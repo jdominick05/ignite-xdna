@@ -46,6 +46,13 @@ import sys
 import time
 from pathlib import Path
 
+# Must precede `import cv2`: OpenCV reads this at videoio init, so setting it
+# afterwards is a silent no-op. Without it, MSMF -- the default Windows backend --
+# takes a fixed ~90s to open this camera (tools/cam_probe.py: 90.02s and 90.20s on
+# two consecutive opens, so not a warmup); with it, 0.07-0.22s, same 640x480 @ 30.0
+# fps. setdefault, not assignment, so the probe can still measure the slow path.
+os.environ.setdefault("OPENCV_VIDEOIO_MSMF_ENABLE_HW_TRANSFORMS", "0")
+
 import cv2
 import numpy as np
 
@@ -55,6 +62,11 @@ import npu.yolo as yc
 from npu.session import build_session, clear_cache
 
 XRT_SMI = r"C:\Windows\System32\AMD\xrt-smi.exe"
+# Pinned rather than left to cv2's default, so the backend the ~90s finding above
+# is about can't change out from under this demo. CAP_DSHOW opens just as fast but
+# reports CAP_PROP_FPS as 0.0, which is the number this demo's camera-vs-NPU
+# ceiling argument rests on (cam_probe.py).
+CAM_BACKEND = cv2.CAP_MSMF
 XCLBIN_1X4_SUBPATH = os.path.join("voe-4.0-win_amd64", "xclbins", "phoenix", "1x4.xclbin")
 _PS_HINT = r"  $env:RYZEN_AI_INSTALLATION_PATH = 'C:\Program Files\RyzenAI\1.7.1'"
 
@@ -138,12 +150,16 @@ def main():
     if args.fresh:
         clear_cache(args.cache_key)
 
+    t_launch = time.perf_counter()
     print(f"model: {args.model}\nxclbin: {xclbin}\nworkers: {args.workers}")
     print("pre-building one session to force the compile before any worker forks "
           "-- avoids N processes racing the same cache directory on first run.")
     _sess = build_session(args.model, "npu", args.cache_key, xclbin, log_severity=2)
     del _sess  # release this process's HW context before spawning workers
-    print("compile cache warm.\n")
+    # Startup is three separately slow phases; time each so "it took forever to
+    # start" can be attributed instead of guessed at (cam_probe.py covers the
+    # camera phase on its own).
+    print(f"compile cache warm.  [+{time.perf_counter() - t_launch:.1f}s]\n")
 
     n = args.workers
     ctx = mp.get_context("spawn")
@@ -172,21 +188,26 @@ def main():
 
     active = active_count(raw_partitions())
     print(f"{n} workers ready. xrt-smi reports {active} active HW context(s) "
-          f"(expect {n} for genuine separate-column parallelism).\n")
+          f"(expect {n} for genuine separate-column parallelism)."
+          f"  [+{time.perf_counter() - t_launch:.1f}s]\n")
 
+    t_cam = time.perf_counter()
     is_cam = args.source.isdigit()
-    cap = cv2.VideoCapture(int(args.source) if is_cam else args.source)
+    cap = cv2.VideoCapture(int(args.source) if is_cam else args.source, CAM_BACKEND)
     if not cap.isOpened():
         raise SystemExit(f"could not open source {args.source}")
-    # No explicit CAP_PROP_FRAME_WIDTH/HEIGHT request: on this machine, changing
-    # resolution away from the camera's default measured at 178s on top of the
-    # ~90s open itself (cam_probe.py) -- a driver-level renegotiation cost, not
-    # anything NPU- or code-related. Native resolution avoids paying it; letterbox()
-    # handles whatever size comes back.
+    # No explicit CAP_PROP_FRAME_WIDTH/HEIGHT request -- but no longer because it is
+    # expensive. That cost (~178s, on top of the ~90s open) was MSMF's hardware
+    # transforms, the same cause as the slow open: with the env var above set it is
+    # 0.02s (cam_probe.py --set-res). Native resolution stays the default only
+    # because every n/m/l/x number in README.md was measured at 640x480 @ 30 fps;
+    # letterbox() handles whatever size comes back, so this is now a free choice.
     print(f"camera native size {int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))}x"
           f"{int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))}, "
           f"{cap.get(cv2.CAP_PROP_FPS):.1f} fps capture rate "
-          "-- that, not the NPU, may be the real ceiling here.", flush=True)
+          "-- that, not the NPU, may be the real ceiling here."
+          f"  [open took {time.perf_counter() - t_cam:.1f}s, +"
+          f"{time.perf_counter() - t_launch:.1f}s since launch]", flush=True)
     print("running - press q to quit", flush=True)
 
     frame_count = 0

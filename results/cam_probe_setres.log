@@ -1,0 +1,24 @@
+camera source 0, backends msmf, msmf_nohw, dshow, requesting 1280x720
+first case pays any cold Windows Frame Server cost -- read the two opens within a case, not just the across-case order.
+
+case msmf: api=1400 OPENCV_VIDEOIO_MSMF_ENABLE_HW_TRANSFORMS=<unset>
+  open 1: ctor   90.41s  isOpened  0.00s  set(1280x720)  179.34s  first read   1.03s  release  0.48s  -> total  270.77s
+           reports 1280x720 @ 30.0 fps, frame 1280x720
+  open 2: ctor   89.60s  isOpened  0.00s  set(1280x720)  178.24s  first read   0.82s  release  0.49s  -> total  268.66s
+           reports 1280x720 @ 30.0 fps, frame 1280x720
+  case msmf wall clock 540.56s
+
+case msmf_nohw: api=1400 OPENCV_VIDEOIO_MSMF_ENABLE_HW_TRANSFORMS=0
+  open 1: ctor    0.20s  isOpened  0.00s  set(1280x720)    0.02s  first read   0.82s  release  0.49s  -> total    1.04s
+           reports 1280x720 @ 30.0 fps, frame 1280x720
+  open 2: ctor    0.07s  isOpened  0.00s  set(1280x720)    0.02s  first read   0.82s  release  0.49s  -> total    0.91s
+           reports 1280x720 @ 30.0 fps, frame 1280x720
+  case msmf_nohw wall clock 3.05s
+
+case dshow: api=700 OPENCV_VIDEOIO_MSMF_ENABLE_HW_TRANSFORMS=<unset>
+  open 1: ctor    0.62s  isOpened  0.00s  set(1280x720)    1.05s  first read   0.62s  release  0.51s  -> total    2.29s
+           reports 1280x720 @ 0.0 fps, frame 1280x720
+  open 2: ctor    0.56s  isOpened  0.00s  set(1280x720)    1.05s  first read   0.73s  release  0.50s  -> total    2.34s
+           reports 1280x720 @ 0.0 fps, frame 1280x720
+  case dshow wall clock 5.76s
+

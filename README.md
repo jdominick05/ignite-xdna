@@ -945,13 +945,42 @@ same model/xclbin combination (above) — independent confirmation that both num
 measuring the same real throughput ceiling, just fed by a webcam instead of pre-loaded
 frames.
 
-Also measured in isolation while chasing an apparent startup hang: `cv2.VideoCapture(0)`
-took ~90s to open on this machine, and requesting a non-native resolution via
-`cap.set(CAP_PROP_FRAME_WIDTH/HEIGHT)` added another ~178s on top — a driver-level
-renegotiation cost specific to this camera, reproduced twice, unrelated to the NPU or
-anything in this repo's code. The demo therefore requests no explicit resolution and
-reports whatever the camera's native size is (640×480 @ 30 fps here); `letterbox()`
-already handles arbitrary capture sizes. The n/m/l/x numbers above are backed by
+**The ~90s camera open was OpenCV's backend, not the camera** — a correction to what
+this section previously claimed. `cv2.VideoCapture(0)` taking ~90s, and
+`cap.set(CAP_PROP_FRAME_WIDTH/HEIGHT)` adding another ~178s on top, were both
+originally read as "a driver-level renegotiation cost specific to this camera."
+They were measured only against OpenCV's *default* Windows backend, MSMF, so they
+never separated a slow camera from a slow backend. `tools/cam_probe.py` separates them
+by timing two consecutive opens per backend in a fresh process each
+(`results/cam_probe_backends.log`, `results/cam_probe_setres.log`):
+
+| backend | open 1 | open 2 | `set(1280×720)` | reports |
+|---|---|---|---|---|
+| MSMF (OpenCV's Windows default) | 90.02s | 90.20s | 179.34s / 178.24s | 640×480 @ 30.0 fps |
+| MSMF, `OPENCV_VIDEOIO_MSMF_ENABLE_HW_TRANSFORMS=0` | 0.22s | **0.07s** | **0.02s** | 640×480 @ 30.0 fps |
+| DirectShow (`CAP_DSHOW`) | 0.75s | 0.56s | 1.05s | 640×480 @ **0.0 fps** |
+
+Both MSMF opens cost ~90s, so this is a fixed per-open cost, not a cold Windows Frame
+Server warmup that a second open would skip — and landing on 90.02s and 90.20s twice
+looks like an internal timeout expiring rather than work being done. Disabling MSMF's
+hardware transforms removes it, and removes the resolution-change cost with it (~178s →
+0.02s), which is consistent with those being one cause rather than two: ~178s is
+about twice ~90s, as an internal re-open paying the same timeout twice would be. The
+variable has to be set **before `import cv2`** — OpenCV reads it at videoio init, so
+setting it afterwards is a silent no-op, and a null result from that ordering is not
+evidence against it.
+
+The demo now sets it and pins `CAP_MSMF` explicitly. `CAP_DSHOW` is just as fast but
+reports `CAP_PROP_FPS` as 0.0, which is precisely the number the camera-bound argument
+above rests on. **Demo startup went from ~92s to 1.7s end to end** — and with per-phase
+timing now printed, that 92s was all camera: compile-cache check 0.4s, four worker NPU
+sessions 1.1s, camera open 0.2s. Re-running the 15s n capture on the fixed path
+reproduces the original numbers exactly (30.0–30.5 fps combined, ~18.1 ms per worker,
+same 640×480 @ 30 fps mode — `results/webcam_multipartition_yolov8n_msmf_nohw.log`), so
+the four logs below remain comparable to anything measured after this change. The demo
+still requests no explicit resolution, but that is now a free choice made to keep the
+n/m/l/x numbers on one mode, not a cost being avoided; `letterbox()` already handles
+arbitrary capture sizes. The n/m/l/x numbers above are backed by
 `results/webcam_multipartition_yolov8{n,m,l,x}.log` — the tool now prints combined fps
 and per-worker ms to stdout once a second (`--max-seconds` auto-quits an unattended
 capture run) instead of only drawing them on the live HUD, which is what the first,

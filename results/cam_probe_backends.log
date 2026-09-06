@@ -1,0 +1,24 @@
+camera source 0, backends msmf, msmf_nohw, dshow, native resolution
+first case pays any cold Windows Frame Server cost -- read the two opens within a case, not just the across-case order.
+
+case msmf: api=1400 OPENCV_VIDEOIO_MSMF_ENABLE_HW_TRANSFORMS=<unset>
+  open 1: ctor   90.02s  isOpened  0.00s  first read   0.72s  release  0.48s  -> total   90.74s
+           reports 640x480 @ 30.0 fps, frame 640x480
+  open 2: ctor   90.20s  isOpened  0.00s  first read   0.67s  release  0.51s  -> total   90.88s
+           reports 640x480 @ 30.0 fps, frame 640x480
+  case msmf wall clock 182.73s
+
+case msmf_nohw: api=1400 OPENCV_VIDEOIO_MSMF_ENABLE_HW_TRANSFORMS=0
+  open 1: ctor    0.22s  isOpened  0.00s  first read   0.68s  release  0.51s  -> total    0.89s
+           reports 640x480 @ 30.0 fps, frame 640x480
+  open 2: ctor    0.07s  isOpened  0.00s  first read   0.67s  release  0.48s  -> total    0.74s
+           reports 640x480 @ 30.0 fps, frame 640x480
+  case msmf_nohw wall clock 2.75s
+
+case dshow: api=700 OPENCV_VIDEOIO_MSMF_ENABLE_HW_TRANSFORMS=<unset>
+  open 1: ctor    0.75s  isOpened  0.00s  first read   0.20s  release  0.48s  -> total    0.95s
+           reports 640x480 @ 0.0 fps, frame 640x480
+  open 2: ctor    0.56s  isOpened  0.00s  first read   0.20s  release  0.48s  -> total    0.76s
+           reports 640x480 @ 0.0 fps, frame 640x480
+  case dshow wall clock 2.81s
+
