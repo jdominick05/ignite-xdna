@@ -1,0 +1,124 @@
+
+# >>>>>>>>>>>>>>>>>>>>>> ERROR REPORT <<<<<<<<<<<<<<<<<<<<<<
+
+    Traceback (most recent call last):
+      File "C:\Users\Flame\miniforge3\Lib\site-packages\conda\exception_handler.py", line 30, in __call__
+        return func(*args, **kwargs)
+      File "C:\Users\Flame\miniforge3\Lib\site-packages\conda\cli\main.py", line 53, in main_subshell
+        exit_code = do_call(args, parser)
+      File "C:\Users\Flame\miniforge3\Lib\site-packages\conda\cli\conda_argparse.py", line 190, in do_call
+        result = getattr(module, func_name)(args, parser)
+      File "C:\Users\Flame\miniforge3\Lib\site-packages\conda\cli\main_run.py", line 141, in execute
+        print(response.stdout, file=sys.stdout, end="")
+        ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      File "C:\Users\Flame\miniforge3\Lib\encodings\cp1252.py", line 19, in encode
+        return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+               ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    UnicodeEncodeError: 'charmap' codec can't encode character '\ufffd' in position 3546: character maps to <undefined>
+
+`$ C:\Users\Flame\miniforge3\Scripts\conda-script.py run -n resnet_env python pipelines/yolov8n/3b_quantize_cut.py --in models/yolov8s_cut.onnx --calib-dir data/coco_calib --limit 300 --adaround --out models/yolov8s_cut_xint8_adaround.onnx`
+
+  environment variables:
+                  3DVPATH=C:\AMD\Chipset_Software\Binaries\3D_V-
+                          Cache_Performance_Optimizer_Driver\
+                AMDRMPATH=C:\Program Files\AMD\RyzenMaster\
+                 CIO_TEST=<not set>
+     CLAUDE_CODE_EXECPATH=C:\Users\Flame\.local\bin\claude.exe
+        CONDA_DEFAULT_ENV=base
+                CONDA_EXE=C:\Users\Flame\miniforge3\Scripts\conda.exe
+             CONDA_PREFIX=C:\Users\Flame\miniforge3
+    CONDA_PROMPT_MODIFIER=(base)
+         CONDA_PYTHON_EXE=C:\Users\Flame\miniforge3\python.exe
+               CONDA_ROOT=C:\Users\Flame\miniforge3
+              CONDA_SHLVL=1
+           CURL_CA_BUNDLE=<not set>
+                  EXEPATH=C:\Program Files\Git\bin
+                 HOMEPATH=\Users\Flame
+               LD_PRELOAD=<not set>
+NODEFAULTCURRENTDIRECTORYINEXEPATH=1
+                     PATH=C:\Users\Flame\bin;C:\Program Files\Git\mingw64\bin;C:\Program
+                          Files\Git\usr\local\bin;C:\Program Files\Git\usr\bin;C:\Program
+                          Files\Git\usr\bin;C:\Program Files\Git\mingw64\bin;C:\Program Files\Gi
+                          t\usr\bin;C:\Users\Flame\bin;C:\Users\Flame\miniforge3;C:\Users\Flame\
+                          miniforge3\Library\mingw-
+                          w64\bin;C:\Users\Flame\miniforge3\Library\usr\bin;C:\Users\Flame\minif
+                          orge3\Library\bin;C:\Users\Flame\miniforge3\Scripts;C:\Users\Flame\min
+                          iforge3\bin;C:\Program Files\Oculus\Support\oculus-runtime;C:\Program
+                          Files\Eclipse Adoptium\jdk-17.0.16.8-hotspot\bin;C:\Program
+                          Files\Eclipse Adoptium\jdk-25.0.0.36-hotspot\bin;C:\Program Files
+                          (x86)\Razer\ChromaBroadcast\bin;C:\Program
+                          Files\Razer\ChromaBroadcast\bin;C:\Program Files\Eclipse
+                          Adoptium\jdk-8.0.462.8-hotspot\bin;C:\Program Files\Eclipse Adoptium\j
+                          dk-21.0.8.9-
+                          hotspot\bin;C:\WINDOWS\system32;C:\WINDOWS;C:\WINDOWS\System32\Wbem;C:
+                          \WINDOWS\System32\WindowsPowerShell\v1.0;C:\WINDOWS\System32\OpenSSH;C
+                          :\Program Files\dotnet;C:\WINDOWS\system32\config\systemprofile\AppDat
+                          a\Local\Microsoft\WindowsApps;C:\Program Files (x86)\Razer Chroma
+                          SDK\bin;C:\Program Files\Razer Chroma SDK\bin;C:\Users\Flame\AppData\L
+                          ocal\Microsoft\WindowsApps;C:\Users\Flame\.lmstudio\bin;C:\Users\Flame
+                          \AppData\Local\Programs\Python\Python313;C:\Program Files\Git\cmd;C:\U
+                          sers\Flame\AppData\Local\nvm;C:\nvm4w\nodejs;C:\Program Files
+                          (x86)\Windows Kits\10\Windows Performance Toolkit;C:\Program
+                          Files\CMake\bin;C:\Program Files
+                          (x86)\Qualcomm\QIKToolV3\3.0.53.0;C:\Program Files
+                          (x86)\Qualcomm\Qualcomm_Software_Center\1.26.2.0;C:\Program Files
+                          (x86)\Bluetooth Command Line Tools\bin;C:\Program Files\dotnet;C:\User
+                          s\Flame\miniforge3;C:\Users\Flame\miniforge3\Scripts;C:\Users\Flame\mi
+                          niforge3\condabin;C:\Users\Flame\.cargo\bin;C:\Users\Flame\AppData\Loc
+                          al\Programs\Python\Python313\Scripts;C:\Users\Flame\AppData\Local\Prog
+                          rams\Python\Python313;C:\Users\Flame\AppData\Local\Programs\Python\Lau
+                          ncher;C:\Users\Flame\AppData\Local\Microsoft\WindowsApps;C:\Users\Flam
+                          e\.lmstudio\bin;C:\Users\Flame\AppData\Local\nvm;C:\nvm4w\nodejs;C:\Pr
+                          ogram Files\JetBrains\IntelliJ IDEA Community Edition
+                          2025.2.4\bin;C:\Users\Flame\AppData\Local\Programs\Microsoft VS Code I
+                          nsiders\bin;C:\Users\Flame\.dotnet\tools;C:\Users\Flame\.local\bin;C:\
+                          Program Files\JetBrains\PyCharm 2026.2.1\bin;C:\Program
+                          Files\Git\usr\bin\vendor_perl;C:\Program Files\Git\usr\bin\core_perl
+             PSMODULEPATH=C:\Users\Flame\Documents\WindowsPowerShell\Modules;C:\Program Files\Wi
+                          ndowsPowerShell\Modules;C:\WINDOWS\system32\WindowsPowerShell\v1.0\Mod
+                          ules
+       REQUESTS_CA_BUNDLE=<not set>
+            SSL_CERT_FILE=C:\Users\Flame\miniforge3\Library\ssl\cacert.pem
+
+     active environment : base
+    active env location : C:\Users\Flame\miniforge3
+            shell level : 1
+       user config file : C:\Users\Flame\.condarc
+ populated config files : C:\Users\Flame\miniforge3\.condarc
+          conda version : 26.5.3
+    conda-build version : not installed
+         python version : 3.14.7.final.0
+                 solver : libmamba (default)
+       virtual packages : __archspec=1=x86_64_v4
+                          __conda=26.5.3=0
+                          __win=10.0.26200=0
+       base environment : C:\Users\Flame\miniforge3  (writable)
+      conda av data dir : C:\Users\Flame\miniforge3\etc\conda
+  conda av metadata url : None
+           channel URLs : https://conda.anaconda.org/conda-forge/win-64
+                          https://conda.anaconda.org/conda-forge/noarch
+          package cache : C:\Users\Flame\miniforge3\pkgs
+                          C:\Users\Flame\.conda\pkgs
+                          C:\Users\Flame\AppData\Local\conda\conda\pkgs
+       envs directories : C:\Users\Flame\miniforge3\envs
+                          C:\Users\Flame\.conda\envs
+                          C:\Users\Flame\AppData\Local\conda\conda\envs
+    temporary directory : C:\Users\Flame\AppData\Local\Temp
+               platform : win-64
+             user-agent : conda/26.5.3 requests/2.34.2 CPython/3.14.7 Windows/11 Windows/10.0.26200 solver/libmamba conda-libmamba-solver/26.7.0 libmambapy/2.5.0
+          administrator : False
+             netrc file : None
+           offline mode : False
+
+
+An unexpected error has occurred. Conda has prepared the above report.
+If you suspect this error is being caused by a malfunctioning plugin,
+consider using the --no-plugins option to turn off plugins.
+
+Example: conda --no-plugins install <package>
+
+Alternatively, you can set the CONDA_NO_PLUGINS environment variable on
+the command line to run the command without plugins enabled.
+
+Example: CONDA_NO_PLUGINS=true conda install <package>
+

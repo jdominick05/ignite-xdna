@@ -1,0 +1,130 @@
+[32m
+[QUARK-INFO]: Checking custom ops library ...[0m
+[33m
+[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[32m
+[QUARK-INFO]: Start compiling CPU version of custom ops library.[0m
+C:\Users\Flame\miniforge3\envs\resnet_env\Lib\site-packages\torch\utils\cpp_extension.py:380: UserWarning: Error checking compiler version for cl: [WinError 2] The system cannot find the file specified
+  warnings.warn(f'Error checking compiler version for {compiler}: {error}')
+INFO: Could not find files for the given pattern(s).
+[31m
+[QUARK-ERROR]: CPU version of custom ops library compilation failed:Command '['where', 'cl']' returned non-zero exit status 1.[0m
+[33m
+[QUARK-WARNING]: Custom ops library compilation failed: CPU version of custom ops library compilation failed:Command '['where', 'cl']' returned non-zero exit status 1..[0m
+Traceback (most recent call last):
+  File "C:\Users\Flame\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\build_custom_ops.py", line 58, in compile_custom_op_cpu
+    load(
+  File "C:\Users\Flame\miniforge3\envs\resnet_env\Lib\site-packages\torch\utils\cpp_extension.py", line 1312, in load
+    return _jit_compile(
+           ^^^^^^^^^^^^^
+  File "C:\Users\Flame\miniforge3\envs\resnet_env\Lib\site-packages\torch\utils\cpp_extension.py", line 1722, in _jit_compile
+    _write_ninja_file_and_build_library(
+  File "C:\Users\Flame\miniforge3\envs\resnet_env\Lib\site-packages\torch\utils\cpp_extension.py", line 1821, in _write_ninja_file_and_build_library
+    _write_ninja_file_to_build_library(
+  File "C:\Users\Flame\miniforge3\envs\resnet_env\Lib\site-packages\torch\utils\cpp_extension.py", line 2246, in _write_ninja_file_to_build_library
+    _write_ninja_file(
+  File "C:\Users\Flame\miniforge3\envs\resnet_env\Lib\site-packages\torch\utils\cpp_extension.py", line 2382, in _write_ninja_file
+    cl_paths = subprocess.check_output(['where',
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Flame\miniforge3\envs\resnet_env\Lib\subprocess.py", line 466, in check_output
+    return run(*popenargs, stdout=PIPE, timeout=timeout, check=True,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Flame\miniforge3\envs\resnet_env\Lib\subprocess.py", line 571, in run
+    raise CalledProcessError(retcode, process.args,
+subprocess.CalledProcessError: Command '['where', 'cl']' returned non-zero exit status 1.
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\Flame\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\build_custom_ops.py", line 291, in compile_library
+    compile_library_core("CPU", extra_cuda_cflags, extra_cflags)
+  File "C:\Users\Flame\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\build_custom_ops.py", line 257, in compile_library_core
+    compile_custom_op_cpu(file_name, build_directory, extra_cuda_cflags, extra_cflags)
+  File "C:\Users\Flame\miniforge3\envs\resnet_env\Lib\site-packages\quark\shares\utils\log.py", line 136, in wrapper
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Flame\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\build_custom_ops.py", line 72, in compile_custom_op_cpu
+    raise RuntimeError("CPU version of custom ops library compilation failed:" + str(e))
+RuntimeError: CPU version of custom ops library compilation failed:Command '['where', 'cl']' returned non-zero exit status 1.
+[32m
+[QUARK-INFO]: Checked custom ops library.[0m
+[33m
+[QUARK-WARNING]: The custom ops library C:\Users\Flame\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: Config has been replaced by QConfig. The old API will be removed in the next release.[0m
+[33m
+[QUARK-WARNING]: The algorithm API is algo_config in QConfig. The old API will be removed in the next release.[0m
+[32m
+[QUARK-INFO]: The input ONNX model can create InferenceSession successfully[0m
+[32m
+[QUARK-INFO]: Folding or fusing operators for better accuracy and performance.[0m
+[33m
+[QUARK-WARNING]: The opset version is 17 < 20. Skipping fusing Gelu.[0m
+[32m
+[QUARK-INFO]: Start applying CLE algorithm on the float model...[0m
+[32m
+[QUARK-INFO]: CrossLayerEqualization pattern num: 0[0m
+[32m
+[QUARK-INFO]: Total CrossLayerEqualization steps: 1[0m
+[32m
+[QUARK-INFO]: The CLE algorithm has been applied. It took 1.3s to complete.[0m
+[32m
+[QUARK-INFO]: Optimizing the model for a better hardware compatibility.[0m
+[32m
+[QUARK-INFO]: The input ONNX model can run inference successfully[0m
+[32m
+[QUARK-INFO]: Start running calibration on 12 samples with extra options {}...[0m
+[32m
+[QUARK-INFO]: Data collection of PowerOfTwoMethod.MinMSE in progress. Runtime will depend on your model and data size.[0m
+Using 12 calibration images (12 batches of 1)
+config: XINT8  ->  models/resnetv2_50x3_xint8_probe12.onnx
+[QUARK_INFO]: Time information:
+2026-09-06 05:36:36.242341
+[QUARK_INFO]: OS and CPU information:
+                                        system --- Windows
+                                          node --- JORDAN-PC
+                                       release --- 11
+                                       version --- 10.0.26200
+                                       machine --- AMD64
+                                     processor --- AMD64 Family 25 Model 97 Stepping 2, AuthenticAMD
+[QUARK_INFO]: Tools version information:
+                                        python --- 3.12.11
+                                          onnx --- 1.19.0
+                                   onnxruntime --- 1.29.0
+                                    quark.onnx --- 0.11.2
+[QUARK_INFO]: Quantized Configuration information:
+                                   model_input --- models/resnetv2_50x3_fp32.onnx
+                                  model_output --- models/resnetv2_50x3_xint8_probe12.onnx
+                       calibration_data_reader --- <__main__.ImageCalibReader object at 0x000002A1D18682F0>
+                         calibration_data_path --- None
+                                  quant_format --- QDQ
+                                   input_nodes --- []
+                                  output_nodes --- []
+                          op_types_to_quantize --- []
+                    extra_op_types_to_quantize --- []
+                                   per_channel --- False
+                                  reduce_range --- False
+                               activation_type --- QUInt8
+                                   weight_type --- QInt8
+                             nodes_to_quantize --- []
+                              nodes_to_exclude --- []
+                          subgraphs_to_exclude --- []
+                                optimize_model --- True
+                      use_external_data_format --- False
+                              calibrate_method --- PowerOfTwoMethod.MinMSE
+                           execution_providers --- ['CPUExecutionProvider']
+                                enable_npu_cnn --- True
+                        enable_npu_transformer --- False
+                     specific_tensor_precision --- False
+                                    debug_mode --- False
+                          convert_fp16_to_fp32 --- False
+                          convert_nchw_to_nhwc --- False
+                                   include_cle --- True
+                                    include_sq --- False
+                              include_rotation --- False
+                               include_fast_ft --- False
+                                 extra_options --- {'ActivationSymmetric': True}
+  0%|          | 0/12 [00:00<?, ?it/s]Cached 1.59GB on disk:   0%|          | 0/12 [00:04<?, ?it/s]Cached 1.59GB on disk:   8%|8         | 1/12 [00:04<00:45,  4.15s/it]Cached 3.17GB on disk:   8%|8         | 1/12 [00:07<00:45,  4.15s/it]Cached 3.17GB on disk:  17%|#6        | 2/12 [00:07<00:38,  3.85s/it]Cached 4.76GB on disk:  17%|#6        | 2/12 [00:11<00:38,  3.85s/it]Cached 4.76GB on disk:  25%|##5       | 3/12 [00:11<00:33,  3.76s/it]Cached 6.34GB on disk:  25%|##5       | 3/12 [00:15<00:33,  3.76s/it]Cached 6.34GB on disk:  33%|###3      | 4/12 [00:15<00:29,  3.73s/it]Cached 7.93GB on disk:  33%|###3      | 4/12 [00:18<00:29,  3.73s/it]Cached 7.93GB on disk:  42%|####1     | 5/12 [00:18<00:25,  3.71s/it]Cached 9.51GB on disk:  42%|####1     | 5/12 [00:22<00:25,  3.71s/it]Cached 9.51GB on disk:  50%|#####     | 6/12 [00:22<00:22,  3.68s/it]Cached 11.10GB on disk:  50%|#####     | 6/12 [00:26<00:22,  3.68s/it]Cached 11.10GB on disk:  58%|#####8    | 7/12 [00:26<00:18,  3.73s/it]Cached 12.68GB on disk:  58%|#####8    | 7/12 [00:29<00:18,  3.73s/it]Cached 12.68GB on disk:  67%|######6   | 8/12 [00:29<00:14,  3.70s/it]Cached 14.27GB on disk:  67%|######6   | 8/12 [00:33<00:14,  3.70s/it]Cached 14.27GB on disk:  75%|#######5  | 9/12 [00:33<00:11,  3.70s/it]Cached 15.85GB on disk:  75%|#######5  | 9/12 [00:37<00:11,  3.70s/it]Cached 15.85GB on disk:  83%|########3 | 10/12 [00:37<00:07,  3.68s/it]Cached 17.44GB on disk:  83%|########3 | 10/12 [00:40<00:07,  3.68s/it]Cached 17.44GB on disk:  92%|#########1| 11/12 [00:40<00:03,  3.70s/it]Cached 19.02GB on disk:  92%|#########1| 11/12 [00:44<00:03,  3.70s/it]Cached 19.02GB on disk: 100%|##########| 12/12 [00:44<00:00,  3.70s/it]Cached 19.02GB on disk: 100%|##########| 12/12 [00:44<00:00,  3.72s/it]
+[32m
+[QUARK-INFO]: Finding optimal threshold for each tensor using PowerOfTwoMethod.MinMSE algorithm in 'All' mode ...[0m
+  0%|          | 0/367 [00:00<?, ?it/s]

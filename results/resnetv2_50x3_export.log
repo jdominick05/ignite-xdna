@@ -1,0 +1,19 @@
+C:\Users\Flame\miniforge3\envs\resnet_env\Lib\site-packages\huggingface_hub\file_download.py:143: UserWarning: `huggingface_hub` cache-system uses symlinks by default to efficiently store duplicated files but your machine does not support them in C:\Users\Flame\.cache\huggingface\hub\models--timm--resnetv2_50x3_bit.goog_in21k_ft_in1k. Caching files will still work but in a degraded version that might require more space on your disk. This warning can be disabled by setting the `HF_HUB_DISABLE_SYMLINKS_WARNING` environment variable. For more details, see https://huggingface.co/docs/huggingface_hub/how-to-cache#limitations.
+To support symlinks on Windows, you either need to activate Developer Mode or to run Python as an administrator. In order to activate developer mode, see this article: https://docs.microsoft.com/en-us/windows/apps/get-started/enable-your-device-for-development
+  warnings.warn(message)
+C:\Users\Flame\miniforge3\envs\resnet_env\Lib\site-packages\torch\onnx\symbolic_helper.py:1531: UserWarning: ONNX export mode is set to TrainingMode.EVAL, but operator 'batch_norm' is set to train=True. Exporting with train=True.
+  warnings.warn(
+C:\Users\Flame\miniforge3\envs\resnet_env\Lib\site-packages\torch\onnx\_internal\jit_utils.py:314: UserWarning: Constant folding - Only steps=1 can be constant folded for opset >= 10 onnx::Slice op. Constant folding not applied. (Triggered internally at C:\actions-runner\_work\pytorch\pytorch\builder\windows\pytorch\torch\csrc\jit\passes\onnx\constant_fold.cpp:181.)
+  _C._jit_pass_onnx_node_shape_type_inference(node, params_dict, opset_version)
+C:\Users\Flame\miniforge3\envs\resnet_env\Lib\site-packages\torch\onnx\utils.py:739: UserWarning: Constant folding - Only steps=1 can be constant folded for opset >= 10 onnx::Slice op. Constant folding not applied. (Triggered internally at C:\actions-runner\_work\pytorch\pytorch\builder\windows\pytorch\torch\csrc\jit\passes\onnx\constant_fold.cpp:181.)
+  _C._jit_pass_onnx_graph_shape_type_inference(
+C:\Users\Flame\miniforge3\envs\resnet_env\Lib\site-packages\torch\onnx\utils.py:1244: UserWarning: Constant folding - Only steps=1 can be constant folded for opset >= 10 onnx::Slice op. Constant folding not applied. (Triggered internally at C:\actions-runner\_work\pytorch\pytorch\builder\windows\pytorch\torch\csrc\jit\passes\onnx\constant_fold.cpp:181.)
+  _C._jit_pass_onnx_graph_shape_type_inference(
+timm data config: {'input_size': (3, 448, 448), 'interpolation': 'bilinear', 'mean': (0.5, 0.5, 0.5), 'std': (0.5, 0.5, 0.5), 'crop_pct': 1.0, 'crop_mode': 'center'}
+
+Wrote models\resnetv2_50x3_fp32.onnx
+  opset:       [('ai.onnx', 17)]
+  input shape: [1, 3, 448, 448]
+  op types:    [('Constant', 262), ('ReduceMean', 159), ('Reshape', 153), ('Mul', 102), ('Add', 65), ('Conv', 54), ('Sub', 53), ('BatchNormalization', 53), ('InstanceNormalization', 49), ('Shape', 49), ('Relu', 49), ('Identity', 33), ('ConstantOfShape', 1), ('Concat', 1), ('Slice', 1), ('Transpose', 1), ('Cast', 1), ('Pad', 1), ('MaxPool', 1), ('GlobalAveragePool', 1), ('Flatten', 1)]
+
+OK - ready for step 2 (quantization)
