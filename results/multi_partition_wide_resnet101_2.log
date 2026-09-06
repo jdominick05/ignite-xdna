@@ -1,0 +1,49 @@
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\1x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\yolocut1x4cachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+deleted stale cache C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\yolocut1x4cachekey
+model: models/wide_resnet101_2_xint8_c64.onnx
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\1x4.xclbin
+finding two random-noise seeds with distinct top-1 predictions for the cross-talk check...
+  a: seed 0 -> class 21
+  b: seed 1 -> class 904
+
+=== 1 independent process(es), separate partitions if the overlay allows it ===
+  partitions during window: [('0', ['1'])]
+  combined 25.4 fps  per-process: [25.4]  mismatches: 0
+
+=== 2 independent process(es), separate partitions if the overlay allows it ===
+  partitions during window: [('0', ['1']), ('1', ['2'])]
+  combined 49.8 fps  per-process: [24.9, 24.9]  mismatches: 0
+
+=== 3 independent process(es), separate partitions if the overlay allows it ===
+  partitions during window: [('0', ['1']), ('1', ['2']), ('2', ['3'])]
+  combined 75.2 fps  per-process: [25.1, 25.1, 25.1]  mismatches: 0
+
+=== 4 independent process(es), separate partitions if the overlay allows it ===
+  partitions during window: [('0', ['1']), ('1', ['2']), ('2', ['3']), ('3', ['4'])]
+  combined 98.3 fps  per-process: [24.6, 24.6, 24.6, 24.6]  mismatches: 0
+
+=== summary ===
+ procs  combined fps  vs 1-proc    partitions  mismatches
+     1          25.4      1.00x             1           0
+     2          49.8      1.96x             2           0
+     3          75.2      2.96x             3           0
+     4          98.3      3.87x             4           0
+
+no cross-talk at any process count.
+
+--- context (Desktop 2 / Phoenix, 2026-09-06) ---
+tools/multi_partition_cls_bench.py: classification counterpart to
+multi_partition_bench.py, built this session -- same spawn/ready-window/
+partition-confirmation methodology, but the correctness check is label-free
+(two random-noise seeds verified to produce different top-1 predictions,
+same rationale as probe_batch_slot_write.py, rather than a labeled eval set).
+wide_resnet101_2_xint8_c64.onnx: 23,180,527,448 MACs/inference (onnx-tool) --
+smaller than yolov8m's 40.6 GMACs, let alone yolov8l/x's 84-131 GMACs, so its
+achieved TOPS (4.56 TOPS = 28.5% of the 16 TOPS nameplate at N=4) does not
+beat the yolov8l/x record set the same day (39.3%) -- consistent with, not a
+counterexample to, the "achieved TOPS tracks per-inference MACs, not model
+family" story: this model is simply lighter per call than the detection
+models that set the record.

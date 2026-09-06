@@ -132,6 +132,20 @@
   up; its default `--limit` is 100, and `--limit 32` is plenty for the only question
   that experiment asks (does the EP take the graph — calibration quality is
   irrelevant to that).
+- **The same calibration-cache growth above, but at a resolution `calib_mb_per_image`
+  doesn't cover.** Quantizing yolov8x re-exported at 1280² (double the repo's usual
+  640, for the multi-partition achieved-TOPS ceiling check — see `RESEARCH.md`
+  finding 5) with the repo's usual `--limit 64` spooled Quark's calibration cache to
+  **169 GB across 64 images (~2.64 GB/image)** and drove this 32 GB machine's free
+  RAM to 0.44 GB before the run had to be killed manually. `3b_quantize_cut.py` was
+  run directly, the same documented gap as the disk-guard note above (`scripts/
+  yolo-cut.sh`'s checks are skipped by hand). Per-image footprint at 1280² is roughly
+  4× the 640² rate (matches the resolution-squared scaling the MACs also showed:
+  524.1 GMACs vs. 131.1 GMACs, almost exactly 4.0×), so `calib_mb_per_image`'s
+  n/s-at-640 figures cannot be reused unscaled at a different resolution. Fixed here
+  with `--limit 4` — this specific model was built to test a throughput ceiling, not
+  to report accuracy, so a thin calibration set costs nothing real; it would be the
+  wrong fix for a model whose accuracy will actually be cited.
 - **AdaRound running out of RAM, and taking SIGSEGV instead of raising.** Measured:
   `--adaround --limit 300` succeeded, then `--limit 200` segfaulted twice at exactly
   the same point with another memory-heavy app resident. *Less* calibration data

@@ -745,7 +745,8 @@ nameplate is INT8, 2 ops/MAC). Nothing here depends on `xrt-smi`'s GOPS column a
 | yolov8n cut XINT8 (4× independent 1x4 columns) | 245.20 | 2.31 | 14.4% |
 | yolov8m cut XINT8 (4× independent 1x4 columns) | 65.30 | 5.30 | 33.1% |
 | yolov8x cut XINT8 (4× independent 1x4 columns) | 23.20 | 6.08 | 38.0% |
-| **yolov8l cut XINT8 (4× independent 1x4 columns)** | 37.30 | **6.29** | **39.3% — best measured** |
+| **yolov8l cut XINT8 (4× independent 1x4 columns)** | 37.30 | **6.29** | **39.3%** |
+| yolov8x@1280 XINT8, throughput-only (4× independent 1x4 columns) | 6.00 | 6.29 | 39.3% — same ceiling at 6.2× the MACs |
 
 Two things fall out of this table that the retracted GOPS numbers never showed:
 
@@ -764,15 +765,41 @@ result: **yolov8l split across 4 columns reaches 39.3% of the 16 TOPS nameplate,
 best number this repo has measured** — nearly 6× yolov8n's old, now-retracted "~1.1"
 GOPS-derived figure. yolov8x's solo regression does not reappear once it gets its own
 column (38.0%, statistically tied with l) — confirming that regression was about
-contending for the whole array, not a property of the model itself. Whether a model
-heavier than yolov8l/x would climb even higher is untested — per-column headroom was
-not exhausted at any size measured here.
+contending for the whole array, not a property of the model itself.
+
+**Tested directly whether a heavier model climbs past 39.3%, and it doesn't — this
+looks like a real ceiling, not unexhausted headroom.** yolov8x was re-exported at
+1280² (imgsz doubled from the repo's usual 640) via `pipelines/yolov8n/1_export.py
+--size 1280`, giving 524.1 GMACs/inference — almost exactly 4.0× the 640² model's
+131.1 GMACs, confirming the resolution scaling. Split across 4 independent columns
+it lands on **39.31% of nameplate** (`results/multi_partition_yolov8x_r1280.log`,
+6.0 fps combined, 3.79× at N=4, zero cross-talk) — statistically identical to
+yolov8l's 39.32%, despite 6.2× the per-inference compute. Two very different
+model/resolution combinations converging on the same figure is real evidence of a
+per-column ceiling near 39-40%, not a lever still waiting for a heavier model. The
+per-column vs. shared-4x4 latency ratio (1.66× at n, 1.88× at m, 2.07× at l) implying
+unused headroom does not translate into a climbing achieved-TOPS figure once a
+model is heavy enough to actually test it — something else (fixed per-call dispatch
+cost that doesn't shrink proportionally at longer compute-bound calls, or a limit in
+how the compiler schedules a single column) caps it instead, and nothing measured so
+far distinguishes which. This 1280² model is calibration-thin (`--limit 4`, plain
+XINT8, chosen deliberately small — see caveat below) and exists purely to test this
+ceiling; it has no measured accuracy and should never be cited for mAP.
 
 Same caveats as the partition-splitting result above travel with every number in this
 table that used `1x4.xclbin` (deprecated overlay, Desktop 2 / Phoenix only, unverified
 on the laptop's Hawk Point chip). yolov8l and yolov8x additionally carry the known
 DPU-timeout instability seen on 2 of 3 full 5000-image mAP attempts as an open risk on
 long runs, though the ~12s throughput windows measured here did not trigger it.
+Building the 1280² model surfaced a new, sharper version of the RAM-wall lesson: the
+first attempt used this repo's usual `--limit 64` calibration count and spooled 169 GB
+into Quark's calibration cache, driving this 32 GB machine's free RAM to 0.44 GB
+before the run had to be killed. `--limit 4` (a throughput probe needs no real
+accuracy, so a thin calibration set costs nothing here) kept the peak well clear of
+the ceiling. The lesson generalizes the existing SIGSEGV note: **calibration memory
+at this backend scales with resolution and calibration count together, not either
+alone — a resolution jump needs the sample count re-checked, not carried over from a
+lower-resolution recipe.**
 
 ---
 

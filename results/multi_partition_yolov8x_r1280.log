@@ -1,0 +1,58 @@
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\1x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\yolocut1x4cachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+deleted stale cache C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\yolocut1x4cachekey
+model: models/yolov8x_r1280_cut_xint8.onnx
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\1x4.xclbin
+pre-building one session to force the compile before any worker forks -- avoids N processes racing the same cache directory on first run.
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\1x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\yolocut1x4cachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+compile cache warm.
+=== 1 independent process(es), separate partitions if the overlay allows it ===
+partitions during window: [('0', ['1'])]
+combined 1.6 fps  per-process: [1.6]  mismatches: 0
+=== 2 independent process(es), separate partitions if the overlay allows it ===
+partitions during window: [('0', ['1']), ('1', ['2'])]
+combined 3.2 fps  per-process: [1.6, 1.6]  mismatches: 0
+=== 3 independent process(es), separate partitions if the overlay allows it ===
+partitions during window: [('0', ['1']), ('1', ['2']), ('2', ['3'])]
+combined 4.7 fps  per-process: [1.6, 1.6, 1.6]  mismatches: 0
+=== 4 independent process(es), separate partitions if the overlay allows it ===
+partitions during window: [('0', ['1']), ('1', ['2']), ('2', ['3']), ('3', ['4'])]
+combined 6.0 fps  per-process: [1.5, 1.5, 1.5, 1.5]  mismatches: 0
+=== summary ===
+procs  combined fps  vs 1-proc    partitions  mismatches
+1           1.6      1.00x             1           0
+2           3.2      2.00x             2           0
+3           4.7      3.00x             3           0
+4           6.0      3.79x             4           0
+no cross-talk at any process count.
+
+--- context (Desktop 2 / Phoenix, 2026-09-06) ---
+Model: models/yolov8x_r1280_cut_xint8.onnx -- yolov8x re-exported at imgsz=1280
+(vs. the repo's usual 640) via pipelines/yolov8n/1_export.py --weights
+models/yolov8x.pt --size 1280, head-cut via 1b_cut_head.py, quantized plain
+XINT8 (no AdaRound) via 3b_quantize_cut.py --calib-dir data/coco_calib --limit 4
+(deliberately thin calibration -- this is a throughput/partitioning probe, not
+an accuracy claim; do not cite this model's mAP, none was measured).
+onnx-tool: 524,093,725,984 MACs/inference (vs. 131,125,732,384 at 640 -- almost
+exactly the expected 4x for 4x the pixels).
+Achieved TOPS at N=4: 524093725984 * 2 * 6.0 / 1e12 = 6.289 TOPS = 39.31% of the
+16 TOPS nameplate -- statistically identical to yolov8l cut XINT8 at 640 split
+the same way (6.291 TOPS, 39.32%, results/multi_partition_yolov8l.log), despite
+6.2x the MACs per inference. Two very different model/resolution combinations
+converging on the same ~39.3% figure is evidence of a real per-column ceiling,
+not a coincidence from one lucky config.
+
+Caveats: 1x4.xclbin is deprecated by AMD (Ryzen AI 1.5+, "no longer supported
+and should not be used"); this quantized model is throughput/correctness-only,
+never evaluated for mAP; memory during quantization was watched closely after
+an earlier attempt at --limit 64 exhausted the machine's free RAM (0.44 GB
+free before it was killed) -- --limit 4 kept peak calibration cache under
+control (recovered to 6-9 GB free during the run, never approached the 4 GB
+auto-kill threshold used to supervise it).

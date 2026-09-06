@@ -149,8 +149,24 @@ generalize beyond any one model:
    itself. The per-column vs. shared-4x4 latency ratio (14.9/8.9≈1.66× at n, 57.8/30.8
    ≈1.88× at m, 103.1/49.7≈2.07× at l) rises with model size but stays well under the
    4× a fully compute-bound single column would show at every size tested — meaning
-   even yolov8l/x leave real per-column headroom unused, and a heavier model still
-   might climb past 39.3% if one gets built. **Standing "~1.1 of 16 TOPS" citations
+   even yolov8l/x leave real per-column headroom unused. **Tested directly: yolov8x
+   re-exported at 1280² (imgsz doubled, 524.1 GMACs/inference — 4.0× the 640² model's
+   131.1 GMACs, confirming the resolution scaling) still lands on 39.31% of nameplate
+   at N=4 (`results/multi_partition_yolov8x_r1280.log`, 6.0 fps combined, zero
+   cross-talk), statistically identical to yolov8l's 39.32%. Two model/resolution
+   combinations 6.2× apart in per-inference compute converging on the same figure is
+   evidence of a real per-column ceiling near 39-40% of the 16 TOPS nameplate for this
+   overlay/toolchain, not a still-open "keep climbing" lever — the remaining headroom
+   the latency ratio implies is not being left on the table by an insufficiently heavy
+   model; something else (fixed per-call dispatch cost that does not shrink relative
+   to a longer compute-bound call the way it should, or a ceiling in how the compiler
+   schedules a single column) is capping it. This calibration-thin (`--limit 4`, plain
+   XINT8) 1280² model was built purely to test this ceiling — it has no measured
+   accuracy and should never be cited for mAP.** Caveat from building it: quantizing
+   at 1280² with the repo's usual `--limit 64` spooled the machine's calibration cache
+   to 169 GB and drove free system RAM to 0.44 GB before being killed — `--limit 4`
+   (this is a throughput probe, not an accuracy claim, so a thin calibration set costs
+   nothing real) kept the peak comfortably below the 32 GB ceiling. **Standing "~1.1 of 16 TOPS" citations
    for yolov8n solo elsewhere in this repo (status table, README) are retracted by
    this same number, not merely superseded** — 6.6%, not "~1.1", is yolov8n's correct
    solo figure; the old phrasing predates this script and should not be repeated.
@@ -322,10 +338,16 @@ been closed:
   multi_partition_yolov8{m,l}.log`), and a real achieved-ops/s number now exists to
   measure it with (finding 5, `tools/estimate_tops.py`): yolov8l split across 4
   columns reaches 39.3% of the 16 TOPS nameplate, the best figure this repo has
-  measured, and per-column headroom is still not exhausted even at yolov8x. Still
+  measured. **Whether a model heavier than yolov8l/x would climb past 39.3% — done,
+  and it doesn't.** yolov8x re-exported at 1280² (6.2× the per-inference MACs of
+  yolov8l at 640²) lands on 39.31%, statistically identical to yolov8l's 39.32%
+  (`results/multi_partition_yolov8x_r1280.log`) — this reads as a real per-column
+  ceiling near 39-40%, not headroom still waiting for a heavier model. Still
   untested: whether a 5th concurrent context queues, refuses, or shares a column;
   whether this holds on the laptop's Hawk Point chip (different column count,
-  unconfirmed); whether a model heavier than yolov8l/x would climb past 39.3%.
+  unconfirmed); what specifically caps a single column at ~39-40% rather than
+  higher (fixed dispatch overhead that doesn't shrink proportionally, or a
+  compiler/scheduling limit — not distinguished by anything measured so far).
 - **Width beyond yolov8m — done for detection (l/x); classification untested.**
   yolov8l/x are measured (see the findings table above) and the trend breaks at x. Two
   width steps still confirm the classification trend (resnet50→wide_resnet50_2→

@@ -45,6 +45,14 @@ ROWS = [
      "results/multi_partition_yolov8l.log, combined fps @ N=4"),
     ("yolov8x cut XINT8 (4x independent 1x4 columns)", "yolov8x_cut_xint8.onnx", 23.2,
      "results/multi_partition_yolov8x.log, combined fps @ N=4"),
+    ("yolov8x@1280 cut XINT8, throughput-only (4x independent 1x4 columns)",
+     "yolov8x_r1280_cut_xint8.onnx", 6.0,
+     "results/multi_partition_yolov8x_r1280.log, combined fps @ N=4"),
+    ("wide_resnet101_2 XINT8 (solo, shared 4x4)", "wide_resnet101_2_xint8_c64.onnx",
+     1000 / 17.90, "README.md:320, 17.90 ms"),
+    ("wide_resnet101_2 XINT8 (4x independent 1x4 columns)",
+     "wide_resnet101_2_xint8_c64.onnx", 98.3,
+     "results/multi_partition_wide_resnet101_2.log, combined fps @ N=4"),
 ]
 
 _mac_cache = {}
