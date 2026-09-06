@@ -176,11 +176,10 @@ generalize beyond any one model:
    table below) as an open risk on longer runs, though the ~12s throughput windows
    used here did not trigger it.
 
-   **Follow-up that reframes the mechanism: the ceiling tracks graph depth (node
-   count), not raw MACs/call, weight-arithmetic-intensity, or resolution.** Two more
-   points were added to close the gap between yolov8m (33.1%) and yolov8l (39.3%) and
-   to separate "more compute per call" from "more pixels per call on the same shallow
-   graph": `yolov8s` split across 4 columns at its native 640² (`results/
+   **Follow-up that closes the yolov8m/yolov8l gap, but weakens rather than confirms
+   the obvious "raw MACs/call" story — no clean second variable survives it.** Two
+   more points were added to fill the gap between yolov8m (33.1%) and yolov8l (39.3%):
+   `yolov8s` split across 4 columns at its native 640² (`results/
    multi_partition_yolov8s.log`, zero cross-talk, the established calibration recipe,
    no accuracy caveat) reaches only **24.8%** (14.93 GMACs, 132.7 fps combined) — and
    `yolov8s` re-exported at 1280² (`results/multi_partition_yolov8s_r1280.log`, same
@@ -198,22 +197,53 @@ generalize beyond any one model:
    | yolov8m | 83 | [48,3,3,3] | 40.6 | 33.1% |
    | yolov8l / yolov8x | 103 | [64,3,3,3] / [80,3,3,3] | 524.1 (x@1280) | 39.3% |
 
-   `yolov8n` and `yolov8s` share the same node count (63) in this repo's own cut
-   export — Ultralytics scales them by width only, not depth — and both cap out well
-   below `yolov8m`/`yolov8l`/`x` (83 and 103 nodes respectively), *regardless of how
-   much raw compute is pushed through the shallower graph via resolution*: `yolov8s`
-   at 640² (14.93 GMACs) and at 1280² (59.66 GMACs, 4× more) land within 3.2 points of
-   each other (24.8% vs 28.0%), both far under the 103-node graphs' ~38-39% ceiling
-   even though `yolov8s@1280`'s GMACs/call exceeds `yolov8m`'s 83-node graph outright.
-   Depth — the number of sequential layer dispatches a single column's schedule has to
-   pipeline across — reads as the actual ceiling-setting variable here, not total
-   compute, not channel width alone, and not resolution. This does not fully explain
-   *why* (a compiler-scheduling/pipelining account is plausible: more layers give the
-   compiler more instruction-level overlap opportunity to hide the same fixed per-node
-   dispatch cost seen in finding 9 below; this is not yet verified beyond the
-   correlation above) — but it is now the leading, most tightly evidenced hypothesis,
-   replacing "an insufficiently heavy model" as the story for the unused headroom the
-   latency ratio implies.
+   An earlier draft of this finding read the 63/83/103 node-count split as depth
+   *setting* the ceiling. That overshoots what these three points support: within the
+   single 63-node class, achieved-% nearly doubles (14.4% → 24.8% → 28.0%) — a bigger
+   swing than the 28.0%→33.1%→39.3% gap *between* the depth classes. `yolov8n` and
+   `yolov8s` share the same node count and differ by channel width only, so this table
+   shows achieved-% rising with **both** width (within a depth class) and depth
+   (across classes) — but every stock YOLOv8 variant scales both together along with
+   total MACs, so **no pair here isolates depth from width**, or either from raw
+   compute. Building a synthetic model to isolate them cleanly (custom-scaled
+   untrained architecture, or graph surgery duplicating a block) was considered and
+   rejected: random-initialized weights make Quark's calibration meaningless — this
+   session already found that even *real* weights under thin calibration
+   (`yolov8s@1280` below) produce a model whose correctness silently collapses, and a
+   synthetic graph has no working oracle to catch the same failure, so its fps
+   wouldn't be citable under this repo's own evidence standard. The cheaper, already-
+   available check is a second architecture family with different confounds: see the
+   ResNet-depth follow-up two entries below, which reuses already-built, already-
+   quantized models (`resnet50`, `wide_resnet50_2`, `wide_resnet101_2`) through
+   `multi_partition_cls_bench.py` with no new export, quantize, or RAM risk.
+
+   **That follow-up ran, and it undercuts the depth reading rather than confirming
+   it.** `resnet50` (50 layers, narrow) reaches 18.8% split-4 (`results/
+   multi_partition_resnet50.log`, 354.6 fps, 4.24 GMACs, zero mismatches);
+   `wide_resnet50_2` (50 layers — same depth, wider) reaches 26.4% (`results/
+   multi_partition_wide_resnet50_2.log`, 181.3 fps, 11.65 GMACs, zero mismatches);
+   `wide_resnet101_2` (101 layers — double the depth, similar width to
+   `wide_resnet50_2`) reaches 28.5% (already measured, `results/
+   multi_partition_wide_resnet101_2.log`). `wide_resnet50_2` vs. `wide_resnet101_2`
+   is the cleanest depth-matched-width pair collected this session — cleaner than any
+   YOLO pair, which never held width fixed while varying depth — and **doubling depth
+   there buys only +2.1 points (26.4%→28.5%)**, a far weaker relationship than YOLO's
+   node-count table suggested (where 63→83 nodes moved 24.8%→33.1%, +8.3 points, and
+   that pair's GMACs/call barely differs from this ResNet pair's ratio). Meanwhile
+   width at *matched* depth is a real, comparably-sized effect in both families:
+   `resnet50`→`wide_resnet50_2` (50 layers, width only) is +7.6 points on 2.75× the
+   GMACs; `yolov8n`→`yolov8s` (63 nodes, width only) is +10.4 points on 3.2× the
+   GMACs. **The honest conclusion across both families: achieved-% correlates clearly
+   with channel width at matched depth; its correlation with depth at matched width is
+   much weaker in the one family that actually isolates it.** The strong-looking
+   depth pattern in the YOLO node-count table most likely reflects Ultralytics' width
+   and depth scaling moving together (and total MACs/call rising with both), not an
+   independent depth effect — this finding does not carry over to a family where depth
+   was checked on its own. Depth is downgraded from "leading hypothesis" back to
+   "correlated but not shown to be causal here"; channel width is the better-supported
+   correlate of the two, in both families, though neither is established as the
+   mechanism (vs., e.g., total GMACs/call itself, which also rises with width in every
+   pair above and hasn't been cleanly separated from it either).
 
    **The `yolov8s@1280` fps number above needed its own correctness check, and the
    check found a real (separate) defect worth naming plainly.**

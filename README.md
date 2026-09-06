@@ -749,6 +749,8 @@ nameplate is INT8, 2 ops/MAC). Nothing here depends on `xrt-smi`'s GOPS column a
 | **yolov8l cut XINT8 (4× independent 1x4 columns)** | 37.30 | **6.29** | **39.3%** |
 | yolov8x@1280 XINT8, throughput-only (4× independent 1x4 columns) | 6.00 | 6.29 | 39.3% — same ceiling at 6.2× the MACs |
 | yolov8s@1280 XINT8 `--limit 4`, throughput-only, **quantization defect confirmed** (4× independent 1x4 columns) | 37.50 | 4.48 | 28.0% — below yolov8m despite more MACs |
+| resnet50 XINT8 (4× independent 1x4 columns) | 354.60 | 3.00 | 18.8% |
+| wide_resnet50_2 XINT8 (4× independent 1x4 columns) | 181.30 | 4.23 | 26.4% |
 
 Two things fall out of this table that the retracted GOPS numbers never showed:
 
@@ -805,15 +807,15 @@ lower-resolution recipe.** (`yolov8s@1280` at the same `--limit 4` recipe confir
 generalizes to width too — its calibration cache peaked at only ~3 GB, since yolov8s's
 activations are far smaller than yolov8x's at the same resolution.)
 
-**The ceiling tracks graph depth, not raw MACs/call — confirmed by filling the gap
-with a model that isolates the two.** `yolov8s` split across 4 columns at its native
-640² reaches only 24.8% (`results/multi_partition_yolov8s.log`, 14.93 GMACs, zero
-cross-talk, the established calibration recipe), and re-exported at 1280² (same
-weights, 4.0× the GMACs, confirming the resolution scaling again) reaches only 28.0%
-— **below yolov8m's 33.1% despite `yolov8s@1280` having more raw GMACs/call than
-yolov8m (59.66 vs 40.6)**. Raw compute-per-call does not predict this. Checked
-directly against this repo's own exported graphs (`onnx.load` on each `*_cut.onnx`,
-counting `Conv` nodes) rather than assumed from Ultralytics' published multipliers:
+**Raw MACs/call alone does not predict the ceiling — filling the gap surfaced a
+counterexample, not a clean second variable.** `yolov8s` split across 4 columns at
+its native 640² reaches only 24.8% (`results/multi_partition_yolov8s.log`,
+14.93 GMACs, zero cross-talk, the established calibration recipe), and re-exported
+at 1280² (same weights, 4.0× the GMACs, confirming the resolution scaling again)
+reaches only 28.0% — **below yolov8m's 33.1% despite `yolov8s@1280` having more raw
+GMACs/call than yolov8m (59.66 vs 40.6)**. Checked directly against this repo's own
+exported graphs (`onnx.load` on each `*_cut.onnx`, counting `Conv` nodes) rather than
+assumed from Ultralytics' published multipliers:
 
 | model | Conv nodes | GMACs/call (max tested) | best split-4 % |
 |---|---|---|---|
@@ -823,16 +825,29 @@ counting `Conv` nodes) rather than assumed from Ultralytics' published multiplie
 | yolov8l / x | 103 | 524.1 (x@1280) | 39.3% |
 
 `yolov8n` and `yolov8s` share the same 63-node depth in this repo's own export (they
-differ by channel width only) and both cap out well under the 83/103-node graphs —
-even where `yolov8s@1280`'s GMACs/call exceeds `yolov8m`'s outright. **Depth — how
-many sequential layer dispatches a column's schedule pipelines across — reads as the
-actual ceiling-setting variable, not total compute, weight-intensity, or resolution.**
-This replaces "an insufficiently heavy model" as the story for the unused per-column
-headroom the latency ratio implied; see `RESEARCH.md` finding 5 for the full
-mechanism discussion, the (weakened, not ruled out) weight-bandwidth-roofline check,
-a one-look channel-padding check that found no evidence of padding, and confirmation
-that AMD's 16 TOPS nameplate is independently correct for both this machine's 8700G
-and the laptop's 8645HS (not a mobile-Phoenix 10 TOPS figure carried over by mistake).
+differ by channel width only), and achieved-% still climbs a long way within that
+one depth class — 14.4% to 28.0%, a bigger swing than the 28.0%→33.1%→39.3% gap
+between the depth classes themselves. **This repo has no pair that varies depth at
+matched width**, or width at matched depth, across the stock YOLOv8 family: node
+count, channel width, and total MACs move together in every variant Ultralytics
+ships.
+
+**The follow-up that isolates them ran, and it points at width, not depth.**
+`resnet50` (50 layers, narrow) reaches 18.8% split-4 and `wide_resnet50_2` (50
+layers — same depth, wider) reaches 26.4%: a clean +7.6-point width effect at
+matched depth, similar in size to yolov8n→s's +10.4 points. But `wide_resnet50_2`
+(50 layers) vs. `wide_resnet101_2` (101 layers, similar width, already measured at
+28.5%) is the cleanest depth-matched-width pair collected — cleaner than any YOLO
+pair, which never held width fixed — and **doubling depth here buys only +2.1
+points (26.4%→28.5%)**, far weaker than the +8.3 points (24.8%→33.1%) the YOLO
+node-count table showed for a similar jump. **Width is the better-supported
+correlate of achieved-% in both families tested; the strong-looking YOLO depth
+pattern most likely reflects Ultralytics scaling width and depth together, not an
+independent depth effect** — see `RESEARCH.md` finding 5 for the full numbers, plus
+the (weakened, not ruled out) weight-bandwidth-roofline check, a one-look
+channel-padding check that found no evidence of padding, and confirmation that
+AMD's 16 TOPS nameplate is independently correct for both this machine's 8700G and
+the laptop's 8645HS (not a mobile-Phoenix 10 TOPS figure carried over by mistake).
 
 The `yolov8s@1280` fps above needed its own correctness check first: `multi_partition_
 bench.py`'s cross-talk oracle flagged every call as a mismatch, at every process

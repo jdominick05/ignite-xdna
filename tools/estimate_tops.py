@@ -61,6 +61,11 @@ ROWS = [
     ("wide_resnet101_2 XINT8 (4x independent 1x4 columns)",
      "wide_resnet101_2_xint8_c64.onnx", 98.3,
      "results/multi_partition_wide_resnet101_2.log, combined fps @ N=4"),
+    ("resnet50 XINT8 (4x independent 1x4 columns)", "resnet50_xint8_c64.onnx", 354.6,
+     "results/multi_partition_resnet50.log, combined fps @ N=4"),
+    ("wide_resnet50_2 XINT8 (4x independent 1x4 columns)",
+     "wide_resnet50_2_xint8_c64.onnx", 181.3,
+     "results/multi_partition_wide_resnet50_2.log, combined fps @ N=4"),
 ]
 
 _profile_cache = {}
