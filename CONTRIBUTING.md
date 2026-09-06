@@ -81,7 +81,7 @@ session would test nothing this project cares about. Verification is empirical i
 ```bash
 python -m compileall -q npu pipelines tools \
   && for s in scripts/*.sh; do bash -n "$s" || exit 1; done \
-  && python -c "import npu.preprocess, npu.yolo, npu.yolo_decode, npu.session, npu.paths" \
+  && python -c "import npu.preprocess, npu.yolo, npu.yolo_decode, npu.yolo_pose, npu.yolo_pose_decode, npu.session, npu.paths" \
   && echo "PIPELINE CHECKS PASS"
 ```
 
