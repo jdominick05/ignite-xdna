@@ -201,6 +201,7 @@ generalize beyond any one model:
 | Is stream saturation compute-bound or memory-bound? | Concurrent sessions each hold their own runtime buffers — is the throughput ceiling actually a memory ceiling in disguise? | **Answered: memory, not the cause.** `xrt-smi examine -r aie-partitions` (the one tool found this session that can actually see NPU memory — Windows' `GPU Engine`/`GPU Adapter Memory` counters can't, the device is a `ComputeAccelerator`, not a WDDM GPU adapter) shows memory scaling linearly with stream count on both yolov8n (~29 MB/stream) and yolov8m (~100 MB/stream), climbing cleanly through 8 streams with no ceiling — well past the 2-3 stream point where throughput already flattened. Memory and throughput are decoupled, ruling memory out and leaving compute headroom as the standing explanation. `tools/session_hold.py`, `results/nstream_memory_yolov8{n,m}.log`. |
 | Does classification show the same concurrency shape; does accuracy survive contention past a binary found/not-found check? | Every prior concurrency check only confirmed a binary ground truth (found a person, or didn't) — does real accuracy hold under N-way contention, and does classification saturate the same way detection does? | **Answered: yes on both, cleanly.** resnet50 saturates at 1.60× by 8 concurrent streams (between yolov8n's 2.13× and yolov8m's 1.29×, its own idle-headroom budget) and holds flat through 16 with zero regression. Every concurrent stream ran the identical labeled slice the solo baseline used, so predictions could be diffed exactly rather than compared as an aggregate top-1 a different sample could move on its own — result: bit-identical argmax on all 960 concurrent classifications tested (16 streams × 60 images), at every stream count. `tools/nstream_cls_bench.py`, `results/nstream_resnet50.log`. Table in `README.md`. |
 | Width beyond yolov8m: does the n→s→m trend continue at l/x? | Two width steps (n→s, s→m) both bought a clear mAP gain for extra latency — does l→x keep paying off? | **Answered: no, the trend breaks.** l: 49.67 ms, 45.37 mAP@50-95, 1510/1517 nodes. x: 117.11 ms, 45.09 mAP@50-95, same 1510/1517 nodes (l/x share architecture depth, only channel width differs). x is 2.36× the latency of l for a net *loss* in mAP — width alone stops paying off somewhere around l under this recipe (plain XINT8, calib 24-32). Also found: yolov8l's full 5000-image eval failed with a hardware DPU timeout on 2 of 3 attempts, memory confirmed flat (231 MB) during the runs that succeeded — ruling out a simple leak, root cause still unresolved, not seen on any other size. `results/map_yolov8{l,x}_cut_xint8_npu.log`, `results/yolo_cut_{l,x}_{cpu,npu,diag}.log`. Table in `README.md`. |
+| Can `xrt-smi`'s GOPS column build a utilization-vs-16-TOPS story? | GOPS is the one other live NPU-side reading `xrt-smi` exposes besides memory — does it track real compute headroom running out the way the throughput ceiling does? | **Answered: no, it's a dead end.** `tools/session_hold.py` extended to parse GOPS and independently count actual completions/s in the same run. GOPS is exactly `9 × streams` (yolov8n) / `80 × streams` (yolov8m) with zero saturation through 8 streams, while measured completions/s is flat from 1 stream onward in the same run — decoupled from real throughput. Simplest explanation: `xrt-smi` credits each context a notional per-context GOPS figure blind to shared-array contention, not a measurement of delivered compute. `results/gops_yolov8{n,m}.log`. Table in `README.md`. |
 
 ## Open questions
 
@@ -225,18 +226,27 @@ been closed:
   earlier was resolution-specific (640×640), not width-specific, since the ResNet
   AdaRound runs above hit no such wall at 224². AdaRound for YOLOv8l/x at 640×640 is
   still untried anywhere.
-- **Direct NPU utilization measurement — done.** Windows' `GPU Engine` counter was a
-  dead end for a reason stronger than polling granularity: the NPU registers as a
-  `ComputeAccelerator` device, not a WDDM GPU adapter, so it never appears as an adapter
-  LUID for that counter (or `GPU Adapter Memory`) to read at all, regardless of sampling
-  rate. `xrt-smi examine -r aie-partitions`'s GOPS column, turned into a
-  utilization-vs-16-TOPS number across 8 already-quantized models by
-  `tools/gops_sweep.py` (`results/npu_utilization_gops.log`), lands everything under 2%
-  of nameplate (9 GOPS for yolov8n up to 258 for yolov8x) — roughly two orders of
+- **Direct NPU utilization measurement — done, GOPS path closed on two fronts.**
+  Windows' `GPU Engine` counter was a dead end for a reason stronger than polling
+  granularity: the NPU registers as a `ComputeAccelerator` device, not a WDDM GPU
+  adapter, so it never appears as an adapter LUID for that counter (or `GPU Adapter
+  Memory`) to read at all, regardless of sampling rate. `xrt-smi examine -r
+  aie-partitions`'s GOPS column was tried two ways: a cross-model sweep across 8
+  already-quantized models (`tools/gops_sweep.py`, `results/npu_utilization_gops.log`)
+  turns it into a utilization-vs-16-TOPS number that lands everything under 2% of
+  nameplate (9 GOPS for yolov8n up to 258 for yolov8x) — roughly two orders of
   magnitude below the FLOPs/latency estimate this repo used everywhere else (yolov8n at
-  ~1.1 TOPS). The reading's cross-model ratios track FLOPs closely (validated on
-  n/s/m), so it reads as real; what the counter counts, and why the absolute number
-  differs so much from the FLOPs/latency estimate, remains open. See finding 3.
+  ~1.1 TOPS) — with cross-model ratios tracking FLOPs closely (validated on n/s/m), so
+  the reading looks real; and a per-stream concurrency check (`tools/session_hold.py`
+  extended to parse GOPS, `results/gops_yolov8{n,m}.log`) found GOPS scales exactly
+  linearly with stream count (9×/80× per stream for n/m) with no saturation through 8
+  streams, while measured completions/s in the same run is flat from 1 stream onward —
+  decoupled from real contention. Together: the counter is a per-context notional
+  figure, not a measurement of delivered compute, so it can't build a
+  utilization-vs-16-TOPS story under load; what it counts, and why its absolute
+  magnitude differs so much from the FLOPs/latency estimate, remains open. See finding
+  3 and the status table. No remaining path to direct compute-utilization measurement
+  is known on this stack.
 - **Width beyond yolov8m — done for detection (l/x); classification untested.**
   yolov8l/x are measured (see the findings table above) and the trend breaks at x. Two
   width steps still confirm the classification trend (resnet50→wide_resnet50_2→
