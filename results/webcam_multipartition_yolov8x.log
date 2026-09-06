@@ -1,0 +1,51 @@
+model: models/yolov8x_cut_xint8.onnx
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\1x4.xclbin
+workers: 4
+pre-building one session to force the compile before any worker forks -- avoids N processes racing the same cache directory on first run.
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\1x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\yolocutx1x4cachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+compile cache warm.
+
+waiting for 4 workers to build sessions and report ready...
+4 workers ready. xrt-smi reports 4 active HW context(s) (expect 4 for genuine separate-column parallelism).
+
+camera native size 640x480, 30.0 fps capture rate -- that, not the NPU, may be the real ceiling here.
+running - press q to quit
+t=  1.0s  combined   2.0 fps  per-worker ~197.1 ms  frames_sent=11
+t=  2.0s  combined  14.0 fps  per-worker ~176.9 ms  frames_sent=41
+t=  3.0s  combined  22.0 fps  per-worker ~180.5 ms  frames_sent=72
+t=  4.1s  combined  22.0 fps  per-worker ~177.6 ms  frames_sent=102
+t=  5.1s  combined  22.5 fps  per-worker ~177.2 ms  frames_sent=133
+t=  6.1s  combined  22.0 fps  per-worker ~177.5 ms  frames_sent=163
+t=  7.1s  combined  22.0 fps  per-worker ~176.8 ms  frames_sent=194
+t=  8.1s  combined  23.5 fps  per-worker ~176.8 ms  frames_sent=225
+t=  9.2s  combined  22.5 fps  per-worker ~176.7 ms  frames_sent=255
+t= 10.2s  combined  22.5 fps  per-worker ~176.4 ms  frames_sent=286
+t= 11.2s  combined  23.0 fps  per-worker ~176.4 ms  frames_sent=316
+t= 12.2s  combined  23.5 fps  per-worker ~176.8 ms  frames_sent=347
+t= 13.2s  combined  22.5 fps  per-worker ~176.7 ms  frames_sent=377
+t= 14.2s  combined  22.5 fps  per-worker ~176.6 ms  frames_sent=407
+reached --max-seconds 15s, quitting
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\1x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\yolocutx1x4cachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\1x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\yolocutx1x4cachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\1x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\yolocutx1x4cachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\1x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\yolocutx1x4cachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.

@@ -26,6 +26,9 @@ stall.
     $env:RYZEN_AI_INSTALLATION_PATH = 'C:\\Program Files\\RyzenAI\\1.7.1'
     python tools/webcam_multipartition_demo.py --workers 4 --source 0
         # q quits; defaults to yolov8n_cut_xint8.onnx on yolocut1x4cachekey
+        # --max-seconds N auto-quits after N seconds and is meant for logged,
+        # unattended capture runs -- combined fps / per-worker ms are printed
+        # to stdout once a second either way, live or logged
 
 --workers must be <= 4 on this 4-column Phoenix chip. 1x4.xclbin is
 deprecated by AMD since Ryzen AI 1.5 (still functions under the 1.7.1 install
@@ -126,6 +129,9 @@ def main():
     ap.add_argument("--source", default="0")
     ap.add_argument("--fresh", action="store_true")
     ap.add_argument("--ready-timeout", type=float, default=60.0)
+    ap.add_argument("--max-seconds", type=float, default=None,
+                     help="auto-quit after this many seconds -- for unattended, "
+                          "loggable capture runs instead of manual 'q' to quit")
     args = ap.parse_args()
 
     xclbin = resolve_1x4_xclbin(args.xclbin)
@@ -187,6 +193,10 @@ def main():
     last_dets = []
     infer_ms_by_rank = {}
     completion_times = collections.deque()
+    model_tag = Path(args.model).stem
+    win_name = f"{model_tag} npu x{n} round-robin"
+    run_start = time.perf_counter()
+    last_log = run_start
 
     try:
         while True:
@@ -223,8 +233,18 @@ def main():
                         f"per-worker ~{avg_infer:4.1f} ms",
                         (10, 28), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2,
                         cv2.LINE_AA)
-            cv2.imshow(f"yolov8n npu x{n} round-robin", frame)
+            cv2.imshow(win_name, frame)
+
+            if now - last_log >= 1.0:
+                print(f"t={now - run_start:5.1f}s  combined {combined_fps:5.1f} fps  "
+                      f"per-worker ~{avg_infer:5.1f} ms  frames_sent={frame_count}",
+                      flush=True)
+                last_log = now
+
             if cv2.waitKey(1) & 0xFF == ord("q"):
+                break
+            if args.max_seconds is not None and now - run_start >= args.max_seconds:
+                print(f"reached --max-seconds {args.max_seconds:.0f}s, quitting", flush=True)
                 break
     finally:
         stop_event.set()

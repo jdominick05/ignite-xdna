@@ -918,19 +918,32 @@ process = one HW column, per the sweep above) and round-robin live webcam frames
 dropping a frame rather than queuing it if its assigned worker is still busy — so the
 on-screen number is a genuine live rate, not an average over a growing backlog.
 
-Measured on Desktop 2 / Phoenix: all 4 workers reached ready, and `xrt-smi` confirmed
-4 active HW contexts — genuine separate-column parallelism, not one partition being
-time-sliced. **Live HUD read combined 30.0 fps, ~18.0 ms per worker.** 30.0 fps is
-exactly this camera's own native capture rate, measured separately — the round-robin
-split is working as designed, but the webcam's frame delivery, not NPU throughput, is
-what caps the on-screen number. The static-image benchmark already put this same
-model's ceiling at 245.2 fps combined at N=4 — roughly **8× of headroom sitting
-unused** here because the camera can't feed frames fast enough to reach it. This
-resolves the Roadmap's open "webcam path… not exercised end to end" item, but not the
-way that item anticipated: the finding isn't about the NPU or the round-robin split at
-all, it's that camera capture is the bottleneck for this exact demo, and the multi-
-partition throughput gain would need a faster frame source (multiple cameras, a video
-file, or synthetic frames) to actually show up on screen.
+Measured on Desktop 2 / Phoenix, camera a Logitech C920s: all 4 workers reached ready,
+and `xrt-smi` confirmed 4 active HW contexts — genuine separate-column parallelism, not
+one partition being time-sliced. **Live HUD read combined 30.0 fps, ~18.0 ms per
+worker.** 30.0 fps is exactly this camera's own native capture rate, measured
+separately — the round-robin split is working as designed, but the webcam's frame
+delivery, not NPU throughput, is what caps the on-screen number. The static-image
+benchmark already put this same model's ceiling at 245.2 fps combined at N=4 — roughly
+**8× of headroom sitting unused** here because the camera can't feed frames fast enough
+to reach it. This resolves the Roadmap's open "webcam path… not exercised end to end"
+item, but not the way that item anticipated: the finding isn't about the NPU or the
+round-robin split at all, it's that camera capture is the bottleneck for this exact
+demo, and the multi-partition throughput gain would need a faster frame source
+(multiple cameras, a video file, or synthetic frames) to actually show up on screen —
+*at this model size*.
+
+**Repeating the same live demo at m, l, and x finds where that stops being true**
+(`results/webcam_multipartition_yolov8{n,m,l,x}.log`, 15s capture windows each, same
+camera): per-worker latency climbs with model size — 18.0 ms (n) → 62.0 ms (m) →
+110.6 ms (l) → 176.6 ms (x) — and n/m/l all still land at the camera's 30 fps ceiling,
+comfortably under the ~133 ms/worker four workers need to sustain it. x is the first
+size where that budget is blown: **combined fps drops to 22.0–23.5, genuinely
+NPU-bound rather than camera-bound for the first time in this series.** That live
+number lines up closely with the static-image benchmark's 23.20 fps combined for the
+same model/xclbin combination (above) — independent confirmation that both numbers are
+measuring the same real throughput ceiling, just fed by a webcam instead of pre-loaded
+frames.
 
 Also measured in isolation while chasing an apparent startup hang: `cv2.VideoCapture(0)`
 took ~90s to open on this machine, and requesting a non-native resolution via
@@ -938,9 +951,11 @@ took ~90s to open on this machine, and requesting a non-native resolution via
 renegotiation cost specific to this camera, reproduced twice, unrelated to the NPU or
 anything in this repo's code. The demo therefore requests no explicit resolution and
 reports whatever the camera's native size is (640×480 @ 30 fps here); `letterbox()`
-already handles arbitrary capture sizes. No `results/` log backs this one — it's a live
-HUD reading, not a script that writes a log — so the numbers above are the record;
-`tools/webcam_multipartition_demo.py` reproduces it.
+already handles arbitrary capture sizes. The n/m/l/x numbers above are backed by
+`results/webcam_multipartition_yolov8{n,m,l,x}.log` — the tool now prints combined fps
+and per-worker ms to stdout once a second (`--max-seconds` auto-quits an unattended
+capture run) instead of only drawing them on the live HUD, which is what the first,
+n-only pass through this section had to rely on.
 
 ---
 
@@ -1358,7 +1373,7 @@ reasoning behind each.
   been exercised end to end.** The related but distinct round-robin-across-4-columns
   demo *has* — see
   [A live demo](#a-live-demo-does-the-multi-partition-finding-hold-on-a-real-webcam)
-  above: camera-bound at 30 fps, not NPU-bound.
+  above: camera-bound at 30 fps through n/m/l, genuinely NPU-bound (22.0–23.5 fps) at x.
 - **5th AIE column on this Phoenix chip — done, and it's a dead end.** `1x4.xclbin`
   caps at 4 independent partitions regardless of process count; a 5th process shares
   column 4 rather than getting its own. The driver's `5x4_*.xclbin` overlays fall back

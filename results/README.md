@@ -13,6 +13,7 @@ edited by hand except that the local user profile path has been replaced with
 | `interact/` | `wide_resnet50_2` at 160²/224²/288²: width and resolution together | Width and resolution together |
 | `batch/` | Static batch-2 ResNet50 export: the negative result on batching | Batching |
 | top level | The original ResNet50 table rows and the YOLOv8 head-cut investigation | Results; The YOLOv8n blocker |
+| top level | `webcam_multipartition_yolov8{n,m,l,x}.log`: live webcam round-robin across 4 independent 1x4.xclbin columns, per size | The webcam round-robin demo |
 
 File name conventions: `export_*` (ONNX export), `quant_*` (Quark quantization),
 `run_*` / `lat_*` (NPU or CPU inference and latency), `map_*` (COCO mAP evaluation),
