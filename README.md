@@ -1356,11 +1356,20 @@ through the `com.microsoft` domain instead — which the VitisAI EP's matcher ev
 doesn't recognize at all. Quark's own config dump also shows `A16W8` never sets
 `enable_npu_cnn: True` the way `XINT8` does, so this wasn't a close call. Not worth
 chasing further: fixing it means bumping export opset (its own trap, see below), for a
-config with no shown accuracy edge over `XINT8_ADAROUND`. **BF16 was never attempted at
-all, and isn't a gap** — Quark's quantizer for this backend doesn't expose a BF16 config
-to try (only `XINT8`/`A8W8`/`A16W8`/`XINT8_ADAROUND`/`XINT8_ADAQUANT` exist), consistent
-with AMD's documented support matrix: XDNA1 is CNN-INT8 only, BF16/transformer support
-is a later-chip, different-runtime story.
+config with no shown accuracy edge over `XINT8_ADAROUND`. **BF16 was never attempted
+through Quark, and that's a toolchain gap, not a silicon one** — Quark's quantizer for
+this backend doesn't expose a BF16 config to try (only
+`XINT8`/`A8W8`/`A16W8`/`XINT8_ADAROUND`/`XINT8_ADAQUANT` exist), and AMD's documented
+support matrix says XDNA1's *shipped CNN/LLM runtime path* is INT8-only. But the tile
+silicon itself is a different question, and now has a primary-source answer rather than
+a spec-sheet assumption: AMD's own `OGOAT/Collaterals/device.yaml` (bundled in this same
+1.7.1 install, see `results/aie/notes_aie2_device_dtypes.log`) gives Phoenix's `AIE2`
+tile spec directly — `macs_per_cycle: bfloat16xbfloat16: 128, int16xint8: 128,
+int8xint8: 256`. **The array natively does bfloat16 and int16 arithmetic; the absence
+from this repo's results is Quark/VitisAI-EP not exposing it, not the hardware lacking
+it.** See RESEARCH.md's "Custom C++ XRT / hand-written AIE kernels" for the full
+citation and the (closed) question of whether a custom kernel reaching those paths is
+buildable from anything else this SDK ships.
 
 **Silent CPU fallback is the failure mode to watch for.** The `[Vitis AI EP]` banner,
 `Target architecture:`, `Compile done.` and the operator table print **only during

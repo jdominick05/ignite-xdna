@@ -16,13 +16,17 @@ edited by hand except that the local user profile path has been replaced with
 | `mobilenet/` | `mobilenetv2_100.ra_in1k`: CPU/DML/NPU head-to-head, EP report -- the negative result where a model cheap enough on CPU alone loses to both accelerators | Model family: MobileNetV2 vs ResNet50 |
 | `bit/` | `resnetv2_50x3_bit`: CPU/NPU head-to-head, EP report -- best accuracy in this repo (84.00% top-1), yet NPU still loses to CPU because `InstanceNormalization` has no NPU kernel in this EP (only 79.5% of nodes place) | Pushing width further: resnetv2_50x3_bit |
 | `a16w8/` | `resnet50` quantized with Quark's `A16W8` (INT16 activation/INT8 weight) config, quantize log, EP report -- confirms 0/394 nodes place on NPU (full CPU fallback), traced to opset 17 vs. the 16-bit Q/DQ opset-21 requirement | Key findings: "The X1 backend is XINT8 or nothing" |
+| `aie/` | `notes_aie2_device_dtypes.log` -- not a measurement, a verbatim excerpt of AMD's own `OGOAT/Collaterals/device.yaml` (shipped in the 1.7.1 install) giving Phoenix's `AIE2` tile spec per data type, plus the `aie4_models` dead-end (internal AMD kernel-source tree, wrong chip generation) | RESEARCH.md: "Custom C++ XRT / hand-written AIE kernels" |
 | top level | The original ResNet50 table rows and the YOLOv8 head-cut investigation | Results; The YOLOv8n blocker |
 | top level | `webcam_multipartition_yolov8{n,m,l,x}.log`: live webcam round-robin across 4 independent 1x4.xclbin columns, per size | The webcam round-robin demo |
 | top level | `cam_probe_{backends,setres,late_set}.log`: camera open cost per OpenCV videoio backend, the resolution-change cost, and the no-op when the env var is set after `import cv2`; `webcam_multipartition_yolov8n_msmf_nohw.log` is the n demo re-run on the fast path | The webcam round-robin demo |
 
 File name conventions: `export_*` (ONNX export), `quant_*` (Quark quantization),
 `run_*` / `lat_*` (NPU or CPU inference and latency), `map_*` (COCO mAP evaluation),
-`diag_*` (the VitisAI EP assignment report as read by `tools/diag_ep.py`).
+`diag_*` (the VitisAI EP assignment report as read by `tools/diag_ep.py`), `notes_*`
+(a documentation excerpt -- a vendor config/source file read verbatim, not code run or
+hardware touched; the file itself says so in its header, e.g. `aie/
+notes_aie2_device_dtypes.log`).
 `*_npu`, `*_cpu` and `*_dml` suffixes name the execution provider requested; whether the
 NPU actually took the graph is answered by the matching `diag_*` log, not the suffix.
 DML has no report-file equivalent (VitisAI's `vitisai_ep_report.json` is written by that

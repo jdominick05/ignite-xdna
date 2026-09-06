@@ -587,35 +587,65 @@ been closed:
   next step is visible: a labeled licence-plate dataset from fixed camera feeds,
   fine-tuning a YOLO variant on it, and reusing this same head-cut + XINT8 + AdaRound
   recipe rather than re-deriving it.
-- **Custom C++ XRT / hand-written AIE kernels — scoped, not yet attempted.** Everything
-  above runs through ONNX Runtime's VitisAI EP against Quark-quantized INT8 graphs; it
-  answers "what can this hardware do through the toolchain AMD ships for CNN inference,"
-  not "what can the AIE array itself do." Prompted by asking whether XDNA1's silicon
-  supports INT16/BF16 at all (the "A16W8" and BF16 findings above are both about this
-  EP's own config surface, not the tile ISA) — checked what it would actually take to
-  reach the array directly. Answer: the tooling for it is already installed, not
-  hypothetical. `C:\Program Files\RyzenAI\1.7.1` ships three wheels never touched by
-  anything in this repo: **`vaie_overlay`** (`aiecompiler.exe`, plus Python wrappers for
-  `xchesscc`/`xchessmk` — the classical proprietary per-tile "CHESS" kernel compiler —
-  `mesimulator` — a software AIE simulator, kernels can be validated with **no hardware
-  at all** — `xclbinutil`, which packages a custom xclbin, `aiebu_asm`, `bootgen`,
-  `iss_dbg`); **`vaie_cpplus`** (the ADF C++ dataflow-graph API headers — `adf.h`, tile
-  control for both `aie2gen`, i.e. this project's own Hawk Point/Phoenix chips, and
-  `aie4gen` — this is what a kernel graph would actually be written in); and
-  **`llvm_aie_lightweight`** (Peano: `clang.exe` + `ld.lld.exe` targeting
-  `aie2-none-unknown-elf` directly, a second, open compiler path alongside CHESS). Raw
-  XRT (`xrt\xrt_coreutil.dll`) is present too, for driving a self-built xclbin with no
-  ONNX Runtime involved. This is the same Vitis/Vivado-lineage AI Engine toolchain used
-  for Versal FPGA+AIE designs, repackaged for XDNA1 — not the open-source
-  `mlir-aie`/IRON project, which is a separate, lighter-weight alternative entry point
-  this SDK does not ship at all. Checked whether any existing example already exercises
-  it: no — `LLM\` (the only other non-CNN use of this same install) goes through
-  `onnxruntime-genai`'s own C API, not custom AIE kernels, so there is no worked example
-  anywhere in this SDK to build from. Reaching it would be a from-zero bring-up — ADF
-  graph in C++, kernel compile (CHESS or Peano), `aiecompiler`, `xclbinutil` packaging,
-  a small XRT host program — the same falsification-first shape this project itself
-  started with on resnet50, one level lower in the stack, with `mesimulator` as the way
-  to validate correctness before any hardware is involved at all. Not started.
+- **Custom C++ XRT / hand-written AIE kernels — scoped, and the silicon-vs-toolchain
+  question now has a primary-source answer.** Everything above runs through ONNX
+  Runtime's VitisAI EP against Quark-quantized INT8 graphs; it answers "what can this
+  hardware do through the toolchain AMD ships for CNN inference," not "what can the AIE
+  array itself do." Prompted by asking whether XDNA1's silicon supports INT16/BF16 at
+  all (the "A16W8" and BF16 findings above are both about this EP's own config surface,
+  not the tile ISA) — checked what it would actually take to reach the array directly,
+  and what the tile ISA actually supports.
+  **`C:\Program Files\RyzenAI\1.7.1` ships an AI Engine compiler toolchain never touched
+  by anything in this repo:** `vaie_overlay` (its RECORD lists exactly two executables,
+  `aiecompiler.exe` and `graph_preprocessor.exe`, plus .bat wrappers and a client DLL —
+  `vaie_overlay/cli.py`'s `__all__` also names `mesimulator`, `xchesscc`/`xchessmk`,
+  `xclbinutil`, `bootgen`, `iss_dbg`, but that list is a shared entrypoint list used
+  across AMD's Vitis Python packaging convention, not a manifest of this wheel's actual
+  contents — an earlier draft of this note stated those tools ship here; they don't,
+  confirmed from the RECORD, not assumed); `vaie_cpplus` (the ADF C++ dataflow-graph API
+  headers — `adf.h`, tile control for both `aie2gen`, this project's own Hawk
+  Point/Phoenix chips, and `aie4gen`); and `llvm_aie_lightweight` (Peano: `clang.exe` +
+  `ld.lld.exe` targeting `aie2-none-unknown-elf` directly). Raw XRT
+  (`xrt\xrt_coreutil.dll`) is present too. This is the same Vitis/Vivado-lineage AI
+  Engine toolchain used for Versal FPGA+AIE designs, repackaged for XDNA1 — not the
+  open-source `mlir-aie`/IRON project, which this SDK does not ship at all.
+  **The dtype question has a better answer than compiling anything: `device.yaml`**, a
+  config file inside the `waic` wheel (also in this same install, `OGOAT/Collaterals/
+  device.yaml` — see `results/aie/notes_aie2_device_dtypes.log` for the full excerpt),
+  gives AMD's own per-architecture tile spec. Phoenix mixes in the `AIE2` block:
+  `macs_per_cycle` of 128 for `bfloat16xbfloat16` and `int16xint8`, 256 for
+  `int8xint8`; `adds_per_cycle` of 32 (`bfloat16`, `int16`) and 64 (`int8`, `int4`).
+  **This settles it: the silicon supports bfloat16, int16, int8, and int4 arithmetic
+  natively — this repo's INT8-only toolchain limit (locked #3) is a Quark/VitisAI-EP
+  config-surface restriction, not a hardware one**, now backed by an AMD-authored
+  in-SDK citation rather than a spec-sheet assumption. `int16xint8` at 128 macs/cycle is
+  exactly A16W8's shape (INT16 activation/INT8 weight) — confirms the A16W8 finding
+  above was correctly scoped to the EP (opset-17 Q/DQ domain routing), not the hardware.
+  Strix's `AIE2p` block, for contrast, adds `bfp16` and `int16xint16`/`int8xint4`
+  combinations AIE2 lacks and roughly doubles most throughput figures — an asymmetry
+  that is itself evidence this is a real per-chip table, not a copy-pasted default.
+  **Checked whether an actual custom kernel could be built and run on Phoenix from
+  material already in this install — a real dead end, confirmed rather than assumed.**
+  The same `waic` wheel also bundles `aie4_models/`, a large internal AMD kernel-source
+  tree (per-dtype Conv/GEMM/MaxPool/GroupNorm/Softmax/etc. C++ kernels in int8x8,
+  int16x8, int16x16, and bf16 variants — a real catalog of "every kernel, every data
+  type" for *some* chip). But `aie4_models/buildscripts/build_conv.py` hardcodes
+  `set_dev_gen(DevGen.Aie4)` at import time; `model_cfg.yaml`'s only documented
+  `device:` choices are `mds` (Medusa) and `swv` (SoundWave), both mapping to
+  `device.yaml`'s `TestHW` block — no `macs_per_cycle` table at all, i.e. pre-silicon
+  test hardware, not a shipping product; and `settings.sh` references AMD-internal
+  infrastructure (`/proj/primebuilds/...`, `aiengine-eng` license servers). This is an
+  internal engineering source tree for a different, unreleased chip generation,
+  incidentally bundled into a public wheel — not a path to a Phoenix kernel, checked
+  from the source before attempting a build, not assumed after one failed.
+  Checked whether any existing example already exercises the *reachable* part of this
+  toolchain (`aiecompiler`/ADF/Peano) for CNN inference: no — `LLM\` (the only other
+  non-CNN use of this same install) goes through `onnxruntime-genai`'s own C API, not
+  custom AIE kernels, so there is no worked example anywhere in this SDK to build a
+  Phoenix kernel from. Reaching it would still be a from-zero bring-up — ADF graph in
+  C++, kernel compile (CHESS or Peano), `aiecompiler`, `xclbinutil` packaging, a small
+  XRT host program — the same falsification-first shape this project itself started
+  with on resnet50, one level lower in the stack. Not started.
 
 ## How to read the rest of this repository
 

@@ -1,0 +1,111 @@
+This is a documentation excerpt, not a measurement -- no code was run, nothing
+was compiled, nothing touched hardware. It is a verbatim read of a config file
+already shipped inside C:\Program Files\RyzenAI\1.7.1, extracted from the
+`waic-1.7.1-py3-none-any.whl` wheel (installed into the `ryzen-ai-1.7.1` conda
+env as package `waic`), member path
+`OGOAT/Collaterals/device.yaml`. Recorded here because it is the primary-source
+answer to "does XDNA1 support int8/int16/bfloat16" -- a question this repo had
+previously only answered at the toolchain level (Quark's config surface),
+never at the silicon level. See RESEARCH.md's open questions, "Custom C++ XRT
+/ hand-written AIE kernels" for the full context.
+
+`device.yaml` is part of AMD's OGOAT graph-optimizer/cost-model library
+(shared infrastructure for tiling and scheduling across AIE-based products,
+not specific to the CNN-inference path this repo otherwise uses). It defines
+one architecture block per AIE generation (AIE2, AIE2p, TestHW) and one
+per-product device block that mixes in an architecture block by name. The
+`phoenix:` block below is this project's own chip (Hawk Point is not named
+separately -- see caveat at the bottom).
+
+=== AIE2 architecture block (mixed into `phoenix:`) ===
+  adds_per_cycle:
+    bfloat16: 32
+    int16: 32
+    int8: 64
+    int4: 64
+  macs_per_cycle:
+    bfloat16xbfloat16: 128
+    int16xint8: 128
+    int8xint8: 256
+  core_data_memory: 64 (KB, per tile)
+  core_num_banks: 4
+  core_program_memory: 16 (KB)
+  memtile_capacity: 512 (KB)
+  memtile_num_banks: 8
+  max_stream_bw: 4
+
+=== phoenix: device block ===
+  num_columns: 4
+  num_rows: 4
+  memtile_rows: 1
+  dram_read_bandwidth: 16
+  dram_write_bandwidth: 16
+  <<: *AIE2
+
+=== AIE2p architecture block (Strix -- mixed into `strix:`/`gpt2:`), for contrast ===
+  adds_per_cycle:
+    bfloat16: 32
+    bfp16: 32
+    int16: 32
+    int8: 64
+    int4: 64
+  macs_per_cycle:
+    bfloat16xbfloat16: 64
+    bfp16xbfp16: 512
+    int16xint16: 128
+    int16xint8: 256
+    int16xint4: 256
+    int16xint2: 256
+    int8xint16: 256
+    int8xint8: 512
+    int8xint4: 512
+
+=== Reading this ===
+- AIE2 (Phoenix/Hawk Point, this repo's hardware) natively supports bfloat16,
+  int16, int8, and int4 arithmetic at the tile level, with real per-cycle MAC
+  throughput numbers for bfloat16xbfloat16, int16xint8, and int8xint8. This is
+  a citable, AMD-authored, in-SDK confirmation that the *silicon* is not the
+  reason this repo's toolchain is INT8-only -- that limit (docs/DECISIONS.md
+  locked #3, README.md's "X1 backend is XINT8 or nothing") is a Quark/VitisAI-EP
+  config-surface restriction, not a hardware one.
+- AIE2 is missing entries AIE2p has: no int16xint16, no int8xint4/int8xint16,
+  no bfp16 (block floating point). This asymmetry is what makes the table
+  credible as a real per-architecture spec rather than a copy-pasted default --
+  Strix's AIE2p block is a strict superset in dtype combinations and (for most
+  combinations) roughly double the throughput.
+- int16xint8 at 128 macs/cycle is exactly the shape Quark's `A16W8` config asks
+  for (INT16 activations, INT8 weights) -- see results/a16w8/. That measurement
+  found 0/394 nodes reaching the NPU, traced to an opset-17-vs-21 ONNX Q/DQ
+  domain issue in the VitisAI EP's graph matcher. This file confirms that
+  finding was correctly scoped to the EP, not the hardware: the tile has a
+  real int16xint8 MAC path, the EP just doesn't route to it via this config.
+
+=== Caveat ===
+This file is generic OGOAT infrastructure, not proof any particular kernel
+compiles or runs for Phoenix. A separate, larger source tree bundled in the
+same `waic` wheel (`aie4_models/`, a full internal AMD kernel-build repo with
+per-dtype Conv/GEMM/MaxPool/GroupNorm/Softmax/etc. kernel source in int8x8,
+int16x8, int16x16, and bf16 variants) was checked as a possible way to actually
+build and run one of these kernels -- and is a dead end for this hardware:
+`aie4_models/buildscripts/build_conv.py` hardcodes `set_dev_gen(DevGen.Aie4)`
+at import time, `model_cfg.yaml`'s only documented `device:` choices are `mds`
+(Medusa) and `swv` (SoundWave) -- both map to a `TestHW` architecture block in
+device.yaml with no `macs_per_cycle` table at all, i.e. pre-silicon test
+hardware, not a shipping AIE2/AIE2p product -- and `settings.sh` references
+AMD-internal build infrastructure (`/proj/primebuilds/...`, `aiengine-eng`
+license servers). This is an internal AMD engineering source tree for a
+different, unreleased chip generation, incidentally bundled into a public
+wheel; it is not a path to a custom kernel for this project's Phoenix/Hawk
+Point hardware. Not attempted, for this reason -- confirmed from the source
+before trying, not assumed.
+
+Also correcting an overclaim from the previous commit (8cb20fc, not yet pushed):
+that commit and RESEARCH.md said `vaie_overlay` ships `mesimulator`, `xchesscc`/
+`xchessmk`, `xclbinutil`, `bootgen`, and `iss_dbg`. Re-checked the wheel's own
+RECORD: it contains exactly two executables, `aiecompiler.exe` and
+`graph_preprocessor.exe` (plus their .bat wrappers and a client DLL). Those
+other names come from `vaie_overlay/cli.py`'s `__all__` list, which is a shared
+entrypoint list used across AMD's Vitis Python packaging convention -- not a
+manifest of what this specific wheel contains. Whether those tools exist
+elsewhere in the 1.7.1 install is unconfirmed, not assumed present. README.md
+and RESEARCH.md are corrected in the same commit as this file.
