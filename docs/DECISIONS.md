@@ -294,7 +294,11 @@
   driver/firmware revision this repo doesn't have, or the separate ahead-of-time
   AIE-compiler flow (`vaitrace`'s `-cp`/`vaiml` flags) rather than the lightweight
   ORT/VitisAI-EP JIT-compile path every pipeline here uses — out of scope unless that
-  flow gets set up deliberately. Desktop 2 / Phoenix.
+  flow gets set up deliberately. Desktop 2 / Phoenix. **That flow is now scoped, not
+  just named** — see RESEARCH.md's open questions, "Custom C++ XRT / hand-written AIE
+  kernels": the whole classical AIE compiler stack (`aiecompiler`, ADF C++ headers,
+  Peano, raw XRT) is already present in the `RyzenAI\1.7.1` install, unused by anything
+  here.
 
 ## The YOLOv8 partitioning failure (resolved)
 

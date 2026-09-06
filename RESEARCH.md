@@ -587,6 +587,35 @@ been closed:
   next step is visible: a labeled licence-plate dataset from fixed camera feeds,
   fine-tuning a YOLO variant on it, and reusing this same head-cut + XINT8 + AdaRound
   recipe rather than re-deriving it.
+- **Custom C++ XRT / hand-written AIE kernels — scoped, not yet attempted.** Everything
+  above runs through ONNX Runtime's VitisAI EP against Quark-quantized INT8 graphs; it
+  answers "what can this hardware do through the toolchain AMD ships for CNN inference,"
+  not "what can the AIE array itself do." Prompted by asking whether XDNA1's silicon
+  supports INT16/BF16 at all (the "A16W8" and BF16 findings above are both about this
+  EP's own config surface, not the tile ISA) — checked what it would actually take to
+  reach the array directly. Answer: the tooling for it is already installed, not
+  hypothetical. `C:\Program Files\RyzenAI\1.7.1` ships three wheels never touched by
+  anything in this repo: **`vaie_overlay`** (`aiecompiler.exe`, plus Python wrappers for
+  `xchesscc`/`xchessmk` — the classical proprietary per-tile "CHESS" kernel compiler —
+  `mesimulator` — a software AIE simulator, kernels can be validated with **no hardware
+  at all** — `xclbinutil`, which packages a custom xclbin, `aiebu_asm`, `bootgen`,
+  `iss_dbg`); **`vaie_cpplus`** (the ADF C++ dataflow-graph API headers — `adf.h`, tile
+  control for both `aie2gen`, i.e. this project's own Hawk Point/Phoenix chips, and
+  `aie4gen` — this is what a kernel graph would actually be written in); and
+  **`llvm_aie_lightweight`** (Peano: `clang.exe` + `ld.lld.exe` targeting
+  `aie2-none-unknown-elf` directly, a second, open compiler path alongside CHESS). Raw
+  XRT (`xrt\xrt_coreutil.dll`) is present too, for driving a self-built xclbin with no
+  ONNX Runtime involved. This is the same Vitis/Vivado-lineage AI Engine toolchain used
+  for Versal FPGA+AIE designs, repackaged for XDNA1 — not the open-source
+  `mlir-aie`/IRON project, which is a separate, lighter-weight alternative entry point
+  this SDK does not ship at all. Checked whether any existing example already exercises
+  it: no — `LLM\` (the only other non-CNN use of this same install) goes through
+  `onnxruntime-genai`'s own C API, not custom AIE kernels, so there is no worked example
+  anywhere in this SDK to build from. Reaching it would be a from-zero bring-up — ADF
+  graph in C++, kernel compile (CHESS or Peano), `aiecompiler`, `xclbinutil` packaging,
+  a small XRT host program — the same falsification-first shape this project itself
+  started with on resnet50, one level lower in the stack, with `mesimulator` as the way
+  to validate correctness before any hardware is involved at all. Not started.
 
 ## How to read the rest of this repository
 
