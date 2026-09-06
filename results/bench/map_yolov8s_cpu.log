@@ -1,0 +1,47 @@
+loading annotations into memory...
+Done (t=0.28s)
+creating index...
+index created!
+model: full graph (1 output), ONNX decode
+eval : 5000 images, conf 0.001, iou 0.7, max_det 300, per-class NMS
+  500/5000  (55139 detections so far)
+  1000/5000  (110268 detections so far)
+  1500/5000  (167571 detections so far)
+  2000/5000  (222085 detections so far)
+  2500/5000  (276157 detections so far)
+  3000/5000  (332254 detections so far)
+  3500/5000  (388535 detections so far)
+  4000/5000  (445038 detections so far)
+  4500/5000  (503680 detections so far)
+  5000/5000  (559065 detections so far)
+
+559065 detections over 5000 images in 527s
+inference  mean 95.70 ms   median 94.70 ms
+wrote C:\Users\<user>\src\timm-resnet50.a1_in1k-RyzenAI\results\dets_yolov8s_cpu.json
+Loading and preparing results...
+DONE (t=2.09s)
+creating index...
+index created!
+Running per image evaluation...
+Evaluate annotation type *bbox*
+DONE (t=27.37s).
+Accumulating evaluation results...
+DONE (t=5.33s).
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.443
+ Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] = 0.607
+ Average Precision  (AP) @[ IoU=0.75      | area=   all | maxDets=100 ] = 0.480
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.252
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.491
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.600
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=  1 ] = 0.344
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets= 10 ] = 0.561
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.610
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.400
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.673
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.755
+
+=== yolov8s | CPU | 5000 images ===
+mAP@50-95  44.29
+mAP@50     60.69
+mAP small / medium / large   25.16 / 49.09 / 60.00
+latency    95.70 ms

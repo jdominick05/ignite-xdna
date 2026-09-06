@@ -1,0 +1,27 @@
+
+=== C:\Users\<user>\src\timm-resnet50.a1_in1k-RyzenAI\modelcachekey\vitisai_ep_report.json ===
+  all            nodeNum=  769  opTypes=10
+  NPU            nodeNum=  767  opTypes=10
+  VITIS_EP_CPU   nodeNum=    2  opTypes=2
+
+  per-node device counts: {'CPU': 2, 'NPU': 767}
+
+  767 nodes on the NPU, 2 elsewhere.
+
+  op type x device:
+    CPU           DequantizeLinear     1
+    CPU           QuantizeLinear       1
+    NPU           Add                  33
+    NPU           Conv                 104
+    NPU           DequantizeLinear     384
+    NPU           Flatten              1
+    NPU           Gemm                 1
+    NPU           GlobalAveragePool    1
+    NPU           MaxPool              1
+    NPU           Mul                  1
+    NPU           QuantizeLinear       141
+    NPU           Relu                 100
+
+  2 nodes NOT on the NPU (first 25):
+    CPU           QuantizeLinear       ['input_QuantizeLinear_Output']
+    CPU           DequantizeLinear     ['output']

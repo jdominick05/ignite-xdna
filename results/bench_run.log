@@ -1,0 +1,1098 @@
+[2m    have yolov8n_cut_xint8_c200.onnx -- skipping (--force to redo)[0m
+
+[1m[34m==> quantize yolov8n adaround  (200 images, ~20 GB of spool)[0m
+[2m    disk: 64 GB free, ~23 GB needed for Quark's calibration cache (yolov8n: ~105 MB/image)[0m
+[2m    AdaRound: expect this one to take many minutes[0m
+[2m    env: resnet_env  (3.12.11)[0m
+[2m    log: results/bench/quant_yolov8n_cut_xint8_c200_adaround.log[0m
+[32m
+[QUARK-INFO]: Checking custom ops library ...[0m
+[33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[32m
+[QUARK-INFO]: Start compiling CPU version of custom ops library.[0m
+W0905 15:27:10.432000 3928 site-packages\torch\utils\cpp_extension.py:466] Error checking compiler version for cl: [WinError 2] The system cannot find the file specified
+INFO: Could not find files for the given pattern(s).
+[31m
+[QUARK-ERROR]: CPU version of custom ops library compilation failed:Command '['where', 'cl']' returned non-zero exit status 1.[0m
+[33m
+[QUARK-WARNING]: Custom ops library compilation failed: CPU version of custom ops library compilation failed:Command '['where', 'cl']' returned non-zero exit status 1..[0m
+Traceback (most recent call last):
+  File "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\build_custom_ops.py", line 58, in compile_custom_op_cpu
+    load(
+  File "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\torch\utils\cpp_extension.py", line 1681, in load
+    return _jit_compile(
+           ^^^^^^^^^^^^^
+  File "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\torch\utils\cpp_extension.py", line 2138, in _jit_compile
+    _write_ninja_file_and_build_library(
+  File "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\torch\utils\cpp_extension.py", line 2275, in _write_ninja_file_and_build_library
+    _write_ninja_file_to_build_library(
+  File "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\torch\utils\cpp_extension.py", line 2762, in _write_ninja_file_to_build_library
+    _write_ninja_file(
+  File "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\torch\utils\cpp_extension.py", line 2946, in _write_ninja_file
+    cl_paths = subprocess.check_output(['where',
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\subprocess.py", line 466, in check_output
+    return run(*popenargs, stdout=PIPE, timeout=timeout, check=True,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\subprocess.py", line 571, in run
+    raise CalledProcessError(retcode, process.args,
+subprocess.CalledProcessError: Command '['where', 'cl']' returned non-zero exit status 1.
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\build_custom_ops.py", line 291, in compile_library
+    compile_library_core("CPU", extra_cuda_cflags, extra_cflags)
+  File "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\build_custom_ops.py", line 257, in compile_library_core
+    compile_custom_op_cpu(file_name, build_directory, extra_cuda_cflags, extra_cflags)
+  File "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\shares\utils\log.py", line 136, in wrapper
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\build_custom_ops.py", line 72, in compile_custom_op_cpu
+    raise RuntimeError("CPU version of custom ops library compilation failed:" + str(e))
+RuntimeError: CPU version of custom ops library compilation failed:Command '['where', 'cl']' returned non-zero exit status 1.
+[32m
+[QUARK-INFO]: Checked custom ops library.[0m
+[33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: Config has been replaced by QConfig. The old API will be removed in the next release.[0m
+[33m
+[QUARK-WARNING]: The algorithm API is algo_config in QConfig. The old API will be removed in the next release.[0m
+[32m
+[QUARK-INFO]: The input ONNX model can create InferenceSession successfully[0m
+[32m
+[QUARK-INFO]: Folding or fusing operators for better accuracy and performance.[0m
+[33m
+[QUARK-WARNING]: The opset version is 17 < 20. Skipping fusing Gelu.[0m
+[32m
+[QUARK-INFO]: Start applying CLE algorithm on the float model...[0m
+[32m
+[QUARK-INFO]: CrossLayerEqualization pattern num: 0[0m
+[32m
+[QUARK-INFO]: Total CrossLayerEqualization steps: 1[0m
+[32m
+[QUARK-INFO]: The CLE algorithm has been applied. It took 0.1s to complete.[0m
+[32m
+[QUARK-INFO]: Optimizing the model for a better hardware compatibility.[0m
+[32m
+[QUARK-INFO]: Found Split node /model.2/Split. Replacing with Slice.[0m
+[32m
+[QUARK-INFO]: Found Split node /model.4/Split. Replacing with Slice.[0m
+[32m
+[QUARK-INFO]: Found Split node /model.6/Split. Replacing with Slice.[0m
+[32m
+[QUARK-INFO]: Found Split node /model.8/Split. Replacing with Slice.[0m
+[32m
+[QUARK-INFO]: Found Split node /model.12/Split. Replacing with Slice.[0m
+[32m
+[QUARK-INFO]: Found Split node /model.15/Split. Replacing with Slice.[0m
+[32m
+[QUARK-INFO]: Found Split node /model.18/Split. Replacing with Slice.[0m
+[32m
+[QUARK-INFO]: Found Split node /model.21/Split. Replacing with Slice.[0m
+[32m
+[QUARK-INFO]: The input ONNX model can run inference successfully[0m
+[32m
+[QUARK-INFO]: Start running calibration on 200 samples with extra options {}...[0m
+[32m
+[QUARK-INFO]: Data collection of PowerOfTwoMethod.MinMSE in progress. Runtime will depend on your model and data size.[0m
+input model: models/yolov8n_cut.onnx, 209 nodes, 6 outputs
+AdaRound: 1000 iterations (slow - expect many minutes)
+calibrating on 200 images
+quantizing with XINT8 + AdaRound -> models/yolov8n_cut_xint8_c200_adaround.onnx
+[QUARK_INFO]: Time information:
+2026-09-05 15:27:11.266499
+[QUARK_INFO]: OS and CPU information:
+                                        system --- Windows
+                                          node --- DESKTOP-GS7R78P
+                                       release --- 11
+                                       version --- 10.0.26200
+                                       machine --- AMD64
+                                     processor --- AMD64 Family 25 Model 117 Stepping 2, AuthenticAMD
+[QUARK_INFO]: Tools version information:
+                                        python --- 3.12.11
+                                          onnx --- 1.19.0
+                                   onnxruntime --- 1.29.0
+                                    quark.onnx --- 0.11
+[QUARK_INFO]: Quantized Configuration information:
+                                   model_input --- models/yolov8n_cut.onnx
+                                  model_output --- models/yolov8n_cut_xint8_c200_adaround.onnx
+                       calibration_data_reader --- <__main__.CocoCalibReader object at 0x000001BBB34DEE70>
+                         calibration_data_path --- None
+                                  quant_format --- QDQ
+                                   input_nodes --- []
+                                  output_nodes --- []
+                          op_types_to_quantize --- []
+                    extra_op_types_to_quantize --- []
+                                   per_channel --- False
+                                  reduce_range --- False
+                               activation_type --- QUInt8
+                                   weight_type --- QInt8
+                             nodes_to_quantize --- []
+                              nodes_to_exclude --- []
+                          subgraphs_to_exclude --- []
+                                optimize_model --- True
+                      use_external_data_format --- False
+                              calibrate_method --- PowerOfTwoMethod.MinMSE
+                           execution_providers --- ['CPUExecutionProvider']
+                                enable_npu_cnn --- True
+                        enable_npu_transformer --- False
+                     specific_tensor_precision --- False
+                                    debug_mode --- False
+                          convert_fp16_to_fp32 --- False
+                          convert_nchw_to_nhwc --- False
+                                   include_cle --- True
+                                    include_sq --- False
+                              include_rotation --- False
+                               include_fast_ft --- True
+                                 extra_options --- {'ActivationSymmetric': True, 'FastFinetune': {'DataSize': 200, 'FixedSeed': 1705472343, 'BatchSize': 2, 'NumIterations': 1000, 'LearningRate': 0.1, 'OptimAlgorithm': 'adaround', 'OptimDevice': 'cpu', 'InferDevice': 'cpu', 'EarlyStop': True}, 'AddQDQPairToWeight': False}
+  calib 50/200
+  calib 100/200
+  calib 150/200
+  calib 200/200
+  0%|          | 0/200 [00:00<?, ?it/s]Cached 0.10GB:   0%|          | 0/200 [00:00<?, ?it/s]Cached 0.10GB:   0%|          | 1/200 [00:00<02:15,  1.47it/s]Cached 0.21GB:   0%|          | 1/200 [00:01<02:15,  1.47it/s]Cached 0.21GB:   1%|1         | 2/200 [00:01<01:34,  2.10it/s]Cached 0.31GB:   1%|1         | 2/200 [00:01<01:34,  2.10it/s]Cached 0.31GB:   2%|1         | 3/200 [00:01<01:17,  2.55it/s]Cached 0.41GB:   2%|1         | 3/200 [00:01<01:17,  2.55it/s]Cached 0.41GB:   2%|2         | 4/200 [00:01<01:12,  2.69it/s]Cached 0.52GB:   2%|2         | 4/200 [00:01<01:12,  2.69it/s]Cached 0.52GB:   2%|2         | 5/200 [00:01<01:06,  2.93it/s]Cached 0.62GB:   2%|2         | 5/200 [00:02<01:06,  2.93it/s]Cached 0.62GB:   3%|3         | 6/200 [00:02<01:02,  3.11it/s]Cached 0.72GB:   3%|3         | 6/200 [00:02<01:02,  3.11it/s]Cached 0.72GB:   4%|3         | 7/200 [00:02<01:09,  2.79it/s]Cached 0.83GB:   4%|3         | 7/200 [00:03<01:09,  2.79it/s]Cached 0.83GB:   4%|4         | 8/200 [00:03<01:08,  2.80it/s]Cached 0.93GB:   4%|4         | 8/200 [00:03<01:08,  2.80it/s]Cached 0.93GB:   4%|4         | 9/200 [00:03<01:07,  2.82it/s]Cached 1.03GB:   4%|4         | 9/200 [00:03<01:07,  2.82it/s]Cached 1.03GB:   5%|5         | 10/200 [00:03<01:09,  2.73it/s]Cached 1.14GB:   5%|5         | 10/200 [00:04<01:09,  2.73it/s]Cached 1.14GB:   6%|5         | 11/200 [00:04<01:07,  2.82it/s]Cached 1.24GB:   6%|5         | 11/200 [00:04<01:07,  2.82it/s]Cached 1.24GB:   6%|6         | 12/200 [00:04<01:03,  2.95it/s]Cached 1.34GB:   6%|6         | 12/200 [00:04<01:03,  2.95it/s]Cached 1.34GB:   6%|6         | 13/200 [00:04<01:00,  3.07it/s]Cached 1.45GB:   6%|6         | 13/200 [00:05<01:00,  3.07it/s]Cached 1.45GB:   7%|7         | 14/200 [00:05<01:06,  2.79it/s]Cached 1.55GB:   7%|7         | 14/200 [00:05<01:06,  2.79it/s]Cached 1.55GB:   8%|7         | 15/200 [00:05<01:03,  2.92it/s]Cached 1.65GB:   8%|7         | 15/200 [00:05<01:03,  2.92it/s]Cached 1.65GB:   8%|8         | 16/200 [00:05<01:01,  2.99it/s]Cached 1.76GB:   8%|8         | 16/200 [00:06<01:01,  2.99it/s]Cached 1.76GB:   8%|8         | 17/200 [00:06<00:58,  3.11it/s]Cached 1.86GB:   8%|8         | 17/200 [00:06<00:58,  3.11it/s]Cached 1.86GB:   9%|9         | 18/200 [00:06<00:56,  3.20it/s]Cached 1.96GB:   9%|9         | 18/200 [00:06<00:56,  3.20it/s]Cached 1.96GB:  10%|9         | 19/200 [00:06<00:54,  3.29it/s]Cached 2.07GB:  10%|9         | 19/200 [00:06<00:54,  3.29it/s]Cached 2.07GB:  10%|#         | 20/200 [00:06<00:54,  3.30it/s]Cached 2.17GB:  10%|#         | 20/200 [00:07<00:54,  3.30it/s]Cached 2.17GB:  10%|#         | 21/200 [00:07<00:55,  3.24it/s]Cached 2.28GB:  10%|#         | 21/200 [00:07<00:55,  3.24it/s]Cached 2.28GB:  11%|#1        | 22/200 [00:07<00:57,  3.12it/s]Cached 2.38GB:  11%|#1        | 22/200 [00:07<00:57,  3.12it/s]Cached 2.38GB:  12%|#1        | 23/200 [00:07<00:55,  3.22it/s]Cached 2.48GB:  12%|#1        | 23/200 [00:08<00:55,  3.22it/s]Cached 2.48GB:  12%|#2        | 24/200 [00:08<00:54,  3.25it/s]Cached 2.59GB:  12%|#2        | 24/200 [00:08<00:54,  3.25it/s]Cached 2.59GB:  12%|#2        | 25/200 [00:08<00:53,  3.25it/s]Cached 2.69GB:  12%|#2        | 25/200 [00:08<00:53,  3.25it/s]Cached 2.69GB:  13%|#3        | 26/200 [00:08<00:53,  3.25it/s]Cached 2.79GB:  13%|#3        | 26/200 [00:09<00:53,  3.25it/s]Cached 2.79GB:  14%|#3        | 27/200 [00:09<00:52,  3.26it/s]Cached 2.90GB:  14%|#3        | 27/200 [00:09<00:52,  3.26it/s]Cached 2.90GB:  14%|#4        | 28/200 [00:09<00:53,  3.23it/s]Cached 3.00GB:  14%|#4        | 28/200 [00:09<00:53,  3.23it/s]Cached 3.00GB:  14%|#4        | 29/200 [00:09<00:52,  3.24it/s]Cached 3.10GB:  14%|#4        | 29/200 [00:09<00:52,  3.24it/s]Cached 3.10GB:  15%|#5        | 30/200 [00:09<00:51,  3.28it/s]Cached 3.21GB:  15%|#5        | 30/200 [00:10<00:51,  3.28it/s]Cached 3.21GB:  16%|#5        | 31/200 [00:10<00:53,  3.18it/s]Cached 3.31GB:  16%|#5        | 31/200 [00:10<00:53,  3.18it/s]Cached 3.31GB:  16%|#6        | 32/200 [00:10<00:52,  3.22it/s]Cached 3.41GB:  16%|#6        | 32/200 [00:10<00:52,  3.22it/s]Cached 3.41GB:  16%|#6        | 33/200 [00:10<00:53,  3.10it/s]Cached 3.52GB:  16%|#6        | 33/200 [00:11<00:53,  3.10it/s]Cached 3.52GB:  17%|#7        | 34/200 [00:11<00:54,  3.04it/s]Cached 3.62GB:  17%|#7        | 34/200 [00:11<00:54,  3.04it/s]Cached 3.62GB:  18%|#7        | 35/200 [00:11<00:56,  2.95it/s]Cached 3.72GB:  18%|#7        | 35/200 [00:11<00:56,  2.95it/s]Cached 3.72GB:  18%|#8        | 36/200 [00:11<00:53,  3.07it/s]Cached 3.83GB:  18%|#8        | 36/200 [00:12<00:53,  3.07it/s]Cached 3.83GB:  18%|#8        | 37/200 [00:12<00:51,  3.16it/s]Cached 3.93GB:  18%|#8        | 37/200 [00:12<00:51,  3.16it/s]Cached 3.93GB:  19%|#9        | 38/200 [00:12<00:51,  3.17it/s]Cached 4.03GB:  19%|#9        | 38/200 [00:12<00:51,  3.17it/s]Cached 4.03GB:  20%|#9        | 39/200 [00:12<00:51,  3.15it/s]Cached 4.14GB:  20%|#9        | 39/200 [00:13<00:51,  3.15it/s]Cached 4.14GB:  20%|##        | 40/200 [00:13<00:51,  3.14it/s]Cached 4.24GB:  20%|##        | 40/200 [00:13<00:51,  3.14it/s]Cached 4.24GB:  20%|##        | 41/200 [00:13<00:51,  3.10it/s]Cached 4.34GB:  20%|##        | 41/200 [00:13<00:51,  3.10it/s]Cached 4.34GB:  21%|##1       | 42/200 [00:13<00:50,  3.14it/s]Cached 4.45GB:  21%|##1       | 42/200 [00:14<00:50,  3.14it/s]Cached 4.45GB:  22%|##1       | 43/200 [00:14<00:49,  3.14it/s]Cached 4.55GB:  22%|##1       | 43/200 [00:14<00:49,  3.14it/s]Cached 4.55GB:  22%|##2       | 44/200 [00:14<00:48,  3.22it/s]Cached 4.65GB:  22%|##2       | 44/200 [00:14<00:48,  3.22it/s]Cached 4.65GB:  22%|##2       | 45/200 [00:14<00:48,  3.23it/s]Cached 4.76GB:  22%|##2       | 45/200 [00:15<00:48,  3.23it/s]Cached 4.76GB:  23%|##3       | 46/200 [00:15<00:46,  3.30it/s]Cached 4.86GB:  23%|##3       | 46/200 [00:15<00:46,  3.30it/s]Cached 4.86GB:  24%|##3       | 47/200 [00:15<00:46,  3.31it/s]Cached 4.96GB:  24%|##3       | 47/200 [00:15<00:46,  3.31it/s]Cached 4.96GB:  24%|##4       | 48/200 [00:15<00:46,  3.30it/s]Cached 5.07GB:  24%|##4       | 48/200 [00:15<00:46,  3.30it/s]Cached 5.07GB:  24%|##4       | 49/200 [00:15<00:44,  3.37it/s]Cached 5.17GB:  24%|##4       | 49/200 [00:16<00:44,  3.37it/s]Cached 5.17GB:  25%|##5       | 50/200 [00:16<00:44,  3.40it/s]Cached 5.27GB:  25%|##5       | 50/200 [00:16<00:44,  3.40it/s]Cached 5.27GB:  26%|##5       | 51/200 [00:16<00:44,  3.33it/s]Cached 5.38GB:  26%|##5       | 51/200 [00:16<00:44,  3.33it/s]Cached 5.38GB:  26%|##6       | 52/200 [00:16<00:44,  3.33it/s]Cached 5.48GB:  26%|##6       | 52/200 [00:17<00:44,  3.33it/s]Cached 5.48GB:  26%|##6       | 53/200 [00:17<00:43,  3.35it/s]Cached 5.58GB:  26%|##6       | 53/200 [00:17<00:43,  3.35it/s]Cached 5.58GB:  27%|##7       | 54/200 [00:17<00:43,  3.32it/s]Cached 5.69GB:  27%|##7       | 54/200 [00:17<00:43,  3.32it/s]Cached 5.69GB:  28%|##7       | 55/200 [00:17<00:43,  3.33it/s]Cached 5.79GB:  28%|##7       | 55/200 [00:18<00:43,  3.33it/s]Cached 5.79GB:  28%|##8       | 56/200 [00:18<00:43,  3.33it/s]Cached 5.89GB:  28%|##8       | 56/200 [00:18<00:43,  3.33it/s]Cached 5.89GB:  28%|##8       | 57/200 [00:18<00:44,  3.23it/s]Cached 6.00GB:  28%|##8       | 57/200 [00:18<00:44,  3.23it/s]Cached 6.00GB:  29%|##9       | 58/200 [00:18<00:43,  3.23it/s]Cached 6.10GB:  29%|##9       | 58/200 [00:19<00:43,  3.23it/s]Cached 6.10GB:  30%|##9       | 59/200 [00:19<00:44,  3.19it/s]Cached 6.20GB:  30%|##9       | 59/200 [00:19<00:44,  3.19it/s]Cached 6.20GB:  30%|###       | 60/200 [00:19<00:44,  3.18it/s]Cached 6.31GB:  30%|###       | 60/200 [00:19<00:44,  3.18it/s]Cached 6.31GB:  30%|###       | 61/200 [00:19<00:43,  3.20it/s]Cached 6.41GB:  30%|###       | 61/200 [00:19<00:43,  3.20it/s]Cached 6.41GB:  31%|###1      | 62/200 [00:19<00:43,  3.20it/s]Cached 6.52GB:  31%|###1      | 62/200 [00:20<00:43,  3.20it/s]Cached 6.52GB:  32%|###1      | 63/200 [00:20<00:42,  3.25it/s]Cached 6.62GB:  32%|###1      | 63/200 [00:20<00:42,  3.25it/s]Cached 6.62GB:  32%|###2      | 64/200 [00:20<00:44,  3.07it/s]Cached 6.72GB:  32%|###2      | 64/200 [00:20<00:44,  3.07it/s]Cached 6.72GB:  32%|###2      | 65/200 [00:20<00:44,  3.01it/s]Cached 6.83GB:  32%|###2      | 65/200 [00:21<00:44,  3.01it/s]Cached 6.83GB:  33%|###3      | 66/200 [00:21<00:45,  2.95it/s]Cached 6.93GB:  33%|###3      | 66/200 [00:21<00:45,  2.95it/s]Cached 6.93GB:  34%|###3      | 67/200 [00:21<00:47,  2.77it/s]Cached 7.03GB:  34%|###3      | 67/200 [00:22<00:47,  2.77it/s]Cached 7.03GB:  34%|###4      | 68/200 [00:22<00:46,  2.83it/s]Cached 7.14GB:  34%|###4      | 68/200 [00:22<00:46,  2.83it/s]Cached 7.14GB:  34%|###4      | 69/200 [00:22<00:55,  2.38it/s]Cached 7.24GB:  34%|###4      | 69/200 [00:23<00:55,  2.38it/s]Cached 7.24GB:  35%|###5      | 70/200 [00:23<00:54,  2.37it/s]Cached 7.34GB:  35%|###5      | 70/200 [00:23<00:54,  2.37it/s]Cached 7.34GB:  36%|###5      | 71/200 [00:23<00:52,  2.45it/s]Cached 7.45GB:  36%|###5      | 71/200 [00:23<00:52,  2.45it/s]Cached 7.45GB:  36%|###6      | 72/200 [00:23<00:51,  2.46it/s]Cached 7.55GB:  36%|###6      | 72/200 [00:24<00:51,  2.46it/s]Cached 7.55GB:  36%|###6      | 73/200 [00:24<00:50,  2.51it/s]Cached 7.65GB:  36%|###6      | 73/200 [00:24<00:50,  2.51it/s]Cached 7.65GB:  37%|###7      | 74/200 [00:24<00:48,  2.59it/s]Cached 7.76GB:  37%|###7      | 74/200 [00:25<00:48,  2.59it/s]Cached 7.76GB:  38%|###7      | 75/200 [00:25<00:49,  2.54it/s]Cached 7.86GB:  38%|###7      | 75/200 [00:25<00:49,  2.54it/s]Cached 7.86GB:  38%|###8      | 76/200 [00:25<00:46,  2.65it/s]Cached 7.96GB:  38%|###8      | 76/200 [00:25<00:46,  2.65it/s]Cached 7.96GB:  38%|###8      | 77/200 [00:25<00:46,  2.67it/s]Cached 8.07GB:  38%|###8      | 77/200 [00:26<00:46,  2.67it/s]Cached 8.07GB:  39%|###9      | 78/200 [00:26<00:44,  2.73it/s]Cached 8.17GB:  39%|###9      | 78/200 [00:26<00:44,  2.73it/s]Cached 8.17GB:  40%|###9      | 79/200 [00:26<00:44,  2.71it/s]Cached 8.27GB:  40%|###9      | 79/200 [00:26<00:44,  2.71it/s]Cached 8.27GB:  40%|####      | 80/200 [00:26<00:43,  2.78it/s]Cached 8.38GB:  40%|####      | 80/200 [00:27<00:43,  2.78it/s]Cached 8.38GB:  40%|####      | 81/200 [00:27<00:41,  2.87it/s]Cached 8.48GB:  40%|####      | 81/200 [00:27<00:41,  2.87it/s]Cached 8.48GB:  41%|####1     | 82/200 [00:27<00:40,  2.92it/s]Cached 8.58GB:  41%|####1     | 82/200 [00:27<00:40,  2.92it/s]Cached 8.58GB:  42%|####1     | 83/200 [00:27<00:41,  2.85it/s]Cached 8.69GB:  42%|####1     | 83/200 [00:28<00:41,  2.85it/s]Cached 8.69GB:  42%|####2     | 84/200 [00:28<00:39,  2.94it/s]Cached 8.79GB:  42%|####2     | 84/200 [00:28<00:39,  2.94it/s]Cached 8.79GB:  42%|####2     | 85/200 [00:28<00:38,  2.97it/s]Cached 8.89GB:  42%|####2     | 85/200 [00:28<00:38,  2.97it/s]Cached 8.89GB:  43%|####3     | 86/200 [00:28<00:39,  2.90it/s]Cached 9.00GB:  43%|####3     | 86/200 [00:29<00:39,  2.90it/s]Cached 9.00GB:  44%|####3     | 87/200 [00:29<00:38,  2.90it/s]Cached 9.10GB:  44%|####3     | 87/200 [00:29<00:38,  2.90it/s]Cached 9.10GB:  44%|####4     | 88/200 [00:29<00:37,  3.01it/s]Cached 9.20GB:  44%|####4     | 88/200 [00:29<00:37,  3.01it/s]Cached 9.20GB:  44%|####4     | 89/200 [00:29<00:36,  3.03it/s]Cached 9.31GB:  44%|####4     | 89/200 [00:30<00:36,  3.03it/s]Cached 9.31GB:  45%|####5     | 90/200 [00:30<00:34,  3.16it/s]Cached 9.41GB:  45%|####5     | 90/200 [00:30<00:34,  3.16it/s]Cached 9.41GB:  46%|####5     | 91/200 [00:30<00:33,  3.23it/s]Cached 9.51GB:  46%|####5     | 91/200 [00:30<00:33,  3.23it/s]Cached 9.51GB:  46%|####6     | 92/200 [00:30<00:39,  2.73it/s]Cached 9.62GB:  46%|####6     | 92/200 [00:31<00:39,  2.73it/s]Cached 9.62GB:  46%|####6     | 93/200 [00:31<00:38,  2.78it/s]Cached 9.72GB:  46%|####6     | 93/200 [00:31<00:38,  2.78it/s]Cached 9.72GB:  47%|####6     | 94/200 [00:31<00:36,  2.91it/s]Cached 9.82GB:  47%|####6     | 94/200 [00:31<00:36,  2.91it/s]Cached 9.82GB:  48%|####7     | 95/200 [00:31<00:34,  3.01it/s]Cached 9.93GB:  48%|####7     | 95/200 [00:32<00:34,  3.01it/s]Cached 9.93GB:  48%|####8     | 96/200 [00:32<00:34,  2.99it/s]Cached 10.03GB:  48%|####8     | 96/200 [00:32<00:34,  2.99it/s]Cached 10.03GB:  48%|####8     | 97/200 [00:32<00:34,  2.95it/s]Cached 10.13GB:  48%|####8     | 97/200 [00:32<00:34,  2.95it/s]Cached 10.13GB:  49%|####9     | 98/200 [00:32<00:34,  2.92it/s]Cached 10.24GB:  49%|####9     | 98/200 [00:33<00:34,  2.92it/s]Cached 10.24GB:  50%|####9     | 99/200 [00:33<00:34,  2.92it/s]Cached 10.34GB:  50%|####9     | 99/200 [00:33<00:34,  2.92it/s]Cached 10.34GB:  50%|#####     | 100/200 [00:33<00:33,  2.97it/s]Cached 10.44GB:  50%|#####     | 100/200 [00:33<00:33,  2.97it/s]Cached 10.44GB:  50%|#####     | 101/200 [00:33<00:33,  2.99it/s]Cached 10.55GB:  50%|#####     | 101/200 [00:34<00:33,  2.99it/s]Cached 10.55GB:  51%|#####1    | 102/200 [00:34<00:32,  2.99it/s]Cached 10.65GB:  51%|#####1    | 102/200 [00:34<00:32,  2.99it/s]Cached 10.65GB:  52%|#####1    | 103/200 [00:34<00:32,  3.00it/s]Cached 10.76GB:  52%|#####1    | 103/200 [00:34<00:32,  3.00it/s]Cached 10.76GB:  52%|#####2    | 104/200 [00:34<00:32,  2.99it/s]Cached 10.86GB:  52%|#####2    | 104/200 [00:35<00:32,  2.99it/s]Cached 10.86GB:  52%|#####2    | 105/200 [00:35<00:30,  3.07it/s]Cached 10.96GB:  52%|#####2    | 105/200 [00:35<00:30,  3.07it/s]Cached 10.96GB:  53%|#####3    | 106/200 [00:35<00:31,  3.03it/s]Cached 11.07GB:  53%|#####3    | 106/200 [00:35<00:31,  3.03it/s]Cached 11.07GB:  54%|#####3    | 107/200 [00:35<00:29,  3.13it/s]Cached 11.17GB:  54%|#####3    | 107/200 [00:36<00:29,  3.13it/s]Cached 11.17GB:  54%|#####4    | 108/200 [00:36<00:29,  3.12it/s]Cached 11.27GB:  54%|#####4    | 108/200 [00:36<00:29,  3.12it/s]Cached 11.27GB:  55%|#####4    | 109/200 [00:36<00:30,  3.00it/s]Cached 11.38GB:  55%|#####4    | 109/200 [00:36<00:30,  3.00it/s]Cached 11.38GB:  55%|#####5    | 110/200 [00:36<00:30,  2.98it/s]Cached 11.48GB:  55%|#####5    | 110/200 [00:37<00:30,  2.98it/s]Cached 11.48GB:  56%|#####5    | 111/200 [00:37<00:29,  2.99it/s]Cached 11.58GB:  56%|#####5    | 111/200 [00:37<00:29,  2.99it/s]Cached 11.58GB:  56%|#####6    | 112/200 [00:37<00:28,  3.04it/s]Cached 11.69GB:  56%|#####6    | 112/200 [00:37<00:28,  3.04it/s]Cached 11.69GB:  56%|#####6    | 113/200 [00:37<00:27,  3.17it/s]Cached 11.79GB:  56%|#####6    | 113/200 [00:38<00:27,  3.17it/s]Cached 11.79GB:  57%|#####6    | 114/200 [00:38<00:26,  3.23it/s]Cached 11.89GB:  57%|#####6    | 114/200 [00:38<00:26,  3.23it/s]Cached 11.89GB:  57%|#####7    | 115/200 [00:38<00:26,  3.24it/s]Cached 12.00GB:  57%|#####7    | 115/200 [00:38<00:26,  3.24it/s]Cached 12.00GB:  58%|#####8    | 116/200 [00:38<00:25,  3.30it/s]Cached 12.10GB:  58%|#####8    | 116/200 [00:38<00:25,  3.30it/s]Cached 12.10GB:  58%|#####8    | 117/200 [00:38<00:26,  3.16it/s]Cached 12.20GB:  58%|#####8    | 117/200 [00:39<00:26,  3.16it/s]Cached 12.20GB:  59%|#####8    | 118/200 [00:39<00:27,  3.00it/s]Cached 12.31GB:  59%|#####8    | 118/200 [00:39<00:27,  3.00it/s]Cached 12.31GB:  60%|#####9    | 119/200 [00:39<00:26,  3.06it/s]Cached 12.41GB:  60%|#####9    | 119/200 [00:39<00:26,  3.06it/s]Cached 12.41GB:  60%|######    | 120/200 [00:39<00:25,  3.18it/s]Cached 12.51GB:  60%|######    | 120/200 [00:40<00:25,  3.18it/s]Cached 12.51GB:  60%|######    | 121/200 [00:40<00:25,  3.05it/s]Cached 12.62GB:  60%|######    | 121/200 [00:40<00:25,  3.05it/s]Cached 12.62GB:  61%|######1   | 122/200 [00:40<00:25,  3.00it/s]Cached 12.72GB:  61%|######1   | 122/200 [00:40<00:25,  3.00it/s]Cached 12.72GB:  62%|######1   | 123/200 [00:40<00:24,  3.15it/s]Cached 12.82GB:  62%|######1   | 123/200 [00:41<00:24,  3.15it/s]Cached 12.82GB:  62%|######2   | 124/200 [00:41<00:23,  3.24it/s]Cached 12.93GB:  62%|######2   | 124/200 [00:41<00:23,  3.24it/s]Cached 12.93GB:  62%|######2   | 125/200 [00:41<00:23,  3.24it/s]Cached 13.03GB:  62%|######2   | 125/200 [00:41<00:23,  3.24it/s]Cached 13.03GB:  63%|######3   | 126/200 [00:41<00:22,  3.33it/s]Cached 13.13GB:  63%|######3   | 126/200 [00:42<00:22,  3.33it/s]Cached 13.13GB:  64%|######3   | 127/200 [00:42<00:21,  3.37it/s]Cached 13.24GB:  64%|######3   | 127/200 [00:42<00:21,  3.37it/s]Cached 13.24GB:  64%|######4   | 128/200 [00:42<00:21,  3.38it/s]Cached 13.34GB:  64%|######4   | 128/200 [00:42<00:21,  3.38it/s]Cached 13.34GB:  64%|######4   | 129/200 [00:42<00:21,  3.35it/s]Cached 13.44GB:  64%|######4   | 129/200 [00:43<00:21,  3.35it/s]Cached 13.44GB:  65%|######5   | 130/200 [00:43<00:20,  3.37it/s]Cached 13.55GB:  65%|######5   | 130/200 [00:43<00:20,  3.37it/s]Cached 13.55GB:  66%|######5   | 131/200 [00:43<00:20,  3.42it/s]Cached 13.65GB:  66%|######5   | 131/200 [00:43<00:20,  3.42it/s]Cached 13.65GB:  66%|######6   | 132/200 [00:43<00:20,  3.37it/s]Cached 13.75GB:  66%|######6   | 132/200 [00:43<00:20,  3.37it/s]Cached 13.75GB:  66%|######6   | 133/200 [00:43<00:19,  3.40it/s]Cached 13.86GB:  66%|######6   | 133/200 [00:44<00:19,  3.40it/s]Cached 13.86GB:  67%|######7   | 134/200 [00:44<00:19,  3.40it/s]Cached 13.96GB:  67%|######7   | 134/200 [00:44<00:19,  3.40it/s]Cached 13.96GB:  68%|######7   | 135/200 [00:44<00:19,  3.32it/s]Cached 14.06GB:  68%|######7   | 135/200 [00:44<00:19,  3.32it/s]Cached 14.06GB:  68%|######8   | 136/200 [00:44<00:19,  3.28it/s]Cached 14.17GB:  68%|######8   | 136/200 [00:45<00:19,  3.28it/s]Cached 14.17GB:  68%|######8   | 137/200 [00:45<00:19,  3.29it/s]Cached 14.27GB:  68%|######8   | 137/200 [00:45<00:19,  3.29it/s]Cached 14.27GB:  69%|######9   | 138/200 [00:45<00:19,  3.22it/s]Cached 14.37GB:  69%|######9   | 138/200 [00:45<00:19,  3.22it/s]Cached 14.37GB:  70%|######9   | 139/200 [00:45<00:18,  3.26it/s]Cached 14.48GB:  70%|######9   | 139/200 [00:46<00:18,  3.26it/s]Cached 14.48GB:  70%|#######   | 140/200 [00:46<00:18,  3.26it/s]Cached 14.58GB:  70%|#######   | 140/200 [00:46<00:18,  3.26it/s]Cached 14.58GB:  70%|#######   | 141/200 [00:46<00:17,  3.33it/s]Cached 14.68GB:  70%|#######   | 141/200 [00:46<00:17,  3.33it/s]Cached 14.68GB:  71%|#######1  | 142/200 [00:46<00:17,  3.36it/s]Cached 14.79GB:  71%|#######1  | 142/200 [00:46<00:17,  3.36it/s]Cached 14.79GB:  72%|#######1  | 143/200 [00:46<00:16,  3.41it/s]Cached 14.89GB:  72%|#######1  | 143/200 [00:47<00:16,  3.41it/s]Cached 14.89GB:  72%|#######2  | 144/200 [00:47<00:16,  3.40it/s]Cached 15.00GB:  72%|#######2  | 144/200 [00:47<00:16,  3.40it/s]Cached 15.00GB:  72%|#######2  | 145/200 [00:47<00:16,  3.39it/s]Cached 15.10GB:  72%|#######2  | 145/200 [00:47<00:16,  3.39it/s]Cached 15.10GB:  73%|#######3  | 146/200 [00:47<00:15,  3.39it/s]Cached 15.20GB:  73%|#######3  | 146/200 [00:48<00:15,  3.39it/s]Cached 15.20GB:  74%|#######3  | 147/200 [00:48<00:15,  3.38it/s]Cached 15.31GB:  74%|#######3  | 147/200 [00:48<00:15,  3.38it/s]Cached 15.31GB:  74%|#######4  | 148/200 [00:48<00:15,  3.28it/s]Cached 15.41GB:  74%|#######4  | 148/200 [00:48<00:15,  3.28it/s]Cached 15.41GB:  74%|#######4  | 149/200 [00:48<00:15,  3.23it/s]Cached 15.51GB:  74%|#######4  | 149/200 [00:49<00:15,  3.23it/s]Cached 15.51GB:  75%|#######5  | 150/200 [00:49<00:15,  3.33it/s]Cached 15.62GB:  75%|#######5  | 150/200 [00:49<00:15,  3.33it/s]Cached 15.62GB:  76%|#######5  | 151/200 [00:49<00:14,  3.38it/s]Cached 15.72GB:  76%|#######5  | 151/200 [00:49<00:14,  3.38it/s]Cached 15.72GB:  76%|#######6  | 152/200 [00:49<00:14,  3.38it/s]Cached 15.82GB:  76%|#######6  | 152/200 [00:49<00:14,  3.38it/s]Cached 15.82GB:  76%|#######6  | 153/200 [00:49<00:13,  3.42it/s]Cached 15.93GB:  76%|#######6  | 153/200 [00:50<00:13,  3.42it/s]Cached 15.93GB:  77%|#######7  | 154/200 [00:50<00:13,  3.41it/s]Cached 16.03GB:  77%|#######7  | 154/200 [00:50<00:13,  3.41it/s]Cached 16.03GB:  78%|#######7  | 155/200 [00:50<00:13,  3.42it/s]Cached 16.13GB:  78%|#######7  | 155/200 [00:50<00:13,  3.42it/s]Cached 16.13GB:  78%|#######8  | 156/200 [00:50<00:12,  3.40it/s]Cached 16.24GB:  78%|#######8  | 156/200 [00:51<00:12,  3.40it/s]Cached 16.24GB:  78%|#######8  | 157/200 [00:51<00:12,  3.42it/s]Cached 16.34GB:  78%|#######8  | 157/200 [00:51<00:12,  3.42it/s]Cached 16.34GB:  79%|#######9  | 158/200 [00:51<00:12,  3.39it/s]Cached 16.44GB:  79%|#######9  | 158/200 [00:51<00:12,  3.39it/s]Cached 16.44GB:  80%|#######9  | 159/200 [00:51<00:12,  3.37it/s]Cached 16.55GB:  80%|#######9  | 159/200 [00:51<00:12,  3.37it/s]Cached 16.55GB:  80%|########  | 160/200 [00:51<00:12,  3.26it/s]Cached 16.65GB:  80%|########  | 160/200 [00:52<00:12,  3.26it/s]Cached 16.65GB:  80%|########  | 161/200 [00:52<00:12,  3.20it/s]Cached 16.75GB:  80%|########  | 161/200 [00:52<00:12,  3.20it/s]Cached 16.75GB:  81%|########1 | 162/200 [00:52<00:11,  3.18it/s]Cached 16.86GB:  81%|########1 | 162/200 [00:52<00:11,  3.18it/s]Cached 16.86GB:  82%|########1 | 163/200 [00:52<00:11,  3.11it/s]Cached 16.96GB:  82%|########1 | 163/200 [00:53<00:11,  3.11it/s]Cached 16.96GB:  82%|########2 | 164/200 [00:53<00:11,  3.21it/s]Cached 17.06GB:  82%|########2 | 164/200 [00:53<00:11,  3.21it/s]Cached 17.06GB:  82%|########2 | 165/200 [00:53<00:10,  3.21it/s]Cached 17.17GB:  82%|########2 | 165/200 [00:53<00:10,  3.21it/s]Cached 17.17GB:  83%|########2 | 166/200 [00:53<00:10,  3.18it/s]Cached 17.27GB:  83%|########2 | 166/200 [00:54<00:10,  3.18it/s]Cached 17.27GB:  84%|########3 | 167/200 [00:54<00:10,  3.19it/s]Cached 17.37GB:  84%|########3 | 167/200 [00:54<00:10,  3.19it/s]Cached 17.37GB:  84%|########4 | 168/200 [00:54<00:10,  3.19it/s]Cached 17.48GB:  84%|########4 | 168/200 [00:54<00:10,  3.19it/s]Cached 17.48GB:  84%|########4 | 169/200 [00:54<00:09,  3.20it/s]Cached 17.58GB:  84%|########4 | 169/200 [00:55<00:09,  3.20it/s]Cached 17.58GB:  85%|########5 | 170/200 [00:55<00:09,  3.25it/s]Cached 17.68GB:  85%|########5 | 170/200 [00:55<00:09,  3.25it/s]Cached 17.68GB:  86%|########5 | 171/200 [00:55<00:08,  3.25it/s]Cached 17.79GB:  86%|########5 | 171/200 [00:55<00:08,  3.25it/s]Cached 17.79GB:  86%|########6 | 172/200 [00:55<00:08,  3.27it/s]Cached 17.89GB:  86%|########6 | 172/200 [00:56<00:08,  3.27it/s]Cached 17.89GB:  86%|########6 | 173/200 [00:56<00:08,  3.34it/s]Cached 17.99GB:  86%|########6 | 173/200 [00:56<00:08,  3.34it/s]Cached 17.99GB:  87%|########7 | 174/200 [00:56<00:07,  3.38it/s]Cached 18.10GB:  87%|########7 | 174/200 [00:56<00:07,  3.38it/s]Cached 18.10GB:  88%|########7 | 175/200 [00:56<00:07,  3.26it/s]Cached 18.20GB:  88%|########7 | 175/200 [00:56<00:07,  3.26it/s]Cached 18.20GB:  88%|########8 | 176/200 [00:56<00:07,  3.31it/s]Cached 18.30GB:  88%|########8 | 176/200 [00:57<00:07,  3.31it/s]Cached 18.30GB:  88%|########8 | 177/200 [00:57<00:07,  3.24it/s]Cached 18.41GB:  88%|########8 | 177/200 [00:57<00:07,  3.24it/s]Cached 18.41GB:  89%|########9 | 178/200 [00:57<00:06,  3.30it/s]Cached 18.51GB:  89%|########9 | 178/200 [00:57<00:06,  3.30it/s]Cached 18.51GB:  90%|########9 | 179/200 [00:57<00:06,  3.33it/s]Cached 18.61GB:  90%|########9 | 179/200 [00:58<00:06,  3.33it/s]Cached 18.61GB:  90%|######### | 180/200 [00:58<00:05,  3.38it/s]Cached 18.72GB:  90%|######### | 180/200 [00:58<00:05,  3.38it/s]Cached 18.72GB:  90%|######### | 181/200 [00:58<00:05,  3.37it/s]Cached 18.82GB:  90%|######### | 181/200 [00:58<00:05,  3.37it/s]Cached 18.82GB:  91%|#########1| 182/200 [00:58<00:05,  3.40it/s]Cached 18.92GB:  91%|#########1| 182/200 [00:59<00:05,  3.40it/s]Cached 18.92GB:  92%|#########1| 183/200 [00:59<00:05,  3.34it/s]Cached 19.03GB:  92%|#########1| 183/200 [00:59<00:05,  3.34it/s]Cached 19.03GB:  92%|#########2| 184/200 [00:59<00:04,  3.31it/s]Cached 19.13GB:  92%|#########2| 184/200 [00:59<00:04,  3.31it/s]Cached 19.13GB:  92%|#########2| 185/200 [00:59<00:04,  3.28it/s]Cached 19.24GB:  92%|#########2| 185/200 [00:59<00:04,  3.28it/s]Cached 19.24GB:  93%|#########3| 186/200 [00:59<00:04,  3.32it/s]Cached 19.34GB:  93%|#########3| 186/200 [01:00<00:04,  3.32it/s]Cached 19.34GB:  94%|#########3| 187/200 [01:00<00:03,  3.28it/s]Cached 19.44GB:  94%|#########3| 187/200 [01:00<00:03,  3.28it/s]Cached 19.44GB:  94%|#########3| 188/200 [01:00<00:03,  3.32it/s]Cached 19.55GB:  94%|#########3| 188/200 [01:00<00:03,  3.32it/s]Cached 19.55GB:  94%|#########4| 189/200 [01:00<00:03,  3.34it/s]Cached 19.65GB:  94%|#########4| 189/200 [01:01<00:03,  3.34it/s]Cached 19.65GB:  95%|#########5| 190/200 [01:01<00:02,  3.34it/s]Cached 19.75GB:  95%|#########5| 190/200 [01:01<00:02,  3.34it/s]Cached 19.75GB:  96%|#########5| 191/200 [01:01<00:02,  3.32it/s]Cached 19.86GB:  96%|#########5| 191/200 [01:01<00:02,  3.32it/s]Cached 19.86GB:  96%|#########6| 192/200 [01:01<00:02,  3.32it/s]Cached 19.96GB:  96%|#########6| 192/200 [01:02<00:02,  3.32it/s]Cached 19.96GB:  96%|#########6| 193/200 [01:02<00:02,  3.36it/s]Cached 20.06GB:  96%|#########6| 193/200 [01:02<00:02,  3.36it/s]Cached 20.06GB:  97%|#########7| 194/200 [01:02<00:01,  3.37it/s]Cached 20.17GB:  97%|#########7| 194/200 [01:02<00:01,  3.37it/s]Cached 20.17GB:  98%|#########7| 195/200 [01:02<00:01,  3.36it/s]Cached 20.27GB:  98%|#########7| 195/200 [01:02<00:01,  3.36it/s]Cached 20.27GB:  98%|#########8| 196/200 [01:02<00:01,  3.32it/s]Cached 20.37GB:  98%|#########8| 196/200 [01:03<00:01,  3.32it/s]Cached 20.37GB:  98%|#########8| 197/200 [01:03<00:00,  3.33it/s]Cached 20.48GB:  98%|#########8| 197/200 [01:03<00:00,  3.33it/s]Cached 20.48GB:  99%|#########9| 198/200 [01:03<00:00,  3.20it/s]Cached 20.58GB:  99%|#########9| 198/200 [01:03<00:00,  3.20it/s]Cached 20.58GB: 100%|#########9| 199/200 [01:03<00:00,  3.17it/s]Cached 20.68GB: 100%|#########9| 199/200 [01:04<00:00,  3.17it/s]Cached 20.68GB: 100%|##########| 200/200 [01:04<00:00,  3.16it/s]Cached 20.68GB: 100%|##########| 200/200 [01:04<00:00,  3.12it/s]
+[32m
+[QUARK-INFO]: Finding optimal threshold for each tensor using PowerOfTwoMethod.MinMSE algorithm in 'All' mode ...[0m
+  0%|          | 0/218 [00:00<?, ?it/s]  0%|          | 1/218 [00:05<19:22,  5.36s/it]  1%|          | 2/218 [00:06<10:31,  2.93s/it]  1%|1         | 3/218 [00:07<06:25,  1.79s/it]  2%|1         | 4/218 [00:13<12:55,  3.62s/it]  2%|2         | 5/218 [00:15<10:15,  2.89s/it]  3%|2         | 6/218 [00:15<07:18,  2.07s/it]  3%|3         | 7/218 [00:16<05:40,  1.61s/it]  4%|3         | 8/218 [00:16<04:18,  1.23s/it]  4%|4         | 9/218 [00:17<04:15,  1.22s/it]  5%|4         | 10/218 [00:19<04:17,  1.24s/it]  5%|5         | 11/218 [00:20<04:20,  1.26s/it]  6%|5         | 12/218 [00:21<04:15,  1.24s/it]  6%|5         | 13/218 [00:22<03:25,  1.00s/it]  6%|6         | 14/218 [00:26<07:20,  2.16s/it]  7%|6         | 15/218 [00:29<07:36,  2.25s/it]  7%|7         | 16/218 [00:30<06:30,  1.94s/it]  8%|7         | 17/218 [00:31<05:46,  1.72s/it]  8%|8         | 18/218 [00:32<04:23,  1.32s/it]  9%|8         | 19/218 [00:34<05:24,  1.63s/it]  9%|9         | 20/218 [00:36<06:07,  1.86s/it] 10%|9         | 21/218 [00:59<26:46,  8.15s/it] 10%|#         | 22/218 [01:01<19:58,  6.11s/it] 11%|#         | 23/218 [01:01<14:33,  4.48s/it] 11%|#1        | 24/218 [01:06<14:46,  4.57s/it] 11%|#1        | 25/218 [01:07<10:58,  3.41s/it] 12%|#1        | 26/218 [01:07<08:16,  2.58s/it] 12%|#2        | 27/218 [01:08<06:24,  2.01s/it] 13%|#2        | 28/218 [01:13<08:49,  2.79s/it] 13%|#3        | 29/218 [01:16<09:27,  3.00s/it] 14%|#3        | 30/218 [01:19<08:49,  2.82s/it] 14%|#4        | 31/218 [01:19<06:44,  2.16s/it] 15%|#4        | 32/218 [01:20<05:02,  1.62s/it] 15%|#5        | 33/218 [01:21<04:37,  1.50s/it] 16%|#5        | 34/218 [01:21<03:34,  1.16s/it] 16%|#6        | 35/218 [01:23<04:37,  1.52s/it] 17%|#6        | 36/218 [01:28<07:25,  2.45s/it] 17%|#6        | 37/218 [01:29<06:17,  2.09s/it] 17%|#7        | 38/218 [01:31<05:30,  1.84s/it] 18%|#7        | 39/218 [01:35<08:04,  2.71s/it] 18%|#8        | 40/218 [01:50<18:59,  6.40s/it] 19%|#8        | 41/218 [01:52<14:20,  4.86s/it] 19%|#9        | 42/218 [01:53<11:22,  3.88s/it] 20%|#9        | 43/218 [01:56<10:10,  3.49s/it] 20%|##        | 44/218 [01:57<08:12,  2.83s/it] 21%|##        | 45/218 [01:59<07:02,  2.44s/it] 21%|##1       | 46/218 [02:08<13:00,  4.54s/it] 22%|##1       | 47/218 [02:09<10:06,  3.55s/it] 22%|##2       | 48/218 [02:18<14:50,  5.24s/it] 22%|##2       | 49/218 [02:20<11:48,  4.19s/it] 23%|##2       | 50/218 [02:27<13:57,  4.98s/it] 23%|##3       | 51/218 [02:32<13:31,  4.86s/it] 24%|##3       | 52/218 [02:32<09:58,  3.60s/it] 24%|##4       | 53/218 [02:34<07:55,  2.88s/it] 25%|##4       | 54/218 [02:55<22:56,  8.39s/it] 25%|##5       | 55/218 [02:56<17:02,  6.27s/it] 26%|##5       | 56/218 [02:59<13:54,  5.15s/it] 26%|##6       | 57/218 [03:03<13:33,  5.06s/it] 27%|##6       | 58/218 [03:05<10:29,  3.93s/it] 27%|##7       | 59/218 [03:05<07:50,  2.96s/it] 28%|##7       | 60/218 [03:06<05:59,  2.28s/it] 28%|##7       | 61/218 [03:07<04:40,  1.79s/it] 28%|##8       | 62/218 [03:07<03:46,  1.45s/it] 29%|##8       | 63/218 [03:12<06:21,  2.46s/it] 29%|##9       | 64/218 [03:13<05:22,  2.09s/it] 30%|##9       | 65/218 [03:16<05:31,  2.17s/it] 30%|###       | 66/218 [03:18<05:45,  2.28s/it] 31%|###       | 67/218 [03:20<05:00,  1.99s/it] 31%|###1      | 68/218 [03:21<04:26,  1.78s/it] 32%|###1      | 69/218 [03:22<04:01,  1.62s/it] 32%|###2      | 70/218 [03:26<05:20,  2.17s/it] 33%|###2      | 71/218 [03:27<04:38,  1.89s/it] 33%|###3      | 72/218 [03:28<04:06,  1.69s/it] 33%|###3      | 73/218 [03:30<04:31,  1.88s/it] 34%|###3      | 74/218 [03:35<06:28,  2.70s/it] 34%|###4      | 75/218 [03:40<07:59,  3.35s/it] 35%|###4      | 76/218 [03:45<09:05,  3.84s/it] 35%|###5      | 77/218 [03:51<10:25,  4.44s/it] 36%|###5      | 78/218 [03:56<10:36,  4.55s/it] 36%|###6      | 79/218 [03:58<09:10,  3.96s/it] 37%|###6      | 80/218 [04:03<09:35,  4.17s/it] 37%|###7      | 81/218 [04:04<07:29,  3.28s/it] 38%|###7      | 82/218 [04:06<06:47,  3.00s/it] 38%|###8      | 83/218 [04:09<06:16,  2.79s/it] 39%|###8      | 84/218 [04:13<07:27,  3.34s/it] 39%|###8      | 85/218 [04:15<06:11,  2.79s/it] 39%|###9      | 86/218 [04:17<05:50,  2.65s/it] 40%|###9      | 87/218 [04:18<04:50,  2.22s/it] 40%|####      | 88/218 [04:20<04:32,  2.10s/it] 41%|####      | 89/218 [04:21<03:55,  1.82s/it] 41%|####1     | 90/218 [04:22<03:28,  1.63s/it] 42%|####1     | 91/218 [04:27<05:21,  2.53s/it] 42%|####2     | 92/218 [04:28<04:28,  2.13s/it] 43%|####2     | 93/218 [04:32<05:16,  2.53s/it] 43%|####3     | 94/218 [04:32<03:53,  1.89s/it] 44%|####3     | 95/218 [04:33<03:26,  1.67s/it] 44%|####4     | 96/218 [04:35<03:08,  1.54s/it] 44%|####4     | 97/218 [04:36<02:54,  1.44s/it] 45%|####4     | 98/218 [04:38<03:30,  1.76s/it] 45%|####5     | 99/218 [04:39<03:08,  1.58s/it] 46%|####5     | 100/218 [04:40<02:32,  1.30s/it] 46%|####6     | 101/218 [04:42<03:10,  1.63s/it] 47%|####6     | 102/218 [04:44<02:58,  1.54s/it] 47%|####7     | 103/218 [04:44<02:26,  1.28s/it] 48%|####7     | 104/218 [04:46<02:33,  1.35s/it] 48%|####8     | 105/218 [04:47<02:29,  1.32s/it] 49%|####8     | 106/218 [04:48<02:23,  1.28s/it] 49%|####9     | 107/218 [04:58<07:05,  3.83s/it] 50%|####9     | 108/218 [05:01<06:11,  3.38s/it] 50%|#####     | 109/218 [05:03<05:33,  3.06s/it] 50%|#####     | 110/218 [05:07<06:18,  3.50s/it] 51%|#####     | 111/218 [05:09<05:01,  2.82s/it] 51%|#####1    | 112/218 [05:13<05:54,  3.34s/it] 52%|#####1    | 113/218 [05:23<09:01,  5.16s/it] 52%|#####2    | 114/218 [05:24<06:52,  3.97s/it] 53%|#####2    | 115/218 [05:25<05:23,  3.14s/it] 53%|#####3    | 116/218 [05:26<04:03,  2.39s/it] 54%|#####3    | 117/218 [05:35<07:30,  4.46s/it] 54%|#####4    | 118/218 [05:37<06:22,  3.82s/it] 55%|#####4    | 119/218 [05:42<06:40,  4.04s/it] 55%|#####5    | 120/218 [05:44<05:46,  3.53s/it] 56%|#####5    | 121/218 [05:45<04:34,  2.83s/it] 56%|#####5    | 122/218 [05:47<03:54,  2.45s/it] 56%|#####6    | 123/218 [05:49<03:33,  2.25s/it] 57%|#####6    | 124/218 [05:49<02:46,  1.77s/it] 57%|#####7    | 125/218 [05:52<02:59,  1.93s/it] 58%|#####7    | 126/218 [05:54<03:08,  2.05s/it] 58%|#####8    | 127/218 [05:56<03:14,  2.14s/it] 59%|#####8    | 128/218 [05:58<02:47,  1.86s/it] 59%|#####9    | 129/218 [06:00<02:58,  2.01s/it] 60%|#####9    | 130/218 [06:02<03:04,  2.10s/it] 60%|######    | 131/218 [06:03<02:39,  1.83s/it] 61%|######    | 132/218 [06:06<02:50,  1.98s/it] 61%|######1   | 133/218 [06:08<02:57,  2.08s/it] 61%|######1   | 134/218 [06:09<02:32,  1.82s/it] 62%|######1   | 135/218 [06:15<04:08,  2.99s/it] 62%|######2   | 136/218 [06:16<03:21,  2.46s/it] 63%|######2   | 137/218 [06:26<06:16,  4.64s/it] 63%|######3   | 138/218 [06:30<06:09,  4.61s/it] 64%|######3   | 139/218 [06:31<04:30,  3.43s/it] 64%|######4   | 140/218 [06:32<03:35,  2.76s/it] 65%|######4   | 141/218 [06:35<03:21,  2.62s/it] 65%|######5   | 142/218 [06:50<08:10,  6.46s/it] 66%|######5   | 143/218 [06:59<09:04,  7.26s/it] 66%|######6   | 144/218 [07:00<06:43,  5.45s/it] 67%|######6   | 145/218 [07:05<06:19,  5.20s/it] 67%|######6   | 146/218 [07:14<07:37,  6.35s/it] 67%|######7   | 147/218 [07:16<06:06,  5.16s/it] 68%|######7   | 148/218 [07:21<05:55,  5.08s/it] 68%|######8   | 149/218 [07:26<05:41,  4.95s/it] 69%|######8   | 150/218 [07:31<05:31,  4.87s/it] 69%|######9   | 151/218 [07:33<04:35,  4.11s/it] 70%|######9   | 152/218 [07:38<04:40,  4.25s/it] 70%|#######   | 153/218 [07:42<04:42,  4.35s/it] 71%|#######   | 154/218 [07:44<03:59,  3.74s/it] 71%|#######1  | 155/218 [07:46<03:07,  2.97s/it] 72%|#######1  | 156/218 [07:51<03:54,  3.79s/it] 72%|#######2  | 157/218 [07:53<03:03,  3.01s/it] 72%|#######2  | 158/218 [07:53<02:18,  2.30s/it] 73%|#######2  | 159/218 [07:55<02:15,  2.30s/it] 73%|#######3  | 160/218 [07:57<01:54,  1.97s/it] 74%|#######3  | 161/218 [08:12<05:37,  5.92s/it] 74%|#######4  | 162/218 [08:14<04:31,  4.85s/it] 75%|#######4  | 163/218 [08:15<03:17,  3.59s/it] 75%|#######5  | 164/218 [08:19<03:30,  3.89s/it] 76%|#######5  | 165/218 [08:20<02:34,  2.92s/it] 76%|#######6  | 166/218 [08:22<02:22,  2.74s/it] 77%|#######6  | 167/218 [08:27<02:48,  3.30s/it] 77%|#######7  | 168/218 [08:34<03:38,  4.36s/it] 78%|#######7  | 169/218 [08:38<03:37,  4.43s/it] 78%|#######7  | 170/218 [08:40<02:50,  3.56s/it] 78%|#######8  | 171/218 [08:46<03:17,  4.20s/it] 79%|#######8  | 172/218 [08:46<02:23,  3.13s/it] 79%|#######9  | 173/218 [08:48<01:55,  2.56s/it] 80%|#######9  | 174/218 [08:50<01:49,  2.49s/it] 80%|########  | 175/218 [08:54<02:14,  3.12s/it] 81%|########  | 176/218 [08:59<02:29,  3.56s/it] 81%|########1 | 177/218 [09:04<02:38,  3.87s/it] 82%|########1 | 178/218 [09:08<02:43,  4.08s/it] 82%|########2 | 179/218 [09:09<01:58,  3.04s/it] 83%|########2 | 180/218 [09:09<01:28,  2.32s/it] 83%|########3 | 181/218 [09:10<01:05,  1.76s/it] 83%|########3 | 182/218 [09:12<01:09,  1.94s/it] 84%|########3 | 183/218 [09:13<00:53,  1.54s/it] 84%|########4 | 184/218 [09:14<00:49,  1.45s/it] 85%|########4 | 185/218 [09:15<00:45,  1.37s/it] 85%|########5 | 186/218 [09:25<02:01,  3.79s/it] 86%|########5 | 187/218 [09:46<04:35,  8.90s/it] 86%|########6 | 188/218 [09:48<03:29,  6.97s/it] 87%|########6 | 189/218 [09:50<02:41,  5.58s/it] 87%|########7 | 190/218 [09:52<01:59,  4.27s/it] 88%|########7 | 191/218 [09:53<01:30,  3.35s/it] 88%|########8 | 192/218 [09:55<01:19,  3.05s/it] 89%|########8 | 193/218 [09:56<01:02,  2.51s/it] 89%|########8 | 194/218 [09:59<00:59,  2.46s/it] 89%|########9 | 195/218 [10:01<00:55,  2.43s/it] 90%|########9 | 196/218 [10:02<00:45,  2.07s/it] 90%|######### | 197/218 [10:03<00:32,  1.57s/it] 91%|######### | 198/218 [10:04<00:29,  1.46s/it] 91%|#########1| 199/218 [10:04<00:22,  1.16s/it] 92%|#########1| 200/218 [10:07<00:27,  1.51s/it] 92%|#########2| 201/218 [10:07<00:21,  1.26s/it] 93%|#########2| 202/218 [10:09<00:19,  1.25s/it] 93%|#########3| 203/218 [10:14<00:38,  2.57s/it] 94%|#########3| 204/218 [10:15<00:30,  2.16s/it] 94%|#########4| 205/218 [10:16<00:21,  1.63s/it] 94%|#########4| 206/218 [10:18<00:22,  1.84s/it] 95%|#########4| 207/218 [10:19<00:15,  1.43s/it] 95%|#########5| 208/218 [10:28<00:37,  3.73s/it] 96%|#########5| 209/218 [10:28<00:24,  2.75s/it] 96%|#########6| 210/218 [10:29<00:18,  2.30s/it] 97%|#########6| 211/218 [10:32<00:16,  2.31s/it] 97%|#########7| 212/218 [10:34<00:13,  2.31s/it] 98%|#########7| 213/218 [10:35<00:09,  1.82s/it] 98%|#########8| 214/218 [10:36<00:06,  1.64s/it] 99%|#########8| 215/218 [10:38<00:05,  1.85s/it] 99%|#########9| 216/218 [10:44<00:05,  2.98s/it]100%|#########9| 217/218 [10:53<00:04,  4.82s/it]100%|##########| 218/218 [10:54<00:00,  3.57s/it]100%|##########| 218/218 [10:54<00:00,  3.00s/it]
+[32m
+[QUARK-INFO]: The calibration has been finished. It took 719.1s to complete.[0m
+[32m
+[QUARK-INFO]: Remove QuantizeLinear & DequantizeLinear on certain operations(such as conv-relu).[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.0/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.2/cv1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.2/m.0/cv1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.2/m.0/cv2/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.2/cv2/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.3/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.4/cv1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.4/m.0/cv1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.4/m.0/cv2/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.4/m.1/cv1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.4/m.1/cv2/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.4/cv2/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.5/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.6/cv1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.6/m.0/cv1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.6/m.0/cv2/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.6/m.1/cv1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.6/m.1/cv2/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.6/cv2/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.7/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.8/cv1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.8/m.0/cv1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.8/m.0/cv2/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.8/cv2/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.9/cv1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.9/cv2/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.12/cv1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.12/m.0/cv1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.12/m.0/cv2/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.12/cv2/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.15/cv1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.15/m.0/cv1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.15/m.0/cv2/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.15/cv2/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.16/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.22/cv2.0/cv2.0.0/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.22/cv3.0/cv3.0.0/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.22/cv2.0/cv2.0.1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.22/cv3.0/cv3.0.1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.18/cv1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.18/m.0/cv1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.18/m.0/cv2/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.18/cv2/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.19/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.22/cv2.1/cv2.1.0/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.22/cv3.1/cv3.1.0/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.22/cv2.1/cv2.1.1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.22/cv3.1/cv3.1.1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.21/cv1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.21/m.0/cv1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.21/m.0/cv2/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.21/cv2/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.22/cv2.2/cv2.2.0/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.22/cv3.2/cv3.2.0/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.22/cv2.2/cv2.2.1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.22/cv3.2/cv3.2.1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.0/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.2/cv1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.2/m.0/cv1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.2/m.0/cv2/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.2/cv2/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.3/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.4/cv1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.4/m.0/cv1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.4/m.0/cv2/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.4/m.1/cv1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.4/m.1/cv2/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.4/cv2/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.5/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.6/cv1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.6/m.0/cv1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.6/m.0/cv2/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.6/m.1/cv1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.6/m.1/cv2/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.6/cv2/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.7/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.8/cv1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.8/m.0/cv1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.8/m.0/cv2/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.8/cv2/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.9/cv1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.9/cv2/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.12/cv1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.12/m.0/cv1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.12/m.0/cv2/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.12/cv2/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.15/cv1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.15/m.0/cv1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.15/m.0/cv2/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.15/cv2/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.16/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.22/cv2.0/cv2.0.0/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.22/cv3.0/cv3.0.0/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.22/cv2.0/cv2.0.1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.22/cv3.0/cv3.0.1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.18/cv1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.18/m.0/cv1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.18/m.0/cv2/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.18/cv2/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.19/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.22/cv2.1/cv2.1.0/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.22/cv3.1/cv3.1.0/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.22/cv2.1/cv2.1.1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.22/cv3.1/cv3.1.1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.21/cv1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.21/m.0/cv1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.21/m.0/cv2/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.21/cv2/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.22/cv2.2/cv2.2.0/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.22/cv3.2/cv3.2.0/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.22/cv2.2/cv2.2.1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.22/cv3.2/cv3.2.1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Adjust the quantize info to meet the compiler constraints[0m
+[32m
+[QUARK-INFO]: Output pos of concat node /model.2/Concat is 3, min_pos is 2. Modify opos from 3 to 2.[0m
+[32m
+[QUARK-INFO]: Input pos of concat node /model.2/Concat is 4, min_pos is 2. Modify ipos from 4 to 2.[0m
+[32m
+[QUARK-INFO]: Input pos of concat node /model.4/Concat is 5, min_pos is 4. Modify ipos from 5 to 4.[0m
+[32m
+[QUARK-INFO]: Input pos of concat node /model.6/Concat is 5, min_pos is 4. Modify ipos from 5 to 4.[0m
+[32m
+[QUARK-INFO]: Output pos of concat node /model.8/Concat is 4, min_pos is 3. Modify opos from 4 to 3.[0m
+[32m
+[QUARK-INFO]: Input pos of concat node /model.8/Concat is 4, min_pos is 3. Modify ipos from 4 to 3.[0m
+[32m
+[QUARK-INFO]: Input pos of concat node /model.8/Concat is 5, min_pos is 3. Modify ipos from 5 to 3.[0m
+[32m
+[QUARK-INFO]: Output pos of concat node /model.11/Concat is 5, min_pos is 4. Modify opos from 5 to 4.[0m
+[32m
+[QUARK-INFO]: Input pos of concat node /model.11/Concat is 5, min_pos is 4. Modify ipos from 5 to 4.[0m
+[32m
+[QUARK-INFO]: Output pos of concat node /model.12/Concat is 5, min_pos is 4. Modify opos from 5 to 4.[0m
+[32m
+[QUARK-INFO]: Input pos of concat node /model.12/Concat is 5, min_pos is 4. Modify ipos from 5 to 4.[0m
+[32m
+[QUARK-INFO]: Input pos of concat node /model.12/Concat is 5, min_pos is 4. Modify ipos from 5 to 4.[0m
+[32m
+[QUARK-INFO]: Input pos of concat node /model.18/Concat is 5, min_pos is 4. Modify ipos from 5 to 4.[0m
+[32m
+[QUARK-INFO]: Input pos of concat node /model.18/Concat is 5, min_pos is 4. Modify ipos from 5 to 4.[0m
+[32m
+[QUARK-INFO]: Input pos of concat node /model.20/Concat is 5, min_pos is 4. Modify ipos from 5 to 4.[0m
+[32m
+[QUARK-INFO]: Input pos of concat node /model.21/Concat is 5, min_pos is 4. Modify ipos from 5 to 4.[0m
+[32m
+[QUARK-INFO]: Input pos of Slice layer /model.2/Split_output_0_0 is 3. Output pos of Slice layer /model.2/Split_output_0_0 is 2.Modify ipos from 3 to 2.[0m
+[32m
+[QUARK-INFO]: Input pos of Slice layer /model.8/Split_output_0_0 is 4. Output pos of Slice layer /model.8/Split_output_0_0 is 3.Modify ipos from 4 to 3.[0m
+[32m
+[QUARK-INFO]: Input pos of Slice layer /model.12/Split_output_0_0 is 5. Output pos of Slice layer /model.12/Split_output_0_0 is 4.Modify ipos from 5 to 4.[0m
+[32m
+[QUARK-INFO]: Input pos of Slice layer /model.18/Split_output_0_0 is 5. Output pos of Slice layer /model.18/Split_output_0_0 is 4.Modify ipos from 5 to 4.[0m
+[32m
+[QUARK-INFO]: Input pos of Slice layer /model.21/Split_output_0_0 is 5. Output pos of Slice layer /model.21/Split_output_0_0 is 4.Modify ipos from 5 to 4.[0m
+[32m
+[QUARK-INFO]: Adjust the quantize info to meet the compiler constraints[0m
+[32m
+[QUARK-INFO]: Start applying FastFinetune algorithm on the quant model...[0m
+  0%|          | 0/63 [00:00<?, ?it/s][33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: finetuning layer 0, onnx inference (quantized model + float model) time consumed 14.309089s[0m
+[32m
+[QUARK-INFO]: Module (images)->(/model.0/conv/Conv_output_0) will be optimized by adaround on cpu[0m
+scripts/lib.sh: line 75:  1482 Segmentation fault         "$@" 2>&1
+      1483 Done                       | tee "$log"
+[33m!!  quantizing yolov8n_cut_xint8_c200_adaround.onnx FAILED -- continuing with the rest[0m
+[33m!!    see results/bench/quant_yolov8n_cut_xint8_c200_adaround.log[0m
+[33m!!  cleaning up Quark temp caches in /tmp[0m
+[2m      rm -rf /tmp/quark_onnx.quant.e9xzhhu_ (25M)[0m
+
+[1m[34m==> quantize yolov8s xint8  (200 images, ~38 GB of spool)[0m
+[2m    disk: 64 GB free, ~41 GB needed for Quark's calibration cache (yolov8s: ~198 MB/image)[0m
+[33m!!  this will leave about 23 GB free[0m
+[2m    env: resnet_env  (3.12.11)[0m
+[2m    log: results/bench/quant_yolov8s_cut_xint8_c200.log[0m
+[32m
+[QUARK-INFO]: Checking custom ops library ...[0m
+[33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[32m
+[QUARK-INFO]: Start compiling CPU version of custom ops library.[0m
+W0905 15:40:05.027000 4996 site-packages\torch\utils\cpp_extension.py:466] Error checking compiler version for cl: [WinError 2] The system cannot find the file specified
+INFO: Could not find files for the given pattern(s).
+[31m
+[QUARK-ERROR]: CPU version of custom ops library compilation failed:Command '['where', 'cl']' returned non-zero exit status 1.[0m
+[33m
+[QUARK-WARNING]: Custom ops library compilation failed: CPU version of custom ops library compilation failed:Command '['where', 'cl']' returned non-zero exit status 1..[0m
+Traceback (most recent call last):
+  File "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\build_custom_ops.py", line 58, in compile_custom_op_cpu
+    load(
+  File "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\torch\utils\cpp_extension.py", line 1681, in load
+    return _jit_compile(
+           ^^^^^^^^^^^^^
+  File "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\torch\utils\cpp_extension.py", line 2138, in _jit_compile
+    _write_ninja_file_and_build_library(
+  File "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\torch\utils\cpp_extension.py", line 2275, in _write_ninja_file_and_build_library
+    _write_ninja_file_to_build_library(
+  File "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\torch\utils\cpp_extension.py", line 2762, in _write_ninja_file_to_build_library
+    _write_ninja_file(
+  File "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\torch\utils\cpp_extension.py", line 2946, in _write_ninja_file
+    cl_paths = subprocess.check_output(['where',
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\subprocess.py", line 466, in check_output
+    return run(*popenargs, stdout=PIPE, timeout=timeout, check=True,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\subprocess.py", line 571, in run
+    raise CalledProcessError(retcode, process.args,
+subprocess.CalledProcessError: Command '['where', 'cl']' returned non-zero exit status 1.
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\build_custom_ops.py", line 291, in compile_library
+    compile_library_core("CPU", extra_cuda_cflags, extra_cflags)
+  File "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\build_custom_ops.py", line 257, in compile_library_core
+    compile_custom_op_cpu(file_name, build_directory, extra_cuda_cflags, extra_cflags)
+  File "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\shares\utils\log.py", line 136, in wrapper
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\build_custom_ops.py", line 72, in compile_custom_op_cpu
+    raise RuntimeError("CPU version of custom ops library compilation failed:" + str(e))
+RuntimeError: CPU version of custom ops library compilation failed:Command '['where', 'cl']' returned non-zero exit status 1.
+[32m
+[QUARK-INFO]: Checked custom ops library.[0m
+[33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: Config has been replaced by QConfig. The old API will be removed in the next release.[0m
+[33m
+[QUARK-WARNING]: The algorithm API is algo_config in QConfig. The old API will be removed in the next release.[0m
+[32m
+[QUARK-INFO]: The input ONNX model can create InferenceSession successfully[0m
+[32m
+[QUARK-INFO]: Folding or fusing operators for better accuracy and performance.[0m
+[33m
+[QUARK-WARNING]: The opset version is 17 < 20. Skipping fusing Gelu.[0m
+[32m
+[QUARK-INFO]: Start applying CLE algorithm on the float model...[0m
+[32m
+[QUARK-INFO]: CrossLayerEqualization pattern num: 0[0m
+[32m
+[QUARK-INFO]: Total CrossLayerEqualization steps: 1[0m
+[32m
+[QUARK-INFO]: The CLE algorithm has been applied. It took 0.1s to complete.[0m
+[32m
+[QUARK-INFO]: Optimizing the model for a better hardware compatibility.[0m
+[32m
+[QUARK-INFO]: Found Split node /model.2/Split. Replacing with Slice.[0m
+[32m
+[QUARK-INFO]: Found Split node /model.4/Split. Replacing with Slice.[0m
+[32m
+[QUARK-INFO]: Found Split node /model.6/Split. Replacing with Slice.[0m
+[32m
+[QUARK-INFO]: Found Split node /model.8/Split. Replacing with Slice.[0m
+[32m
+[QUARK-INFO]: Found Split node /model.12/Split. Replacing with Slice.[0m
+[32m
+[QUARK-INFO]: Found Split node /model.15/Split. Replacing with Slice.[0m
+[32m
+[QUARK-INFO]: Found Split node /model.18/Split. Replacing with Slice.[0m
+[32m
+[QUARK-INFO]: Found Split node /model.21/Split. Replacing with Slice.[0m
+[32m
+[QUARK-INFO]: The input ONNX model can run inference successfully[0m
+[32m
+[QUARK-INFO]: Start running calibration on 200 samples with extra options {}...[0m
+[32m
+[QUARK-INFO]: Data collection of PowerOfTwoMethod.MinMSE in progress. Runtime will depend on your model and data size.[0m
+input model: models/yolov8s_cut.onnx, 209 nodes, 6 outputs
+calibrating on 200 images
+quantizing with XINT8 -> models/yolov8s_cut_xint8_c200.onnx
+[QUARK_INFO]: Time information:
+2026-09-05 15:40:06.920728
+[QUARK_INFO]: OS and CPU information:
+                                        system --- Windows
+                                          node --- DESKTOP-GS7R78P
+                                       release --- 11
+                                       version --- 10.0.26200
+                                       machine --- AMD64
+                                     processor --- AMD64 Family 25 Model 117 Stepping 2, AuthenticAMD
+[QUARK_INFO]: Tools version information:
+                                        python --- 3.12.11
+                                          onnx --- 1.19.0
+                                   onnxruntime --- 1.29.0
+                                    quark.onnx --- 0.11
+[QUARK_INFO]: Quantized Configuration information:
+                                   model_input --- models/yolov8s_cut.onnx
+                                  model_output --- models/yolov8s_cut_xint8_c200.onnx
+                       calibration_data_reader --- <__main__.CocoCalibReader object at 0x0000022DB0D98050>
+                         calibration_data_path --- None
+                                  quant_format --- QDQ
+                                   input_nodes --- []
+                                  output_nodes --- []
+                          op_types_to_quantize --- []
+                    extra_op_types_to_quantize --- []
+                                   per_channel --- False
+                                  reduce_range --- False
+                               activation_type --- QUInt8
+                                   weight_type --- QInt8
+                             nodes_to_quantize --- []
+                              nodes_to_exclude --- []
+                          subgraphs_to_exclude --- []
+                                optimize_model --- True
+                      use_external_data_format --- False
+                              calibrate_method --- PowerOfTwoMethod.MinMSE
+                           execution_providers --- ['CPUExecutionProvider']
+                                enable_npu_cnn --- True
+                        enable_npu_transformer --- False
+                     specific_tensor_precision --- False
+                                    debug_mode --- False
+                          convert_fp16_to_fp32 --- False
+                          convert_nchw_to_nhwc --- False
+                                   include_cle --- True
+                                    include_sq --- False
+                              include_rotation --- False
+                               include_fast_ft --- False
+                                 extra_options --- {'ActivationSymmetric': True}
+  calib 50/200
+  calib 100/200
+  calib 150/200
+  calib 200/200
+  0%|          | 0/200 [00:00<?, ?it/s]Cached 0.19GB:   0%|          | 0/200 [00:01<?, ?it/s]Cached 0.19GB:   0%|          | 1/200 [00:01<03:35,  1.09s/it]Cached 0.39GB:   0%|          | 1/200 [00:01<03:35,  1.09s/it]Cached 0.39GB:   1%|1         | 2/200 [00:01<02:47,  1.18it/s]Cached 0.58GB:   1%|1         | 2/200 [00:02<02:47,  1.18it/s]Cached 0.58GB:   2%|1         | 3/200 [00:02<02:35,  1.27it/s]Cached 0.77GB:   2%|1         | 3/200 [00:03<02:35,  1.27it/s]Cached 0.77GB:   2%|2         | 4/200 [00:03<02:34,  1.27it/s]Cached 0.97GB:   2%|2         | 4/200 [00:04<02:34,  1.27it/s]Cached 0.97GB:   2%|2         | 5/200 [00:04<02:34,  1.26it/s]Cached 1.16GB:   2%|2         | 5/200 [00:04<02:34,  1.26it/s]Cached 1.16GB:   3%|3         | 6/200 [00:04<02:31,  1.28it/s]Cached 1.35GB:   3%|3         | 6/200 [00:05<02:31,  1.28it/s]Cached 1.35GB:   4%|3         | 7/200 [00:05<02:29,  1.29it/s]Cached 1.55GB:   4%|3         | 7/200 [00:06<02:29,  1.29it/s]Cached 1.55GB:   4%|4         | 8/200 [00:06<02:24,  1.33it/s]Cached 1.74GB:   4%|4         | 8/200 [00:07<02:24,  1.33it/s]Cached 1.74GB:   4%|4         | 9/200 [00:07<02:22,  1.34it/s]Cached 1.93GB:   4%|4         | 9/200 [00:07<02:22,  1.34it/s]Cached 1.93GB:   5%|5         | 10/200 [00:07<02:22,  1.34it/s]Cached 2.13GB:   5%|5         | 10/200 [00:08<02:22,  1.34it/s]Cached 2.13GB:   6%|5         | 11/200 [00:08<02:16,  1.39it/s]Cached 2.32GB:   6%|5         | 11/200 [00:09<02:16,  1.39it/s]Cached 2.32GB:   6%|6         | 12/200 [00:09<02:20,  1.34it/s]Cached 2.51GB:   6%|6         | 12/200 [00:09<02:20,  1.34it/s]Cached 2.51GB:   6%|6         | 13/200 [00:09<02:16,  1.37it/s]Cached 2.71GB:   6%|6         | 13/200 [00:10<02:16,  1.37it/s]Cached 2.71GB:   7%|7         | 14/200 [00:10<02:10,  1.42it/s]Cached 2.90GB:   7%|7         | 14/200 [00:11<02:10,  1.42it/s]Cached 2.90GB:   8%|7         | 15/200 [00:11<02:08,  1.44it/s]Cached 3.09GB:   8%|7         | 15/200 [00:11<02:08,  1.44it/s]Cached 3.09GB:   8%|8         | 16/200 [00:11<02:07,  1.44it/s]Cached 3.29GB:   8%|8         | 16/200 [00:12<02:07,  1.44it/s]Cached 3.29GB:   8%|8         | 17/200 [00:12<01:59,  1.53it/s]Cached 3.48GB:   8%|8         | 17/200 [00:13<01:59,  1.53it/s]Cached 3.48GB:   9%|9         | 18/200 [00:13<01:50,  1.65it/s]Cached 3.67GB:   9%|9         | 18/200 [00:13<01:50,  1.65it/s]Cached 3.67GB:  10%|9         | 19/200 [00:13<01:47,  1.68it/s]Cached 3.87GB:  10%|9         | 19/200 [00:14<01:47,  1.68it/s]Cached 3.87GB:  10%|#         | 20/200 [00:14<01:53,  1.59it/s]Cached 4.06GB:  10%|#         | 20/200 [00:14<01:53,  1.59it/s]Cached 4.06GB:  10%|#         | 21/200 [00:14<01:51,  1.60it/s]Cached 4.25GB:  10%|#         | 21/200 [00:15<01:51,  1.60it/s]Cached 4.25GB:  11%|#1        | 22/200 [00:15<01:51,  1.59it/s]Cached 4.45GB:  11%|#1        | 22/200 [00:16<01:51,  1.59it/s]Cached 4.45GB:  12%|#1        | 23/200 [00:16<01:47,  1.64it/s]Cached 4.64GB:  12%|#1        | 23/200 [00:16<01:47,  1.64it/s]Cached 4.64GB:  12%|#2        | 24/200 [00:16<01:52,  1.57it/s]Cached 4.83GB:  12%|#2        | 24/200 [00:17<01:52,  1.57it/s]Cached 4.83GB:  12%|#2        | 25/200 [00:17<01:56,  1.50it/s]Cached 5.03GB:  12%|#2        | 25/200 [00:18<01:56,  1.50it/s]Cached 5.03GB:  13%|#3        | 26/200 [00:18<01:52,  1.55it/s]Cached 5.22GB:  13%|#3        | 26/200 [00:18<01:52,  1.55it/s]Cached 5.22GB:  14%|#3        | 27/200 [00:18<01:49,  1.58it/s]Cached 5.41GB:  14%|#3        | 27/200 [00:19<01:49,  1.58it/s]Cached 5.41GB:  14%|#4        | 28/200 [00:19<01:50,  1.56it/s]Cached 5.60GB:  14%|#4        | 28/200 [00:20<01:50,  1.56it/s]Cached 5.60GB:  14%|#4        | 29/200 [00:20<01:50,  1.55it/s]Cached 5.80GB:  14%|#4        | 29/200 [00:20<01:50,  1.55it/s]Cached 5.80GB:  15%|#5        | 30/200 [00:20<01:46,  1.60it/s]Cached 5.99GB:  15%|#5        | 30/200 [00:21<01:46,  1.60it/s]Cached 5.99GB:  16%|#5        | 31/200 [00:21<01:49,  1.55it/s]Cached 6.18GB:  16%|#5        | 31/200 [00:22<01:49,  1.55it/s]Cached 6.18GB:  16%|#6        | 32/200 [00:22<01:52,  1.50it/s]Cached 6.38GB:  16%|#6        | 32/200 [00:22<01:52,  1.50it/s]Cached 6.38GB:  16%|#6        | 33/200 [00:22<01:53,  1.47it/s]Cached 6.57GB:  16%|#6        | 33/200 [00:23<01:53,  1.47it/s]Cached 6.57GB:  17%|#7        | 34/200 [00:23<01:55,  1.44it/s]Cached 6.76GB:  17%|#7        | 34/200 [00:24<01:55,  1.44it/s]Cached 6.76GB:  18%|#7        | 35/200 [00:24<01:56,  1.42it/s]Cached 6.96GB:  18%|#7        | 35/200 [00:25<01:56,  1.42it/s]Cached 6.96GB:  18%|#8        | 36/200 [00:25<01:59,  1.37it/s]Cached 7.15GB:  18%|#8        | 36/200 [00:25<01:59,  1.37it/s]Cached 7.15GB:  18%|#8        | 37/200 [00:25<01:51,  1.47it/s]Cached 7.34GB:  18%|#8        | 37/200 [00:26<01:51,  1.47it/s]Cached 7.34GB:  19%|#9        | 38/200 [00:26<01:50,  1.47it/s]Cached 7.54GB:  19%|#9        | 38/200 [00:27<01:50,  1.47it/s]Cached 7.54GB:  20%|#9        | 39/200 [00:27<01:53,  1.42it/s]Cached 7.73GB:  20%|#9        | 39/200 [00:27<01:53,  1.42it/s]Cached 7.73GB:  20%|##        | 40/200 [00:27<01:50,  1.44it/s]Cached 7.92GB:  20%|##        | 40/200 [00:28<01:50,  1.44it/s]Cached 7.92GB:  20%|##        | 41/200 [00:28<01:44,  1.53it/s]Cached 8.12GB:  20%|##        | 41/200 [00:28<01:44,  1.53it/s]Cached 8.12GB:  21%|##1       | 42/200 [00:28<01:40,  1.57it/s]Cached 8.31GB:  21%|##1       | 42/200 [00:29<01:40,  1.57it/s]Cached 8.31GB:  22%|##1       | 43/200 [00:29<01:40,  1.56it/s]Cached 8.50GB:  22%|##1       | 43/200 [00:30<01:40,  1.56it/s]Cached 8.50GB:  22%|##2       | 44/200 [00:30<01:41,  1.53it/s]Cached 8.70GB:  22%|##2       | 44/200 [00:30<01:41,  1.53it/s]Cached 8.70GB:  22%|##2       | 45/200 [00:30<01:41,  1.52it/s]Cached 8.89GB:  22%|##2       | 45/200 [00:31<01:41,  1.52it/s]Cached 8.89GB:  23%|##3       | 46/200 [00:31<02:03,  1.24it/s]Cached 9.08GB:  23%|##3       | 46/200 [00:33<02:03,  1.24it/s]Cached 9.08GB:  24%|##3       | 47/200 [00:33<02:24,  1.06it/s]Cached 9.28GB:  24%|##3       | 47/200 [00:34<02:24,  1.06it/s]Cached 9.28GB:  24%|##4       | 48/200 [00:34<02:27,  1.03it/s]Cached 9.47GB:  24%|##4       | 48/200 [00:37<02:27,  1.03it/s]Cached 9.47GB:  24%|##4       | 49/200 [00:37<03:58,  1.58s/it]Cached 9.66GB:  24%|##4       | 49/200 [00:38<03:58,  1.58s/it]Cached 9.66GB:  25%|##5       | 50/200 [00:38<03:19,  1.33s/it]Cached 9.86GB:  25%|##5       | 50/200 [00:38<03:19,  1.33s/it]Cached 9.86GB:  26%|##5       | 51/200 [00:38<02:51,  1.15s/it]Cached 10.05GB:  26%|##5       | 51/200 [00:39<02:51,  1.15s/it]Cached 10.05GB:  26%|##6       | 52/200 [00:39<02:31,  1.02s/it]Cached 10.24GB:  26%|##6       | 52/200 [00:40<02:31,  1.02s/it]Cached 10.24GB:  26%|##6       | 53/200 [00:40<02:11,  1.12it/s]Cached 10.44GB:  26%|##6       | 53/200 [00:40<02:11,  1.12it/s]Cached 10.44GB:  27%|##7       | 54/200 [00:40<01:57,  1.24it/s]Cached 10.63GB:  27%|##7       | 54/200 [00:41<01:57,  1.24it/s]Cached 10.63GB:  28%|##7       | 55/200 [00:41<01:46,  1.36it/s]Cached 10.82GB:  28%|##7       | 55/200 [00:41<01:46,  1.36it/s]Cached 10.82GB:  28%|##8       | 56/200 [00:41<01:39,  1.45it/s]Cached 11.02GB:  28%|##8       | 56/200 [00:42<01:39,  1.45it/s]Cached 11.02GB:  28%|##8       | 57/200 [00:42<01:34,  1.51it/s]Cached 11.21GB:  28%|##8       | 57/200 [00:43<01:34,  1.51it/s]Cached 11.21GB:  29%|##9       | 58/200 [00:43<01:31,  1.55it/s]Cached 11.40GB:  29%|##9       | 58/200 [00:43<01:31,  1.55it/s]Cached 11.40GB:  30%|##9       | 59/200 [00:43<01:31,  1.54it/s]Cached 11.60GB:  30%|##9       | 59/200 [00:44<01:31,  1.54it/s]Cached 11.60GB:  30%|###       | 60/200 [00:44<01:27,  1.60it/s]Cached 11.79GB:  30%|###       | 60/200 [00:44<01:27,  1.60it/s]Cached 11.79GB:  30%|###       | 61/200 [00:44<01:25,  1.63it/s]Cached 11.98GB:  30%|###       | 61/200 [00:45<01:25,  1.63it/s]Cached 11.98GB:  31%|###1      | 62/200 [00:45<01:21,  1.70it/s]Cached 12.18GB:  31%|###1      | 62/200 [00:45<01:21,  1.70it/s]Cached 12.18GB:  32%|###1      | 63/200 [00:45<01:19,  1.71it/s]Cached 12.37GB:  32%|###1      | 63/200 [00:46<01:19,  1.71it/s]Cached 12.37GB:  32%|###2      | 64/200 [00:46<01:19,  1.72it/s]Cached 12.56GB:  32%|###2      | 64/200 [00:47<01:19,  1.72it/s]Cached 12.56GB:  32%|###2      | 65/200 [00:47<01:18,  1.72it/s]Cached 12.76GB:  32%|###2      | 65/200 [00:47<01:18,  1.72it/s]Cached 12.76GB:  33%|###3      | 66/200 [00:47<01:17,  1.73it/s]Cached 12.95GB:  33%|###3      | 66/200 [00:48<01:17,  1.73it/s]Cached 12.95GB:  34%|###3      | 67/200 [00:48<01:16,  1.73it/s]Cached 13.14GB:  34%|###3      | 67/200 [00:48<01:16,  1.73it/s]Cached 13.14GB:  34%|###4      | 68/200 [00:48<01:22,  1.60it/s]Cached 13.34GB:  34%|###4      | 68/200 [00:49<01:22,  1.60it/s]Cached 13.34GB:  34%|###4      | 69/200 [00:49<01:24,  1.54it/s]Cached 13.53GB:  34%|###4      | 69/200 [00:50<01:24,  1.54it/s]Cached 13.53GB:  35%|###5      | 70/200 [00:50<01:22,  1.57it/s]Cached 13.72GB:  35%|###5      | 70/200 [00:50<01:22,  1.57it/s]Cached 13.72GB:  36%|###5      | 71/200 [00:50<01:18,  1.64it/s]Cached 13.92GB:  36%|###5      | 71/200 [00:51<01:18,  1.64it/s]Cached 13.92GB:  36%|###6      | 72/200 [00:51<01:16,  1.67it/s]Cached 14.11GB:  36%|###6      | 72/200 [00:52<01:16,  1.67it/s]Cached 14.11GB:  36%|###6      | 73/200 [00:52<01:16,  1.66it/s]Cached 14.30GB:  36%|###6      | 73/200 [00:52<01:16,  1.66it/s]Cached 14.30GB:  37%|###7      | 74/200 [00:52<01:18,  1.61it/s]Cached 14.50GB:  37%|###7      | 74/200 [00:53<01:18,  1.61it/s]Cached 14.50GB:  38%|###7      | 75/200 [00:53<01:15,  1.65it/s]Cached 14.69GB:  38%|###7      | 75/200 [00:53<01:15,  1.65it/s]Cached 14.69GB:  38%|###8      | 76/200 [00:53<01:19,  1.56it/s]Cached 14.88GB:  38%|###8      | 76/200 [00:54<01:19,  1.56it/s]Cached 14.88GB:  38%|###8      | 77/200 [00:54<01:17,  1.59it/s]Cached 15.08GB:  38%|###8      | 77/200 [00:55<01:17,  1.59it/s]Cached 15.08GB:  39%|###9      | 78/200 [00:55<01:18,  1.56it/s]Cached 15.27GB:  39%|###9      | 78/200 [00:55<01:18,  1.56it/s]Cached 15.27GB:  40%|###9      | 79/200 [00:55<01:15,  1.60it/s]Cached 15.46GB:  40%|###9      | 79/200 [00:56<01:15,  1.60it/s]Cached 15.46GB:  40%|####      | 80/200 [00:56<01:15,  1.59it/s]Cached 15.66GB:  40%|####      | 80/200 [00:57<01:15,  1.59it/s]Cached 15.66GB:  40%|####      | 81/200 [00:57<01:17,  1.54it/s]Cached 15.85GB:  40%|####      | 81/200 [00:57<01:17,  1.54it/s]Cached 15.85GB:  41%|####1     | 82/200 [00:57<01:13,  1.60it/s]Cached 16.04GB:  41%|####1     | 82/200 [00:58<01:13,  1.60it/s]Cached 16.04GB:  42%|####1     | 83/200 [00:58<01:11,  1.64it/s]Cached 16.24GB:  42%|####1     | 83/200 [00:58<01:11,  1.64it/s]Cached 16.24GB:  42%|####2     | 84/200 [00:58<01:08,  1.68it/s]Cached 16.43GB:  42%|####2     | 84/200 [00:59<01:08,  1.68it/s]Cached 16.43GB:  42%|####2     | 85/200 [00:59<01:09,  1.66it/s]Cached 16.62GB:  42%|####2     | 85/200 [01:00<01:09,  1.66it/s]Cached 16.62GB:  43%|####3     | 86/200 [01:00<01:09,  1.65it/s]Cached 16.81GB:  43%|####3     | 86/200 [01:00<01:09,  1.65it/s]Cached 16.81GB:  44%|####3     | 87/200 [01:00<01:07,  1.67it/s]Cached 17.01GB:  44%|####3     | 87/200 [01:01<01:07,  1.67it/s]Cached 17.01GB:  44%|####4     | 88/200 [01:01<01:05,  1.71it/s]Cached 17.20GB:  44%|####4     | 88/200 [01:01<01:05,  1.71it/s]Cached 17.20GB:  44%|####4     | 89/200 [01:01<01:05,  1.70it/s]Cached 17.39GB:  44%|####4     | 89/200 [01:02<01:05,  1.70it/s]Cached 17.39GB:  45%|####5     | 90/200 [01:02<01:04,  1.71it/s]Cached 17.59GB:  45%|####5     | 90/200 [01:03<01:04,  1.71it/s]Cached 17.59GB:  46%|####5     | 91/200 [01:03<01:04,  1.70it/s]Cached 17.78GB:  46%|####5     | 91/200 [01:03<01:04,  1.70it/s]Cached 17.78GB:  46%|####6     | 92/200 [01:03<01:03,  1.69it/s]Cached 17.97GB:  46%|####6     | 92/200 [01:04<01:03,  1.69it/s]Cached 17.97GB:  46%|####6     | 93/200 [01:04<01:05,  1.62it/s]Cached 18.17GB:  46%|####6     | 93/200 [01:04<01:05,  1.62it/s]Cached 18.17GB:  47%|####6     | 94/200 [01:04<01:07,  1.58it/s]Cached 18.36GB:  47%|####6     | 94/200 [01:05<01:07,  1.58it/s]Cached 18.36GB:  48%|####7     | 95/200 [01:05<01:09,  1.51it/s]Cached 18.55GB:  48%|####7     | 95/200 [01:06<01:09,  1.51it/s]Cached 18.55GB:  48%|####8     | 96/200 [01:06<01:05,  1.59it/s]Cached 18.75GB:  48%|####8     | 96/200 [01:06<01:05,  1.59it/s]Cached 18.75GB:  48%|####8     | 97/200 [01:06<01:04,  1.60it/s]Cached 18.94GB:  48%|####8     | 97/200 [01:07<01:04,  1.60it/s]Cached 18.94GB:  49%|####9     | 98/200 [01:07<01:07,  1.52it/s]Cached 19.13GB:  49%|####9     | 98/200 [01:08<01:07,  1.52it/s]Cached 19.13GB:  50%|####9     | 99/200 [01:08<01:06,  1.53it/s]Cached 19.33GB:  50%|####9     | 99/200 [01:08<01:06,  1.53it/s]Cached 19.33GB:  50%|#####     | 100/200 [01:08<01:03,  1.57it/s]Cached 19.52GB:  50%|#####     | 100/200 [01:09<01:03,  1.57it/s]Cached 19.52GB:  50%|#####     | 101/200 [01:09<01:00,  1.62it/s]Cached 19.71GB:  50%|#####     | 101/200 [01:10<01:00,  1.62it/s]Cached 19.71GB:  51%|#####1    | 102/200 [01:10<01:00,  1.62it/s]Cached 19.91GB:  51%|#####1    | 102/200 [01:10<01:00,  1.62it/s]Cached 19.91GB:  52%|#####1    | 103/200 [01:10<00:59,  1.62it/s]Cached 20.10GB:  52%|#####1    | 103/200 [01:11<00:59,  1.62it/s]Cached 20.10GB:  52%|#####2    | 104/200 [01:11<00:58,  1.65it/s]Cached 20.29GB:  52%|#####2    | 104/200 [01:11<00:58,  1.65it/s]Cached 20.29GB:  52%|#####2    | 105/200 [01:11<00:56,  1.69it/s]Cached 20.49GB:  52%|#####2    | 105/200 [01:12<00:56,  1.69it/s]Cached 20.49GB:  53%|#####3    | 106/200 [01:12<00:54,  1.73it/s]Cached 20.68GB:  53%|#####3    | 106/200 [01:12<00:54,  1.73it/s]Cached 20.68GB:  54%|#####3    | 107/200 [01:12<00:53,  1.74it/s]Cached 20.87GB:  54%|#####3    | 107/200 [01:13<00:53,  1.74it/s]Cached 20.87GB:  54%|#####4    | 108/200 [01:13<00:53,  1.71it/s]Cached 21.07GB:  54%|#####4    | 108/200 [01:14<00:53,  1.71it/s]Cached 21.07GB:  55%|#####4    | 109/200 [01:14<00:55,  1.65it/s]Cached 21.26GB:  55%|#####4    | 109/200 [01:14<00:55,  1.65it/s]Cached 21.26GB:  55%|#####5    | 110/200 [01:14<00:58,  1.55it/s]Cached 21.45GB:  55%|#####5    | 110/200 [01:15<00:58,  1.55it/s]Cached 21.45GB:  56%|#####5    | 111/200 [01:15<00:56,  1.59it/s]Cached 21.65GB:  56%|#####5    | 111/200 [01:16<00:56,  1.59it/s]Cached 21.65GB:  56%|#####6    | 112/200 [01:16<00:55,  1.58it/s]Cached 21.84GB:  56%|#####6    | 112/200 [01:16<00:55,  1.58it/s]Cached 21.84GB:  56%|#####6    | 113/200 [01:16<00:56,  1.55it/s]Cached 22.03GB:  56%|#####6    | 113/200 [01:17<00:56,  1.55it/s]Cached 22.03GB:  57%|#####6    | 114/200 [01:17<00:53,  1.60it/s]Cached 22.23GB:  57%|#####6    | 114/200 [01:18<00:53,  1.60it/s]Cached 22.23GB:  57%|#####7    | 115/200 [01:18<00:57,  1.47it/s]Cached 22.42GB:  57%|#####7    | 115/200 [01:19<00:57,  1.47it/s]Cached 22.42GB:  58%|#####8    | 116/200 [01:19<01:00,  1.38it/s]Cached 22.61GB:  58%|#####8    | 116/200 [01:19<01:00,  1.38it/s]Cached 22.61GB:  58%|#####8    | 117/200 [01:19<00:58,  1.41it/s]Cached 22.81GB:  58%|#####8    | 117/200 [01:20<00:58,  1.41it/s]Cached 22.81GB:  59%|#####8    | 118/200 [01:20<00:56,  1.44it/s]Cached 23.00GB:  59%|#####8    | 118/200 [01:20<00:56,  1.44it/s]Cached 23.00GB:  60%|#####9    | 119/200 [01:20<00:53,  1.50it/s]Cached 23.19GB:  60%|#####9    | 119/200 [01:21<00:53,  1.50it/s]Cached 23.19GB:  60%|######    | 120/200 [01:21<00:52,  1.52it/s]Cached 23.39GB:  60%|######    | 120/200 [01:22<00:52,  1.52it/s]Cached 23.39GB:  60%|######    | 121/200 [01:22<00:54,  1.44it/s]Cached 23.58GB:  60%|######    | 121/200 [01:22<00:54,  1.44it/s]Cached 23.58GB:  61%|######1   | 122/200 [01:22<00:52,  1.50it/s]Cached 23.77GB:  61%|######1   | 122/200 [01:23<00:52,  1.50it/s]Cached 23.77GB:  62%|######1   | 123/200 [01:23<00:49,  1.57it/s]Cached 23.97GB:  62%|######1   | 123/200 [01:24<00:49,  1.57it/s]Cached 23.97GB:  62%|######2   | 124/200 [01:24<00:46,  1.62it/s]Cached 24.16GB:  62%|######2   | 124/200 [01:24<00:46,  1.62it/s]Cached 24.16GB:  62%|######2   | 125/200 [01:24<00:44,  1.68it/s]Cached 24.35GB:  62%|######2   | 125/200 [01:25<00:44,  1.68it/s]Cached 24.35GB:  63%|######3   | 126/200 [01:25<00:44,  1.66it/s]Cached 24.55GB:  63%|######3   | 126/200 [01:25<00:44,  1.66it/s]Cached 24.55GB:  64%|######3   | 127/200 [01:25<00:43,  1.66it/s]Cached 24.74GB:  64%|######3   | 127/200 [01:26<00:43,  1.66it/s]Cached 24.74GB:  64%|######4   | 128/200 [01:26<00:44,  1.60it/s]Cached 24.93GB:  64%|######4   | 128/200 [01:27<00:44,  1.60it/s]Cached 24.93GB:  64%|######4   | 129/200 [01:27<00:43,  1.62it/s]Cached 25.13GB:  64%|######4   | 129/200 [01:27<00:43,  1.62it/s]Cached 25.13GB:  65%|######5   | 130/200 [01:27<00:45,  1.55it/s]Cached 25.32GB:  65%|######5   | 130/200 [01:28<00:45,  1.55it/s]Cached 25.32GB:  66%|######5   | 131/200 [01:28<00:47,  1.45it/s]Cached 25.51GB:  66%|######5   | 131/200 [01:29<00:47,  1.45it/s]Cached 25.51GB:  66%|######6   | 132/200 [01:29<00:46,  1.46it/s]Cached 25.71GB:  66%|######6   | 132/200 [01:29<00:46,  1.46it/s]Cached 25.71GB:  66%|######6   | 133/200 [01:29<00:43,  1.54it/s]Cached 25.90GB:  66%|######6   | 133/200 [01:30<00:43,  1.54it/s]Cached 25.90GB:  67%|######7   | 134/200 [01:30<00:42,  1.56it/s]Cached 26.09GB:  67%|######7   | 134/200 [01:31<00:42,  1.56it/s]Cached 26.09GB:  68%|######7   | 135/200 [01:31<00:40,  1.61it/s]Cached 26.29GB:  68%|######7   | 135/200 [01:31<00:40,  1.61it/s]Cached 26.29GB:  68%|######8   | 136/200 [01:31<00:39,  1.63it/s]Cached 26.48GB:  68%|######8   | 136/200 [01:32<00:39,  1.63it/s]Cached 26.48GB:  68%|######8   | 137/200 [01:32<00:38,  1.62it/s]Cached 26.67GB:  68%|######8   | 137/200 [01:32<00:38,  1.62it/s]Cached 26.67GB:  69%|######9   | 138/200 [01:32<00:37,  1.66it/s]Cached 26.87GB:  69%|######9   | 138/200 [01:33<00:37,  1.66it/s]Cached 26.87GB:  70%|######9   | 139/200 [01:33<00:36,  1.68it/s]Cached 27.06GB:  70%|######9   | 139/200 [01:34<00:36,  1.68it/s]Cached 27.06GB:  70%|#######   | 140/200 [01:34<00:35,  1.71it/s]Cached 27.25GB:  70%|#######   | 140/200 [01:34<00:35,  1.71it/s]Cached 27.25GB:  70%|#######   | 141/200 [01:34<00:35,  1.68it/s]Cached 27.44GB:  70%|#######   | 141/200 [01:35<00:35,  1.68it/s]Cached 27.44GB:  71%|#######1  | 142/200 [01:35<00:34,  1.69it/s]Cached 27.64GB:  71%|#######1  | 142/200 [01:35<00:34,  1.69it/s]Cached 27.64GB:  72%|#######1  | 143/200 [01:35<00:33,  1.73it/s]Cached 27.83GB:  72%|#######1  | 143/200 [01:36<00:33,  1.73it/s]Cached 27.83GB:  72%|#######2  | 144/200 [01:36<00:32,  1.71it/s]Cached 28.02GB:  72%|#######2  | 144/200 [01:36<00:32,  1.71it/s]Cached 28.02GB:  72%|#######2  | 145/200 [01:36<00:31,  1.73it/s]Cached 28.22GB:  72%|#######2  | 145/200 [01:37<00:31,  1.73it/s]Cached 28.22GB:  73%|#######3  | 146/200 [01:37<00:32,  1.65it/s]Cached 28.41GB:  73%|#######3  | 146/200 [01:38<00:32,  1.65it/s]Cached 28.41GB:  74%|#######3  | 147/200 [01:38<00:32,  1.62it/s]Cached 28.60GB:  74%|#######3  | 147/200 [01:38<00:32,  1.62it/s]Cached 28.60GB:  74%|#######4  | 148/200 [01:38<00:32,  1.62it/s]Cached 28.80GB:  74%|#######4  | 148/200 [01:39<00:32,  1.62it/s]Cached 28.80GB:  74%|#######4  | 149/200 [01:39<00:30,  1.65it/s]Cached 28.99GB:  74%|#######4  | 149/200 [01:40<00:30,  1.65it/s]Cached 28.99GB:  75%|#######5  | 150/200 [01:40<00:30,  1.65it/s]Cached 29.18GB:  75%|#######5  | 150/200 [01:40<00:30,  1.65it/s]Cached 29.18GB:  76%|#######5  | 151/200 [01:40<00:30,  1.62it/s]Cached 29.38GB:  76%|#######5  | 151/200 [01:41<00:30,  1.62it/s]Cached 29.38GB:  76%|#######6  | 152/200 [01:41<00:29,  1.64it/s]Cached 29.57GB:  76%|#######6  | 152/200 [01:41<00:29,  1.64it/s]Cached 29.57GB:  76%|#######6  | 153/200 [01:41<00:28,  1.64it/s]Cached 29.76GB:  76%|#######6  | 153/200 [01:42<00:28,  1.64it/s]Cached 29.76GB:  77%|#######7  | 154/200 [01:42<00:27,  1.68it/s]Cached 29.96GB:  77%|#######7  | 154/200 [01:43<00:27,  1.68it/s]Cached 29.96GB:  78%|#######7  | 155/200 [01:43<00:26,  1.70it/s]Cached 30.15GB:  78%|#######7  | 155/200 [01:43<00:26,  1.70it/s]Cached 30.15GB:  78%|#######8  | 156/200 [01:43<00:25,  1.73it/s]Cached 30.34GB:  78%|#######8  | 156/200 [01:44<00:25,  1.73it/s]Cached 30.34GB:  78%|#######8  | 157/200 [01:44<00:25,  1.70it/s]Cached 30.54GB:  78%|#######8  | 157/200 [01:44<00:25,  1.70it/s]Cached 30.54GB:  79%|#######9  | 158/200 [01:44<00:25,  1.67it/s]Cached 30.73GB:  79%|#######9  | 158/200 [01:45<00:25,  1.67it/s]Cached 30.73GB:  80%|#######9  | 159/200 [01:45<00:24,  1.68it/s]Cached 30.92GB:  80%|#######9  | 159/200 [01:45<00:24,  1.68it/s]Cached 30.92GB:  80%|########  | 160/200 [01:45<00:23,  1.70it/s]Cached 31.12GB:  80%|########  | 160/200 [01:46<00:23,  1.70it/s]Cached 31.12GB:  80%|########  | 161/200 [01:46<00:23,  1.69it/s]Cached 31.31GB:  80%|########  | 161/200 [01:47<00:23,  1.69it/s]Cached 31.31GB:  81%|########1 | 162/200 [01:47<00:22,  1.66it/s]Cached 31.50GB:  81%|########1 | 162/200 [01:47<00:22,  1.66it/s]Cached 31.50GB:  82%|########1 | 163/200 [01:47<00:22,  1.67it/s]Cached 31.70GB:  82%|########1 | 163/200 [01:48<00:22,  1.67it/s]Cached 31.70GB:  82%|########2 | 164/200 [01:48<00:21,  1.68it/s]Cached 31.89GB:  82%|########2 | 164/200 [01:49<00:21,  1.68it/s]Cached 31.89GB:  82%|########2 | 165/200 [01:49<00:20,  1.67it/s]Cached 32.08GB:  82%|########2 | 165/200 [01:49<00:20,  1.67it/s]Cached 32.08GB:  83%|########2 | 166/200 [01:49<00:20,  1.70it/s]Cached 32.28GB:  83%|########2 | 166/200 [01:50<00:20,  1.70it/s]Cached 32.28GB:  84%|########3 | 167/200 [01:50<00:19,  1.72it/s]Cached 32.47GB:  84%|########3 | 167/200 [01:50<00:19,  1.72it/s]Cached 32.47GB:  84%|########4 | 168/200 [01:50<00:18,  1.76it/s]Cached 32.66GB:  84%|########4 | 168/200 [01:51<00:18,  1.76it/s]Cached 32.66GB:  84%|########4 | 169/200 [01:51<00:17,  1.72it/s]Cached 32.86GB:  84%|########4 | 169/200 [01:51<00:17,  1.72it/s]Cached 32.86GB:  85%|########5 | 170/200 [01:51<00:17,  1.71it/s]Cached 33.05GB:  85%|########5 | 170/200 [01:52<00:17,  1.71it/s]Cached 33.05GB:  86%|########5 | 171/200 [01:52<00:17,  1.65it/s]Cached 33.24GB:  86%|########5 | 171/200 [01:53<00:17,  1.65it/s]Cached 33.24GB:  86%|########6 | 172/200 [01:53<00:18,  1.49it/s]Cached 33.44GB:  86%|########6 | 172/200 [01:54<00:18,  1.49it/s]Cached 33.44GB:  86%|########6 | 173/200 [01:54<00:18,  1.49it/s]Cached 33.63GB:  86%|########6 | 173/200 [01:54<00:18,  1.49it/s]Cached 33.63GB:  87%|########7 | 174/200 [01:54<00:16,  1.59it/s]Cached 33.82GB:  87%|########7 | 174/200 [01:55<00:16,  1.59it/s]Cached 33.82GB:  88%|########7 | 175/200 [01:55<00:17,  1.45it/s]Cached 34.02GB:  88%|########7 | 175/200 [01:56<00:17,  1.45it/s]Cached 34.02GB:  88%|########8 | 176/200 [01:56<00:16,  1.48it/s]Cached 34.21GB:  88%|########8 | 176/200 [01:56<00:16,  1.48it/s]Cached 34.21GB:  88%|########8 | 177/200 [01:56<00:15,  1.53it/s]Cached 34.40GB:  88%|########8 | 177/200 [01:57<00:15,  1.53it/s]Cached 34.40GB:  89%|########9 | 178/200 [01:57<00:13,  1.60it/s]Cached 34.60GB:  89%|########9 | 178/200 [01:57<00:13,  1.60it/s]Cached 34.60GB:  90%|########9 | 179/200 [01:57<00:12,  1.65it/s]Cached 34.79GB:  90%|########9 | 179/200 [01:58<00:12,  1.65it/s]Cached 34.79GB:  90%|######### | 180/200 [01:58<00:11,  1.70it/s]Cached 34.98GB:  90%|######### | 180/200 [01:58<00:11,  1.70it/s]Cached 34.98GB:  90%|######### | 181/200 [01:58<00:11,  1.69it/s]Cached 35.18GB:  90%|######### | 181/200 [01:59<00:11,  1.69it/s]Cached 35.18GB:  91%|#########1| 182/200 [01:59<00:10,  1.74it/s]Cached 35.37GB:  91%|#########1| 182/200 [02:00<00:10,  1.74it/s]Cached 35.37GB:  92%|#########1| 183/200 [02:00<00:09,  1.75it/s]Cached 35.56GB:  92%|#########1| 183/200 [02:00<00:09,  1.75it/s]Cached 35.56GB:  92%|#########2| 184/200 [02:00<00:09,  1.75it/s]Cached 35.76GB:  92%|#########2| 184/200 [02:01<00:09,  1.75it/s]Cached 35.76GB:  92%|#########2| 185/200 [02:01<00:08,  1.76it/s]Cached 35.95GB:  92%|#########2| 185/200 [02:01<00:08,  1.76it/s]Cached 35.95GB:  93%|#########3| 186/200 [02:01<00:08,  1.71it/s]Cached 36.14GB:  93%|#########3| 186/200 [02:02<00:08,  1.71it/s]Cached 36.14GB:  94%|#########3| 187/200 [02:02<00:07,  1.71it/s]Cached 36.34GB:  94%|#########3| 187/200 [02:02<00:07,  1.71it/s]Cached 36.34GB:  94%|#########3| 188/200 [02:02<00:07,  1.71it/s]Cached 36.53GB:  94%|#########3| 188/200 [02:03<00:07,  1.71it/s]Cached 36.53GB:  94%|#########4| 189/200 [02:03<00:06,  1.75it/s]Cached 36.72GB:  94%|#########4| 189/200 [02:03<00:06,  1.75it/s]Cached 36.72GB:  95%|#########5| 190/200 [02:03<00:05,  1.79it/s]Cached 36.92GB:  95%|#########5| 190/200 [02:04<00:05,  1.79it/s]Cached 36.92GB:  96%|#########5| 191/200 [02:04<00:05,  1.76it/s]Cached 37.11GB:  96%|#########5| 191/200 [02:05<00:05,  1.76it/s]Cached 37.11GB:  96%|#########6| 192/200 [02:05<00:04,  1.76it/s]Cached 37.30GB:  96%|#########6| 192/200 [02:05<00:04,  1.76it/s]Cached 37.30GB:  96%|#########6| 193/200 [02:05<00:04,  1.73it/s]Cached 37.50GB:  96%|#########6| 193/200 [02:06<00:04,  1.73it/s]Cached 37.50GB:  97%|#########7| 194/200 [02:06<00:03,  1.74it/s]Cached 37.69GB:  97%|#########7| 194/200 [02:06<00:03,  1.74it/s]Cached 37.69GB:  98%|#########7| 195/200 [02:06<00:02,  1.72it/s]Cached 37.88GB:  98%|#########7| 195/200 [02:07<00:02,  1.72it/s]Cached 37.88GB:  98%|#########8| 196/200 [02:07<00:02,  1.64it/s]Cached 38.07GB:  98%|#########8| 196/200 [02:08<00:02,  1.64it/s]Cached 38.07GB:  98%|#########8| 197/200 [02:08<00:01,  1.60it/s]Cached 38.27GB:  98%|#########8| 197/200 [02:08<00:01,  1.60it/s]Cached 38.27GB:  99%|#########9| 198/200 [02:08<00:01,  1.65it/s]Cached 38.46GB:  99%|#########9| 198/200 [02:09<00:01,  1.65it/s]Cached 38.46GB: 100%|#########9| 199/200 [02:09<00:00,  1.72it/s]Cached 38.65GB: 100%|#########9| 199/200 [02:09<00:00,  1.72it/s]Cached 38.65GB: 100%|##########| 200/200 [02:09<00:00,  1.68it/s]Cached 38.65GB: 100%|##########| 200/200 [02:09<00:00,  1.54it/s]
+[32m
+[QUARK-INFO]: Finding optimal threshold for each tensor using PowerOfTwoMethod.MinMSE algorithm in 'All' mode ...[0m
+  0%|          | 0/218 [00:00<?, ?it/s]  0%|          | 1/218 [00:05<19:09,  5.30s/it]  1%|          | 2/218 [00:06<10:30,  2.92s/it]  1%|1         | 3/218 [00:06<06:20,  1.77s/it]  2%|1         | 4/218 [00:13<12:41,  3.56s/it]  2%|2         | 5/218 [00:14<09:59,  2.81s/it]  3%|2         | 6/218 [00:15<07:08,  2.02s/it]  3%|3         | 7/218 [00:19<10:03,  2.86s/it]  4%|3         | 8/218 [00:41<31:21,  8.96s/it]  4%|4         | 9/218 [00:51<31:32,  9.05s/it]  5%|4         | 10/218 [00:58<29:14,  8.44s/it]  5%|5         | 11/218 [01:02<25:11,  7.30s/it]  6%|5         | 12/218 [01:44<1:00:33, 17.64s/it]  6%|5         | 13/218 [01:45<43:26, 12.71s/it]    6%|6         | 14/218 [01:50<35:25, 10.42s/it]  7%|6         | 15/218 [01:55<29:25,  8.70s/it]  7%|7         | 16/218 [02:00<25:14,  7.50s/it]  8%|7         | 17/218 [02:06<24:28,  7.31s/it]  8%|8         | 18/218 [02:11<21:39,  6.50s/it]  9%|8         | 19/218 [02:20<24:22,  7.35s/it]  9%|9         | 20/218 [02:29<25:55,  7.86s/it] 10%|9         | 21/218 [02:34<22:38,  6.89s/it] 10%|#         | 22/218 [02:43<24:47,  7.59s/it] 11%|#         | 23/218 [02:44<17:54,  5.51s/it] 11%|#1        | 24/218 [02:49<17:05,  5.29s/it] 11%|#1        | 25/218 [02:50<13:11,  4.10s/it] 12%|#1        | 26/218 [02:52<11:27,  3.58s/it] 12%|#2        | 27/218 [02:57<12:26,  3.91s/it] 13%|#2        | 28/218 [02:58<09:51,  3.11s/it] 13%|#3        | 29/218 [03:00<08:01,  2.55s/it] 14%|#3        | 30/218 [03:09<14:24,  4.60s/it] 14%|#4        | 31/218 [03:18<18:49,  6.04s/it] 15%|#4        | 32/218 [03:20<14:15,  4.60s/it] 15%|#5        | 33/218 [03:40<28:43,  9.32s/it] 16%|#5        | 34/218 [03:42<22:16,  7.27s/it] 16%|#6        | 35/218 [03:47<20:00,  6.56s/it] 17%|#6        | 36/218 [03:49<15:18,  5.05s/it] 17%|#6        | 37/218 [05:14<1:27:29, 29.00s/it] 17%|#7        | 38/218 [05:17<1:03:27, 21.15s/it] 18%|#7        | 39/218 [05:19<46:28, 15.58s/it]   18%|#8        | 40/218 [05:20<32:56, 11.11s/it] 19%|#8        | 41/218 [05:22<25:07,  8.52s/it] 19%|#9        | 42/218 [05:27<21:41,  7.39s/it] 20%|#9        | 43/218 [05:32<19:26,  6.67s/it] 20%|##        | 44/218 [05:37<17:48,  6.14s/it] 21%|##        | 45/218 [05:57<29:24, 10.20s/it] 21%|##1       | 46/218 [07:22<1:33:49, 32.73s/it] 22%|##1       | 47/218 [08:00<1:38:12, 34.46s/it] 22%|##2       | 48/218 [08:03<1:10:35, 24.91s/it] 22%|##2       | 49/218 [08:04<50:12, 17.82s/it]   23%|##2       | 50/218 [08:09<38:48, 13.86s/it] 23%|##3       | 51/218 [08:11<28:58, 10.41s/it] 24%|##3       | 52/218 [08:16<24:04,  8.70s/it] 24%|##4       | 53/218 [08:21<20:36,  7.50s/it] 25%|##4       | 54/218 [08:23<16:18,  5.97s/it] 25%|##5       | 55/218 [08:42<27:02,  9.96s/it] 26%|##5       | 56/218 [08:47<22:37,  8.38s/it] 26%|##6       | 57/218 [08:52<19:32,  7.29s/it] 27%|##6       | 58/218 [09:01<21:00,  7.88s/it] 27%|##7       | 59/218 [09:02<15:36,  5.89s/it] 28%|##7       | 60/218 [09:05<12:42,  4.83s/it] 28%|##7       | 61/218 [09:14<16:10,  6.18s/it] 28%|##8       | 62/218 [09:16<13:06,  5.04s/it] 29%|##8       | 63/218 [09:21<12:41,  4.91s/it] 29%|##9       | 64/218 [09:26<12:21,  4.82s/it] 30%|##9       | 65/218 [09:30<12:07,  4.75s/it] 30%|###       | 66/218 [09:35<11:57,  4.72s/it] 31%|###       | 67/218 [09:49<19:20,  7.68s/it] 31%|###1      | 68/218 [09:52<15:15,  6.10s/it] 32%|###1      | 69/218 [09:53<11:32,  4.65s/it] 32%|###2      | 70/218 [09:55<09:46,  3.96s/it] 33%|###2      | 71/218 [09:58<08:33,  3.49s/it] 33%|###3      | 72/218 [09:59<06:50,  2.81s/it] 33%|###3      | 73/218 [10:04<08:07,  3.36s/it] 34%|###3      | 74/218 [10:06<07:22,  3.07s/it] 34%|###4      | 75/218 [10:15<11:44,  4.92s/it] 35%|###4      | 76/218 [10:17<09:02,  3.82s/it] 35%|###5      | 77/218 [10:21<09:37,  4.09s/it] 36%|###5      | 78/218 [10:23<07:33,  3.24s/it] 36%|###6      | 79/218 [10:25<06:55,  2.99s/it] 37%|###6      | 80/218 [10:26<05:39,  2.46s/it] 37%|###7      | 81/218 [10:30<06:17,  2.76s/it] 38%|###7      | 82/218 [10:31<05:12,  2.30s/it] 38%|###8      | 83/218 [10:40<09:56,  4.42s/it] 39%|###8      | 84/218 [10:49<13:05,  5.87s/it] 39%|###8      | 85/218 [10:59<15:13,  6.87s/it] 39%|###9      | 86/218 [11:01<12:08,  5.52s/it] 40%|###9      | 87/218 [11:03<10:00,  4.58s/it] 40%|####      | 88/218 [11:05<07:44,  3.57s/it] 41%|####      | 89/218 [11:05<05:37,  2.62s/it] 41%|####1     | 90/218 [11:10<06:52,  3.22s/it] 42%|####1     | 91/218 [11:12<06:16,  2.96s/it] 42%|####2     | 92/218 [11:14<05:51,  2.79s/it] 43%|####2     | 93/218 [11:19<06:59,  3.35s/it] 43%|####3     | 94/218 [11:26<09:07,  4.42s/it] 44%|####3     | 95/218 [11:28<07:48,  3.81s/it] 44%|####4     | 96/218 [11:38<11:16,  5.54s/it] 44%|####4     | 97/218 [11:40<09:16,  4.60s/it] 45%|####4     | 98/218 [11:50<11:59,  6.00s/it] 45%|####5     | 99/218 [11:52<09:44,  4.91s/it] 46%|####5     | 100/218 [11:53<07:28,  3.80s/it] 46%|####6     | 101/218 [12:08<13:47,  7.07s/it] 47%|####6     | 102/218 [12:13<12:15,  6.34s/it] 47%|####7     | 103/218 [12:15<09:51,  5.15s/it] 48%|####7     | 104/218 [12:20<09:32,  5.02s/it] 48%|####8     | 105/218 [12:40<18:13,  9.68s/it] 49%|####8     | 106/218 [12:45<15:31,  8.32s/it] 49%|####9     | 107/218 [12:47<11:27,  6.20s/it] 50%|####9     | 108/218 [12:47<08:20,  4.55s/it] 50%|#####     | 109/218 [12:50<07:05,  3.90s/it] 50%|#####     | 110/218 [12:55<07:31,  4.18s/it] 51%|#####     | 111/218 [12:57<06:31,  3.66s/it] 51%|#####1    | 112/218 [12:59<05:46,  3.27s/it] 52%|#####1    | 113/218 [13:09<08:54,  5.09s/it] 52%|#####2    | 114/218 [13:28<16:17,  9.40s/it] 53%|#####2    | 115/218 [13:37<16:04,  9.37s/it] 53%|#####3    | 116/218 [13:42<13:31,  7.96s/it] 54%|#####3    | 117/218 [13:44<10:33,  6.27s/it] 54%|#####4    | 118/218 [13:47<08:29,  5.09s/it] 55%|#####4    | 119/218 [13:56<10:29,  6.36s/it] 55%|#####5    | 120/218 [15:10<43:36, 26.70s/it] 56%|#####5    | 121/218 [15:13<31:29, 19.48s/it] 56%|#####5    | 122/218 [15:18<24:10, 15.11s/it] 56%|#####6    | 123/218 [15:19<17:22, 10.97s/it] 57%|#####6    | 124/218 [15:24<14:24,  9.19s/it] 57%|#####7    | 125/218 [15:25<10:33,  6.82s/it] 58%|#####7    | 126/218 [15:45<16:10, 10.55s/it] 58%|#####8    | 127/218 [15:47<12:16,  8.09s/it] 59%|#####8    | 128/218 [15:47<08:40,  5.79s/it] 59%|#####9    | 129/218 [15:57<10:11,  6.87s/it] 60%|#####9    | 130/218 [15:59<08:09,  5.57s/it] 60%|######    | 131/218 [16:02<06:43,  4.63s/it] 61%|######    | 132/218 [16:04<05:41,  3.98s/it] 61%|######1   | 133/218 [16:09<05:56,  4.19s/it] 61%|######1   | 134/218 [16:18<07:58,  5.69s/it] 62%|######1   | 135/218 [16:27<09:21,  6.77s/it] 62%|######2   | 136/218 [16:29<06:59,  5.11s/it] 63%|######2   | 137/218 [16:38<08:33,  6.33s/it] 63%|######3   | 138/218 [16:58<13:56, 10.45s/it] 64%|######3   | 139/218 [16:59<10:07,  7.69s/it] 64%|######4   | 140/218 [17:02<07:55,  6.10s/it] 65%|######4   | 141/218 [17:04<06:24,  4.99s/it] 65%|######5   | 142/218 [17:09<06:11,  4.89s/it] 66%|######5   | 143/218 [17:11<05:10,  4.14s/it] 66%|######6   | 144/218 [17:13<04:26,  3.60s/it] 67%|######6   | 145/218 [17:16<03:56,  3.24s/it] 67%|######6   | 146/218 [17:20<04:24,  3.67s/it] 67%|######7   | 147/218 [17:22<03:29,  2.94s/it] 68%|######7   | 148/218 [17:31<05:37,  4.82s/it] 68%|######8   | 149/218 [17:33<04:42,  4.09s/it] 69%|######8   | 150/218 [17:43<06:26,  5.68s/it] 69%|######9   | 151/218 [17:44<04:51,  4.35s/it] 70%|######9   | 152/218 [17:46<04:07,  3.75s/it] 70%|#######   | 153/218 [17:49<03:37,  3.34s/it] 71%|#######   | 154/218 [17:58<05:27,  5.12s/it] 71%|#######1  | 155/218 [18:00<04:30,  4.29s/it] 72%|#######1  | 156/218 [18:03<03:49,  3.71s/it] 72%|#######2  | 157/218 [18:07<04:04,  4.01s/it] 72%|#######2  | 158/218 [18:28<08:53,  8.89s/it] 73%|#######2  | 159/218 [18:32<07:30,  7.63s/it] 73%|#######3  | 160/218 [18:51<10:43, 11.09s/it] 74%|#######3  | 161/218 [18:54<08:03,  8.48s/it] 74%|#######4  | 162/218 [19:08<09:26, 10.12s/it] 75%|#######4  | 163/218 [19:10<07:10,  7.83s/it] 75%|#######5  | 164/218 [19:15<06:10,  6.86s/it] 76%|#######5  | 165/218 [19:17<04:52,  5.52s/it] 76%|#######6  | 166/218 [19:20<03:57,  4.57s/it] 77%|#######6  | 167/218 [19:21<03:02,  3.57s/it] 77%|#######7  | 168/218 [19:21<02:10,  2.62s/it] 78%|#######7  | 169/218 [19:22<01:35,  1.96s/it] 78%|#######7  | 170/218 [19:23<01:23,  1.75s/it] 78%|#######8  | 171/218 [19:25<01:31,  1.95s/it] 79%|#######8  | 172/218 [19:29<01:50,  2.41s/it] 79%|#######9  | 173/218 [19:38<03:18,  4.41s/it] 80%|#######9  | 174/218 [19:47<04:16,  5.83s/it] 80%|########  | 175/218 [19:56<04:52,  6.80s/it] 81%|########  | 176/218 [20:01<04:18,  6.15s/it] 81%|########1 | 177/218 [20:10<04:51,  7.11s/it] 82%|########1 | 178/218 [20:21<05:27,  8.19s/it] 82%|########2 | 179/218 [20:23<04:14,  6.52s/it] 83%|########2 | 180/218 [20:26<03:23,  5.35s/it] 83%|########3 | 181/218 [20:27<02:26,  3.96s/it] 83%|########3 | 182/218 [20:37<03:29,  5.81s/it] 84%|########3 | 183/218 [20:42<03:19,  5.70s/it] 84%|########4 | 184/218 [20:44<02:34,  4.55s/it] 85%|########4 | 185/218 [20:46<02:03,  3.74s/it] 85%|########5 | 186/218 [20:47<01:35,  2.98s/it] 86%|########5 | 187/218 [20:50<01:33,  3.01s/it] 86%|########6 | 188/218 [20:56<01:52,  3.76s/it] 87%|########6 | 189/218 [20:59<01:42,  3.55s/it] 87%|########7 | 190/218 [21:02<01:36,  3.45s/it] 88%|########7 | 191/218 [21:04<01:21,  3.00s/it] 88%|########8 | 192/218 [21:07<01:20,  3.09s/it] 89%|########8 | 193/218 [21:09<01:03,  2.55s/it] 89%|########8 | 194/218 [21:14<01:19,  3.29s/it] 89%|########9 | 195/218 [21:18<01:26,  3.75s/it] 90%|########9 | 196/218 [21:21<01:13,  3.35s/it] 90%|######### | 197/218 [21:22<00:56,  2.70s/it] 91%|######### | 198/218 [21:27<01:05,  3.27s/it] 91%|#########1| 199/218 [21:31<01:09,  3.68s/it] 92%|#########1| 200/218 [21:41<01:39,  5.51s/it] 92%|#########2| 201/218 [21:42<01:11,  4.22s/it] 93%|#########2| 202/218 [21:47<01:09,  4.36s/it] 93%|#########3| 203/218 [21:57<01:28,  5.91s/it] 94%|#########3| 204/218 [22:01<01:17,  5.53s/it] 94%|#########4| 205/218 [22:06<01:08,  5.26s/it] 94%|#########4| 206/218 [22:06<00:45,  3.79s/it] 95%|#########4| 207/218 [22:09<00:37,  3.38s/it] 95%|#########5| 208/218 [22:11<00:30,  3.07s/it] 96%|#########5| 209/218 [22:14<00:28,  3.18s/it] 96%|#########6| 210/218 [22:19<00:28,  3.61s/it] 97%|#########6| 211/218 [22:20<00:19,  2.72s/it] 97%|#########7| 212/218 [22:41<00:50,  8.40s/it] 98%|#########7| 213/218 [22:42<00:30,  6.10s/it] 98%|#########8| 214/218 [22:47<00:23,  5.81s/it] 99%|#########8| 215/218 [22:50<00:14,  4.84s/it] 99%|#########9| 216/218 [22:52<00:08,  4.15s/it]100%|#########9| 217/218 [22:54<00:03,  3.28s/it]100%|##########| 218/218 [22:58<00:00,  3.70s/it]100%|##########| 218/218 [22:58<00:00,  6.32s/it]
+[32m
+[QUARK-INFO]: The calibration has been finished. It took 1509.2s to complete.[0m
+[32m
+[QUARK-INFO]: Remove QuantizeLinear & DequantizeLinear on certain operations(such as conv-relu).[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.0/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.2/cv1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.2/m.0/cv1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.2/m.0/cv2/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.2/cv2/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.3/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.4/cv1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.4/m.0/cv1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.4/m.0/cv2/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.4/m.1/cv1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.4/m.1/cv2/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.4/cv2/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.5/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.6/cv1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.6/m.0/cv1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.6/m.0/cv2/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.6/m.1/cv1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.6/m.1/cv2/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.6/cv2/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.7/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.8/cv1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.8/m.0/cv1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.8/m.0/cv2/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.8/cv2/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.9/cv1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.9/cv2/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.12/cv1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.12/m.0/cv1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.12/m.0/cv2/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.12/cv2/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.15/cv1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.15/m.0/cv1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.15/m.0/cv2/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.15/cv2/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.16/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.22/cv2.0/cv2.0.0/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.22/cv3.0/cv3.0.0/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.22/cv2.0/cv2.0.1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.22/cv3.0/cv3.0.1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.18/cv1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.18/m.0/cv1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.18/m.0/cv2/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.18/cv2/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.19/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.22/cv2.1/cv2.1.0/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.22/cv3.1/cv3.1.0/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.22/cv2.1/cv2.1.1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.22/cv3.1/cv3.1.1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.21/cv1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.21/m.0/cv1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.21/m.0/cv2/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.21/cv2/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.22/cv2.2/cv2.2.0/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.22/cv3.2/cv3.2.0/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.22/cv2.2/cv2.2.1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.22/cv3.2/cv3.2.1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.0/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.2/cv1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.2/m.0/cv1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.2/m.0/cv2/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.2/cv2/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.3/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.4/cv1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.4/m.0/cv1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.4/m.0/cv2/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.4/m.1/cv1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.4/m.1/cv2/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.4/cv2/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.5/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.6/cv1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.6/m.0/cv1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.6/m.0/cv2/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.6/m.1/cv1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.6/m.1/cv2/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.6/cv2/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.7/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.8/cv1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.8/m.0/cv1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.8/m.0/cv2/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.8/cv2/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.9/cv1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.9/cv2/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.12/cv1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.12/m.0/cv1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.12/m.0/cv2/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.12/cv2/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.15/cv1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.15/m.0/cv1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.15/m.0/cv2/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.15/cv2/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.16/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.22/cv2.0/cv2.0.0/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.22/cv3.0/cv3.0.0/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.22/cv2.0/cv2.0.1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.22/cv3.0/cv3.0.1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.18/cv1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.18/m.0/cv1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.18/m.0/cv2/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.18/cv2/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.19/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.22/cv2.1/cv2.1.0/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.22/cv3.1/cv3.1.0/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.22/cv2.1/cv2.1.1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.22/cv3.1/cv3.1.1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.21/cv1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.21/m.0/cv1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.21/m.0/cv2/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.21/cv2/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.22/cv2.2/cv2.2.0/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.22/cv3.2/cv3.2.0/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.22/cv2.2/cv2.2.1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.22/cv3.2/cv3.2.1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Adjust the quantize info to meet the compiler constraints[0m
+[32m
+[QUARK-INFO]: Input pos of concat node /model.2/Concat is 4, min_pos is 3. Modify ipos from 4 to 3.[0m
+[32m
+[QUARK-INFO]: Input pos of concat node /model.4/Concat is 5, min_pos is 4. Modify ipos from 5 to 4.[0m
+[32m
+[QUARK-INFO]: Input pos of concat node /model.4/Concat is 5, min_pos is 4. Modify ipos from 5 to 4.[0m
+[32m
+[QUARK-INFO]: Input pos of concat node /model.4/Concat is 5, min_pos is 4. Modify ipos from 5 to 4.[0m
+[32m
+[QUARK-INFO]: Output pos of concat node /model.6/Concat is 4, min_pos is 3. Modify opos from 4 to 3.[0m
+[32m
+[QUARK-INFO]: Input pos of concat node /model.6/Concat is 4, min_pos is 3. Modify ipos from 4 to 3.[0m
+[32m
+[QUARK-INFO]: Input pos of concat node /model.6/Concat is 4, min_pos is 3. Modify ipos from 4 to 3.[0m
+[32m
+[QUARK-INFO]: Input pos of concat node /model.6/Concat is 4, min_pos is 3. Modify ipos from 4 to 3.[0m
+[32m
+[QUARK-INFO]: Output pos of concat node /model.8/Concat is 4, min_pos is 3. Modify opos from 4 to 3.[0m
+[32m
+[QUARK-INFO]: Input pos of concat node /model.8/Concat is 4, min_pos is 3. Modify ipos from 4 to 3.[0m
+[32m
+[QUARK-INFO]: Input pos of concat node /model.8/Concat is 5, min_pos is 3. Modify ipos from 5 to 3.[0m
+[32m
+[QUARK-INFO]: Input pos of concat node /model.11/Concat is 5, min_pos is 4. Modify ipos from 5 to 4.[0m
+[32m
+[QUARK-INFO]: Input pos of concat node /model.12/Concat is 5, min_pos is 4. Modify ipos from 5 to 4.[0m
+[32m
+[QUARK-INFO]: Output pos of concat node /model.17/Concat is 5, min_pos is 4. Modify opos from 5 to 4.[0m
+[32m
+[QUARK-INFO]: Input pos of concat node /model.17/Concat is 5, min_pos is 4. Modify ipos from 5 to 4.[0m
+[32m
+[QUARK-INFO]: Input pos of concat node /model.18/Concat is 5, min_pos is 4. Modify ipos from 5 to 4.[0m
+[32m
+[QUARK-INFO]: Input pos of concat node /model.20/Concat is 5, min_pos is 4. Modify ipos from 5 to 4.[0m
+[32m
+[QUARK-INFO]: Input pos of concat node /model.21/Concat is 5, min_pos is 4. Modify ipos from 5 to 4.[0m
+[32m
+[QUARK-INFO]: Input pos of Slice layer /model.4/Split_output_0_0 is 5. Output pos of Slice layer /model.4/Split_output_0_0 is 4.Modify ipos from 5 to 4.[0m
+[32m
+[QUARK-INFO]: Input pos of Slice layer /model.6/Split_output_0_0 is 4. Output pos of Slice layer /model.6/Split_output_0_0 is 3.Modify ipos from 4 to 3.[0m
+[32m
+[QUARK-INFO]: Input pos of Slice layer /model.8/Split_output_0_0 is 4. Output pos of Slice layer /model.8/Split_output_0_0 is 3.Modify ipos from 4 to 3.[0m
+[32m
+[QUARK-INFO]: Input pos of Slice layer /model.12/Split_output_0_0 is 5. Output pos of Slice layer /model.12/Split_output_0_0 is 4.Modify ipos from 5 to 4.[0m
+[32m
+[QUARK-INFO]: Input pos of Slice layer /model.18/Split_output_0_0 is 5. Output pos of Slice layer /model.18/Split_output_0_0 is 4.Modify ipos from 5 to 4.[0m
+[32m
+[QUARK-INFO]: Input pos of Slice layer /model.21/Split_output_0_0 is 5. Output pos of Slice layer /model.21/Split_output_0_0 is 4.Modify ipos from 5 to 4.[0m
+[32m
+[QUARK-INFO]: Adjust the quantize info to meet the compiler constraints[0m
+[32m
+[QUARK-INFO]: Output pos of concat node /model.14/Concat is 5, min_pos is 4. Modify opos from 5 to 4.[0m
+[32m
+[QUARK-INFO]: Input pos of concat node /model.14/Concat is 5, min_pos is 4. Modify ipos from 5 to 4.[0m
+[32m
+[QUARK-INFO]: Adjust the quantize info to meet the compiler constraints[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: e2e quantization time consumed:1519.847747[0m
+[32m
+[QUARK-INFO]: The operation types and their corresponding quantities of the input float model is shown in the table below.[0m
++-----------------------------------------------------------+
+| Op Type              | Float Model                        |
+|----------------------+------------------------------------|
+| Conv                 | 63                                 |
+| Sigmoid              | 57                                 |
+| Mul                  | 57                                 |
+| Split                | 8                                  |
+| Add                  | 6                                  |
+| Concat               | 13                                 |
+| MaxPool              | 3                                  |
+| Resize               | 2                                  |
+|----------------------+------------------------------------|
+| Quantized model path | models/yolov8s_cut_xint8_c200.onnx |
++-----------------------------------------------------------+
+[32m
+[QUARK-INFO]: The quantized information for all operation types is shown in the table below.[0m
+[32m
+[QUARK-INFO]: The discrepancy between the operation types in the quantized model and the float model is due to the application of graph optimization.[0m
++------------------------------------------------+
+| Op Type     | Activation | Weights  | Bias     |
+|-------------+------------+----------+----------|
+| Conv        | UINT8(63)  | INT8(63) | INT8(63) |
+| Mul         | UINT8(57)  |          |          |
+| Slice       | UINT8(16)  |          |          |
+| Add         | UINT8(6)   |          |          |
+| Concat      | UINT8(13)  |          |          |
+| MaxPool     | UINT8(3)   |          |          |
+| Resize      | UINT8(2)   |          |          |
+| HardSigmoid | UINT8(57)  |          |          |
++------------------------------------------------+
+
+wrote models/yolov8s_cut_xint8_c200.onnx
+ops: [('DequantizeLinear', 344), ('QuantizeLinear', 218), ('Constant', 121), ('Mul', 114), ('Conv', 63), ('HardSigmoid', 57), ('Slice', 16), ('Concat', 13), ('Add', 6), ('MaxPool', 3), ('Resize', 2)]
+QuantizeLinear 218  DequantizeLinear 344
+first node: Constant 
+WARNING: graph does not start with QuantizeLinear - check that the input tensor got quantized.
+
+Next: tools/diag_ep.py --model <out>, then 4_detect.py --ep npu --fresh
+[32m OK yolov8s_cut_xint8_c200.onnx  (11M)[0m
+
+[1m[34m==> quantize yolov8s adaround  (200 images, ~38 GB of spool)[0m
+[2m    disk: 63 GB free, ~41 GB needed for Quark's calibration cache (yolov8s: ~198 MB/image)[0m
+[33m!!  this will leave about 22 GB free[0m
+[2m    AdaRound: expect this one to take many minutes[0m
+[2m    env: resnet_env  (3.12.11)[0m
+[2m    log: results/bench/quant_yolov8s_cut_xint8_c200_adaround.log[0m
+[32m
+[QUARK-INFO]: Checking custom ops library ...[0m
+[33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[32m
+[QUARK-INFO]: Start compiling CPU version of custom ops library.[0m
+W0905 16:05:34.320000 19516 site-packages\torch\utils\cpp_extension.py:466] Error checking compiler version for cl: [WinError 2] The system cannot find the file specified
+INFO: Could not find files for the given pattern(s).
+[31m
+[QUARK-ERROR]: CPU version of custom ops library compilation failed:Command '['where', 'cl']' returned non-zero exit status 1.[0m
+[33m
+[QUARK-WARNING]: Custom ops library compilation failed: CPU version of custom ops library compilation failed:Command '['where', 'cl']' returned non-zero exit status 1..[0m
+Traceback (most recent call last):
+  File "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\build_custom_ops.py", line 58, in compile_custom_op_cpu
+    load(
+  File "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\torch\utils\cpp_extension.py", line 1681, in load
+    return _jit_compile(
+           ^^^^^^^^^^^^^
+  File "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\torch\utils\cpp_extension.py", line 2138, in _jit_compile
+    _write_ninja_file_and_build_library(
+  File "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\torch\utils\cpp_extension.py", line 2275, in _write_ninja_file_and_build_library
+    _write_ninja_file_to_build_library(
+  File "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\torch\utils\cpp_extension.py", line 2762, in _write_ninja_file_to_build_library
+    _write_ninja_file(
+  File "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\torch\utils\cpp_extension.py", line 2946, in _write_ninja_file
+    cl_paths = subprocess.check_output(['where',
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\subprocess.py", line 466, in check_output
+    return run(*popenargs, stdout=PIPE, timeout=timeout, check=True,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\subprocess.py", line 571, in run
+    raise CalledProcessError(retcode, process.args,
+subprocess.CalledProcessError: Command '['where', 'cl']' returned non-zero exit status 1.
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\build_custom_ops.py", line 291, in compile_library
+    compile_library_core("CPU", extra_cuda_cflags, extra_cflags)
+  File "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\build_custom_ops.py", line 257, in compile_library_core
+    compile_custom_op_cpu(file_name, build_directory, extra_cuda_cflags, extra_cflags)
+  File "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\shares\utils\log.py", line 136, in wrapper
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\build_custom_ops.py", line 72, in compile_custom_op_cpu
+    raise RuntimeError("CPU version of custom ops library compilation failed:" + str(e))
+RuntimeError: CPU version of custom ops library compilation failed:Command '['where', 'cl']' returned non-zero exit status 1.
+[32m
+[QUARK-INFO]: Checked custom ops library.[0m
+[33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: Config has been replaced by QConfig. The old API will be removed in the next release.[0m
+[33m
+[QUARK-WARNING]: The algorithm API is algo_config in QConfig. The old API will be removed in the next release.[0m
+[32m
+[QUARK-INFO]: The input ONNX model can create InferenceSession successfully[0m
+[32m
+[QUARK-INFO]: Folding or fusing operators for better accuracy and performance.[0m
+[33m
+[QUARK-WARNING]: The opset version is 17 < 20. Skipping fusing Gelu.[0m
+[32m
+[QUARK-INFO]: Start applying CLE algorithm on the float model...[0m
+[32m
+[QUARK-INFO]: CrossLayerEqualization pattern num: 0[0m
+[32m
+[QUARK-INFO]: Total CrossLayerEqualization steps: 1[0m
+[32m
+[QUARK-INFO]: The CLE algorithm has been applied. It took 0.1s to complete.[0m
+[32m
+[QUARK-INFO]: Optimizing the model for a better hardware compatibility.[0m
+[32m
+[QUARK-INFO]: Found Split node /model.2/Split. Replacing with Slice.[0m
+[32m
+[QUARK-INFO]: Found Split node /model.4/Split. Replacing with Slice.[0m
+[32m
+[QUARK-INFO]: Found Split node /model.6/Split. Replacing with Slice.[0m
+[32m
+[QUARK-INFO]: Found Split node /model.8/Split. Replacing with Slice.[0m
+[32m
+[QUARK-INFO]: Found Split node /model.12/Split. Replacing with Slice.[0m
+[32m
+[QUARK-INFO]: Found Split node /model.15/Split. Replacing with Slice.[0m
+[32m
+[QUARK-INFO]: Found Split node /model.18/Split. Replacing with Slice.[0m
+[32m
+[QUARK-INFO]: Found Split node /model.21/Split. Replacing with Slice.[0m
+[32m
+[QUARK-INFO]: The input ONNX model can run inference successfully[0m
+[32m
+[QUARK-INFO]: Start running calibration on 200 samples with extra options {}...[0m
+[32m
+[QUARK-INFO]: Data collection of PowerOfTwoMethod.MinMSE in progress. Runtime will depend on your model and data size.[0m
+input model: models/yolov8s_cut.onnx, 209 nodes, 6 outputs
+AdaRound: 1000 iterations (slow - expect many minutes)
+calibrating on 200 images
+quantizing with XINT8 + AdaRound -> models/yolov8s_cut_xint8_c200_adaround.onnx
+[QUARK_INFO]: Time information:
+2026-09-05 16:05:35.627486
+[QUARK_INFO]: OS and CPU information:
+                                        system --- Windows
+                                          node --- DESKTOP-GS7R78P
+                                       release --- 11
+                                       version --- 10.0.26200
+                                       machine --- AMD64
+                                     processor --- AMD64 Family 25 Model 117 Stepping 2, AuthenticAMD
+[QUARK_INFO]: Tools version information:
+                                        python --- 3.12.11
+                                          onnx --- 1.19.0
+                                   onnxruntime --- 1.29.0
+                                    quark.onnx --- 0.11
+[QUARK_INFO]: Quantized Configuration information:
+                                   model_input --- models/yolov8s_cut.onnx
+                                  model_output --- models/yolov8s_cut_xint8_c200_adaround.onnx
+                       calibration_data_reader --- <__main__.CocoCalibReader object at 0x000001F5AE4CD160>
+                         calibration_data_path --- None
+                                  quant_format --- QDQ
+                                   input_nodes --- []
+                                  output_nodes --- []
+                          op_types_to_quantize --- []
+                    extra_op_types_to_quantize --- []
+                                   per_channel --- False
+                                  reduce_range --- False
+                               activation_type --- QUInt8
+                                   weight_type --- QInt8
+                             nodes_to_quantize --- []
+                              nodes_to_exclude --- []
+                          subgraphs_to_exclude --- []
+                                optimize_model --- True
+                      use_external_data_format --- False
+                              calibrate_method --- PowerOfTwoMethod.MinMSE
+                           execution_providers --- ['CPUExecutionProvider']
+                                enable_npu_cnn --- True
+                        enable_npu_transformer --- False
+                     specific_tensor_precision --- False
+                                    debug_mode --- False
+                          convert_fp16_to_fp32 --- False
+                          convert_nchw_to_nhwc --- False
+                                   include_cle --- True
+                                    include_sq --- False
+                              include_rotation --- False
+                               include_fast_ft --- True
+                                 extra_options --- {'ActivationSymmetric': True, 'FastFinetune': {'DataSize': 200, 'FixedSeed': 1705472343, 'BatchSize': 2, 'NumIterations': 1000, 'LearningRate': 0.1, 'OptimAlgorithm': 'adaround', 'OptimDevice': 'cpu', 'InferDevice': 'cpu', 'EarlyStop': True}, 'AddQDQPairToWeight': False}
+  calib 50/200
+  calib 100/200
+  calib 150/200
+  calib 200/200
+  0%|          | 0/200 [00:00<?, ?it/s]Cached 0.19GB:   0%|          | 0/200 [00:00<?, ?it/s]Cached 0.19GB:   0%|          | 1/200 [00:00<02:03,  1.62it/s]Cached 0.39GB:   0%|          | 1/200 [00:01<02:03,  1.62it/s]Cached 0.39GB:   1%|1         | 2/200 [00:01<01:50,  1.79it/s]Cached 0.58GB:   1%|1         | 2/200 [00:01<01:50,  1.79it/s]Cached 0.58GB:   2%|1         | 3/200 [00:01<01:49,  1.80it/s]Cached 0.77GB:   2%|1         | 3/200 [00:02<01:49,  1.80it/s]Cached 0.77GB:   2%|2         | 4/200 [00:02<02:11,  1.49it/s]Cached 0.97GB:   2%|2         | 4/200 [00:03<02:11,  1.49it/s]Cached 0.97GB:   2%|2         | 5/200 [00:03<01:59,  1.63it/s]Cached 1.16GB:   2%|2         | 5/200 [00:03<01:59,  1.63it/s]Cached 1.16GB:   3%|3         | 6/200 [00:03<02:00,  1.61it/s]Cached 1.35GB:   3%|3         | 6/200 [00:04<02:00,  1.61it/s]Cached 1.35GB:   4%|3         | 7/200 [00:04<02:03,  1.57it/s]Cached 1.55GB:   4%|3         | 7/200 [00:05<02:03,  1.57it/s]Cached 1.55GB:   4%|4         | 8/200 [00:05<02:06,  1.52it/s]Cached 1.74GB:   4%|4         | 8/200 [00:05<02:06,  1.52it/s]Cached 1.74GB:   4%|4         | 9/200 [00:05<02:17,  1.39it/s]Cached 1.93GB:   4%|4         | 9/200 [00:06<02:17,  1.39it/s]Cached 1.93GB:   5%|5         | 10/200 [00:06<02:36,  1.22it/s]Cached 2.13GB:   5%|5         | 10/200 [00:07<02:36,  1.22it/s]Cached 2.13GB:   6%|5         | 11/200 [00:07<02:31,  1.25it/s]Cached 2.32GB:   6%|5         | 11/200 [00:08<02:31,  1.25it/s]Cached 2.32GB:   6%|6         | 12/200 [00:08<02:24,  1.30it/s]Cached 2.51GB:   6%|6         | 12/200 [00:09<02:24,  1.30it/s]Cached 2.51GB:   6%|6         | 13/200 [00:09<02:18,  1.35it/s]Cached 2.71GB:   6%|6         | 13/200 [00:09<02:18,  1.35it/s]Cached 2.71GB:   7%|7         | 14/200 [00:09<02:09,  1.43it/s]Cached 2.90GB:   7%|7         | 14/200 [00:10<02:09,  1.43it/s]Cached 2.90GB:   8%|7         | 15/200 [00:10<02:04,  1.49it/s]Cached 3.09GB:   8%|7         | 15/200 [00:11<02:04,  1.49it/s]Cached 3.09GB:   8%|8         | 16/200 [00:11<02:09,  1.42it/s]Cached 3.29GB:   8%|8         | 16/200 [00:11<02:09,  1.42it/s]Cached 3.29GB:   8%|8         | 17/200 [00:11<02:08,  1.42it/s]Cached 3.48GB:   8%|8         | 17/200 [00:12<02:08,  1.42it/s]Cached 3.48GB:   9%|9         | 18/200 [00:12<02:05,  1.45it/s]Cached 3.67GB:   9%|9         | 18/200 [00:13<02:05,  1.45it/s]Cached 3.67GB:  10%|9         | 19/200 [00:13<01:59,  1.51it/s]Cached 3.87GB:  10%|9         | 19/200 [00:13<01:59,  1.51it/s]Cached 3.87GB:  10%|#         | 20/200 [00:13<01:58,  1.51it/s]Cached 4.06GB:  10%|#         | 20/200 [00:14<01:58,  1.51it/s]Cached 4.06GB:  10%|#         | 21/200 [00:14<01:56,  1.54it/s]Cached 4.25GB:  10%|#         | 21/200 [00:14<01:56,  1.54it/s]Cached 4.25GB:  11%|#1        | 22/200 [00:14<01:54,  1.55it/s]Cached 4.45GB:  11%|#1        | 22/200 [00:15<01:54,  1.55it/s]Cached 4.45GB:  12%|#1        | 23/200 [00:15<01:55,  1.53it/s]Cached 4.64GB:  12%|#1        | 23/200 [00:16<01:55,  1.53it/s]Cached 4.64GB:  12%|#2        | 24/200 [00:16<01:51,  1.58it/s]Cached 4.83GB:  12%|#2        | 24/200 [00:16<01:51,  1.58it/s]Cached 4.83GB:  12%|#2        | 25/200 [00:16<01:49,  1.59it/s]Cached 5.03GB:  12%|#2        | 25/200 [00:17<01:49,  1.59it/s]Cached 5.03GB:  13%|#3        | 26/200 [00:17<01:55,  1.51it/s]Cached 5.22GB:  13%|#3        | 26/200 [00:18<01:55,  1.51it/s]Cached 5.22GB:  14%|#3        | 27/200 [00:18<01:49,  1.57it/s]Cached 5.41GB:  14%|#3        | 27/200 [00:18<01:49,  1.57it/s]Cached 5.41GB:  14%|#4        | 28/200 [00:18<01:49,  1.56it/s]Cached 5.60GB:  14%|#4        | 28/200 [00:19<01:49,  1.56it/s]Cached 5.60GB:  14%|#4        | 29/200 [00:19<01:50,  1.55it/s]Cached 5.80GB:  14%|#4        | 29/200 [00:20<01:50,  1.55it/s]Cached 5.80GB:  15%|#5        | 30/200 [00:20<01:52,  1.51it/s]Cached 5.99GB:  15%|#5        | 30/200 [00:20<01:52,  1.51it/s]Cached 5.99GB:  16%|#5        | 31/200 [00:20<01:53,  1.49it/s]Cached 6.18GB:  16%|#5        | 31/200 [00:21<01:53,  1.49it/s]Cached 6.18GB:  16%|#6        | 32/200 [00:21<01:52,  1.49it/s]Cached 6.38GB:  16%|#6        | 32/200 [00:22<01:52,  1.49it/s]Cached 6.38GB:  16%|#6        | 33/200 [00:22<01:48,  1.54it/s]Cached 6.57GB:  16%|#6        | 33/200 [00:22<01:48,  1.54it/s]Cached 6.57GB:  17%|#7        | 34/200 [00:22<01:45,  1.58it/s]Cached 6.76GB:  17%|#7        | 34/200 [00:23<01:45,  1.58it/s]Cached 6.76GB:  18%|#7        | 35/200 [00:23<01:46,  1.55it/s]Cached 6.96GB:  18%|#7        | 35/200 [00:24<01:46,  1.55it/s]Cached 6.96GB:  18%|#8        | 36/200 [00:24<01:44,  1.56it/s]Cached 7.15GB:  18%|#8        | 36/200 [00:24<01:44,  1.56it/s]Cached 7.15GB:  18%|#8        | 37/200 [00:24<01:47,  1.52it/s]Cached 7.34GB:  18%|#8        | 37/200 [00:25<01:47,  1.52it/s]Cached 7.34GB:  19%|#9        | 38/200 [00:25<01:51,  1.45it/s]Cached 7.54GB:  19%|#9        | 38/200 [00:26<01:51,  1.45it/s]Cached 7.54GB:  20%|#9        | 39/200 [00:26<01:45,  1.52it/s]Cached 7.73GB:  20%|#9        | 39/200 [00:26<01:45,  1.52it/s]Cached 7.73GB:  20%|##        | 40/200 [00:26<01:48,  1.47it/s]Cached 7.92GB:  20%|##        | 40/200 [00:27<01:48,  1.47it/s]Cached 7.92GB:  20%|##        | 41/200 [00:27<01:43,  1.53it/s]Cached 8.12GB:  20%|##        | 41/200 [00:28<01:43,  1.53it/s]Cached 8.12GB:  21%|##1       | 42/200 [00:28<01:45,  1.50it/s]Cached 8.31GB:  21%|##1       | 42/200 [00:28<01:45,  1.50it/s]Cached 8.31GB:  22%|##1       | 43/200 [00:28<01:48,  1.45it/s]Cached 8.50GB:  22%|##1       | 43/200 [00:29<01:48,  1.45it/s]Cached 8.50GB:  22%|##2       | 44/200 [00:29<01:43,  1.51it/s]Cached 8.70GB:  22%|##2       | 44/200 [00:30<01:43,  1.51it/s]Cached 8.70GB:  22%|##2       | 45/200 [00:30<01:39,  1.55it/s]Cached 8.89GB:  22%|##2       | 45/200 [00:30<01:39,  1.55it/s]Cached 8.89GB:  23%|##3       | 46/200 [00:30<01:43,  1.49it/s]

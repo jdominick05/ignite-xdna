@@ -1,0 +1,174 @@
+[32m
+[QUARK-INFO]: Checking custom ops library ...[0m
+[33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[32m
+[QUARK-INFO]: Start compiling CPU version of custom ops library.[0m
+W0905 17:17:12.797000 10984 site-packages\torch\utils\cpp_extension.py:466] Error checking compiler version for cl: [WinError 2] The system cannot find the file specified
+INFO: Could not find files for the given pattern(s).
+[31m
+[QUARK-ERROR]: CPU version of custom ops library compilation failed:Command '['where', 'cl']' returned non-zero exit status 1.[0m
+[33m
+[QUARK-WARNING]: Custom ops library compilation failed: CPU version of custom ops library compilation failed:Command '['where', 'cl']' returned non-zero exit status 1..[0m
+Traceback (most recent call last):
+  File "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\build_custom_ops.py", line 58, in compile_custom_op_cpu
+    load(
+  File "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\torch\utils\cpp_extension.py", line 1681, in load
+    return _jit_compile(
+           ^^^^^^^^^^^^^
+  File "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\torch\utils\cpp_extension.py", line 2138, in _jit_compile
+    _write_ninja_file_and_build_library(
+  File "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\torch\utils\cpp_extension.py", line 2275, in _write_ninja_file_and_build_library
+    _write_ninja_file_to_build_library(
+  File "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\torch\utils\cpp_extension.py", line 2762, in _write_ninja_file_to_build_library
+    _write_ninja_file(
+  File "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\torch\utils\cpp_extension.py", line 2946, in _write_ninja_file
+    cl_paths = subprocess.check_output(['where',
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\subprocess.py", line 466, in check_output
+    return run(*popenargs, stdout=PIPE, timeout=timeout, check=True,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\subprocess.py", line 571, in run
+    raise CalledProcessError(retcode, process.args,
+subprocess.CalledProcessError: Command '['where', 'cl']' returned non-zero exit status 1.
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\build_custom_ops.py", line 291, in compile_library
+    compile_library_core("CPU", extra_cuda_cflags, extra_cflags)
+  File "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\build_custom_ops.py", line 257, in compile_library_core
+    compile_custom_op_cpu(file_name, build_directory, extra_cuda_cflags, extra_cflags)
+  File "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\shares\utils\log.py", line 136, in wrapper
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\build_custom_ops.py", line 72, in compile_custom_op_cpu
+    raise RuntimeError("CPU version of custom ops library compilation failed:" + str(e))
+RuntimeError: CPU version of custom ops library compilation failed:Command '['where', 'cl']' returned non-zero exit status 1.
+[32m
+[QUARK-INFO]: Checked custom ops library.[0m
+[33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: Config has been replaced by QConfig. The old API will be removed in the next release.[0m
+[33m
+[QUARK-WARNING]: The algorithm API is algo_config in QConfig. The old API will be removed in the next release.[0m
+[32m
+[QUARK-INFO]: The input ONNX model can create InferenceSession successfully[0m
+[32m
+[QUARK-INFO]: Folding or fusing operators for better accuracy and performance.[0m
+[33m
+[QUARK-WARNING]: The opset version is 17 < 20. Skipping fusing Gelu.[0m
+[32m
+[QUARK-INFO]: Start applying CLE algorithm on the float model...[0m
+[32m
+[QUARK-INFO]: CrossLayerEqualization pattern num: 33[0m
+[32m
+[QUARK-INFO]: Total CrossLayerEqualization steps: 1[0m
+[32m
+[QUARK-INFO]: The CLE algorithm has been applied. It took 0.8s to complete.[0m
+[32m
+[QUARK-INFO]: Optimizing the model for a better hardware compatibility.[0m
+[32m
+[QUARK-INFO]: The input ONNX model can run inference successfully[0m
+[32m
+[QUARK-INFO]: Start running calibration on 64 samples with extra options {}...[0m
+[32m
+[QUARK-INFO]: Data collection of PowerOfTwoMethod.MinMSE in progress. Runtime will depend on your model and data size.[0m
+Using 64 calibration images
+config: XINT8  ->  models/resnet50_r128_xint8_c64.onnx
+[QUARK_INFO]: Time information:
+2026-09-05 17:17:14.068809
+[QUARK_INFO]: OS and CPU information:
+                                        system --- Windows
+                                          node --- DESKTOP-GS7R78P
+                                       release --- 11
+                                       version --- 10.0.26200
+                                       machine --- AMD64
+                                     processor --- AMD64 Family 25 Model 117 Stepping 2, AuthenticAMD
+[QUARK_INFO]: Tools version information:
+                                        python --- 3.12.11
+                                          onnx --- 1.19.0
+                                   onnxruntime --- 1.29.0
+                                    quark.onnx --- 0.11
+[QUARK_INFO]: Quantized Configuration information:
+                                   model_input --- models/resnet50_r128_fp32.onnx
+                                  model_output --- models/resnet50_r128_xint8_c64.onnx
+                       calibration_data_reader --- <__main__.ImageCalibReader object at 0x0000023DF76EA2A0>
+                         calibration_data_path --- None
+                                  quant_format --- QDQ
+                                   input_nodes --- []
+                                  output_nodes --- []
+                          op_types_to_quantize --- []
+                    extra_op_types_to_quantize --- []
+                                   per_channel --- False
+                                  reduce_range --- False
+                               activation_type --- QUInt8
+                                   weight_type --- QInt8
+                             nodes_to_quantize --- []
+                              nodes_to_exclude --- []
+                          subgraphs_to_exclude --- []
+                                optimize_model --- True
+                      use_external_data_format --- False
+                              calibrate_method --- PowerOfTwoMethod.MinMSE
+                           execution_providers --- ['CPUExecutionProvider']
+                                enable_npu_cnn --- True
+                        enable_npu_transformer --- False
+                     specific_tensor_precision --- False
+                                    debug_mode --- False
+                          convert_fp16_to_fp32 --- False
+                          convert_nchw_to_nhwc --- False
+                                   include_cle --- True
+                                    include_sq --- False
+                              include_rotation --- False
+                               include_fast_ft --- False
+                                 extra_options --- {'ActivationSymmetric': True}
+  0%|          | 0/64 [00:00<?, ?it/s]Cached 0.02GB:   0%|          | 0/64 [00:00<?, ?it/s]Cached 0.02GB:   2%|1         | 1/64 [00:00<00:07,  8.11it/s]Cached 0.03GB:   2%|1         | 1/64 [00:00<00:07,  8.11it/s]Cached 0.05GB:   2%|1         | 1/64 [00:00<00:07,  8.11it/s]Cached 0.05GB:   5%|4         | 3/64 [00:00<00:05, 10.65it/s]Cached 0.06GB:   5%|4         | 3/64 [00:00<00:05, 10.65it/s]Cached 0.08GB:   5%|4         | 3/64 [00:00<00:05, 10.65it/s]Cached 0.08GB:   8%|7         | 5/64 [00:00<00:05, 11.08it/s]Cached 0.10GB:   8%|7         | 5/64 [00:00<00:05, 11.08it/s]Cached 0.11GB:   8%|7         | 5/64 [00:00<00:05, 11.08it/s]Cached 0.11GB:  11%|#         | 7/64 [00:00<00:04, 11.62it/s]Cached 0.13GB:  11%|#         | 7/64 [00:00<00:04, 11.62it/s]Cached 0.15GB:  11%|#         | 7/64 [00:00<00:04, 11.62it/s]Cached 0.15GB:  14%|#4        | 9/64 [00:00<00:04, 11.75it/s]Cached 0.16GB:  14%|#4        | 9/64 [00:00<00:04, 11.75it/s]Cached 0.18GB:  14%|#4        | 9/64 [00:00<00:04, 11.75it/s]Cached 0.18GB:  17%|#7        | 11/64 [00:00<00:04, 11.74it/s]Cached 0.19GB:  17%|#7        | 11/64 [00:01<00:04, 11.74it/s]Cached 0.21GB:  17%|#7        | 11/64 [00:01<00:04, 11.74it/s]Cached 0.21GB:  20%|##        | 13/64 [00:01<00:04, 11.78it/s]Cached 0.23GB:  20%|##        | 13/64 [00:01<00:04, 11.78it/s]Cached 0.24GB:  20%|##        | 13/64 [00:01<00:04, 11.78it/s]Cached 0.24GB:  23%|##3       | 15/64 [00:01<00:04, 11.85it/s]Cached 0.26GB:  23%|##3       | 15/64 [00:01<00:04, 11.85it/s]Cached 0.28GB:  23%|##3       | 15/64 [00:01<00:04, 11.85it/s]Cached 0.28GB:  27%|##6       | 17/64 [00:01<00:04, 11.60it/s]Cached 0.29GB:  27%|##6       | 17/64 [00:01<00:04, 11.60it/s]Cached 0.31GB:  27%|##6       | 17/64 [00:01<00:04, 11.60it/s]Cached 0.31GB:  30%|##9       | 19/64 [00:01<00:03, 11.74it/s]Cached 0.32GB:  30%|##9       | 19/64 [00:01<00:03, 11.74it/s]Cached 0.34GB:  30%|##9       | 19/64 [00:01<00:03, 11.74it/s]Cached 0.34GB:  33%|###2      | 21/64 [00:01<00:03, 11.40it/s]Cached 0.36GB:  33%|###2      | 21/64 [00:01<00:03, 11.40it/s]Cached 0.37GB:  33%|###2      | 21/64 [00:02<00:03, 11.40it/s]Cached 0.37GB:  36%|###5      | 23/64 [00:02<00:03, 11.45it/s]Cached 0.39GB:  36%|###5      | 23/64 [00:02<00:03, 11.45it/s]Cached 0.40GB:  36%|###5      | 23/64 [00:02<00:03, 11.45it/s]Cached 0.40GB:  39%|###9      | 25/64 [00:02<00:03, 11.48it/s]Cached 0.42GB:  39%|###9      | 25/64 [00:02<00:03, 11.48it/s]Cached 0.44GB:  39%|###9      | 25/64 [00:02<00:03, 11.48it/s]Cached 0.44GB:  42%|####2     | 27/64 [00:02<00:03, 11.58it/s]Cached 0.45GB:  42%|####2     | 27/64 [00:02<00:03, 11.58it/s]Cached 0.47GB:  42%|####2     | 27/64 [00:02<00:03, 11.58it/s]Cached 0.47GB:  45%|####5     | 29/64 [00:02<00:03, 11.55it/s]Cached 0.49GB:  45%|####5     | 29/64 [00:02<00:03, 11.55it/s]Cached 0.50GB:  45%|####5     | 29/64 [00:02<00:03, 11.55it/s]Cached 0.50GB:  48%|####8     | 31/64 [00:02<00:02, 11.67it/s]Cached 0.52GB:  48%|####8     | 31/64 [00:02<00:02, 11.67it/s]Cached 0.53GB:  48%|####8     | 31/64 [00:02<00:02, 11.67it/s]Cached 0.53GB:  52%|#####1    | 33/64 [00:02<00:02, 11.72it/s]Cached 0.55GB:  52%|#####1    | 33/64 [00:02<00:02, 11.72it/s]Cached 0.57GB:  52%|#####1    | 33/64 [00:03<00:02, 11.72it/s]Cached 0.57GB:  55%|#####4    | 35/64 [00:03<00:02, 11.56it/s]Cached 0.58GB:  55%|#####4    | 35/64 [00:03<00:02, 11.56it/s]Cached 0.60GB:  55%|#####4    | 35/64 [00:03<00:02, 11.56it/s]Cached 0.60GB:  58%|#####7    | 37/64 [00:03<00:02, 11.69it/s]Cached 0.61GB:  58%|#####7    | 37/64 [00:03<00:02, 11.69it/s]Cached 0.63GB:  58%|#####7    | 37/64 [00:03<00:02, 11.69it/s]Cached 0.63GB:  61%|######    | 39/64 [00:03<00:02, 11.64it/s]Cached 0.65GB:  61%|######    | 39/64 [00:03<00:02, 11.64it/s]Cached 0.66GB:  61%|######    | 39/64 [00:03<00:02, 11.64it/s]Cached 0.66GB:  64%|######4   | 41/64 [00:03<00:01, 11.57it/s]Cached 0.68GB:  64%|######4   | 41/64 [00:03<00:01, 11.57it/s]Cached 0.70GB:  64%|######4   | 41/64 [00:03<00:01, 11.57it/s]Cached 0.70GB:  67%|######7   | 43/64 [00:03<00:01, 11.55it/s]Cached 0.71GB:  67%|######7   | 43/64 [00:03<00:01, 11.55it/s]Cached 0.73GB:  67%|######7   | 43/64 [00:03<00:01, 11.55it/s]Cached 0.73GB:  70%|#######   | 45/64 [00:03<00:01, 11.28it/s]Cached 0.74GB:  70%|#######   | 45/64 [00:04<00:01, 11.28it/s]Cached 0.76GB:  70%|#######   | 45/64 [00:04<00:01, 11.28it/s]Cached 0.76GB:  73%|#######3  | 47/64 [00:04<00:01, 11.32it/s]Cached 0.78GB:  73%|#######3  | 47/64 [00:04<00:01, 11.32it/s]Cached 0.79GB:  73%|#######3  | 47/64 [00:04<00:01, 11.32it/s]Cached 0.79GB:  77%|#######6  | 49/64 [00:04<00:01, 11.19it/s]Cached 0.81GB:  77%|#######6  | 49/64 [00:04<00:01, 11.19it/s]Cached 0.83GB:  77%|#######6  | 49/64 [00:04<00:01, 11.19it/s]Cached 0.83GB:  80%|#######9  | 51/64 [00:04<00:01, 11.32it/s]Cached 0.84GB:  80%|#######9  | 51/64 [00:04<00:01, 11.32it/s]Cached 0.86GB:  80%|#######9  | 51/64 [00:04<00:01, 11.32it/s]Cached 0.86GB:  83%|########2 | 53/64 [00:04<00:00, 11.50it/s]Cached 0.87GB:  83%|########2 | 53/64 [00:04<00:00, 11.50it/s]Cached 0.89GB:  83%|########2 | 53/64 [00:04<00:00, 11.50it/s]Cached 0.89GB:  86%|########5 | 55/64 [00:04<00:00, 11.45it/s]Cached 0.91GB:  86%|########5 | 55/64 [00:04<00:00, 11.45it/s]Cached 0.92GB:  86%|########5 | 55/64 [00:04<00:00, 11.45it/s]Cached 0.92GB:  89%|########9 | 57/64 [00:04<00:00, 11.27it/s]Cached 0.94GB:  89%|########9 | 57/64 [00:05<00:00, 11.27it/s]Cached 0.95GB:  89%|########9 | 57/64 [00:05<00:00, 11.27it/s]Cached 0.95GB:  92%|#########2| 59/64 [00:05<00:00, 11.38it/s]Cached 0.97GB:  92%|#########2| 59/64 [00:05<00:00, 11.38it/s]Cached 0.99GB:  92%|#########2| 59/64 [00:05<00:00, 11.38it/s]Cached 0.99GB:  95%|#########5| 61/64 [00:05<00:00, 11.25it/s]Cached 1.00GB:  95%|#########5| 61/64 [00:05<00:00, 11.25it/s]Cached 1.02GB:  95%|#########5| 61/64 [00:05<00:00, 11.25it/s]Cached 1.02GB:  98%|#########8| 63/64 [00:05<00:00, 11.32it/s]Cached 1.04GB:  98%|#########8| 63/64 [00:05<00:00, 11.32it/s]Cached 1.04GB: 100%|##########| 64/64 [00:05<00:00, 11.46it/s]
+[32m
+[QUARK-INFO]: Finding optimal threshold for each tensor using PowerOfTwoMethod.MinMSE algorithm in 'All' mode ...[0m
+  0%|          | 0/123 [00:00<?, ?it/s]  2%|1         | 2/123 [00:00<00:27,  4.38it/s]  3%|3         | 4/123 [00:00<00:17,  6.97it/s]  4%|4         | 5/123 [00:00<00:19,  5.95it/s]  5%|4         | 6/123 [00:01<00:45,  2.58it/s]  6%|5         | 7/123 [00:02<00:47,  2.45it/s]  7%|7         | 9/123 [00:03<00:50,  2.28it/s]  8%|8         | 10/123 [00:04<01:03,  1.78it/s]  9%|8         | 11/123 [00:04<00:49,  2.26it/s] 11%|#         | 13/123 [00:04<00:34,  3.21it/s] 12%|#2        | 15/123 [00:04<00:25,  4.22it/s] 13%|#3        | 16/123 [00:04<00:22,  4.74it/s] 14%|#3        | 17/123 [00:05<00:39,  2.66it/s] 15%|#4        | 18/123 [00:05<00:32,  3.22it/s] 15%|#5        | 19/123 [00:06<00:30,  3.45it/s] 16%|#6        | 20/123 [00:06<00:27,  3.70it/s] 17%|#7        | 21/123 [00:06<00:26,  3.88it/s] 18%|#7        | 22/123 [00:06<00:21,  4.65it/s] 19%|#8        | 23/123 [00:06<00:21,  4.60it/s] 21%|##1       | 26/123 [00:07<00:11,  8.13it/s] 23%|##2       | 28/123 [00:07<00:12,  7.85it/s] 24%|##4       | 30/123 [00:07<00:15,  5.91it/s] 25%|##5       | 31/123 [00:07<00:14,  6.29it/s] 26%|##6       | 32/123 [00:08<00:15,  5.81it/s] 27%|##6       | 33/123 [00:08<00:16,  5.45it/s] 28%|##7       | 34/123 [00:08<00:22,  4.01it/s] 28%|##8       | 35/123 [00:09<00:21,  4.14it/s] 29%|##9       | 36/123 [00:09<00:17,  4.88it/s] 31%|###       | 38/123 [00:09<00:14,  5.73it/s] 33%|###2      | 40/123 [00:09<00:13,  6.25it/s] 33%|###3      | 41/123 [00:09<00:12,  6.72it/s] 35%|###4      | 43/123 [00:10<00:15,  5.30it/s] 36%|###5      | 44/123 [00:10<00:15,  5.13it/s] 37%|###6      | 45/123 [00:11<00:28,  2.77it/s] 37%|###7      | 46/123 [00:12<00:38,  2.02it/s] 39%|###9      | 48/123 [00:12<00:25,  2.90it/s] 40%|###9      | 49/123 [00:12<00:23,  3.14it/s] 41%|####      | 50/123 [00:12<00:19,  3.75it/s] 41%|####1     | 51/123 [00:13<00:16,  4.46it/s] 42%|####2     | 52/123 [00:13<00:15,  4.50it/s] 43%|####3     | 53/123 [00:13<00:15,  4.51it/s] 45%|####4     | 55/123 [00:13<00:10,  6.33it/s] 46%|####5     | 56/123 [00:13<00:09,  6.81it/s] 46%|####6     | 57/123 [00:13<00:10,  6.03it/s] 49%|####8     | 60/123 [00:14<00:06,  9.79it/s] 50%|#####     | 62/123 [00:14<00:10,  5.86it/s] 51%|#####1    | 63/123 [00:14<00:09,  6.19it/s] 53%|#####2    | 65/123 [00:15<00:08,  6.56it/s] 54%|#####3    | 66/123 [00:15<00:12,  4.75it/s] 54%|#####4    | 67/123 [00:15<00:14,  3.79it/s] 57%|#####6    | 70/123 [00:16<00:09,  5.43it/s] 59%|#####8    | 72/123 [00:16<00:07,  6.63it/s] 59%|#####9    | 73/123 [00:16<00:07,  7.00it/s] 60%|######    | 74/123 [00:16<00:06,  7.38it/s] 61%|######    | 75/123 [00:17<00:14,  3.20it/s] 62%|######1   | 76/123 [00:18<00:21,  2.19it/s] 63%|######3   | 78/123 [00:19<00:20,  2.17it/s] 64%|######4   | 79/123 [00:19<00:17,  2.46it/s] 65%|######5   | 80/123 [00:19<00:15,  2.76it/s] 66%|######5   | 81/123 [00:20<00:21,  2.00it/s] 67%|######6   | 82/123 [00:21<00:20,  1.97it/s] 69%|######9   | 85/123 [00:21<00:11,  3.36it/s] 70%|######9   | 86/123 [00:21<00:10,  3.46it/s] 71%|#######   | 87/123 [00:22<00:15,  2.33it/s] 72%|#######1  | 88/123 [00:22<00:13,  2.62it/s] 72%|#######2  | 89/123 [00:23<00:10,  3.22it/s] 73%|#######3  | 90/123 [00:23<00:09,  3.48it/s] 74%|#######3  | 91/123 [00:23<00:08,  3.72it/s] 75%|#######4  | 92/123 [00:23<00:07,  3.88it/s] 76%|#######6  | 94/123 [00:24<00:10,  2.76it/s] 77%|#######7  | 95/123 [00:25<00:10,  2.61it/s] 78%|#######8  | 96/123 [00:25<00:08,  3.18it/s] 79%|#######8  | 97/123 [00:25<00:09,  2.84it/s] 80%|########  | 99/123 [00:26<00:06,  3.81it/s] 81%|########1 | 100/123 [00:26<00:05,  4.43it/s] 82%|########2 | 101/123 [00:26<00:06,  3.56it/s] 84%|########3 | 103/123 [00:27<00:05,  3.79it/s] 85%|########4 | 104/123 [00:27<00:04,  4.40it/s] 85%|########5 | 105/123 [00:27<00:03,  5.07it/s] 88%|########7 | 108/123 [00:27<00:01,  8.03it/s] 89%|########9 | 110/123 [00:27<00:02,  6.37it/s] 90%|######### | 111/123 [00:28<00:02,  4.74it/s] 91%|#########1| 112/123 [00:28<00:03,  3.66it/s] 93%|#########3| 115/123 [00:29<00:01,  5.80it/s] 95%|#########5| 117/123 [00:29<00:00,  7.37it/s] 97%|#########6| 119/123 [00:29<00:00,  6.95it/s] 98%|#########7| 120/123 [00:29<00:00,  6.33it/s] 98%|#########8| 121/123 [00:29<00:00,  6.72it/s] 99%|#########9| 122/123 [00:29<00:00,  7.18it/s]100%|##########| 123/123 [00:29<00:00,  4.11it/s]
+[32m
+[QUARK-INFO]: The calibration has been finished. It took 35.9s to complete.[0m
+[32m
+[QUARK-INFO]: Remove QuantizeLinear & DequantizeLinear on certain operations(such as conv-relu).[0m
+[32m
+[QUARK-INFO]: Rescale GlobalAveragePool /global_pool/pool/GlobalAveragePool with factor 1.0 to simulate DPU behavior.[0m
+[32m
+[QUARK-INFO]: Adjust the quantize info to meet the compiler constraints[0m
+[32m
+[QUARK-INFO]: Input pos of pooling layer /global_pool/pool/GlobalAveragePool is 2. Output pos of pooling layer /global_pool/pool/GlobalAveragePool is 4.Modify opos from 4 to 2.[0m
+[32m
+[QUARK-INFO]: Adjust the quantize info to meet the compiler constraints[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: e2e quantization time consumed:42.804559[0m
+[32m
+[QUARK-INFO]: The operation types and their corresponding quantities of the input float model is shown in the table below.[0m
++------------------------------------------------------------+
+| Op Type              | Float Model                         |
+|----------------------+-------------------------------------|
+| Conv                 | 53                                  |
+| Relu                 | 49                                  |
+| MaxPool              | 1                                   |
+| Add                  | 16                                  |
+| GlobalAveragePool    | 1                                   |
+| Flatten              | 1                                   |
+| Gemm                 | 1                                   |
+|----------------------+-------------------------------------|
+| Quantized model path | models/resnet50_r128_xint8_c64.onnx |
++------------------------------------------------------------+
+[32m
+[QUARK-INFO]: The quantized information for all operation types is shown in the table below.[0m
+[32m
+[QUARK-INFO]: The discrepancy between the operation types in the quantized model and the float model is due to the application of graph optimization.[0m
++------------------------------------------------------+
+| Op Type           | Activation | Weights  | Bias     |
+|-------------------+------------+----------+----------|
+| Conv              | UINT8(53)  | INT8(53) | INT8(53) |
+| MaxPool           | UINT8(1)   |          |          |
+| Add               | UINT8(16)  |          |          |
+| GlobalAveragePool | UINT8(1)   |          |          |
+| Flatten           | UINT8(1)   |          |          |
+| Gemm              | UINT8(1)   | INT8(1)  | INT8(1)  |
++------------------------------------------------------+
+
+Wrote models/resnet50_r128_xint8_c64.onnx

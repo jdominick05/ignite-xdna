@@ -1,0 +1,12 @@
+# Normalize line endings: LF in the repo, native in the working tree.
+* text=auto
+
+# Model artifacts are git-ignored by default. These rules apply if you choose
+# to track them anyway - e.g. on a Hugging Face model repo, which expects LFS.
+*.onnx     filter=lfs diff=lfs merge=lfs -text
+*.pt       filter=lfs diff=lfs merge=lfs -text
+*.xmodel   filter=lfs diff=lfs merge=lfs -text
+*.xclbin   filter=lfs diff=lfs merge=lfs -text
+
+# Keep captured logs and result images out of language statistics.
+results/**   linguist-documentation

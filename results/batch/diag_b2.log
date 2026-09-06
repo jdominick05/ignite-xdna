@@ -1,0 +1,52 @@
+
+=== C:\Users\<user>\src\timm-resnet50.a1_in1k-RyzenAI\modelcachekey\vitisai_ep_report.json ===
+  all            nodeNum=  395  opTypes=10
+  CPU            nodeNum=   91  opTypes=7
+  NPU            nodeNum=   80  opTypes=4
+  VITIS_EP_CPU   nodeNum=  224  opTypes=2
+
+  per-node device counts: {'CPU': 315, 'NPU': 80}
+
+  80 nodes on the NPU, 315 elsewhere.
+
+  op type x device:
+    CPU           Conv                 53
+    CPU           DequantizeLinear     166
+    CPU           Flatten              1
+    CPU           Gemm                 1
+    CPU           GlobalAveragePool    1
+    CPU           MaxPool              1
+    CPU           Mul                  1
+    CPU           QuantizeLinear       58
+    CPU           Relu                 33
+    NPU           Add                  16
+    NPU           DequantizeLinear     32
+    NPU           QuantizeLinear       16
+    NPU           Relu                 16
+
+  315 nodes NOT on the NPU (first 25):
+    CPU           QuantizeLinear       ['input_QuantizeLinear_Output']
+    CPU           DequantizeLinear     ['input_DequantizeLinear_Output']
+    CPU           DequantizeLinear     ['onnx::Conv_498_DequantizeLinear_Output']
+    CPU           DequantizeLinear     ['onnx::Conv_497_DequantizeLinear_Output']
+    CPU           Conv                 ['/conv1/Conv_output_0']
+    CPU           Relu                 ['/act1/Relu_output_0']
+    CPU           QuantizeLinear       ['/act1/Relu_output_0_QuantizeLinear_Output']
+    CPU           DequantizeLinear     ['/act1/Relu_output_0_DequantizeLinear_Output']
+    CPU           MaxPool              ['/maxpool/MaxPool_output_0']
+    CPU           QuantizeLinear       ['/maxpool/MaxPool_output_0_QuantizeLinear_Output']
+    CPU           DequantizeLinear     ['/maxpool/MaxPool_output_0_DequantizeLinear_Output']
+    CPU           DequantizeLinear     ['onnx::Conv_501_DequantizeLinear_Output']
+    CPU           DequantizeLinear     ['onnx::Conv_500_DequantizeLinear_Output']
+    CPU           Conv                 ['/layer1/layer1.0/conv1/Conv_output_0']
+    CPU           Relu                 ['/layer1/layer1.0/act1/Relu_output_0']
+    CPU           QuantizeLinear       ['/layer1/layer1.0/act1/Relu_output_0_QuantizeLinear_Output']
+    CPU           DequantizeLinear     ['/layer1/layer1.0/act1/Relu_output_0_DequantizeLinear_Output']
+    CPU           DequantizeLinear     ['onnx::Conv_504_DequantizeLinear_Output']
+    CPU           DequantizeLinear     ['onnx::Conv_503_DequantizeLinear_Output']
+    CPU           Conv                 ['/layer1/layer1.0/conv2/Conv_output_0']
+    CPU           Relu                 ['/layer1/layer1.0/act2/Relu_output_0']
+    CPU           QuantizeLinear       ['/layer1/layer1.0/act2/Relu_output_0_QuantizeLinear_Output']
+    CPU           DequantizeLinear     ['/layer1/layer1.0/act2/Relu_output_0_DequantizeLinear_Output']
+    CPU           DequantizeLinear     ['onnx::Conv_507_DequantizeLinear_Output']
+    CPU           DequantizeLinear     ['onnx::Conv_506_DequantizeLinear_Output']

@@ -1,0 +1,10 @@
+C:\Users\<user>\src\timm-resnet50.a1_in1k-RyzenAI\pipelines\resnet50\1_export.py:72: DeprecationWarning: You are using the legacy TorchScript-based ONNX export. Starting in PyTorch 2.9, the new torch.export-based ONNX exporter will be the default. To switch now, set dynamo=True in torch.onnx.export. This new exporter supports features like exporting LLMs with DynamicCache. We encourage you to try it and share feedback to help improve the experience. Learn more about the new export logic: https://pytorch.org/docs/stable/onnx_dynamo.html. For exporting control flow: https://pytorch.org/tutorials/beginner/onnx/export_control_flow_model_to_onnx_tutorial.html.
+  torch.onnx.export(
+timm data config: {'input_size': (3, 160, 160), 'interpolation': 'bicubic', 'mean': (0.485, 0.456, 0.406), 'std': (0.229, 0.224, 0.225), 'crop_pct': 0.95, 'crop_mode': 'center'}
+
+Wrote models\resnet50_r160_fp32.onnx
+  opset:       [('ai.onnx', 17)]
+  input shape: [1, 3, 160, 160]
+  op types:    [('Conv', 53), ('Relu', 49), ('Add', 16), ('MaxPool', 1), ('GlobalAveragePool', 1), ('Flatten', 1), ('Gemm', 1)]
+
+OK - ready for step 2 (quantization)

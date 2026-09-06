@@ -1,0 +1,36 @@
+deleted stale cache C:\Users\<user>\src\timm-resnet50.a1_in1k-RyzenAI\yolocutcachekey
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\<user>\src\timm-resnet50.a1_in1k-RyzenAI\yolocutcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+model: head-cut (6 outputs), decode tail runs in numpy
+input: 640x640
+
+=== NPU | models/yolov8m_cut_xint8.onnx | 640px | assets/test_image.jpg ===
+infer   mean 30.80 ms   median 30.57 ms   p95 31.57 ms   (32.5 fps)
+post    mean 0.21 ms
+22 detections:
+   chair            0.92  (291,217,62,101)
+   tv               0.90  (6,166,148,94)
+   chair            0.90  (361,219,55,100)
+   person           0.78  (411,157,54,139)
+   chair            0.78  (410,219,32,88)
+   vase             0.78  (549,298,37,102)
+   dining table     0.78  (319,219,116,100)
+   potted plant     0.73  (228,175,38,37)
+   clock            0.68  (448,120,13,21)
+   refrigerator     0.62  (492,170,20,113)
+   refrigerator     0.62  (445,167,67,115)
+   vase             0.56  (359,213,14,16)
+   tv               0.56  (558,208,81,78)
+   dining table     0.56  (461,345,178,76)
+   microwave        0.50  (512,205,14,17)
+   vase             0.38  (166,233,19,34)
+   book             0.38  (605,306,34,50)
+   potted plant     0.32  (333,176,47,40)
+   vase             0.32  (240,197,13,15)
+   vase             0.32  (351,208,10,21)
+   vase             0.27  (313,191,12,22)
+   cup              0.27  (554,291,22,41)
+wrote C:\Users\<user>\src\timm-resnet50.a1_in1k-RyzenAI\results\out_yolov8m_cut_xint8_npu.jpg

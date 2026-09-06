@@ -1,0 +1,1265 @@
+
+[1m[34m==> 1/5  head cut -- models/yolov8s_cut.onnx exists, skipping (--recut to redo)[0m
+
+[1m[34m==> 2/5  quantizing to xint8  (32 calibration images)[0m
+[2m    disk: 62 GB free, ~6 GB needed for Quark's calibration cache[0m
+[2m    env: resnet_env  (3.12.11)[0m
+[2m    log: results/yolo_cut_quantize_xint8.log[0m
+[32m
+[QUARK-INFO]: Checking custom ops library ...[0m
+[33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[32m
+[QUARK-INFO]: Start compiling CPU version of custom ops library.[0m
+W0905 14:48:09.176000 5284 site-packages\torch\utils\cpp_extension.py:466] Error checking compiler version for cl: [WinError 2] The system cannot find the file specified
+INFO: Could not find files for the given pattern(s).
+[31m
+[QUARK-ERROR]: CPU version of custom ops library compilation failed:Command '['where', 'cl']' returned non-zero exit status 1.[0m
+[33m
+[QUARK-WARNING]: Custom ops library compilation failed: CPU version of custom ops library compilation failed:Command '['where', 'cl']' returned non-zero exit status 1..[0m
+Traceback (most recent call last):
+  File "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\build_custom_ops.py", line 58, in compile_custom_op_cpu
+    load(
+  File "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\torch\utils\cpp_extension.py", line 1681, in load
+    return _jit_compile(
+           ^^^^^^^^^^^^^
+  File "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\torch\utils\cpp_extension.py", line 2138, in _jit_compile
+    _write_ninja_file_and_build_library(
+  File "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\torch\utils\cpp_extension.py", line 2275, in _write_ninja_file_and_build_library
+    _write_ninja_file_to_build_library(
+  File "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\torch\utils\cpp_extension.py", line 2762, in _write_ninja_file_to_build_library
+    _write_ninja_file(
+  File "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\torch\utils\cpp_extension.py", line 2946, in _write_ninja_file
+    cl_paths = subprocess.check_output(['where',
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\subprocess.py", line 466, in check_output
+    return run(*popenargs, stdout=PIPE, timeout=timeout, check=True,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\subprocess.py", line 571, in run
+    raise CalledProcessError(retcode, process.args,
+subprocess.CalledProcessError: Command '['where', 'cl']' returned non-zero exit status 1.
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\build_custom_ops.py", line 291, in compile_library
+    compile_library_core("CPU", extra_cuda_cflags, extra_cflags)
+  File "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\build_custom_ops.py", line 257, in compile_library_core
+    compile_custom_op_cpu(file_name, build_directory, extra_cuda_cflags, extra_cflags)
+  File "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\shares\utils\log.py", line 136, in wrapper
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\build_custom_ops.py", line 72, in compile_custom_op_cpu
+    raise RuntimeError("CPU version of custom ops library compilation failed:" + str(e))
+RuntimeError: CPU version of custom ops library compilation failed:Command '['where', 'cl']' returned non-zero exit status 1.
+[32m
+[QUARK-INFO]: Checked custom ops library.[0m
+[33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: Config has been replaced by QConfig. The old API will be removed in the next release.[0m
+[33m
+[QUARK-WARNING]: The algorithm API is algo_config in QConfig. The old API will be removed in the next release.[0m
+[32m
+[QUARK-INFO]: The input ONNX model can create InferenceSession successfully[0m
+[32m
+[QUARK-INFO]: Folding or fusing operators for better accuracy and performance.[0m
+[33m
+[QUARK-WARNING]: The opset version is 17 < 20. Skipping fusing Gelu.[0m
+[32m
+[QUARK-INFO]: Start applying CLE algorithm on the float model...[0m
+[32m
+[QUARK-INFO]: CrossLayerEqualization pattern num: 0[0m
+[32m
+[QUARK-INFO]: Total CrossLayerEqualization steps: 1[0m
+[32m
+[QUARK-INFO]: The CLE algorithm has been applied. It took 0.1s to complete.[0m
+[32m
+[QUARK-INFO]: Optimizing the model for a better hardware compatibility.[0m
+[32m
+[QUARK-INFO]: Found Split node /model.2/Split. Replacing with Slice.[0m
+[32m
+[QUARK-INFO]: Found Split node /model.4/Split. Replacing with Slice.[0m
+[32m
+[QUARK-INFO]: Found Split node /model.6/Split. Replacing with Slice.[0m
+[32m
+[QUARK-INFO]: Found Split node /model.8/Split. Replacing with Slice.[0m
+[32m
+[QUARK-INFO]: Found Split node /model.12/Split. Replacing with Slice.[0m
+[32m
+[QUARK-INFO]: Found Split node /model.15/Split. Replacing with Slice.[0m
+[32m
+[QUARK-INFO]: Found Split node /model.18/Split. Replacing with Slice.[0m
+[32m
+[QUARK-INFO]: Found Split node /model.21/Split. Replacing with Slice.[0m
+[32m
+[QUARK-INFO]: The input ONNX model can run inference successfully[0m
+[32m
+[QUARK-INFO]: Start running calibration on 32 samples with extra options {}...[0m
+[32m
+[QUARK-INFO]: Data collection of PowerOfTwoMethod.MinMSE in progress. Runtime will depend on your model and data size.[0m
+input model: models/yolov8s_cut.onnx, 209 nodes, 6 outputs
+calibrating on 32 images
+quantizing with XINT8 -> models/yolov8s_cut_xint8.onnx
+[QUARK_INFO]: Time information:
+2026-09-05 14:48:09.965033
+[QUARK_INFO]: OS and CPU information:
+                                        system --- Windows
+                                          node --- DESKTOP-GS7R78P
+                                       release --- 11
+                                       version --- 10.0.26200
+                                       machine --- AMD64
+                                     processor --- AMD64 Family 25 Model 117 Stepping 2, AuthenticAMD
+[QUARK_INFO]: Tools version information:
+                                        python --- 3.12.11
+                                          onnx --- 1.19.0
+                                   onnxruntime --- 1.29.0
+                                    quark.onnx --- 0.11
+[QUARK_INFO]: Quantized Configuration information:
+                                   model_input --- models/yolov8s_cut.onnx
+                                  model_output --- models/yolov8s_cut_xint8.onnx
+                       calibration_data_reader --- <__main__.CocoCalibReader object at 0x00000248DE0CAD80>
+                         calibration_data_path --- None
+                                  quant_format --- QDQ
+                                   input_nodes --- []
+                                  output_nodes --- []
+                          op_types_to_quantize --- []
+                    extra_op_types_to_quantize --- []
+                                   per_channel --- False
+                                  reduce_range --- False
+                               activation_type --- QUInt8
+                                   weight_type --- QInt8
+                             nodes_to_quantize --- []
+                              nodes_to_exclude --- []
+                          subgraphs_to_exclude --- []
+                                optimize_model --- True
+                      use_external_data_format --- False
+                              calibrate_method --- PowerOfTwoMethod.MinMSE
+                           execution_providers --- ['CPUExecutionProvider']
+                                enable_npu_cnn --- True
+                        enable_npu_transformer --- False
+                     specific_tensor_precision --- False
+                                    debug_mode --- False
+                          convert_fp16_to_fp32 --- False
+                          convert_nchw_to_nhwc --- False
+                                   include_cle --- True
+                                    include_sq --- False
+                              include_rotation --- False
+                               include_fast_ft --- False
+                                 extra_options --- {'ActivationSymmetric': True}
+  0%|          | 0/32 [00:00<?, ?it/s]Cached 0.19GB:   0%|          | 0/32 [00:00<?, ?it/s]Cached 0.19GB:   3%|3         | 1/32 [00:00<00:19,  1.57it/s]Cached 0.39GB:   3%|3         | 1/32 [00:01<00:19,  1.57it/s]Cached 0.39GB:   6%|6         | 2/32 [00:01<00:19,  1.51it/s]Cached 0.58GB:   6%|6         | 2/32 [00:02<00:19,  1.51it/s]Cached 0.58GB:   9%|9         | 3/32 [00:02<00:19,  1.47it/s]Cached 0.77GB:   9%|9         | 3/32 [00:02<00:19,  1.47it/s]Cached 0.77GB:  12%|#2        | 4/32 [00:02<00:17,  1.59it/s]Cached 0.97GB:  12%|#2        | 4/32 [00:03<00:17,  1.59it/s]Cached 0.97GB:  16%|#5        | 5/32 [00:03<00:16,  1.64it/s]Cached 1.16GB:  16%|#5        | 5/32 [00:03<00:16,  1.64it/s]Cached 1.16GB:  19%|#8        | 6/32 [00:03<00:15,  1.70it/s]Cached 1.35GB:  19%|#8        | 6/32 [00:04<00:15,  1.70it/s]Cached 1.35GB:  22%|##1       | 7/32 [00:04<00:14,  1.70it/s]Cached 1.55GB:  22%|##1       | 7/32 [00:04<00:14,  1.70it/s]Cached 1.55GB:  25%|##5       | 8/32 [00:04<00:13,  1.76it/s]Cached 1.74GB:  25%|##5       | 8/32 [00:05<00:13,  1.76it/s]Cached 1.74GB:  28%|##8       | 9/32 [00:05<00:12,  1.79it/s]Cached 1.93GB:  28%|##8       | 9/32 [00:05<00:12,  1.79it/s]Cached 1.93GB:  31%|###1      | 10/32 [00:05<00:12,  1.82it/s]Cached 2.13GB:  31%|###1      | 10/32 [00:06<00:12,  1.82it/s]Cached 2.13GB:  34%|###4      | 11/32 [00:06<00:11,  1.82it/s]Cached 2.32GB:  34%|###4      | 11/32 [00:06<00:11,  1.82it/s]Cached 2.32GB:  38%|###7      | 12/32 [00:06<00:10,  1.84it/s]Cached 2.51GB:  38%|###7      | 12/32 [00:07<00:10,  1.84it/s]Cached 2.51GB:  41%|####      | 13/32 [00:07<00:10,  1.85it/s]Cached 2.71GB:  41%|####      | 13/32 [00:08<00:10,  1.85it/s]Cached 2.71GB:  44%|####3     | 14/32 [00:08<00:09,  1.84it/s]Cached 2.90GB:  44%|####3     | 14/32 [00:08<00:09,  1.84it/s]Cached 2.90GB:  47%|####6     | 15/32 [00:08<00:09,  1.85it/s]Cached 3.09GB:  47%|####6     | 15/32 [00:09<00:09,  1.85it/s]Cached 3.09GB:  50%|#####     | 16/32 [00:09<00:08,  1.86it/s]Cached 3.29GB:  50%|#####     | 16/32 [00:09<00:08,  1.86it/s]Cached 3.29GB:  53%|#####3    | 17/32 [00:09<00:08,  1.85it/s]Cached 3.48GB:  53%|#####3    | 17/32 [00:10<00:08,  1.85it/s]Cached 3.48GB:  56%|#####6    | 18/32 [00:10<00:07,  1.84it/s]Cached 3.67GB:  56%|#####6    | 18/32 [00:10<00:07,  1.84it/s]Cached 3.67GB:  59%|#####9    | 19/32 [00:10<00:06,  1.88it/s]Cached 3.87GB:  59%|#####9    | 19/32 [00:11<00:06,  1.88it/s]Cached 3.87GB:  62%|######2   | 20/32 [00:11<00:06,  1.86it/s]Cached 4.06GB:  62%|######2   | 20/32 [00:11<00:06,  1.86it/s]Cached 4.06GB:  66%|######5   | 21/32 [00:11<00:06,  1.81it/s]Cached 4.25GB:  66%|######5   | 21/32 [00:12<00:06,  1.81it/s]Cached 4.25GB:  69%|######8   | 22/32 [00:12<00:05,  1.78it/s]Cached 4.45GB:  69%|######8   | 22/32 [00:13<00:05,  1.78it/s]Cached 4.45GB:  72%|#######1  | 23/32 [00:13<00:05,  1.77it/s]Cached 4.64GB:  72%|#######1  | 23/32 [00:13<00:05,  1.77it/s]Cached 4.64GB:  75%|#######5  | 24/32 [00:13<00:04,  1.70it/s]Cached 4.83GB:  75%|#######5  | 24/32 [00:14<00:04,  1.70it/s]Cached 4.83GB:  78%|#######8  | 25/32 [00:14<00:04,  1.73it/s]Cached 5.03GB:  78%|#######8  | 25/32 [00:14<00:04,  1.73it/s]Cached 5.03GB:  81%|########1 | 26/32 [00:14<00:03,  1.73it/s]Cached 5.22GB:  81%|########1 | 26/32 [00:15<00:03,  1.73it/s]Cached 5.22GB:  84%|########4 | 27/32 [00:15<00:02,  1.74it/s]Cached 5.41GB:  84%|########4 | 27/32 [00:15<00:02,  1.74it/s]Cached 5.41GB:  88%|########7 | 28/32 [00:15<00:02,  1.71it/s]Cached 5.60GB:  88%|########7 | 28/32 [00:16<00:02,  1.71it/s]Cached 5.60GB:  91%|######### | 29/32 [00:16<00:01,  1.71it/s]Cached 5.80GB:  91%|######### | 29/32 [00:17<00:01,  1.71it/s]Cached 5.80GB:  94%|#########3| 30/32 [00:17<00:01,  1.66it/s]Cached 5.99GB:  94%|#########3| 30/32 [00:17<00:01,  1.66it/s]Cached 5.99GB:  97%|#########6| 31/32 [00:17<00:00,  1.72it/s]Cached 6.18GB:  97%|#########6| 31/32 [00:18<00:00,  1.72it/s]Cached 6.18GB: 100%|##########| 32/32 [00:18<00:00,  1.75it/s]Cached 6.18GB: 100%|##########| 32/32 [00:18<00:00,  1.75it/s]
+[32m
+[QUARK-INFO]: Finding optimal threshold for each tensor using PowerOfTwoMethod.MinMSE algorithm in 'All' mode ...[0m
+  0%|          | 0/218 [00:00<?, ?it/s]  0%|          | 1/218 [00:00<03:23,  1.07it/s]  1%|          | 2/218 [00:01<01:48,  1.99it/s]  2%|1         | 4/218 [00:02<01:51,  1.91it/s]  2%|2         | 5/218 [00:02<01:32,  2.30it/s]  3%|3         | 7/218 [00:02<00:57,  3.70it/s]  4%|3         | 8/218 [00:04<02:09,  1.62it/s]  4%|4         | 9/218 [00:05<02:36,  1.34it/s]  5%|4         | 10/218 [00:06<02:36,  1.33it/s]  5%|5         | 11/218 [00:07<03:20,  1.03it/s]  6%|5         | 12/218 [00:07<02:34,  1.33it/s]  6%|5         | 13/218 [00:08<02:00,  1.70it/s]  6%|6         | 14/218 [00:08<02:07,  1.59it/s]  7%|6         | 15/218 [00:15<08:29,  2.51s/it]  7%|7         | 16/218 [00:16<07:04,  2.10s/it]  8%|7         | 17/218 [00:17<05:08,  1.53s/it]  9%|8         | 19/218 [00:17<03:05,  1.07it/s] 10%|9         | 21/218 [00:17<01:57,  1.68it/s] 10%|#         | 22/218 [00:18<02:03,  1.59it/s] 11%|#         | 23/218 [00:19<02:43,  1.20it/s] 11%|#1        | 24/218 [00:21<03:14,  1.00s/it] 11%|#1        | 25/218 [00:22<03:39,  1.14s/it] 12%|#1        | 26/218 [00:23<02:58,  1.07it/s] 12%|#2        | 27/218 [00:24<02:47,  1.14it/s] 13%|#2        | 28/218 [00:24<02:40,  1.18it/s] 13%|#3        | 29/218 [00:25<02:03,  1.53it/s] 14%|#4        | 31/218 [00:28<03:14,  1.04s/it] 15%|#4        | 32/218 [00:28<03:01,  1.02it/s] 15%|#5        | 33/218 [00:29<02:49,  1.09it/s] 16%|#5        | 34/218 [00:29<02:21,  1.30it/s] 17%|#6        | 36/218 [00:30<01:36,  1.88it/s] 17%|#6        | 37/218 [00:30<01:18,  2.32it/s] 17%|#7        | 38/218 [00:32<02:39,  1.13it/s] 18%|#7        | 39/218 [00:33<02:14,  1.33it/s] 18%|#8        | 40/218 [00:33<01:56,  1.53it/s] 19%|#8        | 41/218 [00:33<01:42,  1.73it/s] 19%|#9        | 42/218 [00:34<01:22,  2.15it/s] 20%|#9        | 43/218 [00:35<02:13,  1.31it/s] 20%|##        | 44/218 [00:35<01:53,  1.54it/s] 21%|##        | 45/218 [00:36<01:58,  1.45it/s] 21%|##1       | 46/218 [00:36<01:33,  1.85it/s] 22%|##1       | 47/218 [00:37<01:23,  2.04it/s] 22%|##2       | 48/218 [00:38<01:36,  1.76it/s] 22%|##2       | 49/218 [00:38<01:45,  1.60it/s] 23%|##2       | 50/218 [00:39<01:33,  1.80it/s] 23%|##3       | 51/218 [00:39<01:14,  2.23it/s] 24%|##3       | 52/218 [00:40<02:05,  1.32it/s] 24%|##4       | 53/218 [00:42<02:41,  1.02it/s] 25%|##4       | 54/218 [00:42<02:11,  1.25it/s] 25%|##5       | 55/218 [00:43<02:09,  1.26it/s] 26%|##5       | 56/218 [00:46<03:55,  1.45s/it] 26%|##6       | 57/218 [00:47<03:20,  1.24s/it] 27%|##6       | 58/218 [00:48<02:55,  1.10s/it] 27%|##7       | 59/218 [00:48<02:37,  1.01it/s] 28%|##7       | 60/218 [00:49<02:07,  1.24it/s] 28%|##7       | 61/218 [00:49<02:04,  1.26it/s] 28%|##8       | 62/218 [00:50<02:01,  1.28it/s] 29%|##8       | 63/218 [00:51<01:41,  1.52it/s] 29%|##9       | 64/218 [00:51<01:28,  1.73it/s] 30%|##9       | 65/218 [00:52<02:10,  1.17it/s] 30%|###       | 66/218 [00:53<02:05,  1.21it/s] 31%|###       | 67/218 [00:54<01:45,  1.44it/s] 31%|###1      | 68/218 [00:54<01:21,  1.83it/s] 32%|###1      | 69/218 [00:54<01:14,  2.01it/s] 32%|###2      | 70/218 [00:54<00:59,  2.47it/s] 33%|###2      | 71/218 [00:55<01:14,  1.98it/s] 33%|###3      | 72/218 [00:55<01:08,  2.12it/s] 33%|###3      | 73/218 [00:59<03:01,  1.25s/it] 34%|###3      | 74/218 [00:59<02:22,  1.01it/s] 34%|###4      | 75/218 [01:00<02:43,  1.15s/it] 35%|###4      | 76/218 [01:05<05:14,  2.21s/it] 35%|###5      | 77/218 [01:07<04:41,  1.99s/it] 36%|###5      | 78/218 [01:07<03:46,  1.62s/it] 36%|###6      | 79/218 [01:10<04:41,  2.03s/it] 37%|###6      | 80/218 [01:11<03:32,  1.54s/it] 37%|###7      | 81/218 [01:12<03:28,  1.52s/it] 38%|###7      | 82/218 [01:12<02:33,  1.13s/it] 38%|###8      | 83/218 [01:13<01:54,  1.18it/s] 39%|###8      | 84/218 [01:13<01:36,  1.39it/s] 39%|###8      | 85/218 [01:13<01:21,  1.62it/s] 39%|###9      | 86/218 [01:14<01:18,  1.68it/s] 40%|###9      | 87/218 [01:14<01:10,  1.87it/s] 40%|####      | 88/218 [01:17<02:44,  1.26s/it] 41%|####      | 89/218 [01:18<02:01,  1.06it/s] 41%|####1     | 90/218 [01:18<01:31,  1.40it/s] 42%|####1     | 91/218 [01:21<02:55,  1.38s/it] 42%|####2     | 92/218 [01:21<02:10,  1.03s/it] 43%|####2     | 93/218 [01:21<01:37,  1.28it/s] 43%|####3     | 94/218 [01:22<01:34,  1.31it/s] 44%|####3     | 95/218 [01:22<01:27,  1.41it/s] 44%|####4     | 96/218 [01:23<01:15,  1.62it/s] 45%|####4     | 98/218 [01:24<01:24,  1.42it/s] 45%|####5     | 99/218 [01:25<01:14,  1.60it/s] 46%|####5     | 100/218 [01:27<02:02,  1.04s/it] 46%|####6     | 101/218 [01:28<01:53,  1.03it/s] 47%|####6     | 102/218 [01:29<01:46,  1.09it/s] 47%|####7     | 103/218 [01:29<01:28,  1.31it/s] 48%|####7     | 104/218 [01:29<01:09,  1.65it/s] 48%|####8     | 105/218 [01:30<01:01,  1.85it/s] 49%|####8     | 106/218 [01:30<00:55,  2.02it/s] 49%|####9     | 107/218 [01:31<01:03,  1.74it/s] 50%|####9     | 108/218 [01:31<00:57,  1.92it/s] 50%|#####     | 109/218 [01:32<01:04,  1.70it/s] 50%|#####     | 110/218 [01:32<00:50,  2.12it/s] 51%|#####     | 111/218 [01:34<01:23,  1.29it/s] 51%|#####1    | 112/218 [01:34<01:03,  1.66it/s] 52%|#####1    | 113/218 [01:35<01:30,  1.16it/s] 52%|#####2    | 114/218 [01:36<01:14,  1.39it/s] 53%|#####2    | 115/218 [01:36<01:14,  1.38it/s] 53%|#####3    | 116/218 [01:43<04:15,  2.51s/it] 54%|#####3    | 117/218 [01:43<03:03,  1.81s/it] 54%|#####4    | 118/218 [01:44<02:29,  1.50s/it] 55%|#####4    | 119/218 [01:44<01:55,  1.16s/it] 55%|#####5    | 120/218 [01:46<02:03,  1.26s/it] 56%|#####5    | 121/218 [01:47<02:08,  1.33s/it] 56%|#####5    | 122/218 [01:50<02:57,  1.85s/it] 56%|#####6    | 123/218 [01:51<02:14,  1.42s/it] 57%|#####6    | 124/218 [01:52<02:14,  1.44s/it] 57%|#####7    | 125/218 [01:53<01:54,  1.23s/it] 58%|#####7    | 126/218 [01:53<01:29,  1.03it/s] 58%|#####8    | 127/218 [01:54<01:12,  1.25it/s] 59%|#####8    | 128/218 [01:54<01:10,  1.27it/s] 59%|#####9    | 129/218 [01:57<02:07,  1.44s/it] 60%|#####9    | 130/218 [01:59<02:07,  1.45s/it] 60%|######    | 131/218 [01:59<01:31,  1.05s/it] 61%|######    | 132/218 [02:01<01:41,  1.18s/it] 61%|######1   | 133/218 [02:01<01:29,  1.05s/it] 61%|######1   | 134/218 [02:03<01:40,  1.19s/it] 62%|######1   | 135/218 [02:04<01:46,  1.28s/it] 62%|######2   | 136/218 [02:05<01:18,  1.04it/s] 63%|######2   | 137/218 [02:07<02:07,  1.57s/it] 63%|######3   | 138/218 [02:08<01:32,  1.16s/it] 64%|######3   | 139/218 [02:11<02:13,  1.69s/it] 64%|######4   | 140/218 [02:11<01:49,  1.41s/it] 65%|######4   | 141/218 [02:18<03:44,  2.92s/it] 65%|######5   | 142/218 [02:19<03:08,  2.48s/it] 66%|######5   | 143/218 [02:20<02:19,  1.85s/it] 66%|######6   | 144/218 [02:20<01:53,  1.53s/it] 67%|######6   | 145/218 [02:21<01:26,  1.18s/it] 67%|######6   | 146/218 [02:21<01:08,  1.06it/s] 67%|######7   | 147/218 [02:23<01:34,  1.33s/it] 68%|######7   | 148/218 [02:24<01:21,  1.17s/it] 68%|######8   | 149/218 [02:24<01:00,  1.14it/s] 69%|######8   | 150/218 [02:25<00:56,  1.20it/s] 69%|######9   | 151/218 [02:26<00:54,  1.24it/s] 70%|######9   | 152/218 [02:26<00:41,  1.60it/s] 70%|#######   | 153/218 [02:26<00:32,  2.01it/s] 71%|#######   | 154/218 [02:27<00:29,  2.17it/s] 71%|#######1  | 155/218 [02:27<00:35,  1.80it/s] 72%|#######1  | 156/218 [02:28<00:31,  1.95it/s] 72%|#######2  | 157/218 [02:29<00:35,  1.71it/s] 72%|#######2  | 158/218 [02:29<00:38,  1.56it/s] 73%|#######2  | 159/218 [02:30<00:30,  1.94it/s] 73%|#######3  | 160/218 [02:30<00:27,  2.13it/s] 74%|#######4  | 162/218 [02:30<00:19,  2.81it/s] 75%|#######4  | 163/218 [02:32<00:34,  1.58it/s] 75%|#######5  | 164/218 [02:32<00:30,  1.76it/s] 76%|#######5  | 165/218 [02:33<00:33,  1.60it/s] 76%|#######6  | 166/218 [02:36<01:06,  1.28s/it] 77%|#######6  | 167/218 [02:37<00:57,  1.14s/it] 77%|#######7  | 168/218 [02:37<00:45,  1.09it/s] 78%|#######7  | 169/218 [02:38<00:37,  1.31it/s] 78%|#######7  | 170/218 [02:38<00:36,  1.32it/s] 78%|#######8  | 171/218 [02:39<00:35,  1.32it/s] 79%|#######8  | 172/218 [02:39<00:29,  1.54it/s] 79%|#######9  | 173/218 [02:40<00:25,  1.75it/s] 80%|#######9  | 174/218 [02:40<00:22,  1.94it/s] 80%|########  | 175/218 [02:40<00:18,  2.34it/s] 81%|########1 | 177/218 [02:41<00:16,  2.41it/s] 82%|########1 | 178/218 [02:42<00:16,  2.44it/s] 82%|########2 | 179/218 [02:42<00:19,  2.00it/s] 83%|########2 | 180/218 [02:43<00:17,  2.13it/s] 83%|########3 | 181/218 [02:43<00:16,  2.26it/s] 83%|########3 | 182/218 [02:44<00:15,  2.33it/s] 84%|########3 | 183/218 [02:45<00:25,  1.37it/s] 84%|########4 | 184/218 [02:47<00:32,  1.05it/s] 85%|########4 | 185/218 [02:47<00:29,  1.12it/s] 85%|########5 | 186/218 [02:48<00:24,  1.32it/s] 86%|########5 | 187/218 [02:48<00:23,  1.33it/s] 86%|########6 | 188/218 [02:49<00:17,  1.68it/s] 87%|########6 | 189/218 [02:49<00:15,  1.88it/s] 87%|########7 | 190/218 [02:50<00:16,  1.66it/s] 88%|########7 | 191/218 [02:50<00:14,  1.85it/s] 88%|########8 | 192/218 [02:51<00:15,  1.65it/s] 89%|########8 | 193/218 [02:53<00:22,  1.13it/s] 89%|########8 | 194/218 [02:54<00:23,  1.02it/s] 89%|########9 | 195/218 [02:54<00:17,  1.34it/s] 90%|########9 | 196/218 [02:55<00:15,  1.42it/s] 90%|######### | 197/218 [02:56<00:19,  1.06it/s] 91%|######### | 198/218 [02:57<00:17,  1.11it/s] 91%|#########1| 199/218 [02:57<00:14,  1.31it/s] 92%|#########1| 200/218 [02:58<00:11,  1.53it/s] 92%|#########2| 201/218 [02:58<00:08,  1.92it/s] 93%|#########2| 202/218 [02:59<00:09,  1.68it/s] 94%|#########3| 204/218 [03:00<00:09,  1.41it/s] 94%|#########4| 205/218 [03:01<00:07,  1.69it/s] 94%|#########4| 206/218 [03:02<00:10,  1.18it/s] 95%|#########4| 207/218 [03:03<00:09,  1.20it/s] 95%|#########5| 208/218 [03:05<00:10,  1.03s/it] 96%|#########5| 209/218 [03:05<00:07,  1.18it/s] 96%|#########6| 210/218 [03:05<00:05,  1.50it/s] 97%|#########6| 211/218 [03:06<00:04,  1.70it/s] 97%|#########7| 212/218 [03:11<00:11,  1.96s/it] 98%|#########7| 213/218 [03:12<00:09,  1.84s/it] 98%|#########8| 214/218 [03:13<00:05,  1.36s/it] 99%|#########8| 215/218 [03:13<00:03,  1.06s/it] 99%|#########9| 216/218 [03:14<00:01,  1.03it/s]100%|#########9| 217/218 [03:14<00:00,  1.25it/s]100%|##########| 218/218 [03:15<00:00,  1.27it/s]100%|##########| 218/218 [03:15<00:00,  1.12it/s]
+[32m
+[QUARK-INFO]: The calibration has been finished. It took 214.0s to complete.[0m
+[32m
+[QUARK-INFO]: Remove QuantizeLinear & DequantizeLinear on certain operations(such as conv-relu).[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.0/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.2/cv1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.2/m.0/cv1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.2/m.0/cv2/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.2/cv2/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.3/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.4/cv1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.4/m.0/cv1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.4/m.0/cv2/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.4/m.1/cv1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.4/m.1/cv2/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.4/cv2/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.5/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.6/cv1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.6/m.0/cv1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.6/m.0/cv2/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.6/m.1/cv1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.6/m.1/cv2/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.6/cv2/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.7/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.8/cv1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.8/m.0/cv1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.8/m.0/cv2/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.8/cv2/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.9/cv1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.9/cv2/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.12/cv1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.12/m.0/cv1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.12/m.0/cv2/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.12/cv2/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.15/cv1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.15/m.0/cv1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.15/m.0/cv2/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.15/cv2/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.16/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.22/cv2.0/cv2.0.0/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.22/cv3.0/cv3.0.0/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.22/cv2.0/cv2.0.1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.22/cv3.0/cv3.0.1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.18/cv1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.18/m.0/cv1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.18/m.0/cv2/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.18/cv2/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.19/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.22/cv2.1/cv2.1.0/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.22/cv3.1/cv3.1.0/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.22/cv2.1/cv2.1.1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.22/cv3.1/cv3.1.1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.21/cv1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.21/m.0/cv1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.21/m.0/cv2/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.21/cv2/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.22/cv2.2/cv2.2.0/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.22/cv3.2/cv3.2.0/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.22/cv2.2/cv2.2.1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.22/cv3.2/cv3.2.1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.0/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.2/cv1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.2/m.0/cv1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.2/m.0/cv2/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.2/cv2/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.3/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.4/cv1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.4/m.0/cv1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.4/m.0/cv2/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.4/m.1/cv1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.4/m.1/cv2/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.4/cv2/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.5/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.6/cv1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.6/m.0/cv1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.6/m.0/cv2/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.6/m.1/cv1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.6/m.1/cv2/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.6/cv2/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.7/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.8/cv1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.8/m.0/cv1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.8/m.0/cv2/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.8/cv2/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.9/cv1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.9/cv2/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.12/cv1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.12/m.0/cv1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.12/m.0/cv2/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.12/cv2/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.15/cv1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.15/m.0/cv1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.15/m.0/cv2/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.15/cv2/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.16/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.22/cv2.0/cv2.0.0/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.22/cv3.0/cv3.0.0/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.22/cv2.0/cv2.0.1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.22/cv3.0/cv3.0.1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.18/cv1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.18/m.0/cv1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.18/m.0/cv2/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.18/cv2/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.19/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.22/cv2.1/cv2.1.0/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.22/cv3.1/cv3.1.0/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.22/cv2.1/cv2.1.1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.22/cv3.1/cv3.1.1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.21/cv1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.21/m.0/cv1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.21/m.0/cv2/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.21/cv2/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.22/cv2.2/cv2.2.0/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.22/cv3.2/cv3.2.0/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.22/cv2.2/cv2.2.1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.22/cv3.2/cv3.2.1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Adjust the quantize info to meet the compiler constraints[0m
+[32m
+[QUARK-INFO]: Input pos of concat node /model.2/Concat is 4, min_pos is 3. Modify ipos from 4 to 3.[0m
+[32m
+[QUARK-INFO]: Input pos of concat node /model.4/Concat is 5, min_pos is 4. Modify ipos from 5 to 4.[0m
+[32m
+[QUARK-INFO]: Input pos of concat node /model.4/Concat is 5, min_pos is 4. Modify ipos from 5 to 4.[0m
+[32m
+[QUARK-INFO]: Input pos of concat node /model.4/Concat is 5, min_pos is 4. Modify ipos from 5 to 4.[0m
+[32m
+[QUARK-INFO]: Output pos of concat node /model.6/Concat is 4, min_pos is 3. Modify opos from 4 to 3.[0m
+[32m
+[QUARK-INFO]: Input pos of concat node /model.6/Concat is 4, min_pos is 3. Modify ipos from 4 to 3.[0m
+[32m
+[QUARK-INFO]: Input pos of concat node /model.6/Concat is 4, min_pos is 3. Modify ipos from 4 to 3.[0m
+[32m
+[QUARK-INFO]: Input pos of concat node /model.6/Concat is 4, min_pos is 3. Modify ipos from 4 to 3.[0m
+[32m
+[QUARK-INFO]: Input pos of concat node /model.8/Concat is 5, min_pos is 4. Modify ipos from 5 to 4.[0m
+[32m
+[QUARK-INFO]: Output pos of concat node /model.12/Concat is 5, min_pos is 4. Modify opos from 5 to 4.[0m
+[32m
+[QUARK-INFO]: Input pos of concat node /model.12/Concat is 5, min_pos is 4. Modify ipos from 5 to 4.[0m
+[32m
+[QUARK-INFO]: Input pos of concat node /model.12/Concat is 5, min_pos is 4. Modify ipos from 5 to 4.[0m
+[32m
+[QUARK-INFO]: Output pos of concat node /model.17/Concat is 5, min_pos is 4. Modify opos from 5 to 4.[0m
+[32m
+[QUARK-INFO]: Input pos of concat node /model.17/Concat is 5, min_pos is 4. Modify ipos from 5 to 4.[0m
+[32m
+[QUARK-INFO]: Input pos of concat node /model.18/Concat is 5, min_pos is 4. Modify ipos from 5 to 4.[0m
+[32m
+[QUARK-INFO]: Input pos of concat node /model.21/Concat is 5, min_pos is 4. Modify ipos from 5 to 4.[0m
+[32m
+[QUARK-INFO]: Input pos of Slice layer /model.4/Split_output_0_0 is 5. Output pos of Slice layer /model.4/Split_output_0_0 is 4.Modify ipos from 5 to 4.[0m
+[32m
+[QUARK-INFO]: Input pos of Slice layer /model.6/Split_output_0_0 is 4. Output pos of Slice layer /model.6/Split_output_0_0 is 3.Modify ipos from 4 to 3.[0m
+[32m
+[QUARK-INFO]: Input pos of Slice layer /model.12/Split_output_0_0 is 5. Output pos of Slice layer /model.12/Split_output_0_0 is 4.Modify ipos from 5 to 4.[0m
+[32m
+[QUARK-INFO]: Input pos of Slice layer /model.21/Split_output_0_0 is 5. Output pos of Slice layer /model.21/Split_output_0_0 is 4.Modify ipos from 5 to 4.[0m
+[32m
+[QUARK-INFO]: Adjust the quantize info to meet the compiler constraints[0m
+[32m
+[QUARK-INFO]: Output pos of concat node /model.14/Concat is 5, min_pos is 4. Modify opos from 5 to 4.[0m
+[32m
+[QUARK-INFO]: Input pos of concat node /model.14/Concat is 5, min_pos is 4. Modify ipos from 5 to 4.[0m
+[32m
+[QUARK-INFO]: Adjust the quantize info to meet the compiler constraints[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: e2e quantization time consumed:220.920122[0m
+[32m
+[QUARK-INFO]: The operation types and their corresponding quantities of the input float model is shown in the table below.[0m
++------------------------------------------------------+
+| Op Type              | Float Model                   |
+|----------------------+-------------------------------|
+| Conv                 | 63                            |
+| Sigmoid              | 57                            |
+| Mul                  | 57                            |
+| Split                | 8                             |
+| Add                  | 6                             |
+| Concat               | 13                            |
+| MaxPool              | 3                             |
+| Resize               | 2                             |
+|----------------------+-------------------------------|
+| Quantized model path | models/yolov8s_cut_xint8.onnx |
++------------------------------------------------------+
+[32m
+[QUARK-INFO]: The quantized information for all operation types is shown in the table below.[0m
+[32m
+[QUARK-INFO]: The discrepancy between the operation types in the quantized model and the float model is due to the application of graph optimization.[0m
++------------------------------------------------+
+| Op Type     | Activation | Weights  | Bias     |
+|-------------+------------+----------+----------|
+| Conv        | UINT8(63)  | INT8(63) | INT8(63) |
+| Mul         | UINT8(57)  |          |          |
+| Slice       | UINT8(16)  |          |          |
+| Add         | UINT8(6)   |          |          |
+| Concat      | UINT8(13)  |          |          |
+| MaxPool     | UINT8(3)   |          |          |
+| Resize      | UINT8(2)   |          |          |
+| HardSigmoid | UINT8(57)  |          |          |
++------------------------------------------------+
+
+wrote models/yolov8s_cut_xint8.onnx
+ops: [('DequantizeLinear', 344), ('QuantizeLinear', 218), ('Constant', 121), ('Mul', 114), ('Conv', 63), ('HardSigmoid', 57), ('Slice', 16), ('Concat', 13), ('Add', 6), ('MaxPool', 3), ('Resize', 2)]
+QuantizeLinear 218  DequantizeLinear 344
+first node: Constant 
+WARNING: graph does not start with QuantizeLinear - check that the input tensor got quantized.
+
+Next: tools/diag_ep.py --model <out>, then 4_detect.py --ep npu --fresh
+
+[1m[34m==> 3/5  CPU sanity check on the quantized model[0m
+[2m    env: resnet_env17  (3.12.11)[0m
+[2m    RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1[0m
+[2m    log: results/yolo_cut_cpu.log[0m
+2026-09-05 14:51:53.6381988 [I:onnxruntime:, inference_session.cc:606 onnxruntime::InferenceSession::TraceSessionOptions] Session Options {  execution_mode:0 execution_order:DEFAULT enable_profiling:0 optimized_model_filepath: enable_mem_pattern:1 enable_mem_reuse:1 enable_cpu_mem_arena:1 profile_file_prefix:onnxruntime_profile_ session_logid: session_log_severity_level:1 session_log_verbosity_level:0 max_num_graph_transformation_steps:10 graph_optimization_level:4 intra_op_param:OrtThreadPoolParams { thread_pool_size: 0 auto_set_affinity: 0 allow_spinning: 1 dynamic_block_base_: 0 stack_size: 0 affinity_str:  set_denormal_as_zero: 0 } inter_op_param:OrtThreadPoolParams { thread_pool_size: 0 auto_set_affinity: 0 allow_spinning: 1 dynamic_block_base_: 0 stack_size: 0 affinity_str:  set_denormal_as_zero: 0 } use_per_session_threads:1 thread_pool_allow_spinning:1 use_deterministic_compute:0 ep_selection_policy:0 config_options: {  } }
+2026-09-05 14:51:53.6398429 [I:onnxruntime:, inference_session.cc:414 onnxruntime::InferenceSession::ConstructorCommon::<lambda_cd5baf9f006fce338b072dac99354b33>::operator ()] Flush-to-zero and denormal-as-zero are off
+2026-09-05 14:51:53.6400704 [I:onnxruntime:, inference_session.cc:422 onnxruntime::InferenceSession::ConstructorCommon] Creating and using per session threadpools since use_per_session_threads_ is true
+2026-09-05 14:51:53.6402871 [I:onnxruntime:, inference_session.cc:446 onnxruntime::InferenceSession::ConstructorCommon] Dynamic block base set to 0
+2026-09-05 14:51:53.6841329 [I:onnxruntime:, inference_session.cc:2042 onnxruntime::InferenceSession::Initialize] Initializing session.
+2026-09-05 14:51:53.7047805 [I:onnxruntime:, graph_partitioner.cc:1209 onnxruntime::GraphPartitioner::InlineFunctionsAOT] This model does not have any local functions defined. AOT Inlining is not performed
+2026-09-05 14:51:53.7073756 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer EnsureUniqueDQForNodeUnit modified: 1 with status: OK
+2026-09-05 14:51:53.7189904 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer Level1_RuleBasedTransformer modified: 0 with status: OK
+2026-09-05 14:51:53.7204477 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer DoubleQDQPairsRemover modified: 0 with status: OK
+2026-09-05 14:51:53.7250527 [I:onnxruntime:, constant_sharing.cc:248 onnxruntime::ConstantSharing::ApplyImpl] Total shared scalar initializer count: 443
+2026-09-05 14:51:53.7253489 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer ConstantSharing modified: 1 with status: OK
+2026-09-05 14:51:53.7422119 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer CommonSubexpressionElimination modified: 0 with status: OK
+2026-09-05 14:51:53.7432920 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer ConstantFolding modified: 0 with status: OK
+2026-09-05 14:51:53.7439820 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer MatMulAddFusion modified: 0 with status: OK
+2026-09-05 14:51:53.7443309 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer ReshapeFusion modified: 0 with status: OK
+2026-09-05 14:51:53.7445070 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer FreeDimensionOverrideTransformer modified: 0 with status: OK
+2026-09-05 14:51:53.7447079 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer GeluFusionL1 modified: 0 with status: OK
+2026-09-05 14:51:53.7450328 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer LayerNormFusionL1 modified: 0 with status: OK
+2026-09-05 14:51:53.7461586 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer QDQPropagationTransformer modified: 0 with status: OK
+2026-09-05 14:51:53.7466214 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer WeightBiasQuantization modified: 0 with status: OK
+2026-09-05 14:51:53.7470236 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer EnsureUniqueDQForNodeUnit modified: 0 with status: OK
+2026-09-05 14:51:53.7474100 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer RocmBlasAltImpl modified: 0 with status: OK
+2026-09-05 14:51:53.7500941 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer TransposeOptimizer modified: 0 with status: OK
+2026-09-05 14:51:53.7506896 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer Level1_RuleBasedTransformer modified: 0 with status: OK
+2026-09-05 14:51:53.7515373 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer DoubleQDQPairsRemover modified: 0 with status: OK
+2026-09-05 14:51:53.7534505 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer CommonSubexpressionElimination modified: 0 with status: OK
+2026-09-05 14:51:53.7550066 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer ConstantFolding modified: 0 with status: OK
+2026-09-05 14:51:53.7557873 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer MatMulAddFusion modified: 0 with status: OK
+2026-09-05 14:51:53.7562951 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer ReshapeFusion modified: 0 with status: OK
+2026-09-05 14:51:53.7565118 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer FreeDimensionOverrideTransformer modified: 0 with status: OK
+2026-09-05 14:51:53.7567268 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer GeluFusionL1 modified: 0 with status: OK
+2026-09-05 14:51:53.7571091 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer LayerNormFusionL1 modified: 0 with status: OK
+2026-09-05 14:51:53.7589933 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer QDQPropagationTransformer modified: 0 with status: OK
+2026-09-05 14:51:53.7596321 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer WeightBiasQuantization modified: 0 with status: OK
+2026-09-05 14:51:53.7603387 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer EnsureUniqueDQForNodeUnit modified: 0 with status: OK
+2026-09-05 14:51:53.7607996 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer RocmBlasAltImpl modified: 0 with status: OK
+2026-09-05 14:51:53.7693626 [I:onnxruntime:, inference_session.cc:1465 onnxruntime::InferenceSession::TransformGraph] Running graph optimizations in loop 1 time/s (Graph Optimizations Loop Level : 1)
+2026-09-05 14:51:53.7702263 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer Level2_RuleBasedTransformer modified: 0 with status: OK
+2026-09-05 14:51:53.7725650 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer TransposeOptimizer_CPUExecutionProvider modified: 0 with status: OK
+2026-09-05 14:51:53.7732058 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer QDQS8ToU8Transformer modified: 0 with status: OK
+2026-09-05 14:51:53.7755568 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer QDQSelectorActionTransformer modified: 1 with status: OK
+2026-09-05 14:51:53.7822057 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer GemmActivationFusion modified: 0 with status: OK
+2026-09-05 14:51:53.7825988 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer MatMulIntegerToFloatFusion modified: 0 with status: OK
+2026-09-05 14:51:53.7828985 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer DynamicQuantizeMatMulFusion modified: 0 with status: OK
+2026-09-05 14:51:53.7834276 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer ConvActivationFusion modified: 0 with status: OK
+2026-09-05 14:51:53.7838863 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer GeluFusionL2 modified: 0 with status: OK
+2026-09-05 14:51:53.7840997 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer LayerNormFusionL2 modified: 0 with status: OK
+2026-09-05 14:51:53.7844749 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer SimplifiedLayerNormFusion modified: 0 with status: OK
+2026-09-05 14:51:53.7848107 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer AttentionFusion modified: 0 with status: OK
+2026-09-05 14:51:53.7851657 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer EmbedLayerNormFusion modified: 0 with status: OK
+2026-09-05 14:51:53.7866377 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer GatherSliceToSplitFusion modified: 1 with status: OK
+2026-09-05 14:51:53.7934063 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.21/Split_output_1_steps_1'. It is no longer used by any node.
+2026-09-05 14:51:53.7936475 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.4/Split_output_1_ends_1'. It is no longer used by any node.
+2026-09-05 14:51:53.7938717 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.18/Split_output_0_starts_0'. It is no longer used by any node.
+2026-09-05 14:51:53.7940891 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.2/Split_output_0_ends_0'. It is no longer used by any node.
+2026-09-05 14:51:53.7942919 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.8/Split_output_1_starts_1'. It is no longer used by any node.
+2026-09-05 14:51:53.7945407 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.4/Split_output_1_starts_1'. It is no longer used by any node.
+2026-09-05 14:51:53.7947655 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.21/Split_output_1_ends_1'. It is no longer used by any node.
+2026-09-05 14:51:53.7953193 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer GatherToSliceFusion modified: 0 with status: OK
+2026-09-05 14:51:53.7957946 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer MatmulTransposeFusion modified: 0 with status: OK
+2026-09-05 14:51:53.7960862 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer BiasGeluFusion modified: 0 with status: OK
+2026-09-05 14:51:53.7963548 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer GroupQueryAttentionFusion modified: 0 with status: OK
+2026-09-05 14:51:53.7966262 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer MatMulAddFusion modified: 0 with status: OK
+2026-09-05 14:51:53.7968817 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer SkipLayerNormFusion modified: 0 with status: OK
+2026-09-05 14:51:53.7972292 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer FastGeluFusion modified: 0 with status: OK
+2026-09-05 14:51:53.7975791 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer QuickGeluFusion modified: 0 with status: OK
+2026-09-05 14:51:53.7978747 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer BiasSoftmaxFusion modified: 0 with status: OK
+2026-09-05 14:51:53.7981539 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer BiasDropoutFusion modified: 0 with status: OK
+2026-09-05 14:51:53.7984987 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer MatMulScaleFusion modified: 0 with status: OK
+2026-09-05 14:51:53.7987859 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer MatMulActivationFusion modified: 0 with status: OK
+2026-09-05 14:51:53.7991621 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer MatMulNBitsFusion modified: 0 with status: OK
+2026-09-05 14:51:53.7994977 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer QDQFinalCleanupTransformer modified: 0 with status: OK
+2026-09-05 14:51:53.7998726 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer Level2_RuleBasedTransformer modified: 0 with status: OK
+2026-09-05 14:51:53.8003506 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer QDQS8ToU8Transformer modified: 0 with status: OK
+2026-09-05 14:51:53.8009759 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer QDQSelectorActionTransformer modified: 0 with status: OK
+2026-09-05 14:51:53.8013946 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer GemmActivationFusion modified: 0 with status: OK
+2026-09-05 14:51:53.8018096 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer MatMulIntegerToFloatFusion modified: 0 with status: OK
+2026-09-05 14:51:53.8021834 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer DynamicQuantizeMatMulFusion modified: 0 with status: OK
+2026-09-05 14:51:53.8027354 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer ConvActivationFusion modified: 0 with status: OK
+2026-09-05 14:51:53.8031187 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer GeluFusionL2 modified: 0 with status: OK
+2026-09-05 14:51:53.8033582 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer LayerNormFusionL2 modified: 0 with status: OK
+2026-09-05 14:51:53.8036771 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer SimplifiedLayerNormFusion modified: 0 with status: OK
+2026-09-05 14:51:53.8040736 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer AttentionFusion modified: 0 with status: OK
+2026-09-05 14:51:53.8043374 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer EmbedLayerNormFusion modified: 0 with status: OK
+2026-09-05 14:51:53.8053922 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer GatherSliceToSplitFusion modified: 0 with status: OK
+2026-09-05 14:51:53.8067459 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer GatherToSliceFusion modified: 0 with status: OK
+2026-09-05 14:51:53.8071361 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer MatmulTransposeFusion modified: 0 with status: OK
+2026-09-05 14:51:53.8074655 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer BiasGeluFusion modified: 0 with status: OK
+2026-09-05 14:51:53.8077477 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer GroupQueryAttentionFusion modified: 0 with status: OK
+2026-09-05 14:51:53.8080319 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer MatMulAddFusion modified: 0 with status: OK
+2026-09-05 14:51:53.8083197 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer SkipLayerNormFusion modified: 0 with status: OK
+2026-09-05 14:51:53.8086717 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer FastGeluFusion modified: 0 with status: OK
+2026-09-05 14:51:53.8089921 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer QuickGeluFusion modified: 0 with status: OK
+2026-09-05 14:51:53.8092877 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer BiasSoftmaxFusion modified: 0 with status: OK
+2026-09-05 14:51:53.8095620 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer BiasDropoutFusion modified: 0 with status: OK
+2026-09-05 14:51:53.8098821 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer MatMulScaleFusion modified: 0 with status: OK
+2026-09-05 14:51:53.8102290 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer MatMulActivationFusion modified: 0 with status: OK
+2026-09-05 14:51:53.8106273 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer MatMulNBitsFusion modified: 0 with status: OK
+2026-09-05 14:51:53.8109462 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer QDQFinalCleanupTransformer modified: 0 with status: OK
+2026-09-05 14:51:53.8114015 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer NchwcTransformer modified: 0 with status: OK
+2026-09-05 14:51:53.8124739 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer NhwcTransformer modified: 0 with status: OK
+2026-09-05 14:51:53.8129069 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer ConvAddActivationFusion modified: 0 with status: OK
+2026-09-05 14:51:53.8137755 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer RemoveDuplicateCastTransformer modified: 0 with status: OK
+2026-09-05 14:51:53.8140235 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer CastFloat16Transformer modified: 0 with status: OK
+2026-09-05 14:51:53.8143390 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer FuseFp16InitializerToFp32NodeTransformer modified: 0 with status: OK
+2026-09-05 14:51:53.8145580 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer MemcpyTransformer modified: 0 with status: OK
+2026-09-05 14:51:53.8194563 [I:onnxruntime:, allocation_planner.cc:2659 onnxruntime::IGraphPartitioner::CreateGraphPartitioner] Use DeviceBasedPartition as default
+2026-09-05 14:51:53.8315229 [I:onnxruntime:, session_state_utils.cc:243 onnxruntime::session_state_utils::SaveInitializedTensors] Saving initialized tensors.
+2026-09-05 14:51:53.8335046 [I:onnxruntime:, session_state_utils.cc:438 onnxruntime::session_state_utils::SaveInitializedTensors] Done saving initialized tensors
+2026-09-05 14:51:53.8401429 [I:onnxruntime:, inference_session.cc:2532 onnxruntime::InferenceSession::Initialize] Session successfully initialized.
+model: head-cut (6 outputs), decode tail runs in numpy
+
+=== CPU | models/yolov8s_cut_xint8.onnx | assets/test_image.jpg ===
+infer   mean 118.46 ms   median 124.71 ms   p95 127.57 ms   (8.4 fps)
+post    mean 0.21 ms
+15 detections:
+   tv               0.95  (3,166,149,96)
+   tv               0.92  (558,208,80,80)
+   refrigerator     0.82  (445,169,67,114)
+   person           0.82  (406,156,60,142)
+   chair            0.82  (291,217,64,101)
+   chair            0.82  (360,217,59,98)
+   potted plant     0.62  (230,175,36,36)
+   person           0.62  (383,171,24,43)
+   chair            0.62  (410,220,31,86)
+   clock            0.56  (447,121,13,20)
+   potted plant     0.56  (333,176,34,54)
+   vase             0.56  (550,297,37,103)
+   vase             0.38  (240,196,11,15)
+   dining table     0.38  (311,228,79,91)
+   refrigerator     0.27  (384,144,27,71)
+wrote C:\Users\<user>\src\timm-resnet50.a1_in1k-RyzenAI\results\out_yolov8s_cut_xint8_cpu.jpg
+[32m OK 15 detections on CPU[0m
+
+[1m[34m==> 4/5  NPU run  (--fresh: recompiling, this looks frozen but isn't)[0m
+[2m    log: results/yolo_cut_npu.log[0m
+2026-09-05 14:51:55.0005136 [I:onnxruntime:, inference_session.cc:606 onnxruntime::InferenceSession::TraceSessionOptions] Session Options {  execution_mode:0 execution_order:DEFAULT enable_profiling:0 optimized_model_filepath: enable_mem_pattern:1 enable_mem_reuse:1 enable_cpu_mem_arena:1 profile_file_prefix:onnxruntime_profile_ session_logid: session_log_severity_level:1 session_log_verbosity_level:0 max_num_graph_transformation_steps:10 graph_optimization_level:4 intra_op_param:OrtThreadPoolParams { thread_pool_size: 0 auto_set_affinity: 0 allow_spinning: 1 dynamic_block_base_: 0 stack_size: 0 affinity_str:  set_denormal_as_zero: 0 } inter_op_param:OrtThreadPoolParams { thread_pool_size: 0 auto_set_affinity: 0 allow_spinning: 1 dynamic_block_base_: 0 stack_size: 0 affinity_str:  set_denormal_as_zero: 0 } use_per_session_threads:1 thread_pool_allow_spinning:1 use_deterministic_compute:0 ep_selection_policy:0 config_options: {  } }
+2026-09-05 14:51:55.0015893 [I:onnxruntime:, inference_session.cc:414 onnxruntime::InferenceSession::ConstructorCommon::<lambda_cd5baf9f006fce338b072dac99354b33>::operator ()] Flush-to-zero and denormal-as-zero are off
+2026-09-05 14:51:55.0018283 [I:onnxruntime:, inference_session.cc:422 onnxruntime::InferenceSession::ConstructorCommon] Creating and using per session threadpools since use_per_session_threads_ is true
+2026-09-05 14:51:55.0021072 [I:onnxruntime:, inference_session.cc:446 onnxruntime::InferenceSession::ConstructorCommon] Dynamic block base set to 0
+2026-09-05 14:51:55.5451082 [I:onnxruntime:, inference_session.cc:2042 onnxruntime::InferenceSession::Initialize] Initializing session.
+2026-09-05 14:51:55.5453177 [I:onnxruntime:, inference_session.cc:2080 onnxruntime::InferenceSession::Initialize] Adding default CPU execution provider.
+2026-09-05 14:51:55.5483405 [I:onnxruntime:, graph_partitioner.cc:1209 onnxruntime::GraphPartitioner::InlineFunctionsAOT] This model does not have any local functions defined. AOT Inlining is not performed
+2026-09-05 14:51:55.5503323 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer EnsureUniqueDQForNodeUnit modified: 1 with status: OK
+2026-09-05 14:51:55.5593463 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer Level1_RuleBasedTransformer modified: 0 with status: OK
+2026-09-05 14:51:55.5601399 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer DoubleQDQPairsRemover modified: 0 with status: OK
+2026-09-05 14:51:55.5632887 [I:onnxruntime:, constant_sharing.cc:248 onnxruntime::ConstantSharing::ApplyImpl] Total shared scalar initializer count: 443
+2026-09-05 14:51:55.5635142 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer ConstantSharing modified: 1 with status: OK
+2026-09-05 14:51:55.5730537 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer CommonSubexpressionElimination modified: 0 with status: OK
+2026-09-05 14:51:55.5739430 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer ConstantFolding modified: 0 with status: OK
+2026-09-05 14:51:55.5743645 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer MatMulAddFusion modified: 0 with status: OK
+2026-09-05 14:51:55.5747842 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer ReshapeFusion modified: 0 with status: OK
+2026-09-05 14:51:55.5749977 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer FreeDimensionOverrideTransformer modified: 0 with status: OK
+2026-09-05 14:51:55.5752083 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer GeluFusionL1 modified: 0 with status: OK
+2026-09-05 14:51:55.5755270 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer LayerNormFusionL1 modified: 0 with status: OK
+2026-09-05 14:51:55.5765510 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer QDQPropagationTransformer modified: 0 with status: OK
+2026-09-05 14:51:55.5770210 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer WeightBiasQuantization modified: 0 with status: OK
+2026-09-05 14:51:55.5774512 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer EnsureUniqueDQForNodeUnit modified: 0 with status: OK
+2026-09-05 14:51:55.5777874 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer RocmBlasAltImpl modified: 0 with status: OK
+2026-09-05 14:51:55.5794721 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer TransposeOptimizer modified: 0 with status: OK
+2026-09-05 14:51:55.5799559 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer Level1_RuleBasedTransformer modified: 0 with status: OK
+2026-09-05 14:51:55.5806630 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer DoubleQDQPairsRemover modified: 0 with status: OK
+2026-09-05 14:51:55.5821342 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer CommonSubexpressionElimination modified: 0 with status: OK
+2026-09-05 14:51:55.5827819 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer ConstantFolding modified: 0 with status: OK
+2026-09-05 14:51:55.5831041 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer MatMulAddFusion modified: 0 with status: OK
+2026-09-05 14:51:55.5834135 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer ReshapeFusion modified: 0 with status: OK
+2026-09-05 14:51:55.5835861 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer FreeDimensionOverrideTransformer modified: 0 with status: OK
+2026-09-05 14:51:55.5837823 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer GeluFusionL1 modified: 0 with status: OK
+2026-09-05 14:51:55.5841019 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer LayerNormFusionL1 modified: 0 with status: OK
+2026-09-05 14:51:55.5851364 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer QDQPropagationTransformer modified: 0 with status: OK
+2026-09-05 14:51:55.5855998 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer WeightBiasQuantization modified: 0 with status: OK
+2026-09-05 14:51:55.5860147 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer EnsureUniqueDQForNodeUnit modified: 0 with status: OK
+2026-09-05 14:51:55.5863361 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer RocmBlasAltImpl modified: 0 with status: OK
+2026-09-05 14:52:13.7551606 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.10/Constant_output_0'. It is no longer used by any node.
+2026-09-05 14:52:13.7554053 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.16.conv.bias_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.7556229 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.4/m.1/cv1/conv/Conv_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.7558858 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.6/m.0/cv1/conv/Conv_output_0_scale'. It is no longer used by any node.
+2026-09-05 14:52:13.7561905 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.15/m.0/cv1/act/Sigmoid_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.7566738 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.2/m.0/cv1/act/Mul_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.7570300 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.15/cv2/act/Sigmoid_output_0_Scale'. It is no longer used by any node.
+2026-09-05 14:52:13.7573026 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.21/Split_output_1_steps_1'. It is no longer used by any node.
+2026-09-05 14:52:13.7575296 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.6.cv1.conv.weight_scale'. It is no longer used by any node.
+2026-09-05 14:52:13.7577458 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.4/m.0/cv2/act/Mul_output_0_scale'. It is no longer used by any node.
+2026-09-05 14:52:13.7579748 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.12/cv2/act/Mul_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.7582048 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.21/Split_output_1_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.7584327 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.0/conv/Conv_output_0_scale'. It is no longer used by any node.
+2026-09-05 14:52:13.7586613 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.2.m.0.cv1.conv.bias_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.7588868 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.15.cv1.conv.weight_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.7592114 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.0.conv.weight_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.7594367 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.0.conv.weight_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.7596567 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.0/conv/Conv_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.7598889 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.15/cv2/act/Mul_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.7601161 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.1.conv.bias_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.7603335 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.22.cv2.0.0.conv.bias_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.7605570 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.2.m.0.cv1.conv.weight_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.7608785 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.12/cv2/conv/Conv_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.7611578 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.1/act/Mul_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.7613975 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.2/m.0/cv1/conv/Conv_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.7616463 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.0.conv.bias_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.7618731 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.2/cv1/act/Sigmoid_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.7621122 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.21.cv2.conv.bias_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.7623511 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.22.cv2.1.1.conv.weight_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.7625889 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.0.conv.bias_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.7628293 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.2/Split_output_1_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.7630496 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.4.cv1.conv.weight_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.7635651 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.0/act/Sigmoid_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.7645389 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.2.m.0.cv1.conv.weight_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.7648473 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.6.cv1.conv.bias_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.7651471 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.7/conv/Conv_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.7654927 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.22.cv2.1.0.conv.weight_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.7657956 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.9/Concat_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.7660955 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.0/act/Mul_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.7664032 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.1/conv/Conv_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.7666947 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.12.m.0.cv2.conv.bias_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.7670086 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.2.cv1.conv.weight_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.7672986 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.9/cv1/act/Mul_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.7676201 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.2.m.0.cv2.conv.bias_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.7679097 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.1.conv.weight_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.7681957 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.2.m.0.cv2.conv.bias_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.7685431 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.1.conv.weight_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.7688750 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.15/Split_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.7691790 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.15/m.0/cv1/act/Mul_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.7694965 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.4/m.0/cv1/conv/Conv_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.7698246 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.21/cv1/act/Sigmoid_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.7701366 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.1.conv.bias_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.7704471 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.4.m.1.cv1.conv.bias_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.7707919 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.1/act/Sigmoid_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.7710960 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.22.cv3.2.1.conv.bias_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.7713955 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.4.m.0.cv2.conv.weight_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.7716953 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.4/Split_output_1_ends_1'. It is no longer used by any node.
+2026-09-05 14:52:13.7720035 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.2/cv1/conv/Conv_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.7723085 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.18.m.0.cv2.conv.bias_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.7726040 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.4/Split_output_1_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.7729049 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.4/m.0/cv2/conv/Conv_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.7732188 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.2.cv1.conv.weight_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.7735452 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.18.m.0.cv1.conv.weight_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.7738470 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.6/m.0/cv1/act/Mul_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.7741573 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.18/Split_output_0_starts_0'. It is no longer used by any node.
+2026-09-05 14:52:13.7744537 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.8/m.0/cv2/act/Sigmoid_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.7747919 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.2.cv1.conv.bias_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.7751055 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.2.cv1.conv.bias_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.7753987 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.2/cv1/act/Mul_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.7757006 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.22.cv3.2.1.conv.bias_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.7759961 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.2/Split_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.7762967 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.4/m.0/cv2/act/Sigmoid_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.7766491 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.2.m.0.cv1.conv.bias_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.7769439 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.2/m.0/cv1/act/Sigmoid_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.7772579 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.22.cv3.1.2.bias_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.7775619 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.2.m.0.cv2.conv.weight_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.7778595 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.22.cv3.1.0.conv.bias_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.7781564 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.4.cv2.conv.bias_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.7785078 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.2/m.0/cv2/conv/Conv_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.7788201 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.4.m.1.cv1.conv.weight_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.7791208 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.22.cv2.1.1.conv.bias_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.7794649 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.2.m.0.cv2.conv.weight_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.7797669 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.6/cv2/act/Sigmoid_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.7800952 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.2/m.0/cv2/act/Sigmoid_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.7804094 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.2/m.0/cv2/act/Mul_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.7807560 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.15/Concat_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.7810671 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.12/Split_output_1_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.7813867 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.2/m.0/Add_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.7817010 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.3.conv.weight_scale'. It is no longer used by any node.
+2026-09-05 14:52:13.7819749 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.8.cv1.conv.bias_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.7822616 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.2/Concat_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.7825526 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.22/cv3.0/cv3.0.0/act/Sigmoid_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.7828102 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.2/cv2/conv/Conv_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.7830820 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.15.m.0.cv2.conv.bias_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.7833853 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.3/act/Sigmoid_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.7836823 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.2.cv2.conv.weight_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.7839666 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.2.cv2.conv.weight_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.7842787 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.16/conv/Conv_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.7845934 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.2.cv2.conv.bias_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.7848815 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.7.conv.bias_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.7851614 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.18.m.0.cv1.conv.weight_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.7854657 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.2.cv2.conv.bias_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.7857502 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.2/cv2/act/Sigmoid_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.7860723 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.2/cv2/act/Mul_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.7863950 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.6/cv1/act/Sigmoid_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.7866945 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.3/conv/Conv_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.7869888 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.3.conv.weight_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.7872719 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.22.cv2.2.1.conv.bias_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.7875638 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.3.conv.weight_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.7878708 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.22.cv2.0.1.conv.bias_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.7881863 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.6.m.1.cv1.conv.bias_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.7884776 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.3.conv.bias_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.7887556 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.3.conv.bias_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.7890416 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.3/act/Mul_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.7893619 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.8/Concat_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.7896519 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.18/cv1/act/Mul_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.7899607 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.22.cv3.1.2.weight_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.7902471 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.6.cv2.conv.weight_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.7905636 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.4/cv1/conv/Conv_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.7908843 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.22.cv3.1.2.bias_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.7911862 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.6.m.0.cv1.conv.weight_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.7914796 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.4.cv1.conv.weight_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.7917675 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.8/cv2/act/Mul_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.7920908 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.4.cv1.conv.bias_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.7923780 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.6.cv2.conv.weight_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.7926874 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.6/cv1/conv/Conv_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.7930921 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.6/m.1/cv2/act/Mul_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.7933959 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.4.cv1.conv.bias_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.7936787 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.2/Split_output_0_ends_0'. It is no longer used by any node.
+2026-09-05 14:52:13.7940155 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.12/m.0/cv2/conv/Conv_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.7943643 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.12.m.0.cv2.conv.weight_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.7946814 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.4/cv1/act/Sigmoid_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.7951360 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.15.cv2.conv.bias_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.7953803 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.22/cv3.2/cv3.2.1/conv/Conv_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.7956375 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.4/cv1/act/Mul_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.7960004 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.4/Split_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.7962884 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.7/act/Mul_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.7965792 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.6/m.1/cv2/conv/Conv_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.7968942 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.6/m.1/cv1/act/Mul_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.7971952 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.8.m.0.cv2.conv.weight_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.7975006 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.17/Concat_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.7978045 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.4.m.0.cv1.conv.weight_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.7981055 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.4.m.0.cv1.conv.weight_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.7983945 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.4/m.1/cv2/act/Sigmoid_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.7987020 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.16.conv.weight_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.7989949 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.22/cv2.2/cv2.2.0/conv/Conv_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.7993173 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.4.m.0.cv1.conv.bias_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.7996316 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.22.cv3.0.0.conv.weight_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.7999276 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.4.m.0.cv1.conv.bias_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.8002154 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.4/m.0/cv1/act/Sigmoid_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8005225 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.4/m.0/cv1/act/Mul_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8008409 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.22/cv3.0/cv3.0.0/conv/Conv_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8011546 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.4.m.0.cv2.conv.weight_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8014483 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.8/Split_output_1_starts_1'. It is no longer used by any node.
+2026-09-05 14:52:13.8017453 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.4.m.0.cv2.conv.bias_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8020426 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.4.m.0.cv2.conv.bias_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.8023397 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.15/m.0/cv1/conv/Conv_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8026425 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.6.cv1.conv.weight_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8029315 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.4/m.0/cv2/act/Mul_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8032330 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.4/m.0/Add_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8035345 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.22.cv3.2.1.conv.weight_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.8038525 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.18.cv2.conv.bias_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8041408 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.22.cv3.1.0.conv.bias_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8044307 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.18/cv1/act/Sigmoid_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8047334 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.4.m.1.cv1.conv.weight_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8050378 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.15.cv1.conv.bias_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8053591 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.4.m.1.cv1.conv.bias_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.8056469 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.9/cv2/act/Sigmoid_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8059408 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.4/m.1/cv1/act/Sigmoid_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8061940 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.21.cv1.conv.weight_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.8064358 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.4/m.1/cv1/act/Mul_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8067089 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.22.cv3.1.0.conv.weight_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.8070250 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.4/m.1/cv2/conv/Conv_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8073471 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.4.m.1.cv2.conv.weight_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8075841 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.4.m.1.cv2.conv.weight_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.8078182 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.19.conv.weight_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.8080510 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.4.m.1.cv2.conv.bias_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8083700 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.4.m.1.cv2.conv.bias_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.8086604 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.4/m.1/cv2/act/Mul_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8089724 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.22/cv3.1/cv3.1.1/conv/Conv_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8092846 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.4/m.1/Add_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8095883 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.22/cv2.2/cv2.2.0/act/Sigmoid_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8099239 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.4/Concat_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8102127 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.12.m.0.cv1.conv.bias_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8105807 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.21/cv1/act/Mul_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8108350 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.12.m.0.cv2.conv.bias_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.8110764 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.4/cv2/conv/Conv_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8113832 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.12/cv2/act/Sigmoid_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8117186 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.4.cv2.conv.weight_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8120141 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.8.m.0.cv2.conv.bias_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8123227 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.4.cv2.conv.weight_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.8126169 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.8/cv1/act/Mul_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8129486 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.4.cv2.conv.bias_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.8132361 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.4/cv2/act/Sigmoid_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8135412 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.22/cv2.1/cv2.1.1/conv/Conv_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8138592 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.7.conv.weight_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8141530 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.4/cv2/act/Mul_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8144832 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.5/conv/Conv_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8147780 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.5/act/Mul_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8150721 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.8.cv2.conv.bias_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.8153587 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.22.cv3.2.2.bias_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.8156655 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.5.conv.weight_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8159711 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.5.conv.weight_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.8162646 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.6/m.1/Add_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8165579 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.5.conv.bias_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8168397 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.12/m.0/cv1/act/Sigmoid_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8171718 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.7.conv.weight_scale'. It is no longer used by any node.
+2026-09-05 14:52:13.8174513 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.5.conv.bias_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.8177489 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.5/act/Sigmoid_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8180504 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.6.cv1.conv.weight_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.8183809 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.18/m.0/cv1/act/Mul_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8187190 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.6.cv1.conv.bias_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8190083 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.6/cv1/act/Mul_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8193346 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.6/Split_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8196239 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.6/Split_output_1_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8199111 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.22.cv3.1.1.conv.bias_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8201992 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.6/m.0/cv1/conv/Conv_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8205249 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.12.cv2.conv.bias_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8208246 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.15/cv1/act/Mul_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8211244 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.6.m.0.cv1.conv.weight_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.8214231 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.22.cv3.1.2.weight_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8217106 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.6.m.0.cv2.conv.weight_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.8220038 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.6.m.0.cv1.conv.bias_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8223063 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.6.m.0.cv1.conv.bias_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.8226058 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.6/m.0/cv1/act/Sigmoid_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8229280 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.21/Concat_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8232176 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.12.cv2.conv.weight_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.8235059 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.6/m.0/cv2/conv/Conv_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8238119 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.22.cv2.0.2.weight_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8241309 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.6.m.0.cv2.conv.weight_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8244661 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.6.m.0.cv2.conv.bias_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8247602 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.6.m.0.cv2.conv.bias_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.8250478 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.6/m.0/cv2/act/Sigmoid_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8253536 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.6.m.1.cv2.conv.bias_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.8256681 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.6/m.0/cv2/act/Mul_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8259689 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.6/m.0/Add_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8262784 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.8/Split_output_1_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8266259 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.6/m.1/cv1/conv/Conv_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8270040 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.6.cv2.conv.bias_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8272605 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.15.cv2.conv.weight_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8275772 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.22.cv2.0.1.conv.weight_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8279118 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.6.m.1.cv1.conv.weight_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8282348 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.22.cv2.0.1.conv.weight_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.8285726 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.6.m.1.cv1.conv.weight_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.8288717 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.22.cv2.0.1.conv.bias_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.8291719 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.6.m.1.cv1.conv.bias_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.8294791 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.6/m.1/cv1/act/Sigmoid_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8298079 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.21/m.0/cv2/conv/Conv_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8301235 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.6.m.1.cv2.conv.weight_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8304464 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.6.m.1.cv2.conv.weight_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.8307417 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.9/cv2/act/Mul_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8310409 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.6.m.1.cv2.conv.bias_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8313315 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.15.cv2.conv.bias_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.8316285 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.6/m.1/cv2/act/Sigmoid_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8319492 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.6/Concat_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8322552 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.6/cv2/conv/Conv_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8325658 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.6.cv2.conv.bias_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.8328497 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.6/cv2/act/Mul_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8331496 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.7.conv.weight_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.8334440 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.7/act/Sigmoid_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8337543 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.9.cv1.conv.bias_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.8340544 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.7.conv.bias_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8343467 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.8/cv1/conv/Conv_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8346479 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.21.cv2.conv.weight_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.8349371 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.8.cv1.conv.weight_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8352346 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.8.cv1.conv.weight_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.8355264 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.8.cv2.conv.bias_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8358312 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.8.cv1.conv.bias_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.8361177 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.8/cv1/act/Sigmoid_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8364298 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.8/Split_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8367235 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.15.cv1.conv.weight_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.8370124 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.8/m.0/cv1/conv/Conv_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8373384 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.15.m.0.cv2.conv.weight_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.8376492 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.8.m.0.cv1.conv.weight_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8379453 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.8.m.0.cv1.conv.weight_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.8382487 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.22/cv2.0/cv2.0.0/conv/Conv_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8385797 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.8.m.0.cv1.conv.bias_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8388727 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.8.m.0.cv1.conv.bias_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.8391749 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.8/m.0/cv1/act/Sigmoid_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8395006 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.8.cv2.conv.weight_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.8397917 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.8/m.0/cv1/act/Mul_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8401076 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.8/m.0/cv2/conv/Conv_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8404144 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.8.m.0.cv2.conv.weight_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.8407186 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.8.m.0.cv2.conv.bias_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.8410111 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.9/cv2/conv/Conv_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8413328 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.8/m.0/cv2/act/Mul_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8416553 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.22.cv2.0.2.weight_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.8418896 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.15/Split_output_1_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8421601 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.8/m.0/Add_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8424638 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.8/cv2/conv/Conv_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8427639 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.8.cv2.conv.weight_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8430634 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.22.cv2.1.0.conv.bias_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.8433532 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.8/cv2/act/Sigmoid_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8436808 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.22/cv2.0/cv2.0.0/act/Mul_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8439924 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.12/m.0/cv1/act/Mul_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8442966 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.9/cv1/conv/Conv_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8445960 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.16.conv.weight_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.8448917 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.9.cv1.conv.weight_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8451973 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.9.cv1.conv.weight_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.8454964 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.12/m.0/cv2/act/Mul_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8457972 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.9.cv1.conv.bias_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8460945 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.9/cv1/act/Sigmoid_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8463942 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.12/cv1/conv/Conv_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8467037 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.12/m.0/cv2/act/Sigmoid_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8470281 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.15/m.0/cv2/act/Mul_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8474269 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.9.cv2.conv.weight_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8477184 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.9.cv2.conv.weight_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.8480114 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.9.cv2.conv.bias_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8482969 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.9.cv2.conv.bias_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.8485918 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.11/Concat_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8488935 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.15/m.0/cv2/act/Sigmoid_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8493479 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.4/Split_output_1_starts_1'. It is no longer used by any node.
+2026-09-05 14:52:13.8496543 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.12.cv1.conv.weight_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8499610 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.12.cv1.conv.weight_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.8502655 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.12.cv1.conv.bias_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8505663 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.12.cv1.conv.bias_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.8508859 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.12/cv1/act/Sigmoid_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8512380 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.12/cv1/act/Mul_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8515356 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.12/Concat_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8518268 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.12/Split_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8521364 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.12/m.0/cv1/conv/Conv_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8524518 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.12.cv2.conv.weight_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8527439 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.22.cv2.0.0.conv.weight_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.8530484 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.12.m.0.cv1.conv.weight_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8533426 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.12.m.0.cv1.conv.weight_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.8536481 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.22/cv2.0/cv2.0.1/act/Mul_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8539805 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.12.m.0.cv1.conv.bias_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.8542704 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.12.m.0.cv2.conv.weight_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.8545736 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.21.cv2.conv.weight_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8548594 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.15.m.0.cv1.conv.bias_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.8551723 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.21.cv1.conv.weight_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8554628 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.12.cv2.conv.bias_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.8557475 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.14/Concat_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8560448 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.15/cv1/conv/Conv_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8563573 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.15.m.0.cv1.conv.bias_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8566609 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.15.cv1.conv.bias_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.8570045 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.15/cv1/act/Sigmoid_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8573023 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.15.m.0.cv1.conv.weight_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8575568 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.15.m.0.cv1.conv.weight_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.8578426 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.19/act/Mul_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8581558 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.15/m.0/cv2/conv/Conv_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8584706 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.15.m.0.cv2.conv.weight_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8587922 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.15.m.0.cv2.conv.bias_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8591035 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.15/cv2/conv/Conv_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8594209 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.15.cv2.conv.weight_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.8597158 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.22.cv2.2.0.conv.weight_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8600177 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.18.cv1.conv.weight_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.8603182 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.22.cv2.2.0.conv.bias_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8606138 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.15/cv2/act/Sigmoid_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8609378 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.16.conv.bias_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8612333 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.22/cv2.0/cv2.0.1/act/Sigmoid_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8615521 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.22.cv2.0.0.conv.weight_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8618674 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.22.cv2.0.0.conv.bias_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8621645 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.22.cv3.0.0.conv.weight_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.8624599 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.22.cv3.0.0.conv.bias_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8628023 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.22.cv3.0.0.conv.bias_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.8630940 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.16/act/Sigmoid_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8633478 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.22/cv2.0/cv2.0.0/act/Sigmoid_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8636220 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.16/act/Mul_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8639296 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.22/cv3.2/cv3.2.0/conv/Conv_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8642652 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.22/cv3.0/cv3.0.0/act/Mul_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8645891 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.22/cv2.0/cv2.0.1/conv/Conv_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8649140 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.22/cv3.0/cv3.0.1/conv/Conv_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8652271 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.22.cv3.0.1.conv.weight_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8655336 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.22.cv3.0.1.conv.weight_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.8658484 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.22.cv3.0.1.conv.bias_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8661427 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.22.cv3.0.1.conv.bias_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.8664349 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.22/cv2.2/cv2.2.0/act/Mul_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8667433 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.18/cv1/conv/Conv_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8670636 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.18.cv1.conv.weight_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8673540 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.18/m.0/cv2/act/Sigmoid_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8676740 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.18.cv1.conv.bias_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8679713 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.18.cv1.conv.bias_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.8682567 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.22/cv3.0/cv3.0.1/act/Sigmoid_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8685836 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.22.cv2.1.1.conv.bias_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.8688875 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.22/cv3.0/cv3.0.1/act/Mul_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8691952 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.22.cv3.1.1.conv.weight_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.8694984 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.22.cv2.0.2.bias_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8697838 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.22.cv2.0.2.bias_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.8700720 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.22.cv3.0.2.weight_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8703700 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.22.cv3.0.2.weight_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.8706562 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.22.cv3.0.2.bias_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8709477 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.22.cv3.0.2.bias_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.8712323 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.18/Split_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8715328 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.22.cv2.2.2.weight_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.8718312 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.18/Split_output_1_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8721270 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.18/m.0/cv1/conv/Conv_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8724346 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.22.cv2.1.2.bias_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.8727160 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.18.m.0.cv1.conv.bias_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8730919 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.21/cv2/conv/Conv_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8734719 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.18.m.0.cv1.conv.bias_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.8737295 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.18/m.0/cv1/act/Sigmoid_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8739919 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.18/m.0/cv2/act/Mul_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8742447 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.18/m.0/cv2/conv/Conv_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8745049 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.18.m.0.cv2.conv.weight_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8747810 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.18.m.0.cv2.conv.weight_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.8751114 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.18.m.0.cv2.conv.bias_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8754241 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.21.m.0.cv1.conv.weight_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.8756611 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.18/Concat_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8758888 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.18/cv2/conv/Conv_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8761395 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.18.cv2.conv.weight_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8764194 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.18.cv2.conv.weight_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.8766457 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.18.cv2.conv.bias_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.8769384 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.18/cv2/act/Sigmoid_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8772413 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.18/cv2/act/Mul_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8775496 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.19/conv/Conv_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8778589 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.19.conv.weight_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8781453 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.19.conv.bias_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8784320 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.19.conv.bias_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.8787229 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.22/cv2.1/cv2.1.0/conv/Conv_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8790366 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.22.cv2.1.0.conv.weight_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8793412 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.22.cv2.1.0.conv.bias_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8796392 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.22/cv3.1/cv3.1.0/conv/Conv_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8799508 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.22.cv3.1.0.conv.weight_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8802445 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.19/act/Sigmoid_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8805586 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.22.cv2.1.2.weight_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.8808611 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.22/cv2.1/cv2.1.0/act/Sigmoid_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8811791 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.22/cv3.1/cv3.1.0/act/Sigmoid_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8814954 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.22/cv2.1/cv2.1.0/act/Mul_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8818054 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.22/cv3.1/cv3.1.0/act/Mul_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8821360 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.20/Concat_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8824536 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.21.cv2.conv.bias_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.8827378 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.22.cv2.1.1.conv.weight_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.8830308 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.22.cv3.1.1.conv.weight_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8833242 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.22.cv3.1.1.conv.bias_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.8836472 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.21/cv1/conv/Conv_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8839620 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.21.cv1.conv.bias_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8842640 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.21.cv1.conv.bias_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.8845568 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.22/cv2.1/cv2.1.1/act/Sigmoid_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8848696 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.22/cv3.1/cv3.1.1/act/Sigmoid_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8851840 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.22/cv2.1/cv2.1.1/act/Mul_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8855162 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.22/cv3.1/cv3.1.1/act/Mul_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8858267 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.21/cv2/act/Mul_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8861368 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.22.cv2.1.2.weight_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8864313 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.22.cv2.1.2.bias_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8867152 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.21/Split_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8870127 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.21/m.0/cv1/conv/Conv_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8873157 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.21.m.0.cv1.conv.weight_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8876238 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.21.m.0.cv1.conv.bias_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8879130 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.21.m.0.cv1.conv.bias_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.8882145 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.21/m.0/cv1/act/Sigmoid_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8885726 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.21/m.0/cv1/act/Mul_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8888348 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.21.m.0.cv2.conv.weight_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8890844 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.21.m.0.cv2.conv.weight_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.8894195 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.21.m.0.cv2.conv.bias_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8897148 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.21.m.0.cv2.conv.bias_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.8900184 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.21/m.0/cv2/act/Sigmoid_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8903527 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.21/m.0/cv2/act/Mul_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8906587 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.22.cv2.2.1.conv.bias_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.8909614 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.21/cv2/act/Sigmoid_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8912754 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.22.cv2.2.0.conv.weight_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.8915718 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.22.cv2.2.0.conv.bias_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.8918707 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.22.cv3.2.0.conv.weight_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8921786 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.22.cv3.2.0.conv.weight_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.8924856 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.22.cv3.2.0.conv.bias_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8927220 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.22.cv3.2.0.conv.bias_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.8929608 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.22/cv3.2/cv3.2.0/act/Sigmoid_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8932942 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.22/cv3.2/cv3.2.0/act/Mul_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8936067 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.22/cv2.2/cv2.2.1/conv/Conv_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8939313 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.21/Split_output_1_ends_1'. It is no longer used by any node.
+2026-09-05 14:52:13.8942055 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.22.cv2.2.1.conv.weight_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8944953 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.22.cv2.2.1.conv.weight_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.8948223 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.22.cv3.2.1.conv.weight_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8951544 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.22/cv2.2/cv2.2.1/act/Sigmoid_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8954933 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.22/cv3.2/cv3.2.1/act/Sigmoid_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8958330 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.22/cv2.2/cv2.2.1/act/Mul_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8961664 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/model.22/cv3.2/cv3.2.1/act/Mul_output_0_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8964808 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.22.cv2.2.2.weight_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8967696 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.22.cv2.2.2.bias_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8970569 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.22.cv2.2.2.bias_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.8973394 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.22.cv3.2.2.weight_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.8976465 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.22.cv3.2.2.weight_quantized'. It is no longer used by any node.
+2026-09-05 14:52:13.8979392 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'model.22.cv3.2.2.bias_zero_point'. It is no longer used by any node.
+2026-09-05 14:52:13.9013174 [I:onnxruntime:, inference_session.cc:1465 onnxruntime::InferenceSession::TransformGraph] Running graph optimizations in loop 1 time/s (Graph Optimizations Loop Level : 1)
+2026-09-05 14:52:13.9016254 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer Level2_RuleBasedTransformer modified: 0 with status: OK
+2026-09-05 14:52:13.9019643 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer TransposeOptimizer_CPUExecutionProvider modified: 0 with status: OK
+2026-09-05 14:52:13.9022709 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer QDQS8ToU8Transformer modified: 0 with status: OK
+2026-09-05 14:52:13.9026969 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer QDQSelectorActionTransformer modified: 0 with status: OK
+2026-09-05 14:52:13.9029914 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer GemmActivationFusion modified: 0 with status: OK
+2026-09-05 14:52:13.9032681 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer MatMulIntegerToFloatFusion modified: 0 with status: OK
+2026-09-05 14:52:13.9035527 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer DynamicQuantizeMatMulFusion modified: 0 with status: OK
+2026-09-05 14:52:13.9038316 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer ConvActivationFusion modified: 0 with status: OK
+2026-09-05 14:52:13.9041268 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer GeluFusionL2 modified: 0 with status: OK
+2026-09-05 14:52:13.9043984 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer LayerNormFusionL2 modified: 0 with status: OK
+2026-09-05 14:52:13.9046210 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer SimplifiedLayerNormFusion modified: 0 with status: OK
+2026-09-05 14:52:13.9048480 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer AttentionFusion modified: 0 with status: OK
+2026-09-05 14:52:13.9050579 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer EmbedLayerNormFusion modified: 0 with status: OK
+2026-09-05 14:52:13.9052863 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer GatherSliceToSplitFusion modified: 0 with status: OK
+2026-09-05 14:52:13.9055435 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer GatherToSliceFusion modified: 0 with status: OK
+2026-09-05 14:52:13.9058309 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer MatmulTransposeFusion modified: 0 with status: OK
+2026-09-05 14:52:13.9060990 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer BiasGeluFusion modified: 0 with status: OK
+2026-09-05 14:52:13.9062988 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer GroupQueryAttentionFusion modified: 0 with status: OK
+2026-09-05 14:52:13.9065074 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer MatMulAddFusion modified: 0 with status: OK
+2026-09-05 14:52:13.9067411 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer SkipLayerNormFusion modified: 0 with status: OK
+2026-09-05 14:52:13.9069988 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer FastGeluFusion modified: 0 with status: OK
+2026-09-05 14:52:13.9072688 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer QuickGeluFusion modified: 0 with status: OK
+2026-09-05 14:52:13.9075197 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer BiasSoftmaxFusion modified: 0 with status: OK
+2026-09-05 14:52:13.9077692 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer BiasDropoutFusion modified: 0 with status: OK
+2026-09-05 14:52:13.9080584 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer MatMulScaleFusion modified: 0 with status: OK
+2026-09-05 14:52:13.9083107 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer MatMulActivationFusion modified: 0 with status: OK
+2026-09-05 14:52:13.9085684 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer MatMulNBitsFusion modified: 0 with status: OK
+2026-09-05 14:52:13.9088147 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer QDQFinalCleanupTransformer modified: 0 with status: OK
+2026-09-05 14:52:13.9090993 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer NchwcTransformer modified: 0 with status: OK
+2026-09-05 14:52:13.9093757 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer NhwcTransformer modified: 0 with status: OK
+2026-09-05 14:52:13.9096185 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer ConvAddActivationFusion modified: 0 with status: OK
+2026-09-05 14:52:13.9098859 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer RemoveDuplicateCastTransformer modified: 0 with status: OK
+2026-09-05 14:52:13.9101541 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer CastFloat16Transformer modified: 0 with status: OK
+2026-09-05 14:52:13.9104098 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer FuseFp16InitializerToFp32NodeTransformer modified: 0 with status: OK
+2026-09-05 14:52:13.9107315 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer MemcpyTransformer modified: 0 with status: OK
+2026-09-05 14:52:13.9111209 [I:onnxruntime:, allocation_planner.cc:2659 onnxruntime::IGraphPartitioner::CreateGraphPartitioner] Use DeviceBasedPartition as default
+2026-09-05 14:52:13.9115149 [I:onnxruntime:, session_state_utils.cc:243 onnxruntime::session_state_utils::SaveInitializedTensors] Saving initialized tensors.
+2026-09-05 14:52:13.9118299 [I:onnxruntime:, session_state_utils.cc:438 onnxruntime::session_state_utils::SaveInitializedTensors] Done saving initialized tensors
+2026-09-05 14:52:14.1577150 [I:onnxruntime:, inference_session.cc:2532 onnxruntime::InferenceSession::Initialize] Session successfully initialized.
+deleted stale cache C:\Users\<user>\src\timm-resnet50.a1_in1k-RyzenAI\yolocutcachekey
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\<user>\src\timm-resnet50.a1_in1k-RyzenAI\yolocutcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+model: head-cut (6 outputs), decode tail runs in numpy
+
+=== NPU | models/yolov8s_cut_xint8.onnx | assets/test_image.jpg ===
+infer   mean 15.53 ms   median 15.39 ms   p95 16.35 ms   (64.4 fps)
+post    mean 0.20 ms
+17 detections:
+   tv               0.95  (3,166,149,96)
+   tv               0.92  (558,207,80,81)
+   person           0.82  (406,156,60,143)
+   chair            0.82  (360,217,59,98)
+   chair            0.82  (290,217,64,104)
+   refrigerator     0.78  (445,169,67,118)
+   potted plant     0.62  (230,175,36,36)
+   person           0.62  (383,171,22,38)
+   chair            0.62  (410,220,31,86)
+   clock            0.56  (447,121,13,20)
+   vase             0.50  (550,296,37,104)
+   potted plant     0.44  (333,176,33,45)
+   vase             0.38  (240,196,11,15)
+   dining table     0.38  (313,229,75,90)
+   zebra            0.32  (48,-110,536,85)
+   vase             0.27  (167,232,18,34)
+   dining table     0.27  (463,349,175,72)
+wrote C:\Users\<user>\src\timm-resnet50.a1_in1k-RyzenAI\results\out_yolov8s_cut_xint8_npu.jpg
+
+[1m[34m==> 5/5  what the EP actually took[0m
+[2m    log: results/yolo_cut_diag.log[0m
+=== models/yolov8s_cut_xint8.onnx ===
+ir_version 8   opset [('ai.onnx', 17), ('com.microsoft.nchwc', 1), ('ai.onnx.ml', 5), ('ai.onnx.training', 1), ('ai.onnx.preview', 1), ('ai.onnx.preview.training', 1), ('com.microsoft.experimental', 1), ('com.microsoft', 1), ('org.pytorch.aten', 1), ('com.amd.quark', 1)]
+producer   quark.onnx 0.11
+nodes      957
+input      images [1, 3, 640, 640]
+output     /model.22/cv2.0/cv2.0.2/Conv_output_0 [1, 64, 80, 80]
+output     /model.22/cv2.1/cv2.1.2/Conv_output_0 [1, 64, 40, 40]
+output     /model.22/cv2.2/cv2.2.2/Conv_output_0 [1, 64, 20, 20]
+output     /model.22/cv3.0/cv3.0.2/Conv_output_0 [1, 80, 80, 80]
+output     /model.22/cv3.1/cv3.1.2/Conv_output_0 [1, 80, 40, 40]
+output     /model.22/cv3.2/cv3.2.2/Conv_output_0 [1, 80, 20, 20]
+ops        [('DequantizeLinear', 344), ('QuantizeLinear', 218), ('Constant', 121), ('Mul', 114), ('Conv', 63), ('HardSigmoid', 57), ('Slice', 16), ('Concat', 13), ('Add', 6), ('MaxPool', 3), ('Resize', 2)]
+
+Q/DQ       QuantizeLinear 218, DequantizeLinear 344
+
+ops absent from the known-good ResNet50 graph: [('Concat', 13), ('HardSigmoid', 57), ('Resize', 2), ('Slice', 16)]
+  Any of these could be what GetCapability refuses. Bisect by removing them, not by guessing.
+
+float compute nodes (no Q/DQ within 3 hops upstream): 0
+
+first Conv/Gemm: /model.0/conv/Conv
+   input producers: ['DequantizeLinear', 'DequantizeLinear', 'DequantizeLinear']
+
+=== C:\Users\<user>\src\timm-resnet50.a1_in1k-RyzenAI\yolocutcachekey\vitisai_ep_report.json ===
+  all            nodeNum=  929  opTypes=10
+  NPU            nodeNum=  922  opTypes=10
+  VITIS_EP_CPU   nodeNum=    7  opTypes=2
+
+  per-node device counts: {'CPU': 7, 'NPU': 922}
+
+  922 nodes on the NPU, 7 elsewhere.
+
+  op type x device:
+    CPU           DequantizeLinear     6
+    CPU           QuantizeLinear       1
+    NPU           Add                  6
+    NPU           Concat               13
+    NPU           Conv                 63
+    NPU           DequantizeLinear     431
+    NPU           HardSigmoid          57
+    NPU           MaxPool              3
+    NPU           Mul                  114
+    NPU           QuantizeLinear       217
+    NPU           Resize               2
+    NPU           Slice                16
+
+  7 nodes NOT on the NPU (first 25):
+    CPU           QuantizeLinear       ['images_QuantizeLinear_Output']
+    CPU           DequantizeLinear     ['/model.22/cv3.2/cv3.2.2/Conv_output_0']
+    CPU           DequantizeLinear     ['/model.22/cv3.1/cv3.1.2/Conv_output_0']
+    CPU           DequantizeLinear     ['/model.22/cv3.0/cv3.0.2/Conv_output_0']
+    CPU           DequantizeLinear     ['/model.22/cv2.2/cv2.2.2/Conv_output_0']
+    CPU           DequantizeLinear     ['/model.22/cv2.1/cv2.1.2/Conv_output_0']
+    CPU           DequantizeLinear     ['/model.22/cv2.0/cv2.0.2/Conv_output_0']
+
+[1m================ RESULT ================[0m
+
+  VERDICT: 922/929 nodes on the NPU. The EP engaged.
+[33m  EP engaged but still slow (15.53 ms).[0m
+  A real partitioning problem -- but you now have a compile log and an
+  operator table for the first time. Read results/yolo_cut_npu.log and the
+  per-node split in results/yolo_cut_diag.log.
+
+  logs: results/yolo_cut_{cpu,npu,diag}.log
