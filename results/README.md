@@ -14,7 +14,7 @@ edited by hand except that the local user profile path has been replaced with
 | `batch/` | Static batch-2 ResNet50 export: the negative result on batching | Batching |
 | top level | The original ResNet50 table rows and the YOLOv8 head-cut investigation | Results; The YOLOv8n blocker |
 | top level | `webcam_multipartition_yolov8{n,m,l,x}.log`: live webcam round-robin across 4 independent 1x4.xclbin columns, per size | The webcam round-robin demo |
-| top level | `cam_probe_backends.log`, `cam_probe_setres.log`: camera open cost per OpenCV videoio backend, and `webcam_multipartition_yolov8n_msmf_nohw.log`, the same n demo re-run with the fast one | The webcam round-robin demo |
+| top level | `cam_probe_{backends,setres,late_set}.log`: camera open cost per OpenCV videoio backend, the resolution-change cost, and the no-op when the env var is set after `import cv2`; `webcam_multipartition_yolov8n_msmf_nohw.log` is the n demo re-run on the fast path | The webcam round-robin demo |
 
 File name conventions: `export_*` (ONNX export), `quant_*` (Quark quantization),
 `run_*` / `lat_*` (NPU or CPU inference and latency), `map_*` (COCO mAP evaluation),
