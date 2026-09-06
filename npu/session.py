@@ -54,14 +54,21 @@ def clear_cache(cache_key):
         print(f"deleted stale cache {path}")
 
 
-def build_session(model, ep, cache_key, xclbin=None, log_severity=1):
+def build_session(model, ep, cache_key, xclbin=None, log_severity=1,
+                   enable_profiling=False):
     """Build an InferenceSession on the CPU EP or the VitisAI (NPU) EP.
 
     log_severity is passed straight to ORT: 0 = verbose (per-node EP
     assignment), 1 = info (compile log), 2 = warning only.
+
+    enable_profiling turns on ORT's own chrome-trace profiler (per-node
+    timing, written on sess.end_profiling()) -- off by default since it adds
+    overhead to every call; only for diagnostic tools that need per-call
+    timing breakdown (see tools/percall_overhead_bench.py).
     """
     so = ort.SessionOptions()
     so.log_severity_level = log_severity
+    so.enable_profiling = enable_profiling
 
     if ep == "cpu":
         return ort.InferenceSession(str(model), sess_options=so,

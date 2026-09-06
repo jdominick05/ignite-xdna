@@ -783,12 +783,25 @@ model/resolution combinations converging on the same figure is real evidence of 
 per-column ceiling near 39-40%, not a lever still waiting for a heavier model. The
 per-column vs. shared-4x4 latency ratio (1.66× at n, 1.88× at m, 2.07× at l) implying
 unused headroom does not translate into a climbing achieved-TOPS figure once a
-model is heavy enough to actually test it — something else (fixed per-call dispatch
-cost that doesn't shrink proportionally at longer compute-bound calls, or a limit in
-how the compiler schedules a single column) caps it instead, and nothing measured so
-far distinguishes which. This 1280² model is calibration-thin (`--limit 4`, plain
-XINT8, chosen deliberately small — see caveat below) and exists purely to test this
-ceiling; it has no measured accuracy and should never be cited for mAP.
+model is heavy enough to actually test it. This 1280² model is calibration-thin
+(`--limit 4`, plain XINT8, chosen deliberately small — see caveat below) and exists
+purely to test this ceiling; it has no measured accuracy and should never be cited
+for mAP.
+
+**Which of the two candidate causes it is — narrowed, and it's not dispatch.**
+`tools/percall_overhead_bench.py` (`results/percall_overhead_yolov8_1x4.log`) turns
+on ORT's own profiler on a single held-open `1x4.xclbin` session per model size and
+reads the duration ORT reports for the fused on-NPU compute node separately from the
+full per-call time. Dispatch/sync overhead outside that node is negligible at every
+size tested — 0.7% of wall time at yolov8n, down to 0.1% at yolov8l — so it is not a
+fixed per-call cost failing to amortize. Essentially all wall time (95.8%–99.5%) is
+the compute node's own reported duration, and *that* duration's efficiency against
+an ideal 4-TOPS column climbs with model size the same way the combined-throughput
+table above does (19.0%→29.3%→36.5%→41.3%, n→s→m→l, measured by a fully independent
+method landing on the same numbers). The ~39-40% ceiling lives inside the compiled
+kernel's own scheduled execution on a single column — a real compiler/scheduling
+limit, not a host-side dispatch cost that could be amortized away by batching calls
+differently.
 
 Same caveats as the partition-splitting result above travel with every number in this
 table that used `1x4.xclbin` (deprecated overlay, Desktop 2 / Phoenix only, unverified

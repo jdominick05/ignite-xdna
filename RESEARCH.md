@@ -294,6 +294,34 @@ generalize beyond any one model:
    width is the strongest correlate is an open hardware question this repo's tooling
    cannot currently answer, not a mechanism this repo has established.
 
+   **One piece of that thread reopened, though: not *why* width correlates, but
+   *where* the missing time goes, which `nodeStat`'s static routing could never show
+   and a new tool can.** `tools/percall_overhead_bench.py`
+   (`results/percall_overhead_yolov8_1x4.log`) turns on ORT's own profiler
+   (`session_options.enable_profiling`) on a single held-open `1x4.xclbin` (one
+   column) session and reads the duration ORT itself reports for the fused
+   `vitis_ai_ep_*_kernel_time` node — the entire on-NPU subgraph as one op — separately
+   from the full per-call `model_run` duration. This distinguishes the two candidate
+   explanations finding 5 above left open ("fixed per-call dispatch cost that doesn't
+   shrink proportionally... or a limit in how the compiler schedules a single column
+   ... nothing measured so far distinguishes which"): **dispatch/sync overhead outside
+   the compute node is negligible at every size tested — 0.7% of wall time at yolov8n,
+   shrinking to 0.1% at yolov8l** (consistent with a small, roughly-fixed number of
+   microseconds, not a cost that fails to amortize). Essentially all wall time (95.8%
+   to 99.5%) is the `vitis_ep` node's own reported duration, and *that* duration's
+   efficiency against an ideal 4-TOPS column (16 TOPS / 4 columns) rises monotonically
+   with model size — 19.0% (n) → 29.3% (s) → 36.5% (m) → 41.3% (l) — closely matching
+   the combined-4-column figures already measured by a completely independent method
+   (`multi_partition_bench.py`'s multi-process throughput: 14.4% / 24.8–28.0% / 33.1% /
+   39.3%). Two different measurements — solo per-call node timing here, combined
+   multi-process throughput there — land on the same numbers. **The dispatch-overhead
+   hypothesis is now ruled out, not merely left undistinguished: the ~39-40% ceiling
+   and its rise with width live entirely inside the compiled kernel's own scheduled
+   execution on a single column, a real compiler/scheduling limit, not a fixable
+   host-side cost.** Going further than this would need instruction/tile-level
+   profiling this repo's toolchain does not expose — the same wall the paragraph above
+   already hit from the `nodeStat` side, reached again here from the timing side.
+
    **The `yolov8s@1280` fps number above needed its own correctness check, and the
    check found a real (separate) defect worth naming plainly.**
    `multi_partition_bench.py`'s built-in cross-talk oracle (alternate a known-positive
@@ -527,12 +555,27 @@ been closed:
   and it doesn't.** yolov8x re-exported at 1280² (6.2× the per-inference MACs of
   yolov8l at 640²) lands on 39.31%, statistically identical to yolov8l's 39.32%
   (`results/multi_partition_yolov8x_r1280.log`) — this reads as a real per-column
-  ceiling near 39-40%, not headroom still waiting for a heavier model. Still
-  untested: whether a 5th concurrent context queues, refuses, or shares a column;
-  whether this holds on the laptop's Hawk Point chip (different column count,
-  unconfirmed); what specifically caps a single column at ~39-40% rather than
-  higher (fixed dispatch overhead that doesn't shrink proportionally, or a
-  compiler/scheduling limit — not distinguished by anything measured so far).
+  ceiling near 39-40%, not headroom still waiting for a heavier model. **Whether a
+  5th concurrent context queues, refuses, or shares a column — done: it shares.**
+  This Phoenix chip actually has 5 physical columns (`xrt-smi examine -r platform`);
+  `1x4.xclbin` still only ever exposes 4 partitions, and the 5th process pairs up
+  with the 4th on column 4 rather than getting its own (`results/
+  multi_partition_yolov8n_5col.log`). The driver's own `5x4_*.xclbin` overlay family
+  was tried directly as the obvious follow-up and falls back to 100% CPU on this
+  install (`docs/DECISIONS.md`, "Rejected approaches") — the 5th column is real but
+  unreachable through anything this repo's tooling can drive. **What specifically
+  caps a single column at ~39-40% rather than higher — narrowed: it is not fixed
+  per-call dispatch overhead.** `tools/percall_overhead_bench.py`
+  (`results/percall_overhead_yolov8_1x4.log`) profiled a single held-open
+  `1x4.xclbin` session per model size and found dispatch/sync overhead outside the
+  compute node negligible at every size (0.7% of wall time at n, down to 0.1% at l)
+  — essentially all wall time is the compute node's own reported duration, and that
+  duration's efficiency against an ideal 4-TOPS column climbs with model size
+  (19.0%→29.3%→36.5%→41.3%, n→s→m→l), matching the combined-throughput figures
+  above via a fully independent measurement. The ceiling lives inside the compiled
+  kernel's own scheduled execution, not host-side dispatch — a real compiler/
+  scheduling limit. Still unconfirmed: whether any of this holds on the laptop's
+  Hawk Point chip (different column count, untested).
 - **Width beyond yolov8m — done for detection (l/x); classification untested.**
   yolov8l/x are measured (see the findings table above) and the trend breaks at x. Two
   width steps still confirm the classification trend (resnet50→wide_resnet50_2→

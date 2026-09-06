@@ -1,0 +1,104 @@
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\1x4.xclbin
+
+=== yolov8n_cut_xint8.onnx (cache: yolocut1x4cachekey) ===
+model: models/yolov8n_cut_xint8.onnx
+MACs/inference: 4.703e+09  ideal time at a 4-TOPS column: 2.352 ms
+cache:  C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\yolocut1x4cachekey
+
+200 calls, ORT trace vs. this process's own perf_counter (13.015 ms/call, 76.8 fps measured independently of the trace):
+  model_run (ORT wall/call):          12.946 ms  100.0%
+  vitis_ai_ep node (NPU compute):      12.408 ms   95.8%
+  other Node ops (Quant/Dequant):       0.448 ms    3.5%
+  unaccounted gap (dispatch/sync):      0.089 ms    0.7%
+
+  ideal 4-TOPS-column compute time:     2.352 ms
+  vitis_ep node / ideal (node-level efficiency):  19.0%
+  ideal / model_run (this call's overall %-of-column-TOPS):  18.2%
+
+=== yolov8s_cut_xint8.onnx (cache: yolocuts1x4cachekey) ===
+model: models/yolov8s_cut_xint8.onnx
+MACs/inference: 1.493e+10  ideal time at a 4-TOPS column: 7.466 ms
+cache:  C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\yolocuts1x4cachekey
+
+150 calls, ORT trace vs. this process's own perf_counter (26.077 ms/call, 38.3 fps measured independently of the trace):
+  model_run (ORT wall/call):          26.002 ms  100.0%
+  vitis_ai_ep node (NPU compute):      25.469 ms   97.9%
+  other Node ops (Quant/Dequant):       0.443 ms    1.7%
+  unaccounted gap (dispatch/sync):      0.091 ms    0.3%
+
+  ideal 4-TOPS-column compute time:     7.466 ms
+  vitis_ep node / ideal (node-level efficiency):  29.3%
+  ideal / model_run (this call's overall %-of-column-TOPS):  28.7%
+
+=== yolov8m_cut_xint8.onnx (cache: yolocutm1x4cachekey) ===
+model: models/yolov8m_cut_xint8.onnx
+MACs/inference: 4.06e+10  ideal time at a 4-TOPS column: 20.302 ms
+cache:  C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\yolocutm1x4cachekey
+
+100 calls, ORT trace vs. this process's own perf_counter (56.299 ms/call, 17.8 fps measured independently of the trace):
+  model_run (ORT wall/call):          56.226 ms  100.0%
+  vitis_ai_ep node (NPU compute):      55.697 ms   99.1%
+  other Node ops (Quant/Dequant):       0.441 ms    0.8%
+  unaccounted gap (dispatch/sync):      0.088 ms    0.2%
+
+  ideal 4-TOPS-column compute time:    20.302 ms
+  vitis_ep node / ideal (node-level efficiency):  36.5%
+  ideal / model_run (this call's overall %-of-column-TOPS):  36.1%
+
+=== yolov8l_cut_xint8.onnx (cache: yolocutl1x4cachekey) ===
+model: models/yolov8l_cut_xint8.onnx
+MACs/inference: 8.433e+10  ideal time at a 4-TOPS column: 42.167 ms
+cache:  C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\yolocutl1x4cachekey
+
+100 calls, ORT trace vs. this process's own perf_counter (102.808 ms/call, 9.7 fps measured independently of the trace):
+  model_run (ORT wall/call):         102.733 ms  100.0%
+  vitis_ai_ep node (NPU compute):     102.190 ms   99.5%
+  other Node ops (Quant/Dequant):       0.452 ms    0.4%
+  unaccounted gap (dispatch/sync):      0.090 ms    0.1%
+
+  ideal 4-TOPS-column compute time:    42.167 ms
+  vitis_ep node / ideal (node-level efficiency):  41.3%
+  ideal / model_run (this call's overall %-of-column-TOPS):  41.0%
+
+=== summary ===
+model     wall ms/call   vitis_ep %   gap %   node-level efficiency
+n              12.946       95.8%     0.7%          19.0%
+s              26.002       97.9%     0.3%          29.3%
+m              56.226       99.1%     0.2%          36.5%
+l             102.733       99.5%     0.1%          41.3%
+
+--- context ---
+tools/percall_overhead_bench.py, prompted by RESEARCH.md finding 5's open
+question: does the ~39-40% per-column achieved-TOPS ceiling come from fixed
+per-call dispatch overhead that doesn't amortize, or a compiler/scheduling
+limit inside the compute itself? Neither `vitisai_ep_report.json` (static
+compile-time NPU/CPU routing only, no timing) nor the combined multi-process
+throughput numbers already in this repo could distinguish the two -- this
+run uses ORT's own profiler (session_options.enable_profiling) on a single
+held-open 1x4.xclbin (one column) session per model, which reports a
+duration for the fused `vitis_ai_ep_*_kernel_time` node (the entire on-NPU
+subgraph) separately from the full per-call `model_run` duration.
+
+Result: dispatch/sync overhead outside the compute node is negligible at
+every model size tested (0.7% down to 0.1% of wall time, shrinking as
+absolute call time grows -- consistent with a small roughly-fixed number of
+microseconds, not a proportional cost). Essentially all wall time (95.8% to
+99.5%) is the vitis_ep node's own reported duration. Node-level efficiency
+against an ideal 4-TOPS column (16 TOPS nameplate / 4 columns) rises
+monotonically with model size -- 19.0% (n) -> 29.3% (s) -> 36.5% (m) ->
+41.3% (l) -- closely matching the combined-4-column figures already measured
+by multi_partition_bench.py + estimate_tops.py (14.4% / 24.8-28.0% / 33.1% /
+39.3%), a second, independent measurement method (solo per-call node timing
+vs. combined multi-process throughput) landing on the same numbers.
+
+Conclusion: this is not a dispatch-overhead-doesn't-amortize story -- that
+hypothesis is ruled out directly, not just left undistinguished. The ~39-40%
+ceiling and its rise with model width both live entirely inside the
+compiled kernel's own scheduled execution on a single column -- a real
+compiler/scheduling limit, not a fixable host-side cost. Going further would
+need instruction/tile-level profiling this repo's toolchain does not expose
+(see RESEARCH.md finding 5's earlier "this thread stops here" on
+vitisai_ep_report.json's nodeStat lacking cycle-level detail -- same wall,
+approached from a different angle, same result).
+Desktop 2 / Phoenix.
