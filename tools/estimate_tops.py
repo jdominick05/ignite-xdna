@@ -39,6 +39,8 @@ ROWS = [
      "README.md:173, 117.11 ms"),
     ("yolov8n cut XINT8 (4x independent 1x4 columns)", "yolov8n_cut_xint8.onnx", 245.2,
      "results/multi_partition_yolov8n.log, combined fps @ N=4"),
+    ("yolov8s cut XINT8 (4x independent 1x4 columns)", "yolov8s_cut_xint8.onnx", 132.7,
+     "results/multi_partition_yolov8s.log, combined fps @ N=4"),
     ("yolov8m cut XINT8 (4x independent 1x4 columns)", "yolov8m_cut_xint8.onnx", 65.3,
      "results/multi_partition_yolov8m.log, combined fps @ N=4"),
     ("yolov8l cut XINT8 (4x independent 1x4 columns)", "yolov8l_cut_xint8.onnx", 37.3,
@@ -48,6 +50,12 @@ ROWS = [
     ("yolov8x@1280 cut XINT8, throughput-only (4x independent 1x4 columns)",
      "yolov8x_r1280_cut_xint8.onnx", 6.0,
      "results/multi_partition_yolov8x_r1280.log, combined fps @ N=4"),
+    ("yolov8s@1280 cut XINT8 --limit 4, throughput-only (4x independent 1x4 columns)",
+     "yolov8s_r1280_cut_xint8.onnx", 37.5,
+     "results/multi_partition_yolov8s_r1280.log, combined fps @ N=4 -- correctness check "
+     "flagged every call as a mismatch even at N=1 (no concurrency possible); confirmed via "
+     "CPU cross-check to be a real quantization defect (img_b false-positives class 0), not "
+     "cross-talk -- fps is still valid, node schedule is unaffected by Q/DQ scale values"),
     ("wide_resnet101_2 XINT8 (solo, shared 4x4)", "wide_resnet101_2_xint8_c64.onnx",
      1000 / 17.90, "README.md:320, 17.90 ms"),
     ("wide_resnet101_2 XINT8 (4x independent 1x4 columns)",
@@ -55,25 +63,36 @@ ROWS = [
      "results/multi_partition_wide_resnet101_2.log, combined fps @ N=4"),
 ]
 
-_mac_cache = {}
+_profile_cache = {}
 
 
-def macs_for(model_file):
-    if model_file not in _mac_cache:
+def profile_for(model_file):
+    """(MACs, params, graph memory bytes) -- params is INT8 weight-byte count
+    (1 byte/param post-quantization); memory is onnx-tool's sum of every
+    tensor's byte size across the graph, a proxy for total data movement, not
+    a measurement of actual DDR traffic (the compiler may keep tensors
+    on-chip). Used to test whether achieved TOPS tracks arithmetic intensity
+    (MACs per weight-byte, MACs per graph-memory-byte) rather than model
+    family or resolution -- see RESEARCH.md finding 5's ceiling discussion."""
+    if model_file not in _profile_cache:
         m = onnx_tool.Model(str(MODELS / model_file))
         m.graph.shape_infer()
         m.graph.profile()
-        _mac_cache[model_file] = m.graph.macs[0]
-    return _mac_cache[model_file]
+        _profile_cache[model_file] = (m.graph.macs[0], m.graph.params, m.graph.memory)
+    return _profile_cache[model_file]
 
 
 def main():
-    print(f"{'config':<48} {'MACs':>14} {'fps':>8} {'TOPS':>8} {'% of 16':>8}   source")
+    print(f"{'config':<48} {'MACs':>14} {'fps':>8} {'TOPS':>8} {'% of 16':>8} "
+          f"{'MACs/Wbyte':>11} {'MACs/memByte':>12}   source")
     for label, model_file, fps, source in ROWS:
-        macs = macs_for(model_file)
+        macs, params, memory = profile_for(model_file)
         tops = macs * 2 * fps / 1e12
         pct = 100 * tops / NAMEPLATE_TOPS
-        print(f"{label:<48} {macs:>14.4g} {fps:>8.2f} {tops:>8.3f} {pct:>7.1f}%   {source}")
+        macs_per_wbyte = macs / params
+        macs_per_membyte = macs / memory
+        print(f"{label:<48} {macs:>14.4g} {fps:>8.2f} {tops:>8.3f} {pct:>7.1f}% "
+              f"{macs_per_wbyte:>11.1f} {macs_per_membyte:>12.2f}   {source}")
 
 
 if __name__ == "__main__":

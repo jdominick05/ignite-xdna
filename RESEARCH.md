@@ -176,6 +176,112 @@ generalize beyond any one model:
    table below) as an open risk on longer runs, though the ~12s throughput windows
    used here did not trigger it.
 
+   **Follow-up that reframes the mechanism: the ceiling tracks graph depth (node
+   count), not raw MACs/call, weight-arithmetic-intensity, or resolution.** Two more
+   points were added to close the gap between yolov8m (33.1%) and yolov8l (39.3%) and
+   to separate "more compute per call" from "more pixels per call on the same shallow
+   graph": `yolov8s` split across 4 columns at its native 640² (`results/
+   multi_partition_yolov8s.log`, zero cross-talk, the established calibration recipe,
+   no accuracy caveat) reaches only **24.8%** (14.93 GMACs, 132.7 fps combined) — and
+   `yolov8s` re-exported at 1280² (`results/multi_partition_yolov8s_r1280.log`, same
+   weights, 59.66 GMACs — 4.0× the 640² model's, confirming the resolution scaling
+   again) reaches only **28.0%**, *below yolov8m's 33.1% despite more raw GMACs/call
+   (59.66 vs 40.6)*. Raw compute-per-call is not the predictor: yolov8s@1280 has more
+   of it than yolov8m and still lands lower. Checked directly against this repo's own
+   exported graphs (`onnx.load` on each `*_cut.onnx`, counting `Conv` nodes and reading
+   each first/last Conv weight's initializer shape) rather than assumed from
+   Ultralytics' published width/depth multipliers:
+   | model | Conv nodes | first-conv weight | GMACs/call (max tested) | best split-4 % |
+   |---|---|---|---|---|
+   | yolov8n | 63 | [16,3,3,3] | 4.70 | 14.4% |
+   | yolov8s | 63 | [32,3,3,3] | 59.66 (@1280) | 28.0% |
+   | yolov8m | 83 | [48,3,3,3] | 40.6 | 33.1% |
+   | yolov8l / yolov8x | 103 | [64,3,3,3] / [80,3,3,3] | 524.1 (x@1280) | 39.3% |
+
+   `yolov8n` and `yolov8s` share the same node count (63) in this repo's own cut
+   export — Ultralytics scales them by width only, not depth — and both cap out well
+   below `yolov8m`/`yolov8l`/`x` (83 and 103 nodes respectively), *regardless of how
+   much raw compute is pushed through the shallower graph via resolution*: `yolov8s`
+   at 640² (14.93 GMACs) and at 1280² (59.66 GMACs, 4× more) land within 3.2 points of
+   each other (24.8% vs 28.0%), both far under the 103-node graphs' ~38-39% ceiling
+   even though `yolov8s@1280`'s GMACs/call exceeds `yolov8m`'s 83-node graph outright.
+   Depth — the number of sequential layer dispatches a single column's schedule has to
+   pipeline across — reads as the actual ceiling-setting variable here, not total
+   compute, not channel width alone, and not resolution. This does not fully explain
+   *why* (a compiler-scheduling/pipelining account is plausible: more layers give the
+   compiler more instruction-level overlap opportunity to hide the same fixed per-node
+   dispatch cost seen in finding 9 below; this is not yet verified beyond the
+   correlation above) — but it is now the leading, most tightly evidenced hypothesis,
+   replacing "an insufficiently heavy model" as the story for the unused headroom the
+   latency ratio implies.
+
+   **The `yolov8s@1280` fps number above needed its own correctness check, and the
+   check found a real (separate) defect worth naming plainly.**
+   `multi_partition_bench.py`'s built-in cross-talk oracle (alternate a known-positive
+   and known-negative image across workers, flag any crossed result) flagged **every
+   single call as a mismatch, at every process count including N=1** where no
+   concurrency is even possible — the opposite of what cross-talk would look like
+   (cross-talk needs ≥2 contending workers). Traced with the cheapest available check
+   (an independent `--ep cpu` comparison, the same pattern already established in
+   finding 7): the FP32 cut model correctly finds class 0 in the positive image and not
+   in the negative one at 1280²; the **XINT8 model reproduces the same false positive
+   on the negative image on plain CPU**, with no NPU or concurrency involved at all.
+   This is a genuine under-calibration accuracy defect from the deliberately thin
+   `--limit 4` calibration recipe (chosen for RAM safety, see the caveat above) meeting
+   a narrower/shallower architecture than the `yolov8x@1280` probe that established the
+   same recipe safely — not a hardware fault. Q/DQ scale corruption does not change
+   node count or MAC count, so the fps figure is unaffected and still usable for the
+   ceiling question; the model's *correctness* is not, and — like `yolov8x@1280` before
+   it — it must never be cited for mAP or detection accuracy. Filed as a minor tooling
+   gap rather than fixed: `multi_partition_bench.py`'s cross-talk heuristic does not
+   distinguish "fails identically solo" from "fails only when contended," and a future
+   revision should gate on the N=1 case before attributing anything to concurrency.
+
+   **The weight-bandwidth-roofline hypothesis raised when this ceiling was first
+   measured is weakened, not ruled out — the pair that looked like a clean test of it
+   wasn't.** `tools/estimate_tops.py` now also reports MACs per INT8 weight-byte
+   (`onnx-tool`'s `graph.params`) alongside MACs per graph-memory-byte
+   (`graph.memory`, its sum of every tensor's byte size — a proxy for data movement,
+   not a measurement of actual DDR traffic, since the compiler may keep tensors
+   on-chip). The `yolov8l` (1931 MACs/weight-byte, 39.3%) vs. `yolov8x@1280` (7685
+   MACs/weight-byte — 4.0× more reuse of the same weight bytes, still 39.3%)
+   comparison originally cited as ruling this out is **confounded**: MACs/call and
+   weight-intensity moved together by the same 4.0× (both are driven by the same H×W
+   resolution term for a fixed graph), so that pair cannot separate "more spatial
+   reuse didn't help" from "more compute per call didn't help." The pair that actually
+   discriminates was already in the table: **`wide_resnet101_2` (182.8 MACs/weight-byte,
+   23.2 GMACs) reaches 28.5%, vs. `yolov8m` (1568.5 MACs/weight-byte — 8.6× more reuse
+   per weight byte, but only 1.75× the GMACs/call) reaches 33.1%.** An 8.6× spread in
+   weight-arithmetic-intensity producing only a 4.6-point spread in achieved-% is a
+   real weakening of a weight-bandwidth-roofline story (if weight streaming from DDR
+   every call dominated, that 8.6× gap should show up as a far larger effect than 4.6
+   points) — but it is not a clean refutation, since `yolov8m`'s higher GMACs/call is
+   itself a live confound in this pair too. No experiment run so far isolates
+   weight-intensity from GMACs/call cleanly; the depth finding above is the stronger,
+   better-isolated result from this round.
+
+   **Checked the channel-padding hypothesis once, cheaply, with no new hardware
+   time.** If the compiler pads channel counts to a tile-granularity boundary, the
+   array executes more MACs than the graph nominally contains, and "39% of nameplate"
+   would understate how busy the silicon actually is. `yolocutcachekey/
+   vitisai_ep_report.json` (written by the EP on every session build, read here for a
+   model already compiled from an earlier run — no new build needed) includes a
+   `shapeInfo` list naming every compiled tensor's shape; `yolov8n`'s first conv weight
+   appears as `[16, 3, 3, 3]`, exactly the nominal, unpadded channel count from the
+   graph itself. One data point is not proof padding never happens elsewhere in the
+   graph, but it found no evidence for it where checked, which weakens (does not
+   confirm or rule out) padding as the explanation for the gap between 39% useful ops
+   and 100% busy silicon.
+
+   **Denominator checked, not just inherited: AMD's 16 TOPS nameplate is confirmed
+   correct for this specific chip, not a mobile-Phoenix figure carried over by
+   mistake.** Web search on 2026-09-06 confirms both machines' NPUs are independently
+   rated 16 TOPS INT8 by AMD/reviewers: the Ryzen 7 8700G (Desktop 2, this machine)
+   at 1.6 GHz XDNA clock, and the laptop's Ryzen 5 8645HS (Hawk Point). The 10 TOPS
+   figure belongs only to the original Ryzen 7040 mobile series at its lower mobile
+   NPU clock — not to either machine this repo measures on. Every "% of 16" number in
+   this repo divides by the correct figure for the hardware it was measured on.
+
    Consequences below follow from the width of the compute-bound margin (still real,
    independent of the retracted GOPS number — see the concurrency and width findings
    throughout this repo), and both have been measured rather than assumed:

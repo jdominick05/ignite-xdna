@@ -743,10 +743,12 @@ nameplate is INT8, 2 ops/MAC). Nothing here depends on `xrt-smi`'s GOPS column a
 | yolov8x cut XINT8 (solo, shared 4x4) | 8.54 | 2.24 | 14.0% |
 | **yolov8l cut XINT8 (solo, shared 4x4)** | 20.13 | 3.40 | **21.2%** (solo peak) |
 | yolov8n cut XINT8 (4× independent 1x4 columns) | 245.20 | 2.31 | 14.4% |
+| yolov8s cut XINT8 (4× independent 1x4 columns) | 132.70 | 3.96 | 24.8% |
 | yolov8m cut XINT8 (4× independent 1x4 columns) | 65.30 | 5.30 | 33.1% |
 | yolov8x cut XINT8 (4× independent 1x4 columns) | 23.20 | 6.08 | 38.0% |
 | **yolov8l cut XINT8 (4× independent 1x4 columns)** | 37.30 | **6.29** | **39.3%** |
 | yolov8x@1280 XINT8, throughput-only (4× independent 1x4 columns) | 6.00 | 6.29 | 39.3% — same ceiling at 6.2× the MACs |
+| yolov8s@1280 XINT8 `--limit 4`, throughput-only, **quantization defect confirmed** (4× independent 1x4 columns) | 37.50 | 4.48 | 28.0% — below yolov8m despite more MACs |
 
 Two things fall out of this table that the retracted GOPS numbers never showed:
 
@@ -799,7 +801,47 @@ accuracy, so a thin calibration set costs nothing here) kept the peak well clear
 the ceiling. The lesson generalizes the existing SIGSEGV note: **calibration memory
 at this backend scales with resolution and calibration count together, not either
 alone — a resolution jump needs the sample count re-checked, not carried over from a
-lower-resolution recipe.**
+lower-resolution recipe.** (`yolov8s@1280` at the same `--limit 4` recipe confirms this
+generalizes to width too — its calibration cache peaked at only ~3 GB, since yolov8s's
+activations are far smaller than yolov8x's at the same resolution.)
+
+**The ceiling tracks graph depth, not raw MACs/call — confirmed by filling the gap
+with a model that isolates the two.** `yolov8s` split across 4 columns at its native
+640² reaches only 24.8% (`results/multi_partition_yolov8s.log`, 14.93 GMACs, zero
+cross-talk, the established calibration recipe), and re-exported at 1280² (same
+weights, 4.0× the GMACs, confirming the resolution scaling again) reaches only 28.0%
+— **below yolov8m's 33.1% despite `yolov8s@1280` having more raw GMACs/call than
+yolov8m (59.66 vs 40.6)**. Raw compute-per-call does not predict this. Checked
+directly against this repo's own exported graphs (`onnx.load` on each `*_cut.onnx`,
+counting `Conv` nodes) rather than assumed from Ultralytics' published multipliers:
+
+| model | Conv nodes | GMACs/call (max tested) | best split-4 % |
+|---|---|---|---|
+| yolov8n | 63 | 4.70 | 14.4% |
+| yolov8s | 63 | 59.66 (@1280) | 28.0% |
+| yolov8m | 83 | 40.6 | 33.1% |
+| yolov8l / x | 103 | 524.1 (x@1280) | 39.3% |
+
+`yolov8n` and `yolov8s` share the same 63-node depth in this repo's own export (they
+differ by channel width only) and both cap out well under the 83/103-node graphs —
+even where `yolov8s@1280`'s GMACs/call exceeds `yolov8m`'s outright. **Depth — how
+many sequential layer dispatches a column's schedule pipelines across — reads as the
+actual ceiling-setting variable, not total compute, weight-intensity, or resolution.**
+This replaces "an insufficiently heavy model" as the story for the unused per-column
+headroom the latency ratio implied; see `RESEARCH.md` finding 5 for the full
+mechanism discussion, the (weakened, not ruled out) weight-bandwidth-roofline check,
+a one-look channel-padding check that found no evidence of padding, and confirmation
+that AMD's 16 TOPS nameplate is independently correct for both this machine's 8700G
+and the laptop's 8645HS (not a mobile-Phoenix 10 TOPS figure carried over by mistake).
+
+The `yolov8s@1280` fps above needed its own correctness check first: `multi_partition_
+bench.py`'s cross-talk oracle flagged every call as a mismatch, at every process
+count *including N=1* where no concurrency is possible — the opposite signature of
+real cross-talk. An independent `--ep cpu` comparison (same pattern as the batch>1
+finding) confirmed a genuine quantization defect from the thin `--limit 4` recipe
+meeting this narrower architecture, reproducible on plain CPU with no NPU involved:
+the fps figure is unaffected (Q/DQ scale corruption doesn't change node or MAC count)
+but this model must never be cited for mAP or detection accuracy, same as `yolov8x@1280`.
 
 ---
 

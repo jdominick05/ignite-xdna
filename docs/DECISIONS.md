@@ -146,6 +146,17 @@
   with `--limit 4` — this specific model was built to test a throughput ceiling, not
   to report accuracy, so a thin calibration set costs nothing real; it would be the
   wrong fix for a model whose accuracy will actually be cited.
+- **Confirms the per-image footprint above scales with model width too, not only
+  resolution.** `yolov8s` re-exported at the same 1280² (filling the achieved-TOPS
+  gap between yolov8m and yolov8l — `RESEARCH.md` finding 5) at the same `--limit 4`
+  spooled only **~3 GB total** (~0.77 GB/image) — `yolov8s`'s activations are far
+  smaller than `yolov8x`'s at matched resolution, since it is both narrower and
+  shallower (63 Conv nodes vs. `yolov8x`'s 103). Same `--limit 4` fix, no incident this
+  time; cited here as the confirming data point, not a new pitfall. This calibration
+  choice also produced a real, separate accuracy defect (not a RAM issue) — see
+  `RESEARCH.md` finding 5's cross-talk-oracle write-up: the thin calibration set was
+  too thin for this narrower architecture, confirmed via `--ep cpu` comparison, and
+  the resulting model must never be cited for mAP.
 - **AdaRound running out of RAM, and taking SIGSEGV instead of raising.** Measured:
   `--adaround --limit 300` succeeded, then `--limit 200` segfaulted twice at exactly
   the same point with another memory-heavy app resident. *Less* calibration data

@@ -1,0 +1,80 @@
+RYZEN_AI_INSTALLATION_PATH = None
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\1x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\yolocut1x4cachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+deleted stale cache C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\yolocut1x4cachekey
+model: models/yolov8s_r1280_cut_xint8.onnx
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\1x4.xclbin
+pre-building one session to force the compile before any worker forks -- avoids N processes racing the same cache directory on first run.
+RYZEN_AI_INSTALLATION_PATH = None
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\1x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\yolocut1x4cachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+compile cache warm.
+
+=== 1 independent process(es), separate partitions if the overlay allows it ===
+  partitions during window: [('0', ['1'])]
+  combined 10.3 fps  per-process: [10.3]  mismatches: 141  *** CROSS-TALK ***
+
+=== 2 independent process(es), separate partitions if the overlay allows it ===
+  partitions during window: [('0', ['1']), ('1', ['2'])]
+  combined 20.3 fps  per-process: [10.2, 10.2]  mismatches: 137  *** CROSS-TALK ***
+
+=== 3 independent process(es), separate partitions if the overlay allows it ===
+  partitions during window: [('0', ['1']), ('1', ['2']), ('2', ['3'])]
+  combined 29.8 fps  per-process: [9.9, 9.9, 10.0]  mismatches: 133  *** CROSS-TALK ***
+
+=== 4 independent process(es), separate partitions if the overlay allows it ===
+  partitions during window: [('0', ['1']), ('1', ['2']), ('2', ['3']), ('3', ['4'])]
+  combined 37.5 fps  per-process: [9.4, 9.3, 9.4, 9.3]  mismatches: 127  *** CROSS-TALK ***
+
+=== summary ===
+ procs  combined fps  vs 1-proc    partitions  mismatches
+     1          10.3      1.00x             1         141
+     2          20.3      1.97x             2         137
+     3          29.8      2.89x             3         133
+     4          37.5      3.63x             4         127
+
+*** 538 total cross-talk mismatches -- do not trust multi-partition concurrency on this backend without per-call verification ***
+
+--- context (Desktop 2 / Phoenix, 2026-09-06) ---
+Built to fill the gap in the achieved-TOPS saturation curve between yolov8m
+(40.6 GMACs -> 33.1%) and yolov8l (84.3 GMACs -> 39.3%): yolov8s re-exported
+at 1280x1280 (models/yolov8s_r1280_cut_xint8.onnx, quantized plain XINT8,
+--limit 4 calibration, ~0.77 GB cached per image -- 3.09 GB total, far below
+the yolov8x@1280 RAM-wall incident) profiles to 59.66 GMACs/inference
+(onnx-tool), landing at 37.5 fps combined @ N=4 -> 4.475 TOPS -> 28.0% of the
+16 TOPS nameplate.
+
+The tool's own cross-talk heuristic flagged every single call as a mismatch,
+even at N=1 where no concurrency is possible -- this is NOT cross-talk, and
+was confirmed as such with the cheapest available check: worker rank 0
+always gets the "expect negative" image (img_b) per multi_partition_bench.py's
+own assignment (`is_neg = (i == 0)`), and CPU-EP sessions built directly on
+both the FP32 cut model (models/yolov8s_r1280_cut.onnx) and this XINT8 model
+were compared on the same two images:
+  - FP32 CPU: img_a finds class 0 (True, correct), img_b does not (False,
+    correct) -- the oracle images and letterbox/decode path are valid at
+    this resolution.
+  - XINT8 CPU: img_a still finds class 0 (True, correct), but img_b now
+    ALSO finds class 0 (True -- a false positive) reproducibly on CPU with
+    the identical quantized weights, no NPU or concurrency involved.
+This is a genuine --limit 4 under-calibration accuracy defect specific to
+this (narrower, shallower) architecture at this resolution, not a hardware
+fault: node schedule and MAC count are untouched by Q/DQ scale values, so
+the fps/TOPS number above is still valid for the throughput question this
+probe exists to answer, but this model has a directly measured (not merely
+"unmeasured") accuracy defect and must never be cited for mAP or detection
+correctness. Minor tooling note: multi_partition_bench.py's cross-talk
+check conflates a quantization-accuracy failure that reproduces solo (N=1)
+with real cross-talk; a future version should gate on the N=1 case cleanly
+before attributing anything to concurrency.
+
+Surprising result: 59.66 GMACs (between yolov8m's 40.6 and yolov8l's 84.3)
+achieves 28.0%, LOWER than yolov8m's 33.1% -- not a monotonic fill of the
+gap. Raw MACs/call alone does not predict achieved %; see
+results/multi_partition_yolov8s.log (yolov8s at native 640, same weights
+architecture, no resolution change) for the follow-up that isolates
+resolution from architecture.
