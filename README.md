@@ -905,10 +905,11 @@ checks on CPU, runs on the NPU and reads the report back.
 - **Static batch >1 is unsafe on this backend, not just slow.** Measured: it silently
   drops every batch element after the first rather than raising an error (see
   [Batching](#batching-does-it-help-throughput)). Batch 1 only.
-- **AdaRound doesn't fit for YOLOv8s and up at 640×640** on the 13.8 GB development
-  machine — FastFinetune's memory high-water mark is layer 0, the only layer at full
-  resolution, and it takes SIGSEGV rather than raising when it doesn't fit. Plain XINT8
-  only for those configurations.
+- **AdaRound needs more RAM than the 13.8 GB laptop has for YOLOv8s/m at 640×640** —
+  FastFinetune's memory high-water mark is layer 0, the only layer at full resolution,
+  and it takes SIGSEGV rather than raising there. Not a hard wall, though: both s and m
+  now have AdaRound results (see Roadmap), quantized on Desktop 1's 32 GB + GPU-accelerated
+  FastFinetune (`--device`). l/x AdaRound at 640×640 remains untried anywhere.
 - **yolov8l's full-dataset eval is flaky.** Two of three 5000-image mAP attempts hit a
   hardware `DPU timeout` mid-run; the third, and a standalone 500-image run, completed
   cleanly with NPU memory flat throughout (ruling out a simple leak). Root cause
@@ -944,6 +945,18 @@ reasoning behind each.
   the number to trust, consistent with this README's other slice-vs-full warnings.
   Worth understanding why detection AdaRound recovers so much less than
   classification's before spending the RAM on YOLOv8m/l/x or the wide ResNets.
+- **AdaRound for YOLOv8m at 640×640 — done, and it recovers even less.** Quantized on
+  Desktop 1 (GPU-accelerated FastFinetune, `--device`) and run on Desktop 2's XDNA1
+  (Phoenix): `models/yolov8m_cut_xint8_adaround.onnx` runs at the same 30.46 ms/frame as
+  plain XINT8 (1216/1223 nodes — no latency cost from AdaRound, only the weight rounding
+  changes). Full 5000-image mAP@50-95 is 45.32 against plain XINT8's 43.49
+  (`results/map_yolov8m_cut_xint8_adaround_npu.log`) — **+1.83 points**, a smaller
+  absolute recovery than yolov8s's +2.58 despite m's much higher starting accuracy,
+  extending the pattern that AdaRound has less room to recover as width increases.
+  Caveat: this model arrived via Syncthing with no local log of its calibration count,
+  so it isn't a clean like-for-like comparison against the calib-64 plain-XINT8 row —
+  the exact "a model can arrive with no log explaining it" risk this repo's own
+  machine notes warn about.
 - **Concurrent streams past 2, and on a wider model — done.** Both saturate:
   yolov8n flattens at 3 streams (~167 fps, 2.1×); yolov8m, which uses more of the
   array per call, saturates a stream earlier at 1.29× (`results/nstream_*.log`).

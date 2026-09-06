@@ -1,0 +1,53 @@
+deleted stale cache C:\Users\Ignis\PycharmProjects\ryzen-ai-xdna1-quantization\yolocutcachekey
+loading annotations into memory...
+Done (t=0.27s)
+creating index...
+index created!
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\Ignis\PycharmProjects\ryzen-ai-xdna1-quantization\yolocutcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+model: head-cut (6 outputs), numpy decode, input 640x640
+eval : 5000 images, conf 0.001, iou 0.7, max_det 300, per-class NMS
+  500/5000  (38414 detections so far)
+  1000/5000  (77503 detections so far)
+  1500/5000  (119039 detections so far)
+  2000/5000  (158469 detections so far)
+  2500/5000  (196711 detections so far)
+  3000/5000  (236306 detections so far)
+  3500/5000  (276564 detections so far)
+  4000/5000  (316271 detections so far)
+  4500/5000  (357406 detections so far)
+  5000/5000  (396445 detections so far)
+
+396445 detections over 5000 images in 891s
+inference  mean 171.75 ms   median 171.75 ms
+wrote C:\Users\Ignis\PycharmProjects\ryzen-ai-xdna1-quantization\results\dets_yolov8m_cut_xint8_adaround_npu.json
+Loading and preparing results...
+DONE (t=1.23s)
+creating index...
+index created!
+Running per image evaluation...
+Evaluate annotation type *bbox*
+DONE (t=18.87s).
+Accumulating evaluation results...
+DONE (t=3.15s).
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.453
+ Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] = 0.617
+ Average Precision  (AP) @[ IoU=0.75      | area=   all | maxDets=100 ] = 0.491
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.275
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.521
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.625
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=  1 ] = 0.356
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets= 10 ] = 0.581
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.627
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.425
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.687
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.778
+
+=== yolov8m_cut_xint8_adaround | NPU | 640px | 5000 images ===
+mAP@50-95  45.32
+mAP@50     61.71
+mAP small / medium / large   27.46 / 52.14 / 62.47
+latency    171.75 ms
