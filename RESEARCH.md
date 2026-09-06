@@ -77,9 +77,22 @@ generalize beyond any one model:
    rounding), **and AdaRound recovers most but not all of it.** ResNet50: 71.7% → 79.8%
    against an 80.4% ceiling. This is a repeatable recovery technique, not a lucky
    result on one model.
-3. **This NPU is not compute-bound at the model sizes tested.** yolov8n uses roughly
-   1.1 of its 16 TOPS. Consequences follow directly from this, and both have been
-   measured rather than assumed:
+3. **This NPU is not compute-bound at the model sizes tested — by a much wider margin
+   than the earlier FLOPs/latency estimate suggested.** That estimate put yolov8n at
+   roughly 1.1 of its 16 TOPS; a direct measurement (`xrt-smi examine -r
+   aie-partitions`'s GOPS column, `tools/gops_sweep.py`,
+   `results/npu_utilization_gops.log`) instead puts it at 9 GOPS — 0.06% of the 16 TOPS
+   nameplate, about two orders of magnitude lower. The reading tracks FLOPs almost
+   exactly across yolov8n→s→m (9→29→80 GOPS against 3.29×/9.1× FLOPs ratios), so the
+   cross-model *ratios* are trustworthy; what exactly the counter counts (raw MACs,
+   a wider instruction count, a wall-clock average folding in dispatch overhead the
+   FLOPs/latency estimate never accounted for) is undocumented anywhere found so far,
+   so the absolute %-of-16-TOPS figure should be read as directional. Even yolov8x, the
+   widest model measured, only reaches 258 GOPS (1.6%) — and notably keeps climbing past
+   yolov8l even though mAP does not, so raw utilization and accuracy are separate
+   ceilings, not the same one. Consequences follow directly from the *shape* of this
+   finding regardless of the exact number, and both have been measured rather than
+   assumed:
    - **Width is nearly free — confirmed on a second architecture and a second task,
      and it keeps paying off further out.** yolov8s costs 3.2× the FLOPs of yolov8n
      for only 1.75× the latency, and yolov8m pushes a third step further: 9.1× the
@@ -212,15 +225,18 @@ been closed:
   earlier was resolution-specific (640×640), not width-specific, since the ResNet
   AdaRound runs above hit no such wall at 224². AdaRound for YOLOv8l/x at 640×640 is
   still untried anywhere.
-- **Direct NPU utilization measurement — partially unblocked.** Windows' `GPU Engine`
-  counter was a dead end for a reason stronger than polling granularity: the NPU
-  registers as a `ComputeAccelerator` device, not a WDDM GPU adapter, so it never
-  appears as an adapter LUID for that counter (or `GPU Adapter Memory`) to read at all,
-  regardless of sampling rate. `xrt-smi examine -r aie-partitions` (bundled with the
-  driver) is the tool that actually sees this device — live per-context memory and a
-  GOPS column — and is now used here for the memory side of the concurrency findings
-  above. Turning its GOPS reading into a real utilization-vs-16-TOPS number, across
-  model sizes, is still untried.
+- **Direct NPU utilization measurement — done.** Windows' `GPU Engine` counter was a
+  dead end for a reason stronger than polling granularity: the NPU registers as a
+  `ComputeAccelerator` device, not a WDDM GPU adapter, so it never appears as an adapter
+  LUID for that counter (or `GPU Adapter Memory`) to read at all, regardless of sampling
+  rate. `xrt-smi examine -r aie-partitions`'s GOPS column, turned into a
+  utilization-vs-16-TOPS number across 8 already-quantized models by
+  `tools/gops_sweep.py` (`results/npu_utilization_gops.log`), lands everything under 2%
+  of nameplate (9 GOPS for yolov8n up to 258 for yolov8x) — roughly two orders of
+  magnitude below the FLOPs/latency estimate this repo used everywhere else (yolov8n at
+  ~1.1 TOPS). The reading's cross-model ratios track FLOPs closely (validated on
+  n/s/m), so it reads as real; what the counter counts, and why the absolute number
+  differs so much from the FLOPs/latency estimate, remains open. See finding 3.
 - **Width beyond yolov8m — done for detection (l/x); classification untested.**
   yolov8l/x are measured (see the findings table above) and the trend breaks at x. Two
   width steps still confirm the classification trend (resnet50→wide_resnet50_2→

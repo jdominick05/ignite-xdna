@@ -95,10 +95,14 @@ is backwards here: the bigger model is more accurate *and* 2.2× faster than the
 on the CPU.
 
 **Latency scales far below FLOPs.** yolov8s is 3.2× the arithmetic of yolov8n (28.6 vs
-8.7 GFLOPs) but only 1.75× the latency. yolov8n reaches roughly 1.1 of the array's 16 TOPS,
-so most of the extra width lands in lanes that were already idle. Both models partition
-identically — 922 NPU / 7 CPU — so this is width being absorbed, not a different graph.
-**Do not quote a FLOPs ratio as a latency prediction on this hardware.**
+8.7 GFLOPs) but only 1.75× the latency. yolov8n was estimated at roughly 1.1 of the
+array's 16 TOPS from FLOPs/latency alone; a direct measurement (see
+[Direct NPU utilization](#direct-npu-utilization-what-gops-actually-says) below) instead
+puts it at **9 GOPS — 0.06% of nameplate**, about two orders of magnitude lower, so the
+idle headroom the extra width is landing in is far larger than this original estimate
+implied. Both models partition identically — 922 NPU / 7 CPU — so this is width being
+absorbed, not a different graph. **Do not quote a FLOPs ratio as a latency prediction on
+this hardware.**
 
 **The quantization penalty shrinks as the model gets wider:** −9.75 mAP for n
 (36.69 → 26.94, a 27% relative loss) but −6.89 for s (44.29 → 37.40, 16%). Some of that
@@ -585,6 +589,49 @@ concurrent classifications (16 streams × 60 images) produced the bit-identical
 prediction the uncontended baseline did** — not just "similar accuracy," the literal
 same argmax on every image, at every stream count. Contention changes latency, not
 outputs, on this backend, on both models tested.
+
+### Direct NPU utilization: what GOPS actually says
+
+Every earlier "not compute-bound" claim in this README was a FLOPs/latency estimate
+(model FLOPs ÷ measured latency ÷ 16 TOPS nameplate), never a direct measurement — the
+GOPS column in `xrt-smi examine -r aie-partitions`'s per-context report (already used
+above for the concurrency memory numbers) had never been read. `tools/gops_sweep.py`
+holds one NPU session busy per model and samples it:
+
+| Model | GOPS | % of 16 TOPS | Memory |
+|---|---|---|---|
+| yolov8n | 9 | 0.056% | 93 MB |
+| yolov8s | 29 | 0.181% | 118 MB |
+| yolov8m (AdaRound) | 80 | 0.500% | 164 MB |
+| yolov8l | 166 | 1.038% | 231 MB |
+| yolov8x | 258 | 1.613% | 270 MB |
+| resnet50 (AdaRound) | 9 | 0.056% | 99 MB |
+| wide_resnet50_2 (AdaRound) | 23 | 0.144% | 144 MB |
+| wide_resnet101_2 | 46 | 0.287% | 204 MB |
+
+(`results/npu_utilization_gops.log`.) Two things stand out. First, **the reading tracks
+FLOPs almost exactly across the detection width steps** — yolov8n→s→m is 9→29→80 GOPS
+(3.2×, 8.9×) against FLOPs ratios of 3.29× and 9.1× — which is strong evidence this is a
+real, consistent relative measurement, not noise. Second, **the absolute number is
+roughly two orders of magnitude below the FLOPs/latency estimate used everywhere else in
+this README**: yolov8n's 9 GOPS is 0.06% of nameplate, not the ~1.1 TOPS (~6.9%) that
+estimate implied, and even yolov8x — the widest, most expensive model measured here —
+only reaches 1.6%. Whatever this NPU's real ceiling is, every model in this repo is
+nowhere near it.
+
+One more thing worth naming: **GOPS keeps climbing from l to x (166 → 258) even though
+mAP does not** (see [the width trend breaks here](#model-size-n-vs-s-measured-together)
+above, 45.37 → 45.09). Raw utilization and accuracy are separate ceilings — x keeps
+costing more measurable compute for no return, it doesn't just cost more latency for no
+return.
+
+Caveat, stated plainly: what exactly xrt-smi's GOPS counter counts — raw MACs, some
+wider instruction count, a wall-clock average that folds in per-call dispatch overhead
+the FLOPs/latency estimate never accounted for — is not documented anywhere this
+project has found. The cross-model *ratios* are corroborated against known FLOPs ratios
+above and are trustworthy; the absolute %-of-16-TOPS figure should be read as
+directional, not a precise utilization number. The `xrt-smi` FPS/Latency columns next to
+GOPS were always `N/A` in every sample taken, on this driver version.
 
 ---
 
