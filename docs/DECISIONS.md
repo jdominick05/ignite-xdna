@@ -19,8 +19,7 @@
    `Cannot find or create target with fingerprint=0x080002050018eec1`
    (4x4_3.5.0.0-2352) / `0x0a000205001c8d4c` (4x4_3.5.0.0-2160_ipu_2). Not tried:
    other 4x4 variants, or grepping 1.8's DLLs for `AMD_AIE2_4x4_Overlay` — moot since
-   1.7.1 works. Worth filing upstream against `amd/RyzenAI-SW` with the
-   recursive-search output above.
+   1.7.1 works. Filed upstream: [amd/RyzenAI-SW#400](https://github.com/amd/RyzenAI-SW/issues/400).
 2. **Provider options for PHX/HPT** (in `npu/session.py::build_session`): `cacheDir`,
    `cacheKey`, `enable_cache_file_io_in_mem: "0"`, `target: "X1"`,
    `xlnx_enable_py3_round: "0"`, `xclbin: <phoenix 4x4 path>`. camelCase
@@ -65,7 +64,21 @@
    anywhere; the run reports a plausible-looking latency and completes normally.
    **Never trust a batch>1 NPU result on this backend without an independent accuracy
    check** — it fails silently, not loudly, and it fails by not writing every batch
-   element, not by miscomputing them.
+   element, not by miscomputing them. Filed upstream:
+   [amd/RyzenAI-SW#401](https://github.com/amd/RyzenAI-SW/issues/401). A label-free,
+   ImageNet-free reproduction lives at `tools/probe_batch_slot_write.py`: it reads the
+   static batch size N off the graph (not assumed to be 2), fills every one of the N
+   slots with independent random noise in two separate batches, and reports per slot
+   whether the output actually changed — a slot identical across two draws of
+   continuous random floats is a probability-zero coincidence, so "identical" means
+   unwritten. Logged at `results/batch/slot_probe_b2.log` (2026-09-06): at batch 2 on
+   the NPU EP, slot 0 changes (max abs diff 2.125) and slot 1 does not (max abs diff
+   0.0, flagged STALE/UNWRITTEN); the CPU EP control on the same weights changes in
+   both slots (2.5 and 1.625) with none flagged stale. **Only batch 2 has been run —
+   batch 4 is untested.** The tool itself is not limited to 2 (point it at any static
+   batch-N model to get a per-slot table for that N), but no batch-4 XINT8 export has
+   been produced or tried yet, so whether batch 4 leaves only slot 0 live or some
+   larger prefix is an open question, not an assumed generalization from batch 2.
 6. **Preprocessing** must match calibration exactly. ResNet: timm
    `resolve_data_config` → `{'input_size':(3,224,224),'interpolation':'bicubic',
    'mean':(0.485,0.456,0.406),'std':(0.229,0.224,0.225),'crop_pct':0.95,

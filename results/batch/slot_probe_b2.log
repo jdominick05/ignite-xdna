@@ -1,0 +1,18 @@
+[0;93m2026-09-06 07:22:11.2912850 [W:onnxruntime:, session_state.cc:1316 onnxruntime::VerifyEachNodeIsAssignedToAnEp] Some nodes were not assigned to the preferred execution providers which may or may not have an negative impact on performance. e.g. ORT explicitly assigns shape related ops to CPU to improve perf.[m
+[0;93m2026-09-06 07:22:11.2918693 [W:onnxruntime:, session_state.cc:1318 onnxruntime::VerifyEachNodeIsAssignedToAnEp] Rerunning with verbose output on a non-minimal build will show node assignments.[m
+deleted stale cache C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\modelcachekey
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\modelcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+
+=== NPU EP, batch 2 ===
+slot 0: identical despite different input = False  (max abs diff 2.125000)
+slot 1: identical despite different input = True  (max abs diff 0.000000)  <-- STALE/UNWRITTEN
+stale slots: [1] of 2
+
+=== CPU EP, batch 2 ===
+slot 0: identical despite different input = False  (max abs diff 1.625000)
+slot 1: identical despite different input = False  (max abs diff 2.500000)
+no stale slots detected out of 2
