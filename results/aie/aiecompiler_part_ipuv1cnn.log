@@ -1,0 +1,29 @@
+Tried the one real device-model-shaped string found anywhere in this SDK:
+`DPU_PDI_0:IPUV1CNN` .. `DPU_PDI_7:IPUV1CNN`, extracted directly from the
+aie_partition metadata section of `phoenix\4x4.xclbin` (the same xclbin
+npu.session.resolve_xclbin resolves for every NPU run in this repo) via a raw
+byte scan -- this xclbin has no strings/xclbinutil tool in this SDK to read it
+properly (docs/DECISIONS.md already notes vaie_overlay ships no xclbinutil).
+"IPUV1CNN" looks like a genuine kernel/PDI instance name AMD's own runtime uses
+internally. It is not a valid aiecompiler --part value: same "could not auto
+derive AIE architecture" error as the deliberately-bogus probe above. Also
+checked and ruled out: vaip_config.json's "target" strings (PROCYON-MHA-QDQ,
+PSD/PSO/PSV, RyzenAI_transformer_cxx_*) are the VitisAI EP's own op-fusion
+subgraph labels, unrelated to aiecompiler's device-part namespace, and the
+xclbin's own embedded build_metadata is boilerplate from an unrelated Vitis
+"vadd" hello-world example (blank board/part fields) -- not real Phoenix
+metadata. No valid --part/--platform value for this hardware has been found
+anywhere in the 1.7.1 install. This is where the bring-up stops for this pass:
+--target=hw is closed without one, regardless of whether a platform file
+exists.
+
+                                           AI Engine Compiler
+                                     Version 2026.1 (windows64-bit)
+                                     SW Build ab5caf8 (release_rai_1_7) on 2026-03-19-12:10:22
+                          Copyright 1986-2022 Xilinx, Inc. All Rights Reserved.
+                          Copyright 2022-2026 Advanced Micro Devices, Inc. All Rights Reserved.
+ERROR: [aiecompiler 77-23428] The AIE architecture could not be auto derived from the platform/part specified.
+Compilation Failed
+(WARNING:0, CRITICAL-WARNING:0, ERROR:1)
+INVOKING: ['aiecompiler', '--include=C:\\Users\\<user>\\miniforge3\\envs\\ryzen-ai-1.7.1\\Lib\\site-packages\\vaie_cpplus\\include', '--target=x86sim', 'graph.cc', '--part=IPUV1CNN']
+EXIT CODE: 0

@@ -1,0 +1,17 @@
+Follow-up to aiecompiler_x86sim_passthrough.log: passed a deliberately bogus
+--part value to see whether aiecompiler's error text would list valid device
+model names (a common CLI pattern for this class of tool). It didn't -- the
+error just confirms the flag is real and the AIE architecture couldn't be
+derived from whatever string was given, with no enumeration of valid parts
+anywhere in this or the --help/--help-list output.
+
+                                           AI Engine Compiler
+                                     Version 2026.1 (windows64-bit)
+                                     SW Build ab5caf8 (release_rai_1_7) on 2026-03-19-12:10:22
+                          Copyright 1986-2022 Xilinx, Inc. All Rights Reserved.
+                          Copyright 2022-2026 Advanced Micro Devices, Inc. All Rights Reserved.
+ERROR: [aiecompiler 77-23428] The AIE architecture could not be auto derived from the platform/part specified.
+Compilation Failed
+(WARNING:0, CRITICAL-WARNING:0, ERROR:1)
+INVOKING: ['aiecompiler', '--include=C:\\Users\\<user>\\miniforge3\\envs\\ryzen-ai-1.7.1\\Lib\\site-packages\\vaie_cpplus\\include', '--target=x86sim', 'graph.cc', '--part=probe_invalid_part_name']
+EXIT CODE: 0

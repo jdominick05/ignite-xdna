@@ -645,7 +645,39 @@ been closed:
   Phoenix kernel from. Reaching it would still be a from-zero bring-up — ADF graph in
   C++, kernel compile (CHESS or Peano), `aiecompiler`, `xclbinutil` packaging, a small
   XRT host program — the same falsification-first shape this project itself started
-  with on resnet50, one level lower in the stack. Not started.
+  with on resnet50, one level lower in the stack.
+  **Bring-up started, and it stopped at a specific, well-defined wall — a real result,
+  not an abandoned attempt.** Wrote the smallest possible ADF graph (`tools/aie_probe/`:
+  one `int8` passthrough kernel, two ports, one connect) using the confirmed API surface
+  from `vaie_cpplus/include/adf.h`/`adf/window/window.h` (`window_readincr`/
+  `window_writeincr` verified present, not assumed from memory of the public AI Engine
+  docs). `aiecompiler` (invoked via the installed `vaie-overlay` package, in
+  `ryzen-ai-1.7.1`, not `resnet_env17` — that env stays untouched) runs completely
+  self-contained on this install: full version banner (`AI Engine Compiler 2026.1`,
+  `SW Build ab5caf8 (release_rai_1_7)`), full `--help` listing, no missing-dependency
+  error (`results/aie/aiecompiler_help.log`) — the `data/baseline.txt` failure an earlier
+  pass in this session worried about never materialized.
+  **The actual wall: no valid `--part`/`--platform` device-model string exists anywhere
+  in this SDK.** `--target=x86sim` (compiles to native x86 threads — validates ADF graph
+  structure and kernel logic only, proves nothing about the AIE array itself) got as far
+  as requiring one of those two flags (`results/aie/aiecompiler_x86sim_passthrough.log`).
+  Checked three candidates, all failed identically ("AIE architecture could not be
+  auto-derived"): a deliberately bogus string (confirms the flag works, no valid-parts
+  list is ever printed); `vaip_config.json`'s `"target"` strings (`PROCYON-MHA-QDQ`,
+  `PSD`/`PSO`/`PSV`, `RyzenAI_transformer_cxx_*`) — these are the VitisAI EP's own
+  op-fusion subgraph labels, a different namespace entirely; and `IPUV1CNN`, a real
+  string pulled directly from `phoenix\4x4.xclbin`'s own `aie_partition` metadata section
+  (`DPU_PDI_0:IPUV1CNN` through `DPU_PDI_7:IPUV1CNN` — this SDK ships no `xclbinutil` to
+  read that section properly, so this came from a raw byte scan) — still rejected
+  (`results/aie/aiecompiler_part_{probe,ipuv1cnn}.log`). The xclbin's own embedded
+  `build_metadata` turned out to be boilerplate from an unrelated Vitis `vadd`
+  hello-world example (blank `board`/`part` fields), not real Phoenix identification.
+  **`--target=hw` is closed on this install regardless of platform files, because
+  nothing here names the device aiecompiler needs to hear.** This is where the bring-up
+  stops for now — a durable negative, not a dead end to hide: the compiler runs, a
+  trivial kernel graph is syntactically accepted, and the blocker is one specific,
+  named, reproducible thing (no discoverable device-model string), not a vague
+  environment failure.
 
 ## How to read the rest of this repository
 

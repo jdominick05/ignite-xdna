@@ -1,0 +1,134 @@
+First successful invocation of `aiecompiler` on this install (via
+`vaie_overlay.cli.aiecompiler()`, resolved through the installed `vaie-overlay`
+package in the `ryzen-ai-1.7.1` conda env -- see RESEARCH.md's "Custom C++ XRT
+/ hand-written AIE kernels"). `-h` alone errors as an unrecognized option; `-help`
+is the real flag (Xilinx/Vitis CLI convention). This establishes the tool is
+self-contained and runs on this Windows install -- it prints a full version
+banner and its complete option listing, with no missing-dependency error. Full
+`aiecompiler --help` output follows.
+
+usage: loader [options]
+
+options:
+  -dbg             Use debug binaries
+  -exec <program>  Run specified program
+  -metrics         Run through performance monitor
+  -devenv          Run through MS dev studio
+  -ij              Run idea
+  -nb              Run netbeans
+  -jp              Run jprofiler
+  -cmd             Start a command shell
+  -java            Run via java directly
+  -internal_ip     Run with internal IP instead of customer
+  -help            Display this help
+
+                                           AI Engine Compiler
+                                     Version 2026.1 (windows64-bit)
+                                     SW Build ab5caf8 (release_rai_1_7) on 2026-03-19-12:10:22
+                          Copyright 1986-2022 Xilinx, Inc. All Rights Reserved.
+                          Copyright 2022-2026 Advanced Micro Devices, Inc. All Rights Reserved.
+USAGE: aiecompiler [options] <Input File>
+
+OPTIONS:
+
+AI-Engine Options:
+               
+  --constraints=<string>           - Specify constraints files in JSON format (zero or more)
+  --enable-partition=<string>      - Use this option to enable AIE partition flow. Usage --enable-partition="false"|"<partition_start_column:partition_num_columns>" (default: false)
+  --heapsize=<int>                 - Heap size, in bytes, per processor (default 1024)
+  --part=<string>                  - Use a physical device model for constraint mapping
+  --pl-freq=<number>               - Specify frequency (in MHz) for all PL kernels and PLIOs.(default:1/4 Of Device Speed Grade Specfic AIE Freq). Usage --pl-freq=<value>
+  --pl-register-threshold=<number> - Specify frequency (in MHz) threshold for registered AIE-PL crossing.(default:1/8 Of Device Speed Grade Specfic AIE Freq)
+  --stacksize=<int>                - Stack size, in bytes, per processor (default 1024)
+
+CDO Options:
+                    
+  --broadcast-enable-core          - Enable all AIE cores associated with a graph using broadcast. This option reserves one broadcast channel in the array for core enabling purpose.
+
+Compiler Debugging Options:
+     
+  --adf-api-log-level=<uint>       - ADF API log-level (0: errors, 1: level-0 + warnings, 2: level-1 + info messages, 3: level-2 + debug messages) (default: 2)
+  --kernel-linting                 - Consistency checking between graphs and kernels (default: false).
+  --log-level=<int>                - Log level for verbose logging. Only applicable with -verbose (range: [0,5], default: 2 with -verbose, 0 with -quiet, 1 otherwise)
+  --quiet                          - Suppress output of the aiecompiler backend
+  --verbose                        - Verbose output of the aiecompiler backend
+
+Design Rule Check Options:
+      
+  --drc.disable=<string>           - Disable the Design Rule Check for the specified ID. A disabled check is not executed.
+  --drc.enable=<string>            - Enable the Design Rule Check for the specified ID.
+  --drc.severity=<string>          - Change the severity of a Design Rule Check. Value string format "<ID>:<severity>[:context]".
+  --drc.waive=<string>             - Waive the Design Rule Check for the specified ID. A waived check is still performed, but marked as waived.
+
+Execution Target:
+               
+  --compile-testbench-only         - When only the testbench portion of the design has changed, set this option to speed up the AIE compilation flow needed prior to AIE simulation. This option is applicable only for --target=hw and AIE simulation flow and is ignored for --target=x86sim
+  --target=<string>                - Set the execution target      
+    =x86sim                -   Compile application targeting x86 Simulation      
+    =hw                    -   Compile application targeting Hardware
+
+File Options:
+                   
+  --include=<string>               - Specify an include directory (zero or more)
+  --output=<string>                - [Optional] State the name to be used in intermediate, report and summary file names under Work, instead of using the top-level project name by default. E.g. 'aiecompiler project.cpp --output mygraph' will produce Work/reports/'mygraph.xpe', Work/temp/'mygraph_mapped.json' etc. instead of 'project.xpe', 'project_mapped.json' etc.
+  --output-archive=<string>        - Specify output archive name which will contain compiled AIE artifacts (default: 'libadf.a')
+  --platform=<string>              - Specify path to a platform specification(XPFM) or hardware specification(XSA)
+  --workdir=<string>               - Specify a working directory (default 'Work')
+
+Generic Options:
+                
+  --help                           - print AICompiler help
+  --help-list                      - print AICompiler help in list format
+  --version                        - print AICompiler version
+
+Input Spec Options:
+             
+
+Miscellaneous Options:
+          
+  --Xxloptstr=<string>             - Option string to enable/disable optimizations in XLOpt level 2.
+                                   "-xlinline-threshold=T" : set the automatic inlining threshold to T (default T = 5000)
+                                   "-annotate-pragma" : automatic insertion of loop unrolling, pipelining, and flattening pragma (default = true)
+  --disable-multirate              - Disable multirate in ADF graphs (default: false)
+  --evaluate-fifo-depth            - Enable fifo guidance (default false design should be compiled and deployed without this option on hardware
+  --float-accuracy=<string>        - Select the float accuracy in aie-ml
+  --known-tripcount                - converting unknown trip count to Known trip count
+  --lock-fence-mode=<int>          - Enables more aggressive scheduling around acquire and release of io buffers for aie-ml (default: 1).
+                                   -lock-fence-mode=0 : disable aggressive scheduling
+                                   -lock-fence-mode=1 : use aggressive scheduling
+  --nodot-graph                    - Don't generate dot graph files
+  --xlopt=<int>                    - Enable a combination of kernel optimizations based on the opt level (allowed levels = 0-2, default = 1).
+                                    -xlopt=1 : automatic computation of heap size, guidance generation from LLVM IR analysis
+                                    -xlopt=2 : automatic inlining, loop peeling for unrolled loops, pragma insertion
+
+Module-Specific Options:
+        
+  --Xchess=<string>                - Pass kernel-specific option to the CHESS compiler specified as <kernel>:<optionid>=<value>
+  --Xelfgen=<string>               - Pass general option to the Elf Generator Makefile (e.g. -j2)
+  --Xmapper=<string>               - Pass general option to the MAPPER phase (e.g. -c0)
+  --Xpreproc=<string>              - Pass general option to the PREPROCESSOR phase for all source code compilations AIE/PS/PL/x86sim (e.g. -D...)
+  --Xpslinker=<string>             - Pass general option to the PS LINKER phase (e.g. -L... -l...)
+  --fast-floats                    - Enable fast implementation for linear floating point scalar operations like add, sub, mul and compare 
+  --fast-nonlinearfloats           - Enable fast implementation for non-linear floating point scalar operations like sine/cosine, sqrt and inv 
+  --fastmath                       - Enable fast implementations of float2fix, fplt and fpge 
+  --Xx86sim=<string>               - Pass x86sim specific options to the compiler.
+                   "clangStaticAnalyzer=[0,1]" : Perform static analysis.
+                   "thread-local-globals=[0,1]" : Make global variables thread_local. Default is 1.
+                   "internalize-funcs=[0,1]" : Change linkage of functions with external linkage to internal linkage. Default is 1.
+                   "internalize-global-vars=[0,1]" : Change linkage of global variables with external linkage to internal linkage. Default is 1.
+                   "truncate-vector-load-store-addresses=[0,1]" : align addresses of vector loads and stores. Default is 1.
+                   "code-coverage" : Enable code coverage for AIE kernel code. Default is 0.
+
+Router Options:
+                 
+  --Xrouter=<string>               - Pass general option to the ROUTER phase (e.g. -c maxconfl)
+  --swfifo-threshold=<int>         - fifo_depth threshold to place DMA FIFO (default: 40 words). If the fifo_depth value is smaller than this number, then stream switch fifo will be used
+
+Tracing Options:
+                
+  --event-trace=<string>           - Event trace configuration levels
+  --event-trace-port=<string>      - Set the AI Engine event tracing port (default: gmio)
+  --graph-iterator-event           - Enable event trace based on graph iteration count at runtime (default: false)
+  --num-trace-streams=<int>        - Number of trace streams (default: 16)
+  --trace-plio-width=<int>         - PLIO width for trace streams (default: 64)
+EXIT CODE: 0

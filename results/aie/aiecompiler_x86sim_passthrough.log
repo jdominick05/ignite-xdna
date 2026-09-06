@@ -1,0 +1,23 @@
+First real invocation of AMD's `aiecompiler` (see RESEARCH.md's "Custom C++ XRT /
+hand-written AIE kernels") against a trivial ADF graph: a single passthrough
+kernel over int8, source at tools/aie_probe/{kernels.h,kernels.cc,graph.h,graph.cc}.
+`--target=x86sim` compiles a kernel graph to run as native x86 threads -- it
+validates ADF graph structure and kernel logic only, it does not touch, target,
+or say anything about the AIE array itself (no tile dtype/timing/placement
+information comes from this target). This run's actual result: the compiler
+starts, finds and includes the ADF headers, and gets as far as needing a
+--platform or --part before it can proceed -- confirming aiecompiler is
+functional on this install (contrary to the working assumption two commits ago
+that it might not even start) and that specifying no device model at all is not
+enough to compile even for a software-only target.
+
+                                           AI Engine Compiler
+                                     Version 2026.1 (windows64-bit)
+                                     SW Build ab5caf8 (release_rai_1_7) on 2026-03-19-12:10:22
+                          Copyright 1986-2022 Xilinx, Inc. All Rights Reserved.
+                          Copyright 2022-2026 Advanced Micro Devices, Inc. All Rights Reserved.
+ERROR: [aiecompiler 77-6500] You must specify either the --platform or the --part option.
+Compilation Failed
+(WARNING:0, CRITICAL-WARNING:0, ERROR:1)
+INVOKING: ['aiecompiler', '--include=C:\\Users\\<user>\\miniforge3\\envs\\ryzen-ai-1.7.1\\Lib\\site-packages\\vaie_cpplus\\include', '--target=x86sim', 'graph.cc']
+EXIT CODE: 0
