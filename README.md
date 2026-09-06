@@ -500,8 +500,10 @@ strictly in turn. Concurrent threads get **1.8-1.9× the combined throughput** o
 round-robin, with zero cross-talk on either model. Each individual call gets ~1 ms
 slower under contention (13.3 → 14.3 ms), but two streams together clear far more
 frames per second than one stream alone manages twice. That's consistent with the
-width finding above: yolov8n only reaches about 1.1 of the array's 16 TOPS on paper
-(see [Model width](#model-size-n-vs-s-measured-together)), so a single small model
+width finding above: yolov8n only reaches about 6.6% of the array's 16 TOPS solo
+(`tools/estimate_tops.py`; see "Splitting the array into independent partitions"
+below — this retracts an earlier "~1.1" figure on this row, computed before that
+script existed), so a single small model
 leaves most of the array idle, and a second independent stream can use that
 headroom — some other cost (dispatch/DMA setup, not compute) is what puts a floor
 under single-stream latency, and that floor is what two threads partly hide behind
@@ -721,6 +723,56 @@ project has found. The cross-model *ratios* are corroborated against known FLOPs
 above and are trustworthy; the absolute %-of-16-TOPS figure should be read as
 directional, not a precise utilization number. The `xrt-smi` FPS/Latency columns next to
 GOPS were always `N/A` in every sample taken, on this driver version.
+
+### Achieved ops/s: a real answer to "% of 16 TOPS", not a GOPS estimate
+
+`tools/estimate_tops.py` closes the gap the caveat above leaves open. It reads real
+MACs per inference off the actual on-NPU graph via `onnx-tool`'s static analysis (the
+head-cut model, not Ultralytics' published FLOPs — the cut removed the decode tail,
+so the true NPU-side work is strictly less), and multiplies by a measured fps that is
+cited from an existing log, never re-derived: `TOPS = MACs × 2 × fps` (AMD's 16 TOPS
+nameplate is INT8, 2 ops/MAC). Nothing here depends on `xrt-smi`'s GOPS column at all.
+
+| config | fps | TOPS | % of 16 |
+|---|---|---|---|
+| resnet50 XINT8 (solo, shared 4x4) | 176.06 | 1.49 | 9.3% |
+| yolov8n cut XINT8 (solo, shared 4x4) | 111.86 | 1.05 | 6.6% |
+| yolov8s cut XINT8 (solo, shared 4x4) | 63.98 | 1.91 | 11.9% |
+| wide_resnet50_2 XINT8 (solo, shared 4x4) | 103.52 | 2.41 | 15.1% |
+| yolov8m cut XINT8 (solo, shared 4x4) | 32.47 | 2.64 | 16.5% |
+| yolov8x cut XINT8 (solo, shared 4x4) | 8.54 | 2.24 | 14.0% |
+| **yolov8l cut XINT8 (solo, shared 4x4)** | 20.13 | 3.40 | **21.2%** (solo peak) |
+| yolov8n cut XINT8 (4× independent 1x4 columns) | 245.20 | 2.31 | 14.4% |
+| yolov8m cut XINT8 (4× independent 1x4 columns) | 65.30 | 5.30 | 33.1% |
+| yolov8x cut XINT8 (4× independent 1x4 columns) | 23.20 | 6.08 | 38.0% |
+| **yolov8l cut XINT8 (4× independent 1x4 columns)** | 37.30 | **6.29** | **39.3% — best measured** |
+
+Two things fall out of this table that the retracted GOPS numbers never showed:
+
+**Solo achieved compute rises with model size, then turns over at x** — the same
+width-stops-paying-off shape already found for yolov8l→x's latency and mAP (see
+[the width trend breaks here](#model-size-n-vs-s-measured-together)), now visible in
+delivered compute too, not just in the FLOPs-per-latency ratio.
+
+**Splitting across 4 independent columns changes which model wins, and by a lot.**
+yolov8m and yolov8l both scale to ~3.8× combined throughput at 4 columns (`results/
+multi_partition_yolov8{m,l}.log`) — not the same 3.65× as yolov8n by coincidence, but
+better, because a heavier model still has per-column headroom left (the per-column
+vs. shared-4x4 latency ratio — 1.66× at n, 1.88× at m, 2.07× at l — stays well under
+the 4× a fully compute-bound single column would show, at every size tested). The
+result: **yolov8l split across 4 columns reaches 39.3% of the 16 TOPS nameplate, the
+best number this repo has measured** — nearly 6× yolov8n's old, now-retracted "~1.1"
+GOPS-derived figure. yolov8x's solo regression does not reappear once it gets its own
+column (38.0%, statistically tied with l) — confirming that regression was about
+contending for the whole array, not a property of the model itself. Whether a model
+heavier than yolov8l/x would climb even higher is untested — per-column headroom was
+not exhausted at any size measured here.
+
+Same caveats as the partition-splitting result above travel with every number in this
+table that used `1x4.xclbin` (deprecated overlay, Desktop 2 / Phoenix only, unverified
+on the laptop's Hawk Point chip). yolov8l and yolov8x additionally carry the known
+DPU-timeout instability seen on 2 of 3 full 5000-image mAP attempts as an open risk on
+long runs, though the ~12s throughput windows measured here did not trigger it.
 
 ---
 
