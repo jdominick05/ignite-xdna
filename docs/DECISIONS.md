@@ -209,6 +209,36 @@
   dataclass today, but if a future Ryzen AI bumps Quark and it starts returning
   `QConfig`, every `qc.<attr> = ...` assignment becomes a silent no-op.
   `3b_quantize_cut.py` type-checks for exactly this.
+- **The 5th physical AIE column on this Phoenix chip cannot be reached through this
+  repo's tooling.** `xrt-smi examine -r platform` reports **Total Columns: 5** here
+  (Desktop 2), not the 4 every `tools/multi_partition_bench.py` sweep has assumed.
+  Extending that tool to `--procs 1 2 3 4 5` against the existing `1x4.xclbin` shows
+  why: `xrt-smi examine -r aie-partitions` during the n=5 window still reports only
+  **4** distinct partitions (columns 1–4); the 5th and 4th process share one partition
+  and both drop to ~38 fps (half of ~61 fps solo) while columns 1–3 stay full-rate —
+  `1x4.xclbin` itself exposes only 4 of the 5 columns as independent contexts, so a
+  5th process just gets time-sliced onto column 4 rather than a genuine 5th column.
+  Combined throughput at n=5 (257.2 fps) barely improves on n=4 (246.4 fps) for
+  exactly this reason.
+  Tried the obvious next step — the driver's own 5-column overlay family
+  (`C:\Windows\System32\AMD\5x4_3.5.0.0-799.xclbin`, `-950.xclbin`,
+  `5x4_3.5.0.050-651.xclbin`; none shipped in the 1.7.1 SDK's own xclbins folder) —
+  and **all three build without error and produce numerically correct output that
+  matches CPU, but run 100% on CPU.** `vitisai_ep_report.json`'s `deviceStat` for
+  every one of them has no `DPU` entry at all (only `CPU` and `VITIS_EP_CPU`), and
+  session build logs a glog `F`-severity line, `target_factory.cpp:161] Cannot find
+  or create target with fingerprint=0x...`, for each — a hardware-target lookup that
+  fails and silently falls through to full CPU rather than raising. This is the exact
+  "CPU run in an NPU costume" failure `npu.session.resolve_xclbin`'s docstring warns
+  about, just from a different cause (xclbin/firmware fingerprint mismatch, not a
+  missing xclbin) — **matching CPU output is not evidence of NPU execution; check
+  `deviceStat` for a `DPU` entry before trusting any result from an unfamiliar
+  xclbin.** Conclusion: the 5th column is real but not reachable from this machine's
+  1.7.1 install with any xclbin tried so far. Getting to it would need either a
+  driver/firmware revision this repo doesn't have, or the separate ahead-of-time
+  AIE-compiler flow (`vaitrace`'s `-cp`/`vaiml` flags) rather than the lightweight
+  ORT/VitisAI-EP JIT-compile path every pipeline here uses — out of scope unless that
+  flow gets set up deliberately. Desktop 2 / Phoenix.
 
 ## The YOLOv8 partitioning failure (resolved)
 

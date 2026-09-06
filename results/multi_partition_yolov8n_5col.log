@@ -1,0 +1,60 @@
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\1x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\yolocut1x4cachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+deleted stale cache C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\yolocut1x4cachekey
+model: models/yolov8n_cut_xint8.onnx
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\1x4.xclbin
+pre-building one session to force the compile before any worker forks -- avoids N processes racing the same cache directory on first run.
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\1x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\yolocut1x4cachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+compile cache warm.
+
+=== 1 independent process(es), separate partitions if the overlay allows it ===
+  partitions during window: [('0', ['1'])]
+  combined 67.2 fps  per-process: [67.2]  mismatches: 0
+
+=== 2 independent process(es), separate partitions if the overlay allows it ===
+  partitions during window: [('0', ['1']), ('1', ['2'])]
+  combined 130.3 fps  per-process: [65.2, 65.2]  mismatches: 0
+
+=== 3 independent process(es), separate partitions if the overlay allows it ===
+  partitions during window: [('0', ['1']), ('1', ['2']), ('2', ['3'])]
+  combined 188.5 fps  per-process: [63.0, 62.9, 62.6]  mismatches: 0
+
+=== 4 independent process(es), separate partitions if the overlay allows it ===
+  partitions during window: [('0', ['1']), ('1', ['2']), ('2', ['3']), ('3', ['4'])]
+  combined 246.4 fps  per-process: [61.3, 61.9, 61.8, 61.3]  mismatches: 0
+
+=== 5 independent process(es), separate partitions if the overlay allows it ===
+  partitions during window: [('0', ['1']), ('1', ['2']), ('2', ['3']), ('3', ['4'])]
+  combined 257.2 fps  per-process: [60.8, 60.1, 59.8, 38.2, 38.2]  mismatches: 0
+
+=== summary ===
+ procs  combined fps  vs 1-proc    partitions  mismatches
+     1          67.2      1.00x             1           0
+     2         130.3      1.94x             2           0
+     3         188.5      2.80x             3           0
+     4         246.4      3.66x             4           0
+     5         257.2      3.83x             4           0
+
+no cross-talk at any process count.
+
+--- context ---
+Extends results/multi_partition_yolov8n.log (N=1..4) to N=5, prompted by
+xrt-smi examine -r platform reporting "Total Columns : 5" on this chip -- one
+more than every prior multi-partition sweep assumed. Result: 1x4.xclbin only
+ever exposes 4 independent partitions regardless of process count; at N=5 the
+partition report still lists exactly 4 entries, and the 4th and 5th processes
+share column 4 (both ~38 fps, half of the ~60 fps the other three columns keep
+solo) rather than getting distinct 5th column. Combined throughput barely
+moves past N=4 as a result (246.4 -> 257.2 fps). See docs/DECISIONS.md
+"Rejected approaches" for the follow-up: the driver's 5x4_*.xclbin overlay
+family was tried directly and falls back to 100% CPU on this install (fingerprint
+mismatch), so the 5th physical column is confirmed real but not reachable
+through this repo's tooling here.
+Desktop 2 / Phoenix.

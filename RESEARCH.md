@@ -125,6 +125,25 @@ generalize beyond any one model:
    the laptop's Hawk Point chip may have a different column count and has not been
    tested.
 
+   **Checked whether this scales to a 5th column — it doesn't, on this install.**
+   `xrt-smi examine -r platform` reports **Total Columns: 5** on Desktop 2's Phoenix
+   chip, one more than the 4 assumed above. Extending the sweep to `--procs 1 2 3 4 5`
+   against the same `1x4.xclbin` shows why that 5th column was never in play:
+   `xrt-smi`'s own partition report at N=5 still lists only 4 distinct partitions —
+   the 5th process shares column 4 with the 4th (both drop to ~38 fps, half of solo
+   rate) rather than getting an independent 5th context, so combined throughput barely
+   moves (246.4 → 257.2 fps). The driver's own 5-column overlay family
+   (`5x4_*.xclbin` under `C:\Windows\System32\AMD`, not shipped in the 1.7.1 SDK's own
+   xclbins folder) was tried directly as the obvious next step and is a dead end here:
+   all three versioned candidates build and run without error and produce output that
+   matches CPU, but **every node reports `device: CPU`** in
+   `vitisai_ep_report.json` — a hardware-target fingerprint lookup fails silently
+   (`target_factory.cpp: Cannot find or create target with fingerprint=0x...`) and the
+   whole graph falls back to CPU, not the NPU. See `docs/DECISIONS.md`'s "Rejected
+   approaches" for the full write-up. The physical 5th column is real; reaching it
+   would need a different driver/firmware revision or the ahead-of-time AIE-compiler
+   flow this repo doesn't use, not more xclbin-hunting on this install.
+
 5. **A real achieved-ops/s number now exists, replacing every retracted GOPS
    citation — and it names a config well past anything measured before.**
    `tools/estimate_tops.py` computes `TOPS = MACs_per_inference × 2 × fps`, with MACs
