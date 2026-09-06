@@ -17,3 +17,6 @@ YOLO_CACHE_KEY = "yolocachekey"
 # compile cached from the full-graph model.
 YOLO_CUT_CACHE_KEY = "yolocutcachekey"
 YOLO_POSE_CUT_CACHE_KEY = "yoloposecutcachekey"
+# Same model, the 1-column overlay instead of 4x4 (tools/multi_partition_bench.py)
+# -- its own key so a 1x4 compile can never collide with the 4x4 one above.
+YOLO_CUT_1X4_CACHE_KEY = "yolocut1x4cachekey"

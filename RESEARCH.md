@@ -77,22 +77,57 @@ generalize beyond any one model:
    rounding), **and AdaRound recovers most but not all of it.** ResNet50: 71.7% → 79.8%
    against an 80.4% ceiling. This is a repeatable recovery technique, not a lucky
    result on one model.
-3. **This NPU is not compute-bound at the model sizes tested — by a much wider margin
-   than the earlier FLOPs/latency estimate suggested.** That estimate put yolov8n at
-   roughly 1.1 of its 16 TOPS; a direct measurement (`xrt-smi examine -r
-   aie-partitions`'s GOPS column, `tools/gops_sweep.py`,
-   `results/npu_utilization_gops.log`) instead puts it at 9 GOPS — 0.06% of the 16 TOPS
-   nameplate, about two orders of magnitude lower. The reading tracks FLOPs almost
-   exactly across yolov8n→s→m (9→29→80 GOPS against 3.29×/9.1× FLOPs ratios), so the
-   cross-model *ratios* are trustworthy; what exactly the counter counts (raw MACs,
-   a wider instruction count, a wall-clock average folding in dispatch overhead the
-   FLOPs/latency estimate never accounted for) is undocumented anywhere found so far,
-   so the absolute %-of-16-TOPS figure should be read as directional. Even yolov8x, the
-   widest model measured, only reaches 258 GOPS (1.6%) — and notably keeps climbing past
-   yolov8l even though mAP does not, so raw utilization and accuracy are separate
-   ceilings, not the same one. Consequences follow directly from the *shape* of this
-   finding regardless of the exact number, and both have been measured rather than
-   assumed:
+3. **This NPU is not compute-bound at the model sizes tested, but `xrt-smi`'s GOPS
+   column cannot tell you by how much — it's a per-context notional figure, not a
+   delivered-compute measurement, and every absolute number this repo previously read
+   off it is retracted, not revised.** `tools/gops_sweep.py`
+   (`results/npu_utilization_gops.log`) found GOPS ratios that track FLOPs almost
+   exactly across yolov8n→s→m (9→29→80 against 3.29×/9.1× FLOPs ratios) — which reads
+   like a real measurement, but is equally what a *compile-time* value derived from
+   the xmodel's own op count would look like, since that also scales with FLOPs. Two
+   independent checks settled which one it is, in the same direction: GOPS scales
+   exactly linearly with concurrent stream count while measured completions/s stays
+   flat in the same run (`tools/session_hold.py`, `results/gops_yolov8{n,m}.log`); and
+   reading `xrt-smi examine -r aie-partitions`'s *full* report, not just its GOPS and
+   memory columns, shows every session this repo has ever built under the `4x4.xclbin`
+   overlay — any thread count, any process count — lands on one
+   `Partition Index: 0, Columns: [1, 2, 3, 4]`. Two independent processes on that
+   partition were measured to exactly halve each other's throughput (~149/s solo →
+   ~76/s each concurrent, combined ~152/s): a single physical resource being
+   time-sliced. That is also the actual mechanism behind the concurrency-saturation
+   finding below, which previously named "compute headroom" only by eliminating
+   memory as the cause — the real cause is one shared partition, not abstract
+   headroom. No %-of-16-TOPS number from this repo's earlier GOPS readings should be
+   cited going forward.
+4. **Splitting the array into independent per-column partitions beats the single
+   4x4 partition on combined throughput — a real way to use more of this NPU, with a
+   real caveat attached.** `1x4.xclbin`, bundled with the SDK right next to
+   `4x4.xclbin` and unused by this project until now, claims only one column per HW
+   context. `tools/multi_partition_bench.py` (`results/multi_partition_yolov8n.log`)
+   confirmed via the same full partition report that N independent OS processes
+   against it get N *separate* `Partition Index` entries on N different columns —
+   not the single shared partition the 4x4 overlay always produces — with throughput
+   measured across all N held in a common, confirmed-active window (every process
+   started, `xrt-smi` polled until all N contexts report Active, only then does the
+   clock start), not reconstructed from staggered runs with uncontrolled overlap.
+   Result on yolov8n: 67.2 fps solo, scaling to 245.2 fps at N=4 (3.65×), zero
+   cross-talk at every process count checked the same known-positive/known-negative
+   way as every other concurrency tool in this repo. 245.2 fps beats the single 4x4
+   partition's own ~151–172 fps ceiling by roughly 1.4–1.6×, at the cost of
+   per-inference latency roughly doubling (~15 ms/call on one column vs 4x4's
+   ~6.6 ms/call) — a genuine throughput/latency trade for independent-stream
+   workloads, not free capacity. **Caveat that must travel with this result**: AMD
+   deprecated `1x4.xclbin` starting Ryzen AI 1.5 ("no longer supported and should not
+   be used" — checked against AMD's published release notes 2026-09-06); it still
+   compiles and runs correctly on the 1.7.1 install this project depends on, but this
+   is unsupported territory, not a sanctioned configuration, and nothing guarantees
+   it survives a future driver or SDK update. Measured on Desktop 2 / Phoenix only —
+   the laptop's Hawk Point chip may have a different column count and has not been
+   tested.
+
+   Consequences below follow from the width of the compute-bound margin (still real,
+   independent of the retracted GOPS number — see the concurrency and width findings
+   throughout this repo), and both have been measured rather than assumed:
    - **Width is nearly free — confirmed on a second architecture and a second task,
      and it keeps paying off further out.** yolov8s costs 3.2× the FLOPs of yolov8n
      for only 1.75× the latency, and yolov8m pushes a third step further: 9.1× the
@@ -226,27 +261,30 @@ been closed:
   earlier was resolution-specific (640×640), not width-specific, since the ResNet
   AdaRound runs above hit no such wall at 224². AdaRound for YOLOv8l/x at 640×640 is
   still untried anywhere.
-- **Direct NPU utilization measurement — done, GOPS path closed on two fronts.**
+- **Direct NPU utilization measurement — the GOPS path is closed and retracted, but
+  reading the full partition report instead of just that column opened a real one.**
   Windows' `GPU Engine` counter was a dead end for a reason stronger than polling
   granularity: the NPU registers as a `ComputeAccelerator` device, not a WDDM GPU
   adapter, so it never appears as an adapter LUID for that counter (or `GPU Adapter
   Memory`) to read at all, regardless of sampling rate. `xrt-smi examine -r
-  aie-partitions`'s GOPS column was tried two ways: a cross-model sweep across 8
-  already-quantized models (`tools/gops_sweep.py`, `results/npu_utilization_gops.log`)
-  turns it into a utilization-vs-16-TOPS number that lands everything under 2% of
-  nameplate (9 GOPS for yolov8n up to 258 for yolov8x) — roughly two orders of
-  magnitude below the FLOPs/latency estimate this repo used everywhere else (yolov8n at
-  ~1.1 TOPS) — with cross-model ratios tracking FLOPs closely (validated on n/s/m), so
-  the reading looks real; and a per-stream concurrency check (`tools/session_hold.py`
-  extended to parse GOPS, `results/gops_yolov8{n,m}.log`) found GOPS scales exactly
-  linearly with stream count (9×/80× per stream for n/m) with no saturation through 8
-  streams, while measured completions/s in the same run is flat from 1 stream onward —
-  decoupled from real contention. Together: the counter is a per-context notional
-  figure, not a measurement of delivered compute, so it can't build a
-  utilization-vs-16-TOPS story under load; what it counts, and why its absolute
-  magnitude differs so much from the FLOPs/latency estimate, remains open. See finding
-  3 and the status table. No remaining path to direct compute-utilization measurement
-  is known on this stack.
+  aie-partitions`'s GOPS column looked like a utilization signal (cross-model ratios
+  track FLOPs closely, `tools/gops_sweep.py`, `results/npu_utilization_gops.log`) but
+  is a per-context notional figure, not delivered compute — disproved by linear
+  scaling with stream count while measured completions/s stays flat
+  (`tools/session_hold.py`, `results/gops_yolov8{n,m}.log`), and explained by finally
+  reading the report's Partition Index / Columns fields (never parsed before): every
+  session this repo has built under `4x4.xclbin` lands on one shared
+  `Partition Index: 0, Columns: [1, 2, 3, 4]`, so "GOPS vs 16 TOPS" was never a
+  meaningful ratio to begin with. See finding 3 — every prior absolute number from
+  GOPS is retracted, not revised. That same discovery opened a real lever instead:
+  `1x4.xclbin` gives independent OS processes *separate* partitions on separate
+  columns, and `tools/multi_partition_bench.py`
+  (`results/multi_partition_yolov8n.log`) measured 3.65× combined throughput at 4
+  concurrent processes vs 1, beating the single 4x4 partition's own ceiling by
+  roughly 1.4–1.6× — see finding 4, caveat about `1x4.xclbin` being deprecated by AMD
+  included. Untested: whether a 5th concurrent context queues, refuses, or shares a
+  column; whether this holds on the laptop's Hawk Point chip (different column
+  count, unconfirmed); whether it holds for a wider model than yolov8n.
 - **Width beyond yolov8m — done for detection (l/x); classification untested.**
   yolov8l/x are measured (see the findings table above) and the trend breaks at x. Two
   width steps still confirm the classification trend (resnet50→wide_resnet50_2→

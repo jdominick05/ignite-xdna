@@ -10,13 +10,17 @@
 1. **Ryzen AI 1.7.1 for NPU inference, not 1.8.0.** 1.8.0 SDK ships ZERO xclbins
    (`voe-4.0-win_amd64\` contains only `vaip_config.json`; recursive search of the
    install tree finds none; env site-packages only has
-   `data\parts\xilinx\xclbin\strx\base.xclbin`). Docs for 1.8.0 still claim
-   `phoenix\4x4.xclbin` exists — the docs are wrong. The driver drops xclbins in
-   `C:\Windows\System32\AMD\` (`1x4_*`, `4x4_*`, `5x4_*` = XDNA1; `AMD_AIE2P_*` =
-   Strix) but 1.8's EP rejects them: `Cannot find or create target with
-   fingerprint=0x080002050018eec1` (4x4_3.5.0.0-2352) /
-   `0x0a000205001c8d4c` (4x4_3.5.0.0-2160_ipu_2). Not tried: other 4x4 variants, or
-   grepping 1.8's DLLs for `AMD_AIE2_4x4_Overlay` — moot since 1.7.1 works.
+   `data\parts\xilinx\xclbin\strx\base.xclbin`). This is a packaging bug, not a
+   documentation error: AMD's 1.8.0 docs are internally consistent and correctly say
+   to use `phoenix\4x4.xclbin` for PHX/HPT INT8 CNN models — the installed package
+   just doesn't contain that file (verified against the published 1.8.0 docs
+   2026-09-06). The driver drops xclbins in `C:\Windows\System32\AMD\` (`1x4_*`,
+   `4x4_*`, `5x4_*` = XDNA1; `AMD_AIE2P_*` = Strix) but 1.8's EP rejects them:
+   `Cannot find or create target with fingerprint=0x080002050018eec1`
+   (4x4_3.5.0.0-2352) / `0x0a000205001c8d4c` (4x4_3.5.0.0-2160_ipu_2). Not tried:
+   other 4x4 variants, or grepping 1.8's DLLs for `AMD_AIE2_4x4_Overlay` — moot since
+   1.7.1 works. Worth filing upstream against `amd/RyzenAI-SW` with the
+   recursive-search output above.
 2. **Provider options for PHX/HPT** (in `npu/session.py::build_session`): `cacheDir`,
    `cacheKey`, `enable_cache_file_io_in_mem: "0"`, `target: "X1"`,
    `xlnx_enable_py3_round: "0"`, `xclbin: <phoenix 4x4 path>`. camelCase
@@ -171,13 +175,21 @@
 ## The YOLOv8 partitioning failure (resolved)
 
 For a while, YOLOv8 would not reach the NPU at all: the VitisAI EP claimed **zero**
-nodes and silently fell back to CPU while still reporting "NPU" in the logs.
+nodes and silently fell back to CPU while still reporting "NPU" in the logs. **The
+actual finding here is that failure mode, not the fix that followed it** — a handful
+of unsupported float ops (DFL/anchor decode) caused the EP to reject the *entire*
+965-node graph wholesale rather than partitioning around the unsupported tail and
+running the rest, which is the more common and far less surprising failure shape.
+Moving decode off-graph is not itself novel: cutting post-processing out of a
+detector and running it in inference code is the standard move for edge NPU
+toolchains generally (Rockchip's RKNN and Hailo's compiler both require the same
+pattern for YOLO). What's specific to this backend is that skipping the cut doesn't
+degrade gracefully into a partial partition — it's all-or-nothing.
 
-**It was the float decode tail.** Cutting the 18-node DFL/anchor tail out of the ONNX
-graph and doing it in numpy takes the VitisAI EP from claiming **zero** nodes to
-claiming **922 of 929**, and yolov8n from 39.1 ms (CPU in disguise) to **8.7–9.8 ms on
-the NPU**, ~110 fps. Five runs, each with `--fresh` so each recompiled, spanned
-8.73–9.78 ms.
+Cutting the 18-node DFL/anchor tail out of the ONNX graph and doing it in numpy
+takes the VitisAI EP from claiming **zero** nodes to claiming **922 of 929**, and
+yolov8n from 39.1 ms (CPU in disguise) to **8.7–9.8 ms on the NPU**, ~110 fps. Five
+runs, each with `--fresh` so each recompiled, spanned 8.73–9.78 ms.
 
 ```
                         yolov8n_xint8.onnx      yolov8n_cut_xint8.onnx
@@ -194,9 +206,14 @@ and the six output `DequantizeLinear`s — structurally identical to ResNet50's 
 
 ### How it was found
 
-`<cacheKey>/vitisai_ep_report.json`, which nobody had opened until then. The EP writes
-it on **every** session build, including a cache hit, which makes it far better
-evidence than the compile log (which prints only on a real compile). `tools/diag_ep.py
+`<cacheKey>/vitisai_ep_report.json` — the Operator Assignment Report, a documented
+AMD feature (auto-generation became opt-in rather than automatic as of Ryzen AI 1.5;
+`XLNX_ONNX_EP_REPORT_FILE` is what turns it back on). It's real, but nothing in the
+tooling points here at the moment a graph is silently rejected, and neither AMD's
+CNN tutorial nor the failure path in the EP's own logging says "check this file" —
+that gap, not the file's existence, is what cost the time here. The EP writes it on
+**every** session build, including a cache hit, which makes it far better evidence
+than the compile log (which prints only on a real compile). `tools/diag_ep.py
 --cache-key` reads it; `scripts/*.sh` call `npu_verdict` to summarise it in one line.
 
 The report showed no `NPU` entry in `deviceStat` at all and all 965 nodes marked
