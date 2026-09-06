@@ -47,7 +47,10 @@ import time
 from pathlib import Path
 
 # Must precede `import cv2`: OpenCV reads this at videoio init, so setting it
-# afterwards is a silent no-op. Without it, MSMF -- the default Windows backend --
+# afterwards is a silent no-op -- measured, not assumed (cam_probe.py --case
+# msmf_late is still ~90s with the variable reading back as "0"), which is why
+# this cannot be hidden behind a shared helper in npu/.
+# Without it, MSMF -- the default Windows backend --
 # takes a fixed ~90s to open this camera (tools/cam_probe.py: 90.02s and 90.20s on
 # two consecutive opens, so not a warmup); with it, 0.07-0.22s, same 640x480 @ 30.0
 # fps. setdefault, not assignment, so the probe can still measure the slow path.

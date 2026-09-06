@@ -967,8 +967,18 @@ hardware transforms removes it, and removes the resolution-change cost with it (
 0.02s), which is consistent with those being one cause rather than two: ~178s is
 about twice ~90s, as an internal re-open paying the same timeout twice would be. The
 variable has to be set **before `import cv2`** — OpenCV reads it at videoio init, so
-setting it afterwards is a silent no-op, and a null result from that ordering is not
-evidence against it.
+setting it afterwards is a silent no-op. That is measured, not assumed: a fourth probe
+case sets the variable immediately *after* importing cv2 and still opens in 89.99s and
+89.50s, with `os.environ` reading it back as `"0"` the whole time
+(`results/cam_probe_late_set.log`). A null result from that ordering is therefore not
+evidence against the fix — it is the trap. It also means this cannot be hidden behind
+a shared helper in `npu/`: the assignment has to sit above the first cv2 import in each
+entry point, including the transitive one through `npu.yolo`. All three camera entry
+points now carry it — the round-robin demo, `pipelines/yolov8n/4_detect.py`, and
+`pipelines/yolov8n-pose/4_pose.py`. The latter two were worse off than the demo: both
+request 1280×720 on the camera path, so they paid the open *and* the resolution change,
+~270s of looking hung before the first frame. That is a plausible reason the Roadmap
+still lists the `./scripts/yolo-demo.sh` webcam path as never exercised end to end.
 
 The demo now sets it and pins `CAP_MSMF` explicitly. `CAP_DSHOW` is just as fast but
 reports `CAP_PROP_FPS` as 0.0, which is precisely the number the camera-bound argument

@@ -12,6 +12,9 @@ backend only -- which is MSMF -- so it never separated "this camera is slow" fro
               init; setting it after the import is a silent no-op, so a null
               result from that ordering would not be evidence)
   dshow       cv2.CAP_DSHOW, the older DirectShow path
+  msmf_late   the same variable, but set *after* cv2 is imported -- decides
+              whether the fix can live in one shared helper (order-independent)
+              or has to be repeated at the top of every entry point
 
 Each case runs in its own subprocess so its cv2 import is fresh and its env is
 its own. Within a case the camera is opened twice: slow-then-fast points at a
@@ -33,7 +36,7 @@ import subprocess
 import sys
 import time
 
-CASES = ("msmf", "msmf_nohw", "dshow")
+CASES = ("msmf", "msmf_nohw", "dshow", "msmf_late")
 # per-case subprocess ceiling: the known-bad path is ~90s to open and ~178s more
 # to renegotiate resolution, twice over for the second open -- so allow well past that
 CASE_TIMEOUT = 900.0
@@ -52,7 +55,12 @@ def child(case, source, set_res):
     """One backend, in a fresh interpreter: open twice, timing every step."""
     import cv2  # imported here so case_env's variable is already in place
 
-    api = {"msmf": cv2.CAP_MSMF, "msmf_nohw": cv2.CAP_MSMF, "dshow": cv2.CAP_DSHOW}[case]
+    if case == "msmf_late":
+        # deliberately after the import above -- that is the whole point of this case
+        os.environ["OPENCV_VIDEOIO_MSMF_ENABLE_HW_TRANSFORMS"] = "0"
+
+    api = {"msmf": cv2.CAP_MSMF, "msmf_nohw": cv2.CAP_MSMF, "dshow": cv2.CAP_DSHOW,
+           "msmf_late": cv2.CAP_MSMF}[case]
     hw = os.environ.get("OPENCV_VIDEOIO_MSMF_ENABLE_HW_TRANSFORMS", "<unset>")
     print(f"case {case}: api={api} OPENCV_VIDEOIO_MSMF_ENABLE_HW_TRANSFORMS={hw}",
           flush=True)

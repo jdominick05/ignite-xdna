@@ -1,0 +1,10 @@
+camera source 0, backends msmf_late, native resolution
+first case pays any cold Windows Frame Server cost -- read the two opens within a case, not just the across-case order.
+
+case msmf_late: api=1400 OPENCV_VIDEOIO_MSMF_ENABLE_HW_TRANSFORMS=0
+  open 1: ctor   89.99s  isOpened  0.00s  first read   0.69s  release  0.51s  -> total   90.67s
+           reports 640x480 @ 30.0 fps, frame 640x480
+  open 2: ctor   89.50s  isOpened  0.00s  first read   0.67s  release  0.51s  -> total   90.17s
+           reports 640x480 @ 30.0 fps, frame 640x480
+  case msmf_late wall clock 182.00s
+

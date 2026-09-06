@@ -28,6 +28,13 @@ import sys
 import time
 from pathlib import Path
 
+# Must precede every cv2 import, the transitive one through npu.yolo included:
+# OpenCV reads this at videoio init, and setting it later is a measured silent
+# no-op (tools/cam_probe.py --case msmf_late: still ~90s, with the variable
+# reading back as "0"). Without it, MSMF -- the default Windows backend -- takes a
+# fixed ~90s to open a webcam. Irrelevant to --source on a file.
+os.environ.setdefault("OPENCV_VIDEOIO_MSMF_ENABLE_HW_TRANSFORMS", "0")
+
 import cv2
 import numpy as np
 
