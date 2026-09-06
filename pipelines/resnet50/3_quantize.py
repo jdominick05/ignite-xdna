@@ -89,6 +89,11 @@ def main():
                          "must match the one written by step 1 for this --in-model")
     ap.add_argument("--batch", type=int, default=1,
                     help="must match the static batch --in-model was exported with")
+    ap.add_argument("--device", default="cpu",
+                    help="OptimDevice/InferDevice for ADAROUND/ADAQUANT's FastFinetune, "
+                         "e.g. cpu, cuda, cuda:0 (needs a torch build where "
+                         "torch.cuda.is_available() is True for that device). "
+                         "No effect on plain XINT8/A8W8, which have no FastFinetune.")
     args = ap.parse_args()
     out_model = args.out or str(MODELS / f"resnet50_{args.config.lower()}.onnx")
     in_model = args.in_model or str(IN_MODEL)
@@ -101,6 +106,10 @@ def main():
 
     print(f"config: {args.config}  ->  {out_model}")
     quant_config = get_default_config(args.config)
+    if "FastFinetune" in quant_config.extra_options:
+        quant_config.extra_options["FastFinetune"]["OptimDevice"] = args.device
+        quant_config.extra_options["FastFinetune"]["InferDevice"] = args.device
+        print(f"FastFinetune device: {args.device}")
     config = Config(global_quant_config=quant_config)
 
     quantizer = ModelQuantizer(config)

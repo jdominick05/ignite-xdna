@@ -76,6 +76,10 @@ def main():
     ap.add_argument("--limit", type=int, default=300)
     ap.add_argument("--adaround", action="store_true")
     ap.add_argument("--iters", type=int, default=1000)
+    ap.add_argument("--device", default="cpu",
+                     help="OptimDevice/InferDevice for AdaRound's FastFinetune, "
+                          "e.g. cpu, cuda, cuda:0 (needs a torch build where "
+                          "torch.cuda.is_available() is True for that device)")
     ap.add_argument("--out", default=None)
     args = ap.parse_args()
 
@@ -109,9 +113,12 @@ def main():
         params = dict(ADAROUND)
         params["NumIterations"] = args.iters
         params["DataSize"] = min(args.limit, params["DataSize"])
+        params["OptimDevice"] = args.device
+        params["InferDevice"] = args.device
         qc.include_fast_ft = True          # without this FastFinetune is ignored
         qc.extra_options["FastFinetune"] = params
-        print(f"AdaRound: {args.iters} iterations (slow - expect many minutes)")
+        print(f"AdaRound: {args.iters} iterations on {args.device} "
+              f"(slow - expect many minutes on cpu)")
 
     # Derived from the source stem, not hardcoded: --variant s|m|l|x feeds this
     # script a yolov8s_cut.onnx, and a fixed "yolov8n_" would overwrite the n.
