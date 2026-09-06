@@ -1,0 +1,41 @@
+deleted stale cache C:\Users\Ignis\src\ryzen-ai-xdna1-quantization\yoloposecutcachekey
+loading annotations into memory...
+Done (t=0.15s)
+creating index...
+index created!
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\Ignis\src\ryzen-ai-xdna1-quantization\yoloposecutcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+model: head-cut (9 outputs), numpy decode, input 640x640
+eval : 500 images, conf 0.001, iou 0.7, max_det 300, class-agnostic NMS (single class)
+  500/500  (11319 detections so far)
+
+11319 detections over 500 images in 8s
+inference  mean 9.27 ms   median 9.13 ms
+wrote C:\Users\Ignis\src\ryzen-ai-xdna1-quantization\results\dets_kpts_yolov8n-pose_cut_xint8_npu.json
+Loading and preparing results...
+DONE (t=0.23s)
+creating index...
+index created!
+Running per image evaluation...
+Evaluate annotation type *keypoints*
+DONE (t=0.54s).
+Accumulating evaluation results...
+DONE (t=0.08s).
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets= 20 ] = 0.316
+ Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets= 20 ] = 0.664
+ Average Precision  (AP) @[ IoU=0.75      | area=   all | maxDets= 20 ] = 0.282
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=medium | maxDets= 20 ] = 0.208
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= large | maxDets= 20 ] = 0.452
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets= 20 ] = 0.416
+ Average Recall     (AR) @[ IoU=0.50      | area=   all | maxDets= 20 ] = 0.772
+ Average Recall     (AR) @[ IoU=0.75      | area=   all | maxDets= 20 ] = 0.393
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=medium | maxDets= 20 ] = 0.293
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets= 20 ] = 0.568
+
+=== yolov8n-pose_cut_xint8 | NPU | 640px | 500 images ===
+OKS mAP@50-95  31.65
+OKS mAP@50     66.39
+latency        9.27 ms

@@ -16,3 +16,4 @@ YOLO_CACHE_KEY = "yolocachekey"
 # The head-cut YOLO model gets its own key so it can never collide with a
 # compile cached from the full-graph model.
 YOLO_CUT_CACHE_KEY = "yolocutcachekey"
+YOLO_POSE_CUT_CACHE_KEY = "yoloposecutcachekey"
