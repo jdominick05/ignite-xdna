@@ -1,0 +1,267 @@
+[32m
+[QUARK-INFO]: Checking custom ops library ...[0m
+[33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[32m
+[QUARK-INFO]: Start compiling CPU version of custom ops library.[0m
+C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\torch\utils\cpp_extension.py:380: UserWarning: Error checking compiler version for cl: [WinError 2] The system cannot find the file specified
+  warnings.warn(f'Error checking compiler version for {compiler}: {error}')
+INFO: Could not find files for the given pattern(s).
+[31m
+[QUARK-ERROR]: CPU version of custom ops library compilation failed:Command '['where', 'cl']' returned non-zero exit status 1.[0m
+[33m
+[QUARK-WARNING]: Custom ops library compilation failed: CPU version of custom ops library compilation failed:Command '['where', 'cl']' returned non-zero exit status 1..[0m
+[32m
+[QUARK-INFO]: Checked custom ops library.[0m
+[33m
+[QUARK-WARNING]: The api `activation` has been replaced with `input_tensors` and will be removed in the next release.[0m
+[33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: Config has been replaced by QConfig. The old API will be removed in the next release.[0m
+[33m
+[QUARK-WARNING]: The algorithm API is algo_config in QConfig. The old API will be removed in the next release.[0m
+[32m
+[QUARK-INFO]: The input ONNX model can create InferenceSession successfully[0m
+[32m
+[QUARK-INFO]: The parameter AlignEltwiseQuantType takes effect, the weights of nodes will be quantized with the activation quant type if the operation type is in [Mul, Div, Add, Sub, Min, Max].[0m
+[32m
+[QUARK-INFO]: Folding or fusing operators for better accuracy and performance.[0m
+[33m
+[QUARK-WARNING]: The opset version is 17 < 20. Skipping fusing Gelu.[0m
+[32m
+[QUARK-INFO]: Start applying CLE algorithm on the float model...[0m
+[32m
+[QUARK-INFO]: CrossLayerEqualization pattern num: 33[0m
+[32m
+[QUARK-INFO]: Total CrossLayerEqualization steps: 1[0m
+[32m
+[QUARK-INFO]: The CLE algorithm has been applied. It took 0.7s to complete.[0m
+[32m
+[QUARK-INFO]: Optimizing the model for a better hardware compatibility.[0m
+[32m
+[QUARK-INFO]: The input ONNX model can run inference successfully[0m
+[32m
+[QUARK-INFO]: Start running calibration on 300 samples with extra options {}...[0m
+[32m
+[QUARK-INFO]: Data collection of CalibrationMethod.MinMax in progress. Runtime will depend on your model and data size.[0m
+[32m
+[QUARK-INFO]: The calibration has been finished. It took 7.9s to complete.[0m
+WARNING:root:ONNX QuantizeLinear and DequantizeLinear operators do not support 16-bit/4-bit integer quantization types prior to opset 21. The domain of QuantizeLinear and DequantizeLinear operators will be set to 'com.microsoft' to enable support.
+[32m
+[QUARK-INFO]: The type of tensor /layer2/layer2.0/act3/Relu_output_0 is QInt16: using specific tensor precision[0m
+[32m
+[QUARK-INFO]: The type of tensor /layer2/layer2.2/act3/Relu_output_0 is QInt16: using specific tensor precision[0m
+[32m
+[QUARK-INFO]: The type of tensor /layer2/layer2.3/conv3/Conv_output_0 is QInt16: using specific tensor precision[0m
+[32m
+[QUARK-INFO]: The type of tensor /layer2/layer2.1/act3/Relu_output_0 is QInt16: using specific tensor precision[0m
+[32m
+[QUARK-INFO]: The type of tensor /layer4/layer4.0/act3/Relu_output_0 is QInt16: using specific tensor precision[0m
+[32m
+[QUARK-INFO]: The type of tensor /layer4/layer4.1/act3/Relu_output_0 is QInt16: using specific tensor precision[0m
+[32m
+[QUARK-INFO]: The type of tensor /layer3/layer3.4/conv3/Conv_output_0 is QInt16: using specific tensor precision[0m
+[32m
+[QUARK-INFO]: The type of tensor /layer3/layer3.4/act3/Relu_output_0 is QInt16: using specific tensor precision[0m
+[32m
+[QUARK-INFO]: The type of tensor /layer2/layer2.1/conv3/Conv_output_0 is QInt16: using specific tensor precision[0m
+[32m
+[QUARK-INFO]: The type of tensor /layer4/layer4.0/downsample/downsample.0/Conv_output_0 is QInt16: using specific tensor precision[0m
+[32m
+[QUARK-INFO]: The type of tensor /layer4/layer4.2/conv3/Conv_output_0 is QInt16: using specific tensor precision[0m
+[32m
+[QUARK-INFO]: The type of tensor /layer3/layer3.1/conv3/Conv_output_0 is QInt16: using specific tensor precision[0m
+[32m
+[QUARK-INFO]: The type of tensor /layer1/layer1.0/downsample/downsample.0/Conv_output_0 is QInt16: using specific tensor precision[0m
+[32m
+[QUARK-INFO]: The type of tensor /layer3/layer3.3/conv3/Conv_output_0 is QInt16: using specific tensor precision[0m
+[32m
+[QUARK-INFO]: The type of tensor /layer2/layer2.0/downsample/downsample.0/Conv_output_0 is QInt16: using specific tensor precision[0m
+[32m
+[QUARK-INFO]: The type of tensor /layer4/layer4.1/conv3/Conv_output_0 is QInt16: using specific tensor precision[0m
+[32m
+[QUARK-INFO]: The type of tensor /layer4/layer4.0/conv3/Conv_output_0 is QInt16: using specific tensor precision[0m
+[32m
+[QUARK-INFO]: The type of tensor /layer3/layer3.2/conv3/Conv_output_0 is QInt16: using specific tensor precision[0m
+[32m
+[QUARK-INFO]: The type of tensor /layer3/layer3.5/conv3/Conv_output_0 is QInt16: using specific tensor precision[0m
+[32m
+[QUARK-INFO]: The type of tensor /layer3/layer3.3/act3/Relu_output_0 is QInt16: using specific tensor precision[0m
+[32m
+[QUARK-INFO]: The type of tensor /layer3/layer3.0/act3/Relu_output_0 is QInt16: using specific tensor precision[0m
+[32m
+[QUARK-INFO]: The type of tensor /layer1/layer1.1/act3/Relu_output_0 is QInt16: using specific tensor precision[0m
+[32m
+[QUARK-INFO]: The type of tensor /layer1/layer1.0/act3/Relu_output_0 is QInt16: using specific tensor precision[0m
+[32m
+[QUARK-INFO]: The type of tensor /layer2/layer2.0/conv3/Conv_output_0 is QInt16: using specific tensor precision[0m
+[32m
+[QUARK-INFO]: The type of tensor /layer2/layer2.2/conv3/Conv_output_0 is QInt16: using specific tensor precision[0m
+[32m
+[QUARK-INFO]: The type of tensor /layer3/layer3.0/conv3/Conv_output_0 is QInt16: using specific tensor precision[0m
+[32m
+[QUARK-INFO]: The type of tensor /layer1/layer1.0/conv3/Conv_output_0 is QInt16: using specific tensor precision[0m
+[32m
+[QUARK-INFO]: The type of tensor /layer1/layer1.1/conv3/Conv_output_0 is QInt16: using specific tensor precision[0m
+[32m
+[QUARK-INFO]: The type of tensor /layer3/layer3.2/act3/Relu_output_0 is QInt16: using specific tensor precision[0m
+[32m
+[QUARK-INFO]: The type of tensor /layer3/layer3.1/act3/Relu_output_0 is QInt16: using specific tensor precision[0m
+[32m
+[QUARK-INFO]: The type of tensor /layer1/layer1.2/conv3/Conv_output_0 is QInt16: using specific tensor precision[0m
+[32m
+[QUARK-INFO]: The type of tensor /layer3/layer3.0/downsample/downsample.0/Conv_output_0 is QInt16: using specific tensor precision[0m
+[33m
+[QUARK-WARNING]: ONNX QuantizeLinear and DequantizeLinear operators do not support 16-bit/4-bit integer quantization types prior to opset 21. The domain of QuantizeLinear and DequantizeLinear operators will be set to 'com.microsoft' to enable support.[0m
+[32m
+[QUARK-INFO]: The type of tensor /layer2/layer2.0/act3/Relu_output_0 is QInt16: using specific tensor precision[0m
+[32m
+[QUARK-INFO]: The type of tensor /layer2/layer2.2/act3/Relu_output_0 is QInt16: using specific tensor precision[0m
+[32m
+[QUARK-INFO]: The type of tensor /layer2/layer2.3/conv3/Conv_output_0 is QInt16: using specific tensor precision[0m
+[32m
+[QUARK-INFO]: The type of tensor /layer2/layer2.1/act3/Relu_output_0 is QInt16: using specific tensor precision[0m
+[32m
+[QUARK-INFO]: The type of tensor /layer4/layer4.0/act3/Relu_output_0 is QInt16: using specific tensor precision[0m
+[32m
+[QUARK-INFO]: The type of tensor /layer4/layer4.1/act3/Relu_output_0 is QInt16: using specific tensor precision[0m
+[32m
+[QUARK-INFO]: The type of tensor /layer3/layer3.4/conv3/Conv_output_0 is QInt16: using specific tensor precision[0m
+[32m
+[QUARK-INFO]: The type of tensor /layer3/layer3.4/act3/Relu_output_0 is QInt16: using specific tensor precision[0m
+[32m
+[QUARK-INFO]: The type of tensor /layer2/layer2.1/conv3/Conv_output_0 is QInt16: using specific tensor precision[0m
+[32m
+[QUARK-INFO]: The type of tensor /layer4/layer4.0/downsample/downsample.0/Conv_output_0 is QInt16: using specific tensor precision[0m
+[32m
+[QUARK-INFO]: The type of tensor /layer4/layer4.2/conv3/Conv_output_0 is QInt16: using specific tensor precision[0m
+[32m
+[QUARK-INFO]: The type of tensor /layer3/layer3.1/conv3/Conv_output_0 is QInt16: using specific tensor precision[0m
+[32m
+[QUARK-INFO]: The type of tensor /layer1/layer1.0/downsample/downsample.0/Conv_output_0 is QInt16: using specific tensor precision[0m
+[32m
+[QUARK-INFO]: The type of tensor /layer3/layer3.3/conv3/Conv_output_0 is QInt16: using specific tensor precision[0m
+[32m
+[QUARK-INFO]: The type of tensor /layer2/layer2.0/downsample/downsample.0/Conv_output_0 is QInt16: using specific tensor precision[0m
+[32m
+[QUARK-INFO]: The type of tensor /layer4/layer4.1/conv3/Conv_output_0 is QInt16: using specific tensor precision[0m
+[32m
+[QUARK-INFO]: The type of tensor /layer4/layer4.0/conv3/Conv_output_0 is QInt16: using specific tensor precision[0m
+[32m
+[QUARK-INFO]: The type of tensor /layer3/layer3.2/conv3/Conv_output_0 is QInt16: using specific tensor precision[0m
+[32m
+[QUARK-INFO]: The type of tensor /layer3/layer3.5/conv3/Conv_output_0 is QInt16: using specific tensor precision[0m
+[32m
+[QUARK-INFO]: The type of tensor /layer3/layer3.3/act3/Relu_output_0 is QInt16: using specific tensor precision[0m
+[32m
+[QUARK-INFO]: The type of tensor /layer3/layer3.0/act3/Relu_output_0 is QInt16: using specific tensor precision[0m
+[32m
+[QUARK-INFO]: The type of tensor /layer1/layer1.1/act3/Relu_output_0 is QInt16: using specific tensor precision[0m
+[32m
+[QUARK-INFO]: The type of tensor /layer1/layer1.0/act3/Relu_output_0 is QInt16: using specific tensor precision[0m
+[32m
+[QUARK-INFO]: The type of tensor /layer2/layer2.0/conv3/Conv_output_0 is QInt16: using specific tensor precision[0m
+[32m
+[QUARK-INFO]: The type of tensor /layer2/layer2.2/conv3/Conv_output_0 is QInt16: using specific tensor precision[0m
+[32m
+[QUARK-INFO]: The type of tensor /layer3/layer3.0/conv3/Conv_output_0 is QInt16: using specific tensor precision[0m
+[32m
+[QUARK-INFO]: The type of tensor /layer1/layer1.0/conv3/Conv_output_0 is QInt16: using specific tensor precision[0m
+[32m
+[QUARK-INFO]: The type of tensor /layer1/layer1.1/conv3/Conv_output_0 is QInt16: using specific tensor precision[0m
+[32m
+[QUARK-INFO]: The type of tensor /layer3/layer3.2/act3/Relu_output_0 is QInt16: using specific tensor precision[0m
+[32m
+[QUARK-INFO]: The type of tensor /layer3/layer3.1/act3/Relu_output_0 is QInt16: using specific tensor precision[0m
+[32m
+[QUARK-INFO]: The type of tensor /layer1/layer1.2/conv3/Conv_output_0 is QInt16: using specific tensor precision[0m
+[32m
+[QUARK-INFO]: The type of tensor /layer3/layer3.0/downsample/downsample.0/Conv_output_0 is QInt16: using specific tensor precision[0m
+[32m
+[QUARK-INFO]: Remove QuantizeLinear & DequantizeLinear on certain operations(such as conv-relu).[0m
+[32m
+[QUARK-INFO]: Adjust the quantize info to meet the compiler constraints[0m
+[32m
+[QUARK-INFO]: Converted 256 custom QDQs to MS contributed QDQs[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: e2e quantization time consumed:13.130861[0m
+[32m
+[QUARK-INFO]: The operation types and their corresponding quantities of the input float model is shown in the table below.[0m
+Using 300 calibration images (300 batches of 1)
+config: A16W8  ->  models/resnet50_a16w8.onnx
+[QUARK_INFO]: Time information:
+2026-09-06 18:19:20.606225
+[QUARK_INFO]: OS and CPU information:
+                                        system --- Windows
+                                          node --- DESKTOP-CBL5NUA
+                                       release --- 11
+                                       version --- 10.0.26200
+                                       machine --- AMD64
+                                     processor --- AMD64 Family 25 Model 117 Stepping 2, AuthenticAMD
+[QUARK_INFO]: Tools version information:
+                                        python --- 3.12.11
+                                          onnx --- 1.19.0
+                                   onnxruntime --- 1.22.1
+                                    quark.onnx --- 0.11rc1
+[QUARK_INFO]: Quantized Configuration information:
+                                   model_input --- C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\models\resnet50_fp32.onnx
+                                  model_output --- models/resnet50_a16w8.onnx
+                       calibration_data_reader --- <__main__.ImageCalibReader object at 0x00000168B9096300>
+                         calibration_data_path --- None
+                                  quant_format --- QDQ
+                                   input_nodes --- []
+                                  output_nodes --- []
+                          op_types_to_quantize --- []
+                    extra_op_types_to_quantize --- []
+                                   per_channel --- False
+                                  reduce_range --- False
+                               activation_type --- QInt16
+                                   weight_type --- QInt8
+                             nodes_to_quantize --- []
+                              nodes_to_exclude --- []
+                          subgraphs_to_exclude --- []
+                                optimize_model --- True
+                      use_external_data_format --- False
+                              calibrate_method --- CalibrationMethod.MinMax
+                           execution_providers --- ['CPUExecutionProvider']
+                                enable_npu_cnn --- False
+                        enable_npu_transformer --- False
+                     specific_tensor_precision --- False
+                                    debug_mode --- False
+                          convert_fp16_to_fp32 --- False
+                          convert_nchw_to_nhwc --- False
+                                   include_cle --- True
+                                    include_sq --- False
+                              include_rotation --- False
+                               include_fast_ft --- False
+                                 extra_options --- {'ActivationSymmetric': True, 'AlignSlice': False, 'FoldRelu': True, 'AlignConcat': True, 'AlignEltwiseQuantType': True}
++---------------------------------------------------+
+| Op Type              | Float Model                |
+|----------------------+----------------------------|
+| Conv                 | 53                         |
+| Relu                 | 49                         |
+| MaxPool              | 1                          |
+| Add                  | 16                         |
+| GlobalAveragePool    | 1                          |
+| Flatten              | 1                          |
+| Gemm                 | 1                          |
+|----------------------+----------------------------|
+| Quantized model path | models/resnet50_a16w8.onnx |
++---------------------------------------------------+
+[32m
+[QUARK-INFO]: The quantized information for all operation types is shown in the table below.[0m
+[32m
+[QUARK-INFO]: The discrepancy between the operation types in the quantized model and the float model is due to the application of graph optimization.[0m
++-------------------------------------------------------+
+| Op Type           | Activation | Weights  | Bias      |
+|-------------------+------------+----------+-----------|
+| Conv              | INT16(53)  | INT8(53) | INT32(53) |
+| MaxPool           | INT16(1)   |          |           |
+| Add               | INT16(16)  |          |           |
+| GlobalAveragePool | INT16(1)   |          |           |
+| Flatten           | INT16(1)   |          |           |
+| Gemm              | INT16(1)   | INT8(1)  | INT32(1)  |
++-------------------------------------------------------+
+
+Wrote models/resnet50_a16w8.onnx

@@ -1347,6 +1347,20 @@ architecture; the xclbin does.
 **The X1 backend is XINT8 or nothing.** Power-of-two scales, MinMSE calibration,
 UINT8 activations with INT8 weights. A8W8 (float scales) does not raise an error — it
 just falls back to CPU, and the only symptoms are CPU-level latency and lower accuracy.
+**A16W8 (INT16 activations) now measured too, not just assumed dead: same silent
+full-CPU fallback** — `tools/diag_ep.py` shows 0/394 nodes on NPU
+(`results/a16w8/diag_resnet50_a16w8_npu.log`), and Quark's own quantize log names the
+mechanism: this repo's export is pinned to opset 17 (below), and ONNX's `QuantizeLinear`/
+`DequantizeLinear` don't support 16-bit types before opset 21, so Quark routes INT16 Q/DQ
+through the `com.microsoft` domain instead — which the VitisAI EP's matcher evidently
+doesn't recognize at all. Quark's own config dump also shows `A16W8` never sets
+`enable_npu_cnn: True` the way `XINT8` does, so this wasn't a close call. Not worth
+chasing further: fixing it means bumping export opset (its own trap, see below), for a
+config with no shown accuracy edge over `XINT8_ADAROUND`. **BF16 was never attempted at
+all, and isn't a gap** — Quark's quantizer for this backend doesn't expose a BF16 config
+to try (only `XINT8`/`A8W8`/`A16W8`/`XINT8_ADAROUND`/`XINT8_ADAQUANT` exist), consistent
+with AMD's documented support matrix: XDNA1 is CNN-INT8 only, BF16/transformer support
+is a later-chip, different-runtime story.
 
 **Silent CPU fallback is the failure mode to watch for.** The `[Vitis AI EP]` banner,
 `Target architecture:`, `Compile done.` and the operator table print **only during

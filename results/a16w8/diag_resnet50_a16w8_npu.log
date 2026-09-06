@@ -1,0 +1,21 @@
+
+=== C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\modelcachekey\vitisai_ep_report.json ===
+  all            nodeNum=  394  opTypes=9
+  CPU            nodeNum=  122  opTypes=7
+  VITIS_EP_CPU   nodeNum=  272  opTypes=2
+
+  per-node device counts: {'CPU': 394}
+
+  *** ZERO nodes on the NPU. The EP registered, walked the graph and claimed nothing. ***
+  This is NOT a partitioning problem - there is no partition. Compare op types against a graph that does compile.
+
+  op type x device:
+    CPU           Add                  16
+    CPU           Conv                 53
+    CPU           DequantizeLinear     198
+    CPU           Flatten              1
+    CPU           Gemm                 1
+    CPU           GlobalAveragePool    1
+    CPU           MaxPool              1
+    CPU           QuantizeLinear       74
+    CPU           Relu                 49

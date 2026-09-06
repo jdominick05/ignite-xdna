@@ -31,7 +31,28 @@
    `target: X1` alone does NOT select chip arch; the xclbin does.
 3. **X1 backend = XINT8 only.** Power-of-two scales, MinMSE calib, UINT8 activations /
    INT8 weights+bias. A8W8 (float scales) silently falls back to CPU (39 ms latency =
-   CPU speed, accuracy 66.6%). A16W8 not tried, assumed dead on X1.
+   CPU speed, accuracy 66.6%). **A16W8 (INT16 activations / INT8 weights) now measured,
+   not assumed: also a full CPU fallback.** `tools/diag_ep.py --cache-key modelcachekey`
+   on `resnet50_a16w8.onnx` (`results/a16w8/diag_resnet50_a16w8_npu.log`) shows **0/394
+   nodes on NPU** — `deviceStat` has no NPU entry at all, only `CPU` (122) and
+   `VITIS_EP_CPU` (272), the same wholesale-rejection shape as the YOLOv8 full-graph
+   blocker, not a partial partition. Quark's own quantize log
+   (`results/a16w8/quant_resnet50_a16w8.log`) is a tell in hindsight: `A16W8`'s default
+   config prints `enable_npu_cnn: False` and `execution_providers:
+   ['CPUExecutionProvider']` — Quark itself never marks this config for NPU deployment,
+   unlike `XINT8`. Ran at 26.18 ms / 69.70% top-1 on CPU (`results/a16w8/
+   lat_resnet50_a16w8_npu.log`) — plausible-looking numbers, same silent-fallback danger
+   as A8W8. Root cause is a real, documented ONNX Runtime opset limit surfaced in the
+   quantize log: *"ONNX QuantizeLinear and DequantizeLinear operators do not support
+   16-bit/4-bit integer quantization types prior to opset 21"* — this repo's export is
+   pinned to **opset 17** (locked #5), so Quark routes the INT16 Q/DQ nodes through the
+   `com.microsoft` domain instead of standard ONNX ops, and the VitisAI EP's op matcher
+   evidently does not recognize that domain's Q/DQ variant at all, hence zero nodes.
+   INT16 activations are not dead on this hardware/EP in principle so much as
+   incompatible with the specific opset this project's export pipeline is locked to —
+   untested whether opset 21 would change this, and not worth chasing: bumping export
+   opset is its own can of worms (locked #5's dynamo/opset-18 trap) for a config with no
+   demonstrated accuracy upside over `XINT8_ADAROUND` so far.
 4. **Accuracy recovery = XINT8 + AdaRound**, i.e. `get_default_config("XINT8_ADAROUND")`.
    Recovered ResNet50 from 71.7% → 79.8% (FP32 80.1%). Config names verified:
    `get_default_config()` accepts `"XINT8"`, `"A8W8"`, `"A16W8"`, `"XINT8_ADAROUND"`,
