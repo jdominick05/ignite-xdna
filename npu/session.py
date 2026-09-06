@@ -56,7 +56,7 @@ def clear_cache(cache_key):
 
 def build_session(model, ep, cache_key, xclbin=None, log_severity=1,
                    enable_profiling=False):
-    """Build an InferenceSession on the CPU EP or the VitisAI (NPU) EP.
+    """Build an InferenceSession on CPU, DirectML (iGPU), or VitisAI (NPU).
 
     log_severity is passed straight to ORT: 0 = verbose (per-node EP
     assignment), 1 = info (compile log), 2 = warning only.
@@ -73,6 +73,28 @@ def build_session(model, ep, cache_key, xclbin=None, log_severity=1,
     if ep == "cpu":
         return ort.InferenceSession(str(model), sess_options=so,
                                     providers=["CPUExecutionProvider"])
+
+    if ep == "dml":
+        # DirectML: the iGPU path (Radeon 780M here), so a head-to-head against
+        # the NPU means something. No cacheDir/xclbin -- those are VitisAI-only.
+        # Explicit ALL rather than relying on ORT's default so this reads as a
+        # deliberate "every available graph optimization" choice, matching what
+        # the NPU side gets from Quark/VitisAI's own compile.
+        so.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
+        print(f"onnxruntime {ort.__version__}  providers: {ort.get_available_providers()}")
+        sess = ort.InferenceSession(str(model), sess_options=so,
+                                    providers=["DmlExecutionProvider"])
+        # DML has no vitisai_ep_report.json equivalent -- registering is not
+        # sufficient (that lesson is the whole reason this repo checks the NPU
+        # report rather than trusting registration; see docs/DECISIONS.md). The
+        # closest available check: assert the provider registered, and callers
+        # doing a real comparison should still capture a --log 0 run once and
+        # read DML vs CPU node counts off the verbose per-node assignment log,
+        # since a silent partial CPU fallback is possible here too.
+        if "DmlExecutionProvider" not in sess.get_providers():
+            raise SystemExit("DML EP did not register; session providers are "
+                             f"{sess.get_providers()}. This run would be pure CPU.")
+        return sess
 
     # The EP writes its report only when this is set. scripts/lib.sh exports it,
     # but a bare `python pipelines/.../4_detect.py --ep npu` from the shell does

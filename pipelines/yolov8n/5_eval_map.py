@@ -40,16 +40,25 @@ from npu.yolo_decode import decode_heads, head_order
 
 
 def build_forward(sess, conf, imgsz):
-    """-> (forward_fn, description). Same dispatch as 4_detect.py."""
+    """-> (run_fn, decode_fn, description). Same dispatch as 4_detect.py.
+
+    Split so a caller can time run_fn (pure sess.run) separately from
+    decode_fn (DFL/anchor decode for a cut model, a numpy cost that scales
+    with how many candidates survive `conf` -- folding it into "inference"
+    makes a cut model's latency depend on the eval threshold instead of the
+    EP, and at this script's conf 0.001 that cost is not small: the NPU cut
+    model's mean moved from 8.94ms at demo conf 0.25 to 15.01ms here on a
+    single image, before even reaching the 5000-image average."""
     inp = sess.get_inputs()[0].name
     n_out = len(sess.get_outputs())
     if n_out == len(yc.HEAD_OUTS):
         order = head_order(sess, imgsz)
-        return (lambda x: decode_heads([sess.run(None, {inp: x})[i] for i in order],
-                                       imgsz=imgsz, conf_thres=conf),
+        return (lambda x: sess.run(None, {inp: x}),
+                lambda r: decode_heads([r[i] for i in order], imgsz=imgsz, conf_thres=conf),
                 f"head-cut ({n_out} outputs), numpy decode")
     if n_out == 1:
-        return (lambda x: sess.run(None, {inp: x})[0],
+        return (lambda x: sess.run(None, {inp: x}),
+                lambda r: r[0],
                 "full graph (1 output), ONNX decode")
     raise SystemExit(f"don't know what to do with {n_out} outputs")
 
@@ -57,7 +66,7 @@ def build_forward(sess, conf, imgsz):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", required=True)
-    ap.add_argument("--ep", choices=["cpu", "npu"], default="npu")
+    ap.add_argument("--ep", choices=["cpu", "dml", "npu"], default="npu")
     ap.add_argument("--images", default=str(DATA / "coco" / "val2017"))
     ap.add_argument("--ann", default=str(DATA / "coco" / "annotations" /
                                          "instances_val2017.json"))
@@ -96,7 +105,7 @@ def main():
                          log_severity=args.log)
     # Letterbox size comes from the model, not from a flag -- see 4_detect.py.
     imgsz = yc.input_size(sess.get_inputs()[0].shape, args.model)
-    forward, desc = build_forward(sess, args.conf, imgsz)
+    run_fn, decode_fn, desc = build_forward(sess, args.conf, imgsz)
     print(f"model: {desc}, input {imgsz}x{imgsz}")
     print(f"eval : {len(img_ids)} images, conf {args.conf}, iou {args.iou}, "
           f"max_det {args.max_det}, "
@@ -112,8 +121,9 @@ def main():
             continue
         x, pad, scale = yc.letterbox(img, imgsz)
         t0 = time.perf_counter()
-        out = forward(x)
+        raw = run_fn(x)
         times.append(time.perf_counter() - t0)
+        out = decode_fn(raw)
         for x0, y0, w, h, s, c in yc.postprocess(out, pad, scale, args.conf,
                                                  args.iou, args.agnostic,
                                                  args.max_det):

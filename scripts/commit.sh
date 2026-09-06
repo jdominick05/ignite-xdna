@@ -59,7 +59,7 @@ step "checking staged results/ logs are UTF-8 and profile-scrubbed"
 UNAME="${USERNAME:-${USER:-}}"
 BAD=0
 while IFS= read -r f; do
-    case "$f" in results/*) ;; *) continue ;; esac
+    case "$f" in results/*.log) ;; *) continue ;; esac
     [ -f "$f" ] || continue
     if ! python -c "import sys; sys.exit(1 if b'\x00' in open(sys.argv[1],'rb').read() else 0)" "$f"; then
         warn "$f looks UTF-16 (embedded NUL bytes) -- decode to UTF-8 before committing"

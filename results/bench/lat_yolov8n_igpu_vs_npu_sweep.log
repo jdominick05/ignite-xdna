@@ -1,0 +1,41 @@
+=== models/yolov8n.onnx | cpu ===
+model: full graph (1 output), decode tail runs in the ONNX model
+infer   mean 27.91 ms   median 28.43 ms   p95 33.02 ms   (35.8 fps)
+post    mean 1.40 ms
+
+=== models/yolov8n.onnx | dml ===
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+model: full graph (1 output), decode tail runs in the ONNX model
+infer   mean 12.79 ms   median 12.55 ms   p95 14.95 ms   (78.2 fps)
+post    mean 1.23 ms
+
+=== models/yolov8n_fp16.onnx | dml ===
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+model: full graph (1 output), decode tail runs in the ONNX model
+infer   mean 10.50 ms   median 10.33 ms   p95 11.36 ms   (95.3 fps)
+post    mean 1.09 ms
+
+=== models/yolov8n_cut.onnx | dml ===
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+model: head-cut (6 outputs), decode tail runs in numpy
+infer   mean 14.16 ms   median 14.12 ms   p95 15.56 ms   (70.6 fps)
+post    mean 1.85 ms
+
+=== models/yolov8n_cut_fp16.onnx | dml ===
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+model: head-cut (6 outputs), decode tail runs in numpy
+infer   mean 9.96 ms   median 9.85 ms   p95 10.47 ms   (100.4 fps)
+post    mean 1.84 ms
+
+=== models/yolov8n_cut_xint8_c200.onnx | npu ===
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+model: head-cut (6 outputs), decode tail runs in numpy
+infer   mean 6.85 ms   median 6.79 ms   p95 7.23 ms   (145.9 fps)
+post    mean 2.15 ms
+
+=== models/yolov8n_cut_xint8_adaround.onnx | npu ===
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+model: head-cut (6 outputs), decode tail runs in numpy
+infer   mean 6.82 ms   median 6.72 ms   p95 7.20 ms   (146.6 fps)
+post    mean 2.13 ms
+

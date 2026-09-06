@@ -52,7 +52,7 @@ IMAGE_EXTS = (".jpg", ".jpeg", ".png", ".bmp", ".webp")
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", required=True)
-    ap.add_argument("--ep", choices=["cpu", "npu"], default="cpu")
+    ap.add_argument("--ep", choices=["cpu", "dml", "npu"], default="cpu")
     ap.add_argument("--source", default="0", help="image path, video path, or camera index")
     ap.add_argument("--xclbin", default=None)
     ap.add_argument("--conf", type=float, default=0.25)
@@ -79,30 +79,46 @@ def main():
     # cannot be fed 640 pixels by a caller who forgot a flag.
     imgsz = yc.input_size(sess.get_inputs()[0].shape, args.model)
     n_out = len(sess.get_outputs())
+    # run_raw is timed alone as "infer" -- pure sess.run, comparable across EPs
+    # and graph shapes. decode_raw (DFL/anchor decode for a cut model) is
+    # folded into "post" instead: it runs in numpy regardless of EP, its cost
+    # depends on --conf (more candidates survive the prefilter at low conf),
+    # and lumping it into "infer" makes a cut NPU model's number include work
+    # a full-graph model does inside the EP for free. Confirmed this matters:
+    # the cut model's mean infer time moved from 8.94ms to 15.01ms between
+    # --conf 0.25 and --conf 0.001 with nothing else changed.
     if n_out == len(yc.HEAD_OUTS):
         order = head_order(sess, imgsz)
         print(f"model: head-cut ({n_out} outputs), decode tail runs in numpy")
 
-        def forward(x):
-            r = sess.run(None, {inp: x})
+        def run_raw(x):
+            return sess.run(None, {inp: x})
+
+        def decode_raw(r):
             return decode_heads([r[i] for i in order], imgsz=imgsz,
                                 conf_thres=args.conf)
     elif n_out == 1:
         print("model: full graph (1 output), decode tail runs in the ONNX model")
 
-        def forward(x):
-            return sess.run(None, {inp: x})[0]
+        def run_raw(x):
+            return sess.run(None, {inp: x})
+
+        def decode_raw(r):
+            return r[0]
     else:
         raise SystemExit(f"don't know what to do with {n_out} outputs: "
                          f"{[o.name for o in sess.get_outputs()]}")
     print(f"input: {imgsz}x{imgsz}")
 
     def infer(img):
-        """-> dets, infer_ms, post_ms"""
+        """-> dets, infer_ms, post_ms. infer_ms is sess.run only; post_ms is
+        numpy decode (cut models) + NMS, so infer_ms means the same thing for
+        every EP and graph shape."""
         x, pad, scale = yc.letterbox(img, imgsz)
         t0 = time.perf_counter()
-        out = forward(x)
+        raw = run_raw(x)
         t1 = time.perf_counter()
+        out = decode_raw(raw)
         dets = yc.postprocess(out, pad, scale, conf_thres=args.conf, iou_thres=args.iou)
         t2 = time.perf_counter()
         return dets, (t1 - t0) * 1000, (t2 - t1) * 1000

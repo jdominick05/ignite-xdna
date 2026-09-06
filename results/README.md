@@ -8,6 +8,7 @@ edited by hand except that the local user profile path has been replaced with
 | Directory | Experiment | README section |
 |---|---|---|
 | `bench/` | YOLOv8 n vs s: quantization, latency, COCO mAP on the full val2017 set, EP reports | Model size: n vs s |
+| `bench/` | `lat_yolov8n_igpu_vs_npu_sweep.log`, `diag_dml_node_placement.log`, `map_yolov8n_{,fp16_}dml.log`, `{lat,map}_yolov8n_cut_xint8_adaround_npu.log`: CPU/DML/NPU head-to-head, DML node-placement evidence (no `vitisai_ep_report.json` equivalent exists for DML, so `_dml` logs carry a `--log 0` "All nodes placed on" line instead), full-5000 AdaRound mAP | iGPU vs NPU: is Ryzen AI worth it over DirectML? |
 | `res/` | ResNet50 at 128²–384²: export, quantization, NPU run, EP report per resolution | ResNet50 input resolution |
 | `wide/` | `wide_resnet50_2`, `wide_resnet101_2`, and yolov8m: width steps on both pipelines | Model width; A third width step |
 | `interact/` | `wide_resnet50_2` at 160²/224²/288²: width and resolution together | Width and resolution together |
@@ -19,8 +20,11 @@ edited by hand except that the local user profile path has been replaced with
 File name conventions: `export_*` (ONNX export), `quant_*` (Quark quantization),
 `run_*` / `lat_*` (NPU or CPU inference and latency), `map_*` (COCO mAP evaluation),
 `diag_*` (the VitisAI EP assignment report as read by `tools/diag_ep.py`).
-`*_npu` and `*_cpu` suffixes name the execution provider requested; whether the NPU
-actually took the graph is answered by the matching `diag_*` log, not the suffix.
+`*_npu`, `*_cpu` and `*_dml` suffixes name the execution provider requested; whether the
+NPU actually took the graph is answered by the matching `diag_*` log, not the suffix.
+DML has no report-file equivalent (VitisAI's `vitisai_ep_report.json` is written by that
+EP specifically) — for a `_dml` log, "did it engage" evidence means a `--log 0` capture
+showing `All nodes placed on [DmlExecutionProvider]`, as in `diag_dml_node_placement.log`.
 
 `out_*.jpg` are detections drawn on `assets/test_image.jpg` by the configuration in the
 file name. `npu_log.txt` is a captured VitisAI EP compile log and is UTF-16, so search it

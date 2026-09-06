@@ -1,0 +1,48 @@
+loading annotations into memory...
+Done (t=0.25s)
+creating index...
+index created!
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+model: full graph (1 output), ONNX decode, input 640x640
+eval : 5000 images, conf 0.001, iou 0.7, max_det 300, per-class NMS
+  500/5000  (67834 detections so far)
+  1000/5000  (135776 detections so far)
+  1500/5000  (206636 detections so far)
+  2000/5000  (274335 detections so far)
+  2500/5000  (342246 detections so far)
+  3000/5000  (411163 detections so far)
+  3500/5000  (479835 detections so far)
+  4000/5000  (549429 detections so far)
+  4500/5000  (620928 detections so far)
+  5000/5000  (689835 detections so far)
+
+689835 detections over 5000 images in 123s
+inference  mean 16.95 ms   median 16.79 ms
+wrote C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\results\dets_yolov8n_dml.json
+Loading and preparing results...
+DONE (t=1.95s)
+creating index...
+index created!
+Running per image evaluation...
+Evaluate annotation type *bbox*
+DONE (t=24.83s).
+Accumulating evaluation results...
+DONE (t=5.09s).
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.367
+ Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] = 0.516
+ Average Precision  (AP) @[ IoU=0.75      | area=   all | maxDets=100 ] = 0.399
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.178
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.405
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.519
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=  1 ] = 0.304
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets= 10 ] = 0.500
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.550
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.326
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.614
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.712
+
+=== yolov8n | DML | 640px | 5000 images ===
+mAP@50-95  36.69
+mAP@50     51.64
+mAP small / medium / large   17.85 / 40.49 / 51.87
+latency    16.95 ms

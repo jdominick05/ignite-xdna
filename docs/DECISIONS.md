@@ -99,6 +99,41 @@
 
 ## Rejected approaches and known pitfalls
 
+- **`4_detect.py`/`5_eval_map.py` used to time a cut model's numpy DFL/anchor decode as
+  part of "infer."** For a head-cut model `forward` was `sess.run` + `decode_heads`
+  timed as one block; a full-graph model's decode runs inside the ONNX graph, so its
+  "infer" never carried this cost. The two "infer" numbers were never measuring the same
+  thing, and the gap is not small: moving `--conf` from the demo's 0.25 to the eval
+  script's 0.001 alone took the cut NPU model's single-image "infer" from 8.94ms to
+  15.01ms with zero EP or hardware change. Fixed by splitting the timed region in both
+  scripts: "infer" is `sess.run` alone (comparable across every EP and graph shape),
+  decode moved into "post" alongside NMS. Found while building a fair CPU/DML/NPU
+  comparison (see `README.md`'s "iGPU vs NPU" section) — a DML full-graph model would
+  have been compared against an NPU cut model's inflated number, understating the NPU
+  specifically because it needed the head-cut workaround DirectML doesn't.
+- **NPU single-instance latency drifts session to session on this shared dev machine
+  independent of any code or model change** — 12.7ms measured for
+  `yolov8n_cut_xint8_c200.onnx` in isolation, 6.8-6.9ms measured minutes later
+  back-to-back with a CPU/DML/NPU sweep, same model, same compile cache, nothing
+  changed. Background CPU load from other processes on the machine is the suspect, not
+  diagnosed further. Consequence for any future timing comparison: don't trust a
+  latency number against one committed on a different day: capture every configuration
+  being compared in one interleaved sitting.
+- **DirectML on this iGPU (Radeon 780M) gains nothing from a plain QDQ INT8 model.**
+  `yolov8n_cut_xint8_c200.onnx` on `DmlExecutionProvider`: 16.6ms, slower than the same
+  graph shape's own FP32 (14.5ms) — DirectML has no dedicated INT8 fast path exercised
+  by ORT's standard QDQ lowering here, so it just pays dequantize→float-compute→quantize
+  overhead around the same math the FP32 model already does. Registering and "All nodes
+  placed on [DmlExecutionProvider]" (`--log 0`, no CPU fallback) is not evidence of a
+  speedup — check the number, not just whether it engaged. FP16 (via
+  `onnxruntime.transformers.float16.convert_float_to_float16`, `keep_io_types=True`) is
+  DML's real speed lever on this hardware: ~9.9-10.5ms, and mAP moved only 36.69 → 36.72
+  on the full 5000-image set, i.e. free.
+- **DML has no `vitisai_ep_report.json` equivalent.** "Did the EP actually take the
+  graph" for a `_dml` result means a `--log 0` capture of ORT's own
+  `VerifyEachNodeIsAssignedToAnEp` log line, not a report file — see
+  `results/bench/diag_dml_node_placement.log`.
+
 - Small language models on this NPU: unsupported by the vendor support matrix (no
   BF16, no NLP path on XDNA1). Scope redirected to CNN inference.
 - Ryzen AI 1.8.0 for inference: no Phoenix xclbin (see locked #1).

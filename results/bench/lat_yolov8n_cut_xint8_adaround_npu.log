@@ -1,0 +1,17 @@
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\yolocutcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+model: head-cut (6 outputs), decode tail runs in numpy
+input: 640x640
+
+=== NPU | models/yolov8n_cut_xint8_adaround.onnx | 640px | assets/test_image.jpg ===
+infer   mean 6.95 ms   median 6.92 ms   p95 7.37 ms   (143.9 fps)
+post    mean 2.07 ms
+4 detections:
+   person           0.62  (411,157,53,140)
+   tv               0.50  (5,165,150,97)
+   chair            0.50  (292,217,62,100)
+   chair            0.38  (361,215,81,98)
+wrote C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\results\out_yolov8n_cut_xint8_adaround_npu.jpg

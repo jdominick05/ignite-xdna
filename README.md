@@ -200,6 +200,83 @@ aie-partitions`, sampled every 15s) — so it is not a simple memory leak accumu
 over a long run. Root cause unresolved; not seen at all on n/s/m/x. Worth a closer look
 before trusting long unattended l runs in a real deployment.
 
+### iGPU vs NPU: is Ryzen AI worth it over DirectML?
+
+The Radeon 780M/760M iGPU on these same chips is reachable through
+`DmlExecutionProvider` with no extra install — this build of onnxruntime already lists
+it (`onnxruntime.get_available_providers()` → `['VitisAIExecutionProvider',
+'DmlExecutionProvider', 'CPUExecutionProvider']`) — so the real question isn't "can you
+use DirectML instead," it's whether the NPU's extra pipeline work (head-cut, calibrate,
+quantize, optionally AdaRound, always `--fresh`, all the footguns in
+[`docs/DECISIONS.md`](docs/DECISIONS.md)) buys anything DirectML doesn't hand you for
+free. `npu/session.py::build_session` now takes `--ep dml` alongside `cpu`/`npu`, so the
+same script, same letterbox, same decode, same NMS runs on all three.
+
+**A measurement bug would have inverted this comparison, so it's worth stating what got
+fixed first.** `4_detect.py`/`5_eval_map.py` used to time `sess.run` and the cut model's
+numpy DFL/anchor decode as one number called "infer." That decode cost is real numpy
+work with nothing to do with the EP, and it scales with how many candidates survive
+`--conf` — moving from the demo's 0.25 to the eval script's 0.001 alone took the cut NPU
+model's measured "infer" from 8.94 ms to 15.01 ms on the same single image, no EP or
+hardware change involved. A full-graph model decodes inside the ONNX graph, so its
+"infer" never carried this cost — meaning the old numbers penalized exactly the models
+this section needed to compare fairly. Fixed by splitting the timed region: "infer" is
+now `sess.run` alone for every EP and every graph shape; decode (cut models only) moved
+into "post" alongside NMS.
+
+**Latency also drifted between sessions on this shared dev machine** — a NPU burst
+measured 12.7 ms in isolation and 6.8-6.9 ms measured back-to-back with everything else
+in this table minutes later, on the same model and cache, with no code change between
+the two. Background CPU load (other sessions on this machine, not this project's code)
+is the suspect. The fix for a comparison, not a single number: interleave every
+configuration in one sitting rather than trust a config's latency against a number
+committed on a different day. The table below is one such sweep
+(`results/bench/lat_yolov8n_igpu_vs_npu_sweep.log`), each model run immediately after
+the last, 150 warmed-up runs each.
+
+| Model | Device | Effort to get here | Infer (sess.run only) | mAP@50-95 | mAP@50 |
+|---|---|---|---|---|---|
+| yolov8n FP32, full graph | CPU | none (baseline) | 22.9-27.9 ms | 36.69 | 51.64 |
+| yolov8n FP32, full graph | **DML (iGPU)** | **none** — the export ONNX runs as-is | 12.1-12.8 ms | 36.69 | 51.64 |
+| yolov8n FP16, full graph | **DML (iGPU)** | one `convert_float_to_float16` call | **9.9-10.5 ms** | 36.72 | 51.68 |
+| yolov8n XINT8, head-cut | NPU | cut head + calibrate + quantize | 6.8-6.9 ms | 26.94 | 40.15 |
+| yolov8n XINT8+AdaRound, head-cut | **NPU** | + AdaRound FastFinetune | **6.8-6.9 ms** | **32.19** | **47.04** |
+
+Two things to check before trusting a GPU number at all, both done here rather than
+assumed: DirectML registering is not the same as DirectML running the graph — the same
+"EP claims the graph and still falls back" trap this repo already hit once with VitisAI
+(see the YOLOv8 partitioning section above) is exactly as possible on DML. Every model
+in this table logs `All nodes placed on [DmlExecutionProvider]`
+(`results/bench/diag_dml_node_placement.log`, verbose session log, `--log 0`) — including
+the XINT8 model, which DML happily accepts but gains nothing from: 16.6 ms, slower than
+its own FP32 cut model, because DirectML has no dedicated INT8 fast path here and just
+pays full QDQ dequantize→compute→quantize overhead around the same float math. And the
+FP32→FP16 conversion (`onnxruntime.transformers.float16.convert_float_to_float16`,
+`keep_io_types=True` so letterbox/decode stay float32 at the boundary) was checked
+against a full 5000-image mAP, not assumed lossless: 36.72 vs FP32's 36.69, within noise.
+
+**The honest answer has two columns, and they point in opposite directions.**
+DirectML's best case (FP16, zero quantization work) is 1.3-1.5× slower than the NPU's
+best case, full stop — the NPU wins the speed race even against an optimized iGPU path.
+But NPU XINT8+AdaRound still costs **4.5 mAP points against FP32** even after the
+accuracy-recovery step this repo's own locked decision calls for (32.19 vs 36.69 mAP@50-95,
+and that gap is measured on the full 5000, not a slice: an earlier 200-image-slice
+estimate for this same recovery step guessed a smaller 2.9-point remaining loss, and per
+the standing rule that a slice is not the answer, the full-set 4.5 supersedes it) — against
+DML's zero mAP loss at FP16 for one function call and no calibration, no head-cutting, no
+`--fresh` discipline, none of `docs/DECISIONS.md`'s pitfall list. If the deployment can
+tolerate ~10 ms instead of ~7 ms, DirectML is very plausibly the better trade: most of
+the NPU's speed for none of its accuracy cost and none of its tooling burden. The NPU is
+worth it specifically when the last ~30-40% of latency matters more than 4.5 mAP points
+and the engineering time to chase it — a real case, just a narrower one than "NPU beats
+iGPU" alone implies.
+
+Not measured here: DML on the laptop's Radeon 760M (a different, smaller iGPU — this
+table is Desktop 2 / Phoenix, Radeon 780M, only); DML with IOBinding (this repo's
+existing methodology times plain `sess.run` for every EP including the NPU, so adding
+IOBinding for DML alone would make the comparison less fair, not more, even though it
+would make DML's own number smaller in isolation); yolov8s/m/l/x on DML.
+
 ### Input resolution: the fixed cost of running the graph at all
 
 The n-vs-s table says width is cheap. This one asks the complementary question — is the
