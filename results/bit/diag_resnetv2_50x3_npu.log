@@ -1,0 +1,53 @@
+
+=== C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\modelcachekey\vitisai_ep_report.json ===
+  all            nodeNum= 1271  opTypes=11
+  CPU            nodeNum=   53  opTypes=3
+  NPU            nodeNum= 1010  opTypes=9
+  VITIS_EP_CPU   nodeNum=  208  opTypes=2
+
+  per-node device counts: {'CPU': 261, 'NPU': 1010}
+
+  1010 nodes on the NPU, 261 elsewhere.
+
+  op type x device:
+    CPU           Conv                 3
+    CPU           DequantizeLinear     155
+    CPU           Flatten              1
+    CPU           InstanceNormalization 49
+    CPU           QuantizeLinear       53
+    NPU           Add                  65
+    NPU           Conv                 51
+    NPU           DequantizeLinear     430
+    NPU           GlobalAveragePool    1
+    NPU           MaxPool              1
+    NPU           Mul                  50
+    NPU           QuantizeLinear       265
+    NPU           Relu                 49
+    NPU           Reshape              98
+
+  261 nodes NOT on the NPU (first 25):
+    CPU           DequantizeLinear     ['/stages/stages.0/blocks/blocks.0/norm1/Constant_1_output_0_DequantizeLinear_Output/duplicated_token_186']
+    CPU           DequantizeLinear     ['/stages/stages.0/blocks/blocks.0/norm1/Constant_2_output_0_DequantizeLinear_Output/duplicated_token_92']
+    CPU           DequantizeLinear     ['/stages/stages.0/blocks/blocks.0/norm1/Constant_1_output_0_DequantizeLinear_Output/duplicated_token_172']
+    CPU           DequantizeLinear     ['/stages/stages.0/blocks/blocks.0/norm1/Constant_2_output_0_DequantizeLinear_Output/duplicated_token_78']
+    CPU           DequantizeLinear     ['/stages/stages.0/blocks/blocks.0/norm1/Constant_1_output_0_DequantizeLinear_Output/duplicated_token_170']
+    CPU           DequantizeLinear     ['/stages/stages.0/blocks/blocks.0/norm1/Constant_2_output_0_DequantizeLinear_Output/duplicated_token_76']
+    CPU           DequantizeLinear     ['/stages/stages.0/blocks/blocks.0/norm1/Constant_1_output_0_DequantizeLinear_Output/duplicated_token_168']
+    CPU           DequantizeLinear     ['/stages/stages.0/blocks/blocks.0/norm1/Constant_2_output_0_DequantizeLinear_Output/duplicated_token_74']
+    CPU           DequantizeLinear     ['/stages/stages.0/blocks/blocks.0/norm1/Constant_1_output_0_DequantizeLinear_Output/duplicated_token_136']
+    CPU           DequantizeLinear     ['/stages/stages.0/blocks/blocks.0/norm1/Constant_2_output_0_DequantizeLinear_Output/duplicated_token_42']
+    CPU           DequantizeLinear     ['/stages/stages.0/blocks/blocks.0/norm1/Constant_1_output_0_DequantizeLinear_Output/duplicated_token_134']
+    CPU           DequantizeLinear     ['/stages/stages.0/blocks/blocks.0/norm1/Constant_2_output_0_DequantizeLinear_Output/duplicated_token_40']
+    CPU           DequantizeLinear     ['/stages/stages.0/blocks/blocks.0/norm1/Constant_1_output_0_DequantizeLinear_Output/duplicated_token_132']
+    CPU           DequantizeLinear     ['/stages/stages.0/blocks/blocks.0/norm1/Constant_2_output_0_DequantizeLinear_Output/duplicated_token_38']
+    CPU           DequantizeLinear     ['/stages/stages.0/blocks/blocks.0/norm1/Constant_1_output_0_DequantizeLinear_Output/duplicated_token_112']
+    CPU           DequantizeLinear     ['/stages/stages.0/blocks/blocks.0/norm1/Constant_2_output_0_DequantizeLinear_Output/duplicated_token_18']
+    CPU           DequantizeLinear     ['/stages/stages.0/blocks/blocks.0/norm1/Constant_1_output_0_DequantizeLinear_Output/duplicated_token_110']
+    CPU           DequantizeLinear     ['/stages/stages.0/blocks/blocks.0/norm1/Constant_2_output_0_DequantizeLinear_Output/duplicated_token_16']
+    CPU           DequantizeLinear     ['/stages/stages.0/blocks/blocks.0/norm1/Constant_1_output_0_DequantizeLinear_Output/duplicated_token_108']
+    CPU           DequantizeLinear     ['/stages/stages.0/blocks/blocks.0/norm1/Constant_2_output_0_DequantizeLinear_Output/duplicated_token_14']
+    CPU           DequantizeLinear     ['/stages/stages.0/blocks/blocks.0/norm1/Constant_1_output_0_DequantizeLinear_Output/duplicated_token_94']
+    CPU           DequantizeLinear     ['/stages/stages.0/blocks/blocks.0/norm1/Constant_2_output_0_DequantizeLinear_Output/duplicated_token_0']
+    CPU           DequantizeLinear     ['/stages/stages.0/blocks/blocks.0/norm1/Constant_1_output_0_DequantizeLinear_Output/duplicated']
+    CPU           DequantizeLinear     ['/stages/stages.0/blocks/blocks.0/norm1/Constant_2_output_0_DequantizeLinear_Output/duplicated']
+    CPU           QuantizeLinear       ['input_QuantizeLinear_Output']

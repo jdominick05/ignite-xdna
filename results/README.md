@@ -14,6 +14,7 @@ edited by hand except that the local user profile path has been replaced with
 | `interact/` | `wide_resnet50_2` at 160²/224²/288²: width and resolution together | Width and resolution together |
 | `batch/` | Static batch-2 ResNet50 export: the negative result on batching | Batching |
 | `mobilenet/` | `mobilenetv2_100.ra_in1k`: CPU/DML/NPU head-to-head, EP report -- the negative result where a model cheap enough on CPU alone loses to both accelerators | Model family: MobileNetV2 vs ResNet50 |
+| `bit/` | `resnetv2_50x3_bit`: CPU/NPU head-to-head, EP report -- best accuracy in this repo (84.00% top-1), yet NPU still loses to CPU because `InstanceNormalization` has no NPU kernel in this EP (only 79.5% of nodes place) | Pushing width further: resnetv2_50x3_bit |
 | top level | The original ResNet50 table rows and the YOLOv8 head-cut investigation | Results; The YOLOv8n blocker |
 | top level | `webcam_multipartition_yolov8{n,m,l,x}.log`: live webcam round-robin across 4 independent 1x4.xclbin columns, per size | The webcam round-robin demo |
 | top level | `cam_probe_{backends,setres,late_set}.log`: camera open cost per OpenCV videoio backend, the resolution-change cost, and the no-op when the env var is set after `import cv2`; `webcam_multipartition_yolov8n_msmf_nohw.log` is the n demo re-run on the fast path | The webcam round-robin demo |

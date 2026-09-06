@@ -321,6 +321,53 @@ answer to "what is this hardware good for": models expensive enough on CPU that 
 few milliseconds of fixed accelerator overhead is small by comparison — not every
 classifier a phone can already run fine.**
 
+### Pushing width further: `resnetv2_50x3_bit`, and a second way to lose to CPU
+
+The width lever paid off cleanly twice (resnet50 → wide_resnet50_2 → wide_resnet101_2),
+so the obvious next step is to push it further and see if it keeps paying. `resnetv2_50x3
+.goog_in21k_ft_in1k` (a "Big Transfer" ResNetv2, 3× resnet50's width, timm's own 448²
+recommended input) is also the first model in this repo built on **GroupNorm-style
+`InstanceNormalization`** instead of `BatchNormalization` — BatchNorm folds into the
+preceding Conv at export time, but this architecture's norm layers do not, so they survive
+as standalone graph nodes into the quantized model. Exported, quantized `XINT8_ADAROUND`,
+and run CPU/NPU the same way as every model above (`results/bit/`):
+
+| Config | Device | top-1 / top-5 | Latency |
+|---|---|---|---|
+| FP32, full graph | CPU | **84.00% / 96.00%** | **470.79 ms** |
+| XINT8+AdaRound | NPU | 82.10% / 95.30% | 588.58 ms |
+
+**84.00% top-1 is the best accuracy this repo has ever measured** — beating
+wide_resnet101_2's 80.20% by 3.8 points, at the cost of a CPU baseline nearly 25× heavier
+than resnet50's. And yet **the NPU loses to CPU again, by 25%** — a second, structurally
+different way to fail the "NPU wins" pattern, this time on a model with plenty of compute
+to amortize dispatch overhead. `tools/diag_ep.py` explains why (`results/bit/
+diag_resnetv2_50x3_npu.log`): only **1010 of 1271 nodes (79.5%) place on the NPU** — far
+below every other model in this doc (ResNet50 99.5%, wide_resnet101_2 99.7%, MobileNetV2
+99.4%) — and the 261 CPU nodes are not the usual 2-node input/output boundary. **All 49
+`InstanceNormalization` nodes fall to CPU**, along with 3 adjacent Conv nodes and their
+Q/DQ scale nodes. The VitisAI EP for this backend has no NPU kernel for
+`InstanceNormalization` — checked directly from the report, not inferred from latency.
+
+The mechanism is different from MobileNetV2's: this is not dispatch overhead swamping a
+tiny compute cost, it's **49 CPU-executed normalization ops interleaved between NPU
+convs**, each transition paying a cross-EP hand-off (copy on/off the NPU) on top of doing
+real work on the slower device — worse than running the whole graph on CPU natively,
+where the same norm ops fuse efficiently into one runtime with no hand-off cost at all.
+Accuracy also degrades further from quantization here (84.00% → 82.10%, a 1.9-point drop)
+than any other model in this repo's XINT8+AdaRound rows, plausibly because the 49
+unfused normalization layers add extra quantization boundaries AdaRound has to fit.
+
+**Revises the "what is this hardware good for" answer once more**: being compute-heavy
+is necessary but not sufficient. The graph also has to be built from ops the VitisAI EP
+actually has NPU kernels for — Conv/Add/Mul/Relu/pooling place near-universally in this
+repo, but `InstanceNormalization` (and, by the same logic, anything relying on non-fused
+normalization — GroupNorm, LayerNorm) is a real, measured gap, not a hypothetical one.
+**Every clean NPU win in this repo (ResNet50, wide_resnet50_2, wide_resnet101_2, yolov8n)
+shares one property this model breaks: BatchNorm-only, so normalization disappears into
+the Conv weights before the graph the NPU ever sees.** That, not just "heavy enough,"
+is what "best suited for this hardware" actually means for a classifier.
+
 ### Input resolution: the fixed cost of running the graph at all
 
 The n-vs-s table says width is cheap. This one asks the complementary question — is the
@@ -1352,6 +1399,16 @@ exactly the regime where the NPU wins — this project's advice to reach for XDN
 always implicitly scoped to "a model heavy enough that a few ms of dispatch overhead
 is noise," not to every classifier a CPU already runs comfortably. See "Model family:
 MobileNetV2 vs ResNet50" above.
+
+**"Heavy enough" is necessary but not sufficient — the op set matters too.**
+`resnetv2_50x3_bit` has a 470.79 ms CPU baseline (no dispatch-overhead excuse available)
+and still loses to the NPU, by 25% (588.58 ms), because only 1010/1271 nodes (79.5%)
+place on the NPU: every `InstanceNormalization` node in it falls to CPU, confirmed via
+`tools/diag_ep.py`, not assumed. Every clean NPU win in this repo shares BatchNorm-only
+normalization, which folds into the preceding Conv's weights at export and so never
+reaches the graph as its own node. A non-fused normalization layer (GroupNorm,
+LayerNorm, InstanceNorm) is a measured gap in this EP's NPU kernel coverage, not a
+hypothetical one. See "Pushing width further: `resnetv2_50x3_bit`" above.
 
 ---
 
