@@ -712,9 +712,37 @@ Ryzen AI 1.5 — "no longer supported and should not be used," per AMD's own rel
 notes (checked 2026-09-06). It still compiles and runs correctly, with verified zero
 cross-talk, on the 1.7.1 install this project depends on — but this is unsupported
 territory, not a sanctioned configuration, and nothing guarantees it survives a
-future driver or SDK update. Also untested: whether a 5th concurrent context queues
-behind a column or is refused outright, and whether this holds on the laptop's Hawk
-Point chip, which may have a different column count.
+future driver or SDK update.
+
+**The 5th concurrent context question is answered: it shares, it doesn't queue or
+refuse.** `xrt-smi examine -r platform` reports **Total Columns: 5** on Desktop 2's
+Phoenix chip — one more than every sweep above assumed. Extending the process count
+to 5 (`results/multi_partition_yolov8n_5col.log`):
+
+| processes | combined fps | vs 1-proc | partitions reported | mismatches |
+|---|---|---|---|---|
+| 4 | 246.4 | 3.66× | 4 | 0 |
+| 5 | 257.2 | 3.83× | **4** | 0 |
+
+`1x4.xclbin` only ever exposes **4** independent partitions regardless of process
+count — at N=5 the partition report still lists exactly 4 entries, and the 4th and
+5th processes share column 4, each dropping to ~38 fps (half the ~60 fps the other
+three columns keep solo) rather than getting a distinct 5th context. Combined
+throughput barely moves past N=4 as a result (246.4 → 257.2 fps) — a shared-column
+slowdown, not real 5-way scaling. The obvious next step — the driver's own
+`5x4_*.xclbin` overlay family under `C:\Windows\System32\AMD`, none shipped in the
+1.7.1 SDK's own `xclbins` folder — was tried directly: all three build and run
+without error and produce output matching CPU, but `vitisai_ep_report.json` shows
+every node on device `"CPU"` — a hardware-target fingerprint lookup fails silently
+during session init (`Cannot find or create target with fingerprint=0x...`) and the
+whole graph falls back to CPU rather than raising. Matching CPU output was, on its
+own, *not* evidence of NPU execution here — caught only by checking the report's
+`deviceStat` for a DPU entry, the same discipline the batch-2 and `yolov8s@1280`
+findings above required. **Conclusion: the 5th physical column is real but not
+reachable from this machine's 1.7.1 install through any xclbin tried** — see
+`docs/DECISIONS.md` ("Rejected approaches") for the full record. Still untested:
+whether the laptop's Hawk Point chip has the same column count and 5th-column
+behavior — Phoenix-only so far.
 
 Caveat, stated plainly: what exactly xrt-smi's GOPS counter counts — raw MACs, some
 wider instruction count, a wall-clock average that folds in per-call dispatch overhead
@@ -876,6 +904,43 @@ finding) confirmed a genuine quantization defect from the thin `--limit 4` recip
 meeting this narrower architecture, reproducible on plain CPU with no NPU involved:
 the fps figure is unaffected (Q/DQ scale corruption doesn't change node or MAC count)
 but this model must never be cited for mAP or detection accuracy, same as `yolov8x@1280`.
+
+### A live demo: does the multi-partition finding hold on a real webcam?
+
+Every number above for `1x4.xclbin` came from a static-image benchmark
+(`tools/multi_partition_bench.py`) feeding pre-loaded frames as fast as each session
+could accept them. `tools/webcam_multipartition_demo.py` asks the practical version of
+the same question: does splitting into 4 independent single-column NPU sessions
+(measured combined throughput 67.2 → 245.2 fps at N=4, yolov8n, above) turn into a
+faster *live* demo than the single `4x4.xclbin` session `pipelines/yolov8n/4_detect.py`
+uses? Four worker processes each build their own session against `1x4.xclbin` (one OS
+process = one HW column, per the sweep above) and round-robin live webcam frames,
+dropping a frame rather than queuing it if its assigned worker is still busy — so the
+on-screen number is a genuine live rate, not an average over a growing backlog.
+
+Measured on Desktop 2 / Phoenix: all 4 workers reached ready, and `xrt-smi` confirmed
+4 active HW contexts — genuine separate-column parallelism, not one partition being
+time-sliced. **Live HUD read combined 30.0 fps, ~18.0 ms per worker.** 30.0 fps is
+exactly this camera's own native capture rate, measured separately — the round-robin
+split is working as designed, but the webcam's frame delivery, not NPU throughput, is
+what caps the on-screen number. The static-image benchmark already put this same
+model's ceiling at 245.2 fps combined at N=4 — roughly **8× of headroom sitting
+unused** here because the camera can't feed frames fast enough to reach it. This
+resolves the Roadmap's open "webcam path… not exercised end to end" item, but not the
+way that item anticipated: the finding isn't about the NPU or the round-robin split at
+all, it's that camera capture is the bottleneck for this exact demo, and the multi-
+partition throughput gain would need a faster frame source (multiple cameras, a video
+file, or synthetic frames) to actually show up on screen.
+
+Also measured in isolation while chasing an apparent startup hang: `cv2.VideoCapture(0)`
+took ~90s to open on this machine, and requesting a non-native resolution via
+`cap.set(CAP_PROP_FRAME_WIDTH/HEIGHT)` added another ~178s on top — a driver-level
+renegotiation cost specific to this camera, reproduced twice, unrelated to the NPU or
+anything in this repo's code. The demo therefore requests no explicit resolution and
+reports whatever the camera's native size is (640×480 @ 30 fps here); `letterbox()`
+already handles arbitrary capture sizes. No `results/` log backs this one — it's a live
+HUD reading, not a script that writes a log — so the numbers above are the record;
+`tools/webcam_multipartition_demo.py` reproduces it.
 
 ---
 
@@ -1214,7 +1279,7 @@ checks on CPU, runs on the NPU and reads the report back.
   (GOPS) — and is what the concurrency measurements above use for memory. Its GOPS
   column was tried as a utilization signal too and turned out to be a dead end (scales
   linearly with stream count, decoupled from measured throughput); see the
-  [GOPS section](#is-the-saturation-compute-or-memory) above and
+  [GOPS section](#two-cameras-does-independent-concurrency-work-where-batching-doesnt) above and
   [Roadmap](#roadmap).
 - **No formal test suite.** Verification here is empirical (`compileall` + import checks
   as a syntax gate, then real pipeline runs read from `results/`) rather than unit tests
@@ -1272,7 +1337,7 @@ reasoning behind each.
   (x) — the width trend that held cleanly through m flattens here; x is pure extra cost
   for less accuracy than l. Calibrated smaller (32/24 images) than m's 64, a caveat in
   the same vein as m's own. l's full eval is also flaky in a way nothing smaller is —
-  see [Known limitations](#known-limitations-and-honest-caveats). Table in the width
+  see [Known limitations](#known-limitations). Table in the width
   section above.
 - **AdaRound across the ResNet50 resolution sweep.** The sweep is plain XINT8, and
   AdaRound's recovery could move where the accuracy peak sits.
@@ -1289,7 +1354,17 @@ reasoning behind each.
 - **Explain ResNet50's AdaRound latency cost** (5.63 → 6.93 ms). The EP report shows the
   same 393 / 2 partition for both models, so extra CPU fallback is ruled out; a
   `--fresh` re-run of each and a diff of the two reports would settle it.
-- **The webcam path** (`./scripts/yolo-demo.sh`) has not been exercised end to end.
+- **The webcam path (single `4x4.xclbin` session, `./scripts/yolo-demo.sh`) has not
+  been exercised end to end.** The related but distinct round-robin-across-4-columns
+  demo *has* — see
+  [A live demo](#a-live-demo-does-the-multi-partition-finding-hold-on-a-real-webcam)
+  above: camera-bound at 30 fps, not NPU-bound.
+- **5th AIE column on this Phoenix chip — done, and it's a dead end.** `1x4.xclbin`
+  caps at 4 independent partitions regardless of process count; a 5th process shares
+  column 4 rather than getting its own. The driver's `5x4_*.xclbin` overlays fall back
+  silently to 100% CPU (fingerprint mismatch). See
+  [Splitting the array into independent partitions](#splitting-the-array-into-independent-partitions)
+  above and `docs/DECISIONS.md`.
 - **Longer term:** a detector fine-tuned for fixed camera feeds (licence-plate
   recognition), reusing the head-cut + XINT8 + AdaRound recipe rather than re-deriving it.
 

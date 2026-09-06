@@ -17,6 +17,10 @@
 #     every later grep/rg silently match nothing
 #   - no literal local profile path -- replace with C:\Users\<user> by hand
 #     before staging, this script only detects it, it does not rewrite logs
+#   - staging a new/changed results/*.log without README.md in the same
+#     commit prints a warning (not a block -- a rerun confirming an existing
+#     number doesn't need one), per CLAUDE.md's "update README.md before
+#     every commit" rule
 #
 # Positional args (if any) are `git add`-ed by name -- never -A, never `.`.
 # With none, whatever is already staged is committed as-is.
@@ -72,6 +76,14 @@ while IFS= read -r f; do
 done < <(git diff --cached --name-only)
 [ "$BAD" = 0 ] || die "fix the above, then re-stage and re-run"
 ok "staged results/ logs clean"
+
+if git diff --cached --name-only | grep -q '^results/.*\.log$'; then
+    if ! git diff --cached --name-only | grep -qx 'README.md'; then
+        warn "staging a results/*.log without README.md in this commit -- if this is" \
+             "a new finding, retraction, or number that supersedes one already in the" \
+             "README, fold it in before committing (CLAUDE.md's maintenance rule)."
+    fi
+fi
 
 TMPMSG="$(mktemp)"
 trap 'rm -f "$TMPMSG"' EXIT
