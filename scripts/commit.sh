@@ -34,7 +34,7 @@ while [ $# -gt 0 ]; do
         -s|--session-url) SESSION_URL="$2"; shift ;;
         -c|--coauthor)    COAUTHOR="$2"; shift ;;
         -h|--help)        usage "${BASH_SOURCE[0]}"; exit 0 ;;
-        --)               shift; while [ $# -gt 0 ]; do FILES+=("$1"); shift; done ;;
+        --)               shift; while [ $# -gt 0 ]; do FILES+=("$1"); shift; done; continue ;;
         -*)               die "unknown flag $1" ;;
         *)                FILES+=("$1") ;;
     esac
