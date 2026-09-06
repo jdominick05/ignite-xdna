@@ -277,6 +277,50 @@ existing methodology times plain `sess.run` for every EP including the NPU, so a
 IOBinding for DML alone would make the comparison less fair, not more, even though it
 would make DML's own number smaller in isolation); yolov8s/m/l/x on DML.
 
+### Model family: MobileNetV2 vs ResNet50 — does "NPU beats CPU" hold for a cheap-enough model?
+
+Every NPU-wins-on-latency result above (ResNet50, yolov8n) starts from a CPU baseline
+in the tens of milliseconds. `mobilenetv2_100.ra_in1k` (timm, depthwise-separable convs,
+ReLU6, no SE block — the one op family neither existing pipeline had exercised) was
+exported, quantized `XINT8_ADAROUND`, and run CPU/DML/NPU the same way as ResNet50, to
+ask what happens once the CPU number itself is already small. Same methodology as the
+iGPU-vs-NPU table above: same `npu/session.py::build_session`, same 1000-image eval
+slice as ResNet50's own table, `--ep dml`/`--ep npu` added to `pipelines/resnet50/4_run.py`
+for this comparison (`results/mobilenet/`).
+
+| Config | Device | top-1 / top-5 | Latency |
+|---|---|---|---|
+| FP32, full graph | CPU | 74.20% / 89.70% | **1.72 ms** |
+| FP32, full graph | DML (iGPU) | 74.20% / 89.70% | 3.19 ms |
+| XINT8+AdaRound | NPU | 73.40% / 90.20% | 2.68 ms |
+
+Node placement was checked before trusting the NPU number, same as everywhere else in
+this doc: `tools/diag_ep.py` reads 347/349 nodes on the NPU
+(`results/mobilenet/diag_mobilenetv2_npu.log`), the 2 CPU nodes being the input
+QuantizeLinear/output DequantizeLinear boundary every XINT8 graph pays — not a partial
+silent fallback dressed up as "high overhead."
+
+**Plain CPU wins outright here — both accelerators are net negative.** Accuracy is a
+wash (the 0.8-point top-1 drop is within the noise this 1000-image/623-class slice
+already carries, and top-5 actually improved), so this isn't an accuracy-for-speed
+trade like ResNet50 or yolov8n — DML and the NPU are simply slower, on a model already
+83% smaller in node count than what either accelerator was built to be worth engaging
+for. The likely mechanism: both DirectML dispatch and the VitisAI EP's per-call
+setup/copy overhead are roughly fixed costs per `session.run`, and at 1.72 ms of actual
+CPU compute there's nothing left for either accelerator's throughput advantage to
+amortize against — the same shape as the XINT8-on-DML result above (16.6 ms, slower
+than DML's own FP32), just reached from underneath instead of from the INT8-fast-path
+side.
+
+That puts a floor under every other result in this document: ResNet50's CPU baseline
+(19.7 ms) and yolov8n's (22.9-27.9 ms) are both roughly one to two orders of magnitude
+above MobileNetV2's 1.72 ms, and both are where the NPU wins convincingly. The crossover
+between "NPU/DML worth it" and "plain CPU wins" sits somewhere between those two
+regimes — not measured precisely, but bounded from both sides now. **The practical
+answer to "what is this hardware good for": models expensive enough on CPU that a
+few milliseconds of fixed accelerator overhead is small by comparison — not every
+classifier a phone can already run fine.**
+
 ### Input resolution: the fixed cost of running the graph at all
 
 The n-vs-s table says width is cheap. This one asks the complementary question — is the
@@ -1262,7 +1306,13 @@ just falls back to CPU, and the only symptoms are CPU-level latency and lower ac
 compilation**, never on a cache load, so their absence in a normal run means nothing
 by itself. Two reliable checks: the cache directory should contain a
 `compiled.*.xmodel` (ResNet's does, YOLO's does not), and NPU latency should be several
-times better than CPU. If it is not, you are running on the CPU.
+times better than CPU. If it is not, you are running on the CPU. **Caveat found later
+(MobileNetV2, see "Model family" below): that second check is a heuristic, not a
+guarantee** — a genuinely engaged NPU (347/349 nodes, confirmed via
+`vitisai_ep_report.json`) still lost to plain CPU (2.68 ms vs 1.72 ms) on a model cheap
+enough that per-call dispatch overhead outweighs the compute saved. The report file is
+still the only real evidence; "NPU should be faster" stops being a safe proxy once the
+CPU number itself is in the low single-digit milliseconds.
 
 **Always pass `--fresh` when changing model or xclbin.** The compile cache is keyed by
 a hardcoded `cacheKey`, not by a model hash, so a stale entry is reused silently and
@@ -1294,6 +1344,14 @@ classes. Read it with `pyarrow.parquet.ParquetFile.iter_batches` and write
 `image['bytes']` straight to disk. The `datasets` library pulls in more than a
 gigabyte of Arrow and torch just to import, and a non-streaming `load_dataset` wants
 150 GB.
+
+**Neither accelerator is free — both carry a per-call floor.** MobileNetV2 (1.72 ms on
+plain CPU) lost to both DML (3.19 ms) and a genuinely NPU-engaged run (2.68 ms,
+347/349 nodes). ResNet50 and yolov8n's CPU baselines are 10-15x larger, and that is
+exactly the regime where the NPU wins — this project's advice to reach for XDNA1 was
+always implicitly scoped to "a model heavy enough that a few ms of dispatch overhead
+is noise," not to every classifier a CPU already runs comfortably. See "Model family:
+MobileNetV2 vs ResNet50" above.
 
 ---
 

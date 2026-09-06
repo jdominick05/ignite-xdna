@@ -40,7 +40,7 @@ CFG_PATH = MODELS / "preprocess_config.json"
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--ep", choices=["cpu", "npu"], default="cpu")
+    ap.add_argument("--ep", choices=["cpu", "dml", "npu"], default="cpu")
     ap.add_argument("--images", required=True)
     ap.add_argument("--n", type=int, default=1000)
     ap.add_argument("--verbose", action="store_true", help="ORT verbose logs")
