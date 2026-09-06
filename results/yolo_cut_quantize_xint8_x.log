@@ -1,0 +1,640 @@
+[32m
+[QUARK-INFO]: Checking custom ops library ...[0m
+[33m
+[QUARK-WARNING]: The custom ops library C:\Users\Ignis\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[32m
+[QUARK-INFO]: Start compiling CPU version of custom ops library.[0m
+W0906 01:23:18.770000 3916 site-packages\torch\utils\cpp_extension.py:466] Error checking compiler version for cl: [WinError 2] The system cannot find the file specified
+INFO: Could not find files for the given pattern(s).
+[31m
+[QUARK-ERROR]: CPU version of custom ops library compilation failed:Command '['where', 'cl']' returned non-zero exit status 1.[0m
+[33m
+[QUARK-WARNING]: Custom ops library compilation failed: CPU version of custom ops library compilation failed:Command '['where', 'cl']' returned non-zero exit status 1..[0m
+Traceback (most recent call last):
+  File "C:\Users\Ignis\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\build_custom_ops.py", line 58, in compile_custom_op_cpu
+    load(
+  File "C:\Users\Ignis\miniforge3\envs\resnet_env\Lib\site-packages\torch\utils\cpp_extension.py", line 1681, in load
+    return _jit_compile(
+           ^^^^^^^^^^^^^
+  File "C:\Users\Ignis\miniforge3\envs\resnet_env\Lib\site-packages\torch\utils\cpp_extension.py", line 2138, in _jit_compile
+    _write_ninja_file_and_build_library(
+  File "C:\Users\Ignis\miniforge3\envs\resnet_env\Lib\site-packages\torch\utils\cpp_extension.py", line 2275, in _write_ninja_file_and_build_library
+    _write_ninja_file_to_build_library(
+  File "C:\Users\Ignis\miniforge3\envs\resnet_env\Lib\site-packages\torch\utils\cpp_extension.py", line 2762, in _write_ninja_file_to_build_library
+    _write_ninja_file(
+  File "C:\Users\Ignis\miniforge3\envs\resnet_env\Lib\site-packages\torch\utils\cpp_extension.py", line 2946, in _write_ninja_file
+    cl_paths = subprocess.check_output(['where',
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Ignis\miniforge3\envs\resnet_env\Lib\subprocess.py", line 466, in check_output
+    return run(*popenargs, stdout=PIPE, timeout=timeout, check=True,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Ignis\miniforge3\envs\resnet_env\Lib\subprocess.py", line 571, in run
+    raise CalledProcessError(retcode, process.args,
+subprocess.CalledProcessError: Command '['where', 'cl']' returned non-zero exit status 1.
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\Ignis\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\build_custom_ops.py", line 291, in compile_library
+    compile_library_core("CPU", extra_cuda_cflags, extra_cflags)
+  File "C:\Users\Ignis\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\build_custom_ops.py", line 257, in compile_library_core
+    compile_custom_op_cpu(file_name, build_directory, extra_cuda_cflags, extra_cflags)
+  File "C:\Users\Ignis\miniforge3\envs\resnet_env\Lib\site-packages\quark\shares\utils\log.py", line 136, in wrapper
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Ignis\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\build_custom_ops.py", line 72, in compile_custom_op_cpu
+    raise RuntimeError("CPU version of custom ops library compilation failed:" + str(e))
+RuntimeError: CPU version of custom ops library compilation failed:Command '['where', 'cl']' returned non-zero exit status 1.
+[32m
+[QUARK-INFO]: Checked custom ops library.[0m
+[33m
+[QUARK-WARNING]: The custom ops library C:\Users\Ignis\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: Config has been replaced by QConfig. The old API will be removed in the next release.[0m
+[33m
+[QUARK-WARNING]: The algorithm API is algo_config in QConfig. The old API will be removed in the next release.[0m
+[32m
+[QUARK-INFO]: The input ONNX model can create InferenceSession successfully[0m
+[32m
+[QUARK-INFO]: Folding or fusing operators for better accuracy and performance.[0m
+[33m
+[QUARK-WARNING]: The opset version is 17 < 20. Skipping fusing Gelu.[0m
+[32m
+[QUARK-INFO]: Start applying CLE algorithm on the float model...[0m
+[32m
+[QUARK-INFO]: CrossLayerEqualization pattern num: 0[0m
+[32m
+[QUARK-INFO]: Total CrossLayerEqualization steps: 1[0m
+[32m
+[QUARK-INFO]: The CLE algorithm has been applied. It took 0.6s to complete.[0m
+[32m
+[QUARK-INFO]: Optimizing the model for a better hardware compatibility.[0m
+[32m
+[QUARK-INFO]: Found Split node /model.2/Split. Replacing with Slice.[0m
+[32m
+[QUARK-INFO]: Found Split node /model.4/Split. Replacing with Slice.[0m
+[32m
+[QUARK-INFO]: Found Split node /model.6/Split. Replacing with Slice.[0m
+[32m
+[QUARK-INFO]: Found Split node /model.8/Split. Replacing with Slice.[0m
+[32m
+[QUARK-INFO]: Found Split node /model.12/Split. Replacing with Slice.[0m
+[32m
+[QUARK-INFO]: Found Split node /model.15/Split. Replacing with Slice.[0m
+[32m
+[QUARK-INFO]: Found Split node /model.18/Split. Replacing with Slice.[0m
+[32m
+[QUARK-INFO]: Found Split node /model.21/Split. Replacing with Slice.[0m
+[32m
+[QUARK-INFO]: The input ONNX model can run inference successfully[0m
+[32m
+[QUARK-INFO]: Start running calibration on 24 samples with extra options {}...[0m
+[32m
+[QUARK-INFO]: Data collection of PowerOfTwoMethod.MinMSE in progress. Runtime will depend on your model and data size.[0m
+input model: models/yolov8x_cut.onnx, 341 nodes, 6 outputs, 640x640 input
+calibrating on 24 images at 640x640
+quantizing with XINT8 -> models/yolov8x_cut_xint8.onnx
+[QUARK_INFO]: Time information:
+2026-09-06 01:23:22.825655
+[QUARK_INFO]: OS and CPU information:
+                                        system --- Windows
+                                          node --- DESKTOP-GS7R78P
+                                       release --- 11
+                                       version --- 10.0.26200
+                                       machine --- AMD64
+                                     processor --- AMD64 Family 25 Model 117 Stepping 2, AuthenticAMD
+[QUARK_INFO]: Tools version information:
+                                        python --- 3.12.11
+                                          onnx --- 1.19.0
+                                   onnxruntime --- 1.29.0
+                                    quark.onnx --- 0.11
+[QUARK_INFO]: Quantized Configuration information:
+                                   model_input --- models/yolov8x_cut.onnx
+                                  model_output --- models/yolov8x_cut_xint8.onnx
+                       calibration_data_reader --- <__main__.CocoCalibReader object at 0x000001FCAE7B96A0>
+                         calibration_data_path --- None
+                                  quant_format --- QDQ
+                                   input_nodes --- []
+                                  output_nodes --- []
+                          op_types_to_quantize --- []
+                    extra_op_types_to_quantize --- []
+                                   per_channel --- False
+                                  reduce_range --- False
+                               activation_type --- QUInt8
+                                   weight_type --- QInt8
+                             nodes_to_quantize --- []
+                              nodes_to_exclude --- []
+                          subgraphs_to_exclude --- []
+                                optimize_model --- True
+                      use_external_data_format --- False
+                              calibrate_method --- PowerOfTwoMethod.MinMSE
+                           execution_providers --- ['CPUExecutionProvider']
+                                enable_npu_cnn --- True
+                        enable_npu_transformer --- False
+                     specific_tensor_precision --- False
+                                    debug_mode --- False
+                          convert_fp16_to_fp32 --- False
+                          convert_nchw_to_nhwc --- False
+                                   include_cle --- True
+                                    include_sq --- False
+                              include_rotation --- False
+                               include_fast_ft --- False
+                                 extra_options --- {'ActivationSymmetric': True}
+  0%|          | 0/24 [00:00<?, ?it/s]Cached 0.66GB:   0%|          | 0/24 [00:02<?, ?it/s]Cached 0.66GB:   4%|4         | 1/24 [00:02<01:01,  2.65s/it]Cached 1.32GB:   4%|4         | 1/24 [00:05<01:01,  2.65s/it]Cached 1.32GB:   8%|8         | 2/24 [00:05<00:59,  2.71s/it]Cached 1.98GB:   8%|8         | 2/24 [00:07<00:59,  2.71s/it]Cached 1.98GB:  12%|#2        | 3/24 [00:07<00:55,  2.63s/it]Cached 2.65GB:  12%|#2        | 3/24 [00:10<00:55,  2.63s/it]Cached 2.65GB:  17%|#6        | 4/24 [00:10<00:51,  2.55s/it]Cached 3.31GB:  17%|#6        | 4/24 [00:12<00:51,  2.55s/it]Cached 3.31GB:  21%|##        | 5/24 [00:12<00:47,  2.51s/it]Cached 3.97GB:  21%|##        | 5/24 [00:15<00:47,  2.51s/it]Cached 3.97GB:  25%|##5       | 6/24 [00:15<00:44,  2.49s/it]Cached 4.63GB:  25%|##5       | 6/24 [00:17<00:44,  2.49s/it]Cached 4.63GB:  29%|##9       | 7/24 [00:17<00:41,  2.47s/it]Cached 5.29GB:  29%|##9       | 7/24 [00:20<00:41,  2.47s/it]Cached 5.29GB:  33%|###3      | 8/24 [00:20<00:39,  2.45s/it]Cached 5.95GB:  33%|###3      | 8/24 [00:22<00:39,  2.45s/it]Cached 5.95GB:  38%|###7      | 9/24 [00:22<00:36,  2.45s/it]Cached 6.61GB:  38%|###7      | 9/24 [00:25<00:36,  2.45s/it]Cached 6.61GB:  42%|####1     | 10/24 [00:25<00:34,  2.45s/it]Cached 7.27GB:  42%|####1     | 10/24 [00:27<00:34,  2.45s/it]Cached 7.27GB:  46%|####5     | 11/24 [00:27<00:32,  2.48s/it]Cached 7.94GB:  46%|####5     | 11/24 [00:30<00:32,  2.48s/it]Cached 7.94GB:  50%|#####     | 12/24 [00:30<00:29,  2.49s/it]Cached 8.60GB:  50%|#####     | 12/24 [00:32<00:29,  2.49s/it]Cached 8.60GB:  54%|#####4    | 13/24 [00:32<00:27,  2.52s/it]Cached 9.26GB:  54%|#####4    | 13/24 [00:35<00:27,  2.52s/it]Cached 9.26GB:  58%|#####8    | 14/24 [00:35<00:25,  2.54s/it]Cached 9.92GB:  58%|#####8    | 14/24 [00:37<00:25,  2.54s/it]Cached 9.92GB:  62%|######2   | 15/24 [00:37<00:22,  2.53s/it]Cached 10.58GB:  62%|######2   | 15/24 [00:40<00:22,  2.53s/it]Cached 10.58GB:  67%|######6   | 16/24 [00:40<00:20,  2.50s/it]Cached 11.24GB:  67%|######6   | 16/24 [00:42<00:20,  2.50s/it]Cached 11.24GB:  71%|#######   | 17/24 [00:42<00:18,  2.58s/it]Cached 11.90GB:  71%|#######   | 17/24 [00:45<00:18,  2.58s/it]Cached 11.90GB:  75%|#######5  | 18/24 [00:45<00:15,  2.56s/it]Cached 12.56GB:  75%|#######5  | 18/24 [00:47<00:15,  2.56s/it]Cached 12.56GB:  79%|#######9  | 19/24 [00:47<00:12,  2.53s/it]Cached 13.23GB:  79%|#######9  | 19/24 [00:50<00:12,  2.53s/it]Cached 13.23GB:  83%|########3 | 20/24 [00:50<00:10,  2.50s/it]Cached 13.89GB:  83%|########3 | 20/24 [00:52<00:10,  2.50s/it]Cached 13.89GB:  88%|########7 | 21/24 [00:52<00:07,  2.50s/it]Cached 14.55GB:  88%|########7 | 21/24 [00:55<00:07,  2.50s/it]Cached 14.55GB:  92%|#########1| 22/24 [00:55<00:05,  2.50s/it]Cached 15.21GB:  92%|#########1| 22/24 [00:58<00:05,  2.50s/it]Cached 15.21GB:  96%|#########5| 23/24 [00:58<00:02,  2.55s/it]Cached 15.87GB:  96%|#########5| 23/24 [01:00<00:02,  2.55s/it]Cached 15.87GB: 100%|##########| 24/24 [01:00<00:00,  2.54s/it]Cached 15.87GB: 100%|##########| 24/24 [01:00<00:00,  2.52s/it]
+[32m
+[QUARK-INFO]: Finding optimal threshold for each tensor using PowerOfTwoMethod.MinMSE algorithm in 'All' mode ...[0m
+  0%|          | 0/350 [00:00<?, ?it/s]  0%|          | 1/350 [00:00<04:45,  1.22it/s]  1%|          | 2/350 [00:00<02:32,  2.29it/s]  1%|1         | 4/350 [00:01<02:40,  2.16it/s]  1%|1         | 5/350 [00:02<02:16,  2.52it/s]  2%|2         | 7/350 [00:02<01:42,  3.36it/s]  2%|2         | 8/350 [00:06<07:04,  1.24s/it]  3%|2         | 9/350 [00:07<06:27,  1.14s/it]  3%|2         | 10/350 [00:08<05:59,  1.06s/it]  3%|3         | 11/350 [00:09<05:38,  1.00it/s]  3%|3         | 12/350 [00:10<05:23,  1.05it/s]  4%|3         | 13/350 [00:16<14:52,  2.65s/it]  4%|4         | 14/350 [00:16<10:48,  1.93s/it]  4%|4         | 15/350 [00:17<07:54,  1.42s/it]  5%|4         | 16/350 [00:29<25:44,  4.62s/it]  5%|4         | 17/350 [00:30<20:13,  3.64s/it]  5%|5         | 19/350 [00:30<11:09,  2.02s/it]  6%|5         | 20/350 [00:31<09:17,  1.69s/it]  6%|6         | 21/350 [00:31<07:07,  1.30s/it]  6%|6         | 22/350 [00:32<05:26,  1.00it/s]  7%|6         | 23/350 [00:32<04:56,  1.10it/s]  7%|6         | 24/350 [00:43<20:13,  3.72s/it]  7%|7         | 25/350 [00:43<14:53,  2.75s/it]  7%|7         | 26/350 [00:45<13:03,  2.42s/it]  8%|7         | 27/350 [00:48<13:29,  2.51s/it]  8%|8         | 28/350 [00:48<09:45,  1.82s/it]  8%|8         | 29/350 [00:51<11:05,  2.07s/it]  9%|8         | 30/350 [00:51<08:17,  1.56s/it]  9%|8         | 31/350 [00:51<06:04,  1.14s/it]  9%|9         | 32/350 [00:52<05:19,  1.01s/it]  9%|9         | 33/350 [00:52<04:48,  1.10it/s] 10%|9         | 34/350 [00:58<12:13,  2.32s/it] 10%|#         | 35/350 [00:59<10:37,  2.02s/it] 10%|#         | 36/350 [01:05<15:52,  3.03s/it] 11%|#         | 37/350 [01:05<11:22,  2.18s/it] 11%|#         | 38/350 [01:06<10:03,  1.94s/it] 11%|#1        | 39/350 [01:07<08:06,  1.56s/it] 11%|#1        | 40/350 [01:08<07:52,  1.53s/it] 12%|#1        | 41/350 [01:09<06:40,  1.30s/it] 12%|#2        | 42/350 [01:15<13:32,  2.64s/it] 12%|#2        | 43/350 [01:17<11:49,  2.31s/it] 13%|#2        | 44/350 [01:17<09:28,  1.86s/it] 13%|#2        | 45/350 [01:18<07:46,  1.53s/it] 13%|#3        | 46/350 [01:19<06:35,  1.30s/it] 13%|#3        | 47/350 [01:20<05:41,  1.13s/it] 14%|#3        | 48/350 [01:20<05:11,  1.03s/it] 14%|#4        | 49/350 [01:21<03:54,  1.28it/s] 14%|#4        | 50/350 [01:22<05:03,  1.01s/it] 15%|#4        | 51/350 [01:23<04:32,  1.10it/s] 15%|#4        | 52/350 [01:23<03:44,  1.32it/s] 15%|#5        | 53/350 [01:23<02:57,  1.68it/s] 15%|#5        | 54/350 [01:24<02:19,  2.11it/s] 16%|#6        | 56/350 [01:24<02:13,  2.21it/s] 16%|#6        | 57/350 [01:25<01:56,  2.51it/s] 17%|#6        | 58/350 [01:25<02:26,  2.00it/s] 17%|#6        | 59/350 [01:29<05:49,  1.20s/it] 17%|#7        | 60/350 [01:32<08:14,  1.71s/it] 18%|#7        | 62/350 [01:32<04:49,  1.01s/it] 18%|#8        | 63/350 [01:33<05:22,  1.12s/it] 18%|#8        | 64/350 [01:34<04:14,  1.12it/s] 19%|#8        | 65/350 [01:34<04:03,  1.17it/s] 19%|#8        | 66/350 [01:36<04:55,  1.04s/it] 19%|#9        | 67/350 [01:37<05:29,  1.17s/it] 19%|#9        | 68/350 [01:39<05:54,  1.26s/it] 20%|#9        | 69/350 [01:42<08:36,  1.84s/it] 20%|##        | 70/350 [01:43<07:09,  1.54s/it] 20%|##        | 71/350 [01:46<09:39,  2.08s/it] 21%|##        | 72/350 [01:46<07:04,  1.53s/it] 21%|##        | 73/350 [01:48<07:14,  1.57s/it] 21%|##1       | 74/350 [01:48<05:23,  1.17s/it] 21%|##1       | 75/350 [01:57<16:17,  3.55s/it] 22%|##1       | 76/350 [01:58<12:28,  2.73s/it] 22%|##2       | 77/350 [01:58<08:59,  1.97s/it] 22%|##2       | 78/350 [01:59<07:22,  1.63s/it] 23%|##2       | 79/350 [02:03<09:53,  2.19s/it] 23%|##2       | 80/350 [02:03<07:12,  1.60s/it] 23%|##3       | 81/350 [02:04<06:02,  1.35s/it] 23%|##3       | 82/350 [02:05<06:18,  1.41s/it] 24%|##3       | 83/350 [02:06<05:28,  1.23s/it] 24%|##4       | 84/350 [02:08<06:12,  1.40s/it] 24%|##4       | 85/350 [02:09<05:29,  1.24s/it] 25%|##4       | 86/350 [02:11<06:16,  1.43s/it] 25%|##4       | 87/350 [02:12<05:31,  1.26s/it] 25%|##5       | 88/350 [02:13<06:01,  1.38s/it] 25%|##5       | 89/350 [02:15<06:23,  1.47s/it] 26%|##5       | 90/350 [02:17<06:43,  1.55s/it] 26%|##6       | 91/350 [02:17<05:15,  1.22s/it] 26%|##6       | 92/350 [02:19<05:50,  1.36s/it] 27%|##6       | 93/350 [02:19<04:26,  1.04s/it] 27%|##6       | 94/350 [02:19<03:23,  1.26it/s] 27%|##7       | 95/350 [02:20<03:26,  1.24it/s] 27%|##7       | 96/350 [02:23<06:36,  1.56s/it] 28%|##7       | 97/350 [02:24<05:41,  1.35s/it] 28%|##8       | 98/350 [02:25<05:23,  1.28s/it] 28%|##8       | 99/350 [02:26<04:53,  1.17s/it] 29%|##8       | 100/350 [02:29<06:58,  1.67s/it] 29%|##8       | 101/350 [02:31<06:32,  1.58s/it] 29%|##9       | 102/350 [02:31<05:01,  1.22s/it] 29%|##9       | 103/350 [02:31<03:44,  1.10it/s] 30%|##9       | 104/350 [02:31<02:51,  1.44it/s] 30%|###       | 105/350 [02:34<05:34,  1.36s/it] 30%|###       | 106/350 [02:35<04:43,  1.16s/it] 31%|###       | 107/350 [02:36<04:52,  1.20s/it] 31%|###       | 108/350 [02:42<10:08,  2.52s/it] 31%|###1      | 109/350 [02:44<10:17,  2.56s/it] 31%|###1      | 110/350 [02:46<08:49,  2.21s/it] 32%|###1      | 111/350 [02:46<06:22,  1.60s/it] 32%|###2      | 112/350 [02:49<07:37,  1.92s/it] 32%|###2      | 113/350 [02:50<06:56,  1.76s/it] 33%|###2      | 114/350 [02:53<08:01,  2.04s/it] 33%|###2      | 115/350 [02:53<05:59,  1.53s/it] 33%|###3      | 116/350 [02:54<05:45,  1.47s/it] 33%|###3      | 117/350 [02:55<04:12,  1.09s/it] 34%|###3      | 118/350 [02:56<04:41,  1.21s/it] 34%|###4      | 119/350 [02:57<04:04,  1.06s/it] 34%|###4      | 120/350 [02:58<03:38,  1.05it/s] 35%|###4      | 121/350 [02:58<03:26,  1.11it/s] 35%|###4      | 122/350 [03:00<03:59,  1.05s/it] 35%|###5      | 123/350 [03:00<03:01,  1.25it/s] 35%|###5      | 124/350 [03:01<02:59,  1.26it/s] 36%|###5      | 125/350 [03:01<02:55,  1.28it/s] 36%|###6      | 126/350 [03:15<17:45,  4.76s/it] 36%|###6      | 127/350 [03:16<13:18,  3.58s/it] 37%|###6      | 128/350 [03:17<10:12,  2.76s/it] 37%|###6      | 129/350 [03:18<07:59,  2.17s/it] 37%|###7      | 130/350 [03:21<08:54,  2.43s/it] 37%|###7      | 131/350 [03:21<06:27,  1.77s/it] 38%|###7      | 132/350 [03:23<06:04,  1.67s/it] 38%|###8      | 133/350 [03:23<04:28,  1.24s/it] 38%|###8      | 134/350 [03:23<03:32,  1.02it/s] 39%|###8      | 135/350 [03:24<03:19,  1.08it/s] 39%|###8      | 136/350 [03:26<04:00,  1.13s/it] 39%|###9      | 137/350 [03:32<09:11,  2.59s/it] 39%|###9      | 138/350 [03:32<07:09,  2.03s/it] 40%|###9      | 139/350 [03:33<05:10,  1.47s/it] 40%|####      | 140/350 [03:33<04:26,  1.27s/it] 40%|####      | 141/350 [03:34<03:31,  1.01s/it] 41%|####      | 142/350 [03:34<02:40,  1.29it/s] 41%|####      | 143/350 [03:35<02:38,  1.30it/s] 41%|####1     | 144/350 [03:36<03:25,  1.00it/s] 41%|####1     | 145/350 [03:37<02:48,  1.22it/s] 42%|####1     | 146/350 [03:37<02:45,  1.23it/s] 42%|####2     | 147/350 [03:41<05:00,  1.48s/it] 42%|####2     | 148/350 [03:47<09:34,  2.85s/it] 43%|####2     | 149/350 [03:47<07:05,  2.11s/it] 43%|####2     | 150/350 [03:48<05:45,  1.73s/it] 43%|####3     | 151/350 [03:51<07:00,  2.11s/it] 44%|####3     | 153/350 [03:54<06:02,  1.84s/it] 44%|####4     | 154/350 [03:57<07:02,  2.16s/it] 44%|####4     | 155/350 [03:58<05:48,  1.79s/it] 45%|####4     | 156/350 [03:58<04:23,  1.36s/it] 45%|####4     | 157/350 [03:59<03:51,  1.20s/it] 45%|####5     | 158/350 [03:59<02:53,  1.11it/s] 45%|####5     | 159/350 [04:00<02:41,  1.18it/s] 46%|####5     | 160/350 [04:01<03:15,  1.03s/it] 46%|####6     | 161/350 [04:02<03:34,  1.14s/it] 46%|####6     | 162/350 [04:03<02:49,  1.11it/s] 47%|####6     | 163/350 [04:03<02:07,  1.46it/s] 47%|####6     | 164/350 [04:04<02:07,  1.45it/s] 47%|####7     | 165/350 [04:04<01:39,  1.86it/s] 47%|####7     | 166/350 [04:19<15:09,  4.95s/it] 48%|####7     | 167/350 [04:19<10:47,  3.54s/it] 48%|####8     | 168/350 [04:21<08:58,  2.96s/it] 48%|####8     | 169/350 [04:22<06:56,  2.30s/it] 49%|####8     | 170/350 [04:22<05:30,  1.84s/it] 49%|####8     | 171/350 [04:25<06:29,  2.17s/it] 49%|####9     | 172/350 [04:26<05:13,  1.76s/it] 49%|####9     | 173/350 [04:29<06:12,  2.10s/it] 50%|####9     | 174/350 [04:31<05:37,  1.91s/it] 50%|#####     | 175/350 [04:31<04:33,  1.56s/it] 50%|#####     | 176/350 [04:32<03:50,  1.32s/it] 51%|#####     | 177/350 [04:32<02:50,  1.02it/s] 51%|#####     | 178/350 [04:35<04:27,  1.55s/it] 51%|#####1    | 179/350 [04:39<06:11,  2.17s/it] 51%|#####1    | 180/350 [04:40<05:37,  1.99s/it] 52%|#####1    | 181/350 [04:41<04:36,  1.64s/it] 52%|#####2    | 182/350 [04:44<05:38,  2.02s/it] 52%|#####2    | 183/350 [04:46<05:08,  1.85s/it] 53%|#####2    | 184/350 [04:46<03:44,  1.35s/it] 53%|#####2    | 185/350 [04:46<03:13,  1.17s/it] 53%|#####3    | 186/350 [04:48<03:25,  1.25s/it] 53%|#####3    | 187/350 [04:48<02:32,  1.07it/s] 54%|#####3    | 188/350 [04:48<01:55,  1.40it/s] 54%|#####4    | 189/350 [04:51<03:39,  1.36s/it] 54%|#####4    | 190/350 [04:53<03:42,  1.39s/it] 55%|#####4    | 191/350 [04:53<02:51,  1.08s/it] 55%|#####4    | 192/350 [04:59<06:39,  2.53s/it] 55%|#####5    | 193/350 [05:00<05:46,  2.21s/it] 55%|#####5    | 194/350 [05:01<04:34,  1.76s/it] 56%|#####5    | 195/350 [05:03<04:18,  1.67s/it] 56%|#####6    | 196/350 [05:04<04:07,  1.61s/it] 56%|#####6    | 197/350 [05:07<05:05,  1.99s/it] 57%|#####6    | 198/350 [05:08<04:37,  1.83s/it] 57%|#####6    | 199/350 [05:10<04:19,  1.72s/it] 57%|#####7    | 200/350 [05:10<03:19,  1.33s/it] 57%|#####7    | 201/350 [05:11<02:54,  1.17s/it] 58%|#####7    | 202/350 [05:12<03:05,  1.25s/it] 58%|#####8    | 203/350 [05:13<02:17,  1.07it/s] 58%|#####8    | 204/350 [05:13<01:43,  1.41it/s] 59%|#####8    | 205/350 [05:14<01:43,  1.40it/s] 59%|#####8    | 206/350 [05:19<05:15,  2.19s/it] 59%|#####9    | 207/350 [05:19<03:46,  1.58s/it] 59%|#####9    | 208/350 [05:22<04:30,  1.91s/it] 60%|#####9    | 209/350 [05:23<04:06,  1.75s/it] 60%|######    | 210/350 [05:24<03:20,  1.43s/it] 60%|######    | 211/350 [05:25<02:48,  1.21s/it] 61%|######    | 212/350 [05:26<02:28,  1.08s/it] 61%|######    | 213/350 [05:26<02:12,  1.04it/s] 61%|######1   | 214/350 [05:26<01:38,  1.38it/s] 61%|######1   | 215/350 [05:27<01:35,  1.41it/s] 62%|######1   | 216/350 [05:28<01:33,  1.43it/s] 62%|######2   | 217/350 [05:28<01:19,  1.68it/s] 62%|######2   | 218/350 [05:29<01:21,  1.62it/s] 63%|######2   | 219/350 [05:30<01:48,  1.20it/s] 63%|######2   | 220/350 [05:30<01:22,  1.57it/s] 63%|######3   | 221/350 [05:33<02:45,  1.28s/it] 63%|######3   | 222/350 [05:33<02:02,  1.05it/s] 64%|######3   | 223/350 [05:36<03:13,  1.53s/it] 64%|######4   | 224/350 [05:37<02:28,  1.18s/it] 64%|######4   | 225/350 [05:38<02:38,  1.27s/it] 65%|######4   | 226/350 [05:50<09:33,  4.63s/it] 65%|######4   | 227/350 [05:52<07:31,  3.67s/it] 65%|######5   | 228/350 [05:53<05:40,  2.79s/it] 65%|######5   | 229/350 [05:56<05:48,  2.88s/it] 66%|######5   | 230/350 [05:59<05:46,  2.89s/it] 66%|######6   | 231/350 [05:59<04:07,  2.08s/it] 66%|######6   | 232/350 [06:08<08:01,  4.08s/it] 67%|######6   | 233/350 [06:11<07:19,  3.76s/it] 67%|######6   | 234/350 [06:12<05:38,  2.92s/it] 67%|######7   | 235/350 [06:12<04:19,  2.26s/it] 67%|######7   | 236/350 [06:13<03:25,  1.80s/it] 68%|######7   | 237/350 [06:13<02:29,  1.32s/it] 68%|######8   | 238/350 [06:14<02:07,  1.14s/it] 68%|######8   | 239/350 [06:17<03:07,  1.69s/it] 69%|######8   | 241/350 [06:17<01:49,  1.00s/it] 69%|######9   | 242/350 [06:18<01:26,  1.24it/s] 69%|######9   | 243/350 [06:18<01:24,  1.27it/s] 70%|######9   | 244/350 [06:20<01:42,  1.03it/s] 70%|#######   | 245/350 [06:21<01:56,  1.11s/it] 70%|#######   | 246/350 [06:22<01:43,  1.00it/s] 71%|#######   | 247/350 [06:23<01:56,  1.13s/it] 71%|#######   | 248/350 [06:24<01:33,  1.10it/s] 71%|#######1  | 249/350 [06:25<01:49,  1.08s/it] 71%|#######1  | 250/350 [06:27<02:02,  1.22s/it] 72%|#######1  | 251/350 [06:28<01:46,  1.08s/it] 72%|#######2  | 252/350 [06:28<01:19,  1.23it/s] 72%|#######2  | 253/350 [06:29<01:37,  1.01s/it] 73%|#######2  | 254/350 [06:30<01:29,  1.08it/s] 73%|#######2  | 255/350 [06:31<01:22,  1.14it/s] 73%|#######3  | 256/350 [06:34<02:18,  1.47s/it] 73%|#######3  | 257/350 [06:35<02:16,  1.47s/it] 74%|#######3  | 258/350 [06:41<04:15,  2.78s/it] 74%|#######4  | 259/350 [06:42<03:38,  2.40s/it] 74%|#######4  | 260/350 [06:43<02:50,  1.90s/it] 75%|#######4  | 261/350 [06:45<02:36,  1.76s/it] 75%|#######4  | 262/350 [06:45<02:08,  1.46s/it] 75%|#######5  | 263/350 [06:45<01:33,  1.07s/it] 75%|#######5  | 264/350 [06:46<01:23,  1.03it/s] 76%|#######5  | 265/350 [06:47<01:06,  1.27it/s] 76%|#######6  | 266/350 [06:48<01:22,  1.02it/s] 76%|#######6  | 267/350 [06:48<01:06,  1.25it/s] 77%|#######6  | 268/350 [06:50<01:38,  1.21s/it] 77%|#######6  | 269/350 [06:51<01:26,  1.06s/it] 77%|#######7  | 270/350 [06:53<01:34,  1.18s/it] 77%|#######7  | 271/350 [06:54<01:39,  1.26s/it] 78%|#######7  | 272/350 [06:54<01:12,  1.07it/s] 78%|#######8  | 273/350 [06:56<01:25,  1.11s/it] 78%|#######8  | 274/350 [06:57<01:32,  1.21s/it] 79%|#######8  | 275/350 [06:58<01:20,  1.07s/it] 79%|#######8  | 276/350 [06:59<01:11,  1.03it/s] 79%|#######9  | 277/350 [07:00<01:21,  1.11s/it] 79%|#######9  | 278/350 [07:00<01:00,  1.19it/s] 80%|#######9  | 279/350 [07:02<01:12,  1.02s/it] 80%|########  | 280/350 [07:03<01:05,  1.07it/s] 81%|########  | 282/350 [07:03<00:46,  1.47it/s] 81%|########  | 283/350 [07:03<00:37,  1.80it/s] 81%|########1 | 284/350 [07:05<00:52,  1.27it/s] 81%|########1 | 285/350 [07:06<01:02,  1.04it/s] 82%|########1 | 286/350 [07:07<00:47,  1.34it/s] 82%|########2 | 287/350 [07:07<00:40,  1.57it/s] 82%|########2 | 288/350 [07:08<00:53,  1.16it/s] 83%|########2 | 289/350 [07:10<01:02,  1.03s/it] 83%|########2 | 290/350 [07:10<00:47,  1.27it/s] 83%|########3 | 291/350 [07:12<01:00,  1.02s/it] 83%|########3 | 292/350 [07:15<01:43,  1.79s/it] 84%|########3 | 293/350 [07:16<01:23,  1.47s/it] 84%|########4 | 294/350 [07:17<01:21,  1.46s/it] 84%|########4 | 295/350 [07:18<01:08,  1.24s/it] 85%|########4 | 296/350 [07:21<01:33,  1.73s/it] 85%|########4 | 297/350 [07:22<01:26,  1.64s/it] 85%|########5 | 298/350 [07:23<01:05,  1.26s/it] 85%|########5 | 299/350 [07:24<01:07,  1.32s/it] 86%|########5 | 300/350 [07:25<00:57,  1.14s/it] 86%|########6 | 301/350 [07:26<00:51,  1.05s/it] 86%|########6 | 302/350 [07:27<00:58,  1.21s/it] 87%|########6 | 303/350 [07:28<00:43,  1.09it/s] 87%|########6 | 304/350 [07:29<00:52,  1.14s/it] 87%|########7 | 305/350 [07:32<01:18,  1.73s/it] 87%|########7 | 306/350 [07:35<01:32,  2.11s/it] 88%|########7 | 307/350 [07:36<01:12,  1.69s/it] 88%|########8 | 308/350 [07:37<00:59,  1.41s/it] 88%|########8 | 309/350 [07:38<00:49,  1.20s/it] 89%|########8 | 310/350 [07:38<00:35,  1.11it/s] 89%|########8 | 311/350 [07:38<00:33,  1.15it/s] 89%|########9 | 312/350 [07:40<00:39,  1.04s/it] 89%|########9 | 313/350 [07:43<01:01,  1.66s/it] 90%|########9 | 314/350 [07:44<00:49,  1.38s/it] 90%|######### | 315/350 [07:44<00:35,  1.02s/it] 90%|######### | 316/350 [07:44<00:26,  1.30it/s] 91%|######### | 317/350 [07:45<00:25,  1.31it/s] 91%|######### | 318/350 [07:46<00:24,  1.33it/s] 91%|#########1| 319/350 [07:47<00:29,  1.04it/s] 91%|#########1| 320/350 [07:48<00:33,  1.10s/it] 92%|#########1| 321/350 [07:49<00:28,  1.01it/s] 92%|#########2| 322/350 [07:52<00:44,  1.59s/it] 92%|#########2| 323/350 [07:54<00:41,  1.55s/it] 93%|#########2| 324/350 [07:57<00:52,  2.02s/it] 93%|#########2| 325/350 [07:58<00:46,  1.85s/it] 93%|#########3| 326/350 [08:05<01:16,  3.20s/it] 93%|#########3| 327/350 [08:06<01:01,  2.69s/it] 94%|#########3| 328/350 [08:08<00:50,  2.32s/it] 94%|#########3| 329/350 [08:08<00:39,  1.86s/it] 94%|#########4| 330/350 [08:10<00:34,  1.75s/it] 95%|#########4| 331/350 [08:11<00:31,  1.67s/it] 95%|#########4| 332/350 [08:11<00:22,  1.23s/it] 95%|#########5| 333/350 [08:14<00:28,  1.68s/it] 95%|#########5| 334/350 [08:17<00:31,  1.98s/it] 96%|#########5| 335/350 [08:18<00:23,  1.59s/it] 96%|#########6| 336/350 [08:18<00:18,  1.32s/it] 96%|#########6| 337/350 [08:19<00:14,  1.13s/it] 97%|#########6| 338/350 [08:20<00:11,  1.00it/s] 97%|#########6| 339/350 [08:22<00:16,  1.50s/it] 97%|#########7| 340/350 [08:24<00:14,  1.45s/it] 97%|#########7| 341/350 [08:26<00:16,  1.83s/it] 98%|#########7| 342/350 [08:28<00:13,  1.72s/it] 98%|#########8| 343/350 [08:29<00:09,  1.41s/it] 98%|#########8| 344/350 [08:31<00:11,  1.84s/it] 99%|#########8| 345/350 [08:33<00:08,  1.73s/it] 99%|#########8| 346/350 [08:33<00:05,  1.26s/it] 99%|#########9| 347/350 [08:36<00:05,  1.75s/it] 99%|#########9| 348/350 [08:37<00:03,  1.66s/it]100%|#########9| 349/350 [08:38<00:01,  1.39s/it]100%|##########| 350/350 [08:40<00:00,  1.41s/it]100%|##########| 350/350 [08:40<00:00,  1.49s/it]
+[32m
+[QUARK-INFO]: The calibration has been finished. It took 582.0s to complete.[0m
+[32m
+[QUARK-INFO]: Remove QuantizeLinear & DequantizeLinear on certain operations(such as conv-relu).[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.0/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.2/cv1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.2/m.0/cv1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.2/m.0/cv2/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.2/m.1/cv1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.2/m.1/cv2/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.2/m.2/cv1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.2/m.2/cv2/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.2/cv2/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.3/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.4/cv1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.4/m.0/cv1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.4/m.0/cv2/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.4/m.1/cv1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.4/m.1/cv2/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.4/m.2/cv1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.4/m.2/cv2/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.4/m.3/cv1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.4/m.3/cv2/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.4/m.4/cv1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.4/m.4/cv2/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.4/m.5/cv1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.4/m.5/cv2/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.4/cv2/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.5/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.6/cv1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.6/m.0/cv1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.6/m.0/cv2/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.6/m.1/cv1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.6/m.1/cv2/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.6/m.2/cv1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.6/m.2/cv2/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.6/m.3/cv1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.6/m.3/cv2/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.6/m.4/cv1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.6/m.4/cv2/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.6/m.5/cv1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.6/m.5/cv2/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.6/cv2/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.7/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.8/cv1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.8/m.0/cv1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.8/m.0/cv2/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.8/m.1/cv1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.8/m.1/cv2/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.8/m.2/cv1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.8/m.2/cv2/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.8/cv2/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.9/cv1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.9/cv2/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.12/cv1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.12/m.0/cv1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.12/m.0/cv2/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.12/m.1/cv1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.12/m.1/cv2/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.12/m.2/cv1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.12/m.2/cv2/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.12/cv2/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.15/cv1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.15/m.0/cv1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.15/m.0/cv2/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.15/m.1/cv1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.15/m.1/cv2/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.15/m.2/cv1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.15/m.2/cv2/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.15/cv2/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.16/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.22/cv2.0/cv2.0.0/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.22/cv3.0/cv3.0.0/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.22/cv2.0/cv2.0.1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.22/cv3.0/cv3.0.1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.18/cv1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.18/m.0/cv1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.18/m.0/cv2/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.18/m.1/cv1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.18/m.1/cv2/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.18/m.2/cv1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.18/m.2/cv2/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.18/cv2/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.19/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.22/cv2.1/cv2.1.0/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.22/cv3.1/cv3.1.0/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.22/cv2.1/cv2.1.1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.22/cv3.1/cv3.1.1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.21/cv1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.21/m.0/cv1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.21/m.0/cv2/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.21/m.1/cv1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.21/m.1/cv2/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.21/m.2/cv1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.21/m.2/cv2/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.21/cv2/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.22/cv2.2/cv2.2.0/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.22/cv3.2/cv3.2.0/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.22/cv2.2/cv2.2.1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /model.22/cv3.2/cv3.2.1/act/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.0/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.2/cv1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.2/m.0/cv1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.2/m.0/cv2/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.2/m.1/cv1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.2/m.1/cv2/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.2/m.2/cv1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.2/m.2/cv2/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.2/cv2/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.3/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.4/cv1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.4/m.0/cv1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.4/m.0/cv2/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.4/m.1/cv1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.4/m.1/cv2/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.4/m.2/cv1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.4/m.2/cv2/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.4/m.3/cv1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.4/m.3/cv2/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.4/m.4/cv1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.4/m.4/cv2/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.4/m.5/cv1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.4/m.5/cv2/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.4/cv2/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.5/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.6/cv1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.6/m.0/cv1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.6/m.0/cv2/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.6/m.1/cv1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.6/m.1/cv2/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.6/m.2/cv1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.6/m.2/cv2/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.6/m.3/cv1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.6/m.3/cv2/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.6/m.4/cv1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.6/m.4/cv2/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.6/m.5/cv1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.6/m.5/cv2/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.6/cv2/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.7/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.8/cv1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.8/m.0/cv1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.8/m.0/cv2/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.8/m.1/cv1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.8/m.1/cv2/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.8/m.2/cv1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.8/m.2/cv2/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.8/cv2/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.9/cv1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.9/cv2/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.12/cv1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.12/m.0/cv1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.12/m.0/cv2/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.12/m.1/cv1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.12/m.1/cv2/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.12/m.2/cv1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.12/m.2/cv2/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.12/cv2/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.15/cv1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.15/m.0/cv1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.15/m.0/cv2/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.15/m.1/cv1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.15/m.1/cv2/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.15/m.2/cv1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.15/m.2/cv2/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.15/cv2/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.16/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.22/cv2.0/cv2.0.0/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.22/cv3.0/cv3.0.0/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.22/cv2.0/cv2.0.1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.22/cv3.0/cv3.0.1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.18/cv1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.18/m.0/cv1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.18/m.0/cv2/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.18/m.1/cv1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.18/m.1/cv2/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.18/m.2/cv1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.18/m.2/cv2/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.18/cv2/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.19/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.22/cv2.1/cv2.1.0/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.22/cv3.1/cv3.1.0/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.22/cv2.1/cv2.1.1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.22/cv3.1/cv3.1.1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.21/cv1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.21/m.0/cv1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.21/m.0/cv2/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.21/m.1/cv1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.21/m.1/cv2/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.21/m.2/cv1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.21/m.2/cv2/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.21/cv2/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.22/cv2.2/cv2.2.0/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.22/cv3.2/cv3.2.0/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.22/cv2.2/cv2.2.1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /model.22/cv3.2/cv3.2.1/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Adjust the quantize info to meet the compiler constraints[0m
+[32m
+[QUARK-INFO]: Input pos of concat node /model.2/Concat is 4, min_pos is 3. Modify ipos from 4 to 3.[0m
+[32m
+[QUARK-INFO]: Input pos of concat node /model.2/Concat is 4, min_pos is 3. Modify ipos from 4 to 3.[0m
+[32m
+[QUARK-INFO]: Input pos of concat node /model.2/Concat is 4, min_pos is 3. Modify ipos from 4 to 3.[0m
+[32m
+[QUARK-INFO]: Output pos of concat node /model.4/Concat is 4, min_pos is 3. Modify opos from 4 to 3.[0m
+[32m
+[QUARK-INFO]: Input pos of concat node /model.4/Concat is 4, min_pos is 3. Modify ipos from 4 to 3.[0m
+[32m
+[QUARK-INFO]: Input pos of concat node /model.4/Concat is 5, min_pos is 3. Modify ipos from 5 to 3.[0m
+[32m
+[QUARK-INFO]: Input pos of concat node /model.4/Concat is 5, min_pos is 3. Modify ipos from 5 to 3.[0m
+[32m
+[QUARK-INFO]: Input pos of concat node /model.4/Concat is 5, min_pos is 3. Modify ipos from 5 to 3.[0m
+[32m
+[QUARK-INFO]: Input pos of concat node /model.4/Concat is 4, min_pos is 3. Modify ipos from 4 to 3.[0m
+[32m
+[QUARK-INFO]: Input pos of concat node /model.4/Concat is 4, min_pos is 3. Modify ipos from 4 to 3.[0m
+[32m
+[QUARK-INFO]: Input pos of concat node /model.4/Concat is 4, min_pos is 3. Modify ipos from 4 to 3.[0m
+[32m
+[QUARK-INFO]: Output pos of concat node /model.11/Concat is 5, min_pos is 4. Modify opos from 5 to 4.[0m
+[32m
+[QUARK-INFO]: Input pos of concat node /model.11/Concat is 5, min_pos is 4. Modify ipos from 5 to 4.[0m
+[32m
+[QUARK-INFO]: Output pos of concat node /model.12/Concat is 5, min_pos is 4. Modify opos from 5 to 4.[0m
+[32m
+[QUARK-INFO]: Input pos of concat node /model.12/Concat is 5, min_pos is 4. Modify ipos from 5 to 4.[0m
+[32m
+[QUARK-INFO]: Input pos of concat node /model.12/Concat is 5, min_pos is 4. Modify ipos from 5 to 4.[0m
+[32m
+[QUARK-INFO]: Output pos of concat node /model.15/Concat is 5, min_pos is 4. Modify opos from 5 to 4.[0m
+[32m
+[QUARK-INFO]: Input pos of concat node /model.15/Concat is 5, min_pos is 4. Modify ipos from 5 to 4.[0m
+[32m
+[QUARK-INFO]: Input pos of concat node /model.15/Concat is 5, min_pos is 4. Modify ipos from 5 to 4.[0m
+[32m
+[QUARK-INFO]: Input pos of concat node /model.15/Concat is 5, min_pos is 4. Modify ipos from 5 to 4.[0m
+[32m
+[QUARK-INFO]: Input pos of concat node /model.15/Concat is 5, min_pos is 4. Modify ipos from 5 to 4.[0m
+[32m
+[QUARK-INFO]: Output pos of concat node /model.17/Concat is 5, min_pos is 4. Modify opos from 5 to 4.[0m
+[32m
+[QUARK-INFO]: Input pos of concat node /model.17/Concat is 5, min_pos is 4. Modify ipos from 5 to 4.[0m
+[32m
+[QUARK-INFO]: Input pos of Slice layer /model.4/Split_output_0_0 is 4. Output pos of Slice layer /model.4/Split_output_0_0 is 3.Modify ipos from 4 to 3.[0m
+[32m
+[QUARK-INFO]: Input pos of Slice layer /model.15/Split_output_0_0 is 5. Output pos of Slice layer /model.15/Split_output_0_0 is 4.Modify ipos from 5 to 4.[0m
+[32m
+[QUARK-INFO]: Adjust the quantize info to meet the compiler constraints[0m
+[32m
+[QUARK-INFO]: Output pos of concat node /model.14/Concat is 5, min_pos is 4. Modify opos from 5 to 4.[0m
+[32m
+[QUARK-INFO]: Input pos of concat node /model.14/Concat is 5, min_pos is 4. Modify ipos from 5 to 4.[0m
+[32m
+[QUARK-INFO]: Adjust the quantize info to meet the compiler constraints[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: e2e quantization time consumed:609.934683[0m
+[32m
+[QUARK-INFO]: The operation types and their corresponding quantities of the input float model is shown in the table below.[0m
++------------------------------------------------------+
+| Op Type              | Float Model                   |
+|----------------------+-------------------------------|
+| Conv                 | 103                           |
+| Sigmoid              | 97                            |
+| Mul                  | 97                            |
+| Split                | 8                             |
+| Add                  | 18                            |
+| Concat               | 13                            |
+| MaxPool              | 3                             |
+| Resize               | 2                             |
+|----------------------+-------------------------------|
+| Quantized model path | models/yolov8x_cut_xint8.onnx |
++------------------------------------------------------+
+[32m
+[QUARK-INFO]: The quantized information for all operation types is shown in the table below.[0m
+[32m
+[QUARK-INFO]: The discrepancy between the operation types in the quantized model and the float model is due to the application of graph optimization.[0m
++--------------------------------------------------+
+| Op Type     | Activation | Weights   | Bias      |
+|-------------+------------+-----------+-----------|
+| Conv        | UINT8(103) | INT8(103) | INT8(103) |
+| Mul         | UINT8(97)  |           |           |
+| Slice       | UINT8(16)  |           |           |
+| Add         | UINT8(18)  |           |           |
+| Concat      | UINT8(13)  |           |           |
+| MaxPool     | UINT8(3)   |           |           |
+| Resize      | UINT8(2)   |           |           |
+| HardSigmoid | UINT8(97)  |           |           |
++--------------------------------------------------+
+
+wrote models/yolov8x_cut_xint8.onnx
+ops: [('DequantizeLinear', 556), ('QuantizeLinear', 350), ('Mul', 194), ('Constant', 161), ('Conv', 103), ('HardSigmoid', 97), ('Add', 18), ('Slice', 16), ('Concat', 13), ('MaxPool', 3), ('Resize', 2)]
+QuantizeLinear 350  DequantizeLinear 556
+first node: Constant 
+WARNING: graph does not start with QuantizeLinear - check that the input tensor got quantized.
+
+Next: tools/diag_ep.py --model <out>, then 4_detect.py --ep npu --fresh

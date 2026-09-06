@@ -1,0 +1,33 @@
+deleted stale cache C:\Users\Ignis\src\ryzen-ai-xdna1-quantization\yoloposecutcachekey
+building session A...
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\Ignis\src\ryzen-ai-xdna1-quantization\yoloposecutcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+  session ready: pose, 640x640, 9 outputs
+building session B (same cache -- should be fast, no recompile)...
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\Ignis\src\ryzen-ai-xdna1-quantization\yoloposecutcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+  session ready: pose, 640x640, 9 outputs
+
+=== solo baseline, 10s each ===
+  [solo] camera A: 753 calls, mean 13.30 ms, 75.2 fps, expected positive, 0 mismatches
+  [solo] camera B: 755 calls, mean 13.26 ms, 75.4 fps, expected negative, 0 mismatches
+
+=== round-robin, single thread, 10s ===
+  [round-robin] camera A: 378 calls, mean 13.36 ms, 74.8 fps, expected positive, 0 mismatches
+  [round-robin] camera B: 378 calls, mean 13.16 ms, 76.0 fps, expected negative, 0 mismatches
+  combined: 75.4 fps across both streams
+
+=== concurrent threads, 10s ===
+  [concurrent] camera A: 700 calls, mean 14.30 ms, 69.9 fps, expected positive, 0 mismatches
+  [concurrent] camera B: 700 calls, mean 14.31 ms, 69.9 fps, expected negative, 0 mismatches
+  combined: 139.8 fps across both streams (wall clock, 10.0s)
+
+=== verdict ===
+  no cross-talk: each stream's detections stayed correct throughout.
+  concurrent-thread throughput vs round-robin: 1.85x (genuine parallelism)

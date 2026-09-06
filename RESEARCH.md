@@ -181,6 +181,12 @@ generalize beyond any one model:
 | Width×resolution interaction | Does a wide model at low resolution beat a narrow model at high resolution on both axes? | **Answered: no, falsified.** resnet50@256² (6.32 ms, 74.00% top-1) beats every `wide_resnet50_2` configuration tested (160²/224²/288²) on both axes at once. Traces back to `wide_resnet50_2` never having a real top-1 edge at matched resolution to begin with. Table in `README.md`. |
 | Fixed-cost intercept: hardware or graph property? | Does the ~2.6 ms fixed cost stay fixed at 2.7× the width? | **Inconclusive.** Marginal cost triples with width (65.10 → 180.94 ms/Mpixel, solid). Intercept comes out lower, not the same or higher (1.88 ms vs 2.63 ms) — but on only 3 points, not a trustworthy comparison either way. Table in `README.md`. |
 | AdaRound at width | Does AdaRound recover less on a wider model, as the YOLO n→s pattern predicts? | **Answered: no, the prediction was wrong.** resnet50 recovers 90.0% of its quantization loss, `wide_resnet50_2` recovers 90.5% — essentially identical, and the wider model's initial loss was actually larger, not smaller. Also settled: AdaRound's RAM wall is resolution-specific (640×640), not width-specific — both fit fine at 224². `wide_resnet50_2`+AdaRound (80.10% top-1, 9.66 ms) is now this repo's best classification speed/accuracy point. Table in `README.md`. |
+| AdaRound for YOLOv8s at 640² | Is this actually RAM-blocked, and does it recover as much as classification's ~90%? | **Answered: not blocked, and recovers far less.** `yolov8s_cut_xint8_adaround.onnx` compiles and runs fine (15.5 ms, 922/929 nodes) — the earlier RAM-wall note didn't hold. Full 5000-image mAP@50-95 is 39.98 vs plain XINT8's 37.40 — 2.6 points, nowhere near classification's ~90% recovery. A 500-image slice first suggested 45.19, another instance of the slice-vs-full trap this repo already flags elsewhere. Table in `README.md`. |
+| Concurrent camera streams | Is a static batch>1 the only way to ask this NPU for more than one image at once, and does it fail the same way? | **Answered: no — two independent sessions on two threads is a different request than batching, and it works.** 1.8-1.9× the combined throughput of round-robin, zero cross-talk between streams (checked directly, the same way the batch-2 bug was found, not assumed away). Consistent with yolov8n only reaching ~1.1 of the array's 16 TOPS solo — there's headroom for a second stream. `tools/dual_stream_bench.py`, `results/dual_stream_{pose,detect}.log`. |
+| Concurrent streams beyond 2, and at width | Does the multiplier keep climbing past 2 streams, and does a wider model with less idle headroom get the same multiplier? | **Answered: no on both counts, and the two answers explain each other.** yolov8n's combined throughput saturates at 3 streams (~167 fps, 2.1×) — headroom runs out, concurrency doesn't stop working. yolov8m, which already uses more of the array per call, saturates a stream earlier at a much smaller 1.29×. Zero cross-talk at up to 8 concurrent streams on either model; no throughput regression past the ceiling. `tools/nstream_bench.py`, `results/nstream_{yolov8n,yolov8m}.log`. Table in `README.md`. |
+| Is stream saturation compute-bound or memory-bound? | Concurrent sessions each hold their own runtime buffers — is the throughput ceiling actually a memory ceiling in disguise? | **Answered: memory, not the cause.** `xrt-smi examine -r aie-partitions` (the one tool found this session that can actually see NPU memory — Windows' `GPU Engine`/`GPU Adapter Memory` counters can't, the device is a `ComputeAccelerator`, not a WDDM GPU adapter) shows memory scaling linearly with stream count on both yolov8n (~29 MB/stream) and yolov8m (~100 MB/stream), climbing cleanly through 8 streams with no ceiling — well past the 2-3 stream point where throughput already flattened. Memory and throughput are decoupled, ruling memory out and leaving compute headroom as the standing explanation. `tools/session_hold.py`, `results/nstream_memory_yolov8{n,m}.log`. |
+| Does classification show the same concurrency shape; does accuracy survive contention past a binary found/not-found check? | Every prior concurrency check only confirmed a binary ground truth (found a person, or didn't) — does real accuracy hold under N-way contention, and does classification saturate the same way detection does? | **Answered: yes on both, cleanly.** resnet50 saturates at 1.60× by 8 concurrent streams (between yolov8n's 2.13× and yolov8m's 1.29×, its own idle-headroom budget) and holds flat through 16 with zero regression. Every concurrent stream ran the identical labeled slice the solo baseline used, so predictions could be diffed exactly rather than compared as an aggregate top-1 a different sample could move on its own — result: bit-identical argmax on all 960 concurrent classifications tested (16 streams × 60 images), at every stream count. `tools/nstream_cls_bench.py`, `results/nstream_resnet50.log`. Table in `README.md`. |
+| Width beyond yolov8m: does the n→s→m trend continue at l/x? | Two width steps (n→s, s→m) both bought a clear mAP gain for extra latency — does l→x keep paying off? | **Answered: no, the trend breaks.** l: 49.67 ms, 45.37 mAP@50-95, 1510/1517 nodes. x: 117.11 ms, 45.09 mAP@50-95, same 1510/1517 nodes (l/x share architecture depth, only channel width differs). x is 2.36× the latency of l for a net *loss* in mAP — width alone stops paying off somewhere around l under this recipe (plain XINT8, calib 24-32). Also found: yolov8l's full 5000-image eval failed with a hardware DPU timeout on 2 of 3 attempts, memory confirmed flat (231 MB) during the runs that succeeded — ruling out a simple leak, root cause still unresolved, not seen on any other size. `results/map_yolov8{l,x}_cut_xint8_npu.log`, `results/yolo_cut_{l,x}_{cpu,npu,diag}.log`. Table in `README.md`. |
 
 ## Open questions
 
@@ -203,21 +209,22 @@ been closed:
   the development machine's RAM at 640×640 specifically (now confirmed
   resolution-specific, not width-specific, since the ResNet AdaRound runs above hit no
   such wall at 224²).
-- **Direct NPU utilization measurement.** Windows' `GPU Engine` performance counter
-  (the one Task Manager's NPU graph reads) exists for this device but couldn't resolve
-  the yolov8m benchmark at all — `Get-Counter`'s own ~0.5-1s per-call cost is coarser
-  than the ~31ms inference bursts it was polling for. Effective NPU throughput has so
-  far only been inferred indirectly (measured latency against the model's FLOPs puts
-  yolov8n at roughly 1.1 of the 16 TOPS on paper) — a lower-level counter or
-  AMD's own profiling tool (untried) might resolve this properly.
-- **Width beyond what's measured.** Two width steps confirm the trend for
-  classification (resnet50→wide_resnet50_2→wide_resnet101_2) and now two for detection
-  too (yolov8n→s→m, 9.1× FLOPs for 3.46× latency, 43.49 mAP@50-95 at m). l/x remain
-  untested — disk is the binding constraint there (`calib_mb_per_image` extrapolates
-  ~1-1.5 GB/calibration-image at 640×640 for l/x, more than the development machine's
-  disk allows at any useful sample count).
-- **Full 5000-image mAP for every model size**, not just n and s (m/l/x untested at
-  scale).
+- **Direct NPU utilization measurement — partially unblocked.** Windows' `GPU Engine`
+  counter was a dead end for a reason stronger than polling granularity: the NPU
+  registers as a `ComputeAccelerator` device, not a WDDM GPU adapter, so it never
+  appears as an adapter LUID for that counter (or `GPU Adapter Memory`) to read at all,
+  regardless of sampling rate. `xrt-smi examine -r aie-partitions` (bundled with the
+  driver) is the tool that actually sees this device — live per-context memory and a
+  GOPS column — and is now used here for the memory side of the concurrency findings
+  above. Turning its GOPS reading into a real utilization-vs-16-TOPS number, across
+  model sizes, is still untried.
+- **Width beyond yolov8m — done for detection (l/x); classification untested.**
+  yolov8l/x are measured (see the findings table above) and the trend breaks at x. Two
+  width steps still confirm the classification trend (resnet50→wide_resnet50_2→
+  wide_resnet101_2) with nothing past that tested.
+- **Full 5000-image mAP for every model size — done for n/s/m/l/x.** All five detection
+  sizes now have a full-dataset number; only calibration sample count differs between
+  them (200 for n/s, 64 for m, 32/24 for l/x), a caveat already flagged in `README.md`.
 - **The eventual application.** Nothing here commits to it yet, but the shape of a
   next step is visible: a labeled licence-plate dataset from fixed camera feeds,
   fine-tuning a YOLO variant on it, and reusing this same head-cut + XINT8 + AdaRound

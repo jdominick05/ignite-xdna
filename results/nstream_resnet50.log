@@ -1,0 +1,308 @@
+model: models/resnet50_xint8_c64.onnx
+pool: 1000 labeled images, 60 per stream
+sweep: [1, 2, 3, 4, 6, 8, 12, 16] streams
+
+=== solo reference (1 session, no contention) ===
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\Ignis\src\ryzen-ai-xdna1-quantization\modelcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+  top-1 81.67%  (60 images)  101.4 fps
+
+=== 1 concurrent stream(s), all on the same 60 images ===
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\Ignis\src\ryzen-ai-xdna1-quantization\modelcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+  combined 67.1 fps  (1.00x vs 1-stream)  mean top-1 81.67%  per-stream top-1: [81.7]  worst mismatch-vs-solo 0.00%
+
+=== 2 concurrent stream(s), all on the same 60 images ===
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\Ignis\src\ryzen-ai-xdna1-quantization\modelcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\Ignis\src\ryzen-ai-xdna1-quantization\modelcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+  combined 102.6 fps  (1.53x vs 1-stream)  mean top-1 81.67%  per-stream top-1: [81.7, 81.7]  worst mismatch-vs-solo 0.00%
+
+=== 3 concurrent stream(s), all on the same 60 images ===
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\Ignis\src\ryzen-ai-xdna1-quantization\modelcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\Ignis\src\ryzen-ai-xdna1-quantization\modelcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\Ignis\src\ryzen-ai-xdna1-quantization\modelcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+  combined 104.8 fps  (1.56x vs 1-stream)  mean top-1 81.67%  per-stream top-1: [81.7, 81.7, 81.7]  worst mismatch-vs-solo 0.00%
+
+=== 4 concurrent stream(s), all on the same 60 images ===
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\Ignis\src\ryzen-ai-xdna1-quantization\modelcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\Ignis\src\ryzen-ai-xdna1-quantization\modelcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\Ignis\src\ryzen-ai-xdna1-quantization\modelcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\Ignis\src\ryzen-ai-xdna1-quantization\modelcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+  combined 105.0 fps  (1.57x vs 1-stream)  mean top-1 81.67%  per-stream top-1: [81.7, 81.7, 81.7, 81.7]  worst mismatch-vs-solo 0.00%
+
+=== 6 concurrent stream(s), all on the same 60 images ===
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\Ignis\src\ryzen-ai-xdna1-quantization\modelcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\Ignis\src\ryzen-ai-xdna1-quantization\modelcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\Ignis\src\ryzen-ai-xdna1-quantization\modelcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\Ignis\src\ryzen-ai-xdna1-quantization\modelcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\Ignis\src\ryzen-ai-xdna1-quantization\modelcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\Ignis\src\ryzen-ai-xdna1-quantization\modelcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+  combined 106.7 fps  (1.59x vs 1-stream)  mean top-1 81.67%  per-stream top-1: [81.7, 81.7, 81.7, 81.7, 81.7, 81.7]  worst mismatch-vs-solo 0.00%
+
+=== 8 concurrent stream(s), all on the same 60 images ===
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\Ignis\src\ryzen-ai-xdna1-quantization\modelcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\Ignis\src\ryzen-ai-xdna1-quantization\modelcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\Ignis\src\ryzen-ai-xdna1-quantization\modelcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\Ignis\src\ryzen-ai-xdna1-quantization\modelcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\Ignis\src\ryzen-ai-xdna1-quantization\modelcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\Ignis\src\ryzen-ai-xdna1-quantization\modelcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\Ignis\src\ryzen-ai-xdna1-quantization\modelcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\Ignis\src\ryzen-ai-xdna1-quantization\modelcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+  combined 107.1 fps  (1.60x vs 1-stream)  mean top-1 81.67%  per-stream top-1: [81.7, 81.7, 81.7, 81.7, 81.7, 81.7, 81.7, 81.7]  worst mismatch-vs-solo 0.00%
+
+=== 12 concurrent stream(s), all on the same 60 images ===
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\Ignis\src\ryzen-ai-xdna1-quantization\modelcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\Ignis\src\ryzen-ai-xdna1-quantization\modelcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\Ignis\src\ryzen-ai-xdna1-quantization\modelcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\Ignis\src\ryzen-ai-xdna1-quantization\modelcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\Ignis\src\ryzen-ai-xdna1-quantization\modelcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\Ignis\src\ryzen-ai-xdna1-quantization\modelcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\Ignis\src\ryzen-ai-xdna1-quantization\modelcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\Ignis\src\ryzen-ai-xdna1-quantization\modelcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\Ignis\src\ryzen-ai-xdna1-quantization\modelcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\Ignis\src\ryzen-ai-xdna1-quantization\modelcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\Ignis\src\ryzen-ai-xdna1-quantization\modelcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\Ignis\src\ryzen-ai-xdna1-quantization\modelcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+  combined 107.1 fps  (1.60x vs 1-stream)  mean top-1 81.67%  per-stream top-1: [81.7, 81.7, 81.7, 81.7, 81.7, 81.7, 81.7, 81.7, 81.7, 81.7, 81.7, 81.7]  worst mismatch-vs-solo 0.00%
+
+=== 16 concurrent stream(s), all on the same 60 images ===
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\Ignis\src\ryzen-ai-xdna1-quantization\modelcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\Ignis\src\ryzen-ai-xdna1-quantization\modelcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\Ignis\src\ryzen-ai-xdna1-quantization\modelcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\Ignis\src\ryzen-ai-xdna1-quantization\modelcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\Ignis\src\ryzen-ai-xdna1-quantization\modelcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\Ignis\src\ryzen-ai-xdna1-quantization\modelcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\Ignis\src\ryzen-ai-xdna1-quantization\modelcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\Ignis\src\ryzen-ai-xdna1-quantization\modelcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\Ignis\src\ryzen-ai-xdna1-quantization\modelcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\Ignis\src\ryzen-ai-xdna1-quantization\modelcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\Ignis\src\ryzen-ai-xdna1-quantization\modelcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\Ignis\src\ryzen-ai-xdna1-quantization\modelcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\Ignis\src\ryzen-ai-xdna1-quantization\modelcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\Ignis\src\ryzen-ai-xdna1-quantization\modelcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\Ignis\src\ryzen-ai-xdna1-quantization\modelcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\Ignis\src\ryzen-ai-xdna1-quantization\modelcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+  combined 107.3 fps  (1.60x vs 1-stream)  mean top-1 81.67%  per-stream top-1: [81.7, 81.7, 81.7, 81.7, 81.7, 81.7, 81.7, 81.7, 81.7, 81.7, 81.7, 81.7, 81.7, 81.7, 81.7, 81.7]  worst mismatch-vs-solo 0.00%
+
+=== summary ===
+streams  combined fps   speedup  mean top-1  mismatch
+      1          67.1     1.00x      81.67%     0.00%
+      2         102.6     1.53x      81.67%     0.00%
+      3         104.8     1.56x      81.67%     0.00%
+      4         105.0     1.57x      81.67%     0.00%
+      6         106.7     1.59x      81.67%     0.00%
+      8         107.1     1.60x      81.67%     0.00%
+     12         107.1     1.60x      81.67%     0.00%
+     16         107.3     1.60x      81.67%     0.00%
+
+exact match: every concurrent stream at every N produced the identical per-image predictions as the solo reference (81.67% top-1). Accuracy is unaffected by contention on this backend.

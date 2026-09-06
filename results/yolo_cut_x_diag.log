@@ -1,0 +1,54 @@
+=== models/yolov8x_cut_xint8.onnx ===
+ir_version 8   opset [('ai.onnx', 17), ('com.microsoft.nchwc', 1), ('ai.onnx.ml', 5), ('ai.onnx.training', 1), ('ai.onnx.preview', 1), ('ai.onnx.preview.training', 1), ('com.microsoft.experimental', 1), ('com.microsoft', 1), ('org.pytorch.aten', 1), ('com.amd.quark', 1)]
+producer   quark.onnx 0.11
+nodes      1513
+input      images [1, 3, 640, 640]
+output     /model.22/cv2.0/cv2.0.2/Conv_output_0 [1, 64, 80, 80]
+output     /model.22/cv2.1/cv2.1.2/Conv_output_0 [1, 64, 40, 40]
+output     /model.22/cv2.2/cv2.2.2/Conv_output_0 [1, 64, 20, 20]
+output     /model.22/cv3.0/cv3.0.2/Conv_output_0 [1, 80, 80, 80]
+output     /model.22/cv3.1/cv3.1.2/Conv_output_0 [1, 80, 40, 40]
+output     /model.22/cv3.2/cv3.2.2/Conv_output_0 [1, 80, 20, 20]
+ops        [('DequantizeLinear', 556), ('QuantizeLinear', 350), ('Mul', 194), ('Constant', 161), ('Conv', 103), ('HardSigmoid', 97), ('Add', 18), ('Slice', 16), ('Concat', 13), ('MaxPool', 3), ('Resize', 2)]
+
+Q/DQ       QuantizeLinear 350, DequantizeLinear 556
+
+ops absent from the known-good ResNet50 graph: [('Concat', 13), ('HardSigmoid', 97), ('Resize', 2), ('Slice', 16)]
+  Any of these could be what GetCapability refuses. Bisect by removing them, not by guessing.
+
+float compute nodes (no Q/DQ within 3 hops upstream): 0
+
+first Conv/Gemm: /model.0/conv/Conv
+   input producers: ['DequantizeLinear', 'DequantizeLinear', 'DequantizeLinear']
+
+=== C:\Users\Ignis\src\ryzen-ai-xdna1-quantization\yolocutcachekey\vitisai_ep_report.json ===
+  all            nodeNum= 1517  opTypes=10
+  NPU            nodeNum= 1510  opTypes=10
+  VITIS_EP_CPU   nodeNum=    7  opTypes=2
+
+  per-node device counts: {'CPU': 7, 'NPU': 1510}
+
+  1510 nodes on the NPU, 7 elsewhere.
+
+  op type x device:
+    CPU           DequantizeLinear     6
+    CPU           QuantizeLinear       1
+    NPU           Add                  18
+    NPU           Concat               13
+    NPU           Conv                 103
+    NPU           DequantizeLinear     715
+    NPU           HardSigmoid          97
+    NPU           MaxPool              3
+    NPU           Mul                  194
+    NPU           QuantizeLinear       349
+    NPU           Resize               2
+    NPU           Slice                16
+
+  7 nodes NOT on the NPU (first 25):
+    CPU           QuantizeLinear       ['images_QuantizeLinear_Output']
+    CPU           DequantizeLinear     ['/model.22/cv3.2/cv3.2.2/Conv_output_0']
+    CPU           DequantizeLinear     ['/model.22/cv3.1/cv3.1.2/Conv_output_0']
+    CPU           DequantizeLinear     ['/model.22/cv3.0/cv3.0.2/Conv_output_0']
+    CPU           DequantizeLinear     ['/model.22/cv2.2/cv2.2.2/Conv_output_0']
+    CPU           DequantizeLinear     ['/model.22/cv2.1/cv2.1.2/Conv_output_0']
+    CPU           DequantizeLinear     ['/model.22/cv2.0/cv2.0.2/Conv_output_0']
