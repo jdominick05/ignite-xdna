@@ -224,13 +224,20 @@ generalize beyond any one model:
    multi_partition_wide_resnet50_2.log`, 181.3 fps, 11.65 GMACs, zero mismatches);
    `wide_resnet101_2` (101 layers — double the depth, similar width to
    `wide_resnet50_2`) reaches 28.5% (already measured, `results/
-   multi_partition_wide_resnet101_2.log`). `wide_resnet50_2` vs. `wide_resnet101_2`
-   is the cleanest depth-matched-width pair collected this session — cleaner than any
-   YOLO pair, which never held width fixed while varying depth — and **doubling depth
-   there buys only +2.1 points (26.4%→28.5%)**, a far weaker relationship than YOLO's
-   node-count table suggested (where 63→83 nodes moved 24.8%→33.1%, +8.3 points, and
-   that pair's GMACs/call barely differs from this ResNet pair's ratio). Meanwhile
-   width at *matched* depth is a real, comparably-sized effect in both families:
+   multi_partition_wide_resnet101_2.log`). The width match was checked directly
+   (`onnx-tool` shape inference on both quantized graphs' Conv output tensors, not
+   assumed from torchvision's `width_per_group` documentation): the two graphs'
+   per-stage channel counts are byte-identical at every one of 53 shared stages
+   (`[64,128,256,...,2048]`, same list both models), differing only in node count
+   (53 vs. 104) — this genuinely is a width-matched pair, the only one collected
+   this session. `wide_resnet50_2` vs. `wide_resnet101_2` is that pair, and **doubling
+   depth there buys only +2.1 points (26.4%→28.5%)**, a far weaker relationship than
+   YOLO's node-count table suggested (63→83 nodes moved 24.8%→33.1%, +8.3 points). One
+   precision this pair does *not* buy, though: its GMACs/call also roughly doubled
+   alongside depth (11.65→23.18) — width is held fixed, but compute and depth still
+   move together, so this is "doubling depth-and-compute at fixed width" vs. nothing,
+   not a depth-alone isolation either. Meanwhile width at *matched* depth is a real,
+   comparably-sized effect in both families:
    `resnet50`→`wide_resnet50_2` (50 layers, width only) is +7.6 points on 2.75× the
    GMACs; `yolov8n`→`yolov8s` (63 nodes, width only) is +10.4 points on 3.2× the
    GMACs. **The honest conclusion across both families: achieved-% correlates clearly
@@ -244,6 +251,29 @@ generalize beyond any one model:
    correlate of the two, in both families, though neither is established as the
    mechanism (vs., e.g., total GMACs/call itself, which also rises with width in every
    pair above and hasn't been cleanly separated from it either).
+
+   **Checked whether this repo's own tooling can explain *why* width correlates with
+   achieved-% — it can't, and this is where that question stops rather than moves to
+   speculation.** `vitisai_ep_report.json`'s `nodeStat` (a per-node list already
+   partly used for the padding check above) carries each node's op type, I/O tensor
+   shapes, and a `device: NPU|CPU` field — a static compile-time routing decision, not
+   a cycle count, timing, or tile/lane assignment. Checked on the freshest available
+   builds (`yolocut1x4cachekey`, which held `wide_resnet50_2`'s report after the run
+   above): 393/395 nodes route to NPU, only 2 to `VITIS_EP_CPU` (boundary Q/DQ) —
+   effectively the same near-100% NPU routing already seen for every classification
+   and YOLO model in this repo (929-node YOLO graphs: 922 NPU/7 CPU). Every model
+   tested, narrow or wide, routes almost entirely to the NPU, so this file cannot be
+   distinguishing "narrow models fall back to CPU more" (they don't) from any
+   tile-level utilization story — and it carries no data at the tile/lane granularity
+   that would test one. No file this repo's own toolchain writes exposes that level of
+   detail. Rather than reach for AMD's published AIE tile-count/topology figures — a
+   spec sheet has no way to be checked against which specific layers of *these*
+   compiled graphs landed on which tiles, so a topology narrative built from it would
+   be unfalsifiable with what's on hand — **this thread stops here**: achieved-%
+   correlates with channel width across two architecture families, more weakly with
+   depth, and more weakly still (not cleanly separable) with total MACs/call; *why*
+   width is the strongest correlate is an open hardware question this repo's tooling
+   cannot currently answer, not a mechanism this repo has established.
 
    **The `yolov8s@1280` fps number above needed its own correctness check, and the
    check found a real (separate) defect worth naming plainly.**

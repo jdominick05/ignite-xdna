@@ -835,19 +835,25 @@ ships.
 **The follow-up that isolates them ran, and it points at width, not depth.**
 `resnet50` (50 layers, narrow) reaches 18.8% split-4 and `wide_resnet50_2` (50
 layers — same depth, wider) reaches 26.4%: a clean +7.6-point width effect at
-matched depth, similar in size to yolov8n→s's +10.4 points. But `wide_resnet50_2`
-(50 layers) vs. `wide_resnet101_2` (101 layers, similar width, already measured at
-28.5%) is the cleanest depth-matched-width pair collected — cleaner than any YOLO
-pair, which never held width fixed — and **doubling depth here buys only +2.1
-points (26.4%→28.5%)**, far weaker than the +8.3 points (24.8%→33.1%) the YOLO
-node-count table showed for a similar jump. **Width is the better-supported
-correlate of achieved-% in both families tested; the strong-looking YOLO depth
-pattern most likely reflects Ultralytics scaling width and depth together, not an
-independent depth effect** — see `RESEARCH.md` finding 5 for the full numbers, plus
-the (weakened, not ruled out) weight-bandwidth-roofline check, a one-look
-channel-padding check that found no evidence of padding, and confirmation that
-AMD's 16 TOPS nameplate is independently correct for both this machine's 8700G and
-the laptop's 8645HS (not a mobile-Phoenix 10 TOPS figure carried over by mistake).
+matched depth, similar in size to yolov8n→s's +10.4 points. `wide_resnet50_2` (50
+layers) vs. `wide_resnet101_2` (101 layers) is the only width-*matched* pair
+collected — checked directly via `onnx-tool` shape inference, not assumed: every
+Conv stage's channel count is identical between the two graphs, differing only in
+node count. **Doubling depth there buys only +2.1 points (26.4%→28.5%)**, far
+weaker than the +8.3 points (24.8%→33.1%) the YOLO node-count table showed for a
+similar jump — though that pair's GMACs/call also doubled alongside depth, so it's
+"more depth and compute together" vs. nothing, not a depth-alone isolation.
+**Width is the better-supported correlate of achieved-% in both families tested.**
+*Why* width correlates more strongly was checked once more and left open: the
+VitisAI EP's own `vitisai_ep_report.json` records only a static per-node NPU/CPU
+routing decision, not cycle counts or tile/lane assignment, and virtually every
+node in every model here (narrow or wide) already routes to the NPU — this repo's
+tooling has nothing at the granularity that would explain the mechanism, and a
+hardware topology narrative built from a spec sheet instead would be unfalsifiable
+against these specific compiled graphs. See `RESEARCH.md` finding 5 for the full
+numbers, the (weakened, not ruled out) weight-bandwidth-roofline check, the
+padding check, and confirmation that AMD's 16 TOPS nameplate is independently
+correct for both this machine's 8700G and the laptop's 8645HS.
 
 The `yolov8s@1280` fps above needed its own correctness check first: `multi_partition_
 bench.py`'s cross-talk oracle flagged every call as a mismatch, at every process
