@@ -560,6 +560,38 @@ ceilings should track together. Neither happens — throughput caps out while me
 sails past that point still rising. This rules out memory pressure as the explanation
 for the saturation curves above and leaves compute headroom as the one still standing.
 
+**Can `xrt-smi`'s GOPS column build a real utilization-vs-TOPS story?** No — it
+doesn't measure delivered compute at all on this backend, and that's worth stating
+plainly rather than leaving it implied by an unused column. `tools/session_hold.py`
+was extended to parse `xrt-smi`'s per-context GOPS field alongside memory, and to
+independently count actual `session.run()` completions per stream in the same run
+(a ground truth the tool didn't have before — GOPS alone can't be checked against
+anything without it):
+
+| streams | yolov8n GOPS | yolov8n measured completions/s | yolov8m GOPS | yolov8m measured completions/s |
+|---|---|---|---|---|
+| 1 | 9 | 151.4 | 80 | 37.9 |
+| 2 | 18 | 171.6 | 160 | 36.1 |
+| 3 | 27 | 169.2 | 240 | 36.1 |
+| 4 | 36 | 171.1 | 320 | 39.2 |
+| 6 | 54 | 168.9 | 480 | 36.2 |
+| 8 | 72 | 171.8 | 640 | 39.0 |
+
+(`results/gops_yolov8n.log`, `results/gops_yolov8m.log`.) GOPS is **exactly**
+`9 × streams` for yolov8n and `80 × streams` for yolov8m, with no saturation at all
+through 8 streams — while the measured completion rate in the same run is flat from
+1 stream onward, matching the throughput ceiling already found above. If GOPS were
+real delivered array throughput, it would flatten alongside the measured rate once
+compute headroom ran out; instead it grows without bound, proportional only to
+session count. The simplest explanation consistent with the data: `xrt-smi` credits
+each HW context a notional GOPS figure (apparently the model's own nominal op count
+times that context's submission rate), computed per-context in isolation, blind to
+whatever shared-array contention is actually throttling real throughput. **GOPS is
+not a usable proxy for utilization or saturation on this backend** — the honest
+conclusion is a negative result, not a new axis of evidence, and the "full
+utilization-vs-TOPS story" roadmap item is closed as not achievable with this tool
+rather than left open.
+
 **Does classification show the same shape, and does accuracy itself survive
 contention?** `tools/nstream_cls_bench.py` runs the same N-stream sweep on resnet50,
 past 8 streams this time (1 through 16), and — because every prior check here only
@@ -919,8 +951,11 @@ checks on CPU, runs on the NPU and reads the report back.
   shows up as an adapter LUID for those counters to poll, regardless of sampling rate.
   `xrt-smi examine -r aie-partitions` (bundled with the driver, `C:\Windows\System32\AMD\`)
   is the tool that actually sees it — live per-context memory (MB) and compute rate
-  (GOPS) — and is what the concurrency measurements above use for memory. It has not
-  yet been used to build a full utilization-vs-TOPS story; see [Roadmap](#roadmap).
+  (GOPS) — and is what the concurrency measurements above use for memory. Its GOPS
+  column was tried as a utilization signal too and turned out to be a dead end (scales
+  linearly with stream count, decoupled from measured throughput); see the
+  [GOPS section](#is-the-saturation-compute-or-memory) above and
+  [Roadmap](#roadmap).
 - **No formal test suite.** Verification here is empirical (`compileall` + import checks
   as a syntax gate, then real pipeline runs read from `results/`) rather than unit tests
   — there's no fixture NPU to test against in CI.
@@ -972,11 +1007,13 @@ reasoning behind each.
 - **A yolov8m mAP row at calibration 200**, so the detection width table is
   like-for-like at every size (the current 43.49 was calibrated on 64 images). Same
   caveat now applies to l (32) and x (24).
-- **A full utilization-vs-TOPS story using `xrt-smi`.** Its GOPS-per-context readout is
-  the first tool this repo has found that can actually see the NPU (Windows' `GPU
-  Engine`/`GPU Adapter Memory` counters can't — the device isn't a WDDM GPU adapter at
-  all). Used here only for memory; turning its GOPS column into a real utilization
-  number against the 16 TOPS ceiling, across model sizes, is untried.
+- **A full utilization-vs-TOPS story using `xrt-smi`'s GOPS column — done, and it's a
+  dead end.** GOPS scales exactly linearly with stream count (9×/80× per stream for
+  yolov8n/yolov8m) with no ceiling through 8 streams, while the same run's *measured*
+  completion rate is flat from 1 stream on — decoupled from real throughput, so it
+  can't be turned into a utilization-vs-16-TOPS number. `results/gops_yolov8{n,m}.log`.
+  `xrt-smi`'s memory readout (used above) remains the one number from this tool that
+  tracks something real; GOPS does not.
 - **Explain ResNet50's AdaRound latency cost** (5.63 → 6.93 ms). The EP report shows the
   same 393 / 2 partition for both models, so extra CPU fallback is ruled out; a
   `--fresh` re-run of each and a diff of the two reports would settle it.
