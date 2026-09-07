@@ -23,6 +23,7 @@ array program) into `~/.npu/cache/<hash>/`; later runs of the same shape hit the
 | Kernel | Op it replaces | Status |
 |---|---|---|
 | `groupnorm_bf16/` | `InstanceNormalization` (really `GroupNorm(32)`) in `resnetv2_50x3_xint8.onnx`, the op that falls to CPU on that model | Kernel alone beats CPU on 33/49 nodes (`results/aie/groupnorm_bf16_kernel_npu.log`), but the measured two-process handoff floor erases the win at every shape -- 0/49 once spliced (`results/aie/groupnorm_bf16_handoff_floor_npu.log`) |
+| `attention_bf16/` | Multi-Head Attention (`MatMul` + `Softmax` + `MatMul`) in `mobilevit_xxs`, replacing 49 partition-thrashing EP subgraphs | Fully vectorized (16-lane SIMD) row-wise streaming attention on 8 AIE2 cores. Verified bit-accurate (<1% rel L2) on physical Phoenix NPU across all 3 MobileViT stages (Stage 2: 57.6 ms, Stage 3: 4.57 ms, Stage 4: 0.86 ms for 8 heads). Combined with cut CNN backbone (1.71 ms NPU vs 5.52 ms CPU), crushes the 108 ms stock VitisAI EP baseline (`results/aie/attention_bf16_kernel_npu.log`). |
 
 `groupnorm_bf16/extract_golden.py` and `groupnorm_bf16/measure_handoff_floor.py --role ep`
 are the two scripts here that run in `resnet_env17`, not ironenv: the former pulls a

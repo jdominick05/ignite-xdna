@@ -1,0 +1,123 @@
+﻿=== Stage 4 (N=16, D=24) - Single Core ===
+Loaded config from data/golden/attn_s4_l0\meta.json: N=16, D=24, scale=0.2041241452319315, num_cores=1
+Using D=24, D_pad=32, num_cores=1
+Allocating device tensors on npu for 1 cores...
+Running JIT compilation and execution on npu...
+First run (including JIT compile): 3402.40 ms
+NaN count in out_np: 0 of 384, across cores: []
+
+--- Numerical Verification across all 1 cores ---
+Max absolute error: 0.004798
+Relative L2 error:  0.946%
+  Core/Head  0: rel L2 = 0.946%
+VERIFICATION: PASS (within bfloat16 precision bounds)
+
+--- Benchmarking (2 warmup, 10 iterations) ---
+Execution time (us): min=817.3, mean=853.6, max=929.2
+Arithmetic throughput: 0.03 GFLOPS (0.03 MFLOP in 0.85 ms)
+=== Stage 4 (N=16, D=24) - 8 Cores ===
+Loaded config from data/golden/attn_s4_l0\meta.json: N=16, D=24, scale=0.2041241452319315, num_cores=8
+Using D=24, D_pad=32, num_cores=8
+Allocating device tensors on npu for 8 cores...
+Running JIT compilation and execution on npu...
+First run (including JIT compile): 3793.17 ms
+NaN count in out_np: 0 of 3072, across cores: []
+
+--- Numerical Verification across all 8 cores ---
+Max absolute error: 0.008442
+Relative L2 error:  0.799%
+  Core/Head  0: rel L2 = 0.946%
+  Core/Head  1: rel L2 = 0.729%
+  Core/Head  2: rel L2 = 0.779%
+  Core/Head  3: rel L2 = 0.747%
+  Core/Head  4: rel L2 = 0.957%
+  Core/Head  5: rel L2 = 0.844%
+  Core/Head  6: rel L2 = 0.725%
+  Core/Head  7: rel L2 = 0.742%
+VERIFICATION: PASS (within bfloat16 precision bounds)
+
+--- Benchmarking (2 warmup, 10 iterations) ---
+Execution time (us): min=829.6, mean=859.4, max=913.4
+Arithmetic throughput: 0.24 GFLOPS (0.21 MFLOP in 0.86 ms)
+=== Stage 3 (N=64, D=20) - Single Core ===
+Loaded config from data/golden/attn_s3_l0\meta.json: N=64, D=20, scale=0.22360679774997896, num_cores=1
+Using D=20, D_pad=32, num_cores=1
+Allocating device tensors on npu for 1 cores...
+Running JIT compilation and execution on npu...
+First run (including JIT compile): 3540.39 ms
+NaN count in out_np: 0 of 1280, across cores: []
+
+--- Numerical Verification across all 1 cores ---
+Max absolute error: 0.003700
+Relative L2 error:  0.854%
+  Core/Head  0: rel L2 = 0.854%
+VERIFICATION: PASS (within bfloat16 precision bounds)
+
+--- Benchmarking (2 warmup, 10 iterations) ---
+Execution time (us): min=4519.0, mean=4579.9, max=4700.9
+Arithmetic throughput: 0.08 GFLOPS (0.35 MFLOP in 4.58 ms)
+=== Stage 3 (N=64, D=20) - 8 Cores ===
+Loaded config from data/golden/attn_s3_l0\meta.json: N=64, D=20, scale=0.22360679774997896, num_cores=8
+Using D=20, D_pad=32, num_cores=8
+Allocating device tensors on npu for 8 cores...
+Running JIT compilation and execution on npu...
+First run (including JIT compile): 3360.39 ms
+NaN count in out_np: 0 of 10240, across cores: []
+
+--- Numerical Verification across all 8 cores ---
+Max absolute error: 0.011116
+Relative L2 error:  0.973%
+  Core/Head  0: rel L2 = 0.854%
+  Core/Head  1: rel L2 = 1.022%
+  Core/Head  2: rel L2 = 0.935%
+  Core/Head  3: rel L2 = 1.014%
+  Core/Head  4: rel L2 = 0.865%
+  Core/Head  5: rel L2 = 1.060%
+  Core/Head  6: rel L2 = 0.988%
+  Core/Head  7: rel L2 = 0.933%
+VERIFICATION: PASS (within bfloat16 precision bounds)
+
+--- Benchmarking (2 warmup, 10 iterations) ---
+Execution time (us): min=4452.6, mean=4565.0, max=4637.7
+Arithmetic throughput: 0.61 GFLOPS (2.79 MFLOP in 4.57 ms)
+=== Stage 2 (N=256, D=16) - Single Core ===
+Loaded config from data/golden/attn_s2_l0\meta.json: N=256, D=16, scale=0.25, num_cores=1
+Using D=16, D_pad=16, num_cores=1
+Allocating device tensors on npu for 1 cores...
+Running JIT compilation and execution on npu...
+First run (including JIT compile): 3205.08 ms
+NaN count in out_np: 0 of 4096, across cores: []
+
+--- Numerical Verification across all 1 cores ---
+Max absolute error: 0.010764
+Relative L2 error:  1.190%
+  Core/Head  0: rel L2 = 1.190%
+VERIFICATION: PASS (within bfloat16 precision bounds)
+
+--- Benchmarking (2 warmup, 5 iterations) ---
+Execution time (us): min=55578.1, mean=55725.1, max=55963.4
+Arithmetic throughput: 0.08 GFLOPS (4.52 MFLOP in 55.73 ms)
+=== Stage 2 (N=256, D=16) - 8 Cores ===
+Loaded config from data/golden/attn_s2_l0\meta.json: N=256, D=16, scale=0.25, num_cores=8
+Using D=16, D_pad=16, num_cores=8
+Allocating device tensors on npu for 8 cores...
+Running JIT compilation and execution on npu...
+First run (including JIT compile): 3572.72 ms
+NaN count in out_np: 0 of 32768, across cores: []
+
+--- Numerical Verification across all 8 cores ---
+Max absolute error: 0.020667
+Relative L2 error:  0.992%
+  Core/Head  0: rel L2 = 1.190%
+  Core/Head  1: rel L2 = 0.976%
+  Core/Head  2: rel L2 = 0.960%
+  Core/Head  3: rel L2 = 0.892%
+  Core/Head  4: rel L2 = 1.194%
+  Core/Head  5: rel L2 = 0.952%
+  Core/Head  6: rel L2 = 0.984%
+  Core/Head  7: rel L2 = 0.929%
+VERIFICATION: PASS (within bfloat16 precision bounds)
+
+--- Benchmarking (2 warmup, 5 iterations) ---
+Execution time (us): min=57553.3, mean=57613.6, max=57691.5
+Arithmetic throughput: 0.63 GFLOPS (36.18 MFLOP in 57.61 ms)
