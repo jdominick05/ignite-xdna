@@ -59,23 +59,28 @@ While the kernel compiles, maps cleanly across 8 physical AIE2 cores, streams vi
 
 | Pipeline Configuration | Hardware Execution | Latency | Note |
 |---|---|---|---|
-| **Stock VitisAI EP Baseline** | 49 NPU Partitions (partition thrashing) | 108.00 ms | 1.0× (baseline, 1037 NPU nodes / 548 CPU nodes) |
-| **CPU Full Baseline** | 8 Zen4 cores (PyTorch FP32) | 18.37 ms | 5.9× faster than stock EP (68.30% top-1 on 1000 eval images) |
-| **Cut CNN Backbone** | Physical Phoenix NPU (1 subgraph, 407 nodes) | **1.73 ms** | **3.1× vs CPU CNN (5.35 ms)** (like-for-like) |
+| **Stock VitisAI EP Baseline** | 58 DPU subgraphs (partition thrashing) | 108.29 ms | measured; 1037 NPU / 156 CPU / 392 VITIS_EP_CPU nodes |
+| **CPU Full Baseline (ORT CPU EP)** | 8 Zen4 cores, FP32 | **7.51 ms** | the like-for-like CPU baseline (PyTorch eager is 15.71 ms; 68.30% top-1) |
+| **Cut CNN Backbone** | Physical Phoenix NPU (1 subgraph, 407 nodes) | **1.71 ms** | **3.30× vs CPU CNN (5.65 ms)** (like-for-like) |
 | **Full NPU with AIE Attention** | Cut CNN on NPU + AIE2 Attention Kernel | **>120 ms** | **Loses to both CPU and Stock EP** |
-| **Heterogeneous Splice (REPORTED)**| Cut CNN on NPU (1.73 ms) + Attention on CPU (2.03 ms) | 4.47 ms *(unverified)* | No `results/` log — see warning below |
+| **Heterogeneous Splice (MEASURED)**| Cut CNN on NPU (1.71 ms) + Attention on CPU (1.41 ms, torch) | **3.25 ms** | **2.31× vs ORT CPU**; residual only +0.13 ms |
 
 > [!WARNING]
 > The heterogeneous spliced pipeline does NOT use the AIE attention kernel — it leaves attention on CPU.
-> **Its 4.47 ms figure is reported, not measured.** `4.47` is a hardcoded constant in
-> `tools/demo_attention.py`, and the "0.72 ms in-process handoff residual" is back-solved from it
-> (`4.47 - (backbone + 2.03)`); the demo runs no spliced loop. Treat as unverified until a
-> `perf_counter` run around the real loop is captured under `results/`. The 108.00 ms stock-EP,
-> 18.37 ms full-CPU, 1.73 ms backbone and 5.35 ms CPU-backbone numbers on this page have no
-> `results/` log either.
+> **It is a cost model, not a functional pipeline.** `mobilevit_cut_backbone_xint8.onnx` is
+> `[1,3,256,256] -> [1,1000]`: a complete classifier with the transformer blocks *deleted*, not a
+> backbone handing intermediates to attention. The two halves are unconnected and the composite
+> computes nothing valid. Measured by `tools/splice_wall_clock.py`
+> (`results/mobilevit/splice_wall_clock_npu.log`), superseding a previously published 4.47 ms /
+> 4.1× that was a hardcoded constant with a back-solved residual.
 >
-> If the pipeline were split across separate Python processes (the Python 3.12 vs 3.13 pyxrt ABI
-> wall), the IPC handoff floor measured in `groupnorm_bf16` (789 µs–23.6 ms) would erase the margin.
+> **The CPU kernel decides the verdict.** The same nine blocks cost 1.41 ms in torch and 12.73 ms
+> in numpy (9×). With numpy the identical splice is 14.57 ms — **0.52×, losing to plain CPU**. The
+> 2.31× above is against ORT's own optimized CPU kernels, which is the honest comparison; the old
+> 4.1× compared an ORT splice against a PyTorch-eager baseline.
+>
+> Split across separate Python processes (the Python 3.12 vs 3.13 pyxrt ABI wall), the IPC handoff
+> floor measured in `groupnorm_bf16` (789 µs–23.6 ms) would erase the margin entirely.
 >
 > **Accuracy:** MobileViT-XXS FP32 measures **68.30% top-1 / 88.20% top-5** over 1000 `data/eval`
 > images (`results/mobilevit/eval_fp32_cpu.log`) — matching the paper's ~69.0%. An earlier 75.0%

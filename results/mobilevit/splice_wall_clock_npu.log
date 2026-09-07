@@ -1,0 +1,72 @@
+=== MobileViT-XXS heterogeneous splice: measured wall clock ===
+COST MODEL, NOT A PIPELINE: the cut CNN is a complete [1,3,256,256]->[1,1000]
+classifier with the transformer blocks deleted, so the two halves are
+unconnected and the composite computes nothing valid. See the module docstring.
+
+attention blocks read from mobilevit_xxs_fp32.onnx: 9 total
+    B=4 H=4 N=256 D=16   x2 blocks
+    B=4 H=4 N= 64 D=20   x4 blocks
+    B=4 H=4 N= 16 D=24   x3 blocks
+
+building NPU session for the cut CNN backbone ...
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\mobilevit_cut
+First run compiles the model. It takes a while and looks frozen. It isn't.
+
+--- the two halves, measured separately, same process/session ---
+  cut CNN backbone, NPU                        mean    1.71 ms   median    1.71   p95    1.79   min    1.65
+  attention x9 blocks, CPU (torch 2.4.1+cpu, 8 threads) mean    1.41 ms   median    1.38   p95    1.65   min    1.23
+  attention x9 blocks, CPU (numpy, slow contrast) mean   12.73 ms   median   12.57   p95   13.90   min   11.65
+  -> implementation alone is 9.0x. The torch row is the one that counts:
+     the splice is being compared against the full model under ORT's own
+     optimized CPU kernels, so a naive CPU attention would rig it.
+
+--- the spliced loop, one perf_counter around both (torch attention) ---
+  SPLICE: NPU backbone + CPU attention         mean    3.25 ms   median    3.22   p95    3.61   min    2.96
+  in-process residual = 3.25 - (1.71 + 1.41) = +0.13 ms
+
+--- baselines, same run (NPU latency drifts between sessions) ---
+  cut CNN backbone, CPU  (like-for-like vs NPU) mean    5.65 ms   median    5.66   p95    6.37   min    4.81
+  FULL model FP32, ORT CPU EP                  mean    7.51 ms   median    7.48   p95    8.40   min    6.45
+
+building NPU session for the stock 49-subgraph graph ...
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\mobilevit_stock
+First run compiles the model. It takes a while and looks frozen. It isn't.
+  FULL model XINT8, stock graph on NPU         mean  108.29 ms   median  108.49   p95  109.34   min  106.29
+
+--- EP placement, read fresh from this run's own reports ---
+  mobilevit_cut: nodes {'all': 409, 'NPU': 407, 'VITIS_EP_CPU': 2}   subgraphs {'DPU': 1}
+  mobilevit_stock: nodes {'all': 1585, 'CPU': 156, 'NPU': 1037, 'VITIS_EP_CPU': 392}   subgraphs {'DPU': 58}
+
+=== VERDICT ===
+  splice (cost model)             3.25 ms
+  vs FULL model FP32 ORT CPU      7.51 ms   -> 2.31x
+  vs FULL model XINT8 NPU       108.29 ms   -> 33.30x
+  backbone alone: NPU 1.71 vs CPU 5.65 ms  -> 3.30x (like-for-like, the honest CNN number)
+  attention on CPU is 1.41 ms of the 3.25 ms total (43%), using torch
+  with the naive numpy attention instead the same splice is 14.57 ms -> 0.52x, i.e. it LOSES to plain CPU.
+  The CPU-side kernel choice, not the NPU, decides the verdict here.
+
+  Reminder: the FP32-CPU comparison is the apples-to-apples one (same ORT,
+  same machine, same run). A PyTorch full-model baseline is a different
+  measurement and must not be swapped in for this one.
+
+=== Addendum: where the old "18.37 ms CPU baseline" came from ===
+Run separately in resnet_env (timm is not installed in resnet_env17), same
+machine, same session date. Desktop 2 / Phoenix, Ryzen 7 8700G.
+
+  torch 2.4.1+cpu, 8 threads
+  PyTorch eager FP32 full model: mean 15.71 ms  median 15.24  min 13.94
+
+The previously published splice speedup ("4.1x vs full CPU 18.37 ms") compared an
+ORT-executed splice against a PyTorch-eager full-model baseline. Those are two
+different runtimes. Measured on the same runtime as the splice, the full FP32
+model under the ORT CPU EP is 7.51 ms (see above), so the honest like-for-like
+speedup is 2.31x, not 4.1x. The 15.71 ms here is consistent with the old 18.37 ms
+figure once run-to-run drift is allowed for -- the baseline was not wrong as a
+PyTorch number, it was wrong as the thing to compare against.

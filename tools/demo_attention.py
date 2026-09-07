@@ -3,9 +3,10 @@
 Demonstrates:
   1. Hand-written fused BF16 Multi-Head Attention kernel running across 8 physical AIE2 cores
      using row-wise FlashAttention streaming and 16-lane native SIMD vectorization.
-  2. Cut CNN backbone executing on physical Phoenix NPU via VitisAI EP (1 single subgraph, 407 nodes, 1.73 ms).
+  2. Cut CNN backbone executing on physical Phoenix NPU via VitisAI EP (1 single subgraph, 407 nodes, 1.71 ms).
   3. Real ImageNet golden tensor numerical verification (<1% relative L2 error) and top-1 classification.
-  4. Measured in-process heterogeneous spliced pipeline (NPU CNN + CPU Attn) achieving 4.47 ms wall-clock (4.1x faster than CPU 18.37 ms).
+  4. Heterogeneous splice figures (NPU CNN + CPU Attn), 3.25 ms / 2.31x vs the ORT CPU EP.
+     Those are MEASURED BY tools/splice_wall_clock.py, not by this demo -- run that for the number.
 
 Usage:
   python tools/demo_attention.py
@@ -27,8 +28,15 @@ RESNET_ENV17_PYTHON = r"C:\Users\Ignis\miniforge3\envs\resnet_env17\python.exe"
 RESNET_ENV_PYTHON = r"C:\Users\Ignis\miniforge3\envs\resnet_env\python.exe"
 GOLDEN_BASE = REPO_ROOT / "data" / "golden"
 MODEL_PATH = REPO_ROOT / "models" / "mobilevit_cut_backbone_xint8.onnx"
-CACHE_DIR = REPO_ROOT / "modelcachekey"
-CACHE_KEY = "mobilevit_cut"
+# Cache lives at the repo root like every other compile cache here, and the key
+# comes from npu.paths so this can never drift from tools/splice_wall_clock.py.
+# This used to be REPO_ROOT/"modelcachekey" with the same key, which nested a
+# second copy of the MobileViT compile inside resnet50's cache directory.
+sys.path.insert(0, str(REPO_ROOT))
+from npu.paths import MOBILEVIT_CUT_CACHE_KEY  # noqa: E402
+
+CACHE_DIR = REPO_ROOT
+CACHE_KEY = MOBILEVIT_CUT_CACHE_KEY
 DEFAULT_IMAGE = REPO_ROOT / "data" / "calib" / "000000.jpg"
 LABELS_FILE = REPO_ROOT / "data" / "calib" / "labels.json"
 
@@ -173,7 +181,7 @@ print(json.dumps({{
         res = json.loads(lines[-1])
         print(f"    VitisAI EP Partitioning: {res['subgraphs']} NPU subgraph, {res['npu_nodes']} nodes assigned to NPU")
         print(f"    Measured NPU Latency:   {res['mean_ms']:.2f} ms (min: {res['min_ms']:.2f} ms)")
-        print(f"{GREEN}{BOLD} OK  Cut CNN Backbone Running 100% on NPU at {res['mean_ms']:.2f} ms (3.2x faster than CPU 5.52 ms){RESET}\n")
+        print(f"{GREEN}{BOLD} OK  Cut CNN Backbone Running 100% on NPU at {res['mean_ms']:.2f} ms (3.30x faster than CPU 5.65 ms){RESET}\n")
         return res
     except Exception as e:
         print(f"{RED}Failed to parse backbone output: {e}\n{proc.stdout}{RESET}")
@@ -181,7 +189,7 @@ print(json.dumps({{
 
 
 def run_top1_verification(image_path: Path):
-    print(f"{BOLD}{BLUE}==> [3/4] Evaluating MobileViT XXS Top-1 Prediction & Parity...{RESET}")
+    print(f"{BOLD}{BLUE}==> [3/4] PyTorch FP32 checkpoint sanity check (CPU only, no NPU, no quantized model)...{RESET}")
 
     eval_script = f"""
 import json, os
@@ -248,15 +256,16 @@ print(json.dumps({{
 def print_comparison_table(aie_res, backbone_res):
     print(f"{BOLD}{CYAN}==> [4/4] Empirical Findings & Architecture Comparison{RESET}\n")
 
-    # NOTE: every constant below except backbone_ms comes from a prior session's
-    # scrollback, NOT from a results/ log, and none of it is measured by this demo.
-    # In particular the spliced total is a REPORTED figure, not a wall clock this
-    # script takes -- it runs no spliced loop. Labelled as such in the table.
-    backbone_ms = backbone_res["mean_ms"] if backbone_res else 1.73
-    backbone_cpu_ms = 5.35
+    # These now come from a real logged run -- tools/splice_wall_clock.py,
+    # results/mobilevit/splice_wall_clock_npu.log (100 iters, Desktop 2 / Phoenix).
+    # This demo still does not run a spliced loop itself; run that tool for the
+    # measurement rather than trusting these as live numbers.
+    backbone_ms = backbone_res["mean_ms"] if backbone_res else 1.71
+    backbone_cpu_ms = 5.65
     cpu_attn_stage3_8h_ms = 0.034
-    cpu_attn_all_ms = 2.03
-    reported_splice_ms = 4.47
+    cpu_attn_all_ms = 1.41          # torch, 8 threads; numpy is 12.73 (9x)
+    splice_ms = 3.25                # measured wall clock
+    cpu_full_ort_ms = 7.51          # full FP32 under the ORT CPU EP -- the honest baseline
 
     print(f"{BOLD}--- 1. Cut CNN Backbone (Identical 407-node graph on both devices) ---{RESET}")
     print(f"+----------------------------------+-------------------+-----------------+-----------------------+")
@@ -286,16 +295,21 @@ def print_comparison_table(aie_res, backbone_res):
     print(f"+--------------------------------------+---------------------+-------------------+---------------------+")
     print(f"| Architecture Pipeline                | Device Mapping      | Measured Latency  | Note                |")
     print(f"+--------------------------------------+---------------------+-------------------+---------------------+")
-    print(f"| Stock VitisAI EP Baseline (Quantized)| 49 NPU Subgraphs    | 108.00 ms         | Severe thrashing    |")
-    print(f"| Full Zen4 CPU Baseline (FP32)        | 8 Zen4 CPU Cores    |  18.37 ms         | PyTorch full model  |")
+    print(f"| Stock VitisAI EP Baseline (Quantized)| 58 DPU Subgraphs    | 108.29 ms         | Severe thrashing    |")
+    print(f"| Full Zen4 CPU Baseline (FP32, ORT)   | 8 Zen4 CPU Cores    |  {cpu_full_ort_ms:5.2f} ms         | like-for-like base  |")
+    print(f"|   same model, PyTorch eager instead  | 8 Zen4 CPU Cores    |  15.71 ms         | NOT the baseline    |")
     print(f"| Full NPU (with AIE Attention Kernel) | Phoenix NPU         |  >120 ms (est.)   | Loses to stock EP   |")
-    print(f"| {YELLOW}Heterogeneous Splice (REPORTED)     {RESET} | {YELLOW}NPU CNN + CPU Attn  {RESET}| {YELLOW}{reported_splice_ms:5.2f} ms (unver.) {RESET}| {YELLOW}no results/ log yet {RESET}|")
+    print(f"| {GREEN}Heterogeneous Splice (MEASURED)     {RESET} | {GREEN}NPU CNN + CPU Attn  {RESET}| {GREEN}{splice_ms:5.2f} ms          {RESET}| {GREEN}{cpu_full_ort_ms/splice_ms:4.2f}x vs ORT CPU     {RESET}|")
     print(f"+--------------------------------------+---------------------+-------------------+---------------------+")
-    print(f"  * {YELLOW}The {reported_splice_ms:.2f} ms splice figure is REPORTED, not measured here.{RESET} This demo runs no spliced")
-    print(f"    loop; the number is a constant carried over from a prior session with no results/ log")
-    print(f"    behind it. Treat as unverified until a perf_counter run around the real loop is logged.")
-    print(f"    Does NOT use the AIE attention kernel. Cross-process IPC handoff (measured in")
-    print(f"    groupnorm_bf16 at 789 us - 23.6 ms) would erase these gains if crossing Python ABI boundaries.\n")
+    print(f"  * Measured by tools/splice_wall_clock.py (results/mobilevit/splice_wall_clock_npu.log),")
+    print(f"    NOT by this demo: {backbone_ms:.2f} ms NPU backbone + {cpu_attn_all_ms:.2f} ms CPU attention, in-process residual")
+    print(f"    only +0.13 ms. Supersedes a published 4.47 ms / 4.1x, which was a hardcoded constant")
+    print(f"    compared against a PyTorch-eager rather than an ORT CPU baseline.")
+    print(f"  * {YELLOW}COST MODEL, not a pipeline:{RESET} the cut CNN is a whole [1,3,256,256]->[1,1000] classifier")
+    print(f"    with the transformer blocks deleted, so the halves are unconnected and compute nothing")
+    print(f"    valid. Does NOT use the AIE attention kernel. {YELLOW}The CPU kernel decides the verdict:{RESET}")
+    print(f"    with numpy instead of torch the same splice is 14.57 ms = 0.52x, i.e. it LOSES to CPU.")
+    print(f"    Cross-process IPC handoff (groupnorm_bf16: 789 us - 23.6 ms) would erase the gain too.\n")
 
 
 def main():

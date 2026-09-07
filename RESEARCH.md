@@ -1007,15 +1007,40 @@ been closed:
   sequence length ($N \ge 2048$) of LLMs needed to overcome AIE2 launch and DMA sequencing overhead.
   Running the full model on NPU with this kernel takes >120 ms.
 
-  **Heterogeneous splice — reported but NOT backed by a log.** Leaving attention on CPU
-  and running the cut CNN on NPU in one process was reported at **4.47 ms** vs 18.37 ms
-  full-CPU. That figure is a hardcoded constant in `tools/demo_attention.py`
-  (`measured_splice_ms = 4.47`) and its "0.72 ms in-process handoff residual" is
-  back-solved as `4.47 - (backbone + 2.03)`, not measured; the demo never runs a spliced
-  loop. Unverified until a `perf_counter` run around the real loop lands in `results/`.
-  Certain regardless: this pipeline does NOT use the AIE attention kernel, and splitting
-  it across processes (the python 3.12 vs 3.13 pyxrt ABI wall) would meet the
-  `groupnorm_bf16` IPC floor (789 µs–23.6 ms) and lose the margin outright.
+  **Heterogeneous splice: now measured at 3.25 ms / 2.31x, replacing the reported
+  4.47 ms / 4.1x.** `tools/splice_wall_clock.py` wraps a `perf_counter` around a real
+  in-process loop; every row below comes from the same run, since NPU latency drifts
+  between sessions on this machine (`results/mobilevit/splice_wall_clock_npu.log`,
+  100 iterations, Desktop 2 / Phoenix):
+
+      cut CNN backbone, NPU                    1.71 ms   (407/409 nodes, 1 subgraph)
+      cut CNN backbone, CPU                    5.65 ms   -> 3.30x like-for-like
+      attention x9 blocks, CPU (torch, 8 thr)  1.41 ms
+      SPLICE (NPU backbone + CPU attention)    3.25 ms   residual +0.13 ms
+      full model FP32, ORT CPU EP              7.51 ms   -> splice 2.31x
+      full model XINT8, stock graph on NPU   108.29 ms   (1037/156/392, 58 subgraphs)
+
+  Three things change. (1) **The in-process residual is 0.13 ms, not 0.72** -- the old
+  number was back-solved from a hardcoded total; real in-process handoff is nearly free.
+  (2) **The speedup is 2.31x, not 4.1x**: the old 18.37 ms baseline was PyTorch eager
+  while the splice ran under ORT. Measured here, PyTorch eager is 15.71 ms (consistent
+  with 18.37 after drift) but ORT CPU runs the same FP32 graph in 7.51 ms, so comparing
+  an ORT splice against a PyTorch baseline inflated the win ~1.8x. (3) The 108.00 ms
+  stock-EP claim **reproduced almost exactly** at 108.29 ms, as did the 1.73 ms backbone
+  and its 1-subgraph placement.
+  **The CPU-side kernel choice, not the NPU, decides the verdict.** The same nine blocks
+  cost 1.41 ms in torch and 12.73 ms in numpy -- 9x, from multithreaded batched GEMM and
+  a fused softmax. With numpy the identical splice is 14.57 ms, i.e. **0.52x -- it loses
+  to plain CPU.** Every "the NPU wins" claim about a heterogeneous pipeline is partly a
+  claim about which CPU implementation it was allowed to beat, and this repo should state
+  which one it used.
+  **It is a cost model, not a pipeline.** `mobilevit_cut_backbone_xint8.onnx` is
+  `[1,3,256,256] -> [1,1000]`: a complete classifier with the transformer blocks deleted,
+  not a backbone emitting intermediates for an attention stage. Nothing connects the two
+  halves and the composite computes nothing valid (the quantized backbone is 0% top-1 by
+  itself). That is also all the 4.47 ms ever meant. It does NOT use the AIE attention
+  kernel, and splitting it across processes (the python 3.12 vs 3.13 pyxrt ABI wall)
+  would meet the `groupnorm_bf16` IPC floor (789 µs-23.6 ms) and lose the margin outright.
 
 - **Follow-up: MobileViT-XXS collapses under per-tensor INT8, and the cause is the
   depthwise scale grid — not channel death, and not activation range.** Measured on the

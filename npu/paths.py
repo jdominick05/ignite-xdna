@@ -20,3 +20,10 @@ YOLO_POSE_CUT_CACHE_KEY = "yoloposecutcachekey"
 # Same model, the 1-column overlay instead of 4x4 (tools/multi_partition_bench.py)
 # -- its own key so a 1x4 compile can never collide with the 4x4 one above.
 YOLO_CUT_1X4_CACHE_KEY = "yolocut1x4cachekey"
+# MobileViT: the attention-free CNN (mobilevit_cut_backbone_xint8.onnx) and the
+# stock 49-subgraph graph. Both sit at the repo root like every key above.
+# tools/demo_attention.py and tools/pipeline_splice_bench.py once hardcoded
+# cacheDir=ROOT/modelcachekey with cacheKey=mobilevit_cut, nesting a second copy
+# inside resnet50's cache -- use these constants, not a hand-rolled dict.
+MOBILEVIT_CUT_CACHE_KEY = "mobilevit_cut"
+MOBILEVIT_STOCK_CACHE_KEY = "mobilevit_stock"
