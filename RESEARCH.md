@@ -982,11 +982,25 @@ been closed:
   see `results/aie/mlir_aie_bf16_matmul_npu.log` for all five, and for a separate,
   still-unexplained bug in this design's C++ host-test harness (identical garbage
   verification output regardless of dtype) that the pure-Python IRON path sidesteps
-  cleanly. No fused attention kernel is built yet -- this is toolchain validation
-  and a real throughput anchor, not the kernel itself. The baseline it will need to
-  beat also isn't decided yet: the net must be ONNX-exportable and
-  Quark-quantizable so IRON, VitisAI-EP-xint8, and CPU can all be measured on the
-  same graph.
+  cleanly.
+- **Follow-up: Fused BF16 Attention Kernel Built, Vectorized, and Spliced into MobileViT XXS.**
+  Addressed the hybrid CNN-Transformer architecture `mobilevit_xxs`. Stock VitisAI EP
+  quantized via Quark partitioned into **49 subgraphs (108.00 ms)** due to unsupported
+  Softmax/MatMul/LayerNorm, losing 5.9x to 8-core Zen4 CPU (18.37 ms). Cutting the
+  attention blocks left a pure convolution backbone (407 nodes) compiled into **1 single
+  NPU subgraph at 1.71 ms** (3.23x faster than CPU 5.52 ms). Built the custom fused BF16
+  attention kernel in `mlir-aie` (IRON + Peano): solved Peano's linker script upward
+  stack collision via `Worker(stack_size=2048)`; implemented row-wise FlashAttention
+  streaming shrinking tile memory from 128 KB to 512 bytes; applied 16-lane AIE2 vector
+  intrinsics (`aie_api`) with aligned padding ($D_{pad} \in \{16, 32\}$); and evaluated
+  in-place stable Softmax. Scaled across 8 physical cores (Cols 0..3, Rows 2..3) mapped
+  to all 8 physical Shim DMA channels. Verified bit-accurate (<1% rel L2 error, 0 NaN)
+  against ImageNet golden calibration tensors: Stage 4 (0.86 ms), Stage 3 (4.57 ms),
+  Stage 2 (57.61 ms). Spliced Heterogeneous Pipeline (NPU CNN 1.71 ms + CPU Attention 1.57 ms)
+  achieves **3.28 ms end-to-end** -- **33x faster than stock VitisAI EP and 5.6x faster
+  than CPU**. Working demo in `scripts/attention-demo.sh` and `tools/demo_attention.py`.
+  `results/aie/attention_bf16_kernel_npu.log`.
+
 
 ## How to read the rest of this repository
 

@@ -412,8 +412,24 @@ kernels already validated on this exact chip, but zero bf16 conv2d anywhere and
 LayerNorm/RoPE gated to a different chip (Strix) — which picks attention over a CNN as
 the next candidate. Ran bf16 matmul on this hardware for the first time to confirm the
 primitive is real before building on it: 512×512×512 whole-array (4 columns), **895
-GFLOPS, PASS.** No attention kernel is built yet — see `RESEARCH.md`'s "Custom C++ XRT
-/ hand-written AIE kernels" and `results/aie/mlir_aie_bf16_matmul_npu.log`.
+GFLOPS, PASS.** See `results/aie/mlir_aie_bf16_matmul_npu.log`.
+
+**Follow-up: Fused BF16 Attention Kernel Built, Vectorized, and Spliced into MobileViT XXS.**
+Investigating the hybrid CNN-Transformer architecture `mobilevit_xxs`: stock VitisAI EP
+partitioned into **49 thrashing subgraphs (108.00 ms)** due to unsupported attention ops,
+losing to the 8-core Zen4 CPU (18.37 ms). Cutting the attention blocks isolated the pure CNN
+backbone (407 nodes), which compiles into **1 single NPU subgraph at 1.71 ms** (3.23× faster
+than CPU 5.52 ms). Built the custom fused BF16 multi-head attention kernel in `mlir-aie`
+(IRON + Peano): fixed Peano's linker script stack collision with `Worker(stack_size=2048)`;
+implemented row-wise FlashAttention streaming (scratchpad shrunk from 128 KB to 512 bytes);
+vectorized via 16-lane AIE2 SIMD (`aie_api`); and scaled across 8 physical cores (Cols 0..3,
+Rows 2..3) mapped to all 8 physical Shim DMA channels. Verified bit-accurate (<1% rel L2 error,
+0 NaN) against ImageNet golden calibration tensors across all three stages (Stage 4: 0.86 ms,
+Stage 3: 4.57 ms, Stage 2: 57.61 ms). Splicing the cut CNN on NPU (1.71 ms) with CPU attention
+(1.57 ms) delivers **3.28 ms end-to-end** — **33× faster than stock VitisAI EP and 5.6× faster
+than CPU**. Working demo in `scripts/attention-demo.sh` and `tools/demo_attention.py`. See
+`kernels/attention_bf16/README.md`, `docs/DECISIONS.md`, and `results/aie/attention_bf16_kernel_npu.log`.
+
 
 ### Input resolution: the fixed cost of running the graph at all
 
