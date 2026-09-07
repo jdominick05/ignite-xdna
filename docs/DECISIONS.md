@@ -342,6 +342,14 @@
   `physical_device.dll` is still genuinely absent everywhere checked — but custom-kernel
   bring-up on this hardware is not actually blocked, only through a different toolchain
   than this project's own pipelines use. See `results/aie/mlir_aie_saxpy_npu.log`.
+  **Update:** ran three more of mlir-aie's own tutorial designs from a cleared compile
+  cache to check the result wasn't specific to SAXPY's single elementwise core — a
+  multi-column memcpy bandwidth microbenchmark (56.19 GB/s effective), a 4-core
+  single-column reduce-max cascade (cross-core control flow, not just parallel
+  elementwise), and a single-core int16 matmul at two shapes via the AOT `.compile()`
+  path (two distinct on-disk `.xclbin`s, confirmed not reused across shapes). All
+  `PASS!`. Same conclusion as above, now on broader IRON-surface evidence. See
+  `results/aie/mlir_aie_examples_npu.log`.
 
 ## The YOLOv8 partitioning failure (resolved)
 

@@ -785,6 +785,24 @@ been closed:
   Closes the "is custom-kernel bring-up possible on this hardware" question with a
   measured yes, via a different door than the one that was walled off.
 
+  **Follow-up: three more `programming_examples/getting_started` designs, same result.**
+  SAXPY is the simplest design in mlir-aie's own tutorial set, so it left open whether the
+  result generalizes. From a cleared compile cache, three more designs were run and all
+  `PASS!`ed: `00_memcpy` (a multi-column DMA-bound bandwidth microbenchmark, every shim DMA
+  in/out pair on the device, 56.19 GB/s effective NPU-side bandwidth on 64 MiB round-trip);
+  `02_vector_reduce_max` (a 4-core single-column cascade — each core reduces a quarter of
+  the input and forwards its running max to the next core, exercising cross-core control
+  flow, not just parallel elementwise work); and `03_matrix_multiplication_single_core`
+  (int16 matmul at two shapes, 256³ and 512³, via the design's opt-in AOT path —
+  `.specialize(...).compile()` produces distinct on-disk xclbin/insts artifacts for each
+  shape before either kernel runs, confirmed by two differently-sized `final.xclbin`s in
+  the compile cache, not one reused across both). Full stdout and cache-directory evidence
+  in `results/aie/mlir_aie_examples_npu.log`. This broadens the exercised IRON surface
+  (`ObjectFifo` split/forward, multi-core `Worker` cascades, `TaskGroup`-scoped multi-tile
+  DMA, AOT `compile()`) well past SAXPY's single elementwise core, with the same
+  conclusion: still a different toolchain from this project's own pipelines, not a reason
+  to move off Quark/VitisAI EP for quantized-model inference.
+
 ## How to read the rest of this repository
 
 If you want *what works and how fast*: `README.md`.

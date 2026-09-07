@@ -1,0 +1,91 @@
+Follow-up to mlir_aie_saxpy_npu.log, which brought up the mlir-aie/Peano toolchain
+(v1.4.2, conda env mlir-aie-iron, C:\Users\<user>\mlir-aie) and ran one hand-written
+kernel (SAXPY) on this hardware. This log runs three more of mlir-aie's own
+programming_examples/getting_started designs -- the tutorial progression SAXPY (01) sits
+inside -- to check whether that result generalizes past the single simplest kernel, or
+whether SAXPY happened to be the one easy case.
+
+Cleared ~/.npu/cache before this round (rm -rf ~/.npu/cache) so all four compiles below
+are fresh, not cache hits. Activated via mlir-aie's own iron_env.ps1 (PowerShell, not
+Git Bash -- the generated activation script is .ps1/.cmd only).
+
+--- 00_memcpy/memcpy.py ---
+
+Multi-column memcpy microbenchmark: every shim DMA in/out pair on the device (2 columns x
+2 channels), each running the library passthrough kernel, moving 16,777,216 int32
+elements (64 MiB) round-trip, 1 warmup + 5 timed iterations. Verified byte-identical
+against the input via assert_pass. stdout:
+
+  NPU time     (avg/min/max us): 2388.5 / 2304.7 / 2499.9
+  End-to-end   (avg/min/max us): 3128.0 / 2905.9 / 3280.3
+  Effective bandwidth (NPU avg): 56.19 GB/s
+  PASS!
+
+Cache dir 8ddaa8641f35bc971fbcdb97: 2 rows x 4 cores' worth of ELFs
+(elfs_main_core_{0,1}_{2,3,4,5}), kernel source passThroughLine.cc, final.xclbin 24,056
+bytes.
+
+--- 02_vector_reduce_max/vector_reduce_max_1col.py ---
+
+4-core cascade reduce-max: input is 524,288 bytes (262,144 bf16 elements) split into
+2048-element chunks across num_iter iterations, each chunk split 4 ways across a single
+column's 4 cores; each core reduces its quarter with the reduce_max kernel and forwards
+its running max to the next core in the cascade, the last core writing the final scalar
+out. Verified against input0.numpy().max(). stdout:
+
+  PASS!
+
+Cache dir d3ba8808a200aed8e9a8780c: 4 core ELFs on row 0 (elfs_main_core_0_{2,3,4,5}),
+kernel source reduce_max_vector_bfloat16.cc, final.xclbin 17,288 bytes.
+
+--- 03_matrix_multiplication_single_core/matrix_multiplication_single_core.py ---
+
+Single-core int16 matmul, run twice at two shapes (256x256x256, then 512x512x512), tile
+size 64x64x64, using the design's opt-in AOT path: both shapes are pre-compiled to
+on-disk xclbin/insts artifacts before either kernel runs (aot_compile), then dispatched
+via the same @iron.jit-decorated call, which hits the on-disk cache instead of paying
+aiecc time again. Each result checked against np.matmul. stdout:
+
+  === AOT pre-compile phase ===
+    AOT compiled matmul 256x256x256 int16
+      xclbin: C:\Users\<user>\.npu\cache\5218f97a669d77e902cf97c2\final.xclbin
+      insts:  C:\Users\<user>\.npu\cache\5218f97a669d77e902cf97c2\insts.bin
+    AOT compiled matmul 512x512x512 int16
+      xclbin: C:\Users\<user>\.npu\cache\f66d4afda5300349c0ebeeae\final.xclbin
+      insts:  C:\Users\<user>\.npu\cache\f66d4afda5300349c0ebeeae\insts.bin
+
+  === Running matmul 256x256x256 int16 ===
+    PASS
+
+  === Running matmul 512x512x512 int16 ===
+    PASS
+
+  All variants PASS!
+
+Cache dirs 5218f97a669d77e902cf97c2 (256^3, final.xclbin 10,760 bytes) and
+f66d4afda5300349c0ebeeae (512^3, final.xclbin 11,272 bytes), each one core ELF
+(elfs_main_core_0_2), kernel source matmul_i16_i16.cc -- confirms the AOT step produced
+two genuinely distinct compiled artifacts, not one reused across both shapes.
+
+--- Conclusion ---
+
+Four different design shapes now run correctly on this machine's XDNA1 (Phoenix) NPU via
+mlir-aie/Peano: single-core elementwise (SAXPY, prior log), multi-column DMA-bound
+passthrough (memcpy), a 4-core single-column cascade with cross-core control flow
+(reduce-max), and a single-core matmul exercised at two problem sizes via both the AOT
+and JIT-cache paths. This is broader coverage of IRON's own programming model (ObjectFifo
+split/forward, Worker cascades, TaskGroup-scoped multi-tile DMA, AOT specialize().compile())
+than SAXPY alone exercised, all from a cold compile cache, all without touching
+aiecompiler_client.dll or physical_device.dll. Still not part of this repo's tracked
+pipelines -- these are hand-written kernels via a different toolchain (mlir-aie/IRON),
+not quantized-model inference via Quark/VitisAI EP.
+
+No new machine state: same mlir-aie-iron conda env, same C:\Users\<user>\mlir-aie clone
+and XRT SDK dir as mlir_aie_saxpy_npu.log; the ~/.npu/cache clear/repopulate is the only
+change, and mlir-aie's own cache, not this project's *cachekey/ directories.
+
+amd/RyzenAI-SW (the source of npu_check_compat.log) has also been relocated from
+C:\Users\<user>\RyzenAI-SW to this repo's own root (RyzenAI-SW/, gitignored) -- still not
+tracked, just co-located for convenience; no content or build output changed.
+
+Machine: Desktop 2 / Phoenix.
