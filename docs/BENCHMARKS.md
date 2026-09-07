@@ -782,6 +782,38 @@ forced m match the small-M rows to within 6% at both dtypes (int8 m=16: 585 at M
 → 64 — not token count. A prefill shorter than ~512 tokens at d_model=4096 loses at either
 dtype on this design; only a differently tiled design could change that.
 
+### bf16 GEMM at n=64: the same fix int8 used
+
+int8's `n=64` win above came from L1 headroom bf16 didn't have — bf16's own `n=64` misses
+the 65,536 B tile by exactly 3,328 B (68,864 B needed). The fix is a 13-line patch to
+`whole_array.py` (not part of this repo; lives in the local `~/mlir-aie` checkout), added
+2026-09-07: a `--c-single-buffer {0,1}` flag that drops the per-core `C_L1L2` output-tile
+FIFO from depth 2 to depth 1. That FIFO is not the A/B DMA re-stream path double-buffering
+earns its keep on — `core_fn` acquires it once, accumulates `K/k` matmuls into it, and
+releases it once per output tile, so there is no compute/compute overlap to lose, only
+compute/next-tile-DMA-out overlap this patch gives up. It frees exactly
+`m·n·dtype_out_bytes` of L1 (16,384 B at m=n=64, f32 out) — precisely the shortfall.
+
+| MxKxN | NPU bf16 GFLOPS, n=64 | vs default tile (n=32) | CPU bf16 GFLOPS (mean) | NPU/CPU bf16 |
+|---|---|---|---|---|
+| 512³ | 910.72 | 1.08× | 1309.7 | 0.70× |
+| 1024³ | 2029.93 | 1.08× | 1570.8 | 1.29× |
+| 2048³ | 2477.23 | 1.39× | 1313.7 | **1.89×** |
+| 2048×4096×4096 | 2641.41 | 1.47× | 1517.5 | 1.74× |
+
+All four PASS at this repo's standing bf16/f32 tolerance. An overlap-cost control —
+default tile (`n=32`) with `--c-single-buffer 1` at the last row's shape — reads 1740.51
+GFLOPS against 1801.18 at the normal double-buffered depth, a 3.4% loss: single-buffering
+`C_L1L2` does cost a little overlap when L1 headroom was never the constraint, which is
+what confirms the `n=64` gain above is the bigger tile reaching the array more
+efficiently, not an accident of the buffer-depth change itself.
+
+**The win margin against CPU bf16 widens from 1.19×–1.35× (default tile, the standing bf16
+GEMM headline) to 1.29×–1.89× at M, N ≥ 1024** — 2048³'s 1.89× is the largest bf16 GEMM
+margin measured in this project. 512³ still loses (0.70×, barely moved from the default
+tile's 0.65×) — the same small-shape verdict every GEMM result here has shown. See
+`results/aie/bf16_matmul_n64_single_buffer_npu.log`.
+
 **Not done, deliberately:** bf16 at `n=64` is one line away — single-buffering the C output
 FIFO (`depths=[1]`, the change that got `bottleneck.py` to 56×56) frees 16 KB — but
 `whole_array.py` is the shared upstream file another live session was running its FFN

@@ -1278,6 +1278,12 @@ sections above.
   N ≥ 2048 with `n=64` — a tile int8's half-size buffers fit in L1 and bf16's miss by the
   stack.
   [Working](docs/BENCHMARKS.md#int8-gemm-the-npus-headline-dtype-needs-a-tile-bf16-cant-fit).
+- **bf16 GEMM at `n=64`.** Single-buffering `whole_array.py`'s C output tile (a 13-line
+  patch, `--c-single-buffer 1`) frees exactly the 16 KB bf16's default double-buffer was
+  missing by. Once it fits: the CPU-bf16 win margin widens from 1.19×–1.35× (default
+  tile) to 1.29×–1.89× at M, N ≥ 1024 — 2048³'s 1.89× is the largest bf16 GEMM margin
+  measured in this project. 512³ still loses (0.70×), same as every other shape here.
+  [Working](docs/BENCHMARKS.md#bf16-gemm-at-n64-the-same-fix-int8-used).
 
 **Still open.**
 
@@ -1302,11 +1308,6 @@ sections above.
   the ceilings derived from it, and the objectives list live in
   [`docs/SILICON.md`](docs/SILICON.md); its objective S0 (measure the core clock, which
   nothing here has done) gates every per-second ceiling in that file.
-- **bf16 GEMM at `n=64`.** Misses AIE2's 64 KB L1 by exactly the 3,328 B stack;
-  single-buffering `whole_array.py`'s C output FIFO would free 16 KB. Untested because the
-  file was in use by another live session when the int8 sweep found the tile. This is
-  `docs/SILICON.md`'s objective K2 from the other direction: int8 already reaches the 64×64
-  tile and gets 1.9× for it.
 - **Longer term:** a detector fine-tuned for fixed camera feeds (licence-plate
   recognition), reusing the head-cut + XINT8 + AdaRound recipe rather than re-deriving it.
 

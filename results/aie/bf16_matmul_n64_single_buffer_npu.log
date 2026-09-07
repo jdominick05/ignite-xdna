@@ -1,0 +1,82 @@
+bf16 GEMM at n=64: closing RESEARCH.md's open item by single-buffering the C_L1L2 output tile.
+Desktop 2 (Ryzen 7 8700G / Phoenix XDNA1), 2026-09-07, mlir-aie v1.4.2, ironenv.
+
+WHY THIS EXISTS
+================
+int8_matmul_sweep_npu.log found n=64 is a strong tile for int8 (up to 1.9x the default
+tile's throughput) but bf16 at n=64 misses AIE2's ~64 KiB L1 by exactly 3,328 bytes
+(68,864 B needed vs 65,536 B available -- "'aie.tile' op Basic sequential allocation
+failed"). RESEARCH.md's roadmap named the fix and left it untested: "single-buffering
+whole_array.py's C output FIFO would free 16 KB[, but was] untested because the file
+was in use by another live session." That conflict is gone; this closes it.
+
+THE PATCH (persisted in the local ~/mlir-aie checkout, not part of this repo)
+===============================================================================
+whole_array.py's C_L1L2 fifo -- each compute core's own output-tile buffer, built by
+`c_l2l3.prod().join(..., depths=[fifo_depth] * n_aie_rows)` -- was hardcoded to
+fifo_depth=2 (the same double-buffer depth used for the A/B DMA re-stream fifos, where
+it earns its keep by overlapping the next tile's load with the current one's compute).
+C_L1L2 is different: core_fn acquires it once, zeroes it, accumulates K//k matmuls into
+it, and releases it once per output tile -- there is no compute/compute overlap to lose,
+only compute/DMA-out overlap on the *next* tile, which this patch does not preserve.
+
+Added a `--c-single-buffer {0,1}` CLI flag (default 0, so every existing invocation is
+byte-for-byte unaffected) that swaps `depths=[fifo_depth] * n_aie_rows` for
+`depths=[1] * n_aie_rows` in that one join call, threaded through `_build_design`,
+`whole_array`, `generate_taps`, `_compile_kwargs` and `_run_and_verify`. Frees exactly
+m * n * dtype_out_itemsize bytes of L1 (16,384 B at m=n=64, f32 out) -- precisely enough
+to clear the 3,328 B overflow. Full diff (13 lines, mechanical) kept alongside this log's
+commit; not reproduced here.
+
+METHOD
+======
+whole_array.py --dev npu --dtype_in bf16 --dtype_out f32 --n-aie-cols 4 --c-single-buffer 1
+Shapes: -M -K -N as tabulated. n=64 forced; m=64/k=64 (default) elsewhere. iters=10,
+warmup=3. `assert_close_with_benchmark` (bf16/f32 tolerance, this repo's standing
+correctness bar for bf16 -- not bit-exact like the int8 sweep's int32 output) on every
+run. CPU bf16 baseline is int8_matmul_sweep_npu.log's torch bf16 column, same afternoon,
+same machine (mean-wall GFLOPS, this repo's convention) -- not re-measured here.
+
+RESULTS
+=======
+bf16 n=64, --c-single-buffer 1 (all PASS):
+
+  MxKxN                m    NPU GFLOPS   default-tile NPU (n=32, double-buf)   CPU bf16 (mean)   n=64 vs CPU
+  --------------------------------------------------------------------------------------------------------
+  512x512x512          64      910.72              846.40                         1309.7            0.70x
+  1024x1024x1024       64     2029.93             1875.30                         1570.8            1.29x
+  2048x2048x2048       64     2477.23             1775.65                         1313.7            1.89x
+  2048x4096x4096       64     2641.41             1801.18                         1517.5             1.74x
+
+  (default-tile and CPU bf16 columns are int8_matmul_sweep_npu.log's TABLE 1 / CPU
+   RESULTS, same shapes, same sitting; not re-run here)
+
+Overlap-cost control -- default tile (n=32) with --c-single-buffer 1, same shape as the
+last row above: 1740.51 GFLOPS, vs 1801.18 at the default double-buffered depth -- a
+3.4% loss. This isolates the mechanism: single-buffering C_L1L2 has a small, real
+overlap cost when L1 headroom was never the constraint, confirming the n=64 gain above
+is from the larger tile reaching the array's MAC array more efficiently, not from the
+buffer-depth change itself accidentally helping.
+
+FINDING
+=======
+n=64 was memory-blocked, not throughput-blocked -- once unblocked it delivers close to
+int8's own n=64 story: NPU GFLOPS rises 8-40% over the default tile at every shape
+(846->911 at 512^3 up to 1802->2641 at 2048x4096x4096), and the **win margin against CPU
+bf16 widens from 1.19-1.35x (default tile, previously the standing bf16 GEMM headline) to
+1.29-1.89x at M,N >= 1024** -- 2048^3's 1.89x is the largest bf16 GEMM margin measured in
+this project to date. 512^3 still loses (0.70x, a marginal improvement on the default
+tile's 0.65x but the same verdict) -- consistent with every prior bf16/int8 GEMM result
+in this repo: small shapes lose regardless of tile choice.
+
+This closes RESEARCH.md's "bf16 GEMM at n=64" open item. Read together with
+docs/SILICON.md's objective K2 (int8 already reached the 64x64 tile) and
+int8_matmul_sweep_npu.log's TABLE 1 (dtype-blind default-tile ceiling): both dtypes were
+bound by the *same* generic-tiling default, not a dtype-specific limit, and both clear it
+the same way -- a bigger n at the cost of L1 headroom that has to be found somewhere.
+
+Not tested: n=64 combined with c_col_maj or b_col_maj; m=128 (now that 16 KiB is free,
+worth checking whether it alone, or m=128+n=64 together, fits); the M-edge/prefill shapes
+(128/256x4096x4096) at n=64+single-buffer, where int8's TABLE 2 showed the tile is
+m-bound, not M-bound, and this patch does not touch m; int8 with --c-single-buffer
+(int8's own n=64 already fits without it, so no expected gain, not measured to confirm).

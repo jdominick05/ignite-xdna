@@ -258,8 +258,20 @@ almost everywhere** and runs only 1.1–1.5× the bf16 rate; **`n=64`, which int
 tiles leave L1 room for and bf16's do not (bf16 misses by exactly the 3,328 B stack),
 doubles it bit-exact to 4448–4607 GOPS** — a **1.10×–1.83× NPU win at M ≥ 512, N ≥ 2048**
 by the mean, thin enough that the CPU kernel's best-case time takes back the K=N=4096 rows. The
-small-M loss tracks the forced tile `m`, not token count. Not done: bf16 at `n=64` via a
-single-buffered C FIFO (`whole_array.py` was in use by another live session).
+small-M loss tracks the forced tile `m`, not token count.
+
+**`bf16_matmul_n64_single_buffer_npu.log`** — closes the item above. A 13-line patch to
+`whole_array.py` (not part of this repo; lives in the local `~/mlir-aie` checkout) adds
+`--c-single-buffer {0,1}`, dropping the per-core `C_L1L2` output-tile FIFO from depth 2 to
+1 — that fifo has no compute/compute overlap to lose (`core_fn` acquires it once per
+output tile), only compute/next-tile-DMA-out overlap this gives up, and it frees exactly
+`m·n·dtype_out_bytes` of L1 (16,384 B at m=n=64, f32 out) — precisely bf16 `n=64`'s
+3,328 B shortfall. Result: **the CPU-bf16 win margin widens from 1.19×–1.35× (default
+tile) to 1.29×–1.89× at M, N ≥ 1024** — 2048³'s 1.89× is the largest bf16 GEMM margin
+measured in this project — while 512³ still loses (0.70×, barely moved from 0.65×). An
+overlap-cost control (default tile with `--c-single-buffer 1` at the same shape) reads
+1740.51 vs 1801.18 GFLOPS at the normal double-buffered depth, a 3.4% loss confirming the
+gain above is the bigger tile, not an accident of the buffer-depth change.
 
 ## Dispatch floor and the int8 conv verdict
 

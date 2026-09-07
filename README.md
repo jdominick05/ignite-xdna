@@ -179,11 +179,11 @@ Outcomes, mostly negative and all measured:
   7B-model projection shape** (M2048/K4096/N4096, 1.33×) — but a real FFN hinges on
   `d_ff`'s factorization: Llama-2-7B (`d_ff=11008`) flips it to **1.10× CPU**, Mistral-7B
   (`d_ff=14336`) keeps **1.13× NPU**. `attention_bf16`'s own kernel never had this bug.
-- **int8 GEMM wins too, but only with a tile bf16 can't fit.** At the default tile the
-  NPU's headline dtype **loses** to the CPU's own int8 kernel (torch `_int_mm`) almost
-  everywhere; int8's half-size tiles leave L1 room for `n=64`, which doubles it, bit-exact,
-  to **4448–4607 GOPS**, 2.5× bf16's, and a **1.10×–1.83× win at M ≥ 512, N ≥ 2048** —
-  thin (the CPU's best case takes back the K=N=4096 rows); prefill under ~512 tokens loses.
+- **int8 GEMM wins too, but only with a tile bf16 couldn't fit — until it could.** At the
+  default tile the NPU's headline dtype **loses** to CPU's own int8 kernel almost
+  everywhere; `n=64` fits int8's half-size tiles for **4448–4607 GOPS**, a **1.10×–1.83×
+  win at M ≥ 512, N ≥ 2048** (thin at K=N=4096; prefill loses). Single-buffering the C
+  output tile frees bf16's own missing 16 KB too, widening its `n=64` win to **1.29×–1.89×**.
 - **Int8 conv loses, and the op class is closed.** NPU marginal throughput 146.1 GOPS
   against the CPU's 819.0; at ResNet50's real 56×56 conv2_x shape the CPU wins **12.75×**.
 - **bf16 attention for MobileViT loses by 71×–240×**, and its recorded diagnosis was
