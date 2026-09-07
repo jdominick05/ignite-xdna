@@ -402,6 +402,19 @@ payoff does not, absent an unbuilt cross-node batching scheme to amortize the
 per-call floor. The full model's top-1 with bf16 in these nodes is now moot until
 that scheme exists.
 
+**Follow-up: this was the wrong shape of op for bf16, so the next check is a
+compute-bound one instead.** GroupNorm has no arithmetic intensity — bf16 there only
+ever bought a smaller payload, never a faster MAC, which is why the fixes above kept
+moving a boundary cost around instead of the real constraint. Checked what a fused
+self-attention block (QK²ᵀ → softmax → PV, one xclbin, no host round-trip) would take:
+mlir-aie has real bf16 matmul, eltwise, activations, scale_shift, softmax, and swiglu
+kernels already validated on this exact chip, but zero bf16 conv2d anywhere and
+LayerNorm/RoPE gated to a different chip (Strix) — which picks attention over a CNN as
+the next candidate. Ran bf16 matmul on this hardware for the first time to confirm the
+primitive is real before building on it: 512×512×512 whole-array (4 columns), **895
+GFLOPS, PASS.** No attention kernel is built yet — see `RESEARCH.md`'s "Custom C++ XRT
+/ hand-written AIE kernels" and `results/aie/mlir_aie_bf16_matmul_npu.log`.
+
 ### Input resolution: the fixed cost of running the graph at all
 
 The n-vs-s table says width is cheap. This one asks the complementary question — is the
