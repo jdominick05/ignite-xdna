@@ -1,0 +1,83 @@
+bf16 GEMM at a real transformer-projection shape (M=2048, K=4096, N=4096) --
+the follow-up bf16_matmul_k_limit_diagnosed_npu.log's own closing line asked for:
+does the K-limit fix hold at LLM scale, not just the isolated 512x512x512 anchor
+or the small bisection shapes used to diagnose it?
+Desktop 2 (Ryzen 7 8700G / Phoenix XDNA1), 2026-09-07, mlir-aie v1.4.2, ironenv (NPU)
++ resnet_env (CPU baseline, torch 2.4.1+cpu).
+
+WHY THIS SHAPE
+==============
+K=4096 is chosen deliberately: it is past the old "K >= 3072 fails" boundary
+(bf16_matmul_niche_npu.log) that bf16_matmul_k_limit_diagnosed_npu.log traced to
+the K-reduction loop accumulating in a dtype_out-typed buffer instead of fp32, fixed
+for free with --dtype_out f32. M=2048 (tokens) x K=4096 (d_model) x N=4096 (output
+dim) is representative of a QKVO or gate/up projection in a 7B-class transformer
+(Llama-2-7B: d_model=4096; Mistral-7B: d_model=4096) -- a real production contraction
+dimension, not a synthetic large K chosen just to clear the old ceiling.
+
+METHOD
+======
+NPU: whole_array.py (~/mlir-aie/programming_examples/basic/matrix_multiplication/
+whole_array/), 4 columns, --dtype_in bf16 --dtype_out f32, default tile sizes
+(m=64, k=64, n=32), 5 iters / 2 warmup. Verified PASS by the script's own
+assert_close_with_benchmark against numpy A@B (fp32 reference), not just timed.
+
+  cd ~/mlir-aie/programming_examples/basic/matrix_multiplication/whole_array
+  python whole_array.py --dev npu --dtype_in bf16 --dtype_out f32 \
+      -M 2048 -K 4096 -N 4096 --n-aie-cols 4 --iters 5 --warmup 2
+
+CPU: kernels/bf16_matmul_sweep/cpu_matmul_sweep.py (already in this repo, the same
+tool bf16_matmul_niche_npu.log used), torch 2.4.1+cpu, resnet_env, same MxKxN shape,
+10 iters / 3 warmup, both fp32 and bf16 dtype:
+
+  conda activate resnet_env
+  python kernels/bf16_matmul_sweep/cpu_matmul_sweep.py --shapes 2048x4096x4096 \
+      --iters 10 --warmup 3
+
+RESULTS
+=======
+NPU (whole_array, 4 columns, bf16 in / f32 out):
+  NPU time     (avg/min/max us): 38678.5 / 37998.5 / 39533.7
+  End-to-end   (avg/min/max us): 39608.7 / 38941.7 / 40537.8
+  NPU GFLOPS                    : 1776.68
+  PASS!
+
+CPU (torch, this machine's Zen4 cores, single process):
+                MxKxN      MFLOP    mean ms     min ms     GFLOPS
+  --- fp32 ---
+       2048x4096x4096   68719.48   108.9752    94.6372      630.6
+  --- bf16 ---
+       2048x4096x4096   68719.48    51.5484    45.3550     1333.1
+
+RESULTS -- same table convention as bf16_matmul_niche_npu.log (NPU GFLOPS printed
+value vs CPU mean-wall-time bf16 GFLOPS, bf16 being the like-for-like dtype; CPU
+fp32 is for reference only, not the comparison):
+
+      MxKxN            NPU GFLOPS   CPU bf16 GFLOPS   ratio    winner
+  ---------------------------------------------------------------------
+  2048x4096x4096          1776.68           1333.1     1.33x   NPU
+
+THE FINDING
+===========
+**The win holds at production transformer scale, including past the old K ceiling.**
+1.33x sits squarely inside the 1.18x-1.78x range bf16_matmul_niche_npu.log measured
+at shapes up to K=2048/N=4096 (the largest K that design could run correctly before
+today's fix) -- there is no sign of the NPU's advantage collapsing as the shape grows
+toward what a real 7B-class model's linear projections actually use. K=4096 alone
+(this log) was previously an outright FAIL (silent ~10-13% undercount, not even a
+crash) under the bf16-output default; with --dtype_out f32 it is not just correct but
+still winning.
+
+**Caveat this shares with the niche log:** GFLOPS is not the same as "worth building."
+The dispatch-floor argument in attention_bf16/README.md and dispatch_floor_npu.log
+(617us wall / 170us hardware per call) is unaffected by this result -- a real model has
+many small ops around a big matmul like this one (norms, activations, residual adds),
+and this log only measures the isolated GEMM in steady state, not a spliced pipeline.
+This is evidence the *compute kernel* is a genuine NPU strength at this scale, not
+evidence an end-to-end transformer block on this hardware would win -- that would need
+a real multi-op pipeline measurement, not attempted here.
+
+**Not tested this session:** K beyond 4096 (e.g. 8192, matching longer-context FFN
+dims in some models), attention's other two GEMM shapes (QK^T with K=head_dim~128,
+Attn@V with K=seq_len), or int8/int16 at this scale. This log is one data point
+confirming the K-fix generalizes to a realistic shape, not a full sweep.

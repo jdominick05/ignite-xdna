@@ -174,10 +174,10 @@ Outcomes, mostly negative and all measured:
 
 - **bf16 GEMM is the first genuine NPU win in this project.** 2072.5 GFLOPS at 1024³
   against CPU bf16's 1161.2 — the NPU wins 1.18×–1.78× once M/N ≥ 1024, and loses at
-  512³ (895.1 vs 1100.6). **Diagnosed:** "`K ≥ 3072` fails, undiagnosed" was the wrong
-  framing — the reduction loop accumulates in `dtype_out`, not fp32, so `--dtype_out
-  bf16` swamps small increments as K grows; `--dtype_out f32` fixes it for free, clean
-  to K=4096 tested.
+  512³ (895.1 vs 1100.6). **Diagnosed:** "`K ≥ 3072` fails, undiagnosed" was really the
+  reduction loop accumulating in `dtype_out` instead of fp32; `--dtype_out f32` fixes it
+  free, and **the win holds at a real 7B-model projection shape** (M2048/K4096/N4096,
+  1.33× NPU) — `attention_bf16`'s own kernel never had this bug.
 - **Int8 conv loses, and the op class is closed.** A bottleneck spatial sweep puts NPU
   marginal throughput at 146.1 GOPS against the CPU's 819.0; at ResNet50's real 56×56
   conv2_x shape the CPU wins **12.75×**. Reaching the real shape widened the gap.

@@ -595,9 +595,22 @@ This is the "LLM-scale, not mobile-vision" shape `attention_bf16`'s own math pre
 would be needed to make kernel quality (not dispatch overhead) the deciding factor. It
 does not by itself mean a fused attention block would win — attention is softmax plus
 two data-dependent matmuls, not one static GEMM — but the K ceiling that would have
-capped a head_dim×seq_len block near LLM scale is gone with `--dtype_out f32`; whether
-`attention_bf16`'s own kernel has the same accumulate-in-`dtype_out` pattern is
-unchecked. See `results/aie/bf16_matmul_niche_npu.log`.
+capped a head_dim×seq_len block near LLM scale is gone with `--dtype_out f32`.
+**Checked: `attention_bf16`'s own kernel does not have the bug.** Its `Attn@V` reduction
+(`attention_kernels.cc`) already accumulates into `aie::accum<accfloat,16>` — AIE2's
+native fp32 hardware accumulator — across the full loop and casts to bf16 once at the
+end, the same pattern the matmul fix required. That kernel's 71–240× loss to CPU is
+design (zero `aie::mmul` calls) and op size, not precision — no change needed there.
+
+**And the win holds at real production scale, past the old K ceiling.** M=2048,
+K=4096, N=4096 — a QKVO/gate-projection-sized contraction dim (Llama-2-7B and
+Mistral-7B both use `d_model=4096`), previously an outright FAIL under the bf16-output
+default — passes clean with `--dtype_out f32` at **1776.7 GFLOPS vs 1333.1 GFLOPS CPU
+bf16 (torch), a 1.33× NPU win**, squarely inside the 1.18×–1.78× range measured at
+smaller shapes above. See `results/aie/bf16_matmul_attention_scale_npu.log`. This is
+one GEMM in isolation, not a multi-op pipeline measurement — the dispatch-floor
+caveats below still apply to any real transformer block built from it.
+See `results/aie/bf16_matmul_niche_npu.log`.
 
 **Heterogeneous splice, now measured: 3.25 ms, and 2.31× — not the 4.47 ms / 4.1× once
 published here.** `tools/splice_wall_clock.py` puts a `perf_counter` around a real

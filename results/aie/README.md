@@ -39,7 +39,10 @@ Read these before quoting anything below.
   corrected** by `bf16_matmul_k_limit_diagnosed_npu.log`: not a threshold, and not
   undiagnosed. The K-reduction accumulates in a buffer typed `dtype_out`; with
   `--dtype_out bf16` the running sum swamps small increments as K grows. `--dtype_out
-  f32` removes the limit for free, verified clean to K=4096.
+  f32` removes the limit for free, verified clean to K=4096. `bf16_matmul_attention_
+  scale_npu.log` confirms the fix and the NPU win both hold at a real production shape
+  (K=4096), and that `attention_bf16`'s own kernel never had this bug in the first
+  place (its reduction already accumulates in AIE2's native fp32 accumulator).
 
 ## Toolchain bring-up
 
@@ -160,6 +163,16 @@ loop accumulates in a buffer typed `dtype_out`, not fp32** — `--dtype_out bf16
 the running sum back to bf16 every reduction step, swamping small increments as it
 grows. **Fix, free: `--dtype_out f32`** — clean PASS at K=2880/4096 on `whole_array`,
 1741.7/1830.2 GFLOPS, same range as the bf16-output numbers above.
+
+**`bf16_matmul_attention_scale_npu.log`** — does the fix, and the NPU win, hold at real
+scale, not just the small shapes used to bisect K? M=2048, K=4096, N=4096 (a 7B-class
+model's `d_model` contraction dim; Llama-2-7B and Mistral-7B both use 4096) — a shape
+that FAILed outright before today's fix. With `--dtype_out f32`: PASS, **1776.7 GFLOPS
+vs CPU bf16's 1333.1 (torch), a 1.33× NPU win**, in range with the smaller shapes above.
+Also checked `attention_bf16/attention_kernels.cc` for the same bug: it doesn't have
+it — its `Attn@V` reduction already accumulates in AIE2's native fp32 `accfloat`
+accumulator across the full loop, casting to bf16 only once at the end. That kernel's
+71–240× loss to CPU stays design- and size-driven (see below), not precision.
 
 ## Dispatch floor and the int8 conv verdict
 
