@@ -870,6 +870,36 @@ been closed:
   every `programming_examples` design tagged for this machine's chip (`ryzen_ai_npu1`)
   has now been tried on the actual hardware; `mobilenet` remains the one design whose
   hardware-relevant paths require a chip (Strix/npu2) this machine doesn't have.
+- **Follow-up: does any of this actually help the models this repo cares about? Not by
+  beating the quantized path's raw latency — by reaching data types XINT8 structurally
+  can't.** VitisAI EP is XINT8-or-nothing (`A16W8` falls back to CPU entirely, see
+  "LOCKED DECISIONS"); every conv-shaped IRON design tried above (`bottleneck`,
+  `conv2d`, `resnet/layers_conv2_x`) is itself int8/uint8, matching rather than
+  exceeding what Quark already gives. But `eltwise`/`eltwise_unary`/`scale_shift`/
+  `softmax`/`swiglu` (bf16) and `magika`/the `getting_started` matmul (int16) prove
+  those precisions genuinely execute on this NPU via IRON — something the standard
+  pipeline cannot do at all. That points at a narrower, real idea: hand-written kernels
+  for the specific ops XINT8 already can't reach — like `InstanceNormalization` in
+  `resnetv2_50x3_bit`, which falls back to CPU entirely (79.5% of nodes place; see
+  `results/bit/`) and is the documented reason that model loses to CPU despite being
+  this repo's best-accuracy result. Checked two things before writing any kernel code:
+  (1) a literal in-process ORT custom op calling `pyxrt` is dead — `pyxrt.pyd` hard-
+  depends on `python313.dll` (`dumpbin /dependents`), and `resnet_env17` is Python
+  3.12 — so any splice has to be a two-process pipeline; (2) that two-process design is
+  hardware-viable — a VitisAI-EP session and a separately-compiled IRON xclbin both
+  held active NPU contexts at once, in both acquisition orders, with zero contention
+  (steady 149-150 completions/s throughout a 35s hold in one direction; 8/8 IRON PASSes
+  during a session build in the other). Then profiled a real inference on
+  `resnetv2_50x3_xint8.onnx` (ORT's own `enable_profiling`) to get real per-node CPU
+  cost for all 49 `InstanceNormalization` nodes (really `GroupNorm(32)` via a reshape
+  trick — confirmed in the graph itself), grouped by their 6 distinct shapes, and
+  compared each against a DMA-floor-plus-round-trip-overhead projection. Verdict: not
+  uniform. The 3 smallest shapes (27/49 nodes, ~8.6 of the total 42.37ms CPU cost)
+  should stay on CPU — fixed per-call dispatch overhead alone matches or beats their
+  real cost. The 3 largest shapes (22/49 nodes, ~33.8ms) are real candidates, projected
+  to cut InstanceNorm's total cost from 42.37ms to roughly 28ms if a kernel hits the
+  projection — a meaningful reduction, not an elimination. No kernel written yet; full
+  numbers in `results/bit/profile_instancenorm_splice_feasibility.log`.
 
 ## How to read the rest of this repository
 

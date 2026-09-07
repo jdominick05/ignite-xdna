@@ -1,0 +1,105 @@
+Feasibility check for an idea raised after the mlir-aie/IRON custom-kernel exploration
+(results/aie/mlir_aie_*.log): resnetv2_50x3_bit's 49 InstanceNormalization nodes (really
+GroupNorm(32) exported via reshape -- see diag_resnetv2_50x3_npu.log) fall back to CPU
+entirely (VitisAI EP has no kernel for this op), and that's the documented reason NPU
+loses to CPU on this model despite 79.5% of nodes placing (results/bit/). Question: would
+a hand-written BF16 AIE kernel via mlir-aie/IRON, spliced in as a two-process pipeline
+(a literal in-process ORT custom op is ruled out -- see below), beat the CPU fallback for
+any of these nodes? Answer with real profiled numbers, not speculation, before writing a
+single line of kernel code.
+
+--- Ruled out: in-process splice ---
+
+Tested importing pyxrt (mlir-aie's XRT python binding) into resnet_env17 (the env
+onnxruntime-vitisai/ryzen-ai-1.7.1 lives in). Fails: `ImportError: DLL load failed`.
+`dumpbin /dependents` on pyxrt.pyd shows a hard dependency on `python313.dll`.
+resnet_env17 is Python 3.12.11; ironenv (where pyxrt actually works) is Python 3.13.15.
+This is a real ABI binding, not a PATH/env problem -- this specific pyxrt build can never
+load inside resnet_env17's interpreter. Rules out a literal ORT custom op calling pyxrt
+directly in the same process. Any splice has to be a two-process pipeline (separate
+processes handing off a tensor), not a single graph execution.
+
+--- Confirmed: two-process hardware co-residency works ---
+
+Tested whether a VitisAI-EP-compiled xclbin and a separately-compiled IRON/Peano xclbin
+can both hold an active NPU hardware context at once, in separate OS processes, in both
+acquisition orders:
+
+  - VitisAI EP session held busy 35s (models/yolov8n_cut_xint8.onnx, 1 stream, via
+    tools/session_hold.py) while the IRON `eltwise` design (ml/eltwise, bf16 add)
+    compiled from its JIT cache and ran to PASS! mid-window. xrt-smi sampled every 3s
+    throughout: steady 93 MB / 9 GOPS / ~149-150 completions/s, no drop, no error.
+  - Reverse order: IRON `eltwise` looped 8x back-to-back while a fresh VitisAI EP
+    session built and ran concurrently (tools/session_hold.py, 1 stream, 6s hold).
+    All 8 IRON iterations PASS!, session build unaffected.
+
+Both toolchains' XRT client stacks coexist on this device in either order. The splice
+is a viable two-process design at the hardware level.
+
+--- The actual question: does the arithmetic work? ---
+
+DMA floor: results/aie/mlir_aie_examples_npu.log measured 56.19 GB/s effective NPU
+bandwidth (00_memcpy). InstanceNorm/GroupNorm is two-pass (read once for mean/var, read
+again + write to normalize) -- at bf16, that's ~3x the single-pass byte count per node
+(2 reads + 1 write of `32 * L` elements, 2 bytes each). DMA floor = 3 * 32 * L * 2 /
+56.19e9 seconds.
+
+Round-trip floor: taken from mlir_aie_magika_mobilenet_npu.log's group2 result (455-463us
+for a 214-element output, i.e. essentially all fixed dispatch overhead, negligible real
+compute/DMA) -- the best existing real-world floor for "a small kernel, hot dispatch, no
+process-startup cost." Used as ~460us fixed overhead per call in the two-process design.
+
+Real per-node CPU cost: profiled a real inference (models/resnetv2_50x3_xint8.onnx,
+NPU EP, modelcachekey, one real preprocessed image at 448x448, ORT's own
+enable_profiling=True chrome-trace, node input_type_shape read directly off each trace
+event -- no shape-name matching needed). All 49 InstanceNormalization nodes captured,
+grouped by their 6 distinct shapes (all num_groups=32, varying only in the flattened
+spatial dimension L; norm2/norm3 in each block reuse norm1's scale/bias constants, so a
+kernel does not need a per-node constant-loading path):
+
+  shape (1,32,L)   nodes   CPU us/call   DMA floor us   +460us overhead   verdict
+  L=9408             5        117.6          32.1            492              CPU wins
+  L=18816            11       233.3          64.3            524              CPU wins
+  L=37632            11       495.8         128.6            589              CPU wins (barely)
+  L=75264            14       989.4         257.2            717              KERNEL wins by ~272us/call
+  L=150528           5       1899.3         514.4            974              KERNEL wins by ~925us/call
+  L=301056           3       3472.1        1028.8           1489              KERNEL wins by ~1983us/call
+
+Sum of measured CPU cost across all 49 nodes, one inference: 42,372.7us (42.37ms) --
+larger than this model's entire NPU-side inference budget (resnetv2_50x3_bit's own NPU
+latency isn't in this log, but resnet50 itself runs full-network in 5.68-6.9ms per
+README.md, for scale). This single op-type is the dominant cost in the CPU-fallback
+portion of this model by a wide margin.
+
+--- Verdict ---
+
+The splice idea is not uniformly true, and the profiled numbers say exactly where it
+would and wouldn't help:
+  - The three SMALLEST shapes (L=9408, 18816, 37632 -- 27 of 49 nodes, ~8.6ms of the
+    42.37ms total) should stay on CPU. Fixed per-call dispatch overhead alone (~460us)
+    already exceeds or matches their real CPU cost; a kernel there would be a net loss.
+  - The three LARGEST shapes (L=75264, 150528, 301056 -- 22 of 49 nodes, ~33.8ms of the
+    42.37ms total) are real candidates: projected kernel time (overhead + DMA floor)
+    beats measured CPU cost by 272-1983us per call, depending on shape.
+  - Best case across those 22 nodes (if a real kernel hits these projections): total
+    InstanceNorm cost across all 49 nodes would drop from 42.37ms to roughly 8.6ms
+    (unconverted, CPU) + 19.4ms (converted, projected) = ~28.0ms -- a ~34% reduction in
+    this op's total cost, not an elimination of it. The unconverted 27 small-shape nodes
+    remain the floor.
+  - This is a projection from DMA-floor + a round-trip-overhead estimate borrowed from a
+    different kernel (magika group2), not a measured result for an actual
+    GroupNorm(32) kernel -- real numbers could come in worse (kernel authoring bugs,
+    tiling/placement overhead this projection doesn't account for) or better (batching
+    multiple same-shape nodes into one dispatch, not attempted here).
+
+Next step, if pursued: author a BF16 GroupNorm(32) IRON kernel for the L=75264 shape
+only (14 nodes, the most common of the three winning shapes, and the smallest of the
+three so the least placement/tiling risk) -- no existing mlir-aie template for this op
+(ml/norm is npu2/Strix-only), so this is from-scratch kernel authoring: a two-pass
+reduction (sum, sum-of-squares per group) then an elementwise normalize-and-affine
+pass, structurally combining the reduction pattern already proven in
+getting_started/02_vector_reduce_max with the two-phase runtime-parameterized pattern
+in ml/scale_shift -- both already PASS on this hardware, but nobody has combined them
+into a per-group reduction here yet. Not attempted in this log.
+
+Machine: Desktop 2 / Phoenix.
