@@ -710,6 +710,51 @@ caches.
     underutilize the array at *this* shape, not at all shapes). The experiment that would
     settle it: run standalone `ml/bottleneck` at 32² against a larger spatial and see whether
     GOPS scales. **Do not record this as "int8 chained conv is dead."**
+    *(Superseded 2026-09-07 by the spatial sweep below — the op class IS now closed, on the
+    evidence that experiment asked for. The caution above stands as written for the state of
+    knowledge at the time; do not read it as still-open.)*
+- **int8 ResNet-bottleneck convolution on XDNA1 via mlir-aie — CLOSED, loses at every
+  compilable shape (2026-09-07).** The experiment the entry above asked for, run:
+  `kernels/bottleneck_sweep/sweep.py` sweeps one standalone `ml/bottleneck` on the NPU
+  across spatial sizes; `cpu_sweep.py` runs the identical arithmetic through ORT QDQ int8 at
+  the same shapes; both sides in one sitting per the drift invariant
+  (`results/aie/bottleneck_spatial_sweep_npu.log`, Desktop 2 / Phoenix). Every NPU shape is
+  checked against mlir-aie's own torch int8 golden before its timings are kept.
+  - **`tensor_h` is the free axis, `tensor_w` is not.** Every L1 buffer in `bottleneck.py`
+    is `tensor_w * channels` bytes; none scale with height. Sweep h, not w.
+  - **Throughput scales, and nowhere near enough.** NPU hardware GOPS rises 116.7 → 143.7
+    across a 16× increase in work, converging on a **marginal 146.1 GOPS** (fit
+    `hw_time = intercept + slope × FLOPs`, r² = 0.99999). The CPU's marginal rate over the
+    same shapes is **819.0 GOPS**. Per shape the CPU wins **7.6×** at 32×32 and **5.7×** at
+    512×32 on the hardware bracket (11.4× / 6.0× end to end). 512×32 is the NPU's best point
+    *and* the CPU's worst (cache-limited, its only sub-900 GOPS row) and the CPU still wins
+    by 5.7×. Fixing utilization entirely buys 23% against a 570% gap.
+  - **Decide on the fit, never on per-point GOPS.** Per-point end-to-end GOPS must climb
+    with problem size on any accelerator as the fixed host cost amortizes — reading that
+    rise as "the array scales" is a measurement artifact. `1/slope` removes fixed cost.
+  - **`tensor_w` = 32 is a structural ceiling, and ResNet50's real conv2_x is 56×56.** 56×56,
+    32×64, 64×64 and 128×64 all fail in `aiecc`, not at runtime: Tile(0,4) (the skip-add
+    core) needs five `w`×256-byte buffers plus a 2560-byte stack against 64 KB of AIE2 tile
+    memory — `'aie.tile' op allocated buffers exceeded available memory`, bank-aware *and*
+    basic sequential allocation, 8 error lines across the 4 shapes. So the 32² that
+    `layers_conv2_x` runs is the largest square that fits, not the network's shape.
+  - **Still open, and now specific:** column count (1–3 of a 4×5 array; 4 × 146 = 584 GOPS
+    would still lose, but not by 5.6×), and kernel quality — 146.1 GOPS is ~7% of one
+    column's ~2 TOPS int8 peak (architectural, **not** measured here), the same shape as
+    `attention_bf16`'s 0.61 against 895 GFLOPS. `conv2dk1.cc`/`conv2dk3.cc` have not been
+    read for how they vectorize. That is the first thing to look at, not another shape.
+  - **Tooling:** `aiecc` needs `xclbinutil`, which is NOT in `ironenv/Scripts`. Put the XRT
+    SDK directory (`/c/Xilinx/XRT/xrt_sdk/xrt`) on PATH too, or the build dies at the final
+    link with `tool 'xclbinutil' not found`.
+- **Correction — "628.2 µs reproduces the 617 µs dispatch floor to ~2%" was numerology
+  (2026-09-07).** `results/aie/conv2x_int8_cpu_baseline.log` compared its measured *host*
+  cost (wall − hardware) against the passthrough's *wall* intercept. Those are different
+  quantities: 617.0 µs = 447.3 µs host + 169.8 µs hardware, so the like-for-like host floor
+  is **447.3 µs** and 628.2 is 40% over it, not 2% under. The bottleneck sweep's own host
+  cost runs 608–874 µs and *grows* with payload (44% across a 16× byte range), consistent
+  with buffer sync charged outside the hardware bracket — so it is not a flat floor either.
+  No verdict in this repo depends on the agreement. When quoting the dispatch floor, say
+  which bracket: **169.8 µs hardware, 447.3 µs host, 617.0 µs wall.**
 - **Attention Kernel Latency vs CPU (Negative Result):**
   - Stage 4 (8 heads): **0.86 ms** on AIE2 vs **0.012 ms** on Zen4 CPU (71× slower than CPU)
   - Stage 3 (8 heads): **4.57 ms** on AIE2 vs **0.034 ms** on Zen4 CPU (134× slower than CPU)

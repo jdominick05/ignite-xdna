@@ -1,0 +1,219 @@
+Spatial sweep of mlir-aie ml/bottleneck (int8) vs CPU ORT int8 -- does NPU GOPS scale?
+Desktop 2 (Ryzen 7 8700G / Phoenix XDNA1), 2026-09-07, both sides one sitting.
+
+  NPU : kernels/bottleneck_sweep/sweep.py     (mlir-aie ironenv, py3.13)
+  CPU : kernels/bottleneck_sweep/cpu_sweep.py (resnet_env, onnxruntime 1.22.1)
+
+THE QUESTION THIS ANSWERS
+=========================
+results/aie/conv2x_int8_cpu_baseline.log closed exactly one design at one shape -- the
+chained 3-bottleneck ml/resnet/layers_conv2_x at 32x32x256, losing to Zen4 CPU ORT int8
+by 6.3-8.5x -- and named the experiment that would widen or narrow it:
+
+    "running standalone `ml/bottleneck` at 32x32 against a larger spatial and watching
+     whether GOPS scales is the experiment that would turn 'this design at this shape
+     loses' into either 'this op class loses' or 'this op class needs spatial >= N'."
+
+That experiment is this log. Answer: the op class loses. Throughput does climb with
+size, and it climbs nowhere near far enough -- the CPU is ahead by at least 5.7x at
+every shape, rising to 7.6x (hardware bracket) / 11.4x (end to end) at 32x32. The 5.7x
+is the FLOOR of the gap, measured at the single shape most favourable to the NPU and
+least favourable to the CPU; it is not the typical case.
+
+WHICH AXIS WAS SWEPT, AND WHY
+=============================
+tensor_h is the free axis; tensor_w is not. Every L1 buffer in bottleneck.py is sized
+tensor_w * channels bytes (l1_in_ty is (w,1,256) int8) while rows stream through
+range_(tensor_h) one at a time. So h scales the problem at constant memory and w does
+not. This was predicted from the source and then confirmed by the compile failures
+below, which are all width failures and none of them height failures.
+
+HOW THE VERDICT IS DECIDED -- the fit, not per-point GOPS
+=========================================================
+Per-point end-to-end GOPS *must* climb with size on any accelerator, because the largely
+fixed host cost (447.3us host intercept, results/aie/dispatch_floor_npu.log; see point 4
+for how far the measured cost here exceeds it) shrinks as a fraction of a bigger job. Reading that rise as "the array scales" would be a measurement artifact. The honest
+metric is a least-squares fit of
+
+    hw_time = intercept + slope * FLOPs      ->   marginal GOPS = 1/slope
+
+which is the array's steady-state throughput with every fixed cost removed. Both sides
+are fit the same way, from the same FLOP formula, over the same shape list.
+
+CORRECTNESS GATE
+================
+Every NPU shape is checked against the torch int8 golden from mlir-aie's own
+ml/bottleneck/test.py (same scales, same DataShaper layouts: YCXC8/CYX in,
+OIYXI8O8/OIYX weights, CDYX/YCXD out) before its timings are kept. All five verified
+shapes passed. No shape entered the fit unverified.
+
+NPU -- ml/bottleneck, int8, 1 column, iters=50 warmup=3, compile excluded
+========================================================================
+      HxW     MFLOP   wall ms     hw ms   host ms   hw GOPS  e2e GOPS  ok
+----------------------------------------------------------------------------------
+    32x32    142.61    1.8298    1.2221    0.6077     116.7      77.9  yes
+    64x32    285.21    2.9328    2.2379    0.6949     127.4      97.3  yes
+   128x32    570.43    5.0034    4.1715    0.8319     136.7     114.0  yes
+   256x32   1140.85    8.9099    8.0981    0.8118     140.9     128.0  yes
+   512x32   2281.70   16.7497   15.8753    0.8743     143.7     136.2  yes
+    56x56    436.73   RuntimeError: [aiecc] Compilation failed with exit code 1
+    32x64    285.21   RuntimeError: [aiecc] Compilation failed with exit code 1
+    64x64    570.43   RuntimeError: [aiecc] Compilation failed with exit code 1
+   128x64   1140.85   RuntimeError: [aiecc] Compilation failed with exit code 1
+
+FIT  hw_time_ms = intercept + slope * FLOPs   (5 verified shapes)
+  intercept     : 270.0 us
+  marginal GOPS : 146.1
+  r^2           : 0.99999
+
+CPU -- ORT CPU EP, QDQ int8 (VNNI), iters=100 warmup=10
+=======================================================
+      HxW     MFLOP   int8 ms    min ms      GOPS
+--------------------------------------------------
+    32x32    142.61    0.1606    0.1484     887.7
+    64x32    285.21    0.2703    0.2260    1055.2
+   128x32    570.43    0.5828    0.4433     978.8
+   256x32   1140.85    1.2188    1.0098     936.1
+   512x32   2281.70    2.7825    2.1507     820.0
+    56x56    436.73    0.4029    0.3120    1083.9
+    32x64    285.21    0.2606    0.2177    1094.4
+    64x64    570.43    0.5364    0.4479    1063.4
+   128x64   1140.85    1.1020    0.9311    1035.3
+
+FIT  cpu_time_ms = intercept + slope * FLOPs
+  intercept     : -116.9 us
+  marginal GOPS : 819.0
+  r^2           : 0.98870
+
+HEAD TO HEAD, per shape (the primary evidence -- see the caveat on the CPU fit below)
+=====================================================================================
+      HxW    NPU hw ms   NPU e2e ms   CPU int8 ms   hw ratio   e2e ratio
+    32x32       1.2221       1.8298        0.1606       7.6x       11.4x
+    64x32       2.2379       2.9328        0.2703       8.3x       10.9x
+   128x32       4.1715       5.0034        0.5828       7.2x        8.6x
+   256x32       8.0981       8.9099        1.2188       6.6x        7.3x
+   512x32      15.8753      16.7497        2.7825       5.7x        6.0x
+
+WHAT THIS SHOWS
+===============
+1. GOPS DOES scale -- and not nearly enough. NPU hardware throughput rises monotonically
+   from 116.7 to 143.7 GOPS over a 16x increase in work, a 23% gain that is flattening
+   (the last doubling bought 2%). Marginal GOPS, 146.1, is the asymptote the per-point
+   column is converging to. So 32x32 was mildly underutilizing the array, and fixing
+   that entirely would move the verdict from 7.6x to 5.7x. It does not change it.
+
+2. The gap survives at the shape most favourable to the NPU. 512x32 is simultaneously
+   the NPU's best point (143.7 GOPS, 98% of its asymptote) and the CPU's worst (820.0
+   GOPS, its only sub-900 row -- the working set has outgrown cache there). Even at that
+   pairing the CPU is 5.7x faster on the hardware bracket and 6.0x end-to-end. Every
+   other shape is worse for the NPU.
+
+3. Marginal GOPS: 146.1 (NPU) vs 819.0 (CPU) = 5.6x, matching the per-shape ratio at the
+   large end. Both routes to the number agree, which is what makes this a verdict on the
+   op class rather than on a shape.
+
+4. Host cost is large, and it is NOT the flat floor -- a correction to how this repo has
+   been reading that number. The host ms column here is wall - hw, so the like-for-like
+   quantity in results/aie/dispatch_floor_npu.log is that log's HOST intercept, 447.3us,
+   not its 617.0us wall intercept (617.0 = 447.3 host + 169.8 hardware). Measured here:
+
+       32x32   608us     128x32  832us     512x32  874us
+       64x32   695us     256x32  812us
+
+   That is 160-430us ABOVE the 447.3us floor and it grows with payload -- a 44% rise
+   across a 16x increase in bytes moved, consistent with buffer sync being charged
+   outside the hardware bracket in proportion to size. It is not flat, and it is not a
+   reproduction of a fixed cost.
+
+   This also corrects results/aie/conv2x_int8_cpu_baseline.log, which called its 628.2us
+   host cost a reproduction of "617.0us to ~2%". Those are different quantities: 628.2
+   host against a 447.3us host floor is 40% over, not 2% under. The agreement was
+   numerology. That log is left as written (results logs are never rewritten here); this
+   is the correction. Nothing in either verdict depends on it -- dispatch was never the
+   thing to fix, and the reason is point 2, not this arithmetic.
+
+   Where the fixed cost does matter is the amortization argument, which survives intact:
+   host cost is 33% of wall time at 32x32 and 5% at 512x32, and removing it entirely
+   still leaves the 5.7x hardware-bracket loss.
+
+5. tensor_w = 32 is a hard ceiling for this design, and it is a structural one. 56x56,
+   32x64, 64x64 and 128x64 all fail identically in aiecc, not at runtime:
+
+       aie.mlir:2:3: error: 'aie.tile' op allocated buffers exceeded available memory
+       aie.mlir:2:3: error: 'aie.tile' op Basic sequential allocation also failed.
+       MemoryMap: (stack) 2560 B, outOFL2L3_buff_0 16384, outOFL2L3_buff_1 16384,
+                  wts_buf_02_cons_buff_0 16384, skip_buf_cons_buff_0 16384,
+                  skip_buf_cons_buff_1 16384
+
+   The skip-add core, Tile(0,4), needs five w*256-byte buffers plus a 2560-byte stack
+   against 64 KB of AIE2 tile local memory. At w=64 that is 5 x 16384 + 2560 = 84480 B;
+   at w=56 the buffers shrink to 14336 B each (confirmed in the failure dump:
+   memref<56x1x256xi8>) for 74240 B, still over. Bank-aware allocation fails first,
+   sequential allocation fails after it -- 8 error lines for 4 shapes, two per shape, all
+   on tile(0,4). Widening this design past w=32 requires restructuring its buffering, not
+   a parameter change.
+
+   (The memtile also logs a bank-aware failure for the 69632-byte weights buffer at every
+   shape including the five that pass; sequential allocation covers it there. It is a
+   warning, not the cause.)
+
+   Consequence worth stating plainly: ResNet50's real conv2_x is 56x56, and this design
+   cannot compile that shape at all. The 32x32 that layers_conv2_x runs -- and that
+   results/aie/conv2x_int8_cpu_baseline.log measured -- is not the network's shape; it
+   is the largest square that fits.
+
+6. The CPU fit is the weaker of the two numbers, deliberately reported anyway. r^2 is
+   0.98870 with a NEGATIVE intercept (-116.9us), which is not physical: the CPU's
+   per-FLOP cost is not constant in problem size, because cache behaviour changes (GOPS
+   peaks near 1094 at 32x64 and falls to 820 at 512x32). A straight line through that is
+   an approximation. The NPU fit has no such problem (r^2 = 0.99999, physical +270.0us
+   intercept). So the per-shape table above is the primary evidence and the CPU marginal
+   GOPS is corroboration -- but both point the same way, and the per-shape comparison
+   does not depend on the fit at all.
+
+WHAT IS CLOSED, AND WHAT IS NOT
+===============================
+CLOSED: "32x32 was underutilizing the array" as an explanation for the conv2x loss. It
+was underutilizing it, by about 23%, and the loss is 570%. The residual gap is the
+kernel's steady-state throughput against VNNI, not the shape.
+
+CLOSED: chained/standalone int8 ResNet bottleneck convolution on XDNA1 via mlir-aie, at
+every spatial size this design can compile, loses to the Zen4 CPU by 5.7-11.4x. Two
+independent designs (layers_conv2_x chained across 3 columns, ml/bottleneck standalone
+on 1 column) now agree.
+
+NOT CLOSED -- and these are real, not hedges:
+  * Column count. Both measurements are 1-3 columns of a 4x5 array. The marginal-GOPS
+    number is per-design, not per-chip; a design using all four columns could plausibly
+    reach ~4x146 = 584 GOPS, which is still below the CPU's 819 but no longer 5.6x away.
+    This is the one remaining lever that could change the arithmetic rather than the
+    verdict.
+  * Whether the AIE2 int8 MAC peak is being approached at all -- and the arithmetic says
+    emphatically not. An AIE2 core does 256 int8 MACs/cycle; at 2 ops per MAC and 4
+    compute cores in this column, one column is ~2 TOPS at 1 GHz. That figure is from the
+    AIE2 architecture, NOT measured on this machine -- but against it, 146.1 GOPS is
+    about 7% of a single column's peak. That is the same shape of finding as
+    kernels/attention_bf16 (0.61 GFLOPS measured against 895, because it called aie::mmul
+    zero times). Nobody has read conv2dk1.cc / conv2dk3.cc to check how they vectorize.
+    If they leave the MAC array as idle as attention did, the 5.7x is a kernel-quality
+    result and not a chip result, and it is the first thing to look at.
+  * w > 32 for this op. Untested, because untestable without rewriting the design's
+    buffering. 56x56 -- the shape that actually matters for ResNet50 -- is on the far
+    side of that rewrite.
+
+REPRODUCE
+=========
+  # NPU (ironenv). xclbinutil is NOT in ironenv/Scripts; the XRT SDK must be on PATH too
+  # or aiecc dies at the final link with "tool 'xclbinutil' not found".
+  export PATH=/c/Users/<user>/mlir-aie/ironenv/Scripts:/c/Xilinx/XRT/xrt_sdk/xrt:$PATH
+  export PYTHONPATH=/c/Xilinx/XRT/xrt_sdk/xrt/python
+  python3 kernels/bottleneck_sweep/sweep.py --iters 50 --warmup 3
+
+  # CPU (resnet_env has torch + onnx + onnxruntime, so one activation covers it)
+  conda activate resnet_env
+  python kernels/bottleneck_sweep/cpu_sweep.py --iters 100 --warmup 10 \
+      --workdir scratch/bottleneck_sweep
+
+Nine aiecc JIT compiles on the first run (tens of minutes -- not separately timed);
+later runs hit ~/.npu/cache. Run the two sides in the same sitting -- NPU latency on this
+machine drifts between sessions independently of any code change.

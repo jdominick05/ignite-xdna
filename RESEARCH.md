@@ -1059,6 +1059,50 @@ been closed:
   again). Running standalone `ml/bottleneck` at 32^2 against a larger spatial and watching
   whether GOPS scales is what would decide it. Third consecutive negative on hand-written
   kernel/subgraph acceleration, and the first to cost an afternoon rather than weeks.
+
+- **The spatial sweep settles it: GOPS scales by 23%, against a 570% gap. The op class is
+  closed.** `kernels/bottleneck_sweep/sweep.py` runs one standalone `ml/bottleneck` on the
+  NPU across spatial sizes, and `cpu_sweep.py` runs the identical arithmetic through ORT
+  QDQ int8 at the same shapes, both sides in one sitting
+  (`results/aie/bottleneck_spatial_sweep_npu.log`, Desktop 2 / Phoenix). `tensor_h` is the
+  free axis -- every L1 buffer in the design is `tensor_w * channels` bytes and none scale
+  with height -- and each NPU shape is checked against mlir-aie's own torch int8 golden
+  before its timings enter the fit.
+  NPU hardware throughput rises monotonically **116.7 -> 143.7 GOPS** across a 16x increase
+  in work (32x32 -> 512x32), converging on a **marginal 146.1 GOPS** (r^2 = 0.99999). The
+  CPU's marginal rate over the same shapes is **819.0 GOPS**. Per-shape the CPU wins
+  **7.6x** at 32x32 and **5.7x** at 512x32 on the hardware bracket (11.4x / 6.0x end to
+  end). 512x32 is simultaneously the NPU's best point and the CPU's *worst* -- the only row
+  where the CPU drops below 900 GOPS, its working set having outgrown cache -- and the CPU
+  still wins by 5.7x. So 32x32 *was* underutilizing the array, by about 23%, against a loss
+  of 570%.
+  The verdict deliberately rests on the fit rather than per-point GOPS: per-point
+  end-to-end GOPS must climb with size on any accelerator as fixed host cost amortizes, so
+  reading that rise as "the array scales" would be a measurement artifact. `1/slope` removes
+  every fixed cost. (The CPU fit is the weaker of the two -- r^2 0.98870 with an unphysical
+  -116.9us intercept, because CPU per-FLOP cost varies with cache behaviour -- so the
+  per-shape table is the primary evidence and the CPU marginal rate is corroboration. Both
+  agree.)
+  **`tensor_w` = 32 is a hard ceiling for this design, and ResNet50's real conv2_x is
+  56x56.** 56x56, 32x64, 64x64 and 128x64 all fail in `aiecc`, not at runtime: the skip-add
+  core Tile(0,4) needs five `w`*256-byte buffers plus a 2560-byte stack against 64 KB of
+  AIE2 tile local memory (`'aie.tile' op allocated buffers exceeded available memory`, both
+  bank-aware and basic sequential allocation, 8 error lines across the 4 shapes). At w=56
+  the buffers are 14336 B each for 74240 B total -- still over. So the 32x32 that
+  `layers_conv2_x` runs is not the network's shape; it is the largest square that fits, and
+  widening past it needs the design's buffering restructured, not a parameter changed.
+  **What stays open, and it is now specific:** column count (both measurements use 1-3
+  columns of a 4x5 array -- 4 x 146 = 584 GOPS would still lose, but not by 5.6x), and
+  kernel quality -- 146.1 GOPS is roughly 7% of one column's ~2 TOPS int8 peak (256 int8
+  MACs/cycle/core x 2 ops x 4 cores at 1 GHz; architectural, **not** measured on this
+  machine). That is the same shape of finding as the attention kernel's 0.61 against 895
+  GFLOPS, and nobody has yet read `conv2dk1.cc`/`conv2dk3.cc` to see how they vectorize.
+  **Correction carried by this run:** the conv2x log called its 628.2us of host cost a
+  reproduction of the passthrough's 617.0us "to ~2%". Different quantities -- 617.0us is the
+  passthrough's *wall* intercept (447.3 host + 169.8 hardware), so the like-for-like host
+  floor is **447.3us** and 628.2 is 40% over it, not 2% under. This sweep's own host cost
+  runs 608-874us and *grows* with payload (44% across a 16x byte range), so it is not a flat
+  floor either. No verdict depends on it; the agreement was numerology and is retracted.
 - **The per-dispatch floor, finally measured in isolation.** Every isolated-op verdict
   above rested on a "~185-200us" constant inherited from one 96 KB probe during the
   GroupNorm work and never measured on its own. `kernels/dispatch_floor/measure_floor.py`

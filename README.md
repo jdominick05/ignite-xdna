@@ -508,15 +508,54 @@ with the splice's torch-vs-numpy 9×, that is two for two: **on this project the
 choice has decided the verdict more often than the NPU has.** Any NPU-vs-CPU claim here has
 to name which CPU implementation it beat.
 
-Two things worth keeping separate from the verdict. The design's own harness reports both
-brackets, so its **628.2 µs** of host cost independently reproduces the passthrough's
-617.0 µs to ~2% on a completely unrelated design — the dispatch floor is not an artifact of
-how it was measured. And the scope is narrow on purpose: this closes *this design at this
-shape*, **not the op class.** It is one shape (32²×64) on three columns, against the same
-silicon's 895 GFLOPS 4-column bf16 matmul — a ~4× gap this run does not explain. Column
-count and 32×32 spatial/tile utilization are both untested; running standalone
-`ml/bottleneck` at 32² against a larger spatial and watching whether GOPS scales is what
-would settle it.
+The scope of that run was narrow on purpose — one shape (32²×64) on three columns — so it
+closed *this design at this shape*, not the op class, and named the experiment that would
+settle it: sweep standalone `ml/bottleneck` and watch whether GOPS scales.
+
+### It scales, by 23%, against a 570% gap — the op class is closed
+
+`kernels/bottleneck_sweep/` sweeps one bottleneck across spatial sizes on the NPU and runs
+the identical arithmetic through ORT int8 on the CPU at the same shapes, both sides in one
+sitting (`results/aie/bottleneck_spatial_sweep_npu.log`). `tensor_h` is the free axis —
+every L1 buffer scales with `tensor_w`, none with `tensor_h` — and every NPU shape is
+checked against mlir-aie's own torch int8 golden before its timings count.
+
+| H×W | MFLOP | NPU hw | NPU e2e | CPU int8 | hw ratio |
+|---|---|---|---|---|---|
+| 32×32 | 142.6 | 1.222 ms | 1.830 ms | 0.161 ms | **7.6×** |
+| 64×32 | 285.2 | 2.238 ms | 2.933 ms | 0.270 ms | 8.3× |
+| 128×32 | 570.4 | 4.172 ms | 5.003 ms | 0.583 ms | 7.2× |
+| 256×32 | 1140.9 | 8.098 ms | 8.910 ms | 1.219 ms | 6.6× |
+| 512×32 | 2281.7 | 15.875 ms | 16.750 ms | 2.783 ms | **5.7×** |
+
+Per-point GOPS *has* to climb with size on any accelerator, because the fixed host cost
+amortizes — so the verdict rests on a least-squares fit of `time = intercept + slope ×
+FLOPs`, whose `1/slope` is throughput with every fixed cost removed. **NPU marginal 146.1
+GOPS against CPU 819.0** (NPU fit r²=0.99999). NPU hardware throughput does rise, 116.7 →
+143.7 GOPS over 16× more work, and that 23% is the whole prize for fixing utilization
+against a 570% gap. 512×32 is simultaneously the NPU's best point and the CPU's *worst*
+(the working set has outgrown cache there) and the CPU still wins 5.7×; every other shape
+is worse for the NPU.
+
+**`tensor_w` = 32 is a hard ceiling, and ResNet50's real conv2_x is 56×56.** 56×56, 32×64,
+64×64 and 128×64 all fail in `aiecc`, not at runtime: the skip-add core needs five
+`w`×256-byte buffers plus stack against 64 KB of AIE2 tile memory (`'aie.tile' op allocated
+buffers exceeded available memory`, both bank-aware and sequential allocation). So the 32²
+that `layers_conv2_x` runs is not the network's shape — it is the largest square that fits.
+
+What that leaves open is narrower and more specific than before: **column count** (both
+measurements use 1–3 columns of a 4×5 array; 4×146 ≈ 584 GOPS would still lose, but not by
+5.6×) and **kernel quality** — 146 GOPS is roughly 7% of one column's ~2 TOPS int8 peak
+(architectural, not measured here), the same shape of finding as the attention kernel's
+0.61 of 895 GFLOPS. Nobody has read `conv2dk1.cc`/`conv2dk3.cc` to see how they vectorize.
+
+**A correction that came out of this sweep:** the conv2x log called its 628.2 µs of host
+cost a reproduction of the passthrough's 617.0 µs "to ~2%". Those are different quantities.
+617.0 µs is the passthrough's *wall* intercept (447.3 host + 169.8 hardware); the
+like-for-like host floor is **447.3 µs**, so 628.2 is 40% over it, not 2% under. The
+sweep's own host cost runs 608–874 µs and *grows* with payload, so it is not a flat floor
+either. Nothing in either verdict depends on this — dispatch was never the thing to fix —
+but the agreement was numerology and is retracted here.
 
 **Heterogeneous splice, now measured: 3.25 ms, and 2.31× — not the 4.47 ms / 4.1× once
 published here.** `tools/splice_wall_clock.py` puts a `perf_counter` around a real
