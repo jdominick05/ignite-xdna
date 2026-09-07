@@ -635,11 +635,69 @@ caches.
 - **Architectural Comparison & Splicing Reality:**
   - **Cut CNN Backbone (Like-for-Like):** 1.73 ms NPU vs 5.35 ms CPU (**3.1× speedup** on the identical 407-node graph). Comparing 1.73 ms against the 108 ms stock EP baseline is comparing a model fragment to a whole model; the 3.1× like-for-like is the honest figure.
   - **Full Model on NPU (with AIE Attention):** >120 ms, which loses heavily to both CPU (18.37 ms) and Stock VitisAI EP (108.00 ms).
-  - **Heterogeneous Splice (In-Process Measured):** Wall-clock time measured around the real in-process loop is **4.47 ms** (1.73 ms NPU infer + 2.03 ms CPU attention across 9 transformer blocks + 0.72 ms in-process buffer wrapping residual). This achieves an honest **4.1× speedup vs full CPU (18.37 ms)** and **24.2× vs Stock VitisAI EP (108.00 ms)**.
-  - **Cross-Process IPC Floor Contrast:** The heterogeneous pipeline leaves attention on CPU and does NOT use the AIE attention kernel. Crucially, its 4.47 ms latency relies on single-process host memory wrapping (~0.72 ms overhead). If partitioned across separate Python processes (due to Python 3.12 vs 3.13 pyxrt ABI boundaries), the IPC handoff floor (measured at 789 µs–23.6 ms in `groupnorm_bf16`) would completely erase any speedup margin.
-- **Accuracy Ground Truth & Calibration Status:**
-  - Full FP32 `mobilevit_xxs` on `data/eval` (1,000 ImageNet validation images) achieves **75.0% top-1** (18.54 ms/image).
-  - Both ONNX models in `models/` (`mobilevit_cut_backbone_xint8.onnx` and `mobilevit_xint8.onnx`) were quantized with synthetic random data (`UseRandomData = True`) as compiler place-and-route probes. Testing on real validation images yields **0.0% top-1 accuracy** (on `000000.jpg`, ground truth 91, the cut backbone emits garbage logits `[724, 930, 692, 224, 820]`). Neither quantized model can be cited for top-1 or mAP accuracy without a real-data calibration pass.
+  - **Heterogeneous Splice — reported at 4.47 ms, NOT backed by a log.** `4.47` is a
+    hardcoded constant in `tools/demo_attention.py` (`measured_splice_ms = 4.47`), printed
+    with a `(meas.)` label, and the "0.72 ms in-process buffer wrapping residual" is
+    back-solved as `4.47 - (backbone + 2.03)` rather than measured — the demo never runs a
+    spliced loop at all. Do not cite it until a `perf_counter` run around the real loop is
+    captured under `results/`. The 108.00 ms stock-EP, 18.37 ms full-CPU, 1.73 ms backbone
+    and 5.35 ms CPU-backbone figures in this section are in the same position: plausible,
+    from a real session, but with no `results/` log behind them.
+  - **Cross-Process IPC Floor Contrast:** The heterogeneous pipeline leaves attention on CPU and does NOT use the AIE attention kernel. If partitioned across separate Python processes (due to Python 3.12 vs 3.13 pyxrt ABI boundaries), the IPC handoff floor (measured at 789 µs–23.6 ms in `groupnorm_bf16`) would completely erase any speedup margin.
+
+### MobileViT-XXS accuracy: measured, and the FP32 baseline retracted
+
+**Date:** 2026-09-07 (same day, follow-up). Machine: Desktop 2 / Phoenix.
+Logs: `results/mobilevit/eval_*.log`, `results/mobilevit/quant_grid_audit.log`.
+Reproduce: `./scripts/mobilevit-eval.sh --slice`, `python tools/audit_quant_grid.py`.
+
+| Model | Quantization | Top-1 | Top-5 | Latency/img (CPU) |
+|---|---|---|---|---|
+| MobileViT-XXS | FP32 | **68.30%** | 88.20% | 8.77 ms |
+| MobileViT-XXS | Full XINT8 | **0.00%** | 0.10% | 20.14 ms |
+| MobileViT-XXS | Hybrid (CNN XINT8 / transformer FP32) | **0.10%** | 0.30% | 11.65 ms |
+| MobileViT-XXS | Hybrid + AdaRound (500 iters, real data) | **0.80%** | 2.50% | 11.40 ms |
+
+- **RETRACTED: the FP32 baseline is 68.30% top-1, not 75.0%.** 75.0% was the first 100
+  images only; the full 1000 give 68.30%, which matches the published MobileViT-XXS paper
+  figure (~69.0%) and confirms the checkpoint identity. Demonstrated rather than asserted —
+  `./scripts/mobilevit-eval.sh --slice` runs the identical FP32 weights at n=100 (75.00%)
+  and n=1000 (68.30%) in the same invocation. **This is the second time this repo has been
+  burned by a slice**, after yolov8s AdaRound read 45.19 mAP on 500 images and 39.98 on the
+  full 5000. The invariant exists because of incidents, not taste.
+- **Real-data calibration was not the missing piece.** The models above were calibrated on
+  300 real ImageNet images (`pipelines/mobilevit/2_quantize.py`), replacing the earlier
+  `UseRandomData=True` place-and-route probes. Accuracy is still ~0%. The random-data
+  calibration was a genuine defect, but fixing it changed nothing — the collapse is
+  structural.
+- **The discriminator is the depthwise weight-scale grid, not channel death.** MobileNetV2
+  survives the identical per-tensor power-of-two recipe at 73.40%, so whatever kills
+  MobileViT must be something the two do not share. `tools/audit_quant_grid.py` reads all of
+  this statically out of the `.onnx` files:
+  - **Not dead channels.** MobileNetV2 has a 25.0%-dead depthwise block of its own, and
+    186/9920 dead channels in its non-depthwise convs versus MobileViT's 3/1864 —
+    MobileViT's non-depthwise convs are *less* damaged.
+  - **Not activation range.** Both models' coarsest activation scale is exactly 0.5.
+  - **The scale grid.** MobileNetV2's depthwise scales span 0.0156–0.25 and never exceed
+    0.25. MobileViT-XXS's span 0.125–**1.0**. At Δ=1.0 on a 3×3 depthwise kernel almost
+    every real weight rounds to 0 or ±1, and the layer stops being a convolution.
+  - Suspected upstream cause, **not logged and therefore not established**: SiLU vs ReLU6.
+    Cross-Layer Equalization requires a positive-homogeneous activation (`f(αx) = αf(x)`);
+    ReLU6 qualifies, SiLU does not, so CLE is skipped and nothing bounds the folded-BN
+    per-channel weight disparity that then sets Δ. Capturing Quark's CLE pattern count for
+    both models is the next thing to log if this is to be claimed.
+- **Why AdaRound cannot fix it, mechanically.** AdaRound chooses between `floor(w/Δ)` and
+  `ceil(w/Δ)`; it never changes Δ. The audit confirms the scale grid is byte-identical
+  before and after AdaRound; only the dead-channel count shifts at the rounding boundary
+  (28/432 → 24/432), which buys 0.00% → 0.80% top-1. **Deploying a SiLU/GELU backbone on
+  XDNA1 requires QAT or per-channel scale support — no PTQ recipe reaches it.**
+- **Rank-5 tensors never reach the NPU.** Across `mobilevit_stock`'s 1585 nodes, 207 touch a
+  rank-5 tensor and **all 207 are on CPU, no exceptions** (`--rank-audit`). Control: YOLOv8's
+  16 rank-4 `Slice` nodes all place on NPU, and MobileViT is the only model in this repo that
+  emits a rank-5 tensor at all. Sufficient but not necessary — 18 rank-4 `Transpose`, 18
+  rank-4 `MatMul` and 21 rank-3 `LayerNormalization` nodes also fall back, on op support.
+  MobileViT's 5D shapes come from the unfold/fold (`[4, 256, 3, 4, 16]`) bridging its conv
+  and transformer stages, so this is architectural, not a quantization artifact.
 
 
 

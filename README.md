@@ -436,19 +436,80 @@ in **0.034 ms**, making the 4.57 ms AIE2 kernel **134× slower than CPU** (0.61 
 <0.1% of array compute peak). Running the full model entirely on NPU with this kernel would
 take >120 ms.
 
-**Measured Heterogeneous Splice & Accuracy Ground Truth:**
-Leaving attention on CPU and running the cut CNN on NPU in a unified process yields a measured
-end-to-end wall-clock time of **4.47 ms** (1.73 ms NPU infer + 2.03 ms CPU attention across 9 blocks +
-0.72 ms in-process buffer wrapping residual), achieving an honest **4.1× speedup vs full CPU (18.37 ms)**
-and 24.2× vs stock VitisAI EP (108.00 ms). Note that this pipeline does NOT use the AIE attention kernel;
-furthermore, if partitioned across separate Python processes (due to Python 3.12 vs 3.13 pyxrt ABI walls),
-the cross-process IPC floor (789 µs–23.6 ms in `groupnorm_bf16`) would completely erase this advantage.
-On accuracy: full FP32 `mobilevit_xxs` achieves **75.0% top-1** on ImageNet validation (`data/eval`, 1000 images),
-but both quantized ONNX models in `models/` were built with synthetic random calibration (`UseRandomData = True`)
-for place-and-route diagnostics, scoring 0% accuracy on real validation images. Neither quantized model
-can be cited for top-1 or mAP accuracy without a real-data calibration pass.
-Demo in `scripts/attention-demo.sh` and `tools/demo_attention.py`. See `kernels/attention_bf16/README.md`,
-`docs/DECISIONS.md`, and `results/aie/attention_bf16_kernel_npu.log`.
+**Heterogeneous splice (leave attention on CPU):** the cut CNN on NPU plus attention on
+CPU, in one process, was reported at **4.47 ms** against a full-CPU baseline of 18.37 ms.
+That number is **not currently backed by a log** — it is a hardcoded constant in
+`tools/demo_attention.py`, and its "0.72 ms handoff residual" is back-solved from it, not
+measured. Treat it as unverified until a `perf_counter` run around the real loop lands in
+`results/`. What is certain: this pipeline does **not** use the AIE attention kernel, and
+if it were split across processes (the Python 3.12 vs 3.13 pyxrt ABI wall), the
+cross-process IPC floor measured in `groupnorm_bf16` (789 µs–23.6 ms) would erase the
+margin outright. Demo in `scripts/attention-demo.sh` and `tools/demo_attention.py`. See
+`kernels/attention_bf16/README.md` and `results/aie/attention_bf16_kernel_npu.log`.
+
+### MobileViT-XXS does not survive per-tensor INT8, and AdaRound cannot save it
+
+The accuracy question the attention work deferred, now measured on the full 1000-image
+eval set (`./scripts/mobilevit-eval.sh`, all rows CPU, `results/mobilevit/eval_*.log`):
+
+| Model | Quantization | Top-1 | Top-5 | Latency/img |
+|---|---|---|---|---|
+| MobileViT-XXS | FP32 baseline | **68.30%** | 88.20% | 8.77 ms |
+| MobileViT-XXS | Full XINT8 | **0.00%** | 0.10% | 20.14 ms |
+| MobileViT-XXS | Hybrid (CNN XINT8, transformer FP32) | **0.10%** | 0.30% | 11.65 ms |
+| MobileViT-XXS | Hybrid + AdaRound (500 iters, real data) | **0.80%** | 2.50% | 11.40 ms |
+
+This is a **total collapse, and real-data calibration does not fix it** — the models above
+were calibrated on 300 real ImageNet images, not the `UseRandomData=True` probes the
+earlier pass used. AdaRound moves top-1 from 0.00% to 0.80%. That is the ceiling of what
+rounding can buy here.
+
+**Retraction: the FP32 baseline is 68.30%, not the 75.0% previously published here.**
+75.0% was the first *100* images; the full 1000 settle at 68.30%, which matches the
+published MobileViT-XXS paper figure (~69.0%). Reproduced deliberately as the last row of
+`./scripts/mobilevit-eval.sh --slice`: same weights, same code, 75.00% on 100 images and
+68.30% on 1000. This is the yolov8s AdaRound slice trap (45.19 → 39.98 mAP) a second time.
+
+**Why it collapses, when MobileNetV2 in the same repo survives the same recipe at 73.40%.**
+`tools/audit_quant_grid.py` reads this out of the `.onnx` files themselves — no hardware,
+no accuracy run, reproducible by anyone holding `models/`
+(`results/mobilevit/quant_grid_audit.log`):
+
+| | MobileNetV2 (recovers) | MobileViT-XXS (collapses) |
+|---|---|---|
+| Weight scale granularity | per-tensor | per-tensor |
+| Depthwise scale grid | 0.0156 … **0.25** | 0.125 … **1.0** |
+| Depthwise channels quantized to all-zero | 196/7136, worst block 25.0% | 28/432, worst block 34.4% |
+| Other-conv dead channels | 186/9920 | 3/1864 |
+| Coarsest activation scale | 0.5 | 0.5 |
+
+The intuitive explanation — "depthwise channels die under per-tensor quantization" — **is
+not what separates them.** MobileNetV2 carries a 25%-dead depthwise block of its own and
+still reaches 73.40%, and its *other* convs are considerably more damaged than
+MobileViT's (186/9920 vs 3/1864). Nor is it activation range: both models top out at the
+same coarsest activation scale of 0.5.
+
+What separates them is the **depthwise weight-scale grid**. MobileNetV2's depthwise scales
+never exceed Δ=0.25; MobileViT-XXS reaches **Δ=1.0** on a 3×3 depthwise kernel, a 4–16×
+coarser grid. At Δ=1.0 essentially every real weight rounds to 0 or ±1, so the layer stops
+being a convolution and becomes a sign map. The plausible upstream cause is SiLU vs
+ReLU6 — an unbounded activation gives Quark no bounded range to equalize against, and
+Cross-Layer Equalization requires positive homogeneity (`f(αx) = αf(x)`), which ReLU6
+satisfies and SiLU does not — but **CLE pattern counts were not captured in a log here**,
+so that half remains an explanation, not a measurement.
+
+AdaRound's failure is now mechanically explained rather than asserted: it picks between
+`floor(w/Δ)` and `ceil(w/Δ)` and **never changes Δ**. The audit confirms the scale grid is
+byte-identical before and after AdaRound; only the dead-channel count shifts at the
+rounding boundary (28/432 → 24/432), worth 0.8 points. **Deploying a SiLU/GELU backbone to
+XDNA1 needs QAT or per-channel scale support, not a better PTQ recipe.**
+
+**A rank-5 tensor never reaches the NPU.** Across `mobilevit_stock`'s 1585 nodes, **207
+touch a rank-5 tensor and all 207 are on CPU — zero exceptions** (`--rank-audit`). The
+contrast holds: YOLOv8's 16 rank-4 `Slice` nodes all place on NPU, and no other model in
+this repo produces a rank-5 tensor at all. Rank-5 is *sufficient* to force CPU fallback,
+but not the whole story — 18 rank-4 `Transpose`, 18 rank-4 `MatMul` and 21 rank-3
+`LayerNormalization` nodes fall back too, on op support rather than rank.
 
 
 ### Input resolution: the fixed cost of running the graph at all

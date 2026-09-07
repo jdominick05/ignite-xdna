@@ -1,0 +1,60 @@
+
+MobileNetV2 (ReLU6)      -- recovers to 73.40%
+  models/mobilenetv2_xint8_adaround.onnx
+  granularity            : per-tensor  (17 depthwise + 35 other convs)
+  depthwise scale grid   : [0.015625, 0.03125, 0.0625, 0.125, 0.25]
+  depthwise dead chans   : 196/7136   worst block 25.0%   median 2.6%
+  per-block dead pct     : 25 2 3 0 4 3 0 4 2 5 0 5 6 2 2 3 1
+  other conv scale range : 0.000976562 .. 0.0625
+  other conv dead chans  : 186/9920
+  activation scales      : 0.03125 .. 0.5   (16x range, 66 sites)
+  distinct activation    : [0.03125, 0.0625, 0.125, 0.25, 0.5]
+
+MobileViT-XXS full XINT8 -- collapses to 0.00%
+  models/mobilevit_xxs_xint8.onnx
+  granularity            : per-tensor  (7 depthwise + 28 other convs)
+  depthwise scale grid   : [0.125, 0.25, 0.5, 1.0]
+  depthwise dead chans   : 28/432   worst block 34.4%   median 8.3%
+  per-block dead pct     : 19 34 8 4 10 0 0
+  other conv scale range : 0.00195312 .. 0.125
+  other conv dead chans  : 3/1864
+  activation scales      : 0.0078125 .. 0.5   (64x range, 425 sites)
+  distinct activation    : [0.0078125, 0.015625, 0.03125, 0.0625, 0.125, 0.25, 0.5]
+
+MobileViT-XXS hyb+AdaRound -- 0.80% (scales unchanged)
+  models/mobilevit_xxs_hybrid_adaround.onnx
+  granularity            : per-tensor  (7 depthwise + 28 other convs)
+  depthwise scale grid   : [0.125, 0.25, 0.5, 1.0]
+  depthwise dead chans   : 24/432   worst block 18.8%   median 8.3%
+  per-block dead pct     : 19 19 10 6 8 0 0
+  other conv scale range : 0.00195312 .. 0.125
+  other conv dead chans  : 3/1864
+  activation scales      : 0.0078125 .. 0.5   (64x range, 66 sites)
+  distinct activation    : [0.0078125, 0.015625, 0.03125, 0.0625, 0.125, 0.25, 0.5]
+
+=== EP placement by tensor rank (from the EP's own reports) ===
+
+  modelcachekey\vitisai_ep_report.json   (1271 nodes)
+    nodes touching a rank>=5 tensor : none in this graph
+    Slice/Transpose/Squeeze by (device, rank):
+
+  yolocut1x4cachekey\vitisai_ep_report.json   (929 nodes)
+    nodes touching a rank>=5 tensor : none in this graph
+    Slice/Transpose/Squeeze by (device, rank):
+      ('NPU', 4) -> 16
+
+  yolocutcachekey\vitisai_ep_report.json   (929 nodes)
+    nodes touching a rank>=5 tensor : none in this graph
+    Slice/Transpose/Squeeze by (device, rank):
+      ('NPU', 4) -> 16
+
+  mobilevit_cut\vitisai_ep_report.json   (409 nodes)
+    nodes touching a rank>=5 tensor : none in this graph
+    Slice/Transpose/Squeeze by (device, rank):
+
+  mobilevit_stock\vitisai_ep_report.json   (1585 nodes)
+    nodes touching a rank>=5 tensor : {'CPU': 207}
+    Slice/Transpose/Squeeze by (device, rank):
+      ('CPU', 4) -> 18
+      ('CPU', 5) -> 72
+      ('NPU', 4) -> 12

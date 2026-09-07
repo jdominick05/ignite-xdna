@@ -60,20 +60,31 @@ While the kernel compiles, maps cleanly across 8 physical AIE2 cores, streams vi
 | Pipeline Configuration | Hardware Execution | Latency | Note |
 |---|---|---|---|
 | **Stock VitisAI EP Baseline** | 49 NPU Partitions (partition thrashing) | 108.00 ms | 1.0× (baseline, 1037 NPU nodes / 548 CPU nodes) |
-| **CPU Full Baseline** | 8 Zen4 cores (PyTorch FP32) | 18.37 ms | 5.9× faster than stock EP (75.0% top-1 on 1000 eval images) |
+| **CPU Full Baseline** | 8 Zen4 cores (PyTorch FP32) | 18.37 ms | 5.9× faster than stock EP (68.30% top-1 on 1000 eval images) |
 | **Cut CNN Backbone** | Physical Phoenix NPU (1 subgraph, 407 nodes) | **1.73 ms** | **3.1× vs CPU CNN (5.35 ms)** (like-for-like) |
 | **Full NPU with AIE Attention** | Cut CNN on NPU + AIE2 Attention Kernel | **>120 ms** | **Loses to both CPU and Stock EP** |
-| **Heterogeneous Splice (Measured)**| Cut CNN on NPU (1.73 ms) + Attention on CPU (2.03 ms) | **4.47 ms** | **4.1× vs full CPU (18.37 ms)**; incl. 0.72 ms in-process handoff |
+| **Heterogeneous Splice (REPORTED)**| Cut CNN on NPU (1.73 ms) + Attention on CPU (2.03 ms) | 4.47 ms *(unverified)* | No `results/` log — see warning below |
 
 > [!WARNING]
-> The heterogeneous spliced pipeline does NOT use the AIE attention kernel — it leaves attention on CPU. End-to-end wall-clock time measured around the real in-process loop is **4.47 ms** (1.73 ms NPU infer + 2.03 ms CPU attention across 9 transformer blocks + 0.72 ms in-process buffer wrapping residual), delivering an honest **4.1× speedup vs full CPU (18.37 ms)** and 24.2× vs stock EP (108.00 ms).
-> 
-> In contrast, if partitioned across separate Python processes (due to Python 3.12 vs 3.13 pyxrt ABI walls), the IPC handoff floor measured in `groupnorm_bf16` ($789\,\mu\text{s}$–$23.6\text{ ms}$) would completely erase this advantage.
+> The heterogeneous spliced pipeline does NOT use the AIE attention kernel — it leaves attention on CPU.
+> **Its 4.47 ms figure is reported, not measured.** `4.47` is a hardcoded constant in
+> `tools/demo_attention.py`, and the "0.72 ms in-process handoff residual" is back-solved from it
+> (`4.47 - (backbone + 2.03)`); the demo runs no spliced loop. Treat as unverified until a
+> `perf_counter` run around the real loop is captured under `results/`. The 108.00 ms stock-EP,
+> 18.37 ms full-CPU, 1.73 ms backbone and 5.35 ms CPU-backbone numbers on this page have no
+> `results/` log either.
 >
-> **Accuracy Caveat:** While full FP32 `mobilevit_xxs` scores 75.0% top-1 on `data/eval`, the quantized ONNX models (`mobilevit_cut_backbone_xint8.onnx` and `mobilevit_xint8.onnx`) were compiled with synthetic random calibration (`UseRandomData = True`) for hardware place-and-route diagnostics, scoring 0% accuracy on real validation images. Neither quantized model can be cited for top-1 or mAP accuracy without a real-data calibration pass.
+> If the pipeline were split across separate Python processes (the Python 3.12 vs 3.13 pyxrt ABI
+> wall), the IPC handoff floor measured in `groupnorm_bf16` (789 µs–23.6 ms) would erase the margin.
+>
+> **Accuracy:** MobileViT-XXS FP32 measures **68.30% top-1 / 88.20% top-5** over 1000 `data/eval`
+> images (`results/mobilevit/eval_fp32_cpu.log`) — matching the paper's ~69.0%. An earlier 75.0%
+> here was a 100-image slice and has been retracted. Every XINT8 variant collapses: full XINT8
+> 0.00%, hybrid 0.10%, hybrid+AdaRound 0.80%, *with real 300-image calibration* — the cause is a
+> depthwise weight scale reaching Δ=1.0, which AdaRound cannot change. See
+> `./scripts/mobilevit-eval.sh`, `tools/audit_quant_grid.py`, and `docs/DECISIONS.md`.
 
 ## Quickstart
-
 Run in PowerShell with `ironenv`:
 
 ```powershell

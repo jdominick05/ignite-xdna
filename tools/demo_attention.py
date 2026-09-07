@@ -233,8 +233,10 @@ print(json.dumps({{
         print(f"    Ground Truth: Class {res['true_label']}")
         if res["match"]:
             print(f"{GREEN}{BOLD} OK  Top-1 Argmax Label Matches Ground Truth Class {res['true_label']}!{RESET}")
-            print(f"     (Note: PyTorch FP32 reaches 75.0% top-1 on 1000 validation images. Both quantized ONNX")
-            print(f"      models in models/ were exported with synthetic random calibration and score 0% on real data.)\n")
+            print(f"     (Note: this is PyTorch FP32 on CPU -- it touches neither the NPU nor any quantized")
+            print(f"      model, so it is a sanity check on the checkpoint, not a parity check. FP32 measures")
+            print(f"      68.30% top-1 over 1000 images; the XINT8 variants reach at best 0.80%. See")
+            print(f"      ./scripts/mobilevit-eval.sh and results/mobilevit/.)\n")
         else:
             print(f"{YELLOW}!!  Prediction does not match ground truth.{RESET}\n")
         return res
@@ -246,12 +248,15 @@ print(json.dumps({{
 def print_comparison_table(aie_res, backbone_res):
     print(f"{BOLD}{CYAN}==> [4/4] Empirical Findings & Architecture Comparison{RESET}\n")
 
+    # NOTE: every constant below except backbone_ms comes from a prior session's
+    # scrollback, NOT from a results/ log, and none of it is measured by this demo.
+    # In particular the spliced total is a REPORTED figure, not a wall clock this
+    # script takes -- it runs no spliced loop. Labelled as such in the table.
     backbone_ms = backbone_res["mean_ms"] if backbone_res else 1.73
     backbone_cpu_ms = 5.35
     cpu_attn_stage3_8h_ms = 0.034
     cpu_attn_all_ms = 2.03
-    measured_splice_ms = 4.47
-    residual_ms = measured_splice_ms - (backbone_ms + cpu_attn_all_ms)
+    reported_splice_ms = 4.47
 
     print(f"{BOLD}--- 1. Cut CNN Backbone (Identical 407-node graph on both devices) ---{RESET}")
     print(f"+----------------------------------+-------------------+-----------------+-----------------------+")
@@ -284,11 +289,12 @@ def print_comparison_table(aie_res, backbone_res):
     print(f"| Stock VitisAI EP Baseline (Quantized)| 49 NPU Subgraphs    | 108.00 ms         | Severe thrashing    |")
     print(f"| Full Zen4 CPU Baseline (FP32)        | 8 Zen4 CPU Cores    |  18.37 ms         | PyTorch full model  |")
     print(f"| Full NPU (with AIE Attention Kernel) | Phoenix NPU         |  >120 ms (est.)   | Loses to stock EP   |")
-    print(f"| {GREEN}Heterogeneous Splice (Measured Wall){RESET} | {GREEN}NPU CNN + CPU Attn  {RESET}| {GREEN}{measured_splice_ms:5.2f} ms (meas.)  {RESET}| {GREEN}{18.37/measured_splice_ms:4.1f}x vs Full CPU (18.37ms){RESET}|")
+    print(f"| {YELLOW}Heterogeneous Splice (REPORTED)     {RESET} | {YELLOW}NPU CNN + CPU Attn  {RESET}| {YELLOW}{reported_splice_ms:5.2f} ms (unver.) {RESET}| {YELLOW}no results/ log yet {RESET}|")
     print(f"+--------------------------------------+---------------------+-------------------+---------------------+")
-    print(f"  * Measured wall-clock around real in-process loop: {backbone_ms:.2f} ms NPU backbone + {cpu_attn_all_ms:.2f} ms CPU attention")
-    print(f"    + {residual_ms:.2f} ms in-process buffer wrapping residual = {measured_splice_ms:.2f} ms (4.1x vs CPU).")
-    print(f"    Does NOT use the AIE attention kernel. In contrast, cross-process IPC handoff (measured in")
+    print(f"  * {YELLOW}The {reported_splice_ms:.2f} ms splice figure is REPORTED, not measured here.{RESET} This demo runs no spliced")
+    print(f"    loop; the number is a constant carried over from a prior session with no results/ log")
+    print(f"    behind it. Treat as unverified until a perf_counter run around the real loop is logged.")
+    print(f"    Does NOT use the AIE attention kernel. Cross-process IPC handoff (measured in")
     print(f"    groupnorm_bf16 at 789 us - 23.6 ms) would erase these gains if crossing Python ABI boundaries.\n")
 
 
