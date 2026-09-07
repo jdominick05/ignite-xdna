@@ -478,6 +478,32 @@
   No fused attention kernel is built yet; the baseline it needs to beat (must be
   ONNX-exportable and Quark-quantizable) also isn't decided. See
   `results/aie/mlir_aie_bf16_matmul_npu.log`.
+- **bf16 GEMM at M/N >= ~1024 is the first genuine NPU win measured anywhere in this
+  project (2026-09-07).** After conv closed at a 12.75x loss even at ResNet50's real
+  56×56 shape, and mobile-vision attention closed at 71–240×, the user reframed the
+  goal explicitly: stop trying to make the NPU match CPU at every op, find where it
+  actually has an edge. No CPU bf16/fp32 GEMM baseline existed in this repo to check
+  the 895 GFLOPS anchor against — every other CPU number here is int8 QDQ conv. Built
+  one (`kernels/bf16_matmul_sweep/cpu_matmul_sweep.py`, torch bf16/fp32, this
+  machine's Zen4 cores) and swept `whole_array.py` (4-column bf16) across shapes.
+  **At the one shape previously measured (512³), the NPU's 895 GFLOPS actually *loses*
+  to plain CPU torch bf16 (1100.6 GFLOPS)** on this specific machine (Ryzen 7 8700G, no
+  discrete GPU) — the "895 is a strength" framing was incomplete without this
+  comparison. But NPU throughput keeps climbing with M/N (895 → ~1800–2070 GFLOPS)
+  while CPU bf16 stays close to flat (1100–1360 GFLOPS); the crossover is around
+  N=1024 at M=K=512, and from there the NPU wins by **1.18×–1.78×** up to a K limit
+  (below). Every NPU number is a verified PASS against numpy `A@B`, not just timed.
+  **K >= 3072 fails correctness regardless of M/N** (tested M=K=N=4096, and each of
+  M=4096/N=4096 alone passing while K=3072 or K=4096 alone fails) — a real, current
+  limit in this in-tree `whole_array` design, not diagnosed this session (AIE2's
+  `aie::mmul` accumulates in fp32 natively, so plain bf16 rounding drift is an
+  unlikely explanation; more likely a K-loop tiling/indexing limit). Practical bf16
+  GEMM envelope on this hardware today: M/N in 1024–4096, K <= ~2048. This is the
+  "LLM-scale, not mobile-vision" shape `attention_bf16/README.md`'s own math already
+  predicted would be needed — but does not by itself mean a fused attention block
+  would win (softmax + two data-dependent matmuls, not one static GEMM, and an
+  attention block near LLM scale would likely hit the K>=3072 ceiling). See
+  `results/aie/bf16_matmul_niche_npu.log`.
 
 ## The YOLOv8 partitioning failure (resolved)
 

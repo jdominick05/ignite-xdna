@@ -576,6 +576,46 @@ sweep's own host cost runs 608–874 µs and *grows* with payload, so it is not 
 either. Nothing in either verdict depends on this — dispatch was never the thing to fix —
 but the agreement was numerology and is retracted here.
 
+### bf16 GEMM: the first genuine NPU win in this project
+
+Conv lost at 12.75×, even at ResNet50's real shape. Mobile-vision attention lost at
+71–240×. At that point the goal stopped being "make the NPU match CPU at every op" and
+became "find where it actually has an edge" — the NPU and the CPU are different
+hardware and shouldn't be expected to be good at the same things. No CPU bf16/fp32
+GEMM baseline existed anywhere in this repo to check that against — every other CPU
+number here is int8 QDQ conv. Built one
+(`kernels/bf16_matmul_sweep/cpu_matmul_sweep.py`, torch bf16 on this machine's Zen4
+cores) and swept the same 4-column bf16 `whole_array.py` design across shapes larger
+than the single 512³ point measured earlier.
+
+**At that one shape, the NPU's 895 GFLOPS actually loses to CPU bf16 (1100.6 GFLOPS)**
+on this machine (Ryzen 7 8700G, no discrete GPU) — the "895 is a strength" framing was
+incomplete without this comparison. But NPU throughput climbs with M/N while CPU bf16
+stays close to flat:
+
+| MxKxN | NPU GFLOPS | CPU bf16 GFLOPS | winner |
+|---|---|---|---|
+| 512×512×512 | 895.1 | 1100.6 | CPU, 1.23× |
+| 512×512×1024 | 1339.0 | 1134.5 | NPU, 1.18× |
+| 512×512×2048 | 1675.8 | 1146.6 | NPU, 1.46× |
+| 1024×1024×1024 | 2072.5 | 1161.2 | NPU, 1.78× |
+| 2048×2048×2048 | 1791.9 | 1197.5 | NPU, 1.50× |
+| 4096×2048×2048 | 1847.0 | 1247.7 | NPU, 1.48× |
+
+Every NPU number is a verified PASS against numpy `A@B`, not just timed. The crossover
+is around N=1024 at M=K=512; past it the NPU wins by 1.18×–1.78×. **K ≥ 3072 fails
+correctness regardless of M or N** — a real, undiagnosed limit in this in-tree design
+(M=4096 alone and N=4096 alone both pass; K=3072 or K=4096 alone fail), not ordinary
+bf16 rounding drift, since AIE2's `aie::mmul` accumulates in fp32 natively. Practical
+envelope today: M/N in 1024–4096, K ≤ ~2048.
+
+This is the "LLM-scale, not mobile-vision" shape `attention_bf16`'s own math predicted
+would be needed to make kernel quality (not dispatch overhead) the deciding factor. It
+does not by itself mean a fused attention block would win — attention is softmax plus
+two data-dependent matmuls, not one static GEMM, and a block anywhere near LLM scale
+would need to fit inside the K ≤ ~2048 ceiling above. See
+`results/aie/bf16_matmul_niche_npu.log`.
+
 **Heterogeneous splice, now measured: 3.25 ms, and 2.31× — not the 4.47 ms / 4.1× once
 published here.** `tools/splice_wall_clock.py` puts a `perf_counter` around a real
 in-process loop (`results/mobilevit/splice_wall_clock_npu.log`, 100 iterations, every row

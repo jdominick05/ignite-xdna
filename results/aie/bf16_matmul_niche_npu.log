@@ -1,0 +1,84 @@
+bf16 GEMM, NPU vs CPU, at shapes beyond the single 512x512x512 anchor in
+mlir_aie_bf16_matmul_npu.log -- the first head-to-head NPU-vs-CPU bf16/fp32 matmul
+comparison in this project (every other CPU number here is int8 QDQ conv).
+Desktop 2 (Ryzen 7 8700G / Phoenix XDNA1), 2026-09-07, both sides one sitting.
+
+WHY THIS EXISTS
+===============
+attention_bf16/README.md closed MobileViT-scale fused attention as a definitive loss
+(71-240x) and did the math on why: even a *perfect* aie::mmul kernel needs the op to be
+~20x bigger than mobile-vision attention before compute time (at the 895 GFLOPS anchor)
+outruns the ~617us dispatch floor. That points at LLM-scale GEMM, not mobile vision. But
+no CPU bf16/fp32 GEMM baseline existed anywhere in this repo to compare against at any
+size -- so "895 GFLOPS is good" was never checked against what this machine's own CPU
+does at bf16 matmul. It is checked here.
+
+  NPU : whole_array.py (~/mlir-aie/programming_examples/basic/matrix_multiplication/
+        whole_array), --n-aie-cols 4 --dtype_in bf16 --dtype_out bf16, ironenv
+  CPU : kernels/bf16_matmul_sweep/cpu_matmul_sweep.py, torch 2.4.1+cpu, resnet_env
+
+Every NPU number below is a verified PASS (whole_array.py's own A@B correctness check
+against numpy), not just timed.
+
+RESULTS -- hardware bracket (NPU) vs mean wall time (CPU), same MxKxN shape
+=============================================================================
+      MxKxN         NPU GFLOPS   CPU bf16 GFLOPS   ratio    winner
+------------------------------------------------------------------------
+   512x512x512          895.08           1100.6     0.81x   CPU
+  512x512x1024         1339.03           1134.5     1.18x   NPU
+  512x512x2048         1675.84           1146.6     1.46x   NPU
+ 512x2048x2048         1645.62           1124.0     1.46x   NPU
+1024x1024x1024         2072.54           1161.2     1.78x   NPU
+2048x2048x2048         1791.90           1197.5     1.50x   NPU
+2048x2048x4096         1842.70           1323.2     1.39x   NPU
+4096x2048x2048         1846.96           1247.7     1.48x   NPU
+   K >= 3072 (any M, N)         FAIL -- output does not match A@B (see below)
+
+CPU fp32 numbers (for reference, not the comparison -- bf16 is the like-for-like
+dtype): 512-580 GFLOPS at all shapes tested, roughly half the bf16 rate, consistent
+with AVX-512 fp32 vs bf16 throughput on this Zen4 core.
+
+THE FINDING
+===========
+**The first genuine NPU win measured anywhere in this project.** At the single shape
+this project had previously measured (512x512x512), the NPU's 895 GFLOPS actually
+*loses* to plain CPU torch bf16 matmul (1100.6 GFLOPS) on this specific machine (Ryzen
+7 8700G, no discrete GPU) -- so the "895 GFLOPS is a strength" framing in
+mlir_aie_bf16_matmul_npu.log was incomplete without this comparison. But GFLOPS is not
+flat with size on either side, and they diverge: NPU throughput keeps climbing with M/N
+(895 -> ~1800-2070 GFLOPS across the shapes tested) while CPU bf16 throughput is close
+to flat (1100-1360 GFLOPS across the same range, mild upward drift from cache effects).
+The crossover is around N=1024 at M=K=512: NPU wins from there on, by 1.2x-1.8x, up to
+the K limit below.
+
+K >= 3072 FAILS CORRECTNESS -- A REAL, UNDIAGNOSED LIMIT, NOT A TYPO
+=====================================================================
+M=4096 alone (K=N=2048) passes. N=4096 alone (M=K=2048) passes. K=3072 or K=4096 fails
+regardless of M/N (tested M=K=N=4096, M=2048/K=4096/N=2048, M=2048/K=3072/N=2048 --
+all FAIL; only the K dimension was implicated in every failing combination tested).
+AIE2's aie::mmul accumulates bf16 x bf16 -> fp32 natively, so this does not look like
+ordinary bf16 rounding drift; more likely a tiling/indexing limit in this in-tree
+whole_array design specific to the K (reduction) loop's tile count at this scale. NOT
+diagnosed further this session -- upstream example code, out of scope for this pass.
+Flagged as an open item: the practical bf16 GEMM range on this hardware, with this
+design, is K <= ~2048.
+
+WHAT THIS MEANS FOR THE "FIND THE NPU'S NICHE" QUESTION
+=========================================================
+This is the answer the project was looking for after conv (12.75x loss, even at
+ResNet50's real shape, bottleneck_w56_npu.log) and mobile-vision attention (71-240x
+loss, attention_bf16/README.md) both closed against the NPU. Large bf16 GEMM -- M/N in
+the 1024-4096 range, K up to ~2048 -- is a real, measured NPU strength on this specific
+machine, not a marketing GFLOPS number. This is exactly the "LLM-scale, not mobile
+vision" shape attention_bf16/README.md's own math predicted would be needed. It does
+NOT mean attention itself would win yet -- attention adds softmax and two matmuls with
+data-dependent shapes, not a single large GEMM, and the K>=3072 ceiling would bite an
+attention block with head_dim x seq_len anywhere near LLM scale (seq_len >= 2048 was
+named as the threshold that would matter). Next step, not done this session: either
+diagnose the K>=3072 failure (it may be a small tiling fix, unlike conv2dk3/conv2dk1's
+register-spill class of bug) or build a fused attention/FFN block that stays within the
+verified K<=2048 envelope and re-measure end to end.
+
+Local mlir-aie checkout only where whole_array.py was invoked directly (no local edits
+made to it this session, unlike bottleneck.py). cpu_matmul_sweep.py is new, committed
+to this repo at kernels/bf16_matmul_sweep/.
