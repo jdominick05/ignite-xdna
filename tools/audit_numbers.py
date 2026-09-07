@@ -67,7 +67,7 @@ def log_corpus(root: Path) -> str:
         return ""
     chunks = []
     for p in results.rglob("*"):
-        if p.is_file() and p.suffix.lower() in {".log", ".txt", ".json"}:
+        if p.is_file() and p.suffix.lower() in {".log", ".txt", ".json"} and not p.name.startswith("dets_"):
             try:
                 chunks.append(p.read_text(encoding="utf-8", errors="replace"))
             except OSError:

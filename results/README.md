@@ -11,7 +11,7 @@ than going quietly stale.
 
 | Directory | Experiment | Section it backs |
 |---|---|---|
-| `bench/` | YOLOv8 n vs s: quantization, latency, COCO mAP on the full val2017 set, EP reports | [Model size: n vs s](../docs/BENCHMARKS.md#model-size-n-vs-s-measured-together) |
+| `bench/` | YOLOv8 n vs s vs m: quantization, latency, COCO mAP on the full val2017 set (including `quant_yolov8m_cut_xint8_c200.log`, `lat_yolov8m_cut_xint8_c200_npu.log`, `lat_yolov8m_cpu.log`, `diag_yolov8m_cut_xint8_c200.log`, `map_yolov8m_cut_xint8_c200_npu.log`, `map_yolov8m_cpu.log`), EP reports | [Model size: n vs s](../docs/BENCHMARKS.md#model-size-n-vs-s-measured-together) |
 | `bench/` | `lat_yolov8n_igpu_vs_npu_sweep.log`, `diag_dml_node_placement.log`, `map_yolov8n_{,fp16_}dml.log`, `{lat,map}_yolov8n_cut_xint8_adaround_npu.log`: CPU/DML/NPU head-to-head, DML node-placement evidence (no `vitisai_ep_report.json` equivalent exists for DML, so `_dml` logs carry a `--log 0` "All nodes placed on" line instead), full-5000 AdaRound mAP | [iGPU vs NPU](../docs/BENCHMARKS.md#igpu-vs-npu-is-ryzen-ai-worth-it-over-directml) |
 | `res/` | ResNet50 at 128²–384²: export, quantization, NPU run, EP report per resolution; plus 288² AdaRound logs (`quant_resnet50_r288_xint8_adaround.log`, `run_resnet50_r288_adaround_npu.log`, `diag_resnet50_r288_adaround.log`) | [ResNet50 input resolution](../docs/BENCHMARKS.md#resnet50-input-resolution-does-the-fixed-cost-story-hold-for-a-classifier) |
 | `wide/` | `wide_resnet50_2`, `wide_resnet101_2`, and yolov8m: width steps on both pipelines | [Model width](../docs/BENCHMARKS.md#model-width-does-width-is-nearly-free-hold-for-a-classifier-too); [a third width step](../docs/BENCHMARKS.md#model-size-n-vs-s-measured-together) |

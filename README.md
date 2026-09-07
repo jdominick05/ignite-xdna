@@ -40,18 +40,17 @@ Detection width sweep, head-cut plain XINT8, full 5000-image val2017 mAP
 |---|---|---|---|---|---|
 | yolov8n | **8.94 ms** | 26.94 | 40.15 | 922 / 929 | 200 |
 | yolov8s | **15.63 ms** | 37.40 | 53.13 | 922 / 929 | 200 |
-| yolov8m | **30.80 ms** | 43.49 | 59.79 | 1216 / 1223 | 64 |
+| yolov8m | **26.95 ms** | 43.38 | 59.62 | 1216 / 1223 | 200 |
 | yolov8l | **49.67 ms** | 45.37 | 62.34 | 1510 / 1517 | 32 |
 | yolov8x | **117.11 ms** | 45.09 | 61.37 | 1510 / 1517 | 24 |
 
-> **These rows are not like-for-like.** Calibration count drops from 200 to 24 across
-> the table because disk was the blocker (~1–1.5 GB of spooled activations per
-> calibration image at 640×640), so m/l/x are calibrated thinner than n/s. Calibration
-> size affects the quantization's exact operating point; this repo's own finding is that
-> width dominates the accuracy story far more than sample count does, but the rows still
-> aren't a clean comparison. l's full eval is also flaky — two of three 5000-image
-> attempts hit a hardware `DPU timeout`. Working:
-> [Model size: n vs s](docs/BENCHMARKS.md#model-size-n-vs-s-measured-together).
+> **These rows are not like-for-like.** Calibration count drops across the table
+> because disk was the blocker (~1–1.5 GB of spooled activations per calibration
+> image at 640×640), so l (32) and x (24) are calibrated thinner than n/s/m (200).
+> Width dominates the accuracy story far more than sample count does: yolov8m at
+> 200 images shifted mAP by only -0.11 points (43.49 → 43.38) vs calib 64.
+> l's full eval is also flaky — two of three 5000-image attempts hit a hardware `DPU timeout`.
+> Working: [Model size: n vs s](docs/BENCHMARKS.md#model-size-n-vs-s-measured-together).
 
 ## Headline findings
 

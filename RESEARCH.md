@@ -1303,12 +1303,18 @@ sections above.
   that the plain XINT8 drop at 288² (which fell below 256²) was primarily quantization noise
   rather than resolution mismatch, though 224² remains optimal on both axes (79.80% at 5.27 ms).
   [Working](docs/BENCHMARKS.md#resnet50-input-resolution-does-the-fixed-cost-story-hold-for-a-classifier).
+- **A yolov8m mAP row at calibration 200.** Measured on the full 5000-image val2017 set:
+  plain XINT8 calibrated on 200 images scores 43.38 mAP@50-95 and 59.62 mAP@50 at 26.95 ms
+  (1216/1223 nodes, 99.4%) on NPU (`results/bench/map_yolov8m_cut_xint8_c200_npu.log`,
+  `results/bench/lat_yolov8m_cut_xint8_c200_npu.log`, `results/bench/diag_yolov8m_cut_xint8_c200.log`).
+  This matches the original calib-64 row (43.49 / 59.79 at 30.80 ms) within 0.11 points, closing the
+  calibration-size caveat and confirming that width, not calibration sample count past 64, dominates
+  quantization accuracy. The float CPU baseline on the same 5000 images is 49.54 mAP@50-95 / 66.09 mAP@50
+  at 144.12 ms (`results/bench/map_yolov8m_cpu.log`, `results/bench/lat_yolov8m_cpu.log`), showing a 5.35×
+  NPU speedup. [Working](docs/BENCHMARKS.md#model-size-n-vs-s-measured-together).
 
 **Still open.**
 
-- **A yolov8m mAP row at calibration 200**, so the detection width table is
-  like-for-like at every size (the current 43.49 was calibrated on 64 images). Same
-  caveat now applies to l (32) and x (24).
 - **The webcam path (single `4x4.xclbin` session, `./scripts/yolo-demo.sh`) has not
   been exercised end to end.** The related but distinct round-robin-across-4-columns
   demo *has* — see

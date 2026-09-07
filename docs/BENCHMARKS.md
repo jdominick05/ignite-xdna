@@ -77,8 +77,10 @@ reproduces every cell.
 |---|---|---|---|---|---|
 | yolov8n XINT8, head-cut | NPU | **8.94 ms** (112 fps) | 26.94 | 40.15 | 922 / 929 |
 | **yolov8s XINT8, head-cut** | **NPU** | **15.63 ms** (64 fps) | **37.40** | **53.13** | 922 / 929 |
+| **yolov8m XINT8, head-cut** | **NPU** | **26.95 ms** (37 fps) | **43.38** | **59.62** | 1216 / 1223 |
 | yolov8n FP32 | CPU | 34.04 ms | 36.69 | 51.64 | — |
 | yolov8s FP32 | CPU | 82.33 ms | 44.29 | 60.69 | — |
+| yolov8m FP32 | CPU | 144.12 ms | 49.54 | 66.09 | — |
 
 Three things fall out of that table, and they all point the same way.
 
@@ -149,10 +151,7 @@ Windows tooling can't resolve it at all, not just misrepresent it. The diag repo
 (1216/1223 nodes) and the measured 6.6× speedup remain the reliable evidence that the NPU
 did the work — not this counter.
 
-Caveat: yolov8m's mAP was measured on a calib-64 quantization, not calib-200 like n/s
-above, so it isn't a perfectly like-for-like row — calibration size affects the
-quantization's exact operating point, though this repo's own finding is that width
-dominates the accuracy story far more than calibration sample count does.
+Caveat: yolov8m's mAP was originally measured on a calib-64 quantization (`results/wide/map_yolov8m_npu.log`), not calib-200 like n/s above. Re-measuring it under `./scripts/yolo-bench.sh --variants "m" --calib 200 --no-adaround` produces **43.38 mAP@50-95** and **59.62 mAP@50** at **26.95 ms** (`results/bench/map_yolov8m_cut_xint8_c200_npu.log`, `results/bench/lat_yolov8m_cut_xint8_c200_npu.log`, `results/bench/diag_yolov8m_cut_xint8_c200.log`). The mAP delta is just -0.11 points, closing the caveat and proving that calibration sample count past 64 does not meaningfully change the quantization operating point. The full 5000-image FP32 CPU baseline for yolov8m was also measured in this run: **49.54 mAP@50-95, 66.09 mAP@50** at **144.12 ms** (`results/bench/map_yolov8m_cpu.log`, `results/bench/lat_yolov8m_cpu.log`).
 
 **The last two width steps: l and x.** Disk was the blocker (`calib_mb_per_image`
 extrapolates ~1-1.5 GB/calibration-image at 640×640), so both are calibrated smaller

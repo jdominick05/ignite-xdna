@@ -102,7 +102,7 @@ def main():
 
     threads = args.threads
     if threads is None:
-        threads = int(os.environ.get("OMP_NUM_THREADS", "4"))
+        threads = int(os.environ.get("OMP_NUM_THREADS", "8"))
     os.environ["OMP_NUM_THREADS"] = str(threads)
     os.environ["MKL_NUM_THREADS"] = str(threads)
     os.environ["OPENBLAS_NUM_THREADS"] = str(threads)
@@ -111,6 +111,23 @@ def main():
         torch.set_num_threads(threads)
     except ImportError:
         pass
+
+    # On Windows with SMT (e.g. 8 cores / 16 threads), pin to physical cores
+    # to avoid SMT thread thrashing on OpenMP barriers.
+    if sys.platform == "win32" and (os.cpu_count() or 0) >= 16:
+        try:
+            import ctypes
+            from ctypes import wintypes
+            k32 = ctypes.windll.kernel32
+            k32.SetProcessAffinityMask.argtypes = [wintypes.HANDLE, ctypes.c_size_t]
+            k32.SetProcessAffinityMask.restype = wintypes.BOOL
+            mask = 0x5555 if threads == 8 else (0x55 if threads == 4 else None)
+            if mask is not None:
+                if k32.SetProcessAffinityMask(k32.GetCurrentProcess(), mask):
+                    print(f"Pinned process affinity mask to 0x{mask:X} ({threads} real cores, no SMT)")
+        except Exception:
+            pass
+
     print(f"CPU threads: {threads}")
 
     out_model = args.out or str(MODELS / f"resnet50_{args.config.lower()}.onnx")

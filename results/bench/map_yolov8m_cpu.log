@@ -1,0 +1,47 @@
+loading annotations into memory...
+Done (t=0.27s)
+creating index...
+index created!
+model: full graph (1 output), ONNX decode, input 640x640
+eval : 5000 images, conf 0.001, iou 0.7, max_det 300, per-class NMS
+  500/5000  (46149 detections so far)
+  1000/5000  (92685 detections so far)
+  1500/5000  (141507 detections so far)
+  2000/5000  (187975 detections so far)
+  2500/5000  (233671 detections so far)
+  3000/5000  (280477 detections so far)
+  3500/5000  (328279 detections so far)
+  4000/5000  (375925 detections so far)
+  4500/5000  (424901 detections so far)
+  5000/5000  (471168 detections so far)
+
+471168 detections over 5000 images in 783s
+inference  mean 149.08 ms   median 148.41 ms
+wrote C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\results\dets_yolov8m_cpu.json
+Loading and preparing results...
+DONE (t=1.37s)
+creating index...
+index created!
+Running per image evaluation...
+Evaluate annotation type *bbox*
+DONE (t=21.70s).
+Accumulating evaluation results...
+DONE (t=3.92s).
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.495
+ Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] = 0.661
+ Average Precision  (AP) @[ IoU=0.75      | area=   all | maxDets=100 ] = 0.540
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.311
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.549
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.656
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=  1 ] = 0.370
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets= 10 ] = 0.607
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.653
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.466
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.712
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.791
+
+=== yolov8m | CPU | 640px | 5000 images ===
+mAP@50-95  49.54
+mAP@50     66.09
+mAP small / medium / large   31.06 / 54.94 / 65.58
+latency    149.08 ms

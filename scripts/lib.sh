@@ -15,10 +15,10 @@ cd "$REPO_ROOT"
 # Threading defaults for CPU quantization / FastFinetune / calibration.
 # PyTorch and ONNX Runtime default to all logical threads (16 on 8700G),
 # which causes severe OpenMP barrier contention and thread thrashing on tiny
-# per-layer FastFinetune batches (batch size 2).
-: "${OMP_NUM_THREADS:=4}"
-: "${MKL_NUM_THREADS:=4}"
-: "${OPENBLAS_NUM_THREADS:=4}"
+# per-layer FastFinetune batches (batch size 2). 8 physical cores is the measured sweet spot.
+: "${OMP_NUM_THREADS:=8}"
+: "${MKL_NUM_THREADS:=8}"
+: "${OPENBLAS_NUM_THREADS:=8}"
 : "${OMP_WAIT_POLICY:=PASSIVE}"
 export OMP_NUM_THREADS MKL_NUM_THREADS OPENBLAS_NUM_THREADS OMP_WAIT_POLICY
 
