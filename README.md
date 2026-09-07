@@ -537,17 +537,27 @@ against a 570% gap. 512×32 is simultaneously the NPU's best point and the CPU's
 (the working set has outgrown cache there) and the CPU still wins 5.7×; every other shape
 is worse for the NPU.
 
-**`tensor_w` = 32 is a hard ceiling, and ResNet50's real conv2_x is 56×56.** 56×56, 32×64,
-64×64 and 128×64 all fail in `aiecc`, not at runtime: the skip-add core needs five
-`w`×256-byte buffers plus stack against 64 KB of AIE2 tile memory (`'aie.tile' op allocated
-buffers exceeded available memory`, both bank-aware and sequential allocation). So the 32²
-that `layers_conv2_x` runs is not the network's shape — it is the largest square that fits.
+**`tensor_w` = 32 was recorded here as a hard ceiling; corrected to 44 (2026-09-07).**
+56×56, 32×64, 64×64 and 128×64 all failed in `aiecc`, not at runtime: the skip-add core
+needs five buffers plus stack against 64 KB of AIE2 tile memory (`'aie.tile' op allocated
+buffers exceeded available memory`). But only four of those five buffers actually scale
+with `w`; the fifth (the 1×1+skip weights) is sized by channels and stays fixed — the
+"5×w×256 B" estimate overstated the ceiling everywhere except the one width (64) it was
+checked at. `conv2dk1.cc`/`conv2dk3.cc` have since been read and both had a real bug: a
+width-32-only restriction (`conv2dk3`'s pointer-stride hardcode, `conv2dk1`/
+`conv2dk1_skip`'s dead remainder path), fixed and verified end-to-end through
+`bottleneck.py` itself at `tensor_w`=36/40/44 (`results/aie/conv2dk3_widthfix_npu.log`,
+`results/aie/bottleneck_widthfix_npu.log`, `docs/DECISIONS.md`). So the 32² that
+`layers_conv2_x` runs still is not the network's real 56×56 shape — the corrected ceiling
+of 44 is closer but still short of it, and reaching 56 needs the skip-add tile's buffering
+restructured, not another kernel fix.
 
 What that leaves open is narrower and more specific than before: **column count** (both
 measurements use 1–3 columns of a 4×5 array; 4×146 ≈ 584 GOPS would still lose, but not by
 5.6×) and **kernel quality** — 146 GOPS is roughly 7% of one column's ~2 TOPS int8 peak
 (architectural, not measured here), the same shape of finding as the attention kernel's
-0.61 of 895 GFLOPS. Nobody has read `conv2dk1.cc`/`conv2dk3.cc` to see how they vectorize.
+0.61 of 895 GFLOPS. The width fix confirmed the kernels vectorize correctly but does not
+change this gap — 99.1 GOPS at the new `tensor_w`=44 ceiling is still far below the CPU.
 
 **A correction that came out of this sweep:** the conv2x log called its 628.2 µs of host
 cost a reproduction of the passthrough's 617.0 µs "to ~2%". Those are different quantities.
