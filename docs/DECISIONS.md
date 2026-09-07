@@ -493,16 +493,23 @@
   while CPU bf16 stays close to flat (1100–1360 GFLOPS); the crossover is around
   N=1024 at M=K=512, and from there the NPU wins by **1.18×–1.78×** up to a K limit
   (below). Every NPU number is a verified PASS against numpy `A@B`, not just timed.
-  **K >= 3072 fails correctness regardless of M/N** (tested M=K=N=4096, and each of
-  M=4096/N=4096 alone passing while K=3072 or K=4096 alone fails) — a real, current
-  limit in this in-tree `whole_array` design, not diagnosed this session (AIE2's
-  `aie::mmul` accumulates in fp32 natively, so plain bf16 rounding drift is an
-  unlikely explanation; more likely a K-loop tiling/indexing limit). Practical bf16
-  GEMM envelope on this hardware today: M/N in 1024–4096, K <= ~2048. This is the
-  "LLM-scale, not mobile-vision" shape `attention_bf16/README.md`'s own math already
-  predicted would be needed — but does not by itself mean a fused attention block
-  would win (softmax + two data-dependent matmuls, not one static GEMM, and an
-  attention block near LLM scale would likely hit the K>=3072 ceiling). See
+  **Diagnosed (2026-09-07): the "K >= 3072 fails, undiagnosed" limit was mis-framed —
+  not a threshold, and not undiagnosed.** Bisecting K in small steps shows the error
+  starts continuously around K/k≈23 reduction steps and grows smoothly to near-total by
+  K/k=96, always a systematic ~10–13% undercount, never NaN/garbage — a precision
+  signature, not an addressing bug. **Root cause: the K-reduction loop accumulates the
+  running sum in a buffer typed `dtype_out`, not fp32.** `aie::mmul` does accumulate one
+  MAC to fp32 natively, but with `--dtype_out bf16` that fp32 result is rounded back to
+  bf16 before the next reduction step adds onto it, so the running sum round-trips
+  through bf16's 8-bit mantissa on every step and swamps small increments once its
+  magnitude grows. **Fix, and it's free: `--dtype_out f32`** — clean PASS at K=2880 and
+  K=4096 on the real `whole_array` design, 1741.7 and 1830.2 GFLOPS, in the same range
+  as the bf16-output numbers above. K was never the ceiling; the output dtype was. See
+  `results/aie/bf16_matmul_k_limit_diagnosed_npu.log`. This is the "LLM-scale, not
+  mobile-vision" shape `attention_bf16/README.md`'s own math already predicted would be
+  needed — but does not by itself mean a fused attention block would win (softmax + two
+  data-dependent matmuls, not one static GEMM), and whether `attention_bf16`'s own
+  kernel has the same accumulate-in-`dtype_out` pattern is unchecked. See
   `results/aie/bf16_matmul_niche_npu.log`.
 
 ## The YOLOv8 partitioning failure (resolved)
@@ -621,7 +628,7 @@ caches.
 
 ### The Problem: Stock VitisAI EP Partition Thrashing
 
-- Stock `mobilevit_xxs` quantized via Quark (XINT8 MinMSE) was accepted by VitisAI EP, but partitioned into **49 separate subgraphs** (48 CPU-NPU context switches / DMA roundtrips) because the DPU overlay lacks support for `Softmax`, `LayerNorm`, and standalone `MatMul`.
+- Stock `mobilevit_xxs` quantized via Quark (XINT8 MinMSE) was accepted by VitisAI EP, but partitioned into **49 metaDef subgraphs (58 IPU subgraphs)** (48 CPU-NPU context switches / DMA roundtrips) because the DPU overlay lacks support for `Softmax`, `LayerNorm`, and standalone `MatMul`.
 - **Measured Latency:** **108.00 ms** on physical Phoenix NPU, compared to **18.37 ms** on the 8-core Zen4 CPU (a 5.9× slowdown on NPU due to DMA/IPC overhead).
 
 ### The Remedy: Slicing the CNN Backbone & Custom Fused BF16 Attention
@@ -947,7 +954,7 @@ caches.
     `results/mobilevit/splice_wall_clock_npu.log`, 100 iterations, all rows from one run.
     Backbone NPU 1.71 ms / CPU 5.65 ms (3.30× like-for-like); attention ×9 on CPU 1.41 ms
     (torch, 8 threads); splice 3.25 ms with an in-process residual of **+0.13 ms**; full
-    FP32 under the ORT CPU EP 7.51 ms; stock 49-subgraph graph on NPU 108.29 ms.
+    FP32 under the ORT CPU EP 7.51 ms; stock 49-subgraph (metaDef; 58 IPU subgraphs) graph on NPU 108.29 ms.
     What the old numbers got wrong: the 0.72 ms residual was back-solved from a hardcoded
     total and is really 0.13 ms, and the 4.1× compared an ORT splice against a **PyTorch
     eager** baseline (18.37 ms). PyTorch eager measures 15.71 ms here, but ORT CPU runs the

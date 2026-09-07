@@ -383,7 +383,7 @@ GFLOPS, PASS.** See `results/aie/mlir_aie_bf16_matmul_npu.log`.
 
 **Follow-up: Fused BF16 Attention Kernel Built, but Small Sequence Length Exposes the Arithmetic Floor (Negative Result).**
 Investigating the hybrid CNN-Transformer architecture `mobilevit_xxs`: stock VitisAI EP
-partitioned it into **58 thrashing DPU subgraphs, 108.29 ms** (1,037 NPU / 156 CPU /
+partitioned it into **49 metaDef (58 IPU) thrashing DPU subgraphs, 108.29 ms** (1,037 NPU / 156 CPU /
 392 `VITIS_EP_CPU` nodes, the CPU compute being LayerNorm, MatMul, Slice, Squeeze,
 Transpose, Reshape) because the DPU overlay has no kernel for those transformer
 operators — **14.4× slower than the same FP32 graph under the ORT CPU EP (7.51 ms)**.
@@ -570,18 +570,34 @@ stays close to flat:
 | 4096×2048×2048 | 1847.0 | 1247.7 | NPU, 1.48× |
 
 Every NPU number is a verified PASS against numpy `A@B`, not just timed. The crossover
-is around N=1024 at M=K=512; past it the NPU wins by 1.18×–1.78×. **K ≥ 3072 fails
-correctness regardless of M or N** — a real, undiagnosed limit in this in-tree design
-(M=4096 alone and N=4096 alone both pass; K=3072 or K=4096 alone fail), not ordinary
-bf16 rounding drift, since AIE2's `aie::mmul` accumulates in fp32 natively. Practical
-envelope today: M/N in 1024–4096, K ≤ ~2048.
+is around N=1024 at M=K=512; past it the NPU wins by 1.18×–1.78×.
+
+**Correction (2026-09-07): "K ≥ 3072 fails correctness, undiagnosed" was the wrong
+framing — it isn't a threshold, and it isn't undiagnosed.** Bisecting K in small steps
+(not the original coarse 512/1024/2048/4096 grid) shows the error starts continuously
+around K/k≈23 tile-iterations (K=1472 at the design's default k=32 tile) and grows
+smoothly — 1 element wrong of 262,144 at onset, 4.0% wrong by K=2048, 99.99% wrong by
+K=3072 — always a systematic ~10–13% *undercount*, never NaN/garbage. **Root cause: the
+K-reduction loop accumulates the running sum directly in a buffer typed `dtype_out`, not
+fp32** — with `--dtype_out bf16` (every number in the table above), the partial sum
+round-trips through bf16's 8-bit mantissa on every one of the K/k reduction steps, and
+once its magnitude swamps a new tile's marginal contribution, that increment is dropped.
+AIE2's `aie::mmul` does accumulate one MAC to fp32 natively, but that result is rounded
+back to bf16 the instant it's stored for the next iteration to add onto — the fp32
+accumulation the hardware is capable of never spans more than one step.
+**Fix, and it's free: `--dtype_out f32`** — verified 0/262,144 mismatches at K=3072
+(single-core) and clean PASSes at K=2880 and K=4096 on the real 4-column `whole_array`
+design, at 1741.7 and 1830.2 GFLOPS — in the same range as the bf16-output numbers
+above, no measured throughput cost. K was never the real ceiling; the output dtype was.
+See `results/aie/bf16_matmul_k_limit_diagnosed_npu.log`.
 
 This is the "LLM-scale, not mobile-vision" shape `attention_bf16`'s own math predicted
 would be needed to make kernel quality (not dispatch overhead) the deciding factor. It
 does not by itself mean a fused attention block would win — attention is softmax plus
-two data-dependent matmuls, not one static GEMM, and a block anywhere near LLM scale
-would need to fit inside the K ≤ ~2048 ceiling above. See
-`results/aie/bf16_matmul_niche_npu.log`.
+two data-dependent matmuls, not one static GEMM — but the K ceiling that would have
+capped a head_dim×seq_len block near LLM scale is gone with `--dtype_out f32`; whether
+`attention_bf16`'s own kernel has the same accumulate-in-`dtype_out` pattern is
+unchecked. See `results/aie/bf16_matmul_niche_npu.log`.
 
 **Heterogeneous splice, now measured: 3.25 ms, and 2.31× — not the 4.47 ms / 4.1× once
 published here.** `tools/splice_wall_clock.py` puts a `perf_counter` around a real
@@ -595,7 +611,7 @@ from the same run because NPU latency drifts between sessions):
 | Attention ×9 blocks, CPU (torch, 8 threads) | 1.41 ms | |
 | **Splice: NPU backbone + CPU attention** | **3.25 ms** | in-process residual **+0.13 ms** |
 | Full model FP32, **ORT CPU EP** | 7.51 ms | → splice is **2.31×** |
-| Full model XINT8, stock graph on NPU | 108.29 ms | 1037/156/392 nodes, **58** subgraphs |
+| Full model XINT8, stock graph on NPU | 108.29 ms | 1037/156/392 nodes, **49 metaDef (58 IPU)** subgraphs |
 
 Three corrections fall out. **The residual is 0.13 ms, not 0.72** — the old figure was
 back-solved from a hardcoded total, and in-process handoff is very nearly free. **The

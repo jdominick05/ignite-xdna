@@ -55,12 +55,20 @@ with M/N (895 → ~1800–2070 GFLOPS) while CPU bf16 stays close to flat (1100�
 Crossover around N=1024 at M=K=512; from there **NPU wins 1.18×–1.78×**, every number a
 verified PASS against numpy.
 
-**`K ≥ 3072` fails correctness regardless of M/N** — a real, undiagnosed limit in the
-in-tree design (M=4096 alone and N=4096 alone both pass; K=3072/4096 alone fail), not
-bf16 rounding drift (AIE2's `aie::mmul` accumulates in fp32). Practical envelope today:
-M/N 1024–4096, K ≤ ~2048 — the "LLM-scale, not mobile-vision" shape
-`attention_bf16/README.md`'s own math predicted would be needed, though a real fused
-attention block would need to fit inside the K ceiling too.
+**Diagnosed (2026-09-07): "`K ≥ 3072` fails, undiagnosed" was the wrong framing.** It
+isn't a threshold — error starts continuously around K/k≈23 reduction steps and grows
+smoothly to near-total by K/k=96, always a systematic ~10–13% undercount, never
+NaN/garbage. **Root cause: the K-reduction loop accumulates into a buffer typed
+`dtype_out`, not fp32** — with `--dtype_out bf16`, the running sum round-trips through
+bf16's 8-bit mantissa every reduction step and swamps small increments once the sum's
+magnitude grows. `aie::mmul` does accumulate one MAC to fp32, but that result is
+rounded back to bf16 before the next step adds onto it. **Fix, and it's free:
+`--dtype_out f32`** — clean PASS at K=2880 and K=4096 on `whole_array`, 1741.7 and
+1830.2 GFLOPS, same range as the bf16-output numbers above. K was never the ceiling;
+the output dtype was. See `results/aie/bf16_matmul_k_limit_diagnosed_npu.log`. This is
+the "LLM-scale, not mobile-vision" shape `attention_bf16/README.md`'s own math
+predicted would be needed — a real fused attention block still needs its own check for
+the same accumulate-in-`dtype_out` pattern, unchecked so far.
 
 `results/aie/bf16_matmul_niche_npu.log`, `docs/DECISIONS.md`.
 

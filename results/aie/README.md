@@ -35,6 +35,11 @@ Read these before quoting anything below.
 - **`bottleneck_spatial_sweep_npu.log`'s open item "kernel quality … `conv2dk1.cc`/
   `conv2dk3.cc` unread" is closed:** both have since been read, both vectorize correctly
   with `aie::mmul`, and both carried a width-32 bug that is now fixed and verified.
+- **`bf16_matmul_niche_npu.log`'s "K ≥ 3072 fails correctness, undiagnosed" is
+  corrected** by `bf16_matmul_k_limit_diagnosed_npu.log`: not a threshold, and not
+  undiagnosed. The K-reduction accumulates in a buffer typed `dtype_out`; with
+  `--dtype_out bf16` the running sum swamps small increments as K grows. `--dtype_out
+  f32` removes the limit for free, verified clean to K=4096.
 
 ## Toolchain bring-up
 
@@ -145,8 +150,16 @@ genuine NPU win: `kernels/bf16_matmul_sweep/cpu_matmul_sweep.py` (torch bf16 on 
 machine's Zen4 cores) against the 4-column `whole_array.py` design across shapes larger
 than the single 512³ point above. At 512³ the NPU's 895 GFLOPS **loses** to CPU bf16's
 1100.6; past a crossover near N=1024 the NPU wins 1.18×–1.78×, peaking at 2072.5 GFLOPS at
-1024³. `K ≥ 3072` fails correctness regardless of M or N — undiagnosed, and not ordinary
-bf16 rounding drift. Every NPU number is a verified PASS against numpy `A@B`.
+1024³. Every NPU number is a verified PASS against numpy `A@B`.
+
+**`bf16_matmul_k_limit_diagnosed_npu.log`** — follow-up that diagnoses the above log's
+"`K ≥ 3072` fails, undiagnosed" close. **Not a threshold**: bisecting K shows the error
+starts continuously around K/k≈23 and grows smoothly, always a systematic ~10–13%
+undercount (a precision signature, not an addressing bug). **Root cause: the K-reduction
+loop accumulates in a buffer typed `dtype_out`, not fp32** — `--dtype_out bf16` rounds
+the running sum back to bf16 every reduction step, swamping small increments as it
+grows. **Fix, free: `--dtype_out f32`** — clean PASS at K=2880/4096 on `whole_array`,
+1741.7/1830.2 GFLOPS, same range as the bf16-output numbers above.
 
 ## Dispatch floor and the int8 conv verdict
 

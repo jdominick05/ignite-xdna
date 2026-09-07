@@ -1,0 +1,108 @@
+bf16 GEMM "K >= 3072 fails correctness" (bf16_matmul_niche_npu.log) -- diagnosed.
+Desktop 2 (Ryzen 7 8700G / Phoenix XDNA1), 2026-09-07, mlir-aie v1.4.2, ironenv.
+
+WHY THIS EXISTS
+================
+bf16_matmul_niche_npu.log closed with "K >= 3072 FAILS CORRECTNESS -- A REAL,
+UNDIAGNOSED LIMIT, NOT A TYPO" and flagged it as an open item, out of scope for
+that session. This picks it back up: is it really a hard threshold, and why.
+
+METHOD
+======
+whole_array.py / single_core.py (~/mlir-aie/programming_examples/basic/
+matrix_multiplication/), pure-Python IRON path, same as the niche log. Two
+things the original log didn't do: (1) bisect K in small steps instead of the
+coarse 512/1024/2048/4096 grid, on both designs, not just whole_array; (2) get
+actual mismatch data instead of the CLI's flat "FAIL! output does not match
+A @ B" -- assert_close_with_benchmark's mismatch_indices option only fires on
+the integer dtype branch, so for bf16/f32 output it prints nothing beyond
+FAIL. Patched a local copy of single_core.py's _run_and_verify (diagnostic
+print only, not committed to this repo, not persisted in the mlir-aie
+checkout) to dump NaN/Inf counts, mismatch count, and sample actual-vs-
+expected values before the assert.
+
+FINDING 1: IT IS NOT A THRESHOLD AT K=3072. IT STARTS AT K/k=23 AND GROWS.
+===========================================================================
+single_core (default tile k=32), M=N=512, bisecting K:
+
+  K       K/k   mismatches / 262144   note
+  1408    44    0                     PASS (CLI)
+  1472    46    1                     CLI reports FAIL; [341,399] actual=5440.0 expected=6016.0 (-9.6%)
+  1536    48    14                    bad rows/cols scattered, all values ~9-10% low
+  2048    64    10524 (4.0%)          every row touched at least once
+  3072    96    262126 (99.99%)       495/512 rows fully wrong
+
+whole_array (4 columns, default tile k=64), M=N=512, bisecting K:
+  K=2816 (K/k=44) PASS, K=2880 (K/k=45) first FAIL, K=3072/4096 FAIL -- same
+  44-tile-per-core boundary as single_core once normalized by k (44 in both,
+  independent of column count -- the reduction loop is per-core, so this
+  tracks K/k, not K itself, which is why the original log's round-number grid
+  (2048 pass, 3072 fail) made it look like a hard cutoff at a suspicious
+  round number when it is really a continuous function of K/k crossing ~44).
+
+Every failing case: actual is systematically LOWER than expected, no NaN/Inf,
+no wraparound/garbage -- ratios cluster ~0.87-0.90 rather than being random,
+which is a precision/swamping signature, not a corrupted-address signature
+(a real addressing bug -- wrong tile read, buffer aliasing -- reads as noise
+or clean garbage blocks, not a smooth double-precision digit or two error
+that gets worse the more terms you add).
+
+FINDING 2: ROOT CAUSE -- THE K-REDUCTION ACCUMULATES IN dtype_out, NOT fp32.
+=============================================================================
+Both designs' core_fn does:
+    elem_out = out_c.acquire(1); zero(elem_out)
+    for _ in range_(K // k):
+        matmul(elem_in_a, elem_in_b, elem_out)   # accumulates INTO elem_out
+        ...
+elem_out's buffer type is `C_l1_ty = np.ndarray[(m, n), dtype[dtype_out]]` --
+literally the CLI's --dtype_out choice, not a separate fp32 accumulator. With
+--dtype_out bf16 (what every number in bf16_matmul_niche_npu.log used), the
+running partial sum is stored and re-read as bf16 (8-bit mantissa, ~2 decimal
+digits) on every one of the K/k reduction steps. AIE2's aie::mmul natively
+accumulates a single MAC to fp32 (docs/BENCHMARKS.md's device.yaml excerpt),
+but that fp32 result gets rounded down to bf16 the moment it's stored back
+into elem_out for the next iteration to add onto -- so the more reduction
+steps, the more times the running sum round-trips through bf16, and once its
+magnitude grows large enough that one more k-tile's marginal contribution
+falls below bf16's ~0.4%-per-step relative precision, that increment is
+partially or fully swamped. This is exactly the "sum many numbers into a
+low-precision accumulator" failure mode, and explains both the smooth growth
+with K/k (more round-trips) and the systematic low bias (swamped increments
+are dropped, never added spuriously).
+
+FINDING 3: THE FIX IS FREE -- --dtype_out f32 REMOVES THE LIMIT ENTIRELY.
+============================================================================
+Same designs, same K values that failed at --dtype_out bf16, re-run with
+--dtype_out f32 (a real fp32 accumulator; C is cast to bf16 only once, on
+readback, if the caller wants it):
+
+  single_core,  M=N=512, K=3072, --dtype_out f32: 0/262144 mismatches, PASS.
+  whole_array,  M=N=512, K=2880, --dtype_out f32: PASS, 1741.68 GFLOPS.
+  whole_array,  M=N=512, K=4096, --dtype_out f32: PASS, 1830.22 GFLOPS
+    (not tested past 4096 this session -- no reason from this mechanism to
+    expect a new ceiling, since the accumulator is now the same fp32 the
+    hardware MAC already produces per step, but not verified at LLM-scale K).
+
+GFLOPS at f32 output is in the same range as the bf16-output numbers at
+comparable shapes in bf16_matmul_niche_npu.log (e.g. 4096x2048x2048 bf16-out
+hit 1846.96 GFLOPS; 512x4096x512 f32-out here hit 1830.22) -- no measured
+throughput cost to the fix at these shapes.
+
+WHAT THIS MEANS FOR THE "FIND THE NPU'S NICHE" QUESTION
+=========================================================
+bf16_matmul_niche_npu.log's practical envelope note -- "K <= ~2048" -- undersells
+this design. The real constraint was never K itself, it was accumulating the
+reduction in bf16. With --dtype_out f32, K is not the limiting factor found
+so far (tested clean to 4096); this reopens the large-K, LLM-scale GEMM shape
+attention_bf16/README.md's own math said would be needed for attention to
+have a chance, which the niche log had marked as blocked by this ceiling.
+Still not measured: does this same accumulate-in-dtype_out pattern affect
+attention_bf16's own kernel, which also targets bf16 output? Worth checking
+before building a fused attention/FFN block on the assumption this is fixed
+project-wide -- this session only touched basic/matrix_multiplication.
+
+Local mlir-aie checkout only (v1.4.2 clone), no upstream edits committed;
+the diagnostic single_core.py copy used for the detailed mismatch dump lives
+outside this repo and was not preserved. cpu_matmul_sweep.py (already in this
+repo at kernels/bf16_matmul_sweep/) was not re-run this session -- this is
+an NPU-only correctness/diagnosis pass, not a new throughput comparison.

@@ -986,7 +986,7 @@ been closed:
   cleanly.
 - **Follow-up: Fused BF16 Attention Kernel Built, but Small Sequence Length Exposes the Arithmetic Floor (Negative Result).**
   Addressed the hybrid CNN-Transformer architecture `mobilevit_xxs`. Stock VitisAI EP
-  quantized via Quark partitioned it into **58 thrashing DPU subgraphs, 108.29 ms** (1,037 NPU /
+  quantized via Quark partitioned it into **49 metaDef (58 IPU) thrashing DPU subgraphs, 108.29 ms** (1,037 NPU /
   156 CPU / 392 `VITIS_EP_CPU` nodes; the CPU compute is LayerNorm, MatMul, Slice, Squeeze,
   Transpose, Reshape) because the DPU overlay has no kernel for those transformer operators --
   **14.4x slower than the same FP32 graph under the ORT CPU EP (7.51 ms)**. Cutting the
@@ -1142,7 +1142,7 @@ been closed:
       attention x9 blocks, CPU (torch, 8 thr)  1.41 ms
       SPLICE (NPU backbone + CPU attention)    3.25 ms   residual +0.13 ms
       full model FP32, ORT CPU EP              7.51 ms   -> splice 2.31x
-      full model XINT8, stock graph on NPU   108.29 ms   (1037/156/392, 58 subgraphs)
+      full model XINT8, stock graph on NPU   108.29 ms   (1037/156/392, 49 metaDef / 58 IPU subgraphs)
 
   Three things change. (1) **The in-process residual is 0.13 ms, not 0.72** -- the old
   number was back-solved from a hardcoded total; real in-process handoff is nearly free.

@@ -14,12 +14,12 @@ repo is probably the set of XDNA1 facts that are undocumented or documented inco
 
 Most of this narrowness is not optional.
 
-| | Required | If you don't have it |
-|---|---|---|
-| Chip | **Hawk Point or Phoenix** (XDNA1, `AMD_AIE2_4x4_Overlay`, provider option `target: "X1"`) | Strix (XDNA2) is a different architecture and none of the firmware paths here apply; it has not been touched |
-| OS | **Windows** | XDNA1 has no Linux userspace. A WSL run is silently CPU-only rather than an error |
-| SDK | **Ryzen AI 1.7.1** for inference, 1.8.0 for export/quantize | 1.8.0 ships no Phoenix xclbin at all and cannot run inference on this chip |
-| Shell | PowerShell, and Git Bash for `scripts/` | cmd prints `%VAR%` back instead of erroring on an unset variable |
+| | Required | If you don't have it                                                                                                                                                                                                            |
+|---|---|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Chip | **Hawk Point or Phoenix** (XDNA1, `AMD_AIE2_4x4_Overlay`, provider option `target: "X1"`) | Strix (XDNA2) is a different architecture and none of the firmware paths here apply; it has not been touched                                                                                                                    |
+| OS | **Windows** | Linux untested.                                                                                                                                                                                                                 |
+| SDK | **Ryzen AI 1.7.1** for inference, 1.8.0 for export/quantize | 1.8.0 ships no Phoenix xclbin at all and cannot run inference on this chip                                                                                                                                                      |
+| Shell | PowerShell, and Git Bash for `scripts/` | cmd prints `%VAR%` back instead of erroring on an unset variable                                                                                                                                                                |
 | Workload | **CNN INT8 only** | No BF16, no transformer/NLP paths, no LLMs through the shipped runtime. That is a vendor-level limit, not a configuration problem — though the silicon itself is a different question, see [kernels](#hand-written-aie-kernels) |
 
 Full environment split, install steps and footguns: [`docs/SETUP.md`](docs/SETUP.md).
@@ -174,7 +174,10 @@ Outcomes, mostly negative and all measured:
 
 - **bf16 GEMM is the first genuine NPU win in this project.** 2072.5 GFLOPS at 1024³
   against CPU bf16's 1161.2 — the NPU wins 1.18×–1.78× once M/N ≥ 1024, and loses at
-  512³ (895.1 vs 1100.6). `K ≥ 3072` fails correctness, undiagnosed.
+  512³ (895.1 vs 1100.6). **Diagnosed:** "`K ≥ 3072` fails, undiagnosed" was the wrong
+  framing — the reduction loop accumulates in `dtype_out`, not fp32, so `--dtype_out
+  bf16` swamps small increments as K grows; `--dtype_out f32` fixes it for free, clean
+  to K=4096 tested.
 - **Int8 conv loses, and the op class is closed.** A bottleneck spatial sweep puts NPU
   marginal throughput at 146.1 GOPS against the CPU's 819.0; at ResNet50's real 56×56
   conv2_x shape the CPU wins **12.75×**. Reaching the real shape widened the gap.
