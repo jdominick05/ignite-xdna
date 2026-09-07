@@ -1,0 +1,89 @@
+CLE pattern count probe -- Desktop 2 (Phoenix, Ryzen 7 8700G), 2026-09-07
+env: resnet_env (Quark).  Command: bash scratch/cle_probe/run_probe.sh
+  pipelines/mobilevit/2_quantize.py --config XINT8 --limit 32, models written to
+  scratch/cle_probe/ (NOT models/ -- that is the Syncthing folder).
+
+QUESTION: does Quark skip Cross-Layer Equalization on MobileViT-XXS because SiLU
+is not positive-homogeneous, and is that why it collapses to ~0% top-1 under XINT8
+while MobileNetV2 keeps 73.40% under the identical recipe?
+
+== Measured CLE log lines (verbatim, ANSI stripped) ==
+mobilenetv2_fp32.onnx    -> [QUARK-INFO]: CrossLayerEqualization pattern num: 3
+mobilevit_xxs_fp32.onnx  -> [QUARK-INFO]: CrossLayerEqualization pattern num: 0
+  (both followed by 'Total CrossLayerEqualization steps: 1')
+  tracked raw logs: results/mobilevit/cle_probe_mobilenetv2_quant.log
+                    results/mobilevit/cle_probe_mobilevit_quant.log  (line 33 in each)
+  --limit 32 does not affect the count: CLE pattern matching is structural and runs
+  before calibration, so the count is a property of the graph, not the sample size.
+
+== Which patterns actually matched (Equalization.get_cle_pattern_pair re-run directly) ==
+mobilenetv2: 3 entries, but only 2 DISTINCT pairs -- the first is emitted twice:
+   Conv(/blocks/blocks.0/blocks.0.0/conv_pw/Conv) -> Conv(/blocks/blocks.1/blocks.1.0/conv_pw/Conv)
+   Conv(/blocks/blocks.6/blocks.6.0/conv_pwl/Conv) -> Conv(/conv_head/Conv)
+   Conv(/blocks/blocks.0/blocks.0.0/conv_pw/Conv) -> Conv(/blocks/blocks.1/blocks.1.0/conv_pw/Conv)   [dup]
+mobilevit_xxs: none.
+
+== VERDICT: hypothesis is literally true but is NOT the cause ==
+The 0-vs-nonzero split is exactly what the SiLU story predicted, so the headline
+reads as a confirmation. It is not one, for two measured reasons:
+
+ 1. CLE is very nearly inert on MobileNetV2 too -- 2 distinct pairs against 52 Conv
+    nodes. Two equalized pairs cannot be what preserves 73.40% top-1.
+ 2. NEITHER matched pair contains a depthwise conv. Both are pointwise: a pw->pw
+    pair and the final conv_pwl->conv_head pair. The measured discriminator for the
+    collapse is the DEPTHWISE weight-scale grid (MobileNetV2 depthwise scales stay
+    <=0.25, MobileViT-XXS reaches 1.0; results/mobilevit/quant_grid_audit.log).
+    CLE never touches a depthwise conv in either model, so it cannot be what bounds
+    that grid, in either direction.
+
+== Why the count is so low: the matcher, not the activation ==
+quark/onnx/algorithm/cle/equalization.py:475 -- the walk from a Conv/Gemm accepts
+only  Linear_node = ['Relu', 'ReduceMean', 'Pad', 'LeakyRelu']  as an intervening
+node, and 'else: break' on anything else. Two consequences:
+ - MobileViT: SiLU is Sigmoid+Mul. Sigmoid is not in that list. Additionally the
+   Conv feeds BOTH the Sigmoid and the Mul (that is what x*sigmoid(x) is), so the
+   walk's 'len(node_output_nodes1) == 1' single-consumer precondition already fails
+   before the op-type test is reached. Rejected twice over. Both rejections measured
+   on the graph, not just read off the source: of 36 Conv/Gemm nodes, 29 have exactly
+   2 consumers and the pair is ['Sigmoid','Mul'] (e.g. /stem/conv/Conv); of the 6
+   single-consumer convs, all feed Add(3) or Reshape(3), neither in Linear_node. The
+   last has 0 consumers (graph output). So no conv in the model can start a match.
+ - MobileNetV2: its ReLU6 exports as Clip (35 Clip nodes, 0 Relu -- counted from
+   the graph), and Clip is ALSO not in that list. equalization.py has a
+   replace_all_clip6_to_relu pass that would rewrite Clip(0,6)->Relu, but
+   algorithm/interface.py:49 gates it behind extra_options['ReplaceClip6Relu'],
+   which defaults to False and is not set anywhere in this repo. So MobileNetV2's
+   ReLU6 blocks the walk for the same structural reason SiLU does.
+The 3-vs-0 gap is therefore residual Conv->Conv adjacency, not a statement about
+positive homogeneity. MobileNetV2 has a couple of activation-free conv adjacencies
+(linear-bottleneck exits); MobileViT has none.
+
+== A correction this probe forced: ReLU6 is NOT positive-homogeneous ==
+The hypothesis as previously recorded said CLE needs f(ax)=a*f(x) and that "ReLU6
+satisfies it, SiLU does not". The second half is right; the FIRST HALF IS FALSE.
+ReLU6(2*4) = 6, but 2*ReLU6(4) = 8 -- it saturates, so it breaks homogeneity just as
+SiLU does. Quark's matcher agrees with the math rather than with the old claim: the
+accepted set Linear_node = ['Relu','ReduceMean','Pad','LeakyRelu'] is exactly the
+positive-homogeneous/linear ops, and Clip is deliberately absent. replace_all_clip6_to
+_relu exists as an OPT-IN approximation (Nagel et al. substitute the same way) --
+which is only necessary because ReLU6 does not satisfy the precondition natively.
+So the old explanation was not merely non-causal; it had ReLU6 on the wrong side of
+the property it invoked.
+
+== What is now open again ==
+Refuting CLE removes the only proposed cause for the depthwise Delta=1.0 grid and puts
+nothing in its place. State of play: the DISCRIMINATOR is measured (depthwise weight-
+scale grid, quant_grid_audit.log); CLE is RULED OUT as the mechanism bounding it, in
+both models; the UPSTREAM CAUSE of the grid difference is OPEN. HardSigmoid below is
+not a candidate for that slot -- it is a post-hoc activation swap and cannot set a
+weight scale.
+
+== Incidental, unverified ==
+The MobileViT XINT8 op table shows HardSigmoid(34) where the FP32 graph has
+Sigmoid(34): Quark approximates every SiLU with a hard-sigmoid form. That is a
+separate candidate contributor to the collapse and has NOT been measured.
+
+== Graph op-type counts (onnx, load_external_data=False) ==
+mobilenetv2_fp32.onnx   170 nodes: Conv 52, Gemm 1, Clip 35, Relu 0
+mobilevit_xxs_fp32.onnx 550 nodes: Conv 35, Gemm 1, Sigmoid 34, Mul 52, Relu 0,
+                                   Clip 0, Softmax 9, LayerNormalization 21

@@ -717,11 +717,40 @@ Reproduce: `./scripts/mobilevit-eval.sh --slice`, `python tools/audit_quant_grid
   - **The scale grid.** MobileNetV2's depthwise scales span 0.0156–0.25 and never exceed
     0.25. MobileViT-XXS's span 0.125–**1.0**. At Δ=1.0 on a 3×3 depthwise kernel almost
     every real weight rounds to 0 or ±1, and the layer stops being a convolution.
-  - Suspected upstream cause, **not logged and therefore not established**: SiLU vs ReLU6.
-    Cross-Layer Equalization requires a positive-homogeneous activation (`f(αx) = αf(x)`);
-    ReLU6 qualifies, SiLU does not, so CLE is skipped and nothing bounds the folded-BN
-    per-channel weight disparity that then sets Δ. Capturing Quark's CLE pattern count for
-    both models is the next thing to log if this is to be claimed.
+  - **What sets Δ is open. Cross-Layer Equalization was the suspect, was measured, and is
+    ruled out** (`results/mobilevit/cle_pattern_count.log`; raw Quark logs
+    `results/mobilevit/cle_probe_{mobilenetv2,mobilevit}_quant.log`, line 33 of each).
+    The old claim: CLE needs a positive-homogeneous activation (`f(αx) = αf(x)`), ReLU6
+    qualifies and SiLU doesn't, so CLE is skipped on MobileViT and nothing bounds the
+    folded-BN per-channel weight disparity that sets Δ. The measured counts are
+    MobileNetV2 **3**, MobileViT-XXS **0** — the predicted direction, which makes this an
+    easy thing to mis-read as confirmation. It isn't, on two grounds:
+    - **Neither matched pair is depthwise.** Re-running `get_cle_pattern_pair` directly,
+      the 3 entries are 2 distinct pairs (one is emitted twice), both pointwise:
+      `/blocks/blocks.0/.../conv_pw` → `/blocks/blocks.1/.../conv_pw`, and
+      `/blocks/blocks.6/.../conv_pwl` → `/conv_head`. CLE touches no depthwise conv in
+      either model, so it cannot bound the depthwise grid in either direction. (The
+      weaker supporting point: 2 pairs against 52 convs is nearly inert anyway.)
+    - **ReLU6 is not positive-homogeneous.** `ReLU6(2·4)=6`, not `2·ReLU6(4)=8`; it
+      saturates. The premise had ReLU6 on the wrong side of the property it invoked.
+      Quark's matcher tracks the real math: `equalization.py:475` accepts only
+      `Linear_node = ['Relu','ReduceMean','Pad','LeakyRelu']` between two convs and
+      `break`s on anything else — `Clip` is absent, and `replace_all_clip6_to_relu`
+      exists as an **opt-in approximation** (`ReplaceClip6Relu`, default `False`, never
+      set in this repo) precisely because ReLU6 fails the precondition natively.
+      MobileNetV2's ReLU6 exports as 35 `Clip` nodes with **zero** `Relu`, so its
+      activations block the walk for the same structural reason SiLU's do. MobileViT is
+      rejected twice over: `Sigmoid` is not in the accepted set, and 29 of its 36
+      `Conv`/`Gemm` nodes feed *both* the `Sigmoid` and the `Mul` (that is what
+      `x·sigmoid(x)` is), so the `len(...) == 1` single-consumer precondition fails before
+      the op-type test runs; the remaining 6 feed `Add`/`Reshape`, also not accepted.
+    The 3-vs-0 gap is therefore residual activation-free `Conv`→`Conv` adjacency
+    (linear-bottleneck exits), not a statement about homogeneity. **Net: the
+    discriminator is measured (depthwise grid), CLE is excluded as its mechanism, and the
+    upstream cause is unexplained.** Do not fill the slot with the `HardSigmoid(34)`
+    substitution visible in MobileViT's XINT8 op table — a post-hoc activation swap
+    cannot set a weight scale. Note `--limit` is irrelevant to any of this: CLE matching
+    is structural and runs before calibration.
 - **Why AdaRound cannot fix it, mechanically.** AdaRound chooses between `floor(w/Δ)` and
   `ceil(w/Δ)`; it never changes Δ. The audit confirms the scale grid is byte-identical
   before and after AdaRound; only the dead-channel count shifts at the rounding boundary

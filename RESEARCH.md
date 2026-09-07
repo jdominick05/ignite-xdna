@@ -1077,11 +1077,27 @@ been closed:
   range: both bottom out at the same coarsest activation scale, 0.5. What differs is the
   **depthwise weight-scale grid**: MobileNetV2 never exceeds Δ=0.25, MobileViT-XXS reaches
   **Δ=1.0** on a 3×3 depthwise kernel — 4–16× coarser — at which point nearly every weight
-  rounds to 0 or ±1 and the layer degenerates into a sign map. The likely upstream cause is
-  SiLU vs ReLU6 (Cross-Layer Equalization needs positive homogeneity, `f(αx) = αf(x)`,
-  which ReLU6 has and SiLU does not, so CLE is skipped and nothing bounds the folded-BN
-  weight disparity) — but **CLE pattern counts were never captured in a log**, so that
-  half is an explanation, not a measurement, and is the obvious next thing to log.
+  rounds to 0 or ±1 and the layer degenerates into a sign map. The upstream cause is
+  **open**: the standing SiLU-vs-ReLU6 / Cross-Layer-Equalization explanation was logged
+  and **refuted** (`results/mobilevit/cle_pattern_count.log`, raw Quark logs in
+  `cle_probe_mobilenetv2_quant.log` / `cle_probe_mobilevit_quant.log`). The counts come
+  out as predicted — MobileNetV2 **3**, MobileViT-XXS **0** — which reads as confirmation
+  and is not one. Re-running Quark's own `get_cle_pattern_pair` shows the 3 are 2 distinct
+  pairs against 52 convs, and **neither contains a depthwise conv** (both pointwise:
+  `conv_pw`→`conv_pw`, `conv_pwl`→`conv_head`). CLE never reaches a depthwise layer in
+  either model, so it cannot bound the depthwise grid that *is* the measured
+  discriminator. The premise was independently wrong: **ReLU6 is not positive-homogeneous**
+  (`ReLU6(2·4)=6 ≠ 2·ReLU6(4)=8`). Quark's matcher accepts only
+  `['Relu','ReduceMean','Pad','LeakyRelu']` between convs — `Clip` absent — and
+  MobileNetV2's ReLU6 exports as 35 `Clip` nodes with zero `Relu`, so its activations block
+  the walk exactly as SiLU does; the opt-in `ReplaceClip6Relu` rewrite (default `False`,
+  never set here) exists precisely *because* ReLU6 fails the precondition. MobileViT is
+  rejected twice: `Sigmoid` is not in the accepted set, and 29/36 of its convs feed both
+  the `Sigmoid` and the `Mul`, breaking the matcher's single-consumer precondition first.
+  The 3-vs-0 gap is residual activation-free `Conv`→`Conv` adjacency, nothing more.
+  Incidental and unmeasured: the MobileViT XINT8 op table shows `HardSigmoid(34)` where
+  FP32 has `Sigmoid(34)`; that is a post-hoc activation swap and cannot set a weight scale,
+  so it is not a candidate for the vacated slot.
   Why AdaRound can't help, now mechanical rather than asserted: it selects between
   `floor(w/Δ)` and `ceil(w/Δ)` and never alters Δ. The audit shows the scale grid
   byte-identical pre/post AdaRound, with only the dead-channel count shifting at the

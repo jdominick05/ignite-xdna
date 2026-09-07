@@ -1,0 +1,558 @@
+
+[QUARK-INFO]: Checking custom ops library ...
+
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.
+
+[QUARK-INFO]: Start compiling CPU version of custom ops library.
+C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\torch\utils\cpp_extension.py:380: UserWarning: Error checking compiler version for cl: [WinError 2] The system cannot find the file specified
+  warnings.warn(f'Error checking compiler version for {compiler}: {error}')
+INFO: Could not find files for the given pattern(s).
+
+[QUARK-ERROR]: CPU version of custom ops library compilation failed:Command '['where', 'cl']' returned non-zero exit status 1.
+
+[QUARK-WARNING]: Custom ops library compilation failed: CPU version of custom ops library compilation failed:Command '['where', 'cl']' returned non-zero exit status 1..
+
+[QUARK-INFO]: Checked custom ops library.
+
+[QUARK-WARNING]: The api `activation` has been replaced with `input_tensors` and will be removed in the next release.
+
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.
+
+[QUARK-WARNING]: Config has been replaced by QConfig. The old API will be removed in the next release.
+
+[QUARK-WARNING]: The algorithm API is algo_config in QConfig. The old API will be removed in the next release.
+
+[QUARK-INFO]: The input ONNX model can create InferenceSession successfully
+
+[QUARK-INFO]: Folding or fusing operators for better accuracy and performance.
+
+[QUARK-WARNING]: The opset version is 17 < 20. Skipping fusing Gelu.
+
+[QUARK-INFO]: Start applying CLE algorithm on the float model...
+
+[QUARK-INFO]: CrossLayerEqualization pattern num: 0
+
+[QUARK-INFO]: Total CrossLayerEqualization steps: 1
+
+[QUARK-INFO]: The CLE algorithm has been applied. It took 0.0s to complete.
+
+[QUARK-INFO]: Optimizing the model for a better hardware compatibility.
+
+[QUARK-INFO]: Found Split node /stages/stages.2/stages.2.1/transformer/transformer.0/attn/Split. Replacing with Slice.
+
+[QUARK-INFO]: Found Split node /stages/stages.2/stages.2.1/transformer/transformer.1/attn/Split. Replacing with Slice.
+
+[QUARK-INFO]: Found Split node /stages/stages.3/stages.3.1/transformer/transformer.0/attn/Split. Replacing with Slice.
+
+[QUARK-INFO]: Found Split node /stages/stages.3/stages.3.1/transformer/transformer.1/attn/Split. Replacing with Slice.
+
+[QUARK-INFO]: Found Split node /stages/stages.3/stages.3.1/transformer/transformer.2/attn/Split. Replacing with Slice.
+
+[QUARK-INFO]: Found Split node /stages/stages.3/stages.3.1/transformer/transformer.3/attn/Split. Replacing with Slice.
+
+[QUARK-INFO]: Found Split node /stages/stages.4/stages.4.1/transformer/transformer.0/attn/Split. Replacing with Slice.
+
+[QUARK-INFO]: Found Split node /stages/stages.4/stages.4.1/transformer/transformer.1/attn/Split. Replacing with Slice.
+
+[QUARK-INFO]: Found Split node /stages/stages.4/stages.4.1/transformer/transformer.2/attn/Split. Replacing with Slice.
+
+[QUARK-INFO]: The input ONNX model can run inference successfully
+
+[QUARK-INFO]: Start running calibration on 32 samples with extra options {}...
+
+[QUARK-INFO]: Data collection of PowerOfTwoMethod.MinMSE in progress. Runtime will depend on your model and data size.
+Using 32 real calibration images (32 batches of 1)
+Configuring Quark quantizer with XINT8...
+Quantizing models/mobilevit_xxs_fp32.onnx -> C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/scratch/cle_probe/mobilevit_xxs_xint8.onnx...
+[QUARK_INFO]: Time information:
+2026-09-07 04:44:16.530273
+[QUARK_INFO]: OS and CPU information:
+                                        system --- Windows
+                                          node --- DESKTOP-CBL5NUA
+                                       release --- 11
+                                       version --- 10.0.26200
+                                       machine --- AMD64
+                                     processor --- AMD64 Family 25 Model 117 Stepping 2, AuthenticAMD
+[QUARK_INFO]: Tools version information:
+                                        python --- 3.12.11
+                                          onnx --- 1.19.0
+                                   onnxruntime --- 1.22.1
+                                    quark.onnx --- 0.11rc1
+[QUARK_INFO]: Quantized Configuration information:
+                                   model_input --- models/mobilevit_xxs_fp32.onnx
+                                  model_output --- C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/scratch/cle_probe/mobilevit_xxs_xint8.onnx
+                       calibration_data_reader --- <__main__.ImageCalibReader object at 0x0000022E483C5790>
+                         calibration_data_path --- None
+                                  quant_format --- QDQ
+                                   input_nodes --- []
+                                  output_nodes --- []
+                          op_types_to_quantize --- []
+                    extra_op_types_to_quantize --- []
+                                   per_channel --- False
+                                  reduce_range --- False
+                               activation_type --- QUInt8
+                                   weight_type --- QInt8
+                             nodes_to_quantize --- []
+                              nodes_to_exclude --- []
+                          subgraphs_to_exclude --- []
+                                optimize_model --- True
+                      use_external_data_format --- False
+                              calibrate_method --- PowerOfTwoMethod.MinMSE
+                           execution_providers --- ['CPUExecutionProvider']
+                                enable_npu_cnn --- True
+                        enable_npu_transformer --- False
+                     specific_tensor_precision --- False
+                                    debug_mode --- False
+                          convert_fp16_to_fp32 --- False
+                          convert_nchw_to_nhwc --- False
+                                   include_cle --- True
+                                    include_sq --- False
+                              include_rotation --- False
+                               include_fast_ft --- False
+                                 extra_options --- {'ActivationSymmetric': True}
+
+  0%|          | 0/32 [00:00<?, ?it/s]
+Cached 0.05GB:   0%|          | 0/32 [00:00<?, ?it/s]
+Cached 0.05GB:   3%|3         | 1/32 [00:00<00:10,  3.03it/s]
+Cached 0.10GB:   3%|3         | 1/32 [00:00<00:10,  3.03it/s]
+Cached 0.10GB:   6%|6         | 2/32 [00:00<00:07,  3.84it/s]
+Cached 0.15GB:   6%|6         | 2/32 [00:00<00:07,  3.84it/s]
+Cached 0.15GB:   9%|9         | 3/32 [00:00<00:06,  4.52it/s]
+Cached 0.20GB:   9%|9         | 3/32 [00:00<00:06,  4.52it/s]
+Cached 0.20GB:  12%|#2        | 4/32 [00:00<00:05,  4.71it/s]
+Cached 0.25GB:  12%|#2        | 4/32 [00:01<00:05,  4.71it/s]
+Cached 0.25GB:  16%|#5        | 5/32 [00:01<00:05,  5.01it/s]
+Cached 0.30GB:  16%|#5        | 5/32 [00:01<00:05,  5.01it/s]
+Cached 0.30GB:  19%|#8        | 6/32 [00:01<00:04,  5.28it/s]
+Cached 0.35GB:  19%|#8        | 6/32 [00:01<00:04,  5.28it/s]
+Cached 0.35GB:  22%|##1       | 7/32 [00:01<00:04,  5.34it/s]
+Cached 0.40GB:  22%|##1       | 7/32 [00:01<00:04,  5.34it/s]
+Cached 0.40GB:  25%|##5       | 8/32 [00:01<00:04,  5.41it/s]
+Cached 0.45GB:  25%|##5       | 8/32 [00:01<00:04,  5.41it/s]
+Cached 0.45GB:  28%|##8       | 9/32 [00:01<00:04,  5.36it/s]
+Cached 0.50GB:  28%|##8       | 9/32 [00:01<00:04,  5.36it/s]
+Cached 0.50GB:  31%|###1      | 10/32 [00:01<00:04,  5.37it/s]
+Cached 0.55GB:  31%|###1      | 10/32 [00:02<00:04,  5.37it/s]
+Cached 0.55GB:  34%|###4      | 11/32 [00:02<00:03,  5.46it/s]
+Cached 0.60GB:  34%|###4      | 11/32 [00:02<00:03,  5.46it/s]
+Cached 0.60GB:  38%|###7      | 12/32 [00:02<00:03,  5.43it/s]
+Cached 0.65GB:  38%|###7      | 12/32 [00:02<00:03,  5.43it/s]
+Cached 0.65GB:  41%|####      | 13/32 [00:02<00:03,  5.43it/s]
+Cached 0.70GB:  41%|####      | 13/32 [00:02<00:03,  5.43it/s]
+Cached 0.70GB:  44%|####3     | 14/32 [00:02<00:03,  5.46it/s]
+Cached 0.75GB:  44%|####3     | 14/32 [00:02<00:03,  5.46it/s]
+Cached 0.75GB:  47%|####6     | 15/32 [00:02<00:03,  5.37it/s]
+Cached 0.80GB:  47%|####6     | 15/32 [00:03<00:03,  5.37it/s]
+Cached 0.80GB:  50%|#####     | 16/32 [00:03<00:03,  5.33it/s]
+Cached 0.85GB:  50%|#####     | 16/32 [00:03<00:03,  5.33it/s]
+Cached 0.85GB:  53%|#####3    | 17/32 [00:03<00:02,  5.41it/s]
+Cached 0.90GB:  53%|#####3    | 17/32 [00:03<00:02,  5.41it/s]
+Cached 0.90GB:  56%|#####6    | 18/32 [00:03<00:02,  5.36it/s]
+Cached 0.95GB:  56%|#####6    | 18/32 [00:03<00:02,  5.36it/s]
+Cached 0.95GB:  59%|#####9    | 19/32 [00:03<00:02,  5.33it/s]
+Cached 1.00GB:  59%|#####9    | 19/32 [00:03<00:02,  5.33it/s]
+Cached 1.00GB:  62%|######2   | 20/32 [00:03<00:02,  5.33it/s]
+Cached 1.05GB:  62%|######2   | 20/32 [00:04<00:02,  5.33it/s]
+Cached 1.05GB:  66%|######5   | 21/32 [00:04<00:02,  5.41it/s]
+Cached 1.09GB:  66%|######5   | 21/32 [00:04<00:02,  5.41it/s]
+Cached 1.09GB:  69%|######8   | 22/32 [00:04<00:01,  5.40it/s]
+Cached 1.14GB:  69%|######8   | 22/32 [00:04<00:01,  5.40it/s]
+Cached 1.14GB:  72%|#######1  | 23/32 [00:04<00:01,  5.35it/s]
+Cached 1.19GB:  72%|#######1  | 23/32 [00:04<00:01,  5.35it/s]
+Cached 1.19GB:  75%|#######5  | 24/32 [00:04<00:01,  5.31it/s]
+Cached 1.24GB:  75%|#######5  | 24/32 [00:04<00:01,  5.31it/s]
+Cached 1.24GB:  78%|#######8  | 25/32 [00:04<00:01,  5.28it/s]
+Cached 1.29GB:  78%|#######8  | 25/32 [00:04<00:01,  5.28it/s]
+Cached 1.29GB:  81%|########1 | 26/32 [00:04<00:01,  5.24it/s]
+Cached 1.34GB:  81%|########1 | 26/32 [00:05<00:01,  5.24it/s]
+Cached 1.34GB:  84%|########4 | 27/32 [00:05<00:01,  4.99it/s]
+Cached 1.39GB:  84%|########4 | 27/32 [00:05<00:01,  4.99it/s]
+Cached 1.39GB:  88%|########7 | 28/32 [00:05<00:00,  5.12it/s]
+Cached 1.44GB:  88%|########7 | 28/32 [00:05<00:00,  5.12it/s]
+Cached 1.44GB:  91%|######### | 29/32 [00:05<00:00,  5.27it/s]
+Cached 1.49GB:  91%|######### | 29/32 [00:05<00:00,  5.27it/s]
+Cached 1.49GB:  94%|#########3| 30/32 [00:05<00:00,  5.40it/s]
+Cached 1.54GB:  94%|#########3| 30/32 [00:05<00:00,  5.40it/s]
+Cached 1.54GB:  97%|#########6| 31/32 [00:05<00:00,  5.26it/s]
+Cached 1.59GB:  97%|#########6| 31/32 [00:06<00:00,  5.26it/s]
+Cached 1.59GB: 100%|##########| 32/32 [00:06<00:00,  5.30it/s]
+Cached 1.59GB: 100%|##########| 32/32 [00:06<00:00,  5.22it/s]
+
+[QUARK-INFO]: Finding optimal threshold for each tensor using PowerOfTwoMethod.MinMSE algorithm in 'All' mode ...
+
+  0%|          | 0/425 [00:00<?, ?it/s]
+  1%|1         | 5/425 [00:00<00:17, 23.50it/s]
+  2%|1         | 8/425 [00:00<00:58,  7.09it/s]
+  2%|2         | 10/425 [00:01<00:47,  8.80it/s]
+  3%|2         | 12/425 [00:01<00:41, 10.03it/s]
+  3%|3         | 14/425 [00:01<00:36, 11.30it/s]
+  4%|4         | 17/425 [00:01<00:27, 14.96it/s]
+  5%|4         | 21/425 [00:01<00:23, 17.22it/s]
+  6%|5         | 24/425 [00:01<00:20, 19.44it/s]
+  7%|6         | 28/425 [00:01<00:17, 22.88it/s]
+  7%|7         | 31/425 [00:02<00:17, 21.92it/s]
+  8%|8         | 34/425 [00:03<01:20,  4.88it/s]
+  8%|8         | 36/425 [00:03<01:09,  5.56it/s]
+  9%|9         | 39/425 [00:04<00:52,  7.34it/s]
+ 10%|9         | 42/425 [00:04<00:40,  9.56it/s]
+ 11%|#         | 45/425 [00:04<00:57,  6.57it/s]
+ 11%|#1        | 47/425 [00:05<00:48,  7.74it/s]
+ 12%|#1        | 50/425 [00:05<00:36, 10.14it/s]
+ 12%|#2        | 53/425 [00:05<00:30, 12.33it/s]
+ 13%|#3        | 56/425 [00:05<00:25, 14.59it/s]
+ 14%|#3        | 59/425 [00:05<00:33, 10.81it/s]
+ 14%|#4        | 61/425 [00:05<00:30, 12.01it/s]
+ 15%|#4        | 63/425 [00:06<00:28, 12.74it/s]
+ 16%|#6        | 70/425 [00:06<00:16, 21.08it/s]
+ 17%|#7        | 73/425 [00:06<00:16, 21.79it/s]
+ 18%|#7        | 76/425 [00:06<00:17, 19.42it/s]
+ 19%|#8        | 79/425 [00:07<00:26, 12.90it/s]
+ 19%|#9        | 81/425 [00:07<00:48,  7.14it/s]
+ 20%|#9        | 83/425 [00:07<00:41,  8.15it/s]
+ 20%|##        | 86/425 [00:08<00:33, 10.16it/s]
+ 21%|##        | 89/425 [00:08<00:26, 12.53it/s]
+ 21%|##1       | 91/425 [00:08<00:25, 13.13it/s]
+ 22%|##2       | 94/425 [00:08<00:26, 12.27it/s]
+ 23%|##2       | 97/425 [00:08<00:22, 14.58it/s]
+ 23%|##3       | 99/425 [00:08<00:26, 12.49it/s]
+ 24%|##3       | 101/425 [00:09<00:28, 11.37it/s]
+ 24%|##4       | 104/425 [00:09<00:22, 14.01it/s]
+ 25%|##5       | 107/425 [00:09<00:19, 16.13it/s]
+ 26%|##5       | 110/425 [00:09<00:17, 18.23it/s]
+ 27%|##6       | 113/425 [00:09<00:16, 18.51it/s]
+ 27%|##7       | 116/425 [00:09<00:19, 15.66it/s]
+ 29%|##8       | 123/425 [00:10<00:13, 22.71it/s]
+ 30%|###       | 128/425 [00:10<00:11, 25.47it/s]
+ 31%|###       | 131/425 [00:10<00:18, 15.59it/s]
+ 32%|###1      | 134/425 [00:11<00:29,  9.74it/s]
+ 32%|###2      | 136/425 [00:11<00:27, 10.66it/s]
+ 33%|###2      | 140/425 [00:11<00:22, 12.78it/s]
+ 33%|###3      | 142/425 [00:12<00:28,  9.92it/s]
+ 34%|###3      | 144/425 [00:12<00:47,  5.93it/s]
+ 35%|###5      | 150/425 [00:13<00:33,  8.25it/s]
+ 36%|###5      | 152/425 [00:13<00:32,  8.44it/s]
+ 36%|###6      | 155/425 [00:13<00:25, 10.61it/s]
+ 37%|###6      | 157/425 [00:14<00:41,  6.39it/s]
+ 37%|###7      | 159/425 [00:14<00:38,  6.91it/s]
+ 39%|###8      | 164/425 [00:14<00:29,  8.90it/s]
+ 40%|###9      | 168/425 [00:15<00:26,  9.81it/s]
+ 41%|####      | 174/425 [00:16<00:29,  8.44it/s]
+ 42%|####2     | 180/425 [00:16<00:21, 11.20it/s]
+ 43%|####3     | 183/425 [00:16<00:20, 12.04it/s]
+ 44%|####4     | 188/425 [00:16<00:18, 12.86it/s]
+ 45%|####4     | 191/425 [00:17<00:16, 13.79it/s]
+ 45%|####5     | 193/425 [00:17<00:29,  7.96it/s]
+ 46%|####5     | 195/425 [00:17<00:25,  8.93it/s]
+ 47%|####6     | 198/425 [00:18<00:21, 10.75it/s]
+ 47%|####7     | 200/425 [00:18<00:25,  8.76it/s]
+ 48%|####7     | 202/425 [00:18<00:26,  8.57it/s]
+ 48%|####8     | 205/425 [00:18<00:20, 10.91it/s]
+ 49%|####8     | 208/425 [00:18<00:16, 13.29it/s]
+ 49%|####9     | 210/425 [00:19<00:16, 13.40it/s]
+ 50%|#####     | 214/425 [00:19<00:11, 17.90it/s]
+ 51%|#####1    | 218/425 [00:19<00:09, 21.17it/s]
+ 52%|#####2    | 223/425 [00:19<00:09, 22.43it/s]
+ 54%|#####3    | 228/425 [00:19<00:07, 24.67it/s]
+ 55%|#####4    | 232/425 [00:19<00:07, 25.56it/s]
+ 55%|#####5    | 235/425 [00:20<00:09, 19.00it/s]
+ 56%|#####6    | 238/425 [00:20<00:09, 18.89it/s]
+ 57%|#####6    | 241/425 [00:20<00:14, 12.75it/s]
+ 58%|#####7    | 246/425 [00:21<00:19,  9.42it/s]
+ 58%|#####8    | 248/425 [00:21<00:17, 10.31it/s]
+ 59%|#####9    | 251/425 [00:21<00:14, 12.38it/s]
+ 60%|######    | 255/425 [00:22<00:13, 12.26it/s]
+ 60%|######    | 257/425 [00:22<00:12, 13.00it/s]
+ 61%|######1   | 261/425 [00:22<00:10, 16.13it/s]
+ 62%|######1   | 263/425 [00:22<00:10, 15.94it/s]
+ 62%|######2   | 265/425 [00:22<00:10, 15.30it/s]
+ 64%|######3   | 270/425 [00:22<00:07, 22.06it/s]
+ 64%|######4   | 273/425 [00:23<00:10, 14.41it/s]
+ 65%|######4   | 276/425 [00:24<00:31,  4.77it/s]
+ 65%|######5   | 278/425 [00:24<00:26,  5.60it/s]
+ 66%|######5   | 280/425 [00:25<00:24,  5.85it/s]
+ 67%|######6   | 283/425 [00:25<00:17,  7.89it/s]
+ 67%|######7   | 286/425 [00:25<00:14,  9.45it/s]
+ 68%|######7   | 288/425 [00:25<00:12, 10.72it/s]
+ 68%|######8   | 291/425 [00:25<00:11, 12.01it/s]
+ 69%|######8   | 293/425 [00:26<00:11, 11.91it/s]
+ 71%|#######   | 300/425 [00:26<00:06, 20.78it/s]
+ 71%|#######1  | 303/425 [00:26<00:05, 20.96it/s]
+ 73%|#######2  | 309/425 [00:26<00:04, 27.19it/s]
+ 74%|#######3  | 313/425 [00:26<00:03, 29.75it/s]
+ 75%|#######4  | 317/425 [00:28<00:15,  7.06it/s]
+ 75%|#######5  | 320/425 [00:28<00:12,  8.25it/s]
+ 76%|#######6  | 323/425 [00:28<00:10,  9.78it/s]
+ 77%|#######6  | 327/425 [00:28<00:09, 10.37it/s]
+ 77%|#######7  | 329/425 [00:29<00:10,  9.21it/s]
+ 78%|#######7  | 331/425 [00:29<00:10,  8.62it/s]
+ 79%|#######8  | 334/425 [00:29<00:08, 11.03it/s]
+ 79%|#######9  | 337/425 [00:29<00:06, 13.44it/s]
+ 80%|########  | 340/425 [00:29<00:06, 12.39it/s]
+ 81%|########  | 343/425 [00:30<00:05, 14.64it/s]
+ 82%|########1 | 347/425 [00:30<00:04, 16.97it/s]
+ 83%|########2 | 351/425 [00:30<00:03, 20.69it/s]
+ 84%|########3 | 355/425 [00:30<00:02, 23.81it/s]
+ 84%|########4 | 358/425 [00:31<00:06,  9.87it/s]
+ 85%|########5 | 363/425 [00:31<00:04, 14.04it/s]
+ 86%|########6 | 366/425 [00:31<00:04, 13.01it/s]
+ 87%|########6 | 369/425 [00:31<00:04, 12.96it/s]
+ 88%|########7 | 373/425 [00:31<00:03, 16.42it/s]
+ 88%|########8 | 376/425 [00:32<00:02, 17.37it/s]
+ 89%|########9 | 379/425 [00:32<00:03, 12.81it/s]
+ 90%|########9 | 381/425 [00:32<00:03, 12.76it/s]
+ 90%|######### | 383/425 [00:32<00:03, 11.46it/s]
+ 91%|######### | 385/425 [00:33<00:03, 11.43it/s]
+ 92%|#########1| 390/425 [00:33<00:01, 17.75it/s]
+ 92%|#########2| 393/425 [00:33<00:02, 14.95it/s]
+ 93%|#########2| 395/425 [00:33<00:01, 15.42it/s]
+ 93%|#########3| 397/425 [00:33<00:01, 16.03it/s]
+ 94%|#########4| 401/425 [00:33<00:01, 20.06it/s]
+ 95%|#########5| 404/425 [00:34<00:01, 13.45it/s]
+ 97%|#########6| 411/425 [00:34<00:00, 21.79it/s]
+ 97%|#########7| 414/425 [00:34<00:00, 22.43it/s]
+ 98%|#########8| 417/425 [00:35<00:01,  7.68it/s]
+ 99%|#########8| 420/425 [00:37<00:01,  3.81it/s]
+100%|#########9| 423/425 [00:37<00:00,  4.97it/s]
+100%|##########| 425/425 [00:37<00:00,  5.46it/s]
+100%|##########| 425/425 [00:37<00:00, 11.23it/s]
+
+[QUARK-INFO]: The calibration has been finished. It took 44.2s to complete.
+
+[QUARK-INFO]: Remove QuantizeLinear & DequantizeLinear on certain operations(such as conv-relu).
+
+[QUARK-INFO]: Found Sigmoid node /stem/bn/act/Sigmoid. Replacing with HardSigmoid.
+
+[QUARK-INFO]: Found Sigmoid node /stages/stages.0/stages.0.0/conv1_1x1/bn/act/Sigmoid. Replacing with HardSigmoid.
+
+[QUARK-INFO]: Found Sigmoid node /stages/stages.0/stages.0.0/conv2_kxk/bn/act/Sigmoid. Replacing with HardSigmoid.
+
+[QUARK-INFO]: Found Sigmoid node /stages/stages.1/stages.1.0/conv1_1x1/bn/act/Sigmoid. Replacing with HardSigmoid.
+
+[QUARK-INFO]: Found Sigmoid node /stages/stages.1/stages.1.0/conv2_kxk/bn/act/Sigmoid. Replacing with HardSigmoid.
+
+[QUARK-INFO]: Found Sigmoid node /stages/stages.1/stages.1.1/conv1_1x1/bn/act/Sigmoid. Replacing with HardSigmoid.
+
+[QUARK-INFO]: Found Sigmoid node /stages/stages.1/stages.1.1/conv2_kxk/bn/act/Sigmoid. Replacing with HardSigmoid.
+
+[QUARK-INFO]: Found Sigmoid node /stages/stages.1/stages.1.2/conv1_1x1/bn/act/Sigmoid. Replacing with HardSigmoid.
+
+[QUARK-INFO]: Found Sigmoid node /stages/stages.1/stages.1.2/conv2_kxk/bn/act/Sigmoid. Replacing with HardSigmoid.
+
+[QUARK-INFO]: Found Sigmoid node /stages/stages.2/stages.2.0/conv1_1x1/bn/act/Sigmoid. Replacing with HardSigmoid.
+
+[QUARK-INFO]: Found Sigmoid node /stages/stages.2/stages.2.0/conv2_kxk/bn/act/Sigmoid. Replacing with HardSigmoid.
+
+[QUARK-INFO]: Found Sigmoid node /stages/stages.2/stages.2.1/conv_kxk/bn/act/Sigmoid. Replacing with HardSigmoid.
+
+[QUARK-INFO]: Found Sigmoid node /stages/stages.2/stages.2.1/transformer/transformer.0/mlp/act/Sigmoid. Replacing with HardSigmoid.
+
+[QUARK-INFO]: Found Sigmoid node /stages/stages.2/stages.2.1/transformer/transformer.1/mlp/act/Sigmoid. Replacing with HardSigmoid.
+
+[QUARK-INFO]: Found Sigmoid node /stages/stages.2/stages.2.1/conv_proj/bn/act/Sigmoid. Replacing with HardSigmoid.
+
+[QUARK-INFO]: Found Sigmoid node /stages/stages.2/stages.2.1/conv_fusion/bn/act/Sigmoid. Replacing with HardSigmoid.
+
+[QUARK-INFO]: Found Sigmoid node /stages/stages.3/stages.3.0/conv1_1x1/bn/act/Sigmoid. Replacing with HardSigmoid.
+
+[QUARK-INFO]: Found Sigmoid node /stages/stages.3/stages.3.0/conv2_kxk/bn/act/Sigmoid. Replacing with HardSigmoid.
+
+[QUARK-INFO]: Found Sigmoid node /stages/stages.3/stages.3.1/conv_kxk/bn/act/Sigmoid. Replacing with HardSigmoid.
+
+[QUARK-INFO]: Found Sigmoid node /stages/stages.3/stages.3.1/transformer/transformer.0/mlp/act/Sigmoid. Replacing with HardSigmoid.
+
+[QUARK-INFO]: Found Sigmoid node /stages/stages.3/stages.3.1/transformer/transformer.1/mlp/act/Sigmoid. Replacing with HardSigmoid.
+
+[QUARK-INFO]: Found Sigmoid node /stages/stages.3/stages.3.1/transformer/transformer.2/mlp/act/Sigmoid. Replacing with HardSigmoid.
+
+[QUARK-INFO]: Found Sigmoid node /stages/stages.3/stages.3.1/transformer/transformer.3/mlp/act/Sigmoid. Replacing with HardSigmoid.
+
+[QUARK-INFO]: Found Sigmoid node /stages/stages.3/stages.3.1/conv_proj/bn/act/Sigmoid. Replacing with HardSigmoid.
+
+[QUARK-INFO]: Found Sigmoid node /stages/stages.3/stages.3.1/conv_fusion/bn/act/Sigmoid. Replacing with HardSigmoid.
+
+[QUARK-INFO]: Found Sigmoid node /stages/stages.4/stages.4.0/conv1_1x1/bn/act/Sigmoid. Replacing with HardSigmoid.
+
+[QUARK-INFO]: Found Sigmoid node /stages/stages.4/stages.4.0/conv2_kxk/bn/act/Sigmoid. Replacing with HardSigmoid.
+
+[QUARK-INFO]: Found Sigmoid node /stages/stages.4/stages.4.1/conv_kxk/bn/act/Sigmoid. Replacing with HardSigmoid.
+
+[QUARK-INFO]: Found Sigmoid node /stages/stages.4/stages.4.1/transformer/transformer.0/mlp/act/Sigmoid. Replacing with HardSigmoid.
+
+[QUARK-INFO]: Found Sigmoid node /stages/stages.4/stages.4.1/transformer/transformer.1/mlp/act/Sigmoid. Replacing with HardSigmoid.
+
+[QUARK-INFO]: Found Sigmoid node /stages/stages.4/stages.4.1/transformer/transformer.2/mlp/act/Sigmoid. Replacing with HardSigmoid.
+
+[QUARK-INFO]: Found Sigmoid node /stages/stages.4/stages.4.1/conv_proj/bn/act/Sigmoid. Replacing with HardSigmoid.
+
+[QUARK-INFO]: Found Sigmoid node /stages/stages.4/stages.4.1/conv_fusion/bn/act/Sigmoid. Replacing with HardSigmoid.
+
+[QUARK-INFO]: Found Sigmoid node /final_conv/bn/act/Sigmoid. Replacing with HardSigmoid.
+
+[QUARK-INFO]: Found HardSigmoid node /stem/bn/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.
+
+[QUARK-INFO]: Found HardSigmoid node /stages/stages.0/stages.0.0/conv1_1x1/bn/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.
+
+[QUARK-INFO]: Found HardSigmoid node /stages/stages.0/stages.0.0/conv2_kxk/bn/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.
+
+[QUARK-INFO]: Found HardSigmoid node /stages/stages.1/stages.1.0/conv1_1x1/bn/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.
+
+[QUARK-INFO]: Found HardSigmoid node /stages/stages.1/stages.1.0/conv2_kxk/bn/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.
+
+[QUARK-INFO]: Found HardSigmoid node /stages/stages.1/stages.1.1/conv1_1x1/bn/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.
+
+[QUARK-INFO]: Found HardSigmoid node /stages/stages.1/stages.1.1/conv2_kxk/bn/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.
+
+[QUARK-INFO]: Found HardSigmoid node /stages/stages.1/stages.1.2/conv1_1x1/bn/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.
+
+[QUARK-INFO]: Found HardSigmoid node /stages/stages.1/stages.1.2/conv2_kxk/bn/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.
+
+[QUARK-INFO]: Found HardSigmoid node /stages/stages.2/stages.2.0/conv1_1x1/bn/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.
+
+[QUARK-INFO]: Found HardSigmoid node /stages/stages.2/stages.2.0/conv2_kxk/bn/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.
+
+[QUARK-INFO]: Found HardSigmoid node /stages/stages.2/stages.2.1/conv_kxk/bn/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.
+
+[QUARK-INFO]: Found HardSigmoid node /stages/stages.2/stages.2.1/transformer/transformer.0/mlp/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.
+
+[QUARK-INFO]: Found HardSigmoid node /stages/stages.2/stages.2.1/transformer/transformer.1/mlp/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.
+
+[QUARK-INFO]: Found HardSigmoid node /stages/stages.2/stages.2.1/conv_proj/bn/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.
+
+[QUARK-INFO]: Found HardSigmoid node /stages/stages.2/stages.2.1/conv_fusion/bn/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.
+
+[QUARK-INFO]: Found HardSigmoid node /stages/stages.3/stages.3.0/conv1_1x1/bn/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.
+
+[QUARK-INFO]: Found HardSigmoid node /stages/stages.3/stages.3.0/conv2_kxk/bn/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.
+
+[QUARK-INFO]: Found HardSigmoid node /stages/stages.3/stages.3.1/conv_kxk/bn/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.
+
+[QUARK-INFO]: Found HardSigmoid node /stages/stages.3/stages.3.1/transformer/transformer.0/mlp/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.
+
+[QUARK-INFO]: Found HardSigmoid node /stages/stages.3/stages.3.1/transformer/transformer.1/mlp/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.
+
+[QUARK-INFO]: Found HardSigmoid node /stages/stages.3/stages.3.1/transformer/transformer.2/mlp/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.
+
+[QUARK-INFO]: Found HardSigmoid node /stages/stages.3/stages.3.1/transformer/transformer.3/mlp/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.
+
+[QUARK-INFO]: Found HardSigmoid node /stages/stages.3/stages.3.1/conv_proj/bn/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.
+
+[QUARK-INFO]: Found HardSigmoid node /stages/stages.3/stages.3.1/conv_fusion/bn/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.
+
+[QUARK-INFO]: Found HardSigmoid node /stages/stages.4/stages.4.0/conv1_1x1/bn/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.
+
+[QUARK-INFO]: Found HardSigmoid node /stages/stages.4/stages.4.0/conv2_kxk/bn/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.
+
+[QUARK-INFO]: Found HardSigmoid node /stages/stages.4/stages.4.1/conv_kxk/bn/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.
+
+[QUARK-INFO]: Found HardSigmoid node /stages/stages.4/stages.4.1/transformer/transformer.0/mlp/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.
+
+[QUARK-INFO]: Found HardSigmoid node /stages/stages.4/stages.4.1/transformer/transformer.1/mlp/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.
+
+[QUARK-INFO]: Found HardSigmoid node /stages/stages.4/stages.4.1/transformer/transformer.2/mlp/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.
+
+[QUARK-INFO]: Found HardSigmoid node /stages/stages.4/stages.4.1/conv_proj/bn/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.
+
+[QUARK-INFO]: Found HardSigmoid node /stages/stages.4/stages.4.1/conv_fusion/bn/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.
+
+[QUARK-INFO]: Found HardSigmoid node /final_conv/bn/act/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.
+
+[QUARK-INFO]: Rescale GlobalAveragePool /head/global_pool/pool/GlobalAveragePool with factor 1.0 to simulate DPU behavior.
+
+[QUARK-INFO]: Adjust the quantize info to meet the compiler constraints
+
+[QUARK-INFO]: Input pos of concat node /stages/stages.2/stages.2.1/Concat is 7, min_pos is 6. Modify ipos from 7 to 6.
+
+[QUARK-INFO]: Input pos of concat node /stages/stages.3/stages.3.1/Concat is 7, min_pos is 6. Modify ipos from 7 to 6.
+
+[QUARK-INFO]: Input pos of pooling layer /head/global_pool/pool/GlobalAveragePool is 4. Output pos of pooling layer /head/global_pool/pool/GlobalAveragePool is 6.Modify opos from 6 to 4.
+
+[QUARK-INFO]: Input pos of Slice layer /stages/stages.2/stages.2.1/transformer/transformer.0/attn/Split_token_3_2 is 4. Output pos of Slice layer /stages/stages.2/stages.2.1/transformer/transformer.0/attn/Split_token_3_2 is 6.Modify opos from 6 to 4.
+
+[QUARK-INFO]: Input pos of Slice layer /stages/stages.2/stages.2.1/transformer/transformer.1/attn/Split_0 is 5. Output pos of Slice layer /stages/stages.2/stages.2.1/transformer/transformer.1/attn/Split_0 is 4.Modify ipos from 5 to 4.
+
+[QUARK-INFO]: Input pos of Slice layer /stages/stages.2/stages.2.1/transformer/transformer.1/attn/Split_token_7_1 is 4. Output pos of Slice layer /stages/stages.2/stages.2.1/transformer/transformer.1/attn/Split_token_7_1 is 5.Modify opos from 5 to 4.
+
+[QUARK-INFO]: Input pos of Slice layer /stages/stages.2/stages.2.1/transformer/transformer.1/attn/Split_token_9_2 is 4. Output pos of Slice layer /stages/stages.2/stages.2.1/transformer/transformer.1/attn/Split_token_9_2 is 5.Modify opos from 5 to 4.
+
+[QUARK-INFO]: Input pos of Slice layer /stages/stages.3/stages.3.1/transformer/transformer.0/attn/Split_token_16_2 is 5. Output pos of Slice layer /stages/stages.3/stages.3.1/transformer/transformer.0/attn/Split_token_16_2 is 6.Modify opos from 6 to 5.
+
+[QUARK-INFO]: Input pos of Slice layer /stages/stages.3/stages.3.1/transformer/transformer.1/attn/Split_token_21_1 is 5. Output pos of Slice layer /stages/stages.3/stages.3.1/transformer/transformer.1/attn/Split_token_21_1 is 4.Modify ipos from 5 to 4.
+
+[QUARK-INFO]: Input pos of Slice layer /stages/stages.3/stages.3.1/transformer/transformer.1/attn/Split_token_23_2 is 4. Output pos of Slice layer /stages/stages.3/stages.3.1/transformer/transformer.1/attn/Split_token_23_2 is 6.Modify opos from 6 to 4.
+
+[QUARK-INFO]: Input pos of Slice layer /stages/stages.3/stages.3.1/transformer/transformer.2/attn/Split_token_28_1 is 5. Output pos of Slice layer /stages/stages.3/stages.3.1/transformer/transformer.2/attn/Split_token_28_1 is 4.Modify ipos from 5 to 4.
+
+[QUARK-INFO]: Input pos of Slice layer /stages/stages.3/stages.3.1/transformer/transformer.2/attn/Split_token_30_2 is 4. Output pos of Slice layer /stages/stages.3/stages.3.1/transformer/transformer.2/attn/Split_token_30_2 is 5.Modify opos from 5 to 4.
+
+[QUARK-INFO]: Input pos of Slice layer /stages/stages.3/stages.3.1/transformer/transformer.3/attn/Split_token_37_2 is 5. Output pos of Slice layer /stages/stages.3/stages.3.1/transformer/transformer.3/attn/Split_token_37_2 is 6.Modify opos from 6 to 5.
+
+[QUARK-INFO]: Input pos of Slice layer /stages/stages.4/stages.4.1/transformer/transformer.0/attn/Split_token_44_2 is 5. Output pos of Slice layer /stages/stages.4/stages.4.1/transformer/transformer.0/attn/Split_token_44_2 is 6.Modify opos from 6 to 5.
+
+[QUARK-INFO]: Input pos of Slice layer /stages/stages.4/stages.4.1/transformer/transformer.1/attn/Split_token_51_2 is 5. Output pos of Slice layer /stages/stages.4/stages.4.1/transformer/transformer.1/attn/Split_token_51_2 is 6.Modify opos from 6 to 5.
+
+[QUARK-INFO]: Shift cut of layer onnx::Conv_1289_DequantizeLinear_Output is -1. It exceeds range [0, 16]. Modify wpos from 2 to 3.
+
+[QUARK-INFO]: Shift cut of layer onnx::Conv_1298_DequantizeLinear_Output is -1. It exceeds range [0, 16]. Modify wpos from 0 to 1.
+
+[QUARK-INFO]: Adjust the quantize info to meet the compiler constraints
+
+[QUARK-INFO]: Input pos of Slice layer /stages/stages.3/stages.3.1/transformer/transformer.1/attn/Split_0 is 4. Output pos of Slice layer /stages/stages.3/stages.3.1/transformer/transformer.1/attn/Split_0 is 5.Modify opos from 5 to 4.
+
+[QUARK-INFO]: Input pos of Slice layer /stages/stages.3/stages.3.1/transformer/transformer.2/attn/Split_0 is 4. Output pos of Slice layer /stages/stages.3/stages.3.1/transformer/transformer.2/attn/Split_0 is 5.Modify opos from 5 to 4.
+
+[QUARK-INFO]: Adjust the quantize info to meet the compiler constraints
+
+[QUARK-INFO]: Quark_latency_profiler: e2e quantization time consumed:50.314696
+
+[QUARK-INFO]: The operation types and their corresponding quantities of the input float model is shown in the table below.
++-----------------------------------------------------------------------------+
+| Op Type              | Float Model                                          |
+|----------------------+------------------------------------------------------|
+| Conv                 | 35                                                   |
+| Sigmoid              | 34                                                   |
+| Mul                  | 52                                                   |
+| Add                  | 57                                                   |
+| Constant             | 99                                                   |
+| Reshape              | 36                                                   |
+| Transpose            | 39                                                   |
+| LayerNormalization   | 21                                                   |
+| MatMul               | 54                                                   |
+| Split                | 9                                                    |
+| Squeeze              | 27                                                   |
+| Shape                | 9                                                    |
+| Slice                | 9                                                    |
+| Cast                 | 18                                                   |
+| Sqrt                 | 27                                                   |
+| Div                  | 9                                                    |
+| Softmax              | 9                                                    |
+| Concat               | 3                                                    |
+| GlobalAveragePool    | 1                                                    |
+| Flatten              | 1                                                    |
+| Gemm                 | 1                                                    |
+|----------------------+------------------------------------------------------|
+| Quantized model path | C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quant� |
++-----------------------------------------------------------------------------+
+
+[QUARK-INFO]: The quantized information for all operation types is shown in the table below.
+
+[QUARK-INFO]: The discrepancy between the operation types in the quantized model and the float model is due to the application of graph optimization.
++--------------------------------------------------------+
+| Op Type            | Activation | Weights   | Bias     |
+|--------------------+------------+-----------+----------|
+| Conv               | UINT8(35)  | INT8(35)  | INT8(32) |
+| Mul                | UINT8(52)  |           |          |
+| Add                | UINT8(21)  |           |          |
+| Reshape            | UINT8(90)  |           |          |
+| Transpose          | UINT8(48)  |           |          |
+| LayerNormalization | UINT8(21)  | INT8(21)  | INT8(21) |
+| Gemm               | UINT8(37)  | INT8(37)  | INT8(37) |
+| Slice              | UINT8(27)  |           |          |
+| Squeeze            | UINT8(27)  |           |          |
+| MatMul             | UINT8(18)  | UINT8(18) |          |
+| Softmax            | UINT8(9)   |           |          |
+| Concat             | UINT8(3)   |           |          |
+| GlobalAveragePool  | UINT8(1)   |           |          |
+| Flatten            | UINT8(1)   |           |          |
+| HardSigmoid        | UINT8(34)  |           |          |
++--------------------------------------------------------+
+Quantization complete! Output written to C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/scratch/cle_probe/mobilevit_xxs_xint8.onnx

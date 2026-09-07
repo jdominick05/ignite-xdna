@@ -535,11 +535,30 @@ same coarsest activation scale of 0.5.
 What separates them is the **depthwise weight-scale grid**. MobileNetV2's depthwise scales
 never exceed Δ=0.25; MobileViT-XXS reaches **Δ=1.0** on a 3×3 depthwise kernel, a 4–16×
 coarser grid. At Δ=1.0 essentially every real weight rounds to 0 or ±1, so the layer stops
-being a convolution and becomes a sign map. The plausible upstream cause is SiLU vs
-ReLU6 — an unbounded activation gives Quark no bounded range to equalize against, and
-Cross-Layer Equalization requires positive homogeneity (`f(αx) = αf(x)`), which ReLU6
-satisfies and SiLU does not — but **CLE pattern counts were not captured in a log here**,
-so that half remains an explanation, not a measurement.
+being a convolution and becomes a sign map.
+
+**What sets Δ is now an open question again — Cross-Layer Equalization has been measured
+and ruled out.** The standing explanation was that CLE needs a positive-homogeneous
+activation (`f(αx) = αf(x)`), that ReLU6 has it and SiLU doesn't, so Quark equalizes
+MobileNetV2 and skips MobileViT. Capturing the counts
+(`results/mobilevit/cle_pattern_count.log`) confirms the headline and destroys the
+argument: MobileNetV2 matches **3** CLE patterns, MobileViT-XXS **0**. But 3 is really 2
+distinct pairs against 52 convs, and — decisively — **neither pair contains a depthwise
+conv.** Both are pointwise (a `conv_pw`→`conv_pw` pair and `conv_pwl`→`conv_head`). CLE
+never touches a depthwise layer in either model, so it cannot be what bounds the depthwise
+grid, in either direction.
+
+The premise was also wrong on its own terms: **ReLU6 is not positive-homogeneous** —
+`ReLU6(2·4) = 6`, not `2·ReLU6(4) = 8`. Quark's matcher agrees with the math rather than
+with the old claim; it accepts only `['Relu','ReduceMean','Pad','LeakyRelu']` between two
+convs, and `Clip` is deliberately absent. MobileNetV2's ReLU6 exports as `Clip` (35 of
+them, zero `Relu`), so its activations block the walk for the same structural reason
+SiLU's do; the 3-vs-0 gap is residual activation-free `Conv`→`Conv` adjacency, not a
+statement about homogeneity. MobileViT is rejected twice over: `Sigmoid` isn't in the
+accepted set, and 29 of its 36 convs feed *both* the `Sigmoid` and the `Mul`, failing the
+matcher's single-consumer precondition before the op-type test is even reached. So the
+discriminator is measured, CLE is excluded as its mechanism, and **the upstream cause of
+the depthwise grid difference is unexplained.**
 
 AdaRound's failure is now mechanically explained rather than asserted: it picks between
 `floor(w/Δ)` and `ceil(w/Δ)` and **never changes Δ**. The audit confirms the scale grid is
