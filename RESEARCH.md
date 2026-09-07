@@ -1268,7 +1268,7 @@ reasoning behind each.
 - **Concurrent streams past 2, and on a wider model — done.** Both saturate:
   yolov8n flattens at 3 streams (~167 fps, 2.1×); yolov8m, which uses more of the
   array per call, saturates a stream earlier at 1.29× (`results/nstream_*.log`).
-  Table in the [Two cameras](#two-cameras-does-independent-concurrency-work-where-batching-doesnt)
+  Table in the [Two cameras](docs/BENCHMARKS.md#two-cameras-does-independent-concurrency-work-where-batching-doesnt)
   section above.
 - **Is stream saturation compute or memory — done, it's compute.** `tools/session_hold.py`
   + `xrt-smi examine -r aie-partitions` show NPU memory scaling linearly with stream
@@ -1286,7 +1286,7 @@ reasoning behind each.
   (x) — the width trend that held cleanly through m flattens here; x is pure extra cost
   for less accuracy than l. Calibrated smaller (32/24 images) than m's 64, a caveat in
   the same vein as m's own. l's full eval is also flaky in a way nothing smaller is —
-  see [Known limitations](#known-limitations). Table in the width
+  see [Known limitations](docs/BENCHMARKS.md#known-limitations). Table in the width
   section above.
 - **AdaRound across the ResNet50 resolution sweep.** The sweep is plain XINT8, and
   AdaRound's recovery could move where the accuracy peak sits.
@@ -1306,13 +1306,13 @@ reasoning behind each.
 - **The webcam path (single `4x4.xclbin` session, `./scripts/yolo-demo.sh`) has not
   been exercised end to end.** The related but distinct round-robin-across-4-columns
   demo *has* — see
-  [A live demo](#a-live-demo-does-the-multi-partition-finding-hold-on-a-real-webcam)
+  [A live demo](docs/BENCHMARKS.md#a-live-demo-does-the-multi-partition-finding-hold-on-a-real-webcam)
   above: camera-bound at 30 fps through n/m/l, genuinely NPU-bound (22.0–23.5 fps) at x.
 - **5th AIE column on this Phoenix chip — done, and it's a dead end.** `1x4.xclbin`
   caps at 4 independent partitions regardless of process count; a 5th process shares
   column 4 rather than getting its own. The driver's `5x4_*.xclbin` overlays fall back
   silently to 100% CPU (fingerprint mismatch). See
-  [Splitting the array into independent partitions](#splitting-the-array-into-independent-partitions)
+  [Splitting the array into independent partitions](docs/BENCHMARKS.md#splitting-the-array-into-independent-partitions)
   above and `docs/DECISIONS.md`.
 - **Longer term:** a detector fine-tuned for fixed camera feeds (licence-plate
   recognition), reusing the head-cut + XINT8 + AdaRound recipe rather than re-deriving it.

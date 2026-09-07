@@ -8,8 +8,8 @@ were not available to the original work.
 
 ## Ground rules
 
-- **Measure, don't assume.** Every claim in `README.md` and `RESEARCH.md` is backed by a
-  logged run under `results/`. If you change a number, change it because you ran
+- **Measure, don't assume.** Every claim in `README.md`, `RESEARCH.md` and
+  `docs/BENCHMARKS.md` is backed by a logged run under `results/`. If you change a number, change it because you ran
   something, and say what you ran.
 - Keep changes focused: one logical change per merge request.
 - Prefer simple, explicit code over abstraction. There is no framework here on purpose.
@@ -20,8 +20,8 @@ were not available to the original work.
 
 You need real Ryzen AI hardware (Hawk Point or Phoenix, XDNA1) to run anything past
 export. There is no simulator, and CPU-only runs do not exercise what this repository is
-about. See [Compatibility](README.md#compatibility) in the README before assuming your
-machine qualifies.
+about. See [Compatibility](docs/SETUP.md#compatibility) before assuming your machine
+qualifies.
 
 ```powershell
 conda create -n resnet_env   --clone ryzen-ai-1.8.0
@@ -29,8 +29,8 @@ conda create -n resnet_env17 --clone ryzen-ai-1.7.1
 ```
 
 Two environments, not one, because the SDK version that can export and quantize is not
-the one that can run on the NPU. See [Environments](README.md#environments) in the
-README for the reasoning; do not try to collapse them into one.
+the one that can run on the NPU. See [Environments](docs/SETUP.md#environments) for the
+reasoning; do not try to collapse them into one.
 
 ### What to read before changing anything
 
@@ -100,8 +100,8 @@ you did not measure.
 2. Open a merge request with a clear description: what changed, why, and what you ran to
    verify it. Paste the relevant `results/` output or log line, not just "it works".
 3. If your change touches a locked decision or a documented finding, update
-   `docs/DECISIONS.md`, `RESEARCH.md` or `README.md` in the same change. A document that
-   contradicts the code misleads the next person to read it.
+   `docs/DECISIONS.md`, `RESEARCH.md`, `docs/BENCHMARKS.md` or `README.md` in the same
+   change. A document that contradicts the code misleads the next person to read it.
 4. State explicitly what was tested and what was not. Untested code handed over as
    verified has caused real errors in this project; a merge request that says "steps 1
    and 2 were run on hardware, step 3 was not" is more useful than one that claims

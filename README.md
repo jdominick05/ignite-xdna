@@ -116,7 +116,7 @@ a compiler/scheduling limit, not host overhead. **Two earlier answers to this qu
 retracted**: the ~1.1 TOPS FLOPs-derived estimate for yolov8n, and every %-of-nameplate
 figure derived from `xrt-smi`'s GOPS column, which scales linearly with stream count while
 measured throughput stays flat.
-[Working](docs/BENCHMARKS.md#achieved-opss-a-real-answer-to-of-16-tops-not-a-gops-estimate).
+[Working](docs/BENCHMARKS.md#achieved-opss-a-real-answer-to--of-16-tops-not-a-gops-estimate).
 
 **Do not quote a FLOPs ratio as a latency prediction on this hardware.** yolov8s is 3.2×
 the arithmetic of yolov8n for 1.75× the latency; yolov8m is 9.1× for 3.46×. The CPU-vs-NPU

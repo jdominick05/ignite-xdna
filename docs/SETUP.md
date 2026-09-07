@@ -15,7 +15,7 @@ This is a narrow target, and most of the narrowness is not optional.
   `target: "X1"`). Strix is a different architecture and none of the firmware paths
   here apply to it.
 - **Windows.** XDNA1 has no Linux userspace.
-- **Ryzen AI 1.7.1 for inference.** Not 1.8.0 — see [Key findings](#key-findings).
+- **Ryzen AI 1.7.1 for inference.** Not 1.8.0 — see [Key findings](BENCHMARKS.md#key-findings).
 - **PowerShell**, not cmd. The scripts print resolved paths at startup so you can see
   when an environment variable did not take.
 

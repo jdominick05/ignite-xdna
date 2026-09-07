@@ -175,7 +175,7 @@ it (`onnxruntime.get_available_providers()` → `['VitisAIExecutionProvider',
 'DmlExecutionProvider', 'CPUExecutionProvider']`) — so the real question isn't "can you
 use DirectML instead," it's whether the NPU's extra pipeline work (head-cut, calibrate,
 quantize, optionally AdaRound, always `--fresh`, all the footguns in
-[`docs/DECISIONS.md`](docs/DECISIONS.md)) buys anything DirectML doesn't hand you for
+[`docs/DECISIONS.md`](DECISIONS.md)) buys anything DirectML doesn't hand you for
 free. `npu/session.py::build_session` now takes `--ep dml` alongside `cpu`/`npu`, so the
 same script, same letterbox, same decode, same NMS runs on all three.
 
@@ -1749,7 +1749,7 @@ checks on CPU, runs on the NPU and reads the report back.
   column was tried as a utilization signal too and turned out to be a dead end (scales
   linearly with stream count, decoupled from measured throughput); see the
   [GOPS section](#two-cameras-does-independent-concurrency-work-where-batching-doesnt) above and
-  [Roadmap](#roadmap).
+  [Roadmap](../RESEARCH.md#roadmap).
 - **No formal test suite.** Verification here is empirical (`compileall` + import checks
   as a syntax gate, then real pipeline runs read from `results/`) rather than unit tests
   — there's no fixture NPU to test against in CI.
