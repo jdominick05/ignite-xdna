@@ -860,9 +860,24 @@ caches.
     is `tensor_w`=44, not 32 — 45 fails only because it isn't a multiple of 4 (VMAC's
     fundamental granularity, a real hardware limit), and 46/48 exceed Tile(0,4)'s 64 KB
     (also real). This does **not** reopen the CLOSED throughput verdict above (99.1 GOPS
-    at w=44, still far below the CPU's 819–1094) and does **not** reach ResNet50's actual
-    56×56 shape — that still needs Tile(0,4)'s buffering restructured, not just this
-    kernel fix. Log: `results/aie/bottleneck_widthfix_npu.log`.
+    at w=44, still far below the CPU's 819–1094). Log: `results/aie/bottleneck_widthfix_npu.log`.
+  - **56×56 reached (2026-09-07) — the item the sweep above left explicitly open
+    ("untestable without rewriting the design's buffering") is now tested, and it makes
+    the verdict worse, not better.** Of Tile(0,4)'s five buffers, the final output
+    ObjectFifo (`outOFL2L3`) was the one safe one to shrink — single-buffering it
+    (`depth=1` instead of the default 2, in `bottleneck.py` itself, local checkout only)
+    trades some throughput (compute stalls until the previous row's DMA-out drains) for
+    3584 B of headroom at w=56, just enough. `skip_buf`'s depth was left alone — that one
+    is load-bearing for the skip connection's timing against the conv3x3 stage's latency,
+    not safe to shrink casually. **Result, both shapes verified against the torch golden:**
+    at 56×56 (ResNet50's actual conv2_x, not a compile-constrained stand-in), NPU hw
+    4.2435 ms vs CPU 0.3327 ms — **CPU wins 12.75×**, worse than the 5.7–11.4× range found
+    at every compile-limited 32-wide shape. Marginal (fixed-cost-removed) rate: NPU 111.1
+    GOPS vs CPU 1678.8 GOPS — **15.1×**. Reaching the real shape did not narrow the gap,
+    it widened it. Log: `results/aie/bottleneck_w56_npu.log`. Caveat: this NPU fit is 2
+    points on the w-axis, not the 5-point h-axis fit above (146.1 GOPS marginal) — not
+    strictly the same quantity, and single-buffering the output costs some of that
+    difference — but both read as far below the CPU regardless.
   - **Tooling:** `aiecc` needs `xclbinutil`, which is NOT in `ironenv/Scripts`. Put the XRT
     SDK directory (`/c/Xilinx/XRT/xrt_sdk/xrt`) on PATH too, or the build dies at the final
     link with `tool 'xclbinutil' not found`.

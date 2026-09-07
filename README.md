@@ -549,15 +549,24 @@ width-32-only restriction (`conv2dk3`'s pointer-stride hardcode, `conv2dk1`/
 `bottleneck.py` itself at `tensor_w`=36/40/44 (`results/aie/conv2dk3_widthfix_npu.log`,
 `results/aie/bottleneck_widthfix_npu.log`, `docs/DECISIONS.md`). So the 32² that
 `layers_conv2_x` runs still is not the network's real 56×56 shape — the corrected ceiling
-of 44 is closer but still short of it, and reaching 56 needs the skip-add tile's buffering
-restructured, not another kernel fix.
+of 44 is closer but still short of it.
+
+**56×56 itself has since been reached (2026-09-07), and the verdict got worse, not
+better.** Single-buffering Tile(0,4)'s final output FIFO (`depth=1` instead of 2, in the
+local `bottleneck.py` — `skip_buf`'s depth is load-bearing for the skip connection's
+timing and was left alone) frees just enough L1 headroom to compile 56×56. Both 32×56 and
+56×56 verified against the torch golden. At the real shape: NPU hardware 4.2435 ms vs CPU
+0.3327 ms — **CPU wins 12.75×**, worse than the 5.7–11.4× range found at every
+compile-limited 32-wide shape (marginal, fixed-cost-removed rate: 111.1 vs 1678.8 GOPS,
+15.1×). Reaching ResNet50's actual shape did not narrow the gap; it widened it
+(`results/aie/bottleneck_w56_npu.log`).
 
 What that leaves open is narrower and more specific than before: **column count** (both
 measurements use 1–3 columns of a 4×5 array; 4×146 ≈ 584 GOPS would still lose, but not by
-5.6×) and **kernel quality** — 146 GOPS is roughly 7% of one column's ~2 TOPS int8 peak
-(architectural, not measured here), the same shape of finding as the attention kernel's
-0.61 of 895 GFLOPS. The width fix confirmed the kernels vectorize correctly but does not
-change this gap — 99.1 GOPS at the new `tensor_w`=44 ceiling is still far below the CPU.
+5.6×) — the one lever the 56×56 result doesn't touch, since it's still a 1-column design.
+Kernel quality is no longer an open question in the attention-kernel sense: `conv2dk1.cc`/
+`conv2dk3.cc` do vectorize correctly with `aie::mmul`, and the width bug that was in them
+is now fixed and verified at the real shape.
 
 **A correction that came out of this sweep:** the conv2x log called its 628.2 µs of host
 cost a reproduction of the passthrough's 617.0 µs "to ~2%". Those are different quantities.

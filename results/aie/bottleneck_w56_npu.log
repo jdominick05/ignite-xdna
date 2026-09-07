@@ -1,0 +1,73 @@
+bottleneck.py at ResNet50's ACTUAL conv2_x shape (56x56) -- the shape every prior
+measurement in this project could not reach, now unblocked by two fixes:
+  1. conv2dk3 / conv2dk1 / conv2dk1_skip's width-32-only kernel restriction
+     (results/aie/conv2dk3_widthfix_npu.log, results/aie/bottleneck_widthfix_npu.log)
+  2. Tile(0,4)'s L1 budget: single-buffered the final output ObjectFifo (depth=1
+     instead of the default 2) in the local mlir-aie checkout's bottleneck.py --
+     the one buffer of Tile(0,4)'s five that is safe to shrink without touching the
+     skip connection's timing. See the patch comment in bottleneck.py itself.
+Desktop 2 (Ryzen 7 8700G / Phoenix XDNA1), 2026-09-07, both sides one sitting.
+
+  NPU : kernels/bottleneck_sweep/sweep.py --shapes 32x56,56x56 --iters 5 --warmup 1
+  CPU : kernels/bottleneck_sweep/cpu_sweep.py --shapes 32x56,56x56 --iters 100 --warmup 10
+
+CORRECTNESS
+===========
+Both NPU shapes verified against the torch int8 golden before timing (sweep.py's
+existing gate, DataShaper YCXC8/CYX in, OIYXI8O8/OIYX weights, CDYX/YCXD out).
+32x56: ok=yes. 56x56: ok=yes.
+
+NPU -- ml/bottleneck, int8, 1 column, single-buffered output FIFO
+===================================================================
+      HxW     MFLOP   wall ms     hw ms   host ms   hw GOPS  e2e GOPS  ok
+----------------------------------------------------------------------------------
+    32x56    249.56    3.2117    2.5590    0.6526      97.5      77.7  yes
+    56x56    436.73    4.9321    4.2435    0.6886     102.9      88.5  yes
+
+FIT  hw_time_ms = intercept + slope * FLOPs
+  intercept     : 313.0 us
+  marginal GOPS : 111.1
+  r^2           : 1.00000
+
+CPU -- ORT CPU EP, QDQ int8 (VNNI), same shapes
+================================================
+      HxW     MFLOP   int8 ms    min ms      GOPS
+--------------------------------------------------
+    32x56    249.56    0.2212    0.1919    1128.1
+    56x56    436.73    0.3327    0.2917    1312.7
+
+FIT  cpu_time_ms = intercept + slope * FLOPs
+  intercept     : 72.6 us
+  marginal GOPS : 1678.8
+  r^2           : 1.00000
+
+VERDICT AT THE SHAPE THAT ACTUALLY MATTERS
+===========================================
+At 56x56 (ResNet50's real conv2_x, not a compile-constrained stand-in): NPU hw
+4.2435 ms vs CPU 0.3327 ms -- CPU wins 12.75x, worse than the 5.7-11.4x range found
+across the compile-limited 32-wide shapes in bottleneck_spatial_sweep_npu.log.
+Marginal (steady-state, fixed-cost-removed) rate: NPU 111.1 GOPS vs CPU 1678.8 GOPS
+-- 15.1x. This closes the item bottleneck_spatial_sweep_npu.log left explicitly open:
+"w > 32 for this op. Untested, because untestable without rewriting the design's
+buffering. 56x56 -- the shape that actually matters for ResNet50 -- is on the far
+side of that rewrite." It is no longer untested: reaching the real shape did not
+narrow the gap, it widened it. The CLOSED verdict (int8 chained ResNet-bottleneck
+convolution on XDNA1 via this mlir-aie design loses to Zen4 CPU at every shape) now
+includes the shape that mattered most, and loses by more there than anywhere else
+measured.
+
+CAVEAT
+======
+This NPU fit is 2 points on the w-axis (32x56, 56x56), not the 5-point h-axis fit in
+bottleneck_spatial_sweep_npu.log (146.1 GOPS marginal) -- different axis, not
+directly the same quantity, though both read as "far below the CPU." Single-
+buffering the output FIFO trades throughput for fit (compute stalls until the
+previous row's DMA-out drains) -- part of why marginal GOPS here (111.1) reads
+lower than the h-axis sweep's 146.1, not evidence of a regression in the width fix
+itself. A future column-scaled or double-buffered-output design could plausibly
+close some of the gap on GOPS alone; it would need to close a lot more of it than
+1.7x (the widest previously-open estimate) to change the verdict, and column count
+was already the more promising untested lever going in.
+
+Local mlir-aie checkout only (bottleneck.py's depth=1 change, plus the width fixes
+it depends on); never upstreamed, per project convention.
