@@ -430,6 +430,19 @@
   standalone measured artifact, but has no path into the real model's inference
   without an unbuilt, unmeasured cross-node batching scheme to amortize the
   per-call floor. See `results/aie/groupnorm_bf16_handoff_floor_npu.log`.
+  **Update:** that floor's ~90% conversion cost turned out to be `ml_dtypes.astype()`
+  itself, not physics — bfloat16 isn't a native numpy dtype, so it runs a scalar
+  loop with no SIMD path. A strided-view truncation with preallocated buffers
+  (`measure_handoff_floor_v2.py`) cuts the L=301056 floor from 23.6ms to 5.7ms, and
+  isolating the shared-memory protocol alone (zero conversion) measures 1.19ms —
+  already under CPU's 3.47ms at that shape. Separately, re-profiling the real model
+  found the QuantizeLinear/DequantizeLinear nodes wrapping every InstanceNorm site
+  add 56.8% on top of its own cost (65.08ms across all 49 nodes, not 42.37ms) — the
+  real bar an int8-native design (on-core dequant/requant, folding those nodes'
+  scales into the kernel) would need to clear, which the measured protocol floor
+  already does at the hardest shape. No int8-native kernel is built; this reopens
+  the question rather than answering it. See
+  `results/aie/groupnorm_bf16_handoff_floor_v2_npu.log`.
 
 ## The YOLOv8 partitioning failure (resolved)
 

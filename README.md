@@ -389,18 +389,40 @@ else. Per call, kernel NPU time vs the profiled CPU cost of the same node
 33 of the 49 nodes win, worth ~19.4 ms of the op's 42.37 ms per inference — **at the
 kernel alone**, single-process. Splicing it into the real model needs a second OS
 process (the XRT Python binding is built against Python 3.13, the EP's env is 3.12,
-a hard ABI wall), and that handoff turns out to be the whole story: measuring its
-floor (`results/aie/groupnorm_bf16_handoff_floor_npu.log` — shared-memory ping-pong
-of the real byte volume plus fp32/bf16 conversion, no actual NPU dispatch, so this
-can only understate the real cost) found **789 μs-23.6 ms per call depending on
-shape, which erases every one of the 33 wins above** — 0/49 nodes survive a real
-splice. ~90% of the floor at the largest shape is the fp32/bf16 conversion itself,
-not the shared-memory transfer, and closing that gap wouldn't be enough either: the
-non-conversion residual alone still exceeds every shape's margin except a near-wash
-at L=301056. The per-node kernel numbers above stand as measured; the practical
-payoff does not, absent an unbuilt cross-node batching scheme to amortize the
-per-call floor. The full model's top-1 with bf16 in these nodes is now moot until
-that scheme exists.
+a hard ABI wall), and the first attempt at measuring that handoff's floor
+(`results/aie/groupnorm_bf16_handoff_floor_npu.log`) found 789 μs–23.6 ms per call
+depending on shape — erasing every one of the 33 wins above. But that floor used
+`ml_dtypes.astype()` for fp32/bf16 conversion, and bfloat16 isn't a native numpy
+dtype: `.astype()` runs a scalar per-element loop with no SIMD path, so that number
+measured a slow conversion function, not a hardware limit. Replacing it with a
+strided-view truncation and preallocated buffers
+(`results/aie/groupnorm_bf16_handoff_floor_v2_npu.log`) cuts the L=301056 floor from
+23.6 ms to 5.7 ms — CPU still wins there, by 1.65× instead of 6.8× — but isolating
+the protocol alone (`--no-convert`, zero conversion work, full bf16 payload) measures
+**1.19 ms/call, already under CPU's 3.47 ms** at that shape. The shared-memory
+handoff was never the obstacle; the host-side conversion was.
+
+That reopens a further question: every one of the 49 InstanceNorm nodes sits inside a
+`QuantizeLinear → DequantizeLinear → InstanceNorm → QuantizeLinear → DequantizeLinear`
+sandwich (verified programmatically against the real graph, all 49/49, no other float
+op riding along on either side) — and re-profiling the real model shows two of those
+four QDQ nodes (the input-side quantize and output-side dequantize) are already
+optimized away by ORT at runtime, while the other two (input-side dequantize,
+output-side quantize) run for real, adding **56.8% on top of InstanceNorm's own
+cost**: 65.08 ms total across all 49 nodes, not 42.37 ms, once those two nodes are
+counted — 11.1% of the model's 586.32 ms/image latency, not 7.2%. An int8-native
+kernel design (int8 in, on-core dequant fused into the stats pass, on-core requant
+fused into the affine pass, int8 out) would need to beat that larger 65.08 ms number,
+not InstanceNorm alone — a considerably easier bar, and the measured 1.19 ms
+protocol floor already clears the hardest single-shape case (L=301056: 5.21 ms) with
+room to spare, before any int8-specific payload reduction is even counted.
+
+None of that kernel has been built: the on-core int8→bf16 widen-and-dequant cost is
+real and unmeasured, not zero, and the host-side plumbing to extract/reinsert int8
+tensors at these exact graph points doesn't exist yet. This is the first version of
+this investigation where the projected numbers point to a win rather than a loss —
+but it is still a projection. Full details:
+`results/aie/groupnorm_bf16_handoff_floor_v2_npu.log`.
 
 ### Input resolution: the fixed cost of running the graph at all
 

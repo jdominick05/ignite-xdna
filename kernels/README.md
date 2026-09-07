@@ -22,11 +22,20 @@ array program) into `~/.npu/cache/<hash>/`; later runs of the same shape hit the
 
 | Kernel | Op it replaces | Status |
 |---|---|---|
-| `groupnorm_bf16/` | `InstanceNormalization` (really `GroupNorm(32)`) in `resnetv2_50x3_xint8.onnx`, the op that falls to CPU on that model | Kernel alone beats CPU on 33/49 nodes (`results/aie/groupnorm_bf16_kernel_npu.log`), but the measured two-process handoff floor erases the win at every shape -- 0/49 once spliced (`results/aie/groupnorm_bf16_handoff_floor_npu.log`) |
+| `groupnorm_bf16/` | `InstanceNormalization` (really `GroupNorm(32)`) in `resnetv2_50x3_xint8.onnx`, the op that falls to CPU on that model | Kernel alone beats CPU on 33/49 nodes (`results/aie/groupnorm_bf16_kernel_npu.log`); the v1 two-process handoff floor erased the win at every shape, but that floor used a conversion function with no SIMD path, not a hardware limit -- a faster conversion plus the real int8-boundary target reopen the question, unbuilt. See `results/aie/groupnorm_bf16_handoff_floor_v2_npu.log` |
 
 `groupnorm_bf16/extract_golden.py` and `groupnorm_bf16/measure_handoff_floor.py --role ep`
-are the two scripts here that run in `resnet_env17`, not ironenv: the former pulls a
-real node's input, params and ORT's own CPU output out of the model into `data/golden/`
-(git-ignored) so the kernel is checked against the actual tensors, not random data; the
-latter is one side of the two-process handoff-floor measurement above (the other side,
-`--role kernel`, runs in ironenv like everything else here).
+/ `measure_handoff_floor_v2.py --role ep` are the scripts here that run in
+`resnet_env17`, not ironenv: the first pulls a real node's input, params and ORT's own
+CPU output out of the model into `data/golden/` (git-ignored) so the kernel is checked
+against the actual tensors, not random data; the other two are one side each of the
+two-process handoff-floor measurements above (the other side, `--role kernel`, runs in
+ironenv like everything else here). `measure_handoff_floor_v2.py` replaces
+`ml_dtypes.astype()` (a scalar per-element loop -- bfloat16 isn't a native numpy dtype,
+so there's no SIMD path) with a strided-view truncation and preallocated buffers,
+cutting the measured floor at L=301056 from 23.6ms to 5.7ms, and adds `--no-convert`
+to isolate the protocol cost alone (1.19ms -- already under CPU's 3.47ms on its own).
+See `results/aie/groupnorm_bf16_handoff_floor_v2_npu.log` for the full writeup,
+including why the real CPU cost this design should be compared against is higher than
+InstanceNorm alone (56.8% higher -- the QuantizeLinear/DequantizeLinear nodes wrapping
+every site are a real target too, not just InstanceNorm).
