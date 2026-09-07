@@ -25,8 +25,9 @@ little, and lets the first failure bound w rather than guessing it.
 WHAT DECIDES THE QUESTION
 -------------------------
 Not per-point GOPS. Per-point end-to-end GOPS *must* climb with size regardless of the
-array, because the ~450us fixed host cost measured in results/aie/dispatch_floor_npu.log
-shrinks as a fraction of a bigger job. The honest metric is a least-squares fit of
+array, because host cost -- a 447.3us floor per results/aie/dispatch_floor_npu.log, and
+measured at 608-874us here, rising with payload rather than flat -- shrinks as a FRACTION
+of a bigger job even while growing in absolute terms. The honest metric is a fit of
 
     hw_time = intercept + slope * FLOPs
 
