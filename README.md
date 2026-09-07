@@ -441,6 +441,41 @@ summed over the real block counts (2×57.61 + 4×4.57 + 3×0.86 ≈ 136 ms at 8 
 end to end. It is cited only to say the direction is hopeless, which the per-stage numbers
 already establish on their own.
 
+**Why it lost is not what this README first said — and the per-dispatch floor is now
+measured.** Every isolated-op verdict here rested on a "~185–200 µs" per-dispatch constant
+inherited from one 96 KB probe and never measured on its own.
+`kernels/dispatch_floor/measure_floor.py` measures it with a design that has **no compute
+tile at all** (shim→memtile→shim), so there is no kernel math to attribute time to —
+payloads swept 8 KB–32 MB, output verified per payload, compile excluded
+(`results/aie/dispatch_floor_npu.log`):
+
+| | |
+|---|---|
+| Hardware floor (submit+wait only) | **169.8 µs** (R²=1.0000) |
+| Wall floor through `@iron.jit` | **617.0 µs** (R²=0.9998) |
+| Host-side, flat in payload size | 447.3 µs |
+| Streaming bandwidth | 12.2–13.8 GB/s |
+
+**The old constant was right about the hardware.** What nobody had separated is that a
+kernel doesn't *pay* the hardware floor — through the IRON call path it pays **3.6× more**,
+and both hand-written kernels were charged that while their write-ups reasoned with 185 µs.
+
+That correction cuts the other way too. At Stage 2, dispatch is **~1% of the measured
+57,610 µs** — so "dominated by dispatch overhead" was never true here. The real
+cause is kernel design: `attention_kernels.cc` uses **`aie::mmul` zero times**, hand-rolling
+dot products with a horizontal `aie::reduce_add` per output element, reaching 0.61 GFLOPS on
+hardware this repo measured at **895 GFLOPS**. The row-wise streaming that solved the 128 KB
+scratchpad overflow is the same edit that destroyed the arithmetic intensity.
+**Rewriting it with `mmul` still would not save it**, which is why the verdict stands: a
+perfect 895 GFLOPS kernel gives Stage 2 40 µs + 617 µs = 657 µs against CPU's 240 µs, and
+even at the 170 µs hardware floor 210 vs 240 µs is a wash; Stages 3 and 4 lose at both.
+
+The reusable output is a **go/no-go test to run before writing a kernel at all**: the op's
+CPU time must exceed **~617 µs** through IRON, or **~170 µs** on a hypothetical
+zero-overhead resubmit path. Both are lower bounds — this is a no-compute passthrough, and a
+real multi-core kernel's own configuration cost sits inside the hardware bracket. Dispatch
+also dominates *everything* below ~0.5 MB: wall time is flat across a 64× payload range.
+
 **Heterogeneous splice, now measured: 3.25 ms, and 2.31× — not the 4.47 ms / 4.1× once
 published here.** `tools/splice_wall_clock.py` puts a `perf_counter` around a real
 in-process loop (`results/mobilevit/splice_wall_clock_npu.log`, 100 iterations, every row

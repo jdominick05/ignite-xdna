@@ -1,0 +1,138 @@
+NPU per-dispatch floor, measured in isolation -- Desktop 2 (Phoenix, Ryzen 7 8700G)
+2026-09-07. env: mlir-aie ironenv (v1.4.2) + XRT SDK 2.21.75, native Windows.
+Command: python3 kernels/dispatch_floor/measure_floor.py --iters 50 --warmup 5 \
+           --sizes 1024,4096,16384,65536,262144,1048576,4194304
+
+WHY: kernels/groupnorm_bf16 and kernels/attention_bf16 both lost to the Zen4 CPU,
+and both write-ups blame a per-dispatch fixed cost of '~185-200us'. That constant
+was inherited from a single 96KB probe during the GroupNorm work and never measured
+on its own, yet every isolated-op verdict in this repo rests on it.
+
+DESIGN: no compute tile at all -- shim -> memtile -> shim via ObjectFifo.forward(),
+the structure of mlir-aie's basic/passthrough_dmas. No kernel math exists to
+attribute time to, so per-call time is dispatch + DMA and nothing else. Every
+payload is verified (output == input) before its timings are kept; compile is
+excluded (warmup + @iron.jit kernel cache), so the timed loop recompiles nothing.
+
+TWO LAYERS ARE TIMED PER CALL:
+  wall = perf_counter around the @iron.jit call -- what a design actually pays.
+  hw   = the runtime's OWN bracket around kernel(3,insts,n,*bufs) + wait(), returned
+         per call as KernelResult.npu_time (ns). See xrtruntime/hostruntime.py run().
+'host' is wall-hw: IRON's per-call host-side cost. Read that carefully -- the hw
+bracket is NARROW. It opens only after the hw_context cache lookup, the pyxrt kernel-
+handle retrieval and any insts_bo / buffer-coherence work, so all of that lands in the
+host column despite being XRT/driver time rather than interpreter time. A cProfile of
+this path (50 calls, N=4096) puts its largest entry at XRTRuntime.load with tottime ==
+cumtime -- time inside a C call the profiler cannot see into -- and cProfile's own
+overhead is ~0.36 ms/call here (0.98 ms/call profiled vs 0.62 unprofiled), so tracked
+Python work is only on the order of ~100us/call. The stat/realpath/signature churn
+(nt.stat x8, nt._getfinalpathname x4, inspect._signature_from_callable x6 PER LAUNCH,
+from the artifacts_present check in callabledesign.py and load() in
+xrtruntime/hostruntime.py:721) is real and worth hoisting, but it is the minority of
+the 447us. So: host-side, MOSTLY XRT OUTSIDE THE SUBMIT BRACKET, not Python overhead.
+How much is actually recoverable is untested -- a C++ host or a cached-handle re-submit
+path is what would measure it.
+
+NPU per-dispatch floor -- no-compute passthrough (shim->memtile->shim)
+iters=50 warmup=5 (compile excluded, kernel cached)
+
+   elems  KB moved   wall ms  wall min     hw ms    hw min   host ms  ok
+--------------------------------------------------------------------------------
+    1024       8.0    0.6557    0.5900    0.1780    0.1586    0.4778  yes
+    4096      32.0    0.6441    0.5865    0.1765    0.1574    0.4676  yes
+   16384     128.0    0.6100    0.5827    0.1773    0.1658    0.4327  yes
+   65536     512.0    0.6827    0.5996    0.2092    0.1929    0.4735  yes
+  262144    2048.0    0.7468    0.7204    0.3169    0.3069    0.4299  yes
+ 1048576    8192.0    1.2649    1.1757    0.7699    0.7461    0.4950  yes
+ 4194304   32768.0    3.3703    3.0740    2.6080    2.5632    0.7623  yes
+
+WALL (what a design pays today):  time_ms = intercept + slope * bytes   (R^2 = 0.9990)
+  intercept (FIXED PER-DISPATCH COST) : 617.0 us
+  slope                               : 0.0817 ns/byte
+  implied streaming bandwidth         : 12.24 GB/s
+
+HARDWARE ONLY (submit+wait, no Python):  time_ms = intercept + slope * bytes   (R^2 = 1.0000)
+  intercept (FIXED PER-DISPATCH COST) : 169.8 us
+  slope                               : 0.0726 ns/byte
+  implied streaming bandwidth         : 13.78 GB/s
+
+Go/no-go threshold this implies:
+  An op whose CPU time is under 617.0 us cannot win through
+  the IRON call path regardless of kernel quality.
+  Of that, 169.8 us is hardware and 447.3 us is host-side overhead that a
+  leaner submission path could in principle remove.
+  Compare against the measured CPU times before writing a kernel:
+    attention_bf16 stage 4: CPU 12 us   stage 3: CPU 34 us   stage 2: CPU 240 us
+
+=== WHAT THIS SETTLES ===
+
+1. THE REPO'S "~185-200us" CONSTANT WAS RIGHT -- ABOUT THE HARDWARE. The measured
+   hardware floor is 169.8us, squarely in that range. This is a confirmation, not a
+   retraction. What was never separated is that a kernel does not PAY the hardware
+   floor: through the @iron.jit path it pays 617.0us, i.e. 3.6x the number the
+   write-ups were quoting. Both kernels/groupnorm_bf16 and kernels/attention_bf16
+   were charged the wall figure while their analyses reasoned with the hardware one.
+
+2. DISPATCH DOMINATES EVERYTHING BELOW ~0.5 MB. Wall time is flat from 8KB to 512KB
+   (0.61-0.68 ms across a 64x payload range). Transfer only becomes visible past
+   ~2 MB. Below that, payload size is not what a kernel is paying for.
+
+3. GO/NO-GO THRESHOLD, to run BEFORE writing a kernel rather than after:
+     through IRON today      : the op's CPU time must exceed ~617us
+     best case, raw resubmit : the op's CPU time must exceed ~170us
+   Both are LOWER BOUNDS for a real design: this is a no-compute passthrough, and a
+   multi-core kernel's own configuration cost lands inside the hw bracket and pushes
+   its floor above 169.8us. One design, one data point -- treat as a floor, not a
+   universal constant.
+
+4. IT CLOSES THE ATTENTION THREAD PROPERLY. Applying the measured floor to
+   kernels/attention_bf16's own numbers, assuming a PERFECT kernel running at the
+   895 GFLOPS this machine actually reached (mlir_aie_bf16_matmul_npu.log):
+
+     stage   FLOP      compute@895  +617 wall   vs CPU     +170 hw     vs CPU
+     ------  --------  -----------  ----------  ---------  ----------  --------
+     2       36.18 M     40.4 us     657 us     240 us     210 us      240 us
+                                     loses 2.7x            wins 1.14x (a wash)
+     3        2.79 M      3.1 us     620 us      34 us     173 us       34 us
+                                     loses 18x             loses 5.1x
+     4        0.21 M      0.2 us     617 us      12 us     170 us       12 us
+                                     loses 51x             loses 14x
+
+   So the attention verdict SURVIVES the correction: even a perfect kernel on a
+   perfect submit path only reaches a wash at stage 2 and still loses at 3 and 4.
+   But the recorded DIAGNOSIS was wrong. The write-ups say the wall was per-dispatch
+   fixed cost; at stage 2 dispatch is 617us of a measured 57,610us -- ~1%. The real
+   cause is kernel design: attention_kernels.cc contains ZERO uses of aie::mmul and
+   instead hand-rolls dot products with a horizontal aie::reduce_add PER OUTPUT
+   ELEMENT, achieving 0.63 GFLOPS on hardware measured at 895. Row-wise streaming
+   fixed the 128KB scratchpad overflow and destroyed the arithmetic intensity in the
+   same edit. Do NOT reuse that inner loop as a template.
+
+   Cross-check that the floor is consistent with that design: attention stage 4
+   measured 860us wall for 0.21 MFLOP; 860 - 617 = 243us of compute + 8-core config,
+   which is the right order for a kernel doing almost no math. The floor explains the
+   fixed part of the attention numbers without being the reason they lost.
+
+5. WHAT IT OPENS. 447.3us/call of host-side cost sits outside the hardware bracket and
+   is flat in payload size. How much is recoverable is UNMEASURED -- a cached-handle
+   re-submit, a C++ host, or a batched/chained submit (xrt::runlist, if this XRT
+   exposes it) are the candidates. If that cost were eliminated the go/no-go threshold
+   drops 3.6x, which would not save attention but would move the boundary for every
+   future kernel. That is the next measurement, not a claim.
+
+=== FOLLOW-UP: THE BATCHED-SUBMIT PATH EXISTS (verified, not yet measured) ===
+Checked directly on this machine while writing the above:
+
+  xrt::runlist  -> present in /c/Xilinx/XRT/xrt_sdk/xrt/include/xrt/experimental/xrt_kernel.h
+                   (experimental namespace in XRT 2.21.75, not stable API)
+  pyxrt.runlist -> BOUND in this install's pyxrt, exposing add / execute / wait
+                   (python3 -c "import pyxrt; dir(pyxrt.runlist)")
+
+So N dispatches can in principle be queued with add(), submitted with a single execute()
+and joined with one wait(). That attacks BOTH terms measured above: the 447.3us host cost
+would be paid once per batch instead of once per call, and the 169.8us hardware floor may
+partly amortize as well since it covers submit+wait.
+
+This is an API-existence check ONLY. Nothing here has been run: no measurement, no claim
+about what it actually saves, and "experimental" means the signature can move between XRT
+versions. It is recorded as the next measurement to make, not as a result.

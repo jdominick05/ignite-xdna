@@ -1007,11 +1007,54 @@ been closed:
   (~100x smaller than MobileNetV2's ~300 MFLOP floor, which already lost to CPU). Zen4 AVX-512
   runs those 8 heads in **0.034 ms**, making the 4.57 ms AIE2 kernel **134x slower than CPU**
   (achieving 0.61 GFLOPS, <0.1% of array peak). Mobile vision self-attention lacks the token
-  sequence length ($N \ge 2048$) of LLMs needed to overcome AIE2 launch and DMA sequencing overhead.
+  sequence length ($N \ge 2048$) of LLMs.
   Running the full model on NPU with this kernel takes **>120 ms -- a projection, not a
   measurement**: the per-stage timings summed over the real block counts
   (2x57.61 + 4x4.57 + 3x0.86 ~= 136 ms at 8 heads), never run end to end. Cited only for
   direction; the per-stage numbers already settle it.
+
+  **Diagnosis corrected 2026-09-07 -- the verdict holds, the stated cause did not.**
+  This entry originally attributed the loss to "AIE2 launch and DMA sequencing overhead."
+  The per-dispatch floor has since been measured in isolation (see the next finding):
+  **617 us wall / 170 us hardware** per call, which against Stage 2's measured 57,610 us is
+  **~1%**, not the dominant term. The actual cause is the kernel: `attention_kernels.cc`
+  contains **zero uses of `aie::mmul`** and instead hand-rolls dot products with a
+  horizontal `aie::reduce_add` per output element, forfeiting the native bf16xbf16->fp32
+  MAC the whole pivot was chasing. It reaches 0.61 GFLOPS on hardware this repo measured at
+  **895 GFLOPS**, so ~99.9% of the gap is design, not fixed cost. The row-wise
+  FlashAttention streaming that solved the 128 KB scratchpad overflow is the same edit that
+  destroyed the arithmetic intensity -- that inner loop is not a template to reuse.
+  Rewriting it with `aie::mmul` would still not save it, which is why this stays a negative
+  result: a perfect 895 GFLOPS kernel gives Stage 2 40 us + 617 us = 657 us against CPU's
+  240 us, and even at the 170 us hardware floor 210 vs 240 us is a wash; Stages 3 and 4 lose
+  at both floors. The op needs to be ~20x larger before kernel quality decides anything.
+
+- **The per-dispatch floor, finally measured in isolation.** Every isolated-op verdict
+  above rested on a "~185-200us" constant inherited from one 96 KB probe during the
+  GroupNorm work and never measured on its own. `kernels/dispatch_floor/measure_floor.py`
+  measures it with a design that has **no compute tile at all** (shim->memtile->shim via
+  `ObjectFifo.forward()`), so there is no kernel math to attribute time to; payloads sweep
+  8 KB-32 MB, output is verified per payload, and compile is excluded
+  (`results/aie/dispatch_floor_npu.log`, Desktop 2 / Phoenix).
+  **The old constant was right about the hardware: 169.8 us** (R^2 = 1.0000). What nobody
+  had separated is that a kernel does not *pay* the hardware floor -- through the
+  `@iron.jit` path it pays **617.0 us** (R^2 = 0.9998), 3.6x more, and both hand-written
+  kernels were charged that while their write-ups reasoned with the hardware number.
+  The 447.3 us difference is host-side and flat in payload size, but it is **not** simply
+  "Python overhead": the hardware bracket is narrow (opening only after the hw_context
+  lookup, kernel-handle retrieval and buffer coherence), and cProfile -- whose own overhead
+  is ~0.36 ms/call here -- puts its largest entry inside a C call it cannot see into.
+  Tracked Python work is ~100 us/call; the `nt.stat`x8 / `_getfinalpathname`x4 /
+  `inspect._signature_from_callable`x6 *per launch* is real waste worth hoisting but is the
+  minority. How much of the 447 us is recoverable is **unmeasured** -- a cached-handle
+  resubmit, a C++ host, or a batched submit are the candidates, and that is the next
+  measurement rather than a claim. Two further results fall out: **dispatch dominates
+  everything below ~0.5 MB** (wall time flat across a 64x payload range, 8 KB->512 KB;
+  transfer only visible past ~2 MB; 12.2-13.8 GB/s streaming), and a **go/no-go threshold
+  to apply before writing a kernel** -- the op's CPU time must exceed ~617 us through IRON,
+  or ~170 us on a hypothetical zero-overhead path. Both are lower bounds: this is a
+  no-compute passthrough, and a real multi-core kernel's configuration cost sits inside the
+  hardware bracket and pushes its own floor above 169.8 us.
 
   **Heterogeneous splice: now measured at 3.25 ms / 2.31x, replacing the reported
   4.47 ms / 4.1x.** `tools/splice_wall_clock.py` wraps a `perf_counter` around a real

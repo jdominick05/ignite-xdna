@@ -49,11 +49,34 @@ Log: `results/aie/attention_bf16_kernel_npu.log`
 
 While the kernel compiles, maps cleanly across 8 physical AIE2 cores, streams via 8 Shim DMA channels, and achieves bit-accurate numerical verification (<1% rel L2 error, 0 NaN), **it is heavily outperformed by CPU**.
 
-**Why? The Arithmetic Intensity Floor:**
-- At Stage 3 (8 heads), total compute is only **2.79 MFLOP** ($0.0028\text{ GFLOP}$).
-- For comparison, MobileNetV2 was $\sim 300\text{ MFLOP}$ and was already too light to amortize NPU fixed costs (losing to CPU 2.68 ms vs 1.72 ms). This attention operator is **$\sim 100\times$ smaller still**.
-- At 4.57 ms, achieved throughput is only **0.61 GFLOPS** ($<0.1\%$ of the array's compute capability), completely dominated by runtime dispatch, task-group orchestration, and shim DMA latency for tiny vector lengths.
-- The pivot intended to find a compute-bound operator, but mobile vision attention ($N \le 256$) lacks the token sequence length of LLMs ($N \ge 2048$), landing squarely back in the dispatch-bound regime.
+**Why? Two reasons, and the one originally written here was wrong.**
+
+> **CORRECTION (2026-09-07).** This section previously said the loss was "completely
+> dominated by runtime dispatch" and that the op landed "squarely back in the
+> dispatch-bound regime." The dispatch floor has since been measured directly
+> (`results/aie/dispatch_floor_npu.log`): **617 µs wall / 170 µs hardware** per call.
+> At Stage 2 that is ~1% of the measured 57,610 µs. Dispatch is **not** what happened
+> here. The verdict below survives; the diagnosis did not.
+
+- **The real cause is kernel design.** `attention_kernels.cc` uses **`aie::mmul` zero
+  times.** It hand-rolls dot products with a horizontal `aie::reduce_add` **per output
+  element**, which serialises the vector unit and forfeits the native bf16×bf16→fp32 MAC
+  the pivot was chasing. Result: **0.61 GFLOPS on hardware this repo measured at 895
+  GFLOPS** (`results/aie/mlir_aie_bf16_matmul_npu.log`, 4-column whole_array 512³) — 0.07%
+  of demonstrated throughput, so ~99.9% of the gap is design, not fixed cost. The
+  row-wise FlashAttention streaming that solved the 128 KB scratchpad overflow is the
+  same edit that destroyed the arithmetic intensity. **Do not reuse this inner loop as a
+  template.**
+- **The op is genuinely too small as well** — this part stands. Stage 3 is **2.79 MFLOP**;
+  MobileNetV2 at ~300 MFLOP already lost to CPU (2.68 ms vs 1.72 ms), and this is ~100×
+  smaller still. Mobile vision attention ($N \le 256$) has nowhere near an LLM's sequence
+  length ($N \ge 2048$).
+- **Rewriting it with `aie::mmul` would not save it,** which is why this stays a negative
+  result rather than a TODO. Against the measured floor, a *perfect* kernel at 895 GFLOPS:
+  Stage 2 = 40 µs compute + 617 µs = 657 µs vs CPU **240 µs** (loses 2.7×); even on a
+  hypothetical zero-overhead resubmit path, 210 µs vs 240 µs is a wash. Stages 3 and 4
+  lose at both floors. The op has to be ~20× larger before the kernel quality is what
+  decides the outcome.
 
 ## Full Model Architecture Comparison
 

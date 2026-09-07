@@ -405,7 +405,9 @@
   params fifo; (3) both passes are issued by the host as two fills of the same block,
   so the reduction's state never leaves core memory; (4) the projection's ~460us
   fixed-overhead assumption is retired — a 96 KB probe run measures this design's
-  floor at ~185-200us NPU time, which is what flipped L=37632 from a projected loss to
+  floor at ~185-200us NPU time (CONFIRMED 2026-09-07 by direct measurement at 169.8us —
+  but see the dispatch-floor entry below: a design does not *pay* the hardware floor, it
+  pays 617us through the IRON call path), which is what flipped L=37632 from a projected loss to
   a measured 145us/call win. Two Peano facts worth not rediscovering: its AIE libc has
   no float `sqrtf` (software reciprocal-sqrt in the kernel instead), and
   `aie::set_rounding(conv_even)` is needed for the accumulator-to-bf16 store to match a
@@ -626,12 +628,66 @@ caches.
     - Stage 3 ($N=64, D=20$): PASS (0.973% rel L2 error, 0 NaN across 10,240 elements)
     - Stage 4 ($N=16, D=24$): PASS (0.799% rel L2 error, 0 NaN across 3,072 elements)
   - **Tensor Shape & Precision Floor:** The 10,240-element Stage 3 shape reflects the real MobileViT-XXS architecture ($B=1, H=8, N=64, D=20 \rightarrow 8 \times 64 \times 20 = 10,240$ active elements, padded to 16,384 in memory for 16-lane vector alignment with $D_{pad}=32$). Truncating FP32 to BF16 introduces an unavoidable baseline quantization floor of **0.1700% relative L2 error**. The kernel's `fast_exp` polynomial approximation introduces a maximum relative error of **0.235%**. Combined with vector accumulation, the total measured kernel error is **0.973% relative L2 error** vs FP32 golden reference.
+- **The per-dispatch floor, measured in isolation (2026-09-07).** Every isolated-op
+  verdict in this repo rested on a "~185-200us" constant inherited from one 96 KB probe
+  during the GroupNorm work and never measured on its own. It has now been measured with
+  a no-compute passthrough design (shim→memtile→shim, no compute tile, so no math to
+  attribute time to), sweeping 8 KB–32 MB, output verified per payload, compile excluded:
+  `kernels/dispatch_floor/measure_floor.py`, `results/aie/dispatch_floor_npu.log`.
+  - **Hardware floor 169.8 µs** (R²=1.0000) — the old constant was **right**. This is a
+    confirmation, not a retraction.
+  - **Wall floor 617.0 µs** (R²=0.9998) through the `@iron.jit` path — **3.6× the number
+    the write-ups were quoting.** Both `groupnorm_bf16` and `attention_bf16` were charged
+    the wall figure while their analyses reasoned with the hardware one. That gap, not the
+    constant's value, is what was wrong.
+  - **447.3 µs/call is host-side and flat in payload size.** Do *not* call this "Python
+    overhead": the hardware bracket is narrow (it opens only after the hw_context lookup,
+    kernel-handle retrieval and buffer-coherence work), and cProfile — whose own overhead
+    is ~0.36 ms/call here — attributes its largest entry to a C call it cannot see into.
+    Tracked Python work is only ~100 µs/call. The `nt.stat`×8 / `_getfinalpathname`×4 /
+    `inspect._signature_from_callable`×6 **per launch** (the `artifacts_present` check in
+    `callabledesign.py`, and `xrtruntime/hostruntime.py:721`) is real waste worth hoisting,
+    but it is the minority. How much of the 447 µs is recoverable is **unmeasured**.
+  - **Dispatch dominates everything below ~0.5 MB.** Wall time is flat 8 KB→512 KB across a
+    64× payload range; transfer only becomes visible past ~2 MB. Streaming bandwidth
+    12.2–13.8 GB/s.
+  - **Go/no-go, to run BEFORE writing a kernel:** the op's CPU time must exceed **~617 µs**
+    through IRON today, or **~170 µs** on a hypothetical zero-overhead resubmit path. Both
+    are **lower bounds** — this is a no-compute passthrough, and a multi-core kernel's own
+    configuration cost lands inside the hardware bracket and pushes its floor above 169.8 µs.
+    One design, one data point: a floor, not a universal constant.
+  - **The batched-submit path exists — verified, not measured.** `xrt::runlist` is present
+    in this install's `include/xrt/experimental/xrt_kernel.h` (experimental namespace in
+    XRT 2.21.75, so the signature is not stable), and **`pyxrt.runlist` is bound**, exposing
+    `add` / `execute` / `wait`. N dispatches can therefore be queued and submitted once,
+    which attacks both measured terms: the 447 µs host cost would be paid per batch rather
+    than per call, and part of the 169.8 µs may amortize since it brackets submit+wait.
+    **Nothing has been run** — this is an API-existence check and the next measurement to
+    make, not a result. It does not rescue attention (see above), but it would move the
+    go/no-go threshold for every future kernel.
 - **Attention Kernel Latency vs CPU (Negative Result):**
   - Stage 4 (8 heads): **0.86 ms** on AIE2 vs **0.012 ms** on Zen4 CPU (71× slower than CPU)
   - Stage 3 (8 heads): **4.57 ms** on AIE2 vs **0.034 ms** on Zen4 CPU (134× slower than CPU)
   - Stage 2 (8 heads): **57.61 ms** on AIE2 vs **0.240 ms** on Zen4 CPU (240× slower than CPU)
   - Full model attention (all 9 layers): **>120 ms** on AIE2 vs ~1.4 ms on CPU. NOTE: the >120 ms is a PROJECTION -- the per-stage kernel timings summed over the real block counts (2x57.61 + 4x4.57 + 3x0.86 ~= 136 ms at 8 heads), never run end to end.
-  - **The Arithmetic Floor:** Stage 3 compute volume is only **2.79 MFLOP** (0.0028 GFLOP). MobileNetV2 at ~300 MFLOP was already below the NPU acceleration threshold (losing to CPU 2.68 vs 1.72 ms); MobileViT attention is ~100× smaller still. Achieved throughput is **0.61 GFLOPS** (<0.1% of array compute capability), meaning execution time is virtually 100% dispatch, shim DMA sequence overhead, and tile orchestration.
+  - **The Arithmetic Floor:** Stage 3 compute volume is only **2.79 MFLOP** (0.0028 GFLOP). MobileNetV2 at ~300 MFLOP was already below the NPU acceleration threshold (losing to CPU 2.68 vs 1.72 ms); MobileViT attention is ~100× smaller still. Achieved throughput is **0.61 GFLOPS** (<0.1% of array compute capability).
+  - **DIAGNOSIS CORRECTED (2026-09-07) — the verdict stands, the stated cause was wrong.**
+    The clause "execution time is virtually 100% dispatch, shim DMA sequence overhead and
+    tile orchestration" was written before the dispatch floor was ever measured. It now is
+    (`results/aie/dispatch_floor_npu.log`, `kernels/dispatch_floor/measure_floor.py`):
+    **617 µs wall / 170 µs hardware** per call. Against Stage 2's measured 57,610 µs that
+    is **~1%**, not ~100%. What actually happened is kernel design:
+    `attention_kernels.cc` uses **`aie::mmul` zero times**, hand-rolling dot products with
+    a horizontal `aie::reduce_add` per output element, so it reaches 0.61 GFLOPS on
+    hardware this repo measured at **895 GFLOPS** — 0.07% of demonstrated throughput.
+    ~99.9% of the gap is the kernel, not fixed cost. The row-wise FlashAttention streaming
+    that fixed the 128 KB scratchpad overflow is the same edit that destroyed the
+    arithmetic intensity; **do not reuse that inner loop as a template.**
+    Rewriting it with `aie::mmul` still would not save it, which is why this remains a
+    negative result: a *perfect* kernel at 895 GFLOPS gives Stage 2 40 µs + 617 µs =
+    657 µs against CPU's 240 µs (loses 2.7×), and even on a hypothetical zero-overhead
+    resubmit path 210 µs vs 240 µs is a wash; Stages 3 and 4 lose at both floors. The op
+    must be ~20× larger before kernel quality is what decides the outcome.
 - **Architectural Comparison & Splicing Reality:**
   - **Cut CNN Backbone (Like-for-Like):** 1.73 ms NPU vs 5.35 ms CPU (**3.1× speedup** on the identical 407-node graph). Comparing 1.73 ms against the 108 ms stock EP baseline is comparing a model fragment to a whole model; the 3.1× like-for-like is the honest figure.
   - **Full Model on NPU (with AIE Attention):** >120 ms (projected, see above), losing heavily to both the ORT CPU EP (7.51 ms measured) and the stock VitisAI EP (108.29 ms measured).
