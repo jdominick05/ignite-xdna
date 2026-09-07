@@ -738,11 +738,33 @@ caches.
     memory — `'aie.tile' op allocated buffers exceeded available memory`, bank-aware *and*
     basic sequential allocation, 8 error lines across the 4 shapes. So the 32² that
     `layers_conv2_x` runs is the largest square that fits, not the network's shape.
-  - **Still open, and now specific:** column count (1–3 of a 4×5 array; 4 × 146 = 584 GOPS
-    would still lose, but not by 5.6×), and kernel quality — 146.1 GOPS is ~7% of one
-    column's ~2 TOPS int8 peak (architectural, **not** measured here), the same shape as
-    `attention_bf16`'s 0.61 against 895 GFLOPS. `conv2dk1.cc`/`conv2dk3.cc` have not been
-    read for how they vectorize. That is the first thing to look at, not another shape.
+  - **`conv2dk1.cc`/`conv2dk3.cc` read (2026-09-07): they vectorize correctly, ruling out
+    the attention-kernel failure mode.** Both `conv2dk1_i8_vector` and `conv2dk3_i8_vector`
+    (the paths `bottleneck.py` actually compiles — its `kernels/conv.py` wrapper passes no
+    `-DSCALAR`) use `aie::mmul<4,8,8,int8,int8>` with 8 live pipelined accumulators
+    (`AIE_PREPARE_FOR_PIPELINING`, `AIE_LOOP_MIN_ITERATION_COUNT(2)`). Zero resemblance to
+    `attention_bf16`'s zero-`mmul` scalar fallback — the 146 GOPS is not a coding bug of that
+    kind. Placement (`Tile(0,3)`, `Tile(0,4)`, `Tile(0,5)` + one more) already spans 4 cores
+    of one column, so the "~7% of one column's peak" framing was already accounting for
+    multi-core, not comparing against a single core. The remaining gap reads as structural —
+    dispatch overhead and short pipeline fill/drain at width 32 — not something a kernel
+    rewrite trivially fixes.
+  - **`conv2dk3_i8_vector` hardcodes `const int iw = 32;` (both variants, lines 449 and
+    904) and ignores its own `input_width` parameter — VERIFIED as a real stride bug, not
+    dead code.** `iw` is not cosmetic: it is the actual line-advance stride for `line[i] +=
+    (iw * 8)` / `line[i] -= (input_channels/8) * (iw * 8)` and the matching `output +=/-=
+    iw * 8` resets, used ~20 times through the function to walk input/output pointers row to
+    row. Feed this kernel an `input_width` other than 32 and every one of those pointer
+    resets computes the wrong offset — silent memory corruption, not a crash, and not
+    caught by any assert in this function. The kernel author's own comment: *"TODO temporary
+    workaround. When assigned to input_width, the results are wrong. ???"* Cross-checked
+    against `conv2dk3_i8_scalar` (line 33+), which *does* use `input_width` correctly in its
+    address math — the bug is vector-path-only. In practice this never fires today: the
+    `aiecc` L1-memory ceiling above already rejects every width-≠-32 shape at compile time,
+    before this stride bug could run. But it means fixing the L1 budget alone would not be
+    enough to unlock a wider `bottleneck` — this specific upstream kernel would need its own
+    fix (or independent verification) before trusting output at any width but 32. Not this
+    project's file to patch; flag upstream if pursued.
   - **Tooling:** `aiecc` needs `xclbinutil`, which is NOT in `ironenv/Scripts`. Put the XRT
     SDK directory (`/c/Xilinx/XRT/xrt_sdk/xrt`) on PATH too, or the build dies at the final
     link with `tool 'xclbinutil' not found`.
