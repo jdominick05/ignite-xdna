@@ -627,6 +627,28 @@ the wider (non-square) FFN shape, a live single-session pipeline, and attention'
 QK^T/Attn@V shapes (small K=head_dim, K=seq_len) rather than this square GEMM.
 See `results/aie/bf16_matmul_ffn_pipeline_npu.log`.
 
+**Correction: at the real (non-square) shape, that pipeline win reverses — CPU wins
+1.10×.** The square approximation above dodged a real limit: Llama-2-7B's actual
+`d_ff=11008` up-projection (`N=11008`) hit a DMA-stride compile error chasing this down
+found **three separate DMA/BD toolchain limits**, not one — a C-output row-block
+byte-stride cap of a fixed ~4 MiB (`m × 4 × N × dtype_out_bytes ≤ 2²²`, verified at three
+independent points), a B-input per-core tile buffer word-length cap (16,383 words), and a
+DMA "too many simultaneously active buffer descriptors" compiler limit on the A-tensor
+reload pattern once its repeat count exceeds ~64. `N=11008`'s factorization (2⁸ × 43)
+leaves exactly one tile size, `n=64`, that survives all three, and correctness (limit 1)
+forces `m=16` — a quarter of the default. That tile-size compromise is what costs the
+win: the up-projection alone drops to **909.97 GFLOPS** (vs 1793 GFLOPS for the same
+`K=4096` contraction at an unconstrained tile size), while the down-projection, never
+tile-constrained, still hits **1800.86 GFLOPS**. Blended: **1192.9 GFLOPS NPU vs 1309.6
+GFLOPS CPU (torch bf16) — CPU wins 1.10×**, reversing the square-shape's 1.32× NPU win.
+Both stages still verify PASS against numpy — this is a DMA-descriptor/toolchain limit
+in `whole_array.py`'s generic tiling, not a precision or `aie::mmul` correctness problem,
+and not necessarily true of a shape-specific fused kernel that could pick a different DMA
+decomposition. **The standing takeaway this project can actually support: bf16 GEMM wins
+at tile sizes the toolchain doesn't compromise — it does not automatically win at
+whatever shape a real model happens to use.** See
+`results/aie/bf16_matmul_ffn_real_shape_npu.log`.
+
 **Heterogeneous splice, now measured: 3.25 ms, and 2.31× — not the 4.47 ms / 4.1× once
 published here.** `tools/splice_wall_clock.py` puts a `perf_counter` around a real
 in-process loop (`results/mobilevit/splice_wall_clock_npu.log`, 100 iterations, every row

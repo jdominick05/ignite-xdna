@@ -35,6 +35,15 @@ Read these before quoting anything below.
 - **`bottleneck_spatial_sweep_npu.log`'s open item "kernel quality … `conv2dk1.cc`/
   `conv2dk3.cc` unread" is closed:** both have since been read, both vectorize correctly
   with `aie::mmul`, and both carried a width-32 bug that is now fixed and verified.
+- **`bf16_matmul_ffn_pipeline_npu.log`'s "1.32× NPU win" on the FFN pipeline is
+  corrected/reversed** at the real (non-square) shape by
+  `bf16_matmul_ffn_real_shape_npu.log`: that 1.32× used a square approximation of the
+  up-projection (`N=4096` instead of the real `d_ff=11008`) to dodge a DMA-stride
+  compile limit. At the real shape, three DMA/BD toolchain limits force the
+  up-projection's tile size down to `m=16` (from the default 64), dropping it to 909.97
+  GFLOPS and flipping the blended pipeline result to a **1.10× CPU win**. The isolated
+  win at an unconstrained tile size is not retracted — it just doesn't automatically
+  transfer to a real model's actual dimensions.
 - **`bf16_matmul_niche_npu.log`'s "K ≥ 3072 fails correctness, undiagnosed" is
   corrected** by `bf16_matmul_k_limit_diagnosed_npu.log`: not a threshold, and not
   undiagnosed. The K-reduction accumulates in a buffer typed `dtype_out`; with
@@ -185,6 +194,28 @@ GFLOPS CPU (torch bf16) — 1.32×**, next to nothing off the single-GEMM 1.33×
 a sum of independently measured stage costs plus an isolated activation cost, not a live
 single-session run with real data handed off between stages — that hand-off cost, and
 attention's own QK^T/Attn@V shapes, are still open.
+
+**`bf16_matmul_ffn_real_shape_npu.log`** — chases the N=8192 DMA-stride limit the log
+above deferred, all the way to the real d_ff=11008 shape, and finds three separate
+DMA/BD toolchain limits, not one: (1) a C-output row-block byte-stride cap — a fixed
+~4 MiB (2²² byte) stride, `m × 4 × N × dtype_out_bytes ≤ 2²²`, verified at three
+independent points including a bf16-vs-f32 cross-check that confirmed it's byte- not
+element-based; (2) a B-input per-core tile buffer word-length cap (16,383 words,
+ruling out any `n` above ~511 at `k=64`); (3) a DMA "too many simultaneously active
+buffer descriptors" compiler limit once the A-tensor reload pattern's repeat count
+exceeds ~64 (empirically bisected: repeat_count=43 compiles fine, 86 doesn't — the
+boundary is magnitude, not the "ugly" prime 43 in 11008=2⁸×43 as first suspected).
+N=11008's factorization leaves exactly one tile size, `n=64`, surviving all three, and
+correctness forces `m=16` — a quarter of the default. That tile-size compromise costs
+real throughput: the up-projection alone drops to **909.97 GFLOPS** (vs 1793 GFLOPS for
+the same K=4096 contraction at an unconstrained tile size); the down-projection, never
+constrained, still hits **1800.86 GFLOPS**. Blended pipeline: **1192.9 GFLOPS NPU vs
+1309.6 GFLOPS CPU — CPU wins 1.10×**, reversing the square-shape approximation's 1.32×
+NPU win above. Both stages still PASS numpy verification — this is a DMA-descriptor
+limit in `whole_array.py`'s generic tiling strategy, not a precision or `aie::mmul`
+problem, and not necessarily true of a shape-specific fused kernel. Not tried:
+`c_col_maj`/`b_col_maj` as an alternate way around limit 1, and Mistral-7B's
+`d_ff=14336` (2¹¹×7, a friendlier factorization).
 
 ## Dispatch floor and the int8 conv verdict
 

@@ -177,8 +177,9 @@ Outcomes, mostly negative and all measured:
   512³ (895.1 vs 1100.6). **Diagnosed:** "`K ≥ 3072` fails, undiagnosed" was really the
   reduction loop accumulating in `dtype_out` instead of fp32; `--dtype_out f32` fixes it
   free, and **the win holds at a real 7B-model projection shape** (M2048/K4096/N4096,
-  1.33× NPU) and through a real two-matmul FFN pipeline (up→GELU→down, 1.32× NPU) —
-  `attention_bf16`'s own kernel never had this bug.
+  1.33× NPU) — but **not automatically at a real model's actual FFN shape**: d_ff=11008's
+  factorization forces a tile-size compromise that flips a square-shape 1.32× NPU pipeline
+  win to a **1.10× CPU win**. `attention_bf16`'s own kernel never had this bug.
 - **Int8 conv loses, and the op class is closed.** A bottleneck spatial sweep puts NPU
   marginal throughput at 146.1 GOPS against the CPU's 819.0; at ResNet50's real 56×56
   conv2_x shape the CPU wins **12.75×**. Reaching the real shape widened the gap.
