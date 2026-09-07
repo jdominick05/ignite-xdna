@@ -1284,6 +1284,12 @@ sections above.
   tile) to 1.29×–1.89× at M, N ≥ 1024 — 2048³'s 1.89× is the largest bf16 GEMM margin
   measured in this project. 512³ still loses (0.70×), same as every other shape here.
   [Working](docs/BENCHMARKS.md#bf16-gemm-at-n64-the-same-fix-int8-used).
+- **ResNet50's AdaRound latency cost — there wasn't one, and the old 5.63/6.93 ms pair is
+  retracted.** A same-sitting `--fresh` rerun of both models at 1000 images (2026-09-07)
+  read 5.26 ms and 5.27 ms, with `vitisai_ep_report.json` node-for-node identical between
+  them. No log in the repo reproduces the original numbers; `results/bench_xint8_npu.log`
+  and its AdaRound sibling exist today at only 100 images, the likely sign of a later probe
+  run reusing those log names. [Working](docs/BENCHMARKS.md#results).
 
 **Still open.**
 
@@ -1292,9 +1298,6 @@ sections above.
 - **A yolov8m mAP row at calibration 200**, so the detection width table is
   like-for-like at every size (the current 43.49 was calibrated on 64 images). Same
   caveat now applies to l (32) and x (24).
-- **Explain ResNet50's AdaRound latency cost** (5.63 → 6.93 ms). The EP report shows the
-  same 393 / 2 partition for both models, so extra CPU fallback is ruled out; a
-  `--fresh` re-run of each and a diff of the two reports would settle it.
 - **The webcam path (single `4x4.xclbin` session, `./scripts/yolo-demo.sh`) has not
   been exercised end to end.** The related but distinct round-robin-across-4-columns
   demo *has* — see

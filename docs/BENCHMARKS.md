@@ -16,14 +16,40 @@ Published top-1 for `resnet50.a1_in1k` is 80.4%.
 |---|---|---|---|---|
 | FP32 | 80.10% | 93.90% | 19.7 ms | CPU |
 | XINT8 | 71.40% | 88.10% | 40.2 ms | CPU (ORT dequantizes — slower than FP32) |
-| XINT8 | 71.70% | 88.40% | **5.63 ms** | NPU (393 ops NPU / 2 CPU, 1 subgraph) |
+| XINT8 | 71.70% | 88.40% | 5.63 ms *(superseded, see below)* | NPU (393 ops NPU / 2 CPU, 1 subgraph) |
 | A8W8 | 66.60% | 85.10% | 39.0 ms | CPU fallback despite requesting NPU |
-| **XINT8 + AdaRound** | **79.80%** | **92.50%** | **6.93 ms** | **NPU** |
+| **XINT8 + AdaRound** | **79.80%** | **92.50%** | 6.93 ms *(superseded, see below)* | **NPU** |
 
 Two things worth pulling out of that table. Plain XINT8 costs 8.4 points of top-1,
-which is a lot; AdaRound buys back all but 0.3 of it for about 1.3 ms. And NPU versus
-CPU on the *same* INT8 model agree to within 0.3% — the NPU's numerics are faithful,
-so any accuracy gap you see is the quantization, not the hardware.
+which is a lot; AdaRound buys back almost all of it. And NPU versus CPU on the *same*
+INT8 model agree to within 0.3% — the NPU's numerics are faithful, so any accuracy gap
+you see is the quantization, not the hardware.
+
+**The 1.3 ms AdaRound latency cost above does not reproduce, and is retracted.**
+`RESEARCH.md` had left this open: same 393-NPU/2-CPU partition on both models, so the
+gap couldn't be extra CPU fallback, and nothing else explained it. A same-sitting
+`--fresh` rerun of both models, 1000 images each (2026-09-07, Desktop 2):
+
+| Model | top-1 | top-5 | Latency | EP partition |
+|---|---|---|---|---|
+| XINT8 | 71.90% | 88.50% | **5.26 ms** | 393 NPU / 2 CPU |
+| XINT8 + AdaRound | 79.80% | 92.50% | **5.27 ms** | 393 NPU / 2 CPU |
+
+0.01 ms apart — no measured latency cost. `tools/diag_ep.py` against both
+`vitisai_ep_report.json` captures shows the partitions aren't just the same size, they're
+node-for-node, op-type-for-op-type, device-for-device identical (`results/
+adaround_latency_diff_diag_xint8.log`, `results/adaround_latency_diff_diag_adaround.log`).
+No log in this repo now reproduces the original 5.63/6.93 ms pair; the leading suspect is
+the log-name collision this project has been burned by before (`CLAUDE.md`, "Never let two
+machines silently overwrite the same result-log name") — `results/bench_xint8_npu.log` and
+`results/bench_xint8_adaround_npu.log` exist today at only 100 images, not the 1000 the
+headline table cites, meaning a smaller probe run reused those names after the original.
+Treat 5.63/6.93 ms as unverified, not as the number to plan around; the accuracy figures
+(71.70/79.80%) do still match a current log and stand. Latency also drifts session to
+session on this shared machine (`CLAUDE.md`), so the fair comparison is always the
+back-to-back pair above, not either number in isolation.
+See `results/adaround_latency_diff_xint8_npu.log`,
+`results/adaround_latency_diff_adaround_npu.log`.
 
 **YOLOv8n** — 640×640, single image, inference only (post-processing listed separately).
 

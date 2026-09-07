@@ -28,7 +28,7 @@ Full environment split, install steps and footguns: [`docs/SETUP.md`](docs/SETUP
 
 | Pipeline | Model | Status |
 |---|---|---|
-| `pipelines/resnet50` | timm `resnet50.a1_in1k` | **Working** — 79.80% top-1 at 6.93 ms on the NPU (XINT8+AdaRound) |
+| `pipelines/resnet50` | timm `resnet50.a1_in1k` | **Working** — 79.80% top-1 at 5.27 ms on the NPU (XINT8+AdaRound) |
 | `pipelines/yolov8n` | YOLOv8 n/s/m/l/x detection | **Working** — 8.94–117.11 ms on the NPU once the decode tail is cut off the graph |
 | `pipelines/yolov8n-pose` | YOLOv8n-pose, 17-point COCO keypoints | **Working** — 9.8 ms on the NPU (1015/1025 nodes), OKS mAP@50-95 31.65 XINT8 vs 49.49 float (500-image slice) |
 | `pipelines/mobilevit` | MobileViT-XXS (hybrid CNN/transformer) | **Does not survive INT8** — 0.00% top-1, kept as the negative result |
@@ -71,7 +71,7 @@ EP was *requested*. A8W8 falls back silently (39.0 ms, CPU speed); so does A16W8
 
 **AdaRound recovers classification, but not detection.** ResNet50 loses 8.4 points of
 top-1 to plain XINT8 (80.10% → 71.70%) and AdaRound buys back all but 0.3 of it (79.80%)
-for about 1.3 ms. On detection it barely moves: yolov8s **+2.58 mAP** (37.40 → 39.98) and
+at no measured latency cost (5.26 vs 5.27 ms, back-to-back). On detection it barely moves: yolov8s **+2.58 mAP** (37.40 → 39.98) and
 yolov8m **+1.83** (43.49 → 45.32), nowhere near the ~90% recovery it gets on classifiers.
 A 500-image slice first suggested 45.19 for yolov8s, which would have been a different
 story — the full 5000 is the number to trust.
