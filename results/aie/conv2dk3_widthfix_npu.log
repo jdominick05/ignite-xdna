@@ -1,0 +1,30 @@
+conv2dk3 width-32 hardcode fix -- bit-exact verification across widths.
+Desktop 2 (Ryzen 7 8700G / Phoenix XDNA1), 2026-09-07, one sitting, independent rerun
+of the fix landed in commits d117395/271c6d9 (~mlir-aie checkout, local patch only,
+not upstreamed -- see docs/DECISIONS.md).
+
+  kernels/conv2dk3_widthfix/test_width.py --shapes 32x32,32x36,32x40,32x48,32x64
+  (mlir-aie ironenv, python 3.13, ~.npu/cache cleared before the run)
+
+Self-tagging identity-kernel diagnostic: weight = delta only at the center tap
+(w2[c,c,1,1]=64, scale=6) against a distinct-per-pixel input so any misread is legible
+directly from the raw output; compared against a torch reference matching the AIE
+kernel's sum_srs rounding exactly. 64 -> 64 channels, uint8 activations, no skip-add
+(isolated from bottleneck.py's unrelated Tile(0,4) L1 ceiling).
+
+conv2dk3_ui8_vector width isolation test (64 -> 64, uint8 act, no skip)
+      HxW    result  max |diff|
+----------------------------------------
+32x     32      PASS  0.000
+32x     36      PASS  0.000
+32x     40      PASS  0.000
+32x     48      PASS  0.000
+32x     64      PASS  0.000
+
+All five widths bit-exact, including 32x36 (remainder-only path) and 32x40 (aligned-
+block path), both of which had failed under the stock (upstream) kernel per the earlier
+diagnostic in docs/DECISIONS.md. Confirms the unified run_middle_block<ActType,N> fix
+(N<=4 accumulators, within AIE2's 6 hardware accumulator registers) resolves both the
+channel-block-0 leftmost-pattern bug and the aligned-block bug documented as open items
+in the prior session's handoff. Patch lives only in the local mlir-aie checkout (wheel
++ clone copies, both git-clone-external to this repo), never upstreamed.

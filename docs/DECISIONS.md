@@ -815,6 +815,9 @@ caches.
       - Clone: `~/mlir-aie/aie_kernels/aie2/conv2dk3.cc` (100% mirrored)
       - Both `conv2dk3_ui8_vector` and `conv2dk3_i8_vector` patched and verified. Local-only;
         never pushed upstream.
+    - **Independently reproduced** in a fresh session (Desktop 2, same day): env rebuilt
+      from `iron_env.ps1` by hand, `~/.npu/cache` cleared, `test_width.py` rerun end to
+      end — same bit-exact result at all five widths. Log: `results/aie/conv2dk3_widthfix_npu.log`.
   - **Tooling:** `aiecc` needs `xclbinutil`, which is NOT in `ironenv/Scripts`. Put the XRT
     SDK directory (`/c/Xilinx/XRT/xrt_sdk/xrt`) on PATH too, or the build dies at the final
     link with `tool 'xclbinutil' not found`.
