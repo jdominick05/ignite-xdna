@@ -644,10 +644,24 @@ GFLOPS CPU (torch bf16) — CPU wins 1.10×**, reversing the square-shape's 1.32
 Both stages still verify PASS against numpy — this is a DMA-descriptor/toolchain limit
 in `whole_array.py`'s generic tiling, not a precision or `aie::mmul` correctness problem,
 and not necessarily true of a shape-specific fused kernel that could pick a different DMA
-decomposition. **The standing takeaway this project can actually support: bf16 GEMM wins
-at tile sizes the toolchain doesn't compromise — it does not automatically win at
-whatever shape a real model happens to use.** See
-`results/aie/bf16_matmul_ffn_real_shape_npu.log`.
+decomposition. See `results/aie/bf16_matmul_ffn_real_shape_npu.log`.
+
+**Sharpened, not just extended: it isn't "real shapes lose," it's "this specific
+integer's factorization decides it."** Two follow-ups on the deferred items above.
+(1) `--c-col-maj 1` does dodge the byte-stride limit (compiles clean at default tiles for
+`N=11008`) but tops out at **811.69 GFLOPS — worse** than the `m=16` row-major workaround,
+because pushing the tile back up to recover throughput hits a fourth limit instead (AIE2's
+~64 KiB L1 tile memory, shared by the double-buffered A/B/C tiles) — not a useful lever
+here. (2) Mistral-7B's `d_ff=14336` (`2¹¹ × 7`, vs Llama's `2⁸ × 43`) hits the *identical*
+`m=16` cap — that limit scales with `N` alone, not its factorization — but its cleaner
+factorization admits `n=128` where `11008` was stuck at `n=64`, and that alone is a 74%
+throughput jump (835.63 → 1454.37 GFLOPS). Full Mistral pipeline: **1542.9 GFLOPS NPU vs
+1362.8 GFLOPS CPU — NPU wins 1.13×**, the opposite verdict from Llama-2-7B on the same
+hardware and toolchain. **The real determinant this project can now name precisely:
+whether `d_ff`'s factorization admits an `n`-tile ≥~128 once `m` is forced down by the
+fixed byte-stride cap** — a property of the specific integer a model architect picked for
+unrelated reasons, not of "real-world shape" in general. See
+`results/aie/bf16_matmul_ffn_shape_variants_npu.log`.
 
 **Heterogeneous splice, now measured: 3.25 ms, and 2.31× — not the 4.47 ms / 4.1× once
 published here.** `tools/splice_wall_clock.py` puts a `perf_counter` around a real

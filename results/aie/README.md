@@ -44,6 +44,13 @@ Read these before quoting anything below.
   GFLOPS and flipping the blended pipeline result to a **1.10× CPU win**. The isolated
   win at an unconstrained tile size is not retracted — it just doesn't automatically
   transfer to a real model's actual dimensions.
+- **`bf16_matmul_ffn_real_shape_npu.log`'s Llama-2-7B verdict (CPU wins 1.10×) is
+  sharpened, not reversed, by `bf16_matmul_ffn_shape_variants_npu.log`:** the same
+  hardware/toolchain gives Mistral-7B's `d_ff=14336` shape the **opposite** verdict (NPU
+  wins 1.13×), because its factorization admits a much larger `n`-tile than Llama's
+  `d_ff=11008` does under the same fixed `m=16` cap. "Real shapes lose" was too broad a
+  read of the Llama-only result — the actual determinant is one integer's factorization,
+  not "real-world-ness."
 - **`bf16_matmul_niche_npu.log`'s "K ≥ 3072 fails correctness, undiagnosed" is
   corrected** by `bf16_matmul_k_limit_diagnosed_npu.log`: not a threshold, and not
   undiagnosed. The K-reduction accumulates in a buffer typed `dtype_out`; with
@@ -216,6 +223,24 @@ limit in `whole_array.py`'s generic tiling strategy, not a precision or `aie::mm
 problem, and not necessarily true of a shape-specific fused kernel. Not tried:
 `c_col_maj`/`b_col_maj` as an alternate way around limit 1, and Mistral-7B's
 `d_ff=14336` (2¹¹×7, a friendlier factorization).
+
+**`bf16_matmul_ffn_shape_variants_npu.log`** — both of the log above's untried items,
+and neither answer is the naive guess. `--c-col-maj 1` does dodge the byte-stride limit
+(compiles clean at default `m=64`/`n=32` for `N=11008`) but only reaches **811.69
+GFLOPS — worse** than the `m=16` row-major workaround, because pushing the tile back up
+to chase more throughput just trades limit 1 for a fourth one: AIE2's ~64 KiB L1
+tile memory (shared by the double-buffered A/B/C tiles) — confirmed by two separate
+"allocated buffers exceeded available memory" failures (`n=64`/default `m`, and
+`m=128`/default `n`). Mistral-7B's `d_ff=14336` (`2¹¹×7`) hits the identical `m=16` cap
+as Llama's `d_ff=11008` (limit 1 scales with `N` alone, not its factorization) — but its
+cleaner factorization admits `n=128` where `11008` was stuck at `n=64` (`n=448` overflows
+the same L1-memory limit `c_col_maj` hit). That alone is a 74% throughput jump: 835.63
+GFLOPS at `n=64` → **1454.37 GFLOPS at `n=128`**. Full pipeline (up at `n=128`, down at
+default tiles, unconstrained): **1542.9 GFLOPS NPU vs 1362.8 GFLOPS CPU — NPU wins
+1.13×**, the *opposite* verdict from Llama-2-7B on the identical hardware and toolchain.
+The determinant this project can now name precisely: whether `d_ff`'s factorization
+admits an `n`-tile ≥~128 once `m` is forced down by the fixed byte-stride cap — a
+property of the specific integer, not of "real-world shape" in general.
 
 ## Dispatch floor and the int8 conv verdict
 

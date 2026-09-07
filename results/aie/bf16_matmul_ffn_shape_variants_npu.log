@@ -1,0 +1,123 @@
+Follow-up to bf16_matmul_ffn_real_shape_npu.log's two "not tested this session"
+items: does `--c-col-maj 1` dodge the C-output byte-stride limit (limit 1) and
+recover throughput, and does Mistral-7B's friendlier d_ff=14336 factorization
+avoid the m=16 tile-size compromise Llama-2-7B's d_ff=11008 forced? Both
+tried. Neither answer is the naive guess.
+Desktop 2 (Ryzen 7 8700G / Phoenix XDNA1), 2026-09-07, mlir-aie v1.4.2, ironenv
+(NPU) + resnet_env (CPU baseline, torch 2.4.1+cpu).
+
+PART 1: --c-col-maj 1 -- dodges limit 1, but doesn't help
+===========================================================
+`--c-col-maj 1` stores C column-major, which moves the C-output tap's
+outer-repeat stride from depending on N (row-major: m*4*N*itemsize) to
+depending on M instead. Since M=2048 << N=11008, this should relax limit 1
+enough to use the default m=64 tile. Tested at N=11008 (Llama-2-7B shape):
+
+  python whole_array.py --dev npu --dtype_in bf16 --dtype_out f32 \
+      -M 2048 -K 4096 -N 11008 --c-col-maj 1 --n-aie-cols 4 \
+      --iters 5 --warmup 2
+
+Compiles and PASSes at the *default* m=64/n=32 -- confirms the byte-stride
+limit is dodged. **But throughput is 811.69 GFLOPS, WORSE than the row-major
+m=16 workaround's 909.97 GFLOPS.** Tried to push it higher by growing the
+tile further (col-major relieves limit 1's pressure, so the natural next
+move is a bigger m or n): both directions hit a NEW, fourth limit --
+**AIE2 L1 (core-local) total tile memory, ~64 KiB, shared by the double-
+buffered A/B/C tiles**:
+
+  -n 64  (m=64 default): "allocated buffers exceeded available memory" --
+    C_L1L2 buffers alone are 2x16384 bytes at m=64/n=64/f32, plus A/B
+    buffers, over budget.
+  -m 128 (n=32 default): same error, A_L2L1 buffers now the big ones.
+
+So `--c-col-maj 1` trades limit 1 (DMA byte-stride) for limit 4 (L1 tile
+memory) at a WORSE operating point for this shape -- not a useful lever here.
+Verdict: the row-major m=16 workaround (bf16_matmul_ffn_real_shape_npu.log)
+remains the better of the two available compile-clean options for N=11008.
+
+PART 2: Mistral-7B's d_ff=14336 -- the factorization DOES matter, just not
+the way first guessed
+========================================================================
+Llama-2-7B's d_ff=11008 = 2^8 * 43 forces n=64 as the *only* tile-n value
+that survives all three DMA/BD limits (bf16_matmul_ffn_real_shape_npu.log),
+because 2752 = 11008/4's only divisors that are multiples of 16 are
+{16, 32, 64, 688, 1376, 2752} -- a large gap from 64 straight to 688 (688
+blows the B-input word-length limit). The hypothesis going in: Mistral-7B's
+d_ff=14336 = 2^11 * 7 is a "friendlier" factorization and might avoid the
+whole compromise. **Wrong reason, right instinct: it doesn't relax limit 1
+(m is still capped at 16, since that limit scales with N alone, independent
+of N's factorization), but it DOES open up intermediate n values 11008
+couldn't reach** -- 3584 = 14336/4's divisors that are multiples of 16
+include 64, 112, **128**, 224, 256, 448, ... -- a much finer ladder.
+
+  # m=16 forced exactly as with N=11008 (same limit-1 math); n swept:
+  python whole_array.py --dev npu --dtype_in bf16 --dtype_out f32 \
+      -M 2048 -K 4096 -N 14336 -m 16 -n 64  --n-aie-cols 4 --iters 10 --warmup 3
+  python whole_array.py --dev npu --dtype_in bf16 --dtype_out f32 \
+      -M 2048 -K 4096 -N 14336 -m 16 -n 128 --n-aie-cols 4 --iters 10 --warmup 3
+  python whole_array.py --dev npu --dtype_in bf16 --dtype_out f32 \
+      -M 2048 -K 4096 -N 14336 -m 16 -n 448 --n-aie-cols 4 --iters 10 --warmup 3
+
+  n=64:  835.63 GFLOPS, PASS
+  n=128: 1454.37 GFLOPS, PASS  -- 74% higher than n=64, from doubling n alone
+  n=448: FAILS -- L1 tile memory exceeded (B buffers alone: 2x57344 bytes)
+
+n=128 is the practical ceiling: n=224's B+C buffers alone (57344+28672=86016
+bytes) already exceed the ~64 KiB L1 budget before A/stack are even added, so
+224 was not run (the arithmetic settles it, matching the n=448 measured
+failure's own numbers closely enough not to need a third data point).
+
+Down-projection (K=14336, N=4096 -- unconstrained, same as the N=11008 case):
+  python whole_array.py --dev npu --dtype_in bf16 --dtype_out f32 \
+      -M 2048 -K 14336 -N 4096 --n-aie-cols 4 --iters 10 --warmup 3
+  NPU time     (avg/min/max us): 141406.9 / 139905.5 / 144286.1
+  End-to-end   (avg/min/max us): 142314.7 / 140906.3 / 145210.7
+  NPU GFLOPS                    : 1700.89
+  PASS!
+
+CPU baseline (torch bf16, same one-off harness, Mistral shape):
+  CPU FFN pipeline (Mistral-7B shape), M=2048 K=4096 N=14336 (d_ff)
+    mean 352.978 ms, min 309.520 ms, max 408.163 ms over 10 iters
+    effective GFLOPS: 1362.8
+  CPU GELU alone on (2048,14336) bf16: mean 3.155 ms, min 2.845 ms
+
+MISTRAL PIPELINE, BEST NPU CONFIG (m=16, n=128 up / default down)
+=====================================================================
+  NPU pipeline = up End-to-end (166.298 ms) + CPU GELU (3.155 ms)
+               + down End-to-end (142.315 ms) = 311.768 ms
+  CPU pipeline = 352.978 ms
+
+  total FLOPs (both matmuls) = 2*(2*2048*4096*14336) = 481.04 GFLOP
+
+      pipeline                             NPU GFLOPS   CPU GFLOPS   ratio    winner
+  -------------------------------------------------------------------------------------
+  Mistral-7B (d_ff=14336) up->gelu->down      1542.9       1362.8     1.13x    NPU
+
+THE FINDING
+===========
+**Two real 7B models' actual FFN shapes give opposite verdicts on the same
+hardware, same toolchain, same limits.** Llama-2-7B (d_ff=11008): CPU wins
+1.10x (bf16_matmul_ffn_real_shape_npu.log). Mistral-7B (d_ff=14336): **NPU
+wins 1.13x**, this log. Both hit the identical limit-1 constraint forcing
+m=16 for the up-projection -- the difference is entirely in how much n-tile
+headroom each d_ff's factorization leaves under limits 2-4. 11008's stray
+large prime (43) leaves none (n stuck at 64); 14336's 2^11*7 leaves room up
+to n=128 (2x the throughput at m=16 alone).
+
+**This sharpens, not just extends, bf16_matmul_ffn_real_shape_npu.log's
+bottom line.** It is not "square wins, real shapes lose" -- Mistral's real,
+non-square shape wins. It is not "d_ff must be small" -- Mistral's d_ff
+(14336) is larger than Llama's (11008) and wins anyway. The actual
+determinant this project can now name precisely: **whether d_ff's
+factorization admits an n-tile large enough (ideally >=128 at this K, dtype,
+and L1 budget) once m is forced down by the fixed ~4 MiB C-output byte-stride
+cap.** That is a property of the specific integer, not of "real-world-ness"
+in general -- a fact a model architect choosing d_ff for other reasons would
+have no way to know without a check exactly like this one.
+
+**Not tested:** whether a hand-tuned `k` (currently fixed at the default 64)
+trades against `n` inside the same L1 budget in a way that recovers more
+throughput at N=11008; `int8`/`int16` at either shape (a narrower dtype_out
+would relax limit 1 further, per bf16_matmul_ffn_real_shape_npu.log's
+byte-stride formula, but changes precision semantics and needs its own
+correctness check); GPT-family d_ff values with other factorizations.
