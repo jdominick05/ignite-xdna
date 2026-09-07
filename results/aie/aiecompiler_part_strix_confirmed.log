@@ -1,0 +1,49 @@
+Follow-up to aiecompiler_part_{probe,ipuv1cnn}.log, which established that no
+guessed --part string derives an architecture. Rather than keep guessing,
+looked for the real device database this install ships: RDI_APPROOT/data/parts
+(RDI_APPROOT = one level above bin/, resolved by reading aiecompiler.bat and
+setupEnv.bat directly rather than assuming). That tree exists and contains
+exactly one populated entry:
+
+  data/parts/xilinx/xclbin/strx/base.xclbin
+
+Its embedded build_metadata (read with the same regex byte-scanner used for
+the phoenix xclbin previously) gives a real, well-formed part string for
+Strix:
+
+  board_id: "strx", part: "xc10AIE2P_ML-die-0x-e-S",
+  PlatformVBNV: "amd_strx_strx_202410_1"
+
+Fed --part=xc10AIE2P_ML-die-0x-e-S (a real string pulled from AMD's own
+shipped data, not a guess) to the same trivial graph in tools/aie_probe/ that
+every prior attempt used. Result below: the "AIE architecture could not be
+auto derived" error is GONE. It derives __AIE_ARCH__=21 and proceeds to
+invoke Peano's own bundled clang for the ADF frontend's preprocessing pass,
+which now fails on something completely different (missing <iostream> --
+see aiecompiler_hostlib_missing.log). This is the important result: it
+proves the --part mechanism works end-to-end on this install when fed a
+real device string. The prior wall was never a broken flag or a broken tool
+-- it was that this install's shipped part database has no Phoenix entry,
+only Strix's.
+
+                                           AI Engine Compiler
+                                     Version 2026.1 (windows64-bit)
+                                     SW Build ab5caf8 (release_rai_1_7) on 2026-03-19-12:10:22
+                          Copyright 1986-2022 Xilinx, Inc. All Rights Reserved.
+                          Copyright 2022-2026 Advanced Micro Devices, Inc. All Rights Reserved.
+INFO: [aiecompiler 77-297] Cmd Line : C:/Users/<user>/miniforge3/envs/ryzen-ai-1.7.1/Lib/site-packages/bin/unwrapped/win64.o/aiecompiler.exe --include C:\Users\<user>\miniforge3\envs\ryzen-ai-1.7.1\Lib\site-packages\vaie_cpplus\include --target x86sim graph.cc --part xc10AIE2P_ML-die-0x-e-S
+INFO: [aiecompiler 77-404] Executing Cmd: ""C:\Users\<user>\miniforge3\envs\ryzen-ai-1.7.1\Lib\site-packages/win64.o/tools/peano/bin/clang.exe" -E -std=c++20 -D__ADF_FRONTEND__  -D__AIE_ARCH__=21  -I "C:/Users/<user>/miniforge3/envs/ryzen-ai-1.7.1/Lib/site-packages/include" -I . -I "C:\Users\<user>\miniforge3\envs\ryzen-ai-1.7.1\Lib\site-packages\vaie_cpplus\include" "graph.cc" > Work/temp/graph.ii"
+In file included from graph.cc:15:
+In file included from .\graph.h:2:
+In file included from C:\Users\<user>\miniforge3\envs\ryzen-ai-1.7.1\Lib\site-packages\vaie_cpplus\include\adf.h:41:
+C:\Users\<user>\miniforge3\envs\ryzen-ai-1.7.1\Lib\site-packages\vaie_cpplus\include\adf/new_frontend/adf.h:30:10: fatal error: 'iostream' file not found
+   30 | #include <iostream>
+      |          ^~~~~~~~~~
+1 error generated.
+ERROR: [aiecompiler 77-753] This application has discovered an exceptional condition from which it cannot recover while executing the following command
+  >> ""C:\Users\<user>\miniforge3\envs\ryzen-ai-1.7.1\Lib\site-packages/win64.o/tools/peano/bin/clang.exe" -E -std=c++20 -D__ADF_FRONTEND__  -D__AIE_ARCH__=21  -I "C:/Users/<user>/miniforge3/envs/ryzen-ai-1.7.1/Lib/site-packages/include" -I . -I "C:\Users\<user>\miniforge3\envs\ryzen-ai-1.7.1\Lib\site-packages\vaie_cpplus\include" "graph.cc" > Work/temp/graph.ii".
+Please check the output log for errors and fix those before you run the application.
+Compilation Failed
+(WARNING:0, CRITICAL-WARNING:0, ERROR:1)
+INVOKING: ['aiecompiler', '--include=C:\\Users\\<user>\\miniforge3\\envs\\ryzen-ai-1.7.1\\Lib\\site-packages\\vaie_cpplus\\include', '--target=x86sim', 'graph.cc', '--part=xc10AIE2P_ML-die-0x-e-S']
+EXIT CODE: 0

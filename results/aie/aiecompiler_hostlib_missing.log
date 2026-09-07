@@ -1,0 +1,39 @@
+The new wall reached once a real --part string (Strix's confirmed, Phoenix's
+candidate) gets past architecture derivation -- see aiecompiler_part_strix_
+confirmed.log and aiecompiler_part_phoenix_candidate.log. Both fail
+identically, regardless of --target={x86sim,hw} and regardless of which
+part string was used:
+
+  adf/new_frontend/adf.h:30:10: fatal error: 'iostream' file not found
+
+This is the ADF C++ frontend's own preprocessing pass (invoked internally
+by aiecompiler via Peano's bundled clang, before any AIE-target codegen
+happens) failing to find a host C++ standard library. It is independent of
+the AIE array entirely -- it would block a Strix build exactly the same way
+it blocks a Phoenix one.
+
+Checked whether this SDK ships a C++ stdlib anywhere for Peano to find:
+
+  find <ryzen-ai-1.7.1 env> -iname iostream   ->   no results
+
+Checked whether Visual Studio (MSVC's STL, the other place a Windows
+install would normally get <iostream> from) is present on this machine at
+all:
+
+  no Microsoft Visual Studio / Build Tools install found under either
+  Program Files location; no vcvarsall.bat anywhere under Program Files
+
+Conclusion: this is a genuine, structural gap in this pip-packaged
+distribution -- Peano is shipped for AIE-target code generation, but
+nothing shipped alongside it, and nothing installed on this machine,
+supplies the host-side C++ standard library its own ADF frontend needs
+just to preprocess a graph description. Unlike the --part wall (which
+turned out to be solvable from data already on disk), this one is not:
+either install a full C++ toolchain (Visual Studio Build Tools, at minimum
+its C++ workload) on this machine and point Peano's clang at its include
+path, or find a machine that already has one.
+
+Not attempted: installing Visual Studio Build Tools was judged out of
+scope for this pass -- a multi-GB software install is a real, standing
+change to this shared machine, not a quick check, and belongs in its own
+explicitly-approved step rather than folded into this investigation.

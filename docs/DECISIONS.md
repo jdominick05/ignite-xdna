@@ -298,7 +298,13 @@
   just named** — see RESEARCH.md's open questions, "Custom C++ XRT / hand-written AIE
   kernels": the whole classical AIE compiler stack (`aiecompiler`, ADF C++ headers,
   Peano, raw XRT) is already present in the `RyzenAI\1.7.1` install, unused by anything
-  here.
+  here. **Update:** the device-model string this flow needs (`--part`) was found —
+  `xc10AIE24x5-die-1LP-e-S-es1`, pulled from `aiecompiler_client.dll`'s own part table,
+  matching this same "Total Columns: 5" finding rather than a guess — but the bring-up
+  now stops one wall later: this machine has no host C++ standard library for Peano's
+  bundled clang to preprocess the ADF frontend with (no `<iostream>` anywhere in the SDK,
+  no Visual Studio install). See `results/aie/aiecompiler_part_phoenix_candidate.log` and
+  `aiecompiler_hostlib_missing.log`.
 
 ## The YOLOv8 partitioning failure (resolved)
 

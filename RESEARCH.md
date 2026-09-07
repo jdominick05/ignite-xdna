@@ -657,27 +657,57 @@ been closed:
   `SW Build ab5caf8 (release_rai_1_7)`), full `--help` listing, no missing-dependency
   error (`results/aie/aiecompiler_help.log`) — the `data/baseline.txt` failure an earlier
   pass in this session worried about never materialized.
-  **The actual wall: no valid `--part`/`--platform` device-model string exists anywhere
-  in this SDK.** `--target=x86sim` (compiles to native x86 threads — validates ADF graph
-  structure and kernel logic only, proves nothing about the AIE array itself) got as far
-  as requiring one of those two flags (`results/aie/aiecompiler_x86sim_passthrough.log`).
-  Checked three candidates, all failed identically ("AIE architecture could not be
-  auto-derived"): a deliberately bogus string (confirms the flag works, no valid-parts
-  list is ever printed); `vaip_config.json`'s `"target"` strings (`PROCYON-MHA-QDQ`,
-  `PSD`/`PSO`/`PSV`, `RyzenAI_transformer_cxx_*`) — these are the VitisAI EP's own
-  op-fusion subgraph labels, a different namespace entirely; and `IPUV1CNN`, a real
-  string pulled directly from `phoenix\4x4.xclbin`'s own `aie_partition` metadata section
-  (`DPU_PDI_0:IPUV1CNN` through `DPU_PDI_7:IPUV1CNN` — this SDK ships no `xclbinutil` to
-  read that section properly, so this came from a raw byte scan) — still rejected
-  (`results/aie/aiecompiler_part_{probe,ipuv1cnn}.log`). The xclbin's own embedded
-  `build_metadata` turned out to be boilerplate from an unrelated Vitis `vadd`
-  hello-world example (blank `board`/`part` fields), not real Phoenix identification.
-  **`--target=hw` is closed on this install regardless of platform files, because
-  nothing here names the device aiecompiler needs to hear.** This is where the bring-up
-  stops for now — a durable negative, not a dead end to hide: the compiler runs, a
-  trivial kernel graph is syntactically accepted, and the blocker is one specific,
-  named, reproducible thing (no discoverable device-model string), not a vague
-  environment failure.
+  **First wall: no valid `--part`/`--platform` device-model string exists anywhere in
+  this SDK's help output or config files.** `--target=x86sim` (compiles to native x86
+  threads — validates ADF graph structure and kernel logic only, proves nothing about the
+  AIE array itself) got as far as requiring one of those two flags
+  (`results/aie/aiecompiler_x86sim_passthrough.log`). Checked three guessed candidates,
+  all failed identically ("AIE architecture could not be auto-derived"): a deliberately
+  bogus string (confirms the flag works, no valid-parts list is ever printed);
+  `vaip_config.json`'s `"target"` strings (`PROCYON-MHA-QDQ`, `PSD`/`PSO`/`PSV`,
+  `RyzenAI_transformer_cxx_*`) — these are the VitisAI EP's own op-fusion subgraph
+  labels, a different namespace entirely; and `IPUV1CNN`, a real string pulled directly
+  from `phoenix\4x4.xclbin`'s own `aie_partition` metadata section (this SDK ships no
+  `xclbinutil` to read that section properly, so this came from a raw byte scan) — still
+  rejected (`results/aie/aiecompiler_part_{probe,ipuv1cnn}.log`).
+  **That wall is now solved, not just named.** Rather than keep guessing, read
+  `aiecompiler.bat`/`setupEnv.bat` directly to find where the tool actually looks for a
+  device database: `RDI_APPROOT/data/parts/xilinx/xclbin/`, which this install ships with
+  exactly one populated entry — `strx/base.xclbin` (Strix). Its embedded `build_metadata`
+  gives a real, well-formed part string, `xc10AIE2P_ML-die-0x-e-S`, and feeding that to
+  `--part` makes the "could not be auto-derived" error disappear entirely — it derives
+  `__AIE_ARCH__=21` and moves on to a completely different failure
+  (`results/aie/aiecompiler_part_strix_confirmed.log`). The `--part` mechanism works; this
+  install's shipped database simply has no Phoenix entry, only Strix's. Byte-scanning the
+  132 MB `aiecompiler_client.dll` that actually implements derivation (found by grepping
+  every `.dll`/`.exe` in the env for the literal error string) turned up
+  `BuildDevice::isPHXPart()` alongside `isSTRXPart()` — the compiler's own code recognizes
+  a PHX device family — plus a table of real `xc10`-prefixed part strings for many AMD
+  chips, including `xc10AIE24x5-die-1LP-e-S-es1`. That name matches an existing,
+  independent measurement in `docs/DECISIONS.md`: `xrt-smi examine -r platform` reports
+  **Total Columns: 5** on this exact Phoenix desktop, not the 4 every tool here assumes —
+  i.e. the physical array really is 4×5, of which this project's own xclbins expose only a
+  4×4 subset. Fed to `--part`, `xc10AIE24x5`/its full form both derive cleanly
+  (`__AIE_ARCH__=20`, no "could not be derived" error —
+  `results/aie/aiecompiler_part_phoenix_candidate.log`; full detail on the string-table
+  discovery in `results/aie/notes_aiecompiler_part_db.log`). Not confirmed against an
+  AMD-published part list (none exists anywhere in this SDK), but the strongest evidence
+  available on this machine, and corroborated by hardware measurement that predates and
+  wasn't chosen to fit this investigation.
+  **Second wall, newly reached: no host C++ standard library exists on this machine.**
+  Every part string that now derives successfully — Strix's confirmed one and Phoenix's
+  candidate — reaches the identical next failure, independent of `--target={x86sim,hw}`:
+  `adf/new_frontend/adf.h`'s own `#include <iostream>` fails to resolve, because the ADF
+  C++ frontend's preprocessing pass runs through Peano's bundled `clang.exe`, and nothing
+  in this pip package (`find ... -iname iostream` → no results) or on this machine (no
+  Visual Studio / Build Tools install anywhere under `Program Files`, no `vcvarsall.bat`)
+  supplies a C++ standard library for it to find (`results/aie/aiecompiler_hostlib_missing.log`).
+  This wall is not a data-population gap like the first one — it would block a Strix build
+  identically — and it is not attempted to fix here: installing a full C++ toolchain is a
+  standing change to a shared machine, not a quick check, and belongs in its own
+  explicitly-approved step. **This is where the bring-up stops for now: the device-model
+  wall that looked closed is open, and the new wall behind it is a known, standard
+  requirement (a C++ toolchain) rather than an undiscoverable one.**
 
 ## How to read the rest of this repository
 

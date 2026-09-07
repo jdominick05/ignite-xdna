@@ -1,0 +1,95 @@
+Not a measurement -- a verbatim excerpt of what was found by reading and
+byte-scanning files this SDK ships, done to explain aiecompiler_part_*.log.
+
+## Where the part database lives
+
+aiecompiler.bat sets RDI_BINROOT=%~dp0 and calls setupEnv.bat, which derives
+RDI_APPROOT as one level above it (Lib/site-packages here). That's a real
+patch-baseline search mechanism (looks for RDI_APPROOT/data/baseline.txt),
+not something guessed -- read straight out of both .bat files.
+
+RDI_APPROOT/data/parts/xilinx/xclbin/ contains exactly one populated
+subdirectory:
+
+  strx/base.xclbin   (3395 bytes)
+
+No phx/, hawk/, or equivalent. Its embedded build_metadata JSON (same
+regex-based extractor used earlier on phoenix's 4x4.xclbin, since this SDK
+has no xclbinutil) gives:
+
+  {"dsa":{"vendor":"amd","board_id":"strx","name":"strx",
+   "version_major":"202410","version_minor":"1",
+   "board":{"name":"amd.com:strx:1.0","vendor":"amd.com",
+   "part":"xc10AIE2P_ML-die-0x-e-S","board_part":"amd.com:strx:part0:1.0"}},
+   "xclbin":{"packaged_by":{"name":"xclbinutil","version":"2.16.0", ...}}}
+
+That part string, fed to --part, is what unblocked aiecompiler_part_strix_
+confirmed.log.
+
+## Where the derivation logic lives
+
+Grepped every .dll/.exe under the ryzen-ai-1.7.1 env for the literal error
+text "could not be auto derived" to find which binary actually implements
+it (rather than assume). Four files matched; the one that matters is
+lib/win64.o/aiecompiler_client.dll (132,767,824 bytes) -- aiecompiler.exe
+itself is a 256 KB thin dispatcher.
+
+Byte-scanning that DLL for ASCII runs turned up two things:
+
+1. Mangled C++ symbols naming a BuildDevice class with these predicates:
+     isPHXPart, isSTRXPart, isAie2pPart, isAie2psPart, isAie4Part,
+     isAie4aPart, isAieMlPart, isAmdPart
+   PHX and STRX are checked as board-level identifiers, distinct from and
+   alongside the AIE-generation predicates (Aie2p = Strix's architecture,
+   Aie4/Aie4a = the internal/pre-silicon generation already ruled out via
+   aie4_models -- see notes_aie2_device_dtypes.log). A live (not
+   dead-code-only) diagnostic string confirms this is reachable:
+     "...if not multi-layer and the part is not PHX/STRX)"
+   and a second string confirms STRX is spelled out in full elsewhere too:
+     "--multi-layer-ctrl-pkt-strx-opt only works for Strix devices."
+   This means the compiler's own code recognizes a PHX device family. What
+   it doesn't have, anywhere in this pip package, is data for one -- no
+   xclbin, no full qualified part string containing "AIE2_ML" or "PHX" the
+   way Strix's does.
+
+2. A table of xc10-prefixed part-name strings compiled into the same DLL
+   (i.e. data, not necessarily backed by any local xclbin):
+     xc10AIE2P_ML, xc10AIE2P_ML-die-0x-e-S-es1   (Strix; confirmed working)
+     xc10AIE24x5,  xc10AIE24x5-die-1LP-e-S-es1   (candidate; see below)
+     xc10AIE2H
+     xc10MDS1, xc10MDS1-die-0x-e-S-es1, xc10MDS1H, xc10MDSDA, xc10MDSDH
+     xc10SWV1, xc10SWV1H
+     xc10S70, xc10S70-die-0x-e-S-es1
+     xc10Turin, xc10Turin-die-0x-e-S-es1, xc10Turin_large_pgm
+     xc10T21, xc10T50_large_pgm, xc10TuriH
+     xc2ve3304, xc2ve3358, xc2ve3504, xc2ve3558, xc2ve3804, xc2ve3858
+       (Versal parts)
+   MDS1/SWV1 match the "mds"/"swv" placeholder devices already identified
+   as pre-silicon test hardware in the aie4_models dead end -- this table
+   spans many AMD chips across several product lines, most unrelated to
+   this project. No literal "AIE2_ML" (Strix's part minus the P) and no
+   literal "PHX"/"phx" standalone token (as opposed to substrings inside
+   AVX-512 instruction-mnemonic identifiers like PHXZ128rm, which are
+   compiler-internal noise, not device names) exists anywhere in this
+   binary's string table.
+
+## Why xc10AIE24x5 is the candidate, not a guess
+
+docs/DECISIONS.md already records, from `xrt-smi examine -r platform` run
+on this exact Phoenix desktop: "Total Columns: 5", not the 4 every existing
+tool in this repo assumes -- i.e. the physical AIE array really is laid out
+4 rows x 5 columns, of which this project's xclbins expose only a 4x4
+subset. "AIE24x5" reads literally as "AIE2 generation, 4x5 array" and
+matches that independent, pre-existing hardware measurement. This is
+corroboration, not proof -- no AMD-published document naming Phoenix's
+part string was found anywhere in this SDK to confirm it directly.
+
+## Result
+
+Fed to --part, xc10AIE24x5 (with a "partial part name" warning) and its
+full form xc10AIE24x5-die-1LP-e-S-es1 (no warning) both derive cleanly
+(__AIE_ARCH__=20, vs. Strix's 21) and reach the same downstream wall every
+successful part string now reaches: a missing host C++ standard library.
+See aiecompiler_part_phoenix_candidate.log for the full compiler output and
+aiecompiler_hostlib_missing.log for why that wall is separate from, and
+easier than, the one this note resolves.
