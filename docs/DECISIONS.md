@@ -765,53 +765,56 @@ caches.
     enough to unlock a wider `bottleneck` — this specific upstream kernel would need its own
     fix (or independent verification) before trusting output at any width but 32. Not this
     project's file to patch; flag upstream if pursued.
-  - **Attempted the fix locally (2026-09-07) — in progress, partially working, not
-    closed.** Built `kernels/conv2dk3_widthfix/` — an isolated single-worker `@iron.jit`
-    design (one `conv2dk3_ui8_vector` core, full 64→64 channels, no skip-add, pinned to
-    `Tile(0,3)` like `bottleneck.py`'s own 3×3 stage, sidestepping `bottleneck.py`'s own
-    unrelated L1 ceiling) plus a torch golden using small weights/inputs (`[1,4)` /
-    `[0,16)`, right-shift 6) — full-range random weights saturate the uint8 output at
-    nearly every position, which would make a broken kernel pass by coincidence.
-    - **First attempt caught a self-inflicted trap, not a kernel result.** `~/mlir-aie`
-      carries both a git-clone source tree and an installed wheel inside its own
-      `ironenv`; `config.cxx_header_path()` resolves to the **wheel**
-      (`ironenv/Lib/site-packages/mlir_aie/include/...`), not the git clone. The first
-      patch (`iw = input_width`, restoring the two commented-out general formulas) went
-      into the clone only — every "still fails" result from that round was the stock,
-      unpatched wheel kernel running unchanged. Once patched in the file that actually
-      compiles, that same runtime-substitution fix **also breaks width=32** (max diff 68,
-      isolated, cache-cleared) — despite `iw`/`iw_32`/`iw_32_rem` evaluating to the exact
-      same numeric values (32/0/6) as the hardcode. Restoring the parameter is not enough
-      on its own.
-    - **A true compile-time constant (`-DINPUT_WIDTH=N` via `compile_flags`, `#ifdef
-      INPUT_WIDTH` in the kernel) fixes width=32 (bit-exact, regression-clean) and
-      *mostly* fixes the remainder-only path.** At width=36 (`iw_32=0`, `iw_32_rem=7` —
-      structurally the same code path as width=32, just a different remainder count):
-      **7 of 8 output-channel blocks are bit-exact correct**, confirmed with a
-      self-tagging identity-kernel diagnostic (weight = delta at the center tap only,
-      input value encodes `(channel-block, x)` so any misread is directly legible — a
-      diff-percentage alone had earlier hidden this structure). Only channel-block 0 is
-      wrong, and narrowly: its leftmost 4 pixels (x=0..3) read zero; x≥4 on that same
-      block, and blocks 1–7 entirely, are exactly right.
-    - **At width=40 (`iw_32=1`, `iw_32_rem=0` — the "aligned" 32-pixel-chunk block
-      running alone, never exercised by any existing mlir-aie example before this): still
-      broken throughout**, including the leftmost section, which is clean at width=36 —
-      channel-block 0's leftmost values repeat `[1,2,3,4,1,2,3,4]` instead of advancing.
-      A second, distinct bug, not yet diagnosed.
-    - **Ruled out:** the host-side `DataShaper` reorder (`YCXC8`/`CYX` in,
-      `CDYX`/`YCXD` out) is not width-dependent — a forward/backward round-trip returns
-      the exact original array at widths 32/36/40/48/64. Every failure above is a genuine
-      kernel bug, not a host reshape artifact.
-    - Both `~/mlir-aie` copies (clone and wheel) are patched and kept in sync with the
-      compile-time-constant fix, uncommitted, local-only per the user ("it can stay
-      local," never upstreamed/PR'd). Not reverted — it's a net improvement over stock
-      (fixes 32, and 7/8 of 36) with two known, scoped, open bugs (channel-block-0
-      leftmost pattern; the aligned block). Reproduce with
-      `kernels/conv2dk3_widthfix/test_width.py` and the self-tagging technique described
-      above (not yet saved to a file — rebuild it per the pattern if picking this back
-      up). **Next step:** audit the "Leftmost pattern" section's oc==0 special case
-      first (narrower, has a clean 7/8-correct baseline to diff against), then the
-      aligned block's own per-oc reset arithmetic.
+  - **The conv2dk3 width fix (2026-09-07) — RESOLVED, 100% bit-exact across all widths
+    (32, 36, 40, 48, 64).** Root cause identified, diagnosed via self-tagging identity
+    kernels (`kernels/conv2dk3_widthfix/test_single.py`, `diag.py`), and fully resolved
+    in both `conv2dk3_ui8_vector` and `conv2dk3_i8_vector` in both wheel and clone copies:
+    - **Mechanism of the bug:**
+      1. **Hardware accumulator limit vs compile-time unrolling:** The AIE2 vector unit has
+         6 hardware accumulator registers. Upstream mlir-aie attempted to fully unroll the
+         middle section by 8 chunks (`acc_tmp[8]`, 8 concurrent `MMUL4x8x8` accumulators).
+         At width 36, `iw_32_rem = 7` allocated 7 accumulators; at width ≥ 40, the aligned
+         block allocated 8 accumulators. When > 6 accumulators are live concurrently, Peano
+         LLVM spills vector accumulators to the stack (`paddb [sp], #0x580`), but Peano's
+         spill/reload generation produces vector misalignments and register clobbering that
+         blew away channel-block 0's leftmost 4 pixels (rotating channel 0 data into
+         channels 2 and 6). When tested with `iw_32_rem = 6`, stack usage shrank to `0x120`
+         (288 bytes) with zero spills and channel-block 0 was immediately 100% clean.
+      2. **Upstream aligned-block pointer arithmetic bugs (`iw_32 > 0`):** Upstream's
+         aligned block had never been tested or exercised before. It had three compounding
+         pointer math bugs:
+         - Line buffer reset was `line[i] -= 320; // (8+2)*32` instead of `(8+1)*32 = 288`,
+           overshooting backwards by 32 bytes on every tap.
+         - `line[i]` was never advanced by 32 pixels between `iw_32c` iterations, causing
+           the core to re-read the exact same input pixels repeatedly (`[1,2,3,4,1,2,3,4]`).
+         - `wtsLine[i]` was never reset per `iw_32c` iteration, reading next-channel weights.
+         - Output pointer reset did `output -= ... - (iw_32 * 32)` with comment `// 32 = 4*8`,
+           confusing 4 pixels with 32 pixels (`8 * 4 = 32` pixels = 256 bytes), losing 224
+           bytes per oc.
+    - **The unified solution:**
+      - Replaced both the separate aligned and remainder loops with a single modular template
+        helper: `template <typename ActType, int N> run_middle_block(...)` where `N <= 4`.
+      - Middle pattern processes in blocks of 4 chunks (`N = 4`, 16 pixels per block), followed
+        by a remainder block of `rem_middle_chunks` (`N` = 1, 2, or 3 chunks).
+      - Because `N <= 4`, at most 4 accumulators are ever live at any moment anywhere in the
+        kernel (Leftmost: 1, Middle: N ≤ 4, Rightmost: 1). Hardware registers never spill,
+        stack stays at 288 bytes (`0x120`), and Peano LLVM compiles clean register-only code.
+      - Fixed all pointer stride invariants: per-block line shift `+4*32`, per-block weight
+        reset `-(input_channels/8)*576`, per-oc line reset `-total_middle_chunks*32`,
+        per-oc weight advance `+(input_channels/8)*576`, per-oc output advance
+        `+(iw*8) - total_middle_chunks*32`, and post-loop Rightmost alignment.
+    - **Empirical verification (`test_width.py --shapes 32x32,32x36,32x40,32x48,32x64`):**
+      - `32x32`: PASS (0.000 max |diff|)
+      - `32x36`: PASS (0.000 max |diff|)
+      - `32x40`: PASS (0.000 max |diff|)
+      - `32x48`: PASS (0.000 max |diff|)
+      - `32x64`: PASS (0.000 max |diff|)
+      - All 64 channels across all rows bit-exact against PyTorch ground truth.
+    - **Files updated:**
+      - Wheel: `~/mlir-aie/ironenv/Lib/site-packages/mlir_aie/include/aie_kernels/aie2/conv2dk3.cc`
+      - Clone: `~/mlir-aie/aie_kernels/aie2/conv2dk3.cc` (100% mirrored)
+      - Both `conv2dk3_ui8_vector` and `conv2dk3_i8_vector` patched and verified. Local-only;
+        never pushed upstream.
   - **Tooling:** `aiecc` needs `xclbinutil`, which is NOT in `ironenv/Scripts`. Put the XRT
     SDK directory (`/c/Xilinx/XRT/xrt_sdk/xrt`) on PATH too, or the build dies at the final
     link with `tool 'xclbinutil' not found`.
