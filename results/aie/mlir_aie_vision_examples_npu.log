@@ -1,0 +1,119 @@
+Follow-up to mlir_aie_ml_examples_npu.log, which left vision/* and the Makefile-built
+ml/* designs unrun on this machine because it had neither `make` nor an OpenCV C++ dev
+package. Both gaps are now filled -- this log runs those designs.
+
+--- What was installed to unblock this ---
+
+  - GNU Make 4.4.1 (conda-forge's latest build) into the isolated `mlir-aie-iron` conda
+    env, not any of this repo's 5 tracked envs: `conda install -n mlir-aie-iron -c
+    conda-forge make=4.4.1`.
+  - OpenCV 5.0.0 (the current latest release; Windows prebuilt, vc16 = VS2019 ABI, binary
+    compatible with the VS2022 Build Tools already on this machine per Microsoft's C++
+    ABI stability guarantee) -- downloaded the official
+    opencv-5.0.0-windows.exe self-extractor (195,273,354 bytes, matches the GitHub
+    release asset size) and extracted with 7z to C:\Technical\thirdParty\, landing at
+    C:\Technical\thirdParty\opencv\build. That exact path is mlir-aie's own CMakeLists.txt
+    hardcoded default `OpenCV_DIR` for every vision/* example (see each CMakeLists.txt's
+    own comment), so nothing in mlir-aie needed editing -- it just needed OpenCV to
+    actually exist at the path it already assumes.
+  - torch 2.14.0+cpu (latest, CPU-only wheel) into mlir-aie's own `ironenv` venv, needed
+    only so two ml/* examples (bottleneck, conv2d) can generate a torch/numpy host-side
+    reference to check the NPU's output against -- not used for anything performance-
+    relevant, and not touching this repo's own resnet_env/resnet_env17 (CLAUDE.md's
+    "don't install torch into resnet_env17" is about the pipeline's own quantize/run env;
+    this is the fully separate mlir-aie-iron/ironenv toolchain).
+  - A `python3.exe` shim (copy of `ironenv\Scripts\python.exe`) added to that same
+    Scripts dir. mlir-aie's Makefiles shell out to a bare `python3`, which on this
+    machine resolves to the Windows Store's app-execution-alias stub instead of the
+    activated venv's interpreter; the shim makes `python3` resolve correctly once the
+    venv's Scripts dir is first on PATH, same fix pattern as the llvm-objcopy.exe PATH
+    fix in the original saxpy setup.
+
+Two Makefile-specific quirks fixed at invocation time, not by editing mlir-aie itself:
+  - `makefile-common` infers "running under WSL" from `command -v powershell.exe`
+    succeeding -- true on native Windows too (powershell.exe is always on PATH), so its
+    `getwslpath` variable defaults to `wslpath -w`, a WSL-only tool absent from Git Bash.
+    Fixed per-invocation with a command-line override: `make getwslpath=echo ...`.
+  - The vision/* CMake build finds OpenCV fine at configure time, but the built .exe
+    still needs `C:\Technical\thirdParty\opencv\build\x64\vc16\bin` (the DLLs) on PATH at
+    *run* time, or it fails silently under the Makefile's `powershell.exe ./foo.exe`
+    wrapper. Added to PATH before invoking `make run`.
+  - (Separately confirmed harmless: the Makefile's literal `-D CMAKE_C_COMPILER=cc -D
+    CMAKE_CXX_COMPILER=g++` flags, meant for a Linux/WSL gcc, are silently ignored by
+    CMake's Visual Studio generator, which uses cl.exe from the installed VS2022 Build
+    Tools toolset regardless of what's passed.)
+
+All four `vision/*` designs are Makefile + CMake host builds: the .py generates the
+xclbin/insts via mlir-aie's own JIT pipeline, then a C++ test.cpp (linking OpenCV,
+built via CMake + MSBuild/VS2022) drives the actual NPU dispatch and compares against a
+golden reference computed by the same test.cpp on the CPU. None given an input image, so
+each generates and uses a random in-memory image of its target resolution (1920x1080).
+
+--- vision/color_detect ---
+
+  make getwslpath=echo run  ->
+    Running colorDetect for resolution: 1920x1080
+    Load input image RANDOM and run colorDetect
+    Number of differences: 31688, average L1 error: 1.868708
+    PASS!
+
+--- vision/color_threshold ---
+
+  make getwslpath=echo run  -> PASS!
+
+--- vision/edge_detect ---
+
+  make getwslpath=echo run  ->
+    Running edgeDetect for resolution: 1920x1080
+    Number of differences: 17571, average L1 error: 1.093529
+    PASS!
+
+--- vision/vision_passthrough ---
+
+  make getwslpath=echo run  ->
+    Load input image RANDOM and run passThrough
+    Number of differences: 0, average L1 error: 0.000000
+    PASS!
+
+Byte-exact (0 differences) -- the tightest check of the four, as expected for a pure
+passthrough with no pixel math in between.
+
+--- ml/bottleneck (pure Python + torch reference, no CMake/OpenCV) ---
+
+A real ResNet-family bottleneck block: conv1x1 -> conv3x3 -> conv1x1 with a skip
+connection, built from mlir-aie's own kernels.conv2dk1/conv2dk3/conv2dk1_skip library
+functions -- structurally the same building block this repo's own resnet50 pipeline
+quantizes and runs, here as a hand-written kernel checked against a torch reference
+instead of a quantized ONNX graph.
+
+  make getwslpath=echo devicename=npu run_py  ->
+    Avg NPU time: 1620us.
+    PASS!
+
+--- ml/conv2d (pure Python + torch reference) ---
+
+1x1 conv, default shape (32x32, 64->64 channels), run twice: once plain, once with
+--fuse_relu (both are separate cases in mlir-aie's own npu1 test matrix for this design).
+
+  make getwslpath=echo devicename=npu run_py               -> Avg NPU time: 540us.  PASS!
+  make getwslpath=echo devicename=npu fuse_relu=1 run_py    -> Avg NPU time: 533us.  PASS!
+
+--- Conclusion ---
+
+Seven more designs PASS on this machine's XDNA1 (Phoenix) NPU: all four vision/* designs
+(the ones previously blocked by missing make/OpenCV) and three ml/* designs needing
+torch for reference generation (bottleneck, conv2d plain, conv2d+fuse_relu). Combined
+with the prior two logs, every mlir-aie programming_examples design tagged npu1
+(Phoenix) that this survey identified as runnable without Strix-only hardware or a
+substantial multi-file model (magika, mobilenet) has now been tried, and all of them
+pass. bottleneck in particular is the closest thing in mlir-aie's own example set to this
+repo's actual model family (a ResNet bottleneck block) -- still a hand-written kernel via
+a separate toolchain, not a quantized ONNX graph through Quark/VitisAI EP, but the
+closest structural match found so far.
+
+New machine state beyond the two prior mlir-aie logs: `make` 4.4.1 in the mlir-aie-iron
+conda env, OpenCV 5.0.0 at C:\Technical\thirdParty\opencv, torch 2.14.0+cpu in the
+ironenv venv, a python3.exe shim in ironenv\Scripts. Nothing added to this repo's own 5
+tracked conda envs.
+
+Machine: Desktop 2 / Phoenix.

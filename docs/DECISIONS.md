@@ -359,7 +359,20 @@
   has neither `make` nor an OpenCV C++ dev package; other `ml/*` designs are
   Strix-only (`ryzen_ai_npu2`) regardless of that gap; `ml/magika` and `ml/mobilenet`
   are Phoenix-capable but multi-file enough to warrant their own pass. See
-  `results/aie/mlir_aie_ml_examples_npu.log`.
+  `results/aie/mlir_aie_ml_examples_npu.log`. **Update:** installed `make` 4.4.1
+  (conda-forge, into the isolated `mlir-aie-iron` env) and OpenCV 5.0.0 (current latest,
+  extracted to `C:\Technical\thirdParty\opencv` — mlir-aie's own CMakeLists.txt hardcoded
+  default path, no edits needed) to clear that gap. All four `vision/*` designs then
+  passed (`color_detect`, `color_threshold`, `edge_detect`, `vision_passthrough` —
+  byte-exact). Also installed `torch` (latest, CPU-only, host-reference generation only)
+  and ran `bottleneck` (a real ResNet-style conv1×1→conv3×3→conv1×1-plus-skip block,
+  1620us, `PASS!`) and `conv2d` plain/`--fuse_relu` (540/533us, both `PASS!`). Fixed two
+  Makefile quirks at invocation time rather than editing mlir-aie: `make
+  getwslpath=echo ...` (its WSL-detection heuristic false-positives on native Windows)
+  and putting OpenCV's `bin` dir on `PATH` before `make run` (needed at run time, not
+  just CMake configure time). Every `ryzen_ai_npu1`-tagged design short of the
+  substantial multi-file models (`magika`, `mobilenet`) has now been tried and passes.
+  See `results/aie/mlir_aie_vision_examples_npu.log`.
 
 ## The YOLOv8 partitioning failure (resolved)
 

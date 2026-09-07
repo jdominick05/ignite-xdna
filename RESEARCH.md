@@ -823,6 +823,32 @@ been closed:
   Phoenix-capable and pure-Python but are multi-file models substantial enough to
   warrant their own dedicated pass rather than folding into this one.
 
+  **Follow-up: installed `make` and OpenCV, ran the rest.** Both gaps above were filled
+  — GNU Make 4.4.1 into the isolated `mlir-aie-iron` conda env, and OpenCV 5.0.0 (current
+  latest, Windows prebuilt) extracted to `C:\Technical\thirdParty\opencv`, which happens
+  to be mlir-aie's own `CMakeLists.txt` hardcoded default `OpenCV_DIR` for every
+  `vision/*` example, so nothing in mlir-aie itself needed editing. All four `vision/*`
+  designs then ran and passed: `color_detect`, `color_threshold`, `edge_detect`, and
+  `vision_passthrough` (byte-exact, 0 differences — the tightest of the four, as expected
+  for a pure passthrough). Also installed `torch` (latest, CPU-only) into mlir-aie's own
+  venv — used only to generate a host-side reference, not for anything
+  performance-relevant — and ran two more `ml/*` designs that needed it: `bottleneck`
+  (**Avg NPU time: 1620us**, `PASS!`) and `conv2d` at its default 1×1 32×32×64→64 shape,
+  both plain (540us) and with `--fuse_relu` (533us), both `PASS!`. `bottleneck` is the
+  closest match yet to this repo's actual model family — a real ResNet-style
+  conv1×1→conv3×3→conv1×1-plus-skip block, built from mlir-aie's own
+  `kernels.conv2dk1`/`conv2dk3`/`conv2dk1_skip` library functions, still via a
+  hand-written-kernel toolchain rather than a quantized ONNX graph through Quark/VitisAI
+  EP. Two Makefile-specific quirks were fixed at invocation time (not by editing
+  mlir-aie): `make getwslpath=echo ...` (its own WSL-detection heuristic — "is
+  `powershell.exe` on PATH" — false-positives on native Windows), and adding the OpenCV
+  `bin` directory to `PATH` before `make run` (needed by the built `.exe` at run time,
+  not just at CMake configure time). Full detail in
+  `results/aie/mlir_aie_vision_examples_npu.log`. With this, every `programming_examples`
+  design tagged for this machine's chip (`ryzen_ai_npu1`) that isn't a substantial
+  multi-file model (`magika`, `mobilenet`, left for their own pass) has now been tried,
+  and all of them pass.
+
 ## How to read the rest of this repository
 
 If you want *what works and how fast*: `README.md`.
