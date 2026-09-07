@@ -101,6 +101,18 @@ and `configure --help` on Desktop 2: `Total Columns: 5`, `Power Mode: Default`, 
 reported on this driver. Nothing on the device was changed. Cited by
 [`docs/SILICON.md`](../../docs/SILICON.md), sections 1.1 and 1.7.
 
+**`clock_probe_npu.log`** — the AIE core clock, measured (objective S0 of
+[`docs/SILICON.md`](../../docs/SILICON.md)): `kernels/clock_probe/` brackets a DMA-free
+loop with `event0()`/`event1()`, the trace unit stamps both, and submit+wait time is fitted
+against the stamped cycles. **1.80 GHz** in `default`/`performance`/`turbo`, **1.03 GHz**
+`balanced`, **0.80 GHz** `powersaver`, one fresh process per mode with the platform report
+captured in each; two loops agree within 0.33%; no idle penalty at 5 s; the power mode was
+restored to `default` and the clock re-measured. Supersedes the 1.6 GHz RESEARCH.md cited
+from a web search and the 1 GHz `bottleneck_spatial_sweep_npu.log` assumed. Also records
+why the cycle counter cannot be read from a Peano kernel and that mlir-aie v1.4.2's trace
+parser mis-times gaps over 2^18 cycles. Written up in
+[`docs/BENCHMARKS.md`](../../docs/BENCHMARKS.md#the-aie-core-clock-measured-180-ghz-default-080-powersaver).
+
 ## mlir-aie examples on this hardware
 
 **`mlir_aie_saxpy_npu.log`** — set up the open-source `Xilinx/mlir-aie` (IRON/Peano)

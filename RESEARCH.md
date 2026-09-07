@@ -388,6 +388,12 @@ generalize beyond any one model:
    figure belongs only to the original Ryzen 7040 mobile series at its lower mobile
    NPU clock — not to either machine this repo measures on. Every "% of 16" number in
    this repo divides by the correct figure for the hardware it was measured on.
+   **Update 2026-09-07: the clock is now measured, not searched** — 1.80 GHz in the
+   `default` power mode on Desktop 2, 0.80 in `powersaver`, 1.03 in `balanced`
+   (`results/aie/clock_probe_npu.log`). The 16 TOPS nameplate is what all 20 cores do
+   at 1.6 GHz; at the measured clock the array is 18.4 TOPS and the 16 reachable cores
+   14.7. The %-of-nameplate figures here divide by 16 TOPS and are unchanged; the
+   physical-ceiling reading is in `docs/SILICON.md` section 2.
 
    Consequences below follow from the width of the compute-bound margin (still real,
    independent of the retracted GOPS number — see the concurrency and width findings
@@ -1096,7 +1102,8 @@ been closed:
   columns of a 4x5 array -- 4 x 146 = 584 GOPS would still lose, but not by 5.6x), and
   kernel quality -- 146.1 GOPS is roughly 7% of one column's ~2 TOPS int8 peak (256 int8
   MACs/cycle/core x 2 ops x 4 cores at 1 GHz; architectural, **not** measured on this
-  machine). That is the same shape of finding as the attention kernel's 0.61 against 895
+  machine -- measured 2026-09-07: 1.80 GHz in `default`, so one column is 3.69 TOPS and
+  146.1 GOPS is 4% of it, `results/aie/clock_probe_npu.log`). That is the same shape of finding as the attention kernel's 0.61 against 895
   GFLOPS, and nobody has yet read `conv2dk1.cc`/`conv2dk3.cc` to see how they vectorize.
   **Correction carried by this run:** the conv2x log called its 628.2us of host cost a
   reproduction of the passthrough's 617.0us "to ~2%". Different quantities -- 617.0us is the
@@ -1104,6 +1111,29 @@ been closed:
   floor is **447.3us** and 628.2 is 40% over it, not 2% under. This sweep's own host cost
   runs 608-874us and *grows* with payload (44% across a 16x byte range), so it is not a flat
   floor either. No verdict depends on it; the agreement was numerology and is retracted.
+- **The core clock, measured: 1.80 GHz, and power mode moves it 2.25x.** Every
+  per-second ceiling in `docs/SILICON.md` divided by a clock nothing here had measured
+  (1.6 GHz from a web search; 1 GHz assumed in the bottleneck log). `kernels/clock_probe/`
+  brackets a DMA-free loop with `event0()`/`event1()`, lets the tile's trace unit stamp
+  both with its timer, and fits the runtime's submit+wait time against the stamped cycles
+  across 2^18-2^25 iterations so the dispatch cost cancels: **1.7983 GHz in `default`**
+  (R^2 = 1.000000), 0.7985 `powersaver`, 1.0274 `balanced`, 1.8002 `performance`, 1.7998
+  `turbo`; a second loop with a different cost (2.000 vs 9.000 cycles per iteration, both
+  exactly constant at every length) agrees within 0.33% in every mode
+  (`results/aie/clock_probe_npu.log`, Desktop 2 / Phoenix, 2026-09-07). Three things fell
+  out. The 16 TOPS nameplate is what 20 cores do at 1.6 GHz; at the measured clock the
+  array is 18.4 TOPS and the 16 reachable cores 14.7, so the `4x4` overlay's physical
+  ceiling is 92% of nameplate, not 82%. No idle penalty at the 5 s scale (1.77-1.79 GHz
+  after 5 s idle), so the session-to-session drift is not an idle clock state -- but a
+  power-mode change between sessions would produce exactly that symptom, and no log here
+  records the mode. And the tooling: Peano cannot read the cycle counter at all
+  (`get_cycles()` is declared, never defined; `__builtin_readcyclecounter` and inline asm
+  both die in the backend), pyxrt's `max_clock_frequency_mhz` reads 800 in every mode,
+  `xrt-smi configure --pmode turbo` errors and switches anyway, and mlir-aie v1.4.2's
+  trace parser mis-times any gap over 2^18 cycles (146 us) -- the harness carries a
+  corrected decoder, cross-checked against upstream on a sync-free run. Not run: the
+  concurrent-VitisAI-EP leg; only one core tile was measured. Full treatment in
+  [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md#the-aie-core-clock-measured-180-ghz-default-080-powersaver).
 - **The per-dispatch floor, finally measured in isolation.** Every isolated-op verdict
   above rested on a "~185-200us" constant inherited from one 96 KB probe during the
   GroupNorm work and never measured on its own. `kernels/dispatch_floor/measure_floor.py`
@@ -1326,8 +1356,12 @@ sections above.
   56×56 result doesn't touch.
 - **What the array physically is, and what that permits.** The silicon-level inventory,
   the ceilings derived from it, and the objectives list live in
-  [`docs/SILICON.md`](docs/SILICON.md); its objective S0 (measure the core clock, which
-  nothing here has done) gates every per-second ceiling in that file.
+  [`docs/SILICON.md`](docs/SILICON.md). Its objective S0 is done: the core clock is
+  **1.80 GHz** in `default` (0.80 `powersaver`, 1.03 `balanced`), measured through the
+  trace unit because Peano cannot read the cycle counter (`results/aie/clock_probe_npu.log`).
+  Open from it: S0's concurrent-VitisAI-EP leg; S1's bandwidth constants, now with a
+  clock behind them (the 7.0 GB/s shim channel is one 32-bit word per cycle); and S2's
+  full trace, whose upstream parser mis-times gaps over 2^18 cycles.
 - **Longer term:** a detector fine-tuned for fixed camera feeds (licence-plate
   recognition), reusing the head-cut + XINT8 + AdaRound recipe rather than re-deriving it.
 

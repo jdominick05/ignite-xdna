@@ -190,7 +190,7 @@ Outcomes, mostly negative and all measured:
 - **A bf16 GroupNorm beat the CPU on 33 of 49 nodes** of `resnetv2_50x3_bit` — and then
   the measured two-process handoff floor (789 µs–23.6 ms per call) erased all 33.
 - **Go/no-go before writing any kernel:** the op's CPU time must exceed the measured
-  dispatch floor — **617.0 µs** through IRON, **169.8 µs** on the hardware itself.
+  dispatch floor, **617.0 µs** IRON / **169.8 µs** hardware. Core clock: **1.80 GHz** (0.80 in powersaver).
 
 See [`kernels/README.md`](kernels/README.md) and `results/aie/`.
 

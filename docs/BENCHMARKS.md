@@ -849,6 +849,107 @@ path accumulates in an int8 buffer across K and is unusable past one k-tile), `-
 < 4, int16. ORT MatMulInteger's 1.05–1.68× deficit to torch here does not reopen the closed
 int8 conv class — GEMM is not conv. See `results/aie/int8_matmul_sweep_npu.log`.
 
+### The AIE core clock, measured: 1.80 GHz default, 0.80 powersaver
+
+Every per-second ceiling this repo derives for the array — TOPS per column, bytes per
+cycle on a stream, MACs per cycle per core — multiplied a per-cycle figure by a clock
+nothing on this machine had measured. `RESEARCH.md` cited 1.6 GHz from a web search,
+`results/aie/bottleneck_spatial_sweep_npu.log` reasoned at 1 GHz and said so, and
+`xrt-smi examine -r platform` prints no clock. `docs/SILICON.md` carried it as unmeasured
+and made measuring it objective S0. This is that measurement (Desktop 2 / Phoenix,
+2026-09-07, `results/aie/clock_probe_npu.log`, `kernels/clock_probe/`).
+
+**Method.** One Worker on one core tile runs `event0()`, a DMA-free loop of N iterations,
+`event1()`. The tile's trace unit stamps both instruction events with its 64-bit timer and
+streams the packets to a host buffer (`Program.enable_trace`). The host times the same
+call with the runtime's own submit+wait bracket — the `hw` column
+`results/aie/dispatch_floor_npu.log` used — and fits `hw_ms = intercept + slope × (stamp1 − stamp0)`
+across N = 2^18 … 2^25, so the fixed per-dispatch cost lands in the intercept and the
+clock is 1/slope. Two loops with different costs (a volatile scalar add: 9 cycles per
+iteration; a dependent 16-lane `aie::add` chain: 2) must fit to the same clock. Every call
+is verified before its timing is kept (mode and length echoed back, a checksum of the
+loop's arithmetic, the core-tile row, the real event pair present ahead of the filler
+pairs in the trace); compile is excluded. One fresh process per power mode, because `@iron.jit` holds one hardware
+context for the life of the process; each run captures `xrt-smi examine -r platform` in
+its own output so the mode is evidenced, not asserted.
+
+| Power mode | Core clock, scalar loop | vector loop | R² (scalar / vector) | Loops agree within |
+|---|---|---|---|---|
+| `default` | **1.7983 GHz** | 1.7924 GHz | 1.000000 / 0.999995 | 0.33% |
+| `powersaver` | **0.7985 GHz** | 0.7984 GHz | 1.000000 / 1.000000 | 0.01% |
+| `balanced` | **1.0274 GHz** | 1.0278 GHz | 1.000000 / 1.000000 | 0.04% |
+| `performance` | **1.8002 GHz** | 1.7986 GHz | 0.999999 / 1.000000 | 0.09% |
+| `turbo` | **1.7998 GHz** | 1.7989 GHz | 1.000000 / 1.000000 | 0.05% |
+| `default`, re-measured after the sweep | **1.7990 GHz** | 1.7993 GHz | 0.999999 / 1.000000 | 0.02% |
+
+Cycles per iteration came out exactly constant at every length — 9.000 and 2.000 from 2^18
+to 2^25 iterations — which is what makes the stamps trustworthy as core cycles: a timer at
+k times the clock would need both 9/k and 2/k to be whole numbers, which only k = 1
+satisfies, and a timer at a fraction of it would put the independently measured 7.0 GB/s
+shim stream at under half of `device.yaml`'s 4 bytes per cycle (at 1.80 GHz it is 3.9).
+The raw ratio cycles ÷ hw at
+the longest `default` point (168 ms) reads 1.7947 GHz, converging on the fit from below as
+the intercept amortizes.
+
+**What it changes.** Nothing measured in milliseconds, and no %-of-nameplate figure: those
+divide by AMD's 16 TOPS, not by a clock. What moves is every ceiling `docs/SILICON.md`
+derived from a clock: the 16 TOPS nameplate is what 20 cores do at 1.6 GHz, and in
+`default` this part runs at 1.80 — 18.4 TOPS for the full array, 14.7 for the 16 cores the
+`4x4` overlay reaches, so that overlay's physical ceiling is 92% of nameplate, not 82%; a
+column is 3.69 int8 TOPS, the vendor DPU's measured 1.650 is 44.8% of it; the 16-core bf16
+peak is 7.37 TFLOPS and the best GEMM here (2072.54 GFLOPS) is 28.1% of it. The
+conversion from any figure quoted "at 1.6 GHz" is the ratio 1.6 ÷ 1.8 = 0.889; the old
+columns stay in that file beside the new one. Power mode is a **2.25× lever on the clock**
+(0.80 → 1.80 GHz) that no log in this repo recorded: any future comparison across sessions
+should capture the platform report alongside, as `clock_probe.py` does.
+
+**What else the runs showed.**
+- Three calls each after 5 s of idle read 1.7851 / 1.7716 / 1.7683 GHz, against 1.759–1.787
+  for ten back-to-back calls. No idle penalty at that scale, so the session-to-session
+  latency drift in `docs/DECISIONS.md` is not an idle clock state at 5 s.
+- pyxrt's `device.get_info(max_clock_frequency_mhz)` reads **800 in every mode**, the
+  `powersaver` clock; it is not the live clock.
+- `xrt-smi configure --pmode turbo` printed `[xrt-smi] ERROR: Failed to escape
+  (0xc0000001): A device attached to the system is not functioning.`, yet the platform
+  report then read `Turbo` and the clock matched `performance` and `default`. Restoring
+  `default` from `turbo` printed the same error and worked; the device stayed healthy (the
+  last table row). `powersaver`, `balanced` and `performance` switched without error, all
+  from an unelevated shell. Whether `turbo` is a real fourth state on this part is open.
+- The traced core reports itself at physical row 2, column 1 (both `get_coreid()` and the
+  trace packet header): IRON's logical column 0 is physical column 1 on this xclbin.
+- Untraced (`--trace-size 0`, three matching points), the same design's hardware-bracket
+  intercept is 210.6 / 281.9 µs (vector / scalar loop): 40–110 µs above the no-compute
+  passthrough's 169.8 µs, the cost of a core to load and start. Trace adds 65–110 µs on
+  top (321.4 / 346.9 µs traced). Both cancel in the fit. The untraced slopes, 1.1156 and
+  5.0006 ns per iteration, with the traced 2 and 9 cycles per iteration, give 1.7928 and
+  1.7998 GHz — the clock a third way, from timing alone.
+
+**Tooling found on the way, all of it load-bearing for the trace objectives in
+`docs/SILICON.md`.** Peano (llvm-aie 22) declares `get_cycles()` in its aie_api compat
+header and never defines it (`ld.lld: error: undefined symbol: get_cycles()`);
+`__builtin_readcyclecounter()` dies in the legalizer and inline asm in IRTranslator, so the
+trace unit is the one path to the tile timer the open toolchain exposes — this was also
+the first end-to-end hardware trace on npu1 on this machine. One `event0`/`event1` pair
+alone never reached host memory: the trace unit packs frames into 32-byte packets and the
+shim DMA writes 64-byte bursts, exactly the "too few events to create a valid trace
+packet" case mlir-aie's programming guide names; the kernel emits 256 filler pairs after
+the real one. And mlir-aie v1.4.2's `aie.utils.trace.parse` mis-times any gap longer than
+2^18 cycles: the hardware encodes it as an `0xff` sync frame (one wrap of the 18-bit delta
+counter) plus a repeat count, the parser treats `0xff` as a no-op and the repeat as
+re-issuing the last event, and a 2,097,172-cycle gap came back as 45,017 with eight
+spurious events. `clock_probe.py` decodes the frames itself and cross-checks against
+upstream on a run short enough to hold no sync frame (both: 73,732 cycles). At 1.8 GHz the
+upstream limit is 146 µs between consecutive events; any real kernel trace here will hit
+it.
+
+**Caveats.** The measurement assumes the trace timer ticks at the core clock; the integer
+cycles per iteration support it and do not prove it. One core tile (logical (0,2)) was
+measured; other tiles and columns are assumed to share the clock domain. The
+concurrent-VitisAI-EP leg of objective S0 was not run — the worktree that ran this had no
+`models/` directory. Power mode was changed and restored; nothing else on the device was
+touched. Wall time is not reported: with trace on, IRON allocates and dumps a 64 KB trace
+buffer inside the wall bracket.
+
 ### MobileViT-XXS does not survive per-tensor INT8, and AdaRound cannot save it
 
 The accuracy question the attention work deferred, now measured on the full 1000-image
