@@ -1,0 +1,104 @@
+CPU baseline for mlir-aie ml/resnet/layers_conv2_x -- Desktop 2 (Phoenix, Ryzen 7 8700G)
+2026-09-07. All five rows captured in ONE sitting, per the NPU-drift invariant.
+
+WHY: layers_conv2_x -- three ResNet bottleneck blocks chained core-to-core across three
+columns, int8, ObjectFifo to ObjectFifo, ONE dispatch for the whole chain -- has run and
+PASSed on this machine since 2026-09-06 (mlir_aie_magika_mobilenet_npu.log:18, 1888.5us),
+and nobody had ever measured what a CPU does the same work in. It was the single most
+promising remaining target: unlike attention_bf16 it is big enough to amortize the
+measured dispatch floor (dispatch_floor_npu.log) AND it is built on mlir-aie's own
+validated int8 conv kernels rather than a hand-rolled inner loop. It is also the only
+design on this hardware matching the repo's own XINT8 thesis.
+
+The two previous kernels both lost after being built. This one was measured first.
+
+WORKLOAD (from the design's own torch reference, test.py): input 1x64x32x32, stride 1,
+3x3 padded, spatial stays 32x32 throughout.
+  shortcut  64 -> 256  1x1                                              33.55 MFLOP
+  block 0:  64 -> 64 1x1 | 64 -> 64 3x3 | 64 -> 256 1x1  (+skip)       117.44
+  block 1: 256 -> 64 1x1 | 64 -> 64 3x3 | 64 -> 256 1x1  (+skip)       142.61
+  block 2: 256 -> 64 1x1 | 64 -> 64 3x3 | 64 -> 256 1x1  (+skip)       142.61
+  TOTAL                                                                436.21 MFLOP
+
+=== MEASURED ===
+                                          time        throughput
+  NPU int8, hardware bracket            1869.6 us      233 GOPS
+  NPU int8, END-TO-END (wall)           2497.8 us      175 GOPS
+  CPU torch fp32 (8 threads)            1856   us      235 GFLOPS
+  CPU ORT CPU EP, fp32                   815   us      535 GFLOPS
+  CPU ORT CPU EP, QDQ int8 (VNNI)        295   us     1481 GOPS
+
+NPU rows: `python3 test.py` in the mlir-aie ironenv; the design's own harness prints both
+brackets. PASS (numerics verified by the design itself).
+CPU rows: kernels/conv2x_baseline/cpu_baseline.py. torch cross-checked in two envs
+(ironenv 1.857ms, resnet_env 1.856ms). int8 is ORT's own static QDQ quantizer with random
+calibration -- LATENCY ONLY, never used for an accuracy claim; the QDQ graph shape and the
+int8 kernels ORT selects do not depend on the scale values.
+VERIFIED that the int8 row is really int8, since the whole 6.3x rests on it: after ORT's
+own graph optimization the executed graph is
+  {QLinearConv: 10, QLinearAdd: 3, QuantizeLinear: 1, DequantizeLinear: 1, Transpose: 2}
+i.e. all 10 convs and all 3 skip-adds run as integer kernels, with a single quantize at the
+input and a single dequantize at the output -- not an fp32 graph carrying stray Q/DQ pairs.
+ONNX artifacts live in scratch/conv2x/ (git-ignored, not tracked). Regenerate with
+cpu_baseline.py --mode torch --export ... then --mode quant.
+
+=== THE ANSWER: THE CHAINED INT8 DESIGN LOSES, AND NOT NARROWLY ===
+Like for like -- int8 on NPU against int8 on CPU:
+    CPU is 6.3x faster than the NPU's hardware bracket (1869.6 / 295)
+    CPU is 8.5x faster than the NPU end to end  (2497.8 / 295)
+The NPU needs 436 MFLOP to take 2.5 ms; the same 8-core Zen4 that hosts it does the work
+in 0.295 ms using VNNI.
+
+This is the THIRD consecutive negative result on hand-written kernel / subgraph
+acceleration (GroupNorm splice, attention kernel, now this) -- counting only that category;
+the MobileNetV2 and stock-MobileViT losses are VitisAI EP results, a different thing. It is
+the first of the three that cost an afternoon of measurement instead of weeks of kernel
+writing, which is the whole point of having measured the floor first.
+
+=== WHY THE CPU BASELINE CHOICE ALMOST INVERTED THE CONCLUSION ===
+torch fp32 is 1856us. The NPU hardware bracket is 1869.6us. Had this been benchmarked
+against torch alone -- the baseline kernels/attention_bf16 used -- the honest-looking
+headline would have been "the chained int8 design reaches parity with CPU", off by a
+factor of 6.3 from the like-for-like answer. ORT's CPU EP is 2.3x faster than torch on the
+identical fp32 graph, and its int8 path is another 2.8x on top.
+This is the same lesson the MobileViT splice produced (torch vs numpy attention, 9x,
+splice_wall_clock_npu.log) arriving from the opposite direction, and it is now two for two:
+ON THIS PROJECT, THE CPU KERNEL CHOICE HAS DECIDED THE VERDICT MORE OFTEN THAN THE NPU HAS.
+Any future NPU-vs-CPU claim here must name which CPU implementation it beat.
+
+=== INDEPENDENT CORROBORATION OF THE DISPATCH FLOOR ===
+This design's harness reports both brackets, so it cross-checks dispatch_floor_npu.log
+(measured the same day on a no-compute passthrough, a completely different design):
+    end-to-end 2497.8 - hardware 1869.6 = 628.2 us of host-side cost
+    passthrough floor measured separately: 617.0 us wall, of which 447.3 us host
+Two unrelated designs -- a no-compute passthrough and a 3-block CNN with real weights --
+agree on the per-call host cost to within about 2%. That is the stronger result here: this
+morning's floor was explicitly caveated as "one design, one data point, a floor not a
+universal constant", and it now reproduces on an independent design. The slightly higher
+628us is consistent with this design carrying more buffers (activations plus three blocks'
+weights) than the passthrough's three. The floor is not an artifact of the passthrough.
+
+=== SCOPE: WHAT THIS CLOSES, AND WHAT IT EXPLICITLY DOES NOT ===
+CLOSED -- THIS DESIGN AT THIS SHAPE. layers_conv2_x at 32x32x64, 436 MFLOP, 3 columns,
+loses to Zen4+VNNI by 6.3-8.5x. That matters because it fixed every flaw diagnosed in
+attention_bf16 (right dtype, right MAC path, dispatch amortized to ~25% of wall, no
+two-process handoff) and still lost, so none of those were the binding constraint.
+
+OPEN -- AND DELIBERATELY NOT CLOSED: whether the OP CLASS loses. Do not read this log as
+"int8 chained conv is dead"; it is one shape and one column count, and the gap to the same
+silicon's own demonstrated ceiling is unexplained. The 4-column bf16 matmul reached
+895 GFLOPS here (mlir_aie_bf16_matmul_npu.log) against this design's 233 GOPS -- ~4x -- so
+the array does far more than this design extracts. Two untested candidates for that 4x,
+neither of which this run distinguishes:
+  - COLUMN COUNT. layers_conv2_x uses 3 columns; the 895 GFLOPS run used 4. Part of the
+    gap, but 3-vs-4 cannot be all of it.
+  - SPATIAL SIZE / TILE UTILIZATION. 32x32 is small: short rows, small tiles, little work
+    per DMA transfer -- structurally the same problem that sank attention, which would mean
+    the conv kernels are underutilizing the MAC array at this shape rather than at all
+    shapes. `ml/bottleneck` runs standalone on this chip; running it at 32x32 against a
+    larger spatial and watching whether GOPS scales is the experiment that would turn
+    "this design at this shape loses" into either "this op class loses" or "this op class
+    needs spatial >= N".
+Also untested: whether xrt::runlist batching (verified present in this XRT install and
+bound in pyxrt) recovers any of the 628us of host cost. It would not close a 6.3x gap, so
+it is no longer on the critical path for this question.

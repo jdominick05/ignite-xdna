@@ -476,6 +476,48 @@ zero-overhead resubmit path. Both are lower bounds — this is a no-compute pass
 real multi-core kernel's own configuration cost sits inside the hardware bracket. Dispatch
 also dominates *everything* below ~0.5 MB: wall time is flat across a 64× payload range.
 
+### The chained int8 CNN also loses — and this time it was measured before anything was built
+
+`ml/resnet/layers_conv2_x` (three ResNet bottlenecks chained core-to-core across three
+columns, int8, ObjectFifo→ObjectFifo, **one dispatch for the whole chain**) had run and
+PASSed here since 2026-09-06, but its CPU side had never been measured. It was the best
+remaining structural idea precisely because it fixes every flaw diagnosed above: the dtype
+this repo's XINT8 thesis is about, mlir-aie's own validated int8 conv kernels instead of a
+hand-rolled loop, dispatch amortized to ~25% of wall, and no two-process handoff.
+436.21 MFLOP, every row captured in one sitting
+(`kernels/conv2x_baseline/cpu_baseline.py`, `results/aie/conv2x_int8_cpu_baseline.log`):
+
+| | time | throughput |
+|---|---|---|
+| NPU int8, hardware bracket | 1869.6 µs | 233 GOPS |
+| NPU int8, **end-to-end** | 2497.8 µs | 175 GOPS |
+| CPU torch fp32 (8 threads) | 1856 µs | 235 GFLOPS |
+| CPU ORT CPU EP, fp32 | 815 µs | 535 GFLOPS |
+| **CPU ORT CPU EP, QDQ int8 (VNNI)** | **295 µs** | **1481 GOPS** |
+
+**Like for like — int8 against int8 — the CPU is 6.3× faster than the NPU's hardware
+bracket and 8.5× end to end.** The int8 row was verified to genuinely be int8 (ORT's
+optimized graph executes 10 `QLinearConv` + 3 `QLinearAdd`), since the whole ratio rests
+on it.
+
+**The CPU baseline choice nearly inverted the conclusion.** torch fp32 lands at 1856 µs —
+within 1% of the NPU's 1869.6 µs. Benchmarking against torch alone, which is what the
+attention kernel did, would have read as *parity* and been wrong by 6.3×. ORT beats torch
+by 2.3× on the identical fp32 graph, and its int8 path by another 2.8× on top. Together
+with the splice's torch-vs-numpy 9×, that is two for two: **on this project the CPU kernel
+choice has decided the verdict more often than the NPU has.** Any NPU-vs-CPU claim here has
+to name which CPU implementation it beat.
+
+Two things worth keeping separate from the verdict. The design's own harness reports both
+brackets, so its **628.2 µs** of host cost independently reproduces the passthrough's
+617.0 µs to ~2% on a completely unrelated design — the dispatch floor is not an artifact of
+how it was measured. And the scope is narrow on purpose: this closes *this design at this
+shape*, **not the op class.** It is one shape (32²×64) on three columns, against the same
+silicon's 895 GFLOPS 4-column bf16 matmul — a ~4× gap this run does not explain. Column
+count and 32×32 spatial/tile utilization are both untested; running standalone
+`ml/bottleneck` at 32² against a larger spatial and watching whether GOPS scales is what
+would settle it.
+
 **Heterogeneous splice, now measured: 3.25 ms, and 2.31× — not the 4.47 ms / 4.1× once
 published here.** `tools/splice_wall_clock.py` puts a `perf_counter` around a real
 in-process loop (`results/mobilevit/splice_wall_clock_npu.log`, 100 iterations, every row

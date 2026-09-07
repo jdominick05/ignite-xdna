@@ -1029,6 +1029,36 @@ been closed:
   240 us, and even at the 170 us hardware floor 210 vs 240 us is a wash; Stages 3 and 4 lose
   at both floors. The op needs to be ~20x larger before kernel quality decides anything.
 
+- **The chained int8 CNN loses to the CPU by 6.3x, measured before any kernel was written.**
+  `ml/resnet/layers_conv2_x` -- 3 ResNet bottlenecks chained core-to-core across 3 columns,
+  int8, ObjectFifo to ObjectFifo, one dispatch for the whole chain -- had run and PASSed on
+  this machine since 2026-09-06, but the CPU side had never been measured. It was the best
+  remaining structural idea, because it fixes every flaw diagnosed in the attention kernel:
+  the dtype the repo's whole XINT8 thesis is about, mlir-aie's own validated int8 conv
+  kernels instead of a hand-rolled inner loop, dispatch amortized to ~25% of wall, and no
+  two-process handoff. Workload 1x64x32x32, spatial 32x32 throughout, **436.21 MFLOP**; all
+  rows in one sitting (`kernels/conv2x_baseline/cpu_baseline.py`,
+  `results/aie/conv2x_int8_cpu_baseline.log`):
+  NPU int8 **1869.6us** hardware / **2497.8us** end-to-end; CPU torch fp32 **1856us**;
+  CPU ORT fp32 **815us**; CPU ORT QDQ int8 **295us** (1481 GOPS, VNNI).
+  **Like for like the CPU wins by 6.3x on the hardware bracket and 8.5x end to end.** The
+  int8 row was verified to actually be int8 -- ORT's optimized graph executes 10
+  `QLinearConv` + 3 `QLinearAdd` -- since the whole ratio rests on it.
+  **The CPU baseline choice nearly inverted the conclusion:** torch fp32 (1856us) sits within
+  1% of the NPU's hardware bracket (1869.6us), so benchmarking against torch alone -- the
+  baseline the attention kernel used -- would have read as parity, off by 6.3x. ORT is 2.3x
+  faster than torch on the identical fp32 graph and its int8 path another 2.8x on top. With
+  the MobileViT splice's torch-vs-numpy 9x, that is two for two: **on this project the CPU
+  kernel choice has decided the verdict more often than the NPU has**, and any NPU-vs-CPU
+  claim here has to name which CPU implementation it beat.
+  **Scope, stated deliberately:** this closes *this design at this shape*, not the op class.
+  It is one shape (32^2 x 64) on 3 columns, and the same silicon reached 895 GFLOPS on
+  4-column bf16 matmul -- ~4x this design's 233 GOPS -- a gap this run does not explain. The
+  two untested candidates are column count (3 vs 4) and spatial size / tile utilization
+  (32x32 means short rows and little work per DMA transfer, structurally attention's problem
+  again). Running standalone `ml/bottleneck` at 32^2 against a larger spatial and watching
+  whether GOPS scales is what would decide it. Third consecutive negative on hand-written
+  kernel/subgraph acceleration, and the first to cost an afternoon rather than weeks.
 - **The per-dispatch floor, finally measured in isolation.** Every isolated-op verdict
   above rested on a "~185-200us" constant inherited from one 96 KB probe during the
   GroupNorm work and never measured on its own. `kernels/dispatch_floor/measure_floor.py`

@@ -656,6 +656,13 @@ caches.
     are **lower bounds** — this is a no-compute passthrough, and a multi-core kernel's own
     configuration cost lands inside the hardware bracket and pushes its floor above 169.8 µs.
     One design, one data point: a floor, not a universal constant.
+  - **REPRODUCED on an independent design the same day.** `ml/resnet/layers_conv2_x` (a
+    3-block int8 CNN with real weights, nothing like a passthrough) reports both brackets
+    from its own harness: end-to-end 2497.8 µs − hardware 1869.6 µs = **628.2 µs** of
+    host-side cost, against the passthrough's 617.0 µs wall floor. Two unrelated designs
+    agree to ~2%, which upgrades this from "one data point" to a reproducible constant.
+    The slightly higher figure is consistent with carrying more buffers (activations plus
+    three blocks' weights). See `results/aie/conv2x_int8_cpu_baseline.log`.
   - **The batched-submit path exists — verified, not measured.** `xrt::runlist` is present
     in this install's `include/xrt/experimental/xrt_kernel.h` (experimental namespace in
     XRT 2.21.75, so the signature is not stable), and **`pyxrt.runlist` is bound**, exposing
@@ -665,6 +672,44 @@ caches.
     **Nothing has been run** — this is an API-existence check and the next measurement to
     make, not a result. It does not rescue attention (see above), but it would move the
     go/no-go threshold for every future kernel.
+- **Chained int8 CNN vs CPU — measured before building anything (2026-09-07).**
+  `ml/resnet/layers_conv2_x` (3 ResNet bottlenecks chained core-to-core across 3 columns,
+  int8, ObjectFifo→ObjectFifo, **one dispatch for the chain**) had run and PASSed here since
+  2026-09-06 at 1888.5 µs, but nobody had measured the CPU side. It was the best remaining
+  structural idea: it fixes every flaw diagnosed in `attention_bf16` — right dtype for this
+  repo's XINT8 thesis, mlir-aie's own validated int8 conv kernels rather than a hand-rolled
+  loop, dispatch amortized to ~25% of wall, and no two-process handoff. All five rows below
+  captured in one sitting per the drift invariant
+  (`kernels/conv2x_baseline/cpu_baseline.py`, `results/aie/conv2x_int8_cpu_baseline.log`).
+  Workload: 1×64×32×32, stride 1, spatial 32×32 throughout, **436.21 MFLOP**.
+
+  | | time | throughput |
+  |---|---|---|
+  | NPU int8, hardware bracket | 1869.6 µs | 233 GOPS |
+  | NPU int8, **end-to-end** | 2497.8 µs | 175 GOPS |
+  | CPU torch fp32 (8 thr) | 1856 µs | 235 GFLOPS |
+  | CPU ORT CPU EP fp32 | 815 µs | 535 GFLOPS |
+  | **CPU ORT CPU EP QDQ int8 (VNNI)** | **295 µs** | **1481 GOPS** |
+
+  **Like for like, int8 vs int8, the CPU is 6.3× faster than the NPU's hardware bracket and
+  8.5× end to end.** Verified the int8 row really is int8 — after ORT's own optimization the
+  executed graph is 10 `QLinearConv` + 3 `QLinearAdd`, not an fp32 graph with stray Q/DQ.
+  - **The CPU baseline choice nearly inverted this.** torch fp32 is 1856 µs against the NPU's
+    1869.6 µs — benchmarking against torch alone (the baseline `attention_bf16` used) would
+    have read as "parity", off by 6.3× from the like-for-like answer. ORT beats torch by 2.3×
+    on the identical fp32 graph and its int8 path by another 2.8×. Together with the
+    MobileViT splice's torch-vs-numpy 9× this is now two for two: **on this project the CPU
+    kernel choice has decided the verdict more often than the NPU has.** Any NPU-vs-CPU claim
+    here must name which CPU implementation it beat.
+  - **Scope — closed for this design at this shape; the op class is NOT closed.** One shape
+    (32²×64, 436 MFLOP) and 3 columns. The same silicon reached 895 GFLOPS on 4-column bf16
+    matmul — ~4× this design's 233 GOPS — and that gap is unexplained. Two untested
+    candidates this run does not distinguish: **column count** (3 vs 4, part of it but not
+    all), and **spatial size / tile utilization** (32×32 gives short rows and little work per
+    DMA transfer — structurally attention's problem again, which would mean the conv kernels
+    underutilize the array at *this* shape, not at all shapes). The experiment that would
+    settle it: run standalone `ml/bottleneck` at 32² against a larger spatial and see whether
+    GOPS scales. **Do not record this as "int8 chained conv is dead."**
 - **Attention Kernel Latency vs CPU (Negative Result):**
   - Stage 4 (8 heads): **0.86 ms** on AIE2 vs **0.012 ms** on Zen4 CPU (71× slower than CPU)
   - Stage 3 (8 heads): **4.57 ms** on AIE2 vs **0.034 ms** on Zen4 CPU (134× slower than CPU)
