@@ -64,7 +64,7 @@ a one-off workaround: it took the EP from 0/965 nodes to 922/929, and the model 
 
 ## What's actually been learned (not just measured)
 
-The numbers live in `README.md`. What's worth stating as findings, because they
+The numbers live in [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md). What's worth stating as findings, because they
 generalize beyond any one model:
 
 1. **Graph shape matters more than graph size, and the EP gives you nothing to debug
@@ -486,21 +486,21 @@ generalize beyond any one model:
 | ResNet50 | Does *any* real CNN reach the NPU with acceptable accuracy? | **Answered: yes.** 79.8% top-1, 6.9 ms. Serves as the ongoing control. |
 | YOLOv8 (full graph) | Does a harder, decode-tail-included graph reach the NPU? | **Answered: no**, and understood why. Kept as a control, not a bug to fix. |
 | YOLOv8 (head-cut) | Can the same model reach the NPU with the decode moved off-graph? | **Answered: yes.** 8.9–15.6 ms depending on width, beats FP32 on both axes at width s. |
-| Resolution sensitivity (classification) | Does ResNet50 have the same fixed-cost floor YOLO does, and does accuracy survive moving off the training resolution? | **Answered, 128–384px measured.** Smaller fixed cost (2.6 ms vs YOLO's 2.4, but a smaller share — 23% vs 27% — of a slower run), more compute-bound, and accuracy peaks above training resolution at 256px rather than at it. The 288px turn is a real ceiling, not noise: everything above 256px is strictly worse on both latency and accuracy at once. Table in `README.md`. |
-| Width sensitivity (classification) | Does "width is nearly free" (found on yolov8n→s) generalize past YOLO, and does it hold at a bigger step? | **Answered: yes, at two steps.** `wide_resnet50_2` (isolated width, 2.7× params, 1.73× latency) and `wide_resnet101_2` (deeper+wider, 4.96× params, 3.15× latency, 80.2% top-1 beating resnet50's AdaRound headline with plain XINT8) both hold. Table in `README.md`. |
-| Width sensitivity (detection) | Does the yolov8n→s ratio hold at a third, bigger width step? | **Answered: yes, latency and accuracy both.** yolov8m: 9.1× the FLOPs of yolov8n for 3.46× the latency (30.80 ms, 1216/1223 nodes), 43.49 mAP@50-95 past yolov8s's 37.40 (calib 64, not the 200 n/s used — noted as a caveat, not a confound). Table in `README.md`. |
+| Resolution sensitivity (classification) | Does ResNet50 have the same fixed-cost floor YOLO does, and does accuracy survive moving off the training resolution? | **Answered, 128–384px measured.** Smaller fixed cost (2.6 ms vs YOLO's 2.4, but a smaller share — 23% vs 27% — of a slower run), more compute-bound, and accuracy peaks above training resolution at 256px rather than at it. The 288px turn is a real ceiling, not noise: everything above 256px is strictly worse on both latency and accuracy at once. Table in [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md#resnet50-input-resolution-does-the-fixed-cost-story-hold-for-a-classifier). |
+| Width sensitivity (classification) | Does "width is nearly free" (found on yolov8n→s) generalize past YOLO, and does it hold at a bigger step? | **Answered: yes, at two steps.** `wide_resnet50_2` (isolated width, 2.7× params, 1.73× latency) and `wide_resnet101_2` (deeper+wider, 4.96× params, 3.15× latency, 80.2% top-1 beating resnet50's AdaRound headline with plain XINT8) both hold. Table in [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md#model-width-does-width-is-nearly-free-hold-for-a-classifier-too). |
+| Width sensitivity (detection) | Does the yolov8n→s ratio hold at a third, bigger width step? | **Answered: yes, latency and accuracy both.** yolov8m: 9.1× the FLOPs of yolov8n for 3.46× the latency (30.80 ms, 1216/1223 nodes), 43.49 mAP@50-95 past yolov8s's 37.40 (calib 64, not the 200 n/s used — noted as a caveat, not a confound). Table in [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md#model-size-n-vs-s-measured-together). |
 | Batch efficiency | Is a static batch >1 an efficient way to use this NPU? | **Answered: no, and it's unsafe in a specific, isolated way.** Batch 2 on resnet50 drops the EP's partition to 80/395 nodes, costs 12.6× the per-image latency, and only writes the first batch slot — slot 0 scores 72.00% (correct), slot 1 scores ~0% with input-independent output. Do not batch on this backend. |
-| Width×resolution interaction | Does a wide model at low resolution beat a narrow model at high resolution on both axes? | **Answered: no, falsified.** resnet50@256² (6.32 ms, 74.00% top-1) beats every `wide_resnet50_2` configuration tested (160²/224²/288²) on both axes at once. Traces back to `wide_resnet50_2` never having a real top-1 edge at matched resolution to begin with. Table in `README.md`. |
-| Fixed-cost intercept: hardware or graph property? | Does the ~2.6 ms fixed cost stay fixed at 2.7× the width? | **Inconclusive.** Marginal cost triples with width (65.10 → 180.94 ms/Mpixel, solid). Intercept comes out lower, not the same or higher (1.88 ms vs 2.63 ms) — but on only 3 points, not a trustworthy comparison either way. Table in `README.md`. |
-| AdaRound at width | Does AdaRound recover less on a wider model, as the YOLO n→s pattern predicts? | **Answered: no, the prediction was wrong.** resnet50 recovers 90.0% of its quantization loss, `wide_resnet50_2` recovers 90.5% — essentially identical, and the wider model's initial loss was actually larger, not smaller. Also settled: AdaRound's RAM wall is resolution-specific (640×640), not width-specific — both fit fine at 224². `wide_resnet50_2`+AdaRound (80.10% top-1, 9.66 ms) is now this repo's best classification speed/accuracy point. Table in `README.md`. |
-| AdaRound for YOLOv8s at 640² | Is this actually RAM-blocked, and does it recover as much as classification's ~90%? | **Answered: not blocked, and recovers far less.** `yolov8s_cut_xint8_adaround.onnx` compiles and runs fine (15.5 ms, 922/929 nodes) — the earlier RAM-wall note didn't hold. Full 5000-image mAP@50-95 is 39.98 vs plain XINT8's 37.40 — 2.6 points, nowhere near classification's ~90% recovery. A 500-image slice first suggested 45.19, another instance of the slice-vs-full trap this repo already flags elsewhere. Table in `README.md`. |
+| Width×resolution interaction | Does a wide model at low resolution beat a narrow model at high resolution on both axes? | **Answered: no, falsified.** resnet50@256² (6.32 ms, 74.00% top-1) beats every `wide_resnet50_2` configuration tested (160²/224²/288²) on both axes at once. Traces back to `wide_resnet50_2` never having a real top-1 edge at matched resolution to begin with. Table in [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md#width-and-resolution-together-does-a-wide-model-at-low-resolution-beat-a-narrow-model-at-high-resolution). |
+| Fixed-cost intercept: hardware or graph property? | Does the ~2.6 ms fixed cost stay fixed at 2.7× the width? | **Inconclusive.** Marginal cost triples with width (65.10 → 180.94 ms/Mpixel, solid). Intercept comes out lower, not the same or higher (1.88 ms vs 2.63 ms) — but on only 3 points, not a trustworthy comparison either way. Table in [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md#is-the-fixed-per-inference-cost-a-hardware-property-or-a-graph-property). |
+| AdaRound at width | Does AdaRound recover less on a wider model, as the YOLO n→s pattern predicts? | **Answered: no, the prediction was wrong.** resnet50 recovers 90.0% of its quantization loss, `wide_resnet50_2` recovers 90.5% — essentially identical, and the wider model's initial loss was actually larger, not smaller. Also settled: AdaRound's RAM wall is resolution-specific (640×640), not width-specific — both fit fine at 224². `wide_resnet50_2`+AdaRound (80.10% top-1, 9.66 ms) is now this repo's best classification speed/accuracy point. Table in [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md#adaround-at-width-does-it-recover-less-on-a-wider-model). |
+| AdaRound for YOLOv8s at 640² | Is this actually RAM-blocked, and does it recover as much as classification's ~90%? | **Answered: not blocked, and recovers far less.** `yolov8s_cut_xint8_adaround.onnx` compiles and runs fine (15.5 ms, 922/929 nodes) — the earlier RAM-wall note didn't hold. Full 5000-image mAP@50-95 is 39.98 vs plain XINT8's 37.40 — 2.6 points, nowhere near classification's ~90% recovery. A 500-image slice first suggested 45.19, another instance of the slice-vs-full trap this repo already flags elsewhere. Table in [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md#adaround-on-detection-how-much-does-it-actually-recover). |
 | AdaRound for YOLOv8m at 640² | Does AdaRound's recovery keep shrinking as width increases past s, matching the n→s quantization-penalty trend? | **Answered: yes, recovers even less in absolute terms.** Quantized on Desktop 1 (GPU-accelerated FastFinetune) and run on Desktop 2's XDNA1: 45.32 mAP@50-95 vs plain XINT8's 43.49 — +1.83 points, smaller than s's +2.58 despite m's much higher baseline accuracy, and no latency cost (30.46 ms, same as plain XINT8's 30.80). Caveat: the quantized model synced in with no local log of its calibration count, so it isn't a clean like-for-like comparison against the calib-64 plain-XINT8 row. `results/map_yolov8m_cut_xint8_adaround_npu.log`. |
 | Concurrent camera streams | Is a static batch>1 the only way to ask this NPU for more than one image at once, and does it fail the same way? | **Answered: no — two independent sessions on two threads is a different request than batching, and it works.** 1.8-1.9× the combined throughput of round-robin, zero cross-talk between streams (checked directly, the same way the batch-2 bug was found, not assumed away). Consistent with yolov8n only reaching about 6.6% of the array's 16 TOPS solo (`tools/estimate_tops.py`, finding 5 above — retracts this row's earlier "~1.1" figure) — there's headroom for a second stream. `tools/dual_stream_bench.py`, `results/dual_stream_{pose,detect}.log`. |
-| Concurrent streams beyond 2, and at width | Does the multiplier keep climbing past 2 streams, and does a wider model with less idle headroom get the same multiplier? | **Answered: no on both counts, and the two answers explain each other.** yolov8n's combined throughput saturates at 3 streams (~167 fps, 2.1×) — headroom runs out, concurrency doesn't stop working. yolov8m, which already uses more of the array per call, saturates a stream earlier at a much smaller 1.29×. Zero cross-talk at up to 8 concurrent streams on either model; no throughput regression past the ceiling. `tools/nstream_bench.py`, `results/nstream_{yolov8n,yolov8m}.log`. Table in `README.md`. |
+| Concurrent streams beyond 2, and at width | Does the multiplier keep climbing past 2 streams, and does a wider model with less idle headroom get the same multiplier? | **Answered: no on both counts, and the two answers explain each other.** yolov8n's combined throughput saturates at 3 streams (~167 fps, 2.1×) — headroom runs out, concurrency doesn't stop working. yolov8m, which already uses more of the array per call, saturates a stream earlier at a much smaller 1.29×. Zero cross-talk at up to 8 concurrent streams on either model; no throughput regression past the ceiling. `tools/nstream_bench.py`, `results/nstream_{yolov8n,yolov8m}.log`. Table in [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md#two-cameras-does-independent-concurrency-work-where-batching-doesnt). |
 | Is stream saturation compute-bound or memory-bound? | Concurrent sessions each hold their own runtime buffers — is the throughput ceiling actually a memory ceiling in disguise? | **Answered: memory, not the cause.** `xrt-smi examine -r aie-partitions` (the one tool found this session that can actually see NPU memory — Windows' `GPU Engine`/`GPU Adapter Memory` counters can't, the device is a `ComputeAccelerator`, not a WDDM GPU adapter) shows memory scaling linearly with stream count on both yolov8n (~29 MB/stream) and yolov8m (~100 MB/stream), climbing cleanly through 8 streams with no ceiling — well past the 2-3 stream point where throughput already flattened. Memory and throughput are decoupled, ruling memory out and leaving compute headroom as the standing explanation. `tools/session_hold.py`, `results/nstream_memory_yolov8{n,m}.log`. |
-| Does classification show the same concurrency shape; does accuracy survive contention past a binary found/not-found check? | Every prior concurrency check only confirmed a binary ground truth (found a person, or didn't) — does real accuracy hold under N-way contention, and does classification saturate the same way detection does? | **Answered: yes on both, cleanly.** resnet50 saturates at 1.60× by 8 concurrent streams (between yolov8n's 2.13× and yolov8m's 1.29×, its own idle-headroom budget) and holds flat through 16 with zero regression. Every concurrent stream ran the identical labeled slice the solo baseline used, so predictions could be diffed exactly rather than compared as an aggregate top-1 a different sample could move on its own — result: bit-identical argmax on all 960 concurrent classifications tested (16 streams × 60 images), at every stream count. `tools/nstream_cls_bench.py`, `results/nstream_resnet50.log`. Table in `README.md`. |
-| Width beyond yolov8m: does the n→s→m trend continue at l/x? | Two width steps (n→s, s→m) both bought a clear mAP gain for extra latency — does l→x keep paying off? | **Answered: no, the trend breaks.** l: 49.67 ms, 45.37 mAP@50-95, 1510/1517 nodes. x: 117.11 ms, 45.09 mAP@50-95, same 1510/1517 nodes (l/x share architecture depth, only channel width differs). x is 2.36× the latency of l for a net *loss* in mAP — width alone stops paying off somewhere around l under this recipe (plain XINT8, calib 24-32). Also found: yolov8l's full 5000-image eval failed with a hardware DPU timeout on 2 of 3 attempts, memory confirmed flat (231 MB) during the runs that succeeded — ruling out a simple leak, root cause still unresolved, not seen on any other size. `results/map_yolov8{l,x}_cut_xint8_npu.log`, `results/yolo_cut_{l,x}_{cpu,npu,diag}.log`. Table in `README.md`. |
-| Can `xrt-smi`'s GOPS column build a utilization-vs-16-TOPS story? | GOPS is the one other live NPU-side reading `xrt-smi` exposes besides memory — does it track real compute headroom running out the way the throughput ceiling does? | **Answered: no, it's a dead end.** `tools/session_hold.py` extended to parse GOPS and independently count actual completions/s in the same run. GOPS is exactly `9 × streams` (yolov8n) / `80 × streams` (yolov8m) with zero saturation through 8 streams, while measured completions/s is flat from 1 stream onward in the same run — decoupled from real throughput. Simplest explanation: `xrt-smi` credits each context a notional per-context GOPS figure blind to shared-array contention, not a measurement of delivered compute. `results/gops_yolov8{n,m}.log`. Table in `README.md`. |
+| Does classification show the same concurrency shape; does accuracy survive contention past a binary found/not-found check? | Every prior concurrency check only confirmed a binary ground truth (found a person, or didn't) — does real accuracy hold under N-way contention, and does classification saturate the same way detection does? | **Answered: yes on both, cleanly.** resnet50 saturates at 1.60× by 8 concurrent streams (between yolov8n's 2.13× and yolov8m's 1.29×, its own idle-headroom budget) and holds flat through 16 with zero regression. Every concurrent stream ran the identical labeled slice the solo baseline used, so predictions could be diffed exactly rather than compared as an aggregate top-1 a different sample could move on its own — result: bit-identical argmax on all 960 concurrent classifications tested (16 streams × 60 images), at every stream count. `tools/nstream_cls_bench.py`, `results/nstream_resnet50.log`. Table in [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md#two-cameras-does-independent-concurrency-work-where-batching-doesnt). |
+| Width beyond yolov8m: does the n→s→m trend continue at l/x? | Two width steps (n→s, s→m) both bought a clear mAP gain for extra latency — does l→x keep paying off? | **Answered: no, the trend breaks.** l: 49.67 ms, 45.37 mAP@50-95, 1510/1517 nodes. x: 117.11 ms, 45.09 mAP@50-95, same 1510/1517 nodes (l/x share architecture depth, only channel width differs). x is 2.36× the latency of l for a net *loss* in mAP — width alone stops paying off somewhere around l under this recipe (plain XINT8, calib 24-32). Also found: yolov8l's full 5000-image eval failed with a hardware DPU timeout on 2 of 3 attempts, memory confirmed flat (231 MB) during the runs that succeeded — ruling out a simple leak, root cause still unresolved, not seen on any other size. `results/map_yolov8{l,x}_cut_xint8_npu.log`, `results/yolo_cut_{l,x}_{cpu,npu,diag}.log`. Table in [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md#model-size-n-vs-s-measured-together). |
+| Can `xrt-smi`'s GOPS column build a utilization-vs-16-TOPS story? | GOPS is the one other live NPU-side reading `xrt-smi` exposes besides memory — does it track real compute headroom running out the way the throughput ceiling does? | **Answered: no, it's a dead end.** `tools/session_hold.py` extended to parse GOPS and independently count actual completions/s in the same run. GOPS is exactly `9 × streams` (yolov8n) / `80 × streams` (yolov8m) with zero saturation through 8 streams, while measured completions/s is flat from 1 stream onward in the same run — decoupled from real throughput. Simplest explanation: `xrt-smi` credits each context a notional per-context GOPS figure blind to shared-array contention, not a measurement of delivered compute. `results/gops_yolov8{n,m}.log`. Table in [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md#direct-npu-utilization-what-gops-actually-says). |
 
 ## Open questions
 
@@ -582,7 +582,8 @@ been closed:
   wide_resnet101_2) with nothing past that tested.
 - **Full 5000-image mAP for every model size — done for n/s/m/l/x.** All five detection
   sizes now have a full-dataset number; only calibration sample count differs between
-  them (200 for n/s, 64 for m, 32/24 for l/x), a caveat already flagged in `README.md`.
+  them (200 for n/s, 64 for m, 32/24 for l/x), a caveat already flagged in `README.md`
+  and `docs/BENCHMARKS.md`.
 - **The eventual application.** Nothing here commits to it yet, but the shape of a
   next step is visible: a labeled licence-plate dataset from fixed camera feeds,
   fine-tuning a YOLO variant on it, and reusing this same head-cut + XINT8 + AdaRound
@@ -1236,84 +1237,62 @@ been closed:
 
 ## Roadmap
 
-Open measurements, roughly in the order they would resolve. `RESEARCH.md` carries the
-reasoning behind each.
+Where the open measurements stand. Everything below that closed has its numbers, method
+and caveats in [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md); this list keeps one line each so the trail from
+question to answer stays visible, and the full reasoning behind each question is in the
+sections above.
 
-- **`pipelines/yolov8n-pose` end to end on the NPU — done.** Head-cut partitions
-  1015/1025 (99.0%), 9.8 ms/frame, same clean pattern as detect. XINT8 costs 17.8
-  points of OKS mAP@50-95 (49.49 → 31.65, a 36% relative loss — proportionally worse
-  than bbox yolov8n's plain-XINT8 loss). AdaRound is untried for pose and is the
-  obvious next lever, same as it was for detect.
-- **AdaRound for YOLOv8s at 640×640 — done, and it barely helps.** Not blocked after
-  all: `models/yolov8s_cut_xint8_adaround.onnx` compiles and runs (15.5 ms/frame,
-  922/929 nodes). Full 5000-image mAP@50-95 is 39.98 against plain XINT8's 37.40
-  (`results/map_yolov8s_cut_xint8_adaround_npu.log`) — 2.6 points, not the 90%
-  recovery AdaRound gets on ResNet50/wide_resnet50_2. A 500-image slice run first
-  suggested 45.19, which would have been a very different story; the full 5000 is
-  the number to trust, consistent with this README's other slice-vs-full warnings.
-  Worth understanding why detection AdaRound recovers so much less than
-  classification's before spending the RAM on YOLOv8m/l/x or the wide ResNets.
-- **AdaRound for YOLOv8m at 640×640 — done, and it recovers even less.** Quantized on
-  Desktop 1 (GPU-accelerated FastFinetune, `--device`) and run on Desktop 2's XDNA1
-  (Phoenix): `models/yolov8m_cut_xint8_adaround.onnx` runs at the same 30.46 ms/frame as
-  plain XINT8 (1216/1223 nodes — no latency cost from AdaRound, only the weight rounding
-  changes). Full 5000-image mAP@50-95 is 45.32 against plain XINT8's 43.49
-  (`results/map_yolov8m_cut_xint8_adaround_npu.log`) — **+1.83 points**, a smaller
-  absolute recovery than yolov8s's +2.58 despite m's much higher starting accuracy,
-  extending the pattern that AdaRound has less room to recover as width increases.
-  Caveat: this model arrived via Syncthing with no local log of its calibration count,
-  so it isn't a clean like-for-like comparison against the calib-64 plain-XINT8 row —
-  the exact "a model can arrive with no log explaining it" risk this repo's own
-  machine notes warn about.
-- **Concurrent streams past 2, and on a wider model — done.** Both saturate:
-  yolov8n flattens at 3 streams (~167 fps, 2.1×); yolov8m, which uses more of the
-  array per call, saturates a stream earlier at 1.29× (`results/nstream_*.log`).
-  Table in the [Two cameras](docs/BENCHMARKS.md#two-cameras-does-independent-concurrency-work-where-batching-doesnt)
-  section above.
-- **Is stream saturation compute or memory — done, it's compute.** `tools/session_hold.py`
-  + `xrt-smi examine -r aie-partitions` show NPU memory scaling linearly with stream
-  count on both models (~29 MB/stream yolov8n, ~100 MB/stream yolov8m), no ceiling
-  through 8 streams — decoupled from the throughput plateau, which rules memory out.
-  `results/nstream_memory_yolov8{n,m}.log`.
-- **Does classification show the same saturation shape, and does accuracy survive
-  contention — done, yes on both.** resnet50 saturates at 1.60× by 8 streams (between
-  yolov8n's 2.13× and yolov8m's 1.29×) and holds flat through 16, with the *exact* same
-  per-image predictions as the uncontended baseline at every stream count — not just
-  similar top-1, bit-identical argmax on all 960 concurrent classifications tested.
-  `tools/nstream_cls_bench.py`, `results/nstream_resnet50.log`. Open: `wide_resnet50_2`
-  or a bigger classification model untested; >16 streams untested.
-- **yolov8l and yolov8x — done.** 49.67 ms / 45.37 mAP@50-95 (l) and 117.11 ms / 45.09
-  (x) — the width trend that held cleanly through m flattens here; x is pure extra cost
-  for less accuracy than l. Calibrated smaller (32/24 images) than m's 64, a caveat in
-  the same vein as m's own. l's full eval is also flaky in a way nothing smaller is —
-  see [Known limitations](docs/BENCHMARKS.md#known-limitations). Table in the width
-  section above.
+**Closed.**
+
+- **`pipelines/yolov8n-pose` end to end on the NPU.** 1015/1025 nodes, 9.8 ms/frame,
+  XINT8 costs 17.8 points of OKS mAP@50-95 — and AdaRound for pose is still untried.
+  [Working](docs/BENCHMARKS.md#yolov8n-pose-end-to-end-on-the-npu).
+- **AdaRound for YOLOv8s and YOLOv8m at 640×640.** Not RAM-blocked after all, and it
+  barely helps either one: +2.58 mAP at s, +1.83 at m, against classification's ~90%
+  recovery. Why detection recovers so much less is still unexplained.
+  [Working](docs/BENCHMARKS.md#adaround-on-detection-how-much-does-it-actually-recover).
+- **Concurrent streams past 2, and on a wider model.** Both saturate — yolov8n at 3
+  streams (~167 fps, 2.1×), yolov8m a stream earlier at 1.29×.
+  [Working](docs/BENCHMARKS.md#two-cameras-does-independent-concurrency-work-where-batching-doesnt).
+- **Is stream saturation compute or memory?** Compute. NPU memory scales linearly with
+  stream count (~29 MB/stream yolov8n, ~100 MB/stream yolov8m) with no ceiling through 8,
+  decoupled from the throughput plateau. `results/nstream_memory_yolov8{n,m}.log`.
+- **Does classification saturate the same way, and does accuracy survive contention?**
+  Yes to both: resnet50 saturates at 1.60× by 8 streams and holds flat through 16, with
+  bit-identical argmax on all 960 concurrent classifications tested. Still open within
+  it: `wide_resnet50_2` or a bigger classifier untested, and >16 streams untested.
+  `results/nstream_resnet50.log`.
+- **yolov8l and yolov8x.** The width trend breaks: x is 2.36× the latency of l for a net
+  mAP loss. Both calibrated smaller (32/24) than m's 64, and l's full eval is flaky.
+  [Working](docs/BENCHMARKS.md#model-size-n-vs-s-measured-together).
+- **A full utilization-vs-TOPS story from `xrt-smi`'s GOPS column — a dead end, and
+  retracted.** GOPS scales exactly linearly with stream count while measured completion
+  rate is flat from 1 stream on. The real answer came from `tools/estimate_tops.py`
+  instead. [Working](docs/BENCHMARKS.md#achieved-opss-a-real-answer-to--of-16-tops-not-a-gops-estimate).
+- **5th AIE column on this Phoenix chip — a dead end.** `1x4.xclbin` caps at 4
+  independent partitions regardless of process count, and the driver's `5x4_*.xclbin`
+  overlays fall back silently to 100% CPU.
+  [Working](docs/BENCHMARKS.md#splitting-the-array-into-independent-partitions).
+
+**Still open.**
+
 - **AdaRound across the ResNet50 resolution sweep.** The sweep is plain XINT8, and
   AdaRound's recovery could move where the accuracy peak sits.
 - **A yolov8m mAP row at calibration 200**, so the detection width table is
   like-for-like at every size (the current 43.49 was calibrated on 64 images). Same
   caveat now applies to l (32) and x (24).
-- **A full utilization-vs-TOPS story using `xrt-smi`'s GOPS column — done, and it's a
-  dead end.** GOPS scales exactly linearly with stream count (9×/80× per stream for
-  yolov8n/yolov8m) with no ceiling through 8 streams, while the same run's *measured*
-  completion rate is flat from 1 stream on — decoupled from real throughput, so it
-  can't be turned into a utilization-vs-16-TOPS number. `results/gops_yolov8{n,m}.log`.
-  `xrt-smi`'s memory readout (used above) remains the one number from this tool that
-  tracks something real; GOPS does not.
 - **Explain ResNet50's AdaRound latency cost** (5.63 → 6.93 ms). The EP report shows the
   same 393 / 2 partition for both models, so extra CPU fallback is ruled out; a
   `--fresh` re-run of each and a diff of the two reports would settle it.
 - **The webcam path (single `4x4.xclbin` session, `./scripts/yolo-demo.sh`) has not
   been exercised end to end.** The related but distinct round-robin-across-4-columns
   demo *has* — see
-  [A live demo](docs/BENCHMARKS.md#a-live-demo-does-the-multi-partition-finding-hold-on-a-real-webcam)
-  above: camera-bound at 30 fps through n/m/l, genuinely NPU-bound (22.0–23.5 fps) at x.
-- **5th AIE column on this Phoenix chip — done, and it's a dead end.** `1x4.xclbin`
-  caps at 4 independent partitions regardless of process count; a 5th process shares
-  column 4 rather than getting its own. The driver's `5x4_*.xclbin` overlays fall back
-  silently to 100% CPU (fingerprint mismatch). See
-  [Splitting the array into independent partitions](docs/BENCHMARKS.md#splitting-the-array-into-independent-partitions)
-  above and `docs/DECISIONS.md`.
+  [A live demo](docs/BENCHMARKS.md#a-live-demo-does-the-multi-partition-finding-hold-on-a-real-webcam):
+  camera-bound at 30 fps through n/m/l, genuinely NPU-bound (22.0–23.5 fps) at x.
+- **AdaRound for pose**, untried, and the obvious next lever there.
+- **Column count for the int8 conv kernels.** Both NPU measurements use 1–3 columns of a
+  4×5 array; 4 × 146 ≈ 584 GOPS would still lose, but not by 5.6×. The one lever the
+  56×56 result doesn't touch.
 - **Longer term:** a detector fine-tuned for fixed camera feeds (licence-plate
   recognition), reusing the head-cut + XINT8 + AdaRound recipe rather than re-deriving it.
 

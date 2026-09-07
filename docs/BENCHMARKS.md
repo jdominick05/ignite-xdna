@@ -1514,6 +1514,46 @@ n-only pass through this section had to rely on.
 
 ---
 
+### AdaRound on detection: how much does it actually recover?
+
+Moved here from RESEARCH.md's roadmap, where both results were recorded and nowhere else.
+AdaRound buys back ~90% of the quantization loss on this repo's classifiers; on detection
+it does not come close, at either width measured.
+
+**yolov8s at 640×640 — it barely helps.** Not blocked after all:
+`models/yolov8s_cut_xint8_adaround.onnx` compiles and runs (15.5 ms/frame, 922/929 nodes).
+Full 5000-image mAP@50-95 is 39.98 against plain XINT8's 37.40
+(`results/map_yolov8s_cut_xint8_adaround_npu.log`) — 2.6 points, not the 90% recovery
+AdaRound gets on ResNet50/wide_resnet50_2. A 500-image slice run first suggested 45.19,
+which would have been a very different story; the full 5000 is the number to trust,
+consistent with this repo's other slice-vs-full warnings. Worth understanding why
+detection AdaRound recovers so much less than classification's before spending the RAM on
+YOLOv8m/l/x or the wide ResNets.
+
+**yolov8m at 640×640 — it recovers even less.** Quantized on Desktop 1 (GPU-accelerated
+FastFinetune, `--device`) and run on Desktop 2's XDNA1 (Phoenix):
+`models/yolov8m_cut_xint8_adaround.onnx` runs at the same 30.46 ms/frame as plain XINT8
+(1216/1223 nodes — no latency cost from AdaRound, only the weight rounding changes). Full
+5000-image mAP@50-95 is 45.32 against plain XINT8's 43.49
+(`results/map_yolov8m_cut_xint8_adaround_npu.log`) — **+1.83 points**, a smaller absolute
+recovery than yolov8s's +2.58 despite m's much higher starting accuracy, extending the
+pattern that AdaRound has less room to recover as width increases.
+
+> **Caveat.** The yolov8m AdaRound model arrived via Syncthing with no local log of its
+> calibration count, so it isn't a clean like-for-like comparison against the calib-64
+> plain-XINT8 row — the exact "a model can arrive with no log explaining it" risk this
+> repo's own machine notes warn about.
+
+### yolov8n-pose end to end on the NPU
+
+Head-cut partitions 1015/1025 (99.0%), 9.8 ms/frame, same clean pattern as detect. XINT8
+costs 17.8 points of OKS mAP@50-95 (49.49 → 31.65, a 36% relative loss — proportionally
+worse than bbox yolov8n's plain-XINT8 loss). AdaRound is untried for pose and is the
+obvious next lever, same as it was for detect.
+
+`results/pose_cut_{npu,diag}.log`, `results/map_kpts_*.log`. The OKS mAP figures are a
+500-image slice, not the full set — labelled as a slice everywhere they appear.
+
 ## Key findings
 
 Roughly ordered by how much time each one cost to discover.
