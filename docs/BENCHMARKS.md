@@ -612,6 +612,21 @@ one GEMM in isolation, not a multi-op pipeline measurement — the dispatch-floo
 caveats below still apply to any real transformer block built from it.
 See `results/aie/bf16_matmul_niche_npu.log`.
 
+**And a real two-matmul pipeline holds too: 1.32× on FFN up-projection → GELU →
+down-projection, barely moved from the single-GEMM 1.33×.** Both stages at the same
+M=2048/K=4096/N=4096 shape (the real Llama-2-7B `d_ff=11008` width hit a DMA-stride
+compile limit at N=8192, not chased further this session — see the log), GELU timed
+separately on the (2048,4096) intermediate (0.729 ms — under 1% of either stage's
+~39 ms, so it doesn't meaningfully dilute the ratio). Effective pipeline throughput:
+**1738.6 GFLOPS NPU vs 1315.6 GFLOPS CPU (torch bf16)**. This is a sum of two
+independently measured stage costs plus an isolated activation cost, **not** a live
+single-session run with real data handed off between stages — the host-side cost of
+reading a real NPU output, running GELU on it, and staging it as the next real input
+was not measured, only GELU on a fresh random tensor of the same shape was. Still open:
+the wider (non-square) FFN shape, a live single-session pipeline, and attention's own
+QK^T/Attn@V shapes (small K=head_dim, K=seq_len) rather than this square GEMM.
+See `results/aie/bf16_matmul_ffn_pipeline_npu.log`.
+
 **Heterogeneous splice, now measured: 3.25 ms, and 2.31× — not the 4.47 ms / 4.1× once
 published here.** `tools/splice_wall_clock.py` puts a `perf_counter` around a real
 in-process loop (`results/mobilevit/splice_wall_clock_npu.log`, 100 iterations, every row

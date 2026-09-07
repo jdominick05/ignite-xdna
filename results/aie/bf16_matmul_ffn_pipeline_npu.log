@@ -1,0 +1,140 @@
+A real multi-op transformer-block-shaped pipeline: FFN up-projection (NPU) ->
+GELU activation (CPU) -> FFN down-projection (NPU), against the same pipeline
+run entirely on CPU. This is the follow-up bf16_matmul_attention_scale_npu.log's
+own closing caveat asked for: does the isolated-GEMM win survive once the
+dispatch floor is paid twice and a real elementwise op sits between the two
+matmuls, or does it erode the way dispatch_floor_npu.log's ~617us/call warns it
+could?
+Desktop 2 (Ryzen 7 8700G / Phoenix XDNA1), 2026-09-07, mlir-aie v1.4.2, ironenv
+(NPU) + resnet_env (CPU baseline, torch 2.4.1+cpu).
+
+WHY THIS SHAPE
+==============
+A transformer FFN block is X @ W_up -> activation -> @ W_down, i.e. exactly two
+GEMMs with one elementwise op between them -- the smallest real multi-op
+pipeline this repo can build without writing a new fused AIE kernel. d_model=
+4096 (Llama-2-7B / Mistral-7B) is the same contraction dim as
+bf16_matmul_attention_scale_npu.log. d_ff is normally wider than d_model (e.g.
+11008 for Llama-2-7B), but N=8192 hit a real infra limit -- see LIMIT HIT below
+-- so both stages use the already-verified M=2048/K=4096/N=4096 square shape.
+This under-states a real FFN's total FLOPs (no wide intermediate) but is the
+right shape to answer the actual question here: what does chaining two real
+NPU dispatches with a CPU op between them cost, relative to one dispatch.
+
+LIMIT HIT (recorded, not chased further)
+=========================================
+First attempt used the real Llama-2-7B shape, N=8192 for the up-projection
+(M=2048, K=4096, N=8192, --dtype_out f32, default tiles):
+
+  python whole_array.py --dev npu --dtype_in bf16 --dtype_out f32 \
+      -M 2048 -K 4096 -N 8192 --n-aie-cols 4 --iters 10 --warmup 3
+
+aiecc compilation failed, not a runtime error:
+  error: 'aie.dma_bd' op Stride 3 exceeds the [1:1048576] range.
+  aie.dma_bd(%arg2 : memref<16777216xf32> offset = 0 len = 524288
+      sizes = [2, 64, 256, 32] strides = [2097152, 128, 8192, 1])
+
+The f32 output buffer at N=8192 pushes one DMA stride past the BD's encodable
+range -- an artifact of --dtype_out f32 (4 bytes/elem) combined with the tiling
+whole_array.py picks at this N, not a correctness bug in the K-fix. Not
+investigated further this session (would need a tile-shape change, e.g.
+smaller -n, to keep every stride in range); worth revisiting if a wider-N shape
+matters for a future measurement. Fell back to the symmetric N=4096 shape for
+both stages, which is already verified correct and fast to iterate on.
+
+METHOD
+======
+NPU: whole_array.py, 4 columns, --dtype_in bf16 --dtype_out f32, default tiles
+(m=64, k=64, n=32), 10 iters / 3 warmup, run twice -- once standing in for the
+up-projection, once for the down-projection (same shape, independent process,
+independent random A/B each run; verified PASS by the script's own
+assert_close_with_benchmark both times):
+
+  cd ~/mlir-aie/programming_examples/basic/matrix_multiplication/whole_array
+  python whole_array.py --dev npu --dtype_in bf16 --dtype_out f32 \
+      -M 2048 -K 4096 -N 4096 --n-aie-cols 4 --iters 10 --warmup 3
+
+CPU: a new one-off script (not added to kernels/, this measurement's own
+harness), torch 2.4.1+cpu, resnet_env, bf16, same M/K/N, 10 iters / 3 warmup,
+timing the full fused pipeline (X @ Wup -> gelu -> @ Wdown) as one call per
+iteration, plus GELU timed alone on a (2048,4096) bf16 tensor for the isolated
+activation cost:
+
+  conda activate resnet_env
+  python - <<'PYEOF'
+  # X (2048,4096) @ Wup (4096,4096) -> gelu -> @ Wdown (4096,4096), torch bf16,
+  # 10 timed iters after 3 warmup; GELU alone timed the same way on a
+  # (2048,4096) bf16 tensor.
+  PYEOF
+
+RESULTS
+=======
+NPU, per stage (both stages used this identical shape/run):
+  NPU time     (avg/min/max us): 38321.4 / 37805.8 / 39787.8
+  End-to-end   (avg/min/max us): 39165.9 / 38431.2 / 40774.8
+  NPU GFLOPS                    : 1793.24
+  PASS!
+(Slightly different from bf16_matmul_attention_scale_npu.log's 1776.68 GFLOPS
+at the identical shape -- consistent with this repo's documented cross-session
+NPU/DML latency drift, not a regression.)
+
+CPU (torch bf16, this machine's Zen4 cores, single process):
+  CPU FFN pipeline (X@Wup -> gelu -> @Wdown), M=2048 K=4096 N=4096
+    mean 104.470 ms, min 86.944 ms, max 123.246 ms over 10 iters
+    effective GFLOPS (both matmuls, activation excluded from flop count): 1315.6
+  CPU GELU alone on (2048,4096) bf16: mean 0.729 ms, min 0.623 ms
+
+PIPELINE ESTIMATE
+==================
+Sum of independently measured stage costs (see THE FINDING for exactly what
+this does and does not capture):
+
+  NPU pipeline = stage1 End-to-end + CPU GELU + stage2 End-to-end
+               = 39.1659 ms + 0.729 ms + 39.1659 ms = 79.061 ms
+  CPU pipeline = 104.470 ms (measured directly, one fused call)
+
+  effective pipeline GFLOPS (both matmuls' FLOPs / total time, activation
+  excluded from the FLOP count same as the CPU number above):
+    NPU: 137.44 GFLOP / 79.061 ms = 1738.6 GFLOPS
+    CPU: 137.44 GFLOP / 104.470 ms = 1315.6 GFLOPS
+
+      pipeline              NPU GFLOPS   CPU GFLOPS   ratio    winner
+  -------------------------------------------------------------------
+  up -> gelu -> down            1738.6       1315.6     1.32x   NPU
+
+THE FINDING
+===========
+**The win survives chaining two real dispatches with a CPU op between them,
+and barely moves: 1.32x here vs 1.33x for one isolated GEMM at the same
+shape.** GELU's 0.729ms is under 1% of either stage's ~39ms, so it does not
+meaningfully dilute the ratio either direction -- the pipeline result is,
+predictably, close to the single-GEMM result scaled to two stages.
+
+**What this does NOT prove, and why the ratio holding is not yet the full
+answer to "does a real FFN block win":**
+- Each whole_array.py "End-to-end" timing (39165.9us avg) is already a warm,
+  steady-state per-call number from a hot loop within one open XRT session --
+  it already includes real per-call dispatch overhead for *that* stage. But
+  the two stages here ran as two independent processes, each with fresh random
+  A/B, not one live session passing stage 1's real output through GELU into
+  stage 2's real input. The host-side cost of that hand-off -- reading a real
+  NPU output buffer, running GELU on it, staging it as the next input -- was
+  not measured; only GELU-on-a-fresh-random-tensor was. If that hand-off adds
+  meaningfully more than the isolated-GELU number, this pipeline estimate
+  undercounts it.
+- Both stages use the same M=2048/K=4096/N=4096 shape. A real FFN's up-
+  projection is wider (N=d_ff > d_model) -- this log's own LIMIT HIT section
+  shows why that wasn't measured (a DMA stride overflow at N=8192, not chased
+  further). A wider up-projection would shift the FLOP balance between stages
+  but not obviously change the ratio, since both stages already win
+  individually.
+- This is still two matmuls and one elementwise op, not a full transformer
+  block. Attention's own two data-dependent matmuls (QK^T, Attn@V) are a
+  different shape (small K=head_dim for QK^T, K=seq_len for Attn@V) and were
+  not measured here -- bf16_matmul_attention_scale_npu.log already flagged
+  this as open and it stays open.
+
+**Not tested this session:** the real (non-square) FFN shape past the N=8192
+DMA-stride limit; a live single-session pipeline with real data hand-off
+instead of two independent processes; attention's QK^T/Attn@V shapes; int8/
+int16 at this scale.

@@ -174,6 +174,18 @@ it — its `Attn@V` reduction already accumulates in AIE2's native fp32 `accfloa
 accumulator across the full loop, casting to bf16 only once at the end. That kernel's
 71–240× loss to CPU stays design- and size-driven (see below), not precision.
 
+**`bf16_matmul_ffn_pipeline_npu.log`** — the actual multi-op pipeline measurement the
+log above deferred: FFN up-projection (NPU) → GELU (CPU) → down-projection (NPU), both
+matmuls at the same M=2048/K=4096/N=4096 shape (the real Llama-2-7B `d_ff=11008` width
+hit a DMA-stride compile limit at N=8192 — `aie.dma_bd` stride 3 out of range — not
+chased further; recorded, not investigated). GELU timed alone on the (2048,4096)
+intermediate: 0.729 ms, under 1% of either ~39 ms stage. Chaining two real dispatches
+with a real CPU op between them barely moves the ratio: **1738.6 GFLOPS NPU vs 1315.6
+GFLOPS CPU (torch bf16) — 1.32×**, next to nothing off the single-GEMM 1.33×. Explicitly
+a sum of independently measured stage costs plus an isolated activation cost, not a live
+single-session run with real data handed off between stages — that hand-off cost, and
+attention's own QK^T/Attn@V shapes, are still open.
+
 ## Dispatch floor and the int8 conv verdict
 
 **`dispatch_floor_npu.log`** — the per-dispatch cost measured IN ISOLATION at last
