@@ -732,23 +732,38 @@ caches.
   - **Decide on the fit, never on per-point GOPS.** Per-point end-to-end GOPS must climb
     with problem size on any accelerator as the fixed host cost amortizes — reading that
     rise as "the array scales" is a measurement artifact. `1/slope` removes fixed cost.
-  - **`tensor_w` = 32 is a structural ceiling, and ResNet50's real conv2_x is 56×56.** 56×56,
+  - **`tensor_w` = 32 was recorded as a structural ceiling here; corrected below to 44
+    once the actual blocker (a separate conv2dk1/conv2dk1_skip bug, not this buffer
+    budget) was fixed — see the 2026-09-07 correction bullet further down.** 56×56,
     32×64, 64×64 and 128×64 all fail in `aiecc`, not at runtime: Tile(0,4) (the skip-add
-    core) needs five `w`×256-byte buffers plus a 2560-byte stack against 64 KB of AIE2 tile
-    memory — `'aie.tile' op allocated buffers exceeded available memory`, bank-aware *and*
-    basic sequential allocation, 8 error lines across the 4 shapes. So the 32² that
-    `layers_conv2_x` runs is the largest square that fits, not the network's shape.
-  - **`conv2dk1.cc`/`conv2dk3.cc` read (2026-09-07): they vectorize correctly, ruling out
-    the attention-kernel failure mode.** Both `conv2dk1_i8_vector` and `conv2dk3_i8_vector`
-    (the paths `bottleneck.py` actually compiles — its `kernels/conv.py` wrapper passes no
-    `-DSCALAR`) use `aie::mmul<4,8,8,int8,int8>` with 8 live pipelined accumulators
-    (`AIE_PREPARE_FOR_PIPELINING`, `AIE_LOOP_MIN_ITERATION_COUNT(2)`). Zero resemblance to
-    `attention_bf16`'s zero-`mmul` scalar fallback — the 146 GOPS is not a coding bug of that
-    kind. Placement (`Tile(0,3)`, `Tile(0,4)`, `Tile(0,5)` + one more) already spans 4 cores
-    of one column, so the "~7% of one column's peak" framing was already accounting for
-    multi-core, not comparing against a single core. The remaining gap reads as structural —
-    dispatch overhead and short pipeline fill/drain at width 32 — not something a kernel
-    rewrite trivially fixes.
+    core) needs five buffers plus a 2560-byte stack against 64 KB of AIE2 tile memory —
+    `'aie.tile' op allocated buffers exceeded available memory`, bank-aware *and* basic
+    sequential allocation, 8 error lines across the 4 shapes. But four of those five
+    buffers (`outOFL2L3`×2, `skip_buf`×2) scale as `w`×256 B; the fifth, `wts_buf_02`
+    (the 1×1+skip weights), is sized by channels only (`input_channels/8 *
+    output_channels` = constant 16384 B) and does not grow with `w` at all. The original
+    "5×w×256 B" framing held exactly at `w`=64 only because 64×256 happens to equal that
+    fixed 16384 B by coincidence — it overstated the ceiling everywhere else. ResNet50's
+    real conv2_x (56×56) still cannot compile — the corrected ceiling of 44 is short of
+    56 — so the practical conclusion is unchanged, but the stated mechanism and the exact
+    ceiling value were both off.
+  - **`conv2dk1.cc`/`conv2dk3.cc` read (2026-09-07): they vectorize correctly (use
+    `aie::mmul`, not a scalar fallback), ruling out the attention-kernel failure mode —
+    but the "8 live pipelined accumulators" read below was wrong; corrected 2026-09-07.**
+    Both `conv2dk1_i8_vector` and `conv2dk3_i8_vector` (the paths `bottleneck.py` actually
+    compiles — its `kernels/conv.py` wrapper passes no `-DSCALAR`) use
+    `aie::mmul<4,8,8,int8,int8>`. Zero resemblance to `attention_bf16`'s zero-`mmul` scalar
+    fallback — the 146 GOPS is not a coding bug of *that* kind. Placement (`Tile(0,3)`,
+    `Tile(0,4)`, `Tile(0,5)` + one more) already spans 4 cores of one column, so the "~7%
+    of one column's peak" framing was already accounting for multi-core, not comparing
+    against a single core. **What was wrong:** the "8 live pipelined accumulators" were not
+    a performance-only design choice — AIE2 has only 6 hardware accumulator registers, so
+    8 concurrent accumulators is itself the correctness bug fixed below (register
+    spill/pointer corruption in conv2dk3, dead remainder code in conv2dk1/conv2dk1_skip).
+    The throughput gap at width 32 (where the bug never fired) reads as structural —
+    dispatch overhead and short pipeline fill/drain — not something a kernel rewrite
+    trivially fixes; but "8 accumulators is fine, it's just slow" was not a safe reading
+    at any other width, which the fix below confirms.
   - **`conv2dk3_i8_vector` hardcodes `const int iw = 32;` (both variants, lines 449 and
     904) and ignores its own `input_width` parameter — VERIFIED as a real stride bug, not
     dead code.** `iw` is not cosmetic: it is the actual line-advance stride for `line[i] +=
@@ -818,6 +833,36 @@ caches.
     - **Independently reproduced** in a fresh session (Desktop 2, same day): env rebuilt
       from `iron_env.ps1` by hand, `~/.npu/cache` cleared, `test_width.py` rerun end to
       end — same bit-exact result at all five widths. Log: `results/aie/conv2dk3_widthfix_npu.log`.
+  - **Correction to the "they vectorize correctly" read above: `conv2dk1_i8_vector`/
+    `conv2dk1_ui8_vector`/`conv2dk1_skip_i8_vector` had the same width restriction as
+    conv2dk3, and worse — a dead remainder path, not a corrupted one (2026-09-07).**
+    Testing intermediate widths on the already-fixed `conv2dk3` found `bottleneck.py`
+    compiles fine at `tensor_w`=36/40/44 (the "5×w×256 B" ceiling above was itself an
+    approximation — one of Tile(0,4)'s five buffers, `wts_buf_02`, is sized by channels,
+    not width, so it doesn't grow with `w`) but produces wrong output at every one of
+    them. Root cause: `conv2dk1_i8_vector`/`conv2dk1_ui8_vector` hardcode
+    `iw_32_rem = 0` (a real value, never computed from `input_width`), and
+    `conv2dk1_skip_i8_vector`'s remainder path was never implemented at all — a
+    commented-out stub. Both guarded only by `assert((input_width/4)%8==0)`, compiled
+    out in the release `aiecc` build. Any `input_width` not a multiple of 32 silently
+    dropped its remainder columns from output (and, in the skip case, from the residual
+    add too) — never exercised before because every prior run used `tensor_w`=32 exactly.
+    **Fixed**: all three kernels rewritten to walk `input_width` in blocks of N≤4
+    4-pixel chunks addressed directly from base pointers (index arithmetic, not
+    incremental pointer state — the class of bug conv2dk3's aligned block had),
+    keeping live accumulators within AIE2's 6 hardware registers (upstream used 8), and
+    `input_width` made a compile-time constant via `-DINPUT_WIDTH` for the same reason
+    conv2dk3 needed it. `conv2dk1_skip_ui8_vector` (the uint8-skip twin, not exercised
+    by `bottleneck.py`) was left unfixed and is flagged, not touched. **Verified
+    end-to-end** through the actual `bottleneck.py` design via
+    `kernels/bottleneck_sweep/sweep.py`'s torch-golden gate: 32×32/36/40/44 all `ok=yes`
+    (previously NO at 36/40/44). The *real* ceiling for this channel config (256/64/64/256)
+    is `tensor_w`=44, not 32 — 45 fails only because it isn't a multiple of 4 (VMAC's
+    fundamental granularity, a real hardware limit), and 46/48 exceed Tile(0,4)'s 64 KB
+    (also real). This does **not** reopen the CLOSED throughput verdict above (99.1 GOPS
+    at w=44, still far below the CPU's 819–1094) and does **not** reach ResNet50's actual
+    56×56 shape — that still needs Tile(0,4)'s buffering restructured, not just this
+    kernel fix. Log: `results/aie/bottleneck_widthfix_npu.log`.
   - **Tooling:** `aiecc` needs `xclbinutil`, which is NOT in `ironenv/Scripts`. Put the XRT
     SDK directory (`/c/Xilinx/XRT/xrt_sdk/xrt`) on PATH too, or the build dies at the final
     link with `tool 'xclbinutil' not found`.

@@ -1,0 +1,75 @@
+conv2dk1 / conv2dk1_skip width-32 restriction fix, verified end to end through
+mlir-aie's actual ml/bottleneck design (the design results/aie/bottleneck_spatial_sweep_npu.log
+found capped at tensor_w=32).
+Desktop 2 (Ryzen 7 8700G / Phoenix XDNA1), 2026-09-07, one sitting.
+
+  kernels/bottleneck_sweep/sweep.py --shapes 32x32,32x36,32x40,32x44,32x48,32x45,32x46
+  (mlir-aie ironenv, python 3.13, ~.npu/cache cleared before the run)
+
+WHAT WAS FOUND
+==============
+The previously-recorded "tensor_w=32 is a hard ceiling" (bottleneck_spatial_sweep_npu.log,
+docs/DECISIONS.md) was checked only at w=56/64/128 -- nothing between 33 and 48 was
+tried, and the "5 x w*256 B" budget it used for the ceiling was itself an approximation:
+one of the five Tile(0,4) buffers (wts_buf_02, the 1x1+skip weights) is sized by channels
+(input_channels/8 * output_channels = constant 16384 B), not by width, so it does not
+grow with w. Testing intermediate widths on the already-fixed conv2dk3 kernel found the
+design DOES compile at w=36/40/44 -- but produces wrong output at every one of them.
+
+Root cause (different bug, different file than conv2dk3's): conv2dk1_i8_vector,
+conv2dk1_ui8_vector and conv2dk1_skip_i8_vector -- the 1x1 and 1x1+skip kernels
+bottleneck.py runs at full tensor_w -- hardcode `iw_32_rem = 0` (conv2dk1) or never
+implement a remainder path at all (conv2dk1_skip, a commented-out stub), each guarded
+only by an `assert((input_width/4)%8==0)` that is compiled out in the release aiecc
+build. Any input_width not a multiple of 32 silently dropped its remainder columns --
+not a numeric bug, dead code that was never exercised because every prior run used
+tensor_w=32 exactly.
+
+THE FIX
+=======
+Rewrote all three vector kernels (conv2dk1_i8_vector, conv2dk1_ui8_vector,
+conv2dk1_skip_i8_vector) to walk input_width in blocks of N<=4 4-pixel chunks,
+addressed directly from the base input/output/skip/weight pointers (index arithmetic,
+not incremental pointer state -- the class of bug conv2dk3's aligned block had).
+Accumulators stay within AIE2's 6 hardware registers (upstream used 8 concurrently).
+input_width also made a true compile-time constant via -DINPUT_WIDTH (same reason
+conv2dk3 needed it -- see docs/DECISIONS.md). conv2dk1_skip_ui8_vector (the twin for
+uint8 skip, not exercised by bottleneck.py) was left unfixed and is flagged as a
+known-equivalent bug, not touched.
+
+VERIFICATION -- kernels/bottleneck_sweep/sweep.py, torch-golden correctness gate
+==================================================================================
+      HxW     MFLOP   wall ms     hw ms   host ms   hw GOPS  e2e GOPS  ok
+----------------------------------------------------------------------------------
+    32x32    142.61    2.1973    1.4892    0.7081      95.8      64.9  yes
+    32x36    160.43    2.3154    1.6921    0.6233      94.8      69.3  yes
+    32x40    178.26    2.3788    1.8151    0.5637      98.2      74.9  yes
+    32x44    196.08    2.7220    1.9796    0.7424      99.1      72.0  yes
+    32x45    200.54    2.5244    1.9646    0.5598     102.1      79.4  NO (compiled;
+                                                    45 is not a multiple of 4 -- VMAC's
+                                                    fundamental granularity, an inherent
+                                                    hardware limit, not a fix bug)
+    32x46      --     RuntimeError: [aiecc] Compilation failed (L1 ceiling)
+    32x48      --     RuntimeError: [aiecc] Compilation failed (L1 ceiling)
+
+FIT (32,36,40,44 only): intercept 229.6 us, marginal GOPS 111.8, r^2 0.99136.
+
+WHAT THIS CHANGES AND WHAT IT DOES NOT
+=======================================
+- The real L1 ceiling for this channel config (256/64/64/256) is tensor_w=44, not 32.
+  36/40/44 now verify bit-correct against the torch golden through the full chained
+  design (conv1 -> conv3x3 split-worker -> conv1+skip), where the same shapes failed
+  correctness before this fix. 45 and above (46, 48) either violate the 4-pixel VMAC
+  granularity or exceed Tile(0,4)'s 64 KB local memory -- both real hardware limits,
+  not fixable by more kernel engineering.
+- Does NOT reopen the CLOSED verdict in bottleneck_spatial_sweep_npu.log: hw GOPS at
+  w=44 (99.1) is still far below the CPU's measured 819-1094 GOPS int8 rate. The op
+  class still loses on this chip; what changed is the addressable width range, not the
+  throughput gap.
+- Does NOT unlock ResNet50's real 56x56 conv2_x shape -- 56 is still past the 44-wide
+  ceiling. Reaching 56 would need restructuring Tile(0,4)'s buffering (e.g. dropping
+  double-buffering on one of the five buffers, or moving the skip-add off that tile),
+  not just this kernel fix.
+
+Local mlir-aie checkout only (wheel + clone copies, both patched and kept in sync);
+never upstreamed, per project convention (see conv2dk3's own fix).
