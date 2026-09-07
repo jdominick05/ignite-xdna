@@ -54,7 +54,7 @@ columns as brackets, not as a choice.
 
 | Resource | Value | Tag and evidence |
 |---|---|---|
-| Data memory | 64 KB, 4 banks | SPEC: `device.yaml` `core_data_memory: 64`, `core_num_banks: 4`; target model `getLocalMemorySize() = 0x10000`. MEASURED as a wall: every `bottleneck.py` width past 44 and every bf16 GEMM tile past `m=64,n=32`/f32 dies with `allocated buffers exceeded available memory` (`results/aie/bottleneck_spatial_sweep_npu.log`, `results/aie/bf16_matmul_ffn_shape_variants_npu.log`). |
+| Data memory | 64 KB, 4 banks | SPEC: `device.yaml` `core_data_memory: 64`, `core_num_banks: 4`; target model `getLocalMemorySize() = 0x10000`. MEASURED as a wall: every `bottleneck.py` width past 44 and every bf16 GEMM tile past `m=64,n=32`/f32 dies with `allocated buffers exceeded available memory` (`results/aie/bottleneck_spatial_sweep_npu.log`, `results/aie/bf16_matmul_ffn_shape_variants_npu.log`). The bf16 `n=64` tile needs 68,864 B — over by exactly the 3,328 B stack — while int8's fits at 52,480 B (`results/aie/int8_matmul_sweep_npu.log`). |
 | Program memory | 16 KB | SPEC: `device.yaml` `core_program_memory: 16`. |
 | MACs per cycle | int8×int8 **256**; bf16×bf16 **128**; int16×int8 **128** | SPEC: `device.yaml` AIE2 `macs_per_cycle`. |
 | Adds per cycle | int8, int4: 64; bf16, int16: 32 | SPEC: `device.yaml` AIE2 `adds_per_cycle`. |
@@ -250,7 +250,13 @@ the core can absorb 0.0625 B/MAC. DERIVED:
 | 32×32 | 0.125 | 64 | 50% | — |
 | 16×64 (forced at N=11008) | 0.156 | 51.2 | 40% | 909.97 GFLOPS — 0.51× the default tile's 1793 at the same K |
 | 16×128 (Mistral N=14336) | 0.141 | 56.9 | 44% | 1454.37 GFLOPS |
-| 64×64 | 0.0625 | 128 | **100%** | never — its double-buffered f32 C tile alone is 2 × 16 KB, and the whole set (A 8 KB, B 8 KB, C 16 KB, ×2) is exactly 64 KB with no stack; the `n=64` attempt failed on L1 (`..._ffn_shape_variants_npu.log`) |
+| 64×64 | 0.0625 | 128 | **100%** | never in bf16 — its double-buffered f32 C tile alone is 2 × 16 KB, and the whole set (A 8 KB, B 8 KB, C 16 KB, ×2) is exactly 64 KB with no stack; the `n=64` attempt failed on L1 (`..._ffn_shape_variants_npu.log`), and a second attempt measured the miss at exactly the 3,328 B stack (`results/aie/int8_matmul_sweep_npu.log`). **Reached in int8**, whose operands are half the bytes (52,480 B with stack): 4447.97–4607.05 GOPS at the 2048-class shapes, 1.9× the 64×32 int8 tile, bit-exact |
+
+The int8 column of the same table is the bf16 one at half the bytes per MAC (0.0469 at
+64×32, 0.0313 at 64×64) against the same 8 B/cycle and 256 MAC/cycle, so 64×64 is exactly
+input-balanced for int8 — and MEASURED it goes 2387.01 → 4607.05 GOPS at 4096×2048×2048,
+18% → 35% of the 16-core int8 peak at 1.6 GHz (`results/aie/int8_matmul_sweep_npu.log`).
+The tile decides whether the core is fed, at both dtypes.
 
 Two readings. First, the default tile is input-bound at two thirds of peak *before* any
 other inefficiency, and the measured 27–32% (1.6 GHz) sits at half of that bound — so
@@ -425,7 +431,10 @@ Reuses: `kernels/bottleneck_sweep/`, the local `conv2dk1`/`conv2dk3` width fixes
 
 **K2. bf16 GEMM to its input-bound roofline.**
 Bar: 27–32% of peak today (2.4) against a 67% bound at the default tile and 100% at 64×64
-(3.1). Physical basis: 3.1's three levers — C accumulated in registers or across the
+(3.1). The 64×64 lever is already measured on int8, whose half-size operands fit it in L1:
+1.9× over 64×32 with the generic `whole_array.py` CLI, no design work
+(`results/aie/int8_matmul_sweep_npu.log`); bf16 needs the 16 KB a single-buffered C FIFO
+would free before it can take the same tile. Physical basis: 3.1's three levers — C accumulated in registers or across the
 cascade instead of read-modify-written in L1 every k-step; A or B shared between adjacent
 cores through neighbour memory so one stream feeds two; and shape-specific DMA
 decomposition through the mem tile for widths like 11008 where the shim BD's 20-bit step
