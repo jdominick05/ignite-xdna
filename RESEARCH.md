@@ -1245,7 +1245,8 @@ sections above.
 **Closed.**
 
 - **`pipelines/yolov8n-pose` end to end on the NPU.** 1015/1025 nodes, 9.8 ms/frame,
-  XINT8 costs 17.8 points of OKS mAP@50-95 — and AdaRound for pose is still untried.
+  XINT8 costs 17.2 points of OKS mAP@50-95 on the full 5000-image set — AdaRound for pose
+  is measured separately below.
   [Working](docs/BENCHMARKS.md#yolov8n-pose-end-to-end-on-the-npu).
 - **AdaRound for YOLOv8s and YOLOv8m at 640×640.** Not RAM-blocked after all, and it
   barely helps either one: +2.58 mAP at s, +1.83 at m, against classification's ~90%

@@ -1041,7 +1041,7 @@ boundary node shifts device near the peak rather than a clean scaling story. **2
 best measured point on the speed/accuracy frontier for this checkpoint** — beating the
 default 224² on both axes at once, and beating every size tried above it on both axes too.
 
-**Does AdaRound change the curve?** AdaRound at 224² reaches 79.80% top-1 / 94.60%
+**Does AdaRound change the curve?** AdaRound at 224² reaches 79.80% top-1 / 92.50%
 top-5 (5.27 ms). Testing AdaRound on 288² (`models/resnet50_r288_xint8_adaround.onnx`,
 `results/res/run_resnet50_r288_adaround_npu.log`, 1000 eval images) yields:
 * **78.10% top-1** (+6.60% over plain XINT8's 71.50%)
@@ -2106,4 +2106,15 @@ To isolate the cause, `tools/bench_quant_threads.py` microbenchmarks AdaRound Fa
 - **No formal test suite.** Verification here is empirical (`compileall` + import checks
   as a syntax gate, then real pipeline runs read from `results/`) rather than unit tests
   — there's no fixture NPU to test against in CI.
+- **`scripts/lib.sh` now exports `OMP_NUM_THREADS=8` (etc.) for every script that sources
+  it, not just quantization.** Added 2026-09-07 to fix FastFinetune's thread-thrashing on
+  tiny per-layer batches (see "Quantization CPU threading" above), but the export has no
+  scope guard, so it also pins CPU-EP inference in `4_run.py`/eval scripts run through
+  `scripts/*.sh`. Measured effect: yolov8m's FP32 CPU baseline dropped from 204.38 ms
+  (`results/wide/yolo_m_fp32_cpu.log`, pre-change, unconstrained threads) to 144.12 ms
+  (`results/bench/lat_yolov8m_cpu.log`, post-change, 8 physical cores) on the same
+  8700G — an 8-core pin beating 16 unconstrained threads for CPU inference too, not only
+  FastFinetune. Any CPU latency number measured before 2026-09-07 was not pinned; any
+  measured after, through a `scripts/*.sh` wrapper, is. Don't diff a pre- and post-change
+  CPU number as if the only variable were the model.
 
