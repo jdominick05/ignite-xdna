@@ -1,0 +1,131 @@
+Follow-up to aiecompiler_hostlib_fixed.log, which stopped at:
+  ERROR: [aiecompiler 77-22139] Could not find the
+  C:/Users/<user>/miniforge3/envs/ryzen-ai-1.7.1/Lib/site-packages/lib/win64.o/physical_device.dll
+  file
+after the hostlib wall cleared and the compiler got as far as
+"Reading logical device aie2_5x4_device". This log answers two questions the
+prior one left open: is physical_device.dll a literal filename or a
+constructed/derivable one, and does any other AMD distribution on this
+machine ship it.
+
+Tooling added this session (neither was already installed):
+  winget install --id 7zip.7zip --silent ...
+  winget install --id activescott.lessmsi --silent ...
+7-Zip opens the installer's PE+7z-SFX and lists/extracts its cabinets.
+lessmsi is MSI-aware -- it reads the MSI's own File table to map the
+opaque per-file names actually stored in each cabinet (e.g.
+"flsulA7d1XEwok7Mk7kJOCruvai0_4") back to real filenames, and can extract
+without running any install action (no services started, no registry
+written, unlike a real msiexec install or the .exe's own /install path).
+
+--- 1. Is "physical_device.dll" a literal name or built from a format string? ---
+
+Binary-scanned all three copies of aiecompiler_client.dll present in the
+ryzen-ai-1.7.1 pip env for ASCII runs of >=4 chars around every occurrence
+of "physical_device" / "logical_device" (case-insensitive):
+  Lib/site-packages/lib/win64.o/aiecompiler_client.dll            (132,767,824 bytes)
+  Lib/site-packages/vaie_cpplus/lib/win64.o/aiecompiler_client.dll (10,092,624 bytes)
+  Lib/site-packages/onnxruntime/capi/aiecompiler_client.dll        (same content as vaie_cpplus's copy)
+
+First DLL, offset 0x763711e, one string-table run:
+  ... | fildll | guidance_summary.dll | Dbghelp.dll | udm_api.dll |
+  platform_device.dll | physical_device.dll | LLVMXLOptPreProc.dll | --dll | ...
+
+Second and third DLLs (identical at this offset), offset 0x800370:
+  The logical Device name %s is not supported. | physical_device.dll |
+  createPhysicalDevice | setupComMsgMgr | The function 'createPhysicalDevice'
+  is not found in the library. Please ...
+
+Conclusion: "physical_device.dll" is a literal, hardcoded filename -- it
+appears as a fixed string next to the runtime's own error messages, not
+built via a %s pattern the way "The logical Device name %s is not
+supported" is. The compiler expects to LoadLibrary this exact name and call
+an exported createPhysicalDevice() from it. This is not something a
+differently-named file already on disk could satisfy.
+
+It also isn't alone. The same string table names a small family of
+"physical backend" DLLs the compiler expects: physical_device.dll,
+platform_device.dll, guidance_summary.dll, udm_api.dll. Checked all three
+for existence anywhere in the ryzen-ai-1.7.1 pip env:
+  find ... -iname platform_device.dll   -> no match
+  find ... -iname guidance_summary.dll  -> no match
+  find ... -iname udm_api.dll           -> no match
+All three are absent, same as physical_device.dll. This isn't one missing
+file; it's an entire class of physical-implementation backend components
+that the redistributable SDK doesn't ship.
+
+--- 2. Does the offline installer or the 1.8.0 SDK ship it instead? ---
+
+C:\Users\<user>\Downloads\Downloads\ryzen-ai-lt-1.7.1.exe (2,749,950,720 bytes)
+and ryzen-ai-1.8.0.exe (3,548,445,464 bytes) are full offline installers
+already present on this machine (not downloaded for this investigation).
+Both are a thin PE stub wrapping a solid 7z archive containing one .msi
+plus ~20-22 numbered .cab files (the .msi's own File/Media tables map
+files to cabs; cab entries use MSI's opaque per-file names, not real
+filenames -- hence needing lessmsi, not just 7z, to identify anything).
+
+ryzen-ai-lt-1.7.1.exe: extracted the SFX (2.7 GB, all 22 cabs) and ran
+lessmsi's full extraction of ryzen-ai-lt-1.7.1.msi (1,961 files). The MSI
+turns out to be nothing but the same 21 wheels this pip env already has,
+byte-for-byte -- same version strings (vaie_overlay-1.7.1, vaie_cpplus-
+1.7.1, device_essentials_strx_overlay-1.7.1, amd_quark-0.11rc1, etc.).
+Opened vaie_overlay-1.7.1 and vaie_cpplus-1.7.1 (the two wheels that carry
+aiecompiler_client.dll in the pip env) via `7z l` on the extracted .whl
+files directly: no physical_device.dll, no platform_device.dll, no
+guidance_summary.dll, no udm_api.dll in either. The offline installer is
+not a different, more complete package -- it installs the identical pip
+wheels via MSI instead of pip.
+
+Also opened device_essentials_strx_overlay-1.7.1's own RECORD (dist-info
+manifest, no extraction needed -- this wheel is already installed in the
+pip env at Lib/site-packages/src/device_essentials_strx_overlay/): 189
+files, all under data/FeatureStore/ and data/hierdb/optstrategy/*.pb (an
+ML-based place-and-route congestion/timing feature store -- "FeatureStore",
+"hierdb", "congestion_features.json", per-strategy model_X1.pb files) plus
+the one entry already known from notes_aiecompiler_part_db.log:
+  data/parts/xilinx/xclbin/strx/base.xclbin
+No physical_device.dll and no phx equivalent of this package exists in the
+1.7.1 wheel set at all (grepped every .whl name from the MSI's File table;
+only "..._strx_overlay" appears, no "..._phx_overlay"). So the per-chip
+physical-implementation DATA (feature store, congestion model) is shipped
+for Strix only -- consistent with data/parts/xilinx/xclbin/ having only a
+strx/ subdirectory (notes_aiecompiler_part_db.log) -- but even for Strix,
+the physical_device.dll BACKEND CODE that would consume this data isn't
+shipped either. Data and code are both incomplete, in different ways.
+
+ryzen-ai-1.8.0.exe: extracted just the .msi (942 KB; this is the first
+file in the solid 7z block so 7z didn't need to touch the 3.5 GB of
+cabs behind it) and read its File table with lessmsi. The wheel set is
+different from and non-overlapping with 1.7.1's aiecompiler-relevant
+packages: aianalyzer, amd_atom, cardano, flexml (not flexml_lite), flexmlrt,
+llvm_aie (not llvm_aie_lightweight), model_generate, onnxruntime_*,
+ryzenai_dynamic_dispatch, ryzenai_onnx_utils, vaitrace, voe, waic --
+1.8.0 (grep -i "physical_device"
+against the full File table: no match; the search is conclusive without
+needing the cabs, since the File table lists every filename regardless of
+which cab holds it).
+
+--- Conclusion ---
+
+physical_device.dll (and its siblings platform_device.dll,
+guidance_summary.dll, udm_api.dll) are real, hardcoded, expected filenames
+-- not a derivable name a differently-named file could satisfy -- and they
+are absent from every AMD distribution channel checked on this machine:
+the ryzen-ai-1.7.1 pip package, the whole C: drive as loose files, the
+ryzen-ai-lt-1.7.1.exe offline installer (byte-identical wheel content to
+pip), and the ryzen-ai-1.8.0.exe offline installer (doesn't ship the
+aiecompiler-bringup packages at all). Scoped claim, per CLAUDE.md: this is
+"neither installer available on this machine, at either SDK version" --
+not "no AMD distribution anywhere ships it." A full Vitis/Vivado install,
+or a direct request to AMD, are the only remaining avenues, and both are
+out of scope for this pass.
+
+The shape of what's missing -- a physical place-and-route/timing backend,
+paired with a per-chip ML congestion feature store that itself only covers
+Strix in this SDK -- reads as a deliberate boundary in AMD's redistributable
+packaging: pre-built xclbin overlays (base.xclbin, 1x4.xclbin, 4x4.xclbin)
+ship to end users; the tool to build new ones from a hand-written ADF graph
+for --target=hw does not. This closes the third and (for this pass) final
+wall in the custom-kernel bring-up investigation.
+
+Machine: Desktop 2 / Phoenix.

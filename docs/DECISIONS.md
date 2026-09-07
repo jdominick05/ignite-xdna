@@ -311,7 +311,23 @@
   even more precisely than the part-string name alone did). Stops one wall later:
   `lib/win64.o/physical_device.dll` doesn't exist anywhere on this machine, checked via a
   full `C:` drive search, not just the pip env. See
-  `results/aie/aiecompiler_hostlib_fixed.log`.
+  `results/aie/aiecompiler_hostlib_fixed.log`. **Update:** confirmed this is a genuine
+  packaging gap, not a fixable name/path issue. Binary-scanning `aiecompiler_client.dll`
+  (all three copies in the pip env) shows `physical_device.dll` is a literal hardcoded
+  filename the compiler `LoadLibrary`s and calls `createPhysicalDevice()` from — not
+  derivable — and it's one of four sibling DLLs the same string table names
+  (`platform_device.dll`, `guidance_summary.dll`, `udm_api.dll`), all equally absent.
+  Opened both full offline installers already on this machine (`ryzen-ai-lt-1.7.1.exe`,
+  `ryzen-ai-1.8.0.exe`, via `7z`/`lessmsi` — installed both tools with `winget` this
+  session) rather than only the pip package: 1.7.1's installer contains byte-identical
+  wheels to pip (no extra content); 1.8.0's installer doesn't ship the `vaie_overlay`/
+  `vaie_cpplus` packages at all. `device_essentials_strx_overlay-1.7.1` (source of
+  `strx/base.xclbin`) ships a large ML place-and-route congestion feature store for
+  Strix only — no Phoenix equivalent in 1.7.1 — but still no `physical_device.dll`, even
+  for Strix. Conclusion: AMD's redistributable packaging draws its boundary at pre-built
+  xclbin overlays; the physical-implementation backend to build a new one from a
+  hand-written ADF graph isn't included, on either SDK version available here. See
+  `results/aie/aiecompiler_physical_device_missing.log`.
 
 ## The YOLOv8 partitioning failure (resolved)
 

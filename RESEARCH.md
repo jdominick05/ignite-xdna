@@ -718,17 +718,34 @@ been closed:
   strongest confirmation yet that `xc10AIE24x5-die-1LP-e-S-es1` is genuinely Phoenix,
   since "aie2_5x4" names exactly the architecture and 5-column×4-row physical layout the
   pre-existing, independent `xrt-smi` measurement already established for this chip.
-  **Third wall: `physical_device.dll` does not exist anywhere on this machine.** One step
-  past device derivation, `aiecompiler` needs `lib/win64.o/physical_device.dll` (the
-  presumed place-and-route/timing counterpart to the "logical device" topology that just
-  resolved fine) and can't find it — checked the whole `ryzen-ai-1.7.1` env and then the
-  entire `C:` drive (`Get-ChildItem -Recurse -Filter physical_device.dll`): zero matches
-  anywhere. Unlike the first two walls, this isn't fixable from data or tooling already on
-  this machine — it would mean acquiring a different, larger AMD distribution on spec, out
-  of scope for this pass. **This is where the bring-up stops for now: two walls
-  solved in sequence (device-model string, host C++ toolchain), a third reached that is a
-  missing file rather than a missing setting — `--target=hw` on this specific pip
-  packaging is closed until that file is found or supplied from elsewhere.**
+  **Third wall: `physical_device.dll` is a real, hardcoded, missing file — not one AMD
+  distribution on this machine ships it.** One step past device derivation, `aiecompiler`
+  needs `lib/win64.o/physical_device.dll` and can't find it. Binary-scanning all three
+  copies of `aiecompiler_client.dll` in the pip env confirms this is a literal filename
+  the compiler `LoadLibrary`s and calls an exported `createPhysicalDevice()` from — not a
+  `%s`-templated name a differently-named file could satisfy — and it sits beside three
+  sibling DLLs the same table expects (`platform_device.dll`, `guidance_summary.dll`,
+  `udm_api.dll`), all of which are equally absent. Checked the whole `C:` drive (zero
+  matches), then went looking inside the two full offline installers already on this
+  machine (`ryzen-ai-lt-1.7.1.exe`, `ryzen-ai-1.8.0.exe` — each a 7z-SFX wrapping an MSI
+  plus ~20 cabs; opened with `7z`/`lessmsi`, the latter needed because MSI cabinets store
+  files under opaque per-file IDs, not real names). The 1.7.1 installer turned out to
+  install the *exact same pip wheels*, byte-for-byte — no extra content. The 1.8.0
+  installer doesn't even ship the `vaie_overlay`/`vaie_cpplus` packages that carry
+  `aiecompiler_client.dll` at all. Also opened `device_essentials_strx_overlay-1.7.1`
+  (the package that supplies `strx/base.xclbin`): it ships a large ML-based
+  place-and-route congestion feature store (`data/FeatureStore/`, `data/hierdb/
+  optstrategy/*.pb`) for Strix only — no Phoenix equivalent exists in 1.7.1 at all — but
+  even for Strix it contains no `physical_device.dll`. The data and the code that would
+  consume it are both incomplete, in different ways. This reads as a deliberate boundary
+  in AMD's redistributable packaging: pre-built xclbin overlays ship to end users; the
+  physical-implementation backend needed to build a new one from a hand-written ADF
+  graph does not. **This is where the bring-up stops for now: two walls solved in
+  sequence (device-model string, host C++ toolchain), a third reached that neither
+  installer on this machine, at either SDK version, can supply — `--target=hw` on this
+  packaging is closed until that component is found or supplied from elsewhere (a full
+  Vitis/Vivado install, or a direct request to AMD, are the only remaining avenues, both
+  out of scope for this pass).** See `results/aie/aiecompiler_physical_device_missing.log`.
 
 ## How to read the rest of this repository
 
