@@ -386,11 +386,21 @@ else. Per call, kernel NPU time vs the profiled CPU cost of the same node
 | L = 18816 | 11 | 233 μs | 262 μs | CPU, by 28 μs |
 | L = 9408 | 5 | 118 μs | not run | CPU (kernel floor is ~200 μs) |
 
-33 of the 49 nodes win, worth ~19.4 ms of the op's 42.37 ms per inference on paper.
-What is **not** measured: the whole-model latency with the kernel spliced in — it has
-to be a second process (the XRT Python binding is built against Python 3.13, the EP's
-env is 3.12), and that handoff cost, plus the top-1 effect of bf16 in 33 nodes, is the
-next measurement, not an assumption.
+33 of the 49 nodes win, worth ~19.4 ms of the op's 42.37 ms per inference — **at the
+kernel alone**, single-process. Splicing it into the real model needs a second OS
+process (the XRT Python binding is built against Python 3.13, the EP's env is 3.12,
+a hard ABI wall), and that handoff turns out to be the whole story: measuring its
+floor (`results/aie/groupnorm_bf16_handoff_floor_npu.log` — shared-memory ping-pong
+of the real byte volume plus fp32/bf16 conversion, no actual NPU dispatch, so this
+can only understate the real cost) found **789 μs-23.6 ms per call depending on
+shape, which erases every one of the 33 wins above** — 0/49 nodes survive a real
+splice. ~90% of the floor at the largest shape is the fp32/bf16 conversion itself,
+not the shared-memory transfer, and closing that gap wouldn't be enough either: the
+non-conversion residual alone still exceeds every shape's margin except a near-wash
+at L=301056. The per-node kernel numbers above stand as measured; the practical
+payoff does not, absent an unbuilt cross-node batching scheme to amortize the
+per-call floor. The full model's top-1 with bf16 in these nodes is now moot until
+that scheme exists.
 
 ### Input resolution: the fixed cost of running the graph at all
 
@@ -1401,7 +1411,10 @@ That path has since produced a kernel for this repo's own gap: a bf16 GroupNorm(
 (`kernels/groupnorm_bf16/`) standing in for the `InstanceNormalization` that
 `resnetv2_50x3_bit` leaves on CPU, measured on the real node tensors at 1535 μs vs the
 CPU's 3472 μs per call for the largest shape, and a win on 4 of its 6 shapes (33 of 49
-nodes) — see "Pushing width further" below and `results/aie/groupnorm_bf16_kernel_npu.log`.
+nodes) — but a follow-up measurement of the two-process handoff a real splice needs
+found that floor alone (789 μs-23.6 ms/call) erases every one of those wins; see
+"Pushing width further" below and `results/aie/groupnorm_bf16_kernel_npu.log` /
+`results/aie/groupnorm_bf16_handoff_floor_npu.log`.
 
 **Silent CPU fallback is the failure mode to watch for.** The `[Vitis AI EP]` banner,
 `Target architecture:`, `Compile done.` and the operator table print **only during

@@ -920,10 +920,29 @@ been closed:
   narrow measured kernel win because the real overhead is smaller. L=18816 loses by
   28us/call and L=9408 sits under the ~200us floor, both staying on CPU. Net: 33 of the
   49 nodes are now measured wins, ~19.4ms of the op's 42.37ms per inference (the
-  feasibility log projected 22 nodes and ~14ms). Not yet measured, and deliberately not
-  assumed: the two-process handoff cost (the harness's own host-side gap is ~0.45ms per
-  call, enough to erase the narrowest wins if it carried over) and the full model's
-  top-1 with bf16 in these 33 nodes. `results/aie/groupnorm_bf16_kernel_npu.log`.
+  feasibility log projected 22 nodes and ~14ms). `results/aie/groupnorm_bf16_kernel_npu.log`.
+- **Follow-up: the handoff cost that erases it.** The kernel wins above are single-
+  process (`iron.jit`'s own buffer marshaling only). A real splice needs two OS
+  processes — `resnet_env17`'s python 3.12 can never load pyxrt (a hard ABI wall
+  against python313.dll, not a PATH issue), so the EP session and the IRON kernel
+  can't share an interpreter. Measured the floor of that handoff — shared-memory
+  ping-pong of the real per-shape byte volume plus fp32/bf16 conversion, no
+  onnxruntime, no actual NPU dispatch (an identity copy stands in for the kernel) —
+  at all six node shapes: the floor alone is **789us-23.6ms/call**, and every single
+  shape flips. 0 of the 49 nodes survive splicing once this floor is added, down
+  from the 33/49 measured as kernel-alone wins. The floor is conversion-bound, not
+  transfer-bound (an isolated timing at L=301056 found ~90% of the 23.6ms is the
+  fp32<->bf16 cast itself, using `ml_dtypes` — confirmed installed in
+  `resnet_env17`, previously unknown — which measured ~2.5x faster than a
+  hand-rolled bit-trick conversion); the residual, non-conversion cost still
+  exceeds every shape's kernel-vs-CPU margin except a near-wash at L=301056, so a
+  faster conversion alone would not rescue this. The per-node kernel wins stand as
+  measured; the practical splice does not survive contact with the real two-process
+  pipeline this hardware/toolchain split forces, and no batching-across-nodes
+  design has been attempted to change that arithmetic. Not yet measured: the full
+  model's top-1 with bf16 in these nodes (now moot unless a batched splice is
+  built and shown to change the handoff numbers above).
+  `results/aie/groupnorm_bf16_handoff_floor_npu.log`.
 
 ## How to read the rest of this repository
 

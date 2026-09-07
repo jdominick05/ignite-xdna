@@ -22,9 +22,11 @@ array program) into `~/.npu/cache/<hash>/`; later runs of the same shape hit the
 
 | Kernel | Op it replaces | Status |
 |---|---|---|
-| `groupnorm_bf16/` | `InstanceNormalization` (really `GroupNorm(32)`) in `resnetv2_50x3_xint8.onnx`, the op that falls to CPU on that model | PASS on real node tensors at L = 75264 / 150528 / 301056; `results/aie/groupnorm_bf16_kernel_npu.log` |
+| `groupnorm_bf16/` | `InstanceNormalization` (really `GroupNorm(32)`) in `resnetv2_50x3_xint8.onnx`, the op that falls to CPU on that model | Kernel alone beats CPU on 33/49 nodes (`results/aie/groupnorm_bf16_kernel_npu.log`), but the measured two-process handoff floor erases the win at every shape -- 0/49 once spliced (`results/aie/groupnorm_bf16_handoff_floor_npu.log`) |
 
-`groupnorm_bf16/extract_golden.py` is the one script here that runs in `resnet_env17`:
-it pulls a real node's input, params and ORT's own CPU output out of the model into
-`data/golden/` (git-ignored) so the kernel is checked against the actual tensors, not
-random data.
+`groupnorm_bf16/extract_golden.py` and `groupnorm_bf16/measure_handoff_floor.py --role ep`
+are the two scripts here that run in `resnet_env17`, not ironenv: the former pulls a
+real node's input, params and ORT's own CPU output out of the model into `data/golden/`
+(git-ignored) so the kernel is checked against the actual tensors, not random data; the
+latter is one side of the two-process handoff-floor measurement above (the other side,
+`--role kernel`, runs in ironenv like everything else here).

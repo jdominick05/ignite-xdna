@@ -413,7 +413,23 @@
   profiled CPU: 1535 vs 3472us (L=301056), 836 vs 1899 (150528), 510 vs 989 (75264),
   351 vs 496 (37632); 18816 and 9408 stay on CPU. Neither the two-process handoff nor
   the full model's top-1 with bf16 in these nodes has been measured yet. See
-  `results/aie/groupnorm_bf16_kernel_npu.log`.
+  `results/aie/groupnorm_bf16_kernel_npu.log`. **Update:** measured the two-process
+  handoff floor (`kernels/groupnorm_bf16/measure_handoff_floor.py`, shared-memory
+  ping-pong of the real byte volume plus fp32/bf16 conversion, no onnxruntime, no
+  actual NPU dispatch — resnet_env17 can never load pyxrt, per the ABI wall in
+  `results/bit/profile_instancenorm_splice_feasibility.log`, so any splice is two
+  processes, not one). Result: the floor alone (789us-23.6ms/call depending on
+  shape) exceeds every shape's entire CPU cost, let alone the narrower kernel
+  margin — 0/49 nodes survive splicing, down from the 33/49 measured above.
+  ~90% of the floor at the largest shape is the fp32<->bf16 conversion itself
+  (`ml_dtypes.astype`, confirmed present in resnet_env17 and ~2.5x faster than a
+  hand-rolled bit-trick conversion — used throughout so the floor isn't
+  artificially inflated), not the shared-memory transfer; the non-conversion
+  residual still exceeds every shape's margin except a near-wash at L=301056, so
+  a faster conversion would not rescue this design either. This kernel is a real,
+  standalone measured artifact, but has no path into the real model's inference
+  without an unbuilt, unmeasured cross-node batching scheme to amortize the
+  per-call floor. See `results/aie/groupnorm_bf16_handoff_floor_npu.log`.
 
 ## The YOLOv8 partitioning failure (resolved)
 

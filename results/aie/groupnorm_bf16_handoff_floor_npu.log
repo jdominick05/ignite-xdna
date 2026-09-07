@@ -1,0 +1,101 @@
+Follow-up to groupnorm_bf16_kernel_npu.log: that log measured the kernel alone
+(single process, iron.jit's own buffer marshaling only) and left the two-process
+handoff explicitly unmeasured -- resnetv2_50x3_xint8.onnx runs under the VitisAI EP
+in resnet_env17 (python 3.12), and pyxrt can only load in ironenv (python 3.13;
+profile_instancenorm_splice_feasibility.log established this is a hard ABI wall,
+not a PATH issue), so any real splice is two OS processes handing a tensor back
+and forth, never an in-process custom op. This measures the floor of that handoff:
+the cheapest version of the two-process design, with NO onnxruntime and NO actual
+NPU dispatch on the kernel side (an identity copy stands in for gn_stats/
+gn_finalize/gn_affine). Whatever this floor costs, a real splice can only be
+slower, so it settles whether the per-node kernel wins in groupnorm_bf16_kernel_
+npu.log survive contact with a real two-process pipeline.
+
+--- Design ---
+
+kernels/groupnorm_bf16/measure_handoff_floor.py, one process per role, plain
+numpy + multiprocessing.shared_memory (no repo imports, so nothing here needed
+either env's own toolchain -- both roles ran anyway in the env a real splice
+would use: --role ep in resnet_env17, --role kernel in ironenv, so this floor
+also reflects each env's own numpy build).
+
+Three shared-memory segments: a 4-slot int64 control block (idle / input-ready /
+output-ready / stop) and two data buffers sized for the round-trip's bf16
+payload. ep role: generate a random fp32 [1,32,L] tensor (stand-in for ORT's real
+output), convert to bf16, write, signal, busy-spin for the output flag, read
+back, convert to fp32 -- timed start-to-finish, 200 iterations after 20 warmup.
+kernel role: busy-spin for the input flag, identity-copy the bf16 buffer to the
+output buffer (the zero-cost stand-in for the actual kernel), signal back.
+
+bf16 conversion uses ml_dtypes.astype (confirmed installed in resnet_env17,
+which was not previously known -- see [[project-mlir-aie-exploration]]) rather
+than a hand-rolled bit-trick: an isolated micro-benchmark at L=301056 showed
+ml_dtypes is ~2.5x faster (pack 15.6-16.8ms, unpack 5.1-5.6ms, vs the bit-trick
+path's pack 35.6-43.1ms, unpack 13.4-15.4ms for the same 9.6M-element array) --
+using the slower path would have overstated the floor, not understated it, so
+the reported numbers use the faster one throughout.
+
+One real bug hit and fixed during development: the kernel role's wait loop
+originally read "while state == IDLE: keep spinning" as its handshake, which is
+also true (vacuously, loop doesn't spin) immediately after the kernel role sets
+OUTPUT_READY itself -- it would then re-enter the loop body, re-read its own
+just-written OUTPUT_READY flag, and assert-fail expecting INPUT_READY. Fixed to
+spin explicitly for INPUT_READY or STOP, not merely "not idle".
+
+--- Results ---
+
+Desktop 2 / Phoenix, resnet_env17 (ep role) <-> ironenv (kernel role), 200 iters
+each, average round-trip us; nodes/CPU/kernel columns repeated from
+groupnorm_bf16_kernel_npu.log's verdict table for direct comparison:
+
+  L        nodes  CPU us/call  kernel us/call  handoff floor us/call  splice total  verdict
+  9408       5       117.6      not run          789.8 (638-2090)       --            CPU wins (floor alone is 6.7x the CPU cost)
+  18816     11       233.3      261.7            1505.3 (1357-2716)    1767.0        CPU wins by 1533.7us (kernel alone lost by only 28us)
+  37632     11       495.8      351.0            3090.0 (2713-6218)    3441.0        CPU wins by 2945.2us (kernel alone won by 145us)
+  75264     14       989.4      510.1            6179.8 (5381-9426)    6689.9        CPU wins by 5700.5us (kernel alone won by 479us)
+  150528     5      1899.3      835.8           12167.7 (10738-20801) 13003.5        CPU wins by 11104.2us (kernel alone won by 1063.5us)
+  301056     3      3472.1     1535.2           23618.9 (21521-34213) 25154.1        CPU wins by 21682.0us (kernel alone won by 1936.9us)
+
+Every shape flips. The 33/49 nodes that measured as kernel wins in
+groupnorm_bf16_kernel_npu.log (single-process) become 0/49 once the measured
+handoff floor is added -- at every shape the floor alone is already several
+times the entire per-node CPU cost, let alone the narrower kernel-vs-CPU margin.
+
+The floor is conversion-bound, not transfer-bound: an isolated timing of just
+bf16_pack/bf16_unpack at L=301056 (9.6M elements) took ~21.1-22.4us combined
+(pack 15.6-16.8ms + unpack 5.1-5.6ms), i.e. ~90% of that shape's 23.6ms
+round-trip -- the shared-memory write/read/signal itself is the remaining
+~2.1ms. That residual, even assumed to scale down linearly with L for the
+smaller shapes (not independently measured at each shape), is still larger
+than every shape's per-node kernel-vs-CPU margin except a near-wash at
+L=301056 (~2.1ms residual vs. a 1.937ms margin) -- so a faster host-side
+conversion alone would not rescue this design at any shape; the round-trip
+byte volume through two independent Python processes is the real floor, not
+an artifact of the specific cast function or the busy-spin signaling.
+
+--- What this does NOT show ---
+
+- Not tried: OS-native synchronization (Windows Events / WaitForSingleObject)
+  in place of the busy-spin flag, or a compiled (non-numpy) conversion path --
+  either could shave the ~2.1ms non-conversion residual at L=301056, but that
+  residual is already close to that shape's 1.937ms margin, so closing it
+  fully still would not clear a comfortable win, and every smaller shape's
+  gap is far too wide (2945us-21682us) for either change to matter.
+- Not measured: the real splice with actual onnxruntime session I/O and actual
+  NPU kernel dispatch on the kernel side -- this is a floor (best case), so it
+  can only make every row in the table above worse, not better.
+- Not measured: whether a design that batches many same-shape nodes into one
+  handoff (amortizing the per-call floor across, e.g., all 14 L=75264 nodes in
+  one round trip) changes the arithmetic -- floated as a possibility in
+  profile_instancenorm_splice_feasibility.log's "Next step" section, not
+  attempted here or there.
+
+Conclusion for RESEARCH.md/README.md: the per-node kernel wins measured in
+groupnorm_bf16_kernel_npu.log stand as measured (single process, real node
+tensors) -- but the practical splice this project would need to realize them
+does not survive contact with the actual two-process handoff this hardware/
+toolchain split requires. As things stand, this kernel has no path to running
+inside this model's real inference without an unbuilt, unmeasured batching
+scheme; it remains a standalone measured artifact, not a usable optimization.
+
+Machine: Desktop 2 / Phoenix.
