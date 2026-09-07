@@ -393,7 +393,27 @@
   `getwslpath=echo`. This closes out every `ryzen_ai_npu1`-tagged design in
   `programming_examples` — `mobilenet` is the one design whose hardware paths need a
   chip this machine doesn't have. See
-  `results/aie/mlir_aie_magika_mobilenet_npu.log`.
+  `results/aie/mlir_aie_magika_mobilenet_npu.log`. **Update:** first kernel written for
+  this repo's own gap rather than run from mlir-aie's examples: `kernels/groupnorm_bf16/`,
+  a bf16 GroupNorm(32) standing in for the `InstanceNormalization` that
+  `resnetv2_50x3_xint8.onnx` leaves on CPU. Decisions baked into it, each for a measured
+  reason: (1) two workers per column, not four — a shim tile has two DMA channels per
+  direction, and the op is DMA-bound, so the 8-worker layout is the one that keeps
+  every channel busy with exactly one stream; (2) the per-core scale/bias ride the data
+  fifo as its first object (raw fp32 bits in a bf16 chunk) because both shim MM2S
+  channels are already taken by the two data streams — there is no channel left for a
+  params fifo; (3) both passes are issued by the host as two fills of the same block,
+  so the reduction's state never leaves core memory; (4) the projection's ~460us
+  fixed-overhead assumption is retired — a 96 KB probe run measures this design's
+  floor at ~185-200us NPU time, which is what flipped L=37632 from a projected loss to
+  a measured 145us/call win. Two Peano facts worth not rediscovering: its AIE libc has
+  no float `sqrtf` (software reciprocal-sqrt in the kernel instead), and
+  `aie::set_rounding(conv_even)` is needed for the accumulator-to-bf16 store to match a
+  host round-to-nearest-even pack. Measured per call on real node tensors, kernel vs
+  profiled CPU: 1535 vs 3472us (L=301056), 836 vs 1899 (150528), 510 vs 989 (75264),
+  351 vs 496 (37632); 18816 and 9408 stay on CPU. Neither the two-process handoff nor
+  the full model's top-1 with bf16 in these nodes has been measured yet. See
+  `results/aie/groupnorm_bf16_kernel_npu.log`.
 
 ## The YOLOv8 partitioning failure (resolved)
 

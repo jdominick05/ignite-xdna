@@ -79,14 +79,16 @@ There is no unit-test suite. There is no way to fake this hardware, and a mocked
 session would test nothing this project cares about. Verification is empirical instead:
 
 ```bash
-python -m compileall -q npu pipelines tools \
+python -m compileall -q npu pipelines tools kernels \
   && for s in scripts/*.sh; do bash -n "$s" || exit 1; done \
   && python -c "import npu.preprocess, npu.yolo, npu.yolo_decode, npu.yolo_pose, npu.yolo_pose_decode, npu.session, npu.paths" \
   && echo "PIPELINE CHECKS PASS"
 ```
 
 Run this (in `resnet_env17`) after touching anything under `npu/`, `pipelines/`,
-`tools/`, or `scripts/`. It only catches syntax and import breakage; it is **not**
+`tools/`, `scripts/`, or `kernels/` (`kernels/` only gets the syntax pass here — its
+designs import mlir-aie, which lives in a different env; see `kernels/README.md`). It
+only catches syntax and import breakage; it is **not**
 evidence that a behavioural claim is true. If your change could affect latency,
 accuracy, or whether the VitisAI EP accepts a graph, run the relevant pipeline and read
 the log in `results/` before describing the change as verified. Never report a number

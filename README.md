@@ -368,6 +368,30 @@ shares one property this model breaks: BatchNorm-only, so normalization disappea
 the Conv weights before the graph the NPU ever sees.** That, not just "heavy enough,"
 is what "best suited for this hardware" actually means for a classifier.
 
+**The gap is not closed, but it is now measured to be partly closable — with a kernel
+the EP doesn't have.** The open-source `mlir-aie` toolchain (see "Key findings" below)
+can run bf16 on this array, which Quark/VitisAI EP cannot, so `kernels/groupnorm_bf16/`
+is a from-scratch bf16 GroupNorm(32) — exactly the op these 49 nodes are, via a reshape —
+using all four columns' shim DMAs. Checked against the real node tensors pulled out of
+this model (and ORT's own CPU output), its error is the bf16 output rounding and nothing
+else. Per call, kernel NPU time vs the profiled CPU cost of the same node
+(`results/aie/groupnorm_bf16_kernel_npu.log`, `results/bit/profile_instancenorm_splice_feasibility.log`):
+
+| Shape (1, 32, L) | Nodes | CPU per call | Kernel per call | Verdict |
+|---|---|---|---|---|
+| L = 301056 | 3 | 3472 μs | **1535 μs** | kernel, −1937 μs |
+| L = 150528 | 5 | 1899 μs | **836 μs** | kernel, −1063 μs |
+| L = 75264 | 14 | 989 μs | **510 μs** | kernel, −479 μs |
+| L = 37632 | 11 | 496 μs | **351 μs** | kernel, −145 μs |
+| L = 18816 | 11 | 233 μs | 262 μs | CPU, by 28 μs |
+| L = 9408 | 5 | 118 μs | not run | CPU (kernel floor is ~200 μs) |
+
+33 of the 49 nodes win, worth ~19.4 ms of the op's 42.37 ms per inference on paper.
+What is **not** measured: the whole-model latency with the kernel spliced in — it has
+to be a second process (the XRT Python binding is built against Python 3.13, the EP's
+env is 3.12), and that handoff cost, plus the top-1 effect of bf16 in 33 nodes, is the
+next measurement, not an assumption.
+
 ### Input resolution: the fixed cost of running the graph at all
 
 The n-vs-s table says width is cheap. This one asks the complementary question — is the
@@ -1373,6 +1397,11 @@ buildable at all: not through this SDK's own `aiecompiler` (a missing `physical_
 blocks it, confirmed absent from every AMD distribution channel checked), but through the
 open-source `mlir-aie`/Peano toolchain instead — a hand-written kernel compiled and run
 correctly on this machine's XDNA1 hardware, natively on Windows, no gated access required.
+That path has since produced a kernel for this repo's own gap: a bf16 GroupNorm(32)
+(`kernels/groupnorm_bf16/`) standing in for the `InstanceNormalization` that
+`resnetv2_50x3_bit` leaves on CPU, measured on the real node tensors at 1535 μs vs the
+CPU's 3472 μs per call for the largest shape, and a win on 4 of its 6 shapes (33 of 49
+nodes) — see "Pushing width further" below and `results/aie/groupnorm_bf16_kernel_npu.log`.
 
 **Silent CPU fallback is the failure mode to watch for.** The `[Vitis AI EP]` banner,
 `Target architecture:`, `Compile done.` and the operator table print **only during
@@ -1434,7 +1463,9 @@ place on the NPU: every `InstanceNormalization` node in it falls to CPU, confirm
 normalization, which folds into the preceding Conv's weights at export and so never
 reaches the graph as its own node. A non-fused normalization layer (GroupNorm,
 LayerNorm, InstanceNorm) is a measured gap in this EP's NPU kernel coverage, not a
-hypothetical one. See "Pushing width further: `resnetv2_50x3_bit`" above.
+hypothetical one. See "Pushing width further: `resnetv2_50x3_bit`" above — including the
+hand-written bf16 kernel that now beats the CPU fallback for that op on 33 of the 49
+nodes, per node, with the whole-model splice still unmeasured.
 
 ---
 

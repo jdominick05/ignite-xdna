@@ -1,0 +1,256 @@
+Follow-up to results/bit/profile_instancenorm_splice_feasibility.log, which profiled the
+real CPU cost of resnetv2_50x3_xint8.onnx's 49 InstanceNormalization nodes (VitisAI EP
+has no NPU kernel for the op) and projected which of their 6 shapes a hand-written bf16
+AIE kernel could beat. This log is that kernel, written and measured: kernels/
+groupnorm_bf16/ (groupnorm.py = IRON design + harness, groupnorm_kernels.cc = the AIE
+C++, extract_golden.py = pulls a real node's tensors out of the model). Same mlir-aie
+v1.4.2 / ironenv / Peano setup as the other mlir_aie_*.log files here; no mlir-aie
+example was modified or reused as a template -- ml/norm (the only norm design) is
+npu2/Strix-only, so this is from scratch.
+
+Order of work, per the user's call: write the largest shape (L=301056) first, because
+it has the widest projected margin and the fewest nodes -- if it lands near the 1489us
+projection the model is credible and the smaller shapes follow; if it lands far off,
+that's learned in 3 nodes instead of 14.
+
+--- What the kernel is ---
+
+GroupNorm(32) over a [1, 32, L] bf16 tensor:  y[g,:] = scale[g]*(x[g,:]-mean[g])/
+sqrt(var[g]+eps) + bias[g], eps = 1e-5 (the fp32 9.999999747378752e-06 every node in
+the model carries). Layout on the npu1 array: 8 workers, two per column on rows 2-3 of
+all four columns, each owning 4 consecutive groups (a contiguous 4*L block). Each worker
+has its own input and output ObjectFifo pinned to its column's shim tile, so every one
+of the device's 8 shim MM2S and 8 S2MM channels carries exactly one stream -- the point
+of the layout, since the op is DMA-bound. Per worker the host queues 3 fills and 1
+drain: a params object (that core's scale/bias as raw fp32 bits inside one bf16 chunk),
+the 4*L block for pass 1 (statistics), the same block again for pass 2 (normalise),
+and the 4*L output. The two-pass reduction therefore never touches the host. Compute:
+pass 1 keeps 16-lane fp32 sum / sum-of-squares accumulators per group via the bf16 x
+bf16 -> fp32 MAC path (products exact); between passes each group's (sum, sumsq,
+scale, bias) folds to an affine pair (a, b); pass 2 is y = a*x + b as two MACs per
+vector (a split into a bf16 hi part and bf16 residual so it keeps ~16 mantissa bits,
+b seeding the fp32 accumulator exactly), rounded to bf16 round-to-nearest-even.
+
+Two toolchain facts learned on the way, both now in the source comments:
+  - Peano's AIE libc has no float sqrtf (compile error: "no matching function for
+    call to 'sqrt'", only the integral template exists) -- the kernel uses a software
+    reciprocal sqrt (bit-hack seed + 3 Newton steps, fp32-exact; 4 calls per core).
+  - A shim tile has 2 DMA channels per direction, and two cores per column already use
+    both, so the params can't ride a third fifo; they go down the data fifo as object 0.
+
+--- Numerical check ---
+
+Every run below compares the kernel output against (1) a float64 GroupNorm of the
+bf16-rounded input the kernel actually sees (centred two-pass variance), (2) that same
+reference rounded to bf16 the way the kernel's output is, and, for the golden runs,
+(3) ORT's own CPU fp32 InstanceNormalization output for the real node on the real
+image (data/eval/000000.jpg at 448x448, via extract_golden.py in resnet_env17). Pass
+criterion: every element within 0.02 + |y|/256 of (1). In every run the "kernel vs
+f64 reference" row is numerically identical to the "bf16-rounded reference vs f64
+reference" row -- i.e. the kernel's entire error is the bf16 output quantisation
+(rel-L2 ~0.17% per group), and against the bf16-rounded reference it is bit-exact
+except for a handful of round-half cases (mean|err| <= 8e-6). The kernel's E[x^2]-mean^2
+variance is safe on these tensors: per-group |mean|/std tops out at 0.72 (L=75264),
+and its deviation from the centred value is at fp32 noise (<= 2.6e-15).
+
+All golden nodes have scale = 1.0 and bias = 0.0 exactly: the exporter's GroupNorm ->
+InstanceNormalization reshape trick applies the real per-channel affine as separate
+Mul/Add nodes after the reshape back, so the InstanceNormalization node itself is
+identity-affine. The kernel's affine path is still exercised by the random-data runs
+(scale in [0.5, 1.5], bias in [-0.5, 0.5]).
+
+--- Runs (Desktop 2 / Phoenix, ironenv, python groupnorm.py -d npu ...) ---
+
+Timing: "NPU time" is mlir-aie's own bracket -- kernel dispatch through completion
+(xrt run + wait), the same bracket behind the 56.19 GB/s memcpy figure in
+mlir_aie_examples_npu.log -- and excludes host-side sync. "End-to-end" wraps the whole
+Python call. 2 warmup + 10 timed iterations each. Chunk = ObjectFifo object size in
+bf16 elements; every L below is chunk*49 except where noted.
+
+L=301056, random data, chunk 3072 (first successful compile, cache 974a6150c19cb3252c784ebe):
+
+  random input: L=301056, seed=0
+  output |y| max 7.4069
+  kernel vs f64 reference on bf16 input   : max|err| 0.01559 at group 15 (ref 5.1719, out 5.1875), mean|err| 0.001237, per-group rel-L2 mean 0.00165 max 0.00178
+  kernel vs same reference rounded to bf16: max|err| 0.01562 at group 0 (ref 2.6875, out 2.7031), mean|err| 0.000007, per-group rel-L2 mean 0.00017 max 0.00041
+  bf16-rounded reference vs f64 reference : max|err| 0.01559 at group 15 (ref 5.1719, out 5.1875), mean|err| 0.001237, per-group rel-L2 mean 0.00165 max 0.00178
+  per-group |mean|/std max 1.666; E[x^2]-mean^2 vs centred variance: max rel diff 2.00e-15
+  elements outside 0.02 + |y|/256 tolerance: 0 / 9633792
+  NPU time     (avg/min/max us): 1546.6 / 1478.3 / 1773.4
+  End-to-end   (avg/min/max us): 2174.3 / 1920.3 / 2799.4
+  tensor 19.27 MB bf16; DMA traffic 57.80 MB -> 37.37 GB/s at NPU avg, 39.10 GB/s at NPU min
+  PASS!
+
+L=301056, random data, chunk 6144 (cache bea0980d1871a982eb8da426):
+
+  NPU time     (avg/min/max us): 1487.3 / 1455.5 / 1506.0
+  End-to-end   (avg/min/max us): 2032.3 / 1898.3 / 2285.2
+  tensor 19.27 MB bf16; DMA traffic 57.80 MB -> 38.86 GB/s at NPU avg, 39.71 GB/s at NPU min
+  PASS!   (numerical rows identical to the chunk-3072 run above)
+
+L=301056, GOLDEN (/stages/stages.0/blocks/blocks.1/norm1/InstanceNormalization,
+|x| max 420.0, per-group |mean|/std max 0.226), chunk 3072:
+
+  output |y| max 11.8522
+  kernel vs f64 reference on bf16 input   : max|err| 0.03122 at group 19 (ref 8.9062, out 8.8750), mean|err| 0.001028, per-group rel-L2 mean 0.00169 max 0.00195
+  kernel vs same reference rounded to bf16: max|err| 0.00781 at group 24 (ref -1.4922, out -1.5000), mean|err| 0.000003, per-group rel-L2 mean 0.00003 max 0.00085
+  bf16-rounded reference vs f64 reference : max|err| 0.03122 at group 19 (ref 8.9062, out 8.8750), mean|err| 0.001028, per-group rel-L2 mean 0.00169 max 0.00195
+  kernel vs ORT CPU fp32 InstanceNorm       : max|err| 0.03139 at group 0 (ref -8.5939, out -8.5625), mean|err| 0.001028, per-group rel-L2 mean 0.00169 max 0.00195
+  f64 ref on fp32 input vs ORT CPU fp32    : max|err| 0.00167 at group 0 (ref -9.5732, out -9.5716), mean|err| 0.000015, per-group rel-L2 mean 0.00002 max 0.00017
+  per-group |mean|/std max 0.226; E[x^2]-mean^2 vs centred variance: max rel diff 2.20e-16
+  elements outside 0.02 + |y|/256 tolerance: 0 / 9633792
+  NPU time     (avg/min/max us): 1538.7 / 1482.2 / 1804.9
+  End-to-end   (avg/min/max us): 2001.4 / 1912.0 / 2340.3
+  tensor 19.27 MB bf16; DMA traffic 57.80 MB -> 37.57 GB/s at NPU avg, 39.00 GB/s at NPU min
+  PASS!
+
+L=301056, GOLDEN, chunk 6144:
+
+  (numerical rows identical to the chunk-3072 golden run)
+  NPU time     (avg/min/max us): 1535.2 / 1481.6 / 1606.5
+  End-to-end   (avg/min/max us): 2250.5 / 1979.0 / 2849.2
+  tensor 19.27 MB bf16; DMA traffic 57.80 MB -> 37.65 GB/s at NPU avg, 39.01 GB/s at NPU min
+  PASS!
+
+Overhead probe -- L=1536, chunk 1536 (one chunk per group, 96 KB tensor), random data:
+
+  elements outside 0.02 + |y|/256 tolerance: 0 / 49152
+  NPU time     (avg/min/max us): 200.9 / 184.3 / 233.4
+  End-to-end   (avg/min/max us): 701.8 / 624.3 / 892.0
+  tensor 0.10 MB bf16; DMA traffic 0.29 MB -> 1.47 GB/s at NPU avg, 1.60 GB/s at NPU min
+  PASS!
+
+  This is the fixed per-call cost of this design on this machine: ~185-200us of NPU
+  time before any real data moves. The feasibility log assumed ~460us, borrowed from
+  magika group2 (the smallest previously measured call) -- that number carried
+  magika's own DMA and compute, so it overstated the floor by more than 2x.
+
+L=75264, random data, chunk 1536:
+
+  elements outside 0.02 + |y|/256 tolerance: 0 / 2408448
+  NPU time     (avg/min/max us): 530.8 / 515.2 / 575.8
+  End-to-end   (avg/min/max us): 1036.0 / 959.4 / 1106.0
+  tensor 4.82 MB bf16; DMA traffic 14.45 MB -> 27.22 GB/s at NPU avg, 28.05 GB/s at NPU min
+  PASS!
+
+L=75264, GOLDEN (/stages/stages.0/blocks/blocks.0/norm1/InstanceNormalization,
+|x| max 63.5, per-group |mean|/std max 0.718), chunk 1536:
+
+  output |y| max 15.9353
+  kernel vs f64 reference on bf16 input   : max|err| 0.03119 at group 21 (ref 8.2188, out 8.2500), mean|err| 0.000811, per-group rel-L2 mean 0.00163 max 0.00185
+  kernel vs same reference rounded to bf16: max|err| 0.03125 at group 22 (ref 6.3438, out 6.3750), mean|err| 0.000002, per-group rel-L2 mean 0.00005 max 0.00062
+  bf16-rounded reference vs f64 reference : max|err| 0.03119 at group 21 (ref 8.2188, out 8.2500), mean|err| 0.000811, per-group rel-L2 mean 0.00163 max 0.00185
+  kernel vs ORT CPU fp32 InstanceNorm       : max|err| 0.03117 at group 21 (ref 8.2188, out 8.2500), mean|err| 0.000811, per-group rel-L2 mean 0.00163 max 0.00185
+  f64 ref on fp32 input vs ORT CPU fp32    : max|err| 0.00051 at group 15 (ref 15.3081, out 15.3086), mean|err| 0.000007, per-group rel-L2 mean 0.00001 max 0.00003
+  per-group |mean|/std max 0.718; E[x^2]-mean^2 vs centred variance: max rel diff 1.89e-15
+  elements outside 0.02 + |y|/256 tolerance: 0 / 2408448
+  NPU time     (avg/min/max us): 510.1 / 501.9 / 519.7
+  End-to-end   (avg/min/max us): 929.0 / 904.9 / 957.3
+  tensor 4.82 MB bf16; DMA traffic 14.45 MB -> 28.33 GB/s at NPU avg, 28.79 GB/s at NPU min
+  PASS!
+
+L=150528, random data, chunk 3072:
+
+  elements outside 0.02 + |y|/256 tolerance: 0 / 4816896
+  NPU time     (avg/min/max us): 840.0 / 817.2 / 869.7
+  End-to-end   (avg/min/max us): 1312.6 / 1241.6 / 1561.3
+  tensor 9.63 MB bf16; DMA traffic 28.90 MB -> 34.41 GB/s at NPU avg, 35.37 GB/s at NPU min
+  PASS!
+
+L=150528, GOLDEN (/stages/stages.1/blocks/blocks.0/norm2/InstanceNormalization,
+|x| max 128.0, per-group |mean|/std max 0.303), chunk 3072:
+
+  output |y| max 8.0463
+  kernel vs f64 reference on bf16 input   : max|err| 0.01622 at group 3 (ref 8.0463, out 8.0625), mean|err| 0.001090, per-group rel-L2 mean 0.00168 max 0.00229
+  kernel vs same reference rounded to bf16: max|err| 0.00000 at group 0 (ref 0.6602, out 0.6602), mean|err| 0.000000, per-group rel-L2 mean 0.00000 max 0.00000
+  bf16-rounded reference vs f64 reference : max|err| 0.01622 at group 3 (ref 8.0463, out 8.0625), mean|err| 0.001090, per-group rel-L2 mean 0.00168 max 0.00229
+  kernel vs ORT CPU fp32 InstanceNorm       : max|err| 0.01622 at group 3 (ref 8.0463, out 8.0625), mean|err| 0.001090, per-group rel-L2 mean 0.00168 max 0.00229
+  f64 ref on fp32 input vs ORT CPU fp32    : max|err| 0.00018 at group 25 (ref 7.0620, out 7.0622), mean|err| 0.000002, per-group rel-L2 mean 0.00000 max 0.00003
+  per-group |mean|/std max 0.303; E[x^2]-mean^2 vs centred variance: max rel diff 4.86e-16
+  elements outside 0.02 + |y|/256 tolerance: 0 / 4816896
+  NPU time     (avg/min/max us): 835.8 / 807.7 / 877.0
+  End-to-end   (avg/min/max us): 1335.6 / 1254.5 / 1656.0
+  tensor 9.63 MB bf16; DMA traffic 28.90 MB -> 34.58 GB/s at NPU avg, 35.78 GB/s at NPU min
+  PASS!
+
+L=37632, GOLDEN (/stages/stages.1/blocks/blocks.0/norm3/InstanceNormalization,
+|x| max 512.0, per-group |mean|/std max 0.377), chunk 2352 (16 chunks per group):
+
+  output |y| max 9.1505
+  kernel vs f64 reference on bf16 input   : max|err| 0.02554 at group 13 (ref 9.1505, out 9.1250), mean|err| 0.001022, per-group rel-L2 mean 0.00164 max 0.00175
+  kernel vs same reference rounded to bf16: max|err| 0.03125 at group 16 (ref -4.1562, out -4.1250), mean|err| 0.000004, per-group rel-L2 mean 0.00005 max 0.00063
+  bf16-rounded reference vs f64 reference : max|err| 0.02554 at group 13 (ref 9.1505, out 9.1250), mean|err| 0.001022, per-group rel-L2 mean 0.00164 max 0.00175
+  kernel vs ORT CPU fp32 InstanceNorm       : max|err| 0.02555 at group 13 (ref 9.1506, out 9.1250), mean|err| 0.001022, per-group rel-L2 mean 0.00164 max 0.00175
+  f64 ref on fp32 input vs ORT CPU fp32    : max|err| 0.00004 at group 19 (ref -5.6421, out -5.6421), mean|err| 0.000001, per-group rel-L2 mean 0.00000 max 0.00001
+  per-group |mean|/std max 0.377; E[x^2]-mean^2 vs centred variance: max rel diff 5.57e-16
+  elements outside 0.02 + |y|/256 tolerance: 0 / 1204224
+  NPU time     (avg/min/max us): 351.0 / 337.1 / 404.9
+  End-to-end   (avg/min/max us): 768.9 / 752.0 / 822.9
+  tensor 2.41 MB bf16; DMA traffic 7.23 MB -> 20.59 GB/s at NPU avg, 21.43 GB/s at NPU min
+  PASS!
+
+L=18816, GOLDEN (/stages/stages.2/blocks/blocks.0/norm3/InstanceNormalization,
+|x| max 1016.0, per-group |mean|/std max 0.311), chunk 2352 (8 chunks per group):
+
+  output |y| max 12.0972
+  kernel vs f64 reference on bf16 input   : max|err| 0.03097 at group 4 (ref 8.0310, out 8.0000), mean|err| 0.000983, per-group rel-L2 mean 0.00165 max 0.00184
+  kernel vs same reference rounded to bf16: max|err| 0.00000 at group 0 (ref -0.3418, out -0.3418), mean|err| 0.000000, per-group rel-L2 mean 0.00000 max 0.00000
+  bf16-rounded reference vs f64 reference : max|err| 0.03097 at group 4 (ref 8.0310, out 8.0000), mean|err| 0.000983, per-group rel-L2 mean 0.00165 max 0.00184
+  kernel vs ORT CPU fp32 InstanceNorm       : max|err| 0.03097 at group 4 (ref 8.0310, out 8.0000), mean|err| 0.000983, per-group rel-L2 mean 0.00165 max 0.00184
+  f64 ref on fp32 input vs ORT CPU fp32    : max|err| 0.00002 at group 31 (ref 7.5246, out 7.5246), mean|err| 0.000000, per-group rel-L2 mean 0.00000 max 0.00000
+  per-group |mean|/std max 0.311; E[x^2]-mean^2 vs centred variance: max rel diff 3.86e-16
+  elements outside 0.02 + |y|/256 tolerance: 0 / 602112
+  NPU time     (avg/min/max us): 261.7 / 254.8 / 267.0
+  End-to-end   (avg/min/max us): 680.2 / 656.2 / 725.0
+  tensor 1.20 MB bf16; DMA traffic 3.61 MB -> 13.81 GB/s at NPU avg, 14.18 GB/s at NPU min
+  PASS!
+
+L=9408 was not run: its CPU cost (117.6us) is already below the ~185-200us fixed floor
+measured by the overhead probe, so no configuration of this design can win there.
+
+Compile artifacts (the two L=301056 builds): ~/.npu/cache/974a6150c19cb3252c784ebe
+(chunk 3072, final.xclbin 60,408 B) and bea0980d1871a982eb8da426 (chunk 6144,
+final.xclbin 71,421 B), each with 8 core ELFs elfs_main_core_{0,1,2,3}_{2,3} -- the
+4-column x 2-row placement the design pins, all four columns' shim DMAs in use.
+
+--- Verdict: measured against the feasibility log's projection and CPU cost ---
+
+CPU us/call is the profiled figure from results/bit/profile_instancenorm_splice_
+feasibility.log (ORT's own profiler, real inference, same model). NPU us/call is the
+golden run's avg (min in parentheses).
+
+  L         nodes  CPU us/call   projected   NPU us/call (min)     per call    x nodes
+  9408        5       117.6         492      not run (floor ~200)  CPU wins    --
+  18816      11       233.3         524      261.7  (254.8)        CPU +28us   --
+  37632      11       495.8         589      351.0  (337.1)        NPU +145us  +1.59 ms
+  75264      14       989.4         717      510.1  (501.9)        NPU +479us  +6.71 ms
+  150528      5      1899.3         974      835.8  (807.7)        NPU +1063us +5.32 ms
+  301056      3      3472.1        1489     1535.2 (1481.6)        NPU +1937us +5.81 ms
+
+  - The 301056 row landed on its projection (1535 vs 1489us avg; the min, 1482, is
+    within 0.5%). The projection's two halves were both wrong in ways that cancelled:
+    the fixed overhead is ~200us not 460, and the traffic moves at 37-39 GB/s in this
+    design rather than memcpy's 56 GB/s (pass 1 is read-only, so half the time only
+    one DMA direction is busy; memcpy's figure was full duplex).
+  - Everything below it beat its projection, because the real overhead is smaller
+    than assumed. That flips the 37632 row: "CPU wins (barely)" in the projection,
+    a measured 145us/call kernel win here -- narrow, but on 11 nodes.
+  - 18816 and 9408 stay on CPU, as projected; 18816 loses by only 28us/call.
+  - Total across the 33 convertible nodes (4 shapes): ~19.4ms of the op's 42.37ms per
+    inference, i.e. InstanceNorm's cost would drop to ~23ms -- against the feasibility
+    log's ~28ms projection, and its "22 nodes" is now 33.
+
+What this does NOT show: (a) the model's end-to-end latency with the kernel spliced in.
+The two-process pipeline (VitisAI EP session in resnet_env17 handing tensors to the
+ironenv process, shown viable at the hardware level in the feasibility log) is not
+built; its handoff cost is unmeasured and will decide how much of the per-call margin
+survives -- the harness's own End-to-end minus NPU-time gap (~0.42-0.50ms per call
+here, Python-side dispatch plus buffer handling) is the scale of host-side cost to
+beat, and by itself it would erase the 37632 win and most of the 75264 one if it
+carried over unchanged. (b) Accuracy of the full model with bf16 in place of fp32 for
+these nodes: per-node error is the bf16 output rounding floor (rel-L2 ~0.17%), but the
+top-1 effect of 33 such nodes in series has not been measured. Both are the next
+measurements, not assumptions.
+
+Machine: Desktop 2 / Phoenix. Kernel runs in the mlir-aie ironenv; golden extraction in
+resnet_env17 (CPU EP only, no NPU contention with the timed runs).

@@ -898,8 +898,32 @@ been closed:
   should stay on CPU — fixed per-call dispatch overhead alone matches or beats their
   real cost. The 3 largest shapes (22/49 nodes, ~33.8ms) are real candidates, projected
   to cut InstanceNorm's total cost from 42.37ms to roughly 28ms if a kernel hits the
-  projection — a meaningful reduction, not an elimination. No kernel written yet; full
-  numbers in `results/bit/profile_instancenorm_splice_feasibility.log`.
+  projection — a meaningful reduction, not an elimination. Full numbers in
+  `results/bit/profile_instancenorm_splice_feasibility.log`.
+- **Follow-up: the kernel, written and measured.** `kernels/groupnorm_bf16/` is a
+  from-scratch bf16 GroupNorm(32) IRON design (no mlir-aie template exists for this op
+  on npu1; `ml/norm` is Strix-only): 8 workers, two per column so every one of the
+  device's 8 shim DMA channels per direction carries one stream, each worker owning 4
+  groups and seeing its block twice through one ObjectFifo (statistics pass, then
+  normalise pass) with the per-group stats staying in core memory between passes.
+  Written for the largest shape first (L=301056: widest margin, fewest nodes, the row
+  that tests whether the projection model is real), then built down the table. Checked
+  at every shape against the real node tensors pulled from the model (input, params,
+  and ORT's own CPU fp32 output for one image): the kernel's entire error is the bf16
+  output rounding (per-group rel-L2 ~0.17%; bit-exact against the bf16-rounded
+  reference bar a few round-half cases). Measured NPU time per call vs. the profiled
+  CPU cost: L=301056 **1535us vs 3472** (the projection said 1489 — landed on it, though
+  its two halves were both off in cancelling directions: fixed overhead measured at
+  ~200us, not the 460 borrowed from magika, and this design's traffic moves at 37-39
+  GB/s, not memcpy's 56), L=150528 **836 vs 1899**, L=75264 **510 vs 989**, and L=37632
+  **351 vs 496** — that last row flipping from the projection's "CPU wins (barely)" to a
+  narrow measured kernel win because the real overhead is smaller. L=18816 loses by
+  28us/call and L=9408 sits under the ~200us floor, both staying on CPU. Net: 33 of the
+  49 nodes are now measured wins, ~19.4ms of the op's 42.37ms per inference (the
+  feasibility log projected 22 nodes and ~14ms). Not yet measured, and deliberately not
+  assumed: the two-process handoff cost (the harness's own host-side gap is ~0.45ms per
+  call, enough to erase the narrowest wins if it carried over) and the full model's
+  top-1 with bf16 in these 33 nodes. `results/aie/groupnorm_bf16_kernel_npu.log`.
 
 ## How to read the rest of this repository
 
