@@ -48,6 +48,18 @@
  * HWiNFO64 side: writes HKCU\Software\HWiNFO64\Sensors\Custom\<group>\{Usage0,Clock0,Other0..N}
  * with Name/Value/Unit, the interface HWiNFO documents for custom sensors (enabled by default
  * since v6.10; HWiNFO must be running with its Sensors window open to pick them up).
+ * Two rules about what gets written, both because HWiNFO's Min/Max/Average columns average
+ * every sample they are given and a custom sensor has no way to say "no reading":
+ *   - a value xrt-smi reports as N/A (GOPS/EGOPS for IRON/XRT contexts) is never published
+ *     as 0 -- the key is removed until some context reports a number;
+ *   - --idle hide removes the activity sensors (utilization, clock, completions/s,
+ *     submissions/s, GOPS) while no hardware context is active, so HWiNFO's Average covers
+ *     the time the NPU was doing something. The default, --idle zero, keeps publishing the
+ *     true idle readings (0 %, 800 MHz, 0/s), which is what pulls a whole-session Average
+ *     down. The memory, context-count and column-count sensors are always published.
+ * The previous build of this bridge named its group "XDNA NPU" when the platform name did
+ * not parse and used a different sensor schema (Other0 = "NPU GOPS"); that group is
+ * removed at start-up when found, so HWiNFO does not show two NPUs.
  *
  * USAGE
  *   hwinfo_npu_bridge.exe                 live dashboard, polls every 2 s, publishes to HWiNFO
@@ -56,6 +68,7 @@
  *   hwinfo_npu_bridge.exe --json          one JSON object per sample on stdout (for scripts)
  *   hwinfo_npu_bridge.exe --plain         one text line per sample, no screen redraw
  *   hwinfo_npu_bridge.exe --no-hwinfo     monitor only, touch no registry key
+ *   hwinfo_npu_bridge.exe --idle hide     remove activity sensors from HWiNFO while the NPU is idle
  *   hwinfo_npu_bridge.exe --background    hide the console window (bridge only)
  *   hwinfo_npu_bridge.exe --clean         remove this group's registry keys on exit
  *
@@ -648,12 +661,44 @@ static bool WriteSensor(const std::wstring& group, const Sensor& s) {
     return ok;
 }
 
+static void DeleteSensor(const std::wstring& group, const std::wstring& key) {
+    RegDeleteKeyW(HKEY_CURRENT_USER, (std::wstring(REG_ROOT) + L"\\" + group + L"\\" + key).c_str());
+}
+
+static std::wstring ReadSensorName(const std::wstring& group, const std::wstring& key) {
+    std::wstring sub = std::wstring(REG_ROOT) + L"\\" + group + L"\\" + key;
+    HKEY h = nullptr;
+    if (RegOpenKeyExW(HKEY_CURRENT_USER, sub.c_str(), 0, KEY_QUERY_VALUE, &h) != ERROR_SUCCESS) return L"";
+    wchar_t buf[256]; DWORD size = sizeof(buf), type = 0;
+    std::wstring out;
+    if (RegQueryValueExW(h, L"Name", nullptr, &type, (BYTE*)buf, &size) == ERROR_SUCCESS && type == REG_SZ) out.assign(buf, size / sizeof(wchar_t));
+    RegCloseKey(h);
+    while (!out.empty() && out.back() == L'\0') out.pop_back();
+    return out;
+}
+
 static void CleanRegistry(const std::wstring& group) {
     const wchar_t* types[] = { L"Usage", L"Other", L"Temp", L"Volt", L"Fan", L"Current", L"Power", L"Clock" };
     for (auto t : types)
         for (int i = 0; i < 16; ++i)
             RegDeleteKeyW(HKEY_CURRENT_USER, (std::wstring(REG_ROOT) + L"\\" + group + L"\\" + t + std::to_wstring(i)).c_str());
     RegDeleteKeyW(HKEY_CURRENT_USER, (std::wstring(REG_ROOT) + L"\\" + group).c_str());
+}
+
+// The previous build of this bridge wrote a different schema (Other0 = "NPU GOPS", Other1 =
+// "NPU EGOPS", ...) under "XDNA NPU" (its fallback name when the platform name did not
+// parse) or under the device name. Those keys are never updated again, so HWiNFO would keep
+// showing a second, frozen NPU. Remove the legacy group, and any legacy keys in our own group
+// that this schema does not overwrite.
+static void RemoveLegacySensors(const std::wstring& ourGroup, std::vector<std::string>& notes) {
+    if (ReadSensorName(L"XDNA NPU", L"Other0") == L"NPU GOPS") {
+        CleanRegistry(L"XDNA NPU");
+        notes.push_back("removed the previous build's frozen HWiNFO group \"XDNA NPU\"");
+    }
+    if (ourGroup != L"XDNA NPU" && ReadSensorName(ourGroup, L"Other0") == L"NPU GOPS") {
+        for (int i = 0; i < 16; ++i) DeleteSensor(ourGroup, L"Other" + std::to_wstring(i));
+        notes.push_back("replaced the previous build's sensors in HWiNFO group \"" + WideToUtf8(ourGroup) + "\"");
+    }
 }
 
 // ---------------------------------------------------------------------------------------
@@ -727,23 +772,34 @@ static Frame Poll(const StaticInfo& si, PdhReader* pdh, std::map<RateKey, RatePr
     return f;
 }
 
-static std::vector<Sensor> Publish(const std::wstring& group, const StaticInfo& si, const Frame& f, int& failed) {
+// Returns the sensors written this poll. Keys not in the returned list were deleted, so a
+// sensor HWiNFO cannot be given a real value for is absent rather than 0.
+static std::vector<Sensor> Publish(const std::wstring& group, const Frame& f, bool hideIdle, int& failed) {
+    bool idle = f.activeCtx == 0 && (!f.pdh.ok || f.pdh.utilPct < 0.5);
+    bool hide = hideIdle && idle;
     std::vector<Sensor> v;
+    std::vector<std::wstring> drop;
     double util = f.pdh.ok ? f.pdh.utilPct : -1;
-    v.push_back({ L"Usage0", L"NPU Utilization", L"%", util < 0 ? 0.0 : util });
-    if (f.clockMhz >= 0) v.push_back({ L"Clock0", L"NPU Clock", L"MHz", f.clockMhz });
+    if (!hide && util >= 0) v.push_back({ L"Usage0", L"NPU Utilization", L"%", util }); else drop.push_back(L"Usage0");
+    if (!hide && f.clockMhz >= 0) v.push_back({ L"Clock0", L"NPU Clock", L"MHz", f.clockMhz }); else drop.push_back(L"Clock0");
+    // always: memory and what is allocated -- 0 is a true reading here
     v.push_back({ L"Other0", L"NPU Memory (adapter, shared)", L"MB", f.pdh.adapterSharedMb < 0 ? 0.0 : f.pdh.adapterSharedMb });
     v.push_back({ L"Other1", L"NPU Memory (xrt-smi)", L"MB", f.xrt.totalMemMb < 0 ? 0.0 : f.xrt.totalMemMb });
     v.push_back({ L"Other2", L"NPU Active Contexts", L"", (double)f.activeCtx });
     v.push_back({ L"Other3", L"NPU Columns In Use", L"cols", (double)f.xrt.cols.size() });
-    v.push_back({ L"Other4", L"NPU Completions", L"/s", f.totalComplPerS < 0 ? 0.0 : f.totalComplPerS });
-    v.push_back({ L"Other5", L"NPU Submissions", L"/s", f.totalSubsPerS < 0 ? 0.0 : f.totalSubsPerS });
-    double gops = 0, egops = 0;
-    for (const auto& r : f.rows) { if (r.gops > 0) gops += r.gops; if (r.egops > 0) egops += r.egops; }
-    v.push_back({ L"Other6", L"NPU GOPS (xrt-smi)", L"GOPS", gops });
-    v.push_back({ L"Other7", L"NPU EGOPS (xrt-smi)", L"GOPS", egops });
+    // rates: a real 0 while idle in --idle zero, absent in --idle hide
+    if (!hide) {
+        v.push_back({ L"Other4", L"NPU Completions", L"/s", f.totalComplPerS < 0 ? 0.0 : f.totalComplPerS });
+        v.push_back({ L"Other5", L"NPU Submissions", L"/s", f.totalSubsPerS < 0 ? 0.0 : f.totalSubsPerS });
+    } else { drop.push_back(L"Other4"); drop.push_back(L"Other5"); }
+    // GOPS/EGOPS only when some context actually reports them (xrt-smi says N/A for IRON/XRT contexts)
+    double gops = 0, egops = 0; bool anyG = false, anyE = false;
+    for (const auto& r : f.rows) { if (r.gops >= 0) { gops += r.gops; anyG = true; } if (r.egops >= 0) { egops += r.egops; anyE = true; } }
+    if (!hide && anyG) v.push_back({ L"Other6", L"NPU GOPS (xrt-smi)", L"GOPS", gops }); else drop.push_back(L"Other6");
+    if (!hide && anyE) v.push_back({ L"Other7", L"NPU EGOPS (xrt-smi)", L"GOPS", egops }); else drop.push_back(L"Other7");
     failed = 0;
-    for (const auto& s : v) if (!WriteSensor(group, s)) failed++;
+    for (const auto& x : v) if (!WriteSensor(group, x)) failed++;
+    for (const auto& k : drop) DeleteSensor(group, k);
     return v;
 }
 
@@ -804,8 +860,8 @@ static std::string Pad(const std::string& s, int w, bool right = false) {
 }
 
 static std::vector<std::string> RenderFrame(const Term& t, const StaticInfo& si, const Frame& f, const std::deque<double>& hist,
-                                            const std::wstring& group, bool hwinfo, int hwFailed, const std::vector<std::string>& notes,
-                                            double interval) {
+                                            const std::wstring& group, bool hwinfo, int hwCount, int hwFailed, bool hideIdle,
+                                            const std::vector<std::string>& notes, double interval) {
     std::vector<std::string> L;
     std::string B = Colr(t, "1"), C = Colr(t, "36"), D = Colr(t, "2"), G = Colr(t, "32"), Y = Colr(t, "33"), R = Colr(t, "31"), Z = Reset(t);
     const std::string dot = t.unicode ? " \xC2\xB7 " : " | ";
@@ -915,7 +971,8 @@ static std::vector<std::string> RenderFrame(const Term& t, const StaticInfo& si,
         std::ostringstream p;
         p << D;
         if (hwinfo) {
-            p << "HWiNFO: " << (hwFailed == 0 ? std::string(f.clockMhz >= 0 ? "10 sensors" : "9 sensors") : (std::to_string(hwFailed) + " sensor writes FAILED")) << " -> HKCU\\" << WideToUtf8(REG_ROOT) << "\\" << WideToUtf8(group);
+            p << "HWiNFO: " << (hwFailed == 0 ? std::to_string(hwCount) + " sensors" : (std::to_string(hwFailed) + " sensor writes FAILED"))
+              << " -> HKCU\\" << WideToUtf8(REG_ROOT) << "\\" << WideToUtf8(group) << (hideIdle ? " (idle: hidden)" : " (idle: zeros)");
         } else {
             p << "HWiNFO publish off (--no-hwinfo)";
         }
@@ -969,6 +1026,9 @@ static void PrintUsage() {
         "  --plain             one text line per sample, no ANSI, no redraw\n"
         "  --ascii             dashboard without Unicode block/box glyphs\n"
         "  --no-hwinfo         do not write HWiNFO custom-sensor registry keys\n"
+        "  --idle zero|hide    while no hardware context is active: publish the true idle readings\n"
+        "                      (0 %%, 800 MHz, 0/s; default) or remove those sensors so HWiNFO's\n"
+        "                      Average covers active time only; memory/contexts/columns stay either way\n"
         "  --group <name>      HWiNFO sensor group name (default: device name, e.g. \"NPU Phoenix\")\n"
         "  --background        hide the console window (bridge only, no display)\n"
         "  --clean             remove this group's registry keys on exit\n"
@@ -986,7 +1046,7 @@ static void PrintUsage() {
 
 int main(int argc, char* argv[]) {
     double interval = 2.0;
-    std::string group, adapterMatch, luidOverride;
+    std::string group, adapterMatch, luidOverride, idleMode = "zero";
     bool once = false, jsonMode = false, plain = false, ascii = false, background = false, noHwinfo = false, cleanOnExit = false;
 
     for (int i = 1; i < argc; ++i) {
@@ -996,6 +1056,7 @@ int main(int argc, char* argv[]) {
         else if (a == "--group") next(group);
         else if (a == "--adapter") next(adapterMatch);
         else if (a == "--luid") next(luidOverride);
+        else if (a == "--idle") { next(idleMode); if (idleMode != "zero" && idleMode != "hide") { fprintf(stderr, "--idle takes zero or hide\n"); return 2; } }
         else if (a == "--once") once = true;
         else if (a == "--json") jsonMode = true;
         else if (a == "--plain") plain = true;
@@ -1038,6 +1099,8 @@ int main(int argc, char* argv[]) {
     if (!havePdh) notes.push_back("PDH: " + pdhErr);
 
     std::wstring wgroup = Utf8ToWide(group.empty() ? si.name : group);
+    bool hideIdle = idleMode == "hide";
+    if (!noHwinfo) RemoveLegacySensors(wgroup, notes);
     if (background) { HWND w = GetConsoleWindow(); if (w) ShowWindow(w, SW_HIDE); }
 
     if (dashboard) { fputs("\x1b[?25l\x1b[2J\x1b[H", stdout); fflush(stdout); }
@@ -1059,19 +1122,19 @@ int main(int argc, char* argv[]) {
         hist.push_back(f.pdh.ok ? f.pdh.utilPct : -1);
         while (hist.size() > 40) hist.pop_front();
 
-        int hwFailed = 0;
-        if (!noHwinfo) Publish(wgroup, si, f, hwFailed);
+        int hwFailed = 0, hwCount = 0;
+        if (!noHwinfo) hwCount = (int)Publish(wgroup, f, hideIdle, hwFailed).size();
 
         if (jsonMode) {
             json j = FrameJson(si, f);
-            j["hwinfo"] = { {"published", !noHwinfo}, {"failed_writes", hwFailed}, {"group", WideToUtf8(wgroup)} };
+            j["hwinfo"] = { {"published", !noHwinfo}, {"sensors", hwCount}, {"failed_writes", hwFailed}, {"group", WideToUtf8(wgroup)}, {"idle", idleMode} };
             printf("%s\n", j.dump().c_str());
             fflush(stdout);
         } else if (!background) {
             if (dashboard) {
                 CONSOLE_SCREEN_BUFFER_INFO csbi;
                 if (GetConsoleScreenBufferInfo(hout, &csbi)) term.width = csbi.srWindow.Right - csbi.srWindow.Left + 1;
-                auto lines = RenderFrame(term, si, f, hist, wgroup, !noHwinfo, hwFailed, notes, interval);
+                auto lines = RenderFrame(term, si, f, hist, wgroup, !noHwinfo, hwCount, hwFailed, hideIdle, notes, interval);
                 std::string out = "\x1b[H";
                 for (const auto& l : lines) out += l + "\x1b[K\n";
                 out += "\x1b[J";
@@ -1085,7 +1148,7 @@ int main(int argc, char* argv[]) {
                 fflush(stdout);
             } else {  // --once
                 Term t2 = term; t2.vt = false;
-                for (const auto& l : RenderFrame(t2, si, f, hist, wgroup, !noHwinfo, hwFailed, notes, interval)) printf("%s\n", l.c_str());
+                for (const auto& l : RenderFrame(t2, si, f, hist, wgroup, !noHwinfo, hwCount, hwFailed, hideIdle, notes, interval)) printf("%s\n", l.c_str());
                 fflush(stdout);
             }
         }

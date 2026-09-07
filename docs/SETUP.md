@@ -87,11 +87,20 @@ scripts\build_hwinfo_bridge.bat            # or ./scripts/build-hwinfo-bridge.sh
 tools\hwinfo_npu_bridge.exe                # live dashboard, polls every 2 s, publishes to HWiNFO
 tools\hwinfo_npu_bridge.exe --once        # one plain sample;  --json / --plain for scripts
 tools\hwinfo_npu_bridge.exe --no-hwinfo   # monitor only, touches no registry key
+tools\hwinfo_npu_bridge.exe --idle hide   # drop the activity sensors from HWiNFO while the NPU is idle
 ```
 
 A running `hwinfo_npu_bridge.exe` locks its own file, so stop it before rebuilding. HWiNFO
 picks the sensors up from `HKCU\Software\HWiNFO64\Sensors\Custom\<device name>` while its
-Sensors window is open; `--clean` removes that group on exit.
+Sensors window is open; `--clean` removes that group on exit. HWiNFO's Min/Max/Average
+columns average every sample a custom sensor is given and there is no way to hand it "no
+reading", so two rules apply: a value xrt-smi reports as `N/A` is never published as 0 (the
+key is removed instead), and `--idle hide` removes utilization, clock, completions/s,
+submissions/s and GOPS while no hardware context is active, so the Average covers the time
+the NPU was actually doing something. The default keeps publishing the true idle readings
+(0 %, 800 MHz, 0/s), which is what drags a whole-session Average down. An earlier build of
+the bridge left a frozen second group, "XDNA NPU", with its old sensor schema; the current
+build removes it at start-up.
 
 ---
 
