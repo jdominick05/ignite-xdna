@@ -1290,6 +1290,13 @@ sections above.
   them. No log in the repo reproduces the original numbers; `results/bench_xint8_npu.log`
   and its AdaRound sibling exist today at only 100 images, the likely sign of a later probe
   run reusing those log names. [Working](docs/BENCHMARKS.md#results).
+- **AdaRound for pose.** Quantized on Desktop 2 (CPU FastFinetune, 300 calib images) and
+  evaluated across the full 5,000-image COCO val2017 set: AdaRound recovers +1.68 points
+  of OKS mAP@50-95 (32.64 → 34.32) and +4.95 points of OKS mAP@50 (66.90 → 71.85) at
+  9.35 ms on NPU (1015/1025 nodes), with zero latency cost. On the original 500-image
+  slice, it reads 33.94 (+2.29) / 71.88 (+5.49) against plain XINT8's 31.65 / 66.39.
+  Like detection, it does not close the full gap to float (49.86), but delivers a clean,
+  cost-free recovery. [Working](docs/BENCHMARKS.md#yolov8n-pose-end-to-end-on-the-npu).
 
 **Still open.**
 
@@ -1303,7 +1310,6 @@ sections above.
   demo *has* — see
   [A live demo](docs/BENCHMARKS.md#a-live-demo-does-the-multi-partition-finding-hold-on-a-real-webcam):
   camera-bound at 30 fps through n/m/l, genuinely NPU-bound (22.0–23.5 fps) at x.
-- **AdaRound for pose**, untried, and the obvious next lever there.
 - **Column count for the int8 conv kernels.** Both NPU measurements use 1–3 columns of a
   4×5 array; 4 × 146 ≈ 584 GOPS would still lose, but not by 5.6×. The one lever the
   56×56 result doesn't touch.

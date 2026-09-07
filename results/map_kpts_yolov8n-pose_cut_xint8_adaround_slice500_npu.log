@@ -1,0 +1,41 @@
+deleted stale cache C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\yoloposecutcachekey
+loading annotations into memory...
+Done (t=0.15s)
+creating index...
+index created!
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\yoloposecutcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+model: head-cut (9 outputs), numpy decode, input 640x640
+eval : 500 images, conf 0.001, iou 0.7, max_det 300, class-agnostic NMS (single class)
+  500/500  (13894 detections so far)
+
+13894 detections over 500 images in 8s
+inference  mean 9.15 ms   median 9.09 ms
+wrote C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\results\dets_kpts_yolov8n-pose_cut_xint8_adaround_npu.json
+Loading and preparing results...
+DONE (t=0.30s)
+creating index...
+index created!
+Running per image evaluation...
+Evaluate annotation type *keypoints*
+DONE (t=0.54s).
+Accumulating evaluation results...
+DONE (t=0.02s).
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets= 20 ] = 0.339
+ Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets= 20 ] = 0.719
+ Average Precision  (AP) @[ IoU=0.75      | area=   all | maxDets= 20 ] = 0.294
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=medium | maxDets= 20 ] = 0.235
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= large | maxDets= 20 ] = 0.464
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets= 20 ] = 0.432
+ Average Recall     (AR) @[ IoU=0.50      | area=   all | maxDets= 20 ] = 0.795
+ Average Recall     (AR) @[ IoU=0.75      | area=   all | maxDets= 20 ] = 0.420
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=medium | maxDets= 20 ] = 0.323
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets= 20 ] = 0.566
+
+=== yolov8n-pose_cut_xint8_adaround | NPU | 640px | 500 images ===
+OKS mAP@50-95  33.94
+OKS mAP@50     71.88
+latency        9.15 ms

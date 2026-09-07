@@ -1,0 +1,44 @@
+loading annotations into memory...
+Done (t=0.14s)
+creating index...
+index created!
+model: head-cut (9 outputs), numpy decode, input 640x640
+eval : 5000 images, conf 0.001, iou 0.7, max_det 300, class-agnostic NMS (single class)
+  500/5000  (17187 detections so far)
+  1000/5000  (35410 detections so far)
+  1500/5000  (54127 detections so far)
+  2000/5000  (72075 detections so far)
+  2500/5000  (90332 detections so far)
+  3000/5000  (107887 detections so far)
+  3500/5000  (125604 detections so far)
+  4000/5000  (143361 detections so far)
+  4500/5000  (159817 detections so far)
+  5000/5000  (177660 detections so far)
+
+177660 detections over 5000 images in 181s
+inference  mean 28.89 ms   median 28.22 ms
+wrote C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\results\dets_kpts_yolov8n-pose_cut_cpu.json
+Loading and preparing results...
+DONE (t=3.70s)
+creating index...
+index created!
+Running per image evaluation...
+Evaluate annotation type *keypoints*
+DONE (t=6.45s).
+Accumulating evaluation results...
+DONE (t=0.32s).
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets= 20 ] = 0.499
+ Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets= 20 ] = 0.787
+ Average Precision  (AP) @[ IoU=0.75      | area=   all | maxDets= 20 ] = 0.536
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=medium | maxDets= 20 ] = 0.405
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= large | maxDets= 20 ] = 0.627
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets= 20 ] = 0.579
+ Average Recall     (AR) @[ IoU=0.50      | area=   all | maxDets= 20 ] = 0.854
+ Average Recall     (AR) @[ IoU=0.75      | area=   all | maxDets= 20 ] = 0.622
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=medium | maxDets= 20 ] = 0.488
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets= 20 ] = 0.705
+
+=== yolov8n-pose_cut | CPU | 640px | 5000 images ===
+OKS mAP@50-95  49.86
+OKS mAP@50     78.69
+latency        28.89 ms

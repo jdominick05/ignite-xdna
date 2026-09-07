@@ -1773,13 +1773,52 @@ pattern that AdaRound has less room to recover as width increases.
 
 ### yolov8n-pose end to end on the NPU
 
-Head-cut partitions 1015/1025 (99.0%), 9.8 ms/frame, same clean pattern as detect. XINT8
-costs 17.8 points of OKS mAP@50-95 (49.49 → 31.65, a 36% relative loss — proportionally
-worse than bbox yolov8n's plain-XINT8 loss). AdaRound is untried for pose and is the
-obvious next lever, same as it was for detect.
+Head-cut partitions 1015/1025 (99.0%), ~9.1–9.4 ms/frame, same clean pattern as detect:
+only the input `QuantizeLinear` and 9 output `DequantizeLinear` nodes land on CPU, with
+every Conv (72), Mul (126), HardSigmoid (63), Slice (16), Concat (13), and MaxPool (3)
+placing on the NPU (`results/pose_cut_adaround_diag.log`).
 
-`results/pose_cut_{npu,diag}.log`, `results/map_kpts_*.log`. The OKS mAP figures are a
-500-image slice, not the full set — labelled as a slice everywhere they appear.
+Plain XINT8 costs 17.2 points of OKS mAP@50-95 on the full set (49.86 → 32.64, a 35%
+relative loss) — proportionally worse than bbox yolov8n's plain-XINT8 loss, because
+keypoint coordinate regression and heatmap peaks are especially sensitive to per-tensor
+quantization grids. AdaRound (`models/yolov8n-pose_cut_xint8_adaround.onnx`, 300 calib
+images, 72 layers optimized on Desktop 2) recovers a meaningful portion of this gap with
+zero latency cost.
+
+Full COCO val2017 evaluation (5000 images, conf 0.001, IoU 0.7, max_det 300, single-class
+class-agnostic NMS):
+
+| Precision | Device | EP partition | Latency | OKS mAP@50-95 | OKS mAP@50 | Backing log |
+|---|---|---|---|---|---|---|
+| FP32 (float) | CPU | all CPU | 28.89 ms | 49.86 | 78.69 | `results/map_kpts_yolov8n-pose_cut_full5000_cpu.log` |
+| Plain XINT8 | NPU | 1015 NPU / 10 CPU | 9.10 ms | 32.64 | 66.90 | `results/map_kpts_yolov8n-pose_cut_xint8_full5000_npu.log` |
+| **XINT8 + AdaRound** | **NPU** | **1015 NPU / 10 CPU** | **9.35 ms** | **34.32** (+1.68) | **71.85** (+4.95) | `results/map_kpts_yolov8n-pose_cut_xint8_adaround_npu.log` |
+
+The earlier 500-image slice run (kept beside the full set per this repo's history-of-being-wrong
+contract):
+
+| Precision | Device | EP partition | Latency | OKS mAP@50-95 | OKS mAP@50 | Backing log |
+|---|---|---|---|---|---|---|
+| FP32 (float) | CPU | all CPU | 36.47 ms | 49.49 | 79.05 | `results/map_kpts_yolov8n-pose_cut_cpu.log` |
+| Plain XINT8 | NPU | 1015 NPU / 10 CPU | 9.27 ms | 31.65 | 66.39 | `results/map_kpts_yolov8n-pose_cut_xint8_npu.log` |
+| **XINT8 + AdaRound** | **NPU** | **1015 NPU / 10 CPU** | **9.15 ms** | **33.94** (+2.29) | **71.88** (+5.49) | `results/map_kpts_yolov8n-pose_cut_xint8_adaround_slice500_npu.log` |
+
+Two findings from these tables:
+
+1. **AdaRound buys back accuracy with zero latency penalty.** On the full 5,000 images,
+   AdaRound recovers **+1.68 points** of OKS mAP@50-95 and **+4.95 points** of OKS mAP@50
+   (and +2.29 / +5.49 on the 500-image slice). Mean inference latency is 9.35 ms vs 9.10 ms
+   (single-image timed run reads 9.19 ms, `results/pose_cut_adaround_npu.log`), well within
+   normal session drift.
+2. **Keypoint recovery resembles detection, not classification.** AdaRound recovers
+   ~90% of the quantization loss on ResNet50; on pose it recovers ~10% of the mAP@50-95
+   drop and ~42% of the mAP@50 drop. As with YOLO detection, the spatial heads remain
+   fundamentally limited by per-tensor power-of-two scale granularity.
+
+Quantization log: `results/pose_cut_quantize_xint8_adaround.log` (FastFinetune 1319.2s, total
+quantization 2169.5s on Desktop 2's 8700G CPU). Single-image verification:
+`results/pose_cut_adaround_{cpu,npu}.log`, with outputs drawn to
+`results/out_yolov8n-pose_cut_xint8_adaround_{cpu,npu}.jpg`.
 
 ## Key findings
 
