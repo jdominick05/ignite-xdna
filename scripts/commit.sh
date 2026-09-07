@@ -28,7 +28,10 @@
 . "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 SUBJECT="" BODY_FILE="" SESSION_URL="${CLAUDE_SESSION_URL:-}"
-COAUTHOR="Claude Sonnet 5 <noreply@anthropic.com>"
+# Override with --coauthor (or CLAUDE_COAUTHOR) when the session is running a
+# different model -- the trailer should name the model that actually wrote the
+# commit, and a session can switch models partway through.
+COAUTHOR="${CLAUDE_COAUTHOR:-Claude Sonnet 5 <noreply@anthropic.com>}"
 FILES=()
 
 while [ $# -gt 0 ]; do
