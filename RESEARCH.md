@@ -703,11 +703,32 @@ been closed:
   Visual Studio / Build Tools install anywhere under `Program Files`, no `vcvarsall.bat`)
   supplies a C++ standard library for it to find (`results/aie/aiecompiler_hostlib_missing.log`).
   This wall is not a data-population gap like the first one — it would block a Strix build
-  identically — and it is not attempted to fix here: installing a full C++ toolchain is a
-  standing change to a shared machine, not a quick check, and belongs in its own
-  explicitly-approved step. **This is where the bring-up stops for now: the device-model
-  wall that looked closed is open, and the new wall behind it is a known, standard
-  requirement (a C++ toolchain) rather than an undiscoverable one.**
+  identically.
+  **That wall is solved too.** Installed Visual Studio 2022 Build Tools (C++/VCTools
+  workload) via `winget`, then passed MSVC's and the pulled-in Windows 10 SDK's (`10.0.
+  26100.0` — an independent version number from this machine's Windows 11 build, not a
+  mismatch) include directories to `aiecompiler` as extra `--include` flags (it accepts
+  the flag repeated, accumulating a search list). The `<iostream>` failure disappears
+  completely (`results/aie/aiecompiler_hostlib_fixed.log`). Along the way, the trivial
+  graph in `tools/aie_probe/graph.h` hit its own, unrelated bug — `connect<>(...)` with an
+  empty template list is rejected for window ports — fixed with an explicit
+  `adf::window<32>` argument (32 int8 elements, matching the kernel's read loop). With
+  both fixed, the compiler goes further than at any point in this investigation: it reads
+  and derives the graph, and logs **`Reading logical device aie2_5x4_device`** — the
+  strongest confirmation yet that `xc10AIE24x5-die-1LP-e-S-es1` is genuinely Phoenix,
+  since "aie2_5x4" names exactly the architecture and 5-column×4-row physical layout the
+  pre-existing, independent `xrt-smi` measurement already established for this chip.
+  **Third wall: `physical_device.dll` does not exist anywhere on this machine.** One step
+  past device derivation, `aiecompiler` needs `lib/win64.o/physical_device.dll` (the
+  presumed place-and-route/timing counterpart to the "logical device" topology that just
+  resolved fine) and can't find it — checked the whole `ryzen-ai-1.7.1` env and then the
+  entire `C:` drive (`Get-ChildItem -Recurse -Filter physical_device.dll`): zero matches
+  anywhere. Unlike the first two walls, this isn't fixable from data or tooling already on
+  this machine — it would mean acquiring a different, larger AMD distribution on spec, out
+  of scope for this pass. **This is where the bring-up stops for now: two walls
+  solved in sequence (device-model string, host C++ toolchain), a third reached that is a
+  missing file rather than a missing setting — `--target=hw` on this specific pip
+  packaging is closed until that file is found or supplied from elsewhere.**
 
 ## How to read the rest of this repository
 

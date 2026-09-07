@@ -1,0 +1,99 @@
+Follow-up to aiecompiler_hostlib_missing.log, which found no host C++ standard
+library anywhere on this machine (no Visual Studio install, nothing bundled
+in the ryzen-ai-1.7.1 pip env). Installed Visual Studio 2022 Build Tools
+with the C++ (VCTools) workload via winget:
+
+  winget install --id Microsoft.VisualStudio.2022.BuildTools --silent \
+    --accept-package-agreements --accept-source-agreements --override \
+    "--add Microsoft.VisualStudio.Workload.VCTools --includeRecommended --passive --norestart"
+
+That installed MSVC 14.44.35207 (VC/Tools/MSVC/14.44.35207/include, has
+iostream and the rest of the STL) and pulled in a Windows 10 SDK,
+10.0.26100.0 (Windows Kits/10/Include/10.0.26100.0/{ucrt,shared,um}), even
+though this machine runs Windows 11 build 26200 -- the two numbers are
+independent (SDK version vs. OS build), not a mismatch to worry about.
+
+Passed all three as extra --include paths to aiecompiler (it accepts the
+flag repeated, accumulating a search list) alongside the existing
+vaie_cpplus include:
+
+  --include=<vaie_cpplus>/include
+  --include=<VS Build Tools>/VC/Tools/MSVC/14.44.35207/include
+  --include=<Windows Kits>/10/Include/10.0.26100.0/ucrt
+  --include=<Windows Kits>/10/Include/10.0.26100.0/shared
+  --include=<Windows Kits>/10/Include/10.0.26100.0/um
+
+Result: the `<iostream>` failure is completely gone. The ADF frontend's own
+preprocessing pass succeeds, and the pipeline advances much further than
+ever before in this investigation -- through a "frontend executable" build
+(graph.exe, an MSVC-style link of the graph description against
+aiecompiler_client.lib) and into real graph analysis.
+
+Along the way, the pre-existing trivial graph in tools/aie_probe/graph.h hit
+its own, unrelated bug: `connect<>(...)` with an empty template parameter
+list is rejected for window ports ("The template parameter cannot be empty
+when connecting a kernel port... specified based on the kernel port type").
+Fixed by giving both connect<> calls an explicit adf::window<32> argument
+(our kernel's window::readincr loop processes 32 int8 elements = 32 bytes;
+`window<SIZE, MARGIN=0>` is defined in adf/new_frontend/types.h). That
+cleared both errors -- confirmed no code-level issue remains in the graph
+description itself.
+
+With that fixed, the compiler reads our graph, resolves the derived device,
+and prints:
+
+  INFO: [aiecompiler 77-749] Reading logical device aie2_5x4_device
+
+-- twice, once during a validation pass and once for the real run. This is
+the strongest confirmation yet that xc10AIE24x5-die-1LP-e-S-es1 (see
+aiecompiler_part_phoenix_candidate.log) is genuinely Phoenix: "aie2_5x4"
+names both the architecture (AIE2) and the exact 5-column-x-4-row physical
+layout the pre-existing xrt-smi measurement in docs/DECISIONS.md already
+established for this chip, independently of this investigation.
+
+New wall, one level past device derivation:
+
+  ERROR: [aiecompiler 77-22139] Could not find the .../lib/win64.o/
+  physical_device.dll file
+
+Checked whether this file exists anywhere -- not just the ryzen-ai-1.7.1
+pip env, the whole C: drive (`Get-ChildItem -Recurse -Filter
+physical_device.dll` from the root): zero matches, anywhere on this
+machine. "Logical device" (the architecture/topology description, aie2_5x4
+in this case) resolved fine from data already present; "physical device"
+(presumably real place-and-route/timing data for actual silicon) is a
+missing file, not a missing environment variable or include path -- nothing
+here can supply it. This SDK's `vaie-overlay`/`vaie-cpplus` packaging was
+very plausibly built to support the ORT/VitisAI EP's own lightweight
+JIT-compile flow (pre-built xclbins, no full place-and-route needed), not
+the classical AIE compiler's real hardware-target path -- consistent with
+this whole investigation's starting premise, that nothing in this repo
+(or apparently in this pip distribution) uses `--target=hw` for real.
+
+Not attempted: hunting for physical_device.dll in a different AMD
+distribution (a full Vitis/Vivado install, or a different Ryzen AI SDK
+version) -- that would mean acquiring and installing an entirely separate,
+much larger toolchain on spec, a bigger commitment than this pass's
+== install Build Tools, try the fix == scope.
+
+                                           AI Engine Compiler
+                                     Version 2026.1 (windows64-bit)
+                                     SW Build ab5caf8 (release_rai_1_7) on 2026-03-19-12:10:22
+                          Copyright 1986-2022 Xilinx, Inc. All Rights Reserved.
+                          Copyright 2022-2026 Advanced Micro Devices, Inc. All Rights Reserved.
+INFO: [aiecompiler 77-297] Cmd Line : C:/Users/<user>/miniforge3/envs/ryzen-ai-1.7.1/Lib/site-packages/bin/unwrapped/win64.o/aiecompiler.exe --include C:\Users\<user>\miniforge3\envs\ryzen-ai-1.7.1\Lib\site-packages\vaie_cpplus\include --include=C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Tools\MSVC\14.44.35207\include --include=C:\Program Files (x86)\Windows Kits\10\Include\10.0.26100.0\ucrt --include=C:\Program Files (x86)\Windows Kits\10\Include\10.0.26100.0\shared --include=C:\Program Files (x86)\Windows Kits\10\Include\10.0.26100.0\um --target hw graph.cc --part xc10AIE24x5-die-1LP-e-S-es1
+INFO: [aiecompiler 77-404] Executing Cmd: ""C:\Users\<user>\miniforge3\envs\ryzen-ai-1.7.1\Lib\site-packages/win64.o/tools/peano/bin/clang.exe" -E -std=c++20 -D__ADF_FRONTEND__  -D__AIE_ARCH__=20  -I "C:/Users/<user>/miniforge3/envs/ryzen-ai-1.7.1/Lib/site-packages/include" -I . -I "C:\Users\<user>\miniforge3\envs\ryzen-ai-1.7.1\Lib\site-packages\vaie_cpplus\include" -I "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Tools\MSVC\14.44.35207\include" -I "C:\Program Files (x86)\Windows Kits\10\Include\10.0.26100.0\ucrt" -I "C:\Program Files (x86)\Windows Kits\10\Include\10.0.26100.0\shared" -I "C:\Program Files (x86)\Windows Kits\10\Include\10.0.26100.0\um" "graph.cc" > Work/temp/graph.ii"
+INFO: [aiecompiler 77-404] Executing Cmd: "C:/Users/<user>/miniforge3/envs/ryzen-ai-1.7.1/Lib/site-packages/bin/graph_preprocessor.bat Work/temp/graph.ii -o Work/temp/graph.processed.ii -report-core-dump --keep-intermediate-results=1 -- --std=c++20 "
+INFO: [aiecompiler 77-404] Executing Cmd: ""C:\Users\<user>\miniforge3\envs\ryzen-ai-1.7.1\Lib\site-packages/win64.o/tools/peano/bin/clang.exe" -std=c++20 Work/temp/graph.processed.ii -oWork/temp/graph.exe -L "C:/Users/<user>/miniforge3/envs/ryzen-ai-1.7.1/Lib/site-packages/lib/win64.o" -laiecompiler_client.lib  -Wl,/FORCE:UNRESOLVED,/STACK:104857600 "
+graph-94386e.o : error LNK2019: unresolved external symbol "void __cdecl passthrough(struct input_window<signed char> *,struct output_window<signed char> *)" (?passthrough@@YAXPEAU?$input_window@C@@PEAU?$output_window@C@@@Z) referenced in function "public: __cdecl simpleGraph::simpleGraph(void)" (??0simpleGraph@@QEAA@XZ)
+Work\temp\graph.exe : warning LNK4088: image being generated due to /FORCE option; image may not run
+INFO: [aiecompiler 77-404] Executing Cmd: "Work\temp\graph.exe --include "C:\Users\<user>\miniforge3\envs\ryzen-ai-1.7.1\Lib\site-packages\vaie_cpplus\include" --include "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Tools\MSVC\14.44.35207\include" --include "C:\Program Files (x86)\Windows Kits\10\Include\10.0.26100.0\ucrt" --include "C:\Program Files (x86)\Windows Kits\10\Include\10.0.26100.0\shared" --include "C:\Program Files (x86)\Windows Kits\10\Include\10.0.26100.0\um" --workdir Work --part xc10AIE24x5-die-1LP-e-S-es1 --aiearch aie-ml --log-level 2 --pl-axi-lite 0 --enable-multi-layer 0 --multi-layer-opt 0 --disable-dma-autostart 0 --enable-light-cdo 0 --large-program-memory 0 --swfifo-threshold 40 --enable-dma-fifo 1 --keep-intermediate-results 1 --target hw --dump-frontend-impl 0 --out-of-order-mode 0"
+INFO: [aiecompiler 77-749] Reading logical device aie2_5x4_device
+WARNING: [aiecompiler 77-5890] 'k.in[0]' is a window port. Window ports will be deprecated in the next release. Use io buffers instead.
+WARNING: [aiecompiler 77-5890] 'k.out[0]' is a window port. Window ports will be deprecated in the next release. Use io buffers instead.
+INFO: [aiecompiler 77-749] Reading logical device aie2_5x4_device
+ERROR: [aiecompiler 77-22139] Could not find the C:/Users/<user>/miniforge3/envs/ryzen-ai-1.7.1/Lib/site-packages/lib/win64.o/physical_device.dll file
+Compilation Failed
+(WARNING:2, CRITICAL-WARNING:0, ERROR:1)
+INVOKING: ['aiecompiler', '--include=C:\\Users\\<user>\\miniforge3\\envs\\ryzen-ai-1.7.1\\Lib\\site-packages\\vaie_cpplus\\include', '--include=C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\VC\\Tools\\MSVC\\14.44.35207\\include', '--include=C:\\Program Files (x86)\\Windows Kits\\10\\Include\\10.0.26100.0\\ucrt', '--include=C:\\Program Files (x86)\\Windows Kits\\10\\Include\\10.0.26100.0\\shared', '--include=C:\\Program Files (x86)\\Windows Kits\\10\\Include\\10.0.26100.0\\um', '--target=hw', 'graph.cc', '--part=xc10AIE24x5-die-1LP-e-S-es1']
+EXIT CODE: 0

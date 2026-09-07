@@ -304,7 +304,14 @@
   now stops one wall later: this machine has no host C++ standard library for Peano's
   bundled clang to preprocess the ADF frontend with (no `<iostream>` anywhere in the SDK,
   no Visual Studio install). See `results/aie/aiecompiler_part_phoenix_candidate.log` and
-  `aiecompiler_hostlib_missing.log`.
+  `aiecompiler_hostlib_missing.log`. **Update:** installed VS 2022 Build Tools (C++
+  workload) and fed its + the pulled-in Windows SDK's include dirs to `aiecompiler` —
+  the `<iostream>` wall is gone, and the compiler now derives the graph and logs
+  `Reading logical device aie2_5x4_device` (matching this same "Total Columns: 5" finding
+  even more precisely than the part-string name alone did). Stops one wall later:
+  `lib/win64.o/physical_device.dll` doesn't exist anywhere on this machine, checked via a
+  full `C:` drive search, not just the pip env. See
+  `results/aie/aiecompiler_hostlib_fixed.log`.
 
 ## The YOLOv8 partitioning failure (resolved)
 
