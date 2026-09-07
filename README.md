@@ -201,6 +201,10 @@ results/              Tracked logs — the evidence for every number in the docs
 models/  data/        Generated. Git-ignored, and expensive to regenerate
 ```
 
+`models/`, `data/` and the `*cachekey/` compile caches are git-ignored: large,
+machine-specific, and reproducible from the steps above. A compile cache is keyed by name
+rather than by model hash, so pass `--fresh` whenever the model or xclbin changes.
+
 ## Known limitations
 
 One chip generation and one SDK version (Hawk Point/Phoenix via Ryzen AI 1.7.1); Windows
