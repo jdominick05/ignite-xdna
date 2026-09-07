@@ -1274,8 +1274,9 @@ sections above.
   overlays fall back silently to 100% CPU.
   [Working](docs/BENCHMARKS.md#splitting-the-array-into-independent-partitions).
 - **int8 GEMM against the CPU's own int8 kernel.** Loses at `whole_array`'s default tile
-  (the CPU is strongest at exactly the NPU's headline dtype), wins 1.10×–1.83× at M ≥ 512
-  with `n=64` — a tile int8's half-size buffers fit in L1 and bf16's miss by the stack.
+  (the CPU is strongest at exactly the NPU's headline dtype), wins 1.10×–1.83× at M ≥ 512,
+  N ≥ 2048 with `n=64` — a tile int8's half-size buffers fit in L1 and bf16's miss by the
+  stack.
   [Working](docs/BENCHMARKS.md#int8-gemm-the-npus-headline-dtype-needs-a-tile-bf16-cant-fit).
 
 **Still open.**

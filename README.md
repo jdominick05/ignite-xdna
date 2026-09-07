@@ -182,8 +182,8 @@ Outcomes, mostly negative and all measured:
 - **int8 GEMM wins too, but only with a tile bf16 can't fit.** At the default tile the
   NPU's headline dtype **loses** to the CPU's own int8 kernel (torch `_int_mm`) almost
   everywhere; int8's half-size tiles leave L1 room for `n=64`, which doubles it, bit-exact,
-  to **4448–4607 GOPS** (2.5× the bf16 rate) and a **1.10×–1.83× win at M ≥ 512** — thin
-  (the CPU's best case takes back the K=N=4096 rows), and prefill under ~512 tokens loses.
+  to **4448–4607 GOPS**, 2.5× bf16's, and a **1.10×–1.83× win at M ≥ 512, N ≥ 2048** —
+  thin (the CPU's best case takes back the K=N=4096 rows); prefill under ~512 tokens loses.
 - **Int8 conv loses, and the op class is closed.** NPU marginal throughput 146.1 GOPS
   against the CPU's 819.0; at ResNet50's real 56×56 conv2_x shape the CPU wins **12.75×**.
 - **bf16 attention for MobileViT loses by 71×–240×**, and its recorded diagnosis was

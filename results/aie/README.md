@@ -256,8 +256,8 @@ kernels: torch `_int_mm` and ORT `MatMulInteger`; torch's is faster and is the v
 line). **At the default tile the NPU's headline dtype loses to the CPU's own int8 kernel
 almost everywhere** and runs only 1.1–1.5× the bf16 rate; **`n=64`, which int8's half-size
 tiles leave L1 room for and bf16's do not (bf16 misses by exactly the 3,328 B stack),
-doubles it bit-exact to 4448–4607 GOPS** — a **1.10×–1.83× NPU win at M ≥ 512** by the
-mean, thin enough that the CPU kernel's best-case time takes back the K=N=4096 rows. The
+doubles it bit-exact to 4448–4607 GOPS** — a **1.10×–1.83× NPU win at M ≥ 512, N ≥ 2048**
+by the mean, thin enough that the CPU kernel's best-case time takes back the K=N=4096 rows. The
 small-M loss tracks the forced tile `m`, not token count. Not done: bf16 at `n=64` via a
 single-buffered C FIFO (`whole_array.py` was in use by another live session).
 

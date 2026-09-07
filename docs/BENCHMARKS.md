@@ -769,7 +769,7 @@ same sitting at 2048³ — the 2× the MAC count promised, but only once the til
 have. **The margin is thin at the largest shapes:** torch's kernel has a large mean/min
 spread there (2048³: 7.08 ms mean, 4.09 ms min), and read against its best case the
 2048-class wins hold at 1.06–1.10× while the K=N=4096 rows become a 1.13–1.24× CPU win.
-In the same sitting the same design in bf16 beat CPU bf16 by 1.13×–1.35× at M ≥ 512 (CPU
+In the same sitting the same design in bf16 beat CPU bf16 by 1.13×–1.35× at M ≥ 512, N ≥ 1024 (CPU
 bf16 came in ~15% higher than in the sweep above — drift on the CPU side, which is why that
 range is narrower than 1.18×–1.78×). So int8 GEMM is a second genuine niche, about twice
 the bf16 one in absolute throughput, and relative to its own CPU competitor no wider than
