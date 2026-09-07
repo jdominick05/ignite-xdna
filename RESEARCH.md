@@ -1297,9 +1297,15 @@ sections above.
 - **Column count for the int8 conv kernels.** Both NPU measurements use 1–3 columns of a
   4×5 array; 4 × 146 ≈ 584 GOPS would still lose, but not by 5.6×. The one lever the
   56×56 result doesn't touch.
+- **What the array physically is, and what that permits.** The silicon-level inventory,
+  the ceilings derived from it, and the objectives list live in
+  [`docs/SILICON.md`](docs/SILICON.md); its objective S0 (measure the core clock, which
+  nothing here has done) gates every per-second ceiling in that file.
 - **bf16 GEMM at `n=64`.** Misses AIE2's 64 KB L1 by exactly the 3,328 B stack;
   single-buffering `whole_array.py`'s C output FIFO would free 16 KB. Untested because the
-  file was in use by another live session when the int8 sweep found the tile.
+  file was in use by another live session when the int8 sweep found the tile. This is
+  `docs/SILICON.md`'s objective K2 from the other direction: int8 already reaches the 64×64
+  tile and gets 1.9× for it.
 - **Longer term:** a detector fine-tuned for fixed camera feeds (licence-plate
   recognition), reusing the head-cut + XINT8 + AdaRound recipe rather than re-deriving it.
 

@@ -1,0 +1,57 @@
+xrt-smi platform report and the power-mode knob -- Desktop 2 (Phoenix, Ryzen 7 8700G),
+2026-09-07. Driver 32.0.20101.3760, xrt-smi from C:\Windows\System32\AMD\xrt-smi.exe, run
+with --batch so the output carries no terminal escape codes.
+
+Not a benchmark. A verbatim capture of what the driver's own tool reports about this NPU,
+recorded because docs/SILICON.md cites two things from it that no earlier log carried: the
+"Power Mode" field of the platform report, and the list of modes `xrt-smi configure
+--pmode` accepts. Nothing on the device was changed -- --pmode was not exercised, only its
+help was printed. "Total Columns: 5" is the same reading docs/DECISIONS.md first recorded
+(results/aie/aiecompiler_part_phoenix_candidate.log:29 quotes it), repeated here so the
+three facts sit in one log.
+
+Note the report prints no clock frequency of any kind. The AIE core clock this repo
+cites (1.6 GHz for the 8700G, RESEARCH.md, from a web search) is not measured by anything
+on this machine yet; docs/SILICON.md objective S0 is that measurement.
+
+=== xrt-smi --batch examine -r platform ===
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+Platform
+  Name                   : NPU Phoenix
+  Power Mode             : Default
+  Total Columns          : 5
+
+Estimated Power          : N/A
+
+=== xrt-smi --batch configure --help ===
+
+COMMAND: configure
+
+DESCRIPTION: Device and host configuration.
+
+USAGE: xrt-smi configure [-h] [-d arg] [--pmode arg]
+
+OPTIONS:
+  -d, --device       - The Bus:Device.Function (e.g., 0000:d8:00.0) device of interest
+  -h, --help         - Help to use this sub-command
+  --pmode            - Modes: default, powersaver, balanced, performance, turbo
+
+
+GLOBAL OPTIONS:
+  --verbose          - Turn on verbosity
+  --batch            - Enable batch mode (disables escape characters)
+  --force            - When possible, force an operation
+
+=== xrt-smi examine --help, report types this driver offers (from the same session) ===
+
+  -r, --report       - The type of report to be produced. Reports currently available are:
+                         aie-partitions - AIE partition information
+                         all            - All known reports are produced
+                         host           - Host information
+                         platform       - Platforms flashed on the device
+
+No "clocks" or "telemetry" report exists on this driver version; aie-partitions is the
+report tools/session_hold.py and tools/multi_partition_bench.py already read.

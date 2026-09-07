@@ -95,6 +95,12 @@ built locally, confirms this driver (32.0.20101.3760) OK's every VitisAI EP vers
 knows (1.2-1.8) against this PHX/HPT device — a second, independent tool corroborating
 findings already used throughout this directory.
 
+**`xrt_smi_platform_pmode.log`** — a `--batch` capture of `xrt-smi examine -r platform`
+and `configure --help` on Desktop 2: `Total Columns: 5`, `Power Mode: Default`, the five
+`--pmode` values (`default, powersaver, balanced, performance, turbo`), and no clock
+reported on this driver. Nothing on the device was changed. Cited by
+[`docs/SILICON.md`](../../docs/SILICON.md), sections 1.1 and 1.7.
+
 ## mlir-aie examples on this hardware
 
 **`mlir_aie_saxpy_npu.log`** — set up the open-source `Xilinx/mlir-aie` (IRON/Peano)
