@@ -803,6 +803,26 @@ been closed:
   conclusion: still a different toolchain from this project's own pipelines, not a reason
   to move off Quark/VitisAI EP for quantized-model inference.
 
+  **Follow-up: mlir-aie's `ml/` examples — closer to this repo's own operator
+  vocabulary.** `getting_started` designs are generic (memcpy, reduce, matmul);
+  mlir-aie also ships a `vision/` and an `ml/` category, closer to what YOLOv8/ResNet
+  actually run. Five pure-Python, Phoenix-tagged (`ryzen_ai_npu1`) designs from this
+  category ran, all from a cleared compile cache: `eltwise` (bf16 add and mul, each its
+  own compiled kernel), `eltwise_unary` (relu, silu, gelu — the exact activation
+  functions this project's own quantized models use), `scale_shift` (a two-phase
+  `D = A*B+C` design synchronized across phases with a `WorkerRuntimeBarrier`, a
+  different structural pattern than the split-and-parallelize style of the other
+  designs), `softmax`, and `swiglu`. All **`PASS!`** — see
+  `results/aie/mlir_aie_ml_examples_npu.log`. The rest of `vision/`/`ml/` was not run
+  this pass, for reasons the log states plainly rather than working around: the
+  `vision/*` designs and a few `ml/*` designs (`bottleneck`, `conv2d`, `conv2d_14x14`)
+  drive the NPU from a `make`-built C++ host program linking OpenCV, and this machine
+  has neither `make` nor an OpenCV C++ dev package installed; several other `ml/*`
+  designs are tagged `ryzen_ai_npu2` (Strix) only in mlir-aie's own test metadata and
+  do not apply to this Phoenix machine regardless; `ml/magika` and `ml/mobilenet` are
+  Phoenix-capable and pure-Python but are multi-file models substantial enough to
+  warrant their own dedicated pass rather than folding into this one.
+
 ## How to read the rest of this repository
 
 If you want *what works and how fast*: `README.md`.

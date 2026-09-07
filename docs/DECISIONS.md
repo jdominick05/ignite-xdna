@@ -349,7 +349,17 @@
   elementwise), and a single-core int16 matmul at two shapes via the AOT `.compile()`
   path (two distinct on-disk `.xclbin`s, confirmed not reused across shapes). All
   `PASS!`. Same conclusion as above, now on broader IRON-surface evidence. See
-  `results/aie/mlir_aie_examples_npu.log`.
+  `results/aie/mlir_aie_examples_npu.log`. **Update:** tried mlir-aie's `vision/`/`ml/`
+  categories next (closer to this repo's own operator vocabulary than
+  `getting_started`'s generic microbenchmarks). Five pure-Python, Phoenix-tagged designs
+  ran clean from a cleared cache — `eltwise` (add/mul), `eltwise_unary` (relu/silu/gelu),
+  `scale_shift` (two-phase runtime-parameterized `D=A*B+C`), `softmax`, `swiglu` — all
+  `PASS!`. The rest is a real, stated gap rather than a workaround: `vision/*` and a few
+  `ml/*` designs need a `make`-built C++ host program linking OpenCV, and this machine
+  has neither `make` nor an OpenCV C++ dev package; other `ml/*` designs are
+  Strix-only (`ryzen_ai_npu2`) regardless of that gap; `ml/magika` and `ml/mobilenet`
+  are Phoenix-capable but multi-file enough to warrant their own pass. See
+  `results/aie/mlir_aie_ml_examples_npu.log`.
 
 ## The YOLOv8 partitioning failure (resolved)
 

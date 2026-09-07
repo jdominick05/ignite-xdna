@@ -1,0 +1,97 @@
+Follow-up to mlir_aie_examples_npu.log (getting_started designs). User asked to try the
+vision/ and ml/ programming_examples next -- these are the categories most relevant to
+this project's own theme (CNN inference primitives), as opposed to getting_started's
+generic microbenchmarks.
+
+Survey of programming_examples/vision/ and programming_examples/ml/ against this
+hardware (Phoenix, ryzen_ai_npu1 in mlir-aie's own REQUIRES tags):
+
+  - vision/{color_detect,color_threshold,edge_detect,vision_passthrough}: all support
+    npu1 (`run_makefile.lit`), but every one drives the actual NPU dispatch from a C++
+    host program (test.cpp, linking OpenCV) built via `make -f Makefile`. This machine
+    has no `make` on PATH (checked: `which make` / `where make` both fail) and the
+    mlir-aie-iron ironenv has no Python cv2 either (these need the C++ OpenCV libs
+    test.cpp links against, a separate thing). Not run this pass -- would need a make
+    tool (e.g. via MSYS2) and an OpenCV C++ dev package added to the machine, out of
+    scope for "try the examples that already run."
+  - ml/{bottleneck,conv2d,conv2d_14x14}: also Makefile-built (same `make` gap), and
+    additionally require `torch` (not installed in the mlir-aie-iron env). Not run.
+  - ml/norm (rms/layer via Makefile) and ml/rope: Makefile-built, `ryzen_ai_npu2`
+    (Strix) only in their REQUIRES tags -- wrong chip generation for this machine
+    regardless of the make gap.
+  - ml/{cast_f32_bf16,dwconv1d,mm_activation_epilogue}, ml/norm's own `run_strix.lit`
+    python path, and every design under ml/block_datatypes/: all tagged
+    `ryzen_ai_npu2` only (Strix/AIE2P) -- do not apply to this Phoenix/AIE2 machine at
+    all, not a local setup gap.
+  - ml/magika: has its own `run_phoenix.lit` but is a multi-group text-classifier model
+    (`group0.py`/`group2.py`, `data/`, `kernels/`) well beyond a single design file;
+    left for a dedicated pass rather than folding into this one.
+  - ml/mobilenet: an end-to-end mobilenet dataflow (`run_e2e.lit`, `run_strix_makefile.lit`),
+    same story as magika -- substantial enough to warrant its own log, not run here.
+  - ml/{eltwise,eltwise_unary,scale_shift,softmax,swiglu}: pure-Python `@iron.jit`
+    designs, `ryzen_ai_npu1` + peano only in REQUIRES, no Makefile/OpenCV/torch. These
+    five ran.
+
+Cleared ~/.npu/cache before this round (fresh compiles, not cache hits). Same
+mlir-aie-iron env / C:\Users\<user>\mlir-aie clone (tag v1.4.2) as the prior two logs.
+
+--- ml/eltwise/eltwise.py (bf16 vector elementwise, per-worker split across the array) ---
+
+  python eltwise.py -d npu -o add   -> PASS!
+  python eltwise.py -d npu -o mul   -> PASS!
+
+Cache: eltwise_add_bf16_vector.cc (xclbin 17,240 B), eltwise_mul_bf16_vector.cc
+(xclbin 17,304 B) -- confirms add and mul compiled to genuinely distinct kernels, not
+one path reused.
+
+--- ml/eltwise_unary/eltwise_unary.py (bf16 activation functions) ---
+
+  python eltwise_unary.py -d npu -o relu  -> PASS!
+  python eltwise_unary.py -d npu -o silu  -> PASS!
+  python eltwise_unary.py -d npu -o gelu  -> PASS!
+
+Cache: bf16_relu.cc (xclbin 23,672 B), silu_bf16.cc (xclbin 34,168 B), gelu_bf16.cc
+(xclbin 35,192 B). Directly relevant to this project's own domain -- relu/silu/gelu are
+exactly the activation kernels YOLOv8/ResNet-family models use, here run as standalone
+hand-written AIE kernels rather than as part of a quantized ONNX graph.
+
+--- ml/scale_shift/scale_shift.py (time-multiplexed D = A*B+C, two-phase runtime param) ---
+
+  python scale_shift.py -d npu  -> PASS!
+
+Two cores compute D = A*B (phase 1, `rtp = 1`), then D = D + C (phase 2, `rtp = 0`) over
+the same workers, synchronized via a `WorkerRuntimeBarrier` so the runtime-parameter
+buffer update is visible before each phase starts -- a different structural pattern
+(same cores, two passes) than the split-and-parallelize style of the other designs here.
+Cache: eltwise_mul_add_bf16_vector.cc (xclbin 13,976 B).
+
+--- ml/softmax/softmax.py ---
+
+  python softmax.py -d npu  -> PASS!
+
+Cache: softmax_bf16.cc, largest xclbin of this batch (71,037 B).
+
+--- ml/swiglu/swiglu.py ---
+
+  python swiglu.py -d npu  -> PASS!
+
+Cache: swiglu_bf16.cc (xclbin 21,400 B).
+
+--- Conclusion ---
+
+Eight more designs PASS on this machine's actual XDNA1 (Phoenix) NPU via mlir-aie/Peano,
+all from a cold compile cache, all distinct kernels confirmed via the cache directories
+(8 total, no collisions). This round specifically exercises ml/-category primitives
+(elementwise binary ops, activation functions, a two-phase runtime-parameterized design,
+softmax, swiglu) rather than getting_started's generic microbenchmarks -- closer to the
+actual operator vocabulary of the CNN/detection models this repo's own pipelines quantize
+and run, though still via a hand-written-kernel toolchain entirely separate from
+Quark/VitisAI EP. vision/ and the remaining ml/ Makefile-built examples are not blocked
+by chip generation (several are npu1-tagged) but by two missing pieces on this machine:
+a `make` tool and an OpenCV C++ dev package -- a real, stated gap, not attempted to work
+around this pass. ml/magika and ml/mobilenet are pure-Python npu1-capable but are
+multi-file models substantial enough to warrant their own dedicated log.
+
+No new machine state beyond the two prior mlir-aie logs.
+
+Machine: Desktop 2 / Phoenix.
