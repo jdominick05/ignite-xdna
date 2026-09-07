@@ -1,0 +1,124 @@
+Follow-up to aiecompiler_physical_device_missing.log, which closed AMD's proprietary
+aiecompiler path (vaie_cpplus / aiecompiler_client.dll) for --target=hw: physical_device.dll
+and three sibling DLLs are absent from every AMD distribution channel checked on this
+machine (pip, both offline installers at 1.7.1 and 1.8.0). That log's conclusion offered
+two remaining avenues, both "out of scope for this pass": a full Vitis/Vivado install, or
+a direct request to AMD. This log is the result of chasing the first of those -- and
+finding a materially different, unblocked path instead of the gated one originally implied.
+
+--- What "full Vitis/Vivado" turned out to actually mean ---
+
+The physical place-and-route backend AMD ships standalone is called "Vitis AIE Essentials",
+gated behind the "Ryzen AI Software Early Access Lounge" (account.amd.com/en/member/
+ryzenai-sw-ea.html: AMD account + approval, then a MAC-address-locked license from
+xilinx.com/getlicense). Every reference to it on Windows -- including AMD's own official
+guide -- runs it under WSL, not natively; it is also frozen at SDK version 1.3.1 in every
+source found, two versions behind the 1.7.1 pipeline already probed. This is the gated,
+proprietary route and was not pursued further (WSL cannot reach XDNA1 hardware per this
+project's own findings, and the version gap to 1.7.1 is unverified).
+
+Instead: AMD's own current docs say the Vitis installation step can be skipped entirely
+for AIE2 (Phoenix/Hawk Point, this hardware) and AIE2P (Strix) by using Peano, the
+open-source LLVM-based AIE backend bundled with Xilinx/mlir-aie on GitHub. That project
+implements its own place-and-route in MLIR passes and generates the CDO/PDI/xclbin
+directly -- it does not call AMD's proprietary aiecompiler or physical_device.dll at all.
+No AMD account, no license, no WSL.
+
+Peano was, in fact, already sitting on this machine: `llvm_aie_lightweight-1.7.1` is a pip
+dependency of the existing ryzen-ai-1.7.1 env, installed at
+Lib/site-packages/win64.o/tools/peano/ (clang.exe, ld.lld.exe, native Windows binaries,
+targets aie2-none-unknown-elf and aie2p-none-unknown-elf) -- a completely separate
+`win64.o` namespace from `Lib/site-packages/lib/win64.o/` where physical_device.dll was
+expected. Two distinct toolchains coexist in the same pip env; only one of them is
+missing its backend.
+
+--- Setup (native Windows, no WSL) ---
+
+New conda env (Python 3.13, required for the Windows XRT SDK's pyxrt bindings; none of
+the project's existing 5 envs touched):
+  conda create -n mlir-aie-iron python=3.13
+
+Cloned to C:\Users\<user>\mlir-aie (outside this repo -- a separate toolchain, not part of
+the tracked pipelines), checked out tag v1.4.2 (commit 760932a4abf):
+  git clone --recurse-submodules https://github.com/Xilinx/mlir-aie.git
+  git checkout v1.4.2
+
+Checked the one real compatibility risk first: mlir-aie's native Windows guide requires
+XRT 2.21.0 / NPU driver 32.0.20101.3760. `xrt-smi examine` on this machine already
+reported exactly that (XRT 2.21.0, NPU Driver Version 32.0.20101.3760, NPU Firmware
+1.5.5.391, device "NPU Phoenix") -- no driver change needed.
+
+`python utils\iron_setup.py` builds a local .\ironenv venv and pulls pinned wheels. Two
+snags, both minor and fixed without touching the existing pip envs or system state:
+  1. "llvm-objcopy.exe is required to prepare the llvm-aie wheel" -- the setup script
+     looks for it under peano_root/bin or PATH and finds neither; the mlir_aie wheel
+     (a different package from llvm-aie) bundles its own copy at
+     ironenv/Lib/site-packages/mlir_aie/bin/llvm-objcopy.exe. Fixed by adding that
+     directory to PATH before rerunning setup.
+  2. "No Windows XRT SDK root was found" -- iron_setup.py's own XRT (driver+runtime,
+     already installed) is not the same thing as the XRT *SDK* (headers + pyxrt.pyd) it
+     needs to build/JIT host code. Downloaded xrt_windows_sdk.zip from the matching
+     release (github.com/Xilinx/XRT/releases/download/2.21.75/xrt_windows_sdk.zip,
+     70,834,080 bytes, matches the GitHub-reported size), extracted to
+     C:\Xilinx\XRT\xrt_sdk\xrt, reran with --xrt-root pointing at it.
+Second rerun: "IRON environment is ready." (Python 3.13.15 | mlir_aie 1.3.4 | llvm-aie
+22.0.0.2026090201+a36c62b9 | XRT: C:\Xilinx\XRT\xrt_sdk\xrt)
+
+--- First run: version-skew failure, then the fix ---
+
+programming_examples/getting_started/01_SAXPY/saxpy.py against the freshly-installed
+mlir_aie 1.3.4 (installed setup.py's rolling "latest-wheels-4" channel) failed immediately
+in kernel generation:
+  TypeError: Runtime.__init__() takes from 1 to 2 positional arguments but 3 were given
+This is the exact version-skew the project's own README warns about: the checked-out
+`main` branch's example code had drifted from wheel 1.3.4's API. Fixed by syncing both to
+the same tagged release instead of a rolling channel + branch tip:
+  git checkout v1.4.2
+  pip install --upgrade mlir_aie -f https://github.com/Xilinx/mlir-aie/releases/expanded_assets/v1.4.2
+(installed mlir_aie-1.4.2, replacing 1.3.4)
+
+--- Result ---
+
+Cleared ~/.npu/cache and reran saxpy.py from a cold cache to get a genuine compile, not a
+cache hit. saxpy.py builds a 2-input, 1-output IRON kernel (SAXPY: z = 3*x + y, N=4096,
+bfloat16, one AIE core), JIT-compiles it via @iron.jit, dispatches it against
+device="npu" (not a simulator device string), and checks the NPU's output against a numpy
+reference with a one-line tolerance assertion. Full captured stdout:
+
+  PASS!
+
+The fresh-compile cache directory (~/.npu/cache/f6e83e5ef3060b585fcb4256/) is the evidence
+this was a real compile, not a stale artifact: aie.mlir and input_with_addresses.mlir (the
+placed MLIR module), three staged LLVM-IR dumps for the core (peano-compat / opted /
+peano-linked *.ll), the compiled kernel object (objects_main_core_0_2.o, from saxpy.cc via
+the ExternalFunction mechanism), the linked core ELF (elfs_main_core_0_2.elf), the three
+CDO binaries (cdo_main/main_aie_cdo_{elfs,enable,init}.bin -- Configuration Data Objects,
+what actually programs the AIE array), main.pdi (Programmable Device Image), and
+final.xclbin (8,870 bytes) -- the artifact XRT loads. Every stage of place-and-route ran
+through mlir-aie's own tools; aiecompiler_client.dll and physical_device.dll are not in
+this path at all.
+
+--- Conclusion ---
+
+The custom-kernel bring-up wall in aiecompiler_physical_device_missing.log is specific to
+AMD's proprietary vaie_cpplus/aiecompiler toolchain, not to this hardware or to "writing
+custom AIE kernels" in general. A hand-written kernel was written, compiled for
+--target=hw, and verified correct against a numpy reference on this machine's actual
+XDNA1 (Phoenix) NPU, entirely through the open-source mlir-aie + Peano toolchain, natively
+on Windows, with no AMD account, no license, and no WSL. This does not make the
+proprietary-toolchain finding wrong -- physical_device.dll is still genuinely absent from
+every AMD distribution channel checked -- but it means custom-kernel bring-up on this
+hardware is not actually blocked; it just requires a different toolchain than the one
+this project's own pipelines (Quark/VitisAI EP) use for quantized-model inference. The two
+toolchains are not interchangeable: mlir-aie/IRON is for hand-written kernels from
+scratch; Quark+VitisAI EP is for quantizing and running existing ONNX models. This log
+closes the "is custom-kernel bring-up possible on this hardware" question with a measured
+yes, via a different door than the one that was walled off.
+
+New machine state, none touching the existing 5 conda envs or the tracked pipelines:
+  - conda env mlir-aie-iron (Python 3.13, bootstrap interpreter only)
+  - C:\Users\<user>\mlir-aie (git clone, tag v1.4.2, own .\ironenv venv inside it)
+  - C:\Xilinx\XRT\xrt_sdk\xrt (XRT Windows SDK 2.21.75, headers + pyxrt only -- the
+    driver/runtime XRT this machine already had is untouched)
+
+Machine: Desktop 2 / Phoenix.

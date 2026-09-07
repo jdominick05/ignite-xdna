@@ -327,7 +327,21 @@
   for Strix. Conclusion: AMD's redistributable packaging draws its boundary at pre-built
   xclbin overlays; the physical-implementation backend to build a new one from a
   hand-written ADF graph isn't included, on either SDK version available here. See
-  `results/aie/aiecompiler_physical_device_missing.log`.
+  `results/aie/aiecompiler_physical_device_missing.log`. **Update:** that wall is specific
+  to AMD's proprietary `vaie_cpplus`/`aiecompiler` toolchain, not to this hardware. Set up
+  the open-source `Xilinx/mlir-aie` (IRON/Peano) toolchain instead — native Windows, no
+  WSL, no AMD account, no license, in a new isolated conda env (`mlir-aie-iron`, Python
+  3.13) that touches none of the existing 5 envs — and ran a hand-written SAXPY kernel
+  end to end on this machine's actual XDNA1 (Phoenix) hardware: JIT-compiled, dispatched
+  against `device="npu"`, verified correct against a numpy reference. `PASS!`, from a cold
+  compile cache whose intermediate artifacts (placed MLIR, staged LLVM-IR, core ELF, CDO
+  binaries, PDI, final `.xclbin`) confirm a genuine place-and-route, not a stale artifact
+  or a simulator run. Peano (`llvm_aie_lightweight`) was already a pip dependency in the
+  existing `ryzen-ai-1.7.1` env, under a `win64.o` namespace entirely separate from the
+  one missing `physical_device.dll`. Doesn't overturn the proprietary-toolchain finding —
+  `physical_device.dll` is still genuinely absent everywhere checked — but custom-kernel
+  bring-up on this hardware is not actually blocked, only through a different toolchain
+  than this project's own pipelines use. See `results/aie/mlir_aie_saxpy_npu.log`.
 
 ## The YOLOv8 partitioning failure (resolved)
 

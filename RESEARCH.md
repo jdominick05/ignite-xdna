@@ -740,12 +740,50 @@ been closed:
   consume it are both incomplete, in different ways. This reads as a deliberate boundary
   in AMD's redistributable packaging: pre-built xclbin overlays ship to end users; the
   physical-implementation backend needed to build a new one from a hand-written ADF
-  graph does not. **This is where the bring-up stops for now: two walls solved in
-  sequence (device-model string, host C++ toolchain), a third reached that neither
-  installer on this machine, at either SDK version, can supply — `--target=hw` on this
-  packaging is closed until that component is found or supplied from elsewhere (a full
-  Vitis/Vivado install, or a direct request to AMD, are the only remaining avenues, both
-  out of scope for this pass).** See `results/aie/aiecompiler_physical_device_missing.log`.
+  graph does not. **This is where AMD's own proprietary toolchain (`vaie_cpplus`/
+  `aiecompiler_client.dll`) stops: two walls solved in sequence (device-model string,
+  host C++ toolchain), a third that neither offline installer on this machine, at either
+  SDK version, can supply.** See `results/aie/aiecompiler_physical_device_missing.log`.
+  **Chasing "a full Vitis/Vivado install" (the avenue this log left open) turned up a
+  different, unblocked door instead of the gated one implied.** The physical
+  place-and-route backend AMD ships standalone (Vitis AIE Essentials) is gated behind an
+  early-access account + a MAC-locked license, frozen at SDK 1.3.1, and every Windows
+  reference to it runs under WSL (which this project's own findings already rule out for
+  reaching XDNA1 hardware) — not pursued further. But AMD's current docs also say the
+  Vitis step can be skipped entirely for AIE2/AIE2P using **Peano**, the open-source
+  LLVM-based AIE backend bundled with `Xilinx/mlir-aie` on GitHub — a project that
+  implements its own place-and-route in MLIR passes and never calls `aiecompiler`/
+  `physical_device.dll` at all. Peano was already on this machine as a pip dependency
+  (`llvm_aie_lightweight`, native Windows `clang.exe`/`ld.lld.exe` under a completely
+  separate `win64.o` namespace from the one missing its backend).
+  **Set up mlir-aie's native-Windows path (no WSL) in a new, isolated conda env
+  (`mlir-aie-iron`, Python 3.13; none of the existing 5 envs touched) and ran a
+  hand-written kernel end to end on this machine's actual XDNA1 (Phoenix) hardware —
+  measured, not simulated.** `xrt-smi examine` already reported exactly the XRT/driver
+  version (2.21.0 / 32.0.20101.3760) mlir-aie's guide requires, so no driver change was
+  needed. Two setup snags, both fixed without touching the existing pip envs (a missing
+  `llvm-objcopy.exe` the setup script looks for in the wrong directory — the `mlir_aie`
+  wheel bundles its own copy; a missing Windows XRT *SDK*, distinct from the driver/
+  runtime XRT already installed — downloaded from the matching XRT GitHub release). One
+  version-skew failure (`main` branch example code vs. a rolling wheel channel —
+  `Runtime.__init__()` signature mismatch, the exact pitfall the project's own README
+  warns about) fixed by checking out a tagged release (`v1.4.2`) and installing its
+  matching wheel instead of `main` + latest. With both in sync, the SAXPY example
+  (`z = 3*x + y`, N=4096, bfloat16, one AIE core) JIT-compiled, dispatched against
+  `device="npu"`, and verified against a numpy reference: **`PASS!`**
+  (`results/aie/mlir_aie_saxpy_npu.log`). The fresh compile cache is the evidence this
+  was a real compile, not a stale artifact or a simulator run: placed MLIR, three staged
+  LLVM-IR dumps, a compiled kernel object, a linked core ELF, three CDO binaries, a PDI,
+  and a 8,870-byte `final.xclbin` — every place-and-route stage done by mlir-aie's own
+  tools. **This does not overturn the proprietary-toolchain finding — `physical_device.dll`
+  is still genuinely absent from every AMD distribution channel checked — but it means
+  custom-kernel bring-up on this hardware is not actually blocked; it just needs a
+  different toolchain than the one this project's own pipelines (Quark + VitisAI EP) use
+  for quantized-model inference.** The two are not interchangeable: mlir-aie/IRON is for
+  hand-written kernels from scratch, Quark/VitisAI EP is for running existing quantized
+  ONNX models — this project's own pipelines still have no reason to move off the latter.
+  Closes the "is custom-kernel bring-up possible on this hardware" question with a
+  measured yes, via a different door than the one that was walled off.
 
 ## How to read the rest of this repository
 
