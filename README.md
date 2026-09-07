@@ -416,11 +416,13 @@ GFLOPS, PASS.** See `results/aie/mlir_aie_bf16_matmul_npu.log`.
 
 **Follow-up: Fused BF16 Attention Kernel Built, but Small Sequence Length Exposes the Arithmetic Floor (Negative Result).**
 Investigating the hybrid CNN-Transformer architecture `mobilevit_xxs`: stock VitisAI EP
-partitioned into **49 thrashing subgraphs (108.00 ms)** (1,037 NPU nodes / 548 CPU nodes,
-including 156 CPU compute nodes: LayerNorm, MatMul, Slice, Reshape) due to unsupported
-transformer operators, losing 5.9× to the 8-core Zen4 CPU (18.37 ms). Cutting the attention
-blocks isolated the pure CNN backbone (409 nodes: 407 NPU in **1 single subgraph**, 2 CPU boundary
-nodes), executing on NPU in **1.73 ms** (3.1× faster than CPU 5.35 ms, like-for-like). Built the
+partitioned it into **58 thrashing DPU subgraphs, 108.29 ms** (1,037 NPU / 156 CPU /
+392 `VITIS_EP_CPU` nodes, the CPU compute being LayerNorm, MatMul, Slice, Squeeze,
+Transpose, Reshape) because the DPU overlay has no kernel for those transformer
+operators — **14.4× slower than the same FP32 graph under the ORT CPU EP (7.51 ms)**.
+Cutting the attention blocks isolated the pure CNN backbone (409 nodes: 407 NPU in
+**1 single subgraph**, 2 CPU boundary nodes), executing on NPU in **1.71 ms**
+(**3.30×** faster than CPU 5.65 ms, like-for-like). Built the
 custom fused BF16 multi-head attention kernel in `mlir-aie` (IRON + Peano): fixed Peano's linker
 script stack collision with `Worker(stack_size=2048)`; implemented row-wise FlashAttention streaming
 (scratchpad shrunk from 128 KB to 512 bytes); vectorized via 16-lane AIE2 SIMD (`aie_api`); and
@@ -434,7 +436,10 @@ On Stage 3 (8 heads), total arithmetic is only **2.79 MFLOP** — roughly 100× 
 MobileNetV2's ~300 MFLOP floor which already lost to CPU. Zen4 AVX-512 executes those 8 heads
 in **0.034 ms**, making the 4.57 ms AIE2 kernel **134× slower than CPU** (0.61 GFLOPS achieved,
 <0.1% of array compute peak). Running the full model entirely on NPU with this kernel would
-take >120 ms.
+take **>120 ms — a projection, not a measurement**: it is the per-stage kernel timings above
+summed over the real block counts (2×57.61 + 4×4.57 + 3×0.86 ≈ 136 ms at 8 heads), never run
+end to end. It is cited only to say the direction is hopeless, which the per-stage numbers
+already establish on their own.
 
 **Heterogeneous splice, now measured: 3.25 ms, and 2.31× — not the 4.47 ms / 4.1× once
 published here.** `tools/splice_wall_clock.py` puts a `perf_counter` around a real

@@ -62,7 +62,7 @@ While the kernel compiles, maps cleanly across 8 physical AIE2 cores, streams vi
 | **Stock VitisAI EP Baseline** | 58 DPU subgraphs (partition thrashing) | 108.29 ms | measured; 1037 NPU / 156 CPU / 392 VITIS_EP_CPU nodes |
 | **CPU Full Baseline (ORT CPU EP)** | 8 Zen4 cores, FP32 | **7.51 ms** | the like-for-like CPU baseline (PyTorch eager is 15.71 ms; 68.30% top-1) |
 | **Cut CNN Backbone** | Physical Phoenix NPU (1 subgraph, 407 nodes) | **1.71 ms** | **3.30× vs CPU CNN (5.65 ms)** (like-for-like) |
-| **Full NPU with AIE Attention** | Cut CNN on NPU + AIE2 Attention Kernel | **>120 ms** | **Loses to both CPU and Stock EP** |
+| **Full NPU with AIE Attention** | Cut CNN on NPU + AIE2 Attention Kernel | >120 ms *(projected)* | Per-stage timings summed over real block counts; never run end to end |
 | **Heterogeneous Splice (MEASURED)**| Cut CNN on NPU (1.71 ms) + Attention on CPU (1.41 ms, torch) | **3.25 ms** | **2.31× vs ORT CPU**; residual only +0.13 ms |
 
 > [!WARNING]

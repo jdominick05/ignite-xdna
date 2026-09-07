@@ -630,11 +630,11 @@ caches.
   - Stage 4 (8 heads): **0.86 ms** on AIE2 vs **0.012 ms** on Zen4 CPU (71× slower than CPU)
   - Stage 3 (8 heads): **4.57 ms** on AIE2 vs **0.034 ms** on Zen4 CPU (134× slower than CPU)
   - Stage 2 (8 heads): **57.61 ms** on AIE2 vs **0.240 ms** on Zen4 CPU (240× slower than CPU)
-  - Full model attention (all 9 layers, 16 heads each): **>120 ms** on AIE2 vs **1.57 ms** on CPU.
+  - Full model attention (all 9 layers): **>120 ms** on AIE2 vs ~1.4 ms on CPU. NOTE: the >120 ms is a PROJECTION -- the per-stage kernel timings summed over the real block counts (2x57.61 + 4x4.57 + 3x0.86 ~= 136 ms at 8 heads), never run end to end.
   - **The Arithmetic Floor:** Stage 3 compute volume is only **2.79 MFLOP** (0.0028 GFLOP). MobileNetV2 at ~300 MFLOP was already below the NPU acceleration threshold (losing to CPU 2.68 vs 1.72 ms); MobileViT attention is ~100× smaller still. Achieved throughput is **0.61 GFLOPS** (<0.1% of array compute capability), meaning execution time is virtually 100% dispatch, shim DMA sequence overhead, and tile orchestration.
 - **Architectural Comparison & Splicing Reality:**
   - **Cut CNN Backbone (Like-for-Like):** 1.73 ms NPU vs 5.35 ms CPU (**3.1× speedup** on the identical 407-node graph). Comparing 1.73 ms against the 108 ms stock EP baseline is comparing a model fragment to a whole model; the 3.1× like-for-like is the honest figure.
-  - **Full Model on NPU (with AIE Attention):** >120 ms, which loses heavily to both CPU (18.37 ms) and Stock VitisAI EP (108.00 ms).
+  - **Full Model on NPU (with AIE Attention):** >120 ms (projected, see above), losing heavily to both the ORT CPU EP (7.51 ms measured) and the stock VitisAI EP (108.29 ms measured).
   - **Heterogeneous Splice — MEASURED 2026-09-07: 3.25 ms and 2.31×, superseding the
     reported 4.47 ms / 4.1×.** `tools/splice_wall_clock.py`,
     `results/mobilevit/splice_wall_clock_npu.log`, 100 iterations, all rows from one run.

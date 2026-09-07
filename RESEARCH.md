@@ -985,11 +985,14 @@ been closed:
   cleanly.
 - **Follow-up: Fused BF16 Attention Kernel Built, but Small Sequence Length Exposes the Arithmetic Floor (Negative Result).**
   Addressed the hybrid CNN-Transformer architecture `mobilevit_xxs`. Stock VitisAI EP
-  quantized via Quark partitioned into **49 thrashing subgraphs (108.00 ms)** (1,037 NPU nodes /
-  548 CPU nodes, including 156 CPU compute nodes: LayerNorm, MatMul, Slice, Reshape) due to unsupported
-  transformer operators, losing 5.9x to 8-core Zen4 CPU (18.37 ms). Cutting the attention blocks
-  left a pure convolution backbone (409 nodes: 407 NPU in **1 single subgraph**, 2 CPU boundary nodes)
-  compiled into NPU at **1.73 ms** (3.1x faster than CPU 5.35 ms, like-for-like). Built the custom
+  quantized via Quark partitioned it into **58 thrashing DPU subgraphs, 108.29 ms** (1,037 NPU /
+  156 CPU / 392 `VITIS_EP_CPU` nodes; the CPU compute is LayerNorm, MatMul, Slice, Squeeze,
+  Transpose, Reshape) because the DPU overlay has no kernel for those transformer operators --
+  **14.4x slower than the same FP32 graph under the ORT CPU EP (7.51 ms)**. Cutting the
+  attention blocks left a pure convolution backbone (409 nodes: 407 NPU in **1 single
+  subgraph**, 2 CPU boundary nodes) compiled into NPU at **1.71 ms** (**3.30x** faster than
+  CPU 5.65 ms, like-for-like). All four figures re-measured in one run, see the splice entry
+  below. Built the custom
   fused BF16 attention kernel in `mlir-aie` (IRON + Peano): solved Peano's linker script upward
   stack collision via `Worker(stack_size=2048)`; implemented row-wise FlashAttention streaming
   shrinking tile memory from 128 KB to 512 bytes; applied 16-lane AIE2 vector intrinsics (`aie_api`)
@@ -1005,7 +1008,10 @@ been closed:
   runs those 8 heads in **0.034 ms**, making the 4.57 ms AIE2 kernel **134x slower than CPU**
   (achieving 0.61 GFLOPS, <0.1% of array peak). Mobile vision self-attention lacks the token
   sequence length ($N \ge 2048$) of LLMs needed to overcome AIE2 launch and DMA sequencing overhead.
-  Running the full model on NPU with this kernel takes >120 ms.
+  Running the full model on NPU with this kernel takes **>120 ms -- a projection, not a
+  measurement**: the per-stage timings summed over the real block counts
+  (2x57.61 + 4x4.57 + 3x0.86 ~= 136 ms at 8 heads), never run end to end. Cited only for
+  direction; the per-stage numbers already settle it.
 
   **Heterogeneous splice: now measured at 3.25 ms / 2.31x, replacing the reported
   4.47 ms / 4.1x.** `tools/splice_wall_clock.py` wraps a `perf_counter` around a real
