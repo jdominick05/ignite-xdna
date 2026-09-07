@@ -430,6 +430,52 @@
   standalone measured artifact, but has no path into the real model's inference
   without an unbuilt, unmeasured cross-node batching scheme to amortize the
   per-call floor. See `results/aie/groupnorm_bf16_handoff_floor_npu.log`.
+  **Update:** GroupNorm is ~6 ops/element with no arithmetic intensity, so bf16
+  there only ever bought a smaller payload, never a faster MAC — every fix to the
+  handoff floor was fighting a boundary cost, not the real constraint AIE2's native
+  bf16xbf16->fp32 MAC exists to address. Pivoted to checking whether a compute-bound
+  op (fused self-attention: QK^T -> softmax -> PV, one xclbin, no host round-trip)
+  is buildable from validated pieces. Inventoried bf16 support across
+  `programming_examples/` (v1.4.2): matmul, eltwise, eltwise_unary, scale_shift,
+  softmax, swiglu all have real bf16 kernels tested on this chip (npu1/aie2);
+  conv2d/conv2d_14x14/bottleneck/resnet are int8/uint8-only everywhere; LayerNorm/
+  RMSNorm/RoPE/dwconv1d are bf16 but Strix (aie2p)-only. Picks attention over a CNN
+  — no bf16 conv2d to build from, but attention's core compute needs no
+  LayerNorm-equivalent. `ml/resnet/layers_conv2_x` (already run) is the structural
+  template for chaining blocks core-to-core without a host round-trip.
+  Ran bf16 matmul on this hardware for the first time to confirm the primitive
+  before building on it (`basic/matrix_multiplication` had never been exercised on
+  this machine): single_core 512^3 bf16, PASS, 116.56 GFLOPS (2303us); whole_array
+  4-column 512^3 bf16, PASS, 895.08 GFLOPS (299.9us) — ~7.7x scaling, not a clean
+  4x. Getting there needed five new native-Windows fixes: (1) GNU Make auto-exports
+  command-line vars into recipe subprocess environments; passing both uppercase
+  M/K/N and lowercase m/k/n collides in MSBuild's case-insensitive .NET environment
+  dictionary ("Key in dictionary: 'N' Key being added: 'n'") — omit the lowercase
+  tile dims, they default to 32 already; (2) `powershell.exe`'s WSL-detection
+  false-positives on native Windows (same class as the known `getwslpath` issue)
+  and wrapping `cmake -E env CXXFLAGS="..."` through it loses the quote boundary on
+  re-tokenization — add `powershell=` to the existing `getwslpath=echo`
+  invocation-time override; (3) the matmul Makefiles never forward
+  `XRT_INC_DIR`/`XRT_LIB_DIR` into the actual cmake configure call, so passing them
+  as Make vars is a no-op — `export CMAKE_PREFIX_PATH=/c/Xilinx/XRT/xrt_sdk/xrt`
+  makes `find_package(XRT)` succeed instead; (4) `xclbinutil.exe` lives at
+  `C:\Xilinx\XRT\xrt_sdk\xrt\`, not under `ironenv` — needs to be on `PATH`; (5)
+  `pyxrt.pyd` lives at `C:\Xilinx\XRT\xrt_sdk\xrt\python\` and needs to be on
+  `PYTHONPATH`, or `aie.utils.tensor_factory` silently downgrades to a CPU-only
+  tensor class and `--dev npu` fails with `Unsupported device: npu` (not an import
+  error) instead of the real `ModuleNotFoundError` cause. One upstream source edit
+  in the external clone (not this repo, will be lost on `git pull` of mlir-aie):
+  `basic/matrix_multiplication/common.h:382`'s `(struct error<Tout>){...}` is a
+  GCC-only compound literal MSVC rejects (C4576/C2760) — changed to
+  `error<Tout>{...}`, a portable brace-init with identical semantics. Separately,
+  the Makefile's own `make run` path (a C++ host test.exe linked against the XRT
+  C++ SDK) produced byte-identical garbage verification output regardless of dtype
+  (bf16 and the Makefile's i16/i32 default both failed the same way) — an
+  unexplained bug in that specific harness, sidestepped by using the already-proven
+  pure-Python IRON path (`python3 <design>.py ...`) instead, which PASSed cleanly.
+  No fused attention kernel is built yet; the baseline it needs to beat (must be
+  ONNX-exportable and Quark-quantizable) also isn't decided. See
+  `results/aie/mlir_aie_bf16_matmul_npu.log`.
 
 ## The YOLOv8 partitioning failure (resolved)
 

@@ -943,6 +943,50 @@ been closed:
   model's top-1 with bf16 in these nodes (now moot unless a batched splice is
   built and shown to change the handoff numbers above).
   `results/aie/groupnorm_bf16_handoff_floor_npu.log`.
+- **Follow-up: GroupNorm was the wrong shape of op for bf16 to begin with -- pivoting
+  to a compute-bound one.** GroupNorm is ~6 ops per element with no arithmetic
+  intensity; bf16 there only ever bought a 2x byte-size reduction over fp32, never a
+  compute win, which is why every fix to the handoff floor above was fighting a
+  boundary cost rather than the real constraint. AIE2's actual bf16 advantage is a
+  native bf16xbf16->fp32 MAC, which a memory-bound op never exercises. Decision:
+  check whether a fused self-attention block (QK^T -> softmax -> PV, one xclbin, no
+  host round-trip between stages) is buildable entirely from mlir-aie's own
+  bf16-validated building blocks on this chip, so that MAC path has something to
+  land on. Inventoried bf16 support across `programming_examples/` (v1.4.2, static
+  code reading): matmul (`basic/matrix_multiplication/{single_core,whole_array}`),
+  `ml/eltwise`, `ml/eltwise_unary`, `ml/scale_shift`, `ml/softmax`, and `ml/swiglu`
+  all have real bf16 kernels already tested on this chip (npu1/aie2); `ml/conv2d`,
+  `ml/conv2d_14x14`, `ml/bottleneck`, and `ml/resnet` are int8/uint8-only with no
+  bf16 path anywhere in the tree; `ml/norm` (LayerNorm/RMSNorm), `ml/rope`, and
+  `ml/dwconv1d` are bf16 but Strix (aie2p)-only, "no aie2 counterpart." This picks
+  the net: a CNN would mean writing bf16 conv2d from zero with no reference: a
+  self-attention block needs no LayerNorm-equivalent for its core compute and is
+  assemblable entirely from already-validated pieces. `ml/resnet/layers_conv2_x`
+  (already run, see the entry above) is the structural template for chaining
+  without a host round-trip: block N's output ObjectFifo is literally block N+1's
+  input ObjectFifo, core to core, and the whole chain is one dispatch.
+  Before building anything, ran the actual bf16 matmul primitive on this hardware
+  for the first time (`basic/matrix_multiplication` had never been run on this
+  machine; only the unrelated `getting_started/03_matrix_multiplication_single_core`
+  int16 design had): single_core, 512x512x512, bf16 in/out, **PASS, 116.56
+  GFLOPS (2303us NPU time)**; whole_array, 4 columns, same shape, **PASS, 895.08
+  GFLOPS (299.9us NPU time)** -- ~7.7x scaling across 4 columns, not a clean 4x. The
+  headline is the PASS, not the GFLOPS: it answers whether there is a real, correct
+  bf16 compute primitive to build an attention block on before committing engineering
+  time to one. Getting there needed five new native-Windows toolchain fixes (a
+  Make/MSBuild environment-variable case collision, a `powershell.exe`
+  re-tokenization bug that loses a multi-word `CXXFLAGS` value, `CMAKE_PREFIX_PATH`
+  for XRT's own CMake package discovery, `xclbinutil.exe`'s real path, and
+  `pyxrt.pyd`'s real path/PYTHONPATH requirement) plus one one-line portability fix
+  in the external mlir-aie clone (a GCC-only compound-literal cast MSVC rejects) --
+  see `results/aie/mlir_aie_bf16_matmul_npu.log` for all five, and for a separate,
+  still-unexplained bug in this design's C++ host-test harness (identical garbage
+  verification output regardless of dtype) that the pure-Python IRON path sidesteps
+  cleanly. No fused attention kernel is built yet -- this is toolchain validation
+  and a real throughput anchor, not the kernel itself. The baseline it will need to
+  beat also isn't decided yet: the net must be ONNX-exportable and
+  Quark-quantizable so IRON, VitisAI-EP-xint8, and CPU can all be measured on the
+  same graph.
 
 ## How to read the rest of this repository
 

@@ -1,0 +1,155 @@
+bf16 primitive inventory + real matmul numbers on Phoenix (XDNA1) -- pivot away
+from the groupnorm_bf16 splice thread toward a compute-bound op
+
+Context: the groupnorm_bf16 kernel (results/aie/groupnorm_bf16_handoff_floor_npu.log)
+is memory-bound -- ~6 ops per element, no arithmetic intensity to speak of -- so bf16
+there only ever bought a 2x byte-size reduction over fp32, never a compute win, and
+every fix to the two-process handoff floor was fighting a boundary cost, not the real
+constraint. Decision: stop optimizing a memory-bound splice and instead check whether
+a compute-bound op (fused self-attention: QK^T -> softmax -> PV) is buildable entirely
+from mlir-aie's own validated bf16 building blocks on this exact chip, so bf16's actual
+advantage on AIE2 (native bf16xbf16->fp32 MAC) has something to land on.
+
+--- 1. bf16 primitive inventory (static code reading, v1.4.2, C:\Users\<user>\mlir-aie)
+---
+
+| Primitive | bf16 on Phoenix (npu1/aie2)? | Path |
+|---|---|---|
+| matmul (single_core, whole_array) | Yes, in-tree bf16 lit tests | basic/matrix_multiplication/{single_core,whole_array} |
+| eltwise (add/mul) | Yes | ml/eltwise |
+| eltwise_unary (relu/silu/gelu) | Yes | ml/eltwise_unary |
+| scale_shift | Yes | ml/scale_shift |
+| softmax | Yes | ml/softmax |
+| swiglu | Yes | ml/swiglu |
+| conv2d / conv2d_14x14 / bottleneck / resnet | No -- int8/uint8 only, no bf16 path anywhere | ml/conv2d*, ml/bottleneck, ml/resnet |
+| LayerNorm / RMSNorm | bf16, but Strix (aie2p) only -- "no aie2 counterpart" | ml/norm |
+| RoPE | bf16, Strix (aie2p) only | ml/rope |
+| dwconv1d | bf16, Strix (aie2p) only | ml/dwconv1d |
+| cast_f32_bf16 | Strix (aie2p) only | ml/cast_f32_bf16 |
+
+Conclusion: a CNN path has no bf16 conv2d to build on (would mean writing one from
+zero, no in-tree reference). A self-attention block (matmul + softmax + matmul, no
+LayerNorm) is assemblable entirely from primitives already validated in-tree for this
+chip. This picked the candidate net -- see docs/DECISIONS.md and RESEARCH.md for the
+full reasoning chain.
+
+`ml/resnet/layers_conv2_x` (already run, mlir_aie_magika_mobilenet_npu.log) is the
+structural reference for chaining blocks without a host round-trip: block N's output
+ObjectFifo is literally block N+1's input ObjectFifo (core-to-core, no L3 hop), MemTile
+is used only for buffering/broadcast (skip connections, weight staging), and the whole
+chain is one Runtime.sequence / one xclbin / one dispatch.
+
+--- 2. Real hardware bf16 matmul numbers (this session, this machine) ---
+
+Before this session, no design in `basic/matrix_multiplication` had been run on this
+machine at all -- only `getting_started/03_matrix_multiplication_single_core` (int16)
+had been tried previously. Running these bf16-tagged designs for the first time hit
+five new native-Windows toolchain issues, all fixed at invocation time (see section 3);
+none required editing the design's actual kernel/MLIR.
+
+single_core, 512x512x512, bf16 in/out, run via the pure-Python IRON path
+(`python3 single_core.py --dev npu -M 512 -K 512 -N 512 --dtype_in bf16 --dtype_out bf16
+--warmup 1 --iters 5`):
+
+  NPU time     (avg/min/max us): 2303.0 / 2289.5 / 2318.6
+  End-to-end   (avg/min/max us): 3043.1 / 2921.6 / 3247.4
+  NPU GFLOPS                    : 116.56
+  PASS!
+
+whole_array, 4 columns, 512x512x512, bf16 in/out, same path
+(`python3 whole_array.py --dev npu -M 512 -K 512 -N 512 --n-aie-cols 4 --dtype_in bf16
+--dtype_out bf16 --warmup 1 --iters 5`):
+
+  NPU time     (avg/min/max us): 299.9 / 293.1 / 308.0
+  End-to-end   (avg/min/max us): 848.5 / 740.3 / 1224.2
+  NPU GFLOPS                    : 895.08
+  PASS!
+
+4 columns scale single-core throughput by ~7.7x (116.56 -> 895.08 GFLOPS), not a clean
+4x -- consistent with whole_array using more compute tiles per column than single_core
+uses in total, not just more columns.
+
+**bf16 matmul is real and correct on this hardware, verified end to end (PASS, not just
+timed)** -- this is the headline finding, not the GFLOPS number. It answers the
+blocking question the pivot depended on: is there a working bf16 primitive to build an
+attention block on. Yes.
+
+--- 3. A failed detour, and why it doesn't change finding 2 ---
+
+The Makefile-driven `make ... run` path for `basic/matrix_multiplication/single_core`
+builds a separate C++ host test binary (test.cpp, linked against the XRT C++ SDK) and
+runs the design through it instead of the pure-Python path. That path produced
+byte-identical garbage "Reference" tables (bit patterns in the bf16 NaN/Inf exponent
+range) and ~239k/262k element mismatches for BOTH bf16 (512x512x512) and the Makefile's
+own i16/i32 default (512x512x512) -- same garbage regardless of dtype. Real NPU timing
+still came through this path before verification ran (2511us bf16 / 3022us i16), but
+the identical-garbage-regardless-of-dtype signature means this is a bug in the C++ test
+harness or its interaction with this exact Windows XRT SDK build, not a bf16-specific
+or kernel-level bug -- confirmed by getting a clean PASS through the alternate,
+already-validated pure-Python path (`python3 <design>.py ...`, no Makefile, no
+test.exe) that every other design in this repo's mlir-aie history has used
+successfully. Not investigated further; use the pure-Python path for any future design
+in this family, not `make run`.
+
+--- 4. Five new Windows-native toolchain quirks fixed this session (invocation-time,
+no upstream edits except one line noted below) ---
+
+1. GNU Make auto-exports command-line-set variables into every recipe subprocess's
+   environment. `basic/matrix_multiplication`'s Makefiles take both uppercase GEMM
+   dims (M/K/N) and lowercase tile dims (m/k/n) on the command line; passing both
+   together makes MSBuild's .NET `ProcessStartInfo.EnvironmentVariables` (a
+   case-insensitive Hashtable on Windows) throw "Key in dictionary: 'N' Key being
+   added: 'n'" while building the C++ host test.exe. Fix: don't pass the lowercase
+   tile dims on the command line -- they already default to 32/32/32 in every
+   Makefile checked, so omitting them changes nothing but avoids the collision. This
+   only bites the C++ CMake host-build path (single_core/whole_array/cascade); it
+   doesn't affect the pure-Python path at all.
+2. `programming_examples/makefile-common`'s `command -v powershell.exe` WSL-detection
+   heuristic false-positives on native Windows (same class of bug as the known
+   `getwslpath` issue) and sets `powershell = powershell.exe`, wrapping the
+   `cmake -E env CXXFLAGS="..."` build step through `powershell.exe`. PowerShell's
+   own re-tokenization of that wrapped command line loses the CXXFLAGS quote
+   boundary, so cmake -E env sees `-ggdb` etc. as separate unknown options instead of
+   part of the CXXFLAGS value. Fix at invocation time: `make ... powershell= ...` (in
+   addition to the already-known `getwslpath=echo`) to run the whole recipe directly
+   through Git Bash instead.
+3. The matmul family's CMakeLists.txt needs `-DXRT_INC_DIR=... -DXRT_LIB_DIR=...`, but
+   the Makefile recipe never forwards Make command-line variables of those names into
+   the actual `cmake` configure invocation -- setting them via `make XRT_INC_DIR=...`
+   is a silent no-op. `common.cmake` does auto-detect via `find_package(XRT QUIET)`
+   first, though, and that succeeds once `CMAKE_PREFIX_PATH` (a real environment
+   variable, inherited by the child `cmake` process regardless of Make's variable
+   semantics) points at the XRT SDK root: `export
+   CMAKE_PREFIX_PATH=/c/Xilinx/XRT/xrt_sdk/xrt` -> `-- Found XRT: .../xrt_sdk/xrt/
+   share/cmake/XRT (found version "2.21.0")`.
+4. `xclbinutil.exe` (needed by aiecc's Python compile pipeline, independent of the
+   above) lives at `C:\Xilinx\XRT\xrt_sdk\xrt\xclbinutil.exe`, not anywhere under
+   `ironenv`. Put that directory on `PATH`.
+5. `pyxrt.pyd` (the Python XRT binding used by every pure-Python IRON design's `--dev
+   npu` path) lives at `C:\Xilinx\XRT\xrt_sdk\xrt\python\pyxrt.pyd` and is not
+   importable by default -- `import pyxrt` fails with a plain `ModuleNotFoundError`,
+   and the tensor factory in `aie.utils.tensor_factory` silently downgrades to a
+   CPU-only tensor class on that failure (`ValueError: Unsupported device: npu`, not
+   an import error, is what actually surfaces). Fix: put that directory on
+   `PYTHONPATH` before running any `--dev npu` design.
+
+One upstream source edit, in the external clone only (not part of this repo, not
+committed here, will be lost on any `git pull` of mlir-aie -- re-apply if needed):
+`programming_examples/basic/matrix_multiplication/common.h:382` had
+`return (struct error<Tout>){row, col, expected, actual};` -- a GCC-only compound
+literal over a class type, not standard C++. MSVC rejects it (C4576/C2760). Changed to
+`return error<Tout>{row, col, expected, actual};` (plain aggregate brace-init,
+semantically identical, portable). This was needed to get the C++ test.exe to compile
+at all, before section 3 above found that path numerically broken regardless.
+
+--- What is still not built ---
+
+No fused attention kernel exists yet. This session validated that the primitives it
+would be built from are real and correct on this hardware, got one real throughput
+anchor (895 GFLOPS bf16, 4-column whole_array matmul, 512x512x512), and cleared five
+Windows-toolchain blockers that would otherwise cost the next session the same hours.
+The actual design -- QK^T, softmax, PV chained via layers_conv2_x's ObjectFifo pattern,
+one xclbin, one dispatch, no LayerNorm (aie2 has none) -- has not been written. The
+baseline this needs to beat also has not been decided: the net must be ONNX-exportable
+and Quark-quantizable so IRON / VitisAI-EP-xint8 / CPU can be compared on the same
+graph, same input.
