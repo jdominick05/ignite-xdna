@@ -665,11 +665,30 @@ Reproduce: `./scripts/mobilevit-eval.sh --slice`, `python tools/audit_quant_grid
   and n=1000 (68.30%) in the same invocation. **This is the second time this repo has been
   burned by a slice**, after yolov8s AdaRound read 45.19 mAP on 500 images and 39.98 on the
   full 5000. The invariant exists because of incidents, not taste.
-- **Real-data calibration was not the missing piece.** The models above were calibrated on
-  300 real ImageNet images (`pipelines/mobilevit/2_quantize.py`), replacing the earlier
-  `UseRandomData=True` place-and-route probes. Accuracy is still ~0%. The random-data
-  calibration was a genuine defect, but fixing it changed nothing — the collapse is
-  structural.
+- **Real-data calibration was not the missing piece.** The models above are a genuinely
+  different calibration from the earlier `UseRandomData=True` place-and-route probes, and
+  accuracy is still ~0%. Verified rather than assumed, since a 0% score is also what a
+  random-data probe gives: the old probe `models/mobilevit_xint8.onnx` is still on disk,
+  and `audit_quant_grid.py` shows the two are nothing alike —
+
+  | | random-data probe | real-data calibration |
+  |---|---|---|
+  | Activation scales | 0.000122 … **4.0** (32768× range, 12 distinct) | 0.0078 … 0.5 (64× range, 7 distinct) |
+  | Depthwise scale grid | 0.0156 (single value) | 0.125 … 1.0 |
+  | Dead depthwise channels | **0/432** | 28/432 |
+
+  **The probe also scores ~0% with zero dead channels**, which is a third independent
+  strike against the channel-death explanation: two models fail the same way, one with 28
+  dead channels and one with none. The probe's failure mode is different again — Gaussian
+  inputs drive activation scales to 4.0 and produce a 32768× spread no real image
+  distribution justifies.
+- **Provenance caveat.** Only the FP32 and full-XINT8 models are reproducible from this
+  repo (`pipelines/mobilevit/1_export.py` → `2_quantize.py`, which quantizes the whole
+  graph with one `get_default_config`). The two **hybrid** models were produced by a
+  cut + AdaRound path that is **not committed here** — `2_quantize.py` has no cut path and
+  no `include_fast_ft` wiring — so their calibration set size and AdaRound iteration count
+  are reported, not verified, and the eval rows above evaluate them as found in `models/`.
+  Committing that build path is the outstanding work.
 - **The discriminator is the depthwise weight-scale grid, not channel death.** MobileNetV2
   survives the identical per-tensor power-of-two recipe at 73.40%, so whatever kills
   MobileViT must be something the two do not share. `tools/audit_quant_grid.py` reads all of

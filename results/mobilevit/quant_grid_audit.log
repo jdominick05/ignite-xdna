@@ -1,5 +1,5 @@
 
-MobileNetV2 (ReLU6)      -- recovers to 73.40%
+MobileNetV2 (ReLU6)         -- RECOVERS to 73.40% despite a 25%-dead block
   models/mobilenetv2_xint8_adaround.onnx
   granularity            : per-tensor  (17 depthwise + 35 other convs)
   depthwise scale grid   : [0.015625, 0.03125, 0.0625, 0.125, 0.25]
@@ -10,7 +10,7 @@ MobileNetV2 (ReLU6)      -- recovers to 73.40%
   activation scales      : 0.03125 .. 0.5   (16x range, 66 sites)
   distinct activation    : [0.03125, 0.0625, 0.125, 0.25, 0.5]
 
-MobileViT-XXS full XINT8 -- collapses to 0.00%
+MobileViT-XXS full XINT8    -- COLLAPSES to 0.00%, depthwise scale reaches 1.0
   models/mobilevit_xxs_xint8.onnx
   granularity            : per-tensor  (7 depthwise + 28 other convs)
   depthwise scale grid   : [0.125, 0.25, 0.5, 1.0]
@@ -21,7 +21,7 @@ MobileViT-XXS full XINT8 -- collapses to 0.00%
   activation scales      : 0.0078125 .. 0.5   (64x range, 425 sites)
   distinct activation    : [0.0078125, 0.015625, 0.03125, 0.0625, 0.125, 0.25, 0.5]
 
-MobileViT-XXS hyb+AdaRound -- 0.80% (scales unchanged)
+MobileViT-XXS hyb+AdaRound  -- 0.80%; scale grid IDENTICAL to the row above
   models/mobilevit_xxs_hybrid_adaround.onnx
   granularity            : per-tensor  (7 depthwise + 28 other convs)
   depthwise scale grid   : [0.125, 0.25, 0.5, 1.0]
@@ -31,6 +31,17 @@ MobileViT-XXS hyb+AdaRound -- 0.80% (scales unchanged)
   other conv dead chans  : 3/1864
   activation scales      : 0.0078125 .. 0.5   (64x range, 66 sites)
   distinct activation    : [0.0078125, 0.015625, 0.03125, 0.0625, 0.125, 0.25, 0.5]
+
+MobileViT-XXS random-probe  -- CONTROL: 0 dead channels, still ~0% accuracy
+  models/mobilevit_xint8.onnx
+  granularity            : per-tensor  (7 depthwise + 28 other convs)
+  depthwise scale grid   : [0.015625]
+  depthwise dead chans   : 0/432   worst block 0.0%   median 0.0%
+  per-block dead pct     : 0 0 0 0 0 0 0
+  other conv scale range : 0.00195312 .. 2
+  other conv dead chans  : 64/1864
+  activation scales      : 0.00012207 .. 4   (32768x range, 425 sites)
+  distinct activation    : [0.0001220703125, 0.000244140625, 0.00048828125, 0.0009765625, 0.001953125, 0.00390625, 0.0078125, 0.015625, 0.03125, 0.0625, 0.125, 4.0]
 
 === EP placement by tensor rank (from the EP's own reports) ===
 

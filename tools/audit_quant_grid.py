@@ -24,8 +24,14 @@ explanation. This prints the three quantities that actually separate them:
                                   zeros, i.e. are deleted from the network
 
 The dead-channel count is the symptom most people reach for, and on its own it
-does NOT discriminate: MobileNetV2 carries a 25%-dead depthwise block and still
-recovers. The scale grid is what separates them.
+does NOT discriminate. Two controls say so:
+  * MobileNetV2 carries a 25%-dead depthwise block and still recovers to 73.40%.
+  * models/mobilevit_xint8.onnx -- an older UseRandomData=True place-and-route
+    probe -- has ZERO dead depthwise channels and still scores ~0%.
+The scale grid is what separates them. That probe is also the control proving
+the real-data models are a distinct calibration and not the same artifact
+relabelled: its activation scales span 0.000122..4.0 (32768x, Gaussian input)
+against the real calibration's 0.0078..0.5 (64x).
 
 AdaRound cannot repair this: it chooses between floor(w/Delta) and ceil(w/Delta)
 but never changes Delta. The audit shows exactly that -- the scale grid is
@@ -137,9 +143,14 @@ def rank_audit():
 
 
 DEFAULT_PAIR = [
-    ("models/mobilenetv2_xint8_adaround.onnx", "MobileNetV2 (ReLU6)      -- recovers to 73.40%"),
-    ("models/mobilevit_xxs_xint8.onnx", "MobileViT-XXS full XINT8 -- collapses to 0.00%"),
-    ("models/mobilevit_xxs_hybrid_adaround.onnx", "MobileViT-XXS hyb+AdaRound -- 0.80% (scales unchanged)"),
+    ("models/mobilenetv2_xint8_adaround.onnx",
+     "MobileNetV2 (ReLU6)         -- RECOVERS to 73.40% despite a 25%-dead block"),
+    ("models/mobilevit_xxs_xint8.onnx",
+     "MobileViT-XXS full XINT8    -- COLLAPSES to 0.00%, depthwise scale reaches 1.0"),
+    ("models/mobilevit_xxs_hybrid_adaround.onnx",
+     "MobileViT-XXS hyb+AdaRound  -- 0.80%; scale grid IDENTICAL to the row above"),
+    ("models/mobilevit_xint8.onnx",
+     "MobileViT-XXS random-probe  -- CONTROL: 0 dead channels, still ~0% accuracy"),
 ]
 
 

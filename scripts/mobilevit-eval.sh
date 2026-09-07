@@ -11,14 +11,21 @@
 # collapse on CPU already, so an NPU run would only measure a broken model
 # faster. Fix the accuracy first, then add an --ep npu row.
 #
-# Expected (1000 images, Desktop 2 / Phoenix, Ryzen 7 8700G):
-#   FP32                  68.30% / 88.20%
-#   Full XINT8             0.00% /  0.00%
-#   Hybrid XINT8           0.00% /  0.00%
-#   Hybrid + AdaRound      0.80% /  2.50%
+# Measured (1000 images, Desktop 2 / Phoenix, Ryzen 7 8700G) --
+# results/mobilevit/eval_*.log:
+#   FP32                  68.30% / 88.20%    8.77 ms
+#   Full XINT8             0.00% /  0.10%   20.14 ms
+#   Hybrid XINT8           0.10% /  0.30%   11.65 ms
+#   Hybrid + AdaRound      0.80% /  2.50%   11.40 ms
+#   FP32, first 100 only  75.00% / 89.00%   (--slice; why a slice is not the answer)
 #
 # The collapse is real and its mechanism is static -- see
 # tools/audit_quant_grid.py, which reads it straight out of the .onnx files.
+#
+# PROVENANCE: only the FP32 and full-XINT8 models are reproducible from this
+# repo (pipelines/mobilevit/1_export.py -> 2_quantize.py). The two hybrid
+# models were built by a cut/AdaRound path that is NOT committed here; they are
+# evaluated as found in models/. See docs/DECISIONS.md.
 
 . "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
@@ -37,10 +44,13 @@ CFG=models/preprocess_config_mobilevit_xxs.json
 
 need_dir  data/eval "run: python pipelines/resnet50/2_fetch_imagenet.py"
 need_file "$CFG"    "run: python pipelines/mobilevit/1_export.py"
-need_file models/mobilevit_xxs_fp32.onnx
-need_file models/mobilevit_xxs_xint8.onnx
-need_file models/mobilevit_xxs_hybrid_xint8.onnx
-need_file models/mobilevit_xxs_hybrid_adaround.onnx
+need_file models/mobilevit_xxs_fp32.onnx  "run: python pipelines/mobilevit/1_export.py"
+need_file models/mobilevit_xxs_xint8.onnx \
+    "run: python pipelines/mobilevit/2_quantize.py --calib-dir data/calib --limit 300"
+# No build hint for the two hybrids on purpose: the cut + AdaRound path that
+# produced them is not in this repo (see the PROVENANCE note in the header).
+need_file models/mobilevit_xxs_hybrid_xint8.onnx    "not reproducible from this repo yet"
+need_file models/mobilevit_xxs_hybrid_adaround.onnx "not reproducible from this repo yet"
 
 npu_env
 RESULTS=()

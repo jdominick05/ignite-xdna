@@ -1023,7 +1023,14 @@ been closed:
   (`./scripts/mobilevit-eval.sh`, `results/mobilevit/eval_*.log`): FP32 **68.30%/88.20%**
   (8.77 ms); full XINT8 **0.00%/0.10%**; hybrid CNN-XINT8/transformer-FP32 **0.10%/0.30%**;
   hybrid + AdaRound (500 iters, real data) **0.80%/2.50%**. Real-data calibration does not
-  rescue it — the earlier `UseRandomData=True` probes were not the problem.
+  rescue it — the earlier `UseRandomData=True` probes were not the problem. Checked rather
+  than assumed, since a random probe also scores 0%: the old probe is still on disk and the
+  two calibrations are nothing alike (activation scales 0.000122–4.0, a 32768× spread, vs
+  0.0078–0.5; and **zero** dead depthwise channels vs 28). The probe fails anyway, which is
+  a third independent strike against the channel-death explanation below. Provenance
+  caveat: only the FP32 and full-XINT8 models are reproducible from this repo; the two
+  hybrids came from a cut + AdaRound path that is not committed, so their calibration size
+  and iteration count are reported, not verified.
   **Retraction: the FP32 baseline is 68.30%, not the 75.0% previously published.** 75.0%
   was the first 100 images; 1000 images give 68.30%, matching the paper's ~69.0%.
   Reproduced on purpose as a row of `--slice`: identical weights, 75.00% at n=100 and

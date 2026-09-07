@@ -459,10 +459,19 @@ eval set (`./scripts/mobilevit-eval.sh`, all rows CPU, `results/mobilevit/eval_*
 | MobileViT-XXS | Hybrid (CNN XINT8, transformer FP32) | **0.10%** | 0.30% | 11.65 ms |
 | MobileViT-XXS | Hybrid + AdaRound (500 iters, real data) | **0.80%** | 2.50% | 11.40 ms |
 
-This is a **total collapse, and real-data calibration does not fix it** — the models above
-were calibrated on 300 real ImageNet images, not the `UseRandomData=True` probes the
-earlier pass used. AdaRound moves top-1 from 0.00% to 0.80%. That is the ceiling of what
-rounding can buy here.
+This is a **total collapse, and real-data calibration does not fix it.** That the models
+above really are a different calibration from the earlier `UseRandomData=True` probes was
+checked, not assumed — a 0% score is also what a random probe gives. The old probe is
+still on disk and the two are nothing alike: it has activation scales spanning
+0.000122–**4.0** (32768×) against the real calibration's 0.0078–0.5 (64×), and **zero**
+dead depthwise channels against 28. It scores ~0% anyway — a third strike against the
+channel-death story below. AdaRound moves top-1 from 0.00% to 0.80%; that is the ceiling
+of what rounding buys here.
+
+> Only the FP32 and full-XINT8 rows are reproducible from this repo
+> (`pipelines/mobilevit/1_export.py` → `2_quantize.py`). The two hybrid models came from a
+> cut + AdaRound path that is not committed, so "300 images" and "500 iters" are reported
+> rather than verified; the eval rows measure them as found in `models/`.
 
 **Retraction: the FP32 baseline is 68.30%, not the 75.0% previously published here.**
 75.0% was the first *100* images; the full 1000 settle at 68.30%, which matches the
