@@ -1514,3 +1514,243 @@ n-only pass through this section had to rely on.
 
 ---
 
+## Key findings
+
+Roughly ordered by how much time each one cost to discover.
+
+**Ryzen AI 1.8.0 ships no Phoenix xclbin, and its documentation says otherwise.**
+`voe-4.0-win_amd64\` contains only `vaip_config.json`; a recursive search of the whole
+install tree finds no xclbin, and the environment's site-packages carries only a Strix
+`base.xclbin`. The NPU driver does drop XDNA1 xclbins into `C:\Windows\System32\AMD\`,
+but 1.8's EP rejects them with `Cannot find or create target with fingerprint=...`.
+Version 1.7.1 still ships `voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin`, and that is
+the only firmware observed to work on this chip. Hence the two-environment split.
+
+**Without an explicit xclbin, the compiler silently targets Strix.** It selects
+`AMD_AIE2P_4x4_Overlay` and the run then dies at inference with `DPU timeout ...
+ERT_CMD_STATE_ERROR`. Setting `target: "X1"` alone does *not* select the chip
+architecture; the xclbin does.
+
+**The X1 backend is XINT8 or nothing.** Power-of-two scales, MinMSE calibration,
+UINT8 activations with INT8 weights. A8W8 (float scales) does not raise an error — it
+just falls back to CPU, and the only symptoms are CPU-level latency and lower accuracy.
+**A16W8 (INT16 activations) now measured too, not just assumed dead: same silent
+full-CPU fallback** — `tools/diag_ep.py` shows 0/394 nodes on NPU
+(`results/a16w8/diag_resnet50_a16w8_npu.log`), and Quark's own quantize log names the
+mechanism: this repo's export is pinned to opset 17 (below), and ONNX's `QuantizeLinear`/
+`DequantizeLinear` don't support 16-bit types before opset 21, so Quark routes INT16 Q/DQ
+through the `com.microsoft` domain instead — which the VitisAI EP's matcher evidently
+doesn't recognize at all. Quark's own config dump also shows `A16W8` never sets
+`enable_npu_cnn: True` the way `XINT8` does, so this wasn't a close call. Not worth
+chasing further: fixing it means bumping export opset (its own trap, see below), for a
+config with no shown accuracy edge over `XINT8_ADAROUND`. **BF16 was never attempted
+through Quark, and that's a toolchain gap, not a silicon one** — Quark's quantizer for
+this backend doesn't expose a BF16 config to try (only
+`XINT8`/`A8W8`/`A16W8`/`XINT8_ADAROUND`/`XINT8_ADAQUANT` exist), and AMD's documented
+support matrix says XDNA1's *shipped CNN/LLM runtime path* is INT8-only. But the tile
+silicon itself is a different question, and now has a primary-source answer rather than
+a spec-sheet assumption: AMD's own `OGOAT/Collaterals/device.yaml` (bundled in this same
+1.7.1 install, see `results/aie/notes_aie2_device_dtypes.log`) gives Phoenix's `AIE2`
+tile spec directly — `macs_per_cycle: bfloat16xbfloat16: 128, int16xint8: 128,
+int8xint8: 256`. **The array natively does bfloat16 and int16 arithmetic; the absence
+from this repo's results is Quark/VitisAI-EP not exposing it, not the hardware lacking
+it.** See RESEARCH.md's "Custom C++ XRT / hand-written AIE kernels" for the full
+citation, and for a measured yes on whether a custom kernel reaching those paths is
+buildable at all: not through this SDK's own `aiecompiler` (a missing `physical_device.dll`
+blocks it, confirmed absent from every AMD distribution channel checked), but through the
+open-source `mlir-aie`/Peano toolchain instead — a hand-written kernel compiled and run
+correctly on this machine's XDNA1 hardware, natively on Windows, no gated access required.
+That path has since produced a kernel for this repo's own gap: a bf16 GroupNorm(32)
+(`kernels/groupnorm_bf16/`) standing in for the `InstanceNormalization` that
+`resnetv2_50x3_bit` leaves on CPU, measured on the real node tensors at 1535 μs vs the
+CPU's 3472 μs per call for the largest shape, and a win on 4 of its 6 shapes (33 of 49
+nodes) — but a follow-up measurement of the two-process handoff a real splice needs
+found that floor alone (789 μs-23.6 ms/call) erases every one of those wins; see
+"Pushing width further" below and `results/aie/groupnorm_bf16_kernel_npu.log` /
+`results/aie/groupnorm_bf16_handoff_floor_npu.log`.
+
+**Silent CPU fallback is the failure mode to watch for.** The `[Vitis AI EP]` banner,
+`Target architecture:`, `Compile done.` and the operator table print **only during
+compilation**, never on a cache load, so their absence in a normal run means nothing
+by itself. Two reliable checks: the cache directory should contain a
+`compiled.*.xmodel` (ResNet's does, YOLO's does not), and NPU latency should be several
+times better than CPU. If it is not, you are running on the CPU. **Caveat found later
+(MobileNetV2, see "Model family" below): that second check is a heuristic, not a
+guarantee** — a genuinely engaged NPU (347/349 nodes, confirmed via
+`vitisai_ep_report.json`) still lost to plain CPU (2.68 ms vs 1.72 ms) on a model cheap
+enough that per-call dispatch overhead outweighs the compute saved. The report file is
+still the only real evidence; "NPU should be faster" stops being a safe proxy once the
+CPU number itself is in the low single-digit milliseconds.
+
+**Always pass `--fresh` when changing model or xclbin.** The compile cache is keyed by
+a hardcoded `cacheKey`, not by a model hash, so a stale entry is reused silently and
+you end up debugging a wrong-architecture artifact.
+
+**Export with opset 17, static batch 1, and the legacy exporter.** `dynamo=True` (the
+default on torch >= 2.9) silently emits opset 18 even when asked for 17; the version
+converter's assertion only warns. Dynamic batch axes inject `Shape`/`Concat`/`Reshape`
+at the graph tail, which are prime CPU-fallback candidates. Static export yields a
+clean `GlobalAveragePool -> Flatten -> Gemm`.
+
+**Preprocessing must match calibration exactly**, which is why it lives in exactly one
+place. The ResNet transform is driven by timm's `resolve_data_config` and written to
+`models/preprocess_config.json` at export time — this checkpoint uses `crop_pct=0.95`,
+not the 0.875 you would get by hardcoding ImageNet defaults.
+
+**Quark's config object is a dataclass**, so assigning a misspelled option succeeds
+silently and does nothing. Verify attribute names before trusting that an option took
+effect:
+
+```powershell
+python -c "from quark.onnx.quantization.config import get_default_config as g; print([a for a in dir(g('XINT8')) if 'exclude' in a.lower()])"
+```
+
+**ImageNet-1k on Hugging Face is parquet, not tarballs.** The old
+`data/val_images.tar.gz` path returns 404. Validation is 14 shards of roughly 480 MB
+and 3570 rows each, in random class order, so a single shard already covers about 974
+classes. Read it with `pyarrow.parquet.ParquetFile.iter_batches` and write
+`image['bytes']` straight to disk. The `datasets` library pulls in more than a
+gigabyte of Arrow and torch just to import, and a non-streaming `load_dataset` wants
+150 GB.
+
+**Neither accelerator is free — both carry a per-call floor.** MobileNetV2 (1.72 ms on
+plain CPU) lost to both DML (3.19 ms) and a genuinely NPU-engaged run (2.68 ms,
+347/349 nodes). ResNet50 and yolov8n's CPU baselines are 10-15x larger, and that is
+exactly the regime where the NPU wins — this project's advice to reach for XDNA1 was
+always implicitly scoped to "a model heavy enough that a few ms of dispatch overhead
+is noise," not to every classifier a CPU already runs comfortably. See "Model family:
+MobileNetV2 vs ResNet50" above.
+
+**"Heavy enough" is necessary but not sufficient — the op set matters too.**
+`resnetv2_50x3_bit` has a 470.79 ms CPU baseline (no dispatch-overhead excuse available)
+and still loses to the NPU, by 25% (588.58 ms), because only 1010/1271 nodes (79.5%)
+place on the NPU: every `InstanceNormalization` node in it falls to CPU, confirmed via
+`tools/diag_ep.py`, not assumed. Every clean NPU win in this repo shares BatchNorm-only
+normalization, which folds into the preceding Conv's weights at export and so never
+reaches the graph as its own node. A non-fused normalization layer (GroupNorm,
+LayerNorm, InstanceNorm) is a measured gap in this EP's NPU kernel coverage, not a
+hypothetical one. See "Pushing width further: `resnetv2_50x3_bit`" above — including the
+hand-written bf16 kernel that now beats the CPU fallback for that op on 33 of the 49
+nodes, per node, with the whole-model splice still unmeasured.
+
+---
+
+## The YOLOv8n blocker, and how it was solved
+
+For a while the quantized YOLOv8n ran at 37–39 ms on the NPU — indistinguishable from
+CPU FP32 — while producing detections whose confidences were visibly shifted from FP32,
+so the INT8 model clearly *was* executing. Something was running it, just not the NPU.
+
+**Diagnosis.** The VitisAI EP writes an assignment report to
+`<cacheKey>/vitisai_ep_report.json` on every session build — unlike the compile log,
+which prints only on an actual compile. `tools/diag_ep.py` reads it. Against the working
+ResNet50 pipeline:
+
+```
+yolov8n_xint8.onnx                    resnet50_xint8_adaround.onnx
+  all           965 nodes               all            395 nodes
+  CPU           298                     NPU            393     <-- no NPU entry for YOLO
+  VITIS_EP_CPU  667                     VITIS_EP_CPU     2
+```
+
+No `NPU` entry at all, and every one of the 965 nodes marked `device: "CPU"`. The EP had
+registered, walked the graph and claimed *nothing*. That is wholesale rejection rather
+than bad partitioning — there is no partition — which is why no compile log, no operator
+table and no `compiled.*.xmodel` were ever produced.
+
+**Cause: the float decode tail.** The last 18 nodes of a YOLOv8 export are the DFL and
+anchor-decode arithmetic, kept in float during quantization. Their presence made the EP
+refuse the entire graph rather than partition around them.
+
+**Fix: cut them out and decode in numpy.** `1b_cut_head.py` rewrites the model so its
+outputs are the six raw detection convolutions (233 nodes → 209), and
+`npu/yolo_decode.py` reproduces the removed tail. The result:
+
+```
+  yolov8n_cut_xint8.onnx
+    all           929 nodes
+    NPU           922            <-- 99.2% of the graph
+    VITIS_EP_CPU    7
+```
+
+The seven CPU nodes are only the boundary conversions: the input `QuantizeLinear` and
+the six output `DequantizeLinear`s — structurally the same as ResNet50's two.
+
+| configuration | device | inference | note |
+|---|---|---|---|
+| full graph, FP32 | CPU | 37.0 ms | |
+| head-cut, FP32 | CPU | 31.8 ms | |
+| full graph, XINT8 | "NPU" | 39.1 ms | EP took 0 nodes; this was CPU |
+| **head-cut, XINT8** | **NPU** | **8.7–9.8 ms** | **922/929 nodes, ~110 fps** |
+
+Post-processing costs 0.16 ms, because the numpy decode filters on class logits before
+the DFL softmax rather than decoding all 8400 anchors. Sigmoid is monotonic, so this
+selects exactly the anchors NMS would have kept — verified identical, with and without
+the filter.
+
+**What was *not* the cause**, each checked rather than assumed:
+
+- **Not the SiLU rewrite.** Quark's `enable_npu_cnn` turns `Sigmoid`+`Mul` into
+  `HardSigmoid`+`Mul` (57 of them) and lowers `Split` to `Slice`. This was the leading
+  suspect, since none of those ops appear in the ResNet50 graph. The report settles it:
+  the EP put all 57 `HardSigmoid`, all 16 `Slice`, both `Resize` and all 13 `Concat` on
+  the NPU. Every one of them is supported.
+- **Not a misspelled Quark attribute.** `subgraphs_to_exclude` is a real field on the
+  legacy `QuantizationConfig`, is consumed by `quantize.py`, and raises rather than
+  no-ops when the subgraph doesn't match.
+- **Not a missing xclbin.** The blocked run passed the correct Phoenix 4x4 xclbin from
+  the 1.7.1 install. (`npu/session.py` now refuses to build an NPU session without one
+  regardless — it previously warned and continued, which is a CPU run wearing an NPU
+  costume.)
+- **Not ORT's constant sharing.** The working ResNet report shows the same merged scalar
+  initializers.
+
+Reproduce the whole thing with `./scripts/yolo-cut.sh`, which cuts, quantizes, sanity-
+checks on CPU, runs on the NPU and reads the report back.
+
+> **Calibration caveat.** The model above was calibrated on only 32 images,
+> because the point of that run was whether the EP accepts the graph — which calibration
+> quality has no bearing on. Its detections drift from FP32 accordingly. For a model you
+> would actually ship, re-run with `--limit 300 --adaround` and measure COCO mAP; expect
+> real accuracy loss from the SiLU-to-hard-swish substitution on top of INT8 rounding.
+
+---
+
+## Known limitations
+
+- **One chip generation, one SDK version.** Everything here targets Hawk Point/Phoenix
+  (XDNA1) via Ryzen AI 1.7.1 specifically. Strix (XDNA2) uses a different xclbin and
+  compiler target and has not been touched; 1.8.0 cannot run inference on this chip at
+  all (no Phoenix xclbin — see [Key findings](#key-findings)).
+- **Windows only.** XDNA1 has no Linux userspace; a WSL run is silently CPU-only rather
+  than an error, which is the kind of failure that's easy to miss.
+- **The full-graph YOLOv8 model is refused by the EP, on purpose left that way.** It's
+  kept in the repo as the control proving the head-cut fix is real — see
+  [The YOLOv8n blocker](#the-yolov8n-blocker-and-how-it-was-solved) — not a bug to fix.
+- **Static batch >1 is unsafe on this backend, not just slow.** Measured: it silently
+  drops every batch element after the first rather than raising an error (see
+  [Batching](#batching-does-it-help-throughput)). Batch 1 only.
+- **AdaRound needs more RAM than the 13.8 GB laptop has for YOLOv8s/m at 640×640** —
+  FastFinetune's memory high-water mark is layer 0, the only layer at full resolution,
+  and it takes SIGSEGV rather than raising there. Not a hard wall, though: both s and m
+  now have AdaRound results (see Roadmap), quantized on Desktop 1's 32 GB + GPU-accelerated
+  FastFinetune (`--device`). l/x AdaRound at 640×640 remains untried anywhere.
+- **yolov8l's full-dataset eval is flaky.** Two of three 5000-image mAP attempts hit a
+  hardware `DPU timeout` mid-run; the third, and a standalone 500-image run, completed
+  cleanly with NPU memory flat throughout (ruling out a simple leak). Root cause
+  unresolved — see the width section. Not seen on any other model size.
+- **NPU utilization can't be measured through standard Windows tooling.** The `GPU
+  Engine`/`GPU Adapter Memory` performance counters exist but can't see this device at
+  all — the NPU registers as a `ComputeAccelerator`, not a WDDM GPU adapter, so it never
+  shows up as an adapter LUID for those counters to poll, regardless of sampling rate.
+  `xrt-smi examine -r aie-partitions` (bundled with the driver, `C:\Windows\System32\AMD\`)
+  is the tool that actually sees it — live per-context memory (MB) and compute rate
+  (GOPS) — and is what the concurrency measurements above use for memory. Its GOPS
+  column was tried as a utilization signal too and turned out to be a dead end (scales
+  linearly with stream count, decoupled from measured throughput); see the
+  [GOPS section](#two-cameras-does-independent-concurrency-work-where-batching-doesnt) above and
+  [Roadmap](#roadmap).
+- **No formal test suite.** Verification here is empirical (`compileall` + import checks
+  as a syntax gate, then real pipeline runs read from `results/`) rather than unit tests
+  — there's no fixture NPU to test against in CI.
+

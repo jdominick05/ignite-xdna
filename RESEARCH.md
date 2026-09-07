@@ -1234,6 +1234,89 @@ been closed:
 
 
 
+## Roadmap
+
+Open measurements, roughly in the order they would resolve. `RESEARCH.md` carries the
+reasoning behind each.
+
+- **`pipelines/yolov8n-pose` end to end on the NPU — done.** Head-cut partitions
+  1015/1025 (99.0%), 9.8 ms/frame, same clean pattern as detect. XINT8 costs 17.8
+  points of OKS mAP@50-95 (49.49 → 31.65, a 36% relative loss — proportionally worse
+  than bbox yolov8n's plain-XINT8 loss). AdaRound is untried for pose and is the
+  obvious next lever, same as it was for detect.
+- **AdaRound for YOLOv8s at 640×640 — done, and it barely helps.** Not blocked after
+  all: `models/yolov8s_cut_xint8_adaround.onnx` compiles and runs (15.5 ms/frame,
+  922/929 nodes). Full 5000-image mAP@50-95 is 39.98 against plain XINT8's 37.40
+  (`results/map_yolov8s_cut_xint8_adaround_npu.log`) — 2.6 points, not the 90%
+  recovery AdaRound gets on ResNet50/wide_resnet50_2. A 500-image slice run first
+  suggested 45.19, which would have been a very different story; the full 5000 is
+  the number to trust, consistent with this README's other slice-vs-full warnings.
+  Worth understanding why detection AdaRound recovers so much less than
+  classification's before spending the RAM on YOLOv8m/l/x or the wide ResNets.
+- **AdaRound for YOLOv8m at 640×640 — done, and it recovers even less.** Quantized on
+  Desktop 1 (GPU-accelerated FastFinetune, `--device`) and run on Desktop 2's XDNA1
+  (Phoenix): `models/yolov8m_cut_xint8_adaround.onnx` runs at the same 30.46 ms/frame as
+  plain XINT8 (1216/1223 nodes — no latency cost from AdaRound, only the weight rounding
+  changes). Full 5000-image mAP@50-95 is 45.32 against plain XINT8's 43.49
+  (`results/map_yolov8m_cut_xint8_adaround_npu.log`) — **+1.83 points**, a smaller
+  absolute recovery than yolov8s's +2.58 despite m's much higher starting accuracy,
+  extending the pattern that AdaRound has less room to recover as width increases.
+  Caveat: this model arrived via Syncthing with no local log of its calibration count,
+  so it isn't a clean like-for-like comparison against the calib-64 plain-XINT8 row —
+  the exact "a model can arrive with no log explaining it" risk this repo's own
+  machine notes warn about.
+- **Concurrent streams past 2, and on a wider model — done.** Both saturate:
+  yolov8n flattens at 3 streams (~167 fps, 2.1×); yolov8m, which uses more of the
+  array per call, saturates a stream earlier at 1.29× (`results/nstream_*.log`).
+  Table in the [Two cameras](#two-cameras-does-independent-concurrency-work-where-batching-doesnt)
+  section above.
+- **Is stream saturation compute or memory — done, it's compute.** `tools/session_hold.py`
+  + `xrt-smi examine -r aie-partitions` show NPU memory scaling linearly with stream
+  count on both models (~29 MB/stream yolov8n, ~100 MB/stream yolov8m), no ceiling
+  through 8 streams — decoupled from the throughput plateau, which rules memory out.
+  `results/nstream_memory_yolov8{n,m}.log`.
+- **Does classification show the same saturation shape, and does accuracy survive
+  contention — done, yes on both.** resnet50 saturates at 1.60× by 8 streams (between
+  yolov8n's 2.13× and yolov8m's 1.29×) and holds flat through 16, with the *exact* same
+  per-image predictions as the uncontended baseline at every stream count — not just
+  similar top-1, bit-identical argmax on all 960 concurrent classifications tested.
+  `tools/nstream_cls_bench.py`, `results/nstream_resnet50.log`. Open: `wide_resnet50_2`
+  or a bigger classification model untested; >16 streams untested.
+- **yolov8l and yolov8x — done.** 49.67 ms / 45.37 mAP@50-95 (l) and 117.11 ms / 45.09
+  (x) — the width trend that held cleanly through m flattens here; x is pure extra cost
+  for less accuracy than l. Calibrated smaller (32/24 images) than m's 64, a caveat in
+  the same vein as m's own. l's full eval is also flaky in a way nothing smaller is —
+  see [Known limitations](#known-limitations). Table in the width
+  section above.
+- **AdaRound across the ResNet50 resolution sweep.** The sweep is plain XINT8, and
+  AdaRound's recovery could move where the accuracy peak sits.
+- **A yolov8m mAP row at calibration 200**, so the detection width table is
+  like-for-like at every size (the current 43.49 was calibrated on 64 images). Same
+  caveat now applies to l (32) and x (24).
+- **A full utilization-vs-TOPS story using `xrt-smi`'s GOPS column — done, and it's a
+  dead end.** GOPS scales exactly linearly with stream count (9×/80× per stream for
+  yolov8n/yolov8m) with no ceiling through 8 streams, while the same run's *measured*
+  completion rate is flat from 1 stream on — decoupled from real throughput, so it
+  can't be turned into a utilization-vs-16-TOPS number. `results/gops_yolov8{n,m}.log`.
+  `xrt-smi`'s memory readout (used above) remains the one number from this tool that
+  tracks something real; GOPS does not.
+- **Explain ResNet50's AdaRound latency cost** (5.63 → 6.93 ms). The EP report shows the
+  same 393 / 2 partition for both models, so extra CPU fallback is ruled out; a
+  `--fresh` re-run of each and a diff of the two reports would settle it.
+- **The webcam path (single `4x4.xclbin` session, `./scripts/yolo-demo.sh`) has not
+  been exercised end to end.** The related but distinct round-robin-across-4-columns
+  demo *has* — see
+  [A live demo](#a-live-demo-does-the-multi-partition-finding-hold-on-a-real-webcam)
+  above: camera-bound at 30 fps through n/m/l, genuinely NPU-bound (22.0–23.5 fps) at x.
+- **5th AIE column on this Phoenix chip — done, and it's a dead end.** `1x4.xclbin`
+  caps at 4 independent partitions regardless of process count; a 5th process shares
+  column 4 rather than getting its own. The driver's `5x4_*.xclbin` overlays fall back
+  silently to 100% CPU (fingerprint mismatch). See
+  [Splitting the array into independent partitions](#splitting-the-array-into-independent-partitions)
+  above and `docs/DECISIONS.md`.
+- **Longer term:** a detector fine-tuned for fixed camera feeds (licence-plate
+  recognition), reusing the head-cut + XINT8 + AdaRound recipe rather than re-deriving it.
+
 ## How to read the rest of this repository
 
 If you want *what works and how fast*: `README.md`.
