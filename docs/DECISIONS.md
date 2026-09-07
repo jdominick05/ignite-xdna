@@ -372,7 +372,28 @@
   and putting OpenCV's `bin` dir on `PATH` before `make run` (needed at run time, not
   just CMake configure time). Every `ryzen_ai_npu1`-tagged design short of the
   substantial multi-file models (`magika`, `mobilenet`) has now been tried and passes.
-  See `results/aie/mlir_aie_vision_examples_npu.log`.
+  See `results/aie/mlir_aie_vision_examples_npu.log`. **Update:** ran `magika` and
+  `mobilenet`, plus `ml/resnet/layers_conv2_x` (tagged `ryzen_ai_npu1`, missed by the
+  original survey) — three chained ResNet conv2_x bottleneck blocks across three NPU
+  columns, `PASS!` at 1888.5us avg NPU time. `magika`'s own `run_phoenix.lit` marks it
+  `XFAIL` upstream ("Known-failing numerical check on the NPU"), but running it anyway
+  found both `group0` (EVM -34.85 dB) and `group2` (EVM -56.91 dB) **PASS** on this
+  hardware — the expected failure did not reproduce here, recorded as a discrepancy
+  rather than assumed away. `trace_py` for both groups hits an unrelated tooling gap
+  (aiecc doesn't leave the trace parser's expected intermediate MLIR file on disk on
+  this machine) after an identical NPU PASS. `mobilenet`'s own README targets "the
+  Strix NPU2" and its hardware lits require `ryzen_ai_npu2` — a chip this machine
+  doesn't have, same class of gap as the other npu2-only designs already logged; only
+  its no-hardware numpy cross-validation could run here. Also found and fixed a new
+  Windows-path/Git-Bash interaction: `magika`'s Makefile (unlike `bottleneck`/`conv2d`)
+  defines its own compile rule expanding a backslash-separated Windows path
+  (`$(shell python3 -c "from aie.utils.config import root_path; print(root_path())")`)
+  into an unquoted `-I` flag, which Git Bash's `sh` mangles; fixed with a command-line
+  override (`make MLIR_AIE_DIR=/c/... run_py`), the same invocation-time-fix pattern as
+  `getwslpath=echo`. This closes out every `ryzen_ai_npu1`-tagged design in
+  `programming_examples` — `mobilenet` is the one design whose hardware paths need a
+  chip this machine doesn't have. See
+  `results/aie/mlir_aie_magika_mobilenet_npu.log`.
 
 ## The YOLOv8 partitioning failure (resolved)
 

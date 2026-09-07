@@ -1,0 +1,114 @@
+Follow-up to mlir_aie_vision_examples_npu.log, which explicitly deferred ml/magika and
+ml/mobilenet as "multi-file models substantial enough to warrant their own log." This
+log runs both, plus ml/resnet/layers_conv2_x -- a design not previously surveyed at all
+(missed in the original vision/ml pass) that turns out to be tagged for this exact chip.
+
+Same mlir-aie-iron conda env / C:\Users\<user>\mlir-aie clone (tag v1.4.2) as prior logs.
+`make clean` before every run below (fresh compiles, not cache hits).
+
+--- ml/resnet/layers_conv2_x (new: not in the original vision/ml survey) ---
+
+REQUIRES: ryzen_ai_npu1, peano, torch -- applies directly to this Phoenix machine, no
+gaps. Three ResNet conv2_x-stage bottleneck blocks (conv1x1->conv3x3->conv1x1 + skip,
+the same structural unit resnet/bottleneck already proved) chained depth-first across
+three separate NPU columns, output handed column-to-column without going off-chip
+between blocks -- the multi-column version of the single-block bottleneck design.
+
+  make -f Makefile run_py  ->
+    NPU time     (avg/min/max us): 1888.5 / 1850.1 / 1954.5
+    End-to-end   (avg/min/max us): 2583.2 / 2328.4 / 2838.2
+    PASS!
+
+--- ml/magika (text-type classifier, https://github.com/google/magika) ---
+
+REQUIRES (run_phoenix.lit): ryzen_ai_npu1, peano, torch -- applies to this machine.
+The lit file carries "XFAIL: *" with the comment "Known-failing numerical check on the
+NPU. Silently skipped on main (the torch feature was off), so mark as an expected
+failure now that it runs." Ran every target in that lit by hand rather than trusting
+the XFAIL label, since an XFAIL from upstream CI is not the same claim as "fails on
+this machine" -- and it did not reproduce as a numerical failure here:
+
+  group0 (kernels/group0.cc, GROUPA+GROUPB variants):
+    make targetname=group0 run_py    -> Avg NPU time: 665us.  evm: -34.85  PASS.
+    make targetname=group0 trace_py  -> Avg NPU time: 639us.  evm: -34.85  PASS
+      (NPU dispatch identical to run_py; see trace note below)
+
+  group2 (kernels/group2.cc):
+    make targetname=group2 run_py    -> Avg NPU time: 455us.  evm: -56.91  PASS.
+    make targetname=group2 trace_py  -> Avg NPU time: 463us.  evm: -56.91  PASS
+      (NPU dispatch identical to run_py; see trace note below)
+
+Both groups pass with large negative EVM (error-vector-magnitude in dB; more negative
+is better -- -34.85 and -56.91 dB both indicate the AIE output tracks the reference
+closely, not a marginal pass). The lit's XFAIL did not manifest as a numeric mismatch
+in either group on this hardware/toolchain combination -- recorded as measured, not
+assumed; the upstream expected-failure may be tied to a different environment, a
+group1 combination not implemented here ("group1 component is not yet implemented"
+per magika's own README), or may have since been fixed on the mlir-aie side.
+
+Tooling gap, not a hardware result: `trace_py`'s NPU run and numeric check both pass
+identically to run_py, but the downstream trace-JSON step then fails --
+`python/utils/trace/parse.py` looks for
+`build/aie_trace.mlir.prj/input_with_addresses.mlir`, and aiecc's own step log reports
+"(4/37) input_with_addresses.mlir ... took 18 ms" but the file is not left on disk in
+that .prj directory afterward (confirmed by listing the directory: 17 other
+intermediates present, this one absent). This is the trace-visualization post-step
+only; the actual NPU compute and numerical PASS above are unaffected.
+
+Compile-flag note: magika's Makefile (unlike bottleneck/conv2d, which route through
+makefile-common's `jit_xclbin` macro) defines its own `build/%.o` clang rule that
+expands `${MLIR_AIE_DIR}` -- itself `$(shell python3 -c "from aie.utils.config import
+root_path; print(root_path())")`, which returns a backslash-separated Windows path --
+directly into an unquoted `-I` flag. Git Bash's `sh` (the shell GNU Make resolves to
+when invoked from this environment) strips backslashes it doesn't recognize as
+escapes, silently mangling the include path and producing a "aie_api/aie.hpp file not
+found" error with no indication the path itself was the problem. Fixed at invocation
+time by overriding the variable with its forward-slash equivalent:
+`make MLIR_AIE_DIR=/c/Users/<user>/mlir-aie/ironenv/Lib/site-packages/mlir_aie ...`.
+Not a mlir-aie bug to fix upstream -- it's a Windows-path-through-POSIX-shell
+interaction specific to running these Makefiles via Git Bash rather than WSL, the same
+class of issue as the getwslpath override already documented.
+
+--- ml/mobilenet (MobileNetV3, IRON) ---
+
+README states plainly: "End-to-end MobileNet V3 inference on the Strix NPU2." Checked
+every lit in the directory before running anything:
+  - run_e2e.lit, run_strix_makefile.lit: both `REQUIRES: ryzen_ai_npu2` -- Strix only,
+    do not apply to this Phoenix (npu1) machine. Not run; this is a chip-generation
+    gap, not a local setup gap, same as block_datatypes/ and the other npu2-only
+    designs already logged as out of scope in mlir_aie_ml_examples_npu.log.
+  - run_numpy_per_bn.lit: `REQUIRES: peano` only, no hardware tag -- pure-numpy
+    cross-validation of mobilenet_numpy.py's kernels against brevitas-generated
+    per-block fixtures already checked into bottleneck_{A,B,C}/data/. This is the one
+    piece of ml/mobilenet actually executable on this machine, and it touches no NPU
+    hardware at all -- recorded here for completeness, not as an NPU result:
+
+  python -X utf8 -m mobilenet.test_numpy_per_bn  ->
+    bn1 (per-bn)            75264/75264   100.0%  BIT-EXACT
+    bn2 (per-bn)            75264/75264   100.0%  BIT-EXACT
+    bn3 (per-bn)            31360/31360   100.0%  BIT-EXACT
+    bn6 (per-bn)            15680/15680   100.0%  BIT-EXACT
+    bn7 (per-bn)            15680/15680   100.0%  BIT-EXACT
+    bn8 (per-bn)            15680/15680   100.0%  BIT-EXACT
+    bn10->bn11->bn12 chain   3920/3920    100.0%  BIT-EXACT
+    bn13->bn14 cascade       3920/3920    100.0%  BIT-EXACT
+    ALL VERIFIED BLOCKS BIT-EXACT
+
+--- Conclusion ---
+
+resnet/layers_conv2_x and both magika groups (run_py + the NPU-dispatch half of
+trace_py) PASS on this machine's actual XDNA1 (Phoenix) NPU. magika's upstream XFAIL
+did not reproduce as a numeric failure here -- worth noting as a discrepancy between
+mlir-aie's own CI expectation and this measurement, not silently smoothed over.
+mobilenet's hardware paths are Strix-only by the project's own README and REQUIRES
+tags; only its numpy-only reference check could run here, and it is not an NPU
+measurement.
+
+With this log, every mlir-aie programming_examples/ml design tagged for this machine's
+chip (ryzen_ai_npu1) has now been tried on the actual hardware: eltwise, eltwise_unary,
+scale_shift, softmax, swiglu (prior log), bottleneck, conv2d, conv2d_14x14 (prior log),
+resnet/layers_conv2_x and magika group0/group2 (this log). mobilenet remains the one
+ml/ design whose hardware-relevant paths require Strix (npu2), a chip this machine does
+not have.
+
+Machine: Desktop 2 / Phoenix.

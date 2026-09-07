@@ -844,10 +844,32 @@ been closed:
   `powershell.exe` on PATH" — false-positives on native Windows), and adding the OpenCV
   `bin` directory to `PATH` before `make run` (needed by the built `.exe` at run time,
   not just at CMake configure time). Full detail in
-  `results/aie/mlir_aie_vision_examples_npu.log`. With this, every `programming_examples`
-  design tagged for this machine's chip (`ryzen_ai_npu1`) that isn't a substantial
-  multi-file model (`magika`, `mobilenet`, left for their own pass) has now been tried,
-  and all of them pass.
+  `results/aie/mlir_aie_vision_examples_npu.log`.
+- **Follow-up: `magika` and `mobilenet` — the two multi-file models left for their own
+  pass — plus one design missed in the original survey.** `ml/resnet/layers_conv2_x`
+  (tagged `ryzen_ai_npu1`, not caught by the first `vision`/`ml` sweep) chains three
+  ResNet conv2_x bottleneck blocks depth-first across three separate NPU columns —
+  **PASS!**, 1888.5us avg NPU time. `ml/magika` (Google's file-type-detection network)
+  is tagged `ryzen_ai_npu1` too but mlir-aie's own `run_phoenix.lit` marks it `XFAIL`
+  ("Known-failing numerical check on the NPU"); ran every target in that lit by hand
+  anyway rather than trusting the label, and it did not reproduce as a numeric failure
+  on this hardware — both `group0` (Avg NPU time 665us, EVM -34.85 dB) and `group2`
+  (455us, EVM -56.91 dB) **PASS**, a discrepancy from the upstream expectation worth
+  recording rather than silently matching. `trace_py` for both groups reproduces the
+  identical NPU PASS but then fails in an unrelated downstream step — the trace-JSON
+  parser's expected intermediate MLIR file isn't left on disk by aiecc's pipeline on
+  this machine, a tooling gap in the visualization step, not the hardware result.
+  `ml/mobilenet`'s own README states it targets "the Strix NPU2," and both its
+  hardware-driving lits (`run_e2e.lit`, `run_strix_makefile.lit`) require
+  `ryzen_ai_npu2` — inapplicable to this Phoenix machine by chip generation, the same
+  as the other npu2-only designs already logged. Only its numpy-only cross-validation
+  (`run_numpy_per_bn.lit`, no hardware tag) could run here — all 8 verified blocks
+  bit-exact against the brevitas fixtures — recorded as a no-hardware check, not an NPU
+  measurement. Full detail, including the Windows-path-through-Git-Bash compile-flag
+  fix magika needed, in `results/aie/mlir_aie_magika_mobilenet_npu.log`. With this,
+  every `programming_examples` design tagged for this machine's chip (`ryzen_ai_npu1`)
+  has now been tried on the actual hardware; `mobilenet` remains the one design whose
+  hardware-relevant paths require a chip (Strix/npu2) this machine doesn't have.
 
 ## How to read the rest of this repository
 
