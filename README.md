@@ -416,26 +416,38 @@ GFLOPS, PASS.** See `results/aie/mlir_aie_bf16_matmul_npu.log`.
 
 **Follow-up: Fused BF16 Attention Kernel Built, but Small Sequence Length Exposes the Arithmetic Floor (Negative Result).**
 Investigating the hybrid CNN-Transformer architecture `mobilevit_xxs`: stock VitisAI EP
-partitioned into **49 thrashing subgraphs (108.00 ms)** due to unsupported attention ops,
-losing to the 8-core Zen4 CPU (18.37 ms). Cutting the attention blocks isolated the pure CNN
-backbone (407 nodes), which compiles into **1 single NPU subgraph at 1.71 ms** (3.23× faster
-than CPU 5.52 ms, like-for-like). Built the custom fused BF16 multi-head attention kernel in `mlir-aie`
-(IRON + Peano): fixed Peano's linker script stack collision with `Worker(stack_size=2048)`;
-implemented row-wise FlashAttention streaming (scratchpad shrunk from 128 KB to 512 bytes);
-vectorized via 16-lane AIE2 SIMD (`aie_api`); and scaled across 8 physical cores (Cols 0..3,
-Rows 2..3) mapped to all 8 physical Shim DMA channels. The kernel passes bit-accurate
-numerical verification (<1% rel L2 error, 0 NaN) against ImageNet golden calibration tensors
-across all three stages (Stage 4: 0.86 ms, Stage 3: 4.57 ms, Stage 2: 57.61 ms).
+partitioned into **49 thrashing subgraphs (108.00 ms)** (1,037 NPU nodes / 548 CPU nodes,
+including 156 CPU compute nodes: LayerNorm, MatMul, Slice, Reshape) due to unsupported
+transformer operators, losing 5.9× to the 8-core Zen4 CPU (18.37 ms). Cutting the attention
+blocks isolated the pure CNN backbone (409 nodes: 407 NPU in **1 single subgraph**, 2 CPU boundary
+nodes), executing on NPU in **1.73 ms** (3.1× faster than CPU 5.35 ms, like-for-like). Built the
+custom fused BF16 multi-head attention kernel in `mlir-aie` (IRON + Peano): fixed Peano's linker
+script stack collision with `Worker(stack_size=2048)`; implemented row-wise FlashAttention streaming
+(scratchpad shrunk from 128 KB to 512 bytes); vectorized via 16-lane AIE2 SIMD (`aie_api`); and
+scaled across 8 physical cores (Cols 0..3, Rows 2..3) mapped to all 8 physical Shim DMA channels.
+The kernel passes bit-accurate numerical verification (<1% rel L2 error, 0 NaN) across all stages
+(Stage 4: 0.86 ms, Stage 3: 4.57 ms, Stage 2: 57.61 ms), accounting for the 0.1700% FP32→BF16
+quantization floor and 0.235% `fast_exp` approximation error on Stage 3's 10,240 active elements.
 
 **However, the kernel heavily loses to CPU (Negative Result):**
 On Stage 3 (8 heads), total arithmetic is only **2.79 MFLOP** — roughly 100× smaller than
 MobileNetV2's ~300 MFLOP floor which already lost to CPU. Zen4 AVX-512 executes those 8 heads
 in **0.034 ms**, making the 4.57 ms AIE2 kernel **134× slower than CPU** (0.61 GFLOPS achieved,
 <0.1% of array compute peak). Running the full model entirely on NPU with this kernel would
-take >120 ms. An idealized heterogeneous splice (NPU CNN 1.71 ms + CPU Attention 1.57 ms)
-yields **3.28 ms as a sum-of-timers**, but leaves attention on CPU and leaves the cross-process
-handoff floor (789 µs–23.6 ms in `groupnorm_bf16`) unmeasured. Demo and diagnostic breakdown in
-`scripts/attention-demo.sh` and `tools/demo_attention.py`. See `kernels/attention_bf16/README.md`,
+take >120 ms.
+
+**Measured Heterogeneous Splice & Accuracy Ground Truth:**
+Leaving attention on CPU and running the cut CNN on NPU in a unified process yields a measured
+end-to-end wall-clock time of **4.47 ms** (1.73 ms NPU infer + 2.03 ms CPU attention across 9 blocks +
+0.72 ms in-process buffer wrapping residual), achieving an honest **4.1× speedup vs full CPU (18.37 ms)**
+and 24.2× vs stock VitisAI EP (108.00 ms). Note that this pipeline does NOT use the AIE attention kernel;
+furthermore, if partitioned across separate Python processes (due to Python 3.12 vs 3.13 pyxrt ABI walls),
+the cross-process IPC floor (789 µs–23.6 ms in `groupnorm_bf16`) would completely erase this advantage.
+On accuracy: full FP32 `mobilevit_xxs` achieves **75.0% top-1** on ImageNet validation (`data/eval`, 1000 images),
+but both quantized ONNX models in `models/` were built with synthetic random calibration (`UseRandomData = True`)
+for place-and-route diagnostics, scoring 0% accuracy on real validation images. Neither quantized model
+can be cited for top-1 or mAP accuracy without a real-data calibration pass.
+Demo in `scripts/attention-demo.sh` and `tools/demo_attention.py`. See `kernels/attention_bf16/README.md`,
 `docs/DECISIONS.md`, and `results/aie/attention_bf16_kernel_npu.log`.
 
 

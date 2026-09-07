@@ -3,9 +3,9 @@
 Demonstrates:
   1. Hand-written fused BF16 Multi-Head Attention kernel running across 8 physical AIE2 cores
      using row-wise FlashAttention streaming and 16-lane native SIMD vectorization.
-  2. Cut CNN backbone executing on physical Phoenix NPU via VitisAI EP (1 single subgraph, 407 nodes, 1.71 ms).
+  2. Cut CNN backbone executing on physical Phoenix NPU via VitisAI EP (1 single subgraph, 407 nodes, 1.73 ms).
   3. Real ImageNet golden tensor numerical verification (<1% relative L2 error) and top-1 classification.
-  4. End-to-end heterogeneous spliced pipeline achieving 3.28 ms (33x faster than stock VitisAI EP).
+  4. Measured in-process heterogeneous spliced pipeline (NPU CNN + CPU Attn) achieving 4.47 ms wall-clock (4.1x faster than CPU 18.37 ms).
 
 Usage:
   python tools/demo_attention.py
@@ -233,7 +233,8 @@ print(json.dumps({{
         print(f"    Ground Truth: Class {res['true_label']}")
         if res["match"]:
             print(f"{GREEN}{BOLD} OK  Top-1 Argmax Label Matches Ground Truth Class {res['true_label']}!{RESET}")
-            print(f"     (Note: Evaluated on calibration sample {image_path.name}; not an unseen validation slice)\n")
+            print(f"     (Note: PyTorch FP32 reaches 75.0% top-1 on 1000 validation images. Both quantized ONNX")
+            print(f"      models in models/ were exported with synthetic random calibration and score 0% on real data.)\n")
         else:
             print(f"{YELLOW}!!  Prediction does not match ground truth.{RESET}\n")
         return res
@@ -245,11 +246,12 @@ print(json.dumps({{
 def print_comparison_table(aie_res, backbone_res):
     print(f"{BOLD}{CYAN}==> [4/4] Empirical Findings & Architecture Comparison{RESET}\n")
 
-    backbone_ms = backbone_res["mean_ms"] if backbone_res else 1.74
+    backbone_ms = backbone_res["mean_ms"] if backbone_res else 1.73
     backbone_cpu_ms = 5.35
     cpu_attn_stage3_8h_ms = 0.034
-    cpu_attn_all_ms = 1.57
-    projected_splice_ms = backbone_ms + cpu_attn_all_ms
+    cpu_attn_all_ms = 2.03
+    measured_splice_ms = 4.47
+    residual_ms = measured_splice_ms - (backbone_ms + cpu_attn_all_ms)
 
     print(f"{BOLD}--- 1. Cut CNN Backbone (Identical 407-node graph on both devices) ---{RESET}")
     print(f"+----------------------------------+-------------------+-----------------+-----------------------+")
@@ -282,11 +284,12 @@ def print_comparison_table(aie_res, backbone_res):
     print(f"| Stock VitisAI EP Baseline (Quantized)| 49 NPU Subgraphs    | 108.00 ms         | Severe thrashing    |")
     print(f"| Full Zen4 CPU Baseline (FP32)        | 8 Zen4 CPU Cores    |  18.37 ms         | PyTorch full model  |")
     print(f"| Full NPU (with AIE Attention Kernel) | Phoenix NPU         |  >120 ms (est.)   | Loses to stock EP   |")
-    print(f"| {YELLOW}Heterogeneous Splice (CNN NPU+Attn CPU){RESET}| {YELLOW}NPU CNN + CPU Attn  {RESET}| {YELLOW}{projected_splice_ms:5.2f} ms (proj.)  {RESET}| {YELLOW}Sum-of-timers only*   {RESET}|")
+    print(f"| {GREEN}Heterogeneous Splice (Measured Wall){RESET} | {GREEN}NPU CNN + CPU Attn  {RESET}| {GREEN}{measured_splice_ms:5.2f} ms (meas.)  {RESET}| {GREEN}{18.37/measured_splice_ms:4.1f}x vs Full CPU (18.37ms){RESET}|")
     print(f"+--------------------------------------+---------------------+-------------------+---------------------+")
-    print(f"  * Warning: 3.31 ms is an idealized sum-of-timers (1.74 ms + 1.57 ms). As established in the")
-    print(f"    GroupNorm characterization, real inter-process handoff floor (789 us - 23.6 ms) remains")
-    print(f"    unmeasured here and would erode this margin without an in-process unified memory splice.\n")
+    print(f"  * Measured wall-clock around real in-process loop: {backbone_ms:.2f} ms NPU backbone + {cpu_attn_all_ms:.2f} ms CPU attention")
+    print(f"    + {residual_ms:.2f} ms in-process buffer wrapping residual = {measured_splice_ms:.2f} ms (4.1x vs CPU).")
+    print(f"    Does NOT use the AIE attention kernel. In contrast, cross-process IPC handoff (measured in")
+    print(f"    groupnorm_bf16 at 789 us - 23.6 ms) would erase these gains if crossing Python ABI boundaries.\n")
 
 
 def main():

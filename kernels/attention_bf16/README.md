@@ -39,6 +39,12 @@ Log: `results/aie/attention_bf16_kernel_npu.log`
 | **Stage 3** | 64 | 20 (32) | **8 cores** | **4.57 ms** | **PASS (0.973% rel L2)** | 0.034 ms | 134× slower than CPU |
 | **Stage 2** | 256 | 16 (16) | **8 cores** | **57.61 ms** | **PASS (0.992% rel L2)** | 0.240 ms | 240× slower than CPU |
 
+### Numerical Precision & Tensor Shape Verification
+
+- **Shape Check:** MobileViT-XXS Stage 3 attention tensor is $B=1, H=8, N=64, D=20$, giving exactly **10,240 active elements** per pass. Memory layout pads $D \rightarrow D_{pad}=32$ for 16-lane vector alignment (16,384 elements in tile memory).
+- **Quantization Floor:** Truncating golden FP32 outputs to BF16 introduces an unavoidable baseline quantization floor of **0.1700% relative L2 error**.
+- **Kernel Approximation:** The kernel's `fast_exp` polynomial approximation has a maximum relative error of **0.235%**. Combined with BF16 vector accumulation, the total measured kernel error against FP32 golden reference is **0.973% relative L2 error (0 NaN)** — fully within expected numerical bounds.
+
 ### The Finding: A Definitive Negative Result on Operator Acceleration
 
 While the kernel compiles, maps cleanly across 8 physical AIE2 cores, streams via 8 Shim DMA channels, and achieves bit-accurate numerical verification (<1% rel L2 error, 0 NaN), **it is heavily outperformed by CPU**.
@@ -53,14 +59,18 @@ While the kernel compiles, maps cleanly across 8 physical AIE2 cores, streams vi
 
 | Pipeline Configuration | Hardware Execution | Latency | Note |
 |---|---|---|---|
-| **Stock VitisAI EP Baseline** | 49 NPU Partitions (partition thrashing) | 108.00 ms | 1.0× (baseline) |
-| **CPU Full Baseline** | 8 Zen4 cores (PyTorch FP32) | 18.37 ms | 5.9× faster than stock EP |
-| **Cut CNN Backbone** | Physical Phoenix NPU (1 subgraph, 407 nodes) | **1.71 ms** | **3.23× vs CPU CNN (5.52 ms)** (like-for-like) |
+| **Stock VitisAI EP Baseline** | 49 NPU Partitions (partition thrashing) | 108.00 ms | 1.0× (baseline, 1037 NPU nodes / 548 CPU nodes) |
+| **CPU Full Baseline** | 8 Zen4 cores (PyTorch FP32) | 18.37 ms | 5.9× faster than stock EP (75.0% top-1 on 1000 eval images) |
+| **Cut CNN Backbone** | Physical Phoenix NPU (1 subgraph, 407 nodes) | **1.73 ms** | **3.1× vs CPU CNN (5.35 ms)** (like-for-like) |
 | **Full NPU with AIE Attention** | Cut CNN on NPU + AIE2 Attention Kernel | **>120 ms** | **Loses to both CPU and Stock EP** |
-| **Heterogeneous Splice (Projected)**| Cut CNN on NPU (1.71 ms) + Attention on CPU (1.57 ms) | **3.28 ms** | *Idealized sum-of-timers (handoff floor unmeasured)* |
+| **Heterogeneous Splice (Measured)**| Cut CNN on NPU (1.73 ms) + Attention on CPU (2.03 ms) | **4.47 ms** | **4.1× vs full CPU (18.37 ms)**; incl. 0.72 ms in-process handoff |
 
 > [!WARNING]
-> The 3.28 ms heterogeneous pipeline does NOT use the AIE attention kernel — it leaves attention on CPU. Furthermore, 3.28 ms is an idealized sum of isolated stage timers ($1.71\text{ ms} + 1.57\text{ ms}$). Real inter-process handoff floor (measured in `groupnorm_bf16` at $789\,\mu\text{s}$–$23.6\text{ ms}$) remains unmeasured here and would erode this margin without an in-process unified memory splice.
+> The heterogeneous spliced pipeline does NOT use the AIE attention kernel — it leaves attention on CPU. End-to-end wall-clock time measured around the real in-process loop is **4.47 ms** (1.73 ms NPU infer + 2.03 ms CPU attention across 9 transformer blocks + 0.72 ms in-process buffer wrapping residual), delivering an honest **4.1× speedup vs full CPU (18.37 ms)** and 24.2× vs stock EP (108.00 ms).
+> 
+> In contrast, if partitioned across separate Python processes (due to Python 3.12 vs 3.13 pyxrt ABI walls), the IPC handoff floor measured in `groupnorm_bf16` ($789\,\mu\text{s}$–$23.6\text{ ms}$) would completely erase this advantage.
+>
+> **Accuracy Caveat:** While full FP32 `mobilevit_xxs` scores 75.0% top-1 on `data/eval`, the quantized ONNX models (`mobilevit_cut_backbone_xint8.onnx` and `mobilevit_xint8.onnx`) were compiled with synthetic random calibration (`UseRandomData = True`) for hardware place-and-route diagnostics, scoring 0% accuracy on real validation images. Neither quantized model can be cited for top-1 or mAP accuracy without a real-data calibration pass.
 
 ## Quickstart
 

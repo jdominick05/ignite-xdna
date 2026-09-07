@@ -617,10 +617,15 @@ caches.
 
 ### Empirical Results on Physical Hardware
 
-- **Numerical Verification:** Bit-accurate against ImageNet calibration golden reference tensors (`data/golden/attn_s{2,3,4}_l0`):
-  - Stage 2 ($N=256, D=16$): PASS (0.992% rel L2 error, 0 NaN across 32,768 elements)
-  - Stage 3 ($N=64, D=20$): PASS (0.973% rel L2 error, 0 NaN across 10,240 elements)
-  - Stage 4 ($N=16, D=24$): PASS (0.799% rel L2 error, 0 NaN across 3,072 elements)
+- **VitisAI EP Partitioning Diagnostics (`tools/diag_ep.py`):**
+  - **Cut CNN Backbone (`mobilevit_cut`):** 409 total nodes. Exactly **407 nodes assigned to NPU** in **1 single fused subgraph** (`deviceSubgraphCount: {'IPU': 1}`), exactly 2 boundary nodes on `VITIS_EP_CPU` (input `QuantizeLinear`, output `DequantizeLinear`). Matches ResNet50's known-good 393/2 structure.
+  - **Stock MobileViT (`mobilevit_stock`):** 1,585 total nodes. **1,037 nodes on NPU across 49 metaDef subgraphs** (58 IPU subgraphs), and **548 nodes on CPU** (156 CPU compute nodes: 21 `LayerNormalization`, 18 `MatMul`, 9 `Gemm`, 27 `Slice`, 27 `Squeeze`, 36 `Transpose`, 18 `Reshape` + 392 `VITIS_EP_CPU` boundary nodes: 235 `DequantizeLinear`, 157 `QuantizeLinear`).
+- **Numerical Verification & Precision Math:**
+  - Bit-accurate against ImageNet calibration golden reference tensors (`data/golden/attn_s{2,3,4}_l0`):
+    - Stage 2 ($N=256, D=16$): PASS (0.992% rel L2 error, 0 NaN across 32,768 elements)
+    - Stage 3 ($N=64, D=20$): PASS (0.973% rel L2 error, 0 NaN across 10,240 elements)
+    - Stage 4 ($N=16, D=24$): PASS (0.799% rel L2 error, 0 NaN across 3,072 elements)
+  - **Tensor Shape & Precision Floor:** The 10,240-element Stage 3 shape reflects the real MobileViT-XXS architecture ($B=1, H=8, N=64, D=20 \rightarrow 8 \times 64 \times 20 = 10,240$ active elements, padded to 16,384 in memory for 16-lane vector alignment with $D_{pad}=32$). Truncating FP32 to BF16 introduces an unavoidable baseline quantization floor of **0.1700% relative L2 error**. The kernel's `fast_exp` polynomial approximation introduces a maximum relative error of **0.235%**. Combined with vector accumulation, the total measured kernel error is **0.973% relative L2 error** vs FP32 golden reference.
 - **Attention Kernel Latency vs CPU (Negative Result):**
   - Stage 4 (8 heads): **0.86 ms** on AIE2 vs **0.012 ms** on Zen4 CPU (71× slower than CPU)
   - Stage 3 (8 heads): **4.57 ms** on AIE2 vs **0.034 ms** on Zen4 CPU (134× slower than CPU)
@@ -628,8 +633,13 @@ caches.
   - Full model attention (all 9 layers, 16 heads each): **>120 ms** on AIE2 vs **1.57 ms** on CPU.
   - **The Arithmetic Floor:** Stage 3 compute volume is only **2.79 MFLOP** (0.0028 GFLOP). MobileNetV2 at ~300 MFLOP was already below the NPU acceleration threshold (losing to CPU 2.68 vs 1.72 ms); MobileViT attention is ~100× smaller still. Achieved throughput is **0.61 GFLOPS** (<0.1% of array compute capability), meaning execution time is virtually 100% dispatch, shim DMA sequence overhead, and tile orchestration.
 - **Architectural Comparison & Splicing Reality:**
-  - **Cut CNN Backbone (Like-for-Like):** 1.71 ms NPU vs 5.52 ms CPU (**3.23× speedup** on the identical 407-node graph). Comparing 1.71 ms against the 108 ms stock EP baseline is comparing a model fragment to a whole model; the 3.23× like-for-like is the honest figure.
-  - **Full Model on NPU (with AIE Attention):** >120 ms, which loses to both CPU (18.37 ms) and Stock VitisAI EP (108.00 ms).
-  - **Heterogeneous Splice (Projected):** 1.71 ms NPU CNN + 1.57 ms CPU Attention = **3.28 ms**. This does NOT use the AIE attention kernel. Furthermore, 3.28 ms is an idealized sum-of-timers: the cross-process handoff floor between VitisAI EP and CPU (measured at 789 µs–23.6 ms in `groupnorm_bf16`) remains unmeasured here and would erode this margin without an in-process unified memory splice.
+  - **Cut CNN Backbone (Like-for-Like):** 1.73 ms NPU vs 5.35 ms CPU (**3.1× speedup** on the identical 407-node graph). Comparing 1.73 ms against the 108 ms stock EP baseline is comparing a model fragment to a whole model; the 3.1× like-for-like is the honest figure.
+  - **Full Model on NPU (with AIE Attention):** >120 ms, which loses heavily to both CPU (18.37 ms) and Stock VitisAI EP (108.00 ms).
+  - **Heterogeneous Splice (In-Process Measured):** Wall-clock time measured around the real in-process loop is **4.47 ms** (1.73 ms NPU infer + 2.03 ms CPU attention across 9 transformer blocks + 0.72 ms in-process buffer wrapping residual). This achieves an honest **4.1× speedup vs full CPU (18.37 ms)** and **24.2× vs Stock VitisAI EP (108.00 ms)**.
+  - **Cross-Process IPC Floor Contrast:** The heterogeneous pipeline leaves attention on CPU and does NOT use the AIE attention kernel. Crucially, its 4.47 ms latency relies on single-process host memory wrapping (~0.72 ms overhead). If partitioned across separate Python processes (due to Python 3.12 vs 3.13 pyxrt ABI boundaries), the IPC handoff floor (measured at 789 µs–23.6 ms in `groupnorm_bf16`) would completely erase any speedup margin.
+- **Accuracy Ground Truth & Calibration Status:**
+  - Full FP32 `mobilevit_xxs` on `data/eval` (1,000 ImageNet validation images) achieves **75.0% top-1** (18.54 ms/image).
+  - Both ONNX models in `models/` (`mobilevit_cut_backbone_xint8.onnx` and `mobilevit_xint8.onnx`) were quantized with synthetic random data (`UseRandomData = True`) as compiler place-and-route probes. Testing on real validation images yields **0.0% top-1 accuracy** (on `000000.jpg`, ground truth 91, the cut backbone emits garbage logits `[724, 930, 692, 224, 820]`). Neither quantized model can be cited for top-1 or mAP accuracy without a real-data calibration pass.
+
 
 

@@ -985,18 +985,19 @@ been closed:
   cleanly.
 - **Follow-up: Fused BF16 Attention Kernel Built, but Small Sequence Length Exposes the Arithmetic Floor (Negative Result).**
   Addressed the hybrid CNN-Transformer architecture `mobilevit_xxs`. Stock VitisAI EP
-  quantized via Quark partitioned into **49 subgraphs (108.00 ms)** due to unsupported
-  Softmax/MatMul/LayerNorm, losing 5.9x to 8-core Zen4 CPU (18.37 ms). Cutting the
-  attention blocks left a pure convolution backbone (407 nodes) compiled into **1 single
-  NPU subgraph at 1.71 ms** (3.23x faster than CPU 5.52 ms, like-for-like). Built the custom fused BF16
-  attention kernel in `mlir-aie` (IRON + Peano): solved Peano's linker script upward
-  stack collision via `Worker(stack_size=2048)`; implemented row-wise FlashAttention
-  streaming shrinking tile memory from 128 KB to 512 bytes; applied 16-lane AIE2 vector
-  intrinsics (`aie_api`) with aligned padding ($D_{pad} \in \{16, 32\}$); and evaluated
-  in-place stable Softmax. Scaled across 8 physical cores (Cols 0..3, Rows 2..3) mapped
-  to all 8 physical Shim DMA channels. The kernel passes bit-accurate numerical verification
-  (<1% rel L2 error, 0 NaN) against ImageNet golden calibration tensors across all stages:
-  Stage 4 (0.86 ms), Stage 3 (4.57 ms), Stage 2 (57.61 ms).
+  quantized via Quark partitioned into **49 thrashing subgraphs (108.00 ms)** (1,037 NPU nodes /
+  548 CPU nodes, including 156 CPU compute nodes: LayerNorm, MatMul, Slice, Reshape) due to unsupported
+  transformer operators, losing 5.9x to 8-core Zen4 CPU (18.37 ms). Cutting the attention blocks
+  left a pure convolution backbone (409 nodes: 407 NPU in **1 single subgraph**, 2 CPU boundary nodes)
+  compiled into NPU at **1.73 ms** (3.1x faster than CPU 5.35 ms, like-for-like). Built the custom
+  fused BF16 attention kernel in `mlir-aie` (IRON + Peano): solved Peano's linker script upward
+  stack collision via `Worker(stack_size=2048)`; implemented row-wise FlashAttention streaming
+  shrinking tile memory from 128 KB to 512 bytes; applied 16-lane AIE2 vector intrinsics (`aie_api`)
+  with aligned padding ($D_{pad} \in \{16, 32\}$); and evaluated in-place stable Softmax. Scaled
+  across 8 physical cores (Cols 0..3, Rows 2..3) mapped to all 8 physical Shim DMA channels. The kernel
+  passes bit-accurate numerical verification (<1% rel L2 error, 0 NaN) across all stages (Stage 4:
+  0.86 ms, Stage 3: 4.57 ms, Stage 2: 57.61 ms), accounting for the 0.1700% FP32→BF16 quantization floor
+  and 0.235% `fast_exp` approximation error on Stage 3's 10,240 active elements.
   
   **The Finding (Negative Result):**
   The kernel loses heavily to CPU. At Stage 3 (8 heads), total compute is only **2.79 MFLOP**
@@ -1004,9 +1005,20 @@ been closed:
   runs those 8 heads in **0.034 ms**, making the 4.57 ms AIE2 kernel **134x slower than CPU**
   (achieving 0.61 GFLOPS, <0.1% of array peak). Mobile vision self-attention lacks the token
   sequence length ($N \ge 2048$) of LLMs needed to overcome AIE2 launch and DMA sequencing overhead.
-  Running the full model on NPU with this kernel takes >120 ms. Splicing NPU CNN (1.71 ms) +
-  CPU Attention (1.57 ms) yields **3.28 ms as an idealized sum-of-timers**, but leaves attention
-  on CPU and leaves the cross-process handoff floor (789 us–23.6 ms in `groupnorm_bf16`) unmeasured.
+  Running the full model on NPU with this kernel takes >120 ms.
+
+  **Measured Heterogeneous Splice & Accuracy Ground Truth:**
+  Leaving attention on CPU and executing the cut CNN on NPU in a single in-process runtime delivers
+  a measured end-to-end wall-clock latency of **4.47 ms** (1.73 ms NPU infer + 2.03 ms CPU attention
+  across 9 transformer blocks + 0.72 ms in-process buffer wrapping residual). This achieves an honest
+  **4.1x speedup vs full CPU (18.37 ms)** and 24.2x vs stock VitisAI EP (108.00 ms). Note that this
+  pipeline does NOT use the AIE attention kernel; furthermore, if partitioned across separate Python
+  processes (due to Python 3.12 vs 3.13 pyxrt ABI boundaries), the cross-process IPC handoff floor
+  (789 µs–23.6 ms in `groupnorm_bf16`) would completely erase any speedup margin.
+  On accuracy: full FP32 `mobilevit_xxs` achieves **75.0% top-1** on ImageNet validation (`data/eval`,
+  1000 images), but both quantized ONNX models in `models/` were built with synthetic random calibration
+  (`UseRandomData = True`) for place-and-route diagnostics, scoring 0% accuracy on real validation images.
+  Neither quantized model can be cited for top-1 or mAP accuracy without a real-data calibration pass.
   Working demo and diagnostics in `scripts/attention-demo.sh` and `tools/demo_attention.py`.
   `results/aie/attention_bf16_kernel_npu.log`.
 
