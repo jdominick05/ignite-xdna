@@ -1,0 +1,583 @@
+# SILICON — what the XDNA1 array physically is, and what that makes possible
+
+> A new file class, added 2026-09-07. `docs/BENCHMARKS.md` records what was measured,
+> `docs/DECISIONS.md` records what was decided, `RESEARCH.md` carries the thesis and the
+> open questions. This file is the layer underneath all three: an inventory of what the
+> Phoenix AIE array physically contains, the ceilings that follow from it, where every
+> number this repo has measured sits against those ceilings, and the objectives that are
+> physically reachable on this silicon — whether or not the tooling to reach them exists
+> today. Where it doesn't, building the tooling is the work item, not the reason to stop.
+
+**Provenance.** Desktop 2 (Ryzen 7 8700G, Phoenix XDNA1; the laptop's Hawk Point is
+untested for everything below). Repo state: `main` at `ce3e773`, `docs-restructure` at
+`80770d3`. Toolchains: Ryzen AI 1.7.1 (VitisAI EP + `phoenix\4x4.xclbin` / `1x4.xclbin`),
+`Xilinx/mlir-aie` v1.4.2 (IRON + Peano) in the ironenv, XRT SDK 2.21.75, NPU driver
+32.0.20101.3760. If any of those move, re-check the SPEC rows before trusting a DERIVED one.
+
+## How to read this
+
+Every figure carries one of four tags, and the tag is the claim:
+
+- **MEASURED** — a log under `results/` on this machine, path given. The repo's standing
+  evidence rule applies unchanged.
+- **SPEC** — read from a vendor or toolchain source file already on this machine, path
+  given: AMD's `device.yaml` (excerpted verbatim in
+  `results/aie/notes_aie2_device_dtypes.log`), or mlir-aie v1.4.2's target model
+  (`include/aie/Dialect/AIE/IR/AIETargetModel.h`, `lib/Dialect/AIE/IR/AIETargetModel.cpp`)
+  and kernel library. A SPEC row is what the toolchain *believes* about the chip; it has
+  been right every time this repo has tested one, but it is not a measurement.
+- **DERIVED** — arithmetic shown inline from MEASURED and SPEC inputs, assumptions named.
+- **TO VERIFY** — physically checkable on this machine, and nobody has.
+
+**The clock is not measured.** Every per-second ceiling below depends on the AIE core
+clock, and nothing in this repo measures it: `RESEARCH.md` cites 1.6 GHz for the 8700G
+from a web search, `results/aie/bottleneck_spatial_sweep_npu.log` assumed 1 GHz and says
+so, and `xrt-smi examine -r platform` prints no clock at all (only `Power Mode: Default`).
+So per-cycle figures are the primary SPEC numbers, every per-second figure is given at
+both 1.0 and 1.6 GHz, and measuring the clock is objective S0 below. Read the two
+columns as brackets, not as a choice.
+
+## 1. The physical array
+
+### 1.1 Geometry
+
+| Fact | Value | Tag and evidence |
+|---|---|---|
+| Physical columns | **5** | MEASURED: `xrt-smi examine -r platform` reports `Total Columns: 5` (re-run 2026-09-07, `results/aie/xrt_smi_platform_pmode.log`; first recorded in `docs/DECISIONS.md`). AMD's own `aiecompiler` derives `aie2_5x4_device` for the part string `xc10AIE24x5-die-1LP-e-S-es1` (`results/aie/aiecompiler_hostlib_fixed.log`, `results/aie/notes_aiecompiler_part_db.log`). |
+| Rows per column | 6: one shim tile, one mem tile, four core tiles | SPEC: `BaseNPU1TargetModel::rows()` returns 6 ("1 Shim row, 1 memtile row, and 4 Core rows"); `device.yaml` `phoenix:` block has `num_rows: 4`, `memtile_rows: 1`. |
+| Core tiles | 20 physical, 16 reachable today | DERIVED: 5 × 4 and 4 × 4. |
+| Columns any path on this machine can drive | 4 | MEASURED: `4x4.xclbin` always lands on `Partition Index: 0, Columns: [1, 2, 3, 4]` (`results/gops_yolov8n.log`, `tools/session_hold.py`); `1x4.xclbin` exposes at most 4 partitions and a 5th process time-slices column 4 (`results/multi_partition_yolov8n_5col.log`); the driver's own `5x4_*.xclbin` overlays build, run, match CPU output and place 0 nodes on the NPU — fingerprint mismatch, `docs/DECISIONS.md`. SPEC: mlir-aie v1.4.2 models NPU1 as at most 4 columns (`python/iron/device/__init__.py:42`, `_MAX_COLS = {"NPU1": 4}`; `AIEAttrs.td` defines `npu1` as the 4-column "whole array" plus `npu1_1col..3col`). |
+| Which column is the unreachable one | column 0, by elimination | DERIVED from the `[1, 2, 3, 4]` partition report. TO VERIFY: whether column 0's shim tile has a NoC DMA at all, or is compute-only (mlir-aie's "NPU1 has no ShimPL tiles" comment covers only the four columns it models). |
+| `device.yaml`'s own `phoenix:` block | `num_columns: 4` | SPEC — AMD's cost-model config describes the 4-column overlay, not the die. The two AMD sources disagree with each other; `xrt-smi` and `aiecompiler` are the ones that talk to hardware. |
+
+### 1.2 One core tile
+
+| Resource | Value | Tag and evidence |
+|---|---|---|
+| Data memory | 64 KB, 4 banks | SPEC: `device.yaml` `core_data_memory: 64`, `core_num_banks: 4`; target model `getLocalMemorySize() = 0x10000`. MEASURED as a wall: every `bottleneck.py` width past 44 and every bf16 GEMM tile past `m=64,n=32`/f32 dies with `allocated buffers exceeded available memory` (`results/aie/bottleneck_spatial_sweep_npu.log`, `results/aie/bf16_matmul_ffn_shape_variants_npu.log`). |
+| Program memory | 16 KB | SPEC: `device.yaml` `core_program_memory: 16`. |
+| MACs per cycle | int8×int8 **256**; bf16×bf16 **128**; int16×int8 **128** | SPEC: `device.yaml` AIE2 `macs_per_cycle`. |
+| Adds per cycle | int8, int4: 64; bf16, int16: 32 | SPEC: `device.yaml` AIE2 `adds_per_cycle`. |
+| Absent from the table | int16×int16, int8×int4, int16×int4, bfp16×bfp16 | SPEC: those appear only in the AIE2p (Strix) block. No vector fp32 multiply path is listed either; fp32 *accumulation* is native (`accfloat`), and `kernels/groupnorm_bf16/groupnorm_kernels.cc` gets fp32-grade products by splitting a coefficient into a bf16 hi part and a bf16 residual — two MACs, not one. |
+| Vector load/store bus | 256 bits | SPEC: `getComputeTileLoadStoreBusWidth() = 256`. |
+| Accumulator cascade to a neighbour | 512 bits | SPEC: `getAccumulatorCascadeSize() = 512`. Exercised on this chip by `02_vector_reduce_max`'s 4-core cascade (`results/aie/mlir_aie_examples_npu.log`). |
+| DMA | 2 S2MM + 2 MM2S channels; 16 BDs; 16 locks | SPEC: `AIE2TargetModel::getNum{Dest,Source}SwitchboxConnections` (DMA bundle = 2 each way); `getNumBDs` = 16, `getNumLocks` = 16 for non-mem tiles. |
+| BD fields | length ≤ 2¹⁴−1 words (65,532 B); 3-D addressing; 8-bit wrap; 13-bit step; 6-bit iteration wrap | SPEC: `getDmaBdMaxLen`, `getBDMaxDims`, `getDmaBdWrapBits`, `getDmaBdStepBits`, `getDmaBdIterBits`. MEASURED as a wall: a 64×688 bf16 B-tile (22,016 words) is refused with "exceeds the maximum of 16383 words supported by this tile type" (`results/aie/bf16_matmul_ffn_real_shape_npu.log`). |
+| Neighbour memories a core can address directly | its own, west, north, and south unless the south tile is the mem tile | SPEC: `AIE2TargetModel::isLegalMemAffinity` (`AIETargetModel.cpp:809-823`). DERIVED: a core in the lowest core row sees 3 × 64 KB, the other three rows see 4 × 64 KB. |
+| Stack | Peano defaults to 1024 B and grows *upward into tile buffers* | MEASURED: silent corruption until `Worker(..., stack_size=2048)` (`kernels/attention_bf16/README.md`). |
+| Live accumulators | 8 concurrently-live 4×8×8 int8 `aie::mmul` accumulators spill to the stack; ≤4 stays in registers | MEASURED: the root cause of the `conv2dk3` width-32 corruption (`results/aie/conv2dk3_widthfix_npu.log`, `kernels/README.md`). TO VERIFY the exact register count from the AIE-ML ISA rather than from that one kernel. |
+| Cycle counter | `aie::tile::current().cycles()` → `get_cycles()` | SPEC: `ironenv/Lib/site-packages/mlir_aie/include/aie_api/tile.hpp`. Never used in this repo yet; it is what objective S0 is built on. |
+| `aie::mmul` shapes in mlir-aie's GEMM library | bf16 4×8×4; int8 4×8×8; int16 4×4×4 | SPEC: `aie_kernels/aie2/mm.cc`. |
+| Numerics | `aie::set_rounding(conv_even)` needed to match host round-to-nearest-even; Peano's AIE libc has no float `sqrtf` | MEASURED: `results/aie/groupnorm_bf16_kernel_npu.log`. |
+
+### 1.3 One mem tile
+
+| Resource | Value | Tag and evidence |
+|---|---|---|
+| Memory | 512 KB, 8 banks | SPEC: `device.yaml` `memtile_capacity: 512`, `memtile_num_banks: 8`; `getMemTileSize() = 0x80000`. |
+| DMA | 6 S2MM + 6 MM2S channels; 48 BDs (even channels use BDs 0–23, odd 24–47); 64 locks | SPEC: switchbox DMA bundle = 6 each way; `getNumBDs(MemTile) = 48`; `isBdChannelAccessible`; `getNumLocks(MemTile) = 64`. |
+| BD fields | length ≤ 2¹⁷−1 words (the whole tile); **4-D** addressing; 10-bit wrap; 17-bit step; 6-bit iteration wrap | SPEC: same accessors. The 4-D BD is the one address generator on the chip that can do an im2col or a transpose in flight without a core touching the data. |
+| Neighbour access | east and west mem tiles are addressable | SPEC: `isLegalMemAffinity`'s mem-tile branch. TO VERIFY on NPU1 hardware. |
+
+### 1.4 One shim tile
+
+| Resource | Value | Tag and evidence |
+|---|---|---|
+| NoC DMA | 2 S2MM + 2 MM2S channels; 16 BDs; 16 locks | SPEC: switchbox DMA bundle = 2 each way; `getNumBDs` = 16. MEASURED as a design constraint: `kernels/groupnorm_bf16/groupnorm.py` puts exactly two workers per column so each of the 8 MM2S and 8 S2MM channels on the 4-column device carries one stream, and had to ride the per-core parameters on the data fifo because no third channel exists. |
+| BD fields | 32-bit length; 3-D addressing; 10-bit wrap; **20-bit step**; 6-bit iteration wrap; repeat count ≤ 255 | SPEC: same accessors plus `getMaxRepeatCount() = 255`. Address granularity is 32-bit words (`getAddressGenGranularity() = 32`). |
+| Shim type | all four modelled columns are NoC shims ("NPU1 has no ShimPL tiles") | SPEC: `VirtualizedNPU1TargetModel::getTileType`. Column 0 is outside the model — see 1.1. |
+
+### 1.5 Streams and the switch
+
+| Fact | Value | Tag and evidence |
+|---|---|---|
+| Stream width | 32-bit streams, one word per cycle per stream | SPEC-adjacent: `device.yaml` `max_stream_bw: 4` carries no unit in the excerpt; it is consistent with 4 bytes per cycle per stream and nothing else obvious. **TO VERIFY** with the single-channel microbenchmark in S1 — see the 9% discrepancy in 1.6. |
+| Switch features used or provable here | circuit-switched routes, packet-switched routes (packet id ≤ 31), broadcast from one master to several slaves, trace ports on core, mem and shim tiles | SPEC: `getMaxPacketId() = 31`; `WireBundle::Trace` slave ports exist on all three tile types (`AIETargetModel.cpp`, port-index tables). Broadcast is what lets `whole_array.py` feed one A-tile to a whole row of cores and one B-tile to a whole column. |
+| Switch ports per tile (masters out / slaves in) | core tile: DMA 2/2, core 1/1, FIFO 1/1, north 6/4, south 4/6, east and west 4/4 (0 at the array edge); mem tile: DMA 6/6, north 6/4, south 4/6; shim: north 6/4, south (the NoC side) 6/8, east and west 4/4, FIFO 1/1 | SPEC: `AIE2TargetModel::getNumDestSwitchboxConnections` and `getNumSourceSwitchboxConnections`, read with their `case` labels. Consistent with the model's own validation rule that a tile's north masters equal the tile above's south slaves. |
+
+### 1.6 Off-chip bandwidth
+
+Three independent measurements, none of them a clean single-direction read test:
+
+| Design | Channels per direction | What moved | NPU time | Rate | Tag and evidence |
+|---|---|---|---|---|---|
+| `00_memcpy` (passthrough, 64 MiB round trip) | 4 ("2 columns × 2 channels") | 64 MiB in and 64 MiB out | 2388.5 µs avg | 56.19 GB/s "effective" = read+write bytes ÷ time, i.e. **28.1 GB/s per direction** | MEASURED `results/aie/mlir_aie_examples_npu.log`; the per-direction split is DERIVED (2 × 67,108,864 B ÷ 2388.5 µs = 56.19 GB/s reproduces the log's own figure). |
+| `groupnorm_bf16`, L=301056 | 8 | 19.27 MB read twice, written once | 1487.3–1546.6 µs | 37.4–38.9 GB/s combined; the read stream alone is **25.9 GB/s** (2 × 19.27 MB ÷ 1487.3 µs) with 13.0 GB/s of writes running concurrently | MEASURED `results/aie/groupnorm_bf16_kernel_npu.log`; split DERIVED. |
+| `dispatch_floor` passthrough (shim→memtile→shim, one fifo in, one forwarded out) | 1 | 8 KB–32 MB, each payload in and back out | slope 0.0726 ns per round-trip byte | 13.78 GB/s of read+write bytes, i.e. **6.9 GB/s per direction on one channel** | MEASURED `results/aie/dispatch_floor_npu.log`; the script counts `n * 4 * 2` bytes per call (`kernels/dispatch_floor/measure_floor.py`), so the split is DERIVED from its own accounting. |
+
+What those three say together (DERIVED). Two independent designs agree on the per-channel
+rate: memcpy at 7.0 GB/s per shim channel per direction across four channels, the
+passthrough at 6.9 GB/s on one. Eight channels did not get eight times that — the
+GroupNorm design's reads total 25.9 GB/s, 3.2 GB/s per channel — so above roughly four
+channels a shared cap near 26–28 GB/s per direction binds, DRAM or NoC side, not the
+channels. `device.yaml`'s `dram_read_bandwidth: 16` / `dram_write_bandwidth: 16` carry no
+unit; 16 bytes per cycle at 1.6 GHz is 25.6 GB/s, within 10% of both shared-cap
+measurements, which is suggestive and nothing more. The per-channel figure is the
+uncomfortable one: 7.0 GB/s at 4 bytes per cycle needs a 1.75 GHz clock, 9% above the
+cited 1.6 GHz. So either the clock is higher than cited, or a shim DMA channel is wider
+than one 32-bit stream, or `max_stream_bw: 4` is not bytes per cycle at all. S0 and S1
+between them settle which.
+
+### 1.7 Clock and power mode
+
+| Fact | Value | Tag and evidence |
+|---|---|---|
+| Core clock | **unmeasured** | RESEARCH.md: 1.6 GHz for the 8700G, from a web search on 2026-09-06. `results/aie/bottleneck_spatial_sweep_npu.log`: "~2 TOPS at 1 GHz … NOT measured on this machine". |
+| Power mode | `Default`; `xrt-smi configure --pmode` accepts `default, powersaver, balanced, performance, turbo` | MEASURED: `results/aie/xrt_smi_platform_pmode.log` (a verbatim `--batch` capture of `xrt-smi examine -r platform` and `configure --help`, 2026-09-07; nothing on the device was changed). Never exercised by anything in this repo. |
+| A symptom nobody has attributed | the same model, same cache, measured 12.7 ms alone and 6.8–6.9 ms minutes later in a sweep | MEASURED `docs/DECISIONS.md` ("NPU single-instance latency drifts session to session"). Background CPU load was the suspect; an NPU clock or power state that changes with activity is the other candidate, and S0 tests it. |
+
+### 1.8 On-chip storage, totalled
+
+DERIVED from 1.2–1.3: 16 core tiles × 64 KB + 4 mem tiles × 512 KB = **3.0 MB** reachable
+today; 20 + 5 gives **3.75 MB** if column 0 is reached. Program memory is 16 KB per core,
+256 KB across the reachable array. For scale: yolov8n's head-cut int8 graph is on the order
+of 3 MB of weights (TO VERIFY the exact byte count with `onnx-tool`'s `graph.params`, which
+`tools/estimate_tops.py` already reads), so a fully weight-resident small CNN is at the
+edge of what the reachable array can hold and comfortably inside the physical one.
+
+## 2. Ceilings, and where every measured number sits
+
+### 2.1 The nameplate, reproduced
+
+DERIVED: 20 cores × 256 int8 MAC/cycle × 2 ops/MAC × 1.6 GHz = **16.38 TOPS**. That is the
+"16 TOPS" AMD prints, and it only reproduces with all 20 cores at 1.6 GHz. Sixteen cores at
+the same clock give 13.1 TOPS; at 1.0 GHz the two figures are 10.24 and 8.19 TOPS.
+Consequence: **the 4x4 overlay's physical ceiling is 82% of nameplate**, so the repo's best
+achieved figure — yolov8l on four independent `1x4` columns, 6.29 TOPS, 39.3% of nameplate
+(`results/multi_partition_yolov8l.log`, `tools/estimate_tops.py`) — is 48% of what the
+16 cores it ran on can physically do at 1.6 GHz.
+
+### 2.2 The per-column denominator is a finding, not a convention
+
+`results/percall_overhead_yolov8_1x4.log` divides by "an ideal 4-TOPS column" (16 ÷ 4). A
+four-core column is 4 × 256 × 2 × f:
+
+| Clock | int8 per column | bf16 per column | int16×int8 per column | int8 per core |
+|---|---|---|---|---|
+| 1.0 GHz | 2.05 TOPS | 1.02 TFLOPS | 1.02 TOPS | 512 GOPS |
+| 1.6 GHz | 3.28 TOPS | 1.64 TFLOPS | 1.64 TOPS | 819 GOPS |
+
+The vendor DPU's yolov8l run on one column is 8.433 × 10¹⁰ MACs in 102.190 ms of node time
+(MEASURED, that log) = **1.650 TOPS achieved per column**. Against the three denominators:
+41.3% of "4 TOPS", **50.3% of a 3.28-TOPS column, 80.5% of a 2.05-TOPS column.** Which of
+the last two is true is exactly the clock question; either way, 1.65 TOPS per column is a
+measured, clock-independent bar that this silicon demonstrably sustains on int8 conv, and
+it is the bar every open kernel in section 4 is held to.
+
+### 2.3 int8 conv: the vendor kernel vs the open one, same silicon
+
+| Kernel | Marginal rate, one column | Per core | Share of 819 GOPS/core (1.6 GHz) | Tag and evidence |
+|---|---|---|---|---|
+| VitisAI DPU, yolov8l, `1x4.xclbin` | 1650 GOPS (node time, not a fit) | 412 GOPS | 50.3% | MEASURED `results/percall_overhead_yolov8_1x4.log`; DERIVED split |
+| mlir-aie `ml/bottleneck`, h-axis sweep | 146.1 GOPS (fit, r² = 0.99999) | 36.5 GOPS | 4.5% | MEASURED `results/aie/bottleneck_spatial_sweep_npu.log` |
+| mlir-aie `ml/bottleneck`, 56×56 | 111.1 GOPS (2-point fit) | 27.8 GOPS | 3.4% | MEASURED `results/aie/bottleneck_w56_npu.log` |
+| CPU, ORT QDQ int8 on 8 Zen4 cores, same shapes | 819.0 (sweep) / 1678.8 (56×56) GOPS | — | — | MEASURED, same two logs |
+
+The vendor-to-open gap, **11.3×**, is clock-independent because both ran on the same
+column. That gap, not the CPU, is the real statement about the open int8 conv kernels: the
+op class was closed against the CPU (12.75× at 56×56), and it was closed by a kernel
+running at one-eleventh of what the same column does under AMD's compiler. At the DPU's
+rate one column matches the CPU's 1678.8 GOPS and four columns are ~4× ahead of it.
+Whether an open kernel can reach the DPU's rate is objective K1; nothing physical says it
+can't.
+
+### 2.4 bf16 GEMM
+
+| Quantity | Value | Tag and evidence |
+|---|---|---|
+| 16-core bf16 peak | 4.10 TFLOPS at 1.0 GHz; 6.55 TFLOPS at 1.6 GHz | DERIVED: 16 × 128 × 2 × f |
+| Best measured | 2072.54 GFLOPS (1024³, bf16 out) | MEASURED `results/aie/bf16_matmul_niche_npu.log` |
+| Typical at production shapes | 1776.68 (2048×4096×4096, f32 out), 1800.86 (down-projection K=11008), 1846.96 (4096×2048×2048) GFLOPS | MEASURED `results/aie/bf16_matmul_attention_scale_npu.log`, `..._ffn_real_shape_npu.log`, `..._niche_npu.log` |
+| Share of peak | 50.6% (1.0 GHz) / 31.6% (1.6 GHz) at the best point; 43–45% / 27–28% at production shapes | DERIVED |
+| Per core at the best point | 2072.54 ÷ 16 = 129.5 GFLOPS = 64.8 GMAC/s = 40.5 MAC/cycle of 128 at 1.6 GHz | DERIVED |
+| CPU bar (torch bf16, 8 Zen4 cores) | 1100.6–1362.8 GFLOPS across every shape measured | MEASURED, the same logs |
+
+The NPU's measured edge here is 1.13–1.78× over the CPU, and it comes from running the
+array at roughly a third to a half of its bf16 peak. Section 3.1 says why, and how much of
+the rest is physically recoverable.
+
+### 2.5 Dispatch
+
+| Path | Fixed cost per call | Tag and evidence |
+|---|---|---|
+| IRON `@iron.jit`, wall | **617.0 µs** | MEASURED `results/aie/dispatch_floor_npu.log` (R² 0.9990) |
+| IRON, host-side share | 447.3 µs, flat in payload, mostly XRT outside the submit bracket | MEASURED, same log |
+| IRON, hardware bracket (submit + wait) | **169.8 µs** | MEASURED, same log (R² 1.0000) |
+| VitisAI EP, host-side gap outside every ORT node (its Q/DQ nodes are a further 0.44 ms of real CPU work, also outside the compute node) | **0.089–0.091 ms** per call, every model size, one column | MEASURED `results/percall_overhead_yolov8_1x4.log` ("unaccounted gap (dispatch/sync)") |
+
+What the last row does and does not show. It shows that the host-side term is software:
+the vendor path spends about 90 µs per call outside its nodes where IRON spends 447 µs, on
+the same driver. It does **not** show what the hardware floor is — the vendor's own
+submit-to-completion latency sits *inside* its compute node's 12–102 ms, mixed with the
+DPU's execution, and that log cannot separate it. Whether IRON's 169.8 µs hardware bracket
+is silicon, or IRON's per-call runtime sequence (instruction buffer reload, BD
+reprogramming, context bookkeeping), is therefore **open**, and objectives D1–D3 are the
+measurements that close it. Until they do, the repo's go/no-go rule stands as measured: an
+op must cost more than ~617 µs on the CPU to win through IRON today, ~170 µs on a bare
+resubmit.
+
+### 2.6 The three FFN DMA limits are field widths, not compiler bugs
+
+`results/aie/bf16_matmul_ffn_real_shape_npu.log` found three limits chasing Llama-2-7B's
+`d_ff=11008`. Each one lines up with a BD field in the target model:
+
+| Limit as measured | Field in the target model | Match | Consequence |
+|---|---|---|---|
+| C-output stride cap "[1:1048576]" words, i.e. a fixed 4 MiB regardless of dtype | shim BD **20-bit step** at 32-bit granularity → 2²⁰ words = 4 MiB | exact | Silicon. Cannot be lifted; must be decomposed around (more BDs, a different layout, or staging through the mem tile). |
+| B-tile "exceeds the maximum of 16383 words supported by this tile type" | core BD **length ≤ 2¹⁴−1** | exact | Silicon. `n` at `k=64` bf16 is capped at 511 on any core-tile BD. |
+| "Too many simultaneously active buffer descriptors on tile (1,0), which supports up to 16", after the compiler split a repeat count of 86 into 64 + 22 | shim tile **16 BDs**; **6-bit iteration wrap** (max 64) | exact on both numbers | The 16-BD budget and the 64 wrap are silicon. How the compiler chains a longer repeat is the tooling half — the chunking strategy is what overflowed, and it is replaceable. |
+
+The workaround space is therefore about *decomposition*, and the mem tile is the tool the
+silicon provides for it: 48 BDs, 4-D addressing, and a 17-bit step of its own. Routing the
+C output shim→mem tile→DDR, or reshaping the A reload so its repeat stays under 64, are
+designs, not compiler patches. `--c-col-maj` was tried and traded this limit for the 64 KB
+L1 wall at a worse operating point (`results/aie/bf16_matmul_ffn_shape_variants_npu.log`);
+Mistral's `d_ff=14336` showed that the surviving `n`-tile size, not "real-shape-ness",
+decides the verdict (1.10× CPU at 11008, 1.13× NPU at 14336).
+
+## 3. Rooflines per op class
+
+### 3.1 GEMM: the tile decides whether the core is fed
+
+A core computing an m×n output tile over a k-step needs (m+n)·k·2 bytes of bf16 operands
+for m·n·k MACs, i.e. **2(m+n)/(m·n) bytes per MAC**. Its two S2MM channels deliver at most
+8 bytes per cycle if a stream is 4 B/cycle (1.5, TO VERIFY). At 128 bf16 MACs per cycle
+the core can absorb 0.0625 B/MAC. DERIVED:
+
+| Tile m×n (k=64) | B/MAC | Input-bound MAC/cycle | Ceiling as % of bf16 peak | Where it was measured |
+|---|---|---|---|---|
+| 64×32 (`whole_array.py` default) | 0.0938 | 85.3 | **67%** | every 1776–2072 GFLOPS row above |
+| 32×32 | 0.125 | 64 | 50% | — |
+| 16×64 (forced at N=11008) | 0.156 | 51.2 | 40% | 909.97 GFLOPS — 0.51× the default tile's 1793 at the same K |
+| 16×128 (Mistral N=14336) | 0.141 | 56.9 | 44% | 1454.37 GFLOPS |
+| 64×64 | 0.0625 | 128 | **100%** | never — its double-buffered f32 C tile alone is 2 × 16 KB, and the whole set (A 8 KB, B 8 KB, C 16 KB, ×2) is exactly 64 KB with no stack; the `n=64` attempt failed on L1 (`..._ffn_shape_variants_npu.log`) |
+
+Two readings. First, the default tile is input-bound at two thirds of peak *before* any
+other inefficiency, and the measured 27–32% (1.6 GHz) sits at half of that bound — so
+roughly half of the remaining gap is data movement and half is inside the core (C tile
+read-modify-write over the 256-bit bus every k-step, loop overhead, pipeline fill). The
+trace in S2 apportions those. Second, the levers the silicon offers are specific: keep the
+running sum out of L1 (accumulate across k in registers or across cores over the 512-bit
+cascade, so C is written once), share A or B between adjacent cores through neighbour
+memory so one DMA stream feeds two consumers (halves the per-core input demand without
+touching the switch), and pick tiles by the B/MAC column above rather than by what fits
+the generic design's DMA pattern. The CPU bar is flat at 1100–1360 GFLOPS; the input-bound
+ceiling for a 64×64 tile at 1.6 GHz is 6.55 TFLOPS, at 1.0 GHz 4.10.
+
+### 3.2 GroupNorm and InstanceNorm live at the DRAM cap
+
+`groupnorm_bf16` reads its 19.27 MB tensor twice and writes it once in 1.487–1.547 ms
+(MEASURED, `results/aie/groupnorm_bf16_kernel_npu.log`), a read rate of 25.9 GB/s that sits
+within 8% of memcpy's independently measured 28.1 GB/s per direction (1.6) — at twice the
+channel count, with 13 GB/s of writes running alongside. The kernel is at the shared
+off-chip cap, and the compute — about six ops per element on a 128-MAC core — is
+invisible. DERIVED: the op is ~1 op per byte moved, so on this array
+it can never run faster than the off-chip cap allows, and the only two levers are physical:
+a one-pass statistics scheme (shifted sums or Welford in fp32, 1 read + 1 write) gives at
+most 1.5× at the same cap; fusing the normalisation into the epilogue of the conv that
+produces the tensor gives all of it, because the tensor then never leaves the array between
+the two ops. That is why the standing verdict — 33/49 nodes win in isolation and 0/49
+survive a two-process handoff — is not a kernel problem. It is a graph-boundary problem,
+and it is addressed by D4 and A2, not by another norm kernel.
+
+### 3.3 Conv is compute-bound if the schedule lets it be
+
+DERIVED for the block the repo measured (3×3, 64→64 channels, 56×56): 56·56·64·64·9 =
+115.6 MMAC over 200 KB in, 36 KB of weights and 200 KB out — about 265 MACs per byte of
+traffic, against the 16 MAC/B the core's input channels demand at 128 MACs/cycle (and 32
+MAC/B at the int8 rate of 256). Conv has ~10× more reuse than the array needs, the whole
+layer's weights fit in one core's L1 and the block's fit in a mem tile, so the 146 GOPS is
+a scheduling and vectorisation result, not a bandwidth one — which is what the width-fix
+work already found from the other direction (`aie::mmul` used correctly, but width-32
+strides hard-coded and accumulators spilled). The DPU at 1.65 TOPS per column is the
+existence proof that this silicon schedules conv at least eleven times better than the
+open kernel does today.
+
+### 3.4 Small ops and the floor
+
+Below the dispatch floor nothing wins, however good the kernel: attention stages 3 and 4
+(34 µs and 12 µs on the CPU), GroupNorm at L ≤ 18816 (233 µs), the whole of MobileNetV2
+(1.72 ms on the CPU, 2.68 ms through the EP), MobileViT's stage-2 attention (240 µs).
+MEASURED in `results/aie/dispatch_floor_npu.log`, `results/mobilenet/`, `docs/BENCHMARKS.md`.
+The vendor path's 90 µs host-side gap (2.5) shows that the 447 µs host half of the floor
+is software; whether the 169.8 µs hardware half is silicon is what D1–D3 measure, and every
+small-op verdict in this repo is conditional on where it lands.
+
+## 4. Objectives
+
+Ordered by dependency, and weighted toward where the NPU has *measured* edge — large bf16
+GEMM, independent-stream throughput, wide graphs — with the closed int8-conv result kept
+as the bar an open kernel would have to clear rather than a reason not to try. Each entry
+names its physical basis, the tooling that has to exist, the measurement that decides it,
+and what in this repo it reuses. None of them is a claim of a result.
+
+### Tier 0 — instrumentation (cheap, and everything downstream needs it)
+
+**S0. Measure the core clock, per power mode.**
+Physical basis: every core has a 64-bit cycle counter (1.2). Tooling: a one-Worker design
+that reads `aie::tile::current().cycles()` before and after a fixed, DMA-free loop, writes
+both stamps to its output fifo, and is timed by the host around the same call; repeat under
+each `xrt-smi configure --pmode` and while a VitisAI EP session runs concurrently.
+Measurement: cycles ÷ wall seconds, with the loop long enough that the 617 µs dispatch
+cost is under 1% of it. Decides: every per-second column in sections 2–3; whether the
+session-to-session drift in 1.7 is a clock state; whether `turbo` exists on this part.
+Reuses: `kernels/dispatch_floor/measure_floor.py`'s harness and verification pattern.
+
+**S1. Pin the data-movement constants.**
+Physical basis: 1.5–1.6 hold three mutually inconsistent inferences. Tooling: extend the
+dispatch-floor passthrough with `--direction {read,write,both}` and `--channels 1..8`,
+plus two more variants — mem tile → four cores by broadcast, and core → adjacent core by
+shared memory versus by DMA. Measurement: bytes per cycle per stream (with S0's clock), the
+per-direction off-chip cap and whether it moves with channel count, mem-tile fan-out
+bandwidth, and the neighbour-memory read rate. Decides: the 8 B/cycle assumption behind
+3.1, the DRAM cap behind 3.2, and whether column count (A1) would raise off-chip bandwidth
+at all. Reuses: the same script; `results/aie/mlir_aie_examples_npu.log`'s memcpy as the
+cross-check.
+
+**S2. Hardware trace on npu1, end to end.**
+Physical basis: every core, mem and shim tile has a trace unit that emits cycle-stamped
+event packets (8 selectable events per tile, or program-counter samples) over the stream
+switch to a shim DMA and into a host buffer; mlir-aie's `Program.enable_trace` configures
+all of it (SPEC: `programming_guide/section-4/section-4b/README.md`). Tooling: the only
+known gap is the post-step — `magika`'s `trace_py` produced an NPU PASS and then failed
+because `aiecc` did not leave `input_with_addresses.mlir` on disk on this machine
+(`results/aie/mlir_aie_magika_mobilenet_npu.log`); fix or bypass that parser. Measurement:
+Perfetto timelines for `ml/bottleneck` at 56×56 and `whole_array.py` at 2048×4096×4096
+showing per-core MAC busy time, DMA stalls and lock waits. Decides: which half of the
+3.1 gap is data movement and which is in-core; where conv's 11.3× goes. This is the
+"instruction/tile-level profiling this repo's toolchain does not expose" that closed two
+threads in `RESEARCH.md` — the silicon exposes it, the post-step didn't.
+
+**S3. In-kernel cycle accounting without trace.**
+Physical basis: the same counter as S0, read inside the kernel around the `mmul` loop and
+around each fifo acquire. Tooling: a `-DPROFILE` build of `mm.cc`'s `matmul_vectorized_*`
+and of `conv2dk3` that writes cycle deltas into a side buffer. Measurement: MACs per cycle
+per core directly, independent of host timing and of S2. Decides: the same questions as
+S2 at lower fidelity and zero toolchain risk; use whichever lands first.
+
+### Tier 1 — the dispatch path
+
+**D1. `xrt::runlist` batching.**
+Physical basis: the vendor path's host-side cost per call is about 90 µs against IRON's
+447 µs on the same driver (2.5), so most of the host term is software, and a list of N
+runs costs one host round trip. Tooling: none new — `xrt::runlist` is in this
+XRT's experimental header and `pyxrt.runlist` exposes `add`/`execute`/`wait` (MEASURED as
+present, `results/aie/dispatch_floor_npu.log`, follow-up section). Measurement: the
+passthrough sweep at N = 1, 8, 64 runs per list; report host µs per run and hardware µs per
+run. Decides: how much of the 447.3 µs and of the 169.8 µs amortises. Reuses:
+`measure_floor.py`.
+
+**D2. A C++ host with cached handles.**
+Physical basis: the host cost is "mostly XRT outside the submit bracket" (that log's own
+cProfile), not interpreter time. Tooling: a small C++ program against the XRT SDK
+(headers and libs are at `C:\Xilinx\XRT\xrt_sdk\xrt`) that loads a `final.xclbin` from
+`~/.npu/cache/<hash>/` once, holds the `hw_context`, kernel handle, instruction BO and
+data BOs, and resubmits. Measurement: wall per call versus the 617.0/169.8 µs brackets on
+the identical xclbin. Decides: the true per-call floor of this driver for a non-vendor
+design; sets the number that replaces 617 µs in every go/no-go. Reuses: the CMake and XRT
+package setup already proven for `vision/*` (`results/aie/mlir_aie_vision_examples_npu.log`).
+
+**D3. Persistent kernels: pay the floor once per session, not per op.**
+Physical basis: a core is a processor running an ELF; nothing in the silicon requires it to
+stop between operations. Cores can loop forever on ObjectFifo acquires, and the host's
+runtime sequence is just BD programming plus a sync — the same mechanism the vendor DPU
+uses to run a whole graph as one node. Tooling: an IRON design whose `Runtime` sequence
+is re-issued per op with new buffer offsets while the `hw_context` and core programs stay
+resident, and (through D2) a host path that issues only the DMA part. Measurement: per-op
+cost for a 96 KB GroupNorm or a stage-3 attention block, against their 233 µs / 34 µs CPU
+times. Decides: whether the small-op class (3.4) is reachable at all. This is the single
+objective with the widest blast radius: every verdict in this repo that says "loses on the
+dispatch floor" was measured against a floor D3 removes.
+
+**D4. In-process splice: kill the two-process handoff.**
+Physical basis: the EP and an IRON xclbin already hold NPU contexts concurrently with zero
+contention (`results/bit/profile_instancenorm_splice_feasibility.log`), and in-process
+handoff on this machine costs +0.13 ms, not the 789 µs–23.6 ms that two processes cost
+(`results/mobilevit/splice_wall_clock_npu.log` vs
+`results/aie/groupnorm_bf16_handoff_floor_npu.log`; the unmerged branch
+`groupnorm-floor-v2` cut the two-process figure to 5.7 ms at L=301056 — still a loss —
+and measured the protocol alone, without the fp32/bf16 conversion, at 1.19 ms, which
+would fit inside that shape's 1.94 ms kernel margin). The wall was never the silicon; it
+is that `pyxrt.pyd` links `python313.dll` and `resnet_env17` is Python 3.12.
+Tooling: an ONNX Runtime custom-op DLL in C++ that owns an XRT context for an IRON xclbin
+and is registered into the same `resnet_env17` session as the VitisAI EP — no Python
+binding in the loop. Measurement: `resnetv2_50x3_xint8.onnx` end to end with the 33
+winning `InstanceNormalization` nodes routed to `kernels/groupnorm_bf16/`, against the
+measured 588.58 ms NPU / 470.79 ms CPU. Decides: whether the 33/49 per-node wins
+(19.4 ms of 42.37 ms) survive contact with the real graph once the handoff is in-process.
+Reuses: the kernel, `extract_golden.py`, the handoff harnesses on both branches.
+
+### Tier 2 — kernel quality, held to measured bars
+
+**K1. int8 conv at DPU-class efficiency.**
+Bar: 1.65 TOPS per column, clock-independent (2.2); today 146 GOPS (2.3). Physical
+basis: 3.3 — conv has ten times the reuse the core needs, the weights fit on-chip, and the
+same column sustains the bar under AMD's compiler. Tooling: a conv design of this repo's
+own rather than `ml/bottleneck`: weight-stationary tiles in the mem tile, im2col or row
+shifting done by the mem tile's 4-D BDs rather than by core code, all four cores of a column
+on one layer with the K-reduction over the 512-bit cascade, then four columns; S2/S3 driving
+every iteration. Measurement: the `sweep.py`/`cpu_sweep.py` fit at 56×56 and 512×32, one
+sitting, against ORT int8 (1678.8 GOPS marginal) — the CPU implementation named, per the
+standing rule. Go/no-go: nothing below ~1 TOPS per column is worth a second week; the
+gap is 11.3× and the first trace will say whether it is data movement or issue rate.
+Reuses: `kernels/bottleneck_sweep/`, the local `conv2dk1`/`conv2dk3` width fixes,
+`kernels/conv2dk3_widthfix/`.
+
+**K2. bf16 GEMM to its input-bound roofline.**
+Bar: 27–32% of peak today (2.4) against a 67% bound at the default tile and 100% at 64×64
+(3.1). Physical basis: 3.1's three levers — C accumulated in registers or across the
+cascade instead of read-modify-written in L1 every k-step; A or B shared between adjacent
+cores through neighbour memory so one stream feeds two; and shape-specific DMA
+decomposition through the mem tile for widths like 11008 where the shim BD's 20-bit step
+forces the generic design down to `m=16` (2.6). Tooling: a repo-owned GEMM design (not the
+generic `whole_array.py` CLI) with the tile chosen from the B/MAC table, f32 accumulation
+kept as the K-limit diagnosis requires (`results/aie/bf16_matmul_k_limit_diagnosed_npu.log`).
+Measurement: `kernels/bf16_matmul_sweep/cpu_matmul_sweep.py` on the same shapes, one
+sitting; report the fit, not per-point GFLOPS. Go/no-go: the CPU is flat at 1100–1360
+GFLOPS; every doubling of the NPU's 1.13–1.78× edge is a doubling of the case for the
+transformer capstone C2.
+
+**K3. int16×int8 (A16W8) kernels — the precision the EP can't reach.**
+Physical basis: the tile does int16×int8 at 128 MACs per cycle, the same rate as bf16
+with half the weight bytes (1.2); Quark's `A16W8` places 0/394 nodes because opset-17 Q/DQ
+can't carry 16-bit types (`results/a16w8/diag_resnet50_a16w8_npu.log`) — an EP limit, not
+a silicon one. Tooling: `mmul` for mixed int16×int8 (TO VERIFY which shapes the AIE API
+offers on aie2; `mm.cc` ships only int16×int16 4×4×4), then a GEMM and a 1×1 conv on the
+K2 template. Measurement: accuracy on a model XINT8 breaks — yolov8n-pose's 17.8-point OKS
+loss, or MobileViT's 0.00% — with the K2 CPU harness for latency. Decides: whether an
+int16-activation path recovers accuracy at a cost the array can pay.
+
+**K4. Per-channel and non-power-of-two requantisation.**
+Physical basis: nothing in the tile constrains scales; `XINT8`'s power-of-two per-tensor
+grid is a DPU/Quark contract. MobileViT-XXS collapses to 0.00% because its depthwise
+weight-scale grid reaches Δ=1.0 where MobileNetV2's stays at 0.25
+(`results/mobilevit/quant_grid_audit.log`), and AdaRound cannot move Δ. Tooling: a
+depthwise 3×3 int8 kernel with a per-channel multiplier-and-shift epilogue. Constraint:
+those ops are tiny, so this is only worth building after D3, or inside a monolithic graph
+(C1) — on its own it lands under the floor (3.4).
+
+**K5. Fused attention at LLM scale, with `mmul` this time.**
+Physical basis: the array wins bf16 GEMM from N ≈ 1024 upward, and the old K ceiling was
+an accumulator dtype, not hardware (`results/aie/bf16_matmul_niche_npu.log`,
+`..._k_limit_diagnosed_npu.log`). Budget: a 64-row Q block at head_dim 128 is 16 KB of
+bf16; double-buffered K and V tiles of the same size are 64 KB, so the per-core block is
+32 rows, running max and sum in fp32 in L1, scores never materialised (the 128 KB N×N
+matrix that overflowed at N=256 is the thing to avoid, and row-wise streaming is right —
+what killed `attention_bf16` was doing it without `mmul`, 0.61 GFLOPS on hardware
+measured at 895). Tooling: K2's GEMM tile plus the already-validated bf16 softmax pieces
+(`results/aie/mlir_aie_ml_examples_npu.log`). Measurement: seq_len 2048 and 4096, head_dim
+128, against torch bf16 attention on this CPU measured first, in the same sitting.
+Go/no-go: CPU time must clear the floor that D1–D3 leave.
+
+### Tier 3 — the array
+
+**A1. Reach the fifth column.**
+Known: five physical columns (1.1); AMD's compiler derives a 5×4 device for this part; the
+driver ships 5×4 overlays; mlir-aie stops at four. Unknown: whether column 0's shim has a
+NoC DMA, and whether the driver grants a 5-column `hw_context` to a non-vendor xclbin.
+Tooling: extend mlir-aie's NPU1 target model to five columns (`_MAX_COLS`, a
+`VirtualizedNPU1TargetModel(5)`, the `AIEAttrs.td` enum) and build the memcpy design for
+it. Measurement, in order: does the driver load it (`xrt-smi examine -r aie-partitions`
+during the run must show a 5-column partition); does column 0's shim move data; if not, do
+column 0's cores run when fed over the switch from column 1. Prize: 20 cores instead of
+16, and the missing 18% of nameplate (2.1). The first experiment is the driver grant, not
+a kernel.
+
+**A2. Heterogeneous partitions in one process.**
+Physical basis: `1x4.xclbin` gives independent per-column partitions that scale to 3.65×
+(`results/multi_partition_yolov8n.log`), and an EP context and an IRON context coexist
+(D4's evidence). Tooling: D4's custom op plus a one-column IRON design (`npu1_1col`) so
+the DPU runs the convs on columns 1–3 while the norm, attention or requant kernel runs on
+column 4, pipelined. Measurement: `resnetv2_50x3` again, and MobileViT's real backbone
+handing its intermediate to an on-NPU attention block. Decides: whether the 49-boundary
+graphs that lose today (3.2) can be pipelined instead of serialised.
+
+**A3. A weight-resident, persistent small CNN.**
+Physical basis: 3.0 MB of reachable SRAM (1.8) against yolov8n's ~3 MB of int8 weights;
+the measured 2.40 ms fixed cost per yolov8n inference and 2.63 ms per ResNet50 inference
+(`docs/BENCHMARKS.md`, "Input resolution") is work proportional to the graph, not the
+pixels, and the EP's own dispatch is 0.089 ms of it. Tooling: D3's persistent design
+applied to a real graph — weights loaded once into mem tiles and L1, activations streamed
+per frame. Measurement: the same `ms = a + b × Mpixels` fit; the objective is `a` under
+0.5 ms. Decides: whether the fixed cost is weight and layer setup (removable) or something
+the graph's shape imposes; and it is the one route by which a MobileNetV2-class model could
+stop losing to the CPU.
+
+**A4. Five contexts on five columns.**
+Follows A1 and the `1x4` result: the array today reaches 6.29 TOPS on four independent
+contexts (`results/multi_partition_yolov8l.log`); a fifth column that behaves like the
+other four adds 25% to that ceiling for independent-stream workloads, which is the one
+workload shape where this NPU has beaten the CPU by the widest margin.
+
+### Capstones — what the arithmetic says is possible, stated as targets
+
+**C1. The repo's most accurate model, run as one NPU graph.** `resnetv2_50x3_bit` is 84.00%
+top-1 and loses to the CPU (588.58 vs 470.79 ms) because 49 `InstanceNormalization` nodes
+and their neighbours fall to the CPU and the graph is cut into subgraphs around them
+(`results/bit/`). DERIVED order of magnitude only: scaling `resnet50`'s 4.24 GMACs
+(`results/multi_partition_resnet50.log`) by 3² for width and 2² for 448² gives ~150 GMACs;
+at the DPU's measured 1.65 TOPS per column that is ~180 ms on one column and ~45 ms on
+four, plus the norms at the DRAM cap (~25 ms for all 49 if each is one read and one write,
+zero if fused). Against 470.79 ms that is a 3–10× win on paper for the most accurate model
+this repo has — reachable only through K1 (a DPU-class open conv) or A2 (the DPU plus a
+column of norms), and the honest statement is that K1 is the long pole of this whole
+document. Replace the MAC estimate with `onnx-tool`'s count before quoting it anywhere.
+
+**C2. A transformer block at 7B scale on the array.** GEMMs already win 1.13–1.33× at
+production shapes (2.4); the block needs K2 (tiles at the roofline), K5 (attention), D3 (so
+the norms and activations between GEMMs don't each pay a dispatch), and one measured CPU
+implementation named on the other side. The Llama/Mistral pair shows the verdict can flip
+on one integer's factorisation (2.6), so the target is a block that carries its own DMA
+decomposition per shape, not a generic one.
+
+## 5. What the silicon cannot do, and what is merely blocked
+
+**Cannot (design around, don't chase):**
+
+- int16×int16, int8×int4, int16×int4 and bfp16 MACs — AIE2p only (SPEC 1.2).
+- A vector fp32 multiply path — not in the table; fp32 products cost two bf16 MACs, fp32
+  accumulation is free.
+- More than 64 KB per core, 512 KB per mem tile, 16 BDs and 16 locks per core or shim tile,
+  a shim BD stride over 4 MiB, a core-tile BD over 16,383 words, an iteration wrap over
+  64 — field widths (1.2–1.4, 2.6).
+- An off-chip rate above the shared cap S1 will pin (currently inferred at 26–28 GB/s per
+  direction), whatever the channel count.
+- Hardware `sqrtf` in Peano's AIE libc (software reciprocal square root is fine, 1.2).
+
+**Blocked by runtime, firmware or packaging — i.e. work, not walls:**
+
+- The fifth column through the 1.7.1 EP (fingerprint mismatch) — A1 goes around the EP.
+- Batch > 1 through the EP writes only slot 0 (`results/batch/slot_probe_b2.log`, filed as
+  amd/RyzenAI-SW#401) — N independent contexts is the measured alternative, and a custom
+  design has no such limit.
+- The `pyxrt` / Python 3.12 ABI wall — D4 removes Python from the loop.
+- `A16W8` through the EP (opset-17 Q/DQ) — K3 bypasses the EP.
+- `InstanceNormalization`, rank-5 tensors, `LayerNormalization` and `MatMul` on the EP
+  (`results/bit/`, `results/mobilevit/quant_grid_audit.log`) — kernels, D4, A2.
+- `aiecompiler`'s missing `physical_device.dll` — moot; mlir-aie/Peano does the place and
+  route on this machine already.
+- mlir-aie's 4-column NPU1 model — A1's tooling deliverable.
+- The 617 µs IRON floor — D1–D3.
+
+## 6. Rules every objective inherits
+
+They are the repo's existing rules, restated because a silicon-level target makes each one
+easier to break:
+
+- **Name the CPU implementation** in every ratio. On this project the CPU kernel choice has
+  decided the verdict more often than the NPU has: torch fp32 sat within 1% of the NPU on
+  conv2x while ORT int8 was 6.3× ahead; numpy attention was 9× slower than torch
+  (`results/aie/conv2x_int8_cpu_baseline.log`, `results/mobilevit/splice_wall_clock_npu.log`).
+- **Decide on the fit, not per-point throughput.** `time = intercept + slope × work`;
+  1/slope is the array's rate with every fixed cost removed, and per-point GOPS must rise
+  with size on any accelerator (`results/aie/bottleneck_spatial_sweep_npu.log`).
+- **Both sides in one sitting, machine named.** Latency drifts between sessions (1.7).
+- **Say which bracket**: 169.8 µs hardware, 447.3 µs host, 617.0 µs wall — and after D1–D3,
+  the replacements those measure.
+- **A go/no-go before a kernel, not after**: the op's CPU time against the current floor.
+- **Verify placement, not latency**: `deviceStat` for a `DPU` entry on the EP side; the
+  design's own numeric check against a golden tensor on the IRON side, every shape, before
+  a timing counts.
+- **Keep the negative results in front.** Conv 12.75×, mobile attention 71–240×, MobileViT
+  0.00%, GroupNorm 0/49 after handoff — each one is a constraint on an objective above, and
+  the reason a win here would be believed.

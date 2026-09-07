@@ -1293,6 +1293,10 @@ sections above.
 - **Column count for the int8 conv kernels.** Both NPU measurements use 1–3 columns of a
   4×5 array; 4 × 146 ≈ 584 GOPS would still lose, but not by 5.6×. The one lever the
   56×56 result doesn't touch.
+- **What the array physically is, and what that permits.** The silicon-level inventory,
+  the ceilings derived from it, and the objectives list live in
+  [`docs/SILICON.md`](docs/SILICON.md); its objective S0 (measure the core clock, which
+  nothing here has done) gates every per-second ceiling in that file.
 - **Longer term:** a detector fine-tuned for fixed camera feeds (licence-plate
   recognition), reusing the head-cut + XINT8 + AdaRound recipe rather than re-deriving it.
 
