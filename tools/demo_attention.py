@@ -232,7 +232,8 @@ print(json.dumps({{
         print(f"    Top-1 Pred:   Class {res['top1_class']} ({res['top1_prob']}%)")
         print(f"    Ground Truth: Class {res['true_label']}")
         if res["match"]:
-            print(f"{GREEN}{BOLD} OK  Top-1 Prediction Matches Ground Truth Bit-Accurately!{RESET}\n")
+            print(f"{GREEN}{BOLD} OK  Top-1 Argmax Label Matches Ground Truth Class {res['true_label']}!{RESET}")
+            print(f"     (Note: Evaluated on calibration sample {image_path.name}; not an unseen validation slice)\n")
         else:
             print(f"{YELLOW}!!  Prediction does not match ground truth.{RESET}\n")
         return res
@@ -242,24 +243,50 @@ print(json.dumps({{
 
 
 def print_comparison_table(aie_res, backbone_res):
-    print(f"{BOLD}{CYAN}==> [4/4] Architecture & Pipeline Comparison Summary{RESET}\n")
+    print(f"{BOLD}{CYAN}==> [4/4] Empirical Findings & Architecture Comparison{RESET}\n")
 
-    backbone_ms = backbone_res["mean_ms"] if backbone_res else 1.71
-    cpu_attn_ms = 1.57
-    spliced_ms = backbone_ms + cpu_attn_ms
+    backbone_ms = backbone_res["mean_ms"] if backbone_res else 1.74
+    backbone_cpu_ms = 5.35
+    cpu_attn_stage3_8h_ms = 0.034
+    cpu_attn_all_ms = 1.57
+    projected_splice_ms = backbone_ms + cpu_attn_all_ms
 
-    print(f"{BOLD}+--------------------------------------+---------------------+-------------------+---------------------+{RESET}")
-    print(f"{BOLD}| Pipeline Configuration               | Hardware Mapping    | Measured Latency  | Speedup vs Stock EP |{RESET}")
-    print(f"{BOLD}+--------------------------------------+---------------------+-------------------+---------------------+{RESET}")
-    print(f"| Stock VitisAI EP Baseline (Quantized)| 49 NPU Subgraphs    | 108.00 ms         | 1.0x (Baseline)     |")
-    print(f"| Full Zen4 CPU Baseline (FP32)        | 8 Zen4 CPU Cores    | 18.37 ms          | 5.9x faster         |")
-    print(f"| Cut CNN Backbone (Quantized)         | Phoenix NPU (1 subg)| {backbone_ms:5.2f} ms          | {108.00/backbone_ms:4.1f}x faster         |")
-    print(f"| {BOLD}{GREEN}Spliced Heterogeneous Pipeline      {RESET}| {BOLD}{GREEN}NPU CNN + CPU Attn  {RESET}| {BOLD}{GREEN}{spliced_ms:5.2f} ms          {RESET}| {BOLD}{GREEN}{108.00/spliced_ms:4.1f}x FASTER        {RESET}|")
-    print(f"+--------------------------------------+---------------------+-------------------+---------------------+")
+    print(f"{BOLD}--- 1. Cut CNN Backbone (Identical 407-node graph on both devices) ---{RESET}")
+    print(f"+----------------------------------+-------------------+-----------------+-----------------------+")
+    print(f"| Device / Runtime                 | Latency           | Subgraphs       | Like-for-Like Speedup |")
+    print(f"+----------------------------------+-------------------+-----------------+-----------------------+")
+    print(f"| Zen4 CPU (ORT CPU EP)            | {backbone_cpu_ms:5.2f} ms          | -               | 1.0x (baseline)       |")
+    print(f"| {GREEN}Phoenix NPU (VitisAI EP XINT8)   {RESET}| {GREEN}{backbone_ms:5.2f} ms          {RESET}| {GREEN}1 single NPU subg{RESET}| {GREEN}{backbone_cpu_ms/backbone_ms:4.1f}x FASTER on NPU   {RESET}|")
+    print(f"+----------------------------------+-------------------+-----------------+-----------------------+\n")
+
+    print(f"{BOLD}--- 2. Fused Attention Operator: AIE2 BF16 Kernel vs CPU (Negative Result) ---{RESET}")
+    print(f"  Arithmetic Volume (Stage 3, 8 heads): 2.79 MFLOP (~100x smaller than MobileNetV2's 300 MFLOP floor)")
     if aie_res and aie_res.get("latency_ms"):
-        print(f"| Fused BF16 Attention Kernel (Stage 3)| 8 AIE2 Cores (npu1) | {aie_res['latency_ms']:5.2f} ms          | {aie_res['gflops']:.2f} GFLOPS (bf16) |")
-        print(f"+--------------------------------------+---------------------+-------------------+---------------------+")
-    print()
+        aie_ms = aie_res["latency_ms"]
+        gflops = aie_res["gflops"]
+        ratio = aie_ms / cpu_attn_stage3_8h_ms
+        print(f"+----------------------------------+-------------------+-----------------+-----------------------+")
+        print(f"| Operator Execution Target        | Measured Latency  | Throughput      | Verdict vs CPU        |")
+        print(f"+----------------------------------+-------------------+-----------------+-----------------------+")
+        print(f"| Zen4 CPU (PyTorch AVX-512 bmm)   | {cpu_attn_stage3_8h_ms:5.3f} ms         | ~82 GFLOPS      | 1.0x (baseline)       |")
+        print(f"| {RED}AIE2 BF16 Kernel (8 Cores, npu1) {RESET}| {RED}{aie_ms:5.2f} ms          {RESET}| {RED}{gflops:5.2f} GFLOPS   {RESET}| {RED}{ratio:4.1f}x SLOWER than CPU  {RESET}|")
+        print(f"+----------------------------------+-------------------+-----------------+-----------------------+")
+        print(f"  {RED}{BOLD}NEGATIVE RESULT:{RESET} Kernel is numerically correct (<1% rel L2 vs golden) but loses heavily")
+        print(f"  to CPU. Arithmetic intensity (2.8 MFLOP) is far below the threshold needed to amortize AIE2")
+        print(f"  dispatch and shim DMA sequence overhead.\n")
+
+    print(f"{BOLD}--- 3. Full MobileViT XXS Architectural Options ---{RESET}")
+    print(f"+--------------------------------------+---------------------+-------------------+---------------------+")
+    print(f"| Architecture Pipeline                | Device Mapping      | Measured Latency  | Note                |")
+    print(f"+--------------------------------------+---------------------+-------------------+---------------------+")
+    print(f"| Stock VitisAI EP Baseline (Quantized)| 49 NPU Subgraphs    | 108.00 ms         | Severe thrashing    |")
+    print(f"| Full Zen4 CPU Baseline (FP32)        | 8 Zen4 CPU Cores    |  18.37 ms         | PyTorch full model  |")
+    print(f"| Full NPU (with AIE Attention Kernel) | Phoenix NPU         |  >120 ms (est.)   | Loses to stock EP   |")
+    print(f"| {YELLOW}Heterogeneous Splice (CNN NPU+Attn CPU){RESET}| {YELLOW}NPU CNN + CPU Attn  {RESET}| {YELLOW}{projected_splice_ms:5.2f} ms (proj.)  {RESET}| {YELLOW}Sum-of-timers only*   {RESET}|")
+    print(f"+--------------------------------------+---------------------+-------------------+---------------------+")
+    print(f"  * Warning: 3.31 ms is an idealized sum-of-timers (1.74 ms + 1.57 ms). As established in the")
+    print(f"    GroupNorm characterization, real inter-process handoff floor (789 us - 23.6 ms) remains")
+    print(f"    unmeasured here and would erode this margin without an in-process unified memory splice.\n")
 
 
 def main():

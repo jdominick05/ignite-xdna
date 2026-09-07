@@ -621,13 +621,15 @@ caches.
   - Stage 2 ($N=256, D=16$): PASS (0.992% rel L2 error, 0 NaN across 32,768 elements)
   - Stage 3 ($N=64, D=20$): PASS (0.973% rel L2 error, 0 NaN across 10,240 elements)
   - Stage 4 ($N=16, D=24$): PASS (0.799% rel L2 error, 0 NaN across 3,072 elements)
-- **Attention Kernel Latency (8 cores):**
-  - Stage 4: **0.86 ms** (16 heads = 1.72 ms)
-  - Stage 3: **4.57 ms** (16 heads = 9.14 ms)
-  - Stage 2: **57.61 ms** (16 heads = 115.2 ms)
-- **End-to-End Pipeline Summary:**
-  - Stock VitisAI EP: **108.00 ms** (49 subgraphs)
-  - Full CPU Baseline: **18.37 ms** (Zen4 FP32)
-  - Cut CNN on NPU: **1.71 ms** (3.23× faster than CPU CNN 5.52 ms)
-  - Heterogeneous Splice (NPU CNN 1.71 ms + CPU Attention 1.57 ms): **3.28 ms** (**33× faster than stock VitisAI EP, 5.6× faster than CPU**).
+- **Attention Kernel Latency vs CPU (Negative Result):**
+  - Stage 4 (8 heads): **0.86 ms** on AIE2 vs **0.012 ms** on Zen4 CPU (71× slower than CPU)
+  - Stage 3 (8 heads): **4.57 ms** on AIE2 vs **0.034 ms** on Zen4 CPU (134× slower than CPU)
+  - Stage 2 (8 heads): **57.61 ms** on AIE2 vs **0.240 ms** on Zen4 CPU (240× slower than CPU)
+  - Full model attention (all 9 layers, 16 heads each): **>120 ms** on AIE2 vs **1.57 ms** on CPU.
+  - **The Arithmetic Floor:** Stage 3 compute volume is only **2.79 MFLOP** (0.0028 GFLOP). MobileNetV2 at ~300 MFLOP was already below the NPU acceleration threshold (losing to CPU 2.68 vs 1.72 ms); MobileViT attention is ~100× smaller still. Achieved throughput is **0.61 GFLOPS** (<0.1% of array compute capability), meaning execution time is virtually 100% dispatch, shim DMA sequence overhead, and tile orchestration.
+- **Architectural Comparison & Splicing Reality:**
+  - **Cut CNN Backbone (Like-for-Like):** 1.71 ms NPU vs 5.52 ms CPU (**3.23× speedup** on the identical 407-node graph). Comparing 1.71 ms against the 108 ms stock EP baseline is comparing a model fragment to a whole model; the 3.23× like-for-like is the honest figure.
+  - **Full Model on NPU (with AIE Attention):** >120 ms, which loses to both CPU (18.37 ms) and Stock VitisAI EP (108.00 ms).
+  - **Heterogeneous Splice (Projected):** 1.71 ms NPU CNN + 1.57 ms CPU Attention = **3.28 ms**. This does NOT use the AIE attention kernel. Furthermore, 3.28 ms is an idealized sum-of-timers: the cross-process handoff floor between VitisAI EP and CPU (measured at 789 µs–23.6 ms in `groupnorm_bf16`) remains unmeasured here and would erode this margin without an in-process unified memory splice.
+
 

@@ -983,23 +983,33 @@ been closed:
   still-unexplained bug in this design's C++ host-test harness (identical garbage
   verification output regardless of dtype) that the pure-Python IRON path sidesteps
   cleanly.
-- **Follow-up: Fused BF16 Attention Kernel Built, Vectorized, and Spliced into MobileViT XXS.**
+- **Follow-up: Fused BF16 Attention Kernel Built, but Small Sequence Length Exposes the Arithmetic Floor (Negative Result).**
   Addressed the hybrid CNN-Transformer architecture `mobilevit_xxs`. Stock VitisAI EP
   quantized via Quark partitioned into **49 subgraphs (108.00 ms)** due to unsupported
   Softmax/MatMul/LayerNorm, losing 5.9x to 8-core Zen4 CPU (18.37 ms). Cutting the
   attention blocks left a pure convolution backbone (407 nodes) compiled into **1 single
-  NPU subgraph at 1.71 ms** (3.23x faster than CPU 5.52 ms). Built the custom fused BF16
+  NPU subgraph at 1.71 ms** (3.23x faster than CPU 5.52 ms, like-for-like). Built the custom fused BF16
   attention kernel in `mlir-aie` (IRON + Peano): solved Peano's linker script upward
   stack collision via `Worker(stack_size=2048)`; implemented row-wise FlashAttention
   streaming shrinking tile memory from 128 KB to 512 bytes; applied 16-lane AIE2 vector
   intrinsics (`aie_api`) with aligned padding ($D_{pad} \in \{16, 32\}$); and evaluated
   in-place stable Softmax. Scaled across 8 physical cores (Cols 0..3, Rows 2..3) mapped
-  to all 8 physical Shim DMA channels. Verified bit-accurate (<1% rel L2 error, 0 NaN)
-  against ImageNet golden calibration tensors: Stage 4 (0.86 ms), Stage 3 (4.57 ms),
-  Stage 2 (57.61 ms). Spliced Heterogeneous Pipeline (NPU CNN 1.71 ms + CPU Attention 1.57 ms)
-  achieves **3.28 ms end-to-end** -- **33x faster than stock VitisAI EP and 5.6x faster
-  than CPU**. Working demo in `scripts/attention-demo.sh` and `tools/demo_attention.py`.
+  to all 8 physical Shim DMA channels. The kernel passes bit-accurate numerical verification
+  (<1% rel L2 error, 0 NaN) against ImageNet golden calibration tensors across all stages:
+  Stage 4 (0.86 ms), Stage 3 (4.57 ms), Stage 2 (57.61 ms).
+  
+  **The Finding (Negative Result):**
+  The kernel loses heavily to CPU. At Stage 3 (8 heads), total compute is only **2.79 MFLOP**
+  (~100x smaller than MobileNetV2's ~300 MFLOP floor, which already lost to CPU). Zen4 AVX-512
+  runs those 8 heads in **0.034 ms**, making the 4.57 ms AIE2 kernel **134x slower than CPU**
+  (achieving 0.61 GFLOPS, <0.1% of array peak). Mobile vision self-attention lacks the token
+  sequence length ($N \ge 2048$) of LLMs needed to overcome AIE2 launch and DMA sequencing overhead.
+  Running the full model on NPU with this kernel takes >120 ms. Splicing NPU CNN (1.71 ms) +
+  CPU Attention (1.57 ms) yields **3.28 ms as an idealized sum-of-timers**, but leaves attention
+  on CPU and leaves the cross-process handoff floor (789 us–23.6 ms in `groupnorm_bf16`) unmeasured.
+  Working demo and diagnostics in `scripts/attention-demo.sh` and `tools/demo_attention.py`.
   `results/aie/attention_bf16_kernel_npu.log`.
+
 
 
 ## How to read the rest of this repository
