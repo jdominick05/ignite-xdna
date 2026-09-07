@@ -1368,8 +1368,11 @@ tile spec directly — `macs_per_cycle: bfloat16xbfloat16: 128, int16xint8: 128,
 int8xint8: 256`. **The array natively does bfloat16 and int16 arithmetic; the absence
 from this repo's results is Quark/VitisAI-EP not exposing it, not the hardware lacking
 it.** See RESEARCH.md's "Custom C++ XRT / hand-written AIE kernels" for the full
-citation and the (closed) question of whether a custom kernel reaching those paths is
-buildable from anything else this SDK ships.
+citation, and for a measured yes on whether a custom kernel reaching those paths is
+buildable at all: not through this SDK's own `aiecompiler` (a missing `physical_device.dll`
+blocks it, confirmed absent from every AMD distribution channel checked), but through the
+open-source `mlir-aie`/Peano toolchain instead — a hand-written kernel compiled and run
+correctly on this machine's XDNA1 hardware, natively on Windows, no gated access required.
 
 **Silent CPU fallback is the failure mode to watch for.** The `[Vitis AI EP]` banner,
 `Target architecture:`, `Compile done.` and the operator table print **only during
