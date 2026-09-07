@@ -1,0 +1,266 @@
+NPU telemetry without xrt-smi: XRT's in-process query API and Windows' GPU-engine statistics,
+probed while rewriting tools/hwinfo_npu_bridge.cpp into a live NPU monitor.
+Desktop 2 (Ryzen 7 8700G / Phoenix XDNA1), 2026-09-07 18:40-19:07, XRT 2.21.0 (SDK at
+C:\Xilinx\XRT\xrt_sdk\xrt), NPU driver 32.0.20101.3760, firmware 1.5.5.391, Windows 11 Pro
+26200.9168, power mode Default throughout. A wide_resnet101_2 AdaRound quantize (8 pinned CPU
+threads) ran concurrently the whole time; nothing below is a latency number, so it is noted,
+not a confound.
+
+WHY THIS EXISTS
+===============
+The question asked was "are there other ways to get data points from the NPU that don't
+involve xrt-smi". Everything this repo had read live from the NPU so far came from xrt-smi
+(`tools/session_hold.py`, `results/gops_*.log`, `xrt_smi_platform_pmode.log`), and
+tools/hwinfo_npu_bridge.py/.cpp's own docstring recorded that HWiNFO's native NPU readings
+are placeholders (0.001 V, a flat 800 MHz) and that its D3D/Compute0 usage read 0 % under a
+held VitisAI EP session. Two candidate sources were tested here: XRT's own query API
+(pyxrt / xrt::device::get_info -- the interface xrt-smi is a CLI over) and the Windows
+GPU-engine statistics (PDH / D3DKMT, what Task Manager reads). Both answered.
+
+WHAT WAS RUN
+============
+NPU load for the "busy" samples: mlir-aie v1.4.2 whole_array.py (ironenv), bf16->f32, 2048^3,
+m=64 k=64 n=64 with the local --c-single-buffer 1 patch, --warmup 3 --iters 5000 (about 45 s
+of back-to-back dispatches; 2293.79-2342.27 GFLOPS across the runs), started from Git Bash:
+  python whole_array.py --dev npu -M 2048 -K 2048 -N 2048 -m 64 -k 64 -n 64 --dtype_in bf16 \
+      --dtype_out f32 --c-single-buffer 1 --warmup 3 --iters 5000
+Probes:
+  (a) pyxrt (C:\Xilinx\XRT\xrt_sdk\xrt\python\pyxrt.pyd): pyxrt.device(0).get_info(<every
+      member of pyxrt.xrt_info_device>), timed, during the load.
+  (b) PowerShell Get-Counter '\GPU Engine(*)\Utilization Percentage', '\GPU Adapter Memory(*)\
+      Shared Usage' / 'Dedicated Usage', during the load.
+  (c) a 40-line C++ probe (xrt::device::get_info<...> for name, bdf, max_clock_frequency_mhz,
+      platform, host, dynamic_regions, aie, aie_shim, aie_mem, electrical, thermal, memory),
+      MSVC 2022 Build Tools, boost 1.92 headers from a new conda env `npu_monitor_build`
+      (conda-forge libboost-headers + nlohmann_json; the SDK's xrt/detail/any.h needs
+      boost/any.hpp), linked against xrt_coreutil.lib (the DLL is C:\Windows\System32\
+      xrt_coreutil.dll, installed by the NPU driver). Run idle, then every 3 s during the load,
+      then idle again.
+  (d) the rewritten tools/hwinfo_npu_bridge.exe itself (--once, --plain, --json), idle and
+      during the load, with its HWiNFO registry output read back.
+  (e) three attempts to put a VitisAI EP session on the NPU for the same PDH check -- all
+      failed for reasons unrelated to the probe (below), so the VitisAI path is NOT covered.
+
+(a) pyxrt, during the load (18:41)
+==================================
+pyxrt: C:\Xilinx\XRT\xrt_sdk\xrt\python\pyxrt.pyd
+xrt_info_device members: ['bdf', 'dynamic_regions', 'electrical', 'host', 'interface_uuid', 'kdma', 'm2m', 'max_clock_frequency_mhz', 'mechanical', 'memory', 'name', 'nodma', 'offline', 'pcie_info', 'platform', 'thermal', 'value', 'vmr']
+  bdf                        2.23 ms  003d:00:01.1
+  dynamic_regions            0.10 ms  { |     "dynamic_regions": "" | } |
+  electrical                 0.08 ms  { |     "error_msg": "Failed to escape (0xc0000023): The data area passed to a system call is too small.\r\n", |     "": "Failed to escape (0xc0000023): The data area passed to a system call is too small.\r\n" | } |
+  host                      36.51 ms  { |     "version": "2.21.0", |     "branch": "HEAD", |     "hash": "15e6319be8de1e76a6150111a3861729e988fdb5", |     "build_date": "2026-04-04 00:09:34", |     "drivers": [ |         { |             "name": "NPU Driver", |             "version": "32.0.20101.3760" |         } |     ] | } |
+  interface_uuid             0.02 ms  00000000-0000-0000-0000-000000000000
+  kdma                       0.00 ms  0
+  m2m                        0.02 ms  0
+  max_clock_frequency_mhz    0.04 ms  1800
+  mechanical                 0.01 ms  { |     "fans": { |         "msg": "No sensors present" |     } | } |
+  memory                     0.03 ms  { |     "error_msg": "No such query request (28)" } |
+  name                       0.01 ms  NPU Phoenix
+  nodma                      0.01 ms  0
+  offline                    0.00 ms  0
+  pcie_info                  0.83 ms  { |     "vendor": "0x1022", |     "device": "1502", |     "revision": "00", |     "sub_device": "0x1502", |     "sub_vendor": "0x1022", |     "link_speed_gbit_sec": "4", |     "expected_link_speed_gbit_sec": "4", |     "express_lane_width_count": "16", |     "expected_express_lane_width_count": "16", |     "dma_thread_count": "0" | } |
+  platform                   0.08 ms  { |     "platforms": [ |         {  |             "static_region": { |                 "name": "NPU Phoenix", |                 "total_columns": "5" |             }, |             "status": { |                 "power_mode": "Default" |             }, |             "electrical": { |                 "error_msg": "Failed to escape (0xc0000023): ...
+  thermal                    0.01 ms  { |     "thermals": { |         "msg": "No sensors present" |     } | } |
+  vmr                        0.02 ms  { | } |
+(pyxrt's enum has no aie-partitions entry: the per-context table exists only in xrt-smi.)
+
+(b) Windows GPU-engine statistics, during the load (18:41, same minute as (a))
+==============================================================================
+xrt-smi examine -r aie-partitions --batch, at the same moment:
+  Total Memory Usage: 96 MB
+  Partition Index   : 0
+    Columns: [1, 2, 3, 4]
+      |25612               |176        |1371        |0           |0    |Normal   |
+      |python.exe          |Active     |1371        |0           |     |N/A      |
+      |96 MB               |96 KB      |            |            |     |N/A      |
+      |                    |           |            |            |     |N/A      |
+  (GOPS, FPS and Latency all N/A for this IRON/XRT context.)
+
+--- GPU Engine instances with nonzero util ---
+    88.5  pid_25612_luid_0x00000000_0x0000d6bf_phys_0_eng_0_engtype_compute
+     0.4  pid_5884_luid_0x00000000_0x0000ba8c_phys_0_eng_0_engtype_3d
+     0.3  pid_6496_luid_0x00000000_0x0000ba8c_phys_0_eng_0_engtype_3d
+     1.2  pid_6680_luid_0x00000000_0x0000ba8c_phys_0_eng_0_engtype_3d
+     0.1  pid_8740_luid_0x00000000_0x0000ba8c_phys_0_eng_0_engtype_3d
+     0.2  pid_9192_luid_0x00000000_0x0000ba8c_phys_0_eng_0_engtype_3d
+--- engine types present ---
+3d / compute / compute 0 / compute 1 / copy / high priority 3d / high priority compute / security 1 / timer 0 / video codec 0 / video jpeg 0
+--- GPU Adapter Memory (per LUID) ---
+   394,883,072  dedicated usage  luid_0x00000000_0x0000ba8c_phys_0     <- Radeon 780M
+             0  dedicated usage  luid_0x00000000_0x0000d664_phys_0     <- Microsoft Basic Render Driver
+             0  dedicated usage  luid_0x00000000_0x0000d6bf_phys_0     <- the NPU
+   488,726,528  shared usage  luid_0x00000000_0x0000ba8c_phys_0
+         8,192  shared usage  luid_0x00000000_0x0000d664_phys_0
+   100,679,680  shared usage  luid_0x00000000_0x0000d6bf_phys_0        <- 96.0 MiB, = xrt-smi's 96 MB
+Idle (18:40, 18:44, 18:49, 18:51 -- four separate checks): no instance on luid ..d6bf above 0.5 %,
+shared usage on ..d6bf = 0.
+
+(c) XRT C++ probe: what the in-process API answers on this driver (19:0x)
+=========================================================================
+name  0.0379 ms  NPU Phoenix
+bdf  4.3142 ms  003d:00:01.1
+max_clock_frequency_mhz  0.0514 ms  800
+platform  0.3237 ms  { "platforms": [ { "static_region": { "name": "NPU Phoenix", "total_columns": "5" }, "status": { "power_mode": "Default" }, "electrical": { "error_msg": "Failed to escape (0xc0000023): The data area passed to a system call is too small.\r\n", ...
+host  70.954 ms  { "version": "2.21.0", "branch": "HEAD", "hash": "15e6319be8de1e76a6150111a3861729e988fdb5", "build_date": "2026-04-04 00:09:34", "drivers": [ { "name": "NPU Driver", "version": "32.0.20101.3760" } ] }
+dynamic_regions  0.0789 ms  { "dynamic_regions": "" }
+aie  0.5582 ms  { "description": "Aie_Metadata", "error_msg": "No such query request (190) found in the AIE Metadata" }
+aie_shim  0.2974 ms  { "description": "Aie_Shim_Status", "error_msg": "No such query request (74)" }
+aie_mem  0.0157 ms  { "description": "Aie_Mem_Status", "error_msg": "No such query request (75)" }
+electrical  77.4946 ms  { "error_msg": "Failed to escape (0xc0000023): The data area passed to a system call is too small.\r\n", ... }
+thermal  0.0463 ms  { "thermals": { "msg": "No sensors present" } }
+memory  0.0432 ms  { "error_msg": "No such query request (28)" }
+
+The clock, idle -> load -> idle (same probe, grep max_clock; xrt-smi active-context count beside it):
+idle:  max_clock_frequency_mhz  0.0559 ms  800
+t+3s:  max_clock_frequency_mhz  0.0593 ms  1800 | 1 active ctx
+t+6s:  max_clock_frequency_mhz  0.0556 ms  1800 | 1 active ctx
+t+9s:  max_clock_frequency_mhz  0.0607 ms  1800 | 1 active ctx
+t+12s: max_clock_frequency_mhz  0.0637 ms  1800 | 1 active ctx
+t+15s: max_clock_frequency_mhz  0.0608 ms  1800 | 1 active ctx
+t+18s: max_clock_frequency_mhz  0.068 ms   1800 | 1 active ctx
+t+21s: max_clock_frequency_mhz  0.0406 ms  1800 | 1 active ctx
+t+24s: max_clock_frequency_mhz  0.0763 ms  1800 | 1 active ctx
+t+27s: max_clock_frequency_mhz  0.0637 ms  1800 | 1 active ctx
+t+30s: max_clock_frequency_mhz  0.0455 ms  1800 | 1 active ctx
+after: max_clock_frequency_mhz  0.0588 ms  800
+(the load run itself: NPU GFLOPS 2342.27, PASS!)
+
+(d) the rewritten monitor, tools/hwinfo_npu_bridge.exe
+======================================================
+First build's DXCore query used only DXCORE_ADAPTER_ATTRIBUTE_D3D12_CORE_COMPUTE and did not
+see the NPU:
+  note: NPU adapter not identified among DXCore compute adapters: [AMD Radeon 780M Graphics luid_0x00000000_0x0000ba8c] [Microsoft Basic Render Driver luid_0x00000000_0x0000d664] -- use --adapter <substring> or --luid
+Enumerating by DXCORE_HARDWARE_TYPE_ATTRIBUTE_NPU (Windows SDK 10.0.26100 dxcore_interface.h)
+finds it:
+  adapter "NPU Compute Accelerator Device" luid_0x00000000_0x0000d6bf
+
+--- --once, idle (19:06:06) ---
+AMD NPU monitor · NPU Phoenix · 003d:00:01.1 · 5 columns · power mode Default · 19:06:06  poll #1
+NPU driver 32.0.20101.3760 · firmware 1.5.5.391 · XRT 2.21.0 (XRT API) · adapter "NPU Compute Accelerator Device" luid_0x00000000_0x0000d6bf
+───────────────────────────────────────────────────────────────────────────────────────────────────
+utilization  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░    0.0 %  Windows GPU-engine statistics, NPU adapter
+history      ▁  last 1 polls at 2.0 s
+clock        800 MHz  XRT max_clock_frequency_mhz, a live readback here: 800 idle, 1800 with an active context
+memory       0.0 MB shared · 0.0 MB dedicated  (adapter, Windows)     0 MB in use  (xrt-smi)
+contexts     0 active / 0 listed · columns in use 0/5 [none] · completions n/a/s · submissions n/a/s
+───────────────────────────────────────────────────────────────────────────────────────────────────
+    PID process            status        cols     compl/s    subm/s  migr  susp  err prio       GOPS   EGOPS  mem MB  engine%
+  no hardware contexts running on the device (xrt-smi), and no process shows NPU engine time (Windows)
+───────────────────────────────────────────────────────────────────────────────────────────────────
+not exposed on this NPU: voltage, power (xrt-smi: Estimated Power N/A; the electrical query fails at the driver escape)
+HWiNFO publish off (--no-hwinfo) · xrt-smi 168 ms · pdh 0.7 ms · xrt api 0.16 ms
+
+--- --once, during the load (19:06:27) ---
+AMD NPU monitor · NPU Phoenix · 003d:00:01.1 · 5 columns · power mode Default · 19:06:27  poll #1
+NPU driver 32.0.20101.3760 · firmware 1.5.5.391 · XRT 2.21.0 (XRT API) · adapter "NPU Compute Accelerator Device" luid_0x00000000_0x0000d6bf
+───────────────────────────────────────────────────────────────────────────────────────────────────
+utilization  █████████████████████████░░░░░   84.4 %  Windows GPU-engine statistics, NPU adapter
+history      ▇  last 1 polls at 2.0 s
+clock        1800 MHz  XRT max_clock_frequency_mhz, a live readback here: 800 idle, 1800 with an active context
+memory       96.0 MB shared · 0.0 MB dedicated  (adapter, Windows)     96 MB in use  (xrt-smi)
+contexts     1 active / 1 listed · columns in use 4/5 [1-4] · completions 111.8/s · submissions 111.8/s
+───────────────────────────────────────────────────────────────────────────────────────────────────
+    PID process            status        cols     compl/s    subm/s  migr  susp  err prio       GOPS   EGOPS  mem MB  engine%
+  26412 python.exe         Active        1-4        111.8     111.8     0     0    0 Normal      n/a     n/a      96     84.4
+───────────────────────────────────────────────────────────────────────────────────────────────────
+not exposed on this NPU: voltage, power (xrt-smi: Estimated Power N/A; the electrical query fails at the driver escape)
+HWiNFO publish off (--no-hwinfo) · xrt-smi 116 ms · pdh 0.8 ms · xrt api 0.17 ms
+
+--- --plain --interval 1, monitor started 3 s BEFORE the load (so the new pid had to appear in
+    the engine counters dynamically; it did) ---
+19:06:08 util=0.0% clk=800MHz mem=0.0MB(win) 0MB(xrt) ctx=0/0 cols=none compl/s=n/a subm/s=n/a
+19:06:09 util=0.0% clk=800MHz mem=0.0MB(win) 0MB(xrt) ctx=0/0 cols=none compl/s=n/a subm/s=n/a
+19:06:10 util=0.0% clk=1800MHz mem=96.0MB(win) 96MB(xrt) ctx=1/1 cols=1-4 compl/s=n/a subm/s=n/a
+19:06:12 util=86.1% clk=1800MHz mem=96.0MB(win) 96MB(xrt) ctx=1/1 cols=1-4 compl/s=96.9 subm/s=96.2
+19:06:13 util=84.9% clk=1800MHz mem=96.0MB(win) 96MB(xrt) ctx=1/1 cols=1-4 compl/s=113.7 subm/s=114.5
+19:06:14 util=85.6% clk=1800MHz mem=96.0MB(win) 96MB(xrt) ctx=1/1 cols=1-4 compl/s=113.9 subm/s=113.9
+19:06:15 util=85.4% clk=1800MHz mem=96.0MB(win) 96MB(xrt) ctx=1/1 cols=1-4 compl/s=111.4 subm/s=110.6
+19:06:16 util=84.7% clk=1800MHz mem=96.0MB(win) 96MB(xrt) ctx=1/1 cols=1-4 compl/s=116.5 subm/s=117.3
+19:06:18 util=80.9% clk=1800MHz mem=96.0MB(win) 96MB(xrt) ctx=1/1 cols=1-4 compl/s=106.6 subm/s=106.6
+19:06:19 util=84.8% clk=1800MHz mem=96.0MB(win) 96MB(xrt) ctx=1/1 cols=1-4 compl/s=115.8 subm/s=115.8
+19:06:20 util=86.2% clk=1800MHz mem=96.0MB(win) 96MB(xrt) ctx=1/1 cols=1-4 compl/s=114.1 subm/s=114.1
+19:06:21 util=84.8% clk=1800MHz mem=96.0MB(win) 96MB(xrt) ctx=1/1 cols=1-4 compl/s=115.9 subm/s=115.9
+19:06:23 util=85.7% clk=1800MHz mem=96.0MB(win) 96MB(xrt) ctx=1/1 cols=1-4 compl/s=113.5 subm/s=113.5
+19:06:24 util=85.3% clk=1800MHz mem=96.0MB(win) 96MB(xrt) ctx=1/1 cols=1-4 compl/s=113.6 subm/s=112.8
+19:06:25 util=85.4% clk=1800MHz mem=96.0MB(win) 96MB(xrt) ctx=1/1 cols=1-4 compl/s=112.8 subm/s=113.6
+19:06:26 util=82.8% clk=1800MHz mem=96.0MB(win) 96MB(xrt) ctx=1/1 cols=1-4 compl/s=107.7 subm/s=107.7
+19:06:27 util=86.6% clk=1800MHz mem=96.0MB(win) 96MB(xrt) ctx=1/1 cols=1-4 compl/s=117.9 subm/s=117.9
+19:06:29 util=86.6% clk=1800MHz mem=96.0MB(win) 96MB(xrt) ctx=1/1 cols=1-4 compl/s=118.3 subm/s=118.3
+19:06:30 util=86.2% clk=1800MHz mem=96.0MB(win) 96MB(xrt) ctx=1/1 cols=1-4 compl/s=120.2 subm/s=119.3
+19:06:31 util=86.9% clk=1800MHz mem=96.0MB(win) 96MB(xrt) ctx=1/1 cols=1-4 compl/s=118.8 subm/s=119.6
+19:06:32 util=86.8% clk=1800MHz mem=96.0MB(win) 96MB(xrt) ctx=1/1 cols=1-4 compl/s=119.6 subm/s=118.7
+19:06:33 util=86.3% clk=1800MHz mem=96.0MB(win) 96MB(xrt) ctx=1/1 cols=1-4 compl/s=120.0 subm/s=120.8
+19:06:35 util=86.8% clk=1800MHz mem=96.0MB(win) 96MB(xrt) ctx=1/1 cols=1-4 compl/s=120.5 subm/s=120.5
+19:06:36 util=86.3% clk=1800MHz mem=96.0MB(win) 96MB(xrt) ctx=1/1 cols=1-4 compl/s=119.5 subm/s=119.5
+(the 2048^3 run averages 7.5-8.3 ms per dispatch in whole_array's own bracket, i.e. ~120/s;
+the completions/s column, a delta of xrt-smi's command_completions counter, agrees.)
+
+--- HWiNFO custom-sensor registry, read back during the load (group "NPU test", --plain run above) ---
+Clock0   NPU Clock                           1800.00 MHz
+Other0   NPU Memory (adapter, shared)          96.02 MB
+Other1   NPU Memory (xrt-smi)                  96.00 MB
+Other2   NPU Active Contexts                    1.00
+Other3   NPU Columns In Use                     4.00 cols
+Other4   NPU Completions                      107.70 /s
+Other5   NPU Submissions                      107.70 /s
+Other6   NPU GOPS (xrt-smi)                     0.00 GOPS
+Other7   NPU EGOPS (xrt-smi)                    0.00 GOPS
+Usage0   NPU Utilization                       82.78 %
+
+--- --json --once during the load (the machine-readable form; excerpt) ---
+"xrt_api": {"available": true, "clock_mhz": 1800.0, "ms": 0.3731, "power_mode": "Default"}
+"windows": {"adapter_dedicated_mb": 0.0, "adapter_shared_mb": 96.015625, "engines": {"eng_0_engtype_Compute": 86.64339436155693}, "ms": 0.6975, "ok": true, "utilization_pct": 86.64339436155693}
+"contexts": [{"pid": 26412, "process": "python.exe", "status": "Active", "context_id": 207, "partition": 0, "start_col": 1, "num_cols": 4, "submissions": 2244.0, "completions": 2243.0, "submissions_per_s": 119.52, "completions_per_s": 119.52, "migrations": 0.0, "suspensions": 0.0, "errors": 0.0, "priority": "Normal", "gops": -1.0, "egops": -1.0, "fps": -1.0, "latency": -1.0, "memory_mb": 96.0, "instr_bo_mb": 0.09375, "engine_pct": 86.64, "process_shared_mb": 96.015625, "listed_by_xrt_smi": true}]
+
+(e) VitisAI EP: not covered
+===========================
+Three attempts to hold a VitisAI EP (ORT) session on the NPU so the same engine counter could
+be read under it, all in resnet_env17 with RYZEN_AI_INSTALLATION_PATH=C:\Program Files\RyzenAI\1.7.1:
+  1. tools/session_hold.py --model models/yolov8n_cut_xint8.onnx --cache-key yolocutcachekey --streams 1
+       -> "check failure: node != nullptrcannot find producer. onnx_node_arg_name=/model.21/m.0/cv2/act/Mul_output_0_DequantizeLinear_Output/duplicated"
+  2. tools/session_hold.py --model models/resnet50_xint8_c64.onnx --cache-key modelcachekey --streams 1 --hold 35
+       -> every sample "npu memory: 0 MB  gops: 0  measured completions: 0.0/s"; xrt-smi showed no
+          hardware context; the session never ran on the NPU (not diagnosed).
+  3. pipelines/resnet50/4_run.py --ep npu --images data/calib --n 6000 --model models/resnet50_xint8_c64.onnx
+       -> onnxruntime RUNTIME_EXCEPTION in vitis_ai_ep_1: "vaip_core::TarWriter::write(...)"
+So the earlier observation in hwinfo_npu_bridge.py's docstring -- HWiNFO's D3D/Compute0 at 0 %
+under a held VitisAI session -- is neither confirmed nor refuted here. What IS established is
+that an XRT hardware context created through IRON/pyxrt is fully visible to the engine counter.
+Whether the VitisAI EP's contexts (also XRT hardware contexts underneath) show the same is the
+open item; the compile caches were being used by another session at the time and were not
+touched with --fresh to find out.
+
+Also found, not used: the XRT SDK ships nputrace_tool/ (an ETW session over the NPU driver's
+WPP provider abcf72e0-3618-40c8-ad95-eddd971fd3c9, via tracelog/tracefmt; needs Administrator)
+and xdp_aie_{profile,trace,halt}_plugin.dll (XRT's XDP AIE profile/trace, driven by xrt.ini
+[AIE_profile_settings] / [AIE_trace_settings]) -- both are trace tooling, not a monitor feed.
+
+THE FINDING
+===========
+1. The Windows GPU-engine statistics see the NPU. It is an MCDM adapter with its own LUID
+   (0x0000d6bf here), one engine (eng_0, engtype compute), a shared-memory segment, and per-
+   process utilization -- 88.5 % / 84-87 % across the IRON GEMM run, 0 % idle, memory equal
+   to xrt-smi's figure. This is the only live utilization number for the NPU on this stack;
+   xrt-smi's GOPS/FPS/latency read N/A for the same context. DXCore lists the adapter under
+   DXCORE_HARDWARE_TYPE_ATTRIBUTE_NPU as "NPU Compute Accelerator Device" (not under
+   D3D12_CORE_COMPUTE, which returns only the iGPU and the basic render driver).
+2. XRT's max_clock_frequency_mhz is a live clock readback on this driver: 800 MHz idle,
+   1800 MHz for as long as a hardware context is active, 800 again after, at ~0.05 ms per
+   query. The earlier note that it "reads 800 in every mode" was an idle reading. It agrees
+   with the in-kernel cycle-counter clock probe (1.80 GHz busy in default mode) the other
+   session ran the same day.
+3. The rest of XRT's query surface on this driver: name, bdf, platform (columns, power mode),
+   host (XRT/driver versions), pcie_info answer; aie / aie_shim / aie_mem / memory return
+   "No such query request"; electrical fails at the driver escape (0xc0000023); thermal and
+   mechanical report "No sensors present". The per-context table (aie-partitions) is xrt-smi
+   only. Voltage and power remain unavailable from every documented interface.
+4. The monitor built on all three (tools/hwinfo_npu_bridge.cpp): per poll it costs one
+   xrt-smi process (~120-170 ms), one PDH collection (~0.7 ms) and two XRT queries (~0.2 ms).
+
+NOT TESTED
+==========
+- The engine counter under a VitisAI EP session (e above).
+- Whether max_clock_frequency_mhz reports the balanced/powersaver clocks (1.03 / 0.80 GHz
+  per the other session's probe) under load in those modes; only `Default` was sampled.
+- The dashboard (VT redraw) mode was exercised only through its plain and --once renderers
+  in this log; the escape-sequence path ran in the user's console window, not captured here.

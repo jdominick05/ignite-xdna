@@ -123,6 +123,8 @@ between them settle which.
 | Fact | Value | Tag and evidence |
 |---|---|---|
 | Core clock | **unmeasured** | RESEARCH.md: 1.6 GHz for the 8700G, from a web search on 2026-09-06. `results/aie/bottleneck_spatial_sweep_npu.log`: "~2 TOPS at 1 GHz … NOT measured on this machine". |
+| Clock readback, live | **800 MHz idle → 1800 MHz while a hardware context is active** (power mode `Default`) | MEASURED: XRT's `xrt::device::get_info<max_clock_frequency_mhz>` (also `pyxrt`), sampled idle, every 3 s across a 30 s IRON GEMM run, and idle again, ~0.05 ms per read (`results/aie/xrt_api_live_clock_and_pdh_npu.log`). A readback, not a nameplate: the value follows context activity. `tools/hwinfo_npu_bridge.exe` shows it live and publishes it to HWiNFO. Other power modes not sampled through this path. |
+| Live utilization | Windows' GPU-engine statistics see the NPU: 84–88 % across an IRON GEMM run, 0 % idle, adapter memory = xrt-smi's | MEASURED: `\GPU Engine(pid_*_luid_0x00000000_0x0000d6bf_*_engtype_compute)\Utilization Percentage` via PDH, and DXCore lists the adapter as "NPU Compute Accelerator Device" under `DXCORE_HARDWARE_TYPE_ATTRIBUTE_NPU` (same log). xrt-smi's GOPS/FPS/latency read `N/A` for the same context. Not yet confirmed under a VitisAI EP session. |
 | Power mode | `Default`; `xrt-smi configure --pmode` accepts `default, powersaver, balanced, performance, turbo` | MEASURED: `results/aie/xrt_smi_platform_pmode.log` (a verbatim `--batch` capture of `xrt-smi examine -r platform` and `configure --help`, 2026-09-07; nothing on the device was changed). Never exercised by anything in this repo. |
 | A symptom nobody has attributed | the same model, same cache, measured 12.7 ms alone and 6.8–6.9 ms minutes later in a sweep | MEASURED `docs/DECISIONS.md` ("NPU single-instance latency drifts session to session"). Background CPU load was the suspect; an NPU clock or power state that changes with activity is the other candidate, and S0 tests it. |
 
@@ -328,6 +330,11 @@ Measurement: cycles ÷ wall seconds, with the loop long enough that the 617 µs 
 cost is under 1% of it. Decides: every per-second column in sections 2–3; whether the
 session-to-session drift in 1.7 is a clock state; whether `turbo` exists on this part.
 Reuses: `kernels/dispatch_floor/measure_floor.py`'s harness and verification pattern.
+Already in hand, cheaply: XRT's `max_clock_frequency_mhz` query is a live readback on this
+driver — 800 MHz idle, 1800 MHz while a context is active (1.7,
+`results/aie/xrt_api_live_clock_and_pdh_npu.log`) — so any run can log its clock state at
+~0.05 ms per read (`tools/hwinfo_npu_bridge.exe --json`). The cycle-counter probe stays the
+ground truth for the busy clock and for `balanced`/`powersaver`.
 
 **S1. Pin the data-movement constants.**
 Physical basis: 1.5–1.6 hold three mutually inconsistent inferences. Tooling: extend the

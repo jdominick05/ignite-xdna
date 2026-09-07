@@ -535,10 +535,30 @@
   that got `bottleneck.py` to 56×56 and would free 16 KB) — `whole_array.py` is the shared
   upstream file another live session was running FFN measurements through, and editing it
   under them would silently change their numbers. Next session that owns the file: try it;
-  if bf16 gains what int8 gained, the bf16 niche roughly doubles. Also not measured: the
+  if bf16 gains what int8 gained, the bf16 niche roughly doubles. **Superseded the same
+  day:** the other session took the file and measured it — bf16 at `n=64` with the C tile
+  single-buffered reads 2477.23 GFLOPS at 2048³ against the default tile's 1775.65, and
+  the CPU-bf16 margin widens to 1.29×–1.89× at M, N ≥ 1024
+  (`results/aie/bf16_matmul_n64_single_buffer_npu.log`; the patch is kept as
+  `kernels/gemm_tile_sweep/whole_array_c_single_buffer.patch`). The rejection above was a
+  file-ownership call, not a measurement, and is kept here as written. Also not measured: the
   requantize-to-int8 epilogue a real quantized layer needs (upstream's i8→i8 kernel path
   accumulates in an int8 buffer across K and is unusable past one k-tile). See
   `results/aie/int8_matmul_sweep_npu.log`.
+- **NPU monitoring sources (2026-09-07):** `tools/hwinfo_npu_bridge.cpp` reads utilization
+  and adapter memory from Windows' GPU-engine statistics (PDH over the D3DKMT counters; the NPU
+  is an MCDM adapter with its own LUID), the clock and power mode from XRT's in-process query
+  API (`max_clock_frequency_mhz` is a live readback here: 800 MHz idle, 1800 MHz with an active
+  context), and the per-context table from `xrt-smi examine -r aie-partitions`
+  (`results/aie/xrt_api_live_clock_and_pdh_npu.log`). Tried and dropped: DXCore's
+  `D3D12_CORE_COMPUTE` adapter list (returns only the iGPU and the basic render driver; the NPU
+  is listed under `DXCORE_HARDWARE_TYPE_ATTRIBUTE_NPU`, with a PDH-LUID fallback when even that
+  is absent); XRT's `aie`/`aie_shim`/`aie_mem`/`memory` queries ("No such query request" on this
+  driver) and `electrical`/`thermal` (fails / no sensors); linking `xrt_coreutil_static.lib`
+  (169 MB; the DLL ships with the driver in `System32`, so the import lib is used); installing
+  boost into `resnet_env17` (the XRT SDK headers need `boost/any.hpp` — a separate header-only
+  env, `npu_monitor_build`, keeps the pinned inference env untouched). Rejected for good:
+  inventing a voltage or power figure — no documented interface exposes one on this NPU.
 
 ## The YOLOv8 partitioning failure (resolved)
 

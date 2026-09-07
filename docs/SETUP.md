@@ -55,6 +55,44 @@ $env:RYZEN_AI_INSTALLATION_PATH = 'C:\Program Files\RyzenAI\1.7.1'
 The 1.8.0 installer sets that variable machine-wide and already-open shells keep the
 stale value, so set it per session or pass `--xclbin` explicitly.
 
+### NPU monitor: `tools/hwinfo_npu_bridge.exe`
+
+A live dashboard for the NPU, and a bridge that publishes the same numbers to HWiNFO64's
+custom-sensor registry interface. Everything it shows is read from one of three sources,
+and the screen says which (`results/aie/xrt_api_live_clock_and_pdh_npu.log` is the probe
+behind each claim):
+
+- **Utilization and memory** — Windows' own GPU-engine statistics for the NPU adapter (the
+  D3DKMT counters Task Manager reads, via PDH). The NPU is an MCDM adapter with a LUID and a
+  compute engine like any GPU; an IRON/XRT GEMM run reads 84–88 %, idle reads 0 %, and the
+  adapter's shared memory equals xrt-smi's figure. This is the only live utilization number
+  on this stack — xrt-smi's GOPS/FPS/latency columns read `N/A` for such contexts. Not yet
+  confirmed under a VitisAI EP session (three attempts failed for unrelated reasons; see the
+  log).
+- **Clock and power mode** — XRT's in-process query API. `max_clock_frequency_mhz` is a live
+  readback on this driver: 800 MHz idle, 1800 MHz while a hardware context is active.
+- **Contexts, columns, counters** — `xrt-smi examine -r aie-partitions`, once per poll:
+  pid, process, status, submissions/completions (and their per-second deltas), migrations,
+  suspensions, errors, priority, memory, and whatever GOPS the context reports.
+
+Not shown, because no documented interface exposes them on this NPU: voltage and power
+(xrt-smi's electrical query fails at the driver escape; thermal reports no sensors).
+
+```powershell
+# one-time: header-only build deps (nlohmann/json + boost, which the XRT SDK headers need)
+conda create -n npu_monitor_build -c conda-forge libboost-headers nlohmann_json
+# build (Visual Studio 2022 Build Tools; links the XRT SDK from C:\Xilinx\XRT\xrt_sdk when present)
+scripts\build_hwinfo_bridge.bat            # or ./scripts/build-hwinfo-bridge.sh from Git Bash
+# run
+tools\hwinfo_npu_bridge.exe                # live dashboard, polls every 2 s, publishes to HWiNFO
+tools\hwinfo_npu_bridge.exe --once        # one plain sample;  --json / --plain for scripts
+tools\hwinfo_npu_bridge.exe --no-hwinfo   # monitor only, touches no registry key
+```
+
+A running `hwinfo_npu_bridge.exe` locks its own file, so stop it before rebuilding. HWiNFO
+picks the sensors up from `HKCU\Software\HWiNFO64\Sensors\Custom\<device name>` while its
+Sensors window is open; `--clean` removes that group on exit.
+
 ---
 
 ## Quick install

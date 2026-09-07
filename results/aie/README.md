@@ -101,6 +101,22 @@ and `configure --help` on Desktop 2: `Total Columns: 5`, `Power Mode: Default`, 
 reported on this driver. Nothing on the device was changed. Cited by
 [`docs/SILICON.md`](../../docs/SILICON.md), sections 1.1 and 1.7.
 
+**`xrt_api_live_clock_and_pdh_npu.log`** — NPU telemetry without `xrt-smi`, probed while
+`tools/hwinfo_npu_bridge.cpp` was rewritten into a live monitor: XRT's in-process query API
+(`pyxrt` and a C++ probe: what each `get_info` key answers on this driver, timed) and
+Windows' GPU-engine statistics (PDH). Two findings. `max_clock_frequency_mhz` is a **live
+clock readback** — 800 MHz idle, 1800 MHz for the whole of a 30 s IRON GEMM run, 800 after —
+which corroborates the cycle-counter clock probe and retires the note that it "reads 800 in
+every mode" (an idle reading). And the NPU is visible to Windows as an MCDM adapter
+(`luid_0x00000000_0x0000d6bf`, "NPU Compute Accelerator Device" under DXCore's NPU hardware
+type): its compute engine reads 84–88 % across the run and 0 % idle, and its shared memory
+equals xrt-smi's `total_memory_usage`, while xrt-smi's GOPS/FPS/latency read `N/A` for the
+same context. Also records what does not answer (`aie`/`aie_shim`/`aie_mem`/`memory`:
+"No such query request"; `electrical`: driver escape 0xc0000023; thermal: no sensors), the
+monitor's own frames and HWiNFO registry output under load, and that the VitisAI EP path was
+**not** covered — three attempts to hold a VitisAI session failed for unrelated reasons.
+Cited by [`docs/SILICON.md`](../../docs/SILICON.md) 1.7 and S0, [`docs/SETUP.md`](../../docs/SETUP.md).
+
 ## mlir-aie examples on this hardware
 
 **`mlir_aie_saxpy_npu.log`** — set up the open-source `Xilinx/mlir-aie` (IRON/Peano)
