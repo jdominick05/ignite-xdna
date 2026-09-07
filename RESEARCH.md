@@ -1273,6 +1273,10 @@ sections above.
   independent partitions regardless of process count, and the driver's `5x4_*.xclbin`
   overlays fall back silently to 100% CPU.
   [Working](docs/BENCHMARKS.md#splitting-the-array-into-independent-partitions).
+- **int8 GEMM against the CPU's own int8 kernel.** Loses at `whole_array`'s default tile
+  (the CPU is strongest at exactly the NPU's headline dtype), wins 1.10×–1.83× at M ≥ 512
+  with `n=64` — a tile int8's half-size buffers fit in L1 and bf16's miss by the stack.
+  [Working](docs/BENCHMARKS.md#int8-gemm-the-npus-headline-dtype-needs-a-tile-bf16-cant-fit).
 
 **Still open.**
 
@@ -1293,6 +1297,9 @@ sections above.
 - **Column count for the int8 conv kernels.** Both NPU measurements use 1–3 columns of a
   4×5 array; 4 × 146 ≈ 584 GOPS would still lose, but not by 5.6×. The one lever the
   56×56 result doesn't touch.
+- **bf16 GEMM at `n=64`.** Misses AIE2's 64 KB L1 by exactly the 3,328 B stack;
+  single-buffering `whole_array.py`'s C output FIFO would free 16 KB. Untested because the
+  file was in use by another live session when the int8 sweep found the tile.
 - **Longer term:** a detector fine-tuned for fixed camera feeds (licence-plate
   recognition), reusing the head-cut + XINT8 + AdaRound recipe rather than re-deriving it.
 

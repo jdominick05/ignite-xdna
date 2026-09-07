@@ -242,6 +242,19 @@ The determinant this project can now name precisely: whether `d_ff`'s factorizat
 admits an `n`-tile ≥~128 once `m` is forced down by the fixed byte-stride cap — a
 property of the specific integer, not of "real-world shape" in general.
 
+**`int8_matmul_sweep_npu.log`** — the same upstream `whole_array.py` design in int8
+(`--dtype_in i8 --dtype_out i32`) at the bf16 sweep's shapes, bf16→f32 re-run in the same
+sitting, an M-edge sweep with an m-tile control, a tile check, four L1 ceiling probes, and
+the CPU int8 GEMM baseline this repo never had (`kernels/int8_matmul_sweep/`, two CPU
+kernels: torch `_int_mm` and ORT `MatMulInteger`; torch's is faster and is the verdict
+line). **At the default tile the NPU's headline dtype loses to the CPU's own int8 kernel
+almost everywhere** and runs only 1.1–1.5× the bf16 rate; **`n=64`, which int8's half-size
+tiles leave L1 room for and bf16's do not (bf16 misses by exactly the 3,328 B stack),
+doubles it bit-exact to 4448–4607 GOPS** — a **1.10×–1.83× NPU win at M ≥ 512** by the
+mean, thin enough that the CPU kernel's best-case time takes back the K=N=4096 rows. The
+small-M loss tracks the forced tile `m`, not token count. Not done: bf16 at `n=64` via a
+single-buffered C FIFO (`whole_array.py` was in use by another live session).
+
 ## Dispatch floor and the int8 conv verdict
 
 **`dispatch_floor_npu.log`** — the per-dispatch cost measured IN ISOLATION at last

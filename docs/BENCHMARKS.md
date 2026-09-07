@@ -703,6 +703,95 @@ claim about which CPU kernel you chose to lose to.
 Demo in `scripts/attention-demo.sh` and `tools/demo_attention.py`. See
 `kernels/attention_bf16/README.md` and `results/aie/attention_bf16_kernel_npu.log`.
 
+### int8 GEMM: the NPU's headline dtype needs a tile bf16 can't fit
+
+bf16 was the niche found above, but this project is named for int8, XDNA1's 16 TOPS
+nameplate is an int8 figure, and AMD's own tile spec gives the AIE2 core twice the int8
+MACs per cycle (256 vs 128 bf16). Every int8 number under `kernels/` came from the chained
+conv design; nobody had run the same `whole_array.py` GEMM in int8, and there was no CPU
+int8 GEMM baseline to read it against — every CPU int8 number here is ORT QDQ conv. Both
+were run in one sitting (`kernels/int8_matmul_sweep/`, 2026-09-07, Desktop 2): the
+upstream design unmodified with `--dtype_in i8 --dtype_out i32` (i32 because the K
+reduction accumulates in a `dtype_out` buffer — the bf16 lesson above), bf16→f32 re-run
+alongside it, and a CPU script that times **two** int8 kernels — torch `_int_mm`
+(int8×int8→int32) and ORT `MatMulInteger` u8s8 (MLAS, the library behind every other CPU
+int8 number here) — because this repo has twice lost a verdict to the slower CPU kernel.
+torch's is faster at every shape (1.05–1.68×) and is the verdict line. Every int8 NPU row
+is a bit-exact PASS (`np.array_equal`), stronger than the bf16 tolerance check.
+
+**At the tile the design ships with (m=64/k=64/n=32), int8 loses to the CPU's own int8
+kernel almost everywhere, and runs only 1.1–1.5× the bf16 rate, not 2×.** Same sitting:
+
+| MxKxN | NPU int8 GOPS | NPU bf16 GFLOPS | int8/bf16 | CPU int8 GOPS (torch, mean) | NPU/CPU int8 |
+|---|---|---|---|---|---|
+| 512³ | 982.52 | 846.40 | 1.16× | 2053.4 | 0.48× |
+| 1024³ | 2743.72 | 1875.30 | 1.46× | 2267.7 | 1.21× |
+| 2048³ | 2373.66 | 1775.65 | 1.34× | 2427.3 | 0.98× |
+| 4096×2048×2048 | 2387.01 | — | — | 2690.4 | 0.89× |
+| 2048×4096×4096 | 2047.66 | 1801.18 | 1.14× | 2757.9 | 0.74× |
+| 512×4096×4096 | 1875.49 | 1671.94 | 1.12× | 2647.8 | 0.71× |
+| 1024×4096×4096 | 1956.97 | 1779.78 | 1.10× | 2563.3 | 0.76× |
+
+What bounds the default tile is dtype-blind: the design re-streams the whole A matrix from
+DDR once per column block (N/(n·4) times) and B once per row block (M/(m·4) times), each
+k-step handshakes two tiles through two FIFO levels, and the output tile it
+read-modify-writes is 4 bytes per element for i32 and f32 alike. Halving the MAC
+instruction count buys little against that.
+
+**What int8 has that bf16 does not is L1 headroom, and it is worth 2×.** int8's A/B tiles
+are half the bytes, so its default tile uses 32 KB of the 64 KB tile memory (bf16: 44 KB)
+and `n=64` fits at 52 KB. A tile check at 2048³ (all bit-exact): `k=128` +20%, `m=128`
++37%, **`n=64` +98% — 4603 GOPS**, because every doubling of `n` halves the A re-streaming.
+The same `n=64` in bf16 needs 68,864 B against a 65,536 B tile: it misses by exactly the
+3,328 B stack (`'aie.tile' op Basic sequential allocation failed`, and so do `m=128` bf16,
+`m=128 n=64` int8 and `k=128 n=64` int8). The full int8 sweep at `n=64`:
+
+| MxKxN | m | NPU int8 GOPS, n=64 | vs default | CPU int8 GOPS (mean) | NPU/CPU int8 | CPU int8 best case (min) | NPU/CPU at CPU's min |
+|---|---|---|---|---|---|---|---|
+| 512³ | 64 | 974.29 | 0.99× | 2053.4 | 0.47× | 2218.5 | 0.44× |
+| 512×512×1024 | 64 | 1764.51 | 1.15× | 2161.4 | 0.82× | 2200.3 | 0.80× |
+| 512×512×2048 | 64 | 2544.29 | 1.28× | 2312.9 | 1.10× | 2359.9 | 1.08× |
+| 1024³ | 64 | 3544.29 | 1.29× | 2267.7 | 1.56× | 2304.2 | 1.54× |
+| 2048³ | 64 | 4447.97 | 1.87× | 2427.3 | 1.83× | 4200.5 | 1.06× |
+| 4096×2048×2048 | 64 | 4607.05 | 1.93× | 2690.4 | 1.71× | 4189.2 | 1.10× |
+| 2048×4096×4096 | 64 | 3263.99 | 1.59× | 2757.9 | 1.18× | 4033.9 | 0.81× |
+| 128×4096×4096 | 16 (forced) | 1091.53 | 1.86× | 2868.7 | 0.38× | 3028.9 | 0.36× |
+| 256×4096×4096 | 32 (forced) | 1888.39 | 1.81× | 2859.2 | 0.66× | 3167.5 | 0.60× |
+| 512×4096×4096 | 64 | 3160.96 | 1.69× | 2647.8 | 1.19× | 3610.7 | 0.88× |
+| 1024×4096×4096 | 64 | 3282.40 | 1.68× | 2563.3 | 1.28× | 3698.2 | 0.89× |
+
+**The verdict, by this repo's mean-based convention: with `n=64`, NPU int8 beats the CPU's
+best int8 kernel 1.10×–1.83× at every shape with M ≥ 512 and N ≥ 2048**, and still loses at
+512³, 512×512×1024 and short prefill (M=128: 2.6×, M=256: 1.5×). 4607 GOPS is the highest
+ops rate any single dispatch has reached in this project (28.8% of the 16 TOPS nameplate;
+the 39.3% above is a whole-graph figure across four columns), and 2.5× the bf16 rate of the
+same sitting at 2048³ — the 2× the MAC count promised, but only once the tile bf16 cannot
+have. **The margin is thin at the largest shapes:** torch's kernel has a large mean/min
+spread there (2048³: 7.08 ms mean, 4.09 ms min), and read against its best case the
+2048-class wins hold at 1.06–1.10× while the K=N=4096 rows become a 1.13–1.24× CPU win.
+In the same sitting the same design in bf16 beat CPU bf16 by 1.13×–1.35× at M ≥ 512 (CPU
+bf16 came in ~15% higher than in the sweep above — drift on the CPU side, which is why that
+range is narrower than 1.18×–1.78×). So int8 GEMM is a second genuine niche, about twice
+the bf16 one in absolute throughput, and relative to its own CPU competitor no wider than
+bf16's at the largest shapes (1.18× vs 1.19× at 2048×4096×4096).
+
+**The M-edge is a tile artifact.** `whole_array` needs `M % (m·4) == 0` and `(M/m/4) % 2
+== 0`, so M=128 forces m=16 and M=256 forces m=32; control rows at M=512 with the same
+forced m match the small-M rows to within 6% at both dtypes (int8 m=16: 585 at M=128 vs
+610 at M=512; m=32: 1041 vs 1046). Throughput tracks `m` — 610 → 1046 → 1875 for 16 → 32
+→ 64 — not token count. A prefill shorter than ~512 tokens at d_model=4096 loses at either
+dtype on this design; only a differently tiled design could change that.
+
+**Not done, deliberately:** bf16 at `n=64` is one line away — single-buffering the C output
+FIFO (`depths=[1]`, the change that got `bottleneck.py` to 56×56) frees 16 KB — but
+`whole_array.py` is the shared upstream file another live session was running its FFN
+measurements through, and editing it under them would silently change their numbers. If
+bf16 gains at `n=64` what int8 gained, the bf16 niche roughly doubles too. Also not
+measured: the int8 requantization epilogue a real quantized layer needs (upstream's i8→i8
+path accumulates in an int8 buffer across K and is unusable past one k-tile), `--n-aie-cols`
+< 4, int16. ORT MatMulInteger's 1.05–1.68× deficit to torch here does not reopen the closed
+int8 conv class — GEMM is not conv. See `results/aie/int8_matmul_sweep_npu.log`.
+
 ### MobileViT-XXS does not survive per-tensor INT8, and AdaRound cannot save it
 
 The accuracy question the attention work deferred, now measured on the full 1000-image

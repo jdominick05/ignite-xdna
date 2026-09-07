@@ -31,6 +31,7 @@ array program) into `~/.npu/cache/<hash>/`; later runs of the same shape hit the
 | Kernel | Op it replaces | Verdict |
 |---|---|---|
 | `bf16_matmul_sweep/` | Nothing — the bf16 GEMM shape sweep | **Wins.** NPU 1.18×–1.78× over CPU bf16 once M/N ≥ 1024 |
+| `int8_matmul_sweep/` | Nothing — the int8 GEMM sweep, with the CPU int8 GEMM baseline | **Loses at the default tile; wins 1.10×–1.83× at M ≥ 512 with `n=64`**, a tile bf16 can't fit |
 | `groupnorm_bf16/` | `InstanceNormalization` / `GroupNorm(32)` in `resnetv2_50x3_xint8.onnx` | Wins on 33/49 nodes standalone; **0/49 once the handoff is counted** |
 | `attention_bf16/` | Multi-head attention in `mobilevit_xxs` | **Loses 71×–240×.** Numerically correct, badly written |
 | `conv2x_baseline/` | Nothing — the CPU baseline for `ml/resnet/layers_conv2_x` | **CPU wins 6.3×–8.5×** like-for-like int8 |
@@ -71,6 +72,32 @@ predicted would be needed — a real fused attention block still needs its own c
 the same accumulate-in-`dtype_out` pattern, unchecked so far.
 
 `results/aie/bf16_matmul_niche_npu.log`, `docs/DECISIONS.md`.
+
+## `int8_matmul_sweep/`
+
+The **second NPU win**, and the sharper test: on this machine the CPU is relatively
+strongest (AVX-512 VNNI) at exactly the dtype the NPU is sold on. `npu_matmul_sweep.py`
+drives the same upstream `whole_array.py` in int8 (`--dtype_in i8 --dtype_out i32` — i32
+because the K reduction accumulates in `dtype_out`, the bf16 lesson above) and bf16→f32 in
+the same sitting; `cpu_int8_matmul_sweep.py` (resnet_env) times **two** CPU int8 kernels,
+torch `_int_mm` and ORT `MatMulInteger` u8s8 (MLAS), plus torch bf16/fp32. torch's is
+1.05–1.68× faster and is the verdict line. Every int8 NPU row is bit-exact.
+
+**At the default tile (m=64/k=64/n=32) the NPU's headline dtype loses** to the CPU's own
+int8 kernel almost everywhere (0.7–1.0× at the 2048/4096-class shapes, one 1.21× win at
+1024³) and runs only 1.1–1.5× the bf16 rate — the default tile is bound by dtype-blind
+costs (A/B re-streaming from DDR, per-tile handshakes, a 4-byte output tile either way).
+**int8's half-size tiles leave the L1 headroom bf16 doesn't have**: `n=64` fits at 52 KB
+and doubles the rate, bit-exact — 4448–4607 GOPS at the 2048-class shapes, 2.5× bf16's,
+the highest single-dispatch rate in this project. bf16 at `n=64` misses the 64 KB tile by
+exactly the 3,328 B stack. **Verdict (mean-based, this repo's convention): NPU int8 at
+`n=64` wins 1.10×–1.83× at every shape with M ≥ 512 and N ≥ 2048**; loses at 512³ and at
+short prefill (M ≤ 256). Thin at the largest shapes — the CPU kernel's best-case (min) time
+takes back the K=N=4096 rows. The small-M loss is a tile artifact: throughput tracks `m`
+(forced to M/8 by the design), not token count, at both dtypes.
+
+Not done: bf16 at `n=64` by single-buffering the C FIFO (`whole_array.py` was in use by
+another live session). `results/aie/int8_matmul_sweep_npu.log`, `docs/DECISIONS.md`.
 
 ## `groupnorm_bf16/`
 

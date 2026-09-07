@@ -511,6 +511,34 @@
   data-dependent matmuls, not one static GEMM), and whether `attention_bf16`'s own
   kernel has the same accumulate-in-`dtype_out` pattern is unchecked. See
   `results/aie/bf16_matmul_niche_npu.log`.
+- **int8 GEMM (2026-09-07): the NPU's headline dtype loses at `whole_array`'s default tile
+  and wins only with a tile bf16 can't fit — use `n=64` for int8.** Same upstream design,
+  `--dtype_in i8 --dtype_out i32` (i32 for the same accumulate-in-`dtype_out` reason as
+  above), against the CPU's own int8 GEMM kernels — torch `_int_mm` and ORT
+  `MatMulInteger` u8s8, both timed because this repo has twice lost a verdict to the slower
+  CPU kernel; torch's is 1.05–1.68× faster here and is the verdict line. At the default
+  m=64/k=64/n=32: int8 runs only 1.1–1.5× the bf16 rate (not the 2× the MAC count
+  promises) and loses to the CPU's int8 kernel at every shape but 1024³. The default tile
+  is bound by dtype-blind costs — the design re-streams A from DDR N/(n·4) times and B
+  M/(m·4) times, each k-step handshakes two tiles through two FIFO levels, and the output
+  tile it read-modify-writes is 4 bytes per element for i32 and f32 alike. int8's
+  half-size A/B tiles put its default at 32 KB of the 64 KB L1 (bf16: 44 KB), so `n=64`
+  fits (52 KB) and doubles the rate bit-exact (2048³: 2374 → 4448 GOPS; `m=128` +37%,
+  `k=128` +20%). bf16 at `n=64` needs 68,864 B — over by exactly the 3,328 B stack
+  (`'aie.tile' op Basic sequential allocation failed`; the allocator dump is in the log).
+  Verdict by the mean: NPU int8 at `n=64` wins 1.10×–1.83× at M ≥ 512 and N ≥ 2048, loses
+  at 512³ and M ≤ 256; against torch's best-case (min) time the K=N=4096 rows flip to a
+  1.13–1.24× CPU win. **The small-M loss is a tile artifact, not a hardware property:**
+  `whole_array` forces m = M/8 (4 rows × 2 transfer blocks), and M=128 at m=16 equals
+  M=512 at m=16 to within 6% at both dtypes. **Rejected for now, deliberately: bf16 at
+  `n=64` by single-buffering the C output FIFO** (`depths=[1]` in the C join — the change
+  that got `bottleneck.py` to 56×56 and would free 16 KB) — `whole_array.py` is the shared
+  upstream file another live session was running FFN measurements through, and editing it
+  under them would silently change their numbers. Next session that owns the file: try it;
+  if bf16 gains what int8 gained, the bf16 niche roughly doubles. Also not measured: the
+  requantize-to-int8 epilogue a real quantized layer needs (upstream's i8→i8 kernel path
+  accumulates in an int8 buffer across K and is unusable past one k-tile). See
+  `results/aie/int8_matmul_sweep_npu.log`.
 
 ## The YOLOv8 partitioning failure (resolved)
 

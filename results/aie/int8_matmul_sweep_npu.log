@@ -1,0 +1,599 @@
+int8 GEMM on the NPU against the CPU's own int8 GEMM kernels -- the first clean int8
+GEMM number in this project. Every int8 figure before this came from the chained conv
+design (ml/bottleneck, layers_conv2_x), whose two kernels each carried a width-32 bug and
+which lost to the CPU 5.7-12.75x; the one NPU win on record is bf16 GEMM. This runs the
+same upstream whole_array.py design in int8 (--dtype_in i8 --dtype_out i32) at the bf16
+sweep's shapes, adds an M-edge sweep with an m-tile control, a tile check, four L1
+ceiling probes, and the CPU int8 GEMM baseline this repo never had.
+Desktop 2 (Ryzen 7 8700G / Phoenix XDNA1), 2026-09-07, mlir-aie v1.4.2, ironenv (NPU) +
+resnet_env (CPU: torch 2.4.1+cpu, onnxruntime 1.22.1). All rows one sitting, 13:14-14:25.
+A second Claude Code session was live in this same checkout throughout, working the bf16
+FFN thread (its commits 80770d3 and earlier); the process snapshot taken at the start and
+end of every NPU batch below found no other python/aiecc/clang process, and no NPU run of
+its overlapped these.
+
+WHY THIS EXISTS
+===============
+This project is named for int8 (Quark XINT8 is the only dtype the VitisAI X1 backend
+takes) and XDNA1's 16 TOPS nameplate is an int8 figure. AMD's own device.yaml
+(notes_aie2_device_dtypes.log) gives the AIE2 tile 256 int8xint8 MACs/cycle against 128
+for bf16 -- so on paper int8 GEMM should run at 2x the bf16 rate that
+bf16_matmul_niche_npu.log found to be this NPU's first genuine win. Nobody had measured
+it: the int8 numbers in kernels/ are all conv, on a design with since-fixed kernel bugs.
+And there was no CPU int8 GEMM baseline to read such a number against -- every CPU int8
+number here is ORT QDQ conv. Two questions, then: does int8 GEMM double the bf16 rate on
+this design, and does it beat the CPU's own int8 GEMM kernel? On this machine the second
+question is the sharper one, because Zen4 has AVX-512 VNNI: the CPU is relatively
+strongest exactly at the NPU's headline dtype.
+
+WHAT WAS RUN
+============
+NPU: kernels/int8_matmul_sweep/npu_matmul_sweep.py drives
+~/mlir-aie/programming_examples/basic/matrix_multiplication/whole_array/whole_array.py
+(upstream v1.4.2, unmodified) once per row: 4 columns, 10 timed iters after 3 warmup,
+tiles m=64/k=64/n=32 unless the row says otherwise. Each row reports the script's own
+NPU-time bracket (around kernel.wait()), its end-to-end bracket (around the Python call)
+and the GOPS/GFLOPS it derives from the NPU bracket (2MKN / avg). Verification is the
+script's own numpy A@B check: for integer dtypes that is np.array_equal, so every int8
+PASS below is bit-exact; the bf16->f32 PASS is a 5% / 0.5 tolerance. whole_array needs
+M % (m*4) == 0 and (M/m/4) % 2 == 0, so M=128 forces m=16 and M=256 forces m=32 -- those
+rows say so, and the m-tile control rows exist because of it.
+
+  python kernels/int8_matmul_sweep/npu_matmul_sweep.py --dtype i8 --iters 10 --warmup 3 \
+      --shapes 512x512x512,512x512x1024,512x512x2048,1024x1024x1024,2048x2048x2048,\
+               4096x2048x2048,2048x4096x4096,128x4096x4096,256x4096x4096,512x4096x4096,\
+               1024x4096x4096,512x4096x4096@16,512x4096x4096@32
+  python kernels/int8_matmul_sweep/npu_matmul_sweep.py --dtype bf16 --iters 10 --warmup 3 \
+      --shapes 512x512x512,1024x1024x1024,2048x2048x2048,2048x4096x4096,128x4096x4096,\
+               256x4096x4096,512x4096x4096,1024x4096x4096,512x4096x4096@16,512x4096x4096@32
+  (each row is: whole_array.py --dev npu -M .. -K .. -N .. -m .. -k 64 -n 32 --n-aie-cols 4
+   --dtype_in i8 --dtype_out i32 --warmup 3 --iters 10, or bf16/f32)
+  Tile check / probes: the same driver with -k 128, -n 64, @128 (m), see below.
+
+CPU: kernels/int8_matmul_sweep/cpu_int8_matmul_sweep.py, resnet_env, 20 timed iters
+after 5 warmup, GOPS from the mean (this repo's convention; min is printed too). Two int8
+kernels, because this repo has twice been wrong by picking the slower CPU kernel
+(conv2x_int8_cpu_baseline.log, the MobileViT splice): torch._int_mm (int8 x int8 ->
+int32, torch's own CPU int8 GEMM, 8 threads) and ORT MatMulInteger u8s8 (MLAS -- the
+library behind every other CPU int8 number in this repo). Both are checked exactly (int64
+reference up to 2^30 MACs, torch-vs-ORT cross-check at every shape); the faster one is the
+verdict line. torch bf16 and fp32 matmul are timed in the same run.
+
+  conda activate resnet_env
+  python kernels/int8_matmul_sweep/cpu_int8_matmul_sweep.py --iters 20 --warmup 5 \
+      --shapes 512x512x512,512x512x1024,512x512x2048,1024x1024x1024,2048x2048x2048,\
+               4096x2048x2048,2048x4096x4096,128x4096x4096,256x4096x4096,512x4096x4096,\
+               1024x4096x4096
+
+RAW NPU OUTPUT (whole_array.py's own benchmark tail, per run; wall includes the numpy
+reference, which is what makes the 4096-class int8 rows take minutes)
+================================================================================
+=== int8 GEMM sweep, NPU side. start 2026-09-07 13:14:55 ===
+--- other python/compiler processes at start (contention check) ---   (none)
+######## BATCH 1: int8 -> int32 ########
+=== 512x512x512  m=64 k=64 n=32  i8->i32 ===
+  NPU time     (avg/min/max us): 273.2 / 256.0 / 307.0
+  End-to-end   (avg/min/max us): 741.0 / 665.3 / 939.7
+  NPU GFLOPS                    : 982.52
+  PASS!
+(wall incl. compile: 5.6 s)
+=== 512x512x1024  m=64 k=64 n=32  i8->i32 ===
+  NPU time     (avg/min/max us): 351.1 / 340.3 / 390.4
+  End-to-end   (avg/min/max us): 806.6 / 747.7 / 1170.8
+  NPU GFLOPS                    : 1529.33
+  PASS!
+(wall incl. compile: 6.4 s)
+=== 512x512x2048  m=64 k=64 n=32  i8->i32 ===
+  NPU time     (avg/min/max us): 538.4 / 512.0 / 599.4
+  End-to-end   (avg/min/max us): 995.6 / 907.9 / 1307.0
+  NPU GFLOPS                    : 1994.47
+  PASS!
+(wall incl. compile: 9.9 s)
+=== 1024x1024x1024  m=64 k=64 n=32  i8->i32 ===
+  NPU time     (avg/min/max us): 782.7 / 769.8 / 821.8
+  End-to-end   (avg/min/max us): 1251.4 / 1167.3 / 1528.3
+  NPU GFLOPS                    : 2743.72
+  PASS!
+(wall incl. compile: 9.7 s)
+=== 2048x2048x2048  m=64 k=64 n=32  i8->i32 ===
+  NPU time     (avg/min/max us): 7237.7 / 7015.8 / 7518.8
+  End-to-end   (avg/min/max us): 8126.4 / 7770.2 / 8409.2
+  NPU GFLOPS                    : 2373.66
+  PASS!
+(wall incl. compile: 79.3 s)
+=== 4096x2048x2048  m=64 k=64 n=32  i8->i32 ===
+  NPU time     (avg/min/max us): 14394.5 / 13548.6 / 15167.3
+  End-to-end   (avg/min/max us): 15176.5 / 14340.7 / 16024.1
+  NPU GFLOPS                    : 2387.01
+  PASS!
+(wall incl. compile: 181.5 s)
+=== 2048x4096x4096  m=64 k=64 n=32  i8->i32 ===
+  NPU time     (avg/min/max us): 33560.0 / 32943.4 / 34766.5
+  End-to-end   (avg/min/max us): 34436.9 / 33694.8 / 35538.2
+  NPU GFLOPS                    : 2047.66
+  PASS!
+(wall incl. compile: 760.9 s)
+=== 128x4096x4096  m=16 k=64 n=32  i8->i32 ===
+  NPU time     (avg/min/max us): 7337.9 / 7162.9 / 7625.1
+  End-to-end   (avg/min/max us): 8175.8 / 7949.5 / 8473.2
+  NPU GFLOPS                    : 585.31
+  PASS!
+(wall incl. compile: 41.7 s)
+=== 256x4096x4096  m=32 k=64 n=32  i8->i32 ===
+  NPU time     (avg/min/max us): 8249.4 / 7845.3 / 8779.0
+  End-to-end   (avg/min/max us): 9050.4 / 8622.6 / 9542.8
+  NPU GFLOPS                    : 1041.28
+  PASS!
+(wall incl. compile: 91.0 s)
+=== 512x4096x4096  m=64 k=64 n=32  i8->i32 ===
+  NPU time     (avg/min/max us): 9160.2 / 8539.5 / 9830.1
+  End-to-end   (avg/min/max us): 9958.7 / 9300.8 / 10831.7
+  NPU GFLOPS                    : 1875.49
+  PASS!
+(wall incl. compile: 187.8 s)
+=== 1024x4096x4096  m=64 k=64 n=32  i8->i32 ===
+  NPU time     (avg/min/max us): 17557.7 / 16683.1 / 19434.1
+  End-to-end   (avg/min/max us): 18461.2 / 17590.2 / 20258.3
+  NPU GFLOPS                    : 1956.97
+  PASS!
+(wall incl. compile: 386.3 s)
+=== 512x4096x4096  m=16 k=64 n=32  i8->i32 ===   (m-tile control)
+  NPU time     (avg/min/max us): 28167.1 / 27495.2 / 29903.0
+  End-to-end   (avg/min/max us): 29032.6 / 28314.9 / 30831.3
+  NPU GFLOPS                    : 609.93
+  PASS!
+(wall incl. compile: 184.7 s)
+=== 512x4096x4096  m=32 k=64 n=32  i8->i32 ===   (m-tile control)
+  NPU time     (avg/min/max us): 16426.8 / 16094.7 / 16965.3
+  End-to-end   (avg/min/max us): 17331.2 / 17024.9 / 17706.8
+  NPU GFLOPS                    : 1045.84
+  PASS!
+(wall incl. compile: 176.1 s)
+######## BATCH 2: bf16 -> f32 (same sitting) ########
+=== 512x512x512  m=64 k=64 n=32  bf16->f32 ===
+  NPU time     (avg/min/max us): 317.1 / 297.7 / 355.6
+  End-to-end   (avg/min/max us): 831.0 / 700.6 / 1202.0
+  NPU GFLOPS                    : 846.40
+  PASS!
+=== 1024x1024x1024  m=64 k=64 n=32  bf16->f32 ===
+  NPU time     (avg/min/max us): 1145.1 / 1123.3 / 1214.3
+  End-to-end   (avg/min/max us): 1652.1 / 1582.9 / 1895.9
+  NPU GFLOPS                    : 1875.30
+  PASS!
+=== 2048x2048x2048  m=64 k=64 n=32  bf16->f32 ===
+  NPU time     (avg/min/max us): 9675.3 / 9513.0 / 9929.8
+  End-to-end   (avg/min/max us): 10402.8 / 10143.5 / 10833.0
+  NPU GFLOPS                    : 1775.65
+  PASS!
+=== 2048x4096x4096  m=64 k=64 n=32  bf16->f32 ===
+  NPU time     (avg/min/max us): 38152.4 / 37796.2 / 39467.1
+  End-to-end   (avg/min/max us): 39089.9 / 38631.8 / 40473.4
+  NPU GFLOPS                    : 1801.18
+  PASS!
+=== 128x4096x4096  m=16 k=64 n=32  bf16->f32 ===
+  NPU time     (avg/min/max us): 7213.4 / 6940.3 / 7673.5
+  End-to-end   (avg/min/max us): 8049.7 / 7688.7 / 8846.1
+  NPU GFLOPS                    : 595.42
+  PASS!
+=== 256x4096x4096  m=32 k=64 n=32  bf16->f32 ===
+  NPU time     (avg/min/max us): 8299.8 / 8045.7 / 8524.9
+  End-to-end   (avg/min/max us): 9048.3 / 8868.4 / 9309.9
+  NPU GFLOPS                    : 1034.96
+  PASS!
+=== 512x4096x4096  m=64 k=64 n=32  bf16->f32 ===
+  NPU time     (avg/min/max us): 10275.4 / 9731.0 / 11697.6
+  End-to-end   (avg/min/max us): 11049.8 / 10491.1 / 12420.0
+  NPU GFLOPS                    : 1671.94
+  PASS!
+=== 1024x4096x4096  m=64 k=64 n=32  bf16->f32 ===
+  NPU time     (avg/min/max us): 19305.6 / 19105.0 / 19490.1
+  End-to-end   (avg/min/max us): 20177.3 / 19662.8 / 20489.9
+  NPU GFLOPS                    : 1779.78
+  PASS!
+=== 512x4096x4096  m=16 k=64 n=32  bf16->f32 ===   (m-tile control)
+  NPU time     (avg/min/max us): 27206.7 / 26922.2 / 27802.4
+  End-to-end   (avg/min/max us): 28038.0 / 27520.4 / 28669.1
+  NPU GFLOPS                    : 631.46
+  PASS!
+=== 512x4096x4096  m=32 k=64 n=32  bf16->f32 ===   (m-tile control)
+  NPU time     (avg/min/max us): 16238.9 / 15209.1 / 17596.5
+  End-to-end   (avg/min/max us): 17052.7 / 16027.0 / 18361.1
+  NPU GFLOPS                    : 1057.94
+  PASS!
+--- other python/compiler processes at end ---   (none)
+=== done 2026-09-07 13:51:04 ===
+
+=== int8 tile check at 2048^3. start 2026-09-07 13:51:19 ===
+=== 2048x2048x2048  m=64 k=128 n=32  i8->i32 ===
+  NPU time     (avg/min/max us): 6162.1 / 6075.9 / 6281.4
+  End-to-end   (avg/min/max us): 6958.5 / 6591.7 / 7268.2
+  NPU GFLOPS                    : 2788.00
+  PASS!
+=== 2048x2048x2048  m=64 k=64 n=64  i8->i32 ===
+  NPU time     (avg/min/max us): 3732.1 / 3684.6 / 3780.1
+  End-to-end   (avg/min/max us): 4502.8 / 4451.8 / 4555.2
+  NPU GFLOPS                    : 4603.26
+  PASS!
+=== 2048x2048x2048  m=128 k=64 n=32  i8->i32 ===
+  NPU time     (avg/min/max us): 5381.0 / 5248.5 / 5673.8
+  End-to-end   (avg/min/max us): 6116.3 / 5768.3 / 6557.4
+  NPU GFLOPS                    : 3192.69
+  PASS!
+=== 2048x2048x2048  m=64 k=64 n=32  i8->i32 ===   (default again -- drift control)
+  NPU time     (avg/min/max us): 7396.8 / 6967.2 / 9549.9
+  End-to-end   (avg/min/max us): 8213.7 / 7741.3 / 10353.4
+  NPU GFLOPS                    : 2322.61
+  PASS!
+=== done 2026-09-07 13:56:43 ===
+
+=== L1 ceiling probes + tuned int8 sweep. start 2026-09-07 13:59:12 ===
+--- other python/compiler processes at start (contention check) ---   (none)
+######## PROBE A: int8 m=128 n=64 (k=64) at 2048^3 ########
+=== 2048x2048x2048  m=128 k=64 n=64  i8->i32 ===
+--- stderr tail (rc=1) ---
+  	C_L1L2_3_3_buff_1 	: 0x8D00-0x10CFF 	(32768 bytes)
+  	A_L2L1_3_3_cons_buff_1 	: 0x12D00-0x14CFF 	(8192 bytes)
+  	B_L2L1_3_3_cons_buff_1 	: 0x15D00-0x16CFF 	(4096 bytes)
+  C:\Users\<user>\.npu\cache\6e002715f50cbf6e13c65f3c\aie.mlir:2:3: error: 'aie.tile' op Basic sequential allocation failed.
+(wall incl. compile: 3.5 s)
+######## PROBE B: int8 k=128 n=64 (m=64) at 2048^3 ########
+=== 2048x2048x2048  m=64 k=128 n=64  i8->i32 ===
+--- stderr tail (rc=1) ---
+  	C_L1L2_3_3_buff_1 	: 0x4D00-0x8CFF 	(16384 bytes)
+  	B_L2L1_3_3_cons_buff_1 	: 0xAD00-0xCCFF 	(8192 bytes)
+  	A_L2L1_3_3_cons_buff_1 	: 0xED00-0x10CFF 	(8192 bytes)
+  C:\Users\<user>\.npu\cache\8797498ccd10ac84bfdd6fca\aie.mlir:2:3: error: 'aie.tile' op Basic sequential allocation failed.
+(wall incl. compile: 3.4 s)
+######## PROBE C: bf16 n=64 (m=64, k=64) at 2048^3 ########
+=== 2048x2048x2048  m=64 k=64 n=64  bf16->f32 ===
+--- stderr tail (rc=1) ---
+  	C_L1L2_3_3_buff_1 	: 0x4D00-0x8CFF 	(16384 bytes)
+  	B_L2L1_3_3_cons_buff_1 	: 0xAD00-0xCCFF 	(8192 bytes)
+  	A_L2L1_3_3_cons_buff_1 	: 0xED00-0x10CFF 	(8192 bytes)
+  C:\Users\<user>\.npu\cache\2c80606ed2d773df7d608a68\aie.mlir:2:3: error: 'aie.tile' op Basic sequential allocation failed.
+(wall incl. compile: 3.4 s)
+######## PROBE D: bf16 m=128 (k=64, n=32) at 2048^3 ########
+=== 2048x2048x2048  m=128 k=64 n=32  bf16->f32 ===
+--- stderr tail (rc=1) ---
+  	C_L1L2_3_3_buff_1 	: 0x4D00-0x8CFF 	(16384 bytes)
+  	A_L2L1_3_3_cons_buff_1 	: 0xCD00-0x10CFF 	(16384 bytes)
+  	B_L2L1_3_3_cons_buff_1 	: 0x11D00-0x12CFF 	(4096 bytes)
+  C:\Users\<user>\.npu\cache\805455dbfb542288d96b646a\aie.mlir:2:3: error: 'aie.tile' op Basic sequential allocation failed.
+(wall incl. compile: 3.4 s)
+######## TUNED int8 sweep: n=64 (m default, k=64) ########
+=== 512x512x512  m=64 k=64 n=64  i8->i32 ===
+  NPU time     (avg/min/max us): 275.5 / 264.6 / 296.2
+  End-to-end   (avg/min/max us): 717.4 / 679.5 / 816.2
+  NPU GFLOPS                    : 974.29
+  PASS!
+(wall incl. compile: 5.6 s)
+=== 512x512x1024  m=64 k=64 n=64  i8->i32 ===
+  NPU time     (avg/min/max us): 304.3 / 285.6 / 347.1
+  End-to-end   (avg/min/max us): 797.9 / 690.3 / 1098.7
+  NPU GFLOPS                    : 1764.51
+  PASS!
+(wall incl. compile: 6.2 s)
+=== 512x512x2048  m=64 k=64 n=64  i8->i32 ===
+  NPU time     (avg/min/max us): 422.0 / 413.2 / 437.1
+  End-to-end   (avg/min/max us): 877.5 / 843.9 / 945.4
+  NPU GFLOPS                    : 2544.29
+  PASS!
+(wall incl. compile: 7.8 s)
+=== 1024x1024x1024  m=64 k=64 n=64  i8->i32 ===
+  NPU time     (avg/min/max us): 605.9 / 596.4 / 619.5
+  End-to-end   (avg/min/max us): 1037.0 / 1013.5 / 1095.4
+  NPU GFLOPS                    : 3544.29
+  PASS!
+(wall incl. compile: 9.8 s)
+=== 2048x2048x2048  m=64 k=64 n=64  i8->i32 ===
+  NPU time     (avg/min/max us): 3862.4 / 3736.9 / 4280.7
+  End-to-end   (avg/min/max us): 4666.4 / 4448.9 / 5262.6
+  NPU GFLOPS                    : 4447.97
+  PASS!
+(wall incl. compile: 72.6 s)
+=== 4096x2048x2048  m=64 k=64 n=64  i8->i32 ===
+  NPU time     (avg/min/max us): 7458.1 / 7359.9 / 7636.0
+  End-to-end   (avg/min/max us): 8197.0 / 7847.9 / 8463.5
+  NPU GFLOPS                    : 4607.05
+  PASS!
+(wall incl. compile: 153.5 s)
+=== 2048x4096x4096  m=64 k=64 n=64  i8->i32 ===
+  NPU time     (avg/min/max us): 21053.8 / 19726.2 / 23104.6
+  End-to-end   (avg/min/max us): 22009.2 / 20698.1 / 23984.5
+  NPU GFLOPS                    : 3263.99
+  PASS!
+(wall incl. compile: 546.7 s)
+=== 128x4096x4096  m=16 k=64 n=64  i8->i32 ===
+  NPU time     (avg/min/max us): 3934.8 / 3639.0 / 4187.6
+  End-to-end   (avg/min/max us): 4725.2 / 4295.7 / 5081.6
+  NPU GFLOPS                    : 1091.53
+  PASS!
+(wall incl. compile: 45.4 s)
+=== 256x4096x4096  m=32 k=64 n=64  i8->i32 ===
+  NPU time     (avg/min/max us): 4548.8 / 4274.1 / 4917.6
+  End-to-end   (avg/min/max us): 5426.3 / 5189.6 / 5820.1
+  NPU GFLOPS                    : 1888.39
+  PASS!
+(wall incl. compile: 89.5 s)
+=== 512x4096x4096  m=64 k=64 n=64  i8->i32 ===
+  NPU time     (avg/min/max us): 5435.0 / 5225.6 / 5729.7
+  End-to-end   (avg/min/max us): 6220.3 / 6057.0 / 6572.1
+  NPU GFLOPS                    : 3160.96
+  PASS!
+(wall incl. compile: 222.3 s)
+=== 1024x4096x4096  m=64 k=64 n=64  i8->i32 ===
+  NPU time     (avg/min/max us): 10467.9 / 10183.1 / 10936.4
+  End-to-end   (avg/min/max us): 11258.7 / 10954.3 / 11729.6
+  NPU GFLOPS                    : 3282.40
+  PASS!
+(wall incl. compile: 347.0 s)
+--- other python/compiler processes at end ---   (none)
+=== done 2026-09-07 14:24:33 ===
+
+CPU RESULTS (verbatim; start 13:56:46, end 13:57:03)
+=====================================================
+CPU: AMD Ryzen 7 8700G w/ Radeon 780M Graphics
+torch 2.4.1+cpu (threads 8), onnxruntime 1.22.1 (intra_op_num_threads 0 = ORT default), numpy 1.26.4
+iters=20 warmup=5; GOPS/GFLOPS = 2MKN / mean wall ms
+
+           MxKxN      GOP |  torch _int_mm ms     GOPS |   ORT u8s8 ms     GOPS |  best i8 |   bf16 ms   GFLOPS | fp32 GFLOPS | i8/bf16
+---------------------------------------------------------------------------------------------------------------------------------------
+     512x512x512     0.27 |     0.131/  0.121   2053.4 |   0.14/  0.14   1858.3 |   2053.4 |     0.205   1309.7 |       599.2 |    1.57
+                            int64-ref torch=OK ort=OK cross=OK
+    512x512x1024     0.54 |     0.248/  0.244   2161.4 |   0.31/  0.28   1749.4 |   2161.4 |     0.486   1105.7 |       923.5 |    1.95
+                            int64-ref torch=OK ort=OK cross=OK
+    512x512x2048     1.07 |     0.464/  0.455   2312.9 |   0.62/  0.53   1735.8 |   2312.9 |     0.934   1149.0 |       518.8 |    2.01
+                            int64-ref torch=OK ort=OK cross=OK
+  1024x1024x1024     2.15 |     0.947/  0.932   2267.7 |   1.00/  0.61   2150.8 |   2267.7 |     1.367   1570.8 |       735.2 |    1.44
+                            int64-ref torch=OK ort=OK cross=OK
+  2048x2048x2048    17.18 |     7.078/  4.090   2427.3 |   8.69/  8.07   1978.1 |   2427.3 |    13.077   1313.7 |       652.1 |    1.85
+                            cross-check torch-vs-ort=OK (int64 ref skipped, > 2^30 MACs)
+  4096x2048x2048    34.36 |    12.771/  8.202   2690.4 |  20.29/ 17.77   1693.4 |   2690.4 |    24.089   1426.3 |       656.5 |    1.89
+                            cross-check torch-vs-ort=OK (int64 ref skipped, > 2^30 MACs)
+  2048x4096x4096    68.72 |    24.917/ 17.036   2757.9 |  40.42/ 36.91   1700.0 |   2757.9 |    45.285   1517.5 |       708.4 |    1.82
+                            cross-check torch-vs-ort=OK (int64 ref skipped, > 2^30 MACs)
+   128x4096x4096     4.29 |     1.497/  1.418   2868.7 |   2.51/  2.49   1709.3 |   2868.7 |     3.041   1412.2 |       500.4 |    2.03
+                            cross-check torch-vs-ort=OK (int64 ref skipped, > 2^30 MACs)
+   256x4096x4096     8.59 |     3.004/  2.712   2859.2 |   4.43/  3.35   1938.7 |   2859.2 |     6.597   1302.2 |       618.7 |    2.20
+                            cross-check torch-vs-ort=OK (int64 ref skipped, > 2^30 MACs)
+   512x4096x4096    17.18 |     6.488/  4.758   2647.8 |   8.66/  8.16   1983.6 |   2647.8 |    12.745   1348.0 |       677.8 |    1.96
+                            cross-check torch-vs-ort=OK (int64 ref skipped, > 2^30 MACs)
+  1024x4096x4096    34.36 |    13.405/  9.291   2563.3 |  17.14/ 11.72   2004.9 |   2563.3 |    21.744   1580.2 |       677.4 |    1.62
+                            cross-check torch-vs-ort=OK (int64 ref skipped, > 2^30 MACs)
+
+(ms columns are mean/min over the timed iterations; 'best i8' is the faster of the two int8 kernels)
+
+Two things to read off the CPU table before any comparison. torch._int_mm beats ORT's
+MatMulInteger at every shape (1.05-1.68x), so it is the verdict line; every earlier CPU
+int8 number in this repo came from MLAS, which for GEMM is the slower of the two -- that
+does not reopen the closed conv class (GEMM != conv, and ORT's QLinearConv is a different
+MLAS path), it just means "the CPU kernel you lose to" matters here too. And the torch
+kernel's mean is far above its min at the big shapes (2048^3: 7.08 ms mean, 4.09 ms min
+-- 2427 GOPS by the mean, 4200 by the min), a spread ORT does not show. The verdict below
+uses the mean, as every CPU number in this repo does; the min-based figure is quoted
+wherever it would change the reading.
+
+TABLE 1 -- NPU int8 vs NPU bf16, same sitting, default tiles (m=64 k=64 n=32)
+=============================================================================
+      MxKxN         m    int8 GOPS   bf16 GFLOPS   int8/bf16
+  -----------------------------------------------------------
+   512x512x512     64       982.52        846.40      1.16x
+  1024x1024x1024   64      2743.72       1875.30      1.46x
+  2048x2048x2048   64      2373.66       1775.65      1.34x
+  2048x4096x4096   64      2047.66       1801.18      1.14x
+   128x4096x4096   16*      585.31        595.42      0.98x
+   256x4096x4096   32*     1041.28       1034.96      1.01x
+   512x4096x4096   64      1875.49       1671.94      1.12x
+  1024x4096x4096   64      1956.97       1779.78      1.10x
+  (* m forced by M; see TABLE 2)
+
+The 2x the MAC count promises does not appear anywhere: 1.10-1.46x at the square and
+2048-class shapes, and parity at the forced small tiles. Whatever bounds this design at
+the default tile is dtype-independent -- the int32 and f32 output tiles are the same 4
+bytes per element, so the per-k-step read-modify-write of the output tile and the
+per-tile FIFO handshakes cost int8 exactly what they cost bf16.
+
+TABLE 2 -- M-edge at K=N=4096 (LLM prefill length), with the m-tile control
+============================================================================
+      MxKxN         m    int8 GOPS   bf16 GFLOPS     note
+  ------------------------------------------------------------------
+   128x4096x4096   16       585.31        595.42     m forced by M
+   256x4096x4096   32      1041.28       1034.96     m forced by M
+   512x4096x4096   64      1875.49       1671.94
+  1024x4096x4096   64      1956.97       1779.78
+  2048x4096x4096   64      2047.66       1801.18
+   512x4096x4096   16       609.93        631.46     control: same M, forced m
+   512x4096x4096   32      1045.84       1057.94     control: same M, forced m
+
+The control rows settle what the M-edge rows would otherwise have overstated: M=128 at
+m=16 (585) is M=512 at m=16 (610), and M=256 at m=32 (1041) is M=512 at m=32 (1046).
+Throughput tracks the tile row size m -- close to linearly, 16 -> 32 -> 64 is 610 -> 1046
+-> 1875 -- and not the token count M at all. A short prefill is slow on this design
+because whole_array's 4 rows x 2 transfer blocks force m = M/8 at small M, not because the
+hardware does less work per second on it. Whether a differently tiled design could keep
+m=64 at M=128 is not tested here.
+
+TABLE 3 -- int8 tile check at 2048^3 (what int8's half-size A/B tiles buy)
+==========================================================================
+     m    k    n     L1 A/B/C double-buffered     int8 GOPS    vs default
+  ---------------------------------------------------------------------
+    64   64   32     16 + 8 + 16 KB = 40 KB        2322.61      (re-run; 2373.66 in the sweep)
+    64  128   32     16 + 8 + 16 KB = 40 KB        2788.00       1.20x
+   128   64   32     16 + 8 + 32 KB = 56 KB        3192.69       1.37x
+    64   64   64     16 + 16 + 32 KB = 64 KB       4603.26       1.98x
+
+n=64 doubles the int8 rate, bit-exact. The reason is not the MAC count: every extra
+column of n halves the number of times the whole A matrix is re-streamed from DDR
+(whole_array reloads A once per N/(n*4) column block, and re-streams B once per M/(m*4)
+row block), so total DDR traffic per GEMM goes as MKN/4 * (1/n + 1/m). m=64/n=32 is
+0.047 per MAC; n=64 is 0.031 (-33%), m=128 is 0.039 (-17%); the measured gains are
+larger than the traffic reduction alone, so per-tile fixed cost shrinks too. k=128 only
+halves the output-tile read-modify-write per MAC and buys the least. The same n=64 tile
+in bf16 is 16 + 16 + 32 KB with a 2-byte input -- A and B tiles twice the bytes -- which
+is why bf16 cannot follow (TABLE 4).
+
+TABLE 4 -- L1 ceiling probes at 2048^3 (do the bigger tiles compile at all?)
+===========================================================================
+All four fail in aiecc before anything runs, with the same error --
+  'aie.tile' op Basic sequential allocation failed
+-- and the allocator's own dump (RAW section above) shows the double-buffered A/B/C
+tiles plus the 0xD00 (3,328 B) stack against the tile's 65,536 B:
+
+  dtype   m    k    n    A/B/C tile bytes (x2 each)   needs      result
+  --------------------------------------------------------------------------------
+  int8    64   64   32   4096 / 2048 / 8192            32,000    PASS (the default)
+  int8    64   64   64   4096 / 4096 / 16384           52,480    PASS (TABLE 3, 4603 GOPS)
+  int8   128   64   64   8192 / 4096 / 32768           93,440    FAIL
+  int8    64  128   64   8192 / 8192 / 16384           68,864    FAIL (over by 3,328 B)
+  bf16    64   64   32   8192 / 4096 / 8192            44,288    PASS (the default)
+  bf16    64   64   64   8192 / 8192 / 16384           68,864    FAIL (over by 3,328 B)
+  bf16   128   64   32   16384 / 4096 / 16384          77,056    FAIL
+
+bf16's n=64 misses the tile by exactly the stack. int8's default tile sits at 32 KB of
+64 KB, which is what leaves it room to reach n=64; bf16's default is already at 44 KB.
+
+TABLE 5 -- the full int8 sweep at n=64 (m default, k=64), same sitting
+=======================================================================
+      MxKxN         m    n=64 GOPS   default GOPS   n=64/default
+  ------------------------------------------------------------------
+   512x512x512     64       974.29         982.52       0.99x
+   512x512x1024    64      1764.51        1529.33       1.15x
+   512x512x2048    64      2544.29        1994.47       1.28x
+  1024x1024x1024   64      3544.29        2743.72       1.29x
+  2048x2048x2048   64      4447.97        2373.66       1.87x
+  4096x2048x2048   64      4607.05        2387.01       1.93x
+  2048x4096x4096   64      3263.99        2047.66       1.59x
+   128x4096x4096   16*     1091.53         585.31       1.86x
+   256x4096x4096   32*     1888.39        1041.28       1.81x
+   512x4096x4096   64      3160.96        1875.49       1.69x
+  1024x4096x4096   64      3282.40        1956.97       1.68x
+  (* m forced by M)
+
+Every row bit-exact. n=64 buys nothing at 512^3 -- at 275 us that shape is within 2x of
+the 169.8 us hardware dispatch floor (dispatch_floor_npu.log) and no tile can show
+through it -- and 1.6-1.9x everywhere the GEMM is big enough to be DMA-bound. 4607 GOPS
+is the highest ops rate any single dispatch has reached in this project (28.8% of the
+16 TOPS nameplate; the 39.3% in docs/BENCHMARKS.md is a whole-graph figure across four
+independent columns, not one kernel). At the 2048-class shapes int8 at n=64 is 2.5x the
+bf16 rate of the same sitting (4448 vs 1776 at 2048^3), 1.8-1.9x at the K=N=4096
+shapes -- the 2x the MAC count promised, but only once the tile bf16 cannot have.
+
+TABLE 6 -- the verdict: NPU int8 vs the CPU's best int8 kernel (torch._int_mm, mean),
+           at the default tile and at n=64, with bf16 alongside from the same sitting
+=====================================================================================
+                        NPU int8 GOPS          CPU i8    NPU/CPU int8       NPU bf16   CPU bf16   NPU/CPU
+      MxKxN            default    n=64        (mean)  default   n=64        GFLOPS    GFLOPS     bf16
+  ----------------------------------------------------------------------------------------------------
+   512x512x512          982.52    974.29     2053.4    0.48x    0.47x        846.40    1309.7    0.65x
+   512x512x1024        1529.33   1764.51     2161.4    0.71x    0.82x            -         -        -
+   512x512x2048        1994.47   2544.29     2312.9    0.86x    1.10x            -         -        -
+  1024x1024x1024       2743.72   3544.29     2267.7    1.21x    1.56x       1875.30    1570.8    1.19x
+  2048x2048x2048       2373.66   4447.97     2427.3    0.98x    1.83x       1775.65    1313.7    1.35x
+  4096x2048x2048       2387.01   4607.05     2690.4    0.89x    1.71x            -         -        -
+  2048x4096x4096       2047.66   3263.99     2757.9    0.74x    1.18x       1801.18    1517.5    1.19x
+   128x4096x4096 m16    585.31   1091.53     2868.7    0.20x    0.38x        595.42    1412.2    0.42x
+   256x4096x4096 m32   1041.28   1888.39     2859.2    0.36x    0.66x       1034.96    1302.2    0.79x
+   512x4096x4096       1875.49   3160.96     2647.8    0.71x    1.19x       1671.94    1348.0    1.24x
+  1024x4096x4096       1956.97   3282.40     2563.3    0.76x    1.28x       1779.78    1580.2    1.13x
+  (ratio > 1 = NPU faster; "-" = bf16 not re-run at that shape this sitting, see
+   bf16_matmul_niche_npu.log for its earlier-sitting number)
+
+Against the CPU kernel's MIN time instead of its mean (its best case), the same n=64
+column reads:
+
+      MxKxN         CPU i8 GOPS (min)   NPU n=64 / CPU min
+  --------------------------------------------------------
+   512x512x512            2218.5            0.44x
+   512x512x1024           2200.3            0.80x
+   512x512x2048           2359.9            1.08x
+  1024x1024x1024          2304.2            1.54x
+  2048x2048x2048          4200.5            1.06x
+  4096x2048x2048          4189.2            1.10x
+  2048x4096x4096          4033.9            0.81x
+   128x4096x4096          3028.9            0.36x
+   256x4096x4096          3167.5            0.60x
+   512x4096x4096          3610.7            0.88x
+  1024x4096x4096          3698.2            0.89x
+
+The square and 2048-class wins survive at 1.06-1.54x; the K=N=4096 rows flip to a
+1.13-1.24x CPU win.
+
+THE FINDING
+===========
+1. At the tile whole_array ships with, the NPU's headline dtype loses to the CPU's own
+   int8 GEMM kernel almost everywhere: 1.02-1.41x behind at the square and 2048-class
+   shapes, 2.7-4.9x behind at short prefill (M <= 256), one 1.21x win at 1024^3. In the
+   same sitting the same design in bf16 beats CPU bf16 by 1.13-1.35x at every shape with
+   M >= 512. So the plain reading of the first two batches is: on this machine, bf16 is
+   the niche and int8 is not -- because the CPU is relatively strongest (AVX-512 VNNI,
+   torch's kernel at 2.1-2.9 TOPS by the mean, 4.0-4.2 at its best) at exactly the
+   dtype the NPU is sold on, and the design's default tile gives int8 only 1.1-1.5x the
+   bf16 rate, not 2x. The costs that bound it there are dtype-independent: the whole A
+   matrix is re-streamed from DDR once per column block and B once per row block, each
+   k-step handshakes two tiles through two FIFO levels, and the output tile it
+   read-modify-writes is 4 bytes per element for i32 and f32 alike.
+
+2. What int8 has that bf16 does not is L1 headroom. Its A and B tiles are half the
+   bytes, so the default tile uses 32 KB of the 64 KB and n=64 fits at 52 KB; bf16 sits at
+   44 KB by default and its n=64 misses the tile by exactly the 3,328 B stack (TABLE 4).
+   n=64 halves the number of times A is re-streamed and the int8 rate doubles, bit-exact
+   (TABLE 3, TABLE 5): 4448-4607 GOPS at the 2048-class shapes, 3160-3282 at the
+   K=N=4096 shapes with M >= 512. That is 2.5x the bf16 rate of the same sitting at
+   2048^3, and the highest ops rate any single dispatch has reached in this project.
+
+3. The verdict, by this repo's mean-based convention (TABLE 6): with n=64, NPU int8
+   beats the CPU's best int8 kernel by 1.10-1.83x at every shape with M >= 512 and
+   N >= 2048, and still loses at 512^3 (2.1x), 512x512x1024 (1.2x) and short prefill
+   (M=128: 2.6x, M=256: 1.5x). The margin is real but thin at the largest shapes: read
+   against the CPU kernel's best-case (min) time, the 2048-class wins hold at 1.06-1.10x
+   and the K=N=4096 rows become a 1.13-1.24x CPU win. int8 GEMM is therefore a second
+   genuine NPU niche on this machine, in absolute terms about twice as fast as the bf16
+   one -- but only with the tile the dtype's smaller footprint buys, and relative to its
+   own CPU competitor no wider than the bf16 niche is relative to CPU bf16 at the
+   largest shapes (1.18x vs 1.19x at 2048x4096x4096).
+
+4. The M-edge is a tile artifact, not a hardware property. Throughput tracks m, not M
+   (TABLE 2: M=128 at m=16 equals M=512 at m=16 to within 6%, at both dtypes), and n=64
+   lifts the small-M rows by the same 1.8x it lifts everything else without changing
+   which side wins them. On this design a prefill shorter than ~512 tokens at
+   d_model=4096 loses at either dtype because whole_array's 4 rows x 2 transfer blocks
+   force m = M/8; a differently tiled design is the only thing that could change that.
+
+5. The mechanism is a DDR-traffic mechanism, and it says what to try next. Total
+   traffic per GEMM on this design goes as MKN/4 * (1/n + 1/m) -- n=64 cuts it a third,
+   m=128 a sixth, and measured gains exceed both, so per-tile fixed cost is in there too.
+   bf16 is stuck at the default tile by 3,328 B. Single-buffering the C output FIFO
+   (depths=[1] in whole_array.py's C join -- the same one-line change that got
+   bottleneck.py to 56x56, bottleneck_w56_npu.log) would free 16 KB and let bf16 take
+   n=64. NOT done here: whole_array.py is the shared upstream file the other live
+   session is running its FFN measurements through, and editing it under them would
+   silently change their numbers. It is the obvious follow-up: if bf16 gains at n=64
+   what int8 gained, the bf16 niche roughly doubles too.
+
+NOT TESTED / CAVEATS
+====================
+- Same sitting, one machine: every number above is from 13:14-14:25 on Desktop 2. CPU
+  bf16 came in at 1310-1580 GFLOPS here against 1100-1360 in bf16_matmul_niche_npu.log
+  earlier today (~15% higher), which is why the bf16 NPU margin reads 1.13-1.35x in
+  TABLE 6 rather than that log's 1.18-1.78x -- drift on the CPU side, not a new NPU
+  result. Compare within this log.
+- The CPU verdict kernel (torch._int_mm) has a large mean/min spread at the big shapes
+  (2048^3: 7.08 ms mean, 4.09 ms min) that ORT's MatMulInteger does not; the verdict uses
+  the mean like every other CPU number here, and the min-based reading is given beside
+  it. Nothing was done to pin threads or frequency on either side.
+- ORT MatMulInteger (MLAS, u8s8) is 1.05-1.68x slower than torch's int8 kernel for GEMM
+  on this machine. Every earlier CPU int8 number in this repo is MLAS (QLinearConv); GEMM
+  is not conv and this does not reopen the closed int8 conv class -- it is one more case
+  of the CPU kernel choice moving the verdict. ORT s8s8 (int8 activations) fell to 45.6
+  GOPS in the probe before this log's runs -- an unvectorized MLAS path -- and was not
+  used.
+- int8 -> int32 output only. A real quantized layer requantizes back to int8 (XINT8's
+  power-of-two scales make that a shift); that epilogue is not measured. Upstream's
+  i8->i8 kernel path accumulates across K in an int8 C buffer and is unusable for K > k;
+  i8->i16 wraps at these input ranges. The 4-byte output tile is part of why the default
+  tile is dtype-blind.
+- Not tried: n=64 for bf16 via the C-FIFO depth change above; --n-aie-cols other than 4;
+  int16 (the design's default dtype); k=128 combined with n=64 (does not fit, TABLE 4);
+  b_col_maj/c_col_maj; any shape past K=N=4096.
+- whole_array.py's own numpy int64 reference is what made the 4096-class int8 rows
+  take 3-13 minutes of wall each; the NPU part of every row is milliseconds.

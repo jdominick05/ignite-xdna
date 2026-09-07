@@ -174,18 +174,20 @@ Outcomes, mostly negative and all measured:
 
 - **bf16 GEMM is the first genuine NPU win in this project.** 2072.5 GFLOPS at 1024³
   against CPU bf16's 1161.2 — the NPU wins 1.18×–1.78× once M/N ≥ 1024, and loses at
-  512³ (895.1 vs 1100.6). **Diagnosed:** "`K ≥ 3072` fails, undiagnosed" was really the
-  reduction loop accumulating in `dtype_out` instead of fp32; `--dtype_out f32` fixes it
-  free, and **the win holds at a real 7B-model projection shape** (M2048/K4096/N4096,
-  1.33× NPU) — but a real FFN's win/loss hinges on `d_ff`'s factorization: Llama-2-7B
-  (`d_ff=11008`) flips it to **1.10× CPU**; Mistral-7B (`d_ff=14336`) keeps **1.13× NPU**.
-  `attention_bf16`'s own kernel never had this bug.
-- **Int8 conv loses, and the op class is closed.** A bottleneck spatial sweep puts NPU
-  marginal throughput at 146.1 GOPS against the CPU's 819.0; at ResNet50's real 56×56
-  conv2_x shape the CPU wins **12.75×**. Reaching the real shape widened the gap.
+  512³ (895.1 vs 1100.6). "`K ≥ 3072` fails" was the reduction loop accumulating in
+  `dtype_out` instead of fp32; `--dtype_out f32` fixes it free, and **the win holds at a
+  7B-model projection shape** (M2048/K4096/N4096, 1.33×) — but a real FFN hinges on
+  `d_ff`'s factorization: Llama-2-7B (`d_ff=11008`) flips it to **1.10× CPU**, Mistral-7B
+  (`d_ff=14336`) keeps **1.13× NPU**. `attention_bf16`'s own kernel never had this bug.
+- **int8 GEMM wins too, but only with a tile bf16 can't fit.** At the default tile the
+  NPU's headline dtype **loses** to the CPU's own int8 kernel (torch `_int_mm`) almost
+  everywhere; int8's half-size tiles leave L1 room for `n=64`, which doubles it, bit-exact,
+  to **4448–4607 GOPS** (2.5× the bf16 rate) and a **1.10×–1.83× win at M ≥ 512** — thin
+  (the CPU's best case takes back the K=N=4096 rows), and prefill under ~512 tokens loses.
+- **Int8 conv loses, and the op class is closed.** NPU marginal throughput 146.1 GOPS
+  against the CPU's 819.0; at ResNet50's real 56×56 conv2_x shape the CPU wins **12.75×**.
 - **bf16 attention for MobileViT loses by 71×–240×**, and its recorded diagnosis was
-  wrong: the cause was not dispatch cost but `attention_kernels.cc` never calling
-  `aie::mmul`, reaching 0.61 GFLOPS on hardware measured at 895.
+  wrong: not dispatch cost, but `attention_kernels.cc` never calling `aie::mmul` — 0.61 GFLOPS vs 895.
 - **A bf16 GroupNorm beat the CPU on 33 of 49 nodes** of `resnetv2_50x3_bit` — and then
   the measured two-process handoff floor (789 µs–23.6 ms per call) erased all 33.
 - **Go/no-go before writing any kernel:** the op's CPU time must exceed the measured
@@ -216,9 +218,8 @@ One chip generation and one SDK version (Hawk Point/Phoenix via Ryzen AI 1.7.1);
 only; batch 1 only; the full-graph YOLOv8 model is deliberately left in a state the EP
 refuses, as the control that makes the head-cut result meaningful; AdaRound at 640×640
 needs more RAM than the 13.8 GB laptop has; yolov8l's full eval is flaky; NPU utilization
-can't be read through standard Windows tooling; and there is no unit-test suite, because
-the hardware cannot be faked. The full list, with the measurement behind each, is in
-[`docs/BENCHMARKS.md`](docs/BENCHMARKS.md#known-limitations).
+can't be read through standard Windows tooling; no unit-test suite (the hardware cannot
+be faked). The full list, with the measurement behind each: [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md#known-limitations).
 
 ## Acknowledgements
 
@@ -230,10 +231,9 @@ AI `CNN-examples/object_detection` samples. Models are timm's `resnet50.a1_in1k`
 
 Contributions are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md). Measurements on
 hardware not available here are especially useful: Strix, more RAM for the
-AdaRound-blocked configurations, more disk for yolov8l/x. There is no unit-test suite,
-because the hardware cannot be faked; changes must pass the syntax and import gate in
-`CONTRIBUTING.md` and come with a logged measurement under `results/` for anything
-behavioural.
+AdaRound-blocked configurations, more disk for yolov8l/x. Changes must pass the syntax
+and import gate in `CONTRIBUTING.md` and come with a logged measurement under `results/`
+for anything behavioural — there is no unit-test suite, because the hardware cannot be faked.
 
 ## License
 
