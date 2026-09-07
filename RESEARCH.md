@@ -1297,11 +1297,15 @@ sections above.
   slice, it reads 33.94 (+2.29) / 71.88 (+5.49) against plain XINT8's 31.65 / 66.39.
   Like detection, it does not close the full gap to float (49.86), but delivers a clean,
   cost-free recovery. [Working](docs/BENCHMARKS.md#yolov8n-pose-end-to-end-on-the-npu).
+- **AdaRound on the ResNet50 resolution sweep (288²).** Measured on 1000 eval images:
+  AdaRound at 288² recovers +6.60 points of top-1 (71.50% → 78.10%) and +3.90 points
+  of top-5 (89.50% → 93.40%) at 8.78 ms on NPU (393/395 nodes, 99.5%). This confirms
+  that the plain XINT8 drop at 288² (which fell below 256²) was primarily quantization noise
+  rather than resolution mismatch, though 224² remains optimal on both axes (79.80% at 5.27 ms).
+  [Working](docs/BENCHMARKS.md#resnet50-input-resolution-does-the-fixed-cost-story-hold-for-a-classifier).
 
 **Still open.**
 
-- **AdaRound across the ResNet50 resolution sweep.** The sweep is plain XINT8, and
-  AdaRound's recovery could move where the accuracy peak sits.
 - **A yolov8m mAP row at calibration 200**, so the detection width table is
   like-for-like at every size (the current 43.49 was calibrated on 64 images). Same
   caveat now applies to l (32) and x (24).

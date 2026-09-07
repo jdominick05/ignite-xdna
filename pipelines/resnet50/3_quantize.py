@@ -89,12 +89,30 @@ def main():
                          "must match the one written by step 1 for this --in-model")
     ap.add_argument("--batch", type=int, default=1,
                     help="must match the static batch --in-model was exported with")
+    ap.add_argument("--iters", type=int, default=1000,
+                    help="NumIterations for FastFinetune (default: 1000)")
+    ap.add_argument("--threads", type=int, default=None,
+                    help="number of CPU threads for PyTorch/OpenMP (default: respects OMP_NUM_THREADS or 4)")
     ap.add_argument("--device", default="cpu",
                     help="OptimDevice/InferDevice for ADAROUND/ADAQUANT's FastFinetune, "
                          "e.g. cpu, cuda, cuda:0 (needs a torch build where "
                          "torch.cuda.is_available() is True for that device). "
                          "No effect on plain XINT8/A8W8, which have no FastFinetune.")
     args = ap.parse_args()
+
+    threads = args.threads
+    if threads is None:
+        threads = int(os.environ.get("OMP_NUM_THREADS", "4"))
+    os.environ["OMP_NUM_THREADS"] = str(threads)
+    os.environ["MKL_NUM_THREADS"] = str(threads)
+    os.environ["OPENBLAS_NUM_THREADS"] = str(threads)
+    try:
+        import torch
+        torch.set_num_threads(threads)
+    except ImportError:
+        pass
+    print(f"CPU threads: {threads}")
+
     out_model = args.out or str(MODELS / f"resnet50_{args.config.lower()}.onnx")
     in_model = args.in_model or str(IN_MODEL)
     cfg_path = args.cfg_path or str(CFG_PATH)
@@ -109,7 +127,9 @@ def main():
     if "FastFinetune" in quant_config.extra_options:
         quant_config.extra_options["FastFinetune"]["OptimDevice"] = args.device
         quant_config.extra_options["FastFinetune"]["InferDevice"] = args.device
-        print(f"FastFinetune device: {args.device}")
+        if args.iters:
+            quant_config.extra_options["FastFinetune"]["NumIterations"] = args.iters
+        print(f"FastFinetune device: {args.device}, iters: {args.iters}")
     config = Config(global_quant_config=quant_config)
 
     quantizer = ModelQuantizer(config)

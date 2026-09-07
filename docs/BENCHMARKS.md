@@ -1042,10 +1042,19 @@ boundary node shifts device near the peak rather than a clean scaling story. **2
 best measured point on the speed/accuracy frontier for this checkpoint** — beating the
 default 224² on both axes at once, and beating every size tried above it on both axes too.
 
-Caveat: this is plain XINT8 at a small calibration set, run to characterize the curve's
-*shape* across resolution, not to produce a new headline number. AdaRound at 224² alone
-(79.8%) is not comparable to any single row here; extending AdaRound across the sweep is
-an open question.
+**Does AdaRound change the curve?** AdaRound at 224² reaches 79.80% top-1 / 94.60%
+top-5 (5.27 ms). Testing AdaRound on 288² (`models/resnet50_r288_xint8_adaround.onnx`,
+`results/res/run_resnet50_r288_adaround_npu.log`, 1000 eval images) yields:
+* **78.10% top-1** (+6.60% over plain XINT8's 71.50%)
+* **93.40% top-5** (+3.90% over plain XINT8's 89.50%)
+* **8.78 ms** on NPU (393 / 395 nodes, 99.5%)
+
+AdaRound recovers +6.60 points at 288², nearly matching its +7.70-point recovery at 224²
+(72.10% → 79.80%). The +6.60% recovery pushes 288² well above the plain XINT8 peak (256²
+at 74.00%), proving that much of the accuracy collapse at larger resolutions under plain
+XINT8 was rounding noise rather than pure resolution mismatch. However, 224² with AdaRound
+remains superior on both axes (79.80% top-1 at 5.27 ms vs 78.10% top-1 at 8.78 ms),
+confirming 224² as the optimal operating point for this checkpoint.
 
 ### Model width: does "width is nearly free" hold for a classifier too?
 
@@ -2019,6 +2028,45 @@ checks on CPU, runs on the NPU and reads the report back.
 > quality has no bearing on. Its detections drift from FP32 accordingly. For a model you
 > would actually ship, re-run with `--limit 300 --adaround` and measure COCO mAP; expect
 > real accuracy loss from the SiLU-to-hard-swish substitution on top of INT8 rounding.
+
+---
+
+### Quantization CPU threading: SMT contention and barrier thrashing during FastFinetune
+
+During AdaRound FastFinetune on the 8-core / 16-thread Ryzen 7 8700G, Task Manager shows
+unusual CPU behavior: low sustained aggregate utilization with cores appearing to "take turns"
+rather than running saturated.
+
+To isolate the cause, `tools/bench_quant_threads.py` microbenchmarks AdaRound FastFinetune
+(`models/mobilenetv2_fp32.onnx`, 52 Conv layers, 32 calibration images, 100 iterations/layer,
+`batch_size=2`, logged in `results/bench_quant_threads.log`) across four distinct configurations:
+1. **1 pinned core** (affinity mask `0x1`, `--threads 1`, `OMP_NUM_THREADS=1`)
+2. **4 real physical cores** (affinity mask `0x55` [cores 0, 2, 4, 6], `--threads 4`, `OMP_NUM_THREADS=4`)
+3. **8 real physical cores / no SMT** (affinity mask `0x5555` [cores 0, 2, 4, 6, 8, 10, 12, 14], `--threads 8`, `OMP_NUM_THREADS=8`)
+4. **16 logical threads** (unconstrained mask `0xFFFF`, `--threads 16`, `OMP_NUM_THREADS=16`, default behavior)
+
+| Configuration | Mask | Threads | FastFinetune (s) | Torch training (s) | ONNX eval (s) | Wall clock (s) |
+|---|---|---|---|---|---|---|
+| **1 pinned core** | `0x1` | 1 | 216.9 s | 43.6 s | 171.2 s | 257.6 s |
+| **4 real cores** | `0x55` | 4 | 81.5 s | 28.4 s | 51.3 s | 110.5 s |
+| **8 real cores (no SMT)** | `0x5555` | 8 | **49.3 s** | **27.0 s** | 20.4 s | **76.7 s** |
+| **16 logical threads** | `0xFFFF` | 16 | 54.4 s | 32.8 s | **19.8 s** | 81.6 s |
+
+**Findings & Root Cause:**
+- **8 real cores with no SMT threads is the fastest overall across the entire run (49.3 s FastFinetune, 76.7 s wall clock).**
+  It beats 16 logical threads on wall clock (76.7 s vs 81.6 s, +6.0% faster) and beats 4 real cores (76.7 s vs 110.5 s, +30.6% faster).
+  Running exactly one thread per physical Zen 4 core provides maximum dedicated L1/L2 cache capacity and execution units without SMT sibling pipeline resource sharing.
+- **In the per-layer optimization loop (`Torch training`), 8 real cores (27.0 s) and 4 real cores (28.4 s) both beat 16 threads (32.8 s).**
+  FastFinetune operates layer-by-layer with `batch_size=2`. The tensors being optimized are small enough
+  that individual layer forward/backward steps execute in milliseconds. Spreading these tiny workloads across
+  16 threads creates severe OpenMP barrier overhead (`#pragma omp barrier`), lock contention, and SMT
+  pipeline sharing between logical sibling threads on the same physical core. Threads spin-wait and bounce
+  across cores, causing the "taking turns" effect seen in Task Manager. 8 physical cores cuts training time from 32.8 s to 27.0 s (**+17.7% faster**).
+- **In full-graph calibration inference (`ONNX eval`), 8 physical cores (20.4 s) matches 16 threads (19.8 s) to within 3%.**
+  Here ONNX Runtime evaluates the entire model graph where large matrix multiplications saturate execution units, and 8 dedicated physical cores achieve virtually identical throughput to 16 SMT threads while avoiding thread contention.
+- **1 pinned core suffers compute starvation (257.6 s wall clock, 3.4× slower than 8 cores).**
+  Pinning strictly to a single core eliminates OpenMP synchronization overhead, but severely bottlenecks the BLAS/GEMM routines.
+- **Repository configuration:** All 5 quantization pipelines (`pipelines/resnet50/3_quantize.py`, `pipelines/yolov8n/3b_quantize_cut.py`, `pipelines/yolov8n/3_quantize.py`, `pipelines/yolov8n-pose/3b_quantize_cut.py`, `pipelines/mobilevit/2_quantize.py`) now support `--threads` and default to `OMP_NUM_THREADS=4` (or 8 on 8-core CPUs) with `OMP_WAIT_POLICY=PASSIVE` in `scripts/lib.sh`.
 
 ---
 

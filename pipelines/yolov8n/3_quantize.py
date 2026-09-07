@@ -69,8 +69,23 @@ def main():
     ap.add_argument("--limit", type=int, default=300)
     ap.add_argument("--adaround", action="store_true")
     ap.add_argument("--iters", type=int, default=1000)
+    ap.add_argument("--threads", type=int, default=None,
+                    help="number of CPU threads for PyTorch/OpenMP (default: respects OMP_NUM_THREADS or 4)")
     ap.add_argument("--out", default=None)
     args = ap.parse_args()
+
+    threads = args.threads
+    if threads is None:
+        threads = int(os.environ.get("OMP_NUM_THREADS", "4"))
+    os.environ["OMP_NUM_THREADS"] = str(threads)
+    os.environ["MKL_NUM_THREADS"] = str(threads)
+    os.environ["OPENBLAS_NUM_THREADS"] = str(threads)
+    try:
+        import torch
+        torch.set_num_threads(threads)
+    except ImportError:
+        pass
+    print(f"CPU threads: {threads}")
 
     tag = "xint8_adaround" if args.adaround else "xint8"
     out = args.out or str(MODELS / f"yolov8n_{tag}.onnx")

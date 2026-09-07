@@ -12,6 +12,16 @@ cd "$REPO_ROOT"
 # Windows-style path: this is read by Python's os.path.join, not by bash.
 : "${RYZEN_AI_PATH:=C:\\Program Files\\RyzenAI\\1.7.1}"
 
+# Threading defaults for CPU quantization / FastFinetune / calibration.
+# PyTorch and ONNX Runtime default to all logical threads (16 on 8700G),
+# which causes severe OpenMP barrier contention and thread thrashing on tiny
+# per-layer FastFinetune batches (batch size 2).
+: "${OMP_NUM_THREADS:=4}"
+: "${MKL_NUM_THREADS:=4}"
+: "${OPENBLAS_NUM_THREADS:=4}"
+: "${OMP_WAIT_POLICY:=PASSIVE}"
+export OMP_NUM_THREADS MKL_NUM_THREADS OPENBLAS_NUM_THREADS OMP_WAIT_POLICY
+
 BOLD=$'\033[1m'; RED=$'\033[31m'; GREEN=$'\033[32m'; YELLOW=$'\033[33m'
 BLUE=$'\033[34m'; DIM=$'\033[2m'; OFF=$'\033[0m'
 

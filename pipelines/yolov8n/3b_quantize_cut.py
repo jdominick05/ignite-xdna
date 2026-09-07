@@ -80,8 +80,23 @@ def main():
                      help="OptimDevice/InferDevice for AdaRound's FastFinetune, "
                           "e.g. cpu, cuda, cuda:0 (needs a torch build where "
                           "torch.cuda.is_available() is True for that device)")
+    ap.add_argument("--threads", type=int, default=None,
+                    help="number of CPU threads for PyTorch/OpenMP (default: respects OMP_NUM_THREADS or 4)")
     ap.add_argument("--out", default=None)
     args = ap.parse_args()
+
+    threads = args.threads
+    if threads is None:
+        threads = int(os.environ.get("OMP_NUM_THREADS", "4"))
+    os.environ["OMP_NUM_THREADS"] = str(threads)
+    os.environ["MKL_NUM_THREADS"] = str(threads)
+    os.environ["OPENBLAS_NUM_THREADS"] = str(threads)
+    try:
+        import torch
+        torch.set_num_threads(threads)
+    except ImportError:
+        pass
+    print(f"CPU threads: {threads}")
 
     if not os.path.isfile(args.src):
         raise SystemExit(f"{args.src} missing - run 1b_cut_head.py first")

@@ -65,7 +65,22 @@ def main():
     ap.add_argument("--in-model", default=None, help="FP32 model to quantize")
     ap.add_argument("--cfg-path", default=None, help="preprocess config")
     ap.add_argument("--batch", type=int, default=1)
+    ap.add_argument("--threads", type=int, default=None,
+                    help="number of CPU threads for PyTorch/OpenMP (default: respects OMP_NUM_THREADS or 4)")
     args = ap.parse_args()
+
+    threads = args.threads
+    if threads is None:
+        threads = int(os.environ.get("OMP_NUM_THREADS", "4"))
+    os.environ["OMP_NUM_THREADS"] = str(threads)
+    os.environ["MKL_NUM_THREADS"] = str(threads)
+    os.environ["OPENBLAS_NUM_THREADS"] = str(threads)
+    try:
+        import torch
+        torch.set_num_threads(threads)
+    except ImportError:
+        pass
+    print(f"CPU threads: {threads}")
 
     in_model = args.in_model or str(IN_MODEL)
     out_model = args.out or str(MODELS / f"mobilevit_xxs_{args.config.lower()}.onnx")
