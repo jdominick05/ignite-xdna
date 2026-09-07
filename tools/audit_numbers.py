@@ -20,6 +20,7 @@ Usage:
 """
 import argparse
 import re
+import subprocess
 import sys
 from collections import defaultdict
 from pathlib import Path
@@ -39,6 +40,21 @@ SKIP_DIRS = {".git", "node_modules", "__pycache__"}
 
 
 def md_files(root: Path):
+    """The repo's own markdown, i.e. what git tracks.
+
+    rglob would also pull in the vendored RyzenAI-SW/ checkout and any scratch .md in
+    the working tree, whose figures have nothing to do with this repo's logs.
+    """
+    try:
+        out = subprocess.run(
+            ["git", "-C", str(root), "ls-files", "*.md"],
+            capture_output=True, text=True, check=True,
+        ).stdout.split("\n")
+        tracked = sorted(root / line for line in out if line.strip())
+        if tracked:
+            return tracked
+    except (OSError, subprocess.CalledProcessError):
+        pass
     return sorted(
         p for p in root.rglob("*.md")
         if not SKIP_DIRS & set(p.parts) and "results" not in p.parts[:-1]
@@ -92,6 +108,12 @@ def retractions(root: Path):
 
 
 def main():
+    # The docs are full of arrows and em dashes; a cp1252 console raises on the first
+    # one and takes the whole audit with it.
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    except (AttributeError, OSError):
+        pass
     ap = argparse.ArgumentParser()
     ap.add_argument("root", nargs="?", default=".")
     ap.add_argument("--untraced", action="store_true")
