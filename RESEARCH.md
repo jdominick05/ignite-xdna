@@ -511,10 +511,11 @@ been closed:
 
 - **Resolution vs. accuracy for classification — done, 128–384px.** 256px is the
   measured peak of the speed/accuracy frontier under plain XINT8 (74.00% at 6.32 ms);
-  everything above it is strictly dominated. AdaRound across the peak resolutions (224²,
-  256², 288²) is now measured too: 256² AdaRound matches 224² on top-1 (both 79.80%)
-  while achieving higher top-5 (93.40% vs 92.50%) at only 5.85 ms (vs 5.27 ms), and
-  nearly matches wide_resnet50_2 (80.10% / 93.40% at 9.66 ms) at 39% lower latency.
+  everything above it is strictly dominated. AdaRound across the resolution range (192²,
+  224², 256², 288²) reveals a broad 79.30%–79.80% top-1 accuracy plateau: 192² AdaRound
+  recovers +8.00% top-1 (71.30% → 79.30%) at 5.15 ms (~194 img/s); 256² AdaRound matches
+  224² on top-1 (both 79.80%) while achieving higher top-5 (93.40% vs 92.50%) at 5.85 ms,
+  and nearly matches wide_resnet50_2 (80.10% / 93.40% at 9.66 ms) at 39% lower latency.
   288² AdaRound (78.10% / 93.40% at 8.78 ms) confirms that resolutions above 256² remain
   dominated even after rounding optimization.
 - **AdaRound for `wide_resnet50_2` and `wide_resnet101_2` — done.** `wide_resnet50_2`
@@ -1238,7 +1239,93 @@ been closed:
   stages, so this is a structural property of the architecture, not a quantization
   artifact.
 
+## Future pipeline test plans (Categories A through E)
 
+Based on the hardware invariants established across classification, detection, pose estimation, and kernel sweeps on AMD XDNA1 (Phoenix/Hawk Point, `4x4.xclbin`, VOE 4.0, VitisAI EP), candidate models must satisfy five structural criteria to run efficiently: arithmetic intensity >= 150 MACs/weight-byte, channel widths >= 64, pure standard 2D convolutions/pooling/elementwise ops without LayerNorm/Softmax in the compiled subgraph, single monolithic subgraph placement (>98% in `vitisai_ep_report.json`), and static batch-1 shapes.
+
+The following test plans define candidate models, hypotheses, verification metrics, and falsification criteria across five untested application domains.
+
+### Category A: Image Super-Resolution and Restoration
+
+Super-resolution models are structurally matched to XDNA1: 100% convolutional, zero LayerNorm or Softmax, large spatial activations (H x W), and high arithmetic intensity that stresses AIE MAC utilization rather than DMA dispatch overhead.
+
+- **Candidate architectures:**
+  1. Real-ESRGAN Compact (16-block residual convolution chain + PixelShuffle / ConvTranspose upsampler; 4x scaling).
+  2. SESR-M7 / ESPCN (Efficient Sub-Pixel Convolutional Neural Network; 3x3 and 5x5 convs with PReLU; 2x to 4x scaling).
+- **Hypothesis:** High-resolution conv-only upscaling graphs sustain >30% of the 16 TOPS nameplate without graph fragmentation, achieving sub-10 ms per-tile latency.
+- **Target shapes and pipeline:** Static input `(1, 3, 256, 256)` -> static output `(1, 3, 1024, 1024)` (4x) or `(1, 3, 512, 512)` (2x).
+- **Quantization:** Quark XINT8 PTQ + AdaRound calibrated on high-frequency image crops (DIV2K / Set14).
+- **Verification protocol:**
+  1. Inspect `vitisai_ep_report.json` via `tools/diag_ep.py` to confirm 100% NPU assignment. Specifically test whether ONNX `Resize` (nearest/bilinear) or `ConvTranspose` / `DepthToSpace` (PixelShuffle) compiles natively on AIE or fractures into CPU subgraphs.
+  2. Measure PSNR and SSIM on standard benchmarks (Set5, Set14) across FP32, plain XINT8, and AdaRound to evaluate quantization loss on image reconstruction.
+  3. Profile latency and achieved TOPS via `tools/estimate_tops.py`.
+- **Falsification criteria:** The pipeline fails if sub-pixel shuffling or spatial upsampling operations fall back to CPU, incurring cross-device transfer overhead that negates convolutional acceleration.
+
+### Category B: Real-Time Portrait Matting and Semantic Segmentation
+
+Matting and bilateral segmentation provide zero-trimap background separation for real-time video conferencing, pairing with the multi-partition camera capture infrastructure in `scripts/yolo-demo.sh`.
+
+- **Candidate architectures:**
+  1. MODNet (Objective-Oriented Trimap-Free Portrait Matting; MobileNetV2-derived backbone with semantic, detail, and fusion branches).
+  2. BiSeNetV2 / STDC (Bilateral Segmentation Network; separate wide shallow detail branch and deep semantic branch).
+- **Hypothesis:** Multi-branch convolutional matting executes trimap-free at 512x512 with >98% NPU node residency, delivering sub-10 ms alpha matte generation suitable for 30+ fps webcam background replacement with near-zero CPU load.
+- **Target shapes and pipeline:** Static input `(1, 3, 512, 512)` -> static output `(1, 1, 512, 512)` alpha matte in `[0, 1]`.
+- **Quantization:** Quark XINT8 PTQ with portrait calibration (PPM-100 / portrait subsets) + AdaRound for fine boundary refinement.
+- **Verification protocol:**
+  1. Verify compiler node acceptance in `vitisai_ep_report.json`. Check whether bilinear upsampling in the fusion branch triggers subgraph partitioning.
+  2. Evaluate alpha matte boundary fidelity: Mean Absolute Difference (MAD), Sum of Absolute Differences (SAD), and Mean Squared Error (MSE) relative to FP32 reference.
+  3. Deploy in an interactive video pipeline (`pipelines/modnet/4_matte.py`) under `resnet_env17` to measure end-to-end webcam frame latency, alpha composition overhead, and NPU utilization.
+- **Falsification criteria:** If depthwise separable layers in MODNet's backbone exhibit the Delta=1.0 scale grid collapse observed in MobileViT, or if multi-scale feature fusion forces CPU round-trips, the model requires backbone replacement (e.g. standard ResNet/BiSeNet detail branch).
+
+### Category C: Advanced Detection and RepVGG Backbones
+
+Structurally re-parameterized networks collapse multi-branch training graphs into a single linear sequence of standard 3x3 convolutions with ReLU at inference, eliminating residual Add branches.
+
+- **Candidate architectures:**
+  1. YOLOv6 (Meituan RepVGG backbone; pure 3x3 convs + ReLU in inference mode).
+  2. YOLO-World v2 (Open-vocabulary detection; decoupled CPU text embedding + NPU vision backbone).
+  3. YOLOv11 (Successor detection architecture with C3k2 blocks, evaluated under the established 6-output head-cut pattern).
+- **Hypothesis:** Eliminating residual `Add` branches via structural re-parameterization reduces SRAM buffer contention and DMA ping-ponging, improving single-column execution efficiency relative to YOLOv8 CSPDarknet blocks while plain ReLU avoids SiLU->HardSwish quantization distortion.
+- **Target shapes and pipeline:** Static input `(1, 3, 640, 640)`, head-cut architecture exporting raw box and class tensors directly (`1b_cut_head` recipe).
+- **Quantization:** Quark XINT8 + AdaRound calibrated on COCO val2017.
+- **Verification protocol:**
+  1. Re-parameterize YOLOv6 to inference mode before export.
+  2. Cut decode heads and verify 6-output shape contract.
+  3. Measure compiled node placement, per-frame latency, and mAP@50-95 on the full 5000-image COCO val2017 benchmark.
+- **Falsification criteria:** If re-parameterized weight distributions exhibit high dynamic range outliers that degrade INT8 PTQ accuracy beyond the recovery capacity of AdaRound, or if the compiler fails to fuse adjacent Conv+ReLU layers efficiently.
+
+### Category D: Monocular Depth Estimation
+
+Dense geometric scene prediction from single monocular camera streams without transformer attention mechanisms.
+
+- **Candidate architectures:**
+  1. MiDaS v2.1 Small (EfficientNet-Lite / MobileNet backbone with multiscale feature fusion decoder).
+  2. FastDepth (MobileNet encoder with depthwise separable conv decoder).
+- **Hypothesis:** Pure convolutional encoder-decoder depth estimation produces dense relative inverse depth maps at 256x256 or 384x384 in 5-8 ms on NPU, providing real-time spatial scene representation for synthetic bokeh and spatial interaction.
+- **Target shapes and pipeline:** Static input `(1, 3, 256, 256)` or `(1, 3, 384, 384)` -> static output `(1, 1, H, W)`.
+- **Quantization:** Quark XINT8 + AdaRound on NYU-Depth / KITTI image patches.
+- **Verification protocol:**
+  1. Audit node placement in `vitisai_ep_report.json`.
+  2. Check depth boundary sharpness and relative depth metrics (AbsRel, RMSE) against FP32 ground truth.
+  3. Confirm whether depthwise decoder layers avoid the scale grid collapse observed in MobileViT.
+- **Falsification criteria:** If multiscale residual connections in the decoder cause frequent memory spills or CPU fallback.
+
+### Category E: Untested Classification Topologies
+
+Characterizing the boundary conditions of the XDNA1 compiler on alternative convolutional connection topologies: dense concatenation and grouped convolutions.
+
+- **Candidate architectures:**
+  1. DenseNet-121 / DenseNet-169 (Dense connectivity via channel `Concat` across blocks).
+  2. ResNeXt-50 (32x4d) (Grouped convolutions; 32 groups of 4 channels).
+  3. RegNetX (RegNetX-002 through RegNetX-080; regular linear channel capacity design space).
+- **Hypothesis:** DenseNet channel concatenation stresses AIE DMA memory bandwidth as channel width accumulates, revealing whether `Concat` carries higher latency overhead than ResNet elementwise `Add`. ResNeXt tests whether grouped convolutions compile to native AIE micro-kernels or trigger unoptimized scalar loops.
+- **Target shapes and pipeline:** Static input `(1, 3, 224, 224)`.
+- **Quantization:** Timm FP32 export -> Quark XINT8 PTQ + AdaRound on ImageNet-1k (1000 eval images and full set).
+- **Verification protocol:**
+  1. Compile and inspect `vitisai_ep_report.json` for both DenseNet and ResNeXt.
+  2. Measure execution latency against ResNet50 (5.27 ms baseline) and wide_resnet50_2 (8.48 ms baseline).
+  3. Evaluate top-1 / top-5 classification accuracy across FP32, plain XINT8, and AdaRound.
+- **Falsification criteria:** If grouped convolutions fail to map to AIE SIMD lanes (causing severe latency regression vs standard convs of equal FLOPs) or if channel concatenation incurs memory copies that dominate wall time.
 
 ## Roadmap
 
@@ -1303,11 +1390,13 @@ sections above.
   slice, it reads 33.94 (+2.29) / 71.88 (+5.49) against plain XINT8's 31.65 / 66.39.
   Like detection, it does not close the full gap to float (49.86), but delivers a clean,
   cost-free recovery. [Working](docs/BENCHMARKS.md#yolov8n-pose-end-to-end-on-the-npu).
-- **AdaRound on the ResNet50 resolution sweep (288²).** Measured on 1000 eval images:
-  AdaRound at 288² recovers +6.60 points of top-1 (71.50% → 78.10%) and +3.90 points
-  of top-5 (89.50% → 93.40%) at 8.78 ms on NPU (393/395 nodes, 99.5%). This confirms
-  that the plain XINT8 drop at 288² (which fell below 256²) was primarily quantization noise
-  rather than resolution mismatch, though 224² remains optimal on both axes (79.80% at 5.27 ms).
+- **AdaRound on the ResNet50 resolution sweep (192², 256², 288²).** Measured on 1000 eval images:
+  AdaRound at 192² recovers +8.00 points of top-1 (71.30% → 79.30%) and +5.80 points
+  of top-5 (86.60% → 92.40%) at 5.15 ms (393/395 nodes, 99.5%, ~194 img/s). At 256², AdaRound
+  hits 79.80% top-1 / 93.40% top-5 at 5.85 ms (matching 224² top-1 while gaining +0.90% top-5).
+  At 288², it reaches 78.10% top-1 / 93.40% top-5 at 8.78 ms. This confirms that AdaRound
+  creates a broad 79.3%–79.8% accuracy plateau across 192²–256² within 5.15–5.85 ms, proving
+  that PTQ drops at lower resolutions were largely rounding noise rather than spatial information loss.
   [Working](docs/BENCHMARKS.md#resnet50-input-resolution-does-the-fixed-cost-story-hold-for-a-classifier).
 - **A yolov8m mAP row at calibration 200.** Measured on the full 5000-image val2017 set:
   plain XINT8 calibrated on 200 images scores 43.38 mAP@50-95 and 59.62 mAP@50 at 26.95 ms
@@ -1333,6 +1422,12 @@ sections above.
   the ceilings derived from it, and the objectives list live in
   [`docs/SILICON.md`](docs/SILICON.md); its objective S0 (measure the core clock, which
   nothing here has done) gates every per-second ceiling in that file.
+- **Candidate model pipelines (Categories A through E).** Detailed test plans, target shapes, and falsification criteria defined in [Future pipeline test plans](#future-pipeline-test-plans-categories-a-through-e) above:
+  - **Category A:** Image Super-Resolution (Real-ESRGAN Compact, SESR-M7).
+  - **Category B:** Real-Time Portrait Matting and Semantic Segmentation (MODNet, BiSeNetV2) — bring-up underway in `pipelines/modnet/`.
+  - **Category C:** Advanced Detection and RepVGG Backbones (YOLOv6, YOLO-World v2, YOLOv11).
+  - **Category D:** Monocular Depth Estimation (MiDaS v2.1 Small, FastDepth).
+  - **Category E:** Untested Classification Topologies (DenseNet-121, ResNeXt-50, RegNetX).
 - **Longer term:** a detector fine-tuned for fixed camera feeds (licence-plate
   recognition), reusing the head-cut + XINT8 + AdaRound recipe rather than re-deriving it.
 
