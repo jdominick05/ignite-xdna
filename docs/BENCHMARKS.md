@@ -853,7 +853,7 @@ margin measured in this project. 512³ still loses (0.70×, barely moved from th
 tile's 0.65×) — the same small-shape verdict every GEMM result here has shown. See
 `results/aie/bf16_matmul_n64_single_buffer_npu.log`.
 
-**Not done, deliberately:** bf16 at `n=64` is one line away — single-buffering the C output
+**Superseded the same day (kept as written):** the C tile was single-buffered after all, once the other session had finished with `whole_array.py` — the section above — and the tile sweep it enables is the next section. As it stood: bf16 at `n=64` is one line away — single-buffering the C output
 FIFO (`depths=[1]`, the change that got `bottleneck.py` to 56×56) frees 16 KB — but
 `whole_array.py` is the shared upstream file another live session was running its FFN
 measurements through, and editing it under them would silently change their numbers. If
@@ -862,6 +862,75 @@ measured: the int8 requantization epilogue a real quantized layer needs (upstrea
 path accumulates in an int8 buffer across K and is unusable past one k-tile), `--n-aie-cols`
 < 4, int16. ORT MatMulInteger's 1.05–1.68× deficit to torch here does not reopen the closed
 int8 conv class — GEMM is not conv. See `results/aie/int8_matmul_sweep_npu.log`.
+
+### The bf16 tile sweep: what the freed 16 KB buys, and where the B/MAC model stops
+
+Single-buffering the C output tile (`--c-single-buffer 1`, the local `whole_array.py` patch
+in `kernels/gemm_tile_sweep/`) frees 16 KB of the 64 KB L1 per core. The section above spent
+it on `n=64`. This sweep asks what else it reaches, and tests `docs/SILICON.md` 3.1's
+bytes-per-MAC ceiling model against every tile the generic 4×4 design can now compile:
+ten bf16 m/k/n tiles at 2048³, three of them with B column-major, the four survivors across
+1024³, 4096×2048×2048 and 2048×4096×4096, three int8 tiles, and a same-sitting CPU bf16
+baseline (torch 2.14, 8 threads). Desktop 2, clean sitting 2026-09-07 23:59 – 2026-09-08
+00:05, the device watched by the monitor throughout (only the sweep's own contexts) after an
+earlier screen under a running AdaRound job was discarded. Every NPU point is 10 iterations
+after 3 warm-ups; GFLOPS is 2MKN over the NPU-bracket average. `results/aie/gemm_tile_sweep_c_single_buffer_npu.log`.
+
+**L1 is exactly the model.** `2A + 2B + (1|2)·C + 3,328 B stack` decided all 28 compiles: 25 of
+the 26 tiles it put under 65,536 B compiled (the 26th, m=128 at N=4096, hit the C-output stride
+cap of SILICON.md 2.6 instead), and both it put over — 128/64/64 and 64/128/64 in bf16, 85,248 B —
+died in the allocator. 128×64 and 64×128 are out of bf16's reach even single-buffered, now
+measured rather than derived.
+
+**The 2048³ tile screen** (bf16; predicted = 3.1's ceiling × the 7.37 TFLOPS peak at 1.80 GHz):
+
+| tile m/k/n | C buffer | B/MAC | 3.1 ceiling | predicted | measured GFLOPS | % of peak | vs default |
+|---|---|---|---|---|---|---|---|
+| 64/64/32 (default) | double | 0.0938 | 67% | 4913 | 1715.59 | 23.3% | 1.00× |
+| 64/64/32 | single | 0.0938 | 67% | 4913 | 1603.26 | 21.8% | 0.93× |
+| 128/64/32 | single | 0.0781 | 80% | 5896 | 2136.09 | 29.0% | 1.25× |
+| **64/64/64** | single | 0.0625 | 100% | 7370 | **2501.71** | 33.9% | 1.46× |
+| **32/64/128** | single | 0.0781 | 80% | 5896 | **2494.61** | 33.8% | 1.45× |
+| 64/128/32 | single | 0.0938 | 67% | 4913 | 1809.65 | 24.6% | 1.05× |
+| 128/32/64 | single | 0.0469 | 100% | 7370 | 2070.87 | 28.1% | 1.21× |
+| 64/32/128 | single | 0.0469 | 100% | 7370 | 2146.76 | 29.1% | 1.25× |
+| 128/64/64, 64/128/64 | single | 0.0469, 0.0625 | 100% | 7370 | L1: 85,248 B | — | — |
+
+Single-buffering alone costs 6.5% at the default tile (the overlap it removes is real); what it
+buys is 64/64/64 and 32/64/128, equal within 0.3% and 1.46× the default. **The B/MAC model is
+missing two terms.** 128×32 and 32×128 have identical B/MAC and measure 1.17× apart; with
+`--b-col-maj 1`, which makes B's contiguous DMA run k elements instead of n for both, 128/64/32
+gains 4.3% (2228.17), 32/64/128 loses 12.6% (2180.36), 64/64/64 moves −2.9% (2429.80), and the
+first two swap order — B's run length is a term. And k is a term: 128/32/64 and 64/32/128 have a
+better B/MAC than 64/64/64 and land below it, while 64/128/32 beats the default tile at the
+same B/MAC by 5.5%. The model still orders tiles that differ only in B/MAC correctly; at 64×64
+the measured 33.9% of peak against its 100% input-bound ceiling says the next two thirds are
+not input bandwidth.
+
+**Shapes × tiles against the same-sitting CPU bf16** (CPU GFLOPS from the mean, and from the
+best-case min, of 20 iterations):
+
+| MxKxN | CPU bf16 mean / min | 64/64/32 dbl | 64/64/64 | 32/64/128 | 128/64/32 | best NPU ÷ CPU mean / min |
+|---|---|---|---|---|---|---|
+| 1024³ | 1419.8 / 2294.6 | 1872.95 | 2080.98 | 1972.14 | 1885.68 | 1.47× / 0.91× |
+| 2048³ | 1210.0 / 1424.4 | 1715.59 | 2501.71 | 2494.61 | 2136.09 | 2.07× / 1.76× |
+| 4096×2048×2048 | 1315.3 / 1610.3 | 1663.31 | 2508.97 | 2521.46 | 2123.49 | 1.92× / 1.57× |
+| 2048×4096×4096 | 1431.4 / 1760.2 | 1731.85 | 2653.05 | **2700.44** | stride cap | 1.89× / 1.53× |
+
+2700.44 GFLOPS at 2048×4096×4096 is the best bf16 figure in this repo, 36.6% of peak. The two
+best tiles track each other at every shape; 1024³ is the one shape where the CPU's best-case
+min beats the NPU's mean (0.91×) — the small-shape caveat every GEMM result here carries. The
+2048³ 64/64/64 point agrees with the `n=64` section's 2477.23 within 1%.
+
+**int8 gains too, and more than the contaminated screen suggested:** at 2048³, 64/64/64
+double-buffered 4293.63 GOPS, 128/64/64 single 4683.89 (1.091×), 64/128/64 single 4852.06
+(1.130×) — the k=128 tile is the better use of the 16 KB in int8, consistent with the k term
+above. (The discarded screen, kept in the log's appendix, had every control 6–11% low and the
+int8 gains at +4%; its ranking was right and its sizes were not.)
+
+**Not tested:** any tile past L1 (a design change — C through the mem tile or a smaller
+accumulator — not a flag); m=128 at N=4096 (the 2.6 stride cap); 32×64 and 32×32; int8 across
+shapes; `--b-col-maj` at other shapes; whether 32/64/128 keeps its lead below M=1024.
 
 ### The AIE core clock, measured: 1.80 GHz default, 0.80 powersaver
 

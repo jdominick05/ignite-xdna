@@ -1424,6 +1424,12 @@ sections above.
   missing by. Once it fits: the CPU-bf16 win margin widens from 1.19×–1.35× (default
   tile) to 1.29×–1.89× at M, N ≥ 1024 — 2048³'s 1.89× is the largest bf16 GEMM margin
   measured in this project. 512³ still loses (0.70×), same as every other shape here.
+  The tile sweep that followed (`results/aie/gemm_tile_sweep_c_single_buffer_npu.log`) found
+  64×64 and 32×128 to be the best tiles the CLI can reach — 2501.71 / 2494.61 GFLOPS at
+  2048³, 2700.44 at 2048×4096×4096, 1.89× the same-sitting CPU bf16 — 128×64 / 64×128 out of
+  reach by exactly the 19,712 B the L1 arithmetic said, and SILICON.md 3.1's B/MAC model
+  short of a B-run-length term and a k term.
+  [Working](docs/BENCHMARKS.md#the-bf16-tile-sweep-what-the-freed-16-kb-buys-and-where-the-bmac-model-stops).
   [Working](docs/BENCHMARKS.md#bf16-gemm-at-n64-the-same-fix-int8-used).
 - **ResNet50's AdaRound latency cost — there wasn't one, and the old 5.63/6.93 ms pair is
   retracted.** A same-sitting `--fresh` rerun of both models at 1000 images (2026-09-07)

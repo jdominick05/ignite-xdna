@@ -274,7 +274,19 @@ the core can absorb 0.0625 B/MAC. DERIVED:
 | 32×32 | 0.125 | 64 | 50% | — |
 | 16×64 (forced at N=11008) | 0.156 | 51.2 | 40% | 909.97 GFLOPS — 0.51× the default tile's 1793 at the same K |
 | 16×128 (Mistral N=14336) | 0.141 | 56.9 | 44% | 1454.37 GFLOPS |
-| 64×64 | 0.0625 | 128 | **100%** | **Reached in bf16 once the C tile is single-buffered** (`--c-single-buffer 1`, a local `whole_array.py` patch kept as `kernels/gemm_tile_sweep/whole_array_c_single_buffer.patch`): 2477.23 GFLOPS at 2048³ and 2641.41 at 2048×4096×4096 against the default tile's 1775.65 / 1801.18, the CPU-bf16 margin widening to 1.29×–1.89× (`results/aie/bf16_matmul_n64_single_buffer_npu.log`). Before that it was out of reach: the double-buffered f32 C tile alone is 2 × 16 KB, the whole set (A 8 KB, B 8 KB, C 16 KB, ×2) is exactly 64 KB with no stack, the `n=64` attempt failed on L1 (`..._ffn_shape_variants_npu.log`) and a second attempt measured the miss at exactly the 3,328 B stack (`results/aie/int8_matmul_sweep_npu.log`). **Reached in int8** without the patch, its operands being half the bytes (52,480 B with stack): 4447.97–4607.05 GOPS at the 2048-class shapes, 1.9× the 64×32 int8 tile, bit-exact |
+| 64×64 | 0.0625 | 128 | **100%** | **Reached in bf16 once the C tile is single-buffered** (`--c-single-buffer 1`, a local `whole_array.py` patch kept as `kernels/gemm_tile_sweep/whole_array_c_single_buffer.patch`): 2477.23 GFLOPS at 2048³ and 2641.41 at 2048×4096×4096 against the default tile's 1775.65 / 1801.18, the CPU-bf16 margin widening to 1.29×–1.89× (`results/aie/bf16_matmul_n64_single_buffer_npu.log`). Before that it was out of reach: the double-buffered f32 C tile alone is 2 × 16 KB, the whole set (A 8 KB, B 8 KB, C 16 KB, ×2) is exactly 64 KB with no stack, the `n=64` attempt failed on L1 (`..._ffn_shape_variants_npu.log`) and a second attempt measured the miss at exactly the 3,328 B stack (`results/aie/int8_matmul_sweep_npu.log`). **Reached in int8** without the patch, its operands being half the bytes (52,480 B with stack): 4447.97–4607.05 GOPS at the 2048-class shapes, 1.9× the 64×32 int8 tile, bit-exact. Clean re-run of the bf16 tile 2026-09-08: 2501.71 at 2048³, **33.9% of the 7.37 TFLOPS peak against this row's 100% ceiling** (`results/aie/gemm_tile_sweep_c_single_buffer_npu.log`) |
+| 128×32 | 0.0781 | 102.4 | 80% | 2136.09 GFLOPS at 2048³ single-C, 29.0% of peak — while 32×128, the same B/MAC, reads 2494.61: the model has no term for B's DMA run length (`results/aie/gemm_tile_sweep_c_single_buffer_npu.log`, Table 3: with B column-major the two swap order) |
+| 32×128 | 0.0781 | 102.4 | 80% | 2494.61 at 2048³ and **2700.44 at 2048×4096×4096, the best bf16 figure in this repo, 36.6% of peak**, tracking 64×64 within 2% at every shape (same log) |
+| 128×64, 64×128 at k=32 | 0.0469 | 128 | 100% | 2070.87 / 2146.76 at 2048³ — below 64×64 at k=64 despite the better B/MAC: k is a term the model lacks (same log). At k=64 both miss L1 by 19,712 B even single-buffered, MEASURED in the allocator |
+
+MEASURED against the model, 2026-09-08 (`results/aie/gemm_tile_sweep_c_single_buffer_npu.log`): the L1
+arithmetic is exact (all 28 compiles) and 64×64 is the best tile, as it predicts, but two
+terms are missing — B's
+contiguous DMA run length (n elements row-major; `--b-col-maj 1` moves 128×32 +4.3% and
+32×128 −12.6%) and k (tiles with a better B/MAC at k=32 land 14–17% below 64/64/64 at k=64; doubling k at the default tile's B/MAC gains 5.5%). And at
+64×64 the array reaches 33.9% of peak against a 100% input-bound ceiling, so the remaining
+two thirds are not input bandwidth: dispatch, the K-loop's C read-modify-write in f32, and
+the 3.2 kernel are where K2 goes next.
 
 The int8 column of the same table is the bf16 one at half the bytes per MAC (0.0469 at
 64×32, 0.0313 at 64×64) against the same 8 B/cycle and 256 MAC/cycle, so 64×64 is exactly
@@ -491,10 +503,15 @@ design work: 1.9× over 64×32 in int8, whose half-size operands fit it in L1
 (`results/aie/int8_matmul_sweep_npu.log`), and 1.39–1.47× in bf16 once the C output tile is
 single-buffered to free the 16 KB it was short by — 2477.23 GFLOPS at 2048³, the CPU-bf16
 margin widening to 1.29×–1.89× (`results/aie/bf16_matmul_n64_single_buffer_npu.log`). That is
-where the CLI stops: 128×64 and 64×128 at k=64 miss L1 by 19,712 B even single-buffered.
-DERIVED, not measured — 2A+2B+C+stack = 32,768 + 16,384 + 32,768 + 3,328 = 85,248 B
-against the 65,536 B bank, which is `l1_estimate()` in
-`kernels/int8_matmul_sweep/npu_matmul_sweep.py`; no sweep was run at those two tiles.
+where the CLI stops: 128×64 and 64×128 at k=64 miss L1 by 19,712 B even single-buffered —
+2A+2B+C+stack = 32,768 + 16,384 + 32,768 + 3,328 = 85,248 B against the 65,536 B bank,
+`l1_estimate()` in `kernels/int8_matmul_sweep/npu_matmul_sweep.py`, and MEASURED: both die
+in the allocator exactly as predicted while 25 of the 26 predicted-fit tiles compile (the
+26th hits 2.6's stride cap) — `results/aie/gemm_tile_sweep_c_single_buffer_npu.log`, Table 1.
+That sweep also settles what the freed 16 KB buys: 64×64 and 32×128 at 2501.71 / 2494.61
+GFLOPS at 2048³ and 2700.44 at 2048×4096×4096, 1.46× the default tile and 33.9–36.6% of
+peak against 3.1's 100% ceiling, so the next two thirds are not input bandwidth (3.1's
+measured-against-the-model paragraph names the two terms the model lacks).
 Physical basis: 3.1's three levers — C accumulated in registers or across the
 cascade instead of read-modify-written in L1 every k-step; A or B shared between adjacent
 cores through neighbour memory so one stream feeds two; and shape-specific DMA

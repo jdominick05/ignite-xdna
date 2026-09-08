@@ -98,8 +98,25 @@ short prefill (M ≤ 256). Thin at the largest shapes — the CPU kernel's best-
 takes back the K=N=4096 rows. The small-M loss is a tile artifact: throughput tracks `m`
 (forced to M/8 by the design), not token count, at both dtypes.
 
-Not done: bf16 at `n=64` by single-buffering the C FIFO (`whole_array.py` was in use by
-another live session). `results/aie/int8_matmul_sweep_npu.log`, `docs/DECISIONS.md`.
+Not done at the time: bf16 at `n=64` by single-buffering the C FIFO (`whole_array.py` was in
+use by another live session). Done since — `gemm_tile_sweep/` below.
+`results/aie/int8_matmul_sweep_npu.log`, `docs/DECISIONS.md`.
+
+## `gemm_tile_sweep/`
+
+Not a design: `whole_array_c_single_buffer.patch` is a `git diff` against mlir-aie v1.4.2's
+`programming_examples/basic/matrix_multiplication/whole_array/whole_array.py` adding
+`--c-single-buffer {0,1}`, which sets the per-core C output ObjectFIFO's depth to 1 instead
+of 2 and frees `m·n·4` B of the 64 KB L1 (16 KB at 64×64). Apply it with `git apply` in the
+mlir-aie checkout; `int8_matmul_sweep/npu_matmul_sweep.py --c-single-buffer 1` passes it
+through and prints the L1 estimate (`2A + 2B + (1|2)·C + 3,328 B`) each run. What it bought,
+measured in a clean sitting (`results/aie/gemm_tile_sweep_c_single_buffer_npu.log`):
+bf16 64/64/64 at 2501.71 GFLOPS and 32/64/128 at 2494.61 at 2048³ (1.46× the default tile),
+2700.44 at 2048×4096×4096 — the repo's best bf16 figure, 1.89× the same-sitting CPU bf16
+mean — and int8 +9–13% from 128/64/64 and 64/128/64. The L1 arithmetic predicted all 28
+compile outcomes; 128×64 and 64×128 stay out of bf16's reach. Single-buffering alone costs
+6.5% at the default tile, so it is worth it only for the tiles it lets in. Written up in
+[`docs/BENCHMARKS.md`](../docs/BENCHMARKS.md#the-bf16-tile-sweep-what-the-freed-16-kb-buys-and-where-the-bmac-model-stops) and `docs/SILICON.md` 3.1/K2.
 
 ## `groupnorm_bf16/`
 

@@ -331,6 +331,18 @@ overlap-cost control (default tile with `--c-single-buffer 1` at the same shape)
 1740.51 vs 1801.18 GFLOPS at the normal double-buffered depth, a 3.4% loss confirming the
 gain above is the bigger tile, not an accident of the buffer-depth change.
 
+**`gemm_tile_sweep_c_single_buffer_npu.log`** — the tile sweep the single-buffered C tile
+makes possible: ten bf16 m/k/n tiles at 2048³ on the generic 4×4 `whole_array.py` design,
+three with B column-major, the four survivors across 1024³ / 4096×2048×2048 / 2048×4096×4096,
+three int8 tiles, and a same-sitting CPU bf16 baseline; clean sitting, the device watched by
+the monitor. The L1 model `2A + 2B + (1|2)·C + 3,328 B` predicted all 28 compile outcomes;
+64/64/64 and 32/64/128 are the best reachable bf16 tiles (2501.71 / 2494.61 GFLOPS at 2048³,
+2700.44 at 2048×4096×4096 — the repo's best, 36.6% of peak, 1.89× CPU bf16); SILICON.md 3.1's
+B/MAC model is missing a B-run-length term and a k term; int8 gains 9–13% from the freed
+L1. Supersedes an 18:33 screen of the same tiles taken under a running AdaRound job, kept in
+its appendix. Written up in
+[`docs/BENCHMARKS.md`](../../docs/BENCHMARKS.md#the-bf16-tile-sweep-what-the-freed-16-kb-buys-and-where-the-bmac-model-stops) and `docs/SILICON.md` 3.1/K2.
+
 ## Dispatch floor and the int8 conv verdict
 
 **`dispatch_floor_npu.log`** — the per-dispatch cost measured IN ISOLATION at last
