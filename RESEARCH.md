@@ -1328,11 +1328,11 @@ Structurally re-parameterized networks collapse multi-branch training graphs int
   over FP32 CPU) both confirm the structural half of the hypothesis, matching yolov8n's own
   head-cut numbers rather than beating them — Add-free RepVGG doesn't measurably help SRAM
   contention here, it's simply not worse. Plain XINT8 (no AdaRound) loses 14.03 points of
-  mAP@50-95, more than yolov8n's plain-XINT8 loss on the same convention — whether that's the
-  "high dynamic range outlier" failure mode the falsification criterion describes, or a gap
-  AdaRound closes the way it does for every other detector/pose model in this repo, is
-  untested. The AdaRound run needed to answer it hasn't been quantized yet — the RepVGG/no-DFL
-  candidate itself is not falsified, only its accuracy-recovery leg is still open.
+  mAP@50-95, more than yolov8n's plain-XINT8 loss on the same convention. AdaRound (same
+  recipe used everywhere else in this repo, no yolov6n-specific tuning) recovers +10.65 of
+  those points (76%) at zero latency cost, closing to within 3.38 of FP32 — **refuting**
+  the "beyond AdaRound's recovery capacity" branch of the falsification criterion below.
+  Both halves of the candidate are now closed: [docs/BENCHMARKS.md](docs/BENCHMARKS.md#category-c-first-candidate-yolov6n-repvgg-backbone).
 
 ### Category D: Monocular Depth Estimation
 
@@ -1501,12 +1501,15 @@ sections above.
   hypothesis holds: RepVGG's `switch_to_deploy()` collapse (no residual `Add`) plus the
   `use_dfl=False` head (no DFL softmax at all) place a single clean 518/525-node (98.7%)
   NPU subgraph, 3.0x faster than FP32 CPU (20.04 -> 6.62 ms at eval settings) — in the same
-  range as yolov8n's own head-cut numbers, not better or worse on placement/speed. But
-  plain XINT8 (no AdaRound yet) costs **-14.03 points of mAP@50-95** (36.95 → 22.92) and
-  **-17.00 of mAP@50** (51.98 → 34.98) on the full 5000-image set — a substantially bigger
-  hit than yolov8n's plain-XINT8 loss. Whether AdaRound recovers this the way it does for
-  every other detector/pose model here is untested, not refuted; that's the open half of
-  the falsification criterion. [Working](docs/BENCHMARKS.md#category-c-first-candidate-yolov6n-repvgg-backbone).
+  range as yolov8n's own head-cut numbers, not better or worse on placement/speed. Plain
+  XINT8 (no AdaRound) costs **-14.03 points of mAP@50-95** (36.95 → 22.92) and **-17.00 of
+  mAP@50** (51.98 → 34.98) on the full 5000-image set — a substantially bigger hit than
+  yolov8n's plain-XINT8 loss — but **AdaRound recovers +10.65 (76%) / +14.86 (87%) of that
+  loss** (→ 33.57 / 49.84) at zero latency cost, closing to within 3.38 / 2.14 points of
+  FP32. This refutes the "beyond AdaRound's recovery capacity" branch of the
+  falsification criterion: re-parameterized RepVGG weights don't carry AdaRound-resistant
+  outliers here. Both halves of the candidate are closed.
+  [Working](docs/BENCHMARKS.md#category-c-first-candidate-yolov6n-repvgg-backbone).
 
 **Still open.**
 
@@ -1535,8 +1538,8 @@ sections above.
   full trace, whose upstream parser mis-times gaps over 2^18 cycles.
 - **Candidate model pipelines (Categories A, C, D, E).** Test plans, target shapes, and falsification criteria:
   - **Category A:** Image Super-Resolution (Real-ESRGAN Compact, SESR-M7).
-  - **Category C:** Advanced Detection and RepVGG Backbones — YOLOv6n placement/speed/plain-XINT8
-    tested (closed above); its AdaRound recovery, YOLO-World v2, and YOLOv11 still open.
+  - **Category C:** Advanced Detection and RepVGG Backbones — YOLOv6n (placement, speed,
+    plain-XINT8 and AdaRound recovery) closed above; YOLO-World v2 and YOLOv11 still open.
   - **Category D:** Monocular Depth Estimation (MiDaS v2.1 Small, FastDepth).
   - **Category E:** Untested Classification Topologies (DenseNet-121, ResNeXt-50, RegNetX).
 - **Longer term:** a detector fine-tuned for fixed camera feeds (licence-plate

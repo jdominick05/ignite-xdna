@@ -2238,26 +2238,35 @@ latency is comparable across rows even though conf differs from the demo setting
 | Precision | Device | Latency (eval, conf 0.001) | mAP@50-95 | mAP@50 | Backing log |
 |---|---|---|---|---|---|
 | FP32 (float) | CPU | 20.04 ms | 36.95 | 51.98 | `results/map_yolov6n_fp32_cpu.log` |
-| **Plain XINT8** | **NPU** | **6.62 ms** | **22.92** (-14.03) | **34.98** (-17.00) | `results/map_yolov6n_cut_xint8_npu.log` |
+| Plain XINT8 | NPU | 6.62 ms | 22.92 (-14.03) | 34.98 (-17.00) | `results/map_yolov6n_cut_xint8_npu.log` |
+| **XINT8 + AdaRound** | **NPU** | **6.62 ms** | **33.57** (-3.38) | **49.84** (-2.14) | `results/map_yolov6n_cut_xint8_adaround_npu.log` |
 
-Two findings:
+AdaRound (`models/yolov6n_cut_xint8_adaround.onnx`, 300 calib images, 71 layers optimized
+on Desktop 2's 8700G CPU, `results/quant_yolov6n_cut_xint8_adaround.log`, e2e 1522.0s)
+placement and latency are unchanged from plain XINT8 — **518/525 nodes (98.7%), the same
+single subgraph** (`results/diag_yolov6n_cut_xint8_adaround.log`), 6.53 ms demo-conf
+single-image latency (`results/lat_yolov6n_cut_xint8_adaround_npu.log`, vs plain XINT8's
+6.60 ms — within normal session drift, not a regression).
+
+Three findings:
 
 1. **The structural hypothesis holds on placement and speed.** 98.7% single-subgraph
    placement and a 3.0x latency win (20.04 -> 6.62 ms at eval settings) are in the same
    range as yolov8n's own head-cut numbers — RepVGG's Add-free backbone compiles and runs
    as cleanly as CSPDarknet's does here, neither better nor worse on this axis.
-2. **Plain XINT8 costs more accuracy here than it does on yolov8n.** -14.03 points of
-   mAP@50-95 (38% relative) and -17.00 points of mAP@50 (33% relative) is a substantially
-   larger drop than yolov8n's plain-XINT8 loss on the same convention. This was measured
-   **without AdaRound** — the accuracy-recovery path this repo's other detection and pose
-   models all needed (yolov8n-pose above recovers +1.68/+4.95 points from it). No AdaRound
-   run has been quantized for yolov6n yet, so whether the gap closes the way it does
-   elsewhere is untested, not refuted.
-
-Falsification criteria from `RESEARCH.md` Category C ("re-parameterized weight
-distributions exhibit high dynamic range outliers that degrade INT8 PTQ accuracy beyond
-AdaRound's recovery capacity") is **not yet checked** — that requires the AdaRound run
-that hasn't been done. What's measured so far is consistent with either outcome.
+2. **Plain XINT8 costs more accuracy here than it does on yolov8n**, but AdaRound recovers
+   most of it, at zero latency cost. -14.03 points of mAP@50-95 (38% relative) and -17.00
+   of mAP@50 (33% relative) is a substantially larger plain-XINT8 drop than yolov8n's on
+   the same convention. AdaRound recovers **+10.65 points of mAP@50-95 (76% of the loss)**
+   and **+14.86 points of mAP@50 (87% of the loss)**, closing to within 3.38 / 2.14 points
+   of FP32 — much closer to ResNet50's ~90% AdaRound recovery than to yolov8n-pose's ~10%
+   (see the pose section above). Re-parameterized RepVGG weights evidently don't carry the
+   AdaRound-resistant outliers the falsification criterion below worried about.
+3. **This refutes the "AdaRound can't save it" branch of the Category C criterion.**
+   `RESEARCH.md`'s falsification criteria asked whether re-parameterized weight
+   distributions would degrade INT8 PTQ "beyond the recovery capacity of AdaRound" —
+   measured, they don't: the same AdaRound recipe used elsewhere in this repo, with no
+   yolov6n-specific tuning, recovers the large majority of the plain-XINT8 loss.
 
 ## Key findings
 
