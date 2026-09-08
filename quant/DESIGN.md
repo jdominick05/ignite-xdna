@@ -787,7 +787,9 @@ refine directions, the avgpool table). Nothing here is a latency experiment.
 - **CLE order and thresholds** are transcribed, not designed; a different pair order gives
   different weights and a different (still valid) model. The pattern-count gate catches a
   matcher difference, not an ordering one — Phase 2's position table does.
-- **RAM.** The exact store is Quark's ~105 MB/image; owning the code does not shrink it.
+- **RAM.** The exact store is Quark's ~105 MB/image; owning the code shrinks it only by
+  what emission discards (36 percent on ResNet, the pruned pre-Relu tensors;
+  [measured](../docs/BENCHMARKS.md#ignition-calibration-spool-without-the-pruned-pre-relu-tensors)).
   The `hist` store is the escape hatch and is labelled approximate until measured.
 - **AdaRound parity is statistical.** If ours lands 0.3 points below Quark's on resnet50,
   that is a session-noise question first (the repo's drift record), a bug second.

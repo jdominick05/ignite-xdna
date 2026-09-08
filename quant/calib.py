@@ -15,7 +15,7 @@ import onnxruntime as ort
 
 from .graph import Graph
 from .pow2 import TensorQ, qrange, scale2pos, sqerr
-from .qdq import quantizable_tensors
+from .qdq import prunable_tensors, quantizable_tensors
 from .sources import ImageFolderSource
 
 
@@ -49,8 +49,16 @@ def choose_pow2_minmse(x: np.ndarray, dtype: str) -> tuple[int, dict]:
 
 
 def collect_and_choose(g: Graph, source: ImageFolderSource, scratch: Path) -> tuple[dict[str, TensorQ], dict]:
-    """Run the float graph once per image, spool samples, choose all positions."""
-    acts, weights, sharing = quantizable_tensors(g)
+    """Run the float graph once per image, spool samples, choose all positions.
+
+    Conv/Add outputs consumed only by a Relu receive a temporary QDQ pair that emit
+    removes, so their positions never reach the file; they are neither spooled nor
+    searched. The reference producer spools them anyway (All mode); the chosen
+    positions are unaffected because nothing downstream reads them.
+    """
+    all_acts, weights, sharing = quantizable_tensors(g)
+    pruned = prunable_tensors(g)
+    acts = [name for name in all_acts if name not in pruned]
     g.infer_shapes()
     inputs = list(g.model.graph.input)
     if len(inputs) != 1 or inputs[0].name != source.input_name:
@@ -77,6 +85,7 @@ def collect_and_choose(g: Graph, source: ImageFolderSource, scratch: Path) -> tu
                                    providers=["CPUExecutionProvider"])
     report = {"store": "exact_float16", "mode": "All", "images": len(source),
               "listing": [p.as_posix() for p in source.listing()],
+              "spooled_tensors": len(acts), "skipped_prunable_tensors": len(pruned),
               "sample_bytes": estimated_bytes, "free_bytes_before": free_bytes,
               "ort_version": ort.__version__, "graph_optimization": "ORT_DISABLE_ALL",
               "tensors": {}, "sharing": sharing}
@@ -86,7 +95,8 @@ def collect_and_choose(g: Graph, source: ImageFolderSource, scratch: Path) -> tu
         if not root.is_relative_to(scratch):
             raise ValueError("Calibration temporary directory escaped its requested root")
         paths = {name: root / f"tensor_{i}.f16" for i, name in enumerate(acts)}
-        print(f"CALIBRATION images={len(source)} tensors={len(acts)} sample_bytes={estimated_bytes}", flush=True)
+        print(f"CALIBRATION images={len(source)} tensors={len(acts)} skipped_prunable={len(pruned)} "
+              f"sample_bytes={estimated_bytes}", flush=True)
         count = 0
         for count, image in enumerate(source, 1):
             if image.dtype != np.float32 or image.shape != shapes[source.input_name]:

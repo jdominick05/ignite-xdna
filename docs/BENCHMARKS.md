@@ -2788,6 +2788,26 @@ and now (5.22 ms) are different days on the shared machine and are not compared.
 What this does not show: CLE on grouped or depthwise convolutions, on Gemm pairs, or on
 graphs whose matcher walk crosses Pad or ReduceMean; each raises until it has a gate.
 
+### Ignition: calibration spool without the pruned pre-Relu tensors
+
+Both producers' calibration had spooled all 123 activations of the folded ResNet,
+including the 49 Conv/Add outputs that feed only a Relu. Those tensors get a
+temporary Q/DQ pair that emission removes (Quark's `get_qdq_to_remove`, Ignition's
+`prune_conv_relu`), so their MinMSE positions never reach the file. `quant/calib.py`
+now skips them: 74 tensors are spooled and searched, the sample store drops from
+3,404,592,128 to 2,174,678,016 bytes (36 percent) for 64 images, and the CLE
+calibration's wall time from 104.7 s to 72.0 s on Desktop 2 (no-CLE: 102.6 s to 71.1 s). The gate is byte
+identity of the output file, not a graph diff: the trimmed
+[CLE run](../results/quant/quant_resnet50_ignition_cle_c64_lean.log) writes SHA256
+`74f2b9a180e05b22a203aeb896f2f31daf20a58beb759dc81f6aee52021e8bbe`, the same file as
+the [full-spool CLE run](../results/quant/quant_resnet50_ignition_cle_c64.log) above,
+and the trimmed [no-CLE run](../results/quant/quant_resnet50_ignition_nocle_c64_lean.log)
+writes `afe15baa15a250ffdb0b68c5ce1f97efc1720d4c53140be42164321e7fb0686d`, the
+released alpha artifact. Quark's All-mode calibrator still spools every tensor, so
+`scripts/quant-reference.sh` keeps sizing its disk guard from the full list. The
+sidecar records `spooled_tensors` and `skipped_prunable_tensors`; the skipped set is
+exactly the set `emit` prunes, by construction from the same `prunable_tensors`.
+
 ## Key findings
 
 Roughly ordered by how much time each one cost to discover.
