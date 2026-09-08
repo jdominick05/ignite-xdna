@@ -1,15 +1,30 @@
-"""Position refinement for the folded ResNet operator set.
+"""Position refinement transcribed from Quark 0.11rc1 QuantPosManager (refine.py).
 
-The rules are sourced from Quark 0.11rc1 QuantPosManager (DESIGN.md §2.3).
-All writes update actual initializer data and record changes. This implementation
-does not reproduce the vendor's temporary-list raw_data write bug.
+Rules run in the source order inside each loop: align_concat, align_pool, align_pad,
+align_slice, shift_read, shift_write, shift_cut, shift_bias, hard_sigmoid, shift_swish
+(DESIGN.md section 2.3). Positions are located the way the source locates them: an input
+position is the DequantizeLinear feeding that input slot; an output position is the
+QuantizeLinear whose first input is the node output, or the one after a bridging node
+(AveragePool/HardSigmoid to Mul, or an annotate-family node to a retained activation).
+Writes go to the shared scale initializer, which is what the source's Q/DQ pair update
+amounts to; the source's temporary-list raw_data write bug is not reproduced.
+The source's Mul shift_write rule does not flag a change and so cannot by itself trigger
+another loop; that is reproduced. Operators without a measured instance raise.
 """
 from dataclasses import dataclass
 
 import numpy as np
 
 from .graph import Graph
+from .passes import check_hard_sigmoid
 from .pow2 import pos2scale, scale2pos
+
+QDQ_OPS = ("QuantizeLinear", "DequantizeLinear")
+ANNOTATE_OPS = ("Conv", "Add", "MaxPool", "AveragePool", "GlobalAveragePool", "MatMul", "Gemm", "ConvTranspose")
+REMOVE_QDQ_OPS = ("Clip", "Relu", "LeakyRelu", "PRelu")  # quantizers/interface.py:62-70 defaults
+AVG_POOL_OPS = ("AveragePool", "GlobalAveragePool")
+ALLOWED = {"Conv", "Gemm", "Add", "Relu", "MaxPool", "GlobalAveragePool", "Flatten", "Constant", "Mul",
+           "HardSigmoid", "Concat", "Slice", "Resize", *QDQ_OPS}
 
 
 @dataclass
@@ -23,38 +38,73 @@ class RefineReport:
 def refine(g: Graph, max_loops: int = 5) -> RefineReport:
     if max_loops < 1:
         raise ValueError("max_loops must be positive")
-    producers = {out: n for n in g.nodes() for out in n.output}
-    consumers = {}
-    for node in g.nodes():
-        for name in node.input:
-            consumers.setdefault(name, []).append(node)
-    allowed = {"Conv", "Gemm", "Add", "Relu", "MaxPool", "GlobalAveragePool",
-               "Flatten", "Constant", "Mul", "QuantizeLinear", "DequantizeLinear"}
-    if any(n.op_type not in allowed or n.domain for n in g.nodes()):
-        raise ValueError("Only the Phase 1 ResNet refinement operators are implemented")
-    changes, counts = [], {}
+    nodes = g.nodes()
+    if any(n.op_type not in ALLOWED or n.domain for n in nodes):
+        raise ValueError("Only the folded ResNet and head-cut YOLO refinement operators are implemented")
+    producers = {out: n for n in nodes for out in n.output if out}
+    changes, counts, flagged = [], {}, [False]
 
-    def iparam(node, slot=0):
-        parent = producers.get(node.input[slot])
-        return parent.input[1] if parent is not None and parent.op_type == "DequantizeLinear" else None
+    def dq_scale(tensor):
+        """find_node_name: the Q/DQ node whose first output is this tensor."""
+        parent = producers.get(tensor)
+        return parent.input[1] if parent is not None and parent.op_type in QDQ_OPS else None
 
-    def oparam(node):
-        followers = consumers.get(node.output[0], [])
-        q = next((n for n in followers if n.op_type == "QuantizeLinear"), None)
-        if q is not None:
-            return q.input[1]
-        bridge = next((n for n in followers if
-                       (node.op_type in ("Conv", "Add") and n.op_type == "Relu") or
-                       (node.op_type == "GlobalAveragePool" and n.op_type == "Mul")), None)
-        if bridge is not None:
-            q = next((n for n in consumers.get(bridge.output[0], []) if n.op_type == "QuantizeLinear"), None)
-            if q is not None:
-                return q.input[1]
+    def ipos_by_id(node, slot):
+        """get_ipos_name_by_id: no walk-back."""
+        return dq_scale(node.input[slot]) if len(node.input) > slot else None
+
+    def ipos(node):
+        """get_ipos_name: first input, with the source's one-step walk-back for average pools."""
+        if not node.input:
+            return None
+        name = dq_scale(node.input[0])
+        if name is not None:
+            return name
+        if node.op_type in AVG_POOL_OPS:
+            for n in nodes:
+                if n.output and n.output[0] == node.input[0]:
+                    name = dq_scale(n.input[0])
+                    if name is not None:
+                        return name
         return None
 
+    def q_scale_after(tensor):
+        """find_o_name: first Q/DQ node in graph order whose first input is this tensor."""
+        for n in nodes:
+            if n.input and n.input[0] == tensor and n.op_type in QDQ_OPS:
+                return n.input[1]
+        return None
+
+    def needs_annotated(n):
+        if n.op_type == "Clip":
+            raise NotImplementedError("Clip annotation (is_clip_with_min_max) is not transcribed")
+        return n.op_type in REMOVE_QDQ_OPS
+
+    def connected(pre, n):
+        return ((pre in AVG_POOL_OPS + ("HardSigmoid",) and n.op_type == "Mul") or
+                (pre in ANNOTATE_OPS and needs_annotated(n)))
+
+    def opos(node):
+        """get_opos_name, including its running rename of the searched tensor."""
+        out = node.output[0]
+        name = q_scale_after(out)
+        if name is not None:
+            return name
+        for n in nodes:
+            if n.input and n.input[0] == out and connected(node.op_type, n):
+                out = n.output[0]
+                name = q_scale_after(out)
+                if name is not None:
+                    return name
+        return None
+
+    def wpos(node):
+        return dq_scale(node.input[1]) if len(node.input) > 1 else None
+
+    def bpos(node):
+        return dq_scale(node.input[2]) if len(node.input) > 2 else None
+
     def get(name):
-        if name is None:
-            raise ValueError("Missing position at a required refinement boundary")
         scale = g.initializer(name)
         if scale is None or scale.shape != () or scale.dtype != np.float32:
             raise ValueError(f"Expected scalar float32 scale {name}")
@@ -63,54 +113,171 @@ def refine(g: Graph, max_loops: int = 5) -> RefineReport:
             raise ValueError(f"Non-power-of-two scale {name}")
         return pos
 
-    def setpos(name, pos, rule, node):
+    def setpos(name, pos, rule, node, flag=True):
         old = get(name)
         if old != pos:
             g.set_initializer(name, np.asarray(pos2scale(pos)))
             changes.append({"scale": name, "old": old, "new": pos, "rule": rule, "node": node.name})
             counts[rule] = counts.get(rule, 0) + 1
+            if flag:
+                flagged[0] = True
 
     def clamp(x, lo, hi):
         return min(max(x, lo), hi)
 
+    def is_sigmoid_layer(tensor):
+        return any(check_hard_sigmoid(n) and n.input and n.input[0] == tensor for n in nodes)
+
+    def align_concat():
+        for node in nodes:
+            if node.op_type != "Concat":
+                continue
+            o = opos(node)
+            if o is None:
+                continue
+            value = get(o)
+            minimum = value
+            names = [ipos_by_id(node, i) for i in range(len(node.input))]
+            for name in names:
+                if name is not None:
+                    minimum = min(get(name), minimum)
+            if value != minimum:
+                setpos(o, minimum, "align_concat", node)
+            for name in names:
+                if name is not None and get(name) != minimum:
+                    setpos(name, minimum, "align_concat", node)
+
+    def align_inout(op_types, rule):
+        for node in nodes:
+            if node.op_type not in op_types:
+                continue
+            i, o = ipos(node), opos(node)
+            if i is None or o is None:
+                continue
+            ip, op = get(i), get(o)
+            if op > ip:
+                setpos(o, ip, rule, node)
+            elif op < ip:
+                setpos(i, op, rule, node)
+
+    def input_positions(node):
+        names = [ipos_by_id(node, i) for i in range(len(node.input))]
+        if any(name is None for name in names):
+            return None, None
+        return names, [get(name) for name in names]
+
+    def shift_read():
+        for node in nodes:
+            if node.op_type not in ("Add", "Sub"):
+                continue
+            names, values = input_positions(node)
+            if names is None:
+                continue
+            id_max, id_min = int(np.argmax(values)), int(np.argmin(values))
+            if values[id_max] - values[id_min] > 7:
+                setpos(names[id_max], values[id_min] + 7, "shift_read", node)
+
+    def shift_write():
+        for node in nodes:
+            if node.op_type not in ("Add", "Mul"):
+                continue
+            names, values = input_positions(node)
+            if names is None:
+                continue
+            o = opos(node)
+            if o is None:
+                continue
+            op = get(o)
+            if node.op_type == "Add":
+                low = min(values)
+                sw = low - op
+                if sw > 25 or sw < -7:
+                    setpos(o, low - clamp(sw, -7, 25), "shift_write", node)
+            else:
+                total = sum(values)
+                sw = total - op
+                if sw > 32 or sw < 0:
+                    # The source does not set has_change here (adjust_shift_write, Mul branch).
+                    setpos(o, total - clamp(sw, 0, 32), "shift_write_mul", node, flag=False)
+
+    def shift_cut():
+        for node in nodes:
+            if node.op_type not in ("Conv", "Gemm"):
+                continue
+            i, o, w = ipos(node), opos(node), wpos(node)
+            if i is None or o is None or w is None:
+                continue
+            ip, op, wp = get(i), get(o), get(w)
+            sc = wp + ip - op
+            if sc < 0 or sc > 16:
+                setpos(w, clamp(sc, 0, 16) + op - ip, "shift_cut", node)
+
+    def shift_bias():
+        for node in nodes:
+            if node.op_type not in ("Conv", "Gemm"):
+                continue
+            b = bpos(node)
+            if b is None:
+                continue
+            i, o, w = ipos(node), opos(node), wpos(node)
+            if i is None or o is None or w is None:
+                continue
+            ip, op, wp, bp = get(i), get(o), get(w), get(b)
+            shift_cut_value = wp + ip - op
+            lower = min(0, -(24 - (8 + shift_cut_value)))
+            if any(n.op_type == "LeakyRelu" and n.input and n.input[0] == node.output[0] for n in nodes):
+                lower = 0
+            sb = wp + ip - bp
+            if sb < lower or sb > 15:
+                setpos(b, wp + ip - clamp(sb, lower, 15), "shift_bias", node)
+
+    def hard_sigmoid():
+        for node in nodes:
+            if node.op_type != "HardSigmoid" or not check_hard_sigmoid(node):
+                continue
+            i, o = ipos(node), opos(node)
+            if i is None or o is None:
+                continue
+            ip, op = get(i), get(o)
+            new_ip = clamp(ip, 0, 15)
+            new_op = op if op > 7 else 7
+            shift_sigmoid = 14 + new_ip - new_op
+            new_op = new_op if shift_sigmoid > 0 else 14 + new_ip
+            if new_ip != ip:
+                setpos(i, new_ip, "hard_sigmoid", node)
+            if new_op != op:
+                setpos(o, new_op, "hard_sigmoid", node)
+
+    def shift_swish():
+        for node in nodes:
+            if node.op_type != "Mul" or len(node.input) != 2:
+                continue
+            if not (is_sigmoid_layer(node.input[0]) or is_sigmoid_layer(node.input[1])):
+                continue
+            o = opos(node)
+            if o is None:
+                continue
+            op = get(o)
+            i0, i1 = ipos_by_id(node, 0), ipos_by_id(node, 1)
+            if i0 is None or i1 is None:
+                continue
+            total = get(i0) + get(i1)
+            sh = total - op
+            if sh < 0 or sh > 15:
+                setpos(o, total - clamp(sh, 0, 15), "shift_swish", node)
+
     for loop in range(1, max_loops + 1):
-        before = len(changes)
-        for node in g.nodes():
-            if node.op_type in ("MaxPool", "GlobalAveragePool"):
-                i, o = iparam(node), oparam(node)
-                pos = min(get(i), get(o))
-                setpos(i, pos, "align_pool", node)
-                setpos(o, pos, "align_pool", node)
-        for node in g.nodes():
-            if node.op_type == "Add":
-                names = [iparam(node, i) for i in range(len(node.input))]
-                values = [get(n) for n in names]
-                maximum = int(np.argmax(values))
-                if max(values) - min(values) > 7:
-                    setpos(names[maximum], min(values) + 7, "shift_read", node)
-        for node in g.nodes():
-            if node.op_type == "Add":
-                values = [get(iparam(node, i)) for i in range(len(node.input))]
-                out = oparam(node)
-                shift = min(values) - get(out)
-                setpos(out, min(values) - clamp(shift, -7, 25), "shift_write", node)
-            elif node.op_type == "Mul":
-                # The only Mul in this supported graph is the GAP correction,
-                # whose Constant operand has no quantization position.
-                if not any(producers.get(name) is not None and producers[name].op_type == "GlobalAveragePool"
-                           for name in node.input):
-                    raise ValueError(f"Unsupported non-GAP Mul in refinement: {node.name}")
-        for node in g.nodes():
-            if node.op_type in ("Conv", "Gemm"):
-                inp, weight, out = iparam(node), iparam(node, 1), oparam(node)
-                ip, wp, op = get(inp), get(weight), get(out)
-                setpos(weight, clamp(wp + ip - op, 0, 16) + op - ip, "shift_cut", node)
-        for node in g.nodes():
-            if node.op_type in ("Conv", "Gemm") and len(node.input) == 3:
-                ip, wp, op = get(iparam(node)), get(iparam(node, 1)), get(oparam(node))
-                bias = iparam(node, 2)
-                lower = min(0, wp + ip - op - 16)
-                setpos(bias, wp + ip - clamp(wp + ip - get(bias), lower, 15), "shift_bias", node)
-        if len(changes) == before:
+        flagged[0] = False
+        align_concat()
+        align_inout(("MaxPool", "AveragePool", "GlobalAveragePool"), "align_pool")
+        align_inout(("Pad",), "align_pad")
+        align_inout(("Slice",), "align_slice")
+        shift_read()
+        shift_write()
+        shift_cut()
+        shift_bias()
+        hard_sigmoid()
+        shift_swish()
+        if not flagged[0]:
             return RefineReport(loop, counts, changes, True)
     return RefineReport(max_loops, counts, changes, False)

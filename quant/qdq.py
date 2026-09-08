@@ -1,7 +1,12 @@
-"""QDQ emission for folded ResNet classifiers, from float weights and positions.
+"""QDQ emission for folded ResNet classifiers and head-cut YOLOv8, from float weights and positions.
 
 No topology or integer weights are copied from a quantized model. Unsupported
 operator families fail explicitly until their preprocessing/emission gates run.
+Tensor marking follows the vendor's operator quantizers: Conv/Gemm mark their first
+input, output and initializers; MaxPool and Resize (QDQDirect8BitOp) mark their first
+input and share its parameters with their output; every other supported operator marks
+all float activation inputs and outputs (QDQOperatorBase). Constant-node outputs and
+the empty Resize roi are never marked, as the vendor's type check skips them.
 """
 from dataclasses import dataclass, replace
 import numpy as np
@@ -11,14 +16,21 @@ from .graph import Graph
 from .pow2 import TensorQ, pos2scale, quantize, scale2pos
 
 RESNET_OPS = {"Conv", "Relu", "Add", "MaxPool", "GlobalAveragePool", "Flatten", "Gemm"}
+YOLO_OPS = {"Conv", "Sigmoid", "Mul", "Add", "Concat", "MaxPool", "Resize", "Slice", "Constant"}
+SUPPORTED_OPS = RESNET_OPS | YOLO_OPS
+SHARING_OPS = {"MaxPool", "Resize"}  # QDQDirect8BitOp: output reuses input[0]'s parameters
 
 
 def quantizable_tensors(g: Graph) -> tuple[list[str], list[str], dict[str, str]]:
-    """Activation names, float initializer names, shared-parameter providers."""
+    """Activation names, float initializer names, shared-parameter root providers."""
     acts, weights, sharing = {}, {}, {}
+    initializers = {t.name for t in g.model.graph.initializer}
+    constants = {out for n in g.nodes() if n.op_type == "Constant" for out in n.output}
     for node in g.nodes():
-        if node.domain or node.op_type not in RESNET_OPS:
+        if node.domain or node.op_type not in SUPPORTED_OPS:
             raise ValueError(f"Unsupported float operator: {node.domain}:{node.op_type}")
+        if node.op_type == "Constant":
+            continue
         if node.op_type in ("Conv", "Gemm"):
             if len(node.input) not in (2, 3):
                 raise ValueError(f"Invalid inputs at {node.name}")
@@ -31,16 +43,27 @@ def quantizable_tensors(g: Graph) -> tuple[list[str], list[str], dict[str, str]]
             attrs = {a.name: helper.get_attribute_value(a) for a in node.attribute}
             if node.op_type == "Gemm" and attrs.get("beta", 1.0) != 1.0:
                 raise ValueError("Non-unit Gemm beta is not yet supported")
+        elif node.op_type in SHARING_OPS:
+            if len(node.output) != 1:
+                raise ValueError(f"{node.op_type} {node.name} must have one output")
+            if node.input[0] in initializers or node.input[0] in constants:
+                raise ValueError(f"{node.op_type} {node.name} needs an activation input")
+            acts[node.input[0]] = None
+            sharing[node.output[0]] = node.input[0]
         else:
             for name in node.input:
-                if name:
-                    acts[name] = None
+                if not name or name in constants:
+                    continue
+                if name in initializers:
+                    raise ValueError(f"Initializer {name} feeding {node.op_type} {node.name} has no emission rule")
+                acts[name] = None
         for name in node.output:
             acts[name] = None
-        if node.op_type == "MaxPool":
-            if len(node.output) != 1:
-                raise ValueError("MaxPool indices output is not supported")
-            sharing[node.output[0]] = node.input[0]
+    for name in list(sharing):
+        root = sharing[name]
+        while root in sharing:
+            root = sharing[root]
+        sharing[name] = root
     return list(acts), list(weights), sharing
 
 

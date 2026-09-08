@@ -8,8 +8,11 @@ The broader signatures and roadmap below remain a design, not an Alpha API promi
 references both without CLE and with the default preset's CLE; the transcribed
 refinement and equalization rules are probed against Quark's on identical inputs; the
 first controlled ResNet acceptance study is measured; AdaRound is transcribed and
-byte-identical to a fresh `XINT8_ADAROUND` oracle on the same machine. YOLO and the
-broader acceptance map remain open.** AdaRound evidence is in the
+byte-identical to a fresh `XINT8_ADAROUND` oracle on the same machine; head-cut YOLOv8n
+preparation (Split→Slice, the SiLU chain, Concat/Slice/pool alignment, the HardSigmoid
+and swish shifts) is transcribed and position-for-position, integer-for-integer equal
+to a fresh same-listing oracle. YOLO AdaRound and the broader acceptance map remain
+open.** YOLO evidence is in the [YOLO preparation parity section](../docs/BENCHMARKS.md#ignition-yolov8n-cut-preparation-parity); AdaRound evidence is in the
 [AdaRound parity section](../docs/BENCHMARKS.md#ignition-adaround-parity); CLE evidence is in the
 [CLE parity section](../docs/BENCHMARKS.md#ignition-cle-parity-and-the-default-xint8-preset). The audit is in
 [`notes_xint8_dialect.log`](../results/quant/notes_xint8_dialect.log); remaining unknowns
@@ -153,6 +156,13 @@ swish moves `opos = ipos0+ipos1-clamp(sw,0,15)`. Alignment chooses minimum posit
 Order is concat, pool, pad, slice, read, write, cut, bias, HardSigmoid, swish
 [Q] `refine.py:686-724`. The draft's ConvTranspose/MatMul cut/bias coverage was incorrect.
 These are producer rules, not independently measured compiler requirements.
+All ten rules are transcribed in `quant/refine.py` as of 2026-09-08 and exercised on
+yolov8n-cut, where the vendor's log and Ignition's sidecar record the same 20 moves (16
+Concat alignments, 4 Slice alignments) in the same order. Ignition walks its own
+topological order rather than the vendor's file order; the outcome is identical on this
+graph, and equivalence where rules interact is unproven **[U]**. The HardSigmoid and swish
+shift bounds are transcribed but no calibration has fired them yet
+([YOLO preparation parity](../docs/BENCHMARKS.md#ignition-yolov8n-cut-preparation-parity)).
 
 ### 2.4 The consumer side
 
@@ -219,8 +229,13 @@ installed versions, source/model SHA256 values, and raw fingerprints are in
   checks single-consumer topology and downstream activation (`:685-736`).
 - **Sharing mechanism resolved [Q]:** `extended_quantizer.py:478-509` waits for the
   provider, selects its consumer-specific quantized value, and reuses its scale/zp
-  initializer names. Initializer sharing is rejected. **[U]** individual ORT handler
-  eligibility/slot rules outside the Phase 1 graph remain for Phase 2 transcription.
+  initializer names. Initializer sharing is rejected. Resolved 2026-09-08 [M] for the
+  head-cut YOLOv8n set: `QDQConv` marks input 0, the output and its initializers;
+  `QDQMaxPool`/`QDQResize` (`QDQDirect8BitOp`) mark input 0 and share its parameters
+  with the output, transitively through the SPPF chain; Sigmoid, Mul, Add, Concat and
+  Slice fall to `QDQOperatorBase`, which marks every float activation input and output
+  and skips INT64 Constant outputs and the empty Resize roi (`qdq_quantizer.py:256-276`).
+  **[U]** handlers outside that set remain untranscribed.
 - **Reader resolved [Q]:** `calibration/data_readers.py:544-579` returns the supplied
   object without `isinstance`; `calibrators.py:679` calls `get_next()`. The annotated
   base class is ORT's, so a Quark import is not needed in the adapter.
@@ -237,9 +252,12 @@ installed versions, source/model SHA256 values, and raw fingerprints are in
   the DPU effect of a moved weight scale is unmeasured because no real calibration has
   fired shift-cut or shift-bias. The earlier
   [fresh no-CLE ResNet comparison](../results/quant/diff_resnet50_reemit_nocle_c64.log)
-  moved only the GAP output position. **[U]** rules and bridges absent from this graph
-  (Concat/Pad/Slice/HardSigmoid/swish; Gemm/MaxPool/ConvTranspose/MatMul, and
-  Clip/LeakyRelu/PRelu bridges) remain untested.
+  moved only the GAP output position. Concat and Slice alignment and the
+  HardSigmoid→Mul bridge are measured on yolov8n-cut (2026-09-08,
+  [YOLO preparation parity](../docs/BENCHMARKS.md#ignition-yolov8n-cut-preparation-parity)): 20 moves identical to the vendor's. **[U]** Pad
+  alignment, the HardSigmoid and swish shift bounds (transcribed, never fired),
+  Gemm/ConvTranspose/MatMul cut/bias instances and the Clip/LeakyRelu/PRelu bridges
+  remain untested.
 - **CLE defaults resolved [Q]:** `algorithm/interface.py:61-66`: `CLESteps=1`,
   `CLEBalanceMethod="max"`, `CLEWeightThreshold=0.5`, `CLEScaleAppendBias=True`,
   `CLEScaleUseThreshold=True`, `CLETotalLayerDiffThreshold=2e-7`. **[L]** Transcribed
@@ -338,11 +356,13 @@ The probe runner records placement and output differences separately; successful
 construction is not an automatic numerical acceptance verdict.
 
 The remaining signatures below describe the broader design, not a promise that
-every listed method exists. The current emitter rejects operators outside
-Conv/Relu/Add/MaxPool/GlobalAveragePool/Flatten/Gemm, non-unit Gemm beta, MaxPool
-indices, and GAP shapes other than the measured 7×7 case. Nested graphs, CLE,
-YOLO preparation remains unsupported; AdaRound is the separate `adaround` command
-on an emitted file. Probe mutations are separate from
+every listed method exists. The current emitter accepts two families, read from the
+float export's operators: folded ResNet (Conv/Relu/Add/MaxPool/GlobalAveragePool/
+Flatten/Gemm) and head-cut YOLOv8 (Conv/Sigmoid/Mul/Add/Concat/MaxPool/Resize and
+Split, rewritten to Slice). It rejects anything else, non-unit Gemm beta, MaxPool
+indices, a float initializer feeding a non-Conv operator, and GAP shapes other than
+the measured 7×7 case. Nested graphs remain unsupported; AdaRound is the separate
+`adaround` command on an emitted ResNet file (its YOLO gate is open). Probe mutations are separate from
 the parity emitter. Degenerate
 UINT8 calibration ranges are rejected because the vendor would emit zp0, outside
 this slice's zp128 contract. No general XINT8 preset replacement is claimed.
@@ -378,7 +398,13 @@ identity and would make the weight gate vacuous. That export already needs none 
 emitter, the GAP Mul and refine are the whole of Phase 1. yolov8n-cut is a Phase 2 target
 for the same reason: its float export needs Split→Slice (8 → 16) and the SiLU chain
 (57 Sigmoid → 57 HardSigmoid + 57 extra Mul, 57 → 114) [M] before its positions can be
-compared.
+compared. Both are transcribed (`passes.split_to_slice`, `passes.sigmoid_to_hardsigmoid`,
+`passes.hardsigmoid_dpu_scale`); Ignition's prepared float graph diffs empty against
+Quark's own pre-calibration graph, and the vendor's other pre-optimizations (onnxslim,
+ORT basic optimization, BN folding) change nothing on this export [M 2026-09-08,
+`results/quant/prepare_probe_yolov8n_cut.log`; the ResNet control is
+`prepare_probe_resnet50_fp32.log`, where the same steps are no-ops and the committed
+`resnet50_xint8_c64.onnx` replays exactly].
 
 ### 4.2 Modules, every function and form
 
@@ -760,7 +786,7 @@ machine. Log names carry model and variant, never a bare name (`CLAUDE.md`).
 |---|---|---|
 | 0 | `notes_xint8_dialect.log`, subsequent scaffold inspection logs | §2 with every [U] either resolved (file:line quoted) or listed as still open; initial throwaway inspection followed by `Graph.fingerprint()` once the audit is folded. ResNet/YOLO XINT8, ResNet A8W8 and the ResNet float export. Vendor source read verbatim, no hardware — the `quant_grid_audit.log` precedent |
 | 1 | `quant_resnet50_quark_nocle.log`, `quant_resnet50_own_reemit.log`, `diff_resnet50_own_vs_quark.log`, `run_resnet50_own_reemit_{cpu,npu}.log`, `diag_resnet50_own_reemit.log` | Starting from `models/resnet50_fp32.onnx`, against a **fresh** Quark run with `include_cle=False` on the same machine: `graph_diff.ok()` with the weight-LSB count printed; `refine()` run on the positions read out of the Quark model reports zero moves (every bound in §2.3 validated); identical full-set CPU top-1 through the existing `4_run.py`; EP report with the same node split as the Quark model's own `diag_*`; NPU latency captured in the same sitting as the Quark model's, and reported as a pair |
-| 2 | `quant_resnet50_own_xint8.log`, `quant_yolov8n_cut_own_xint8.log`, `diff_*_own_vs_quark.log`, `run_*_own_xint8_npu.log`, `map_yolov8n_cut_own_xint8_npu.log` (full 5000), `diag_*` | Same machine, same sorted listing, same `--limit`: position table equal to Quark's for every tensor (or the diff listed and explained); full-set top-1 / full-5000 mAP beside Quark's from the same sitting. A slice is labelled a slice |
+| 2 | `quant_resnet50_own_xint8.log`, `quant_yolov8n_cut_own_xint8.log`, `diff_*_own_vs_quark.log`, `run_*_own_xint8_npu.log`, `map_yolov8n_cut_own_xint8_npu.log` (full 5000), `diag_*` | Same machine, same sorted listing, same `--limit`: position table equal to Quark's for every tensor (or the diff listed and explained); full-set top-1 / full-5000 mAP beside Quark's from the same sitting. A slice is labelled a slice. ResNet closed (no-CLE and CLE sections); yolov8n-cut closed 2026-09-08 (`quant_yolov8n_cut_{quark,ignition}_cle_c64.log`, `diff_yolov8n_cut_ignition_cle_c64.log`, `map_yolov8n_cut_ignition_cle_c64_{reference,own}_{cpu,npu}.log`) |
 | 3 | `quant_*_own_xint8_adaround.log`, `run_*`/`map_*` | Accuracy within session noise of `XINT8_ADAROUND` on resnet50 and yolov8n-cut; peak RSS logged beside Quark's on the same machine. Stretch: the laptop finishes where Quark SIGSEGVs. ResNet closed 2026-09-08 bitwise (`quant_resnet50_ignition_cle_adaround_c64.log`, `diff_*`, `run_*`); yolov8n-cut waits on YOLO preparation; the laptop stretch is unrun |
 | 4 | `probe_resnet50_<mutation>.log` per mutation, plus `probe_resnet50_summary.log` | For every mutation: EP node split, NPU-vs-CPU output agreement on N images, same-sitting latency; foreign-context check before each. The A8W8 attribution in DECISIONS #3 rewritten from the single-variable result — kept beside the old wording, not replacing it |
 | 5 | one log per item | Each item measured and folded like any other experiment |
@@ -780,7 +806,7 @@ as a witness and the log says so.
 |---|---|---|---|---|
 | 0 | Fingerprint | `notes_xint8_dialect.log`; §2 corrected | every [U] closed or explicitly open | any machine, no hardware |
 | 1 | Re-emit | `graph.py`, `pow2.py`, `qdq.py`, `refine.py` (`apply` + rules), `passes.simulate_dpu`, `verify.py`, `quantize --scales-from`, `3d_quantize_compare.py`, `npu/ep_report.py` | resnet50 from the float export: `graph_diff.ok()` against a fresh no-CLE Quark model (scales exact, weights ≤1 LSB, count logged); `refine()` on Quark's positions moves nothing; identical CPU top-1; same EP split; paired latency | quantize D1/D2 → NPU L/D2 |
-| 2 | Calibrate | `sources.py`, `calib.py` (exact store), `weights.py`, `cle.py`, `passes.prepare`, `3c_quantize_own.py` ×2, `scripts/quant-own.sh` | position-for-position equal to Quark on resnet50 and yolov8n-cut, same machine + listing; full-set top-1 and full-5000 mAP paired | Desktop 2 |
+| 2 | Calibrate | `sources.py`, `calib.py` (exact store), `weights.py`, `cle.py`, `passes.prepare`, `3c_quantize_own.py` ×2, `scripts/quant-own.sh` | position-for-position equal to Quark on resnet50 and yolov8n-cut, same machine + listing; full-set top-1 and full-5000 mAP paired. ResNet and yolov8n-cut closed 2026-09-08 | Desktop 2 |
 | 3 | AdaRound | `adaround.py`, `FastFinetuneConfig`, RSS logging | accuracy parity with `XINT8_ADAROUND`; RSS beside Quark's. ResNet: byte-identical on Desktop 2 (2026-09-08); YOLO open | D1/D2, then the laptop as the stretch |
 | 4 | Acceptance map | `probe.py`, `tools/quant_probe.py`, `scripts/quant-probe.sh` | every mutation in §4.2 measured with output check; new BENCHMARKS section; DECISIONS #3 amended | L/D2 |
 | 5 | Beyond Quark | per-layer error budget in the sidecar → a BENCHMARKS table; MODNet re-calibrated through `npu.modnet` (closes the RESEARCH open item); `calib_store="hist"` with its accuracy cost measured; MobileViT per-channel **only if** Phase 4 admits it; QAT hook (`sources` + `pow2` reused from torch) | each a logged, folded experiment | per `CLAUDE.md` routing |

@@ -1,0 +1,301 @@
+Ignition 0.1.0a1: yolo_cut / CLE
+IMPORT_BLOCK_ACTIVE quark torch
+CALIBRATION images=64 tensors=218 skipped_prunable=0 sample_bytes=7106560000
+COLLECT 16/64
+COLLECT 32/64
+COLLECT 48/64
+COLLECT 64/64
+CHOOSE 16/218
+CHOOSE 32/218
+CHOOSE 48/218
+CHOOSE 64/218
+CHOOSE 80/218
+CHOOSE 96/218
+CHOOSE 112/218
+CHOOSE 128/218
+CHOOSE 144/218
+CHOOSE 160/218
+CHOOSE 176/218
+CHOOSE 192/218
+CHOOSE 208/218
+CHOOSE 218/218
+{
+  "producer": "Ignition",
+  "producer_version": "0.1.0a1",
+  "family": "yolo_cut",
+  "scope": "yolo_cut_cle",
+  "format": "XINT8_QDQ",
+  "mode": "own_minmse_cle",
+  "cle": true,
+  "input_sha256": "11b52c2530def3c99bccc4bee39a40683aab8619d4278a334b5f0f78c43fd0a1",
+  "versions": {
+    "numpy": "1.26.4",
+    "onnx": "1.18.0"
+  },
+  "prepare": {
+    "split_to_slice": 8
+  },
+  "preprocess": {
+    "family": "yolo_cut",
+    "letterbox": 640,
+    "input_name": "images"
+  },
+  "emit": {
+    "activations": 218,
+    "initializers": 126,
+    "pruned": 0
+  },
+  "gap_mul": 0,
+  "hardsigmoid": {
+    "replaced": 57,
+    "scaled": 57
+  },
+  "refine": {
+    "loops": 2,
+    "changes_by_rule": {
+      "align_concat": 16,
+      "align_slice": 4
+    },
+    "log": [
+      {
+        "scale": "/model.2/Concat_output_0_scale",
+        "old": 3,
+        "new": 2,
+        "rule": "align_concat",
+        "node": "/model.2/Concat"
+      },
+      {
+        "scale": "/model.2/Split_output_0_scale",
+        "old": 3,
+        "new": 2,
+        "rule": "align_concat",
+        "node": "/model.2/Concat"
+      },
+      {
+        "scale": "/model.2/Split_output_1_scale",
+        "old": 4,
+        "new": 2,
+        "rule": "align_concat",
+        "node": "/model.2/Concat"
+      },
+      {
+        "scale": "/model.4/Split_output_1_scale",
+        "old": 5,
+        "new": 4,
+        "rule": "align_concat",
+        "node": "/model.4/Concat"
+      },
+      {
+        "scale": "/model.6/Split_output_1_scale",
+        "old": 5,
+        "new": 4,
+        "rule": "align_concat",
+        "node": "/model.6/Concat"
+      },
+      {
+        "scale": "/model.8/Concat_output_0_scale",
+        "old": 4,
+        "new": 3,
+        "rule": "align_concat",
+        "node": "/model.8/Concat"
+      },
+      {
+        "scale": "/model.8/Split_output_0_scale",
+        "old": 4,
+        "new": 3,
+        "rule": "align_concat",
+        "node": "/model.8/Concat"
+      },
+      {
+        "scale": "/model.8/Split_output_1_scale",
+        "old": 5,
+        "new": 3,
+        "rule": "align_concat",
+        "node": "/model.8/Concat"
+      },
+      {
+        "scale": "/model.6/cv2/act/Mul_output_0_scale",
+        "old": 5,
+        "new": 4,
+        "rule": "align_concat",
+        "node": "/model.11/Concat"
+      },
+      {
+        "scale": "/model.12/Concat_output_0_scale",
+        "old": 5,
+        "new": 4,
+        "rule": "align_concat",
+        "node": "/model.12/Concat"
+      },
+      {
+        "scale": "/model.12/Split_output_0_scale",
+        "old": 5,
+        "new": 4,
+        "rule": "align_concat",
+        "node": "/model.12/Concat"
+      },
+      {
+        "scale": "/model.12/Split_output_1_scale",
+        "old": 5,
+        "new": 4,
+        "rule": "align_concat",
+        "node": "/model.12/Concat"
+      },
+      {
+        "scale": "/model.18/Split_output_0_scale",
+        "old": 5,
+        "new": 4,
+        "rule": "align_concat",
+        "node": "/model.18/Concat"
+      },
+      {
+        "scale": "/model.18/Split_output_1_scale",
+        "old": 5,
+        "new": 4,
+        "rule": "align_concat",
+        "node": "/model.18/Concat"
+      },
+      {
+        "scale": "/model.19/act/Mul_output_0_scale",
+        "old": 5,
+        "new": 4,
+        "rule": "align_concat",
+        "node": "/model.20/Concat"
+      },
+      {
+        "scale": "/model.21/Split_output_1_scale",
+        "old": 5,
+        "new": 4,
+        "rule": "align_concat",
+        "node": "/model.21/Concat"
+      },
+      {
+        "scale": "/model.2/cv1/act/Mul_output_0_scale",
+        "old": 3,
+        "new": 2,
+        "rule": "align_slice",
+        "node": "/model.2/Split_output_0_0"
+      },
+      {
+        "scale": "/model.8/cv1/act/Mul_output_0_scale",
+        "old": 4,
+        "new": 3,
+        "rule": "align_slice",
+        "node": "/model.8/Split_output_0_0"
+      },
+      {
+        "scale": "/model.12/cv1/act/Mul_output_0_scale",
+        "old": 5,
+        "new": 4,
+        "rule": "align_slice",
+        "node": "/model.12/Split_output_0_0"
+      },
+      {
+        "scale": "/model.18/cv1/act/Mul_output_0_scale",
+        "old": 5,
+        "new": 4,
+        "rule": "align_slice",
+        "node": "/model.18/Split_output_0_0"
+      }
+    ],
+    "converged": true
+  },
+  "output_sha256": "b4b7e0fa3c086d1abf8ed9f6d8f407bc4075ec325fe26447032bb03e87776cec",
+  "wall_seconds": 244.5238446000003,
+  "quark_imported": false,
+  "torch_imported": false
+}
+CLE_REPORT {
+  "pattern_count": 0,
+  "unique_pairs": 0,
+  "pairs": [],
+  "steps": 1,
+  "last_diff": 0.0,
+  "weight_threshold": 0.5,
+  "append_bias": true,
+  "use_threshold": true
+}
+CALIBRATION_REPORT {
+  "store": "exact_float16",
+  "mode": "All",
+  "images": 64,
+  "listing": [
+    "data/coco_calib/000000000139.jpg",
+    "data/coco_calib/000000001532.jpg",
+    "data/coco_calib/000000002592.jpg",
+    "data/coco_calib/000000005037.jpg",
+    "data/coco_calib/000000006763.jpg",
+    "data/coco_calib/000000007888.jpg",
+    "data/coco_calib/000000009590.jpg",
+    "data/coco_calib/000000011511.jpg",
+    "data/coco_calib/000000013291.jpg",
+    "data/coco_calib/000000015079.jpg",
+    "data/coco_calib/000000016249.jpg",
+    "data/coco_calib/000000017899.jpg",
+    "data/coco_calib/000000019402.jpg",
+    "data/coco_calib/000000021839.jpg",
+    "data/coco_calib/000000023126.jpg",
+    "data/coco_calib/000000025057.jpg",
+    "data/coco_calib/000000026690.jpg",
+    "data/coco_calib/000000029393.jpg",
+    "data/coco_calib/000000031248.jpg",
+    "data/coco_calib/000000032817.jpg",
+    "data/coco_calib/000000034139.jpg",
+    "data/coco_calib/000000036660.jpg",
+    "data/coco_calib/000000038678.jpg",
+    "data/coco_calib/000000040471.jpg",
+    "data/coco_calib/000000042888.jpg",
+    "data/coco_calib/000000045090.jpg",
+    "data/coco_calib/000000047121.jpg",
+    "data/coco_calib/000000049259.jpg",
+    "data/coco_calib/000000050844.jpg",
+    "data/coco_calib/000000052412.jpg",
+    "data/coco_calib/000000054592.jpg",
+    "data/coco_calib/000000056288.jpg",
+    "data/coco_calib/000000058350.jpg",
+    "data/coco_calib/000000060363.jpg",
+    "data/coco_calib/000000061584.jpg",
+    "data/coco_calib/000000064084.jpg",
+    "data/coco_calib/000000065798.jpg",
+    "data/coco_calib/000000067315.jpg",
+    "data/coco_calib/000000069213.jpg",
+    "data/coco_calib/000000072281.jpg",
+    "data/coco_calib/000000074646.jpg",
+    "data/coco_calib/000000077595.jpg",
+    "data/coco_calib/000000079144.jpg",
+    "data/coco_calib/000000080659.jpg",
+    "data/coco_calib/000000082765.jpg",
+    "data/coco_calib/000000084477.jpg",
+    "data/coco_calib/000000085823.jpg",
+    "data/coco_calib/000000088250.jpg",
+    "data/coco_calib/000000089670.jpg",
+    "data/coco_calib/000000091615.jpg",
+    "data/coco_calib/000000093437.jpg",
+    "data/coco_calib/000000095843.jpg",
+    "data/coco_calib/000000097988.jpg",
+    "data/coco_calib/000000099114.jpg",
+    "data/coco_calib/000000101420.jpg",
+    "data/coco_calib/000000104198.jpg",
+    "data/coco_calib/000000105912.jpg",
+    "data/coco_calib/000000107554.jpg",
+    "data/coco_calib/000000109916.jpg",
+    "data/coco_calib/000000111179.jpg",
+    "data/coco_calib/000000113720.jpg",
+    "data/coco_calib/000000116362.jpg",
+    "data/coco_calib/000000118367.jpg",
+    "data/coco_calib/000000119995.jpg"
+  ],
+  "spooled_tensors": 218,
+  "skipped_prunable_tensors": 0,
+  "sample_bytes": 7106560000,
+  "free_bytes_before": 775088812032,
+  "ort_version": "1.23.3.dev20260320",
+  "graph_optimization": "ORT_DISABLE_ALL",
+  "sharing": {
+    "/model.9/m/MaxPool_output_0": "/model.9/cv1/act/Mul_output_0",
+    "/model.9/m_1/MaxPool_output_0": "/model.9/cv1/act/Mul_output_0",
+    "/model.9/m_2/MaxPool_output_0": "/model.9/cv1/act/Mul_output_0",
+    "/model.10/Resize_output_0": "/model.9/cv2/act/Mul_output_0",
+    "/model.13/Resize_output_0": "/model.12/cv2/act/Mul_output_0"
+  }
+}

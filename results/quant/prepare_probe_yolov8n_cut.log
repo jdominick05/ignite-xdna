@@ -1,0 +1,418 @@
+PREPARE_PROBE_SETUP {
+  "in_model": "models/yolov8n_cut.onnx",
+  "sha256": "11b52c2530def3c99bccc4bee39a40683aab8619d4278a334b5f0f78c43fd0a1",
+  "family": "yolo_cut",
+  "replay_from": "models/yolov8n_cut_xint8.onnx",
+  "replay_sha256": "f02e86ba1bf61ff3fdc159e29b15259567e279df06f68c6d9adeb966fe56c885",
+  "cle": true,
+  "reader_images": 2,
+  "preprocess": {
+    "family": "yolo_cut",
+    "letterbox": 640,
+    "input_name": "images"
+  },
+  "versions": {
+    "amd-quark": "0.11rc1",
+    "onnx": "1.19.0",
+    "onnxruntime": "1.22.1",
+    "numpy": "1.26.4",
+    "onnxslim": "0.1.96"
+  },
+  "ops": {
+    "Add": 6,
+    "Concat": 13,
+    "Conv": 63,
+    "MaxPool": 3,
+    "Mul": 57,
+    "Resize": 2,
+    "Sigmoid": 57,
+    "Split": 8
+  }
+}
+PREPARE_REPLAY {
+  "seconds": 3.813,
+  "reference_refine_moves": 0,
+  "replay_refine_moves": 0,
+  "replay_refine_loops": 1,
+  "emit": {
+    "activations": 218,
+    "initializers": 126,
+    "pruned": 0
+  },
+  "gap_mul": 0,
+  "hardsigmoid": {
+    "replaced": 57,
+    "scaled": 57
+  },
+  "graph_diff": {
+    "node_delta": [],
+    "init_exact_mismatch": [],
+    "weight_lsb": {},
+    "weight_changed_elements": {},
+    "compared_int8_initializers": 126
+  },
+  "exact": true,
+  "positions": 344
+}
+[32m
+[QUARK-INFO]: Checking custom ops library ...[0m
+[33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[32m
+[QUARK-INFO]: Start compiling CPU version of custom ops library.[0m
+C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\torch\utils\cpp_extension.py:380: UserWarning: Error checking compiler version for cl: [WinError 2] The system cannot find the file specified
+  warnings.warn(f'Error checking compiler version for {compiler}: {error}')
+INFO: Could not find files for the given pattern(s).
+[31m
+[QUARK-ERROR]: CPU version of custom ops library compilation failed:Command '['where', 'cl']' returned non-zero exit status 1.[0m
+[33m
+[QUARK-WARNING]: Custom ops library compilation failed: CPU version of custom ops library compilation failed:Command '['where', 'cl']' returned non-zero exit status 1..[0m
+[32m
+[QUARK-INFO]: Checked custom ops library.[0m
+[33m
+[QUARK-WARNING]: The api `activation` has been replaced with `input_tensors` and will be removed in the next release.[0m
+[33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+PREPARE_PROBE_QUARK {
+  "op_types_to_quantize": [
+    "Add",
+    "ArgMax",
+    "AveragePool",
+    "Clip",
+    "Concat",
+    "Conv",
+    "ConvTranspose",
+    "DepthToSpace",
+    "Div",
+    "EmbedLayerNormalization",
+    "Erf",
+    "Gather",
+    "Gelu",
+    "Gemm",
+    "GlobalAveragePool",
+    "HardSigmoid",
+    "InstanceNormalization",
+    "LayerNormalization",
+    "LeakyRelu",
+    "LpNormalization",
+    "MatMul",
+    "Max",
+    "MaxPool",
+    "Min",
+    "Mul",
+    "PRelu",
+    "Pad",
+    "ReduceMean",
+    "Relu",
+    "Reshape",
+    "Resize",
+    "Sigmoid",
+    "Slice",
+    "Softmax",
+    "SpaceToDepth",
+    "Split",
+    "Squeeze",
+    "Sub",
+    "Tanh",
+    "Transpose",
+    "Unsqueeze",
+    "Where"
+  ],
+  "extra_options": {
+    "ActivationSymmetric": true,
+    "ConvertSplitToSlice": true,
+    "ConvertBNToConv": true,
+    "ConvertReduceMeanToGlobalAvgPool": true,
+    "SplitLargeKernelPool": true
+  },
+  "optimize_model": true,
+  "include_cle": true,
+  "enable_npu_cnn": true
+}
+[32m
+[QUARK-INFO]: Found Split node /model.2/Split. Replacing with Slice.[0m
+[32m
+[QUARK-INFO]: Found Split node /model.4/Split. Replacing with Slice.[0m
+[32m
+[QUARK-INFO]: Found Split node /model.6/Split. Replacing with Slice.[0m
+[32m
+[QUARK-INFO]: Found Split node /model.8/Split. Replacing with Slice.[0m
+[32m
+[QUARK-INFO]: Found Split node /model.12/Split. Replacing with Slice.[0m
+[32m
+[QUARK-INFO]: Found Split node /model.15/Split. Replacing with Slice.[0m
+[32m
+[QUARK-INFO]: Found Split node /model.18/Split. Replacing with Slice.[0m
+[32m
+[QUARK-INFO]: Found Split node /model.21/Split. Replacing with Slice.[0m
+PREPARE_PROBE_STEPS {
+  "onnxslim": {
+    "nodes": [
+      209,
+      209
+    ],
+    "op_delta": {},
+    "node_names_removed": [],
+    "node_names_added": 0,
+    "initializers": [
+      131,
+      131
+    ],
+    "initializers_removed": [],
+    "initializers_added": 0,
+    "initializer_bytes_changed": [],
+    "value_info": [
+      218,
+      428
+    ],
+    "structure_equal": true
+  },
+  "ort_basic": {
+    "nodes": [
+      209,
+      209
+    ],
+    "op_delta": {},
+    "node_names_removed": [],
+    "node_names_added": 0,
+    "initializers": [
+      131,
+      131
+    ],
+    "initializers_removed": [],
+    "initializers_added": 0,
+    "initializer_bytes_changed": [],
+    "value_info": [
+      218,
+      218
+    ],
+    "structure_equal": true
+  },
+  "fold_batch_norm": {
+    "nodes": [
+      209,
+      209
+    ],
+    "op_delta": {},
+    "node_names_removed": [],
+    "node_names_added": 0,
+    "initializers": [
+      131,
+      131
+    ],
+    "initializers_removed": [],
+    "initializers_added": 0,
+    "initializer_bytes_changed": [],
+    "value_info": [
+      218,
+      218
+    ],
+    "structure_equal": true
+  },
+  "hardware_compat": {
+    "nodes": [
+      209,
+      281
+    ],
+    "op_delta": {
+      "Constant": [
+        0,
+        64
+      ],
+      "Slice": [
+        0,
+        16
+      ],
+      "Split": [
+        8,
+        0
+      ]
+    },
+    "node_names_removed": [
+      "/model.12/Split",
+      "/model.15/Split",
+      "/model.18/Split",
+      "/model.2/Split",
+      "/model.21/Split",
+      "/model.4/Split",
+      "/model.6/Split",
+      "/model.8/Split"
+    ],
+    "node_names_added": 17,
+    "initializers": [
+      131,
+      127
+    ],
+    "initializers_removed": [
+      "onnx::Split_137",
+      "onnx::Split_157",
+      "onnx::Split_184",
+      "onnx::Split_211"
+    ],
+    "initializers_added": 0,
+    "initializer_bytes_changed": [],
+    "value_info": [
+      218,
+      218
+    ],
+    "structure_equal": false
+  },
+  "seconds": 0.956
+}
+[32m
+[QUARK-INFO]: Folding or fusing operators for better accuracy and performance.[0m
+[33m
+[QUARK-WARNING]: The opset version is 17 < 20. Skipping fusing Gelu.[0m
+[32m
+[QUARK-INFO]: Start applying CLE algorithm on the float model...[0m
+[32m
+[QUARK-INFO]: CrossLayerEqualization pattern num: 0[0m
+[32m
+[QUARK-INFO]: Total CrossLayerEqualization steps: 1[0m
+[32m
+[QUARK-INFO]: The CLE algorithm has been applied. It took 0.0s to complete.[0m
+[32m
+[QUARK-INFO]: Optimizing the model for a better hardware compatibility.[0m
+[32m
+[QUARK-INFO]: Found Split node /model.2/Split. Replacing with Slice.[0m
+[32m
+[QUARK-INFO]: Found Split node /model.4/Split. Replacing with Slice.[0m
+[32m
+[QUARK-INFO]: Found Split node /model.6/Split. Replacing with Slice.[0m
+[32m
+[QUARK-INFO]: Found Split node /model.8/Split. Replacing with Slice.[0m
+[32m
+[QUARK-INFO]: Found Split node /model.12/Split. Replacing with Slice.[0m
+[32m
+[QUARK-INFO]: Found Split node /model.15/Split. Replacing with Slice.[0m
+[32m
+[QUARK-INFO]: Found Split node /model.18/Split. Replacing with Slice.[0m
+[32m
+[QUARK-INFO]: Found Split node /model.21/Split. Replacing with Slice.[0m
+PREPARE_PROBE_RESULT {
+  "quark_seconds": 0.44,
+  "ignition": {
+    "cle": {
+      "pattern_count": 0,
+      "unique_pairs": 0,
+      "pairs": [],
+      "steps": 1,
+      "last_diff": 0.0,
+      "weight_threshold": 0.5,
+      "append_bias": true,
+      "use_threshold": true,
+      "scaled": {}
+    },
+    "prepare": {
+      "split_to_slice": 8
+    },
+    "seconds": 0.125,
+    "delta_from_export": {
+      "nodes": [
+        209,
+        281
+      ],
+      "op_delta": {
+        "Constant": [
+          0,
+          64
+        ],
+        "Slice": [
+          0,
+          16
+        ],
+        "Split": [
+          8,
+          0
+        ]
+      },
+      "node_names_removed": [
+        "/model.12/Split",
+        "/model.15/Split",
+        "/model.18/Split",
+        "/model.2/Split",
+        "/model.21/Split",
+        "/model.4/Split",
+        "/model.6/Split",
+        "/model.8/Split"
+      ],
+      "node_names_added": 17,
+      "initializers": [
+        131,
+        127
+      ],
+      "initializers_removed": [
+        "onnx::Split_137",
+        "onnx::Split_157",
+        "onnx::Split_184",
+        "onnx::Split_211"
+      ],
+      "initializers_added": 0,
+      "initializer_bytes_changed": [],
+      "value_info": [
+        218,
+        282
+      ],
+      "structure_equal": false
+    }
+  },
+  "quark_delta_from_export": {
+    "nodes": [
+      209,
+      281
+    ],
+    "op_delta": {
+      "Constant": [
+        0,
+        64
+      ],
+      "Slice": [
+        0,
+        16
+      ],
+      "Split": [
+        8,
+        0
+      ]
+    },
+    "node_names_removed": [
+      "/model.12/Split",
+      "/model.15/Split",
+      "/model.18/Split",
+      "/model.2/Split",
+      "/model.21/Split",
+      "/model.4/Split",
+      "/model.6/Split",
+      "/model.8/Split"
+    ],
+    "node_names_added": 17,
+    "initializers": [
+      131,
+      127
+    ],
+    "initializers_removed": [
+      "onnx::Split_137",
+      "onnx::Split_157",
+      "onnx::Split_184",
+      "onnx::Split_211"
+    ],
+    "initializers_added": 0,
+    "initializer_bytes_changed": [],
+    "value_info": [
+      218,
+      492
+    ],
+    "structure_equal": false
+  },
+  "node_names_equal_as_sets": true,
+  "node_order_equal": false,
+  "graph_diff": {
+    "node_delta": [],
+    "init_exact_mismatch": [],
+    "weight_lsb": {},
+    "weight_changed_elements": {},
+    "compared_int8_initializers": 0
+  },
+  "whole_pre_process_equal": true
+}
+PREPARE_PROBE_PASS True

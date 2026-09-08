@@ -1,4 +1,4 @@
-"""Ignition XINT8 producer for folded ResNet, with optional CLE and position-table replay."""
+"""Ignition XINT8 producer for folded ResNet and head-cut YOLOv8, with optional CLE and position replay."""
 from dataclasses import asdict
 import hashlib
 import importlib.metadata as metadata
@@ -10,10 +10,11 @@ import time
 from . import __version__
 from .cle import cross_layer_equalize
 from .graph import Graph
-from .passes import avgpool_dpu_scale
+from .passes import avgpool_dpu_scale, hardsigmoid_dpu_scale, sigmoid_to_hardsigmoid, split_to_slice
 from .qdq import emit, read_pos_table, quantizable_tensors
 from .refine import refine
-from .sources import ImageFolderSource
+
+YOLO_MARKERS = {"Sigmoid", "Split", "Slice", "Concat", "Resize"}
 
 
 def _check_imports() -> None:
@@ -26,8 +27,50 @@ def file_hash(path: Path) -> str:
         return hashlib.file_digest(stream, "sha256").hexdigest()
 
 
+def graph_family(g: Graph) -> str:
+    """folded_resnet or yolo_cut, decided by the operators present; anything else fails later."""
+    ops = {n.op_type for n in g.nodes()}
+    return "yolo_cut" if ops & YOLO_MARKERS else "folded_resnet"
+
+
+def check_family(g: Graph, family: str) -> None:
+    if len(g.model.graph.input) != 1:
+        raise ValueError("Ignition supports one image input")
+    if family == "folded_resnet":
+        if len(g.model.graph.output) != 1:
+            raise ValueError("Folded ResNet support expects one classifier output")
+        for node in g.nodes():
+            if node.op_type == "GlobalAveragePool":
+                shape = g.value_shape(node.input[0])
+                if shape is None or len(shape) != 4 or shape[-2:] != (7, 7):
+                    raise ValueError(f"Ignition Alpha supports only 7x7 GAP, got {shape}")
+    elif not g.model.graph.output:
+        raise ValueError("Head-cut YOLO support expects the head outputs")
+
+
+def prepare(g: Graph, family: str) -> dict:
+    """The vendor's hardware-compatibility pre-process for this family, before calibration."""
+    report = {}
+    if family == "yolo_cut":
+        report["split_to_slice"] = split_to_slice(g)
+    g.infer_shapes()
+    # Reject unsupported graphs before any costly calibration or output write.
+    quantizable_tensors(g)
+    return report
+
+
+def prepared_graph(model_in: Path) -> tuple[Graph, str]:
+    """Load, prepare and shape-infer a float export; the wrappers size calibration from it."""
+    graph = Graph.load(Path(model_in))
+    family = graph_family(graph)
+    graph.infer_shapes()
+    check_family(graph, family)
+    prepare(graph, family)
+    return graph, family
+
+
 def quantize(model_in: Path, model_out: Path, *, scales_from: Path | None = None,
-             source: ImageFolderSource | None = None, preprocess: dict | None = None,
+             source=None, preprocess: dict | None = None,
              scratch: Path | None = None, cle: bool = False) -> dict:
     _check_imports()
     if (scales_from is None) == (source is None):
@@ -38,19 +81,12 @@ def quantize(model_in: Path, model_out: Path, *, scales_from: Path | None = None
         raise FileExistsError("Choose a new model/sidecar name")
     start = time.perf_counter()
     graph = Graph.load(model_in)
-    # Reject unsupported graphs before any costly calibration or output write.
-    quantizable_tensors(graph)
+    family = graph_family(graph)
     graph.infer_shapes()
-    if len(graph.model.graph.input) != 1 or len(graph.model.graph.output) != 1:
-        raise ValueError("Ignition Alpha supports one image input and one classifier output")
-    for node in graph.nodes():
-        if node.op_type == "GlobalAveragePool":
-            shape = graph.value_shape(node.input[0])
-            if shape is None or len(shape) != 4 or shape[-2:] != (7, 7):
-                raise ValueError(f"Ignition Alpha supports only 7x7 GAP, got {shape}")
+    check_family(graph, family)
     report = {
-        "producer": "Ignition", "producer_version": __version__,
-        "scope": "folded_resnet_cle" if cle else "folded_resnet_nocle", "format": "XINT8_QDQ",
+        "producer": "Ignition", "producer_version": __version__, "family": family,
+        "scope": f"{family}_{'cle' if cle else 'nocle'}", "format": "XINT8_QDQ",
         "mode": "reemit_from_positions" if scales_from else "own_minmse_cle" if cle else "own_minmse_nocle",
         "cle": cle,
         "input_sha256": file_hash(model_in),
@@ -61,6 +97,8 @@ def quantize(model_in: Path, model_out: Path, *, scales_from: Path | None = None
         # calibration and weight quantization then see the equalized initializers.
         report["cle_report"] = asdict(cross_layer_equalize(graph))
         graph.infer_shapes()
+    # Quark's after-algorithm optimizations (Split to Slice) follow CLE and precede calibration.
+    report["prepare"] = prepare(graph, family)
     if scales_from is not None:
         scales_from = Path(scales_from)
         reference = Graph.load(scales_from)
@@ -78,7 +116,9 @@ def quantize(model_in: Path, model_out: Path, *, scales_from: Path | None = None
         report["preprocess"] = preprocess
     report["emit"] = asdict(emit(graph, positions))
     graph.infer_shapes()
+    # The vendor's DPU simulation runs on the quantized graph, before refinement.
     report["gap_mul"] = avgpool_dpu_scale(graph)
+    report["hardsigmoid"] = {"replaced": sigmoid_to_hardsigmoid(graph), "scaled": hardsigmoid_dpu_scale(graph)}
     report["refine"] = asdict(refine(graph))
     if not report["refine"]["converged"]:
         raise ValueError("Position refinement did not converge")

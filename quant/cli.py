@@ -1,4 +1,4 @@
-"""Ignition Alpha: inspect ONNX graphs, quantize folded ResNet with or without CLE, or AdaRound an emitted file."""
+"""Ignition Alpha: inspect ONNX graphs, quantize folded ResNet or head-cut YOLOv8 with or without CLE, or AdaRound an emitted ResNet file."""
 import argparse
 from dataclasses import asdict
 import importlib.abc
@@ -29,14 +29,17 @@ def main(argv=None):
     commands = parser.add_subparsers(dest="command", required=True)
     inspect = commands.add_parser("inspect", help="Print a static fingerprint of any ONNX file; does not run a model")
     inspect.add_argument("models", type=Path, nargs="+")
-    emit = commands.add_parser("quantize", help="Calibrate and emit XINT8 QDQ for folded ResNet")
-    emit.add_argument("--in-model", type=Path, default=Path("models/resnet50_fp32.onnx"))
+    emit = commands.add_parser("quantize", help="Calibrate and emit XINT8 QDQ for folded ResNet or head-cut YOLOv8")
+    emit.add_argument("--in-model", type=Path, default=Path("models/resnet50_fp32.onnx"),
+                      help="Float export; the family (folded ResNet or head-cut YOLO) is read from its operators")
     emit.add_argument("--out", type=Path, required=True)
     cle = emit.add_mutually_exclusive_group(required=True)
     cle.add_argument("--cle", action="store_true", help="Apply the transcribed cross-layer equalization first")
     cle.add_argument("--no-cle", action="store_true", help="Calibrate the float export as exported")
-    emit.add_argument("--calib-dir", type=Path, default=Path("data/calib"))
-    emit.add_argument("--cfg-path", type=Path, default=Path("models/preprocess_config.json"))
+    emit.add_argument("--calib-dir", type=Path, default=None,
+                      help="data/calib for ResNet, data/coco_calib for YOLO unless given")
+    emit.add_argument("--cfg-path", type=Path, default=Path("models/preprocess_config.json"),
+                      help="Classification preprocessing config (ResNet only; YOLO letterboxes to the graph input)")
     emit.add_argument("--limit", type=int, default=64)
     emit.add_argument("--scratch", type=Path, default=Path("scratch"))
     emit.add_argument("--scales-from", type=Path,
@@ -58,8 +61,8 @@ def main(argv=None):
     try:
         from onnx.checker import ValidationError
         from .graph import Graph
-        from .quantize import file_hash, quantize
-        from .sources import ImageFolderSource
+        from .quantize import file_hash, graph_family, quantize
+        from .sources import CocoSource, ImageFolderSource
         from .verify import graph_diff
 
         try:
@@ -101,6 +104,8 @@ def main(argv=None):
                 source = ImageFolderSource(args.calib_dir, cfg, len(listing), input_name)
                 if [p.as_posix() for p in source.listing()] != listing:
                     parser.error("Calibration listing differs from the base sidecar")
+                if provenance.get("family", "folded_resnet") != "folded_resnet":
+                    raise NotImplementedError("AdaRound is gated on folded ResNet; the YOLO gate is open")
                 if provenance["cle"]:
                     # The float reference is the equalized float graph, as in Quark's post-process.
                     cross_layer_equalize(float_graph)
@@ -146,14 +151,21 @@ def main(argv=None):
             if args.out.exists() or Path(str(args.out) + ".quant.json").exists():
                 parser.error("Choose a new output/sidecar name; existing artifacts are never overwritten")
             source, cfg = None, None
+            graph = Graph.load(args.in_model)
+            family = graph_family(graph)
             if args.scales_from is None:
-                cfg = json.loads(args.cfg_path.read_text(encoding="utf-8"))
-                graph = Graph.load(args.in_model)
                 input_name = graph.model.graph.input[0].name
-                if graph.value_shape(input_name) != (1, *cfg["input_size"]):
-                    parser.error("Preprocessing config does not match model input shape")
-                source = ImageFolderSource(args.calib_dir, cfg, args.limit, input_name)
-            print(f"Ignition {__version__}: folded ResNet / {'CLE' if args.cle else 'no CLE'}", flush=True)
+                if family == "yolo_cut":
+                    from npu.yolo import input_size
+                    imgsz = input_size(list(graph.value_shape(input_name) or ()), str(args.in_model))
+                    source = CocoSource(args.calib_dir or Path("data/coco_calib"), args.limit, imgsz, input_name)
+                else:
+                    cfg = json.loads(args.cfg_path.read_text(encoding="utf-8"))
+                    if graph.value_shape(input_name) != (1, *cfg["input_size"]):
+                        parser.error("Preprocessing config does not match model input shape")
+                    source = ImageFolderSource(args.calib_dir or Path("data/calib"), cfg, args.limit, input_name)
+                cfg = source.preprocess()
+            print(f"Ignition {__version__}: {family} / {'CLE' if args.cle else 'no CLE'}", flush=True)
             print("IMPORT_BLOCK_ACTIVE quark torch", flush=True)
             report = quantize(args.in_model, args.out, scales_from=args.scales_from,
                               source=source, preprocess=cfg, scratch=args.scratch, cle=args.cle)

@@ -1,5 +1,9 @@
 """Build a fresh Quark oracle (no CLE by default, --cle for the default preset, --adaround for XINT8_ADAROUND) for the owned quantizer's gates.
 
+The family is read from the float export: folded ResNet uses the classification
+preprocessing config, a head-cut YOLO export letterboxes through npu.yolo like
+pipelines/yolov8n/3b_quantize_cut.py. The recorded listing is what the owned producer must replay.
+
 Quark is imported only in this reference process. The owned producer runs in a
 separate process and never imports Quark. Use scripts/quant-reference.sh for guards.
 """
@@ -18,14 +22,16 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
 from quant.graph import Graph
-from quant.sources import ImageFolderSource, as_reader
+from quant.quantize import graph_family
+from quant.sources import CocoSource, ImageFolderSource, as_reader
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--in-model", type=Path, default=Path("models/resnet50_fp32.onnx"))
     parser.add_argument("--out", type=Path, required=True)
-    parser.add_argument("--calib-dir", type=Path, default=Path("data/calib"))
+    parser.add_argument("--calib-dir", type=Path, default=None,
+                        help="data/calib for ResNet, data/coco_calib for YOLO unless given")
     parser.add_argument("--cfg-path", type=Path, default=Path("models/preprocess_config.json"))
     parser.add_argument("--limit", type=int, default=64)
     parser.add_argument("--cle", action="store_true", help="Keep Quark's default include_cle=True")
@@ -36,15 +42,22 @@ def main():
     if args.out.exists() or sidecar.exists():
         parser.error("Reference output or sidecar already exists; choose a new name")
     graph = Graph.load(args.in_model)
-    cfg = json.loads(args.cfg_path.read_text(encoding="utf-8"))
+    family = graph_family(graph)
     input_name = graph.model.graph.input[0].name
-    if graph.value_shape(input_name) != (1, *cfg["input_size"]):
-        parser.error("Preprocessing config does not match model input shape")
-    source = ImageFolderSource(args.calib_dir, cfg, args.limit, input_name)
+    if family == "yolo_cut":
+        from npu.yolo import input_size
+        imgsz = input_size(list(graph.value_shape(input_name) or ()), str(args.in_model))
+        source = CocoSource(args.calib_dir or Path("data/coco_calib"), args.limit, imgsz, input_name)
+    else:
+        cfg = json.loads(args.cfg_path.read_text(encoding="utf-8"))
+        if graph.value_shape(input_name) != (1, *cfg["input_size"]):
+            parser.error("Preprocessing config does not match model input shape")
+        source = ImageFolderSource(args.calib_dir or Path("data/calib"), cfg, args.limit, input_name)
+    cfg = source.preprocess()
     with args.in_model.open("rb") as stream:
         model_hash = hashlib.file_digest(stream, "sha256").hexdigest()
     report = {
-        "machine": "Desktop 2 / Ryzen 7 8700G", "include_cle": args.cle, "include_fast_ft": args.adaround,
+        "machine": "Desktop 2 / Ryzen 7 8700G", "family": family, "include_cle": args.cle, "include_fast_ft": args.adaround,
         "float_model_sha256": model_hash, "preprocess": cfg,
         "listing": [p.as_posix() for p in source.listing()],
         "versions": {p: metadata.version(p) for p in ("amd-quark", "onnx", "onnxruntime", "numpy")},

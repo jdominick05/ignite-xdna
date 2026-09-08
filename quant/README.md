@@ -1,7 +1,8 @@
 # Ignition Alpha
 
 Ignition **0.1.0a1** independently calibrates and quantizes this repository's folded
-ResNet50 ONNX export into the XINT8 QDQ dialect used by the XDNA1 VitisAI backend.
+ResNet50 and head-cut YOLOv8n ONNX exports into the XINT8 QDQ dialect used by the
+XDNA1 VitisAI backend.
 The quantization command imports neither Quark nor torch. It writes an ONNX model
 and a `.quant.json` sidecar with version, hashes, calibration listing, candidate
 errors, scales, parameter sharing and refinement decisions.
@@ -14,20 +15,20 @@ ONNX quantizer. Its internal package remains `quant`. See the
 
 | Area | Alpha contract |
 |---|---|
-| Measured model | `resnet50.a1_in1k`, folded FP32 export, default 224px input |
-| Graph | Standard-domain Conv/Relu/Add/MaxPool/GlobalAveragePool/Flatten/Gemm; one input/output; GAP receives a 7×7 spatial tensor |
+| Measured models | `resnet50.a1_in1k`, folded FP32 export, default 224px input; `yolov8n_cut`, the head-cut YOLOv8n export at 640px |
+| Graph | Folded ResNet: standard-domain Conv/Relu/Add/MaxPool/GlobalAveragePool/Flatten/Gemm, one input/output, GAP receives a 7×7 spatial tensor. Head-cut YOLOv8: Conv/Sigmoid/Mul/Add/Concat/MaxPool/Resize/Split, one input, the six head outputs; Split is rewritten to Slice and SiLU to the DPU HardSigmoid chain as the vendor does. The family is read from the operators |
 | Export | Opset 17, IR 8, fully static batch 1 |
-| Quantization | Exact-sample MinMSE; scalar power-of-two scales; UINT8/zp128 activations and INT8/zp0 weights/biases; optional transcribed CLE (`--cle`, Conv→Conv pairs only) |
+| Quantization | Exact-sample MinMSE over each pipeline's own reader (the timm transform, or `npu.yolo.letterbox` at the graph's input size); scalar power-of-two scales; UINT8/zp128 activations and INT8/zp0 weights/biases; MaxPool/Resize outputs share their input's parameters; optional transcribed CLE (`--cle`, Conv→Conv pairs only; zero patterns on the SiLU net, as in the vendor's default preset) |
 | Execution target | Windows, Phoenix/Hawk Point XDNA1, Ryzen AI 1.7.1; measured on Phoenix |
 | AdaRound | `python -m quant adaround` on an emitted file: Quark's FastFinetune AdaRound transcribed (torch, `resnet_env`); byte-identical to a fresh same-listing `XINT8_ADAROUND` oracle on ResNet50, same machine and runtime |
-| Additional tools | Static inspection of any ONNX file (contract violations reported, not enforced), position-table replay, graph comparison, full classification evaluation, controlled EP probes and a refinement probe against Quark |
+| Additional tools | Static inspection of any ONNX file (contract violations reported, not enforced), position-table replay, graph comparison, full classification evaluation, controlled EP probes, a refinement probe and a preparation probe against Quark |
 
 Other graphs are unvalidated even if they share those operators. Unsupported operators,
 batch/opset contracts and GAP shapes fail explicitly. Exactly one of `--cle` and
 `--no-cle` is required; `--cle` applies the transcribed default-preset equalization
-(Conv→Conv pairs; depthwise pairs, Gemm pairs and Clip replacement raise). YOLO,
-per-channel weights, INT32 bias and arbitrary scales are outside the alpha's
-production scope; AdaRound is the separate `adaround` command on an emitted file.
+(Conv→Conv pairs; depthwise pairs, Gemm pairs and Clip replacement raise). YOLO
+AdaRound, per-channel weights, INT32 bias and arbitrary scales are outside the alpha's
+production scope; AdaRound is the separate `adaround` command on an emitted ResNet file.
 Probe mutations are experiments, not presets.
 
 ## Prepare the local artifacts
@@ -71,6 +72,17 @@ python -m quant inspect models/resnet50_ignition_custom.onnx
 Replace `--no-cle` with `--cle` for the default-preset recipe; the sidecar then carries
 the ordered pair list and per-pair scale statistics under `cle_report`.
 
+For the head-cut YOLOv8n export, name the model and the COCO calibration folder; the
+letterbox size is read from the graph input and `--cfg-path` is ignored:
+
+```bash
+./scripts/quant-own.sh --in-model models/yolov8n_cut.onnx --calib-dir data/coco_calib --out models/yolov8n_cut_ignition_cle_c64.onnx --log results/quant/quant_yolov8n_cut_ignition_cle_c64.log --cle
+```
+
+The sidecar records `prepare.split_to_slice` (8 on yolov8n), the `hardsigmoid`
+replacement/scaling counts (57 each) and every refinement move. Calibration spools
+all 218 activation tensors, 7,106,560,000 bytes for 64 images, under `scratch/`.
+
 `inspect` loads permissively and reports `export_contract` and `onnx_checker` per
 file; `quantize` keeps the strict loader. Direct Python commands print to the
 terminal; use the shell wrappers when collecting repository evidence. Existing output models and sidecars are never overwritten.
@@ -110,9 +122,11 @@ documents those commands. With that reference and labeled `data/eval/` available
 
 ```bash
 ./scripts/quant-validate.sh --model models/resnet50_ignition_alpha.onnx --reference models/resnet50_quark_nocle_c64.onnx --tag resnet50_ignition_alpha_verify
+./scripts/quant-validate.sh --family yolo --model models/yolov8n_cut_ignition_cle_c64.onnx --reference models/yolov8n_cut_quark_cle_c64.onnx --tag yolov8n_cut_ignition_cle_c64
 ```
 
-This compares parameters, runs full labeled CPU/NPU evaluation, requires a clean
+This compares parameters, runs full labeled CPU/NPU evaluation (all 5,000 val2017
+images through `pipelines/yolov8n/5_eval_map.py` with `--family yolo`), requires a clean
 pre-run hardware-context check, uses fresh compilation and records the EP report.
 For CPU-only verification add `--cpu-only`. Quark is needed only to generate the
 optional oracle, not by Ignition or its inference commands.
@@ -121,6 +135,11 @@ optional oracle, not by Ignition or its inference commands.
 the oracle's positions and diffs Quark's refinement against Ignition's on identical
 inputs. It runs in `resnet_env` because it imports Quark, and writes only its log.
 
+`./scripts/quant-prepare-probe.sh --log results/quant/prepare_probe_<tag>.log --in-model <float export> [--replay-from <committed XINT8 file>] [--cle]`
+compares Quark's pre-calibration graph with Ignition's prepared graph, reports each
+vendor preparation step in isolation and, with `--replay-from`, re-emits a committed
+artifact from its own positions and diffs it. Same environment rule, same single output.
+
 Read [Alpha validation](../docs/BENCHMARKS.md#ignition-alpha-release-validation) for
 the versioned artifact's evidence and [acceptance findings](../docs/BENCHMARKS.md#ignition-controlled-resnet-qdq-acceptance)
 for numerical traps. Successful EP placement does not establish correct outputs;
@@ -128,4 +147,6 @@ even an optimized CPU reference can disagree with unoptimized ONNX computation.
 With `--cle` the output reproduces the repository's plain-XINT8 ResNet50 to the integer
 ([CLE parity](../docs/BENCHMARKS.md#ignition-cle-parity-and-the-default-xint8-preset)); `adaround` on that file
 reproduces a fresh `XINT8_ADAROUND` oracle byte for byte on the same machine
-([AdaRound parity](../docs/BENCHMARKS.md#ignition-adaround-parity)).
+([AdaRound parity](../docs/BENCHMARKS.md#ignition-adaround-parity)). On the head-cut
+YOLOv8n export the same `--cle` run matches a fresh same-listing oracle position for
+position and integer for integer ([YOLO preparation parity](../docs/BENCHMARKS.md#ignition-yolov8n-cut-preparation-parity)).
