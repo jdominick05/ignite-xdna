@@ -212,6 +212,22 @@ NPU dispatch) at all six node shapes and found it erases every one of the 33/49 
 from `groupnorm_bf16_kernel_npu.log` — **0/49 nodes survive a real splice as currently
 designed.**
 
+**`groupnorm_bf16_handoff_floor_v2_npu.log`** — reopens the question above: the floor was
+a slow conversion function, not physics. Three challenges to the v1 log, each checked with
+a measurement: a DMA-floor arithmetic retraction (no new measurement — L is per-group
+length, so L=301056 moves 32·L = 9.6M elements, and the kernel was already at the floor);
+`ml_dtypes.astype()` has no SIMD path for bfloat16 (not a native numpy dtype, so it runs a
+scalar loop) — replaced with a strided-view truncation and preallocated buffers, cutting
+the combined pack+unpack at L=301056 from ~22.6ms to ~4.0ms (5.6×) and the real two-process
+floor from 23.6ms to 5.7ms (CPU still wins there, 1.65× not 6.8×), while isolating the
+protocol alone (`--no-convert`, zero conversion) measures 1.19ms/call, already **under**
+CPU's 3.47ms; and a re-profile of the real model showing the QuantizeLinear/
+DequantizeLinear nodes wrapping every InstanceNorm site add 56.8% on top of its own cost
+(65.08ms across all 49 nodes, 11.1% of the model's latency, not InstanceNorm's 42.37ms /
+7.2% alone) — the real, larger target an int8-native design would need to clear, which the
+measured protocol floor already does at the hardest shape. No int8-native kernel is built;
+this reopens the question rather than answering it.
+
 **`mlir_aie_bf16_matmul_npu.log`** — pivot away from that memory-bound splice toward a
 compute-bound op: a static inventory of bf16 support across `programming_examples/`
 (matmul/eltwise/eltwise_unary/scale_shift/softmax/swiglu real on this chip,

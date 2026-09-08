@@ -1,0 +1,166 @@
+Follow-up to groupnorm_bf16_handoff_floor_npu.log, which measured the two-process
+splice handoff floor using ml_dtypes.astype() for fp32<->bf16 conversion and found it
+erased every one of the 33/49 per-node kernel wins. Three challenges to that result,
+raised in review, each checked here with a real measurement rather than argued from
+memory:
+
+  1. The DMA-floor retraction: L in groupnorm_bf16_kernel_npu.log is the per-group
+     length, so at L=301056 the kernel moves 32*L = 9.6M elements (19.3MB bf16), not
+     L elements -- two reads plus a write at ~38 GB/s lands right on the kernel's
+     measured 1535us. The kernel is at the DMA floor, not 28x off it as first
+     estimated. No new measurement needed here; this corrects an earlier arithmetic
+     error, not a claim this log re-checks.
+  2. Is the v1 "floor" a hardware floor or a slow-conversion-function artifact?
+     ml_dtypes.bfloat16 is not a native numpy dtype, so `.astype()` runs a scalar
+     per-element loop with no SIMD path -- checked below.
+  3. Is the two-process design itself removable? A DequantizeLinear precedes every
+     InstanceNorm node in this model (already known -- the QDQ sandwich is checked in
+     full below), which raises the question of whether splicing at the int8 boundary,
+     with on-core dequant/requant, changes the arithmetic. This log establishes the
+     graph structure and the true CPU cost that boundary would displace; it does NOT
+     build that kernel -- see "What is still not built" at the end.
+
+--- 1. Fast conversion: ml_dtypes vs a strided-view truncation ---
+
+Isolated microbenchmark, L=301056 (9.6M elements), resnet_env17, 20-50 iters after
+warmup:
+
+  pack   (fp32->bf16)  ml_dtypes.astype()          : 16,836.9 us
+  pack   (fp32->bf16)  x.view(uint16)[1::2], out=  :  2,025.6 us   (8.3x faster)
+  unpack (bf16->fp32)  ml_dtypes.astype()          :  5,733.3 us
+  unpack (bf16->fp32)  zero-ext view, out=         :  1,976.7 us   (2.9x faster)
+  combined pack+unpack: ml_dtypes ~22,600us  vs  fast path ~4,002us  (5.6x faster)
+
+The strided-view trick is exact for pack only up to rounding mode: it takes the high
+16 bits of each little-endian fp32 word, which is bf16-by-truncation, not
+round-to-nearest-even -- up to ~1 ULP more error than the kernel's existing RNE path,
+on top of the ~0.17% rel-L2 bf16 rounding error groupnorm.py already carries and
+tolerates. Not re-verified numerically against real golden tensors in this log (this
+log, like v1, never touches the real kernel -- identity copy stands in for it
+throughout, per measure_handoff_floor.py's design). Preallocating the output buffer
+and writing via indexed assignment (no `.copy()`, no fresh array per call) is most of
+the win: a bare `.copy()` of the same strided view, with no preallocation, measured
+3965.8us -- almost 2x slower than the `out=` version -- confirming the allocation
+itself, not the strided memory pattern, was much of v1's hidden cost too.
+
+--- 2. Re-measuring the real two-process floor with the fast conversion ---
+
+kernels/groupnorm_bf16/measure_handoff_floor_v2.py: same shared-memory ping-pong
+design as v1 (control block + two data buffers, busy-spin handshake, identity copy on
+the kernel side), fast strided pack/unpack with preallocated scratch buffers instead
+of ml_dtypes. Adds --no-convert (raw uint16 passthrough, zero conversion work at all)
+to isolate the protocol cost alone. Desktop 2 / Phoenix, resnet_env17 (ep role) <->
+ironenv (kernel role), L=301056 (the tightest CPU-vs-kernel margin), 20 warmup + 200
+timed iters:
+
+  v1 floor (ml_dtypes conversion)      : 23,618.9 us/call   CPU (3472.1us) wins 6.8x
+  v2 floor (fast strided conversion)   :  5,711.8 us/call   CPU wins 1.65x
+  v2 protocol floor (--no-convert)     :  1,189.4 us/call   THIS beats CPU by 2.9x
+
+Fixing only the conversion function (challenge 2) does not flip the verdict at
+L=301056 -- CPU still wins, just by 1.65x instead of 6.8x, matching the arithmetic:
+allocation/protocol residual was already ~2.1ms in v1's own diagnosis, and 5,711.8 -
+4,002 (measured combined pack+unpack) = ~1,710us lines up with that residual. But the
+--no-convert run shows the shared-memory protocol itself, at the FULL bf16 payload
+size (19.27MB/direction) with zero conversion, is not the obstacle v1 made it look
+like -- it already beats CPU on its own. Every bit of the remaining gap in the v2 row
+above is attributable to host-side conversion, not IPC.
+
+--- 3. Is the DequantizeLinear feeding these nodes actually adjacent? ---
+
+Loaded models/resnetv2_50x3_xint8.onnx (onnx.load, no onnxruntime needed), built a
+producer/consumer map, and checked -- not sampled, asserted -- the full 4-node QDQ
+sandwich around all 49 InstanceNormalization nodes:
+
+  [[upstream op]] -> QuantizeLinear (Q_in) -> DequantizeLinear (DQ_in) ->
+  InstanceNormalization -> QuantizeLinear (Q_out) -> DequantizeLinear (DQ_out) ->
+  [[downstream op]]
+
+All 49/49 nodes match this exact pattern with no other float op riding along on
+either side (verified via assert, not eyeballed on a sample) -- the cleanest possible
+case for an int8-boundary splice: nothing else needs to move with it.
+
+--- 4. The QDQ nodes' real runtime cost -- and a correction to what "CPU cost" means ---
+
+Folding Q_out's scale into the kernel's existing `y = a*x + b` affine pass, and DQ_in's
+scale into gn_stats' normalization (both raised in review, not built here), would
+delete those two ops from CPU's ledger, not just shrink wire traffic. Re-profiled the
+real model (ORT enable_profiling=True chrome-trace, same methodology as
+results/bit/profile_instancenorm_splice_feasibility.log, one real preprocessed image,
+10 timed calls after 3 warmup) and matched trace events to the exact 4 QDQ node names
+per site from the graph mapping above.
+
+Result: Q_in and DQ_out do not appear as separate timed events anywhere in the trace,
+at 0/49 sites. ORT's own graph optimizer has already eliminated them at runtime (each
+site's Q_in feeds only a matching-scale DQ_in with no other consumer, and
+symmetrically on the output side) -- there is no cost there to "absorb," they already
+don't run. DQ_in and Q_out DO run, with real measured cost, at all 49/49 sites:
+
+  L        nodes  InstNorm us  DQ_in us  Q_out us  REAL_total us  (InstNorm-only, prior logs)
+  9408       5        147.6      43.1      59.0       249.7          (117.6)
+  18816     11        313.7      69.7     125.1       508.5          (233.3)
+  37632     11        547.1     112.3     176.6       836.0          (495.8)
+  75264     14        908.5     196.1     302.9      1407.5          (989.4)
+  150528     5       1755.5     363.9     623.7      2743.0         (1899.3)
+  301056     3       3265.0     757.6    1183.6      5206.2         (3472.1)
+
+Sum across all 49 nodes: InstanceNorm alone 41,498.7us (consistent with the 42,372.7us
+in profile_instancenorm_splice_feasibility.log -- different image/run, same ballpark,
+not a revision). InstanceNorm + DQ_in + Q_out: 65,076.5us -- 56.8% more than the
+InstanceNorm-alone number every prior log in this project compared kernel designs
+against.
+
+This changes the real target: a splice that only replaces InstanceNorm (this kernel's
+current design) has to beat the InstNorm column. A splice that ALSO takes over
+dequant/requant by construction (int8 in, on-core dequant, on-core requant, int8 out)
+has to beat REAL_total instead -- a much more generous bar, since it is displacing
+work that costs 56.8% more than what every previous comparison in this project used.
+
+Against the model's own measured 586.32ms/image latency
+(results/bit/lat_resnetv2_50x3_xint8_npu.log): this QDQ sandwich's real current cost
+is 65,076.5us = 11.1% of total (not the 7.2% RESEARCH.md/README.md currently state,
+which used InstanceNorm alone) -- README.md/RESEARCH.md's "3.3% realistic ceiling"
+framing is superseded by this number and needs updating once a real int8-boundary
+kernel is built and measured, not projected from this log alone.
+
+--- 5. Where the numbers point, if built ---
+
+Not measured, stated as a projection only: at L=301056, the v2 protocol-floor
+(1,189.4us, at the full bf16 payload size, zero conversion) already sits comfortably
+under the new 5,206.2us target -- 4.4x margin -- before any int8-specific saving is
+counted. An int8 payload halves that transfer again (301056*32 = 9.6M elements, 1
+byte each = 9.63MB/direction vs bf16's 19.27MB), and reading review feedback closely:
+pass 2 of the kernel's two-pass design (stats, then normalize) re-reads the same block
+from DDR a second time -- at L=301056 the 9.6M-element block cannot fit in on-core
+64KB tiles, so this is a real second int8 DMA read, not free, bringing total DMA to
+roughly input (9.63MB) + pass-2 re-read (9.63MB) + output (9.63MB) = ~28.9MB, against
+the current bf16 design's ~57.8MB (3x 19.27MB) -- a real 2x DMA reduction at this
+shape, not the 4x a single-read mental model would suggest. The on-core int8->bf16
+widen-and-dequant-multiply cost is real, not free, and has not been measured or even
+microbenchmarked here -- explicitly not assumed to be zero in any total above.
+
+--- What is still not built ---
+
+- The actual AIE kernel change: an int8 input/output path with the dequant multiply
+  fused into gn_stats and the requant fused into gn_affine. groupnorm.py's kernel
+  today takes bf16 in and out; none of this log touches that kernel.
+- The host-side mechanism to extract the int8 tensor + scale at each site (currently
+  extract_golden.py pulls the already-dequantized fp32 tensor) and to feed a
+  requantized int8 result back into the graph at Q_out's position instead of DQ_out's
+  (moot anyway, since DQ_out doesn't run) or wherever the real splice point ends up
+  being wired.
+- Any measurement of the on-core int8->bf16 conversion's actual cost, or of the real
+  two-pass DMA volume at int8, on hardware.
+
+Until those are built, the honest status is unchanged in kind from every prior log in
+this chain: a genuine, verified NPU compute win in isolation (groupnorm_bf16_kernel_npu.log),
+a verified two-process protocol floor that no longer looks like the blocker
+(this log, section 2), a verified clean graph boundary for an int8-native design (this
+log, section 3), and a verified, larger-than-previously-assumed CPU target for that
+design to beat (this log, section 4) -- but no int8-native kernel has been written or
+measured. This is the first version of this investigation where the projected numbers
+suggest a real win rather than a 2-16x loss; it is still a projection.
+
+Machine: Desktop 2 / Phoenix. Server: mlir-aie ironenv. Client: resnet_env17.
+kernels/groupnorm_bf16/measure_handoff_floor_v2.py added; measure_handoff_floor.py
+(v1) untouched, kept as the record of the conversion-function-inflated result.

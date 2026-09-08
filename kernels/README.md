@@ -33,7 +33,7 @@ array program) into `~/.npu/cache/<hash>/`; later runs of the same shape hit the
 | `bf16_matmul_sweep/` | Nothing — the bf16 GEMM shape sweep | **Wins.** NPU 1.18×–1.78× over CPU bf16 once M/N ≥ 1024 |
 | `int8_matmul_sweep/` | Nothing — the int8 GEMM sweep, with the CPU int8 GEMM baseline | **Loses at the default tile; wins 1.10×–1.83× at M ≥ 512, N ≥ 2048 with `n=64`**, a tile bf16 can't fit |
 | `gemm_tile_sweep/` | Nothing — a local `whole_array.py` patch, not a design | Adds `--c-single-buffer`, which frees the 16 KB that puts the 64×64 tile in reach for bf16 |
-| `groupnorm_bf16/` | `InstanceNormalization` / `GroupNorm(32)` in `resnetv2_50x3_xint8.onnx` | Wins on 33/49 nodes standalone; **0/49 once the handoff is counted** |
+| `groupnorm_bf16/` | `InstanceNormalization` / `GroupNorm(32)` in `resnetv2_50x3_xint8.onnx` | Wins on 33/49 nodes standalone; v1 measured **0/49 once the handoff is counted** — reopened: the floor was a slow conversion function, not physics; v2 cuts it 23.6ms→5.7ms and isolates a 1.19ms protocol-only floor, already under CPU. Reopened, unbuilt |
 | `attention_bf16/` | Multi-head attention in `mobilevit_xxs` | **Loses 71×–240×.** Numerically correct, badly written |
 | `conv2x_baseline/` | Nothing — the CPU baseline for `ml/resnet/layers_conv2_x` | **CPU wins 6.3×–8.5×** like-for-like int8 |
 | `bottleneck_sweep/` | Nothing — the spatial sweep conv2x asked for | **CPU wins 5.7×–12.75×.** The int8 conv op class is closed |
@@ -142,19 +142,42 @@ Replaces the `InstanceNormalization` (really `GroupNorm(32)`) in
 `resnetv2_50x3_xint8.onnx` — the op that falls to CPU on that model.
 
 The kernel alone beats CPU on 33 of 49 nodes
-(`results/aie/groupnorm_bf16_kernel_npu.log`). **But the measured two-process handoff
-floor erases the win at every shape — 0/49 once spliced**
-(`results/aie/groupnorm_bf16_handoff_floor_npu.log`). The splice needs two OS processes
-because the XRT Python binding is built against Python 3.13 and the EP's env is 3.12, a
-hard ABI wall; the floor is 789 µs–23.6 ms per call depending on shape, and ~90% of it at
-the largest shape is the fp32/bf16 conversion, not the shared-memory transfer.
+(`results/aie/groupnorm_bf16_kernel_npu.log`). The measured two-process handoff floor
+first erased the win at every shape — 0/49 once spliced
+(`results/aie/groupnorm_bf16_handoff_floor_npu.log`) — because the splice needs two OS
+processes (the XRT Python binding is built against Python 3.13 and the EP's env is
+3.12, a hard ABI wall); that floor read 789 µs–23.6 ms per call depending on shape,
+~90% of it at the largest shape the fp32/bf16 conversion, not the shared-memory
+transfer.
 
-`extract_golden.py` and `measure_handoff_floor.py --role ep` are the two scripts here that
-run in `resnet_env17`, not ironenv: the former pulls a real node's input, params and ORT's
-own CPU output out of the model into `data/golden/` (git-ignored) so the kernel is checked
-against the actual tensors, not random data; the latter is one side of the two-process
-handoff-floor measurement above (the other side, `--role kernel`, runs in ironenv like
-everything else here).
+**Reopened (v2): the floor was a slow conversion function, not physics.**
+`ml_dtypes.astype()` has no SIMD path (bfloat16 isn't a native numpy dtype, so it runs
+a scalar per-element loop); `measure_handoff_floor_v2.py` replaces it with a
+strided-view truncation and preallocated buffers, dropping the combined pack+unpack at
+L=301056 from ~22.6 ms to ~4.0 ms (5.6×) and the real two-process floor from 23.6 ms to
+5.7 ms. CPU still wins there (1.65×, not 6.8×) — but isolating the protocol alone
+(`--no-convert`, zero conversion, full bf16 payload) measures 1.19 ms/call, already
+**under** CPU's 3.47 ms: the shared-memory handoff was never the obstacle, the
+conversion function was. Every one of the 49 InstanceNorm nodes also sits inside a
+QuantizeLinear→DequantizeLinear→InstanceNorm→QuantizeLinear→DequantizeLinear sandwich;
+ORT already eliminates the outer pair at runtime, but the inner dequantize/quantize
+pair adds 56.8% on top of InstanceNorm's own cost (65.08 ms across all 49 nodes, 11.1%
+of the model's 586.32 ms/image latency, not InstanceNorm's 42.37 ms / 7.2% alone) —
+folding those two nodes' scales into the kernel's stats/affine passes would let an
+int8-native design target that larger number, a bar the measured 1.19 ms protocol floor
+already clears at the hardest shape (5.21 ms target at L=301056) before any
+int8-specific payload reduction is counted. No int8-native kernel is built: the on-core
+int8→bf16 widen/dequant cost is real and unmeasured, and the host-side plumbing to
+extract/reinsert int8 tensors at these graph points doesn't exist. Still a projection,
+not a measurement of the thing itself. See
+`results/aie/groupnorm_bf16_handoff_floor_v2_npu.log`.
+
+`extract_golden.py` and `measure_handoff_floor.py`/`measure_handoff_floor_v2.py --role
+ep` are the scripts here that run in `resnet_env17`, not ironenv: the first pulls a real
+node's input, params and ORT's own CPU output out of the model into `data/golden/`
+(git-ignored) so the kernel is checked against the actual tensors, not random data; the
+other two are one side each of the two-process handoff-floor measurements above (the
+other side, `--role kernel`, runs in ironenv like everything else here).
 
 ## `attention_bf16/`
 

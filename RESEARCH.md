@@ -956,10 +956,45 @@ been closed:
   model's top-1 with bf16 in these nodes (now moot unless a batched splice is
   built and shown to change the handoff numbers above).
   `results/aie/groupnorm_bf16_handoff_floor_npu.log`.
+- **Follow-up: the floor was a conversion function, not physics -- and the real
+  target is bigger than assumed.** Three challenges to the log above, each checked
+  with a measurement: (1) DMA-floor retraction -- L is per-group length, so
+  L=301056 moves 32*L = 9.6M elements; the kernel was already at the floor (1535us
+  measured vs ~1489us projected), not 28x off it, an earlier arithmetic error, not a
+  re-measurement. (2) `ml_dtypes.bfloat16` isn't a native numpy dtype, so
+  `.astype()` runs a scalar loop with no SIMD path -- `measure_handoff_floor_v2.py`
+  replaces it with a strided-view truncation (`x.view(uint16)[1::2]`, bf16-by-
+  truncation rather than RNE) plus preallocated `out=` buffers: combined pack+unpack
+  at L=301056 drops from ~22.6ms to ~4.0ms (5.6x), and the real two-process floor at
+  that shape drops from 23.6ms to 5.7ms (CPU still wins, 1.65x not 6.8x) --
+  isolating the protocol alone (`--no-convert`, zero conversion, full bf16 payload)
+  measures 1.19ms/call, already UNDER CPU's 3.47ms. The shared-memory handoff was
+  never the obstacle; the conversion function was. (3) Every one of the 49
+  InstanceNorm nodes sits inside a `QuantizeLinear -> DequantizeLinear ->
+  InstanceNorm -> QuantizeLinear -> DequantizeLinear` sandwich (verified
+  programmatically against the real graph, all 49/49, nothing else riding along) --
+  re-profiling the real model (same ORT chrome-trace methodology as
+  profile_instancenorm_splice_feasibility.log) shows the input-side quantize and
+  output-side dequantize are already optimized away by ORT at runtime (0/49 sites),
+  but the input-side dequantize and output-side quantize DO run, adding 56.8% on top
+  of InstanceNorm's own cost -- 65.08ms across all 49 nodes, not 42.37ms, i.e. 11.1%
+  of the model's 586.32ms/image latency, not 7.2%. Folding those two nodes' scales
+  into the kernel's existing stats/affine passes (raised in review, not built) would
+  let an int8-native design (int8 in, on-core dequant, on-core requant, int8 out)
+  target that larger 65.08ms number instead of InstanceNorm alone -- a bar the
+  measured 1.19ms protocol floor already clears at the hardest shape (5.21ms target
+  at L=301056) before any int8-specific payload reduction is counted. Nothing about
+  the actual int8-native kernel is built: the on-core int8->bf16 widen-and-dequant
+  cost is real and unmeasured, not assumed zero, and the host-side plumbing to
+  extract/reinsert int8 tensors at these graph points doesn't exist. First version
+  of this chain where the projected numbers point to a win, not a loss -- still a
+  projection, not a measurement of the thing itself.
+  `results/aie/groupnorm_bf16_handoff_floor_v2_npu.log`.
 - **Follow-up: GroupNorm was the wrong shape of op for bf16 to begin with -- pivoting
-  to a compute-bound one.** GroupNorm is ~6 ops per element with no arithmetic
-  intensity; bf16 there only ever bought a 2x byte-size reduction over fp32, never a
-  compute win, which is why every fix to the handoff floor above was fighting a
+  to a compute-bound one.** Written after the reopening above, not unaware of it: even
+  taking the reopened floor at face value, GroupNorm is ~6 ops per element with no
+  arithmetic intensity; bf16 there only ever bought a 2x byte-size reduction over fp32,
+  never a compute win, which is why every fix to the handoff floor was fighting a
   boundary cost rather than the real constraint. AIE2's actual bf16 advantage is a
   native bf16xbf16->fp32 MAC, which a memory-bound op never exercises. Decision:
   check whether a fused self-attention block (QK^T -> softmax -> PV, one xclbin, no
