@@ -510,11 +510,13 @@ resolve, carried forward from earlier engineering notes and updated for what has
 been closed:
 
 - **Resolution vs. accuracy for classification — done, 128–384px.** 256px is the
-  measured peak of the speed/accuracy frontier; everything above it (288/320/384px) is
-  strictly dominated — worse latency and worse accuracy at once, confirmed by the
-  320/384px outlier check rather than assumed from the 288px point alone. AdaRound
-  across the same sweep is still open — the table so far is plain XINT8, and AdaRound's
-  recovery could plausibly move where the peak sits.
+  measured peak of the speed/accuracy frontier under plain XINT8 (74.00% at 6.32 ms);
+  everything above it is strictly dominated. AdaRound across the peak resolutions (224²,
+  256², 288²) is now measured too: 256² AdaRound matches 224² on top-1 (both 79.80%)
+  while achieving higher top-5 (93.40% vs 92.50%) at only 5.85 ms (vs 5.27 ms), and
+  nearly matches wide_resnet50_2 (80.10% / 93.40% at 9.66 ms) at 39% lower latency.
+  288² AdaRound (78.10% / 93.40% at 8.78 ms) confirms that resolutions above 256² remain
+  dominated even after rounding optimization.
 - **AdaRound for `wide_resnet50_2` and `wide_resnet101_2` — done.** `wide_resnet50_2`
   recovers 90.5% of its quantization loss, essentially matching resnet50's 90.0% (see the
   findings section above); the predicted "recovers less at width" effect didn't materialize,

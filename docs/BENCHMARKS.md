@@ -1042,18 +1042,29 @@ best measured point on the speed/accuracy frontier for this checkpoint** — bea
 default 224² on both axes at once, and beating every size tried above it on both axes too.
 
 **Does AdaRound change the curve?** AdaRound at 224² reaches 79.80% top-1 / 92.50%
-top-5 (5.27 ms). Testing AdaRound on 288² (`models/resnet50_r288_xint8_adaround.onnx`,
-`results/res/run_resnet50_r288_adaround_npu.log`, 1000 eval images) yields:
-* **78.10% top-1** (+6.60% over plain XINT8's 71.50%)
-* **93.40% top-5** (+3.90% over plain XINT8's 89.50%)
-* **8.78 ms** on NPU (393 / 395 nodes, 99.5%)
+top-5 (5.27 ms). Testing AdaRound across the resolutions bracketing 224² (256² and 288²)
+reveals how rounding recovery interacts with resolution:
 
-AdaRound recovers +6.60 points at 288², nearly matching its +7.70-point recovery at 224²
-(72.10% → 79.80%). The +6.60% recovery pushes 288² well above the plain XINT8 peak (256²
-at 74.00%), proving that much of the accuracy collapse at larger resolutions under plain
-XINT8 was rounding noise rather than pure resolution mismatch. However, 224² with AdaRound
-remains superior on both axes (79.80% top-1 at 5.27 ms vs 78.10% top-1 at 8.78 ms),
-confirming 224² as the optimal operating point for this checkpoint.
+| Resolution | Plain XINT8 top-1 | AdaRound top-1 | AdaRound top-5 | NPU Latency | NPU Nodes | Backing Logs |
+|---|---|---|---|---|---|---|
+| 224² | 72.10% | **79.80%** | 92.50% | **5.27 ms** | 393 / 395 | `results/adaround_latency_diff_adaround_npu.log` |
+| **256²** | **74.00%** | **79.80%** | **93.40%** | **5.85 ms** | 392 / 394 | `results/res/run_resnet50_r256_adaround_npu.log`, `diag_resnet50_r256_adaround.log` |
+| 288² | 71.50% | 78.10% | 93.40% | 8.78 ms | 393 / 395 | `results/res/run_resnet50_r288_adaround_npu.log`, `diag_resnet50_r288_adaround.log` |
+
+**Key findings on AdaRound across resolution**:
+- **Top-1 matches 224² exactly at 79.80%**: Under plain XINT8, 256² held a +1.90% lead
+  over 224² (74.00% vs 72.10%) because the extra spatial resolution helped the network
+  absorb per-tensor rounding noise. Once AdaRound closes the quantization gap (+7.70% at 224²,
+  +5.80% at 256²), both configurations converge to the identical **79.80%** ceiling of the float model.
+- **Top-5 improves by +0.90%**: 256² AdaRound achieves **93.40% top-5**, clearly outperforming
+  224² AdaRound's 92.50% and matching 288²'s 93.40%.
+- **Negligible latency penalty**: At **5.85 ms** (~171.0 img/s), 256² is only 0.58 ms slower than
+  224² (5.27 ms). If top-5 accuracy matters, 256² is the superior operating point.
+- **Comparison to `wide_resnet50_2`**: `wide_resnet50_2` + AdaRound scores 80.10% top-1 / 93.40% top-5
+  at 9.66 ms. ResNet50 at 256² with AdaRound reaches virtually identical accuracy (79.80% / 93.40%)
+  at **39% lower latency** (5.85 ms vs 9.66 ms, 171 img/s vs 103 img/s).
+- **288² remains dominated**: Top-1 falls off to 78.10% while latency jumps to 8.78 ms (a 50% latency
+  increase over 256² for 1.7 points lower top-1).
 
 ### Model width: does "width is nearly free" hold for a classifier too?
 
