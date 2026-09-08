@@ -266,8 +266,14 @@ installed versions, source/model SHA256 values, and raw fingerprints are in
   decay after warmup. `create_torch/base_qdq_quantizers.py:192-263` uses gamma=-0.1,
   zeta=1.1, floor plus stretched sigmoid, and hard rounding at alpha>=0.
   `train_torch/train_model.py:55-158` optimizes alpha with Adam, random batches, and
-  immediate early stop on non-improving rolling rounding loss. **[U]** full layer
-  caching/selection and selective updates remain for Phase 3; no parity claim yet.
+  immediate early stop on non-improving rolling rounding loss. **Resolved 2026-09-08 [M]:**
+  layer selection is every Conv/Gemm whose input arrives through Q->DQ and whose weight
+  through a DQ (`onnx_subgraph.py` `find_start`/`find_end`), ending at the Relu output when
+  one follows; the data path is sequential, the quantized sub-model under
+  `ORT_DISABLE_ALL` and the float sub-model under default optimization; SelectiveUpdate
+  (off in the preset) is not transcribed; `create_model_ops.py` builds the torch layer
+  twice, which the transcription mirrors. Parity is measured bitwise in the
+  [AdaRound parity section](../docs/BENCHMARKS.md#ignition-adaround-parity).
 - **Consumer model metadata bounded [L]:** stripping model metadata and changing the
   producer name to `Ignition` preserve placement and NPU outputs on the measured
   no-CLE ResNet. See the [acceptance study](../docs/BENCHMARKS.md#ignition-controlled-resnet-qdq-acceptance).
