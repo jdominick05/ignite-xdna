@@ -1091,10 +1091,9 @@ that works on this NPU is width, not a narrower model tuned harder or a better
 quantization recipe** — and it keeps paying off at nearly 5× the params, not just the
 first doubling.
 
-Caveat: plain XINT8, calibration 64 — same caveat as the resolution sweep above. No
-AdaRound run yet for either wide model, so none of this is a clean comparison against the
-79.8% AdaRound headline for resnet50 on its own terms; wide_resnet101_2 beating it anyway,
-without AdaRound, is the more striking reading of that number, not a like-for-like one.
+Caveat: plain XINT8, calibration 64 — same caveat as the resolution sweep above.
+(AdaRound has since been evaluated for both wide models; see the next section for
+the like-for-like comparison against the float baselines.)
 
 ### AdaRound at width: does it recover less on a wider model?
 
@@ -1110,24 +1109,31 @@ already measured above:
 |---|---|---|---|---|---|
 | resnet50 | 80.10% | 72.10% | 79.30% | −8.00 (10.0% rel.) | 7.20 (90.0% of the gap) |
 | wide_resnet50_2 | 81.00% | 71.50% | **80.10%** | −9.50 (11.7% rel.) | 8.60 (90.5% of the gap) |
+| wide_resnet101_2 | 82.00% | 80.20% | 79.90% | −1.80 (2.2% rel.) | −0.30 (wash on top-1; top-5 recovers 92.90% → 93.90%, closing 66.7% of gap) |
 
 **The prediction doesn't hold, in either direction.** The initial quantization penalty
-was actually *worse* for the wider model here (−9.50 vs −8.00, both absolute and
+was actually *worse* for the wider model at 50 layers (−9.50 vs −8.00, both absolute and
 relative) — the opposite of the YOLO n→s pattern — and AdaRound's recovery efficiency
-is essentially identical between them (90.0% vs 90.5% of the gap closed). Two
-takeaways: first, "quantization penalty shrinks with width" doesn't generalize from
-YOLOv8n→s to resnet50→wide_resnet50_2 — it was a real finding on that pair, not a law
-of width in general. Second, and more useful in practice: **AdaRound also fits fine at
-224² for a 2.7×-wider model** — the RAM wall that blocks it for YOLOv8s+ is specific to
-640×640 inputs (where layer 0 is the memory peak and scales with input resolution, not
-model width), not to width itself. Both AdaRound quantizations here ran through their
-full layer stack on this same 13.8 GB, ~4-5 GB-free box without incident.
+is essentially identical between them (90.0% vs 90.5% of the gap closed).
 
-`wide_resnet50_2` + AdaRound is now **the best speed/accuracy point in this repo for
-classification**: 80.10% top-1 at 9.66 ms, essentially matching `wide_resnet101_2`'s
-80.20% (17.90 ms) at roughly half the latency — because `wide_resnet101_2`'s width step
-confounded depth and recipe with width, while this one is the clean, isolated width
-step, now with AdaRound applied on top of it.
+**At `wide_resnet101_2` (101 layers, 126.9M params, 104 Conv layers), the story shifts again**:
+- **Plain XINT8 was already remarkably immune to quantization loss**: only −1.80 points of
+  top-1 loss from the 82.00% FP32 baseline (`results/wide/run101_fp32_cpu.log`), compared to
+  −8.00 for resnet50 and −9.50 for wide_resnet50_2. The massive parameter capacity absorbs
+  per-tensor rounding noise.
+- **AdaRound on `wide_resnet101_2`** (`results/wide/run101_adaround_npu.log`,
+  `results/wide/diag101_adaround.log`): Top-1 sits at **79.90%** (vs 80.20% plain XINT8, within
+  statistical noise on 1000 images), but **top-5 recovers clearly**: **92.90% → 93.90%**, closing
+  66.7% of the gap to the 94.40% FP32 ceiling.
+- **Latency & Placement**: Runs at **16.64 ms** on NPU (767 / 769 nodes, 99.7% on NPU),
+  delivering a **4.97× speedup over the 8-core Zen 4 CPU FP32 baseline** (82.78 ms).
+- **Practical comparison**: `wide_resnet50_2` + AdaRound remains **the best speed/accuracy point
+  in this repo for classification**: 80.10% top-1 at 9.66 ms, essentially matching
+  `wide_resnet101_2`'s 79.90% / 80.20% accuracy at nearly half the latency (9.66 ms vs 16.64 ms),
+  because `wide_resnet101_2` doubles depth (101 layers vs 50) without buying more top-1 accuracy.
+- **Resource requirement**: AdaRound on `wide_resnet101_2` ran 104 Conv layers through CPU FastFinetune
+  at 224² on this same 13.8 GB, ~4-5 GB-free box without incident, confirming once more that
+  AdaRound's memory limit is resolution-specific (640×640), not parameter- or depth-specific.
 
 ### Width and resolution together: does a wide model at low resolution beat a narrow model at high resolution?
 
