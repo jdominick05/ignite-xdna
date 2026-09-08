@@ -1,0 +1,20 @@
+Quant scaffold validation / Desktop 2 / Ryzen 7 8700G
+UTC: 2026-09-08T06:18:49.080010+00:00
+Environment: resnet_env
+Versions: {'numpy': '1.26.4', 'onnx': '1.19.0'}
+No Quark import or model execution; these are software checks, not Phase 1 parity or NPU gates.
+CODE SHA256 quant/__init__.py 41522a28b8175f85ef98cecf1bdf6b538a366662d36eccfe3b1a8748c88d2426
+CODE SHA256 quant/graph.py 673c12ff721e4652155b71b9c8c97af32c1367f4e2ca09965e329e2c9ae503e3
+CODE SHA256 quant/pow2.py 22805d66f80e342dcf05daf7f6d41efd7a44a58f5baf15983ff2b4c8db504043
+{"checker_after_sort": "PASS", "constant_or_initializer_mul_factors": {}, "model": "resnet50_fp32", "node_order_changed_in_memory": false, "nodes": 122, "original_checker": "PASS", "sha256": "d999c960ea12f9481e6fb43aab28ea3e2741c712fc4c30997b07d9b725cb87e6"}
+{"checker_after_sort": "PASS", "constant_or_initializer_mul_factors": {"1.0048828125": 1}, "model": "resnet50_xint8_c64", "node_order_changed_in_memory": true, "nodes": 380, "original_checker": "Nodes in a graph must be topologically sorted, however input '/global_pool/pool/GlobalAveragePool_output_0' of node: ", "sha256": "bd817280673fe25e67380a6adde1db82275d1aa284924a0e6b67ea97e4315722"}
+{"checker_after_sort": "PASS", "constant_or_initializer_mul_factors": {"1.0001220703125": 57}, "model": "yolov8n_cut_xint8", "node_order_changed_in_memory": true, "nodes": 957, "original_checker": "Nodes in a graph must be topologically sorted, however input '/model.0/act/Sigmoid_output_0' of node: ", "sha256": "f02e86ba1bf61ff3fdc159e29b15259567e279df06f68c6d9adeb966fe56c885"}
+{"checker_after_sort": "PASS", "constant_or_initializer_mul_factors": {}, "model": "resnet50_a8w8", "node_order_changed_in_memory": false, "nodes": 378, "original_checker": "PASS", "sha256": "2194ea10e85bdd189c77f37fa2ee1589a8e075ca01eeb62f4ea22c79c98da490"}
+Export contract and graph dependency rejection checks: PASS
+Half ties / saturation INT8: [-127, -127, -127, -2, -2, 0, 0, 0, 2, 2, 126, 127, 127]
+Half ties / saturation UINT8 zp128: [0, 0, 0, 126, 126, 128, 128, 128, 130, 130, 254, 255, 255]
+Position conversion, roundtrip, scalar/empty arrays, sqerr, invalid parameter checks: PASS
+Source-extracted quant_utils.py:533 expression + source clipping ranges: PASS (both dtypes, positions -5/0/7)
+Source-expression comparison is not a fresh Quark quantization or graph_diff gate.
+Imported Quark/torch modules: []
+QUANT SCAFFOLD CHECKS PASS

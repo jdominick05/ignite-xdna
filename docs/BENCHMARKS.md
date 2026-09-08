@@ -2458,6 +2458,567 @@ Three takeaways:
 3. **Reconstruction quality on real images:** Visual reconstruction on the benchmark butterfly image
    (`results/butterfly_sesr_{cpu,dml,npu}.png`) demonstrates crisp wing pattern and edge
    reconstruction without halo artifacts or INT8 quantization banding.
+### An owned XINT8 quantizer: scale-exact reproduction, then the EP's acceptance map
+
+Phase 0 began on Desktop 2 (Ryzen 7 8700G), 2026-09-08. The source audit and static
+model inspection are in [`notes_xint8_dialect.log`](../results/quant/notes_xint8_dialect.log);
+the corrected contract and phase gates are in [`quant/DESIGN.md`](../quant/DESIGN.md).
+Method: read the installed Quark 0.11rc1 Python source as text/AST, without importing
+Quark; load the synced ONNX files using ONNX 1.19.0 and NumPy 1.26.4. Source and model
+SHA256 values bind the excerpts and fingerprints to the inspected files. The log's
+one-off inspector was `scratch/quant_phase0.py`. No model was executed, quantized,
+compiled, or evaluated; these are producer observations, not EP acceptance results.
+
+| Inspected file | Graph nodes | Q / DQ | Observation |
+|---|---:|---:|---|
+| `resnet50_fp32.onnx` | 122 | 0 / 0 | No BatchNormalization, Split or ReduceMean |
+| `resnet50_xint8_c64.onnx` | 380 | 74 / 182 | UINT8 activation zp=128; INT8 weight/bias zp=0; scalar power-of-two scales |
+| `yolov8n_cut_xint8.onnx` | 957 | 218 / 344 | Same dtype/scale dialect; HardSigmoid beta omitted |
+| `resnet50_a8w8.onnx` | 378 | 74 / 182 | Microsoft-domain QDQ, INT8 activation zp=0, non-power-of-two scales, INT32 bias |
+
+These are counts in files as found in `models/`, not the EP's optimized node counts.
+Syncthing provenance does not establish which machine built them. The attempted extra
+YOLO float inspection used the absent name `yolov8n_cut_fp32.onnx`; that missing file is
+recorded and contributes no measurement. The initial inspector counted only initializer
+Mul factors, so its empty factor maps do not establish absence of Constant-fed factors.
+
+The audit corrects the initial design in several consequential places: XINT8's
+`QuantPosManager` aligns Concat and pooling to the minimum connected position; the
+draft had borrowed `QuantInfoManager`'s different rules. Cut/bias refinement dispatches
+only Conv/Gemm. Bias starts with its own MinMSE position. Stored signed integers clip
+to [-127,127], and NumPy rounds ties to even. The effective op list unions three
+registries. CLE knobs, the large-pool threshold, reader behavior, and AdaRound's core
+schedule now have file:line evidence in the log.
+
+At the scaffold checkpoint, open questions included source hazards in refinement's change tracking/raw-data update, whether final
+positions alone reproduce weights after refinement, detailed handler rules, optional
+Softmax expansion, full AdaRound data/update behavior, and consumer metadata sensitivity.
+The fresh no-CLE comparison, full-set accuracy, and paired NPU gates had not run;
+the subsequent ResNet experiment below records their outcome.
+At that checkpoint the A8W8 attribution remained confounded; the subsequent
+[Ignition acceptance study](#ignition-controlled-resnet-qdq-acceptance) isolates several properties.
+
+The initial scaffold now rechecks all four files using `Graph.fingerprint()`:
+[`inspect_resnet50_yolov8n_xint8_a8w8_resnet_env17.log`](../results/quant/inspect_resnet50_yolov8n_xint8_a8w8_resnet_env17.log).
+Reproduce from Git Bash with
+`./scripts/quant-inspect.sh --env resnet_env17 --log results/quant/<new_model_variant>.log models/resnet50_fp32.onnx models/resnet50_xint8_c64.onnx models/yolov8n_cut_xint8.onnx models/resnet50_a8w8.onnx`.
+The wrapper refuses to overwrite evidence. Unlike the initial throwaway inspection,
+the graph wrapper includes Constant-fed factors: one ResNet GAP factor of
+1.0048828125 and 57 YOLO HardSigmoid factors of 1.0001220703125. The initial draft's
+ResNet expansion omitted the extra Constant alongside its Mul; both are included in
+the corrected design and the table above.
+
+Both XINT8 files fail the ONNX checker in their original order because simulation
+nodes follow their consumers. A stable in-memory topological sort makes the checker
+pass; it preserves every serialized node and initializer and writes no file. ResNet
+float and A8W8 already pass in file order. The checker result and unchanged file hashes
+are recorded in the focused scaffold checks for
+[`resnet_env`](../results/quant/check_resnet50_yolov8n_xint8_a8w8_scaffold_resnet_env.log)
+and [`resnet_env17`](../results/quant/check_resnet50_yolov8n_xint8_a8w8_scaffold_resnet_env17.log).
+Those checks ran on Desktop 2 with ONNX 1.19.0 / 1.18.0 respectively, NumPy 1.26.4
+in both, through the one-off `scratch/validate_quant_scaffold.py` and `run_logged`.
+They cover invalid export shapes/opsets/IR, missing dependencies/cycles/duplicate
+outputs, signed and unsigned half ties/saturation, position roundtrips, invalid
+parameters, and comparison with Quark's source-extracted integer arithmetic expression.
+Neither Quark nor torch was imported. `QUANT SCAFFOLD CHECKS PASS` appears in both
+logs; the repository syntax/import/shell gate also printed `PIPELINE CHECKS PASS`.
+This scaffold checkpoint verified only the building blocks. The subsequent experiment
+below adds emission, graph comparison, calibration and execution evidence.
+
+#### Owned ResNet50 no-CLE re-emission and independent calibration
+
+On Desktop 2, 2026-09-08, an owned producer reproduced the fresh Quark no-CLE ResNet
+from its float export, first by replaying positions and then by selecting positions
+independently. This is a supported ResNet slice, not completion of the broader
+CLE/YOLO/AdaRound roadmap. The input was the existing folded, batch-1, opset-17,
+IR-8 `resnet50_fp32.onnx`; its SHA256 is recorded in each producer/comparison log.
+No new export, compile-cache key or inference-provider setting was introduced.
+
+The [fresh reference log](../results/quant/quant_resnet50_quark_nocle_c64.log) records
+Quark 0.11rc1 XINT8 with `include_cle=False`, ONNX 1.19.0, ORT 1.22.1 and NumPy
+1.26.4 in `resnet_env`. It uses the first 64 sorted calibration images and the
+existing `npu.preprocess.build_transform` with `preprocess_config.json` (bicubic,
+center crop, crop fraction 0.95, ImageNet normalization). The separate owned process
+reads the same float graph and preprocessing/listing. Its CLI blocks Quark and torch
+imports, and independent mode does not accept any reference positions.
+
+The [re-emission comparison](../results/quant/diff_resnet50_reemit_nocle_c64.log)
+passes with exact graph connections, scales and zero points, and all 108 integer
+weight/bias tensors exact (zero changed elements, stricter than the allowed one LSB).
+It quantizes the original float initializers, inserts 74 retained activation QDQ
+pairs and 108 initializer DQs, prunes 49 Conv/Add→Relu pairs, and adds the GAP
+Constant/Mul. Refinement on both the re-emitted and reference positions makes no
+changes. Graph comparison ignores node/internal tensor names and topological order
+while checking ordered edges, attributes, types, graph output paths and initializer data.
+
+The [independent producer log](../results/quant/quant_resnet50_own_nocle_c64.log)
+records 123 activation tensors over the same 64 images, stored as 3,404,592,128
+bytes of float16 samples. ORT CPU optimization is disabled during collection.
+One tensor at a time is converted to float32; MinMSE evaluates five positions around
+symmetric min/max with float32 summed squared error and first-minimum tie handling.
+Float weights and biases get their own MinMSE positions. MaxPool shares its input's
+parameter names. GAP alignment moves its output position from 5 to 2; the next
+refinement loop makes no changes. The private spool is removed after calibration.
+Disk guarding uses inferred tensor sizes plus reserve; the reference wrapper now
+uses this calculation too because the generic ResNet estimate was too small.
+
+The [independent comparison and per-tensor errors](../results/quant/diff_resnet50_own_nocle_c64.log)
+records `POSITION_DELTA {}`, `SAME_FLOAT_PREPROCESS_LISTING_CLE True`, and
+`GRAPH_DIFF_PASS True`: all final positions, graph structure, scalar parameters and
+all 108 integer tensors match exactly. The owned run used ONNX 1.18.0, NumPy 1.26.4
+and ORT 1.23.3.dev20260320 in `resnet_env17`; parity was measured despite this ORT
+version difference. The sidecar includes the listing, initial candidate errors,
+shared parameters, final positions, refinement moves and hashes. Model SHA256s:
+
+| Artifact | SHA256 |
+|---|---|
+| Fresh Quark no-CLE | `a7a17654f79f141941806c13d26fe9ca12c727ab671eb345e15f5c1345eff0c7` |
+| Owned position replay | `d5d792fee680042cd4f16dd3693a60fdbe90b99020458ad1a00e624a407cfb1a` |
+| Owned independent MinMSE | `c1945d2dce29e6afeaed16ef8c2bcc5689044f5210543440f84fb258c29e0ea5` |
+
+Different file hashes reflect serialization/metadata/order differences; exact parity
+here means the checked graph and parameter contents, not identical ONNX files.
+Producer wall times are logged for reproducibility, not a controlled speed comparison.
+
+Evaluation uses all 1,000 labeled images in `data/eval`, batch 1, via the existing
+ResNet `4_run.py`. Timing is `sess.run` alone. NPU runs use Ryzen AI 1.7.1's Phoenix
+`4x4.xclbin`, the existing `modelcachekey`, and `--fresh` for each model. The two
+re-emission pre-run witnesses show no hardware contexts:
+[reference](../results/quant/contexts_resnet50_reemit_nocle_c64_reference.log) and
+[owned](../results/quant/contexts_resnet50_reemit_nocle_c64_own.log).
+
+| Pair / model | CPU top-1 / top-5 | CPU mean / median / p95 ms | NPU top-1 / top-5 | NPU mean / median / p95 ms |
+|---|---:|---:|---:|---:|
+| Replay reference | 62.00 / 79.80% | 45.67 / 45.45 / 50.51 | 59.90 / 79.10% | 5.60 / 5.53 / 6.38 |
+| Owned replay | 62.00 / 79.80% | 38.17 / 38.01 / 42.73 | 59.90 / 79.10% | 5.57 / 5.52 / 6.25 |
+| Calibration reference | 62.00 / 79.80% | 42.27 / 41.55 / 48.34 | 59.90 / 79.10% | 5.45 / 5.42 / 5.76 |
+| Owned independent calibration | 62.00 / 79.80% | 39.98 / 38.79 / 51.14 | 59.90 / 79.10% | 5.67 / 5.65 / 6.13 |
+
+Replay evaluation logs:
+[reference CPU](../results/quant/run_resnet50_reemit_nocle_c64_reference_cpu.log),
+[owned CPU](../results/quant/run_resnet50_reemit_nocle_c64_own_cpu.log),
+[reference NPU](../results/quant/run_resnet50_reemit_nocle_c64_reference_npu.log),
+[owned NPU](../results/quant/run_resnet50_reemit_nocle_c64_own_npu.log).
+Both [reference EP](../results/quant/diag_resnet50_reemit_nocle_c64_reference.log) and
+[owned EP](../results/quant/diag_resnet50_reemit_nocle_c64_own.log) place 393 nodes on
+the NPU and 2 on CPU: the input QuantizeLinear and final output DequantizeLinear.
+The small paired NPU latency difference does not establish a speedup. CPU timing
+also drifted between equivalent graphs; the purpose of these runs is output and
+placement parity. The CPU-to-NPU accuracy difference is shared by both producers.
+
+Independent calibration evaluation logs:
+[reference CPU](../results/quant/run_resnet50_own_nocle_c64_reference_cpu.log),
+[owned CPU](../results/quant/run_resnet50_own_nocle_c64_own_cpu.log),
+[reference NPU](../results/quant/run_resnet50_own_nocle_c64_reference_npu.log),
+[owned NPU](../results/quant/run_resnet50_own_nocle_c64_own_npu.log).
+Both pre-run witnesses again show no hardware contexts:
+[reference](../results/quant/contexts_resnet50_own_nocle_c64_reference.log),
+[owned](../results/quant/contexts_resnet50_own_nocle_c64_own.log).
+Both [reference EP](../results/quant/diag_resnet50_own_nocle_c64_reference.log) and
+[owned EP](../results/quant/diag_resnet50_own_nocle_c64_own.log) retain the same
+393-NPU / 2-CPU split and the same two boundary operators on CPU.
+The witnesses check immediately before each session; they are not continuous
+contention monitoring. No owned calibration or parallel benchmark ran during these
+paired measurements.
+
+The completion gate and real-model mutation checks are recorded for
+[`resnet_env`](../results/quant/check_resnet50_own_nocle_c64_resnet_env.log) and
+[`resnet_env17`](../results/quant/check_resnet50_own_nocle_c64_resnet_env17.log).
+`tools/quant_verify_checks.py` accepts internal renaming/resorting and a counted
+one-LSB change, rejects a residual rewire, changed scalar scale and two-LSB change,
+and checks signed clipping/ties. These are checks of graph-comparison behavior on
+the real emitted model; they do not substitute for the hardware runs above.
+
+Reproduce from Git Bash, choosing new output/log/tag names to preserve evidence:
+
+```bash
+./scripts/quant-reference.sh --out models/resnet50_quark_nocle_c64.onnx --log results/quant/quant_resnet50_quark_nocle_c64.log
+./scripts/quant-own.sh --out models/resnet50_own_reemit_nocle_c64.onnx --scales-from models/resnet50_quark_nocle_c64.onnx --log results/quant/quant_resnet50_own_reemit_nocle_c64.log
+./scripts/quant-own.sh --out models/resnet50_own_nocle_c64.onnx --log results/quant/quant_resnet50_own_nocle_c64.log
+./scripts/quant-validate.sh --model models/resnet50_own_nocle_c64.onnx --reference models/resnet50_quark_nocle_c64.onnx --tag resnet50_own_nocle_c64
+```
+
+The replay producer was initially run directly; its sidecar/hash are captured by
+the comparison log. The wrapper above is the repeatable entry point. Independent
+calibration requires only the owned command, the float export and calibration data.
+CLE/default-XINT8 parity, YOLO handlers, AdaRound and broader refinement behavior
+remain open; the next section records the first controlled EP probes. The observed GAP-only adjustment
+does not settle the source hazards for weight/bias position changes on other graphs.
+
+### Ignition: controlled ResNet QDQ acceptance
+
+Ignition is the owned quantizer in `quant/`. Once the no-CLE ResNet producer matched
+the fresh Quark reference, the most useful next experiment was to separate the
+properties that stock A8W8 changes together. This study changes one property family
+per artifact and checks both placement and numerical execution. It does not change
+Ignition's default emission recipe.
+
+**Method.** Desktop 2, Ryzen 7 8700G, Phoenix XDNA1, Ryzen AI 1.7.1,
+`resnet_env17`, ORT `1.23.3.dev20260320`, static batch 1, opset 17 / IR 8.
+The base is `models/resnet50_own_nocle_c64.onnx`, independently calibrated on
+64 images without CLE; `c64` names that calibration count. Its SHA256 is
+`c1945d2dce29e6afeaed16ef8c2bcc5689044f5210543440f84fb258c29e0ea5`.
+The Phoenix `4x4.xclbin` SHA256 is
+`d3b5e845b05f91beb90555b6f50ca542e05f69379f3fd9ab15246ad344c469fe`.
+Every variant uses a separate process and clears the existing `modelcachekey` before
+compilation. Each log records a clean `xrt-smi` context check immediately before NPU
+construction; this is a pre-run witness, not continuous isolation monitoring.
+
+The first matrix uses the first 32 sorted evaluation images, transformed once through
+`npu.preprocess`, with input-byte SHA256
+`8482bcbcbd18be08d7d719bdcc31a23a0a3798d5fc960b5db20d4cdc550380ca`.
+This slice measures output agreement, **not classification accuracy**. Times measure
+`sess.run` alone after five warmups, excluding preprocessing, construction and output
+comparison. CPU reference audits ran after the NPU measurements. These are diagnostic
+latencies from one sitting, not evidence of small speedups between equivalent models.
+The shared parser reads the EP's own `nodeStat`/`deviceStat`; all completed artifacts'
+archived reports are checked in
+[`diag_ignition_acceptance_archived.log`](../results/quant/diag_ignition_acceptance_archived.log).
+
+| Mutation (32 images) | NPU / total nodes | Requested-EP mean / median / p95 ms | EP vs unoptimized CPU RMSE | Evidence |
+|---|---:|---:|---:|---|
+| Baseline | 393 / 395 | 5.613 / 5.433 / 7.015 | 0.756329 | [log](../results/quant/probe_resnet50_accept_c64_baseline.log) |
+| Strip model metadata | 393 / 395 | 5.381 / 5.343 / 5.487 | 0.756329 | [log](../results/quant/probe_resnet50_accept_c64_strip_metadata.log) |
+| Set producer name to `Ignition` | 393 / 395 | 5.674 / 5.447 / 6.725 | 0.756329 | [log](../results/quant/probe_resnet50_accept_c64_producer_ignition.log) |
+| Q/DQ domain → `com.microsoft` | 0 / 395 | 33.984 / 33.952 / 37.419 | 0.000000 | [log](../results/quant/probe_resnet50_accept_c64_domain_msft.log) |
+| Activations → INT8, zero point 0 | 393 / 395 | 5.460 / 5.362 / 6.100 | 0.756329 | [log](../results/quant/probe_resnet50_accept_c64_act_int8_zp0.log) |
+| Activation scales × 1.01, except final output | 393 / 395 | 5.435 / 5.365 / 5.766 | 4.230485 | [log](../results/quant/probe_resnet50_accept_c64_float_act_scales.log) |
+| Conv/Gemm weight scales × 1.01 | 276 / 395 | 24.408 / 24.310 / 26.350 | 11.371655 | [log](../results/quant/probe_resnet50_accept_c64_float_weight_scales.log) |
+| Bias dtype → INT32, retain original bias scale | 393 / 395 | 5.462 / 5.410 / 5.878 | 0.756329 | [log](../results/quant/probe_resnet50_accept_c64_bias_int32_dtype.log) |
+| Bias → INT32 at input × weight scale | 393 / 395 | 5.310 / 5.293 / 5.515 | 8.025162 | [log](../results/quant/probe_resnet50_accept_c64_bias_int32_product.log) |
+| Repeat scalar weight parameters per channel | Not measured: resource stop | Not measured | Not measured | [log](../results/quant/probe_resnet50_accept_c64_weights_per_channel.log) |
+| Remove GAP correction Constant/Mul | 392 / 394 | 5.423 / 5.365 / 5.764 | 0.757691 | [log](../results/quant/probe_resnet50_accept_c64_drop_gap_mul.log) |
+
+The domain-only variant preserves every original scale, dtype and zero point, adding
+the Microsoft domain import for Q/DQ. Its CPU outputs remain exact, but its requested
+EP executes entirely on CPU. **The domain change alone is sufficient for fallback on
+this graph.** This does not establish that it is the only cause in every A8W8 graph.
+Signed activations, stripped metadata and the `Ignition` producer name all preserve
+the baseline NPU outputs exactly. Vendor producer metadata is not necessary for this
+measured artifact. Earlier artifacts keep their historical `owned.xint8` metadata;
+new quantizer emissions use `Ignition`.
+
+**Placement is insufficient.** The non-power-of-two activation-scale variant still
+places 393 nodes on NPU, but agrees with its CPU reference's argmax on none of the
+32 images; maximum absolute output error is 24.625. The weight-scale variant partly
+falls back and also has zero argmax agreement, with maximum error 26.125. These probes
+multiply existing scales by float32 1.01; they do not recalibrate with MinMax or test
+all non-power-of-two grids. Keep the measured power-of-two recipe as the default.
+
+**The CPU reference can also mislead.** Casting the original INT8 biases and zero
+points to INT32 without changing their scales leaves decoded biases unchanged.
+Its unoptimized CPU output is exact against baseline, and its NPU output is exact
+against baseline NPU. Yet optimized CPU execution differs from unoptimized CPU by
+RMSE 5.035656, maximum error 31.875 and zero argmax agreement. The initial probe's
+`npu_vs_cpu` comparison therefore cannot diagnose an NPU error for this row.
+The table uses the separate `ORT_DISABLE_ALL` audit instead:
+[initial audit](../results/quant/probe_resnet50_accept_c64_cpu_reference_audit.log),
+[v2 audit including Ignition metadata and input hashes](../results/quant/probe_resnet50_accept_c64_cpu_reference_audit_v2.log).
+This establishes optimizer-dependent behavior in this ORT build; the responsible
+rewrite has not been isolated. The input×weight-scale INT32 bias variant is different:
+both CPU modes remain exact against baseline, while the NPU produces maximum error
+16.0 and zero argmax agreement. INT32 dtype alone is not a wholesale rejection rule,
+but the conventional product-scale representation is not numerically safe here.
+
+Removing the GAP simulation factor preserves the NPU outputs exactly while changing
+the CPU approximation (CPU-vs-baseline RMSE 0.062496, maximum error 0.75). The factor's
+absence does not cause wholesale refusal in this graph; that is not a reason to remove
+it from the parity producer.
+
+**Per-channel compilation remains unresolved.** This mutation repeats each scalar
+scale/zero point across output channels and sets the DQ axis; integer weights stay
+unchanged, and optimized CPU outputs are exact against baseline. Session construction
+did not finish. The process was manually stopped after 273.731 seconds with working
+set 11,973,251,072 bytes and private bytes 12,628,627,456, documented in the
+[resource-stop witness](../results/quant/probe_resnet50_accept_c64_weights_per_channel_resource_stop.log).
+No placement or NPU numerical verdict exists. Do not describe this as CPU fallback or
+as support for genuinely differing channel scales. Subsequent probes use a parent
+process with an 8 GiB child-RSS limit and a 300-second wall limit (600 for full eval);
+the limits contain resource growth, not explain its cause.
+
+**Full-set confirmation.** The baseline and signed-activation variant were then run
+back to back on all 1,000 labeled evaluation images. The transformed input SHA256 is
+`2d094210cd103987a9971f0dde88308603ac4e5310bd23f7f292271e6f5f4dc4`.
+Top-5 uses the same descending `argsort` tie convention as `4_run.py`.
+
+| Artifact | CPU top-1 / top-5 % | NPU top-1 / top-5 % | NPU nodes | NPU mean / median / p95 ms | Evidence |
+|---|---:|---:|---:|---:|---|
+| Baseline | 62.00 / 79.80 | 59.90 / 79.10 | 393 / 395 | 5.404 / 5.346 / 5.739 | [log](../results/quant/probe_resnet50_accept_full1000_baseline.log) |
+| Signed activations | 62.00 / 79.80 | 59.90 / 79.10 | 393 / 395 | 5.438 / 5.387 / 5.782 | [log](../results/quant/probe_resnet50_accept_full1000_act_int8_zp0.log) |
+
+All CPU outputs and all 1,000,000 NPU logit elements match the baseline exactly.
+Both variants' NPU-vs-optimized-CPU RMSE is 0.810127, maximum error 4.125; the separate
+unoptimized audit covers the 32-image slice, not this full set. These are no-CLE,
+64-calibration-image models, not the default CLE/AdaRound headline models.
+
+The [first combined summary](../results/quant/probe_resnet50_acceptance_summary.log)
+is **superseded**: it joined CPU audits by model hash alone and incorrectly reused the
+32-image RMSE 0.756329 in its full-set rows. Raw full-set logs were correct. The
+[corrected summary](../results/quant/probe_resnet50_acceptance_summary_v2.log) binds an
+audit to both model and input hashes and reports 0.810127 for the full set.
+
+The implementation now checks optimized and unoptimized CPU outputs before every
+NPU attempt. The integrated reference check reproduces the INT32-bias discrepancy
+on four diagnostic images without requesting the NPU
+([check](../results/quant/check_ignition_acceptance_cpu_reference.log)).
+Both time and RSS stop paths were exercised with CPU-only child commands
+([limits check](../results/quant/check_ignition_acceptance_limits.log)). Syntax,
+shell parsing and all shared-module imports pass without Quark/torch in
+[resnet_env](../results/quant/check_ignition_acceptance_resnet_env.log) and
+[resnet_env17](../results/quant/check_ignition_acceptance_resnet_env17.log).
+
+Reproduce from Git Bash with a new tag; start with a baseline and selected mutation:
+
+```bash
+./scripts/quant-probe.sh --tag resnet50_accept_repeat --mutation baseline
+./scripts/quant-probe.sh --tag resnet50_accept_repeat --mutation act_int8_zp0
+```
+
+Use a separate new tag and `--full-eval` on both commands for full labeled evaluation.
+Omitting `--mutation` attempts the whole matrix, including the unresolved per-channel
+case under the resource limits. Models, `.probe.json`, output arrays and archived EP
+reports remain ignored under `models/`; tracked logs contain the evidence. There is
+no automatic boolean that equates successful construction with numerical validity.
+
+### Ignition Alpha release validation
+
+**Alpha 0.1.0a1** packages the measured folded-ResNet no-CLE producer behind
+`python -m quant quantize` and `inspect`, with a version command and explicit
+[supported scope](../quant/README.md). The legacy pipeline entry point delegates to
+the same CLI; the shell wrapper retains logging and environment activation.
+The [todo list](../quant/TODO.md) defines the unimplemented milestones.
+
+A fresh independent 64-image calibration on Desktop 2 generated
+`models/resnet50_ignition_alpha_nocle_c64.onnx`, SHA256
+`afe15baa15a250ffdb0b68c5ce1f97efc1720d4c53140be42164321e7fb0686d`.
+ONNX and sidecar both record producer `Ignition` and version `0.1.0a1`. The
+[quantization log](../results/quant/quant_resnet50_ignition_alpha_nocle_c64.log)
+records active Quark/torch import blocking, the exact calibration listing,
+3,404,592,128 bytes of float16 samples, emission counts and the GAP alignment move.
+No CLE or reference position table was used for this artifact.
+
+The [comparison log](../results/quant/diff_resnet50_ignition_alpha_nocle_c64.log)
+checks the unchanged float export, preprocessing, calibration listing and no-CLE
+setting against the existing fresh Quark oracle. All graph connections, positions,
+scales, zero points and 108 integer initializers match exactly, with both final
+position tables at refinement fixed points. The extra preflight shape inference
+and alpha metadata do not change those numerical parameters.
+
+**Full evaluation, same sitting:** `scripts/quant-validate.sh` ran each artifact on
+all 1,000 labeled images in `data/eval/`, CPU first, then fresh NPU sessions. This
+uses the existing `4_run.py` timing bracket: one warmup, then `sess.run` only,
+excluding preprocessing. Ryzen 7 8700G / Phoenix XDNA1, Ryzen AI 1.7.1,
+ORT `1.23.3.dev20260320`, `resnet_env17`, static batch 1, Phoenix `4x4.xclbin`.
+Both pre-NPU checks reported no hardware contexts:
+[reference witness](../results/quant/contexts_resnet50_ignition_alpha_nocle_c64_reference.log),
+[Alpha witness](../results/quant/contexts_resnet50_ignition_alpha_nocle_c64_own.log).
+These are pre-run checks, not continuous contention monitoring.
+
+| Artifact / device | Top-1 / top-5 % | Mean / median / p95 ms | Evidence |
+|---|---:|---:|---|
+| Quark no-CLE / CPU | 62.00 / 79.80 | 34.31 / 34.22 / 38.36 | [run](../results/quant/run_resnet50_ignition_alpha_nocle_c64_reference_cpu.log) |
+| Ignition Alpha / CPU | 62.00 / 79.80 | 34.02 / 33.87 / 38.41 | [run](../results/quant/run_resnet50_ignition_alpha_nocle_c64_own_cpu.log) |
+| Quark no-CLE / NPU | 59.90 / 79.10 | 5.27 / 5.25 / 5.42 | [run](../results/quant/run_resnet50_ignition_alpha_nocle_c64_reference_npu.log) |
+| Ignition Alpha / NPU | 59.90 / 79.10 | 5.27 / 5.26 / 5.41 | [run](../results/quant/run_resnet50_ignition_alpha_nocle_c64_own_npu.log) |
+
+Both EP reports place **393/395 nodes on NPU**, with matching operator/device counts
+and only the input/output QDQ boundary on CPU:
+[reference diagnostic](../results/quant/diag_resnet50_ignition_alpha_nocle_c64_reference.log),
+[Alpha diagnostic](../results/quant/diag_resnet50_ignition_alpha_nocle_c64_own.log).
+This confirms full-set accuracy and placement parity for the versioned alpha artifact.
+The small latency differences are not a claimed optimization. These no-CLE figures
+do not replace the repository's default CLE/AdaRound results or establish support
+for other model families. For scale: the repo's headline ResNet50 (CLE plus AdaRound)
+reads 79.80% top-1 on the NPU against this no-CLE alpha's 59.90%, a 19.9-point gap;
+the [CLE parity section](#ignition-cle-parity-and-the-default-xint8-preset) measures
+12.2 of those points as CLE and leaves 7.7 to AdaRound, which Ignition does not have
+(latencies are different days and are not compared). The release evaluation reports
+accuracy, not saved-logit equality; the separate acceptance study above records its
+exact-logit comparisons.
+
+Release checks passed in
+[resnet_env](../results/quant/check_resnet50_ignition_alpha_resnet_env.log) and
+[resnet_env17](../results/quant/check_resnet50_ignition_alpha_resnet_env17.log): syntax,
+shell parsing, all shared imports without Quark/torch, model/sidecar version and hash,
+CLI inspection with import-guard cleanup, legacy help, overwrite refusal, and real
+ResNet mutations rejected for wrong opset, batch, symbolic input, unsupported operator
+and non-7×7 GAP. Existing graph-diff checks also reject rewires/scale changes and count
+LSB differences. They do not mock or request an NPU session.
+
+The [legacy-entry-point replay](../results/quant/quant_resnet50_ignition_alpha_replay.log)
+separately checks `--scales-from` through the shared CLI and records its graph-diff
+gate. It is not another independent calibration or NPU measurement.
+
+### Ignition: refinement rules under perturbation
+
+Every ResNet parity result above exercised one refinement rule, the GAP output
+alignment. The shift-cut, shift-bias, shift-read and shift-write rules in
+`quant/refine.py` had never moved a position against Quark's, so a later CLE parity
+failure could not have been attributed to CLE rather than to refinement.
+`tools/quant_refine_probe.py` (wrapper `scripts/quant-refine-probe.sh`, `resnet_env`,
+no hardware, no model written) settles that on the fresh no-CLE oracle
+`models/resnet50_quark_nocle_c64.onnx` (SHA256
+`a7a17654f79f141941806c13d26fe9ca12c727ab671eb345e15f5c1345eff0c7`, checked against its
+sidecar): it perturbs the oracle's scale initializers, runs Quark's own
+`adjust_quantize_info` and Ignition's `refine` on byte-identical copies, and diffs the
+final position tables. Quark sees the file-order proto its pipeline saved, which is not
+topological (the GAP factor nodes trail their consumers); Ignition sees the sorted copy
+its loader produces. Quark's Relu bridging reads a module-level pruning list that its
+XINT8 pipeline fills before quantizing (`Clip, Relu, LeakyRelu, PRelu`); the probe calls
+the same preparation function and records the list before and after, because with the
+list empty Quark silently skips cut, bias and write on every pruned Conv/Add→Relu and
+every "disagreement" would be the probe's, not a rule's.
+
+The oracle has 181 scale initializers (73 activation, 54 weight, 54 bias), 54 Conv/Gemm
+of which 33 reach their output scale only through a Relu, and 16 Adds, all bridged. Its
+MaxPool output reuses its input scale, so pool alignment can only act on the GAP.
+
+| Set | Perturbation | Agreement | Rules Ignition fired | Log |
+|---|---|---|---|---|
+| Control | none | equal, zero moves in both | none | both |
+| 20 directed cases | one rule violated by construction: cut high/low and bias high/low on a Relu-bridged Conv, a direct-Q Conv and the Gemm; read on each input of an Add; write low/high; GAP pool high/low; a pool/write oscillation; a seven-scale combination | 20/20 equal; 19 converge in both, the oscillation hits the five-pass limit in both with the same final table | cut 16, bias 9, write 8, pool 8, read 7 | [run 1](../results/quant/refine_probe_resnet50_quark_nocle_c64.log), [run 2](../results/quant/refine_probe_resnet50_quark_nocle_c64_wide.log) |
+| 500 random trials, seed 0 | 1–6 scales shifted by up to ±6 positions | 500/500 equal; 40 trials moved anything | pool 22, cut 18, write 1 | [run 1](../results/quant/refine_probe_resnet50_quark_nocle_c64.log) |
+| 300 random trials, seed 1 | 1–12 scales shifted by up to ±12 positions | 300/300 equal; 243 trials moved, 942 moves in total, up to 11 in one trial | cut 527, bias 167, read 151, write 79, pool 26 | [run 2](../results/quant/refine_probe_resnet50_quark_nocle_c64_wide.log) |
+
+In all 800 random trials Quark's pass count equals Ignition's loop count (one pass in
+517, two in 281, three in 2), no trial hit the loop limit, and neither final table
+violates any sourced constraint. The oscillation case (GAP output set 40 positions below
+its input) is the loop-limit check: pool alignment pulls the shared
+`/layer4/layer4.2/act3/Relu_output_0_scale` down to −38, the last Add's shift-write
+pushes it back to −22, five times in both refiners, and both stop at the same state with
+the alignment still violated. Quark logs its limit warning; Ignition reports
+`converged: false`, which `quantize` turns into an error.
+
+**Stored integers.** In every directed case both refiners leave every `*_quantized`
+initializer byte-identical. That matches the source order in Quark's pipeline
+(`npu_cnn_quantizer.py:119-165`: weights quantized and stored, then pruning, then
+refinement) and in Ignition's (`emit`, then `refine`). Parity therefore requires *not*
+re-rounding after a scale move. The conditional consequence is real: a weight scale
+moved by shift-cut leaves the stored integers at the old position, so the dequantized
+weight is off by that power of two. No measured model has fired shift-cut or shift-bias
+on a weight or bias in Quark's real pipeline; this ResNet's calibration moved only the
+GAP output. Whether the DPU result of such a moved weight is wrong is unmeasured.
+
+**Raw-data hazard, measured.** Quark's `set_scale` writes `float_data` in place but
+assigns a `raw_data` update to a temporary list (`refine.py:49-57`). With the perturbed
+oracle's 181 scales converted to `raw_data`, Quark's refine ran its five passes, logged
+ten "Modify" messages and the limit warning, and changed nothing; Ignition's result on
+the same file equals its `float_data` result. Quark's own oracle stores scales as
+`float_data`, so its pipeline is unaffected; the Ignition alpha artifact stores them as
+`raw_data`, so Quark's refine is a silent no-op on Ignition output. The Mul shift-write
+hazard (`refine.py:537-539` never sets `has_change`) is unreachable on this graph: the
+only Mul is the GAP factor, whose Constant operand has no position, and both skip it.
+
+What this does not show: rules Ignition does not implement (Concat, Pad, Slice,
+HardSigmoid, swish) and bridges beyond Conv/Add→Relu and GAP→Mul (Quark also bridges
+Gemm, MaxPool, ConvTranspose and MatMul, and through Clip, LeakyRelu and PRelu) are
+untested because this graph has none. Both runs are Desktop 2, `resnet_env`, CPU only.
+
+### Ignition: CLE parity and the default XINT8 preset
+
+`quant/cle.py` transcribes Quark 0.11rc1's cross-layer equalization
+(`algorithm/cle/equalization.py`) for the Conv→Conv pair path: the matcher's
+single-consumer walk through Relu, ReduceMean, Pad and LeakyRelu, the source's
+insert-before-last pair sort that lists the first pair twice, the bias column appended
+to the head weights with the source's shrink-factor ladder, the "max" balance with its
+0.5 weight threshold, and a tail scaled by `1 / scale` rather than divided. Depthwise
+pairs and triples, Gemm-in-pair transposes and Clip replacement raise, having no
+instance on this graph. Three gates, in order.
+
+**Float-level parity first.** `tools/quant_cle_probe.py` (wrapper
+`scripts/quant-cle-probe.sh`, `resnet_env`, under a second each, no calibration)
+equalizes the float export with Quark's `cle_transforms` under its resolved default
+op list and the audited defaults, and with Ignition's `cross_layer_equalize`, then
+compares the ordered pattern list and every float initializer byte for byte
+([log](../results/quant/cle_probe_resnet50_fp32.log)). Both list 33 patterns: 32 unique pairs
+plus `layer1.0 conv1→conv2` a second time at the end, which is the 33 the repo's
+original quantization log printed on 2026-09-05. Both change the same 80 initializers
+and no byte differs. Per-channel scales span 0.245–5.12, and the threshold leaves
+1,759 of 7,616 channel scales at 1.
+
+**Same-listing calibration parity.** A fresh default-preset Quark oracle
+([quant log](../results/quant/quant_resnet50_quark_cle_c64.log), 33 patterns, 97.4 s, SHA256
+`2df63ef320dcdb49297546b3b1c41b5e7d7f3300b278ade621a0b71c6042f01f`) and Ignition with
+`--cle` ([quant log](../results/quant/quant_resnet50_ignition_cle_c64.log), 104.7 s, SHA256
+`74f2b9a180e05b22a203aeb896f2f31daf20a58beb759dc81f6aee52021e8bbe`, Quark and torch
+imports blocked) on the same 64 images: the
+[comparison](../results/quant/diff_resnet50_ignition_cle_c64.log) reports an empty position
+delta, matching float/preprocess/listing/CLE provenance, identical graph connections
+and all 108 int8 initializers exact. Refinement moved only the GAP output position in
+both, so CLE did not fire shift-cut or shift-bias on this network either; the
+[refinement probe](#ignition-refinement-rules-under-perturbation) remains the only
+evidence for those rules.
+
+**The oracle is the repo's original artifact.** The new Quark model is graph-identical
+to `models/resnet50_xint8_c64.onnx` (SHA256
+`bd817280673fe25e67380a6adde1db82275d1aa284924a0e6b67ea97e4315722`, quantized
+2026-09-05 by [`quant_resnet50_xint8_c64.log`](../results/res/quant_resnet50_xint8_c64.log)
+on the same 64 images): empty position delta, 108/108 int8 initializers exact.
+Ignition's `--cle` output therefore reproduces, to the integer, the plain-XINT8 ResNet50
+that every earlier ResNet figure in this document was measured on. The files differ in
+producer metadata and initializer order, not in any parameter.
+
+**Full evaluation, same sitting** (`scripts/quant-validate.sh`, Desktop 2, Ryzen 7 8700G /
+Phoenix XDNA1, Ryzen AI 1.7.1, `resnet_env17`, 1,000 labeled images, `sess.run` only,
+static batch 1, fresh compile; both pre-NPU witnesses idle:
+[reference](../results/quant/contexts_resnet50_ignition_cle_c64_reference.log),
+[own](../results/quant/contexts_resnet50_ignition_cle_c64_own.log)):
+
+| Artifact / device | Top-1 / top-5 % | Mean / median / p95 ms | Placement | Evidence |
+|---|---:|---:|---|---|
+| Quark default (CLE) / CPU | 72.80 / 88.40 | 31.40 / 31.80 / 38.26 | CPU | [run](../results/quant/run_resnet50_ignition_cle_c64_reference_cpu.log) |
+| Ignition `--cle` / CPU | 72.80 / 88.40 | 30.62 / 30.68 / 39.86 | CPU | [run](../results/quant/run_resnet50_ignition_cle_c64_own_cpu.log) |
+| Quark default (CLE) / NPU | 72.10 / 88.10 | 5.22 / 5.17 / 5.54 | 393/395 | [run](../results/quant/run_resnet50_ignition_cle_c64_reference_npu.log), [diag](../results/quant/diag_resnet50_ignition_cle_c64_reference.log) |
+| Ignition `--cle` / NPU | 72.10 / 88.10 | 5.22 / 5.17 / 5.48 | 393/395 | [run](../results/quant/run_resnet50_ignition_cle_c64_own_npu.log), [diag](../results/quant/diag_resnet50_ignition_cle_c64_own.log) |
+| Ignition alpha no-CLE / CPU and NPU | 62.00 / 79.80 and 59.90 / 79.10 | 34.02 and 5.27 | 393/395 | [Alpha validation](#ignition-alpha-release-validation) |
+| Repo headline, CLE + AdaRound / NPU | 79.80 | 5.27 | 393/395 | README pipeline table |
+
+CLE alone is worth 10.8 points of top-1 on CPU and 12.2 on the NPU over the no-CLE
+alpha; the remaining 7.7 points to the headline are AdaRound, which Ignition does not
+have. The NPU accuracy equals the original artifact's 2026-09-05 measurement
+(72.10 / 88.10, [run](../results/res/run_resnet50_npu.log)); its latency then (5.68 ms)
+and now (5.22 ms) are different days on the shared machine and are not compared. The
+0.7-point CPU-to-NPU drop is the NPU-versus-CPU floor the acceptance study measured.
+
+What this does not show: CLE on grouped or depthwise convolutions, on Gemm pairs, or on
+graphs whose matcher walk crosses Pad or ReduceMean; each raises until it has a gate.
+
+### Ignition: calibration spool without the pruned pre-Relu tensors
+
+Both producers' calibration had spooled all 123 activations of the folded ResNet,
+including the 49 Conv/Add outputs that feed only a Relu. Those tensors get a
+temporary Q/DQ pair that emission removes (Quark's `get_qdq_to_remove`, Ignition's
+`prune_conv_relu`), so their MinMSE positions never reach the file. `quant/calib.py`
+now skips them: 74 tensors are spooled and searched, the sample store drops from
+3,404,592,128 to 2,174,678,016 bytes (36 percent) for 64 images, and the CLE
+calibration's wall time from 104.7 s to 72.0 s on Desktop 2 (no-CLE: 102.6 s to 71.1 s). The gate is byte
+identity of the output file, not a graph diff: the trimmed
+[CLE run](../results/quant/quant_resnet50_ignition_cle_c64_lean.log) writes SHA256
+`74f2b9a180e05b22a203aeb896f2f31daf20a58beb759dc81f6aee52021e8bbe`, the same file as
+the [full-spool CLE run](../results/quant/quant_resnet50_ignition_cle_c64.log) above,
+and the trimmed [no-CLE run](../results/quant/quant_resnet50_ignition_nocle_c64_lean.log)
+writes `afe15baa15a250ffdb0b68c5ce1f97efc1720d4c53140be42164321e7fb0686d`, the
+released alpha artifact. Quark's All-mode calibrator still spools every tensor, so
+`scripts/quant-reference.sh` keeps sizing its disk guard from the full list. The
+sidecar records `spooled_tensors` and `skipped_prunable_tensors`; the skipped set is
+exactly the set `emit` prunes, by construction from the same `prunable_tensors`.
+
+### Ignition: permissive inspection
+
+`python -m quant inspect` and `tools/quant_inspect.py` used the same loader as
+`quantize`, so any file outside the export contract (IR 8, opset 17, static batch 1)
+could not be fingerprinted at all; the batch-2 ResNet that measured the EP's stale
+slot-1 buffer was one such file. Inspection now loads with `strict=False`: the
+contract check and the ONNX checker run, their failures are reported per file as
+`export_contract` and `onnx_checker` instead of raised, and the fingerprint follows.
+[Inspection of the batch-2 XINT8 and float exports and the A8W8 model](../results/quant/inspect_resnet50_b2_permissive_resnet_env17.log)
+reports the batch violation for the first two and `ok` for the third, with all three
+fingerprints. `quantize` keeps the strict loader:
+[the alpha boundary checks](../results/quant/check_resnet50_ignition_nocle_c64_lean_resnet_env17.log),
+re-run against the fresh artifact, still reject wrong opset, batch 2, a symbolic batch,
+an unsupported operator and a non-7×7 GAP, and the CLI still refuses a missing CLE
+choice, a non-positive limit and an existing output. A direct `quantize` on the batch-2
+float export exits with the batch error and writes nothing.
 
 ## Key findings
 
@@ -2476,7 +3037,10 @@ the only firmware observed to work on this chip. Hence the two-environment split
 ERT_CMD_STATE_ERROR`. Setting `target: "X1"` alone does *not* select the chip
 architecture; the xclbin does.
 
-**The X1 backend is XINT8 or nothing.** Power-of-two scales, MinMSE calibration,
+**Historical rule, now narrowed: "The X1 backend is XINT8 or nothing."** The
+[Ignition probes](#ignition-controlled-resnet-qdq-acceptance) supersede the float-scale-only
+attribution: domain-only fallback is measured, signed activations work, and some scale
+changes compile but execute incorrectly. Keep XINT8 as the default: power-of-two scales, MinMSE calibration,
 UINT8 activations with INT8 weights. A8W8 (float scales) does not raise an error — it
 just falls back to CPU, and the only symptoms are CPU-level latency and lower accuracy.
 **A16W8 (INT16 activations) now measured too, not just assumed dead: same silent

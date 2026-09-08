@@ -1534,6 +1534,27 @@ sections above.
 
 **Still open.**
 
+- **How far does Ignition's XINT8 parity extend beyond folded ResNet?**
+  [Alpha scope and usage](quant/README.md) and the [implementation backlog](quant/TODO.md)
+  now distinguish the runnable release from the broader design.
+  [ResNet re-emission and independent calibration](docs/BENCHMARKS.md#owned-resnet50-no-cle-re-emission-and-independent-calibration)
+  now reproduce the fresh no-CLE reference from the float export: graph connections,
+  scales, zero points and integer weight/bias data match exactly. The owned calibration
+  process blocks Quark and torch imports. Full-set accuracy and paired NPU evidence
+  are recorded in the linked section. [Controlled acceptance probes](docs/BENCHMARKS.md#ignition-controlled-resnet-qdq-acceptance)
+  now isolate domain-only fallback, exact signed-activation NPU parity on the full set,
+  and metadata independence on this graph. They also expose numerical failures despite
+  NPU placement and an optimizer-dependent CPU reference discrepancy. The
+  [refinement probe](docs/BENCHMARKS.md#ignition-refinement-rules-under-perturbation) shows the transcribed shift and alignment
+  rules reach the same final positions as Quark's on 20 directed and 800 random
+  perturbations of the oracle, so a CLE parity failure on this graph cannot hide in
+  refinement. [CLE parity](docs/BENCHMARKS.md#ignition-cle-parity-and-the-default-xint8-preset) now covers the default preset too:
+  byte-identical equalized weights, an exact position/integer match with a fresh oracle
+  that is itself identical to the repo's original resnet50 XINT8 artifact, and 72.10%
+  top-1 at 5.22 ms paired on the NPU for both producers. Safe departures
+  from power-of-two scales, product-scale INT32 bias execution, per-channel compiler
+  memory growth, YOLO and AdaRound remain open. See
+  [`quant/DESIGN.md`](quant/DESIGN.md) for the ordered gates and remaining source questions.
 - **Does MODNet's alpha error move once calibration and inference agree?** Every MODNet
   model measured so far was calibrated through PIL bilinear while inference resized with
   cv2 bilinear — Pillow antialiases on downscale, OpenCV does not, so the two were never

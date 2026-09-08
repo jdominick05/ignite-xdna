@@ -29,9 +29,21 @@
    runtime: `DPU timeout ... Timeout layer
    name:[subgraph_(/conv1/Conv_output_0_vaip_3)] ... ERT_CMD_STATE_ERROR`.
    `target: X1` alone does NOT select chip arch; the xclbin does.
-3. **X1 backend = XINT8 only.** Power-of-two scales, MinMSE calib, UINT8 activations /
-   INT8 weights+bias. A8W8 (float scales) silently falls back to CPU (39 ms latency =
-   CPU speed, accuracy 66.6%). **A16W8 (INT16 activations / INT8 weights) now measured,
+3. **Keep XINT8 as the measured default recipe.** Power-of-two scales, MinMSE calib,
+   UINT8 activations / INT8 weights+bias. The original rule was "X1 backend = XINT8
+   only": A8W8 (float scales) silently fell back to CPU (39 ms latency = CPU speed,
+   accuracy 66.6%). **That measurement stands; attributing it to float scales alone
+   is superseded by [Ignition's controlled probes](BENCHMARKS.md#ignition-controlled-resnet-qdq-acceptance).**
+   On the no-CLE ResNet, moving Q/DQ to `com.microsoft` alone causes full fallback;
+   signed INT8 activations preserve baseline NPU outputs over the full evaluation set.
+   Perturbing activation scales off the power-of-two grid can retain NPU placement
+   while breaking numerical agreement. INT32 bias dtype alone also retains placement
+   and baseline NPU outputs, but the input×weight-scale representation produces wrong
+   NPU results. Keep both as experimental mutations. Per-channel construction was
+   stopped for memory growth before a placement verdict. Stripping metadata or naming
+   the producer `Ignition` preserves measured placement and outputs. These findings
+   bound this artifact and runtime, not every graph the compiler may see.
+   **A16W8 (INT16 activations / INT8 weights) now measured,
    not assumed: also a full CPU fallback.** `tools/diag_ep.py --cache-key modelcachekey`
    on `resnet50_a16w8.onnx` (`results/a16w8/diag_resnet50_a16w8_npu.log`) shows **0/394
    nodes on NPU** — `deviceStat` has no NPU entry at all, only `CPU` (122) and
@@ -119,6 +131,23 @@
    autoimport). Never `load_dataset` without streaming (150GB).
 
 ## Rejected approaches and known pitfalls
+
+- **An optimized CPU session is not sufficient as a QDQ numerical reference.**
+  Ignition's INT32-bias dtype-only mutation preserves decoded biases and unoptimized
+  CPU outputs, but this ORT build's optimized CPU output differs. Comparing the NPU
+  only with that optimized result would blame the wrong execution path. Keep
+  `ORT_DISABLE_ALL` as a separate reference, and require output checks in addition
+  to EP placement. Product-scale INT32 bias and non-power-of-two scale mutations
+  expose the converse failure: NPU placement with incorrect numerical execution.
+  [Controlled evidence and limits](BENCHMARKS.md#ignition-controlled-resnet-qdq-acceptance).
+
+- **Quark's refinement is a silent no-op on `raw_data` scale initializers.** Its
+  `set_scale` writes `float_data` in place but assigns a `raw_data` update to a
+  temporary list, so on such a file it runs five passes, logs "Modify" lines and the
+  loop-limit warning, and changes nothing. Quark's own output stores scales as
+  `float_data`; Ignition's stores `raw_data`, so running Quark's `adjust_quantize_info`
+  on an Ignition artifact refines nothing while claiming to. Ignition's `refine` reads
+  either form. [Measured on the perturbed oracle](BENCHMARKS.md#ignition-refinement-rules-under-perturbation).
 
 - **`4_detect.py`/`5_eval_map.py` used to time a cut model's numpy DFL/anchor decode as
   part of "infer."** For a head-cut model `forward` was `sess.run` + `decode_heads`

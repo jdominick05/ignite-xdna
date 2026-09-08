@@ -79,20 +79,32 @@ There is no unit-test suite. There is no way to fake this hardware, and a mocked
 session would test nothing this project cares about. Verification is empirical instead:
 
 ```bash
-python -m compileall -q npu pipelines tools kernels \
+python -m compileall -q npu pipelines tools kernels quant \
   && for s in scripts/*.sh; do bash -n "$s" || exit 1; done \
-  && python -c "import npu.preprocess, npu.yolo, npu.yolo_decode, npu.yolo_pose, npu.yolo_pose_decode, npu.session, npu.paths, npu.modnet, npu.yolov6, npu.yolov6_decode, npu.midas, npu.sesr" \
+  && python -c "import npu.preprocess, npu.yolo, npu.yolo_decode, npu.yolo_pose, npu.yolo_pose_decode, npu.session, npu.ep_report, npu.paths, npu.modnet, npu.yolov6, npu.yolov6_decode, npu.midas, npu.sesr, quant, quant.graph, quant.pow2, quant.sources, quant.calib, quant.qdq, quant.passes, quant.cle, quant.refine, quant.verify, quant.quantize, quant.probe, quant.cli, quant.__main__" \
   && echo "PIPELINE CHECKS PASS"
 ```
 
 Run this (in `resnet_env17`) after touching anything under `npu/`, `pipelines/`,
-`tools/`, `scripts/`, or `kernels/` (`kernels/` only gets the syntax pass here — its
+`tools/`, `scripts/`, `quant/`, or `kernels/` (`kernels/` only gets the syntax pass here — its
 designs import mlir-aie, which lives in a different env; see `kernels/README.md`). It
 only catches syntax and import breakage; it is **not**
 evidence that a behavioural claim is true. If your change could affect latency,
 accuracy, or whether the VitisAI EP accepts a graph, run the relevant pipeline and read
 the log in `results/` before describing the change as verified. Never report a number
 you did not measure.
+
+Every new `npu/` or `quant/` module joins the import list here and in the local
+`CLAUDE.md`. `quant/` must never import Quark, and `npu/` must never import `quant/`.
+The owned quantizer's core also imports in `resnet_env`; torch belongs only in its
+future AdaRound module. See [`quant/DESIGN.md`](quant/DESIGN.md) for the ordered
+comparison gates; passing imports does not validate a quantized model.
+
+For Ignition Alpha's supported scope and usage, start with [quant/README.md](quant/README.md).
+[quant/TODO.md](quant/TODO.md) lists future work with evidence required to close it.
+`python tools/quant_alpha_checks.py --model <fresh_alpha.onnx>` checks the release
+interface, provenance and unsupported-input boundaries on real ResNet artifacts;
+it does not replace full CPU/NPU evaluation.
 
 ## Submitting a change
 

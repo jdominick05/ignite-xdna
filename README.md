@@ -34,6 +34,7 @@ Full environment split, install steps and footguns: [`docs/SETUP.md`](docs/SETUP
 | `pipelines/midas` | MiDaS v2.1 Small (monocular depth) | **Working** — 10.81 ms on NPU (682/684 nodes, single subgraph), r = 0.8706 vs FP32 (50 scenes) |
 | `pipelines/sesr` | SESR-M7 (2x super-resolution) | **Working** — 1.48 ms on NPU (50/52 nodes, single subgraph), 35.16 dB PSNR on Set5 (XINT8+AdaRound) |
 | `pipelines/mobilevit` | MobileViT-XXS (hybrid CNN/transformer) | **Does not survive INT8** — 0.00% top-1, kept as the negative result |
+| `quant/` (Ignition) | Folded ResNet, with or without CLE | **Alpha 0.1.0a1** — independent calibration/emission without Quark or torch; `--cle` reproduces the repo's plain-XINT8 ResNet50 to the integer. [Quickstart](quant/README.md), [todo list](quant/TODO.md), [validation](docs/BENCHMARKS.md#ignition-alpha-release-validation), [CLE parity](docs/BENCHMARKS.md#ignition-cle-parity-and-the-default-xint8-preset), [acceptance findings](docs/BENCHMARKS.md#ignition-controlled-resnet-qdq-acceptance) |
 
 Detection width sweep, head-cut plain XINT8, full 5000-image val2017 mAP
 (conf 0.001, IoU 0.7, max_det 300, per-class NMS):
@@ -66,9 +67,8 @@ and 8.7–9.8 ms. The seven CPU nodes are only the input/output Q/DQ boundary.
 **Silent CPU fallback is the failure mode to watch for.** The `[Vitis AI EP]` banner and
 operator table print only during compilation, never on a cache load, so their absence
 means nothing. `<cacheKey>/vitisai_ep_report.json` — written on every session build, read
-by `tools/diag_ep.py` — is the only real evidence. A `_npu` suffix in a log name means the
-EP was *requested*. A8W8 falls back silently (39.0 ms, CPU speed); so does A16W8
-(0/394 nodes); so does batch 2.
+by `tools/diag_ep.py` — is the only real evidence of placement, and placement alone is not correctness: [Ignition's probes](docs/BENCHMARKS.md#ignition-controlled-resnet-qdq-acceptance) catch wrong NPU logits. A `_npu` suffix in a log name means the
+EP was *requested*. A8W8 falls back silently (39.0 ms, CPU speed); so does A16W8 (0/394 nodes); so does batch 2.
 
 **AdaRound recovers classification, but not detection.** ResNet50 loses 8.4 points of
 top-1 to plain XINT8 (80.10% → 71.70%) and AdaRound buys back all but 0.3 of it (79.80%)
