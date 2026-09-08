@@ -1635,6 +1635,28 @@ mismatch against the uncontended baseline at every stream count, all the way to
 classifiers spanning 2.7× to 5× resnet50's params, plus two detection models, with
 the same shape and the same zero-corruption guarantee every time.
 
+**Pushed to find where the ceiling itself gives out, not just where fps plateaus:**
+`wide_resnet101_2` again, streams 32/48/64/96/128 in one run. 32/48/64/96 all land
+on the same plateau already seen above (61.9 / 62.1 / 62.3 / 61.9 fps, flat within
+noise, 0.00% mismatch throughout) — one more confirmation that the fps ceiling
+itself doesn't move past the point it's already reached by 3-8 streams. **128
+streams does not complete: it hits a real hardware/driver ceiling, not a script
+failure.** Session construction gets to roughly 121 of the 128 requested sessions,
+then XRT fatally aborts: `Failed to submit command to hw queue (0xc01e0200): Even
+after the video memory manager split the DMA buffer, the video memory manager
+could not page-in all of the required allocations into video memory at the same
+time. The device is unable to continue.` This is WDDM failing to page in enough
+concurrent hardware-context allocations, not an OOM in the Python process itself —
+though host RAM was also under real pressure at the time (free memory dropped to
+~6.4 GB on this 32 GB box while ~120+ sessions were live, climbing back to ~20 GB
+within seconds once the process aborted), and this machine had another concurrent
+session's build process running at the same time, so the exact session count where
+this breaks is not a clean, isolated ceiling — call it "somewhere in the 96-128
+range, and lower under memory pressure from other processes," not a precise number.
+`results/nstream_wide_resnet101_2_128_ceiling.log`. Concurrent-stream headroom on
+this hardware is generous but not unlimited, and the failure mode when it runs out
+is a hard XRT abort, not a graceful queue or slowdown.
+
 ### Direct NPU utilization: what GOPS actually says
 
 Every earlier "not compute-bound" claim in this README was a FLOPs/latency estimate

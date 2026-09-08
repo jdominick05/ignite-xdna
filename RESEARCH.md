@@ -1390,6 +1390,13 @@ sections above.
   32.** Its ceiling is lower still (1.32×, flat by 3 streams — the least idle headroom of
   the three classifiers) and holds flat with zero regression through 32 streams, with
   the same 0.00% mismatch guarantee at every count. `results/nstream_wide_resnet101_2.log`.
+  **Pushed to 128 to find where it actually breaks — it does, and not gracefully.**
+  32/48/64/96 all confirm the same plateau again; 128 aborts partway through session
+  construction (~121/128 built) with a fatal XRT hardware-queue error — WDDM unable to
+  page in enough concurrent hw-context allocations into video memory, not a Python-side
+  OOM, though host RAM was genuinely tight at the time (~6.4 GB free of 32 GB) with
+  another process's build also running on this shared machine, so the exact breaking
+  point isn't a clean isolated number. `results/nstream_wide_resnet101_2_128_ceiling.log`.
 - **yolov8l and yolov8x.** The width trend breaks: x is 2.36× the latency of l for a net
   mAP loss. Both calibrated smaller (32/24) than m's 64, and l's full eval is flaky.
   [Working](docs/BENCHMARKS.md#model-size-n-vs-s-measured-together).
