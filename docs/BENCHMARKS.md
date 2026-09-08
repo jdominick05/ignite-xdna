@@ -2186,6 +2186,48 @@ Tested across 50 full validation portrait images (`data/modnet_val/`):
 - **Speedup**: **9.03x over 8-core Zen 4 CPU**, and **1.37x faster than the 12 CU Radeon 780M iGPU**.
 - **End-to-End Frame Pipeline**: 1.90 ms preprocess + 28.13 ms NPU infer + 2.33 ms postprocess = **32.36 ms total frame time (~30.9 real-time FPS)** with live bokeh blur.
 
+**The four latency rows above shipped with no backing log** — they were written from a
+session whose output was never captured under `results/`, against this repo's rule that
+every figure trace to a log. They are kept here rather than deleted, and re-measured
+below; read the re-measurement as the citable set.
+
+#### 4. Same-sitting re-measurement, with logs (2026-09-07, Desktop 2)
+
+All four configurations captured back to back in one session, because NPU and DML latency
+on this machine drift between sessions independently of any code change. Same 50
+validation images, same harness (`pipelines/modnet/5_eval.py`), `--fresh` on both NPU runs.
+
+| Model & Runtime | Device | Latency | FPS | NPU Node Placement | MAD vs FP32 ref | Log |
+|---|---|---|---|---|---|---|
+| MODNet Zero-Concat XINT8 | Ryzen AI NPU (Phoenix 4x4) | **17.75 ms** | 56.3 fps | **533 / 538 (99.1%)** | **0.35269** | `results/modnet/eval_modnet_zero_concat_xint8_npu.log` |
+| MODNet Cut XINT8 | Ryzen AI NPU (Phoenix 4x4) | 26.44 ms | 37.8 fps | 502 / 507 (99.0%) | 0.19022 | `results/modnet/eval_modnet_cut_xint8_npu.log` |
+| MODNet FP32 | Radeon 780M iGPU (DirectML) | 46.14 ms | 21.7 fps | — | 0.00000 | `results/modnet/lat_modnet_fp32_dml.log` |
+| MODNet FP32 | Ryzen 7 8700G CPU (Zen 4) | 209.60 ms | 4.8 fps | — | 0.00000 | `results/modnet/lat_modnet_fp32_cpu.log` |
+
+- **The accuracy metrics reproduce exactly.** Cut XINT8 re-measured MAD 0.19022 / SAD
+  50.75k against the 0.1902 / 50.75k recorded above — the quality numbers in section 3
+  were right, only their evidence was missing. The two FP32 rows score MAD 0.00000
+  because reference and test model are the same file; that is the harness identity check,
+  not a result.
+- **The latencies do not reproduce, and the speedup multiples move with them.** Cut XINT8
+  read 26.44 ms here against 28.45 ms above, CPU 209.60 against 256.89, DML 46.14 against
+  39.05. Recomputed from this sitting, Cut XINT8 is **7.93x the CPU** (not 9.03x) and
+  **1.75x the iGPU** (not 1.37x) — the iGPU margin is the one that moved most, and it
+  moved in the NPU's favour. Neither set is wrong; they are different sessions, which is
+  exactly why the two are kept separate rather than merged.
+- **Zero-Concat is the faster graph and the worse matte.** It places 31 more nodes on the
+  NPU (533/538) and runs 1.49x faster than Cut, but its MAD against the FP32 reference is
+  **0.35269 — 1.85x Cut's 0.19022**. Buying 8.7 ms costs nearly double the alpha error.
+  `demos/portrait_matting_demo.py` defaults to this variant, so what the demo shows on
+  screen is the fast-and-loose end of that trade, not the accurate one.
+- **Calibration and inference preprocessing were not byte-identical** for any MODNet model
+  measured so far. `pipelines/modnet/3_quantize.py` resized calibration images through
+  `PIL.Image.BILINEAR` while every inference path used `cv2.INTER_LINEAR`; Pillow
+  antialiases on downscale and OpenCV does not, so the two disagree pixel-for-pixel. Both
+  now share `npu/modnet.py`, but **every MODNet number on this page was measured with
+  models calibrated through the old PIL path** — re-quantizing to close the gap is untried,
+  and the MAD figures above are the ones to beat when someone does.
+
 ---
 
 ## Known limitations

@@ -29,6 +29,7 @@ $env:RYZEN_AI_INSTALLATION_PATH = 'C:\Program Files\RyzenAI\1.7.1'
 | [`resolution_ladder_demo.py`](resolution_ladder_demo.py) | **Fixed Dispatch Floor & Compute Knee**: ResNet50 from 128² to 384²; $3.07\times$ FLOPs scaling costs only $1.61\times$ latency below 224² before compute overtakes dispatch floor | [ResNet50 input resolution](../docs/BENCHMARKS.md#resnet50-input-resolution-does-the-fixed-cost-story-hold-for-a-classifier) | `results/resolution_ladder_npu.jpg` |
 | [`classifier_width_demo.py`](classifier_width_demo.py) | **Classifier Width Generality**: ResNet50 vs Wide-ResNet50-2 vs Wide-ResNet101-2; confirms sub-linear scaling holds across CNN classifiers ($2.7\times$ params costs $1.64\times$ latency) | [Model width](../docs/BENCHMARKS.md#model-width-does-width-is-nearly-free-hold-for-a-classifier-too) | `results/classifier_width_npu.jpg` |
 | [`webcam_multipartition_demo.py`](webcam_multipartition_demo.py) | **Multi-Partition Concurrency**: Live webcam round-robin across 4 independent `1x4.xclbin` column partitions | [A live demo](../docs/BENCHMARKS.md#a-live-demo-does-the-multi-partition-finding-hold-on-a-real-webcam) | — |
+| [`portrait_matting_demo.py`](portrait_matting_demo.py) | **Real-Time Portrait Matting**: Live webcam matting (MODNet Zero-Concat XINT8 512x512) on NPU at 17.75 ms / 56.3 fps, 533/538 nodes — the fast variant, at 1.85x Cut's alpha error; bokeh blur, green-screen studio, EP cycling | [Category B: Real-Time Portrait Matting](../docs/BENCHMARKS.md#category-b-real-time-portrait-matting-modnet-on-xdna1-npu) | `results/modnet/000000001000_npu_composite.png` |
 
 ## Running the Demos
 
@@ -79,3 +80,17 @@ Evaluates ResNet50, Wide-ResNet50-2, and Wide-ResNet101-2 back-to-back on the NP
 ```bash
 python demos/classifier_width_demo.py --out-dir results/
 ```
+
+### 9. Live Portrait Matting on Webcam
+Runs MODNet **Zero-Concat** XINT8 at 512x512 on the physical NPU with live interactive controls:
+```powershell
+python demos/portrait_matting_demo.py --source 0
+```
+- **Key controls**: `b` (Bokeh blur), `[` / `]` (blur radius), `g` (Green screen), `m` (Raw alpha trimap), `s` (Split screen), `c` (Cycle NPU / iGPU / CPU), `p` (Save snapshot), `SPACE` (Pause), `q` (Quit).
+- **It defaults to the fast, less accurate graph.** Zero-Concat runs 17.75 ms to Cut's
+  26.44 ms, but its alpha error against the FP32 reference is 1.85x Cut's (MAD 0.35269 vs
+  0.19022) — see [Category B](../docs/BENCHMARKS.md#4-same-sitting-re-measurement-with-logs-2026-09-07-desktop-2).
+  Pass `--model models/modnet/modnet_cut_xint8.onnx` for the accurate one.
+- **`p` writes a snapshot of whatever the camera sees** into `results/modnet/`. That
+  directory is committed, so delete snapshots you don't want published — the ones from the
+  original demo session were of a person and were kept out of the repo deliberately.
