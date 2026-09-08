@@ -1290,6 +1290,8 @@ Super-resolution models are structurally matched to XDNA1: 100% convolutional, z
   2. Measure PSNR and SSIM on standard benchmarks (Set5, Set14) across FP32, plain XINT8, and AdaRound to evaluate quantization loss on image reconstruction.
   3. Profile latency and achieved TOPS via `tools/estimate_tops.py`.
 - **Falsification criteria:** The pipeline fails if sub-pixel shuffling or spatial upsampling operations fall back to CPU, incurring cross-device transfer overhead that negates convolutional acceleration.
+- **SESR-M7 result:** PixelShuffle (`DepthToSpace`) compiles natively on AIE into a **single monolithic DPU subgraph** (50/52 nodes on NPU, 96.2%, 0 internal fallbacks; outer 2 nodes are input `QuantizeLinear` and output `DequantizeLinear`). Single-tile latency at 256x256 -> 512x512 is **1.48 ms (674.0 fps)** on Phoenix XDNA1 — **5.43x faster than 8-core Zen 4 CPU (8.07 ms)** and **3.02x faster than Radeon 780M iGPU DML (4.48 ms)**. Plain XINT8 achieves 34.06 dB PSNR on Set5 (vs 35.64 dB FP32 reference); **AdaRound FastFinetune recovers 69.6% (+1.10 dB) of the lost PSNR to reach 35.16 dB (0.9437 SSIM)** at zero latency cost (1.48 ms vs 1.54 ms plain). Set14 sees 70.4% recovery (+0.50 dB to 29.82 dB, within 0.21 dB of FP32). Full working: [docs/BENCHMARKS.md](docs/BENCHMARKS.md#category-a-image-super-resolution-sesr-m7).
+- **Negative result (Real-ESRGAN Compact):** Real-ESRGAN Compact (64-channel residual dense chain) explodes intermediate activation memory across residual concatenations (12.6 MB per activation tensor), exceeding on-chip tile memory and fracturing into **81 DPU subgraphs** with **1,068 nodes on CPU** and only 707 on NPU. SESR's constant 16-channel linear collapsed topology avoids SRAM exhaustion, confirming that channel width discipline is mandatory for monolithic NPU residency in restoration pipelines.
 
 ### Category B: Real-Time Portrait Matting and Semantic Segmentation
 
@@ -1512,6 +1514,23 @@ sections above.
   falsification criterion: re-parameterized RepVGG weights don't carry AdaRound-resistant
   outliers here. Both halves of the candidate are closed.
   [Working](docs/BENCHMARKS.md#category-c-first-candidate-yolov6n-repvgg-backbone).
+- **Category D: Monocular Depth Estimation (MiDaS v2.1 Small).** New pipeline
+  (`pipelines/midas/`). Nearest-neighbor upsampling fuses all RefineNet decoder layers
+  into a single monolithic DPU subgraph (682/684 nodes, 99.7%), eliminating 4 host CPU
+  round-trips and accelerating inference by 34% (16.44 -> 10.81 ms, 92.5 fps) — a
+  1.53x win over Zen 4 CPU (16.56 ms). Plain XINT8 preserves depth structure cleanly
+  (Pearson r = 0.8706, MAD = 26.02/255) without scale grid collapse. Both hypotheses
+  closed. [Working](docs/BENCHMARKS.md#category-d-monocular-depth-estimation-midas-v21-small).
+- **Category A: Image Super-Resolution (SESR-M7).** New pipeline (`pipelines/sesr/`).
+  Sub-pixel convolution (`DepthToSpace` / PixelShuffle) compiles natively on AIE into a
+  single monolithic DPU subgraph (50/52 nodes, 96.2%, zero internal fallbacks). Achieves
+  **1.48 ms per 256x256 tile (674.0 fps)** on Phoenix XDNA1 — **5.43x faster than 8-core
+  Zen 4 CPU** (8.07 ms) and **3.02x faster than Radeon 780M iGPU DML** (4.48 ms), marking
+  the first visual pipeline where the NPU decisively outperforms the iGPU. Plain XINT8 loses
+  1.58 dB on Set5 (34.06 dB vs 35.64 FP32); **AdaRound FastFinetune recovers 69.6% (+1.10 dB)
+  to reach 35.16 dB (0.9437 SSIM)** at zero latency cost. Real-ESRGAN Compact's 81-subgraph
+  memory spill confirms that 16-channel width discipline is required to avoid SRAM
+  exhaustion. Both hypotheses closed. [Working](docs/BENCHMARKS.md#category-a-image-super-resolution-sesr-m7).
 
 **Still open.**
 
@@ -1539,10 +1558,12 @@ sections above.
   clock behind them (the 7.0 GB/s shim channel is one 32-bit word per cycle); and S2's
   full trace, whose upstream parser mis-times gaps over 2^18 cycles.
 - **Candidate model pipelines (Categories A, C, D, E).** Test plans, target shapes, and falsification criteria:
-  - **Category A:** Image Super-Resolution (Real-ESRGAN Compact, SESR-M7).
+  - **Category A:** Image Super-Resolution — SESR-M7 (placement, 1.48 ms latency, 3.02x iGPU win,
+    70% AdaRound recovery) and Real-ESRGAN Compact (activation memory spill) closed above.
   - **Category C:** Advanced Detection and RepVGG Backbones — YOLOv6n (placement, speed,
     plain-XINT8 and AdaRound recovery) closed above; YOLO-World v2 and YOLOv11 still open.
-  - **Category D:** Monocular Depth Estimation (MiDaS v2.1 Small, FastDepth).
+  - **Category D:** Monocular Depth Estimation — MiDaS v2.1 Small (bilinear vs nearest fusion,
+    10.81 ms, 1.53x CPU win) closed above; FastDepth still open.
   - **Category E:** Untested Classification Topologies (DenseNet-121, ResNeXt-50, RegNetX).
 - **Longer term:** a detector fine-tuned for fixed camera feeds (licence-plate
   recognition), reusing the head-cut + XINT8 + AdaRound recipe rather than re-deriving it.

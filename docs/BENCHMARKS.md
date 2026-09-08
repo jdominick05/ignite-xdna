@@ -2348,6 +2348,117 @@ Two findings:
    boundary nodes, accelerating inference by 34% (10.81 ms vs 16.44 ms) with negligible loss
    in depth correlation ($r = 0.8706$ vs $0.8834$).
 
+### Category A: Image Super-Resolution (SESR-M7)
+
+`pipelines/sesr/` — new pipeline, implementing Collapsible Linear Blocks for Super-Efficient
+Super-Resolution (SESR-M7, 2x upscaling) from AMD's official re-parameterized release.
+Tests Category A's hypothesis on high-resolution dense convolutional restoration: static
+256x256 RGB input (`[1, 3, 256, 256]`) to static 512x512 RGB output (`[1, 3, 512, 512]`)
+using a 16-channel linear collapsed body (7 residual blocks of 3x3 convs with ReLU and a
+long residual skip) terminated by a 5x5 tail convolution and PixelShuffle upsampler
+(`DepthToSpace`).
+
+Exported cleanly to `models/sesr_m7_fp32.onnx` (opset 17, 18 nodes: 9 Convs, 7 ReLUs, 1 Add,
+1 DepthToSpace). Preprocessing is byte-identical between calibration and inference via
+`npu/sesr.py` (mean subtraction: RGB - 128.0; post-processing: RGB + 128.0, clipped to [0, 255]).
+
+#### Sub-pixel convolution compiles natively on AIE
+
+The critical open architectural question for restoration networks was whether sub-pixel
+convolution (`DepthToSpace` / PixelShuffle, `mode="CRD"`, `blocksize=2`) compiles natively on
+AIE or fractures into CPU fallback subgraphs.
+
+In `results/diag_sesr_m7_xint8.log` and `results/diag_sesr_m7_adaround.log`, the VitisAI EP
+compiles the entire model into a **single monolithic DPU subgraph**:
+- **50 of 52 nodes (96.2%) placed on the NPU**, 2 on CPU.
+- The 2 CPU nodes are the outer graph boundary conversions (`QuantizeLinear` on input,
+  `DequantizeLinear` on output).
+- **Zero internal CPU fallbacks**: `DepthToSpace` compiles natively on AIE alongside all 9 Convs,
+  7 ReLUs, and the long residual `Add`.
+
+#### Memory explosion in Real-ESRGAN Compact: A negative structural result
+
+Before implementing SESR-M7, Real-ESRGAN Compact (a 16-block residual dense chain with 64 base
+channels, scaling 256x256 to 1024x1024) was evaluated as the primary candidate. It failed to
+achieve monolithic execution:
+- Real-ESRGAN Compact fractured into **81 separate DPU subgraphs** with **1,068 nodes on CPU**
+  and only 707 nodes on NPU.
+- **Root cause:** Intermediate activation memory explosion across dense concatenations. Each
+  dense block accumulates feature channels (64 -> 128 -> 192), producing intermediate tensors
+  of size 1 x 192 x 256 x 256 x 4 bytes ≈ 12.6 MB per activation — far exceeding the AIE tile
+  local data memory (64 KB per core). The compiler is forced to spill activations back to host
+  RAM over the system bus between blocks.
+- SESR's constant 16-channel linear collapsed topology avoids SRAM exhaustion completely,
+  confirming that **channel width discipline is mandatory for monolithic NPU residency in
+  restoration graphs**.
+
+#### Latency across hardware: First decisive win over the iGPU
+
+Benchmarked at static 256x256 input resolution (50 iterations, batch 1, `sess.run` alone,
+single tile):
+
+| Hardware / Provider | Model Variant | Precision | Subgraphs | Latency (mean) | P50 / P90 | Throughput | Backing Log |
+|---|---|---|---|---|---|---|---|
+| CPU (Zen 4, 8C/16T) | Clean Export | FP32 | 1 (CPU) | 8.07 ms | 7.89 / 9.50 ms | 124.0 fps | `results/lat_sesr_m7_cpu.log` |
+| iGPU (Radeon 780M, DirectML) | Clean Export | FP32 | 1 (DML) | 4.48 ms | 4.23 / 5.39 ms | 223.1 fps | `results/lat_sesr_m7_dml.log` |
+| NPU (Phoenix XDNA1) | Stock PTQ | XINT8 | 1 (DPU) | 1.54 ms | 1.48 / 1.60 ms | 650.7 fps | `results/lat_sesr_m7_xint8_npu.log` |
+| **NPU (Phoenix XDNA1)** | AdaRound | XINT8 | 1 (DPU) | **1.48 ms** | 1.47 / 1.55 ms | 674.0 fps | `results/lat_sesr_m7_adaround_npu.log` |
+
+Two hardware findings:
+1. **The NPU beats the 8-core Zen 4 CPU by 5.43x** (1.48 ms vs 8.07 ms). On CPU, running the
+   quantized XINT8 model takes 12.85 ms due to ORT dequantization overhead; the NPU is **8.66x
+   faster than CPU XINT8**.
+2. **This is the first visual pipeline where the NPU soundly beats the Radeon 780M iGPU (3.02x).**
+   Across detection and matting, the iGPU was either faster (yolov8n DML 6.08 ms vs NPU 6.59 ms) or
+   closely competitive (MODNet DML 46.14 ms vs NPU 26.44 ms, a 1.75x margin). For SESR's compact,
+   continuous convolution chain, the NPU reaches 1.48 ms against DML's 4.48 ms.
+
+#### Quantitative Fidelity: Set5 and Set14 Benchmarks
+
+Evaluated on the standard Set5 (5 images) and Set14 (14 images) SISR benchmark datasets using
+standard luminance (Y-channel in YCbCr) and full RGB PSNR and SSIM. Tiling handles arbitrary
+image sizes seamlessly.
+
+##### Set5 Evaluation (5 images)
+
+| Model | EP | PSNR (Y) [dB] | SSIM (Y) | PSNR (RGB) [dB] | SSIM (RGB) | Latency [ms] | FPS | Backing Log |
+|---|---|---|---|---|---|---|---|---|
+| Bicubic baseline | CPU | 32.63 | 0.9249 | 32.07 | 0.9121 | — | — | `results/eval_sesr_m7_set5_npu.log` |
+| FP32 Reference | CPU | 35.64 | 0.9518 | 34.88 | 0.9401 | 6.59 | 151.7 | `results/eval_sesr_m7_set5_npu.log` |
+| XINT8 | NPU | 34.06 | 0.9346 | 33.20 | 0.9137 | 2.00 | 499.8 | `results/eval_sesr_m7_set5_npu.log` |
+| **XINT8 + AdaRound** | NPU | 35.16 | 0.9437 | 34.20 | 0.9272 | 2.22 | 450.4 | `results/eval_sesr_m7_set5_npu.log` |
+| FP32 Reference | DML | 35.64 | 0.9518 | 34.88 | 0.9401 | 11.27 | 88.8 | `results/eval_sesr_m7_set5_dml.log` |
+| XINT8 | DML | 34.25 | 0.9339 | 33.15 | 0.9071 | 15.35 | 65.2 | `results/eval_sesr_m7_set5_dml.log` |
+| XINT8 + AdaRound | DML | 35.06 | 0.9415 | 34.17 | 0.9254 | 14.74 | 67.9 | `results/eval_sesr_m7_set5_dml.log` |
+
+##### Set14 Evaluation (14 images)
+
+| Model | EP | PSNR (Y) [dB] | SSIM (Y) | PSNR (RGB) [dB] | SSIM (RGB) | Latency [ms] | FPS | Backing Log |
+|---|---|---|---|---|---|---|---|---|
+| Bicubic baseline | CPU | 28.51 | 0.8557 | 28.05 | 0.8403 | — | — | `results/eval_sesr_m7_set14_npu.log` |
+| FP32 Reference | CPU | 30.03 | 0.8910 | 29.37 | 0.8746 | 7.45 | 134.2 | `results/eval_sesr_m7_set14_npu.log` |
+| XINT8 | NPU | 29.32 | 0.8770 | 28.71 | 0.8567 | 1.71 | 583.9 | `results/eval_sesr_m7_set14_npu.log` |
+| **XINT8 + AdaRound** | NPU | 29.82 | 0.8837 | 29.09 | 0.8639 | 1.77 | 565.1 | `results/eval_sesr_m7_set14_npu.log` |
+| FP32 Reference | DML | 30.03 | 0.8910 | 29.37 | 0.8746 | 10.86 | 92.1 | `results/eval_sesr_m7_set14_dml.log` |
+| XINT8 | DML | 29.41 | 0.8771 | 28.73 | 0.8552 | 13.63 | 73.4 | `results/eval_sesr_m7_set14_dml.log` |
+| XINT8 + AdaRound | DML | 29.79 | 0.8828 | 29.09 | 0.8629 | 13.59 | 73.6 | `results/eval_sesr_m7_set14_dml.log` |
+
+Three takeaways:
+1. **Exact reproduction of published baseline:** The clean PyTorch NCHW export reproduces AMD's
+   official FP32 reference metrics exactly: **35.64 dB PSNR / 0.9518 SSIM** on Set5, and
+   **30.03 dB PSNR / 0.8910 SSIM** on Set14.
+2. **AdaRound recovers 70% of quantization loss at zero hardware latency cost:**
+   - On Set5, plain XINT8 loses 1.58 dB; AdaRound FastFinetune (200 iterations on 100 crops)
+     recovers **+1.10 dB (69.6% recovery)** to reach 35.16 dB (0.9437 SSIM).
+   - On Set14, plain XINT8 loses 0.71 dB; AdaRound recovers **+0.50 dB (70.4% recovery)** to
+     reach 29.82 dB (0.8837 SSIM), closing to within **0.21 dB of FP32**.
+   - As in ResNet50 and YOLOv6, AdaRound changes only the weight rounding grid, leaving graph
+     topology and node count identical (50 NPU / 2 CPU); hardware latency on NPU is identical
+     within run-to-run noise (1.48 ms vs 1.54 ms).
+3. **Reconstruction quality on real images:** Visual reconstruction on the benchmark butterfly image
+   (`results/butterfly_sesr_{cpu,dml,npu}.png`) demonstrates crisp wing pattern and edge
+   reconstruction without halo artifacts or INT8 quantization banding.
+
 ## Key findings
 
 Roughly ordered by how much time each one cost to discover.

@@ -42,6 +42,9 @@ MODNET_USER_CACHE_KEY = "modnet_user_cache"
 # NPU-optimized nearest resize (single monolithic DPU subgraph).
 MIDAS_CACHE_KEY = "midascachekey"
 MIDAS_NEAREST_CACHE_KEY = "midasnearestcache"
+# SESR super-resolution: single monolithic DPU subgraph upscaling via DepthToSpace.
+SESR_CACHE_KEY = "sesrcachekey"
+SESR_ADAROUND_CACHE_KEY = "sesradaroundcachekey"
 
 
 def modnet_cache_key(model_path):

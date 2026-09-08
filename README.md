@@ -1,9 +1,8 @@
 # Ryzen AI XDNA1 NPU quantization pipelines
 
-INT8 quantization and NPU deployment for **AMD Hawk Point / Phoenix** (Ryzen 8040 and
-8000G series, XDNA1, 16 TOPS) on Windows, using AMD Quark and the VitisAI ONNX Runtime
-execution provider. Three pipelines — ResNet50 classification, YOLOv8 n/s/m/l/x
-detection, YOLOv8n-pose keypoints — each `export → quantize → run → measure`.
+INT8 quantization and NPU deployment for **AMD Hawk Point / Phoenix** (Ryzen 8040 / 8000G,
+XDNA1, 16 TOPS) on Windows, using Quark and the VitisAI ONNX Runtime execution provider.
+Pipelines spanning classification, detection, pose, depth, and super-resolution.
 
 **This is a hardware-characterization study, not a packaged tool.** Everything is
 reproducible end to end, but the deliverable is measurements: every number below is
@@ -33,6 +32,7 @@ Full environment split, install steps and footguns: [`docs/SETUP.md`](docs/SETUP
 | `pipelines/yolov8n-pose` | YOLOv8n-pose, 17-point COCO keypoints | **Working** — 9.35 ms on the NPU (1015/1025 nodes), OKS mAP@50-95 34.32 AdaRound vs 32.64 plain XINT8 and 49.86 float (5000 images) |
 | `pipelines/yolov6n` | YOLOv6n detection (RepVGG backbone, no DFL) | **Working** — 6.62 ms on the NPU (518/525 nodes), mAP@50-95 33.57 AdaRound vs 22.92 plain XINT8 and 36.95 float (5000 images) |
 | `pipelines/midas` | MiDaS v2.1 Small (monocular depth) | **Working** — 10.81 ms on NPU (682/684 nodes, single subgraph), r = 0.8706 vs FP32 (50 scenes) |
+| `pipelines/sesr` | SESR-M7 (2x super-resolution) | **Working** — 1.48 ms on NPU (50/52 nodes, single subgraph), 35.16 dB PSNR on Set5 (XINT8+AdaRound) |
 | `pipelines/mobilevit` | MobileViT-XXS (hybrid CNN/transformer) | **Does not survive INT8** — 0.00% top-1, kept as the negative result |
 
 Detection width sweep, head-cut plain XINT8, full 5000-image val2017 mAP
