@@ -1,0 +1,99 @@
+diff --git a/programming_examples/basic/matrix_multiplication/whole_array/whole_array.py b/programming_examples/basic/matrix_multiplication/whole_array/whole_array.py
+index 33ce76791ef..17eca59546e 100644
+--- a/programming_examples/basic/matrix_multiplication/whole_array/whole_array.py
++++ b/programming_examples/basic/matrix_multiplication/whole_array/whole_array.py
+@@ -67,6 +67,7 @@ def _build_design(
+     emulate_bf16_mmul_with_bfp16,
+     use_chess,
+     scalar,
++    c_single_buffer=False,
+     *,
+     generate_taps=False,
+ ):
+@@ -120,6 +121,13 @@ def _build_design(
+     assert n % t == 0
+ 
+     fifo_depth = 2
++    # The C_L1L2 fifo is each core's own output tile buffer (not the DMA
++    # re-stream path A/B use) -- core_fn zeroes it, accumulates K//k matmuls
++    # into it, then releases once per output tile, so there is no benefit to
++    # double-buffering it unless the core can start its next tile before this
++    # one's L1->L2 DMA drains. Single-buffering trades that (unmeasured) overlap
++    # for m*n*dtype_out_bytes of freed L1 -- e.g. 16 KiB at m=n=64, f32 out.
++    c_l1l2_depth = 1 if c_single_buffer else fifo_depth
+     n_tiles_per_core = (M // m) * (N // n) // n_aie_cores
+ 
+     if n_aie_cols > n_aie_rows:
+@@ -206,7 +214,7 @@ def _build_design(
+             of_offsets,
+             obj_types=[C_l1_ty] * n_aie_rows,
+             names=[f"C_L1L2_{col}_{row}" for row in range(n_aie_rows)],
+-            depths=[fifo_depth] * n_aie_rows,
++            depths=[c_l1l2_depth] * n_aie_rows,
+         )
+         for j in range(n_aie_rows):
+             C_l1l2_fifos[j].append(c_tmp_fifos[j])
+@@ -382,6 +390,7 @@ def whole_array(
+     emulate_bf16_mmul_with_bfp16: CompileTime[bool] = False,
+     use_chess: CompileTime[bool] = False,
+     scalar: CompileTime[bool] = False,
++    c_single_buffer: CompileTime[bool] = False,
+ ):
+     return _build_design(
+         iron.get_current_device(),
+@@ -399,6 +408,7 @@ def whole_array(
+         emulate_bf16_mmul_with_bfp16,
+         use_chess,
+         scalar,
++        c_single_buffer,
+     )
+ 
+ 
+@@ -416,6 +426,7 @@ def generate_taps(
+     c_col_maj=0,
+     emulate_bf16_mmul_with_bfp16=False,
+     dev="npu",
++    c_single_buffer=False,
+ ):
+     """Return ``(A_taps, B_taps, C_taps)`` for the visualization notebook."""
+     dev_obj = _device_for(dev, n_aie_cols)
+@@ -436,6 +447,7 @@ def generate_taps(
+         emulate_bf16_mmul_with_bfp16,
+         use_chess=False,
+         scalar=False,
++        c_single_buffer=c_single_buffer,
+         generate_taps=True,
+     )
+ 
+@@ -452,6 +464,15 @@ def _make_argparser():
+     p.add_argument("--n-aie-cols", type=int, choices=[1, 2, 4, 8], default=4)
+     p.add_argument("--b-col-maj", type=int, choices=[0, 1], default=0)
+     p.add_argument("--c-col-maj", type=int, choices=[0, 1], default=0)
++    p.add_argument(
++        "--c-single-buffer",
++        type=int,
++        choices=[0, 1],
++        default=0,
++        help="single-buffer the per-core C_L1L2 output tile (frees "
++        "m*n*dtype_out_bytes of L1 vs the default double buffer, at the cost "
++        "of any next-tile/DMA-out overlap)",
++    )
+     p.add_argument(
+         "--emulate-bf16-mmul-with-bfp16", type=int, choices=[0, 1], default=0
+     )
+@@ -526,6 +547,7 @@ def _compile_kwargs(opts):
+         emulate_bf16_mmul_with_bfp16=bool(opts.emulate_bf16_mmul_with_bfp16),
+         use_chess=bool(opts.use_chess),
+         scalar=bool(opts.scalar),
++        c_single_buffer=bool(opts.c_single_buffer),
+     )
+ 
+ 
+@@ -568,6 +590,7 @@ def _run_and_verify(opts):
+         emulate_bf16_mmul_with_bfp16=bool(opts.emulate_bf16_mmul_with_bfp16),
+         use_chess=bool(opts.use_chess),
+         scalar=bool(opts.scalar),
++        c_single_buffer=bool(opts.c_single_buffer),
+         warmup=opts.warmup,
+         iters=opts.iters,
+     )

@@ -39,6 +39,15 @@ USAGE (ironenv -- NOT resnet_env / resnet_env17)
 
 Pair it with cpu_int8_matmul_sweep.py (resnet_env) in the same sitting -- NPU latency on
 this machine drifts between sessions independently of any code change.
+
+`--c-single-buffer 1` passes whole_array.py's `--c-single-buffer` flag, which is NOT in
+upstream mlir-aie v1.4.2: it is the local patch in
+kernels/gemm_tile_sweep/whole_array_c_single_buffer.patch (drops the per-core C_L1L2
+output-tile FIFO from depth 2 to 1, freeing m*n*dtype_out_bytes of L1). Every run header
+and the SUMMARY carry an `L1 est` column: 2*A + 2*B + (1|2)*C + 3,328 B stack, the
+allocator's own arithmetic (results/aie/int8_matmul_sweep_npu.log TABLE 4 matched it byte
+for byte), so a compile failure with "Basic sequential allocation failed" can be read
+against the prediction.
 """
 
 import argparse
@@ -94,10 +103,24 @@ def default_m(M):
     return m
 
 
+ITEMSIZE = {"i8": 1, "i16": 2, "bf16": 2, "i32": 4, "f32": 4}
+L1_BYTES = 65536
+STACK_BYTES = 0xD00  # 3,328 B, whole_array's stack_size (see the allocator dump in the int8 log)
+
+
+def l1_estimate(m, k, n, dtype_in, dtype_out, c_single_buffer):
+    """Bytes of core L1 the design's buffers need: double-buffered A and B tiles, the C
+    tile at depth 1 or 2, plus the stack. Matches the aie.tile allocator's arithmetic."""
+    bi, bo = ITEMSIZE[dtype_in], ITEMSIZE[dtype_out]
+    a, b, c = m * k * bi, k * n * bi, m * n * bo
+    return 2 * a + 2 * b + (1 if c_single_buffer else 2) * c + STACK_BYTES
+
+
 def run_one(args, M, K, N, m):
     dtype_in, dtype_out = DTYPES[args.dtype]
     if args.dtype_out:
         dtype_out = args.dtype_out
+    l1 = l1_estimate(m, args.k, args.n, dtype_in, dtype_out, args.c_single_buffer)
     cmd = [
         sys.executable,
         "whole_array.py",
@@ -111,7 +134,14 @@ def run_one(args, M, K, N, m):
         "--warmup", str(args.warmup),
         "--iters", str(args.iters),
     ]
-    print(f"\n=== {M}x{K}x{N}  m={m} k={args.k} n={args.n}  {dtype_in}->{dtype_out} ===")
+    if args.c_single_buffer:
+        cmd += ["--c-single-buffer", "1"]
+    if args.b_col_maj:
+        cmd += ["--b-col-maj", "1"]
+    fit = "fits" if l1 <= L1_BYTES else f"OVER by {l1 - L1_BYTES:,}"
+    print(f"\n=== {M}x{K}x{N}  m={m} k={args.k} n={args.n}  {dtype_in}->{dtype_out}"
+          f"  c_single_buffer={args.c_single_buffer}"
+          f"{'  b_col_maj=1' if args.b_col_maj else ''}  L1 est {l1:,} B ({fit}) ===")
     print("$ " + " ".join(cmd[1:]))
     sys.stdout.flush()
     t0 = time.perf_counter()
@@ -154,6 +184,7 @@ def run_one(args, M, K, N, m):
     return {
         "shape": f"{M}x{K}x{N}",
         "m": m,
+        "l1": l1,
         "verdict": verdict,
         "npu_avg": float(npu.group(1)) if npu else None,
         "npu_min": float(npu.group(2)) if npu else None,
@@ -171,6 +202,12 @@ def main():
     p.add_argument("-k", type=int, default=64, help="tile k (whole_array default 64)")
     p.add_argument("-n", type=int, default=32, help="tile n (whole_array default 32)")
     p.add_argument("--cols", type=int, default=4, help="--n-aie-cols (4 = the whole Phoenix array)")
+    p.add_argument("--c-single-buffer", type=int, choices=[0, 1], default=0,
+                   help="pass whole_array's --c-single-buffer (local patch, see docstring); "
+                        "0 = upstream's double-buffered C tile")
+    p.add_argument("--b-col-maj", type=int, choices=[0, 1], default=0,
+                   help="pass whole_array's --b-col-maj 1 (B stored column-major, so its L3->L2 "
+                        "DMA reads k contiguous elements per burst instead of n); upstream flag")
     p.add_argument("--iters", type=int, default=10)
     p.add_argument("--warmup", type=int, default=3)
     p.add_argument("--timeout", type=int, default=1500, help="seconds per run, compile included")
@@ -185,7 +222,8 @@ def main():
     if args.dtype_out:
         dtype_out = args.dtype_out
     print(f"whole_array sweep  dtype {dtype_in}->{dtype_out}  cols={args.cols} k={args.k} n={args.n}  "
-          f"iters={args.iters} warmup={args.warmup}  python={sys.executable}")
+          f"c_single_buffer={args.c_single_buffer} b_col_maj={args.b_col_maj}  iters={args.iters} warmup={args.warmup}  "
+          f"python={sys.executable}")
     print(f"whole_array dir: {args.whole_array_dir}")
 
     results = []
@@ -194,15 +232,18 @@ def main():
         results.append(run_one(args, M, K, N, m))
 
     unit = "GOPS" if dtype_in.startswith("i") else "GFLOPS"
-    print(f"\nSUMMARY  ({dtype_in}->{dtype_out}, {args.cols} cols, k={args.k} n={args.n}; "
-          f"{unit} = 2MKN / NPU-bracket avg)")
-    head = f"{'MxKxN':>16} {'m':>3} {'verdict':>10} {'NPU avg us':>12} {'NPU min us':>12} {'e2e avg us':>12} {unit:>9}"
+    print(f"\nSUMMARY  ({dtype_in}->{dtype_out}, {args.cols} cols, k={args.k} n={args.n} "
+          f"c_single_buffer={args.c_single_buffer} b_col_maj={args.b_col_maj}; {unit} = 2MKN / NPU-bracket avg; "
+          f"L1 est = 2A+2B+C*(1|2)+stack, of {L1_BYTES:,})")
+    head = (f"{'MxKxN':>16} {'m':>3} {'L1 est':>8} {'verdict':>10} {'NPU avg us':>12} "
+            f"{'NPU min us':>12} {'e2e avg us':>12} {unit:>9}")
     print(head)
     print("-" * len(head))
     for r in results:
         fmt = lambda v: f"{v:12.1f}" if v is not None else f"{'-':>12}"
         g = f"{r['gops']:9.2f}" if r["gops"] is not None else f"{'-':>9}"
-        print(f"{r['shape']:>16} {r['m']:>3} {r['verdict']:>10} {fmt(r['npu_avg'])} {fmt(r['npu_min'])} {fmt(r['e2e_avg'])} {g}")
+        print(f"{r['shape']:>16} {r['m']:>3} {r['l1']:>8,} {r['verdict']:>10} {fmt(r['npu_avg'])} "
+              f"{fmt(r['npu_min'])} {fmt(r['e2e_avg'])} {g}")
 
 
 if __name__ == "__main__":

@@ -252,7 +252,7 @@ the core can absorb 0.0625 B/MAC. DERIVED:
 | 32×32 | 0.125 | 64 | 50% | — |
 | 16×64 (forced at N=11008) | 0.156 | 51.2 | 40% | 909.97 GFLOPS — 0.51× the default tile's 1793 at the same K |
 | 16×128 (Mistral N=14336) | 0.141 | 56.9 | 44% | 1454.37 GFLOPS |
-| 64×64 | 0.0625 | 128 | **100%** | never in bf16 — its double-buffered f32 C tile alone is 2 × 16 KB, and the whole set (A 8 KB, B 8 KB, C 16 KB, ×2) is exactly 64 KB with no stack; the `n=64` attempt failed on L1 (`..._ffn_shape_variants_npu.log`), and a second attempt measured the miss at exactly the 3,328 B stack (`results/aie/int8_matmul_sweep_npu.log`). **Reached in int8**, whose operands are half the bytes (52,480 B with stack): 4447.97–4607.05 GOPS at the 2048-class shapes, 1.9× the 64×32 int8 tile, bit-exact |
+| 64×64 | 0.0625 | 128 | **100%** | **Reached in bf16 once the C tile is single-buffered** (`--c-single-buffer 1`, a local `whole_array.py` patch kept as `kernels/gemm_tile_sweep/whole_array_c_single_buffer.patch`): 2477.23 GFLOPS at 2048³ and 2641.41 at 2048×4096×4096 against the default tile's 1775.65 / 1801.18, the CPU-bf16 margin widening to 1.29×–1.89× (`results/aie/bf16_matmul_n64_single_buffer_npu.log`). Before that it was out of reach: the double-buffered f32 C tile alone is 2 × 16 KB, the whole set (A 8 KB, B 8 KB, C 16 KB, ×2) is exactly 64 KB with no stack, the `n=64` attempt failed on L1 (`..._ffn_shape_variants_npu.log`) and a second attempt measured the miss at exactly the 3,328 B stack (`results/aie/int8_matmul_sweep_npu.log`). **Reached in int8** without the patch, its operands being half the bytes (52,480 B with stack): 4447.97–4607.05 GOPS at the 2048-class shapes, 1.9× the 64×32 int8 tile, bit-exact |
 
 The int8 column of the same table is the bf16 one at half the bytes per MAC (0.0469 at
 64×32, 0.0313 at 64×64) against the same 8 B/cycle and 256 MAC/cycle, so 64×64 is exactly
@@ -438,10 +438,16 @@ Reuses: `kernels/bottleneck_sweep/`, the local `conv2dk1`/`conv2dk3` width fixes
 
 **K2. bf16 GEMM to its input-bound roofline.**
 Bar: 27–32% of peak today (2.4) against a 67% bound at the default tile and 100% at 64×64
-(3.1). The 64×64 lever is already measured on int8, whose half-size operands fit it in L1:
-1.9× over 64×32 with the generic `whole_array.py` CLI, no design work
-(`results/aie/int8_matmul_sweep_npu.log`); bf16 needs the 16 KB a single-buffered C FIFO
-would free before it can take the same tile. Physical basis: 3.1's three levers — C accumulated in registers or across the
+(3.1). The 64×64 lever is measured on both dtypes with the generic `whole_array.py` CLI and no
+design work: 1.9× over 64×32 in int8, whose half-size operands fit it in L1
+(`results/aie/int8_matmul_sweep_npu.log`), and 1.39–1.47× in bf16 once the C output tile is
+single-buffered to free the 16 KB it was short by — 2477.23 GFLOPS at 2048³, the CPU-bf16
+margin widening to 1.29×–1.89× (`results/aie/bf16_matmul_n64_single_buffer_npu.log`). That is
+where the CLI stops: 128×64 and 64×128 at k=64 miss L1 by 19,712 B even single-buffered.
+DERIVED, not measured — 2A+2B+C+stack = 32,768 + 16,384 + 32,768 + 3,328 = 85,248 B
+against the 65,536 B bank, which is `l1_estimate()` in
+`kernels/int8_matmul_sweep/npu_matmul_sweep.py`; no sweep was run at those two tiles.
+Physical basis: 3.1's three levers — C accumulated in registers or across the
 cascade instead of read-modify-written in L1 every k-step; A or B shared between adjacent
 cores through neighbour memory so one stream feeds two; and shape-specific DMA
 decomposition through the mem tile for widths like 11008 where the shim BD's 20-bit step

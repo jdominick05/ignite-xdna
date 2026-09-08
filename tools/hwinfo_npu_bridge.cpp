@@ -18,12 +18,12 @@
  *      NPU/IPU/XDNA device); --adapter / --luid override that if the match fails.
  *
  *   2. xrt-smi examine -r aie-partitions (AMD's signed CLI over the XRT driver query
- *      interface), per poll: memory in use, which columns each partition holds, and the
+ *      interface), per read: memory in use, which columns each partition holds, and the
  *      per-hardware-context table -- pid, process, status, submissions, completions,
  *      migrations, suspensions, errors, priority, and whatever GOPS/EGOPS/FPS/latency the
  *      context reports (VitisAI EP contexts report GOPS; IRON/XRT ones report N/A). The
  *      completions/s and submissions/s columns are deltas of xrt-smi's counters between
- *      polls, computed here.
+ *      reads, computed here.
  *
  *   3. XRT's own C++ query API (xrt::device::get_info, the interface xrt-smi is a CLI over),
  *      in-process, when built with HAVE_XRT: device name and BDF once; and per poll, at
@@ -61,16 +61,29 @@
  * not parse and used a different sensor schema (Other0 = "NPU GOPS"); that group is
  * removed at start-up when found, so HWiNFO does not show two NPUs.
  *
+ * POLLING
+ * -------
+ * Two cadences. The fast sources -- the Windows engine counters and XRT's clock readback --
+ * cost a few ms and are sampled every --interval seconds (default 0.5, minimum 0.1: up to ten
+ * samples a second). xrt-smi is a child process that takes a few hundred ms per report, so it
+ * runs on its own thread every --smi-interval seconds (default 2, 0 = never) and a frame uses
+ * the newest xrt-smi sample, showing its age; completions/s and submissions/s are deltas
+ * between consecutive xrt-smi reads, not per frame. The footer prints the requested and the
+ * measured poll period. Dashboard keys: + and - halve and double the poll interval, [ and ]
+ * the xrt-smi interval, s turns xrt-smi off and on, p pauses (the activity sensors are
+ * removed from HWiNFO while paused, for the Average rule above), q quits.
+ *
  * USAGE
- *   hwinfo_npu_bridge.exe                 live dashboard, polls every 2 s, publishes to HWiNFO
- *   hwinfo_npu_bridge.exe --interval 1    faster polling
- *   hwinfo_npu_bridge.exe --once          one sample, printed plainly, then exit
- *   hwinfo_npu_bridge.exe --json          one JSON object per sample on stdout (for scripts)
- *   hwinfo_npu_bridge.exe --plain         one text line per sample, no screen redraw
- *   hwinfo_npu_bridge.exe --no-hwinfo     monitor only, touch no registry key
- *   hwinfo_npu_bridge.exe --idle hide     remove activity sensors from HWiNFO while the NPU is idle
- *   hwinfo_npu_bridge.exe --background    hide the console window (bridge only)
- *   hwinfo_npu_bridge.exe --clean         remove this group's registry keys on exit
+ *   hwinfo_npu_bridge.exe                     live dashboard: 0.5 s polls, xrt-smi every 2 s, publishes to HWiNFO
+ *   hwinfo_npu_bridge.exe --interval 0.1      ten utilization/clock samples a second
+ *   hwinfo_npu_bridge.exe --smi-interval 5    xrt-smi every 5 s (0 = never run it)
+ *   hwinfo_npu_bridge.exe --once              one sample, printed plainly, then exit
+ *   hwinfo_npu_bridge.exe --json              one JSON object per sample on stdout (for scripts)
+ *   hwinfo_npu_bridge.exe --plain             one text line per sample, no screen redraw
+ *   hwinfo_npu_bridge.exe --no-hwinfo         monitor only, touch no registry key
+ *   hwinfo_npu_bridge.exe --idle hide         remove activity sensors from HWiNFO while the NPU is idle
+ *   hwinfo_npu_bridge.exe --background        hide the console window (bridge only)
+ *   hwinfo_npu_bridge.exe --clean             remove this group's registry keys on exit
  *
  * Build: scripts/build_hwinfo_bridge.bat (MSVC; nlohmann/json + boost headers from the
  * npu_monitor_build conda env; XRT SDK from C:\Xilinx\XRT\xrt_sdk when present -> HAVE_XRT).
@@ -98,6 +111,7 @@
 #include <deque>
 #include <fstream>
 #include <map>
+#include <mutex>
 #include <sstream>
 #include <string>
 #include <thread>
@@ -386,6 +400,10 @@ struct XrtSample {
     int partitions = 0;
     std::vector<int> cols;      // columns held by any partition
     std::vector<Ctx> ctx;
+    // set by the sampler (TakeXrt), not by the parser
+    int seq = 0;                                     // 0 = no xrt-smi read yet
+    Clock::time_point takenAt{};
+    double totalComplPerS = -1, totalSubsPerS = -1;  // deltas against the previous read
 };
 
 static XrtSample SampleXrt() {
@@ -702,11 +720,72 @@ static void RemoveLegacySensors(const std::wstring& ourGroup, std::vector<std::s
 }
 
 // ---------------------------------------------------------------------------------------
-// One poll = both sources, joined by pid, plus rates
+// xrt-smi on its own cadence, and one poll = the fast sources joined with its newest sample
 // ---------------------------------------------------------------------------------------
 
+// xrt-smi is a child process that takes a few hundred ms per report, so it never runs inside
+// the poll loop: XrtWorker reads it every intervalMs on its own thread and a frame takes the
+// newest sample from here, with its age. Completions/s and submissions/s are deltas between
+// consecutive xrt-smi reads, computed where the reads happen rather than per frame.
+struct RateKey { int pid; int ctx; bool operator<(const RateKey& o) const { return pid != o.pid ? pid < o.pid : ctx < o.ctx; } };
+struct RatePrev { double subs, compl; Clock::time_point t; };
+
+struct XrtShared {
+    std::mutex m;
+    XrtSample latest;                    // seq 0 until the first read
+    std::atomic<int> intervalMs{2000};   // 0 = xrt-smi off
+    std::atomic<bool> paused{false};
+    std::map<RateKey, RatePrev> prev;    // sampler side only
+};
+
+// One xrt-smi read, with rates against the previous one. Called from the worker thread, or
+// from the main thread in --once mode -- never from both.
+static void TakeXrt(XrtShared& sh, bool resetRates) {
+    if (resetRates) sh.prev.clear();
+    auto now = Clock::now();
+    XrtSample s = SampleXrt();
+    s.takenAt = now;
+    std::map<RateKey, RatePrev> next;
+    double totC = 0, totS = 0; bool any = false;
+    for (auto& c : s.ctx) {
+        RateKey k{ c.pid, c.ctxId };
+        auto it = sh.prev.find(k);
+        if (it != sh.prev.end()) {
+            double dt = std::chrono::duration<double>(now - it->second.t).count();
+            if (dt > 0 && c.compl >= 0 && it->second.compl >= 0 && c.compl >= it->second.compl) { c.complPerS = (c.compl - it->second.compl) / dt; totC += c.complPerS; any = true; }
+            if (dt > 0 && c.subs >= 0 && it->second.subs >= 0 && c.subs >= it->second.subs) { c.subsPerS = (c.subs - it->second.subs) / dt; totS += c.subsPerS; }
+        }
+        next[k] = RatePrev{ c.subs, c.compl, now };
+    }
+    if (s.ok) sh.prev.swap(next);   // a failed read keeps the last good counters
+    if (any) { s.totalComplPerS = totC; s.totalSubsPerS = totS; }
+    std::lock_guard<std::mutex> lk(sh.m);
+    s.seq = sh.latest.seq + 1;
+    sh.latest = std::move(s);
+}
+
+static void XrtWorker(XrtShared* sh) {
+    Clock::time_point last{};
+    int reads = 0;
+    bool gap = false;   // off or paused since the last read: the next read must not rate against stale counters
+    while (g_running) {
+        int iv = sh->intervalMs;
+        if (iv <= 0 || sh->paused) { gap = true; std::this_thread::sleep_for(std::chrono::milliseconds(20)); continue; }
+        // the second read follows the first within 500 ms so the rates show without a full interval's wait
+        int wait = reads == 0 ? 0 : (reads == 1 ? std::min(iv, 500) : iv);
+        if (std::chrono::duration<double, std::milli>(Clock::now() - last).count() >= wait) {
+            TakeXrt(*sh, gap);
+            gap = false;
+            last = Clock::now();
+            ++reads;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    }
+}
+
 struct Frame {
-    XrtSample xrt;
+    XrtSample xrt;              // newest xrt-smi sample (seq 0: none yet, or xrt-smi off)
+    double xrtAgeS = -1;        // age of that sample at this frame
     PdhSample pdh;
     double clockMhz = -1;       // XRT API readback; -1 without HAVE_XRT
     std::string powerMode;      // XRT API, per poll
@@ -716,34 +795,25 @@ struct Frame {
     double totalComplPerS = -1, totalSubsPerS = -1;
     std::string when;
     int seq = 0;
+    Clock::time_point at{};
 };
 
-struct RateKey { int pid; int ctx; bool operator<(const RateKey& o) const { return pid != o.pid ? pid < o.pid : ctx < o.ctx; } };
-struct RatePrev { double subs, compl; Clock::time_point t; };
-
-static Frame Poll(const StaticInfo& si, PdhReader* pdh, std::map<RateKey, RatePrev>& prev, int seq) {
+static Frame Poll(const StaticInfo& si, PdhReader* pdh, XrtShared& sh, int seq) {
     Frame f;
     f.seq = seq;
-    auto now = Clock::now();
-    f.xrt = SampleXrt();
+    f.at = Clock::now();
+    if (sh.intervalMs > 0) { std::lock_guard<std::mutex> lk(sh.m); f.xrt = sh.latest; }
+    if (f.xrt.seq > 0) f.xrtAgeS = std::chrono::duration<double>(f.at - f.xrt.takenAt).count();
     if (pdh) f.pdh = pdh->Sample(si);
     f.powerMode = si.powerMode;
     XrtLive(f.clockMhz, f.powerMode, f.xrtApiMs);
     {
         SYSTEMTIME st; GetLocalTime(&st);
-        char b[32]; snprintf(b, sizeof b, "%02d:%02d:%02d", st.wHour, st.wMinute, st.wSecond); f.when = b;
+        char b[32]; snprintf(b, sizeof b, "%02d:%02d:%02d.%03d", st.wHour, st.wMinute, st.wSecond, st.wMilliseconds); f.when = b;
     }
-    std::map<RateKey, RatePrev> next;
-    double totC = 0, totS = 0; bool anyRate = false;
+    f.totalComplPerS = f.xrt.totalComplPerS;
+    f.totalSubsPerS = f.xrt.totalSubsPerS;
     for (auto c : f.xrt.ctx) {
-        RateKey k{ c.pid, c.ctxId };
-        auto it = prev.find(k);
-        if (it != prev.end()) {
-            double dt = std::chrono::duration<double>(now - it->second.t).count();
-            if (dt > 0 && c.compl >= 0 && it->second.compl >= 0 && c.compl >= it->second.compl) { c.complPerS = (c.compl - it->second.compl) / dt; totC += c.complPerS; anyRate = true; }
-            if (dt > 0 && c.subs >= 0 && it->second.subs >= 0 && c.subs >= it->second.subs) { c.subsPerS = (c.subs - it->second.subs) / dt; totS += c.subsPerS; }
-        }
-        next[k] = RatePrev{ c.subs, c.compl, now };
         if (Lower(c.status) == "active") f.activeCtx++;
         if (f.pdh.ok) {
             auto p = f.pdh.pidPct.find(c.pid);
@@ -753,9 +823,7 @@ static Frame Poll(const StaticInfo& si, PdhReader* pdh, std::map<RateKey, RatePr
         }
         f.rows.push_back(c);
     }
-    prev.swap(next);
-    if (anyRate) { f.totalComplPerS = totC; f.totalSubsPerS = totS; }
-    // pids the engine counters see that xrt-smi does not list (e.g. a context torn down between the two reads)
+    // pids the engine counters see that xrt-smi does not list (a context torn down between the two reads, or xrt-smi off)
     if (f.pdh.ok) {
         for (const auto& [pid, pct] : f.pdh.pidPct) {
             if (pid < 0 || pct < 0.05) continue;
@@ -782,13 +850,16 @@ static std::vector<Sensor> Publish(const std::wstring& group, const Frame& f, bo
     double util = f.pdh.ok ? f.pdh.utilPct : -1;
     if (!hide && util >= 0) v.push_back({ L"Usage0", L"NPU Utilization", L"%", util }); else drop.push_back(L"Usage0");
     if (!hide && f.clockMhz >= 0) v.push_back({ L"Clock0", L"NPU Clock", L"MHz", f.clockMhz }); else drop.push_back(L"Clock0");
-    // always: memory and what is allocated -- 0 is a true reading here
+    // always while xrt-smi answers: memory and what is allocated -- 0 is a true reading here.
+    // With no xrt-smi sample (--smi-interval 0, or a failed read) these are absent rather than 0.
     v.push_back({ L"Other0", L"NPU Memory (adapter, shared)", L"MB", f.pdh.adapterSharedMb < 0 ? 0.0 : f.pdh.adapterSharedMb });
-    v.push_back({ L"Other1", L"NPU Memory (xrt-smi)", L"MB", f.xrt.totalMemMb < 0 ? 0.0 : f.xrt.totalMemMb });
-    v.push_back({ L"Other2", L"NPU Active Contexts", L"", (double)f.activeCtx });
-    v.push_back({ L"Other3", L"NPU Columns In Use", L"cols", (double)f.xrt.cols.size() });
+    if (f.xrt.ok) {
+        v.push_back({ L"Other1", L"NPU Memory (xrt-smi)", L"MB", f.xrt.totalMemMb < 0 ? 0.0 : f.xrt.totalMemMb });
+        v.push_back({ L"Other2", L"NPU Active Contexts", L"", (double)f.activeCtx });
+        v.push_back({ L"Other3", L"NPU Columns In Use", L"cols", (double)f.xrt.cols.size() });
+    } else { drop.push_back(L"Other1"); drop.push_back(L"Other2"); drop.push_back(L"Other3"); }
     // rates: a real 0 while idle in --idle zero, absent in --idle hide
-    if (!hide) {
+    if (!hide && f.xrt.ok) {
         v.push_back({ L"Other4", L"NPU Completions", L"/s", f.totalComplPerS < 0 ? 0.0 : f.totalComplPerS });
         v.push_back({ L"Other5", L"NPU Submissions", L"/s", f.totalSubsPerS < 0 ? 0.0 : f.totalSubsPerS });
     } else { drop.push_back(L"Other4"); drop.push_back(L"Other5"); }
@@ -801,6 +872,12 @@ static std::vector<Sensor> Publish(const std::wstring& group, const Frame& f, bo
     for (const auto& x : v) if (!WriteSensor(group, x)) failed++;
     for (const auto& k : drop) DeleteSensor(group, k);
     return v;
+}
+
+// While the dashboard is paused nothing is sampled, so the activity sensors are removed rather
+// than left frozen at their last value, which HWiNFO would keep averaging.
+static void Unpublish(const std::wstring& group) {
+    for (const wchar_t* k : { L"Usage0", L"Clock0", L"Other4", L"Other5", L"Other6", L"Other7" }) DeleteSensor(group, k);
 }
 
 // ---------------------------------------------------------------------------------------
@@ -833,11 +910,11 @@ static std::string Rule(const Term& t, int width) {
     return s;
 }
 
-static std::string Spark(const Term& t, const std::deque<double>& hist) {
+static std::string Spark(const Term& t, const std::vector<double>& vals) {
     static const char* lv[] = { "\xE2\x96\x81", "\xE2\x96\x82", "\xE2\x96\x83", "\xE2\x96\x84", "\xE2\x96\x85", "\xE2\x96\x86", "\xE2\x96\x87", "\xE2\x96\x88" };
     static const char* la[] = { "_", ".", "-", "=", "+", "*", "%", "#" };
     std::string s;
-    for (double v : hist) {
+    for (double v : vals) {
         if (v < 0) { s += " "; continue; }
         int i = (int)std::min(7.0, std::floor(std::max(0.0, std::min(100.0, v)) / 100.0 * 7.999));
         s += t.unicode ? lv[i] : la[i];
@@ -859,13 +936,17 @@ static std::string Pad(const std::string& s, int w, bool right = false) {
     return right ? std::string(w - s.size(), ' ') + s : s + std::string(w - s.size(), ' ');
 }
 
-static std::vector<std::string> RenderFrame(const Term& t, const StaticInfo& si, const Frame& f, const std::deque<double>& hist,
+struct View { double interval = 0.5; double smiInterval = 2.0; double actualPeriod = -1; bool paused = false; };
+struct HistPt { double t; double util; };   // seconds since start; utilization %, -1 = no reading
+
+static std::vector<std::string> RenderFrame(const Term& t, const StaticInfo& si, const Frame& f, const std::deque<HistPt>& hist,
                                             const std::wstring& group, bool hwinfo, int hwCount, int hwFailed, bool hideIdle,
-                                            const std::vector<std::string>& notes, double interval) {
+                                            const std::vector<std::string>& notes, const View& v) {
     std::vector<std::string> L;
     std::string B = Colr(t, "1"), C = Colr(t, "36"), D = Colr(t, "2"), G = Colr(t, "32"), Y = Colr(t, "33"), R = Colr(t, "31"), Z = Reset(t);
     const std::string dot = t.unicode ? " \xC2\xB7 " : " | ";
     int W = std::max(60, std::min(t.width - 1, 160));
+    bool smiOn = v.smiInterval > 0;
 
     // header
     {
@@ -875,6 +956,7 @@ static std::vector<std::string> RenderFrame(const Term& t, const StaticInfo& si,
         if (si.totalCols > 0) o << dot << si.totalCols << " columns";
         if (!f.powerMode.empty()) o << dot << "power mode " << f.powerMode;
         o << dot << D << f.when << "  poll #" << f.seq << Z;
+        if (v.paused) o << dot << Y << B << "PAUSED" << Z << Y << " (p resumes)" << Z;
         L.push_back(o.str());
     }
     {
@@ -890,7 +972,7 @@ static std::vector<std::string> RenderFrame(const Term& t, const StaticInfo& si,
     }
     L.push_back(D + Rule(t, W) + Z);
 
-    // utilization
+    // utilization, and its history over as many polls as fit the width
     {
         double u = f.pdh.ok ? f.pdh.utilPct : -1;
         std::string col = (u < 0) ? D : (u < 50 ? G : (u < 85 ? Y : R));
@@ -898,8 +980,18 @@ static std::vector<std::string> RenderFrame(const Term& t, const StaticInfo& si,
         o << B << "utilization  " << Z << col << Bar(t, u, 30) << Z << " " << B << Pad(u < 0 ? "  n/a" : FmtNum(u, 1) + " %", 8, true) << Z
           << "  " << D << (f.pdh.ok ? "Windows GPU-engine statistics, NPU adapter" : "unavailable: " + f.pdh.err) << Z;
         L.push_back(o.str());
+        int sparkW = std::max(20, std::min(120, W - 13 - 48));
+        size_t n = std::min(hist.size(), (size_t)sparkW);
+        std::vector<double> vals; double sum = 0, mx = -1; int cnt = 0;
+        for (size_t i = hist.size() - n; i < hist.size(); ++i) {
+            double x = hist[i].util; vals.push_back(x);
+            if (x >= 0) { sum += x; ++cnt; mx = std::max(mx, x); }
+        }
+        double span = n >= 2 ? hist.back().t - hist[hist.size() - n].t : 0.0;
         std::ostringstream h;
-        h << D << "history      " << Z << col << Spark(t, hist) << Z << D << "  last " << hist.size() << " polls at " << FmtNum(interval, 1) << " s" << Z;
+        h << D << "history      " << Z << col << Spark(t, vals) << Z << D << "  last " << FmtNum(span, 1) << " s";
+        if (cnt > 0) h << dot << "avg " << FmtNum(sum / cnt, 1) << " %" << dot << "max " << FmtNum(mx, 1) << " %";
+        h << Z;
         L.push_back(h.str());
     }
     // clock
@@ -927,10 +1019,15 @@ static std::vector<std::string> RenderFrame(const Term& t, const StaticInfo& si,
     {
         std::ostringstream o;
         o << B << "contexts     " << Z;
-        if (f.xrt.ok) {
+        if (!smiOn) {
+            o << D << "xrt-smi off (--smi-interval 0, or the s key): contexts, columns and counters are not sampled" << Z;
+        } else if (f.xrt.seq == 0) {
+            o << D << "waiting for the first xrt-smi read" << Z;
+        } else if (f.xrt.ok) {
             o << f.activeCtx << " active / " << f.xrt.ctx.size() << " listed" << dot
               << "columns in use " << f.xrt.cols.size() << (si.totalCols > 0 ? "/" + std::to_string(si.totalCols) : "") << " [" << ColsText(f.xrt.cols) << "]" << dot
-              << "completions " << FmtNum(f.totalComplPerS, 1) << "/s" << dot << "submissions " << FmtNum(f.totalSubsPerS, 1) << "/s";
+              << "completions " << FmtNum(f.totalComplPerS, 1) << "/s" << dot << "submissions " << FmtNum(f.totalSubsPerS, 1) << "/s"
+              << dot << D << "xrt-smi read " << FmtNum(f.xrtAgeS, 1) << " s ago" << Z;
         } else {
             o << R << "xrt-smi failed: " << f.xrt.err << Z;
         }
@@ -947,7 +1044,8 @@ static std::vector<std::string> RenderFrame(const Term& t, const StaticInfo& si,
           << Pad("mem MB", 7, true) << " " << Pad("engine%", 8, true) << Z;
         L.push_back(h.str());
         if (f.rows.empty()) {
-            L.push_back(D + "  no hardware contexts running on the device (xrt-smi), and no process shows NPU engine time (Windows)" + Z);
+            L.push_back(D + (smiOn ? "  no hardware contexts running on the device (xrt-smi), and no process shows NPU engine time (Windows)"
+                                   : "  no process shows NPU engine time (Windows); xrt-smi is off") + Z);
         }
         for (const auto& r : f.rows) {
             std::ostringstream o;
@@ -965,30 +1063,35 @@ static std::vector<std::string> RenderFrame(const Term& t, const StaticInfo& si,
 
     // footer
     {
-        std::ostringstream o;
-        o << D << "not exposed on this NPU: voltage, power (xrt-smi: Estimated Power N/A; the electrical query fails at the driver escape)" << Z;
-        L.push_back(o.str());
+        L.push_back(D + "not exposed on this NPU: voltage, power (xrt-smi: Estimated Power N/A; the electrical query fails at the driver escape)" + Z);
         std::ostringstream p;
         p << D;
         if (hwinfo) {
-            p << "HWiNFO: " << (hwFailed == 0 ? std::to_string(hwCount) + " sensors" : (std::to_string(hwFailed) + " sensor writes FAILED"))
+            p << "HWiNFO: " << (v.paused ? std::string("paused, activity sensors removed") : (hwFailed == 0 ? std::to_string(hwCount) + " sensors" : (std::to_string(hwFailed) + " sensor writes FAILED")))
               << " -> HKCU\\" << WideToUtf8(REG_ROOT) << "\\" << WideToUtf8(group) << (hideIdle ? " (idle: hidden)" : " (idle: zeros)");
         } else {
             p << "HWiNFO publish off (--no-hwinfo)";
         }
-        p << dot << "xrt-smi " << FmtNum(f.xrt.ms, 0) << " ms" << dot << "pdh " << FmtNum(f.pdh.ms, 1) << " ms";
-        if (si.xrtApi) p << dot << "xrt api " << FmtNum(f.xrtApiMs, 2) << " ms";
-        if (t.vt) p << dot << "q quits";
         p << Z;
         L.push_back(p.str());
+        std::ostringstream q;
+        q << D << "poll every " << FmtNum(v.interval, 2) << " s";
+        if (v.actualPeriod >= 0) q << " (last " << FmtNum(v.actualPeriod, 2) << " s)";
+        q << dot << "pdh " << FmtNum(f.pdh.ms, 1) << " ms";
+        if (si.xrtApi) q << dot << "xrt api " << FmtNum(f.xrtApiMs, 2) << " ms";
+        if (smiOn) { q << dot << "xrt-smi every " << FmtNum(v.smiInterval, 1) << " s"; if (f.xrt.seq > 0) q << ", " << FmtNum(f.xrt.ms, 0) << " ms a read"; }
+        else q << dot << "xrt-smi off";
+        q << Z;
+        L.push_back(q.str());
+        if (t.vt) L.push_back(D + "keys  + / - poll faster / slower" + dot + "[ / ] xrt-smi faster / slower" + dot + "s xrt-smi on / off" + dot + "p pause" + dot + "q quit" + Z);
         for (const auto& n : notes) L.push_back(Y + "note: " + n + Z);
     }
     return L;
 }
 
-static json FrameJson(const StaticInfo& si, const Frame& f) {
+static json FrameJson(const StaticInfo& si, const Frame& f, const View& v) {
     json j;
-    j["time"] = f.when; j["poll"] = f.seq;
+    j["time"] = f.when; j["poll"] = f.seq; j["poll_interval_s"] = v.interval; j["period_s"] = v.actualPeriod;
     j["device"] = { {"name", si.name}, {"bdf", si.bdf}, {"total_columns", si.totalCols}, {"power_mode", f.powerMode},
                     {"npu_driver", si.driverVersion}, {"firmware", si.firmware}, {"xrt", si.xrtVersion},
                     {"adapter", si.adapterDesc}, {"luid", si.luidTag} };
@@ -996,9 +1099,12 @@ static json FrameJson(const StaticInfo& si, const Frame& f) {
     j["windows"] = { {"ok", f.pdh.ok}, {"error", f.pdh.err}, {"utilization_pct", f.pdh.utilPct},
                      {"adapter_shared_mb", f.pdh.adapterSharedMb}, {"adapter_dedicated_mb", f.pdh.adapterDedicatedMb}, {"ms", f.pdh.ms} };
     json eng = json::object();
-    for (const auto& [k, v] : f.pdh.engPct) eng[k] = v;
+    for (const auto& [k, v2] : f.pdh.engPct) eng[k] = v2;
     j["windows"]["engines"] = eng;
-    j["xrt_smi"] = { {"ok", f.xrt.ok}, {"error", f.xrt.err}, {"memory_mb", f.xrt.totalMemMb}, {"partitions", f.xrt.partitions},
+    // sample/age say how fresh the xrt-smi section is: it is read every interval_s, not per poll
+    j["xrt_smi"] = { {"ok", f.xrt.ok}, {"error", f.xrt.err}, {"enabled", v.smiInterval > 0}, {"interval_s", v.smiInterval},
+                     {"sample", f.xrt.seq}, {"age_s", f.xrtAgeS},
+                     {"memory_mb", f.xrt.totalMemMb}, {"partitions", f.xrt.partitions},
                      {"columns_in_use", f.xrt.cols}, {"active_contexts", f.activeCtx},
                      {"completions_per_s", f.totalComplPerS}, {"submissions_per_s", f.totalSubsPerS}, {"ms", f.xrt.ms} };
     json rows = json::array();
@@ -1020,39 +1126,47 @@ static void PrintUsage() {
     printf(
         "AMD XDNA1 NPU monitor + HWiNFO64 custom-sensor bridge\n\n"
         "Usage: hwinfo_npu_bridge.exe [options]\n\n"
-        "  --interval <sec>    seconds between polls (default 2.0, minimum 0.5)\n"
-        "  --once              one sample, printed plainly, then exit\n"
-        "  --json              one JSON object per sample on stdout (implies no redraw)\n"
-        "  --plain             one text line per sample, no ANSI, no redraw\n"
-        "  --ascii             dashboard without Unicode block/box glyphs\n"
-        "  --no-hwinfo         do not write HWiNFO custom-sensor registry keys\n"
-        "  --idle zero|hide    while no hardware context is active: publish the true idle readings\n"
-        "                      (0 %%, 800 MHz, 0/s; default) or remove those sensors so HWiNFO's\n"
-        "                      Average covers active time only; memory/contexts/columns stay either way\n"
-        "  --group <name>      HWiNFO sensor group name (default: device name, e.g. \"NPU Phoenix\")\n"
-        "  --background        hide the console window (bridge only, no display)\n"
-        "  --clean             remove this group's registry keys on exit\n"
-        "  --adapter <substr>  pick the NPU adapter by DXCore driver description (default: NPU/IPU/XDNA)\n"
-        "  --luid <0x..>       pick the NPU adapter by LUID low part, as in PDH's luid_0x00000000_0x0000d6bf\n"
-        "  -h, --help          this text\n\n"
+        "  --interval <sec>      seconds between polls of utilization, memory and clock\n"
+        "                        (default 0.5, min 0.1, max 60)\n"
+        "  --smi-interval <sec>  seconds between xrt-smi reads for contexts, columns and counters\n"
+        "                        (default 2, min 0.5, max 60; 0 = never run xrt-smi)\n"
+        "  --once                one sample, printed plainly, then exit\n"
+        "  --json                one JSON object per sample on stdout (implies no redraw)\n"
+        "  --plain               one text line per sample, no ANSI, no redraw\n"
+        "  --ascii               dashboard without Unicode block/box glyphs\n"
+        "  --no-hwinfo           do not write HWiNFO custom-sensor registry keys\n"
+        "  --idle zero|hide      while no hardware context is active: publish the true idle readings\n"
+        "                        (0 %%, 800 MHz, 0/s; default) or remove those sensors so HWiNFO's\n"
+        "                        Average covers active time only; memory/contexts/columns stay either way\n"
+        "  --group <name>        HWiNFO sensor group name (default: device name, e.g. \"NPU Phoenix\")\n"
+        "  --background          hide the console window (bridge only, no display)\n"
+        "  --clean               remove this group's registry keys on exit\n"
+        "  --adapter <substr>    pick the NPU adapter by DXCore driver description (default: NPU/IPU/XDNA)\n"
+        "  --luid <0x..>         pick the NPU adapter by LUID low part, as in PDH's luid_0x00000000_0x0000d6bf\n"
+        "  -h, --help            this text\n\n"
+        "Dashboard keys: + / - halve / double the poll interval, [ / ] the xrt-smi interval, s xrt-smi\n"
+        "on/off, p pause (activity sensors are removed from HWiNFO while paused), q quit.\n\n"
         "Sources: utilization and adapter memory come from Windows' GPU-engine statistics for the NPU\n"
         "adapter (what Task Manager reads); contexts, columns, counters and GOPS come from xrt-smi\n"
-        "examine -r aie-partitions; clock and power mode from XRT's in-process query API (the clock is a\n"
-        "live readback: 800 MHz idle, 1800 MHz with an active context); firmware from xrt-smi's host report.\n"
+        "examine -r aie-partitions, read on its own thread every --smi-interval; clock and power mode\n"
+        "from XRT's in-process query API (the clock is a live readback: 800 MHz idle, 1800 MHz with an\n"
+        "active context); firmware from xrt-smi's host report.\n"
         "Not available on this NPU from any documented interface, so never shown: voltage, power.\n"
         "Requires the AMD NPU driver (%s) and, for the bridge, HWiNFO64 with its Sensors window open.\n",
         WideToUtf8(XRT_SMI_PATH).c_str());
 }
 
 int main(int argc, char* argv[]) {
-    double interval = 2.0;
+    double interval = 0.5, smiInterval = 2.0;
     std::string group, adapterMatch, luidOverride, idleMode = "zero";
     bool once = false, jsonMode = false, plain = false, ascii = false, background = false, noHwinfo = false, cleanOnExit = false;
 
     for (int i = 1; i < argc; ++i) {
         std::string a = argv[i];
         auto next = [&](std::string& dst) { if (i + 1 < argc) dst = argv[++i]; else { fprintf(stderr, "%s needs a value\n", a.c_str()); exit(2); } };
-        if (a == "--interval") { std::string v; next(v); try { interval = std::stod(v); } catch (...) { fprintf(stderr, "bad --interval\n"); return 2; } }
+        auto seconds = [&](double& dst) { std::string v; next(v); try { dst = std::stod(v); } catch (...) { fprintf(stderr, "bad %s value \"%s\"\n", a.c_str(), v.c_str()); exit(2); } };
+        if (a == "--interval") seconds(interval);
+        else if (a == "--smi-interval") seconds(smiInterval);
         else if (a == "--group") next(group);
         else if (a == "--adapter") next(adapterMatch);
         else if (a == "--luid") next(luidOverride);
@@ -1067,7 +1181,8 @@ int main(int argc, char* argv[]) {
         else if (a == "--help" || a == "-h" || a == "/?") { PrintUsage(); return 0; }
         else { fprintf(stderr, "unknown option %s (try --help)\n", a.c_str()); return 2; }
     }
-    interval = std::max(0.5, interval);
+    interval = std::max(0.1, std::min(60.0, interval));
+    smiInterval = smiInterval > 0 ? std::max(0.5, std::min(60.0, smiInterval)) : 0.0;
 
     if (GetFileAttributesW(XRT_SMI_PATH) == INVALID_FILE_ATTRIBUTES) {
         fprintf(stderr, "error: %s not found -- no AMD XDNA NPU driver on this machine\n", WideToUtf8(XRT_SMI_PATH).c_str());
@@ -1105,64 +1220,113 @@ int main(int argc, char* argv[]) {
 
     if (dashboard) { fputs("\x1b[?25l\x1b[2J\x1b[H", stdout); fflush(stdout); }
 
-    std::map<RateKey, RatePrev> prev;
-    std::deque<double> hist;
+    XrtShared sh;
+    sh.intervalMs = (int)std::lround(smiInterval * 1000);
+    std::thread worker;
+    View view; view.interval = interval; view.smiInterval = smiInterval;
+    std::deque<HistPt> hist;
+    Clock::time_point t0 = Clock::now();
     int seq = 0;
-    // The first engine-utilization value needs a second PDH collection some time after the
-    // baseline, and completions/s needs two xrt-smi reads: prime both, then start.
-    {
-        Frame prime = Poll(si, havePdh ? &pdh : nullptr, prev, 0);
-        (void)prime;
-        std::this_thread::sleep_for(std::chrono::milliseconds(once ? std::max(500, (int)(interval * 1000)) : 500));
+    // Prime: the engine-utilization rate needs a second PDH collection after the baseline, and
+    // completions/s needs two xrt-smi reads. --once takes both reads here; otherwise the worker
+    // takes them and the first frame waits (up to 3 s) for the first one.
+    if (once) {
+        if (smiInterval > 0) TakeXrt(sh, false);
+        Frame prime = Poll(si, havePdh ? &pdh : nullptr, sh, 0); (void)prime;
+        std::this_thread::sleep_for(std::chrono::milliseconds(std::max(500, (int)std::lround(interval * 1000))));
+        if (smiInterval > 0) TakeXrt(sh, false);
+    } else {
+        worker = std::thread(XrtWorker, &sh);
+        Frame prime = Poll(si, havePdh ? &pdh : nullptr, sh, 0); (void)prime;
+        auto until = Clock::now() + std::chrono::milliseconds(std::max(200, (int)std::lround(interval * 1000)));
+        while (g_running && Clock::now() < until) std::this_thread::sleep_for(std::chrono::milliseconds(20));
+        auto giveUp = Clock::now() + std::chrono::seconds(3);
+        while (g_running && smiInterval > 0 && Clock::now() < giveUp) {
+            { std::lock_guard<std::mutex> lk(sh.m); if (sh.latest.seq > 0) break; }
+            std::this_thread::sleep_for(std::chrono::milliseconds(20));
+        }
     }
 
+    Frame f;
+    Clock::time_point lastPoll{}, nextPoll = Clock::now();
+    bool paused = false, wasPaused = false, needRender = false;
+    int hwFailed = 0, hwCount = 0;
+    double smiSaved = smiInterval > 0 ? smiInterval : 2.0;   // what the s key restores
     while (g_running) {
-        ++seq;
-        Frame f = Poll(si, havePdh ? &pdh : nullptr, prev, seq);
-        hist.push_back(f.pdh.ok ? f.pdh.utilPct : -1);
-        while (hist.size() > 40) hist.pop_front();
+        bool polled = false;
+        if (!paused && Clock::now() >= nextPoll) {
+            ++seq;
+            auto now = Clock::now();
+            view.actualPeriod = seq > 1 ? std::chrono::duration<double>(now - lastPoll).count() : -1;
+            lastPoll = now;
+            nextPoll = now + std::chrono::milliseconds((int)std::lround(interval * 1000));
+            f = Poll(si, havePdh ? &pdh : nullptr, sh, seq);
+            hist.push_back({ std::chrono::duration<double>(f.at - t0).count(), f.pdh.ok ? f.pdh.utilPct : -1 });
+            while (hist.size() > 600) hist.pop_front();
+            if (!noHwinfo) hwCount = (int)Publish(wgroup, f, hideIdle, hwFailed).size();
+            polled = true;
+        }
+        if (paused && !wasPaused && !noHwinfo) Unpublish(wgroup);
+        wasPaused = paused;
+        view.interval = interval; view.smiInterval = smiInterval; view.paused = paused;
 
-        int hwFailed = 0, hwCount = 0;
-        if (!noHwinfo) hwCount = (int)Publish(wgroup, f, hideIdle, hwFailed).size();
-
-        if (jsonMode) {
-            json j = FrameJson(si, f);
-            j["hwinfo"] = { {"published", !noHwinfo}, {"sensors", hwCount}, {"failed_writes", hwFailed}, {"group", WideToUtf8(wgroup)}, {"idle", idleMode} };
-            printf("%s\n", j.dump().c_str());
-            fflush(stdout);
-        } else if (!background) {
-            if (dashboard) {
-                CONSOLE_SCREEN_BUFFER_INFO csbi;
-                if (GetConsoleScreenBufferInfo(hout, &csbi)) term.width = csbi.srWindow.Right - csbi.srWindow.Left + 1;
-                auto lines = RenderFrame(term, si, f, hist, wgroup, !noHwinfo, hwCount, hwFailed, hideIdle, notes, interval);
-                std::string out = "\x1b[H";
-                for (const auto& l : lines) out += l + "\x1b[K\n";
-                out += "\x1b[J";
-                fputs(out.c_str(), stdout);
+        if (polled || needRender) {
+            needRender = false;
+            if (jsonMode) {
+                json j = FrameJson(si, f, view);
+                j["hwinfo"] = { {"published", !noHwinfo}, {"sensors", hwCount}, {"failed_writes", hwFailed}, {"group", WideToUtf8(wgroup)}, {"idle", idleMode} };
+                printf("%s\n", j.dump().c_str());
                 fflush(stdout);
-            } else if (plain) {
-                printf("%s util=%s%% clk=%sMHz mem=%sMB(win) %sMB(xrt) ctx=%d/%zu cols=%s compl/s=%s subm/s=%s%s\n",
-                       f.when.c_str(), FmtNum(f.pdh.ok ? f.pdh.utilPct : -1, 1).c_str(), FmtNum(f.clockMhz, 0).c_str(), FmtNum(f.pdh.adapterSharedMb, 1).c_str(),
-                       FmtNum(f.xrt.totalMemMb < 0 ? 0 : f.xrt.totalMemMb, 0).c_str(), f.activeCtx, f.xrt.ctx.size(), ColsText(f.xrt.cols).c_str(),
-                       FmtNum(f.totalComplPerS, 1).c_str(), FmtNum(f.totalSubsPerS, 1).c_str(), f.xrt.ok ? "" : (" xrt-smi:" + f.xrt.err).c_str());
-                fflush(stdout);
-            } else {  // --once
-                Term t2 = term; t2.vt = false;
-                for (const auto& l : RenderFrame(t2, si, f, hist, wgroup, !noHwinfo, hwCount, hwFailed, hideIdle, notes, interval)) printf("%s\n", l.c_str());
-                fflush(stdout);
+            } else if (!background) {
+                if (dashboard) {
+                    CONSOLE_SCREEN_BUFFER_INFO csbi;
+                    if (GetConsoleScreenBufferInfo(hout, &csbi)) term.width = csbi.srWindow.Right - csbi.srWindow.Left + 1;
+                    auto lines = RenderFrame(term, si, f, hist, wgroup, !noHwinfo, hwCount, hwFailed, hideIdle, notes, view);
+                    std::string out = "\x1b[H";
+                    for (const auto& l : lines) out += l + "\x1b[K\n";
+                    out += "\x1b[J";
+                    fputs(out.c_str(), stdout);
+                    fflush(stdout);
+                } else if (plain) {
+                    std::string smiAge = smiInterval <= 0 ? "off" : (f.xrt.seq == 0 ? "n/a" : FmtNum(f.xrtAgeS, 1) + "s");
+                    printf("%s util=%s%% clk=%sMHz mem=%sMB(win) %sMB(xrt) ctx=%d/%zu cols=%s compl/s=%s subm/s=%s period=%ss smi-age=%s%s\n",
+                           f.when.c_str(), FmtNum(f.pdh.ok ? f.pdh.utilPct : -1, 1).c_str(), FmtNum(f.clockMhz, 0).c_str(), FmtNum(f.pdh.adapterSharedMb, 1).c_str(),
+                           f.xrt.ok ? FmtNum(std::max(0.0, f.xrt.totalMemMb), 0).c_str() : "n/a", f.activeCtx, f.xrt.ctx.size(), ColsText(f.xrt.cols).c_str(),
+                           FmtNum(f.totalComplPerS, 1).c_str(), FmtNum(f.totalSubsPerS, 1).c_str(), FmtNum(view.actualPeriod, 2).c_str(), smiAge.c_str(),
+                           (f.xrt.ok || f.xrt.seq == 0) ? "" : (" xrt-smi:" + f.xrt.err).c_str());
+                    fflush(stdout);
+                } else {  // --once
+                    Term t2 = term; t2.vt = false;
+                    for (const auto& l : RenderFrame(t2, si, f, hist, wgroup, !noHwinfo, hwCount, hwFailed, hideIdle, notes, view)) printf("%s\n", l.c_str());
+                    fflush(stdout);
+                }
             }
         }
         if (once) break;
 
-        // sleep in 100 ms steps, watching Ctrl+C and, on a live console, the q key
-        int ms = (int)(interval * 1000), slept = 0;
-        while (g_running && slept < ms) {
-            if (dashboard && _kbhit()) { int c = _getch(); if (c == 'q' || c == 'Q' || c == 27) { g_running = false; break; } }
-            int step = std::min(100, ms - slept);
-            std::this_thread::sleep_for(std::chrono::milliseconds(step));
-            slept += step;
+        // Wait for the next poll in 20 ms steps, watching Ctrl+C and, on a live console, the keys.
+        // A key that changes a rate takes effect now, not after the old interval has elapsed.
+        while (g_running && !needRender) {
+            if (!paused && Clock::now() >= nextPoll) break;
+            if (dashboard && _kbhit()) {
+                int c = _getch();
+                if (c == 'q' || c == 'Q' || c == 27) g_running = false;
+                else if (c == '+' || c == '=') { interval = std::max(0.1, interval / 2); needRender = true; }
+                else if (c == '-' || c == '_') { interval = std::min(60.0, interval * 2); needRender = true; }
+                else if (c == '[' && smiInterval > 0) { smiInterval = std::max(0.5, smiInterval / 2); needRender = true; }
+                else if (c == ']' && smiInterval > 0) { smiInterval = std::min(60.0, smiInterval * 2); needRender = true; }
+                else if (c == 's' || c == 'S') { if (smiInterval > 0) { smiSaved = smiInterval; smiInterval = 0; } else smiInterval = smiSaved; needRender = true; }
+                else if (c == 'p' || c == 'P') { paused = !paused; sh.paused = paused; needRender = true; }
+                if (needRender) {
+                    sh.intervalMs = (int)std::lround(smiInterval * 1000);
+                    nextPoll = std::min(nextPoll, lastPoll + std::chrono::milliseconds((int)std::lround(interval * 1000)));
+                }
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(20));
         }
     }
+    g_running = false;
+    if (worker.joinable()) worker.join();
 
     if (dashboard) { fputs("\x1b[?25h", stdout); fflush(stdout); }
 #ifdef HAVE_XRT

@@ -21,6 +21,7 @@ whole_array.py) per this repo's drift invariant.
 """
 
 import argparse
+import os
 import statistics
 import time
 
@@ -69,7 +70,12 @@ def main():
         shapes.append((int(m), int(k), int(n)))
 
     print("CPU GEMM sweep -- torch, single process, this machine's Zen4 cores")
-    print(f"torch {torch.__version__}, iters={args.iters} warmup={args.warmup}\n")
+    # Thread count is part of the number: scripts/lib.sh now exports OMP_NUM_THREADS=8
+    # (2026-09-07), and the same FP32 model moved 30% on that alone (docs/BENCHMARKS.md,
+    # "Known limitations"). This script does not source lib.sh; record what torch got.
+    print(f"torch {torch.__version__}, torch threads {torch.get_num_threads()} "
+          f"(OMP_NUM_THREADS={os.environ.get('OMP_NUM_THREADS', '<unset>')}), "
+          f"iters={args.iters} warmup={args.warmup}\n")
 
     for dtype, label in ((torch.float32, "fp32"), (torch.bfloat16, "bf16")):
         print(f"--- dtype={label} ---")
