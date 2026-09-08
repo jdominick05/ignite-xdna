@@ -1657,6 +1657,33 @@ range, and lower under memory pressure from other processes," not a precise numb
 this hardware is generous but not unlimited, and the failure mode when it runs out
 is a hard XRT abort, not a graceful queue or slowdown.
 
+**Does the memory/throughput decoupling found on yolov8n/yolov8m above ("Is the
+saturation compute or memory?") hold for a classifier too, and at this much larger
+memory footprint?** Checked
+directly with `tools/session_hold.py` against `wide_resnet101_2` at conservative
+stream counts (1/8/16/32 — deliberately not repeating the 128-stream WDDM abort
+just found above), holding sessions busy on synthetic input and sampling
+`xrt-smi examine -r aie-partitions` every 3s:
+
+| streams | NPU memory | GOPS | measured completions/s |
+|---|---|---|---|
+| 1 | 204 MB | 46 | 61.1 |
+| 8 | 1188 MB | 368 | 62.4 |
+| 16 | 2313 MB | 736 | 62.1 |
+| 32 | 4562 MB | 1472 | 62.1 |
+
+(`results/session_hold_wide_resnet101_2.log`.) Same shape as yolov8n/yolov8m,
+extended to a classifier and to a far larger absolute footprint: memory scales
+**exactly linearly** at ~140.6 MB/stream (steeper than yolov8m's ~100 MB/stream
+and yolov8n's ~29 MB/stream — consistent with it being the largest model checked
+this way), and GOPS is again **exactly** `46 × streams` with no saturation through
+32 streams — while measured completions/s is flat from 1 stream onward, matching
+the same ~62 fps ceiling `nstream_cls_bench.py` found independently above. Memory
+climbing to 4.5 GB by 32 streams with throughput never moving off its 1-stream
+value is the same decoupling already established, now confirmed on a third model
+family: neither NPU memory pressure nor `xrt-smi`'s GOPS column explains where the
+classifier throughput ceiling comes from, any more than they did for detection.
+
 ### Direct NPU utilization: what GOPS actually says
 
 Every earlier "not compute-bound" claim in this README was a FLOPs/latency estimate
