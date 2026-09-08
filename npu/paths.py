@@ -27,3 +27,32 @@ YOLO_CUT_1X4_CACHE_KEY = "yolocut1x4cachekey"
 # inside resnet50's cache -- use these constants, not a hand-rolled dict.
 MOBILEVIT_CUT_CACHE_KEY = "mobilevit_cut"
 MOBILEVIT_STOCK_CACHE_KEY = "mobilevit_stock"
+# MODNet ships four quantized variants and each needs its own key. The two
+# underscore-named dirs already hold compiled artifacts under those names, so they keep
+# them rather than being renamed into the `*cachekey` shape used above.
+MODNET_CACHE_KEY = "modnetcachekey"
+MODNET_CUT_CACHE_KEY = "modnetcutcachekey"
+MODNET_WEBCAM_CUT_CACHE_KEY = "modnet_webcam_cache"
+MODNET_ZERO_CONCAT_CACHE_KEY = "modnet_zero_concat_cache"
+MODNET_USER_CACHE_KEY = "modnet_user_cache"
+
+
+def modnet_cache_key(model_path):
+    """Pick a MODNet variant's compile-cache key from its filename.
+
+    Markers are checked most-specific first: `modnet_webcam_cut_xint8` contains both
+    "webcam" and "cut", and the plain `"cut" in path` test this replaces sent it to the
+    cut model's cache -- two different graphs (522 vs 507 nodes) sharing one name-keyed
+    compile, which is reused silently rather than recompiled.
+    """
+    stem = Path(model_path).stem
+    for marker, key in (
+        ("zero_concat", MODNET_ZERO_CONCAT_CACHE_KEY),
+        ("webcam", MODNET_WEBCAM_CUT_CACHE_KEY),
+        ("user", MODNET_USER_CACHE_KEY),
+        ("cut", MODNET_CUT_CACHE_KEY),
+    ):
+        if marker in stem:
+            return key
+    return MODNET_CACHE_KEY
+
