@@ -102,10 +102,28 @@ Not done at the time: bf16 at `n=64` by single-buffering the C FIFO (`whole_arra
 use by another live session). Done since — `gemm_tile_sweep/` below.
 `results/aie/int8_matmul_sweep_npu.log`, `docs/DECISIONS.md`.
 
+**The bit-exact check itself was the sweep's wall time.** Upstream `whole_array.py` verifies
+integer runs against `A.astype(int64) @ B.astype(int64)`, a scalar loop in numpy (no BLAS
+path for integer matmul): 532.7 s for the 2048×4096×4096 row's reference alone against
+33.6 ms of NPU time, 760.9 s wall for that row in the sweep above. `whole_array_int_reference_float64.patch`
+(one hunk, apply with `git apply` in the mlir-aie checkout, alongside the C-single-buffer
+patch below) computes the same reference in float64 through BLAS — bit-exact while
+`K · max|a| · max|b| ≤ 2^53`, i.e. `K ≤ 2^39` for int8, with int64 kept as the fallback
+beyond it — in 0.244 s (2182×), proven identical on the sweep's own data, a full-range
+worst case and the all −128 bound case at K = 4096, and re-run on the NPU: the same rows
+`PASS!` against the new oracle with the same seed, so every earlier `PASS!` keeps its
+meaning; the 2048×4096×4096 wall is 5.7 s / 1.1 s (first / cache-warm). `cpu_int8_matmul_sweep.py`
+got the same oracle and now checks exactly at every shape instead of skipping above 2^30
+MACs. No hardware number moved. `results/aie/int8_matmul_reference_float64_npu.log`. (The word "int64" that
+travelled through two handoff notes as a reserved research item was this oracle, not a
+datatype anything here computes in.)
+
 ## `gemm_tile_sweep/`
 
 Not a design: `whole_array_c_single_buffer.patch` is a `git diff` against mlir-aie v1.4.2's
-`programming_examples/basic/matrix_multiplication/whole_array/whole_array.py` adding
+`programming_examples/basic/matrix_multiplication/whole_array/whole_array.py` (one of two
+local patches to that file — the other, the float64 reference oracle, lives in
+`int8_matmul_sweep/`; the live checkout carries both) adding
 `--c-single-buffer {0,1}`, which sets the per-core C output ObjectFIFO's depth to 1 instead
 of 2 and frees `m·n·4` B of the 64 KB L1 (16 KB at 64×64). Apply it with `git apply` in the
 mlir-aie checkout; `int8_matmul_sweep/npu_matmul_sweep.py --c-single-buffer 1` passes it

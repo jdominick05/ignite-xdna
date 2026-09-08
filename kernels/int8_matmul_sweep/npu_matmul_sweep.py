@@ -48,6 +48,14 @@ and the SUMMARY carry an `L1 est` column: 2*A + 2*B + (1|2)*C + 3,328 B stack, t
 allocator's own arithmetic (results/aie/int8_matmul_sweep_npu.log TABLE 4 matched it byte
 for byte), so a compile failure with "Basic sequential allocation failed" can be read
 against the prediction.
+
+whole_array_int_reference_float64.patch (this directory) is the second local patch to the
+same whole_array.py: its integer PASS!/FAIL! reference becomes a float64 BLAS matmul --
+bit-exact while K * max|a| * max|b| <= 2**53, int64 kept as the fallback -- instead of
+numpy's scalar int64 loop, which cost minutes per 4096-class int8 row and was the sweep's
+wall time (results/aie/int8_matmul_reference_float64_npu.log). Without it every int8 row
+still passes, just slowly. `git apply --check -R <patch>` in the checkout says whether
+each patch is applied.
 """
 
 import argparse

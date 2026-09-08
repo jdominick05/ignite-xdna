@@ -343,6 +343,19 @@ L1. Supersedes an 18:33 screen of the same tiles taken under a running AdaRound 
 its appendix. Written up in
 [`docs/BENCHMARKS.md`](../../docs/BENCHMARKS.md#the-bf16-tile-sweep-what-the-freed-16-kb-buys-and-where-the-bmac-model-stops) and `docs/SILICON.md` 3.1/K2.
 
+**`int8_matmul_reference_float64_npu.log`** — not a hardware measurement: the int8 sweeps'
+bit-exact oracle, moved from numpy's scalar int64 loop (532.7 s for the 2048×4096×4096
+reference alone, against 33.6 ms of NPU time — the 760.9 s wall in `int8_matmul_sweep_npu.log`)
+to a float64 BLAS matmul (0.244 s, 2182×), exact while `K · max|a| · max|b| ≤ 2^53`.
+Proven bit-identical on the sweep's own data at three shapes, a full-range worst case and
+the all −128 bound case at K = 4096; the sweep rows re-run through the patched
+`whole_array.py` on the NPU `PASS!` with the same seed (2048×4096×4096 wall 5.7 s / 1.1 s
+first / cache-warm), so every earlier `PASS!` keeps its meaning. The patch is
+`kernels/int8_matmul_sweep/whole_array_int_reference_float64.patch`; `cpu_int8_matmul_sweep.py`
+got the same oracle. Patching `whole_array.py` changes its JIT-cache hash, so the first run of
+each config recompiles (seconds). CPU timings were taken beside another session's yolov6n
+evaluation runs. Cited by [`kernels/README.md`](../../kernels/README.md).
+
 ## Dispatch floor and the int8 conv verdict
 
 **`dispatch_floor_npu.log`** — the per-dispatch cost measured IN ISOLATION at last

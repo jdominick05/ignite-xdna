@@ -1,0 +1,303 @@
+int8_matmul_reference_float64_npu.log -- the int8 GEMM sweep's exact-reference oracle moved
+from numpy's scalar int64 loop to a float64 BLAS matmul, and proven bit-identical.
+
+Desktop 2: Ryzen 7 8700G (8 Zen 4 cores / 16 threads), Phoenix XDNA1 (NPU driver
+32.0.20101.3760, XRT 2.21.0), Windows 11. mlir-aie v1.4.2 ironenv (Python 3.13.15, numpy
+2.5.3 on scipy-openblas 0.3.34) for whole_array.py and the direct check; resnet_env (torch)
+for the CPU sweep script. 2026-09-08, 00:35-00:45.
+
+Not a hardware measurement: nothing about the NPU changed. This log backs a tooling claim
+-- that the verification the int8 sweep's PASS! lines rest on is now cheap and still exact --
+and the before/after wall times quoted in kernels/README.md.
+
+WHY
+---
+whole_array.py verifies every NPU result against numpy A @ B. For integer inputs upstream
+computes A.astype(int64) @ B.astype(int64); numpy has no BLAS path for integer matmul, so
+that is a scalar loop, and it dominated the int8 sweep's wall time: 760.9 s "wall incl.
+compile" for the 2048x4096x4096 row whose NPU time is 33.6 ms
+(results/aie/int8_matmul_sweep_npu.log, RAW NPU OUTPUT). The word "int64" then travelled
+through two handoff notes (HANDOFF_GEMINI.md, HANDOFF_CLAUDE.md) as if it were a research
+item reserved for this session. It is an oracle, not a datatype anything here computes in:
+the AIE GEMM designs accumulate int8 into int32 and bf16 into float32.
+
+THE BOUND
+---------
+A float64 product of integer matrices is exact when every partial sum fits the 53-bit
+mantissa: K * max|a| * max|b| <= 2^53. Each product of two exact integers is exact in
+float64, and sums of integers of magnitude below 2^53 are exact in any order, so BLAS's
+blocking, threading and FMA cannot change the result. For int8 x int8 (|a|, |b| <= 128)
+the bound is K <= 2^39; whole_array's generator draws from [-32, 31), so the sweep's sums
+stay below 2^22 at K = 4096 (see |C|max below); the full-range worst case at K = 4096 is
+2^26. Outside the bound the patch falls back to the int64 loop.
+
+THE PATCH
+---------
+kernels/int8_matmul_sweep/whole_array_int_reference_float64.patch, one hunk against
+mlir-aie v1.4.2's programming_examples/basic/matrix_multiplication/whole_array/whole_array.py,
+generated from the pristine HEAD file and applied with git apply to the live ~/mlir-aie
+checkout on top of kernels/gemm_tile_sweep/whole_array_c_single_buffer.patch. Both
+reverse-apply cleanly (git apply --check -R), i.e. the live file is exactly v1.4.2 + the two
+patch files. The float branch is untouched.
+
+diff --git a/programming_examples/basic/matrix_multiplication/whole_array/whole_array.py b/programming_examples/basic/matrix_multiplication/whole_array/whole_array.py
+--- a/programming_examples/basic/matrix_multiplication/whole_array/whole_array.py
++++ b/programming_examples/basic/matrix_multiplication/whole_array/whole_array.py
+@@ -506,6 +506,14 @@
+ def _numpy_reference(A_np, B_np, b_col_maj, dtype_out):
+     B_logical = B_np.T if b_col_maj else B_np
+     if np.issubdtype(A_np.dtype, np.integer):
++        # numpy has no BLAS path for integer matmul, so an int64 product is a scalar
++        # loop: minutes at the 4096-class shapes against milliseconds of NPU time. A
++        # float64 product is bit-exact as long as every partial sum fits the 53-bit
++        # mantissa, K * max|a| * max|b| <= 2**53 (K <= 2**39 for i8 x i8), and it runs
++        # through BLAS dgemm in about a second. int64 stays the fallback beyond that.
++        amax = lambda dt: max(abs(int(np.iinfo(dt).min)), int(np.iinfo(dt).max))
++        if A_np.shape[1] * amax(A_np.dtype) * amax(B_logical.dtype) <= 2**53:
++            return (A_np.astype(np.float64) @ B_logical.astype(np.float64)).astype(dtype_out)
+         return (A_np.astype(np.int64) @ B_logical.astype(np.int64)).astype(dtype_out)
+     return (A_np.astype(np.float32) @ B_logical.astype(np.float32)).astype(dtype_out)
+ 
+
+WHAT WAS RUN
+------------
+1. check_ref.py (ironenv, CPU only): A and B drawn exactly as whole_array._run_and_verify
+   draws them (seed 1726250518), the upstream int64 reference and the float64 reference
+   timed and compared with np.array_equal after the cast to int32, at the sweep's 512^3,
+   1024^3 and 2048x4096x4096; then a full-range [-128, 127] case and an all -128 case at
+   K = 4096, the largest K in any sweep here.
+2. run_cpu_check.sh (resnet_env): kernels/int8_matmul_sweep/cpu_int8_matmul_sweep.py, whose
+   int64 reference had the same cost and was skipped above 2^30 MACs, now checks both CPU
+   kernels against a float64 reference at every shape -- run at 512^3 (the int64 path used to
+   run here) and 2048^3 (used to be skipped).
+3. run_ref_npu.sh (ironenv): the sweep's 512^3 and 2048x4096x4096 int8 rows through the
+   patched whole_array.py via npu_matmul_sweep.py, default tile, --iters 10 --warmup 3; the
+   big row twice (the first wall may include a JIT compile, the second is cache-warm). Same
+   seed, same A and B as the 2026-09-07 sweep, so PASS! against the float64 oracle is
+   transitively bit-identity with the int64 oracle those rows already passed against.
+
+Contention, stated: another session was working on yolov6n on this machine. Its quantize
+job (pid 31204, resnet_env, 8 pinned threads) had finished before check_ref.py started
+(model written 00:35:12; check started 00:35:42), but its evaluation runs overlapped the
+int64 timing -- its NPU detection dump was written at 00:39:32 and its CPU dump at 00:44:14,
+inside the 00:35:48-00:44:41 int64 reference -- so the CPU timings here are indicative, not
+clean; the bit-identity is the result. For the NPU proof xrt-smi reported no hardware
+context at 00:45:07 and at 00:45:20, and that session's next NPU run (its yolov6n latency
+log, written 00:45:57) came after this one ended. No python or compiler process was listed
+at either snapshot.
+
+The patch changes whole_array.py's source hash, which is part of IRON's JIT cache key: run
+1 recompiled both configs from scratch (~/.npu/cache/744065f3... rewritten 00:45:11-13 for
+512^3, 5c8de2f2... 00:45:16-18 for 2048x4096x4096 -- aie.mlir, final.xclbin, insts.bin,
+all fresh) and run 2 hit the cache. A whole_array compile is seconds here, so the 760.9 s
+wall in the 2026-09-07 log was the int64 reference; that log does not separate the
+compile/run/import remainder.
+
+--- check_ref.py ---
+"""int64 vs float64 exact-reference check, CPU only, whole_array.py's own data generator.
+
+For each MxKxN: A, B drawn exactly as whole_array._run_and_verify draws them (seed
+1726250518, integers in [iinfo.min//4, iinfo.max//4) = [-32, 31) for int8), then the
+upstream int64 reference and the proposed float64 (BLAS dgemm) reference, timed, and
+compared with np.array_equal after the cast to int32. Then a full-range worst case:
+A, B over all of [-128, 127] at K=4096 (the largest K in any sweep here), where the
+bound K * 128 * 128 = 2**26 << 2**53 says float64 stays exact.
+"""
+import sys, time
+import numpy as np
+
+def gen(M, K, N, dtype=np.int8):
+    rng = np.random.default_rng(1726250518)
+    info = np.iinfo(dtype)
+    A = rng.integers(info.min // 4, info.max // 4, size=(M, K), dtype=dtype)
+    B = rng.integers(info.min // 4, info.max // 4, size=(K, N), dtype=dtype)
+    return A, B
+
+def ref_int64(A, B):
+    return (A.astype(np.int64) @ B.astype(np.int64)).astype(np.int32)
+
+def ref_f64(A, B):
+    return (A.astype(np.float64) @ B.astype(np.float64)).astype(np.int32)
+
+def check(label, A, B):
+    t0 = time.perf_counter(); r64 = ref_int64(A, B); t64 = time.perf_counter() - t0
+    t0 = time.perf_counter(); rf = ref_f64(A, B); tf = time.perf_counter() - t0
+    same = np.array_equal(r64, rf)
+    print(f"{label:>28}  int64 {t64:9.2f} s   float64 {tf:8.3f} s   speedup {t64/tf:8.1f}x   "
+          f"identical={same}  |C|max={int(np.abs(r64).max())}", flush=True)
+    return same
+
+print("numpy", np.__version__, "threads/BLAS:", end=" ")
+try:
+    import threadpoolctl; print([ (i['internal_api'], i['num_threads']) for i in threadpoolctl.threadpool_info()])
+except Exception as e: print("(threadpoolctl not installed)")
+ok = True
+for shp in sys.argv[1:]:
+    M, K, N = (int(x) for x in shp.lower().split("x"))
+    A, B = gen(M, K, N)
+    ok &= check(f"{M}x{K}x{N} (sweep data)", A, B)
+# full-range worst case at the largest K used in any sweep
+rng = np.random.default_rng(0)
+A = rng.integers(-128, 128, size=(256, 4096), dtype=np.int8)
+B = rng.integers(-128, 128, size=(4096, 256), dtype=np.int8)
+ok &= check("256x4096x256 (full range)", A, B)
+A = np.full((64, 4096), -128, np.int8); B = np.full((4096, 64), -128, np.int8)
+ok &= check("64x4096x64 (all -128, bound)", A, B)
+print("ALL IDENTICAL" if ok else "MISMATCH FOUND", flush=True)
+
+--- run_cpu_check.sh ---
+#!/usr/bin/env bash
+# The CPU sweep script with its new float64 oracle: 512^3 (int64 ref used to run here) and
+# 2048^3 (> 2^30 MACs, the int64 ref used to be skipped here) -- both must print f64-ref OK.
+set -u
+cd "$HOME/PycharmProjects/ryzen-ai-xdna1-quantization" || exit 1
+eval "$(conda shell.bash hook)" && conda activate resnet_env || exit 1
+echo "=== cpu_int8_matmul_sweep.py float64-oracle check. start $(date '+%Y-%m-%d %H:%M:%S') ==="
+PYTHONIOENCODING=utf-8 python kernels/int8_matmul_sweep/cpu_int8_matmul_sweep.py --iters 5 --warmup 2 --shapes 512x512x512,2048x2048x2048
+echo "=== done $(date '+%Y-%m-%d %H:%M:%S') exit=$? ==="
+
+--- run_ref_npu.sh ---
+#!/usr/bin/env bash
+# NPU proof for the float64 reference patch: the same rows the int8 sweep ran on 2026-09-07
+# (results/aie/int8_matmul_sweep_npu.log, seed 1726250518 -> identical A, B), so a PASS!
+# against the float64 oracle is transitively a bit-identity with the int64 oracle those
+# rows already passed against. 2048x4096x4096 twice: the first wall may include a JIT
+# compile, the second is cache-warm.
+set -u
+source "C:/Users/<user>/.claude/jobs/77babca4/tmp/ironenv.sh"
+cd "$HOME/PycharmProjects/ryzen-ai-xdna1-quantization" || exit 1
+snap() { powershell -NoProfile -Command "Get-CimInstance Win32_Process | Where-Object { \$_.Name -match '^(python|aiecc|clang|peano)' } | ForEach-Object { '{0} {1} {2}' -f \$_.ProcessId, \$_.Name, (\$_.CommandLine -replace '\s+',' ').Substring(0, [Math]::Min(140, (\$_.CommandLine).Length)) }"; }
+echo "=== float64-reference proof on the NPU. start $(date '+%Y-%m-%d %H:%M:%S') ==="
+echo "--- other python/compiler processes at start ---"; snap
+echo "--- xrt-smi aie-partitions before ---"; "C:/Windows/System32/AMD/xrt-smi.exe" examine -r aie-partitions 2>&1 | grep -i 'hardware context\|pid\|Phoenix' 
+echo "--- live whole_array.py patch state ---"; (cd "$HOME/mlir-aie" && for p in kernels/gemm_tile_sweep/whole_array_c_single_buffer.patch kernels/int8_matmul_sweep/whole_array_int_reference_float64.patch; do git apply --check -R "$HOME/PycharmProjects/ryzen-ai-xdna1-quantization/$p" && echo "applied: $p"; done)
+D="python kernels/int8_matmul_sweep/npu_matmul_sweep.py --iters 10 --warmup 3"
+echo; echo "######## RUN 1: 512^3 and 2048x4096x4096, int8 -> int32, default tile ########"
+$D --shapes 512x512x512,2048x4096x4096
+echo; echo "######## RUN 2: 2048x4096x4096 again (JIT cache warm) ########"
+$D --shapes 2048x4096x4096
+echo; echo "--- xrt-smi aie-partitions after ---"; "C:/Windows/System32/AMD/xrt-smi.exe" examine -r aie-partitions 2>&1 | grep -i 'hardware context\|pid'
+echo "--- other python/compiler processes at end ---"; snap
+echo "=== done $(date '+%Y-%m-%d %H:%M:%S') ==="
+
+RESULTS
+=======
+1. int64 vs float64 on whole_array's own data (check_ref.txt)
+--------------------------------------------------------------
+=== check_ref start 2026-09-08 00:35:42 ===
+numpy 2.5.3 threads/BLAS: (threadpoolctl not installed)
+    512x512x512 (sweep data)  int64      0.65 s   float64    0.004 s   speedup    165.5x   identical=True  |C|max=36882
+ 1024x1024x1024 (sweep data)  int64      5.61 s   float64    0.011 s   speedup    533.5x   identical=True  |C|max=51270
+ 2048x4096x4096 (sweep data)  int64    532.74 s   float64    0.244 s   speedup   2182.5x   identical=True  |C|max=113316
+   256x4096x256 (full range)  int64      0.41 s   float64    0.004 s   speedup     97.2x   identical=True  |C|max=1637250
+64x4096x64 (all -128, bound)  int64      0.01 s   float64    0.001 s   speedup     14.7x   identical=True  |C|max=67108864
+ALL IDENTICAL
+=== end 2026-09-08 00:44:42 exit=0 ===
+
+2. cpu_int8_matmul_sweep.py with the float64 oracle (cpu_check.txt)
+--------------------------------------------------------------------
+=== cpu_int8_matmul_sweep.py float64-oracle check. start 2026-09-08 00:45:05 ===
+CPU int8 GEMM sweep -- torch._int_mm vs ORT MatMulInteger (u8s8), plus torch bf16/fp32
+CPU: AMD Ryzen 7 8700G w/ Radeon 780M Graphics
+torch 2.4.1+cpu (threads 8), onnxruntime 1.22.1 (intra_op_num_threads 0 = ORT default), numpy 1.26.4
+iters=5 warmup=2; GOPS/GFLOPS = 2MKN / mean wall ms
+
+           MxKxN      GOP |  torch _int_mm ms     GOPS |   ORT u8s8 ms     GOPS |  best i8 |   bf16 ms   GFLOPS | fp32 GFLOPS | i8/bf16
+---------------------------------------------------------------------------------------------------------------------------------------
+     512x512x512     0.27 |     0.129/  0.124   2078.0 |   0.15/  0.15   1774.2 |   2078.0 |     0.248   1082.6 |       569.2 |    1.92
+                            f64-ref torch=OK ort=OK cross=OK
+  2048x2048x2048    17.18 |     7.500/  6.901   2290.6 |   9.45/  8.77   1817.2 |   2290.6 |    13.938   1232.6 |       601.6 |    1.86
+                            f64-ref torch=OK ort=OK cross=OK
+
+(ms columns are mean/min over the timed iterations; 'best i8' is the faster of the two int8 kernels)
+=== done 2026-09-08 00:45:07 exit=0 ===
+
+3. the sweep rows through the patched whole_array.py on the NPU (ref_npu.txt)
+----------------------------------------------------------------------------
+=== float64-reference proof on the NPU. start 2026-09-08 00:45:07 ===
+--- other python/compiler processes at start ---
+--- xrt-smi aie-partitions before ---
+[003d:00:01.1] : NPU Phoenix
+  No hardware contexts running on device
+--- live whole_array.py patch state ---
+applied: kernels/gemm_tile_sweep/whole_array_c_single_buffer.patch
+applied: kernels/int8_matmul_sweep/whole_array_int_reference_float64.patch
+
+######## RUN 1: 512^3 and 2048x4096x4096, int8 -> int32, default tile ########
+whole_array sweep  dtype i8->i32  cols=4 k=64 n=32  c_single_buffer=0 b_col_maj=0  iters=10 warmup=3  python=C:\Users\<user>\mlir-aie\ironenv\Scripts\python.exe
+whole_array dir: C:\Users\<user>\mlir-aie\programming_examples\basic\matrix_multiplication\whole_array
+
+=== 512x512x512  m=64 k=64 n=32  i8->i32  c_single_buffer=0  L1 est 32,000 B (fits) ===
+$ whole_array.py --dev npu -M 512 -K 512 -N 512 -m 64 -k 64 -n 32 --n-aie-cols 4 --dtype_in i8 --dtype_out i32 --warmup 3 --iters 10
+--- stdout tail ---
+  NPU time     (avg/min/max us): 289.0 / 271.2 / 314.0
+  End-to-end   (avg/min/max us): 741.0 / 708.2 / 776.1
+  NPU GFLOPS                    : 928.81
+  PASS!
+(wall incl. compile: 5.3 s)
+
+=== 2048x4096x4096  m=64 k=64 n=32  i8->i32  c_single_buffer=0  L1 est 32,000 B (fits) ===
+$ whole_array.py --dev npu -M 2048 -K 4096 -N 4096 -m 64 -k 64 -n 32 --n-aie-cols 4 --dtype_in i8 --dtype_out i32 --warmup 3 --iters 10
+--- stdout tail ---
+  NPU time     (avg/min/max us): 38635.0 / 35075.2 / 52198.1
+  End-to-end   (avg/min/max us): 39568.0 / 36112.2 / 53138.0
+  NPU GFLOPS                    : 1778.68
+  PASS!
+(wall incl. compile: 5.7 s)
+
+SUMMARY  (i8->i32, 4 cols, k=64 n=32 c_single_buffer=0 b_col_maj=0; GOPS = 2MKN / NPU-bracket avg; L1 est = 2A+2B+C*(1|2)+stack, of 65,536)
+           MxKxN   m   L1 est    verdict   NPU avg us   NPU min us   e2e avg us      GOPS
+-----------------------------------------------------------------------------------------
+     512x512x512  64   32,000       PASS        289.0        271.2        741.0    928.81
+  2048x4096x4096  64   32,000       PASS      38635.0      35075.2      39568.0   1778.68
+
+######## RUN 2: 2048x4096x4096 again (JIT cache warm) ########
+whole_array sweep  dtype i8->i32  cols=4 k=64 n=32  c_single_buffer=0 b_col_maj=0  iters=10 warmup=3  python=C:\Users\<user>\mlir-aie\ironenv\Scripts\python.exe
+whole_array dir: C:\Users\<user>\mlir-aie\programming_examples\basic\matrix_multiplication\whole_array
+
+=== 2048x4096x4096  m=64 k=64 n=32  i8->i32  c_single_buffer=0  L1 est 32,000 B (fits) ===
+$ whole_array.py --dev npu -M 2048 -K 4096 -N 4096 -m 64 -k 64 -n 32 --n-aie-cols 4 --dtype_in i8 --dtype_out i32 --warmup 3 --iters 10
+--- stdout tail ---
+  NPU time     (avg/min/max us): 34778.7 / 34496.4 / 35007.5
+  End-to-end   (avg/min/max us): 35657.5 / 35311.3 / 35968.4
+  NPU GFLOPS                    : 1975.91
+  PASS!
+(wall incl. compile: 1.1 s)
+
+SUMMARY  (i8->i32, 4 cols, k=64 n=32 c_single_buffer=0 b_col_maj=0; GOPS = 2MKN / NPU-bracket avg; L1 est = 2A+2B+C*(1|2)+stack, of 65,536)
+           MxKxN   m   L1 est    verdict   NPU avg us   NPU min us   e2e avg us      GOPS
+-----------------------------------------------------------------------------------------
+  2048x4096x4096  64   32,000       PASS      34778.7      34496.4      35657.5   1975.91
+
+--- xrt-smi aie-partitions after ---
+  No hardware contexts running on device
+--- other python/compiler processes at end ---
+=== done 2026-09-08 00:45:20 ===
+
+BEFORE / AFTER
+--------------
+  2048x4096x4096 int8, default tile          before (2026-09-07)   after (this log)
+  reference alone, CPU (check_ref.py)          532.74 s int64         0.244 s float64   (2182x)
+  whole_array.py wall incl. compile, NPU run   760.9 s                 5.7 s first /   1.1 s cache-warm
+  NPU time per GEMM                            33.6 ms              see the raw output above
+  verdict                                      PASS! (int64)        PASS! (float64) -- same A, B, C
+  512^3 wall                                     5.6 s                5.3 s
+
+FINDING
+-------
+The float64 reference is bit-identical to the int64 reference at every shape checked --
+the three sweep shapes, the full-range worst case and the all -128 bound case at K = 4096 --
+and 15-2182x faster (532.74 s -> 0.244 s at 2048x4096x4096). The patched whole_array.py
+still prints PASS! on the same data the 2026-09-07 sweep passed with the int64 oracle, so
+every PASS! in results/aie/int8_matmul_sweep_npu.log and
+gemm_tile_sweep_c_single_buffer_npu.log stands unchanged in meaning. The 4096-class int8
+rows now cost seconds of wall instead of minutes, which is what made the int8 sweeps take
+longer than the bf16 ones. The CPU sweep script's check is now exact at every shape instead
+of skipped above 2^30 MACs. Nothing measured about the NPU moved.
+
+NOT TESTED
+----------
+- int16 inputs (bound K <= 2^23; the sweeps only run int8 and bf16).
+- The int64 fallback branch (no shape here exceeds the bound).
+- A clean-CPU timing of either reference: another session's yolov6n evaluations ran during
+  check_ref.py (see "Contention, stated" above).

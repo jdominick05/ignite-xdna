@@ -1,0 +1,18 @@
+diff --git a/programming_examples/basic/matrix_multiplication/whole_array/whole_array.py b/programming_examples/basic/matrix_multiplication/whole_array/whole_array.py
+--- a/programming_examples/basic/matrix_multiplication/whole_array/whole_array.py
++++ b/programming_examples/basic/matrix_multiplication/whole_array/whole_array.py
+@@ -506,6 +506,14 @@
+ def _numpy_reference(A_np, B_np, b_col_maj, dtype_out):
+     B_logical = B_np.T if b_col_maj else B_np
+     if np.issubdtype(A_np.dtype, np.integer):
++        # numpy has no BLAS path for integer matmul, so an int64 product is a scalar
++        # loop: minutes at the 4096-class shapes against milliseconds of NPU time. A
++        # float64 product is bit-exact as long as every partial sum fits the 53-bit
++        # mantissa, K * max|a| * max|b| <= 2**53 (K <= 2**39 for i8 x i8), and it runs
++        # through BLAS dgemm in about a second. int64 stays the fallback beyond that.
++        amax = lambda dt: max(abs(int(np.iinfo(dt).min)), int(np.iinfo(dt).max))
++        if A_np.shape[1] * amax(A_np.dtype) * amax(B_logical.dtype) <= 2**53:
++            return (A_np.astype(np.float64) @ B_logical.astype(np.float64)).astype(dtype_out)
+         return (A_np.astype(np.int64) @ B_logical.astype(np.int64)).astype(dtype_out)
+     return (A_np.astype(np.float32) @ B_logical.astype(np.float32)).astype(dtype_out)
+ 

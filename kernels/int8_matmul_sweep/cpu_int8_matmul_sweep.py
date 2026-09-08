@@ -18,9 +18,11 @@ The faster of the two is the verdict line; both are printed. torch bf16 and fp32
 are timed in the same sitting so the int8-vs-bf16 ratio on the CPU side comes from one
 run, not from a table measured hours earlier.
 
-Both int8 outputs are checked exactly: against an int64 reference when M*K*N <= 2^30,
-and against each other at every shape (the uint8 operand is the int8 one plus 128, so
-ORT's result minus 128 * colsum(B) must equal torch's, element for element).
+Both int8 outputs are checked exactly at every shape: against a float64 reference --
+bit-exact while K * 128 * 128 <= 2^53, i.e. K <= 2^39, and BLAS-fast, where the int64
+matmul this used to run (skipped above 2^30 MACs) is a scalar loop -- and against each
+other (the uint8 operand is the int8 one plus 128, so ORT's result minus 128 * colsum(B)
+must equal torch's, element for element).
 
 USAGE (resnet_env -- has torch, onnx, onnxruntime; NOT ironenv)
     conda activate resnet_env
@@ -81,7 +83,7 @@ def ort_session(M, K, N):
     return sess, so
 
 
-def one_shape(M, K, N, iters, warmup, verify_limit):
+def one_shape(M, K, N, iters, warmup):
     ops = 2.0 * M * K * N
     a8 = torch.randint(-128, 128, (M, K), dtype=torch.int8)
     b8 = torch.randint(-128, 128, (K, N), dtype=torch.int8)
@@ -101,13 +103,16 @@ def one_shape(M, K, N, iters, warmup, verify_limit):
     # Exact checks
     colsum = b8.to(torch.int64).sum(dim=0)  # (N,)
     cross = bool(((torch.from_numpy(y_ort).to(torch.int64) - 128 * colsum) == y_torch.to(torch.int64)).all())
-    if M * K * N <= verify_limit:
-        ref = a8.to(torch.int64) @ b8.to(torch.int64)
-        exact_torch = bool((y_torch.to(torch.int64) == ref).all())
-        exact_ort = bool((torch.from_numpy(y_ort).to(torch.int64) == (a8.to(torch.int64) + 128) @ b8.to(torch.int64)).all())
-        check = f"int64-ref torch={'OK' if exact_torch else 'MISMATCH'} ort={'OK' if exact_ort else 'MISMATCH'} cross={'OK' if cross else 'MISMATCH'}"
-    else:
-        check = f"cross-check torch-vs-ort={'OK' if cross else 'MISMATCH'} (int64 ref skipped, > 2^30 MACs)"
+    # float64 accumulation is exact while every partial sum fits 53 bits: K * 128 * 128
+    # <= 2**53 (K <= 2**39), far beyond any shape here; it runs through BLAS instead of
+    # the scalar int64 loop, so it is affordable at every shape.
+    assert K * 128 * 128 <= 2**53, "float64 reference not exact at this K"
+    a64, b64 = a8.to(torch.float64), b8.to(torch.float64)
+    ref = (a64 @ b64).to(torch.int64)
+    ref_u = ((a64 + 128) @ b64).to(torch.int64)
+    exact_torch = bool((y_torch.to(torch.int64) == ref).all())
+    exact_ort = bool((torch.from_numpy(y_ort).to(torch.int64) == ref_u).all())
+    check = f"f64-ref torch={'OK' if exact_torch else 'MISMATCH'} ort={'OK' if exact_ort else 'MISMATCH'} cross={'OK' if cross else 'MISMATCH'}"
 
     # torch bf16 / fp32 for the same-sitting reference
     af = torch.randn(M, K, dtype=torch.float32)
@@ -133,7 +138,6 @@ def main():
     p.add_argument("--iters", type=int, default=20)
     p.add_argument("--warmup", type=int, default=5)
     p.add_argument("--shapes", type=str, required=True, help="comma-separated MxKxN list")
-    p.add_argument("--verify-limit", type=int, default=2**30, help="max M*K*N for the int64 reference check")
     args = p.parse_args()
 
     import onnxruntime as ort
@@ -155,7 +159,7 @@ def main():
     print("-" * len(head))
     rows = []
     for M, K, N in shapes:
-        r = one_shape(M, K, N, args.iters, args.warmup, args.verify_limit)
+        r = one_shape(M, K, N, args.iters, args.warmup)
         rows.append(r)
         ti, oi, bfr, fr = r["torch_i8"], r["ort_u8s8"], r["bf16"], r["fp32"]
         best = max(ti[2], oi[2])
