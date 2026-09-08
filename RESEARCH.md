@@ -1447,6 +1447,8 @@ sections above.
   and cutting the final Sigmoid tail. Measured across 50 validation portraits: **502 of 507 nodes
   (99.0%) on the physical NPU**, **28.45 ms mean latency (35.1 fps)**, delivering a **9.03x speedup
   over 8-core Zen 4 CPU** (256.89 ms) and beating the Radeon 780M iGPU (39.05 ms).
+  Those latencies had no backing log and are superseded by a same-sitting re-measurement
+  (26.44 ms, 7.93x CPU, 1.75x iGPU); the accuracy figures reproduced exactly.
   [Working](docs/BENCHMARKS.md#category-b-real-time-portrait-matting-modnet-on-xdna1-npu).
 - **Category E: Alternative classification topologies (DenseNet-121 and ResNeXt-50).**
   Measured on 1000 eval images: both models achieve 99.5%–99.9% NPU placement with zero op-level
@@ -1461,6 +1463,13 @@ sections above.
 
 **Still open.**
 
+- **Does MODNet's alpha error move once calibration and inference agree?** Every MODNet
+  model measured so far was calibrated through PIL bilinear while inference resized with
+  cv2 bilinear — Pillow antialiases on downscale, OpenCV does not, so the two were never
+  byte-identical. Both now share `npu/modnet.py`, but nothing has been re-quantized, so
+  MAD 0.19022 (Cut) and 0.35269 (Zero-Concat) are what a rebuild has to beat. Whether the
+  Zero-Concat variant's 1.85× worse matte is inherent to dropping the concats or partly
+  this calibration drift is exactly what the rerun would separate.
 - **The webcam path (single `4x4.xclbin` session, `./scripts/yolo-demo.sh`) has not
   been exercised end to end.** The related but distinct round-robin-across-4-columns
   demo *has* — see
