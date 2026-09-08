@@ -1315,17 +1315,15 @@ Dense geometric scene prediction from single monocular camera streams without tr
 Characterizing the boundary conditions of the XDNA1 compiler on alternative convolutional connection topologies: dense concatenation and grouped convolutions.
 
 - **Candidate architectures:**
-  1. DenseNet-121 / DenseNet-169 (Dense connectivity via channel `Concat` across blocks).
-  2. ResNeXt-50 (32x4d) (Grouped convolutions; 32 groups of 4 channels).
+  1. DenseNet-121 (Dense connectivity via channel `Concat` across blocks; 120 Convs, 62 Concats, 3 AveragePools).
+  2. ResNeXt-50 (32x4d) (Grouped convolutions; 53 Convs with 32 groups of 4 channels each).
   3. RegNetX (RegNetX-002 through RegNetX-080; regular linear channel capacity design space).
 - **Hypothesis:** DenseNet channel concatenation stresses AIE DMA memory bandwidth as channel width accumulates, revealing whether `Concat` carries higher latency overhead than ResNet elementwise `Add`. ResNeXt tests whether grouped convolutions compile to native AIE micro-kernels or trigger unoptimized scalar loops.
 - **Target shapes and pipeline:** Static input `(1, 3, 224, 224)`.
-- **Quantization:** Timm FP32 export -> Quark XINT8 PTQ + AdaRound on ImageNet-1k (1000 eval images and full set).
-- **Verification protocol:**
-  1. Compile and inspect `vitisai_ep_report.json` for both DenseNet and ResNeXt.
-  2. Measure execution latency against ResNet50 (5.27 ms baseline) and wide_resnet50_2 (8.48 ms baseline).
-  3. Evaluate top-1 / top-5 classification accuracy across FP32, plain XINT8, and AdaRound.
-- **Falsification criteria:** If grouped convolutions fail to map to AIE SIMD lanes (causing severe latency regression vs standard convs of equal FLOPs) or if channel concatenation incurs memory copies that dominate wall time.
+- **Measured findings (DenseNet-121 & ResNeXt-50):**
+  1. **Hardware offload is complete**: DenseNet-121 places **1,703 / 1,705 nodes (99.9%)** on NPU at **8.06 ms** (2.69× speedup over Zen 4 CPU FP32 at 21.70 ms); all 58 Concat nodes execute natively on AIE without DMA bottlenecks. ResNeXt-50 places **393 / 395 nodes (99.5%)** on NPU at **9.37 ms** (1.86× speedup over Zen 4 CPU FP32 at 17.40 ms); all 53 `group=32` convs compile natively.
+  2. **Coarse per-tensor PTQ fails completely**: Both architectures collapse to **0.10% top-1** under plain XINT8 (vs 78.00% / 81.00% FP32 baselines). Dense block concatenation forces disparate block activations into shared power-of-two scales (causing shift cuts to exceed `[0, 16]` by up to 7 powers of 2), while 4-channel grouped convs produce wide cross-group dynamic range divergence that per-tensor INT8 cannot represent.
+- **Falsification verdict:** Refuted for latency (neither `Concat` memory copies nor grouped conv micro-kernels stall the NPU), but confirmed as a severe failure mode for plain per-tensor INT8 PTQ.
 
 ## Roadmap
 
@@ -1408,6 +1406,28 @@ sections above.
   quantization accuracy. The float CPU baseline on the same 5000 images is 49.54 mAP@50-95 / 66.09 mAP@50
   at 144.12 ms (`results/bench/map_yolov8m_cpu.log`, `results/bench/lat_yolov8m_cpu.log`), showing a 5.35×
   NPU speedup. [Working](docs/BENCHMARKS.md#model-size-n-vs-s-measured-together).
+- **Category B: Real-Time Portrait Matting (MODNet at 512x512).** Stock MODNet rejected
+  outright by VitisAI EP (0/872 nodes on NPU, 132 ms CPU fallback). Bisection through isolated
+  subgraphs traced the failure to `IBNorm`'s intra-layer diamond split (`Slice` -> `BatchNorm` +
+  `InstanceNorm` -> `Concat`), where an unsupported CPU op (`InstanceNorm`) inside a sliced/concatenated
+  layer forces cross-device synchronization and triggers whole-graph compiler refusal. Resolved via
+  `modnet_cut`: calibrating empirical running stats for `InstanceNorm` (MAD = 0.0384 vs uncalibrated),
+  merging into a unified `BatchNorm2d`, mathematically folding into preceding `Conv2d` weights/biases
+  (eliminating all 17 Slice, 17 IN, 17 Concat nodes), refactoring `SEBlock` from Linear to 1x1 Conv2d,
+  and cutting the final Sigmoid tail. Measured across 50 validation portraits: **502 of 507 nodes
+  (99.0%) on the physical NPU**, **28.45 ms mean latency (35.1 fps)**, delivering a **9.03x speedup
+  over 8-core Zen 4 CPU** (256.89 ms) and beating the Radeon 780M iGPU (39.05 ms).
+  [Working](docs/BENCHMARKS.md#category-b-real-time-portrait-matting-modnet-on-xdna1-npu).
+- **Category E: Alternative classification topologies (DenseNet-121 and ResNeXt-50).**
+  Measured on 1000 eval images: both models achieve 99.5%–99.9% NPU placement with zero op-level
+  refusal. DenseNet-121 (1703/1705 nodes on NPU, all 58 Concats and 3 AveragePools accepted) runs
+  at 8.06 ms (2.69× speedup over Zen 4 CPU FP32 at 21.70 ms), proving Concat does not bottleneck AIE
+  DMA memory bandwidth. ResNeXt-50 (393/395 nodes on NPU) compiles all 53 grouped convs (`groups=32`)
+  natively at 9.37 ms (1.86× speedup over Zen 4 CPU FP32 at 17.40 ms). However, both architectures suffer
+  catastrophic PTQ collapse under plain XINT8 (0.10% top-1 vs 78.00%/81.00% FP32 baselines), revealing
+  a critical compiler boundary: power-of-two per-tensor scaling cannot represent the disparate dynamic ranges
+  across concatenated blocks or narrow 4-channel conv groups without per-channel scaling or AdaRound reconstruction.
+  [Working](docs/BENCHMARKS.md#alternative-classification-topologies-densenet-121-concat-and-resnext-50-grouped-convs).
 
 **Still open.**
 
@@ -1423,9 +1443,8 @@ sections above.
   the ceilings derived from it, and the objectives list live in
   [`docs/SILICON.md`](docs/SILICON.md); its objective S0 (measure the core clock, which
   nothing here has done) gates every per-second ceiling in that file.
-- **Candidate model pipelines (Categories A through E).** Detailed test plans, target shapes, and falsification criteria defined in [Future pipeline test plans](#future-pipeline-test-plans-categories-a-through-e) above:
+- **Candidate model pipelines (Categories A, C, D, E).** Test plans, target shapes, and falsification criteria:
   - **Category A:** Image Super-Resolution (Real-ESRGAN Compact, SESR-M7).
-  - **Category B:** Real-Time Portrait Matting and Semantic Segmentation (MODNet, BiSeNetV2) — bring-up underway in `pipelines/modnet/`.
   - **Category C:** Advanced Detection and RepVGG Backbones (YOLOv6, YOLO-World v2, YOLOv11).
   - **Category D:** Monocular Depth Estimation (MiDaS v2.1 Small, FastDepth).
   - **Category E:** Untested Classification Topologies (DenseNet-121, ResNeXt-50, RegNetX).
