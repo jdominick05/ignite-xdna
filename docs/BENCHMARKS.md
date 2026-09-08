@@ -1582,6 +1582,30 @@ prediction the uncontended baseline did** — not just "similar accuracy," the l
 same argmax on every image, at every stream count. Contention changes latency, not
 outputs, on this backend, on both models tested.
 
+**Does a wider classifier saturate the same way, or earlier — like yolov8m does
+against yolov8n?** `wide_resnet50_2` (2.7× resnet50's params, same recipe, calib 64)
+run through the same sweep:
+
+| streams | combined fps | speedup vs 1 | mean top-1 | mismatch vs solo |
+|---|---|---|---|---|
+| 1 | 73.9 | 1.00× | 76.67% | 0.00% |
+| 2 | 113.2 | 1.53× | 76.67% | 0.00% |
+| 3 | 114.9 | 1.55× | 76.67% | 0.00% |
+| 4 | 116.0 | 1.57× | 76.67% | 0.00% |
+| 6 | 116.7 | 1.58× | 76.67% | 0.00% |
+| 8 | 117.1 | 1.58× | 76.67% | 0.00% |
+| 12 | 117.2 | 1.58× | 76.67% | 0.00% |
+| 16 | 117.2 | 1.59× | 76.67% | 0.00% |
+
+(`results/nstream_wide_resnet50_2.log`, `--fresh`.) Confirms the pattern from
+detection: the wider model saturates to essentially the same final multiplier as
+resnet50 (1.59× vs 1.60×) but gets there faster — flat by 2 streams instead of 8 —
+because it already uses more of the array per call, leaving less idle headroom for a
+second context to fill. And the accuracy guarantee holds again: every concurrent
+classification at every stream count matched the uncontended baseline exactly
+(0.00% mismatch throughout), zero regressions on a second, wider architecture. `>16`
+streams and a still-wider classifier (`wide_resnet101_2`) remain untested.
+
 ### Direct NPU utilization: what GOPS actually says
 
 Every earlier "not compute-bound" claim in this README was a FLOPs/latency estimate

@@ -1380,9 +1380,13 @@ sections above.
   decoupled from the throughput plateau. `results/nstream_memory_yolov8{n,m}.log`.
 - **Does classification saturate the same way, and does accuracy survive contention?**
   Yes to both: resnet50 saturates at 1.60× by 8 streams and holds flat through 16, with
-  bit-identical argmax on all 960 concurrent classifications tested. Still open within
-  it: `wide_resnet50_2` or a bigger classifier untested, and >16 streams untested.
-  `results/nstream_resnet50.log`.
+  bit-identical argmax on all 960 concurrent classifications tested.
+  `results/nstream_resnet50.log`. **Does a wider classifier saturate earlier, like
+  yolov8m does against yolov8n — done.** `wide_resnet50_2` reaches essentially the same
+  final multiplier (1.59× vs resnet50's 1.60×) but flattens by 2 streams instead of 8,
+  and every concurrent classification at every stream count still matched the
+  uncontended baseline exactly (0.00% mismatch). `results/nstream_wide_resnet50_2.log`.
+  Still open: `wide_resnet101_2` untested, and >16 streams untested on any model.
 - **yolov8l and yolov8x.** The width trend breaks: x is 2.36× the latency of l for a net
   mAP loss. Both calibrated smaller (32/24) than m's 64, and l's full eval is flaky.
   [Working](docs/BENCHMARKS.md#model-size-n-vs-s-measured-together).
