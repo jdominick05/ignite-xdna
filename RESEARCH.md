@@ -1513,6 +1513,13 @@ sections above.
 
 **Still open.**
 
+- **Can an owned quantizer reproduce Quark's XINT8 output from the float export?**
+  [Phase 0 source/model inspection](docs/BENCHMARKS.md#an-owned-xint8-quantizer-scale-exact-reproduction-then-the-eps-acceptance-map)
+  corrected the proposed alignment rules and resolved bias initialization, rounding,
+  registry selection and default knobs. Fresh no-CLE re-emission, exact scales/weight
+  comparison, full-set accuracy and paired NPU gates remain open; metadata sensitivity
+  and the confounded A8W8 rejection require later one-variable probes. See
+  [`quant/DESIGN.md`](quant/DESIGN.md) for the ordered gates and remaining source questions.
 - **Does MODNet's alpha error move once calibration and inference agree?** Every MODNet
   model measured so far was calibrated through PIL bilinear while inference resized with
   cv2 bilinear — Pillow antialiases on downscale, OpenCV does not, so the two were never

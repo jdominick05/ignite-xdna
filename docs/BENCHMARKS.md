@@ -2268,6 +2268,71 @@ Three findings:
    measured, they don't: the same AdaRound recipe used elsewhere in this repo, with no
    yolov6n-specific tuning, recovers the large majority of the plain-XINT8 loss.
 
+### An owned XINT8 quantizer: scale-exact reproduction, then the EP's acceptance map
+
+Phase 0 began on Desktop 2 (Ryzen 7 8700G), 2026-09-08. The source audit and static
+model inspection are in [`notes_xint8_dialect.log`](../results/quant/notes_xint8_dialect.log);
+the corrected contract and phase gates are in [`quant/DESIGN.md`](../quant/DESIGN.md).
+Method: read the installed Quark 0.11rc1 Python source as text/AST, without importing
+Quark; load the synced ONNX files using ONNX 1.19.0 and NumPy 1.26.4. Source and model
+SHA256 values bind the excerpts and fingerprints to the inspected files. The log's
+one-off inspector was `scratch/quant_phase0.py`. No model was executed, quantized,
+compiled, or evaluated; these are producer observations, not EP acceptance results.
+
+| Inspected file | Graph nodes | Q / DQ | Observation |
+|---|---:|---:|---|
+| `resnet50_fp32.onnx` | 122 | 0 / 0 | No BatchNormalization, Split or ReduceMean |
+| `resnet50_xint8_c64.onnx` | 380 | 74 / 182 | UINT8 activation zp=128; INT8 weight/bias zp=0; scalar power-of-two scales |
+| `yolov8n_cut_xint8.onnx` | 957 | 218 / 344 | Same dtype/scale dialect; HardSigmoid beta omitted |
+| `resnet50_a8w8.onnx` | 378 | 74 / 182 | Microsoft-domain QDQ, INT8 activation zp=0, non-power-of-two scales, INT32 bias |
+
+These are counts in files as found in `models/`, not the EP's optimized node counts.
+Syncthing provenance does not establish which machine built them. The attempted extra
+YOLO float inspection used the absent name `yolov8n_cut_fp32.onnx`; that missing file is
+recorded and contributes no measurement. The initial inspector counted only initializer
+Mul factors, so its empty factor maps do not establish absence of Constant-fed factors.
+
+The audit corrects the initial design in several consequential places: XINT8's
+`QuantPosManager` aligns Concat and pooling to the minimum connected position; the
+draft had borrowed `QuantInfoManager`'s different rules. Cut/bias refinement dispatches
+only Conv/Gemm. Bias starts with its own MinMSE position. Stored signed integers clip
+to [-127,127], and NumPy rounds ties to even. The effective op list unions three
+registries. CLE knobs, the large-pool threshold, reader behavior, and AdaRound's core
+schedule now have file:line evidence in the log.
+
+Open: source hazards in refinement's change tracking/raw-data update, whether final
+positions alone reproduce weights after refinement, detailed handler rules, optional
+Softmax expansion, full AdaRound data/update behavior, and consumer metadata sensitivity.
+The fresh no-CLE comparison, full-set accuracy, and paired NPU gates have not run.
+The A8W8 attribution remains confounded until Phase 4 isolates each change.
+
+The initial scaffold now rechecks all four files using `Graph.fingerprint()`:
+[`inspect_resnet50_yolov8n_xint8_a8w8_resnet_env17.log`](../results/quant/inspect_resnet50_yolov8n_xint8_a8w8_resnet_env17.log).
+Reproduce from Git Bash with
+`./scripts/quant-inspect.sh --env resnet_env17 --log results/quant/<new_model_variant>.log models/resnet50_fp32.onnx models/resnet50_xint8_c64.onnx models/yolov8n_cut_xint8.onnx models/resnet50_a8w8.onnx`.
+The wrapper refuses to overwrite evidence. Unlike the initial throwaway inspection,
+the graph wrapper includes Constant-fed factors: one ResNet GAP factor of
+1.0048828125 and 57 YOLO HardSigmoid factors of 1.0001220703125. The initial draft's
+ResNet expansion omitted the extra Constant alongside its Mul; both are included in
+the corrected design and the table above.
+
+Both XINT8 files fail the ONNX checker in their original order because simulation
+nodes follow their consumers. A stable in-memory topological sort makes the checker
+pass; it preserves every serialized node and initializer and writes no file. ResNet
+float and A8W8 already pass in file order. The checker result and unchanged file hashes
+are recorded in the focused scaffold checks for
+[`resnet_env`](../results/quant/check_resnet50_yolov8n_xint8_a8w8_scaffold_resnet_env.log)
+and [`resnet_env17`](../results/quant/check_resnet50_yolov8n_xint8_a8w8_scaffold_resnet_env17.log).
+Those checks ran on Desktop 2 with ONNX 1.19.0 / 1.18.0 respectively, NumPy 1.26.4
+in both, through the one-off `scratch/validate_quant_scaffold.py` and `run_logged`.
+They cover invalid export shapes/opsets/IR, missing dependencies/cycles/duplicate
+outputs, signed and unsigned half ties/saturation, position roundtrips, invalid
+parameters, and comparison with Quark's source-extracted integer arithmetic expression.
+Neither Quark nor torch was imported. `QUANT SCAFFOLD CHECKS PASS` appears in both
+logs; the repository syntax/import/shell gate also printed `PIPELINE CHECKS PASS`.
+This verifies the building blocks, not a quantizer: emission, graph_diff, calibration,
+full-set accuracy and NPU gates remain unimplemented or unrun.
+
 ## Key findings
 
 Roughly ordered by how much time each one cost to discover.

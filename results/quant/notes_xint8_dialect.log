@@ -1,0 +1,2027 @@
+Phase 0: local XINT8 dialect inspection, Desktop 2 / Ryzen 7 8700G
+UTC: 2026-09-08T06:06:02.397661+00:00
+Method: scratch/quant_phase0.py; onnx.load + numpy inspection; AST/source text reads.
+No Quark import, model execution, calibration, compilation, NPU session, or accuracy/latency measurement.
+Models inspected as found in the Syncthing folder; their build machine is not established.
+Quark citations below are relative to resnet_env/Lib/site-packages/quark/onnx/.
+Versions: {"amd-quark": "0.11rc1", "numpy": "1.26.4", "onnx": "1.19.0", "onnxruntime": "1.22.1"}
+Python: 3.12.11 | packaged by conda-forge | (main, Jun  4 2025, 14:29:09) [MSC v.1943 64 bit (AMD64)]
+FINDINGS AND OPEN ITEMS
+RESOLVED [Q] Registry: default op selection is the UNION of QLinearOpsRegistry,
+QDQRegistry and NPUCnnRegistry (quantizers/interface.py:202-227), not NPUCnnRegistry
+alone. The exact keys are printed below. Dispatch prioritizes NPUCnnRegistry then
+QDQRegistry, then QDQOperatorBase (quantizers/registry.py:145-151).
+RESOLVED [Q] Annotation: quantization/quant_utils.py:102 lists Conv, Add, MaxPool,
+AveragePool, GlobalAveragePool, MatMul, Gemm, ConvTranspose. Removal also depends on
+single-consumer topology, supported downstream activation, and Pad->average-pool
+(quant_utils.py:685-736); it is not an unrestricted Conv/Relu rewrite.
+RESOLVED [Q] Sharing: extended_quantizer.py:478-509 reuses the upstream provider's
+scale and zero-point initializer NAMES for a marked activation. It waits until the
+provider is quantized, selects get_for_consumer(node_name), and rejects initializer
+sharing. The finite default op list does not imply all inputs of every op quantize:
+individual ORT handlers decide slots, exclusions, and sharing. Detailed handler
+eligibility beyond the Phase 1 ResNet graph remains OPEN for Phase 2 transcription.
+RESOLVED [Q] Bias: npu_cnn_quantizer.py:200-216 calls quantize_weight_tensor for
+default int8 bias. Therefore initial bias position uses its own MinMSE values,
+not ipos+wpos; qdq_quantizer.py:931-956 -> quant_utils.py:1089-1118.
+RESOLVED [Q] Rounding/storage: quant_utils.py:527-535 casts inputs to float32,
+divides by scale, numpy .round() (ties to even), adds zero point, and clips using
+symmetric=True. INT8 storage clips to [-127,127], NOT the full [-128,127] range
+(quant_utils.py:364-379,474-486). UINT8 clips to [0,255]. Weight/activation arithmetic
+differs from the EP's rounding setting; this audit makes no NPU rounding claim.
+RESOLVED [Q] MinMSE: quant_utils.py:1089-1118 searches base_pos-1 through base_pos+3,
+with strict '<' selecting the first minimum. float16 activation storage is converted
+back to float32 for this computation (calibrators.py:675-695; collectors.py:337-350).
+scale2pos clamps scale into [2^-127,2^127] before rint(-log2(scale)) (:814-833).
+RESOLVED [Q] Refine dispatch/directions, postprocess/refinement/refine.py:
+  shift_cut :164-203 applies ONLY Conv/Gemm; wpos = clamp(sc,0,16)+opos-ipos.
+  shift_bias :205-254 applies ONLY Conv/Gemm; bpos = wpos+ipos-clamp(sb,min_sb,15);
+    min_sb=min(0,shift_cut-16), except direct LeakyRelu successor forces 0.
+  shift_read :380-427 applies Add/Sub; lowers ONE argmax input to min(ipos)+7 per pass.
+  shift_write :430-543 applies Add/Mul; moves output to min(ipos)-clamp(sw,-7,25)
+    or sum(ipos)-clamp(sw,0,32), respectively.
+  HardSigmoid :330-377 clamps ipos to [0,15], then opos to [7,14+new_ipos].
+  Swish :256-324 moves opos = ipos0+ipos1-clamp(shift_swish,0,15); source matcher
+    recognizes a Mul input also consumed by a qualifying HardSigmoid.
+  Concat :545-583 assigns ALL available input and output positions their minimum.
+  Pool :585-610 aligns MaxPool/AveragePool/GlobalAveragePool to min(ipos,opos).
+  Pad :613-639 and Slice :641-666 likewise choose the minimum on both sides.
+  Resize is NOT covered by this manager's alignment rules (handler sharing is separate).
+  Rule order :686-724: concat,pool,pad,slice,read,write,cut,bias,hard_sigmoid,swish.
+CORRECTION: draft DESIGN.md confused QuantPosManager (XINT8 adjust_quantize_info)
+with QuantInfoManager (general align_quantize_info). Output-led concat alignment
+and unconditional input-led pool alignment described the latter, not this path.
+OPEN [U] Refine implementation hazards: Mul shift_write omits has_change=True
+(:537-539); set_scale's raw_data branch assigns to a temporary list (:49-57).
+Need focused Phase 1 comparison before deciding bug compatibility. No edited vendor
+code and no claim these branches affect the inspected models. Refine only changes
+scale metadata, not initializer integer values; Phase 1 must account for any
+post-rounding scale moves when matching weights from an original float graph.
+RESOLVED [Q][M] HardSigmoid beta: omitted by converter (:86-98); default beta=0.5
+in the installed ONNX opset-17 schema. quant_utils.py:622-632 accepts absence or
+approximately 0.5; fingerprint prints actual model attributes.
+RESOLVED [Q] CLE defaults: algorithm/interface.py:61-66: steps=1, balance=max,
+weight_threshold=0.5, append_bias=True, use_threshold=True, total_diff_threshold=2e-7.
+RESOLVED [Q] Large pool: optimizations/optimize.py:190-250 only splits a rank-4
+GlobalAveragePool with spatial area >512, once. Near-square integer factors must
+leave both resulting areas <=512, otherwise skip. Prepending AveragePool uses its
+kernel dimensions as strides, while the original GlobalAveragePool remains.
+RESOLVED [Q] Simulation defaults: npu_cnn_quantizer.py:293-324 explicitly enables
+LeakyRelu, Sigmoid, HardSigmoid, AvgPool, ReduceMean; disables Softmax,
+InstanceNormalization, Clip. The wrapper's own all-True defaults are not this path.
+  LeakyRelu alpha rounds to multiples of 1/256 (:70-84).
+  ReduceMean multiplies by a shape/axes-dependent nearest dyadic reciprocal
+    correction (:185-242); behavior is now sourced, no implementation yet.
+  Optional Softmax delegates to SimulateDPUSoftmax (:261-274). Its full expansion
+    remains OPEN (Phase 2 only if enabled/encountered); default XINT8 disables it.
+  Optional InstanceNorm becomes a custom-domain operator, preserving epsilon
+    (:276-295); optional Clip rounds/clamps initializer limits to [-128,127]
+    (:297-345). No acceptance claim for either disabled rewrite.
+RESOLVED [Q] Calibration reader: calibration/data_readers.py:544-579 returns the
+provided object without an isinstance test; calibrators.py:679 calls get_next().
+Quark imports ORT's CalibrationDataReader, not a distinct Quark base class.
+Reader methods needed by calibration/CLE/finetune should still be supplied by the
+comparison adapter; no Quark import is necessary in quant/.
+RESOLVED [Q] XINT8_ADAROUND preset: custom_config.py:20-30 has DataSize=1000,
+FixedSeed=1705472343, BatchSize=2, NumIterations=1000, LearningRate=0.1,
+OptimAlgorithm=adaround, OptimDevice=cpu, InferDevice=cpu, EarlyStop=True.
+RESOLVED [Q] AdaRound core schedule: train_model_param.py:24-48 gives reg=0.01,
+beta=(20,2), warm_start=0.2; train_model_loss.py:44-79 uses zero rounding penalty
+until warmup ends and cosine beta decay thereafter. base_qdq_quantizers.py:192-263
+uses gamma=-0.1,zeta=1.1 and floor+clamped stretched sigmoid; hard result alpha>=0.
+train_model.py:55-158 uses Adam on alpha, random batch permutations, quantized
+inputs at default drop_ratio=1, and immediate early stop when the rolling rounding
+loss fails to improve. Full layer caching/selection and selective-update handling
+remain OPEN for Phase 3; schedule alone does not establish AdaRound parity.
+OPEN [U] Consumer metadata: producer_name, metadata_props, and opset-import
+sensitivity cannot be established by reading producer source or vaip_config.json.
+Needs Phase 4 one-variable EP probes, including SAME-model CPU/NPU output checks.
+OPEN [U] Phase 1 exact re-emission: no fresh no-CLE Quark reference run yet, no
+graph_diff, no full-set CPU evaluation and no EP engagement/latency gates attempted.
+Existing resnet50_xint8_c64 is fingerprint evidence only, not a Phase 1 oracle.
+
+MODEL FINGERPRINTS (raw inspection; file SHA256 binds this evidence to synced artifacts)
+MODEL: models/resnet50_fp32.onnx SHA256=d999c960ea12f9481e6fb43aab28ea3e2741c712fc4c30997b07d9b725cb87e6
+{
+  "direct_conv_add_relu": 49,
+  "domains": {
+    "": 122
+  },
+  "hardsigmoid_attributes": {},
+  "inputs": {
+    "input": [
+      1,
+      3,
+      224,
+      224
+    ]
+  },
+  "ir_version": 8,
+  "metadata_keys": [],
+  "nodes": 122,
+  "op_counts": {
+    "Add": 16,
+    "Conv": 53,
+    "Flatten": 1,
+    "Gemm": 1,
+    "GlobalAveragePool": 1,
+    "MaxPool": 1,
+    "Relu": 49
+  },
+  "opsets": {
+    "": 17
+  },
+  "producer": [
+    "pytorch",
+    "2.8.0"
+  ],
+  "qdq": {},
+  "scalar_mul_factors": {}
+}
+MODEL: models/resnet50_xint8_c64.onnx SHA256=bd817280673fe25e67380a6adde1db82275d1aa284924a0e6b67ea97e4315722
+{
+  "direct_conv_add_relu": 49,
+  "domains": {
+    "": 380
+  },
+  "hardsigmoid_attributes": {},
+  "inputs": {
+    "input": [
+      1,
+      3,
+      224,
+      224
+    ]
+  },
+  "ir_version": 8,
+  "metadata_keys": [
+    "onnx.infer"
+  ],
+  "nodes": 380,
+  "op_counts": {
+    "Add": 16,
+    "Constant": 1,
+    "Conv": 53,
+    "DequantizeLinear": 182,
+    "Flatten": 1,
+    "Gemm": 1,
+    "GlobalAveragePool": 1,
+    "MaxPool": 1,
+    "Mul": 1,
+    "QuantizeLinear": 74,
+    "Relu": 49
+  },
+  "opsets": {
+    "": 17,
+    "ai.onnx.ml": 5,
+    "ai.onnx.preview": 1,
+    "ai.onnx.preview.training": 1,
+    "ai.onnx.training": 1,
+    "com.amd.quark": 1,
+    "com.microsoft": 1,
+    "com.microsoft.experimental": 1,
+    "com.microsoft.nchwc": 1,
+    "org.pytorch.aten": 1
+  },
+  "producer": [
+    "quark.onnx",
+    "0.11"
+  ],
+  "qdq": {
+    "activation": {
+      "dq_count": 74,
+      "dtypes": [
+        "uint8"
+      ],
+      "power_of_two_scales": 74,
+      "q_precedes": 74,
+      "scale_max": 0.5,
+      "scale_min": 0.03125,
+      "scale_shapes": [
+        []
+      ],
+      "zero_points": [
+        128
+      ],
+      "zp_shapes": [
+        []
+      ]
+    },
+    "bias": {
+      "dq_count": 54,
+      "dtypes": [
+        "int8"
+      ],
+      "power_of_two_scales": 54,
+      "q_precedes": 0,
+      "scale_max": 0.25,
+      "scale_min": 0.015625,
+      "scale_shapes": [
+        []
+      ],
+      "value_max": 127,
+      "value_min": -127,
+      "zero_points": [
+        0
+      ],
+      "zp_shapes": [
+        []
+      ]
+    },
+    "weight": {
+      "dq_count": 54,
+      "dtypes": [
+        "int8"
+      ],
+      "power_of_two_scales": 54,
+      "q_precedes": 0,
+      "scale_max": 0.03125,
+      "scale_min": 0.001953125,
+      "scale_shapes": [
+        []
+      ],
+      "value_max": 127,
+      "value_min": -127,
+      "zero_points": [
+        0
+      ],
+      "zp_shapes": [
+        []
+      ]
+    }
+  },
+  "scalar_mul_factors": {}
+}
+MODEL: models/yolov8n_cut_xint8.onnx SHA256=f02e86ba1bf61ff3fdc159e29b15259567e279df06f68c6d9adeb966fe56c885
+{
+  "direct_conv_add_relu": 0,
+  "domains": {
+    "": 957
+  },
+  "hardsigmoid_attributes": {
+    "{\"alpha\": 0.1666666716337204}": 57
+  },
+  "inputs": {
+    "images": [
+      1,
+      3,
+      640,
+      640
+    ]
+  },
+  "ir_version": 8,
+  "metadata_keys": [
+    "onnx.infer"
+  ],
+  "nodes": 957,
+  "op_counts": {
+    "Add": 6,
+    "Concat": 13,
+    "Constant": 121,
+    "Conv": 63,
+    "DequantizeLinear": 344,
+    "HardSigmoid": 57,
+    "MaxPool": 3,
+    "Mul": 114,
+    "QuantizeLinear": 218,
+    "Resize": 2,
+    "Slice": 16
+  },
+  "opsets": {
+    "": 17,
+    "ai.onnx.ml": 5,
+    "ai.onnx.preview": 1,
+    "ai.onnx.preview.training": 1,
+    "ai.onnx.training": 1,
+    "com.amd.quark": 1,
+    "com.microsoft": 1,
+    "com.microsoft.experimental": 1,
+    "com.microsoft.nchwc": 1,
+    "org.pytorch.aten": 1
+  },
+  "producer": [
+    "quark.onnx",
+    "0.11"
+  ],
+  "qdq": {
+    "activation": {
+      "dq_count": 218,
+      "dtypes": [
+        "uint8"
+      ],
+      "power_of_two_scales": 218,
+      "q_precedes": 218,
+      "scale_max": 1.0,
+      "scale_min": 0.0078125,
+      "scale_shapes": [
+        []
+      ],
+      "zero_points": [
+        128
+      ],
+      "zp_shapes": [
+        []
+      ]
+    },
+    "bias": {
+      "dq_count": 63,
+      "dtypes": [
+        "int8"
+      ],
+      "power_of_two_scales": 63,
+      "q_precedes": 0,
+      "scale_max": 0.25,
+      "scale_min": 0.015625,
+      "scale_shapes": [
+        []
+      ],
+      "value_max": 127,
+      "value_min": -127,
+      "zero_points": [
+        0
+      ],
+      "zp_shapes": [
+        []
+      ]
+    },
+    "weight": {
+      "dq_count": 63,
+      "dtypes": [
+        "int8"
+      ],
+      "power_of_two_scales": 63,
+      "q_precedes": 0,
+      "scale_max": 0.25,
+      "scale_min": 0.001953125,
+      "scale_shapes": [
+        []
+      ],
+      "value_max": 127,
+      "value_min": -127,
+      "zero_points": [
+        0
+      ],
+      "zp_shapes": [
+        []
+      ]
+    }
+  },
+  "scalar_mul_factors": {}
+}
+MODEL: models/resnet50_a8w8.onnx SHA256=2194ea10e85bdd189c77f37fa2ee1589a8e075ca01eeb62f4ea22c79c98da490
+{
+  "direct_conv_add_relu": 49,
+  "domains": {
+    "": 122,
+    "com.microsoft": 256
+  },
+  "hardsigmoid_attributes": {},
+  "inputs": {
+    "input": [
+      1,
+      3,
+      224,
+      224
+    ]
+  },
+  "ir_version": 8,
+  "metadata_keys": [
+    "onnx.infer"
+  ],
+  "nodes": 378,
+  "op_counts": {
+    "Add": 16,
+    "Conv": 53,
+    "DequantizeLinear": 182,
+    "Flatten": 1,
+    "Gemm": 1,
+    "GlobalAveragePool": 1,
+    "MaxPool": 1,
+    "QuantizeLinear": 74,
+    "Relu": 49
+  },
+  "opsets": {
+    "": 17,
+    "ai.onnx.ml": 5,
+    "ai.onnx.preview.training": 1,
+    "ai.onnx.training": 1,
+    "com.amd.quark": 1,
+    "com.microsoft": 1,
+    "com.microsoft.dml": 1,
+    "com.microsoft.experimental": 1,
+    "com.microsoft.nchwc": 1,
+    "org.pytorch.aten": 1
+  },
+  "producer": [
+    "quark.onnx",
+    "0.11"
+  ],
+  "qdq": {
+    "activation": {
+      "dq_count": 74,
+      "dtypes": [
+        "int8"
+      ],
+      "power_of_two_scales": 0,
+      "q_precedes": 74,
+      "scale_max": 0.6463682651519775,
+      "scale_min": 0.020787402987480164,
+      "scale_shapes": [
+        []
+      ],
+      "zero_points": [
+        0
+      ],
+      "zp_shapes": [
+        []
+      ]
+    },
+    "bias": {
+      "dq_count": 54,
+      "dtypes": [
+        "int32"
+      ],
+      "power_of_two_scales": 0,
+      "q_precedes": 0,
+      "scale_max": 0.013813382014632225,
+      "scale_min": 0.00043443808681331575,
+      "scale_shapes": [
+        [
+          1
+        ]
+      ],
+      "value_max": 72060,
+      "value_min": -8626,
+      "zero_points": [
+        0
+      ],
+      "zp_shapes": [
+        []
+      ]
+    },
+    "weight": {
+      "dq_count": 54,
+      "dtypes": [
+        "int8"
+      ],
+      "power_of_two_scales": 0,
+      "q_precedes": 0,
+      "scale_max": 0.07060110569000244,
+      "scale_min": 0.00272712716832757,
+      "scale_shapes": [
+        []
+      ],
+      "value_max": 127,
+      "value_min": -127,
+      "zero_points": [
+        0
+      ],
+      "zp_shapes": [
+        []
+      ]
+    }
+  },
+  "scalar_mul_factors": {}
+}
+MISSING: models/yolov8n_cut_fp32.onnx
+REGISTRY KEYS (AST only, no vendor code executed)
+{
+  "CommonOpsRegistry": [
+    "Gather",
+    "Transpose",
+    "EmbedLayerNormalization"
+  ],
+  "IntegerOpsRegistry": [
+    "Conv",
+    "MatMul",
+    "Attention",
+    "LSTM"
+  ],
+  "QLinearOpsRegistry": [
+    "ArgMax",
+    "Conv",
+    "Gemm",
+    "MatMul",
+    "Add",
+    "Mul",
+    "Relu",
+    "Clip",
+    "LeakyRelu",
+    "Sigmoid",
+    "MaxPool",
+    "GlobalAveragePool",
+    "Split",
+    "Pad",
+    "Reshape",
+    "Squeeze",
+    "Unsqueeze",
+    "Resize",
+    "AveragePool",
+    "Concat",
+    "Softmax",
+    "Where",
+    "Gather",
+    "Transpose",
+    "EmbedLayerNormalization"
+  ],
+  "QDQRegistry": [
+    "Conv",
+    "ConvTranspose",
+    "Gemm",
+    "Clip",
+    "Relu",
+    "Reshape",
+    "Transpose",
+    "Squeeze",
+    "Unsqueeze",
+    "Resize",
+    "MaxPool",
+    "AveragePool",
+    "MatMul",
+    "Split",
+    "Gather",
+    "Where",
+    "Tanh",
+    "Gelu",
+    "InstanceNormalization",
+    "LayerNormalization"
+  ],
+  "NPUCnnRegistry": [
+    "HardSigmoid",
+    "LayerNormalization",
+    "Div",
+    "Erf",
+    "Tanh",
+    "Sub",
+    "Min",
+    "Max",
+    "ReduceMean",
+    "DepthToSpace",
+    "SpaceToDepth",
+    "Slice",
+    "PRelu",
+    "LpNormalization",
+    "AveragePool"
+  ],
+  "NPUTransformerRegistry": [
+    "Gemm",
+    "MatMul"
+  ],
+  "default_XINT8_op_types": [
+    "Add",
+    "ArgMax",
+    "AveragePool",
+    "Clip",
+    "Concat",
+    "Conv",
+    "ConvTranspose",
+    "DepthToSpace",
+    "Div",
+    "EmbedLayerNormalization",
+    "Erf",
+    "Gather",
+    "Gelu",
+    "Gemm",
+    "GlobalAveragePool",
+    "HardSigmoid",
+    "InstanceNormalization",
+    "LayerNormalization",
+    "LeakyRelu",
+    "LpNormalization",
+    "MatMul",
+    "Max",
+    "MaxPool",
+    "Min",
+    "Mul",
+    "PRelu",
+    "Pad",
+    "ReduceMean",
+    "Relu",
+    "Reshape",
+    "Resize",
+    "Sigmoid",
+    "Slice",
+    "Softmax",
+    "SpaceToDepth",
+    "Split",
+    "Squeeze",
+    "Sub",
+    "Tanh",
+    "Transpose",
+    "Unsqueeze",
+    "Where"
+  ]
+}
+ONNX opset-17 HardSigmoid beta default (installed schema)
+0.5
+SOURCE EXCERPTS (verbatim; AMD source files carry SPDX-License-Identifier: MIT)
+FILE: quantizers/registry.py SHA256=788aa42d4f9e4e0ac8425789587ce11af2fd2a531daaac59d6a15ce5c46b83b5
+35: from quark.onnx.operators.quant_ops.prelu import QDQPRelu
+36: 
+37: CommonOpsRegistry = {
+38:     "Gather": GatherQuant,
+39:     "Transpose": Direct8BitOp,
+40:     "EmbedLayerNormalization": EmbedLayerNormalizationQuant,
+41: }
+42: 
+43: IntegerOpsRegistry = {
+44:     "Conv": ConvInteger,
+45:     "MatMul": MatMulInteger,
+46:     "Attention": AttentionQuant,
+47:     "LSTM": LSTMQuant,
+48: }
+49: IntegerOpsRegistry.update(CommonOpsRegistry)
+50: 
+51: QLinearOpsRegistry = {
+52:     "ArgMax": QArgMax,
+53:     "Conv": QLinearConv,
+54:     "Gemm": QLinearGemm,
+55:     "MatMul": QLinearMatMul,
+56:     "Add": QLinearBinaryOp,
+57:     "Mul": QLinearBinaryOp,
+58:     "Relu": QLinearActivation,
+59:     "Clip": QLinearActivation,
+60:     "LeakyRelu": QLinearActivation,
+61:     "Sigmoid": QLinearActivation,
+62:     "MaxPool": QMaxPool,
+63:     "GlobalAveragePool": QGlobalAveragePool,
+64:     "Split": QSplit,
+65:     "Pad": QPad,
+66:     "Reshape": Direct8BitOp,
+67:     "Squeeze": Direct8BitOp,
+68:     "Unsqueeze": Direct8BitOp,
+69:     "Resize": QResize,
+70:     "AveragePool": QLinearPool,
+71:     "Concat": QLinearConcat,
+72:     "Softmax": QLinearSoftmax,
+73:     "Where": QLinearWhere,
+74: }
+75: QLinearOpsRegistry.update(CommonOpsRegistry)
+76: 
+77: QDQRegistry = {
+78:     "Conv": QDQConv,
+79:     "ConvTranspose": QDQConv,
+80:     "Gemm": QDQGemm,
+81:     "Clip": QDQRemovableActivation,
+82:     "Relu": QDQRemovableActivation,
+83:     "Reshape": QDQDirect8BitOp,
+84:     "Transpose": QDQDirect8BitOp,
+85:     "Squeeze": QDQDirect8BitOp,
+86:     "Unsqueeze": QDQDirect8BitOp,
+87:     "Resize": QDQResize,
+88:     "MaxPool": QDQMaxPool,
+89:     "AveragePool": QDQDirect8BitOp,
+90:     "MatMul": QDQMatMul,
+91:     "Split": QDQSplit,
+92:     "Gather": QDQGather,
+93:     "Where": QDQWhere,
+94:     "Tanh": QDQOperatorBase,
+95:     "Gelu": QDQOperatorBase,
+96: }
+97: 
+98: QDQRegistry["InstanceNormalization"] = QDQNormalization
+99: QDQRegistry["LayerNormalization"] = QDQLayerNorm
+100: 
+101: NPUCnnRegistry = {
+102:     "HardSigmoid": QDQHardSigmoid,
+103:     "LayerNormalization": QDQLayerNorm,
+104:     "Div": QDQOperatorBase,
+105:     "Erf": QDQOperatorBase,
+106:     "Tanh": QDQOperatorBase,
+107:     "Sub": QDQOperatorBase,
+108:     "Min": QDQOperatorBase,
+109:     "Max": QDQOperatorBase,
+110:     "ReduceMean": QDQOperatorBase,
+111:     "DepthToSpace": QDQOperatorBase,
+112:     "SpaceToDepth": QDQOperatorBase,
+113:     "Slice": QDQOperatorBase,
+114:     "PRelu": QDQPRelu,
+115:     "LpNormalization": QDQOperatorBase,
+116:     "AveragePool": QDQOperatorBase,
+145: def CreateNPUCnnQDQQuantizer(onnx_quantizer: Any, node: NodeProto) -> QDQOperatorBase | Any:
+146:     if node.op_type in NPUCnnRegistry:
+147:         return NPUCnnRegistry[node.op_type](onnx_quantizer, node)
+148: 
+149:     elif node.op_type in QDQRegistry:
+150:         return QDQRegistry[node.op_type](onnx_quantizer, node)
+151:     return QDQOperatorBase(onnx_quantizer, node)
+FILE: quantizers/interface.py SHA256=a651cf684b9b03c28020433f4bbfc4fd3f5734f927997e68e1e7979ce0ed9700
+202:     for node in float_model.graph.node:
+203:         if node.op_type not in op_types_all:
+204:             op_types_all.append(node.op_type)
+205: 
+206:     if not op_types_to_quantize or len(op_types_to_quantize) == 0:
+207:         if enable_npu_transformer:
+208:             op_types_to_quantize = list(NPUTransformerRegistry.keys())
+209:         else:
+210:             q_linear_ops = list(QLinearOpsRegistry.keys())
+211:             qdq_ops = list(QDQRegistry.keys())
+212:             if enable_npu_cnn or quant_format is ExtendedQuantFormat.QDQ:
+213:                 dpu_ops = list(NPUCnnRegistry.keys())
+214:                 qdq_ops = list(set(dpu_ops + qdq_ops))
+215:             op_types_to_quantize = list(set(q_linear_ops + qdq_ops))
+216: 
+217:     if extra_options.get("QuantizeAllOpTypes", False):
+218:         extra_op_types_to_quantize.extend(op_types_all)
+219: 
+220:     op_types_absent = [op_type for op_type in extra_op_types_to_quantize if op_type not in op_types_all]
+221:     if op_types_absent:
+222:         logger.warning(f"The model does not contain the following op types: {', '.join(op_types_absent)}")
+223: 
+224:     op_types_to_quantize += extra_op_types_to_quantize
+225:     op_types_to_quantize = list(set(op_types_to_quantize))  # To eliminate duplicates
+226: 
+227:     return op_types_to_quantize
+FILE: quantizers/npu_cnn_quantizer.py SHA256=d3c034d285e092f85cbe544505a1c625479a0cb754894fd25959c93e11705aaa
+100: 
+101:         # If using enable_npu_cnn, QDQ should always set WeightSymmetric as True.
+102:         if "WeightSymmetric" in self.extra_options and not self.extra_options["WeightSymmetric"]:
+103:             raise ValueError("When enable_npu_cnn=True, WeightSymmetric must be set to true.")
+104:         self.is_weight_symmetric = True
+105: 
+106:         # If using enable_npu_cnn, QDQ should always always set ActivationSymmetric as True.
+107:         if "ActivationSymmetric" in self.extra_options and not self.extra_options["ActivationSymmetric"]:
+108:             raise ValueError("When enable_npu_cnn=True, ActivationSymmetric must be set to true.")
+109:         self.is_activation_symmetric = True
+110:         self.int32_bias = (
+111:             False if extra_options is None or "Int32Bias" not in extra_options else extra_options["Int32Bias"]
+112:         )
+113:         self.int16_bias = (
+119:     def quantize_model(self) -> Any:
+120:         annotate_tensors = get_annotate_tensors(self.model.model)
+121: 
+122:         for node in self.model.nodes():
+123:             if self.should_quantize_node(node):
+124:                 op_quantizer = CreateNPUCnnQDQQuantizer(self, node)
+125:                 op_quantizer.quantize()
+126: 
+127:                 if self.dedicated_qdq_pair:
+128:                     for tensor_name in node.input:
+129:                         if tensor_name not in self.tensor_to_its_receiving_nodes:
+130:                             self.tensor_to_its_receiving_nodes[tensor_name] = []
+131:                         self.tensor_to_its_receiving_nodes[tensor_name].append(node)
+132: 
+133:         self._quantize_normal_tensors()
+134:         self._quantize_sharing_param_tensors()
+135:         if self.quantize_bias and self.int32_bias and not self.weights_only:
+136:             self._quantize_bias_tensors()
+137:         self.remove_nodes()
+138:         dq_nodes_to_remove, q_nodes_to_remove, input_node_mapping = get_qdq_to_remove(
+139:             self.model.model, annotate_tensors
+140:         )
+141:         pruned_model = copy.deepcopy(self.model)
+142:         modified_annotate_input(pruned_model.model, input_node_mapping)
+143:         pruned_model.model = remove_nodes(pruned_model.model, dq_nodes_to_remove)
+144:         pruned_model.model = remove_nodes(pruned_model.model, q_nodes_to_remove)
+145:         try:
+146:             pruned_model.topological_sort()
+147:             logger.info("Remove QuantizeLinear & DequantizeLinear on certain operations(such as conv-relu).")
+148:             self.model.model = pruned_model.model
+149:         except Exception as e:
+150:             logger.warning(
+151:                 f"Unable to remove QuantizeLinear & DequantizeLinear on certain operations(such as conv-relu). Exception: {e}"
+152:             )
+153:         if "SimulateDPU" not in self.extra_options or self.extra_options["SimulateDPU"] is True:
+154:             self._simulate_transforms()
+155: 
+156:         if "NPULimitationCheck" not in self.extra_options or self.extra_options["NPULimitationCheck"] is True:
+157:             self._quantize_refine()
+158:         if not self.add_qdq_pair_to_weight:
+159:             self.model.clean_initializers()
+160: 
+161:         self.model.model.producer_name = __producer__
+162:         self.model.model.producer_version = __version__
+163: 
+164:         return self.model.model
+165: 
+200:     def quantize_bias_tensor(
+201:         self, node_name: str, bias_name: str, input_name: str, weight_name: str, beta: float = 1.0
+202:     ) -> None:
+203:         weight = find_by_name(bias_name, self.model.initializer())
+204:         if weight is not None:
+205:             if weight.data_type in (onnx_proto.TensorProto.FLOAT, onnx_proto.TensorProto.FLOAT16):
+206:                 if self.quantize_bias:
+207:                     if bias_name not in self.bias_to_quantize:
+208:                         if self.int32_bias:
+209:                             self.bias_to_quantize[bias_name] = QDQBiasQuantInfo(
+210:                                 node_name, input_name, weight_name, beta
+211:                             )
+212:                         else:
+213:                             self.quantize_weight_tensor(bias_name)
+214:         else:
+215:             logger.warning(f"Expected {bias_name} to be a weight")
+216: 
+293: 
+294:         self.model.model, self.nodes_to_exclude = simulate_transforms(
+295:             self.model.model,
+296:             self.should_quantize_node,
+297:             self.nodes_to_quantize,
+298:             self.nodes_to_exclude,
+299:             convert_leaky_relu_to_dpu_version=convert_leaky_relu_to_dpu_version,
+300:             convert_sigmoid_to_hard_sigmoid=convert_sigmoid_to_hard_sigmoid,
+301:             convert_hard_sigmoid_to_dpu_version=convert_hard_sigmoid_to_dpu_version,
+302:             convert_avg_pool_to_dpu_version=convert_avg_pool_to_dpu_version,
+303:             convert_reduce_mean_to_dpu_version=convert_reduce_mean_to_dpu_version,
+304:             convert_softmax_to_dpu_version=convert_softmax_to_dpu_version,
+305:             convert_instance_norm_to_dpu_version=convert_instance_norm_to_dpu_version,
+306:             convert_clip_to_dpu_version=convert_clip_to_dpu_version,
+307:         )
+FILE: quantizers/extended_quantizer.py SHA256=f8336bb84dbe3881c9f2b8ea0470828d4e033dab009747142c9a79c87cf46dd4
+478:     def _quantize_sharing_param_tensors(self) -> None:
+479:         """
+480:         Adds Q/DQ ops to tensors that have been marked for quantization by op quantizers.
+481:         Only operates on tensors that want to use the quantization parameter initializers from an upstream tensor.
+482:         For example, a Transpose node's output tensor will typically want to use the same quantization parameter
+483:         initializers as the Transpose node's input.
+484:         """
+485:         while self.tensors_to_quantize:
+486:             for tensor_name, tensor_info in self.tensors_to_quantize.copy().items():
+487:                 quant_provider = tensor_info.quant_para_provider
+488:                 if quant_provider and quant_provider.input_name in self.quantized_value_map:
+489:                     del self.tensors_to_quantize[tensor_name]
+490: 
+491:                     quantized_value = self.quantized_value_map[quant_provider.input_name].get_for_consumer(
+492:                         quant_provider.node_name
+493:                     )
+494:                     if self.is_input_a_initializer(tensor_name):
+495:                         raise ValueError("Quantization parameter shared mode is not supported for weight yet")
+496: 
+497:                     # Need to check if this tensor's quant_type is converted for some consumers.
+498:                     # If so, create new scale/zp initializers for these consumers.
+499:                     converted_qparam_inits = None
+500: 
+501:                     if converted_qparam_inits is None:
+502:                         # Normal case: <producer> --> Q_shared --> DQ_shared --> <consumers>
+503:                         self._add_fn_pair_for_activation(
+504:                             tensor_name, quantized_value.scale_name, quantized_value.zp_name
+505:                         )
+506:                     else:
+507:                         # Conversion case: <producer> ---> Q_shared -+-> DQ_shared --> <consumers of original type>
+508:                         #                                            |
+509:                         #                                            +-> DQ_shared' --> Q2 --> DQ2 --> <consumers of converted type>
+FILE: quantizers/qdq_quantizer.py SHA256=aff5429cc84e6dc65ad0fd10d1d016966171929c96179c4adeb9e765cb961260
+931:             zero_point = np.array(quant_overrides["zero_point"], dtype=ONNX_TYPE_TO_NP_TYPE[qType])
+932:             scale = np.array(quant_overrides["scale"])
+933:             q_weight_data = quantize_nparray(qType, weight_data.flatten(), scale, zero_point)
+934:             assert isinstance(zero_point, np.ndarray), f"Unexpected type {type(zero_point)}"
+935:             assert isinstance(scale, np.ndarray), f"Unexpected type {type(scale)}"
+936: 
+937:         else:
+938:             _, _, zero_point, scale, q_weight_data = quantize_data(
+939:                 data=weight_data.flatten(),
+940:                 qType=qType,
+941:                 symmetric=self.is_weight_symmetric,
+942:                 weight_method=self.weight_method,
+943:                 minmse_mode=self.minmse_mode,
+944:                 reduce_range=self.reduce_range and reduce_range,
+945:                 method=self.calibrate_method,
+946:                 use_pof2s=self.use_power_of_2_scale,
+947:                 use_scaling=self.is_weight_scaled,
+948:             )
+949: 
+950:             assert isinstance(zero_point, np.ndarray), f"Unexpected type {type(zero_point)}"
+951:             assert isinstance(scale, np.ndarray), f"Unexpected type {type(scale)}"
+952: 
+953:         scale_dtype = weight.data_type
+954:         scale_initializer = onnx.helper.make_tensor(scale_name, scale_dtype, [], scale.reshape((-1,)).tolist())
+955:         if qType in ONNX_BFP_QTYPES_LIST:
+956:             # BFP data types do not need zero point, but we need to consider the case of reusing zero point of
+FILE: quantization/quant_utils.py SHA256=3485d964d11237d211c1082176873420d9a1c3ff08bada1de095368c46588e05
+99: FN_OP_TYPES = [COP_BFP_OP_NAME, COP_MX_OP_NAME]
+100: 
+101: HARD_SIGMOID_SCALE = (2731.0 / 16384.0) / (1.0 / 6.0)
+102: annotate_op_type = ["Conv", "Add", "MaxPool", "AveragePool", "GlobalAveragePool", "MatMul", "Gemm", "ConvTranspose"]
+103: avg_pool_op_type = ["AveragePool", "GlobalAveragePool"]
+104: remove_qdq_op_type: list[str] = []
+105: 
+106: BFP_OP_DEFAULT_ATTRS = {
+364: dtype_ranges = {
+365:     "UINT8": (0, 255),
+366:     "INT8": (-128, 127),
+367:     "UINT16": (0, 65535),
+368:     "INT16": (-32768, 32767),
+369:     "UINT4": (0, 15),
+370:     "INT4": (-8, 7),
+371:     "UINT32": (0, 2**32 - 1),
+372:     "INT32": (-(2**31), 2**31 - 1),
+373: }
+374: 
+375: symmetric_ranges = {
+376:     "INT8": (-127, 127),
+377:     "INT16": (-32767, 32767),
+378:     "INT32": (-(2**31 - 1), 2**31 - 1),
+379: }
+474: 
+475:     if reduce_range:
+476:         qrange = ONNX_INT_TYPE_REDUCED_RANGE.get(qType)
+477:     elif symmetric and qType in ONNX_INT_TYPE_SYMMETRIC_RANGE:
+478:         qrange = ONNX_INT_TYPE_SYMMETRIC_RANGE[qType]
+479:     else:
+480:         qrange = ONNX_INT_TYPE_RANGE.get(qType)
+481: 
+482:     if not qrange:
+483:         raise ValueError(
+484:             f"Unexpected data type {qType} requested. Only INT4, UINT4, INT8, UINT8, INT16, and UINT16 are supported."
+485:         )
+486: 
+527:     else:
+528:         dtype = ONNX_TYPE_TO_NP_TYPE[qType]
+529:         (qmin, qmax) = get_qmin_qmax_for_qType(qType, reduce_range=False, symmetric=True)
+530: 
+531:         cliplow = max(qmin, low) if low is not None else qmin
+532:         cliphigh = min(qmax, high) if high is not None else qmax
+533:         arr_fp32 = np.asarray((arr.astype(np.float32) / scale).round() + zero_point)
+534:         np.clip(arr_fp32, cliplow, cliphigh, out=arr_fp32)
+535:         return _check_type(arr_fp32.astype(dtype))
+622: def check_hard_sigmoid_condition(node: onnx.NodeProto) -> bool:
+623:     """
+624:     :param node: node object
+625:     :return: hard sigmoid or not
+626:     """
+627:     has_beta_attr = any(attr.name == "beta" for attr in node.attribute)
+628:     has_beta_0_5_attr = any(attr.name == "beta" and is_approximately_equal(attr.f, 0.5) for attr in node.attribute)
+629:     has_alpha_attr = any(attr.name == "alpha" and is_approximately_equal(attr.f, 1.0 / 6.0) for attr in node.attribute)
+630:     if (not has_beta_attr or has_beta_0_5_attr) and has_alpha_attr:
+631:         return True
+632:     return False
+685:     :return: the node needs annotated or not
+686:     """
+687:     if node.op_type == "Clip" and node.op_type in remove_qdq_op_type:
+688:         if is_clip_with_min_max(model, node, 0, 6) or is_clip_with_min_max(model, node, 0, 1):
+689:             return True
+690:     elif node.op_type in remove_qdq_op_type:
+691:         return True
+692:     return False
+693: 
+694: 
+695: def get_tensor_to_consumer(model: onnx.ModelProto) -> dict[str, list[onnx.NodeProto]]:
+696:     onnx_model = ONNXModel(model)
+697:     tensor_to_consumer = {}
+698:     for node in onnx_model.model.graph.node:
+712: def get_annotate_tensors(model: onnx.ModelProto) -> list[str]:
+713:     """
+714:     Find patterns in the model where qdq needs to be removed, and then return the corresponding tensor names
+715:     annotate_tensors refers to the tensors associated with the input of the qdq that need to be removed
+716:     :param model: model object
+717:     :return: the annotate tensors
+718:     """
+719:     matching_output_tensor = []
+720:     pad_output_tensor = []
+721:     tensor_to_consumer = get_tensor_to_consumer(model)
+722:     for node in model.graph.node:
+723:         if node.op_type in annotate_op_type and node.output[0] in tensor_to_consumer:
+724:             if len(tensor_to_consumer[node.output[0]]) == 1:
+725:                 matching_output_tensor.append(node.output[0])
+726:         elif node.op_type == "Pad" and node.output[0] in tensor_to_consumer:
+727:             if len(tensor_to_consumer[node.output[0]]) == 1:
+728:                 pad_output_tensor.append(node.output[0])
+729: 
+730:     annotate_tensors = []
+731:     for node in model.graph.node:
+732:         if (is_node_needs_annotated(model, node) and node.input[0] in matching_output_tensor) or (
+733:             node.op_type in avg_pool_op_type and node.input[0] in pad_output_tensor
+734:         ):
+735:             annotate_tensors.append(node.input[0])
+736:     return annotate_tensors
+814: def scale2pos(scale: float) -> int:
+815:     """
+816:     Obtain the fixed-point position corresponding to the scale.
+817:     To avoid generating infinity during computations,
+818:     the range of scale is limited.
+819:     :param scale: the scale
+820:     :return: the fixed-point position
+821:     """
+822:     scale = min(max(scale, float(2**-127)), float(2**127))
+823:     return int(np.rint(-np.log2(scale)))
+824: 
+825: 
+826: def pos2scale(pos: int) -> float:
+827:     """
+828:     Obtain the scale corresponding to the fixed-point position.
+829:     :param scale: the fixed-point position
+830:     :return: the scale
+831:     """
+832:     return float(np.power(2.0, -pos))
+833: 
+1089:     qmin, qmax = get_qmin_qmax_for_qType(qType, reduce_range, symmetric=symmetric)
+1090:     zero_point, scale = compute_scale_zp(
+1091:         rmin, rmax, qmin, qmax, qType, method, symmetric=symmetric, use_pof2s=use_pof2s
+1092:     )
+1093: 
+1094:     quantized_data = quantize_nparray(qType, np.asarray(data), scale, zero_point)
+1095: 
+1096:     if method == PowerOfTwoMethod.NonOverflow:
+1097:         return _check_type(rmin, rmax, zero_point, scale, quantized_data, zero_point_index=2)
+1098:     elif method == PowerOfTwoMethod.MinMSE:
+1099:         scale_mse = scale
+1100:         zp_mse = zero_point
+1101:         quantized_data_mse = quantized_data
+1102:         diff_min = float("inf")
+1103:         for i in range(pos_range):
+1104:             new_scale = pos2scale(scale2pos(scale) + i - 1)
+1105:             new_scale = np.array(new_scale, dtype=data.dtype)
+1106:             rmin = (qmin.astype(np.float32) - zero_point.astype(np.float32)) * new_scale
+1107: 
+1108:             new_quantized_data = quantize_nparray(qType, np.asarray(data), new_scale, zp_mse)
+1109:             diff = np.sum((dequantize_data(new_quantized_data, new_scale, zp_mse) - np.asarray(data)) ** 2)
+1110:             if diff < diff_min:
+1111:                 diff_min = diff
+1112:                 scale_mse = new_scale
+1113:                 quantized_data_mse = new_quantized_data
+1114: 
+1115:         rmin_mse = (qmin.astype(np.float32) - zp_mse.astype(np.float32)) * scale_mse
+1116:         rmax_mse = (qmax.astype(np.float32) - zp_mse.astype(np.float32)) * scale_mse
+1117:         return _check_type(rmin_mse, rmax_mse, zp_mse, scale_mse, quantized_data_mse, zero_point_index=2)
+1118: 
+FILE: quantization/config/custom_config.py SHA256=f500adff1259df303e9e09731dc3b3463fbd108d3e4793a70fddc75366e95034
+20: DEFAULT_ADAROUND_PARAMS = {
+21:     "DataSize": 1000,
+22:     "FixedSeed": 1705472343,
+23:     "BatchSize": 2,
+24:     "NumIterations": 1000,
+25:     "LearningRate": 0.1,
+26:     "OptimAlgorithm": "adaround",
+27:     "OptimDevice": "cpu",
+28:     "InferDevice": "cpu",
+29:     "EarlyStop": True,
+30: }
+164: XINT8_ADAROUND_CONFIG = QuantizationConfig(
+165:     calibrate_method=PowerOfTwoMethod.MinMSE,
+166:     activation_type=QuantType.QUInt8,
+167:     weight_type=QuantType.QInt8,
+168:     enable_npu_cnn=True,
+169:     include_fast_ft=True,
+170:     extra_options={"ActivationSymmetric": True, "FastFinetune": DEFAULT_ADAROUND_PARAMS},
+171: )
+172: 
+FILE: quantization/quantize.py SHA256=5d0d298be2a5491e28604045b47a129b552d183adc9f4d3da9ba27061bd9b8ae
+327:             and not extra_options.get("BF16QDQToCast", False)
+328:             and not extra_options.get("EnableVaimlBF16", False)
+329:         )
+330:     ):
+331:         if "ConvertSplitToSlice" not in extra_options:
+332:             extra_options["ConvertSplitToSlice"] = True
+333:         if "ConvertBNToConv" not in extra_options:
+334:             extra_options["ConvertBNToConv"] = True
+335:         if "ConvertReduceMeanToGlobalAvgPool" not in extra_options:
+336:             extra_options["ConvertReduceMeanToGlobalAvgPool"] = True
+337:         if "SplitLargeKernelPool" not in extra_options:
+338:             extra_options["SplitLargeKernelPool"] = True
+339: 
+340:     data_reader = get_data_reader(float_model, calibration_data_reader, calibration_data_path, extra_options)
+FILE: calibration/data_readers.py SHA256=1463ead2a00e1c90f94a67c85b2127473b9a4445dc593d9588d58dfd893ee0d9
+544: def get_data_reader(
+545:     model_input: str | Path | onnx.ModelProto,
+546:     calibration_data_reader: CalibrationDataReader | None = None,
+547:     calibration_data_path: str | None = None,
+548:     extra_options: dict[str, Any] = {},
+549: ) -> CalibrationDataReader:
+550:     """This function is used to determine data reader based on user inputs."""
+551: 
+552:     data_reader = calibration_data_reader
+553: 
+554:     if calibration_data_reader is not None and calibration_data_path is not None:
+555:         logger.warning(
+556:             "Both calibration_data_reader and calibration_data_path are provided, will use the former for calibration."
+557:         )
+558: 
+559:     elif calibration_data_reader is None and calibration_data_path is not None:
+560:         logger.info(f"Since calibration_data_reader is None, will use {calibration_data_path} to create data reader.")
+561:         data_reader = PathDataReader(model_input, calibration_data_path)
+562: 
+563:     elif calibration_data_reader is None and calibration_data_path is None:
+564:         if not extra_options.get("UseRandomData", False):
+565:             raise ValueError(
+566:                 "A calibration data reader is required for quantization, but none was provided. "
+567:                 "Please provide a calibration data reader or path, or alternatively enable random data reader "
+568:                 "for calibration by setting config.global_quant_config.extra_options['UseRandomData'] to True."
+569:             )
+570:         else:
+571:             logger.info("No calibration data reader or path provided, will use random data reader.")
+572:             data_reader = RandomDataReader(
+573:                 model_input,
+574:                 input_shape=extra_options.get("RandomDataReaderInputShape", {}),
+575:                 input_data_range=extra_options.get("RandomDataReaderInputDataRange"),
+576:             )
+577: 
+578:     assert data_reader is not None, "No data reader provided!"
+579: 
+FILE: calibration/calibrators.py SHA256=5fcc41fa2e5eb0f0698bbeac7b923c26373dc22916bf84ae04b6a35f8ff9f62a
+675:         cache_capacity = 0
+676: 
+677:         pbar = tqdm(range(data_size))
+678:         for _ in pbar:
+679:             inputs = data_reader.get_next()
+680:             if not inputs:
+681:                 break
+682:             outputs = self.infer_session.run(None, inputs)
+683: 
+684:             fixed_outputs: list[Any] = []
+685: 
+686:             cached_mem = 0
+687:             for output_index, output in enumerate(outputs):
+688:                 output = output.astype(np.float16)  # To reduce memory consumption
+689:                 cached_mem += output.nbytes
+690: 
+691:                 if not self.optimize_mem:
+692:                     # Copy np.ndarray only for graph outputs that are also graph inputs to workaround bug:
+693:                     # https://github.com/microsoft/onnxruntime/issues/21922
+694:                     if output_names[output_index] in input_names_set:
+695:                         fixed_outputs.append(copy.copy(output))
+FILE: calibration/collectors.py SHA256=e52428a815ed9b377f8062c75e444ccc32c0673641c0b413a511fd18020d1ba6
+337:         if _all_dims_equal(data_arr):
+338:             # The np.array() requires all dims to be exactly the same
+339:             d = np.array(data_arr).flatten()
+340:         elif _nonbatch_dims_equal(data_arr):
+341:             # The np.concatenate() requires array dims except for the concat axis must match exactly
+342:             d = np.concatenate(data_arr, axis=0).flatten()
+343:         else:
+344:             raise ValueError("The dims of samples do not match exactly!")
+345: 
+346:         rmin_mse, rmax_mse, _, _, _ = quantize_data(
+347:             data=d.astype(np.float32, copy=False), qType=act_type, symmetric=symmetric, method=method
+348:         )
+349:         return (rmin_mse, rmax_mse)
+350: 
+FILE: algorithm/interface.py SHA256=8f287a7ce8d58c37b8da1df0de44473930b0224dcb92fb67280bb3e62077c603
+61:     cle_steps = extra_options.get("CLESteps", 1)
+62:     cle_balance_method = extra_options.get("CLEBalanceMethod", "max")
+63:     cle_weight_threshold = extra_options.get("CLEWeightThreshold", 0.5)
+64:     cle_scale_append_bias = extra_options.get("CLEScaleAppendBias", True)
+65:     cle_scale_use_threshold = extra_options.get("CLEScaleUseThreshold", True)
+66:     cle_total_layer_diff_threshold = extra_options.get("CLETotalLayerDiffThreshold", 2e-7)
+FILE: optimizations/optimize.py SHA256=be248fa7eb7f36ff3cfd1d4120f781792ca5c125ed81764188e6c072413fcbd5
+190:     def split_large_kernel_pool(self) -> None:
+191:         """
+192:         For pooling with an excessively large kernel size in the onnx model,
+193:         split it into multiple smaller poolings.
+194:         """
+195: 
+196:         def _get_factors(num: int) -> tuple[int, int]:
+197:             factor_1 = int(sqrt(num))
+198:             while factor_1 > 1:
+199:                 if num % (factor_1) == 0:
+200:                     factor_2 = num / factor_1
+201:                     return int(factor_1), int(factor_2)
+202:                 factor_1 = factor_1 - 1
+203:             factor_2 = num
+204:             return int(factor_1), int(factor_2)
+205: 
+206:         onnx_model = ONNXModel(self.model)
+207:         for node in onnx_model.model.graph.node:
+208:             if node.op_type == "GlobalAveragePool" and self.should_quantize_node(node):
+209:                 input_name = node.input[0]
+210:                 kw = None
+211:                 kh = None
+212:                 for input_info in onnx_model.model.graph.value_info:
+213:                     if input_info.name == input_name:
+214:                         input_shape = [dim.dim_value for dim in input_info.type.tensor_type.shape.dim]
+215:                         if len(input_shape) == 4:
+216:                             kh = input_shape[2]
+217:                             kw = input_shape[3]
+218:                         break
+219:                 if not kw or not kh:
+220:                     logger.warning(f"Failed to get the input shape, skip optimizing for GlobalAveragePool {node.name}.")
+221:                     continue
+222:                 # Only one split is supported.
+223:                 # TODO: Support multiple split operations
+224:                 elif kw * kh > 512:
+225:                     kh1, kh2 = _get_factors(kh)
+226:                     kw1, kw2 = _get_factors(kw)
+227:                     if kh1 * kw1 > 512 or kh2 * kw2 > 512:
+228:                         logger.warning(
+229:                             "After split, the kernel size is still too large."
+230:                             "Currently, only one split is supported. Skip optimization."
+231:                         )
+232:                     else:
+233:                         split_tensor = node.input[0] + "_Split"
+234:                         pool_node = onnx.helper.make_node(
+235:                             "AveragePool",
+236:                             inputs=[node.input[0]],
+237:                             outputs=[split_tensor],
+238:                             kernel_shape=[kh1, kw1],
+239:                             strides=[kh1, kw1],
+240:                             name=split_tensor,
+241:                         )
+242:                         if not node.name:
+243:                             node.name = node.output[0]
+244:                         node.input[0] = split_tensor
+245:                         onnx_model.model.graph.node.extend([pool_node])
+246:                         logger.info(
+247:                             f"Found GlobalAveragePool node {node.name} with large kernel size. "
+248:                             f"Split it into multiple AveragePools."
+249:                         )
+250:         onnx_model.clean_initializers()
+FILE: postprocess/refinement/refine.py SHA256=c7c166d9cc99b3b7ef76fa466bb70c457b9c6e0389bc35aee452b1bdda5d3b03
+164:     def adjust_shift_cut(self) -> None:
+165:         """Adjust the shift cut of nodes.
+166: 
+167:         shift_cut = wpos + ipos - opos
+168: 
+169:         DPU compiler constraints of shift_cut:
+170:         1. 0 <= shift_cut <= 16
+171:         """
+172:         for i, node in enumerate(self.model.model.graph.node):
+173:             if node.op_type not in ["Conv", "Gemm"]:
+174:                 continue
+175:             ipos_name = self.get_ipos_name(node)
+176:             ipos, _ = self.get_pos_by_name(ipos_name)
+177: 
+178:             opos_name = self.get_opos_name(node)
+179:             opos, _ = self.get_pos_by_name(opos_name)
+180:             wpos_name = self.get_wpos_name(node)
+181:             wpos, wpos_node = self.get_pos_by_name(wpos_name)
+182: 
+183:             # Adjust shift_cut
+184:             min_sc = 0
+185:             max_sc = 16
+186:             if wpos is None or ipos is None or opos is None:
+187:                 logger.debug(f"Found a pos that is None. Shift cut of layer {node.name} has not taken effect.")
+188:                 continue
+189:             sc = wpos + ipos - opos
+190:             new_sc = None
+191:             if sc < min_sc:
+192:                 new_sc = min_sc
+193:             elif sc > max_sc:
+194:                 new_sc = max_sc
+195: 
+196:             if new_sc is not None:
+197:                 self.has_change = True
+198:                 new_wpos = new_sc + opos - ipos
+199:                 self.set_pos(wpos_node, new_wpos)
+200:                 logger.info(
+201:                     f"Shift cut of layer {node.input[1]} is {int(sc)}. It exceeds range [{int(min_sc)}, {int(max_sc)}]. "
+202:                     f"Modify wpos from {int(wpos)} to {int(new_wpos)}."
+203:                 )
+204: 
+205:     def adjust_shift_bias(self) -> None:
+206:         """Adjust the shift bias of node.
+207: 
+208:         shift_bias = wpos + ipos - bpos
+209: 
+210:         DPU compiler constraints of shift_bias:
+211:         1. min(0, -(24 - (8 + shift_cut))) <= shift_bias <= 15
+212:         """
+213:         for i, node in enumerate(self.model.model.graph.node):
+214:             if node.op_type not in ["Conv", "Gemm"]:
+215:                 continue
+216: 
+217:             ipos_name = self.get_ipos_name(node)
+218:             ipos, _ = self.get_pos_by_name(ipos_name)
+219: 
+220:             opos_name = self.get_opos_name(node)
+221:             opos, _ = self.get_pos_by_name(opos_name)
+222:             wpos_name = self.get_wpos_name(node)
+223:             wpos, wpos_node = self.get_pos_by_name(wpos_name)
+224:             bpos_name = self.get_bpos_name(node)
+225:             if bpos_name:
+226:                 bpos, bpos_node = self.get_pos_by_name(bpos_name)
+227:                 # Adjust shift_bias
+228:                 if wpos is None or ipos is None or opos is None or bpos is None:
+229:                     logger.debug(f"Found a pos that is None. Shift bias of layer {node.name} has not taken effect.")
+230:                     continue
+231:                 shift_cut = wpos + ipos - opos
+232: 
+233:                 min_sb = min(0, -(24 - (8 + shift_cut)))
+234:                 # TODO: Optimize code structure
+235:                 for n in self.model.model.graph.node:
+236:                     if n.op_type == "LeakyRelu" and n.input[0] == node.output[0]:
+237:                         min_sb = 0
+238:                 max_sb = 15
+239:                 shift_bias = wpos + ipos - bpos
+240: 
+241:                 new_sb = None
+242:                 if shift_bias < min_sb:
+243:                     new_sb = min_sb
+244:                 elif shift_bias > max_sb:
+245:                     new_sb = max_sb
+246: 
+247:                 if new_sb is not None:
+248:                     self.has_change = True
+249:                     new_bpos = wpos + ipos - new_sb
+250:                     self.set_pos(self.get_node_by_name(bpos_name), new_bpos)
+251:                     logger.info(
+252:                         f"Shift bias of layer {node.input[2]} is {int(shift_bias)}. It exceeds range [{int(min_sb)}, {int(max_sb)}]. "
+253:                         f"Modify bpos from {int(bpos)} to {int(new_bpos)}."
+254:                     )
+308:                 min_sh, max_sh = 0, 15
+309: 
+310:                 shift_swish = ipos0 + ipos1 - opos
+311: 
+312:                 new_opos = opos
+313:                 if shift_swish < min_sh:
+314:                     new_opos = ipos0 + ipos1 - min_sh
+315:                 elif shift_swish > max_sh:
+316:                     new_opos = ipos0 + ipos1 - max_sh
+317: 
+318:                 if new_opos != opos:
+319:                     self.has_change = True
+320:                     self.set_pos(self.get_node_by_name(opos_name), new_opos)
+321:                     logger.info(
+322:                         f"Shift Swish of layer {node.name} is {int(shift_swish)}({int(ipos0)}+{int(ipos1)}-{int(opos)}). It exceeds range [{int(min_sh)}, {int(max_sh)}]. "
+323:                         f"Modify opos from {int(opos)} to {int(new_opos)}."
+324:                     )
+330:     def adjust_hard_sigmoid(self) -> None:
+331:         """Adjust quantize info of HardSigmoid nodes.
+332: 
+333:         DPU compiler constraints for HardSigmoid:
+334:         1. input pos of HardSigmoid >= 0 && <= 15
+335:         2. output pos of HardSigmoid >= 7
+336:         3. shift_sigmoid >= 0 && shift_sigmoid <= 31 where
+337:             shift_sigmoid = 14 + 'input pos' - ' output pos'
+338:         """
+339:         for i, node in enumerate(self.model.model.graph.node):
+340:             if node.op_type not in ["HardSigmoid"]:
+341:                 continue
+342:             if not check_hard_sigmoid_condition(node):
+343:                 continue
+344:             ipos_name = self.get_ipos_name(node)
+345:             ipos, _ = self.get_pos_by_name(ipos_name)
+346: 
+347:             opos_name = self.get_opos_name(node)
+348:             opos, _ = self.get_pos_by_name(opos_name)
+349: 
+350:             if ipos is None or opos is None:
+351:                 logger.debug(
+352:                     "Found a pos that is None. Adjust quantize info of HardSigmoid "
+353:                     f"nodes of layer {node.name} has not taken effect."
+354:                 )
+355:                 continue
+356: 
+357:             new_ipos = ipos if ipos > 0 else 0
+358:             new_ipos = new_ipos if new_ipos <= 15 else 15
+359: 
+360:             new_opos = opos if opos > 7 else 7
+361:             shift_sigmoid = 14 + new_ipos - new_opos  # will not bigger than 31 now
+362:             new_opos = new_opos if shift_sigmoid > 0 else 14 + new_ipos
+363: 
+364:             if new_ipos != ipos:
+365:                 self.has_change = True
+366:                 self.set_pos(self.get_node_by_name(ipos_name), new_ipos)
+367:                 logger.info(
+368:                     f"Input quantize pos of HardSigmoid layer {node.input[0]} is {int(ipos)}, modify it to {int(new_ipos)} "
+369:                     "to meet the DPU constraints."
+370:                 )
+371: 
+372:             if new_opos != opos:
+373:                 self.has_change = True
+374:                 self.set_pos(self.get_node_by_name(opos_name), new_opos)
+375:                 logger.info(
+376:                     f"Output quantize pos of HardSigmoid layer {node.output[0]} is {int(opos)}, modify it to {int(new_opos)} "
+377:                     "to meet the DPU constraints."
+412:             id_max = np.argmax(iposes)
+413:             id_min = np.argmin(iposes)
+414:             sr = iposes[id_max] - iposes[id_min]
+415:             min_sr, max_sr = 0, 7
+416: 
+417:             new_sr = None
+418:             if sr > max_sr:
+419:                 new_sr = max_sr
+420: 
+421:             if new_sr is not None:
+422:                 self.has_change = True
+423:                 new_ipos_max = iposes[id_min] + new_sr
+424:                 self.set_pos(self.get_node_by_name(ipos_layers[id_max]), new_ipos_max)
+425:                 logger.info(
+426:                     f"Shift read of layer {node.name} is {int(sr)}({int(iposes[id_max])}-{int(iposes[id_min])}). It exceeds range [{int(min_sr)}, {int(max_sr)}]. "
+427:                     f"Modify ipos from {int(iposes[id_max])} to {int(new_ipos_max)}."
+478:                     continue
+479: 
+480:                 id_min = np.argmin(iposes)
+481:                 sw = iposes[id_min] - opos
+482:                 min_sw, max_sw = -7, 25
+483: 
+484:                 new_sw = None
+485:                 if sw > max_sw:
+486:                     new_sw = max_sw
+487:                 elif sw < min_sw:
+488:                     new_sw = min_sw
+489: 
+490:                 if new_sw is not None:
+491:                     self.has_change = True
+492:                     new_opos = iposes[id_min] - new_sw
+493:                     self.set_pos(self.get_node_by_name(opos_name), new_opos)
+494:                     logger.info(
+495:                         f"Shift write of layer {node.name} is {int(sw)}({int(iposes[id_min])}-{int(opos)}). It exceeds range [{int(min_sw)}, {int(max_sw)}]. "
+496:                         f"Modify opos from {int(opos)} to {int(new_opos)}."
+497:                     )
+498:             elif node.op_type == "Mul":
+499:                 ipos_layers = []
+500:                 iposes = []
+501:                 skip = False
+502: 
+503:                 for i in range(len(node.input)):
+504:                     ipos_name = self.get_ipos_name_by_id(node, i)
+505:                     if ipos_name is None:
+506:                         logger.debug(f"Fail to get input quantized position for layer {node.name}, please check it.")
+507:                         skip = True
+508:                         break
+509:                     ipos_layers.append(ipos_name)
+510:                 for name in ipos_layers:
+511:                     ipos, _ = self.get_pos_by_name(name)
+512:                     if ipos is None:
+513:                         logger.debug(f"Fail to get quantized position for layer {name}, skip adjust_shift_read for it.")
+514:                         skip = True
+515:                         break
+516:                     iposes.append(ipos)
+517:                 if skip:
+518:                     continue
+519:                 opos_name = self.get_opos_name(node)
+520:                 opos, _ = self.get_pos_by_name(opos_name)
+521:                 if opos is None:
+522:                     logger.debug(
+523:                         f"Fail to get quantized position for layer {node.name}(output:0), "
+524:                         "skip adjust_shift_write for it."
+525:                     )
+526:                     continue
+527: 
+528:                 sw = sum(iposes) - opos
+529:                 min_sw, max_sw = 0, 32
+530: 
+531:                 new_sw = None
+532:                 if sw > max_sw:
+533:                     new_sw = max_sw
+534:                 elif sw < min_sw:
+535:                     new_sw = min_sw
+536: 
+537:                 if new_sw is not None:
+538:                     new_opos = sum(iposes) - new_sw
+539:                     self.set_pos(self.get_node_by_name(opos_name), new_opos)
+540:                     logger.info(
+541:                         f"Shift write of layer {node.name} is {int(sw)}({int(sum(iposes))}-{int(opos)}). It exceeds range [{int(min_sw)}, {int(max_sw)}]. "
+542:                         f"Modify opos from {int(opos)} to {int(new_opos)}."
+543:                     )
+545:     def align_concat(self) -> None:
+546:         """Align concat op's inputs and output pos."""
+547:         for i, node in enumerate(self.model.model.graph.node):
+548:             if node.op_type not in ["Concat"]:
+549:                 continue
+550:             input_node_num = len(node.input)
+551:             opos_name = self.get_opos_name(node)
+552:             opos, _ = self.get_pos_by_name(opos_name)
+553:             if opos is not None:
+554:                 min_pos = opos
+555:                 ipos_layers = []
+556: 
+557:                 for i in range(input_node_num):
+558:                     ipos_name = self.get_ipos_name_by_id(node, i)
+559:                     ipos_layers.append(ipos_name)
+560:                 for name in ipos_layers:
+561:                     ipos, _ = self.get_pos_by_name(name)
+562:                     if ipos is not None:
+563:                         min_pos = min(ipos, min_pos)
+564:                 if opos != min_pos:
+565:                     self.has_change = True
+566:                     self.set_pos(self.get_node_by_name(opos_name), min_pos)
+567:                     logger.info(
+568:                         f"Output pos of concat node {node.name} is {int(opos)}, min_pos is {int(min_pos)}. "
+569:                         f"Modify opos from {int(opos)} to {int(min_pos)}."
+570:                     )
+571:                 for name in ipos_layers:
+572:                     ipos, ipos_node = self.get_pos_by_name(name)
+573:                     if ipos is not None and ipos != min_pos:
+574:                         self.has_change = True
+575:                         self.set_pos(ipos_node, min_pos)
+576:                         logger.info(
+577:                             f"Input pos of concat node {node.name} is {int(ipos)}, min_pos is {int(min_pos)}. "
+578:                             f"Modify ipos from {int(ipos)} to {int(min_pos)}."
+579:                         )
+580:             else:
+581:                 logger.debug(
+582:                     f"Fail to get quantized position for layer {node.name}(output:0), skip align concat for it."
+583:                 )
+584: 
+585:     def align_pool(self) -> None:
+586:         """Align max/avg pooling input and output pos."""
+587:         for i, node in enumerate(self.model.model.graph.node):
+588:             if node.op_type not in ["MaxPool", "AveragePool", "GlobalAveragePool"]:
+589:                 continue
+590:             ipos_name = self.get_ipos_name(node)
+591:             ipos, ipos_layer = self.get_pos_by_name(ipos_name)
+592: 
+593:             opos_name = self.get_opos_name(node)
+594:             opos, opos_layer = self.get_pos_by_name(opos_name)
+595:             if ipos is None or opos is None:
+596:                 logger.debug(f"Found a pos that is None. Align pool of layer {node.name} has not taken effect.")
+597:                 continue
+598:             if ipos is not None and opos is not None and opos > ipos:
+599:                 self.has_change = True
+600:                 self.set_pos(opos_layer, ipos)
+601:                 logger.info(
+602:                     f"Input pos of pooling layer {node.name} is {int(ipos)}. Output pos of pooling layer {node.name} is {int(opos)}."
+603:                     f"Modify opos from {int(opos)} to {int(ipos)}."
+604:                 )
+605:             elif ipos is not None and opos is not None and opos < ipos:
+606:                 self.has_change = True
+607:                 self.set_pos(ipos_layer, opos)
+608:                 logger.info(
+609:                     f"Input pos of pooling layer {node.name} is {int(ipos)}. Output pos of pooling layer {node.name} is {int(opos)}."
+610:                     f"Modify ipos from {int(ipos)} to {int(opos)}."
+611:                 )
+612: 
+613:     def align_pad(self) -> None:
+614:         """Align pad input and output pos."""
+615:         for i, node in enumerate(self.model.model.graph.node):
+616:             if node.op_type != "Pad":
+617:                 continue
+618:             ipos_name = self.get_ipos_name(node)
+619:             ipos, ipos_layer = self.get_pos_by_name(ipos_name)
+620: 
+621:             opos_name = self.get_opos_name(node)
+622:             opos, opos_layer = self.get_pos_by_name(opos_name)
+623:             if ipos is None or opos is None:
+624:                 logger.debug(f"Found a pos that is None. Align pad of layer {node.name} has not taken effect.")
+625:                 continue
+626:             if ipos is not None and opos is not None and opos > ipos:
+627:                 self.has_change = True
+628:                 self.set_pos(opos_layer, ipos)
+629:                 logger.info(
+630:                     f"Input pos of pad layer {node.name} is {int(ipos)}. Output pos of pad layer {node.name} is {int(opos)}."
+631:                     f"Modify opos from {int(opos)} to {int(ipos)}."
+632:                 )
+633:             elif ipos is not None and opos is not None and opos < ipos:
+634:                 self.has_change = True
+635:                 self.set_pos(ipos_layer, opos)
+636:                 logger.info(
+637:                     f"Input pos of pad layer {node.name} is {int(ipos)}. Output pos of pooling layer {node.name} is {int(opos)}."
+638:                     f"Modify ipos from {int(ipos)} to {int(opos)}."
+639:                 )
+640: 
+641:     def align_slice(self) -> None:
+642:         """Align slice input and output pos."""
+643:         for i, node in enumerate(self.model.model.graph.node):
+644:             if node.op_type not in ["Slice"]:
+645:                 continue
+646:             ipos_name = self.get_ipos_name(node)
+647:             ipos, ipos_layer = self.get_pos_by_name(ipos_name)
+648: 
+649:             opos_name = self.get_opos_name(node)
+650:             opos, opos_layer = self.get_pos_by_name(opos_name)
+651:             if ipos is None or opos is None:
+652:                 logger.debug(f"Found a pos that is None. Align Slice of layer {node.name} has not taken effect.")
+653:                 continue
+654:             if ipos is not None and opos is not None and opos > ipos:
+655:                 self.has_change = True
+656:                 self.set_pos(opos_layer, ipos)
+657:                 logger.info(
+658:                     f"Input pos of Slice layer {node.name} is {int(ipos)}. Output pos of Slice layer {node.name} is {int(opos)}."
+659:                     f"Modify opos from {int(opos)} to {int(ipos)}."
+660:                 )
+661:             elif ipos is not None and opos is not None and opos < ipos:
+662:                 self.has_change = True
+663:                 self.set_pos(ipos_layer, opos)
+664:                 logger.info(
+665:                     f"Input pos of Slice layer {node.name} is {int(ipos)}. Output pos of Slice layer {node.name} is {int(opos)}."
+666:                     f"Modify ipos from {int(ipos)} to {int(opos)}."
+686:     manager = QuantPosManager(model)
+687: 
+688:     while manager.has_change and (manager.adjust_loop_count < max_loop_num):
+689:         manager.adjust_loop_count += 1
+690:         if manager.adjust_loop_count == max_loop_num:
+691:             logger.warning("The number of adjustments has reached the limit. Please check the model")
+692:         manager.has_change = False
+693:         logger.info("Adjust the quantize info to meet the compiler constraints")
+694: 
+695:         # First do the alignment, then make adjustments to ensure all adjustments are effective
+696:         if align_concat:
+697:             manager.align_concat()
+698: 
+699:         if align_pool:
+700:             manager.align_pool()
+701: 
+702:         if align_pad:
+703:             manager.align_pad()
+704: 
+705:         if align_slice:
+706:             manager.align_slice()
+707: 
+708:         if adjust_shift_read:
+709:             manager.adjust_shift_read()
+710: 
+711:         if adjust_shift_write:
+712:             manager.adjust_shift_write()
+713: 
+714:         if adjust_shift_cut:
+715:             manager.adjust_shift_cut()
+716: 
+717:         if adjust_shift_bias:
+718:             manager.adjust_shift_bias()
+719: 
+720:         if adjust_hard_sigmoid:
+721:             manager.adjust_hard_sigmoid()
+722: 
+723:         if adjust_shift_swish:
+724:             manager.adjust_shift_swish()
+725: 
+726:     return manager.model
+FILE: postprocess/simulation/simulate_dpu.py SHA256=bc2e55f9ebb4abc4d9b98f5e3fe2b07c79547472863f0e036afd48e3ee24c088
+70:     def convert_leaky_relu_to_dpu_version(self) -> None:
+71:         """Convert LeakyReLU to DPU version.
+72:         LeakyReLU(alpha) --> LeakyReLU(round(alpha*256)/256)
+73:         """
+74:         for node in self.model.graph.node:
+75:             if node.op_type == "LeakyRelu" and self.should_quantize_node(node):
+76:                 alpha_attr = next((attr for attr in node.attribute if attr.name == "alpha"), None)
+77:                 if alpha_attr:
+78:                     ori_alpha = alpha_attr.f
+79:                     dpu_alpha = dpu_leaky_relu_alpha(alpha_attr.f)
+80:                     alpha_attr.f = dpu_alpha
+81:                     logger.info(
+82:                         f"Found Leaky ReLU node {node.name} with alpha={ori_alpha}. "
+83:                         f"Replacing with new alpha={dpu_alpha}."
+84:                     )
+85: 
+86:     def convert_sigmoid_to_hard_sigmoid(self) -> None:
+87:         """Convert Sigmoid to HardSigmoid."""
+88:         nodes_to_remove = []
+89:         for node in self.model.graph.node:
+90:             if node.op_type == "Sigmoid" and self.should_quantize_node(node):
+91:                 hard_sigmoid_node = onnx.helper.make_node(
+92:                     "HardSigmoid", inputs=node.input, outputs=node.output, name=node.name
+93:                 )
+94:                 hard_sigmoid_alpha = onnx.helper.make_attribute("alpha", 1.0 / 6.0)
+95:                 hard_sigmoid_node.attribute.append(hard_sigmoid_alpha)
+96:                 self.model.graph.node.append(hard_sigmoid_node)
+97:                 nodes_to_remove.append(node)
+98:                 logger.info(f"Found Sigmoid node {node.name}. Replacing with HardSigmoid.")
+99:         self.model = remove_nodes(self.model, nodes_to_remove)
+100: 
+101:     def convert_hard_sigmoid_to_dpu_version(self) -> None:
+102:         """Convert HardSigmoid to DPU version."""
+103:         for node in self.model.graph.node:
+104:             if node.op_type == "HardSigmoid" and check_hard_sigmoid_condition(node) and self.should_simulate_node(node):
+105:                 self.insert_mul(node, HARD_SIGMOID_SCALE)
+106:                 logger.info(f"Found HardSigmoid node {node.name} with alpha={1.0 / 6.0}. Convert to DPU version.")
+108:     def convert_avg_pool_to_dpu_version(self) -> None:
+109:         """Convert AveragePool to DPU version."""
+110: 
+111:         def _get_avgpool_scale(kh: int, kw: int) -> Any:
+112:             if kh > 255 or kw > 255:
+113:                 return 1.0
+114:             elif kh == 3 and kw == 3:
+115:                 return 9.0 * 7.0 / 64.0
+116:             elif kh == 5 and kw == 5:
+117:                 return 25.0 * 10.0 / 256.0
+118:             elif kh == 6 and kw == 6:
+119:                 return 36.0 * 7.0 / 256.0
+120:             elif kh == 7 and kw == 7:
+121:                 return 49.0 * 21.0 / 1024.0
+122:             elif kh == 14 and kw == 14:
+123:                 return 196.0 * 21.0 / 4096.0
+124:             else:
+125:                 rec = kw * kh
+126:                 n_max = 7 + math.ceil(math.log2(rec))
+127:                 ns = range(0, n_max)
+128:                 ns_pow = [2**n for n in ns]
+129:                 ks = [round(ns_p / rec) for ns_p in ns_pow]
+130:                 diffs = [abs(k / ns_p - 1 / rec) for k, ns_p in zip(ks, ns_pow, strict=False)]
+131:                 n = diffs.index(min(diffs))
+132:                 k = ks[n]
+133:                 scale = k / 2**n
+134:                 scale *= rec
+135:                 return scale
+136: 
+137:         for node in self.model.graph.node:
+138:             if node.op_type in ["AveragePool", "GlobalAveragePool"] and self.should_quantize_node(node):
+139:                 is_global_avg_pool = node.op_type == "GlobalAveragePool"
+140:                 input_name = node.input[0]
+141:                 for n1 in self.model.graph.node:
+142:                     if n1.output[0] == input_name:
+143:                         if n1.op_type == "DequantizeLinear":
+144:                             input_name = n1.input[0]
+145:                             for n2 in self.model.graph.node:
+146:                                 if n2.output[0] == input_name:
+147:                                     input_name = n2.input[0]
+148:                                     break
+149:                         else:
+150:                             break
+151:                 input_shape = None
+152:                 shape_to_check = False
+153:                 kh = 0
+154:                 kw = 0
+155:                 if is_global_avg_pool:
+156:                     for input_info in self.model.graph.value_info:
+157:                         if input_info.name == input_name:
+158:                             input_shape = [dim.dim_value for dim in input_info.type.tensor_type.shape.dim]
+159:                             if len(input_shape) == 4 and input_shape[2] == input_shape[3]:
+160:                                 shape_to_check = True
+161:                                 kh = input_shape[2]
+162:                                 kw = input_shape[3]
+163:                             break
+164:                     if not input_shape:
+165:                         logger.warning(
+166:                             f"Failed to get the input shape of GlobalAveragePool {node.name}, skip simulating DPU behavior."
+167:                         )
+168:                         continue
+169:                 else:
+170:                     kernel_shape_attr = next((attr for attr in node.attribute if attr.name == "kernel_shape"), None)
+171:                     if kernel_shape_attr:
+172:                         kernel_shape = kernel_shape_attr.ints
+173:                         if len(kernel_shape) == 2 and kernel_shape[0] == kernel_shape[1]:
+174:                             shape_to_check = True
+175:                             kh = kernel_shape[0]
+176:                             kw = kernel_shape[1]
+177: 
+178:                 if shape_to_check and (kh * kw > 0):
+179:                     scale = _get_avgpool_scale(kh, kw)
+180:                     self.insert_mul(node, scale)
+181:                     logger.info(f"Rescale {node.op_type} {node.name} with factor {scale} to simulate DPU behavior.")
+182:                 else:
+183:                     logger.warning(f"Do not support rescale {node.op_type} {node.name} to simulate DPU behavior.")
+185:     def convert_reduce_mean_to_dpu_version(self) -> None:
+186:         """Convert ReduceMean to DPU version."""
+187: 
+188:         def _get_reduce_mean_scale(rec: int) -> Any:
+189:             n_max = 7 + math.ceil(math.log2(rec))
+190:             ns = range(0, n_max)
+191:             ns_pow = [2**n for n in ns]
+192:             ks = [round(ns_p / rec) for ns_p in ns_pow]
+193:             diffs = [abs(k / ns_p - 1 / rec) for k, ns_p in zip(ks, ns_pow, strict=False)]
+194:             n = diffs.index(min(diffs))
+195:             k = ks[n]
+196:             scale = k / 2**n
+197:             scale *= rec
+198:             return scale
+227:                 if axes is not None and input_shape is not None and len(input_shape) > 0:
+228:                     rec = 1
+229:                     for i in axes:
+230:                         rec *= input_shape[i]
+231:                     if isinstance(rec, int) and rec > 0:
+232:                         scale = _get_reduce_mean_scale(rec)
+233:                         self.insert_mul(node, scale)
+234:                         logger.info(f"Rescale {node.op_type} {node.name} with factor {scale} to simulate DPU behavior.")
+235:                     else:
+236:                         logger.warning(
+237:                             f"Do not support rescale {node.op_type} {node.name} to simulate DPU behavior."
+238:                             f"Please check axes: {axes} and input shape: {input_shape}."
+239:                         )
+240:                 else:
+241:                     logger.warning(
+242:                         f"Do not support rescale {node.op_type} {node.name} to simulate DPU behavior. Please check axes and input shape."
+261:         opset_version = get_opset_version(self.model)
+262:         for node in nodes:
+263:             new_nodes = SimulateDPUSoftmax(opset_version=opset_version).simulate(
+264:                 node
+265:             )  # several nodes simulate a softmax
+266: 
+267:             if len(new_nodes):
+268:                 self.model.graph.node.remove(node)
+269:                 self.model.graph.node.extend(new_nodes)
+270: 
+271:                 self.nodes_to_exclude.extend(new_nodes[:-1])
+272:                 logger.info(f"Softmax {node.name} to simulate DPU behavior under opset {opset_version}.")
+273:             else:
+274:                 logger.warning(f"Softmax {node.name} to simulate DPU behavior under opset {opset_version} failed.")
+275: 
+276:     def convert_instance_norm_to_dpu_version(self) -> None:
+277:         """Convert Instance Normalization to DPU version."""
+278:         nodes_to_remove = []
+279:         nodes_to_add = []
+280:         for node in self.model.graph.node:
+281:             if node.op_type == "InstanceNormalization" and self.should_quantize_node(node):
+282:                 epsilon = next((attr.f for attr in node.attribute if attr.name == "epsilon"), 1e-05)
+283:                 new_node = onnx.helper.make_node(
+284:                     COP_IN_OP_NAME,
+285:                     node.input,
+286:                     node.output,
+287:                     domain=COP_DOMAIN,
+288:                     name=node.name,
+289:                     epsilon=epsilon,
+290:                 )
+291:                 nodes_to_remove.append(node)
+292:                 nodes_to_add.append(new_node)
+293:                 logger.info(f"InstanceNormalization node {node.name} to simulate DPU behavior by {new_node.op_type}.")
+294:         self.model = remove_nodes(self.model, nodes_to_remove)
+295:         self.model.graph.node.extend(nodes_to_add)
+297:     def convert_clip_to_dpu_version(self) -> None:
+298:         """Convert Clip to DPU version."""
+299:         for node in self.model.graph.node:
+300:             if node.op_type == "Clip" and self.should_quantize_node(node):
+301:                 min_value, max_value, para_type = get_clip_min_max(self.model, node)
+302: 
+303:                 if para_type != 1:  # Get from initializers
+304:                     logger.warning(
+305:                         f"The min and max of Clip node '{node.name}' are not initializers, conversion to the DPU version is not supported yet."
+306:                     )
+307:                     continue
+308: 
+309:                 if min_value is not None:
+310:                     min_value = max(-128, min(127, round(min_value)))
+311:                     new_min_value = np.array(min_value, dtype=np.float32)
+312:                     for initializer in self.model.graph.initializer:
+313:                         if initializer.name == node.input[1]:
+314:                             new_tensor = onnx.numpy_helper.from_array(new_min_value, name=node.input[1])
+315:                             initializer.CopyFrom(new_tensor)
+316:                             break
+317:                 elif min_value is None:
+318:                     assert node.input[1] == "" and node.attribute == []
+319:                     min_value = -128
+320:                     new_min_value = np.array(min_value, dtype=np.float32)
+321:                     new_weight_name = node.name + "_dpu_min"
+322:                     node.input[1] = new_weight_name
+323:                     new_weight_tensor = onnx.numpy_helper.from_array(new_min_value, name=new_weight_name)
+324:                     self.model.graph.initializer.append(new_weight_tensor)
+325: 
+326:                 if max_value is not None:
+327:                     max_value = max(-128, min(127, round(max_value)))
+328:                     new_max_value = np.array(max_value, dtype=np.float32)
+329:                     for initializer in self.model.graph.initializer:
+330:                         if initializer.name == node.input[2]:
+331:                             new_tensor = onnx.numpy_helper.from_array(new_max_value, name=node.input[2])
+332:                             initializer.CopyFrom(new_tensor)
+333:                             break
+334:                 elif max_value is None:
+335:                     assert node.input[2] == "" and node.attribute == []
+336:                     max_value = 127
+337:                     new_max_value = np.array(max_value, dtype=np.float32)
+338:                     new_weight_name = node.name + "_dpu_max"
+339:                     node.input[2] = new_weight_name
+340:                     new_weight_tensor = onnx.numpy_helper.from_array(new_max_value, name=new_weight_name)
+341:                     self.model.graph.initializer.append(new_weight_tensor)
+342: 
+343:                 logger.info(
+344:                     f"Clip node '{node.name}' is converted to DPU version, min is {new_min_value}, max is {new_max_value}."
+345:                 )
+FILE: algorithm/finetuning/create_torch/base_qdq_quantizers.py SHA256=9e31bcfcff9023e92834194bb7d805d4ea8868fed7091ae8617a062ff1fdf347
+192: class AdaroundConstants:
+193:     """Constants used for Adarounding"""
+194: 
+195:     GAMMA = -0.1
+196:     ZETA = 1.1
+225:         alpha = self.alpha.to(device=tensor.device, dtype=tensor.dtype)
+226:         h_alpha = self._get_h_alpha(alpha).to(tensor.dtype)
+227:         self.round_func = lambda input: torch.floor(input) + h_alpha  # type: ignore
+228: 
+229:     def initialize_alpha(self, tensor: torch.Tensor) -> None:
+230:         """
+231:         Initializes alpha parameter, same shape as the tensor
+232:         :param tensor: The tensor to be ada-rounded
+233:         """
+234:         if self.alpha is not None:
+235:             return
+236: 
+237:         tensor_floor = torch.floor(tensor / self.scale)
+238: 
+239:         tensor_diff = (tensor / self.scale) - tensor_floor
+240:         alpha = -torch.log(
+241:             (AdaroundConstants.ZETA - AdaroundConstants.GAMMA) / (tensor_diff - AdaroundConstants.GAMMA) - 1
+242:         )
+243: 
+244:         # Even if the input is integer type, alpha has to be kept in float32
+245:         # in order to be updated by the optimizer
+246:         self.alpha = torch.nn.Parameter(alpha.float(), requires_grad=True)
+247: 
+248:     def _get_h_alpha(self, alpha: torch.Tensor) -> torch.Tensor:
+249:         """
+250:         Calculate h_alpha tensor
+251:         :return: the h_alpha tensor
+252:         """
+253:         # Soft rounding maps alpha parameter between zero and one using
+254:         # rectified sigmoid function and hard rounding maps it to exactly zero or one
+255:         if self.use_soft_rounding:
+256:             h_alpha = torch.clamp(
+257:                 torch.sigmoid(alpha) * (AdaroundConstants.ZETA - AdaroundConstants.GAMMA) + AdaroundConstants.GAMMA,
+258:                 0,
+259:                 1,
+260:             )
+261:         else:
+262:             h_alpha = alpha >= 0
+263:         return h_alpha
+FILE: algorithm/finetuning/train_torch/train_model_param.py SHA256=8b6a2f6357bde51011f79cb62155ba24d4087c0b2e53f19fb87da149f25dd2a7
+24:     def __init__(
+25:         self,
+26:         data_loader: DataLoader[Any] | None = None,
+27:         data_size: int | None = None,
+28:         fixed_seed: int | None = None,
+29:         num_batches: int = 1,
+30:         num_iterations: int = 1000,
+31:         batch_size: int = 1,
+32:         initial_lr: float = 0.1,
+33:         optim_algo: str = "adaround",
+34:         optim_device: str = "cpu",
+35:         lr_adjust: Any = (),
+36:         selective_update: bool = False,
+37:         early_stop: bool = False,
+38:         log_period: float | int = 100,
+39:         update_bias: bool = True,
+40:         reg_param: float = 0.01,
+41:         beta_range: tuple[int, int] = (20, 2),
+42:         warm_start: float = 0.2,
+43:         drop_ratio: float = 1.0,
+44:         block_recon: bool = False,
+45:         dummy_path: str = "",
+46:         num_workers: int = 1,
+47:         pin_memory: bool = False,
+48:     ) -> None:
+FILE: algorithm/finetuning/train_torch/train_model_loss.py SHA256=91228380c66b6ef9c9e18cf84f4aa012180ced65bcc3eb2f5d8a8ddd4e4a4942
+44:         if cur_iter < params.num_iterations * params.warm_start:
+45:             round_loss = torch.tensor(0.0)
+46:         else:
+47:             h_alpha = torch.clamp(
+48:                 torch.sigmoid(alpha) * (AdaroundConstants.ZETA - AdaroundConstants.GAMMA) + AdaroundConstants.GAMMA,
+49:                 0,
+50:                 1,
+51:             )
+52: 
+53:             beta = cls._calculate_beta(params.num_iterations, cur_iter, params.beta_range, params.warm_start)
+54: 
+55:             reg_term = torch.add(1, -(torch.add(2 * h_alpha, -1).abs()).pow(beta)).sum()
+56: 
+57:             round_loss = params.reg_param * reg_term
+58: 
+59:         return round_loss
+60: 
+61:     @staticmethod
+62:     def _calculate_beta(max_iter: int, cur_iter: int, beta_range: tuple[float, float], warm_start: float) -> Any:
+63:         """
+64:         Calculate beta parameter used in regularization function using cosine decay
+65:         :param max_iter: Total maximum number of iterations
+66:         :param cur_iter: Current iteration
+67:         :param beta_range: Range for beta decay (start_beta, end_beta)
+68:         :param warm_start: Warm up period, during which rounding loss has zero effect
+69:         :return: Parameter beta
+70:         """
+71:         assert cur_iter < max_iter, "Current iteration should be less than total maximum number of iterations."
+72: 
+73:         start_beta, end_beta = beta_range
+74: 
+75:         warm_start_end_iter = warm_start * max_iter
+76: 
+77:         rel_iter = (cur_iter - warm_start_end_iter) / (max_iter - warm_start_end_iter)
+78: 
+79:         beta = end_beta + 0.5 * (start_beta - end_beta) * (1 + np.cos(rel_iter * np.pi))
+FILE: algorithm/finetuning/train_torch/train_model.py SHA256=7a654c7cfc23ec1e4bf7c22cc11eec8cc94c20fb495b30fffdf4ca069a7a918e
+55:         """
+56:         quant_module = module_instance.module if isinstance(module_instance, torch.nn.DataParallel) else module_instance
+57: 
+58:         # Set up Adam optimizer with parameters
+59:         if params.algorithm == "adaround":
+60:             # Before optimization, set the optimized layer's rounding mode to "Soft rounding",
+61:             # which maps alpha parameter between zero and one
+62:             quantizer = quant_module._module.weight_quantizer
+63:             quantizer.use_soft_rounding = True
+64: 
+65:             optimizer = torch.optim.Adam([quantizer.alpha], lr=params.lr)  # type: ignore
+66:         elif params.algorithm == "adaquant":
+67:             optimize_vars = [quant_module._module.weight]
+68: 
+69:             # If required updating bias, add the bias to optimizing variables
+70:             if params.update_bias and quant_module._module.bias_quantizer is not None:
+80: 
+81:         for iteration in range(params.num_iterations):
+82:             # Generate random indices for the batch
+83:             indices = torch.randperm(len(all_inp_data_quant))[: params.batch_size].tolist()
+84: 
+85:             # Get a batch of input and output data
+86:             inp_data_quant = torch.cat([all_inp_data_quant[i] for i in indices], dim=0)
+87:             inp_data_float = torch.cat([all_inp_data_float[i] for i in indices], dim=0)
+88:             out_data_float = torch.cat([all_out_data_float[i] for i in indices], dim=0)
+89: 
+90:             # Droped quantized input data with a ratio
+91:             # If drop_ratio = 1, the input data is all from quantized model
+92:             # If drop_ratio = 0, the input data is all from float model
+93:             # Otherwise, the input data comes from a mixture of the two
+94:             if params.drop_ratio >= 1:
+117:             # Check if early stop or not
+118:             # It reused the params.num_batches and params.warm_start
+119:             num_batches = params.num_batches if params.num_batches > 1 else params.num_iterations / 10
+120:             if params.early_stop and iteration >= params.num_iterations * params.warm_start:
+121:                 if iteration % num_batches == num_batches - 1:
+122:                     # Average loss of a certain number of batches
+123:                     mean_loss = mean_loss / num_batches
+124: 
+125:                     if mean_loss < best_loss:
+126:                         best_loss = mean_loss
+127:                     else:
+128:                         # In order to save time, we have no patience here, just break directly
+129:                         logger.info(
+130:                             "%s Iterations=%d, mean loss %5f (in %d batches) is not better than best loss %5f, early stop",
+131:                             params.algorithm,
+132:                             iteration,
+133:                             mean_loss,
+134:                             num_batches,
+135:                             best_loss,
+136:                         )
+137:                         break
+138: 
+139:                     # Clear for the next accumulation
+140:                     mean_loss = 0.0
+141:                 else:
+142:                     # Accumulate loss in a certain number of batches
+143:                     if params.algorithm == "adaround":
+144:                         mean_loss += float(round_loss)
+145:                     else:
+146:                         mean_loss += float(recons_loss)
+147: 
+148:             # Back propagate and Update the parameter
+149:             total_loss.backward()
+150:             optimizer.step()
+151: 
+152:             # Show log
+153:             if iteration % params.log_period == 0 or iteration == params.num_iterations - 1:
+154:                 learning_rate = optimizer.param_groups[0]["lr"]
+155:                 if params.algorithm == "adaround":
+156:                     logger.info(
+157:                         "%s iterations=%d, lr=%f, loss=%5f (Recons loss=%5f, Rounding loss=%5f)",
+158:                         params.algorithm,
+Imported Quark/torch modules: []
