@@ -1603,8 +1603,37 @@ resnet50 (1.59× vs 1.60×) but gets there faster — flat by 2 streams instead 
 because it already uses more of the array per call, leaving less idle headroom for a
 second context to fill. And the accuracy guarantee holds again: every concurrent
 classification at every stream count matched the uncontended baseline exactly
-(0.00% mismatch throughout), zero regressions on a second, wider architecture. `>16`
-streams and a still-wider classifier (`wide_resnet101_2`) remain untested.
+(0.00% mismatch throughout), zero regressions on a second, wider architecture.
+
+**Pushed further on both open ends at once: a third, still-wider classifier
+(`wide_resnet101_2`, plain XINT8 calib 64, 767/769 nodes), and streams past 16, up
+to 32:**
+
+| streams | combined fps | speedup vs 1 | mean top-1 | mismatch vs solo |
+|---|---|---|---|---|
+| 1 | 47.1 | 1.00× | 81.67% | 0.00% |
+| 2 | 61.3 | 1.30× | 81.67% | 0.00% |
+| 3 | 62.0 | 1.32× | 81.67% | 0.00% |
+| 4 | 62.3 | 1.32× | 81.67% | 0.00% |
+| 6 | 62.1 | 1.32× | 81.67% | 0.00% |
+| 8 | 62.2 | 1.32× | 81.67% | 0.00% |
+| 12 | 62.1 | 1.32× | 81.67% | 0.00% |
+| 16 | 62.2 | 1.32× | 81.67% | 0.00% |
+| 24 | 62.2 | 1.32× | 81.67% | 0.00% |
+| 32 | 62.3 | 1.32× | 81.67% | 0.00% |
+
+(`results/nstream_wide_resnet101_2.log`, `--fresh`.) Both open ends close the same
+way: **the ceiling holds at 32 streams with zero regression** (dropping the "is 16
+enough to see the plateau end" question), and the trend across all three
+classifiers now reads as monotonic with per-call array usage, not just a
+two-point pattern — resnet50's 1.60× (flat by 8) → wide_resnet50_2's 1.59× (flat by
+2) → wide_resnet101_2's **lower** 1.32× (flat by 3, its lowest idle headroom of the
+three, consistent with it also being the heaviest single-stream call at 47.1 fps
+vs the other two's 67-74 fps). Accuracy is unaffected here too: still 0.00%
+mismatch against the uncontended baseline at every stream count, all the way to
+32. Concurrent-stream saturation on this backend is now checked on three
+classifiers spanning 2.7× to 5× resnet50's params, plus two detection models, with
+the same shape and the same zero-corruption guarantee every time.
 
 ### Direct NPU utilization: what GOPS actually says
 

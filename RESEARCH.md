@@ -1386,7 +1386,10 @@ sections above.
   final multiplier (1.59× vs resnet50's 1.60×) but flattens by 2 streams instead of 8,
   and every concurrent classification at every stream count still matched the
   uncontended baseline exactly (0.00% mismatch). `results/nstream_wide_resnet50_2.log`.
-  Still open: `wide_resnet101_2` untested, and >16 streams untested on any model.
+  **Both remaining gaps closed together: `wide_resnet101_2` and streams past 16, up to
+  32.** Its ceiling is lower still (1.32×, flat by 3 streams — the least idle headroom of
+  the three classifiers) and holds flat with zero regression through 32 streams, with
+  the same 0.00% mismatch guarantee at every count. `results/nstream_wide_resnet101_2.log`.
 - **yolov8l and yolov8x.** The width trend breaks: x is 2.36× the latency of l for a net
   mAP loss. Both calibrated smaller (32/24) than m's 64, and l's full eval is flaky.
   [Working](docs/BENCHMARKS.md#model-size-n-vs-s-measured-together).
