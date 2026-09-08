@@ -3100,8 +3100,8 @@ provenance notes: this run's sidecar inherited the base's numpy/onnx versions (o
 later runs (`base_versions` now keeps the base's); and the finetuned file carries the
 base's `positions` table unchanged, which is correct because AdaRound never moves a
 scale. Against the alpha's no-CLE 62.00% CPU top-1, the c64 Ignition artifact with CLE
-and AdaRound reads 79.40%; the repo's 79.80% headline came from a different
-calibration listing and is not compared.
+and AdaRound reads 79.40%; the repo's 79.80% headline is a separate run whose
+calibration count no log here records, and it is not compared.
 
 ## Key findings
 
