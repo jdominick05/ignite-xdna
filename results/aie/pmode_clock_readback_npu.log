@@ -1,0 +1,309 @@
+pmode_clock_readback_npu.log -- XRT's max_clock_frequency_mhz against power mode AND load,
+varied in one sitting.
+
+Desktop 2: Ryzen 7 8700G, Phoenix XDNA1 (NPU driver 32.0.20101.3760, firmware 1.5.5.391,
+XRT 2.21.0), Windows 11. Read through tools/hwinfo_npu_bridge.exe --json (the in-process
+xrt::device::get_info<max_clock_frequency_mhz> and the platform report's power_mode, every
+poll), with Windows' GPU-engine utilization for the NPU adapter in the same row, while
+xrt-smi configure --pmode was stepped through all five modes under a 2048^3 bf16 GEMM hold
+and again idle. 2026-09-07 23:51 (contaminated, kept) and 2026-09-08 (clean).
+
+WHY
+---
+The 92cba62 merge flagged a contradiction as UNRESOLVED (docs/DECISIONS.md): the monitor
+work read max_clock_frequency_mhz as a live clock -- 800 MHz idle, 1800 MHz with an active
+context, power mode Default (xrt_api_live_clock_and_pdh_npu.log) -- while the clock-probe
+work read the same query as a flat 800 in every power mode (clock_probe_npu.log, one fresh
+pyxrt process per mode, nothing running on the device). The merge's hypothesis was that one
+varied load at fixed mode and the other varied mode at no load. Nobody had varied both.
+
+WHAT WAS RUN
+------------
+--- test_pmode_clock.sh (23:51 run) ---
+#!/usr/bin/env bash
+# Power mode x load, one sitting: the monitor logs XRT's max_clock_frequency_mhz, the power
+# mode and the engine utilization every 0.25 s while a 2048^3 bf16 GEMM hold runs and
+# xrt-smi configure --pmode is stepped through all five modes; then the same five modes idle.
+# Resolves the contradiction flagged in 92cba62 (live 800/1800 readback vs "flat 800 across
+# all five power modes"). Restores --pmode default at the end and prints the mode read back.
+cd /c/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization || exit 1
+T="$CLAUDE_JOB_DIR/tmp"
+EXE=./tools/hwinfo_npu_bridge.exe
+SMI="/c/Windows/System32/AMD/xrt-smi.exe"
+LOG="$T/pmode_events.txt"; : > "$LOG"
+ev() { echo "$(date +%H:%M:%S.%N | cut -c1-12) $*" | tee -a "$LOG"; }
+setmode() { out=$("$SMI" configure --pmode "$1" 2>&1 | tr -d '\r' | grep -v '^\s*$' | tail -2 | tr '\n' ' '); ev "pmode $1 -> $out"; }
+
+$EXE --json --no-hwinfo --interval 0.25 --smi-interval 1 > "$T/pmode_json.txt" 2>&1 &
+MON=$!
+sleep 1
+ev "hold start"
+bash "$T/hold_npu.sh" > "$T/hold_npu7.txt" 2>&1 &
+HOLD=$!
+sleep 6
+for m in powersaver balanced performance turbo default; do setmode $m; sleep 6; done
+wait $HOLD; ev "hold end"
+cat "$T/hold_npu7.txt"
+sleep 2
+ev "idle pass"
+for m in powersaver balanced performance turbo default; do setmode $m; sleep 3; done
+sleep 1
+kill $MON 2>/dev/null; wait $MON 2>/dev/null
+echo "--- power mode read back after restore:"; "$SMI" examine -r platform 2>&1 | grep -i "power mode"
+python - "$T" <<'EOF'
+import json, sys, os
+from collections import OrderedDict
+T = sys.argv[1]
+rows = [json.loads(l) for l in open(os.path.join(T, "pmode_json.txt"), encoding="utf-8") if l.strip()]
+print("polls:", len(rows))
+g = OrderedDict()
+for r in rows:
+    mode = r["xrt_api"]["power_mode"]; util = r["windows"]["utilization_pct"]; clk = r["xrt_api"]["clock_mhz"]
+    k = (mode, "busy" if util > 50 else "idle")
+    g.setdefault(k, []).append((clk, util, r["time"]))
+for (mode, state), v in g.items():
+    clks = [c for c, _, _ in v]; utils = [u for _, u, _ in v]
+    print("%-12s %-5s n=%3d  clock MHz min/max %4.0f/%4.0f  util mean %5.1f%%  %s .. %s" % (mode, state, len(v), min(clks), max(clks), sum(utils)/len(utils), v[0][2], v[-1][2]))
+print("--- timeline: every change of (mode, clock)")
+last = None
+for r in rows:
+    key = (r["xrt_api"]["power_mode"], r["xrt_api"]["clock_mhz"])
+    if key != last:
+        print("%s mode=%-12s clock=%4.0f util=%5.1f" % (r["time"], key[0], key[1], r["windows"]["utilization_pct"])); last = key
+EOF
+
+--- test_pmode_clean.sh (clean run; identical except a 0.1 s monitor and the idle pre-check) ---
+#!/usr/bin/env bash
+# Clean repeat of test_pmode_clock.sh: the NPU must be otherwise idle (the 23:51 run overlapped
+# another session's 128-stream wide_resnet101_2 run). The monitor runs at 0.1 s this time, so
+# the run also answers "does a 10 Hz monitor plus a GEMM hold hang the device" on its own.
+cd /c/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization || exit 1
+T="$CLAUDE_JOB_DIR/tmp"
+EXE=./tools/hwinfo_npu_bridge.exe
+SMI="/c/Windows/System32/AMD/xrt-smi.exe"
+LOG="$T/clean_pmode_events.txt"; : > "$LOG"
+ev() { echo "$(date +%H:%M:%S.%N | cut -c1-12) $*" | tee -a "$LOG"; }
+setmode() { out=$("$SMI" configure --pmode "$1" 2>&1 | tr -d '\r' | grep -v '^\s*$' | tail -2 | tr '\n' ' '); ev "pmode $1 -> $out"; }
+
+echo "=== pre-check: hardware contexts on the device, and python processes ==="
+"$SMI" examine -r aie-partitions 2>&1 | grep -vE '^\s*$' | tail -3
+powershell.exe -NoProfile -Command "Get-CimInstance Win32_Process | Where-Object { \$_.Name -match 'python' } | Select-Object ProcessId, @{n='Started';e={\$_.CreationDate.ToString('HH:mm:ss')}}, @{n='Cmd';e={ if (\$_.CommandLine) { \$_.CommandLine.Substring(0, [Math]::Min(110, \$_.CommandLine.Length)) } }} | Format-Table -AutoSize -Wrap"
+if "$SMI" examine -r aie-partitions 2>&1 | grep -q "No hardware contexts"; then echo "device idle: ok"; else echo "ABORT: a hardware context is live on the device"; exit 2; fi
+ev "pmode before: $("$SMI" examine -r platform 2>&1 | grep -i 'power mode' | tr -s ' ')"
+
+$EXE --json --no-hwinfo --interval 0.1 --smi-interval 1 > "$T/clean_pmode_json.txt" 2>&1 &
+MON=$!
+sleep 1
+ev "hold start"
+bash "$T/hold_npu.sh" > "$T/clean_hold.txt" 2>&1 &
+HOLD=$!
+sleep 6
+for m in powersaver balanced performance turbo default; do setmode $m; sleep 6; done
+wait $HOLD; ev "hold end"
+cat "$T/clean_hold.txt"
+sleep 2
+ev "idle pass"
+for m in powersaver balanced performance turbo default; do setmode $m; sleep 3; done
+sleep 1
+kill $MON 2>/dev/null; wait $MON 2>/dev/null
+ev "pmode after: $("$SMI" examine -r platform 2>&1 | grep -i 'power mode' | tr -s ' ')"
+echo "=== post-check ==="; "$SMI" examine -r aie-partitions 2>&1 | grep -vE '^\s*$' | tail -2
+python - "$T" <<'EOF'
+import json, sys, os
+from collections import OrderedDict
+T = sys.argv[1]
+rows = [json.loads(l) for l in open(os.path.join(T, "clean_pmode_json.txt"), encoding="utf-8") if l.strip()]
+per = [r["period_s"] for r in rows if r["period_s"] >= 0]
+print("polls: %d  period mean %.4f min %.3f max %.3f s" % (len(rows), sum(per)/len(per), min(per), max(per)))
+pids = OrderedDict()
+for r in rows:
+    for c in r["contexts"]:
+        if c["listed_by_xrt_smi"]: pids.setdefault((c["pid"], c["process"]), [r["time"], r["time"], c["memory_mb"]])[1] = r["time"]
+for (pid, name), (a, b, mem) in pids.items(): print("context pid %d %s %s .. %s  %s MB" % (pid, name, a, b, mem))
+g = OrderedDict()
+for r in rows:
+    mode = r["xrt_api"]["power_mode"]; util = r["windows"]["utilization_pct"]; clk = r["xrt_api"]["clock_mhz"]
+    k = (mode, "busy" if util > 50 else "idle")
+    g.setdefault(k, []).append((clk, util, r["time"]))
+for (mode, state), v in g.items():
+    clks = [c for c, _, _ in v]; utils = [u for _, u, _ in v]
+    print("%-12s %-5s n=%4d  clock MHz min/max %4.0f/%4.0f  util mean %5.1f%% (min %5.1f max %5.1f)  %s .. %s" % (mode, state, len(v), min(clks), max(clks), sum(utils)/len(utils), min(utils), max(utils), v[0][2], v[-1][2]))
+print("--- timeline: every change of (mode, clock)")
+last = None
+for r in rows:
+    key = (r["xrt_api"]["power_mode"], r["xrt_api"]["clock_mhz"])
+    if key != last:
+        print("%s poll %4d mode=%-12s clock=%4.0f util=%5.1f" % (r["time"], r["poll"], key[0], key[1], r["windows"]["utilization_pct"])); last = key
+EOF
+
+--- hold_npu.sh ---
+export VIRTUAL_ENV='C:\Users\<user>\mlir-aie\ironenv'
+export PATH="C:\Users\<user>\mlir-aie\ironenv\Scripts:C:\Users\<user>\mlir-aie\ironenv\Lib\site-packages\mlir_aie\bin:C:\Users\<user>\mlir-aie\ironenv\Lib\site-packages\mlir_aie\lib:C:\Xilinx\XRT\xrt_sdk\xrt\lib:C:\Xilinx\XRT\xrt_sdk\xrt:C:\Windows\System32\AMD:$PATH"
+export MLIR_AIE_INSTALL_DIR='C:\Users\<user>\mlir-aie\ironenv\Lib\site-packages\mlir_aie'
+export PEANO_INSTALL_DIR='C:\Users\<user>\mlir-aie\ironenv\Lib\site-packages\llvm-aie'
+export XRT_ROOT='C:\Xilinx\XRT\xrt_sdk\xrt'
+export PYTHONPATH='C:\Xilinx\XRT\xrt_sdk\xrt\python'
+export NPU2='0'; unset XILINX_XRT
+cd ~/mlir-aie/programming_examples/basic/matrix_multiplication/whole_array || exit 1
+python whole_array.py --dev npu -M 2048 -K 2048 -N 2048 -m 64 -k 64 -n 64 --dtype_in bf16 --dtype_out f32 --c-single-buffer 1 --warmup 3 --iters 5000 2>&1 | tail -4
+
+
+RUN A  2026-09-07 23:51:23-23:57:02 -- CONTAMINATED, kept because the clock result stands
+--------------------------------------------------------------------------------------------
+Another Claude session on this machine was running its 128-stream wide_resnet101_2
+concurrency sweep at the same time (results/nstream_wide_resnet101_2_128_ceiling.log,
+written 23:57:43): a second python context (pid 16756, 204 MB) appears in the rows from
+23:51:36 and the hold hung at 23:51:52 (ERT_CMD_STATE_TIMEOUT); its timeout expired at
+23:56:42.954, the second that session's XRT aborted with "Failed to submit command to hw
+queue (0xc01e0200)" (that log, line 1734, F20260907 23:56:42.392890). The utilization
+column is therefore two processes' engine time, and the hold did not finish. The clock
+column is a device-level readback and is what this run is kept for.
+
+Events (xrt-smi configure --pmode output, verbatim; the 0xc0000001 escape error on turbo and
+on the default that follows it is the behaviour clock_probe_npu.log already recorded):
+23:51:23.768 hold start
+23:51:29.997 pmode powersaver -> Power mode is set to powersaver  
+23:51:36.237 pmode balanced -> Power mode is set to balanced  
+23:51:42.477 pmode performance -> Power mode is set to performance  
+23:51:48.706 pmode turbo -> EXE:  [xrt-smi] ERROR: Failed to escape (0xc0000001): A device attached to the system is not functioning. 
+23:51:55.450 pmode default -> EXE:  [xrt-smi] ERROR: Failed to escape (0xc0000001): A device attached to the system is not functioning. 
+23:56:42.954 hold end
+23:56:45.038 idle pass
+23:56:45.212 pmode powersaver -> Power mode is set to powersaver  
+23:56:48.390 pmode balanced -> Power mode is set to balanced  
+23:56:51.529 pmode performance -> Power mode is set to performance  
+23:56:54.720 pmode turbo -> EXE:  [xrt-smi] ERROR: Failed to escape (0xc0000001): A device attached to the system is not functioning. 
+23:56:57.927 pmode default -> EXE:  [xrt-smi] ERROR: Failed to escape (0xc0000001): A device attached to the system is not functioning. 
+
+Hold result:
+  File "C:\Users\<user>\mlir-aie\ironenv\Lib\site-packages\mlir_aie\python\aie\utils\hostruntime\xrtruntime\hostruntime.py", line 308, in run
+    raise HostRuntimeError(f"Kernel returned {str(r)}")
+aie.utils.hostruntime.hostruntime.HostRuntimeError: Kernel returned ert_cmd_state.ERT_CMD_STATE_TIMEOUT
+
+Computed from pmode_json.txt (0.25 s polls):
+polls 1354, poll interval 0.25 s (measured period mean 0.2502, min 0.245, max 0.554)
+hardware contexts listed by xrt-smi during the run:
+  pid 27852 python.exe  23:51:24.837 .. 23:56:42.892  96.0 MB
+  pid 16756 python.exe  23:51:36.838 .. 23:56:50.141  204.0 MB
+per (power mode, busy = engine utilization > 50 %; an 'idle' row's non-zero maximum is the poll the switch landed in, a partial window):
+  mode         state     n  clock MHz min/max  util % mean (min-max)    first .. last poll
+  Default      idle   1176   800 / 1800            0.0 (  0.0-  0.7)      23:51:23.384 .. 23:57:01.938
+  Default      busy     28  1800 / 1800           91.0 ( 87.1-100.0)      23:51:24.589 .. 23:55:54.644
+  Powersaver   busy     25   800 /  800           92.5 ( 70.7- 97.5)      23:51:30.089 .. 23:51:36.089
+  Balanced     busy     25  1028 / 1028           94.6 ( 89.7-100.0)      23:51:36.337 .. 23:51:42.338
+  Performance  busy     24  1800 / 1800           87.7 ( 76.4- 90.5)      23:51:42.587 .. 23:51:48.337
+  Turbo        busy     14  1800 / 1800           85.5 ( 69.8- 90.6)      23:51:48.639 .. 23:51:51.837
+  Turbo        idle     24   800 / 1800            0.0 (  0.0-  0.0)      23:51:52.090 .. 23:56:57.696
+  Powersaver   idle     13   800 /  800            0.0 (  0.0-  0.0)      23:56:45.152 .. 23:56:48.142
+  Balanced     idle     13   800 / 1028            0.0 (  0.0-  0.0)      23:56:48.392 .. 23:56:51.439
+  Performance  idle     12   800 /  800            0.0 (  0.0-  0.0)      23:56:51.688 .. 23:56:54.444
+timeline, every change of (mode, clock):
+  23:51:23.384 poll    1 mode=Default      clock= 800 util=  0.0 ctx=0
+  23:51:24.338 poll    5 mode=Default      clock=1800 util=  0.0 ctx=0
+  23:51:30.089 poll   28 mode=Powersaver   clock= 800 util= 70.7 ctx=1
+  23:51:36.337 poll   53 mode=Balanced     clock=1028 util=100.0 ctx=1
+  23:51:42.587 poll   78 mode=Performance  clock=1800 util= 76.4 ctx=2
+  23:51:48.639 poll  102 mode=Turbo        clock=1800 util= 87.0 ctx=2
+  23:51:55.391 poll  127 mode=Default      clock=1800 util=  0.0 ctx=2
+  23:56:45.152 poll 1287 mode=Powersaver   clock= 800 util=  0.0 ctx=1
+  23:56:48.392 poll 1300 mode=Balanced     clock=1028 util=  0.0 ctx=0
+  23:56:50.698 poll 1309 mode=Balanced     clock= 800 util=  0.0 ctx=0
+  23:56:51.688 poll 1313 mode=Performance  clock= 800 util=  0.0 ctx=0
+  23:56:54.642 poll 1325 mode=Turbo        clock= 800 util=  0.0 ctx=0
+  23:56:57.894 poll 1338 mode=Default      clock= 800 util=  0.0 ctx=0
+
+RUN B  2026-09-08, clean: device checked idle first, one 0.1 s monitor, no foreign context
+--------------------------------------------------------------------------------------------
+Events:
+00:05:42.622 pmode before:  Power Mode : Default 
+00:05:43.685 hold start
+00:05:49.913 pmode powersaver -> Power mode is set to powersaver  
+00:05:56.137 pmode balanced -> Power mode is set to balanced  
+00:06:02.363 pmode performance -> Power mode is set to performance  
+00:06:08.522 pmode turbo -> EXE:  [xrt-smi] ERROR: Failed to escape (0xc0000001): A device attached to the system is not functioning. 
+00:06:14.747 pmode default -> EXE:  [xrt-smi] ERROR: Failed to escape (0xc0000001): A device attached to the system is not functioning. 
+00:06:28.476 hold end
+00:06:30.550 idle pass
+00:06:30.732 pmode powersaver -> Power mode is set to powersaver  
+00:06:33.908 pmode balanced -> Power mode is set to balanced  
+00:06:37.135 pmode performance -> Power mode is set to performance  
+00:06:40.329 pmode turbo -> EXE:  [xrt-smi] ERROR: Failed to escape (0xc0000001): A device attached to the system is not functioning. 
+00:06:43.496 pmode default -> EXE:  [xrt-smi] ERROR: Failed to escape (0xc0000001): A device attached to the system is not functioning. 
+00:06:47.777 pmode after:  Power Mode : Default 
+
+Hold result:
+NPU time     (avg/min/max us): 8045.3 / 6690.4 / 76984.9
+End-to-end   (avg/min/max us): 8829.3 / 7184.9 / 77870.3
+NPU GFLOPS                    : 2135.40
+PASS!
+
+Computed from clean_pmode_json.txt (0.1 s polls):
+polls 643, poll interval 0.10 s (measured period mean 0.1000, min 0.098, max 0.102)
+hardware contexts listed by xrt-smi during the run:
+  pid 9620 python.exe  00:05:44.803 .. 00:06:28.986  96.0 MB
+per (power mode, busy = engine utilization > 50 %; an 'idle' row's non-zero maximum is the poll the switch landed in, a partial window):
+  mode         state     n  clock MHz min/max  util % mean (min-max)    first .. last poll
+  Default      idle     74   800 / 1800            0.5 (  0.0- 27.7)      00:05:43.331 .. 00:06:47.504
+  Default      busy    192  1800 / 1800           88.6 ( 75.8- 95.1)      00:05:44.204 .. 00:06:28.304
+  Powersaver   busy     62   800 /  800           92.7 ( 88.3-100.0)      00:05:49.857 .. 00:05:56.005
+  Powersaver   idle     33   800 /  800            0.7 (  0.0- 24.1)      00:05:49.903 .. 00:06:33.852
+  Balanced     idle     33   800 / 1028            1.4 (  0.0- 45.2)      00:05:56.105 .. 00:06:37.093
+  Balanced     busy     61  1028 / 1028           92.7 ( 81.1-100.0)      00:05:56.203 .. 00:06:02.204
+  Performance  idle     33   800 / 1800            1.1 (  0.0- 36.2)      00:06:02.305 .. 00:06:40.283
+  Performance  busy     61  1800 / 1800           88.6 ( 82.1- 94.8)      00:06:02.404 .. 00:06:08.405
+  Turbo        busy     62  1800 / 1800           88.7 ( 80.2- 94.9)      00:06:08.504 .. 00:06:14.605
+  Turbo        idle     32   800 /  800            0.0 (  0.0-  0.0)      00:06:40.306 .. 00:06:43.405
+timeline, every change of (mode, clock):
+  00:05:43.331 poll    1 mode=Default      clock= 800 util=  0.0 ctx=0
+  00:05:44.104 poll    9 mode=Default      clock= 960 util=  0.0 ctx=0
+  00:05:44.204 poll   10 mode=Default      clock=1800 util= 75.8 ctx=0
+  00:05:49.857 poll   66 mode=Powersaver   clock= 800 util= 88.7 ctx=1
+  00:05:56.105 poll  129 mode=Balanced     clock=1028 util= 45.2 ctx=1
+  00:06:02.305 poll  191 mode=Performance  clock=1800 util= 36.2 ctx=1
+  00:06:08.504 poll  253 mode=Turbo        clock=1800 util= 83.1 ctx=1
+  00:06:14.703 poll  315 mode=Default      clock=1800 util= 27.7 ctx=1
+  00:06:28.404 poll  452 mode=Default      clock= 800 util=  6.7 ctx=1
+  00:06:30.705 poll  475 mode=Powersaver   clock= 800 util=  0.0 ctx=0
+  00:06:33.905 poll  507 mode=Balanced     clock= 800 util=  0.0 ctx=0
+  00:06:37.104 poll  539 mode=Performance  clock= 800 util=  0.0 ctx=0
+  00:06:40.306 poll  571 mode=Turbo        clock= 800 util=  0.0 ctx=0
+  00:06:43.592 poll  603 mode=Default      clock= 800 util=  0.0 ctx=0
+
+AGAINST THE TRACE-UNIT CLOCK (clock_probe_npu.log, scalar-loop fit)
+--------------------------------------------------------------------
+  mode          trace unit GHz   readback busy MHz   readback idle MHz
+  default       1.7983           1800                800
+  powersaver    0.7985            800                800
+  balanced      1.0274           1028                800 (RUN A: 1028 for ~2 s while another process's idle context was still listed, then 800)
+  performance   1.8002           1800                800
+  turbo         1.7998           1800                800
+(the readback columns are RUN A and RUN B, which agree)
+
+FINDING
+-------
+max_clock_frequency_mhz is a live readback that tracks BOTH axes: with a context active it
+reads the power mode's clock to the MHz the trace unit measured (1800 / 800 / 1028 / 1800 /
+1800), and with no hardware context on the device it reads 800 in every mode. A context that
+exists but sits idle holds the mode's clock: RUN A's idle pass read 1028 in balanced for ~2 s
+until the other session's context (pid 16756, 0 % engine time) left the device; RUN B, with no
+context, read 800 at once in every mode. So both earlier readings were
+correct for what they varied -- the clock-probe's "800 in every mode" was taken idle, the
+monitor's "800 -> 1800" was taken in Default -- and the merge's hypothesis ("tracks load but
+ignores --pmode") is wrong: it tracks --pmode too. Consequences: the readback is a valid
+busy-clock indicator for the monitor and HWiNFO (it is the core clock while work runs, not a
+nameplate and not a cap); an idle reading says nothing about the mode; and a number taken in
+balanced or powersaver is distinguishable after the fact from the monitor's --json rows.
+
+--pmode turbo: the escape error is reproduced under load and idle, the mode applies regardless
+(the platform report reads Turbo and the busy clock is 1800, as in performance), and the
+default switch after it errors the same way and also applies. Under a running GEMM every mode
+switch took effect within one 0.25 s poll and the kernel kept running through
+powersaver/balanced/performance (RUN A, before the contention hang; RUN B, all five).
+
+NOT TESTED
+----------
+- A VitisAI EP context (all of this is an IRON/XRT hardware context).
+- The mode's clock with a context present but idle, deliberately: RUN A's 1028 in balanced
+  came from another session's leftover context, not a controlled one.
+- Whether turbo differs from performance in anything but the error: the readback and the
+  trace unit both say 1800 / 1.80 GHz for both.

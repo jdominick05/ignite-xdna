@@ -72,6 +72,15 @@
  * measured poll period. Dashboard keys: + and - halve and double the poll interval, [ and ]
  * the xrt-smi interval, s turns xrt-smi off and on, p pauses (the activity sensors are
  * removed from HWiNFO while paused, for the Average rule above), q quits.
+ * Measured 2026-09-07 on the Phoenix desktop, three monitors side by side across one 2048^3
+ * bf16 GEMM hold (results/aie/npu_monitor_poll_rate_npu.log): the engine counter read a mean
+ * 88.2 % over 312 polls at 0.1 s (single polls 82-94 %), 87.9 % at 0.25 s and 87.8 % at 0.5 s
+ * (86-90 %) -- the same figure at every rate, a little more scatter at the fastest, no
+ * dropouts; the first poll of a load is a partial or a 100 % window. The measured period is
+ * exact at all three rates (0.100 / 0.250 / 0.500 s) with timeBeginPeriod(1); on the default
+ * 15.6 ms tick the 20 ms naps ran ~31 ms and every period carried ~22 ms over the request.
+ * When a kernel hung (ERT_CMD_STATE_TIMEOUT in the hold) the counter fell to 0 with sporadic
+ * 100 % samples while the process waited out the timeout.
  *
  * USAGE
  *   hwinfo_npu_bridge.exe                     live dashboard: 0.5 s polls, xrt-smi every 2 s, publishes to HWiNFO
@@ -98,6 +107,7 @@
 #include <dxcore.h>
 #include <pdh.h>
 #include <pdhmsg.h>
+#include <timeapi.h>
 #include <conio.h>
 #include <io.h>
 
@@ -126,6 +136,7 @@
 #pragma comment(lib, "user32.lib")
 #pragma comment(lib, "pdh.lib")
 #pragma comment(lib, "dxcore.lib")
+#pragma comment(lib, "winmm.lib")
 
 using json = nlohmann::json;
 using Clock = std::chrono::steady_clock;
@@ -623,6 +634,10 @@ public:
         double util = 0;
         ForEach(cEng_, [&](const std::string& inst, double v) {
             if (Lower(inst).find(tag) == std::string::npos) return;
+            // A per-engine value far above 100 % is a counter reset (a process leaving), not a
+            // reading: seen as 7e14 % once in a 0.25 s run. Drop it; cap the rest at 100.
+            if (v < 0 || v > 1000.0) return;
+            v = std::min(100.0, v);
             int pid = PidOf(inst);
             util += v;
             s.pidPct[pid] += v;
@@ -1190,6 +1205,9 @@ int main(int argc, char* argv[]) {
     }
     SetConsoleCtrlHandler(ConsoleCtrlHandler, TRUE);
     SetConsoleOutputCP(CP_UTF8);
+    // Windows' default timer tick is 15.6 ms, which turns the loop's 20 ms naps into ~31 ms and
+    // put ~22 ms on every measured poll period (0.122 s for --interval 0.1); ask for 1 ms.
+    timeBeginPeriod(1);
 
     // terminal capabilities
     Term term;
@@ -1259,7 +1277,11 @@ int main(int argc, char* argv[]) {
             auto now = Clock::now();
             view.actualPeriod = seq > 1 ? std::chrono::duration<double>(now - lastPoll).count() : -1;
             lastPoll = now;
-            nextPoll = now + std::chrono::milliseconds((int)std::lround(interval * 1000));
+            // fixed-rate schedule: the next deadline steps from the previous one, so the mean period
+            // is the interval rather than the interval plus the poll's own cost; only a poll more
+            // than one interval late resets it
+            auto step = std::chrono::milliseconds((int)std::lround(interval * 1000));
+            nextPoll = (nextPoll + step > now) ? nextPoll + step : now + step;
             f = Poll(si, havePdh ? &pdh : nullptr, sh, seq);
             hist.push_back({ std::chrono::duration<double>(f.at - t0).count(), f.pdh.ok ? f.pdh.utilPct : -1 });
             while (hist.size() > 600) hist.pop_front();
@@ -1322,11 +1344,18 @@ int main(int argc, char* argv[]) {
                     nextPoll = std::min(nextPoll, lastPoll + std::chrono::milliseconds((int)std::lround(interval * 1000)));
                 }
             }
-            std::this_thread::sleep_for(std::chrono::milliseconds(20));
+            // nap up to 20 ms so a key is seen promptly, but never past the next deadline
+            auto nap = std::chrono::milliseconds(20);
+            if (!paused) {
+                auto left = std::chrono::duration_cast<std::chrono::milliseconds>(nextPoll - Clock::now());
+                if (left < nap) nap = std::max(std::chrono::milliseconds(1), left);
+            }
+            std::this_thread::sleep_for(nap);
         }
     }
     g_running = false;
     if (worker.joinable()) worker.join();
+    timeEndPeriod(1);
 
     if (dashboard) { fputs("\x1b[?25h", stdout); fflush(stdout); }
 #ifdef HAVE_XRT

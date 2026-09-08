@@ -964,6 +964,18 @@ concurrent-VitisAI-EP leg of objective S0 was not run — the worktree that ran 
 touched. Wall time is not reported: with trace on, IRON allocates and dumps a 64 KB trace
 buffer inside the wall bracket.
 
+**The XRT clock readback, reconciled (2026-09-08).** This run read `max_clock_frequency_mhz`
+as a flat 800 in every power mode; the NPU-monitor work read it as 800 idle → 1800 under an
+active context. Both axes varied in one sitting (`results/aie/pmode_clock_readback_npu.log`; a
+2048³ bf16 GEMM hold with `xrt-smi configure --pmode` stepped through all five modes, then
+the five modes idle, the monitor logging the clock, the mode and the engine utilization every
+0.1–0.25 s, twice): busy, the readback is the mode's clock to the MHz of the table above —
+1800 `default`/`performance`/`turbo`, 1028 `balanced`, 800 `powersaver`; idle, 800 in every
+mode. The "flat 800" was an idle reading. Every switch took effect within one poll with the
+GEMM running; `turbo` printed its escape error under load and idle and applied anyway. The
+same log's first run is kept as contaminated: it overlapped another session's 128-stream
+classifier sweep, and the hold hung in the second that sweep's XRT aborted.
+
 ### MobileViT-XXS does not survive per-tensor INT8, and AdaRound cannot save it
 
 The accuracy question the attention work deferred, now measured on the full 1000-image

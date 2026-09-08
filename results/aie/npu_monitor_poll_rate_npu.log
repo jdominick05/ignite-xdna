@@ -1,0 +1,196 @@
+npu_monitor_poll_rate_npu.log -- the NPU monitor's polling rate: what Windows' GPU-engine
+counter reads for the NPU at 0.1 / 0.25 / 0.5 s, how exact the poll period is, and whether a
+10 Hz monitor disturbs a running kernel.
+
+Desktop 2: Ryzen 7 8700G, Phoenix XDNA1 (NPU driver 32.0.20101.3760, firmware 1.5.5.391,
+XRT 2.21.0), Windows 11. tools/hwinfo_npu_bridge.cpp at the two-cadence build committed in
+e776647 (--interval for the engine counters + XRT clock, --smi-interval for xrt-smi on its
+own thread), then with the timing change this log accompanies (timeBeginPeriod(1), sleep to
+the deadline, fixed-rate schedule). 2026-09-07 23:43 to 2026-09-08. Three sessions were
+using this machine that evening; the sections say which runs were contaminated and by what.
+
+WHY
+---
+The monitor's floor was 0.5 s with xrt-smi (a child process, 130-400 ms per report) inside
+the poll loop. With xrt-smi moved to its own cadence the fast sources cost ~1 ms (PDH) and
+~0.4 ms (XRT clock query) per poll, so the floor can drop to 0.1 s -- but a faster PDH sample
+is only useful if the engine counter still reads something meaningful at that window, and
+the loop must actually keep the period it claims. Both were measured rather than assumed.
+
+WHAT WAS RUN
+------------
+test_rate_load.sh: three monitors side by side (--plain --no-hwinfo --interval 0.1 / 0.25 /
+0.5), started 2 s before a 2048^3 bf16 64/64/64 --c-single-buffer 1 GEMM hold (hold_npu.sh:
+whole_array.py --iters 5000, ~39 s), killed 2 s after it. Analysis: per-file period stats,
+the "busy stretch" = first to last poll over 5 %, its mean/min/max, and polls under 5 %
+inside it (dropouts). The user's own bridge instance (default arguments, 0.5 s, publishing
+to HWiNFO) was running throughout every run below.
+
+--- test_rate_load.sh ---
+#!/usr/bin/env bash
+# Three monitors at 0.1 / 0.25 / 0.5 s, side by side, across one 2048^3 bf16 GEMM hold on the NPU.
+# Purpose: see what the Windows engine counter actually reads at each rate under the same load
+# (functional check of the monitor, not a benchmark -- an AdaRound job is running on the CPU).
+cd /c/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization || exit 1
+T="$CLAUDE_JOB_DIR/tmp"
+EXE=./tools/hwinfo_npu_bridge.exe
+for iv in 0.1 0.25 0.5; do
+  $EXE --plain --no-hwinfo --interval $iv > "$T/rate_load_$iv.txt" 2>&1 &
+done
+sleep 2
+echo "hold start $(date +%H:%M:%S)"
+bash "$T/hold_npu.sh" > "$T/hold_npu6.txt" 2>&1
+echo "hold end   $(date +%H:%M:%S)"
+sleep 2
+for p in $(jobs -p); do kill $p 2>/dev/null; done
+wait 2>/dev/null
+cat "$T/hold_npu6.txt"
+python - "$T" <<'EOF'
+import re, sys, os
+T = sys.argv[1]
+for iv in ("0.1", "0.25", "0.5"):
+    vals, per = [], []
+    for l in open(os.path.join(T, "rate_load_%s.txt" % iv), encoding="utf-8"):
+        m = re.search(r"util=([\d.]+|n/a)%.*period=([\d.]+|n/a)s", l)
+        if not m: continue
+        if m.group(1) != "n/a": vals.append(float(m.group(1)))
+        if m.group(2) != "n/a": per.append(float(m.group(2)))
+    busy = [v for v in vals if v > 5]
+    zeros_in_busy = 0
+    # inside the busy stretch, count polls that read 0 (a value the driver did not update in time)
+    if busy:
+        first = next(i for i, v in enumerate(vals) if v > 5); last = len(vals) - 1 - next(i for i, v in enumerate(reversed(vals)) if v > 5)
+        stretch = vals[first:last + 1]
+        zeros_in_busy = sum(1 for v in stretch if v < 5)
+        print("interval %s: %d polls, period mean %.3f s (min %.3f max %.3f); busy stretch %d polls: mean %.1f%% min %.1f%% max %.1f%%, %d polls under 5%% inside it" % (
+            iv, len(vals), sum(per)/len(per), min(per), max(per), len(stretch), sum(stretch)/len(stretch), min(stretch), max(stretch), zeros_in_busy))
+        print("   first 30 busy readings:", " ".join("%.0f" % v for v in stretch[:30]))
+    else:
+        print("interval %s: %d polls, no busy readings" % (iv, len(vals)))
+EOF
+
+--- hold_npu.sh ---
+export VIRTUAL_ENV='C:\Users\<user>\mlir-aie\ironenv'
+export PATH="C:\Users\<user>\mlir-aie\ironenv\Scripts:C:\Users\<user>\mlir-aie\ironenv\Lib\site-packages\mlir_aie\bin:C:\Users\<user>\mlir-aie\ironenv\Lib\site-packages\mlir_aie\lib:C:\Xilinx\XRT\xrt_sdk\xrt\lib:C:\Xilinx\XRT\xrt_sdk\xrt:C:\Windows\System32\AMD:$PATH"
+export MLIR_AIE_INSTALL_DIR='C:\Users\<user>\mlir-aie\ironenv\Lib\site-packages\mlir_aie'
+export PEANO_INSTALL_DIR='C:\Users\<user>\mlir-aie\ironenv\Lib\site-packages\llvm-aie'
+export XRT_ROOT='C:\Xilinx\XRT\xrt_sdk\xrt'
+export PYTHONPATH='C:\Xilinx\XRT\xrt_sdk\xrt\python'
+export NPU2='0'; unset XILINX_XRT
+cd ~/mlir-aie/programming_examples/basic/matrix_multiplication/whole_array || exit 1
+python whole_array.py --dev npu -M 2048 -K 2048 -N 2048 -m 64 -k 64 -n 64 --dtype_in bf16 --dtype_out f32 --c-single-buffer 1 --warmup 3 --iters 5000 2>&1 | tail -4
+
+
+RUN 1  2026-09-07 23:43:53-23:44:32, build WITHOUT the timing change (20 ms naps on the
+       default 15.6 ms Windows tick)
+------------------------------------------------------------------------------------------
+Hold: NPU time avg/min/max 6934.9 / 6725.3 / 18537.3 us, 2477.31 GFLOPS, PASS.
+Analysis output, verbatim:
+
+interval 0.1: 348 polls, period mean 0.122 s (min 0.110 max 0.130); busy stretch 312 polls: mean 88.2% min 23.1% max 94.2%, 0 polls under 5% inside it
+   first 30 busy readings: 23 89 88 93 82 92 88 88 89 86 94 88 89 87 92 87 87 87 93 90 82 94 88 88 86 90 89 89 88 87
+interval 0.25: 157 polls, period mean 0.275 s (min 0.250 max 0.280); busy stretch 142 polls: mean 87.9% min 10.3% max 91.6%, 0 polls under 5% inside it
+   first 30 busy readings: 10 88 89 88 88 90 87 89 90 86 90 87 90 88 87 90 89 87 90 89 88 88 88 85 86 89 90 88 87 89
+interval 0.5: 82 polls, period mean 0.527 s (min 0.500 max 0.530); busy stretch 74 polls: mean 87.8% min 28.9% max 89.9%, 0 polls under 5% inside it
+   first 30 busy readings: 29 88 89 89 89 88 88 88 90 89 88 88 86 88 89 88 89 89 88 89 88 88 89 88 89 88 89 89 88 88
+
+The per-poll raw files of this run were overwritten by run 2 (same file names); the summary
+above is the script's printed output. Reading: the same mean at every rate (88.2 / 87.9 /
+87.8 %), a little more sample-to-sample scatter at 0.1 s (82-94 % against 86-90 % at 0.5 s),
+no dropouts; the first busy poll is a partial window (23 / 10 / 29 %). The period, however,
+ran ~22 ms over the request at every rate: the loop napped 20 ms at a time on the default
+timer tick, and a 20 ms Sleep on a 15.6 ms tick is ~31 ms.
+
+RUN 2  2026-09-07 23:47:15-23:49:11, build WITH the timing change -- CONTAMINATED
+------------------------------------------------------------------------------------------
+Period now exact; the hold hung. Analysis output, verbatim:
+
+interval 0.1: 1191 polls, period mean 0.100 s (min 0.100 max 0.100); busy stretch 996 polls: mean 6.7% min 0.0% max 100.0%, 921 polls under 5% inside it
+   first 30 busy readings: 100 88 89 89 88 82 99 89 88 89 87 87 89 94 84 88 90 82 94 90 88 87 85 89 88 94 84 100 89 87
+interval 0.25: 476 polls, period mean 0.250 s (min 0.250 max 0.250); busy stretch 399 polls: mean 7.3% min 0.0% max 100.0%, 366 polls under 5% inside it
+   first 30 busy readings: 100 90 88 91 86 90 87 87 90 88 87 100 88 88 87 90 88 87 88 89 90 86 90 88 88 90 88 87 35 0
+interval 0.5: 238 polls, period mean 0.500 s (min 0.500 max 0.500); busy stretch 112 polls: mean 14.1% min 0.0% max 100.0%, 94 polls under 5% inside it
+   first 30 busy readings: 100 89 88 87 89 100 88 88 88 89 88 89 88 88 18 0 0 0 0 0 0 0 0 0 0 0 0 0 100 0
+
+The hold ended with
+  aie.utils.hostruntime.hostruntime.HostRuntimeError: Kernel returned ert_cmd_state.ERT_CMD_STATE_TIMEOUT
+about 7 s into its 5000 iterations, and the process then sat in XRT's wait until 23:49:11.
+The "busy stretch" statistics are therefore not a utilization measurement; they are the
+ramp (~7 s of 82-94 %, the same band as run 1), the hang (0 %), and single 100 % samples
+scattered through the wait. What they do establish is the period: 0.100 / 0.250 / 0.500 s
+with min = max at the 10 ms print, at all three rates, for ~2 minutes.
+
+Why it hung -- attributed, not assumed. The monitor's own first lines show a hardware
+context ALREADY on the device before this hold started, with 1.9 GB allocated:
+  ...
+23:47:14.197 util=0.0% clk=1800MHz mem=1891.6MB(win) 1891MB(xrt) ctx=1/1 cols=1-4 compl/s=n/a subm/s=n/a period=n/as smi-age=0.3s
+23:47:14.447 util=0.0% clk=1800MHz mem=1891.6MB(win) 1891MB(xrt) ctx=1/1 cols=1-4 compl/s=n/a subm/s=n/a period=0.25s smi-age=0.5s
+23:47:14.697 util=0.0% clk=1800MHz mem=1891.6MB(win) 1891MB(xrt) ctx=1/1 cols=1-4 compl/s=61.4 subm/s=61.4 period=0.25s smi-age=0.2s
+  ...
+23:47:21.698 util=0.0% clk=1800MHz mem=1987.6MB(win) 1987MB(xrt) ctx=2/2 cols=1-4 compl/s=62.7 subm/s=62.7 period=0.25s smi-age=0.9s
+23:47:21.947 util=0.0% clk=1800MHz mem=1987.6MB(win) 1987MB(xrt) ctx=2/2 cols=1-4 compl/s=62.7 subm/s=62.7 period=0.25s smi-age=1.2s
+23:47:22.198 util=100.0% clk=1800MHz mem=300.7MB(win) 1987MB(xrt) ctx=2/2 cols=1-4 compl/s=62.7 subm/s=62.7 period=0.25s smi-age=1.4s
+23:47:22.447 util=90.2% clk=1800MHz mem=300.7MB(win) 1987MB(xrt) ctx=2/2 cols=1-4 compl/s=62.7 subm/s=62.7 period=0.25s smi-age=1.7s
+23:47:22.698 util=87.8% clk=1800MHz mem=441.3MB(win) 1987MB(xrt) ctx=2/2 cols=1-4 compl/s=62.7 subm/s=62.7 period=0.25s smi-age=1.9s
+  ...
+23:49:01.198 util=0.0% clk=1800MHz mem=4735.2MB(win) 4735MB(xrt) ctx=2/2 cols=1-4 compl/s=62.4 subm/s=62.4 period=0.25s smi-age=2.1s
+23:49:01.449 util=0.0% clk=1800MHz mem=4735.2MB(win) 4735MB(xrt) ctx=2/2 cols=1-4 compl/s=61.8 subm/s=61.8 period=0.25s smi-age=0.3s
+23:49:01.697 util=100.0% clk=1800MHz mem=3038.4MB(win) 4735MB(xrt) ctx=2/2 cols=1-4 compl/s=61.8 subm/s=61.8 period=0.25s smi-age=0.6s
+23:49:01.948 util=0.0% clk=1800MHz mem=32.0MB(win) 4735MB(xrt) ctx=2/2 cols=1-4 compl/s=61.8 subm/s=61.8 period=0.25s smi-age=0.8s
+23:49:02.198 util=0.0% clk=1800MHz mem=32.0MB(win) 4735MB(xrt) ctx=2/2 cols=1-4 compl/s=61.8 subm/s=61.8 period=0.25s smi-age=1.0s
+  ...
+23:49:12.698 util=0.0% clk=800MHz mem=0.0MB(win) 0MB(xrt) ctx=0/0 cols=none compl/s=n/a subm/s=n/a period=0.25s smi-age=1.1s
+23:49:12.948 util=0.0% clk=800MHz mem=0.0MB(win) 0MB(xrt) ctx=0/0 cols=none compl/s=n/a subm/s=n/a period=0.25s smi-age=1.4s
+That context belonged to another Claude session on this machine, which was running
+tools/nstream_bench-style concurrent-stream sweeps of wide_resnet101_2 at the same time
+(results/nstream_wide_resnet101_2.log, 32 streams, file written 23:49:12; commit 38ff572
+"Concurrent streams: wide_resnet101_2 and streams past 16, up to 32", 23:49). A 2048^3 GEMM
+hold submitted while 32 classifier sessions were live on the same four columns timed out.
+The 0.1 / 0.25 / 0.5 s files of this run are the raw data above; the same three-rate,
+same-hold layout was NOT repeated after the fix in isolation, because the point it would
+answer (utilization by rate) was answered by run 1 and the point that changed (period) is
+answered by this run.
+
+RUN 3  2026-09-08, clean: one monitor at --interval 0.1 across the hold, NPU otherwise idle
+------------------------------------------------------------------------------------------
+Taken as part of test_pmode_clean.sh (see pmode_clock_readback_npu.log for that run's
+purpose); the device was checked idle before it and no foreign context appeared during it.
+Computed from clean_pmode_json.txt:
+
+polls 643 at --interval 0.1: period mean 0.1000 s, min 0.098, max 0.102
+busy polls in power mode Default (utilization > 50 %): n=192, mean 88.6 %, min 75.8, max 95.1
+hardware contexts listed by xrt-smi during the run:
+  pid 9620 python.exe  00:05:44.803 .. 00:06:28.986  96.0 MB
+Hold result:
+NPU time     (avg/min/max us): 8045.3 / 6690.4 / 76984.9
+End-to-end   (avg/min/max us): 8829.3 / 7184.9 / 77870.3
+NPU GFLOPS                    : 2135.40
+PASS!
+
+FINDING
+-------
+1. The Windows GPU-engine counter for the NPU adapter reads the same figure at 0.1, 0.25 and
+   0.5 s (88.2 / 87.9 / 87.8 % across one hold), with a little more scatter per sample at
+   0.1 s and no dropouts. 0.1 s is a valid floor for utilization; nothing in the counter
+   quantizes at that window.
+2. The poll period is exact once the process asks Windows for a 1 ms timer tick
+   (timeBeginPeriod(1)), naps to the deadline instead of a fixed 20 ms, and steps the next
+   deadline from the previous one: 0.100 / 0.250 / 0.500 s, min = max. Without that, every
+   period ran ~22 ms long (0.122 / 0.275 / 0.527 s).
+3. A 10 Hz monitor beside a running GEMM did not disturb it (run 3). The two hangs seen that
+   evening (this run 2, and the 23:51 run in pmode_clock_readback_npu.log) both coincided
+   with another session's 32- and 128-stream classifier sweeps on the same device; the
+   second one's timeout expired in the same second that session's XRT aborted with
+   "Failed to submit command to hw queue (0xc01e0200)"
+   (results/nstream_wide_resnet101_2_128_ceiling.log, 23:56:42).
+4. The first poll of a load is a partial or a 100 % window (23 / 10 / 29 % in run 1, 100 %
+   in run 2); a per-process engine value of 7e14 % was returned once by PDH as a process
+   left (a counter reset), which the monitor now drops.
+
+NOT TESTED
+----------
+- Rates below 0.1 s (the CLI floor).
+- The engine counter under a VitisAI EP session (still the open item from
+  xrt_api_live_clock_and_pdh_npu.log); everything here is an IRON/XRT hardware context.
+- Run 1's three-rate layout after the timing fix with the device idle: run 2 was meant to be
+  that and was contaminated; run 3 covers 0.1 s only.

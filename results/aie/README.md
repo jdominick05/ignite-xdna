@@ -129,12 +129,35 @@ why the cycle counter cannot be read from a Peano kernel and that mlir-aie v1.4.
 parser mis-times gaps over 2^18 cycles. Written up in
 [`docs/BENCHMARKS.md`](../../docs/BENCHMARKS.md#the-aie-core-clock-measured-180-ghz-default-080-powersaver).
 
-> The two entries above disagree on one point and neither is retracted: whether XRT's
-> `max_clock_frequency_mhz` tracks the live clock (`xrt_api_live_clock_and_pdh_npu.log`,
-> 800 idle / 1800 under an active context) or is pinned at 800 (`clock_probe_npu.log`,
-> read across all five power modes). The "retires" claim in the first entry is therefore
-> premature. Nobody has varied load and power mode in one sitting; until someone does,
-> the trace-unit 1.80 GHz is the citable core clock. See docs/DECISIONS.md, "UNRESOLVED".
+> The two entries above were read as disagreeing — whether XRT's `max_clock_frequency_mhz`
+> tracks the live clock (`xrt_api_live_clock_and_pdh_npu.log`, 800 idle / 1800 under an
+> active context) or is pinned at 800 (`clock_probe_npu.log`, read across all five power
+> modes) — and the 2026-09-07 merge flagged it UNRESOLVED and the first entry's "retires"
+> claim premature. `pmode_clock_readback_npu.log` below settled it by varying load and
+> power mode in one sitting: both were right for what they varied. The trace-unit 1.80 GHz
+> remains the measurement of the clock; the readback is its live indicator.
+
+**`pmode_clock_readback_npu.log`** — XRT's `max_clock_frequency_mhz` against power mode
+*and* load, varied together: a 2048³ bf16 GEMM hold with `xrt-smi configure --pmode`
+stepped through all five modes, then the same five idle, the monitor logging clock, mode
+and engine utilization every 0.1–0.25 s. Busy, the readback is the mode's clock to the MHz
+the trace unit measured (1800 `default`/`performance`/`turbo`, 1028 `balanced`, 800
+`powersaver`); idle, 800 in every mode. Two runs: the first kept as contaminated (it
+overlapped another session's 128-stream classifier sweep and the hold hung in the second
+that sweep's XRT aborted), the second with the device checked idle first. `turbo`'s escape
+error reproduced twice, the mode applying regardless. Cited by
+[`docs/SILICON.md`](../../docs/SILICON.md) 1.7 and S0, [`docs/DECISIONS.md`](../../docs/DECISIONS.md),
+[`docs/BENCHMARKS.md`](../../docs/BENCHMARKS.md#the-aie-core-clock-measured-180-ghz-default-080-powersaver).
+
+**`npu_monitor_poll_rate_npu.log`** — the NPU monitor's polling rate: three instances of
+`tools/hwinfo_npu_bridge.exe` at 0.1 / 0.25 / 0.5 s across one GEMM hold read the same
+engine-utilization mean (88.2 / 87.9 / 87.8 %) with a little more scatter at 0.1 s and no
+dropouts, and the measured period is exact (0.100 / 0.250 / 0.500 s) once the process asks
+Windows for a 1 ms timer tick — before that every period ran ~22 ms long. A clean 10 Hz
+monitor beside a hold did not disturb it; the two hangs seen that evening are attributed,
+with timestamps, to another session's concurrent-stream runs on the same device. Cited by
+[`docs/SETUP.md`](../../docs/SETUP.md).
+
 
 ## mlir-aie examples on this hardware
 

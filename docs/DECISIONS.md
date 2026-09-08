@@ -576,9 +576,10 @@
   and the following repeat as re-issued events; `kernels/clock_probe/clock_probe.py` has
   the corrected decoder, cross-checked against upstream on a sync-free run. Also learned
   there: pyxrt's `max_clock_frequency_mhz` reads 800 in every power mode and is not the
-  live clock; `xrt-smi configure --pmode turbo` prints a device error and switches anyway.
-  `results/aie/clock_probe_npu.log`.
-- **UNRESOLVED — the two bullets above disagree about `max_clock_frequency_mhz`.** The
+  live clock (an idle reading, it turned out — see the resolution below); `xrt-smi configure
+  --pmode turbo` prints a device error and switches anyway. `results/aie/clock_probe_npu.log`.
+- **RESOLVED 2026-09-08 (flagged UNRESOLVED on 2026-09-07) — the two bullets above disagreed
+  about `max_clock_frequency_mhz`, and both were right for what they varied.** As flagged: the
   monitoring bullet calls it a live readback (800 idle, 1800 with an active context); the
   clock-probe bullet calls it "800 in every power mode and not the live clock". Both were
   measured on Desktop 2 on the same day by different sessions, and neither has been
@@ -589,7 +590,23 @@
   do not cite `max_clock_frequency_mhz` as the core clock — the trace-unit figure
   (1.80 GHz `default`) is the measured one. A `--once` monitor sample taken while the
   device was idle read 800 MHz, which is consistent with either account and settles
-  nothing.
+  nothing. **Resolution, both axes in one sitting** (`results/aie/pmode_clock_readback_npu.log`: a 2048³
+  bf16 GEMM hold with `xrt-smi configure --pmode` stepped through all five modes, then the
+  same five idle, the monitor reading the clock, the mode and the engine utilization every
+  0.1–0.25 s; run twice, the second with the device checked idle first): with a context
+  active the readback is the mode's clock to the MHz the trace unit measured — 1800
+  `default`/`performance`/`turbo`, 1028 `balanced`, 800 `powersaver` — and with no hardware
+  context on the device it reads 800 in every mode (a context that exists but sits idle holds
+  the mode's clock: the first run's idle pass read 1028 in `balanced` until another process's
+  leftover context left the device). The clock-probe's "800 in every mode" was an idle
+  reading; the hypothesis above ("tracks load but ignores `--pmode`") is wrong, it tracks
+  both. So: the readback is a valid busy-clock indicator (what the monitor and HWiNFO show),
+  an idle reading says nothing about the mode, and the trace unit stays the measurement of
+  the clock itself. `--pmode turbo`'s escape error reproduced under load and idle, the mode
+  applying regardless. Two of the evening's holds hung (`ERT_CMD_STATE_TIMEOUT`) — both
+  inside another session's 32- and 128-stream classifier sweeps on the same device, the
+  second's timeout expiring in the same second that session's XRT aborted; a clean 10 Hz
+  monitor beside a hold did not (`results/aie/npu_monitor_poll_rate_npu.log`).
 
 ## The YOLOv8 partitioning failure (resolved)
 

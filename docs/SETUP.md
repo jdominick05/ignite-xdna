@@ -70,10 +70,13 @@ behind each claim):
   confirmed under a VitisAI EP session (three attempts failed for unrelated reasons; see the
   log).
 - **Clock and power mode** — XRT's in-process query API. `max_clock_frequency_mhz` is a live
-  readback on this driver: 800 MHz idle, 1800 MHz while a hardware context is active.
-- **Contexts, columns, counters** — `xrt-smi examine -r aie-partitions`, once per poll:
-  pid, process, status, submissions/completions (and their per-second deltas), migrations,
-  suspensions, errors, priority, memory, and whatever GOPS the context reports.
+  readback on this driver: 800 MHz idle in every power mode, and the mode's clock while a
+  hardware context is active (1800 `default`/`performance`/`turbo`, 1028 `balanced`, 800
+  `powersaver`; `results/aie/pmode_clock_readback_npu.log`).
+- **Contexts, columns, counters** — `xrt-smi examine -r aie-partitions`, read on its own
+  thread every `--smi-interval` seconds (a frame shows the age of the sample it used): pid,
+  process, status, submissions/completions (and their per-second deltas between reads),
+  migrations, suspensions, errors, priority, memory, and whatever GOPS the context reports.
 
 Not shown, because no documented interface exposes them on this NPU: voltage and power
 (xrt-smi's electrical query fails at the driver escape; thermal reports no sensors).
@@ -84,11 +87,28 @@ conda create -n npu_monitor_build -c conda-forge libboost-headers nlohmann_json
 # build (Visual Studio 2022 Build Tools; links the XRT SDK from C:\Xilinx\XRT\xrt_sdk when present)
 scripts\build_hwinfo_bridge.bat            # or ./scripts/build-hwinfo-bridge.sh from Git Bash
 # run
-tools\hwinfo_npu_bridge.exe                # live dashboard, polls every 2 s, publishes to HWiNFO
+tools\hwinfo_npu_bridge.exe                # live dashboard: 0.5 s polls, xrt-smi every 2 s, publishes to HWiNFO
+tools\hwinfo_npu_bridge.exe --interval 0.1 # ten utilization/clock samples a second (--smi-interval <s> for xrt-smi, 0 = never)
 tools\hwinfo_npu_bridge.exe --once        # one plain sample;  --json / --plain for scripts
 tools\hwinfo_npu_bridge.exe --no-hwinfo   # monitor only, touches no registry key
 tools\hwinfo_npu_bridge.exe --idle hide   # drop the activity sensors from HWiNFO while the NPU is idle
 ```
+
+Two polling cadences, because xrt-smi is a child process that costs a few hundred ms per
+report while the engine counters and the clock readback cost a few ms: `--interval` (default
+0.5 s, minimum 0.1) drives utilization, memory and clock; `--smi-interval` (default 2 s,
+0 = never) drives xrt-smi, and completions/s are deltas between xrt-smi reads rather than
+between frames. In the dashboard `+`/`-` halve and double the poll interval, `[`/`]` the
+xrt-smi interval, `s` turns xrt-smi off and on, `p` pauses (the activity sensors leave HWiNFO
+while paused) and `q` quits; the footer prints the requested and the measured period, and
+`--json` carries the same per sample (`period_s`, and `sample`/`age_s` in the xrt-smi section),
+which is the route for logging a run. Measured on Desktop 2 with three monitors side by side
+across one 2048³ bf16 GEMM hold (`results/aie/npu_monitor_poll_rate_npu.log`): the engine
+counter read a mean 88.2 % over 312 polls at 0.1 s (single polls 82–94 %), 87.9 % at 0.25 s
+and 87.8 % at 0.5 s (86–90 %) — the same figure at every rate, a little more scatter at the
+fastest, no dropouts — and the period is exact at all three (0.100 / 0.250 / 0.500 s) once the
+process asks Windows for a 1 ms timer tick; before that, 20 ms naps ran ~31 ms on the default
+15.6 ms tick and every period carried ~22 ms over the request (0.122 / 0.275 / 0.527 s).
 
 A running `hwinfo_npu_bridge.exe` locks its own file, so stop it before rebuilding. HWiNFO
 picks the sensors up from `HKCU\Software\HWiNFO64\Sensors\Custom\<device name>` while its
