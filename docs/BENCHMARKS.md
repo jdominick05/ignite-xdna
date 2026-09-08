@@ -2654,6 +2654,71 @@ The [legacy-entry-point replay](../results/quant/quant_resnet50_ignition_alpha_r
 separately checks `--scales-from` through the shared CLI and records its graph-diff
 gate. It is not another independent calibration or NPU measurement.
 
+### Ignition: refinement rules under perturbation
+
+Every ResNet parity result above exercised one refinement rule, the GAP output
+alignment. The shift-cut, shift-bias, shift-read and shift-write rules in
+`quant/refine.py` had never moved a position against Quark's, so a later CLE parity
+failure could not have been attributed to CLE rather than to refinement.
+`tools/quant_refine_probe.py` (wrapper `scripts/quant-refine-probe.sh`, `resnet_env`,
+no hardware, no model written) settles that on the fresh no-CLE oracle
+`models/resnet50_quark_nocle_c64.onnx` (SHA256
+`a7a17654f79f141941806c13d26fe9ca12c727ab671eb345e15f5c1345eff0c7`, checked against its
+sidecar): it perturbs the oracle's scale initializers, runs Quark's own
+`adjust_quantize_info` and Ignition's `refine` on byte-identical copies, and diffs the
+final position tables. Quark sees the file-order proto its pipeline saved, which is not
+topological (the GAP factor nodes trail their consumers); Ignition sees the sorted copy
+its loader produces. Quark's Relu bridging reads a module-level pruning list that its
+XINT8 pipeline fills before quantizing (`Clip, Relu, LeakyRelu, PRelu`); the probe calls
+the same preparation function and records the list before and after, because with the
+list empty Quark silently skips cut, bias and write on every pruned Conv/Add→Relu and
+every "disagreement" would be the probe's, not a rule's.
+
+The oracle has 181 scale initializers (73 activation, 54 weight, 54 bias), 54 Conv/Gemm
+of which 33 reach their output scale only through a Relu, and 16 Adds, all bridged. Its
+MaxPool output reuses its input scale, so pool alignment can only act on the GAP.
+
+| Set | Perturbation | Agreement | Rules Ignition fired | Log |
+|---|---|---|---|---|
+| Control | none | equal, zero moves in both | none | both |
+| 20 directed cases | one rule violated by construction: cut high/low and bias high/low on a Relu-bridged Conv, a direct-Q Conv and the Gemm; read on each input of an Add; write low/high; GAP pool high/low; a pool/write oscillation; a seven-scale combination | 20/20 equal; 19 converge in both, the oscillation hits the five-pass limit in both with the same final table | cut 16, bias 9, write 8, pool 8, read 7 | [run 1](../results/quant/refine_probe_resnet50_quark_nocle_c64.log), [run 2](../results/quant/refine_probe_resnet50_quark_nocle_c64_wide.log) |
+| 500 random trials, seed 0 | 1–6 scales shifted by up to ±6 positions | 500/500 equal; 40 trials moved anything | pool 22, cut 18, write 1 | [run 1](../results/quant/refine_probe_resnet50_quark_nocle_c64.log) |
+| 300 random trials, seed 1 | 1–12 scales shifted by up to ±12 positions | 300/300 equal; 243 trials moved, 942 moves in total, up to 11 in one trial | cut 527, bias 167, read 151, write 79, pool 26 | [run 2](../results/quant/refine_probe_resnet50_quark_nocle_c64_wide.log) |
+
+In all 800 random trials Quark's pass count equals Ignition's loop count (one pass in
+517, two in 281, three in 2), no trial hit the loop limit, and neither final table
+violates any sourced constraint. The oscillation case (GAP output set 40 positions below
+its input) is the loop-limit check: pool alignment pulls the shared
+`/layer4/layer4.2/act3/Relu_output_0_scale` down to −38, the last Add's shift-write
+pushes it back to −22, five times in both refiners, and both stop at the same state with
+the alignment still violated. Quark logs its limit warning; Ignition reports
+`converged: false`, which `quantize` turns into an error.
+
+**Stored integers.** In every directed case both refiners leave every `*_quantized`
+initializer byte-identical. That matches the source order in Quark's pipeline
+(`npu_cnn_quantizer.py:119-165`: weights quantized and stored, then pruning, then
+refinement) and in Ignition's (`emit`, then `refine`). Parity therefore requires *not*
+re-rounding after a scale move. The conditional consequence is real: a weight scale
+moved by shift-cut leaves the stored integers at the old position, so the dequantized
+weight is off by that power of two. No measured model has fired shift-cut or shift-bias
+on a weight or bias in Quark's real pipeline; this ResNet's calibration moved only the
+GAP output. Whether the DPU result of such a moved weight is wrong is unmeasured.
+
+**Raw-data hazard, measured.** Quark's `set_scale` writes `float_data` in place but
+assigns a `raw_data` update to a temporary list (`refine.py:49-57`). With the perturbed
+oracle's 181 scales converted to `raw_data`, Quark's refine ran its five passes, logged
+ten "Modify" messages and the limit warning, and changed nothing; Ignition's result on
+the same file equals its `float_data` result. Quark's own oracle stores scales as
+`float_data`, so its pipeline is unaffected; the Ignition alpha artifact stores them as
+`raw_data`, so Quark's refine is a silent no-op on Ignition output. The Mul shift-write
+hazard (`refine.py:537-539` never sets `has_change`) is unreachable on this graph: the
+only Mul is the GAP factor, whose Constant operand has no position, and both skip it.
+
+What this does not show: rules Ignition does not implement (Concat, Pad, Slice,
+HardSigmoid, swish) and bridges beyond Conv/Add→Relu and GAP→Mul (Quark also bridges
+Gemm, MaxPool, ConvTranspose and MatMul, and through Clip, LeakyRelu and PRelu) are
+untested because this graph has none. Both runs are Desktop 2, `resnet_env`, CPU only.
+
 ## Key findings
 
 Roughly ordered by how much time each one cost to discover.

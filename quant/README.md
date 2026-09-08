@@ -19,7 +19,7 @@ ONNX quantizer. Its internal package remains `quant`. See the
 | Export | Opset 17, IR 8, fully static batch 1 |
 | Quantization | Exact-sample MinMSE; scalar power-of-two scales; UINT8/zp128 activations and INT8/zp0 weights/biases; no CLE |
 | Execution target | Windows, Phoenix/Hawk Point XDNA1, Ryzen AI 1.7.1; measured on Phoenix |
-| Additional tools | Static inspection, position-table replay, graph comparison, full classification evaluation and controlled EP probes |
+| Additional tools | Static inspection, position-table replay, graph comparison, full classification evaluation, controlled EP probes and a refinement probe against Quark |
 
 Other graphs are unvalidated even if they share those operators. Unsupported operators,
 batch/opset contracts and GAP shapes fail explicitly. The `--no-cle` acknowledgement
@@ -88,6 +88,10 @@ This compares parameters, runs full labeled CPU/NPU evaluation, requires a clean
 pre-run hardware-context check, uses fresh compilation and records the EP report.
 For CPU-only verification add `--cpu-only`. Quark is needed only to generate the
 optional oracle, not by Ignition or its inference commands.
+
+`./scripts/quant-refine-probe.sh --log results/quant/refine_probe_<tag>.log` perturbs
+the oracle's positions and diffs Quark's refinement against Ignition's on identical
+inputs. It runs in `resnet_env` because it imports Quark, and writes only its log.
 
 Read [Alpha validation](../docs/BENCHMARKS.md#ignition-alpha-release-validation) for
 the versioned artifact's evidence and [acceptance findings](../docs/BENCHMARKS.md#ignition-controlled-resnet-qdq-acceptance)

@@ -141,6 +141,14 @@
   expose the converse failure: NPU placement with incorrect numerical execution.
   [Controlled evidence and limits](BENCHMARKS.md#ignition-controlled-resnet-qdq-acceptance).
 
+- **Quark's refinement is a silent no-op on `raw_data` scale initializers.** Its
+  `set_scale` writes `float_data` in place but assigns a `raw_data` update to a
+  temporary list, so on such a file it runs five passes, logs "Modify" lines and the
+  loop-limit warning, and changes nothing. Quark's own output stores scales as
+  `float_data`; Ignition's stores `raw_data`, so running Quark's `adjust_quantize_info`
+  on an Ignition artifact refines nothing while claiming to. Ignition's `refine` reads
+  either form. [Measured on the perturbed oracle](BENCHMARKS.md#ignition-refinement-rules-under-perturbation).
+
 - **`4_detect.py`/`5_eval_map.py` used to time a cut model's numpy DFL/anchor decode as
   part of "infer."** For a head-cut model `forward` was `sess.run` + `decode_heads`
   timed as one block; a full-graph model's decode runs inside the ONNX graph, so its

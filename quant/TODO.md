@@ -28,9 +28,14 @@ recorded in the handoff and Git history rather than treated as future features.
 - [ ] Quantize with CLE on the same image listing as a fresh default XINT8 oracle.
   Require graph/parameter comparison, full labeled CPU/NPU accuracy, fresh EP reports
   and paired latency. Do not compare against an old session's latency.
-- [ ] Exercise refinement cases that move weight/bias positions. Resolve the audited
-  change-tracking/raw-data hazards and record whether stored integers must change;
-  the current ResNet's GAP-only adjustment does not settle these cases.
+- [x] Exercise refinement cases that move weight/bias positions. Resolve the audited
+  change-tracking/raw-data hazards and record whether stored integers must change.
+  Evidence: the [refinement probe](../docs/BENCHMARKS.md#ignition-refinement-rules-under-perturbation)
+  (`results/quant/refine_probe_resnet50_quark_nocle_c64.log` and its `_wide` run): 20
+  directed and 800 random perturbations of the oracle's positions give identical final
+  tables from Quark and Ignition; stored integers are unchanged by both, so parity means
+  no re-rounding; the raw-data write is a measured no-op in Quark and the Mul hazard is
+  unreachable here. Rules and bridges absent from this graph stay untested.
 
 ## Broaden model support after parity gates
 

@@ -1523,7 +1523,11 @@ sections above.
   are recorded in the linked section. [Controlled acceptance probes](docs/BENCHMARKS.md#ignition-controlled-resnet-qdq-acceptance)
   now isolate domain-only fallback, exact signed-activation NPU parity on the full set,
   and metadata independence on this graph. They also expose numerical failures despite
-  NPU placement and an optimizer-dependent CPU reference discrepancy. Safe departures
+  NPU placement and an optimizer-dependent CPU reference discrepancy. The
+  [refinement probe](docs/BENCHMARKS.md#ignition-refinement-rules-under-perturbation) shows the transcribed shift and alignment
+  rules reach the same final positions as Quark's on 20 directed and 800 random
+  perturbations of the oracle, so a CLE parity failure on this graph cannot hide in
+  refinement. Safe departures
   from power-of-two scales, product-scale INT32 bias execution, per-channel compiler
   memory growth, CLE/default-preset parity, YOLO and AdaRound remain open. See
   [`quant/DESIGN.md`](quant/DESIGN.md) for the ordered gates and remaining source questions.

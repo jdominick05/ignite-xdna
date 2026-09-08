@@ -209,14 +209,22 @@ installed versions, source/model SHA256 values, and raw fingerprints are in
 - **Reader resolved [Q]:** `calibration/data_readers.py:544-579` returns the supplied
   object without `isinstance`; `calibrators.py:679` calls `get_next()`. The annotated
   base class is ORT's, so a Quark import is not needed in the adapter.
-- **Bias and refinement resolved [Q]:** §2.2–2.3. **[U]** compatibility with two source
-  hazards outside the measured ResNet case remains open: `refine.py:537-539` omits `has_change=True` for Mul
-  write, and `:49-57` assigns raw-data scale updates to a temporary list. Also,
-  refinement changes scale metadata without re-rounding stored integers. **[L]**
-  The [fresh no-CLE ResNet comparison](../results/quant/diff_resnet50_reemit_nocle_c64.log)
-  establishes that final positions suffice for this graph: all integer data match.
-  Only the GAP output position moved during its fresh calibration; this does not
-  settle re-emission when refinement moves a weight/bias scale on another graph.
+- **Bias and refinement resolved [Q]:** §2.2–2.3. **[L]** The two source hazards are
+  measured on the fresh no-CLE oracle by the
+  [refinement probe](../docs/BENCHMARKS.md#ignition-refinement-rules-under-perturbation):
+  `refine.py:49-57` assigns raw-data scale updates to a temporary list, so Quark's
+  refine is a silent no-op on `raw_data` scales (its own oracle stores `float_data`;
+  Ignition's artifacts store `raw_data`); `:537-539` (Mul write without `has_change`)
+  is unreachable on this graph. Twenty directed one-rule violations and 800 random
+  perturbations give identical final tables from Quark's `adjust_quantize_info` and
+  Ignition's `refine`, including the five-pass limit. Both producers change scale
+  metadata without re-rounding stored integers, so parity requires not re-rounding;
+  the DPU effect of a moved weight scale is unmeasured because no real calibration has
+  fired shift-cut or shift-bias. The earlier
+  [fresh no-CLE ResNet comparison](../results/quant/diff_resnet50_reemit_nocle_c64.log)
+  moved only the GAP output position. **[U]** rules and bridges absent from this graph
+  (Concat/Pad/Slice/HardSigmoid/swish; Gemm/MaxPool/ConvTranspose/MatMul, and
+  Clip/LeakyRelu/PRelu bridges) remain untested.
 - **CLE defaults resolved [Q]:** `algorithm/interface.py:61-66`: `CLESteps=1`,
   `CLEBalanceMethod="max"`, `CLEWeightThreshold=0.5`, `CLEScaleAppendBias=True`,
   `CLEScaleUseThreshold=True`, `CLETotalLayerDiffThreshold=2e-7`.
