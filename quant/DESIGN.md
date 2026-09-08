@@ -373,7 +373,7 @@ producer/consumer lookups are needed by every pass.
 ```
 class Graph:
     model: onnx.ModelProto
-    @classmethod load(path: Path) -> Graph          # asserts opset 17, ir 8, static batch 1; sorts in memory
+    @classmethod load(path: Path, strict=True) -> Graph   # strict asserts opset 17, ir 8, static batch 1; strict=False records contract/checker errors for inspection; sorts in memory
     save(self, path: Path) -> None                  # checker + shape inference before write
     nodes(self) -> list[Node]                       # topological order
     producer(self, tensor: str) -> Node | None

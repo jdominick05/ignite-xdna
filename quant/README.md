@@ -19,7 +19,7 @@ ONNX quantizer. Its internal package remains `quant`. See the
 | Export | Opset 17, IR 8, fully static batch 1 |
 | Quantization | Exact-sample MinMSE; scalar power-of-two scales; UINT8/zp128 activations and INT8/zp0 weights/biases; optional transcribed CLE (`--cle`, Conv→Conv pairs only) |
 | Execution target | Windows, Phoenix/Hawk Point XDNA1, Ryzen AI 1.7.1; measured on Phoenix |
-| Additional tools | Static inspection, position-table replay, graph comparison, full classification evaluation, controlled EP probes and a refinement probe against Quark |
+| Additional tools | Static inspection of any ONNX file (contract violations reported, not enforced), position-table replay, graph comparison, full classification evaluation, controlled EP probes and a refinement probe against Quark |
 
 Other graphs are unvalidated even if they share those operators. Unsupported operators,
 batch/opset contracts and GAP shapes fail explicitly. Exactly one of `--cle` and
@@ -69,8 +69,9 @@ python -m quant inspect models/resnet50_ignition_custom.onnx
 Replace `--no-cle` with `--cle` for the default-preset recipe; the sidecar then carries
 the ordered pair list and per-pair scale statistics under `cle_report`.
 
-Direct Python commands print to the terminal; use the shell wrappers when collecting
-repository evidence. Existing output models and sidecars are never overwritten.
+`inspect` loads permissively and reports `export_contract` and `onnx_checker` per
+file; `quantize` keeps the strict loader. Direct Python commands print to the
+terminal; use the shell wrappers when collecting repository evidence. Existing output models and sidecars are never overwritten.
 Calibration checks free disk from inferred tensor sizes and removes its private spool
 on normal completion or a Python exception. Hard process termination can leave a spool.
 The historical `pipelines/resnet50/3c_quantize_own.py` entry point delegates to this CLI.

@@ -3,6 +3,8 @@
 Graph.load enforces the frozen export contract, not EP acceptance. Extra opset
 imports are retained: inspected Quark models contain unused custom-domain imports.
 Loading sorts nodes in memory before checking; the source file is never written.
+Inspection loads with strict=False: contract and checker failures are recorded on
+the graph instead of raised, so any file can be fingerprinted; quantize stays strict.
 Mutation helpers support the owned emitter; saving infers shapes and checks again.
 """
 from collections import Counter
@@ -19,13 +21,26 @@ class Graph:
     def __init__(self, model: onnx.ModelProto):
         self.model = model
         self.node_order_changed = False
+        self.contract_error: str | None = None
+        self.checker_error: str | None = None
 
     @classmethod
-    def load(cls, path: Path) -> "Graph":
+    def load(cls, path: Path, strict: bool = True) -> "Graph":
         graph = cls(onnx.load(path))
-        graph._check_contract()
+        if strict:
+            graph._check_contract()
+            graph.node_order_changed = graph.topo_sort()
+            graph.check()
+            return graph
+        try:
+            graph._check_contract()
+        except ValueError as exc:
+            graph.contract_error = str(exc)
         graph.node_order_changed = graph.topo_sort()
-        graph.check()
+        try:
+            onnx.checker.check_model(graph.model)
+        except Exception as exc:  # the checker raises its own ValidationError family
+            graph.checker_error = f"{type(exc).__name__}: {exc}"
         return graph
 
     def _check_contract(self) -> None:

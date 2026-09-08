@@ -2808,6 +2808,23 @@ released alpha artifact. Quark's All-mode calibrator still spools every tensor, 
 sidecar records `spooled_tensors` and `skipped_prunable_tensors`; the skipped set is
 exactly the set `emit` prunes, by construction from the same `prunable_tensors`.
 
+### Ignition: permissive inspection
+
+`python -m quant inspect` and `tools/quant_inspect.py` used the same loader as
+`quantize`, so any file outside the export contract (IR 8, opset 17, static batch 1)
+could not be fingerprinted at all; the batch-2 ResNet that measured the EP's stale
+slot-1 buffer was one such file. Inspection now loads with `strict=False`: the
+contract check and the ONNX checker run, their failures are reported per file as
+`export_contract` and `onnx_checker` instead of raised, and the fingerprint follows.
+[Inspection of the batch-2 XINT8 and float exports and the A8W8 model](../results/quant/inspect_resnet50_b2_permissive_resnet_env17.log)
+reports the batch violation for the first two and `ok` for the third, with all three
+fingerprints. `quantize` keeps the strict loader:
+[the alpha boundary checks](../results/quant/check_resnet50_ignition_nocle_c64_lean_resnet_env17.log),
+re-run against the fresh artifact, still reject wrong opset, batch 2, a symbolic batch,
+an unsupported operator and a non-7×7 GAP, and the CLI still refuses a missing CLE
+choice, a non-positive limit and an existing output. A direct `quantize` on the batch-2
+float export exits with the batch error and writes nothing.
+
 ## Key findings
 
 Roughly ordered by how much time each one cost to discover.

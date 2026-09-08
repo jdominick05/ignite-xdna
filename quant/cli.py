@@ -20,7 +20,7 @@ def main(argv=None):
     parser = argparse.ArgumentParser(prog="python -m quant", description=__doc__)
     parser.add_argument("--version", action="version", version=f"Ignition {__version__} (Alpha)")
     commands = parser.add_subparsers(dest="command", required=True)
-    inspect = commands.add_parser("inspect", help="Print a static fingerprint; does not run a model")
+    inspect = commands.add_parser("inspect", help="Print a static fingerprint of any ONNX file; does not run a model")
     inspect.add_argument("models", type=Path, nargs="+")
     emit = commands.add_parser("quantize", help="Calibrate and emit XINT8 QDQ for folded ResNet")
     emit.add_argument("--in-model", type=Path, default=Path("models/resnet50_fp32.onnx"))
@@ -49,12 +49,14 @@ def main(argv=None):
             if args.command == "inspect":
                 reports = []
                 for path in args.models:
-                    graph = Graph.load(path)
+                    graph = Graph.load(path, strict=False)
                     reports.append({"model": path.as_posix(), "sha256": file_hash(path),
+                                    "export_contract": graph.contract_error or "ok",
+                                    "onnx_checker": graph.checker_error or "ok",
                                     "node_order_changed_in_memory": graph.node_order_changed,
                                     "fingerprint": graph.fingerprint()})
                 print(json.dumps({"producer": "Ignition", "version": __version__,
-                                  "method": "Static inspection; no EP acceptance verdict",
+                                  "method": "Static inspection; contract violations reported, not enforced; no EP acceptance verdict",
                                   "models": reports}, indent=2))
                 return
             if args.limit < 1:
