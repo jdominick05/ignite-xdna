@@ -1513,12 +1513,13 @@ sections above.
 
 **Still open.**
 
-- **Can an owned quantizer reproduce Quark's XINT8 output from the float export?**
-  [Phase 0 source/model inspection](docs/BENCHMARKS.md#an-owned-xint8-quantizer-scale-exact-reproduction-then-the-eps-acceptance-map)
-  corrected the proposed alignment rules and resolved bias initialization, rounding,
-  registry selection and default knobs. Fresh no-CLE re-emission, exact scales/weight
-  comparison, full-set accuracy and paired NPU gates remain open; metadata sensitivity
-  and the confounded A8W8 rejection require later one-variable probes. See
+- **How far does owned XINT8 parity extend beyond folded ResNet without CLE?**
+  [ResNet re-emission and independent calibration](docs/BENCHMARKS.md#owned-resnet50-no-cle-re-emission-and-independent-calibration)
+  now reproduce the fresh no-CLE reference from the float export: graph connections,
+  scales, zero points and integer weight/bias data match exactly. The owned calibration
+  process blocks Quark and torch imports. Full-set accuracy and paired NPU evidence
+  are recorded in the linked section. CLE/default-preset parity, YOLO, AdaRound,
+  general metadata sensitivity and the confounded A8W8 rejection remain open. See
   [`quant/DESIGN.md`](quant/DESIGN.md) for the ordered gates and remaining source questions.
 - **Does MODNet's alpha error move once calibration and inference agree?** Every MODNet
   model measured so far was calibrated through PIL bilinear while inference resized with

@@ -1,9 +1,9 @@
-"""Read and fingerprint ONNX graphs before implementing the Phase 1 emitter.
+"""Checked ONNX graph access, mutation, serialization and fingerprints.
 
 Graph.load enforces the frozen export contract, not EP acceptance. Extra opset
 imports are retained: inspected Quark models contain unused custom-domain imports.
 Loading sorts nodes in memory before checking; the source file is never written.
-Other graph mutations and emission are not implemented in this first slice.
+Mutation helpers support the owned emitter; saving infers shapes and checks again.
 """
 from collections import Counter
 import heapq
@@ -106,6 +106,35 @@ class Graph:
     def initializer(self, name: str) -> np.ndarray | None:
         value = next((t for t in self.model.graph.initializer if t.name == name), None)
         return None if value is None else numpy_helper.to_array(value)
+
+    def set_initializer(self, name: str, value: np.ndarray, dtype=None) -> None:
+        tensor = numpy_helper.from_array(np.asarray(value, dtype=dtype), name)
+        existing = next((t for t in self.model.graph.initializer if t.name == name), None)
+        if existing is None:
+            self.model.graph.initializer.append(tensor)
+        else:
+            existing.CopyFrom(tensor)
+
+    def remove_initializer(self, name: str) -> None:
+        keep = [t for t in self.model.graph.initializer if t.name != name]
+        del self.model.graph.initializer[:]
+        self.model.graph.initializer.extend(keep)
+
+    def clean_initializers(self) -> None:
+        used = {name for node in self.model.graph.node for name in node.input}
+        used.update(v.name for v in self.model.graph.output)
+        keep = [t for t in self.model.graph.initializer if t.name in used]
+        del self.model.graph.initializer[:]
+        self.model.graph.initializer.extend(keep)
+
+    def infer_shapes(self) -> None:
+        self.topo_sort()
+        self.model.CopyFrom(onnx.shape_inference.infer_shapes(self.model))
+
+    def save(self, path: Path) -> None:
+        self.infer_shapes()
+        self.check()
+        onnx.save_model(self.model, path)
 
     @staticmethod
     def _shape(value: onnx.ValueInfoProto) -> tuple[int, ...] | None:

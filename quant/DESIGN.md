@@ -1,10 +1,11 @@
 # quant/ — an owned XINT8 quantizer for the X1 backend
 
-**Status: Phase 0 source audit recorded; graph/arithmetic scaffold implemented;
-Phase 1 not yet validated.** The audit is in
+**Status: ResNet no-CLE emission gates pass; independent no-CLE MinMSE calibration
+matches the fresh reference. The broader Phase 2 remains open.** The audit is in
 [`notes_xint8_dialect.log`](../results/quant/notes_xint8_dialect.log); remaining unknowns
-are explicit in §2.6. No fresh no-CLE reference, emitted model, calibration, accuracy,
-or NPU gate has run for this design. Written 2026-09-08 on Desktop 2 from the Quark-produced
+are explicit in §2.6. Re-emission, exact graph/parameter comparison, full-set accuracy
+and paired NPU evidence are in the [ResNet results](../docs/BENCHMARKS.md#owned-resnet50-no-cle-re-emission-and-independent-calibration).
+Written 2026-09-08 on Desktop 2 from the Quark-produced
 models in `models/`, the Quark 0.11rc1 source in `resnet_env`, and the VitisAI EP's
 `vaip_config.json` in Ryzen AI 1.7.1. Every contract fact below carries a provenance tag;
 a fact without one is a guess and is marked as such.
@@ -196,10 +197,13 @@ installed versions, source/model SHA256 values, and raw fingerprints are in
   object without `isinstance`; `calibrators.py:679` calls `get_next()`. The annotated
   base class is ORT's, so a Quark import is not needed in the adapter.
 - **Bias and refinement resolved [Q]:** §2.2–2.3. **[U]** compatibility with two source
-  hazards needs a Phase 1 check: `refine.py:537-539` omits `has_change=True` for Mul
+  hazards outside the measured ResNet case remains open: `refine.py:537-539` omits `has_change=True` for Mul
   write, and `:49-57` assigns raw-data scale updates to a temporary list. Also,
-  refinement changes scale metadata without re-rounding stored integers; a fresh
-  no-CLE reference must establish whether final positions suffice for re-emission.
+  refinement changes scale metadata without re-rounding stored integers. **[L]**
+  The [fresh no-CLE ResNet comparison](../results/quant/diff_resnet50_reemit_nocle_c64.log)
+  establishes that final positions suffice for this graph: all integer data match.
+  Only the GAP output position moved during its fresh calibration; this does not
+  settle re-emission when refinement moves a weight/bias scale on another graph.
 - **CLE defaults resolved [Q]:** `algorithm/interface.py:61-66`: `CLESteps=1`,
   `CLEBalanceMethod="max"`, `CLEWeightThreshold=0.5`, `CLEScaleAppendBias=True`,
   `CLEScaleUseThreshold=True`, `CLETotalLayerDiffThreshold=2e-7`.
@@ -257,14 +261,36 @@ probe mutations**, never as a default, until the EP is measured to accept them.
 
 ## 4. Architecture
 
-**Implemented first slice:** `quant.graph` provides loading/checking, stable in-memory
+**Implemented ResNet slice:** `quant.graph` provides loading/checking, stable in-memory
 topological sorting, producer/consumer/initializer and stored shape/dtype lookups, and
-fingerprinting. `quant.pow2` provides `TensorQ` and arithmetic. Run
+fingerprinting plus checked mutation/save helpers. `quant.pow2` provides `TensorQ` and arithmetic. Run
 `python tools/quant_inspect.py models/resnet50_xint8_c64.onnx` in either conda env.
 The inspector reports any node reordering; synced XINT8 files may append simulation
-nodes after their consumers. It writes no model. Other methods/modules below are
-planned interfaces, not existing APIs; there is no emitter, calibrator, or graph-diff
-gate yet. Nested-graph sorting is explicitly unsupported in this slice.
+nodes after their consumers. It writes no model.
+
+`sources.ImageFolderSource`, `calib.collect_and_choose`, `qdq.emit`,
+`passes.avgpool_dpu_scale`, `refine.refine`, `verify.graph_diff` and
+`quantize.quantize` now implement a folded ResNet path. Calibration uses CPU ORT
+with optimization disabled, exact float16 samples on disk, float32 MinMSE, and
+the shared classification transform. Weight/bias MinMSE lives in `calib.py`;
+integer emission lives in `qdq.py`, without a separate `weights.py` yet.
+The sidecar records the listing, sample sizes, candidate errors, initial positions,
+parameter sharing, refinement moves, final positions and artifact hashes.
+
+Use `scripts/quant-own.sh --out <new.onnx> --log <new.log>` for independent calibration
+in `resnet_env17`; add `--scales-from <reference.onnx>` only for Phase 1 replay.
+Both paths explicitly disable CLE. `scripts/quant-reference.sh` runs the separate
+Quark oracle process; `scripts/quant-validate.sh` compares and evaluates the pair.
+The existing `tools/diag_ep.py` supplies EP evidence; shared `npu/ep_report.py`
+and a programmatic EP gate are still planned refactoring, not implemented APIs.
+
+The remaining signatures below describe the broader design, not a promise that
+every listed method exists. The current emitter rejects operators outside
+Conv/Relu/Add/MaxPool/GlobalAveragePool/Flatten/Gemm, non-unit Gemm beta, MaxPool
+indices, and GAP shapes other than the measured 7×7 case. Nested graphs, CLE,
+YOLO preparation, AdaRound and probe variants remain unsupported. Degenerate
+UINT8 calibration ranges are rejected because the vendor would emit zp0, outside
+this slice's zp128 contract. No general XINT8 preset replacement is claimed.
 
 ### 4.1 Pipeline order
 

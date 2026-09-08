@@ -110,7 +110,7 @@ def dequantize(q: np.ndarray, pos: int, zp: int) -> np.ndarray:
 def sqerr(x: np.ndarray, pos: int, zp: int, dtype: str) -> float:
     """Float32 summed squared error, matching Quark's MinMSE accumulation dtype.
 
-    No calibration or position search is implemented here.
+    Position search lives in calib.py.
     """
     value = _float_input(x)
     restored = dequantize(quantize(value, pos, zp, dtype), pos, zp)

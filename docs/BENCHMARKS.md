@@ -2300,10 +2300,11 @@ to [-127,127], and NumPy rounds ties to even. The effective op list unions three
 registries. CLE knobs, the large-pool threshold, reader behavior, and AdaRound's core
 schedule now have file:line evidence in the log.
 
-Open: source hazards in refinement's change tracking/raw-data update, whether final
+At the scaffold checkpoint, open questions included source hazards in refinement's change tracking/raw-data update, whether final
 positions alone reproduce weights after refinement, detailed handler rules, optional
 Softmax expansion, full AdaRound data/update behavior, and consumer metadata sensitivity.
-The fresh no-CLE comparison, full-set accuracy, and paired NPU gates have not run.
+The fresh no-CLE comparison, full-set accuracy, and paired NPU gates had not run;
+the subsequent ResNet experiment below records their outcome.
 The A8W8 attribution remains confounded until Phase 4 isolates each change.
 
 The initial scaffold now rechecks all four files using `Graph.fingerprint()`:
@@ -2330,8 +2331,128 @@ outputs, signed and unsigned half ties/saturation, position roundtrips, invalid
 parameters, and comparison with Quark's source-extracted integer arithmetic expression.
 Neither Quark nor torch was imported. `QUANT SCAFFOLD CHECKS PASS` appears in both
 logs; the repository syntax/import/shell gate also printed `PIPELINE CHECKS PASS`.
-This verifies the building blocks, not a quantizer: emission, graph_diff, calibration,
-full-set accuracy and NPU gates remain unimplemented or unrun.
+This scaffold checkpoint verified only the building blocks. The subsequent experiment
+below adds emission, graph comparison, calibration and execution evidence.
+
+#### Owned ResNet50 no-CLE re-emission and independent calibration
+
+On Desktop 2, 2026-09-08, an owned producer reproduced the fresh Quark no-CLE ResNet
+from its float export, first by replaying positions and then by selecting positions
+independently. This is a supported ResNet slice, not completion of the broader
+CLE/YOLO/AdaRound roadmap. The input was the existing folded, batch-1, opset-17,
+IR-8 `resnet50_fp32.onnx`; its SHA256 is recorded in each producer/comparison log.
+No new export, compile-cache key or inference-provider setting was introduced.
+
+The [fresh reference log](../results/quant/quant_resnet50_quark_nocle_c64.log) records
+Quark 0.11rc1 XINT8 with `include_cle=False`, ONNX 1.19.0, ORT 1.22.1 and NumPy
+1.26.4 in `resnet_env`. It uses the first 64 sorted calibration images and the
+existing `npu.preprocess.build_transform` with `preprocess_config.json` (bicubic,
+center crop, crop fraction 0.95, ImageNet normalization). The separate owned process
+reads the same float graph and preprocessing/listing. Its CLI blocks Quark and torch
+imports, and independent mode does not accept any reference positions.
+
+The [re-emission comparison](../results/quant/diff_resnet50_reemit_nocle_c64.log)
+passes with exact graph connections, scales and zero points, and all 108 integer
+weight/bias tensors exact (zero changed elements, stricter than the allowed one LSB).
+It quantizes the original float initializers, inserts 74 retained activation QDQ
+pairs and 108 initializer DQs, prunes 49 Conv/Add→Relu pairs, and adds the GAP
+Constant/Mul. Refinement on both the re-emitted and reference positions makes no
+changes. Graph comparison ignores node/internal tensor names and topological order
+while checking ordered edges, attributes, types, graph output paths and initializer data.
+
+The [independent producer log](../results/quant/quant_resnet50_own_nocle_c64.log)
+records 123 activation tensors over the same 64 images, stored as 3,404,592,128
+bytes of float16 samples. ORT CPU optimization is disabled during collection.
+One tensor at a time is converted to float32; MinMSE evaluates five positions around
+symmetric min/max with float32 summed squared error and first-minimum tie handling.
+Float weights and biases get their own MinMSE positions. MaxPool shares its input's
+parameter names. GAP alignment moves its output position from 5 to 2; the next
+refinement loop makes no changes. The private spool is removed after calibration.
+Disk guarding uses inferred tensor sizes plus reserve; the reference wrapper now
+uses this calculation too because the generic ResNet estimate was too small.
+
+The [independent comparison and per-tensor errors](../results/quant/diff_resnet50_own_nocle_c64.log)
+records `POSITION_DELTA {}`, `SAME_FLOAT_PREPROCESS_LISTING_CLE True`, and
+`GRAPH_DIFF_PASS True`: all final positions, graph structure, scalar parameters and
+all 108 integer tensors match exactly. The owned run used ONNX 1.18.0, NumPy 1.26.4
+and ORT 1.23.3.dev20260320 in `resnet_env17`; parity was measured despite this ORT
+version difference. The sidecar includes the listing, initial candidate errors,
+shared parameters, final positions, refinement moves and hashes. Model SHA256s:
+
+| Artifact | SHA256 |
+|---|---|
+| Fresh Quark no-CLE | `a7a17654f79f141941806c13d26fe9ca12c727ab671eb345e15f5c1345eff0c7` |
+| Owned position replay | `d5d792fee680042cd4f16dd3693a60fdbe90b99020458ad1a00e624a407cfb1a` |
+| Owned independent MinMSE | `c1945d2dce29e6afeaed16ef8c2bcc5689044f5210543440f84fb258c29e0ea5` |
+
+Different file hashes reflect serialization/metadata/order differences; exact parity
+here means the checked graph and parameter contents, not identical ONNX files.
+Producer wall times are logged for reproducibility, not a controlled speed comparison.
+
+Evaluation uses all 1,000 labeled images in `data/eval`, batch 1, via the existing
+ResNet `4_run.py`. Timing is `sess.run` alone. NPU runs use Ryzen AI 1.7.1's Phoenix
+`4x4.xclbin`, the existing `modelcachekey`, and `--fresh` for each model. The two
+re-emission pre-run witnesses show no hardware contexts:
+[reference](../results/quant/contexts_resnet50_reemit_nocle_c64_reference.log) and
+[owned](../results/quant/contexts_resnet50_reemit_nocle_c64_own.log).
+
+| Pair / model | CPU top-1 / top-5 | CPU mean / median / p95 ms | NPU top-1 / top-5 | NPU mean / median / p95 ms |
+|---|---:|---:|---:|---:|
+| Replay reference | 62.00 / 79.80% | 45.67 / 45.45 / 50.51 | 59.90 / 79.10% | 5.60 / 5.53 / 6.38 |
+| Owned replay | 62.00 / 79.80% | 38.17 / 38.01 / 42.73 | 59.90 / 79.10% | 5.57 / 5.52 / 6.25 |
+| Calibration reference | 62.00 / 79.80% | 42.27 / 41.55 / 48.34 | 59.90 / 79.10% | 5.45 / 5.42 / 5.76 |
+| Owned independent calibration | 62.00 / 79.80% | 39.98 / 38.79 / 51.14 | 59.90 / 79.10% | 5.67 / 5.65 / 6.13 |
+
+Replay evaluation logs:
+[reference CPU](../results/quant/run_resnet50_reemit_nocle_c64_reference_cpu.log),
+[owned CPU](../results/quant/run_resnet50_reemit_nocle_c64_own_cpu.log),
+[reference NPU](../results/quant/run_resnet50_reemit_nocle_c64_reference_npu.log),
+[owned NPU](../results/quant/run_resnet50_reemit_nocle_c64_own_npu.log).
+Both [reference EP](../results/quant/diag_resnet50_reemit_nocle_c64_reference.log) and
+[owned EP](../results/quant/diag_resnet50_reemit_nocle_c64_own.log) place 393 nodes on
+the NPU and 2 on CPU: the input QuantizeLinear and final output DequantizeLinear.
+The small paired NPU latency difference does not establish a speedup. CPU timing
+also drifted between equivalent graphs; the purpose of these runs is output and
+placement parity. The CPU-to-NPU accuracy difference is shared by both producers.
+
+Independent calibration evaluation logs:
+[reference CPU](../results/quant/run_resnet50_own_nocle_c64_reference_cpu.log),
+[owned CPU](../results/quant/run_resnet50_own_nocle_c64_own_cpu.log),
+[reference NPU](../results/quant/run_resnet50_own_nocle_c64_reference_npu.log),
+[owned NPU](../results/quant/run_resnet50_own_nocle_c64_own_npu.log).
+Both pre-run witnesses again show no hardware contexts:
+[reference](../results/quant/contexts_resnet50_own_nocle_c64_reference.log),
+[owned](../results/quant/contexts_resnet50_own_nocle_c64_own.log).
+Both [reference EP](../results/quant/diag_resnet50_own_nocle_c64_reference.log) and
+[owned EP](../results/quant/diag_resnet50_own_nocle_c64_own.log) retain the same
+393-NPU / 2-CPU split and the same two boundary operators on CPU.
+The witnesses check immediately before each session; they are not continuous
+contention monitoring. No owned calibration or parallel benchmark ran during these
+paired measurements.
+
+The completion gate and real-model mutation checks are recorded for
+[`resnet_env`](../results/quant/check_resnet50_own_nocle_c64_resnet_env.log) and
+[`resnet_env17`](../results/quant/check_resnet50_own_nocle_c64_resnet_env17.log).
+`tools/quant_verify_checks.py` accepts internal renaming/resorting and a counted
+one-LSB change, rejects a residual rewire, changed scalar scale and two-LSB change,
+and checks signed clipping/ties. These are checks of graph-comparison behavior on
+the real emitted model; they do not substitute for the hardware runs above.
+
+Reproduce from Git Bash, choosing new output/log/tag names to preserve evidence:
+
+```bash
+./scripts/quant-reference.sh --out models/resnet50_quark_nocle_c64.onnx --log results/quant/quant_resnet50_quark_nocle_c64.log
+./scripts/quant-own.sh --out models/resnet50_own_reemit_nocle_c64.onnx --scales-from models/resnet50_quark_nocle_c64.onnx --log results/quant/quant_resnet50_own_reemit_nocle_c64.log
+./scripts/quant-own.sh --out models/resnet50_own_nocle_c64.onnx --log results/quant/quant_resnet50_own_nocle_c64.log
+./scripts/quant-validate.sh --model models/resnet50_own_nocle_c64.onnx --reference models/resnet50_quark_nocle_c64.onnx --tag resnet50_own_nocle_c64
+```
+
+The replay producer was initially run directly; its sidecar/hash are captured by
+the comparison log. The wrapper above is the repeatable entry point. Independent
+calibration requires only the owned command, the float export and calibration data.
+CLE/default-XINT8 parity, YOLO handlers, AdaRound, broader refinement behavior and
+one-variable EP acceptance probes remain open. The observed GAP-only adjustment
+does not settle the source hazards for weight/bias position changes on other graphs.
 
 ## Key findings
 
