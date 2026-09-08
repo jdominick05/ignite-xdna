@@ -1,0 +1,38 @@
+
+=== C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\midascachekey\vitisai_ep_report.json ===
+  all            nodeNum=  684  opTypes=7
+  CPU            nodeNum=    4  opTypes=1
+  NPU            nodeNum=  670  opTypes=7
+  VITIS_EP_CPU   nodeNum=   10  opTypes=2
+
+  per-node device counts: {'CPU': 14, 'NPU': 670}
+
+  670 nodes on the NPU, 14 elsewhere.
+
+  op type x device:
+    CPU           DequantizeLinear     5
+    CPU           QuantizeLinear       5
+    CPU           Resize               4
+    NPU           Add                  27
+    NPU           Clip                 48
+    NPU           Conv                 97
+    NPU           DequantizeLinear     349
+    NPU           QuantizeLinear       132
+    NPU           Relu                 16
+    NPU           Resize               1
+
+  14 nodes NOT on the NPU (first 25):
+    CPU           QuantizeLinear       ['image_QuantizeLinear_Output']
+    CPU           DequantizeLinear     ['/refinenet4/resConfUnit2/Add_output_0_DequantizeLinear_Output']
+    CPU           Resize               ['/refinenet4/Resize_output_0']
+    CPU           QuantizeLinear       ['/refinenet4/Resize_output_0_QuantizeLinear_Output']
+    CPU           DequantizeLinear     ['/refinenet3/resConfUnit2/Add_output_0_DequantizeLinear_Output']
+    CPU           Resize               ['/refinenet3/Resize_output_0']
+    CPU           QuantizeLinear       ['/refinenet3/Resize_output_0_QuantizeLinear_Output']
+    CPU           DequantizeLinear     ['/refinenet2/resConfUnit2/Add_output_0_DequantizeLinear_Output']
+    CPU           Resize               ['/refinenet2/Resize_output_0']
+    CPU           QuantizeLinear       ['/refinenet2/Resize_output_0_QuantizeLinear_Output']
+    CPU           DequantizeLinear     ['/refinenet1/resConfUnit2/Add_output_0_DequantizeLinear_Output']
+    CPU           Resize               ['/refinenet1/Resize_output_0']
+    CPU           QuantizeLinear       ['/refinenet1/Resize_output_0_QuantizeLinear_Output']
+    CPU           DequantizeLinear     ['/output_conv/output_conv.5/Relu_output_0']

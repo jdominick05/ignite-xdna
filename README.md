@@ -32,6 +32,7 @@ Full environment split, install steps and footguns: [`docs/SETUP.md`](docs/SETUP
 | `pipelines/yolov8n` | YOLOv8 n/s/m/l/x detection | **Working** — 8.94–117.11 ms on the NPU once the decode tail is cut off the graph |
 | `pipelines/yolov8n-pose` | YOLOv8n-pose, 17-point COCO keypoints | **Working** — 9.35 ms on the NPU (1015/1025 nodes), OKS mAP@50-95 34.32 AdaRound vs 32.64 plain XINT8 and 49.86 float (5000 images) |
 | `pipelines/yolov6n` | YOLOv6n detection (RepVGG backbone, no DFL) | **Working** — 6.62 ms on the NPU (518/525 nodes), mAP@50-95 33.57 AdaRound vs 22.92 plain XINT8 and 36.95 float (5000 images) |
+| `pipelines/midas` | MiDaS v2.1 Small (monocular depth) | **Working** — 10.81 ms on NPU (682/684 nodes, single subgraph), r = 0.8706 vs FP32 (50 scenes) |
 | `pipelines/mobilevit` | MobileViT-XXS (hybrid CNN/transformer) | **Does not survive INT8** — 0.00% top-1, kept as the negative result |
 
 Detection width sweep, head-cut plain XINT8, full 5000-image val2017 mAP
@@ -245,6 +246,5 @@ open-sourced under the AGPL. This choice follows from a dependency, not a prefer
 YOLOv8 code is itself AGPL-3.0 — matching that license here removes the ambiguity of
 combining AGPL and permissively-licensed code in one repo.
 
-This covers the pipeline code only. The ResNet50, YOLOv8n, ImageNet and COCO artifacts
-carry their own upstream licenses — none of them are redistributed by this repo
-(`models/` and `data/` are git-ignored and regenerated locally).
+This covers the pipeline code only. Upstream model artifacts carry their own
+licenses and are not redistributed here (`models/` and `data/` are git-ignored).

@@ -38,6 +38,10 @@ MODNET_CUT_CACHE_KEY = "modnetcutcachekey"
 MODNET_WEBCAM_CUT_CACHE_KEY = "modnet_webcam_cache"
 MODNET_ZERO_CONCAT_CACHE_KEY = "modnet_zero_concat_cache"
 MODNET_USER_CACHE_KEY = "modnet_user_cache"
+# MiDaS monocular depth estimation: stock bilinear resize (5 DPU subgraphs) vs
+# NPU-optimized nearest resize (single monolithic DPU subgraph).
+MIDAS_CACHE_KEY = "midascachekey"
+MIDAS_NEAREST_CACHE_KEY = "midasnearestcache"
 
 
 def modnet_cache_key(model_path):

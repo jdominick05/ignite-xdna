@@ -2268,6 +2268,86 @@ Three findings:
    measured, they don't: the same AdaRound recipe used elsewhere in this repo, with no
    yolov6n-specific tuning, recovers the large majority of the plain-XINT8 loss.
 
+### Category D: Monocular Depth Estimation (MiDaS v2.1 Small)
+
+`pipelines/midas/` — new pipeline, built against `isl-org/MiDaS` (`MiDaS_small`, v2.1).
+Tests Category D's monocular depth estimation hypothesis on dense geometric scene
+prediction: dense relative inverse depth maps at static 256×256 resolution from an
+EfficientNet-Lite backbone with a multiscale feature fusion decoder (RefineNet blocks).
+
+Head-cut at the final raw depth convolution output (`/output_conv/output_conv.5/Relu_output_0`,
+shape `[1, 1, 256, 256]`), removing the trailing FP32 Squeeze node from the exported graph
+(`models/midas_small_cut.onnx`, opset 17, 193 nodes). Preprocessing is byte-identical between
+calibration and inference via `npu/midas.py` (cv2-only, ImageNet mean/std normalized,
+`cv2.INTER_LINEAR` resize).
+
+#### The multi-subgraph dispatch penalty: Bilinear vs Nearest resize
+
+Stock MiDaS exports decoder upsampling layers using bilinear `Resize` with
+`coordinate_transformation_mode="align_corners"`. The VitisAI EP rejects bilinear resize with
+`align_corners` to CPU. Because the 4 decoder RefineNet fusion blocks alternate convolutions
+with upsampling, CPU fallback for those 4 nodes fragments the DPU execution into
+**5 separate DPU subgraphs** (`subgraphStat: [{'device': 'DPU', 'count': 5}]` in
+`results/diag_midas_small_bilinear_xint8.log`):
+
+- **Stock Bilinear**: 670 / 684 nodes (98.0%) on NPU across 5 DPU subgraphs, with 14 nodes
+  on CPU (4 bilinear Resize nodes, 5 DequantizeLinear, 5 QuantizeLinear boundary conversions).
+  Measured single-image latency on NPU: **16.44 ms (60.8 fps)** (`results/lat_midas_small_bilinear_xint8_npu.log`).
+- **NPU-Optimized Nearest**: Converting the 4 intermediate decoder Resize nodes to `nearest`
+  (`coordinate_transformation_mode="asymmetric"`, `nearest_mode="floor"`, matching YOLOv8)
+  enables native DPU operator fusion into a **single monolithic DPU subgraph**
+  (`subgraphStat: [{'device': 'DPU', 'count': 1}]` in `results/diag_midas_small_nearest_xint8.log`).
+  Placement reaches **682 / 684 nodes (99.7%) on NPU**, leaving only the outer input
+  `QuantizeLinear` and output `DequantizeLinear` on CPU.
+  Measured single-image latency on NPU: **10.81 ms (92.5 fps)** (`results/lat_midas_small_nearest_xint8_npu.log`).
+
+**Result:** Eliminating 4 cross-EP CPU host round-trips speeds up NPU execution by
+**+5.63 ms (34% faster, 60.8 → 92.5 fps)** at near-identical spatial fidelity.
+
+#### Tri-Hardware Performance Comparison
+
+Measured on Desktop 2 (Ryzen 7 8700G, Radeon 780M, Phoenix XDNA1 NPU, 50 iterations, batch 1,
+`sess.run` only, `models/midas_small_cut.onnx` vs `models/midas_small_{cut,nearest_cut}_xint8.onnx`):
+
+| Hardware / Provider | Model Variant | Precision | Subgraphs | Latency (mean) | Throughput | Backing Log |
+|---|---|---|---|---|---|---|
+| CPU (Zen 4, 8C/16T) | Stock Cut | FP32 | 1 (CPU) | 16.56 ms | 60.4 fps | `results/lat_midas_small_cpu.log` |
+| iGPU (Radeon 780M, DirectML) | Stock Cut | FP32 | 1 (DML) | 7.93 ms | 126.1 fps | `results/lat_midas_small_dml.log` |
+| **NPU (Phoenix XDNA1)** | Stock Bilinear | XINT8 | **5 (DPU)** | 16.44 ms | 60.8 fps | `results/lat_midas_small_bilinear_xint8_npu.log` |
+| **NPU (Phoenix XDNA1)** | **Nearest-Neighbor** | **XINT8** | **1 (DPU)** | **10.81 ms** | **92.5 fps** | `results/lat_midas_small_nearest_xint8_npu.log` |
+
+The single-subgraph NPU execution beats the 8-core Zen 4 CPU by **1.53×** (10.81 ms vs 16.56 ms).
+The Radeon 780M iGPU remains faster at 7.93 ms, consistent with the iGPU-vs-NPU findings
+elsewhere in this study for dense convolutional workloads without activation quantization.
+
+#### Quantitative Depth Fidelity Evaluation
+
+Evaluated across 50 validation scenes (`data/midas_val/`, diverse indoor and outdoor scenes)
+against the FP32 reference model running on CPU:
+
+| Metric | Stock Bilinear XINT8 (NPU) | Nearest-Neighbor XINT8 (NPU) | Delta (Nearest vs Bilinear) | Backing Log |
+|---|---|---|---|---|
+| Pearson Correlation $r$ | **0.8834** | **0.8706** | -0.0128 | `results/eval_midas_small_bilinear_xint8_npu.log` / `results/eval_midas_small_nearest_xint8_npu.log` |
+| Mean Absolute Diff (MAD) | 23.87 / 255 | 26.02 / 255 | +2.15 / 255 | `results/eval_midas_small_bilinear_xint8_npu.log` / `results/eval_midas_small_nearest_xint8_npu.log` |
+| Root Mean Squared (RMSE) | 31.17 / 255 | 34.00 / 255 | +2.83 / 255 | `results/eval_midas_small_bilinear_xint8_npu.log` / `results/eval_midas_small_nearest_xint8_npu.log` |
+| Threshold Acc ($\delta < 1.25$) | 47.94% | 43.54% | -4.40% | `results/eval_midas_small_bilinear_xint8_npu.log` / `results/eval_midas_small_nearest_xint8_npu.log` |
+| Threshold Acc ($\delta < 1.25^2$) | 69.58% | 67.42% | -2.16% | `results/eval_midas_small_bilinear_xint8_npu.log` / `results/eval_midas_small_nearest_xint8_npu.log` |
+| Evaluation Latency (infer) | 17.64 ms | 10.77 ms | -6.87 ms (1.64× faster) | `results/eval_midas_small_bilinear_xint8_npu.log` / `results/eval_midas_small_nearest_xint8_npu.log` |
+
+Both variants maintain strong structural geometry (Pearson $r \approx 0.87–0.88$), preserving depth
+orderings, object silhouettes, and relative spatial depth cleanly
+(`results/midas_depth_bilinear_npu.jpg` and `results/midas_depth_npu.jpg`).
+
+Two findings:
+1. **The multi-scale decoder avoids the scale grid collapse observed in MobileViT.** Unlike
+   MobileViT's depthwise layers where weight scale grids collapsed to $\Delta = 1.0$, MiDaS's
+   depthwise separable backbone and RefineNet fusion layers quantize smoothly under plain XINT8
+   PTQ without requiring AdaRound to prevent structural degradation.
+2. **Nearest-neighbor substitution is a massive latency win on DPU.** Swapping the decoder
+   upsampling interpolation from bilinear to nearest eliminates 4 host round-trips and 8 Q/DQ
+   boundary nodes, accelerating inference by 34% (10.81 ms vs 16.44 ms) with negligible loss
+   in depth correlation ($r = 0.8706$ vs $0.8834$).
+
 ## Key findings
 
 Roughly ordered by how much time each one cost to discover.

@@ -1339,7 +1339,8 @@ Structurally re-parameterized networks collapse multi-branch training graphs int
 Dense geometric scene prediction from single monocular camera streams without transformer attention mechanisms.
 
 - **Candidate architectures:**
-  1. MiDaS v2.1 Small (EfficientNet-Lite / MobileNet backbone with multiscale feature fusion decoder).
+  1. MiDaS v2.1 Small (EfficientNet-Lite / MobileNet backbone with multiscale feature fusion decoder). **Tested** —
+     see below and [docs/BENCHMARKS.md](docs/BENCHMARKS.md#category-d-monocular-depth-estimation-midas-v21-small).
   2. FastDepth (MobileNet encoder with depthwise separable conv decoder).
 - **Hypothesis:** Pure convolutional encoder-decoder depth estimation produces dense relative inverse depth maps at 256x256 or 384x384 in 5-8 ms on NPU, providing real-time spatial scene representation for synthetic bokeh and spatial interaction.
 - **Target shapes and pipeline:** Static input `(1, 3, 256, 256)` or `(1, 3, 384, 384)` -> static output `(1, 1, H, W)`.
@@ -1349,6 +1350,7 @@ Dense geometric scene prediction from single monocular camera streams without tr
   2. Check depth boundary sharpness and relative depth metrics (AbsRel, RMSE) against FP32 ground truth.
   3. Confirm whether depthwise decoder layers avoid the scale grid collapse observed in MobileViT.
 - **Falsification criteria:** If multiscale residual connections in the decoder cause frequent memory spills or CPU fallback.
+- **MiDaS v2.1 Small result:** Stock bilinear upsampling causes CPU fallback on 4 Resize nodes, fragmenting DPU execution into 5 subgraphs and yielding 16.44 ms. Converting decoder Resize layers to nearest-neighbor fuses the model into a single monolithic DPU subgraph (682/684 nodes on NPU, 99.7%), accelerating inference by 34% to **10.81 ms (92.5 fps)** — a **1.53× win over 8-core Zen 4 CPU (16.56 ms)**. Quantization fidelity is strong under plain XINT8 PTQ without requiring AdaRound (Pearson $r = 0.8706$, MAD $26.02 / 255$, RMSE $34.00 / 255$), refuting the depthwise scale grid collapse fear. Full working: [docs/BENCHMARKS.md](docs/BENCHMARKS.md#category-d-monocular-depth-estimation-midas-v21-small).
 
 ### Category E: Untested Classification Topologies
 
