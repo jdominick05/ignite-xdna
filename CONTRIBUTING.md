@@ -97,7 +97,7 @@ you did not measure.
 Every new `npu/` or `quant/` module joins the import list here and in the local
 `CLAUDE.md`. `quant/` must never import Quark, and `npu/` must never import `quant/`.
 The owned quantizer's core also imports in `resnet_env`; torch belongs only in its
-future AdaRound module. See [`quant/DESIGN.md`](quant/DESIGN.md) for the ordered
+AdaRound module. See [`quant/DESIGN.md`](quant/DESIGN.md) for the ordered
 comparison gates; passing imports does not validate a quantized model.
 
 For Ignition Alpha's supported scope and usage, start with [quant/README.md](quant/README.md).

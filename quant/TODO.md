@@ -44,9 +44,18 @@ recorded in the handoff and Git history rather than treated as future features.
 
 ## Broaden model support after parity gates
 
-- [ ] Add YOLO preparation and handlers: Split→Slice, supported pooling rewrites,
+- [x] Add YOLO preparation and handlers: Split→Slice, supported pooling rewrites,
   SiLU/HardSigmoid simulation, Concat sharing/alignment and graph-specific pruning.
   Gate on exact same-listing head-cut YOLOv8n comparison and full COCO evaluation.
+  Evidence (yolov8n-cut, closed 2026-09-08): `quant/passes.py`, the generalized
+  `quant/qdq.py` marking and the full `quant/refine.py` transcription;
+  [YOLO preparation parity](../docs/BENCHMARKS.md#ignition-yolov8n-cut-preparation-parity):
+  the prepared graph equals Quark's pre-calibration graph and the committed artifact
+  replays exactly (`tools/quant_prepare_probe.py`), a fresh same-listing c64 oracle
+  matches position for position with 126/126 int8 byte-identical, and both files read
+  27.43 CPU / 27.03 NPU mAP@50-95 with 922/929 nodes placed and byte-identical
+  detections. Pooling rewrites and Conv→Relu pruning had no instance on this graph, and
+  the HardSigmoid and swish shift bounds never fired.
 - [x] Add AdaRound as an isolated optional torch module. Match the audited schedule,
   layer selection, update behavior and full-set accuracy; record peak memory beside
   the Quark oracle. Keep all other core imports torch-free. Evidence (ResNet, closed

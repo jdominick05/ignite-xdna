@@ -1598,9 +1598,14 @@ sections above.
   [AdaRound parity](docs/BENCHMARKS.md#ignition-adaround-parity) transcribes Quark's FastFinetune
   AdaRound: byte-identical to a fresh `XINT8_ADAROUND` oracle on the same machine,
   79.40% CPU top-1 for both, while a Sep 5 Quark artifact from an unrecorded machine
-  differs by one LSB in 4.1 M weights, so cross-machine parity stays statistical. Safe
-  departures from power-of-two scales, product-scale INT32 bias execution, per-channel
-  compiler memory growth and YOLO remain open. See
+  differs by one LSB in 4.1 M weights, so cross-machine parity stays statistical.
+  [YOLO preparation parity](docs/BENCHMARKS.md#ignition-yolov8n-cut-preparation-parity)
+  extends the gate to the head-cut YOLOv8n export: the prepared float graph equals
+  Quark's pre-calibration graph, a fresh same-listing oracle matches position for
+  position and integer for integer, and both files read 27.03 mAP@50-95 paired on the
+  NPU with byte-identical detections. Safe departures from power-of-two scales,
+  product-scale INT32 bias execution, per-channel compiler memory growth and YOLO
+  AdaRound remain open. See
   [`quant/DESIGN.md`](quant/DESIGN.md) for the ordered gates and remaining source questions.
 - **Does MODNet's alpha error move once calibration and inference agree?** Every MODNet
   model measured so far was calibrated through PIL bilinear while inference resized with

@@ -3103,6 +3103,99 @@ scale. Against the alpha's no-CLE 62.00% CPU top-1, the c64 Ignition artifact wi
 and AdaRound reads 79.40%; the repo's 79.80% headline is a separate run whose
 calibration count no log here records, and it is not compared.
 
+### Ignition: YOLOv8n-cut preparation parity
+
+The head-cut YOLOv8n export is the first graph outside folded ResNet, and it needs
+everything the ResNet path never exercised: `quant/passes.py` rewrites each `Split`
+into one `Slice` per output plus four unnamed INT64 `Constant` nodes for
+starts/ends/axes/steps and drops the split initializer; after emission and before
+refinement it replaces each `Sigmoid` with `HardSigmoid(alpha=1/6)` under the same node
+name and inserts a `Mul` by `HARD_SIGMOID_SCALE = (2731/16384)/(1/6)` with its
+`<out>_Scale` constant, the vendor's DPU simulation. `quant/qdq.py` marks Conv input,
+output, weights and bias; `MaxPool` and `Resize` outputs share their input's scale and
+zero-point initializers, resolved through the SPPF pool chain to the root provider; and
+Sigmoid, Mul, Add, Concat and Slice quantize every float activation input and output.
+`quant/refine.py` is now a full transcription of Quark's `QuantPosManager`: concat,
+pool, pad and slice alignment, then the read, write (a `Mul` write does not raise the
+change flag), cut, bias, HardSigmoid and swish shifts, in the vendor's order, at most
+five loops; it walks Ignition's topological order rather than the vendor's file order.
+`quant/sources.py::CocoSource` replays `3b_quantize_cut.py`'s reader (sorted jpgs,
+`npu.yolo.letterbox` at the graph's input size) and the family is read from the
+operators, never a flag. Three gates, in order.
+
+**Preparation parity first.** `tools/quant_prepare_probe.py` (wrapper
+`scripts/quant-prepare-probe.sh`, `resnet_env`, no calibration, no hardware) runs
+Quark's `apply_pre_process` with the resolved static op types, the hardware-compatibility
+conversions its `quantize()` forces on and its own CLE, against Ignition's load, CLE and
+prepare in the order `quantize()` applies them
+([log](../results/quant/prepare_probe_yolov8n_cut.log)). The graph diff is empty: the
+209-node float export becomes 281 nodes on both sides (8 `Split` to 16 `Slice` plus 64
+`Constant`, the four `onnx::Split_*` initializers removed, 131 to 127), CLE finds zero
+patterns on both (the SiLU net has no Conv-to-Conv pair), node names are equal as sets
+and differ only in order, so the comparison is structural. Each of the vendor's other
+preparation steps applied alone to the export, onnxslim, ORT basic optimization as
+Quark runs it and BatchNorm folding, leaves 209 nodes and 131 initializers with no byte
+changed (onnxslim adds `value_info` only, 218 to 428). The probe then replays the
+repo's committed `yolov8n_cut_xint8.onnx` (SHA256 `f02e86ba…`) from its own positions
+through the new emitter, HardSigmoid bridge and refinement: 344 positions, 218
+activations, 126/126 int8 initializers byte-identical, empty graph diff, zero
+refinement moves on either side, 3.8 s. The same probe on the ResNet export
+([control](../results/quant/prepare_probe_resnet50_fp32.log)) finds all four steps
+no-ops on 122 nodes / 108 initializers, 33 CLE patterns on both sides, an empty whole
+pre-process diff, and `resnet50_xint8_c64.onnx` replaying exactly (182 positions,
+108/108 int8, zero moves), so generalizing the marking and refinement did not move the
+ResNet path.
+
+**Same-listing calibration parity.** A fresh default-preset Quark oracle on the sorted
+first 64 COCO calibration images
+([log](../results/quant/quant_yolov8n_cut_quark_cle_c64.log),
+`scripts/quant-reference.sh --in-model models/yolov8n_cut.onnx --calib-dir data/coco_calib --cle`):
+0 CLE patterns, 20 refinement moves, peak working set 3,725,996,032 bytes, SHA256
+`763e61cb…6ec46`. Ignition on the same listing
+([log](../results/quant/quant_yolov8n_cut_ignition_cle_c64.log), `scripts/quant-own.sh --cle`,
+Quark and torch imports blocked): 218 tensors spooled, 7,106,560,000 bytes, 57
+Sigmoid replaced and scaled, refinement converged in two loops with 16 Concat
+alignments and 4 Slice alignments. The two calibrations ran at the same time on the
+same eight cores, so their wall times (232.2 s and 244.5 s) are not a timing comparison
+and are not compared. Result ([diff](../results/quant/diff_yolov8n_cut_ignition_cle_c64.log)):
+empty position delta; listing, preprocessing (letterbox 640, input `images`), float
+hash and CLE provenance equal; **126/126 int8 initializers byte-identical**, maximum 0
+LSB; refinement fixed point on both. The files themselves hash differently
+(`b4b7e0fa…` against `763e61cb…`): the gate is the graph and every parameter, not the
+serialization. The vendor's 20 logged moves, node, direction, old and new position,
+match Ignition's sidecar entry for entry in the same order, a check made in-session on
+the two logs (the vendor's line names the node but not the tensor, so the comparison is
+node, direction, old and new). The HardSigmoid and swish shift bounds, the read, write,
+cut and bias shifts and pool and pad alignment were transcribed but never fired on this
+calibration, and the graph has no large-kernel pooling or Conv-to-Relu pruning instance,
+so those handlers remain transcriptions without a measured case.
+
+**Full-set evaluation.** `scripts/quant-validate.sh --family yolo` runs
+`pipelines/yolov8n/5_eval_map.py` on all 5,000 val2017 images at conf 0.001, IoU 0.7,
+max_det 300 with per-class NMS, the numpy decode outside "infer". CPU: both files read
+**27.43 mAP@50-95 / 40.87 mAP@50** (small/medium/large 13.96 / 31.04 / 37.63;
+[reference](../results/quant/map_yolov8n_cut_ignition_cle_c64_reference_cpu.log),
+[own](../results/quant/map_yolov8n_cut_ignition_cle_c64_own_cpu.log)), as identical
+parameters require; the detection files (66,904,327 bytes, git-ignored) compared
+byte-identical in-session. NPU, paired in one sitting with a clean `xrt-smi` context
+witness before each model and `--fresh` compilation
+([reference](../results/quant/map_yolov8n_cut_ignition_cle_c64_reference_npu.log),
+[own](../results/quant/map_yolov8n_cut_ignition_cle_c64_own_npu.log),
+[EP reports](../results/quant/diag_yolov8n_cut_ignition_cle_c64_own.log)): both read
+**27.03 mAP@50-95 / 40.19 mAP@50** (13.21 / 30.68 / 37.02), 922 of 929 nodes on the
+NPU with the input `QuantizeLinear` and the six head `DequantizeLinear` on CPU,
+identical EP reports, and byte-identical NPU detection files (65,873,014 bytes), so the
+compiler built the same executable from both. Mean `sess.run` at eval conf was 7.30 ms
+(reference) and 7.28 ms (own), not comparable to demo latency, and the 0.02 ms gap is
+session noise. The 0.40-point CPU-to-NPU drop is the DPU-versus-QDQ drift seen on
+ResNet, downward here. The repo's c200 head-cut artifact reads 26.94 / 40.15 on the
+NPU (the yolov8n XINT8 head-cut row above); the c64 pair is not compared to it because
+the calibration count differs.
+
+What remains open on YOLO: AdaRound (`python -m quant adaround` raises for a non-ResNet
+base), a calibration that fires the shift rules, and traversal-order equivalence where
+refinement rules interact, which this graph does not test.
+
 ## Key findings
 
 Roughly ordered by how much time each one cost to discover.

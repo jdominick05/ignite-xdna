@@ -1,0 +1,47 @@
+loading annotations into memory...
+Done (t=0.33s)
+creating index...
+index created!
+model: head-cut (6 outputs), numpy decode, input 640x640
+eval : 5000 images, conf 0.001, iou 0.7, max_det 300, per-class NMS
+  500/5000  (65494 detections so far)
+  1000/5000  (132800 detections so far)
+  1500/5000  (203270 detections so far)
+  2000/5000  (270698 detections so far)
+  2500/5000  (338742 detections so far)
+  3000/5000  (407399 detections so far)
+  3500/5000  (475806 detections so far)
+  4000/5000  (544540 detections so far)
+  4500/5000  (616391 detections so far)
+  5000/5000  (684742 detections so far)
+
+684742 detections over 5000 images in 247s
+inference  mean 37.88 ms   median 35.94 ms
+wrote results/dets_yolov8n_cut_ignition_cle_c64_reference_cpu.json
+Loading and preparing results...
+DONE (t=2.35s)
+creating index...
+index created!
+Running per image evaluation...
+Evaluate annotation type *bbox*
+DONE (t=29.68s).
+Accumulating evaluation results...
+DONE (t=7.22s).
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.274
+ Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] = 0.409
+ Average Precision  (AP) @[ IoU=0.75      | area=   all | maxDets=100 ] = 0.294
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.140
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.310
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.376
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=  1 ] = 0.258
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets= 10 ] = 0.429
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.472
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.261
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.534
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.607
+
+=== yolov8n_cut_quark_cle_c64 | CPU | 640px | 5000 images ===
+mAP@50-95  27.43
+mAP@50     40.87
+mAP small / medium / large   13.96 / 31.04 / 37.63
+latency    37.88 ms

@@ -1,0 +1,32 @@
+
+=== C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\scratch\quant-worktree\yolocutcachekey\vitisai_ep_report.json ===
+  all            nodeNum=  929  opTypes=10
+  NPU            nodeNum=  922  opTypes=10
+  VITIS_EP_CPU   nodeNum=    7  opTypes=2
+
+  per-node device counts: {'CPU': 7, 'NPU': 922}
+
+  922 nodes on the NPU, 7 elsewhere.
+
+  op type x device:
+    CPU           DequantizeLinear     6
+    CPU           QuantizeLinear       1
+    NPU           Add                  6
+    NPU           Concat               13
+    NPU           Conv                 63
+    NPU           DequantizeLinear     431
+    NPU           HardSigmoid          57
+    NPU           MaxPool              3
+    NPU           Mul                  114
+    NPU           QuantizeLinear       217
+    NPU           Resize               2
+    NPU           Slice                16
+
+  7 nodes NOT on the NPU (first 25):
+    CPU           QuantizeLinear       ['images_QuantizeLinear_Output']
+    CPU           DequantizeLinear     ['/model.22/cv3.2/cv3.2.2/Conv_output_0']
+    CPU           DequantizeLinear     ['/model.22/cv3.1/cv3.1.2/Conv_output_0']
+    CPU           DequantizeLinear     ['/model.22/cv3.0/cv3.0.2/Conv_output_0']
+    CPU           DequantizeLinear     ['/model.22/cv2.2/cv2.2.2/Conv_output_0']
+    CPU           DequantizeLinear     ['/model.22/cv2.1/cv2.1.2/Conv_output_0']
+    CPU           DequantizeLinear     ['/model.22/cv2.0/cv2.0.2/Conv_output_0']
