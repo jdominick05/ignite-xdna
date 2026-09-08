@@ -2638,8 +2638,13 @@ and only the input/output QDQ boundary on CPU:
 This confirms full-set accuracy and placement parity for the versioned alpha artifact.
 The small latency differences are not a claimed optimization. These no-CLE figures
 do not replace the repository's default CLE/AdaRound results or establish support
-for other model families. The release evaluation reports accuracy, not saved-logit
-equality; the separate acceptance study above records its exact-logit comparisons.
+for other model families. For scale: the repo's headline ResNet50 (CLE plus AdaRound)
+reads 79.80% top-1 on the NPU against this no-CLE alpha's 59.90%, a 19.9-point gap;
+the [CLE parity section](#ignition-cle-parity-and-the-default-xint8-preset) measures
+12.2 of those points as CLE and leaves 7.7 to AdaRound, which Ignition does not have
+(latencies are different days and are not compared). The release evaluation reports
+accuracy, not saved-logit equality; the separate acceptance study above records its
+exact-logit comparisons.
 
 Release checks passed in
 [resnet_env](../results/quant/check_resnet50_ignition_alpha_resnet_env.log) and

@@ -62,10 +62,10 @@ out of the graph and decoding them in numpy instead gives **922 of 929 nodes on 
 and 8.7–9.8 ms. The seven CPU nodes are only the input/output Q/DQ boundary.
 [Working](docs/BENCHMARKS.md#the-yolov8n-blocker-and-how-it-was-solved).
 
-**Check placement and output agreement.** The `[Vitis AI EP]` banner and
+**Silent CPU fallback is the failure mode to watch for.** The `[Vitis AI EP]` banner and
 operator table print only during compilation, never on a cache load, so their absence
 means nothing. `<cacheKey>/vitisai_ep_report.json` — written on every session build, read
-by `tools/diag_ep.py` — proves placement; [Ignition's probes](docs/BENCHMARKS.md#ignition-controlled-resnet-qdq-acceptance) also catch wrong NPU outputs. A `_npu` suffix means the
+by `tools/diag_ep.py` — is the only real evidence of placement, and placement alone is not correctness: [Ignition's probes](docs/BENCHMARKS.md#ignition-controlled-resnet-qdq-acceptance) catch wrong NPU logits. A `_npu` suffix in a log name means the
 EP was *requested*. A8W8 falls back silently (39.0 ms, CPU speed); so does A16W8
 (0/394 nodes); so does batch 2.
 

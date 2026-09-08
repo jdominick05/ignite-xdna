@@ -175,6 +175,16 @@ Evidence of engagement stays `<cacheKey>/vitisai_ep_report.json`, read through t
 shared [`npu/ep_report.py`](../npu/ep_report.py) parser used by `tools/diag_ep.py` (schema `deviceStat` /
 `nodeStat` / `shapeInfo`). A `_npu` log name means requested, not engaged.
 
+**The QDQ file is not a bit-exact specification of what the DPU computes [L].** On the
+unmutated no-CLE ResNet the NPU logits differ from unoptimized CPU QDQ execution, and
+the 1,000-image top-1 drops 62.00% to 59.90%; with CLE the drop is 72.80% to 72.10%,
+for Quark's and Ignition's artifacts alike
+([acceptance study](../docs/BENCHMARKS.md#ignition-controlled-resnet-qdq-acceptance),
+[CLE parity](../docs/BENCHMARKS.md#ignition-cle-parity-and-the-default-xint8-preset)).
+Parity therefore means the same file as Quark, and "correct NPU output" in the probes
+means the unmutated model's own NPU logits, never a CPU simulation. `pow2.py` is producer
+arithmetic, not a model of the DPU's rounding; nothing in this design claims one.
+
 ### 2.5 The A8W8 confound
 
 `models/resnet50_a8w8.onnx` [M] has its Q/DQ nodes in the **`com.microsoft` domain**,
