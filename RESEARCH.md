@@ -511,13 +511,13 @@ been closed:
 
 - **Resolution vs. accuracy for classification — done, 128–384px.** 256px is the
   measured peak of the speed/accuracy frontier under plain XINT8 (74.00% at 6.32 ms);
-  everything above it is strictly dominated. AdaRound across the resolution range (192²,
-  224², 256², 288²) reveals a broad 79.30%–79.80% top-1 accuracy plateau: 192² AdaRound
-  recovers +8.00% top-1 (71.30% → 79.30%) at 5.15 ms (~194 img/s); 256² AdaRound matches
-  224² on top-1 (both 79.80%) while achieving higher top-5 (93.40% vs 92.50%) at 5.85 ms,
-  and nearly matches wide_resnet50_2 (80.10% / 93.40% at 9.66 ms) at 39% lower latency.
-  288² AdaRound (78.10% / 93.40% at 8.78 ms) confirms that resolutions above 256² remain
-  dominated even after rounding optimization.
+  everything above it is strictly dominated. AdaRound across the resolution range (160², 192²,
+  224², 256², 288²) maps the complete landscape: 160² marks the physical inflection point
+  recovering +9.50% top-1 (67.10% → 76.60%) and +6.00% top-5 (85.70% → 91.70%) at 4.55 ms
+  (~220 img/s); 192²–256² forms a broad 79.30%–79.80% accuracy plateau (192² at 79.30% / 5.15 ms;
+  256² at 79.80% / 5.85 ms, matching 224² top-1 with +0.90% higher top-5 at 93.40% and rivaling
+  wide_resnet50_2 at 39% lower latency); while 288² AdaRound (78.10% at 8.78 ms) confirms that
+  resolutions above 256² remain dominated even after rounding optimization.
 - **AdaRound for `wide_resnet50_2` and `wide_resnet101_2` — done.** `wide_resnet50_2`
   recovers 90.5% of its quantization loss, essentially matching resnet50's 90.0% (see the
   findings section above); the predicted "recovers less at width" effect didn't materialize,
@@ -1390,13 +1390,14 @@ sections above.
   slice, it reads 33.94 (+2.29) / 71.88 (+5.49) against plain XINT8's 31.65 / 66.39.
   Like detection, it does not close the full gap to float (49.86), but delivers a clean,
   cost-free recovery. [Working](docs/BENCHMARKS.md#yolov8n-pose-end-to-end-on-the-npu).
-- **AdaRound on the ResNet50 resolution sweep (192², 256², 288²).** Measured on 1000 eval images:
-  AdaRound at 192² recovers +8.00 points of top-1 (71.30% → 79.30%) and +5.80 points
-  of top-5 (86.60% → 92.40%) at 5.15 ms (393/395 nodes, 99.5%, ~194 img/s). At 256², AdaRound
-  hits 79.80% top-1 / 93.40% top-5 at 5.85 ms (matching 224² top-1 while gaining +0.90% top-5).
-  At 288², it reaches 78.10% top-1 / 93.40% top-5 at 8.78 ms. This confirms that AdaRound
-  creates a broad 79.3%–79.8% accuracy plateau across 192²–256² within 5.15–5.85 ms, proving
-  that PTQ drops at lower resolutions were largely rounding noise rather than spatial information loss.
+- **AdaRound on the ResNet50 resolution sweep (160², 192², 256², 288²).** Measured on 1000 eval images:
+  AdaRound at 160² recovers +9.50 points of top-1 (67.10% → 76.60%) and +6.00 points of top-5
+  (85.70% → 91.70%) at 4.55 ms (393/395 nodes, 99.5%, ~220 img/s). AdaRound at 192² recovers
+  +8.00 points of top-1 (71.30% → 79.30%) and +5.80 points of top-5 (86.60% → 92.40%) at 5.15 ms
+  (~194 img/s). At 256², AdaRound hits 79.80% top-1 / 93.40% top-5 at 5.85 ms (matching 224² top-1
+  while gaining +0.90% top-5). At 288², it reaches 78.10% top-1 / 93.40% top-5 at 8.78 ms. This confirms
+  that AdaRound creates a broad 79.3%–79.8% accuracy plateau across 192²–256² within 5.15–5.85 ms, with
+  160² marking the physical inflection point where spatial downsampling bounds accuracy rather than rounding noise.
   [Working](docs/BENCHMARKS.md#resnet50-input-resolution-does-the-fixed-cost-story-hold-for-a-classifier).
 - **A yolov8m mAP row at calibration 200.** Measured on the full 5000-image val2017 set:
   plain XINT8 calibrated on 200 images scores 43.38 mAP@50-95 and 59.62 mAP@50 at 26.95 ms

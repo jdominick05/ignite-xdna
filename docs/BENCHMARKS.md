@@ -1042,12 +1042,13 @@ best measured point on the speed/accuracy frontier for this checkpoint** — bea
 default 224² on both axes at once, and beating every size tried above it on both axes too.
 
 **Does AdaRound change the curve?** AdaRound at 224² reaches 79.80% top-1 / 92.50%
-top-5 (5.27 ms). Testing AdaRound across the resolutions spanning 192² to 288²
+top-5 (5.27 ms). Testing AdaRound across the resolutions spanning 160² to 288²
 reveals how rounding recovery interacts with resolution:
 
 | Resolution | Plain XINT8 top-1 | AdaRound top-1 | AdaRound top-5 | NPU Latency | NPU Nodes | Backing Logs |
 |---|---|---|---|---|---|---|
-| **192²** | 71.30% | 79.30% | 92.40% | **5.15 ms** | 393 / 395 | `results/res/run_resnet50_r192_adaround_npu.log`, `diag_resnet50_r192_adaround.log` |
+| **160²** | 67.10% | **76.60%** | 91.70% | **4.55 ms** | 393 / 395 | `results/res/run_resnet50_r160_adaround_npu.log`, `diag_resnet50_r160_adaround.log` |
+| **192²** | 71.30% | 79.30% | 92.40% | 5.15 ms | 393 / 395 | `results/res/run_resnet50_r192_adaround_npu.log`, `diag_resnet50_r192_adaround.log` |
 | **224²** | 72.10% | **79.80%** | 92.50% | 5.27 ms | 393 / 395 | `results/adaround_latency_diff_adaround_npu.log` |
 | **256²** | **74.00%** | **79.80%** | **93.40%** | 5.85 ms | 392 / 394 | `results/res/run_resnet50_r256_adaround_npu.log`, `diag_resnet50_r256_adaround.log` |
 | 288² | 71.50% | 78.10% | 93.40% | 8.78 ms | 393 / 395 | `results/res/run_resnet50_r288_adaround_npu.log`, `diag_resnet50_r288_adaround.log` |
@@ -1058,6 +1059,12 @@ reveals how rounding recovery interacts with resolution:
   lower-resolution activation maps were more susceptible to per-tensor INT8 rounding noise. AdaRound
   delivers massive recoveries across all three sizes (+8.00% at 192², +7.70% at 224², +5.80% at 256²),
   flattening the accuracy response into a tight 0.5-point band (79.30%–79.80%).
+- **160² marks the true inflection point (+9.50% recovery, 76.60% top-1 at 4.55 ms)**: At 160²,
+  AdaRound yields its largest single recovery (+9.50% top-1 from 67.10% to 76.60%, and +6.00% top-5
+  from 85.70% to 91.70%). Here the network finally steps off the 79% plateau, reflecting the physical
+  limit of spatial downsampling (a 5×5 final spatial grid before pooling) rather than rounding noise.
+  Crucially, 160² AdaRound still **beats default 224² plain XINT8 on both axes** (+4.50% top-1,
+  +3.60% top-5, and 20% lower latency: 4.55 ms vs 5.68 ms, ~220 img/s).
 - **192² offers maximum throughput at near-peak accuracy**: At **5.15 ms** (~194.1 img/s), 192² AdaRound
   reaches **79.30% top-1 and 92.40% top-5**, sacrificing only 0.50% top-1 against 224² (79.80%) and matching
   its top-5 (92.40% vs 92.50%) while running at higher throughput. Against stock plain XINT8 at 224²
@@ -1066,7 +1073,7 @@ reveals how rounding recovery interacts with resolution:
 - **Top-1 peaks at 79.80% across 224² and 256²**: Both 224² and 256² converge to the identical **79.80%**
   ceiling of the float model.
 - **Top-5 improves by +0.90% at 256²**: 256² AdaRound achieves **93.40% top-5**, clearly outperforming
-  224² (92.50%) and 192² (92.40%) at only **5.85 ms** (~171.0 img/s, +0.58 ms over 224²).
+  224² (92.50%), 192² (92.40%), and 160² (91.70%) at only **5.85 ms** (~171.0 img/s, +0.58 ms over 224²).
 - **Comparison to `wide_resnet50_2`**: `wide_resnet50_2` + AdaRound scores 80.10% top-1 / 93.40% top-5
   at 9.66 ms. ResNet50 at 256² with AdaRound reaches virtually identical accuracy (79.80% / 93.40%)
   at **39% lower latency** (5.85 ms vs 9.66 ms, 171 img/s vs 103 img/s).
