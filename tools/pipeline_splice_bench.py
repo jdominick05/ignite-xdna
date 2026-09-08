@@ -14,11 +14,17 @@ import queue
 import numpy as np
 import torch
 import onnxruntime as ort
+import sys
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(REPO_ROOT))
+from npu.paths import CACHE_DIR, MOBILEVIT_CUT_CACHE_KEY
 
 model_path = "models/mobilevit_cut_backbone_xint8.onnx"
 xclbin_path = r"C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin"
-cache_dir = "modelcachekey"
-cache_key = "mobilevit_cut"
+cache_dir = str(CACHE_DIR)
+cache_key = MOBILEVIT_CUT_CACHE_KEY
 
 po = {
     "config_file": "",

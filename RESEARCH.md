@@ -1402,7 +1402,8 @@ Characterizing the boundary conditions of the XDNA1 compiler on alternative conv
 - **Measured findings (DenseNet-121 & ResNeXt-50):**
   1. **Hardware offload is complete**: DenseNet-121 places **1,703 / 1,705 nodes (99.9%)** on NPU at **8.06 ms** (2.69× speedup over Zen 4 CPU FP32 at 21.70 ms); all 58 Concat nodes execute natively on AIE without DMA bottlenecks. ResNeXt-50 places **393 / 395 nodes (99.5%)** on NPU at **9.37 ms** (1.86× speedup over Zen 4 CPU FP32 at 17.40 ms); all 53 `group=32` convs compile natively.
   2. **Coarse per-tensor PTQ fails completely**: Both architectures collapse to **0.10% top-1** under plain XINT8 (vs 78.00% / 81.00% FP32 baselines). Dense block concatenation forces disparate block activations into shared power-of-two scales (causing shift cuts to exceed `[0, 16]` by up to 7 powers of 2), while 4-channel grouped convs produce wide cross-group dynamic range divergence that per-tensor INT8 cannot represent.
-- **Falsification verdict:** Refuted for latency (neither `Concat` memory copies nor grouped conv micro-kernels stall the NPU), but confirmed as a severe failure mode for plain per-tensor INT8 PTQ.
+  3. **RegNetX-002 proves the collapse is DPU shift-cut scale explosion, not concatenation or narrow groups**: RegNetX-002 (2.68M parameters, regular linear channel capacity) places **324 / 326 nodes (99.4%)** on NPU at **2.45 ms (407.9 FPS)**, but also collapses to **0.50% top-1** under plain XINT8 and **0.50% under AdaRound** (vs 68.50% FP32 baseline). Static inspection via `tools/audit_quant_grid.py` traced this to Quark's DPU shift-cut clamp ($131 \to -108$) forcing $\Delta = 2^{108} \approx 3.25 \times 10^{32}$ on depthwise weights, spanning an $8.5 \times 10^{35}\times$ activation dynamic range. AdaRound cannot modify the scale grid $\Delta$ and thus cannot recover the network.
+- **Falsification verdict:** Refuted for latency (neither `Concat` memory copies nor grouped conv micro-kernels stall the NPU), but confirmed as a severe failure mode for plain per-tensor INT8 PTQ and unrecoverable by AdaRound when shift cuts cause floating scale explosion.
 
 ## Roadmap
 
@@ -1524,16 +1525,23 @@ sections above.
   over 8-core Zen 4 CPU** (256.89 ms) and beating the Radeon 780M iGPU (39.05 ms).
   Those latencies had no backing log and are superseded by a same-sitting re-measurement
   (26.44 ms, 7.93x CPU, 1.75x iGPU); the accuracy figures reproduced exactly.
+  Re-quantizing under byte-identical OpenCV preprocessing (2026-09-08) reduced MAD to
+  **0.18629** on Cut (-2.1%) and **0.33187** on Zero-Concat (-5.9%), confirming the calibration
+  mismatch was inflating error across both models while the 1.78x quality gap remains structural.
   [Working](docs/BENCHMARKS.md#category-b-real-time-portrait-matting-modnet-on-xdna1-npu).
-- **Category E: Alternative classification topologies (DenseNet-121 and ResNeXt-50).**
-  Measured on 1000 eval images: both models achieve 99.5%–99.9% NPU placement with zero op-level
-  refusal. DenseNet-121 (1703/1705 nodes on NPU, all 58 Concats and 3 AveragePools accepted) runs
-  at 8.06 ms (2.69× speedup over Zen 4 CPU FP32 at 21.70 ms), proving Concat does not bottleneck AIE
-  DMA memory bandwidth. ResNeXt-50 (393/395 nodes on NPU) compiles all 53 grouped convs (`groups=32`)
-  natively at 9.37 ms (1.86× speedup over Zen 4 CPU FP32 at 17.40 ms). However, both architectures suffer
-  catastrophic PTQ collapse under plain XINT8 (0.10% top-1 vs 78.00%/81.00% FP32 baselines), revealing
-  a critical compiler boundary: power-of-two per-tensor scaling cannot represent the disparate dynamic ranges
-  across concatenated blocks or narrow 4-channel conv groups without per-channel scaling or AdaRound reconstruction.
+- **Category E: Alternative classification topologies (DenseNet-121, ResNeXt-50, RegNetX-002).**
+  Measured on 1000 eval images (DenseNet, ResNeXt) and 200 eval images (RegNetX): all three models
+  achieve 99.4%–99.9% NPU placement with zero op-level refusal. DenseNet-121 (1703/1705 nodes on NPU,
+  all 58 Concats and 3 AveragePools accepted) runs at 8.06 ms (2.69× speedup over Zen 4 CPU FP32 at 21.70 ms),
+  proving Concat does not bottleneck AIE DMA memory bandwidth. ResNeXt-50 (393/395 nodes on NPU) compiles
+  all 53 grouped convs (`groups=32`) natively at 9.37 ms (1.86× speedup over Zen 4 CPU FP32 at 17.40 ms).
+  RegNetX-002 (324/326 nodes on NPU, 99.4%) compiles natively at **2.45 ms (407.9 FPS)**.
+  However, all three topologies suffer catastrophic PTQ collapse under plain XINT8 (0.10% / 0.10% / 0.50% top-1
+  vs 78.00% / 81.00% / 68.50% FP32 baselines). RegNetX-002 proves the collapse is not specific to block
+  concatenation or narrow groups, and AdaRound cannot rescue it (0.50% top-1): Quark's DPU shift-cut clamp
+  forces weight position shifts by 100+ powers of 2 to satisfy 16-bit shift register limits, creating an
+  astronomical floating scale distortion ($\Delta = 2^{108} \approx 3.25 \times 10^{32}$) that integer rounding
+  cannot recover.
   [Working](docs/BENCHMARKS.md#alternative-classification-topologies-densenet-121-concat-and-resnext-50-grouped-convs).
 - **Category C, first candidate: YOLOv6n (RepVGG backbone).** New pipeline
   (`pipelines/yolov6n/`), Meituan's official 0.4.0 release. The structural half of the
@@ -1624,7 +1632,7 @@ sections above.
     plain-XINT8 and AdaRound recovery) closed above; YOLO-World v2 and YOLOv11 still open.
   - **Category D:** Monocular Depth Estimation — MiDaS v2.1 Small (bilinear vs nearest fusion,
     10.81 ms, 1.53x CPU win) closed above; FastDepth still open.
-  - **Category E:** Untested Classification Topologies (DenseNet-121, ResNeXt-50, RegNetX).
+  - **Category E:** Untested Classification Topologies — DenseNet-121, ResNeXt-50, and RegNetX-002 (placement, Concat DMA, grouped convs, shift-cut scale explosion) closed above.
 - **Longer term:** a detector fine-tuned for fixed camera feeds (licence-plate
   recognition), reusing the head-cut + XINT8 + AdaRound recipe rather than re-deriving it.
 

@@ -3432,6 +3432,82 @@ validation images, same harness (`pipelines/modnet/5_eval.py`), `--fresh` on bot
   models calibrated through the old PIL path** — re-quantizing to close the gap is untried,
   and the MAD figures above are the ones to beat when someone does.
 
+#### 5. OpenCV calibration fix: error reduction and the structural Zero-Concat gap (2026-09-08, Desktop 2)
+
+Section 4 called out that calibration and inference preprocessing were not byte-identical:
+`pipelines/modnet/3_quantize.py` calibrated through `PIL.Image.BILINEAR` (antialiasing on
+downscale) while inference used `cv2.INTER_LINEAR`. Both models were re-quantized with unified
+OpenCV preprocessing and evaluated back to back on Desktop 2 under the same 50 validation images:
+
+| Model & Runtime | Device | Latency | FPS | NPU Node Placement | MAD vs FP32 ref | SAD (1e3) | Log |
+|---|---|---|---|---|---|---|---|
+| MODNet Cut XINT8 (calibfix) | Ryzen AI NPU (Phoenix 4x4) | **27.51 ms** | 36.3 fps | 502 / 507 (99.0%) | **0.18629** | **49.11** | `results/modnet/eval_modnet_cut_xint8_calibfix_npu.log` |
+| MODNet Cut XINT8 (PIL, superseded) | Ryzen AI NPU (Phoenix 4x4) | 26.44 ms | 37.8 fps | 502 / 507 (99.0%) | 0.19022 | 50.75 | `results/modnet/eval_modnet_cut_xint8_npu.log` |
+| MODNet Zero-Concat XINT8 (calibfix) | Ryzen AI NPU (Phoenix 4x4) | **18.46 ms** | 54.2 fps | 533 / 538 (99.1%) | **0.33187** | **90.03** | `results/modnet/eval_modnet_zero_concat_xint8_calibfix_npu.log` |
+| MODNet Zero-Concat XINT8 (PIL, superseded) | Ryzen AI NPU (Phoenix 4x4) | 17.75 ms | 56.3 fps | 533 / 538 (99.1%) | 0.35269 | 93.18 | `results/modnet/eval_modnet_zero_concat_xint8_npu.log` |
+
+- **Error dropped across both variants.** Cut MAD fell from 0.19022 to 0.18629 (-2.1%) and SAD
+  from 50.75k to 49.11k; Zero-Concat MAD fell from 0.35269 to 0.33187 (-5.9%) and SAD from 93.18k
+  to 90.03k. Eliminating downsampling antialiasing differences during calibration directly improves
+  quantized alpha reproduction.
+- **The Zero-Concat quality penalty is structural, not calibration drift.** Zero-Concat's error
+  remains 1.78x higher than Cut's under identical calibration (0.33187 vs 0.18629). Replacing skip-
+  connections with zero-padded channels in the fusion stage permanently discards boundary spatial
+  detail; the ~8.7 ms speedup continues to trade half the alpha quality.
+
+---
+
+### Alternative classification topologies: DenseNet-121 (concat) and ResNeXt-50 (grouped convs)
+
+Investigating compiler placement and post-training quantization fidelity across non-standard
+convolutional topologies: dense channel concatenation (DenseNet-121) and grouped convolutions
+(ResNeXt-50 32x4d). 1000 ImageNet-1k validation images, static shape `(1, 3, 224, 224)` on Desktop 2:
+
+| Model | Architecture Feature | NPU Placement | Latency (NPU) | Latency (Zen 4 FP32) | Top-1 (FP32) | Top-1 (Plain XINT8) | Log |
+|---|---|---|---|---|---|---|---|
+| DenseNet-121 | 58 `Concat`, 3 `AveragePool` | **1703 / 1705 (99.9%)** | **8.06 ms** | 21.70 ms (2.69x) | 78.00% | 0.10% | `results/res/run_densenet121_xint8_npu.log` |
+| ResNeXt-50 32x4d | 53 grouped convs (`groups=32`) | **393 / 395 (99.5%)** | **9.37 ms** | 17.40 ms (1.86x) | 81.00% | 0.10% | `results/res/run_resnext50_32x4d_xint8_npu.log` |
+
+- **Hardware offload is complete**: Both models achieve >99.5% NPU placement with zero op-level
+  refusal. All 58 Concat nodes in DenseNet-121 execute on AIE tiles without DMA bottlenecks, and
+  all 53 grouped convs in ResNeXt-50 compile natively without scalar fallback.
+- **Plain per-tensor XINT8 collapses completely**: Both drop to 0.10% top-1 (random chance on 1000
+  classes).
+
+#### RegNetX-002: regular channels, shift-cut scale explosion, and AdaRound limits (2026-09-08, Desktop 2)
+
+To isolate whether Category E's collapse was driven by DenseNet's accumulating channel concatenation
+or ResNeXt's narrow 4-channel groups, `regnetx_002` (2.68M parameters, regular linear channel
+capacity, no concat, standard grouped convs) was exported and evaluated on Desktop 2 across 200
+ImageNet-1k validation images:
+
+| Model Variant | Execution Target | Top-1 | Top-5 | Latency | Placement | Log |
+|---|---|---|---|---|---|---|
+| RegNetX-002 FP32 | CPU (Zen 4) | **68.50%** | **90.50%** | 1.89 ms | Reference baseline | `results/regnet/eval_regnetx_002_fp32_cpu.log` |
+| RegNetX-002 Plain XINT8 | **Ryzen AI NPU** | **0.50%** | **1.00%** | **2.45 ms** (407.9 FPS) | **324 / 326 (99.4%)** | `results/regnet/eval_regnetx_002_xint8_npu.log` |
+| RegNetX-002 AdaRound | CPU (ORT) | 0.50% | 1.00% | 4.20 ms | — | `results/regnet/eval_regnetx_002_xint8_adaround_cpu.log` |
+
+- **Placement and speed excel**: 324 of 326 nodes (99.4%) compile onto the Phoenix NPU (`results/regnet/diag_regnetx_002_xint8.log`),
+  with only input QuantizeLinear and output DequantizeLinear boundary nodes on CPU. Inference runs
+  at 2.45 ms (407.9 FPS), delivering a 1.39x speedup over Zen 4 CPU INT8 (4.20 ms).
+- **Total accuracy collapse persists**: Both plain XINT8 and AdaRound (300 iters/layer, 45 layers,
+  77s FastFinetune on 8 pinned CPU cores) score 0.50% top-1 (pure random guessing).
+- **Scale explosion root cause (`tools/audit_quant_grid.py`)**:
+  Static inspection (`results/regnet/audit_regnetx_002_quant_grid.log`) revealed astronomical scale
+  distortion under Quark's power-of-two quantizer:
+  - Activation scales span 0.015625 to 1.329e+36 (an 8.5e35 range across 61 sites).
+  - Depthwise scale grid reaches 3.245e+32 (2^108).
+  - Other conv scales collapse to 9.40e-38 (2^-123).
+- **The DPU shift-cut clamp mechanism**:
+  During compilation Quark logs `Shift cut of layer onnx::Conv_418 exceeds range [0, 16] (131). Modify wpos from 7 to -108.`
+  The Phoenix DPU accumulator shift register only allows shifts in `[0, 16]`. To avoid hardware
+  overflow, Quark modifies weight positions by 100+ powers of 2. Since scale is 2^-pos,
+  shifting `wpos` to -108 forces scale to 2^108, annihilating activation resolution.
+- **Why AdaRound cannot rescue this**:
+  As established in the MobileViT study, AdaRound optimizes ternary rounding {-1, 0, 1} over
+  fixed quantization intervals Delta. It never changes Delta. When Delta has suffered
+  floating-point scale explosion, integer rounding cannot recover the network.
+
 ---
 
 ## Known limitations

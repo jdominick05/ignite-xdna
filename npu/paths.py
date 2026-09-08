@@ -45,6 +45,8 @@ MIDAS_NEAREST_CACHE_KEY = "midasnearestcache"
 # SESR super-resolution: single monolithic DPU subgraph upscaling via DepthToSpace.
 SESR_CACHE_KEY = "sesrcachekey"
 SESR_ADAROUND_CACHE_KEY = "sesradaroundcachekey"
+# RegNetX regular channel capacity classification.
+REGNETX_CACHE_KEY = "regnetxcachekey"
 
 
 def modnet_cache_key(model_path):

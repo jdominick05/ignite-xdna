@@ -61,6 +61,19 @@ use_env() {
     info "env: $1  ($(python -c 'import sys;print(sys.version.split()[0])'))"
 }
 
+# check_npu_contention -- verify no other sessions are occupying the AIE tiles.
+check_npu_contention() {
+    local smi="/c/Windows/System32/AMD/xrt-smi.exe"
+    if [ -x "$smi" ]; then
+        local out
+        out="$("$smi" examine -r aie-partitions 2>/dev/null || true)"
+        if [ -n "$out" ] && ! echo "$out" | grep -q "No hardware contexts running"; then
+            warn "Active hardware contexts detected on NPU! Concurrency will degrade benchmarks."
+            info "$out"
+        fi
+    fi
+}
+
 # npu_env -- the 1.7.1 inference env, with the vars every NPU run needs.
 # 1.8.0 ships no Phoenix xclbin, and existing shells often still point at it.
 npu_env() {
@@ -68,6 +81,7 @@ npu_env() {
     export RYZEN_AI_INSTALLATION_PATH="$RYZEN_AI_PATH"
     export XLNX_ONNX_EP_REPORT_FILE="vitisai_ep_report.json"
     info "RYZEN_AI_INSTALLATION_PATH = $RYZEN_AI_INSTALLATION_PATH"
+    check_npu_contention
 }
 
 # usage "${BASH_SOURCE[0]}" -- print the script's leading comment block as help,

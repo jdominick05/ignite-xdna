@@ -58,6 +58,8 @@ def main():
     ap.add_argument("--batch", type=int, default=1,
                     help="must match the static batch --model was exported with; "
                          "images are grouped into batches of this size per session.run")
+    ap.add_argument("--cache-key", default=RESNET_CACHE_KEY,
+                    help=f"compile cache directory key (default: {RESNET_CACHE_KEY})")
     args = ap.parse_args()
 
     with open(args.cfg_path or str(CFG_PATH)) as f:
@@ -78,10 +80,11 @@ def main():
     if labels is None:
         print("no labels.json found - will print predictions only, no accuracy")
 
+    cache_key = args.cache_key
     if args.fresh:
-        clear_cache(RESNET_CACHE_KEY)
+        clear_cache(cache_key)
 
-    session = build_session(args.model, args.ep, RESNET_CACHE_KEY, args.xclbin,
+    session = build_session(args.model, args.ep, cache_key, args.xclbin,
                             log_severity=0 if args.verbose else 1)
     input_name = session.get_inputs()[0].name
 
