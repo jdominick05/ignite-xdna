@@ -19,14 +19,16 @@ ONNX quantizer. Its internal package remains `quant`. See the
 | Export | Opset 17, IR 8, fully static batch 1 |
 | Quantization | Exact-sample MinMSE; scalar power-of-two scales; UINT8/zp128 activations and INT8/zp0 weights/biases; optional transcribed CLE (`--cle`, Conv→Conv pairs only) |
 | Execution target | Windows, Phoenix/Hawk Point XDNA1, Ryzen AI 1.7.1; measured on Phoenix |
+| AdaRound | `python -m quant adaround` on an emitted file: Quark's FastFinetune AdaRound transcribed (torch, `resnet_env`); byte-identical to a fresh same-listing `XINT8_ADAROUND` oracle on ResNet50, same machine and runtime |
 | Additional tools | Static inspection of any ONNX file (contract violations reported, not enforced), position-table replay, graph comparison, full classification evaluation, controlled EP probes and a refinement probe against Quark |
 
 Other graphs are unvalidated even if they share those operators. Unsupported operators,
 batch/opset contracts and GAP shapes fail explicitly. Exactly one of `--cle` and
 `--no-cle` is required; `--cle` applies the transcribed default-preset equalization
 (Conv→Conv pairs; depthwise pairs, Gemm pairs and Clip replacement raise). YOLO,
-AdaRound, per-channel weights, INT32 bias and arbitrary scales are outside the alpha's
-production scope. Probe mutations are experiments, not presets.
+per-channel weights, INT32 bias and arbitrary scales are outside the alpha's
+production scope; AdaRound is the separate `adaround` command on an emitted file.
+Probe mutations are experiments, not presets.
 
 ## Prepare the local artifacts
 
@@ -80,6 +82,25 @@ The historical `pipelines/resnet50/3c_quantize_own.py` entry point delegates to 
 calibration. It is a parity/debugging mode, not needed to quantize from the float model.
 It does not copy the reference's integer weights or topology.
 
+## AdaRound
+
+`adaround` finetunes the weight rounding of an emitted file the way Quark's
+`XINT8_ADAROUND` preset does after calibration. It reads the CLE flag and the
+calibration listing from the base's sidecar, rebuilds the equalized float reference,
+checks the float model's hash, and writes a new model plus sidecar (an `adaround`
+section with per-layer reconstruction metrics, iterations, changed elements, peak
+working set and versions; scales and positions are unchanged). It imports torch, so
+the wrapper uses `resnet_env`; Quark stays blocked:
+
+```bash
+./scripts/quant-adaround.sh --quant models/resnet50_ignition_cle_c64.onnx --out models/resnet50_ignition_cle_adaround_c64.onnx --log results/quant/quant_resnet50_ignition_cle_adaround_c64.log
+```
+
+About nine minutes on Desktop 2 for ResNet50's 54 layers, peak working set about 3 GB.
+The matching oracle is `./scripts/quant-reference.sh --cle --adaround`, and
+`scripts/quant-validate.sh` gates the pair like any other artifact; `INT8_EXACT` in its
+diff log is the bitwise verdict.
+
 ## Verify an output
 
 The optional Quark comparison requires a separately generated same-listing reference
@@ -105,4 +126,6 @@ the versioned artifact's evidence and [acceptance findings](../docs/BENCHMARKS.m
 for numerical traps. Successful EP placement does not establish correct outputs;
 even an optimized CPU reference can disagree with unoptimized ONNX computation.
 With `--cle` the output reproduces the repository's plain-XINT8 ResNet50 to the integer
-([CLE parity](../docs/BENCHMARKS.md#ignition-cle-parity-and-the-default-xint8-preset)); AdaRound accuracy is not claimed.
+([CLE parity](../docs/BENCHMARKS.md#ignition-cle-parity-and-the-default-xint8-preset)); `adaround` on that file
+reproduces a fresh `XINT8_ADAROUND` oracle byte for byte on the same machine
+([AdaRound parity](../docs/BENCHMARKS.md#ignition-adaround-parity)).

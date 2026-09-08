@@ -1,0 +1,2189 @@
+{
+  "machine": "Desktop 2 / Ryzen 7 8700G",
+  "include_cle": true,
+  "include_fast_ft": true,
+  "float_model_sha256": "d999c960ea12f9481e6fb43aab28ea3e2741c712fc4c30997b07d9b725cb87e6",
+  "preprocess": {
+    "input_size": [
+      3,
+      224,
+      224
+    ],
+    "interpolation": "bicubic",
+    "mean": [
+      0.485,
+      0.456,
+      0.406
+    ],
+    "std": [
+      0.229,
+      0.224,
+      0.225
+    ],
+    "crop_pct": 0.95,
+    "crop_mode": "center"
+  },
+  "listing": [
+    "data/calib/000000.jpg",
+    "data/calib/000001.jpg",
+    "data/calib/000002.jpg",
+    "data/calib/000003.jpg",
+    "data/calib/000004.jpg",
+    "data/calib/000005.jpg",
+    "data/calib/000006.jpg",
+    "data/calib/000007.jpg",
+    "data/calib/000008.jpg",
+    "data/calib/000009.jpg",
+    "data/calib/000010.jpg",
+    "data/calib/000011.jpg",
+    "data/calib/000012.jpg",
+    "data/calib/000013.jpg",
+    "data/calib/000014.jpg",
+    "data/calib/000015.jpg",
+    "data/calib/000016.jpg",
+    "data/calib/000017.jpg",
+    "data/calib/000018.jpg",
+    "data/calib/000019.jpg",
+    "data/calib/000020.jpg",
+    "data/calib/000021.jpg",
+    "data/calib/000022.jpg",
+    "data/calib/000023.jpg",
+    "data/calib/000024.jpg",
+    "data/calib/000025.jpg",
+    "data/calib/000026.jpg",
+    "data/calib/000027.jpg",
+    "data/calib/000028.jpg",
+    "data/calib/000029.jpg",
+    "data/calib/000030.jpg",
+    "data/calib/000031.jpg",
+    "data/calib/000032.jpg",
+    "data/calib/000033.jpg",
+    "data/calib/000034.jpg",
+    "data/calib/000035.jpg",
+    "data/calib/000036.jpg",
+    "data/calib/000037.jpg",
+    "data/calib/000038.jpg",
+    "data/calib/000039.jpg",
+    "data/calib/000040.jpg",
+    "data/calib/000041.jpg",
+    "data/calib/000042.jpg",
+    "data/calib/000043.jpg",
+    "data/calib/000044.jpg",
+    "data/calib/000045.jpg",
+    "data/calib/000046.jpg",
+    "data/calib/000047.jpg",
+    "data/calib/000048.jpg",
+    "data/calib/000049.jpg",
+    "data/calib/000050.jpg",
+    "data/calib/000051.jpg",
+    "data/calib/000052.jpg",
+    "data/calib/000053.jpg",
+    "data/calib/000054.jpg",
+    "data/calib/000055.jpg",
+    "data/calib/000056.jpg",
+    "data/calib/000057.jpg",
+    "data/calib/000058.jpg",
+    "data/calib/000059.jpg",
+    "data/calib/000060.jpg",
+    "data/calib/000061.jpg",
+    "data/calib/000062.jpg",
+    "data/calib/000063.jpg"
+  ],
+  "versions": {
+    "amd-quark": "0.11rc1",
+    "onnx": "1.19.0",
+    "onnxruntime": "1.22.1",
+    "numpy": "1.26.4"
+  }
+}
+[32m
+[QUARK-INFO]: Checking custom ops library ...[0m
+[33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[32m
+[QUARK-INFO]: Start compiling CPU version of custom ops library.[0m
+C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\torch\utils\cpp_extension.py:380: UserWarning: Error checking compiler version for cl: [WinError 2] The system cannot find the file specified
+  warnings.warn(f'Error checking compiler version for {compiler}: {error}')
+INFO: Could not find files for the given pattern(s).
+[31m
+[QUARK-ERROR]: CPU version of custom ops library compilation failed:Command '['where', 'cl']' returned non-zero exit status 1.[0m
+[33m
+[QUARK-WARNING]: Custom ops library compilation failed: CPU version of custom ops library compilation failed:Command '['where', 'cl']' returned non-zero exit status 1..[0m
+[32m
+[QUARK-INFO]: Checked custom ops library.[0m
+[33m
+[QUARK-WARNING]: The api `activation` has been replaced with `input_tensors` and will be removed in the next release.[0m
+[33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+CLE_PATTERNS 33
+[33m
+[QUARK-WARNING]: Config has been replaced by QConfig. The old API will be removed in the next release.[0m
+[33m
+[QUARK-WARNING]: The algorithm API is algo_config in QConfig. The old API will be removed in the next release.[0m
+[32m
+[QUARK-INFO]: The input ONNX model can create InferenceSession successfully[0m
+[32m
+[QUARK-INFO]: Folding or fusing operators for better accuracy and performance.[0m
+[33m
+[QUARK-WARNING]: The opset version is 17 < 20. Skipping fusing Gelu.[0m
+[32m
+[QUARK-INFO]: Start applying CLE algorithm on the float model...[0m
+[32m
+[QUARK-INFO]: CrossLayerEqualization pattern num: 33[0m
+[32m
+[QUARK-INFO]: Total CrossLayerEqualization steps: 1[0m
+[32m
+[QUARK-INFO]: The CLE algorithm has been applied. It took 0.7s to complete.[0m
+[32m
+[QUARK-INFO]: Optimizing the model for a better hardware compatibility.[0m
+[32m
+[QUARK-INFO]: The input ONNX model can run inference successfully[0m
+[32m
+[QUARK-INFO]: Start running calibration on 64 samples with extra options {}...[0m
+[32m
+[QUARK-INFO]: Data collection of PowerOfTwoMethod.MinMSE in progress. Runtime will depend on your model and data size.[0m
+[QUARK_INFO]: Time information:
+2026-09-08 15:13:42.196468
+[QUARK_INFO]: OS and CPU information:
+                                        system --- Windows
+                                          node --- DESKTOP-CBL5NUA
+                                       release --- 11
+                                       version --- 10.0.26200
+                                       machine --- AMD64
+                                     processor --- AMD64 Family 25 Model 117 Stepping 2, AuthenticAMD
+[QUARK_INFO]: Tools version information:
+                                        python --- 3.12.11
+                                          onnx --- 1.19.0
+                                   onnxruntime --- 1.22.1
+                                    quark.onnx --- 0.11rc1
+[QUARK_INFO]: Quantized Configuration information:
+                                   model_input --- models\resnet50_fp32.onnx
+                                  model_output --- models\resnet50_quark_cle_adaround_c64_rerun.onnx
+                       calibration_data_reader --- <quant.sources.as_reader.<locals>.Reader object at 0x000002AA9198F5C0>
+                         calibration_data_path --- None
+                                  quant_format --- QDQ
+                                   input_nodes --- []
+                                  output_nodes --- []
+                          op_types_to_quantize --- []
+                    extra_op_types_to_quantize --- []
+                                   per_channel --- False
+                                  reduce_range --- False
+                               activation_type --- QUInt8
+                                   weight_type --- QInt8
+                             nodes_to_quantize --- []
+                              nodes_to_exclude --- []
+                          subgraphs_to_exclude --- []
+                                optimize_model --- True
+                      use_external_data_format --- False
+                              calibrate_method --- PowerOfTwoMethod.MinMSE
+                           execution_providers --- ['CPUExecutionProvider']
+                                enable_npu_cnn --- True
+                        enable_npu_transformer --- False
+                     specific_tensor_precision --- False
+                                    debug_mode --- False
+                          convert_fp16_to_fp32 --- False
+                          convert_nchw_to_nhwc --- False
+                                   include_cle --- True
+                                    include_sq --- False
+                              include_rotation --- False
+                               include_fast_ft --- True
+                                 extra_options --- {'ActivationSymmetric': True, 'FastFinetune': {'DataSize': 1000, 'FixedSeed': 1705472343, 'BatchSize': 2, 'NumIterations': 1000, 'LearningRate': 0.1, 'OptimAlgorithm': 'adaround', 'OptimDevice': 'cpu', 'InferDevice': 'cpu', 'EarlyStop': True}, 'AddQDQPairToWeight': False}
+  0%|          | 0/64 [00:00<?, ?it/s]Cached 0.05GB:   0%|          | 0/64 [00:00<?, ?it/s]Cached 0.05GB:   2%|▏         | 1/64 [00:00<00:10,  5.94it/s]Cached 0.10GB:   2%|▏         | 1/64 [00:00<00:10,  5.94it/s]Cached 0.10GB:   3%|▎         | 2/64 [00:00<00:09,  6.49it/s]Cached 0.15GB:   3%|▎         | 2/64 [00:00<00:09,  6.49it/s]Cached 0.15GB:   5%|▍         | 3/64 [00:00<00:08,  7.02it/s]Cached 0.20GB:   5%|▍         | 3/64 [00:00<00:08,  7.02it/s]Cached 0.20GB:   6%|▋         | 4/64 [00:00<00:08,  7.24it/s]Cached 0.25GB:   6%|▋         | 4/64 [00:00<00:08,  7.24it/s]Cached 0.25GB:   8%|▊         | 5/64 [00:00<00:08,  7.32it/s]Cached 0.30GB:   8%|▊         | 5/64 [00:00<00:08,  7.32it/s]Cached 0.30GB:   9%|▉         | 6/64 [00:00<00:07,  7.31it/s]Cached 0.35GB:   9%|▉         | 6/64 [00:00<00:07,  7.31it/s]Cached 0.35GB:  11%|█         | 7/64 [00:00<00:07,  7.18it/s]Cached 0.40GB:  11%|█         | 7/64 [00:01<00:07,  7.18it/s]Cached 0.40GB:  12%|█▎        | 8/64 [00:01<00:07,  7.49it/s]Cached 0.45GB:  12%|█▎        | 8/64 [00:01<00:07,  7.49it/s]Cached 0.45GB:  14%|█▍        | 9/64 [00:01<00:07,  7.59it/s]Cached 0.50GB:  14%|█▍        | 9/64 [00:01<00:07,  7.59it/s]Cached 0.50GB:  16%|█▌        | 10/64 [00:01<00:07,  7.68it/s]Cached 0.54GB:  16%|█▌        | 10/64 [00:01<00:07,  7.68it/s]Cached 0.54GB:  17%|█▋        | 11/64 [00:01<00:06,  7.72it/s]Cached 0.59GB:  17%|█▋        | 11/64 [00:01<00:06,  7.72it/s]Cached 0.59GB:  19%|█▉        | 12/64 [00:01<00:06,  7.69it/s]Cached 0.64GB:  19%|█▉        | 12/64 [00:01<00:06,  7.69it/s]Cached 0.64GB:  20%|██        | 13/64 [00:01<00:06,  7.87it/s]Cached 0.69GB:  20%|██        | 13/64 [00:01<00:06,  7.87it/s]Cached 0.69GB:  22%|██▏       | 14/64 [00:01<00:06,  7.82it/s]Cached 0.74GB:  22%|██▏       | 14/64 [00:01<00:06,  7.82it/s]Cached 0.74GB:  23%|██▎       | 15/64 [00:01<00:06,  8.01it/s]Cached 0.79GB:  23%|██▎       | 15/64 [00:02<00:06,  8.01it/s]Cached 0.79GB:  25%|██▌       | 16/64 [00:02<00:06,  7.99it/s]Cached 0.84GB:  25%|██▌       | 16/64 [00:02<00:06,  7.99it/s]Cached 0.84GB:  27%|██▋       | 17/64 [00:02<00:05,  8.03it/s]Cached 0.89GB:  27%|██▋       | 17/64 [00:02<00:05,  8.03it/s]Cached 0.89GB:  28%|██▊       | 18/64 [00:02<00:05,  7.96it/s]Cached 0.94GB:  28%|██▊       | 18/64 [00:02<00:05,  7.96it/s]Cached 0.94GB:  30%|██▉       | 19/64 [00:02<00:05,  8.15it/s]Cached 0.99GB:  30%|██▉       | 19/64 [00:02<00:05,  8.15it/s]Cached 0.99GB:  31%|███▏      | 20/64 [00:02<00:05,  8.15it/s]Cached 1.04GB:  31%|███▏      | 20/64 [00:02<00:05,  8.15it/s]Cached 1.04GB:  33%|███▎      | 21/64 [00:02<00:05,  8.13it/s]Cached 1.09GB:  33%|███▎      | 21/64 [00:02<00:05,  8.13it/s]Cached 1.09GB:  34%|███▍      | 22/64 [00:02<00:05,  8.18it/s]Cached 1.14GB:  34%|███▍      | 22/64 [00:02<00:05,  8.18it/s]Cached 1.14GB:  36%|███▌      | 23/64 [00:02<00:04,  8.43it/s]Cached 1.19GB:  36%|███▌      | 23/64 [00:03<00:04,  8.43it/s]Cached 1.19GB:  38%|███▊      | 24/64 [00:03<00:04,  8.45it/s]Cached 1.24GB:  38%|███▊      | 24/64 [00:03<00:04,  8.45it/s]Cached 1.24GB:  39%|███▉      | 25/64 [00:03<00:04,  8.60it/s]Cached 1.29GB:  39%|███▉      | 25/64 [00:03<00:04,  8.60it/s]Cached 1.29GB:  41%|████      | 26/64 [00:03<00:04,  8.64it/s]Cached 1.34GB:  41%|████      | 26/64 [00:03<00:04,  8.64it/s]Cached 1.34GB:  42%|████▏     | 27/64 [00:03<00:04,  8.69it/s]Cached 1.39GB:  42%|████▏     | 27/64 [00:03<00:04,  8.69it/s]Cached 1.39GB:  44%|████▍     | 28/64 [00:03<00:04,  8.83it/s]Cached 1.44GB:  44%|████▍     | 28/64 [00:03<00:04,  8.83it/s]Cached 1.44GB:  45%|████▌     | 29/64 [00:03<00:03,  8.92it/s]Cached 1.49GB:  45%|████▌     | 29/64 [00:03<00:03,  8.92it/s]Cached 1.49GB:  47%|████▋     | 30/64 [00:03<00:03,  8.89it/s]Cached 1.54GB:  47%|████▋     | 30/64 [00:03<00:03,  8.89it/s]Cached 1.54GB:  48%|████▊     | 31/64 [00:03<00:03,  8.93it/s]Cached 1.59GB:  48%|████▊     | 31/64 [00:04<00:03,  8.93it/s]Cached 1.59GB:  50%|█████     | 32/64 [00:04<00:04,  7.94it/s]Cached 1.63GB:  50%|█████     | 32/64 [00:04<00:04,  7.94it/s]Cached 1.63GB:  52%|█████▏    | 33/64 [00:04<00:03,  8.13it/s]Cached 1.68GB:  52%|█████▏    | 33/64 [00:04<00:03,  8.13it/s]Cached 1.68GB:  53%|█████▎    | 34/64 [00:04<00:03,  8.16it/s]Cached 1.73GB:  53%|█████▎    | 34/64 [00:04<00:03,  8.16it/s]Cached 1.73GB:  55%|█████▍    | 35/64 [00:04<00:03,  8.33it/s]Cached 1.78GB:  55%|█████▍    | 35/64 [00:04<00:03,  8.33it/s]Cached 1.78GB:  56%|█████▋    | 36/64 [00:04<00:03,  8.43it/s]Cached 1.83GB:  56%|█████▋    | 36/64 [00:04<00:03,  8.43it/s]Cached 1.83GB:  58%|█████▊    | 37/64 [00:04<00:03,  8.57it/s]Cached 1.88GB:  58%|█████▊    | 37/64 [00:04<00:03,  8.57it/s]Cached 1.88GB:  59%|█████▉    | 38/64 [00:04<00:03,  8.64it/s]Cached 1.93GB:  59%|█████▉    | 38/64 [00:04<00:03,  8.64it/s]Cached 1.93GB:  61%|██████    | 39/64 [00:04<00:02,  8.66it/s]Cached 1.98GB:  61%|██████    | 39/64 [00:04<00:02,  8.66it/s]Cached 1.98GB:  62%|██████▎   | 40/64 [00:04<00:02,  8.52it/s]Cached 2.03GB:  62%|██████▎   | 40/64 [00:05<00:02,  8.52it/s]Cached 2.03GB:  64%|██████▍   | 41/64 [00:05<00:02,  8.27it/s]Cached 2.08GB:  64%|██████▍   | 41/64 [00:05<00:02,  8.27it/s]Cached 2.08GB:  66%|██████▌   | 42/64 [00:05<00:02,  7.99it/s]Cached 2.13GB:  66%|██████▌   | 42/64 [00:05<00:02,  7.99it/s]Cached 2.13GB:  67%|██████▋   | 43/64 [00:05<00:03,  6.73it/s]Cached 2.18GB:  67%|██████▋   | 43/64 [00:05<00:03,  6.73it/s]Cached 2.18GB:  69%|██████▉   | 44/64 [00:05<00:02,  7.35it/s]Cached 2.23GB:  69%|██████▉   | 44/64 [00:05<00:02,  7.35it/s]Cached 2.23GB:  70%|███████   | 45/64 [00:05<00:02,  7.63it/s]Cached 2.28GB:  70%|███████   | 45/64 [00:05<00:02,  7.63it/s]Cached 2.28GB:  72%|███████▏  | 46/64 [00:05<00:02,  7.89it/s]Cached 2.33GB:  72%|███████▏  | 46/64 [00:05<00:02,  7.89it/s]Cached 2.33GB:  73%|███████▎  | 47/64 [00:05<00:02,  8.03it/s]Cached 2.38GB:  73%|███████▎  | 47/64 [00:05<00:02,  8.03it/s]Cached 2.38GB:  75%|███████▌  | 48/64 [00:05<00:01,  8.16it/s]Cached 2.43GB:  75%|███████▌  | 48/64 [00:06<00:01,  8.16it/s]Cached 2.43GB:  77%|███████▋  | 49/64 [00:06<00:01,  8.37it/s]Cached 2.48GB:  77%|███████▋  | 49/64 [00:06<00:01,  8.37it/s]Cached 2.48GB:  78%|███████▊  | 50/64 [00:06<00:01,  8.33it/s]Cached 2.53GB:  78%|███████▊  | 50/64 [00:06<00:01,  8.33it/s]Cached 2.53GB:  80%|███████▉  | 51/64 [00:06<00:01,  8.35it/s]Cached 2.58GB:  80%|███████▉  | 51/64 [00:06<00:01,  8.35it/s]Cached 2.58GB:  81%|████████▏ | 52/64 [00:06<00:01,  7.82it/s]Cached 2.63GB:  81%|████████▏ | 52/64 [00:06<00:01,  7.82it/s]Cached 2.63GB:  83%|████████▎ | 53/64 [00:06<00:01,  8.07it/s]Cached 2.68GB:  83%|████████▎ | 53/64 [00:06<00:01,  8.07it/s]Cached 2.68GB:  84%|████████▍ | 54/64 [00:06<00:01,  8.31it/s]Cached 2.72GB:  84%|████████▍ | 54/64 [00:06<00:01,  8.31it/s]Cached 2.72GB:  86%|████████▌ | 55/64 [00:06<00:01,  8.46it/s]Cached 2.77GB:  86%|████████▌ | 55/64 [00:06<00:01,  8.46it/s]Cached 2.77GB:  88%|████████▊ | 56/64 [00:06<00:00,  8.69it/s]Cached 2.82GB:  88%|████████▊ | 56/64 [00:07<00:00,  8.69it/s]Cached 2.82GB:  89%|████████▉ | 57/64 [00:07<00:00,  7.46it/s]Cached 2.87GB:  89%|████████▉ | 57/64 [00:07<00:00,  7.46it/s]Cached 2.87GB:  91%|█████████ | 58/64 [00:07<00:00,  7.86it/s]Cached 2.92GB:  91%|█████████ | 58/64 [00:07<00:00,  7.86it/s]Cached 2.92GB:  92%|█████████▏| 59/64 [00:07<00:00,  8.18it/s]Cached 2.97GB:  92%|█████████▏| 59/64 [00:07<00:00,  8.18it/s]Cached 2.97GB:  94%|█████████▍| 60/64 [00:07<00:00,  8.50it/s]Cached 3.02GB:  94%|█████████▍| 60/64 [00:07<00:00,  8.50it/s]Cached 3.02GB:  95%|█████████▌| 61/64 [00:07<00:00,  8.52it/s]Cached 3.07GB:  95%|█████████▌| 61/64 [00:07<00:00,  8.52it/s]Cached 3.07GB:  97%|█████████▋| 62/64 [00:07<00:00,  7.89it/s]Cached 3.12GB:  97%|█████████▋| 62/64 [00:07<00:00,  7.89it/s]Cached 3.12GB:  98%|█████████▊| 63/64 [00:07<00:00,  8.05it/s]Cached 3.17GB:  98%|█████████▊| 63/64 [00:07<00:00,  8.05it/s]Cached 3.17GB: 100%|██████████| 64/64 [00:07<00:00,  8.27it/s]Cached 3.17GB: 100%|██████████| 64/64 [00:07<00:00,  8.05it/s]
+[32m
+[QUARK-INFO]: Finding optimal threshold for each tensor using PowerOfTwoMethod.MinMSE algorithm in 'All' mode ...[0m
+  0%|          | 0/123 [00:00<?, ?it/s]  2%|▏         | 2/123 [00:00<00:15,  7.59it/s]  2%|▏         | 3/123 [00:00<00:22,  5.38it/s]  3%|▎         | 4/123 [00:00<00:19,  6.06it/s]  4%|▍         | 5/123 [00:02<01:37,  1.21it/s]  5%|▍         | 6/123 [00:02<01:14,  1.57it/s]  6%|▌         | 7/123 [00:03<00:55,  2.10it/s]  7%|▋         | 8/123 [00:03<00:42,  2.72it/s]  8%|▊         | 10/123 [00:03<00:31,  3.60it/s]  9%|▉         | 11/123 [00:03<00:30,  3.69it/s] 10%|▉         | 12/123 [00:03<00:25,  4.27it/s] 11%|█         | 13/123 [00:05<00:49,  2.21it/s] 11%|█▏        | 14/123 [00:05<00:39,  2.74it/s] 13%|█▎        | 16/123 [00:06<00:47,  2.24it/s] 14%|█▍        | 17/123 [00:06<00:49,  2.13it/s] 15%|█▍        | 18/123 [00:07<01:07,  1.56it/s] 15%|█▌        | 19/123 [00:08<00:56,  1.85it/s] 16%|█▋        | 20/123 [00:08<00:44,  2.30it/s] 17%|█▋        | 21/123 [00:10<01:33,  1.09it/s] 18%|█▊        | 22/123 [00:11<01:35,  1.05it/s] 19%|█▊        | 23/123 [00:11<01:14,  1.34it/s] 20%|█▉        | 24/123 [00:12<01:06,  1.48it/s] 20%|██        | 25/123 [00:14<01:45,  1.08s/it] 22%|██▏       | 27/123 [00:14<01:03,  1.50it/s] 23%|██▎       | 28/123 [00:14<00:50,  1.88it/s] 24%|██▎       | 29/123 [00:15<01:02,  1.51it/s] 24%|██▍       | 30/123 [00:16<00:57,  1.61it/s] 26%|██▌       | 32/123 [00:17<00:54,  1.68it/s] 27%|██▋       | 33/123 [00:17<00:51,  1.74it/s] 28%|██▊       | 34/123 [00:19<01:01,  1.45it/s] 28%|██▊       | 35/123 [00:21<01:33,  1.06s/it] 29%|██▉       | 36/123 [00:23<01:57,  1.35s/it] 30%|███       | 37/123 [00:23<01:26,  1.01s/it] 31%|███       | 38/123 [00:23<01:13,  1.15it/s] 32%|███▏      | 39/123 [00:24<00:58,  1.45it/s] 33%|███▎      | 40/123 [00:24<00:47,  1.75it/s] 33%|███▎      | 41/123 [00:24<00:36,  2.25it/s] 34%|███▍      | 42/123 [00:25<00:37,  2.17it/s] 35%|███▍      | 43/123 [00:25<00:38,  2.07it/s] 36%|███▌      | 44/123 [00:25<00:33,  2.38it/s] 37%|███▋      | 45/123 [00:26<00:35,  2.19it/s] 37%|███▋      | 46/123 [00:26<00:36,  2.11it/s] 38%|███▊      | 47/123 [00:27<00:37,  2.02it/s] 39%|███▉      | 48/123 [00:27<00:29,  2.59it/s] 40%|███▉      | 49/123 [00:28<00:31,  2.34it/s] 41%|████      | 50/123 [00:28<00:30,  2.36it/s] 41%|████▏     | 51/123 [00:29<00:32,  2.24it/s] 42%|████▏     | 52/123 [00:29<00:24,  2.84it/s] 43%|████▎     | 53/123 [00:31<01:01,  1.15it/s] 44%|████▍     | 54/123 [00:31<00:48,  1.42it/s] 45%|████▍     | 55/123 [00:31<00:38,  1.75it/s] 46%|████▌     | 56/123 [00:32<00:37,  1.78it/s] 47%|████▋     | 58/123 [00:32<00:28,  2.29it/s] 48%|████▊     | 59/123 [00:33<00:25,  2.54it/s] 49%|████▉     | 60/123 [00:33<00:20,  3.04it/s] 50%|████▉     | 61/123 [00:33<00:19,  3.19it/s] 50%|█████     | 62/123 [00:33<00:16,  3.80it/s] 51%|█████     | 63/123 [00:34<00:15,  3.85it/s] 53%|█████▎    | 65/123 [00:36<00:36,  1.61it/s] 54%|█████▎    | 66/123 [00:37<00:41,  1.38it/s] 54%|█████▍    | 67/123 [00:37<00:38,  1.47it/s] 55%|█████▌    | 68/123 [00:38<00:43,  1.27it/s] 56%|█████▌    | 69/123 [00:39<00:38,  1.41it/s] 57%|█████▋    | 70/123 [00:39<00:35,  1.51it/s] 58%|█████▊    | 71/123 [00:40<00:32,  1.59it/s] 59%|█████▊    | 72/123 [00:40<00:30,  1.69it/s] 59%|█████▉    | 73/123 [00:41<00:24,  2.03it/s] 60%|██████    | 74/123 [00:43<00:46,  1.04it/s] 61%|██████    | 75/123 [00:44<00:47,  1.02it/s] 62%|██████▏   | 76/123 [00:44<00:36,  1.28it/s] 63%|██████▎   | 77/123 [00:44<00:28,  1.61it/s] 64%|██████▍   | 79/123 [00:45<00:21,  2.09it/s] 65%|██████▌   | 80/123 [00:45<00:16,  2.55it/s] 67%|██████▋   | 82/123 [00:45<00:12,  3.37it/s] 67%|██████▋   | 83/123 [00:47<00:27,  1.43it/s] 68%|██████▊   | 84/123 [00:48<00:25,  1.51it/s] 69%|██████▉   | 85/123 [00:49<00:28,  1.32it/s] 70%|██████▉   | 86/123 [00:50<00:25,  1.45it/s] 72%|███████▏  | 88/123 [00:50<00:15,  2.23it/s] 72%|███████▏  | 89/123 [00:50<00:12,  2.64it/s] 74%|███████▍  | 91/123 [00:50<00:08,  3.76it/s] 75%|███████▍  | 92/123 [00:51<00:09,  3.14it/s] 76%|███████▌  | 93/123 [00:51<00:08,  3.66it/s] 76%|███████▋  | 94/123 [00:51<00:07,  4.07it/s] 78%|███████▊  | 96/123 [00:51<00:05,  5.09it/s] 79%|███████▉  | 97/123 [00:51<00:04,  5.52it/s] 80%|███████▉  | 98/123 [00:51<00:04,  5.88it/s] 80%|████████  | 99/123 [00:52<00:06,  3.70it/s] 82%|████████▏ | 101/123 [00:53<00:06,  3.58it/s] 83%|████████▎ | 102/123 [00:55<00:14,  1.43it/s] 84%|████████▎ | 103/123 [00:55<00:13,  1.51it/s] 85%|████████▍ | 104/123 [00:56<00:14,  1.31it/s] 85%|████████▌ | 105/123 [00:57<00:12,  1.43it/s] 86%|████████▌ | 106/123 [00:59<00:18,  1.09s/it] 87%|████████▋ | 107/123 [01:00<00:17,  1.08s/it] 88%|████████▊ | 108/123 [01:00<00:13,  1.10it/s] 89%|████████▊ | 109/123 [01:01<00:10,  1.38it/s] 89%|████████▉ | 110/123 [01:01<00:07,  1.80it/s] 90%|█████████ | 111/123 [01:01<00:05,  2.31it/s] 91%|█████████ | 112/123 [01:01<00:04,  2.64it/s] 92%|█████████▏| 113/123 [01:02<00:04,  2.40it/s] 93%|█████████▎| 114/123 [01:03<00:05,  1.65it/s] 93%|█████████▎| 115/123 [01:03<00:04,  1.72it/s] 94%|█████████▍| 116/123 [01:04<00:03,  1.77it/s] 95%|█████████▌| 117/123 [01:04<00:03,  1.82it/s] 96%|█████████▌| 118/123 [01:06<00:04,  1.00it/s] 97%|█████████▋| 119/123 [01:07<00:03,  1.29it/s] 98%|█████████▊| 120/123 [01:08<00:02,  1.16it/s] 98%|█████████▊| 121/123 [01:08<00:01,  1.31it/s] 99%|█████████▉| 122/123 [01:09<00:00,  1.63it/s]100%|██████████| 123/123 [01:09<00:00,  1.70it/s]100%|██████████| 123/123 [01:09<00:00,  1.77it/s]
+[32m
+[QUARK-INFO]: The calibration has been finished. It took 77.9s to complete.[0m
+[32m
+[QUARK-INFO]: Remove QuantizeLinear & DequantizeLinear on certain operations(such as conv-relu).[0m
+[32m
+[QUARK-INFO]: Rescale GlobalAveragePool /global_pool/pool/GlobalAveragePool with factor 1.0048828125 to simulate DPU behavior.[0m
+[32m
+[QUARK-INFO]: Adjust the quantize info to meet the compiler constraints[0m
+[32m
+[QUARK-INFO]: Input pos of pooling layer /global_pool/pool/GlobalAveragePool is 2. Output pos of pooling layer /global_pool/pool/GlobalAveragePool is 5.Modify opos from 5 to 2.[0m
+[32m
+[QUARK-INFO]: Adjust the quantize info to meet the compiler constraints[0m
+[32m
+[QUARK-INFO]: Start applying FastFinetune algorithm on the quant model...[0m
+  0%|          | 0/54 [00:00<?, ?it/s][33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: finetuning layer 0, onnx inference (quantized model + float model) time consumed 1.985695s[0m
+[32m
+[QUARK-INFO]: Module (input)->(/act1/Relu_output_0) will be optimized by adaround on cpu[0m
+[32m
+[QUARK-INFO]: adaround iterations=0, lr=0.100000, loss=0.602374 (Recons loss=0.602374, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=100, lr=0.100000, loss=0.347940 (Recons loss=0.347940, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=200, lr=0.100000, loss=81.152214 (Recons loss=0.385214, Rounding loss=80.766998)[0m
+[32m
+[QUARK-INFO]: adaround iterations=300, lr=0.100000, loss=41.100365 (Recons loss=0.336434, Rounding loss=40.763931)[0m
+[32m
+[QUARK-INFO]: adaround iterations=400, lr=0.100000, loss=35.252083 (Recons loss=0.318832, Rounding loss=34.933250)[0m
+[32m
+[QUARK-INFO]: adaround iterations=500, lr=0.100000, loss=27.935534 (Recons loss=0.458085, Rounding loss=27.477448)[0m
+[32m
+[QUARK-INFO]: adaround iterations=600, lr=0.100000, loss=20.276237 (Recons loss=0.335300, Rounding loss=19.940937)[0m
+[32m
+[QUARK-INFO]: adaround iterations=700, lr=0.100000, loss=11.988233 (Recons loss=0.258106, Rounding loss=11.730126)[0m
+[32m
+[QUARK-INFO]: adaround iterations=800, lr=0.100000, loss=1.399797 (Recons loss=0.396515, Rounding loss=1.003283)[0m
+[32m
+[QUARK-INFO]: adaround iterations=900, lr=0.100000, loss=0.367475 (Recons loss=0.367475, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=999, lr=0.100000, loss=0.353954 (Recons loss=0.353954, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: Module (input)->(/act1/Relu_output_0) recons metrics was optimized from 0.016245 to 0.005595 (diff=-0.010650)[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: finetuning layer 0, torch training time consumed 7.487633s[0m
+  2%|▏         | 1/54 [00:09<08:22,  9.47s/it][33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: finetuning layer 1, onnx inference (quantized model + float model) time consumed 0.330112s[0m
+[32m
+[QUARK-INFO]: Module (/maxpool/MaxPool_output_0)->(/layer1/layer1.0/act1/Relu_output_0) will be optimized by adaround on cpu[0m
+[32m
+[QUARK-INFO]: adaround iterations=0, lr=0.100000, loss=0.476439 (Recons loss=0.476439, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=100, lr=0.100000, loss=0.267425 (Recons loss=0.267425, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=200, lr=0.100000, loss=26.975513 (Recons loss=0.288488, Rounding loss=26.687025)[0m
+[32m
+[QUARK-INFO]: adaround iterations=300, lr=0.100000, loss=12.124104 (Recons loss=0.252476, Rounding loss=11.871628)[0m
+[32m
+[QUARK-INFO]: adaround iterations=400, lr=0.100000, loss=9.632598 (Recons loss=0.255085, Rounding loss=9.377513)[0m
+[32m
+[QUARK-INFO]: adaround iterations=500, lr=0.100000, loss=7.454252 (Recons loss=0.250084, Rounding loss=7.204168)[0m
+[32m
+[QUARK-INFO]: adaround iterations=600, lr=0.100000, loss=5.096828 (Recons loss=0.234648, Rounding loss=4.862180)[0m
+[32m
+[QUARK-INFO]: adaround iterations=700, lr=0.100000, loss=2.648531 (Recons loss=0.269963, Rounding loss=2.378569)[0m
+[32m
+[QUARK-INFO]: adaround iterations=800, lr=0.100000, loss=0.768040 (Recons loss=0.252061, Rounding loss=0.515979)[0m
+[32m
+[QUARK-INFO]: adaround iterations=900, lr=0.100000, loss=0.392340 (Recons loss=0.307725, Rounding loss=0.084616)[0m
+[32m
+[QUARK-INFO]: adaround iterations=999, lr=0.100000, loss=0.409093 (Recons loss=0.359029, Rounding loss=0.050064)[0m
+[32m
+[QUARK-INFO]: Module (/maxpool/MaxPool_output_0)->(/layer1/layer1.0/act1/Relu_output_0) recons metrics was optimized from 0.014824 to 0.006869 (diff=-0.007955)[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: finetuning layer 1, torch training time consumed 3.147420s[0m
+  4%|▎         | 2/54 [00:12<05:09,  5.95s/it][33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: finetuning layer 2, onnx inference (quantized model + float model) time consumed 0.342193s[0m
+[32m
+[QUARK-INFO]: Module (/maxpool/MaxPool_output_0)->(/layer1/layer1.0/downsample/downsample.0/Conv_output_0) will be optimized by adaround on cpu[0m
+[32m
+[QUARK-INFO]: adaround iterations=0, lr=0.100000, loss=8.184742 (Recons loss=8.184742, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=100, lr=0.100000, loss=4.739385 (Recons loss=4.739385, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=200, lr=0.100000, loss=118.640846 (Recons loss=5.156404, Rounding loss=113.484444)[0m
+[32m
+[QUARK-INFO]: adaround iterations=300, lr=0.100000, loss=66.855637 (Recons loss=5.430581, Rounding loss=61.425056)[0m
+[32m
+[QUARK-INFO]: adaround iterations=400, lr=0.100000, loss=58.456161 (Recons loss=5.642771, Rounding loss=52.813393)[0m
+[32m
+[QUARK-INFO]: adaround iterations=500, lr=0.100000, loss=48.569870 (Recons loss=4.631093, Rounding loss=43.938778)[0m
+[32m
+[QUARK-INFO]: adaround iterations=600, lr=0.100000, loss=37.970467 (Recons loss=4.687948, Rounding loss=33.282520)[0m
+[32m
+[QUARK-INFO]: adaround iterations=700, lr=0.100000, loss=24.603611 (Recons loss=4.376491, Rounding loss=20.227119)[0m
+[32m
+[QUARK-INFO]: adaround iterations=800, lr=0.100000, loss=11.619184 (Recons loss=5.037850, Rounding loss=6.581335)[0m
+[32m
+[QUARK-INFO]: adaround iterations=900, lr=0.100000, loss=6.909898 (Recons loss=5.618216, Rounding loss=1.291682)[0m
+[32m
+[QUARK-INFO]: adaround iterations=999, lr=0.100000, loss=6.128889 (Recons loss=5.230272, Rounding loss=0.898617)[0m
+[32m
+[QUARK-INFO]: Module (/maxpool/MaxPool_output_0)->(/layer1/layer1.0/downsample/downsample.0/Conv_output_0) recons metrics was optimized from 0.089003 to 0.034508 (diff=-0.054496)[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: finetuning layer 2, torch training time consumed 5.853354s[0m
+  6%|▌         | 3/54 [00:19<05:09,  6.06s/it][33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: finetuning layer 3, onnx inference (quantized model + float model) time consumed 0.337064s[0m
+[32m
+[QUARK-INFO]: Module (/layer1/layer1.0/act1/Relu_output_0)->(/layer1/layer1.0/act2/Relu_output_0) will be optimized by adaround on cpu[0m
+[32m
+[QUARK-INFO]: adaround iterations=0, lr=0.100000, loss=1.410887 (Recons loss=1.410887, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=100, lr=0.100000, loss=0.547943 (Recons loss=0.547943, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=200, lr=0.100000, loss=118.233215 (Recons loss=0.534035, Rounding loss=117.699181)[0m
+[32m
+[QUARK-INFO]: adaround iterations=300, lr=0.100000, loss=36.846489 (Recons loss=0.566201, Rounding loss=36.280289)[0m
+[32m
+[QUARK-INFO]: adaround iterations=400, lr=0.100000, loss=24.914351 (Recons loss=0.738324, Rounding loss=24.176025)[0m
+[32m
+[QUARK-INFO]: adaround iterations=500, lr=0.100000, loss=16.379787 (Recons loss=0.752367, Rounding loss=15.627421)[0m
+[32m
+[QUARK-INFO]: adaround iterations=600, lr=0.100000, loss=9.789639 (Recons loss=0.637155, Rounding loss=9.152485)[0m
+[32m
+[QUARK-INFO]: adaround iterations=700, lr=0.100000, loss=3.753234 (Recons loss=0.621835, Rounding loss=3.131399)[0m
+[32m
+[QUARK-INFO]: adaround iterations=800, lr=0.100000, loss=0.846408 (Recons loss=0.583733, Rounding loss=0.262675)[0m
+[32m
+[QUARK-INFO]: adaround iterations=900, lr=0.100000, loss=0.574388 (Recons loss=0.574388, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=999, lr=0.100000, loss=0.565333 (Recons loss=0.565333, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: Module (/layer1/layer1.0/act1/Relu_output_0)->(/layer1/layer1.0/act2/Relu_output_0) recons metrics was optimized from 0.026667 to 0.010080 (diff=-0.016588)[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: finetuning layer 3, torch training time consumed 5.658879s[0m
+  7%|▋         | 4/54 [00:25<05:01,  6.04s/it][33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: finetuning layer 4, onnx inference (quantized model + float model) time consumed 0.428030s[0m
+[32m
+[QUARK-INFO]: Module (/layer1/layer1.0/act2/Relu_output_0)->(/layer1/layer1.0/conv3/Conv_output_0) will be optimized by adaround on cpu[0m
+[32m
+[QUARK-INFO]: adaround iterations=0, lr=0.100000, loss=1.855724 (Recons loss=1.855724, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=100, lr=0.100000, loss=2.040248 (Recons loss=2.040248, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=200, lr=0.100000, loss=77.557770 (Recons loss=1.600374, Rounding loss=75.957397)[0m
+[32m
+[QUARK-INFO]: adaround iterations=300, lr=0.100000, loss=31.122711 (Recons loss=1.409266, Rounding loss=29.713446)[0m
+[32m
+[QUARK-INFO]: adaround iterations=400, lr=0.100000, loss=25.651157 (Recons loss=1.434940, Rounding loss=24.216217)[0m
+[32m
+[QUARK-INFO]: adaround iterations=500, lr=0.100000, loss=20.802528 (Recons loss=1.789283, Rounding loss=19.013245)[0m
+[32m
+[QUARK-INFO]: adaround iterations=600, lr=0.100000, loss=16.298222 (Recons loss=3.080508, Rounding loss=13.217712)[0m
+[32m
+[QUARK-INFO]: adaround iterations=700, lr=0.100000, loss=6.737590 (Recons loss=2.599627, Rounding loss=4.137963)[0m
+[32m
+[QUARK-INFO]: adaround iterations=800, lr=0.100000, loss=2.308277 (Recons loss=1.438040, Rounding loss=0.870237)[0m
+[32m
+[QUARK-INFO]: adaround iterations=900, lr=0.100000, loss=1.735483 (Recons loss=1.624973, Rounding loss=0.110510)[0m
+[32m
+[QUARK-INFO]: adaround iterations=999, lr=0.100000, loss=1.730609 (Recons loss=1.730609, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: Module (/layer1/layer1.0/act2/Relu_output_0)->(/layer1/layer1.0/conv3/Conv_output_0) recons metrics was optimized from 0.012764 to 0.008164 (diff=-0.004600)[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: finetuning layer 4, torch training time consumed 5.776497s[0m
+  9%|▉         | 5/54 [00:31<04:58,  6.10s/it][33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: finetuning layer 5, onnx inference (quantized model + float model) time consumed 0.566444s[0m
+[32m
+[QUARK-INFO]: Module (/layer1/layer1.0/act3/Relu_output_0)->(/layer1/layer1.1/act1/Relu_output_0) will be optimized by adaround on cpu[0m
+[32m
+[QUARK-INFO]: adaround iterations=0, lr=0.100000, loss=1.894702 (Recons loss=1.894702, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=100, lr=0.100000, loss=2.215349 (Recons loss=2.215349, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=200, lr=0.100000, loss=53.253265 (Recons loss=2.944907, Rounding loss=50.308357)[0m
+[32m
+[QUARK-INFO]: adaround iterations=300, lr=0.100000, loss=13.993130 (Recons loss=2.022248, Rounding loss=11.970882)[0m
+[32m
+[QUARK-INFO]: adaround iterations=400, lr=0.100000, loss=8.459791 (Recons loss=1.515174, Rounding loss=6.944618)[0m
+[32m
+[QUARK-INFO]: adaround iterations=500, lr=0.100000, loss=5.939272 (Recons loss=2.817024, Rounding loss=3.122248)[0m
+[32m
+[QUARK-INFO]: adaround iterations=600, lr=0.100000, loss=4.139680 (Recons loss=2.582461, Rounding loss=1.557220)[0m
+[32m
+[QUARK-INFO]: adaround iterations=700, lr=0.100000, loss=2.932214 (Recons loss=2.562638, Rounding loss=0.369576)[0m
+[32m
+[QUARK-INFO]: adaround iterations=800, lr=0.100000, loss=2.493113 (Recons loss=2.460919, Rounding loss=0.032193)[0m
+[32m
+[QUARK-INFO]: adaround iterations=900, lr=0.100000, loss=2.330034 (Recons loss=2.330034, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=999, lr=0.100000, loss=1.962250 (Recons loss=1.962250, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: Module (/layer1/layer1.0/act3/Relu_output_0)->(/layer1/layer1.1/act1/Relu_output_0) recons metrics was optimized from 0.051788 to 0.036341 (diff=-0.015447)[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: finetuning layer 5, torch training time consumed 5.865048s[0m
+ 11%|█         | 6/54 [00:37<04:58,  6.21s/it][33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: finetuning layer 6, onnx inference (quantized model + float model) time consumed 0.542940s[0m
+[32m
+[QUARK-INFO]: Module (/layer1/layer1.1/act1/Relu_output_0)->(/layer1/layer1.1/act2/Relu_output_0) will be optimized by adaround on cpu[0m
+[32m
+[QUARK-INFO]: adaround iterations=0, lr=0.100000, loss=5.700255 (Recons loss=5.700255, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=100, lr=0.100000, loss=5.100929 (Recons loss=5.100929, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=200, lr=0.100000, loss=214.371445 (Recons loss=2.272731, Rounding loss=212.098709)[0m
+[32m
+[QUARK-INFO]: adaround iterations=300, lr=0.100000, loss=81.963318 (Recons loss=5.205524, Rounding loss=76.757797)[0m
+[32m
+[QUARK-INFO]: adaround iterations=400, lr=0.100000, loss=326.412567 (Recons loss=274.295654, Rounding loss=52.116913)[0m
+[32m
+[QUARK-INFO]: adaround iterations=500, lr=0.100000, loss=75.421906 (Recons loss=41.306019, Rounding loss=34.115883)[0m
+[32m
+[QUARK-INFO]: adaround iterations=600, lr=0.100000, loss=23.435263 (Recons loss=2.512872, Rounding loss=20.922392)[0m
+[32m
+[QUARK-INFO]: adaround iterations=700, lr=0.100000, loss=27.674648 (Recons loss=19.102659, Rounding loss=8.571990)[0m
+[32m
+[QUARK-INFO]: adaround iterations=800, lr=0.100000, loss=4.885877 (Recons loss=4.243044, Rounding loss=0.642832)[0m
+[32m
+[QUARK-INFO]: adaround iterations=900, lr=0.100000, loss=15.783299 (Recons loss=15.783299, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=999, lr=0.100000, loss=57.481247 (Recons loss=57.481247, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: Module (/layer1/layer1.1/act1/Relu_output_0)->(/layer1/layer1.1/act2/Relu_output_0) recons metrics was optimized from 0.332317 to 0.273563 (diff=-0.058754)[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: finetuning layer 6, torch training time consumed 5.457981s[0m
+ 13%|█▎        | 7/54 [00:43<04:48,  6.14s/it][33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: finetuning layer 7, onnx inference (quantized model + float model) time consumed 0.581538s[0m
+[32m
+[QUARK-INFO]: Module (/layer1/layer1.1/act2/Relu_output_0)->(/layer1/layer1.1/conv3/Conv_output_0) will be optimized by adaround on cpu[0m
+[32m
+[QUARK-INFO]: adaround iterations=0, lr=0.100000, loss=10.754597 (Recons loss=10.754597, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=100, lr=0.100000, loss=9.255610 (Recons loss=9.255610, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=200, lr=0.100000, loss=117.759171 (Recons loss=25.085850, Rounding loss=92.673317)[0m
+[32m
+[QUARK-INFO]: adaround iterations=300, lr=0.100000, loss=52.553780 (Recons loss=13.369184, Rounding loss=39.184593)[0m
+[32m
+[QUARK-INFO]: adaround iterations=400, lr=0.100000, loss=1959.336304 (Recons loss=1926.836548, Rounding loss=32.499805)[0m
+[32m
+[QUARK-INFO]: adaround iterations=500, lr=0.100000, loss=40.055656 (Recons loss=13.805950, Rounding loss=26.249706)[0m
+[32m
+[QUARK-INFO]: adaround iterations=600, lr=0.100000, loss=39.131378 (Recons loss=20.917311, Rounding loss=18.214066)[0m
+[32m
+[QUARK-INFO]: adaround iterations=700, lr=0.100000, loss=19.093092 (Recons loss=10.927314, Rounding loss=8.165778)[0m
+[32m
+[QUARK-INFO]: adaround iterations=800, lr=0.100000, loss=11.562172 (Recons loss=10.927754, Rounding loss=0.634417)[0m
+[32m
+[QUARK-INFO]: adaround iterations=900, lr=0.100000, loss=75.177254 (Recons loss=75.177254, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=999, lr=0.100000, loss=12.509358 (Recons loss=12.509358, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: Module (/layer1/layer1.1/act2/Relu_output_0)->(/layer1/layer1.1/conv3/Conv_output_0) recons metrics was optimized from 0.483070 to 0.463080 (diff=-0.019990)[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: finetuning layer 7, torch training time consumed 5.833322s[0m
+ 15%|█▍        | 8/54 [00:50<04:46,  6.23s/it][33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: finetuning layer 8, onnx inference (quantized model + float model) time consumed 0.716168s[0m
+[32m
+[QUARK-INFO]: Module (/layer1/layer1.1/act3/Relu_output_0)->(/layer1/layer1.2/act1/Relu_output_0) will be optimized by adaround on cpu[0m
+[32m
+[QUARK-INFO]: adaround iterations=0, lr=0.100000, loss=5.196861 (Recons loss=5.196861, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=100, lr=0.100000, loss=5.866290 (Recons loss=5.866290, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=200, lr=0.100000, loss=65.763893 (Recons loss=3.111389, Rounding loss=62.652508)[0m
+[32m
+[QUARK-INFO]: adaround iterations=300, lr=0.100000, loss=20.615440 (Recons loss=4.393312, Rounding loss=16.222128)[0m
+[32m
+[QUARK-INFO]: adaround iterations=400, lr=0.100000, loss=12.588263 (Recons loss=4.369505, Rounding loss=8.218757)[0m
+[32m
+[QUARK-INFO]: adaround iterations=500, lr=0.100000, loss=9.535181 (Recons loss=5.145133, Rounding loss=4.390048)[0m
+[32m
+[QUARK-INFO]: adaround iterations=600, lr=0.100000, loss=7.251144 (Recons loss=5.160893, Rounding loss=2.090251)[0m
+[32m
+[QUARK-INFO]: adaround iterations=700, lr=0.100000, loss=4.449480 (Recons loss=3.955451, Rounding loss=0.494029)[0m
+[32m
+[QUARK-INFO]: adaround iterations=800, lr=0.100000, loss=5.416691 (Recons loss=5.396786, Rounding loss=0.019905)[0m
+[32m
+[QUARK-INFO]: adaround iterations=900, lr=0.100000, loss=4.455817 (Recons loss=4.455817, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=999, lr=0.100000, loss=4.312493 (Recons loss=4.312493, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: Module (/layer1/layer1.1/act3/Relu_output_0)->(/layer1/layer1.2/act1/Relu_output_0) recons metrics was optimized from 0.082514 to 0.069916 (diff=-0.012598)[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: finetuning layer 8, torch training time consumed 5.793239s[0m
+ 17%|█▋        | 9/54 [00:56<04:44,  6.32s/it][33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: finetuning layer 9, onnx inference (quantized model + float model) time consumed 0.704613s[0m
+[32m
+[QUARK-INFO]: Module (/layer1/layer1.2/act1/Relu_output_0)->(/layer1/layer1.2/act2/Relu_output_0) will be optimized by adaround on cpu[0m
+[32m
+[QUARK-INFO]: adaround iterations=0, lr=0.100000, loss=12.304042 (Recons loss=12.304042, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=100, lr=0.100000, loss=10.617327 (Recons loss=10.617327, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=200, lr=0.100000, loss=197.623535 (Recons loss=12.918802, Rounding loss=184.704727)[0m
+[32m
+[QUARK-INFO]: adaround iterations=300, lr=0.100000, loss=68.075607 (Recons loss=11.705191, Rounding loss=56.370419)[0m
+[32m
+[QUARK-INFO]: adaround iterations=400, lr=0.100000, loss=40.334602 (Recons loss=6.001346, Rounding loss=34.333256)[0m
+[32m
+[QUARK-INFO]: adaround iterations=500, lr=0.100000, loss=30.579449 (Recons loss=10.233155, Rounding loss=20.346294)[0m
+[32m
+[QUARK-INFO]: adaround iterations=600, lr=0.100000, loss=21.737494 (Recons loss=12.107861, Rounding loss=9.629633)[0m
+[32m
+[QUARK-INFO]: adaround iterations=700, lr=0.100000, loss=11.974301 (Recons loss=8.261016, Rounding loss=3.713285)[0m
+[32m
+[QUARK-INFO]: adaround iterations=800, lr=0.100000, loss=6.342606 (Recons loss=6.107356, Rounding loss=0.235250)[0m
+[32m
+[QUARK-INFO]: adaround iterations=900, lr=0.100000, loss=9.284549 (Recons loss=9.284549, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=999, lr=0.100000, loss=8.718930 (Recons loss=8.718930, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: Module (/layer1/layer1.2/act1/Relu_output_0)->(/layer1/layer1.2/act2/Relu_output_0) recons metrics was optimized from 0.185407 to 0.171063 (diff=-0.014344)[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: finetuning layer 9, torch training time consumed 5.700128s[0m
+ 19%|█▊        | 10/54 [01:03<04:39,  6.34s/it][33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: finetuning layer 10, onnx inference (quantized model + float model) time consumed 0.799853s[0m
+[32m
+[QUARK-INFO]: Module (/layer1/layer1.2/act2/Relu_output_0)->(/layer1/layer1.2/conv3/Conv_output_0) will be optimized by adaround on cpu[0m
+[32m
+[QUARK-INFO]: adaround iterations=0, lr=0.100000, loss=12.650782 (Recons loss=12.650782, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=100, lr=0.100000, loss=16.331972 (Recons loss=16.331972, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=200, lr=0.100000, loss=113.498001 (Recons loss=17.467628, Rounding loss=96.030373)[0m
+[32m
+[QUARK-INFO]: adaround iterations=300, lr=0.100000, loss=47.220764 (Recons loss=10.826672, Rounding loss=36.394093)[0m
+[32m
+[QUARK-INFO]: adaround iterations=400, lr=0.100000, loss=39.525391 (Recons loss=11.002502, Rounding loss=28.522890)[0m
+[32m
+[QUARK-INFO]: adaround iterations=500, lr=0.100000, loss=43.762207 (Recons loss=20.359287, Rounding loss=23.402920)[0m
+[32m
+[QUARK-INFO]: adaround iterations=600, lr=0.100000, loss=31.728184 (Recons loss=17.476585, Rounding loss=14.251598)[0m
+[32m
+[QUARK-INFO]: adaround iterations=700, lr=0.100000, loss=24.438555 (Recons loss=18.075310, Rounding loss=6.363245)[0m
+[32m
+[QUARK-INFO]: adaround iterations=800, lr=0.100000, loss=14.272701 (Recons loss=13.570601, Rounding loss=0.702101)[0m
+[32m
+[QUARK-INFO]: adaround iterations=900, lr=0.100000, loss=16.557074 (Recons loss=16.557074, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=999, lr=0.100000, loss=9.007758 (Recons loss=9.007758, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: Module (/layer1/layer1.2/act2/Relu_output_0)->(/layer1/layer1.2/conv3/Conv_output_0) recons metrics was optimized from 0.086187 to 0.080817 (diff=-0.005370)[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: finetuning layer 10, torch training time consumed 5.729343s[0m
+ 20%|██        | 11/54 [01:09<04:35,  6.40s/it][33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: finetuning layer 11, onnx inference (quantized model + float model) time consumed 0.843495s[0m
+[32m
+[QUARK-INFO]: Module (/layer1/layer1.2/act3/Relu_output_0)->(/layer2/layer2.0/act1/Relu_output_0) will be optimized by adaround on cpu[0m
+[32m
+[QUARK-INFO]: adaround iterations=0, lr=0.100000, loss=8.218401 (Recons loss=8.218401, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=100, lr=0.100000, loss=6.825903 (Recons loss=6.825903, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=200, lr=0.100000, loss=153.152771 (Recons loss=5.627893, Rounding loss=147.524872)[0m
+[32m
+[QUARK-INFO]: adaround iterations=300, lr=0.100000, loss=44.786121 (Recons loss=4.269955, Rounding loss=40.516167)[0m
+[32m
+[QUARK-INFO]: adaround iterations=400, lr=0.100000, loss=29.388783 (Recons loss=6.449441, Rounding loss=22.939341)[0m
+[32m
+[QUARK-INFO]: adaround iterations=500, lr=0.100000, loss=18.512541 (Recons loss=5.684288, Rounding loss=12.828254)[0m
+[32m
+[QUARK-INFO]: adaround iterations=600, lr=0.100000, loss=11.699001 (Recons loss=5.693793, Rounding loss=6.005208)[0m
+[32m
+[QUARK-INFO]: adaround iterations=700, lr=0.100000, loss=9.071785 (Recons loss=7.837767, Rounding loss=1.234019)[0m
+[32m
+[QUARK-INFO]: adaround iterations=800, lr=0.100000, loss=6.111805 (Recons loss=6.032443, Rounding loss=0.079363)[0m
+[32m
+[QUARK-INFO]: adaround iterations=900, lr=0.100000, loss=6.812682 (Recons loss=6.812682, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=999, lr=0.100000, loss=6.301263 (Recons loss=6.301263, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: Module (/layer1/layer1.2/act3/Relu_output_0)->(/layer2/layer2.0/act1/Relu_output_0) recons metrics was optimized from 0.055464 to 0.047694 (diff=-0.007771)[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: finetuning layer 11, torch training time consumed 7.330630s[0m
+ 22%|██▏       | 12/54 [01:17<04:51,  6.94s/it][33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: finetuning layer 12, onnx inference (quantized model + float model) time consumed 0.912288s[0m
+[32m
+[QUARK-INFO]: Module (/layer1/layer1.2/act3/Relu_output_0)->(/layer2/layer2.0/downsample/downsample.0/Conv_output_0) will be optimized by adaround on cpu[0m
+[32m
+[QUARK-INFO]: adaround iterations=0, lr=0.100000, loss=351.482849 (Recons loss=351.482849, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=100, lr=0.100000, loss=227.284164 (Recons loss=227.284164, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=200, lr=0.100000, loss=1164.570435 (Recons loss=311.617218, Rounding loss=852.953247)[0m
+[32m
+[QUARK-INFO]: adaround iterations=300, lr=0.100000, loss=653.200256 (Recons loss=235.759354, Rounding loss=417.440918)[0m
+[32m
+[QUARK-INFO]: adaround iterations=400, lr=0.100000, loss=599.828125 (Recons loss=270.235901, Rounding loss=329.592255)[0m
+[32m
+[QUARK-INFO]: adaround iterations=500, lr=0.100000, loss=513.905762 (Recons loss=255.092270, Rounding loss=258.813477)[0m
+[32m
+[QUARK-INFO]: adaround iterations=600, lr=0.100000, loss=425.902039 (Recons loss=237.766235, Rounding loss=188.135818)[0m
+[32m
+[QUARK-INFO]: adaround iterations=700, lr=0.100000, loss=385.706085 (Recons loss=274.086365, Rounding loss=111.619720)[0m
+[32m
+[QUARK-INFO]: adaround iterations=800, lr=0.100000, loss=273.319183 (Recons loss=236.914902, Rounding loss=36.404270)[0m
+[32m
+[QUARK-INFO]: adaround iterations=900, lr=0.100000, loss=257.054749 (Recons loss=255.246811, Rounding loss=1.807926)[0m
+[32m
+[QUARK-INFO]: adaround iterations=999, lr=0.100000, loss=274.156647 (Recons loss=273.939087, Rounding loss=0.217546)[0m
+[32m
+[QUARK-INFO]: Module (/layer1/layer1.2/act3/Relu_output_0)->(/layer2/layer2.0/downsample/downsample.0/Conv_output_0) recons metrics was optimized from 0.690751 to 0.538136 (diff=-0.152615)[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: finetuning layer 12, torch training time consumed 8.662408s[0m
+ 24%|██▍       | 13/54 [01:27<05:17,  7.74s/it][33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: finetuning layer 13, onnx inference (quantized model + float model) time consumed 0.904628s[0m
+[32m
+[QUARK-INFO]: Module (/layer2/layer2.0/act1/Relu_output_0)->(/layer2/layer2.0/act2/Relu_output_0) will be optimized by adaround on cpu[0m
+[32m
+[QUARK-INFO]: adaround iterations=0, lr=0.100000, loss=86.084671 (Recons loss=86.084671, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=100, lr=0.100000, loss=79.260849 (Recons loss=79.260849, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=200, lr=0.100000, loss=799.818665 (Recons loss=70.091003, Rounding loss=729.727661)[0m
+[32m
+[QUARK-INFO]: adaround iterations=300, lr=0.100000, loss=245.624863 (Recons loss=75.598267, Rounding loss=170.026596)[0m
+[32m
+[QUARK-INFO]: adaround iterations=400, lr=0.100000, loss=132.970245 (Recons loss=51.835697, Rounding loss=81.134552)[0m
+[32m
+[QUARK-INFO]: adaround iterations=500, lr=0.100000, loss=109.711517 (Recons loss=73.750519, Rounding loss=35.960999)[0m
+[32m
+[QUARK-INFO]: adaround iterations=600, lr=0.100000, loss=79.123505 (Recons loss=66.574646, Rounding loss=12.548861)[0m
+[32m
+[QUARK-INFO]: adaround iterations=700, lr=0.100000, loss=59.906628 (Recons loss=57.112011, Rounding loss=2.794615)[0m
+[32m
+[QUARK-INFO]: adaround iterations=800, lr=0.100000, loss=74.871033 (Recons loss=74.781807, Rounding loss=0.089227)[0m
+[32m
+[QUARK-INFO]: adaround iterations=900, lr=0.100000, loss=78.283424 (Recons loss=78.283424, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=999, lr=0.100000, loss=74.294357 (Recons loss=74.294357, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: Module (/layer2/layer2.0/act1/Relu_output_0)->(/layer2/layer2.0/act2/Relu_output_0) recons metrics was optimized from 0.523494 to 0.497883 (diff=-0.025610)[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: finetuning layer 13, torch training time consumed 6.160974s[0m
+ 26%|██▌       | 14/54 [01:34<05:01,  7.54s/it][33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: finetuning layer 14, onnx inference (quantized model + float model) time consumed 0.931525s[0m
+[32m
+[QUARK-INFO]: Module (/layer2/layer2.0/act2/Relu_output_0)->(/layer2/layer2.0/conv3/Conv_output_0) will be optimized by adaround on cpu[0m
+[32m
+[QUARK-INFO]: adaround iterations=0, lr=0.100000, loss=169.974854 (Recons loss=169.974854, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=100, lr=0.100000, loss=166.591599 (Recons loss=166.591599, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=200, lr=0.100000, loss=754.612061 (Recons loss=292.105377, Rounding loss=462.506683)[0m
+[32m
+[QUARK-INFO]: adaround iterations=300, lr=0.100000, loss=510.228180 (Recons loss=288.773224, Rounding loss=221.454956)[0m
+[32m
+[QUARK-INFO]: adaround iterations=400, lr=0.100000, loss=440.779053 (Recons loss=266.596893, Rounding loss=174.182159)[0m
+[32m
+[QUARK-INFO]: adaround iterations=500, lr=0.100000, loss=354.809570 (Recons loss=218.121490, Rounding loss=136.688065)[0m
+[32m
+[QUARK-INFO]: adaround iterations=600, lr=0.100000, loss=300.346649 (Recons loss=206.612289, Rounding loss=93.734360)[0m
+[32m
+[QUARK-INFO]: adaround iterations=700, lr=0.100000, loss=303.896301 (Recons loss=252.264786, Rounding loss=51.631523)[0m
+[32m
+[QUARK-INFO]: adaround iterations=800, lr=0.100000, loss=184.462601 (Recons loss=173.798447, Rounding loss=10.664158)[0m
+[32m
+[QUARK-INFO]: adaround iterations=900, lr=0.100000, loss=256.525665 (Recons loss=256.365143, Rounding loss=0.160528)[0m
+[32m
+[QUARK-INFO]: adaround iterations=999, lr=0.100000, loss=200.398758 (Recons loss=200.398758, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: Module (/layer2/layer2.0/act2/Relu_output_0)->(/layer2/layer2.0/conv3/Conv_output_0) recons metrics was optimized from 0.467271 to 0.437828 (diff=-0.029443)[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: finetuning layer 14, torch training time consumed 5.755659s[0m
+ 28%|██▊       | 15/54 [01:41<04:43,  7.28s/it][33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: finetuning layer 15, onnx inference (quantized model + float model) time consumed 1.082735s[0m
+[32m
+[QUARK-INFO]: Module (/layer2/layer2.0/act3/Relu_output_0)->(/layer2/layer2.1/act1/Relu_output_0) will be optimized by adaround on cpu[0m
+[32m
+[QUARK-INFO]: adaround iterations=0, lr=0.100000, loss=7.933455 (Recons loss=7.933455, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=100, lr=0.100000, loss=10.589896 (Recons loss=10.589896, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=200, lr=0.100000, loss=423.692139 (Recons loss=10.229599, Rounding loss=413.462555)[0m
+[32m
+[QUARK-INFO]: adaround iterations=300, lr=0.100000, loss=143.318024 (Recons loss=10.652336, Rounding loss=132.665680)[0m
+[32m
+[QUARK-INFO]: adaround iterations=400, lr=0.100000, loss=92.213638 (Recons loss=12.665535, Rounding loss=79.548103)[0m
+[32m
+[QUARK-INFO]: adaround iterations=500, lr=0.100000, loss=56.364243 (Recons loss=7.641129, Rounding loss=48.723114)[0m
+[32m
+[QUARK-INFO]: adaround iterations=600, lr=0.100000, loss=33.238159 (Recons loss=7.464850, Rounding loss=25.773310)[0m
+[32m
+[QUARK-INFO]: adaround iterations=700, lr=0.100000, loss=14.579960 (Recons loss=6.887814, Rounding loss=7.692146)[0m
+[32m
+[QUARK-INFO]: adaround iterations=800, lr=0.100000, loss=7.930567 (Recons loss=7.526475, Rounding loss=0.404093)[0m
+[32m
+[QUARK-INFO]: adaround iterations=900, lr=0.100000, loss=8.388696 (Recons loss=8.388696, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=999, lr=0.100000, loss=8.736669 (Recons loss=8.736669, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: Module (/layer2/layer2.0/act3/Relu_output_0)->(/layer2/layer2.1/act1/Relu_output_0) recons metrics was optimized from 0.080433 to 0.072599 (diff=-0.007834)[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: finetuning layer 15, torch training time consumed 5.516150s[0m
+ 30%|██▉       | 16/54 [01:47<04:28,  7.08s/it][33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: finetuning layer 16, onnx inference (quantized model + float model) time consumed 1.066516s[0m
+[32m
+[QUARK-INFO]: Module (/layer2/layer2.1/act1/Relu_output_0)->(/layer2/layer2.1/act2/Relu_output_0) will be optimized by adaround on cpu[0m
+[32m
+[QUARK-INFO]: adaround iterations=0, lr=0.100000, loss=37.397560 (Recons loss=37.397560, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=100, lr=0.100000, loss=30.372963 (Recons loss=30.372963, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=200, lr=0.100000, loss=969.158752 (Recons loss=21.761517, Rounding loss=947.397217)[0m
+[32m
+[QUARK-INFO]: adaround iterations=300, lr=0.100000, loss=331.309723 (Recons loss=24.353380, Rounding loss=306.956329)[0m
+[32m
+[QUARK-INFO]: adaround iterations=400, lr=0.100000, loss=206.195160 (Recons loss=18.898325, Rounding loss=187.296829)[0m
+[32m
+[QUARK-INFO]: adaround iterations=500, lr=0.100000, loss=154.469299 (Recons loss=37.507446, Rounding loss=116.961845)[0m
+[32m
+[QUARK-INFO]: adaround iterations=600, lr=0.100000, loss=83.087555 (Recons loss=19.763990, Rounding loss=63.323566)[0m
+[32m
+[QUARK-INFO]: adaround iterations=700, lr=0.100000, loss=52.289856 (Recons loss=27.564947, Rounding loss=24.724911)[0m
+[32m
+[QUARK-INFO]: adaround iterations=800, lr=0.100000, loss=21.244572 (Recons loss=18.814400, Rounding loss=2.430171)[0m
+[32m
+[QUARK-INFO]: adaround iterations=900, lr=0.100000, loss=32.863052 (Recons loss=32.861691, Rounding loss=0.001362)[0m
+[32m
+[QUARK-INFO]: adaround iterations=999, lr=0.100000, loss=28.675043 (Recons loss=28.675043, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: Module (/layer2/layer2.1/act1/Relu_output_0)->(/layer2/layer2.1/act2/Relu_output_0) recons metrics was optimized from 0.240397 to 0.221361 (diff=-0.019036)[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: finetuning layer 16, torch training time consumed 5.225429s[0m
+ 31%|███▏      | 17/54 [01:54<04:13,  6.84s/it][33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: finetuning layer 17, onnx inference (quantized model + float model) time consumed 1.120511s[0m
+[32m
+[QUARK-INFO]: Module (/layer2/layer2.1/act2/Relu_output_0)->(/layer2/layer2.1/conv3/Conv_output_0) will be optimized by adaround on cpu[0m
+[32m
+[QUARK-INFO]: adaround iterations=0, lr=0.100000, loss=147.511536 (Recons loss=147.511536, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=100, lr=0.100000, loss=171.457306 (Recons loss=171.457306, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=200, lr=0.100000, loss=648.228027 (Recons loss=159.075958, Rounding loss=489.152100)[0m
+[32m
+[QUARK-INFO]: adaround iterations=300, lr=0.100000, loss=454.463135 (Recons loss=192.165115, Rounding loss=262.298004)[0m
+[32m
+[QUARK-INFO]: adaround iterations=400, lr=0.100000, loss=400.827759 (Recons loss=177.437164, Rounding loss=223.390594)[0m
+[32m
+[QUARK-INFO]: adaround iterations=500, lr=0.100000, loss=325.651520 (Recons loss=133.669449, Rounding loss=191.982071)[0m
+[32m
+[QUARK-INFO]: adaround iterations=600, lr=0.100000, loss=324.450012 (Recons loss=167.476028, Rounding loss=156.973969)[0m
+[32m
+[QUARK-INFO]: adaround iterations=700, lr=0.100000, loss=238.928375 (Recons loss=128.976776, Rounding loss=109.951591)[0m
+[32m
+[QUARK-INFO]: adaround iterations=800, lr=0.100000, loss=198.885681 (Recons loss=152.242264, Rounding loss=46.643425)[0m
+[32m
+[QUARK-INFO]: adaround iterations=900, lr=0.100000, loss=151.873840 (Recons loss=148.387161, Rounding loss=3.486682)[0m
+[32m
+[QUARK-INFO]: adaround iterations=999, lr=0.100000, loss=175.159546 (Recons loss=174.587311, Rounding loss=0.572242)[0m
+[32m
+[QUARK-INFO]: Module (/layer2/layer2.1/act2/Relu_output_0)->(/layer2/layer2.1/conv3/Conv_output_0) recons metrics was optimized from 0.355512 to 0.316920 (diff=-0.038592)[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: finetuning layer 17, torch training time consumed 5.778267s[0m
+ 33%|███▎      | 18/54 [02:00<04:06,  6.86s/it][33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: finetuning layer 18, onnx inference (quantized model + float model) time consumed 1.233273s[0m
+[32m
+[QUARK-INFO]: Module (/layer2/layer2.1/act3/Relu_output_0)->(/layer2/layer2.2/act1/Relu_output_0) will be optimized by adaround on cpu[0m
+[32m
+[QUARK-INFO]: adaround iterations=0, lr=0.100000, loss=5.910978 (Recons loss=5.910978, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=100, lr=0.100000, loss=7.600657 (Recons loss=7.600657, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=200, lr=0.100000, loss=378.280945 (Recons loss=7.495021, Rounding loss=370.785919)[0m
+[32m
+[QUARK-INFO]: adaround iterations=300, lr=0.100000, loss=96.795349 (Recons loss=5.761303, Rounding loss=91.034042)[0m
+[32m
+[QUARK-INFO]: adaround iterations=400, lr=0.100000, loss=58.704674 (Recons loss=7.169448, Rounding loss=51.535225)[0m
+[32m
+[QUARK-INFO]: adaround iterations=500, lr=0.100000, loss=33.825184 (Recons loss=6.635561, Rounding loss=27.189623)[0m
+[32m
+[QUARK-INFO]: adaround iterations=600, lr=0.100000, loss=16.421041 (Recons loss=6.636947, Rounding loss=9.784094)[0m
+[32m
+[QUARK-INFO]: adaround iterations=700, lr=0.100000, loss=9.068346 (Recons loss=7.032713, Rounding loss=2.035632)[0m
+[32m
+[QUARK-INFO]: adaround iterations=800, lr=0.100000, loss=9.718918 (Recons loss=9.634465, Rounding loss=0.084452)[0m
+[32m
+[QUARK-INFO]: adaround iterations=900, lr=0.100000, loss=6.812312 (Recons loss=6.812312, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=999, lr=0.100000, loss=7.909085 (Recons loss=7.909085, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: Module (/layer2/layer2.1/act3/Relu_output_0)->(/layer2/layer2.2/act1/Relu_output_0) recons metrics was optimized from 0.056196 to 0.053571 (diff=-0.002626)[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: finetuning layer 18, torch training time consumed 5.823915s[0m
+ 35%|███▌      | 19/54 [02:08<04:02,  6.92s/it][33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: finetuning layer 19, onnx inference (quantized model + float model) time consumed 1.175649s[0m
+[32m
+[QUARK-INFO]: Module (/layer2/layer2.2/act1/Relu_output_0)->(/layer2/layer2.2/act2/Relu_output_0) will be optimized by adaround on cpu[0m
+[32m
+[QUARK-INFO]: adaround iterations=0, lr=0.100000, loss=45.745983 (Recons loss=45.745983, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=100, lr=0.100000, loss=20.934685 (Recons loss=20.934685, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=200, lr=0.100000, loss=909.950378 (Recons loss=44.638634, Rounding loss=865.311768)[0m
+[32m
+[QUARK-INFO]: adaround iterations=300, lr=0.100000, loss=293.295074 (Recons loss=51.384338, Rounding loss=241.910736)[0m
+[32m
+[QUARK-INFO]: adaround iterations=400, lr=0.100000, loss=167.602097 (Recons loss=31.794662, Rounding loss=135.807434)[0m
+[32m
+[QUARK-INFO]: adaround iterations=500, lr=0.100000, loss=98.789574 (Recons loss=26.787901, Rounding loss=72.001671)[0m
+[32m
+[QUARK-INFO]: adaround iterations=600, lr=0.100000, loss=68.619293 (Recons loss=37.275810, Rounding loss=31.343485)[0m
+[32m
+[QUARK-INFO]: adaround iterations=700, lr=0.100000, loss=45.137466 (Recons loss=36.879414, Rounding loss=8.258052)[0m
+[32m
+[QUARK-INFO]: adaround iterations=800, lr=0.100000, loss=25.664721 (Recons loss=25.393179, Rounding loss=0.271541)[0m
+[32m
+[QUARK-INFO]: adaround iterations=900, lr=0.100000, loss=26.319750 (Recons loss=26.319750, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=999, lr=0.100000, loss=23.534595 (Recons loss=23.534595, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: Module (/layer2/layer2.2/act1/Relu_output_0)->(/layer2/layer2.2/act2/Relu_output_0) recons metrics was optimized from 0.297660 to 0.285188 (diff=-0.012472)[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: finetuning layer 19, torch training time consumed 5.568737s[0m
+ 37%|███▋      | 20/54 [02:14<03:53,  6.87s/it][33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: finetuning layer 20, onnx inference (quantized model + float model) time consumed 1.287637s[0m
+[32m
+[QUARK-INFO]: Module (/layer2/layer2.2/act2/Relu_output_0)->(/layer2/layer2.2/conv3/Conv_output_0) will be optimized by adaround on cpu[0m
+[32m
+[QUARK-INFO]: adaround iterations=0, lr=0.100000, loss=229.834808 (Recons loss=229.834808, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=100, lr=0.100000, loss=318.497223 (Recons loss=318.497223, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=200, lr=0.100000, loss=655.094238 (Recons loss=157.170624, Rounding loss=497.923584)[0m
+[32m
+[QUARK-INFO]: adaround iterations=300, lr=0.100000, loss=405.082947 (Recons loss=149.415512, Rounding loss=255.667450)[0m
+[32m
+[QUARK-INFO]: adaround iterations=400, lr=0.100000, loss=425.048645 (Recons loss=210.024719, Rounding loss=215.023941)[0m
+[32m
+[QUARK-INFO]: adaround iterations=500, lr=0.100000, loss=321.537048 (Recons loss=140.589371, Rounding loss=180.947693)[0m
+[32m
+[QUARK-INFO]: adaround iterations=600, lr=0.100000, loss=285.355103 (Recons loss=145.106415, Rounding loss=140.248688)[0m
+[32m
+[QUARK-INFO]: adaround iterations=700, lr=0.100000, loss=253.070892 (Recons loss=173.448120, Rounding loss=79.622765)[0m
+[32m
+[QUARK-INFO]: adaround iterations=800, lr=0.100000, loss=253.157730 (Recons loss=241.080582, Rounding loss=12.077142)[0m
+[32m
+[QUARK-INFO]: adaround iterations=900, lr=0.100000, loss=168.787811 (Recons loss=168.682510, Rounding loss=0.105298)[0m
+[32m
+[QUARK-INFO]: adaround iterations=999, lr=0.100000, loss=205.140182 (Recons loss=205.140182, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: Module (/layer2/layer2.2/act2/Relu_output_0)->(/layer2/layer2.2/conv3/Conv_output_0) recons metrics was optimized from 0.364468 to 0.339911 (diff=-0.024556)[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: finetuning layer 20, torch training time consumed 5.691676s[0m
+ 39%|███▉      | 21/54 [02:21<03:47,  6.90s/it][33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: finetuning layer 21, onnx inference (quantized model + float model) time consumed 1.338011s[0m
+[32m
+[QUARK-INFO]: Module (/layer2/layer2.2/act3/Relu_output_0)->(/layer2/layer2.3/act1/Relu_output_0) will be optimized by adaround on cpu[0m
+[32m
+[QUARK-INFO]: adaround iterations=0, lr=0.100000, loss=10.146987 (Recons loss=10.146987, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=100, lr=0.100000, loss=10.226506 (Recons loss=10.226506, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=200, lr=0.100000, loss=409.050293 (Recons loss=5.326908, Rounding loss=403.723389)[0m
+[32m
+[QUARK-INFO]: adaround iterations=300, lr=0.100000, loss=126.850166 (Recons loss=4.670580, Rounding loss=122.179588)[0m
+[32m
+[QUARK-INFO]: adaround iterations=400, lr=0.100000, loss=79.953957 (Recons loss=6.217169, Rounding loss=73.736786)[0m
+[32m
+[QUARK-INFO]: adaround iterations=500, lr=0.100000, loss=48.437801 (Recons loss=5.806709, Rounding loss=42.631092)[0m
+[32m
+[QUARK-INFO]: adaround iterations=600, lr=0.100000, loss=26.150589 (Recons loss=7.267596, Rounding loss=18.882992)[0m
+[32m
+[QUARK-INFO]: adaround iterations=700, lr=0.100000, loss=12.583277 (Recons loss=7.723820, Rounding loss=4.859457)[0m
+[32m
+[QUARK-INFO]: adaround iterations=800, lr=0.100000, loss=5.682293 (Recons loss=5.498761, Rounding loss=0.183532)[0m
+[32m
+[QUARK-INFO]: adaround iterations=900, lr=0.100000, loss=6.807980 (Recons loss=6.807980, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=999, lr=0.100000, loss=7.634464 (Recons loss=7.634464, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: Module (/layer2/layer2.2/act3/Relu_output_0)->(/layer2/layer2.3/act1/Relu_output_0) recons metrics was optimized from 0.061604 to 0.056637 (diff=-0.004967)[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: finetuning layer 21, torch training time consumed 5.598663s[0m
+ 41%|████      | 22/54 [02:28<03:41,  6.91s/it][33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: finetuning layer 22, onnx inference (quantized model + float model) time consumed 1.316881s[0m
+[32m
+[QUARK-INFO]: Module (/layer2/layer2.3/act1/Relu_output_0)->(/layer2/layer2.3/act2/Relu_output_0) will be optimized by adaround on cpu[0m
+[32m
+[QUARK-INFO]: adaround iterations=0, lr=0.100000, loss=25.442072 (Recons loss=25.442072, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=100, lr=0.100000, loss=16.348558 (Recons loss=16.348558, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=200, lr=0.100000, loss=956.042786 (Recons loss=18.299702, Rounding loss=937.743103)[0m
+[32m
+[QUARK-INFO]: adaround iterations=300, lr=0.100000, loss=333.499146 (Recons loss=22.774273, Rounding loss=310.724884)[0m
+[32m
+[QUARK-INFO]: adaround iterations=400, lr=0.100000, loss=227.122452 (Recons loss=25.774414, Rounding loss=201.348038)[0m
+[32m
+[QUARK-INFO]: adaround iterations=500, lr=0.100000, loss=143.593216 (Recons loss=21.711542, Rounding loss=121.881668)[0m
+[32m
+[QUARK-INFO]: adaround iterations=600, lr=0.100000, loss=94.657074 (Recons loss=24.709093, Rounding loss=69.947983)[0m
+[32m
+[QUARK-INFO]: adaround iterations=700, lr=0.100000, loss=46.406136 (Recons loss=17.874113, Rounding loss=28.532021)[0m
+[32m
+[QUARK-INFO]: adaround iterations=800, lr=0.100000, loss=18.483538 (Recons loss=16.064178, Rounding loss=2.419359)[0m
+[32m
+[QUARK-INFO]: adaround iterations=900, lr=0.100000, loss=15.420189 (Recons loss=15.415805, Rounding loss=0.004384)[0m
+[32m
+[QUARK-INFO]: adaround iterations=999, lr=0.100000, loss=23.836834 (Recons loss=23.836834, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: Module (/layer2/layer2.3/act1/Relu_output_0)->(/layer2/layer2.3/act2/Relu_output_0) recons metrics was optimized from 0.164966 to 0.153204 (diff=-0.011762)[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: finetuning layer 22, torch training time consumed 5.340408s[0m
+ 43%|████▎     | 23/54 [02:35<03:31,  6.84s/it][33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: finetuning layer 23, onnx inference (quantized model + float model) time consumed 1.450689s[0m
+[32m
+[QUARK-INFO]: Module (/layer2/layer2.3/act2/Relu_output_0)->(/layer2/layer2.3/conv3/Conv_output_0) will be optimized by adaround on cpu[0m
+[32m
+[QUARK-INFO]: adaround iterations=0, lr=0.100000, loss=196.111526 (Recons loss=196.111526, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=100, lr=0.100000, loss=106.797798 (Recons loss=106.797798, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=200, lr=0.100000, loss=629.408081 (Recons loss=139.441589, Rounding loss=489.966461)[0m
+[32m
+[QUARK-INFO]: adaround iterations=300, lr=0.100000, loss=429.907898 (Recons loss=195.675659, Rounding loss=234.232224)[0m
+[32m
+[QUARK-INFO]: adaround iterations=400, lr=0.100000, loss=334.633453 (Recons loss=145.316620, Rounding loss=189.316833)[0m
+[32m
+[QUARK-INFO]: adaround iterations=500, lr=0.100000, loss=305.149719 (Recons loss=150.468369, Rounding loss=154.681335)[0m
+[32m
+[QUARK-INFO]: adaround iterations=600, lr=0.100000, loss=254.921631 (Recons loss=139.361053, Rounding loss=115.560577)[0m
+[32m
+[QUARK-INFO]: adaround iterations=700, lr=0.100000, loss=199.174377 (Recons loss=133.972839, Rounding loss=65.201530)[0m
+[32m
+[QUARK-INFO]: adaround iterations=800, lr=0.100000, loss=171.814529 (Recons loss=161.752853, Rounding loss=10.061669)[0m
+[32m
+[QUARK-INFO]: adaround iterations=900, lr=0.100000, loss=134.608582 (Recons loss=134.500000, Rounding loss=0.108584)[0m
+[32m
+[QUARK-INFO]: adaround iterations=999, lr=0.100000, loss=132.781128 (Recons loss=132.781128, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: Module (/layer2/layer2.3/act2/Relu_output_0)->(/layer2/layer2.3/conv3/Conv_output_0) recons metrics was optimized from 0.287188 to 0.266941 (diff=-0.020247)[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: finetuning layer 23, torch training time consumed 5.611359s[0m
+ 44%|████▍     | 24/54 [02:42<03:27,  6.90s/it][33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: finetuning layer 24, onnx inference (quantized model + float model) time consumed 1.566554s[0m
+[32m
+[QUARK-INFO]: Module (/layer2/layer2.3/act3/Relu_output_0)->(/layer3/layer3.0/act1/Relu_output_0) will be optimized by adaround on cpu[0m
+[32m
+[QUARK-INFO]: adaround iterations=0, lr=0.100000, loss=14.349773 (Recons loss=14.349773, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=100, lr=0.100000, loss=15.407088 (Recons loss=15.407088, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=200, lr=0.100000, loss=699.916382 (Recons loss=10.329995, Rounding loss=689.586365)[0m
+[32m
+[QUARK-INFO]: adaround iterations=300, lr=0.100000, loss=178.269730 (Recons loss=15.277954, Rounding loss=162.991776)[0m
+[32m
+[QUARK-INFO]: adaround iterations=400, lr=0.100000, loss=91.519020 (Recons loss=12.745362, Rounding loss=78.773659)[0m
+[32m
+[QUARK-INFO]: adaround iterations=500, lr=0.100000, loss=55.507145 (Recons loss=15.575309, Rounding loss=39.931835)[0m
+[32m
+[QUARK-INFO]: adaround iterations=600, lr=0.100000, loss=28.561087 (Recons loss=15.154709, Rounding loss=13.406378)[0m
+[32m
+[QUARK-INFO]: adaround iterations=700, lr=0.100000, loss=12.711213 (Recons loss=10.911624, Rounding loss=1.799590)[0m
+[32m
+[QUARK-INFO]: adaround iterations=800, lr=0.100000, loss=12.810726 (Recons loss=12.757864, Rounding loss=0.052862)[0m
+[32m
+[QUARK-INFO]: adaround iterations=900, lr=0.100000, loss=13.027138 (Recons loss=13.027138, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=999, lr=0.100000, loss=12.969880 (Recons loss=12.969880, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: Module (/layer2/layer2.3/act3/Relu_output_0)->(/layer3/layer3.0/act1/Relu_output_0) recons metrics was optimized from 0.057244 to 0.053824 (diff=-0.003420)[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: finetuning layer 24, torch training time consumed 6.319369s[0m
+ 46%|████▋     | 25/54 [02:50<03:28,  7.20s/it][33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: finetuning layer 25, onnx inference (quantized model + float model) time consumed 1.442832s[0m
+[32m
+[QUARK-INFO]: Module (/layer2/layer2.3/act3/Relu_output_0)->(/layer3/layer3.0/downsample/downsample.0/Conv_output_0) will be optimized by adaround on cpu[0m
+[32m
+[QUARK-INFO]: adaround iterations=0, lr=0.100000, loss=394.636230 (Recons loss=394.636230, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=100, lr=0.100000, loss=315.660522 (Recons loss=315.660522, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=200, lr=0.100000, loss=3980.276855 (Recons loss=381.449707, Rounding loss=3598.827148)[0m
+[32m
+[QUARK-INFO]: adaround iterations=300, lr=0.100000, loss=1987.008179 (Recons loss=371.670532, Rounding loss=1615.337646)[0m
+[32m
+[QUARK-INFO]: adaround iterations=400, lr=0.100000, loss=1545.141846 (Recons loss=369.006409, Rounding loss=1176.135376)[0m
+[32m
+[QUARK-INFO]: adaround iterations=500, lr=0.100000, loss=1196.065552 (Recons loss=379.234161, Rounding loss=816.831360)[0m
+[32m
+[QUARK-INFO]: adaround iterations=600, lr=0.100000, loss=926.195312 (Recons loss=391.004547, Rounding loss=535.190796)[0m
+[32m
+[QUARK-INFO]: adaround iterations=700, lr=0.100000, loss=567.665527 (Recons loss=285.811523, Rounding loss=281.854004)[0m
+[32m
+[QUARK-INFO]: adaround iterations=800, lr=0.100000, loss=327.679047 (Recons loss=267.040344, Rounding loss=60.638706)[0m
+[32m
+[QUARK-INFO]: adaround iterations=900, lr=0.100000, loss=319.039886 (Recons loss=318.060913, Rounding loss=0.978981)[0m
+[32m
+[QUARK-INFO]: adaround iterations=999, lr=0.100000, loss=394.223175 (Recons loss=394.172760, Rounding loss=0.050418)[0m
+[32m
+[QUARK-INFO]: Module (/layer2/layer2.3/act3/Relu_output_0)->(/layer3/layer3.0/downsample/downsample.0/Conv_output_0) recons metrics was optimized from 0.414321 to 0.351644 (diff=-0.062677)[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: finetuning layer 25, torch training time consumed 8.918903s[0m
+ 48%|████▊     | 26/54 [03:00<03:48,  8.15s/it][33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: finetuning layer 26, onnx inference (quantized model + float model) time consumed 1.545256s[0m
+[32m
+[QUARK-INFO]: Module (/layer3/layer3.0/act1/Relu_output_0)->(/layer3/layer3.0/act2/Relu_output_0) will be optimized by adaround on cpu[0m
+[32m
+[QUARK-INFO]: adaround iterations=0, lr=0.100000, loss=50.559841 (Recons loss=50.559841, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=100, lr=0.100000, loss=42.094349 (Recons loss=42.094349, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=200, lr=0.100000, loss=3552.426758 (Recons loss=51.569206, Rounding loss=3500.857666)[0m
+[32m
+[QUARK-INFO]: adaround iterations=300, lr=0.100000, loss=1028.391602 (Recons loss=57.239506, Rounding loss=971.152100)[0m
+[32m
+[QUARK-INFO]: adaround iterations=400, lr=0.100000, loss=571.007385 (Recons loss=52.609474, Rounding loss=518.397888)[0m
+[32m
+[QUARK-INFO]: adaround iterations=500, lr=0.100000, loss=279.891174 (Recons loss=43.073208, Rounding loss=236.817978)[0m
+[32m
+[QUARK-INFO]: adaround iterations=600, lr=0.100000, loss=136.170105 (Recons loss=42.651428, Rounding loss=93.518669)[0m
+[32m
+[QUARK-INFO]: adaround iterations=700, lr=0.100000, loss=61.636230 (Recons loss=42.040543, Rounding loss=19.595690)[0m
+[32m
+[QUARK-INFO]: adaround iterations=800, lr=0.100000, loss=60.497704 (Recons loss=60.016357, Rounding loss=0.481347)[0m
+[32m
+[QUARK-INFO]: adaround iterations=900, lr=0.100000, loss=47.357128 (Recons loss=47.357128, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=999, lr=0.100000, loss=43.576061 (Recons loss=43.576061, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: Module (/layer3/layer3.0/act1/Relu_output_0)->(/layer3/layer3.0/act2/Relu_output_0) recons metrics was optimized from 0.229150 to 0.205300 (diff=-0.023850)[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: finetuning layer 26, torch training time consumed 8.319223s[0m
+ 50%|█████     | 27/54 [03:10<03:53,  8.66s/it][33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: finetuning layer 27, onnx inference (quantized model + float model) time consumed 1.490421s[0m
+[32m
+[QUARK-INFO]: Module (/layer3/layer3.0/act2/Relu_output_0)->(/layer3/layer3.0/conv3/Conv_output_0) will be optimized by adaround on cpu[0m
+[32m
+[QUARK-INFO]: adaround iterations=0, lr=0.100000, loss=384.689087 (Recons loss=384.689087, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=100, lr=0.100000, loss=409.809357 (Recons loss=409.809357, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=200, lr=0.100000, loss=2532.056396 (Recons loss=621.505920, Rounding loss=1910.550415)[0m
+[32m
+[QUARK-INFO]: adaround iterations=300, lr=0.100000, loss=1397.468018 (Recons loss=532.593201, Rounding loss=864.874817)[0m
+[32m
+[QUARK-INFO]: adaround iterations=400, lr=0.100000, loss=954.310791 (Recons loss=361.564423, Rounding loss=592.746338)[0m
+[32m
+[QUARK-INFO]: adaround iterations=500, lr=0.100000, loss=931.009155 (Recons loss=508.242950, Rounding loss=422.766235)[0m
+[32m
+[QUARK-INFO]: adaround iterations=600, lr=0.100000, loss=695.367065 (Recons loss=443.629059, Rounding loss=251.738022)[0m
+[32m
+[QUARK-INFO]: adaround iterations=700, lr=0.100000, loss=823.427612 (Recons loss=714.805786, Rounding loss=108.621857)[0m
+[32m
+[QUARK-INFO]: adaround iterations=800, lr=0.100000, loss=554.676758 (Recons loss=538.743469, Rounding loss=15.933260)[0m
+[32m
+[QUARK-INFO]: adaround iterations=900, lr=0.100000, loss=391.117798 (Recons loss=391.013275, Rounding loss=0.104511)[0m
+[32m
+[QUARK-INFO]: adaround iterations=999, lr=0.100000, loss=457.515900 (Recons loss=457.515900, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: Module (/layer3/layer3.0/act2/Relu_output_0)->(/layer3/layer3.0/conv3/Conv_output_0) recons metrics was optimized from 0.540878 to 0.510572 (diff=-0.030306)[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: finetuning layer 27, torch training time consumed 5.861559s[0m
+ 52%|█████▏    | 28/54 [03:17<03:35,  8.27s/it][33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: finetuning layer 28, onnx inference (quantized model + float model) time consumed 1.730117s[0m
+[32m
+[QUARK-INFO]: Module (/layer3/layer3.0/act3/Relu_output_0)->(/layer3/layer3.1/act1/Relu_output_0) will be optimized by adaround on cpu[0m
+[32m
+[QUARK-INFO]: adaround iterations=0, lr=0.100000, loss=28.393093 (Recons loss=28.393093, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=100, lr=0.100000, loss=28.215599 (Recons loss=28.215599, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=200, lr=0.100000, loss=1685.859131 (Recons loss=22.957941, Rounding loss=1662.901245)[0m
+[32m
+[QUARK-INFO]: adaround iterations=300, lr=0.100000, loss=529.364136 (Recons loss=27.541245, Rounding loss=501.822876)[0m
+[32m
+[QUARK-INFO]: adaround iterations=400, lr=0.100000, loss=317.062073 (Recons loss=34.271202, Rounding loss=282.790863)[0m
+[32m
+[QUARK-INFO]: adaround iterations=500, lr=0.100000, loss=173.532959 (Recons loss=18.173880, Rounding loss=155.359085)[0m
+[32m
+[QUARK-INFO]: adaround iterations=600, lr=0.100000, loss=99.457108 (Recons loss=27.765310, Rounding loss=71.691795)[0m
+[32m
+[QUARK-INFO]: adaround iterations=700, lr=0.100000, loss=45.425888 (Recons loss=24.523611, Rounding loss=20.902277)[0m
+[32m
+[QUARK-INFO]: adaround iterations=800, lr=0.100000, loss=42.129871 (Recons loss=40.981998, Rounding loss=1.147872)[0m
+[32m
+[QUARK-INFO]: adaround iterations=900, lr=0.100000, loss=26.306120 (Recons loss=26.306120, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=999, lr=0.100000, loss=18.413607 (Recons loss=18.413607, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: Module (/layer3/layer3.0/act3/Relu_output_0)->(/layer3/layer3.1/act1/Relu_output_0) recons metrics was optimized from 0.116573 to 0.104393 (diff=-0.012180)[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: finetuning layer 28, torch training time consumed 6.351436s[0m
+ 54%|█████▎    | 29/54 [03:25<03:25,  8.21s/it][33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: finetuning layer 29, onnx inference (quantized model + float model) time consumed 1.637825s[0m
+[32m
+[QUARK-INFO]: Module (/layer3/layer3.1/act1/Relu_output_0)->(/layer3/layer3.1/act2/Relu_output_0) will be optimized by adaround on cpu[0m
+[32m
+[QUARK-INFO]: adaround iterations=0, lr=0.100000, loss=58.271202 (Recons loss=58.271202, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=100, lr=0.100000, loss=30.022118 (Recons loss=30.022118, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=200, lr=0.100000, loss=3719.539551 (Recons loss=39.904583, Rounding loss=3679.635010)[0m
+[32m
+[QUARK-INFO]: adaround iterations=300, lr=0.100000, loss=1082.048096 (Recons loss=34.616791, Rounding loss=1047.431274)[0m
+[32m
+[QUARK-INFO]: adaround iterations=400, lr=0.100000, loss=625.623779 (Recons loss=47.861008, Rounding loss=577.762756)[0m
+[32m
+[QUARK-INFO]: adaround iterations=500, lr=0.100000, loss=339.796722 (Recons loss=39.504139, Rounding loss=300.292572)[0m
+[32m
+[QUARK-INFO]: adaround iterations=600, lr=0.100000, loss=169.731720 (Recons loss=35.347862, Rounding loss=134.383865)[0m
+[32m
+[QUARK-INFO]: adaround iterations=700, lr=0.100000, loss=75.216766 (Recons loss=40.743771, Rounding loss=34.472996)[0m
+[32m
+[QUARK-INFO]: adaround iterations=800, lr=0.100000, loss=51.829590 (Recons loss=50.205650, Rounding loss=1.623938)[0m
+[32m
+[QUARK-INFO]: adaround iterations=900, lr=0.100000, loss=34.729439 (Recons loss=34.729439, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=999, lr=0.100000, loss=55.433853 (Recons loss=55.433853, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: Module (/layer3/layer3.1/act1/Relu_output_0)->(/layer3/layer3.1/act2/Relu_output_0) recons metrics was optimized from 0.193080 to 0.171221 (diff=-0.021859)[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: finetuning layer 29, torch training time consumed 7.855724s[0m
+ 56%|█████▌    | 30/54 [03:35<03:26,  8.60s/it][33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: finetuning layer 30, onnx inference (quantized model + float model) time consumed 1.948854s[0m
+[32m
+[QUARK-INFO]: Module (/layer3/layer3.1/act2/Relu_output_0)->(/layer3/layer3.1/conv3/Conv_output_0) will be optimized by adaround on cpu[0m
+[32m
+[QUARK-INFO]: adaround iterations=0, lr=0.100000, loss=200.881363 (Recons loss=200.881363, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=100, lr=0.100000, loss=200.526291 (Recons loss=200.526291, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=200, lr=0.100000, loss=2129.390869 (Recons loss=184.938980, Rounding loss=1944.451782)[0m
+[32m
+[QUARK-INFO]: adaround iterations=300, lr=0.100000, loss=1156.654297 (Recons loss=165.042908, Rounding loss=991.611389)[0m
+[32m
+[QUARK-INFO]: adaround iterations=400, lr=0.100000, loss=1086.620117 (Recons loss=299.820068, Rounding loss=786.800049)[0m
+[32m
+[QUARK-INFO]: adaround iterations=500, lr=0.100000, loss=751.206421 (Recons loss=148.294098, Rounding loss=602.912354)[0m
+[32m
+[QUARK-INFO]: adaround iterations=600, lr=0.100000, loss=649.762634 (Recons loss=228.332626, Rounding loss=421.429993)[0m
+[32m
+[QUARK-INFO]: adaround iterations=700, lr=0.100000, loss=411.154419 (Recons loss=178.951752, Rounding loss=232.202682)[0m
+[32m
+[QUARK-INFO]: adaround iterations=800, lr=0.100000, loss=260.807220 (Recons loss=218.261078, Rounding loss=42.546143)[0m
+[32m
+[QUARK-INFO]: adaround iterations=900, lr=0.100000, loss=180.325211 (Recons loss=179.926254, Rounding loss=0.398950)[0m
+[32m
+[QUARK-INFO]: adaround iterations=999, lr=0.100000, loss=191.168365 (Recons loss=191.168365, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: Module (/layer3/layer3.1/act2/Relu_output_0)->(/layer3/layer3.1/conv3/Conv_output_0) recons metrics was optimized from 0.224419 to 0.207963 (diff=-0.016456)[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: finetuning layer 30, torch training time consumed 5.822353s[0m
+ 57%|█████▋    | 31/54 [03:43<03:12,  8.35s/it][33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: finetuning layer 31, onnx inference (quantized model + float model) time consumed 1.939568s[0m
+[32m
+[QUARK-INFO]: Module (/layer3/layer3.1/act3/Relu_output_0)->(/layer3/layer3.2/act1/Relu_output_0) will be optimized by adaround on cpu[0m
+[32m
+[QUARK-INFO]: adaround iterations=0, lr=0.100000, loss=9.903901 (Recons loss=9.903901, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=100, lr=0.100000, loss=6.157528 (Recons loss=6.157528, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=200, lr=0.100000, loss=1523.024170 (Recons loss=10.734497, Rounding loss=1512.289673)[0m
+[32m
+[QUARK-INFO]: adaround iterations=300, lr=0.100000, loss=361.404663 (Recons loss=10.022412, Rounding loss=351.382263)[0m
+[32m
+[QUARK-INFO]: adaround iterations=400, lr=0.100000, loss=185.590408 (Recons loss=11.073145, Rounding loss=174.517258)[0m
+[32m
+[QUARK-INFO]: adaround iterations=500, lr=0.100000, loss=90.486069 (Recons loss=7.750892, Rounding loss=82.735176)[0m
+[32m
+[QUARK-INFO]: adaround iterations=600, lr=0.100000, loss=42.336632 (Recons loss=10.267602, Rounding loss=32.069031)[0m
+[32m
+[QUARK-INFO]: adaround iterations=700, lr=0.100000, loss=15.537971 (Recons loss=9.973300, Rounding loss=5.564671)[0m
+[32m
+[QUARK-INFO]: adaround iterations=800, lr=0.100000, loss=7.955007 (Recons loss=7.810061, Rounding loss=0.144946)[0m
+[32m
+[QUARK-INFO]: adaround iterations=900, lr=0.100000, loss=8.192237 (Recons loss=8.192237, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=999, lr=0.100000, loss=9.184517 (Recons loss=9.184517, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: Module (/layer3/layer3.1/act3/Relu_output_0)->(/layer3/layer3.2/act1/Relu_output_0) recons metrics was optimized from 0.042969 to 0.039036 (diff=-0.003933)[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: finetuning layer 31, torch training time consumed 6.077820s[0m
+ 59%|█████▉    | 32/54 [03:51<03:01,  8.25s/it][33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: finetuning layer 32, onnx inference (quantized model + float model) time consumed 1.869655s[0m
+[32m
+[QUARK-INFO]: Module (/layer3/layer3.2/act1/Relu_output_0)->(/layer3/layer3.2/act2/Relu_output_0) will be optimized by adaround on cpu[0m
+[32m
+[QUARK-INFO]: adaround iterations=0, lr=0.100000, loss=27.157822 (Recons loss=27.157822, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=100, lr=0.100000, loss=35.244366 (Recons loss=35.244366, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=200, lr=0.100000, loss=3680.660889 (Recons loss=23.901779, Rounding loss=3656.759033)[0m
+[32m
+[QUARK-INFO]: adaround iterations=300, lr=0.100000, loss=1046.324463 (Recons loss=22.291994, Rounding loss=1024.032471)[0m
+[32m
+[QUARK-INFO]: adaround iterations=400, lr=0.100000, loss=594.359192 (Recons loss=30.527033, Rounding loss=563.832153)[0m
+[32m
+[QUARK-INFO]: adaround iterations=500, lr=0.100000, loss=318.789703 (Recons loss=16.821100, Rounding loss=301.968597)[0m
+[32m
+[QUARK-INFO]: adaround iterations=600, lr=0.100000, loss=148.926773 (Recons loss=21.581470, Rounding loss=127.345306)[0m
+[32m
+[QUARK-INFO]: adaround iterations=700, lr=0.100000, loss=49.388569 (Recons loss=19.463076, Rounding loss=29.925493)[0m
+[32m
+[QUARK-INFO]: adaround iterations=800, lr=0.100000, loss=36.009674 (Recons loss=34.222267, Rounding loss=1.787408)[0m
+[32m
+[QUARK-INFO]: adaround iterations=900, lr=0.100000, loss=22.851486 (Recons loss=22.851486, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=999, lr=0.100000, loss=31.573324 (Recons loss=31.573324, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: Module (/layer3/layer3.2/act1/Relu_output_0)->(/layer3/layer3.2/act2/Relu_output_0) recons metrics was optimized from 0.112566 to 0.097062 (diff=-0.015505)[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: finetuning layer 32, torch training time consumed 7.997756s[0m
+ 61%|██████    | 33/54 [04:01<03:03,  8.74s/it][33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: finetuning layer 33, onnx inference (quantized model + float model) time consumed 1.855898s[0m
+[32m
+[QUARK-INFO]: Module (/layer3/layer3.2/act2/Relu_output_0)->(/layer3/layer3.2/conv3/Conv_output_0) will be optimized by adaround on cpu[0m
+[32m
+[QUARK-INFO]: adaround iterations=0, lr=0.100000, loss=133.696793 (Recons loss=133.696793, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=100, lr=0.100000, loss=213.365738 (Recons loss=213.365738, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=200, lr=0.100000, loss=2166.935059 (Recons loss=165.906525, Rounding loss=2001.028564)[0m
+[32m
+[QUARK-INFO]: adaround iterations=300, lr=0.100000, loss=1101.755859 (Recons loss=141.980972, Rounding loss=959.774902)[0m
+[32m
+[QUARK-INFO]: adaround iterations=400, lr=0.100000, loss=919.431946 (Recons loss=160.545090, Rounding loss=758.886841)[0m
+[32m
+[QUARK-INFO]: adaround iterations=500, lr=0.100000, loss=736.369873 (Recons loss=144.041031, Rounding loss=592.328857)[0m
+[32m
+[QUARK-INFO]: adaround iterations=600, lr=0.100000, loss=581.156311 (Recons loss=157.291428, Rounding loss=423.864868)[0m
+[32m
+[QUARK-INFO]: adaround iterations=700, lr=0.100000, loss=438.735229 (Recons loss=218.794907, Rounding loss=219.940308)[0m
+[32m
+[QUARK-INFO]: adaround iterations=800, lr=0.100000, loss=205.851654 (Recons loss=176.320709, Rounding loss=29.530941)[0m
+[32m
+[QUARK-INFO]: adaround iterations=900, lr=0.100000, loss=133.187973 (Recons loss=133.056915, Rounding loss=0.131057)[0m
+[32m
+[QUARK-INFO]: adaround iterations=999, lr=0.100000, loss=121.933266 (Recons loss=121.933266, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: Module (/layer3/layer3.2/act2/Relu_output_0)->(/layer3/layer3.2/conv3/Conv_output_0) recons metrics was optimized from 0.179418 to 0.166973 (diff=-0.012445)[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: finetuning layer 33, torch training time consumed 6.035518s[0m
+ 63%|██████▎   | 34/54 [04:08<02:49,  8.48s/it][33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: finetuning layer 34, onnx inference (quantized model + float model) time consumed 1.899356s[0m
+[32m
+[QUARK-INFO]: Module (/layer3/layer3.2/act3/Relu_output_0)->(/layer3/layer3.3/act1/Relu_output_0) will be optimized by adaround on cpu[0m
+[32m
+[QUARK-INFO]: adaround iterations=0, lr=0.100000, loss=8.969924 (Recons loss=8.969924, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=100, lr=0.100000, loss=7.543418 (Recons loss=7.543418, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=200, lr=0.100000, loss=1498.864746 (Recons loss=8.229450, Rounding loss=1490.635254)[0m
+[32m
+[QUARK-INFO]: adaround iterations=300, lr=0.100000, loss=336.060516 (Recons loss=6.653150, Rounding loss=329.407379)[0m
+[32m
+[QUARK-INFO]: adaround iterations=400, lr=0.100000, loss=148.796417 (Recons loss=7.658541, Rounding loss=141.137878)[0m
+[32m
+[QUARK-INFO]: adaround iterations=500, lr=0.100000, loss=70.042824 (Recons loss=7.921585, Rounding loss=62.121243)[0m
+[32m
+[QUARK-INFO]: adaround iterations=600, lr=0.100000, loss=34.106743 (Recons loss=12.662633, Rounding loss=21.444111)[0m
+[32m
+[QUARK-INFO]: adaround iterations=700, lr=0.100000, loss=12.162392 (Recons loss=8.343838, Rounding loss=3.818554)[0m
+[32m
+[QUARK-INFO]: adaround iterations=800, lr=0.100000, loss=8.862750 (Recons loss=8.672270, Rounding loss=0.190480)[0m
+[32m
+[QUARK-INFO]: adaround iterations=900, lr=0.100000, loss=9.218205 (Recons loss=9.218205, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=999, lr=0.100000, loss=8.200812 (Recons loss=8.200812, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: Module (/layer3/layer3.2/act3/Relu_output_0)->(/layer3/layer3.3/act1/Relu_output_0) recons metrics was optimized from 0.032040 to 0.028944 (diff=-0.003096)[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: finetuning layer 34, torch training time consumed 5.836019s[0m
+ 65%|██████▍   | 35/54 [04:16<02:36,  8.26s/it][33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: finetuning layer 35, onnx inference (quantized model + float model) time consumed 1.992195s[0m
+[32m
+[QUARK-INFO]: Module (/layer3/layer3.3/act1/Relu_output_0)->(/layer3/layer3.3/act2/Relu_output_0) will be optimized by adaround on cpu[0m
+[32m
+[QUARK-INFO]: adaround iterations=0, lr=0.100000, loss=23.349379 (Recons loss=23.349379, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=100, lr=0.100000, loss=18.308002 (Recons loss=18.308002, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=200, lr=0.100000, loss=3491.791016 (Recons loss=16.797318, Rounding loss=3474.993652)[0m
+[32m
+[QUARK-INFO]: adaround iterations=300, lr=0.100000, loss=911.042664 (Recons loss=20.214283, Rounding loss=890.828369)[0m
+[32m
+[QUARK-INFO]: adaround iterations=400, lr=0.100000, loss=464.931030 (Recons loss=15.453036, Rounding loss=449.477997)[0m
+[32m
+[QUARK-INFO]: adaround iterations=500, lr=0.100000, loss=254.414795 (Recons loss=22.367277, Rounding loss=232.047516)[0m
+[32m
+[QUARK-INFO]: adaround iterations=600, lr=0.100000, loss=110.555618 (Recons loss=16.309664, Rounding loss=94.245956)[0m
+[32m
+[QUARK-INFO]: adaround iterations=700, lr=0.100000, loss=47.582062 (Recons loss=26.034386, Rounding loss=21.547678)[0m
+[32m
+[QUARK-INFO]: adaround iterations=800, lr=0.100000, loss=24.790176 (Recons loss=23.842087, Rounding loss=0.948090)[0m
+[32m
+[QUARK-INFO]: adaround iterations=900, lr=0.100000, loss=22.101536 (Recons loss=22.101536, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=999, lr=0.100000, loss=16.599104 (Recons loss=16.599104, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: Module (/layer3/layer3.3/act1/Relu_output_0)->(/layer3/layer3.3/act2/Relu_output_0) recons metrics was optimized from 0.094366 to 0.081444 (diff=-0.012922)[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: finetuning layer 35, torch training time consumed 7.557478s[0m
+ 67%|██████▋   | 36/54 [04:26<02:35,  8.65s/it][33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: finetuning layer 36, onnx inference (quantized model + float model) time consumed 1.942752s[0m
+[32m
+[QUARK-INFO]: Module (/layer3/layer3.3/act2/Relu_output_0)->(/layer3/layer3.3/conv3/Conv_output_0) will be optimized by adaround on cpu[0m
+[32m
+[QUARK-INFO]: adaround iterations=0, lr=0.100000, loss=202.505997 (Recons loss=202.505997, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=100, lr=0.100000, loss=211.890762 (Recons loss=211.890762, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=200, lr=0.100000, loss=2172.158447 (Recons loss=120.306618, Rounding loss=2051.851807)[0m
+[32m
+[QUARK-INFO]: adaround iterations=300, lr=0.100000, loss=1205.122681 (Recons loss=172.398911, Rounding loss=1032.723755)[0m
+[32m
+[QUARK-INFO]: adaround iterations=400, lr=0.100000, loss=978.750488 (Recons loss=169.204117, Rounding loss=809.546387)[0m
+[32m
+[QUARK-INFO]: adaround iterations=500, lr=0.100000, loss=762.884521 (Recons loss=141.085449, Rounding loss=621.799072)[0m
+[32m
+[QUARK-INFO]: adaround iterations=600, lr=0.100000, loss=598.225159 (Recons loss=165.860764, Rounding loss=432.364380)[0m
+[32m
+[QUARK-INFO]: adaround iterations=700, lr=0.100000, loss=392.862610 (Recons loss=174.157166, Rounding loss=218.705429)[0m
+[32m
+[QUARK-INFO]: adaround iterations=800, lr=0.100000, loss=186.665497 (Recons loss=159.762589, Rounding loss=26.902905)[0m
+[32m
+[QUARK-INFO]: adaround iterations=900, lr=0.100000, loss=145.423401 (Recons loss=145.340836, Rounding loss=0.082571)[0m
+[32m
+[QUARK-INFO]: adaround iterations=999, lr=0.100000, loss=180.947937 (Recons loss=180.947937, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: Module (/layer3/layer3.3/act2/Relu_output_0)->(/layer3/layer3.3/conv3/Conv_output_0) recons metrics was optimized from 0.198316 to 0.182199 (diff=-0.016117)[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: finetuning layer 36, torch training time consumed 5.801795s[0m
+ 69%|██████▊   | 37/54 [04:34<02:22,  8.38s/it][33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: finetuning layer 37, onnx inference (quantized model + float model) time consumed 2.093169s[0m
+[32m
+[QUARK-INFO]: Module (/layer3/layer3.3/act3/Relu_output_0)->(/layer3/layer3.4/act1/Relu_output_0) will be optimized by adaround on cpu[0m
+[32m
+[QUARK-INFO]: adaround iterations=0, lr=0.100000, loss=6.858283 (Recons loss=6.858283, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=100, lr=0.100000, loss=8.574883 (Recons loss=8.574883, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=200, lr=0.100000, loss=1381.063110 (Recons loss=8.695703, Rounding loss=1372.367432)[0m
+[32m
+[QUARK-INFO]: adaround iterations=300, lr=0.100000, loss=303.150391 (Recons loss=9.230413, Rounding loss=293.919983)[0m
+[32m
+[QUARK-INFO]: adaround iterations=400, lr=0.100000, loss=145.649231 (Recons loss=9.605294, Rounding loss=136.043930)[0m
+[32m
+[QUARK-INFO]: adaround iterations=500, lr=0.100000, loss=61.969799 (Recons loss=6.198374, Rounding loss=55.771423)[0m
+[32m
+[QUARK-INFO]: adaround iterations=600, lr=0.100000, loss=29.324318 (Recons loss=11.920736, Rounding loss=17.403582)[0m
+[32m
+[QUARK-INFO]: adaround iterations=700, lr=0.100000, loss=11.035186 (Recons loss=8.271027, Rounding loss=2.764159)[0m
+[32m
+[QUARK-INFO]: adaround iterations=800, lr=0.100000, loss=6.348479 (Recons loss=6.269396, Rounding loss=0.079083)[0m
+[32m
+[QUARK-INFO]: adaround iterations=900, lr=0.100000, loss=7.136641 (Recons loss=7.136641, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=999, lr=0.100000, loss=9.314232 (Recons loss=9.314232, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: Module (/layer3/layer3.3/act3/Relu_output_0)->(/layer3/layer3.4/act1/Relu_output_0) recons metrics was optimized from 0.036480 to 0.032677 (diff=-0.003802)[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: finetuning layer 37, torch training time consumed 5.688732s[0m
+ 70%|███████   | 38/54 [04:41<02:11,  8.20s/it][33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: finetuning layer 38, onnx inference (quantized model + float model) time consumed 2.203132s[0m
+[32m
+[QUARK-INFO]: Module (/layer3/layer3.4/act1/Relu_output_0)->(/layer3/layer3.4/act2/Relu_output_0) will be optimized by adaround on cpu[0m
+[32m
+[QUARK-INFO]: adaround iterations=0, lr=0.100000, loss=32.247894 (Recons loss=32.247894, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=100, lr=0.100000, loss=23.522226 (Recons loss=23.522226, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=200, lr=0.100000, loss=3547.626221 (Recons loss=23.529135, Rounding loss=3524.097168)[0m
+[32m
+[QUARK-INFO]: adaround iterations=300, lr=0.100000, loss=962.281372 (Recons loss=19.118052, Rounding loss=943.163330)[0m
+[32m
+[QUARK-INFO]: adaround iterations=400, lr=0.100000, loss=505.964508 (Recons loss=13.453553, Rounding loss=492.510956)[0m
+[32m
+[QUARK-INFO]: adaround iterations=500, lr=0.100000, loss=264.031006 (Recons loss=21.921671, Rounding loss=242.109344)[0m
+[32m
+[QUARK-INFO]: adaround iterations=600, lr=0.100000, loss=111.988899 (Recons loss=12.579341, Rounding loss=99.409561)[0m
+[32m
+[QUARK-INFO]: adaround iterations=700, lr=0.100000, loss=44.530281 (Recons loss=22.279671, Rounding loss=22.250610)[0m
+[32m
+[QUARK-INFO]: adaround iterations=800, lr=0.100000, loss=16.584066 (Recons loss=16.019056, Rounding loss=0.565010)[0m
+[32m
+[QUARK-INFO]: adaround iterations=900, lr=0.100000, loss=17.069742 (Recons loss=17.069742, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=999, lr=0.100000, loss=20.564600 (Recons loss=20.564600, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: Module (/layer3/layer3.4/act1/Relu_output_0)->(/layer3/layer3.4/act2/Relu_output_0) recons metrics was optimized from 0.094259 to 0.079643 (diff=-0.014616)[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: finetuning layer 38, torch training time consumed 7.724539s[0m
+ 72%|███████▏  | 39/54 [04:51<02:10,  8.72s/it][33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: finetuning layer 39, onnx inference (quantized model + float model) time consumed 2.146967s[0m
+[32m
+[QUARK-INFO]: Module (/layer3/layer3.4/act2/Relu_output_0)->(/layer3/layer3.4/conv3/Conv_output_0) will be optimized by adaround on cpu[0m
+[32m
+[QUARK-INFO]: adaround iterations=0, lr=0.100000, loss=236.228500 (Recons loss=236.228500, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=100, lr=0.100000, loss=219.804382 (Recons loss=219.804382, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=200, lr=0.100000, loss=2073.918457 (Recons loss=183.791870, Rounding loss=1890.126709)[0m
+[32m
+[QUARK-INFO]: adaround iterations=300, lr=0.100000, loss=960.996399 (Recons loss=186.450699, Rounding loss=774.545715)[0m
+[32m
+[QUARK-INFO]: adaround iterations=400, lr=0.100000, loss=693.696289 (Recons loss=138.148224, Rounding loss=555.548096)[0m
+[32m
+[QUARK-INFO]: adaround iterations=500, lr=0.100000, loss=552.586426 (Recons loss=173.396698, Rounding loss=379.189728)[0m
+[32m
+[QUARK-INFO]: adaround iterations=600, lr=0.100000, loss=401.867249 (Recons loss=167.526154, Rounding loss=234.341110)[0m
+[32m
+[QUARK-INFO]: adaround iterations=700, lr=0.100000, loss=274.721191 (Recons loss=186.867798, Rounding loss=87.853394)[0m
+[32m
+[QUARK-INFO]: adaround iterations=800, lr=0.100000, loss=187.403458 (Recons loss=183.104416, Rounding loss=4.299037)[0m
+[32m
+[QUARK-INFO]: adaround iterations=900, lr=0.100000, loss=196.911865 (Recons loss=196.902481, Rounding loss=0.009377)[0m
+[32m
+[QUARK-INFO]: adaround iterations=999, lr=0.100000, loss=184.032730 (Recons loss=184.032730, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: Module (/layer3/layer3.4/act2/Relu_output_0)->(/layer3/layer3.4/conv3/Conv_output_0) recons metrics was optimized from 0.210268 to 0.194685 (diff=-0.015583)[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: finetuning layer 39, torch training time consumed 5.599811s[0m
+ 74%|███████▍  | 40/54 [04:59<01:57,  8.43s/it][33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: finetuning layer 40, onnx inference (quantized model + float model) time consumed 2.303380s[0m
+[32m
+[QUARK-INFO]: Module (/layer3/layer3.4/act3/Relu_output_0)->(/layer3/layer3.5/act1/Relu_output_0) will be optimized by adaround on cpu[0m
+[32m
+[QUARK-INFO]: adaround iterations=0, lr=0.100000, loss=10.279886 (Recons loss=10.279886, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=100, lr=0.100000, loss=8.473876 (Recons loss=8.473876, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=200, lr=0.100000, loss=1368.090820 (Recons loss=11.403063, Rounding loss=1356.687744)[0m
+[32m
+[QUARK-INFO]: adaround iterations=300, lr=0.100000, loss=283.435822 (Recons loss=7.588252, Rounding loss=275.847565)[0m
+[32m
+[QUARK-INFO]: adaround iterations=400, lr=0.100000, loss=133.477829 (Recons loss=8.508024, Rounding loss=124.969810)[0m
+[32m
+[QUARK-INFO]: adaround iterations=500, lr=0.100000, loss=60.513809 (Recons loss=11.250565, Rounding loss=49.263245)[0m
+[32m
+[QUARK-INFO]: adaround iterations=600, lr=0.100000, loss=23.601412 (Recons loss=6.820626, Rounding loss=16.780787)[0m
+[32m
+[QUARK-INFO]: adaround iterations=700, lr=0.100000, loss=13.196931 (Recons loss=9.811095, Rounding loss=3.385835)[0m
+[32m
+[QUARK-INFO]: adaround iterations=800, lr=0.100000, loss=7.240581 (Recons loss=7.026149, Rounding loss=0.214432)[0m
+[32m
+[QUARK-INFO]: adaround iterations=900, lr=0.100000, loss=11.700806 (Recons loss=11.700806, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=999, lr=0.100000, loss=9.492001 (Recons loss=9.492001, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: Module (/layer3/layer3.4/act3/Relu_output_0)->(/layer3/layer3.5/act1/Relu_output_0) recons metrics was optimized from 0.037676 to 0.032382 (diff=-0.005295)[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: finetuning layer 40, torch training time consumed 6.138751s[0m
+ 76%|███████▌  | 41/54 [05:07<01:49,  8.43s/it][33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: finetuning layer 41, onnx inference (quantized model + float model) time consumed 2.360831s[0m
+[32m
+[QUARK-INFO]: Module (/layer3/layer3.5/act1/Relu_output_0)->(/layer3/layer3.5/act2/Relu_output_0) will be optimized by adaround on cpu[0m
+[32m
+[QUARK-INFO]: adaround iterations=0, lr=0.100000, loss=51.548801 (Recons loss=51.548801, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=100, lr=0.100000, loss=55.188316 (Recons loss=55.188316, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=200, lr=0.100000, loss=3396.243652 (Recons loss=39.638092, Rounding loss=3356.605469)[0m
+[32m
+[QUARK-INFO]: adaround iterations=300, lr=0.100000, loss=923.610901 (Recons loss=38.966694, Rounding loss=884.644226)[0m
+[32m
+[QUARK-INFO]: adaround iterations=400, lr=0.100000, loss=459.626343 (Recons loss=26.040081, Rounding loss=433.586273)[0m
+[32m
+[QUARK-INFO]: adaround iterations=500, lr=0.100000, loss=241.872223 (Recons loss=41.266449, Rounding loss=200.605774)[0m
+[32m
+[QUARK-INFO]: adaround iterations=600, lr=0.100000, loss=135.610931 (Recons loss=58.222904, Rounding loss=77.388031)[0m
+[32m
+[QUARK-INFO]: adaround iterations=700, lr=0.100000, loss=67.017296 (Recons loss=48.359486, Rounding loss=18.657810)[0m
+[32m
+[QUARK-INFO]: adaround iterations=800, lr=0.100000, loss=50.787495 (Recons loss=49.669285, Rounding loss=1.118211)[0m
+[32m
+[QUARK-INFO]: adaround iterations=900, lr=0.100000, loss=53.925354 (Recons loss=53.925354, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=999, lr=0.100000, loss=49.235363 (Recons loss=49.235363, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: Module (/layer3/layer3.5/act1/Relu_output_0)->(/layer3/layer3.5/act2/Relu_output_0) recons metrics was optimized from 0.211647 to 0.180324 (diff=-0.031323)[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: finetuning layer 41, torch training time consumed 7.953185s[0m
+ 78%|███████▊  | 42/54 [05:18<01:47,  9.00s/it][33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: finetuning layer 42, onnx inference (quantized model + float model) time consumed 2.387433s[0m
+[32m
+[QUARK-INFO]: Module (/layer3/layer3.5/act2/Relu_output_0)->(/layer3/layer3.5/conv3/Conv_output_0) will be optimized by adaround on cpu[0m
+[32m
+[QUARK-INFO]: adaround iterations=0, lr=0.100000, loss=144.886993 (Recons loss=144.886993, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=100, lr=0.100000, loss=159.887848 (Recons loss=159.887848, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=200, lr=0.100000, loss=2122.714111 (Recons loss=136.163773, Rounding loss=1986.550415)[0m
+[32m
+[QUARK-INFO]: adaround iterations=300, lr=0.100000, loss=1217.688354 (Recons loss=251.958420, Rounding loss=965.729919)[0m
+[32m
+[QUARK-INFO]: adaround iterations=400, lr=0.100000, loss=855.110840 (Recons loss=131.313019, Rounding loss=723.797852)[0m
+[32m
+[QUARK-INFO]: adaround iterations=500, lr=0.100000, loss=712.836060 (Recons loss=174.674484, Rounding loss=538.161560)[0m
+[32m
+[QUARK-INFO]: adaround iterations=600, lr=0.100000, loss=493.988800 (Recons loss=131.340881, Rounding loss=362.647919)[0m
+[32m
+[QUARK-INFO]: adaround iterations=700, lr=0.100000, loss=411.189270 (Recons loss=231.709457, Rounding loss=179.479813)[0m
+[32m
+[QUARK-INFO]: adaround iterations=800, lr=0.100000, loss=159.080322 (Recons loss=130.404770, Rounding loss=28.675558)[0m
+[32m
+[QUARK-INFO]: adaround iterations=900, lr=0.100000, loss=145.996796 (Recons loss=145.743484, Rounding loss=0.253312)[0m
+[32m
+[QUARK-INFO]: adaround iterations=999, lr=0.100000, loss=230.486832 (Recons loss=230.486832, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: Module (/layer3/layer3.5/act2/Relu_output_0)->(/layer3/layer3.5/conv3/Conv_output_0) recons metrics was optimized from 0.172293 to 0.157623 (diff=-0.014670)[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: finetuning layer 42, torch training time consumed 5.769456s[0m
+ 80%|███████▉  | 43/54 [05:26<01:36,  8.75s/it][33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: finetuning layer 43, onnx inference (quantized model + float model) time consumed 2.371600s[0m
+[32m
+[QUARK-INFO]: Module (/layer3/layer3.5/act3/Relu_output_0)->(/layer4/layer4.0/act1/Relu_output_0) will be optimized by adaround on cpu[0m
+[32m
+[QUARK-INFO]: adaround iterations=0, lr=0.100000, loss=11.756416 (Recons loss=11.756416, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=100, lr=0.100000, loss=10.578700 (Recons loss=10.578700, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=200, lr=0.100000, loss=2655.001221 (Recons loss=11.642302, Rounding loss=2643.358887)[0m
+[32m
+[QUARK-INFO]: adaround iterations=300, lr=0.100000, loss=511.517395 (Recons loss=12.948166, Rounding loss=498.569244)[0m
+[32m
+[QUARK-INFO]: adaround iterations=400, lr=0.100000, loss=223.779999 (Recons loss=8.208158, Rounding loss=215.571838)[0m
+[32m
+[QUARK-INFO]: adaround iterations=500, lr=0.100000, loss=93.993958 (Recons loss=8.180227, Rounding loss=85.813728)[0m
+[32m
+[QUARK-INFO]: adaround iterations=600, lr=0.100000, loss=40.726906 (Recons loss=14.832768, Rounding loss=25.894138)[0m
+[32m
+[QUARK-INFO]: adaround iterations=700, lr=0.100000, loss=12.782592 (Recons loss=9.446304, Rounding loss=3.336288)[0m
+[32m
+[QUARK-INFO]: adaround iterations=800, lr=0.100000, loss=12.489501 (Recons loss=12.382259, Rounding loss=0.107242)[0m
+[32m
+[QUARK-INFO]: adaround iterations=900, lr=0.100000, loss=10.643079 (Recons loss=10.643079, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=999, lr=0.100000, loss=7.747094 (Recons loss=7.747094, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: Module (/layer3/layer3.5/act3/Relu_output_0)->(/layer4/layer4.0/act1/Relu_output_0) recons metrics was optimized from 0.022628 to 0.019314 (diff=-0.003314)[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: finetuning layer 43, torch training time consumed 8.310684s[0m
+ 81%|████████▏ | 44/54 [05:37<01:33,  9.33s/it][33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: finetuning layer 44, onnx inference (quantized model + float model) time consumed 2.424178s[0m
+[32m
+[QUARK-INFO]: Module (/layer3/layer3.5/act3/Relu_output_0)->(/layer4/layer4.0/downsample/downsample.0/Conv_output_0) will be optimized by adaround on cpu[0m
+[32m
+[QUARK-INFO]: adaround iterations=0, lr=0.100000, loss=599.862061 (Recons loss=599.862061, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=100, lr=0.100000, loss=394.671082 (Recons loss=394.671082, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=200, lr=0.100000, loss=10982.054688 (Recons loss=443.783447, Rounding loss=10538.271484)[0m
+[32m
+[QUARK-INFO]: adaround iterations=300, lr=0.100000, loss=3050.786133 (Recons loss=396.679047, Rounding loss=2654.107178)[0m
+[32m
+[QUARK-INFO]: adaround iterations=400, lr=0.100000, loss=1574.838501 (Recons loss=293.760864, Rounding loss=1281.077637)[0m
+[32m
+[QUARK-INFO]: adaround iterations=500, lr=0.100000, loss=873.530334 (Recons loss=297.491272, Rounding loss=576.039062)[0m
+[32m
+[QUARK-INFO]: adaround iterations=600, lr=0.100000, loss=565.424561 (Recons loss=337.347382, Rounding loss=228.077179)[0m
+[32m
+[QUARK-INFO]: adaround iterations=700, lr=0.100000, loss=372.046448 (Recons loss=318.445099, Rounding loss=53.601357)[0m
+[32m
+[QUARK-INFO]: adaround iterations=800, lr=0.100000, loss=384.338867 (Recons loss=382.116364, Rounding loss=2.222490)[0m
+[32m
+[QUARK-INFO]: adaround iterations=900, lr=0.100000, loss=333.295593 (Recons loss=333.295593, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=999, lr=0.100000, loss=386.430054 (Recons loss=386.430054, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: Module (/layer3/layer3.5/act3/Relu_output_0)->(/layer4/layer4.0/downsample/downsample.0/Conv_output_0) recons metrics was optimized from 0.219664 to 0.184858 (diff=-0.034806)[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: finetuning layer 44, torch training time consumed 23.585579s[0m
+ 83%|████████▎ | 45/54 [06:03<02:09, 14.33s/it][33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: finetuning layer 45, onnx inference (quantized model + float model) time consumed 2.557434s[0m
+[32m
+[QUARK-INFO]: Module (/layer4/layer4.0/act1/Relu_output_0)->(/layer4/layer4.0/act2/Relu_output_0) will be optimized by adaround on cpu[0m
+[32m
+[QUARK-INFO]: adaround iterations=0, lr=0.100000, loss=24.359413 (Recons loss=24.359413, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=100, lr=0.100000, loss=36.188335 (Recons loss=36.188335, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=200, lr=0.100000, loss=12396.903320 (Recons loss=17.495142, Rounding loss=12379.408203)[0m
+[32m
+[QUARK-INFO]: adaround iterations=300, lr=0.100000, loss=2401.945557 (Recons loss=25.904825, Rounding loss=2376.040771)[0m
+[32m
+[QUARK-INFO]: adaround iterations=400, lr=0.100000, loss=1012.222473 (Recons loss=17.085924, Rounding loss=995.136536)[0m
+[32m
+[QUARK-INFO]: adaround iterations=500, lr=0.100000, loss=400.204987 (Recons loss=26.777401, Rounding loss=373.427582)[0m
+[32m
+[QUARK-INFO]: adaround iterations=600, lr=0.100000, loss=143.743057 (Recons loss=36.962021, Rounding loss=106.781036)[0m
+[32m
+[QUARK-INFO]: adaround iterations=700, lr=0.100000, loss=30.548737 (Recons loss=10.206332, Rounding loss=20.342403)[0m
+[32m
+[QUARK-INFO]: adaround iterations=800, lr=0.100000, loss=18.899286 (Recons loss=17.348961, Rounding loss=1.550325)[0m
+[32m
+[QUARK-INFO]: adaround iterations=900, lr=0.100000, loss=19.670408 (Recons loss=19.670408, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=999, lr=0.100000, loss=21.642488 (Recons loss=21.642488, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: Module (/layer4/layer4.0/act1/Relu_output_0)->(/layer4/layer4.0/act2/Relu_output_0) recons metrics was optimized from 0.051492 to 0.036030 (diff=-0.015462)[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: finetuning layer 45, torch training time consumed 25.509085s[0m
+ 85%|████████▌ | 46/54 [06:31<02:27, 18.45s/it][33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: finetuning layer 46, onnx inference (quantized model + float model) time consumed 2.659598s[0m
+[32m
+[QUARK-INFO]: Module (/layer4/layer4.0/act2/Relu_output_0)->(/layer4/layer4.0/conv3/Conv_output_0) will be optimized by adaround on cpu[0m
+[32m
+[QUARK-INFO]: adaround iterations=0, lr=0.100000, loss=144.453690 (Recons loss=144.453690, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=100, lr=0.100000, loss=149.557007 (Recons loss=149.557007, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=200, lr=0.100000, loss=7097.037109 (Recons loss=201.623230, Rounding loss=6895.414062)[0m
+[32m
+[QUARK-INFO]: adaround iterations=300, lr=0.100000, loss=2677.327881 (Recons loss=233.898544, Rounding loss=2443.429443)[0m
+[32m
+[QUARK-INFO]: adaround iterations=400, lr=0.100000, loss=1543.592407 (Recons loss=130.219116, Rounding loss=1413.373291)[0m
+[32m
+[QUARK-INFO]: adaround iterations=500, lr=0.100000, loss=1082.530151 (Recons loss=247.953461, Rounding loss=834.576721)[0m
+[32m
+[QUARK-INFO]: adaround iterations=600, lr=0.100000, loss=618.916870 (Recons loss=214.953796, Rounding loss=403.963104)[0m
+[32m
+[QUARK-INFO]: adaround iterations=700, lr=0.100000, loss=270.674591 (Recons loss=148.896606, Rounding loss=121.777985)[0m
+[32m
+[QUARK-INFO]: adaround iterations=800, lr=0.100000, loss=176.694489 (Recons loss=171.180740, Rounding loss=5.513749)[0m
+[32m
+[QUARK-INFO]: adaround iterations=900, lr=0.100000, loss=141.094818 (Recons loss=141.094818, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=999, lr=0.100000, loss=135.308487 (Recons loss=135.308487, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: Module (/layer4/layer4.0/act2/Relu_output_0)->(/layer4/layer4.0/conv3/Conv_output_0) recons metrics was optimized from 0.099270 to 0.089518 (diff=-0.009752)[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: finetuning layer 46, torch training time consumed 10.663814s[0m
+ 87%|████████▋ | 47/54 [06:44<01:58, 16.92s/it][33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: finetuning layer 47, onnx inference (quantized model + float model) time consumed 2.611644s[0m
+[32m
+[QUARK-INFO]: Module (/layer4/layer4.0/act3/Relu_output_0)->(/layer4/layer4.1/act1/Relu_output_0) will be optimized by adaround on cpu[0m
+[32m
+[QUARK-INFO]: adaround iterations=0, lr=0.100000, loss=20.768118 (Recons loss=20.768118, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=100, lr=0.100000, loss=11.791830 (Recons loss=11.791830, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=200, lr=0.100000, loss=4794.781738 (Recons loss=11.815076, Rounding loss=4782.966797)[0m
+[32m
+[QUARK-INFO]: adaround iterations=300, lr=0.100000, loss=772.247559 (Recons loss=15.371773, Rounding loss=756.875793)[0m
+[32m
+[QUARK-INFO]: adaround iterations=400, lr=0.100000, loss=314.191956 (Recons loss=12.472421, Rounding loss=301.719543)[0m
+[32m
+[QUARK-INFO]: adaround iterations=500, lr=0.100000, loss=141.218521 (Recons loss=13.498062, Rounding loss=127.720459)[0m
+[32m
+[QUARK-INFO]: adaround iterations=600, lr=0.100000, loss=62.632641 (Recons loss=11.219117, Rounding loss=51.413525)[0m
+[32m
+[QUARK-INFO]: adaround iterations=700, lr=0.100000, loss=32.800835 (Recons loss=17.213770, Rounding loss=15.587063)[0m
+[32m
+[QUARK-INFO]: adaround iterations=800, lr=0.100000, loss=14.758416 (Recons loss=13.259050, Rounding loss=1.499366)[0m
+[32m
+[QUARK-INFO]: adaround iterations=900, lr=0.100000, loss=10.000589 (Recons loss=10.000589, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=999, lr=0.100000, loss=13.351531 (Recons loss=13.351531, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: Module (/layer4/layer4.0/act3/Relu_output_0)->(/layer4/layer4.1/act1/Relu_output_0) recons metrics was optimized from 0.033908 to 0.027992 (diff=-0.005916)[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: finetuning layer 47, torch training time consumed 11.043165s[0m
+ 89%|████████▉ | 48/54 [06:58<01:35, 15.94s/it][33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: finetuning layer 48, onnx inference (quantized model + float model) time consumed 2.883433s[0m
+[32m
+[QUARK-INFO]: Module (/layer4/layer4.1/act1/Relu_output_0)->(/layer4/layer4.1/act2/Relu_output_0) will be optimized by adaround on cpu[0m
+[32m
+[QUARK-INFO]: adaround iterations=0, lr=0.100000, loss=8.251294 (Recons loss=8.251294, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=100, lr=0.100000, loss=4.808986 (Recons loss=4.808986, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=200, lr=0.100000, loss=15754.821289 (Recons loss=2.834972, Rounding loss=15751.986328)[0m
+[32m
+[QUARK-INFO]: adaround iterations=300, lr=0.100000, loss=4385.939453 (Recons loss=3.352653, Rounding loss=4382.586914)[0m
+[32m
+[QUARK-INFO]: adaround iterations=400, lr=0.100000, loss=2493.718262 (Recons loss=2.378319, Rounding loss=2491.339844)[0m
+[32m
+[QUARK-INFO]: adaround iterations=500, lr=0.100000, loss=1350.292358 (Recons loss=3.919495, Rounding loss=1346.372803)[0m
+[32m
+[QUARK-INFO]: adaround iterations=600, lr=0.100000, loss=601.697693 (Recons loss=2.897997, Rounding loss=598.799683)[0m
+[32m
+[QUARK-INFO]: adaround iterations=700, lr=0.100000, loss=154.970917 (Recons loss=4.235572, Rounding loss=150.735352)[0m
+[32m
+[QUARK-INFO]: adaround iterations=800, lr=0.100000, loss=8.420009 (Recons loss=3.254609, Rounding loss=5.165400)[0m
+[32m
+[QUARK-INFO]: adaround iterations=900, lr=0.100000, loss=4.261590 (Recons loss=4.261590, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=999, lr=0.100000, loss=1.852714 (Recons loss=1.852714, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: Module (/layer4/layer4.1/act1/Relu_output_0)->(/layer4/layer4.1/act2/Relu_output_0) recons metrics was optimized from 0.016239 to 0.005790 (diff=-0.010449)[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: finetuning layer 48, torch training time consumed 25.050546s[0m
+ 91%|█████████ | 49/54 [07:26<01:37, 19.54s/it][33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: finetuning layer 49, onnx inference (quantized model + float model) time consumed 2.834104s[0m
+[32m
+[QUARK-INFO]: Module (/layer4/layer4.1/act2/Relu_output_0)->(/layer4/layer4.1/conv3/Conv_output_0) will be optimized by adaround on cpu[0m
+[32m
+[QUARK-INFO]: adaround iterations=0, lr=0.100000, loss=28.448574 (Recons loss=28.448574, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=100, lr=0.100000, loss=27.832420 (Recons loss=27.832420, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=200, lr=0.100000, loss=7047.250488 (Recons loss=30.483120, Rounding loss=7016.767578)[0m
+[32m
+[QUARK-INFO]: adaround iterations=300, lr=0.100000, loss=2255.009277 (Recons loss=46.404503, Rounding loss=2208.604736)[0m
+[32m
+[QUARK-INFO]: adaround iterations=400, lr=0.100000, loss=1356.723145 (Recons loss=34.041290, Rounding loss=1322.681885)[0m
+[32m
+[QUARK-INFO]: adaround iterations=500, lr=0.100000, loss=742.149719 (Recons loss=41.407509, Rounding loss=700.742188)[0m
+[32m
+[QUARK-INFO]: adaround iterations=600, lr=0.100000, loss=332.402588 (Recons loss=27.914577, Rounding loss=304.488007)[0m
+[32m
+[QUARK-INFO]: adaround iterations=700, lr=0.100000, loss=110.632408 (Recons loss=56.550354, Rounding loss=54.082054)[0m
+[32m
+[QUARK-INFO]: adaround iterations=800, lr=0.100000, loss=26.134804 (Recons loss=24.799877, Rounding loss=1.334926)[0m
+[32m
+[QUARK-INFO]: adaround iterations=900, lr=0.100000, loss=31.294394 (Recons loss=31.294394, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=999, lr=0.100000, loss=36.016140 (Recons loss=36.016140, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: Module (/layer4/layer4.1/act2/Relu_output_0)->(/layer4/layer4.1/conv3/Conv_output_0) recons metrics was optimized from 0.022878 to 0.017592 (diff=-0.005286)[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: finetuning layer 49, torch training time consumed 10.618022s[0m
+ 93%|█████████▎| 50/54 [07:39<01:10, 17.71s/it][33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: finetuning layer 50, onnx inference (quantized model + float model) time consumed 2.769191s[0m
+[32m
+[QUARK-INFO]: Module (/layer4/layer4.1/act3/Relu_output_0)->(/layer4/layer4.2/act1/Relu_output_0) will be optimized by adaround on cpu[0m
+[32m
+[QUARK-INFO]: adaround iterations=0, lr=0.100000, loss=2.067977 (Recons loss=2.067977, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=100, lr=0.100000, loss=2.088904 (Recons loss=2.088904, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=200, lr=0.100000, loss=5408.714844 (Recons loss=1.266201, Rounding loss=5407.448730)[0m
+[32m
+[QUARK-INFO]: adaround iterations=300, lr=0.100000, loss=845.859558 (Recons loss=1.413327, Rounding loss=844.446228)[0m
+[32m
+[QUARK-INFO]: adaround iterations=400, lr=0.100000, loss=373.203522 (Recons loss=1.484305, Rounding loss=371.719208)[0m
+[32m
+[QUARK-INFO]: adaround iterations=500, lr=0.100000, loss=188.620972 (Recons loss=1.175344, Rounding loss=187.445633)[0m
+[32m
+[QUARK-INFO]: adaround iterations=600, lr=0.100000, loss=91.378761 (Recons loss=1.895321, Rounding loss=89.483437)[0m
+[32m
+[QUARK-INFO]: adaround iterations=700, lr=0.100000, loss=33.013241 (Recons loss=1.262420, Rounding loss=31.750820)[0m
+[32m
+[QUARK-INFO]: adaround iterations=800, lr=0.100000, loss=4.555414 (Recons loss=1.212545, Rounding loss=3.342868)[0m
+[32m
+[QUARK-INFO]: adaround iterations=900, lr=0.100000, loss=1.279430 (Recons loss=1.279430, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=999, lr=0.100000, loss=1.232778 (Recons loss=1.232778, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: Module (/layer4/layer4.1/act3/Relu_output_0)->(/layer4/layer4.2/act1/Relu_output_0) recons metrics was optimized from 0.005238 to 0.003674 (diff=-0.001564)[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: finetuning layer 50, torch training time consumed 11.289548s[0m
+ 94%|█████████▍| 51/54 [07:53<00:49, 16.62s/it][33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: finetuning layer 51, onnx inference (quantized model + float model) time consumed 2.903150s[0m
+[32m
+[QUARK-INFO]: Module (/layer4/layer4.2/act1/Relu_output_0)->(/layer4/layer4.2/act2/Relu_output_0) will be optimized by adaround on cpu[0m
+[32m
+[QUARK-INFO]: adaround iterations=0, lr=0.100000, loss=2.596364 (Recons loss=2.596364, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=100, lr=0.100000, loss=1.765224 (Recons loss=1.765224, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=200, lr=0.100000, loss=13247.635742 (Recons loss=2.079951, Rounding loss=13245.555664)[0m
+[32m
+[QUARK-INFO]: adaround iterations=300, lr=0.100000, loss=2378.309082 (Recons loss=4.577716, Rounding loss=2373.731445)[0m
+[32m
+[QUARK-INFO]: adaround iterations=400, lr=0.100000, loss=1092.593506 (Recons loss=3.047238, Rounding loss=1089.546265)[0m
+[32m
+[QUARK-INFO]: adaround iterations=500, lr=0.100000, loss=471.434052 (Recons loss=1.486492, Rounding loss=469.947571)[0m
+[32m
+[QUARK-INFO]: adaround iterations=600, lr=0.100000, loss=194.873322 (Recons loss=2.398688, Rounding loss=192.474640)[0m
+[32m
+[QUARK-INFO]: adaround iterations=700, lr=0.100000, loss=51.675133 (Recons loss=1.668255, Rounding loss=50.006878)[0m
+[32m
+[QUARK-INFO]: adaround iterations=800, lr=0.100000, loss=6.534271 (Recons loss=2.827954, Rounding loss=3.706318)[0m
+[32m
+[QUARK-INFO]: adaround iterations=900, lr=0.100000, loss=1.949824 (Recons loss=1.939824, Rounding loss=0.010000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=999, lr=0.100000, loss=2.881917 (Recons loss=2.871917, Rounding loss=0.010000)[0m
+[32m
+[QUARK-INFO]: Module (/layer4/layer4.2/act1/Relu_output_0)->(/layer4/layer4.2/act2/Relu_output_0) recons metrics was optimized from 0.008943 to 0.005121 (diff=-0.003822)[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: finetuning layer 51, torch training time consumed 25.020659s[0m
+ 96%|█████████▋| 52/54 [08:21<00:40, 20.01s/it][33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: finetuning layer 52, onnx inference (quantized model + float model) time consumed 3.005726s[0m
+[32m
+[QUARK-INFO]: Module (/layer4/layer4.2/act2/Relu_output_0)->(/layer4/layer4.2/conv3/Conv_output_0) will be optimized by adaround on cpu[0m
+[32m
+[QUARK-INFO]: adaround iterations=0, lr=0.100000, loss=25.701874 (Recons loss=25.701874, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=100, lr=0.100000, loss=19.610998 (Recons loss=19.610998, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=200, lr=0.100000, loss=7369.876953 (Recons loss=18.977571, Rounding loss=7350.899414)[0m
+[32m
+[QUARK-INFO]: adaround iterations=300, lr=0.100000, loss=2360.511963 (Recons loss=41.581215, Rounding loss=2318.930664)[0m
+[32m
+[QUARK-INFO]: adaround iterations=400, lr=0.100000, loss=1409.477173 (Recons loss=24.573236, Rounding loss=1384.903931)[0m
+[32m
+[QUARK-INFO]: adaround iterations=500, lr=0.100000, loss=816.384521 (Recons loss=32.202290, Rounding loss=784.182251)[0m
+[32m
+[QUARK-INFO]: adaround iterations=600, lr=0.100000, loss=401.310516 (Recons loss=18.883276, Rounding loss=382.427246)[0m
+[32m
+[QUARK-INFO]: adaround iterations=700, lr=0.100000, loss=138.958572 (Recons loss=43.384636, Rounding loss=95.573936)[0m
+[32m
+[QUARK-INFO]: adaround iterations=800, lr=0.100000, loss=38.868504 (Recons loss=35.852386, Rounding loss=3.016118)[0m
+[32m
+[QUARK-INFO]: adaround iterations=900, lr=0.100000, loss=19.126669 (Recons loss=19.126669, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=999, lr=0.100000, loss=22.069870 (Recons loss=22.069870, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: Module (/layer4/layer4.2/act2/Relu_output_0)->(/layer4/layer4.2/conv3/Conv_output_0) recons metrics was optimized from 0.017495 to 0.012522 (diff=-0.004973)[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: finetuning layer 52, torch training time consumed 11.050026s[0m
+ 98%|█████████▊| 53/54 [08:35<00:18, 18.23s/it][33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[33m
+[QUARK-WARNING]: Failed to register custom op library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll to ORT with [ONNXRuntimeError] : 1 : FAIL : Error loading "C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll" which is missing. (Error 126: "The specified module could not be found."),please check if the library has been compiled successfully.[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: finetuning layer 53, onnx inference (quantized model + float model) time consumed 2.899900s[0m
+[32m
+[QUARK-INFO]: Module (/global_pool/flatten/Flatten_output_0)->(output_QuantizeLinear_Input) will be optimized by adaround on cpu[0m
+[32m
+[QUARK-INFO]: adaround iterations=0, lr=0.100000, loss=2333.234863 (Recons loss=2333.234863, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=100, lr=0.100000, loss=469.184875 (Recons loss=469.184875, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: adaround iterations=200, lr=0.100000, loss=5326.667969 (Recons loss=1548.475586, Rounding loss=3778.192383)[0m
+[32m
+[QUARK-INFO]: adaround iterations=300, lr=0.100000, loss=1294.234009 (Recons loss=733.236816, Rounding loss=560.997192)[0m
+[32m
+[QUARK-INFO]: adaround iterations=400, lr=0.100000, loss=1209.812866 (Recons loss=786.744263, Rounding loss=423.068573)[0m
+[32m
+[QUARK-INFO]: adaround iterations=500, lr=0.100000, loss=684.898315 (Recons loss=358.050110, Rounding loss=326.848175)[0m
+[32m
+[QUARK-INFO]: adaround iterations=600, lr=0.100000, loss=703.764648 (Recons loss=493.885529, Rounding loss=209.879150)[0m
+[32m
+[QUARK-INFO]: adaround iterations=700, lr=0.100000, loss=725.390381 (Recons loss=637.409607, Rounding loss=87.980743)[0m
+[32m
+[QUARK-INFO]: adaround iterations=800, lr=0.100000, loss=550.564575 (Recons loss=539.671021, Rounding loss=10.893530)[0m
+[32m
+[QUARK-INFO]: adaround iterations=900, lr=0.100000, loss=233.072601 (Recons loss=233.022385, Rounding loss=0.050222)[0m
+[32m
+[QUARK-INFO]: adaround iterations=999, lr=0.100000, loss=666.496826 (Recons loss=666.496826, Rounding loss=0.000000)[0m
+[32m
+[QUARK-INFO]: Module (/global_pool/flatten/Flatten_output_0)->(output_QuantizeLinear_Input) recons metrics was optimized from 2.935895 to 0.642463 (diff=-2.293432)[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: finetuning layer 53, torch training time consumed 22.015359s[0m
+100%|██████████| 54/54 [09:00<00:00, 20.23s/it]100%|██████████| 54/54 [09:00<00:00, 10.01s/it]
+[32m
+[QUARK-INFO]: ONNX inference costs 88.3s and Torch training costs 452.2s[0m
+[32m
+[QUARK-INFO]: The FastFinetune algorithm has been applied. It took 550.0s to complete.[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: e2e quantization time consumed:633.304849[0m
+[32m
+[QUARK-INFO]: The operation types and their corresponding quantities of the input float model is shown in the table below.[0m
+┌──────────────────────┬───────────────────────────────────────────────────┐
+│ Op Type              │ Float Model                                       │
+├──────────────────────┼───────────────────────────────────────────────────┤
+│ Conv                 │ 53                                                │
+│ Relu                 │ 49                                                │
+│ MaxPool              │ 1                                                 │
+│ Add                  │ 16                                                │
+│ GlobalAveragePool    │ 1                                                 │
+│ Flatten              │ 1                                                 │
+│ Gemm                 │ 1                                                 │
+├──────────────────────┼───────────────────────────────────────────────────┤
+│ Quantized model path │ models\resnet50_quark_cle_adaround_c64_rerun.onnx │
+└──────────────────────┴───────────────────────────────────────────────────┘
+[32m
+[QUARK-INFO]: The quantized information for all operation types is shown in the table below.[0m
+[32m
+[QUARK-INFO]: The discrepancy between the operation types in the quantized model and the float model is due to the application of graph optimization.[0m
+┌───────────────────┬────────────┬──────────┬──────────┐
+│ Op Type           │ Activation │ Weights  │ Bias     │
+├───────────────────┼────────────┼──────────┼──────────┤
+│ Conv              │ UINT8(53)  │ INT8(53) │ INT8(53) │
+│ MaxPool           │ UINT8(1)   │          │          │
+│ Add               │ UINT8(16)  │          │          │
+│ GlobalAveragePool │ UINT8(1)   │          │          │
+│ Flatten           │ UINT8(1)   │          │          │
+│ Gemm              │ UINT8(1)   │ INT8(1)  │ INT8(1)  │
+└───────────────────┴────────────┴──────────┴──────────┘
+REFERENCE COMPLETE {"model_sha256": "a9250faebefafb2815d0a2092d3ef6fd78900b9c15e39fec1b861ccd7ca62a3d", "wall_seconds": 633.4196134000013, "peak_rss_bytes": 3581181952}

@@ -1530,9 +1530,13 @@ sections above.
   refinement. [CLE parity](docs/BENCHMARKS.md#ignition-cle-parity-and-the-default-xint8-preset) now covers the default preset too:
   byte-identical equalized weights, an exact position/integer match with a fresh oracle
   that is itself identical to the repo's original resnet50 XINT8 artifact, and 72.10%
-  top-1 at 5.22 ms paired on the NPU for both producers. Safe departures
-  from power-of-two scales, product-scale INT32 bias execution, per-channel compiler
-  memory growth, YOLO and AdaRound remain open. See
+  top-1 at 5.22 ms paired on the NPU for both producers.
+  [AdaRound parity](docs/BENCHMARKS.md#ignition-adaround-parity) transcribes Quark's FastFinetune
+  AdaRound: byte-identical to a fresh `XINT8_ADAROUND` oracle on the same machine,
+  79.40% CPU top-1 for both, while a Sep 5 Quark artifact from an unrecorded machine
+  differs by one LSB in 4.1 M weights, so cross-machine parity stays statistical. Safe
+  departures from power-of-two scales, product-scale INT32 bias execution, per-channel
+  compiler memory growth and YOLO remain open. See
   [`quant/DESIGN.md`](quant/DESIGN.md) for the ordered gates and remaining source questions.
 - **Does MODNet's alpha error move once calibration and inference agree?** Every MODNet
   model measured so far was calibrated through PIL bilinear while inference resized with

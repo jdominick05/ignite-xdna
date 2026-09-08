@@ -1,20 +1,23 @@
 #!/usr/bin/env bash
-# Build a fresh ResNet50 Quark reference (no CLE unless --cle), solely for the owned-emitter gates.
+# Build a fresh ResNet50 Quark reference (no CLE unless --cle; --adaround for XINT8_ADAROUND), solely for the owned-emitter gates.
 #
-#   ./scripts/quant-reference.sh --out models/resnet50_quark_nocle_c64.onnx --log results/quant/quant_resnet50_quark_nocle_c64.log [--limit 64] [--cle]
+#   ./scripts/quant-reference.sh --out models/resnet50_quark_nocle_c64.onnx --log results/quant/quant_resnet50_quark_nocle_c64.log [--limit 64] [--cle] [--adaround]
 #
-# Uses resnet_env and the shared classification preprocessing. Calibration scratch
+# Uses resnet_env and the shared classification preprocessing. --adaround runs Quark's
+# CPU FastFinetune after calibration (about 16 minutes on Desktop 2 for 54 layers) and
+# records its peak working set in the .reference.json sidecar. Calibration scratch
 # is isolated under this worktree so cleanup cannot touch another session's cache.
 # Existing model/log names are refused. The owned producer does not call this script.
 
 . "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
-OUT="" LOG="" LIMIT=64 CLE=""
+OUT="" LOG="" LIMIT=64 CLE="" ADAROUND=""
 while [ $# -gt 0 ]; do
     case "$1" in
         --out) OUT="$2"; shift ;;
         --log) LOG="$2"; shift ;;
         --limit) LIMIT="$2"; shift ;;
         --cle) CLE=--cle ;;
+        --adaround) ADAROUND=--adaround ;;
         -h|--help) usage "${BASH_SOURCE[0]}"; exit 0 ;;
         *) die "unknown flag $1" ;;
     esac
@@ -34,4 +37,4 @@ PRIVATE_TMP="$(mktemp -d "$REPO_ROOT/scratch/quant-reference.XXXXXX")"
 case "$PRIVATE_TMP" in "$REPO_ROOT"/scratch/quant-reference.*) ;; *) die "invalid private scratch path" ;; esac
 export TEMP="$(cygpath -w "$PRIVATE_TMP")" TMP="$(cygpath -w "$PRIVATE_TMP")" PYTHONIOENCODING=utf-8
 quark_guard
-run_logged "$LOG" python pipelines/resnet50/3d_quantize_compare.py --out "$OUT" --limit "$LIMIT" $CLE
+run_logged "$LOG" python pipelines/resnet50/3d_quantize_compare.py --out "$OUT" --limit "$LIMIT" $CLE $ADAROUND

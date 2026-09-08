@@ -7,8 +7,10 @@ The broader signatures and roadmap below remain a design, not an Alpha API promi
 **Status: ResNet emission and independent MinMSE calibration match fresh Quark
 references both without CLE and with the default preset's CLE; the transcribed
 refinement and equalization rules are probed against Quark's on identical inputs; the
-first controlled ResNet acceptance study is measured. YOLO, AdaRound and the broader
-acceptance map remain open.** CLE evidence is in the
+first controlled ResNet acceptance study is measured; AdaRound is transcribed and
+byte-identical to a fresh `XINT8_ADAROUND` oracle on the same machine. YOLO and the
+broader acceptance map remain open.** AdaRound evidence is in the
+[AdaRound parity section](../docs/BENCHMARKS.md#ignition-adaround-parity); CLE evidence is in the
 [CLE parity section](../docs/BENCHMARKS.md#ignition-cle-parity-and-the-default-xint8-preset). The audit is in
 [`notes_xint8_dialect.log`](../results/quant/notes_xint8_dialect.log); remaining unknowns
 are explicit in §2.6. Re-emission, exact graph/parameter comparison, full-set accuracy
@@ -333,7 +335,8 @@ The remaining signatures below describe the broader design, not a promise that
 every listed method exists. The current emitter rejects operators outside
 Conv/Relu/Add/MaxPool/GlobalAveragePool/Flatten/Gemm, non-unit Gemm beta, MaxPool
 indices, and GAP shapes other than the measured 7×7 case. Nested graphs, CLE,
-YOLO preparation and AdaRound remain unsupported. Probe mutations are separate from
+YOLO preparation remains unsupported; AdaRound is the separate `adaround` command
+on an emitted file. Probe mutations are separate from
 the parity emitter. Degenerate
 UINT8 calibration ranges are rejected because the vendor would emit zp0, outside
 this slice's zp128 contract. No general XINT8 preset replacement is claimed.
@@ -612,23 +615,25 @@ Each `adjust_*` returns the number of positions it moved. The change log is what
 into the sidecar: for every tensor whose final position is not its MinMSE position, the
 rule that moved it and by how much. That list is the per-layer transparency of item 2 in §1.
 
-**`quant/adaround.py`** — post-quantization rounding optimisation (torch, lazy import)
+**`quant/adaround.py`** — post-quantization rounding optimisation (torch, imported inside `finetune` only; landed 2026-09-08)
 
 ```
-def finetune(float_model: Path, quant_model: Path, src: CalibSource, cfg: FastFinetuneConfig,
-             tmp: Path) -> Path
-        # per conv-like layer in topological order: cache the layer's float inputs/outputs for
-        # DataSize images to tmp (streamed, never all layers resident), optimise the rounding
-        # variable (Nagel et al. 2020 regulariser) against the float output, write the new
-        # <w>_quantized; positions untouched. Core schedule sourced in §2.6 [Q]; full data/update path [U].
-def layer_targets(g: Graph) -> list[Node]
-def cache_io(model: Path, node: Node, src, n: int, tmp: Path) -> tuple[Path, Path]
-def optimize_layer(w_float, w_q: np.ndarray, tq: TensorQ, x: Path, y: Path, cfg) -> np.ndarray
-def peak_rss() -> int                                  # logged; the laptop SIGSEGV is the number to beat
+@dataclass
+class FastFinetuneConfig          # Quark's extra_options["FastFinetune"] keys plus its fixed TrainParameters
+def layer_targets(qg: Graph, fg: Graph) -> list[Layer]   # Conv/Gemm in the quantized file's node order, with QDQ params
+def finetune(float_graph: Graph, quant_graph: Graph, source: ImageFolderSource,
+             cfg: FastFinetuneConfig | None = None, log=print) -> AdaRoundReport
+        # per layer, sequentially: quantized pre-Q input (ORT_DISABLE_ALL) and float input/output
+        # (default ORT) for DataSize images, all resident; torch module built like Quark's (two RNG
+        # draws per layer); Adam on the rounding variable; hard rounding clamped to [-128, 127]
+        # written to <w>_quantized in place; positions untouched; peak working set in the report
 ```
 
-Parity here is measured in accuracy, not bytes: two AdaRound implementations with
-different seeds are not expected to agree bitwise.
+Parity was measured in bytes, not only in accuracy: with the same seed, module
+construction, batch draws, data sessions and loss, Ignition's file is byte-identical to
+a fresh `XINT8_ADAROUND` oracle on the same machine and runtime
+([AdaRound parity](../docs/BENCHMARKS.md#ignition-adaround-parity)); across machines or runtimes the
+comparison is statistical, as the Sep 5 control in that section shows.
 
 **`quant/verify.py`** — the gates, as code
 
@@ -750,7 +755,7 @@ machine. Log names carry model and variant, never a bare name (`CLAUDE.md`).
 | 0 | `notes_xint8_dialect.log`, subsequent scaffold inspection logs | §2 with every [U] either resolved (file:line quoted) or listed as still open; initial throwaway inspection followed by `Graph.fingerprint()` once the audit is folded. ResNet/YOLO XINT8, ResNet A8W8 and the ResNet float export. Vendor source read verbatim, no hardware — the `quant_grid_audit.log` precedent |
 | 1 | `quant_resnet50_quark_nocle.log`, `quant_resnet50_own_reemit.log`, `diff_resnet50_own_vs_quark.log`, `run_resnet50_own_reemit_{cpu,npu}.log`, `diag_resnet50_own_reemit.log` | Starting from `models/resnet50_fp32.onnx`, against a **fresh** Quark run with `include_cle=False` on the same machine: `graph_diff.ok()` with the weight-LSB count printed; `refine()` run on the positions read out of the Quark model reports zero moves (every bound in §2.3 validated); identical full-set CPU top-1 through the existing `4_run.py`; EP report with the same node split as the Quark model's own `diag_*`; NPU latency captured in the same sitting as the Quark model's, and reported as a pair |
 | 2 | `quant_resnet50_own_xint8.log`, `quant_yolov8n_cut_own_xint8.log`, `diff_*_own_vs_quark.log`, `run_*_own_xint8_npu.log`, `map_yolov8n_cut_own_xint8_npu.log` (full 5000), `diag_*` | Same machine, same sorted listing, same `--limit`: position table equal to Quark's for every tensor (or the diff listed and explained); full-set top-1 / full-5000 mAP beside Quark's from the same sitting. A slice is labelled a slice |
-| 3 | `quant_*_own_xint8_adaround.log`, `run_*`/`map_*` | Accuracy within session noise of `XINT8_ADAROUND` on resnet50 and yolov8n-cut; peak RSS logged beside Quark's on the same machine. Stretch: the laptop finishes where Quark SIGSEGVs |
+| 3 | `quant_*_own_xint8_adaround.log`, `run_*`/`map_*` | Accuracy within session noise of `XINT8_ADAROUND` on resnet50 and yolov8n-cut; peak RSS logged beside Quark's on the same machine. Stretch: the laptop finishes where Quark SIGSEGVs. ResNet closed 2026-09-08 bitwise (`quant_resnet50_ignition_cle_adaround_c64.log`, `diff_*`, `run_*`); yolov8n-cut waits on YOLO preparation; the laptop stretch is unrun |
 | 4 | `probe_resnet50_<mutation>.log` per mutation, plus `probe_resnet50_summary.log` | For every mutation: EP node split, NPU-vs-CPU output agreement on N images, same-sitting latency; foreign-context check before each. The A8W8 attribution in DECISIONS #3 rewritten from the single-variable result — kept beside the old wording, not replacing it |
 | 5 | one log per item | Each item measured and folded like any other experiment |
 
@@ -770,7 +775,7 @@ as a witness and the log says so.
 | 0 | Fingerprint | `notes_xint8_dialect.log`; §2 corrected | every [U] closed or explicitly open | any machine, no hardware |
 | 1 | Re-emit | `graph.py`, `pow2.py`, `qdq.py`, `refine.py` (`apply` + rules), `passes.simulate_dpu`, `verify.py`, `quantize --scales-from`, `3d_quantize_compare.py`, `npu/ep_report.py` | resnet50 from the float export: `graph_diff.ok()` against a fresh no-CLE Quark model (scales exact, weights ≤1 LSB, count logged); `refine()` on Quark's positions moves nothing; identical CPU top-1; same EP split; paired latency | quantize D1/D2 → NPU L/D2 |
 | 2 | Calibrate | `sources.py`, `calib.py` (exact store), `weights.py`, `cle.py`, `passes.prepare`, `3c_quantize_own.py` ×2, `scripts/quant-own.sh` | position-for-position equal to Quark on resnet50 and yolov8n-cut, same machine + listing; full-set top-1 and full-5000 mAP paired | Desktop 2 |
-| 3 | AdaRound | `adaround.py`, `FastFinetuneConfig`, RSS logging | accuracy parity with `XINT8_ADAROUND`; RSS beside Quark's | D1/D2, then the laptop as the stretch |
+| 3 | AdaRound | `adaround.py`, `FastFinetuneConfig`, RSS logging | accuracy parity with `XINT8_ADAROUND`; RSS beside Quark's. ResNet: byte-identical on Desktop 2 (2026-09-08); YOLO open | D1/D2, then the laptop as the stretch |
 | 4 | Acceptance map | `probe.py`, `tools/quant_probe.py`, `scripts/quant-probe.sh` | every mutation in §4.2 measured with output check; new BENCHMARKS section; DECISIONS #3 amended | L/D2 |
 | 5 | Beyond Quark | per-layer error budget in the sidecar → a BENCHMARKS table; MODNet re-calibrated through `npu.modnet` (closes the RESEARCH open item); `calib_store="hist"` with its accuracy cost measured; MobileViT per-channel **only if** Phase 4 admits it; QAT hook (`sources` + `pow2` reused from torch) | each a logged, folded experiment | per `CLAUDE.md` routing |
 
@@ -801,8 +806,11 @@ refine directions, the avgpool table). Nothing here is a latency experiment.
   what emission discards (36 percent on ResNet, the pruned pre-Relu tensors;
   [measured](../docs/BENCHMARKS.md#ignition-calibration-spool-without-the-pruned-pre-relu-tensors)).
   The `hist` store is the escape hatch and is labelled approximate until measured.
-- **AdaRound parity is statistical.** If ours lands 0.3 points below Quark's on resnet50,
-  that is a session-noise question first (the repo's drift record), a bug second.
+- **AdaRound parity is statistical across machines, bitwise on one.** Measured
+  2026-09-08: byte-identical to the oracle on Desktop 2 under one runtime, while a
+  Sep 5 Quark artifact from an unrecorded machine differs from the fresh oracle in
+  4,149,415 weights by one LSB. If ours lands 0.3 points below Quark's on another box,
+  that is a numerics-environment question first (the repo's drift record), a bug second.
 - **The EP might key on something unobservable from the model** (a registry, an env var).
   The `strip_metadata` and `baseline` probes exist to bound that early.
 - **Two live sessions share this worktree and NPU.** Every NPU log records the
