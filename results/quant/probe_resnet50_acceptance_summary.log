@@ -1,0 +1,1300 @@
+PROBE_SUMMARY [
+  {
+    "tag": "resnet50_accept_c64",
+    "mutation": "act_int8_zp0",
+    "status": "completed",
+    "scope": "diagnostic output agreement; not dataset accuracy",
+    "images": 32,
+    "model_sha256": "3c97b606f9e74c6ff31f4885a97f9c8b6769947263140d134eb0a2af9ae911b1",
+    "base_sha256": "c1945d2dce29e6afeaed16ef8c2bcc5689044f5210543440f84fb258c29e0ea5",
+    "inputs_sha256": "8482bcbcbd18be08d7d719bdcc31a23a0a3798d5fc960b5db20d4cdc550380ca",
+    "xclbin_sha256": "d3b5e845b05f91beb90555b6f50ca542e05f69379f3fd9ab15246ad344c469fe",
+    "log": "results/quant/probe_resnet50_accept_c64_act_int8_zp0.log",
+    "cpu_vs_baseline_cpu": {
+      "images": 32,
+      "max_abs": 0.0,
+      "mae": 0.0,
+      "rmse": 0.0,
+      "exact_elements_fraction": 1.0,
+      "argmax_agreement_fraction": 1.0
+    },
+    "cpu_accuracy": null,
+    "npu_accuracy": null,
+    "cpu_latency_ms": {
+      "mean": 37.223534374561495,
+      "median": 37.04419999849051,
+      "p95": 41.69183000230987,
+      "runs": 32,
+      "warmup": 5
+    },
+    "ep_latency_ms": {
+      "mean": 5.460349999566461,
+      "median": 5.361849998735124,
+      "p95": 6.100044997583609,
+      "runs": 32,
+      "warmup": 5
+    },
+    "ep_vs_optimized_cpu": {
+      "images": 32,
+      "max_abs": 3.0,
+      "mae": 0.6254453125,
+      "rmse": 0.7563287665592259,
+      "exact_elements_fraction": 0.05028125,
+      "argmax_agreement_fraction": 0.875
+    },
+    "ep_vs_unoptimized_cpu": null,
+    "ep_vs_baseline_npu": {
+      "images": 32,
+      "max_abs": 0.0,
+      "mae": 0.0,
+      "rmse": 0.0,
+      "exact_elements_fraction": 1.0,
+      "argmax_agreement_fraction": 1.0
+    },
+    "unoptimized_cpu_audit": {
+      "mutation": "act_int8_zp0",
+      "recorded_status": "completed",
+      "model_sha256": "3c97b606f9e74c6ff31f4885a97f9c8b6769947263140d134eb0a2af9ae911b1",
+      "unoptimized_vs_baseline_unoptimized": {
+        "images": 32,
+        "max_abs": 0.0,
+        "mae": 0.0,
+        "rmse": 0.0,
+        "exact_elements_fraction": 1.0,
+        "argmax_agreement_fraction": 1.0
+      },
+      "optimized_cpu_vs_unoptimized_cpu": {
+        "images": 32,
+        "max_abs": 0.0,
+        "mae": 0.0,
+        "rmse": 0.0,
+        "exact_elements_fraction": 1.0,
+        "argmax_agreement_fraction": 1.0
+      },
+      "npu_vs_unoptimized_cpu": {
+        "images": 32,
+        "max_abs": 3.0,
+        "mae": 0.6254453125,
+        "rmse": 0.7563287665592259,
+        "exact_elements_fraction": 0.05028125,
+        "argmax_agreement_fraction": 0.875
+      },
+      "npu_nodes": 393,
+      "total_nodes": 395
+    },
+    "ep": {
+      "npu": 393,
+      "total": 395,
+      "device_counts": {
+        "CPU": 2,
+        "NPU": 393
+      },
+      "ops_by_device": {
+        "CPU:DequantizeLinear": 1,
+        "CPU:QuantizeLinear": 1,
+        "NPU:Add": 16,
+        "NPU:Conv": 53,
+        "NPU:DequantizeLinear": 197,
+        "NPU:Flatten": 1,
+        "NPU:Gemm": 1,
+        "NPU:GlobalAveragePool": 1,
+        "NPU:MaxPool": 1,
+        "NPU:Mul": 1,
+        "NPU:QuantizeLinear": 73,
+        "NPU:Relu": 49
+      }
+    }
+  },
+  {
+    "tag": "resnet50_accept_c64",
+    "mutation": "baseline",
+    "status": "completed",
+    "scope": "diagnostic output agreement; not dataset accuracy",
+    "images": 32,
+    "model_sha256": "c1945d2dce29e6afeaed16ef8c2bcc5689044f5210543440f84fb258c29e0ea5",
+    "base_sha256": "c1945d2dce29e6afeaed16ef8c2bcc5689044f5210543440f84fb258c29e0ea5",
+    "inputs_sha256": "8482bcbcbd18be08d7d719bdcc31a23a0a3798d5fc960b5db20d4cdc550380ca",
+    "xclbin_sha256": "d3b5e845b05f91beb90555b6f50ca542e05f69379f3fd9ab15246ad344c469fe",
+    "log": "results/quant/probe_resnet50_accept_c64_baseline.log",
+    "cpu_vs_baseline_cpu": {
+      "images": 32,
+      "max_abs": 0.0,
+      "mae": 0.0,
+      "rmse": 0.0,
+      "exact_elements_fraction": 1.0,
+      "argmax_agreement_fraction": 1.0
+    },
+    "cpu_accuracy": null,
+    "npu_accuracy": null,
+    "cpu_latency_ms": {
+      "mean": 38.65370937478474,
+      "median": 36.980400000174996,
+      "p95": 49.10511500129359,
+      "runs": 32,
+      "warmup": 5
+    },
+    "ep_latency_ms": {
+      "mean": 5.613349999521233,
+      "median": 5.43285000094329,
+      "p95": 7.014535002235789,
+      "runs": 32,
+      "warmup": 5
+    },
+    "ep_vs_optimized_cpu": {
+      "images": 32,
+      "max_abs": 3.0,
+      "mae": 0.6254453125,
+      "rmse": 0.7563287665592259,
+      "exact_elements_fraction": 0.05028125,
+      "argmax_agreement_fraction": 0.875
+    },
+    "ep_vs_unoptimized_cpu": null,
+    "ep_vs_baseline_npu": null,
+    "unoptimized_cpu_audit": {
+      "mutation": "baseline",
+      "recorded_status": "completed",
+      "model_sha256": "c1945d2dce29e6afeaed16ef8c2bcc5689044f5210543440f84fb258c29e0ea5",
+      "unoptimized_vs_baseline_unoptimized": {
+        "images": 32,
+        "max_abs": 0.0,
+        "mae": 0.0,
+        "rmse": 0.0,
+        "exact_elements_fraction": 1.0,
+        "argmax_agreement_fraction": 1.0
+      },
+      "optimized_cpu_vs_unoptimized_cpu": {
+        "images": 32,
+        "max_abs": 0.0,
+        "mae": 0.0,
+        "rmse": 0.0,
+        "exact_elements_fraction": 1.0,
+        "argmax_agreement_fraction": 1.0
+      },
+      "npu_vs_unoptimized_cpu": {
+        "images": 32,
+        "max_abs": 3.0,
+        "mae": 0.6254453125,
+        "rmse": 0.7563287665592259,
+        "exact_elements_fraction": 0.05028125,
+        "argmax_agreement_fraction": 0.875
+      },
+      "npu_nodes": 393,
+      "total_nodes": 395
+    },
+    "ep": {
+      "npu": 393,
+      "total": 395,
+      "device_counts": {
+        "CPU": 2,
+        "NPU": 393
+      },
+      "ops_by_device": {
+        "CPU:DequantizeLinear": 1,
+        "CPU:QuantizeLinear": 1,
+        "NPU:Add": 16,
+        "NPU:Conv": 53,
+        "NPU:DequantizeLinear": 197,
+        "NPU:Flatten": 1,
+        "NPU:Gemm": 1,
+        "NPU:GlobalAveragePool": 1,
+        "NPU:MaxPool": 1,
+        "NPU:Mul": 1,
+        "NPU:QuantizeLinear": 73,
+        "NPU:Relu": 49
+      }
+    }
+  },
+  {
+    "tag": "resnet50_accept_c64",
+    "mutation": "bias_int32_dtype",
+    "status": "completed",
+    "scope": "diagnostic output agreement; not dataset accuracy",
+    "images": 32,
+    "model_sha256": "76549b1ecf06f5162256adc98ec1f85cb72ba1e1013a6a5b1990741c67ff3c8f",
+    "base_sha256": "c1945d2dce29e6afeaed16ef8c2bcc5689044f5210543440f84fb258c29e0ea5",
+    "inputs_sha256": "8482bcbcbd18be08d7d719bdcc31a23a0a3798d5fc960b5db20d4cdc550380ca",
+    "xclbin_sha256": "d3b5e845b05f91beb90555b6f50ca542e05f69379f3fd9ab15246ad344c469fe",
+    "log": "results/quant/probe_resnet50_accept_c64_bias_int32_dtype.log",
+    "cpu_vs_baseline_cpu": {
+      "images": 32,
+      "max_abs": 31.875,
+      "mae": 4.27594921875,
+      "rmse": 5.035656019126877,
+      "exact_elements_fraction": 0.00709375,
+      "argmax_agreement_fraction": 0.0
+    },
+    "cpu_accuracy": null,
+    "npu_accuracy": null,
+    "cpu_latency_ms": {
+      "mean": 29.273600000351507,
+      "median": 29.633749996719416,
+      "p95": 32.10497000181931,
+      "runs": 32,
+      "warmup": 5
+    },
+    "ep_latency_ms": {
+      "mean": 5.461662500010789,
+      "median": 5.410350000602193,
+      "p95": 5.87813000092865,
+      "runs": 32,
+      "warmup": 5
+    },
+    "ep_vs_optimized_cpu": {
+      "images": 32,
+      "max_abs": 31.75,
+      "mae": 3.89976171875,
+      "rmse": 4.654237033422476,
+      "exact_elements_fraction": 0.00903125,
+      "argmax_agreement_fraction": 0.0
+    },
+    "ep_vs_unoptimized_cpu": null,
+    "ep_vs_baseline_npu": {
+      "images": 32,
+      "max_abs": 0.0,
+      "mae": 0.0,
+      "rmse": 0.0,
+      "exact_elements_fraction": 1.0,
+      "argmax_agreement_fraction": 1.0
+    },
+    "unoptimized_cpu_audit": {
+      "mutation": "bias_int32_dtype",
+      "recorded_status": "completed",
+      "model_sha256": "76549b1ecf06f5162256adc98ec1f85cb72ba1e1013a6a5b1990741c67ff3c8f",
+      "unoptimized_vs_baseline_unoptimized": {
+        "images": 32,
+        "max_abs": 0.0,
+        "mae": 0.0,
+        "rmse": 0.0,
+        "exact_elements_fraction": 1.0,
+        "argmax_agreement_fraction": 1.0
+      },
+      "optimized_cpu_vs_unoptimized_cpu": {
+        "images": 32,
+        "max_abs": 31.875,
+        "mae": 4.27594921875,
+        "rmse": 5.035656019126877,
+        "exact_elements_fraction": 0.00709375,
+        "argmax_agreement_fraction": 0.0
+      },
+      "npu_vs_unoptimized_cpu": {
+        "images": 32,
+        "max_abs": 3.0,
+        "mae": 0.6254453125,
+        "rmse": 0.7563287665592259,
+        "exact_elements_fraction": 0.05028125,
+        "argmax_agreement_fraction": 0.875
+      },
+      "npu_nodes": 393,
+      "total_nodes": 395
+    },
+    "ep": {
+      "npu": 393,
+      "total": 395,
+      "device_counts": {
+        "CPU": 2,
+        "NPU": 393
+      },
+      "ops_by_device": {
+        "CPU:DequantizeLinear": 1,
+        "CPU:QuantizeLinear": 1,
+        "NPU:Add": 16,
+        "NPU:Conv": 53,
+        "NPU:DequantizeLinear": 197,
+        "NPU:Flatten": 1,
+        "NPU:Gemm": 1,
+        "NPU:GlobalAveragePool": 1,
+        "NPU:MaxPool": 1,
+        "NPU:Mul": 1,
+        "NPU:QuantizeLinear": 73,
+        "NPU:Relu": 49
+      }
+    }
+  },
+  {
+    "tag": "resnet50_accept_c64",
+    "mutation": "bias_int32_product",
+    "status": "completed",
+    "scope": "diagnostic output agreement; not dataset accuracy",
+    "images": 32,
+    "model_sha256": "a9467bdcb9a3ab532a571ccbba14ece692cc467765cefc82e2673bd486babbe8",
+    "base_sha256": "c1945d2dce29e6afeaed16ef8c2bcc5689044f5210543440f84fb258c29e0ea5",
+    "inputs_sha256": "8482bcbcbd18be08d7d719bdcc31a23a0a3798d5fc960b5db20d4cdc550380ca",
+    "xclbin_sha256": "d3b5e845b05f91beb90555b6f50ca542e05f69379f3fd9ab15246ad344c469fe",
+    "log": "results/quant/probe_resnet50_accept_c64_bias_int32_product.log",
+    "cpu_vs_baseline_cpu": {
+      "images": 32,
+      "max_abs": 0.0,
+      "mae": 0.0,
+      "rmse": 0.0,
+      "exact_elements_fraction": 1.0,
+      "argmax_agreement_fraction": 1.0
+    },
+    "cpu_accuracy": null,
+    "npu_accuracy": null,
+    "cpu_latency_ms": {
+      "mean": 27.20715625014236,
+      "median": 26.851250000618165,
+      "p95": 29.67459499668621,
+      "runs": 32,
+      "warmup": 5
+    },
+    "ep_latency_ms": {
+      "mean": 5.309743749876361,
+      "median": 5.293499998515472,
+      "p95": 5.514989997755038,
+      "runs": 32,
+      "warmup": 5
+    },
+    "ep_vs_optimized_cpu": {
+      "images": 32,
+      "max_abs": 16.0,
+      "mae": 7.8245234375,
+      "rmse": 8.025161967796974,
+      "exact_elements_fraction": 0.0001875,
+      "argmax_agreement_fraction": 0.0
+    },
+    "ep_vs_unoptimized_cpu": null,
+    "ep_vs_baseline_npu": {
+      "images": 32,
+      "max_abs": 16.25,
+      "mae": 8.3477578125,
+      "rmse": 8.553107188509038,
+      "exact_elements_fraction": 0.000125,
+      "argmax_agreement_fraction": 0.0
+    },
+    "unoptimized_cpu_audit": {
+      "mutation": "bias_int32_product",
+      "recorded_status": "completed",
+      "model_sha256": "a9467bdcb9a3ab532a571ccbba14ece692cc467765cefc82e2673bd486babbe8",
+      "unoptimized_vs_baseline_unoptimized": {
+        "images": 32,
+        "max_abs": 0.0,
+        "mae": 0.0,
+        "rmse": 0.0,
+        "exact_elements_fraction": 1.0,
+        "argmax_agreement_fraction": 1.0
+      },
+      "optimized_cpu_vs_unoptimized_cpu": {
+        "images": 32,
+        "max_abs": 0.0,
+        "mae": 0.0,
+        "rmse": 0.0,
+        "exact_elements_fraction": 1.0,
+        "argmax_agreement_fraction": 1.0
+      },
+      "npu_vs_unoptimized_cpu": {
+        "images": 32,
+        "max_abs": 16.0,
+        "mae": 7.8245234375,
+        "rmse": 8.025161967796974,
+        "exact_elements_fraction": 0.0001875,
+        "argmax_agreement_fraction": 0.0
+      },
+      "npu_nodes": 393,
+      "total_nodes": 395
+    },
+    "ep": {
+      "npu": 393,
+      "total": 395,
+      "device_counts": {
+        "CPU": 2,
+        "NPU": 393
+      },
+      "ops_by_device": {
+        "CPU:DequantizeLinear": 1,
+        "CPU:QuantizeLinear": 1,
+        "NPU:Add": 16,
+        "NPU:Conv": 53,
+        "NPU:DequantizeLinear": 197,
+        "NPU:Flatten": 1,
+        "NPU:Gemm": 1,
+        "NPU:GlobalAveragePool": 1,
+        "NPU:MaxPool": 1,
+        "NPU:Mul": 1,
+        "NPU:QuantizeLinear": 73,
+        "NPU:Relu": 49
+      }
+    }
+  },
+  {
+    "tag": "resnet50_accept_c64",
+    "mutation": "domain_msft",
+    "status": "completed",
+    "scope": "diagnostic output agreement; not dataset accuracy",
+    "images": 32,
+    "model_sha256": "e792c058f2ed23f3f4552cee291dc9e03a63ab866612113d0c450114422f70c5",
+    "base_sha256": "c1945d2dce29e6afeaed16ef8c2bcc5689044f5210543440f84fb258c29e0ea5",
+    "inputs_sha256": "8482bcbcbd18be08d7d719bdcc31a23a0a3798d5fc960b5db20d4cdc550380ca",
+    "xclbin_sha256": "d3b5e845b05f91beb90555b6f50ca542e05f69379f3fd9ab15246ad344c469fe",
+    "log": "results/quant/probe_resnet50_accept_c64_domain_msft.log",
+    "cpu_vs_baseline_cpu": {
+      "images": 32,
+      "max_abs": 0.0,
+      "mae": 0.0,
+      "rmse": 0.0,
+      "exact_elements_fraction": 1.0,
+      "argmax_agreement_fraction": 1.0
+    },
+    "cpu_accuracy": null,
+    "npu_accuracy": null,
+    "cpu_latency_ms": {
+      "mean": 36.18816874973163,
+      "median": 36.15144999639597,
+      "p95": 40.857490003691055,
+      "runs": 32,
+      "warmup": 5
+    },
+    "ep_latency_ms": {
+      "mean": 33.983749999606516,
+      "median": 33.95180000006803,
+      "p95": 37.41932000120869,
+      "runs": 32,
+      "warmup": 5
+    },
+    "ep_vs_optimized_cpu": {
+      "images": 32,
+      "max_abs": 0.0,
+      "mae": 0.0,
+      "rmse": 0.0,
+      "exact_elements_fraction": 1.0,
+      "argmax_agreement_fraction": 1.0
+    },
+    "ep_vs_unoptimized_cpu": null,
+    "ep_vs_baseline_npu": {
+      "images": 32,
+      "max_abs": 3.0,
+      "mae": 0.6254453125,
+      "rmse": 0.7563287665592259,
+      "exact_elements_fraction": 0.05028125,
+      "argmax_agreement_fraction": 0.875
+    },
+    "unoptimized_cpu_audit": {
+      "mutation": "domain_msft",
+      "recorded_status": "completed",
+      "model_sha256": "e792c058f2ed23f3f4552cee291dc9e03a63ab866612113d0c450114422f70c5",
+      "unoptimized_vs_baseline_unoptimized": {
+        "images": 32,
+        "max_abs": 0.0,
+        "mae": 0.0,
+        "rmse": 0.0,
+        "exact_elements_fraction": 1.0,
+        "argmax_agreement_fraction": 1.0
+      },
+      "optimized_cpu_vs_unoptimized_cpu": {
+        "images": 32,
+        "max_abs": 0.0,
+        "mae": 0.0,
+        "rmse": 0.0,
+        "exact_elements_fraction": 1.0,
+        "argmax_agreement_fraction": 1.0
+      },
+      "npu_vs_unoptimized_cpu": {
+        "images": 32,
+        "max_abs": 0.0,
+        "mae": 0.0,
+        "rmse": 0.0,
+        "exact_elements_fraction": 1.0,
+        "argmax_agreement_fraction": 1.0
+      },
+      "npu_nodes": 0,
+      "total_nodes": 395
+    },
+    "ep": {
+      "npu": 0,
+      "total": 395,
+      "device_counts": {
+        "CPU": 395
+      },
+      "ops_by_device": {
+        "CPU:Add": 16,
+        "CPU:Conv": 53,
+        "CPU:DequantizeLinear": 198,
+        "CPU:Flatten": 1,
+        "CPU:Gemm": 1,
+        "CPU:GlobalAveragePool": 1,
+        "CPU:MaxPool": 1,
+        "CPU:Mul": 1,
+        "CPU:QuantizeLinear": 74,
+        "CPU:Relu": 49
+      }
+    }
+  },
+  {
+    "tag": "resnet50_accept_c64",
+    "mutation": "drop_gap_mul",
+    "status": "completed",
+    "scope": "diagnostic output agreement; not dataset accuracy",
+    "images": 32,
+    "model_sha256": "ee90fcecefda10ac8b88ea4f744ecba13334a4a68e6ea733294d8f5a1bda090b",
+    "base_sha256": "c1945d2dce29e6afeaed16ef8c2bcc5689044f5210543440f84fb258c29e0ea5",
+    "inputs_sha256": "8482bcbcbd18be08d7d719bdcc31a23a0a3798d5fc960b5db20d4cdc550380ca",
+    "xclbin_sha256": "d3b5e845b05f91beb90555b6f50ca542e05f69379f3fd9ab15246ad344c469fe",
+    "log": "results/quant/probe_resnet50_accept_c64_drop_gap_mul.log",
+    "cpu_vs_baseline_cpu": {
+      "images": 32,
+      "max_abs": 0.75,
+      "mae": 0.02255859375,
+      "rmse": 0.06249609362792206,
+      "exact_elements_fraction": 0.84434375,
+      "argmax_agreement_fraction": 1.0
+    },
+    "cpu_accuracy": null,
+    "npu_accuracy": null,
+    "cpu_latency_ms": {
+      "mean": 34.444128124277995,
+      "median": 34.1506999975536,
+      "p95": 38.580274999912945,
+      "runs": 32,
+      "warmup": 5
+    },
+    "ep_latency_ms": {
+      "mean": 5.42320937461227,
+      "median": 5.364900000131456,
+      "p95": 5.764324997289805,
+      "runs": 32,
+      "warmup": 5
+    },
+    "ep_vs_optimized_cpu": {
+      "images": 32,
+      "max_abs": 3.0,
+      "mae": 0.62631640625,
+      "rmse": 0.7576907118631916,
+      "exact_elements_fraction": 0.05190625,
+      "argmax_agreement_fraction": 0.875
+    },
+    "ep_vs_unoptimized_cpu": null,
+    "ep_vs_baseline_npu": {
+      "images": 32,
+      "max_abs": 0.0,
+      "mae": 0.0,
+      "rmse": 0.0,
+      "exact_elements_fraction": 1.0,
+      "argmax_agreement_fraction": 1.0
+    },
+    "unoptimized_cpu_audit": {
+      "mutation": "drop_gap_mul",
+      "recorded_status": "completed",
+      "model_sha256": "ee90fcecefda10ac8b88ea4f744ecba13334a4a68e6ea733294d8f5a1bda090b",
+      "unoptimized_vs_baseline_unoptimized": {
+        "images": 32,
+        "max_abs": 0.75,
+        "mae": 0.02255859375,
+        "rmse": 0.06249609362792206,
+        "exact_elements_fraction": 0.84434375,
+        "argmax_agreement_fraction": 1.0
+      },
+      "optimized_cpu_vs_unoptimized_cpu": {
+        "images": 32,
+        "max_abs": 0.0,
+        "mae": 0.0,
+        "rmse": 0.0,
+        "exact_elements_fraction": 1.0,
+        "argmax_agreement_fraction": 1.0
+      },
+      "npu_vs_unoptimized_cpu": {
+        "images": 32,
+        "max_abs": 3.0,
+        "mae": 0.62631640625,
+        "rmse": 0.7576907118631916,
+        "exact_elements_fraction": 0.05190625,
+        "argmax_agreement_fraction": 0.875
+      },
+      "npu_nodes": 392,
+      "total_nodes": 394
+    },
+    "ep": {
+      "npu": 392,
+      "total": 394,
+      "device_counts": {
+        "CPU": 2,
+        "NPU": 392
+      },
+      "ops_by_device": {
+        "CPU:DequantizeLinear": 1,
+        "CPU:QuantizeLinear": 1,
+        "NPU:Add": 16,
+        "NPU:Conv": 53,
+        "NPU:DequantizeLinear": 197,
+        "NPU:Flatten": 1,
+        "NPU:Gemm": 1,
+        "NPU:GlobalAveragePool": 1,
+        "NPU:MaxPool": 1,
+        "NPU:QuantizeLinear": 73,
+        "NPU:Relu": 49
+      }
+    }
+  },
+  {
+    "tag": "resnet50_accept_c64",
+    "mutation": "float_act_scales",
+    "status": "completed",
+    "scope": "diagnostic output agreement; not dataset accuracy",
+    "images": 32,
+    "model_sha256": "90e421f659c20e9f9ebd1b1d684ac720cb5230d8b30f7f29be4d0bfc81d0251a",
+    "base_sha256": "c1945d2dce29e6afeaed16ef8c2bcc5689044f5210543440f84fb258c29e0ea5",
+    "inputs_sha256": "8482bcbcbd18be08d7d719bdcc31a23a0a3798d5fc960b5db20d4cdc550380ca",
+    "xclbin_sha256": "d3b5e845b05f91beb90555b6f50ca542e05f69379f3fd9ab15246ad344c469fe",
+    "log": "results/quant/probe_resnet50_accept_c64_float_act_scales.log",
+    "cpu_vs_baseline_cpu": {
+      "images": 32,
+      "max_abs": 3.375,
+      "mae": 0.45575,
+      "rmse": 0.5859395833296296,
+      "exact_elements_fraction": 0.09109375,
+      "argmax_agreement_fraction": 0.875
+    },
+    "cpu_accuracy": null,
+    "npu_accuracy": null,
+    "cpu_latency_ms": {
+      "mean": 37.75037500031431,
+      "median": 37.743749999208376,
+      "p95": 43.02153499957058,
+      "runs": 32,
+      "warmup": 5
+    },
+    "ep_latency_ms": {
+      "mean": 5.435321874983856,
+      "median": 5.3651500020350795,
+      "p95": 5.7659600002807565,
+      "runs": 32,
+      "warmup": 5
+    },
+    "ep_vs_optimized_cpu": {
+      "images": 32,
+      "max_abs": 24.625,
+      "mae": 3.6373125,
+      "rmse": 4.230485413748344,
+      "exact_elements_fraction": 0.00728125,
+      "argmax_agreement_fraction": 0.0
+    },
+    "ep_vs_unoptimized_cpu": null,
+    "ep_vs_baseline_npu": {
+      "images": 32,
+      "max_abs": 25.125,
+      "mae": 4.0764375,
+      "rmse": 4.671145114389779,
+      "exact_elements_fraction": 0.00575,
+      "argmax_agreement_fraction": 0.0
+    },
+    "unoptimized_cpu_audit": {
+      "mutation": "float_act_scales",
+      "recorded_status": "completed",
+      "model_sha256": "90e421f659c20e9f9ebd1b1d684ac720cb5230d8b30f7f29be4d0bfc81d0251a",
+      "unoptimized_vs_baseline_unoptimized": {
+        "images": 32,
+        "max_abs": 3.375,
+        "mae": 0.45575,
+        "rmse": 0.5859395833296296,
+        "exact_elements_fraction": 0.09109375,
+        "argmax_agreement_fraction": 0.875
+      },
+      "optimized_cpu_vs_unoptimized_cpu": {
+        "images": 32,
+        "max_abs": 0.0,
+        "mae": 0.0,
+        "rmse": 0.0,
+        "exact_elements_fraction": 1.0,
+        "argmax_agreement_fraction": 1.0
+      },
+      "npu_vs_unoptimized_cpu": {
+        "images": 32,
+        "max_abs": 24.625,
+        "mae": 3.6373125,
+        "rmse": 4.230485413748344,
+        "exact_elements_fraction": 0.00728125,
+        "argmax_agreement_fraction": 0.0
+      },
+      "npu_nodes": 393,
+      "total_nodes": 395
+    },
+    "ep": {
+      "npu": 393,
+      "total": 395,
+      "device_counts": {
+        "CPU": 2,
+        "NPU": 393
+      },
+      "ops_by_device": {
+        "CPU:DequantizeLinear": 1,
+        "CPU:QuantizeLinear": 1,
+        "NPU:Add": 16,
+        "NPU:Conv": 53,
+        "NPU:DequantizeLinear": 197,
+        "NPU:Flatten": 1,
+        "NPU:Gemm": 1,
+        "NPU:GlobalAveragePool": 1,
+        "NPU:MaxPool": 1,
+        "NPU:Mul": 1,
+        "NPU:QuantizeLinear": 73,
+        "NPU:Relu": 49
+      }
+    }
+  },
+  {
+    "tag": "resnet50_accept_c64",
+    "mutation": "float_weight_scales",
+    "status": "completed",
+    "scope": "diagnostic output agreement; not dataset accuracy",
+    "images": 32,
+    "model_sha256": "7e9d0b67f12fa247b9f3ddefca5a839047bd9bd472c22e0c8f825018181e0af0",
+    "base_sha256": "c1945d2dce29e6afeaed16ef8c2bcc5689044f5210543440f84fb258c29e0ea5",
+    "inputs_sha256": "8482bcbcbd18be08d7d719bdcc31a23a0a3798d5fc960b5db20d4cdc550380ca",
+    "xclbin_sha256": "d3b5e845b05f91beb90555b6f50ca542e05f69379f3fd9ab15246ad344c469fe",
+    "log": "results/quant/probe_resnet50_accept_c64_float_weight_scales.log",
+    "cpu_vs_baseline_cpu": {
+      "images": 32,
+      "max_abs": 3.875,
+      "mae": 0.50021484375,
+      "rmse": 0.6487484194344908,
+      "exact_elements_fraction": 0.08471875,
+      "argmax_agreement_fraction": 0.75
+    },
+    "cpu_accuracy": null,
+    "npu_accuracy": null,
+    "cpu_latency_ms": {
+      "mean": 35.375887499412784,
+      "median": 35.315900000568945,
+      "p95": 38.87545000143291,
+      "runs": 32,
+      "warmup": 5
+    },
+    "ep_latency_ms": {
+      "mean": 24.40837812468999,
+      "median": 24.31004999743891,
+      "p95": 26.349684999513556,
+      "runs": 32,
+      "warmup": 5
+    },
+    "ep_vs_optimized_cpu": {
+      "images": 32,
+      "max_abs": 26.125,
+      "mae": 10.7010078125,
+      "rmse": 11.371654899628725,
+      "exact_elements_fraction": 0.0003125,
+      "argmax_agreement_fraction": 0.0
+    },
+    "ep_vs_unoptimized_cpu": null,
+    "ep_vs_baseline_npu": {
+      "images": 32,
+      "max_abs": 26.75,
+      "mae": 11.18894140625,
+      "rmse": 11.840066400290214,
+      "exact_elements_fraction": 9.375e-05,
+      "argmax_agreement_fraction": 0.0
+    },
+    "unoptimized_cpu_audit": {
+      "mutation": "float_weight_scales",
+      "recorded_status": "completed",
+      "model_sha256": "7e9d0b67f12fa247b9f3ddefca5a839047bd9bd472c22e0c8f825018181e0af0",
+      "unoptimized_vs_baseline_unoptimized": {
+        "images": 32,
+        "max_abs": 3.875,
+        "mae": 0.50021484375,
+        "rmse": 0.6487484194344908,
+        "exact_elements_fraction": 0.08471875,
+        "argmax_agreement_fraction": 0.75
+      },
+      "optimized_cpu_vs_unoptimized_cpu": {
+        "images": 32,
+        "max_abs": 0.0,
+        "mae": 0.0,
+        "rmse": 0.0,
+        "exact_elements_fraction": 1.0,
+        "argmax_agreement_fraction": 1.0
+      },
+      "npu_vs_unoptimized_cpu": {
+        "images": 32,
+        "max_abs": 26.125,
+        "mae": 10.7010078125,
+        "rmse": 11.371654899628725,
+        "exact_elements_fraction": 0.0003125,
+        "argmax_agreement_fraction": 0.0
+      },
+      "npu_nodes": 276,
+      "total_nodes": 395
+    },
+    "ep": {
+      "npu": 276,
+      "total": 395,
+      "device_counts": {
+        "CPU": 119,
+        "NPU": 276
+      },
+      "ops_by_device": {
+        "CPU:Conv": 19,
+        "CPU:DequantizeLinear": 62,
+        "CPU:Flatten": 1,
+        "CPU:Gemm": 1,
+        "CPU:QuantizeLinear": 22,
+        "CPU:Relu": 14,
+        "NPU:Add": 16,
+        "NPU:Conv": 34,
+        "NPU:DequantizeLinear": 136,
+        "NPU:GlobalAveragePool": 1,
+        "NPU:MaxPool": 1,
+        "NPU:Mul": 1,
+        "NPU:QuantizeLinear": 52,
+        "NPU:Relu": 35
+      }
+    }
+  },
+  {
+    "tag": "resnet50_accept_c64",
+    "mutation": "producer_ignition",
+    "status": "completed",
+    "scope": "diagnostic output agreement; not dataset accuracy",
+    "images": 32,
+    "model_sha256": "4726bf27ad0a73efa0114d5c7784ab327cbd9cb3f42fe26739f0d9fc9af59e82",
+    "base_sha256": "c1945d2dce29e6afeaed16ef8c2bcc5689044f5210543440f84fb258c29e0ea5",
+    "inputs_sha256": "8482bcbcbd18be08d7d719bdcc31a23a0a3798d5fc960b5db20d4cdc550380ca",
+    "xclbin_sha256": "d3b5e845b05f91beb90555b6f50ca542e05f69379f3fd9ab15246ad344c469fe",
+    "log": "results/quant/probe_resnet50_accept_c64_producer_ignition.log",
+    "cpu_vs_baseline_cpu": {
+      "images": 32,
+      "max_abs": 0.0,
+      "mae": 0.0,
+      "rmse": 0.0,
+      "exact_elements_fraction": 1.0,
+      "argmax_agreement_fraction": 1.0
+    },
+    "cpu_accuracy": null,
+    "npu_accuracy": null,
+    "cpu_latency_ms": {
+      "mean": 36.77864062501612,
+      "median": 36.370049994729925,
+      "p95": 40.47362500059535,
+      "runs": 32,
+      "warmup": 5
+    },
+    "ep_latency_ms": {
+      "mean": 5.674199999930352,
+      "median": 5.447200001071906,
+      "p95": 6.724554996981169,
+      "runs": 32,
+      "warmup": 5
+    },
+    "ep_vs_optimized_cpu": {
+      "images": 32,
+      "max_abs": 3.0,
+      "mae": 0.6254453125,
+      "rmse": 0.7563287665592259,
+      "exact_elements_fraction": 0.05028125,
+      "argmax_agreement_fraction": 0.875
+    },
+    "ep_vs_unoptimized_cpu": null,
+    "ep_vs_baseline_npu": {
+      "images": 32,
+      "max_abs": 0.0,
+      "mae": 0.0,
+      "rmse": 0.0,
+      "exact_elements_fraction": 1.0,
+      "argmax_agreement_fraction": 1.0
+    },
+    "unoptimized_cpu_audit": {},
+    "ep": {
+      "npu": 393,
+      "total": 395,
+      "device_counts": {
+        "CPU": 2,
+        "NPU": 393
+      },
+      "ops_by_device": {
+        "CPU:DequantizeLinear": 1,
+        "CPU:QuantizeLinear": 1,
+        "NPU:Add": 16,
+        "NPU:Conv": 53,
+        "NPU:DequantizeLinear": 197,
+        "NPU:Flatten": 1,
+        "NPU:Gemm": 1,
+        "NPU:GlobalAveragePool": 1,
+        "NPU:MaxPool": 1,
+        "NPU:Mul": 1,
+        "NPU:QuantizeLinear": 73,
+        "NPU:Relu": 49
+      }
+    }
+  },
+  {
+    "tag": "resnet50_accept_c64",
+    "mutation": "strip_metadata",
+    "status": "completed",
+    "scope": "diagnostic output agreement; not dataset accuracy",
+    "images": 32,
+    "model_sha256": "aa33eda2e0993bd633f3090a0ec7c69d5c4df4af4202ce2629d5503b926395bb",
+    "base_sha256": "c1945d2dce29e6afeaed16ef8c2bcc5689044f5210543440f84fb258c29e0ea5",
+    "inputs_sha256": "8482bcbcbd18be08d7d719bdcc31a23a0a3798d5fc960b5db20d4cdc550380ca",
+    "xclbin_sha256": "d3b5e845b05f91beb90555b6f50ca542e05f69379f3fd9ab15246ad344c469fe",
+    "log": "results/quant/probe_resnet50_accept_c64_strip_metadata.log",
+    "cpu_vs_baseline_cpu": {
+      "images": 32,
+      "max_abs": 0.0,
+      "mae": 0.0,
+      "rmse": 0.0,
+      "exact_elements_fraction": 1.0,
+      "argmax_agreement_fraction": 1.0
+    },
+    "cpu_accuracy": null,
+    "npu_accuracy": null,
+    "cpu_latency_ms": {
+      "mean": 39.07518437449653,
+      "median": 39.027399998303736,
+      "p95": 42.37043000321137,
+      "runs": 32,
+      "warmup": 5
+    },
+    "ep_latency_ms": {
+      "mean": 5.3807656247499835,
+      "median": 5.342750002455432,
+      "p95": 5.486979998022434,
+      "runs": 32,
+      "warmup": 5
+    },
+    "ep_vs_optimized_cpu": {
+      "images": 32,
+      "max_abs": 3.0,
+      "mae": 0.6254453125,
+      "rmse": 0.7563287665592259,
+      "exact_elements_fraction": 0.05028125,
+      "argmax_agreement_fraction": 0.875
+    },
+    "ep_vs_unoptimized_cpu": null,
+    "ep_vs_baseline_npu": {
+      "images": 32,
+      "max_abs": 0.0,
+      "mae": 0.0,
+      "rmse": 0.0,
+      "exact_elements_fraction": 1.0,
+      "argmax_agreement_fraction": 1.0
+    },
+    "unoptimized_cpu_audit": {
+      "mutation": "strip_metadata",
+      "recorded_status": "completed",
+      "model_sha256": "aa33eda2e0993bd633f3090a0ec7c69d5c4df4af4202ce2629d5503b926395bb",
+      "unoptimized_vs_baseline_unoptimized": {
+        "images": 32,
+        "max_abs": 0.0,
+        "mae": 0.0,
+        "rmse": 0.0,
+        "exact_elements_fraction": 1.0,
+        "argmax_agreement_fraction": 1.0
+      },
+      "optimized_cpu_vs_unoptimized_cpu": {
+        "images": 32,
+        "max_abs": 0.0,
+        "mae": 0.0,
+        "rmse": 0.0,
+        "exact_elements_fraction": 1.0,
+        "argmax_agreement_fraction": 1.0
+      },
+      "npu_vs_unoptimized_cpu": {
+        "images": 32,
+        "max_abs": 3.0,
+        "mae": 0.6254453125,
+        "rmse": 0.7563287665592259,
+        "exact_elements_fraction": 0.05028125,
+        "argmax_agreement_fraction": 0.875
+      },
+      "npu_nodes": 393,
+      "total_nodes": 395
+    },
+    "ep": {
+      "npu": 393,
+      "total": 395,
+      "device_counts": {
+        "CPU": 2,
+        "NPU": 393
+      },
+      "ops_by_device": {
+        "CPU:DequantizeLinear": 1,
+        "CPU:QuantizeLinear": 1,
+        "NPU:Add": 16,
+        "NPU:Conv": 53,
+        "NPU:DequantizeLinear": 197,
+        "NPU:Flatten": 1,
+        "NPU:Gemm": 1,
+        "NPU:GlobalAveragePool": 1,
+        "NPU:MaxPool": 1,
+        "NPU:Mul": 1,
+        "NPU:QuantizeLinear": 73,
+        "NPU:Relu": 49
+      }
+    }
+  },
+  {
+    "tag": "resnet50_accept_c64",
+    "mutation": "weights_per_channel",
+    "status": "resource_stop",
+    "scope": "diagnostic output agreement; not dataset accuracy",
+    "images": 32,
+    "model_sha256": "3d14254b8a0eb2dfdbae452253db5371b8de750422143e1cd1ee1592bef3cb9a",
+    "base_sha256": "c1945d2dce29e6afeaed16ef8c2bcc5689044f5210543440f84fb258c29e0ea5",
+    "inputs_sha256": "8482bcbcbd18be08d7d719bdcc31a23a0a3798d5fc960b5db20d4cdc550380ca",
+    "xclbin_sha256": "d3b5e845b05f91beb90555b6f50ca542e05f69379f3fd9ab15246ad344c469fe",
+    "log": "results/quant/probe_resnet50_accept_c64_weights_per_channel.log",
+    "cpu_vs_baseline_cpu": {
+      "images": 32,
+      "max_abs": 0.0,
+      "mae": 0.0,
+      "rmse": 0.0,
+      "exact_elements_fraction": 1.0,
+      "argmax_agreement_fraction": 1.0
+    },
+    "cpu_accuracy": null,
+    "npu_accuracy": null,
+    "cpu_latency_ms": {
+      "mean": 38.001396875415594,
+      "median": 38.25045000121463,
+      "p95": 43.13069000127143,
+      "runs": 32,
+      "warmup": 5
+    },
+    "ep_latency_ms": null,
+    "ep_vs_optimized_cpu": null,
+    "ep_vs_unoptimized_cpu": null,
+    "ep_vs_baseline_npu": null,
+    "unoptimized_cpu_audit": {
+      "mutation": "weights_per_channel",
+      "recorded_status": "npu_build_started",
+      "model_sha256": "3d14254b8a0eb2dfdbae452253db5371b8de750422143e1cd1ee1592bef3cb9a",
+      "note": "No completed NPU output; no placement or numerical verdict"
+    },
+    "external_stop_log": "results/quant/probe_resnet50_accept_c64_weights_per_channel_resource_stop.log"
+  },
+  {
+    "tag": "resnet50_accept_full1000",
+    "mutation": "act_int8_zp0",
+    "status": "completed",
+    "scope": "full labeled evaluation dataset",
+    "images": 1000,
+    "model_sha256": "3c97b606f9e74c6ff31f4885a97f9c8b6769947263140d134eb0a2af9ae911b1",
+    "base_sha256": "c1945d2dce29e6afeaed16ef8c2bcc5689044f5210543440f84fb258c29e0ea5",
+    "inputs_sha256": "2d094210cd103987a9971f0dde88308603ac4e5310bd23f7f292271e6f5f4dc4",
+    "xclbin_sha256": "d3b5e845b05f91beb90555b6f50ca542e05f69379f3fd9ab15246ad344c469fe",
+    "log": "results/quant/probe_resnet50_accept_full1000_act_int8_zp0.log",
+    "cpu_vs_baseline_cpu": {
+      "images": 1000,
+      "max_abs": 0.0,
+      "mae": 0.0,
+      "rmse": 0.0,
+      "exact_elements_fraction": 1.0,
+      "argmax_agreement_fraction": 1.0
+    },
+    "cpu_accuracy": {
+      "images": 1000,
+      "top1_percent": 62.0,
+      "top5_percent": 79.80000000000001
+    },
+    "npu_accuracy": {
+      "images": 1000,
+      "top1_percent": 59.9,
+      "top5_percent": 79.10000000000001
+    },
+    "cpu_latency_ms": {
+      "mean": 36.706159200082766,
+      "median": 36.46034999837866,
+      "p95": 41.66977499698987,
+      "runs": 1000,
+      "warmup": 5
+    },
+    "ep_latency_ms": {
+      "mean": 5.438179100106936,
+      "median": 5.3870000010647345,
+      "p95": 5.782135000117705,
+      "runs": 1000,
+      "warmup": 5
+    },
+    "ep_vs_optimized_cpu": {
+      "images": 1000,
+      "max_abs": 4.125,
+      "mae": 0.664477875,
+      "rmse": 0.8101274301768827,
+      "exact_elements_fraction": 0.051493,
+      "argmax_agreement_fraction": 0.864
+    },
+    "ep_vs_unoptimized_cpu": null,
+    "ep_vs_baseline_npu": {
+      "images": 1000,
+      "max_abs": 0.0,
+      "mae": 0.0,
+      "rmse": 0.0,
+      "exact_elements_fraction": 1.0,
+      "argmax_agreement_fraction": 1.0
+    },
+    "unoptimized_cpu_audit": {
+      "mutation": "act_int8_zp0",
+      "recorded_status": "completed",
+      "model_sha256": "3c97b606f9e74c6ff31f4885a97f9c8b6769947263140d134eb0a2af9ae911b1",
+      "unoptimized_vs_baseline_unoptimized": {
+        "images": 32,
+        "max_abs": 0.0,
+        "mae": 0.0,
+        "rmse": 0.0,
+        "exact_elements_fraction": 1.0,
+        "argmax_agreement_fraction": 1.0
+      },
+      "optimized_cpu_vs_unoptimized_cpu": {
+        "images": 32,
+        "max_abs": 0.0,
+        "mae": 0.0,
+        "rmse": 0.0,
+        "exact_elements_fraction": 1.0,
+        "argmax_agreement_fraction": 1.0
+      },
+      "npu_vs_unoptimized_cpu": {
+        "images": 32,
+        "max_abs": 3.0,
+        "mae": 0.6254453125,
+        "rmse": 0.7563287665592259,
+        "exact_elements_fraction": 0.05028125,
+        "argmax_agreement_fraction": 0.875
+      },
+      "npu_nodes": 393,
+      "total_nodes": 395
+    },
+    "ep": {
+      "npu": 393,
+      "total": 395,
+      "device_counts": {
+        "CPU": 2,
+        "NPU": 393
+      },
+      "ops_by_device": {
+        "CPU:DequantizeLinear": 1,
+        "CPU:QuantizeLinear": 1,
+        "NPU:Add": 16,
+        "NPU:Conv": 53,
+        "NPU:DequantizeLinear": 197,
+        "NPU:Flatten": 1,
+        "NPU:Gemm": 1,
+        "NPU:GlobalAveragePool": 1,
+        "NPU:MaxPool": 1,
+        "NPU:Mul": 1,
+        "NPU:QuantizeLinear": 73,
+        "NPU:Relu": 49
+      }
+    }
+  },
+  {
+    "tag": "resnet50_accept_full1000",
+    "mutation": "baseline",
+    "status": "completed",
+    "scope": "full labeled evaluation dataset",
+    "images": 1000,
+    "model_sha256": "c1945d2dce29e6afeaed16ef8c2bcc5689044f5210543440f84fb258c29e0ea5",
+    "base_sha256": "c1945d2dce29e6afeaed16ef8c2bcc5689044f5210543440f84fb258c29e0ea5",
+    "inputs_sha256": "2d094210cd103987a9971f0dde88308603ac4e5310bd23f7f292271e6f5f4dc4",
+    "xclbin_sha256": "d3b5e845b05f91beb90555b6f50ca542e05f69379f3fd9ab15246ad344c469fe",
+    "log": "results/quant/probe_resnet50_accept_full1000_baseline.log",
+    "cpu_vs_baseline_cpu": {
+      "images": 1000,
+      "max_abs": 0.0,
+      "mae": 0.0,
+      "rmse": 0.0,
+      "exact_elements_fraction": 1.0,
+      "argmax_agreement_fraction": 1.0
+    },
+    "cpu_accuracy": {
+      "images": 1000,
+      "top1_percent": 62.0,
+      "top5_percent": 79.80000000000001
+    },
+    "npu_accuracy": {
+      "images": 1000,
+      "top1_percent": 59.9,
+      "top5_percent": 79.10000000000001
+    },
+    "cpu_latency_ms": {
+      "mean": 36.386503699977766,
+      "median": 36.20685000350932,
+      "p95": 41.059565002433374,
+      "runs": 1000,
+      "warmup": 5
+    },
+    "ep_latency_ms": {
+      "mean": 5.403876300035336,
+      "median": 5.345899997337256,
+      "p95": 5.739154999901075,
+      "runs": 1000,
+      "warmup": 5
+    },
+    "ep_vs_optimized_cpu": {
+      "images": 1000,
+      "max_abs": 4.125,
+      "mae": 0.664477875,
+      "rmse": 0.8101274301768827,
+      "exact_elements_fraction": 0.051493,
+      "argmax_agreement_fraction": 0.864
+    },
+    "ep_vs_unoptimized_cpu": null,
+    "ep_vs_baseline_npu": null,
+    "unoptimized_cpu_audit": {
+      "mutation": "baseline",
+      "recorded_status": "completed",
+      "model_sha256": "c1945d2dce29e6afeaed16ef8c2bcc5689044f5210543440f84fb258c29e0ea5",
+      "unoptimized_vs_baseline_unoptimized": {
+        "images": 32,
+        "max_abs": 0.0,
+        "mae": 0.0,
+        "rmse": 0.0,
+        "exact_elements_fraction": 1.0,
+        "argmax_agreement_fraction": 1.0
+      },
+      "optimized_cpu_vs_unoptimized_cpu": {
+        "images": 32,
+        "max_abs": 0.0,
+        "mae": 0.0,
+        "rmse": 0.0,
+        "exact_elements_fraction": 1.0,
+        "argmax_agreement_fraction": 1.0
+      },
+      "npu_vs_unoptimized_cpu": {
+        "images": 32,
+        "max_abs": 3.0,
+        "mae": 0.6254453125,
+        "rmse": 0.7563287665592259,
+        "exact_elements_fraction": 0.05028125,
+        "argmax_agreement_fraction": 0.875
+      },
+      "npu_nodes": 393,
+      "total_nodes": 395
+    },
+    "ep": {
+      "npu": 393,
+      "total": 395,
+      "device_counts": {
+        "CPU": 2,
+        "NPU": 393
+      },
+      "ops_by_device": {
+        "CPU:DequantizeLinear": 1,
+        "CPU:QuantizeLinear": 1,
+        "NPU:Add": 16,
+        "NPU:Conv": 53,
+        "NPU:DequantizeLinear": 197,
+        "NPU:Flatten": 1,
+        "NPU:Gemm": 1,
+        "NPU:GlobalAveragePool": 1,
+        "NPU:MaxPool": 1,
+        "NPU:Mul": 1,
+        "NPU:QuantizeLinear": 73,
+        "NPU:Relu": 49
+      }
+    }
+  }
+]
+
+| Cohort / mutation | Status | NPU / total | EP mean / median / p95 ms | EP vs CPU RMSE |
+|---|---|---:|---:|---:|
+| resnet50_accept_c64 / act_int8_zp0 | completed | 393 / 395 | 5.460 / 5.362 / 6.100 | 0.756329 |
+| resnet50_accept_c64 / baseline | completed | 393 / 395 | 5.613 / 5.433 / 7.015 | 0.756329 |
+| resnet50_accept_c64 / bias_int32_dtype | completed | 393 / 395 | 5.462 / 5.410 / 5.878 | 0.756329 |
+| resnet50_accept_c64 / bias_int32_product | completed | 393 / 395 | 5.310 / 5.293 / 5.515 | 8.025162 |
+| resnet50_accept_c64 / domain_msft | completed | 0 / 395 | 33.984 / 33.952 / 37.419 | 0.000000 |
+| resnet50_accept_c64 / drop_gap_mul | completed | 392 / 394 | 5.423 / 5.365 / 5.764 | 0.757691 |
+| resnet50_accept_c64 / float_act_scales | completed | 393 / 395 | 5.435 / 5.365 / 5.766 | 4.230485 |
+| resnet50_accept_c64 / float_weight_scales | completed | 276 / 395 | 24.408 / 24.310 / 26.350 | 11.371655 |
+| resnet50_accept_c64 / producer_ignition | completed | 393 / 395 | 5.674 / 5.447 / 6.725 | 0.756329 |
+| resnet50_accept_c64 / strip_metadata | completed | 393 / 395 | 5.381 / 5.343 / 5.487 | 0.756329 |
+| resnet50_accept_c64 / weights_per_channel | resource_stop | not measured | not measured | not measured |
+| resnet50_accept_full1000 / act_int8_zp0 | completed | 393 / 395 | 5.438 / 5.387 / 5.782 | 0.756329 |
+| resnet50_accept_full1000 / baseline | completed | 393 / 395 | 5.404 / 5.346 / 5.739 | 0.756329 |

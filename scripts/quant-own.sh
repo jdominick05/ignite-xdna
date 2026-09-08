@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Quantize folded ResNet using owned exact-sample MinMSE, without Quark or torch.
+# Quantize folded ResNet with Ignition's exact-sample MinMSE, without Quark or torch.
 #
 #   ./scripts/quant-own.sh --out models/resnet50_own_nocle_c64.onnx --log results/quant/quant_resnet50_own_nocle_c64.log [--limit 64] [--scales-from reference.onnx]
 #

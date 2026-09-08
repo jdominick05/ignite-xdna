@@ -1,4 +1,4 @@
-"""Owned XINT8 producer for folded ResNet, with optional position-table replay."""
+"""Ignition XINT8 producer for folded ResNet, with optional position-table replay."""
 from dataclasses import asdict
 import hashlib
 import importlib.metadata as metadata
@@ -62,7 +62,7 @@ def quantize(model_in: Path, model_out: Path, *, scales_from: Path | None = None
     report["refine"] = asdict(refine(graph))
     if not report["refine"]["converged"]:
         raise ValueError("Position refinement did not converge")
-    graph.model.producer_name = "owned.xint8"
+    graph.model.producer_name = "Ignition"
     graph.model.producer_version = "0.1"
     _check_imports()
     graph.save(model_out)

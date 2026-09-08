@@ -27,7 +27,6 @@ Report schema (verified against both caches):
   shapeInfo   [{name, shape}]
 """
 import argparse
-import json
 import os
 import sys
 from collections import Counter
@@ -36,6 +35,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # repo root on sys.path
 
 from npu.paths import CACHE_DIR
+from npu.ep_report import read_report
 
 # Ops whose presence in a quantized graph is worth calling out, because the
 # ResNet50 graph that compiles cleanly contains none of them.
@@ -126,7 +126,7 @@ def report(cache_key, top=25):
         print("  The EP writes it on every session build. If it is missing, the EP "
               "never ran - check the xclbin and RYZEN_AI_INSTALLATION_PATH.")
         return
-    d = json.load(open(path))
+    d = read_report(Path(path)).raw
     print(f"\n=== {path} ===")
 
     devices = {e["name"]: e for e in d.get("deviceStat", [])}

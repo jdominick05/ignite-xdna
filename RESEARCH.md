@@ -1513,13 +1513,17 @@ sections above.
 
 **Still open.**
 
-- **How far does owned XINT8 parity extend beyond folded ResNet without CLE?**
+- **How far does Ignition's XINT8 parity extend beyond folded ResNet without CLE?**
   [ResNet re-emission and independent calibration](docs/BENCHMARKS.md#owned-resnet50-no-cle-re-emission-and-independent-calibration)
   now reproduce the fresh no-CLE reference from the float export: graph connections,
   scales, zero points and integer weight/bias data match exactly. The owned calibration
   process blocks Quark and torch imports. Full-set accuracy and paired NPU evidence
-  are recorded in the linked section. CLE/default-preset parity, YOLO, AdaRound,
-  general metadata sensitivity and the confounded A8W8 rejection remain open. See
+  are recorded in the linked section. [Controlled acceptance probes](docs/BENCHMARKS.md#ignition-controlled-resnet-qdq-acceptance)
+  now isolate domain-only fallback, exact signed-activation NPU parity on the full set,
+  and metadata independence on this graph. They also expose numerical failures despite
+  NPU placement and an optimizer-dependent CPU reference discrepancy. Safe departures
+  from power-of-two scales, product-scale INT32 bias execution, per-channel compiler
+  memory growth, CLE/default-preset parity, YOLO and AdaRound remain open. See
   [`quant/DESIGN.md`](quant/DESIGN.md) for the ordered gates and remaining source questions.
 - **Does MODNet's alpha error move once calibration and inference agree?** Every MODNet
   model measured so far was calibrated through PIL bilinear while inference resized with

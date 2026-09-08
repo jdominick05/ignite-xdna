@@ -2305,7 +2305,8 @@ positions alone reproduce weights after refinement, detailed handler rules, opti
 Softmax expansion, full AdaRound data/update behavior, and consumer metadata sensitivity.
 The fresh no-CLE comparison, full-set accuracy, and paired NPU gates had not run;
 the subsequent ResNet experiment below records their outcome.
-The A8W8 attribution remains confounded until Phase 4 isolates each change.
+At that checkpoint the A8W8 attribution remained confounded; the subsequent
+[Ignition acceptance study](#ignition-controlled-resnet-qdq-acceptance) isolates several properties.
 
 The initial scaffold now rechecks all four files using `Graph.fingerprint()`:
 [`inspect_resnet50_yolov8n_xint8_a8w8_resnet_env17.log`](../results/quant/inspect_resnet50_yolov8n_xint8_a8w8_resnet_env17.log).
@@ -2450,9 +2451,144 @@ Reproduce from Git Bash, choosing new output/log/tag names to preserve evidence:
 The replay producer was initially run directly; its sidecar/hash are captured by
 the comparison log. The wrapper above is the repeatable entry point. Independent
 calibration requires only the owned command, the float export and calibration data.
-CLE/default-XINT8 parity, YOLO handlers, AdaRound, broader refinement behavior and
-one-variable EP acceptance probes remain open. The observed GAP-only adjustment
+CLE/default-XINT8 parity, YOLO handlers, AdaRound and broader refinement behavior
+remain open; the next section records the first controlled EP probes. The observed GAP-only adjustment
 does not settle the source hazards for weight/bias position changes on other graphs.
+
+### Ignition: controlled ResNet QDQ acceptance
+
+Ignition is the owned quantizer in `quant/`. Once the no-CLE ResNet producer matched
+the fresh Quark reference, the most useful next experiment was to separate the
+properties that stock A8W8 changes together. This study changes one property family
+per artifact and checks both placement and numerical execution. It does not change
+Ignition's default emission recipe.
+
+**Method.** Desktop 2, Ryzen 7 8700G, Phoenix XDNA1, Ryzen AI 1.7.1,
+`resnet_env17`, ORT `1.23.3.dev20260320`, static batch 1, opset 17 / IR 8.
+The base is `models/resnet50_own_nocle_c64.onnx`, independently calibrated on
+64 images without CLE; `c64` names that calibration count. Its SHA256 is
+`c1945d2dce29e6afeaed16ef8c2bcc5689044f5210543440f84fb258c29e0ea5`.
+The Phoenix `4x4.xclbin` SHA256 is
+`d3b5e845b05f91beb90555b6f50ca542e05f69379f3fd9ab15246ad344c469fe`.
+Every variant uses a separate process and clears the existing `modelcachekey` before
+compilation. Each log records a clean `xrt-smi` context check immediately before NPU
+construction; this is a pre-run witness, not continuous isolation monitoring.
+
+The first matrix uses the first 32 sorted evaluation images, transformed once through
+`npu.preprocess`, with input-byte SHA256
+`8482bcbcbd18be08d7d719bdcc31a23a0a3798d5fc960b5db20d4cdc550380ca`.
+This slice measures output agreement, **not classification accuracy**. Times measure
+`sess.run` alone after five warmups, excluding preprocessing, construction and output
+comparison. CPU reference audits ran after the NPU measurements. These are diagnostic
+latencies from one sitting, not evidence of small speedups between equivalent models.
+The shared parser reads the EP's own `nodeStat`/`deviceStat`; all completed artifacts'
+archived reports are checked in
+[`diag_ignition_acceptance_archived.log`](../results/quant/diag_ignition_acceptance_archived.log).
+
+| Mutation (32 images) | NPU / total nodes | Requested-EP mean / median / p95 ms | EP vs unoptimized CPU RMSE | Evidence |
+|---|---:|---:|---:|---|
+| Baseline | 393 / 395 | 5.613 / 5.433 / 7.015 | 0.756329 | [log](../results/quant/probe_resnet50_accept_c64_baseline.log) |
+| Strip model metadata | 393 / 395 | 5.381 / 5.343 / 5.487 | 0.756329 | [log](../results/quant/probe_resnet50_accept_c64_strip_metadata.log) |
+| Set producer name to `Ignition` | 393 / 395 | 5.674 / 5.447 / 6.725 | 0.756329 | [log](../results/quant/probe_resnet50_accept_c64_producer_ignition.log) |
+| Q/DQ domain → `com.microsoft` | 0 / 395 | 33.984 / 33.952 / 37.419 | 0.000000 | [log](../results/quant/probe_resnet50_accept_c64_domain_msft.log) |
+| Activations → INT8, zero point 0 | 393 / 395 | 5.460 / 5.362 / 6.100 | 0.756329 | [log](../results/quant/probe_resnet50_accept_c64_act_int8_zp0.log) |
+| Activation scales × 1.01, except final output | 393 / 395 | 5.435 / 5.365 / 5.766 | 4.230485 | [log](../results/quant/probe_resnet50_accept_c64_float_act_scales.log) |
+| Conv/Gemm weight scales × 1.01 | 276 / 395 | 24.408 / 24.310 / 26.350 | 11.371655 | [log](../results/quant/probe_resnet50_accept_c64_float_weight_scales.log) |
+| Bias dtype → INT32, retain original bias scale | 393 / 395 | 5.462 / 5.410 / 5.878 | 0.756329 | [log](../results/quant/probe_resnet50_accept_c64_bias_int32_dtype.log) |
+| Bias → INT32 at input × weight scale | 393 / 395 | 5.310 / 5.293 / 5.515 | 8.025162 | [log](../results/quant/probe_resnet50_accept_c64_bias_int32_product.log) |
+| Repeat scalar weight parameters per channel | Not measured: resource stop | Not measured | Not measured | [log](../results/quant/probe_resnet50_accept_c64_weights_per_channel.log) |
+| Remove GAP correction Constant/Mul | 392 / 394 | 5.423 / 5.365 / 5.764 | 0.757691 | [log](../results/quant/probe_resnet50_accept_c64_drop_gap_mul.log) |
+
+The domain-only variant preserves every original scale, dtype and zero point, adding
+the Microsoft domain import for Q/DQ. Its CPU outputs remain exact, but its requested
+EP executes entirely on CPU. **The domain change alone is sufficient for fallback on
+this graph.** This does not establish that it is the only cause in every A8W8 graph.
+Signed activations, stripped metadata and the `Ignition` producer name all preserve
+the baseline NPU outputs exactly. Vendor producer metadata is not necessary for this
+measured artifact. Earlier artifacts keep their historical `owned.xint8` metadata;
+new quantizer emissions use `Ignition`.
+
+**Placement is insufficient.** The non-power-of-two activation-scale variant still
+places 393 nodes on NPU, but agrees with its CPU reference's argmax on none of the
+32 images; maximum absolute output error is 24.625. The weight-scale variant partly
+falls back and also has zero argmax agreement, with maximum error 26.125. These probes
+multiply existing scales by float32 1.01; they do not recalibrate with MinMax or test
+all non-power-of-two grids. Keep the measured power-of-two recipe as the default.
+
+**The CPU reference can also mislead.** Casting the original INT8 biases and zero
+points to INT32 without changing their scales leaves decoded biases unchanged.
+Its unoptimized CPU output is exact against baseline, and its NPU output is exact
+against baseline NPU. Yet optimized CPU execution differs from unoptimized CPU by
+RMSE 5.035656, maximum error 31.875 and zero argmax agreement. The initial probe's
+`npu_vs_cpu` comparison therefore cannot diagnose an NPU error for this row.
+The table uses the separate `ORT_DISABLE_ALL` audit instead:
+[initial audit](../results/quant/probe_resnet50_accept_c64_cpu_reference_audit.log),
+[v2 audit including Ignition metadata and input hashes](../results/quant/probe_resnet50_accept_c64_cpu_reference_audit_v2.log).
+This establishes optimizer-dependent behavior in this ORT build; the responsible
+rewrite has not been isolated. The input×weight-scale INT32 bias variant is different:
+both CPU modes remain exact against baseline, while the NPU produces maximum error
+16.0 and zero argmax agreement. INT32 dtype alone is not a wholesale rejection rule,
+but the conventional product-scale representation is not numerically safe here.
+
+Removing the GAP simulation factor preserves the NPU outputs exactly while changing
+the CPU approximation (CPU-vs-baseline RMSE 0.062496, maximum error 0.75). The factor's
+absence does not cause wholesale refusal in this graph; that is not a reason to remove
+it from the parity producer.
+
+**Per-channel compilation remains unresolved.** This mutation repeats each scalar
+scale/zero point across output channels and sets the DQ axis; integer weights stay
+unchanged, and optimized CPU outputs are exact against baseline. Session construction
+did not finish. The process was manually stopped after 273.731 seconds with working
+set 11,973,251,072 bytes and private bytes 12,628,627,456, documented in the
+[resource-stop witness](../results/quant/probe_resnet50_accept_c64_weights_per_channel_resource_stop.log).
+No placement or NPU numerical verdict exists. Do not describe this as CPU fallback or
+as support for genuinely differing channel scales. Subsequent probes use a parent
+process with an 8 GiB child-RSS limit and a 300-second wall limit (600 for full eval);
+the limits contain resource growth, not explain its cause.
+
+**Full-set confirmation.** The baseline and signed-activation variant were then run
+back to back on all 1,000 labeled evaluation images. The transformed input SHA256 is
+`2d094210cd103987a9971f0dde88308603ac4e5310bd23f7f292271e6f5f4dc4`.
+Top-5 uses the same descending `argsort` tie convention as `4_run.py`.
+
+| Artifact | CPU top-1 / top-5 % | NPU top-1 / top-5 % | NPU nodes | NPU mean / median / p95 ms | Evidence |
+|---|---:|---:|---:|---:|---|
+| Baseline | 62.00 / 79.80 | 59.90 / 79.10 | 393 / 395 | 5.404 / 5.346 / 5.739 | [log](../results/quant/probe_resnet50_accept_full1000_baseline.log) |
+| Signed activations | 62.00 / 79.80 | 59.90 / 79.10 | 393 / 395 | 5.438 / 5.387 / 5.782 | [log](../results/quant/probe_resnet50_accept_full1000_act_int8_zp0.log) |
+
+All CPU outputs and all 1,000,000 NPU logit elements match the baseline exactly.
+Both variants' NPU-vs-optimized-CPU RMSE is 0.810127, maximum error 4.125; the separate
+unoptimized audit covers the 32-image slice, not this full set. These are no-CLE,
+64-calibration-image models, not the default CLE/AdaRound headline models.
+
+The [first combined summary](../results/quant/probe_resnet50_acceptance_summary.log)
+is **superseded**: it joined CPU audits by model hash alone and incorrectly reused the
+32-image RMSE 0.756329 in its full-set rows. Raw full-set logs were correct. The
+[corrected summary](../results/quant/probe_resnet50_acceptance_summary_v2.log) binds an
+audit to both model and input hashes and reports 0.810127 for the full set.
+
+The implementation now checks optimized and unoptimized CPU outputs before every
+NPU attempt. The integrated reference check reproduces the INT32-bias discrepancy
+on four diagnostic images without requesting the NPU
+([check](../results/quant/check_ignition_acceptance_cpu_reference.log)).
+Both time and RSS stop paths were exercised with CPU-only child commands
+([limits check](../results/quant/check_ignition_acceptance_limits.log)). Syntax,
+shell parsing and all shared-module imports pass without Quark/torch in
+[resnet_env](../results/quant/check_ignition_acceptance_resnet_env.log) and
+[resnet_env17](../results/quant/check_ignition_acceptance_resnet_env17.log).
+
+Reproduce from Git Bash with a new tag; start with a baseline and selected mutation:
+
+```bash
+./scripts/quant-probe.sh --tag resnet50_accept_repeat --mutation baseline
+./scripts/quant-probe.sh --tag resnet50_accept_repeat --mutation act_int8_zp0
+```
+
+Use a separate new tag and `--full-eval` on both commands for full labeled evaluation.
+Omitting `--mutation` attempts the whole matrix, including the unresolved per-channel
+case under the resource limits. Models, `.probe.json`, output arrays and archived EP
+reports remain ignored under `models/`; tracked logs contain the evidence. There is
+no automatic boolean that equates successful construction with numerical validity.
 
 ## Key findings
 
@@ -2471,7 +2607,10 @@ the only firmware observed to work on this chip. Hence the two-environment split
 ERT_CMD_STATE_ERROR`. Setting `target: "X1"` alone does *not* select the chip
 architecture; the xclbin does.
 
-**The X1 backend is XINT8 or nothing.** Power-of-two scales, MinMSE calibration,
+**Historical rule, now narrowed: "The X1 backend is XINT8 or nothing."** The
+[Ignition probes](#ignition-controlled-resnet-qdq-acceptance) supersede the float-scale-only
+attribution: domain-only fallback is measured, signed activations work, and some scale
+changes compile but execute incorrectly. Keep XINT8 as the default: power-of-two scales, MinMSE calibration,
 UINT8 activations with INT8 weights. A8W8 (float scales) does not raise an error — it
 just falls back to CPU, and the only symptoms are CPU-level latency and lower accuracy.
 **A16W8 (INT16 activations) now measured too, not just assumed dead: same silent

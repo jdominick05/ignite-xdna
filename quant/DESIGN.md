@@ -1,7 +1,8 @@
-# quant/ — an owned XINT8 quantizer for the X1 backend
+# Ignition — an owned XINT8 quantizer for the X1 backend
 
 **Status: ResNet no-CLE emission gates pass; independent no-CLE MinMSE calibration
-matches the fresh reference. The broader Phase 2 remains open.** The audit is in
+matches the fresh reference. The first controlled ResNet acceptance study is measured;
+CLE, YOLO, AdaRound and the broader acceptance map remain open.** The audit is in
 [`notes_xint8_dialect.log`](../results/quant/notes_xint8_dialect.log); remaining unknowns
 are explicit in §2.6. Re-emission, exact graph/parameter comparison, full-set accuracy
 and paired NPU evidence are in the [ResNet results](../docs/BENCHMARKS.md#owned-resnet50-no-cle-re-emission-and-independent-calibration).
@@ -14,6 +15,10 @@ The first scaffold checks pass in both conda envs; source/model inspection and t
 limitations are folded into
 [`docs/BENCHMARKS.md`](../docs/BENCHMARKS.md#an-owned-xint8-quantizer-scale-exact-reproduction-then-the-eps-acceptance-map).
 
+Ignition is the quantizer's project name; `quant/` remains its internal Python package.
+Earlier measured artifacts retain their original `owned.xint8` producer metadata;
+newly emitted artifacts identify their producer as `Ignition`.
+
 The question this directory answers is narrower than "write a quantizer": **can a
 quantizer we own emit the dialect the VitisAI EP's X1 backend accepts — the same graph
 Quark writes, every scale and zero point byte-identical, every weight within one LSB —
@@ -21,7 +26,7 @@ and then do the things Quark cannot be asked to do?** The EP, the xclbin and the
 exactly as they are. The interface being reproduced is the ONNX file.
 
 Read [`docs/DECISIONS.md`](../docs/DECISIONS.md#locked-decisions-do-not-reopen) #3 and
-#5 first: they are the two locked decisions this design lives inside (XINT8 only on X1;
+#5 first: they are the two locked decisions this design lives inside (XINT8 as the measured default;
 opset 17, static batch 1).
 
 ---
@@ -36,9 +41,9 @@ behind `ModelQuantizer.quantize_model()` in `resnet_env`, pinned to 0.11rc1 by t
 
 What owning those four jobs buys, in the order it would be collected:
 
-1. **An acceptance map of the EP, one variable at a time.** DECISIONS #3 says A8W8's
-   float scales fall back to CPU. The A8W8 model on disk differs from the XINT8 one in
-   *three* ways at once (§2.5), so that attribution is a confound, not a finding. An
+1. **An acceptance map of the EP, one variable at a time.** DECISIONS #3 originally
+   attributed A8W8 fallback to float scales. The A8W8 model on disk differs from XINT8
+   in several ways at once (§2.5); the first probes now narrow that attribution. An
    emitter we control can flip one property per probe and read
    `vitisai_ep_report.json` after each.
 2. **Per-tensor transparency at decision time.** The MobileViT collapse was diagnosed
@@ -160,17 +165,21 @@ acceptable to the DPU at all. What each pass *requires* of its input is not in t
 that is what Phase 4 measures.
 
 Evidence of engagement stays `<cacheKey>/vitisai_ep_report.json`, read through the
-`report()` parser in [`tools/diag_ep.py`](../tools/diag_ep.py) (schema `deviceStat` /
+shared [`npu/ep_report.py`](../npu/ep_report.py) parser used by `tools/diag_ep.py` (schema `deviceStat` /
 `nodeStat` / `shapeInfo`). A `_npu` log name means requested, not engaged.
 
 ### 2.5 The A8W8 confound
 
 `models/resnet50_a8w8.onnx` [M] has its Q/DQ nodes in the **`com.microsoft` domain**,
 `int8` zero-point-0 activations with **float** scales, and an **`int32`** bias whose scale
-has shape `(1,)`. DECISIONS #3 attributes its CPU fallback to the float scales. Three
-properties changed together; the EP may reject any one of them. This is the first probe
-Phase 4 runs, and until it runs, "float scales fall back" is a hypothesis with a
-confounded measurement behind it.
+has shape `(1,)`. DECISIONS #3 originally attributed its CPU fallback to float scales.
+Several properties changed together. **[L] The [controlled ResNet study](../docs/BENCHMARKS.md#ignition-controlled-resnet-qdq-acceptance)
+now shows domain-only fallback and exact signed-activation NPU parity.** Perturbing
+activation scales by 1.01 retains placement but breaks numerical agreement; perturbing
+weight scales partly falls back and also breaks agreement. INT32 bias dtype alone
+preserves baseline NPU outputs, while the input×weight-scale representation does not.
+This bounds the original attribution without claiming the domain is the only cause
+in the stock A8W8 combination or every graph. The safe default remains unchanged.
 
 ### 2.6 Phase 0 resolutions and remaining unknowns
 
@@ -225,8 +234,10 @@ installed versions, source/model SHA256 values, and raw fingerprints are in
   `train_torch/train_model.py:55-158` optimizes alpha with Adam, random batches, and
   immediate early stop on non-improving rolling rounding loss. **[U]** full layer
   caching/selection and selective updates remain for Phase 3; no parity claim yet.
-- **Consumer metadata remains [U]:** producer name, metadata and opset-import
-  sensitivity need Phase 4 EP probes. Producer source cannot settle consumer behavior.
+- **Consumer model metadata bounded [L]:** stripping model metadata and changing the
+  producer name to `Ignition` preserve placement and NPU outputs on the measured
+  no-CLE ResNet. See the [acceptance study](../docs/BENCHMARKS.md#ignition-controlled-resnet-qdq-acceptance).
+  **[U]** other graphs and opset-import/version sensitivity remain open.
 
 ---
 
@@ -240,7 +251,7 @@ Quark first, scale-exact, then departing from it deliberately and measurably.
 BFP, transformer paths (DECISIONS #3 and the MobileViT record); Strix / AIE2P; any change
 to the EP, the xclbin or `npu/session.py`; QAT beyond a hook; a second copy of any
 preprocessing transform. Per-channel weights and `int32` bias exist **only as Phase 4
-probe mutations**, never as a default, until the EP is measured to accept them.
+probe mutations**, never as a default, until placement and numerical execution are validated.
 
 **Invariants inherited from `CLAUDE.md`, plus three new ones:**
 
@@ -281,14 +292,17 @@ Use `scripts/quant-own.sh --out <new.onnx> --log <new.log>` for independent cali
 in `resnet_env17`; add `--scales-from <reference.onnx>` only for Phase 1 replay.
 Both paths explicitly disable CLE. `scripts/quant-reference.sh` runs the separate
 Quark oracle process; `scripts/quant-validate.sh` compares and evaluates the pair.
-The existing `tools/diag_ep.py` supplies EP evidence; shared `npu/ep_report.py`
-and a programmatic EP gate are still planned refactoring, not implemented APIs.
+The shared `npu/ep_report.py` now validates EP counts and supplies placement evidence
+to both `tools/diag_ep.py` and `tools/quant_probe.py`. It creates no sessions.
+The probe runner records placement and output differences separately; successful
+construction is not an automatic numerical acceptance verdict.
 
 The remaining signatures below describe the broader design, not a promise that
 every listed method exists. The current emitter rejects operators outside
 Conv/Relu/Add/MaxPool/GlobalAveragePool/Flatten/Gemm, non-unit Gemm beta, MaxPool
 indices, and GAP shapes other than the measured 7×7 case. Nested graphs, CLE,
-YOLO preparation, AdaRound and probe variants remain unsupported. Degenerate
+YOLO preparation and AdaRound remain unsupported. Probe mutations are separate from
+the parity emitter. Degenerate
 UINT8 calibration ranges are rejected because the vendor would emit zp0, outside
 this slice's zp128 contract. No general XINT8 preset replacement is claimed.
 
@@ -597,8 +611,8 @@ def simulate_cpu(model: Path, src: CalibSource, n: int, threads=None) -> list[np
 def compare_outputs(a: list[np.ndarray], b: list[np.ndarray]) -> dict   # max |Δ|, argmax agreement
 def ep_report(model: Path, cache_key: str, xclbin: Path | None, fresh=True) -> EPReport
         # npu.session.build_session(ep="npu"), then <cacheKey>/vitisai_ep_report.json parsed by
-        # tools.diag_ep.report()'s logic — moved into npu/ep_report.py when this lands, so the
-        # pipeline and the quantizer read one parser (and it joins the PIPELINE CHECKS list)
+        # shared npu/ep_report.py logic (implemented); this orchestration signature remains
+        # a design sketch, while tools/quant_probe.py currently owns session construction
 @dataclass
 class EPReport: nodes_total: int; nodes_npu: int; nodes_cpu: int; device_stat: dict; cpu_nodes: list[str]
 ```
@@ -625,6 +639,26 @@ CLE pattern count, tool versions, wall time per stage and peak RSS. It is git-ig
 with the model it describes; the numbers that matter are copied into the run log.
 
 **`quant/probe.py`** — the acceptance map
+
+**Implemented:** `mutate(Graph, name)` returns a checked copy and a change report;
+`output_difference` compares finite matching output arrays. Actual names are
+`baseline`, `strip_metadata`, `producer_ignition`, `domain_msft`, `act_int8_zp0`,
+`float_act_scales`, `float_weight_scales`, `bias_int32_dtype`, `bias_int32_product`,
+`weights_per_channel`, and `drop_gap_mul`. The scale probes multiply existing scales
+by float32 1.01 (activation probe excludes the final output); they do not recalibrate.
+The per-channel probe repeats scalar parameters, leaving stored weights unchanged.
+The two bias probes distinguish dtype from scale representation. All are diagnostic
+mutations, not production configuration options.
+
+`tools/quant_probe.py` runs optimized and unoptimized CPU references, checks a clean
+NPU context, clears the existing cache, archives the EP report and compares outputs.
+`tools/quant_probe_bounded.py` uses the already-installed `psutil` to bound its child
+at 8 GiB RSS and 300 seconds by default; the wrapper allows 600 seconds for full eval.
+`tools/quant_probe_cpu_audit.py` audits older saved outputs; `tools/quant_probe_summary.py`
+binds CPU audits to both model and input hashes. The measured slice and full-set
+confirmation are in [BENCHMARKS](../docs/BENCHMARKS.md#ignition-controlled-resnet-qdq-acceptance).
+
+The catalog below is the remaining broader design, not the implemented registry:
 
 ```
 Mutation = Callable[[Graph], Graph]      # pure: takes an emitted XINT8 graph, returns a variant
@@ -665,7 +699,7 @@ both show the EP failing with a believable latency; a probe that reads only
   (`include_cle=False` for Phase 1; defaults for Phase 2) and `quant.quantize` on the
   **same** listing via `sources.as_reader`, then `graph_diff` and `compare_outputs`. This
   is the only script that imports both, and it lives under `pipelines/`, not `quant/`.
-- `tools/quant_probe.py`: `run_probe` from the command line.
+- `tools/quant_probe.py`: one controlled mutation per process, launched by the bounded wrapper.
 - `scripts/quant-own.sh`, `scripts/quant-probe.sh`: `run_logged`, the per-variant disk
   guard (`calib_mb_per_image` applies to the "exact" store as much as to Quark), the
   Quark cleanup trap for the compare harness, `npu_verdict` after each probe.
@@ -706,7 +740,12 @@ as a witness and the log says so.
 | 4 | Acceptance map | `probe.py`, `tools/quant_probe.py`, `scripts/quant-probe.sh` | every mutation in §4.2 measured with output check; new BENCHMARKS section; DECISIONS #3 amended | L/D2 |
 | 5 | Beyond Quark | per-layer error budget in the sidecar → a BENCHMARKS table; MODNet re-calibrated through `npu.modnet` (closes the RESEARCH open item); `calib_store="hist"` with its accuracy cost measured; MobileViT per-channel **only if** Phase 4 admits it; QAT hook (`sources` + `pow2` reused from torch) | each a logged, folded experiment | per `CLAUDE.md` routing |
 
-Order is strict: Phase 2 does not start until Phase 1's diff log reads clean, and Phase 5
+The first ResNet slice of Phase 4 ran after Phase 1 and independent no-CLE calibration
+passed: resolving the confounded acceptance rules was the next useful research task.
+This does not complete Phase 4's broader catalog; opset changes, Concat, retained
+Conv/Relu QDQ and HardSigmoid mutations remain untested.
+
+Dependencies remain: Phase 2 does not start until Phase 1's diff log reads clean, and Phase 5
 items each wait for the Phase 4 probe that licenses them. Phases 0 and 1 are one to two
 sessions each; Phase 2 is where most of the transcription work sits (registry op list,
 refine directions, the avgpool table). Nothing here is a latency experiment.

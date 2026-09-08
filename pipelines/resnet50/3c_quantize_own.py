@@ -1,4 +1,4 @@
-"""Quantize a folded ResNet using the owned producer (no Quark import)."""
+"""Quantize a folded ResNet with Ignition (no Quark import)."""
 import argparse
 from dataclasses import asdict
 import importlib.abc

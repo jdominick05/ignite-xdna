@@ -32,7 +32,7 @@ Full environment split, install steps and footguns: [`docs/SETUP.md`](docs/SETUP
 | `pipelines/yolov8n-pose` | YOLOv8n-pose, 17-point COCO keypoints | **Working** — 9.35 ms on the NPU (1015/1025 nodes), OKS mAP@50-95 34.32 AdaRound vs 32.64 plain XINT8 and 49.86 float (5000 images) |
 | `pipelines/yolov6n` | YOLOv6n detection (RepVGG backbone, no DFL) | **Working** — 6.62 ms on the NPU (518/525 nodes), mAP@50-95 33.57 AdaRound vs 22.92 plain XINT8 and 36.95 float (5000 images) |
 | `pipelines/mobilevit` | MobileViT-XXS (hybrid CNN/transformer) | **Does not survive INT8** — 0.00% top-1, kept as the negative result |
-| `quant/` | Folded ResNet without CLE | **Working** — independent calibration/emission without Quark or torch; exact parameter, accuracy and NPU-placement parity with the fresh no-CLE reference. [Scope and evidence](docs/BENCHMARKS.md#owned-resnet50-no-cle-re-emission-and-independent-calibration); CLE, YOLO and AdaRound remain future work for this producer |
+| `quant/` (Ignition) | Folded ResNet without CLE | **Working** — independent calibration/emission without Quark or torch; exact parity with the fresh no-CLE reference. [Producer evidence](docs/BENCHMARKS.md#owned-resnet50-no-cle-re-emission-and-independent-calibration), [controlled acceptance findings](docs/BENCHMARKS.md#ignition-controlled-resnet-qdq-acceptance); CLE, YOLO and AdaRound remain future work for this producer |
 
 Detection width sweep, head-cut plain XINT8, full 5000-image val2017 mAP
 (conf 0.001, IoU 0.7, max_det 300, per-class NMS):
@@ -62,10 +62,10 @@ out of the graph and decoding them in numpy instead gives **922 of 929 nodes on 
 and 8.7–9.8 ms. The seven CPU nodes are only the input/output Q/DQ boundary.
 [Working](docs/BENCHMARKS.md#the-yolov8n-blocker-and-how-it-was-solved).
 
-**Silent CPU fallback is the failure mode to watch for.** The `[Vitis AI EP]` banner and
+**Check placement and output agreement.** The `[Vitis AI EP]` banner and
 operator table print only during compilation, never on a cache load, so their absence
 means nothing. `<cacheKey>/vitisai_ep_report.json` — written on every session build, read
-by `tools/diag_ep.py` — is the only real evidence. A `_npu` suffix in a log name means the
+by `tools/diag_ep.py` — proves placement; [Ignition's probes](docs/BENCHMARKS.md#ignition-controlled-resnet-qdq-acceptance) also catch wrong NPU outputs. A `_npu` suffix means the
 EP was *requested*. A8W8 falls back silently (39.0 ms, CPU speed); so does A16W8
 (0/394 nodes); so does batch 2.
 
