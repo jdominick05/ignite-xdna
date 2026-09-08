@@ -68,3 +68,47 @@ def modnet_cache_key(model_path):
             return key
     return MODNET_CACHE_KEY
 
+
+# Real-ESRGAN 4x super-resolution: AMD 10-RRDB vs SRVGGNet-v3 Compact across resolutions.
+REALESRGAN_RRDB_64_CACHE_KEY = "realesrgan_rrdb_64_cache"
+REALESRGAN_RRDB_64_ADAROUND_CACHE_KEY = "realesrgan_rrdb_64_adaround_cache"
+REALESRGAN_RRDB_128_CACHE_KEY = "realesrgan_rrdb_128_cache"
+REALESRGAN_RRDB_256_CACHE_KEY = "realesrgan_rrdb_256_cache"
+REALESRGAN_COMPACT_64_CACHE_KEY = "realesrgan_compact_64_cache"
+REALESRGAN_COMPACT_128_CACHE_KEY = "realesrgan_compact_128_cache"
+REALESRGAN_COMPACT_256_CACHE_KEY = "realesrgan_compact_256_cache"
+REALESRGAN_CACHE_KEY = "realesrgancachekey"
+
+
+def realesrgan_cache_key(model_path):
+    """Pick a Real-ESRGAN variant's compile-cache key from its filename.
+
+    Ensures models of different architectures (compact vs rrdb) and spatial
+    resolutions (r64, r128, r256) never share a compile cache key.
+    """
+    stem = Path(model_path).stem.lower()
+    is_compact = "compact" in stem or "srvgg" in stem or "v3" in stem
+    is_rrdb = "rrdb" in stem or "amd" in stem
+
+    res = "64"
+    for r in ("256", "128", "64"):
+        if f"r{r}" in stem or f"_{r}" in stem or f"x{r}" in stem:
+            res = r
+            break
+
+    if is_compact:
+        if res == "256":
+            return REALESRGAN_COMPACT_256_CACHE_KEY
+        if res == "128":
+            return REALESRGAN_COMPACT_128_CACHE_KEY
+        return REALESRGAN_COMPACT_64_CACHE_KEY
+    if is_rrdb:
+        if "adaround" in stem and res == "64":
+            return REALESRGAN_RRDB_64_ADAROUND_CACHE_KEY
+        if res == "256":
+            return REALESRGAN_RRDB_256_CACHE_KEY
+        if res == "128":
+            return REALESRGAN_RRDB_128_CACHE_KEY
+        return REALESRGAN_RRDB_64_CACHE_KEY
+    return REALESRGAN_CACHE_KEY
+

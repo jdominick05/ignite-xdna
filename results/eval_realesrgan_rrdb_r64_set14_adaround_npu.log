@@ -1,0 +1,18 @@
+﻿Loaded 14 image pairs for Set14.
+Running Bicubic interpolation baseline on Set14...
+Evaluating Custom Model (realesrgan_rrdb_r64_xint8_adaround.onnx) on NPU...
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\realesrgan_rrdb_64_adaround_cache
+First run compiles the model. It takes a while and looks frozen. It isn't.
+
+==========================================================================
+ Real-ESRGAN Evaluation Benchmark: Set14 (Scale 4x) on NPU
+==========================================================================
+| Model Variant       | PSNR (Y)  | SSIM (Y)  | PSNR (RGB)| SSIM (RGB)| Latency (ms)| Throughput |
+|---------------------|-----------|-----------|-----------|-----------|-------------|------------|
+| Bicubic Baseline    |   24.24 dB |   0.6693  |   23.94 dB |   0.6532  |          ù  |          ù |
+| Custom Model (NPU)  |   22.30 dB |   0.5845  |   21.51 dB |   0.5488  |      14.18  |   70.5 fps |
+==========================================================================
+

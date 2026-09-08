@@ -33,6 +33,7 @@ Full environment split, install steps and footguns: [`docs/SETUP.md`](docs/SETUP
 | `pipelines/yolov6n` | YOLOv6n detection (RepVGG backbone, no DFL) | **Working** — 6.62 ms on the NPU (518/525 nodes), mAP@50-95 33.57 AdaRound vs 22.92 plain XINT8 and 36.95 float (5000 images) |
 | `pipelines/midas` | MiDaS v2.1 Small (monocular depth) | **Working** — 10.81 ms on NPU (682/684 nodes, single subgraph), r = 0.8706 vs FP32 (50 scenes) |
 | `pipelines/sesr` | SESR-M7 (2x super-resolution) | **Working** — 1.48 ms on NPU (50/52 nodes, single subgraph), 35.16 dB PSNR on Set5 (XINT8+AdaRound) |
+| `pipelines/realesrgan` | Real-ESRGAN 10-RRDB (4x super-resolution) | **Working** — 14.02 ms on NPU (1773/1775 nodes, single subgraph), 24.50 dB on Set5 (XINT8+AdaRound) |
 | `pipelines/mobilevit` | MobileViT-XXS (hybrid CNN/transformer) | **Does not survive INT8** — 0.00% top-1, kept as the negative result |
 | `quant/` (Ignition) | Folded ResNet and head-cut YOLOv8n, with or without CLE, plus ResNet AdaRound | **Alpha 0.1.0a1** — independent calibration/emission without Quark or torch; `--cle` reproduces the repo's plain-XINT8 ResNet50 to the integer and a fresh yolov8n-cut oracle position for position, and `adaround` reproduces Quark's `XINT8_ADAROUND` byte for byte on the same machine. [Quickstart](quant/README.md), [todo list](quant/TODO.md), [validation](docs/BENCHMARKS.md#ignition-alpha-release-validation), [CLE parity](docs/BENCHMARKS.md#ignition-cle-parity-and-the-default-xint8-preset), [AdaRound parity](docs/BENCHMARKS.md#ignition-adaround-parity), [YOLO preparation](docs/BENCHMARKS.md#ignition-yolov8n-cut-preparation-parity), [acceptance findings](docs/BENCHMARKS.md#ignition-controlled-resnet-qdq-acceptance) |
 
@@ -209,9 +210,8 @@ results/              Tracked logs — the evidence for every number in the docs
 models/  data/        Generated. Git-ignored, and expensive to regenerate
 ```
 
-`models/`, `data/` and the `*cachekey/` compile caches are git-ignored: large,
-machine-specific, and reproducible from the steps above. A compile cache is keyed by name
-rather than by model hash, so pass `--fresh` whenever the model or xclbin changes.
+`models/`, `data/` and compile caches are git-ignored: large, machine-specific, and
+reproducible from the steps above. Pass `--fresh` when the model or xclbin changes.
 
 ## Known limitations
 

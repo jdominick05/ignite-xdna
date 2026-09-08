@@ -1,0 +1,362 @@
+2026-09-08 18:59:39.7014346 [I:onnxruntime:, inference_session.cc:606 onnxruntime::InferenceSession::TraceSessionOptions] Session Options {  execution_mode:0 execution_order:DEFAULT enable_profiling:0 optimized_model_filepath: enable_mem_pattern:1 enable_mem_reuse:1 enable_cpu_mem_arena:1 profile_file_prefix:onnxruntime_profile_ session_logid: session_log_severity_level:1 session_log_verbosity_level:0 max_num_graph_transformation_steps:10 graph_optimization_level:4 intra_op_param:OrtThreadPoolParams { thread_pool_size: 0 auto_set_affinity: 0 allow_spinning: 1 dynamic_block_base_: 0 stack_size: 0 affinity_str:  set_denormal_as_zero: 0 } inter_op_param:OrtThreadPoolParams { thread_pool_size: 0 auto_set_affinity: 0 allow_spinning: 1 dynamic_block_base_: 0 stack_size: 0 affinity_str:  set_denormal_as_zero: 0 } use_per_session_threads:1 thread_pool_allow_spinning:1 use_deterministic_compute:0 ep_selection_policy:0 config_options: {  } }
+2026-09-08 18:59:39.7023265 [I:onnxruntime:, inference_session.cc:414 onnxruntime::InferenceSession::ConstructorCommon::<lambda_cd5baf9f006fce338b072dac99354b33>::operator ()] Flush-to-zero and denormal-as-zero are off
+2026-09-08 18:59:39.7027385 [I:onnxruntime:, inference_session.cc:422 onnxruntime::InferenceSession::ConstructorCommon] Creating and using per session threadpools since use_per_session_threads_ is true
+2026-09-08 18:59:39.7030316 [I:onnxruntime:, inference_session.cc:446 onnxruntime::InferenceSession::ConstructorCommon] Dynamic block base set to 0
+2026-09-08 18:59:39.7285119 [I:onnxruntime:, inference_session.cc:2042 onnxruntime::InferenceSession::Initialize] Initializing session.
+2026-09-08 18:59:39.7325106 [I:onnxruntime:, graph_partitioner.cc:1209 onnxruntime::GraphPartitioner::InlineFunctionsAOT] This model does not have any local functions defined. AOT Inlining is not performed
+2026-09-08 18:59:39.7331608 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer EnsureUniqueDQForNodeUnit modified: 0 with status: OK
+2026-09-08 18:59:39.7357058 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer Level1_RuleBasedTransformer modified: 1 with status: OK
+2026-09-08 18:59:39.7410885 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.0.rdb2.conv5.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.7414006 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.1.rdb1.conv5.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.7416765 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.0.rdb2.conv5.bias'. It is no longer used by any node.
+2026-09-08 18:59:39.7418783 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.1.rdb1.conv5.bias'. It is no longer used by any node.
+2026-09-08 18:59:39.7420660 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.6.rdb3.conv5.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.7422642 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.1.rdb3.conv5.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.7424678 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.6.rdb3.conv5.bias'. It is no longer used by any node.
+2026-09-08 18:59:39.7426550 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/body.9/rdb3/Constant_output_0'. It is no longer used by any node.
+2026-09-08 18:59:39.7428506 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.1.rdb3.conv5.bias'. It is no longer used by any node.
+2026-09-08 18:59:39.7430350 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.0.rdb1.conv5.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.7432294 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.0.rdb1.conv5.bias'. It is no longer used by any node.
+2026-09-08 18:59:39.7434269 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/body.1/rdb2/Constant_output_0'. It is no longer used by any node.
+2026-09-08 18:59:39.7436584 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.9.rdb3.conv5.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.7438503 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.9.rdb3.conv5.bias'. It is no longer used by any node.
+2026-09-08 18:59:39.7440308 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.1.rdb2.conv5.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.7442178 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.1.rdb2.conv5.bias'. It is no longer used by any node.
+2026-09-08 18:59:39.7444062 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/body.4/rdb1/Constant_output_0'. It is no longer used by any node.
+2026-09-08 18:59:39.7445974 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.0.rdb3.conv5.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.7447872 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.0.rdb3.conv5.bias'. It is no longer used by any node.
+2026-09-08 18:59:39.7449717 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/body.4/rdb2/Constant_output_0'. It is no longer used by any node.
+2026-09-08 18:59:39.7451655 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.2.rdb1.conv5.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.7453513 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.2.rdb1.conv5.bias'. It is no longer used by any node.
+2026-09-08 18:59:39.7455361 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.2.rdb3.conv5.bias'. It is no longer used by any node.
+2026-09-08 18:59:39.7457240 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.4.rdb3.conv5.bias'. It is no longer used by any node.
+2026-09-08 18:59:39.7459237 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.2.rdb2.conv5.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.7461063 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.2.rdb2.conv5.bias'. It is no longer used by any node.
+2026-09-08 18:59:39.7462952 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.2.rdb3.conv5.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.7474148 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.5.rdb2.conv5.bias'. It is no longer used by any node.
+2026-09-08 18:59:39.7482487 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.6.rdb1.conv5.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.7484895 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.6.rdb1.conv5.bias'. It is no longer used by any node.
+2026-09-08 18:59:39.7487040 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.3.rdb1.conv5.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.7489094 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.3.rdb1.conv5.bias'. It is no longer used by any node.
+2026-09-08 18:59:39.7491136 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.7.rdb1.conv5.bias'. It is no longer used by any node.
+2026-09-08 18:59:39.7493457 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.3.rdb2.conv5.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.7495382 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.9.rdb1.conv5.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.7497303 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.3.rdb2.conv5.bias'. It is no longer used by any node.
+2026-09-08 18:59:39.7499277 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.9.rdb1.conv5.bias'. It is no longer used by any node.
+2026-09-08 18:59:39.7501202 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/body.0/rdb1/Constant_output_0'. It is no longer used by any node.
+2026-09-08 18:59:39.7503109 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.7.rdb1.conv5.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.7505184 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.3.rdb3.conv5.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.7507232 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.3.rdb3.conv5.bias'. It is no longer used by any node.
+2026-09-08 18:59:39.7509148 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.4.rdb1.conv5.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.7511047 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.4.rdb1.conv5.bias'. It is no longer used by any node.
+2026-09-08 18:59:39.7512991 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.4.rdb2.conv5.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.7514908 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.4.rdb2.conv5.bias'. It is no longer used by any node.
+2026-09-08 18:59:39.7517722 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.4.rdb3.conv5.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.7519996 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.5.rdb1.conv5.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.7522199 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.5.rdb1.conv5.bias'. It is no longer used by any node.
+2026-09-08 18:59:39.7524304 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/body.8/rdb3/Constant_output_0'. It is no longer used by any node.
+2026-09-08 18:59:39.7526597 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.5.rdb2.conv5.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.7530651 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.5.rdb3.conv5.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.7540714 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.5.rdb3.conv5.bias'. It is no longer used by any node.
+2026-09-08 18:59:39.7545088 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/body.6/rdb3/Constant_output_0'. It is no longer used by any node.
+2026-09-08 18:59:39.7547365 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.6.rdb2.conv5.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.7549380 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.6.rdb2.conv5.bias'. It is no longer used by any node.
+2026-09-08 18:59:39.7551432 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.7.rdb3.conv5.bias'. It is no longer used by any node.
+2026-09-08 18:59:39.7553512 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.7.rdb2.conv5.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.7555690 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/body.6/rdb1/Constant_output_0'. It is no longer used by any node.
+2026-09-08 18:59:39.7557813 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.7.rdb2.conv5.bias'. It is no longer used by any node.
+2026-09-08 18:59:39.7559900 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.7.rdb3.conv5.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.7562009 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.8.rdb1.conv5.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.7563988 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.8.rdb1.conv5.bias'. It is no longer used by any node.
+2026-09-08 18:59:39.7566029 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.8.rdb2.conv5.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.7568093 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.8.rdb2.conv5.bias'. It is no longer used by any node.
+2026-09-08 18:59:39.7570080 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.8.rdb3.conv5.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.7572298 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.8.rdb3.conv5.bias'. It is no longer used by any node.
+2026-09-08 18:59:39.7574531 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/body.3/rdb1/Constant_output_0'. It is no longer used by any node.
+2026-09-08 18:59:39.7576743 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.9.rdb2.conv5.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.7579310 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.9.rdb2.conv5.bias'. It is no longer used by any node.
+2026-09-08 18:59:39.7581779 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/body.2/rdb1/Constant_output_0'. It is no longer used by any node.
+2026-09-08 18:59:39.7583884 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/body.0/rdb2/Constant_output_0'. It is no longer used by any node.
+2026-09-08 18:59:39.7585877 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/body.0/rdb3/Constant_output_0'. It is no longer used by any node.
+2026-09-08 18:59:39.7588304 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/body.1/rdb1/Constant_output_0'. It is no longer used by any node.
+2026-09-08 18:59:39.7590818 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/body.1/rdb3/Constant_output_0'. It is no longer used by any node.
+2026-09-08 18:59:39.7593147 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/body.2/rdb2/Constant_output_0'. It is no longer used by any node.
+2026-09-08 18:59:39.7595502 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/body.2/rdb3/Constant_output_0'. It is no longer used by any node.
+2026-09-08 18:59:39.7597631 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/body.3/rdb2/Constant_output_0'. It is no longer used by any node.
+2026-09-08 18:59:39.7599648 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/body.3/rdb3/Constant_output_0'. It is no longer used by any node.
+2026-09-08 18:59:39.7601863 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/body.4/rdb3/Constant_output_0'. It is no longer used by any node.
+2026-09-08 18:59:39.7603958 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/body.5/rdb1/Constant_output_0'. It is no longer used by any node.
+2026-09-08 18:59:39.7606276 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/body.5/rdb2/Constant_output_0'. It is no longer used by any node.
+2026-09-08 18:59:39.7608274 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/body.5/rdb3/Constant_output_0'. It is no longer used by any node.
+2026-09-08 18:59:39.7610402 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/body.6/rdb2/Constant_output_0'. It is no longer used by any node.
+2026-09-08 18:59:39.7612597 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/body.7/rdb1/Constant_output_0'. It is no longer used by any node.
+2026-09-08 18:59:39.7614801 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/body.7/rdb2/Constant_output_0'. It is no longer used by any node.
+2026-09-08 18:59:39.7616826 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/body.7/rdb3/Constant_output_0'. It is no longer used by any node.
+2026-09-08 18:59:39.7619111 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/body.8/rdb1/Constant_output_0'. It is no longer used by any node.
+2026-09-08 18:59:39.7621930 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/body.8/rdb2/Constant_output_0'. It is no longer used by any node.
+2026-09-08 18:59:39.7624893 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/body.9/rdb1/Constant_output_0'. It is no longer used by any node.
+2026-09-08 18:59:39.7628266 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/body.9/rdb2/Constant_output_0'. It is no longer used by any node.
+2026-09-08 18:59:39.7640256 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer DoubleQDQPairsRemover modified: 0 with status: OK
+2026-09-08 18:59:39.7645308 [I:onnxruntime:, constant_sharing.cc:248 onnxruntime::ConstantSharing::ApplyImpl] Total shared scalar initializer count: 10
+2026-09-08 18:59:39.7646866 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer ConstantSharing modified: 1 with status: OK
+2026-09-08 18:59:39.7712873 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer CommonSubexpressionElimination modified: 0 with status: OK
+2026-09-08 18:59:39.7720934 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer ConstantFolding modified: 0 with status: OK
+2026-09-08 18:59:39.7726824 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer MatMulAddFusion modified: 0 with status: OK
+2026-09-08 18:59:39.7732394 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer ReshapeFusion modified: 0 with status: OK
+2026-09-08 18:59:39.7735032 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer FreeDimensionOverrideTransformer modified: 0 with status: OK
+2026-09-08 18:59:39.7738122 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer GeluFusionL1 modified: 0 with status: OK
+2026-09-08 18:59:39.7742417 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer LayerNormFusionL1 modified: 0 with status: OK
+2026-09-08 18:59:39.7745752 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer QDQPropagationTransformer modified: 0 with status: OK
+2026-09-08 18:59:39.7750134 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer WeightBiasQuantization modified: 0 with status: OK
+2026-09-08 18:59:39.7752819 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer EnsureUniqueDQForNodeUnit modified: 0 with status: OK
+2026-09-08 18:59:39.7755316 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer RocmBlasAltImpl modified: 0 with status: OK
+2026-09-08 18:59:39.7766123 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer TransposeOptimizer modified: 0 with status: OK
+2026-09-08 18:59:39.7769544 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer Level1_RuleBasedTransformer modified: 0 with status: OK
+2026-09-08 18:59:39.7772708 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer DoubleQDQPairsRemover modified: 0 with status: OK
+2026-09-08 18:59:39.7784802 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer CommonSubexpressionElimination modified: 0 with status: OK
+2026-09-08 18:59:39.7790831 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer ConstantFolding modified: 0 with status: OK
+2026-09-08 18:59:39.7795056 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer MatMulAddFusion modified: 0 with status: OK
+2026-09-08 18:59:39.7799345 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer ReshapeFusion modified: 0 with status: OK
+2026-09-08 18:59:39.7802017 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer FreeDimensionOverrideTransformer modified: 0 with status: OK
+2026-09-08 18:59:39.7804366 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer GeluFusionL1 modified: 0 with status: OK
+2026-09-08 18:59:39.7808642 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer LayerNormFusionL1 modified: 0 with status: OK
+2026-09-08 18:59:39.7811659 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer QDQPropagationTransformer modified: 0 with status: OK
+2026-09-08 18:59:39.7815605 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer WeightBiasQuantization modified: 0 with status: OK
+2026-09-08 18:59:39.7818540 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer EnsureUniqueDQForNodeUnit modified: 0 with status: OK
+2026-09-08 18:59:39.7821039 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer RocmBlasAltImpl modified: 0 with status: OK
+2026-09-08 18:59:39.7865920 [I:onnxruntime:, inference_session.cc:1465 onnxruntime::InferenceSession::TransformGraph] Running graph optimizations in loop 1 time/s (Graph Optimizations Loop Level : 1)
+2026-09-08 18:59:39.7872187 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer Level2_RuleBasedTransformer modified: 0 with status: OK
+2026-09-08 18:59:39.7886891 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer TransposeOptimizer_CPUExecutionProvider modified: 0 with status: OK
+2026-09-08 18:59:39.7896218 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer QDQS8ToU8Transformer modified: 0 with status: OK
+2026-09-08 18:59:39.7903992 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer QDQSelectorActionTransformer modified: 0 with status: OK
+2026-09-08 18:59:39.7907011 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer GemmActivationFusion modified: 0 with status: OK
+2026-09-08 18:59:39.7912424 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer MatMulIntegerToFloatFusion modified: 0 with status: OK
+2026-09-08 18:59:39.7917615 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer DynamicQuantizeMatMulFusion modified: 0 with status: OK
+2026-09-08 18:59:39.7945971 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer ConvActivationFusion modified: 1 with status: OK
+2026-09-08 18:59:39.7992802 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer GeluFusionL2 modified: 0 with status: OK
+2026-09-08 18:59:39.7994768 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer LayerNormFusionL2 modified: 0 with status: OK
+2026-09-08 18:59:39.7997293 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer SimplifiedLayerNormFusion modified: 0 with status: OK
+2026-09-08 18:59:39.7999615 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer AttentionFusion modified: 0 with status: OK
+2026-09-08 18:59:39.8001910 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer EmbedLayerNormFusion modified: 0 with status: OK
+2026-09-08 18:59:39.8007107 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer GatherSliceToSplitFusion modified: 0 with status: OK
+2026-09-08 18:59:39.8011836 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer GatherToSliceFusion modified: 0 with status: OK
+2026-09-08 18:59:39.8015204 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer MatmulTransposeFusion modified: 0 with status: OK
+2026-09-08 18:59:39.8018211 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer BiasGeluFusion modified: 0 with status: OK
+2026-09-08 18:59:39.8020632 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer GroupQueryAttentionFusion modified: 0 with status: OK
+2026-09-08 18:59:39.8022894 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer MatMulAddFusion modified: 0 with status: OK
+2026-09-08 18:59:39.8025083 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer SkipLayerNormFusion modified: 0 with status: OK
+2026-09-08 18:59:39.8028676 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer FastGeluFusion modified: 0 with status: OK
+2026-09-08 18:59:39.8033639 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer QuickGeluFusion modified: 0 with status: OK
+2026-09-08 18:59:39.8037296 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer BiasSoftmaxFusion modified: 0 with status: OK
+2026-09-08 18:59:39.8057199 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer BiasDropoutFusion modified: 0 with status: OK
+2026-09-08 18:59:39.8061916 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer MatMulScaleFusion modified: 0 with status: OK
+2026-09-08 18:59:39.8064280 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer MatMulActivationFusion modified: 0 with status: OK
+2026-09-08 18:59:39.8067111 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer MatMulNBitsFusion modified: 0 with status: OK
+2026-09-08 18:59:39.8069686 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer QDQFinalCleanupTransformer modified: 0 with status: OK
+2026-09-08 18:59:39.8072108 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer Level2_RuleBasedTransformer modified: 0 with status: OK
+2026-09-08 18:59:39.8074544 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer QDQS8ToU8Transformer modified: 0 with status: OK
+2026-09-08 18:59:39.8078677 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer QDQSelectorActionTransformer modified: 0 with status: OK
+2026-09-08 18:59:39.8081264 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer GemmActivationFusion modified: 0 with status: OK
+2026-09-08 18:59:39.8083495 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer MatMulIntegerToFloatFusion modified: 0 with status: OK
+2026-09-08 18:59:39.8085712 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer DynamicQuantizeMatMulFusion modified: 0 with status: OK
+2026-09-08 18:59:39.8088586 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer ConvActivationFusion modified: 0 with status: OK
+2026-09-08 18:59:39.8090988 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer GeluFusionL2 modified: 0 with status: OK
+2026-09-08 18:59:39.8092626 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer LayerNormFusionL2 modified: 0 with status: OK
+2026-09-08 18:59:39.8094884 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer SimplifiedLayerNormFusion modified: 0 with status: OK
+2026-09-08 18:59:39.8097247 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer AttentionFusion modified: 0 with status: OK
+2026-09-08 18:59:39.8099794 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer EmbedLayerNormFusion modified: 0 with status: OK
+2026-09-08 18:59:39.8105123 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer GatherSliceToSplitFusion modified: 0 with status: OK
+2026-09-08 18:59:39.8107407 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer GatherToSliceFusion modified: 0 with status: OK
+2026-09-08 18:59:39.8109493 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer MatmulTransposeFusion modified: 0 with status: OK
+2026-09-08 18:59:39.8113911 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer BiasGeluFusion modified: 0 with status: OK
+2026-09-08 18:59:39.8116471 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer GroupQueryAttentionFusion modified: 0 with status: OK
+2026-09-08 18:59:39.8119066 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer MatMulAddFusion modified: 0 with status: OK
+2026-09-08 18:59:39.8121652 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer SkipLayerNormFusion modified: 0 with status: OK
+2026-09-08 18:59:39.8124316 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer FastGeluFusion modified: 0 with status: OK
+2026-09-08 18:59:39.8126674 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer QuickGeluFusion modified: 0 with status: OK
+2026-09-08 18:59:39.8129175 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer BiasSoftmaxFusion modified: 0 with status: OK
+2026-09-08 18:59:39.8131971 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer BiasDropoutFusion modified: 0 with status: OK
+2026-09-08 18:59:39.8134663 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer MatMulScaleFusion modified: 0 with status: OK
+2026-09-08 18:59:39.8136933 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer MatMulActivationFusion modified: 0 with status: OK
+2026-09-08 18:59:39.8139688 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer MatMulNBitsFusion modified: 0 with status: OK
+2026-09-08 18:59:39.8142235 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer QDQFinalCleanupTransformer modified: 0 with status: OK
+2026-09-08 18:59:39.8248524 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer NchwcTransformer modified: 1 with status: OK
+2026-09-08 18:59:39.8326535 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.1.rdb3.conv3.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8329530 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.0.rdb1.conv2.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8331578 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.1.rdb2.conv2.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8333342 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'ConvMulFusion_W_body.5.rdb2.conv5.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8335581 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.9.rdb3.conv3.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8337531 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'conv_first.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8339320 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.0.rdb3.conv4.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8341168 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.6.rdb2.conv2.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8343097 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.4.rdb2.conv4.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8345175 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.0.rdb1.conv1.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8347206 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.0.rdb2.conv3.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8349370 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.0.rdb1.conv4.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8351257 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.7.rdb2.conv2.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8353172 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.1.rdb3.conv2.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8355136 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.0.rdb2.conv4.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8357014 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.0.rdb1.conv3.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8359066 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.2.rdb3.conv1.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8360998 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.5.rdb2.conv1.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8362841 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.1.rdb3.conv4.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8364632 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'ConvMulFusion_W_body.7.rdb3.conv5.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8366582 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.0.rdb2.conv2.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8368414 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.6.rdb3.conv1.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8370361 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.3.rdb2.conv2.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8372238 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.9.rdb3.conv1.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8374131 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.0.rdb2.conv1.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8376003 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.0.rdb3.conv1.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8377882 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.1.rdb2.conv4.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8379727 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.1.rdb1.conv3.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8381602 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.0.rdb3.conv2.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8383451 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'ConvMulFusion_W_body.5.rdb1.conv5.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8385436 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.1.rdb1.conv2.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8387194 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.9.rdb3.conv4.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8388949 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.0.rdb3.conv3.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8390734 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'ConvMulFusion_W_body.3.rdb2.conv5.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8392653 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.1.rdb2.conv3.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8394458 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.3.rdb2.conv1.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8396188 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.1.rdb1.conv4.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8397962 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.9.rdb3.conv2.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8399773 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.3.rdb2.conv4.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8401523 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.1.rdb1.conv1.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8403302 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.1.rdb2.conv1.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8405045 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'conv_last.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8406772 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.5.rdb2.conv4.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8408522 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.1.rdb3.conv1.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8421658 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'conv_last.bias'. It is no longer used by any node.
+2026-09-08 18:59:39.8430254 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.2.rdb1.conv1.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8432486 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.2.rdb1.conv2.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8435168 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.2.rdb1.conv3.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8437432 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.2.rdb1.conv4.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8439662 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.5.rdb3.conv2.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8441878 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.2.rdb2.conv1.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8443949 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.2.rdb2.conv2.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8445888 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'ConvMulFusion_W_body.9.rdb2.conv5.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8448032 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.2.rdb2.conv3.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8450171 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.2.rdb2.conv4.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8452223 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.2.rdb3.conv2.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8454432 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.6.rdb3.conv3.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8456687 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.2.rdb3.conv3.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8459122 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'conv_up1.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8461098 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.2.rdb3.conv4.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8463448 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.3.rdb1.conv1.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8465561 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.3.rdb1.conv2.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8468137 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.6.rdb1.conv4.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8471803 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.3.rdb1.conv3.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8474475 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.6.rdb1.conv3.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8477266 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.3.rdb1.conv4.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8480241 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.6.rdb1.conv2.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8484042 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.3.rdb2.conv3.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8487005 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.3.rdb3.conv1.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8490224 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.3.rdb3.conv2.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8493374 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.3.rdb3.conv3.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8497224 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.9.rdb1.conv2.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8499953 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'ConvMulFusion_W_body.1.rdb3.conv5.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8506412 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.3.rdb3.conv4.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8509607 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.9.rdb1.conv1.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8513318 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.9.rdb1.conv4.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8521331 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.4.rdb1.conv1.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8524823 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.4.rdb1.conv2.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8528487 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.4.rdb1.conv3.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8532316 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.4.rdb1.conv4.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8535165 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.7.rdb3.conv3.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8537318 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.5.rdb3.conv1.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8539788 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.4.rdb2.conv1.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8542259 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.4.rdb2.conv2.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8544252 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.4.rdb2.conv3.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8546311 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.4.rdb3.conv1.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8548324 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.7.rdb3.conv1.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8550356 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.5.rdb3.conv3.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8552382 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.4.rdb3.conv2.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8554445 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'ConvMulFusion_W_body.9.rdb1.conv5.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8556986 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'ConvMulFusion_W_body.3.rdb3.conv5.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8559296 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.4.rdb3.conv3.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8561293 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.4.rdb3.conv4.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8563255 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.5.rdb1.conv1.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8565959 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.8.rdb3.conv1.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8568645 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.5.rdb1.conv2.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8571293 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.5.rdb1.conv3.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8573796 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.5.rdb1.conv4.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8576534 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.5.rdb2.conv2.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8578961 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.5.rdb2.conv3.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8582458 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'ConvMulFusion_W_body.8.rdb2.conv5.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8585023 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'ConvMulFusion_W_body.7.rdb1.conv5.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8587802 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.8.rdb1.conv3.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8590080 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.5.rdb3.conv4.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8592226 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.6.rdb1.conv1.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8594499 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.6.rdb2.conv1.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8596752 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'ConvMulFusion_W_body.1.rdb2.conv5.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8599176 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.6.rdb2.conv3.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8602318 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.6.rdb2.conv4.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8604644 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.6.rdb3.conv2.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8607024 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/Constant_output_0'. It is no longer used by any node.
+2026-09-08 18:59:39.8609073 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.6.rdb3.conv4.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8611550 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.7.rdb1.conv1.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8613801 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.7.rdb1.conv2.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8616031 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.7.rdb1.conv3.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8618265 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.7.rdb1.conv4.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8620255 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.7.rdb2.conv1.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8622234 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.7.rdb2.conv3.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8624152 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.7.rdb2.conv4.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8626101 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.7.rdb3.conv2.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8628614 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.7.rdb3.conv4.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8631036 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.8.rdb1.conv1.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8633256 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.8.rdb1.conv2.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8635309 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'ConvMulFusion_W_body.6.rdb2.conv5.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8637932 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.8.rdb1.conv4.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8639974 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.8.rdb2.conv1.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8642052 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.8.rdb2.conv2.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8644122 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.8.rdb2.conv3.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8646583 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.8.rdb2.conv4.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8648658 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'ConvMulFusion_W_body.6.rdb3.conv5.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8650914 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.8.rdb3.conv2.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8652883 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.8.rdb3.conv3.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8655109 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.8.rdb3.conv4.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8657293 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.9.rdb1.conv3.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8659296 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.9.rdb2.conv1.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8661435 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.9.rdb2.conv2.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8664375 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.9.rdb2.conv3.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8667308 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'body.9.rdb2.conv4.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8670394 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'conv_body.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8681243 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'conv_up2.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8683956 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'conv_hr.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8686465 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'ConvMulFusion_W_body.1.rdb1.conv5.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8689712 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'ConvMulFusion_W_body.6.rdb1.conv5.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8692514 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'ConvMulFusion_W_body.0.rdb1.conv5.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8695405 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'ConvMulFusion_W_body.4.rdb2.conv5.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8698796 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'ConvMulFusion_W_body.0.rdb2.conv5.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8701519 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'ConvMulFusion_W_body.0.rdb3.conv5.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8703685 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'ConvMulFusion_W_body.2.rdb1.conv5.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8706110 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'ConvMulFusion_W_body.2.rdb2.conv5.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8708450 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'ConvMulFusion_W_body.2.rdb3.conv5.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8710684 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'ConvMulFusion_W_body.9.rdb3.conv5.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8713036 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'ConvMulFusion_W_body.3.rdb1.conv5.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8715213 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'ConvMulFusion_W_body.4.rdb1.conv5.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8717448 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'ConvMulFusion_W_body.4.rdb3.conv5.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8719807 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'ConvMulFusion_W_body.5.rdb3.conv5.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8722291 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'ConvMulFusion_W_body.7.rdb2.conv5.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8724775 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'ConvMulFusion_W_body.8.rdb1.conv5.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8727068 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'ConvMulFusion_W_body.8.rdb3.conv5.weight'. It is no longer used by any node.
+2026-09-08 18:59:39.8753032 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer NhwcTransformer modified: 0 with status: OK
+2026-09-08 18:59:39.8759423 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer ConvAddActivationFusion modified: 0 with status: OK
+2026-09-08 18:59:39.8764720 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer NchwcTransformer modified: 0 with status: OK
+2026-09-08 18:59:39.8776262 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer NhwcTransformer modified: 0 with status: OK
+2026-09-08 18:59:39.8781690 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer ConvAddActivationFusion modified: 0 with status: OK
+2026-09-08 18:59:39.8790837 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer RemoveDuplicateCastTransformer modified: 0 with status: OK
+2026-09-08 18:59:39.8792747 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer CastFloat16Transformer modified: 0 with status: OK
+2026-09-08 18:59:39.8795636 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer FuseFp16InitializerToFp32NodeTransformer modified: 0 with status: OK
+2026-09-08 18:59:39.8797769 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer MemcpyTransformer modified: 0 with status: OK
+2026-09-08 18:59:39.8843634 [I:onnxruntime:, allocation_planner.cc:2659 onnxruntime::IGraphPartitioner::CreateGraphPartitioner] Use DeviceBasedPartition as default
+2026-09-08 18:59:39.8918603 [I:onnxruntime:, session_state_utils.cc:243 onnxruntime::session_state_utils::SaveInitializedTensors] Saving initialized tensors.
+2026-09-08 18:59:39.8963973 [I:onnxruntime:, session_state_utils.cc:438 onnxruntime::session_state_utils::SaveInitializedTensors] Done saving initialized tensors
+2026-09-08 18:59:39.8981380 [I:onnxruntime:, inference_session.cc:2532 onnxruntime::InferenceSession::Initialize] Session successfully initialized.
+Building session (ep=cpu, cache_key=realesrgan_rrdb_64_cache)...
+Session ready. Model input: input [1, 3, 64, 64]
+
+Benchmarking 50 iterations on CPU (sess.run alone, 64x64)...
+  Mean latency: 51.947 ms (19.3 fps)
+  P50 latency:  51.849 ms
+  P90 latency:  55.819 ms
+  Min / Max:    42.446 ms / 57.610 ms
