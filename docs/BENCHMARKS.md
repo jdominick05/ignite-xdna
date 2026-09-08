@@ -2831,7 +2831,8 @@ do not replace the repository's default CLE/AdaRound results or establish suppor
 for other model families. For scale: the repo's headline ResNet50 (CLE plus AdaRound)
 reads 79.80% top-1 on the NPU against this no-CLE alpha's 59.90%, a 19.9-point gap;
 the [CLE parity section](#ignition-cle-parity-and-the-default-xint8-preset) measures
-12.2 of those points as CLE and leaves 7.7 to AdaRound, which Ignition does not have
+12.2 of those points as CLE and leaves 7.7 to AdaRound, which the
+[AdaRound parity section](#ignition-adaround-parity) now transcribes byte for byte
 (latencies are different days and are not compared). The release evaluation reports
 accuracy, not saved-logit equality; the separate acceptance study above records its
 exact-logit comparisons.
@@ -3019,6 +3020,88 @@ re-run against the fresh artifact, still reject wrong opset, batch 2, a symbolic
 an unsupported operator and a non-7×7 GAP, and the CLI still refuses a missing CLE
 choice, a non-positive limit and an existing output. A direct `quantize` on the batch-2
 float export exits with the batch error and writes nothing.
+
+### Ignition: AdaRound parity
+
+Quark's `XINT8_ADAROUND` preset is the default XINT8 pipeline followed by one
+post-process, `fast_finetune` (`quark/onnx/algorithm/finetuning/`), which rewrites the
+integer weights of every Conv/Gemm in the finished, refined QDQ file and touches nothing
+else. `quant/adaround.py` transcribes that path and `python -m quant adaround` runs it on
+an emitted Ignition file, importing torch inside the finetune only; `quantize` and
+`inspect` still block torch, and Quark stays blocked throughout. The transcription:
+layers in the quantized file's node order, one at a time, each seeing the rounding
+already chosen upstream; the layer's pre-QuantizeLinear input from the current quantized
+graph (ONNX Runtime CPU, `ORT_DISABLE_ALL`) and its float input and output from the
+equalized float graph (ONNX Runtime CPU, default optimization) for every calibration
+image; a torch module with the file's UINT8/zp128 input scale, the INT8 weight scale
+behind the AdaRound rounding variable (floor plus a rectified sigmoid, gamma −0.1, zeta
+1.1), the INT8 bias scale and the Relu; Adam at 0.1 on the rounding variable for 1,000
+iterations of two-image batches drawn with `torch.randperm`, a squared-Frobenius
+reconstruction loss plus the annealed rounding regulariser after a 20 percent warm
+start, early stop on the windowed rounding loss; hard rounding clamped to [−128, 127]
+written back to `<w>_quantized`. One construction detail decides whether the two
+implementations can agree bitwise at all: Quark's module wrapper runs the torch layer's
+initialiser twice, so its global generator advances twice per layer before the first
+batch draw ([RNG probe](../results/quant/adaround_rng_probe_resnet_env.log): Conv with
+and without bias, 1×1 Conv and Gemm all read `double`); Ignition constructs the layer
+and calls `reset_parameters()` once more.
+
+Fresh same-listing oracle: [`XINT8_ADAROUND` on the c64 listing](../results/quant/quant_resnet50_quark_cle_adaround_c64.log)
+(`scripts/quant-reference.sh --cle --adaround`), 54 modules, no early stop, 88.7 s of
+ONNX inference plus 445.1 s of torch training, 629.4 s end to end, peak working set
+3,582,218,240 bytes, SHA256 `a9250fae…62a3d`. Ignition on its CLE artifact
+([log](../results/quant/quant_resnet50_ignition_cle_adaround_c64.log),
+`scripts/quant-adaround.sh`): 82.7 s of data plus 444.1 s of training, 528.2 s for the
+finetune alone, peak working set 3,055,075,328 bytes, SHA256 `bf605321…fc2bc`. Both
+ran in `resnet_env` (torch 2.4.1+cpu, 8 threads, ONNX Runtime 1.22.1) on purpose: the
+oracle's data sessions run under that runtime, so the graph diff compares the
+algorithm, not the runtime. Result
+([diff](../results/quant/diff_resnet50_ignition_cle_adaround_c64.log)): empty position
+delta, provenance equal (listing, preprocessing, float hash, CLE and every FastFinetune
+parameter), **108/108 int8 initializers byte-identical**, refinement fixed point on
+both. The two logs agree line for line: all 702 per-layer lines (the module banner,
+eleven loss lines and the reconstruction metric for each of 54 layers) are identical
+to the last printed digit. AdaRound moved 8,954,279 of the 25,529,472 weight elements
+by exactly one LSB relative to the CLE base (35.07 percent), the same count on both
+sides, and 624 of them sit at −128, Quark's dtype clamp rather than the producer's
+[−127, 127] clip. Full-set CPU top-1 is 79.40% / 93.00% top-5 for both files
+([reference](../results/quant/run_resnet50_ignition_cle_adaround_c64_reference_cpu.log),
+[own](../results/quant/run_resnet50_ignition_cle_adaround_c64_own_cpu.log)), as
+identical bytes require. On the NPU, paired in one sitting with a clean
+`xrt-smi` context witness before each model and `--fresh` compilation, both read
+**79.50% top-1 / 93.30% top-5** at 5.21 ms (reference) and 5.23 ms (own) mean latency,
+393 of 395 nodes placed
+([reference](../results/quant/run_resnet50_ignition_cle_adaround_c64_reference_npu.log),
+[own](../results/quant/run_resnet50_ignition_cle_adaround_c64_own_npu.log),
+[EP reports](../results/quant/diag_resnet50_ignition_cle_adaround_c64_own.log)); the
+0.02 ms latency gap is session noise, not a finding. The NPU sits 0.1 point above CPU
+here, the opposite sign from the no-CLE and CLE floors above, so the DPU-vs-QDQ
+difference is a drift of either sign, not a fixed penalty.
+
+Three controls bound what "bitwise" means here. A second Quark oracle on the same
+machine minutes later ([rerun log](../results/quant/quant_resnet50_quark_cle_adaround_c64_rerun.log),
+633.4 s, peak working set 3,581,181,952 bytes) hashes to the same SHA256 as the first,
+so Quark reproduces itself here. A second Ignition run
+([rerun log](../results/quant/quant_resnet50_ignition_cle_adaround_c64_rerun.log), 523.2 s,
+peak working set 3,053,993,984 bytes) hashes to the same SHA256 as the first, so
+Ignition reproduces itself too, and its sidecar carries the corrected version
+provenance described below. The
+[Sep 5 `XINT8_ADAROUND` artifact](../results/adaround/quant_resnet50_c64.log), built
+from the same listing and seed, differs from the fresh oracle in 4,149,415 weight
+elements (max 1 LSB; topology and scales identical); its log records no machine and its
+layer-0 losses differ from the fresh run's in the sixth decimal (0.347939 against
+0.347940 at iteration 100, during the warm start when only the reconstruction loss
+exists), so that difference began in the float arithmetic (machine or thread count,
+neither recorded), not in a rounding decision. Parity is therefore stated as: same
+machine, same torch and ONNX Runtime
+builds, same thread count; across machines the comparison is statistical. Two
+provenance notes: this run's sidecar inherited the base's numpy/onnx versions (onnx
+1.18.0 from `resnet_env17`) although the finetune process ran onnx 1.19.0, fixed for
+later runs (`base_versions` now keeps the base's); and the finetuned file carries the
+base's `positions` table unchanged, which is correct because AdaRound never moves a
+scale. Against the alpha's no-CLE 62.00% CPU top-1, the c64 Ignition artifact with CLE
+and AdaRound reads 79.40%; the repo's 79.80% headline came from a different
+calibration listing and is not compared.
 
 ## Key findings
 

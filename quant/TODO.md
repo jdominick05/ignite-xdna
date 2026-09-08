@@ -47,9 +47,14 @@ recorded in the handoff and Git history rather than treated as future features.
 - [ ] Add YOLO preparation and handlers: Split→Slice, supported pooling rewrites,
   SiLU/HardSigmoid simulation, Concat sharing/alignment and graph-specific pruning.
   Gate on exact same-listing head-cut YOLOv8n comparison and full COCO evaluation.
-- [ ] Add AdaRound as an isolated optional torch module. Match the audited schedule,
+- [x] Add AdaRound as an isolated optional torch module. Match the audited schedule,
   layer selection, update behavior and full-set accuracy; record peak memory beside
-  the Quark oracle. Keep all other core imports torch-free.
+  the Quark oracle. Keep all other core imports torch-free. Evidence (ResNet, closed
+  2026-09-08): `quant/adaround.py` and `python -m quant adaround`;
+  [AdaRound parity](../docs/BENCHMARKS.md#ignition-adaround-parity): byte-identical to a
+  fresh same-listing `XINT8_ADAROUND` oracle on Desktop 2 (108/108 int8 exact, 702
+  log lines identical), 79.40% CPU top-1 for both, peak working set 3,055,075,328
+  bytes against Quark's 3,582,218,240. yolov8n-cut AdaRound waits on YOLO preparation.
 - [ ] Connect MODNet's calibration source to the shared inference preprocessing,
   then re-evaluate matte quality against the documented mismatched-preprocessing
   baseline. Do not claim this fixes the quality gap before measuring it.

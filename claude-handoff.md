@@ -14,8 +14,39 @@ The release validation uses a freshly calibrated alpha artifact, exact compariso
 against the existing fresh no-CLE oracle, full labeled CPU/NPU evaluation, EP reports
 and both-environment interface/import/boundary checks. Its evidence is in
 [Alpha validation](docs/BENCHMARKS.md#ignition-alpha-release-validation).
-The acceptance findings below remain applicable; production scope is still folded
-ResNet without CLE. No claim of default-preset, YOLO or AdaRound support was added.
+The acceptance findings below remain applicable. Production scope is folded ResNet
+with or without CLE since 2026-09-08 (see "Since the alpha"); YOLO stays unclaimed and
+AdaRound is the milestone in progress.
+
+## Since the alpha (2026-09-08, Desktop 2)
+
+Five follow-up commits on `ignition-alpha`, each with its logs under `results/quant/`
+and its own BENCHMARKS section, then a merge into `pipeline-realesrgan` (`9da474f`).
+Nothing from this batch is pushed.
+
+- **Refinement rules** (`1d26994`) — `tools/quant_refine_probe.py` perturbs the oracle's
+  positions and diffs Quark's `adjust_quantize_info` against `quant/refine.py` on the
+  same input: 20 directed and 800 random cases give identical final tables, stored
+  integers untouched by both, and Quark's refine is a measured no-op on `raw_data`
+  scales ([refinement under perturbation](docs/BENCHMARKS.md#ignition-refinement-rules-under-perturbation)).
+- **CLE parity** (`29b2a76`) — `quant/cle.py` transcribes Quark's equalization (33
+  patterns in the same order, byte-identical equalized initializers). `python -m quant
+  quantize --cle` matches a fresh default-preset oracle exactly (empty position delta,
+  108/108 int8 exact), and that oracle is graph-identical to the repo's original
+  `models/resnet50_xint8_c64.onnx`; 72.80% CPU / 72.10% NPU top-1 at 5.22 ms for both
+  producers, 393/395 nodes placed
+  ([CLE parity](docs/BENCHMARKS.md#ignition-cle-parity-and-the-default-xint8-preset)).
+  Exactly one of `--cle`/`--no-cle` is now required; depthwise, Gemm and Clip CLE
+  paths raise and stay unmeasured.
+- **Calibration spool** (`76ceb98`) — the 49 pruned pre-Relu tensors are neither spooled
+  nor searched: 74 tensors, 2,174,678,016 bytes for 64 images, output byte-identical
+  ([trimmed spool](docs/BENCHMARKS.md#ignition-calibration-spool-without-the-pruned-pre-relu-tensors)).
+- **Permissive inspection** (`8608fce`) — `inspect` loads with `strict=False` and reports
+  `export_contract`/`onnx_checker` per file; `quantize` keeps the strict loader
+  ([permissive inspection](docs/BENCHMARKS.md#ignition-permissive-inspection)).
+- **Docs** (`f110f89`) — README's silent-fallback warning restored, the alpha placed beside
+  the 79.80% headline (19.9 points: 12.2 from CLE, 7.7 from AdaRound), and the
+  DPU-vs-QDQ floor stated in DESIGN §2.4.
 
 ## Name and scope
 
@@ -41,7 +72,9 @@ Work is on **`ignition-alpha`**, following acceptance commit `f792250`, independ
 calibration/emission commit `a326177` and scaffold commit `b7001c5`. On this machine
 its worktree is `scratch/quant-worktree` beneath the primary repository. Find the
 latest commit with `git log -1 ignition-alpha`; inspect `origin/ignition-alpha` for
-the published branch. The earlier acceptance-only session did not push.
+the published branch. The earlier acceptance-only session did not push, and neither
+did the 2026-09-08 session: `ignition-alpha` is five commits ahead of its remote and
+`pipeline-realesrgan` carries the merge `9da474f` plus the other session's pipelines.
 
 The primary worktree has another session's dirty `pipeline-realesrgan`/SESR work. Do not
 reset, clean, overwrite or switch that worktree. `models/` and `data/` in the Ignition
@@ -67,8 +100,9 @@ Ignition-worktree `CLAUDE.md` and tracked `CONTRIBUTING.md` import gates were up
   [graph diff](results/quant/diff_resnet50_own_nocle_c64.log) and the
   [producer method/full-set evidence](docs/BENCHMARKS.md#owned-resnet50-no-cle-re-emission-and-independent-calibration).
 - The emitter remains deliberately narrow: Conv/Relu/Add/MaxPool/GAP/Flatten/Gemm,
-  measured GAP shape, no CLE, no YOLO preparation or AdaRound. Design sketches in
-  `quant/DESIGN.md` include future APIs; do not assume every signature exists.
+  measured GAP shape, transcribed Conv→Conv CLE (`quant/cle.py`, since 2026-09-08), no
+  YOLO preparation or AdaRound. Design sketches in `quant/DESIGN.md` include future
+  APIs; do not assume every signature exists.
 
 ## Acceptance findings
 
@@ -167,12 +201,14 @@ The original NPU matrix predates the automatic unoptimized-reference addition; i
 separate audit supplies that evidence. No new hardware behavior is claimed from the
 later CPU-only implementation checks.
 
-Recommended next producer milestone: **CLE parity on ResNet**, with fresh same-listing
-Quark comparison and full-set CPU/NPU evaluation. This addresses a real gap in the
-current no-CLE producer. YOLO preparation/refinement and AdaRound follow their own
-parity gates. For compiler research, minimize the per-channel construction failure or
-the INT32 product-scale numerical failure before trying them on MobileViT. Opset
-changes, Concat alignment, unpruned Conv/Relu QDQ and HardSigmoid probes remain unrun.
+CLE parity on ResNet closed on 2026-09-08 (see "Since the alpha"). The next producer
+milestone is **AdaRound parity on ResNet**: transcribe Quark's FastFinetune AdaRound as
+an isolated torch module, gate it against a fresh same-listing `XINT8_ADAROUND` oracle
+(graph diff first, then full-set CPU/NPU evaluation) and record peak RSS beside
+Quark's. YOLO preparation/refinement follows its own parity gate. For compiler
+research, minimize the per-channel construction failure or the INT32 product-scale
+numerical failure before trying them on MobileViT. Opset changes, Concat alignment,
+unpruned Conv/Relu QDQ and HardSigmoid probes remain unrun.
 
 Keep `quant/` Quark-free, `npu/` independent of `quant/`, preprocessing shared, cache
 keys unchanged and fresh on model changes. Read the local invariants before running
