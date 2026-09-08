@@ -1312,7 +1312,8 @@ Matting and bilateral segmentation provide zero-trimap background separation for
 Structurally re-parameterized networks collapse multi-branch training graphs into a single linear sequence of standard 3x3 convolutions with ReLU at inference, eliminating residual Add branches.
 
 - **Candidate architectures:**
-  1. YOLOv6 (Meituan RepVGG backbone; pure 3x3 convs + ReLU in inference mode).
+  1. YOLOv6 (Meituan RepVGG backbone; pure 3x3 convs + ReLU in inference mode). **Tested** —
+     see below and [docs/BENCHMARKS.md](docs/BENCHMARKS.md#category-c-first-candidate-yolov6n-repvgg-backbone).
   2. YOLO-World v2 (Open-vocabulary detection; decoupled CPU text embedding + NPU vision backbone).
   3. YOLOv11 (Successor detection architecture with C3k2 blocks, evaluated under the established 6-output head-cut pattern).
 - **Hypothesis:** Eliminating residual `Add` branches via structural re-parameterization reduces SRAM buffer contention and DMA ping-ponging, improving single-column execution efficiency relative to YOLOv8 CSPDarknet blocks while plain ReLU avoids SiLU->HardSwish quantization distortion.
@@ -1323,6 +1324,15 @@ Structurally re-parameterized networks collapse multi-branch training graphs int
   2. Cut decode heads and verify 6-output shape contract.
   3. Measure compiled node placement, per-frame latency, and mAP@50-95 on the full 5000-image COCO val2017 benchmark.
 - **Falsification criteria:** If re-parameterized weight distributions exhibit high dynamic range outliers that degrade INT8 PTQ accuracy beyond the recovery capacity of AdaRound, or if the compiler fails to fuse adjacent Conv+ReLU layers efficiently.
+- **YOLOv6n result:** placement (98.7%, 518/525 nodes, single subgraph) and speed (3.0x
+  over FP32 CPU) both confirm the structural half of the hypothesis, matching yolov8n's own
+  head-cut numbers rather than beating them — Add-free RepVGG doesn't measurably help SRAM
+  contention here, it's simply not worse. Plain XINT8 (no AdaRound) loses 14.03 points of
+  mAP@50-95, more than yolov8n's plain-XINT8 loss on the same convention — whether that's the
+  "high dynamic range outlier" failure mode the falsification criterion describes, or a gap
+  AdaRound closes the way it does for every other detector/pose model in this repo, is
+  untested. The AdaRound run needed to answer it hasn't been quantized yet — the RepVGG/no-DFL
+  candidate itself is not falsified, only its accuracy-recovery leg is still open.
 
 ### Category D: Monocular Depth Estimation
 
@@ -1486,6 +1496,17 @@ sections above.
   a critical compiler boundary: power-of-two per-tensor scaling cannot represent the disparate dynamic ranges
   across concatenated blocks or narrow 4-channel conv groups without per-channel scaling or AdaRound reconstruction.
   [Working](docs/BENCHMARKS.md#alternative-classification-topologies-densenet-121-concat-and-resnext-50-grouped-convs).
+- **Category C, first candidate: YOLOv6n (RepVGG backbone).** New pipeline
+  (`pipelines/yolov6n/`), Meituan's official 0.4.0 release. The structural half of the
+  hypothesis holds: RepVGG's `switch_to_deploy()` collapse (no residual `Add`) plus the
+  `use_dfl=False` head (no DFL softmax at all) place a single clean 518/525-node (98.7%)
+  NPU subgraph, 3.0x faster than FP32 CPU (20.04 -> 6.62 ms at eval settings) — in the same
+  range as yolov8n's own head-cut numbers, not better or worse on placement/speed. But
+  plain XINT8 (no AdaRound yet) costs **-14.03 points of mAP@50-95** (36.95 → 22.92) and
+  **-17.00 of mAP@50** (51.98 → 34.98) on the full 5000-image set — a substantially bigger
+  hit than yolov8n's plain-XINT8 loss. Whether AdaRound recovers this the way it does for
+  every other detector/pose model here is untested, not refuted; that's the open half of
+  the falsification criterion. [Working](docs/BENCHMARKS.md#category-c-first-candidate-yolov6n-repvgg-backbone).
 
 **Still open.**
 
@@ -1514,7 +1535,8 @@ sections above.
   full trace, whose upstream parser mis-times gaps over 2^18 cycles.
 - **Candidate model pipelines (Categories A, C, D, E).** Test plans, target shapes, and falsification criteria:
   - **Category A:** Image Super-Resolution (Real-ESRGAN Compact, SESR-M7).
-  - **Category C:** Advanced Detection and RepVGG Backbones (YOLOv6, YOLO-World v2, YOLOv11).
+  - **Category C:** Advanced Detection and RepVGG Backbones — YOLOv6n placement/speed/plain-XINT8
+    tested (closed above); its AdaRound recovery, YOLO-World v2, and YOLOv11 still open.
   - **Category D:** Monocular Depth Estimation (MiDaS v2.1 Small, FastDepth).
   - **Category E:** Untested Classification Topologies (DenseNet-121, ResNeXt-50, RegNetX).
 - **Longer term:** a detector fine-tuned for fixed camera feeds (licence-plate

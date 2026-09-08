@@ -1,0 +1,35 @@
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\yolov6cutcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+model: head-cut (6 outputs), decode tail runs in numpy
+input: 640x640
+
+=== NPU | models/yolov6n_cut_xint8.onnx | 640px | assets/test_image.jpg ===
+infer   mean 6.60 ms   median 6.59 ms   p95 6.75 ms   (151.4 fps)
+post    mean 1.51 ms
+22 detections:
+   tv               0.85  (0,169,152,96)
+   person           0.80  (410,157,56,132)
+   chair            0.78  (294,219,58,94)
+   person           0.62  (385,173,20,43)
+   tv               0.59  (548,205,92,148)
+   vase             0.56  (549,304,39,95)
+   chair            0.53  (360,217,58,96)
+   potted plant     0.50  (336,175,33,44)
+   tv               0.44  (475,137,59,35)
+   tv               0.41  (4,37,168,96)
+   potted plant     0.38  (204,178,65,35)
+   chair            0.38  (415,219,32,84)
+   traffic light    0.38  (4,39,168,88)
+   tv               0.32  (476,137,20,33)
+   dining table     0.32  (313,215,78,26)
+   cup              0.32  (170,233,18,32)
+   dining table     0.32  (312,223,79,33)
+   chair            0.32  (464,223,29,76)
+   person           0.27  (399,201,10,15)
+   chair            0.27  (302,214,37,19)
+   dining table     0.27  (317,219,75,88)
+   tv               0.27  (542,1,96,140)
+wrote C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\results\out_yolov6n_cut_xint8_npu.jpg

@@ -1,0 +1,48 @@
+=== FP32 CPU mAP (full 5000) ===
+loading annotations into memory...
+Done (t=0.28s)
+creating index...
+index created!
+model: full graph (1 output), ONNX decode, input 640x640
+eval : 5000 images, conf 0.001, iou 0.7, max_det 300, per-class NMS
+  500/5000  (150000 detections so far)
+  1000/5000  (300000 detections so far)
+  1500/5000  (450000 detections so far)
+  2000/5000  (600000 detections so far)
+  2500/5000  (750000 detections so far)
+  3000/5000  (900000 detections so far)
+  3500/5000  (1050000 detections so far)
+  4000/5000  (1200000 detections so far)
+  4500/5000  (1350000 detections so far)
+  5000/5000  (1500000 detections so far)
+
+1500000 detections over 5000 images in 210s
+inference  mean 20.04 ms   median 20.75 ms
+wrote C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\results\dets_yolov6n_cpu.json
+Loading and preparing results...
+DONE (t=4.21s)
+creating index...
+index created!
+Running per image evaluation...
+Evaluate annotation type *bbox*
+DONE (t=37.20s).
+Accumulating evaluation results...
+DONE (t=9.51s).
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.370
+ Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] = 0.520
+ Average Precision  (AP) @[ IoU=0.75      | area=   all | maxDets=100 ] = 0.402
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.169
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.413
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.542
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=  1 ] = 0.304
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets= 10 ] = 0.496
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.549
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.282
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.621
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.743
+
+=== yolov6n | CPU | 640px | 5000 images ===
+mAP@50-95  36.95
+mAP@50     51.98
+mAP small / medium / large   16.89 / 41.25 / 54.22
+latency    20.04 ms

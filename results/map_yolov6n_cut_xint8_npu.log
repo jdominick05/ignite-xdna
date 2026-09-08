@@ -1,0 +1,53 @@
+=== NPU XINT8 mAP (full 5000) ===
+loading annotations into memory...
+Done (t=0.28s)
+creating index...
+index created!
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\yolov6cutcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+model: head-cut (6 outputs), numpy decode, input 640x640
+eval : 5000 images, conf 0.001, iou 0.7, max_det 300, per-class NMS
+  500/5000  (150000 detections so far)
+  1000/5000  (300000 detections so far)
+  1500/5000  (450000 detections so far)
+  2000/5000  (600000 detections so far)
+  2500/5000  (750000 detections so far)
+  3000/5000  (900000 detections so far)
+  3500/5000  (1050000 detections so far)
+  4000/5000  (1200000 detections so far)
+  4500/5000  (1350000 detections so far)
+  5000/5000  (1500000 detections so far)
+
+1500000 detections over 5000 images in 156s
+inference  mean 6.62 ms   median 6.60 ms
+wrote C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\results\dets_yolov6n_cut_xint8_npu.json
+Loading and preparing results...
+DONE (t=4.28s)
+creating index...
+index created!
+Running per image evaluation...
+Evaluate annotation type *bbox*
+DONE (t=37.57s).
+Accumulating evaluation results...
+DONE (t=10.84s).
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.229
+ Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] = 0.350
+ Average Precision  (AP) @[ IoU=0.75      | area=   all | maxDets=100 ] = 0.249
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.093
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.240
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.333
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=  1 ] = 0.223
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets= 10 ] = 0.356
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.394
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.189
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.450
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.520
+
+=== yolov6n_cut_xint8 | NPU | 640px | 5000 images ===
+mAP@50-95  22.92
+mAP@50     34.98
+mAP small / medium / large   9.27 / 24.00 / 33.30
+latency    6.62 ms

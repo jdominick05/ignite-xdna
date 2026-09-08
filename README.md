@@ -31,6 +31,7 @@ Full environment split, install steps and footguns: [`docs/SETUP.md`](docs/SETUP
 | `pipelines/resnet50` | timm `resnet50.a1_in1k` | **Working** — 79.80% top-1 at 5.27 ms on the NPU (XINT8+AdaRound) |
 | `pipelines/yolov8n` | YOLOv8 n/s/m/l/x detection | **Working** — 8.94–117.11 ms on the NPU once the decode tail is cut off the graph |
 | `pipelines/yolov8n-pose` | YOLOv8n-pose, 17-point COCO keypoints | **Working** — 9.35 ms on the NPU (1015/1025 nodes), OKS mAP@50-95 34.32 AdaRound vs 32.64 plain XINT8 and 49.86 float (5000 images) |
+| `pipelines/yolov6n` | YOLOv6n detection (RepVGG backbone, no DFL) | **Working, no AdaRound yet** — 6.62 ms on the NPU (518/525 nodes), mAP@50-95 22.92 plain XINT8 vs 36.95 float (5000 images) |
 | `pipelines/mobilevit` | MobileViT-XXS (hybrid CNN/transformer) | **Does not survive INT8** — 0.00% top-1, kept as the negative result |
 
 Detection width sweep, head-cut plain XINT8, full 5000-image val2017 mAP

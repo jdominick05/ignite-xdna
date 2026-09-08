@@ -2200,6 +2200,65 @@ quantization 2169.5s on Desktop 2's 8700G CPU). Single-image verification:
 `results/pose_cut_adaround_{cpu,npu}.log`, with outputs drawn to
 `results/out_yolov8n-pose_cut_xint8_adaround_{cpu,npu}.jpg`.
 
+### Category C, first candidate: YOLOv6n (RepVGG backbone)
+
+`pipelines/yolov6n/` — new pipeline, built against Meituan's official 0.4.0 release
+(`yolov6n.pt`). Tests the Category C hypothesis directly: YOLOv6's backbone is
+`RepVGGBlock`s, which `switch_to_deploy()` collapses at export time from a multi-branch
+training graph into a single 3x3 `Conv` + `Relu` per block — no residual `Add`, unlike
+YOLOv8's CSPDarknet. `configs/yolov6n.py` also ships `use_dfl=False, reg_max=0`: the box
+head regresses raw `ltrb` directly, so there is no DFL softmax in the exported graph at
+all (confirmed: zero `Softmax` nodes). The head's own `stem`/`cls_conv`/`reg_conv` layers
+still use `ConvBNSiLU` (`Sigmoid`+`Mul`, no native ONNX SiLU op), so the "avoids
+SiLU→HardSwish distortion" half of the hypothesis holds for the backbone only, not the
+head.
+
+Head-cut at the six raw per-level conv outputs (3 `reg_preds`, 3 `cls_preds`), same
+rationale as yolov8n's `1b_cut_head.py`. The removed decode tail (`dist2bbox` + anchor
+grid + sigmoid) is reimplemented in `npu/yolov6_decode.py`, verified bit-exact against the
+full-graph ONNX output on a random input (xywh max abs diff 0.0, cls max abs diff
+1.16e-7 — float sigmoid rounding only) and verified functionally identical on a real
+image: full-graph CPU and head-cut CPU produce the same 22 detections, same classes,
+boxes and scores.
+
+Node placement, quantized (`models/yolov6n_cut_xint8.onnx`, plain XINT8, 300-image
+calibration, no AdaRound): **518/525 nodes (98.7%) on NPU**, a single clean subgraph —
+only the input `QuantizeLinear` and the six output `DequantizeLinear` nodes stay on CPU
+(`results/diag_yolov6n_cut_xint8.log`). Quark's compiler substitutes `HardSigmoid` for the
+head's `Sigmoid`, the same treatment YOLOv8's SiLU gets.
+
+NPU single-image latency at demo settings (conf 0.25): **6.60 ms mean, 151.4 fps**, 518/525
+nodes on NPU (`results/lat_yolov6n_cut_xint8_npu.log`) — the same 22 detections as the CPU
+cross-check above (person, chair, tv, potted plant, ...).
+
+Full COCO val2017 evaluation (5000 images, conf 0.001, IoU 0.7, max_det 300, per-class NMS).
+`4_detect.py`/`5_eval_map.py`'s "infer" is `sess.run` alone (see Invariants), so this
+latency is comparable across rows even though conf differs from the demo setting above:
+
+| Precision | Device | Latency (eval, conf 0.001) | mAP@50-95 | mAP@50 | Backing log |
+|---|---|---|---|---|---|
+| FP32 (float) | CPU | 20.04 ms | 36.95 | 51.98 | `results/map_yolov6n_fp32_cpu.log` |
+| **Plain XINT8** | **NPU** | **6.62 ms** | **22.92** (-14.03) | **34.98** (-17.00) | `results/map_yolov6n_cut_xint8_npu.log` |
+
+Two findings:
+
+1. **The structural hypothesis holds on placement and speed.** 98.7% single-subgraph
+   placement and a 3.0x latency win (20.04 -> 6.62 ms at eval settings) are in the same
+   range as yolov8n's own head-cut numbers — RepVGG's Add-free backbone compiles and runs
+   as cleanly as CSPDarknet's does here, neither better nor worse on this axis.
+2. **Plain XINT8 costs more accuracy here than it does on yolov8n.** -14.03 points of
+   mAP@50-95 (38% relative) and -17.00 points of mAP@50 (33% relative) is a substantially
+   larger drop than yolov8n's plain-XINT8 loss on the same convention. This was measured
+   **without AdaRound** — the accuracy-recovery path this repo's other detection and pose
+   models all needed (yolov8n-pose above recovers +1.68/+4.95 points from it). No AdaRound
+   run has been quantized for yolov6n yet, so whether the gap closes the way it does
+   elsewhere is untested, not refuted.
+
+Falsification criteria from `RESEARCH.md` Category C ("re-parameterized weight
+distributions exhibit high dynamic range outliers that degrade INT8 PTQ accuracy beyond
+AdaRound's recovery capacity") is **not yet checked** — that requires the AdaRound run
+that hasn't been done. What's measured so far is consistent with either outcome.
+
 ## Key findings
 
 Roughly ordered by how much time each one cost to discover.

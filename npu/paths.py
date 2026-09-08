@@ -20,6 +20,9 @@ YOLO_POSE_CUT_CACHE_KEY = "yoloposecutcachekey"
 # Same model, the 1-column overlay instead of 4x4 (tools/multi_partition_bench.py)
 # -- its own key so a 1x4 compile can never collide with the 4x4 one above.
 YOLO_CUT_1X4_CACHE_KEY = "yolocut1x4cachekey"
+# yolov6n: a different architecture (RepVGG backbone, no DFL), own key so its
+# compile can never collide with the yolov8-family caches above.
+YOLOV6_CUT_CACHE_KEY = "yolov6cutcachekey"
 # MobileViT: the attention-free CNN (mobilevit_cut_backbone_xint8.onnx) and the
 # stock 49-subgraph graph. Both sit at the repo root like every key above.
 # tools/demo_attention.py and tools/pipeline_splice_bench.py once hardcoded
