@@ -1,0 +1,42 @@
+
+===========================================================================
+  STATIC BATCH>1 SILENT FAILURE DEMO (AMD XDNA1 NPU)
+  Model: resnet50_b2_xint8_c64.onnx | Batch Size: 2
+  Pair 1: [000000.jpg, 000001.jpg]  vs  Pair 2: [000002.jpg, 000003.jpg]
+===========================================================================
+
+  [1/2] Testing CPUExecutionProvider (Control)...
+        CPU Pass 1: 85.49 ms | Pass 2: 96.68 ms
+        Slot 0 max abs diff: 19.250000  (Updated)
+        Slot 1 max abs diff: 21.250000  (Updated)
+
+  [2/2] Testing VitisAIExecutionProvider on Phoenix NPU...
+[0;93m2026-09-07 23:17:16.3618866 [W:onnxruntime:, session_state.cc:1316 onnxruntime::VerifyEachNodeIsAssignedToAnEp] Some nodes were not assigned to the preferred execution providers which may or may not have an negative impact on performance. e.g. ORT explicitly assigns shape related ops to CPU to improve perf.[m
+[0;93m2026-09-07 23:17:16.3625916 [W:onnxruntime:, session_state.cc:1318 onnxruntime::VerifyEachNodeIsAssignedToAnEp] Rerunning with verbose output on a non-minimal build will show node assignments.[m
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\modelcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+        NPU Pass 1 (compiling/running)... done (110.38 ms)
+        NPU Pass 2 with new images... done (113.53 ms)
+        Slot 0 max abs diff: 19.750000  (Updated)
+        Slot 1 max abs diff: 0.000000  <-- STALE UNWRITTEN BUFFER!
+
+===========================================================================
+  Execution Provider           Slot 0 Max Delta   Slot 1 Max Delta     Status
+---------------------------------------------------------------------------
+  CPUExecutionProvider                19.250000          21.250000       PASS
+  VitisAIExecutionProvider            19.750000           0.000000 FAIL (STALE)
+===========================================================================
+
+  ROOT CAUSE & HARDWARE MECHANISM:
+  The VitisAI compiler assigns only 80/395 nodes to NPU and sets the output
+  DMA stride incorrectly for batch>1. Output slot 0 receives computed logits,
+  while slot 1 is NEVER written to memory by the hardware engine.
+  ORT reports success and returns a plausible latency (~14 ms), silently
+  returning stale uninitialized RAM for all batch slots > 0.
+  -> LOCKED DECISION: Batch 1 ONLY on AMD XDNA1.
+
+  Saved visual evidence composite -> C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\results\batch_failure_npu.jpg
+

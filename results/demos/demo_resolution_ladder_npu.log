@@ -1,0 +1,60 @@
+
+==============================================================================
+  RESNET50 INPUT RESOLUTION SWEEP: FIXED HARDWARE FLOOR DEMO (NPU)
+  Image: 000000.jpg | Timed Runs: 30 | Backend: AMD XDNA1 NPU
+==============================================================================
+
+  [128x128] Compiling and benchmarking ( 1.35 GMACs)...deleted stale cache C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\modelcachekey
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\modelcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+   3.24 ms (308.5 fps) | Class: 91
+  [160x160] Compiling and benchmarking ( 2.11 GMACs)...deleted stale cache C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\modelcachekey
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\modelcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+   4.15 ms (240.7 fps) | Class: 91
+  [224x224] Compiling and benchmarking ( 4.14 GMACs)...deleted stale cache C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\modelcachekey
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\modelcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+   5.27 ms (189.7 fps) | Class: 91
+  [288x288] Compiling and benchmarking ( 6.84 GMACs)...deleted stale cache C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\modelcachekey
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\modelcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+   8.80 ms (113.6 fps) | Class: 91
+  [384x384] Compiling and benchmarking (12.18 GMACs)...deleted stale cache C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\modelcachekey
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\modelcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+  10.82 ms ( 92.4 fps) | Class: 91
+
+================================================================================
+  Resolution     GMACs   GMACs vs 128    Latency   Lat vs 128     FPS  Hardware Bar
+--------------------------------------------------------------------------------
+  128x128        1.35          1.00x     3.24ms        1.00x  308.5  █████░░░░░░░░░░░
+  160x160        2.11          1.56x     4.15ms        1.28x  240.7  ██████░░░░░░░░░░
+  224x224        4.14          3.07x     5.27ms        1.63x  189.7  ████████░░░░░░░░
+  288x288        6.84          5.07x     8.80ms        2.72x  113.6  █████████████░░░
+  384x384       12.18          9.02x    10.82ms        3.34x   92.4  ████████████████
+================================================================================
+
+  ARCHITECTURAL INSIGHTS (docs/BENCHMARKS.md:200):
+  1. DISPATCH FLOOR (128² -> 224²): 3.07x FLOPs increase costs only 1.63x latency!
+     ~80% of execution time at 128² (3.24 ms) is fixed hardware dispatch/DMA floor.
+  2. COMPUTE KNEE (224² -> 384²): 2.94x FLOPs scales latency by 2.05x.
+     Past 288², compute arithmetic overtakes the dispatch floor and scales linearly with pixels.
+
+  Saved resolution comparison strip -> C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\results\resolution_ladder_npu.jpg
+

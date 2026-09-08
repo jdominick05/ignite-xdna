@@ -1,0 +1,36 @@
+
+===========================================================================
+  TRI-HARDWARE SHOWDOWN: CPU vs DirectML (780M iGPU) vs Ryzen AI NPU
+  Image: test_image.jpg (640x426) | Runs: 30 | Conf: 0.25
+===========================================================================
+
+  [CPU FP32 ] Benchmarking on Zen 4 CPU (8-core)...   27.18 ms infer (median  27.11 ms,  36.8 fps) | 10 dets
+  [DML FP32 ] Benchmarking on Radeon 780M iGPU...onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+    8.60 ms infer (median   8.12 ms, 116.3 fps) | 10 dets
+  [DML FP16 ] Benchmarking on Radeon 780M iGPU...onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+    6.08 ms infer (median   5.53 ms, 164.4 fps) | 10 dets
+  [NPU XINT8] Benchmarking on Phoenix XDNA1 (4x4)...deleted stale cache C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\yolocutcachekey
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\yolocutcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+    6.59 ms infer (median   6.58 ms, 151.8 fps) | 4 dets
+
+================================================================================
+  Hardware Pathway Device             Infer (ms)     FPS  vs CPU  mAP@50-95  Latency Bar
+--------------------------------------------------------------------------------
+  CPU FP32       Zen 4 CPU (8-core)     27.18ms   36.8   1.00x     36.69%  ██████████████████
+  DML FP32       Radeon 780M iGPU        8.60ms  116.3   3.16x     36.69%  ██████░░░░░░░░░░░░
+  DML FP16       Radeon 780M iGPU        6.08ms  164.4   4.47x     36.72%  ████░░░░░░░░░░░░░░
+  NPU XINT8      Phoenix XDNA1 (4x4)      6.59ms  151.8   4.13x     32.19%  ████░░░░░░░░░░░░░░
+================================================================================
+
+  KEY ENGINEERING TAKEAWAYS (docs/BENCHMARKS.md:250):
+  1. RAW SPEED: NPU wins by 0.92x over DirectML FP16 (6.6ms vs 6.1ms).
+  2. ACCURACY:  DirectML FP16 retains full FP32 accuracy (+4.53 mAP@50-95 over AdaRound INT8).
+  3. TRADEOFF:  DirectML requires 0 quantization effort (one-line convert, no calibration/head-cut).
+                NPU is worth it when the last 30-40% of latency is critical; otherwise iGPU FP16 is optimal.
+
+  Saved 4-quadrant visual showdown -> C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\results\tri_hardware_showdown.jpg
+

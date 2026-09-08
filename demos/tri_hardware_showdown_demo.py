@@ -226,10 +226,18 @@ def main():
     if dml_fp16 and npu_row:
         ratio = dml_fp16["mean_ms"] / npu_row["mean_ms"]
         map_delta = dml_fp16["pub_map"] - npu_row["pub_map"]
-        print(f"  1. RAW SPEED: NPU wins by {ratio:.2f}x over DirectML FP16 ({npu_row['mean_ms']:.1f}ms vs {dml_fp16['mean_ms']:.1f}ms).")
+        # ratio > 1 means the NPU is ahead; < 1 means the iGPU is. Don't print "wins"
+        # unconditionally -- this run has come out either way on different days.
+        verdict = (f"NPU is {ratio:.2f}x the speed of DirectML FP16"
+                   if ratio >= 1.0 else
+                   f"NPU LOSES to DirectML FP16, at {ratio:.2f}x its speed")
+        print(f"  1. RAW SPEED: {verdict} ({npu_row['mean_ms']:.1f}ms vs {dml_fp16['mean_ms']:.1f}ms).")
         print(f"  2. ACCURACY:  DirectML FP16 retains full FP32 accuracy (+{map_delta:.2f} mAP@50-95 over AdaRound INT8).")
         print("  3. TRADEOFF:  DirectML requires 0 quantization effort (one-line convert, no calibration/head-cut).")
-        print("                NPU is worth it when the last 30-40% of latency is critical; otherwise iGPU FP16 is optimal.")
+        print("  4. CAVEAT:    the DML rows time the FULL graph (decode inside the timed call);")
+        print("                the NPU row is head-cut, so its decode is NOT in this number. The")
+        print("                NPU is flattered by the comparison, not penalised. Latency also")
+        print("                drifts between sessions -- read this table within one run only.")
 
     # ------------------------------------------------------------------ #
     # Assemble 2x2 Composite Image                                       #

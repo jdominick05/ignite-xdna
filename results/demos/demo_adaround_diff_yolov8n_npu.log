@@ -1,0 +1,43 @@
+
+AdaRound diff demo — yolov8n — NPU — conf 0.25
+Image : test_image.jpg  (640×426)
+
+  [1/2] plain XINT8 (yolov8n_cut_xint8.onnx) …
+deleted stale cache C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\yolocutcachekey
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\yolocutcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+        6.65 ms mean   10 detections
+  [2/2] XINT8 + AdaRound (yolov8n_cut_xint8_adaround.onnx) …
+deleted stale cache C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\yolocutcachekey
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\yolocutcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+        6.65 ms mean   4 detections
+
+================================================================
+  XINT8        10 dets      6.65 ms  (150.4 fps)
+  AdaRound      4 dets      6.65 ms  (150.4 fps)
+  Δ latency  -0.00 ms  (AdaRound faster)
+
+  Shared (IoU ≥ 0.45):  4
+  XINT8-only  (orange):  6
+  AdaRound-only (blue):  0
+================================================================
+
+  XINT8 found, AdaRound missed:
+    – potted plant      conf 0.777
+    – vase              conf 0.622
+    – vase              conf 0.500
+    – person            conf 0.438
+    – clock             conf 0.321
+    – potted plant      conf 0.269
+
+  Shared boxes: AdaRound conf delta  mean -0.240  median -0.216  (0/4 higher)
+
+  Saved → C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\results\adaround_diff_yolov8n_npu.jpg
+

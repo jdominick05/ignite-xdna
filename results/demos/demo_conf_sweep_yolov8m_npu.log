@@ -1,0 +1,28 @@
+
+Conf threshold sweep — yolov8m — NPU
+Model : yolov8m_cut_xint8_c200.onnx
+Image : test_image.jpg  (640×426)
+
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\yolocutcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+  Compiling / running …  27.9 ms
+
+    conf  dets  bar                       classes found
+  ──────  ────  ────────────────────────  ──────────────────────────────
+   0.001   171  ██████████████████████  person, tie, bottle, wine glass, cup…  ← mAP eval
+   0.050    36  █████░░░░░░░░░░░░░░░░░  person, bottle, cup, chair, potted plant…
+   0.100    29  ████░░░░░░░░░░░░░░░░░░  person, bottle, cup, chair, potted plant…
+   0.250    23  ███░░░░░░░░░░░░░░░░░░░  person, bottle, chair, potted plant, dining table…  ← demo default
+   0.500    12  ██░░░░░░░░░░░░░░░░░░░░  person, chair, potted plant, dining table, tv…
+   0.750     5  █░░░░░░░░░░░░░░░░░░░░░  person, chair, dining table, tv
+   0.900     3  ░░░░░░░░░░░░░░░░░░░░░░  chair, tv
+
+  Boxes present at 0.001 but gone by 0.25: 148 / 171
+  These are the detections mAP integrates over that a demo window never shows.
+  Colour key: blue = low confidence → red = high confidence
+
+  Saved → C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\results\conf_sweep_yolov8m_npu.jpg
+

@@ -250,6 +250,20 @@ against a full 5000-image mAP, not assumed lossless: 36.72 vs FP32's 36.69, with
 **The honest answer has two columns, and they point in opposite directions.**
 DirectML's best case (FP16, zero quantization work) is 1.3-1.5× slower than the NPU's
 best case, full stop — the NPU wins the speed race even against an optimized iGPU path.
+
+> **The speed half of that has NOT reproduced (2026-09-07, Desktop 2).** A same-sitting
+> four-way capture read CPU 27.18 ms, DML FP32 8.60, **DML FP16 6.08**, and **NPU
+> XINT8+AdaRound 6.59** — the iGPU faster than the NPU, at 0.92×, while also holding
+> 36.72 mAP against 32.19. It won on both axes, reversing this paragraph's conclusion
+> (`results/demos/demo_tri_hardware_showdown.log`). What moved is the DML FP16 number:
+> 6.08 ms here against the 9.9-10.5 ms in the table above; the NPU's ~6.6 ms is in line
+> with what it has always read. The comparison also favours the NPU structurally — the DML
+> rows time the full graph with decode inside the timed call, while the NPU row is head-cut
+> with decode excluded — so the loss is not an artefact of measuring the NPU unfairly.
+> Against that, it is one sitting on a machine whose latency drift is documented, and it
+> was not repeated. Both numbers stand, neither is retracted, and the 1.3-1.5× lead should
+> not be quoted again without a fresh capture of both paths together. The mAP half of the
+> paragraph is unaffected and reproduced exactly (32.19 vs 36.72).
 But NPU XINT8+AdaRound still costs **4.5 mAP points against FP32** even after the
 accuracy-recovery step this repo's own locked decision calls for (32.19 vs 36.69 mAP@50-95,
 and that gap is measured on the full 5000, not a slice: an earlier 200-image-slice

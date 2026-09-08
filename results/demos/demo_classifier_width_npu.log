@@ -1,0 +1,44 @@
+
+==============================================================================
+  CLASSIFIER WIDTH LADDER DEMO (NPU)
+  Image: 000000.jpg | Runs: 30 | Backend: AMD XDNA1 NPU
+==============================================================================
+
+  [ResNet50        ] Compiling and benchmarking (25.6M params, 4.14 GMACs)...deleted stale cache C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\modelcachekey
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\modelcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+   5.38 ms (185.8 fps) | Class: 91
+  [Wide-ResNet50-2 ] Compiling and benchmarking (68.9M params, 11.65 GMACs)...deleted stale cache C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\modelcachekey
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\modelcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+   8.94 ms (111.9 fps) | Class: 91
+  [Wide-ResNet101-2] Compiling and benchmarking (126.9M params, 23.18 GMACs)...deleted stale cache C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\modelcachekey
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\modelcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+  16.67 ms ( 60.0 fps) | Class: 91
+
+================================================================================
+  Model              Params   vs R50   GMACs    Latency   vs R50    Top-1  Latency Bar
+--------------------------------------------------------------------------------
+  ResNet50            25.6M    1.00x    4.14     5.38ms    1.00x    72.1%  █████░░░░░░░░░░░
+  Wide-ResNet50-2     68.9M    2.69x   11.65     8.94ms    1.66x    71.5%  █████████░░░░░░░
+  Wide-ResNet101-2   126.9M    4.96x   23.18    16.67ms    3.10x    80.2%  ████████████████
+================================================================================
+
+  KEY ARCHITECTURAL TAKEAWAYS (docs/BENCHMARKS.md:1073):
+  1. PURE WIDTH STEP: 2.69x parameter scaling costs only 1.66x latency.
+     Confirms 'width is nearly free' holds for CNN classifiers (71.5% top-1, 90.1% top-5).
+  2. EXTENDED STEP:   4.96x parameters (126.9M params) costs only 3.10x latency.
+     Wide-ResNet101-2 achieves 80.2% top-1 under plain XINT8, beating ResNet50 AdaRound.
+
+  Saved classifier width visual strip -> C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\results\classifier_width_npu.jpg
+

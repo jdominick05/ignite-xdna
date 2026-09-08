@@ -1,0 +1,56 @@
+
+Width ladder demo — NPU — 30 timed runs each
+Image : test_image.jpg  (640×426)
+
+  [n] compiling / loading yolov8n_cut_xint8_c200.onnx …deleted stale cache C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\yolocutcachekey
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\yolocutcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+    6.63 ms mean  (150.8 fps)  11 dets
+  [s] compiling / loading yolov8s_cut_xint8_c200.onnx …deleted stale cache C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\yolocutcachekey
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\yolocutcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+   12.87 ms mean  (77.7 fps)  16 dets
+  [m] compiling / loading yolov8m_cut_xint8_c200.onnx …deleted stale cache C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\yolocutcachekey
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\yolocutcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+   27.78 ms mean  (36.0 fps)  22 dets
+  [x] compiling / loading yolov8x_cut_xint8.onnx …deleted stale cache C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\yolocutcachekey
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\yolocutcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+   74.46 ms mean  (13.4 fps)  20 dets ⚠ calib<200
+
+========================================================================
+  Model        Latency     FPS    vs n   GFLOPs  Dets  Utilization bar
+------------------------------------------------------------------------
+  yolov8n       6.63ms   150.8   1.00×      8.7    11  ██░░░░░░░░░░░░░░░░░░░░
+  yolov8s      12.87ms    77.7   1.94×     28.6    16  ████░░░░░░░░░░░░░░░░░░
+  yolov8m      27.78ms    36.0   4.19×     78.9    22  ████████░░░░░░░░░░░░░░
+  yolov8x      74.46ms    13.4  11.23×    257.8    20  ██████████████████████   ⚠ calib<200
+========================================================================
+
+  n→s: 3.3× the FLOPs, 1.94× the latency  →  'width is nearly free'
+  n→m: 9.1× the FLOPs, 4.19× the latency  →  still sub-linear at a bigger step
+
+  Note: these numbers are from a single session. Latency drifts across
+  sessions on this hardware; always compare within a run, not against logs
+  from a different day. (CLAUDE.md invariant)
+
+  Detections at conf ≥ 0.25 (sorted by confidence):
+    yolov8n: tv(0.90), person(0.82), potted plant(0.78), chair(0.78), vase(0.56), chair(0.56), vase(0.50), clock(0.32) … +3 more
+    yolov8s: tv(0.94), tv(0.92), person(0.82), chair(0.82), chair(0.82), refrigerator(0.78), potted plant(0.73), person(0.62) … +8 more
+    yolov8m: chair(0.92), tv(0.90), chair(0.90), person(0.82), dining table(0.82), potted plant(0.73), chair(0.73), vase(0.73) … +14 more
+    yolov8x: tv(0.96), chair(0.95), chair(0.92), tv(0.90), person(0.88), chair(0.85), vase(0.82), refrigerator(0.82) … +12 more
+
+  Annotated images saved to results/

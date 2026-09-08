@@ -1,0 +1,57 @@
+
+===========================================================================
+  YOLOv8n-Pose Keypoint Jitter & AdaRound Recovery Demo on NPU
+  Image: test_image.jpg (640x426) | Runs: 30 | Conf: 0.25
+===========================================================================
+
+  [1/2] Plain XINT8 (yolov8n-pose_cut_xint8.onnx)...RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\yoloposecutcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+    7.20 ms (median   7.21 ms, 138.8 fps) | 1 persons
+  [2/2] XINT8 + AdaRound (yolov8n-pose_cut_xint8_adaround.onnx)...deleted stale cache C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\yoloposecutcachekey
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\yoloposecutcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+    7.26 ms (median   7.24 ms, 137.7 fps) | 1 persons
+
+===========================================================================
+  Metric                              Plain XINT8       XINT8 + AdaRound
+---------------------------------------------------------------------------
+  NPU Latency (mean)                       7.20 ms                 7.26 ms
+  NPU Throughput                          138.8 fps                137.7 fps
+  Published COCO OKS mAP                32.64 mAP      34.32 mAP (+1.68)
+  Persons Detected (conf>=0.25)                  1                      1
+  Matched Persons                               1                      1
+===========================================================================
+
+  KEYPOINT JITTER & DISPLACEMENT ANALYSIS (17 COCO Joints):
+  Joint             XINT8 Vis  AdaRound Vis   Drift (px)  Shift Bar
+  --------------------------------------------------------------
+  nose                  0.80         0.48       6.32px  ████░░░░░░░░░░
+  left_eye              0.84         0.56       7.21px  █████░░░░░░░░░
+  right_eye             0.35         0.12       4.47px  ███░░░░░░░░░░░
+  left_ear              0.93         0.84       7.21px  █████░░░░░░░░░
+  right_ear             0.29         0.10       2.83px  ██░░░░░░░░░░░░
+  left_shoulder         0.99         0.98       6.32px  ████░░░░░░░░░░
+  right_shoulder        0.92         0.90       6.00px  ████░░░░░░░░░░
+  left_elbow            0.98         0.95       5.66px  ████░░░░░░░░░░
+  right_elbow           0.55         0.48      16.00px  ███████████░░░
+  left_wrist            0.94         0.88      10.00px  ███████░░░░░░░
+  right_wrist           0.50         0.44      20.00px  ██████████████
+  left_hip              0.99         0.98       7.21px  █████░░░░░░░░░
+  right_hip             0.96         0.96      10.20px  ███████░░░░░░░
+  left_knee             0.99         0.97      12.00px  ████████░░░░░░
+  right_knee            0.95         0.90      14.14px  ██████████░░░░
+  left_ankle            0.96         0.91       7.21px  █████░░░░░░░░░
+  right_ankle           0.91         0.83       7.21px  █████░░░░░░░░░
+
+  Average Keypoint Coordinate Drift: 8.82 pixels
+  Takeaway: Plain XINT8 introduces coordinate regression jitter on non-convex limbs;
+  AdaRound's weight rounding optimization recovers +1.68 OKS mAP without latency penalty.
+
+  Saved skeleton comparison composite -> C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\results\pose_adaround_diff_npu.jpg
+
