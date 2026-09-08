@@ -29,13 +29,18 @@ Every figure carries one of four tags, and the tag is the claim:
 - **DERIVED** — arithmetic shown inline from MEASURED and SPEC inputs, assumptions named.
 - **TO VERIFY** — physically checkable on this machine, and nobody has.
 
-**The clock is not measured.** Every per-second ceiling below depends on the AIE core
-clock, and nothing in this repo measures it: `RESEARCH.md` cites 1.6 GHz for the 8700G
-from a web search, `results/aie/bottleneck_spatial_sweep_npu.log` assumed 1 GHz and says
-so, and `xrt-smi examine -r platform` prints no clock at all (only `Power Mode: Default`).
-So per-cycle figures are the primary SPEC numbers, every per-second figure is given at
-both 1.0 and 1.6 GHz, and measuring the clock is objective S0 below. Read the two
-columns as brackets, not as a choice.
+**The clock was not measured when this file was written; it is now.** Every per-second
+ceiling below depends on the AIE core clock, and on 2026-09-06 nothing in this repo
+measured it: `RESEARCH.md` cited 1.6 GHz for the 8700G from a web search,
+`results/aie/bottleneck_spatial_sweep_npu.log` assumed 1 GHz and said so, and `xrt-smi
+examine -r platform` prints no clock at all. So per-cycle figures are the primary SPEC
+numbers and every per-second figure below is given at both 1.0 and 1.6 GHz, as originally
+derived. Objective S0 then measured it (2026-09-07, section 1.7): **1.80 GHz** in the
+`default`, `performance` and `turbo` power modes, **1.03 GHz** in `balanced`, **0.80 GHz**
+in `powersaver` (`results/aie/clock_probe_npu.log`). The 1.0/1.6 columns are kept as
+written and the 1.80 GHz value is added beside them wherever it changes a reading, with
+the arithmetic; the conversion from a 1.6 GHz figure is the ratio 1.6 ÷ 1.8 = 0.889.
+New numbers use 1.80 GHz and say which power mode they were taken in.
 
 ## 1. The physical array
 
@@ -47,7 +52,7 @@ columns as brackets, not as a choice.
 | Rows per column | 6: one shim tile, one mem tile, four core tiles | SPEC: `BaseNPU1TargetModel::rows()` returns 6 ("1 Shim row, 1 memtile row, and 4 Core rows"); `device.yaml` `phoenix:` block has `num_rows: 4`, `memtile_rows: 1`. |
 | Core tiles | 20 physical, 16 reachable today | DERIVED: 5 × 4 and 4 × 4. |
 | Columns any path on this machine can drive | 4 | MEASURED: `4x4.xclbin` always lands on `Partition Index: 0, Columns: [1, 2, 3, 4]` (`results/gops_yolov8n.log`, `tools/session_hold.py`); `1x4.xclbin` exposes at most 4 partitions and a 5th process time-slices column 4 (`results/multi_partition_yolov8n_5col.log`); the driver's own `5x4_*.xclbin` overlays build, run, match CPU output and place 0 nodes on the NPU — fingerprint mismatch, `docs/DECISIONS.md`. SPEC: mlir-aie v1.4.2 models NPU1 as at most 4 columns (`python/iron/device/__init__.py:42`, `_MAX_COLS = {"NPU1": 4}`; `AIEAttrs.td` defines `npu1` as the 4-column "whole array" plus `npu1_1col..3col`). |
-| Which column is the unreachable one | column 0, by elimination | DERIVED from the `[1, 2, 3, 4]` partition report. TO VERIFY: whether column 0's shim tile has a NoC DMA at all, or is compute-only (mlir-aie's "NPU1 has no ShimPL tiles" comment covers only the four columns it models). |
+| Which column is the unreachable one | column 0, by elimination | DERIVED from the `[1, 2, 3, 4]` partition report. MEASURED 2026-09-07 that the numbering is physical: a Worker placed on IRON's logical `Tile(0, 2)` reports `get_coreid()` row 2, column 1, and its trace packets carry the same header — logical column 0 is physical column 1 (`results/aie/clock_probe_npu.log`). TO VERIFY: whether column 0's shim tile has a NoC DMA at all, or is compute-only (mlir-aie's "NPU1 has no ShimPL tiles" comment covers only the four columns it models). |
 | `device.yaml`'s own `phoenix:` block | `num_columns: 4` | SPEC — AMD's cost-model config describes the 4-column overlay, not the die. The two AMD sources disagree with each other; `xrt-smi` and `aiecompiler` are the ones that talk to hardware. |
 
 ### 1.2 One core tile
@@ -66,7 +71,7 @@ columns as brackets, not as a choice.
 | Neighbour memories a core can address directly | its own, west, north, and south unless the south tile is the mem tile | SPEC: `AIE2TargetModel::isLegalMemAffinity` (`AIETargetModel.cpp:809-823`). DERIVED: a core in the lowest core row sees 3 × 64 KB, the other three rows see 4 × 64 KB. |
 | Stack | Peano defaults to 1024 B and grows *upward into tile buffers* | MEASURED: silent corruption until `Worker(..., stack_size=2048)` (`kernels/attention_bf16/README.md`). |
 | Live accumulators | 8 concurrently-live 4×8×8 int8 `aie::mmul` accumulators spill to the stack; ≤4 stays in registers | MEASURED: the root cause of the `conv2dk3` width-32 corruption (`results/aie/conv2dk3_widthfix_npu.log`, `kernels/README.md`). TO VERIFY the exact register count from the AIE-ML ISA rather than from that one kernel. |
-| Cycle counter | `aie::tile::current().cycles()` → `get_cycles()` | SPEC: `ironenv/Lib/site-packages/mlir_aie/include/aie_api/tile.hpp`. Never used in this repo yet; it is what objective S0 is built on. |
+| Cycle counter | `aie::tile::current().cycles()` → `get_cycles()` — **not reachable from a Peano kernel**; the trace unit reads the same timer | SPEC: `ironenv/Lib/site-packages/mlir_aie/include/aie_api/tile.hpp`. MEASURED 2026-09-07: Peano (llvm-aie 22) declares `get_cycles()` and never defines it (`ld.lld: undefined symbol`), does not lower `__builtin_readcyclecounter`, and rejects inline asm; S0 read the timer through trace-unit event stamps instead (`results/aie/clock_probe_npu.log`). |
 | `aie::mmul` shapes in mlir-aie's GEMM library | bf16 4×8×4; int8 4×8×8; int16 4×4×4 | SPEC: `aie_kernels/aie2/mm.cc`. |
 | Numerics | `aie::set_rounding(conv_even)` needed to match host round-to-nearest-even; Peano's AIE libc has no float `sqrtf` | MEASURED: `results/aie/groupnorm_bf16_kernel_npu.log`. |
 
@@ -118,15 +123,20 @@ cited 1.6 GHz. So either the clock is higher than cited, or a shim DMA channel i
 than one 32-bit stream, or `max_stream_bw: 4` is not bytes per cycle at all. S0 and S1
 between them settle which.
 
+S0 has settled its half (1.7): the clock is 1.80 GHz, so 7.0 GB/s is 3.9 bytes per cycle
+— one 32-bit stream word per cycle, and `max_stream_bw: 4` reads as bytes per cycle after
+all. The DRAM figure at 1.8 GHz is 28.8 GB/s, still within 10% of the 26–28 GB/s shared
+cap. What S1 still owns is whether that cap is DRAM, NoC, or channel count.
+
 ### 1.7 Clock and power mode
 
 | Fact | Value | Tag and evidence |
 |---|---|---|
-| Core clock | **unmeasured** | RESEARCH.md: 1.6 GHz for the 8700G, from a web search on 2026-09-06. `results/aie/bottleneck_spatial_sweep_npu.log`: "~2 TOPS at 1 GHz … NOT measured on this machine". |
-| Clock readback, live | **800 MHz idle → 1800 MHz while a hardware context is active** (power mode `Default`) | MEASURED: XRT's `xrt::device::get_info<max_clock_frequency_mhz>` (also `pyxrt`), sampled idle, every 3 s across a 30 s IRON GEMM run, and idle again, ~0.05 ms per read (`results/aie/xrt_api_live_clock_and_pdh_npu.log`). A readback, not a nameplate: the value follows context activity. `tools/hwinfo_npu_bridge.exe` shows it live and publishes it to HWiNFO. Other power modes not sampled through this path. |
+| Core clock | **1.80 GHz** in `default`, `performance` and `turbo`; 1.03 GHz in `balanced`; 0.80 GHz in `powersaver` (1.7983 / 1.8002 / 1.7998 / 1.0274 / 0.7985 GHz by the scalar-loop fit; 1.7990 re-measured in `default` after the sweep) | MEASURED `results/aie/clock_probe_npu.log` (2026-09-07, `kernels/clock_probe/`): `event0()`/`event1()` around a DMA-free loop, stamped by the tile's trace unit; the runtime's submit+wait time fitted against the stamped cycles across 2^18–2^25 iterations so the dispatch cost cancels (R² ≥ 0.999995). Two loops with different costs — 9.000 and 2.000 cycles per iteration, exactly constant at every length — agree within 0.33%. Assumes the trace timer ticks at the core clock. Evidence: a timer at k times the clock would need both 9/k and 2/k to be whole numbers, which only k = 1 satisfies; a timer at a fraction of it would put the 7.0 GB/s shim stream of 1.6 at under half of `device.yaml`'s 4 bytes per cycle, and it lands at 3.9. Supersedes: 1.6 GHz from a web search (RESEARCH.md, 2026-09-06) and the 1 GHz `bottleneck_spatial_sweep_npu.log` assumed. One core tile (logical (0,2)) measured; the concurrent-VitisAI-EP leg of S0 was not run. |
+| Clock readback, live | **800 MHz idle → 1800 MHz while a hardware context is active** (power mode `Default`) | MEASURED: XRT's `xrt::device::get_info<max_clock_frequency_mhz>` (also `pyxrt`), sampled idle, every 3 s across a 30 s IRON GEMM run, and idle again, ~0.05 ms per read (`results/aie/xrt_api_live_clock_and_pdh_npu.log`). A readback, not a nameplate: the value follows context activity. `tools/hwinfo_npu_bridge.exe` shows it live and publishes it to HWiNFO. Other power modes not sampled through this path. | Contradicted by the `Power mode` row below, which reads the same query as a fixed 800; see docs/DECISIONS.md, "UNRESOLVED".
 | Live utilization | Windows' GPU-engine statistics see the NPU: 84–88 % across an IRON GEMM run, 0 % idle, adapter memory = xrt-smi's | MEASURED: `\GPU Engine(pid_*_luid_0x00000000_0x0000d6bf_*_engtype_compute)\Utilization Percentage` via PDH, and DXCore lists the adapter as "NPU Compute Accelerator Device" under `DXCORE_HARDWARE_TYPE_ATTRIBUTE_NPU` (same log). xrt-smi's GOPS/FPS/latency read `N/A` for the same context. Not yet confirmed under a VitisAI EP session. |
-| Power mode | `Default`; `xrt-smi configure --pmode` accepts `default, powersaver, balanced, performance, turbo` | MEASURED: `results/aie/xrt_smi_platform_pmode.log` (a verbatim `--batch` capture of `xrt-smi examine -r platform` and `configure --help`, 2026-09-07; nothing on the device was changed). Never exercised by anything in this repo. |
-| A symptom nobody has attributed | the same model, same cache, measured 12.7 ms alone and 6.8–6.9 ms minutes later in a sweep | MEASURED `docs/DECISIONS.md` ("NPU single-instance latency drifts session to session"). Background CPU load was the suspect; an NPU clock or power state that changes with activity is the other candidate, and S0 tests it. |
+| Power mode | `Default`; `xrt-smi configure --pmode` accepts `default, powersaver, balanced, performance, turbo` | MEASURED: `results/aie/xrt_smi_platform_pmode.log` (a verbatim `--batch` capture of `xrt-smi examine -r platform` and `configure --help`, 2026-09-07; nothing on the device was changed). Exercised 2026-09-07 (`results/aie/clock_probe_npu.log`): all five modes switch from an unelevated shell; `powersaver`, `balanced`, `performance` cleanly, `turbo` with `[xrt-smi] ERROR: Failed to escape (0xc0000001)` printed on entry and on leaving, the report reading `Turbo` regardless and the clock matching `performance`. pyxrt's `device.get_info(max_clock_frequency_mhz)` reads 800 in every mode — the `powersaver` clock, not the live one. |
+| A symptom nobody has attributed | the same model, same cache, measured 12.7 ms alone and 6.8–6.9 ms minutes later in a sweep | MEASURED `docs/DECISIONS.md` ("NPU single-instance latency drifts session to session"). Background CPU load was the suspect; an NPU clock or power state that changes with activity is the other candidate, and S0 tests it. TESTED at the 5 s scale (`results/aie/clock_probe_npu.log`): three calls each after 5 s of idle read 1.77–1.79 GHz, the same as back-to-back calls, so idle is not it at that scale. Power mode is a 2.25× clock lever, and no log in this repo records the mode a number was taken under; a mode change between sessions would produce exactly this symptom. |
 
 ### 1.8 On-chip storage, totalled
 
@@ -149,6 +159,12 @@ achieved figure — yolov8l on four independent `1x4` columns, 6.29 TOPS, 39.3% 
 (`results/multi_partition_yolov8l.log`, `tools/estimate_tops.py`) — is 48% of what the
 16 cores it ran on can physically do at 1.6 GHz.
 
+At the MEASURED clock (1.7, `default` mode, 1.80 GHz): 20 × 256 × 2 × 1.8 = **18.4 TOPS**
+for the full array and **14.7 TOPS** for the 16 reachable cores. The nameplate is what the
+20-core array does at 1.6 GHz, and this part runs 12.5% faster than that in `default`; the
+4x4 overlay's physical ceiling is then **92% of nameplate**, not 82%, and yolov8l's 6.29
+TOPS is 43% of what its 16 cores can do. In `powersaver` every figure here is 4/9 of it.
+
 ### 2.2 The per-column denominator is a finding, not a convention
 
 `results/percall_overhead_yolov8_1x4.log` divides by "an ideal 4-TOPS column" (16 ÷ 4). A
@@ -158,11 +174,14 @@ four-core column is 4 × 256 × 2 × f:
 |---|---|---|---|---|
 | 1.0 GHz | 2.05 TOPS | 1.02 TFLOPS | 1.02 TOPS | 512 GOPS |
 | 1.6 GHz | 3.28 TOPS | 1.64 TFLOPS | 1.64 TOPS | 819 GOPS |
+| **1.8 GHz (MEASURED, `default`)** | 3.69 TOPS | 1.84 TFLOPS | 1.84 TOPS | 922 GOPS |
 
 The vendor DPU's yolov8l run on one column is 8.433 × 10¹⁰ MACs in 102.190 ms of node time
 (MEASURED, that log) = **1.650 TOPS achieved per column**. Against the three denominators:
 41.3% of "4 TOPS", **50.3% of a 3.28-TOPS column, 80.5% of a 2.05-TOPS column.** Which of
-the last two is true is exactly the clock question; either way, 1.65 TOPS per column is a
+the last two is true is exactly the clock question — and the answer is neither: at the
+measured 1.80 GHz the column is 3.69 TOPS and the DPU's 1.650 is **44.8%** of it. Either
+way, 1.65 TOPS per column is a
 measured, clock-independent bar that this silicon demonstrably sustains on int8 conv, and
 it is the bar every open kernel in section 4 is held to.
 
@@ -174,6 +193,9 @@ it is the bar every open kernel in section 4 is held to.
 | mlir-aie `ml/bottleneck`, h-axis sweep | 146.1 GOPS (fit, r² = 0.99999) | 36.5 GOPS | 4.5% | MEASURED `results/aie/bottleneck_spatial_sweep_npu.log` |
 | mlir-aie `ml/bottleneck`, 56×56 | 111.1 GOPS (2-point fit) | 27.8 GOPS | 3.4% | MEASURED `results/aie/bottleneck_w56_npu.log` |
 | CPU, ORT QDQ int8 on 8 Zen4 cores, same shapes | 819.0 (sweep) / 1678.8 (56×56) GOPS | — | — | MEASURED, same two logs |
+
+At the measured 1.80 GHz the per-core denominator is 922 GOPS and the three shares read
+44.8%, 4.0% and 3.0% (`results/aie/clock_probe_npu.log`).
 
 The vendor-to-open gap, **11.3×**, is clock-independent because both ran on the same
 column. That gap, not the CPU, is the real statement about the open int8 conv kernels: the
@@ -187,11 +209,11 @@ can't.
 
 | Quantity | Value | Tag and evidence |
 |---|---|---|
-| 16-core bf16 peak | 4.10 TFLOPS at 1.0 GHz; 6.55 TFLOPS at 1.6 GHz | DERIVED: 16 × 128 × 2 × f |
+| 16-core bf16 peak | 4.10 TFLOPS at 1.0 GHz; 6.55 TFLOPS at 1.6 GHz; **7.37 TFLOPS at the measured 1.80 GHz** | DERIVED: 16 × 128 × 2 × f; clock MEASURED `results/aie/clock_probe_npu.log` |
 | Best measured | 2072.54 GFLOPS (1024³, bf16 out) | MEASURED `results/aie/bf16_matmul_niche_npu.log` |
 | Typical at production shapes | 1776.68 (2048×4096×4096, f32 out), 1800.86 (down-projection K=11008), 1846.96 (4096×2048×2048) GFLOPS | MEASURED `results/aie/bf16_matmul_attention_scale_npu.log`, `..._ffn_real_shape_npu.log`, `..._niche_npu.log` |
-| Share of peak | 50.6% (1.0 GHz) / 31.6% (1.6 GHz) at the best point; 43–45% / 27–28% at production shapes | DERIVED |
-| Per core at the best point | 2072.54 ÷ 16 = 129.5 GFLOPS = 64.8 GMAC/s = 40.5 MAC/cycle of 128 at 1.6 GHz | DERIVED |
+| Share of peak | 50.6% (1.0 GHz) / 31.6% (1.6 GHz) / **28.1% (measured 1.80 GHz)** at the best point; 43–45% / 27–28% / 24–25% at production shapes | DERIVED |
+| Per core at the best point | 2072.54 ÷ 16 = 129.5 GFLOPS = 64.8 GMAC/s = 40.5 MAC/cycle of 128 at 1.6 GHz, **36.0 at the measured 1.80 GHz** | DERIVED |
 | CPU bar (torch bf16, 8 Zen4 cores) | 1100.6–1362.8 GFLOPS across every shape measured | MEASURED, the same logs |
 
 The NPU's measured edge here is 1.13–1.78× over the CPU, and it comes from running the
@@ -257,11 +279,13 @@ the core can absorb 0.0625 B/MAC. DERIVED:
 The int8 column of the same table is the bf16 one at half the bytes per MAC (0.0469 at
 64×32, 0.0313 at 64×64) against the same 8 B/cycle and 256 MAC/cycle, so 64×64 is exactly
 input-balanced for int8 — and MEASURED it goes 2387.01 → 4607.05 GOPS at 4096×2048×2048,
-18% → 35% of the 16-core int8 peak at 1.6 GHz (`results/aie/int8_matmul_sweep_npu.log`).
+18% → 35% of the 16-core int8 peak at 1.6 GHz, 16% → 31% at the measured 1.80 GHz
+(`results/aie/int8_matmul_sweep_npu.log`, `results/aie/clock_probe_npu.log`).
 The tile decides whether the core is fed, at both dtypes.
 
 Two readings. First, the default tile is input-bound at two thirds of peak *before* any
-other inefficiency, and the measured 27–32% (1.6 GHz) sits at half of that bound — so
+other inefficiency, and the measured 27–32% (1.6 GHz; 24–28% at the measured 1.80 GHz)
+sits at well under half of that bound — so
 roughly half of the remaining gap is data movement and half is inside the core (C tile
 read-modify-write over the 256-bit bus every k-step, loop overhead, pipeline fill). The
 trace in S2 apportions those. Second, the levers the silicon offers are specific: keep the
@@ -270,7 +294,8 @@ cascade, so C is written once), share A or B between adjacent cores through neig
 memory so one DMA stream feeds two consumers (halves the per-core input demand without
 touching the switch), and pick tiles by the B/MAC column above rather than by what fits
 the generic design's DMA pattern. The CPU bar is flat at 1100–1360 GFLOPS; the input-bound
-ceiling for a 64×64 tile at 1.6 GHz is 6.55 TFLOPS, at 1.0 GHz 4.10.
+ceiling for a 64×64 tile at 1.6 GHz is 6.55 TFLOPS, at 1.0 GHz 4.10, at the measured
+1.80 GHz 7.37.
 
 ### 3.2 GroupNorm and InstanceNorm live at the DRAM cap
 
@@ -321,20 +346,30 @@ and what in this repo it reuses. None of them is a claim of a result.
 
 ### Tier 0 — instrumentation (cheap, and everything downstream needs it)
 
-**S0. Measure the core clock, per power mode.**
-Physical basis: every core has a 64-bit cycle counter (1.2). Tooling: a one-Worker design
-that reads `aie::tile::current().cycles()` before and after a fixed, DMA-free loop, writes
-both stamps to its output fifo, and is timed by the host around the same call; repeat under
-each `xrt-smi configure --pmode` and while a VitisAI EP session runs concurrently.
-Measurement: cycles ÷ wall seconds, with the loop long enough that the 617 µs dispatch
-cost is under 1% of it. Decides: every per-second column in sections 2–3; whether the
-session-to-session drift in 1.7 is a clock state; whether `turbo` exists on this part.
-Reuses: `kernels/dispatch_floor/measure_floor.py`'s harness and verification pattern.
-Already in hand, cheaply: XRT's `max_clock_frequency_mhz` query is a live readback on this
-driver — 800 MHz idle, 1800 MHz while a context is active (1.7,
-`results/aie/xrt_api_live_clock_and_pdh_npu.log`) — so any run can log its clock state at
-~0.05 ms per read (`tools/hwinfo_npu_bridge.exe --json`). The cycle-counter probe stays the
-ground truth for the busy clock and for `balanced`/`powersaver`.
+**S0. Measure the core clock, per power mode. — DONE 2026-09-07, two of its three legs.**
+Result: **1.80 GHz** in `default`, `performance` and `turbo`; **1.03 GHz** in `balanced`;
+**0.80 GHz** in `powersaver` (`results/aie/clock_probe_npu.log`, `kernels/clock_probe/`).
+The tooling as planned did not survive contact: Peano never defines `get_cycles()`
+(undefined symbol at link), does not lower `__builtin_readcyclecounter`, and rejects
+inline asm, so the counter was read through the trace unit instead — `event0()` /
+`event1()` around the loop, stamped by the tile timer, and the runtime's submit+wait time
+fitted against the stamped cycles across 2^18–2^25 iterations so the dispatch cost
+cancels (R² ≥ 0.999995; two loops with 9.000 and 2.000 cycles per iteration agree within
+0.33%). Decided: every per-second column in 2–3 now carries the measured-clock value; the
+5 s idle probe shows no clock penalty, so the drift in 1.7 is not an idle state at that
+scale (a power-mode change would be); `turbo` is accepted and reported, errors on entry,
+and clocks the same as `performance`. Not run: the concurrent-VitisAI-EP leg (the
+worktree that ran this had no `models/`), and every tile other than logical (0,2). Still
+an assumption: that the trace timer is the core clock — the integer, length-independent
+cycles per iteration of two different loops is the evidence for it.
+
+The plan this replaces also recorded a cheap side-channel worth keeping: XRT's
+`max_clock_frequency_mhz` was read as a live readback on this driver — 800 MHz idle,
+1800 MHz while a context is active (`results/aie/xrt_api_live_clock_and_pdh_npu.log`),
+~0.05 ms per read via `tools/hwinfo_npu_bridge.exe --json`. The run above read the same
+query as a flat 800 in every power mode. Both readings stand unretracted and are not
+reconciled — see docs/DECISIONS.md, "UNRESOLVED". The trace-unit figure is the citable
+clock either way.
 
 **S1. Pin the data-movement constants.**
 Physical basis: 1.5–1.6 hold three mutually inconsistent inferences. Tooling: extend the
@@ -347,7 +382,15 @@ bandwidth, and the neighbour-memory read rate. Decides: the 8 B/cycle assumption
 at all. Reuses: the same script; `results/aie/mlir_aie_examples_npu.log`'s memcpy as the
 cross-check.
 
-**S2. Hardware trace on npu1, end to end.**
+**S2. Hardware trace on npu1, end to end. — First step taken by S0.**
+S0 ran `Program.enable_trace` on this machine end to end: `input_with_addresses.mlir` was
+present in the design cache, packets arrived, and the stamps decoded. Two things it
+learned that every later trace here inherits: a core that emits fewer events than fill a
+32-byte packet never gets them to host memory (filler events fix it), and mlir-aie
+v1.4.2's `aie.utils.trace.parse` mis-times any gap longer than 2^18 cycles (146 µs at
+1.8 GHz) by treating the `0xff` sync frame as a timer no-op —
+`kernels/clock_probe/clock_probe.py` carries a corrected decoder, cross-checked against
+upstream on a sync-free run (`results/aie/clock_probe_npu.log`). The rest of S2 stands as written.
 Physical basis: every core, mem and shim tile has a trace unit that emits cycle-stamped
 event packets (8 selectable events per tile, or program-counter samples) over the stream
 switch to a shim DMA and into a host buffer; mlir-aie's `Program.enable_trace` configures
@@ -363,7 +406,11 @@ threads in `RESEARCH.md` — the silicon exposes it, the post-step didn't.
 
 **S3. In-kernel cycle accounting without trace.**
 Physical basis: the same counter as S0, read inside the kernel around the `mmul` loop and
-around each fifo acquire. Tooling: a `-DPROFILE` build of `mm.cc`'s `matmul_vectorized_*`
+around each fifo acquire — except that S0 found Peano cannot read it (1.2), so "without
+trace" now means the S0 mechanism itself: `event0()`/`event1()` brackets, two events per
+region, decoded from the trace stream. S0's own numbers are the first S3 data: a
+dependent 16-lane int32 `aie::add` chain costs exactly 2 cycles per iteration, a volatile
+scalar load-add-store loop 9 (`results/aie/clock_probe_npu.log`). Tooling: a `-DPROFILE` build of `mm.cc`'s `matmul_vectorized_*`
 and of `conv2dk3` that writes cycle deltas into a side buffer. Measurement: MACs per cycle
 per core directly, independent of host timing and of S2. Decides: the same questions as
 S2 at lower fidelity and zero toolchain risk; use whichever lands first.

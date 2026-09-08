@@ -1,0 +1,597 @@
+AIE core clock, measured through the trace unit's timer -- Desktop 2 (Phoenix, Ryzen 7 8700G)
+2026-09-07. env: mlir-aie ironenv (v1.4.2, llvm-aie 22.0.0.2026090201) + XRT SDK 2.21.75, native
+Windows; driver 32.0.20101.3760; xrt-smi from C:\Windows\System32\AMD\xrt-smi.exe (XRT 2.21.0,
+build 15e6319). One fresh process per power mode. Nothing on the device was changed except the
+power mode, which was restored to `default` at the end (verified, last section).
+
+Commands (from the ironenv; kernels/clock_probe/clock_probe.py --help has the setup):
+  python3 kernels/clock_probe/clock_probe.py --label default --iters 10 --warmup 2 \
+      --idle-sleep 5 --idle-repeats 3 --idle-burst 10
+  for each of powersaver, balanced, performance, turbo:
+    xrt-smi --batch configure --pmode <mode>
+    python3 kernels/clock_probe/clock_probe.py --label <mode> --iters 5 --warmup 2 \
+        --scalar-targets 1048576,2097152,4194304,8388608,16777216,33554432 \
+        --vector-targets 1048576,4194304,16777216,67108864
+  xrt-smi --batch configure --pmode default
+  python3 kernels/clock_probe/clock_probe.py --label default-after-pmode-sweep (same points)
+  python3 kernels/clock_probe/clock_probe.py --label default-no-trace --trace-size 0 --iters 5 \
+      --warmup 2 --scalar-targets 1048576,4194304,16777216 --vector-targets 1048576,4194304,16777216
+
+WHY: every per-second ceiling in docs/SILICON.md (TOPS per column, bytes per cycle on a
+stream, MACs per cycle per core) multiplies a per-cycle figure by a clock nothing on this
+machine had measured. RESEARCH.md cited 1.6 GHz from a web search; bottleneck_spatial_sweep
+reasoned at 1 GHz and said so; xrt-smi prints no clock. SILICON.md 1.7 carried the clock as
+unmeasured and objective S0 was this measurement.
+
+METHOD: one Worker on one core tile (logical Tile(0,2)) runs event0(); a DMA-free loop of
+`iters` iterations; event1(). The tile's trace unit stamps both instruction events with its
+timer and streams the packets to a host buffer through IRON's Program.enable_trace. The host
+times the same call with the runtime's own submit+wait bracket (KernelResult.npu_time, the
+'hw' column, the same bracket dispatch_floor_npu.log used) and fits
+    hw_ms = intercept + slope * (stamp1 - stamp0)     across 2^18..2^25 iterations,
+so the fixed per-dispatch cost lands in the intercept and the clock is 1/slope. Two loops:
+'scalar' (a dependent add on a volatile local) and 'vector' (a dependent 16-lane int32
+aie::add chain); they must fit to the same clock. Every call is verified before its timing
+is kept (mode/target echo, checksum of the loop's arithmetic, core-tile row, the real event
+pair present ahead of the filler pairs). Compile is excluded (warmup + @iron.jit cache).
+The 'wall' column is
+meaningless with trace on -- IRON allocates a 64 KB trace buffer and dumps it to disk inside
+that bracket -- and is not fitted.
+
+RESULT (core clock = 1/slope of the hardware-bracket fit; scalar loop / vector loop):
+  power mode      clock (GHz)        R^2                   fit intercept (us, hw, trace on)
+  default         1.7983 / 1.7924    1.000000 / 0.999995   347 / 321
+  powersaver      0.7985 / 0.7984    1.000000 / 1.000000   524 / 462
+  balanced        1.0274 / 1.0278    1.000000 / 1.000000   395 / 384
+  performance     1.8002 / 1.7986    0.999999 / 1.000000   397 / 323
+  turbo           1.7998 / 1.7989    1.000000 / 1.000000   304 / 282
+  default, after  1.7990 / 1.7993    0.999999 / 1.000000   (re-measured after the sweep)
+The two loops agree within 0.33% (default) and 0.01-0.09% (every other mode). The raw
+ratio cycles/hw at the longest point (168 ms) reads 1.7947 GHz in default, converging on
+the fit from below as the intercept amortizes.
+
+WHAT ELSE THE SAME RUNS SHOW:
+- Cycles per iteration are exactly constant at every length: scalar 9.000, vector 2.000,
+  from 2^18 to 2^25 (2^26 for vector) iterations. That is what makes the stamps trustworthy
+  as core cycles: a timer at a different rate would not give integer cycle counts for both
+  loops, and it pins the sync-frame quantum below at exactly 2^18.
+- Idle probe (default): three calls each after 5 s of idle read 1.7851 / 1.7716 / 1.7683 GHz,
+  the ten back-to-back calls after them 1.759-1.787. No idle penalty at the 5 s scale, so
+  the session-to-session latency drift docs/DECISIONS.md records is not an idle clock
+  state at this timescale. Power mode, however, is a 2.25x lever (0.80 -> 1.80 GHz).
+- pyxrt device.get_info(max_clock_frequency_mhz) reads 800 in EVERY mode, including the
+  ones measured at 1.80 GHz. It equals the powersaver clock, not the live one.
+- The trace packet header says the traced core is at row 2, column 1, and get_coreid()
+  inside the kernel says the same: IRON's logical column 0 is physical column 1 on this
+  xclbin, consistent with the 4x4 overlay occupying columns 1-4 (docs/SILICON.md 1.1).
+- `xrt-smi configure --pmode turbo` printed '[xrt-smi] ERROR: Failed to escape
+  (0xc0000001): A device attached to the system is not functioning.', yet the platform
+  report then read 'Turbo' and the clock measured the same 1.80 GHz as performance and
+  default. Restoring default from turbo printed the same error and the report then read
+  'Default'; the device kept working (last section). powersaver, balanced and performance
+  switched without error. Whether turbo is a real fourth state on this part is unresolved.
+- Trace overhead, measured (last section, --trace-size 0 at three matching points): the
+  same design's untraced hardware intercept is 281.9 us (scalar) / 210.6 us (vector),
+  40-110 us above the no-compute passthrough's 169.8 us (dispatch_floor_npu.log) -- a
+  core to load and start -- and trace adds 65-110 us on top (346.9 / 321.4 us traced).
+  Both cancel in the fit. The untraced slopes, 5.0006 and 1.1156 ns per iteration, with
+  the traced 9 and 2 cycles per iteration, give 1.7998 and 1.7928 GHz: the clock a third
+  way, from timing alone.
+
+TOOLING, found on the way (all on this machine, this toolchain):
+- Peano (llvm-aie 22) declares get_cycles() in its aie_api compat header but never
+  defines it: aie::tile::current().cycles() links with 'ld.lld: error: undefined symbol:
+  get_cycles()'. __builtin_readcyclecounter() dies in the legalizer ('unable to legalize
+  instruction: G_READCYCLECOUNTER'), and inline asm dies in IRTranslator ('unable to
+  translate instruction: call'). The trace unit is the one path to the tile timer the open
+  toolchain exposes -- so this is also the first end-to-end hardware trace on npu1 on this
+  machine (docs/SILICON.md objective S2's first step).
+- One event0/event1 pair alone never reaches host memory: the trace unit packs frames into
+  32-byte packets and the shim S2MM DMA writes 64-byte bursts (mlir-aie programming_guide
+  section-4b: 'a simple core may have too few events to create a valid trace packet'). The
+  kernel emits 256 filler pairs after the real pair; the host reads the first pair only.
+- mlir-aie v1.4.2's aie.utils.trace.parse mis-times any gap longer than 2^18 cycles. The
+  hardware encodes such a gap as an Event_Sync frame (0xff, one wrap of the 18-bit delta
+  counter) followed by a Repeat frame counting further wraps; parse.py treats 0xff as a
+  timer no-op and the Repeat as re-issuing the last *event*, so a 2,097,172-cycle gap
+  came back as 45,017 with eight spurious INSTR_EVENT_0 entries. clock_probe.py decodes
+  the frames itself (Sync = +2^18, Repeat repeats whatever preceded it) and cross-checks
+  against parse.py on a run short enough to contain no sync frame: both read 73,732
+  cycles. At 1.8 GHz the upstream limit is 146 us between consecutive events -- any real
+  kernel trace on this machine will hit it.
+- `xrt-smi configure --pmode` works from an unelevated shell on this driver.
+
+CAVEATS:
+- The measurement assumes the trace timer ticks at the core clock. The integer cycles per
+  iteration of two different loops support it; it is still an assumption.
+- One core tile only (logical column 0, row 2). Other tiles and columns were not measured
+  and are assumed to share the clock domain. The 'run under a concurrent VitisAI EP
+  session' leg of objective S0 was NOT run: this worktree has no models/ directory.
+- The clock while a *design* is running is what was measured; between dispatches the
+  hardware may sit lower (the 800 MHz XRT reports could be that state) -- the 5 s idle
+  probe says any such transition is over before a 42 ms call has finished.
+- Nothing here changes any latency number in the repo. It changes their denominators:
+  every '% of peak at 1.6 GHz' in docs/SILICON.md is now '% of peak at 1.8 GHz' by the
+  ratio 1.6/1.8 = 0.889.
+
+=== default: full sweep + idle probe (--iters 10 --warmup 2 --idle-sleep 5 --idle-repeats 3 --idle-burst 10) ===
+
+AIE core clock via trace-unit event stamps -- one Worker, scalar / vector loops, label=default
+iters=10 warmup=2 trace_size=65536 (compile excluded, kernel cached)
+
+--- xrt-smi --batch examine -r platform, and XRT's clock field (captured by this run) ---
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+Platform
+  Name                   : NPU Phoenix 
+  Power Mode             : Default 
+  Total Columns          : 5 
+
+Estimated Power          : N/A
+pyxrt device.get_info(max_clock_frequency_mhz) = 800
+--- end ---
+
+first call (includes compile/cache lookup): 0.10 s wall; tile r2c1 (get_coreid), cycles=73732, hw 0.3661 ms, trace events=491, pairs=245, verify=ok
+trace packet header says the traced core is row 2, col 1
+decoder cross-check on a no-sync run: this script 73732 cycles, mlir-aie parse.py 73732 cycles (agree; parsed against C:\Users\<user>\.npu\cache\1a0df11de1bfd54080e1a5ef\input_with_addresses.mlir)
+
+=== loop: scalar ===
+     iters       cycles  cyc/iter      hw ms     hw min    wall ms cyc/hw GHz  first GHz  tile  ok
+----------------------------------------------------------------------------------------------------------------
+    262144      2359300     9.000     1.6094     1.5713    73.9429     1.4660     1.4918  r2c1  yes
+    524288      4718596     9.000     2.9687     2.9058    74.3394     1.5894     1.6041  r2c1  yes
+   1048576      9437188     9.000     5.5852     5.5302    72.8627     1.6897     1.6822  r2c1  yes
+   2097152     18874372     9.000    10.8364    10.7775    87.7604     1.7418     1.7406  r2c1  yes
+   4194304     37748740     9.000    21.4001    21.3069    88.3461     1.7640     1.7704  r2c1  yes
+   8388608     75497476     9.000    42.3548    42.2661   166.8240     1.7825     1.7826  r2c1  yes
+  16777216    150994948     9.000    84.2940    84.2195   150.9281     1.7913     1.7924  r2c1  yes
+  33554432    301989892     9.000   168.2690   168.1147   385.3502     1.7947     1.7959  r2c1  yes
+
+SCALAR / HARDWARE bracket (submit+wait):  time_ms = intercept + slope * cycles   (R^2 = 1.000000)
+  intercept (per-dispatch cost, cancels)  : 346.9 us
+  slope                                   : 0.556068 ns/cycle
+  CORE CLOCK  1/slope                     : 1.7983 GHz
+
+SCALAR / WALL: not fitted. With trace on, every call allocates a 65536-byte trace buffer and dumps it to disk inside the wall bracket (tens of ms); only the hardware bracket is meaningful here.
+
+=== loop: vector ===
+     iters       cycles  cyc/iter      hw ms     hw min    wall ms cyc/hw GHz  first GHz  tile  ok
+----------------------------------------------------------------------------------------------------------------
+    262144       524309     2.000     0.5979     0.5585    72.9515     0.8770     0.9366  r2c1  yes
+    524288      1048597     2.000     0.8959     0.8419    72.6540     1.1705     1.2250  r2c1  yes
+   1048576      2097173     2.000     1.4777     1.4335    73.1974     1.4193     1.4346  r2c1  yes
+   2097152      4194325     2.000     2.6516     2.6136    74.3189     1.5818     1.5792  r2c1  yes
+   4194304      8388629     2.000     4.9957     4.9468    74.0141     1.6792     1.6657  r2c1  yes
+   8388608     16777237     2.000     9.7246     9.6239   135.4616     1.7252     1.7305  r2c1  yes
+  16777216     33554453     2.000    19.0841    18.9732    90.3340     1.7582     1.7709  r2c1  yes
+  33554432     67108885     2.000    37.7313    37.6170   104.0020     1.7786     1.7846  r2c1  yes
+
+VECTOR / HARDWARE bracket (submit+wait):  time_ms = intercept + slope * cycles   (R^2 = 0.999995)
+  intercept (per-dispatch cost, cancels)  : 321.4 us
+  slope                                   : 0.557900 ns/cycle
+  CORE CLOCK  1/slope                     : 1.7924 GHz
+
+VECTOR / WALL: not fitted. With trace on, every call allocates a 65536-byte trace buffer and dumps it to disk inside the wall bracket (tens of ms); only the hardware bracket is meaningful here.
+
+=== idle probe: sleep 5.0s -> 1 call, x3; then 10 back-to-back ===
+  call       cycles      hw ms cyc/hw GHz
+ idle0     75497476    42.2938     1.7851
+ idle1     75497476    42.6147     1.7716
+ idle2     75497476    42.6961     1.7683
+    b0     75497476    42.4366     1.7791
+    b1     75497476    42.2900     1.7852
+    b2     75497476    42.3619     1.7822
+    b3     75497476    42.4905     1.7768
+    b4     75497476    42.2681     1.7862
+    b5     75497476    42.4671     1.7778
+    b6     75497476    42.2733     1.7859
+    b7     75497476    42.3325     1.7834
+    b8     75497476    42.9147     1.7592
+    b9     75497476    42.2570     1.7866
+
+SUMMARY label=default
+  scalar: core clock 1.7983 GHz (hw bracket), nan GHz (wall)
+  vector: core clock 1.7924 GHz (hw bracket), nan GHz (wall)
+  scalar vs vector agreement: 0.33%
+
+=== xrt-smi --batch configure --pmode powersaver ===
+
+
+Power mode is set to powersaver
+
+=== powersaver: sweep (--iters 5 --warmup 2, six scalar and four vector points) ===
+
+AIE core clock via trace-unit event stamps -- one Worker, scalar / vector loops, label=powersaver
+iters=5 warmup=2 trace_size=65536 (compile excluded, kernel cached)
+
+--- xrt-smi --batch examine -r platform, and XRT's clock field (captured by this run) ---
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+Platform
+  Name                   : NPU Phoenix 
+  Power Mode             : Powersaver 
+  Total Columns          : 5 
+
+Estimated Power          : N/A
+pyxrt device.get_info(max_clock_frequency_mhz) = 800
+--- end ---
+
+first call (includes compile/cache lookup): 0.11 s wall; tile r2c1 (get_coreid), cycles=73732, hw 0.5632 ms, trace events=491, pairs=245, verify=ok
+trace packet header says the traced core is row 2, col 1
+decoder cross-check on a no-sync run: this script 73732 cycles, mlir-aie parse.py 73732 cycles (agree; parsed against C:\Users\<user>\.npu\cache\1a0df11de1bfd54080e1a5ef\input_with_addresses.mlir)
+
+=== loop: scalar ===
+     iters       cycles  cyc/iter      hw ms     hw min    wall ms cyc/hw GHz  first GHz  tile  ok
+----------------------------------------------------------------------------------------------------------------
+   1048576      9437188     9.000    12.3111    12.2807    88.3657     0.7666     0.7638  r2c1  yes
+   2097152     18874372     9.000    24.1237    24.0896   105.5932     0.7824     0.7701  r2c1  yes
+   4194304     37748740     9.000    47.8434    47.7590   120.0937     0.7890     0.7907  r2c1  yes
+   8388608     75497476     9.000    95.0658    95.0148   166.6391     0.7942     0.7942  r2c1  yes
+  16777216    150994948     9.000   189.6945   189.5705   260.1509     0.7960     0.7966  r2c1  yes
+  33554432    301989892     9.000   378.6956   378.6587   449.2450     0.7974     0.7974  r2c1  yes
+
+SCALAR / HARDWARE bracket (submit+wait):  time_ms = intercept + slope * cycles   (R^2 = 1.000000)
+  intercept (per-dispatch cost, cancels)  : 523.5 us
+  slope                                   : 1.252379 ns/cycle
+  CORE CLOCK  1/slope                     : 0.7985 GHz
+
+SCALAR / WALL: not fitted. With trace on, every call allocates a 65536-byte trace buffer and dumps it to disk inside the wall bracket (tens of ms); only the hardware bracket is meaningful here.
+
+=== loop: vector ===
+     iters       cycles  cyc/iter      hw ms     hw min    wall ms cyc/hw GHz  first GHz  tile  ok
+----------------------------------------------------------------------------------------------------------------
+   1048576      2097173     2.000     3.0570     3.0387    71.6490     0.6860     0.6904  r2c1  yes
+   4194304      8388629     2.000    10.9974    10.9554    89.3515     0.7628     0.7574  r2c1  yes
+  16777216     33554453     2.000    42.4970    42.4585   118.9498     0.7896     0.7892  r2c1  yes
+  67108864    134217749     2.000   168.5727   168.5300   339.9085     0.7962     0.7961  r2c1  yes
+
+VECTOR / HARDWARE bracket (submit+wait):  time_ms = intercept + slope * cycles   (R^2 = 1.000000)
+  intercept (per-dispatch cost, cancels)  : 462.1 us
+  slope                                   : 1.252543 ns/cycle
+  CORE CLOCK  1/slope                     : 0.7984 GHz
+
+VECTOR / WALL: not fitted. With trace on, every call allocates a 65536-byte trace buffer and dumps it to disk inside the wall bracket (tens of ms); only the hardware bracket is meaningful here.
+
+SUMMARY label=powersaver
+  scalar: core clock 0.7985 GHz (hw bracket), nan GHz (wall)
+  vector: core clock 0.7984 GHz (hw bracket), nan GHz (wall)
+  scalar vs vector agreement: 0.01%
+
+=== xrt-smi --batch configure --pmode balanced ===
+
+
+Power mode is set to balanced
+
+=== balanced: sweep ===
+
+AIE core clock via trace-unit event stamps -- one Worker, scalar / vector loops, label=balanced
+iters=5 warmup=2 trace_size=65536 (compile excluded, kernel cached)
+
+--- xrt-smi --batch examine -r platform, and XRT's clock field (captured by this run) ---
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+Platform
+  Name                   : NPU Phoenix 
+  Power Mode             : Balanced 
+  Total Columns          : 5 
+
+Estimated Power          : N/A
+pyxrt device.get_info(max_clock_frequency_mhz) = 800
+--- end ---
+
+first call (includes compile/cache lookup): 0.10 s wall; tile r2c1 (get_coreid), cycles=73732, hw 0.4477 ms, trace events=491, pairs=245, verify=ok
+trace packet header says the traced core is row 2, col 1
+decoder cross-check on a no-sync run: this script 73732 cycles, mlir-aie parse.py 73732 cycles (agree; parsed against C:\Users\<user>\.npu\cache\1a0df11de1bfd54080e1a5ef\input_with_addresses.mlir)
+
+=== loop: scalar ===
+     iters       cycles  cyc/iter      hw ms     hw min    wall ms cyc/hw GHz  first GHz  tile  ok
+----------------------------------------------------------------------------------------------------------------
+   1048576      9437188     9.000     9.6001     9.5325   185.6448     0.9830     0.9812  r2c1  yes
+   2097152     18874372     9.000    18.7828    18.7326    90.1940     1.0049     1.0039  r2c1  yes
+   4194304     37748740     9.000    37.1922    37.1200   107.0588     1.0150     1.0188  r2c1  yes
+   8388608     75497476     9.000    73.8427    73.8052   251.9308     1.0224     1.0228  r2c1  yes
+  16777216    150994948     9.000   147.2488   147.1912   218.7474     1.0254     1.0233  r2c1  yes
+  33554432    301989892     9.000   294.3831   294.0345   367.5120     1.0258     1.0270  r2c1  yes
+
+SCALAR / HARDWARE bracket (submit+wait):  time_ms = intercept + slope * cycles   (R^2 = 1.000000)
+  intercept (per-dispatch cost, cancels)  : 395.4 us
+  slope                                   : 0.973315 ns/cycle
+  CORE CLOCK  1/slope                     : 1.0274 GHz
+
+SCALAR / WALL: not fitted. With trace on, every call allocates a 65536-byte trace buffer and dumps it to disk inside the wall bracket (tens of ms); only the hardware bracket is meaningful here.
+
+=== loop: vector ===
+     iters       cycles  cyc/iter      hw ms     hw min    wall ms cyc/hw GHz  first GHz  tile  ok
+----------------------------------------------------------------------------------------------------------------
+   1048576      2097173     2.000     2.4113     2.3844    73.5101     0.8697     0.8515  r2c1  yes
+   4194304      8388629     2.000     8.5357     8.4745    83.0135     0.9828     0.9676  r2c1  yes
+  16777216     33554453     2.000    33.0614    33.0066   104.4625     1.0149     1.0159  r2c1  yes
+  67108864    134217749     2.000   130.9664   130.8870   201.2990     1.0248     1.0251  r2c1  yes
+
+VECTOR / HARDWARE bracket (submit+wait):  time_ms = intercept + slope * cycles   (R^2 = 1.000000)
+  intercept (per-dispatch cost, cancels)  : 384.0 us
+  slope                                   : 0.972964 ns/cycle
+  CORE CLOCK  1/slope                     : 1.0278 GHz
+
+VECTOR / WALL: not fitted. With trace on, every call allocates a 65536-byte trace buffer and dumps it to disk inside the wall bracket (tens of ms); only the hardware bracket is meaningful here.
+
+SUMMARY label=balanced
+  scalar: core clock 1.0274 GHz (hw bracket), nan GHz (wall)
+  vector: core clock 1.0278 GHz (hw bracket), nan GHz (wall)
+  scalar vs vector agreement: 0.04%
+
+=== xrt-smi --batch configure --pmode performance ===
+
+
+Power mode is set to performance
+
+=== performance: sweep ===
+
+AIE core clock via trace-unit event stamps -- one Worker, scalar / vector loops, label=performance
+iters=5 warmup=2 trace_size=65536 (compile excluded, kernel cached)
+
+--- xrt-smi --batch examine -r platform, and XRT's clock field (captured by this run) ---
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+Platform
+  Name                   : NPU Phoenix 
+  Power Mode             : Performance 
+  Total Columns          : 5 
+
+Estimated Power          : N/A
+pyxrt device.get_info(max_clock_frequency_mhz) = 800
+--- end ---
+
+first call (includes compile/cache lookup): 0.10 s wall; tile r2c1 (get_coreid), cycles=73732, hw 0.4505 ms, trace events=491, pairs=245, verify=ok
+trace packet header says the traced core is row 2, col 1
+decoder cross-check on a no-sync run: this script 73732 cycles, mlir-aie parse.py 73732 cycles (agree; parsed against C:\Users\<user>\.npu\cache\1a0df11de1bfd54080e1a5ef\input_with_addresses.mlir)
+
+=== loop: scalar ===
+     iters       cycles  cyc/iter      hw ms     hw min    wall ms cyc/hw GHz  first GHz  tile  ok
+----------------------------------------------------------------------------------------------------------------
+   1048576      9437188     9.000     5.6090     5.5389    72.7989     1.6825     1.7072  r2c1  yes
+   2097152     18874372     9.000    10.8144    10.7972    89.4936     1.7453     1.7274  r2c1  yes
+   4194304     37748740     9.000    21.4230    21.3174    87.7690     1.7621     1.7662  r2c1  yes
+   8388608     75497476     9.000    42.4097    42.2790   121.5419     1.7802     1.7856  r2c1  yes
+  16777216    150994948     9.000    84.2531    84.2063   157.5988     1.7922     1.7817  r2c1  yes
+  33554432    301989892     9.000   168.1437   168.1214   338.7940     1.7960     1.7960  r2c1  yes
+
+SCALAR / HARDWARE bracket (submit+wait):  time_ms = intercept + slope * cycles   (R^2 = 0.999999)
+  intercept (per-dispatch cost, cancels)  : 397.4 us
+  slope                                   : 0.555501 ns/cycle
+  CORE CLOCK  1/slope                     : 1.8002 GHz
+
+SCALAR / WALL: not fitted. With trace on, every call allocates a 65536-byte trace buffer and dumps it to disk inside the wall bracket (tens of ms); only the hardware bracket is meaningful here.
+
+=== loop: vector ===
+     iters       cycles  cyc/iter      hw ms     hw min    wall ms cyc/hw GHz  first GHz  tile  ok
+----------------------------------------------------------------------------------------------------------------
+   1048576      2097173     2.000     1.4678     1.4503    70.5498     1.4288     1.4412  r2c1  yes
+   4194304      8388629     2.000     4.9978     4.9559    70.9747     1.6785     1.6947  r2c1  yes
+  16777216     33554453     2.000    18.9921    18.9508    87.4106     1.7668     1.7613  r2c1  yes
+  67108864    134217749     2.000    74.9441    74.8875   152.0517     1.7909     1.7863  r2c1  yes
+
+VECTOR / HARDWARE bracket (submit+wait):  time_ms = intercept + slope * cycles   (R^2 = 1.000000)
+  intercept (per-dispatch cost, cancels)  : 322.5 us
+  slope                                   : 0.556001 ns/cycle
+  CORE CLOCK  1/slope                     : 1.7986 GHz
+
+VECTOR / WALL: not fitted. With trace on, every call allocates a 65536-byte trace buffer and dumps it to disk inside the wall bracket (tens of ms); only the hardware bracket is meaningful here.
+
+SUMMARY label=performance
+  scalar: core clock 1.8002 GHz (hw bracket), nan GHz (wall)
+  vector: core clock 1.7986 GHz (hw bracket), nan GHz (wall)
+  scalar vs vector agreement: 0.09%
+
+=== xrt-smi --batch configure --pmode turbo (note the error; the report below still reads Turbo) ===
+
+XRT build version: 2.21.0
+Build hash: 15e6319be8de1e76a6150111a3861729e988fdb5
+Build date: 2026-04-04 00:09:34
+Git branch: HEAD
+PID: 11284
+UID: 0
+[Mon Sep  7 22:30:07 2026 GMT]
+HOST: DESKTOP-CBL5NUA
+EXE: 
+[xrt-smi] ERROR: Failed to escape (0xc0000001): A device attached to the system is not functioning.
+
+=== turbo: sweep ===
+
+AIE core clock via trace-unit event stamps -- one Worker, scalar / vector loops, label=turbo
+iters=5 warmup=2 trace_size=65536 (compile excluded, kernel cached)
+
+--- xrt-smi --batch examine -r platform, and XRT's clock field (captured by this run) ---
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+Platform
+  Name                   : NPU Phoenix 
+  Power Mode             : Turbo 
+  Total Columns          : 5 
+
+Estimated Power          : N/A
+pyxrt device.get_info(max_clock_frequency_mhz) = 800
+--- end ---
+
+first call (includes compile/cache lookup): 0.10 s wall; tile r2c1 (get_coreid), cycles=73732, hw 0.3233 ms, trace events=491, pairs=245, verify=ok
+trace packet header says the traced core is row 2, col 1
+decoder cross-check on a no-sync run: this script 73732 cycles, mlir-aie parse.py 73732 cycles (agree; parsed against C:\Users\<user>\.npu\cache\1a0df11de1bfd54080e1a5ef\input_with_addresses.mlir)
+
+=== loop: scalar ===
+     iters       cycles  cyc/iter      hw ms     hw min    wall ms cyc/hw GHz  first GHz  tile  ok
+----------------------------------------------------------------------------------------------------------------
+   1048576      9437188     9.000     5.5437     5.5198   169.7265     1.7023     1.7126  r2c1  yes
+   2097152     18874372     9.000    10.7861    10.7747    87.3898     1.7499     1.7481  r2c1  yes
+   4194304     37748740     9.000    21.2787    21.2605    87.8716     1.7740     1.7726  r2c1  yes
+   8388608     75497476     9.000    42.2565    42.2216   121.7935     1.7866     1.7881  r2c1  yes
+  16777216    150994948     9.000    84.2068    84.1847   152.7228     1.7931     1.7935  r2c1  yes
+  33554432    301989892     9.000   168.0934   168.0725   435.6039     1.7966     1.7964  r2c1  yes
+
+SCALAR / HARDWARE bracket (submit+wait):  time_ms = intercept + slope * cycles   (R^2 = 1.000000)
+  intercept (per-dispatch cost, cancels)  : 303.5 us
+  slope                                   : 0.555628 ns/cycle
+  CORE CLOCK  1/slope                     : 1.7998 GHz
+
+SCALAR / WALL: not fitted. With trace on, every call allocates a 65536-byte trace buffer and dumps it to disk inside the wall bracket (tens of ms); only the hardware bracket is meaningful here.
+
+=== loop: vector ===
+     iters       cycles  cyc/iter      hw ms     hw min    wall ms cyc/hw GHz  first GHz  tile  ok
+----------------------------------------------------------------------------------------------------------------
+   1048576      2097173     2.000     1.4432     1.4144    73.4724     1.4531     1.3731  r2c1  yes
+   4194304      8388629     2.000     4.9527     4.9341    74.6876     1.6937     1.6995  r2c1  yes
+  16777216     33554453     2.000    18.9305    18.9085    88.4604     1.7725     1.7699  r2c1  yes
+  67108864    134217749     2.000    74.8937    74.8487   152.5436     1.7921     1.7921  r2c1  yes
+
+VECTOR / HARDWARE bracket (submit+wait):  time_ms = intercept + slope * cycles   (R^2 = 1.000000)
+  intercept (per-dispatch cost, cancels)  : 281.7 us
+  slope                                   : 0.555898 ns/cycle
+  CORE CLOCK  1/slope                     : 1.7989 GHz
+
+VECTOR / WALL: not fitted. With trace on, every call allocates a 65536-byte trace buffer and dumps it to disk inside the wall bracket (tens of ms); only the hardware bracket is meaningful here.
+
+SUMMARY label=turbo
+  scalar: core clock 1.7998 GHz (hw bracket), nan GHz (wall)
+  vector: core clock 1.7989 GHz (hw bracket), nan GHz (wall)
+  scalar vs vector agreement: 0.05%
+
+=== xrt-smi --batch configure --pmode default (restore; same error, report reads Default) ===
+
+XRT build version: 2.21.0
+Build hash: 15e6319be8de1e76a6150111a3861729e988fdb5
+Build date: 2026-04-04 00:09:34
+Git branch: HEAD
+PID: 7788
+UID: 0
+[Mon Sep  7 22:30:18 2026 GMT]
+HOST: DESKTOP-CBL5NUA
+EXE: 
+[xrt-smi] ERROR: Failed to escape (0xc0000001): A device attached to the system is not functioning.
+
+=== xrt-smi --batch examine -r platform, after restore ===
+
+  Power Mode             : Default
+
+=== default, re-measured after the power-mode sweep ===
+
+AIE core clock via trace-unit event stamps -- one Worker, scalar / vector loops, label=default-after-pmode-sweep
+iters=5 warmup=2 trace_size=65536 (compile excluded, kernel cached)
+
+--- xrt-smi --batch examine -r platform, and XRT's clock field (captured by this run) ---
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+Platform
+  Name                   : NPU Phoenix 
+  Power Mode             : Default 
+  Total Columns          : 5 
+
+Estimated Power          : N/A
+pyxrt device.get_info(max_clock_frequency_mhz) = 800
+--- end ---
+
+first call (includes compile/cache lookup): 0.11 s wall; tile r2c1 (get_coreid), cycles=73732, hw 0.3516 ms, trace events=491, pairs=245, verify=ok
+trace packet header says the traced core is row 2, col 1
+decoder cross-check on a no-sync run: this script 73732 cycles, mlir-aie parse.py 73732 cycles (agree; parsed against C:\Users\<user>\.npu\cache\1a0df11de1bfd54080e1a5ef\input_with_addresses.mlir)
+
+=== loop: scalar ===
+     iters       cycles  cyc/iter      hw ms     hw min    wall ms cyc/hw GHz  first GHz  tile  ok
+----------------------------------------------------------------------------------------------------------------
+   1048576      9437188     9.000     5.5709     5.5178    71.4973     1.6940     1.5970  r2c1  yes
+   2097152     18874372     9.000    10.8734    10.8142    89.6125     1.7358     1.7448  r2c1  yes
+   4194304     37748740     9.000    21.4864    21.2818    88.1492     1.7569     1.7461  r2c1  yes
+   8388608     75497476     9.000    42.4232    42.2781   117.2320     1.7796     1.7856  r2c1  yes
+  16777216    150994948     9.000    84.3035    84.2067   151.1205     1.7911     1.7931  r2c1  yes
+  33554432    301989892     9.000   168.2708   168.1475   434.5026     1.7947     1.7959  r2c1  yes
+
+SCALAR / HARDWARE bracket (submit+wait):  time_ms = intercept + slope * cycles   (R^2 = 0.999999)
+  intercept (per-dispatch cost, cancels)  : 407.1 us
+  slope                                   : 0.555866 ns/cycle
+  CORE CLOCK  1/slope                     : 1.7990 GHz
+
+SCALAR / WALL: not fitted. With trace on, every call allocates a 65536-byte trace buffer and dumps it to disk inside the wall bracket (tens of ms); only the hardware bracket is meaningful here.
+
+=== loop: vector ===
+     iters       cycles  cyc/iter      hw ms     hw min    wall ms cyc/hw GHz  first GHz  tile  ok
+----------------------------------------------------------------------------------------------------------------
+   1048576      2097173     2.000     1.5117     1.4535    72.3138     1.3873     1.3505  r2c1  yes
+   4194304      8388629     2.000     5.0458     4.9466    72.7517     1.6625     1.6444  r2c1  yes
+  16777216     33554453     2.000    18.9913    18.9555    89.1280     1.7668     1.7706  r2c1  yes
+  67108864    134217749     2.000    74.9552    74.8954   149.4862     1.7906     1.7915  r2c1  yes
+
+VECTOR / HARDWARE bracket (submit+wait):  time_ms = intercept + slope * cycles   (R^2 = 1.000000)
+  intercept (per-dispatch cost, cancels)  : 358.3 us
+  slope                                   : 0.555772 ns/cycle
+  CORE CLOCK  1/slope                     : 1.7993 GHz
+
+VECTOR / WALL: not fitted. With trace on, every call allocates a 65536-byte trace buffer and dumps it to disk inside the wall bracket (tens of ms); only the hardware bracket is meaningful here.
+
+SUMMARY label=default-after-pmode-sweep
+  scalar: core clock 1.7990 GHz (hw bracket), nan GHz (wall)
+  vector: core clock 1.7993 GHz (hw bracket), nan GHz (wall)
+  scalar vs vector agreement: 0.02%
+
+=== default, untraced (--trace-size 0): hardware intercept without trace, and ns per iteration ===
+
+AIE core clock via trace-unit event stamps -- one Worker, scalar / vector loops, label=default-no-trace
+iters=5 warmup=2 trace_size=0 (compile excluded, kernel cached)
+
+--- xrt-smi --batch examine -r platform, and XRT's clock field (captured by this run) ---
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+Platform
+  Name                   : NPU Phoenix 
+  Power Mode             : Default 
+  Total Columns          : 5 
+
+Estimated Power          : N/A
+pyxrt device.get_info(max_clock_frequency_mhz) = 800
+--- end ---
+
+first call (includes compile/cache lookup): 3.56 s wall; tile r2c1 (get_coreid), cycles=None, hw 0.4047 ms, trace events=None, pairs=None, verify=ok
+
+=== loop: scalar (no trace: x = iterations) ===
+     iters       cycles  cyc/iter      hw ms     hw min    wall ms cyc/hw GHz  first GHz  tile  ok
+----------------------------------------------------------------------------------------------------------------
+   1048576          n/a       n/a     5.5199     5.5027     6.3396        n/a        n/a  r2c1  yes
+   4194304          n/a       n/a    21.2631    21.2395    22.0869        n/a        n/a  r2c1  yes
+  16777216          n/a       n/a    84.1773    84.1491    84.9577        n/a        n/a  r2c1  yes
+
+SCALAR / HARDWARE bracket (submit+wait):  time_ms = intercept + slope * iterations   (R^2 = 1.000000)
+  intercept (per-dispatch cost, cancels)  : 281.9 us
+  slope                                   : 5.000637 ns/iteration
+
+SCALAR / WALL (perf_counter around @iron.jit call):  time_ms = intercept + slope * iterations   (R^2 = 1.000000)
+  intercept (per-dispatch cost, cancels)  : 1110.2 us
+  slope                                   : 4.997869 ns/iteration
+
+=== loop: vector (no trace: x = iterations) ===
+     iters       cycles  cyc/iter      hw ms     hw min    wall ms cyc/hw GHz  first GHz  tile  ok
+----------------------------------------------------------------------------------------------------------------
+   1048576          n/a       n/a     1.3781     1.3657     1.8172        n/a        n/a  r2c1  yes
+   4194304          n/a       n/a     4.8926     4.8521     5.5798        n/a        n/a  r2c1  yes
+  16777216          n/a       n/a    18.9267    18.8977    19.7698        n/a        n/a  r2c1  yes
+
+VECTOR / HARDWARE bracket (submit+wait):  time_ms = intercept + slope * iterations   (R^2 = 1.000000)
+  intercept (per-dispatch cost, cancels)  : 210.6 us
+  slope                                   : 1.115602 ns/iteration
+
+VECTOR / WALL (perf_counter around @iron.jit call):  time_ms = intercept + slope * iterations   (R^2 = 0.999902)
+  intercept (per-dispatch cost, cancels)  : 706.4 us
+  slope                                   : 1.137491 ns/iteration
+
+SUMMARY label=default-no-trace trace=off
+  scalar: no clock (untraced); hw intercept 281.9 us, wall intercept 1110.2 us
+  vector: no clock (untraced); hw intercept 210.6 us, wall intercept 706.4 us

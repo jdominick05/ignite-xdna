@@ -139,7 +139,12 @@
   changed. Background CPU load from other processes on the machine is the suspect, not
   diagnosed further. Consequence for any future timing comparison: don't trust a
   latency number against one committed on a different day: capture every configuration
-  being compared in one interleaved sitting.
+  being compared in one interleaved sitting. **Tested 2026-09-07 for one candidate cause,
+  an NPU clock that decays with idle:** three probes each after 5 s of idle read the same
+  1.77–1.79 GHz as back-to-back calls (`results/aie/clock_probe_npu.log`), so idle at
+  that scale is not it. Power mode *is* a 2.25× clock lever (0.80 → 1.80 GHz), and nothing
+  in this repo records the mode a number was taken under — a sweep should capture
+  `xrt-smi examine -r platform` alongside, as `kernels/clock_probe/clock_probe.py` does.
 - **DirectML on this iGPU (Radeon 780M) gains nothing from a plain QDQ INT8 model.**
   `yolov8n_cut_xint8_c200.onnx` on `DmlExecutionProvider`: 16.6ms, slower than the same
   graph shape's own FP32 (14.5ms) — DirectML has no dedicated INT8 fast path exercised
@@ -559,6 +564,32 @@
   boost into `resnet_env17` (the XRT SDK headers need `boost/any.hpp` — a separate header-only
   env, `npu_monitor_build`, keeps the pinned inference env untouched). Rejected for good:
   inventing a voltage or power figure — no documented interface exposes one on this NPU.
+- **Reading the AIE cycle counter from a Peano kernel does not work; use the trace unit
+  (2026-09-07).** `aie::tile::current().cycles()` links against a `get_cycles()` that
+  llvm-aie 22 declares and never defines (`ld.lld: undefined symbol`);
+  `__builtin_readcyclecounter()` fails in the legalizer; inline asm fails in IRTranslator.
+  What works: `event0()`/`event1()` in the kernel, `Program.enable_trace` with
+  `INSTR_EVENT_0/1`, and the stamps decoded from the trace stream — with two traps. Fewer
+  events than fill a 32-byte packet never reach host memory (emit filler events after the
+  real ones), and mlir-aie v1.4.2's `aie.utils.trace.parse` mis-times any gap longer than
+  2^18 cycles (146 µs at 1.8 GHz) because it treats the `0xff` sync frame as a timer no-op
+  and the following repeat as re-issued events; `kernels/clock_probe/clock_probe.py` has
+  the corrected decoder, cross-checked against upstream on a sync-free run. Also learned
+  there: pyxrt's `max_clock_frequency_mhz` reads 800 in every power mode and is not the
+  live clock; `xrt-smi configure --pmode turbo` prints a device error and switches anyway.
+  `results/aie/clock_probe_npu.log`.
+- **UNRESOLVED — the two bullets above disagree about `max_clock_frequency_mhz`.** The
+  monitoring bullet calls it a live readback (800 idle, 1800 with an active context); the
+  clock-probe bullet calls it "800 in every power mode and not the live clock". Both were
+  measured on Desktop 2 on the same day by different sessions, and neither has been
+  retracted. They may not actually conflict — one varied *load* at a fixed power mode, the
+  other varied *power mode* with no workload running, and a value that tracks load but
+  ignores `xrt-smi configure --pmode` would satisfy both readings. That is a hypothesis,
+  not a measurement: nobody has yet varied both axes in one sitting. Until someone does,
+  do not cite `max_clock_frequency_mhz` as the core clock — the trace-unit figure
+  (1.80 GHz `default`) is the measured one. A `--once` monitor sample taken while the
+  device was idle read 800 MHz, which is consistent with either account and settles
+  nothing.
 
 ## The YOLOv8 partitioning failure (resolved)
 

@@ -38,6 +38,7 @@ array program) into `~/.npu/cache/<hash>/`; later runs of the same shape hit the
 | `bottleneck_sweep/` | Nothing — the spatial sweep conv2x asked for | **CPU wins 5.7×–12.75×.** The int8 conv op class is closed |
 | `conv2dk3_widthfix/` | Nothing — an upstream mlir-aie bug fix | **Resolved.** Bit-exact at every width tested |
 | `dispatch_floor/` | Nothing — measures the per-dispatch fixed cost itself | Hardware floor **169.8 µs**, wall floor through IRON **617.0 µs** |
+| `clock_probe/` | Nothing — measures the AIE core clock itself, per power mode | **1.80 GHz** in `default`/`performance`/`turbo`, 1.03 `balanced`, 0.80 `powersaver` |
 
 Each kernel's own findings, warnings and retractions follow. They are prose rather than
 table cells because several of them are corrections to what an earlier version of this
@@ -234,3 +235,24 @@ were actually charged while their write-ups reasoned with 185 µs.
 **Go/no-go for any future kernel: the op's CPU time must exceed ~617 µs (IRON) or ~170 µs
 (zero-overhead best case). Run this before writing a kernel.**
 `results/aie/dispatch_floor_npu.log`.
+
+## `clock_probe/`
+
+Not an operator — measures the **AIE core clock**, the number every per-second ceiling in
+`docs/SILICON.md` had been multiplying by without a measurement (objective S0 there).
+
+One Worker on one core tile brackets a DMA-free loop with `event0()`/`event1()`; the tile's
+trace unit stamps both with its timer; the host fits the runtime's submit+wait time against
+the stamped cycles across 2^18–2^25 iterations, so the dispatch cost cancels and the clock
+is 1/slope. Two loops (9 and 2 cycles per iteration, exactly constant at every length) must
+agree. **1.80 GHz in `default`, `performance` and `turbo`; 1.03 GHz `balanced`; 0.80 GHz
+`powersaver`** (R² ≥ 0.999995, loops within 0.33%). No idle penalty at the 5 s scale.
+
+Why trace and not `aie::tile::current().cycles()`: Peano declares `get_cycles()` and never
+defines it, does not lower `__builtin_readcyclecounter`, and rejects inline asm. Two trace
+traps the script works around and documents: one event pair alone never fills a packet
+(the kernel emits filler pairs), and mlir-aie's `parse.py` mis-times gaps over 2^18 cycles
+(`clock_probe.py` decodes the frames itself, cross-checked against upstream on a sync-free
+run). Run from the ironenv; one fresh process per power mode (`xrt-smi configure --pmode`,
+then `--label <mode>`); the script prints the platform report so the mode is evidenced.
+`results/aie/clock_probe_npu.log`.
