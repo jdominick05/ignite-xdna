@@ -17,14 +17,16 @@ ONNX quantizer. Its internal package remains `quant`. See the
 | Measured model | `resnet50.a1_in1k`, folded FP32 export, default 224px input |
 | Graph | Standard-domain Conv/Relu/Add/MaxPool/GlobalAveragePool/Flatten/Gemm; one input/output; GAP receives a 7×7 spatial tensor |
 | Export | Opset 17, IR 8, fully static batch 1 |
-| Quantization | Exact-sample MinMSE; scalar power-of-two scales; UINT8/zp128 activations and INT8/zp0 weights/biases; no CLE |
+| Quantization | Exact-sample MinMSE; scalar power-of-two scales; UINT8/zp128 activations and INT8/zp0 weights/biases; optional transcribed CLE (`--cle`, Conv→Conv pairs only) |
 | Execution target | Windows, Phoenix/Hawk Point XDNA1, Ryzen AI 1.7.1; measured on Phoenix |
 | Additional tools | Static inspection, position-table replay, graph comparison, full classification evaluation, controlled EP probes and a refinement probe against Quark |
 
 Other graphs are unvalidated even if they share those operators. Unsupported operators,
-batch/opset contracts and GAP shapes fail explicitly. The `--no-cle` acknowledgement
-is required. CLE, YOLO, AdaRound, per-channel weights, INT32 bias and arbitrary scales
-are outside the alpha's production scope. Probe mutations are experiments, not presets.
+batch/opset contracts and GAP shapes fail explicitly. Exactly one of `--cle` and
+`--no-cle` is required; `--cle` applies the transcribed default-preset equalization
+(Conv→Conv pairs; depthwise pairs, Gemm pairs and Clip replacement raise). YOLO,
+AdaRound, per-channel weights, INT32 bias and arbitrary scales are outside the alpha's
+production scope. Probe mutations are experiments, not presets.
 
 ## Prepare the local artifacts
 
@@ -49,7 +51,7 @@ the quantization command itself.
 ## Quantize and inspect
 
 In Git Bash, the wrapper activates the inference environment, records a UTF-8 log,
-and uses the alpha's no-CLE recipe. Choose new output and log names on each run:
+and calibrates without CLE unless `--cle` is given. Choose new output and log names on each run:
 
 ```bash
 ./scripts/quant-own.sh --out models/resnet50_ignition_alpha.onnx --log results/quant/quant_resnet50_ignition_alpha.log --limit 64
@@ -64,6 +66,9 @@ python -m quant quantize --in-model models/resnet50_fp32.onnx --out models/resne
 python -m quant inspect models/resnet50_ignition_custom.onnx
 ```
 
+Replace `--no-cle` with `--cle` for the default-preset recipe; the sidecar then carries
+the ordered pair list and per-pair scale statistics under `cle_report`.
+
 Direct Python commands print to the terminal; use the shell wrappers when collecting
 repository evidence. Existing output models and sidecars are never overwritten.
 Calibration checks free disk from inferred tensor sizes and removes its private spool
@@ -76,8 +81,9 @@ It does not copy the reference's integer weights or topology.
 
 ## Verify an output
 
-The optional Quark comparison requires a separately generated same-listing no-CLE
-reference and its provenance file; the [producer experiment](../docs/BENCHMARKS.md#owned-resnet50-no-cle-re-emission-and-independent-calibration)
+The optional Quark comparison requires a separately generated same-listing reference
+built with the same CLE setting (`scripts/quant-reference.sh`, `--cle` or not) and its
+provenance file; the [producer experiment](../docs/BENCHMARKS.md#owned-resnet50-no-cle-re-emission-and-independent-calibration)
 documents those commands. With that reference and labeled `data/eval/` available:
 
 ```bash
@@ -97,4 +103,5 @@ Read [Alpha validation](../docs/BENCHMARKS.md#ignition-alpha-release-validation)
 the versioned artifact's evidence and [acceptance findings](../docs/BENCHMARKS.md#ignition-controlled-resnet-qdq-acceptance)
 for numerical traps. Successful EP placement does not establish correct outputs;
 even an optimized CPU reference can disagree with unoptimized ONNX computation.
-The no-CLE alpha does not claim the accuracy of the repository's CLE/AdaRound models.
+With `--cle` the output reproduces the repository's plain-XINT8 ResNet50 to the integer
+([CLE parity](../docs/BENCHMARKS.md#ignition-cle-parity-and-the-default-xint8-preset)); AdaRound accuracy is not claimed.

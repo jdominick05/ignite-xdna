@@ -32,7 +32,7 @@ Full environment split, install steps and footguns: [`docs/SETUP.md`](docs/SETUP
 | `pipelines/yolov8n-pose` | YOLOv8n-pose, 17-point COCO keypoints | **Working** — 9.35 ms on the NPU (1015/1025 nodes), OKS mAP@50-95 34.32 AdaRound vs 32.64 plain XINT8 and 49.86 float (5000 images) |
 | `pipelines/yolov6n` | YOLOv6n detection (RepVGG backbone, no DFL) | **Working** — 6.62 ms on the NPU (518/525 nodes), mAP@50-95 33.57 AdaRound vs 22.92 plain XINT8 and 36.95 float (5000 images) |
 | `pipelines/mobilevit` | MobileViT-XXS (hybrid CNN/transformer) | **Does not survive INT8** — 0.00% top-1, kept as the negative result |
-| `quant/` (Ignition) | Folded ResNet without CLE | **Alpha 0.1.0a1** — independent calibration/emission without Quark or torch; versioned CLI and explicit scope. [Quickstart](quant/README.md), [todo list](quant/TODO.md), [validation](docs/BENCHMARKS.md#ignition-alpha-release-validation), [acceptance findings](docs/BENCHMARKS.md#ignition-controlled-resnet-qdq-acceptance) |
+| `quant/` (Ignition) | Folded ResNet, with or without CLE | **Alpha 0.1.0a1** — independent calibration/emission without Quark or torch; `--cle` reproduces the repo's plain-XINT8 ResNet50 to the integer. [Quickstart](quant/README.md), [todo list](quant/TODO.md), [validation](docs/BENCHMARKS.md#ignition-alpha-release-validation), [CLE parity](docs/BENCHMARKS.md#ignition-cle-parity-and-the-default-xint8-preset), [acceptance findings](docs/BENCHMARKS.md#ignition-controlled-resnet-qdq-acceptance) |
 
 Detection width sweep, head-cut plain XINT8, full 5000-image val2017 mAP
 (conf 0.001, IoU 0.7, max_det 300, per-class NMS):

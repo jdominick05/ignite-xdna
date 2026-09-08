@@ -1,4 +1,4 @@
-"""Build the fresh no-CLE Quark oracle for the owned quantizer's Phase 1 gate.
+"""Build a fresh Quark oracle (no CLE by default, --cle for the default preset) for the owned quantizer's gates.
 
 Quark is imported only in this reference process. The owned producer runs in a
 separate process and never imports Quark. Use scripts/quant-reference.sh for guards.
@@ -10,6 +10,8 @@ import json
 from pathlib import Path
 import sys
 import time
+
+import onnx
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
@@ -25,6 +27,7 @@ def main():
     parser.add_argument("--calib-dir", type=Path, default=Path("data/calib"))
     parser.add_argument("--cfg-path", type=Path, default=Path("models/preprocess_config.json"))
     parser.add_argument("--limit", type=int, default=64)
+    parser.add_argument("--cle", action="store_true", help="Keep Quark's default include_cle=True")
     args = parser.parse_args()
     sidecar = args.out.with_suffix(".reference.json")
     if args.out.exists() or sidecar.exists():
@@ -38,7 +41,7 @@ def main():
     with args.in_model.open("rb") as stream:
         model_hash = hashlib.file_digest(stream, "sha256").hexdigest()
     report = {
-        "machine": "Desktop 2 / Ryzen 7 8700G", "include_cle": False,
+        "machine": "Desktop 2 / Ryzen 7 8700G", "include_cle": args.cle,
         "float_model_sha256": model_hash, "preprocess": cfg,
         "listing": [p.as_posix() for p in source.listing()],
         "versions": {p: metadata.version(p) for p in ("amd-quark", "onnx", "onnxruntime", "numpy")},
@@ -47,7 +50,15 @@ def main():
     from quark.onnx import ModelQuantizer
     from quark.onnx.quantization.config import Config, get_default_config
     quant_config = get_default_config("XINT8")
-    quant_config.include_cle = False
+    quant_config.include_cle = args.cle
+    if args.cle:
+        # Provenance only: the ordered pattern list Quark's matcher produces on this export.
+        from quark.onnx.algorithm.cle.equalization import Equalization
+        from quark.onnx.quantizers.registry import NPUCnnRegistry, QDQRegistry, QLinearOpsRegistry
+        op_types = sorted(set(QLinearOpsRegistry) | set(QDQRegistry) | set(NPUCnnRegistry))
+        patterns = Equalization(onnx.load(args.in_model), op_types, [], []).get_cle_pattern_pair()
+        report["cle_patterns"] = [[p[1].name, p[-1].name, list(p[0])] for p in patterns]
+        print("CLE_PATTERNS", len(patterns), flush=True)
     start = time.perf_counter()
     ModelQuantizer(Config(global_quant_config=quant_config)).quantize_model(
         str(args.in_model), str(args.out), as_reader(source))

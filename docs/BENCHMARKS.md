@@ -2719,6 +2719,75 @@ HardSigmoid, swish) and bridges beyond Conv/Add→Relu and GAP→Mul (Quark also
 Gemm, MaxPool, ConvTranspose and MatMul, and through Clip, LeakyRelu and PRelu) are
 untested because this graph has none. Both runs are Desktop 2, `resnet_env`, CPU only.
 
+### Ignition: CLE parity and the default XINT8 preset
+
+`quant/cle.py` transcribes Quark 0.11rc1's cross-layer equalization
+(`algorithm/cle/equalization.py`) for the Conv→Conv pair path: the matcher's
+single-consumer walk through Relu, ReduceMean, Pad and LeakyRelu, the source's
+insert-before-last pair sort that lists the first pair twice, the bias column appended
+to the head weights with the source's shrink-factor ladder, the "max" balance with its
+0.5 weight threshold, and a tail scaled by `1 / scale` rather than divided. Depthwise
+pairs and triples, Gemm-in-pair transposes and Clip replacement raise, having no
+instance on this graph. Three gates, in order.
+
+**Float-level parity first.** `tools/quant_cle_probe.py` (wrapper
+`scripts/quant-cle-probe.sh`, `resnet_env`, under a second each, no calibration)
+equalizes the float export with Quark's `cle_transforms` under its resolved default
+op list and the audited defaults, and with Ignition's `cross_layer_equalize`, then
+compares the ordered pattern list and every float initializer byte for byte
+([log](../results/quant/cle_probe_resnet50_fp32.log)). Both list 33 patterns: 32 unique pairs
+plus `layer1.0 conv1→conv2` a second time at the end, which is the 33 the repo's
+original quantization log printed on 2026-09-05. Both change the same 80 initializers
+and no byte differs. Per-channel scales span 0.245–5.12, and the threshold leaves
+1,759 of 7,616 channel scales at 1.
+
+**Same-listing calibration parity.** A fresh default-preset Quark oracle
+([quant log](../results/quant/quant_resnet50_quark_cle_c64.log), 33 patterns, 97.4 s, SHA256
+`2df63ef320dcdb49297546b3b1c41b5e7d7f3300b278ade621a0b71c6042f01f`) and Ignition with
+`--cle` ([quant log](../results/quant/quant_resnet50_ignition_cle_c64.log), 104.7 s, SHA256
+`74f2b9a180e05b22a203aeb896f2f31daf20a58beb759dc81f6aee52021e8bbe`, Quark and torch
+imports blocked) on the same 64 images: the
+[comparison](../results/quant/diff_resnet50_ignition_cle_c64.log) reports an empty position
+delta, matching float/preprocess/listing/CLE provenance, identical graph connections
+and all 108 int8 initializers exact. Refinement moved only the GAP output position in
+both, so CLE did not fire shift-cut or shift-bias on this network either; the
+[refinement probe](#ignition-refinement-rules-under-perturbation) remains the only
+evidence for those rules.
+
+**The oracle is the repo's original artifact.** The new Quark model is graph-identical
+to `models/resnet50_xint8_c64.onnx` (SHA256
+`bd817280673fe25e67380a6adde1db82275d1aa284924a0e6b67ea97e4315722`, quantized
+2026-09-05 by [`quant_resnet50_xint8_c64.log`](../results/res/quant_resnet50_xint8_c64.log)
+on the same 64 images): empty position delta, 108/108 int8 initializers exact.
+Ignition's `--cle` output therefore reproduces, to the integer, the plain-XINT8 ResNet50
+that every earlier ResNet figure in this document was measured on. The files differ in
+producer metadata and initializer order, not in any parameter.
+
+**Full evaluation, same sitting** (`scripts/quant-validate.sh`, Desktop 2, Ryzen 7 8700G /
+Phoenix XDNA1, Ryzen AI 1.7.1, `resnet_env17`, 1,000 labeled images, `sess.run` only,
+static batch 1, fresh compile; both pre-NPU witnesses idle:
+[reference](../results/quant/contexts_resnet50_ignition_cle_c64_reference.log),
+[own](../results/quant/contexts_resnet50_ignition_cle_c64_own.log)):
+
+| Artifact / device | Top-1 / top-5 % | Mean / median / p95 ms | Placement | Evidence |
+|---|---:|---:|---|---|
+| Quark default (CLE) / CPU | 72.80 / 88.40 | 31.40 / 31.80 / 38.26 | CPU | [run](../results/quant/run_resnet50_ignition_cle_c64_reference_cpu.log) |
+| Ignition `--cle` / CPU | 72.80 / 88.40 | 30.62 / 30.68 / 39.86 | CPU | [run](../results/quant/run_resnet50_ignition_cle_c64_own_cpu.log) |
+| Quark default (CLE) / NPU | 72.10 / 88.10 | 5.22 / 5.17 / 5.54 | 393/395 | [run](../results/quant/run_resnet50_ignition_cle_c64_reference_npu.log), [diag](../results/quant/diag_resnet50_ignition_cle_c64_reference.log) |
+| Ignition `--cle` / NPU | 72.10 / 88.10 | 5.22 / 5.17 / 5.48 | 393/395 | [run](../results/quant/run_resnet50_ignition_cle_c64_own_npu.log), [diag](../results/quant/diag_resnet50_ignition_cle_c64_own.log) |
+| Ignition alpha no-CLE / CPU and NPU | 62.00 / 79.80 and 59.90 / 79.10 | 34.02 and 5.27 | 393/395 | [Alpha validation](#ignition-alpha-release-validation) |
+| Repo headline, CLE + AdaRound / NPU | 79.80 | 5.27 | 393/395 | README pipeline table |
+
+CLE alone is worth 10.8 points of top-1 on CPU and 12.2 on the NPU over the no-CLE
+alpha; the remaining 7.7 points to the headline are AdaRound, which Ignition does not
+have. The NPU accuracy equals the original artifact's 2026-09-05 measurement
+(72.10 / 88.10, [run](../results/res/run_resnet50_npu.log)); its latency then (5.68 ms)
+and now (5.22 ms) are different days on the shared machine and are not compared. The
+0.7-point CPU-to-NPU drop is the NPU-versus-CPU floor the acceptance study measured.
+
+What this does not show: CLE on grouped or depthwise convolutions, on Gemm pairs, or on
+graphs whose matcher walk crosses Pad or ReduceMean; each raises until it has a gate.
+
 ## Key findings
 
 Roughly ordered by how much time each one cost to discover.

@@ -4,9 +4,12 @@ The runnable release is **Alpha 0.1.0a1**: [supported scope and commands](README
 [implementation todo list](TODO.md), and [release validation](../docs/BENCHMARKS.md#ignition-alpha-release-validation).
 The broader signatures and roadmap below remain a design, not an Alpha API promise.
 
-**Status: ResNet no-CLE emission gates pass; independent no-CLE MinMSE calibration
-matches the fresh reference. The first controlled ResNet acceptance study is measured;
-CLE, YOLO, AdaRound and the broader acceptance map remain open.** The audit is in
+**Status: ResNet emission and independent MinMSE calibration match fresh Quark
+references both without CLE and with the default preset's CLE; the transcribed
+refinement and equalization rules are probed against Quark's on identical inputs; the
+first controlled ResNet acceptance study is measured. YOLO, AdaRound and the broader
+acceptance map remain open.** CLE evidence is in the
+[CLE parity section](../docs/BENCHMARKS.md#ignition-cle-parity-and-the-default-xint8-preset). The audit is in
 [`notes_xint8_dialect.log`](../results/quant/notes_xint8_dialect.log); remaining unknowns
 are explicit in §2.6. Re-emission, exact graph/parameter comparison, full-set accuracy
 and paired NPU evidence are in the [ResNet results](../docs/BENCHMARKS.md#owned-resnet50-no-cle-re-emission-and-independent-calibration).
@@ -227,7 +230,14 @@ installed versions, source/model SHA256 values, and raw fingerprints are in
   Clip/LeakyRelu/PRelu bridges) remain untested.
 - **CLE defaults resolved [Q]:** `algorithm/interface.py:61-66`: `CLESteps=1`,
   `CLEBalanceMethod="max"`, `CLEWeightThreshold=0.5`, `CLEScaleAppendBias=True`,
-  `CLEScaleUseThreshold=True`, `CLETotalLayerDiffThreshold=2e-7`.
+  `CLEScaleUseThreshold=True`, `CLETotalLayerDiffThreshold=2e-7`. **[L]** Transcribed
+  in `quant/cle.py`; byte-identical equalized weights against `cle_transforms` on the
+  float export, then an exact position/integer match with a fresh default-preset oracle
+  that is itself identical to the repo's original resnet50 XINT8 artifact
+  ([CLE parity](../docs/BENCHMARKS.md#ignition-cle-parity-and-the-default-xint8-preset)). The matcher's insert-before-last sort lists
+  the first pair twice (33 patterns, 32 unique); pairs are equalized in that order on
+  the live initializers. **[U]** depthwise pairs/triples, Gemm pairs and Clip
+  replacement raise; no measured graph exercises them.
 - **Large pool resolved [Q]:** `optimizations/optimize.py:190-250`: rank-4 GAP,
   spatial area `>512`, one factorization near sqrt of each dimension; both resulting
   areas must be `<=512`. Prepend AveragePool with stride=kernel, retaining the GAP.
@@ -554,12 +564,14 @@ def simulate_dpu(g: Graph, q: dict[str, TensorQ], cfg: QuantConfig) -> dict[str,
 **`quant/cle.py`** — cross-layer equalization
 
 ```
-def find_pairs(g: Graph) -> list[tuple[Node, Node]]    # Conv→Relu→Conv, single consumer [Q algorithm/cle/equalization.py]
-def equalize_pair(w1, b1, w2) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]   # s = sqrt(r1/r2) per channel
-def cross_layer_equalize(g: Graph, cfg: QuantConfig) -> int    # returns the pattern count Quark logs
+def find_pairs(g: Graph) -> list[ClePair]                  # single-consumer walk through Relu/ReduceMean/Pad/LeakyRelu, plus the source's insert-before-last sort [Q algorithm/cle/equalization.py]
+def equalize_pair(g, head, tail, weight_threshold, append_bias, use_threshold) -> dict   # _cross_layer_equalize for Conv→Conv group 1: bias column, "max" balance, tail * (1/scale)
+def cross_layer_equalize(g: Graph, *, steps=1, ...) -> CleReport   # cle_transforms + process_cle_transforms step loop; report carries the ordered pairs and per-pair scale stats
 ```
 
-Gate for this module is the logged pattern count: 33 on resnet50, 0 on yolov8n-cut [L].
+Implemented as above [L]: 33 patterns (32 unique, the first listed twice) and
+byte-identical equalized float weights on resnet50; yolov8n-cut's 0 patterns remains a
+design expectation until that graph is prepared.
 The matcher's rejections (Clip, Sigmoid, multi-consumer convs — `results/mobilevit/
 cle_pattern_count.log`) are reproduced, not fixed; CLE across ReLU6 is not sound and the
 record already says so.

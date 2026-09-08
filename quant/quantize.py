@@ -1,4 +1,4 @@
-"""Ignition XINT8 producer for folded ResNet, with optional position-table replay."""
+"""Ignition XINT8 producer for folded ResNet, with optional CLE and position-table replay."""
 from dataclasses import asdict
 import hashlib
 import importlib.metadata as metadata
@@ -8,6 +8,7 @@ import sys
 import time
 
 from . import __version__
+from .cle import cross_layer_equalize
 from .graph import Graph
 from .passes import avgpool_dpu_scale
 from .qdq import emit, read_pos_table, quantizable_tensors
@@ -27,7 +28,7 @@ def file_hash(path: Path) -> str:
 
 def quantize(model_in: Path, model_out: Path, *, scales_from: Path | None = None,
              source: ImageFolderSource | None = None, preprocess: dict | None = None,
-             scratch: Path | None = None) -> dict:
+             scratch: Path | None = None, cle: bool = False) -> dict:
     _check_imports()
     if (scales_from is None) == (source is None):
         raise ValueError("Supply exactly one of a calibration source or scales_from")
@@ -49,11 +50,17 @@ def quantize(model_in: Path, model_out: Path, *, scales_from: Path | None = None
                 raise ValueError(f"Ignition Alpha supports only 7x7 GAP, got {shape}")
     report = {
         "producer": "Ignition", "producer_version": __version__,
-        "scope": "folded_resnet_nocle", "format": "XINT8_QDQ",
-        "mode": "reemit_from_positions" if scales_from else "own_minmse_nocle", "cle": False,
+        "scope": "folded_resnet_cle" if cle else "folded_resnet_nocle", "format": "XINT8_QDQ",
+        "mode": "reemit_from_positions" if scales_from else "own_minmse_cle" if cle else "own_minmse_nocle",
+        "cle": cle,
         "input_sha256": file_hash(model_in),
         "versions": {p: metadata.version(p) for p in ("numpy", "onnx")},
     }
+    if cle:
+        # Quark equalizes the float model before calibration (preproc.py apply_pre_process);
+        # calibration and weight quantization then see the equalized initializers.
+        report["cle_report"] = asdict(cross_layer_equalize(graph))
+        graph.infer_shapes()
     if scales_from is not None:
         scales_from = Path(scales_from)
         reference = Graph.load(scales_from)

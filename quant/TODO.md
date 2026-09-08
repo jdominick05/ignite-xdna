@@ -20,14 +20,19 @@ research plan. A checkbox closes only with the evidence described beside it.
 The release branch is `ignition-alpha`; release verification and publication are
 recorded in the handoff and Git history rather than treated as future features.
 
-## Next milestone: default-preset ResNet parity
+## Default-preset ResNet parity (closed 2026-09-08)
 
-- [ ] Implement CLE from the audited source rules, including pair order, bias
+- [x] Implement CLE from the audited source rules, including pair order, bias
   handling, thresholds and iteration limits. Match the oracle's pattern count and
-  transformed weights before comparing calibration positions.
-- [ ] Quantize with CLE on the same image listing as a fresh default XINT8 oracle.
+  transformed weights before comparing calibration positions. Evidence: `quant/cle.py`
+  and the [float-level probe](../results/quant/cle_probe_resnet50_fp32.log): 33 patterns
+  in the same order, byte-identical equalized initializers.
+- [x] Quantize with CLE on the same image listing as a fresh default XINT8 oracle.
   Require graph/parameter comparison, full labeled CPU/NPU accuracy, fresh EP reports
-  and paired latency. Do not compare against an old session's latency.
+  and paired latency. Evidence: [CLE parity](../docs/BENCHMARKS.md#ignition-cle-parity-and-the-default-xint8-preset): empty position
+  delta, 108/108 int8 exact, 72.80% CPU and 72.10% NPU top-1 for both, 393/395 placed,
+  5.22 ms paired in one sitting; the oracle equals the repo's original resnet50 XINT8
+  artifact. Depthwise/Gemm/Clip CLE paths raise and stay unmeasured.
 - [x] Exercise refinement cases that move weight/bias positions. Resolve the audited
   change-tracking/raw-data hazards and record whether stored integers must change.
   Evidence: the [refinement probe](../docs/BENCHMARKS.md#ignition-refinement-rules-under-perturbation)

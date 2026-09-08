@@ -1,0 +1,303 @@
+[32m
+[QUARK-INFO]: Checking custom ops library ...[0m
+[33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[32m
+[QUARK-INFO]: Start compiling CPU version of custom ops library.[0m
+C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\torch\utils\cpp_extension.py:380: UserWarning: Error checking compiler version for cl: [WinError 2] The system cannot find the file specified
+  warnings.warn(f'Error checking compiler version for {compiler}: {error}')
+INFO: Could not find files for the given pattern(s).
+[31m
+[QUARK-ERROR]: CPU version of custom ops library compilation failed:Command '['where', 'cl']' returned non-zero exit status 1.[0m
+[33m
+[QUARK-WARNING]: Custom ops library compilation failed: CPU version of custom ops library compilation failed:Command '['where', 'cl']' returned non-zero exit status 1..[0m
+[32m
+[QUARK-INFO]: Checked custom ops library.[0m
+[33m
+[QUARK-WARNING]: The api `activation` has been replaced with `input_tensors` and will be removed in the next release.[0m
+[33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+CLE_PROBE_SETUP {
+  "in_model": "models/resnet50_fp32.onnx",
+  "sha256": "d999c960ea12f9481e6fb43aab28ea3e2741c712fc4c30997b07d9b725cb87e6",
+  "versions": {
+    "amd-quark": "0.11rc1",
+    "onnx": "1.19.0",
+    "numpy": "1.26.4"
+  },
+  "op_types_to_quantize": [
+    "Add",
+    "ArgMax",
+    "AveragePool",
+    "Clip",
+    "Concat",
+    "Conv",
+    "ConvTranspose",
+    "DepthToSpace",
+    "Div",
+    "EmbedLayerNormalization",
+    "Erf",
+    "Gather",
+    "Gelu",
+    "Gemm",
+    "GlobalAveragePool",
+    "HardSigmoid",
+    "InstanceNormalization",
+    "LayerNormalization",
+    "LeakyRelu",
+    "LpNormalization",
+    "MatMul",
+    "Max",
+    "MaxPool",
+    "Min",
+    "Mul",
+    "PRelu",
+    "Pad",
+    "ReduceMean",
+    "Relu",
+    "Reshape",
+    "Resize",
+    "Sigmoid",
+    "Slice",
+    "Softmax",
+    "SpaceToDepth",
+    "Split",
+    "Squeeze",
+    "Sub",
+    "Tanh",
+    "Transpose",
+    "Unsqueeze",
+    "Where"
+  ],
+  "steps": 1,
+  "convs": 53,
+  "convs_with_group_attribute": 53,
+  "float_initializers": 108
+}
+CLE_PROBE_RESULT {
+  "quark_log": [
+    "CrossLayerEqualization pattern num: 33",
+    "Total CrossLayerEqualization steps: 1"
+  ],
+  "quark_pattern_count": 33,
+  "ignition_pattern_count": 33,
+  "unique_pairs": 32,
+  "patterns_equal": true,
+  "steps": [
+    1,
+    1
+  ],
+  "changed_initializers": [
+    80,
+    80
+  ],
+  "changed_equal": true,
+  "byte_mismatches": {},
+  "seconds": [
+    0.712,
+    0.545
+  ],
+  "ignition_last_diff": 0.9202582412929688
+}
+CLE_PAIRS [["/layer1/layer1.0/conv1/Conv", "/layer1/layer1.0/conv2/Conv", ["/layer1/layer1.0/conv1/Conv_output_0", "/layer1/layer1.0/act1/Relu_output_0", "/layer1/layer1.0/conv2/Conv_output_0"]], ["/layer1/layer1.0/conv2/Conv", "/layer1/layer1.0/conv3/Conv", ["/layer1/layer1.0/conv2/Conv_output_0", "/layer1/layer1.0/act2/Relu_output_0", "/layer1/layer1.0/conv3/Conv_output_0"]], ["/layer1/layer1.1/conv1/Conv", "/layer1/layer1.1/conv2/Conv", ["/layer1/layer1.1/conv1/Conv_output_0", "/layer1/layer1.1/act1/Relu_output_0", "/layer1/layer1.1/conv2/Conv_output_0"]], ["/layer1/layer1.1/conv2/Conv", "/layer1/layer1.1/conv3/Conv", ["/layer1/layer1.1/conv2/Conv_output_0", "/layer1/layer1.1/act2/Relu_output_0", "/layer1/layer1.1/conv3/Conv_output_0"]], ["/layer1/layer1.2/conv1/Conv", "/layer1/layer1.2/conv2/Conv", ["/layer1/layer1.2/conv1/Conv_output_0", "/layer1/layer1.2/act1/Relu_output_0", "/layer1/layer1.2/conv2/Conv_output_0"]], ["/layer1/layer1.2/conv2/Conv", "/layer1/layer1.2/conv3/Conv", ["/layer1/layer1.2/conv2/Conv_output_0", "/layer1/layer1.2/act2/Relu_output_0", "/layer1/layer1.2/conv3/Conv_output_0"]], ["/layer2/layer2.0/conv1/Conv", "/layer2/layer2.0/conv2/Conv", ["/layer2/layer2.0/conv1/Conv_output_0", "/layer2/layer2.0/act1/Relu_output_0", "/layer2/layer2.0/conv2/Conv_output_0"]], ["/layer2/layer2.0/conv2/Conv", "/layer2/layer2.0/conv3/Conv", ["/layer2/layer2.0/conv2/Conv_output_0", "/layer2/layer2.0/act2/Relu_output_0", "/layer2/layer2.0/conv3/Conv_output_0"]], ["/layer2/layer2.1/conv1/Conv", "/layer2/layer2.1/conv2/Conv", ["/layer2/layer2.1/conv1/Conv_output_0", "/layer2/layer2.1/act1/Relu_output_0", "/layer2/layer2.1/conv2/Conv_output_0"]], ["/layer2/layer2.1/conv2/Conv", "/layer2/layer2.1/conv3/Conv", ["/layer2/layer2.1/conv2/Conv_output_0", "/layer2/layer2.1/act2/Relu_output_0", "/layer2/layer2.1/conv3/Conv_output_0"]], ["/layer2/layer2.2/conv1/Conv", "/layer2/layer2.2/conv2/Conv", ["/layer2/layer2.2/conv1/Conv_output_0", "/layer2/layer2.2/act1/Relu_output_0", "/layer2/layer2.2/conv2/Conv_output_0"]], ["/layer2/layer2.2/conv2/Conv", "/layer2/layer2.2/conv3/Conv", ["/layer2/layer2.2/conv2/Conv_output_0", "/layer2/layer2.2/act2/Relu_output_0", "/layer2/layer2.2/conv3/Conv_output_0"]], ["/layer2/layer2.3/conv1/Conv", "/layer2/layer2.3/conv2/Conv", ["/layer2/layer2.3/conv1/Conv_output_0", "/layer2/layer2.3/act1/Relu_output_0", "/layer2/layer2.3/conv2/Conv_output_0"]], ["/layer2/layer2.3/conv2/Conv", "/layer2/layer2.3/conv3/Conv", ["/layer2/layer2.3/conv2/Conv_output_0", "/layer2/layer2.3/act2/Relu_output_0", "/layer2/layer2.3/conv3/Conv_output_0"]], ["/layer3/layer3.0/conv1/Conv", "/layer3/layer3.0/conv2/Conv", ["/layer3/layer3.0/conv1/Conv_output_0", "/layer3/layer3.0/act1/Relu_output_0", "/layer3/layer3.0/conv2/Conv_output_0"]], ["/layer3/layer3.0/conv2/Conv", "/layer3/layer3.0/conv3/Conv", ["/layer3/layer3.0/conv2/Conv_output_0", "/layer3/layer3.0/act2/Relu_output_0", "/layer3/layer3.0/conv3/Conv_output_0"]], ["/layer3/layer3.1/conv1/Conv", "/layer3/layer3.1/conv2/Conv", ["/layer3/layer3.1/conv1/Conv_output_0", "/layer3/layer3.1/act1/Relu_output_0", "/layer3/layer3.1/conv2/Conv_output_0"]], ["/layer3/layer3.1/conv2/Conv", "/layer3/layer3.1/conv3/Conv", ["/layer3/layer3.1/conv2/Conv_output_0", "/layer3/layer3.1/act2/Relu_output_0", "/layer3/layer3.1/conv3/Conv_output_0"]], ["/layer3/layer3.2/conv1/Conv", "/layer3/layer3.2/conv2/Conv", ["/layer3/layer3.2/conv1/Conv_output_0", "/layer3/layer3.2/act1/Relu_output_0", "/layer3/layer3.2/conv2/Conv_output_0"]], ["/layer3/layer3.2/conv2/Conv", "/layer3/layer3.2/conv3/Conv", ["/layer3/layer3.2/conv2/Conv_output_0", "/layer3/layer3.2/act2/Relu_output_0", "/layer3/layer3.2/conv3/Conv_output_0"]], ["/layer3/layer3.3/conv1/Conv", "/layer3/layer3.3/conv2/Conv", ["/layer3/layer3.3/conv1/Conv_output_0", "/layer3/layer3.3/act1/Relu_output_0", "/layer3/layer3.3/conv2/Conv_output_0"]], ["/layer3/layer3.3/conv2/Conv", "/layer3/layer3.3/conv3/Conv", ["/layer3/layer3.3/conv2/Conv_output_0", "/layer3/layer3.3/act2/Relu_output_0", "/layer3/layer3.3/conv3/Conv_output_0"]], ["/layer3/layer3.4/conv1/Conv", "/layer3/layer3.4/conv2/Conv", ["/layer3/layer3.4/conv1/Conv_output_0", "/layer3/layer3.4/act1/Relu_output_0", "/layer3/layer3.4/conv2/Conv_output_0"]], ["/layer3/layer3.4/conv2/Conv", "/layer3/layer3.4/conv3/Conv", ["/layer3/layer3.4/conv2/Conv_output_0", "/layer3/layer3.4/act2/Relu_output_0", "/layer3/layer3.4/conv3/Conv_output_0"]], ["/layer3/layer3.5/conv1/Conv", "/layer3/layer3.5/conv2/Conv", ["/layer3/layer3.5/conv1/Conv_output_0", "/layer3/layer3.5/act1/Relu_output_0", "/layer3/layer3.5/conv2/Conv_output_0"]], ["/layer3/layer3.5/conv2/Conv", "/layer3/layer3.5/conv3/Conv", ["/layer3/layer3.5/conv2/Conv_output_0", "/layer3/layer3.5/act2/Relu_output_0", "/layer3/layer3.5/conv3/Conv_output_0"]], ["/layer4/layer4.0/conv1/Conv", "/layer4/layer4.0/conv2/Conv", ["/layer4/layer4.0/conv1/Conv_output_0", "/layer4/layer4.0/act1/Relu_output_0", "/layer4/layer4.0/conv2/Conv_output_0"]], ["/layer4/layer4.0/conv2/Conv", "/layer4/layer4.0/conv3/Conv", ["/layer4/layer4.0/conv2/Conv_output_0", "/layer4/layer4.0/act2/Relu_output_0", "/layer4/layer4.0/conv3/Conv_output_0"]], ["/layer4/layer4.1/conv1/Conv", "/layer4/layer4.1/conv2/Conv", ["/layer4/layer4.1/conv1/Conv_output_0", "/layer4/layer4.1/act1/Relu_output_0", "/layer4/layer4.1/conv2/Conv_output_0"]], ["/layer4/layer4.1/conv2/Conv", "/layer4/layer4.1/conv3/Conv", ["/layer4/layer4.1/conv2/Conv_output_0", "/layer4/layer4.1/act2/Relu_output_0", "/layer4/layer4.1/conv3/Conv_output_0"]], ["/layer4/layer4.2/conv1/Conv", "/layer4/layer4.2/conv2/Conv", ["/layer4/layer4.2/conv1/Conv_output_0", "/layer4/layer4.2/act1/Relu_output_0", "/layer4/layer4.2/conv2/Conv_output_0"]], ["/layer4/layer4.2/conv2/Conv", "/layer4/layer4.2/conv3/Conv", ["/layer4/layer4.2/conv2/Conv_output_0", "/layer4/layer4.2/act2/Relu_output_0", "/layer4/layer4.2/conv3/Conv_output_0"]], ["/layer1/layer1.0/conv1/Conv", "/layer1/layer1.0/conv2/Conv", ["/layer1/layer1.0/conv1/Conv_output_0", "/layer1/layer1.0/act1/Relu_output_0", "/layer1/layer1.0/conv2/Conv_output_0"]]]
+CLE_SCALES {
+ "0:0:/layer1/layer1.0/conv1/Conv->/layer1/layer1.0/conv2/Conv": {
+  "channels": 64,
+  "scale_min": 0.43903234601020813,
+  "scale_max": 1.6269893646240234,
+  "unit_scales": 29
+ },
+ "0:1:/layer1/layer1.0/conv2/Conv->/layer1/layer1.0/conv3/Conv": {
+  "channels": 64,
+  "scale_min": 0.5157560110092163,
+  "scale_max": 3.429570436477661,
+  "unit_scales": 24
+ },
+ "0:2:/layer1/layer1.1/conv1/Conv->/layer1/layer1.1/conv2/Conv": {
+  "channels": 64,
+  "scale_min": 0.6753840446472168,
+  "scale_max": 2.8362791538238525,
+  "unit_scales": 0
+ },
+ "0:3:/layer1/layer1.1/conv2/Conv->/layer1/layer1.1/conv3/Conv": {
+  "channels": 64,
+  "scale_min": 0.29572367668151855,
+  "scale_max": 2.254338026046753,
+  "unit_scales": 0
+ },
+ "0:4:/layer1/layer1.2/conv1/Conv->/layer1/layer1.2/conv2/Conv": {
+  "channels": 64,
+  "scale_min": 0.3851180076599121,
+  "scale_max": 1.213152527809143,
+  "unit_scales": 1
+ },
+ "0:5:/layer1/layer1.2/conv2/Conv->/layer1/layer1.2/conv3/Conv": {
+  "channels": 64,
+  "scale_min": 0.5224791765213013,
+  "scale_max": 1.386553406715393,
+  "unit_scales": 0
+ },
+ "0:6:/layer2/layer2.0/conv1/Conv->/layer2/layer2.0/conv2/Conv": {
+  "channels": 128,
+  "scale_min": 0.3490521013736725,
+  "scale_max": 0.917726993560791,
+  "unit_scales": 0
+ },
+ "0:7:/layer2/layer2.0/conv2/Conv->/layer2/layer2.0/conv3/Conv": {
+  "channels": 128,
+  "scale_min": 0.6680071949958801,
+  "scale_max": 1.9005168676376343,
+  "unit_scales": 0
+ },
+ "0:8:/layer2/layer2.1/conv1/Conv->/layer2/layer2.1/conv2/Conv": {
+  "channels": 128,
+  "scale_min": 0.5005756616592407,
+  "scale_max": 2.5046732425689697,
+  "unit_scales": 47
+ },
+ "0:9:/layer2/layer2.1/conv2/Conv->/layer2/layer2.1/conv3/Conv": {
+  "channels": 128,
+  "scale_min": 0.5420117974281311,
+  "scale_max": 5.119661808013916,
+  "unit_scales": 0
+ },
+ "0:10:/layer2/layer2.2/conv1/Conv->/layer2/layer2.2/conv2/Conv": {
+  "channels": 128,
+  "scale_min": 0.3352210521697998,
+  "scale_max": 2.0627214908599854,
+  "unit_scales": 25
+ },
+ "0:11:/layer2/layer2.2/conv2/Conv->/layer2/layer2.2/conv3/Conv": {
+  "channels": 128,
+  "scale_min": 0.43655917048454285,
+  "scale_max": 3.394679546356201,
+  "unit_scales": 0
+ },
+ "0:12:/layer2/layer2.3/conv1/Conv->/layer2/layer2.3/conv2/Conv": {
+  "channels": 128,
+  "scale_min": 0.3296496272087097,
+  "scale_max": 2.095451593399048,
+  "unit_scales": 16
+ },
+ "0:13:/layer2/layer2.3/conv2/Conv->/layer2/layer2.3/conv3/Conv": {
+  "channels": 128,
+  "scale_min": 0.5202000737190247,
+  "scale_max": 3.503633499145508,
+  "unit_scales": 0
+ },
+ "0:14:/layer3/layer3.0/conv1/Conv->/layer3/layer3.0/conv2/Conv": {
+  "channels": 256,
+  "scale_min": 0.2446935623884201,
+  "scale_max": 1.4124497175216675,
+  "unit_scales": 62
+ },
+ "0:15:/layer3/layer3.0/conv2/Conv->/layer3/layer3.0/conv3/Conv": {
+  "channels": 256,
+  "scale_min": 0.3561782240867615,
+  "scale_max": 1.7382073402404785,
+  "unit_scales": 0
+ },
+ "0:16:/layer3/layer3.1/conv1/Conv->/layer3/layer3.1/conv2/Conv": {
+  "channels": 256,
+  "scale_min": 0.5168776512145996,
+  "scale_max": 2.2249326705932617,
+  "unit_scales": 220
+ },
+ "0:17:/layer3/layer3.1/conv2/Conv->/layer3/layer3.1/conv3/Conv": {
+  "channels": 256,
+  "scale_min": 0.4131603538990021,
+  "scale_max": 4.644340515136719,
+  "unit_scales": 0
+ },
+ "0:18:/layer3/layer3.2/conv1/Conv->/layer3/layer3.2/conv2/Conv": {
+  "channels": 256,
+  "scale_min": 0.2516445815563202,
+  "scale_max": 1.9092578887939453,
+  "unit_scales": 114
+ },
+ "0:19:/layer3/layer3.2/conv2/Conv->/layer3/layer3.2/conv3/Conv": {
+  "channels": 256,
+  "scale_min": 0.4815578758716583,
+  "scale_max": 3.8994178771972656,
+  "unit_scales": 0
+ },
+ "0:20:/layer3/layer3.3/conv1/Conv->/layer3/layer3.3/conv2/Conv": {
+  "channels": 256,
+  "scale_min": 0.3233453929424286,
+  "scale_max": 1.5078516006469727,
+  "unit_scales": 92
+ },
+ "0:21:/layer3/layer3.3/conv2/Conv->/layer3/layer3.3/conv3/Conv": {
+  "channels": 256,
+  "scale_min": 0.5406704545021057,
+  "scale_max": 3.6330251693725586,
+  "unit_scales": 0
+ },
+ "0:22:/layer3/layer3.4/conv1/Conv->/layer3/layer3.4/conv2/Conv": {
+  "channels": 256,
+  "scale_min": 0.33509522676467896,
+  "scale_max": 1.9312142133712769,
+  "unit_scales": 102
+ },
+ "0:23:/layer3/layer3.4/conv2/Conv->/layer3/layer3.4/conv3/Conv": {
+  "channels": 256,
+  "scale_min": 0.41193631291389465,
+  "scale_max": 2.417032241821289,
+  "unit_scales": 0
+ },
+ "0:24:/layer3/layer3.5/conv1/Conv->/layer3/layer3.5/conv2/Conv": {
+  "channels": 256,
+  "scale_min": 0.7764763832092285,
+  "scale_max": 2.771657943725586,
+  "unit_scales": 232
+ },
+ "0:25:/layer3/layer3.5/conv2/Conv->/layer3/layer3.5/conv3/Conv": {
+  "channels": 256,
+  "scale_min": 1.0470694303512573,
+  "scale_max": 4.274139404296875,
+  "unit_scales": 0
+ },
+ "0:26:/layer4/layer4.0/conv1/Conv->/layer4/layer4.0/conv2/Conv": {
+  "channels": 512,
+  "scale_min": 0.3945195972919464,
+  "scale_max": 3.219158887863159,
+  "unit_scales": 301
+ },
+ "0:27:/layer4/layer4.0/conv2/Conv->/layer4/layer4.0/conv3/Conv": {
+  "channels": 512,
+  "scale_min": 0.26246583461761475,
+  "scale_max": 1.4044256210327148,
+  "unit_scales": 9
+ },
+ "0:28:/layer4/layer4.1/conv1/Conv->/layer4/layer4.1/conv2/Conv": {
+  "channels": 512,
+  "scale_min": 0.30759871006011963,
+  "scale_max": 1.0,
+  "unit_scales": 366
+ },
+ "0:29:/layer4/layer4.1/conv2/Conv->/layer4/layer4.1/conv3/Conv": {
+  "channels": 512,
+  "scale_min": 0.29593560099601746,
+  "scale_max": 2.551863193511963,
+  "unit_scales": 12
+ },
+ "0:30:/layer4/layer4.2/conv1/Conv->/layer4/layer4.2/conv2/Conv": {
+  "channels": 512,
+  "scale_min": 0.3986676335334778,
+  "scale_max": 1.7051275968551636,
+  "unit_scales": 89
+ },
+ "0:31:/layer4/layer4.2/conv2/Conv->/layer4/layer4.2/conv3/Conv": {
+  "channels": 512,
+  "scale_min": 0.39486366510391235,
+  "scale_max": 3.976264238357544,
+  "unit_scales": 0
+ },
+ "0:32:/layer1/layer1.0/conv1/Conv->/layer1/layer1.0/conv2/Conv": {
+  "channels": 64,
+  "scale_min": 0.7181614637374878,
+  "scale_max": 1.507444143295288,
+  "unit_scales": 18
+ }
+}
+CLE_PROBE_PASS True

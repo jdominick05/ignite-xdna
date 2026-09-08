@@ -1,4 +1,4 @@
-"""Ignition Alpha: inspect ONNX graphs or quantize folded ResNet without CLE."""
+"""Ignition Alpha: inspect ONNX graphs or quantize folded ResNet, with or without CLE."""
 import argparse
 from dataclasses import asdict
 import importlib.abc
@@ -25,8 +25,9 @@ def main(argv=None):
     emit = commands.add_parser("quantize", help="Calibrate and emit XINT8 QDQ for folded ResNet")
     emit.add_argument("--in-model", type=Path, default=Path("models/resnet50_fp32.onnx"))
     emit.add_argument("--out", type=Path, required=True)
-    emit.add_argument("--no-cle", action="store_true", required=True,
-                      help="Required acknowledgement: Alpha has no cross-layer equalization")
+    cle = emit.add_mutually_exclusive_group(required=True)
+    cle.add_argument("--cle", action="store_true", help="Apply the transcribed cross-layer equalization first")
+    cle.add_argument("--no-cle", action="store_true", help="Calibrate the float export as exported")
     emit.add_argument("--calib-dir", type=Path, default=Path("data/calib"))
     emit.add_argument("--cfg-path", type=Path, default=Path("models/preprocess_config.json"))
     emit.add_argument("--limit", type=int, default=64)
@@ -68,11 +69,13 @@ def main(argv=None):
                 if graph.value_shape(input_name) != (1, *cfg["input_size"]):
                     parser.error("Preprocessing config does not match model input shape")
                 source = ImageFolderSource(args.calib_dir, cfg, args.limit, input_name)
-            print(f"Ignition {__version__}: folded ResNet / no CLE", flush=True)
+            print(f"Ignition {__version__}: folded ResNet / {'CLE' if args.cle else 'no CLE'}", flush=True)
             print("IMPORT_BLOCK_ACTIVE quark torch", flush=True)
             report = quantize(args.in_model, args.out, scales_from=args.scales_from,
-                              source=source, preprocess=cfg, scratch=args.scratch)
-            print(json.dumps({k: v for k, v in report.items() if k not in ("positions", "calibration")}, indent=2))
+                              source=source, preprocess=cfg, scratch=args.scratch, cle=args.cle)
+            print(json.dumps({k: v for k, v in report.items() if k not in ("positions", "calibration", "cle_report")}, indent=2))
+            if "cle_report" in report:
+                print("CLE_REPORT", json.dumps({k: v for k, v in report["cle_report"].items() if k != "scaled"}, indent=2))
             if "calibration" in report:
                 print("CALIBRATION_REPORT", json.dumps({k: v for k, v in report["calibration"].items()
                                                         if k not in ("tensors", "emission_positions")}, indent=2))
