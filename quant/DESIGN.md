@@ -1,5 +1,9 @@
 # Ignition — an owned XINT8 quantizer for the X1 backend
 
+The runnable release is **Alpha 0.1.0a1**: [supported scope and commands](README.md),
+[implementation todo list](TODO.md), and [release validation](../docs/BENCHMARKS.md#ignition-alpha-release-validation).
+The broader signatures and roadmap below remain a design, not an Alpha API promise.
+
 **Status: ResNet no-CLE emission gates pass; independent no-CLE MinMSE calibration
 matches the fresh reference. The first controlled ResNet acceptance study is measured;
 CLE, YOLO, AdaRound and the broader acceptance map remain open.** The audit is in

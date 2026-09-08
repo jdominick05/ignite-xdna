@@ -7,9 +7,10 @@ from pathlib import Path
 import sys
 import time
 
+from . import __version__
 from .graph import Graph
 from .passes import avgpool_dpu_scale
-from .qdq import emit, read_pos_table
+from .qdq import emit, read_pos_table, quantizable_tensors
 from .refine import refine
 from .sources import ImageFolderSource
 
@@ -36,7 +37,19 @@ def quantize(model_in: Path, model_out: Path, *, scales_from: Path | None = None
         raise FileExistsError("Choose a new model/sidecar name")
     start = time.perf_counter()
     graph = Graph.load(model_in)
+    # Reject unsupported graphs before any costly calibration or output write.
+    quantizable_tensors(graph)
+    graph.infer_shapes()
+    if len(graph.model.graph.input) != 1 or len(graph.model.graph.output) != 1:
+        raise ValueError("Ignition Alpha supports one image input and one classifier output")
+    for node in graph.nodes():
+        if node.op_type == "GlobalAveragePool":
+            shape = graph.value_shape(node.input[0])
+            if shape is None or len(shape) != 4 or shape[-2:] != (7, 7):
+                raise ValueError(f"Ignition Alpha supports only 7x7 GAP, got {shape}")
     report = {
+        "producer": "Ignition", "producer_version": __version__,
+        "scope": "folded_resnet_nocle", "format": "XINT8_QDQ",
         "mode": "reemit_from_positions" if scales_from else "own_minmse_nocle", "cle": False,
         "input_sha256": file_hash(model_in),
         "versions": {p: metadata.version(p) for p in ("numpy", "onnx")},
@@ -63,7 +76,7 @@ def quantize(model_in: Path, model_out: Path, *, scales_from: Path | None = None
     if not report["refine"]["converged"]:
         raise ValueError("Position refinement did not converge")
     graph.model.producer_name = "Ignition"
-    graph.model.producer_version = "0.1"
+    graph.model.producer_version = __version__
     _check_imports()
     graph.save(model_out)
     report["positions"] = {name: asdict(tq) for name, tq in read_pos_table(graph).items()}

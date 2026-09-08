@@ -1,0 +1,46 @@
+Ignition 0.1.0a1: folded ResNet / no CLE
+IMPORT_BLOCK_ACTIVE quark torch
+{
+  "producer": "Ignition",
+  "producer_version": "0.1.0a1",
+  "scope": "folded_resnet_nocle",
+  "format": "XINT8_QDQ",
+  "mode": "reemit_from_positions",
+  "cle": false,
+  "input_sha256": "d999c960ea12f9481e6fb43aab28ea3e2741c712fc4c30997b07d9b725cb87e6",
+  "versions": {
+    "numpy": "1.26.4",
+    "onnx": "1.18.0"
+  },
+  "scales_from_sha256": "a7a17654f79f141941806c13d26fe9ca12c727ab671eb345e15f5c1345eff0c7",
+  "reference_refine": {
+    "loops": 1,
+    "changes_by_rule": {},
+    "log": [],
+    "converged": true
+  },
+  "emit": {
+    "activations": 74,
+    "initializers": 108,
+    "pruned": 49
+  },
+  "gap_mul": 1,
+  "refine": {
+    "loops": 1,
+    "changes_by_rule": {},
+    "log": [],
+    "converged": true
+  },
+  "output_sha256": "afe15baa15a250ffdb0b68c5ce1f97efc1720d4c53140be42164321e7fb0686d",
+  "wall_seconds": 5.55349529999512,
+  "quark_imported": false,
+  "torch_imported": false
+}
+GRAPH_DIFF {
+  "node_delta": [],
+  "init_exact_mismatch": [],
+  "weight_lsb": {},
+  "weight_changed_elements": {},
+  "compared_int8_initializers": 108
+}
+GRAPH_DIFF_PASS True

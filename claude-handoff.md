@@ -1,5 +1,22 @@
 # Ignition: handoff to Claude
 
+## Alpha release
+
+The current release is **Ignition Alpha 0.1.0a1** on `ignition-alpha`, continuing
+the acceptance study at `f792250`. The user explicitly requested commit and push.
+[quant/README.md](quant/README.md) is the supported-scope quickstart;
+[quant/TODO.md](quant/TODO.md) is the prioritized implementation backlog.
+`python -m quant --version`, `inspect` and `quantize` provide the versioned interface.
+The historical pipeline entry point delegates to the same CLI. New outputs identify
+both Ignition and the alpha version in ONNX metadata and the provenance sidecar.
+
+The release validation uses a freshly calibrated alpha artifact, exact comparison
+against the existing fresh no-CLE oracle, full labeled CPU/NPU evaluation, EP reports
+and both-environment interface/import/boundary checks. Its evidence is in
+[Alpha validation](docs/BENCHMARKS.md#ignition-alpha-release-validation).
+The acceptance findings below remain applicable; production scope is still folded
+ResNet without CLE. No claim of default-preset, YOLO or AdaRound support was added.
+
 ## Name and scope
 
 The user named the quantizer **Ignition**. Use that name in documentation and CLI
@@ -20,12 +37,13 @@ the pre-code starting point and is now historical.
 
 ## Branch and workspace
 
-Work is on **`quant-acceptance-map`**, based on `a326177` (independent no-CLE ResNet
-calibration/emission), following scaffold commit `b7001c5`. On this machine its
-worktree is `scratch/quant-worktree` beneath the primary repository. Find the latest
-commit with `git log -1 quant-acceptance-map`; no push was performed.
+Work is on **`ignition-alpha`**, following acceptance commit `f792250`, independent
+calibration/emission commit `a326177` and scaffold commit `b7001c5`. On this machine
+its worktree is `scratch/quant-worktree` beneath the primary repository. Find the
+latest commit with `git log -1 ignition-alpha`; inspect `origin/ignition-alpha` for
+the published branch. The earlier acceptance-only session did not push.
 
-The primary worktree has another session's dirty `pipeline-midas` work. Do not
+The primary worktree has another session's dirty `pipeline-realesrgan`/SESR work. Do not
 reset, clean, overwrite or switch that worktree. `models/` and `data/` in the Ignition
 worktree are junctions to shared ignored artifacts. Compilation uses the existing
 worktree-local `modelcachekey`, cleared before each changed model. Existing primary
@@ -160,4 +178,5 @@ Keep `quant/` Quark-free, `npu/` independent of `quant/`, preprocessing shared, 
 keys unchanged and fresh on model changes. Read the local invariants before running
 hardware; use activated conda environments, coordinate shared NPU access, preserve
 old evidence, and fold each new finding into BENCHMARKS plus affected decision/open
-question documents. Do not push without the user's explicit authorization.
+question documents. The user authorized this Alpha push; obtain authorization for
+unrelated future publication.

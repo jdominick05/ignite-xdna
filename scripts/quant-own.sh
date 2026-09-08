@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Quantize folded ResNet with Ignition's exact-sample MinMSE, without Quark or torch.
+# Run Ignition Alpha's folded-ResNet calibration and emission, without Quark or torch.
 #
 #   ./scripts/quant-own.sh --out models/resnet50_own_nocle_c64.onnx --log results/quant/quant_resnet50_own_nocle_c64.log [--limit 64] [--scales-from reference.onnx]
 #
@@ -26,4 +26,4 @@ use_env resnet_env17
 export PYTHONIOENCODING=utf-8
 extra=()
 [ -z "$SCALES" ] || extra=(--scales-from "$SCALES")
-run_logged "$LOG" python pipelines/resnet50/3c_quantize_own.py --out "$OUT" --no-cle --limit "$LIMIT" "${extra[@]}"
+run_logged "$LOG" python -m quant quantize --out "$OUT" --no-cle --limit "$LIMIT" "${extra[@]}"

@@ -1,0 +1,152 @@
+Ignition 0.1.0a1: folded ResNet / no CLE
+IMPORT_BLOCK_ACTIVE quark torch
+CALIBRATION images=64 tensors=123 sample_bytes=3404592128
+COLLECT 16/64
+COLLECT 32/64
+COLLECT 48/64
+COLLECT 64/64
+CHOOSE 16/123
+CHOOSE 32/123
+CHOOSE 48/123
+CHOOSE 64/123
+CHOOSE 80/123
+CHOOSE 96/123
+CHOOSE 112/123
+CHOOSE 123/123
+{
+  "producer": "Ignition",
+  "producer_version": "0.1.0a1",
+  "scope": "folded_resnet_nocle",
+  "format": "XINT8_QDQ",
+  "mode": "own_minmse_nocle",
+  "cle": false,
+  "input_sha256": "d999c960ea12f9481e6fb43aab28ea3e2741c712fc4c30997b07d9b725cb87e6",
+  "versions": {
+    "numpy": "1.26.4",
+    "onnx": "1.18.0"
+  },
+  "preprocess": {
+    "input_size": [
+      3,
+      224,
+      224
+    ],
+    "interpolation": "bicubic",
+    "mean": [
+      0.485,
+      0.456,
+      0.406
+    ],
+    "std": [
+      0.229,
+      0.224,
+      0.225
+    ],
+    "crop_pct": 0.95,
+    "crop_mode": "center"
+  },
+  "emit": {
+    "activations": 74,
+    "initializers": 108,
+    "pruned": 49
+  },
+  "gap_mul": 1,
+  "refine": {
+    "loops": 2,
+    "changes_by_rule": {
+      "align_pool": 1
+    },
+    "log": [
+      {
+        "scale": "/global_pool/pool/GlobalAveragePool_output_0_scale",
+        "old": 5,
+        "new": 2,
+        "rule": "align_pool",
+        "node": "/global_pool/pool/GlobalAveragePool"
+      }
+    ],
+    "converged": true
+  },
+  "output_sha256": "afe15baa15a250ffdb0b68c5ce1f97efc1720d4c53140be42164321e7fb0686d",
+  "wall_seconds": 102.55804780000472,
+  "quark_imported": false,
+  "torch_imported": false
+}
+CALIBRATION_REPORT {
+  "store": "exact_float16",
+  "mode": "All",
+  "images": 64,
+  "listing": [
+    "data/calib/000000.jpg",
+    "data/calib/000001.jpg",
+    "data/calib/000002.jpg",
+    "data/calib/000003.jpg",
+    "data/calib/000004.jpg",
+    "data/calib/000005.jpg",
+    "data/calib/000006.jpg",
+    "data/calib/000007.jpg",
+    "data/calib/000008.jpg",
+    "data/calib/000009.jpg",
+    "data/calib/000010.jpg",
+    "data/calib/000011.jpg",
+    "data/calib/000012.jpg",
+    "data/calib/000013.jpg",
+    "data/calib/000014.jpg",
+    "data/calib/000015.jpg",
+    "data/calib/000016.jpg",
+    "data/calib/000017.jpg",
+    "data/calib/000018.jpg",
+    "data/calib/000019.jpg",
+    "data/calib/000020.jpg",
+    "data/calib/000021.jpg",
+    "data/calib/000022.jpg",
+    "data/calib/000023.jpg",
+    "data/calib/000024.jpg",
+    "data/calib/000025.jpg",
+    "data/calib/000026.jpg",
+    "data/calib/000027.jpg",
+    "data/calib/000028.jpg",
+    "data/calib/000029.jpg",
+    "data/calib/000030.jpg",
+    "data/calib/000031.jpg",
+    "data/calib/000032.jpg",
+    "data/calib/000033.jpg",
+    "data/calib/000034.jpg",
+    "data/calib/000035.jpg",
+    "data/calib/000036.jpg",
+    "data/calib/000037.jpg",
+    "data/calib/000038.jpg",
+    "data/calib/000039.jpg",
+    "data/calib/000040.jpg",
+    "data/calib/000041.jpg",
+    "data/calib/000042.jpg",
+    "data/calib/000043.jpg",
+    "data/calib/000044.jpg",
+    "data/calib/000045.jpg",
+    "data/calib/000046.jpg",
+    "data/calib/000047.jpg",
+    "data/calib/000048.jpg",
+    "data/calib/000049.jpg",
+    "data/calib/000050.jpg",
+    "data/calib/000051.jpg",
+    "data/calib/000052.jpg",
+    "data/calib/000053.jpg",
+    "data/calib/000054.jpg",
+    "data/calib/000055.jpg",
+    "data/calib/000056.jpg",
+    "data/calib/000057.jpg",
+    "data/calib/000058.jpg",
+    "data/calib/000059.jpg",
+    "data/calib/000060.jpg",
+    "data/calib/000061.jpg",
+    "data/calib/000062.jpg",
+    "data/calib/000063.jpg"
+  ],
+  "sample_bytes": 3404592128,
+  "free_bytes_before": 810755657728,
+  "ort_version": "1.23.3.dev20260320",
+  "graph_optimization": "ORT_DISABLE_ALL",
+  "sharing": {
+    "/maxpool/MaxPool_output_0": "/act1/Relu_output_0"
+  }
+}

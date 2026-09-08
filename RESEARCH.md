@@ -1514,6 +1514,8 @@ sections above.
 **Still open.**
 
 - **How far does Ignition's XINT8 parity extend beyond folded ResNet without CLE?**
+  [Alpha scope and usage](quant/README.md) and the [implementation backlog](quant/TODO.md)
+  now distinguish the runnable release from the broader design.
   [ResNet re-emission and independent calibration](docs/BENCHMARKS.md#owned-resnet50-no-cle-re-emission-and-independent-calibration)
   now reproduce the fresh no-CLE reference from the float export: graph connections,
   scales, zero points and integer weight/bias data match exactly. The owned calibration

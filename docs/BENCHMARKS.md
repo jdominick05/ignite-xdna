@@ -2590,6 +2590,70 @@ case under the resource limits. Models, `.probe.json`, output arrays and archive
 reports remain ignored under `models/`; tracked logs contain the evidence. There is
 no automatic boolean that equates successful construction with numerical validity.
 
+### Ignition Alpha release validation
+
+**Alpha 0.1.0a1** packages the measured folded-ResNet no-CLE producer behind
+`python -m quant quantize` and `inspect`, with a version command and explicit
+[supported scope](../quant/README.md). The legacy pipeline entry point delegates to
+the same CLI; the shell wrapper retains logging and environment activation.
+The [todo list](../quant/TODO.md) defines the unimplemented milestones.
+
+A fresh independent 64-image calibration on Desktop 2 generated
+`models/resnet50_ignition_alpha_nocle_c64.onnx`, SHA256
+`afe15baa15a250ffdb0b68c5ce1f97efc1720d4c53140be42164321e7fb0686d`.
+ONNX and sidecar both record producer `Ignition` and version `0.1.0a1`. The
+[quantization log](../results/quant/quant_resnet50_ignition_alpha_nocle_c64.log)
+records active Quark/torch import blocking, the exact calibration listing,
+3,404,592,128 bytes of float16 samples, emission counts and the GAP alignment move.
+No CLE or reference position table was used for this artifact.
+
+The [comparison log](../results/quant/diff_resnet50_ignition_alpha_nocle_c64.log)
+checks the unchanged float export, preprocessing, calibration listing and no-CLE
+setting against the existing fresh Quark oracle. All graph connections, positions,
+scales, zero points and 108 integer initializers match exactly, with both final
+position tables at refinement fixed points. The extra preflight shape inference
+and alpha metadata do not change those numerical parameters.
+
+**Full evaluation, same sitting:** `scripts/quant-validate.sh` ran each artifact on
+all 1,000 labeled images in `data/eval/`, CPU first, then fresh NPU sessions. This
+uses the existing `4_run.py` timing bracket: one warmup, then `sess.run` only,
+excluding preprocessing. Ryzen 7 8700G / Phoenix XDNA1, Ryzen AI 1.7.1,
+ORT `1.23.3.dev20260320`, `resnet_env17`, static batch 1, Phoenix `4x4.xclbin`.
+Both pre-NPU checks reported no hardware contexts:
+[reference witness](../results/quant/contexts_resnet50_ignition_alpha_nocle_c64_reference.log),
+[Alpha witness](../results/quant/contexts_resnet50_ignition_alpha_nocle_c64_own.log).
+These are pre-run checks, not continuous contention monitoring.
+
+| Artifact / device | Top-1 / top-5 % | Mean / median / p95 ms | Evidence |
+|---|---:|---:|---|
+| Quark no-CLE / CPU | 62.00 / 79.80 | 34.31 / 34.22 / 38.36 | [run](../results/quant/run_resnet50_ignition_alpha_nocle_c64_reference_cpu.log) |
+| Ignition Alpha / CPU | 62.00 / 79.80 | 34.02 / 33.87 / 38.41 | [run](../results/quant/run_resnet50_ignition_alpha_nocle_c64_own_cpu.log) |
+| Quark no-CLE / NPU | 59.90 / 79.10 | 5.27 / 5.25 / 5.42 | [run](../results/quant/run_resnet50_ignition_alpha_nocle_c64_reference_npu.log) |
+| Ignition Alpha / NPU | 59.90 / 79.10 | 5.27 / 5.26 / 5.41 | [run](../results/quant/run_resnet50_ignition_alpha_nocle_c64_own_npu.log) |
+
+Both EP reports place **393/395 nodes on NPU**, with matching operator/device counts
+and only the input/output QDQ boundary on CPU:
+[reference diagnostic](../results/quant/diag_resnet50_ignition_alpha_nocle_c64_reference.log),
+[Alpha diagnostic](../results/quant/diag_resnet50_ignition_alpha_nocle_c64_own.log).
+This confirms full-set accuracy and placement parity for the versioned alpha artifact.
+The small latency differences are not a claimed optimization. These no-CLE figures
+do not replace the repository's default CLE/AdaRound results or establish support
+for other model families. The release evaluation reports accuracy, not saved-logit
+equality; the separate acceptance study above records its exact-logit comparisons.
+
+Release checks passed in
+[resnet_env](../results/quant/check_resnet50_ignition_alpha_resnet_env.log) and
+[resnet_env17](../results/quant/check_resnet50_ignition_alpha_resnet_env17.log): syntax,
+shell parsing, all shared imports without Quark/torch, model/sidecar version and hash,
+CLI inspection with import-guard cleanup, legacy help, overwrite refusal, and real
+ResNet mutations rejected for wrong opset, batch, symbolic input, unsupported operator
+and non-7×7 GAP. Existing graph-diff checks also reject rewires/scale changes and count
+LSB differences. They do not mock or request an NPU session.
+
+The [legacy-entry-point replay](../results/quant/quant_resnet50_ignition_alpha_replay.log)
+separately checks `--scales-from` through the shared CLI and records its graph-diff
+gate. It is not another independent calibration or NPU measurement.
+
 ## Key findings
 
 Roughly ordered by how much time each one cost to discover.
