@@ -59,6 +59,13 @@ Read these before quoting anything below.
   scale_npu.log` confirms the fix and the NPU win both hold at a real production shape
   (K=4096), and that `attention_bf16`'s own kernel never had this bug in the first
   place (its reduction already accumulates in AIE2's native fp32 accumulator).
+- **`aie2_isa_static.log`'s section-5 attribution is corrected** by `gemm_cost_model.log`.
+  That section is headed "the kernel behind `int8_matmul_sweep_npu.log`'s 4607.05 GOPS" and
+  disassembles the object in cache `0816364bbbaf03f83e2f0bcd`, which carries
+  `memref<64x32xi8>` buffers — the **default n=32 build**, which measured 2387.01 GOPS. The
+  tuned n=64 kernel behind 4607.05 is a different object hash. **Every number in that section
+  survives**: the two objects' loops are identical, nine bundles and eight `vmac` on `cm0`–
+  `cm7` at 88.9% MAC issue density. Only the provenance line was wrong.
 
 ## Toolchain bring-up
 
