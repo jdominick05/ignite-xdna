@@ -158,14 +158,25 @@ def main():
     ap.add_argument('--out', type=Path)
     ap.add_argument('--cpu-only', action='store_true')
     ap.add_argument('--fresh', action='store_true')
+    ap.add_argument('--out-of-contract', action='store_true',
+                    help='Allow shift-cut values outside the producer\'s [0, 16] rule so the '
+                         'sigma = shift_cut + 14 window of Theorem 1 can be probed at its edges. '
+                         'Synthetic 7-node fixtures only; never a production preset.')
     a = ap.parse_args()
     if a.self_check:
         self_check()
         return
     if not a.out or a.out.exists() or not 1 <= a.channels <= 64:
         ap.error('need a new --out directory and 1..64 channels')
-    if not 0 <= a.shift_cut <= 16 or not min(0, a.shift_cut-16) <= a.shift_bias <= 15:
-        ap.error('shift parameters must stay inside the current XINT8 contract')
+    # Default is the producer's own shift-cut rule, [0, 16] (quant/refine.py). Theorem 1's
+    # claimed hardware window is sigma in [0, 31] with sigma = shift_cut + 14, i.e. shift_cut in
+    # [-14, 17], so neither edge is reachable without opting out. --out-of-contract widens the
+    # guard far enough to cross both, and only that far: positions stay well inside the +-127
+    # that scale2pos accepts.
+    lo, hi = (-31, 48) if a.out_of_contract else (0, 16)
+    if not lo <= a.shift_cut <= hi or not min(0, a.shift_cut-16) <= a.shift_bias <= 15:
+        ap.error('shift parameters must stay inside the current XINT8 contract '
+                 '(pass --out-of-contract to probe the sigma window edges)')
     if not a.cpu_only and not a.fresh:
         ap.error('NPU fixtures require --fresh')
     a.out.mkdir(parents=True)

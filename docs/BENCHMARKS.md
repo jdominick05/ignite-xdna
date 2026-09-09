@@ -4742,6 +4742,65 @@ Note the sigma edges remain **unmeasured**: the probe only ever reached sigma in
    emitting a scale the analyzer would flag. The documented FastDepth demo still reproduces
    exactly (pos_y 0 -> 1, sigma -> 31).
 
+### Theorem 1's sigma window, measured at both edges (2026-09-09, Desktop 2)
+
+Theorem 1 claims an operation is executable **iff** `0 <= sigma <= 31`, and it had never been
+tested at either edge: the arithmetic probe's guard is the producer's own `[0, 16]` shift-cut
+rule (`quant/refine.py`), which caps sigma at 30. `--out-of-contract` widens that guard for
+synthetic 7-node fixtures only, leaving the default untouched. Eleven cases, `--checks-only`,
+each `--fresh` with an idle-device precheck
+([first pass](../results/quant/arithmetic_desktop2_20260909_s01_sigma17_sc3.log),
+[second pass](../results/quant/arithmetic_desktop2_20260909_s02_sigma32_sc18.log)):
+
+| sigma | shift-cut | NPU mismatches | max abs diff | Optimized CPU | Distinct reference outputs | Reading |
+|---|---|---|---|---|---|---|
+| -6 | -20 | 7763 / 57344 | **255** | 0 | 3 | diverges |
+| -3 | -17 | 4488 / 57344 | **255** | 0 | 3 | diverges |
+| -1 | -15 | 3564 / 57344 | **255** | 0 | 3 | diverges |
+| **0** | -14 | **3052 / 57344** | **255** | 0 | 3 | **diverges, though Theorem 1 calls it feasible** |
+| 6 | -8 | 0 / 57344 | 0 | 0 | 3 | agrees |
+| 17 | 3 | 1056 / 57344 | 1 | 0 | 101 | agrees, up to the known half-up rounding |
+| **31** | 17 | **0 / 57344** | 0 | 0 | 9 | **agrees exactly at the claimed upper bound** |
+| **32** | 18 | **0 / 57344** | 0 | 0 | 5 | **agrees exactly one past it** |
+| 34 | 20 | 0 / 57344 | 0 | 0 | **1** | degenerate, proves nothing |
+| 38 | 24 | 0 / 57344 | 0 | 0 | **1** | degenerate, proves nothing |
+| 45 | 31 | 0 / 57344 | 0 | 0 | **1** | degenerate, proves nothing |
+
+**The upper bound is not observed.** At sigma = 32 the fixture produces five distinct output
+levels and the NPU reproduces every one of the 57,344 elements exactly. Theorem 1 says the 5-bit
+shifter clamps or overflows past 31; nothing here does. Sigma = 31 is likewise exact.
+
+**The lower bound is real but sits one step higher than claimed.** Sigma = 0 is inside Theorem 1's
+window and it diverges: 3,052 elements wrong, worst case 255, with the NPU returning 0 where the
+reference returns 255 -- a wrap, not a clamp. The optimized CPU session matches the reference
+exactly on the same file, so this is the DPU, not the graph.
+
+Saturation alone does not explain it. Sigma = 6 saturates identically -- the same three distinct
+reference values, 0/128/255 -- and reads **zero** mismatches. Something changes between sigma = 6
+and sigma = 0, and the direction is consistent with the int32 accumulator overflowing once
+`A = M * 2^-sigma` approaches `2^14`. So Theorem 1's *mechanism* survives while its *boundary*
+does not: the measured window is `sigma >= 1`, not `sigma >= 0`.
+
+**The last three rows are worthless, and that is a property of the fixture, not the hardware.**
+Because the probe holds `pos_x = pos_w = 0` and moves only `pos_y`, sigma and the output magnitude
+are the same knob: `out ~ acc * 2^(14 - sigma)`. With C = 32 the accumulator caps at
+`32 * 127 * 127 = 2^19`, so the predicted peak output is 3.94 at sigma = 31, 1.97 at 32 and 0.49 at
+34 -- against 9, 5 and 1 distinct values actually observed. The model is exact. Beyond the mid-30s
+every output rounds to the zero point and the comparison is vacuous.
+
+That also bounds what any single int8 Conv can ever test. An int32 accumulator caps at `2^31`, so a
+non-constant output needs `sigma <= 14 + 31 = 45`, and reaching sigma = 34 non-degenerately would
+take roughly 6,500 input channels against the probe's 64. **This is why no model in the repo has
+ever exceeded sigma = 30**: real layers sit where their accumulators put them, and the upper edge
+of the window is not somewhere a convolution can go.
+
+**What this leaves.** Theorem 1's *iff* is wrong in both directions -- sigma = 0 fails, sigma = 32
+works -- so the tool's criterion should be treated as a heuristic with a measured lower edge and an
+untested upper one. What is *not* claimed here: that sigma = 33 or beyond is safe, which no fixture
+in this family can show; that the divergence at sigma <= 0 is specifically shifter behaviour rather
+than accumulator overflow, which these fixtures cannot separate; or anything at all about
+multi-layer graphs, since every case is one 1x1 Conv at batch 1 with 5 of 7 nodes on the NPU.
+
 **What the repair fix prevents, measured on three shipped models.** Running the old and new
 `repair_model_shift_cut` over the same files:
 
