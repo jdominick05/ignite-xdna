@@ -1,0 +1,679 @@
+2026-09-09 00:41:02.6706298 [I:onnxruntime:, inference_session.cc:606 onnxruntime::InferenceSession::TraceSessionOptions] Session Options {  execution_mode:0 execution_order:DEFAULT enable_profiling:0 optimized_model_filepath: enable_mem_pattern:1 enable_mem_reuse:1 enable_cpu_mem_arena:1 profile_file_prefix:onnxruntime_profile_ session_logid: session_log_severity_level:1 session_log_verbosity_level:0 max_num_graph_transformation_steps:10 graph_optimization_level:4 intra_op_param:OrtThreadPoolParams { thread_pool_size: 0 auto_set_affinity: 0 allow_spinning: 1 dynamic_block_base_: 0 stack_size: 0 affinity_str:  set_denormal_as_zero: 0 } inter_op_param:OrtThreadPoolParams { thread_pool_size: 0 auto_set_affinity: 0 allow_spinning: 1 dynamic_block_base_: 0 stack_size: 0 affinity_str:  set_denormal_as_zero: 0 } use_per_session_threads:1 thread_pool_allow_spinning:1 use_deterministic_compute:0 ep_selection_policy:0 config_options: {  } }
+2026-09-09 00:41:02.6715478 [I:onnxruntime:, inference_session.cc:414 onnxruntime::InferenceSession::ConstructorCommon::<lambda_cd5baf9f006fce338b072dac99354b33>::operator ()] Flush-to-zero and denormal-as-zero are off
+2026-09-09 00:41:02.6717453 [I:onnxruntime:, inference_session.cc:422 onnxruntime::InferenceSession::ConstructorCommon] Creating and using per session threadpools since use_per_session_threads_ is true
+2026-09-09 00:41:02.6719266 [I:onnxruntime:, inference_session.cc:446 onnxruntime::InferenceSession::ConstructorCommon] Dynamic block base set to 0
+2026-09-09 00:41:02.6896647 [I:onnxruntime:, inference_session.cc:2042 onnxruntime::InferenceSession::Initialize] Initializing session.
+2026-09-09 00:41:02.6929259 [I:onnxruntime:, graph_partitioner.cc:1209 onnxruntime::GraphPartitioner::InlineFunctionsAOT] This model does not have any local functions defined. AOT Inlining is not performed
+2026-09-09 00:41:02.6932865 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer EnsureUniqueDQForNodeUnit modified: 0 with status: OK
+2026-09-09 00:41:02.6937380 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer Level1_RuleBasedTransformer modified: 0 with status: OK
+2026-09-09 00:41:02.6940319 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer DoubleQDQPairsRemover modified: 0 with status: OK
+2026-09-09 00:41:02.6952467 [I:onnxruntime:, constant_sharing.cc:248 onnxruntime::ConstantSharing::ApplyImpl] Total shared scalar initializer count: 195
+2026-09-09 00:41:02.6953902 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer ConstantSharing modified: 1 with status: OK
+2026-09-09 00:41:02.6977137 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer CommonSubexpressionElimination modified: 1 with status: OK
+2026-09-09 00:41:02.7005317 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer ConstantFolding modified: 1 with status: OK
+2026-09-09 00:41:02.7023518 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer MatMulAddFusion modified: 0 with status: OK
+2026-09-09 00:41:02.7025602 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer ReshapeFusion modified: 0 with status: OK
+2026-09-09 00:41:02.7027113 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer FreeDimensionOverrideTransformer modified: 0 with status: OK
+2026-09-09 00:41:02.7029015 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer GeluFusionL1 modified: 0 with status: OK
+2026-09-09 00:41:02.7030807 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer LayerNormFusionL1 modified: 0 with status: OK
+2026-09-09 00:41:02.7032837 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer QDQPropagationTransformer modified: 0 with status: OK
+2026-09-09 00:41:02.7034954 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer WeightBiasQuantization modified: 0 with status: OK
+2026-09-09 00:41:02.7037312 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer EnsureUniqueDQForNodeUnit modified: 0 with status: OK
+2026-09-09 00:41:02.7039732 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer RocmBlasAltImpl modified: 0 with status: OK
+2026-09-09 00:41:02.7048014 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer TransposeOptimizer modified: 0 with status: OK
+2026-09-09 00:41:02.7052746 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer Level1_RuleBasedTransformer modified: 0 with status: OK
+2026-09-09 00:41:02.7055664 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer DoubleQDQPairsRemover modified: 0 with status: OK
+2026-09-09 00:41:02.7063666 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer CommonSubexpressionElimination modified: 0 with status: OK
+2026-09-09 00:41:02.7066733 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer ConstantFolding modified: 0 with status: OK
+2026-09-09 00:41:02.7069600 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer MatMulAddFusion modified: 0 with status: OK
+2026-09-09 00:41:02.7072103 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer ReshapeFusion modified: 0 with status: OK
+2026-09-09 00:41:02.7073744 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer FreeDimensionOverrideTransformer modified: 0 with status: OK
+2026-09-09 00:41:02.7075814 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer GeluFusionL1 modified: 0 with status: OK
+2026-09-09 00:41:02.7077822 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer LayerNormFusionL1 modified: 0 with status: OK
+2026-09-09 00:41:02.7080422 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer QDQPropagationTransformer modified: 0 with status: OK
+2026-09-09 00:41:02.7082896 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer WeightBiasQuantization modified: 0 with status: OK
+2026-09-09 00:41:02.7085069 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer EnsureUniqueDQForNodeUnit modified: 0 with status: OK
+2026-09-09 00:41:02.7087124 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer RocmBlasAltImpl modified: 0 with status: OK
+2026-09-09 00:41:02.7130446 [I:onnxruntime:, inference_session.cc:1465 onnxruntime::InferenceSession::TransformGraph] Running graph optimizations in loop 1 time/s (Graph Optimizations Loop Level : 1)
+2026-09-09 00:41:02.7139240 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer Level2_RuleBasedTransformer modified: 0 with status: OK
+2026-09-09 00:41:02.7148631 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer TransposeOptimizer_CPUExecutionProvider modified: 0 with status: OK
+2026-09-09 00:41:02.7151285 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer QDQS8ToU8Transformer modified: 0 with status: OK
+2026-09-09 00:41:02.7154245 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer QDQSelectorActionTransformer modified: 0 with status: OK
+2026-09-09 00:41:02.7156670 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer GemmActivationFusion modified: 0 with status: OK
+2026-09-09 00:41:02.7158903 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer MatMulIntegerToFloatFusion modified: 0 with status: OK
+2026-09-09 00:41:02.7161128 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer DynamicQuantizeMatMulFusion modified: 0 with status: OK
+2026-09-09 00:41:02.7167362 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer ConvActivationFusion modified: 1 with status: OK
+2026-09-09 00:41:02.7188170 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/lr_branch/backbone/features.16/conv/conv.2/Constant_1_output_0'. It is no longer used by any node.
+2026-09-09 00:41:02.7190378 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/lr_branch/backbone/features.5/conv/conv.2/Constant_output_0'. It is no longer used by any node.
+2026-09-09 00:41:02.7193839 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer GeluFusionL2 modified: 0 with status: OK
+2026-09-09 00:41:02.7195336 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer LayerNormFusionL2 modified: 0 with status: OK
+2026-09-09 00:41:02.7197190 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer SimplifiedLayerNormFusion modified: 0 with status: OK
+2026-09-09 00:41:02.7199088 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer AttentionFusion modified: 0 with status: OK
+2026-09-09 00:41:02.7201556 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer EmbedLayerNormFusion modified: 0 with status: OK
+2026-09-09 00:41:02.7206922 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer GatherSliceToSplitFusion modified: 1 with status: OK
+2026-09-09 00:41:02.7223369 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/hr_branch/conv_hr2x/conv_hr2x.1/layers/layers.1/Constant_6_output_0'. It is no longer used by any node.
+2026-09-09 00:41:02.7225619 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/hr_branch/conv_hr2x/conv_hr2x.1/layers/layers.1/Constant_7_output_0'. It is no longer used by any node.
+2026-09-09 00:41:02.7227796 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/hr_branch/conv_enc4x/layers/layers.1/Constant_1_output_0'. It is no longer used by any node.
+2026-09-09 00:41:02.7229856 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/hr_branch/tohr_enc4x/layers/layers.1/Constant_2_output_0'. It is no longer used by any node.
+2026-09-09 00:41:02.7231912 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/f_branch/conv_f/conv_f.0/layers/layers.1/Constant_2_output_0'. It is no longer used by any node.
+2026-09-09 00:41:02.7234075 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/lr_branch/conv_lr16x/layers/layers.1/Constant_5_output_0'. It is no longer used by any node.
+2026-09-09 00:41:02.7236184 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/hr_branch/conv_hr4x/conv_hr4x.1/layers/layers.1/Constant_5_output_0'. It is no longer used by any node.
+2026-09-09 00:41:02.7239154 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer GatherToSliceFusion modified: 0 with status: OK
+2026-09-09 00:41:02.7241048 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer MatmulTransposeFusion modified: 0 with status: OK
+2026-09-09 00:41:02.7242909 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer BiasGeluFusion modified: 0 with status: OK
+2026-09-09 00:41:02.7244697 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer GroupQueryAttentionFusion modified: 0 with status: OK
+2026-09-09 00:41:02.7246551 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer MatMulAddFusion modified: 0 with status: OK
+2026-09-09 00:41:02.7248356 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer SkipLayerNormFusion modified: 0 with status: OK
+2026-09-09 00:41:02.7250184 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer FastGeluFusion modified: 0 with status: OK
+2026-09-09 00:41:02.7251971 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer QuickGeluFusion modified: 0 with status: OK
+2026-09-09 00:41:02.7254024 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer BiasSoftmaxFusion modified: 0 with status: OK
+2026-09-09 00:41:02.7256346 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer BiasDropoutFusion modified: 0 with status: OK
+2026-09-09 00:41:02.7258826 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer MatMulScaleFusion modified: 0 with status: OK
+2026-09-09 00:41:02.7260952 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer MatMulActivationFusion modified: 0 with status: OK
+2026-09-09 00:41:02.7263158 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer MatMulNBitsFusion modified: 0 with status: OK
+2026-09-09 00:41:02.7265177 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer QDQFinalCleanupTransformer modified: 0 with status: OK
+2026-09-09 00:41:02.7267405 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer Level2_RuleBasedTransformer modified: 0 with status: OK
+2026-09-09 00:41:02.7269305 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer QDQS8ToU8Transformer modified: 0 with status: OK
+2026-09-09 00:41:02.7271951 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer QDQSelectorActionTransformer modified: 0 with status: OK
+2026-09-09 00:41:02.7273851 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer GemmActivationFusion modified: 0 with status: OK
+2026-09-09 00:41:02.7275657 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer MatMulIntegerToFloatFusion modified: 0 with status: OK
+2026-09-09 00:41:02.7277490 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer DynamicQuantizeMatMulFusion modified: 0 with status: OK
+2026-09-09 00:41:02.7279614 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer ConvActivationFusion modified: 0 with status: OK
+2026-09-09 00:41:02.7281388 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer GeluFusionL2 modified: 0 with status: OK
+2026-09-09 00:41:02.7282855 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer LayerNormFusionL2 modified: 0 with status: OK
+2026-09-09 00:41:02.7284611 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer SimplifiedLayerNormFusion modified: 0 with status: OK
+2026-09-09 00:41:02.7298618 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer AttentionFusion modified: 0 with status: OK
+2026-09-09 00:41:02.7301288 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer EmbedLayerNormFusion modified: 0 with status: OK
+2026-09-09 00:41:02.7304463 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer GatherSliceToSplitFusion modified: 0 with status: OK
+2026-09-09 00:41:02.7306539 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer GatherToSliceFusion modified: 0 with status: OK
+2026-09-09 00:41:02.7308753 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer MatmulTransposeFusion modified: 0 with status: OK
+2026-09-09 00:41:02.7311026 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer BiasGeluFusion modified: 0 with status: OK
+2026-09-09 00:41:02.7313091 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer GroupQueryAttentionFusion modified: 0 with status: OK
+2026-09-09 00:41:02.7315759 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer MatMulAddFusion modified: 0 with status: OK
+2026-09-09 00:41:02.7318322 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer SkipLayerNormFusion modified: 0 with status: OK
+2026-09-09 00:41:02.7320408 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer FastGeluFusion modified: 0 with status: OK
+2026-09-09 00:41:02.7322945 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer QuickGeluFusion modified: 0 with status: OK
+2026-09-09 00:41:02.7325532 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer BiasSoftmaxFusion modified: 0 with status: OK
+2026-09-09 00:41:02.7327496 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer BiasDropoutFusion modified: 0 with status: OK
+2026-09-09 00:41:02.7329551 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer MatMulScaleFusion modified: 0 with status: OK
+2026-09-09 00:41:02.7331458 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer MatMulActivationFusion modified: 0 with status: OK
+2026-09-09 00:41:02.7334037 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer MatMulNBitsFusion modified: 0 with status: OK
+2026-09-09 00:41:02.7336149 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer QDQFinalCleanupTransformer modified: 0 with status: OK
+2026-09-09 00:41:02.7489820 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer NchwcTransformer modified: 1 with status: OK
+2026-09-09 00:41:02.7511931 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_1277'. It is no longer used by any node.
+2026-09-09 00:41:02.7513853 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_1286'. It is no longer used by any node.
+2026-09-09 00:41:02.7515563 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'lr_branch.conv_lr16x.layers.0.weight'. It is no longer used by any node.
+2026-09-09 00:41:02.7517429 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_1164'. It is no longer used by any node.
+2026-09-09 00:41:02.7519272 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_1295'. It is no longer used by any node.
+2026-09-09 00:41:02.7520983 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_1298'. It is no longer used by any node.
+2026-09-09 00:41:02.7522714 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'lr_branch.conv_lr8x.layers.0.weight'. It is no longer used by any node.
+2026-09-09 00:41:02.7524524 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'hr_branch.tohr_enc4x.layers.0.weight'. It is no longer used by any node.
+2026-09-09 00:41:02.7526372 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'hr_branch.tohr_enc2x.layers.0.weight'. It is no longer used by any node.
+2026-09-09 00:41:02.7528226 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'hr_branch.conv_hr4x.1.layers.0.weight'. It is no longer used by any node.
+2026-09-09 00:41:02.7530071 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_1262'. It is no longer used by any node.
+2026-09-09 00:41:02.7531770 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'hr_branch.conv_hr2x.0.layers.0.weight'. It is no longer used by any node.
+2026-09-09 00:41:02.7533661 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_1181'. It is no longer used by any node.
+2026-09-09 00:41:02.7535379 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'hr_branch.conv_enc4x.layers.0.weight'. It is no longer used by any node.
+2026-09-09 00:41:02.7537231 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_1154'. It is no longer used by any node.
+2026-09-09 00:41:02.7538898 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'hr_branch.conv_hr2x.1.layers.0.weight'. It is no longer used by any node.
+2026-09-09 00:41:02.7540845 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'hr_branch.conv_hr4x.2.layers.0.weight'. It is no longer used by any node.
+2026-09-09 00:41:02.7542740 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'hr_branch.conv_hr2x.2.layers.0.weight'. It is no longer used by any node.
+2026-09-09 00:41:02.7544678 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'hr_branch.conv_hr2x.3.layers.0.weight'. It is no longer used by any node.
+2026-09-09 00:41:02.7546527 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_1160'. It is no longer used by any node.
+2026-09-09 00:41:02.7548225 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'f_branch.conv_lr4x.layers.0.weight'. It is no longer used by any node.
+2026-09-09 00:41:02.7550050 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'f_branch.conv_f2x.layers.0.weight'. It is no longer used by any node.
+2026-09-09 00:41:02.7551879 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'f_branch.conv_f.1.layers.0.weight'. It is no longer used by any node.
+2026-09-09 00:41:02.7553733 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'f_branch.conv_f.1.layers.0.bias'. It is no longer used by any node.
+2026-09-09 00:41:02.7555543 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_1250'. It is no longer used by any node.
+2026-09-09 00:41:02.7557250 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_1148'. It is no longer used by any node.
+2026-09-09 00:41:02.7558957 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_1151'. It is no longer used by any node.
+2026-09-09 00:41:02.7560658 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_1238'. It is no longer used by any node.
+2026-09-09 00:41:02.7562364 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_1157'. It is no longer used by any node.
+2026-09-09 00:41:02.7564058 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_1235'. It is no longer used by any node.
+2026-09-09 00:41:02.7565807 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_1163'. It is no longer used by any node.
+2026-09-09 00:41:02.7567485 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_1166'. It is no longer used by any node.
+2026-09-09 00:41:02.7569188 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_1169'. It is no longer used by any node.
+2026-09-09 00:41:02.7570906 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_1172'. It is no longer used by any node.
+2026-09-09 00:41:02.7572609 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_1173'. It is no longer used by any node.
+2026-09-09 00:41:02.7574320 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_1175'. It is no longer used by any node.
+2026-09-09 00:41:02.7576052 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_1178'. It is no longer used by any node.
+2026-09-09 00:41:02.7577778 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_1184'. It is no longer used by any node.
+2026-09-09 00:41:02.7579480 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_1187'. It is no longer used by any node.
+2026-09-09 00:41:02.7581262 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_1190'. It is no longer used by any node.
+2026-09-09 00:41:02.7583008 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_1193'. It is no longer used by any node.
+2026-09-09 00:41:02.7584673 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_1196'. It is no longer used by any node.
+2026-09-09 00:41:02.7586359 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_1199'. It is no longer used by any node.
+2026-09-09 00:41:02.7588076 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_1202'. It is no longer used by any node.
+2026-09-09 00:41:02.7589785 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_1205'. It is no longer used by any node.
+2026-09-09 00:41:02.7591503 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_1208'. It is no longer used by any node.
+2026-09-09 00:41:02.7593155 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_1211'. It is no longer used by any node.
+2026-09-09 00:41:02.7594820 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_1214'. It is no longer used by any node.
+2026-09-09 00:41:02.7596469 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_1217'. It is no longer used by any node.
+2026-09-09 00:41:02.7611851 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_1220'. It is no longer used by any node.
+2026-09-09 00:41:02.7613844 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_1223'. It is no longer used by any node.
+2026-09-09 00:41:02.7616019 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_1226'. It is no longer used by any node.
+2026-09-09 00:41:02.7617881 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_1229'. It is no longer used by any node.
+2026-09-09 00:41:02.7619696 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_1232'. It is no longer used by any node.
+2026-09-09 00:41:02.7621776 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_1241'. It is no longer used by any node.
+2026-09-09 00:41:02.7623605 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_1244'. It is no longer used by any node.
+2026-09-09 00:41:02.7625453 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_1247'. It is no longer used by any node.
+2026-09-09 00:41:02.7627352 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_1253'. It is no longer used by any node.
+2026-09-09 00:41:02.7629343 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_1256'. It is no longer used by any node.
+2026-09-09 00:41:02.7631123 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_1259'. It is no longer used by any node.
+2026-09-09 00:41:02.7632891 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_1265'. It is no longer used by any node.
+2026-09-09 00:41:02.7634663 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_1268'. It is no longer used by any node.
+2026-09-09 00:41:02.7636585 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_1271'. It is no longer used by any node.
+2026-09-09 00:41:02.7638352 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_1274'. It is no longer used by any node.
+2026-09-09 00:41:02.7640162 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_1280'. It is no longer used by any node.
+2026-09-09 00:41:02.7642049 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_1283'. It is no longer used by any node.
+2026-09-09 00:41:02.7643796 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_1289'. It is no longer used by any node.
+2026-09-09 00:41:02.7645566 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_1292'. It is no longer used by any node.
+2026-09-09 00:41:02.7647339 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_1301'. It is no longer used by any node.
+2026-09-09 00:41:02.7661449 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer NhwcTransformer modified: 0 with status: OK
+2026-09-09 00:41:02.7663740 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer ConvAddActivationFusion modified: 0 with status: OK
+2026-09-09 00:41:02.7666134 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer NchwcTransformer modified: 0 with status: OK
+2026-09-09 00:41:02.7669268 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer NhwcTransformer modified: 0 with status: OK
+2026-09-09 00:41:02.7671402 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer ConvAddActivationFusion modified: 0 with status: OK
+2026-09-09 00:41:02.7675530 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer RemoveDuplicateCastTransformer modified: 0 with status: OK
+2026-09-09 00:41:02.7677470 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer CastFloat16Transformer modified: 0 with status: OK
+2026-09-09 00:41:02.7679565 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer FuseFp16InitializerToFp32NodeTransformer modified: 0 with status: OK
+2026-09-09 00:41:02.7681743 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer MemcpyTransformer modified: 0 with status: OK
+2026-09-09 00:41:02.7693271 [I:onnxruntime:, allocation_planner.cc:2659 onnxruntime::IGraphPartitioner::CreateGraphPartitioner] Use DeviceBasedPartition as default
+2026-09-09 00:41:02.7712261 [I:onnxruntime:, session_state_utils.cc:243 onnxruntime::session_state_utils::SaveInitializedTensors] Saving initialized tensors.
+2026-09-09 00:41:02.7750387 [I:onnxruntime:, session_state_utils.cc:438 onnxruntime::session_state_utils::SaveInitializedTensors] Done saving initialized tensors
+2026-09-09 00:41:02.7772905 [I:onnxruntime:, inference_session.cc:2532 onnxruntime::InferenceSession::Initialize] Session successfully initialized.
+2026-09-09 00:41:02.7779136 [I:onnxruntime:, inference_session.cc:606 onnxruntime::InferenceSession::TraceSessionOptions] Session Options {  execution_mode:0 execution_order:DEFAULT enable_profiling:0 optimized_model_filepath: enable_mem_pattern:1 enable_mem_reuse:1 enable_cpu_mem_arena:1 profile_file_prefix:onnxruntime_profile_ session_logid: session_log_severity_level:1 session_log_verbosity_level:0 max_num_graph_transformation_steps:10 graph_optimization_level:4 intra_op_param:OrtThreadPoolParams { thread_pool_size: 0 auto_set_affinity: 0 allow_spinning: 1 dynamic_block_base_: 0 stack_size: 0 affinity_str:  set_denormal_as_zero: 0 } inter_op_param:OrtThreadPoolParams { thread_pool_size: 0 auto_set_affinity: 0 allow_spinning: 1 dynamic_block_base_: 0 stack_size: 0 affinity_str:  set_denormal_as_zero: 0 } use_per_session_threads:1 thread_pool_allow_spinning:1 use_deterministic_compute:0 ep_selection_policy:0 config_options: {  } }
+2026-09-09 00:41:02.7787944 [I:onnxruntime:, inference_session.cc:422 onnxruntime::InferenceSession::ConstructorCommon] Creating and using per session threadpools since use_per_session_threads_ is true
+2026-09-09 00:41:02.7789596 [I:onnxruntime:, inference_session.cc:446 onnxruntime::InferenceSession::ConstructorCommon] Dynamic block base set to 0
+2026-09-09 00:41:02.8944632 [I:onnxruntime:, inference_session.cc:2042 onnxruntime::InferenceSession::Initialize] Initializing session.
+2026-09-09 00:41:02.8946243 [I:onnxruntime:, inference_session.cc:2080 onnxruntime::InferenceSession::Initialize] Adding default CPU execution provider.
+2026-09-09 00:41:02.8948859 [I:onnxruntime:, graph_partitioner.cc:1209 onnxruntime::GraphPartitioner::InlineFunctionsAOT] This model does not have any local functions defined. AOT Inlining is not performed
+2026-09-09 00:41:02.8954713 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer EnsureUniqueDQForNodeUnit modified: 1 with status: OK
+2026-09-09 00:41:02.8995533 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer Level1_RuleBasedTransformer modified: 1 with status: OK
+2026-09-09 00:41:02.9028418 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/lr_branch/se_block/pool/GlobalAveragePool_output_0_Scale'. It is no longer used by any node.
+2026-09-09 00:41:02.9034576 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer DoubleQDQPairsRemover modified: 0 with status: OK
+2026-09-09 00:41:02.9047121 [I:onnxruntime:, constant_sharing.cc:248 onnxruntime::ConstantSharing::ApplyImpl] Total shared scalar initializer count: 219
+2026-09-09 00:41:02.9048557 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer ConstantSharing modified: 1 with status: OK
+2026-09-09 00:41:02.9088991 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer CommonSubexpressionElimination modified: 0 with status: OK
+2026-09-09 00:41:02.9094679 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer ConstantFolding modified: 0 with status: OK
+2026-09-09 00:41:02.9097157 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer MatMulAddFusion modified: 0 with status: OK
+2026-09-09 00:41:02.9099371 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer ReshapeFusion modified: 0 with status: OK
+2026-09-09 00:41:02.9101007 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer FreeDimensionOverrideTransformer modified: 0 with status: OK
+2026-09-09 00:41:02.9102571 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer GeluFusionL1 modified: 0 with status: OK
+2026-09-09 00:41:02.9104758 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer LayerNormFusionL1 modified: 0 with status: OK
+2026-09-09 00:41:02.9110652 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer QDQPropagationTransformer modified: 0 with status: OK
+2026-09-09 00:41:02.9114222 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer WeightBiasQuantization modified: 0 with status: OK
+2026-09-09 00:41:02.9116971 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer EnsureUniqueDQForNodeUnit modified: 0 with status: OK
+2026-09-09 00:41:02.9119375 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer RocmBlasAltImpl modified: 0 with status: OK
+2026-09-09 00:41:02.9128260 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer TransposeOptimizer modified: 0 with status: OK
+2026-09-09 00:41:02.9130753 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer Level1_RuleBasedTransformer modified: 0 with status: OK
+2026-09-09 00:41:02.9135200 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer DoubleQDQPairsRemover modified: 0 with status: OK
+2026-09-09 00:41:02.9142734 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer CommonSubexpressionElimination modified: 0 with status: OK
+2026-09-09 00:41:02.9147135 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer ConstantFolding modified: 0 with status: OK
+2026-09-09 00:41:02.9149432 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer MatMulAddFusion modified: 0 with status: OK
+2026-09-09 00:41:02.9151698 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer ReshapeFusion modified: 0 with status: OK
+2026-09-09 00:41:02.9153492 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer FreeDimensionOverrideTransformer modified: 0 with status: OK
+2026-09-09 00:41:02.9155082 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer GeluFusionL1 modified: 0 with status: OK
+2026-09-09 00:41:02.9157460 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer LayerNormFusionL1 modified: 0 with status: OK
+2026-09-09 00:41:02.9162150 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer QDQPropagationTransformer modified: 0 with status: OK
+2026-09-09 00:41:02.9165373 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer WeightBiasQuantization modified: 0 with status: OK
+2026-09-09 00:41:02.9168110 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer EnsureUniqueDQForNodeUnit modified: 0 with status: OK
+2026-09-09 00:41:02.9170376 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer RocmBlasAltImpl modified: 0 with status: OK
+2026-09-09 00:41:14.4791958 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_683_scale'. It is no longer used by any node.
+2026-09-09 00:41:14.4795815 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_672_scale'. It is no longer used by any node.
+2026-09-09 00:41:14.4799116 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/hr_branch/Constant_output_0'. It is no longer used by any node.
+2026-09-09 00:41:14.4802367 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'lr_branch.conv_lr8x.0.weight_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.4804737 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/lr_branch/backbone/features.0/features.0.2/Constant_output_0'. It is no longer used by any node.
+2026-09-09 00:41:14.4806970 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_659_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.4809005 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'hr_branch.conv_hr2x.4.bias_scale'. It is no longer used by any node.
+2026-09-09 00:41:14.4811088 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/lr_branch/backbone/features.17/conv/conv.6/Conv_output_0_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.4813357 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'lr_branch.se_block.fc.2.weight_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.4815450 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/lr_branch/backbone/features.0/features.0.2/Constant_1_output_0'. It is no longer used by any node.
+2026-09-09 00:41:14.4817698 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_659_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.4819889 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_729_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.4821839 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'hr_branch.conv_enc2x.0.weight_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.4823903 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/lr_branch/Constant_output_0'. It is no longer used by any node.
+2026-09-09 00:41:14.4825904 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_668_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.4828000 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_737_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.4830114 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/lr_branch/backbone/features.16/conv/conv.6/Conv_output_0_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.4832513 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_672_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.4834462 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'hr_branch.conv_hr2x.6.bias_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.4836670 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_696_scale'. It is no longer used by any node.
+2026-09-09 00:41:14.4838618 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_660_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.4840603 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_660_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.4842720 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_662_scale'. It is no longer used by any node.
+2026-09-09 00:41:14.4844615 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'hr_branch.tohr_enc2x.0.bias_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.4846601 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_662_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.4848452 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_686_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.4850400 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'hr_branch.tohr_enc2x.0.bias_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.4852574 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_776_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.4854437 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_792_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.4856298 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_662_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.4858252 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_722_scale'. It is no longer used by any node.
+2026-09-09 00:41:14.4860035 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'hr_branch.conv_hr2x.4.bias_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.4861980 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_663_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.4863994 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_663_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.4865964 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/lr_branch/backbone/features.5/conv/conv.6/Conv_output_0_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.4868220 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_666_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.4871571 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/hr_branch/Concat_output_0_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.4875575 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'f_branch.conv_f2x.0.weight_scale'. It is no longer used by any node.
+2026-09-09 00:41:14.4879479 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_665_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.4883075 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_665_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.4886476 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/hr_branch/Concat_output_0_scale'. It is no longer used by any node.
+2026-09-09 00:41:14.4889308 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/hr_branch/conv_hr4x/conv_hr4x.1/Relu_output_0_scale'. It is no longer used by any node.
+2026-09-09 00:41:14.4892248 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_666_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.4894635 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/lr_branch/backbone/features.6/conv/conv.6/Conv_output_0_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.4897703 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'hr_branch.conv_hr2x.2.bias_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.4900307 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_669_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.4902406 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_690_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.4904408 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_729_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.4906502 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'hr_branch.conv_enc2x.0.weight_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.4908795 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_668_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.4910740 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'hr_branch.tohr_enc4x.0.bias_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.4912826 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_800_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.4914882 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'hr_branch.conv_hr2x.2.bias_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.4917060 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'hr_branch.tohr_enc2x.0.weight_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.4919148 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_669_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.4921140 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_714_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.4923076 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'hr_branch.tohr_enc2x.0.weight_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.4925322 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_780_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.4927447 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_671_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.4929418 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_671_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.4931255 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'lr_branch.conv_lr8x.0.bias_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.4933204 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/hr_branch/conv_hr2x/conv_hr2x.7/Relu_output_0_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.4935536 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_672_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.4937499 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'hr_branch.conv_enc2x.0.bias_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.4939456 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'hr_branch.conv_enc2x.0.bias_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.4941680 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_704_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.4943764 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_674_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.4945831 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/lr_branch/backbone/features.2/conv/conv.5/Clip_output_0_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.4948143 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_674_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.4949988 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/lr_branch/backbone/features.1/conv/conv.3/Conv_output_0_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.4952312 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_675_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.4954286 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_675_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.4956105 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_765_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.4957932 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_677_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.4959764 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'f_branch.conv_f2x.0.weight_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.4961808 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_677_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.4963625 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_774_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.4965733 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'f_branch.conv_f2x.0.weight_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.4967882 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/lr_branch/backbone/features.14/conv/conv.5/Clip_output_0_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.4970423 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_717_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.4972266 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_678_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.4974150 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/hr_branch/conv_hr2x/conv_hr2x.1/Relu_output_0_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.4976277 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_678_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.4978228 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/hr_branch/conv_enc4x/conv_enc4x.1/Relu_output_0_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.4980493 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_717_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.4982318 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_780_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.4984229 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_680_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.4986115 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_680_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.4988058 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_681_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.4989930 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_681_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.4991969 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_726_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.4993916 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/hr_branch/conv_enc2x/conv_enc2x.1/Relu_output_0_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.4996406 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_683_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.4998211 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'hr_branch.conv_hr4x.4.bias_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.5000138 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_683_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.5001959 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_719_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5004010 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'f_branch.conv_f2x.0.bias_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.5006048 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_684_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5007936 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_684_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.5009783 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_777_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.5011580 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_686_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5013532 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/lr_branch/backbone/features.10/conv/conv.5/Clip_output_0_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5015784 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_687_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5017787 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_687_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.5019708 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_741_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.5021710 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/lr_branch/se_block/pool/GlobalAveragePool_output_0_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5024061 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_803_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5025984 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'hr_branch.tohr_enc4x.0.weight_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5027954 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_803_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.5030078 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'hr_branch.tohr_enc4x.0.weight_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.5032235 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'lr_branch.conv_lr8x.0.bias_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.5034185 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'hr_branch.tohr_enc4x.0.bias_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5036127 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_800_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5037957 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_689_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5039908 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/lr_branch/backbone/features.9/conv/conv.6/Conv_output_0_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5042821 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/lr_branch/backbone/features.14/conv/conv.2/Clip_output_0_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5045117 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_689_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.5047257 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_690_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.5049928 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'hr_branch.conv_enc4x.0.weight_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5052560 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'hr_branch.conv_enc4x.0.weight_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.5054992 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_767_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5057525 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'hr_branch.conv_enc4x.0.bias_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5060745 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'hr_branch.conv_enc4x.0.bias_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.5063280 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'f_branch.conv_lr4x.0.bias_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5065501 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_692_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5068231 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'f_branch.conv_lr4x.0.bias_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.5070545 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_692_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.5072603 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_750_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.5075634 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_693_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5078331 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'hr_branch.conv_hr2x.0.weight_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5081190 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_693_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.5084111 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'lr_branch.conv_lr16x.0.weight_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.5087184 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'lr_branch.se_block.fc.0.weight_scale'. It is no longer used by any node.
+2026-09-09 00:41:14.5090227 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_695_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5092881 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'lr_branch.se_block.fc.0.weight_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5096173 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_695_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.5099020 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'lr_branch.se_block.fc.0.weight_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.5101706 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_696_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5104309 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_696_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.5107139 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_698_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5109834 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_698_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.5112763 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_801_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5115294 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_699_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5117722 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_699_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.5120414 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_789_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5122934 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/f_branch/Concat_output_0_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5125785 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_701_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5128485 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_701_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.5131419 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_783_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5134059 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_702_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5136717 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/lr_branch/se_block/Mul_output_0_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5139699 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_702_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.5142828 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_704_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.5146005 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_705_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5148672 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'hr_branch.conv_hr2x.4.weight_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5151026 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/lr_branch/backbone/features.12/Add_output_0_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5153479 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_705_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.5155728 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_707_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5157761 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_723_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5159844 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_707_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.5162131 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_708_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5165064 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_708_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.5167348 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_710_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5170922 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_710_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.5174237 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_711_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5177383 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_711_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.5180248 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_713_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5183210 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/lr_branch/backbone/features.10/conv/conv.2/Clip_output_0_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5186435 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_713_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.5189222 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'lr_branch.conv_lr16x.0.bias_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.5192124 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_714_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5194618 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_779_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.5197716 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_788_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5200707 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'hr_branch.conv_hr2x.0.bias_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5203823 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/lr_branch/backbone/features.6/conv/conv.5/Clip_output_0_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5207593 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_716_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5210536 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_716_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.5213557 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_719_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.5217759 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_720_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5220679 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_759_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.5223338 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_720_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.5226778 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_722_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5229792 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_722_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.5232497 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_723_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.5235465 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_725_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5238392 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_806_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.5241335 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_725_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.5244236 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_770_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.5247110 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_750_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5250144 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_726_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.5253322 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'f_branch.conv_f.2.weight_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.5256044 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_728_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5259092 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_728_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.5261725 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_731_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5264009 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_731_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.5266801 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_809_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.5269919 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_732_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5272712 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_732_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.5275471 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/lr_branch/backbone/features.8/conv/conv.6/Conv_output_0_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5278170 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_734_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5280345 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'hr_branch.conv_hr4x.4.weight_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5282952 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_734_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.5285328 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'hr_branch.conv_hr4x.4.weight_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.5287381 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_735_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5289286 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/lr_branch/backbone/features.13/conv/conv.5/Clip_output_0_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5292186 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_735_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.5294840 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_737_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.5297435 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_738_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5300085 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_738_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.5302953 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_740_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5305554 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_740_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.5308320 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_741_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5311343 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/lr_branch/backbone/features.4/conv/conv.2/Clip_output_0_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5314970 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_743_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5317524 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'hr_branch.conv_hr2x.6.weight_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5320181 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_743_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.5322409 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'hr_branch.conv_hr2x.2.weight_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.5324656 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_744_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5326666 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_744_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.5328512 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_746_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5330346 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_746_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.5333311 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'hr_branch.conv_hr4x.0.bias_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.5336138 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_747_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5338884 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'hr_branch.conv_hr2x.2.weight_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5342328 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_747_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.5345163 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_749_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5348142 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_749_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.5351403 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/lr_branch/backbone/features.3/conv/conv.2/Clip_output_0_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5353943 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_752_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5356023 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_752_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.5358024 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_753_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5360057 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/f_branch/conv_f/conv_f.1/Relu_output_0_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5362256 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_753_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.5364278 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_755_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5366498 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/lr_branch/backbone/features.3/conv/conv.6/Conv_output_0_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5368887 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_755_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.5370920 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_756_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5372818 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/lr_branch/backbone/features.2/conv/conv.2/Clip_output_0_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5375116 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_756_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.5377086 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_758_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5379179 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_758_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.5381168 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_759_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5383235 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_761_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5385280 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_761_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.5387767 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_762_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5390907 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_762_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.5393612 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_792_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5396218 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_764_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5398965 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_782_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.5401617 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_764_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.5404681 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_812_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5408154 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_801_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.5411037 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'f_branch.conv_f.0.bias_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5413289 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_785_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5415393 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_765_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.5418036 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_767_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.5420717 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_768_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5423253 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_768_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.5425573 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/lr_branch/backbone/features.1/conv/conv.2/Clip_output_0_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5428673 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_770_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5432458 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_771_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5436915 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_771_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.5440332 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/lr_branch/backbone/features.8/conv/conv.2/Clip_output_0_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5443948 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'hr_branch.conv_hr2x.0.weight_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.5447038 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_773_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5449901 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_773_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.5452818 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/lr_branch/backbone/features.7/conv/conv.6/Conv_output_0_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5456100 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_786_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5459036 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_774_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.5461799 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_776_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.5464790 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_777_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5467899 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/hr_branch/Concat_2_output_0_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5471017 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_779_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5474179 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_813_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.5477097 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_782_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5480082 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_783_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.5483523 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_785_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.5486372 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_786_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.5489434 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_788_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.5492934 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'hr_branch.conv_hr2x.0.bias_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.5496070 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_807_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5498680 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_789_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.5501332 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_791_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5504363 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_791_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.5511306 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'f_branch.conv_f2x.0.bias_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5518383 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/lr_branch/backbone/features.13/Add_output_0_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5521316 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_794_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5523936 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_794_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.5527666 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_795_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5530631 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_795_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.5534030 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_797_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5536954 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/hr_branch/conv_hr4x/conv_hr4x.1/Relu_output_0_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5541372 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_797_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.5544470 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/hr_branch/conv_hr4x/conv_hr4x.3/Relu_output_0_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5548241 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_798_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5551929 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_798_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.5555235 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_804_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5558795 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_804_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.5562391 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_806_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5565825 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_807_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.5569275 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_809_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5572673 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_810_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5575549 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_810_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.5578526 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/lr_branch/backbone/features.11/conv/conv.6/Conv_output_0_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5583307 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_812_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.5587026 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'onnx::Conv_813_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5590021 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'lr_branch.se_block.fc.2.weight_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5593871 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/hr_branch/Resize_output_0_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5597334 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'lr_branch.conv_lr16x.0.weight_scale'. It is no longer used by any node.
+2026-09-09 00:41:14.5600202 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'lr_branch.conv_lr16x.0.weight_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5602969 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'lr_branch.conv_lr16x.0.bias_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5605696 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'lr_branch.conv_lr8x.0.weight_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.5608542 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'f_branch.conv_lr4x.0.weight_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5611555 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'f_branch.conv_lr4x.0.weight_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.5614211 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'hr_branch.conv_hr4x.0.weight_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5616948 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'hr_branch.conv_hr4x.0.weight_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.5619661 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/lr_branch/backbone/features.8/conv/conv.5/Clip_output_0_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5623375 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'hr_branch.conv_hr4x.0.bias_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5626630 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'hr_branch.conv_hr4x.2.weight_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5630221 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'hr_branch.conv_hr4x.2.weight_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.5633602 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'hr_branch.conv_hr4x.2.bias_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5636494 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'hr_branch.conv_hr4x.2.bias_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.5639562 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'hr_branch.conv_hr4x.4.bias_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5643381 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/lr_branch/backbone/features.18/features.18.2/Clip_output_0_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5647261 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'hr_branch.conv_hr2x.4.weight_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.5649944 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'hr_branch.conv_hr2x.4.bias_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5653024 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'hr_branch.conv_hr2x.6.weight_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.5655627 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'f_branch.conv_f.2.weight_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5658864 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'hr_branch.conv_hr2x.6.bias_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.5663264 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'f_branch.conv_f.2.bias_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5666033 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'f_branch.conv_f.0.weight_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5668579 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'f_branch.conv_f.0.weight_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.5671617 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'f_branch.conv_f.0.bias_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.5675506 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/lr_branch/backbone/features.10/conv/conv.6/Conv_output_0_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5679062 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer 'f_branch.conv_f.2.bias_quantized'. It is no longer used by any node.
+2026-09-09 00:41:14.5681807 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/lr_branch/backbone/features.0/features.0.2/Clip_output_0_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5684763 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/hr_branch/tohr_enc2x/tohr_enc2x.1/Relu_output_0_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5687484 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/lr_branch/backbone/features.2/conv/conv.6/Conv_output_0_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5690490 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/lr_branch/backbone/features.3/conv/conv.5/Clip_output_0_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5694071 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/lr_branch/backbone/features.3/Add_output_0_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5697351 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/lr_branch/backbone/features.16/conv/conv.5/Clip_output_0_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5700829 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/hr_branch/tohr_enc4x/tohr_enc4x.1/Relu_output_0_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5704516 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/lr_branch/backbone/features.10/Add_output_0_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5707867 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/hr_branch/Concat_1_output_0_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5711220 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/lr_branch/backbone/features.4/conv/conv.5/Clip_output_0_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5715514 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/lr_branch/backbone/features.4/conv/conv.6/Conv_output_0_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5719452 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/hr_branch/conv_hr4x/conv_hr4x.5/Relu_output_0_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5723378 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/lr_branch/backbone/features.5/conv/conv.2/Clip_output_0_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5728386 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/lr_branch/backbone/features.5/conv/conv.5/Clip_output_0_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5731901 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/lr_branch/backbone/features.5/Add_output_0_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5735418 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/lr_branch/backbone/features.6/conv/conv.2/Clip_output_0_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5739497 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/lr_branch/backbone/features.6/Add_output_0_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5743541 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/lr_branch/backbone/features.7/conv/conv.2/Clip_output_0_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5747218 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/lr_branch/backbone/features.7/conv/conv.5/Clip_output_0_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5751108 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/lr_branch/backbone/features.8/Add_output_0_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5755234 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/lr_branch/backbone/features.9/conv/conv.2/Clip_output_0_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5757907 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/lr_branch/backbone/features.9/conv/conv.5/Clip_output_0_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5760335 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/lr_branch/backbone/features.9/Add_output_0_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5762771 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/lr_branch/backbone/features.11/conv/conv.2/Clip_output_0_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5766155 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/lr_branch/backbone/features.11/conv/conv.5/Clip_output_0_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5769923 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/lr_branch/backbone/features.12/conv/conv.2/Clip_output_0_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5772579 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/lr_branch/backbone/features.12/conv/conv.5/Clip_output_0_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5775510 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/lr_branch/backbone/features.12/conv/conv.6/Conv_output_0_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5778127 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/hr_branch/Concat_3_output_0_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5780394 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/lr_branch/backbone/features.13/conv/conv.2/Clip_output_0_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5783042 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/lr_branch/backbone/features.13/conv/conv.6/Conv_output_0_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5787502 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/lr_branch/backbone/features.14/conv/conv.6/Conv_output_0_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5791717 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/f_branch/Concat_1_output_0_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5794875 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/lr_branch/backbone/features.15/conv/conv.2/Clip_output_0_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5798415 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/lr_branch/backbone/features.15/conv/conv.5/Clip_output_0_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5802006 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/lr_branch/backbone/features.15/conv/conv.6/Conv_output_0_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5805203 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/lr_branch/backbone/features.15/Add_output_0_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5808543 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/lr_branch/backbone/features.16/conv/conv.2/Clip_output_0_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5812292 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/hr_branch/conv_hr2x/conv_hr2x.5/Relu_output_0_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5816457 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/lr_branch/backbone/features.16/Add_output_0_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5819978 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/lr_branch/backbone/features.17/conv/conv.2/Clip_output_0_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5823548 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/lr_branch/backbone/features.17/conv/conv.5/Clip_output_0_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5827055 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/lr_branch/se_block/fc/fc.1/Relu_output_0_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5831074 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/lr_branch/se_block/fc/fc.2/Conv_output_0_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5834692 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/lr_branch/se_block/fc/fc.3/Sigmoid_output_0_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5838282 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/lr_branch/conv_lr16x/conv_lr16x.1/Relu_output_0_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5842140 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/lr_branch/conv_lr8x/conv_lr8x.1/Relu_output_0_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5845500 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/f_branch/conv_lr4x/conv_lr4x.1/Relu_output_0_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5849034 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/hr_branch/conv_hr2x/conv_hr2x.3/Relu_output_0_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5852635 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/f_branch/conv_f2x/conv_f2x.1/Relu_output_0_zero_point'. It is no longer used by any node.
+2026-09-09 00:41:14.5856308 [I:onnxruntime:, graph.cc:4888 onnxruntime::Graph::CleanUnusedInitializersAndNodeArgs] Removing initializer '/lr_branch/se_block/fc/fc.3/Sigmoid_output_0_Scale'. It is no longer used by any node.
+2026-09-09 00:41:14.5870355 [I:onnxruntime:, inference_session.cc:1465 onnxruntime::InferenceSession::TransformGraph] Running graph optimizations in loop 1 time/s (Graph Optimizations Loop Level : 1)
+2026-09-09 00:41:14.5874036 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer Level2_RuleBasedTransformer modified: 0 with status: OK
+2026-09-09 00:41:14.5877290 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer TransposeOptimizer_CPUExecutionProvider modified: 0 with status: OK
+2026-09-09 00:41:14.5880693 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer QDQS8ToU8Transformer modified: 0 with status: OK
+2026-09-09 00:41:14.5883825 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer QDQSelectorActionTransformer modified: 0 with status: OK
+2026-09-09 00:41:14.5886700 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer GemmActivationFusion modified: 0 with status: OK
+2026-09-09 00:41:14.5888647 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer MatMulIntegerToFloatFusion modified: 0 with status: OK
+2026-09-09 00:41:14.5890675 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer DynamicQuantizeMatMulFusion modified: 0 with status: OK
+2026-09-09 00:41:14.5893003 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer ConvActivationFusion modified: 0 with status: OK
+2026-09-09 00:41:14.5894926 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer GeluFusionL2 modified: 0 with status: OK
+2026-09-09 00:41:14.5896573 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer LayerNormFusionL2 modified: 0 with status: OK
+2026-09-09 00:41:14.5898351 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer SimplifiedLayerNormFusion modified: 0 with status: OK
+2026-09-09 00:41:14.5900147 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer AttentionFusion modified: 0 with status: OK
+2026-09-09 00:41:14.5901916 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer EmbedLayerNormFusion modified: 0 with status: OK
+2026-09-09 00:41:14.5903935 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer GatherSliceToSplitFusion modified: 0 with status: OK
+2026-09-09 00:41:14.5905807 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer GatherToSliceFusion modified: 0 with status: OK
+2026-09-09 00:41:14.5907544 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer MatmulTransposeFusion modified: 0 with status: OK
+2026-09-09 00:41:14.5909600 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer BiasGeluFusion modified: 0 with status: OK
+2026-09-09 00:41:14.5911429 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer GroupQueryAttentionFusion modified: 0 with status: OK
+2026-09-09 00:41:14.5913454 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer MatMulAddFusion modified: 0 with status: OK
+2026-09-09 00:41:14.5915273 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer SkipLayerNormFusion modified: 0 with status: OK
+2026-09-09 00:41:14.5917117 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer FastGeluFusion modified: 0 with status: OK
+2026-09-09 00:41:14.5918958 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer QuickGeluFusion modified: 0 with status: OK
+2026-09-09 00:41:14.5921236 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer BiasSoftmaxFusion modified: 0 with status: OK
+2026-09-09 00:41:14.5924263 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer BiasDropoutFusion modified: 0 with status: OK
+2026-09-09 00:41:14.5926669 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer MatMulScaleFusion modified: 0 with status: OK
+2026-09-09 00:41:14.5929406 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer MatMulActivationFusion modified: 0 with status: OK
+2026-09-09 00:41:14.5932887 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer MatMulNBitsFusion modified: 0 with status: OK
+2026-09-09 00:41:14.5935792 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer QDQFinalCleanupTransformer modified: 0 with status: OK
+2026-09-09 00:41:14.5938640 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer NchwcTransformer modified: 0 with status: OK
+2026-09-09 00:41:14.5941675 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer NhwcTransformer modified: 0 with status: OK
+2026-09-09 00:41:14.5944845 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer ConvAddActivationFusion modified: 0 with status: OK
+2026-09-09 00:41:14.5947204 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer RemoveDuplicateCastTransformer modified: 0 with status: OK
+2026-09-09 00:41:14.5949294 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer CastFloat16Transformer modified: 0 with status: OK
+2026-09-09 00:41:14.5951182 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer FuseFp16InitializerToFp32NodeTransformer modified: 0 with status: OK
+2026-09-09 00:41:14.5953166 [I:onnxruntime:, graph_transformer.cc:15 onnxruntime::GraphTransformer::Apply] GraphTransformer MemcpyTransformer modified: 0 with status: OK
+[0;93m2026-09-09 00:41:14.5955035 [W:onnxruntime:, session_state.cc:1316 onnxruntime::VerifyEachNodeIsAssignedToAnEp] Some nodes were not assigned to the preferred execution providers which may or may not have an negative impact on performance. e.g. ORT explicitly assigns shape related ops to CPU to improve perf.[m
+[0;93m2026-09-09 00:41:14.5958920 [W:onnxruntime:, session_state.cc:1318 onnxruntime::VerifyEachNodeIsAssignedToAnEp] Rerunning with verbose output on a non-minimal build will show node assignments.[m
+2026-09-09 00:41:14.5961818 [I:onnxruntime:, allocation_planner.cc:2659 onnxruntime::IGraphPartitioner::CreateGraphPartitioner] Use DeviceBasedPartition as default
+2026-09-09 00:41:14.5964270 [I:onnxruntime:, session_state_utils.cc:243 onnxruntime::session_state_utils::SaveInitializedTensors] Saving initialized tensors.
+2026-09-09 00:41:14.5966396 [I:onnxruntime:, session_state_utils.cc:438 onnxruntime::session_state_utils::SaveInitializedTensors] Done saving initialized tensors
+2026-09-09 00:41:14.7604400 [I:onnxruntime:, inference_session.cc:2532 onnxruntime::InferenceSession::Initialize] Session successfully initialized.
+deleted stale cache C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\scratch\quant-worktree\modnetcutcachekey
+[5_eval] Loading reference model on CPU: models/modnet/modnet_fp32.onnx...
+[5_eval] Loading test model on NPU: models/modnet/modnet_cut_ignition_cle_adaround_c64.onnx, Cache=modnetcutcachekey...
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\scratch\quant-worktree\modnetcutcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+[5_eval] Evaluating 50 validation images...
+  [10/50] MAD: 0.07375 | SAD: 22.37k | Latency: 27.05 ms
+  [20/50] MAD: 0.10432 | SAD: 28.64k | Latency: 27.61 ms
+  [30/50] MAD: 0.10611 | SAD: 28.85k | Latency: 28.09 ms
+  [40/50] MAD: 0.10000 | SAD: 27.13k | Latency: 27.92 ms
+  [50/50] MAD: 0.10072 | SAD: 26.71k | Latency: 27.76 ms
+
+=======================================================
+MODNet Evaluation Summary (EP=NPU, N=50)
+=======================================================
+Mean Absolute Difference (MAD): 0.10072
+Sum of Absolute Diff (SAD, 1e3): 26.71
+Mean Squared Error (MSE):       0.091831
+Inference Latency Mean:         27.76 ms
+Inference Latency Median (P50): 27.49 ms
+Inference Latency P90:          28.92 ms
+Throughput:                     36.0 fps
+=======================================================
+
+[5_eval] Reading modnetcutcachekey\vitisai_ep_report.json:
+  NPU nodes: 502/507 (99.0%)
+  CPU fallback nodes: 5/507

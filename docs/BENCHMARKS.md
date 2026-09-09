@@ -3794,6 +3794,137 @@ Still open on MODNet: AdaRound is not wired for this family; the Zero-Concat var
 untouched, a second graph with its own cache key rather than a checkbox; and the listing
 sweep that would let this row be compared with the calibration-fix row is unrun.
 
+### Ignition: MODNet AdaRound parity
+
+`python -m quant adaround` now takes a MODNet-Cut base. This is the first family in which a
+finetuned layer carries an activation, so it is the first time the trained subgraph is
+anything but Conv into Q/DQ: of the 71 Conv layers, 35 are followed by a three-input
+`Clip(0, 6)`, 17 by a `Relu`, and 19 feed their `QuantizeLinear` directly. Quark's own
+module banner ends the subgraph at the activation output rather than the Conv output
+(`Module (input)->(/lr_branch/backbone/features.0/features.0.2/Clip_output_0)`), which is
+what `layer_targets` reproduces.
+
+The Clip is a fork, not a detail. `create_model_ops.py` rewrites a three-input Clip whose
+bounds are initializers of the **quantized** model into attribute form and returns Quark's
+own `Clip` module, whose forward is `torch.clamp`. Its `ActivationMapping` fallback for any
+other Clip shape is `nn.ReLU6`, which draws the same curve but is a different module with a
+different gradient at the bounds, and AdaRound trains through it. Ignition builds the
+`torch.clamp` form and refuses anything else rather than approximating it. The oracle's log
+carries no `Not supported activation node` warning, which is the evidence that the vendor
+took the same branch on all 35.
+
+The layer walk runs on the **simplified** float graph. `passes.simplify` (onnxslim, the
+vendor's own SimplifyModel step) reorders this family's node list, so the adaround branch
+calls `simplify_for` before CLE and `prepare`, in the order `quantize` applies them. This
+was checked before the run rather than after: the 71 `(start, end)` pairs Ignition derives
+are identical to the oracle's 71 banners, in the same order, so the layer-order condition
+that had to be fixed for yolov8n-cut holds here unchanged.
+
+Fresh same-listing oracle: [`XINT8_ADAROUND` on the sorted 64-image portrait listing](../results/quant/quant_modnet_cut_quark_cle_adaround_c64.log)
+(`scripts/quant-reference.sh --in-model models/modnet/modnet_cut_fp32.onnx --calib-dir
+data/modnet_calib --cfg-path models/modnet/preprocess_config.json --cle --adaround`): 9 CLE
+patterns, 71 modules, 33 early stops, 2,881.1 s end to end including calibration and the
+MinMSE search, peak working set 15,801,147,392 bytes, SHA256 `8ec93db8…1524d`. That run was
+contended and was repeated on a quiet box; the timings here and below are **not** a producer
+comparison, for the reasons set out after the diff. Ignition on
+its CLE c64 artifact ([log](../results/quant/quant_modnet_cut_ignition_cle_adaround_c64.log),
+`scripts/quant-adaround.sh --in-model models/modnet/modnet_cut_fp32.onnx --calib-dir
+data/modnet_calib --cfg-path models/modnet/preprocess_config.json`, Quark import-blocked):
+281.7 s of data plus 1,858.6 s of training, 2,140.9 s for the finetune, peak working set
+22,299,271,168 bytes, SHA256 `a4ee1083…b267f`. Both in `resnet_env` (torch 2.4.1+cpu, 8
+threads, ONNX Runtime 1.22.1).
+
+Result ([diff](../results/quant/diff_modnet_cut_ignition_cle_adaround_c64.log)): empty
+position delta; listing, preprocessing, float hash, CLE and every FastFinetune parameter
+equal; **140/140 int8 initializers byte-identical**; refinement a fixed point on both. The
+two logs agree line for line: all 911 per-layer lines — 71 module banners in the same
+order, the loss lines and the 33 early stops — are identical to the last printed digit.
+Against the CLE base, AdaRound moved 2,484,637 of the 6,441,120 weight elements by exactly
+one LSB (38.57 percent), the same count on both sides, biases untouched (0 of 17,885), and
+430 of them sit at −128, Quark's dtype clamp; the base had none there. The files hash
+differently, as on the two earlier families: the gate is the graph and every parameter,
+never the serialization.
+
+**The oracle was re-run on a quiet box, and Quark's AdaRound is reproducible here.** The
+first oracle shared the machine with several other sessions' producers, so a second run was
+made on the same listing and seed
+([log](../results/quant/quant_modnet_cut_quark_cle_adaround_c64_rerun.log)). It produced a
+**byte-identical file** — SHA256 `8ec93db8…1524d` both times — with the same 71 modules, the
+same 33 early stops, and per-layer logs identical to the first run's and to Ignition's, all
+911 lines. The parity gate above is therefore against a reproducible reference rather than
+one lucky run, and load reaches the cost of these runs but not their result.
+
+**The wall times are not a comparison, in either direction.** Host-load witnesses were
+sampled every 10 s through all three runs (`tools/host_load.ps1`), and each saw a different
+machine:
+
+| run | peer cores, mean | free RAM, min | finetune onnx + torch | peak working set |
+|---|---|---|---|---|
+| [oracle, first](../results/quant/load_modnet_cut_quark_cle_adaround_c64.log) | 2.96 | 7.6 GB | 313.8 + 2,004.6 = 2,318.4 s | 15,801,147,392 B |
+| [oracle, re-run](../results/quant/load_modnet_cut_quark_cle_adaround_c64_rerun.log) | 0.68 | 9.1 GB | 266.8 + 1,798.3 = 2,065.1 s | 15,771,942,912 B |
+| [Ignition](../results/quant/load_modnet_cut_ignition_cle_adaround_c64.log) | 2.39 | 1.7 GB | 281.7 + 1,858.6 = 2,140.3 s | 22,299,271,168 B |
+
+Read in order, those rows are a warning about drawing a producer conclusion from any one of
+them. Against the *first* oracle, Ignition looks 7.7 percent faster; against the *re-run* it
+looks 3.6 percent slower; and the re-run itself ran with a third the background load
+Ignition had, so neither figure isolates the producer. Quark's own end-to-end wall, which
+also covers calibration and the MinMSE search, was 2,881.1 s contended against 2,562.0 s
+clean — an 11 percent spread on identical work, which is the size of the effect being
+mistaken for a producer difference. **No claim is made here about which producer is
+faster**; settling it needs both run back to back under the same load, which has not been
+done.
+
+The **peak working sets** are the one row that does compare. Both Quark figures and
+Ignition's are the same measurement (`psutil.Process().memory_info().peak_wset`, in-process,
+unlike the externally sampled figure in the
+[calibration section](#ignition-modnet-independent-calibration-and-paired-matte-evaluation)),
+and the two Quark runs agree to 0.18 percent across very different memory pressure — 7.6 GB
+free against 9.1 GB. That retires the hypothesis that the contended run's peak was trimmed
+low by the OS, and leaves Ignition's 41 percent higher peak as a real difference in
+allocation rather than an artifact.
+
+**Full evaluation, 50 validation images against the FP32 export** (`scripts/quant-validate.sh
+--family modnet`, both NPU runs `--fresh`, both preceded by an `xrt-smi` witness reading no
+hardware contexts):
+
+| File | EP | MAD | SAD (1e3) | MSE | mean ms | P50 | Placement |
+|---|---|---|---|---|---|---|---|
+| Quark oracle | CPU | 0.09361 | 24.48 | 0.084456 | 120.59 | 118.81 | — |
+| Ignition | CPU | 0.09361 | 24.48 | 0.084456 | 119.00 | 113.06 | — |
+| Quark oracle | NPU | **0.10072** | 26.71 | 0.091831 | 28.17 | 27.67 | 502 / 507 |
+| Ignition | NPU | **0.10072** | 26.71 | 0.091831 | 27.76 | 27.49 | 502 / 507 |
+
+Every error figure is identical to five decimals on both providers, and placement is
+identical at 502 of 507 nodes — the five on CPU being two `QuantizeLinear`, two
+`DequantizeLinear` and one `Resize` (`/hr_branch/Resize_1_output_0`). The two EP reports
+differ in exactly one line, the generated name of a duplicated boundary DQ node
+(`input_DequantizeLinear_Output/duplicated` against `…/duplicated_token_0`); node counts and
+per-op device assignments are identical
+([reports](../results/quant/diag_modnet_cut_ignition_cle_adaround_c64_own.log)). Latency
+differences within a pair are session noise on a shared machine, not model differences.
+
+**This is a like-for-like AdaRound toggle on MODNet.** The same 64-image listing quantized
+plain reads 0.17122 CPU / 0.19021 NPU
+([above](#ignition-modnet-independent-calibration-and-paired-matte-evaluation)); with
+AdaRound it reads 0.09361 / 0.10072. AdaRound cuts the matte error by 45 percent on CPU and
+47 percent on the NPU, at identical placement and in the same latency band. That is a larger
+relative move than AdaRound produces on the other two families here, though MAD and mAP are
+different metrics and the comparison is directional only. It does not close the CPU/NPU gap
+within a single file (0.09361 against 0.10072), which remains the
+[recurring finding](#ignition-controlled-resnet-qdq-acceptance) that a QDQ file is not a
+bit-exact specification of what the DPU computes.
+
+**A machine-routing consequence.** Ignition's MODNet AdaRound peaked at 22,299,271,168 bytes
+and drove this 32 GB box down to 1.7 GB free. That puts it beyond the 16 GB laptop, which
+SIGSEGVs without a traceback rather than raising under this load, and lowering the image
+count does not help because the peak is at the full-resolution layers. Run this one on a
+desktop.
+
+Still open on MODNet AdaRound: the Zero-Concat variant is untouched, the calibration-listing
+sweep that would let these rows be compared with the 2026-09-08 calibration-fix row is
+unrun, and GPU FastFinetune (`--device`) waits on Desktop 1 as it does for the other
+families.
+
 ## Key findings
 
 Roughly ordered by how much time each one cost to discover.
