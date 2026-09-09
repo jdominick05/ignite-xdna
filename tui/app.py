@@ -132,8 +132,10 @@ def run_task(entry):
             "--model", choice.relpath, "--ep", ep]
     if src:
         argv += ["--input", str(src)]
-    ui.console.print(f"\n[dim]$ {' '.join(argv[1:])}[/dim]\n")
 
+    ui.clear_screen()
+    ui.rule(entry.title)
+    ui.console.print(f"\n[dim]$ {' '.join(argv[1:])}[/dim]\n")
     if not preflight(entry, ep, choice):
         return
     subprocess.run(argv, cwd=str(ROOT), env=runner.child_env())
@@ -148,10 +150,14 @@ def run_demo(entry):
         src = ui.ask("Camera index or video path:", entry.sample or "0")
 
     argv = runner.build_argv(entry, ep=ep, source=src)
-    ui.console.print(f"\n[dim]$ {' '.join(argv[1:])}[/dim]\n")
 
+    ui.clear_screen()
+    ui.rule(entry.title)
+    ui.console.print(f"\n[dim]$ {' '.join(argv[1:])}[/dim]\n")
     if not preflight(entry, ep or "npu"):
         return
+    # Nothing clears from here on: the demo's own output, and the EP verdict after
+    # it, stay on screen until the user presses Enter to go back.
     rc = runner.run(entry, argv, echo=ui.console.print)
 
     if (ep or entry.default_ep) == "npu":
@@ -162,6 +168,7 @@ def run_demo(entry):
 
 
 def device_screen():
+    ui.clear_screen()
     ui.rule("Device")
     ui.render_checks(guards.startup_checks(need_1x4=True))
     from rich.table import Table
@@ -185,13 +192,20 @@ def device_screen():
 def run(plain=False, lane=None, guards_on=True, **kw):
     guards_on = kw.get("guards", guards_on)
     if guards_on:
+        ui.clear_screen()
         ui.rule("Startup")
         checks = guards.startup_checks()
         ui.render_checks(checks)
         if any(c.blocks_npu for c in checks):
             ui.console.print("\n[yellow]NPU runs will not work until the above is "
                              "fixed. CPU and iGPU still will.[/yellow]")
-        ui.console.print()
+        # The first menu clears this panel, so hold only when there is something
+        # worth reading. An all-clear startup goes straight through -- nothing is
+        # lost, and it saves a keystroke on every launch.
+        if any(c.status != guards.OK for c in checks):
+            ui.ask("\nEnter to continue", "")
+        else:
+            ui.console.print()
 
     if not _acquire_lock():
         return 1
