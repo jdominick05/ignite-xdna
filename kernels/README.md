@@ -307,6 +307,19 @@ dispatches are in flight together, while a single unbatched call still pays ~140
 617 µs through IRON. So the 617 µs rule still governs one-shot latency-critical work, and
 ~36 µs governs anything batchable.
 
+**Scoped the same day: ~36 µs is a raw-pyxrt figure. Through IRON, batching gets you ~531 µs.**
+`dispatch_floor/iron_batch.py` puts runlist submission inside IRON's own host path, so an
+ordinary `@iron.jit` design can batch (`results/aie/iron_batch_npu.log`). The device cost per
+dispatch does fall to **37.5–37.9 µs** — the 17× is real and reachable from IRON — but IRON's
+per-call host work is a near-constant **~500 µs, flat in batch size**, that batching cannot
+touch, so the end-to-end gain is only **1.26–1.37×**. **Use ~531 µs as the go/no-go threshold
+for a batched `@iron.jit` design**, and ~36 µs only if you are willing to write a raw-pyxrt
+driver and give up IRON's argument handling. Two further facts from that run: a real 8-core
+bf16 kernel batches to its own compute time (GroupNorm at L=150528 → 823.8–838.3 µs against
+835.8 µs measured independently), so a real kernel's configuration cost does not swamp the
+floor; and **batching gives up per-call completion status entirely** — a run inside a runlist
+cannot be polled, so verifying output buffers is your only correctness gate.
+
 ## `clock_probe/`
 
 Not an operator — measures the **AIE core clock**, the number every per-second ceiling in

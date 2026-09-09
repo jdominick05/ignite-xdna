@@ -911,6 +911,19 @@ caches.
     dispatches in flight, while one unbatched call still costs ~140 µs raw or 617 µs through
     IRON, and N=1 through a runlist is slightly *slower* than a raw single dispatch. The old
     rule governs one-shot latency-critical work; ~36 µs governs anything batchable.
+  - **SCOPED the same day: ~36 µs is a raw-pyxrt figure, and through IRON the batched floor is
+    ~531 µs.** Batching was wired into IRON's own host path (`kernels/dispatch_floor/
+    iron_batch.py`, `results/aie/iron_batch_npu.log`) rather than measured around it. The
+    device half reproduces from inside IRON — 37.5–37.9 µs per dispatch at N=64, against the
+    raw harness's 36.3 — but IRON's **per-call host work is a near-constant ~500 µs that
+    batching never touches**, so a batched `@iron.jit` call still costs ~531 µs end to end, a
+    1.26–1.37× gain rather than 17×. That ~500 µs is the same term `dispatch_floor_npu.log`
+    called 447.3 µs of host-side cost, measured from a different direction and shown to be
+    independent of how the submit is done. **There are three thresholds, not two:** ~617 µs
+    unbatched through IRON, ~531 µs batched through IRON, ~36 µs batched through raw pyxrt.
+    The 36 µs number is real but it is only available to a caller willing to give up IRON's
+    argument handling. The open question is no longer dispatch — it is IRON's host path, now
+    the larger term by more than an order of magnitude.
   - **REPRODUCED on an independent design the same day.** `ml/resnet/layers_conv2_x` (a
     3-block int8 CNN with real weights, nothing like a passthrough) reports both brackets
     from its own harness: end-to-end 2497.8 µs − hardware 1869.6 µs = **628.2 µs** of

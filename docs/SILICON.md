@@ -371,6 +371,21 @@ still pays ~140 µs raw or 617 µs through IRON. Those four verdicts are not ove
 floor has simply stopped being the reason they lose, which makes kernel quality the deciding
 question for the first time.
 
+**SCOPED the same day, and it matters for all four: ~36 µs is a raw-pyxrt figure.** Batching
+was then wired into IRON's own host path and measured there
+(`results/aie/iron_batch_npu.log`). The device half reproduces from inside IRON — 37.5–37.9 µs
+per dispatch at N=64 — but IRON's per-call host work is a near-constant ~500 µs that batching
+does not touch, so a batched `@iron.jit` call still costs **~531 µs**, a 1.26–1.37× gain
+rather than 17×. Against that floor none of the four reopens survive: MobileViT stage-2
+attention (240 µs), bf16 attention stage 2 (240 µs) and GroupNorm at L ≤ 18816 (233 µs) are
+all still under it, and MobileNetV2's 1720 µs is a whole-model CPU time being compared against
+a per-dispatch floor, which needs per-layer arithmetic nobody has done. **The four reopen only
+for a caller willing to write a raw-pyxrt driver and give up IRON's argument handling.** The
+same run also closed this section's other caveat: a real 8-core bf16 kernel (GroupNorm,
+L=150528) batches to 823.8–838.3 µs per dispatch, which is its own compute — the independently
+measured 835.8 µs — so a real kernel's configuration cost does *not* swamp the passthrough's
+floor.
+
 ## 4. Objectives
 
 Ordered by dependency, and weighted toward where the NPU has *measured* edge — large bf16
@@ -557,6 +572,17 @@ runs costs one host round trip. **Remaining:** this is raw pyxrt; `@iron.jit` do
 runlists, and nothing under `aie/utils/hostruntime/` references one, so a real design still
 pays the old floor until that host path is written. That, not the measurement, is what D1
 now blocks on.
+**Remaining: CLOSED the same day, and the answer moves the problem to D2.** That host path
+was written — `kernels/dispatch_floor/iron_batch.py` patches IRON's own transaction submit to
+queue unstarted runs into a `pyxrt.runlist`, with nothing outside this repo modified
+(`results/aie/iron_batch_npu.log`). From inside IRON the device cost per dispatch does fall to
+**37.5–37.9 µs**, reproducing the raw figure. But the wall clock only improves **1.26–1.37×**,
+because IRON's per-call host work is a near-constant **~500 µs** that batching never touches,
+leaving a batched `@iron.jit` call at ~531 µs. So D1 is answered in full: batching removes the
+dispatch half of the floor and nothing else. The ~500 µs residue is the same term
+`dispatch_floor_npu.log` measured as 447.3 µs, now confirmed independent of how the submit is
+done, and at 37.5 µs of device against ~500 µs of host **it is the larger term by more than an
+order of magnitude**. Whatever removes it is D2's question, not D1's.
 Physical basis: the vendor path's host-side cost per call is about 90 µs against IRON's
 447 µs on the same driver (2.5), so most of the host term is software, and a list of N
 runs costs one host round trip. Tooling: none new — `xrt::runlist` is in this

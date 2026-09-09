@@ -1862,6 +1862,22 @@ sections above.
   one-shot call still pays ~140 µs raw), and it is **raw pyxrt** — `@iron.jit` uses no
   runlists, so a real design pays the old floor until that host path is written. That, not the
   measurement, is what the objective now blocks on.
+- **That host path was then written, and it says the 17× is real but almost none of it reaches
+  the caller.** `kernels/dispatch_floor/iron_batch.py` patches IRON's own transaction submit to
+  queue unstarted runs into a `pyxrt.runlist`, with nothing outside the repo modified, so an
+  ordinary `@iron.jit` design can batch. From inside IRON the device cost per dispatch does
+  fall to **37.5–37.9 µs**, reproducing the raw-pyxrt 36.3. But wall time per call improves
+  only **1.26–1.37×**, because IRON's per-call host work — ABI validation, buffer preparation,
+  instruction-buffer setup — is a near-constant **~500 µs, flat in batch size**, that batching
+  cannot touch. So there are **three thresholds, not two**: ~617 µs unbatched through IRON,
+  ~531 µs batched through IRON, ~36 µs batched through raw pyxrt. Against ~531 µs *none* of
+  the four reopened verdicts survives. This also closes the other caveat — a real 8-core bf16
+  kernel (GroupNorm, L=150528) batches to 823.8–838.3 µs per dispatch, which is its own
+  compute, matching the 835.8 µs measured independently, so a real kernel's configuration cost
+  does not swamp the passthrough's floor. The residue is the same term the floor log called
+  447.3 µs, now confirmed independent of how the submit is done, and at 37.5 µs of device
+  against ~500 µs of host **the host path is the larger problem by more than an order of
+  magnitude.** The open question has moved off the NPU entirely.
 - **The conv op class was closed on a kernel using 5% of its issue slots.** This repo's
   most-lost verdict is int8 conv: the vendor DPU does 1650 GOPS per column, the open kernel
   146.1, an 11.3× gap on the same silicon. Objective K1 said "the first trace will say whether
