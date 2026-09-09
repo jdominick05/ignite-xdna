@@ -306,7 +306,8 @@ installed versions, source/model SHA256 values, and raw fingerprints are in
 **In:** the CNN XINT8 dialect for the X1 backend, for the models this repo already runs
 (ResNet-family classifiers, yolov8 detect/pose head-cut, yolov6n, MODNet). Reproducing
 Quark first, scale-exact, then departing from it deliberately and measurably. Three
-families are implemented: folded ResNet, head-cut YOLOv8 and MODNet.
+families are implemented and gated end to end: folded ResNet, head-cut YOLOv8 and MODNet
+(the Cut variant; Zero-Concat is untouched). AdaRound covers the first two.
 
 **Out:** anything the EP is already measured to reject on this opset — INT16 / A16W8,
 BFP, transformer paths (DECISIONS #3 and the MobileViT record); Strix / AIE2P; any change
@@ -829,7 +830,7 @@ machine. Log names carry model and variant, never a bare name (`CLAUDE.md`).
 |---|---|---|
 | 0 | `notes_xint8_dialect.log`, subsequent scaffold inspection logs | §2 with every [U] either resolved (file:line quoted) or listed as still open; initial throwaway inspection followed by `Graph.fingerprint()` once the audit is folded. ResNet/YOLO XINT8, ResNet A8W8 and the ResNet float export. Vendor source read verbatim, no hardware — the `quant_grid_audit.log` precedent |
 | 1 | `quant_resnet50_quark_nocle.log`, `quant_resnet50_own_reemit.log`, `diff_resnet50_own_vs_quark.log`, `run_resnet50_own_reemit_{cpu,npu}.log`, `diag_resnet50_own_reemit.log` | Starting from `models/resnet50_fp32.onnx`, against a **fresh** Quark run with `include_cle=False` on the same machine: `graph_diff.ok()` with the weight-LSB count printed; `refine()` run on the positions read out of the Quark model reports zero moves (every bound in §2.3 validated); identical full-set CPU top-1 through the existing `4_run.py`; EP report with the same node split as the Quark model's own `diag_*`; NPU latency captured in the same sitting as the Quark model's, and reported as a pair |
-| 2 | `quant_resnet50_own_xint8.log`, `quant_yolov8n_cut_own_xint8.log`, `diff_*_own_vs_quark.log`, `run_*_own_xint8_npu.log`, `map_yolov8n_cut_own_xint8_npu.log` (full 5000), `diag_*` | Same machine, same sorted listing, same `--limit`: position table equal to Quark's for every tensor (or the diff listed and explained); full-set top-1 / full-5000 mAP beside Quark's from the same sitting. A slice is labelled a slice. ResNet closed (no-CLE and CLE sections); yolov8n-cut closed 2026-09-08 (`quant_yolov8n_cut_{quark,ignition}_cle_c64.log`, `diff_yolov8n_cut_ignition_cle_c64.log`, `map_yolov8n_cut_ignition_cle_c64_{reference,own}_{cpu,npu}.log`) |
+| 2 | `quant_resnet50_own_xint8.log`, `quant_yolov8n_cut_own_xint8.log`, `diff_*_own_vs_quark.log`, `run_*_own_xint8_npu.log`, `map_yolov8n_cut_own_xint8_npu.log` (full 5000), `diag_*` | Same machine, same sorted listing, same `--limit`: position table equal to Quark's for every tensor (or the diff listed and explained); full-set top-1 / full-5000 mAP beside Quark's from the same sitting. A slice is labelled a slice. ResNet closed (no-CLE and CLE sections); yolov8n-cut closed 2026-09-08 (`quant_yolov8n_cut_{quark,ignition}_cle_c64.log`, `diff_yolov8n_cut_ignition_cle_c64.log`, `map_yolov8n_cut_ignition_cle_c64_{reference,own}_{cpu,npu}.log`); modnet_cut closed 2026-09-09 (`quant_modnet_cut_{quark,ignition}_cle_c64.log`, `diff_modnet_cut_ignition_cle_c64.log`, `eval_modnet_cut_ignition_cle_c64_{reference,own}_{cpu,npu}.log`, the 50-image matte set labelled as the whole of `data/modnet_val`) |
 | 3 | `quant_*_own_xint8_adaround.log`, `run_*`/`map_*` | Accuracy within session noise of `XINT8_ADAROUND` on resnet50 and yolov8n-cut; peak RSS logged beside Quark's on the same machine. Stretch: the laptop finishes where Quark SIGSEGVs. ResNet closed 2026-09-08 bitwise (`quant_resnet50_ignition_cle_adaround_c64.log`, `diff_*`, `run_*`); yolov8n-cut closed 2026-09-08 bitwise once the layer order followed the vendor's sort (`quant_yolov8n_cut_ignition_cle_adaround_c64.log`, `diff_*`, `map_*`); the laptop stretch is unrun |
 | 4 | `probe_resnet50_<mutation>.log` per mutation, plus `probe_resnet50_summary.log` | For every mutation: EP node split, NPU-vs-CPU output agreement on N images, same-sitting latency; foreign-context check before each. The A8W8 attribution in DECISIONS #3 rewritten from the single-variable result — kept beside the old wording, not replacing it |
 | 5 | one log per item | Each item measured and folded like any other experiment |
@@ -849,7 +850,7 @@ as a witness and the log says so.
 |---|---|---|---|---|
 | 0 | Fingerprint | `notes_xint8_dialect.log`; §2 corrected | every [U] closed or explicitly open | any machine, no hardware |
 | 1 | Re-emit | `graph.py`, `pow2.py`, `qdq.py`, `refine.py` (`apply` + rules), `passes.simulate_dpu`, `verify.py`, `quantize --scales-from`, `3d_quantize_compare.py`, `npu/ep_report.py` | resnet50 from the float export: `graph_diff.ok()` against a fresh no-CLE Quark model (scales exact, weights ≤1 LSB, count logged); `refine()` on Quark's positions moves nothing; identical CPU top-1; same EP split; paired latency | quantize D1/D2 → NPU L/D2 |
-| 2 | Calibrate | `sources.py`, `calib.py` (exact store), `weights.py`, `cle.py`, `passes.prepare`, `3c_quantize_own.py` ×2, `scripts/quant-own.sh` | position-for-position equal to Quark on resnet50 and yolov8n-cut, same machine + listing; full-set top-1 and full-5000 mAP paired. ResNet and yolov8n-cut closed 2026-09-08 | Desktop 2 |
+| 2 | Calibrate | `sources.py`, `calib.py` (exact store), `weights.py`, `cle.py`, `passes.simplify`/`passes.prepare`, `3c_quantize_own.py` ×2, `scripts/quant-own.sh` | position-for-position equal to Quark on resnet50, yolov8n-cut and modnet_cut, same machine + listing; full-set top-1, full-5000 mAP and 50-image matte error paired. ResNet and yolov8n-cut closed 2026-09-08, MODNet 2026-09-09 | Desktop 2 |
 | 3 | AdaRound | `adaround.py`, `FastFinetuneConfig`, RSS logging | accuracy parity with `XINT8_ADAROUND`; RSS beside Quark's. ResNet and yolov8n-cut: byte-identical on Desktop 2 (2026-09-08) | D1/D2, then the laptop as the stretch |
 | 4 | Acceptance map | `probe.py`, `tools/quant_probe.py`, `scripts/quant-probe.sh` | every mutation in §4.2 measured with output check; new BENCHMARKS section; DECISIONS #3 amended | L/D2 |
 | 5 | Beyond Quark | per-layer error budget in the sidecar → a BENCHMARKS table; MODNet re-calibrated through `npu.modnet` (closes the RESEARCH open item); `calib_store="hist"` with its accuracy cost measured; MobileViT per-channel **only if** Phase 4 admits it; QAT hook (`sources` + `pow2` reused from torch) | each a logged, folded experiment | per `CLAUDE.md` routing |
@@ -890,6 +891,11 @@ refine directions, the avgpool table). Nothing here is a latency experiment.
   The `strip_metadata` and `baseline` probes exist to bound that early.
 - **Two live sessions share this worktree and NPU.** Every NPU log records the
   foreign-context check; every commit goes through `scripts/commit.sh`.
+- **Refinement rules interact, and only one graph has shown it.** MODNet needs 3 loops
+  with `align_concat` and `align_pool` both firing, where ResNet and yolov8n-cut converge
+  in 2 with one rule each. It converges, which is evidence for this graph and not a proof
+  that the transcribed order is equivalent to the vendor's in general; the traversal-order
+  question stays open.
 
 ---
 

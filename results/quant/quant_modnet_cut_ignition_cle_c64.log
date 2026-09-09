@@ -1,0 +1,403 @@
+Ignition 0.1.0a1: modnet / CLE
+IMPORT_BLOCK_ACTIVE quark torch
+CALIBRATION images=64 tensors=99 skipped_prunable=52 sample_bytes=12714516480
+COLLECT 16/64
+COLLECT 32/64
+COLLECT 48/64
+COLLECT 64/64
+CHOOSE 16/99
+CHOOSE 32/99
+CHOOSE 48/99
+CHOOSE 64/99
+CHOOSE 80/99
+CHOOSE 96/99
+CHOOSE 99/99
+{
+  "producer": "Ignition",
+  "producer_version": "0.1.0a1",
+  "family": "modnet",
+  "scope": "modnet_cle",
+  "format": "XINT8_QDQ",
+  "mode": "own_minmse_cle",
+  "cle": true,
+  "input_sha256": "ffdc0a20fb0284c0f769e9ff31b2a76d0f06055c08e5cda1c3275ce9bdd37c54",
+  "versions": {
+    "numpy": "1.26.4",
+    "onnx": "1.18.0"
+  },
+  "simplify": {
+    "simplify": {
+      "nodes": [
+        230,
+        150
+      ],
+      "initializers": [
+        140,
+        145
+      ],
+      "nodes_removed": [
+        "/f_branch/Constant",
+        "/f_branch/Constant_1",
+        "/f_branch/Constant_2",
+        "/f_branch/Resize",
+        "/hr_branch/Constant",
+        "/hr_branch/Constant_1",
+        "/hr_branch/Constant_2",
+        "/hr_branch/Constant_3",
+        "/lr_branch/Constant",
+        "/lr_branch/Constant_1",
+        "/lr_branch/backbone/features.0/features.0.2/Constant",
+        "/lr_branch/backbone/features.0/features.0.2/Constant_1",
+        "/lr_branch/backbone/features.1/conv/conv.2/Constant",
+        "/lr_branch/backbone/features.1/conv/conv.2/Constant_1",
+        "/lr_branch/backbone/features.10/conv/conv.2/Constant",
+        "/lr_branch/backbone/features.10/conv/conv.2/Constant_1",
+        "/lr_branch/backbone/features.10/conv/conv.5/Constant",
+        "/lr_branch/backbone/features.10/conv/conv.5/Constant_1",
+        "/lr_branch/backbone/features.11/conv/conv.2/Constant",
+        "/lr_branch/backbone/features.11/conv/conv.2/Constant_1",
+        "/lr_branch/backbone/features.11/conv/conv.5/Constant",
+        "/lr_branch/backbone/features.11/conv/conv.5/Constant_1",
+        "/lr_branch/backbone/features.12/conv/conv.2/Constant",
+        "/lr_branch/backbone/features.12/conv/conv.2/Constant_1",
+        "/lr_branch/backbone/features.12/conv/conv.5/Constant",
+        "/lr_branch/backbone/features.12/conv/conv.5/Constant_1",
+        "/lr_branch/backbone/features.13/conv/conv.2/Constant",
+        "/lr_branch/backbone/features.13/conv/conv.2/Constant_1",
+        "/lr_branch/backbone/features.13/conv/conv.5/Constant",
+        "/lr_branch/backbone/features.13/conv/conv.5/Constant_1",
+        "/lr_branch/backbone/features.14/conv/conv.2/Constant",
+        "/lr_branch/backbone/features.14/conv/conv.2/Constant_1",
+        "/lr_branch/backbone/features.14/conv/conv.5/Constant",
+        "/lr_branch/backbone/features.14/conv/conv.5/Constant_1",
+        "/lr_branch/backbone/features.15/conv/conv.2/Constant",
+        "/lr_branch/backbone/features.15/conv/conv.2/Constant_1",
+        "/lr_branch/backbone/features.15/conv/conv.5/Constant",
+        "/lr_branch/backbone/features.15/conv/conv.5/Constant_1",
+        "/lr_branch/backbone/features.16/conv/conv.2/Constant",
+        "/lr_branch/backbone/features.16/conv/conv.2/Constant_1",
+        "/lr_branch/backbone/features.16/conv/conv.5/Constant",
+        "/lr_branch/backbone/features.16/conv/conv.5/Constant_1",
+        "/lr_branch/backbone/features.17/conv/conv.2/Constant",
+        "/lr_branch/backbone/features.17/conv/conv.2/Constant_1",
+        "/lr_branch/backbone/features.17/conv/conv.5/Constant",
+        "/lr_branch/backbone/features.17/conv/conv.5/Constant_1",
+        "/lr_branch/backbone/features.18/features.18.2/Constant",
+        "/lr_branch/backbone/features.18/features.18.2/Constant_1",
+        "/lr_branch/backbone/features.2/conv/conv.2/Constant",
+        "/lr_branch/backbone/features.2/conv/conv.2/Constant_1",
+        "/lr_branch/backbone/features.2/conv/conv.5/Constant",
+        "/lr_branch/backbone/features.2/conv/conv.5/Constant_1",
+        "/lr_branch/backbone/features.3/conv/conv.2/Constant",
+        "/lr_branch/backbone/features.3/conv/conv.2/Constant_1",
+        "/lr_branch/backbone/features.3/conv/conv.5/Constant",
+        "/lr_branch/backbone/features.3/conv/conv.5/Constant_1",
+        "/lr_branch/backbone/features.4/conv/conv.2/Constant",
+        "/lr_branch/backbone/features.4/conv/conv.2/Constant_1",
+        "/lr_branch/backbone/features.4/conv/conv.5/Constant",
+        "/lr_branch/backbone/features.4/conv/conv.5/Constant_1",
+        "/lr_branch/backbone/features.5/conv/conv.2/Constant",
+        "/lr_branch/backbone/features.5/conv/conv.2/Constant_1",
+        "/lr_branch/backbone/features.5/conv/conv.5/Constant",
+        "/lr_branch/backbone/features.5/conv/conv.5/Constant_1",
+        "/lr_branch/backbone/features.6/conv/conv.2/Constant",
+        "/lr_branch/backbone/features.6/conv/conv.2/Constant_1",
+        "/lr_branch/backbone/features.6/conv/conv.5/Constant",
+        "/lr_branch/backbone/features.6/conv/conv.5/Constant_1",
+        "/lr_branch/backbone/features.7/conv/conv.2/Constant",
+        "/lr_branch/backbone/features.7/conv/conv.2/Constant_1",
+        "/lr_branch/backbone/features.7/conv/conv.5/Constant",
+        "/lr_branch/backbone/features.7/conv/conv.5/Constant_1",
+        "/lr_branch/backbone/features.8/conv/conv.2/Constant",
+        "/lr_branch/backbone/features.8/conv/conv.2/Constant_1",
+        "/lr_branch/backbone/features.8/conv/conv.5/Constant",
+        "/lr_branch/backbone/features.8/conv/conv.5/Constant_1",
+        "/lr_branch/backbone/features.9/conv/conv.2/Constant",
+        "/lr_branch/backbone/features.9/conv/conv.2/Constant_1",
+        "/lr_branch/backbone/features.9/conv/conv.5/Constant",
+        "/lr_branch/backbone/features.9/conv/conv.5/Constant_1"
+      ]
+    }
+  },
+  "prepare": {},
+  "preprocess": {
+    "family": "modnet",
+    "size": 512,
+    "input_name": "input",
+    "transform": "npu.modnet.preprocess"
+  },
+  "emit": {
+    "activations": 99,
+    "initializers": 140,
+    "pruned": 52
+  },
+  "gap_mul": {
+    "scaled": 1,
+    "skipped_not_square": []
+  },
+  "hardsigmoid": {
+    "replaced": 1,
+    "scaled": 1
+  },
+  "refine": {
+    "loops": 3,
+    "changes_by_rule": {
+      "align_concat": 8,
+      "align_pool": 1
+    },
+    "log": [
+      {
+        "scale": "/hr_branch/Resize_output_0_scale",
+        "old": 7,
+        "new": 4,
+        "rule": "align_concat",
+        "node": "/hr_branch/Concat"
+      },
+      {
+        "scale": "/hr_branch/Resize_1_output_0_scale",
+        "old": 7,
+        "new": 4,
+        "rule": "align_concat",
+        "node": "/hr_branch/Concat_2"
+      },
+      {
+        "scale": "/hr_branch/tohr_enc2x/tohr_enc2x.1/Relu_output_0_scale",
+        "old": 4,
+        "new": 2,
+        "rule": "align_concat",
+        "node": "/hr_branch/Concat_3"
+      },
+      {
+        "scale": "/f_branch/conv_lr4x/conv_lr4x.1/Relu_output_0_scale",
+        "old": 3,
+        "new": 1,
+        "rule": "align_concat",
+        "node": "/f_branch/Concat"
+      },
+      {
+        "scale": "/f_branch/Concat_1_output_0_scale",
+        "old": 2,
+        "new": 1,
+        "rule": "align_concat",
+        "node": "/f_branch/Concat_1"
+      },
+      {
+        "scale": "input_scale",
+        "old": 7,
+        "new": 1,
+        "rule": "align_concat",
+        "node": "/f_branch/Concat_1"
+      },
+      {
+        "scale": "/lr_branch/se_block/pool/GlobalAveragePool_output_0_scale",
+        "old": 6,
+        "new": 4,
+        "rule": "align_pool",
+        "node": "/lr_branch/se_block/pool/GlobalAveragePool"
+      },
+      {
+        "scale": "/hr_branch/Concat_output_0_scale",
+        "old": 4,
+        "new": 2,
+        "rule": "align_concat",
+        "node": "/hr_branch/Concat"
+      },
+      {
+        "scale": "/hr_branch/Resize_output_0_scale",
+        "old": 4,
+        "new": 2,
+        "rule": "align_concat",
+        "node": "/hr_branch/Concat"
+      }
+    ],
+    "converged": true
+  },
+  "output_sha256": "71eb3f5f07ddce1facb47f5987fb735a64579ca3890c98f73bac7c848840bdb9",
+  "wall_seconds": 333.27209440000297,
+  "quark_imported": false,
+  "torch_imported": false
+}
+CLE_REPORT {
+  "pattern_count": 9,
+  "unique_pairs": 8,
+  "pairs": [
+    {
+      "head": "/lr_branch/backbone/features.17/conv/conv.6/Conv",
+      "tail": "/lr_branch/backbone/features.18/features.18.0/Conv",
+      "chain": [
+        "/lr_branch/backbone/features.17/conv/conv.6/Conv_output_0",
+        "/lr_branch/backbone/features.18/features.18.0/Conv_output_0"
+      ],
+      "size": 3
+    },
+    {
+      "head": "/lr_branch/se_block/fc/fc.0/Conv",
+      "tail": "/lr_branch/se_block/fc/fc.2/Conv",
+      "chain": [
+        "/lr_branch/se_block/fc/fc.0/Conv_output_0",
+        "/lr_branch/se_block/fc/fc.1/Relu_output_0",
+        "/lr_branch/se_block/fc/fc.2/Conv_output_0"
+      ],
+      "size": 3
+    },
+    {
+      "head": "/hr_branch/conv_hr4x/conv_hr4x.0/Conv",
+      "tail": "/hr_branch/conv_hr4x/conv_hr4x.2/Conv",
+      "chain": [
+        "/hr_branch/conv_hr4x/conv_hr4x.0/Conv_output_0",
+        "/hr_branch/conv_hr4x/conv_hr4x.1/Relu_output_0",
+        "/hr_branch/conv_hr4x/conv_hr4x.2/Conv_output_0"
+      ],
+      "size": 3
+    },
+    {
+      "head": "/hr_branch/conv_hr4x/conv_hr4x.2/Conv",
+      "tail": "/hr_branch/conv_hr4x/conv_hr4x.4/Conv",
+      "chain": [
+        "/hr_branch/conv_hr4x/conv_hr4x.2/Conv_output_0",
+        "/hr_branch/conv_hr4x/conv_hr4x.3/Relu_output_0",
+        "/hr_branch/conv_hr4x/conv_hr4x.4/Conv_output_0"
+      ],
+      "size": 3
+    },
+    {
+      "head": "/hr_branch/conv_hr2x/conv_hr2x.0/Conv",
+      "tail": "/hr_branch/conv_hr2x/conv_hr2x.2/Conv",
+      "chain": [
+        "/hr_branch/conv_hr2x/conv_hr2x.0/Conv_output_0",
+        "/hr_branch/conv_hr2x/conv_hr2x.1/Relu_output_0",
+        "/hr_branch/conv_hr2x/conv_hr2x.2/Conv_output_0"
+      ],
+      "size": 3
+    },
+    {
+      "head": "/hr_branch/conv_hr2x/conv_hr2x.2/Conv",
+      "tail": "/hr_branch/conv_hr2x/conv_hr2x.4/Conv",
+      "chain": [
+        "/hr_branch/conv_hr2x/conv_hr2x.2/Conv_output_0",
+        "/hr_branch/conv_hr2x/conv_hr2x.3/Relu_output_0",
+        "/hr_branch/conv_hr2x/conv_hr2x.4/Conv_output_0"
+      ],
+      "size": 3
+    },
+    {
+      "head": "/hr_branch/conv_hr2x/conv_hr2x.4/Conv",
+      "tail": "/hr_branch/conv_hr2x/conv_hr2x.6/Conv",
+      "chain": [
+        "/hr_branch/conv_hr2x/conv_hr2x.4/Conv_output_0",
+        "/hr_branch/conv_hr2x/conv_hr2x.5/Relu_output_0",
+        "/hr_branch/conv_hr2x/conv_hr2x.6/Conv_output_0"
+      ],
+      "size": 3
+    },
+    {
+      "head": "/f_branch/conv_f/conv_f.0/Conv",
+      "tail": "/f_branch/conv_f/conv_f.2/Conv",
+      "chain": [
+        "/f_branch/conv_f/conv_f.0/Conv_output_0",
+        "/f_branch/conv_f/conv_f.1/Relu_output_0",
+        "logits"
+      ],
+      "size": 3
+    },
+    {
+      "head": "/lr_branch/backbone/features.17/conv/conv.6/Conv",
+      "tail": "/lr_branch/backbone/features.18/features.18.0/Conv",
+      "chain": [
+        "/lr_branch/backbone/features.17/conv/conv.6/Conv_output_0",
+        "/lr_branch/backbone/features.18/features.18.0/Conv_output_0"
+      ],
+      "size": 3
+    }
+  ],
+  "steps": 1,
+  "last_diff": 0.5823134911369134,
+  "weight_threshold": 0.5,
+  "append_bias": true,
+  "use_threshold": true
+}
+CALIBRATION_REPORT {
+  "store": "exact_float16",
+  "mode": "All",
+  "images": 64,
+  "listing": [
+    "data/modnet_calib/000000000785.jpg",
+    "data/modnet_calib/000000000872.jpg",
+    "data/modnet_calib/000000000885.jpg",
+    "data/modnet_calib/000000008532.jpg",
+    "data/modnet_calib/000000008690.jpg",
+    "data/modnet_calib/000000008844.jpg",
+    "data/modnet_calib/000000016598.jpg",
+    "data/modnet_calib/000000025057.jpg",
+    "data/modnet_calib/000000025096.jpg",
+    "data/modnet_calib/000000025228.jpg",
+    "data/modnet_calib/000000025386.jpg",
+    "data/modnet_calib/000000025393.jpg",
+    "data/modnet_calib/000000025394.jpg",
+    "data/modnet_calib/000000025424.jpg",
+    "data/modnet_calib/000000032817.jpg",
+    "data/modnet_calib/000000032861.jpg",
+    "data/modnet_calib/000000032887.jpg",
+    "data/modnet_calib/000000032901.jpg",
+    "data/modnet_calib/000000033104.jpg",
+    "data/modnet_calib/000000033221.jpg",
+    "data/modnet_calib/000000033368.jpg",
+    "data/modnet_calib/000000033638.jpg",
+    "data/modnet_calib/000000049759.jpg",
+    "data/modnet_calib/000000065736.jpg",
+    "data/modnet_calib/000000065798.jpg",
+    "data/modnet_calib/000000066231.jpg",
+    "data/modnet_calib/000000073946.jpg",
+    "data/modnet_calib/000000074256.jpg",
+    "data/modnet_calib/000000081988.jpg",
+    "data/modnet_calib/000000082688.jpg",
+    "data/modnet_calib/000000082696.jpg",
+    "data/modnet_calib/000000090284.jpg",
+    "data/modnet_calib/000000090891.jpg",
+    "data/modnet_calib/000000098853.jpg",
+    "data/modnet_calib/000000099024.jpg",
+    "data/modnet_calib/000000099039.jpg",
+    "data/modnet_calib/000000099182.jpg",
+    "data/modnet_calib/000000106757.jpg",
+    "data/modnet_calib/000000107094.jpg",
+    "data/modnet_calib/000000107226.jpg",
+    "data/modnet_calib/000000114884.jpg",
+    "data/modnet_calib/000000114907.jpg",
+    "data/modnet_calib/000000122962.jpg",
+    "data/modnet_calib/000000123213.jpg",
+    "data/modnet_calib/000000123480.jpg",
+    "data/modnet_calib/000000123633.jpg",
+    "data/modnet_calib/000000131444.jpg",
+    "data/modnet_calib/000000131556.jpg",
+    "data/modnet_calib/000000139872.jpg",
+    "data/modnet_calib/000000147729.jpg",
+    "data/modnet_calib/000000147740.jpg",
+    "data/modnet_calib/000000156071.jpg",
+    "data/modnet_calib/000000156076.jpg",
+    "data/modnet_calib/000000164602.jpg",
+    "data/modnet_calib/000000172571.jpg",
+    "data/modnet_calib/000000172617.jpg",
+    "data/modnet_calib/000000172877.jpg",
+    "data/modnet_calib/000000172946.jpg",
+    "data/modnet_calib/000000180487.jpg",
+    "data/modnet_calib/000000180560.jpg",
+    "data/modnet_calib/000000180751.jpg",
+    "data/modnet_calib/000000188465.jpg",
+    "data/modnet_calib/000000188592.jpg",
+    "data/modnet_calib/000000197388.jpg"
+  ],
+  "spooled_tensors": 99,
+  "skipped_prunable_tensors": 52,
+  "sample_bytes": 12714516480,
+  "free_bytes_before": 799486869504,
+  "ort_version": "1.23.3.dev20260320",
+  "graph_optimization": "ORT_DISABLE_ALL",
+  "sharing": {
+    "/lr_branch/Resize_output_0": "/lr_branch/se_block/Mul_output_0",
+    "/lr_branch/Resize_1_output_0": "/lr_branch/conv_lr16x/conv_lr16x.1/Relu_output_0",
+    "/hr_branch/Resize_2_output_0": "/lr_branch/conv_lr8x/conv_lr8x.1/Relu_output_0",
+    "/f_branch/Resize_1_output_0": "/f_branch/conv_lr4x/conv_lr4x.1/Relu_output_0",
+    "/hr_branch/Resize_3_output_0": "/hr_branch/conv_hr4x/conv_hr4x.5/Relu_output_0",
+    "/f_branch/Resize_2_output_0": "/f_branch/conv_f2x/conv_f2x.1/Relu_output_0"
+  }
+}

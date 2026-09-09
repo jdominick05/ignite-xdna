@@ -1630,6 +1630,17 @@ sections above.
   to a fresh same-listing `XINT8_ADAROUND` oracle, all 819 per-layer log lines equal,
   32.04 mAP@50-95 paired on the NPU for both, and the first same-listing AdaRound
   toggle on this graph: 5.01 points over the plain-XINT8 c64 pair.
+  [MODNet](docs/BENCHMARKS.md#ignition-modnet-independent-calibration-and-paired-matte-evaluation)
+  is the third family and the first that is not a plain convolutional stack: 35 Clip
+  activations, 17 depthwise convolutions, a 16x16 global pool and fractional Resize. Its
+  prepared graph diffs empty against Quark's, an independent calibration on the same
+  64-image listing matches a fresh oracle with 140/140 int8 byte-identical, and both files
+  read 0.17122 MAD on CPU and 0.19021 on the NPU at 502/507 nodes placed. It also answers
+  the preprocessing half structurally: `quant/sources.py` calibrates through
+  `npu.modnet.preprocess`, the same function inference calls. Two rules the graph exposed:
+  the vendor shares a pooling or resize output's quantization parameters with its input
+  only when that input is already marked at its own visit order, and the vendor's
+  SimplifyModel step is onnxslim, which Ignition calls rather than transcribes.
   Safe departures from power-of-two scales, product-scale INT32 bias execution and
   per-channel compiler memory growth remain open. See
   [`quant/DESIGN.md`](quant/DESIGN.md) for the ordered gates and remaining source questions.

@@ -1,0 +1,529 @@
+{
+  "machine": "Desktop 2 / Ryzen 7 8700G",
+  "family": "modnet",
+  "include_cle": true,
+  "include_fast_ft": false,
+  "float_model_sha256": "ffdc0a20fb0284c0f769e9ff31b2a76d0f06055c08e5cda1c3275ce9bdd37c54",
+  "preprocess": {
+    "family": "modnet",
+    "size": 512,
+    "input_name": "input",
+    "transform": "npu.modnet.preprocess"
+  },
+  "listing": [
+    "data/modnet_calib/000000000785.jpg",
+    "data/modnet_calib/000000000872.jpg",
+    "data/modnet_calib/000000000885.jpg",
+    "data/modnet_calib/000000008532.jpg",
+    "data/modnet_calib/000000008690.jpg",
+    "data/modnet_calib/000000008844.jpg",
+    "data/modnet_calib/000000016598.jpg",
+    "data/modnet_calib/000000025057.jpg",
+    "data/modnet_calib/000000025096.jpg",
+    "data/modnet_calib/000000025228.jpg",
+    "data/modnet_calib/000000025386.jpg",
+    "data/modnet_calib/000000025393.jpg",
+    "data/modnet_calib/000000025394.jpg",
+    "data/modnet_calib/000000025424.jpg",
+    "data/modnet_calib/000000032817.jpg",
+    "data/modnet_calib/000000032861.jpg",
+    "data/modnet_calib/000000032887.jpg",
+    "data/modnet_calib/000000032901.jpg",
+    "data/modnet_calib/000000033104.jpg",
+    "data/modnet_calib/000000033221.jpg",
+    "data/modnet_calib/000000033368.jpg",
+    "data/modnet_calib/000000033638.jpg",
+    "data/modnet_calib/000000049759.jpg",
+    "data/modnet_calib/000000065736.jpg",
+    "data/modnet_calib/000000065798.jpg",
+    "data/modnet_calib/000000066231.jpg",
+    "data/modnet_calib/000000073946.jpg",
+    "data/modnet_calib/000000074256.jpg",
+    "data/modnet_calib/000000081988.jpg",
+    "data/modnet_calib/000000082688.jpg",
+    "data/modnet_calib/000000082696.jpg",
+    "data/modnet_calib/000000090284.jpg",
+    "data/modnet_calib/000000090891.jpg",
+    "data/modnet_calib/000000098853.jpg",
+    "data/modnet_calib/000000099024.jpg",
+    "data/modnet_calib/000000099039.jpg",
+    "data/modnet_calib/000000099182.jpg",
+    "data/modnet_calib/000000106757.jpg",
+    "data/modnet_calib/000000107094.jpg",
+    "data/modnet_calib/000000107226.jpg",
+    "data/modnet_calib/000000114884.jpg",
+    "data/modnet_calib/000000114907.jpg",
+    "data/modnet_calib/000000122962.jpg",
+    "data/modnet_calib/000000123213.jpg",
+    "data/modnet_calib/000000123480.jpg",
+    "data/modnet_calib/000000123633.jpg",
+    "data/modnet_calib/000000131444.jpg",
+    "data/modnet_calib/000000131556.jpg",
+    "data/modnet_calib/000000139872.jpg",
+    "data/modnet_calib/000000147729.jpg",
+    "data/modnet_calib/000000147740.jpg",
+    "data/modnet_calib/000000156071.jpg",
+    "data/modnet_calib/000000156076.jpg",
+    "data/modnet_calib/000000164602.jpg",
+    "data/modnet_calib/000000172571.jpg",
+    "data/modnet_calib/000000172617.jpg",
+    "data/modnet_calib/000000172877.jpg",
+    "data/modnet_calib/000000172946.jpg",
+    "data/modnet_calib/000000180487.jpg",
+    "data/modnet_calib/000000180560.jpg",
+    "data/modnet_calib/000000180751.jpg",
+    "data/modnet_calib/000000188465.jpg",
+    "data/modnet_calib/000000188592.jpg",
+    "data/modnet_calib/000000197388.jpg"
+  ],
+  "versions": {
+    "amd-quark": "0.11rc1",
+    "onnx": "1.19.0",
+    "onnxruntime": "1.22.1",
+    "numpy": "1.26.4"
+  }
+}
+[32m
+[QUARK-INFO]: Checking custom ops library ...[0m
+[33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[32m
+[QUARK-INFO]: Start compiling CPU version of custom ops library.[0m
+C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\torch\utils\cpp_extension.py:380: UserWarning: Error checking compiler version for cl: [WinError 2] The system cannot find the file specified
+  warnings.warn(f'Error checking compiler version for {compiler}: {error}')
+INFO: Could not find files for the given pattern(s).
+[31m
+[QUARK-ERROR]: CPU version of custom ops library compilation failed:Command '['where', 'cl']' returned non-zero exit status 1.[0m
+[33m
+[QUARK-WARNING]: Custom ops library compilation failed: CPU version of custom ops library compilation failed:Command '['where', 'cl']' returned non-zero exit status 1..[0m
+[32m
+[QUARK-INFO]: Checked custom ops library.[0m
+[33m
+[QUARK-WARNING]: The api `activation` has been replaced with `input_tensors` and will be removed in the next release.[0m
+[33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+CLE_PATTERNS 9
+[33m
+[QUARK-WARNING]: Config has been replaced by QConfig. The old API will be removed in the next release.[0m
+[33m
+[QUARK-WARNING]: The algorithm API is algo_config in QConfig. The old API will be removed in the next release.[0m
+[32m
+[QUARK-INFO]: The input ONNX model can create InferenceSession successfully[0m
+[32m
+[QUARK-INFO]: Folding or fusing operators for better accuracy and performance.[0m
+[33m
+[QUARK-WARNING]: The opset version is 17 < 20. Skipping fusing Gelu.[0m
+[32m
+[QUARK-INFO]: Start applying CLE algorithm on the float model...[0m
+[32m
+[QUARK-INFO]: CrossLayerEqualization pattern num: 9[0m
+[32m
+[QUARK-INFO]: Total CrossLayerEqualization steps: 1[0m
+[32m
+[QUARK-INFO]: The CLE algorithm has been applied. It took 0.1s to complete.[0m
+[32m
+[QUARK-INFO]: Optimizing the model for a better hardware compatibility.[0m
+[32m
+[QUARK-INFO]: The input ONNX model can run inference successfully[0m
+[32m
+[QUARK-INFO]: Start running calibration on 64 samples with extra options {}...[0m
+[32m
+[QUARK-INFO]: Data collection of PowerOfTwoMethod.MinMSE in progress. Runtime will depend on your model and data size.[0m
+[QUARK_INFO]: Time information:
+2026-09-08 22:09:04.152096
+[QUARK_INFO]: OS and CPU information:
+                                        system --- Windows
+                                          node --- DESKTOP-CBL5NUA
+                                       release --- 11
+                                       version --- 10.0.26200
+                                       machine --- AMD64
+                                     processor --- AMD64 Family 25 Model 117 Stepping 2, AuthenticAMD
+[QUARK_INFO]: Tools version information:
+                                        python --- 3.12.11
+                                          onnx --- 1.19.0
+                                   onnxruntime --- 1.22.1
+                                    quark.onnx --- 0.11rc1
+[QUARK_INFO]: Quantized Configuration information:
+                                   model_input --- models\modnet\modnet_cut_fp32.onnx
+                                  model_output --- models\modnet\modnet_cut_quark_cle_c64.onnx
+                       calibration_data_reader --- <quant.sources.as_reader.<locals>.Reader object at 0x0000027CF705C2F0>
+                         calibration_data_path --- None
+                                  quant_format --- QDQ
+                                   input_nodes --- []
+                                  output_nodes --- []
+                          op_types_to_quantize --- []
+                    extra_op_types_to_quantize --- []
+                                   per_channel --- False
+                                  reduce_range --- False
+                               activation_type --- QUInt8
+                                   weight_type --- QInt8
+                             nodes_to_quantize --- []
+                              nodes_to_exclude --- []
+                          subgraphs_to_exclude --- []
+                                optimize_model --- True
+                      use_external_data_format --- False
+                              calibrate_method --- PowerOfTwoMethod.MinMSE
+                           execution_providers --- ['CPUExecutionProvider']
+                                enable_npu_cnn --- True
+                        enable_npu_transformer --- False
+                     specific_tensor_precision --- False
+                                    debug_mode --- False
+                          convert_fp16_to_fp32 --- False
+                          convert_nchw_to_nhwc --- False
+                                   include_cle --- True
+                                    include_sq --- False
+                              include_rotation --- False
+                               include_fast_ft --- False
+                                 extra_options --- {'ActivationSymmetric': True}
+
+  0%|          | 0/64 [00:00<?, ?it/s]
+Cached 0.29GB:   0%|          | 0/64 [00:00<?, ?it/s]
+Cached 0.29GB:   2%|▏         | 1/64 [00:00<00:40,  1.54it/s]
+Cached 0.58GB:   2%|▏         | 1/64 [00:01<00:40,  1.54it/s]
+Cached 0.58GB:   3%|▎         | 2/64 [00:01<00:39,  1.57it/s]
+Cached 0.87GB:   3%|▎         | 2/64 [00:01<00:39,  1.57it/s]
+Cached 0.87GB:   5%|▍         | 3/64 [00:01<00:37,  1.64it/s]
+Cached 1.16GB:   5%|▍         | 3/64 [00:02<00:37,  1.64it/s]
+Cached 1.16GB:   6%|▋         | 4/64 [00:02<00:36,  1.64it/s]
+Cached 1.45GB:   6%|▋         | 4/64 [00:03<00:36,  1.64it/s]
+Cached 1.45GB:   8%|▊         | 5/64 [00:03<00:35,  1.66it/s]
+Cached 1.74GB:   8%|▊         | 5/64 [00:03<00:35,  1.66it/s]
+Cached 1.74GB:   9%|▉         | 6/64 [00:03<00:34,  1.66it/s]
+Cached 2.03GB:   9%|▉         | 6/64 [00:04<00:34,  1.66it/s]
+Cached 2.03GB:  11%|█         | 7/64 [00:04<00:33,  1.68it/s]
+Cached 2.32GB:  11%|█         | 7/64 [00:04<00:33,  1.68it/s]
+Cached 2.32GB:  12%|█▎        | 8/64 [00:04<00:33,  1.67it/s]
+Cached 2.61GB:  12%|█▎        | 8/64 [00:05<00:33,  1.67it/s]
+Cached 2.61GB:  14%|█▍        | 9/64 [00:05<00:33,  1.66it/s]
+Cached 2.90GB:  14%|█▍        | 9/64 [00:06<00:33,  1.66it/s]
+Cached 2.90GB:  16%|█▌        | 10/64 [00:06<00:32,  1.66it/s]
+Cached 3.19GB:  16%|█▌        | 10/64 [00:06<00:32,  1.66it/s]
+Cached 3.19GB:  17%|█▋        | 11/64 [00:06<00:32,  1.61it/s]
+Cached 3.48GB:  17%|█▋        | 11/64 [00:07<00:32,  1.61it/s]
+Cached 3.48GB:  19%|█▉        | 12/64 [00:07<00:32,  1.61it/s]
+Cached 3.77GB:  19%|█▉        | 12/64 [00:07<00:32,  1.61it/s]
+Cached 3.77GB:  20%|██        | 13/64 [00:07<00:31,  1.62it/s]
+Cached 4.06GB:  20%|██        | 13/64 [00:08<00:31,  1.62it/s]
+Cached 4.06GB:  22%|██▏       | 14/64 [00:08<00:30,  1.62it/s]
+Cached 4.35GB:  22%|██▏       | 14/64 [00:09<00:30,  1.62it/s]
+Cached 4.35GB:  23%|██▎       | 15/64 [00:09<00:30,  1.62it/s]
+Cached 4.64GB:  23%|██▎       | 15/64 [00:09<00:30,  1.62it/s]
+Cached 4.64GB:  25%|██▌       | 16/64 [00:09<00:30,  1.57it/s]
+Cached 4.93GB:  25%|██▌       | 16/64 [00:10<00:30,  1.57it/s]
+Cached 4.93GB:  27%|██▋       | 17/64 [00:10<00:31,  1.50it/s]
+Cached 5.22GB:  27%|██▋       | 17/64 [00:11<00:31,  1.50it/s]
+Cached 5.22GB:  28%|██▊       | 18/64 [00:11<00:30,  1.50it/s]
+Cached 5.51GB:  28%|██▊       | 18/64 [00:11<00:30,  1.50it/s]
+Cached 5.51GB:  30%|██▉       | 19/64 [00:11<00:29,  1.54it/s]
+Cached 5.80GB:  30%|██▉       | 19/64 [00:12<00:29,  1.54it/s]
+Cached 5.80GB:  31%|███▏      | 20/64 [00:12<00:28,  1.57it/s]
+Cached 6.09GB:  31%|███▏      | 20/64 [00:13<00:28,  1.57it/s]
+Cached 6.09GB:  33%|███▎      | 21/64 [00:13<00:26,  1.62it/s]
+Cached 6.38GB:  33%|███▎      | 21/64 [00:13<00:26,  1.62it/s]
+Cached 6.38GB:  34%|███▍      | 22/64 [00:13<00:25,  1.62it/s]
+Cached 6.67GB:  34%|███▍      | 22/64 [00:14<00:25,  1.62it/s]
+Cached 6.67GB:  36%|███▌      | 23/64 [00:14<00:25,  1.63it/s]
+Cached 6.95GB:  36%|███▌      | 23/64 [00:14<00:25,  1.63it/s]
+Cached 6.95GB:  38%|███▊      | 24/64 [00:14<00:24,  1.65it/s]
+Cached 7.24GB:  38%|███▊      | 24/64 [00:15<00:24,  1.65it/s]
+Cached 7.24GB:  39%|███▉      | 25/64 [00:15<00:23,  1.66it/s]
+Cached 7.53GB:  39%|███▉      | 25/64 [00:16<00:23,  1.66it/s]
+Cached 7.53GB:  41%|████      | 26/64 [00:16<00:23,  1.64it/s]
+Cached 7.82GB:  41%|████      | 26/64 [00:16<00:23,  1.64it/s]
+Cached 7.82GB:  42%|████▏     | 27/64 [00:16<00:22,  1.65it/s]
+Cached 8.11GB:  42%|████▏     | 27/64 [00:17<00:22,  1.65it/s]
+Cached 8.11GB:  44%|████▍     | 28/64 [00:17<00:21,  1.64it/s]
+Cached 8.40GB:  44%|████▍     | 28/64 [00:17<00:21,  1.64it/s]
+Cached 8.40GB:  45%|████▌     | 29/64 [00:17<00:20,  1.68it/s]
+Cached 8.69GB:  45%|████▌     | 29/64 [00:18<00:20,  1.68it/s]
+Cached 8.69GB:  47%|████▋     | 30/64 [00:18<00:20,  1.66it/s]
+Cached 8.98GB:  47%|████▋     | 30/64 [00:19<00:20,  1.66it/s]
+Cached 8.98GB:  48%|████▊     | 31/64 [00:19<00:19,  1.65it/s]
+Cached 9.27GB:  48%|████▊     | 31/64 [00:19<00:19,  1.65it/s]
+Cached 9.27GB:  50%|█████     | 32/64 [00:19<00:19,  1.65it/s]
+Cached 9.56GB:  50%|█████     | 32/64 [00:20<00:19,  1.65it/s]
+Cached 9.56GB:  52%|█████▏    | 33/64 [00:20<00:19,  1.61it/s]
+Cached 9.85GB:  52%|█████▏    | 33/64 [00:20<00:19,  1.61it/s]
+Cached 9.85GB:  53%|█████▎    | 34/64 [00:20<00:18,  1.61it/s]
+Cached 10.14GB:  53%|█████▎    | 34/64 [00:21<00:18,  1.61it/s]
+Cached 10.14GB:  55%|█████▍    | 35/64 [00:21<00:17,  1.61it/s]
+Cached 10.43GB:  55%|█████▍    | 35/64 [00:22<00:17,  1.61it/s]
+Cached 10.43GB:  56%|█████▋    | 36/64 [00:22<00:17,  1.62it/s]
+Cached 10.72GB:  56%|█████▋    | 36/64 [00:22<00:17,  1.62it/s]
+Cached 10.72GB:  58%|█████▊    | 37/64 [00:22<00:16,  1.61it/s]
+Cached 11.01GB:  58%|█████▊    | 37/64 [00:23<00:16,  1.61it/s]
+Cached 11.01GB:  59%|█████▉    | 38/64 [00:23<00:16,  1.61it/s]
+Cached 11.30GB:  59%|█████▉    | 38/64 [00:24<00:16,  1.61it/s]
+Cached 11.30GB:  61%|██████    | 39/64 [00:24<00:15,  1.62it/s]
+Cached 11.59GB:  61%|██████    | 39/64 [00:24<00:15,  1.62it/s]
+Cached 11.59GB:  62%|██████▎   | 40/64 [00:24<00:15,  1.56it/s]
+Cached 11.88GB:  62%|██████▎   | 40/64 [00:25<00:15,  1.56it/s]
+Cached 11.88GB:  64%|██████▍   | 41/64 [00:25<00:15,  1.52it/s]
+Cached 12.17GB:  64%|██████▍   | 41/64 [00:26<00:15,  1.52it/s]
+Cached 12.17GB:  66%|██████▌   | 42/64 [00:26<00:14,  1.50it/s]
+Cached 12.46GB:  66%|██████▌   | 42/64 [00:27<00:14,  1.50it/s]
+Cached 12.46GB:  67%|██████▋   | 43/64 [00:27<00:15,  1.34it/s]
+Cached 12.75GB:  67%|██████▋   | 43/64 [00:27<00:15,  1.34it/s]
+Cached 12.75GB:  69%|██████▉   | 44/64 [00:27<00:14,  1.39it/s]
+Cached 13.04GB:  69%|██████▉   | 44/64 [00:28<00:14,  1.39it/s]
+Cached 13.04GB:  70%|███████   | 45/64 [00:28<00:13,  1.44it/s]
+Cached 13.33GB:  70%|███████   | 45/64 [00:29<00:13,  1.44it/s]
+Cached 13.33GB:  72%|███████▏  | 46/64 [00:29<00:12,  1.47it/s]
+Cached 13.62GB:  72%|███████▏  | 46/64 [00:29<00:12,  1.47it/s]
+Cached 13.62GB:  73%|███████▎  | 47/64 [00:29<00:11,  1.51it/s]
+Cached 13.91GB:  73%|███████▎  | 47/64 [00:30<00:11,  1.51it/s]
+Cached 13.91GB:  75%|███████▌  | 48/64 [00:30<00:10,  1.51it/s]
+Cached 14.20GB:  75%|███████▌  | 48/64 [00:30<00:10,  1.51it/s]
+Cached 14.20GB:  77%|███████▋  | 49/64 [00:30<00:09,  1.53it/s]
+Cached 14.49GB:  77%|███████▋  | 49/64 [00:31<00:09,  1.53it/s]
+Cached 14.49GB:  78%|███████▊  | 50/64 [00:31<00:09,  1.53it/s]
+Cached 14.78GB:  78%|███████▊  | 50/64 [00:32<00:09,  1.53it/s]
+Cached 14.78GB:  80%|███████▉  | 51/64 [00:32<00:08,  1.53it/s]
+Cached 15.07GB:  80%|███████▉  | 51/64 [00:32<00:08,  1.53it/s]
+Cached 15.07GB:  81%|████████▏ | 52/64 [00:32<00:07,  1.54it/s]
+Cached 15.36GB:  81%|████████▏ | 52/64 [00:33<00:07,  1.54it/s]
+Cached 15.36GB:  83%|████████▎ | 53/64 [00:33<00:07,  1.55it/s]
+Cached 15.65GB:  83%|████████▎ | 53/64 [00:34<00:07,  1.55it/s]
+Cached 15.65GB:  84%|████████▍ | 54/64 [00:34<00:06,  1.57it/s]
+Cached 15.94GB:  84%|████████▍ | 54/64 [00:34<00:06,  1.57it/s]
+Cached 15.94GB:  86%|████████▌ | 55/64 [00:34<00:05,  1.56it/s]
+Cached 16.23GB:  86%|████████▌ | 55/64 [00:35<00:05,  1.56it/s]
+Cached 16.23GB:  88%|████████▊ | 56/64 [00:35<00:05,  1.55it/s]
+Cached 16.52GB:  88%|████████▊ | 56/64 [00:36<00:05,  1.55it/s]
+Cached 16.52GB:  89%|████████▉ | 57/64 [00:36<00:04,  1.57it/s]
+Cached 16.81GB:  89%|████████▉ | 57/64 [00:36<00:04,  1.57it/s]
+Cached 16.81GB:  91%|█████████ | 58/64 [00:36<00:03,  1.57it/s]
+Cached 17.10GB:  91%|█████████ | 58/64 [00:37<00:03,  1.57it/s]
+Cached 17.10GB:  92%|█████████▏| 59/64 [00:37<00:03,  1.55it/s]
+Cached 17.39GB:  92%|█████████▏| 59/64 [00:37<00:03,  1.55it/s]
+Cached 17.39GB:  94%|█████████▍| 60/64 [00:37<00:02,  1.57it/s]
+Cached 17.68GB:  94%|█████████▍| 60/64 [00:38<00:02,  1.57it/s]
+Cached 17.68GB:  95%|█████████▌| 61/64 [00:38<00:01,  1.56it/s]
+Cached 17.97GB:  95%|█████████▌| 61/64 [00:39<00:01,  1.56it/s]
+Cached 17.97GB:  97%|█████████▋| 62/64 [00:39<00:01,  1.56it/s]
+Cached 18.26GB:  97%|█████████▋| 62/64 [00:39<00:01,  1.56it/s]
+Cached 18.26GB:  98%|█████████▊| 63/64 [00:39<00:00,  1.54it/s]
+Cached 18.55GB:  98%|█████████▊| 63/64 [00:40<00:00,  1.54it/s]
+Cached 18.55GB: 100%|██████████| 64/64 [00:40<00:00,  1.55it/s]
+Cached 18.55GB: 100%|██████████| 64/64 [00:40<00:00,  1.58it/s]
+[32m
+[QUARK-INFO]: Finding optimal threshold for each tensor using PowerOfTwoMethod.MinMSE algorithm in 'All' mode ...[0m
+
+  0%|          | 0/151 [00:00<?, ?it/s]
+  1%|          | 1/151 [00:00<02:02,  1.23it/s]
+  1%|▏         | 2/151 [00:07<10:59,  4.43s/it]
+  2%|▏         | 3/151 [00:09<07:48,  3.17s/it]
+  3%|▎         | 4/151 [00:28<22:42,  9.27s/it]
+  3%|▎         | 5/151 [00:29<15:46,  6.48s/it]
+  4%|▍         | 6/151 [00:30<10:48,  4.47s/it]
+  5%|▍         | 7/151 [00:34<10:35,  4.41s/it]
+  5%|▌         | 8/151 [00:34<07:26,  3.13s/it]
+  6%|▌         | 9/151 [00:46<13:40,  5.78s/it]
+  7%|▋         | 10/151 [01:10<26:48, 11.41s/it]
+  7%|▋         | 11/151 [01:11<19:17,  8.26s/it]
+  8%|▊         | 12/151 [01:12<13:49,  5.97s/it]
+  9%|▊         | 13/151 [01:13<10:22,  4.51s/it]
+  9%|▉         | 14/151 [01:15<08:42,  3.81s/it]
+ 10%|▉         | 15/151 [01:16<06:48,  3.00s/it]
+ 11%|█         | 16/151 [01:17<05:29,  2.44s/it]
+ 11%|█▏        | 17/151 [01:19<04:49,  2.16s/it]
+ 12%|█▏        | 18/151 [01:25<07:11,  3.24s/it]
+ 13%|█▎        | 19/151 [01:28<06:54,  3.14s/it]
+ 13%|█▎        | 20/151 [01:28<05:04,  2.32s/it]
+ 14%|█▍        | 21/151 [01:28<03:45,  1.74s/it]
+ 15%|█▍        | 22/151 [01:30<03:19,  1.55s/it]
+ 15%|█▌        | 23/151 [01:30<02:30,  1.17s/it]
+ 17%|█▋        | 26/151 [01:30<01:09,  1.79it/s]
+ 18%|█▊        | 27/151 [01:56<12:08,  5.87s/it]
+ 19%|█▊        | 28/151 [01:56<09:35,  4.68s/it]
+ 19%|█▉        | 29/151 [02:02<10:07,  4.98s/it]
+ 20%|█▉        | 30/151 [02:08<10:28,  5.20s/it]
+ 21%|██        | 31/151 [02:15<11:15,  5.63s/it]
+ 21%|██        | 32/151 [02:21<11:16,  5.68s/it]
+ 22%|██▏       | 33/151 [02:21<08:22,  4.26s/it]
+ 23%|██▎       | 34/151 [02:22<05:58,  3.06s/it]
+ 23%|██▎       | 35/151 [02:22<04:35,  2.38s/it]
+ 24%|██▍       | 36/151 [02:24<04:10,  2.18s/it]
+ 25%|██▍       | 37/151 [02:30<06:22,  3.36s/it]
+ 25%|██▌       | 38/151 [02:30<04:33,  2.42s/it]
+ 26%|██▌       | 39/151 [02:34<05:22,  2.88s/it]
+ 26%|██▋       | 40/151 [02:36<04:45,  2.57s/it]
+ 27%|██▋       | 41/151 [02:42<06:41,  3.65s/it]
+ 28%|██▊       | 42/151 [02:45<05:58,  3.29s/it]
+ 28%|██▊       | 43/151 [02:46<04:33,  2.53s/it]
+ 29%|██▉       | 44/151 [02:57<09:29,  5.32s/it]
+ 30%|██▉       | 45/151 [03:00<07:52,  4.46s/it]
+ 30%|███       | 46/151 [03:01<06:03,  3.46s/it]
+ 31%|███       | 47/151 [03:02<04:33,  2.63s/it]
+ 32%|███▏      | 48/151 [03:03<03:46,  2.20s/it]
+ 32%|███▏      | 49/151 [03:03<02:46,  1.63s/it]
+ 33%|███▎      | 50/151 [03:05<03:04,  1.83s/it]
+ 34%|███▍      | 51/151 [03:07<02:55,  1.75s/it]
+ 34%|███▍      | 52/151 [03:07<02:10,  1.32s/it]
+ 36%|███▌      | 54/151 [03:08<01:19,  1.22it/s]
+ 36%|███▋      | 55/151 [03:09<01:28,  1.09it/s]
+ 37%|███▋      | 56/151 [03:09<01:08,  1.39it/s]
+ 38%|███▊      | 57/151 [03:16<03:40,  2.34s/it]
+ 38%|███▊      | 58/151 [03:35<10:57,  7.07s/it]
+ 39%|███▉      | 59/151 [03:41<10:28,  6.83s/it]
+ 40%|███▉      | 60/151 [03:43<08:09,  5.38s/it]
+ 40%|████      | 61/151 [03:44<06:03,  4.03s/it]
+ 41%|████      | 62/151 [03:46<05:01,  3.39s/it]
+ 42%|████▏     | 63/151 [03:46<03:34,  2.43s/it]
+ 42%|████▏     | 64/151 [03:48<03:29,  2.41s/it]
+ 43%|████▎     | 65/151 [03:51<03:23,  2.36s/it]
+ 44%|████▎     | 66/151 [03:51<02:29,  1.76s/it]
+ 44%|████▍     | 67/151 [03:53<02:25,  1.74s/it]
+ 45%|████▌     | 68/151 [03:54<02:23,  1.73s/it]
+ 46%|████▌     | 69/151 [03:55<01:45,  1.29s/it]
+ 46%|████▋     | 70/151 [04:01<03:45,  2.78s/it]
+ 47%|████▋     | 71/151 [04:08<05:24,  4.06s/it]
+ 48%|████▊     | 72/151 [04:14<06:04,  4.61s/it]
+ 48%|████▊     | 73/151 [04:16<04:51,  3.74s/it]
+ 49%|████▉     | 74/151 [04:22<06:01,  4.69s/it]
+ 50%|████▉     | 75/151 [04:24<04:48,  3.80s/it]
+ 50%|█████     | 76/151 [04:24<03:26,  2.75s/it]
+ 51%|█████     | 77/151 [04:25<02:36,  2.11s/it]
+ 52%|█████▏    | 78/151 [04:25<01:55,  1.58s/it]
+ 52%|█████▏    | 79/151 [04:26<01:28,  1.23s/it]
+ 53%|█████▎    | 80/151 [04:27<01:26,  1.22s/it]
+ 54%|█████▎    | 81/151 [04:28<01:23,  1.20s/it]
+ 54%|█████▍    | 82/151 [04:31<02:00,  1.75s/it]
+ 56%|█████▌    | 84/151 [04:32<01:18,  1.17s/it]
+ 56%|█████▋    | 85/151 [04:37<02:12,  2.01s/it]
+ 57%|█████▋    | 86/151 [04:38<01:55,  1.78s/it]
+ 58%|█████▊    | 87/151 [04:39<01:49,  1.72s/it]
+ 58%|█████▊    | 88/151 [04:41<01:37,  1.55s/it]
+ 59%|█████▉    | 89/151 [04:42<01:35,  1.54s/it]
+ 60%|█████▉    | 90/151 [04:44<01:46,  1.74s/it]
+ 60%|██████    | 91/151 [04:45<01:17,  1.29s/it]
+ 61%|██████    | 92/151 [04:51<02:45,  2.81s/it]
+ 62%|██████▏   | 93/151 [04:51<01:57,  2.02s/it]
+ 62%|██████▏   | 94/151 [04:52<01:40,  1.76s/it]
+ 63%|██████▎   | 95/151 [04:53<01:15,  1.35s/it]
+ 64%|██████▎   | 96/151 [04:54<01:11,  1.31s/it]
+ 64%|██████▍   | 97/151 [04:56<01:18,  1.45s/it]
+ 65%|██████▍   | 98/151 [04:58<01:28,  1.68s/it]
+ 66%|██████▌   | 99/151 [04:58<01:03,  1.22s/it]
+ 66%|██████▌   | 100/151 [05:09<03:33,  4.19s/it]
+ 67%|██████▋   | 101/151 [05:11<02:59,  3.59s/it]
+ 68%|██████▊   | 103/151 [05:23<03:37,  4.52s/it]
+ 69%|██████▉   | 104/151 [05:28<03:45,  4.80s/it]
+ 70%|██████▉   | 105/151 [05:31<03:17,  4.30s/it]
+ 70%|███████   | 106/151 [05:32<02:34,  3.43s/it]
+ 71%|███████   | 107/151 [05:33<01:57,  2.66s/it]
+ 72%|███████▏  | 108/151 [05:34<01:30,  2.10s/it]
+ 72%|███████▏  | 109/151 [05:34<01:11,  1.70s/it]
+ 73%|███████▎  | 110/151 [05:41<02:06,  3.08s/it]
+ 74%|███████▎  | 111/151 [05:42<01:40,  2.51s/it]
+ 74%|███████▍  | 112/151 [05:42<01:13,  1.88s/it]
+ 75%|███████▍  | 113/151 [05:42<00:51,  1.36s/it]
+ 75%|███████▌  | 114/151 [05:45<01:07,  1.83s/it]
+ 76%|███████▌  | 115/151 [05:48<01:18,  2.19s/it]
+ 77%|███████▋  | 116/151 [05:50<01:10,  2.03s/it]
+ 77%|███████▋  | 117/151 [05:52<01:10,  2.06s/it]
+ 78%|███████▊  | 118/151 [05:53<00:52,  1.59s/it]
+ 79%|███████▉  | 119/151 [05:53<00:41,  1.30s/it]
+ 79%|███████▉  | 120/151 [05:59<01:22,  2.67s/it]
+ 80%|████████  | 121/151 [05:59<00:57,  1.93s/it]
+ 81%|████████  | 122/151 [06:00<00:45,  1.56s/it]
+ 81%|████████▏ | 123/151 [06:00<00:32,  1.15s/it]
+ 82%|████████▏ | 124/151 [06:03<00:45,  1.67s/it]
+ 83%|████████▎ | 125/151 [06:03<00:31,  1.23s/it]
+ 83%|████████▎ | 126/151 [06:06<00:42,  1.72s/it]
+ 84%|████████▍ | 127/151 [06:08<00:40,  1.68s/it]
+ 85%|████████▍ | 128/151 [06:09<00:37,  1.62s/it]
+ 85%|████████▌ | 129/151 [06:15<01:01,  2.81s/it]
+ 86%|████████▌ | 130/151 [06:19<01:08,  3.27s/it]
+ 87%|████████▋ | 131/151 [06:19<00:47,  2.37s/it]
+ 87%|████████▋ | 132/151 [06:31<01:38,  5.20s/it]
+ 88%|████████▊ | 133/151 [06:37<01:37,  5.44s/it]
+ 89%|████████▊ | 134/151 [06:38<01:09,  4.11s/it]
+ 89%|████████▉ | 135/151 [06:39<00:51,  3.23s/it]
+ 90%|█████████ | 136/151 [06:42<00:44,  2.97s/it]
+ 91%|█████████ | 137/151 [06:43<00:35,  2.56s/it]
+ 91%|█████████▏| 138/151 [06:44<00:24,  1.85s/it]
+ 92%|█████████▏| 139/151 [06:50<00:38,  3.24s/it]
+ 93%|█████████▎| 140/151 [06:50<00:26,  2.39s/it]
+ 93%|█████████▎| 141/151 [06:52<00:20,  2.01s/it]
+ 94%|█████████▍| 142/151 [07:03<00:43,  4.87s/it]
+ 95%|█████████▍| 143/151 [07:04<00:28,  3.62s/it]
+ 95%|█████████▌| 144/151 [07:05<00:20,  2.98s/it]
+ 96%|█████████▌| 145/151 [07:08<00:17,  2.95s/it]
+ 97%|█████████▋| 146/151 [07:14<00:18,  3.75s/it]
+ 97%|█████████▋| 147/151 [07:15<00:11,  2.97s/it]
+ 98%|█████████▊| 148/151 [07:16<00:07,  2.37s/it]
+ 99%|█████████▊| 149/151 [07:17<00:04,  2.11s/it]
+ 99%|█████████▉| 150/151 [07:23<00:03,  3.20s/it]
+100%|██████████| 151/151 [07:24<00:00,  2.57s/it]
+100%|██████████| 151/151 [07:24<00:00,  2.95s/it]
+[32m
+[QUARK-INFO]: The calibration has been finished. It took 486.0s to complete.[0m
+[32m
+[QUARK-INFO]: Remove QuantizeLinear & DequantizeLinear on certain operations(such as conv-relu).[0m
+[32m
+[QUARK-INFO]: Found Sigmoid node /lr_branch/se_block/fc/fc.3/Sigmoid. Replacing with HardSigmoid.[0m
+[32m
+[QUARK-INFO]: Found HardSigmoid node /lr_branch/se_block/fc/fc.3/Sigmoid with alpha=0.16666666666666666. Convert to DPU version.[0m
+[32m
+[QUARK-INFO]: Rescale GlobalAveragePool /lr_branch/se_block/pool/GlobalAveragePool with factor 1.0 to simulate DPU behavior.[0m
+[32m
+[QUARK-INFO]: Adjust the quantize info to meet the compiler constraints[0m
+[32m
+[QUARK-INFO]: Input pos of concat node /hr_branch/Concat is 7, min_pos is 4. Modify ipos from 7 to 4.[0m
+[32m
+[QUARK-INFO]: Input pos of concat node /hr_branch/Concat_2 is 7, min_pos is 4. Modify ipos from 7 to 4.[0m
+[32m
+[QUARK-INFO]: Input pos of concat node /hr_branch/Concat_3 is 4, min_pos is 2. Modify ipos from 4 to 2.[0m
+[32m
+[QUARK-INFO]: Input pos of concat node /f_branch/Concat is 3, min_pos is 1. Modify ipos from 3 to 1.[0m
+[32m
+[QUARK-INFO]: Output pos of concat node /f_branch/Concat_1 is 2, min_pos is 1. Modify opos from 2 to 1.[0m
+[32m
+[QUARK-INFO]: Input pos of concat node /f_branch/Concat_1 is 7, min_pos is 1. Modify ipos from 7 to 1.[0m
+[32m
+[QUARK-INFO]: Input pos of pooling layer /lr_branch/se_block/pool/GlobalAveragePool is 4. Output pos of pooling layer /lr_branch/se_block/pool/GlobalAveragePool is 6.Modify opos from 6 to 4.[0m
+[32m
+[QUARK-INFO]: Adjust the quantize info to meet the compiler constraints[0m
+[32m
+[QUARK-INFO]: Output pos of concat node /hr_branch/Concat is 4, min_pos is 2. Modify opos from 4 to 2.[0m
+[32m
+[QUARK-INFO]: Input pos of concat node /hr_branch/Concat is 4, min_pos is 2. Modify ipos from 4 to 2.[0m
+[32m
+[QUARK-INFO]: Adjust the quantize info to meet the compiler constraints[0m
+[32m
+[QUARK-INFO]: Quark_latency_profiler: e2e quantization time consumed:488.676557[0m
+[32m
+[QUARK-INFO]: The operation types and their corresponding quantities of the input float model is shown in the table below.[0m
+┌──────────────────────┬─────────────────────────────────────────────┐
+│ Op Type              │ Float Model                                 │
+├──────────────────────┼─────────────────────────────────────────────┤
+│ Conv                 │ 71                                          │
+│ Constant             │ 79                                          │
+│ Clip                 │ 35                                          │
+│ Add                  │ 10                                          │
+│ GlobalAveragePool    │ 1                                           │
+│ Relu                 │ 17                                          │
+│ Sigmoid              │ 1                                           │
+│ Mul                  │ 1                                           │
+│ Resize               │ 9                                           │
+│ Concat               │ 6                                           │
+├──────────────────────┼─────────────────────────────────────────────┤
+│ Quantized model path │ models\modnet\modnet_cut_quark_cle_c64.onnx │
+└──────────────────────┴─────────────────────────────────────────────┘
+[32m
+[QUARK-INFO]: The quantized information for all operation types is shown in the table below.[0m
+[32m
+[QUARK-INFO]: The discrepancy between the operation types in the quantized model and the float model is due to the application of graph optimization.[0m
+┌───────────────────┬────────────┬──────────┬──────────┐
+│ Op Type           │ Activation │ Weights  │ Bias     │
+├───────────────────┼────────────┼──────────┼──────────┤
+│ Resize            │ UINT8(8)   │          │          │
+│ Conv              │ UINT8(71)  │ INT8(71) │ INT8(69) │
+│ Concat            │ UINT8(6)   │          │          │
+│ Add               │ UINT8(10)  │          │          │
+│ GlobalAveragePool │ UINT8(1)   │          │          │
+│ Mul               │ UINT8(1)   │          │          │
+│ HardSigmoid       │ UINT8(1)   │          │          │
+└───────────────────┴────────────┴──────────┴──────────┘
+REFERENCE COMPLETE {"model_sha256": "7d012cbe5063915536409cb02cb0fcf8be4241e729f88a4ef39afa49bfb6329c", "wall_seconds": 488.7699588000032, "peak_rss_bytes": 15817965568}

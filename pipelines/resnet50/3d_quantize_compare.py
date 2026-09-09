@@ -2,7 +2,8 @@
 
 The family is read from the float export: folded ResNet uses the classification
 preprocessing config, a head-cut YOLO export letterboxes through npu.yolo like
-pipelines/yolov8n/3b_quantize_cut.py. The recorded listing is what the owned producer must replay.
+pipelines/yolov8n/3b_quantize_cut.py, and MODNet reads through npu.modnet.preprocess like
+pipelines/modnet/3_quantize.py. The recorded listing is what the owned producer must replay.
 
 Quark is imported only in this reference process. The owned producer runs in a
 separate process and never imports Quark. Use scripts/quant-reference.sh for guards.
@@ -22,8 +23,8 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
 from quant.graph import Graph
-from quant.quantize import graph_family
-from quant.sources import CocoSource, ImageFolderSource, as_reader
+from quant.quantize import graph_family, simplify_for
+from quant.sources import CocoSource, ImageFolderSource, ModnetSource, as_reader
 
 
 def main():
@@ -31,7 +32,7 @@ def main():
     parser.add_argument("--in-model", type=Path, default=Path("models/resnet50_fp32.onnx"))
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--calib-dir", type=Path, default=None,
-                        help="data/calib for ResNet, data/coco_calib for YOLO unless given")
+                        help="data/calib for ResNet, data/coco_calib for YOLO, data/modnet_calib for MODNet unless given")
     parser.add_argument("--cfg-path", type=Path, default=Path("models/preprocess_config.json"))
     parser.add_argument("--limit", type=int, default=64)
     parser.add_argument("--cle", action="store_true", help="Keep Quark's default include_cle=True")
@@ -48,6 +49,14 @@ def main():
         from npu.yolo import input_size
         imgsz = input_size(list(graph.value_shape(input_name) or ()), str(args.in_model))
         source = CocoSource(args.calib_dir or Path("data/coco_calib"), args.limit, imgsz, input_name)
+    elif family == "modnet":
+        shape = graph.value_shape(input_name)
+        if shape is None or len(shape) != 4 or shape[2] != shape[3]:
+            parser.error(f"MODNet expects a square NCHW input, got {shape}")
+        cfg = json.loads(args.cfg_path.read_text(encoding="utf-8"))
+        if (cfg.get("height"), cfg.get("width")) != (shape[2], shape[3]):
+            parser.error("Preprocessing config size does not match the model input")
+        source = ModnetSource(args.calib_dir or Path("data/modnet_calib"), args.limit, shape[2], input_name)
     else:
         cfg = json.loads(args.cfg_path.read_text(encoding="utf-8"))
         if graph.value_shape(input_name) != (1, *cfg["input_size"]):
@@ -76,7 +85,12 @@ def main():
         from quark.onnx.algorithm.cle.equalization import Equalization
         from quark.onnx.quantizers.registry import NPUCnnRegistry, QDQRegistry, QLinearOpsRegistry
         op_types = sorted(set(QLinearOpsRegistry) | set(QDQRegistry) | set(NPUCnnRegistry))
-        patterns = Equalization(onnx.load(args.in_model), op_types, [], []).get_cle_pattern_pair()
+        # Record the patterns on the graph Quark actually equalizes: its SimplifyModel step
+        # runs first, and on MODNet it removes a Resize and reorders the node list the
+        # matcher walks. simplify_for is a no-op for the other families.
+        equalized = Graph(onnx.load(args.in_model))
+        simplify_for(equalized, family)
+        patterns = Equalization(equalized.model, op_types, [], []).get_cle_pattern_pair()
         report["cle_patterns"] = [[p[1].name, p[-1].name, list(p[0])] for p in patterns]
         print("CLE_PATTERNS", len(patterns), flush=True)
     start = time.perf_counter()

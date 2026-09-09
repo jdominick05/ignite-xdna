@@ -3499,9 +3499,93 @@ with 49 pruned, yolov8n-cut 126/126 with 0 pruned, both `PREPARE_PROBE_PASS True
 (`results/quant/prepare_probe_resnet50_fp32_vendor_order.log`,
 `results/quant/prepare_probe_yolov8n_cut_vendor_order.log`).
 
-Not measured here: independent calibration of this graph, and any hardware run of an
-Ignition-produced MODNet file. Replay proves the emitter and the refinement, not the
-calibrator; a fresh same-listing oracle is the next gate.
+Not measured in this probe: independent calibration of this graph, and any hardware run of
+an Ignition-produced MODNet file. Replay proves the emitter and the refinement, not the
+calibrator. That gate follows in
+[independent calibration](#ignition-modnet-independent-calibration-and-paired-matte-evaluation).
+
+### Ignition: MODNet independent calibration and paired matte evaluation
+
+The [preparation gate](#ignition-modnet-preparation-and-replay-parity) proved the emitter
+and the refinement on this graph by replaying a committed artifact's positions. It could
+not prove the calibrator. This closes that: Ignition chose every position itself, from the
+float export, with Quark and torch blocked, against a fresh Quark oracle built from the
+same float file, the same 64-image listing and the same `include_cle=True` default preset.
+Both ran on Desktop 2 (Ryzen 7 8700G, XDNA1 Phoenix) in one sitting, **sequentially**, so
+their wall times and peak memory are comparable to each other.
+
+Producer logs: `results/quant/quant_modnet_cut_quark_cle_c64.log` and
+`results/quant/quant_modnet_cut_ignition_cle_c64.log`. Comparison:
+`results/quant/diff_modnet_cut_ignition_cle_c64.log`.
+
+**The graph comparison is exact.** Empty position delta, **140 of 140 int8 initializers
+byte-identical**, no node delta, and `SAME_FLOAT_PREPROCESS_LISTING_CLE True` binding both
+sides to the same float SHA256, the same preprocessing record and the same 64 filenames.
+The two files still hash differently (`7d012cbe` against `71eb3f5f`): the gate is the
+graph and its parameters, never the serialization, as on the two earlier families.
+
+Refinement moved 9 positions on this graph and converged in 3 loops: 8 `align_concat` and
+1 `align_pool`, the latter on the SE block's `GlobalAveragePool`. For contrast the same
+transcription needs 2 loops elsewhere and fires one rule each — ResNet 1 `align_pool`,
+yolov8n-cut 16 `align_concat` plus 4 `align_slice`. MODNet is the first measured graph
+where two alignment rules interact across loops, which is the case
+[`quant/DESIGN.md`](../quant/DESIGN.md) lists as the open traversal-order question; it
+converges here, which is evidence for this graph and not a proof of the general case.
+
+**Producer cost, same sitting, sequential:**
+
+| | Quark oracle | Ignition |
+|---|---|---|
+| Wall | 488.8 s | 333.3 s |
+| Peak working set | 15,817,965,568 B | 13,879,128,064 B |
+| Activation store | 18.55 GB cached, 151 tensors | 12,714,516,480 B spooled, 99 tensors |
+| Environment | `resnet_env`, onnx 1.19.0, onnxruntime 1.22.1 | `resnet_env17`, onnx 1.18.0, onnxruntime 1.23.3.dev |
+
+Two caveats on that table. The environments differ by design — the oracle needs Quark,
+which lives in `resnet_env`, and Ignition runs where the NPU runtime is — so the wall-time
+and memory gap is across two onnx/onnxruntime versions as well as two producers, and is
+not a like-for-like producer benchmark. And the two peak figures were taken differently:
+Quark's is `psutil`'s in-process `peak_wset`, Ignition's was sampled from outside every
+5 seconds, so it is a lower bound. The **store** row is the one clean comparison, and it
+is the pruning effect this repo already
+[measured on ResNet](#ignition-calibration-spool-without-the-pruned-pre-relu-tensors):
+Ignition skips the 52 activations that feed a single `Relu` or `Clip(0,6)` and are pruned
+at emission, spooling 99 tensors where the vendor's All mode caches all 151.
+
+**Paired evaluation, 50 validation images, against the FP32 export**
+(`pipelines/modnet/5_eval.py`, both NPU runs `--fresh`, both preceded by an `xrt-smi`
+witness reading no hardware contexts):
+
+| File | EP | MAD | SAD (1e3) | MSE | mean ms | P50 | P90 | Placement |
+|---|---|---|---|---|---|---|---|---|
+| Quark oracle | CPU | 0.17122 | 45.60 | 0.163283 | 103.40 | 101.18 | 115.30 | — |
+| Ignition | CPU | 0.17122 | 45.60 | 0.163283 | 101.98 | 100.62 | 115.24 | — |
+| Quark oracle | NPU | **0.19021** | 50.75 | 0.181764 | 26.69 | 26.46 | 27.12 | 502 / 507 |
+| Ignition | NPU | **0.19021** | 50.75 | 0.181764 | 26.50 | 26.40 | 26.78 | 502 / 507 |
+
+Every error figure is identical to five decimal places on both providers, which is what
+byte-identical parameters should give. Placement is identical too, 502 of 507 nodes, the
+five elsewhere being four boundary Q/DQ nodes and the initial 4x downsampling `Resize`
+(`results/quant/diag_modnet_cut_ignition_cle_c64_{reference,own}.log`). The latency
+differences between the two rows of a pair are session noise on a shared machine, not
+model differences: the two files compute the same thing.
+
+**Two things this table is not.** It is **not** comparable with the
+[calibration-fix row](#5-opencv-calibration-fix-error-reduction-and-the-structural-zero-concat-gap-2026-09-08-desktop-2)'s
+0.18629. That artifact has no committed quantize log and no recorded listing or count, so
+the only honest statement is that a different, unrecorded listing produced a different
+number; 0.19021 here is not a regression against it, and neither figure can be attributed
+to the producer. Reading the two as a calibration-count effect would need a listing sweep
+nobody has run. And the CPU/NPU gap within a single file — 0.17122 against 0.19021 on
+byte-identical parameters — is the same finding the
+[acceptance study](#ignition-controlled-resnet-qdq-acceptance) recorded on ResNet: a QDQ
+file is not a bit-exact specification of what the DPU computes. MODNet is the third graph
+to show it, and it means "parity" here continues to mean the same file as Quark, never a
+claim about DPU arithmetic.
+
+Still open on MODNet: AdaRound is not wired for this family; the Zero-Concat variant is
+untouched, a second graph with its own cache key rather than a checkbox; and the listing
+sweep that would let this row be compared with the calibration-fix row is unrun.
 
 ## Key findings
 

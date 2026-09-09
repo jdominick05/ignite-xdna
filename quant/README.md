@@ -15,7 +15,7 @@ ONNX quantizer. Its internal package remains `quant`. See the
 
 | Area | Alpha contract |
 |---|---|
-| Measured models | `resnet50.a1_in1k`, folded FP32 export, default 224px input; `yolov8n_cut`, the head-cut YOLOv8n export at 640px; `modnet_cut`, the refactored MODNet matting export at 512px (preparation and replay only so far) |
+| Measured models | `resnet50.a1_in1k`, folded FP32 export, default 224px input; `yolov8n_cut`, the head-cut YOLOv8n export at 640px; `modnet_cut`, the refactored MODNet matting export at 512px |
 | Graph | Folded ResNet: standard-domain Conv/Relu/Add/MaxPool/GlobalAveragePool/Flatten/Gemm, one input/output, GAP receives a 7×7 spatial tensor. Head-cut YOLOv8: Conv/Sigmoid/Mul/Add/Concat/MaxPool/Resize/Split, one input, the six head outputs; Split is rewritten to Slice and SiLU to the DPU HardSigmoid chain as the vendor does. MODNet: Conv (including depthwise) / Relu / Clip / Add / Mul / Concat / Resize / GlobalAveragePool / Sigmoid, one input and one matte-logits output, any square GAP window; the vendor's onnxslim simplification runs first. The family is read from the operators |
 | Export | Opset 17, IR 8, fully static batch 1 |
 | Quantization | Exact-sample MinMSE over each pipeline's own reader (the timm transform, `npu.yolo.letterbox`, or `npu.modnet.preprocess`, all at the graph's input size); scalar power-of-two scales; UINT8/zp128 activations and INT8/zp0 weights/biases; a MaxPool/Resize output shares its input's parameters only when that input is already marked at the vendor's visit order, and otherwise gets its own; optional transcribed CLE (`--cle`, Conv→Conv pairs only; 33 patterns on ResNet, 9 on MODNet, zero on the SiLU net, as in the vendor's default preset) |

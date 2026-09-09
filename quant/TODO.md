@@ -76,21 +76,26 @@ recorded in the handoff and Git history rather than treated as future features.
   `OptimDevice = "cuda"` for PyTorch training loop on Desktop 1 (RX 7900 XTX 24 GB)
   while keeping ORT activation caching on CPU. Validate paired convergence against
   Quark GPU oracle (`--device cuda`). See design note in [DESIGN.md §4.2](DESIGN.md#note-for-implementation-gpu--rocm-acceleration-for-adaround).
-- [ ] Connect MODNet's calibration source to the shared inference preprocessing,
+- [x] Connect MODNet's calibration source to the shared inference preprocessing,
   then re-evaluate matte quality against the documented mismatched-preprocessing
   baseline. Do not claim this fixes the quality gap before measuring it.
-  Partly done 2026-09-09: `quant/sources.py`'s `ModnetSource` reads through
-  `npu.modnet.preprocess`, and the family is implemented (`passes.simplify` delegating
-  to onnxslim, `Clip` marking and pruning, the full avgpool table, and a Q/DQ marking
-  pass that follows the vendor's visit order). Evidence so far is preparation and
-  replay only:
+  Closed 2026-09-09. `quant/sources.py`'s `ModnetSource` reads through
+  `npu.modnet.preprocess`, so the matting pipeline's calibration and its inference are one
+  function rather than two copies, and the family is implemented (`passes.simplify`
+  delegating to onnxslim as the vendor does, `Clip` marking and pruning, the vendor's full
+  avgpool table, and a Q/DQ marking pass that follows the vendor's visit order). Evidence:
   [MODNet preparation parity](../docs/BENCHMARKS.md#ignition-modnet-preparation-and-replay-parity)
-  — Quark's whole pre-process diffs empty against Ignition's, and the committed
+  (Quark's whole pre-process diffs empty against Ignition's; the committed
   `modnet_cut_xint8_calibfix.onnx` re-emits 140/140 int8 byte-identical from its own
-  positions. Still to close: an independent calibration against a fresh same-listing
-  oracle, and a paired NPU matte evaluation of the Ignition-produced file. Note that the
-  separate Quark-side rerun already answered the RESEARCH question about the error
-  moving; what is unmeasured is Ignition reproducing it.
+  positions) and
+  [MODNet independent calibration](../docs/BENCHMARKS.md#ignition-modnet-independent-calibration-and-paired-matte-evaluation)
+  (fresh same-listing oracle, empty position delta, 140/140 int8 byte-identical, both files
+  0.17122 MAD on CPU and 0.19021 on NPU over the 50 validation images at 502/507 placed).
+  The re-evaluation half of this item was answered separately on the Quark side by the
+  2026-09-08 OpenCV rerun; what is now also measured is Ignition reproducing it. The quality
+  numbers here are **not** comparable with that rerun's 0.18629, whose listing was never
+  recorded — that comparison needs a listing sweep, which is unrun. AdaRound is not wired
+  for this family and the Zero-Concat variant is untouched.
 - [ ] Consider histogram calibration only with measured error/accuracy and memory
   tradeoffs against the exact-sample store; label approximation explicitly.
 
