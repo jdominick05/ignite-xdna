@@ -1377,17 +1377,46 @@ Investigated via `tools/windows_xrt_driver_probe.py` (`results/aie/windows_xrt_d
 - **Virtual hardware context capacity bound (5 columns)**: `amdxe.sys` enforces a physical ceiling of 5 active virtual hardware contexts per Phoenix device (`results/aie/windows_context_switch_bench.log`). Initial context setup requires 78.63 ms, while subsequent contexts allocate in 5.38-5.78 ms. Attempting a 6th context triggers driver failure with NTSTATUS `0xc01e0009` (hardware capacity exhaustion). Context deletion and userspace garbage collection cleanly recycles the slot in 4.98 ms.
 - **Hardware context-switch penalty (~748 µs)**: Interleaving dispatches across two distinct hardware contexts on the Phoenix NPU increases mean latency from 120.25 µs to 867.99 µs (+747.75 µs penalty, 7.22x slowdown) due to partition state teardown, instruction stream flushing, and base register reprogramming. Multi-tenant concurrency therefore requires dedicated column partitioning (`1x4.xclbin`) rather than time-sliced virtualization on a single partition.
 
-### AIE-ML systolic shift-cut bound [0, 31]
+### AIE-ML systolic shift-cut bound [0, 31] — substantially retracted 2026-09-09
 
-Investigated via `quant/shift_cut.py` and `python -m quant check-shift-cut` (`results/quant/shift_cut_feasibility.log`):
+**Numbering warning, because two files disagree.** In `quant/shift_cut.py`, Theorem 2 is
+the `pos_y` window and Theorem 3 is the position rule. In this entry, Theorem 2 is
+Multi-Branch and Theorem 3 is the `pos_y` window. So "Theorem 3 is retracted" means
+different things in the two files. What is retracted in the *code* is the rule that
+positions must lie in `[0, 31]`. The `pos_y` window itself is not retracted; the
+*projection onto it* was defective. Statements below are kept and marked, not rewritten —
+this file is the record of why.
 
-- **Hardware accumulator shift constraint**: On XDNA1 AIE-ML, the post-accumulator scaling unit uses a 15-bit multiplier M in [16384, 32767] and a 5-bit arithmetic right-shift register sigma in [0, 31]. The effective scaling factor is A ≈ M * 2^(-sigma).
-- **Theorem 1 (Shift-Cut Feasibility Bound)**: If an ONNX QDQ triad requires sigma < 0, the operation requires an arithmetic left-shift exceeding the 32-bit accumulator, resulting in immediate accumulator overflow (as observed in RegNetX-002, where sigma = -90 forces top-1 accuracy to collapse to 0.50%). If sigma > 31, the 5-bit shift register overflows/clamps (as observed in FastDepth, where sigma = 32 overflows by 1 bit, clamping to 31 and doubling layer outputs).
-- **Theorem 2 (Multi-Branch Inter-Scale Alignment)**: In multi-branch elementwise operations (such as Bilateral Guided Aggregation in BiSeNetV2), divergent scale grids truncate dynamic range in hardware.
+Investigated via `quant/shift_cut.py` and `python -m quant check-shift-cut`
+(`results/quant/shift_cut_reaudit_20260909_desktop2.log`, which supersedes
+`results/quant/shift_cut_feasibility.log`):
+
+- **Hardware accumulator shift constraint**: On XDNA1 AIE-ML, the post-accumulator scaling unit uses a 15-bit multiplier M in [16384, 32767] and a 5-bit arithmetic right-shift register sigma in [0, 31]. The effective scaling factor is A ≈ M * 2^(-sigma). — **UNMEASURED (2026-09-09).** Both register widths are asserted; no AIE-ML or DPU ISA document in this repo states either, and AMD's AI Engine documentation describes the path as SRS (shift-round-saturate) without giving the shift field's width.
+- **Theorem 1 (Shift-Cut Feasibility Bound)**: If an ONNX QDQ triad requires sigma < 0, the operation requires an arithmetic left-shift exceeding the 32-bit accumulator, resulting in immediate accumulator overflow (as observed in RegNetX-002, where sigma = -90 forces top-1 accuracy to collapse to 0.50%). If sigma > 31, the 5-bit shift register overflows/clamps (as observed in FastDepth, where sigma = 32 overflows by 1 bit, clamping to 31 and doubling layer outputs). — **BOTH EXAMPLES RETRACTED (2026-09-09).** The corrected analyzer reads RegNetX-002 at sigma min 11 / median 21 / max 30 and FastDepth at min 18 / median 21 / max 23; neither -90 nor 32 reproduces. RegNetX-002's collapse is cross-layer equalization (CLE off: 66.20% top-1 vs 69.50% FP32, no shift-cut adjustment logged; CLE on: 0.10%). FastDepth's "doubling" was never measured. **The theorem itself is untested at both edges**: fixtures built to reach sigma 0, 31 and 32 are refused by the VitisAI EP and execute on the CPU EP (`"tested_conv_on_npu": false`), so they say nothing about the DPU. The highest sigma ever executed on this hardware is **30**.
+- **Theorem 2 (Multi-Branch Inter-Scale Alignment)**: In multi-branch elementwise operations (such as Bilateral Guided Aggregation in BiSeNetV2), divergent scale grids truncate dynamic range in hardware. — **NOT SUPPORTED AS STATED.** It rests on a single flagged op out of 63 in that graph and has never been tested forward; a scale-position sweep on the real BiSeNetV2 `/bga/Mul` moved correlation only in step with the signal's own standard deviation, so no scale position repairs it.
 - **Theorem 3 (Systolic Scale Feasibility Window)**: In power-of-two quantization with scale positions pos = -log2(S), the output position must satisfy:
     pos_x + pos_w - 17 <= pos_y <= pos_x + pos_w + 14
-  Violations are projectable to the nearest bound via `project_scale_to_feasible_basin` (demonstrated on FastDepth `Conv_96`: pos_y 0 -> 1, bringing sigma from 32 down to 31, eliminating the clamp without retraining).
-- **Rule for Project Ignition**: Every QDQ graph emitted for XDNA1 must be verified against the [0, 31] systolic shift-cut bound using `python -m quant check-shift-cut` prior to hardware execution.
+  Violations are projectable to the nearest bound via `project_scale_to_feasible_basin` (demonstrated on FastDepth `Conv_96`: pos_y 0 -> 1, bringing sigma from 32 down to 31, eliminating the clamp without retraining). — **THE PROJECTION WAS DEFECTIVE (2026-09-09).** It clamped pos_x/pos_w into [0, 31] while sigma was computed from the unclamped scales, so on RegNetX-002 `/s1/b1/conv2/conv/Conv` it took an already-feasible layer at sigma = 30 to **sigma = -90**, manufacturing the overflow it exists to prevent. Repairs on real models went SESR-M7 9 -> 0, MODNet-Cut 1 -> 0, RegNetX-002 5 -> 0 once the analyzer was corrected — every one had targeted a working op. Now uses unclamped positions and raises rather than emitting a scale the analyzer would flag.
+- **Rule for Project Ignition**: `python -m quant check-shift-cut` is an **advisory report, not a gate**. Run it, read it, and do not let it block or rewrite a graph: it has a demonstrated false-positive mode of the widest kind (SESR-M7 flagged 9 of 9 operations, then placed 50 / 52 nodes and tracked its CPU reference at r = 0.99912). That bound means **sigma only** — positions outside [0, 31] are advisory notes and never violations. **Do not run `--repair` on a model that already places and scores.**
+
+### A log whose *encoding* is corrupt is fixed in place, not duplicated
+
+Two logs arrived written as UTF-16LE behind a mangled byte-order mark
+(`results/quant_fastdepth_xint8.log`, `results/aie/dpu_transaction_disasm.log`). Git treats
+them as binary, `commit.sh`'s gate rejects them, and — the part that actually costs
+something — every `grep`/`rg` against them silently matches nothing, which is how an
+unbacked BiSeNetV2 microcode table sat unnoticed beside a log that never contained it.
+
+**The rule: decode in place to UTF-8, scrub the profile path, and say in the commit body
+that only the encoding changed.** The "never rewrite a log under `results/`" rule protects
+the *content* of a measurement, not its byte encoding; a file nothing can read is not
+serving as evidence. Verify by asserting the round trip (the recovered text must re-encode
+to the original bytes exactly) before writing, and diff line counts across the change.
+
+This settles a split precedent: `results/quant_fastdepth_xint8.log` was fixed in place in
+merge `4308a62`, while `results/aie/dpu_transaction_disasm.log` was first handled by adding
+a readable sibling and leaving the corrupt original. The sibling approach is withdrawn —
+one canonical, greppable file per measurement.
 
 
 

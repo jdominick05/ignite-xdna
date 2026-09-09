@@ -1425,8 +1425,8 @@ Characterizing the boundary conditions of the XDNA1 compiler on alternative conv
 - **Measured findings (DenseNet-121 & ResNeXt-50):**
   1. **Hardware offload is complete**: DenseNet-121 places **1,703 / 1,705 nodes (99.9%)** on NPU at **8.06 ms** (2.69× speedup over Zen 4 CPU FP32 at 21.70 ms); all 58 Concat nodes execute natively on AIE without DMA bottlenecks. ResNeXt-50 places **393 / 395 nodes (99.5%)** on NPU at **9.37 ms** (1.86× speedup over Zen 4 CPU FP32 at 17.40 ms); all 53 `group=32` convs compile natively.
   2. **Coarse per-tensor PTQ fails completely**: Both architectures collapse to **0.10% top-1** under plain XINT8 (vs 78.00% / 81.00% FP32 baselines). Dense block concatenation forces disparate block activations into shared power-of-two scales (causing shift cuts to exceed `[0, 16]` by up to 7 powers of 2), while 4-channel grouped convs produce wide cross-group dynamic range divergence that per-tensor INT8 cannot represent.
-  3. **RegNetX-002 proves the collapse is DPU shift-cut scale explosion, not concatenation or narrow groups**: RegNetX-002 (2.68M parameters, regular linear channel capacity) places **324 / 326 nodes (99.4%)** on NPU at **2.45 ms (407.9 FPS)**, but also collapses to **0.50% top-1** under plain XINT8 and **0.50% under AdaRound** (vs 68.50% FP32 baseline). Static inspection via `tools/audit_quant_grid.py` traced this to Quark's DPU shift-cut clamp ($131 \to -108$) forcing $\Delta = 2^{108} \approx 3.25 \times 10^{32}$ on depthwise weights, spanning an $8.5 \times 10^{35}\times$ activation dynamic range. AdaRound cannot modify the scale grid $\Delta$ and thus cannot recover the network.
-- **Falsification verdict:** Refuted for latency (neither `Concat` memory copies nor grouped conv micro-kernels stall the NPU), but confirmed as a severe failure mode for plain per-tensor INT8 PTQ and unrecoverable by AdaRound when shift cuts cause floating scale explosion.
+  3. **RegNetX-002's collapse is cross-layer equalization, not a DPU shift-cut bound — the original attribution here is retracted (2026-09-09)**: RegNetX-002 (2.68M parameters, regular linear channel capacity) places **324 / 326 nodes (99.4%)** on NPU at **2.45 ms (407.9 FPS)**, and collapses under the default XINT8 recipe. The placement and latency stand. The *cause* does not: the same graph, producer and calibration listing with **CLE off** takes zero shift-cut adjustments and scores **66.20% top-1** against **69.50%** FP32, where the CLE-on artifact scores **0.10%** (`results/quant/eval_regnetx_002_ignition_nocle_c64_cpu.log`, `eval_regnetx_002_fp32_full1000_cpu.log`, `eval_regnetx_002_quark_cle_full1000_cpu.log`). Equalization inflates the per-channel ranges until Quark's clamp fires ($131 \to -108$, forcing $\Delta = 2^{108} \approx 3.25 \times 10^{32}$); the clamp is the symptom, and the corrected analyzer finds **zero sigma violations** in this graph (`results/quant/shift_cut_reaudit_20260909_desktop2.log`). AdaRound genuinely cannot modify $\Delta$, so it could never have been the lever — turning CLE off is.
+- **Falsification verdict:** Refuted for latency (neither `Concat` memory copies nor grouped conv micro-kernels stall the NPU), but confirmed as a severe failure mode for plain per-tensor INT8 PTQ and unrecoverable by AdaRound. **Corrected 2026-09-09:** the trigger is cross-layer equalization inflating the ranges, not an inherent shift-cut bound — with CLE off the same graph reaches 66.20% top-1 and takes no shift-cut adjustment at all.
 
 ## Roadmap
 
@@ -1560,11 +1560,13 @@ sections above.
   all 53 grouped convs (`groups=32`) natively at 9.37 ms (1.86× speedup over Zen 4 CPU FP32 at 17.40 ms).
   RegNetX-002 (324/326 nodes on NPU, 99.4%) compiles natively at **2.45 ms (407.9 FPS)**.
   However, all three topologies suffer catastrophic PTQ collapse under plain XINT8 (0.10% / 0.10% / 0.50% top-1
-  vs 78.00% / 81.00% / 68.50% FP32 baselines). RegNetX-002 proves the collapse is not specific to block
-  concatenation or narrow groups, and AdaRound cannot rescue it (0.50% top-1): Quark's DPU shift-cut clamp
-  forces weight position shifts by 100+ powers of 2 to satisfy 16-bit shift register limits, creating an
-  astronomical floating scale distortion ($\Delta = 2^{108} \approx 3.25 \times 10^{32}$) that integer rounding
-  cannot recover.
+  vs 78.00% / 81.00% / 68.50% FP32 baselines). RegNetX-002 shows the collapse is not specific to block
+  concatenation or narrow groups, and AdaRound cannot rescue it: Quark's shift-cut clamp forces weight
+  position shifts by 100+ powers of 2, creating a scale distortion ($\Delta = 2^{108} \approx 3.25 \times
+  10^{32}$) that integer rounding cannot recover. **Attribution corrected 2026-09-09:** the clamp is
+  triggered by cross-layer equalization, not by a hardware shift-register limit — CLE off gives
+  66.20% top-1 with no clamp firing. (The "16-bit shift register limits" phrasing here was also
+  inconsistent with the 5-bit shifter asserted elsewhere in this repo; neither width is measured.)
   [Working](docs/BENCHMARKS.md#alternative-classification-topologies-densenet-121-concat-and-resnext-50-grouped-convs).
 - **Category C, first candidate: YOLOv6n (RepVGG backbone).** New pipeline
   (`pipelines/yolov6n/`), Meituan's official 0.4.0 release. The structural half of the
@@ -1712,22 +1714,55 @@ sections above.
   hardware runlist batching overhead is **3.39 µs/run**, and sub-microsecond buffer synchronization
   (0.85 µs at 4 KB) establishes that host-device sync on unified APU memory is purely CPU cache
   flush/invalidation. Context scaling discovered a hard driver ceiling of **5 virtual hardware contexts**
-  (matching the 5 physical silicon columns, with context 6 rejecting at NTSTATUS `0xc01e0009`), and
+  (context 6 rejecting at NTSTATUS `0xc01e0009`) — a driver context-table limit, **not** a
+  column count, since that benchmark loaded `4x4.xclbin`, whose contexts each occupy all four
+  columns; five of them would be twenty column-occupancies on a device that exposes four. The
+  deciding run is the same benchmark against `1x4.xclbin`, and it has not been done. And
   interleaved execution quantified a **747.75 µs context-switch penalty** (7.22x slowdown) when switching
   contexts on a shared partition. Reverse engineering of compiled `.xmodel` microcode
   (`results/aie/dpu_transaction_disasm.log`) revealed 48-byte transaction packets dominated by
   Opcode 3 (Conv2D / 1x1 dense, 43–49%) and Opcode 6 (Depthwise Conv, 33–37%).
   [Working](docs/BENCHMARKS.md#native-windows-xrt-driver-latency-and-dpu-microcode-disassembly).
-- **AIE-ML systolic shift-cut feasibility theorem for Project Ignition — closed.** Mathematical
-  formulation of the post-accumulator scaling unit proved that operations are physically feasible
-  on XDNA1 without numerical distortion if and only if the arithmetic right-shift register
-  sigma in [0, 31] (`results/quant/shift_cut_feasibility.log`). In power-of-two quantization, this yields
-  the exact closed-form Systolic Scale Feasibility Window: `pos_y in [pos_x + pos_w - 17, pos_x + pos_w + 14]`.
-  If sigma < 0 (pos_y > upper bound), 32-bit accumulator overflow destroys accuracy (as observed in
-  RegNetX-002, sigma = -90, collapsing top-1 accuracy to 0.50%). If sigma > 31 (pos_y < lower bound),
-  the 5-bit physical shifter clamps (as in FastDepth, sigma = 32, clamping to 31). Automated scale
-  repair projection (`quant/shift_cut.py::project_scale_to_feasible_basin`) successfully projects FastDepth
-  `Conv_96` pos_y 0 -> 1, eliminating the 1-bit overflow without retraining.
+- **AIE-ML systolic shift-cut feasibility theorem for Project Ignition — REOPENED
+  2026-09-09; this entry previously recorded it as closed.** The formulation still stands as
+  a hypothesis, and `sigma = pos_x + pos_w - pos_y + 14` in `[0, 31]` is still the criterion
+  `quant/shift_cut.py` applies. But three of the four things this entry asserted are now
+  measured false, and the fourth has never been tested.
+  - **The audit does not reproduce.** The corrected analyzer over eleven quantized models
+    finds **zero sigma violations on every one**
+    (`results/quant/shift_cut_reaudit_20260909_desktop2.log`). RegNetX-002 reads min 11 /
+    median 21 / max 30, not -90 / 24 / 27. FastDepth reads min 18 / median 21 / max 23 and
+    never approaches the 32 its "shift clamp, doubling the layer's outputs" story rests on.
+    `results/quant/shift_cut_feasibility.log` no longer matches the tool that wrote it; it is
+    superseded and kept, not deleted.
+  - **The RegNetX-002 exemplar was a confound, not a hardware bound.** The collapse is
+    cross-layer equalization, not the shifter. The same graph, producer and calibration
+    listing with CLE **off** takes zero shift-cut adjustments and scores **66.20% top-1**
+    against a **69.50%** FP32 baseline, where the CLE-on artifact scores **0.10%**
+    (`results/quant/eval_regnetx_002_ignition_nocle_c64_cpu.log`,
+    `eval_regnetx_002_fp32_full1000_cpu.log`,
+    `eval_regnetx_002_quark_cle_full1000_cpu.log`,
+    `quant_regnetx_002_ignition_nocle_c64.log`). ResNeXt-50 carries the same confound and
+    recovers to **68.90%** with CLE off
+    (`results/quant/eval_resnext50_32x4d_quark_nocle_c64_cpu.log`).
+  - **The repair projection was breaking models that already worked.**
+    `project_scale_to_feasible_basin` clamped pos_x and pos_w into `[0, 31]` while sigma was
+    computed from the unclamped scales, so the two disagreed whenever an input position sat
+    outside that range: it took an already-feasible RegNetX-002 layer at sigma = 30 and
+    projected it to **sigma = -90**, manufacturing the accumulator overflow the module exists
+    to prevent. Now fixed and checked rather than trusted. Repairs on real models went
+    SESR-M7 9 -> 0, MODNet-Cut 1 -> 0, RegNetX-002 5 -> 0 — every one had targeted a working op.
+  - **The "if and only if" is untested at both edges, and cannot be reached the obvious way.**
+    No fixture has executed outside the producer's own `[0, 16]` shift-cut contract: fixtures
+    built to reach sigma 0, 31 and 32 are refused by the VitisAI EP and run on the CPU EP
+    instead, recording `"tested_conv_on_npu": false`, so a divergence measured there is a
+    software result. **The highest sigma ever executed on this DPU is 30.** Neither register
+    width behind the theorem — the 15-bit multiplier, the 5-bit shifter — has been measured,
+    and no AIE-ML or DPU ISA document in this repo states either; AMD's AI Engine
+    documentation describes the path as SRS (shift-round-saturate) without giving the field
+    width.
+  Open: whether the bound is real physics at all, and what a forward test that actually
+  reaches the edges would look like, given the EP refuses out-of-contract scales.
   [Working](docs/BENCHMARKS.md#aie-ml-systolic-shift-cut-feasibility-theorem-for-project-ignition).
 - **The webcam path (single `4x4.xclbin` session, `./scripts/yolo-demo.sh`) has not
   been exercised end to end.** The related but distinct round-robin-across-4-columns
@@ -1830,8 +1865,12 @@ sections above.
 - **The shift-cut hazard predictor is not ready to gate the quantizer, and a forward test is
   what showed it.** `quant/shift_cut.py` formulates a real constraint — the DPU requantizer is
   a 15-bit multiplier and a shift confined to σ ∈ [0, 31], so some scale triples genuinely
-  cannot be represented — and its flags coincide with two documented failures, RegNetX-002's
-  collapse and BiSeNetV2's fall from 59.47% to 15.33% pixel accuracy on hardware. But every
+  cannot be represented — and its flags appeared to coincide with two documented failures,
+  RegNetX-002's collapse and BiSeNetV2's fall from 59.47% to 15.33% pixel accuracy on hardware.
+  **Both coincidences have since weakened (2026-09-09):** RegNetX-002's collapse is
+  cross-layer equalization, not a shift-cut bound, and the corrected analyzer finds zero
+  violations in that graph; the BiSeNetV2 association rests on a single flagged op out of 63
+  and has never been tested forward. But every
   one of those was retrodiction: each model already had a known outcome. Predictions for 14
   untested artifacts were therefore committed **before** any of them ran, and then four were
   run. **Both models the audit called infeasible on 9 of 9 operations place 50 of 52 nodes on
@@ -1920,7 +1959,7 @@ sections above.
   - **Category D:** Monocular Depth Estimation — MiDaS v2.1 Small (bilinear vs nearest fusion,
     10.81 ms, 1.53x CPU win) and FastDepth (depthwise separable decoder, 2.87 ms, 1.05x iGPU win,
     r = 0.9383) closed above.
-  - **Category E:** Untested Classification Topologies — DenseNet-121, ResNeXt-50, and RegNetX-002 (placement, Concat DMA, grouped convs, shift-cut scale explosion) closed above.
+  - **Category E:** Untested Classification Topologies — DenseNet-121, ResNeXt-50, and RegNetX-002 (placement, Concat DMA, grouped convs, and a scale explosion since re-attributed to cross-layer equalization rather than a shift-cut bound) closed above.
 - **Longer term:** a detector fine-tuned for fixed camera feeds (licence-plate
   recognition), reusing the head-cut + XINT8 + AdaRound recipe rather than re-deriving it.
 
