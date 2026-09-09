@@ -25,7 +25,8 @@ class ClePair:
     head: str
     tail: str
     chain: list[str]
-    size: int = 3  # source tuple length; triples would be 4
+    size: int = 3  # source tuple length; a Conv -> depthwise -> pointwise triple is 4
+    middle: str | None = None  # the depthwise Conv, set only when size == 4
 
 
 @dataclass
@@ -70,17 +71,35 @@ def _supported(g: Graph, node) -> tuple[bool, int]:
 
 
 def _matcher_support(g: Graph, nodes) -> bool:
-    """check_conv_layers_support: a missing group attribute counts as supported here."""
+    """check_conv_layers_support, including the source's early-break bug.
+
+    The source sets a single `conv_support` flag per node and, when a grouped Conv fails
+    the depthwise test, breaks out of the *attribute* loop rather than the node loop. The
+    flag is then overwritten by the next node, so the returned verdict is whichever the
+    **last** node produced -- a grouped head followed by a group-1 tail is accepted. Only a
+    node that is neither Conv nor Gemm breaks the outer loop and sticks.
+
+    Reproducing it matters: on RegNetX-002 it is the difference between 13 matched pairs
+    and none, and a stricter reading silently drops thirteen of the vendor's 27 patterns.
+    A missing group attribute leaves the flag untouched, which is why it counts as
+    supported here.
+    """
+    supported = True
     for node in nodes:
         if node.op_type == "Conv":
             group = _group(node)
-            if group is not None and group != 1:
-                weight = g.initializer(node.input[1])
-                if not (weight is not None and weight.shape[1] == 1 and group == weight.shape[0]):
-                    return False
-        elif node.op_type != "Gemm":
+            if group is not None:
+                if group == 1:
+                    supported = True
+                else:
+                    weight = g.initializer(node.input[1])
+                    supported = bool(weight is not None and weight.shape[1] == 1
+                                     and group == weight.shape[0])
+        elif node.op_type == "Gemm":
+            supported = True
+        else:
             return False
-    return True
+    return supported
 
 
 def find_pairs(g: Graph) -> list[ClePair]:
@@ -123,21 +142,26 @@ def find_pairs(g: Graph) -> list[ClePair]:
         if node.op_type != "Conv":
             continue
         found = [node]
+        chain = [node.output[0]]
         following = outputs_of(node)
         while following and len(following) == 1:
             nxt = following[0]
             if nxt.op_type == "Relu":
+                chain.append(nxt.output[0])
                 following = outputs_of(nxt)
             elif nxt.op_type == "Conv":
                 found.append(nxt)
+                chain.append(nxt.output[0])
                 following = outputs_of(nxt)
                 if len(found) == 3:
                     first, middle, last = found
                     weight = g.initializer(middle.input[1])
+                    # The source requires the group attribute to be present on all three:
+                    # a missing attribute leaves its flag False and the triple is not matched.
                     depthwise = (_group(middle) or 0) > 1 and weight is not None and \
                         weight.shape[0] == weight.shape[1] * _group(middle)
                     if _group(first) == 1 and depthwise and _group(last) == 1:
-                        raise NotImplementedError("Depthwise CLE triples are not implemented")
+                        pairs.append(ClePair(first.name, last.name, chain, 4, middle.name))
                     break
             else:
                 break
@@ -262,6 +286,59 @@ def equalize_pair(g: Graph, head, tail, weight_threshold: float, append_bias: bo
             "unit_scales": int(np.count_nonzero(scale == 1)), "scale_span_log2": span}
 
 
+def equalize_triple(g: Graph, conv, conv_dw, conv_pw,
+                    max_scale_log2: float | None = None) -> dict:
+    """_cle_set_with_depthwise_layers for a Conv -> depthwise Conv -> pointwise Conv triple.
+
+    The source passes this path none of the pair path's options -- no balance method, no
+    weight threshold, no bias flag, no threshold flag -- so none are accepted here. It
+    equalizes three layers at once against the geometric mean of their per-channel maxima,
+    and it scales the first two biases but never the third layer's.
+    """
+    w0, w1, w2 = (g.initializer(n.input[1]) for n in (conv, conv_dw, conv_pw))
+    if w0 is None or w1 is None or w2 is None:
+        raise ValueError(f"CLE needs float initializers across {conv.name} -> {conv_pw.name}")
+    if any(v.dtype != np.float32 for v in (w0, w1, w2)):
+        raise ValueError("CLE operates on float32 initializers")
+    b0 = g.initializer(conv.input[2]) if len(conv.input) > 2 else None
+    b1 = g.initializer(conv_dw.input[2]) if len(conv_dw.input) > 2 else None
+
+    max_0 = np.max(np.fabs(w0), axis=(1, 2, 3))
+    max_1 = np.max(np.fabs(w1), axis=(1, 2, 3))
+    max_2 = np.max(np.fabs(w2), axis=(0, 2, 3))
+    geometric = np.power(max_0 * max_1 * max_2, 1.0 / 3)
+    scale_12 = max_0 / geometric
+    scale_23 = geometric / max_2
+    # The source nan_to_num's nan and posinf only, then maps exact zeros to one.
+    scale_12 = np.nan_to_num(scale_12, nan=1.0, posinf=1.0)
+    scale_23 = np.nan_to_num(scale_23, nan=1.0, posinf=1.0)
+    scale_12[scale_12 == 0.0] = 1.0
+    scale_23[scale_23 == 0.0] = 1.0
+
+    span = max(_scale_span_log2(scale_12), _scale_span_log2(scale_23))
+    # Measured: skipping every triple over 2 bits recovers RegNetX-002 to 66.20% and
+    # ResNeXt-50 to 68.90%, which is exactly what no CLE at all gives on either. Letting
+    # the milder ones through is worse than both: at 4 bits RegNetX keeps 5 of its 14 and
+    # reads 25.60%.
+    if max_scale_log2 is not None and span > max_scale_log2:
+        return {"skipped": "unstable scale", "channels": int(max_0.shape[0]),
+                "scale_span_log2": span,
+                "scale_12": [float(scale_12.min()), float(scale_12.max())],
+                "scale_23": [float(scale_23.min()), float(scale_23.max())]}
+
+    g.set_initializer(conv.input[1], w0 * (1.0 / scale_12.reshape(-1, 1, 1, 1)))
+    g.set_initializer(conv_dw.input[1],
+                      w1 * scale_12.reshape(-1, 1, 1, 1) * (1.0 / scale_23.reshape(-1, 1, 1, 1)))
+    g.set_initializer(conv_pw.input[1], w2 * scale_23.reshape(1, -1, 1, 1))
+    if b0 is not None:
+        g.set_initializer(conv.input[2], b0 * (1.0 / scale_12))
+    if b1 is not None:
+        g.set_initializer(conv_dw.input[2], b1 * (1.0 / scale_23))
+    return {"channels": int(max_0.shape[0]), "scale_span_log2": span,
+            "scale_12": [float(scale_12.min()), float(scale_12.max())],
+            "scale_23": [float(scale_23.min()), float(scale_23.max())]}
+
+
 def cross_layer_equalize(g: Graph, *, steps: int = 1, balance_method: str = "max",
                          weight_threshold: float = 0.5, append_bias: bool = True,
                          use_threshold: bool = True, diff_threshold: float = 2e-7,
@@ -280,10 +357,20 @@ def cross_layer_equalize(g: Graph, *, steps: int = 1, balance_method: str = "max
             break
         previous = {n.input[1]: g.initializer(n.input[1]) for n in targets}
         for index, pair in enumerate(pairs):
-            key = f"{step_count}:{index}:{pair.head}->{pair.tail}"
-            scaled[key] = equalize_pair(
-                g, by_name[pair.head], by_name[pair.tail], weight_threshold, append_bias,
-                use_threshold, max_scale_log2)
+            if pair.size == 4:
+                key = f"{step_count}:{index}:{pair.head}->{pair.middle}->{pair.tail}"
+                scaled[key] = equalize_triple(
+                    g, by_name[pair.head], by_name[pair.middle], by_name[pair.tail],
+                    max_scale_log2)
+            else:
+                # Pairs are never guarded. The threshold cannot separate benefit from harm
+                # across both populations: ResNet50's beneficial pairs top out at 2.36 bits
+                # while ten of ResNeXt-50's destructive triples sit between 2.2 and 3.4, so
+                # any cut that disarms the triples would also disarm ResNet50's pairs.
+                key = f"{step_count}:{index}:{pair.head}->{pair.tail}"
+                scaled[key] = equalize_pair(
+                    g, by_name[pair.head], by_name[pair.tail], weight_threshold, append_bias,
+                    use_threshold, None)
             if scaled[key].get("skipped") == "unstable scale":
                 skipped_unstable.append({"pair": key, **{k: v for k, v in scaled[key].items()
                                                          if k != "skipped"}})

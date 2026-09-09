@@ -50,12 +50,11 @@ def main(argv=None):
     emit.add_argument("--scales-from", type=Path,
                       help="Replay a reference position table; skips independent calibration")
     emit.add_argument("--cle-guard", type=float, default=None, metavar="BITS",
-                      help="With --cle, skip any pair whose per-channel scale exceeds BITS "
-                           "powers of two. Off by default, which is the parity path. CLE keeps "
-                           "the weight ranges tidy however extreme the scale gets, but the "
-                           "activation between the two layers is multiplied by it: ResNet50 "
-                           "needs 3.5 bits and gains 10.8 top-1, while RegNetX-002 reaches 42.2 "
-                           "and ResNeXt-50 72.6 and both fall to 0.10 percent")
+                      help="With --cle, skip any Conv/depthwise/pointwise TRIPLE whose "
+                           "per-channel scale exceeds BITS powers of two. Pairs are never "
+                           "guarded. Off by default, which is the parity path. 2 recovers "
+                           "RegNetX-002 to 66.20%% and ResNeXt-50 to 68.90%% from 0.10%%, and "
+                           "leaves graphs with no triples byte-identical")
     ada = commands.add_parser("adaround", help="AdaRound weight rounding for an emitted XINT8 file (torch; Quark stays blocked)")
     ada.add_argument("--in-model", type=Path, default=Path("models/resnet50_fp32.onnx"),
                      help="The float export the base was quantized from (hash-checked against its sidecar)")

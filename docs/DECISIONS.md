@@ -169,10 +169,15 @@
   weight range**: CLE keeps weights tidy by construction and in fact *narrows* the weight
   positions on both models it destroys, while the activation between the two layers is
   multiplied by the scale and never rescaled. Measured per equalized pair, the worst is
-  2.52 bits on ResNet50 and 1.81 on MODNet against **17.11** on RegNetX-002 and **33.21** on
-  ResNeXt-50, with near-identical medians -- a few extreme pairs, not a global difference.
-  `--cle-guard BITS` skips those pairs; at 4 bits it is byte-identical on both supported
-  families. [Spans, threshold and parity](BENCHMARKS.md#the-cle-stability-guard-what-to-threshold-on-and-what-it-costs-2026-09-09-desktop-2). Ignition currently refuses `--cle` on these graphs, but
+  2.36 bits on ResNet50 and 1.81 on MODNet against **42.20** on RegNetX-002 and **72.62** on
+  ResNeXt-50 -- the last two measured with the depthwise **triple** formula, which is what those
+  patterns actually are. `--cle-guard BITS` skips a triple over the threshold and never touches a
+  pair, because no single cut separates the populations: ten of ResNeXt-50's destructive triples
+  sit at 2.2-3.4 bits, inside ResNet50's beneficial range. At **2 bits** it recovers RegNetX-002 to
+  66.20% and ResNeXt-50 to 68.90% while leaving ResNet50 and MODNet byte-identical; at 4 it lets
+  five of RegNetX's fourteen through and reads 25.60%, worse than either extreme. Unguarded,
+  Ignition now **refuses to emit** these models -- the post-CLE activation is nonfinite in float16.
+  [Triple path, spans and results](BENCHMARKS.md#depthwise-cle-triples-implemented-and-the-guard-narrowed-to-them-2026-09-09-desktop-2). Ignition currently refuses `--cle` on these graphs, but
   only because the depthwise path is unimplemented, so that is fail-closed by accident rather than
   a guard. [Full matrix, scale grids and caveats](BENCHMARKS.md#regnetx-002-and-resnext-50-recovered-the-collapse-is-cle-not-a-hardware-bound-2026-09-09-desktop-2).
 
