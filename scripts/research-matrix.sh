@@ -12,6 +12,8 @@
 # or name one pair -- resnet50_cle, resnet50_no-cle, yolov8n_cle, modnet_cle -- to
 # rerun just that family's legacy/dual pair into a fresh tag.
 # Each case has its own immutable log, resource limit and host/device guard.
+# calibration-time is the only timing-eligible calibration suite, so its cases wait
+# up to 30 s for a clear host, as the memory and gemm cases already do.
 # The first failure stops the matrix; keep that evidence and use a new tag to rerun.
 
 . "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
@@ -58,12 +60,12 @@ calibration_case() {
             src="$assets/models/modnet/modnet_cut_fp32.onnx"; data="$assets/data/modnet_calib"
             cfg="$assets/models/modnet/preprocess_config.json" ;;
     esac
-    local checks=() reference_args=()
-    if [ "$suite" = calibration-dual ]; then checks=(--checks-only); fi
+    local checks=() reference_args=() gate=()
+    if [ "$suite" = calibration-dual ]; then checks=(--checks-only); else gate=(--wait-clear 30); fi
     if [ "$method" != legacy ]; then
         reference_args=(--reference "$base/${family}_${cle}_legacy_1.onnx")
     fi
-    bash scripts/research-lowlevel.sh "${checks[@]}" --seconds 900 --rss-gib 16 \
+    bash scripts/research-lowlevel.sh "${checks[@]}" "${gate[@]}" --seconds 900 --rss-gib 16 \
         --log "results/quant/alphabet_${tag}_${name}.log" -- python tools/quant_calib_alphabet.py \
         --in-model "$src" --calib-dir "$data" --cfg-path "$cfg" "${reference_args[@]}" \
         --out "$base/$name.onnx" --method "$method" --limit 64 "$flag"
