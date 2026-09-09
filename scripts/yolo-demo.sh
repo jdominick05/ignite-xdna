@@ -82,7 +82,13 @@ fi
 SECS=()
 [ -n "$SECONDS_ARG" ] && SECS=(--max-seconds "$SECONDS_ARG")
 
-npu_env "$LOG"
+# The witness goes BESIDE the log, never into it: npu_env appends the host-load
+# sample to whatever path it is given, and run_logged's tee truncates the log
+# afterwards -- so passing "$LOG" here silently loses the contention record.
+# load_witness derives the name so two variants cannot share one witness.
+WITNESS=""
+[ -n "$LOG" ] && WITNESS="$(load_witness "$LOG")"
+npu_env "$WITNESS"
 step "webcam demo -- $MODEL on ${EP^^}, press q in the window to quit"
 
 CMD=(python pipelines/yolov8n/4_detect.py
