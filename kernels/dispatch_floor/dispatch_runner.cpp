@@ -12,7 +12,7 @@
 //
 // This host removes Python entirely. It loads the SAME compiled design the Python
 // harness resolved out of ~/.npu/cache/ -- same final.xclbin, same insts.bin, same
-// argument layout -- and drives it three ways:
+// argument layout -- and drives it four ways:
 //
 //   single      one dispatch at a time, kernel(...) + wait().  Mirrors pyxrt's ~140 us
 //               single-dispatch path.  This is the number that says whether that floor
@@ -26,6 +26,15 @@
 //               already executing", and add() only requires the list not be executing,
 //               so re-executing a waited list is the documented path.  This is the
 //               "cached handles + persistent kernel loop" arm.
+//   built       identical to `rebuild` except the timer starts BEFORE the construction
+//               loop, so it includes xrt::run creation, set_arg and add.  It exists
+//               because `rebuild` does NOT: its t0 is taken after the build loop, so the
+//               rebuild-vs-persistent gap is first-execute-of-a-fresh-list versus
+//               re-execute-of-a-used-one, NOT the cost of constructing the list.  An
+//               earlier version of this log attributed that gap to construction without
+//               having timed construction at all; `built` minus `rebuild` is the
+//               measured construction cost, and this arm is why the claim is now
+//               measured rather than inferred.
 //
 // WHAT IS AND IS NOT MEASURED
 // ---------------------------
@@ -48,7 +57,9 @@
 // USAGE
 //   scripts\build_dispatch_runner.bat            (builds kernels\dispatch_floor\dispatch_runner.exe)
 //   dispatch_runner.exe --xclbin <path> --insts <path> [flags]
-//   dispatch_runner.exe --cache-newest           (resolve the design out of ~/.npu/cache/)
+//   (--cache-newest-unsafe exists but takes the NEWEST cache entry, which is how the
+//    wrong design got timed once -- prefer explicit --xclbin/--insts, as
+//    scripts/run-dispatch-cpp.sh does by asking IRON which entry it actually used)
 //
 // The design is NOT compiled here -- run kernels/dispatch_floor/measure_runlist.py once
 // to populate the IRON cache, then point this at what it resolved.  Nothing is written
@@ -192,7 +203,7 @@ static void set_args(xrt::run &r, xrt::bo &insts_bo, uint32_t n_words, BufSet &s
 
 int main(int argc, char **argv) {
     std::string xclbin_path, insts_path, entry_name = "(given on the command line)";
-    std::string modes = "single,rebuild,persistent";
+    std::string modes = "single,rebuild,built,persistent";
     std::string batches = "1,2,4,8,16,32,64";
     int payload = 4096, iters = 100, warmup = 5;
     bool use_cache = false;
@@ -205,7 +216,7 @@ int main(int argc, char **argv) {
         };
         if (a == "--xclbin") xclbin_path = next();
         else if (a == "--insts") insts_path = next();
-        else if (a == "--cache-newest") use_cache = true;
+        else if (a == "--cache-newest-unsafe") use_cache = true;
         else if (a == "--payload") payload = std::stoi(next());
         else if (a == "--iters") iters = std::stoi(next());
         else if (a == "--warmup") warmup = std::stoi(next());
@@ -216,13 +227,19 @@ int main(int argc, char **argv) {
                 "dispatch_runner -- C++ XRT host for the AIE dispatch floor\n\n"
                 "  --xclbin PATH      final.xclbin of a compiled IRON design\n"
                 "  --insts PATH       insts.bin for the same design\n"
-                "  --cache-newest     resolve both out of ~/.npu/cache/ (newest entry\n"
-                "                     holding BOTH files), the same rule measure_runlist.py uses\n"
+                "  --cache-newest-unsafe\n"
+                "                     resolve both out of ~/.npu/cache/ by taking the NEWEST\n"
+                "                     entry holding both files. THIS IS THE HEURISTIC THAT\n"
+                "                     TIMED THE WRONG DESIGN -- see section 0 of\n"
+                "                     results/aie/dispatch_cpp_runlist_npu.log. Any other\n"
+                "                     design compiled more recently wins, and its argument\n"
+                "                     layout is not this one's. Prefer --xclbin/--insts from\n"
+                "                     scripts/run-dispatch-cpp.sh, which asks IRON directly.\n"
                 "  --payload N        int32 element count per buffer (default 4096)\n"
                 "  --iters N          timed iterations per point (default 100)\n"
                 "  --warmup N         untimed warmup dispatches (default 5)\n"
                 "  --batch-sizes L    comma-separated (default 1,2,4,8,16,32,64)\n"
-                "  --modes L          any of single,rebuild,persistent (default all three)\n";
+                "  --modes L          any of single,rebuild,built,persistent (default all four)\n";
             return 0;
         } else {
             std::cerr << "unknown flag: " << a << "\n";
@@ -231,6 +248,10 @@ int main(int argc, char **argv) {
     }
 
     if (use_cache && xclbin_path.empty()) {
+        std::cerr << "WARNING: --cache-newest-unsafe takes the NEWEST ~/.npu/cache/ entry.\n"
+                     "         This is the heuristic that timed the wrong design (section 0 of\n"
+                     "         results/aie/dispatch_cpp_runlist_npu.log). Verify the instruction\n"
+                     "         word count below matches the design you meant.\n";
         if (!resolve_from_cache(xclbin_path, insts_path, entry_name)) {
             std::cerr << "ERROR: no ~/.npu/cache/ entry holding both final.xclbin and insts.bin.\n"
                          "       Run kernels/dispatch_floor/measure_runlist.py once to populate it.\n";
@@ -355,6 +376,43 @@ int main(int argc, char **argv) {
                 bool ok = true;
                 for (auto &s : sets) ok = ok && verify_output(s, payload);
                 row("rebuild", batch, summarize(t, batch), ok);
+            }
+        }
+
+        // ---------------- built: rebuild, with construction INSIDE the timer ----------
+        // `built` minus `rebuild` is the measured cost of constructing a runlist.
+        if (want("built")) {
+            for (int batch : batch_list) {
+                std::vector<BufSet> sets;
+                sets.reserve(batch);
+                for (int i = 0; i < batch; ++i) {
+                    sets.push_back(make_bufset(device, kernel, payload));
+                    fill_input(sets.back(), payload);
+                }
+                for (int i = 0; i < warmup; ++i) {
+                    auto r = kernel(kOpcode, insts_bo, n_words, sets[0].a, sets[0].b, sets[0].c);
+                    r.wait();
+                }
+                std::vector<double> t;
+                t.reserve(iters);
+                for (int i = 0; i < iters; ++i) {
+                    auto t0 = clk::now();               // BEFORE the build loop
+                    std::vector<xrt::run> runs;
+                    runs.reserve(batch);
+                    xrt::runlist rl(context);
+                    for (int j = 0; j < batch; ++j) {
+                        xrt::run r(kernel);
+                        set_args(r, insts_bo, n_words, sets[j]);
+                        runs.push_back(r);
+                        rl.add(runs.back());
+                    }
+                    rl.execute();
+                    rl.wait();
+                    t.push_back(std::chrono::duration<double, std::micro>(clk::now() - t0).count());
+                }
+                bool ok = true;
+                for (auto &s : sets) ok = ok && verify_output(s, payload);
+                row("built", batch, summarize(t, batch), ok);
             }
         }
 

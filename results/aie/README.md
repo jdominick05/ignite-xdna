@@ -639,8 +639,14 @@ same design, same sitting, 671.5 us (IRON unbatched) / 498.5 us (IRON batched 64
 ~500 us host share is work a cached-handle host pays once at startup (33-60 ms) rather than per
 call. **Four thresholds now, not three**, none of them retracted. Two limits stand: batching
 only pays from N >= 4-8, and a single dispatch costs ~108 us even in C++, of which only
-~20-30 us was ever the binding. Persistent runlists buy almost nothing (~20 us of construction,
-gone by N=8) — the win is not being IRON, not reusing the list. **Also fixes a wrong-design
+~20-30 us was ever the binding. Persistent runlists buy ~9% at N=64 end-to-end (40.3 -> 36.8 us)
+and 1.40x at N=1 — the win is overwhelmingly not being IRON, not reusing the list. **This log
+corrects its own first version**, which said the rebuild/persistent gap was ~20 us of runlist
+CONSTRUCTION: construction sits outside the timed region in every arm, so it had not been
+measured at all. A `built` arm that times it properly puts construction at ~18 us fixed plus
+~3.3 us per run added — it grows with the batch (~220 us for a 64-run list) rather than
+amortising — while the fresh-versus-reused EXECUTION gap is ~27 us at N=1 and gone by N=8.
+**Also fixes a wrong-design
 bug** in `measure_runlist.py`: its "newest cache entry holding both files" rule excluded nothing
 (every IRON design writes `insts.bin`) and timed a 1052-instruction-word design as if it were
 the 75-word passthrough, reporting 777.7 us and FAILED VERIFICATION; it now captures the paths

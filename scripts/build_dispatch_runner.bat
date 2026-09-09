@@ -71,4 +71,4 @@ if errorlevel 1 (
 if exist kernels\dispatch_floor\dispatch_runner.obj del kernels\dispatch_floor\dispatch_runner.obj
 
 echo [SUCCESS] built kernels\dispatch_floor\dispatch_runner.exe
-echo          try: kernels\dispatch_floor\dispatch_runner.exe --cache-newest --iters 100
+echo          try: kernels\dispatch_floor\dispatch_runner.exe --xclbin ... --insts ...  (see scripts/run-dispatch-cpp.sh)
