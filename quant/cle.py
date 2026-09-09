@@ -39,6 +39,9 @@ class CleReport:
     append_bias: bool
     use_threshold: bool
     scaled: dict = field(default_factory=dict)
+    # None when the guard is off, which is the default and the parity path.
+    max_scale_log2: float | None = None
+    skipped_unstable: list = field(default_factory=list)
 
 
 def _group(node) -> int | None:
@@ -196,8 +199,26 @@ def _calc_scale(head_weights: np.ndarray, tail_weights: np.ndarray, weight_thres
     return scale
 
 
+def _scale_span_log2(scale) -> float:
+    """Widest power-of-two excursion in the per-channel scale, in bits.
+
+    CLE multiplies the head's weights by this vector and the tail's by its reciprocal, so
+    the weight ranges stay tidy however extreme it gets -- measured, CLE *narrows* the
+    weight positions on RegNetX-002 (5..10 into 6..8) and ResNeXt-50 (4..9 into 5..8) even
+    as it destroys them. What it does not rescale is the activation between the two layers,
+    which is multiplied by this vector and then calibrated. That is the quantity worth
+    bounding, and it separates cleanly: ResNet50, where CLE is worth +10.8 top-1, spans
+    6.1 bits; RegNetX-002 spans 66.3 and ResNeXt-50 119.4, and both score 0.10%.
+    """
+    live = np.asarray(scale, dtype=np.float64)
+    live = live[np.isfinite(live) & (live > 0)]
+    if live.size == 0:
+        return 0.0
+    return float(np.abs(np.log2(live)).max())
+
+
 def equalize_pair(g: Graph, head, tail, weight_threshold: float, append_bias: bool,
-                  use_threshold: bool) -> dict:
+                  use_threshold: bool, max_scale_log2: float | None = None) -> dict:
     """_cross_layer_equalize for a Conv->Conv pair with group 1 on both sides."""
     if head.op_type != "Conv" or tail.op_type != "Conv":
         raise NotImplementedError("CLE with a Gemm in the pair is not implemented")
@@ -227,17 +248,24 @@ def equalize_pair(g: Graph, head, tail, weight_threshold: float, append_bias: bo
     scale = _calc_scale(head_weights, tail_weights, weight_threshold, use_threshold)
     if scale.dtype != np.float32:
         raise ValueError("CLE scale must stay float32")
+    span = _scale_span_log2(scale)
+    if max_scale_log2 is not None and span > max_scale_log2:
+        # Leave the pair untouched. Equalising it would multiply the activation between
+        # the two layers by this scale, and nothing downstream rescales it back.
+        return {"skipped": "unstable scale", "channels": int(oc), "scale_span_log2": span,
+                "scale_min": float(scale.min()), "scale_max": float(scale.max())}
     g.set_initializer(head.input[1], head_w * scale.reshape(-1, 1, 1, 1))
     if head_b is not None:
         g.set_initializer(head.input[2], head_b * scale)
     g.set_initializer(tail.input[1], tail_w * (np.float32(1) / scale.reshape(1, -1, 1, 1)))
     return {"channels": int(oc), "scale_min": float(scale.min()), "scale_max": float(scale.max()),
-            "unit_scales": int(np.count_nonzero(scale == 1))}
+            "unit_scales": int(np.count_nonzero(scale == 1)), "scale_span_log2": span}
 
 
 def cross_layer_equalize(g: Graph, *, steps: int = 1, balance_method: str = "max",
                          weight_threshold: float = 0.5, append_bias: bool = True,
-                         use_threshold: bool = True, diff_threshold: float = 2e-7) -> CleReport:
+                         use_threshold: bool = True, diff_threshold: float = 2e-7,
+                         max_scale_log2: float | None = None) -> CleReport:
     """cle_transforms: match, then process_cle_transforms with the source's step loop."""
     if balance_method != "max":
         raise ValueError("The source implements only the max balance method")
@@ -245,14 +273,20 @@ def cross_layer_equalize(g: Graph, *, steps: int = 1, balance_method: str = "max
     by_name = {n.name: n for n in g.nodes()}
     targets = [n for n in g.nodes() if n.op_type in TARGETS]
     scaled = {}
+    skipped_unstable = []
     diff, count, converge_count, step_count = 10.0, 0, 20, 0
     while diff > diff_threshold and count < converge_count:
         if steps >= 0 and step_count >= steps:
             break
         previous = {n.input[1]: g.initializer(n.input[1]) for n in targets}
         for index, pair in enumerate(pairs):
-            scaled[f"{step_count}:{index}:{pair.head}->{pair.tail}"] = equalize_pair(
-                g, by_name[pair.head], by_name[pair.tail], weight_threshold, append_bias, use_threshold)
+            key = f"{step_count}:{index}:{pair.head}->{pair.tail}"
+            scaled[key] = equalize_pair(
+                g, by_name[pair.head], by_name[pair.tail], weight_threshold, append_bias,
+                use_threshold, max_scale_log2)
+            if scaled[key].get("skipped") == "unstable scale":
+                skipped_unstable.append({"pair": key, **{k: v for k, v in scaled[key].items()
+                                                         if k != "skipped"}})
         diff_tmp = 0.0
         for node in targets:
             diff_tmp += float(np.mean(np.abs(np.float64(previous[node.input[1]] - g.initializer(node.input[1])))))
@@ -265,4 +299,5 @@ def cross_layer_equalize(g: Graph, *, steps: int = 1, balance_method: str = "max
     return CleReport(pattern_count=len(pairs), unique_pairs=len({(p.head, p.tail) for p in pairs}),
                      pairs=[asdict(p) for p in pairs], steps=step_count, last_diff=diff,
                      weight_threshold=weight_threshold, append_bias=append_bias,
-                     use_threshold=use_threshold, scaled=scaled)
+                     use_threshold=use_threshold, scaled=scaled,
+                     max_scale_log2=max_scale_log2, skipped_unstable=skipped_unstable)

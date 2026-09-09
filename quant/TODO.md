@@ -114,12 +114,19 @@ recorded in the handoff and Git history rather than treated as future features.
   The Zero-Concat variant and the listing sweep stay open.
 - [ ] Consider histogram calibration only with measured error/accuracy and memory
   tradeoffs against the exact-sample store; label approximation explicitly.
-- [ ] Add a CLE stability guard. Ignition refuses `--cle` on grouped/depthwise graphs today
-  only because `equalize_pair` raises on the depthwise triple, which is fail-closed by accident.
-  A guard that measures each pair's post-transform range and skips or damps it would let CLE run
-  where it is worth 10.8-12.2 points and stop it where it costs 66. Evidence for the failure it
-  must catch: [the collapse is CLE](../docs/BENCHMARKS.md#regnetx-002-and-resnext-50-recovered-the-collapse-is-cle-not-a-hardware-bound-2026-09-09-desktop-2).
-  Gate on the RegNetX-002 and ResNeXt-50 rows plus no change to the three parity families.
+- [x] Add a CLE stability guard. Closed 2026-09-09: `cross_layer_equalize(max_scale_log2=...)`,
+  `python -m quant quantize --cle-guard BITS`, off by default. **The signal is not the
+  post-transform weight range**, as this item originally assumed -- CLE narrows the weight
+  positions even on the models it destroys. It is the per-channel scale, which multiplies the
+  activation between the pair and is never rescaled: worst pair 2.52 bits on ResNet50 and 1.81 on
+  MODNet against 17.11 on RegNetX-002 and 33.21 on ResNeXt-50. At 4 bits the guard is
+  byte-identical on both supported families, and firing it at 2 bits changes ResNet50's output as
+  a positive control. [Spans, threshold and parity](../docs/BENCHMARKS.md#the-cle-stability-guard-what-to-threshold-on-and-what-it-costs-2026-09-09-desktop-2).
+- [ ] Implement the depthwise CLE triple path, which is what blocks proving the guard recovers
+  anything. `find_pairs` raises `Depthwise CLE triples are not implemented` on both RegNetX-002 and
+  ResNeXt-50, so neither can be equalized by Ignition at all and the guard's accuracy claim stays
+  untested. Gate on a fresh same-listing oracle for a depthwise graph before trusting the path,
+  then re-run the two collapse models with and without the guard.
 - [x] RegNetX-002 is a fourth family reproduced with no code change. Its export is
   Conv/Relu/Add/GlobalAveragePool/Flatten/Gemm at 224, routes to `folded_resnet`, and Ignition's
   no-CLE artifact is byte-identical to a fresh Quark no-CLE oracle: 90/90 int8 initializers,

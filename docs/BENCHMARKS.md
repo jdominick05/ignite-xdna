@@ -4648,6 +4648,67 @@ Neither is measured here, and the second trades latency for correctness.
 
 ---
 
+### The CLE stability guard: what to threshold on, and what it costs (2026-09-09, Desktop 2)
+
+Cross-layer equalization destroys RegNetX-002 and ResNeXt-50 and is worth 10.8 top-1 points on
+ResNet50, so the useful question is what separates the two cases. The obvious candidate is wrong.
+
+**It is not the weight range.** Applying Quark's own `cle_transforms` to the float exports and
+measuring every Conv weight before and after, CLE **narrows** the power-of-two positions on both
+models it destroys -- RegNetX-002 from 5..10 into 6..8, ResNeXt-50 from 4..9 into 5..8, the largest
+single move being three positions
+([log](../results/quant/cle_pair_spans_desktop2_20260909.log) covers the pair analysis; the range
+scan is `scratch/cle_ranges.py`). That is CLE working as designed, and it is why this was never
+caught by looking at weights: the transform multiplies the head by a per-channel vector `s` and the
+tail by its reciprocal, so weight ranges stay tidy no matter how extreme `s` gets.
+
+**It is the per-channel scale itself.** What nothing rescales is the activation *between* the two
+layers, which is multiplied by `s` and then calibrated. Measuring the widest power-of-two excursion
+in `s` per equalized pair, on the same axis for all four models:
+
+| Model | CLE's effect | Pairs | Worst pair | Median | Pairs over 4 bits |
+|---|---|---|---|---|---|
+| ResNet50 | **helps**, +10.8 top-1 | 33 | **2.52 bits** | 1.63 | **0** |
+| MODNet-Cut | used by default | 9 | **1.81 bits** | 0.97 | **0** |
+| RegNetX-002 | **destroys**, 66.20 -> 0.10 | 27 | **17.11 bits** | 1.58 | **9** |
+| ResNeXt-50 32x4d | **destroys**, 68.90 -> 0.10 | 33 | **33.21 bits** | 1.95 | **4** |
+
+The medians are almost identical across all four -- 1.63, 0.97, 1.58, 1.95 -- so this is not a
+global difference in how equalizable the architectures are. It is a handful of extreme pairs, which
+is exactly what a per-pair test catches. A scale span of 33 bits means an activation multiplied by
+about 8.6 billion before anything measures its range, and `quant/calib.py` clamps such a range to
+`float32.max / 2`, which lands at position -120 -- the number the RegNetX audit reports.
+
+**The guard.** `quant/cle.py` now takes `max_scale_log2`, exposed as `python -m quant quantize
+--cle-guard BITS` and `scripts/quant-own.sh --cle-guard BITS`. A pair whose span exceeds the
+threshold is left untouched and recorded in `CleReport.skipped_unstable` with its span and channel
+count. **It is off by default**, so the parity path is unchanged.
+
+At **4 bits** it is free on every family Ignition supports -- 1.6x above the worst healthy pair and
+4x below the damage:
+
+| Run | Guard | Result |
+|---|---|---|
+| ResNet50 `--cle`, replayed against the Quark oracle | off | `GRAPH_DIFF_PASS True` |
+| ResNet50 `--cle` | 16 bits | `GRAPH_DIFF_PASS True` |
+| ResNet50 `--cle` | 3 bits | `GRAPH_DIFF_PASS True` |
+| ResNet50 `--cle` | **2 bits** | **`GRAPH_DIFF_PASS False`** -- fires as intended, 2 bits is below ResNet50's 2.52 |
+| MODNet-Cut `--cle` | 4 bits | `GRAPH_DIFF_PASS True` |
+
+The 2-bit row is the positive control: the guard does change the output when it fires, and names
+the pairs it skipped ([logs](../results/quant/) under `cleguard_*`).
+
+**What is not shown, and it is the important caveat.** The guard has **not** been demonstrated to
+recover RegNetX-002 or ResNeXt-50, because Ignition cannot equalize either graph at all: both raise
+`Depthwise CLE triples are not implemented` in `find_pairs`, and that path is unwritten. Their spans
+above come from Quark's pattern matcher with Ignition's `_calc_scale` applied to the float weights,
+which is the same arithmetic Ignition would use but is not the same thing as Ignition running it.
+So this guard is a defence for graphs Ignition already supports, and the measured separation is the
+argument for its threshold -- not an accuracy result. Closing that gap needs the depthwise triple
+path implemented and gated against a fresh oracle first.
+
+---
+
 ## Native Windows XRT driver latency and DPU microcode disassembly
 
 A characterization of AMD's native Windows kernel driver (`amdxe.sys`) and userspace runtime (`pyxrt.pyd`, Python 3.13) on Desktop 2 (Ryzen 7 8700G, Phoenix XDNA1 NPU), measuring the driver floor, unified memory synchronization bandwidth, command submission overhead, and reverse-engineering the compiled DPU microcode transaction stream.

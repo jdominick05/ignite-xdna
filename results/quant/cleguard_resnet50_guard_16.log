@@ -1,0 +1,399 @@
+Ignition 0.1.0a1: folded_resnet / CLE
+IMPORT_BLOCK_ACTIVE quark torch
+{
+  "producer": "Ignition",
+  "producer_version": "0.1.0a1",
+  "family": "folded_resnet",
+  "scope": "folded_resnet_cle",
+  "format": "XINT8_QDQ",
+  "mode": "reemit_from_positions",
+  "cle": true,
+  "input_sha256": "d999c960ea12f9481e6fb43aab28ea3e2741c712fc4c30997b07d9b725cb87e6",
+  "versions": {
+    "numpy": "1.26.4",
+    "onnx": "1.18.0"
+  },
+  "simplify": {},
+  "prepare": {},
+  "scales_from_sha256": "2df63ef320dcdb49297546b3b1c41b5e7d7f3300b278ade621a0b71c6042f01f",
+  "reference_refine": {
+    "loops": 1,
+    "changes_by_rule": {},
+    "log": [],
+    "converged": true
+  },
+  "emit": {
+    "activations": 74,
+    "initializers": 108,
+    "pruned": 49
+  },
+  "gap_mul": {
+    "scaled": 1,
+    "skipped_not_square": []
+  },
+  "hardsigmoid": {
+    "replaced": 0,
+    "scaled": 0
+  },
+  "refine": {
+    "loops": 1,
+    "changes_by_rule": {},
+    "log": [],
+    "converged": true
+  },
+  "output_sha256": "eafed96b7096caed5a306a94ed1e6edcdae6adc81c4d13a3fb2abbc9ee8e46ab",
+  "wall_seconds": 6.6454608000058215,
+  "quark_imported": false,
+  "torch_imported": false
+}
+CLE_REPORT {
+  "pattern_count": 33,
+  "unique_pairs": 32,
+  "pairs": [
+    {
+      "head": "/layer1/layer1.0/conv1/Conv",
+      "tail": "/layer1/layer1.0/conv2/Conv",
+      "chain": [
+        "/layer1/layer1.0/conv1/Conv_output_0",
+        "/layer1/layer1.0/act1/Relu_output_0",
+        "/layer1/layer1.0/conv2/Conv_output_0"
+      ],
+      "size": 3
+    },
+    {
+      "head": "/layer1/layer1.0/conv2/Conv",
+      "tail": "/layer1/layer1.0/conv3/Conv",
+      "chain": [
+        "/layer1/layer1.0/conv2/Conv_output_0",
+        "/layer1/layer1.0/act2/Relu_output_0",
+        "/layer1/layer1.0/conv3/Conv_output_0"
+      ],
+      "size": 3
+    },
+    {
+      "head": "/layer1/layer1.1/conv1/Conv",
+      "tail": "/layer1/layer1.1/conv2/Conv",
+      "chain": [
+        "/layer1/layer1.1/conv1/Conv_output_0",
+        "/layer1/layer1.1/act1/Relu_output_0",
+        "/layer1/layer1.1/conv2/Conv_output_0"
+      ],
+      "size": 3
+    },
+    {
+      "head": "/layer1/layer1.1/conv2/Conv",
+      "tail": "/layer1/layer1.1/conv3/Conv",
+      "chain": [
+        "/layer1/layer1.1/conv2/Conv_output_0",
+        "/layer1/layer1.1/act2/Relu_output_0",
+        "/layer1/layer1.1/conv3/Conv_output_0"
+      ],
+      "size": 3
+    },
+    {
+      "head": "/layer1/layer1.2/conv1/Conv",
+      "tail": "/layer1/layer1.2/conv2/Conv",
+      "chain": [
+        "/layer1/layer1.2/conv1/Conv_output_0",
+        "/layer1/layer1.2/act1/Relu_output_0",
+        "/layer1/layer1.2/conv2/Conv_output_0"
+      ],
+      "size": 3
+    },
+    {
+      "head": "/layer1/layer1.2/conv2/Conv",
+      "tail": "/layer1/layer1.2/conv3/Conv",
+      "chain": [
+        "/layer1/layer1.2/conv2/Conv_output_0",
+        "/layer1/layer1.2/act2/Relu_output_0",
+        "/layer1/layer1.2/conv3/Conv_output_0"
+      ],
+      "size": 3
+    },
+    {
+      "head": "/layer2/layer2.0/conv1/Conv",
+      "tail": "/layer2/layer2.0/conv2/Conv",
+      "chain": [
+        "/layer2/layer2.0/conv1/Conv_output_0",
+        "/layer2/layer2.0/act1/Relu_output_0",
+        "/layer2/layer2.0/conv2/Conv_output_0"
+      ],
+      "size": 3
+    },
+    {
+      "head": "/layer2/layer2.0/conv2/Conv",
+      "tail": "/layer2/layer2.0/conv3/Conv",
+      "chain": [
+        "/layer2/layer2.0/conv2/Conv_output_0",
+        "/layer2/layer2.0/act2/Relu_output_0",
+        "/layer2/layer2.0/conv3/Conv_output_0"
+      ],
+      "size": 3
+    },
+    {
+      "head": "/layer2/layer2.1/conv1/Conv",
+      "tail": "/layer2/layer2.1/conv2/Conv",
+      "chain": [
+        "/layer2/layer2.1/conv1/Conv_output_0",
+        "/layer2/layer2.1/act1/Relu_output_0",
+        "/layer2/layer2.1/conv2/Conv_output_0"
+      ],
+      "size": 3
+    },
+    {
+      "head": "/layer2/layer2.1/conv2/Conv",
+      "tail": "/layer2/layer2.1/conv3/Conv",
+      "chain": [
+        "/layer2/layer2.1/conv2/Conv_output_0",
+        "/layer2/layer2.1/act2/Relu_output_0",
+        "/layer2/layer2.1/conv3/Conv_output_0"
+      ],
+      "size": 3
+    },
+    {
+      "head": "/layer2/layer2.2/conv1/Conv",
+      "tail": "/layer2/layer2.2/conv2/Conv",
+      "chain": [
+        "/layer2/layer2.2/conv1/Conv_output_0",
+        "/layer2/layer2.2/act1/Relu_output_0",
+        "/layer2/layer2.2/conv2/Conv_output_0"
+      ],
+      "size": 3
+    },
+    {
+      "head": "/layer2/layer2.2/conv2/Conv",
+      "tail": "/layer2/layer2.2/conv3/Conv",
+      "chain": [
+        "/layer2/layer2.2/conv2/Conv_output_0",
+        "/layer2/layer2.2/act2/Relu_output_0",
+        "/layer2/layer2.2/conv3/Conv_output_0"
+      ],
+      "size": 3
+    },
+    {
+      "head": "/layer2/layer2.3/conv1/Conv",
+      "tail": "/layer2/layer2.3/conv2/Conv",
+      "chain": [
+        "/layer2/layer2.3/conv1/Conv_output_0",
+        "/layer2/layer2.3/act1/Relu_output_0",
+        "/layer2/layer2.3/conv2/Conv_output_0"
+      ],
+      "size": 3
+    },
+    {
+      "head": "/layer2/layer2.3/conv2/Conv",
+      "tail": "/layer2/layer2.3/conv3/Conv",
+      "chain": [
+        "/layer2/layer2.3/conv2/Conv_output_0",
+        "/layer2/layer2.3/act2/Relu_output_0",
+        "/layer2/layer2.3/conv3/Conv_output_0"
+      ],
+      "size": 3
+    },
+    {
+      "head": "/layer3/layer3.0/conv1/Conv",
+      "tail": "/layer3/layer3.0/conv2/Conv",
+      "chain": [
+        "/layer3/layer3.0/conv1/Conv_output_0",
+        "/layer3/layer3.0/act1/Relu_output_0",
+        "/layer3/layer3.0/conv2/Conv_output_0"
+      ],
+      "size": 3
+    },
+    {
+      "head": "/layer3/layer3.0/conv2/Conv",
+      "tail": "/layer3/layer3.0/conv3/Conv",
+      "chain": [
+        "/layer3/layer3.0/conv2/Conv_output_0",
+        "/layer3/layer3.0/act2/Relu_output_0",
+        "/layer3/layer3.0/conv3/Conv_output_0"
+      ],
+      "size": 3
+    },
+    {
+      "head": "/layer3/layer3.1/conv1/Conv",
+      "tail": "/layer3/layer3.1/conv2/Conv",
+      "chain": [
+        "/layer3/layer3.1/conv1/Conv_output_0",
+        "/layer3/layer3.1/act1/Relu_output_0",
+        "/layer3/layer3.1/conv2/Conv_output_0"
+      ],
+      "size": 3
+    },
+    {
+      "head": "/layer3/layer3.1/conv2/Conv",
+      "tail": "/layer3/layer3.1/conv3/Conv",
+      "chain": [
+        "/layer3/layer3.1/conv2/Conv_output_0",
+        "/layer3/layer3.1/act2/Relu_output_0",
+        "/layer3/layer3.1/conv3/Conv_output_0"
+      ],
+      "size": 3
+    },
+    {
+      "head": "/layer3/layer3.2/conv1/Conv",
+      "tail": "/layer3/layer3.2/conv2/Conv",
+      "chain": [
+        "/layer3/layer3.2/conv1/Conv_output_0",
+        "/layer3/layer3.2/act1/Relu_output_0",
+        "/layer3/layer3.2/conv2/Conv_output_0"
+      ],
+      "size": 3
+    },
+    {
+      "head": "/layer3/layer3.2/conv2/Conv",
+      "tail": "/layer3/layer3.2/conv3/Conv",
+      "chain": [
+        "/layer3/layer3.2/conv2/Conv_output_0",
+        "/layer3/layer3.2/act2/Relu_output_0",
+        "/layer3/layer3.2/conv3/Conv_output_0"
+      ],
+      "size": 3
+    },
+    {
+      "head": "/layer3/layer3.3/conv1/Conv",
+      "tail": "/layer3/layer3.3/conv2/Conv",
+      "chain": [
+        "/layer3/layer3.3/conv1/Conv_output_0",
+        "/layer3/layer3.3/act1/Relu_output_0",
+        "/layer3/layer3.3/conv2/Conv_output_0"
+      ],
+      "size": 3
+    },
+    {
+      "head": "/layer3/layer3.3/conv2/Conv",
+      "tail": "/layer3/layer3.3/conv3/Conv",
+      "chain": [
+        "/layer3/layer3.3/conv2/Conv_output_0",
+        "/layer3/layer3.3/act2/Relu_output_0",
+        "/layer3/layer3.3/conv3/Conv_output_0"
+      ],
+      "size": 3
+    },
+    {
+      "head": "/layer3/layer3.4/conv1/Conv",
+      "tail": "/layer3/layer3.4/conv2/Conv",
+      "chain": [
+        "/layer3/layer3.4/conv1/Conv_output_0",
+        "/layer3/layer3.4/act1/Relu_output_0",
+        "/layer3/layer3.4/conv2/Conv_output_0"
+      ],
+      "size": 3
+    },
+    {
+      "head": "/layer3/layer3.4/conv2/Conv",
+      "tail": "/layer3/layer3.4/conv3/Conv",
+      "chain": [
+        "/layer3/layer3.4/conv2/Conv_output_0",
+        "/layer3/layer3.4/act2/Relu_output_0",
+        "/layer3/layer3.4/conv3/Conv_output_0"
+      ],
+      "size": 3
+    },
+    {
+      "head": "/layer3/layer3.5/conv1/Conv",
+      "tail": "/layer3/layer3.5/conv2/Conv",
+      "chain": [
+        "/layer3/layer3.5/conv1/Conv_output_0",
+        "/layer3/layer3.5/act1/Relu_output_0",
+        "/layer3/layer3.5/conv2/Conv_output_0"
+      ],
+      "size": 3
+    },
+    {
+      "head": "/layer3/layer3.5/conv2/Conv",
+      "tail": "/layer3/layer3.5/conv3/Conv",
+      "chain": [
+        "/layer3/layer3.5/conv2/Conv_output_0",
+        "/layer3/layer3.5/act2/Relu_output_0",
+        "/layer3/layer3.5/conv3/Conv_output_0"
+      ],
+      "size": 3
+    },
+    {
+      "head": "/layer4/layer4.0/conv1/Conv",
+      "tail": "/layer4/layer4.0/conv2/Conv",
+      "chain": [
+        "/layer4/layer4.0/conv1/Conv_output_0",
+        "/layer4/layer4.0/act1/Relu_output_0",
+        "/layer4/layer4.0/conv2/Conv_output_0"
+      ],
+      "size": 3
+    },
+    {
+      "head": "/layer4/layer4.0/conv2/Conv",
+      "tail": "/layer4/layer4.0/conv3/Conv",
+      "chain": [
+        "/layer4/layer4.0/conv2/Conv_output_0",
+        "/layer4/layer4.0/act2/Relu_output_0",
+        "/layer4/layer4.0/conv3/Conv_output_0"
+      ],
+      "size": 3
+    },
+    {
+      "head": "/layer4/layer4.1/conv1/Conv",
+      "tail": "/layer4/layer4.1/conv2/Conv",
+      "chain": [
+        "/layer4/layer4.1/conv1/Conv_output_0",
+        "/layer4/layer4.1/act1/Relu_output_0",
+        "/layer4/layer4.1/conv2/Conv_output_0"
+      ],
+      "size": 3
+    },
+    {
+      "head": "/layer4/layer4.1/conv2/Conv",
+      "tail": "/layer4/layer4.1/conv3/Conv",
+      "chain": [
+        "/layer4/layer4.1/conv2/Conv_output_0",
+        "/layer4/layer4.1/act2/Relu_output_0",
+        "/layer4/layer4.1/conv3/Conv_output_0"
+      ],
+      "size": 3
+    },
+    {
+      "head": "/layer4/layer4.2/conv1/Conv",
+      "tail": "/layer4/layer4.2/conv2/Conv",
+      "chain": [
+        "/layer4/layer4.2/conv1/Conv_output_0",
+        "/layer4/layer4.2/act1/Relu_output_0",
+        "/layer4/layer4.2/conv2/Conv_output_0"
+      ],
+      "size": 3
+    },
+    {
+      "head": "/layer4/layer4.2/conv2/Conv",
+      "tail": "/layer4/layer4.2/conv3/Conv",
+      "chain": [
+        "/layer4/layer4.2/conv2/Conv_output_0",
+        "/layer4/layer4.2/act2/Relu_output_0",
+        "/layer4/layer4.2/conv3/Conv_output_0"
+      ],
+      "size": 3
+    },
+    {
+      "head": "/layer1/layer1.0/conv1/Conv",
+      "tail": "/layer1/layer1.0/conv2/Conv",
+      "chain": [
+        "/layer1/layer1.0/conv1/Conv_output_0",
+        "/layer1/layer1.0/act1/Relu_output_0",
+        "/layer1/layer1.0/conv2/Conv_output_0"
+      ],
+      "size": 3
+    }
+  ],
+  "steps": 1,
+  "last_diff": 0.9202582412929688,
+  "weight_threshold": 0.5,
+  "append_bias": true,
+  "use_threshold": true,
+  "max_scale_log2": 16.0,
+  "skipped_unstable": []
+}
+GRAPH_DIFF {
+  "node_delta": [],
+  "init_exact_mismatch": [],
+  "weight_lsb": {},
+  "weight_changed_elements": {},
+  "compared_int8_initializers": 108
+}
+GRAPH_DIFF_PASS True

@@ -159,7 +159,14 @@
   2..10 and no adjustment fires at all. Placement is identical either way (324/326 for RegNetX),
   which is why this is invisible unless accuracy is actually measured. CLE remains the right
   default for the plain-convolution families where it is worth 10.8-12.2 points on ResNet50 --
-  the rule is to check, not to abandon it. Ignition currently refuses `--cle` on these graphs, but
+  the rule is to check, not to abandon it. **What to check is the per-channel scale, not the
+  weight range**: CLE keeps weights tidy by construction and in fact *narrows* the weight
+  positions on both models it destroys, while the activation between the two layers is
+  multiplied by the scale and never rescaled. Measured per equalized pair, the worst is
+  2.52 bits on ResNet50 and 1.81 on MODNet against **17.11** on RegNetX-002 and **33.21** on
+  ResNeXt-50, with near-identical medians -- a few extreme pairs, not a global difference.
+  `--cle-guard BITS` skips those pairs; at 4 bits it is byte-identical on both supported
+  families. [Spans, threshold and parity](BENCHMARKS.md#the-cle-stability-guard-what-to-threshold-on-and-what-it-costs-2026-09-09-desktop-2). Ignition currently refuses `--cle` on these graphs, but
   only because the depthwise path is unimplemented, so that is fail-closed by accident rather than
   a guard. [Full matrix, scale grids and caveats](BENCHMARKS.md#regnetx-002-and-resnext-50-recovered-the-collapse-is-cle-not-a-hardware-bound-2026-09-09-desktop-2).
 
