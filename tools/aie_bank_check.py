@@ -161,13 +161,22 @@ def report_banks(elf: str) -> dict:
         return {}
     print(f"    own local memory window 0x{base:05x}-0x{base + LOCAL_MEMORY - 1:05x}, "
           f"{NUM_BANKS} banks of {BANK_SIZE // 1024} KB")
+    # A buffer occupies a RANGE, and a 16 KB output tile straddles two 16 KB banks. Its
+    # start address alone is not its bank. Sizes are absent from these ELFs' symbol
+    # table, so each buffer's extent is taken as the gap to the next symbol, which is
+    # exact for a densely packed allocation and is what these builds are.
+    local = sorted(((a, n) for n, a in syms
+                    if base <= a < base + LOCAL_MEMORY and n != STACK_SYM))
     banks: dict[int, list[tuple[str, int]]] = {i: [] for i in range(NUM_BANKS)}
-    for name, addr in syms:
-        if not (base <= addr < base + LOCAL_MEMORY):
-            continue
-        if name == STACK_SYM:
-            continue
-        banks[(addr - base) // BANK_SIZE].append((name, addr))
+    spans: dict[str, tuple[int, int, list[int]]] = {}
+    for idx, (addr, name) in enumerate(local):
+        end = local[idx + 1][0] if idx + 1 < len(local) else base + LOCAL_MEMORY
+        covered = sorted({(a - base) // BANK_SIZE
+                          for a in range(addr, end, BANK_SIZE)} |
+                         {(addr - base) // BANK_SIZE, (end - 1 - base) // BANK_SIZE})
+        spans[name] = (addr, end, covered)
+        for b in covered:
+            banks[b].append((name, addr))
     for i in range(NUM_BANKS):
         entries = banks[i]
         if not entries:
@@ -175,7 +184,9 @@ def report_banks(elf: str) -> dict:
             continue
         print(f"    bank {i}: {len(entries)}")
         for name, addr in entries:
-            print(f"      0x{addr:05x}  {name}")
+            s, e, cov = spans[name]
+            extra = f"  (spans banks {cov})" if len(cov) > 1 else ""
+            print(f"      0x{s:05x}-0x{e - 1:05x}  {(e - s) // 1024:>3} KB  {name}{extra}")
     return banks
 
 

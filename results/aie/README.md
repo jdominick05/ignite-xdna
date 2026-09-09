@@ -271,6 +271,25 @@ padding buffer. Re-read, the int8 GEMM's software body carries **ten** paired-lo
 upper bound. Written up in
 [`docs/BENCHMARKS.md`](../../docs/BENCHMARKS.md#two-loads-in-one-bank-cost-a-cycle-and-the-int8-gemm-has-that-collision-where-bf16-does-not).
 
+**`bank_ab_h12_npu.log`** — H12 run on hardware, and the honest answer is that this machine
+could not resolve it. The intervention is clean: raising the per-core `stack_size` from
+`0xD00` to `0x2000` shifts every local buffer up, moving both A halves wholly into the empty
+bank 3 while B stays in bank 2, with the same kernel source, tile shapes, fifo depths, DMA and
+schedule, and a **byte-identical compiled kernel object** — only the addresses moved, and the
+new layout is exactly what the arithmetic predicted before the build. But across **seven**
+alternating series the two arms overlap and the sign of the difference changes between them:
+best-to-best −4.6%, −2.9%, +2.5%, −2.7%, −0.4%, −5.8%, −1.1%, positive meaning separation was
+faster. The colliding arm's *own* floor drifted **5.0%** between repeats of the identical
+build, larger than the ~3% effect at stake, so a large speedup is excluded and H12 is neither
+confirmed nor refuted. A peer session held about a core throughout; repeat on a quiet machine.
+Validity check recorded: the control's best time sits just under the 2026-09-07 sweep's
+minimum for the identical shape and tile, so the local harness introduces no offset. The route
+that would settle it is the trace unit rather than wall time — read `ACTIVE` against
+`LOCK_STALL` in core cycles inside the dispatch, where host contention cannot reach — which
+needs a trace hook in `whole_array`. Harness `kernels/bank_placement/`; written up in
+[`docs/BENCHMARKS.md`](../../docs/BENCHMARKS.md#two-loads-in-one-bank-cost-a-cycle-and-the-int8-gemm-has-that-collision-where-bf16-does-not).
+
+
 **`pmode_clock_readback_npu.log`** — XRT's `max_clock_frequency_mhz` against power mode
 *and* load, varied together: a 2048³ bf16 GEMM hold with `xrt-smi configure --pmode`
 stepped through all five modes, then the same five idle, the monitor logging clock, mode

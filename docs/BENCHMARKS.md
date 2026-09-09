@@ -1435,11 +1435,25 @@ this document has been calling starvation narrows from 25.4% to between 18% and 
 Moving one input tile into it changes the core's issuing time by a known amount and changes
 nothing about data movement: same bytes, same DMA, same fifo depth, same function bytes.
 
-- **H12.** Placing A and B in different banks on the `whole_array` int8 design will **not**
-  change the measured NPU time, because the core is not the critical path and the per-buffer
-  floor is. Fails if the dispatch speeds up by anything like the ~4% the issuing-cost change
-  predicts, which would mean the design is issue-bound after all. Both outcomes are
-  informative, and it costs one rebuild and one dispatch.
+- **H12 — attempted 2026-09-09, and the machine could not resolve it.** The intervention
+  worked exactly as designed: raising the per-core `stack_size` from `0xD00` to `0x2000` shifts
+  every buffer up, moving both A halves wholly into the empty bank 3 while B stays in bank 2,
+  with the same kernel source, tile shapes, fifo depths, DMA and schedule, and a **byte-identical
+  compiled kernel object**. Only the addresses moved. But across **seven** alternating series
+  the two arms overlap and the sign of the difference changes between series — best-to-best
+  −4.6%, −2.9%, +2.5%, −2.7%, −0.4%, −5.8%, −1.1%, where positive means separating was faster.
+  The colliding arm's *own* floor drifted 5.0% between repeats of the identical build, which is
+  larger than the ~3% effect being looked for. **So a large speedup is excluded and H12 is
+  neither confirmed nor refuted.** Backing log `results/aie/bank_ab_h12_npu.log`; harness
+  `kernels/bank_placement/`. A peer session held about a core throughout, and this should be
+  repeated on a quiet machine.
+  **What would settle it is an instrument this branch already has.** Wall time is the wrong
+  observable for a 3% core-side change on a shared machine; the trace unit is not. Pointing
+  `kernels/pmu_probe/`'s event routing at one core of this design reads `ACTIVE` against
+  `LOCK_STALL` in core cycles, inside the dispatch, where host contention cannot reach. If the
+  floor is real, the separated build's issuing cycles fall by ~96 per call and its lock stall
+  rises by the same, leaving `ACTIVE` unchanged — an equality needing no timing at all. The
+  obstacle is the one `RESEARCH.md` already names: `whole_array` carries no trace hook.
 
 **A tempting join with the driver work, tested and refuted.** Local `main` measures an NPU
 hardware-context-switch penalty of **+747.75 µs** (same-context dispatch 120.25 µs, alternating

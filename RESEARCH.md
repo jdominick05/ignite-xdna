@@ -1774,7 +1774,16 @@ sections above.
   reason this matters beyond one kernel: bank 3 is empty in both builds, so moving an input
   there changes the core's issuing time by a known amount and changes *nothing* about data
   movement — the controlled lever needed to test whether the per-buffer floor or the schedule
-  is the critical path. Also tested and refuted here: the two-process handoff floor is **not**
+  is the critical path. **That test was run on 2026-09-09 and the machine could not resolve
+  it.** The intervention is clean — raising the per-core stack shifts every buffer up, moving A
+  wholly into the empty bank 3, with a byte-identical compiled kernel — but across seven
+  alternating series the arms overlap and the sign of the difference changes between them,
+  while the colliding arm's own floor drifts 5.0% between repeats of the identical build. A
+  large speedup is excluded; the ~3% at stake is not separable from zero. The lesson is about
+  the observable, not the hypothesis: wall time on a shared machine cannot see a 3% core-side
+  change, and the trace unit can, by reading `ACTIVE` against `LOCK_STALL` in core cycles
+  inside the dispatch. That needs a trace hook in `whole_array`, which is the same obstacle
+  already noted above. Also tested and refuted here: the two-process handoff floor is **not**
   the NPU context switch, despite 789.8 µs sitting near a measured 747.75 µs penalty; the floor
   fits 78.4 ns per element with a 147.2 µs intercept at r² 0.9997 and stays conversion-bound.
 - **Candidate model pipelines (Categories A, C, D, E).** Test plans, target shapes, and falsification criteria:
