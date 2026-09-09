@@ -331,6 +331,44 @@ padding buffer. Re-read, the int8 GEMM's software body carries **ten** paired-lo
 upper bound. Written up in
 [`docs/BENCHMARKS.md`](../../docs/BENCHMARKS.md#two-loads-in-one-bank-cost-a-cycle-and-the-int8-gemm-has-that-collision-where-bf16-does-not).
 
+**`im2col_bd_probe_npu.log`** — the two gates on K1's tooling proposal, run BEFORE any conv
+kernel. SILICON 2.6 calls the mem tile's 4-D BD "the one address generator on the chip that can
+do an im2col or a transpose in flight", and K1 proposes moving conv2dk3's ten `vshift`/`vmov`
+bundles onto it. **Gate 1, on paper:** an im2col conv's K*K expansion CANCELS -- every input byte
+feeds C_out MACs -- giving 1/C_out B/MAC, so against the int8 ceiling of 0.03125 B/MAC it is
+stream-bound only below C_out = 32 and has 2x headroom at 64. Bandwidth is not what would kill
+it. **Gate 2, on hardware, and the mechanism fails:** compute-free shim -> memtile -> shim, the
+4-D pattern on the memtile's outbound stream, checked byte-for-byte against a host im2col.
+Non-overlapping patterns pass (k=1: all 256 elements at 16x16, all 64 at 8x8); **every
+overlapping one hangs the device** -- k=2 at 3.52x expansion and k=3 at 6.89x both return
+`ERT_CMD_STATE_TIMEOUT`, as does k=3 with the forwarded fifo given the expanded object type, so
+it is not a length mismatch. k=2 is the smallest overlap a square window can ask for, so the
+boundary is not a large expansion factor. This refutes the ROUTE, not the silicon: the BD field
+widths fit with room to spare, so **do not write a conv kernel against
+`ObjectFifo.forward(dims_to_stream=...)`** -- try a raw BD outside the ObjectFifo abstraction.
+Harness `kernels/im2col_bd/im2col_probe.py`.
+
+**`bank_stall_control_npu.log`** — the positive control for the instrument
+`bank_ab_h12_npu.log` proposed, run BEFORE spending a sitting on it, and **the instrument does
+not work**. A same-bank dual-load conflict has to appear as `MEMORY_STALL`, which
+`pmu_probe_npu.log` had already flagged as never having read nonzero here. In a loop built to
+collide as hard as this design permits, **`MEMORY_STALL` reads 0 in every run of both
+placements at every trip count**, so zero on the GEMM's arms would not distinguish "no conflict"
+from "the event does not fire". No bank-specific event exists to fall back on, and `GROUP_STALL`
+read *exactly* equal to `ACTIVE` in all six eight-event runs. The control did yield a clean
+instruction-matched comparison and found **no rate effect**: colliding costs a *constant* 6
+cycles more at 256, 512 and 2048 iterations, where a one-cycle per-iteration stall would have
+cost 256/512/2048 -- so the INVARIANCE is the finding: those 6 cycles are paid once. Two causes
+fit and neither is ruled out (a fixed loop-setup difference, or a one-time bank-arbitration
+warm-up on first touch of the second bank); the headline does not depend on which. **Caveat that keeps H12 open:** the loop
+runs at 15.0 cycles/iteration for 4 loads, so it has slack to absorb a one-cycle stall. Three
+structural facts fell out, each having cost an attempt: a core's `.bss` is ~16 KB not 64 KB; it
+lies entirely inside ONE 16 KB bank (0x75000-0x77C00, bank 29, fifo buffer at 0x78000, bank 30),
+so no static array can straddle a boundary; and **`stack_size` does not move a kernel's `.bss`**,
+only ObjectFifo buffers. And a trap: at eight traced events the counters are NOT reproducible --
+one identical binary gave 15665/30724/15879 cycles -- because `ACTIVE` overflows the 64 KB trace
+buffer; four events are exact. Harness `kernels/bank_placement/bank_stall_probe.py`.
+
 **`bank_ab_h12_npu.log`** — H12 run on hardware, and the honest answer is that this machine
 could not resolve it. The intervention is clean: raising the per-core `stack_size` from
 `0xD00` to `0x2000` shifts every local buffer up, moving both A halves wholly into the empty
@@ -626,6 +664,32 @@ not built as a third arm); and conv2dk3, the 3x3 middle stage, was not touched a
 likeliest remaining rate-limiter. Host-load witness reads PEER, which can only depress the CPU
 figure and so makes the verdict conservative. Written up in
 [`docs/BENCHMARKS.md`](../../docs/BENCHMARKS.md#the-11-convs-accumulators-were-in-memory-putting-them-in-registers-is-worth-3-and-the-op-class-still-loses).
+
+**`dispatch_cpp_runlist_npu.log`** — the same passthrough through a standalone **C++** XRT host
+(`kernels/dispatch_floor/dispatch_runner.cpp`, no Python in it), run back to back with the
+Python arm in one sitting because latency drifts between sittings. **The 36 us floor is the
+driver's, not the binding's:** C++ reads 36.7 us at N=64 against pyxrt's 35.9 us, the two
+agreeing within ~2% from N=4 up, with Python marginally *faster* at N >= 16. So no host-side
+rewrite goes below it, and `dispatch_runlist_npu.log`'s figure was never pybind overhead.
+**A deployable C++ runner does reach it**, which closes the open item both earlier logs named:
+same design, same sitting, 671.5 us (IRON unbatched) / 498.5 us (IRON batched 64) / ~108 us
+(C++ one call) / **36.7 us** (C++ batched 64) — 13.6x better than batched IRON, because IRON's
+~500 us host share is work a cached-handle host pays once at startup (33-60 ms) rather than per
+call. **Four thresholds now, not three**, none of them retracted. Two limits stand: batching
+only pays from N >= 4-8, and a single dispatch costs ~108 us even in C++, of which only
+~20-30 us was ever the binding. Persistent runlists buy ~9% at N=64 end-to-end (40.3 -> 36.8 us)
+and 1.40x at N=1 — the win is overwhelmingly not being IRON, not reusing the list. **This log
+corrects its own first version**, which said the rebuild/persistent gap was ~20 us of runlist
+CONSTRUCTION: construction sits outside the timed region in every arm, so it had not been
+measured at all. A `built` arm that times it properly puts construction at ~18 us fixed plus
+~3.3 us per run added — it grows with the batch (~220 us for a 64-run list) rather than
+amortising — while the fresh-versus-reused EXECUTION gap is ~27 us at N=1 and gone by N=8.
+**Also fixes a wrong-design
+bug** in `measure_runlist.py`: its "newest cache entry holding both files" rule excluded nothing
+(every IRON design writes `insts.bin`) and timed a 1052-instruction-word design as if it were
+the 75-word passthrough, reporting 777.7 us and FAILED VERIFICATION; it now captures the paths
+`CompilableDesign.compile()` returns and refuses to guess. Written up in
+[`docs/BENCHMARKS.md`](../../docs/BENCHMARKS.md#a-c-xrt-host-reaches-the-device-floor-and-36-µs-is-not-a-python-artifact).
 
 **`iron_batch_npu.log`** — the host path `dispatch_runlist_npu.log` said was missing, written
 and measured. `kernels/dispatch_floor/iron_batch.py` patches IRON's own transaction submit so

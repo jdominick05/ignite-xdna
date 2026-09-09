@@ -334,7 +334,7 @@ were actually charged while their write-ups reasoned with 185 µs.
 
 **Superseded 2026-09-09 for batchable work: the threshold is ~36 µs.** The zero-overhead
 resubmit path is no longer hypothetical — batched `pyxrt.runlist` submission amortises a
-dispatch to **36.3 µs**, 17× below the IRON figure and below the 169.8 µs hardware bracket
+dispatch to **36.3 µs** (**Sitting label**, because two figures for this same measurement class are both live: 36.3 µs is the original 2026-09-09 pyxrt run; the same-sitting rerun in `results/aie/dispatch_cpp_runlist_npu.log` reads **35.9 µs**, and the C++ figure is compared against *that*, not against 36.3 — see this repo's rule that every config being compared must be captured together.), 17× below the IRON figure and below the 169.8 µs hardware bracket
 (`results/aie/dispatch_runlist_npu.log`). It is a **throughput** result: 36 µs holds when 64
 dispatches are in flight together, while a single unbatched call still pays ~140 µs raw or
 617 µs through IRON. So the 617 µs rule still governs one-shot latency-critical work, and
@@ -352,6 +352,26 @@ bf16 kernel batches to its own compute time (GroupNorm at L=150528 → 823.8–8
 835.8 µs measured independently), so a real kernel's configuration cost does not swamp the
 floor; and **batching gives up per-call completion status entirely** — a run inside a runlist
 cannot be polled, so verifying output buffers is your only correctness gate.
+
+**Closed 2026-09-09 in C++: the ~500 µs is IRON's, not the driver's, and you can have 36.7 µs.**
+`dispatch_floor/dispatch_runner.cpp` is a standalone C++ XRT host (build with
+`scripts/build_dispatch_runner.bat`, drive both arms with `scripts/run-dispatch-cpp.sh`). On the
+same cache entry in the same sitting it reaches **36.7 µs** per dispatch at N=64 against pyxrt's
+35.9 µs — agreeing within ~2% from N=4 up — so **the batched floor is the driver's and the
+binding was never in it** (`results/aie/dispatch_cpp_runlist_npu.log`). The stack: 671.5 µs
+(IRON unbatched) · 498.5 µs (IRON batched 64) · ~108 µs (C++ one call) · **36.7 µs** (C++ batched
+64), i.e. 13.6× better than batched IRON, because a cached-handle host pays IRON's per-call work
+once at startup (33–60 ms). **So use ~531 µs for a batched `@iron.jit` design and ~36.7 µs for a
+C++ host** — the latter is now a written, measured runner rather than a hypothetical caller.
+Caveats that survive: batching only pays from N ≥ 4–8; one dispatch costs ~108 µs even in C++
+(only ~20–30 µs of it was the binding); and a persistent runlist is worth ~9% at N=64 end to end
+(40.3 → 36.8 µs), 1.40× at N=1. **Note the correction**: the gap is *not* runlist construction,
+which sits outside the timed region in every arm and had not been measured. Timed properly,
+construction is ~18 µs fixed **plus ~3.3 µs per run added**, so it grows with the batch (~220 µs
+for a 64-run list) instead of amortising; the fresh-versus-reused *execution* gap is ~27 µs at
+N=1 and gone by N=8. If you write a host of your own, note that
+`xrt::runlist` holds references to its runs — declare the run vector **before** the runlist so
+it outlives it, or teardown segfaults rather than raising.
 
 ## `clock_probe/`
 

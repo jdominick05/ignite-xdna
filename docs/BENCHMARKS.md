@@ -792,6 +792,80 @@ that has not been submitted"* — so `runlist.wait()` is the only completion sig
 output buffers is the only correctness gate under batching**, and a batch that silently did
 nothing would otherwise look extremely fast.
 
+### A C++ XRT host reaches the device floor, and 36 µs is not a Python artifact
+
+The two sections above both measured through pybind11, which left one question open and it was
+the one that mattered: is the residual per-call cost the *binding* or the *driver*? A C++ host
+answers it, and the answer decides whether a deployable runner can reach 36 µs or whether
+~500 µs is what a real caller always pays. `kernels/dispatch_floor/dispatch_runner.cpp` is a
+standalone C++ XRT host with no Python in it, driving the **same** cache entry — same
+`final.xclbin`, same `insts.bin`, same argument layout. `scripts/run-dispatch-cpp.sh` runs the
+Python and C++ arms back to back **in one sitting**, because this repo's own rule is that NPU
+latency drifts between sittings independent of any code change. Backing log
+`results/aie/dispatch_cpp_runlist_npu.log`.
+
+Per-dispatch µs on the 32 KB no-compute passthrough, two independent series each:
+
+| N | Python runlist (A / B) | C++ rebuild (A / B) | C++ persistent (A / B) |
+|---|---|---|---|
+| 1 | 144.0 / 146.9 | 148.5 / 152.4 | 125.7 / 123.0 |
+| 4 | 59.8 / 59.7 | 61.5 / 63.2 | 58.4 / 57.9 |
+| 8 | 47.1 / 47.3 | 48.7 / 48.8 | 47.4 / 47.6 |
+| 64 | **35.9 / 35.9** | **36.7 / 36.8** | **36.7 / 36.7** |
+
+**The 36 µs floor belongs to the driver, not to Python.** At N=64 C++ reads 36.7 µs against
+pyxrt's 35.9 µs, in both series, and from N=4 upward the two languages agree within ~2% — with
+Python marginally the *faster* of the two at every N ≥ 16. Removing the binding entirely does
+not move the batched floor. This closes the question the runlist section left open in the
+direction that makes its figure **more** trustworthy: 36.3 µs was never a measurement of pybind
+overhead.
+
+**A deployable C++ runner reaches that floor — the open item is closed.** Same design, same
+sitting, per dispatch: **671.5 µs** unbatched through IRON, **498.5 µs** batched through IRON,
+**36.7 µs** through the C++ host. That is 18.3× better than IRON unbatched and 13.6× better
+than IRON batched. IRON's 460–573 µs host share is *not* irreducible; it is work a cached-handle
+host does once at startup (33–60 ms here) instead of on every call.
+
+**So there are four thresholds, not three**, and which applies depends entirely on the host:
+671.5 µs (IRON, one call) · 498.5 µs (IRON, batched 64) · ~108 µs (C++, one call) · **36.7 µs**
+(C++ or pyxrt, batched 64). Nothing above is retracted — each still governs its own host path.
+
+**The single-dispatch path is only partly Python.** C++ single runs 108.1 / 109.8 µs mean
+against raw pyxrt's 140.8 / 127.0, so roughly 20–30 µs of it is binding overhead — real, but a
+minority. C++ still pays ~108 µs for one dispatch against 36.7 µs batched, so **~70 µs per
+submission is driver-side work that only batching amortises, in any language.** Latency-critical
+single calls do not benefit from the rewrite; throughput does.
+
+**Persistent runlists buy a little, and the mechanism is not the obvious one.** Building the list
+once and re-executing beats rebuilding only at N=1 (125.7 vs 148.5 µs) and N=2, and the two are
+indistinguishable from N=8 up. The first version of this section attributed that to runlist
+*construction* — wrongly: in every arm, and in the Python harness, the timer starts *after* the
+`set_arg`/`add` loop, so construction was never timed at all. A `built` arm that starts the timer
+before the build loop measures it properly: construction costs ~18 µs fixed **plus ~3.3 µs per
+run added**, so it *grows* with the batch (21.7 µs at N=1, ~220 µs to build a 64-run list) rather
+than amortising away. The fresh-versus-reused *execution* gap — what the earlier claim was
+actually pointing at — is ~27 µs at N=1 and gone by N=8. End to end, which is what a caller who
+rebuilds every time faces, `built` vs `persistent` is 169.2 vs 120.8 µs at N=1 (1.40×) and
+40.3 vs 36.8 µs at N=64 (**1.09×**). Reusing the list is worth ~9% at N=64 — real, but small
+beside the 13.6× that comes from not being IRON.
+
+**A wrong-design bug had to be fixed first, and it produced a plausible wrong number rather than
+an error.** The first attempt read FAILED VERIFICATION in both arms with a 777.7 µs single
+dispatch. `measure_runlist.py` resolved the wrong design: its rule was "newest cache entry
+holding both `final.xclbin` and `insts.bin`", and its own comment claimed the `insts.bin`
+condition stopped "a GEMM, say" being picked up — but *every* IRON design writes `insts.bin`, so
+the condition excluded nothing. Once `bank_placement/` and `gemm_reblock/` were compiled later
+the same day, "newest" was one of those. The two designs are not subtle: the passthrough is 75
+instruction words, what it resolved was 1052. It now captures the paths IRON itself returns from
+`CompilableDesign.compile()` and **refuses** to fall back to "newest".
+
+**What this does not show.** One design (a no-compute passthrough), one payload, one machine —
+this bounds the *host*, not any model's latency; a real kernel plateaus on its own compute. The
+C++ host is a benchmark host, not an inference runtime, and nothing here shows the VitisAI EP or
+any ONNX path can use a runlist. Batching still gives up per-call completion status, so any
+deployment at 36 µs inherits output verification as its only correctness gate. The one-time
+setup cost varied 1.8× between two runs of the identical binary and was not investigated.
+
 ### The chained int8 CNN also loses — and this time it was measured before anything was built
 
 `ml/resnet/layers_conv2_x` (three ResNet bottlenecks chained core-to-core across three
@@ -1782,6 +1856,42 @@ nothing about data movement: same bytes, same DMA, same fifo depth, same functio
   floor is real, the separated build's issuing cycles fall by ~96 per call and its lock stall
   rises by the same, leaving `ACTIVE` unchanged — an equality needing no timing at all. The
   obstacle is the one `RESEARCH.md` already names: `whole_array` carries no trace hook.
+  **That plan was tested as an instrument on 2026-09-09 and it does not work — do not run it as
+  written.** A same-bank dual-load conflict has to surface as `MEMORY_STALL`, and
+  `results/aie/pmu_probe_npu.log` had already flagged that event as never having read nonzero
+  here. `kernels/bank_placement/bank_stall_probe.py` is the positive control: one loop, two
+  independent 16-lane loads, one compile-time flag moving stream A's base and nothing else, with
+  the arm read back from the addresses the kernel reports. **`MEMORY_STALL` reads 0 in every run
+  of both placements, at every trip count** — including an arm built to collide as hard as this
+  design permits. So zero on the GEMM's arms would not distinguish "no conflict" from "the event
+  does not fire", and the sitting would buy nothing. There is no bank-specific event to fall back
+  on (the enum has `GROUP_STALL` 22, `MEMORY_STALL` 23, `DM_ACCESS_TO_UNAVAILABLE` 66 and nothing
+  else), and `GROUP_STALL` read *exactly* equal to `ACTIVE` in all six eight-event runs, so it is
+  not an independent signal either. Backing log `results/aie/bank_stall_control_npu.log`.
+  **The control did produce a clean instruction-matched comparison, and it found no rate effect:**
+  with identical `INSTR_LOAD` in both arms, colliding costs a *constant* **6 cycles** more at 256,
+  512 and 2048 iterations (3850/3844, 7690/7684, 30730/30724). A one-cycle per-iteration stall
+  would have cost 256, 512 and 2048, so **the invariance is the finding** — those 6 cycles are
+  paid once, whatever they are. Two causes fit and this run separates neither: a fixed loop-setup
+  difference (one base is a static address, the other a function argument), or a one-time
+  bank-arbitration warm-up on first touch of the second bank, which only the separated arm
+  touches. Neither is ruled out; the headline does not depend on which. **The
+  caveat that keeps H12 open:** the loop runs at 15.0 cycles/iteration for 4 loads, so it is not
+  load-bound and has slack to absorb a one-cycle stall — this bounds the penalty in a *slack*
+  loop, not in the GEMM's tight inner loop.
+  **Three structural facts from the same run, each of which cost an attempt**: a core's `.bss` is
+  ~16 KB, not 64 KB (a 32 KB static array fails to link); it lies *entirely inside one 16 KB
+  bank* (measured 0x75000–0x77C00, bank 29, with the input fifo buffer starting exactly at
+  0x78000, bank 30), so no static array can straddle a boundary and the second stream had to come
+  from the fifo buffer; and **`stack_size` does not move a kernel's `.bss`** — at 0x400 and
+  0x1400 the streams landed identically — because it moves ObjectFifo buffers, which is what H12
+  shifted, not linker-placed statics.
+  **A methodological trap worth carrying forward:** at eight traced events the counters are *not
+  reproducible*. Three dispatches of one identical binary gave 15665 / 30724 / 15879 cycles and
+  4179 / 8195 / 4235 loads, because `ACTIVE` alone emits 38–54k frames into a 64 KB buffer, which
+  overflows and truncates differently each run. Every figure above is from a four-event capture,
+  where all of it is exact and repeatable. An eight-event capture at this loop length would have
+  made the colliding arm look 2× slower — a pure artefact of the *separated* arm being truncated.
 
 **A tempting join with the driver work, tested and refuted.** Local `main` measures an NPU
 hardware-context-switch penalty of **+747.75 µs** (same-context dispatch 120.25 µs, alternating
