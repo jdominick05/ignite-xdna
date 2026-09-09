@@ -17,6 +17,13 @@ for either model.
         --ep npu --source assets/test_image.jpg --fresh --log 1
     python pipelines/yolov8n/4_detect.py --model models/yolov8n_cut_xint8.onnx \
         --ep npu --source 0        # webcam, q quits
+    python pipelines/yolov8n/4_detect.py --model models/yolov8n_cut_xint8.onnx \
+        --ep npu --source 0 --max-seconds 15   # logged webcam run: auto-quits,
+        # prints a per-frame summary over the whole run, and drops annotated
+        # snapshots in outputs/webcam/ so the run leaves evidence behind
+
+A camera run needs a person in front of the camera to mean anything: the summary
+says so explicitly when it ends with zero detections.
 
 Cache key defaults by model name: anything with "cut" in it uses
 yolocutcachekey, everything else yolocachekey, so a cut compile can never be
@@ -41,7 +48,7 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))  # repo root on sys.path
 
 import npu.yolo as yc
-from npu.paths import RESULTS, YOLO_CACHE_KEY, YOLO_CUT_CACHE_KEY
+from npu.paths import ROOT, RESULTS, YOLO_CACHE_KEY, YOLO_CUT_CACHE_KEY
 from npu.session import build_session, clear_cache
 from npu.yolo_decode import decode_heads, head_order
 
@@ -61,12 +68,29 @@ def main():
     ap.add_argument("--fresh", action="store_true", help="delete compile cache first")
     ap.add_argument("--out", default=None, help="output image path (image source only)")
     ap.add_argument("--runs", type=int, default=20, help="timed runs, image source only")
+    # Camera/video only. The webcam path used to leave nothing behind: cv2.imshow
+    # and a 60-frame rolling HUD mean, both gone the moment the window closed, so
+    # an attended run could not be evidence for anything. --max-seconds matches
+    # demos/webcam_multipartition_demo.py's flag of the same name (15s windows
+    # there), and the summary below is what makes the run quotable.
+    ap.add_argument("--max-seconds", type=float, default=None,
+                    help="camera/video only: auto-quit after N seconds, for logged runs")
+    ap.add_argument("--snapshot-dir", default=None,
+                    help="camera/video only: where annotated snapshots go "
+                         "(default outputs/webcam/). NEVER results/: these are "
+                         "camera frames of whoever is at the machine, and "
+                         "results/ is tracked")
     ap.add_argument("--log", type=int, default=1, help="0=verbose 1=info 2=warning")
     args = ap.parse_args()
 
     stem = os.path.splitext(os.path.basename(args.model))[0]
     cache_key = args.cache_key or (
         YOLO_CUT_CACHE_KEY if "cut" in stem.lower() else YOLO_CACHE_KEY)
+    # Print it rather than let a caller re-derive it. Which cache a run used is
+    # exactly the staleness question this repo keeps getting bitten by, and a
+    # wrapper that needs the key for npu_verdict can read it back from the log
+    # instead of hand-rolling a second copy of the rule above.
+    print(f"cache key: {cache_key}")
     if args.fresh:
         clear_cache(cache_key)
 
@@ -162,13 +186,29 @@ def main():
         cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
         cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
 
+    # Report what the camera actually delivered, not what was asked for above. The
+    # multipartition demo's finding was that capture rate, not the NPU, capped the
+    # on-screen number -- so if this run's fps differs from that one's 30.0, the
+    # requested 1280x720 (which that demo never asked for) is a named confound
+    # rather than a silent one.
+    src_w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    src_h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    src_fps = cap.get(cv2.CAP_PROP_FPS)
+    print(f"source: {src_w}x{src_h} @ {src_fps:.1f} fps capture rate "
+          f"-- that, not the NPU, may be the ceiling here", flush=True)
+
     ok, frame = cap.read()
     if not ok:
         raise SystemExit("no frames")
     infer(frame)  # warm-up so the compile isn't counted in the HUD
-    print("running - press q to quit")
+    print("running - press q to quit", flush=True)
 
-    times = []
+    times = []                      # rolling 60, for the on-screen HUD only
+    all_infer, all_post, all_loop = [], [], []   # every frame, for the summary
+    class_counts = {}
+    best_n, best_frame, last_frame = -1, None, None
+    run_start = time.perf_counter()
+    last_log = run_start
     while True:
         t_all = time.perf_counter()
         ok, frame = cap.read()
@@ -180,16 +220,73 @@ def main():
         times.append(ti)
         if len(times) > 60:
             times.pop(0)
+        all_infer.append(ti)
+        all_post.append(tp)
+        all_loop.append(total)
+        for *_rest, c in dets:
+            name = yc.COCO_CLASSES[c]
+            class_counts[name] = class_counts.get(name, 0) + 1
+        # Keep the frame that best shows the thing this run exists to confirm:
+        # real boxes drawn on a real subject. yc.draw annotates in place, so the
+        # copy has to happen after it.
+        last_frame = frame
+        if len(dets) > best_n:
+            best_n, best_frame = len(dets), frame.copy()
         cv2.putText(frame,
                     f"{args.ep.upper()}  infer {np.mean(times):5.1f} ms  "
                     f"post {tp:4.1f} ms  loop {total:5.1f} ms  {1000 / total:4.1f} fps",
                     (10, 28), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2,
                     cv2.LINE_AA)
         cv2.imshow("yolov8n " + args.ep, frame)
+
+        now = time.perf_counter()
+        if now - last_log >= 1.0:
+            print(f"t={now - run_start:5.1f}s  infer {np.mean(times):5.1f} ms  "
+                  f"loop {total:5.1f} ms  {1000 / total:4.1f} fps  "
+                  f"frames={len(all_infer)}  dets={len(dets)}", flush=True)
+            last_log = now
+
         if cv2.waitKey(1) & 0xFF == ord("q"):
             break
+        if args.max_seconds is not None and now - run_start >= args.max_seconds:
+            print(f"reached --max-seconds {args.max_seconds:.0f}s, quitting", flush=True)
+            break
+    elapsed = time.perf_counter() - run_start
     cap.release()
     cv2.destroyAllWindows()
+
+    if not all_infer:
+        raise SystemExit("no frames were processed -- nothing to report")
+
+    # The summary is the evidence. The HUD above is a 60-frame rolling mean that
+    # vanishes with the window; these are every frame of the run.
+    ai, al = np.array(all_infer), np.array(all_loop)
+    print(f"\n=== {args.ep.upper()} | {args.model} | {imgsz}px | source {args.source} "
+          f"({src_w}x{src_h} @ {src_fps:.1f} fps) ===")
+    print(f"frames  {len(all_infer)} in {elapsed:.1f}s "
+          f"({len(all_infer) / elapsed:.1f} fps end to end)")
+    print(f"infer   mean {ai.mean():.2f} ms   median {np.median(ai):.2f} ms   "
+          f"p95 {np.percentile(ai, 95):.2f} ms   ({1000 / ai.mean():.1f} fps if infer-bound)")
+    print(f"post    mean {np.mean(all_post):.2f} ms")
+    print(f"loop    mean {al.mean():.2f} ms   median {np.median(al):.2f} ms   "
+          f"p95 {np.percentile(al, 95):.2f} ms")
+    if class_counts:
+        tot = sum(class_counts.values())
+        print(f"detections {tot} across {len(all_infer)} frames "
+              f"({tot / len(all_infer):.2f}/frame):")
+        for name, n in sorted(class_counts.items(), key=lambda kv: -kv[1]):
+            print(f"   {name:16s} {n}")
+    else:
+        print("detections 0 -- nothing was in front of the camera, or the model "
+              "found nothing. A run with no detections does not verify the demo.")
+
+    snap_dir = Path(args.snapshot_dir) if args.snapshot_dir else ROOT / "outputs" / "webcam"
+    snap_dir.mkdir(parents=True, exist_ok=True)
+    for tag, img in (("best", best_frame), ("last", last_frame)):
+        if img is not None:
+            p = snap_dir / f"webcam_{stem}_{args.ep}_{tag}.jpg"
+            cv2.imwrite(str(p), img)
+            print(f"wrote {p}" + (f"  ({best_n} detections)" if tag == "best" else ""))
 
 
 if __name__ == "__main__":
