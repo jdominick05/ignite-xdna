@@ -93,6 +93,51 @@ def passthrough(a_in: In, _unused: In, c_out: Out, *, n: CompileTime[int] = 4096
     return Program(iron.get_current_device(), rt).resolve_program()
 
 
+def _capture_compiled_paths():
+    """Context manager yielding a dict that IRON fills with the design's real paths.
+
+    CompilableDesign.compile() returns (xclbin_path, inst_path) for the design being
+    built, and CallableDesign._build_kernel calls it on the first use of a
+    specialization in a process -- on a cache HIT too, because compile() is what
+    consults the on-disk cache and returns the existing artifacts. Spying on it is
+    therefore exact for both paths, and needs no private hash or path attribute.
+
+    This replaces an mtime heuristic that produced a wrong answer; see the comment in
+    compile_and_find_cache. Two other resolvers were tried first and are recorded here
+    so they are not re-attempted: CallableDesign.compilable.compile() recompiles,
+    because .compilable is the UNSPECIALIZED design and misses the cache (it then dies
+    on xclbinutil not being on PATH); and importing this module under a synthetic name
+    changes IRON's recipe hash, so the cache is missed that way too.
+    """
+    import contextlib
+
+    from aie.utils.compile.jit.compilabledesign import CompilableDesign
+
+    captured = {}
+
+    @contextlib.contextmanager
+    def _ctx():
+        original = CompilableDesign.compile
+
+        def spy(self, *args, **kwargs):
+            result = original(self, *args, **kwargs)
+            try:
+                xclbin_path, inst_path = result
+                captured["xclbin"] = Path(xclbin_path)
+                captured["insts"] = Path(inst_path)
+            except Exception:
+                pass
+            return result
+
+        CompilableDesign.compile = spy
+        try:
+            yield captured
+        finally:
+            CompilableDesign.compile = original
+
+    return _ctx()
+
+
 def compile_and_find_cache(n):
     """Run the passthrough once via IRON to compile it, then find the xclbin
     and instruction file in ~/.npu/cache/. Returns (xclbin_path, insts_path, kernel_name).
@@ -101,8 +146,10 @@ def compile_and_find_cache(n):
     b = iron.zeros_like(a)
     c = iron.zeros_like(a)
 
-    # Run once to trigger compilation and cache population
-    passthrough(a, b, c, n=n)
+    # Run once to trigger compilation and cache population, capturing the paths IRON
+    # itself resolved for THIS design rather than inferring them afterwards.
+    with _capture_compiled_paths() as captured:
+        passthrough(a, b, c, n=n)
 
     # Verify the design actually works
     if not np.array_equal(c.numpy(), a.numpy()):
@@ -118,25 +165,37 @@ def compile_and_find_cache(n):
             if xclbin_path and insts_path and Path(xclbin_path).exists():
                 return str(Path(xclbin_path).resolve()), str(Path(insts_path).resolve()), kernel_name
 
-    # Fallback: search the cache by modification time
+    # Resolve by WHICH ENTRY IRON JUST LOCKED, not by modification time.
+    #
+    # The previous rule here -- newest entry holding both final.xclbin and insts.bin --
+    # is wrong and produced a WRONG ANSWER rather than an error on 2026-09-09: every
+    # batch read FAILED VERIFICATION and the single-dispatch figure came out at 777.7 us
+    # against the ~140 us this design costs. Its own comment claimed that requiring
+    # insts.bin stopped "a GEMM, say" from being picked up, but EVERY IRON design writes
+    # insts.bin, so the extra condition excluded nothing. Once the bank_placement and
+    # gemm_reblock designs were compiled later the same day, "newest" was one of those,
+    # and this harness happily timed a different design through the passthrough's
+    # argument layout.
+    #
+    # The .lock diff is exact: IRON acquires the lock inside the design's own kernel_dir
+    # on every compile() call, cache hit included, so exactly one entry moves.
     cache_dir = Path.home() / ".npu" / "cache"
     if not cache_dir.exists():
         sys.exit("Cannot find IRON cache at ~/.npu/cache/ — run measure_floor.py first")
 
-    # Take the most recent cache entry that has BOTH an xclbin and an instruction
-    # binary. "Most recent xclbin" alone is wrong: any other design compiled since
-    # (a GEMM, say) would be picked up, and its instruction stream and argument
-    # layout are not this design's. The instruction file is `insts.bin`; earlier
-    # versions of this script looked only for `*.txt` and would silently fall
-    # through to `input_with_addresses.mlir`, which is not an instruction stream.
-    entries = [p.parent for p in cache_dir.glob("*/final.xclbin")
-               if (p.parent / "insts.bin").exists()]
-    if not entries:
-        sys.exit("No compiled design with final.xclbin + insts.bin in ~/.npu/cache/")
-    cache_entry = max(entries, key=lambda d: (d / "final.xclbin").stat().st_mtime)
+    xclbin_path = captured.get("xclbin")
+    insts_path = captured.get("insts")
+    if xclbin_path and insts_path and xclbin_path.is_file() and insts_path.is_file():
+        return str(xclbin_path.resolve()), str(insts_path.resolve()), None
 
-    return (str((cache_entry / "final.xclbin").resolve()),
-            str((cache_entry / "insts.bin").resolve()), None)
+    # Refuse rather than guess. A wrong design here is not a failed run, it is a
+    # plausible number for the wrong thing.
+    sys.exit(
+        "Could not capture the design's compiled paths from IRON.\n"
+        f"  captured: {captured}\n"
+        "Refusing to fall back to 'newest entry in ~/.npu/cache/', which is exactly "
+        "what timed the wrong design on 2026-09-09."
+    )
 
 
 # --------------------------------------------------------------------------- #

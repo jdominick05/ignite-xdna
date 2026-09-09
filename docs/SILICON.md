@@ -406,6 +406,21 @@ L=150528) batches to 823.8–838.3 µs per dispatch, which is its own compute �
 measured 835.8 µs — so a real kernel's configuration cost does *not* swamp the passthrough's
 floor.
 
+**CLOSED 2026-09-09 by a C++ host: the 36 µs floor is the driver's, not the binding's, and a
+deployable runner reaches it.** The scoping above rested on "a caller willing to write a
+raw-pyxrt driver", which left open whether the residual cost was pybind or the driver.
+`kernels/dispatch_floor/dispatch_runner.cpp` — a standalone C++ XRT host, no Python — drives the
+same cache entry to **36.7 µs** at N=64 against pyxrt's 35.9 µs in the same sitting, the two
+agreeing within ~2% from N=4 up (`results/aie/dispatch_cpp_runlist_npu.log`). So removing the
+binding does not move the batched floor: **36 µs is a property of the driver and the device**,
+and no host-side rewrite goes below it. Against the same design in the same sitting the stack is
+671.5 µs (IRON unbatched) · 498.5 µs (IRON batched 64) · ~108 µs (C++, one call) · **36.7 µs**
+(C++ batched 64) — so IRON's ~500 µs host share is work a cached-handle host pays *once* at
+startup, not per call. Two limits survive intact: the four reopens still need ≥ 8 independent
+dispatches in flight, and they still need a caller outside IRON — that caller is now known to be
+writable in C++ rather than hypothetical. A single dispatch costs ~108 µs even in C++, of which
+only ~20–30 µs was ever the binding.
+
 ## 4. Objectives
 
 Ordered by dependency, and weighted toward where the NPU has *measured* edge — large bf16
@@ -603,6 +618,16 @@ dispatch half of the floor and nothing else. The ~500 µs residue is the same te
 `dispatch_floor_npu.log` measured as 447.3 µs, now confirmed independent of how the submit is
 done, and at 37.5 µs of device against ~500 µs of host **it is the larger term by more than an
 order of magnitude**. Whatever removes it is D2's question, not D1's.
+**And that residue is removable — measured 2026-09-09 in C++.** A standalone C++ XRT host with
+no Python in it (`kernels/dispatch_floor/dispatch_runner.cpp`) drives the same cache entry at
+**36.7 µs** per dispatch at N=64, against pyxrt's 35.9 µs in the same sitting; the two agree
+within ~2% from N=4 up, so the batched floor is the *driver's* and the binding was never in it
+(`results/aie/dispatch_cpp_runlist_npu.log`). The same-sitting stack is 671.5 µs (IRON
+unbatched) · 498.5 µs (IRON batched 64) · ~108 µs (C++, one call) · **36.7 µs** (C++ batched 64):
+**13.6× better than batched IRON.** So IRON's ~500 µs is not a property of the device or the
+driver but of IRON's per-call work, and a cached-handle host pays it once at startup (33–60 ms)
+instead. Two limits stand: it needs ≥ 8 dispatches in flight, and one dispatch still costs
+~108 µs even in C++ — only ~20–30 µs of the single-dispatch path was ever the binding.
 Physical basis: the vendor path's host-side cost per call is about 90 µs against IRON's
 447 µs on the same driver (2.5), so most of the host term is software, and a list of N
 runs costs one host round trip. Tooling: none new — `xrt::runlist` is in this
