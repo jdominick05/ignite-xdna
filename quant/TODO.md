@@ -95,7 +95,15 @@ recorded in the handoff and Git history rather than treated as future features.
   2026-09-08 OpenCV rerun; what is now also measured is Ignition reproducing it. The quality
   numbers here are **not** comparable with that rerun's 0.18629, whose listing was never
   recorded — that comparison needs a listing sweep, which is unrun. AdaRound is not wired
-  for this family and the Zero-Concat variant is untouched.
+  for this family (the `adaround` command refuses it explicitly) and the Zero-Concat
+  variant is untouched.
+- [ ] Wire AdaRound for MODNet. It cannot reuse the ResNet/YOLO path unchanged: the
+  layer walk must run on the **simplified** float graph, because `passes.simplify`
+  reorders this family's node list and `Graph.vendor_order` on the raw export is a
+  different order. `Graph.vendor_order` is verified against onnxruntime's
+  `topological_sort` on both slimmed MODNet exports, so the order itself is known; what is
+  missing is `cli.py`'s adaround branch calling `simplify_for` before `prepare`, and a
+  fresh `XINT8_ADAROUND` oracle to gate against.
 - [ ] Consider histogram calibration only with measured error/accuracy and memory
   tradeoffs against the exact-sample store; label approximation explicitly.
 

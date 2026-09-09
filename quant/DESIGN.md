@@ -417,6 +417,11 @@ pre-process step calls `onnxslim`; so does `passes.simplify`, lazily. Reimplemen
 constant lowering, dead-node elimination, common-subexpression elimination, weight tying
 and graphsurgeon's toposort would be transcribing a third-party optimizer rather than the
 vendor's XINT8 dialect, and the acceptance gate would still be "equals onnxslim's output".
+The cost is a provenance one and is paid explicitly: because onnxslim's output *defines*
+the prepared graph for this family, `quantize()` records its version in the sidecar's
+`versions` for MODNet artifacts, so a later release that simplifies differently is visible
+rather than silent. The committed 2026-09-09 pair predates that field; its version (0.1.96)
+is in its quantize and probe logs instead.
 The dependency is a weaker one than Quark: the core still imports with only numpy, onnx
 and onnxruntime in both environments, and only the MODNet family reaches the step at run
 time (onnxslim 0.1.96 is present in `resnet_env` and `resnet_env17`). ResNet and
@@ -429,7 +434,10 @@ a `MaxPool` or `Resize` output its input's parameters only when `is_tensor_quant
 already true for that input at the moment `quantize_model` reaches the node, and otherwise
 marks neither input nor output — the output is then marked plainly by a consumer and gets
 its own calibrated scale. The visit order is the pre-processed model's, i.e.
-`Graph.vendor_order`. ResNet and yolov8n-cut cannot show this because every pooling and
+`Graph.vendor_order`, which is verified equal to onnxruntime's `topological_sort` node for
+node on ten files including both **slimmed** MODNet exports — the check matters here
+because simplification reorders this graph, so the raw export's order is not the vendor's.
+ResNet and yolov8n-cut cannot show the sharing rule because every pooling and
 resize input there has an earlier quantized producer; MODNet feeds two `Resize` nodes from
 the graph input, and the vendor's own artifact gives those two their own scales
 ([MODNet preparation parity](../docs/BENCHMARKS.md#ignition-modnet-preparation-and-replay-parity)).

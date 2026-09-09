@@ -99,6 +99,8 @@ def main(argv=None):
                 if "adaround" in provenance:
                     parser.error("The base was already finetuned; start from the emitted XINT8 file")
                 family = provenance.get("family", "folded_resnet")
+                if family == "modnet":
+                    parser.error("AdaRound is not wired for the MODNet family; see quant/TODO.md")
                 float_graph = Graph.load(args.in_model)
                 if graph_family(float_graph) != family:
                     parser.error("Float model family differs from the base sidecar")

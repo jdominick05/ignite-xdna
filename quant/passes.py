@@ -20,7 +20,7 @@ HARD_SIGMOID_SCALE = (2731.0 / 16384.0) / (1.0 / 6.0)  # quant_utils.py:101
 HARD_SIGMOID_ALPHA = 1.0 / 6.0
 
 
-def _approximately_equal(a: float, b: float, epsilon: float = 1e-6) -> bool:
+def approximately_equal(a: float, b: float, epsilon: float = 1e-6) -> bool:
     """quant_utils.is_approximately_equal."""
     return abs(a - b) < epsilon
 
@@ -28,8 +28,8 @@ def _approximately_equal(a: float, b: float, epsilon: float = 1e-6) -> bool:
 def check_hard_sigmoid(node: onnx.NodeProto) -> bool:
     """quant_utils.check_hard_sigmoid_condition: attribute test only, any operator type."""
     has_beta = any(a.name == "beta" for a in node.attribute)
-    beta_half = any(a.name == "beta" and _approximately_equal(a.f, 0.5) for a in node.attribute)
-    alpha_ok = any(a.name == "alpha" and _approximately_equal(a.f, HARD_SIGMOID_ALPHA) for a in node.attribute)
+    beta_half = any(a.name == "beta" and approximately_equal(a.f, 0.5) for a in node.attribute)
+    alpha_ok = any(a.name == "alpha" and approximately_equal(a.f, HARD_SIGMOID_ALPHA) for a in node.attribute)
     return (not has_beta or beta_half) and alpha_ok
 
 

@@ -3493,7 +3493,10 @@ own scales, 0.25 and 0.0625, where the graph input's is 0.25. Ignition had assum
 sharing was unconditional, which is invisible on ResNet and yolov8n-cut because every
 pooling and resize input there is produced by an earlier quantized node. `quant/qdq.py`
 now walks the marking pass in `Graph.vendor_order`, the order onnxruntime's
-`quantize_model` visits nodes, and applies the rule positionally. Re-running the two
+`quantize_model` visits nodes, and applies the rule positionally. That order was verified
+against onnxruntime's own `topological_sort` node for node on both **slimmed** MODNet
+exports, which matters because simplification reorders this graph — the raw export's order
+is not the vendor's. Ten files now agree on `vendor_order`. Re-running the two
 earlier replays under the new rule reproduces them unchanged — ResNet 108/108 int8 exact
 with 49 pruned, yolov8n-cut 126/126 with 0 pruned, both `PREPARE_PROBE_PASS True`
 (`results/quant/prepare_probe_resnet50_fp32_vendor_order.log`,

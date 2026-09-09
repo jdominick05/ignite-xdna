@@ -115,6 +115,10 @@ def quantize(model_in: Path, model_out: Path, *, scales_from: Path | None = None
         "input_sha256": file_hash(model_in),
         "versions": {p: metadata.version(p) for p in ("numpy", "onnx")},
     }
+    if family == "modnet":
+        # onnxslim's output defines this family's prepared graph, so the artifact records
+        # which version produced it; a later release could simplify differently.
+        report["versions"]["onnxslim"] = metadata.version("onnxslim")
     # SimplifyModel is the vendor's first pre-process step and precedes CLE, whose pattern
     # walk reads the node list it leaves behind.
     report["simplify"] = simplify_for(graph, family)

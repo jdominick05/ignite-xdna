@@ -14,6 +14,7 @@ import numpy as np
 from onnx import helper
 
 from .graph import Graph
+from .passes import approximately_equal
 from .pow2 import TensorQ, pos2scale, quantize, scale2pos
 
 RESNET_OPS = {"Conv", "Relu", "Add", "MaxPool", "GlobalAveragePool", "Flatten", "Gemm"}
@@ -38,8 +39,12 @@ def _clip_bound(g: Graph, node, slot: int):
 def needs_annotated(g: Graph, node) -> bool:
     """quant_utils.is_node_needs_annotated with the default remove_qdq_op_type."""
     if node.op_type == "Clip":
-        bounds = (_clip_bound(g, node, 1), _clip_bound(g, node, 2))
-        return bounds in ((0.0, 6.0), (0.0, 1.0))
+        low, high = _clip_bound(g, node, 1), _clip_bound(g, node, 2)
+        if low is None or high is None:
+            return False
+        # is_clip_with_min_max compares through is_approximately_equal, not ==.
+        return any(approximately_equal(low, a) and approximately_equal(high, b)
+                   for a, b in ((0.0, 6.0), (0.0, 1.0)))
     return node.op_type in ("Relu", "LeakyRelu", "PRelu")
 
 
