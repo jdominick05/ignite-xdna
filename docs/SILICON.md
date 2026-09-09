@@ -696,6 +696,25 @@ the mem tile's 4-D BDs. Reaching 1 TOPS needs 6.8×; the 1×1's defect alone is 
 on that kernel. **What this does not establish** is that a rewrite would get there — the 20×
 and 4× are ceilings on what the schedule leaves unused, not predictions, and the per-loop
 densities are unweighted by trip count.
+**The tooling half was gated on hardware 2026-09-09, and the proposed mechanism does not work
+through IRON.** This entry proposes moving the ten `vshift`/`vmov` bundles "to the mem tile's
+4-D BDs", and 2.6 calls that BD "the one address generator on the chip that can do an im2col
+or a transpose in flight". `kernels/im2col_bd/im2col_probe.py` tests exactly that and nothing
+else — compute-free, shim → mem tile → shim, the 4-D pattern on the mem tile's outbound stream,
+verified byte-for-byte against a host im2col (`results/aie/im2col_bd_probe_npu.log`).
+**Non-overlapping patterns pass and every overlapping one hangs the device:** k=1 returns all
+256 elements correct at 16×16 and all 64 at 8×8, while k=2 (3.52× expansion) and k=3 (6.89×)
+both return `ERT_CMD_STATE_TIMEOUT` — as does k=3 with the forwarded fifo given the expanded
+object type, so it is not a simple length mismatch. Since k=2 is the smallest overlap a square
+window can ask for, the boundary is not a large expansion factor: any re-reading pattern tried
+here times out. This does **not** refute 2.6's claim about the silicon — the BD field widths
+fit with room to spare — it refutes the *route*: do not write a conv kernel against
+`ObjectFifo.forward(dims_to_stream=...)`. A raw buffer descriptor outside the ObjectFifo
+abstraction, where length and access pattern are set independently, is the next thing to try.
+**Bandwidth is not what would kill the design, though** — DERIVED, gate 1 of the same run: an
+im2col conv's expansion cancels, giving **1/C_out bytes per MAC**, so against 3.1's int8 ceiling
+of 0.03125 B/MAC it is stream-bound only below C_out = 32 and has 2× headroom at C_out = 64.
+(That ceiling inherits 1.5's TO VERIFY on the 4 B/cycle stream rate.)
 Bar: 1.65 TOPS per column, clock-independent (2.2); today 146 GOPS (2.3). Physical
 basis: 3.3 — conv has ten times the reuse the core needs, the weights fit on-chip, and the
 same column sustains the bar under AMD's compiler. Tooling: a conv design of this repo's

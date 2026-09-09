@@ -331,6 +331,23 @@ padding buffer. Re-read, the int8 GEMM's software body carries **ten** paired-lo
 upper bound. Written up in
 [`docs/BENCHMARKS.md`](../../docs/BENCHMARKS.md#two-loads-in-one-bank-cost-a-cycle-and-the-int8-gemm-has-that-collision-where-bf16-does-not).
 
+**`im2col_bd_probe_npu.log`** — the two gates on K1's tooling proposal, run BEFORE any conv
+kernel. SILICON 2.6 calls the mem tile's 4-D BD "the one address generator on the chip that can
+do an im2col or a transpose in flight", and K1 proposes moving conv2dk3's ten `vshift`/`vmov`
+bundles onto it. **Gate 1, on paper:** an im2col conv's K*K expansion CANCELS -- every input byte
+feeds C_out MACs -- giving 1/C_out B/MAC, so against the int8 ceiling of 0.03125 B/MAC it is
+stream-bound only below C_out = 32 and has 2x headroom at 64. Bandwidth is not what would kill
+it. **Gate 2, on hardware, and the mechanism fails:** compute-free shim -> memtile -> shim, the
+4-D pattern on the memtile's outbound stream, checked byte-for-byte against a host im2col.
+Non-overlapping patterns pass (k=1: all 256 elements at 16x16, all 64 at 8x8); **every
+overlapping one hangs the device** -- k=2 at 3.52x expansion and k=3 at 6.89x both return
+`ERT_CMD_STATE_TIMEOUT`, as does k=3 with the forwarded fifo given the expanded object type, so
+it is not a length mismatch. k=2 is the smallest overlap a square window can ask for, so the
+boundary is not a large expansion factor. This refutes the ROUTE, not the silicon: the BD field
+widths fit with room to spare, so **do not write a conv kernel against
+`ObjectFifo.forward(dims_to_stream=...)`** -- try a raw BD outside the ObjectFifo abstraction.
+Harness `kernels/im2col_bd/im2col_probe.py`.
+
 **`bank_stall_control_npu.log`** — the positive control for the instrument
 `bank_ab_h12_npu.log` proposed, run BEFORE spending a sitting on it, and **the instrument does
 not work**. A same-bank dual-load conflict has to appear as `MEMORY_STALL`, which

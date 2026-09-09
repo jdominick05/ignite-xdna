@@ -1,0 +1,115 @@
+The mem tile's 4-D BD will not emit an overlapping window through IRON's ObjectFifo
+2026-09-09. env: mlir-aie ironenv (v1.4.2, llvm-aie 22.0.0.2026090201) + XRT SDK 2.21.75, native
+Windows; driver 32.0.20101.3760. Desktop 2 (Phoenix, Ryzen 7 8700G), power mode Default. No
+foreign hardware contexts: `xrt-smi examine -r aie-partitions` reported "No hardware contexts
+running on device" before the runs.
+
+Commands (from the ironenv; --help carries the setup):
+  python3 kernels/im2col_bd/im2col_probe.py --k 1
+  python3 kernels/im2col_bd/im2col_probe.py --k 3
+  python3 kernels/im2col_bd/im2col_probe.py --k 2
+  python3 kernels/im2col_bd/im2col_probe.py --k 1 --height 8 --width 8
+  python3 kernels/im2col_bd/im2col_probe.py --k 3 --wide-obj
+
+WHY: results/aie/conv_issue_rate_decomposed.log closed objective K1's first question -- the int8
+conv's 11.3x shortfall is ISSUE RATE, not data movement. The 3x3 conv's main loop issues 0.222
+vmac/cycle against the int8 GEMM's 0.889, and it does so because SIX of its eighteen bundles are
+`vshift` and FOUR more are `vmov`: ten bundles of sliding-window realignment spent in issue
+slots. docs/SILICON.md K1 names the fix -- "im2col or row shifting done by the mem tile's 4-D
+BDs rather than by core code" -- and SILICON 2.6 calls the 4-D BD "the one address generator on
+the chip that can do an im2col or a transpose in flight without a core touching the data."
+
+That is a claim this repo had never tested. Before writing any conv kernel against it, two gates.
+
+
+--------------------------------------------------------------------------------
+GATE 1 (ON PAPER): IS AN im2col CONV STREAM-BOUND? -- No, above C_out = 32.
+--------------------------------------------------------------------------------
+im2col trades issue slots for bandwidth: it expands the input by K*K. Whether that trade is
+even available is arithmetic, and it should be settled before any kernel exists.
+
+For a KxK conv with C_in input channels and C_out output channels producing H*W outputs:
+    MACs                = H*W*C_out*C_in*K*K
+    im2col input bytes  = H*W*K*K*C_in          (int8, one byte per element)
+    bytes per MAC       = 1 / C_out
+
+So the im2col expansion CANCELS: every input byte delivered feeds C_out MACs, and the per-MAC
+cost depends only on how many output channels one core computes. Against the ceiling SILICON 3.1
+uses for int8 -- 8 B/cycle of operand delivery against 256 int8 MAC/cycle, i.e. 0.03125 B/MAC:
+
+    C_out per core     B/MAC      verdict
+        16             0.0625     2x over the ceiling -- stream-bound
+        32             0.03125    exactly at the ceiling
+        64             0.0156     2x headroom -- NOT stream-bound
+       128             0.0078     4x headroom
+
+DERIVED, and the derivation inherits a TO VERIFY: the 8 B/cycle rests on "two S2MM channels at
+4 B/cycle each", which SILICON 1.5 marks TO VERIFY and this run does not measure. The 256
+int8 MAC/cycle is SPEC (device.yaml `macs_per_cycle`).
+
+VERDICT: the trade is available for a conv computing 32 or more output channels per core, with
+2x headroom at 64. It is NOT available for thin layers. This does not license the design -- it
+only says bandwidth is not what would kill it, so gate 2 is worth running.
+
+
+--------------------------------------------------------------------------------
+GATE 2 (ON HARDWARE): CAN THE BD ACTUALLY RE-READ? -- Not through this path.
+--------------------------------------------------------------------------------
+kernels/im2col_bd/im2col_probe.py is compute-free on purpose: shim -> mem tile -> shim, no core
+tile and no kernel, with the 4-D pattern applied on the mem tile's outbound stream via IRON's
+`of_in.cons().forward(dims_to_stream=...)`. Anything that comes back was produced by the address
+generator alone. The pattern for a KxK unit-stride window over HxW is
+
+    [(out_h, W), (out_w, 1), (K, W), (K, 1)]
+
+and overlap is expressed by the second dimension stepping by ONE element while the fourth reads
+K -- the same addresses are revisited, which is exactly im2col. All sizes and strides were
+checked against the mem tile's 10-bit wrap and 17-bit step (SILICON 2.2) BEFORE compiling, and
+all fit with room to spare.
+
+  k   shape   pattern                            stream/input   result
+  1   16x16   [(16,16),(16,1),(1,16),(1,1)]        256/256 = 1.00x  MATCH, all 256 elements
+  1    8x8    [(8,8),(8,1),(1,8),(1,1)]              64/64 = 1.00x  MATCH, all 64 elements
+  2   16x16   [(15,16),(15,1),(2,16),(2,1)]        900/256 = 3.52x  ERT_CMD_STATE_TIMEOUT
+  3   16x16   [(14,16),(14,1),(3,16),(3,1)]       1764/256 = 6.89x  ERT_CMD_STATE_TIMEOUT
+  3   16x16   same, forwarded fifo given the EXPANDED object type   ERT_CMD_STATE_TIMEOUT
+
+Both non-overlapping cases pass, at two different shapes, and BOTH overlapping cases fail --
+including k=2, whose 3.52x expansion is the smallest overlap a square window can ask for. So the
+boundary is not some large expansion factor: ANY re-reading pattern tried here hangs the DPU.
+
+THE PLUMBING WORKS AND OVERLAP SPECIFICALLY DOES NOT. k=1 is the same code path, the same
+four-dimensional pattern and the same shim/memtile/shim route, differing only in that it emits
+exactly as many elements as the buffer holds and revisits nothing. It returns every one of its
+256 elements byte-for-byte equal to the host im2col. The moment the pattern re-reads -- the
+only change -- the DPU times out.
+
+IT IS NOT MERELY THE OBJECT SIZE BINDING THE TRANSFER LENGTH. That was the obvious explanation,
+since the default forwarded object is the H*W input tile while the pattern asks for 1764
+elements. Giving the forwarded ObjectFifo the expanded object type instead times out identically,
+so the limit is not a simple length mismatch.
+
+WHAT THIS DOES AND DOES NOT LICENSE. It says: do not write a conv kernel against
+`ObjectFifo.forward(dims_to_stream=...)` expecting im2col, because it hangs the device. It does
+NOT say the silicon cannot do it -- the BD field widths are ample here and SILICON 2.6's claim
+is about the hardware, not about IRON. What has been shown is that this ROUTE to the hardware
+will not express it. The next mechanism to try is a raw buffer descriptor outside the ObjectFifo
+abstraction, where the transfer length and the access pattern are set independently.
+
+
+--------------------------------------------------------------------------------
+WHAT THIS DOES NOT SHOW
+--------------------------------------------------------------------------------
+- No rate measurement of any kind. Even where the pattern works (k=1) nothing here times it, so
+  the bandwidth half of K1's question is untouched. Gate 1 is arithmetic, not a measurement.
+- One shape (16x16 int32), one dtype, one route. A conv would use int8 and a channel dimension,
+  which is a fifth dimension the 4-D BD does not have -- how C_in is folded in was not addressed
+  and is a real open question for any im2col design here.
+- The timeout was not diagnosed. Whether the DMA never completes, deadlocks against the
+  consumer's expected length, or is rejected earlier is unknown; no trace or DPU disassembly was
+  taken. "Overlap times out" is the observation, not the mechanism.
+- The threshold is bracketed but not located exactly: 1.00x works and 3.52x (k=2, the smallest
+  overlap a square window can ask for) already fails. No pattern between those two -- an
+  expansion above 1x that is not a KxK window -- was constructed, so "any re-read fails" is a
+  reasonable reading of two points, not a proven boundary.
+- Nothing was tried on the shim BD or the core BD, only the mem tile's.
