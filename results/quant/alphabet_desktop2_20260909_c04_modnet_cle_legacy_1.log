@@ -1,0 +1,143 @@
+RESEARCH_PLATFORM {"machine": "Desktop 2", "cpu": "AMD Ryzen 7 8700G w/ Radeon 780M Graphics", "os": "Windows-11-10.0.26200-SP0", "ram_bytes": 33381138432, "source_sha256": {"tools/research_process.py": "b97c5b1f4821ad42214cd4ec55eef829f1abff924c8ece7f5474f9669586ee5e", "tools/quant_calib_alphabet.py": "88cbdf7ceeb39e7de5a6bca25c360b89b93da0e7182516e3960c4414087248e9", "tools/xint8_arithmetic_probe.py": "f9c4b7def7909edbf5a5394b3bc31e1d10f2732ebb6a445b5febc6a9e078aa5c", "scripts/research-lowlevel.sh": "800bfc258200fec9695442c58cb7578ad4c4f3f6d6d49f55dadc14fc06ff425f", "scripts/research-iron.sh": "eb3e68dad67727528407f4ae41698c5f52178f9a24c53ef2705a7639fe55ac44", "kernels/memory_placement/probe.py": "4ef7ea560f776f309a441f14d78cccd529b36e1600d212455485038035bf1770", "kernels/memory_placement/memory_kernels.cc": "01fbe2cb8ed6ed153eef0f20512422e3eb44e5a1f5b8759956d039f04eef46f3", "scripts/research-matrix.sh": "44dc191783a136d84ad69a3a6795dd74e966250b697ca4cbcdebdf733b0d0b50", "kernels/memory_placement/gemm.py": "8dbf48f8f4a356cc69bc65793b8dd7eab9b18074d414a1e01fb7e0abe42319a3", "kernels/memory_placement/gemm_placement.cc": "2fa1d57cf316cdd8c3599eae4581284c26ee392ad7dbbf289bafd175342ad9bc", "tools/research_summary.py": "e5d1913068f293914d67034d982ffd5363e5187d035108da8d6cdf4a09386efb", "tools/research_toolchain.py": "c6c01235e9eb9ca7f83e9f42e61d1c98bff86c5284a9ab1cd7fd91e571b010ca"}, "commit": "21900ca776b6bac043dc05260af34203f540a571", "command": ["python", "tools/quant_calib_alphabet.py", "--in-model", "../../models/modnet/modnet_cut_fp32.onnx", "--calib-dir", "../../data/modnet_calib", "--cfg-path", "../../models/modnet/preprocess_config.json", "--out", "scratch/research_desktop2_20260909_c04/modnet_cle_legacy_1.onnx", "--method", "legacy", "--limit", "64", "--cle"], "seconds_limit": 900.0, "rss_gib_limit": 16.0, "checks_only": true, "free_ram_bytes": 21633232896}
+CALIBRATION images=64 tensors=99 skipped_prunable=52 sample_bytes=12714516480
+HOST_TIMELINE {"elapsed_seconds": 2.516, "tree_rss_bytes": 1370636288, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 5.094, "tree_rss_bytes": 1575927808, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 7.625, "tree_rss_bytes": 1576439808, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 10.157, "tree_rss_bytes": 1580806144, "foreign_peers": [{"pid": 9008, "name": "pycharm64.exe", "cores": 2.655, "command": "C:\\Program Files\\JetBrains\\PyCharm 2026.2.1\\bin\\pycharm64.exe"}]}
+COLLECT 16/64
+HOST_TIMELINE {"elapsed_seconds": 12.766, "tree_rss_bytes": 1578307584, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 15.407, "tree_rss_bytes": 1587826688, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 17.922, "tree_rss_bytes": 1583046656, "foreign_peers": []}
+COLLECT 32/64
+HOST_TIMELINE {"elapsed_seconds": 20.453, "tree_rss_bytes": 1588658176, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 23.094, "tree_rss_bytes": 1579012096, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 25.719, "tree_rss_bytes": 1596616704, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 28.422, "tree_rss_bytes": 1578262528, "foreign_peers": []}
+COLLECT 48/64
+HOST_TIMELINE {"elapsed_seconds": 30.953, "tree_rss_bytes": 1600638976, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 33.547, "tree_rss_bytes": 1585709056, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 36.157, "tree_rss_bytes": 1597530112, "foreign_peers": []}
+COLLECT 64/64
+HOST_TIMELINE {"elapsed_seconds": 38.703, "tree_rss_bytes": 2189144064, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 41.313, "tree_rss_bytes": 3932897280, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 43.969, "tree_rss_bytes": 3148853248, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 46.578, "tree_rss_bytes": 4020858880, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 49.141, "tree_rss_bytes": 3166392320, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 51.75, "tree_rss_bytes": 2128252928, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 54.594, "tree_rss_bytes": 2714263552, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 57.235, "tree_rss_bytes": 3450187776, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 59.891, "tree_rss_bytes": 5739143168, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 62.516, "tree_rss_bytes": 8711376896, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 65.157, "tree_rss_bytes": 3441455104, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 67.86, "tree_rss_bytes": 8983592960, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 70.438, "tree_rss_bytes": 7072907264, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 73.032, "tree_rss_bytes": 8869646336, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 75.625, "tree_rss_bytes": 3092000768, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 78.219, "tree_rss_bytes": 4238856192, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 80.797, "tree_rss_bytes": 3646136320, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 83.375, "tree_rss_bytes": 3869605888, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 86.0, "tree_rss_bytes": 2215120896, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 88.672, "tree_rss_bytes": 1999015936, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 91.313, "tree_rss_bytes": 3131408384, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 93.907, "tree_rss_bytes": 1647300608, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 96.5, "tree_rss_bytes": 2752614400, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 99.078, "tree_rss_bytes": 2449682432, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 101.703, "tree_rss_bytes": 2353106944, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 104.36, "tree_rss_bytes": 3434348544, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 107.157, "tree_rss_bytes": 3818745856, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 109.907, "tree_rss_bytes": 3793485824, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 112.578, "tree_rss_bytes": 1822773248, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 115.157, "tree_rss_bytes": 3408855040, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 118.016, "tree_rss_bytes": 3905548288, "foreign_peers": []}
+CHOOSE 16/99
+HOST_TIMELINE {"elapsed_seconds": 120.766, "tree_rss_bytes": 2195066880, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 123.328, "tree_rss_bytes": 2645204992, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 126.016, "tree_rss_bytes": 1998536704, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 128.625, "tree_rss_bytes": 2733600768, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 131.188, "tree_rss_bytes": 2448982016, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 133.828, "tree_rss_bytes": 1765351424, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 136.407, "tree_rss_bytes": 2191515648, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 139.016, "tree_rss_bytes": 2521284608, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 141.563, "tree_rss_bytes": 2326052864, "foreign_peers": []}
+CHOOSE 32/99
+HOST_TIMELINE {"elapsed_seconds": 144.11, "tree_rss_bytes": 2016071680, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 146.766, "tree_rss_bytes": 1913573376, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 149.407, "tree_rss_bytes": 1632464896, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 152.063, "tree_rss_bytes": 1581105152, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 154.703, "tree_rss_bytes": 1577365504, "foreign_peers": []}
+CHOOSE 48/99
+HOST_TIMELINE {"elapsed_seconds": 157.344, "tree_rss_bytes": 2124726272, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 160.032, "tree_rss_bytes": 2124726272, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 162.625, "tree_rss_bytes": 1622294528, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 165.25, "tree_rss_bytes": 1703071744, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 167.875, "tree_rss_bytes": 1702961152, "foreign_peers": []}
+CHOOSE 64/99
+HOST_TIMELINE {"elapsed_seconds": 170.547, "tree_rss_bytes": 1713229824, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 173.157, "tree_rss_bytes": 2222112768, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 175.828, "tree_rss_bytes": 2904059904, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 178.5, "tree_rss_bytes": 1657073664, "foreign_peers": []}
+CHOOSE 80/99
+HOST_TIMELINE {"elapsed_seconds": 181.11, "tree_rss_bytes": 3193503744, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 183.735, "tree_rss_bytes": 2820993024, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 186.438, "tree_rss_bytes": 1824186368, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 189.063, "tree_rss_bytes": 1791692800, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 191.719, "tree_rss_bytes": 3670339584, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 194.328, "tree_rss_bytes": 3242475520, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 196.875, "tree_rss_bytes": 2826846208, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 199.407, "tree_rss_bytes": 2680098816, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 202.032, "tree_rss_bytes": 3899613184, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 204.782, "tree_rss_bytes": 3410518016, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 207.453, "tree_rss_bytes": 2059714560, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 210.094, "tree_rss_bytes": 5254475776, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 212.641, "tree_rss_bytes": 5817823232, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 215.235, "tree_rss_bytes": 2638536704, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 217.828, "tree_rss_bytes": 3684274176, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 220.469, "tree_rss_bytes": 2892541952, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 223.063, "tree_rss_bytes": 2865025024, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 225.657, "tree_rss_bytes": 4869029888, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 228.266, "tree_rss_bytes": 6009081856, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 230.907, "tree_rss_bytes": 7104348160, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 233.516, "tree_rss_bytes": 3670339584, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 236.188, "tree_rss_bytes": 3993911296, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 238.907, "tree_rss_bytes": 3813498880, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 241.469, "tree_rss_bytes": 3274506240, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 244.125, "tree_rss_bytes": 1830711296, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 246.719, "tree_rss_bytes": 2135982080, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 249.297, "tree_rss_bytes": 4102844416, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 251.922, "tree_rss_bytes": 6767718400, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 254.5, "tree_rss_bytes": 4482514944, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 257.157, "tree_rss_bytes": 4939268096, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 259.672, "tree_rss_bytes": 6880579584, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 262.328, "tree_rss_bytes": 1837776896, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 264.953, "tree_rss_bytes": 2190860288, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 267.719, "tree_rss_bytes": 4068519936, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 270.422, "tree_rss_bytes": 6188224512, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 273.0, "tree_rss_bytes": 7485358080, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 275.641, "tree_rss_bytes": 5829472256, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 278.36, "tree_rss_bytes": 9574285312, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 280.969, "tree_rss_bytes": 9308520448, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 283.61, "tree_rss_bytes": 9439125504, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 286.235, "tree_rss_bytes": 10127151104, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 288.703, "tree_rss_bytes": 10079244288, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 291.375, "tree_rss_bytes": 12365537280, "foreign_peers": []}
+CHOOSE 96/99
+HOST_TIMELINE {"elapsed_seconds": 293.985, "tree_rss_bytes": 2715353088, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 296.532, "tree_rss_bytes": 11246202880, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 299.172, "tree_rss_bytes": 9410949120, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 301.782, "tree_rss_bytes": 9556500480, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 304.485, "tree_rss_bytes": 10650206208, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 307.078, "tree_rss_bytes": 11926421504, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 309.657, "tree_rss_bytes": 9636438016, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 312.235, "tree_rss_bytes": 13213700096, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 314.782, "tree_rss_bytes": 10660786176, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 317.282, "tree_rss_bytes": 11138494464, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 319.891, "tree_rss_bytes": 11501805568, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 322.36, "tree_rss_bytes": 6182977536, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 324.969, "tree_rss_bytes": 6548320256, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 327.578, "tree_rss_bytes": 4329725952, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 330.36, "tree_rss_bytes": 4862234624, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 332.953, "tree_rss_bytes": 6325796864, "foreign_peers": []}
+CHOOSE 99/99
+HOST_TIMELINE {"elapsed_seconds": 335.516, "tree_rss_bytes": 2177568768, "foreign_peers": []}
+ALPHABET_MODEL_RESULT {"method": "legacy", "family": "modnet", "wall_seconds": 336.2697870999982, "output_sha256": "71eb3f5f07ddce1facb47f5987fb735a64579ca3890c98f73bac7c848840bdb9", "production_default_changed": false, "calibration_error_report": "legacy_float32"}
+RESEARCH_PROCESS_RESULT {"exit_code": 0, "stop": null, "peak_tree_rss_bytes": 13789339648, "rss_measurement": "maximum observed across sampled descendant working sets; zero observations reported as null", "elapsed_seconds": 336.8130000000019, "foreign_contention_observed": true, "timing_eligible": false}

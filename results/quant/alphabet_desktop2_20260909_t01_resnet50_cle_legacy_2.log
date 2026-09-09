@@ -1,0 +1,46 @@
+RESEARCH_PLATFORM {"machine": "Desktop 2", "cpu": "AMD Ryzen 7 8700G w/ Radeon 780M Graphics", "os": "Windows-11-10.0.26200-SP0", "ram_bytes": 33381138432, "source_sha256": {"tools/research_process.py": "b97c5b1f4821ad42214cd4ec55eef829f1abff924c8ece7f5474f9669586ee5e", "tools/quant_calib_alphabet.py": "88cbdf7ceeb39e7de5a6bca25c360b89b93da0e7182516e3960c4414087248e9", "tools/xint8_arithmetic_probe.py": "f9c4b7def7909edbf5a5394b3bc31e1d10f2732ebb6a445b5febc6a9e078aa5c", "scripts/research-lowlevel.sh": "800bfc258200fec9695442c58cb7578ad4c4f3f6d6d49f55dadc14fc06ff425f", "scripts/research-iron.sh": "eb3e68dad67727528407f4ae41698c5f52178f9a24c53ef2705a7639fe55ac44", "kernels/memory_placement/probe.py": "4ef7ea560f776f309a441f14d78cccd529b36e1600d212455485038035bf1770", "kernels/memory_placement/memory_kernels.cc": "01fbe2cb8ed6ed153eef0f20512422e3eb44e5a1f5b8759956d039f04eef46f3", "scripts/research-matrix.sh": "d6bad11de9011f75a4942d2d6f5c1e8155eef00f0bbc1bdde85a785d69545ecc", "kernels/memory_placement/gemm.py": "8dbf48f8f4a356cc69bc65793b8dd7eab9b18074d414a1e01fb7e0abe42319a3", "kernels/memory_placement/gemm_placement.cc": "2fa1d57cf316cdd8c3599eae4581284c26ee392ad7dbbf289bafd175342ad9bc", "tools/research_summary.py": "e5d1913068f293914d67034d982ffd5363e5187d035108da8d6cdf4a09386efb", "tools/research_toolchain.py": "c6c01235e9eb9ca7f83e9f42e61d1c98bff86c5284a9ab1cd7fd91e571b010ca"}, "commit": "55f4fae07d799135a0c72311488e17f5b66355d3", "command": ["python", "tools/quant_calib_alphabet.py", "--in-model", "../../models/resnet50_fp32.onnx", "--calib-dir", "../../data/calib", "--cfg-path", "../../models/preprocess_config.json", "--out", "scratch/research_desktop2_20260909_t01/resnet50_cle_legacy_2.onnx", "--method", "legacy", "--limit", "64", "--cle"], "seconds_limit": 900.0, "rss_gib_limit": 16.0, "checks_only": false, "free_ram_bytes": 22519926784}
+HOST_LOAD busy_cores=0.3 logical_cores=16 free_ram_gb=21 sample_sec=1
+HOST_LOAD_TOP 0.09 HWiNFO64:11920 ws_mb=21
+HOST_LOAD_TOP 0.06 claude:6648 ws_mb=497
+HOST_LOAD_TOP 0.03 pycharm64:9008 ws_mb=2721
+HOST_LOAD_TOP 0.03 Taskmgr:17380 ws_mb=121
+HOST_LOAD_TOP 0.03 powershell:15804 ws_mb=78
+HOST_LOAD_VERDICT CLEAR
+
+CALIBRATION images=64 tensors=74 skipped_prunable=49 sample_bytes=2174678016
+HOST_TIMELINE {"elapsed_seconds": 2.625, "tree_rss_bytes": 1197395968, "foreign_peers": []}
+COLLECT 16/64
+HOST_TIMELINE {"elapsed_seconds": 5.187, "tree_rss_bytes": 1198051328, "foreign_peers": []}
+COLLECT 32/64
+COLLECT 48/64
+HOST_TIMELINE {"elapsed_seconds": 7.812, "tree_rss_bytes": 1196818432, "foreign_peers": []}
+COLLECT 64/64
+HOST_TIMELINE {"elapsed_seconds": 10.406, "tree_rss_bytes": 1511505920, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 12.984, "tree_rss_bytes": 1778716672, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 15.625, "tree_rss_bytes": 1039425536, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 18.156, "tree_rss_bytes": 1443151872, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 20.922, "tree_rss_bytes": 2013184000, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 23.531, "tree_rss_bytes": 1854627840, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 26.109, "tree_rss_bytes": 1955758080, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 28.75, "tree_rss_bytes": 1670066176, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 31.281, "tree_rss_bytes": 1406205952, "foreign_peers": []}
+CHOOSE 16/74
+HOST_TIMELINE {"elapsed_seconds": 34.062, "tree_rss_bytes": 1399103488, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 36.734, "tree_rss_bytes": 1284100096, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 39.297, "tree_rss_bytes": 1229094912, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 41.859, "tree_rss_bytes": 1078878208, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 44.406, "tree_rss_bytes": 1116049408, "foreign_peers": []}
+CHOOSE 32/74
+HOST_TIMELINE {"elapsed_seconds": 47.062, "tree_rss_bytes": 1524289536, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 49.641, "tree_rss_bytes": 1168519168, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 52.266, "tree_rss_bytes": 1142624256, "foreign_peers": []}
+CHOOSE 48/74
+HOST_TIMELINE {"elapsed_seconds": 54.906, "tree_rss_bytes": 1001086976, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 57.641, "tree_rss_bytes": 1201762304, "foreign_peers": []}
+CHOOSE 64/74
+HOST_TIMELINE {"elapsed_seconds": 60.141, "tree_rss_bytes": 1090793472, "foreign_peers": []}
+CHOOSE 74/74
+HOST_TIMELINE {"elapsed_seconds": 62.75, "tree_rss_bytes": 2386771968, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 65.516, "tree_rss_bytes": 8054091776, "foreign_peers": []}
+ALPHABET_MODEL_RESULT {"method": "legacy", "family": "folded_resnet", "wall_seconds": 66.4997213999959, "output_sha256": "eafed96b7096caed5a306a94ed1e6edcdae6adc81c4d13a3fb2abbc9ee8e46ab", "production_default_changed": false, "calibration_error_report": "legacy_float32"}
+RESEARCH_PROCESS_RESULT {"exit_code": 0, "stop": null, "peak_tree_rss_bytes": 10138238976, "rss_measurement": "maximum observed across sampled descendant working sets; zero observations reported as null", "elapsed_seconds": 67.26600000000326, "foreign_contention_observed": false, "timing_eligible": true}

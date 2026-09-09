@@ -149,6 +149,19 @@
   not comparable across runs that saw different load, and peak working set can read *low*
   under memory pressure because the OS trims the set.
 
+- **Exact float16 frequency tables do not replace the calibration spool.** Counting every
+  distinct stored float16 value, and bounding the reduction conservatively enough that a
+  certified position cannot be wrong, is sound: it reproduced the emitted ONNX byte for
+  byte on ResNet50 with and without CLE, on YOLOv8n-cut and on MODNet-Cut, and never
+  certified a position the ordered reduction disagreed with. It is also not worth having.
+  The bound certifies 15-24% of activation tensors and they are the small ones, so it
+  avoids 0.70-3.72% of spool bytes, while a count table costs a fixed 524288 bytes per
+  tensor -- a net 0.29-1.94%. Worse, the uncertified majority still needs an ordered
+  spool, so counting alone has to replay a second full inference pass: five
+  order-balanced blocks put it 1.125x slower than the spool it would replace. The saving
+  shrinks as activations grow, so it is smallest on exactly the models whose spool is the
+  problem. [Method, four-family parity and the timing blocks](BENCHMARKS.md#exact-count-calibration-certificate-and-fallback).
+
 - **An optimized CPU session is not sufficient as a QDQ numerical reference.**
   Ignition's INT32-bias dtype-only mutation preserves decoded biases and unoptimized
   CPU outputs, but this ORT build's optimized CPU output differs. Comparing the NPU

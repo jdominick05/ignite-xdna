@@ -18,7 +18,7 @@ than going quietly stale.
 
 | Directory | Experiment | Section it backs |
 |---|---|---|
-| `aie/`, `quant/` | Windows low-level experiments on Desktop 2, 2026-09-09: `memory_*`, `gemm_*`, `arithmetic_*`, `alphabet_*`; per-case source hashes, resource guards and contention witnesses. [AIE case index](aie/README.md#windows-local-memory-placement) | [Placement, observable arithmetic and exact-count calibration](../docs/BENCHMARKS.md#windows-low-level-research-placement-and-xint8-arithmetic) |
+| `aie/`, `quant/` | Windows low-level experiments on Desktop 2, 2026-09-09: `memory_*`, `gemm_*`, `arithmetic_*`, `alphabet_*`; per-case source hashes, resource guards and contention witnesses. [AIE case index](aie/README.md#windows-local-memory-placement) | [Placement, observable arithmetic and exact-count calibration](../docs/BENCHMARKS.md#windows-low-level-research-placement-and-xint8-arithmetic), [what exact counts cost](../docs/BENCHMARKS.md#exact-count-calibration-what-it-costs) |
 | `quant/` | `quant_resnet50_ignition_alpha_nocle_c64.log`, `diff_resnet50_ignition_alpha_nocle_c64.log`, `run_resnet50_ignition_alpha_nocle_c64_{reference,own}_{cpu,npu}.log`, paired `diag_`/`contexts_` logs: versioned Alpha calibration, exact parity and full evaluation; `check_resnet50_ignition_alpha_{resnet_env,resnet_env17}.log`: CLI/import/boundary checks; `quant_resnet50_ignition_alpha_replay.log`: legacy CLI replay | [Ignition Alpha validation](../docs/BENCHMARKS.md#ignition-alpha-release-validation) |
 | `quant/` | `refine_probe_resnet50_quark_nocle_c64.log` (seed 0: 20 directed cases, 500 random trials of ≤6 scales by ≤±6 positions) and `refine_probe_resnet50_quark_nocle_c64_wide.log` (seed 1: same directed cases, 300 trials of ≤12 scales by ≤±12): Quark's `adjust_quantize_info` vs Ignition's `refine` on byte-identical perturbed oracles, per-case moves and violations, the five-pass oscillation, the raw-data no-op and stored-integer checks; CPU only, no model written | [Ignition refinement rules under perturbation](../docs/BENCHMARKS.md#ignition-refinement-rules-under-perturbation) |
 | `quant/` | `cle_probe_resnet50_fp32.log`: Quark `cle_transforms` vs Ignition `cross_layer_equalize` on the float export, ordered pattern list and byte-exact float initializers; `quant_resnet50_quark_cle_c64.log` (fresh default-preset oracle, 33 patterns) and `quant_resnet50_ignition_cle_c64.log` (Ignition `--cle`, Quark/torch imports blocked); `diff_resnet50_ignition_cle_c64.log`: exact position/integer parity and provenance; `run_resnet50_ignition_cle_c64_{reference,own}_{cpu,npu}.log`, `diag_resnet50_ignition_cle_c64_{reference,own}.log` and `contexts_resnet50_ignition_cle_c64_{reference,own}.log`: full 1,000-image paired evaluation, EP placement and pre-run witnesses | [Ignition CLE parity](../docs/BENCHMARKS.md#ignition-cle-parity-and-the-default-xint8-preset) |
@@ -96,10 +96,17 @@ The checkpoint covers Desktop 2, 2026-09-09:
 
 - `arithmetic_desktop2_20260909_a01_*.log` and `a02_*.log`: all placed Conv fixtures;
   `arithmetic_cpu_*` is CPU-only, and `arithmetic_c32_*_01.log` stopped at the host guard.
-- `alphabet_desktop2_20260909_c02_resnet50_cle_{legacy,dual}_1.log`: completed fresh
-  byte-parity pair. `c01` used a historical reference and failed file identity;
-  `alphabet_resnet50_*_01.log` stopped at the host guard and `02` at the memory cap.
-  `c02_resnet50_no-cle_legacy_1.log` was interrupted and has no completed result.
+- `alphabet_*_{c02,c03,c04}_*_{legacy,dual}_1.log`: the four completed fresh byte-parity
+  pairs -- ResNet50 CLE at `c02`, ResNet50 no-CLE and YOLOv8n-cut at `c03`, MODNet-Cut at
+  `c04`. Retained without a completed result: `c01` used a historical reference and failed
+  file identity, `alphabet_resnet50_*_01.log` stopped at the host guard and `02` at the
+  memory cap, `c02_resnet50_no-cle_legacy_1.log` and `c03_modnet_cle_dual_1.log` were both
+  interrupted. `c03`'s and `c04`'s MODNet legacy runs agree byte for byte, so the
+  interrupted case was rerun rather than repaired.
+- `alphabet_desktop2_20260909_t01_resnet50_cle_{legacy,alphabet}_{1..5}.log`: the timing
+  matrix, five order-balanced blocks per method, the only calibration runs here that are
+  not `--checks-only`. Nine of ten are timing-eligible; `alphabet_5` recorded a foreign
+  peer mid-run and is excluded from the paired comparison, not deleted.
 - `check_alphabet_*_02.log` includes forced fallback, invalid-input and overflow
   checks; `check_arithmetic_*_01.log` checks the independent oracle. Neither is a
   hardware result. The [AIE index](aie/README.md#windows-local-memory-placement)

@@ -1731,9 +1731,13 @@ a single-core tiled GEMM. Weighted placement of operands loaded together is the 
 testable optimization; unseen layouts and DMA overlap remain unverified. Synthetic
 Conv fixtures identify a half-up output-rounding candidate for the observable XINT8
 stack, motivating a real-activation surrogate comparison without changing the producer's
-ONNX rounding contract. Exact float16 counts can certify some legacy calibration
-choices, but the conservative bound leaves most sample storage to exact fallback.
-The linked record separates those measurements from the untested optimization claims.
+ONNX rounding contract. Exact float16 counts reproduce the emitted model byte for byte
+on all four declared pairs, and no certificate was ever unsound -- but the conservative
+bound certifies only the small tensors, so it saves 0.29% to 1.94% of spool bytes and
+runs 1.125x slower than the ordered spool it would replace. That arm is
+[rejected](docs/BENCHMARKS.md#exact-count-calibration-what-it-costs) and Ignition's
+calibration is unchanged. The linked record separates these measurements from the
+untested optimization claims.
 
 If you want *what works and how fast*: `README.md`.
 If you want *every decision, rejection, and environment trap that produced it*:

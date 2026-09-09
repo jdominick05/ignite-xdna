@@ -4254,8 +4254,11 @@ ImageNet-1k validation images:
 
 **2026-09-09, Desktop 2, Ryzen 7 8700G / Phoenix, Windows.** These experiments
 intervene on local operand addresses, probe observable Conv arithmetic, and evaluate
-an exact-count calibration alternative. They use an isolated checkout at
-`1e27c5d48b30b9e83a821d36a27a0e8b81fa2bbc`; production Ignition defaults are unchanged.
+an exact-count calibration alternative. They use an isolated checkout: at
+`1e27c5d48b30b9e83a821d36a27a0e8b81fa2bbc` for the placement, arithmetic and first
+calibration runs, and at later commits on the same branch for the `c04` and `t01`
+calibration runs. Each log's `RESEARCH_PLATFORM` line carries the commit it ran at.
+Production Ignition defaults are unchanged.
 The machine, source hashes, command, resource limits and host witness are embedded in
 each log. NPU runs require an idle-device precheck and record sampled context ownership.
 The [toolchain capture](../results/aie/toolchain_desktop2_20260909_01.log) identifies the
@@ -4407,22 +4410,99 @@ ORT graph and output list; ordered float16 hashes must match the first pass. Bot
 modes leave preparation, CLE, QDQ emission and refinement unchanged. The research
 collector replacement exists only inside the experiment process.
 
-The completed ResNet50 CLE pair uses the same 64 calibration images and produces
-byte-identical ONNX against a fresh legacy run: SHA-256
-`eafed96b7096caed5a306a94ed1e6edcdae6adc81c4d13a3fb2abbc9ee8e46ab`.
-It certifies 17/74 activation tensors and falls back on 57. The full sample spool
-is 2174678016 bytes; ambiguous tensors require 2100166656 bytes, while count tables
-occupy 38797312 bytes. Thus only 3.43% of sample bytes can be avoided before count
-storage and replay costs. This correctness run establishes no speedup.
-Evidence: [fresh legacy](../results/quant/alphabet_desktop2_20260909_c02_resnet50_cle_legacy_1.log),
-[dual](../results/quant/alphabet_desktop2_20260909_c02_resnet50_cle_dual_1.log),
+All four declared pairs are complete on the same 64-image listings, each `dual` run
+compared against a legacy run started fresh in the same scratch base. Every one emits
+byte-identical ONNX. No certificate was ever unsound: `dual` also reduces every tensor
+from the ordered spool and asserts on any disagreement with a certified position.
+
+| Model | Activation tensors | Certified | Exact fallback | Sample bytes | Fallback share | Count tables | ONNX identical |
+|---|---|---|---|---|---|---|---|
+| ResNet50, CLE | 74 | 17 | 57 | 2174678016 | 96.57% | 38797312 | yes |
+| ResNet50, no CLE | 74 | 18 | 56 | 2174678016 | 96.28% | 38797312 | yes |
+| YOLOv8n-cut, CLE | 218 | 33 | 185 | 7106560000 | 97.52% | 114294784 | yes |
+| MODNet-Cut, CLE | 99 | 15 | 84 | 12714516480 | 99.30% | 51904512 | yes |
+
+Storage was the hypothesis, and the conservative bound does not deliver it. Certified
+tensors are a minority everywhere -- 23.0%, 24.3%, 15.1% and 15.2% of tensors -- and
+they are the small ones, so the byte fractions are worse than the counts suggest.
+Sample bytes avoidable before counting are 3.43%, 3.72%, 2.48% and 0.70%. A count table
+is a fixed 524288 bytes per activation tensor whatever that tensor's size, costing
+1.78%, 1.78%, 1.61% and 0.41% of the same totals, which leaves a net 1.64%, 1.94%,
+0.87% and 0.29%.
+
+The direction is the finding. Table overhead shrinks as activations grow, but avoidable
+bytes shrink faster, so the method saves least on exactly the model whose spool is the
+problem: MODNet-Cut spools 12714516480 bytes and gives back 36544512 of them, 0.29%.
+Nothing here justifies replacing the ordered spool.
+
+Evidence, legacy and dual per family: ResNet50 CLE
+[legacy](../results/quant/alphabet_desktop2_20260909_c02_resnet50_cle_legacy_1.log),
+[dual](../results/quant/alphabet_desktop2_20260909_c02_resnet50_cle_dual_1.log);
+ResNet50 no-CLE
+[legacy](../results/quant/alphabet_desktop2_20260909_c03_resnet50_no-cle_legacy_1.log),
+[dual](../results/quant/alphabet_desktop2_20260909_c03_resnet50_no-cle_dual_1.log);
+YOLOv8n-cut
+[legacy](../results/quant/alphabet_desktop2_20260909_c03_yolov8n_cle_legacy_1.log),
+[dual](../results/quant/alphabet_desktop2_20260909_c03_yolov8n_cle_dual_1.log);
+MODNet-Cut
+[legacy](../results/quant/alphabet_desktop2_20260909_c04_modnet_cle_legacy_1.log),
+[dual](../results/quant/alphabet_desktop2_20260909_c04_modnet_cle_dual_1.log);
 [certificate checks](../results/quant/check_alphabet_desktop2_20260909_02.log).
 
-An earlier comparison against a historical artifact failed file identity despite
-identical initializers; graph node order differed. It is retained as a failed
-comparison, not pooled with fresh same-producer pairs. Resource-guard failures and
-the interrupted no-CLE run are likewise retained. The result index distinguishes
-completed checks from these attempts.
+The MODNet-Cut pair was rerun under a fresh tag after a first attempt at its dual case
+was interrupted 24 s in, with no process result recorded. Its fresh legacy run
+reproduced the interrupted attempt's legacy output exactly, SHA-256
+`71eb3f5f07ddce1facb47f5987fb735a64579ca3890c98f73bac7c848840bdb9` on both, so the
+reference the byte comparison is made against is itself reproducible across runs.
+An earlier ResNet50 comparison against a historical artifact failed file identity
+despite identical initializers; graph node order differed. It is retained as a failed
+comparison, not pooled with fresh same-producer pairs. Resource-guard failures and the
+interrupted runs are likewise retained. The result index distinguishes completed checks
+from these attempts.
+
+### Exact-count calibration: what it costs
+
+The four pairs above are `--checks-only` correctness runs and carry no timing claim.
+The cost question is answered separately, by `alphabet` mode -- count tables first,
+then an ordered replay for whatever fails to certify -- against legacy, on ResNet50
+CLE, in five independently started blocks alternating which method goes first.
+
+Every one of the ten runs emitted the same file, SHA-256
+`eafed96b7096caed5a306a94ed1e6edcdae6adc81c4d13a3fb2abbc9ee8e46ab`, the same hash as
+the correctness pair above; all five `alphabet` runs report `onnx_bytes_identical`.
+That is the only correctness gate `alphabet` mode has, because unlike `dual` it never
+reduces the certified tensors the legacy way, and its replay hash check only proves the
+second inference pass reproduced the first.
+
+Nine of the ten runs are timing-eligible. Block 5's `alphabet` run is excluded: the
+monitor recorded PyCharm at 2.065 cores mid-run, which is contention, not a result.
+
+| Method | Blocks used | Mean wall seconds | Standard deviation |
+|---|---|---|---|
+| Legacy ordered spool | 1-4 | 66.41 | 0.09 |
+| Exact counts with fallback | 1-4 | 74.69 | 2.35 |
+
+The paired differences are +10.15, +9.67, +8.22 and +5.10 seconds: `alphabet` mode is
+slower in every block, by a mean 8.29 s, **1.125x**. Including block 5 anyway would
+read 7.99 s and 1.120x, so the verdict does not depend on the exclusion. Peak working
+set is unchanged, about 10.1 GB either way.
+
+The cost is structural, not incidental. 57 of 74 tensors fail to certify, so the second
+inference pass runs nearly the whole model again -- 6.65 to 7.03 s of replay -- and the
+ordered MinMSE reduction still has to cover 96.57% of the samples: 46.89 to 51.86 s
+here, against the 52.998 s the same reduction takes over all 74 tensors in the `dual`
+run above. Paying a full extra inference pass to skip 3.43% of a reduction is the
+entire trade, and it loses.
+
+**Verdict: rejected.** The certificate is sound, which is the result worth keeping, and
+it held on four model families -- but a conservative interval that certifies a sixth to
+a quarter of tensors, all of them small, buys 0.29% to 1.94% of spool bytes and costs
+12% more wall time. Ignition's calibration is unchanged. A less conservative bound would
+have to certify the large tensors to matter, and nothing here shows one exists.
+
+Evidence: the ten `alphabet_desktop2_20260909_t01_resnet50_cle_{legacy,alphabet}_{1..5}`
+logs under [`results/quant/`](../results/quant/), each carrying its own host timeline
+and process result.
 
 ### Evidence and reproduction
 
