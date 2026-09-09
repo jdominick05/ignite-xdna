@@ -1,0 +1,375 @@
+The 1x1 conv's accumulators were in memory. Putting them in registers is worth 3x --
+and the op class still loses
+2026-09-09. Desktop 2 (Phoenix, Ryzen 7 8700G), native Windows, mlir-aie ironenv + XRT SDK.
+NPU and CPU arms measured in the same sitting. Witnesses below.
+
+New code, all in this repository, nothing outside it modified:
+  kernels/conv_accum/aie2/conv2dk1.cc       local copy + the accumulator peel
+  kernels/conv_accum/aie2/conv2dk1_skip.cc  same change, the pipeline's third stage
+  kernels/conv_accum/build_conv_accum.py    in-process source redirect + A/B driver
+
+Commands:
+  python kernels/conv_accum/build_conv_accum.py --cache-home <dir-A> --stock \
+      --rest --shapes 32x32,64x32,128x32,256x32,512x32,56x56 --iters 30
+  python kernels/conv_accum/build_conv_accum.py --cache-home <dir-B> \
+      --rest --shapes ... --iters 30
+  python kernels/bottleneck_sweep/cpu_sweep.py --shapes ...        (resnet_env)
+
+THE DEFECT, EXACTLY. results/aie/conv_issue_rate_decomposed.log located the open int8 conv's
+gap to the vendor DPU as issue rate, with the 1x1's hot loop the worst of it at 0.045 MACs per
+cycle against the int8 GEMM's 0.889. The cause is one declaration. conv2dk1_i8_vector holds
+
+    MMUL4x8x8 acc_tmp[4];
+    for (int x = 0; x < n; x++) acc_tmp[x].mac(in_a, in_b);
+
+where n is a RUNTIME value. Registers cannot be dynamically addressed, so the array is forced
+to memory and every .mac() becomes load-four-quarters / mac / store-four-quarters.
+
+THE CHANGE. Peel the n == 4 case into four NAMED accumulators -- the pattern mm.cc's
+matmul_vectorized_2x2_mmul already uses. The array loop is kept as the tail and IS REACHED BY
+A SHAPE IN THIS SWEEP: total_chunks is iw/4, so iw=56 gives 14 chunks = 4+4+4+2, and the 56x56
+rows below run the tail at n=2 and verify. (iw=36 and iw=40 likewise give 9 and 10.) Four live
+4x8x8 acc32 accumulators is one full 1024-bit register each, under this machine's measured
+five-register spill-free ceiling.
+
+THE PREDICTION THIS TESTS, AND IT IS FALSIFIABLE. results/aie/gemm_reblock_h11_npu.log
+improved the int8 GEMM's kernel by 12.5% -- every spill gone, a full MAC every cycle -- and the
+wall clock did not move, because that design is bound by a per-buffer delivery floor. The conv
+sits at 4.5% of peak rather than 41.9%, so it should be genuinely issue-bound and should
+actually speed up. If it did not, the conv would be delivery-bound too and the op class would
+stay closed for a more interesting reason than anyone had recorded.
+
+WITNESSES
+Two samples bracketing the captured series. PRE-RUN: no hardware contexts on the device,
+HOST_LOAD_VERDICT CLEAR. POST-RUN is printed in full below.
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+HOST_LOAD busy_cores=2.19 logical_cores=16 free_ram_gb=8.9 sample_sec=1
+HOST_LOAD_PEER 1.05 python:31368 repo-producer C:\Users\<user>\miniforge3\envs\resnet_env\python.exe pipelines/yolov8n/3b_quantize_cut.py --in models/yolov8l_cut.onnx --calib-dir data/coc...
+HOST_LOAD_TOP 1.05 python:31368 ws_mb=8142
+HOST_LOAD_TOP 0.31 powershell:21724 ws_mb=65
+HOST_LOAD_TOP 0.15 claude:25792 ws_mb=449
+HOST_LOAD_TOP 0.15 HWiNFO64:11920 ws_mb=20
+HOST_LOAD_TOP 0.11 pycharm64:9008 ws_mb=2303
+HOST_LOAD_VERDICT PEER
+
+--------------------------------------------------------------------------------
+1. THE FALSE NEGATIVE THIS RUN ALMOST REPORTED
+--------------------------------------------------------------------------------
+The bottleneck is a THREE-STAGE core-to-core pipeline: conv2dk1 (1x1), conv2dk3 (3x3), and
+conv2dk1_skip (1x1 + skip). conv2dk1_skip.cc carries the SAME array-accumulator defect, on its
+own two reduction loops.
+
+Patching only conv2dk1.cc -- which is what "fix the 1x1 conv's accumulator residency" literally
+asks for -- and measuring at 32x32, iters=10, three runs in one sitting:
+
+STOCK
+      HxW     MFLOP   wall ms     hw ms   host ms   hw GOPS  e2e GOPS  ok
+----------------------------------------------------------------------------------
+    32x32    142.61    2.2220    1.4844    0.7375      96.1      64.2  yes
+
+not enough verified shapes to fit
+
+conv2dk1.cc ONLY
+      HxW     MFLOP   wall ms     hw ms   host ms   hw GOPS  e2e GOPS  ok
+----------------------------------------------------------------------------------
+    32x32    142.61    2.1780    1.4486    0.7294      98.4      65.5  yes
+
+not enough verified shapes to fit
+
+BOTH 1x1 STAGES
+      HxW     MFLOP   wall ms     hw ms   host ms   hw GOPS  e2e GOPS  ok
+----------------------------------------------------------------------------------
+    32x32    142.61    1.2398    0.6133    0.6265     232.5     115.0  yes
+
+not enough verified shapes to fit
+
+Read alone, the middle table is a null result -- 1.4844 -> 1.4486 ms, 2.4%, inside this
+machine's own drift -- and it would have been reported as one: "the conv is delivery-bound
+too, like the GEMM." It is instead Amdahl. A pipeline runs at the rate of its slowest stage,
+and stage 3 still had its accumulators in memory. Fixing both takes the same shape to
+0.6133 ms, 2.42x.
+
+The lesson is not about this kernel. It is that a single-stage intervention in a multi-stage
+pipeline measures the pipeline's balance, not the intervention.
+
+--------------------------------------------------------------------------------
+2. STATIC -- what the compiler did, no hardware involved
+--------------------------------------------------------------------------------
+tools/aie_disasm.py on the objects each arm actually compiled.
+
+conv2dk1_i8_vector, the hot reduction loop:
+
+                                   stock              patched
+  bundles in the loop                 22                   14
+  vmac in the loop                     1                    4
+  MAC issue rate              0.045/cyc            0.286/cyc     6.29x
+  accumulator quarter loads            4                    0
+  accumulator quarter stores           4                    0
+  bundles issuing nothing              6                    3
+  slot density                 0.91 of 6            1.00 of 6
+  acc registers named          3 (cm0-cm2)          5 (cm0-cm4)
+
+The stock loop, verbatim -- four vlda of amhh1/amhl1/amlh1/amll1 in, one vmac, four vst of
+amhh2/amhl2/amlh2/amll2 out, six dead bundles:
+
+        vlda	amhh1, [p3, #0x60]
+        vlda	amhl1, [p3, #0x40] | vldb	wl2, [p7, dj1]
+        vlda	amlh1, [p3, #0x20]
+        vlda	amll1, [p3, #0x0]
+        (all nop) x2
+        vmac	cm2, cm1, x2, x0, r30
+        (all nop) x4
+        vst	amhh2, [p3, #0x60]
+        vst	amhl2, [p3, #0x40]
+        vst	amlh2, [p3, #0x20] | add	r29, r29, #0x1
+        vst	amll2, [p3, #0x0]  | add	r28, r28, #0x20
+
+and the patched loop -- no accumulator traffic at all, four vmac on named cm1-cm4:
+
+        vlda	wh8, [p7, #0x20] | paddb	[p3], m2
+        vlda	wl8, [p7], #0x40 | vldb	wl6, [p3], #0x20
+        vldb	wl4, [p3], #0x20
+        vldb	wl2, [p3, #0x0]
+        vldb	wl0, [p3, #0x20]
+        (all nop) x3
+        vmac	cm4, cm4, x6, x8, r10
+        vmac	cm3, cm3, x4, x8, r10
+        vmac	cm2, cm2, x2, x8, r10
+        add	r24, r24, r12 | vmac	cm1, cm1, x0, x8, r10
+
+conv2dk1_skip_i8_vector has two reduction halves and both moved the same way: two 22-bundle
+loops at density 0.91 become two 14-bundle loops at density 1.00, with 6 accumulator registers
+named instead of 5.
+
+Both functions grew in total size (163 -> 215 bundles, 218 -> 359) because the peel is an added
+fast path and the array loop is kept as the tail. Stack frame is unchanged at 768 B in both --
+this fix moves the ACCUMULATORS into registers; it does not empty the frame the way H11 did on
+the GEMM.
+
+--------------------------------------------------------------------------------
+3. A/B ON HARDWARE -- alternating arms, each with its own NPU_CACHE_HOME
+--------------------------------------------------------------------------------
+The cache home is per-arm and the driver requires it: @iron.jit keys its cache on the
+design and its compile-time arguments, NOT on the kernel source, so a patched build with
+the same arguments would silently reuse the stock arm's whole xclbin. That is not
+hypothetical -- it happened to the reblocked GEMM in this repo, and the only symptom was
+that no new .o appeared on disk. Verified here by grepping the peel out of the source
+copy the compiler actually consumed.
+
+SERIES A -- stock
+      HxW     MFLOP   wall ms     hw ms   host ms   hw GOPS  e2e GOPS  ok
+----------------------------------------------------------------------------------
+    32x32    142.61    2.1456    1.4952    0.6503      95.4      66.5  yes
+    64x32    285.21    3.4989    2.7142    0.7847     105.1      81.5  yes
+   128x32    570.43    6.1726    5.2107    0.9619     109.5      92.4  yes
+   256x32   1140.85   10.9753   10.0750    0.9003     113.2     103.9  yes
+   512x32   2281.70   20.7103   19.8164    0.8938     115.1     110.2  yes
+    56x56    436.73    5.1115    4.2225    0.8890     103.4      85.4  yes
+      32x64   FAILED TO COMPILE (memtile buffer limit; same in both arms, excluded from the fit)
+      64x64   FAILED TO COMPILE (memtile buffer limit; same in both arms, excluded from the fit)
+     128x64   FAILED TO COMPILE (memtile buffer limit; same in both arms, excluded from the fit)
+FIT  hw_time_ms = intercept + slope * FLOPs   (verified shapes only)
+  points        : 6
+  intercept     : 341.5 us   fixed cost in the hw bracket
+  marginal GOPS : 117.1   steady-state array throughput
+  r^2           : 0.99987
+
+Compare marginal GOPS against the CPU's measured int8 rate from
+kernels/conv2x_baseline/cpu_baseline.py --single (resnet_env, same sitting).
+
+SERIES A -- patched
+      HxW     MFLOP   wall ms     hw ms   host ms   hw GOPS  e2e GOPS  ok
+----------------------------------------------------------------------------------
+    32x32    142.61    1.2920    0.6190    0.6729     230.4     110.4  yes
+    64x32    285.21    1.6883    1.0303    0.6580     276.8     168.9  yes
+   128x32    570.43    3.1284    1.9470    1.1814     293.0     182.3  yes
+   256x32   1140.85    4.3800    3.5239    0.8561     323.7     260.5  yes
+   512x32   2281.70    7.7005    6.7852    0.9153     336.3     296.3  yes
+    56x56    436.73    2.4173    1.6689    0.7484     261.7     180.7  yes
+      32x64   FAILED TO COMPILE (memtile buffer limit; same in both arms, excluded from the fit)
+      64x64   FAILED TO COMPILE (memtile buffer limit; same in both arms, excluded from the fit)
+     128x64   FAILED TO COMPILE (memtile buffer limit; same in both arms, excluded from the fit)
+FIT  hw_time_ms = intercept + slope * FLOPs   (verified shapes only)
+  points        : 6
+  intercept     : 284.6 us   fixed cost in the hw bracket
+  marginal GOPS : 350.3   steady-state array throughput
+  r^2           : 0.99883
+
+Compare marginal GOPS against the CPU's measured int8 rate from
+kernels/conv2x_baseline/cpu_baseline.py --single (resnet_env, same sitting).
+
+SERIES B -- stock
+      HxW     MFLOP   wall ms     hw ms   host ms   hw GOPS  e2e GOPS  ok
+----------------------------------------------------------------------------------
+    32x32    142.61    2.2023    1.4939    0.7084      95.5      64.8  yes
+    64x32    285.21    3.6108    2.7476    0.8632     103.8      79.0  yes
+   128x32    570.43    6.0336    5.1889    0.8446     109.9      94.5  yes
+   256x32   1140.85   12.4156   11.2962    1.1193     101.0      91.9  yes
+   512x32   2281.70   20.7037   19.8010    0.9027     115.2     110.2  yes
+    56x56    436.73    5.1377    4.2453    0.8925     102.9      85.0  yes
+
+FIT  hw_time_ms = intercept + slope * FLOPs   (verified shapes only)
+  points        : 6
+  intercept     : 456.3 us   fixed cost in the hw bracket
+  marginal GOPS : 115.6   steady-state array throughput
+  r^2           : 0.99498
+
+Compare marginal GOPS against the CPU's measured int8 rate from
+kernels/conv2x_baseline/cpu_baseline.py --single (resnet_env, same sitting).
+
+SERIES B -- patched
+      HxW     MFLOP   wall ms     hw ms   host ms   hw GOPS  e2e GOPS  ok
+----------------------------------------------------------------------------------
+    32x32    142.61    1.3283    0.6226    0.7057     229.1     107.4  yes
+    64x32    285.21    1.6562    1.0199    0.6363     279.6     172.2  yes
+   128x32    570.43    2.5345    1.8396    0.6949     310.1     225.1  yes
+   256x32   1140.85    4.3289    3.4961    0.8328     326.3     263.5  yes
+   512x32   2281.70    7.8269    6.8071    1.0198     335.2     291.5  yes
+    56x56    436.73    2.4388    1.6719    0.7669     261.2     179.1  yes
+
+FIT  hw_time_ms = intercept + slope * FLOPs   (verified shapes only)
+  points        : 6
+  intercept     : 252.2 us   fixed cost in the hw bracket
+  marginal GOPS : 348.4   steady-state array throughput
+  r^2           : 0.99867
+
+Compare marginal GOPS against the CPU's measured int8 rate from
+kernels/conv2x_baseline/cpu_baseline.py --single (resnet_env, same sitting).
+
+--------------------------------------------------------------------------------
+4. THE CPU BASELINE, NAMED, SAME SITTING
+--------------------------------------------------------------------------------
+onnxruntime 1.22.1, ORT CPU EP, QDQ int8 (VNNI). Run twice.
+
+CPU SERIES 1
+      HxW     MFLOP   int8 ms    min ms      GOPS
+--------------------------------------------------
+    32x32    142.61    0.1457    0.1161     979.0
+    64x32    285.21    0.3323    0.2376     858.3
+   128x32    570.43    0.5503    0.4414    1036.6
+   256x32   1140.85    1.3005    1.0040     877.2
+   512x32   2281.70    2.6547    2.1403     859.5
+    56x56    436.73    0.3552    0.3082    1229.5
+
+FIT  cpu_time_ms = intercept + slope * FLOPs
+  intercept     : -74.6 us
+  marginal GOPS : 839.5
+  r^2           : 0.99591
+
+CPU SERIES 2
+      HxW     MFLOP   int8 ms    min ms      GOPS
+--------------------------------------------------
+    32x32    142.61    0.1889    0.1585     754.8
+    64x32    285.21    0.2318    0.1919    1230.3
+   128x32    570.43    0.7466    0.6280     764.1
+   256x32   1140.85    1.3609    1.0375     838.3
+   512x32   2281.70    2.7380    2.2255     833.4
+    56x56    436.73    0.4805    0.3603     908.9
+
+FIT  cpu_time_ms = intercept + slope * FLOPs
+  intercept     : -25.0 us
+  marginal GOPS : 823.7
+  r^2           : 0.99649
+
+--------------------------------------------------------------------------------
+5. READING
+--------------------------------------------------------------------------------
+THE PREDICTION HELD, AND THAT IS THE POINT. H11 improved the GEMM's inner loop by 12.5% and
+moved the wall clock by nothing, inside this machine's own +/-5% drift. The same class of
+change to the conv -- accumulators into registers, issue rate up 6.29x in the hot loop -- moves
+marginal throughput by 2.99x and 3.01x across two series. The two designs are bound by
+different things, and this is the first measurement in this repo that shows it by intervening
+rather than by modelling. The conv was issue-bound; the GEMM was not.
+
+EVERY SHAPE IMPROVED, AND THE FIT IS CLEAN. Marginal GOPS -- the shape-free slope, which is the
+honest metric because per-point GOPS must rise with size regardless of the array -- goes
+
+    series A    117.1 -> 350.3    2.99x     r^2 0.99987 / 0.99883
+    series B    115.6 -> 348.4    3.01x     r^2 0.99498 / 0.99867
+
+Both series, same sign, same magnitude, well outside the ~5% drift this machine shows between
+repeats of an identical build. The fixed cost inside the hardware bracket also fell (341.5 ->
+284.6 us in A, 456.3 -> 252.2 in B), but those intercepts are the noisiest quantity in the fit
+and the change in them is not claimed.
+
+AND THE OP CLASS STILL LOSES. This is the verdict, and the CPU baseline is named:
+onnxruntime 1.22.1, ORT CPU EP, QDQ int8 reaching VNNI, same six shapes, same sitting, two
+series -- 839.5 and 823.7 marginal GOPS.
+
+    stock NPU     115.6-117.1 GOPS     CPU wins 7.1-7.2x
+    patched NPU   348.4-350.3 GOPS     CPU wins 2.4x
+    CPU           823.7-839.5 GOPS
+
+A 3x kernel improvement moves the deficit from 7.2x to 2.4x and does not close it. The op-class
+verdict does NOT reopen. What changes is the reason: it was "the kernel uses 5% of its issue
+slots", and it is now "even with the issue slots used, one column of this array does not reach
+a VNNI-equipped Zen4".
+
+The CPU figure is consistent with what this repo already published: docs/SILICON.md 2.3 lists
+819.0 GOPS for the same sweep, against 823.7-839.5 here. So the two arms of the comparison are
+both anchored -- the CPU to a prior measurement, the NPU to its own stock arm in this sitting.
+
+Against the vendor DPU, in the units docs/SILICON.md 2.3 uses (marginal rate for one column,
+and the derived per-core split -- a column is four cores):
+
+                                  one column     per core
+  VitisAI DPU, yolov8l              1650 GOPS    412 GOPS
+  open bottleneck, patched           350 GOPS     88 GOPS
+  open bottleneck, stock (here)      116 GOPS     29 GOPS
+
+The gap to the vendor narrows from ~14x against this sitting's stock arm to ~4.7x. Most of it
+was this one defect; a real remainder is left, and conv2dk3 is the obvious place to look for
+it.
+
+A DISCREPANCY THAT HAS TO BE STATED, BECAUSE IT LOOKS LIKE A CONTRADICTION.
+results/aie/bottleneck_spatial_sweep_npu.log published 146.1 marginal GOPS for the stock
+kernel, and docs/SILICON.md 2.3 quotes it. THIS SITTING'S STOCK ARM MEASURES 115.6-117.1 at the
+same shapes. The kernel is not the same code: that sweep predates the 2026-09-07 width fix,
+which rewrote conv2dk1_i8_vector to walk the width in blocks of N<=4 chunks -- the very array
+whose spill this log removes -- where upstream had used eight concurrent accumulators. The
+published run also could not compile 56x56 at all, and this one can, so the shape sets differ
+too. INFERENCE, not measurement: the width fix appears to have cost ~20% at w=32 while making
+non-multiple-of-32 widths correct. It was never measured at the time. The A/B above is
+like-for-like -- both arms are the current kernel, same sitting, same shapes -- so the 2.99x is
+unaffected by this; but 350.3 should be read against 146.1 as "2.4x the last published figure",
+not against a number measured on different code.
+
+--------------------------------------------------------------------------------
+WHAT THIS DOES NOT SHOW
+--------------------------------------------------------------------------------
+- One design, one column, int8, one machine, one power mode, one sitting. Six shapes, all on
+  the h-axis except 56x56; the w=64 shapes still fail to compile in BOTH arms (a memtile
+  buffer limit, unrelated to this change) and are excluded from both fits.
+- The host-load witness reads PEER, not CLEAR: another session's CPU quantization producer
+  took about a core partway through. The NPU had no foreign context throughout. The CPU arm
+  was run twice and agrees to 1.9% (839.5 and 823.7), and contention can only DEPRESS the CPU
+  figure, which makes the "CPU still wins by 2.4x" verdict conservative rather than flattered.
+- conv2dk3 -- the 3x3 middle stage -- was NOT touched. conv_issue_rate_decomposed.log measured
+  it at 0.222 MACs/cycle and attributed the loss to vshift window alignment, a different
+  defect needing a different fix. With both 1x1 stages now fast, the 3x3 is the likeliest new
+  rate-limiter, and nothing here establishes where the remaining 2.4x to the CPU sits.
+- The MAC issue rates are static ceilings read off the schedule, not counter measurements. No
+  trace or hardware performance counter was run; 0.045 and 0.286 are bundles-and-vmac
+  arithmetic, and the loops' trip counts are not weighted into a whole-kernel figure. In
+  particular the whole-kernel speedup (2.99x) is smaller than the hot-loop issue-rate gain
+  (6.29x), as it must be -- the loop is not all of the kernel.
+- Correctness is the sweep's own gate, and it is a TOLERANCE check, not a bit-exact one:
+  np.allclose(rtol=0, atol=INP_SCALE) against the torch int8 golden mlir-aie's test.py uses.
+  Every shape in every arm reads ok=yes. That bounds the peel's error by one input quantum on
+  these shapes; it is not a proof of exactness, and not a proof for inputs not tested.
+- The w=32 shapes exercise ONLY the peeled n == 4 path (total_chunks = 8 = 4+4). The array
+  tail is reached only by 56x56 (14 = 4+4+4+2), which verifies in both arms and both series.
+  So the tail is covered by one shape, not by the sweep as a whole.
+- The upstream pre-width-fix kernel was NOT built as a third arm, so the ~20% attribution
+  below is inference from one changed file, not a measurement. The machine had a peer
+  producer holding ~13 GB and free RAM at zero for the whole window in which that arm could
+  have been built, and contending with another session's job was not worth a nice-to-have.
+- The intercept changes are reported but not claimed; r^2 is high on the slope, and the
+  intercept is where a six-point fit is weakest (series B's stock intercept, 456.3 us, differs
+  from series A's 341.5 us on identical code).

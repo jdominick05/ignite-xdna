@@ -1,0 +1,90 @@
+The accumulator ceiling is not a width budget: bf16 holds the same total and spills nothing
+2026-09-09. Desktop 2 (Phoenix, Ryzen 7 8700G), mlir-aie ironenv (v1.4.2, llvm-aie
+22.0.0.2026090201). NO NPU SESSION was built and no hardware context was taken; this reads two
+already-compiled kernel objects out of ~/.npu/cache and counts instructions.
+
+Commands (from the repo root, in the ironenv):
+  python tools/aie_disasm.py ~/.npu/cache/e9ed1c603d42d8bb153dfb76/matmul_i8_i32_86901378.o --regs
+  python tools/aie_disasm.py ~/.npu/cache/068c3151806dff6b4ab0f349/matmul_bf16_f32_cb36b67f.o --regs
+
+THE HYPOTHESIS UNDER TEST. results/aie/aie2_isa_static.log measured five concurrently-live
+4x8x8 int8 aie::mmul accumulators as the spill-free ceiling, and results/aie/gemm_cost_model_
+nest.log found the production int8 GEMM holding eight and spilling, with a 416-byte frame.
+But the two dtype paths in mm.cc ask the register file for the SAME TOTAL WIDTH, so the
+ceiling might be a width budget rather than a count:
+
+    int8  matmul_i8_i32   -> matmul_vectorized_4x2_mmul   8 accumulators x 1024 bit = 8192
+    bf16  matmul_bf16_f32 -> matmul_vectorized_4x4       16 accumulators x  512 bit = 8192
+
+If the ceiling is width, bf16 should spill too, the design rule generalises, and reblocking
+int8 buys nothing. If bf16 does not spill, int8's blocking is the defect. Cheapest possible
+test: read both objects.
+
+--------------------------------------------------------------------------------
+1. THE TWO OBJECTS
+--------------------------------------------------------------------------------
+
+== C:\Users\<user>/.npu/cache/e9ed1c603d42d8bb153dfb76/matmul_i8_i32_86901378.o
+  section .text.matmul_i8_i32: 144 bundles (2 full-width, 142 compressed), frame 416 B, stack refs 33
+      acc registers (9): cm0 cm1 cm2 cm3 cm4 cm5 cm6 cm7 cm8
+      vec registers (12): x0 x1 x2 x3 x4 x5 x6 x7 x8 x9 x10 x11
+  
+== C:\Users\<user>/.npu/cache/068c3151806dff6b4ab0f349/matmul_bf16_f32_cb36b67f.o
+  section .text.matmul_bf16_f32: 197 bundles (2 full-width, 195 compressed), frame 64 B, stack refs 33
+      vec registers (9): x0 x1 x2 x3 x4 x5 x6 x8 x10
+  
+--------------------------------------------------------------------------------
+2. WHAT EACH ONE PUTS ON THE STACK
+--------------------------------------------------------------------------------
+Counting operations whose address operand is [sp, ...] inside each matmul body:
+
+    int8   12 vlda  +  12 vst      + 3 lda + 3 st        frame 416 B
+    bf16    0 vlda  +   0 vst      + 15 lda + 15 st      frame  64 B
+
+The int8 frame reconciles exactly: 12 vector spill slots at 32 bytes each is 384 B, plus 32 B
+of scalar, is 416 B.
+
+--------------------------------------------------------------------------------
+3. READING
+--------------------------------------------------------------------------------
+THE WIDTH HYPOTHESIS IS REFUTED. Both kernels occupy the same total accumulator width and the
+same eight of the file's nine registers, and one of them spills twelve vector values while the
+other spills none at all. bf16's fifteen stack references are every one of them SCALAR -- loop
+counters and pointers, which is what a 64-byte frame is. It never puts an accumulator on the
+stack. So the ceiling measured earlier is not a width budget, does not generalise across
+dtypes, and the design rule cannot be stated in bits.
+
+THE FILE ITSELF IS NINE REGISTERS, ADDRESSABLE AT THREE GRANULARITIES. The bf16 object names
+bml0-bml8 and bmh0-bmh8, and both objects name amll0-amll8 through amhh0-amhh8. Those are not
+separate files: they are the same nine accumulators viewed as full 1024-bit registers (cm0-cm8),
+as 512-bit halves (bm), and as 256-bit quarters (am). That is consistent with the nine names
+aie2_isa_static.log reported and explains why it called nine a lower bound -- it had only
+looked for the cm spelling.
+
+SO INT8'S BLOCKING IS THE DEFECT, AND BF16 IS THE EXISTENCE PROOF. A blocking that fits gives a
+64-byte frame and zero accumulator traffic. int8's 4x2 does not fit and pays twelve spill
+round-trips, and gemm_cost_model_nest.log already located where they run: not in the
+nine-bundle hardware loop, but in the 87 non-loop bundles of the accumulator-group body, which
+executes 16 times per kernel call at the n=64 tile.
+
+WHAT THIS SUPPORTS. H11, proposed twice in this repo and never run: rebuild the int8 path on
+matmul_vectorized_2x2_mmul (4 accumulators, mm.cc:81) instead of matmul_vectorized_4x2_mmul
+(8, mm.cc:242). Four is under the five this repo measured as spill-free, so the prediction is a
+frame that falls toward bf16's 64 B and twelve vector spills that disappear, traded against
+twice as many accumulator groups per call. Whether that trade is net positive is exactly what
+the cost model can answer from the rebuilt object, before any hardware runs.
+
+--------------------------------------------------------------------------------
+WHAT THIS DOES NOT SHOW
+--------------------------------------------------------------------------------
+- It does not explain WHY int8's eight 1024-bit accumulators overrun a nine-register file while
+  bf16's sixteen 512-bit ones do not, when both occupy eight registers' worth. The int8 path
+  also stages its int32 output tile through accumulator quarters (vlda amll/amhh from the C
+  pointer), which bf16 does at half the width, and that is the obvious suspect -- but it is a
+  suspect, not a measurement. Nothing here counts live ranges.
+- Two objects, one tile geometry each, one optimisation level, one compiler version.
+- The 416-byte reconciliation assumes 32-byte vector spill slots. That matches, but the slot
+  size was inferred from the arithmetic rather than read from a frame layout.
+- No hardware was involved and no timing is claimed. The consequence of the spill is measured
+  elsewhere (gemm_cost_model_nest.log); this log only establishes that it is a blocking
+  problem rather than a width limit.

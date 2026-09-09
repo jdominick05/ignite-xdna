@@ -20,17 +20,32 @@ The ideal analytical scale factor is:
 The hardware compiler approximates A using (M, sigma):
     A ≈ M * 2^(-sigma),  where M in [16384, 32767] and sigma in [0, 31].
 
-Theorem 1 (Systolic Shift-Cut Bound):
-    An operation is physically executable without numerical distortion on XDNA1
-    if and only if:
+Theorem 1 (Systolic Shift-Cut Bound) -- STATED, NOT VALIDATED ON THIS DEVICE:
+    The criterion this module applies is:
         0 <= sigma <= 31
 
     Since M ≈ 2^14 and A = 2^(pos_y - pos_x - pos_w), we have:
         sigma = pos_x + pos_w - pos_y + 14
 
-    If sigma < 0, the operation requires an arithmetic left-shift exceeding accumulator
-    precision (accumulator overflow hazard).
-    If sigma > 31, the hardware 5-bit shifter clamps to 31 (shift clamp hazard).
+    If sigma < 0, the operation would require an arithmetic left-shift exceeding
+    accumulator precision (accumulator overflow hazard).
+    If sigma > 31, the hardware 5-bit shifter would clamp to 31 (shift clamp hazard).
+
+    Read the "if and only if" as a hypothesis, not a result. Both register widths --
+    the 15-bit multiplier and the 5-bit shifter -- are asserted here, not measured, and
+    no AIE-ML or DPU ISA document in this repo states either. AMD's own AI Engine
+    documentation describes the accumulator-to-vector path as SRS (shift-round-saturate)
+    without giving the shift field's width, so the bound is not externally corroborated
+    either.
+
+    Neither edge has been observed on hardware. The highest sigma ever executed on this
+    DPU is 30; measured placements cover sigma in {14, 15, 17, 18, 22, 30}, all from
+    fixtures whose scales sit inside the producer's own [0, 16] shift-cut contract.
+    Fixtures built to reach sigma 0, 31 and 32 were rejected by the VitisAI EP -- the
+    out-of-contract scales make it refuse the Conv, so those runs record
+    "tested_conv_on_npu": false and ran on the CPU EP. A divergence measured there is a
+    software result and says nothing about the DPU shifter or the accumulator. Any claim
+    that an edge is "measured" needs an NPU:Conv in the EP report, not a fallback.
 
 Theorem 2 (Systolic Scale Feasibility Window):
     For any fixed input scale S_x (pos_x) and weight scale S_w (pos_w), the output
@@ -342,14 +357,26 @@ def print_shift_cut_report(model_path: str, hazards: List[ShiftCutHazard]):
 def calculate_feasible_scale_bounds(scale_x: float, scale_w: float) -> Tuple[int, int, float, float]:
     """Calculate the closed-form feasible position and scale interval for output scale S_y.
 
-    Theorem (Systolic Scale Feasibility Window):
-        pos_y in [max(0, pos_x + pos_w - 17),  min(31, pos_x + pos_w + 14)]
+    Theorem 2 (Systolic Scale Feasibility Window):
+        pos_y in [pos_x + pos_w - 17,  pos_x + pos_w + 14]
         where S = 2^(-pos).
+
+    Positions are used UNCLAMPED, for the same reason project_scale_to_feasible_basin
+    does: clamping pos_x and pos_w into [0, 31] here while sigma is computed from the
+    unclamped scales makes the two disagree whenever an input position sits outside that
+    range, which is what projected an already-feasible RegNetX-002 layer from sigma = 30
+    to sigma = -90. An earlier version of this function clamped both, and the window it
+    returned could therefore exclude the position the analyzer would accept.
+
+    NOTE: this helper currently has no callers. It is kept because it states the window
+    in closed form, and it is corrected so that wiring it up cannot reintroduce that bug.
     """
-    pos_x = max(0, min(31, int(round(-math.log2(scale_x))))) if scale_x > 0 else 0
-    pos_w = max(0, min(31, int(round(-math.log2(scale_w))))) if scale_w > 0 else 0
-    min_pos_y = max(0, pos_x + pos_w - 17)
-    max_pos_y = min(31, pos_x + pos_w + 14)
+    if scale_x <= 0 or scale_w <= 0:
+        return 0, 0, 0.0, 0.0
+    pos_x = int(round(-math.log2(scale_x)))
+    pos_w = int(round(-math.log2(scale_w)))
+    min_pos_y = pos_x + pos_w - 17
+    max_pos_y = pos_x + pos_w + 14
     min_scale_y = 2.0 ** (-max_pos_y)
     max_scale_y = 2.0 ** (-min_pos_y)
     return min_pos_y, max_pos_y, min_scale_y, max_scale_y

@@ -37,10 +37,15 @@ array program) into `~/.npu/cache/<hash>/`; later runs of the same shape hit the
 | `groupnorm_bf16/` | `InstanceNormalization` / `GroupNorm(32)` in `resnetv2_50x3_xint8.onnx` | Wins on 33/49 nodes standalone; v1 measured **0/49 once the handoff is counted** — reopened: the floor was a slow conversion function, not physics; v2 cuts it 23.6ms→5.7ms and isolates a 1.19ms protocol-only floor, already under CPU. Reopened, unbuilt |
 | `attention_bf16/` | Multi-head attention in `mobilevit_xxs` | **Loses 71×–240×.** Numerically correct, badly written |
 | `conv2x_baseline/` | Nothing — the CPU baseline for `ml/resnet/layers_conv2_x` | **CPU wins 6.3×–8.5×** like-for-like int8 |
-| `bottleneck_sweep/` | Nothing — the spatial sweep conv2x asked for | **CPU wins 5.7×–12.75×.** The int8 conv op class is closed |
+| `bottleneck_sweep/` | Nothing — the spatial sweep conv2x asked for | **CPU wins 5.7×–12.75×.** The int8 conv op class is closed — still closed after `conv_accum/`'s 3× fix, but by 2.4× rather than 7.2× |
 | `conv2dk3_widthfix/` | Nothing — an upstream mlir-aie bug fix | **Resolved.** Bit-exact at every width tested |
 | `dispatch_floor/` | Nothing — measures the per-dispatch fixed cost itself | Hardware floor **169.8 µs**, wall floor through IRON **617.0 µs** |
 | `clock_probe/` | Nothing — measures the AIE core clock itself, per power mode | **1.80 GHz** in `default`/`performance`/`turbo`, 1.03 `balanced`, 0.80 `powersaver` |
+| `acc_spill_probe/` | Nothing — finds where the AIE2 accumulator file runs out | **5** live 4×8×8 int8 `aie::mmul` accumulators fit; 6 is the first that spills. Compile only, no NPU |
+| `pmu_probe/` | Nothing — routes the trace unit's stall taxonomy and occupancy | Calibrated on `clock_probe`'s own loops (2.0003, 9.0001). **68%** of a short kernel's cycles are lock wait |
+| `asm_probe/` | Nothing — asks whether hand-written AIE2 assembly is usable | **It assembles and links.** Only statement-level inline asm fails. Compile only, no NPU |
+| `bank_placement/` | A local copy of `whole_array.py` plus `--stack-size`, and an alternating A/B driver | Tests H12: does separating the int8 GEMM's colliding operands into different memory banks speed it up? **Not resolvable on a shared machine** — seven series, arms overlap, sign varies |
+| `conv_accum/` | Local copies of both 1×1 conv kernels with their accumulators made register-resident | **Worth 2.99–3.01×** (116 → 350 marginal GOPS); hot loop 0.045 → 0.286 MACs/cycle. **The op class stays closed** — CPU still wins 2.4×, down from 7.2× |
 
 Each kernel's own findings, warnings and retractions follow. They are prose rather than
 table cells because several of them are corrections to what an earlier version of this
@@ -282,6 +287,37 @@ channel config is `tensor_w`=44 (45 fails the VMAC 4-pixel granularity, not this
 exceed Tile(0,4)'s 64 KB) *before* the single-buffering change described above.
 `results/aie/bottleneck_widthfix_npu.log`, `docs/DECISIONS.md`.
 
+## `conv_accum/`
+
+Not an operator — the **accumulator-residency fix** for the two 1×1 conv kernels, plus the A/B
+driver that measures it. Local copies of `conv2dk1.cc` and `conv2dk1_skip.cc` with one change
+each; `build_conv_accum.py` redirects the source lookup in-process, so **the shared toolchain is
+not edited**.
+
+**The defect.** Both kernels hold `MMUL4x8x8 acc_tmp[4]` and index it with a loop whose trip
+count `n` is a **runtime** value. Registers cannot be dynamically addressed, so the array is
+forced to memory and every `.mac()` becomes load-four-quarters / mac / store-four-quarters — the
+22-bundle, one-`vmac` loop measured at **0.045 MACs/cycle**. Peeling the `n == 4` case into four
+*named* accumulators gives **14 bundles with four `vmac`, 0.286/cyc**, no accumulator traffic.
+The array loop is kept as the tail and is reached: `total_chunks = iw/4`, so `iw=56` gives
+14 = 4+4+4+2 and the 56×56 shape runs it at n=2 and verifies.
+
+**Worth 2.99–3.01×** on marginal GOPS — **115.6–117.1 → 348.4–350.3** across two series, every
+shape passing the sweep's golden gate. **The op class stays closed anyway:** the CPU (ORT CPU EP,
+QDQ int8, VNNI, same sitting) runs 823.7–839.5, so it still wins **2.4×**, down from 7.2×.
+`results/aie/conv_accum_residency_npu.log`.
+
+**Fix every stage of a pipeline before believing a null result.** The bottleneck is three cores
+chained; patching only `conv2dk1.cc` moved 32×32 by **2.4%** and looked like "the conv is
+delivery-bound too". It was Amdahl — stage 3 still had its accumulators in memory. Both stages
+patched: **2.42×** at the same shape. A single-stage intervention measures the pipeline's balance,
+not the intervention.
+
+**Read 350 against 146.1 as 2.4×, not 3×.** The published 146.1 predates the 2026-09-07 width fix
+that rewrote this same loop, so it is not the same code; this sitting's own stock arm measures
+115.6–117.1. The A/B is like-for-like within one sitting. `conv2dk3` was **not** touched and is
+the likeliest remaining rate-limiter.
+
 ## `dispatch_floor/`
 
 Not an operator — measures the **per-dispatch fixed cost itself**, the constant every
@@ -295,6 +331,27 @@ were actually charged while their write-ups reasoned with 185 µs.
 **Go/no-go for any future kernel: the op's CPU time must exceed ~617 µs (IRON) or ~170 µs
 (zero-overhead best case). Run this before writing a kernel.**
 `results/aie/dispatch_floor_npu.log`.
+
+**Superseded 2026-09-09 for batchable work: the threshold is ~36 µs.** The zero-overhead
+resubmit path is no longer hypothetical — batched `pyxrt.runlist` submission amortises a
+dispatch to **36.3 µs**, 17× below the IRON figure and below the 169.8 µs hardware bracket
+(`results/aie/dispatch_runlist_npu.log`). It is a **throughput** result: 36 µs holds when 64
+dispatches are in flight together, while a single unbatched call still pays ~140 µs raw or
+617 µs through IRON. So the 617 µs rule still governs one-shot latency-critical work, and
+~36 µs governs anything batchable.
+
+**Scoped the same day: ~36 µs is a raw-pyxrt figure. Through IRON, batching gets you ~531 µs.**
+`dispatch_floor/iron_batch.py` puts runlist submission inside IRON's own host path, so an
+ordinary `@iron.jit` design can batch (`results/aie/iron_batch_npu.log`). The device cost per
+dispatch does fall to **37.5–37.9 µs** — the 17× is real and reachable from IRON — but IRON's
+per-call host work is a near-constant **~500 µs, flat in batch size**, that batching cannot
+touch, so the end-to-end gain is only **1.26–1.37×**. **Use ~531 µs as the go/no-go threshold
+for a batched `@iron.jit` design**, and ~36 µs only if you are willing to write a raw-pyxrt
+driver and give up IRON's argument handling. Two further facts from that run: a real 8-core
+bf16 kernel batches to its own compute time (GroupNorm at L=150528 → 823.8–838.3 µs against
+835.8 µs measured independently), so a real kernel's configuration cost does not swamp the
+floor; and **batching gives up per-call completion status entirely** — a run inside a runlist
+cannot be polled, so verifying output buffers is your only correctness gate.
 
 ## `clock_probe/`
 
@@ -316,3 +373,66 @@ traps the script works around and documents: one event pair alone never fills a 
 run). Run from the ironenv; one fresh process per power mode (`xrt-smi configure --pmode`,
 then `--label <mode>`); the script prints the platform report so the mode is evidenced.
 `results/aie/clock_probe_npu.log`.
+
+## `pmu_probe/`
+
+Not an operator either. It points the trace unit at the events that say *why* a core is not
+computing — the stall taxonomy, occupancy, and the instruction mix — rather than at the two
+instruction events `clock_probe` used for the clock. It reuses `clock_probe`'s kernel and
+design unchanged and swaps only the event list, so `--calibrate` runs the two loops whose
+cycles per iteration this machine has already measured, and gates on reproducing them before
+anything else is believed. They come back at 2.0003 and 9.0001 against 2.000 and 9.000.
+
+Two mechanics worth knowing before tracing a new event. A level event such as `ACTIVE` emits
+**one frame per cycle**, which sounds like a flood and is not: the trace unit compresses
+consecutive identical frames itself, so a 142,730-cycle window fits in 1,344 bytes. And
+`ACTIVE` is inclusive of stall cycles rather than exclusive of them, so issuing cycles are
+what remains after subtracting the stalls, not something the hardware reports. Run `--raw`
+on any event you have not traced before; the encoding is not documented anywhere this
+project has found, and `--raw` is how the two facts above were established.
+
+First finding: on this one-core design the core waits 8,500–12,700 cycles per dispatch on its
+input ObjectFifo's lock, flat as the loop grows 16×, and **68% of the shortest run's cycles
+are lock wait against 32% computing** — on a loop `tools/aie_disasm.py` rates as perfectly
+scheduled. Three of the four stall categories were zero throughout; they are unexercised by
+this design, not verified. `results/aie/pmu_probe_npu.log`.
+
+## `asm_probe/`
+
+One question: is hand-written AIE2 assembly usable on this machine? `docs/DECISIONS.md`
+records that Peano "rejects inline asm", which closed hand-scheduling. That turns out to be
+half the story. Statement-level inline asm inside a C++ function does fail, in the
+IRTranslator, which is the wall the clock work hit. A standalone `.s` file never enters
+instruction selection at all and goes straight to the integrated assembler — `check.py`
+assembles one, compiles a C++ caller, links them, and confirms both symbols resolve with
+nothing undefined. **So a hand-scheduled inner loop is available** wherever the compiler's
+schedule is the binding constraint, which `tools/aie_disasm.py` can now identify.
+
+It does not rescue the cycle counter. `reg_probe.py` enumerates the special registers the
+assembler will accept as a `mov` source by trying to assemble each: only `CORE_ID` is taken,
+and even `PC`, `SP` and `LR` are refused there. The register database puts the tile timer at
+memory-mapped `0x340F8` and `0x340FC`, in the configuration space reached over AXI-MM from the
+host or a DMA, not in the core's data space. The trace unit stays the only path to it, which
+is what the clock work concluded from three other failures.
+
+Compile only, no NPU, runs in seconds. `results/aie/aie2_isa_static.log`.
+
+## `acc_spill_probe/`
+
+Not an operator either, and the only thing in this directory that never opens the NPU.
+It holds K live `aie::mmul<4,8,8,int8,int8,acc32>` accumulators across a k-reduction loop —
+the shape upstream's `conv2dk3` uses — compiles once per K with Peano, and reads the object
+code back with `tools/aie_disasm.py`. A few seconds, and it runs while the device is busy.
+
+**Five live accumulators of that shape compile with zero stack traffic; six is the first
+count that touches the stack.** The allocator names nine accumulator registers, `cm0`–`cm8`,
+and never goes past nine however many more are asked for. That corrects two documents at
+once: `docs/DECISIONS.md` said AIE2 has 6 accumulator registers and `docs/SILICON.md` said
+≤4 stay in registers, both inferred from the single `conv2dk3` kernel that spilled at 8.
+The width fix below was written to N ≤ 4 and is therefore correct but one short of what fits.
+
+Compiling for the core without IRON needs one non-obvious flag,
+`-D__AIE_API_AIE_ADF_HPP__=1`, which skips `aie_api`'s graph-level ADF header; that header
+includes `<adf.h>`, which ships with Vitis and is not on this machine. The flag is safe
+because rebuilding `clock_probe`'s source this way reproduces the object IRON itself built,
+bundle for bundle. `results/aie/aie2_isa_static.log`.

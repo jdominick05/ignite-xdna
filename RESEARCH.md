@@ -1425,8 +1425,8 @@ Characterizing the boundary conditions of the XDNA1 compiler on alternative conv
 - **Measured findings (DenseNet-121 & ResNeXt-50):**
   1. **Hardware offload is complete**: DenseNet-121 places **1,703 / 1,705 nodes (99.9%)** on NPU at **8.06 ms** (2.69× speedup over Zen 4 CPU FP32 at 21.70 ms); all 58 Concat nodes execute natively on AIE without DMA bottlenecks. ResNeXt-50 places **393 / 395 nodes (99.5%)** on NPU at **9.37 ms** (1.86× speedup over Zen 4 CPU FP32 at 17.40 ms); all 53 `group=32` convs compile natively.
   2. **Coarse per-tensor PTQ fails completely**: Both architectures collapse to **0.10% top-1** under plain XINT8 (vs 78.00% / 81.00% FP32 baselines). Dense block concatenation forces disparate block activations into shared power-of-two scales (causing shift cuts to exceed `[0, 16]` by up to 7 powers of 2), while 4-channel grouped convs produce wide cross-group dynamic range divergence that per-tensor INT8 cannot represent.
-  3. **RegNetX-002 proves the collapse is DPU shift-cut scale explosion, not concatenation or narrow groups**: RegNetX-002 (2.68M parameters, regular linear channel capacity) places **324 / 326 nodes (99.4%)** on NPU at **2.45 ms (407.9 FPS)**, but also collapses to **0.50% top-1** under plain XINT8 and **0.50% under AdaRound** (vs 68.50% FP32 baseline). Static inspection via `tools/audit_quant_grid.py` traced this to Quark's DPU shift-cut clamp ($131 \to -108$) forcing $\Delta = 2^{108} \approx 3.25 \times 10^{32}$ on depthwise weights, spanning an $8.5 \times 10^{35}\times$ activation dynamic range. AdaRound cannot modify the scale grid $\Delta$ and thus cannot recover the network.
-- **Falsification verdict:** Refuted for latency (neither `Concat` memory copies nor grouped conv micro-kernels stall the NPU), but confirmed as a severe failure mode for plain per-tensor INT8 PTQ and unrecoverable by AdaRound when shift cuts cause floating scale explosion.
+  3. **RegNetX-002's collapse is cross-layer equalization, not a DPU shift-cut bound — the original attribution here is retracted (2026-09-09)**: RegNetX-002 (2.68M parameters, regular linear channel capacity) places **324 / 326 nodes (99.4%)** on NPU at **2.45 ms (407.9 FPS)**, and collapses under the default XINT8 recipe. The placement and latency stand. The *cause* does not: the same graph, producer and calibration listing with **CLE off** takes zero shift-cut adjustments and scores **66.20% top-1** against **69.50%** FP32, where the CLE-on artifact scores **0.10%** (`results/quant/eval_regnetx_002_ignition_nocle_c64_cpu.log`, `eval_regnetx_002_fp32_full1000_cpu.log`, `eval_regnetx_002_quark_cle_full1000_cpu.log`). Equalization inflates the per-channel ranges until Quark's clamp fires ($131 \to -108$, forcing $\Delta = 2^{108} \approx 3.25 \times 10^{32}$); the clamp is the symptom, and the corrected analyzer finds **zero sigma violations** in this graph (`results/quant/shift_cut_reaudit_20260909_desktop2.log`). AdaRound genuinely cannot modify $\Delta$, so it could never have been the lever — turning CLE off is.
+- **Falsification verdict:** Refuted for latency (neither `Concat` memory copies nor grouped conv micro-kernels stall the NPU), but confirmed as a severe failure mode for plain per-tensor INT8 PTQ and unrecoverable by AdaRound. **Corrected 2026-09-09:** the trigger is cross-layer equalization inflating the ranges, not an inherent shift-cut bound — with CLE off the same graph reaches 66.20% top-1 and takes no shift-cut adjustment at all.
 
 ## Roadmap
 
@@ -1560,11 +1560,13 @@ sections above.
   all 53 grouped convs (`groups=32`) natively at 9.37 ms (1.86× speedup over Zen 4 CPU FP32 at 17.40 ms).
   RegNetX-002 (324/326 nodes on NPU, 99.4%) compiles natively at **2.45 ms (407.9 FPS)**.
   However, all three topologies suffer catastrophic PTQ collapse under plain XINT8 (0.10% / 0.10% / 0.50% top-1
-  vs 78.00% / 81.00% / 68.50% FP32 baselines). RegNetX-002 proves the collapse is not specific to block
-  concatenation or narrow groups, and AdaRound cannot rescue it (0.50% top-1): Quark's DPU shift-cut clamp
-  forces weight position shifts by 100+ powers of 2 to satisfy 16-bit shift register limits, creating an
-  astronomical floating scale distortion ($\Delta = 2^{108} \approx 3.25 \times 10^{32}$) that integer rounding
-  cannot recover.
+  vs 78.00% / 81.00% / 68.50% FP32 baselines). RegNetX-002 shows the collapse is not specific to block
+  concatenation or narrow groups, and AdaRound cannot rescue it: Quark's shift-cut clamp forces weight
+  position shifts by 100+ powers of 2, creating a scale distortion ($\Delta = 2^{108} \approx 3.25 \times
+  10^{32}$) that integer rounding cannot recover. **Attribution corrected 2026-09-09:** the clamp is
+  triggered by cross-layer equalization, not by a hardware shift-register limit — CLE off gives
+  66.20% top-1 with no clamp firing. (The "16-bit shift register limits" phrasing here was also
+  inconsistent with the 5-bit shifter asserted elsewhere in this repo; neither width is measured.)
   [Working](docs/BENCHMARKS.md#alternative-classification-topologies-densenet-121-concat-and-resnext-50-grouped-convs).
 - **Category C, first candidate: YOLOv6n (RepVGG backbone).** New pipeline
   (`pipelines/yolov6n/`), Meituan's official 0.4.0 release. The structural half of the
@@ -1712,22 +1714,55 @@ sections above.
   hardware runlist batching overhead is **3.39 µs/run**, and sub-microsecond buffer synchronization
   (0.85 µs at 4 KB) establishes that host-device sync on unified APU memory is purely CPU cache
   flush/invalidation. Context scaling discovered a hard driver ceiling of **5 virtual hardware contexts**
-  (matching the 5 physical silicon columns, with context 6 rejecting at NTSTATUS `0xc01e0009`), and
+  (context 6 rejecting at NTSTATUS `0xc01e0009`) — a driver context-table limit, **not** a
+  column count, since that benchmark loaded `4x4.xclbin`, whose contexts each occupy all four
+  columns; five of them would be twenty column-occupancies on a device that exposes four. The
+  deciding run is the same benchmark against `1x4.xclbin`, and it has not been done. And
   interleaved execution quantified a **747.75 µs context-switch penalty** (7.22x slowdown) when switching
   contexts on a shared partition. Reverse engineering of compiled `.xmodel` microcode
   (`results/aie/dpu_transaction_disasm.log`) revealed 48-byte transaction packets dominated by
   Opcode 3 (Conv2D / 1x1 dense, 43–49%) and Opcode 6 (Depthwise Conv, 33–37%).
   [Working](docs/BENCHMARKS.md#native-windows-xrt-driver-latency-and-dpu-microcode-disassembly).
-- **AIE-ML systolic shift-cut feasibility theorem for Project Ignition — closed.** Mathematical
-  formulation of the post-accumulator scaling unit proved that operations are physically feasible
-  on XDNA1 without numerical distortion if and only if the arithmetic right-shift register
-  sigma in [0, 31] (`results/quant/shift_cut_feasibility.log`). In power-of-two quantization, this yields
-  the exact closed-form Systolic Scale Feasibility Window: `pos_y in [pos_x + pos_w - 17, pos_x + pos_w + 14]`.
-  If sigma < 0 (pos_y > upper bound), 32-bit accumulator overflow destroys accuracy (as observed in
-  RegNetX-002, sigma = -90, collapsing top-1 accuracy to 0.50%). If sigma > 31 (pos_y < lower bound),
-  the 5-bit physical shifter clamps (as in FastDepth, sigma = 32, clamping to 31). Automated scale
-  repair projection (`quant/shift_cut.py::project_scale_to_feasible_basin`) successfully projects FastDepth
-  `Conv_96` pos_y 0 -> 1, eliminating the 1-bit overflow without retraining.
+- **AIE-ML systolic shift-cut feasibility theorem for Project Ignition — REOPENED
+  2026-09-09; this entry previously recorded it as closed.** The formulation still stands as
+  a hypothesis, and `sigma = pos_x + pos_w - pos_y + 14` in `[0, 31]` is still the criterion
+  `quant/shift_cut.py` applies. But three of the four things this entry asserted are now
+  measured false, and the fourth has never been tested.
+  - **The audit does not reproduce.** The corrected analyzer over eleven quantized models
+    finds **zero sigma violations on every one**
+    (`results/quant/shift_cut_reaudit_20260909_desktop2.log`). RegNetX-002 reads min 11 /
+    median 21 / max 30, not -90 / 24 / 27. FastDepth reads min 18 / median 21 / max 23 and
+    never approaches the 32 its "shift clamp, doubling the layer's outputs" story rests on.
+    `results/quant/shift_cut_feasibility.log` no longer matches the tool that wrote it; it is
+    superseded and kept, not deleted.
+  - **The RegNetX-002 exemplar was a confound, not a hardware bound.** The collapse is
+    cross-layer equalization, not the shifter. The same graph, producer and calibration
+    listing with CLE **off** takes zero shift-cut adjustments and scores **66.20% top-1**
+    against a **69.50%** FP32 baseline, where the CLE-on artifact scores **0.10%**
+    (`results/quant/eval_regnetx_002_ignition_nocle_c64_cpu.log`,
+    `eval_regnetx_002_fp32_full1000_cpu.log`,
+    `eval_regnetx_002_quark_cle_full1000_cpu.log`,
+    `quant_regnetx_002_ignition_nocle_c64.log`). ResNeXt-50 carries the same confound and
+    recovers to **68.90%** with CLE off
+    (`results/quant/eval_resnext50_32x4d_quark_nocle_c64_cpu.log`).
+  - **The repair projection was breaking models that already worked.**
+    `project_scale_to_feasible_basin` clamped pos_x and pos_w into `[0, 31]` while sigma was
+    computed from the unclamped scales, so the two disagreed whenever an input position sat
+    outside that range: it took an already-feasible RegNetX-002 layer at sigma = 30 and
+    projected it to **sigma = -90**, manufacturing the accumulator overflow the module exists
+    to prevent. Now fixed and checked rather than trusted. Repairs on real models went
+    SESR-M7 9 -> 0, MODNet-Cut 1 -> 0, RegNetX-002 5 -> 0 — every one had targeted a working op.
+  - **The "if and only if" is untested at both edges, and cannot be reached the obvious way.**
+    No fixture has executed outside the producer's own `[0, 16]` shift-cut contract: fixtures
+    built to reach sigma 0, 31 and 32 are refused by the VitisAI EP and run on the CPU EP
+    instead, recording `"tested_conv_on_npu": false`, so a divergence measured there is a
+    software result. **The highest sigma ever executed on this DPU is 30.** Neither register
+    width behind the theorem — the 15-bit multiplier, the 5-bit shifter — has been measured,
+    and no AIE-ML or DPU ISA document in this repo states either; AMD's AI Engine
+    documentation describes the path as SRS (shift-round-saturate) without giving the field
+    width.
+  Open: whether the bound is real physics at all, and what a forward test that actually
+  reaches the edges would look like, given the EP refuses out-of-contract scales.
   [Working](docs/BENCHMARKS.md#aie-ml-systolic-shift-cut-feasibility-theorem-for-project-ignition).
 - **The webcam path (single `4x4.xclbin` session, `./scripts/yolo-demo.sh`) has not
   been exercised end to end.** The related but distinct round-robin-across-4-columns
@@ -1747,6 +1782,174 @@ sections above.
   full trace, whose upstream parser mis-times gaps over 2^18 cycles; and S4, the
   package-power delta that would let a work-per-watt verdict exist at all — nothing here
   has ever measured a watt, and no per-NPU rail is exposed to read one from.
+- **The cycles themselves, read off the machine code.** Peano's `llvm-objdump` disassembles
+  AIE2, so a kernel's inner-loop cost is readable without hardware: the core is a statically
+  scheduled VLIW that covers operand latency with explicit nop bundles, and a hardware loop's
+  bundle count is its cycle count. S0's two loops measured 9.000 and 2.000 cycles per
+  iteration and disassemble to 9 and 2 bundles (`results/aie/aie2_isa_static.log`,
+  `tools/aie_disasm.py`). That closed two questions the docs had carried as unverified —
+  six issue slots per bundle, stated nowhere before, and the accumulator file, where five
+  live 4×8×8 int8 accumulators fit and six spill, correcting both documents that had guessed
+  from one kernel. It also reframes the int8 GEMM: its inner loop issues 88.9% of the
+  machine's MAC rate while the whole kernel reaches 31.3% of peak, so the loss is outside the
+  loop and a kernel rewrite is the wrong lever. Open from it: what the elapsed time is spent
+  on instead, which is the trace unit's stall events rather than the disassembly.
+- **Why a core is not computing, measured.** The trace unit carries a stall taxonomy, and
+  `kernels/pmu_probe/` routes it, calibrated by reproducing the two loops above at 2.0003 and
+  9.0001 cycles per iteration before anything else is believed. `cycles alive = issuing +
+  memory + stream + lock + cascade stalls` closes to a constant 190-cycle prologue across a
+  16× range of work, so the decomposition is sound (`results/aie/pmu_probe_npu.log`). The
+  first answer it gives is uncomfortable and useful: on a one-core design the core waits
+  8,500–12,700 cycles per dispatch on its input queue's lock, flat in the work done, and 68%
+  of the shortest run's cycles are that wait rather than compute. The kernels in this repo
+  have been losing on data arrival, not on arithmetic, and that is now a measurement instead
+  of an inference. Streaming buffers separates the fixed and per-buffer terms and gives the
+  first cost model this repo has for the inside of a kernel: `cycles = n_buffers × (compute +
+  ~205) + ~10,000`, where the per-buffer overhead is a constant 717 cycles at every point over
+  a 4,096× range of work and the lock wait is flat. A buffer carrying less than a few hundred
+  cycles is mostly handoff; a dispatch carrying less than ~10,000 cycles is mostly waiting.
+  Open: three of the four stall categories have never been non-zero here, so they are
+  unexercised; and the same instrument has not yet been pointed at the conv or the GEMM, whose
+  upstream designs carry no trace hook, which is where it would change a verdict.
+- **The int8 GEMM's loss is accumulator spill, and that was settled without running it.** The
+  two results above compose: if a loop's bundle count is its cycle count and a buffer costs a
+  constant on top of its work, a kernel's issuing time is computable from its object file, and
+  the difference from a measured time is the cycles the core spent not issuing.
+  `tools/gemm_cost_model.py` does that for the best int8 GEMM. The kernel is a **loop nest** —
+  two software loops around the hardware loop, with eight accumulators loaded before it and
+  stored after it — and the whole body re-runs once per group of accumulators, 16 times per
+  call. So the celebrated 88.9% inner-loop MAC density covers only 54 of the 141 cycles a group
+  costs. Over a whole call the kernel issues **107.3 MACs per cycle, 41.9% of nameplate**, while
+  the core is issuing for **74.6%** of the dispatch. **The larger loss is the schedule, and it
+  is spill:** the kernel holds eight live accumulators where five is this branch's measured
+  spill-free ceiling, and the 87 non-loop bundles per group are the resulting load, store and
+  stack traffic. What survives from the measurement side is a per-buffer floor — halving the
+  work per buffer leaves measured cycles per call at **3,274 against 3,160** — which n=32 fills
+  to 41% and n=64 to 75%, explaining the sweep's 1.93× tile result and leaving ~1.3× of
+  headroom. The cheapest next test is static: rebuild the kernel blocked to four or five
+  accumulators and re-run the tool; if the per-group bundle count does not fall, those 87
+  bundles are the output tile's mandatory traffic rather than spill. Open: "not issuing" is a
+  residual here, not an observation, and attributing it needs the stream-port events that
+  `kernels/pmu_probe/`'s core-stream reader cannot yet decode. **An earlier reading of this,
+  superseded the same day, modelled the kernel as one loop and reported the core as starved for
+  60% of the dispatch with 2.4× of headroom; both were artefacts of missing the nest.**
+- **A same-bank paired load costs a cycle, and the int8 GEMM has that collision where the bf16
+  GEMM does not.** A core tile's 64 KB of local memory is four banks of 16 KB, and the core has
+  **two load units**, so a bundle can issue two loads at once; when both hit one bank the pair
+  costs an extra cycle. That is measured on the `research/windows-lowlevel` branch by holding
+  the compiled function bytes identical and moving only the operand addresses — 12.0 cycles per
+  iteration in one bank against 11.0 across two, r² 1.0, and 1,024 cycles per 64×64×64 panel in
+  a real GEMM. Surveying this branch's own builds finds the production int8 GEMM with **both
+  input tiles in bank 2 and bank 3 empty**, and the bf16 GEMM — this repo's one genuine NPU
+  win — with its inputs correctly split. The reason is inverted from the obvious one: int8's
+  tiles are half the size, so the allocator packs the pair into a single bank. The int8 kernel
+  is penalised *because* its data is smaller, and its 9-bundle loop is far more exposed than
+  bf16's 32-bundle one. Charging it narrows the GEMM's unexplained residual from 25.4% to
+  18–23%. **This also corrects our own issue-width row:** slot `b` is the second load unit, not
+  the branch slot, which is the whole reason the conflict exists. Open, and cheap, and the
+  reason this matters beyond one kernel: bank 3 is empty in both builds, so moving an input
+  there changes the core's issuing time by a known amount and changes *nothing* about data
+  movement — the controlled lever needed to test whether the per-buffer floor or the schedule
+  is the critical path. **That test was run on 2026-09-09 and the machine could not resolve
+  it.** The intervention is clean — raising the per-core stack shifts every buffer up, moving A
+  wholly into the empty bank 3, with a byte-identical compiled kernel — but across seven
+  alternating series the arms overlap and the sign of the difference changes between them,
+  while the colliding arm's own floor drifts 5.0% between repeats of the identical build. A
+  large speedup is excluded; the ~3% at stake is not separable from zero. The lesson is about
+  the observable, not the hypothesis: wall time on a shared machine cannot see a 3% core-side
+  change, and the trace unit can, by reading `ACTIVE` against `LOCK_STALL` in core cycles
+  inside the dispatch. That needs a trace hook in `whole_array`, which is the same obstacle
+  already noted above. Also tested and refuted here: the two-process handoff floor is **not**
+  the NPU context switch, despite 789.8 µs sitting near a measured 747.75 µs penalty; the floor
+  fits 78.4 ns per element with a 147.2 µs intercept at r² 0.9997 and stays conversion-bound.
+- **The shift-cut hazard predictor is not ready to gate the quantizer, and a forward test is
+  what showed it.** `quant/shift_cut.py` formulates a real constraint — the DPU requantizer is
+  a 15-bit multiplier and a shift confined to σ ∈ [0, 31], so some scale triples genuinely
+  cannot be represented — and its flags appeared to coincide with two documented failures,
+  RegNetX-002's collapse and BiSeNetV2's fall from 59.47% to 15.33% pixel accuracy on hardware.
+  **Both coincidences have since weakened (2026-09-09):** RegNetX-002's collapse is
+  cross-layer equalization, not a shift-cut bound, and the corrected analyzer finds zero
+  violations in that graph; the BiSeNetV2 association rests on a single flagged op out of 63
+  and has never been tested forward. But every
+  one of those was retrodiction: each model already had a known outcome. Predictions for 14
+  untested artifacts were therefore committed **before** any of them ran, and then four were
+  run. **Both models the audit called infeasible on 9 of 9 operations place 50 of 52 nodes on
+  the NPU and track their own CPU reference at correlation 0.999**, which is ordinary
+  requantization divergence. A third such artifact was already inside the audit's own
+  evidence, measuring 34.06 dB PSNR on the NPU against a 35.64 dB float reference. The rule
+  fires on an entire working architecture family. This does not show the bound is wrong as
+  physics, only that the classifier built on it has a false-positive mode of the widest kind,
+  so it belongs as an advisory report rather than a gate. Open: the clean direction is
+  unsettled, because raw-tensor correlation proved too sensitive for a detection head whose
+  decoded detections are byte-identical between CPU and NPU — a task-level metric is needed
+  to test it; and the audit's positive claims on BiSeNetV2 and RegNetX-002 remain untested
+  forward.
+- **The dispatch floor fell 17×, and it was never a kernel problem.** The single most
+  consequential number here is the per-dispatch floor: `docs/SILICON.md` §3.4 says every
+  small-op verdict in this repo is conditional on it, and at 617 µs it closed most of them.
+  The fix was named in the same log that measured it and then sat unrun for two days, recorded
+  as *"Nothing has been run — this is an API-existence check and the next measurement to make,
+  not a result."* Run now: batched `pyxrt.runlist` submission amortises a dispatch to
+  **36.3 µs**, reproduced at 35.9/36.3/36.0/36.3 across four runs. That is 17× below the IRON
+  floor and a **quarter** of the 169.8 µs that was attributed to hardware — so the hardware
+  half was not silicon either. Four of the six ops §3.4 lists as closed now clear the floor:
+  MobileNetV2 by 48×, MobileViT stage-2 attention and bf16 attention stage 2 by 6.7×,
+  GroupNorm at L ≤ 18816 by 6.5×. **They are not thereby wins** — the floor has stopped being
+  the reason they lose, which makes kernel quality the deciding question for the first time,
+  and the attention README's "the op has to be ~20× larger" becomes ~1.4× for stage 2. Two
+  caveats bound it: this is a **throughput** result (36 µs with 64 dispatches in flight; a
+  one-shot call still pays ~140 µs raw), and it is **raw pyxrt** — `@iron.jit` uses no
+  runlists, so a real design pays the old floor until that host path is written. That, not the
+  measurement, is what the objective now blocks on.
+- **That host path was then written, and it says the 17× is real but almost none of it reaches
+  the caller.** `kernels/dispatch_floor/iron_batch.py` patches IRON's own transaction submit to
+  queue unstarted runs into a `pyxrt.runlist`, with nothing outside the repo modified, so an
+  ordinary `@iron.jit` design can batch. From inside IRON the device cost per dispatch does
+  fall to **37.5–37.9 µs**, reproducing the raw-pyxrt 36.3. But wall time per call improves
+  only **1.26–1.37×**, because IRON's per-call host work — ABI validation, buffer preparation,
+  instruction-buffer setup — is a near-constant **~500 µs, flat in batch size**, that batching
+  cannot touch. So there are **three thresholds, not two**: ~617 µs unbatched through IRON,
+  ~531 µs batched through IRON, ~36 µs batched through raw pyxrt. Against ~531 µs *none* of
+  the four reopened verdicts survives. This also closes the other caveat — a real 8-core bf16
+  kernel (GroupNorm, L=150528) batches to 823.8–838.3 µs per dispatch, which is its own
+  compute, matching the 835.8 µs measured independently, so a real kernel's configuration cost
+  does not swamp the passthrough's floor. The residue is the same term the floor log called
+  447.3 µs, now confirmed independent of how the submit is done, and at 37.5 µs of device
+  against ~500 µs of host **the host path is the larger problem by more than an order of
+  magnitude.** The open question has moved off the NPU entirely.
+- **The conv op class was closed on a kernel using 5% of its issue slots.** This repo's
+  most-lost verdict is int8 conv: the vendor DPU does 1650 GOPS per column, the open kernel
+  146.1, an 11.3× gap on the same silicon. Objective K1 said "the first trace will say whether
+  it is data movement or issue rate", and no trace was ever run because the build cache had
+  not survived — *"this repo's most-lost op class was not surveyed"*. Rebuilt and read
+  statically: **it is issue rate, and not marginally.** The int8 GEMM issues 0.889 MACs per
+  cycle; the best conv loop manages 0.333, the 3×3's main loop 0.222, and the 1×1's hot loop
+  **0.045**, with two of its three loops issuing no MAC at all. The 1×1 keeps its accumulator
+  in *memory*, loading four quarters and storing four back around a single `vmac` and idling
+  six of 22 bundles, while naming 3 of the 9 accumulator registers available. The 3×3 keeps
+  its accumulators live and still burns six of eighteen bundles on `vshift` window alignment —
+  the exact cost K1 proposes moving to the mem tile's descriptors. So the op class was closed
+  against the CPU by a kernel leaving 95% of its MAC slots empty, which is a statement about
+  the kernels and not about the silicon. Open, and stated carefully: the 4×–20× are **ceilings
+  on unused issue slots, not predictions**, the densities are unweighted by trip count, and
+  reaching K1's 1 TOPS bar still needs 6.8×.
+- **That ceiling was then cashed in, and it was worth 3× — and the op class still loses.** The
+  1×1's accumulator lived in memory because `MMUL4x8x8 acc_tmp[4]` is indexed by a loop whose
+  trip count is a **runtime** value, and registers cannot be dynamically addressed. Peeling the
+  `n == 4` case into four *named* accumulators takes the hot loop from 22 bundles with one
+  `vmac` to 14 with four — **0.045 → 0.286 MACs/cycle** — and marginal throughput from
+  115.6–117.1 to **348.4–350.3 GOPS** across two series, every shape verifying. **This is the
+  falsifiable prediction H11 set up, and it held:** the same class of change to the GEMM moved
+  the wall clock by nothing because that design is delivery-bound, while the conv, at 4.5% of
+  peak, was genuinely issue-bound. First time this repo has separated the two by intervening
+  rather than modelling. **But the CPU still wins by 2.4×** (823.7–839.5 GOPS, ORT CPU EP QDQ
+  int8 on VNNI, same sitting), so the verdict does not reopen — only its reason changes, from
+  "the kernel uses 5% of its issue slots" to "even with the slots used, one column does not
+  reach a VNNI-equipped Zen4". Two things travel with it: patching only the first of the three
+  pipeline stages gave 2.4% and would have been reported as a null result — **a single-stage
+  fix in a pipeline measures the pipeline's balance, not the fix** — and the stock arm
+  re-measured at 115.6–117.1 rather than the published 146.1, because that figure predates the
+  width fix that rewrote the same loop.
 - **Candidate model pipelines (Categories A, B, C, D, E).** Test plans, target shapes, and falsification criteria:
   - **Category A:** Image Super-Resolution — SESR-M7 (placement, 1.48 ms latency, 3.02x iGPU win,
     70% AdaRound recovery) and Real-ESRGAN Compact (activation memory spill) closed above.
@@ -1756,7 +1959,7 @@ sections above.
   - **Category D:** Monocular Depth Estimation — MiDaS v2.1 Small (bilinear vs nearest fusion,
     10.81 ms, 1.53x CPU win) and FastDepth (depthwise separable decoder, 2.87 ms, 1.05x iGPU win,
     r = 0.9383) closed above.
-  - **Category E:** Untested Classification Topologies — DenseNet-121, ResNeXt-50, and RegNetX-002 (placement, Concat DMA, grouped convs, shift-cut scale explosion) closed above.
+  - **Category E:** Untested Classification Topologies — DenseNet-121, ResNeXt-50, and RegNetX-002 (placement, Concat DMA, grouped convs, and a scale explosion since re-attributed to cross-layer equalization rather than a shift-cut bound) closed above.
 - **Longer term:** a detector fine-tuned for fixed camera feeds (licence-plate
   recognition), reusing the head-cut + XINT8 + AdaRound recipe rather than re-deriving it.
 

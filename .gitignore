@@ -29,6 +29,9 @@ yolownoattncachekey/
 modnetcachekey/
 modnetcutcachekey/
 modnet_webcam_cache/
+# tools/shift_cut_forward_test.py takes its key on the command line, one per model
+# under test, so these are matched by shape rather than listed one by one.
+*fwdcachekey/
 modnet_zero_concat_cache/
 modnet_user_cache/
 modnet_ref_cache/
@@ -91,6 +94,10 @@ dev-tools/
 # The *.log files in results/ are small and ARE tracked deliberately.
 results/dets_*.json
 scratch/
+# The TUI (tui/, scripts/tui.sh) writes every result it produces here, never into
+# results/ -- that tree is the tracked evidence base and 69 of its images are cited
+# from the docs. Sidecar JSONs here record a hostname, so this stays local.
+outputs/
 
 # --- Build artifacts -----------------------------------------------------
 tools/build/

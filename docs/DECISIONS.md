@@ -138,6 +138,41 @@
 
 ## Rejected approaches and known pitfalls
 
+- **The launcher (`tui/`) is a front end, not a measurement tool, and the boundary is
+  load-bearing.** It writes only to `outputs/` (git-ignored): every demo defaults
+  `--out-dir` to `results/`, which is the tracked evidence base -- 69 of its images
+  are cited from the docs, and `adaround_diff_demo.py` writes exactly
+  `results/adaround_diff_yolov8n_npu.jpg`, which `demos/README.md` links. A launcher
+  that did not override that flag would overwrite cited evidence on its first
+  successful run, so `tui/runner.py` passes an absolute `--out-dir` every time and
+  `--selftest` asserts no output path resolves inside `results/`. Latencies it prints
+  carry `quotable: false` in their sidecar next to the contention verdict, because a
+  number-shaped artifact taken under an unknown host load is not a measurement.
+  Rejected along the way: a cross-hardware compare mode (a same-sitting CPU/iGPU/NPU
+  table is exactly the thing that should be a logged run, not a menu item); an
+  in-process task lane (an ORT session inside the UI means a DPU timeout kills the
+  launcher, a lingering session holds a context on single-tenant silicon and blocks
+  the next run, and structured results would have to come from parsing stdout -- so
+  tasks are `python -m tui.task`, spawned like a demo, returning a sidecar JSON); and
+  a `classify` task, because no ImageNet index-to-name mapping exists anywhere in this
+  repo and a task that answers `285` is not one anyone can use.
+
+- **Compile-cache staleness is exactly detectable, and nothing was using the
+  detection.** The cache is keyed by name rather than by model hash, so switching
+  model within a family silently reuses the previous compile -- the documented
+  wrong-weights failure. But `<cacheKey>/context.json` records `config.onnxPath`, the
+  model that compile was actually built from, and it is present in all 31 caches on
+  Desktop 2. Comparing it against the model about to run turns "always pass
+  `--fresh`" from a rule people remember into a check, with no sidecar state to
+  drift. Measured on 2026-09-09 while writing this: `modelcachekey` (ResNet50's key)
+  held a compile of `wide_resnet101_2_xint8_c64.onnx`, left by `classifier_width_demo`
+  which shares `RESNET_CACHE_KEY` across all three classifiers, and `yolocutcachekey`
+  held `yolov8n_cut_xint8_adaround.onnx`. A `4_run.py --ep npu` or a plain yolov8n run
+  without `--fresh` at that moment would have executed the wrong weights and reported
+  a plausible number. Paths in that field are recorded three ways (relative posix,
+  relative windows, absolute), so any comparison has to resolve against `ROOT` first.
+
+
 - **A wall-time or peak-memory figure from Desktop 2 without a host-load witness is a
   guess.** That box runs three Claude sessions, `agy` and PyCharm against the same 16
   threads, and `xrt-smi` answers only the device question -- nothing was watching the CPU.
@@ -672,6 +707,12 @@
   (2026-09-07).** `aie::tile::current().cycles()` links against a `get_cycles()` that
   llvm-aie 22 declares and never defines (`ld.lld: undefined symbol`);
   `__builtin_readcyclecounter()` fails in the legalizer; inline asm fails in IRTranslator.
+  *(Narrowed 2026-09-09: it is statement-level inline asm inside a C++ function that fails
+  there. A standalone `.s` file assembles and links fine, so hand-written AIE2 assembly is
+  available — `kernels/asm_probe/`, `results/aie/aie2_isa_static.log`. It does not rescue the
+  cycle counter: the assembler exposes no timer register name, and the timer is memory-mapped
+  at `0x340F8`/`0x340FC` in the tile's configuration space, not in the core's data space. The
+  conclusion below is unchanged; only the reason "inline asm" was recorded is more specific.)*
   What works: `event0()`/`event1()` in the kernel, `Program.enable_trace` with
   `INSTR_EVENT_0/1`, and the stamps decoded from the trace stream — with two traps. Fewer
   events than fill a 32-byte packet never reach host memory (emit filler events after the
@@ -941,6 +982,28 @@ caches.
     are **lower bounds** — this is a no-compute passthrough, and a multi-core kernel's own
     configuration cost lands inside the hardware bracket and pushes its floor above 169.8 µs.
     One design, one data point: a floor, not a universal constant.
+  - **SUPERSEDED 2026-09-09 for batchable work: ~36 µs.** The "hypothetical zero-overhead
+    resubmit path" above was measured. Batched `pyxrt.runlist` submission amortises the same
+    passthrough to **36.3 µs** per dispatch, 17× below the IRON figure and a quarter of the
+    169.8 µs hardware bracket — so that bracket is not irreducible silicon cost either.
+    Reproduced at 35.9 / 36.3 / 36.0 / 36.3 µs across four runs
+    (`results/aie/dispatch_runlist_npu.log`). **It is a throughput figure**: it holds with 64
+    dispatches in flight, while one unbatched call still costs ~140 µs raw or 617 µs through
+    IRON, and N=1 through a runlist is slightly *slower* than a raw single dispatch. The old
+    rule governs one-shot latency-critical work; ~36 µs governs anything batchable.
+  - **SCOPED the same day: ~36 µs is a raw-pyxrt figure, and through IRON the batched floor is
+    ~531 µs.** Batching was wired into IRON's own host path (`kernels/dispatch_floor/
+    iron_batch.py`, `results/aie/iron_batch_npu.log`) rather than measured around it. The
+    device half reproduces from inside IRON — 37.5–37.9 µs per dispatch at N=64, against the
+    raw harness's 36.3 — but IRON's **per-call host work is a near-constant ~500 µs that
+    batching never touches**, so a batched `@iron.jit` call still costs ~531 µs end to end, a
+    1.26–1.37× gain rather than 17×. That ~500 µs is the same term `dispatch_floor_npu.log`
+    called 447.3 µs of host-side cost, measured from a different direction and shown to be
+    independent of how the submit is done. **There are three thresholds, not two:** ~617 µs
+    unbatched through IRON, ~531 µs batched through IRON, ~36 µs batched through raw pyxrt.
+    The 36 µs number is real but it is only available to a caller willing to give up IRON's
+    argument handling. The open question is no longer dispatch — it is IRON's host path, now
+    the larger term by more than an order of magnitude.
   - **REPRODUCED on an independent design the same day.** `ml/resnet/layers_conv2_x` (a
     3-block int8 CNN with real weights, nothing like a passthrough) reports both brackets
     from its own harness: end-to-end 2497.8 µs − hardware 1869.6 µs = **628.2 µs** of
@@ -957,6 +1020,16 @@ caches.
     **Nothing has been run** — this is an API-existence check and the next measurement to
     make, not a result. It does not rescue attention (see above), but it would move the
     go/no-go threshold for every future kernel.
+    **RUN 2026-09-09, and both guesses in this paragraph were right.** Batching amortises a
+    dispatch to **36.3 µs**, 17× below the IRON floor; and part of the 169.8 µs did amortize —
+    the batched figure is a quarter of it. It still does not rescue attention stages 3 and 4
+    (34 µs and 12 µs of CPU time, both under the new floor), but stage 2 at 240 µs now clears
+    it 6.7×. `results/aie/dispatch_runlist_npu.log`. Getting there needed two fixes to
+    `kernels/dispatch_floor/measure_runlist.py`, both of which had produced a *wrong answer*
+    rather than an error: `kernel(...)` creates and **starts** a run, so runlist entries must
+    be built with `pyxrt.run(kernel)` + `set_arg` instead; and the cache resolver looked for
+    `*.txt` when the instruction stream is `insts.bin`, and took the newest xclbin in the
+    cache rather than one belonging to this design.
 - **Chained int8 CNN vs CPU — measured before building anything (2026-09-07).**
   `ml/resnet/layers_conv2_x` (3 ResNet bottlenecks chained core-to-core across 3 columns,
   int8, ObjectFifo→ObjectFifo, **one dispatch for the chain**) had run and PASSed here since
@@ -1042,7 +1115,8 @@ caches.
     `Tile(0,4)`, `Tile(0,5)` + one more) already spans 4 cores of one column, so the "~7%
     of one column's peak" framing was already accounting for multi-core, not comparing
     against a single core. **What was wrong:** the "8 live pipelined accumulators" were not
-    a performance-only design choice — AIE2 has only 6 hardware accumulator registers, so
+    a performance-only design choice — AIE2 spills past 5 live accumulators of that shape
+    (measured 2026-09-09; this entry originally said 6 registers, see below), so
     8 concurrent accumulators is itself the correctness bug fixed below (register
     spill/pointer corruption in conv2dk3, dead remainder code in conv2dk1/conv2dk1_skip).
     The throughput gap at width 32 (where the bug never fired) reads as structural —
@@ -1071,7 +1145,14 @@ caches.
     in both `conv2dk3_ui8_vector` and `conv2dk3_i8_vector` in both wheel and clone copies:
     - **Mechanism of the bug:**
       1. **Hardware accumulator limit vs compile-time unrolling:** The AIE2 vector unit has
-         6 hardware accumulator registers. Upstream mlir-aie attempted to fully unroll the
+         6 hardware accumulator registers. *(Superseded 2026-09-09. The count was inferred
+         from this kernel alone and is wrong. Sweeping the live-accumulator count and
+         reading the object code shows the allocator names nine accumulator registers,
+         `cm0`–`cm8`, and that five live 4×8×8 int8 accumulators compile with no stack
+         traffic while six is the first count that spills — `kernels/acc_spill_probe/`,
+         `results/aie/aie2_isa_static.log`. The spill this bug rests on is real and the fix
+         is unchanged; only the register count named here was wrong.)* Upstream mlir-aie
+         attempted to fully unroll the
          middle section by 8 chunks (`acc_tmp[8]`, 8 concurrent `MMUL4x8x8` accumulators).
          At width 36, `iw_32_rem = 7` allocated 7 accumulators; at width ≥ 40, the aligned
          block allocated 8 accumulators. When > 6 accumulators are live concurrently, Peano
@@ -1343,19 +1424,46 @@ Investigated via `tools/windows_xrt_driver_probe.py` (`results/aie/windows_xrt_d
 - **Virtual hardware context capacity bound (5 columns)**: `amdxe.sys` enforces a physical ceiling of 5 active virtual hardware contexts per Phoenix device (`results/aie/windows_context_switch_bench.log`). Initial context setup requires 78.63 ms, while subsequent contexts allocate in 5.38-5.78 ms. Attempting a 6th context triggers driver failure with NTSTATUS `0xc01e0009` (hardware capacity exhaustion). Context deletion and userspace garbage collection cleanly recycles the slot in 4.98 ms.
 - **Hardware context-switch penalty (~748 µs)**: Interleaving dispatches across two distinct hardware contexts on the Phoenix NPU increases mean latency from 120.25 µs to 867.99 µs (+747.75 µs penalty, 7.22x slowdown) due to partition state teardown, instruction stream flushing, and base register reprogramming. Multi-tenant concurrency therefore requires dedicated column partitioning (`1x4.xclbin`) rather than time-sliced virtualization on a single partition.
 
-### AIE-ML systolic shift-cut bound [0, 31]
+### AIE-ML systolic shift-cut bound [0, 31] — substantially retracted 2026-09-09
 
-Investigated via `quant/shift_cut.py` and `python -m quant check-shift-cut` (`results/quant/shift_cut_feasibility.log`):
+**Numbering warning, because two files disagree.** In `quant/shift_cut.py`, Theorem 2 is
+the `pos_y` window and Theorem 3 is the position rule. In this entry, Theorem 2 is
+Multi-Branch and Theorem 3 is the `pos_y` window. So "Theorem 3 is retracted" means
+different things in the two files. What is retracted in the *code* is the rule that
+positions must lie in `[0, 31]`. The `pos_y` window itself is not retracted; the
+*projection onto it* was defective. Statements below are kept and marked, not rewritten —
+this file is the record of why.
 
-- **Hardware accumulator shift constraint**: On XDNA1 AIE-ML, the post-accumulator scaling unit uses a 15-bit multiplier M in [16384, 32767] and a 5-bit arithmetic right-shift register sigma in [0, 31]. The effective scaling factor is A ≈ M * 2^(-sigma).
-- **Theorem 1 (Shift-Cut Feasibility Bound)**: If an ONNX QDQ triad requires sigma < 0, the operation requires an arithmetic left-shift exceeding the 32-bit accumulator, resulting in immediate accumulator overflow. **The RegNetX-002 citation for this is superseded (2026-09-09)**: sigma = -90 is really in that file, but it is a consequence of cross-layer equalization inflating the ranges, not a bound the network inherently hits. Turning CLE off, same producer and same listing, gives positions 2..10, no sigma violation and 66.20% top-1 against 0.10% -- [measured](BENCHMARKS.md#regnetx-002-and-resnext-50-recovered-the-collapse-is-cle-not-a-hardware-bound-2026-09-09-desktop-2). No hardware measurement supports the overflow mechanism yet; the theorem is unvalidated on this device. If sigma > 31, the 5-bit shift register overflows/clamps (as observed in FastDepth, where sigma = 32 overflows by 1 bit, clamping to 31 and doubling layer outputs).
-- **Theorem 2 (Multi-Branch Inter-Scale Alignment)**: In multi-branch elementwise operations (such as Bilateral Guided Aggregation in BiSeNetV2), divergent scale grids truncate dynamic range in hardware. **Not supported as stated (2026-09-09), and the Mul is not the fault either.** BiSeNetV2's divergence appears at `/bga/Mul`, whose CPU/NPU correlation falls from 0.986 at both inputs to 0.687 at its output while its sibling `/bga/Mul_1` goes 0.990 to 0.998 -- but a minimal Mul fixture at the failing node's exact shape and positions is **exact** (correlation 1.0000), both of its operands measure clean separately (0.9979 and 0.9858), and no feature-branch position helps once the signal is normalised. Feeding the gate in as a graph input, so the ~280-node semantic branch is never compiled, takes the same Mul from 0.6869 to **0.9981** against an identical CPU reference. What distinguishes the failing case is a **512 KB activation held live across the whole semantic branch**, against 32 KB for the sibling, on a device with 64 KB of tile local memory. That is compiler and allocator behaviour, not quantisation, so scales and AdaRound have nothing to act on. [Localisation, the refuted hypotheses and what remains undecided](BENCHMARKS.md#the-mul-is-not-the-fault-a-long-lived-activation-is-2026-09-09-desktop-2).
+Investigated via `quant/shift_cut.py` and `python -m quant check-shift-cut`
+(`results/quant/shift_cut_reaudit_20260909_desktop2.log`, which supersedes
+`results/quant/shift_cut_feasibility.log`):
+
+- **Hardware accumulator shift constraint**: On XDNA1 AIE-ML, the post-accumulator scaling unit uses a 15-bit multiplier M in [16384, 32767] and a 5-bit arithmetic right-shift register sigma in [0, 31]. The effective scaling factor is A ≈ M * 2^(-sigma). — **UNMEASURED (2026-09-09).** Both register widths are asserted; no AIE-ML or DPU ISA document in this repo states either, and AMD's AI Engine documentation describes the path as SRS (shift-round-saturate) without giving the shift field's width.
+- **Theorem 1 (Shift-Cut Feasibility Bound)**: If an ONNX QDQ triad requires sigma < 0, the operation requires an arithmetic left-shift exceeding the 32-bit accumulator, resulting in immediate accumulator overflow (as observed in RegNetX-002, where sigma = -90 forces top-1 accuracy to collapse to 0.50%). If sigma > 31, the 5-bit shift register overflows/clamps (as observed in FastDepth, where sigma = 32 overflows by 1 bit, clamping to 31 and doubling layer outputs). — **BOTH EXAMPLES RETRACTED (2026-09-09).** The corrected analyzer reads RegNetX-002 at sigma min 11 / median 21 / max 30 and FastDepth at min 18 / median 21 / max 23; neither -90 nor 32 reproduces. RegNetX-002's collapse is cross-layer equalization (CLE off: 66.20% top-1 vs 69.50% FP32, no shift-cut adjustment logged; CLE on: 0.10%). FastDepth's "doubling" was never measured. **The theorem itself is untested at both edges**: fixtures built to reach sigma 0, 31 and 32 are refused by the VitisAI EP and execute on the CPU EP (`"tested_conv_on_npu": false`), so they say nothing about the DPU. The highest sigma ever executed on this hardware is **30**.
+- **Theorem 2 (Multi-Branch Inter-Scale Alignment)**: In multi-branch elementwise operations (such as Bilateral Guided Aggregation in BiSeNetV2), divergent scale grids truncate dynamic range in hardware. — **NOT SUPPORTED AS STATED.** It rests on a single flagged op out of 63 in that graph and has never been tested forward; a scale-position sweep on the real BiSeNetV2 `/bga/Mul` moved correlation only in step with the signal's own standard deviation, so no scale position repairs it. Localised further on `research/windows-lowlevel`: both of that Mul's operands measure clean on their own (0.9979 and 0.9858) and its output reads 0.687, but a minimal Mul fixture at the same shape and positions is exact, and feeding the gate in as a graph input -- so the ~280-node semantic branch never compiles -- takes the same node to 0.9981 against an identical CPU reference. What distinguishes the failing case is a 512 KB activation held live across the whole semantic branch against 32 KB for its sibling, on a device with 64 KB of tile local memory. That is compiler and allocator behaviour, so no scale or rounding choice acts on it. [Localisation and the refuted hypotheses](BENCHMARKS.md#the-mul-is-not-the-fault-a-long-lived-activation-is-2026-09-09-desktop-2).
 - **Theorem 3 (Systolic Scale Feasibility Window)**: In power-of-two quantization with scale positions pos = -log2(S), the output position must satisfy:
     pos_x + pos_w - 17 <= pos_y <= pos_x + pos_w + 14
-  Violations are projectable to the nearest bound via `project_scale_to_feasible_basin` (demonstrated on FastDepth `Conv_96`: pos_y 0 -> 1, bringing sigma from 32 down to 31, eliminating the clamp without retraining).
-- **Theorem 1's window is measured, and its *iff* is wrong in both directions (2026-09-09).** sigma = 32 executes exactly (five distinct output levels, 0 of 57,344 elements wrong), so the claimed 5-bit clamp past 31 is not observed; sigma = 0 diverges badly (3,052 wrong, worst case 255, the NPU wrapping where the reference clamps) although the theorem calls it feasible, and sigma = 6 with identical saturation reads zero mismatches, so saturation alone is not the cause. The measured lower edge is **sigma >= 1**. The upper edge stays untested above 32: `out ~ acc * 2^(14 - sigma)` means one int8 Conv cannot produce a non-constant output there, which is also why no model here has ever exceeded sigma = 30. [Both edges, the degeneracy model and its limits](BENCHMARKS.md#theorem-1s-sigma-window-measured-at-both-edges-2026-09-09-desktop-2).
-- **Theorem 3 is RETRACTED (2026-09-09)**, along with the position half of the verifier. Fifteen of seventeen NPU arithmetic fixtures executed correctly at output positions -1 to -16; SESR-M7 was flagged 9/9 while placing 50 of 52 nodes at 34.06 dB. Positions outside [0, 31] are advisory, not hazards. Re-auditing eleven models finds **zero sigma violations anywhere**, sigma 7..30, so `--repair` has never had a real hazard to act on -- and before it was fixed it would have rewritten 9 working scales on SESR-M7, 1 on MODNet-Cut, and driven one RegNetX layer from a feasible sigma = 30 to sigma = -90. [Re-audit, the three defects and what the fix prevents](BENCHMARKS.md#the-shift-cut-audit-re-run-theorem-3-retracted-and-three-defects-in-the-verifier-2026-09-09-desktop-2).
-- **Rule for Project Ignition**: Every QDQ graph emitted for XDNA1 must be verified against the [0, 31] systolic shift-cut bound using `python -m quant check-shift-cut` prior to hardware execution. That bound means **sigma only**. Do not run `--repair` on a model that already places and scores: its projection moves output scales, and no model measured here has ever needed it. The sigma edges themselves remain unmeasured on hardware.
+  Violations are projectable to the nearest bound via `project_scale_to_feasible_basin` (demonstrated on FastDepth `Conv_96`: pos_y 0 -> 1, bringing sigma from 32 down to 31, eliminating the clamp without retraining). — **THE PROJECTION WAS DEFECTIVE (2026-09-09).** It clamped pos_x/pos_w into [0, 31] while sigma was computed from the unclamped scales, so on RegNetX-002 `/s1/b1/conv2/conv/Conv` it took an already-feasible layer at sigma = 30 to **sigma = -90**, manufacturing the overflow it exists to prevent. Repairs on real models went SESR-M7 9 -> 0, MODNet-Cut 1 -> 0, RegNetX-002 5 -> 0 once the analyzer was corrected — every one had targeted a working op. Now uses unclamped positions and raises rather than emitting a scale the analyzer would flag.
+- **Rule for Project Ignition**: `python -m quant check-shift-cut` is an **advisory report, not a gate**. Run it, read it, and do not let it block or rewrite a graph: it has a demonstrated false-positive mode of the widest kind (SESR-M7 flagged 9 of 9 operations, then placed 50 / 52 nodes and tracked its CPU reference at r = 0.99912). That bound means **sigma only** — positions outside [0, 31] are advisory notes and never violations. **Do not run `--repair` on a model that already places and scores.**
+
+### A log whose *encoding* is corrupt is fixed in place, not duplicated
+
+Two logs arrived written as UTF-16LE behind a mangled byte-order mark
+(`results/quant_fastdepth_xint8.log`, `results/aie/dpu_transaction_disasm.log`). Git treats
+them as binary, `commit.sh`'s gate rejects them, and — the part that actually costs
+something — every `grep`/`rg` against them silently matches nothing, which is how an
+unbacked BiSeNetV2 microcode table sat unnoticed beside a log that never contained it.
+
+**The rule: decode in place to UTF-8, scrub the profile path, and say in the commit body
+that only the encoding changed.** The "never rewrite a log under `results/`" rule protects
+the *content* of a measurement, not its byte encoding; a file nothing can read is not
+serving as evidence. Verify by asserting the round trip (the recovered text must re-encode
+to the original bytes exactly) before writing, and diff line counts across the change.
+
+This settles a split precedent: `results/quant_fastdepth_xint8.log` was fixed in place in
+merge `4308a62`, while `results/aie/dpu_transaction_disasm.log` was first handled by adding
+a readable sibling and leaving the corrupt original. The sibling approach is withdrawn —
+one canonical, greppable file per measurement.
 
 
 
