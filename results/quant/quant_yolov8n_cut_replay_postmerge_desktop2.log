@@ -1,0 +1,68 @@
+Ignition 0.1.0a1: yolo_cut / CLE
+IMPORT_BLOCK_ACTIVE quark torch
+{
+  "producer": "Ignition",
+  "producer_version": "0.1.0a1",
+  "family": "yolo_cut",
+  "scope": "yolo_cut_cle",
+  "format": "XINT8_QDQ",
+  "mode": "reemit_from_positions",
+  "cle": true,
+  "input_sha256": "11b52c2530def3c99bccc4bee39a40683aab8619d4278a334b5f0f78c43fd0a1",
+  "versions": {
+    "numpy": "1.26.4",
+    "onnx": "1.18.0"
+  },
+  "simplify": {},
+  "prepare": {
+    "split_to_slice": 8
+  },
+  "scales_from_sha256": "763e61cbe911425a02e9811b97f5582ba4048ffbc6ea29e5fdcc4a5e8ee6ec46",
+  "reference_refine": {
+    "loops": 1,
+    "changes_by_rule": {},
+    "log": [],
+    "converged": true
+  },
+  "emit": {
+    "activations": 218,
+    "initializers": 126,
+    "pruned": 0
+  },
+  "gap_mul": {
+    "scaled": 0,
+    "skipped_not_square": []
+  },
+  "hardsigmoid": {
+    "replaced": 57,
+    "scaled": 57
+  },
+  "refine": {
+    "loops": 1,
+    "changes_by_rule": {},
+    "log": [],
+    "converged": true
+  },
+  "output_sha256": "b4b7e0fa3c086d1abf8ed9f6d8f407bc4075ec325fe26447032bb03e87776cec",
+  "wall_seconds": 2.2118039000051795,
+  "quark_imported": false,
+  "torch_imported": false
+}
+CLE_REPORT {
+  "pattern_count": 0,
+  "unique_pairs": 0,
+  "pairs": [],
+  "steps": 1,
+  "last_diff": 0.0,
+  "weight_threshold": 0.5,
+  "append_bias": true,
+  "use_threshold": true
+}
+GRAPH_DIFF {
+  "node_delta": [],
+  "init_exact_mismatch": [],
+  "weight_lsb": {},
+  "weight_changed_elements": {},
+  "compared_int8_initializers": 126
+}
+GRAPH_DIFF_PASS True

@@ -1,0 +1,249 @@
+Ignition 0.1.0a1: modnet / CLE
+IMPORT_BLOCK_ACTIVE quark torch
+{
+  "producer": "Ignition",
+  "producer_version": "0.1.0a1",
+  "family": "modnet",
+  "scope": "modnet_cle",
+  "format": "XINT8_QDQ",
+  "mode": "reemit_from_positions",
+  "cle": true,
+  "input_sha256": "ffdc0a20fb0284c0f769e9ff31b2a76d0f06055c08e5cda1c3275ce9bdd37c54",
+  "versions": {
+    "numpy": "1.26.4",
+    "onnx": "1.18.0",
+    "onnxslim": "0.1.96"
+  },
+  "simplify": {
+    "simplify": {
+      "nodes": [
+        230,
+        150
+      ],
+      "initializers": [
+        140,
+        145
+      ],
+      "nodes_removed": [
+        "/f_branch/Constant",
+        "/f_branch/Constant_1",
+        "/f_branch/Constant_2",
+        "/f_branch/Resize",
+        "/hr_branch/Constant",
+        "/hr_branch/Constant_1",
+        "/hr_branch/Constant_2",
+        "/hr_branch/Constant_3",
+        "/lr_branch/Constant",
+        "/lr_branch/Constant_1",
+        "/lr_branch/backbone/features.0/features.0.2/Constant",
+        "/lr_branch/backbone/features.0/features.0.2/Constant_1",
+        "/lr_branch/backbone/features.1/conv/conv.2/Constant",
+        "/lr_branch/backbone/features.1/conv/conv.2/Constant_1",
+        "/lr_branch/backbone/features.10/conv/conv.2/Constant",
+        "/lr_branch/backbone/features.10/conv/conv.2/Constant_1",
+        "/lr_branch/backbone/features.10/conv/conv.5/Constant",
+        "/lr_branch/backbone/features.10/conv/conv.5/Constant_1",
+        "/lr_branch/backbone/features.11/conv/conv.2/Constant",
+        "/lr_branch/backbone/features.11/conv/conv.2/Constant_1",
+        "/lr_branch/backbone/features.11/conv/conv.5/Constant",
+        "/lr_branch/backbone/features.11/conv/conv.5/Constant_1",
+        "/lr_branch/backbone/features.12/conv/conv.2/Constant",
+        "/lr_branch/backbone/features.12/conv/conv.2/Constant_1",
+        "/lr_branch/backbone/features.12/conv/conv.5/Constant",
+        "/lr_branch/backbone/features.12/conv/conv.5/Constant_1",
+        "/lr_branch/backbone/features.13/conv/conv.2/Constant",
+        "/lr_branch/backbone/features.13/conv/conv.2/Constant_1",
+        "/lr_branch/backbone/features.13/conv/conv.5/Constant",
+        "/lr_branch/backbone/features.13/conv/conv.5/Constant_1",
+        "/lr_branch/backbone/features.14/conv/conv.2/Constant",
+        "/lr_branch/backbone/features.14/conv/conv.2/Constant_1",
+        "/lr_branch/backbone/features.14/conv/conv.5/Constant",
+        "/lr_branch/backbone/features.14/conv/conv.5/Constant_1",
+        "/lr_branch/backbone/features.15/conv/conv.2/Constant",
+        "/lr_branch/backbone/features.15/conv/conv.2/Constant_1",
+        "/lr_branch/backbone/features.15/conv/conv.5/Constant",
+        "/lr_branch/backbone/features.15/conv/conv.5/Constant_1",
+        "/lr_branch/backbone/features.16/conv/conv.2/Constant",
+        "/lr_branch/backbone/features.16/conv/conv.2/Constant_1",
+        "/lr_branch/backbone/features.16/conv/conv.5/Constant",
+        "/lr_branch/backbone/features.16/conv/conv.5/Constant_1",
+        "/lr_branch/backbone/features.17/conv/conv.2/Constant",
+        "/lr_branch/backbone/features.17/conv/conv.2/Constant_1",
+        "/lr_branch/backbone/features.17/conv/conv.5/Constant",
+        "/lr_branch/backbone/features.17/conv/conv.5/Constant_1",
+        "/lr_branch/backbone/features.18/features.18.2/Constant",
+        "/lr_branch/backbone/features.18/features.18.2/Constant_1",
+        "/lr_branch/backbone/features.2/conv/conv.2/Constant",
+        "/lr_branch/backbone/features.2/conv/conv.2/Constant_1",
+        "/lr_branch/backbone/features.2/conv/conv.5/Constant",
+        "/lr_branch/backbone/features.2/conv/conv.5/Constant_1",
+        "/lr_branch/backbone/features.3/conv/conv.2/Constant",
+        "/lr_branch/backbone/features.3/conv/conv.2/Constant_1",
+        "/lr_branch/backbone/features.3/conv/conv.5/Constant",
+        "/lr_branch/backbone/features.3/conv/conv.5/Constant_1",
+        "/lr_branch/backbone/features.4/conv/conv.2/Constant",
+        "/lr_branch/backbone/features.4/conv/conv.2/Constant_1",
+        "/lr_branch/backbone/features.4/conv/conv.5/Constant",
+        "/lr_branch/backbone/features.4/conv/conv.5/Constant_1",
+        "/lr_branch/backbone/features.5/conv/conv.2/Constant",
+        "/lr_branch/backbone/features.5/conv/conv.2/Constant_1",
+        "/lr_branch/backbone/features.5/conv/conv.5/Constant",
+        "/lr_branch/backbone/features.5/conv/conv.5/Constant_1",
+        "/lr_branch/backbone/features.6/conv/conv.2/Constant",
+        "/lr_branch/backbone/features.6/conv/conv.2/Constant_1",
+        "/lr_branch/backbone/features.6/conv/conv.5/Constant",
+        "/lr_branch/backbone/features.6/conv/conv.5/Constant_1",
+        "/lr_branch/backbone/features.7/conv/conv.2/Constant",
+        "/lr_branch/backbone/features.7/conv/conv.2/Constant_1",
+        "/lr_branch/backbone/features.7/conv/conv.5/Constant",
+        "/lr_branch/backbone/features.7/conv/conv.5/Constant_1",
+        "/lr_branch/backbone/features.8/conv/conv.2/Constant",
+        "/lr_branch/backbone/features.8/conv/conv.2/Constant_1",
+        "/lr_branch/backbone/features.8/conv/conv.5/Constant",
+        "/lr_branch/backbone/features.8/conv/conv.5/Constant_1",
+        "/lr_branch/backbone/features.9/conv/conv.2/Constant",
+        "/lr_branch/backbone/features.9/conv/conv.2/Constant_1",
+        "/lr_branch/backbone/features.9/conv/conv.5/Constant",
+        "/lr_branch/backbone/features.9/conv/conv.5/Constant_1"
+      ]
+    }
+  },
+  "prepare": {},
+  "scales_from_sha256": "7d012cbe5063915536409cb02cb0fcf8be4241e729f88a4ef39afa49bfb6329c",
+  "reference_refine": {
+    "loops": 1,
+    "changes_by_rule": {},
+    "log": [],
+    "converged": true
+  },
+  "emit": {
+    "activations": 99,
+    "initializers": 140,
+    "pruned": 52
+  },
+  "gap_mul": {
+    "scaled": 1,
+    "skipped_not_square": []
+  },
+  "hardsigmoid": {
+    "replaced": 1,
+    "scaled": 1
+  },
+  "refine": {
+    "loops": 1,
+    "changes_by_rule": {},
+    "log": [],
+    "converged": true
+  },
+  "output_sha256": "71eb3f5f07ddce1facb47f5987fb735a64579ca3890c98f73bac7c848840bdb9",
+  "wall_seconds": 2.922921099991072,
+  "quark_imported": false,
+  "torch_imported": false
+}
+CLE_REPORT {
+  "pattern_count": 9,
+  "unique_pairs": 8,
+  "pairs": [
+    {
+      "head": "/lr_branch/backbone/features.17/conv/conv.6/Conv",
+      "tail": "/lr_branch/backbone/features.18/features.18.0/Conv",
+      "chain": [
+        "/lr_branch/backbone/features.17/conv/conv.6/Conv_output_0",
+        "/lr_branch/backbone/features.18/features.18.0/Conv_output_0"
+      ],
+      "size": 3
+    },
+    {
+      "head": "/lr_branch/se_block/fc/fc.0/Conv",
+      "tail": "/lr_branch/se_block/fc/fc.2/Conv",
+      "chain": [
+        "/lr_branch/se_block/fc/fc.0/Conv_output_0",
+        "/lr_branch/se_block/fc/fc.1/Relu_output_0",
+        "/lr_branch/se_block/fc/fc.2/Conv_output_0"
+      ],
+      "size": 3
+    },
+    {
+      "head": "/hr_branch/conv_hr4x/conv_hr4x.0/Conv",
+      "tail": "/hr_branch/conv_hr4x/conv_hr4x.2/Conv",
+      "chain": [
+        "/hr_branch/conv_hr4x/conv_hr4x.0/Conv_output_0",
+        "/hr_branch/conv_hr4x/conv_hr4x.1/Relu_output_0",
+        "/hr_branch/conv_hr4x/conv_hr4x.2/Conv_output_0"
+      ],
+      "size": 3
+    },
+    {
+      "head": "/hr_branch/conv_hr4x/conv_hr4x.2/Conv",
+      "tail": "/hr_branch/conv_hr4x/conv_hr4x.4/Conv",
+      "chain": [
+        "/hr_branch/conv_hr4x/conv_hr4x.2/Conv_output_0",
+        "/hr_branch/conv_hr4x/conv_hr4x.3/Relu_output_0",
+        "/hr_branch/conv_hr4x/conv_hr4x.4/Conv_output_0"
+      ],
+      "size": 3
+    },
+    {
+      "head": "/hr_branch/conv_hr2x/conv_hr2x.0/Conv",
+      "tail": "/hr_branch/conv_hr2x/conv_hr2x.2/Conv",
+      "chain": [
+        "/hr_branch/conv_hr2x/conv_hr2x.0/Conv_output_0",
+        "/hr_branch/conv_hr2x/conv_hr2x.1/Relu_output_0",
+        "/hr_branch/conv_hr2x/conv_hr2x.2/Conv_output_0"
+      ],
+      "size": 3
+    },
+    {
+      "head": "/hr_branch/conv_hr2x/conv_hr2x.2/Conv",
+      "tail": "/hr_branch/conv_hr2x/conv_hr2x.4/Conv",
+      "chain": [
+        "/hr_branch/conv_hr2x/conv_hr2x.2/Conv_output_0",
+        "/hr_branch/conv_hr2x/conv_hr2x.3/Relu_output_0",
+        "/hr_branch/conv_hr2x/conv_hr2x.4/Conv_output_0"
+      ],
+      "size": 3
+    },
+    {
+      "head": "/hr_branch/conv_hr2x/conv_hr2x.4/Conv",
+      "tail": "/hr_branch/conv_hr2x/conv_hr2x.6/Conv",
+      "chain": [
+        "/hr_branch/conv_hr2x/conv_hr2x.4/Conv_output_0",
+        "/hr_branch/conv_hr2x/conv_hr2x.5/Relu_output_0",
+        "/hr_branch/conv_hr2x/conv_hr2x.6/Conv_output_0"
+      ],
+      "size": 3
+    },
+    {
+      "head": "/f_branch/conv_f/conv_f.0/Conv",
+      "tail": "/f_branch/conv_f/conv_f.2/Conv",
+      "chain": [
+        "/f_branch/conv_f/conv_f.0/Conv_output_0",
+        "/f_branch/conv_f/conv_f.1/Relu_output_0",
+        "logits"
+      ],
+      "size": 3
+    },
+    {
+      "head": "/lr_branch/backbone/features.17/conv/conv.6/Conv",
+      "tail": "/lr_branch/backbone/features.18/features.18.0/Conv",
+      "chain": [
+        "/lr_branch/backbone/features.17/conv/conv.6/Conv_output_0",
+        "/lr_branch/backbone/features.18/features.18.0/Conv_output_0"
+      ],
+      "size": 3
+    }
+  ],
+  "steps": 1,
+  "last_diff": 0.5823134911369134,
+  "weight_threshold": 0.5,
+  "append_bias": true,
+  "use_threshold": true
+}
+GRAPH_DIFF {
+  "node_delta": [],
+  "init_exact_mismatch": [],
+  "weight_lsb": {},
+  "weight_changed_elements": {},
+  "compared_int8_initializers": 140
+}
+GRAPH_DIFF_PASS True
