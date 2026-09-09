@@ -4669,6 +4669,13 @@ tail by its reciprocal, so weight ranges stay tidy no matter how extreme `s` get
 layers, which is multiplied by `s` and then calibrated. Measuring the widest power-of-two excursion
 in `s` per equalized pair, on the same axis for all four models:
 
+> **Superseded the same day.** These spans were computed by reading Quark's pattern list as
+> pairs, but 14 of RegNetX-002's 27 patterns and 17 of ResNeXt-50's 33 are **four-element
+> depthwise triples**, and applying the pair formula to them gives the wrong number. Measured
+> per pattern with the triple path implemented, the worst is **42.20 bits** on RegNetX-002 and
+> **72.62** on ResNeXt-50, and a single threshold does not separate the populations at all:
+> [depthwise triples and the narrowed guard](#depthwise-cle-triples-implemented-and-the-guard-narrowed-to-them-2026-09-09-desktop-2).
+
 | Model | CLE's effect | Pairs | Worst pair | Median | Pairs over 4 bits |
 |---|---|---|---|---|---|
 | ResNet50 | **helps**, +10.8 top-1 | 33 | **2.52 bits** | 1.63 | **0** |
@@ -4762,6 +4769,84 @@ memory growth was hiding a usable feature: the growth was on the way to a reject
 Ryzen AI 1.7.1 on Phoenix. Per-channel *activation* scales and per-channel *bias* were not tested,
 and neither was a genuinely differing channel grid -- though a vector of identical values being
 refused makes a differing one very unlikely to fare better.
+
+---
+
+### Depthwise CLE triples implemented, and the guard narrowed to them (2026-09-09, Desktop 2)
+
+`find_pairs` used to raise `Depthwise CLE triples are not implemented`, so Ignition could not
+equalize RegNetX-002 or ResNeXt-50 at all and the stability guard could not be tested against the
+failure that motivated it. The triple path is now transcribed from
+`_cle_set_with_depthwise_layers`: a Conv, a depthwise Conv and a pointwise Conv are balanced
+together against the geometric mean of their per-channel maxima, with the first two biases scaled
+and the third layer's left alone. That path takes none of the pair path's options -- the source
+passes it no balance method, weight threshold, bias flag or threshold flag -- so `equalize_triple`
+accepts none either.
+
+**Matching the vendor required reproducing a bug in it.** `check_conv_layers_support` sets one
+`conv_support` flag per node and, when a grouped Conv fails the depthwise test, breaks out of the
+*attribute* loop rather than the node loop. The flag is then overwritten by the next node, so the
+returned verdict is whichever the **last** node produced: a grouped head followed by a group-1 tail
+is accepted. Ignition's reading was the strict one, and on RegNetX-002 that is the difference
+between 13 matched pairs and none -- thirteen of the vendor's 27 patterns silently dropped.
+
+| Model | Quark pairs / triples | Ignition pairs / triples |
+|---|---|---|
+| ResNet50 | 33 / 0 | 33 / 0 |
+| RegNetX-002 | 13 / 14 | 13 / 14 |
+| ResNeXt-50 32x4d | 16 / 17 | 16 / 17 |
+
+The float-level probe agrees byte for byte on all three
+([RegNetX](../results/quant/cle_probe_regnetx_002_fp32_triples.log),
+[ResNeXt](../results/quant/cle_probe_resnext50_32x4d_fp32_triples.log),
+[ResNet50](../results/quant/cle_probe_resnet50_fp32_triples.log)): 27 patterns from both sides on
+RegNetX, `patterns_equal: true`, 65 changed initializers each, `byte_mismatches: {}`.
+
+**With the triple path in place, Ignition refuses to emit these models at all.** Quantizing
+RegNetX-002 with `--cle` stops at
+`Nonfinite float16 calibration samples for /s1/b1/conv2/bn/act/Relu_output_0`
+([log](../results/quant/quant_regnetx_002_ignition_cle.log)). That is the mechanism closing:
+a per-channel scale spanning 42 bits multiplies the activation past float16's range, and
+`quant/calib.py` asserts its samples are finite. Quark, which stores samples differently, emits a
+plausible-looking model that scores 0.10%. This is fail-closed **by design** rather than by the
+unimplemented-path accident recorded earlier.
+
+**The correct spans, per pattern, with the triple formula where it belongs:**
+
+| Model | Pairs | Triples |
+|---|---|---|
+| ResNet50 | 33, worst **2.36 bits**, median 1.63 | none |
+| MODNet-Cut | 9, worst **1.81 bits**, median 0.93 | none |
+| RegNetX-002 | 13, all skipped as unsupported heads | 14, worst **42.20 bits**, median **23.51** |
+| ResNeXt-50 32x4d | 16, same | 17, worst **72.62 bits**, median 3.14 |
+
+**A single threshold cannot work, and that is the finding.** ResNeXt-50's seventeen triples span
+2.2, 2.4, 2.6, 2.7, 2.7, 2.8, 3.0, 3.1, 3.4, 3.4, then 32.7, 40.0, 40.7, 41.4, 43.9, 72.6, 72.6.
+**Ten of them sit inside ResNet50's beneficial range**, whose worst pair is 2.36. Any cut low
+enough to disarm those ten also disarms the pairs CLE is worth 10.8 points for. The guard
+therefore applies to **triples only**, and pairs are never guarded.
+
+**What that buys**, all on the full 1,000-image labeled set:
+
+| Model | CLE | Guard | Top-1 | Log |
+|---|---|---|---|---|
+| RegNetX-002 | on | none | **refuses to emit** | [log](../results/quant/quant_regnetx_002_ignition_cle.log) |
+| RegNetX-002 | on | 4 bits, 9 of 14 skipped | **25.60%** | [log](../results/quant/eval_regnetx_002_ignition_cle_guard4_cpu.log) |
+| RegNetX-002 | on | **2 bits, 14 of 14** | **66.20%** | [log](../results/quant/eval_regnetx_002_ignition_cle_g2_cpu.log) |
+| ResNeXt-50 | on | **2 bits, 17 of 17** | **68.90%** | [log](../results/quant/eval_resnext50_ignition_cle_g2_cpu.log) |
+| ResNet50 | on | 2 bits | byte-identical to the oracle | [log](../results/quant/cleguard_rn50_g2_triplesonly.log) |
+| MODNet-Cut | on | 2 bits | byte-identical to the oracle | [log](../results/quant/cleguard_modnet_g2_triplesonly.log) |
+
+The 4-bit row is the useful counter-example: a looser threshold is **worse than either extreme**.
+Letting 5 of RegNetX's 14 triples through leaves the chain partly rebalanced and reads 25.60%,
+against 66.20% for skipping all of them and a refusal for skipping none.
+
+**Be precise about the win.** At 2 bits the guarded result *equals* the no-CLE result on both
+models -- 66.20% and 68.90% -- it does not beat it. What the guard buys is that `--cle` can stay on
+as a default for the families it helps without destroying the ones it does not, and that the
+decision is made per pattern from a measured quantity rather than per model by hand. The threshold
+itself rests on two collapse models and two healthy ones; a family whose triples are genuinely
+benign would be disarmed by it and nothing here has found one.
 
 ---
 

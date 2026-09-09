@@ -1,0 +1,795 @@
+Ignition 0.1.0a1: folded_resnet / CLE
+IMPORT_BLOCK_ACTIVE quark torch
+C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\scratch\windows-lowlevel\quant\cle.py:310: RuntimeWarning: divide by zero encountered in divide
+  scale_12 = max_0 / geometric
+CALIBRATION images=64 tensors=74 skipped_prunable=49 sample_bytes=2595353600
+COLLECT 16/64
+COLLECT 32/64
+COLLECT 48/64
+COLLECT 64/64
+CHOOSE 16/74
+CHOOSE 32/74
+CHOOSE 48/74
+CHOOSE 64/74
+CHOOSE 74/74
+{
+  "producer": "Ignition",
+  "producer_version": "0.1.0a1",
+  "family": "folded_resnet",
+  "scope": "folded_resnet_cle",
+  "format": "XINT8_QDQ",
+  "mode": "own_minmse_cle",
+  "cle": true,
+  "input_sha256": "9c862ca1e3f3f98d42d80bdc618e57f3525e82d41eb7ae3ad4a7b9461a8b0024",
+  "versions": {
+    "numpy": "1.26.4",
+    "onnx": "1.18.0"
+  },
+  "simplify": {},
+  "prepare": {},
+  "preprocess": {
+    "input_size": [
+      3,
+      224,
+      224
+    ],
+    "interpolation": "bicubic",
+    "mean": [
+      0.485,
+      0.456,
+      0.406
+    ],
+    "std": [
+      0.229,
+      0.224,
+      0.225
+    ],
+    "crop_pct": 0.95,
+    "crop_mode": "center"
+  },
+  "emit": {
+    "activations": 74,
+    "initializers": 108,
+    "pruned": 49
+  },
+  "gap_mul": {
+    "scaled": 1,
+    "skipped_not_square": []
+  },
+  "hardsigmoid": {
+    "replaced": 0,
+    "scaled": 0
+  },
+  "refine": {
+    "loops": 2,
+    "changes_by_rule": {
+      "align_pool": 1
+    },
+    "log": [
+      {
+        "scale": "/global_pool/pool/GlobalAveragePool_output_0_scale",
+        "old": 6,
+        "new": 3,
+        "rule": "align_pool",
+        "node": "/global_pool/pool/GlobalAveragePool"
+      }
+    ],
+    "converged": true
+  },
+  "output_sha256": "d341f0f5a380408baeb2b072189006fbda44c76c75893817b1f4f70556c3aa43",
+  "wall_seconds": 78.44023389999347,
+  "quark_imported": false,
+  "torch_imported": false
+}
+CLE_REPORT {
+  "pattern_count": 33,
+  "unique_pairs": 32,
+  "pairs": [
+    {
+      "head": "/layer1/layer1.0/conv1/Conv",
+      "tail": "/layer1/layer1.0/conv3/Conv",
+      "chain": [
+        "/layer1/layer1.0/conv1/Conv_output_0",
+        "/layer1/layer1.0/act1/Relu_output_0",
+        "/layer1/layer1.0/conv2/Conv_output_0",
+        "/layer1/layer1.0/act2/Relu_output_0",
+        "/layer1/layer1.0/conv3/Conv_output_0"
+      ],
+      "size": 4,
+      "middle": "/layer1/layer1.0/conv2/Conv"
+    },
+    {
+      "head": "/layer1/layer1.0/conv1/Conv",
+      "tail": "/layer1/layer1.0/conv3/Conv",
+      "chain": [
+        "/layer1/layer1.0/conv1/Conv_output_0",
+        "/layer1/layer1.0/act1/Relu_output_0",
+        "/layer1/layer1.0/conv2/Conv_output_0",
+        "/layer1/layer1.0/act2/Relu_output_0",
+        "/layer1/layer1.0/conv3/Conv_output_0"
+      ],
+      "size": 4,
+      "middle": "/layer1/layer1.0/conv2/Conv"
+    },
+    {
+      "head": "/layer1/layer1.1/conv1/Conv",
+      "tail": "/layer1/layer1.1/conv3/Conv",
+      "chain": [
+        "/layer1/layer1.1/conv1/Conv_output_0",
+        "/layer1/layer1.1/act1/Relu_output_0",
+        "/layer1/layer1.1/conv2/Conv_output_0",
+        "/layer1/layer1.1/act2/Relu_output_0",
+        "/layer1/layer1.1/conv3/Conv_output_0"
+      ],
+      "size": 4,
+      "middle": "/layer1/layer1.1/conv2/Conv"
+    },
+    {
+      "head": "/layer1/layer1.1/conv2/Conv",
+      "tail": "/layer1/layer1.1/conv3/Conv",
+      "chain": [
+        "/layer1/layer1.1/conv2/Conv_output_0",
+        "/layer1/layer1.1/act2/Relu_output_0",
+        "/layer1/layer1.1/conv3/Conv_output_0"
+      ],
+      "size": 3,
+      "middle": null
+    },
+    {
+      "head": "/layer1/layer1.2/conv1/Conv",
+      "tail": "/layer1/layer1.2/conv3/Conv",
+      "chain": [
+        "/layer1/layer1.2/conv1/Conv_output_0",
+        "/layer1/layer1.2/act1/Relu_output_0",
+        "/layer1/layer1.2/conv2/Conv_output_0",
+        "/layer1/layer1.2/act2/Relu_output_0",
+        "/layer1/layer1.2/conv3/Conv_output_0"
+      ],
+      "size": 4,
+      "middle": "/layer1/layer1.2/conv2/Conv"
+    },
+    {
+      "head": "/layer1/layer1.2/conv2/Conv",
+      "tail": "/layer1/layer1.2/conv3/Conv",
+      "chain": [
+        "/layer1/layer1.2/conv2/Conv_output_0",
+        "/layer1/layer1.2/act2/Relu_output_0",
+        "/layer1/layer1.2/conv3/Conv_output_0"
+      ],
+      "size": 3,
+      "middle": null
+    },
+    {
+      "head": "/layer2/layer2.0/conv1/Conv",
+      "tail": "/layer2/layer2.0/conv3/Conv",
+      "chain": [
+        "/layer2/layer2.0/conv1/Conv_output_0",
+        "/layer2/layer2.0/act1/Relu_output_0",
+        "/layer2/layer2.0/conv2/Conv_output_0",
+        "/layer2/layer2.0/act2/Relu_output_0",
+        "/layer2/layer2.0/conv3/Conv_output_0"
+      ],
+      "size": 4,
+      "middle": "/layer2/layer2.0/conv2/Conv"
+    },
+    {
+      "head": "/layer2/layer2.0/conv2/Conv",
+      "tail": "/layer2/layer2.0/conv3/Conv",
+      "chain": [
+        "/layer2/layer2.0/conv2/Conv_output_0",
+        "/layer2/layer2.0/act2/Relu_output_0",
+        "/layer2/layer2.0/conv3/Conv_output_0"
+      ],
+      "size": 3,
+      "middle": null
+    },
+    {
+      "head": "/layer2/layer2.1/conv1/Conv",
+      "tail": "/layer2/layer2.1/conv3/Conv",
+      "chain": [
+        "/layer2/layer2.1/conv1/Conv_output_0",
+        "/layer2/layer2.1/act1/Relu_output_0",
+        "/layer2/layer2.1/conv2/Conv_output_0",
+        "/layer2/layer2.1/act2/Relu_output_0",
+        "/layer2/layer2.1/conv3/Conv_output_0"
+      ],
+      "size": 4,
+      "middle": "/layer2/layer2.1/conv2/Conv"
+    },
+    {
+      "head": "/layer2/layer2.1/conv2/Conv",
+      "tail": "/layer2/layer2.1/conv3/Conv",
+      "chain": [
+        "/layer2/layer2.1/conv2/Conv_output_0",
+        "/layer2/layer2.1/act2/Relu_output_0",
+        "/layer2/layer2.1/conv3/Conv_output_0"
+      ],
+      "size": 3,
+      "middle": null
+    },
+    {
+      "head": "/layer2/layer2.2/conv1/Conv",
+      "tail": "/layer2/layer2.2/conv3/Conv",
+      "chain": [
+        "/layer2/layer2.2/conv1/Conv_output_0",
+        "/layer2/layer2.2/act1/Relu_output_0",
+        "/layer2/layer2.2/conv2/Conv_output_0",
+        "/layer2/layer2.2/act2/Relu_output_0",
+        "/layer2/layer2.2/conv3/Conv_output_0"
+      ],
+      "size": 4,
+      "middle": "/layer2/layer2.2/conv2/Conv"
+    },
+    {
+      "head": "/layer2/layer2.2/conv2/Conv",
+      "tail": "/layer2/layer2.2/conv3/Conv",
+      "chain": [
+        "/layer2/layer2.2/conv2/Conv_output_0",
+        "/layer2/layer2.2/act2/Relu_output_0",
+        "/layer2/layer2.2/conv3/Conv_output_0"
+      ],
+      "size": 3,
+      "middle": null
+    },
+    {
+      "head": "/layer2/layer2.3/conv1/Conv",
+      "tail": "/layer2/layer2.3/conv3/Conv",
+      "chain": [
+        "/layer2/layer2.3/conv1/Conv_output_0",
+        "/layer2/layer2.3/act1/Relu_output_0",
+        "/layer2/layer2.3/conv2/Conv_output_0",
+        "/layer2/layer2.3/act2/Relu_output_0",
+        "/layer2/layer2.3/conv3/Conv_output_0"
+      ],
+      "size": 4,
+      "middle": "/layer2/layer2.3/conv2/Conv"
+    },
+    {
+      "head": "/layer2/layer2.3/conv2/Conv",
+      "tail": "/layer2/layer2.3/conv3/Conv",
+      "chain": [
+        "/layer2/layer2.3/conv2/Conv_output_0",
+        "/layer2/layer2.3/act2/Relu_output_0",
+        "/layer2/layer2.3/conv3/Conv_output_0"
+      ],
+      "size": 3,
+      "middle": null
+    },
+    {
+      "head": "/layer3/layer3.0/conv1/Conv",
+      "tail": "/layer3/layer3.0/conv3/Conv",
+      "chain": [
+        "/layer3/layer3.0/conv1/Conv_output_0",
+        "/layer3/layer3.0/act1/Relu_output_0",
+        "/layer3/layer3.0/conv2/Conv_output_0",
+        "/layer3/layer3.0/act2/Relu_output_0",
+        "/layer3/layer3.0/conv3/Conv_output_0"
+      ],
+      "size": 4,
+      "middle": "/layer3/layer3.0/conv2/Conv"
+    },
+    {
+      "head": "/layer3/layer3.0/conv2/Conv",
+      "tail": "/layer3/layer3.0/conv3/Conv",
+      "chain": [
+        "/layer3/layer3.0/conv2/Conv_output_0",
+        "/layer3/layer3.0/act2/Relu_output_0",
+        "/layer3/layer3.0/conv3/Conv_output_0"
+      ],
+      "size": 3,
+      "middle": null
+    },
+    {
+      "head": "/layer3/layer3.1/conv1/Conv",
+      "tail": "/layer3/layer3.1/conv3/Conv",
+      "chain": [
+        "/layer3/layer3.1/conv1/Conv_output_0",
+        "/layer3/layer3.1/act1/Relu_output_0",
+        "/layer3/layer3.1/conv2/Conv_output_0",
+        "/layer3/layer3.1/act2/Relu_output_0",
+        "/layer3/layer3.1/conv3/Conv_output_0"
+      ],
+      "size": 4,
+      "middle": "/layer3/layer3.1/conv2/Conv"
+    },
+    {
+      "head": "/layer3/layer3.1/conv2/Conv",
+      "tail": "/layer3/layer3.1/conv3/Conv",
+      "chain": [
+        "/layer3/layer3.1/conv2/Conv_output_0",
+        "/layer3/layer3.1/act2/Relu_output_0",
+        "/layer3/layer3.1/conv3/Conv_output_0"
+      ],
+      "size": 3,
+      "middle": null
+    },
+    {
+      "head": "/layer3/layer3.2/conv1/Conv",
+      "tail": "/layer3/layer3.2/conv3/Conv",
+      "chain": [
+        "/layer3/layer3.2/conv1/Conv_output_0",
+        "/layer3/layer3.2/act1/Relu_output_0",
+        "/layer3/layer3.2/conv2/Conv_output_0",
+        "/layer3/layer3.2/act2/Relu_output_0",
+        "/layer3/layer3.2/conv3/Conv_output_0"
+      ],
+      "size": 4,
+      "middle": "/layer3/layer3.2/conv2/Conv"
+    },
+    {
+      "head": "/layer3/layer3.2/conv2/Conv",
+      "tail": "/layer3/layer3.2/conv3/Conv",
+      "chain": [
+        "/layer3/layer3.2/conv2/Conv_output_0",
+        "/layer3/layer3.2/act2/Relu_output_0",
+        "/layer3/layer3.2/conv3/Conv_output_0"
+      ],
+      "size": 3,
+      "middle": null
+    },
+    {
+      "head": "/layer3/layer3.3/conv1/Conv",
+      "tail": "/layer3/layer3.3/conv3/Conv",
+      "chain": [
+        "/layer3/layer3.3/conv1/Conv_output_0",
+        "/layer3/layer3.3/act1/Relu_output_0",
+        "/layer3/layer3.3/conv2/Conv_output_0",
+        "/layer3/layer3.3/act2/Relu_output_0",
+        "/layer3/layer3.3/conv3/Conv_output_0"
+      ],
+      "size": 4,
+      "middle": "/layer3/layer3.3/conv2/Conv"
+    },
+    {
+      "head": "/layer3/layer3.3/conv2/Conv",
+      "tail": "/layer3/layer3.3/conv3/Conv",
+      "chain": [
+        "/layer3/layer3.3/conv2/Conv_output_0",
+        "/layer3/layer3.3/act2/Relu_output_0",
+        "/layer3/layer3.3/conv3/Conv_output_0"
+      ],
+      "size": 3,
+      "middle": null
+    },
+    {
+      "head": "/layer3/layer3.4/conv1/Conv",
+      "tail": "/layer3/layer3.4/conv3/Conv",
+      "chain": [
+        "/layer3/layer3.4/conv1/Conv_output_0",
+        "/layer3/layer3.4/act1/Relu_output_0",
+        "/layer3/layer3.4/conv2/Conv_output_0",
+        "/layer3/layer3.4/act2/Relu_output_0",
+        "/layer3/layer3.4/conv3/Conv_output_0"
+      ],
+      "size": 4,
+      "middle": "/layer3/layer3.4/conv2/Conv"
+    },
+    {
+      "head": "/layer3/layer3.4/conv2/Conv",
+      "tail": "/layer3/layer3.4/conv3/Conv",
+      "chain": [
+        "/layer3/layer3.4/conv2/Conv_output_0",
+        "/layer3/layer3.4/act2/Relu_output_0",
+        "/layer3/layer3.4/conv3/Conv_output_0"
+      ],
+      "size": 3,
+      "middle": null
+    },
+    {
+      "head": "/layer3/layer3.5/conv1/Conv",
+      "tail": "/layer3/layer3.5/conv3/Conv",
+      "chain": [
+        "/layer3/layer3.5/conv1/Conv_output_0",
+        "/layer3/layer3.5/act1/Relu_output_0",
+        "/layer3/layer3.5/conv2/Conv_output_0",
+        "/layer3/layer3.5/act2/Relu_output_0",
+        "/layer3/layer3.5/conv3/Conv_output_0"
+      ],
+      "size": 4,
+      "middle": "/layer3/layer3.5/conv2/Conv"
+    },
+    {
+      "head": "/layer3/layer3.5/conv2/Conv",
+      "tail": "/layer3/layer3.5/conv3/Conv",
+      "chain": [
+        "/layer3/layer3.5/conv2/Conv_output_0",
+        "/layer3/layer3.5/act2/Relu_output_0",
+        "/layer3/layer3.5/conv3/Conv_output_0"
+      ],
+      "size": 3,
+      "middle": null
+    },
+    {
+      "head": "/layer4/layer4.0/conv1/Conv",
+      "tail": "/layer4/layer4.0/conv3/Conv",
+      "chain": [
+        "/layer4/layer4.0/conv1/Conv_output_0",
+        "/layer4/layer4.0/act1/Relu_output_0",
+        "/layer4/layer4.0/conv2/Conv_output_0",
+        "/layer4/layer4.0/act2/Relu_output_0",
+        "/layer4/layer4.0/conv3/Conv_output_0"
+      ],
+      "size": 4,
+      "middle": "/layer4/layer4.0/conv2/Conv"
+    },
+    {
+      "head": "/layer4/layer4.0/conv2/Conv",
+      "tail": "/layer4/layer4.0/conv3/Conv",
+      "chain": [
+        "/layer4/layer4.0/conv2/Conv_output_0",
+        "/layer4/layer4.0/act2/Relu_output_0",
+        "/layer4/layer4.0/conv3/Conv_output_0"
+      ],
+      "size": 3,
+      "middle": null
+    },
+    {
+      "head": "/layer4/layer4.1/conv1/Conv",
+      "tail": "/layer4/layer4.1/conv3/Conv",
+      "chain": [
+        "/layer4/layer4.1/conv1/Conv_output_0",
+        "/layer4/layer4.1/act1/Relu_output_0",
+        "/layer4/layer4.1/conv2/Conv_output_0",
+        "/layer4/layer4.1/act2/Relu_output_0",
+        "/layer4/layer4.1/conv3/Conv_output_0"
+      ],
+      "size": 4,
+      "middle": "/layer4/layer4.1/conv2/Conv"
+    },
+    {
+      "head": "/layer4/layer4.1/conv2/Conv",
+      "tail": "/layer4/layer4.1/conv3/Conv",
+      "chain": [
+        "/layer4/layer4.1/conv2/Conv_output_0",
+        "/layer4/layer4.1/act2/Relu_output_0",
+        "/layer4/layer4.1/conv3/Conv_output_0"
+      ],
+      "size": 3,
+      "middle": null
+    },
+    {
+      "head": "/layer4/layer4.2/conv1/Conv",
+      "tail": "/layer4/layer4.2/conv3/Conv",
+      "chain": [
+        "/layer4/layer4.2/conv1/Conv_output_0",
+        "/layer4/layer4.2/act1/Relu_output_0",
+        "/layer4/layer4.2/conv2/Conv_output_0",
+        "/layer4/layer4.2/act2/Relu_output_0",
+        "/layer4/layer4.2/conv3/Conv_output_0"
+      ],
+      "size": 4,
+      "middle": "/layer4/layer4.2/conv2/Conv"
+    },
+    {
+      "head": "/layer4/layer4.2/conv2/Conv",
+      "tail": "/layer4/layer4.2/conv3/Conv",
+      "chain": [
+        "/layer4/layer4.2/conv2/Conv_output_0",
+        "/layer4/layer4.2/act2/Relu_output_0",
+        "/layer4/layer4.2/conv3/Conv_output_0"
+      ],
+      "size": 3,
+      "middle": null
+    },
+    {
+      "head": "/layer1/layer1.0/conv2/Conv",
+      "tail": "/layer1/layer1.0/conv3/Conv",
+      "chain": [
+        "/layer1/layer1.0/conv2/Conv_output_0",
+        "/layer1/layer1.0/act2/Relu_output_0",
+        "/layer1/layer1.0/conv3/Conv_output_0"
+      ],
+      "size": 3,
+      "middle": null
+    }
+  ],
+  "steps": 1,
+  "last_diff": 0.0,
+  "weight_threshold": 0.5,
+  "append_bias": true,
+  "use_threshold": true,
+  "max_scale_log2": 2.0,
+  "skipped_unstable": [
+    {
+      "pair": "0:0:/layer1/layer1.0/conv1/Conv->/layer1/layer1.0/conv2/Conv->/layer1/layer1.0/conv3/Conv",
+      "channels": 128,
+      "scale_span_log2": 72.6164535035434,
+      "scale_12": [
+        1.3812405403229883e-22,
+        125138318131200.0
+      ],
+      "scale_23": [
+        1.6350374179574523e-11,
+        333935.75
+      ]
+    },
+    {
+      "pair": "0:1:/layer1/layer1.0/conv1/Conv->/layer1/layer1.0/conv2/Conv->/layer1/layer1.0/conv3/Conv",
+      "channels": 128,
+      "scale_span_log2": 72.6164535035434,
+      "scale_12": [
+        1.3812405403229883e-22,
+        125138318131200.0
+      ],
+      "scale_23": [
+        1.6350374179574523e-11,
+        333935.75
+      ]
+    },
+    {
+      "pair": "0:2:/layer1/layer1.1/conv1/Conv->/layer1/layer1.1/conv2/Conv->/layer1/layer1.1/conv3/Conv",
+      "channels": 128,
+      "scale_span_log2": 41.42308380374515,
+      "scale_12": [
+        3.3916362014892176e-13,
+        2.3180932998657227
+      ],
+      "scale_23": [
+        1.3711730844079284e-06,
+        3.238119125366211
+      ]
+    },
+    {
+      "pair": "0:4:/layer1/layer1.2/conv1/Conv->/layer1/layer1.2/conv2/Conv->/layer1/layer1.2/conv3/Conv",
+      "channels": 128,
+      "scale_span_log2": 32.71273430514893,
+      "scale_12": [
+        1.4206455456466927e-10,
+        1175613056.0
+      ],
+      "scale_23": [
+        5.782643711427227e-05,
+        82604.8515625
+      ]
+    },
+    {
+      "pair": "0:6:/layer2/layer2.0/conv1/Conv->/layer2/layer2.0/conv2/Conv->/layer2/layer2.0/conv3/Conv",
+      "channels": 256,
+      "scale_span_log2": 2.4007269474591304,
+      "scale_12": [
+        0.18936912715435028,
+        2.1636900901794434
+      ],
+      "scale_23": [
+        0.41818737983703613,
+        1.6340960264205933
+      ]
+    },
+    {
+      "pair": "0:8:/layer2/layer2.1/conv1/Conv->/layer2/layer2.1/conv2/Conv->/layer2/layer2.1/conv3/Conv",
+      "channels": 256,
+      "scale_span_log2": 43.89068613454147,
+      "scale_12": [
+        6.131785346401991e-14,
+        1.09821617603302
+      ],
+      "scale_23": [
+        2.714996298891492e-07,
+        1.2271976470947266
+      ]
+    },
+    {
+      "pair": "0:10:/layer2/layer2.2/conv1/Conv->/layer2/layer2.2/conv2/Conv->/layer2/layer2.2/conv3/Conv",
+      "channels": 256,
+      "scale_span_log2": 3.4318695651064455,
+      "scale_12": [
+        0.09266256541013718,
+        1.6085907220840454
+      ],
+      "scale_23": [
+        0.20745033025741577,
+        0.9633426070213318
+      ]
+    },
+    {
+      "pair": "0:12:/layer2/layer2.3/conv1/Conv->/layer2/layer2.3/conv2/Conv->/layer2/layer2.3/conv3/Conv",
+      "channels": 256,
+      "scale_span_log2": 3.3814591213152134,
+      "scale_12": [
+        0.09595759958028793,
+        1.0023705959320068
+      ],
+      "scale_23": [
+        0.1088782325387001,
+        1.0015541315078735
+      ]
+    },
+    {
+      "pair": "0:14:/layer3/layer3.0/conv1/Conv->/layer3/layer3.0/conv2/Conv->/layer3/layer3.0/conv3/Conv",
+      "channels": 512,
+      "scale_span_log2": 2.8062618490592857,
+      "scale_12": [
+        0.1429654210805893,
+        1.0454961061477661
+      ],
+      "scale_23": [
+        0.3919508457183838,
+        1.636141061782837
+      ]
+    },
+    {
+      "pair": "0:16:/layer3/layer3.1/conv1/Conv->/layer3/layer3.1/conv2/Conv->/layer3/layer3.1/conv3/Conv",
+      "channels": 512,
+      "scale_span_log2": 40.700664377221116,
+      "scale_12": [
+        5.596018982402529e-13,
+        285179392.0
+      ],
+      "scale_23": [
+        7.913807280601759e-07,
+        92582.109375
+      ]
+    },
+    {
+      "pair": "0:18:/layer3/layer3.2/conv1/Conv->/layer3/layer3.2/conv2/Conv->/layer3/layer3.2/conv3/Conv",
+      "channels": 512,
+      "scale_span_log2": 39.96367443898717,
+      "scale_12": [
+        0.10389412939548492,
+        1072172695552.0
+      ],
+      "scale_23": [
+        0.26771169900894165,
+        8649766.0
+      ]
+    },
+    {
+      "pair": "0:20:/layer3/layer3.3/conv1/Conv->/layer3/layer3.3/conv2/Conv->/layer3/layer3.3/conv3/Conv",
+      "channels": 512,
+      "scale_span_log2": 3.135050377663853,
+      "scale_12": [
+        0.11382975429296494,
+        1.2680771350860596
+      ],
+      "scale_23": [
+        0.3055098056793213,
+        1.2265881299972534
+      ]
+    },
+    {
+      "pair": "0:22:/layer3/layer3.4/conv1/Conv->/layer3/layer3.4/conv2/Conv->/layer3/layer3.4/conv3/Conv",
+      "channels": 512,
+      "scale_span_log2": 3.0321805247145974,
+      "scale_12": [
+        0.12224263697862625,
+        0.8871381282806396
+      ],
+      "scale_23": [
+        0.28222039341926575,
+        1.4641714096069336
+      ]
+    },
+    {
+      "pair": "0:24:/layer3/layer3.5/conv1/Conv->/layer3/layer3.5/conv2/Conv->/layer3/layer3.5/conv3/Conv",
+      "channels": 512,
+      "scale_span_log2": 2.67656268711757,
+      "scale_12": [
+        0.15641354024410248,
+        0.7618120908737183
+      ],
+      "scale_23": [
+        0.3078819811344147,
+        1.7971457242965698
+      ]
+    },
+    {
+      "pair": "0:26:/layer4/layer4.0/conv1/Conv->/layer4/layer4.0/conv2/Conv->/layer4/layer4.0/conv3/Conv",
+      "channels": 1024,
+      "scale_span_log2": 2.574914616298219,
+      "scale_12": [
+        0.16783149540424347,
+        0.988745391368866
+      ],
+      "scale_23": [
+        1.0229302644729614,
+        3.516747236251831
+      ]
+    },
+    {
+      "pair": "0:28:/layer4/layer4.1/conv1/Conv->/layer4/layer4.1/conv2/Conv->/layer4/layer4.1/conv3/Conv",
+      "channels": 1024,
+      "scale_span_log2": 2.1570417173048773,
+      "scale_12": [
+        0.3674350380897522,
+        4.459993839263916
+      ],
+      "scale_23": [
+        0.5105917453765869,
+        3.1335039138793945
+      ]
+    },
+    {
+      "pair": "0:30:/layer4/layer4.2/conv1/Conv->/layer4/layer4.2/conv2/Conv->/layer4/layer4.2/conv3/Conv",
+      "channels": 1024,
+      "scale_span_log2": 2.7042553287012834,
+      "scale_12": [
+        0.2722708284854889,
+        4.056342124938965
+      ],
+      "scale_23": [
+        0.36270031332969666,
+        6.517213821411133
+      ]
+    }
+  ]
+}
+CALIBRATION_REPORT {
+  "store": "exact_float16",
+  "mode": "All",
+  "images": 64,
+  "listing": [
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000000.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000001.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000002.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000003.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000004.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000005.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000006.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000007.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000008.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000009.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000010.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000011.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000012.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000013.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000014.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000015.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000016.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000017.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000018.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000019.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000020.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000021.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000022.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000023.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000024.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000025.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000026.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000027.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000028.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000029.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000030.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000031.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000032.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000033.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000034.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000035.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000036.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000037.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000038.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000039.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000040.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000041.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000042.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000043.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000044.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000045.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000046.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000047.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000048.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000049.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000050.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000051.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000052.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000053.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000054.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000055.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000056.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000057.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000058.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000059.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000060.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000061.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000062.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000063.jpg"
+  ],
+  "spooled_tensors": 74,
+  "skipped_prunable_tensors": 49,
+  "sample_bytes": 2595353600,
+  "free_bytes_before": 766176784384,
+  "ort_version": "1.23.3.dev20260320",
+  "graph_optimization": "ORT_DISABLE_ALL",
+  "sharing": {
+    "/maxpool/MaxPool_output_0": "/act1/Relu_output_0"
+  }
+}
