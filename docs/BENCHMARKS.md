@@ -1808,9 +1808,14 @@ one dtype, one design.
 
 An AIE2 core tile has 64 KB of local data memory in four banks of 16 KB, and **two load
 units**, so a bundle can issue two loads in one cycle. When both address the same bank the
-pair costs one extra cycle. That price is measured, not assumed: a controlled experiment on
-branch `research/windows-lowlevel` holds the compiled function bytes identical and changes only
-the operand addresses, fitting a length sweep at r² 1.0.
+pair costs one extra cycle. That price is measured, not assumed: a controlled experiment (run on
+branch `research/windows-lowlevel`, its eleven logs now in `results/aie/`) holds the compiled
+function bytes identical and changes only the operand addresses, fitting a length sweep at
+r² 1.0. A second instrument agrees exactly and independently — counting `MEMORY_STALL` events
+inside the dispatch instead of fitting cycles, one same-bank **paired** load raises exactly one
+stall and costs exactly one cycle (`results/aie/bank_stall_observable_npu.log`, set out in
+full later in this section). Pairing is the condition, not adjacency: a loop
+too loose for the compiler to bundle the two loads into one instruction pays nothing at all.
 
 | Case | Core cycles per iteration |
 |---|---|
