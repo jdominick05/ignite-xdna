@@ -1,5 +1,5 @@
 """Minimal, label-free reproduction of the batch>1 unwritten-slot bug
-(docs/DECISIONS.md locked #1, filed as amd/RyzenAI-SW#401).
+(docs/DECISIONS.md locked #5, filed as amd/RyzenAI-SW#401).
 
 Generalizes to whatever static batch size N the given model was exported
 with (read from the graph, never assumed): builds two batches where every
