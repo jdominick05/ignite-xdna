@@ -1719,7 +1719,7 @@ sections above.
   (matching the 5 physical silicon columns, with context 6 rejecting at NTSTATUS `0xc01e0009`), and
   interleaved execution quantified a **747.75 µs context-switch penalty** (7.22x slowdown) when switching
   contexts on a shared partition. A heuristic byte scan of compiled `.xmodel` microcode
-  (`results/aie/dpu_transaction_disasm_utf8.log`) found a dense ~48-byte-strided record
+  (`results/aie/dpu_transaction_disasm.log`) found a dense ~48-byte-strided record
   stream in FastDepth's two `mc_code` segments, bimodal at 49.38% / 37.35% — consistent
   with a mostly pointwise-and-depthwise graph, which FastDepth is. **No DPU ISA was
   recovered**: the scanner's opcode table is a six-entry guess and 13.27% of its

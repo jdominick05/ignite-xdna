@@ -4380,7 +4380,7 @@ holding a dense stream of ~48-byte-strided records — 1,659 + 911 = 2,570 of th
 scan. The distribution is strongly bimodal: 49.38% of records carry `3` in the assumed
 opcode position and 37.35% carry `6`. That is *consistent with* a graph built mostly from
 pointwise and depthwise convolution, which FastDepth is (255/257 nodes, one DPU subgraph).
-Backing log: `results/aie/dpu_transaction_disasm_utf8.log`.
+Backing log: `results/aie/dpu_transaction_disasm.log`.
 
 **What it does not support, and why.** The remaining 13.27% of reported "opcodes" are
 ASCII text being read as instruction words:
@@ -4429,8 +4429,12 @@ loops. That is the tool to build on; this one is a byte-frequency probe.
 **Log encoding.** `results/aie/dpu_transaction_disasm.log` was written as ASCII, decoded as
 UTF-16LE and re-encoded as UTF-8, so it renders as CJK mojibake and every `grep` against it
 silently matches nothing. The corrupt original is kept unmodified, per the rule that a log
-under `results/` is never rewritten; `results/aie/dpu_transaction_disasm_utf8.log` is the
-byte-exact recovery (round trip asserted before writing) and is the one to read.
+under `results/` protects a measurement's *content*, not its byte encoding, and a file no
+`grep` can read is not serving as evidence. The recovery is byte-exact: the decoded text
+re-encodes to the original bytes exactly, asserted before anything was written, and the line
+count is unchanged at 82. Only the encoding changed; no number moved. The same fix was
+applied to `results/quant_fastdepth_xint8.log` in merge `4308a62`, and the rule is now
+recorded in `docs/DECISIONS.md` so there is one policy rather than two precedents.
 
 ---
 
