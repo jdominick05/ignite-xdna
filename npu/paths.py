@@ -23,6 +23,10 @@ YOLO_CUT_1X4_CACHE_KEY = "yolocut1x4cachekey"
 # yolov6n: a different architecture (RepVGG backbone, no DFL), own key so its
 # compile can never collide with the yolov8-family caches above.
 YOLOV6_CUT_CACHE_KEY = "yolov6cutcachekey"
+# yolo11n: C2PSA spatial attention block + decoupled DWConv detect head.
+YOLO11_CACHE_KEY = "yolo11cachekey"
+YOLO11_CUT_CACHE_KEY = "yolo11cutcachekey"
+YOLO11_NO_C2PSA_CACHE_KEY = "yolo11noc2psacachekey"
 # MobileViT: the attention-free CNN (mobilevit_cut_backbone_xint8.onnx) and the
 # stock 49-subgraph graph. Both sit at the repo root like every key above.
 # tools/demo_attention.py and tools/pipeline_splice_bench.py once hardcoded
@@ -111,4 +115,14 @@ def realesrgan_cache_key(model_path):
             return REALESRGAN_RRDB_128_CACHE_KEY
         return REALESRGAN_RRDB_64_CACHE_KEY
     return REALESRGAN_CACHE_KEY
+
+
+def yolo11_cache_key(model_path):
+    """Pick a YOLO11 variant's compile-cache key from its filename."""
+    stem = Path(model_path).stem.lower()
+    if "no_c2psa" in stem or "noc2psa" in stem:
+        return YOLO11_NO_C2PSA_CACHE_KEY
+    if "cut" in stem:
+        return YOLO11_CUT_CACHE_KEY
+    return YOLO11_CACHE_KEY
 

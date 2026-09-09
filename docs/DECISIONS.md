@@ -649,6 +649,19 @@
   inside another session's 32- and 128-stream classifier sweeps on the same device, the
   second's timeout expiring in the same second that session's XRT aborted; a clean 10 Hz
   monitor beside a hold did not (`results/aie/npu_monitor_poll_rate_npu.log`).
+- **C2PSA spatial self-attention in YOLOv11 fractures into CPU fallback on XDNA1 (2026-09-08):**
+  YOLOv11 introduces the C2PSA (Convolutional 2-Stage Pointwise Spatial Attention) block at the
+  deepest stage of the backbone (`/model.10`). In the XINT8 quantized model, the VitisAI EP rejects
+  the 4D `MatMul` operations ($B=1, \text{heads}=2, N=400$) embedded inside the attention loop,
+  placing only 6 out of 1,300 nodes on NPU (0.46%) and leaving all 87 Convolutions on CPU
+  (`results/diag_yolo11n_cut_xint8.log`). The resulting CPU-NPU context ping-pong degrades
+  single-image latency to 33.29–34.63 ms (eval/demo) — 1.46× slower than host CPU FP32 (21.59–22.82 ms).
+  Ablating C2PSA into an identity skip (`/model.10/m/m.0`) proves the remainder of the architecture is
+  exceptionally NPU-friendly: the backbone (C3k2) and decoupled depthwise-convolution heads fuse into
+  a single monolithic DPU subgraph of 1,173 / 1,180 nodes (99.4%, `results/diag_yolo11n_no_c2psa_cut_xint8.log`)
+  executing in **7.08 ms** on 5,000 val2017 images (141.2 fps) — the fastest YOLO model recorded on
+  XDNA1. However, because identity ablation collapses unweighted mAP to 0.19, deploying stock YOLOv11
+  natively on XDNA1 without DPU attention kernel fusion is rejected.
 
 ## The YOLOv8 partitioning failure (resolved)
 
