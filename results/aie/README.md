@@ -252,8 +252,9 @@ measured time. Written up in
 **`bank_conflict_survey.log`** — a fourth exception to "a loop's bundle count is its cycle
 count", and a correction to how this directory names the VLIW slots. A core tile's 64 KB is
 four banks of 16 KB and the core has **two load units**, so a bundle can issue two loads at
-once; when both address one bank the pair costs an extra cycle. That price is measured on
-branch `research/windows-lowlevel` (`memory_desktop2_20260909_m01_*.log`, not merged here) by
+once; when both address one bank the pair costs an extra cycle. That price is measured in
+`memory_desktop2_20260909_m01_*.log` (eleven logs, merged into this directory since; measured on
+branch `research/windows-lowlevel`) by
 holding the compiled function bytes identical and moving only the operand addresses: **12.0**
 cycles per iteration in one bank against **11.0** across two, r² 1.0, and **1,024** cycles per
 64×64×64 panel in a real GEMM. `tools/aie_bank_check.py` reads the allocated addresses out of
