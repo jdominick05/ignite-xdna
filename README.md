@@ -193,8 +193,8 @@ Outcomes, mostly negative and all measured:
   wrong: not dispatch cost, but `attention_kernels.cc` never calling `aie::mmul` — 0.61 GFLOPS vs 895.
 - **A bf16 GroupNorm beat the CPU on 33 of 49 nodes** of `resnetv2_50x3_bit` — and then
   the measured two-process handoff floor (789 µs–23.6 ms per call) erased all 33.
-- **Go/no-go:** the op's CPU time must exceed a measured dispatch floor — **617 µs** one-shot
-  IRON, **~531 µs** batched IRON (host-bound), **36.3 µs** batched raw pyxrt. Clock **1.80 GHz**.
+- **Go/no-go:** CPU time must exceed a *host-set* dispatch floor — **617 µs** one-shot IRON,
+  **~531 µs** batched IRON, **36.7 µs** batched C++ (≈ pyxrt: it's the driver's). **1.80 GHz**.
 
 See [`kernels/README.md`](kernels/README.md) and `results/aie/`.
 
