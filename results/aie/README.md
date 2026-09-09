@@ -358,7 +358,9 @@ from "the event does not fire". No bank-specific event exists to fall back on, a
 read *exactly* equal to `ACTIVE` in all six eight-event runs. The control did yield a clean
 instruction-matched comparison and found **no rate effect**: colliding costs a *constant* 6
 cycles more at 256, 512 and 2048 iterations, where a one-cycle per-iteration stall would have
-cost 256/512/2048 — that is loop setup, not memory. **Caveat that keeps H12 open:** the loop
+cost 256/512/2048 -- so the INVARIANCE is the finding: those 6 cycles are paid once. Two causes
+fit and neither is ruled out (a fixed loop-setup difference, or a one-time bank-arbitration
+warm-up on first touch of the second bank); the headline does not depend on which. **Caveat that keeps H12 open:** the loop
 runs at 15.0 cycles/iteration for 4 loads, so it has slack to absorb a one-cycle stall. Three
 structural facts fell out, each having cost an attempt: a core's `.bss` is ~16 KB not 64 KB; it
 lies entirely inside ONE 16 KB bank (0x75000-0x77C00, bank 29, fifo buffer at 0x78000, bank 30),

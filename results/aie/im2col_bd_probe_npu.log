@@ -84,17 +84,23 @@ exactly as many elements as the buffer holds and revisits nothing. It returns ev
 256 elements byte-for-byte equal to the host im2col. The moment the pattern re-reads -- the
 only change -- the DPU times out.
 
-IT IS NOT MERELY THE OBJECT SIZE BINDING THE TRANSFER LENGTH. That was the obvious explanation,
-since the default forwarded object is the H*W input tile while the pattern asks for 1764
-elements. Giving the forwarded ObjectFifo the expanded object type instead times out identically,
-so the limit is not a simple length mismatch.
+IT IS NOT THE CONSUMER'S EXPECTED LENGTH -- BUT THE PRODUCER'S BOUNDS ARE UNTESTED. The obvious
+explanation was that the forwarded object is the H*W input tile while the pattern asks for 1764
+elements. Giving the forwarded ObjectFifo the expanded object type times out identically, which
+rules that out FOR THE CONSUMER. It does not rule out the producer: `of_in` still carries only
+256 elements into the mem tile, so the buffer `dims_to_stream` walks is still 256 wide and the
+pattern still indexes past its end. Whether the mem tile BD refuses to address beyond its own
+buffer is UNTESTED, and it is the most likely remaining cause. That also sharpens the next
+experiment: a raw-BD attempt should size the mem tile buffer to the EXPANDED length and fill it,
+so that the overlap is a re-read strictly WITHIN bounds.
 
 WHAT THIS DOES AND DOES NOT LICENSE. It says: do not write a conv kernel against
 `ObjectFifo.forward(dims_to_stream=...)` expecting im2col, because it hangs the device. It does
 NOT say the silicon cannot do it -- the BD field widths are ample here and SILICON 2.6's claim
 is about the hardware, not about IRON. What has been shown is that this ROUTE to the hardware
 will not express it. The next mechanism to try is a raw buffer descriptor outside the ObjectFifo
-abstraction, where the transfer length and the access pattern are set independently.
+abstraction, where the transfer length and the access pattern are set independently -- and
+with the mem tile buffer sized to the expanded length, so the re-read stays in bounds.
 
 
 --------------------------------------------------------------------------------
