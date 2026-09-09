@@ -1894,6 +1894,23 @@ sections above.
   the kernels and not about the silicon. Open, and stated carefully: the 4×–20× are **ceilings
   on unused issue slots, not predictions**, the densities are unweighted by trip count, and
   reaching K1's 1 TOPS bar still needs 6.8×.
+- **That ceiling was then cashed in, and it was worth 3× — and the op class still loses.** The
+  1×1's accumulator lived in memory because `MMUL4x8x8 acc_tmp[4]` is indexed by a loop whose
+  trip count is a **runtime** value, and registers cannot be dynamically addressed. Peeling the
+  `n == 4` case into four *named* accumulators takes the hot loop from 22 bundles with one
+  `vmac` to 14 with four — **0.045 → 0.286 MACs/cycle** — and marginal throughput from
+  115.6–117.1 to **348.4–350.3 GOPS** across two series, every shape verifying. **This is the
+  falsifiable prediction H11 set up, and it held:** the same class of change to the GEMM moved
+  the wall clock by nothing because that design is delivery-bound, while the conv, at 4.5% of
+  peak, was genuinely issue-bound. First time this repo has separated the two by intervening
+  rather than modelling. **But the CPU still wins by 2.4×** (823.7–839.5 GOPS, ORT CPU EP QDQ
+  int8 on VNNI, same sitting), so the verdict does not reopen — only its reason changes, from
+  "the kernel uses 5% of its issue slots" to "even with the slots used, one column does not
+  reach a VNNI-equipped Zen4". Two things travel with it: patching only the first of the three
+  pipeline stages gave 2.4% and would have been reported as a null result — **a single-stage
+  fix in a pipeline measures the pipeline's balance, not the fix** — and the stock arm
+  re-measured at 115.6–117.1 rather than the published 146.1, because that figure predates the
+  width fix that rewrote the same loop.
 - **Candidate model pipelines (Categories A, B, C, D, E).** Test plans, target shapes, and falsification criteria:
   - **Category A:** Image Super-Resolution — SESR-M7 (placement, 1.48 ms latency, 3.02x iGPU win,
     70% AdaRound recovery) and Real-ESRGAN Compact (activation memory spill) closed above.

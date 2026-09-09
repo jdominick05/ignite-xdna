@@ -196,7 +196,9 @@ it is the bar every open kernel in section 4 is held to.
 | Kernel | Marginal rate, one column | Per core | Share of 819 GOPS/core (1.6 GHz) | Tag and evidence |
 |---|---|---|---|---|
 | VitisAI DPU, yolov8l, `1x4.xclbin` | 1650 GOPS (node time, not a fit) | 412 GOPS | 50.3% | MEASURED `results/percall_overhead_yolov8_1x4.log`; DERIVED split |
+| mlir-aie `ml/bottleneck`, **accumulators in registers** | **348.4–350.3 GOPS** (two fits, r² ≥ 0.9987) | 87.6 GOPS | 10.7% | MEASURED `results/aie/conv_accum_residency_npu.log` |
 | mlir-aie `ml/bottleneck`, h-axis sweep | 146.1 GOPS (fit, r² = 0.99999) | 36.5 GOPS | 4.5% | MEASURED `results/aie/bottleneck_spatial_sweep_npu.log` |
+| mlir-aie `ml/bottleneck`, stock, re-measured 2026-09-09 | 115.6–117.1 GOPS (two fits) | 29.0 GOPS | 3.5% | MEASURED `results/aie/conv_accum_residency_npu.log` |
 | mlir-aie `ml/bottleneck`, 56×56 | 111.1 GOPS (2-point fit) | 27.8 GOPS | 3.4% | MEASURED `results/aie/bottleneck_w56_npu.log` |
 | CPU, ORT QDQ int8 on 8 Zen4 cores, same shapes | 819.0 (sweep) / 1678.8 (56×56) GOPS | — | — | MEASURED, same two logs |
 
@@ -208,6 +210,24 @@ column. That gap, not the CPU, is the real statement about the open int8 conv ke
 op class was closed against the CPU (12.75× at 56×56), and it was closed by a kernel
 running at one-eleventh of what the same column does under AMD's compiler. At the DPU's
 rate one column matches the CPU's 1678.8 GOPS and four columns are ~4× ahead of it.
+
+**Most of that 11.3× was one line of C++, and removing it did not reopen the op class.**
+Both 1×1 kernels held their four accumulators in a **runtime-indexed array**, which cannot
+live in registers, so every `.mac()` was load-four-quarters / mac / store-four-quarters.
+Peeling the `n == 4` case into named accumulators takes the hot loop from 22 bundles with
+one `vmac` to 14 with four — **0.045 → 0.286 MACs/cycle** — and marginal throughput from
+115.6–117.1 to **348.4–350.3 GOPS**, a **2.99–3.01×** gain reproduced across two series with
+every shape verifying. The vendor gap narrows to **~4.7×**. But the CPU, measured in the same
+sitting on the same shapes (ORT CPU EP, QDQ int8, VNNI), still runs at 823.7–839.5 GOPS, so
+**the CPU still wins by 2.4× and the op class stays closed** — for a new reason. It was "the
+kernel uses 5% of its issue slots"; it is now "even with the slots used, one column does not
+reach a VNNI-equipped Zen4." MEASURED `results/aie/conv_accum_residency_npu.log`.
+
+Two caveats travel with that. **The stock arm re-measured at 115.6–117.1, not 146.1**: the
+published figure predates the 2026-09-07 width fix, which rewrote the same loop, so the
+kernel is not the same code — the A/B above is like-for-like within one sitting, but 350 is
+2.4× the last *published* figure rather than 3× it. And **conv2dk3, the 3×3 middle stage, was
+not touched** and is the likeliest remaining rate-limiter.
 Whether an open kernel can reach the DPU's rate is objective K1; nothing physical says it
 can't. **And 2026-09-09 located where the 11.3× goes: MAC issue density.** The open kernels'
 hardware loops issue 0.045–0.333 `vmac` per cycle against the int8 GEMM's 0.889 on the same

@@ -36,7 +36,7 @@ array program) into `~/.npu/cache/<hash>/`; later runs of the same shape hit the
 | `groupnorm_bf16/` | `InstanceNormalization` / `GroupNorm(32)` in `resnetv2_50x3_xint8.onnx` | Wins on 33/49 nodes standalone; v1 measured **0/49 once the handoff is counted** — reopened: the floor was a slow conversion function, not physics; v2 cuts it 23.6ms→5.7ms and isolates a 1.19ms protocol-only floor, already under CPU. Reopened, unbuilt |
 | `attention_bf16/` | Multi-head attention in `mobilevit_xxs` | **Loses 71×–240×.** Numerically correct, badly written |
 | `conv2x_baseline/` | Nothing — the CPU baseline for `ml/resnet/layers_conv2_x` | **CPU wins 6.3×–8.5×** like-for-like int8 |
-| `bottleneck_sweep/` | Nothing — the spatial sweep conv2x asked for | **CPU wins 5.7×–12.75×.** The int8 conv op class is closed |
+| `bottleneck_sweep/` | Nothing — the spatial sweep conv2x asked for | **CPU wins 5.7×–12.75×.** The int8 conv op class is closed — still closed after `conv_accum/`'s 3× fix, but by 2.4× rather than 7.2× |
 | `conv2dk3_widthfix/` | Nothing — an upstream mlir-aie bug fix | **Resolved.** Bit-exact at every width tested |
 | `dispatch_floor/` | Nothing — measures the per-dispatch fixed cost itself | Hardware floor **169.8 µs**, wall floor through IRON **617.0 µs** |
 | `clock_probe/` | Nothing — measures the AIE core clock itself, per power mode | **1.80 GHz** in `default`/`performance`/`turbo`, 1.03 `balanced`, 0.80 `powersaver` |
@@ -44,6 +44,7 @@ array program) into `~/.npu/cache/<hash>/`; later runs of the same shape hit the
 | `pmu_probe/` | Nothing — routes the trace unit's stall taxonomy and occupancy | Calibrated on `clock_probe`'s own loops (2.0003, 9.0001). **68%** of a short kernel's cycles are lock wait |
 | `asm_probe/` | Nothing — asks whether hand-written AIE2 assembly is usable | **It assembles and links.** Only statement-level inline asm fails. Compile only, no NPU |
 | `bank_placement/` | A local copy of `whole_array.py` plus `--stack-size`, and an alternating A/B driver | Tests H12: does separating the int8 GEMM's colliding operands into different memory banks speed it up? **Not resolvable on a shared machine** — seven series, arms overlap, sign varies |
+| `conv_accum/` | Local copies of both 1×1 conv kernels with their accumulators made register-resident | **Worth 2.99–3.01×** (116 → 350 marginal GOPS); hot loop 0.045 → 0.286 MACs/cycle. **The op class stays closed** — CPU still wins 2.4×, down from 7.2× |
 
 Each kernel's own findings, warnings and retractions follow. They are prose rather than
 table cells because several of them are corrections to what an earlier version of this
@@ -284,6 +285,37 @@ left unfixed and flagged.** Verified end-to-end through the real `bottleneck.py`
 channel config is `tensor_w`=44 (45 fails the VMAC 4-pixel granularity, not this fix; 46/48
 exceed Tile(0,4)'s 64 KB) *before* the single-buffering change described above.
 `results/aie/bottleneck_widthfix_npu.log`, `docs/DECISIONS.md`.
+
+## `conv_accum/`
+
+Not an operator — the **accumulator-residency fix** for the two 1×1 conv kernels, plus the A/B
+driver that measures it. Local copies of `conv2dk1.cc` and `conv2dk1_skip.cc` with one change
+each; `build_conv_accum.py` redirects the source lookup in-process, so **the shared toolchain is
+not edited**.
+
+**The defect.** Both kernels hold `MMUL4x8x8 acc_tmp[4]` and index it with a loop whose trip
+count `n` is a **runtime** value. Registers cannot be dynamically addressed, so the array is
+forced to memory and every `.mac()` becomes load-four-quarters / mac / store-four-quarters — the
+22-bundle, one-`vmac` loop measured at **0.045 MACs/cycle**. Peeling the `n == 4` case into four
+*named* accumulators gives **14 bundles with four `vmac`, 0.286/cyc**, no accumulator traffic.
+The array loop is kept as the tail and is reached: `total_chunks = iw/4`, so `iw=56` gives
+14 = 4+4+4+2 and the 56×56 shape runs it at n=2 and verifies.
+
+**Worth 2.99–3.01×** on marginal GOPS — **115.6–117.1 → 348.4–350.3** across two series, every
+shape passing the sweep's golden gate. **The op class stays closed anyway:** the CPU (ORT CPU EP,
+QDQ int8, VNNI, same sitting) runs 823.7–839.5, so it still wins **2.4×**, down from 7.2×.
+`results/aie/conv_accum_residency_npu.log`.
+
+**Fix every stage of a pipeline before believing a null result.** The bottleneck is three cores
+chained; patching only `conv2dk1.cc` moved 32×32 by **2.4%** and looked like "the conv is
+delivery-bound too". It was Amdahl — stage 3 still had its accumulators in memory. Both stages
+patched: **2.42×** at the same shape. A single-stage intervention measures the pipeline's balance,
+not the intervention.
+
+**Read 350 against 146.1 as 2.4×, not 3×.** The published 146.1 predates the 2026-09-07 width fix
+that rewrote this same loop, so it is not the same code; this sitting's own stock arm measures
+115.6–117.1. The A/B is like-for-like within one sitting. `conv2dk3` was **not** touched and is
+the likeliest remaining rate-limiter.
 
 ## `dispatch_floor/`
 
