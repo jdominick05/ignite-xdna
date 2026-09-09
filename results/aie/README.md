@@ -144,6 +144,20 @@ int8 GEMM's inner loop at 88.9% of the MAC issue rate against a whole-kernel 31.
 placing the loss outside the loop. Written up in
 [`docs/BENCHMARKS.md`](../../docs/BENCHMARKS.md#aie2-machine-code-the-bundle-count-of-a-loop-is-its-cycle-count).
 
+**`pmu_probe_npu.log`** — the trace unit used as a performance-monitoring unit, the first
+time on this machine (objective S2 of [`docs/SILICON.md`](../../docs/SILICON.md)):
+`kernels/pmu_probe/` reuses `clock_probe`'s kernel and design unchanged and swaps only the
+event list, so its calibration runs the two loops whose cycles are already measured here.
+They come back at **2.0003** and **9.0001** cycles per iteration against 2.000 and 9.000.
+Establishes that a level event emits one frame per cycle, compressed into Repeat frames by
+the hardware, and that `cycles alive = issuing + the four stalls` closes to a constant
+190/198-cycle prologue across a 16× range of work. First finding: `LOCK_STALL` is
+8,500–12,700 cycles per dispatch, flat in the work done, and **68%** of the shortest run's
+cycles — the core waits on its input ObjectFifo far longer than it computes, on a loop the
+disassembly rates as perfectly scheduled. Three of the four stall categories were zero
+throughout and are unexercised, not verified. Written up in
+[`docs/BENCHMARKS.md`](../../docs/BENCHMARKS.md#the-trace-unit-as-a-performance-monitoring-unit-68-of-a-short-kernels-cycles-are-lock-wait).
+
 > The two entries above were read as disagreeing — whether XRT's `max_clock_frequency_mhz`
 > tracks the live clock (`xrt_api_live_clock_and_pdh_npu.log`, 800 idle / 1800 under an
 > active context) or is pinned at 800 (`clock_probe_npu.log`, read across all five power

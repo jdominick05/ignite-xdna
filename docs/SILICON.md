@@ -398,7 +398,18 @@ bandwidth, and the neighbour-memory read rate. Decides: the 8 B/cycle assumption
 at all. Reuses: the same script; `results/aie/mlir_aie_examples_npu.log`'s memcpy as the
 cross-check.
 
-**S2. Hardware trace on npu1, end to end. — First step taken by S0.**
+**S2. Hardware trace on npu1, end to end. — Instrument built and calibrated 2026-09-09; the
+applied measurement is what remains.** `kernels/pmu_probe/` routes the stall taxonomy,
+occupancy and instruction mix instead of S0's two instruction events, and gates on
+reproducing S0's own loops before any of it is believed: cycles per iteration come back at
+2.0003 and 9.0001 against the measured 2.000 and 9.000. A level event emits one frame per
+cycle, compressed into Repeat frames by the hardware, so a 142,730-cycle window fits in 1,344
+bytes. The decomposition `cycles alive = issuing + memory + stream + lock + cascade stalls`
+closes to a constant 190/198-cycle prologue across a 16× range of work. First finding:
+`LOCK_STALL` alone accounts for 8,500–12,700 cycles per dispatch, flat in the work done, and
+68% of the shortest run's cycles (`results/aie/pmu_probe_npu.log`). Still open from S2: three
+of the four stall categories have never been non-zero here, so they are unexercised rather
+than verified; and the applied Perfetto-style timelines below.
 S0 ran `Program.enable_trace` on this machine end to end: `input_with_addresses.mlir` was
 present in the design cache, packets arrived, and the stamps decoded. Two things it
 learned that every later trace here inherits: a core that emits fewer events than fill a

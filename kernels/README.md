@@ -41,6 +41,7 @@ array program) into `~/.npu/cache/<hash>/`; later runs of the same shape hit the
 | `dispatch_floor/` | Nothing — measures the per-dispatch fixed cost itself | Hardware floor **169.8 µs**, wall floor through IRON **617.0 µs** |
 | `clock_probe/` | Nothing — measures the AIE core clock itself, per power mode | **1.80 GHz** in `default`/`performance`/`turbo`, 1.03 `balanced`, 0.80 `powersaver` |
 | `acc_spill_probe/` | Nothing — finds where the AIE2 accumulator file runs out | **5** live 4×8×8 int8 `aie::mmul` accumulators fit; 6 is the first that spills. Compile only, no NPU |
+| `pmu_probe/` | Nothing — routes the trace unit's stall taxonomy and occupancy | Calibrated on `clock_probe`'s own loops (2.0003, 9.0001). **68%** of a short kernel's cycles are lock wait |
 
 Each kernel's own findings, warnings and retractions follow. They are prose rather than
 table cells because several of them are corrections to what an earlier version of this
@@ -316,6 +317,29 @@ traps the script works around and documents: one event pair alone never fills a 
 run). Run from the ironenv; one fresh process per power mode (`xrt-smi configure --pmode`,
 then `--label <mode>`); the script prints the platform report so the mode is evidenced.
 `results/aie/clock_probe_npu.log`.
+
+## `pmu_probe/`
+
+Not an operator either. It points the trace unit at the events that say *why* a core is not
+computing — the stall taxonomy, occupancy, and the instruction mix — rather than at the two
+instruction events `clock_probe` used for the clock. It reuses `clock_probe`'s kernel and
+design unchanged and swaps only the event list, so `--calibrate` runs the two loops whose
+cycles per iteration this machine has already measured, and gates on reproducing them before
+anything else is believed. They come back at 2.0003 and 9.0001 against 2.000 and 9.000.
+
+Two mechanics worth knowing before tracing a new event. A level event such as `ACTIVE` emits
+**one frame per cycle**, which sounds like a flood and is not: the trace unit compresses
+consecutive identical frames itself, so a 142,730-cycle window fits in 1,344 bytes. And
+`ACTIVE` is inclusive of stall cycles rather than exclusive of them, so issuing cycles are
+what remains after subtracting the stalls, not something the hardware reports. Run `--raw`
+on any event you have not traced before; the encoding is not documented anywhere this
+project has found, and `--raw` is how the two facts above were established.
+
+First finding: on this one-core design the core waits 8,500–12,700 cycles per dispatch on its
+input ObjectFifo's lock, flat as the loop grows 16×, and **68% of the shortest run's cycles
+are lock wait against 32% computing** — on a loop `tools/aie_disasm.py` rates as perfectly
+scheduled. Three of the four stall categories were zero throughout; they are unexercised by
+this design, not verified. `results/aie/pmu_probe_npu.log`.
 
 ## `acc_spill_probe/`
 

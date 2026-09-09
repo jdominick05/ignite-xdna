@@ -1718,6 +1718,18 @@ sections above.
   machine's MAC rate while the whole kernel reaches 31.3% of peak, so the loss is outside the
   loop and a kernel rewrite is the wrong lever. Open from it: what the elapsed time is spent
   on instead, which is the trace unit's stall events rather than the disassembly.
+- **Why a core is not computing, measured.** The trace unit carries a stall taxonomy, and
+  `kernels/pmu_probe/` routes it, calibrated by reproducing the two loops above at 2.0003 and
+  9.0001 cycles per iteration before anything else is believed. `cycles alive = issuing +
+  memory + stream + lock + cascade stalls` closes to a constant 190-cycle prologue across a
+  16× range of work, so the decomposition is sound (`results/aie/pmu_probe_npu.log`). The
+  first answer it gives is uncomfortable and useful: on a one-core design the core waits
+  8,500–12,700 cycles per dispatch on its input queue's lock, flat in the work done, and 68%
+  of the shortest run's cycles are that wait rather than compute. The kernels in this repo
+  have been losing on data arrival, not on arithmetic, and that is now a measurement instead
+  of an inference. Open: three of the four stall categories have never been non-zero here, so
+  they are unexercised; and the same instrument has not yet been pointed at the conv or the
+  GEMM, which is where it would change a verdict.
 - **Candidate model pipelines (Categories A, C, D, E).** Test plans, target shapes, and falsification criteria:
   - **Category A:** Image Super-Resolution — SESR-M7 (placement, 1.48 ms latency, 3.02x iGPU win,
     70% AdaRound recovery) and Real-ESRGAN Compact (activation memory spill) closed above.

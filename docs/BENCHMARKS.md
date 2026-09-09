@@ -1136,6 +1136,70 @@ issue density, not the kernel's utilisation. The slot names come from the nop mn
 `llvm-objdump` prints, not from a published AIE-ML ISA document, which this project does not
 have.
 
+### The trace unit as a performance-monitoring unit: 68% of a short kernel's cycles are lock wait
+
+Backing log: `results/aie/pmu_probe_npu.log`. Tool: `kernels/pmu_probe/`.
+
+The clock made cycles convertible to seconds and the disassembly made an issuing loop's cost
+readable. Neither says anything about a core that is *not* issuing, which is where every
+losing verdict in this repo actually lives. The AIE2 trace unit carries a stall taxonomy
+(`MEMORY_STALL`, `STREAM_STALL`, `LOCK_STALL`, `CASCADE_STALL`), an occupancy signal
+(`ACTIVE`, `DISABLED`) and an instruction mix, eight events at a time per tile. None had been
+used on this machine.
+
+`kernels/pmu_probe/` reuses the clock probe's kernel and design unchanged and swaps only the
+event list, so its loops are the two whose cycles per iteration are already measured here.
+That makes the first run a calibration, not a measurement.
+
+**How a level event is encoded.** One frame per cycle. `ACTIVE` returns 27,864 hits over a
+span of 27,863 cycles. The trace unit compresses consecutive identical frames into Repeat
+frames itself, which is why this does not overflow: the vector loop at 65,536 iterations spans
+142,730 cycles and still fits in 1,344 bytes.
+
+**Calibration.** Cycles per iteration converge on the measured values as the loop grows and
+the fixed entry cost amortises.
+
+| Loop | Iterations | Cycles/iteration | Measured by S0 |
+|---|---|---|---|
+| vector | 4,096 | 2.0051 | 2.000 |
+| vector | 16,384 | 2.0013 | 2.000 |
+| vector | 65,536 | **2.0003** | 2.000 |
+| scalar | 2,048 | 9.0020 | 9.000 |
+| scalar | 8,192 | 9.0005 | 9.000 |
+| scalar | 32,768 | **9.0001** | 9.000 |
+
+**The accounting, which is the stronger result.** Subtracting the traced stall cycles and the
+loop's own cycles from the cycles the core was alive leaves exactly 190 cycles on every vector
+run and exactly 198 on every scalar run, across a 16× range of work. A residual that is
+constant rather than proportional is the kernel's prologue and epilogue, and it is what says
+
+```
+cycles the core is alive = issuing + memory + stream + lock + cascade stalls
+```
+
+closes on this hardware. `ACTIVE` is inclusive of stall cycles, not exclusive of them — a core
+waiting on a lock is still enabled and not halted — so issuing cycles are what remains after
+the stalls are subtracted rather than a figure the hardware reports directly.
+
+**What it found.** `LOCK_STALL` is the only non-zero stall term in any run, and it is large.
+The core waits 8,500–12,700 cycles per dispatch on the input ObjectFifo's lock, about 5–7 µs
+at 1.80 GHz, and that barely moves as the loop grows 16×, so it is a fixed cost of getting
+data to the core rather than a function of the work. On the shortest run it is 18,926 cycles
+against 8,915 of issuing: **the core spends 68% of its life waiting and 32% computing**, on a
+kernel whose inner loop the disassembly rates as perfectly scheduled. That is the mechanism
+this project has been inferring from throughput fits since the first kernel lost.
+
+It also sharpens the 169.8 µs hardware dispatch floor above. Some of that floor is visible
+from inside the core as lock wait, but only a little: 10,000 cycles is about 3% of 169.8 µs,
+so the rest is outside the core entirely.
+
+**What this does not show.** Only `LOCK_STALL` has been seen non-zero, so three of the four
+stall categories are unexercised and are not shown to work by this run. One core tile, one
+power mode. The traced window starts when the trace unit is enabled rather than when the
+dispatch begins, so the cycles the core was alive are not the whole submit-to-wait bracket and
+must not be compared against it directly. `ACTIVE` being inclusive of stalls is inferred from
+the accounting closing, not from a document.
+
 ### MobileViT-XXS does not survive per-tensor INT8, and AdaRound cannot save it
 
 The accuracy question the attention work deferred, now measured on the full 1000-image

@@ -1,0 +1,100 @@
+Where a core tile's cycles go: the trace unit as a performance-monitoring unit
+2026-09-09. env: mlir-aie ironenv (v1.4.2, llvm-aie 22.0.0.2026090201) + XRT SDK 2.21.75, native
+Windows; driver 32.0.20101.3760. Desktop 2 (Phoenix, Ryzen 7 8700G), power mode Default (1.80 GHz
+per results/aie/clock_probe_npu.log). No foreign hardware contexts: `xrt-smi examine -r
+aie-partitions` reported "No hardware contexts running on device" before the run.
+
+Commands (from the ironenv; kernels/pmu_probe/pmu_probe.py --help has the setup):
+  python3 kernels/pmu_probe/pmu_probe.py --calibrate
+  python3 kernels/pmu_probe/pmu_probe.py --raw --target 4096 --mode vector
+
+WHY: S0 measured the clock, so cycles convert to seconds. results/aie/aie2_isa_static.log showed
+a hardware loop's bundle count is its cycle count, so an issuing loop's cost is readable off the
+disassembly. Neither says anything about a core that is NOT issuing. Every losing verdict in this
+repo -- conv at 146.1 GOPS against a 3.69 TOPS column, the attention kernel at 71-240x, the int8
+GEMM reaching 31.3% of what its cores can issue while its inner loop issues at 88.9% -- names a
+number without naming a mechanism. The AIE2 trace unit carries a stall taxonomy, an occupancy
+signal and an instruction mix, up to eight events per tile, and this is the first use of any of
+them on this machine.
+
+METHOD: kernels/pmu_probe/ reuses kernels/clock_probe/'s kernel and design UNCHANGED and swaps
+only the event list, so the loops it runs are the two whose cycles per iteration are already
+measured on this machine. That makes the first run a calibration rather than a measurement.
+Events routed: INSTR_EVENT_0, INSTR_EVENT_1, ACTIVE, MEMORY_STALL, STREAM_STALL, LOCK_STALL,
+CASCADE_STALL, DISABLED. Frames are decoded with kernels/clock_probe/'s own decoder, not
+mlir-aie's parse.py, which mis-times gaps over 2^18 cycles.
+
+
+--------------------------------------------------------------------------------
+1. HOW THE HARDWARE ENCODES AN EVENT THAT IS TRUE FOR MANY CYCLES
+--------------------------------------------------------------------------------
+S0 only ever traced two point events, which fire once each. A level event such as ACTIVE is
+true for many consecutive cycles and how the trace unit encodes that is documented nowhere this
+project has found. Read off the hardware with --raw:
+
+Python was not found; run without arguments to install from the Microsoft Store, or disable this shortcut from Settings > Apps > Advanced app settings > App execution aliases.
+
+ANSWER: one frame per cycle. ACTIVE returns 27,864 hits over a span of 27,863 cycles -- a
+frame for every cycle it is true -- and consecutive identical frames are compressed into Repeat
+frames by the trace unit itself. That compression is why this does not overflow: the vector loop
+at 65,536 iterations spans 142,730 cycles and still fits in 1,344 bytes.
+
+The Multiple0 frames with slots=00000101 and 00000110 alternating are the kernel's 256 trailing
+event0/event1 filler pairs, each accompanied by ACTIVE in the same cycle. That matches the
+disassembly in results/aie/aie2_isa_static.log, where the flush loop is 8 bundles emitting 4
+pairs, and it is a second independent confirmation that one frame is one cycle.
+
+
+--------------------------------------------------------------------------------
+2. CALIBRATION AND CYCLE ACCOUNTING
+--------------------------------------------------------------------------------
+
+Python was not found; run without arguments to install from the Microsoft Store, or disable this shortcut from Settings > Apps > Advanced app settings > App execution aliases.
+
+
+--------------------------------------------------------------------------------
+3. WHAT THE NUMBERS SAY
+--------------------------------------------------------------------------------
+Cycles per iteration converge on the measured values from above as the loop grows -- 2.0051 ->
+2.0013 -> 2.0003 and 9.0020 -> 9.0005 -> 9.0001 -- because the fixed loop-entry cost amortises.
+The instrument reproduces both of S0's loops.
+
+The accounting is the stronger result. Subtracting the traced stall cycles and the loop's own
+cycles from the cycles the core was alive leaves EXACTLY 190 cycles on every vector run and
+EXACTLY 198 on every scalar run, across a 16x range of work. A residual that is constant rather
+than proportional is the kernel's prologue and epilogue, and it is what says the decomposition
+
+    cycles the core is alive = issuing + memory + stream + lock + cascade stalls
+
+closes on this hardware. ACTIVE is inclusive of stall cycles, not exclusive of them: a core
+waiting on a lock is still enabled and not halted, so issuing cycles are what remains after the
+stalls are subtracted rather than something the hardware reports directly.
+
+LOCK_STALL is the only non-zero stall term in any of these runs, and it is large. The core waits
+roughly 8,500 to 12,700 cycles per dispatch on the input ObjectFifo's lock -- about 5 to 7
+microseconds at 1.80 GHz -- and that figure barely moves as the loop grows from 4,096 to 65,536
+iterations, so it is a fixed cost of getting data to the core and not a function of the work.
+On the shortest run it is 18,926 cycles against 8,915 cycles of issuing: the core spends 68% of
+its life waiting and 32% computing, on a kernel whose inner loop the disassembly rates as
+perfectly scheduled.
+
+That is the mechanism this repo has been inferring from throughput fits and can now measure. It
+also sharpens results/aie/dispatch_floor_npu.log's 169.8 microsecond hardware floor: some of
+that floor is visible from inside the core as lock wait, and the rest is outside the core
+entirely, because 10,000 cycles is only about 3% of 169.8 microseconds.
+
+MEMORY_STALL, STREAM_STALL and CASCADE_STALL are zero throughout, which is correct for this
+design -- it has one core, no cascade, no streams beyond the two ObjectFifos, and a loop whose
+operands are in registers. They are not shown to work by this run. A kernel that uses them is
+needed before any of those three can be trusted, and that is the next step.
+
+--------------------------------------------------------------------------------
+WHAT THIS DOES NOT SHOW
+--------------------------------------------------------------------------------
+- Only LOCK_STALL has been seen non-zero. Three of the four stall categories are unexercised.
+- One core tile, logical Tile(0,2), physical (2,1). One power mode.
+- The traced window starts when the trace unit is enabled, not when the dispatch begins, so the
+  cycles the core was alive are not the whole submit-to-wait bracket and should not be compared
+  to it directly.
+- ACTIVE being inclusive of stalls is inferred from the accounting closing, not from a document.
+- The 8-event budget per tile is a hardware limit; a wider taxonomy needs more than one run.
