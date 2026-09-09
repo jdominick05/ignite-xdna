@@ -1,5 +1,18 @@
 #!/usr/bin/env python3
-"""Positive control: can the AIE2 trace unit see a same-bank dual-load stall at all?
+"""SUPERSEDED positive control: can the AIE2 trace unit see a same-bank dual-load stall?
+
+SUPERSEDED BY kernels/memory_placement/probe.py --events; ITS HEADLINE WAS RETRACTED.
+This probe concluded MEMORY_STALL cannot see a bank conflict. That is wrong, and the fault
+was this kernel rather than the event: the loop below runs at 15.0 cycles/iteration for 4
+loads, far too loose for the compiler to be issuing two of them in ONE instruction, and the
+same-bank penalty exists only for PAIRED loads. There was no conflict here to detect.
+memory_placement/probe.py is the valid control because it ASSERTS the pairing -- it greps
+the disassembly for `vlda` and `vldb` on one line and refuses to run otherwise -- and with
+that assertion the event is exact: one same-bank paired load costs one cycle and raises one
+MEMORY_STALL (results/aie/bank_stall_observable_npu.log). Read the three-outcome table below
+knowing the middle row is what this probe reported and it was the wrong reading of it.
+What still stands from this file: the three structural facts about .bss and stack_size, and
+the eight-event trace-buffer trap, both recorded below.
 
 WHY THIS EXISTS
 ---------------

@@ -371,7 +371,12 @@ pair them, and the penalty exists only for paired loads, so there was nothing to
 structural facts (a core's `.bss` is ~16 KB, lies entirely inside ONE 16 KB bank, and is NOT
 moved by `stack_size`, which relocates only ObjectFifo buffers), and that at eight traced events
 the counters are not reproducible because `ACTIVE` overflows the 64 KB buffer -- which is why the
-replacement used four. Originally described as: the positive control for the instrument
+replacement used four.
+
+Its original entry is kept below verbatim as the superseded record -- every claim in it
+about what `MEMORY_STALL` can see is overturned by the log above, and it is here so the
+correction stays traceable rather than being tidied away. It read: the positive control
+for the instrument
 `bank_ab_h12_npu.log` proposed, run BEFORE spending a sitting on it, and **the instrument does
 not work**. A same-bank dual-load conflict has to appear as `MEMORY_STALL`, which
 `pmu_probe_npu.log` had already flagged as never having read nonzero here. In a loop built to

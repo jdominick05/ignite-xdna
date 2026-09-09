@@ -1,5 +1,14 @@
-// bank_stall_probe: a POSITIVE CONTROL for whether the AIE2 trace unit can see a
-// same-bank dual-load stall at all.
+// bank_stall_probe: a SUPERSEDED positive control for whether the AIE2 trace unit can
+// see a same-bank dual-load stall at all.
+//
+// SUPERSEDED BY kernels/memory_placement/ -- AND THIS PROBE'S HEADLINE WAS RETRACTED.
+// It concluded MEMORY_STALL cannot see a bank conflict. Wrong, and the fault was this
+// kernel, not the event: the loop below issues 4 loads at 15.0 cycles/iteration, far too
+// loose for the compiler to be pairing two of them into one instruction, and the same-bank
+// penalty exists only for PAIRED loads -- so there was nothing here to detect. The valid
+// control asserts the pairing (`vlda` and `vldb` on one disassembly line, refusing to run
+// otherwise), and with it the event is exact: one same-bank paired load = one cycle = one
+// MEMORY_STALL. See results/aie/bank_stall_observable_npu.log.
 //
 // WHY THIS EXISTS
 // ---------------
