@@ -45,7 +45,7 @@ was worth pursuing at all once classification proved the hardware was real.
 **ResNet50 classification** was the first target because it's the simplest possible
 falsification test. A stock timm checkpoint, standard preprocessing, one well-known
 accuracy number to check against (80.4% published top-1). If this doesn't work, nothing
-harder will. It worked, cleanly: 79.8% top-1 at 6.9 ms on the NPU with AdaRound, 393 of
+harder will. It worked, cleanly: 79.8% top-1 at 5.27 ms on the NPU with AdaRound, 393 of
 395 graph nodes accepted by the EP. This pipeline is now the **known-good control** —
 whenever something is unclear about the YOLO pipeline (is a partition bad? is the
 xclbin wrong?), the question becomes "does ResNet50 still show its normal 393/395
@@ -489,7 +489,7 @@ generalize beyond any one model:
 
 | Pipeline | Question it was built to answer | Status |
 |---|---|---|
-| ResNet50 | Does *any* real CNN reach the NPU with acceptable accuracy? | **Answered: yes.** 79.8% top-1, 6.9 ms. Serves as the ongoing control. |
+| ResNet50 | Does *any* real CNN reach the NPU with acceptable accuracy? | **Answered: yes.** 79.8% top-1, 5.27 ms. Serves as the ongoing control. |
 | YOLOv8 (full graph) | Does a harder, decode-tail-included graph reach the NPU? | **Answered: no**, and understood why. Kept as a control, not a bug to fix. |
 | YOLOv8 (head-cut) | Can the same model reach the NPU with the decode moved off-graph? | **Answered: yes.** 8.9–15.6 ms depending on width, beats FP32 on both axes at width s. |
 | Resolution sensitivity (classification) | Does ResNet50 have the same fixed-cost floor YOLO does, and does accuracy survive moving off the training resolution? | **Answered, 128–384px measured.** Smaller fixed cost (2.6 ms vs YOLO's 2.4, but a smaller share — 23% vs 27% — of a slower run), more compute-bound, and accuracy peaks above training resolution at 256px rather than at it. The 288px turn is a real ceiling, not noise: everything above 256px is strictly worse on both latency and accuracy at once. Table in [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md#resnet50-input-resolution-does-the-fixed-cost-story-hold-for-a-classifier). |
@@ -1645,6 +1645,10 @@ sections above.
   [Working](docs/BENCHMARKS.md#5-opencv-calibration-fix-error-reduction-and-the-structural-zero-concat-gap-2026-09-08-desktop-2).
   What the rerun did not close: the calibration reader is still a per-pipeline copy of the
   transform, so nothing structural stops the two drifting apart again. An owned calibration
+  source is the structural fix, and Ignition now has one: `quant/sources.py` calibrates
+  through `npu.modnet.preprocess` — the same function every inference path calls — so the
+  two cannot drift apart by construction rather than by discipline. That covers MODNet
+  only; the other pipelines still each carry their own reader.
 - **Category B: Real-Time Portrait Matting and Semantic Segmentation (MODNet and BiSeNetV2).**
   MODNet (`pipelines/modnet/`) demonstrated the zero-concat trade-off and confirmed calibration sensitivity.
   BiSeNetV2 (`pipelines/bisenetv2/`) tests bilateral multi-branch segmentation (wide shallow Detail Branch +
@@ -1719,9 +1723,13 @@ sections above.
   columns; five of them would be twenty column-occupancies on a device that exposes four. The
   deciding run is the same benchmark against `1x4.xclbin`, and it has not been done. And
   interleaved execution quantified a **747.75 µs context-switch penalty** (7.22x slowdown) when switching
-  contexts on a shared partition. Reverse engineering of compiled `.xmodel` microcode
-  (`results/aie/dpu_transaction_disasm.log`) revealed 48-byte transaction packets dominated by
-  Opcode 3 (Conv2D / 1x1 dense, 43–49%) and Opcode 6 (Depthwise Conv, 33–37%).
+  contexts on a shared partition. A heuristic byte scan of compiled `.xmodel` microcode
+  (`results/aie/dpu_transaction_disasm.log`) found a dense ~48-byte-strided record
+  stream in FastDepth's two `mc_code` segments, bimodal at 49.38% / 37.35% — consistent
+  with a mostly pointwise-and-depthwise graph, which FastDepth is. **No DPU ISA was
+  recovered**: the scanner's opcode table is a six-entry guess and 13.27% of its
+  "opcodes" are ASCII metadata strings (`0x6F630A0A` is `oc` plus two newlines). A
+  companion BiSeNetV2 row is retracted — no log reproduces it.
   [Working](docs/BENCHMARKS.md#native-windows-xrt-driver-latency-and-dpu-microcode-disassembly).
 - **AIE-ML systolic shift-cut feasibility theorem for Project Ignition — REOPENED
   2026-09-09; this entry previously recorded it as closed.** The formulation still stands as
