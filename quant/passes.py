@@ -1,5 +1,7 @@
 """Graph rewrites transcribed from Quark 0.11rc1's preprocessing and DPU simulation.
 
+simplify is the vendor's SimplifyModel step and, like the vendor, delegates to onnxslim
+rather than reimplementing it; it runs first, before CLE sees the node list.
 split_to_slice mirrors optimizations/optimize.py ConvertSplitToSlice and runs before
 calibration, as the vendor's pre-process does. avgpool_dpu_scale, sigmoid_to_hardsigmoid
 and hardsigmoid_dpu_scale mirror postprocess/simulation/simulate_dpu.py and run on the
@@ -7,6 +9,8 @@ emitted QDQ graph, as the vendor's post-process does. Names, attribute values an
 Constant payloads follow the source so the emitted graph diffs empty against an oracle.
 Shapes and operators without a measured instance raise instead of guessing.
 """
+import math
+
 import onnx
 from onnx import helper
 
@@ -94,20 +98,65 @@ def _insert_mul(g: Graph, node: onnx.NodeProto, scale: float) -> None:
     node.output[0] = output + "_Mul"
 
 
-def avgpool_dpu_scale(g: Graph) -> int:
-    """Insert the sourced 7x7 GAP factor. Other shapes await their own gate."""
-    count = 0
+def avgpool_scale(kh: int, kw: int) -> float:
+    """simulate_dpu.py _get_avgpool_scale: the sourced table, then its dyadic search."""
+    if kh > 255 or kw > 255:
+        return 1.0
+    table = {(3, 3): 9.0 * 7.0 / 64.0, (5, 5): 25.0 * 10.0 / 256.0, (6, 6): 36.0 * 7.0 / 256.0,
+             (7, 7): 49.0 * 21.0 / 1024.0, (14, 14): 196.0 * 21.0 / 4096.0}
+    if (kh, kw) in table:
+        return table[(kh, kw)]
+    rec = kw * kh
+    powers = [2 ** n for n in range(7 + math.ceil(math.log2(rec)))]
+    ks = [round(power / rec) for power in powers]
+    diffs = [abs(k / power - 1 / rec) for k, power in zip(ks, powers)]
+    n = diffs.index(min(diffs))
+    return ks[n] / powers[n] * rec
+
+
+def avgpool_dpu_scale(g: Graph) -> dict:
+    """convert_avg_pool_to_dpu_version, for GlobalAveragePool.
+
+    The source reads the pool's pre-Q/DQ input shape, requires it to be rank 4 and square,
+    and otherwise logs a warning and inserts nothing; that skip is reproduced and counted.
+    An unknown shape is a shape-inference failure here, not a vendor case, so it raises.
+    AveragePool has no instance on any measured graph and raises rather than guess.
+    """
+    scaled, skipped = 0, []
     for node in g.nodes():
+        if node.op_type == "AveragePool":
+            raise NotImplementedError("AveragePool DPU simulation has no measured instance")
         if node.op_type != "GlobalAveragePool":
             continue
         shape = g.value_shape(node.input[0])
-        if shape is None or len(shape) != 4 or shape[-2:] != (7, 7):
-            raise ValueError(f"Only 7x7 GAP simulation is implemented, got {shape}")
-        _insert_mul(g, node, 49.0 * 21.0 / 1024.0)
-        count += 1
-    if count:
+        if shape is None or len(shape) != 4:
+            raise ValueError(f"GlobalAveragePool {node.name} has no rank-4 input shape: {shape}")
+        if shape[2] != shape[3]:
+            skipped.append(node.name)
+            continue
+        _insert_mul(g, node, avgpool_scale(int(shape[2]), int(shape[3])))
+        scaled += 1
+    if scaled:
         g.topo_sort()
-    return count
+    return {"scaled": scaled, "skipped_not_square": skipped}
+
+
+def simplify(g: Graph) -> dict:
+    """SimplifyModel (preproc.py apply_pre_optimization_before_algo), the vendor's first step.
+
+    Quark delegates this to onnxslim and so does Ignition: constant lowering, dead-node
+    elimination, common-subexpression elimination and weight tying are onnxslim's, and
+    reimplementing them would be transcribing a third-party optimizer rather than the
+    vendor's dialect. The import is deferred so the core still imports without onnxslim.
+    """
+    from onnxslim import slim
+
+    before = (len(g.model.graph.node), len(g.model.graph.initializer))
+    names = {n.name for n in g.nodes()}
+    g.model.CopyFrom(slim(g.model))
+    after = (len(g.model.graph.node), len(g.model.graph.initializer))
+    return {"nodes": [before[0], after[0]], "initializers": [before[1], after[1]],
+            "nodes_removed": sorted(names - {n.name for n in g.nodes()})}
 
 
 def sigmoid_to_hardsigmoid(g: Graph) -> int:

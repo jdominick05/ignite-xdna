@@ -3422,6 +3422,87 @@ What remains open on YOLO AdaRound: it ran on the yolov8n-cut graph only (no Gem
 activation-bearing layer), the laptop stretch is unrun, and GPU finetune waits on
 Desktop 1.
 
+### Ignition: MODNet preparation and replay parity
+
+MODNet is Ignition's third model family and the first that is not a plain feed-forward
+convolutional stack. It brings four things neither gated export has: 35 `Clip(0,6)`
+activations, 17 depthwise convolutions, a `GlobalAveragePool` over a 16x16 map rather
+than 7x7, and `Resize` nodes with fractional scales, two of them fed straight from the
+graph input. It is also the graph the
+[preprocessing question](../RESEARCH.md) was about: its calibration reader was a copy
+of the inference transform, and the two had silently diverged. `quant/sources.py`'s
+`ModnetSource` calls `npu.modnet.preprocess`, so calibration and inference are the same
+function rather than two copies of one.
+
+Two gates ran on Desktop 2 (Ryzen 7 8700G, XDNA1 Phoenix) in `resnet_env`, both from
+`models/modnet/modnet_cut_fp32.onnx` with CLE on, the vendor's default. Neither touches
+hardware and neither calibrates: a difference here is attributable to graph preparation
+or emission alone. Log: `results/quant/prepare_probe_modnet_cut_fp32.log`.
+
+**Preparation.** Quark's whole `apply_pre_process` (the resolved static op types, the
+hardware-compatibility conversions its `quantize()` forces on for `enable_npu_cnn`, and
+its CLE) against Ignition's `simplify -> CLE -> prepare`, compared with `graph_diff`:
+empty node delta, no initializer mismatch, `whole_pre_process_equal` true. Node names
+match as sets and the order does not, exactly as on the two earlier families, because
+Quark sorts with onnxruntime's `topological_sort` and Ignition with its own stable sort;
+the position table is keyed by tensor name, so order is not part of this gate.
+
+The isolated steps say where the work is on this graph. `onnxslim` takes the export from
+230 nodes to 150 and 140 initializers to 145: it lowers all 79 `Constant` nodes into
+initializers, ties the duplicates (the 35 `Clip` bound pairs collapse to one, six
+`Resize` scale tensors to one), and removes one `Resize` as a common subexpression of
+another with the same input and attributes. Quark's `optimize_model` passes are no-ops
+here: BatchNorm folding and the hardware-compatibility conversions each report
+`structure_equal` with no node or initializer change, so nothing in Quark's own optimizer
+touches this graph and the whole preparation delta is onnxslim's plus CLE's.
+
+**Ignition calls onnxslim rather than reimplementing it.** Quark delegates its
+`SimplifyModel` step to the same library, so a transcription would be reproducing a
+third-party optimizer rather than the vendor's XINT8 dialect, and the gate would still be
+"matches onnxslim". This is a weaker dependency than Quark: `quant/`'s core still imports
+with only numpy, onnx and onnxruntime in both environments, and only the MODNet family
+needs onnxslim at run time (0.1.96, present in `resnet_env` and `resnet_env17`). It is
+recorded as a decision in [`quant/DESIGN.md`](../quant/DESIGN.md), not as an oversight.
+The two earlier families do not run the step: onnxslim is measured to be a structural
+no-op on both exports, so adding it there would change nothing already gated.
+
+**CLE fires on this graph, and only in pairs.** 9 patterns over 8 unique `Conv -> Conv`
+pairs, every one at group 1 — the first measured graph where the transcribed CLE
+actually moves weights (ResNet's 33 patterns did; the SiLU YOLO net had none). The
+depthwise triple path that `quant/cle.py` raises on is *not* reached even though the
+graph has 17 depthwise convolutions, because the vendor's triple matcher links only
+through `Relu` and MODNet's inverted residuals are separated by `Clip`. Depthwise CLE
+therefore remains unimplemented and unmeasured; this graph does not exercise it.
+
+**Replay.** The committed `modnet_cut_xint8_calibfix.onnx` artifact's positions were read
+back and re-emitted through Ignition's own emitter, then compared to the artifact:
+**140 of 140 int8 initializers byte-identical**, empty node delta, no initializer
+mismatch, and refinement a fixed point on both sides (zero moves on the reference, zero
+on the replay, converged in one loop). 239 positions, 99 activation Q/DQ pairs emitted
+and **52 pruned** where a Conv or Add feeds a single `Relu` or `Clip(0,6)`. The GAP
+correction `Mul` was inserted with factor 1.0 for the 16x16 pool, which is what the
+vendor's dyadic search returns for a 256-element window and what its own artifact
+carries; the `Sigmoid` became `HardSigmoid` and picked up its `HARD_SIGMOID_SCALE` `Mul`.
+
+**The rule this graph exposed.** `QDQDirect8BitOp` hands a `MaxPool` or `Resize` output
+its input's quantization parameters only when that input is already marked at the moment
+the node is visited, and otherwise marks neither input nor output, leaving the output to
+be marked plainly by whichever consumer reaches it. Six of MODNet's eight `Resize` nodes
+share, and the two fed by the graph input do not: the vendor's artifact gives them their
+own scales, 0.25 and 0.0625, where the graph input's is 0.25. Ignition had assumed
+sharing was unconditional, which is invisible on ResNet and yolov8n-cut because every
+pooling and resize input there is produced by an earlier quantized node. `quant/qdq.py`
+now walks the marking pass in `Graph.vendor_order`, the order onnxruntime's
+`quantize_model` visits nodes, and applies the rule positionally. Re-running the two
+earlier replays under the new rule reproduces them unchanged — ResNet 108/108 int8 exact
+with 49 pruned, yolov8n-cut 126/126 with 0 pruned, both `PREPARE_PROBE_PASS True`
+(`results/quant/prepare_probe_resnet50_fp32_vendor_order.log`,
+`results/quant/prepare_probe_yolov8n_cut_vendor_order.log`).
+
+Not measured here: independent calibration of this graph, and any hardware run of an
+Ignition-produced MODNet file. Replay proves the emitter and the refinement, not the
+calibrator; a fresh same-listing oracle is the next gate.
+
 ## Key findings
 
 Roughly ordered by how much time each one cost to discover.

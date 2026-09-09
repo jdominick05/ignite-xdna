@@ -79,6 +79,18 @@ recorded in the handoff and Git history rather than treated as future features.
 - [ ] Connect MODNet's calibration source to the shared inference preprocessing,
   then re-evaluate matte quality against the documented mismatched-preprocessing
   baseline. Do not claim this fixes the quality gap before measuring it.
+  Partly done 2026-09-09: `quant/sources.py`'s `ModnetSource` reads through
+  `npu.modnet.preprocess`, and the family is implemented (`passes.simplify` delegating
+  to onnxslim, `Clip` marking and pruning, the full avgpool table, and a Q/DQ marking
+  pass that follows the vendor's visit order). Evidence so far is preparation and
+  replay only:
+  [MODNet preparation parity](../docs/BENCHMARKS.md#ignition-modnet-preparation-and-replay-parity)
+  — Quark's whole pre-process diffs empty against Ignition's, and the committed
+  `modnet_cut_xint8_calibfix.onnx` re-emits 140/140 int8 byte-identical from its own
+  positions. Still to close: an independent calibration against a fresh same-listing
+  oracle, and a paired NPU matte evaluation of the Ignition-produced file. Note that the
+  separate Quark-side rerun already answered the RESEARCH question about the error
+  moving; what is unmeasured is Ignition reproducing it.
 - [ ] Consider histogram calibration only with measured error/accuracy and memory
   tradeoffs against the exact-sample store; label approximation explicitly.
 

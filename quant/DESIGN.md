@@ -305,7 +305,8 @@ installed versions, source/model SHA256 values, and raw fingerprints are in
 
 **In:** the CNN XINT8 dialect for the X1 backend, for the models this repo already runs
 (ResNet-family classifiers, yolov8 detect/pose head-cut, yolov6n, MODNet). Reproducing
-Quark first, scale-exact, then departing from it deliberately and measurably.
+Quark first, scale-exact, then departing from it deliberately and measurably. Three
+families are implemented: folded ResNet, head-cut YOLOv8 and MODNet.
 
 **Out:** anything the EP is already measured to reject on this opset — INT16 / A16W8,
 BFP, transformer paths (DECISIONS #3 and the MobileViT record); Strix / AIE2P; any change
@@ -317,6 +318,8 @@ probe mutations**, never as a default, until placement and numerical execution a
 
 - Nothing under `quant/` imports Quark. Nothing under `npu/` imports `quant/`.
   `quant/` may import `npu/` (for the preprocessing sources and `build_session`).
+  `onnxslim` is the one third-party optimizer the producer calls rather than transcribes,
+  imported lazily inside `passes.simplify` and reached only by the MODNet family.
 - The quantizer runs in `resnet_env` (onnx 1.19, torch present). Its core — everything but
   `adaround.py` — needs only numpy, onnx and onnxruntime and must also import in
   `resnet_env17`, so `verify.py` can run beside an NPU session. (Observed, not acted on:
@@ -375,10 +378,10 @@ Mirrors Quark's stage order [Q] `quantization/quantize.py`, because §2.3's rule
 defined on the graph *after* Q/DQ insertion and *after* the SimulateDPU rewrites:
 
 ```
-load ──► passes.prepare ──► cle ──► calib.collect ──► calib.choose ──► weights
-   (fold BN, Split→Slice,     (opt)   (float16 samples)  (MinMSE pos)    (int8 pos)
-    BN→Conv, ReduceMean→GAP,
-    large-kernel pool split)
+load ──► passes.simplify ──► passes.prepare ──► cle ──► calib.collect ──► calib.choose ──► weights
+   (onnxslim; MODNet only)  (fold BN, Split→Slice,  (opt)  (float16 samples) (MinMSE pos)  (int8 pos)
+                             BN→Conv, ReduceMean→GAP,
+                             large-kernel pool split)
         ──► qdq.emit ──► qdq.prune_conv_relu ──► passes.simulate_dpu ──► refine
              (Q/DQ pairs,                          (SiLU chain, GAP Mul)    (§2.3, ≤5 loops)
               int8 weights/bias)
@@ -407,6 +410,29 @@ ORT basic optimization, BN folding) change nothing on this export [M 2026-09-08,
 `results/quant/prepare_probe_yolov8n_cut.log`; the ResNet control is
 `prepare_probe_resnet50_fp32.log`, where the same steps are no-ops and the committed
 `resnet50_xint8_c64.onnx` replays exactly].
+
+**SimplifyModel is delegated, not transcribed [D 2026-09-09].** The vendor's first
+pre-process step calls `onnxslim`; so does `passes.simplify`, lazily. Reimplementing
+constant lowering, dead-node elimination, common-subexpression elimination, weight tying
+and graphsurgeon's toposort would be transcribing a third-party optimizer rather than the
+vendor's XINT8 dialect, and the acceptance gate would still be "equals onnxslim's output".
+The dependency is a weaker one than Quark: the core still imports with only numpy, onnx
+and onnxruntime in both environments, and only the MODNet family reaches the step at run
+time (onnxslim 0.1.96 is present in `resnet_env` and `resnet_env17`). ResNet and
+yolov8n-cut do not run it, because it is measured to be a structural no-op on both.
+It runs **before** CLE, because CLE's pattern walk reads the node list onnxslim leaves;
+on MODNet that matters, since onnxslim removes a `Resize` and reorders the list.
+
+**Q/DQ marking follows the vendor's visit order [M 2026-09-09].** `QDQDirect8BitOp` gives
+a `MaxPool` or `Resize` output its input's parameters only when `is_tensor_quantized` is
+already true for that input at the moment `quantize_model` reaches the node, and otherwise
+marks neither input nor output — the output is then marked plainly by a consumer and gets
+its own calibrated scale. The visit order is the pre-processed model's, i.e.
+`Graph.vendor_order`. ResNet and yolov8n-cut cannot show this because every pooling and
+resize input there has an earlier quantized producer; MODNet feeds two `Resize` nodes from
+the graph input, and the vendor's own artifact gives those two their own scales
+([MODNet preparation parity](../docs/BENCHMARKS.md#ignition-modnet-preparation-and-replay-parity)).
+`qdq.quantizable_tensors` walks `vendor_order` and applies the rule positionally.
 
 ### 4.2 Modules, every function and form
 

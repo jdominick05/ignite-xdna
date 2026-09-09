@@ -39,8 +39,8 @@ sys.path.insert(0, str(ROOT))
 
 from quant.cle import cross_layer_equalize
 from quant.graph import Graph
-from quant.quantize import check_family, graph_family, prepare, quantize
-from quant.sources import CocoSource, ImageFolderSource, as_reader
+from quant.quantize import check_family, graph_family, prepare, quantize, simplify_for
+from quant.sources import CocoSource, ImageFolderSource, ModnetSource, as_reader
 from quant.verify import graph_diff
 
 
@@ -79,12 +79,18 @@ def delta(before: onnx.ModelProto, after: onnx.ModelProto) -> dict:
 
 
 def source_for(graph: Graph, family: str, calib_dir: Path | None, limit: int, cfg_path: Path):
-    """The CLI's reader for the family: letterbox at the graph's input size, or the timm config."""
+    """The CLI's reader for the family: letterbox or npu.modnet.preprocess at the graph's
+    input size, or the timm config."""
     input_name = graph.model.graph.input[0].name
     if family == "yolo_cut":
         from npu.yolo import input_size
         imgsz = input_size(list(graph.value_shape(input_name) or ()), input_name)
         return CocoSource(calib_dir or ROOT / "data" / "coco_calib", limit, imgsz, input_name)
+    if family == "modnet":
+        shape = graph.value_shape(input_name)
+        if shape is None or len(shape) != 4 or shape[2] != shape[3]:
+            raise ValueError(f"MODNet expects a square NCHW input, got {shape}")
+        return ModnetSource(calib_dir or ROOT / "data" / "modnet_calib", limit, shape[2], input_name)
     cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
     if graph.value_shape(input_name) != (1, *cfg["input_size"]):
         raise ValueError("Preprocess config input_size does not match the graph input")
@@ -121,9 +127,12 @@ def main():
     }
     print("PREPARE_PROBE_SETUP", json.dumps(setup, indent=2), flush=True)
 
-    # Ignition, in quantize()'s order: CLE on the float graph, then the family's preparation.
+    # Ignition, in quantize()'s order: SimplifyModel, CLE on the float graph, then preparation.
     start = time.perf_counter()
     ignition = {}
+    ignition["simplify"] = simplify_for(graph, family)
+    if ignition["simplify"]:
+        graph.infer_shapes()
     if args.cle:
         ignition["cle"] = asdict(cross_layer_equalize(graph))
         graph.infer_shapes()

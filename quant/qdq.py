@@ -1,4 +1,4 @@
-"""QDQ emission for folded ResNet classifiers and head-cut YOLOv8, from float weights and positions.
+"""QDQ emission for folded ResNet classifiers, head-cut YOLOv8 and MODNet, from float weights and positions.
 
 No topology or integer weights are copied from a quantized model. Unsupported
 operator families fail explicitly until their preprocessing/emission gates run.
@@ -6,7 +6,8 @@ Tensor marking follows the vendor's operator quantizers: Conv/Gemm mark their fi
 input, output and initializers; MaxPool and Resize (QDQDirect8BitOp) mark their first
 input and share its parameters with their output; every other supported operator marks
 all float activation inputs and outputs (QDQOperatorBase). Constant-node outputs and
-the empty Resize roi are never marked, as the vendor's type check skips them.
+the empty Resize roi are never marked, as the vendor's type check skips them. Clip marks
+its first input and output only: its min and max are parameters the vendor leaves float.
 """
 from dataclasses import dataclass, replace
 import numpy as np
@@ -17,16 +18,50 @@ from .pow2 import TensorQ, pos2scale, quantize, scale2pos
 
 RESNET_OPS = {"Conv", "Relu", "Add", "MaxPool", "GlobalAveragePool", "Flatten", "Gemm"}
 YOLO_OPS = {"Conv", "Sigmoid", "Mul", "Add", "Concat", "MaxPool", "Resize", "Slice", "Constant"}
-SUPPORTED_OPS = RESNET_OPS | YOLO_OPS
+MODNET_OPS = {"Conv", "Relu", "Clip", "Add", "Mul", "Concat", "Resize", "GlobalAveragePool", "Sigmoid"}
+SUPPORTED_OPS = RESNET_OPS | YOLO_OPS | MODNET_OPS
 SHARING_OPS = {"MaxPool", "Resize"}  # QDQDirect8BitOp: output reuses input[0]'s parameters
+PARAMETER_OPS = {"Clip": 1}  # inputs from this index on are the vendor's float parameters
+# quant_utils.annotate_op_type: a single-consumer output of one of these loses the Q/DQ
+# pair before an annotated activation.
+ANNOTATE_OPS = ("Conv", "Add", "MaxPool", "AveragePool", "GlobalAveragePool", "MatMul", "Gemm", "ConvTranspose")
+
+
+def _clip_bound(g: Graph, node, slot: int):
+    """get_clip_min_max, restricted to the initializer form the measured graphs use."""
+    if len(node.input) <= slot or not node.input[slot]:
+        return None
+    value = g.initializer(node.input[slot])
+    return None if value is None or value.size != 1 else float(value.reshape(-1)[0])
+
+
+def needs_annotated(g: Graph, node) -> bool:
+    """quant_utils.is_node_needs_annotated with the default remove_qdq_op_type."""
+    if node.op_type == "Clip":
+        bounds = (_clip_bound(g, node, 1), _clip_bound(g, node, 2))
+        return bounds in ((0.0, 6.0), (0.0, 1.0))
+    return node.op_type in ("Relu", "LeakyRelu", "PRelu")
 
 
 def quantizable_tensors(g: Graph) -> tuple[list[str], list[str], dict[str, str]]:
-    """Activation names, float initializer names, shared-parameter root providers."""
+    """Activation names, float initializer names, shared-parameter root providers.
+
+    Walks the nodes in the vendor's topological order (Graph.vendor_order, the order
+    onnxruntime.quantization's quantize_model visits them) because QDQDirect8BitOp's
+    sharing is order-dependent: MaxPool and Resize hand their input's parameters to their
+    output only when that input is already marked by the time the node is reached, and
+    otherwise mark nothing at all, leaving the output to be marked plainly by whichever
+    consumer reaches it. On the ResNet and YOLO exports every such input is produced by an
+    earlier quantized node, so the rule is invisible there. MODNet feeds two Resize nodes
+    straight from the graph input, which no earlier node has marked, and those two do get
+    their own calibrated parameters in the vendor's own artifact.
+    """
     acts, weights, sharing = {}, {}, {}
     initializers = {t.name for t in g.model.graph.initializer}
-    constants = {out for n in g.nodes() if n.op_type == "Constant" for out in n.output}
-    for node in g.nodes():
+    nodes = g.nodes()
+    constants = {out for n in nodes if n.op_type == "Constant" for out in n.output}
+    for index in g.vendor_order():
+        node = nodes[index]
         if node.domain or node.op_type not in SUPPORTED_OPS:
             raise ValueError(f"Unsupported float operator: {node.domain}:{node.op_type}")
         if node.op_type == "Constant":
@@ -43,13 +78,24 @@ def quantizable_tensors(g: Graph) -> tuple[list[str], list[str], dict[str, str]]
             attrs = {a.name: helper.get_attribute_value(a) for a in node.attribute}
             if node.op_type == "Gemm" and attrs.get("beta", 1.0) != 1.0:
                 raise ValueError("Non-unit Gemm beta is not yet supported")
+        elif node.op_type in PARAMETER_OPS:
+            # The vendor quantizes the activation and leaves min/max as float parameters.
+            for name in node.input[PARAMETER_OPS[node.op_type]:]:
+                if name and name not in initializers and name not in constants:
+                    raise ValueError(f"{node.op_type} {node.name} expects initializer parameters")
+            acts[node.input[0]] = None
         elif node.op_type in SHARING_OPS:
             if len(node.output) != 1:
                 raise ValueError(f"{node.op_type} {node.name} must have one output")
             if node.input[0] in initializers or node.input[0] in constants:
                 raise ValueError(f"{node.op_type} {node.name} needs an activation input")
-            acts[node.input[0]] = None
+            if node.input[0] not in acts:
+                # is_tensor_quantized is false here, so QDQDirect8BitOp.quantize marks
+                # neither the input nor the output and returns.
+                continue
             sharing[node.output[0]] = node.input[0]
+            acts[node.output[0]] = None
+            continue
         else:
             for name in node.input:
                 if not name or name in constants:
@@ -149,11 +195,12 @@ def quantize_initializer(g: Graph, name: str, tq: TensorQ) -> None:
 
 
 def prunable_tensors(g: Graph) -> dict[str, str]:
+    """get_annotate_tensors: a single-consumer annotate-op output feeding an annotated activation."""
     result = {}
     for node in g.nodes():
-        if node.op_type in ("Conv", "Add"):
+        if node.op_type in ANNOTATE_OPS:
             followers = g.consumers(node.output[0])
-            if len(followers) == 1 and followers[0].op_type == "Relu":
+            if len(followers) == 1 and needs_annotated(g, followers[0]):
                 result[node.output[0]] = followers[0].output[0]
     return result
 
@@ -161,7 +208,7 @@ def prunable_tensors(g: Graph) -> dict[str, str]:
 def prune_conv_relu(g: Graph) -> int:
     removed = []
     for node in g.nodes():
-        if node.op_type not in ("Conv", "Add"):
+        if node.op_type not in ANNOTATE_OPS:
             continue
         qs = g.consumers(node.output[0])
         if len(qs) != 1 or qs[0].op_type != "QuantizeLinear":
@@ -170,7 +217,7 @@ def prune_conv_relu(g: Graph) -> int:
         if len(dqs) != 1 or dqs[0].op_type != "DequantizeLinear":
             continue
         followers = g.consumers(dqs[0].output[0])
-        if len(followers) == 1 and followers[0].op_type == "Relu":
+        if len(followers) == 1 and needs_annotated(g, followers[0]):
             followers[0].input[0] = node.output[0]
             removed.extend([qs[0].name, dqs[0].name])
     keep = [n for n in g.nodes() if n.name not in removed]

@@ -1,0 +1,635 @@
+PREPARE_PROBE_SETUP {
+  "in_model": "models/modnet/modnet_cut_fp32.onnx",
+  "sha256": "ffdc0a20fb0284c0f769e9ff31b2a76d0f06055c08e5cda1c3275ce9bdd37c54",
+  "family": "modnet",
+  "replay_from": "models/modnet/modnet_cut_xint8_calibfix.onnx",
+  "replay_sha256": "02e0b993a6aa52244eea912445ccaf827fe785b11d8c6d2a3683e7a25a053ab4",
+  "cle": true,
+  "reader_images": 2,
+  "preprocess": {
+    "family": "modnet",
+    "size": 512,
+    "input_name": "input",
+    "transform": "npu.modnet.preprocess"
+  },
+  "versions": {
+    "amd-quark": "0.11rc1",
+    "onnx": "1.19.0",
+    "onnxruntime": "1.22.1",
+    "numpy": "1.26.4",
+    "onnxslim": "0.1.96"
+  },
+  "ops": {
+    "Add": 10,
+    "Clip": 35,
+    "Concat": 6,
+    "Constant": 79,
+    "Conv": 71,
+    "GlobalAveragePool": 1,
+    "Mul": 1,
+    "Relu": 17,
+    "Resize": 9,
+    "Sigmoid": 1
+  }
+}
+PREPARE_REPLAY {
+  "seconds": 2.257,
+  "reference_refine_moves": 0,
+  "replay_refine_moves": 0,
+  "replay_refine_loops": 1,
+  "emit": {
+    "activations": 99,
+    "initializers": 140,
+    "pruned": 52
+  },
+  "gap_mul": {
+    "scaled": 1,
+    "skipped_not_square": []
+  },
+  "hardsigmoid": {
+    "replaced": 1,
+    "scaled": 1
+  },
+  "graph_diff": {
+    "node_delta": [],
+    "init_exact_mismatch": [],
+    "weight_lsb": {},
+    "weight_changed_elements": {},
+    "compared_int8_initializers": 140
+  },
+  "exact": true,
+  "positions": 239
+}
+[32m
+[QUARK-INFO]: Checking custom ops library ...[0m
+[33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[32m
+[QUARK-INFO]: Start compiling CPU version of custom ops library.[0m
+C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\torch\utils\cpp_extension.py:380: UserWarning: Error checking compiler version for cl: [WinError 2] The system cannot find the file specified
+  warnings.warn(f'Error checking compiler version for {compiler}: {error}')
+INFO: Could not find files for the given pattern(s).
+[31m
+[QUARK-ERROR]: CPU version of custom ops library compilation failed:Command '['where', 'cl']' returned non-zero exit status 1.[0m
+[33m
+[QUARK-WARNING]: Custom ops library compilation failed: CPU version of custom ops library compilation failed:Command '['where', 'cl']' returned non-zero exit status 1..[0m
+[32m
+[QUARK-INFO]: Checked custom ops library.[0m
+[33m
+[QUARK-WARNING]: The api `activation` has been replaced with `input_tensors` and will be removed in the next release.[0m
+[33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+PREPARE_PROBE_QUARK {
+  "op_types_to_quantize": [
+    "Add",
+    "ArgMax",
+    "AveragePool",
+    "Clip",
+    "Concat",
+    "Conv",
+    "ConvTranspose",
+    "DepthToSpace",
+    "Div",
+    "EmbedLayerNormalization",
+    "Erf",
+    "Gather",
+    "Gelu",
+    "Gemm",
+    "GlobalAveragePool",
+    "HardSigmoid",
+    "InstanceNormalization",
+    "LayerNormalization",
+    "LeakyRelu",
+    "LpNormalization",
+    "MatMul",
+    "Max",
+    "MaxPool",
+    "Min",
+    "Mul",
+    "PRelu",
+    "Pad",
+    "ReduceMean",
+    "Relu",
+    "Reshape",
+    "Resize",
+    "Sigmoid",
+    "Slice",
+    "Softmax",
+    "SpaceToDepth",
+    "Split",
+    "Squeeze",
+    "Sub",
+    "Tanh",
+    "Transpose",
+    "Unsqueeze",
+    "Where"
+  ],
+  "extra_options": {
+    "ActivationSymmetric": true,
+    "ConvertSplitToSlice": true,
+    "ConvertBNToConv": true,
+    "ConvertReduceMeanToGlobalAvgPool": true,
+    "SplitLargeKernelPool": true
+  },
+  "optimize_model": true,
+  "include_cle": true,
+  "enable_npu_cnn": true
+}
+[33m
+[QUARK-WARNING]: Failed to get the input shape, skip optimizing for GlobalAveragePool /lr_branch/se_block/pool/GlobalAveragePool.[0m
+PREPARE_PROBE_STEPS {
+  "onnxslim": {
+    "nodes": [
+      230,
+      150
+    ],
+    "op_delta": {
+      "Constant": [
+        79,
+        0
+      ],
+      "Resize": [
+        9,
+        8
+      ]
+    },
+    "node_names_removed": [
+      "/f_branch/Constant",
+      "/f_branch/Constant_1",
+      "/f_branch/Constant_2",
+      "/f_branch/Resize",
+      "/hr_branch/Constant",
+      "/hr_branch/Constant_1",
+      "/hr_branch/Constant_2",
+      "/hr_branch/Constant_3"
+    ],
+    "node_names_added": 0,
+    "initializers": [
+      140,
+      145
+    ],
+    "initializers_removed": [],
+    "initializers_added": 5,
+    "initializer_bytes_changed": [],
+    "value_info": [
+      0,
+      299
+    ],
+    "structure_equal": false
+  },
+  "ort_basic": {
+    "nodes": [
+      230,
+      151
+    ],
+    "op_delta": {
+      "Constant": [
+        79,
+        0
+      ]
+    },
+    "node_names_removed": [
+      "/f_branch/Constant",
+      "/f_branch/Constant_1",
+      "/f_branch/Constant_2",
+      "/hr_branch/Constant",
+      "/hr_branch/Constant_1",
+      "/hr_branch/Constant_2",
+      "/hr_branch/Constant_3",
+      "/lr_branch/Constant"
+    ],
+    "node_names_added": 0,
+    "initializers": [
+      140,
+      219
+    ],
+    "initializers_removed": [],
+    "initializers_added": 79,
+    "initializer_bytes_changed": [],
+    "value_info": [
+      0,
+      150
+    ],
+    "structure_equal": false
+  },
+  "fold_batch_norm": {
+    "nodes": [
+      230,
+      230
+    ],
+    "op_delta": {},
+    "node_names_removed": [],
+    "node_names_added": 0,
+    "initializers": [
+      140,
+      140
+    ],
+    "initializers_removed": [],
+    "initializers_added": 0,
+    "initializer_bytes_changed": [],
+    "value_info": [
+      0,
+      0
+    ],
+    "structure_equal": true
+  },
+  "hardware_compat": {
+    "nodes": [
+      230,
+      230
+    ],
+    "op_delta": {},
+    "node_names_removed": [],
+    "node_names_added": 0,
+    "initializers": [
+      140,
+      140
+    ],
+    "initializers_removed": [],
+    "initializers_added": 0,
+    "initializer_bytes_changed": [],
+    "value_info": [
+      0,
+      0
+    ],
+    "structure_equal": true
+  },
+  "seconds": 1.152
+}
+[32m
+[QUARK-INFO]: Folding or fusing operators for better accuracy and performance.[0m
+[33m
+[QUARK-WARNING]: The opset version is 17 < 20. Skipping fusing Gelu.[0m
+[32m
+[QUARK-INFO]: Start applying CLE algorithm on the float model...[0m
+[32m
+[QUARK-INFO]: CrossLayerEqualization pattern num: 9[0m
+[32m
+[QUARK-INFO]: Total CrossLayerEqualization steps: 1[0m
+[32m
+[QUARK-INFO]: The CLE algorithm has been applied. It took 0.1s to complete.[0m
+[32m
+[QUARK-INFO]: Optimizing the model for a better hardware compatibility.[0m
+PREPARE_PROBE_RESULT {
+  "quark_seconds": 0.527,
+  "ignition": {
+    "simplify": {
+      "simplify": {
+        "nodes": [
+          230,
+          150
+        ],
+        "initializers": [
+          140,
+          145
+        ],
+        "nodes_removed": [
+          "/f_branch/Constant",
+          "/f_branch/Constant_1",
+          "/f_branch/Constant_2",
+          "/f_branch/Resize",
+          "/hr_branch/Constant",
+          "/hr_branch/Constant_1",
+          "/hr_branch/Constant_2",
+          "/hr_branch/Constant_3",
+          "/lr_branch/Constant",
+          "/lr_branch/Constant_1",
+          "/lr_branch/backbone/features.0/features.0.2/Constant",
+          "/lr_branch/backbone/features.0/features.0.2/Constant_1",
+          "/lr_branch/backbone/features.1/conv/conv.2/Constant",
+          "/lr_branch/backbone/features.1/conv/conv.2/Constant_1",
+          "/lr_branch/backbone/features.10/conv/conv.2/Constant",
+          "/lr_branch/backbone/features.10/conv/conv.2/Constant_1",
+          "/lr_branch/backbone/features.10/conv/conv.5/Constant",
+          "/lr_branch/backbone/features.10/conv/conv.5/Constant_1",
+          "/lr_branch/backbone/features.11/conv/conv.2/Constant",
+          "/lr_branch/backbone/features.11/conv/conv.2/Constant_1",
+          "/lr_branch/backbone/features.11/conv/conv.5/Constant",
+          "/lr_branch/backbone/features.11/conv/conv.5/Constant_1",
+          "/lr_branch/backbone/features.12/conv/conv.2/Constant",
+          "/lr_branch/backbone/features.12/conv/conv.2/Constant_1",
+          "/lr_branch/backbone/features.12/conv/conv.5/Constant",
+          "/lr_branch/backbone/features.12/conv/conv.5/Constant_1",
+          "/lr_branch/backbone/features.13/conv/conv.2/Constant",
+          "/lr_branch/backbone/features.13/conv/conv.2/Constant_1",
+          "/lr_branch/backbone/features.13/conv/conv.5/Constant",
+          "/lr_branch/backbone/features.13/conv/conv.5/Constant_1",
+          "/lr_branch/backbone/features.14/conv/conv.2/Constant",
+          "/lr_branch/backbone/features.14/conv/conv.2/Constant_1",
+          "/lr_branch/backbone/features.14/conv/conv.5/Constant",
+          "/lr_branch/backbone/features.14/conv/conv.5/Constant_1",
+          "/lr_branch/backbone/features.15/conv/conv.2/Constant",
+          "/lr_branch/backbone/features.15/conv/conv.2/Constant_1",
+          "/lr_branch/backbone/features.15/conv/conv.5/Constant",
+          "/lr_branch/backbone/features.15/conv/conv.5/Constant_1",
+          "/lr_branch/backbone/features.16/conv/conv.2/Constant",
+          "/lr_branch/backbone/features.16/conv/conv.2/Constant_1",
+          "/lr_branch/backbone/features.16/conv/conv.5/Constant",
+          "/lr_branch/backbone/features.16/conv/conv.5/Constant_1",
+          "/lr_branch/backbone/features.17/conv/conv.2/Constant",
+          "/lr_branch/backbone/features.17/conv/conv.2/Constant_1",
+          "/lr_branch/backbone/features.17/conv/conv.5/Constant",
+          "/lr_branch/backbone/features.17/conv/conv.5/Constant_1",
+          "/lr_branch/backbone/features.18/features.18.2/Constant",
+          "/lr_branch/backbone/features.18/features.18.2/Constant_1",
+          "/lr_branch/backbone/features.2/conv/conv.2/Constant",
+          "/lr_branch/backbone/features.2/conv/conv.2/Constant_1",
+          "/lr_branch/backbone/features.2/conv/conv.5/Constant",
+          "/lr_branch/backbone/features.2/conv/conv.5/Constant_1",
+          "/lr_branch/backbone/features.3/conv/conv.2/Constant",
+          "/lr_branch/backbone/features.3/conv/conv.2/Constant_1",
+          "/lr_branch/backbone/features.3/conv/conv.5/Constant",
+          "/lr_branch/backbone/features.3/conv/conv.5/Constant_1",
+          "/lr_branch/backbone/features.4/conv/conv.2/Constant",
+          "/lr_branch/backbone/features.4/conv/conv.2/Constant_1",
+          "/lr_branch/backbone/features.4/conv/conv.5/Constant",
+          "/lr_branch/backbone/features.4/conv/conv.5/Constant_1",
+          "/lr_branch/backbone/features.5/conv/conv.2/Constant",
+          "/lr_branch/backbone/features.5/conv/conv.2/Constant_1",
+          "/lr_branch/backbone/features.5/conv/conv.5/Constant",
+          "/lr_branch/backbone/features.5/conv/conv.5/Constant_1",
+          "/lr_branch/backbone/features.6/conv/conv.2/Constant",
+          "/lr_branch/backbone/features.6/conv/conv.2/Constant_1",
+          "/lr_branch/backbone/features.6/conv/conv.5/Constant",
+          "/lr_branch/backbone/features.6/conv/conv.5/Constant_1",
+          "/lr_branch/backbone/features.7/conv/conv.2/Constant",
+          "/lr_branch/backbone/features.7/conv/conv.2/Constant_1",
+          "/lr_branch/backbone/features.7/conv/conv.5/Constant",
+          "/lr_branch/backbone/features.7/conv/conv.5/Constant_1",
+          "/lr_branch/backbone/features.8/conv/conv.2/Constant",
+          "/lr_branch/backbone/features.8/conv/conv.2/Constant_1",
+          "/lr_branch/backbone/features.8/conv/conv.5/Constant",
+          "/lr_branch/backbone/features.8/conv/conv.5/Constant_1",
+          "/lr_branch/backbone/features.9/conv/conv.2/Constant",
+          "/lr_branch/backbone/features.9/conv/conv.2/Constant_1",
+          "/lr_branch/backbone/features.9/conv/conv.5/Constant",
+          "/lr_branch/backbone/features.9/conv/conv.5/Constant_1"
+        ]
+      }
+    },
+    "cle": {
+      "pattern_count": 9,
+      "unique_pairs": 8,
+      "pairs": [
+        {
+          "head": "/lr_branch/backbone/features.17/conv/conv.6/Conv",
+          "tail": "/lr_branch/backbone/features.18/features.18.0/Conv",
+          "chain": [
+            "/lr_branch/backbone/features.17/conv/conv.6/Conv_output_0",
+            "/lr_branch/backbone/features.18/features.18.0/Conv_output_0"
+          ],
+          "size": 3
+        },
+        {
+          "head": "/lr_branch/se_block/fc/fc.0/Conv",
+          "tail": "/lr_branch/se_block/fc/fc.2/Conv",
+          "chain": [
+            "/lr_branch/se_block/fc/fc.0/Conv_output_0",
+            "/lr_branch/se_block/fc/fc.1/Relu_output_0",
+            "/lr_branch/se_block/fc/fc.2/Conv_output_0"
+          ],
+          "size": 3
+        },
+        {
+          "head": "/hr_branch/conv_hr4x/conv_hr4x.0/Conv",
+          "tail": "/hr_branch/conv_hr4x/conv_hr4x.2/Conv",
+          "chain": [
+            "/hr_branch/conv_hr4x/conv_hr4x.0/Conv_output_0",
+            "/hr_branch/conv_hr4x/conv_hr4x.1/Relu_output_0",
+            "/hr_branch/conv_hr4x/conv_hr4x.2/Conv_output_0"
+          ],
+          "size": 3
+        },
+        {
+          "head": "/hr_branch/conv_hr4x/conv_hr4x.2/Conv",
+          "tail": "/hr_branch/conv_hr4x/conv_hr4x.4/Conv",
+          "chain": [
+            "/hr_branch/conv_hr4x/conv_hr4x.2/Conv_output_0",
+            "/hr_branch/conv_hr4x/conv_hr4x.3/Relu_output_0",
+            "/hr_branch/conv_hr4x/conv_hr4x.4/Conv_output_0"
+          ],
+          "size": 3
+        },
+        {
+          "head": "/hr_branch/conv_hr2x/conv_hr2x.0/Conv",
+          "tail": "/hr_branch/conv_hr2x/conv_hr2x.2/Conv",
+          "chain": [
+            "/hr_branch/conv_hr2x/conv_hr2x.0/Conv_output_0",
+            "/hr_branch/conv_hr2x/conv_hr2x.1/Relu_output_0",
+            "/hr_branch/conv_hr2x/conv_hr2x.2/Conv_output_0"
+          ],
+          "size": 3
+        },
+        {
+          "head": "/hr_branch/conv_hr2x/conv_hr2x.2/Conv",
+          "tail": "/hr_branch/conv_hr2x/conv_hr2x.4/Conv",
+          "chain": [
+            "/hr_branch/conv_hr2x/conv_hr2x.2/Conv_output_0",
+            "/hr_branch/conv_hr2x/conv_hr2x.3/Relu_output_0",
+            "/hr_branch/conv_hr2x/conv_hr2x.4/Conv_output_0"
+          ],
+          "size": 3
+        },
+        {
+          "head": "/hr_branch/conv_hr2x/conv_hr2x.4/Conv",
+          "tail": "/hr_branch/conv_hr2x/conv_hr2x.6/Conv",
+          "chain": [
+            "/hr_branch/conv_hr2x/conv_hr2x.4/Conv_output_0",
+            "/hr_branch/conv_hr2x/conv_hr2x.5/Relu_output_0",
+            "/hr_branch/conv_hr2x/conv_hr2x.6/Conv_output_0"
+          ],
+          "size": 3
+        },
+        {
+          "head": "/f_branch/conv_f/conv_f.0/Conv",
+          "tail": "/f_branch/conv_f/conv_f.2/Conv",
+          "chain": [
+            "/f_branch/conv_f/conv_f.0/Conv_output_0",
+            "/f_branch/conv_f/conv_f.1/Relu_output_0",
+            "logits"
+          ],
+          "size": 3
+        },
+        {
+          "head": "/lr_branch/backbone/features.17/conv/conv.6/Conv",
+          "tail": "/lr_branch/backbone/features.18/features.18.0/Conv",
+          "chain": [
+            "/lr_branch/backbone/features.17/conv/conv.6/Conv_output_0",
+            "/lr_branch/backbone/features.18/features.18.0/Conv_output_0"
+          ],
+          "size": 3
+        }
+      ],
+      "steps": 1,
+      "last_diff": 0.5823134911369134,
+      "weight_threshold": 0.5,
+      "append_bias": true,
+      "use_threshold": true,
+      "scaled": {
+        "0:0:/lr_branch/backbone/features.17/conv/conv.6/Conv->/lr_branch/backbone/features.18/features.18.0/Conv": {
+          "channels": 320,
+          "scale_min": 1.4739627838134766,
+          "scale_max": 3.51782488822937,
+          "unit_scales": 0
+        },
+        "0:1:/lr_branch/se_block/fc/fc.0/Conv->/lr_branch/se_block/fc/fc.2/Conv": {
+          "channels": 320,
+          "scale_min": 1.0,
+          "scale_max": 1.0,
+          "unit_scales": 320
+        },
+        "0:2:/hr_branch/conv_hr4x/conv_hr4x.0/Conv->/hr_branch/conv_hr4x/conv_hr4x.2/Conv": {
+          "channels": 64,
+          "scale_min": 0.45429036021232605,
+          "scale_max": 1.0823235511779785,
+          "unit_scales": 39
+        },
+        "0:3:/hr_branch/conv_hr4x/conv_hr4x.2/Conv->/hr_branch/conv_hr4x/conv_hr4x.4/Conv": {
+          "channels": 64,
+          "scale_min": 0.5116907358169556,
+          "scale_max": 1.0,
+          "unit_scales": 48
+        },
+        "0:4:/hr_branch/conv_hr2x/conv_hr2x.0/Conv->/hr_branch/conv_hr2x/conv_hr2x.2/Conv": {
+          "channels": 64,
+          "scale_min": 0.52374666929245,
+          "scale_max": 1.2681691646575928,
+          "unit_scales": 47
+        },
+        "0:5:/hr_branch/conv_hr2x/conv_hr2x.2/Conv->/hr_branch/conv_hr2x/conv_hr2x.4/Conv": {
+          "channels": 32,
+          "scale_min": 0.5744452476501465,
+          "scale_max": 1.2204129695892334,
+          "unit_scales": 20
+        },
+        "0:6:/hr_branch/conv_hr2x/conv_hr2x.4/Conv->/hr_branch/conv_hr2x/conv_hr2x.6/Conv": {
+          "channels": 32,
+          "scale_min": 0.590674877166748,
+          "scale_max": 1.0,
+          "unit_scales": 22
+        },
+        "0:7:/f_branch/conv_f/conv_f.0/Conv->/f_branch/conv_f/conv_f.2/Conv": {
+          "channels": 16,
+          "scale_min": 0.8612293601036072,
+          "scale_max": 2.590820074081421,
+          "unit_scales": 2
+        },
+        "0:8:/lr_branch/backbone/features.17/conv/conv.6/Conv->/lr_branch/backbone/features.18/features.18.0/Conv": {
+          "channels": 320,
+          "scale_min": 0.9999998807907104,
+          "scale_max": 1.0000001192092896,
+          "unit_scales": 212
+        }
+      }
+    },
+    "prepare": {},
+    "seconds": 0.632,
+    "delta_from_export": {
+      "nodes": [
+        230,
+        150
+      ],
+      "op_delta": {
+        "Constant": [
+          79,
+          0
+        ],
+        "Resize": [
+          9,
+          8
+        ]
+      },
+      "node_names_removed": [
+        "/f_branch/Constant",
+        "/f_branch/Constant_1",
+        "/f_branch/Constant_2",
+        "/f_branch/Resize",
+        "/hr_branch/Constant",
+        "/hr_branch/Constant_1",
+        "/hr_branch/Constant_2",
+        "/hr_branch/Constant_3"
+      ],
+      "node_names_added": 0,
+      "initializers": [
+        140,
+        145
+      ],
+      "initializers_removed": [],
+      "initializers_added": 5,
+      "initializer_bytes_changed": [
+        "f_branch.conv_f.0.bias",
+        "f_branch.conv_f.0.weight",
+        "f_branch.conv_f.2.weight",
+        "hr_branch.conv_hr2x.0.bias",
+        "hr_branch.conv_hr2x.0.weight",
+        "hr_branch.conv_hr2x.2.bias",
+        "hr_branch.conv_hr2x.2.weight",
+        "hr_branch.conv_hr2x.4.bias"
+      ],
+      "value_info": [
+        0,
+        299
+      ],
+      "structure_equal": false
+    }
+  },
+  "quark_delta_from_export": {
+    "nodes": [
+      230,
+      150
+    ],
+    "op_delta": {
+      "Constant": [
+        79,
+        0
+      ],
+      "Resize": [
+        9,
+        8
+      ]
+    },
+    "node_names_removed": [
+      "/f_branch/Constant",
+      "/f_branch/Constant_1",
+      "/f_branch/Constant_2",
+      "/f_branch/Resize",
+      "/hr_branch/Constant",
+      "/hr_branch/Constant_1",
+      "/hr_branch/Constant_2",
+      "/hr_branch/Constant_3"
+    ],
+    "node_names_added": 0,
+    "initializers": [
+      140,
+      145
+    ],
+    "initializers_removed": [],
+    "initializers_added": 5,
+    "initializer_bytes_changed": [
+      "f_branch.conv_f.0.bias",
+      "f_branch.conv_f.0.weight",
+      "f_branch.conv_f.2.weight",
+      "hr_branch.conv_hr2x.0.bias",
+      "hr_branch.conv_hr2x.0.weight",
+      "hr_branch.conv_hr2x.2.bias",
+      "hr_branch.conv_hr2x.2.weight",
+      "hr_branch.conv_hr2x.4.bias"
+    ],
+    "value_info": [
+      0,
+      299
+    ],
+    "structure_equal": false
+  },
+  "node_names_equal_as_sets": true,
+  "node_order_equal": false,
+  "graph_diff": {
+    "node_delta": [],
+    "init_exact_mismatch": [],
+    "weight_lsb": {},
+    "weight_changed_elements": {},
+    "compared_int8_initializers": 0
+  },
+  "whole_pre_process_equal": true
+}
+PREPARE_PROBE_PASS True

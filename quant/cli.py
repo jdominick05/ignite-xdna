@@ -1,4 +1,4 @@
-"""Ignition Alpha: inspect ONNX graphs, quantize folded ResNet or head-cut YOLOv8 with or without CLE, or AdaRound an emitted file of either family."""
+"""Ignition Alpha: inspect ONNX graphs, quantize folded ResNet, head-cut YOLOv8 or MODNet with or without CLE, or AdaRound an emitted file of the ResNet or YOLO families."""
 import argparse
 from dataclasses import asdict
 import importlib.abc
@@ -29,17 +29,18 @@ def main(argv=None):
     commands = parser.add_subparsers(dest="command", required=True)
     inspect = commands.add_parser("inspect", help="Print a static fingerprint of any ONNX file; does not run a model")
     inspect.add_argument("models", type=Path, nargs="+")
-    emit = commands.add_parser("quantize", help="Calibrate and emit XINT8 QDQ for folded ResNet or head-cut YOLOv8")
+    emit = commands.add_parser("quantize", help="Calibrate and emit XINT8 QDQ for folded ResNet, head-cut YOLOv8 or MODNet")
     emit.add_argument("--in-model", type=Path, default=Path("models/resnet50_fp32.onnx"),
-                      help="Float export; the family (folded ResNet or head-cut YOLO) is read from its operators")
+                      help="Float export; the family (folded ResNet, head-cut YOLO or MODNet) is read from its operators")
     emit.add_argument("--out", type=Path, required=True)
     cle = emit.add_mutually_exclusive_group(required=True)
     cle.add_argument("--cle", action="store_true", help="Apply the transcribed cross-layer equalization first")
     cle.add_argument("--no-cle", action="store_true", help="Calibrate the float export as exported")
     emit.add_argument("--calib-dir", type=Path, default=None,
-                      help="data/calib for ResNet, data/coco_calib for YOLO unless given")
+                      help="data/calib for ResNet, data/coco_calib for YOLO, data/modnet_calib for MODNet unless given")
     emit.add_argument("--cfg-path", type=Path, default=Path("models/preprocess_config.json"),
-                      help="Classification preprocessing config (ResNet only; YOLO letterboxes to the graph input)")
+                      help="Preprocessing config: ResNet's transform, or MODNet's size cross-check "
+                           "(models/modnet/preprocess_config.json); YOLO letterboxes to the graph input")
     emit.add_argument("--limit", type=int, default=64)
     emit.add_argument("--scratch", type=Path, default=Path("scratch"))
     emit.add_argument("--scales-from", type=Path,
@@ -64,7 +65,7 @@ def main(argv=None):
         from onnx.checker import ValidationError
         from .graph import Graph
         from .quantize import file_hash, graph_family, prepare, quantize
-        from .sources import CocoSource, ImageFolderSource
+        from .sources import CocoSource, ImageFolderSource, ModnetSource
         from .verify import graph_diff
 
         try:
@@ -173,6 +174,15 @@ def main(argv=None):
                     from npu.yolo import input_size
                     imgsz = input_size(list(graph.value_shape(input_name) or ()), str(args.in_model))
                     source = CocoSource(args.calib_dir or Path("data/coco_calib"), args.limit, imgsz, input_name)
+                elif family == "modnet":
+                    shape = graph.value_shape(input_name)
+                    if shape is None or len(shape) != 4 or shape[2] != shape[3]:
+                        parser.error(f"MODNet expects a square NCHW input, got {shape}")
+                    cfg = json.loads(args.cfg_path.read_text(encoding="utf-8"))
+                    if (cfg.get("height"), cfg.get("width")) != (shape[2], shape[3]):
+                        parser.error("Preprocessing config size does not match the model input")
+                    source = ModnetSource(args.calib_dir or Path("data/modnet_calib"), args.limit,
+                                          shape[2], input_name)
                 else:
                     cfg = json.loads(args.cfg_path.read_text(encoding="utf-8"))
                     if graph.value_shape(input_name) != (1, *cfg["input_size"]):
