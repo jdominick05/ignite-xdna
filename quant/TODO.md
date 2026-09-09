@@ -64,6 +64,10 @@ recorded in the handoff and Git history rather than treated as future features.
   fresh same-listing `XINT8_ADAROUND` oracle on Desktop 2 (108/108 int8 exact, 702
   log lines identical), 79.40% CPU top-1 for both, peak working set 3,055,075,328
   bytes against Quark's 3,582,218,240. yolov8n-cut AdaRound waits on YOLO preparation.
+- [ ] Add GPU / ROCm acceleration for AdaRound (`quant/adaround.py`): enable
+  `OptimDevice = "cuda"` for PyTorch training loop on Desktop 1 (RX 7900 XTX 24 GB)
+  while keeping ORT activation caching on CPU. Validate paired convergence against
+  Quark GPU oracle (`--device cuda`). See design note in [DESIGN.md §4.2](DESIGN.md#note-for-implementation-gpu--rocm-acceleration-for-adaround).
 - [ ] Connect MODNet's calibration source to the shared inference preprocessing,
   then re-evaluate matte quality against the documented mismatched-preprocessing
   baseline. Do not claim this fixes the quality gap before measuring it.

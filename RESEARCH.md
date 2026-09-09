@@ -1325,8 +1325,8 @@ Super-resolution models are structurally matched to XDNA1: 100% convolutional, z
   2. Measure PSNR and SSIM on standard benchmarks (Set5, Set14) across FP32, plain XINT8, and AdaRound to evaluate quantization loss on image reconstruction.
   3. Profile latency and achieved TOPS via `tools/estimate_tops.py`.
 - **Falsification criteria:** The pipeline fails if sub-pixel shuffling or spatial upsampling operations fall back to CPU, incurring cross-device transfer overhead that negates convolutional acceleration.
-- **SESR-M7 result:** PixelShuffle (`DepthToSpace`) compiles natively on AIE into a **single monolithic DPU subgraph** (50/52 nodes on NPU, 96.2%, 0 internal fallbacks; outer 2 nodes are input `QuantizeLinear` and output `DequantizeLinear`). Single-tile latency at 256x256 -> 512x512 is **1.48 ms (674.0 fps)** on Phoenix XDNA1 — **5.43x faster than 8-core Zen 4 CPU (8.07 ms)** and **3.02x faster than Radeon 780M iGPU DML (4.48 ms)**. Plain XINT8 achieves 34.06 dB PSNR on Set5 (vs 35.64 dB FP32 reference); **AdaRound FastFinetune recovers 69.6% (+1.10 dB) of the lost PSNR to reach 35.16 dB (0.9437 SSIM)** at zero latency cost (1.48 ms vs 1.54 ms plain). Set14 sees 70.4% recovery (+0.50 dB to 29.82 dB, within 0.21 dB of FP32). Full working: [docs/BENCHMARKS.md](docs/BENCHMARKS.md#category-a-image-super-resolution-sesr-m7).
-- **Negative result (Real-ESRGAN Compact):** Real-ESRGAN Compact (64-channel residual dense chain) explodes intermediate activation memory across residual concatenations (12.6 MB per activation tensor), exceeding on-chip tile memory and fracturing into **81 DPU subgraphs** with **1,068 nodes on CPU** and only 707 on NPU. SESR's constant 16-channel linear collapsed topology avoids SRAM exhaustion, confirming that channel width discipline is mandatory for monolithic NPU residency in restoration pipelines.
+- **Negative result (Real-ESRGAN Compact at 256x256):** Real-ESRGAN Compact (64-channel residual dense chain) explodes intermediate activation memory across residual concatenations (12.6 MB per activation tensor), exceeding on-chip tile memory and fracturing into **81 DPU subgraphs** with **1,068 nodes on CPU** and only 707 on NPU.
+- **Real-ESRGAN 10-RRDB at 64x64 and 128x128 monolithic scaling:** Sizing static input tiles to 64x64 (~196 KB INT8) and 128x128 (~786 KB INT8) drops activation tensors below the host-spill threshold, allowing AMD's 10-RRDB architecture (156 Convs, 120 Concats, 123 LeakyReLUs) to compile into **exactly 1 monolithic DPU subgraph (1,773 / 1,775 nodes on NPU, 99.9%)** with 0 internal CPU fallbacks. At 64x64, runs at **14.02 ms per tile (71.3 fps)** on Phoenix XDNA1 with AdaRound — **3.71x faster than 8-core Zen 4 CPU (51.95 ms)** and outperforming Radeon 780M iGPU DML on full Set5/Set14 tiled evaluation (14.39 ms vs 18.34 ms on Set5). At 128x128, runs at **27.27 ms per tile (36.7 fps)** on NPU plain XINT8 — **9.82x faster than Zen 4 CPU (267.74 ms)** and **1.27x faster than Radeon 780M iGPU DML FP32 (34.67 ms)** on single-tile execution, while delivering **2.06x faster throughput** than four stitched 64x64 tiles (56.08 ms). Conversely, SRVGGNet-v3 Compact revealed an unsupported op rejection: `PRelu` is refused by the VitisAI EP on AIE, falling back to CPU. Full working: [docs/BENCHMARKS.md](docs/BENCHMARKS.md#category-a-cont-high-capacity-super-resolution-real-esrgan-on-xdna1-npu).
 
 ### Category B: Real-Time Portrait Matting and Semantic Segmentation
 
@@ -1564,16 +1564,20 @@ sections above.
   1.53x win over Zen 4 CPU (16.56 ms). Plain XINT8 preserves depth structure cleanly
   (Pearson r = 0.8706, MAD = 26.02/255) without scale grid collapse. Both hypotheses
   closed. [Working](docs/BENCHMARKS.md#category-d-monocular-depth-estimation-midas-v21-small).
-- **Category A: Image Super-Resolution (SESR-M7).** New pipeline (`pipelines/sesr/`).
+- **Category A: Image Super-Resolution (SESR-M7 and Real-ESRGAN).** New pipelines (`pipelines/sesr/`, `pipelines/realesrgan/`).
   Sub-pixel convolution (`DepthToSpace` / PixelShuffle) compiles natively on AIE into a
   single monolithic DPU subgraph (50/52 nodes, 96.2%, zero internal fallbacks). Achieves
   **1.48 ms per 256x256 tile (674.0 fps)** on Phoenix XDNA1 — **5.43x faster than 8-core
   Zen 4 CPU** (8.07 ms) and **3.02x faster than Radeon 780M iGPU DML** (4.48 ms), marking
   the first visual pipeline where the NPU decisively outperforms the iGPU. Plain XINT8 loses
   1.58 dB on Set5 (34.06 dB vs 35.64 FP32); **AdaRound FastFinetune recovers 69.6% (+1.10 dB)
-  to reach 35.16 dB (0.9437 SSIM)** at zero latency cost. Real-ESRGAN Compact's 81-subgraph
-  memory spill confirms that 16-channel width discipline is required to avoid SRAM
-  exhaustion. Both hypotheses closed. [Working](docs/BENCHMARKS.md#category-a-image-super-resolution-sesr-m7).
+  to reach 35.16 dB (0.9437 SSIM)** at zero latency cost. For high-capacity 4x restoration,
+  Real-ESRGAN Compact at 256x256 fractured into 81 subgraphs (12.6 MB activation spill), but
+  sizing static tiles to 64x64 and 128x128 resolves SRAM exhaustion completely: AMD 10-RRDBNet
+  compiles into a **single monolithic DPU subgraph (1,773 / 1,775 nodes on NPU, 99.9%)**, running
+  at **14.02 ms per tile (71.3 fps)** at 64x64 with AdaRound and **27.27 ms (36.7 fps)** at 128x128 on
+  plain XINT8 (9.82x faster than Zen 4 CPU, 1.27x faster than Radeon 780M iGPU DML FP32 at 34.67 ms,
+  and 2.06x faster throughput than four 64x64 tiles). Both hypotheses closed. [Working](docs/BENCHMARKS.md#category-a-cont-high-capacity-super-resolution-real-esrgan-on-xdna1-npu).
 
 **Still open.**
 

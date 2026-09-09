@@ -1,0 +1,25 @@
+﻿
+=== C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\realesrgan_rrdb_128_cache\vitisai_ep_report.json ===
+  all            nodeNum= 1775  opTypes=8
+  NPU            nodeNum= 1773  opTypes=8
+  VITIS_EP_CPU   nodeNum=    2  opTypes=2
+
+  per-node device counts: {'CPU': 2, 'NPU': 1773}
+
+  1773 nodes on the NPU, 2 elsewhere.
+
+  op type x device:
+    CPU           DequantizeLinear     1
+    CPU           QuantizeLinear       1
+    NPU           Add                  41
+    NPU           Concat               120
+    NPU           Conv                 156
+    NPU           DequantizeLinear     992
+    NPU           LeakyRelu            123
+    NPU           Mul                  10
+    NPU           QuantizeLinear       329
+    NPU           Resize               2
+
+  2 nodes NOT on the NPU (first 25):
+    CPU           QuantizeLinear       ['input_QuantizeLinear_Output']
+    CPU           DequantizeLinear     ['output']

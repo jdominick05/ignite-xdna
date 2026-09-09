@@ -667,6 +667,21 @@ a fresh `XINT8_ADAROUND` oracle on the same machine and runtime
 ([AdaRound parity](../docs/BENCHMARKS.md#ignition-adaround-parity)); across machines or runtimes the
 comparison is statistical, as the Sep 5 control in that section shows.
 
+#### Note for implementation: GPU / ROCm acceleration for AdaRound
+
+When scaling to deep restoration networks (e.g. Real-ESRGAN 10-RRDB with 156 convolutions) or wide detectors (YOLOv8m/l/x), CPU AdaRound becomes the sole runtime bottleneck (~15 min at 64², projected ~1 hr at 128² on Zen 4). Enabling ROCm/HIP acceleration in Ignition should follow these guidelines:
+
+1. **Strict scope isolation:** The rest of Ignition (`passes`, `calib`, `cle`, `refine`, `qdq`, `quantize`) must remain strictly pure Python / NumPy with zero PyTorch or GPU dependencies (`_check_imports()` invariant). Only `quant/adaround.py` imports torch and uses GPU devices.
+2. **Hybrid execution architecture (high ROI, low complexity):**
+   - **Keep ORT activation extraction on CPU:** `_run_quantized_inputs` and `_run_float` take only ~0.2s per layer on CPU (<2% of total runtime). Attempting to wire ONNX Runtime through `MIGraphXExecutionProvider` or `ROCMExecutionProvider` under Windows introduces severe configuration fragility for negligible wall-clock gain.
+   - **Move only the PyTorch training loop to GPU:** 98%+ of runtime is spent inside the 1,000-iteration Adam optimization loop. Enable `OptimDevice = "cuda"` / `"cuda:0"` in `FastFinetuneConfig.check()`, transfer `Module`, `self.alpha`, `scale`, `zero_point`, and the drawn batch tensors to device inside the iteration loop, ensure `RoundHalfToEven` and `qdq` execute on CUDA/ROCm tensors, and retrieve weights via `.cpu().numpy()` at layer readout.
+3. **Target machine routing:**
+   - **Desktop 1** (Ryzen 7 7800X3D + Radeon RX 7900 XTX 24 GB) is the intended hardware target for GPU AdaRound. Discrete RDNA3 has official ROCm/CUDA support in PyTorch.
+   - **Desktop 2** (Ryzen 7 8700G, Phoenix APU) runs Windows 11 where the Radeon 780M iGPU lacks official Windows PyTorch ROCm wheels (would require Linux/WSL2).
+4. **Numerical parity contract:**
+   - GPU floating-point parallel reductions in Adam loss computation have non-associative summation order compared to CPU, which may introduce $\pm 1$ LSB differences on edge weights.
+   - Validation must be paired against a Quark GPU oracle run (`--device cuda`) on Desktop 1 rather than comparing cross-device against CPU.
+
 **`quant/verify.py`** — the gates, as code
 
 ```
