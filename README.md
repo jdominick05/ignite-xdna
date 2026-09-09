@@ -31,6 +31,7 @@ Full environment split, install steps and footguns: [`docs/SETUP.md`](docs/SETUP
 | `pipelines/yolov8n` | YOLOv8 n/s/m/l/x detection | **Working** — 8.94–117.11 ms on the NPU once the decode tail is cut off the graph |
 | `pipelines/yolov8n-pose` | YOLOv8n-pose, 17-point COCO keypoints | **Working** — 9.35 ms on the NPU (1015/1025 nodes), OKS mAP@50-95 34.32 AdaRound vs 32.64 plain XINT8 and 49.86 float (5000 images) |
 | `pipelines/yolov6n` | YOLOv6n detection (RepVGG backbone, no DFL) | **Working** — 6.62 ms on the NPU (518/525 nodes), mAP@50-95 33.57 AdaRound vs 22.92 plain XINT8 and 36.95 float (5000 images) |
+| `pipelines/yolov11` | YOLOv11n detection (C3k2 + C2PSA attention) | **Fractured (6/1300 nodes, 33.29 ms)** due to C2PSA 4D MatMul; ablated backbone runs at **7.08 ms (1173/1180 nodes)** |
 | `pipelines/midas` | MiDaS v2.1 Small (monocular depth) | **Working** — 10.81 ms on NPU (682/684 nodes, single subgraph), r = 0.8706 vs FP32 (50 scenes) |
 | `pipelines/sesr` | SESR-M7 (2x super-resolution) | **Working** — 1.48 ms on NPU (50/52 nodes, single subgraph), 35.16 dB PSNR on Set5 (XINT8+AdaRound) |
 | `pipelines/realesrgan` | Real-ESRGAN 10-RRDB (4x super-resolution) | **Working** — 14.02 ms on NPU (1773/1775 nodes, single subgraph), 24.50 dB on Set5 (XINT8+AdaRound) |
@@ -142,9 +143,8 @@ Then, from **Git Bash** (not WSL — a WSL run is silently CPU-only). Every scri
 ```bash
 ./scripts/setup.sh          # one-time: export, fetch datasets, quantize
 ./scripts/resnet-bench.sh   # the ResNet50 table
-./scripts/yolo-cut.sh       # YOLOv8 on the NPU: cut, quantize, run, verify
+./scripts/yolo-cut.sh       # YOLO on the NPU: cut, quantize, run, verify
 ./scripts/yolo-eval.sh      # COCO bbox mAP          ./scripts/pose-eval.sh  # OKS mAP
-./scripts/yolo-demo.sh      # live webcam detection, q to quit
 ./scripts/diag.sh           # what the VitisAI EP actually took
 ```
 

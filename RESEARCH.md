@@ -1352,7 +1352,8 @@ Structurally re-parameterized networks collapse multi-branch training graphs int
   1. YOLOv6 (Meituan RepVGG backbone; pure 3x3 convs + ReLU in inference mode). **Tested** —
      see below and [docs/BENCHMARKS.md](docs/BENCHMARKS.md#category-c-first-candidate-yolov6n-repvgg-backbone).
   2. YOLO-World v2 (Open-vocabulary detection; decoupled CPU text embedding + NPU vision backbone).
-  3. YOLOv11 (Successor detection architecture with C3k2 blocks, evaluated under the established 6-output head-cut pattern).
+  3. YOLOv11 (Successor detection architecture with C3k2 blocks, evaluated under the established 6-output head-cut pattern). **Tested** —
+     see below and [docs/BENCHMARKS.md](docs/BENCHMARKS.md#category-c-second-candidate-yolov11n-c2psa-attention-block--decoupled-dwconv-head).
 - **Hypothesis:** Eliminating residual `Add` branches via structural re-parameterization reduces SRAM buffer contention and DMA ping-ponging, improving single-column execution efficiency relative to YOLOv8 CSPDarknet blocks while plain ReLU avoids SiLU->HardSwish quantization distortion.
 - **Target shapes and pipeline:** Static input `(1, 3, 640, 640)`, head-cut architecture exporting raw box and class tensors directly (`1b_cut_head` recipe).
 - **Quantization:** Quark XINT8 + AdaRound calibrated on COCO val2017.
@@ -1370,6 +1371,14 @@ Structurally re-parameterized networks collapse multi-branch training graphs int
   those points (76%) at zero latency cost, closing to within 3.38 of FP32 — **refuting**
   the "beyond AdaRound's recovery capacity" branch of the falsification criterion below.
   Both halves of the candidate are now closed: [docs/BENCHMARKS.md](docs/BENCHMARKS.md#category-c-first-candidate-yolov6n-repvgg-backbone).
+- **YOLOv11n result:** C2PSA spatial self-attention block is rejected by the DPU compiler
+  (4D `MatMul` inside attention loop forces 1294 nodes to CPU; only 6 land on NPU, running at
+  33.29 ms eval). However, ablating C2PSA unlocks a single monolithic DPU subgraph of
+  1,173 / 1,180 nodes (99.4%) running at **7.08 ms** (141.2 fps) across 5,000 COCO images —
+  the fastest YOLO model ever measured on XDNA1 (1.24x faster than YOLOv8n, 1.18x faster than
+  Radeon 780M iGPU DML). Plain XINT8 stock loses 12.90 mAP (38.72 → 25.82), while identity
+  ablation collapses mAP to 0.19, proving attention cannot be stripped post-hoc without retraining:
+  [docs/BENCHMARKS.md](docs/BENCHMARKS.md#category-c-second-candidate-yolov11n-c2psa-attention-block--decoupled-dwconv-head).
 
 ### Category D: Monocular Depth Estimation
 
@@ -1557,6 +1566,20 @@ sections above.
   falsification criterion: re-parameterized RepVGG weights don't carry AdaRound-resistant
   outliers here. Both halves of the candidate are closed.
   [Working](docs/BENCHMARKS.md#category-c-first-candidate-yolov6n-repvgg-backbone).
+- **Category C, second candidate: YOLOv11n (C2PSA Attention Block & Decoupled DWConv Head).**
+  New pipeline (`pipelines/yolov11/`), Ultralytics YOLOv11 release. Rejection and speed
+  records observed in the same model: the C2PSA spatial self-attention block is rejected
+  by the VitisAI EP (4D `MatMul` inside attention loop forces 1294 nodes to CPU, placing
+  only 6 ancillary nodes on NPU), causing severe host-NPU ping-pong and degrading latency
+  to 33.29 ms eval (slower than Zen 4 CPU FP32 at 22.82 ms). However, ablating C2PSA into
+  an identity passthrough proves the C3k2 backbone and decoupled DWConv detection heads
+  compile into a **single monolithic DPU subgraph of 1,173 / 1,180 nodes (99.4%)**, executing
+  in **7.08 ms on 5,000 val2017 images** (141.2 fps) — **the fastest YOLO model recorded
+  on XDNA1** (1.24x faster than YOLOv8n, 1.35x faster than YOLOv6n, and 1.18x faster than
+  Radeon 780M iGPU DML FP32 at 8.24–8.58 ms). Plain XINT8 stock loses 12.90 mAP (38.72 → 25.82);
+  identity ablation collapses mAP to 0.19, demonstrating that attention cannot be bypassed
+  without retraining. Both candidate hypotheses closed.
+  [Working](docs/BENCHMARKS.md#category-c-second-candidate-yolov11n-c2psa-attention-block--decoupled-dwconv-head).
 - **Category D: Monocular Depth Estimation (MiDaS v2.1 Small).** New pipeline
   (`pipelines/midas/`). Nearest-neighbor upsampling fuses all RefineNet decoder layers
   into a single monolithic DPU subgraph (682/684 nodes, 99.7%), eliminating 4 host CPU
@@ -1637,8 +1660,8 @@ sections above.
 - **Candidate model pipelines (Categories A, C, D, E).** Test plans, target shapes, and falsification criteria:
   - **Category A:** Image Super-Resolution — SESR-M7 (placement, 1.48 ms latency, 3.02x iGPU win,
     70% AdaRound recovery) and Real-ESRGAN Compact (activation memory spill) closed above.
-  - **Category C:** Advanced Detection and RepVGG Backbones — YOLOv6n (placement, speed,
-    plain-XINT8 and AdaRound recovery) closed above; YOLO-World v2 and YOLOv11 still open.
+  - **Category C:** Advanced Detection and RepVGG Backbones — YOLOv6n and YOLOv11n
+    closed above; YOLO-World v2 still open.
   - **Category D:** Monocular Depth Estimation — MiDaS v2.1 Small (bilinear vs nearest fusion,
     10.81 ms, 1.53x CPU win) closed above; FastDepth still open.
   - **Category E:** Untested Classification Topologies — DenseNet-121, ResNeXt-50, and RegNetX-002 (placement, Concat DMA, grouped convs, shift-cut scale explosion) closed above.

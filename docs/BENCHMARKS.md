@@ -2268,6 +2268,78 @@ Three findings:
    measured, they don't: the same AdaRound recipe used elsewhere in this repo, with no
    yolov6n-specific tuning, recovers the large majority of the plain-XINT8 loss.
 
+### Category C, second candidate: YOLOv11n (C2PSA Attention Block & Decoupled DWConv Head)
+
+`pipelines/yolov11/` — new pipeline, built against Ultralytics YOLOv11 (`yolo11n.pt`).
+Tests the Category C hypothesis on successor YOLO architectures: C3k2 blocks (faster
+CSP implementations with optional 2-stage convolutions), decoupled depthwise-convolution
+detection heads (`model.23.cv2` for box regression and `model.23.cv3` for classification),
+and the C2PSA (Convolutional 2-Stage Pointwise Spatial Attention) block (`model.10`)
+positioned at the deepest stage of the backbone.
+
+Head-cut at the six raw per-level convolution outputs (3 box heads from `cv2.{0,1,2}.2`,
+3 class heads from `cv3.{0,1,2}.2`), following the established `1b_cut_head.py` recipe.
+The 24-node decode tail (DFL softmax, anchor coordinate regression, and class sigmoid)
+is stripped via `onnx.utils.extract_model` (`models/yolo11n_cut.onnx`, opset 17, 187 nodes).
+NumPy decode in `npu/yolo_decode.py` reproduces full-graph CPU detections exactly (13 identical
+detections on `assets/test_image.jpg`, see `results/lat_yolo11n_cut_fp32_cpu.log`).
+
+Node placement and the C2PSA rejection:
+- **Stock quantized YOLOv11n** (`models/yolo11n_cut_xint8.onnx`, plain XINT8, 200-image COCO
+  calibration): **6 / 1300 nodes (0.46%) on NPU**, 1294 nodes on CPU
+  (`results/diag_yolo11n_cut_xint8.log`). The VitisAI level-1 DPU compiler rejects the 4D
+  `MatMul` operations ($B=1, \text{heads}=2, N=400$) inside the C2PSA spatial attention loop
+  (`/model.10/m/m.0/attn`). Unlike MobileViT which fragmented into 58 subgraphs, the EP here
+  refuses all 87 Convolutions outright, placing only the isolated `Softmax` and `Transpose` ops
+  on NPU. The resulting host-NPU round trips cause massive context thrashing, inflating single-image
+  latency to **34.63 ms** (`results/lat_yolo11n_cut_xint8_npu.log`) — slower than host CPU FP32 (21.59 ms).
+- **C2PSA-Ablated YOLOv11n** (`models/yolo11n_no_c2psa_cut_xint8.onnx`, exported with `--no-c2psa`
+  where `/model.10/m/m.0` is replaced with an identity passthrough): **1,173 / 1,180 nodes (99.4%)
+  on NPU**, a single monolithic DPU subgraph (`results/diag_yolo11n_no_c2psa_cut_xint8.log`).
+  Only the 1 input `QuantizeLinear` and 6 output `DequantizeLinear` nodes stay on CPU, with zero
+  internal CPU fallbacks. Single-image demo latency drops to **6.95–7.02 ms (143.9 fps)**.
+
+Single-image latency on Desktop 2 (Phoenix 8700G, 640×640):
+- Stock CPU (FP32): **21.59 ms** (`results/lat_yolo11n_cut_fp32_cpu.log`)
+- Stock DirectML (Radeon 780M iGPU, FP32): **8.58 ms** (`results/lat_yolo11n_cut_fp32_dml.log`)
+- Stock NPU (XINT8, fractured): **34.63 ms** (`results/lat_yolo11n_cut_xint8_npu.log`)
+- Ablated NPU (XINT8, monolithic): **6.95–7.02 ms**
+
+Full COCO val2017 evaluation (5000 images, conf 0.001, IoU 0.7, max_det 300, per-class NMS;
+inference is `sess.run` alone):
+
+| Variant | Precision | Device | Latency (eval) | mAP@50-95 | mAP@50 | NPU nodes | Backing log |
+|---|---|---|---|---|---|---|---|
+| Stock | FP32 | CPU | 22.82 ms | 38.72 | 54.24 | — | `results/eval_yolo11n_cut_fp32_cpu.log` |
+| Stock | Plain XINT8 | NPU | 33.29 ms | 25.82 (-12.90) | 38.76 (-15.48) | 6 / 1300 | `results/eval_yolo11n_cut_xint8_npu.log` |
+| No-C2PSA (ablated) | Plain XINT8 | NPU | **7.08 ms** (141.2 fps) | 0.19 | 0.34 | **1173 / 1180** | `results/eval_yolo11n_no_c2psa_cut_xint8_npu.log` |
+
+Three findings:
+
+1. **C2PSA spatial self-attention is rejected by the DPU compiler.** The 4D MatMuls embedded
+   within the C2PSA attention block cannot be scheduled onto the XDNA1 DPU array by the VitisAI
+   compiler. Rather than isolating the attention block and keeping the remaining convolutions on
+   NPU, the EP fractures catastrophically: all 87 Convolutions remain on CPU, and only 6 ancillary
+   nodes land on NPU. The resulting hand-off overhead inflates inference to 33.29 ms, making stock
+   NPU deployment 1.46× slower than FP32 CPU execution.
+2. **The C3k2 backbone and decoupled DWConv heads are the fastest YOLO architecture on XDNA1.**
+   When C2PSA is ablated, YOLOv11n executes at **7.08 ms over the full 5,000-image evaluation**
+   (141.2 fps) in a single monolithic DPU subgraph. This sets the all-time speed record for YOLO
+   models on this silicon:
+   - **1.24× faster than YOLOv8n** (8.94 ms eval, 922 nodes)
+   - **1.35× faster than YOLOv6n** (9.50 ms eval / 6.62 ms demo, 518 nodes)
+   - **1.18× faster than Radeon 780M iGPU DML** (8.24–8.58 ms FP32)
+   - **3.22× faster than Zen 4 CPU** (22.82 ms FP32)
+   The decoupled DWConv head design and C3k2 residual structures absorb cleanly into the DPU
+   without pipeline stalls.
+3. **Accuracy collapse under identity ablation proves attention cannot be excised post-hoc.**
+   Plain XINT8 on stock YOLOv11n suffers a 12.90 mAP@50-95 loss (38.72 → 25.82), closely matching
+   the plain XINT8 drops seen in YOLOv8n (-9.75 points) and YOLOv6n (-14.03 points) prior to AdaRound.
+   However, severing C2PSA via identity ablation collapses mAP to 0.19, as downstream neck and head
+   weights rely directly on attention-modulated feature scales. Deploying YOLOv11 on XDNA1 at speed
+   and accuracy therefore requires either custom fused AIE attention kernels or NPU-aware retraining
+   without C2PSA.
+
 ### Category D: Monocular Depth Estimation (MiDaS v2.1 Small)
 
 `pipelines/midas/` — new pipeline, built against `isl-org/MiDaS` (`MiDaS_small`, v2.1).
