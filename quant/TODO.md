@@ -97,13 +97,21 @@ recorded in the handoff and Git history rather than treated as future features.
   recorded — that comparison needs a listing sweep, which is unrun. AdaRound is not wired
   for this family (the `adaround` command refuses it explicitly) and the Zero-Concat
   variant is untouched.
-- [ ] Wire AdaRound for MODNet. It cannot reuse the ResNet/YOLO path unchanged: the
-  layer walk must run on the **simplified** float graph, because `passes.simplify`
-  reorders this family's node list and `Graph.vendor_order` on the raw export is a
-  different order. `Graph.vendor_order` is verified against onnxruntime's
-  `topological_sort` on both slimmed MODNet exports, so the order itself is known; what is
-  missing is `cli.py`'s adaround branch calling `simplify_for` before `prepare`, and a
-  fresh `XINT8_ADAROUND` oracle to gate against.
+- [x] Wire AdaRound for MODNet. It could not reuse the ResNet/YOLO path unchanged: the
+  layer walk runs on the **simplified** float graph, because `passes.simplify` reorders this
+  family's node list. Closed 2026-09-09. `cli.py`'s adaround branch calls `simplify_for`
+  before CLE and `prepare`, and `adaround.py` gained the vendor's `Clip` handling — a
+  three-input Clip whose bounds are initializers of the quantized model becomes
+  `torch.clamp`, not the `ActivationMapping` `nn.ReLU6` that names the same curve with a
+  different gradient at the bounds; any other Clip shape is refused rather than
+  approximated. MODNet is the first family here where a finetuned layer carries an
+  activation at all (35 Clip, 17 Relu, 19 none over 71 Conv layers). Evidence:
+  [MODNet AdaRound parity](../docs/BENCHMARKS.md#ignition-modnet-adaround-parity) — empty
+  position delta against a fresh same-listing `XINT8_ADAROUND` oracle, 140/140 int8
+  byte-identical, all 911 per-layer log lines equal, and 0.09361 CPU / 0.10072 NPU matte
+  error for both files at 502/507 placed, which is a 45 and 47 percent cut against the same
+  listing quantized plain. Peak working set 22,299,271,168 bytes, beyond the 16 GB laptop.
+  The Zero-Concat variant and the listing sweep stay open.
 - [ ] Consider histogram calibration only with measured error/accuracy and memory
   tradeoffs against the exact-sample store; label approximation explicitly.
 

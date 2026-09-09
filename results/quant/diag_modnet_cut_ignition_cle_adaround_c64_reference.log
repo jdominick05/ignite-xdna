@@ -1,0 +1,33 @@
+
+=== C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\scratch\quant-worktree\modnetcutcachekey\vitisai_ep_report.json ===
+  all            nodeNum=  507  opTypes=11
+  CPU            nodeNum=    1  opTypes=1
+  NPU            nodeNum=  502  opTypes=11
+  VITIS_EP_CPU   nodeNum=    4  opTypes=2
+
+  per-node device counts: {'CPU': 5, 'NPU': 502}
+
+  502 nodes on the NPU, 5 elsewhere.
+
+  op type x device:
+    CPU           DequantizeLinear     2
+    CPU           QuantizeLinear       2
+    CPU           Resize               1
+    NPU           Add                  10
+    NPU           Clip                 35
+    NPU           Concat               6
+    NPU           Conv                 71
+    NPU           DequantizeLinear     255
+    NPU           GlobalAveragePool    1
+    NPU           HardSigmoid          1
+    NPU           Mul                  2
+    NPU           QuantizeLinear       97
+    NPU           Relu                 17
+    NPU           Resize               7
+
+  5 nodes NOT on the NPU (first 25):
+    CPU           QuantizeLinear       ['input_QuantizeLinear_Output']
+    CPU           DequantizeLinear     ['input_DequantizeLinear_Output/duplicated']
+    CPU           Resize               ['/hr_branch/Resize_1_output_0']
+    CPU           QuantizeLinear       ['/hr_branch/Resize_1_output_0_QuantizeLinear_Output']
+    CPU           DequantizeLinear     ['logits']

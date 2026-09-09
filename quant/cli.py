@@ -1,4 +1,4 @@
-"""Ignition Alpha: inspect ONNX graphs, quantize folded ResNet, head-cut YOLOv8 or MODNet with or without CLE, or AdaRound an emitted file of the ResNet or YOLO families."""
+"""Ignition Alpha: inspect ONNX graphs, quantize folded ResNet, head-cut YOLOv8 or MODNet with or without CLE, or AdaRound an emitted file of any of the three."""
 import argparse
 from dataclasses import asdict
 import importlib.abc
@@ -51,9 +51,11 @@ def main(argv=None):
     ada.add_argument("--quant", type=Path, required=True, help="Emitted XINT8 model with its .quant.json sidecar")
     ada.add_argument("--out", type=Path, required=True)
     ada.add_argument("--calib-dir", type=Path, default=Path("data/calib"),
-                     help="The base's calibration folder (data/coco_calib for a head-cut YOLO base)")
+                     help="The base's calibration folder (data/coco_calib for a head-cut YOLO base, "
+                          "data/modnet_calib for a MODNet base)")
     ada.add_argument("--cfg-path", type=Path, default=Path("models/preprocess_config.json"),
-                     help="Classification preprocessing config (ResNet only; YOLO letterboxes to the graph input)")
+                     help="Preprocessing config: ResNet's transform, or MODNet's size cross-check "
+                          "(models/modnet/preprocess_config.json); YOLO letterboxes to the graph input")
     ada.add_argument("--data-size", type=int, default=1000, help="Quark's DataSize (images used, capped by the listing)")
     ada.add_argument("--iters", type=int, default=1000, help="Quark's NumIterations per layer")
     ada.add_argument("--seed", type=int, default=1705472343, help="Quark's FixedSeed")
@@ -64,7 +66,7 @@ def main(argv=None):
     try:
         from onnx.checker import ValidationError
         from .graph import Graph
-        from .quantize import file_hash, graph_family, prepare, quantize
+        from .quantize import file_hash, graph_family, prepare, quantize, simplify_for
         from .sources import CocoSource, ImageFolderSource, ModnetSource
         from .verify import graph_diff
 
@@ -99,8 +101,6 @@ def main(argv=None):
                 if "adaround" in provenance:
                     parser.error("The base was already finetuned; start from the emitted XINT8 file")
                 family = provenance.get("family", "folded_resnet")
-                if family == "modnet":
-                    parser.error("AdaRound is not wired for the MODNet family; see quant/TODO.md")
                 float_graph = Graph.load(args.in_model)
                 if graph_family(float_graph) != family:
                     parser.error("Float model family differs from the base sidecar")
@@ -111,6 +111,16 @@ def main(argv=None):
                     from npu.yolo import input_size
                     imgsz = input_size(list(float_graph.value_shape(input_name) or ()), str(args.in_model))
                     source = CocoSource(args.calib_dir, len(listing), imgsz, input_name)
+                elif family == "modnet":
+                    # The size comes from the graph, as it does when the base was emitted;
+                    # --cfg-path is read only to cross-check it, never to set it.
+                    shape = float_graph.value_shape(input_name)
+                    if shape is None or len(shape) != 4 or shape[2] != shape[3]:
+                        parser.error(f"MODNet expects a square NCHW input, got {shape}")
+                    cfg = json.loads(args.cfg_path.read_text(encoding="utf-8"))
+                    if (cfg.get("height"), cfg.get("width")) != (shape[2], shape[3]):
+                        parser.error("Preprocessing config size does not match the model input")
+                    source = ModnetSource(args.calib_dir, len(listing), shape[2], input_name)
                 else:
                     cfg = json.loads(args.cfg_path.read_text(encoding="utf-8"))
                     if cfg != provenance["preprocess"]:
@@ -120,6 +130,12 @@ def main(argv=None):
                     parser.error("Preprocessing differs from the base sidecar")
                 if [p.as_posix() for p in source.listing()] != listing:
                     parser.error("Calibration listing differs from the base sidecar")
+                # SimplifyModel is the vendor's first pre-process step and precedes CLE,
+                # whose pattern walk reads the node list it leaves behind. It is a no-op
+                # for every family but MODNet, where it also reorders the node list that
+                # layer_targets walks to fix the finetune order.
+                if simplify_for(float_graph, family):
+                    float_graph.infer_shapes()
                 if provenance["cle"]:
                     # The float reference is the equalized float graph, as in Quark's post-process.
                     cross_layer_equalize(float_graph)
@@ -150,7 +166,12 @@ def main(argv=None):
                 })
                 # This process's own versions; the base's stay under base_versions.
                 report["base_versions"] = provenance["versions"]
-                report["versions"] = {p: metadata.version(p) for p in ("numpy", "onnx", "onnxruntime", "torch")}
+                packages = ["numpy", "onnx", "onnxruntime", "torch"]
+                if family == "modnet":
+                    # This family's prepared graph is onnxslim's output, so which version
+                    # simplified the float reference is part of the artifact's provenance.
+                    packages.append("onnxslim")
+                report["versions"] = {p: metadata.version(p) for p in packages}
                 Path(str(args.out) + ".quant.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
                 layers = asdict(adaround_report)["layers"]
                 print("ADAROUND_REPORT", json.dumps({k: v for k, v in asdict(adaround_report).items() if k != "layers"}, indent=2))

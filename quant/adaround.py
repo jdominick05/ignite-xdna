@@ -4,7 +4,7 @@ Transcribes Quark 0.11rc1's FastFinetune AdaRound path
 (``quark/onnx/algorithm/finetuning``: ``fast_finetune.py``, ``onnx_subgraph.py``,
 ``torch_utils.py``, ``train_torch/train_model.py``, ``train_torch/train_model_loss.py``,
 ``create_torch/base_qdq_quantizers.py``, ``create_torch/create_model_ops.py``) for the
-folded ResNet and head-cut YOLOv8 XINT8 dialects. It runs *after* emission, DPU
+folded ResNet, head-cut YOLOv8 and MODNet XINT8 dialects. It runs *after* emission, DPU
 simulation and refinement, on the finished file, exactly where Quark's post-process runs
 it. Only ``<w>_quantized`` initializers change; scales, zero points, biases and topology
 are untouched.
@@ -27,7 +27,11 @@ taken from the float graph explicitly:
    input fake-quantized with the file's UINT8/zp128 scale (round half to even, clamp
    0..255); weight fake-quantized with the file's INT8 scale through the AdaRound
    rounding variable (floor plus rectified sigmoid, gamma -0.1, zeta 1.1); bias
-   fake-quantized with the file's INT8 bias scale; Relu when present.
+   fake-quantized with the file's INT8 bias scale; the activation when present --
+   ``nn.ReLU`` for Relu, and for a three-input Clip the vendor's own ``Clip`` module,
+   which is ``torch.clamp`` rather than ``nn.ReLU6`` (the two agree on the forward
+   values for (0, 6) but not on the gradient at the bounds, and AdaRound trains
+   through it).
 3. Loss: reconstruction against the float output (squared Frobenius norm over dim 1,
    averaged) plus the rounding regulariser after a warm start, beta annealed by
    cosine; Adam on the rounding variable; random ``BatchSize`` batches drawn with
@@ -103,6 +107,7 @@ class Layer:
     f_end: str            # the same tensor in the float graph (a graph output is renamed by its QDQ)
     has_act: bool
     act_op: str | None
+    act_bounds: tuple | None   # a Clip's (min, max), read from the quantized file
     weight_quantized: str
     weight_float: str
     bias_float: str | None
@@ -153,6 +158,25 @@ def _qparams(g: Graph, node: onnx.NodeProto) -> QParams:
     return QParams(float(scale), int(zp), str(zp.dtype))
 
 
+def _clip_bounds(qg: Graph, node: onnx.NodeProto) -> tuple[float, float]:
+    """``create_model_ops`` reads a Clip's bounds from the *quantized* model's initializers.
+
+    Quark rewrites a three-input Clip into the attribute form and hands it to
+    ``convert_act``, which returns its own ``Clip`` module. Its fallback for any other
+    shape of Clip is ``ActivationMapping``'s ``nn.ReLU6`` -- a different module with a
+    different gradient -- so that path is refused rather than approximated.
+    """
+    if len(node.input) != 3:
+        raise NotImplementedError(f"{node.name}: only a three-input Clip is transcribed")
+    bounds = []
+    for name in node.input[1:]:
+        value = qg.initializer(name)
+        if value is None or value.size != 1:
+            raise NotImplementedError(f"{node.name}: Clip bounds must be scalar initializers")
+        bounds.append(float(value.reshape(-1)[0]))
+    return bounds[0], bounds[1]
+
+
 def layer_targets(qg: Graph, fg: Graph) -> list[Layer]:
     """Conv/Gemm layers with their QDQ parameters, in the order Quark's finetune visits them.
 
@@ -193,10 +217,13 @@ def layer_targets(qg: Graph, fg: Graph) -> list[Layer]:
         if len(consumers) != 1:
             raise ValueError(f"{node.name}: expected one consumer of the compute output")
         follower = consumers[0]
+        act_bounds = None
         if follower.op_type == "QuantizeLinear":
             end, has_act, act_op = node.output[0], False, None
         elif follower.op_type in ACT_OPS:
             end, has_act, act_op = follower.output[0], True, follower.op_type
+            if act_op == "Clip":
+                act_bounds = _clip_bounds(qg, follower)
         else:
             end, has_act, act_op = node.output[0], False, None
         if fnode.input[0] != q_in.input[0]:
@@ -215,8 +242,8 @@ def layer_targets(qg: Graph, fg: Graph) -> list[Layer]:
             raise ValueError(f"{node.name}: float weight is not an initializer")
         attrs = {a.name: helper.get_attribute_value(a) for a in node.attribute}
         layers.append(Layer(len(layers), node.name, node.op_type, q_in.input[0], end, f_end, has_act, act_op,
-                            dq_w.input[0], fnode.input[1], bias_float, _qparams(qg, dq_in), _qparams(qg, dq_w),
-                            bias_q, attrs))
+                            act_bounds, dq_w.input[0], fnode.input[1], bias_float, _qparams(qg, dq_in),
+                            _qparams(qg, dq_w), bias_q, attrs))
     if not layers:
         raise ValueError("No Conv/Gemm layers to finetune")
     return layers
@@ -362,7 +389,14 @@ def finetune(float_graph: Graph, quant_graph: Graph, source: ImageFolderSource,
                 self.compute.bias.data = torch.tensor(bias)
             self.alpha = None
             self.use_soft_rounding = True
-            self.act = torch.nn.ReLU(inplace=True) if layer.act_op == "Relu" else None
+            self.act = None
+            if layer.act_op == "Relu":
+                self.act = torch.nn.ReLU(inplace=True)
+            elif layer.act_op == "Clip":
+                # create_model_ops.Clip.forward is torch.clamp on the bounds it read from
+                # the file, not the ActivationMapping ReLU6 that names the same curve.
+                low, high = layer.act_bounds
+                self.act = lambda t, low=low, high=high: torch.clamp(t, low, high)
             if layer.has_act and self.act is None:
                 raise NotImplementedError(f"Activation {layer.act_op} is not transcribed")
 
