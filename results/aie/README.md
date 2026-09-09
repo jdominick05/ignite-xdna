@@ -235,6 +235,22 @@ pair into one bank. Charging it narrows the int8 GEMM's unexplained residual fro
 floor with local `main`'s measured 747.75 µs NPU context-switch penalty. Written up in
 [`docs/BENCHMARKS.md`](../../docs/BENCHMARKS.md#two-loads-in-one-bank-cost-a-cycle-and-the-int8-gemm-has-that-collision-where-bf16-does-not).
 
+**`context_ceiling_crosscheck.log`** — a contradiction between this directory and the Windows
+driver work on the unmerged local `main`, reported rather than resolved. That work finds an
+exact five-context ceiling in `amdxe.sys` (contexts 1-5 allocate, the sixth is rejected with
+NTSTATUS `0xc01e0009`) and annotates it as matching Phoenix's five physical columns. The
+measurements do not conflict; the causal reading does. `multi_partition_yolov8n_5col.log`
+already ran five processes against the per-column `1x4.xclbin` and the partition set **stays
+at four**, on columns 1-4 — the fifth process gets none. The context benchmark loaded
+`4x4.xclbin`, which occupies all four columns as *one* partition, so five contexts each
+wanting a four-column overlay is twenty column-occupancies on a device that exposes four:
+the ceiling cannot be one-context-per-column. Its own +747.75 us switch penalty is the
+signature of time-slicing one partition, where two contexts on separate columns would run
+concurrently as `1x4.xclbin` measurably does at 3.65x. Also notes that the penalty is better
+supported by the minima (61.10 us against 467.90 us, 7.7x) than by the overlapping means. The
+deciding run is the same benchmark against `1x4.xclbin`. Written up in
+[`docs/BENCHMARKS.md`](../../docs/BENCHMARKS.md#two-loads-in-one-bank-cost-a-cycle-and-the-int8-gemm-has-that-collision-where-bf16-does-not).
+
 **`pmode_clock_readback_npu.log`** — XRT's `max_clock_frequency_mhz` against power mode
 *and* load, varied together: a 2048³ bf16 GEMM hold with `xrt-smi configure --pmode`
 stepped through all five modes, then the same five idle, the monitor logging clock, mode

@@ -1428,6 +1428,36 @@ containing 65,536 kernel calls, so those are paid once over 7,458 µs and cannot
 residual. That eliminates the host and the driver, and leaves on-chip data movement — which is
 what H9 predicts and what a stream-port trace would confirm.
 
+**A contradiction to report, not resolve.** The same driver log finds an exact five-context
+ceiling in `amdxe.sys` — contexts 1–5 allocate, the sixth is rejected with NTSTATUS
+`0xc01e0009` — and annotates it as "exactly matches physical Phoenix silicon column count (5
+columns)". **That reading conflicts with a measurement this repo already holds.** The
+measurements themselves do not conflict; only the causal claim does. Backing log
+`results/aie/context_ceiling_crosscheck.log`.
+
+- `results/multi_partition_yolov8n_5col.log` ran N processes against the per-column
+  `1x4.xclbin` and recorded the partitions actually handed out. At N=5 the set **stays at
+  four**, on columns 1–4. The fifth process gets no fifth partition. This is already in §1.1 of
+  `docs/SILICON.md` as "Columns any path on this machine can drive: 4".
+- The context benchmark loaded **`4x4.xclbin`**, which this repo has measured as occupying all
+  four columns as *one* partition. Five contexts each wanting a four-column overlay is twenty
+  column-occupancies on a device that exposes four. They cannot be one-per-column, so the
+  ceiling of five cannot be a column count. It is a driver context-table limit.
+- The benchmark's own second half agrees. Two contexts on separate columns would run
+  concurrently — which is what `1x4.xclbin` measurably does, scaling to 3.65×. Instead
+  alternating between two contexts costs +747.75 µs, and a large switch penalty is the
+  signature of time-slicing one partition. The driver work's own conclusion, that multi-stream
+  execution needs physical column isolation, is the right reading of its own data.
+
+Worth adding in the other direction: that penalty is better supported than its headline 7.22×
+suggests. The mean ratio is taken over overlapping distributions — the same-context *maximum*,
+881.50 µs, exceeds the cross-context *mean* of 867.99 µs — but the minima separate cleanly at
+61.10 µs against 467.90 µs, a factor of 7.7, and a minimum is the right statistic for a floor.
+**The deciding run** is the same context-scaling benchmark against `1x4.xclbin`: a ceiling
+still at five makes it a driver context-table limit outright, a ceiling at four makes it track
+partitions. Neither outcome makes it five columns, and A1 in `docs/SILICON.md` — reach the
+fifth column — stays open either way.
+
 **What this does not show.** Nothing here was measured on hardware by this run; the cycle costs,
 panel slopes and driver floors are quoted from logs on two unmerged branches. The collision is
 a hazard, not a measured cost, for these two kernels — the tool does not resolve which buffers

@@ -1,0 +1,115 @@
+A five-context driver ceiling is not evidence of five usable columns
+2026-09-09. Desktop 2 (Phoenix, Ryzen 7 8700G). NO HARDWARE WAS USED by this run and no
+context was taken; it compares two logs that already exist and does arithmetic.
+
+WHY. Local branch `main` carries a Windows driver characterisation whose context-scaling
+section reports an exact five-context ceiling and annotates it as matching Phoenix's five
+physical columns. That inference conflicts with a measurement this repo already holds. The
+underlying MEASUREMENTS do not conflict; the causal reading does. Under this repo's rules a
+cross-source contradiction gets reported, not resolved unilaterally, so this log states both
+sides, shows why the reading does not follow, and names the run that would settle it.
+
+Commands (from the repo root; the second needs the unmerged local branch present):
+  grep -iE 'partitions during window' results/multi_partition_yolov8n_5col.log
+  git show main:results/aie/windows_context_switch_bench.log
+
+--------------------------------------------------------------------------------
+1. WHAT THIS REPO ALREADY MEASURED: FOUR COLUMNS, NEVER FIVE
+--------------------------------------------------------------------------------
+results/multi_partition_yolov8n_5col.log ran N independent processes against `1x4.xclbin`,
+the per-column overlay, and recorded which partitions the driver actually handed out:
+
+  === 1 independent process(es), separate partitions if the overlay allows it ===
+    partitions during window: [('0', ['1'])]
+  === 2 independent process(es), separate partitions if the overlay allows it ===
+    partitions during window: [('0', ['1']), ('1', ['2'])]
+  === 3 independent process(es), separate partitions if the overlay allows it ===
+    partitions during window: [('0', ['1']), ('1', ['2']), ('2', ['3'])]
+  === 4 independent process(es), separate partitions if the overlay allows it ===
+    partitions during window: [('0', ['1']), ('1', ['2']), ('2', ['3']), ('3', ['4'])]
+  === 5 independent process(es), separate partitions if the overlay allows it ===
+    partitions during window: [('0', ['1']), ('1', ['2']), ('2', ['3']), ('3', ['4'])]
+
+The fifth process gets NO fifth partition: the set stays at four, on columns 1-4. That is
+already written into docs/SILICON.md 1.1 as "Columns any path on this machine can drive: 4",
+alongside the separate findings that `4x4.xclbin` always lands on Partition Index 0 spanning
+columns [1,2,3,4], and that mlir-aie v1.4.2 models NPU1 as at most four columns
+(`_MAX_COLS = {"NPU1": 4}`).
+
+--------------------------------------------------------------------------------
+2. WHAT THE DRIVER WORK MEASURED, AND THE ANNOTATION ON IT
+--------------------------------------------------------------------------------
+
+  Loading XCLBIN: fastdepthcachekey\4x4.xclbin
+    Context #1: ALLOCATED in  78.63 ms
+    Context #2: ALLOCATED in   5.78 ms
+    Context #3: ALLOCATED in   5.66 ms
+    Context #4: ALLOCATED in   5.38 ms
+    Context #5: ALLOCATED in   5.72 ms
+  Observation: Exactly matches physical Phoenix silicon column count (5 columns).
+    Released Context #5 from userspace memory.
+    Immediate reallocation of Context #5: SUCCESS (4.98 ms)
+  [3] Hardware Saturation Boundary Check (Context #6):
+    Context #6: REJECTED in   1.71 ms
+    Status Code: 0xc01e0009 (Hardware resource exhaustion / 5-column capacity exceeded)
+    Same-Context Dispatch (Baseline):
+      Min:      61.10 us
+      Max:     881.50 us
+    Cross-Context Alternating Dispatch:
+      Min:     467.90 us
+      Max:     933.50 us
+    Measured Context-Switch Overhead Penalty:  747.75 us (0.748 ms)
+    - Context #1 Base Setup Floor:    77.68 ms
+    - Context #2-5 Warm Alloc Floor:   5.40 ms (14.4x faster)
+    - Driver Context-Switch Penalty:   747.75 us (~0.75 ms)
+
+--------------------------------------------------------------------------------
+3. WHY THE FIVE-COLUMN READING DOES NOT FOLLOW
+--------------------------------------------------------------------------------
+The benchmark loaded `4x4.xclbin`. This repo has measured that this overlay occupies all four
+columns as ONE partition. So each of those five contexts wants a four-column partition, on a
+device that hands out four columns in total. Five contexts times a four-column overlay is
+twenty column-occupancies on a machine that exposes four. They cannot be one-per-column, and
+the ceiling of five therefore cannot be a column count. It is a driver-side context-table
+limit, and the fact that it happens to equal the physical column count is a coincidence of two
+small integers.
+
+The benchmark's own second half says the same thing. If two contexts each held their own
+column they would run concurrently, which is exactly what this repo measured `1x4.xclbin`
+doing when it scaled to 3.65x across per-column partitions. Instead, alternating dispatches
+between two contexts costs an extra 747.75 microseconds against the same-context baseline.
+A large switch penalty is the signature of TIME-SLICING one partition, not of two partitions
+running side by side. The driver work's own conclusion -- that multi-stream execution needs
+physical column isolation via `1x4.xclbin` -- is the correct reading of its own data and
+agrees with this repo. Only the sentence identifying five contexts with five columns does not.
+
+A NOTE THAT STRENGTHENS THE PENALTY ITSELF. The 7.22x figure is a ratio of means over noisy
+samples, and the distributions overlap: the same-context maximum, 881.50 us, is above the
+cross-context mean of 867.99 us. The minima separate far more cleanly -- 61.10 us against
+467.90 us, a factor of 7.7 -- and a minimum is the right statistic for a floor. The penalty is
+real and if anything better supported by the minima than by the means.
+
+--------------------------------------------------------------------------------
+4. THE RUN THAT WOULD SETTLE IT
+--------------------------------------------------------------------------------
+Repeat the context-scaling benchmark against `1x4.xclbin` instead of `4x4.xclbin`.
+
+  - If the ceiling is still five, it is a driver context-table limit independent of how many
+    columns a context occupies, and the column coincidence is closed.
+  - If it becomes four, the ceiling tracks PARTITIONS, which matches
+    results/multi_partition_yolov8n_5col.log exactly and still does not make it five columns.
+
+Either outcome removes the ambiguity. Neither requires new tooling: the benchmark already
+takes the overlay path.
+
+--------------------------------------------------------------------------------
+WHAT THIS DOES NOT SHOW
+--------------------------------------------------------------------------------
+- Nothing here was measured. Both sides are quoted from existing logs, one of them on a branch
+  that is not merged into this one, so that quote is reproducible only while local `main`
+  exists at that commit.
+- This does not dispute the context-switch penalty, the five-context ceiling itself, the
+  NTSTATUS code, or the warm-versus-cold allocation floors. Those are measurements and they
+  stand. Only the sentence reading the ceiling as five columns is disputed.
+- It also does not establish what the fifth physical column IS for. This repo has never driven
+  it by any path, and objective A1 in docs/SILICON.md is still open.
