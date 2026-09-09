@@ -902,6 +902,15 @@ caches.
     are **lower bounds** — this is a no-compute passthrough, and a multi-core kernel's own
     configuration cost lands inside the hardware bracket and pushes its floor above 169.8 µs.
     One design, one data point: a floor, not a universal constant.
+  - **SUPERSEDED 2026-09-09 for batchable work: ~36 µs.** The "hypothetical zero-overhead
+    resubmit path" above was measured. Batched `pyxrt.runlist` submission amortises the same
+    passthrough to **36.3 µs** per dispatch, 17× below the IRON figure and a quarter of the
+    169.8 µs hardware bracket — so that bracket is not irreducible silicon cost either.
+    Reproduced at 35.9 / 36.3 / 36.0 / 36.3 µs across four runs
+    (`results/aie/dispatch_runlist_npu.log`). **It is a throughput figure**: it holds with 64
+    dispatches in flight, while one unbatched call still costs ~140 µs raw or 617 µs through
+    IRON, and N=1 through a runlist is slightly *slower* than a raw single dispatch. The old
+    rule governs one-shot latency-critical work; ~36 µs governs anything batchable.
   - **REPRODUCED on an independent design the same day.** `ml/resnet/layers_conv2_x` (a
     3-block int8 CNN with real weights, nothing like a passthrough) reports both brackets
     from its own harness: end-to-end 2497.8 µs − hardware 1869.6 µs = **628.2 µs** of
@@ -918,6 +927,16 @@ caches.
     **Nothing has been run** — this is an API-existence check and the next measurement to
     make, not a result. It does not rescue attention (see above), but it would move the
     go/no-go threshold for every future kernel.
+    **RUN 2026-09-09, and both guesses in this paragraph were right.** Batching amortises a
+    dispatch to **36.3 µs**, 17× below the IRON floor; and part of the 169.8 µs did amortize —
+    the batched figure is a quarter of it. It still does not rescue attention stages 3 and 4
+    (34 µs and 12 µs of CPU time, both under the new floor), but stage 2 at 240 µs now clears
+    it 6.7×. `results/aie/dispatch_runlist_npu.log`. Getting there needed two fixes to
+    `kernels/dispatch_floor/measure_runlist.py`, both of which had produced a *wrong answer*
+    rather than an error: `kernel(...)` creates and **starts** a run, so runlist entries must
+    be built with `pyxrt.run(kernel)` + `set_arg` instead; and the cache resolver looked for
+    `*.txt` when the instruction stream is `insts.bin`, and took the newest xclbin in the
+    cache rather than one belonging to this design.
 - **Chained int8 CNN vs CPU — measured before building anything (2026-09-07).**
   `ml/resnet/layers_conv2_x` (3 ResNet bottlenecks chained core-to-core across 3 columns,
   int8, ObjectFifo→ObjectFifo, **one dispatch for the chain**) had run and PASSed here since
