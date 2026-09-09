@@ -1347,6 +1347,96 @@ target the two labels in order; the branch targets are unresolved relocations in
 and were not read directly, so the trip-count reconciliation is the evidence. One power mode,
 one dtype, one design.
 
+### Two loads in one bank cost a cycle, and the int8 GEMM has that collision where bf16 does not
+
+An AIE2 core tile has 64 KB of local data memory in four banks of 16 KB, and **two load
+units**, so a bundle can issue two loads in one cycle. When both address the same bank the
+pair costs one extra cycle. That price is measured, not assumed: a controlled experiment on
+branch `research/windows-lowlevel` holds the compiled function bytes identical and changes only
+the operand addresses, fitting a length sweep at r² 1.0.
+
+| Case | Core cycles per iteration |
+|---|---|
+| Two loads, same bank | **12.0** |
+| Two loads, separate banks | **11.0** |
+| One load, same bank | 11.0 |
+| Same bank, operand offset 64 / 128 / 256 B | 12.0 / 12.0 / 12.0 |
+
+The second load is free across banks and costs exactly one cycle inside one, and the
+granularity is the bank rather than the address. The same branch carries it into a single-core
+tiled GEMM at this section's own 64×64×64 panel geometry: **15,232 cycles per panel with the
+operands in one bank against 14,208 separated**, a 1,024-cycle difference which is one cycle
+for each of that kernel's 1,024 inner iterations. Those logs are not merged here, so they are
+named rather than linked; backing log for the survey below is
+`results/aie/bank_conflict_survey.log`.
+
+**A correction to this repo's own issue-width row falls out first.** The six VLIW slots were
+named "`b` branch, `a` load, `s` store, `x` scalar, `m` move, `v` vector" from the nop
+mnemonics alone. Tabulating every operation in each slot of 226 *strictly six-field* bundles —
+the only encoding whose slot identity is unambiguous — puts `vldb` and `paddb` in slot b,
+`vlda`/`lda`/`mova` in slot a, and `ret` in the scalar slot. **Slot b is the second load unit,
+not the branch slot.** That is not a footnote: it is the reason a bank conflict can happen.
+
+`tools/aie_bank_check.py` reads the allocated buffer addresses out of a core ELF's symbol
+table — they are absent from the cached `aie.mlir`, which is pre-allocation — assigns each to
+a bank, and counts the bundles that issue two loads:
+
+| Build | C | A | B | Empty | Paired loads in the loop | Verdict |
+|---|---|---|---|---|---|---|
+| int8 GEMM, 4607.05 GOPS | banks 0, 1 | **bank 2** | **bank 2** | bank 3 | 1 of 9 bundles | **hazard** |
+| bf16 GEMM, the repo's NPU win | bank 0 | bank 1 | bank 2 | bank 3 | 1 of 32 bundles | clean |
+
+**The reason is inverted from what you would guess.** int8's operand tiles are half the size of
+bf16's, so the pair fits inside one 16 KB bank and the allocator packs them there, while bf16's
+larger tiles are forced apart. The int8 kernel is penalised *because* its data is smaller. The
+exposure is worse than the count suggests, too: both kernels have exactly one paired-load bundle
+in their steady-state loop, but that is 3.1% of the bf16 loop's 32 bundles and 11.1% of the
+int8 loop's 9.
+
+**What it does to the cost model.** Charging the loop's paired load raises the int8 GEMM's
+issuing cost per call from 2,442 to 2,538 cycles and its issuing fraction from 74.6% to 77.5%;
+charging every paired-load bundle in the function, an upper bound since this tool does not
+resolve which buffers the ones outside the loop read, gives 2,682 and 81.9%. So the residual
+this document has been calling starvation narrows from 25.4% to between 18% and 23%.
+
+**And the fix is free, which makes it a controlled experiment.** Bank 3 is empty in both builds.
+Moving one input tile into it changes the core's issuing time by a known amount and changes
+nothing about data movement: same bytes, same DMA, same fifo depth, same function bytes.
+
+- **H12.** Placing A and B in different banks on the `whole_array` int8 design will **not**
+  change the measured NPU time, because the core is not the critical path and the per-buffer
+  floor is. Fails if the dispatch speeds up by anything like the ~4% the issuing-cost change
+  predicts, which would mean the design is issue-bound after all. Both outcomes are
+  informative, and it costs one rebuild and one dispatch.
+
+**A tempting join with the driver work, tested and refuted.** Local `main` measures an NPU
+hardware-context-switch penalty of **+747.75 µs** (same-context dispatch 120.25 µs, alternating
+across two contexts 867.99 µs, a 7.22× slowdown) and an exact five-context ceiling in
+`amdxe.sys` matching Phoenix's five columns. This repo's largest unexplained blocker is the
+two-process handoff floor that erased all 33 bf16 GroupNorm node wins, whose smallest shape is
+**789.8 µs**. The two numbers are close enough to be worth testing, and the test refutes it:
+fitting that log's whole table against element count gives a slope of 78.4 ns per element, an
+intercept of **147.2 µs**, and r² 0.9997. The floor is 99.97% a per-element cost, its fixed
+component is a fifth of the context-switch penalty, and the agreement at the smallest shape is
+a coincidence of one row. The original diagnosis stands — the floor is conversion-bound, bf16
+pack and unpack being ~90% of the round trip at the largest shape. **Do not write that the
+handoff floor is the context switch.**
+
+What the driver work *does* settle here: its userspace dispatch-preparation floor is 8.76 µs
+and its hardware runlist batching overhead 3.39 µs per run. The int8 GEMM is **one** dispatch
+containing 65,536 kernel calls, so those are paid once over 7,458 µs and cannot be the per-call
+residual. That eliminates the host and the driver, and leaves on-chip data movement — which is
+what H9 predicts and what a stream-port trace would confirm.
+
+**What this does not show.** Nothing here was measured on hardware by this run; the cycle costs,
+panel slopes and driver floors are quoted from logs on two unmerged branches. The collision is
+a hazard, not a measured cost, for these two kernels — the tool does not resolve which buffers
+a given paired load reads, so it is certain only inside the hardware loop where the operands are
+the `mmul` tiles. Whether the penalty composes linearly for several paired loads per iteration
+is untested. The bank map is read from the first of 16 core ELFs and allocation is per core. The
+conv kernels have no surviving build cache, so this repo's most-lost op class was **not**
+surveyed.
+
 ### MobileViT-XXS does not survive per-tensor INT8, and AdaRound cannot save it
 
 The accuracy question the attention work deferred, now measured on the full 1000-image

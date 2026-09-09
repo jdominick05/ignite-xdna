@@ -38,6 +38,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 import sys
 
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -121,6 +122,7 @@ def analyse_kernel(section, op: str):
     inner_latch, outer_latch = latches[0], latches[1]
 
     in_loop = count_op(hot.bundles, op)
+    loop_lo = next(i for i, b in enumerate(bundles) if b.addr == hot.start)
     return {
         "loop": hot,
         "loop_bundles": hot.n_bundles,
@@ -132,7 +134,27 @@ def analyse_kernel(section, op: str):
         "inner_body": (inner_latch + 1 - inner_head) - hot.n_bundles,
         "outer_tail": outer_latch - inner_latch,
         "epilogue": len(bundles) - 1 - outer_latch,
+        # Bundles issuing two loads at once, one per memory port. Each costs an extra
+        # cycle when both loads address the same 16 KB bank -- see tools/aie_bank_check.py
+        # and results/aie/memory_desktop2_20260909_*.log for the measurement.
+        "paired_loop": len(paired_loads(hot.bundles)),
+        "paired_inner": (len(paired_loads(bundles[inner_head:inner_latch + 1]))
+                         - len(paired_loads(hot.bundles))),
     }
+
+
+PORT_A = re.compile(r"^v?lda\b|^v?lda\.")
+PORT_B = re.compile(r"^v?ldb\b|^v?ldb\.")
+
+
+def paired_loads(bundles) -> list:
+    """Bundles issuing a load on each of the two memory ports in one cycle."""
+    out = []
+    for b in bundles:
+        ops = [f.split()[0] for f in b.live]
+        if any(PORT_A.match(o) for o in ops) and any(PORT_B.match(o) for o in ops):
+            out.append(b)
+    return out
 
 
 def main(argv=None) -> int:
@@ -151,6 +173,9 @@ def main(argv=None) -> int:
     ap.add_argument("--clock-ghz", type=float, default=CLOCK_GHZ)
     ap.add_argument("--fifos", type=int, default=2,
                     help="input ObjectFifos acquired and released per call")
+    ap.add_argument("--bank-collision", choices=("none", "loop", "all"), default="none",
+                    help="charge one cycle per paired-load bundle, because both its "
+                         "loads hit the same 16 KB bank; check with tools/aie_bank_check.py")
     ap.add_argument("--acc-grid", type=pair, default=(4, 2), metavar="rows,cols",
                     help="how the live accumulators tile the output block; read off the "
                          "loop bounds in the object (default 4,2 for mm.cc int8)")
@@ -197,7 +222,16 @@ def main(argv=None) -> int:
         raise SystemExit(f"--acc-grid does not reproduce the {groups} groups the vmac "
                          f"count requires; check the disassembly")
 
-    inner_cycles = a["inner_body"] + hw_trips * a["loop_bundles"]
+    # Bank-collision penalty. A bundle issuing two loads costs one extra cycle when
+    # both address the same 16 KB bank. --bank-collision loop charges only the paired
+    # loads inside the hardware loop, whose operands are the mmul tiles and so are
+    # known; all also charges the ones in the surrounding body, whose pointers this
+    # tool does not resolve, making that an upper bound rather than a figure.
+    pen_loop = a["paired_loop"] if args.bank_collision in ("loop", "all") else 0
+    pen_inner = a["paired_inner"] if args.bank_collision == "all" else 0
+
+    inner_cycles = (a["inner_body"] + pen_inner
+                    + hw_trips * (a["loop_bundles"] + pen_loop))
     call_cycles = (a["entry"] + a["epilogue"]
                    + outer_passes * (a["outer_header"] + a["outer_tail"])
                    + groups * inner_cycles)
@@ -224,6 +258,10 @@ def main(argv=None) -> int:
           f"{groups // outer_passes} inner)")
     print(f"  cycles per inner body  {inner_cycles:>7}  for {ops_per_group} vmac -> "
           f"{100 * ops_per_group / inner_cycles:.1f}% of one vmac per cycle")
+    print(f"  paired-load bundles    {a['paired_loop']:>7} in the hardware loop, "
+          f"{a['paired_inner']} in the body around it")
+    print(f"  bank collision charged {args.bank_collision:>7}  -> "
+          f"+{pen_loop} cycles/loop-iteration, +{pen_inner} cycles/group")
     print()
 
     zcycles = 0.0

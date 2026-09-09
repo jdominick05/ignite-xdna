@@ -13,8 +13,16 @@ disassembles to 9 bundles; the vector loop measures 2.000 and disassembles to 2.
 
 Slots. A full-width bundle is 16 bytes and prints its slots separated by ';'. The nop
 mnemonics name them -- nopb, nopa, nops, nopx, nopm, nopv -- so there are six slots:
-b branch, a load, s store, x scalar, m move, v vector. `nopxm` is the fused encoding
-printed when both x and m are empty, so a 5-field bundle still occupies six slots.
+b and a are the TWO LOAD UNITS, s store, x scalar, m move, v vector. Read off 226
+strictly six-field bundles across the build caches: slot b holds nopb/paddb/vldb, slot
+a holds nopa/mova/vlda/lda, slot s holds nops/vst/st, slot x holds the scalar ALU and
+control flow (add, lshl, or, event, ret), slot m holds mov/add.nc/vbcst/vshuffle, and
+slot v holds the vector MAC. An earlier version of this file called slot b "branch",
+which is wrong: it is the second load unit, `vldb` issues in it, and `ret` issues in
+the scalar slot. That distinction is the whole reason a bank conflict is possible --
+a bundle naming both a and b issues two loads in one cycle. `nopxm` is the fused
+encoding printed when both x and m are empty, so a 5-field bundle still occupies six
+slots.
 Bundles using few slots are emitted in a compressed encoding shorter than 16 bytes;
 they still issue in one cycle, so cycles are counted by bundle, never by byte.
 

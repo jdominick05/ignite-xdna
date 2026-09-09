@@ -1757,6 +1757,26 @@ sections above.
   `kernels/pmu_probe/`'s core-stream reader cannot yet decode. **An earlier reading of this,
   superseded the same day, modelled the kernel as one loop and reported the core as starved for
   60% of the dispatch with 2.4× of headroom; both were artefacts of missing the nest.**
+- **A same-bank paired load costs a cycle, and the int8 GEMM has that collision where the bf16
+  GEMM does not.** A core tile's 64 KB of local memory is four banks of 16 KB, and the core has
+  **two load units**, so a bundle can issue two loads at once; when both hit one bank the pair
+  costs an extra cycle. That is measured on the `research/windows-lowlevel` branch by holding
+  the compiled function bytes identical and moving only the operand addresses — 12.0 cycles per
+  iteration in one bank against 11.0 across two, r² 1.0, and 1,024 cycles per 64×64×64 panel in
+  a real GEMM. Surveying this branch's own builds finds the production int8 GEMM with **both
+  input tiles in bank 2 and bank 3 empty**, and the bf16 GEMM — this repo's one genuine NPU
+  win — with its inputs correctly split. The reason is inverted from the obvious one: int8's
+  tiles are half the size, so the allocator packs the pair into a single bank. The int8 kernel
+  is penalised *because* its data is smaller, and its 9-bundle loop is far more exposed than
+  bf16's 32-bundle one. Charging it narrows the GEMM's unexplained residual from 25.4% to
+  18–23%. **This also corrects our own issue-width row:** slot `b` is the second load unit, not
+  the branch slot, which is the whole reason the conflict exists. Open, and cheap, and the
+  reason this matters beyond one kernel: bank 3 is empty in both builds, so moving an input
+  there changes the core's issuing time by a known amount and changes *nothing* about data
+  movement — the controlled lever needed to test whether the per-buffer floor or the schedule
+  is the critical path. Also tested and refuted here: the two-process handoff floor is **not**
+  the NPU context switch, despite 789.8 µs sitting near a measured 747.75 µs penalty; the floor
+  fits 78.4 ns per element with a 147.2 µs intercept at r² 0.9997 and stays conversion-bound.
 - **Candidate model pipelines (Categories A, C, D, E).** Test plans, target shapes, and falsification criteria:
   - **Category A:** Image Super-Resolution — SESR-M7 (placement, 1.48 ms latency, 3.02x iGPU win,
     70% AdaRound recovery) and Real-ESRGAN Compact (activation memory spill) closed above.

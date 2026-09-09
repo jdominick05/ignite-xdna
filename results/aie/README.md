@@ -74,6 +74,14 @@ Read these before quoting anything below.
   becomes **25.4%**, and the dominant cost moves from data delivery to accumulator spill
   traffic inside the core. The measured per-buffer floor (3,274 vs 3,160 cycles per call for
   2× the work) is a measurement and is unaffected.
+- **`aie2_isa_static.log`'s VLIW slot naming is corrected** by `bank_conflict_survey.log`.
+  It read the six slots off the nop mnemonics and called them "`b` branch, `a` load, `s`
+  store, `x` scalar, `m` move, `v` vector". Slot **b is the second load unit, not the branch
+  slot**: tabulating every operation in each slot of 226 *strictly six-field* bundles — the
+  only encoding whose slot identity is unambiguous — puts `vldb` and `paddb` in b, `vlda`/
+  `lda`/`mova` in a, and `ret` in the scalar slot x. The slot **count** of six and every
+  cycle figure derived from bundle counts are unaffected. The correction matters because two
+  load units are what make a same-bank paired load, and its extra cycle, possible at all.
 
 ## Toolchain bring-up
 
@@ -210,6 +218,22 @@ is the per-buffer floor: ~3,200 measured cycles per call whatever the tile, whic
 trace probe's 717 cycles per buffer to a different kernel, which would predict 117.5% of the
 measured time. Written up in
 [`docs/BENCHMARKS.md`](../../docs/BENCHMARKS.md#the-int8-gemm-issues-at-40-of-nameplate-and-a-3200-cycle-per-buffer-floor-caps-it).
+
+**`bank_conflict_survey.log`** — a fourth exception to "a loop's bundle count is its cycle
+count", and a correction to how this directory names the VLIW slots. A core tile's 64 KB is
+four banks of 16 KB and the core has **two load units**, so a bundle can issue two loads at
+once; when both address one bank the pair costs an extra cycle. That price is measured on
+branch `research/windows-lowlevel` (`memory_desktop2_20260909_m01_*.log`, not merged here) by
+holding the compiled function bytes identical and moving only the operand addresses: **12.0**
+cycles per iteration in one bank against **11.0** across two, r² 1.0, and **1,024** cycles per
+64×64×64 panel in a real GEMM. `tools/aie_bank_check.py` reads the allocated addresses out of
+a core ELF — they are absent from the pre-allocation `aie.mlir` — and finds the production int8
+GEMM with **both input tiles in bank 2 and bank 3 empty**, against the bf16 GEMM with its
+inputs correctly split. int8 loses because its tiles are *smaller* and the allocator packs the
+pair into one bank. Charging it narrows the int8 GEMM's unexplained residual from 25.4% to
+18–23%. Also refutes, with a fit, the tempting equation of the 789.8 µs two-process handoff
+floor with local `main`'s measured 747.75 µs NPU context-switch penalty. Written up in
+[`docs/BENCHMARKS.md`](../../docs/BENCHMARKS.md#two-loads-in-one-bank-cost-a-cycle-and-the-int8-gemm-has-that-collision-where-bf16-does-not).
 
 **`pmode_clock_readback_npu.log`** — XRT's `max_clock_frequency_mhz` against power mode
 *and* load, varied together: a 2048³ bf16 GEMM hold with `xrt-smi configure --pmode`
