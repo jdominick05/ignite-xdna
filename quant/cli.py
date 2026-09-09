@@ -29,6 +29,10 @@ def main(argv=None):
     commands = parser.add_subparsers(dest="command", required=True)
     inspect = commands.add_parser("inspect", help="Print a static fingerprint of any ONNX file; does not run a model")
     inspect.add_argument("models", type=Path, nargs="+")
+    check_shift = commands.add_parser("check-shift-cut", help="Audit ONNX QDQ models against AIE-ML systolic shift-cut bounds [0, 31]")
+    check_shift.add_argument("models", type=Path, nargs="+", help="Quantized ONNX model paths to audit")
+    check_shift.add_argument("--repair", type=Path, default=None,
+                             help="Optional output path to project and repair violating scales into the feasible basin")
     emit = commands.add_parser("quantize", help="Calibrate and emit XINT8 QDQ for folded ResNet, head-cut YOLOv8 or MODNet")
     emit.add_argument("--in-model", type=Path, default=Path("models/resnet50_fp32.onnx"),
                       help="Float export; the family (folded ResNet, head-cut YOLO or MODNet) is read from its operators")
@@ -81,6 +85,19 @@ def main(argv=None):
                 print(json.dumps({"producer": "Ignition", "version": __version__,
                                   "method": "Static inspection; contract violations reported, not enforced; no EP acceptance verdict",
                                   "models": reports}, indent=2))
+                return
+            if args.command == "check-shift-cut":
+                from .shift_cut import analyze_model_shift_cut, print_shift_cut_report, repair_model_shift_cut
+                for path in args.models:
+                    hazards = analyze_model_shift_cut(str(path))
+                    print_shift_cut_report(str(path), hazards)
+                    if args.repair:
+                        if len(args.models) > 1:
+                            parser.error("--repair can only be used with a single input model")
+                        _, count, repairs = repair_model_shift_cut(str(path), str(args.repair))
+                        print(f"\nRepaired {count} scale hazard(s) -> saved to {args.repair}")
+                        for r in repairs:
+                            print(f"  - {r['node']} ({r['op_type']}): orig sigma={r['orig_sigma']} -> repaired sigma={r['repaired_sigma']}")
                 return
             if args.command == "adaround":
                 from .adaround import FastFinetuneConfig, finetune

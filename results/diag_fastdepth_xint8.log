@@ -1,0 +1,24 @@
+
+=== C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\fastdepthcachekey\vitisai_ep_report.json ===
+  all            nodeNum=  257  opTypes=7
+  NPU            nodeNum=  255  opTypes=7
+  VITIS_EP_CPU   nodeNum=    2  opTypes=2
+
+  per-node device counts: {'CPU': 2, 'NPU': 255}
+
+  255 nodes on the NPU, 2 elsewhere.
+
+  op type x device:
+    CPU           DequantizeLinear     1
+    CPU           QuantizeLinear       1
+    NPU           Add                  3
+    NPU           Clip                 27
+    NPU           Conv                 38
+    NPU           DequantizeLinear     125
+    NPU           QuantizeLinear       46
+    NPU           Relu                 11
+    NPU           Resize               5
+
+  2 nodes NOT on the NPU (first 25):
+    CPU           QuantizeLinear       ['image_QuantizeLinear_Output']
+    CPU           DequantizeLinear     ['depth']

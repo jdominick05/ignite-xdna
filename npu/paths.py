@@ -55,6 +55,11 @@ SESR_CACHE_KEY = "sesrcachekey"
 SESR_ADAROUND_CACHE_KEY = "sesradaroundcachekey"
 # RegNetX regular channel capacity classification.
 REGNETX_CACHE_KEY = "regnetxcachekey"
+# FastDepth monocular depth estimation: depthwise separable conv decoder.
+FASTDEPTH_CACHE_KEY = "fastdepthcachekey"
+# BiSeNetV2 bilateral semantic segmentation.
+BISENETV2_CACHE_KEY = "bisenetv2cachekey"
+BISENETV2_BILINEAR_CACHE_KEY = "bisenetv2bilinearcache"
 
 
 def modnet_cache_key(model_path):

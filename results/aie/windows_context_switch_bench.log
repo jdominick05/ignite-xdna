@@ -1,0 +1,48 @@
+﻿================================================================================
+XDNA1 Windows Driver (amdxe.sys) Context Scaling & Switch Benchmark
+Python: C:\Users\<user>\mlir-aie\ironenv\Scripts\python.exe (3.13.15)
+Driver: amdxe.sys (WDDM ComputeAccelerator)
+================================================================================
+Loading XCLBIN: fastdepthcachekey\4x4.xclbin
+
+[1] Hardware Context Capacity & Allocation Scaling (Up to physical limit):
+  Context #1: ALLOCATED in  78.63 ms
+  Context #2: ALLOCATED in   5.78 ms
+  Context #3: ALLOCATED in   5.66 ms
+  Context #4: ALLOCATED in   5.38 ms
+  Context #5: ALLOCATED in   5.72 ms
+
+Physical Context Saturation Reached: 5 active hardware contexts
+Observation: Exactly matches physical Phoenix silicon column count (5 columns).
+
+[2] Driver Context Slot Recycling Test:
+  Released Context #5 from userspace memory.
+  Immediate reallocation of Context #5: SUCCESS (4.98 ms)
+
+[3] Hardware Saturation Boundary Check (Context #6):
+  Context #6: REJECTED in   1.71 ms
+  Driver Exception: RuntimeError: Failed to create context virtual (0xc01e0009): There was an error while creating context
+  Status Code: 0xc01e0009 (Hardware resource exhaustion / 5-column capacity exceeded)
+
+[4] Hardware Context-Switch Latency Benchmark:
+  Runs per configuration: 25
+  Same-Context Dispatch (Baseline):
+    Mean:    120.25 us (stdev: 160.05 us)
+    Min:      61.10 us
+    Max:     881.50 us
+  Cross-Context Alternating Dispatch:
+    Mean:    867.99 us (stdev: 87.91 us)
+    Min:     467.90 us
+    Max:     933.50 us
+  --------------------------------------------------
+  Measured Context-Switch Overhead Penalty:  747.75 us (0.748 ms)
+  Switch Slowdown Factor:                     7.22x
+
+================================================================================
+SUMMARY OF WINDOWS DRIVER CONTEXT CHARACTERIZATION:
+  - Context #1 Base Setup Floor:    77.68 ms
+  - Context #2-5 Warm Alloc Floor:   5.40 ms (14.4x faster)
+  - Maximum Hardware Virtual Slots:  5 (Hardware saturation bound)
+  - Context Saturation NTSTATUS:     0xc01e0009
+  - Driver Context-Switch Penalty:   747.75 us (~0.75 ms)
+================================================================================
