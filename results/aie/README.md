@@ -251,6 +251,26 @@ supported by the minima (61.10 us against 467.90 us, 7.7x) than by the overlappi
 deciding run is the same benchmark against `1x4.xclbin`. Written up in
 [`docs/BENCHMARKS.md`](../../docs/BENCHMARKS.md#two-loads-in-one-bank-cost-a-cycle-and-the-int8-gemm-has-that-collision-where-bf16-does-not).
 
+
+**`bank_check_validation.log`** — `tools/aie_bank_check.py` checked against a penalty that was
+actually measured, on the `research/windows-lowlevel` branch, rather than only asserted. That
+branch left both build caches on disk: one placement with the two operands sharing a bank and
+one without, from a single kernel source whose compiled object hash is identical in both. Given
+nothing but the cache directory and the operand names the tool reproduces the experiment's own
+labels from the ELF alone, finds exactly **one** paired-load bundle in the compute body, and
+the kernel's source fixes the trip count at 16×8×8 = **1,024** MACs per panel. Predicted
+penalty 1 × 1,024 = **1,024** cycles per panel; measured 15,232 − 14,208 = **1,024**. Exact,
+on a kernel this branch did not write. It also confirms the mechanism is *same-bundle* paired
+loads, not two loads merely near each other. **The validation found a bug on its first run:**
+the check looked only inside hardware loops and so reported "no penalty" on that very kernel,
+whose compute lives in a *software* loop — as `mm.cc`'s accumulator-group body does too. The
+check now walks software-loop bodies, and `--operands` makes the verdict about the two buffers
+a paired load really reads instead of "some bank holds two buffers", which over-reports on a
+padding buffer. Re-read, the int8 GEMM's software body carries **ten** paired-load bundles of
+96, locating rather than changing the 240 cycles per call the cost model already charged as its
+upper bound. Written up in
+[`docs/BENCHMARKS.md`](../../docs/BENCHMARKS.md#two-loads-in-one-bank-cost-a-cycle-and-the-int8-gemm-has-that-collision-where-bf16-does-not).
+
 **`pmode_clock_readback_npu.log`** — XRT's `max_clock_frequency_mhz` against power mode
 *and* load, varied together: a 2048³ bf16 GEMM hold with `xrt-smi configure --pmode`
 stepped through all five modes, then the same five idle, the monitor logging clock, mode

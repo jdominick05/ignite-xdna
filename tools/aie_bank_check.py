@@ -113,6 +113,45 @@ def paired_load_bundles(bundles) -> list:
     return out
 
 
+def software_loops(section) -> list[tuple[str, list]]:
+    """Bodies of software loops: nearest preceding label through a backward branch.
+
+    Checking only hardware loops is not enough and gets the answer wrong. The GEMM in
+    `kernels/memory_placement/` keeps its compute in a *software* loop -- its only
+    hardware loop is the trace-flush loop -- so a hardware-loop-only check reports no
+    paired load and concludes there is no penalty, on the very kernel whose measured
+    penalty is 1,024 cycles per panel.
+    """
+    bundles = section.bundles
+    # A software loop's head is the nearest preceding label that does NOT belong to a
+    # hardware loop. Without that exclusion, a nest resolves to the hardware loop's own
+    # head or its `.L_LEnd` label and the body comes out far too short.
+    inner = set()
+    for lp in ad.find_loops(section):
+        for i, b in enumerate(bundles):
+            if lp.start <= b.addr <= lp.end:
+                inner.add(i)
+    label_at = [i for i, b in enumerate(bundles) if b.label and i not in inner]
+    bodies = []
+    for i, b in enumerate(bundles):
+        if not any(f.split()[0].startswith("jnz") for f in b.live):
+            continue
+        prior = [j for j in label_at if j <= i]
+        if not prior:
+            continue
+        start = prior[-1]
+        bodies.append((start, i))
+    # Branch TARGETS are unresolved relocations in an object file, so a latch cannot be
+    # matched to its own head. Two latches of a nest can therefore resolve to the same
+    # nearest label; keep the shortest body per head so nothing is counted twice.
+    shortest: dict[int, int] = {}
+    for start, end in bodies:
+        if start not in shortest or end < shortest[start]:
+            shortest[start] = end
+    return [(bundles[s].label or f"0x{bundles[s].addr:04x}", bundles[s:e + 1])
+            for s, e in sorted(shortest.items())]
+
+
 def report_banks(elf: str) -> dict:
     syms = read_symbols(elf)
     base = own_window(syms)
@@ -140,6 +179,24 @@ def report_banks(elf: str) -> dict:
     return banks
 
 
+def named_operand_banks(banks: dict, names: list[str]) -> dict[str, list[int]]:
+    """Which bank(s) each named operand landed in.
+
+    Without this the check is only "some bank holds two buffers", which over-reports:
+    a padding or reserve buffer sharing a bank with an operand is harmless, because a
+    paired load never reads it. Naming the two buffers a paired load actually reads
+    turns the hazard into a yes-or-no answer.
+    """
+    out: dict[str, list[int]] = {n: [] for n in names}
+    for i, entries in banks.items():
+        for sym, _ in entries:
+            root = re.sub(r"_buff_\d+$", "", sym)
+            for n in names:
+                if root == n or sym == n:
+                    out[n].append(i)
+    return out
+
+
 def operand_collision(banks: dict) -> list[tuple[int, list[str]]]:
     """Banks holding two or more DISTINCT operands.
 
@@ -163,6 +220,9 @@ def main(argv=None) -> int:
     ap.add_argument("--obj", action="append", default=[],
                     help="a kernel object to disassemble; repeatable")
     ap.add_argument("--kernel", help="only report this function")
+    ap.add_argument("--operands", help="comma-separated names of the two buffers a "
+                                       "paired load reads, e.g. operand_a,operand_b; "
+                                       "makes the verdict about those alone")
     ap.add_argument("--objdump", default=None)
     args = ap.parse_args(argv)
 
@@ -194,13 +254,28 @@ def main(argv=None) -> int:
     else:
         for i, roots in hits:
             print(f"  bank {i} holds {len(roots)} distinct buffers: {', '.join(roots)}")
+
+    named = None
+    if args.operands and banks:
+        names = [n.strip() for n in args.operands.split(",") if n.strip()]
+        placed = named_operand_banks(banks, names)
+        print()
+        print("  the two buffers a paired load actually reads")
+        for n in names:
+            where = placed[n]
+            print(f"    {n:<28} bank {where if where else 'NOT FOUND'}")
+        found = [set(placed[n]) for n in names if placed[n]]
+        named = (len(found) == len(names)
+                 and bool(set.intersection(*found)) if found else None)
+        print(f"    -> {'COLLIDE' if named else 'different banks'}")
     empty = [i for i, e in banks.items() if not e] if banks else []
     if empty:
         print(f"  banks with nothing in them: {empty}")
     print()
 
     print("BUNDLES THAT ISSUE TWO LOADS")
-    total_paired = 0
+    in_loops: set[int] = set()   # addresses, so a hardware loop nested inside a
+                                 # software body is not counted twice
     for obj in objs:
         sections = ad.parse(ad.disassemble(obj, ad.find_objdump(args.objdump)))
         for sec in sections:
@@ -213,24 +288,38 @@ def main(argv=None) -> int:
             print(f"  {sec.name}: {len(pf)} of {len(sec.bundles)} bundles")
             for lp in loops:
                 lpp = paired_load_bundles(lp.bundles)
-                total_paired += len(lpp)
-                mark = "  <-- in the steady-state loop" if lpp else ""
-                print(f"    loop {lp.name}: {len(lpp)} of {lp.n_bundles} bundles{mark}")
+                in_loops.update(b.addr for b in lpp)
+                mark = "  <-- in the hardware loop" if lpp else ""
+                print(f"    hardware loop {lp.name}: {len(lpp)} of "
+                      f"{lp.n_bundles} bundles{mark}")
                 for b in lpp:
+                    print(f"      0x{b.addr:04x}  {' | '.join(b.live)}")
+            for name, body in software_loops(sec):
+                bpp = paired_load_bundles(body)
+                if not bpp:
+                    continue
+                in_loops.update(b.addr for b in bpp)
+                print(f"    software loop {name}: {len(bpp)} of {len(body)} bundles"
+                      f"  <-- one extra cycle per iteration each")
+                for b in bpp:
                     print(f"      0x{b.addr:04x}  {' | '.join(b.live)}")
     print()
 
     print("VERDICT")
-    if hits and total_paired:
-        print(f"  HAZARD. {total_paired} paired-load bundle(s) inside hardware loops, and")
-        print(f"  a bank holds more than one buffer. If a paired load reads two buffers in")
-        print(f"  the same bank it costs one extra cycle per iteration, so a loop's bundle")
-        print(f"  count understates its cycles by that much.")
+    total_paired = len(in_loops)
+    collide = named if named is not None else bool(hits)
+    if collide and total_paired:
+        print(f"  HAZARD. {total_paired} paired-load bundle(s) in loop bodies, hardware and")
+        print(f"  software, and a bank holds more than one buffer. If a paired load reads two")
+        print(f"  buffers in the same bank it costs one extra cycle per iteration, so the")
+        print(f"  loop's bundle count understates its cycles by that much.")
+        print(f"  Predicted penalty = {total_paired} x the iteration count of the loop it is in.")
         if empty:
             print(f"  Bank(s) {empty} are empty, so the collision is avoidable.")
     elif total_paired:
-        print("  Paired loads exist but no bank holds two buffers; no collision to fix.")
-    elif hits:
+        print("  Paired loads exist, but the buffers they read are in different banks;")
+        print("  no collision to fix.")
+    elif collide:
         print("  Buffers share a bank, but no loop issues two loads at once; no penalty.")
     else:
         print("  Neither condition holds.")

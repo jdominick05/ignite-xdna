@@ -1393,6 +1393,38 @@ exposure is worse than the count suggests, too: both kernels have exactly one pa
 in their steady-state loop, but that is 3.1% of the bf16 loop's 32 bundles and 11.1% of the
 int8 loop's 9.
 
+**The check predicts a number someone else measured, exactly.** That branch left both build
+caches on disk — one placement with the operands sharing a bank, one without, from a single
+kernel source whose compiled object hash is identical in both. Given nothing but the cache
+directory and the two operand names, `tools/aie_bank_check.py` reproduces the experiment's own
+labels from the ELF alone: banks 1 and 2 in the build it calls separate, both bank 1 in the
+build it calls same. It finds exactly **one** paired-load bundle in the compute loop's body,
+and the kernel's source fixes the trip count without inference — a 64×(64·panels)×64 int8 GEMM
+over `aie::mmul<4,8,8>` with bounds 16 × 8 × 8, so one panel issues 1,024 MACs and that body
+runs once per MAC.
+
+```
+predicted   1 paired-load bundle x 1,024 iterations = 1,024 cycles per panel
+measured    15,232 - 14,208                         = 1,024 cycles per panel
+```
+
+Backing log `results/aie/bank_check_validation.log`. It also confirms the mechanism is
+**same-bundle** paired loads specifically, not two loads merely near each other: the body is
+eight bundles and only one names both ports.
+
+**The validation found a bug in the check on its first run**, which is the point of doing it.
+The first version looked only inside *hardware* loops and reported "no penalty" on that very
+kernel — because the kernel keeps its compute in a **software** loop, its only hardware loop
+being the trace-flush loop. `mm.cc` is the same shape: its hardware loop is only the innermost
+k-reduction, and the accumulator-group body around it is a software loop. The check now walks
+software-loop bodies too, and a `--operands` flag makes the verdict about the two buffers a
+paired load really reads, rather than "some bank holds two buffers" — which over-reports, since
+a padding buffer sharing a bank is harmless. Re-read that way, the int8 GEMM's software body
+carries **ten** paired-load bundles across its 96, the one in the hardware loop plus nine in
+the accumulator spill traffic. That does not change the cost model, it locates it: nine per
+group over 16 groups plus one per hardware-loop iteration over 96 iterations is 240 cycles per
+call, exactly the `--bank-collision all` figure below.
+
 **What it does to the cost model.** Charging the loop's paired load raises the int8 GEMM's
 issuing cost per call from 2,442 to 2,538 cycles and its issuing fraction from 74.6% to 77.5%;
 charging every paired-load bundle in the function, an upper bound since this tool does not
