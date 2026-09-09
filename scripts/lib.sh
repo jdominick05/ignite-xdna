@@ -74,6 +74,68 @@ check_npu_contention() {
     fi
 }
 
+# check_host_load <mode> [witness] -- the host-side counterpart to the check above.
+# That one asks whether another session holds the AIE tiles; this asks whether one
+# holds the CPU. Desktop 2 runs three Claude sessions, agy and PyCharm against the
+# same 16 threads, so a producer's wall time or peak working set says nothing unless
+# it is read beside what else was running -- which is how the 2026-09-08 MODNet
+# AdaRound oracle came to share the box with another session's yolow quantization.
+#
+#   warn    report and continue; every NPU run gets this through npu_env.
+#   refuse  die on a heavy peer, since a cost figure is the point of those runs.
+#           --allow-busy (HOST_LOAD_ALLOW_BUSY=1) proceeds and records that it did.
+#
+# The snapshot goes into the witness either way. One written only when the box was
+# busy would be indistinguishable from one nobody took.
+check_host_load() {
+    local mode="${1:-warn}" witness="${2:-}" ps1="tools/host_load.ps1"
+    local out verdict line
+    if ! command -v powershell >/dev/null 2>&1 || [ ! -f "$REPO_ROOT/$ps1" ]; then
+        warn "host load unchecked -- no powershell, or missing $ps1"
+        return 0
+    fi
+    out="$(cd "$REPO_ROOT" && powershell -NoProfile -ExecutionPolicy Bypass -File "$ps1" 2>/dev/null || true)"
+    if [ -z "$out" ]; then
+        warn "host load unchecked -- $ps1 produced no output"
+        return 0
+    fi
+    if [ -n "$witness" ]; then
+        mkdir -p "$(dirname "$witness")"
+        printf '%s\n' "$out" >> "$witness"
+    fi
+    while IFS= read -r line; do info "$line"; done \
+        < <(printf '%s\n' "$out" | grep '^HOST_LOAD ' || true)
+    verdict="$(printf '%s\n' "$out" | awk '$1=="HOST_LOAD_VERDICT"{print $2}')"
+    case "$verdict" in
+        CLEAR)
+            info "host: nothing else is competing for the CPU"
+            ;;
+        BUSY)
+            warn "host is busy: wall time and peak working set will not be comparable"
+            while IFS= read -r line; do info "  ${line#HOST_LOAD_TOP }"; done \
+                < <(printf '%s\n' "$out" | grep '^HOST_LOAD_TOP ' | head -3 || true)
+            ;;
+        PEER)
+            warn "another heavy job is already running on this machine:"
+            while IFS= read -r line; do info "  ${line#HOST_LOAD_PEER }"; done \
+                < <(printf '%s\n' "$out" | grep '^HOST_LOAD_PEER ' || true)
+            if [ "${HOST_LOAD_ALLOW_BUSY:-0}" = 1 ]; then
+                warn "--allow-busy: measuring anyway; the witness records the contention"
+                if [ -n "$witness" ]; then
+                    printf 'HOST_LOAD_OVERRIDE allow_busy=1\n' >> "$witness"
+                fi
+            elif [ "$mode" = refuse ]; then
+                die "refusing to start while another heavy job holds the CPU.
+Parity and accuracy are unaffected -- both are fixed-seed, fixed-thread computations --
+but the wall time and peak working set this run reports would not be comparable with
+any other run's. Wait for the job above to finish, or pass --allow-busy to measure
+anyway and have the witness say so."
+            fi
+            ;;
+    esac
+    return 0
+}
+
 # npu_env -- the 1.7.1 inference env, with the vars every NPU run needs.
 # 1.8.0 ships no Phoenix xclbin, and existing shells often still point at it.
 npu_env() {
@@ -82,12 +144,25 @@ npu_env() {
     export XLNX_ONNX_EP_REPORT_FILE="vitisai_ep_report.json"
     info "RYZEN_AI_INSTALLATION_PATH = $RYZEN_AI_INSTALLATION_PATH"
     check_npu_contention
+    # warn, never refuse: an NPU latency number is worth qualifying, but these 18
+    # scripts include the demos, and a guard that stops a demo would get disabled.
+    # A caller with a log path can pass the witness to record beside it.
+    check_host_load warn "${1:-}"
 }
 
 # usage "${BASH_SOURCE[0]}" -- print the script's leading comment block as help,
 # so it can never drift out of sync with a hardcoded line range.
 usage() {
     awk 'NR==1 && /^#!/ {next} /^#/ {sub(/^# ?/, ""); print; next} {exit}' "$1"
+}
+
+# load_witness <logfile> -- the host-load witness that belongs beside a run's log.
+# Derived, never chosen: two machines or two variants writing the same witness name
+# is the same clobbering hazard the result-log naming rule exists for.
+load_witness() {
+    local d b
+    d="$(dirname "$1")"; b="$(basename "$1")"
+    printf '%s/load_%s\n' "$d" "${b#quant_}"
 }
 
 need_file() { [ -f "$1" ] || die "missing $1${2:+ -- $2}"; }

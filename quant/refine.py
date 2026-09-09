@@ -18,13 +18,15 @@ import numpy as np
 from .graph import Graph
 from .passes import check_hard_sigmoid
 from .pow2 import pos2scale, scale2pos
+from .qdq import needs_annotated
 
 QDQ_OPS = ("QuantizeLinear", "DequantizeLinear")
 ANNOTATE_OPS = ("Conv", "Add", "MaxPool", "AveragePool", "GlobalAveragePool", "MatMul", "Gemm", "ConvTranspose")
-REMOVE_QDQ_OPS = ("Clip", "Relu", "LeakyRelu", "PRelu")  # quantizers/interface.py:62-70 defaults
+# Clip/Relu/LeakyRelu/PRelu are quantizers/interface.py:62-70's defaults; qdq.needs_annotated
+# holds the rule, because Clip qualifies only at the sourced bounds.
 AVG_POOL_OPS = ("AveragePool", "GlobalAveragePool")
-ALLOWED = {"Conv", "Gemm", "Add", "Relu", "MaxPool", "GlobalAveragePool", "Flatten", "Constant", "Mul",
-           "HardSigmoid", "Concat", "Slice", "Resize", *QDQ_OPS}
+ALLOWED = {"Conv", "Gemm", "Add", "Relu", "Clip", "MaxPool", "GlobalAveragePool", "Flatten", "Constant",
+           "Mul", "HardSigmoid", "Concat", "Slice", "Resize", *QDQ_OPS}
 
 
 @dataclass
@@ -40,7 +42,7 @@ def refine(g: Graph, max_loops: int = 5) -> RefineReport:
         raise ValueError("max_loops must be positive")
     nodes = g.nodes()
     if any(n.op_type not in ALLOWED or n.domain for n in nodes):
-        raise ValueError("Only the folded ResNet and head-cut YOLO refinement operators are implemented")
+        raise ValueError("Only the folded ResNet, head-cut YOLO and MODNet refinement operators are implemented")
     producers = {out: n for n in nodes for out in n.output if out}
     changes, counts, flagged = [], {}, [False]
 
@@ -75,14 +77,9 @@ def refine(g: Graph, max_loops: int = 5) -> RefineReport:
                 return n.input[1]
         return None
 
-    def needs_annotated(n):
-        if n.op_type == "Clip":
-            raise NotImplementedError("Clip annotation (is_clip_with_min_max) is not transcribed")
-        return n.op_type in REMOVE_QDQ_OPS
-
     def connected(pre, n):
         return ((pre in AVG_POOL_OPS + ("HardSigmoid",) and n.op_type == "Mul") or
-                (pre in ANNOTATE_OPS and needs_annotated(n)))
+                (pre in ANNOTATE_OPS and needs_annotated(g, n)))
 
     def opos(node):
         """get_opos_name, including its running rename of the searched tensor."""

@@ -1,18 +1,24 @@
 #!/usr/bin/env bash
 # Build a fresh Quark reference (no CLE unless --cle; --adaround for XINT8_ADAROUND), solely for the owned-emitter gates.
 #
-#   ./scripts/quant-reference.sh --out models/resnet50_quark_nocle_c64.onnx --log results/quant/quant_resnet50_quark_nocle_c64.log [--limit 64] [--cle] [--adaround]
+#   ./scripts/quant-reference.sh --out models/resnet50_quark_nocle_c64.onnx --log results/quant/quant_resnet50_quark_nocle_c64.log [--limit 64] [--cle] [--adaround] [--allow-busy]
 #   ./scripts/quant-reference.sh --in-model models/yolov8n_cut.onnx --calib-dir data/coco_calib --out models/yolov8n_cut_quark_cle_c64.onnx --log results/quant/quant_yolov8n_cut_quark_cle_c64.log --cle
+#   ./scripts/quant-reference.sh --in-model models/modnet/modnet_cut_fp32.onnx --calib-dir data/modnet_calib --cfg-path models/modnet/preprocess_config.json --out models/modnet/modnet_cut_quark_cle_c64.onnx --log results/quant/quant_modnet_cut_quark_cle_c64.log --cle
 #
 # Uses resnet_env and the shared preprocessing of the family read from the float export
-# (classification config for ResNet, npu.yolo letterbox for a head-cut YOLO). --adaround runs Quark's
+# (classification config for ResNet, npu.yolo letterbox for a head-cut YOLO,
+# npu.modnet.preprocess for MODNet; --cfg-path gives the config the first two check against). --adaround runs Quark's
 # CPU FastFinetune after calibration (about 16 minutes on Desktop 2 for 54 layers) and
 # records its peak working set in the .reference.json sidecar. Calibration scratch
 # is isolated under this worktree so cleanup cannot touch another session's cache.
 # Existing model/log names are refused. The owned producer does not call this script.
+# A contended machine is refused before anything starts. Another build or producer on
+# the same 16 threads leaves parity untouched -- that is a fixed-seed computation -- but
+# makes this run's wall time and peak working set uncomparable with any other's;
+# --allow-busy measures anyway. The snapshot lands in the load_<log> witness either way.
 
 . "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
-OUT="" LOG="" LIMIT=64 CLE="" ADAROUND="" IN_MODEL=models/resnet50_fp32.onnx CALIB_DIR=""
+OUT="" LOG="" LIMIT=64 CLE="" ADAROUND="" IN_MODEL=models/resnet50_fp32.onnx CALIB_DIR="" CFG_PATH="" ALLOW_BUSY=0
 while [ $# -gt 0 ]; do
     case "$1" in
         --out) OUT="$2"; shift ;;
@@ -22,6 +28,8 @@ while [ $# -gt 0 ]; do
         --adaround) ADAROUND=--adaround ;;
         --in-model) IN_MODEL="$2"; shift ;;
         --calib-dir) CALIB_DIR="$2"; shift ;;
+        --cfg-path) CFG_PATH="$2"; shift ;;
+        --allow-busy) ALLOW_BUSY=1 ;;
         -h|--help) usage "${BASH_SOURCE[0]}"; exit 0 ;;
         *) die "unknown flag $1" ;;
     esac
@@ -32,6 +40,9 @@ done
 [ ! -e "$OUT" ] && [ ! -e "$LOG" ] || die "choose new model/log names"
 need_file "$IN_MODEL"
 [ -z "$CALIB_DIR" ] || need_dir "$CALIB_DIR"
+[ -z "$CFG_PATH" ] || need_file "$CFG_PATH"
+if [ "$ALLOW_BUSY" = 1 ]; then export HOST_LOAD_ALLOW_BUSY=1; fi
+check_host_load refuse "$(load_witness "$LOG")"
 use_env resnet_env
 # Size this exact graph; the generic ResNet helper underestimates its All-mode spool.
 NEEDED="$(python -c 'import sys,numpy as np; from quant.quantize import prepared_graph; from quant.qdq import quantizable_tensors; g,_=prepared_graph(sys.argv[2]); names,_,_=quantizable_tensors(g); size=sum(int(np.prod(g.value_shape(n)))*2 for n in names)*int(sys.argv[1]); print((size+1024**3-1)//1024**3+2)' "$LIMIT" "$IN_MODEL")"
@@ -43,4 +54,5 @@ export TEMP="$(cygpath -w "$PRIVATE_TMP")" TMP="$(cygpath -w "$PRIVATE_TMP")" PY
 quark_guard
 extra=(--in-model "$IN_MODEL")
 [ -z "$CALIB_DIR" ] || extra+=(--calib-dir "$CALIB_DIR")
+[ -z "$CFG_PATH" ] || extra+=(--cfg-path "$CFG_PATH")
 run_logged "$LOG" python pipelines/resnet50/3d_quantize_compare.py --out "$OUT" --limit "$LIMIT" "${extra[@]}" $CLE $ADAROUND

@@ -1,0 +1,47 @@
+loading annotations into memory...
+Done (t=0.27s)
+creating index...
+index created!
+model: head-cut (6 outputs), numpy decode, input 640x640
+eval : 5000 images, conf 0.001, iou 0.7, max_det 300, per-class NMS
+  500/5000  (60490 detections so far)
+  1000/5000  (120556 detections so far)
+  1500/5000  (184331 detections so far)
+  2000/5000  (245711 detections so far)
+  2500/5000  (305818 detections so far)
+  3000/5000  (366772 detections so far)
+  3500/5000  (427795 detections so far)
+  4000/5000  (489718 detections so far)
+  4500/5000  (553529 detections so far)
+  5000/5000  (614151 detections so far)
+
+614151 detections over 5000 images in 230s
+inference  mean 36.80 ms   median 34.11 ms
+wrote results/dets_yolov8n_cut_ignition_cle_adaround_c64_own_cpu.json
+Loading and preparing results...
+DONE (t=1.75s)
+creating index...
+index created!
+Running per image evaluation...
+Evaluate annotation type *bbox*
+DONE (t=24.54s).
+Accumulating evaluation results...
+DONE (t=4.72s).
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.322
+ Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] = 0.470
+ Average Precision  (AP) @[ IoU=0.75      | area=   all | maxDets=100 ] = 0.348
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.154
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.345
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.471
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=  1 ] = 0.283
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets= 10 ] = 0.466
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.514
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.286
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.571
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.680
+
+=== yolov8n_cut_ignition_cle_adaround_c64 | CPU | 640px | 5000 images ===
+mAP@50-95  32.21
+mAP@50     46.97
+mAP small / medium / large   15.41 / 34.52 / 47.13
+latency    36.80 ms

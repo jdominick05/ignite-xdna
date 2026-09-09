@@ -15,20 +15,24 @@ ONNX quantizer. Its internal package remains `quant`. See the
 
 | Area | Alpha contract |
 |---|---|
-| Measured models | `resnet50.a1_in1k`, folded FP32 export, default 224px input; `yolov8n_cut`, the head-cut YOLOv8n export at 640px |
-| Graph | Folded ResNet: standard-domain Conv/Relu/Add/MaxPool/GlobalAveragePool/Flatten/Gemm, one input/output, GAP receives a 7×7 spatial tensor. Head-cut YOLOv8: Conv/Sigmoid/Mul/Add/Concat/MaxPool/Resize/Split, one input, the six head outputs; Split is rewritten to Slice and SiLU to the DPU HardSigmoid chain as the vendor does. The family is read from the operators |
+| Measured models | `resnet50.a1_in1k`, folded FP32 export, default 224px input; `yolov8n_cut`, the head-cut YOLOv8n export at 640px; `modnet_cut`, the refactored MODNet matting export at 512px |
+| Graph | Folded ResNet: standard-domain Conv/Relu/Add/MaxPool/GlobalAveragePool/Flatten/Gemm, one input/output, GAP receives a 7×7 spatial tensor. Head-cut YOLOv8: Conv/Sigmoid/Mul/Add/Concat/MaxPool/Resize/Split, one input, the six head outputs; Split is rewritten to Slice and SiLU to the DPU HardSigmoid chain as the vendor does. MODNet: Conv (including depthwise) / Relu / Clip / Add / Mul / Concat / Resize / GlobalAveragePool / Sigmoid, one input and one matte-logits output, any square GAP window; the vendor's onnxslim simplification runs first. The family is read from the operators |
 | Export | Opset 17, IR 8, fully static batch 1 |
-| Quantization | Exact-sample MinMSE over each pipeline's own reader (the timm transform, or `npu.yolo.letterbox` at the graph's input size); scalar power-of-two scales; UINT8/zp128 activations and INT8/zp0 weights/biases; MaxPool/Resize outputs share their input's parameters; optional transcribed CLE (`--cle`, Conv→Conv pairs only; zero patterns on the SiLU net, as in the vendor's default preset) |
+| Quantization | Exact-sample MinMSE over each pipeline's own reader (the timm transform, `npu.yolo.letterbox`, or `npu.modnet.preprocess`, all at the graph's input size); scalar power-of-two scales; UINT8/zp128 activations and INT8/zp0 weights/biases; a MaxPool/Resize output shares its input's parameters only when that input is already marked at the vendor's visit order, and otherwise gets its own; optional transcribed CLE (`--cle`, Conv→Conv pairs only; 33 patterns on ResNet, 9 on MODNet, zero on the SiLU net, as in the vendor's default preset) |
 | Execution target | Windows, Phoenix/Hawk Point XDNA1, Ryzen AI 1.7.1; measured on Phoenix |
-| AdaRound | `python -m quant adaround` on an emitted file: Quark's FastFinetune AdaRound transcribed (torch, `resnet_env`); byte-identical to a fresh same-listing `XINT8_ADAROUND` oracle on ResNet50, same machine and runtime |
+| AdaRound | `python -m quant adaround` on an emitted file of the ResNet or YOLO families (MODNet is not wired): Quark's FastFinetune AdaRound transcribed (torch, `resnet_env`), layers walked in the vendor's topological order of the float model; byte-identical to fresh same-listing `XINT8_ADAROUND` oracles on ResNet50 and yolov8n-cut, same machine and runtime |
 | Additional tools | Static inspection of any ONNX file (contract violations reported, not enforced), position-table replay, graph comparison, full classification evaluation, controlled EP probes, a refinement probe and a preparation probe against Quark |
 
-Other graphs are unvalidated even if they share those operators. Unsupported operators,
-batch/opset contracts and GAP shapes fail explicitly. Exactly one of `--cle` and
+Other graphs are unvalidated even if they share those operators. Unsupported operators
+and batch/opset contracts fail explicitly. The MODNet family additionally needs
+`onnxslim` at run time: the vendor delegates its own simplification step to it and so
+does Ignition, rather than transcribing a third-party optimizer. The core still imports
+with only numpy, onnx and onnxruntime in both environments. Exactly one of `--cle` and
 `--no-cle` is required; `--cle` applies the transcribed default-preset equalization
-(Conv→Conv pairs; depthwise pairs, Gemm pairs and Clip replacement raise). YOLO
-AdaRound, per-channel weights, INT32 bias and arbitrary scales are outside the alpha's
-production scope; AdaRound is the separate `adaround` command on an emitted ResNet file.
+(Conv→Conv pairs; depthwise pairs, Gemm pairs and Clip replacement raise). Per-channel
+weights, INT32 bias and arbitrary scales are outside the alpha's production scope;
+AdaRound is the separate `adaround` command, and is wired for the ResNet and YOLO
+families only.
 Probe mutations are experiments, not presets.
 
 ## Prepare the local artifacts
@@ -106,12 +110,18 @@ the wrapper uses `resnet_env`; Quark stays blocked:
 
 ```bash
 ./scripts/quant-adaround.sh --quant models/resnet50_ignition_cle_c64.onnx --out models/resnet50_ignition_cle_adaround_c64.onnx --log results/quant/quant_resnet50_ignition_cle_adaround_c64.log
+./scripts/quant-adaround.sh --in-model models/yolov8n_cut.onnx --calib-dir data/coco_calib --quant models/yolov8n_cut_ignition_cle_c64.onnx --out models/yolov8n_cut_ignition_cle_adaround_c64.onnx --log results/quant/quant_yolov8n_cut_ignition_cle_adaround_c64.log
 ```
 
-About nine minutes on Desktop 2 for ResNet50's 54 layers, peak working set about 3 GB.
-The matching oracle is `./scripts/quant-reference.sh --cle --adaround`, and
-`scripts/quant-validate.sh` gates the pair like any other artifact; `INT8_EXACT` in its
-diff log is the bitwise verdict.
+The family is read from the base's sidecar; a head-cut YOLO base needs its float export
+and COCO folder and letterboxes to the graph input (`--cfg-path` is not read). The
+layers are visited in the order Quark's loop takes, ORT's topological sort of the float
+model (`Graph.vendor_order`), which is not the export's file order. About nine minutes
+on Desktop 2 for ResNet50's 54 layers, peak working set about 3 GB; about eight and a
+half minutes and 5.7 GB for yolov8n-cut's 63 layers on 64 images. The matching oracle
+is `./scripts/quant-reference.sh --cle --adaround` (with `--in-model` and `--calib-dir`
+for YOLO), and `scripts/quant-validate.sh` gates the pair like any other artifact;
+`INT8_EXACT` in its diff log is the bitwise verdict.
 
 ## Verify an output
 
@@ -149,4 +159,6 @@ With `--cle` the output reproduces the repository's plain-XINT8 ResNet50 to the 
 reproduces a fresh `XINT8_ADAROUND` oracle byte for byte on the same machine
 ([AdaRound parity](../docs/BENCHMARKS.md#ignition-adaround-parity)). On the head-cut
 YOLOv8n export the same `--cle` run matches a fresh same-listing oracle position for
-position and integer for integer ([YOLO preparation parity](../docs/BENCHMARKS.md#ignition-yolov8n-cut-preparation-parity)).
+position and integer for integer ([YOLO preparation parity](../docs/BENCHMARKS.md#ignition-yolov8n-cut-preparation-parity)),
+and `adaround` on that file is byte-identical in every integer to a fresh
+`XINT8_ADAROUND` oracle as well ([YOLO AdaRound parity](../docs/BENCHMARKS.md#ignition-yolov8n-cut-adaround-parity)).

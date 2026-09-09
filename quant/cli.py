@@ -1,4 +1,4 @@
-"""Ignition Alpha: inspect ONNX graphs, quantize folded ResNet or head-cut YOLOv8 with or without CLE, or AdaRound an emitted ResNet file."""
+"""Ignition Alpha: inspect ONNX graphs, quantize folded ResNet, head-cut YOLOv8 or MODNet with or without CLE, or AdaRound an emitted file of the ResNet or YOLO families."""
 import argparse
 from dataclasses import asdict
 import importlib.abc
@@ -29,17 +29,18 @@ def main(argv=None):
     commands = parser.add_subparsers(dest="command", required=True)
     inspect = commands.add_parser("inspect", help="Print a static fingerprint of any ONNX file; does not run a model")
     inspect.add_argument("models", type=Path, nargs="+")
-    emit = commands.add_parser("quantize", help="Calibrate and emit XINT8 QDQ for folded ResNet or head-cut YOLOv8")
+    emit = commands.add_parser("quantize", help="Calibrate and emit XINT8 QDQ for folded ResNet, head-cut YOLOv8 or MODNet")
     emit.add_argument("--in-model", type=Path, default=Path("models/resnet50_fp32.onnx"),
-                      help="Float export; the family (folded ResNet or head-cut YOLO) is read from its operators")
+                      help="Float export; the family (folded ResNet, head-cut YOLO or MODNet) is read from its operators")
     emit.add_argument("--out", type=Path, required=True)
     cle = emit.add_mutually_exclusive_group(required=True)
     cle.add_argument("--cle", action="store_true", help="Apply the transcribed cross-layer equalization first")
     cle.add_argument("--no-cle", action="store_true", help="Calibrate the float export as exported")
     emit.add_argument("--calib-dir", type=Path, default=None,
-                      help="data/calib for ResNet, data/coco_calib for YOLO unless given")
+                      help="data/calib for ResNet, data/coco_calib for YOLO, data/modnet_calib for MODNet unless given")
     emit.add_argument("--cfg-path", type=Path, default=Path("models/preprocess_config.json"),
-                      help="Classification preprocessing config (ResNet only; YOLO letterboxes to the graph input)")
+                      help="Preprocessing config: ResNet's transform, or MODNet's size cross-check "
+                           "(models/modnet/preprocess_config.json); YOLO letterboxes to the graph input")
     emit.add_argument("--limit", type=int, default=64)
     emit.add_argument("--scratch", type=Path, default=Path("scratch"))
     emit.add_argument("--scales-from", type=Path,
@@ -49,8 +50,10 @@ def main(argv=None):
                      help="The float export the base was quantized from (hash-checked against its sidecar)")
     ada.add_argument("--quant", type=Path, required=True, help="Emitted XINT8 model with its .quant.json sidecar")
     ada.add_argument("--out", type=Path, required=True)
-    ada.add_argument("--calib-dir", type=Path, default=Path("data/calib"))
-    ada.add_argument("--cfg-path", type=Path, default=Path("models/preprocess_config.json"))
+    ada.add_argument("--calib-dir", type=Path, default=Path("data/calib"),
+                     help="The base's calibration folder (data/coco_calib for a head-cut YOLO base)")
+    ada.add_argument("--cfg-path", type=Path, default=Path("models/preprocess_config.json"),
+                     help="Classification preprocessing config (ResNet only; YOLO letterboxes to the graph input)")
     ada.add_argument("--data-size", type=int, default=1000, help="Quark's DataSize (images used, capped by the listing)")
     ada.add_argument("--iters", type=int, default=1000, help="Quark's NumIterations per layer")
     ada.add_argument("--seed", type=int, default=1705472343, help="Quark's FixedSeed")
@@ -61,8 +64,8 @@ def main(argv=None):
     try:
         from onnx.checker import ValidationError
         from .graph import Graph
-        from .quantize import file_hash, graph_family, quantize
-        from .sources import CocoSource, ImageFolderSource
+        from .quantize import file_hash, graph_family, prepare, quantize
+        from .sources import CocoSource, ImageFolderSource, ModnetSource
         from .verify import graph_diff
 
         try:
@@ -95,20 +98,34 @@ def main(argv=None):
                     parser.error("AdaRound needs a base with an independent calibration listing in its sidecar")
                 if "adaround" in provenance:
                     parser.error("The base was already finetuned; start from the emitted XINT8 file")
-                cfg = json.loads(args.cfg_path.read_text(encoding="utf-8"))
-                if cfg != provenance["preprocess"]:
-                    parser.error("Preprocessing config differs from the base sidecar")
+                family = provenance.get("family", "folded_resnet")
+                if family == "modnet":
+                    parser.error("AdaRound is not wired for the MODNet family; see quant/TODO.md")
                 float_graph = Graph.load(args.in_model)
+                if graph_family(float_graph) != family:
+                    parser.error("Float model family differs from the base sidecar")
                 input_name = float_graph.model.graph.input[0].name
                 listing = provenance["calibration"]["listing"]
-                source = ImageFolderSource(args.calib_dir, cfg, len(listing), input_name)
+                if family == "yolo_cut":
+                    # The letterbox size comes from the graph input; --cfg-path is not read.
+                    from npu.yolo import input_size
+                    imgsz = input_size(list(float_graph.value_shape(input_name) or ()), str(args.in_model))
+                    source = CocoSource(args.calib_dir, len(listing), imgsz, input_name)
+                else:
+                    cfg = json.loads(args.cfg_path.read_text(encoding="utf-8"))
+                    if cfg != provenance["preprocess"]:
+                        parser.error("Preprocessing config differs from the base sidecar")
+                    source = ImageFolderSource(args.calib_dir, cfg, len(listing), input_name)
+                if source.preprocess() != provenance["preprocess"]:
+                    parser.error("Preprocessing differs from the base sidecar")
                 if [p.as_posix() for p in source.listing()] != listing:
                     parser.error("Calibration listing differs from the base sidecar")
-                if provenance.get("family", "folded_resnet") != "folded_resnet":
-                    raise NotImplementedError("AdaRound is gated on folded ResNet; the YOLO gate is open")
                 if provenance["cle"]:
                     # The float reference is the equalized float graph, as in Quark's post-process.
                     cross_layer_equalize(float_graph)
+                # Quark's reference is its pre-processed float model: after CLE, the same
+                # hardware-compatibility rewrite (Split to Slice) that quantize() applied.
+                prepare(float_graph, family)
                 float_graph.infer_shapes()
                 quant_graph = Graph.load(args.quant)
                 config = FastFinetuneConfig(DataSize=args.data_size, FixedSeed=args.seed, NumIterations=args.iters)
@@ -159,6 +176,15 @@ def main(argv=None):
                     from npu.yolo import input_size
                     imgsz = input_size(list(graph.value_shape(input_name) or ()), str(args.in_model))
                     source = CocoSource(args.calib_dir or Path("data/coco_calib"), args.limit, imgsz, input_name)
+                elif family == "modnet":
+                    shape = graph.value_shape(input_name)
+                    if shape is None or len(shape) != 4 or shape[2] != shape[3]:
+                        parser.error(f"MODNet expects a square NCHW input, got {shape}")
+                    cfg = json.loads(args.cfg_path.read_text(encoding="utf-8"))
+                    if (cfg.get("height"), cfg.get("width")) != (shape[2], shape[3]):
+                        parser.error("Preprocessing config size does not match the model input")
+                    source = ModnetSource(args.calib_dir or Path("data/modnet_calib"), args.limit,
+                                          shape[2], input_name)
                 else:
                     cfg = json.loads(args.cfg_path.read_text(encoding="utf-8"))
                     if graph.value_shape(input_name) != (1, *cfg["input_size"]):

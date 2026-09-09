@@ -108,6 +108,52 @@ class Graph:
             self.model.graph.node.extend(nodes[i] for i in order)
         return changed
 
+    def vendor_order(self) -> list[int]:
+        """Node indices in the order ORT's quantization ``ONNXModel.topological_sort`` yields.
+
+        Quark sorts the pre-processed float model with that routine before quantizing
+        (quantization/quantize.py: ``topo_model.topological_sort()``) and its quantizer
+        keeps the original nodes in that order, so this is the order Quark's AdaRound
+        walks (onnx_subgraph.py iterates ``qmodel.graph.node``). It is not the file
+        order: on folded ResNet the downsample Conv precedes conv2 of its block.
+        Transcribed from onnxruntime/quantization/onnx_model.py ``topological_sort``:
+        nodes without a non-empty input first, in file order; then the consumers of
+        every initializer and graph-input name, names sorted and deduplicated, consumers
+        in file order; then breadth-first through each emitted node's outputs, consumers
+        in file order. Returns indices; the graph is not reordered.
+        """
+        nodes = list(self.model.graph.node)
+        deps_count = [sum(1 for name in node.input if name) for node in nodes]
+        deps_to_nodes: dict[str, list[int]] = {}
+        order = [i for i, count in enumerate(deps_count) if count == 0]
+        for i, node in enumerate(nodes):
+            if deps_count[i] == 0:
+                continue
+            for name in node.input:
+                if name:
+                    deps_to_nodes.setdefault(name, []).append(i)
+        names = sorted([t.name for t in self.model.graph.initializer] + [v.name for v in self.model.graph.input])
+        previous = None
+        for name in names:
+            if name == previous:
+                continue
+            previous = name
+            for i in deps_to_nodes.get(name, ()):
+                deps_count[i] -= 1
+                if deps_count[i] == 0:
+                    order.append(i)
+        start = 0
+        while start < len(order):
+            for output in nodes[order[start]].output:
+                for i in deps_to_nodes.get(output, ()):
+                    deps_count[i] -= 1
+                    if deps_count[i] == 0:
+                        order.append(i)
+            start += 1
+        if len(order) != len(nodes):
+            raise ValueError("Graph is not a DAG under the vendor's sort")
+        return order
+
     def nodes(self) -> list[onnx.NodeProto]:
         """File order, checked as topological by load/check."""
         return list(self.model.graph.node)

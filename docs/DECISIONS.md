@@ -132,6 +132,23 @@
 
 ## Rejected approaches and known pitfalls
 
+- **A wall-time or peak-memory figure from Desktop 2 without a host-load witness is a
+  guess.** That box runs three Claude sessions, `agy` and PyCharm against the same 16
+  threads, and `xrt-smi` answers only the device question -- nothing was watching the CPU.
+  On 2026-09-08 the MODNet AdaRound oracle spent its whole calibration and MinMSE phase
+  beside another session's `pipelines/yolow/3b_quantize_cut.py`, which nobody knew until a
+  check was written for it; the suspicion at the time was `agy` compiling, and `agy`
+  measured 0.2 cores. `tools/host_load.ps1` is the host-side counterpart to the `xrt-smi`
+  check: one-shot it classifies build tools, this repo's own producers (by command line,
+  because every producer here is `python.exe`) and any process holding 2+ cores, and
+  `-Watch` samples a timeline. `check_host_load` in `scripts/lib.sh` warns on every NPU run
+  through `npu_env`, and refuses to start `quant-reference.sh` / `quant-own.sh` /
+  `quant-adaround.sh` unless `--allow-busy`, which records the override in the witness.
+  What contention does and does not reach matters: parity and accuracy are fixed-seed,
+  fixed-thread computations and are untouched by it; wall time and peak working set are
+  not comparable across runs that saw different load, and peak working set can read *low*
+  under memory pressure because the OS trims the set.
+
 - **An optimized CPU session is not sufficient as a QDQ numerical reference.**
   Ignition's INT32-bias dtype-only mutation preserves decoded biases and unoptimized
   CPU outputs, but this ORT build's optimized CPU output differs. Comparing the NPU

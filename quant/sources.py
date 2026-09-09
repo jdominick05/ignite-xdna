@@ -6,8 +6,11 @@ from typing import Iterator
 import cv2
 import numpy as np
 
+from npu.modnet import preprocess as modnet_preprocess
 from npu.preprocess import IMG_EXTS, build_transform
 from npu.yolo import letterbox
+
+MODNET_EXTS = ("*.jpg", "*.jpeg", "*.png", "*.JPEG")  # 3_quantize.py PortraitCalibReader, in its order
 
 
 class ImageFolderSource:
@@ -71,6 +74,48 @@ class CocoSource:
             if img is None:
                 raise RuntimeError(f"cv2 could not read {path}")
             yield letterbox(img, self.imgsz)[0]
+
+
+class ModnetSource:
+    """pipelines/modnet/3_quantize.py's PortraitCalibReader, through npu.modnet.preprocess.
+
+    This is the point of the owned source: the matting pipeline's calibration and its
+    inference now read the same function rather than two copies of one transform, so the
+    PIL/OpenCV divergence that section 5 of Category B measured cannot recur silently.
+    The listing rule is the reader's: a recursive glob per extension in the source's own
+    order, then one sort over the union, then the limit. The size comes from the graph,
+    never a flag, so it cannot drift either. Where the vendor reader silently skips an
+    unreadable file, this raises, as the sibling sources do.
+    """
+
+    def __init__(self, folder: Path, limit: int | None, size: int, input_name: str = "input"):
+        if limit is not None and limit <= 0:
+            raise ValueError("Calibration limit must be positive")
+        files = []
+        for extension in MODNET_EXTS:
+            files.extend(glob.glob(str(Path(folder) / "**" / extension), recursive=True))
+        self.files = [Path(p) for p in sorted(files)[:limit]]
+        if not self.files:
+            raise ValueError(f"No calibration images under {folder}")
+        self.size = int(size)
+        self.input_name = input_name
+
+    def listing(self) -> list[Path]:
+        return list(self.files)
+
+    def preprocess(self) -> dict:
+        return {"family": "modnet", "size": self.size, "input_name": self.input_name,
+                "transform": "npu.modnet.preprocess"}
+
+    def __len__(self) -> int:
+        return len(self.files)
+
+    def __iter__(self) -> Iterator[np.ndarray]:
+        for path in self.files:
+            img = cv2.imread(str(path), cv2.IMREAD_COLOR)
+            if img is None:
+                raise RuntimeError(f"cv2 could not read {path}")
+            yield modnet_preprocess(img, self.size)[0]
 
 
 def as_reader(source):

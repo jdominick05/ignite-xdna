@@ -1,4 +1,4 @@
-"""Ignition XINT8 producer for folded ResNet and head-cut YOLOv8, with optional CLE and position replay."""
+"""Ignition XINT8 producer for folded ResNet, head-cut YOLOv8 and MODNet, with optional CLE and position replay."""
 from dataclasses import asdict
 import hashlib
 import importlib.metadata as metadata
@@ -10,11 +10,12 @@ import time
 from . import __version__
 from .cle import cross_layer_equalize
 from .graph import Graph
-from .passes import avgpool_dpu_scale, hardsigmoid_dpu_scale, sigmoid_to_hardsigmoid, split_to_slice
+from .passes import avgpool_dpu_scale, hardsigmoid_dpu_scale, sigmoid_to_hardsigmoid, simplify, split_to_slice
 from .qdq import emit, read_pos_table, quantizable_tensors
 from .refine import refine
 
 YOLO_MARKERS = {"Sigmoid", "Split", "Slice", "Concat", "Resize"}
+MODNET_MARKERS = {"Clip"}  # neither measured classifier nor head-cut YOLO export carries one
 
 
 def _check_imports() -> None:
@@ -28,8 +29,10 @@ def file_hash(path: Path) -> str:
 
 
 def graph_family(g: Graph) -> str:
-    """folded_resnet or yolo_cut, decided by the operators present; anything else fails later."""
+    """folded_resnet, yolo_cut or modnet, decided by the operators present; anything else fails later."""
     ops = {n.op_type for n in g.nodes()}
+    if ops & MODNET_MARKERS:
+        return "modnet"
     return "yolo_cut" if ops & YOLO_MARKERS else "folded_resnet"
 
 
@@ -44,12 +47,30 @@ def check_family(g: Graph, family: str) -> None:
                 shape = g.value_shape(node.input[0])
                 if shape is None or len(shape) != 4 or shape[-2:] != (7, 7):
                     raise ValueError(f"Ignition Alpha supports only 7x7 GAP, got {shape}")
+    elif family == "modnet":
+        if len(g.model.graph.output) != 1:
+            raise ValueError("MODNet support expects the single matte-logits output")
+        for node in g.nodes():
+            if node.op_type == "GlobalAveragePool":
+                shape = g.value_shape(node.input[0])
+                if shape is None or len(shape) != 4:
+                    raise ValueError(f"MODNet GlobalAveragePool needs a rank-4 input, got {shape}")
     elif not g.model.graph.output:
         raise ValueError("Head-cut YOLO support expects the head outputs")
 
 
+def simplify_for(g: Graph, family: str) -> dict:
+    """The vendor's SimplifyModel step, which precedes CLE and so precedes prepare.
+
+    Only MODNet needs it: on the two gated exports onnxslim is measured to be a structural
+    no-op (`tools/quant_prepare_probe.py`'s isolated steps), so running it there would
+    change nothing that is already gated, and it is not run.
+    """
+    return {"simplify": simplify(g)} if family == "modnet" else {}
+
+
 def prepare(g: Graph, family: str) -> dict:
-    """The vendor's hardware-compatibility pre-process for this family, before calibration."""
+    """The vendor's hardware-compatibility pre-process for this family, after CLE."""
     report = {}
     if family == "yolo_cut":
         report["split_to_slice"] = split_to_slice(g)
@@ -65,6 +86,8 @@ def prepared_graph(model_in: Path) -> tuple[Graph, str]:
     family = graph_family(graph)
     graph.infer_shapes()
     check_family(graph, family)
+    simplify_for(graph, family)
+    graph.infer_shapes()
     prepare(graph, family)
     return graph, family
 
@@ -92,6 +115,15 @@ def quantize(model_in: Path, model_out: Path, *, scales_from: Path | None = None
         "input_sha256": file_hash(model_in),
         "versions": {p: metadata.version(p) for p in ("numpy", "onnx")},
     }
+    if family == "modnet":
+        # onnxslim's output defines this family's prepared graph, so the artifact records
+        # which version produced it; a later release could simplify differently.
+        report["versions"]["onnxslim"] = metadata.version("onnxslim")
+    # SimplifyModel is the vendor's first pre-process step and precedes CLE, whose pattern
+    # walk reads the node list it leaves behind.
+    report["simplify"] = simplify_for(graph, family)
+    if report["simplify"]:
+        graph.infer_shapes()
     if cle:
         # Quark equalizes the float model before calibration (preproc.py apply_pre_process);
         # calibration and weight quantization then see the equalized initializers.
