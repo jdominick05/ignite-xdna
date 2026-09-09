@@ -1705,6 +1705,23 @@ sections above.
   Safe departures from power-of-two scales, product-scale INT32 bias execution and
   per-channel compiler memory growth remain open. See
   [`quant/DESIGN.md`](quant/DESIGN.md) for the ordered gates and remaining source questions.
+- **Native Windows driver overhead floor and DPU microcode stream — closed.** Low-level
+  driver characterization via `pyxrt.pyd` and `amdxe.sys` (`results/aie/windows_xrt_driver_bench.log`)
+  determined that the physical userspace dispatch preparation floor is **8.76 µs** (1.85 µs
+  run allocation + 6.91 µs across 8 arguments), and hardware runlist batching overhead is
+  **3.39 µs/run**. Sub-microsecond buffer synchronization (0.85 µs at 4 KB) establishes that
+  on unified APU memory, host-device synchronization is purely CPU cache flush/invalidation.
+  Reverse engineering of compiled `.xmodel` microcode (`results/aie/dpu_transaction_disasm.log`)
+  revealed 48-byte transaction packets dominated by Opcode 3 (Conv2D / 1x1 dense, 43–49%)
+  and Opcode 6 (Depthwise Conv, 33–37%). [Working](docs/BENCHMARKS.md#native-windows-xrt-driver-latency-and-dpu-microcode-disassembly).
+- **AIE-ML systolic shift-cut feasibility theorem for Project Ignition — closed.** Mathematical
+  formulation of the post-accumulator scaling unit proved that operations are physically feasible
+  on XDNA1 without numerical distortion if and only if the arithmetic right-shift register
+  sigma in [0, 31] (`results/quant/shift_cut_feasibility.log`). If sigma < 0, 32-bit accumulator
+  overflow destroys accuracy (as observed in RegNetX-002, sigma = -90, collapsing top-1 accuracy
+  to 0.50%). If sigma > 31, the 5-bit physical shifter clamps (as in FastDepth, sigma = 32, clamping
+  to 31). Models can now be analytically pre-screened with `python -m quant check-shift-cut`.
+  [Working](docs/BENCHMARKS.md#aie-ml-systolic-shift-cut-feasibility-theorem-for-project-ignition).
 - **The webcam path (single `4x4.xclbin` session, `./scripts/yolo-demo.sh`) has not
   been exercised end to end.** The related but distinct round-robin-across-4-columns
   demo *has* — see

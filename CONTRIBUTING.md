@@ -81,7 +81,7 @@ session would test nothing this project cares about. Verification is empirical i
 ```bash
 python -m compileall -q npu pipelines tools kernels quant \
   && for s in scripts/*.sh; do bash -n "$s" || exit 1; done \
-  && python -c "import npu.preprocess, npu.yolo, npu.yolo_decode, npu.yolo_pose, npu.yolo_pose_decode, npu.session, npu.ep_report, npu.paths, npu.modnet, npu.yolov6, npu.yolov6_decode, npu.yolov11, npu.yolow, npu.midas, npu.sesr, npu.realesrgan, npu.fastdepth, npu.bisenetv2, quant, quant.graph, quant.pow2, quant.sources, quant.calib, quant.qdq, quant.passes, quant.cle, quant.refine, quant.verify, quant.quantize, quant.adaround, quant.probe, quant.cli, quant.__main__" \
+  && python -c "import npu.preprocess, npu.yolo, npu.yolo_decode, npu.yolo_pose, npu.yolo_pose_decode, npu.session, npu.ep_report, npu.paths, npu.modnet, npu.yolov6, npu.yolov6_decode, npu.yolov11, npu.yolow, npu.midas, npu.sesr, npu.realesrgan, npu.fastdepth, npu.bisenetv2, quant, quant.graph, quant.pow2, quant.sources, quant.calib, quant.qdq, quant.passes, quant.cle, quant.refine, quant.verify, quant.quantize, quant.adaround, quant.probe, quant.cli, quant.__main__, quant.shift_cut" \
   && echo "PIPELINE CHECKS PASS"
 ```
 

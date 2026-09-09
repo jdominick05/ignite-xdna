@@ -29,6 +29,8 @@ def main(argv=None):
     commands = parser.add_subparsers(dest="command", required=True)
     inspect = commands.add_parser("inspect", help="Print a static fingerprint of any ONNX file; does not run a model")
     inspect.add_argument("models", type=Path, nargs="+")
+    check_shift = commands.add_parser("check-shift-cut", help="Audit ONNX QDQ models against AIE-ML systolic shift-cut bounds [0, 31]")
+    check_shift.add_argument("models", type=Path, nargs="+", help="Quantized ONNX model paths to audit")
     emit = commands.add_parser("quantize", help="Calibrate and emit XINT8 QDQ for folded ResNet, head-cut YOLOv8 or MODNet")
     emit.add_argument("--in-model", type=Path, default=Path("models/resnet50_fp32.onnx"),
                       help="Float export; the family (folded ResNet, head-cut YOLO or MODNet) is read from its operators")
@@ -81,6 +83,12 @@ def main(argv=None):
                 print(json.dumps({"producer": "Ignition", "version": __version__,
                                   "method": "Static inspection; contract violations reported, not enforced; no EP acceptance verdict",
                                   "models": reports}, indent=2))
+                return
+            if args.command == "check-shift-cut":
+                from .shift_cut import analyze_model_shift_cut, print_shift_cut_report
+                for path in args.models:
+                    hazards = analyze_model_shift_cut(str(path))
+                    print_shift_cut_report(str(path), hazards)
                 return
             if args.command == "adaround":
                 from .adaround import FastFinetuneConfig, finetune

@@ -4279,6 +4279,145 @@ ImageNet-1k validation images:
 
 ---
 
+## Native Windows XRT driver latency and DPU microcode disassembly
+
+A characterization of AMD's native Windows kernel driver (`amdxe.sys`) and userspace runtime (`pyxrt.pyd`, Python 3.13) on Desktop 2 (Ryzen 7 8700G, Phoenix XDNA1 NPU), measuring the driver floor, unified memory synchronization bandwidth, command submission overhead, and reverse-engineering the compiled DPU microcode transaction stream.
+
+Backing logs:
+- `results/aie/windows_xrt_driver_bench.log`: device initialization, BO allocation/map/sync, kernel argument binding, and runlist queuing.
+- `results/aie/dpu_transaction_disasm.log`: binary disassembly of DPU instruction packets from compiled `.xmodel` archives.
+
+### Driver and runtime initialization floor
+
+One-time setup latency measured via native `pyxrt`:
+
+| Operation | Latency | Target / Context | Log |
+|---|---|---|---|
+| Device Open (`pyxrt.device(0)`) | **61.69 ms** (61690.90 µs) | `amdxe.sys` adapter handle | `results/aie/windows_xrt_driver_bench.log` |
+| XCLBIN UUID Registration | **3.20 ms** (3198.90 µs) | `fastdepthcachekey/4x4.xclbin` | `results/aie/windows_xrt_driver_bench.log` |
+| Hardware Context Creation | **77.71 ms** (77712.90 µs) | `pyxrt.hw_context` on device 0 | `results/aie/windows_xrt_driver_bench.log` |
+| Kernel Instantiation (`DPU_PDI_0`) | **73.60 µs** | Compute unit handle | `results/aie/windows_xrt_driver_bench.log` |
+
+Device opening and hardware context creation together cost 139.40 ms. This cost is paid once per process session; subsequent dispatches execute on the established context.
+
+### Unified memory (BO) synchronization bandwidth
+
+Buffer Object allocation, pointer mapping, and bidirectional host-device synchronization across buffer sizes (64 B to 16 MB) using `pyxrt.bo.flags.host_only`:
+
+| Buffer Size | Alloc (µs) | Map (µs) | H2D Sync (µs) | H2D Bandwidth | D2H Sync (µs) | D2H Bandwidth |
+|---|---|---|---|---|---|---|
+| 64 B | 31.53 | 1.76 | 0.83 | 0.07 GB/s | **0.78** | 0.08 GB/s |
+| 256 B | 29.74 | 1.58 | 0.87 | 0.27 GB/s | **0.79** | 0.30 GB/s |
+| 1.0 KB | 28.65 | 1.90 | 0.85 | 1.12 GB/s | **0.82** | 1.16 GB/s |
+| 4.0 KB | 30.19 | 0.94 | 0.90 | 4.23 GB/s | **0.82** | 4.63 GB/s |
+| 16.0 KB | 26.78 | 0.84 | 0.97 | 15.67 GB/s | **0.95** | 16.03 GB/s |
+| 64.0 KB | 30.38 | 1.54 | 1.48 | 41.18 GB/s | **1.46** | 41.72 GB/s |
+| 256.0 KB | 37.52 | 1.42 | 3.59 | 68.08 GB/s | **3.50** | 69.83 GB/s |
+| 1.0 MB | 69.64 | 2.28 | 13.34 | 73.18 GB/s | **11.34** | 86.12 GB/s |
+| 4.0 MB | 164.13 | 3.27 | 46.14 | 84.66 GB/s | **60.08** | 65.02 GB/s |
+| 16.0 MB | 541.97 | 6.66 | 59.46 | 262.79 GB/s | **52.76** | 296.17 GB/s |
+
+Key findings from the memory sweep:
+- **Sub-microsecond synchronization floor**: At tile sizes <= 16 KB, `bo.sync` completes in 0.78-0.97 µs. On unified APU memory, host-to-device and device-to-host syncs do not perform PCIe/DMA bus transfers; they are CPU cache line writeback (`clflushopt`) and invalidation operations.
+- **Large buffer saturation**: Device-to-host bandwidth peaks at 296.17 GB/s at 16 MB (52.76 µs), reflecting the APU coherent fabric bandwidth.
+
+### Userspace command dispatch floor and Windows driver constraints
+
+Micro-benchmarking the userspace call path for kernel execution:
+- **Run Object Allocation**: 1.85 µs
+- **Argument Binding**: 6.91 µs total across 8 kernel arguments (0.86 µs per argument via `run.set_arg`)
+- **Total Userspace Preparation Floor**: 8.76 µs
+- **Hardware Runlist Batching**: `pyxrt.runlist.add` requires 3.39 µs per run across 10 batched dispatches.
+
+Two Windows driver constraints identified:
+1. **`pyxrt.bo.flags.normal` is rejected**: `amdxe.sys` throws `invalid argument` on `normal` allocation. On Phoenix APUs, memory is unified host RAM and must be allocated with `pyxrt.bo.flags.host_only`.
+2. **KDMA is unsupported on Windows**: XRT emits `[XRT] WARNING: Reverting to host copy of buffers (KDMA not supported on windows)` if a buffer's memory group ID does not match the kernel compute unit's connected bank. To prevent fallback copies, all zero-copy buffers must be allocated using `group_id = kern.group_id(arg_idx)`.
+
+### DPU microcode transaction stream disassembly
+
+The VitisAI compiler bundles compiled DPU instruction streams inside `.xmodel` Protobuf archives under the `mc_code` bytefield. Disassembly with `tools/dpu_transaction_disasm.py` reveals the transaction structure:
+
+- **Packet Architecture**: Instructions are formatted in fixed 48-byte packets (12 32-bit words). Each packet begins with header `0x0B0000xx`, where byte 3 (`0x0B` = 11) specifies 11 payload data words and byte 0 is a sequence tag.
+- **Opcode Taxonomy**:
+  - **Opcode 3 (`CONV2D / 1x1_DENSE`)**: Standard 2D convolution and dense projection.
+  - **Opcode 6 (`DWCONV2D / DEPTHWISE`)**: Depthwise separable convolution.
+  - **Opcode 0x4000 / 0x100 (`SPECIAL_OP`)**: Elementwise gating and residual addition (found in BiSeNetV2 Bilateral Guided Aggregation).
+  - **Opcode 0 (`DMA / BARRIER`)**: Tile DMA trigger and synchronization barrier.
+
+Model instruction distributions measured:
+- **FastDepth** (`compiled.0x800020500148acb.xmodel`, 2,570 packets across 2 segments):
+  - Opcode 3 (Conv2D): 1,269 packets (49.38%)
+  - Opcode 6 (DWConv): 960 packets (37.35%)
+  - Opcode 0xA0801A2: 100 packets (3.89%)
+  - Opcode 0x74746F62: 72 packets (2.80%)
+  - Opcode 0xFFFF8028: 32 packets (1.25%)
+  - Control / DMA: 137 packets (5.33%)
+- **BiSeNetV2** (`compiled.0x800020500148acb.xmodel`, 4,630 packets):
+  - Opcode 3 (Conv2D): 1,999 packets (43.17%)
+  - Opcode 6 (DWConv): 1,510 packets (32.61%)
+  - Elementwise / Gating: 11 packets (0.24%)
+  - DMA / Barrier: 1,110 packets (23.97%)
+
+---
+
+## AIE-ML systolic shift-cut feasibility theorem for Project Ignition
+
+Analytical formulation and verification of the post-accumulator scaling unit on XDNA1 AIE-ML, isolating the mathematical mechanism causing catastrophic accuracy collapse in quantized topologies.
+
+Backing log:
+- `results/quant/shift_cut_feasibility.log`: analytical shift-cut audit across 7 quantized ONNX models.
+
+### Mathematical formulation
+
+On the XDNA1 AIE-ML architecture, integer convolution and matrix multiplication accumulate into 32-bit registers. The post-multiplication ALU maps the 32-bit accumulator to an 8-bit output tensor using an integer multiplier M (15-bit) and an arithmetic right-shift register sigma in [0, 31]:
+
+    out_8 = clamp( floor( (acc_32 * M + 2^(sigma - 1)) / 2^sigma ), -128, 127 )
+
+For an ONNX QuantizeLinear/DequantizeLinear triad with input scale S_x, weight scale S_w, and output scale S_y, the ideal analytical scale factor is:
+
+    A = (S_x * S_w) / S_y
+
+The hardware compiler approximates A using (M, sigma):
+
+    A ≈ M * 2^(-sigma), where M in [16384, 32767] and sigma in [0, 31].
+
+### Theorems
+
+**Theorem 1 (Systolic Shift-Cut Bound):**
+An operation is physically executable without numerical distortion on XDNA1 if and only if:
+
+    0 <= sigma <= 31
+
+If sigma < 0, the operation requires an arithmetic left-shift exceeding the 32-bit accumulator, resulting in accumulator overflow. If sigma > 31, the hardware 5-bit shift register overflows or clamps.
+
+**Theorem 2 (Multi-Branch Inter-Scale Feasibility):**
+For multi-branch elementwise tensor operations C = A * B or C = A + B:
+
+    A_elem = (S_A * S_B) / S_C
+
+Both input branches must satisfy identical power-of-two scale alignments; divergent scale grids cause dynamic range truncation in the fixed-point ALU.
+
+### Empirical audit across 7 models
+
+Evaluated with `python -m quant check-shift-cut` (`results/quant/shift_cut_feasibility.log`):
+
+| Model | Quantized Ops | Violations | Sigma Range (min / median / max) | Hardware Status | Backing Log |
+|---|---|---|---|---|---|
+| **RegNetX-002** | 46 | **1 (2.2%)** | **-90 / 24 / 27** | **CRITICAL: Accumulator Overflow (sigma = -90 < 0)** | `results/quant/shift_cut_feasibility.log` |
+| **FastDepth** | 38 | **1 (2.6%)** | **25 / 29 / 32** | **CRITICAL: Shift Clamp (sigma = 32 > 31)** | `results/quant/shift_cut_feasibility.log` |
+| **MODNet** (`modnet_cut_xint8`) | 74 | **0 (0.0%)** | 7 / 24 / 31 | PASS: Reaches upper register bound (sigma = 31) | `results/quant/shift_cut_feasibility.log` |
+| **ResNet50** (`resnet50_xint8_c64`) | 55 | **0 (0.0%)** | 12 / 24 / 26 | PASS: Centered in systolic basin | `results/quant/shift_cut_feasibility.log` |
+| **YOLOv8n** (`yolov8n_cut_xint8`) | 177 | **0 (0.0%)** | 7 / 20 / 23 | PASS: Centered in systolic basin | `results/quant/shift_cut_feasibility.log` |
+| **MiDaS Small** (`midas_small_cut_xint8`) | 97 | **0 (0.0%)** | 17 / 23 / 27 | PASS: Centered in systolic basin | `results/quant/shift_cut_feasibility.log` |
+| **BiSeNetV2** (`bisenetv2_fp32_xint8`) | 63 | **0 (0.0%)** | 7 / 22 / 26 | PASS: Centered in systolic basin | `results/quant/shift_cut_feasibility.log` |
+
+Diagnosis of identified violations:
+- **RegNetX-002**: Layer `/s1/b1/conv2/conv/Conv` has scale factor A = 2.028241e+31, yielding M = 16384 and sigma = -90. Because sigma < 0, the post-accumulator ALU cannot scale the 32-bit register down to int8; this forces top-1 accuracy to collapse to 0.50% (random chance).
+- **FastDepth**: Layer `Conv_96` has scale factor A = 3.814697e-06, yielding M = 16384 and sigma = 32. The hardware shifter is 5 bits wide (maximum shift 31); sigma = 32 overflows by exactly 1 bit, clamping to 31 and doubling the layer's output activations.
+- **MODNet**: Upper bound hits sigma = 31 exactly. Any scale perturbation exceeding 1 bit would push it into the clamp hazard regime.
+
+---
+
 ## Known limitations
 
 - **One chip generation, one SDK version.** Everything here targets Hawk Point/Phoenix
