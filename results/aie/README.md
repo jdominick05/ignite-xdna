@@ -261,6 +261,20 @@ deciding run is the same benchmark against `1x4.xclbin`. Written up in
 [`docs/BENCHMARKS.md`](../../docs/BENCHMARKS.md#two-loads-in-one-bank-cost-a-cycle-and-the-int8-gemm-has-that-collision-where-bf16-does-not).
 
 
+**`accumulator_width_vs_count.log`** — the cheapest test in the current plan, and it refutes
+its own hypothesis. `aie2_isa_static.log` measured five live 4x8x8 int8 accumulators as the
+spill-free ceiling and the production int8 GEMM holds eight and spills (416-byte frame). But
+both dtype paths in `mm.cc` ask for the SAME total width — int8 8x1024 bit, bf16 16x512 bit,
+both 8192 bits across the same 8 of 9 registers — so the ceiling might have been a width
+budget that generalises. It is not: **bf16 spills nothing**, a 64-byte frame whose 15 stack
+references are all scalar, against int8's **12 vector spills** (12 slots x 32 B + 32 B scalar
+reconciles the 416-byte frame exactly). Also establishes the file's shape: 9 registers
+addressed at three granularities, `cm` full 1024-bit, `bml`/`bmh` halves, `amll`..`amhh`
+quarters — so the earlier "9 names is a lower bound" was the whole file seen one way. int8's
+4x2 blocking is the defect, and bf16 is the existence proof that a fitting blocking spills
+nothing. Written up in
+[`docs/BENCHMARKS.md`](../../docs/BENCHMARKS.md#the-int8-gemm-issues-at-40-of-nameplate-and-a-3200-cycle-per-buffer-floor-caps-it).
+
 **`bank_check_validation.log`** — `tools/aie_bank_check.py` checked against a penalty that was
 actually measured, on the `research/windows-lowlevel` branch, rather than only asserted. That
 branch left both build caches on disk: one placement with the two operands sharing a bank and

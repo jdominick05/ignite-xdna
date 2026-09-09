@@ -1369,6 +1369,17 @@ run 16 times per call at n=64. **That is a direct consequence of a number measur
 above:** five live 4×8×8 int8 accumulators is the spill-free ceiling and this kernel holds
 eight, with a 416-byte frame and 33 stack references.
 
+**And the spill is a blocking defect, not a width limit — bf16 proves it.** The two dtype paths
+in `mm.cc` ask the register file for the *same* total accumulator width: int8 takes 8
+accumulators of 1024 bit, bf16 takes 16 of 512 bit, both 8192 bits across the same 8 of the
+file's 9 registers. If the ceiling were a width budget, bf16 would spill too and reblocking
+int8 would buy nothing. It does not spill at all: a **64-byte frame** whose 15 stack references
+are every one of them scalar, against int8's **416-byte frame** carrying **12 vector spills**
+(12 slots × 32 B + 32 B of scalar reconciles 416 exactly). The file itself is 9 registers
+addressed at three granularities — `cm` full, `bml`/`bmh` halves, `amll`…`amhh` quarters —
+so it was never 9 *or more*. Backing log `results/aie/accumulator_width_vs_count.log`. This is
+the existence proof H11 needed: a blocking that fits spills nothing.
+
 **The per-buffer floor is the finding that survived the correction.** Measured cycles per call
 are 3,274 at n=64 and 3,160 at n=32 — a 3.6% difference for buffers whose compute differs by
 2×. That is a measurement, not a model output, and neither reading changes it. What the
