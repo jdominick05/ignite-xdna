@@ -4438,6 +4438,52 @@ What remains open on YOLO: a calibration that fires the shift rules, and travers
 equivalence where refinement rules interact, which this graph does not test. AdaRound
 on this base is the next section.
 
+### Ignition: AdaRound gains an OptimDevice, and the cpu path does not move (2026-09-09, Desktop 2)
+
+`results/quant/adaround_device_cpu_parity_20260909_desktop2.log`. **No GPU measurement —
+none was possible here.** `resnet_env` carries `torch 2.4.1+cpu`, a CPU-only build with
+neither CUDA nor HIP, and Desktop 2's GPU is a Radeon 780M iGPU; the RX 7900 XTX this path
+targets is on **Desktop 1**. Nothing here says AdaRound is faster on a GPU, or runs on one.
+
+What is measured is the precondition. `quant/adaround.py` now takes Quark's `OptimDevice`
+for the Adam rounding loop (ORT activation extraction stays on the CPU, as `InferDevice`
+still refuses to move), and the one serious risk that carried was silently perturbing the
+CPU path — the path that is byte-identical to a fresh `XINT8_ADAROUND` oracle.
+
+`tools/quant_adaround_device_checks.py` runs the transcription on a synthetic QDQ Conv from
+`tools/quant_fixtures.py`, pointed by `--repo` at the pre-change code in the main checkout
+at `311a672` and at the post-change code, and compares emitted int8 weights, per-layer
+report figures and every transcribed log line. At **8 iterations / 4 images** and at
+**200 iterations / 8 images** (which moves 16 of 36 weights, so the loop is genuinely
+exercised) the two are **identical** — weights, recon metrics, changed-element counts and
+trace. Ignition's own `ADAROUND` banner is excluded and named as such in the tool: it is
+this project's telemetry, not transcribed Quark output, and it gained `optim_device` /
+`byte_parity_path` fields deliberately.
+
+Three fail-closed boundaries are checked and hold:
+
+- `OptimDevice` off the CPU **raises** unless `AllowNonParityDevice` is set
+  (CLI: `--device <dev> --accept-non-parity`). A GPU changes float reduction order in Adam
+  and in the convolutions, so the weights will differ from the oracle in the low bits.
+- A non-CPU `InferDevice` is still refused outright.
+- An acknowledged device torch cannot reach raises `RuntimeError` naming the torch build,
+  **instead of silently running on the CPU**. A "GPU run" that is quietly a CPU run is the
+  same failure shape as a CPU run in an NPU costume (`npu.session.resolve_xclbin`), and it
+  is refused the same way.
+
+The module is built and alpha-initialised on the CPU whatever the device, then moved: Quark
+draws twice from the torch RNG per layer in `reset_parameters`
+(`tools/quant_adaround_rng_probe.py`), and the byte-parity result depends on that stream.
+Per-layer QDQ constants and the staged activation tensors are placed on the device once,
+before the loop, rather than rebuilt per call.
+
+**Still open.** Whether a 7900 XTX shortens the 1000-iteration loop on a wide model is
+unmeasured, and so is whether a torch build that can reach it exists on Windows — torch's
+official ROCm wheels are Linux-only, leaving AMD's ROCm-on-Windows preview or
+`torch-directml`, neither installed on any machine here. Installing one is a Desktop 1
+decision. A GPU run will not be byte-identical to the oracle by construction; the report
+records `byte_parity_path=false` and the run logs a warning. Compare accuracy, never bytes.
+
 ### Ignition: YOLOv8n-cut AdaRound parity
 
 `python -m quant adaround` now takes a head-cut YOLOv8n base: the family comes from the
@@ -5326,12 +5372,27 @@ Model instruction distributions measured:
 >    multiplier nor the 5-bit shifter is measured, and no ISA document in this repo states
 >    either width.
 >
+> 5. **The zero was a tautology, and a third of the "analyzed" operations were not
+>    analyzed.** Added 2026-09-09 (Desktop 2), see the subsection below and
+>    `results/quant/shift_cut_contract_20260909_desktop2.log`. Quark's own
+>    `adjust_shift_cut` clamps `shift_cut = wpos + ipos - opos` into `[0, 16]`, and this
+>    module's sigma is the same quantity plus 14 — so the producer contract is
+>    **sigma in [14, 30]**, strictly inside Theorem 1's [0, 31], and an in-contract file
+>    *cannot* violate the bound the audit tests. Separately, the analyzer defaulted
+>    unreadable scales to 1.0 and still scored the operation: **166 of 1102** candidate
+>    operations across the eleven models were passing on invented scales, 57 of 177 on
+>    yolov8n-cut alone.
+>
 > What survives: sigma as a computable property of a QDQ triad, and the audit as an
 > **advisory** report. It must not gate the quantizer.
 
 Analytical formulation and verification of the post-accumulator scaling unit on XDNA1 AIE-ML, isolating the mathematical mechanism causing catastrophic accuracy collapse in quantized topologies.
 
 Backing logs:
+- `results/quant/shift_cut_contract_20260909_desktop2.log`: the producer-contract identity,
+  the coverage correction, and contract-edge saturation across the same eleven models.
+  Supersedes neither log below — every violation count in them still reads zero — but it is
+  why that zero was never evidence.
 - `results/quant/shift_cut_reaudit_20260909_desktop2.log`: the corrected audit across eleven
   quantized ONNX models, zero violations on all of them. **This supersedes the log below.**
 - `results/quant/shift_cut_feasibility.log`: the original audit across 7 quantized ONNX
@@ -5442,6 +5503,88 @@ Tested on FastDepth `Conv_96`:
 > model that already places and scores.
 
 ---
+
+### The producer contract is the binding constraint, not Theorem 1 (2026-09-09, Desktop 2)
+
+Static ONNX inspection only, no hardware context:
+`results/quant/shift_cut_contract_20260909_desktop2.log`. Same eleven models as the
+re-audit, so the two are directly comparable.
+
+**sigma and the vendor's own quantity differ by a constant.** Quark's `adjust_shift_cut`
+— transcribed at `quant/refine.py::shift_cut`, sourced in
+`results/quant/notes_xint8_dialect.log:37` and `:1216-1253` — defines, for Conv and Gemm,
+`shift_cut = wpos + ipos - opos`, clamped into `[0, 16]`. `quant/shift_cut.py`'s sigma over
+the same three positions is `pos_x + pos_w - pos_y + 14`. So `sigma == shift_cut + 14`, and
+the producer contract is exactly **sigma in [14, 30]** — a strict subset of Theorem 1's
+`[0, 31]`.
+
+A Conv or Gemm in a file Quark or Ignition emitted therefore cannot reach the `[0, 31]`
+edges without the producer's clamp having failed first. **The "zero violations on 11 of 11
+models" result is a tautology of that clamp, not a measurement of the hardware bound.**
+Measured here and now checked rather than assumed: every analyzed Conv/Gemm on all eleven
+models lies in `[14, 30]`, zero outside.
+
+This also explains, with no new hardware, the fact recorded in `311a672` that the highest
+sigma ever executed on this device is 30 — 30 is the contract's upper edge (`shift_cut` 16),
+i.e. the producer's ceiling rather than the silicon's. Both register widths behind Theorem 1
+remain unmeasured and both edges of `[0, 31]` remain unreached.
+
+**166 of 1102 candidate operations were being scored on scales that were never read.** The
+analyzer initialised `scale_x`/`scale_w`/`scale_y` to 1.0 and overwrote each only where a
+`DequantizeLinear` producer with an initializer scale existed; where none existed the
+operation was still scored and still counted as passing. Those rows are the `<out>_Scale` /
+`<out>_Mul` pairs `quant/passes.py::_insert_mul` writes for DPU simulation, whose inputs are
+a `Constant` and a `HardSigmoid`. They are the sub-14 minima in the published distributions —
+no Conv ever produced one.
+
+| model | candidates | analyzed | unresolved | Conv/Gemm sigma min/med/max |
+|---|---|---|---|---|
+| resnet50_xint8_c64 | 55 | 54 | 1 | 18 / 21 / 24 |
+| yolov8n_cut_xint8 | 177 | 120 | **57** | 19 / 21 / 23 |
+| yolov8n-pose_cut_xint8 | 198 | 135 | **63** | 20 / 21 / 23 |
+| regnetx_002_xint8 | 46 | 45 | 1 | **14** / 21 / **30** |
+| resnext50_32x4d_xint8 | 55 | 54 | 1 | **14** / 21 / **30** |
+| bisenetv2_fp32_xint8 | 63 | 59 | 4 | 16 / 21 / 24 |
+| fastdepth_fp32_xint8 | 38 | 38 | 0 | 18 / 21 / 23 |
+| sesr_m7_xint8 | 9 | 9 | 0 | 17 / 21 / 23 |
+| midas_small_cut_xint8 | 97 | 97 | 0 | 15 / 22 / 26 |
+| mobilevit_xint8 | 177 | 142 | 35 | 18 / 22 / 26 |
+| densenet121_xint8 | 187 | 183 | 4 | **14** / 21 / 29 |
+
+Unresolved operations are now excluded from the violation denominator and from every
+distribution, and counted on their own line. `--repair` skips them too: projecting from an
+invented 1.0 is the same class of defect as the sigma = −90 incident in `311a672`.
+
+**Contract-edge saturation, and what it does not prove.** An operation at sigma 14 or 30 is
+one the clamp had hard against an edge. Only three models touch an edge at all, and only two
+touch *both*: regnetx_002 (4 low, 2 high) and resnext50_32x4d (4 low, 4 high) — exactly the
+two identified above as CLE confounds, at 0.10% top-1 each and recovering to 66.20% and
+68.90% with CLE off. densenet121 is the informative near-miss: 18 at the low edge, none at
+the high edge, and not a known accuracy casualty.
+
+This is a **correlation at n = 2 and the cause is not established.** The alternative not
+ruled out is architecture: both saturating models are grouped-convolution designs, whose
+per-channel weight ranges are far wider than the dense convolutions in the seven interior
+models, and in the sample available on this machine no grouped-conv model is CLE-free and no
+CLE-on model is group-free — the two explanations are perfectly confounded. The deciding
+experiment is a single-graph A/B in the shape of `scripts/quant-cle-probe.sh`: quantize
+regnetx_002 through Ignition twice from the same float export and calibration listing, once
+`--cle` and once `--no-cle`, and re-measure saturation. Ignition emits both, so it needs no
+vendor run. Not done here — it is a producer pass and belongs on Desktop 1.
+
+**Multi-branch inter-scale divergence** is now reported by `check-shift-cut --branches` as
+the inter-branch position spread at every quantized `Add`/`Concat`, and is **advisory
+only**: a DPU aligns branches to one output scale before adding them, so a wide spread is
+where that alignment costs most, but no divergence has been measured to change an output on
+this device. BiSeNetV2 — the model the check was asked for — reads zero violations under
+every criterion in the module, and its Add/Concat spread is unremarkable.
+
+**Fixture checks.** `tools/quant_shift_cut_checks.py` (47 checks) builds ONNX graphs whose
+sigma is chosen by construction and asserts the analyzer reads it back, bands it correctly,
+refuses to score an operation whose scales it cannot read, and leaves an in-contract model
+byte-identical under `--repair`. `tools/quant_passes_checks.py` (54 checks) pins each
+`quant/passes.py` rewrite against a fixture whose expected node list is known. Neither
+establishes vendor parity — the oracle diff remains that gate — and neither touches hardware.
 
 ## Known limitations
 

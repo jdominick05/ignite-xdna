@@ -1,0 +1,238 @@
+================================================================================
+Shift-cut: the producer contract, and the coverage the audit was not reporting
+================================================================================
+Date        : 2026-09-09 13:20
+Machine     : DESKTOP-CBL5NUA (Desktop 2), Ryzen 7 8700G, Phoenix XDNA1
+Env         : resnet_env17
+Branch      : worktree-ignition-dev
+Command     : python -m quant check-shift-cut --branches <models>
+Hardware    : NONE. Static ONNX inspection only; no InferenceSession was built
+              and no hardware context was opened. Safe under peer NPU load.
+Host load   : OMP_NUM_THREADS=4 for every command in this sitting. Note that this
+              does NOT make tools/host_load.ps1 report CLEAR -- `-m\s+quant\b` is
+              a PEER_CMDS token there, so any `python -m quant` is PEER by name
+              whatever its thread count, and CORES_PEER is 2.0 < 4 in any case.
+              Nothing here is a producer run; the heaviest step is onnx.load.
+
+This log supersedes nothing in results/quant/shift_cut_reaudit_20260909_desktop2.log.
+Every violation count there still reads zero here. What it adds is why that zero was
+never evidence, and what the analyzer was counting to reach it.
+
+--------------------------------------------------------------------------------
+1. sigma and the vendor's shift_cut differ by a constant
+--------------------------------------------------------------------------------
+Quark's adjust_shift_cut (transcribed at quant/refine.py::shift_cut, sourced in
+results/quant/notes_xint8_dialect.log:37 and :1216-1253) defines, for Conv and Gemm
+
+    shift_cut = wpos + ipos - opos      clamped into [0, 16]
+
+quant/shift_cut.py's Theorem 1 quantity over the same three positions is
+
+    sigma = pos_x + pos_w - pos_y + 14
+
+so  sigma == shift_cut + 14, and the producer's contract is exactly
+
+    sigma in [14, 30]   <-  a strict subset of Theorem 1's [0, 31]
+
+CONSEQUENCE. A Conv or Gemm in a file Quark or Ignition emitted cannot reach the
+[0, 31] edges without the producer's own clamp having failed first. The "0 violations
+on 11 of 11 models" result is therefore a tautology of the producer's clamp, not a
+measurement of the hardware bound. The test is kept -- a hand-edited, CLE-inflated or
+foreign-producer file is not in-contract -- but a PASS from it means "this file came
+from the producer", never "this file is safe on the DPU".
+
+This also explains, without new hardware, the fact recorded in 311a672 that the
+highest sigma ever executed on this device is 30: 30 is CONTRACT_SIGMA's upper edge
+(shift_cut = 16), i.e. the producer's ceiling, not the silicon's. The 5-bit shifter
+and 15-bit multiplier remain unmeasured, exactly as that commit says.
+
+--------------------------------------------------------------------------------
+2. Operations scored on scales that were never read
+--------------------------------------------------------------------------------
+analyze_model_shift_cut initialised scale_x/scale_w/scale_y to 1.0 and overwrote each
+only where a DequantizeLinear producer with an initializer scale existed. Where none
+existed the operation was still scored, still got a sigma, and still counted as a
+passing operation in the denominator.
+
+Those rows are the sub-14 minima in the published distributions. They are the
+`<out>_Scale` / `<out>_Mul` pairs that quant/passes.py::_insert_mul writes for DPU
+simulation, whose two inputs are a Constant and a HardSigmoid -- not a QDQ pair.
+
+They are now classified UNRESOLVED: excluded from the violation denominator and from
+every distribution, and counted on their own line.
+
+--------------------------------------------------------------------------------
+3. Coverage, over the same eleven models as the re-audit
+--------------------------------------------------------------------------------
+"candidates" is what the old report called "analyzed". "analyzed" is what it should
+have called it. "viol" is against the stated [0, 31]; "OoC" is outside the producer
+contract [14, 30] but inside [0, 31] -- an observation about provenance, not a hazard.
+
+model                          cand  anlyz  unres  viol  OoC   Conv/Gemm sigma
+                                                               n   min med max
+resnet50_xint8_c64                55     54      1     0    0    54  18  21  24
+yolov8n_cut_xint8                177    120     57     0    0    63  19  21  23
+yolov8n-pose_cut_xint8           198    135     63     0    0    72  20  21  23
+regnetx_002_xint8                 46     45      1     0    0    45  14  21  30
+resnext50_32x4d_xint8             55     54      1     0    0    54  14  21  30
+bisenetv2_fp32_xint8              63     59      4     0    0    57  16  21  24
+fastdepth_fp32_xint8              38     38      0     0    0    38  18  21  23
+sesr_m7_xint8                      9      9      0     0    0     9  17  21  23
+midas_small_cut_xint8             97     97      0     0    0    97  15  22  26
+mobilevit_xint8                  177    142     35     0    0    90  18  22  26
+densenet121_xint8                187    183      4     0    0   183  14  21  29
+
+Violations against [0, 31]: 0 on every model, matching the re-audit exactly.
+Outside the producer contract: 0 on every model -- every analyzed Conv/Gemm sits in
+[14, 30], which is what section 1 says must happen and is now checked
+rather than assumed.
+
+Coverage: 166 of 1102 candidate operations across the eleven models were
+being scored on invented scales. The two head-cut YOLO files are the worst affected
+(57 of 177 and 63 of 198), because SiLU leaves one _Scale/_Mul pair per activation.
+
+--------------------------------------------------------------------------------
+4. Contract-edge saturation
+--------------------------------------------------------------------------------
+An operation at sigma 14 or 30 is one the producer's clamp had hard against an edge.
+Interior layers are the normal case; a model pinned at BOTH edges is one whose
+per-channel ranges the producer could not fit.
+
+model                          Conv/Gemm  at sigma=14  at sigma=30  both edges
+resnet50_xint8_c64                    54            0            0       0.0%
+yolov8n_cut_xint8                     63            0            0       0.0%
+yolov8n-pose_cut_xint8                72            0            0       0.0%
+regnetx_002_xint8                     45            4            2      13.3%  <-- TWO-SIDED
+resnext50_32x4d_xint8                 54            4            4      14.8%  <-- TWO-SIDED
+bisenetv2_fp32_xint8                  57            0            0       0.0%
+fastdepth_fp32_xint8                  38            0            0       0.0%
+sesr_m7_xint8                          9            0            0       0.0%
+midas_small_cut_xint8                 97            0            0       0.0%
+mobilevit_xint8                       90            0            0       0.0%
+densenet121_xint8                    183           18            0       9.8%
+
+Two models saturate at both edges: regnetx_002 and resnext50_32x4d. Those are exactly
+the two the 311a672 commit identified as cross-layer-equalization confounds -- 0.10%
+top-1 each, recovering to 66.20% and 68.90% with CLE off
+(results/quant/eval_regnetx_002_quark_cle_full1000_cpu.log,
+ results/quant/eval_regnetx_002_ignition_nocle_c64_cpu.log,
+ results/quant/eval_resnext50_32x4d_quark_nocle_c64_cpu.log).
+
+ATTRIBUTION, STATED HONESTLY. This is a correlation at n = 2, and it is NOT
+established that equalization is the cause of the saturation.
+
+  - The alternative not ruled out is architecture. Both saturating models are
+    grouped-convolution designs (RegNetX's group width, ResNeXt's cardinality-32
+    blocks), and grouped convolutions carry much wider per-channel weight ranges than
+    the dense convolutions in the seven interior models. No grouped-conv model in this
+    set is CLE-free, and no CLE-on model here is group-free, so the two explanations
+    are perfectly confounded in the sample available on this machine.
+  - densenet121 is the informative near-miss: it touches the LOW edge 18 times and the
+    high edge never. One-sided saturation is a different signature, and densenet121 is
+    not a known accuracy casualty. So "touches an edge" alone predicts nothing; only
+    the two-sided case tracks the failures, on two models.
+
+The deciding experiment is a controlled A/B on one graph, in the shape of
+scripts/quant-cle-probe.sh: quantize regnetx_002 through Ignition twice from the same
+float export and the same calibration listing, once --cle and once --no-cle, and
+re-measure saturation on both artifacts. If saturation disappears with CLE off, it is
+equalization; if it survives, it is the architecture. Ignition emits both, so this
+needs no vendor run.
+
+NOT DONE HERE, and deliberately: that is a producer pass, and this machine is
+Desktop 2 with peer sessions timing hardware. It belongs on Desktop 1. The exact
+command is in the handoff entry.
+
+--------------------------------------------------------------------------------
+5. Multi-branch inter-scale divergence (advisory)
+--------------------------------------------------------------------------------
+Inter-branch position spread at every quantized Add/Concat, reported by
+`check-shift-cut --branches`. A DPU must bring two branches to a common output scale
+before it can add or concatenate them, so a wide spread is where that alignment costs
+the most precision. NOTHING here is a hazard: no divergence has been measured to
+change an output on this device, and BiSeNetV2 -- the model this check was asked for
+-- reads zero violations under every criterion in the module.
+
+model                          Add/Concat  spread min  median  max
+resnet50_xint8_c64                     16          0       0    1
+yolov8n_cut_xint8                      19          0       0    1
+yolov8n-pose_cut_xint8                 19          0       0    2
+regnetx_002_xint8                      13          0       1    2
+resnext50_32x4d_xint8                  16          0       1    1
+bisenetv2_fp32_xint8                   11          0       0    2
+fastdepth_fp32_xint8                    3          0       0    2
+sesr_m7_xint8                           1          1       1    1
+midas_small_cut_xint8                  27          0       1    3
+mobilevit_xint8                        24          0       7    7
+densenet121_xint8                      58          0       0    0
+
+--------------------------------------------------------------------------------
+6. Full report for one model, as the tool prints it
+--------------------------------------------------------------------------------
+================================================================================
+AIE-ML Systolic Shift-Cut Verification Report: C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\models\yolov8n_cut_xint8.onnx
+================================================================================
+Candidate operations: 177  (Conv/Gemm/MatMul and Mul)
+Analyzed             : 120  -- all three scales read from QDQ initializers
+Not analyzable       : 57  -- excluded from every figure below
+Shift-cut violations found: 0 / 120 (0.0% of analyzed)
+
+PASS against sigma in [0, 31]. Read this narrowly: Quark's own
+adjust_shift_cut clamps shift_cut into [0, 16], i.e. sigma into
+[14, 30], so a file this producer emitted CANNOT reach the [0, 31]
+edges. A pass here means the file is in-contract, not that the hardware is safe.
+
+NOT ANALYZABLE: 57 / 177 operation(s). Their scales could not
+be read from a DequantizeLinear, so any sigma would rest on invented 1.0 defaults.
+These were silently counted as passing before 2026-09-09; they are excluded now.
+  - [UNRESOLVED] Mul '/model.0/act/Sigmoid_output_0_Mul': a: producer of '/model.0/act/Sigmoid_output_0_Mul' is HardSigmoid, not DequantizeLinear; b: producer of '/model.0/act/Sigmoid_output_0_Scale' is Constant, not DequantizeLinear -- not analyzed (a sigma here would rest on invented 1.0 scales)
+  - [UNRESOLVED] Mul '/model.1/act/Sigmoid_output_0_Mul': a: producer of '/model.1/act/Sigmoid_output_0_Mul' is HardSigmoid, not DequantizeLinear; b: producer of '/model.1/act/Sigmoid_output_0_Scale' is Constant, not DequantizeLinear -- not analyzed (a sigma here would rest on invented 1.0 scales)
+  - [UNRESOLVED] Mul '/model.2/cv1/act/Sigmoid_output_0_Mul': a: producer of '/model.2/cv1/act/Sigmoid_output_0_Mul' is HardSigmoid, not DequantizeLinear; b: producer of '/model.2/cv1/act/Sigmoid_output_0_Scale' is Constant, not DequantizeLinear -- not analyzed (a sigma here would rest on invented 1.0 scales)
+  - [UNRESOLVED] Mul '/model.2/m.0/cv1/act/Sigmoid_output_0_Mul': a: producer of '/model.2/m.0/cv1/act/Sigmoid_output_0_Mul' is HardSigmoid, not DequantizeLinear; b: producer of '/model.2/m.0/cv1/act/Sigmoid_output_0_Scale' is Constant, not DequantizeLinear -- not analyzed (a sigma here would rest on invented 1.0 scales)
+  - [UNRESOLVED] Mul '/model.2/m.0/cv2/act/Sigmoid_output_0_Mul': a: producer of '/model.2/m.0/cv2/act/Sigmoid_output_0_Mul' is HardSigmoid, not DequantizeLinear; b: producer of '/model.2/m.0/cv2/act/Sigmoid_output_0_Scale' is Constant, not DequantizeLinear -- not analyzed (a sigma here would rest on invented 1.0 scales)
+  - [UNRESOLVED] Mul '/model.2/cv2/act/Sigmoid_output_0_Mul': a: producer of '/model.2/cv2/act/Sigmoid_output_0_Mul' is HardSigmoid, not DequantizeLinear; b: producer of '/model.2/cv2/act/Sigmoid_output_0_Scale' is Constant, not DequantizeLinear -- not analyzed (a sigma here would rest on invented 1.0 scales)
+  - [UNRESOLVED] Mul '/model.3/act/Sigmoid_output_0_Mul': a: producer of '/model.3/act/Sigmoid_output_0_Mul' is HardSigmoid, not DequantizeLinear; b: producer of '/model.3/act/Sigmoid_output_0_Scale' is Constant, not DequantizeLinear -- not analyzed (a sigma here would rest on invented 1.0 scales)
+  - [UNRESOLVED] Mul '/model.4/cv1/act/Sigmoid_output_0_Mul': a: producer of '/model.4/cv1/act/Sigmoid_output_0_Mul' is HardSigmoid, not DequantizeLinear; b: producer of '/model.4/cv1/act/Sigmoid_output_0_Scale' is Constant, not DequantizeLinear -- not analyzed (a sigma here would rest on invented 1.0 scales)
+  - [UNRESOLVED] Mul '/model.4/m.0/cv1/act/Sigmoid_output_0_Mul': a: producer of '/model.4/m.0/cv1/act/Sigmoid_output_0_Mul' is HardSigmoid, not DequantizeLinear; b: producer of '/model.4/m.0/cv1/act/Sigmoid_output_0_Scale' is Constant, not DequantizeLinear -- not analyzed (a sigma here would rest on invented 1.0 scales)
+  - [UNRESOLVED] Mul '/model.4/m.0/cv2/act/Sigmoid_output_0_Mul': a: producer of '/model.4/m.0/cv2/act/Sigmoid_output_0_Mul' is HardSigmoid, not DequantizeLinear; b: producer of '/model.4/m.0/cv2/act/Sigmoid_output_0_Scale' is Constant, not DequantizeLinear -- not analyzed (a sigma here would rest on invented 1.0 scales)
+  ... and 47 more.
+
+Conv/Gemm/MatMul shift-cut distribution over 63 analyzed op(s):
+  sigma      min=19, median=21, max=23
+  shift_cut  min=5, median=7, max=9   (the vendor's own quantity, contract [0, 16])
+  at contract edges: 0 at sigma=14, 0 at sigma=30
+
+Mul (elementwise) distribution over 57 analyzed op(s): min=19, median=20, max=22
+
+Multi-branch inter-scale divergence (ADVISORY, never a hazard): 19 Add/Concat
+  branch position spread: min=0, median=0, max=1 bits
+  A DPU aligns branches to one output scale before adding or concatenating, so a
+  wide spread is where that alignment costs most. No divergence has been measured
+  to change an output on this device; this is reported, not gated on.
+  - Add '/model.2/m.0/Add': positions [2, 3] spread=1
+  - Add '/model.4/m.0/Add': positions [4, 5] spread=1
+================================================================================
+
+--------------------------------------------------------------------------------
+7. Fixture checks
+--------------------------------------------------------------------------------
+tools/quant_shift_cut_checks.py builds ONNX graphs whose sigma is chosen by
+construction and asserts the analyzer reads it back, bands it correctly, and refuses
+to score an operation whose scales it cannot read.
+
+$ python tools/quant_shift_cut_checks.py
+47 passed, 0 failed   (exit 0)
+
+$ python tools/quant_passes_checks.py
+54 passed, 0 failed   (exit 0)
+
+--------------------------------------------------------------------------------
+8. What this log does NOT establish
+--------------------------------------------------------------------------------
+- Nothing about the DPU. No hardware ran. The 5-bit shifter and the 15-bit multiplier
+  behind Theorem 1 are still unmeasured, and both edges of [0, 31] are still unreached
+  on this device.
+- Not that CLE causes contract-edge saturation. Section 4 states the confound.
+- Not vendor parity for any pass. tools/quant_passes_checks.py pins each rewrite
+  against a fixture whose answer is known; the oracle diff remains the parity gate.
+================================================================================
