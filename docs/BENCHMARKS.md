@@ -4361,28 +4361,76 @@ Alternating between two distinct hardware contexts on the Phoenix NPU incurs a 7
 
 ### DPU microcode transaction stream disassembly
 
-The VitisAI compiler bundles compiled DPU instruction streams inside `.xmodel` Protobuf archives under the `mc_code` bytefield. Disassembly with `tools/dpu_transaction_disasm.py` reveals the transaction structure:
+> **Scope correction, 2026-09-09 (Desktop 2).** An earlier version of this section
+> described `tools/dpu_transaction_disasm.py` as decoding a DPU instruction set, and
+> published a BiSeNetV2 row. The decode claim is narrowed to what the method supports and
+> the BiSeNetV2 row is **retracted** — no log backs it. The superseded figures are kept
+> below rather than deleted, per this repo's practice.
 
-- **Packet Architecture**: Instructions are formatted in fixed 48-byte packets (12 32-bit words). Each packet begins with header `0x0B0000xx`, where byte 3 (`0x0B` = 11) specifies 11 payload data words and byte 0 is a sequence tag.
-- **Opcode Taxonomy**:
-  - **Opcode 3 (`CONV2D / 1x1_DENSE`)**: Standard 2D convolution and dense projection.
-  - **Opcode 6 (`DWCONV2D / DEPTHWISE`)**: Depthwise separable convolution.
-  - **Opcode 0x4000 / 0x100 (`SPECIAL_OP`)**: Elementwise gating and residual addition (found in BiSeNetV2 Bilateral Guided Aggregation).
-  - **Opcode 0 (`DMA / BARRIER`)**: Tile DMA trigger and synchronization barrier.
+The VitisAI compiler bundles compiled DPU instruction streams inside `.xmodel` Protobuf
+archives under an `mc_code` bytefield. `tools/dpu_transaction_disasm.py` locates that
+field with a literal ASCII `b"mc_code"` search, then walks the archive one byte at a time
+looking for any 32-bit word whose high byte is `0x0B`, consuming 48 bytes from each hit
+without validating alignment. Its `OPCODE_MAP` is a **six-entry hand-written guess
+table**; no AIE-ML or DPU ISA document is cited anywhere in this repo.
 
-Model instruction distributions measured:
-- **FastDepth** (`compiled.0x800020500148acb.xmodel`, 2,570 packets across 2 segments):
-  - Opcode 3 (Conv2D): 1,269 packets (49.38%)
-  - Opcode 6 (DWConv): 960 packets (37.35%)
-  - Opcode 0xA0801A2: 100 packets (3.89%)
-  - Opcode 0x74746F62: 72 packets (2.80%)
-  - Opcode 0xFFFF8028: 32 packets (1.25%)
-  - Control / DMA: 137 packets (5.33%)
-- **BiSeNetV2** (`compiled.0x800020500148acb.xmodel`, 4,630 packets):
-  - Opcode 3 (Conv2D): 1,999 packets (43.17%)
-  - Opcode 6 (DWConv): 1,510 packets (32.61%)
-  - Elementwise / Gating: 11 packets (0.24%)
-  - DMA / Barrier: 1,110 packets (23.97%)
+**What the measurement supports.** FastDepth's `compiled.0x800020500148acb.xmodel`
+(7,004,134 bytes) contains two `mc_code` segments, at offsets 6,731,604 and 6,782,410,
+holding a dense stream of ~48-byte-strided records — 1,659 + 911 = 2,570 of them by this
+scan. The distribution is strongly bimodal: 49.38% of records carry `3` in the assumed
+opcode position and 37.35% carry `6`. That is *consistent with* a graph built mostly from
+pointwise and depthwise convolution, which FastDepth is (255/257 nodes, one DPU subgraph).
+Backing log: `results/aie/dpu_transaction_disasm_utf8.log`.
+
+**What it does not support, and why.** The remaining 13.27% of reported "opcodes" are
+ASCII text being read as instruction words:
+
+| Reported "opcode" | The bytes, as ASCII |
+|---|---|
+| `0x74746F62` | `bott` |
+| `0x6E617274` | `tran` |
+| `0x68736572` | `resh` |
+| `0x69642D78` | `id-x` |
+| `0x6E696C71` | `nilq` |
+| `0x2D676F6C` | `-gol` |
+| `0x6F630A0A` | `oc` followed by **two newline bytes** |
+
+The last row settles it: no instruction opcode contains `0x0A0A`. These are xmodel
+metadata strings, so an unquantified share of the 2,570 "packets" are not instructions at
+all and the record boundary is not established. Every packet in the listing also carries
+the identical `Inst Ptr 0x0001D214`, which is what a misaligned constant-offset read looks
+like. **No DPU ISA has been recovered.** Packet boundary, opcode field position, opcode
+semantics and column encoding are all unverified inference from a byte-frequency scan.
+
+What *is* solidly measured about column identity is a different result entirely: IRON
+logical `Tile(0,2)` reports `get_coreid()` row 2, column 1, confirmed independently by the
+trace packet header (`results/aie/clock_probe_npu.log`).
+
+**Superseded FastDepth listing** (kept for the record; the percentages are a byte-scan
+histogram, not an instruction mix):
+
+- Opcode 3: 1,269 packets (49.38%) · Opcode 6: 960 (37.35%) · `0xA0801A2`: 100 (3.89%)
+  · `0x74746F62`: 72 (2.80%) · `0xFFFF8028`: 32 (1.25%) · control/DMA: 137 (5.33%)
+
+**Retracted: the BiSeNetV2 row.** It reported 4,630 packets at 43.17% opcode 3, 32.61%
+opcode 6, 0.24% "Bilateral Guided Aggregation gating" and 23.97% DMA/barrier. **No log in
+this repo or in any of its worktrees reproduces those numbers** — the only committed
+disassembly log names exactly one model, and it is FastDepth's. The row was also
+attributed to `compiled.0x800020500148acb.xmodel`, which is FastDepth's own xmodel hash
+copied verbatim from the entry above it. The 0.24% "gating" attribution further asserts a
+semantic decode the six-entry guess table cannot support. Retracted rather than revised:
+re-run and re-log before citing any BiSeNetV2 microcode figure.
+
+**Where real ISA knowledge does exist.** `tools/aie_disasm.py` (branch `silicon-isa-pmu`)
+reads AIE2 *core* machine code with Peano's own `llvm-objdump` — a real disassembler for a
+documented target, calibrated against the clock probe's exact 9.000- and 2.000-cycle
+loops. That is the tool to build on; this one is a byte-frequency probe.
+
+**Log encoding.** `results/aie/dpu_transaction_disasm.log` was written as ASCII, decoded as
+UTF-16LE and re-encoded as UTF-8, so it renders as CJK mojibake and every `grep` against it
+silently matches nothing. The corrupt original is kept unmodified, per the rule that a log
+under `results/` is never rewritten; `results/aie/dpu_transaction_disasm_utf8.log` is the
+byte-exact recovery (round trip asserted before writing) and is the one to read.
 
 ---
 
