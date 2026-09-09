@@ -91,6 +91,16 @@ Read these before quoting anything below.
   rule built on it — restated in four places (`README.md`, `kernels/README.md`,
   `docs/DECISIONS.md`, `docs/BENCHMARKS.md`) — and the four small-op verdicts
   `docs/SILICON.md` §3.4 closed on it.
+- **`dispatch_runlist_npu.log`'s 36 µs is in turn scoped by `iron_batch_npu.log` to raw
+  pyxrt.** Batching was wired into IRON's own host path and measured there: the device cost
+  per dispatch reproduces at **37.5–37.9 µs**, but IRON's per-call host work is a
+  near-constant **~500 µs** that batching does not touch, so a batched `@iron.jit` call still
+  costs **~531 µs** — a 1.26–1.37× gain, not 17×. 36.3 µs is **not retracted**: it is what a
+  raw-pyxrt driver gets, and the device half is confirmed from inside IRON. What changes is
+  which threshold applies to whom — **there are three, not two** (~617 µs unbatched IRON,
+  ~531 µs batched IRON, ~36 µs batched raw pyxrt) — and that against ~531 µs none of the four
+  reopened §3.4 verdicts survives. The same run also closes that log's no-compute-passthrough
+  caveat.
 
 ## Toolchain bring-up
 
@@ -580,6 +590,28 @@ carries one same-bank paired load, worth ~5% and not a lever. **Careful:** the 2
 ceilings on unused issue slots, not predictions of a rewrite, and per-loop densities are
 unweighted by trip count. Written up in
 [`docs/BENCHMARKS.md`](../../docs/BENCHMARKS.md#the-open-convs-113-gap-to-the-vendor-is-issue-rate-and-it-is-visible-without-a-trace).
+
+**`iron_batch_npu.log`** — the host path `dispatch_runlist_npu.log` said was missing, written
+and measured. `kernels/dispatch_floor/iron_batch.py` patches IRON's own transaction submit so
+an ordinary `@iron.jit` design queues unstarted runs into a `pyxrt.runlist`, with nothing
+outside this repo modified. **The device half reproduces from inside IRON** — 37.5–37.9 us per
+dispatch at N=64 across two series, against the raw harness's 36.3 us. **The wall clock barely
+moves:** 1.26x and 1.37x on the passthrough, 1.23x on GroupNorm, because IRON's per-call host
+work is a near-constant **~500 us, flat in batch size**, which batching cannot touch. That
+leaves a batched `@iron.jit` call at **~531 us**, so there are three thresholds, not two:
+~617 us unbatched IRON, ~531 us batched IRON, ~36 us batched raw pyxrt. Against ~531 us none
+of the four small-op verdicts `dispatch_runlist_npu.log` reopened survives. The run also
+closes that log's other caveat: a real 8-core bf16 kernel (GroupNorm, L=150528) batches to
+823.8-838.3 us per dispatch, which is **its own compute** — `groupnorm_bf16_kernel_npu.log`
+independently measured 835.8 us at this shape — so a real kernel's configuration cost does not
+swamp the passthrough's floor. The ~500 us residue is `dispatch_floor_npu.log`'s 447.3 us host
+term measured from a different direction and shown independent of how the submit is done; at
+37.5 us of device against ~500 us of host it is now the larger term by more than an order of
+magnitude. **Batching gives up per-call completion status entirely** — a run inside a runlist
+cannot be polled (`run.state()` raises), so verifying output buffers is the only correctness
+gate, and every row is gated on it. Only the transaction submit path is batched; full-ELF is
+refused with a clear message. Written up in
+[`docs/BENCHMARKS.md`](../../docs/BENCHMARKS.md#batching-reaches-the-device-floor-from-inside-iron--and-irons-own-host-work-eats-almost-all-of-it).
 
 **`dispatch_runlist_npu.log`** — the measurement `dispatch_floor_npu.log` asked for and
 `docs/DECISIONS.md` recorded as unrun (*"Nothing has been run -- this is an API-existence

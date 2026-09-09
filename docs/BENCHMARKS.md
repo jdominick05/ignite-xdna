@@ -489,6 +489,12 @@ also dominates *everything* below ~0.5 MB: wall time is flat across a 64× paylo
 > [Batched submission drops the dispatch floor 17×](#batched-submission-drops-the-dispatch-floor-17-and-reopens-four-closed-verdicts).
 > The 617 µs figure still governs a **single** unbatched IRON dispatch, which is what this
 > section measured, so it is superseded rather than retracted.
+>
+> **Scoped 2026-09-09 (same day): ~36 µs is a raw-pyxrt figure. Through IRON the batched
+> floor is ~531 µs.** Batching was then wired into IRON's own host path and measured there:
+> the device cost per dispatch does fall to 37.5–37.9 µs, but IRON's per-call host work is a
+> near-constant ~500 µs that batching never touches, so a batched `@iron.jit` call still costs
+> ~531 µs. See [Batching reaches the device floor from inside IRON](#batching-reaches-the-device-floor-from-inside-iron--and-irons-own-host-work-eats-almost-all-of-it).
 
 ### The open conv's 11.3× gap to the vendor is issue rate, and it is visible without a trace
 
@@ -549,8 +555,11 @@ a result."* This is that measurement. Backing log `results/aie/dispatch_runlist_
 | **raw pyxrt, single** | **~140 µs** |
 | **`pyxrt.runlist`, N=64, amortised** | **36.3 µs** |
 
-**The go/no-go threshold moves from 617 µs to about 36 µs, a factor of 17.** The amortised
-figure reproduced at 35.9, 36.3, 36.0 and 36.3 µs across four runs.
+**The go/no-go threshold moves from 617 µs to about 36 µs, a factor of 17 — for a caller
+driving raw pyxrt.** The amortised figure reproduced at 35.9, 36.3, 36.0 and 36.3 µs across
+four runs. It was later measured *through IRON* as well, where the device half reproduces but
+the end-to-end threshold only falls to ~531 µs; see
+[Batching reaches the device floor from inside IRON](#batching-reaches-the-device-floor-from-inside-iron--and-irons-own-host-work-eats-almost-all-of-it).
 
 **The "hardware" half was not all hardware.** Raw pyxrt submits the same design in ~140 µs,
 below the 169.8 µs the earlier work called the hardware bracket, and the batched figure is a
@@ -565,20 +574,28 @@ slightly slower than a raw single dispatch, so batching only pays from N=2.
 
 **What reopens.** Against §3.4's own list of what the old floor closed, with its CPU times:
 
-| Op | CPU time | Against a 36 µs floor |
-|---|---|---|
-| MobileNetV2, whole model | 1720 µs | 48× above |
-| MobileViT stage-2 attention | 240 µs | 6.7× above |
-| bf16 attention stage 2 | 240 µs | 6.7× above |
-| GroupNorm at L ≤ 18816 | 233 µs | 6.5× above |
-| bf16 attention stage 3 | 34 µs | still under |
-| bf16 attention stage 4 | 12 µs | still under |
+| Op | CPU time | Against a 36 µs raw-pyxrt floor | Against a ~531 µs batched-IRON floor |
+|---|---|---|---|
+| MobileNetV2, whole model | 1720 µs | 48× above | whole-model time, not per dispatch — see below |
+| MobileViT stage-2 attention | 240 µs | 6.7× above | still under |
+| bf16 attention stage 2 | 240 µs | 6.7× above | still under |
+| GroupNorm at L ≤ 18816 | 233 µs | 6.5× above | still under |
+| bf16 attention stage 3 | 34 µs | still under | still under |
+| bf16 attention stage 4 | 12 µs | still under | still under |
 
 Four of six reopen, without a line of kernel code. That does **not** mean they now win — it
 means the floor is no longer why they lose, and kernel quality becomes the deciding question
 for the first time. The attention kernel's README argued *"the op has to be ~20× larger before
 the kernel quality is what decides the outcome"*; at a 36 µs floor that multiple is ~1.4× for
 stage 2.
+
+**The fourth column is the one to read if you are writing an `@iron.jit` design**, and it says
+that none of the four reopens survive there. Three are single ops under 250 µs against a
+~531 µs batched-IRON floor. MobileNetV2's 1720 µs is a *whole-model* CPU time being compared
+against a *per-dispatch* floor — a comparison the 36 µs column inherits from §3.4 and does not
+justify; the model is many dispatches, and whether it clears the floor needs per-layer
+arithmetic nobody has done. Reopening any of these at 36 µs means committing to a raw-pyxrt
+driver that gives up IRON's argument handling.
 
 **Two real defects were fixed to get here**, both of which produced a wrong answer rather than
 an error. `kernel(...)` in pyxrt creates *and starts* a run, so adding one to a runlist hands
@@ -591,9 +608,97 @@ anywhere in the cache, which after any other design is compiled is a different d
 passthrough, so a real kernel's configuration cost lands inside the dispatch and pushes its
 floor above this one — treat 36 µs as a floor, not a constant. Nothing here is an IRON result:
 the batched path is raw pyxrt, `@iron.jit` does not use runlists, and reaching 36 µs from a
-real design means writing that host path. The 617.0 and 169.8 µs comparators are quoted from
+real design means writing that host path. *(Both of those caveats were closed the same day —
+the host path was written and a real kernel run through it; see the next section.)* The 617.0
+and 169.8 µs comparators are quoted from
 2026-09-07, not re-run. The reopened verdicts are arithmetic against published CPU times, not
 re-measurements — each still needs its own paired run.
+
+### Batching reaches the device floor from inside IRON — and IRON's own host work eats almost all of it
+
+The section above measured 36.3 µs by driving raw pyxrt and closed with two caveats: *"Nothing
+here is an IRON result… reaching 36 µs from a real design means writing that host path"*, and
+*"this is a no-compute passthrough: a real kernel's own configuration cost lands inside the
+dispatch and pushes its floor above this one."* Both are now closed. `kernels/dispatch_floor/
+iron_batch.py` puts runlist submission inside IRON's own host path, and a real 8-core bf16
+kernel was run through it. Backing log `results/aie/iron_batch_npu.log`.
+
+The mechanism: `XRTHostRuntime.run()` submits with `kernel_handle.kernel(3, insts_bo, …)`, and
+in pyxrt `kernel(…)` creates *and starts* a run — exactly what cannot go into a runlist. A
+context manager swaps that kernel for a proxy which builds the run **unstarted**
+(`pyxrt.run(kernel)` + `set_arg`) and queues it. Every other step of IRON's `run()` executes
+unchanged: same ABI validation, same instruction buffer, same argument order. Nothing outside
+this repo is modified, and the patch is removed on leaving the block.
+
+| No-compute passthrough, 32 KB | Series A | Series B |
+|---|---|---|
+| Unbatched, median | 676.2 µs | 729.0 µs |
+| Batched N=64, **device** (runlist bracket) | **37.9 µs** | **37.5 µs** |
+| Batched N=64, **wall per call** | **537.1 µs** | **530.9 µs** |
+| Batched N=64, host share | 499.2 µs | 493.4 µs |
+| End-to-end gain | 1.26× | 1.37× |
+
+**The device half works, and it reproduces the raw-pyxrt number from inside IRON.** The
+runlist bracket falls monotonically — 167.3/170.7 µs at N=1, 45.7/45.5 at N=16, 37.9/37.5 at
+N=64 — against the raw-pyxrt harness's 36.3 µs on the same design. The 17× survives going
+*through* IRON's argument handling rather than around it.
+
+**The real kernel closes the other caveat and confirms the reading from the other side.** bf16
+GroupNorm at L=150528 (8 cores, 32 groups) batches to 838.3, 823.8 and 829.8 µs per dispatch
+at N=4, 16 and 64, then stops. That plateau is not a measurement floor — it is the kernel's own
+compute: `results/aie/groupnorm_bf16_kernel_npu.log` independently measured this design at this
+L at **835.8 µs** per call (min 807.7) against 1899.3 µs on the CPU. All three batched figures
+land within 1.5% of it. Batching removed ~140 µs of device-side dispatch overhead and left the
+work. So a real kernel's dispatch cost is the *same order* as the passthrough's; its
+configuration cost does not swamp it.
+
+**And the end-to-end gain is 1.2–1.4×, not 17×.** That is the half a caller feels. Wall time
+per call improves 1.26× and 1.37× on the passthrough and 1.23× on GroupNorm (1844.5 → 1495.7
+µs). The reason is the host-share column, and it is **flat in batch size**: 478–529 µs on the
+passthrough at every N ≥ 4 across both series, 666–781 µs on GroupNorm. Batching cannot touch
+it because it is not dispatch — it is what IRON does per call *before* the submit: ABI
+validation, buffer preparation, instruction-buffer setup.
+
+**This reproduces and localises the 447 µs host term.** `dispatch_floor_npu.log` split the
+617.0 µs floor into a 169.8 µs hardware bracket and 447.3 µs of host cost. This measures that
+term from a different direction — 478–529 µs on the same design, at every batch size — and
+shows it is independent of *how* the submit is done. Batching fixed the dispatch half of the
+floor; the host half needs a different fix and is now the larger by more than an order of
+magnitude: **37.5 µs of device against ~500 µs of host.**
+
+**There are three thresholds, not two.** This is the correction to the section above:
+
+| Path | Per-dispatch threshold |
+|---|---|
+| Unbatched `@iron.jit` call | 617.0 µs published; 676–729 µs this sitting |
+| **Batched `@iron.jit` call** | **~531–537 µs** |
+| Batched raw-pyxrt driver | 36.3 µs |
+
+~531 µs is 14% below the published 617.0 µs and 21–27% below this sitting's own unbatched
+medians — not 17× below either. Reopening a verdict at 36 µs means committing to a raw-pyxrt
+driver that gives up IRON's argument handling.
+
+**N=1 and N=2 are slower than unbatched, and that is not noise.** A one-call batch pays to
+construct a runlist and amortises nothing: 0.91×/0.86× on the passthrough, 0.96× on GroupNorm.
+Batching is only worth reaching for at N ≥ 4.
+
+**What this does not show.** Two designs, one machine, one sitting; the passthrough was run
+twice and both series are printed in the log, with the N=1 and N=2 rows moving between them.
+The host share is a *subtraction* (wall minus runlist bracket), not a profile of `run()`, so it
+is an upper bound that includes Python loop and buffer-allocation time. Nothing here *reduces*
+the host share — identifying which part of IRON's per-call work dominates it would need a
+profile, and is now worth more than any further dispatch work. Only the transaction submit path
+is batched; the full-ELF path builds its own `pyxrt.run()` and is refused with a clear message.
+Verification is per batch after the flush, so a batch whose runs executed in the wrong *order*
+would still pass. The GroupNorm arm checks finiteness and non-zeroness — enough to catch a
+batch that silently did nothing, which is the failure mode batching introduces, but not an
+accuracy check.
+
+**Batching gives up per-call completion status entirely, and it cannot be recovered.** A run
+inside a runlist cannot be polled on this binding — `run.state()` raises *"Cannot poll a command
+that has not been submitted"* — so `runlist.wait()` is the only completion signal. **Verifying
+output buffers is the only correctness gate under batching**, and a batch that silently did
+nothing would otherwise look extremely fast.
 
 ### The chained int8 CNN also loses — and this time it was measured before anything was built
 
