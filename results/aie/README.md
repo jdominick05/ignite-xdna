@@ -331,6 +331,25 @@ padding buffer. Re-read, the int8 GEMM's software body carries **ten** paired-lo
 upper bound. Written up in
 [`docs/BENCHMARKS.md`](../../docs/BENCHMARKS.md#two-loads-in-one-bank-cost-a-cycle-and-the-int8-gemm-has-that-collision-where-bf16-does-not).
 
+**`bank_stall_control_npu.log`** — the positive control for the instrument
+`bank_ab_h12_npu.log` proposed, run BEFORE spending a sitting on it, and **the instrument does
+not work**. A same-bank dual-load conflict has to appear as `MEMORY_STALL`, which
+`pmu_probe_npu.log` had already flagged as never having read nonzero here. In a loop built to
+collide as hard as this design permits, **`MEMORY_STALL` reads 0 in every run of both
+placements at every trip count**, so zero on the GEMM's arms would not distinguish "no conflict"
+from "the event does not fire". No bank-specific event exists to fall back on, and `GROUP_STALL`
+read *exactly* equal to `ACTIVE` in all six eight-event runs. The control did yield a clean
+instruction-matched comparison and found **no rate effect**: colliding costs a *constant* 6
+cycles more at 256, 512 and 2048 iterations, where a one-cycle per-iteration stall would have
+cost 256/512/2048 — that is loop setup, not memory. **Caveat that keeps H12 open:** the loop
+runs at 15.0 cycles/iteration for 4 loads, so it has slack to absorb a one-cycle stall. Three
+structural facts fell out, each having cost an attempt: a core's `.bss` is ~16 KB not 64 KB; it
+lies entirely inside ONE 16 KB bank (0x75000-0x77C00, bank 29, fifo buffer at 0x78000, bank 30),
+so no static array can straddle a boundary; and **`stack_size` does not move a kernel's `.bss`**,
+only ObjectFifo buffers. And a trap: at eight traced events the counters are NOT reproducible --
+one identical binary gave 15665/30724/15879 cycles -- because `ACTIVE` overflows the 64 KB trace
+buffer; four events are exact. Harness `kernels/bank_placement/bank_stall_probe.py`.
+
 **`bank_ab_h12_npu.log`** — H12 run on hardware, and the honest answer is that this machine
 could not resolve it. The intervention is clean: raising the per-core `stack_size` from
 `0xD00` to `0x2000` shifts every local buffer up, moving both A halves wholly into the empty
