@@ -40,19 +40,48 @@ sys.path.insert(0, str(ROOT))
 from npu.session import build_session, clear_cache, resolve_xclbin  # noqa: E402
 
 
-def make_inputs(sess, seed: int) -> dict:
-    """Deterministic inputs shaped to the model, in a plausible image range."""
+#: Input conventions taken from this repo's own preprocessing modules in npu/. Feeding
+#: the wrong one saturates the network and makes BOTH paths produce nonsense, which then
+#: disagree for reasons that have nothing to do with the DPU -- so this is not cosmetic.
+RANGES = {
+    "byte": (0.0, 255.0),        # npu/sesr.py subtracts 128 from an RGB 0-255 array
+    "unit": (0.0, 1.0),          # npu/realesrgan.py and the yolo modules scale by 1/255
+    "imagenet": (-2.5, 2.5),     # mean/std normalized, e.g. npu/bisenetv2.py
+}
+
+
+def make_inputs(sess, seed: int, rng_name: str) -> dict:
+    """Deterministic inputs shaped to the model, in the range it was calibrated for."""
     rng = np.random.default_rng(seed)
+    lo, hi = RANGES[rng_name]
     feeds = {}
     for inp in sess.get_inputs():
         shape = [d if isinstance(d, int) and d > 0 else 1 for d in inp.shape]
         if "float" in inp.type:
-            feeds[inp.name] = rng.uniform(0.0, 255.0, size=shape).astype(np.float32)
+            feeds[inp.name] = rng.uniform(lo, hi, size=shape).astype(np.float32)
         elif "uint8" in inp.type:
             feeds[inp.name] = rng.integers(0, 256, size=shape, dtype=np.uint8)
         else:
             feeds[inp.name] = rng.integers(-128, 128, size=shape).astype(np.int8)
     return feeds
+
+
+def load_image(sess, path: str, rng_name: str) -> dict:
+    """Feed a real image, resized to the model's own input shape."""
+    import cv2
+    inp = sess.get_inputs()[0]
+    shape = [d if isinstance(d, int) and d > 0 else 1 for d in inp.shape]
+    h, w = shape[2], shape[3]
+    img = cv2.imread(path, cv2.IMREAD_COLOR)
+    if img is None:
+        raise SystemExit(f"cannot read image {path}")
+    img = cv2.cvtColor(cv2.resize(img, (w, h), interpolation=cv2.INTER_LINEAR),
+                       cv2.COLOR_BGR2RGB).astype(np.float32)
+    lo, hi = RANGES[rng_name]
+    arr = img if hi > 2 else img / 255.0
+    if rng_name == "imagenet":
+        arr = (img / 255.0 - np.array([0.485, 0.456, 0.406], np.float32)) /               np.array([0.229, 0.224, 0.225], np.float32)
+    return {inp.name: np.ascontiguousarray(arr.transpose(2, 0, 1)[None])}
 
 
 def agreement(a: np.ndarray, b: np.ndarray) -> dict:
@@ -92,6 +121,12 @@ def main(argv=None) -> int:
     ap.add_argument("--cache-key", required=True,
                     help="cache directory name; never reuse another family's key")
     ap.add_argument("--seed", type=int, default=3)
+    ap.add_argument("--input-range", choices=sorted(RANGES), default="byte",
+                    help="the value range this model was calibrated for; see RANGES")
+    ap.add_argument("--image", help="a real image to feed instead of noise. Random input "
+                    "is a fair probe for a smooth pixel mapping such as super-resolution, "
+                    "and a poor one for a detection or segmentation head, whose outputs on "
+                    "noise are degenerate and disagree for reasons unrelated to the DPU.")
     ap.add_argument("--keep-cache", action="store_true",
                     help="skip the fresh-cache delete (do not use for a real result)")
     args = ap.parse_args(argv)
@@ -100,13 +135,15 @@ def main(argv=None) -> int:
     print(f"model      {model}")
     print(f"cache key  {args.cache_key}")
     print(f"seed       {args.seed}")
+    print(f"input rng  {args.input_range} {RANGES[args.input_range]}")
     print()
 
     if not args.keep_cache:
         clear_cache(args.cache_key)
 
     cpu = build_session(model, "cpu", args.cache_key, log_severity=3)
-    feeds = make_inputs(cpu, args.seed)
+    feeds = (load_image(cpu, args.image, args.input_range) if args.image
+             else make_inputs(cpu, args.seed, args.input_range))
     for name, arr in feeds.items():
         print(f"input      {name} {arr.shape} {arr.dtype}")
     ref = cpu.run(None, feeds)

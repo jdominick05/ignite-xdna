@@ -3763,6 +3763,65 @@ CPU, an EP compile is CPU-heavy, and the repo's own wrappers refuse to start on 
 machine. The NPU itself was idle. Re-run it on a clear machine; the eight extra opset domains
 are the first thing to suspect if the two compiles differ.
 
+### The shift-cut hazard predictor calls a working architecture 100% infeasible
+
+`quant/shift_cut.py` (branch `main`, unmerged at the time of writing) formulates a real
+hardware constraint: the DPU maps its 32-bit accumulator to int8 through a 15-bit multiplier
+and an arithmetic right shift confined to σ ∈ [0, 31], so a scale triple whose ideal factor
+cannot be written in that window is infeasible on the silicon. The audit flags such
+convolutions, and its flags line up with two documented failures — RegNetX-002's collapse to
+0.50% top-1, and BiSeNetV2's fall from 59.47% pixel accuracy under CPU simulation to 15.33%
+on hardware. That second case is exactly the class this repo keeps being burned by: fully
+placed, fast, and numerically wrong only on the device.
+
+But all of that evidence was **retrodictive** — every model the audit had been pointed at
+already had a known outcome. This is the forward test. Predictions for a fixed candidate set
+were committed before anything ran (`results/quant/shift_cut_forward_predictions.log`), and
+the results are in `results/quant/shift_cut_forward_results.log`.
+
+| Model | Prediction | NPU nodes | Correlation vs CPU | Max/peak |
+|---|---|---|---|---|
+| `sesr_m7_fp32_xint8` | **hazard, 9 of 9** | 50 / 52 | **0.99912** | 0.040 |
+| `sesr_m7_nchw_xint8` | **hazard, 9 of 9** | 50 / 52 | **0.99913** | 0.041 |
+| `test_sr_xint8` | clean, 0 of 2 | 8 / 17 | 1.00000 | 0.008 |
+| `yolov8n_cut_xint8_c32` | clean, 0 of 177 | 922 / 929 | 0.880–0.979 | ≤ 0.543 |
+
+**The boldest prediction is refuted, twice.** Both SESR artifacts were called infeasible on
+every one of their nine operations. Both place 50 of 52 nodes on the NPU, the two exceptions
+being a quantize/dequantize pair rather than compute, and both track their own CPU reference
+at a correlation of 0.999 with a worst-case deviation of 4% of peak on a smooth pixel
+mapping. That is ordinary requantization divergence, not a requantizer that cannot represent
+its scales.
+
+**A third case was already inside the audit's own evidence.** Its committed log shows
+`sesr_m7_xint8.onnx` at 9 of 9 violations. That artifact's measured NPU quality is **34.06 dB
+PSNR on Set5** against a 35.64 dB float reference, rising to 35.16 dB with AdaRound. So three
+SESR artifacts are called 100% hardware-infeasible and all three work. The rule fires on the
+whole architecture family, and the commit that introduced it lists ResNet-50, YOLOv8n,
+YOLOv8n-pose and FastDepth as sitting cleanly without mentioning this row.
+
+**The clean direction is not settled here, and the metric is why.** `test_sr_xint8` agrees to
+a correlation of 1.00000 but reaches the NPU with only 8 of 17 nodes, so it exercises little
+of the DPU. `yolov8n_cut_xint8_c32` places 922 of 929 and still shows 0.880–0.979 on its raw
+head tensors — yet this repo's own known-good yolov8n-cut reports **byte-identical decoded
+detections** between CPU and NPU. Raw-tensor correlation is too sensitive for a detection
+head; it moves for reasons that never reach the task output. The metric is sound for
+super-resolution, where the tensor *is* the output, which is where the decisive result sits.
+
+**What this means for the quantizer.** The audit must not gate Ignition in its current form:
+a rule that rejects an entire working architecture family would silently discard good
+artifacts, which is worse than missing bad ones. It does **not** show the bound is wrong as
+physics — the multiplier width and shift window are read from the hardware — only that the
+classifier built on them has a false-positive mode of the widest possible kind. Its
+BiSeNetV2 and RegNetX-002 flags are undisturbed by this and remain retrodictive.
+
+**What this does not show.** One seeded input per model, one real image for the detection
+model; an output-agreement probe, not a dataset evaluation. `realesrgan_compact_r64_xint8`
+was in the prediction set and is reported as discarded rather than quoted: its run fed a
+0–255 input to a model that `npu/realesrgan.py` scales to 0–1, saturating both paths, and it
+places only 12 of 248 nodes. Every other model in the prediction set is still unrun and those
+predictions stand as recorded.
+
 ### Ignition: calibration spool without the pruned pre-Relu tensors
 
 Both producers' calibration had spooled all 123 activations of the folded ResNet,

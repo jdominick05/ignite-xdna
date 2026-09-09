@@ -1,0 +1,138 @@
+Shift-cut forward test: two models it called 100% infeasible run correctly on the DPU
+2026-09-09. Desktop 2 (Phoenix, Ryzen 7 8700G), resnet_env17, Ryzen AI 1.7.1,
+phoenix/4x4.xclbin. These runs DID take a hardware context, one at a time, each on a fresh
+compile cache. `xrt-smi examine -r aie-partitions` reported "No hardware contexts running on
+device" beforehand and tools/host_load.ps1 reported HOST_LOAD_VERDICT CLEAR at 0.34 busy
+cores of 16 -- the quietest the machine has been all sitting.
+
+THIS IS THE SECOND HALF OF AN EXPERIMENT. The predictions were fixed and committed before any
+of these ran, in results/quant/shift_cut_forward_predictions.log. Nothing below was selected
+after the fact; the models run are the two the prediction log named in advance, plus a
+same-architecture-class control and a well-placing detection model.
+
+Commands (from the repo root, resnet_env17, RYZEN_AI_INSTALLATION_PATH set):
+  python tools/shift_cut_forward_test.py models/<model>.onnx --cache-key <key> \
+      --input-range {byte,unit} [--image data/calib/000000.jpg]
+
+--------------------------------------------------------------------------------
+1. THE TWO MODELS PREDICTED TO FAIL ON EVERY OPERATION
+--------------------------------------------------------------------------------
+Both were flagged 9 of 9 -- every quantized systolic operation called a critical hardware
+infeasibility hazard.
+
+model      C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\models\sesr_m7_fp32_xint8.onnx
+cache key  sesrfwdcachekey
+input rng  byte (0.0, 255.0)
+input      input (1, 3, 256, 256) float32
+EP report (truncated):
+  {"deviceStat": [{"name": "all", "nodeNum": 52, "supportedOpType": ["::Add", "::Conv", "::DepthToSpace", "::DequantizeLinear", "::QuantizeLinear", "::Relu"]}, {"name": "NPU", "nodeNum": 50, "supportedOpType": ["::Add", "::Conv", "::DepthToSpace", "::DequantizeLinear", "::QuantizeLinear", "::Relu"]}, 
+output                     elements      max abs     mean abs   max/peak      corr
+----------------------------------------------------------------------------------
+out[0]                       786432      10.0000       1.5943     0.0400   0.99912
+WORST relative deviation across outputs: 0.0400 of peak
+
+model      C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\models\sesr_m7_nchw_xint8.onnx
+cache key  sesrnchwfwdcachekey
+input rng  byte (0.0, 255.0)
+input      input (1, 3, 256, 256) float32
+EP report (truncated):
+  {"deviceStat": [{"name": "all", "nodeNum": 52, "supportedOpType": ["::Add", "::Conv", "::DepthToSpace", "::DequantizeLinear", "::QuantizeLinear", "::Relu"]}, {"name": "NPU", "nodeNum": 50, "supportedOpType": ["::Add", "::Conv", "::DepthToSpace", "::DequantizeLinear", "::QuantizeLinear", "::Relu"]}, 
+output                     elements      max abs     mean abs   max/peak      corr
+----------------------------------------------------------------------------------
+out[0]                       786432      10.0000       1.5852     0.0407   0.99913
+WORST relative deviation across outputs: 0.0407 of peak
+
+--------------------------------------------------------------------------------
+2. A CONTROL OF THE SAME KIND, PREDICTED CLEAN
+--------------------------------------------------------------------------------
+
+model      C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\models\test_sr_xint8.onnx
+cache key  testsrfwdcachekey
+input rng  byte (0.0, 255.0)
+input      input (1, 3, 32, 32) float32
+EP report (truncated):
+  {"deviceStat": [{"name": "all", "nodeNum": 17, "supportedOpType": ["::Conv", "::DepthToSpace", "::DequantizeLinear", "::PRelu", "::QuantizeLinear"]}, {"name": "CPU", "nodeNum": 2, "supportedOpType": ["::Conv", "::PRelu"]}, {"name": "NPU", "nodeNum": 8, "supportedOpType": ["::Conv", "::DepthToSpace",
+output                     elements      max abs     mean abs   max/peak      corr
+----------------------------------------------------------------------------------
+out[0]                        12288       0.0078       0.0000     0.0078   1.00000
+WORST relative deviation across outputs: 0.0078 of peak
+
+--------------------------------------------------------------------------------
+3. A WELL-PLACING DETECTION MODEL, PREDICTED CLEAN, ON A REAL IMAGE
+--------------------------------------------------------------------------------
+
+model      C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\models\yolov8n_cut_xint8_c32.onnx
+cache key  yoloc32fwdcachekey
+input rng  unit (0.0, 1.0)
+input      images (1, 3, 640, 640) float32
+EP report (truncated):
+  {"deviceStat": [{"name": "all", "nodeNum": 929, "supportedOpType": ["::Add", "::Concat", "::Conv", "::DequantizeLinear", "::HardSigmoid", "::MaxPool", "::Mul", "::QuantizeLinear", "::Resize", "::Slice"]}, {"name": "NPU", "nodeNum": 922, "supportedOpType": ["::Add", "::Concat", "::Conv", "::Dequantiz
+output                     elements      max abs     mean abs   max/peak      corr
+----------------------------------------------------------------------------------
+out[0]                       409600       8.6250       0.3526     0.5433   0.96253
+out[1]                       102400       6.0000       0.2750     0.5217   0.97653
+out[2]                        25600       4.8750       0.3309     0.4333   0.97947
+out[3]                       512000       4.0000       0.3578     0.1720   0.93973
+out[4]                       128000       5.5000       0.5542     0.2178   0.87977
+out[5]                        32000       9.5000       0.6953     0.3486   0.90876
+WORST relative deviation across outputs: 0.5433 of peak
+
+--------------------------------------------------------------------------------
+4. READING
+--------------------------------------------------------------------------------
+  model                        prediction    NPU nodes   corr vs CPU   max/peak
+  ---------------------------------------------------------------------------------
+  sesr_m7_fp32_xint8           HAZARD 9/9      50 / 52      0.99912      0.040
+  sesr_m7_nchw_xint8           HAZARD 9/9      50 / 52      0.99913      0.041
+  test_sr_xint8                clean  0/2       8 / 17      1.00000      0.008
+  yolov8n_cut_xint8_c32        clean  0/177   922 / 929   0.880-0.979    <=0.543
+
+THE BOLDEST PREDICTION IS REFUTED, TWICE. Both SESR artifacts were called infeasible on
+every one of their nine operations. Both place 50 of 52 nodes on the NPU -- the two that do
+not are a QuantizeLinear/DequantizeLinear pair, not compute -- and both track their own CPU
+reference at a correlation of 0.999 with a worst-case deviation of 4% of peak on a smooth
+pixel mapping. That is ordinary requantization divergence. It is not what a model whose
+requantizer cannot represent its scales looks like; for comparison, the failure this
+predictor is meant to catch took BiSeNetV2 from 59.47% pixel accuracy under CPU simulation to
+15.33% on hardware.
+
+AND A THIRD CASE WAS ALREADY IN THE PREDICTOR'S OWN EVIDENCE. results/quant/shift_cut_
+feasibility.log, on branch `main`, shows sesr_m7_xint8.onnx at 9 of 9 violations. That
+artifact's measured NPU quality is 34.06 dB PSNR on Set5 against a 35.64 dB float reference,
+and 35.16 dB with AdaRound (docs/BENCHMARKS.md, results/eval_sesr_m7_set5_npu.log). So three
+SESR artifacts are called 100% hardware-infeasible and all three work. The rule fires on the
+whole architecture family.
+
+THE CLEAN DIRECTION IS NOT SETTLED BY THIS RUN, AND THE METRIC IS WHY. test_sr_xint8 agrees
+to a correlation of 1.00000, but only 8 of its 17 nodes reach the NPU, so it exercises little
+of the DPU. yolov8n_cut_xint8_c32 places 922 of 929 and still shows correlations from 0.880
+to 0.979 on its raw head tensors -- yet this repo's own known-good yolov8n-cut reports
+BYTE-IDENTICAL decoded detections between CPU and NPU. Raw-tensor correlation is therefore
+too sensitive for a detection head: it moves for reasons that never reach the task output.
+The metric is sound for super-resolution, where the tensor IS the output, and that is exactly
+where the decisive result sits.
+
+WHAT THIS MEANS FOR IGNITION. The shift-cut audit must not gate Ignition in its current form.
+A rule that calls an entire working architecture family 100% infeasible would reject good
+artifacts, and rejecting good work silently is worse than missing bad work. What the audit
+may still be doing correctly is a separate question this does not answer: its BiSeNetV2 and
+RegNetX-002 flags coincide with real, documented hardware failures, and nothing here disturbs
+those. The honest summary is that it has one confirmed false-positive mode, of the widest
+possible kind, and its true-positive claims remain retrodictive.
+
+--------------------------------------------------------------------------------
+WHAT THIS DOES NOT SHOW
+--------------------------------------------------------------------------------
+- It does not show the shift-cut bound is wrong as physics. The 15-bit multiplier and the
+  sigma in [0, 31] window are read from the hardware's requantizer. What is shown wrong is
+  the classifier built on top of them, on this family.
+- It does not test the audit's positive claims on BiSeNetV2 or RegNetX-002. Those remain
+  consistent with their known failures and untested forward.
+- Agreement is measured on one seeded input per model, and on one real image for the
+  detection model. It is an output-agreement probe, not a dataset evaluation.
+- realesrgan_compact_r64_xint8 was in the prediction set and is NOT reported as a result: its
+  first run fed a 0-255 input to a model that npu/realesrgan.py scales to 0-1, which
+  saturates both paths and makes the comparison meaningless, and it places only 12 of 248
+  nodes on the NPU. It is a poor vehicle and the invalid run is discarded rather than quoted.
+- Every remaining model in the prediction set is still unrun. The predictions stand as
+  recorded.

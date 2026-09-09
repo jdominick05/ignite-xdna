@@ -1786,6 +1786,24 @@ sections above.
   already noted above. Also tested and refuted here: the two-process handoff floor is **not**
   the NPU context switch, despite 789.8 µs sitting near a measured 747.75 µs penalty; the floor
   fits 78.4 ns per element with a 147.2 µs intercept at r² 0.9997 and stays conversion-bound.
+- **The shift-cut hazard predictor is not ready to gate the quantizer, and a forward test is
+  what showed it.** `quant/shift_cut.py` formulates a real constraint — the DPU requantizer is
+  a 15-bit multiplier and a shift confined to σ ∈ [0, 31], so some scale triples genuinely
+  cannot be represented — and its flags coincide with two documented failures, RegNetX-002's
+  collapse and BiSeNetV2's fall from 59.47% to 15.33% pixel accuracy on hardware. But every
+  one of those was retrodiction: each model already had a known outcome. Predictions for 14
+  untested artifacts were therefore committed **before** any of them ran, and then four were
+  run. **Both models the audit called infeasible on 9 of 9 operations place 50 of 52 nodes on
+  the NPU and track their own CPU reference at correlation 0.999**, which is ordinary
+  requantization divergence. A third such artifact was already inside the audit's own
+  evidence, measuring 34.06 dB PSNR on the NPU against a 35.64 dB float reference. The rule
+  fires on an entire working architecture family. This does not show the bound is wrong as
+  physics, only that the classifier built on it has a false-positive mode of the widest kind,
+  so it belongs as an advisory report rather than a gate. Open: the clean direction is
+  unsettled, because raw-tensor correlation proved too sensitive for a detection head whose
+  decoded detections are byte-identical between CPU and NPU — a task-level metric is needed
+  to test it; and the audit's positive claims on BiSeNetV2 and RegNetX-002 remain untested
+  forward.
 - **Candidate model pipelines (Categories A, C, D, E).** Test plans, target shapes, and falsification criteria:
   - **Category A:** Image Super-Resolution — SESR-M7 (placement, 1.48 ms latency, 3.02x iGPU win,
     70% AdaRound recovery) and Real-ESRGAN Compact (activation memory spill) closed above.
