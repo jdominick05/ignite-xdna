@@ -1791,11 +1791,22 @@ sections above.
   architecture perfectly confounded with equalization in the available models. The deciding
   run is a one-graph `--cle` / `--no-cle` A/B through Ignition, on Desktop 1.
   [Working](docs/BENCHMARKS.md#aie-ml-systolic-shift-cut-feasibility-theorem-for-project-ignition).
-- **The webcam path (single `4x4.xclbin` session, `./scripts/yolo-demo.sh`) has not
-  been exercised end to end.** The related but distinct round-robin-across-4-columns
-  demo *has* — see
+- **The webcam path (single `4x4.xclbin` session, `./scripts/yolo-demo.sh`) — closed
+  2026-09-09.** 439 frames in one 15s window on Desktop 2, **922/929 nodes on the NPU**,
+  **29.2 fps end to end** against a camera delivering 30.0 — camera-bound, with `sess.run`
+  at **6.86 ms** (median 6.79, p95 7.39) leaving roughly 5× of headroom unused. The
+  blocker was never the hardware: the camera branch was display-only, so an attended run
+  left no artifact, and `--seconds N` making a bounded run a logged run is what actually
+  closed this. A peer yolov8x calibration held ~3.4 of 16 cores throughout, which shows up
+  as `loop` swinging 16.6–44.6 ms while `infer` never leaves 6.8–6.9 ms — so the fps
+  figure carries that caveat and the infer figure does not.
+  [Working](docs/BENCHMARKS.md#the-single-4x4xclbin-session-on-a-real-webcam).
+  The related but distinct round-robin-across-4-columns demo was already done — see
   [A live demo](docs/BENCHMARKS.md#a-live-demo-does-the-multi-partition-finding-hold-on-a-real-webcam):
-  camera-bound at 30 fps through n/m/l, genuinely NPU-bound (22.0–23.5 fps) at x.
+  camera-bound at 30 fps through n/m/l, genuinely NPU-bound (22.0–23.5 fps) at x. Still
+  open from this: both live numbers are camera-bound at n, so *neither* demo has measured
+  what the single shared partition and the four-column split do against each other with a
+  frame source fast enough to matter, and the two were captured on different days.
 - **Column count for the int8 conv kernels.** Both NPU measurements use 1–3 columns of a
   4×5 array; 4 × 146 ≈ 584 GOPS would still lose, but not by 5.6×. The one lever the
   56×56 result doesn't touch.

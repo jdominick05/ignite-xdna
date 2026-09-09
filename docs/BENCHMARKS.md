@@ -192,6 +192,61 @@ aie-partitions`, sampled every 15s) — so it is not a simple memory leak accumu
 over a long run. Root cause unresolved; not seen at all on n/s/m/x. Worth a closer look
 before trusting long unattended l runs in a real deployment.
 
+**It does not reproduce on Desktop 2, under a witness — and the re-run turned up a
+6.2× timing gap that is now the more interesting question**
+(`results/map_yolov8l_cut_xint8_npu_witnessed.log`,
+`results/witness_yolov8l_cut_xint8_npu.jsonl`, 2026-09-09). The same model
+(`yolov8l_cut_xint8.onnx`), the same 5000 images, with `tools/hwinfo_npu_bridge.exe`
+sampling the device once a second for the whole run: **it completed**, and produced
+**486694 detections and 45.37 mAP@50-95 — identical, to the detection, to the original
+run.** So the numerics are the same and only the environment differs.
+
+The witness rules out, *for this run on this machine*, four of the candidates:
+
+| candidate | what the 347 samples show |
+|---|---|
+| a foreign hardware context | exactly one context throughout — pid 33088, 4 columns, `start_col` 1; never a second |
+| a power-mode change or downclock | `power_mode` `Default` in all 347; clock 1800 MHz whenever submitting, 800 MHz only when idle |
+| NPU memory growth | flat 231 MB while running (64 MB during session setup) — matching the original run's flat 231 MB |
+| a progressive stall | submissions 16.71–19.36/s across 273 working samples, no trend; the only zero-throughput stretch is the 34 s tail, which is the CPU-side pycocotools accumulate |
+
+**None of that explains the original failure, and it must not be read as doing so.**
+Two things block that. First, the machine the failures happened on is **unestablished**:
+the original log records a compile cache under `C:\Users\<user>\src\ryzen-ai-xdna1-quantization`,
+a checkout that does not exist on Desktop 2 (which uses `PycharmProjects\`), and 22
+tracked logs share that `src\` prefix. Desktop 1 has no XDNA1 device, so those NPU runs
+were most likely the laptop — but commit `533b83a` predates this repo's name-the-machine
+rule and does not say. A clean run on Phoenix/32 GB cannot clear a failure that may have
+happened on Hawk Point/16 GB, and host RAM pressure there is untouched by "NPU memory
+flat at 231 MB": NPU memory and host memory are different pools.
+
+Second, and the reason this re-run is worth more than a null result: **the original took
+1532 s at 287.94 ms mean inference; this one took 273 s at 46.33 ms — 5.6× the wall clock
+and 6.2× the per-image figure, for byte-identical output.** Part of that is a timing
+definition, and that part is now settled rather than guessed: at `533b83a` the timed call
+was `forward = lambda x: decode_heads([sess.run(...)…])`, so the original's 287.94 ms
+**included the numpy DFL decode**, where this run's 46.33 ms is `sess.run` alone. The
+per-image figures are therefore not comparable as they stand.
+
+**The wall clock is, and it does not go away.** 1532 s against 273 s is the same loop
+doing the same work — and `npu/yolo_decode.py` and `npu/yolo.py` have had no commits
+since `533b83a`, so the decode being blamed is byte-identical code on both sides. Two
+readings survive, and this repo cannot yet choose between them:
+
+- decode really did cost ~240 ms/image there against ~8 ms/image here, which would be a
+  30× gap in identical numpy on two Zen 4-class CPUs — implausible on its face; or
+- `sess.run` itself was ~270–280 ms there against 46.33 ms here, i.e. the **device** was
+  genuinely ~6× slower, which is what a lower NPU power mode would look like (S0 measured
+  1.80 GHz `default` against 1.03 `balanced` and 0.80 `powersaver` — a 2.25× span on its
+  own) possibly compounded by the contention that this whole line of enquiry started from.
+
+The second is the more likely, and it keeps a **command watchdog** in play as the
+mechanism: a ~280 ms command sits far closer to any fixed timeout than a 46 ms one, and a
+downclocked, contended device is exactly where a long command would get longer still.
+Nothing here measures that, and it is not claimed. What settles it is one run nobody has
+done: **the same model on the laptop, under the current infer/post split and a witness**,
+which yields `sess.run` alone on the machine where the failures actually happened.
+
 ### iGPU vs NPU: is Ryzen AI worth it over DirectML?
 
 The Radeon 780M/760M iGPU on these same chips is reachable through
@@ -2974,6 +3029,14 @@ demo, and the multi-partition throughput gain would need a faster frame source
 (multiple cameras, a video file, or synthetic frames) to actually show up on screen —
 *at this model size*.
 
+**Scope correction.** This paragraph previously said the run "resolves the Roadmap's open
+'webcam path… not exercised end to end' item". It resolved the round-robin half of it.
+RESEARCH.md's item named a *single* `4x4.xclbin` session through `./scripts/yolo-demo.sh`
+— a different demo, a different overlay, a different partition — and that stayed open
+until the run in [The single 4x4.xclbin session on a real
+webcam](#the-single-4x4xclbin-session-on-a-real-webcam) below. The two documents
+disagreed about whether the item was closed for two days; both halves are now measured.
+
 **Repeating the same live demo at m, l, and x finds where that stops being true**
 (`results/webcam_multipartition_yolov8{n,m,l,x}.log`, 15s capture windows each, same
 camera): per-worker latency climbs with model size — 18.0 ms (n) → 62.0 ms (m) →
@@ -3036,6 +3099,57 @@ arbitrary capture sizes. The n/m/l/x numbers above are backed by
 and per-worker ms to stdout once a second (`--max-seconds` auto-quits an unattended
 capture run) instead of only drawing them on the live HUD, which is what the first,
 n-only pass through this section had to rely on.
+
+---
+
+### The single 4x4.xclbin session on a real webcam
+
+The section above answers the *round-robin* webcam question. This one answers the other
+one RESEARCH.md carried: the ordinary path, one session on the shared `4x4.xclbin`
+partition, `./scripts/yolo-demo.sh`, which had never been exercised end to end even
+though every piece of code for it existed. What kept it open was not the hardware — it
+was that the camera branch of `pipelines/yolov8n/4_detect.py` was display-only, so an
+attended run left nothing behind to fold in. `--seconds N` now makes a bounded run a
+logged run, and this is the first one.
+
+Measured on Desktop 2 / Phoenix, Logitech C920s, `yolov8n_cut_xint8_adaround.onnx` at
+640×640, one 15s window (`results/webcam_single_4x4_yolov8n_cut_xint8_adaround_npu.log`):
+
+| | value |
+|---|---|
+| EP placement | **922/929 nodes on the NPU** |
+| frames | 439 in 15.0s = **29.2 fps end to end** |
+| infer (`sess.run` only) | mean **6.86 ms**, median 6.79, p95 7.39 → 145.7 fps if infer-bound |
+| post (numpy DFL decode + NMS) | mean 2.90 ms |
+| loop (capture → draw) | mean 24.53 ms, median 19.82, p95 43.90 |
+| detections | 579 over 439 frames (person 394, couch 82, chair 64, laptop 39) |
+
+**It works, and the NPU is not the limit — the camera is.** 29.2 fps end to end against
+a camera delivering 30.0 fps: the demo is camera-bound, with the NPU turning frames
+around in 6.86 ms and roughly 5× of unused headroom sitting behind a 30 fps webcam. That
+is the same conclusion the round-robin demo reached at this model size, by a different
+route.
+
+**The host contention is visible in the numbers, and it is confined to the host.** A
+peer session's `3b_quantize_cut.py` on yolov8x held ~3.4 of 16 cores for the whole
+capture (`results/load_webcam_single_4x4_yolov8n_cut_xint8_adaround_npu.log`, verdict
+`PEER`); `xrt-smi` read "No hardware contexts running" beforehand, so the NPU itself was
+uncontended. It shows: per-second `loop` swings between 16.6 and 44.6 ms across the run
+while `infer` never leaves 6.8–6.9 ms. The end-to-end 29.2 fps and the loop p95 of 43.90
+ms therefore carry that caveat and the infer figure does not — but the run should still
+be repeated on a quiet host before the fps number is treated as this path's ceiling.
+
+**What this does not settle: the single-session vs round-robin latency comparison.** The
+obvious reading — 6.86 ms on the shared 4×4 partition against ~18.0 ms per worker on a
+single `1x4` column, so splitting into four columns costs per-frame latency and buys
+nothing while the camera is the ceiling — is *consistent* with the static-image sweep's
+own per-column vs shared-4x4 ratio (14.9/8.9 ≈ 1.66× at n, above), but the two live
+numbers were captured on different days, and NPU latency on this machine drifts across
+sessions independent of any code change. Treat the direction as established and the
+multiple as not measured: a real comparison needs both configurations captured together.
+The two runs also differ in capture mode — this one delivered 1280×720 (`4_detect.py`
+requests 720p; the multipartition demo requests nothing and got 640×480), both at 30.0
+fps — which leaves host-side letterbox cost, not NPU work, as the affected term.
 
 ---
 
