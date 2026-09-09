@@ -14,6 +14,33 @@ Two lanes. **Tasks** point a model at your own image and write a usable result:
 remove a background, detect objects, estimate pose, make a depth map, upscale, segment
 a street scene. **Demos** launch the ten scripts in [`demos/`](../demos/README.md).
 
+### Live camera
+
+Six tasks take a live source as well as an image — **remove background, detect objects,
+detect (YOLOv6n), estimate pose, depth (FastDepth), depth (MiDaS)**. Answer the input
+prompt with a camera index (`0` is the default camera) instead of a path; detect,
+detect-v6 and pose take a video file too. `q` or `ESC` quits, `s` saves a snapshot.
+
+```powershell
+python -m tui.task detect --input 0 --ep npu          # until you press q
+python -m tui.task detect --input 0 --ep npu --frames 60 --no-window
+```
+
+`--frames N` stops after N frames and `--no-window` runs headless — together they are
+how the live path gets smoke-tested with nobody at the machine. Headless removes the
+only way to quit early, so use them as a pair.
+
+Each frame goes through the same `DISPATCH[family]` adapter a still image does, never a
+second preprocess path: MODNet shipped once with its transform copied five times and two
+of them disagreed. A live run leaves its last frame as a PNG with the numbers burned in,
+plus the usual sidecar carrying `frames`, mean/median/p95 `sess.run` and the loop fps.
+**The two numbers are not the same quantity** — `sess.run` is the hardware, the loop fps
+includes capture, pre/post and drawing — and both are `quotable: false`.
+
+A camera that will not open is a hard error. It does **not** fall back to stock images,
+because a result you cannot distinguish from a live one is worse than no result — the
+same reason [`npu.session.resolve_xclbin`](../npu/session.py) raises rather than warns.
+
 ## What it is not
 
 Not a measurement tool. [`results/`](../results/README.md) is the tracked evidence
