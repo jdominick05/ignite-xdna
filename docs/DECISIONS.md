@@ -1462,6 +1462,48 @@ Investigated via `quant/shift_cut.py` and `python -m quant check-shift-cut`
   Violations are projectable to the nearest bound via `project_scale_to_feasible_basin` (demonstrated on FastDepth `Conv_96`: pos_y 0 -> 1, bringing sigma from 32 down to 31, eliminating the clamp without retraining). — **THE PROJECTION WAS DEFECTIVE (2026-09-09).** It clamped pos_x/pos_w into [0, 31] while sigma was computed from the unclamped scales, so on RegNetX-002 `/s1/b1/conv2/conv/Conv` it took an already-feasible layer at sigma = 30 to **sigma = -90**, manufacturing the overflow it exists to prevent. Repairs on real models went SESR-M7 9 -> 0, MODNet-Cut 1 -> 0, RegNetX-002 5 -> 0 once the analyzer was corrected — every one had targeted a working op. Now uses unclamped positions and raises rather than emitting a scale the analyzer would flag.
 - **Rule for Project Ignition**: `python -m quant check-shift-cut` is an **advisory report, not a gate**. Run it, read it, and do not let it block or rewrite a graph: it has a demonstrated false-positive mode of the widest kind (SESR-M7 flagged 9 of 9 operations, then placed 50 / 52 nodes and tracked its CPU reference at r = 0.99912). That bound means **sigma only** — positions outside [0, 31] are advisory notes and never violations. **Do not run `--repair` on a model that already places and scores.**
 
+**Added 2026-09-09 (Desktop 2), and it changes what a PASS from this tool means.** The
+criterion is *vacuous on any file this producer emitted*, so the eleven-model zero was
+never evidence about the hardware. Quark's `adjust_shift_cut` defines
+`shift_cut = wpos + ipos - opos` and clamps it into `[0, 16]`; this module's sigma over the
+same three positions is that quantity **+ 14**. So the producer contract is
+**sigma in [14, 30]**, strictly inside Theorem 1's `[0, 31]`, and a Conv or Gemm cannot
+reach the `[0, 31]` edges without the producer's own clamp having failed first. Measured:
+all 744 analyzed Conv/Gemm across eleven models sit in `[14, 30]`
+(`results/quant/shift_cut_contract_20260909_desktop2.log`). This also explains, with no new
+hardware, why the highest sigma ever executed here is 30 — that is the contract's upper
+edge, the producer's ceiling rather than the silicon's.
+
+Two consequences for anyone using the tool:
+
+- **The contract applies to Conv and Gemm ONLY.** `adjust_shift_cut` skips every other
+  `op_type` (`quant/refine.py::shift_cut`). MatMul is not refined by it, and a Mul goes
+  through `shift_write_mul` (clamp 0..32) and `shift_swish` (clamp 0..15) — different rules
+  over different quantities. Judging either against `[14, 30]` would report "this file was
+  not emitted by Quark/Ignition" about a file that was. The analyzer bands Conv/Gemm and
+  says so explicitly for everything else.
+- **An operation whose scales cannot be read is not a passing operation.** The analyzer
+  defaulted `scale_x`/`scale_w`/`scale_y` to 1.0 and scored the op anyway: **166 of 1102**
+  candidates across the eleven models, 57 of 177 on yolov8n-cut, all of them the
+  `_Scale`/`_Mul` DPU-simulation pairs `passes.py::_insert_mul` writes. They are the sub-14
+  minima in the older tables, and no Conv ever produced one. They are now UNRESOLVED —
+  outside the denominator, outside every distribution, and skipped by `--repair`, because
+  projecting from an invented 1.0 is the same defect that drove a feasible layer to
+  sigma = −90.
+
+**Decision: GPU AdaRound is opt-in and explicitly non-parity; the CPU path stays the gate.**
+`quant/adaround.py` takes Quark's `OptimDevice` through `--device`, but `cpu` remains the
+default and the only byte-parity path, because Ignition's AdaRound being byte-identical to a
+fresh `XINT8_ADAROUND` oracle is the property the module exists to hold, and a GPU changes
+float reduction order in Adam and in the convolutions. Off `cpu` therefore requires
+`--accept-non-parity`, records `byte_parity_path: false` in the sidecar, and warns. A device
+torch cannot reach **raises** rather than silently running on the CPU — the same failure
+shape as a CPU run in an NPU costume, refused the same way. If a GPU run is ever gated, it
+must be against a **GPU** oracle from the same box and runtime, never the CPU one. The CPU
+path is shown bit-for-bit unchanged by this refactor
+(`results/quant/adaround_device_cpu_parity_20260909_desktop2.log`). No GPU has run: no torch
+build on any machine here can reach one.
+
 ### A log whose *encoding* is corrupt is fixed in place, not duplicated
 
 Two logs arrived written as UTF-16LE behind a mangled byte-order mark
