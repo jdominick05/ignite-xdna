@@ -49,6 +49,13 @@ def main(argv=None):
     emit.add_argument("--scratch", type=Path, default=Path("scratch"))
     emit.add_argument("--scales-from", type=Path,
                       help="Replay a reference position table; skips independent calibration")
+    emit.add_argument("--cle-guard", type=float, default=None, metavar="BITS",
+                      help="With --cle, skip any pair whose per-channel scale exceeds BITS "
+                           "powers of two. Off by default, which is the parity path. CLE keeps "
+                           "the weight ranges tidy however extreme the scale gets, but the "
+                           "activation between the two layers is multiplied by it: ResNet50 "
+                           "needs 3.5 bits and gains 10.8 top-1, while RegNetX-002 reaches 42.2 "
+                           "and ResNeXt-50 72.6 and both fall to 0.10 percent")
     ada = commands.add_parser("adaround", help="AdaRound weight rounding for an emitted XINT8 file (torch; Quark stays blocked)")
     ada.add_argument("--in-model", type=Path, default=Path("models/resnet50_fp32.onnx"),
                      help="The float export the base was quantized from (hash-checked against its sidecar)")
@@ -232,7 +239,7 @@ def main(argv=None):
             print(f"Ignition {__version__}: {family} / {'CLE' if args.cle else 'no CLE'}", flush=True)
             print("IMPORT_BLOCK_ACTIVE quark torch", flush=True)
             report = quantize(args.in_model, args.out, scales_from=args.scales_from,
-                              source=source, preprocess=cfg, scratch=args.scratch, cle=args.cle)
+                              source=source, preprocess=cfg, scratch=args.scratch, cle=args.cle, cle_guard=args.cle_guard)
             print(json.dumps({k: v for k, v in report.items() if k not in ("positions", "calibration", "cle_report")}, indent=2))
             if "cle_report" in report:
                 print("CLE_REPORT", json.dumps({k: v for k, v in report["cle_report"].items() if k != "scaled"}, indent=2))

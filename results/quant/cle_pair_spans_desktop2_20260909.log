@@ -1,0 +1,31 @@
+[32m
+[QUARK-INFO]: Checking custom ops library ...[0m
+[33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+[32m
+[QUARK-INFO]: Start compiling CPU version of custom ops library.[0m
+C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\torch\utils\cpp_extension.py:380: UserWarning: Error checking compiler version for cl: [WinError 2] The system cannot find the file specified
+  warnings.warn(f'Error checking compiler version for {compiler}: {error}')
+INFO: Could not find files for the given pattern(s).
+[31m
+[QUARK-ERROR]: CPU version of custom ops library compilation failed:Command '['where', 'cl']' returned non-zero exit status 1.[0m
+[33m
+[QUARK-WARNING]: Custom ops library compilation failed: CPU version of custom ops library compilation failed:Command '['where', 'cl']' returned non-zero exit status 1..[0m
+[32m
+[QUARK-INFO]: Checked custom ops library.[0m
+[33m
+[QUARK-WARNING]: The api `activation` has been replaced with `input_tensors` and will be removed in the next release.[0m
+[33m
+[QUARK-WARNING]: The custom ops library C:\Users\<user>\miniforge3\envs\resnet_env\Lib\site-packages\quark\onnx\operators\custom_ops\lib\custom_ops.dll does NOT exist.[0m
+CLE_PAIR_SPAN ResNet50            CLE helps  +10.8 top-1: pairs= 33 max=    2.52 median=  1.63 bits   over 4/8/16/24 bits: 0/0/0/0
+      worst     2.52 bits  /layer3/layer3.1/conv2/Conv -> /layer3/layer3.1/conv3/Conv
+      worst     2.50 bits  /layer3/layer3.2/conv2/Conv -> /layer3/layer3.2/conv3/Conv
+CLE_PAIR_SPAN MODNet-Cut          CLE used by default   : pairs=  9 max=    1.81 median=  0.97 bits   over 4/8/16/24 bits: 0/0/0/0
+      worst     1.81 bits  /lr_branch/backbone/features.17/co -> /lr_branch/backbone/features.18/fe
+      worst     1.81 bits  /lr_branch/backbone/features.17/co -> /lr_branch/backbone/features.18/fe
+CLE_PAIR_SPAN RegNetX-002         CLE destroys 66.20->0.10: pairs= 27 max=   17.11 median=  1.58 bits   over 4/8/16/24 bits: 9/8/2/0
+      worst    17.11 bits  /s3/b2/conv1/conv/Conv -> /s3/b2/conv3/conv/Conv
+      worst    16.01 bits  /s4/b6/conv1/conv/Conv -> /s4/b6/conv3/conv/Conv
+CLE_PAIR_SPAN ResNeXt-50 32x4d    CLE destroys 68.90->0.10: pairs= 33 max=   33.21 median=  1.95 bits   over 4/8/16/24 bits: 4/4/4/3
+      worst    33.21 bits  /layer1/layer1.0/conv1/Conv -> /layer1/layer1.0/conv3/Conv
+      worst    33.21 bits  /layer1/layer1.0/conv1/Conv -> /layer1/layer1.0/conv3/Conv

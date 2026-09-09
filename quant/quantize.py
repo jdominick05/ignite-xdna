@@ -94,7 +94,8 @@ def prepared_graph(model_in: Path) -> tuple[Graph, str]:
 
 def quantize(model_in: Path, model_out: Path, *, scales_from: Path | None = None,
              source=None, preprocess: dict | None = None,
-             scratch: Path | None = None, cle: bool = False) -> dict:
+             scratch: Path | None = None, cle: bool = False,
+             cle_guard: float | None = None) -> dict:
     _check_imports()
     if (scales_from is None) == (source is None):
         raise ValueError("Supply exactly one of a calibration source or scales_from")
@@ -127,7 +128,7 @@ def quantize(model_in: Path, model_out: Path, *, scales_from: Path | None = None
     if cle:
         # Quark equalizes the float model before calibration (preproc.py apply_pre_process);
         # calibration and weight quantization then see the equalized initializers.
-        report["cle_report"] = asdict(cross_layer_equalize(graph))
+        report["cle_report"] = asdict(cross_layer_equalize(graph, max_scale_log2=cle_guard))
         graph.infer_shapes()
     # Quark's after-algorithm optimizations (Split to Slice) follow CLE and precede calibration.
     report["prepare"] = prepare(graph, family)

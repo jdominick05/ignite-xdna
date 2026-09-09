@@ -11,13 +11,15 @@
 # checked against (YOLO reads neither).
 # Calibration guards disk from inferred tensor sizes and cleans its private spool.
 # --scales-from selects Phase 1 replay and skips independent calibration.
+# --cle-guard BITS skips a CLE pair whose per-channel scale exceeds BITS powers of two;
+# off by default, which is the parity path.
 # A contended machine is refused before anything starts. Another build or producer on
 # the same 16 threads leaves parity untouched -- that is a fixed-seed computation -- but
 # makes this run's wall time and peak working set uncomparable with any other's;
 # --allow-busy measures anyway. The snapshot lands in the load_<log> witness either way.
 
 . "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
-OUT="" LOG="" LIMIT=64 SCALES="" CLE=--no-cle IN_MODEL="" CALIB_DIR="" CFG_PATH="" ALLOW_BUSY=0
+OUT="" LOG="" LIMIT=64 SCALES="" CLE=--no-cle IN_MODEL="" CALIB_DIR="" CFG_PATH="" ALLOW_BUSY=0 CLE_GUARD=""
 while [ $# -gt 0 ]; do
     case "$1" in
         --out) OUT="$2"; shift ;;
@@ -28,6 +30,7 @@ while [ $# -gt 0 ]; do
         --calib-dir) CALIB_DIR="$2"; shift ;;
         --cfg-path) CFG_PATH="$2"; shift ;;
         --cle) CLE=--cle ;;
+        --cle-guard) CLE_GUARD="$2"; shift ;;
         --allow-busy) ALLOW_BUSY=1 ;;
         -h|--help) usage "${BASH_SOURCE[0]}"; exit 0 ;;
         *) die "unknown flag $1" ;;
@@ -45,4 +48,4 @@ extra=()
 [ -z "$IN_MODEL" ] || { need_file "$IN_MODEL"; extra+=(--in-model "$IN_MODEL"); }
 [ -z "$CALIB_DIR" ] || { need_dir "$CALIB_DIR"; extra+=(--calib-dir "$CALIB_DIR"); }
 [ -z "$CFG_PATH" ] || { need_file "$CFG_PATH"; extra+=(--cfg-path "$CFG_PATH"); }
-run_logged "$LOG" python -m quant quantize --out "$OUT" "$CLE" --limit "$LIMIT" "${extra[@]}"
+run_logged "$LOG" python -m quant quantize --out "$OUT" "$CLE" ${CLE_GUARD:+--cle-guard "$CLE_GUARD"} --limit "$LIMIT" "${extra[@]}"
