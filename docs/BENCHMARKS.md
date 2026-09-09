@@ -4487,6 +4487,12 @@ slower in every block, by a mean 8.29 s, **1.125x**. Including block 5 anyway wo
 read 7.99 s and 1.120x, so the verdict does not depend on the exclusion. Peak working
 set is unchanged, about 10.1 GB either way.
 
+Those differences shrink monotonically across the matrix and nothing here explains it.
+The method order alternates between blocks, so it is not an order effect; the legacy
+runs are flat to 0.09 s, so it is not the machine warming up under both arms. Only the
+`alphabet` side moves, from 76.62 s down to 71.43 s. It never comes close to changing
+the sign in any block, so it does not affect the verdict, but it is unaccounted for.
+
 The cost is structural, not incidental. 57 of 74 tensors fail to certify, so the second
 inference pass runs nearly the whole model again -- 6.65 to 7.03 s of replay -- and the
 ordered MinMSE reduction still has to cover 96.57% of the samples: 46.89 to 51.86 s
