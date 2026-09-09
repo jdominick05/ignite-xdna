@@ -1,4 +1,4 @@
-"""Ignition Alpha: inspect ONNX graphs, quantize folded ResNet or head-cut YOLOv8 with or without CLE, or AdaRound an emitted ResNet file."""
+"""Ignition Alpha: inspect ONNX graphs, quantize folded ResNet or head-cut YOLOv8 with or without CLE, or AdaRound an emitted file of either family."""
 import argparse
 from dataclasses import asdict
 import importlib.abc
@@ -49,8 +49,10 @@ def main(argv=None):
                      help="The float export the base was quantized from (hash-checked against its sidecar)")
     ada.add_argument("--quant", type=Path, required=True, help="Emitted XINT8 model with its .quant.json sidecar")
     ada.add_argument("--out", type=Path, required=True)
-    ada.add_argument("--calib-dir", type=Path, default=Path("data/calib"))
-    ada.add_argument("--cfg-path", type=Path, default=Path("models/preprocess_config.json"))
+    ada.add_argument("--calib-dir", type=Path, default=Path("data/calib"),
+                     help="The base's calibration folder (data/coco_calib for a head-cut YOLO base)")
+    ada.add_argument("--cfg-path", type=Path, default=Path("models/preprocess_config.json"),
+                     help="Classification preprocessing config (ResNet only; YOLO letterboxes to the graph input)")
     ada.add_argument("--data-size", type=int, default=1000, help="Quark's DataSize (images used, capped by the listing)")
     ada.add_argument("--iters", type=int, default=1000, help="Quark's NumIterations per layer")
     ada.add_argument("--seed", type=int, default=1705472343, help="Quark's FixedSeed")
@@ -61,7 +63,7 @@ def main(argv=None):
     try:
         from onnx.checker import ValidationError
         from .graph import Graph
-        from .quantize import file_hash, graph_family, quantize
+        from .quantize import file_hash, graph_family, prepare, quantize
         from .sources import CocoSource, ImageFolderSource
         from .verify import graph_diff
 
@@ -95,20 +97,32 @@ def main(argv=None):
                     parser.error("AdaRound needs a base with an independent calibration listing in its sidecar")
                 if "adaround" in provenance:
                     parser.error("The base was already finetuned; start from the emitted XINT8 file")
-                cfg = json.loads(args.cfg_path.read_text(encoding="utf-8"))
-                if cfg != provenance["preprocess"]:
-                    parser.error("Preprocessing config differs from the base sidecar")
+                family = provenance.get("family", "folded_resnet")
                 float_graph = Graph.load(args.in_model)
+                if graph_family(float_graph) != family:
+                    parser.error("Float model family differs from the base sidecar")
                 input_name = float_graph.model.graph.input[0].name
                 listing = provenance["calibration"]["listing"]
-                source = ImageFolderSource(args.calib_dir, cfg, len(listing), input_name)
+                if family == "yolo_cut":
+                    # The letterbox size comes from the graph input; --cfg-path is not read.
+                    from npu.yolo import input_size
+                    imgsz = input_size(list(float_graph.value_shape(input_name) or ()), str(args.in_model))
+                    source = CocoSource(args.calib_dir, len(listing), imgsz, input_name)
+                else:
+                    cfg = json.loads(args.cfg_path.read_text(encoding="utf-8"))
+                    if cfg != provenance["preprocess"]:
+                        parser.error("Preprocessing config differs from the base sidecar")
+                    source = ImageFolderSource(args.calib_dir, cfg, len(listing), input_name)
+                if source.preprocess() != provenance["preprocess"]:
+                    parser.error("Preprocessing differs from the base sidecar")
                 if [p.as_posix() for p in source.listing()] != listing:
                     parser.error("Calibration listing differs from the base sidecar")
-                if provenance.get("family", "folded_resnet") != "folded_resnet":
-                    raise NotImplementedError("AdaRound is gated on folded ResNet; the YOLO gate is open")
                 if provenance["cle"]:
                     # The float reference is the equalized float graph, as in Quark's post-process.
                     cross_layer_equalize(float_graph)
+                # Quark's reference is its pre-processed float model: after CLE, the same
+                # hardware-compatibility rewrite (Split to Slice) that quantize() applied.
+                prepare(float_graph, family)
                 float_graph.infer_shapes()
                 quant_graph = Graph.load(args.quant)
                 config = FastFinetuneConfig(DataSize=args.data_size, FixedSeed=args.seed, NumIterations=args.iters)

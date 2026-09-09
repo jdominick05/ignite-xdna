@@ -63,7 +63,15 @@ recorded in the handoff and Git history rather than treated as future features.
   [AdaRound parity](../docs/BENCHMARKS.md#ignition-adaround-parity): byte-identical to a
   fresh same-listing `XINT8_ADAROUND` oracle on Desktop 2 (108/108 int8 exact, 702
   log lines identical), 79.40% CPU top-1 for both, peak working set 3,055,075,328
-  bytes against Quark's 3,582,218,240. yolov8n-cut AdaRound waits on YOLO preparation.
+  bytes against Quark's 3,582,218,240. yolov8n-cut (closed 2026-09-08):
+  [YOLO AdaRound parity](../docs/BENCHMARKS.md#ignition-yolov8n-cut-adaround-parity):
+  the layers are walked in the vendor's topological order of the float model
+  (`Graph.vendor_order`, the order Quark's loop takes; Ignition's emitted file order
+  diverges at the 39th conv), and the result is 126/126 int8 byte-identical to a fresh
+  same-listing oracle with all 819 per-layer log lines equal, peak working set
+  5,742,055,424 bytes against Quark's 5,393,625,088; both files read 32.21 CPU /
+  32.04 NPU mAP@50-95 with 922/929 placed and byte-identical detections, 5.01 NPU
+  points above the same-listing plain-XINT8 pair.
 - [ ] Add GPU / ROCm acceleration for AdaRound (`quant/adaround.py`): enable
   `OptimDevice = "cuda"` for PyTorch training loop on Desktop 1 (RX 7900 XTX 24 GB)
   while keeping ORT activation caching on CPU. Validate paired convergence against

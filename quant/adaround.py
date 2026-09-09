@@ -4,12 +4,18 @@ Transcribes Quark 0.11rc1's FastFinetune AdaRound path
 (``quark/onnx/algorithm/finetuning``: ``fast_finetune.py``, ``onnx_subgraph.py``,
 ``torch_utils.py``, ``train_torch/train_model.py``, ``train_torch/train_model_loss.py``,
 ``create_torch/base_qdq_quantizers.py``, ``create_torch/create_model_ops.py``) for the
-folded ResNet XINT8 dialect. It runs *after* emission and refinement, on the finished
-file, exactly where Quark's post-process runs it. Only ``<w>_quantized`` initializers
-change; scales, zero points, biases and topology are untouched.
+folded ResNet and head-cut YOLOv8 XINT8 dialects. It runs *after* emission, DPU
+simulation and refinement, on the finished file, exactly where Quark's post-process runs
+it. Only ``<w>_quantized`` initializers change; scales, zero points, biases and topology
+are untouched.
 
-Per Conv/Gemm layer, in the quantized file's node order and sequentially (layer i sees
-the rounding chosen for layers < i):
+Per Conv/Gemm layer, sequentially (layer i sees the rounding chosen for layers < i), in
+the order Quark's loop visits them: Quark walks its quantized file, whose original nodes
+sit in the order ORT's ``topological_sort`` gave the pre-processed float model
+(``Graph.vendor_order``), not the export's file order and not Ignition's emitted order.
+On folded ResNet the two coincide by accident of the emitter; on head-cut YOLOv8n the
+emitted file lists the head convs differently from the 39th layer on, so the order is
+taken from the float graph explicitly:
 
 1. Data: the layer's pre-QuantizeLinear input from the *current* quantized graph
    (ONNX Runtime CPU, ``ORT_DISABLE_ALL``); the float input and the float output
@@ -148,18 +154,28 @@ def _qparams(g: Graph, node: onnx.NodeProto) -> QParams:
 
 
 def layer_targets(qg: Graph, fg: Graph) -> list[Layer]:
-    """Conv/Gemm layers of the quantized file, in file order, with their QDQ parameters.
+    """Conv/Gemm layers with their QDQ parameters, in the order Quark's finetune visits them.
 
-    Quark's Subgraph takes a layer when its input comes through Q->DQ and its weight
-    through a DQ; anything else is skipped silently there and rejected here.
+    The order is the float graph's ``vendor_order`` (ORT's ``topological_sort``, which
+    Quark applies to the pre-processed float model and its quantizer preserves); every
+    Conv/Gemm of the quantized file must appear there under the same name. Quark's
+    Subgraph takes a layer when its input comes through Q->DQ and its weight through a
+    DQ; anything else is skipped silently there and rejected here.
     """
     layers = []
-    float_nodes = {n.name: n for n in fg.nodes()}
+    quant_nodes = {n.name: n for n in qg.nodes()}
     for node in qg.nodes():
-        if node.op_type not in ("Conv", "Gemm"):
-            if node.op_type in ("ConvTranspose", "MatMul", "InstanceNormalization", "LayerNormalization"):
-                raise NotImplementedError(f"{node.op_type} is a Quark finetune target not transcribed here")
-            continue
+        if node.op_type in ("ConvTranspose", "MatMul", "InstanceNormalization", "LayerNormalization"):
+            raise NotImplementedError(f"{node.op_type} is a Quark finetune target not transcribed here")
+    float_nodes = fg.nodes()
+    targets = [float_nodes[i] for i in fg.vendor_order() if float_nodes[i].op_type in ("Conv", "Gemm")]
+    quant_targets = sum(1 for n in qg.nodes() if n.op_type in ("Conv", "Gemm"))
+    if quant_targets != len(targets):
+        raise ValueError(f"Quantized file has {quant_targets} Conv/Gemm layers, float graph {len(targets)}")
+    for fnode in targets:
+        node = quant_nodes.get(fnode.name)
+        if node is None or node.op_type != fnode.op_type:
+            raise ValueError(f"{fnode.name}: quantized file has no matching node")
         dq_in = qg.producer(node.input[0])
         q_in = qg.producer(dq_in.input[0]) if dq_in is not None and dq_in.op_type == "DequantizeLinear" else None
         if q_in is None or q_in.op_type != "QuantizeLinear":
@@ -183,9 +199,8 @@ def layer_targets(qg: Graph, fg: Graph) -> list[Layer]:
             end, has_act, act_op = follower.output[0], True, follower.op_type
         else:
             end, has_act, act_op = node.output[0], False, None
-        fnode = float_nodes.get(node.name)
-        if fnode is None or fnode.op_type != node.op_type or fnode.input[0] != q_in.input[0]:
-            raise ValueError(f"{node.name}: float graph has no matching node")
+        if fnode.input[0] != q_in.input[0]:
+            raise ValueError(f"{node.name}: float graph input differs from the quantized file")
         f_end = fnode.output[0]
         if has_act:
             facts = fg.consumers(fnode.output[0])

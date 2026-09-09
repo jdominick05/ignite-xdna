@@ -8,11 +8,13 @@ The broader signatures and roadmap below remain a design, not an Alpha API promi
 references both without CLE and with the default preset's CLE; the transcribed
 refinement and equalization rules are probed against Quark's on identical inputs; the
 first controlled ResNet acceptance study is measured; AdaRound is transcribed and
-byte-identical to a fresh `XINT8_ADAROUND` oracle on the same machine; head-cut YOLOv8n
-preparation (Split→Slice, the SiLU chain, Concat/Slice/pool alignment, the HardSigmoid
-and swish shifts) is transcribed and position-for-position, integer-for-integer equal
-to a fresh same-listing oracle. YOLO AdaRound and the broader acceptance map remain
-open.** YOLO evidence is in the [YOLO preparation parity section](../docs/BENCHMARKS.md#ignition-yolov8n-cut-preparation-parity); AdaRound evidence is in the
+byte-identical to fresh `XINT8_ADAROUND` oracles on the same machine for both
+families, walking the layers in the vendor's topological order of the float model;
+head-cut YOLOv8n preparation (Split→Slice, the SiLU chain, Concat/Slice/pool alignment,
+the HardSigmoid and swish shifts) is transcribed and position-for-position,
+integer-for-integer equal to a fresh same-listing oracle. The broader acceptance map
+remains open.** YOLO evidence is in the [YOLO preparation parity](../docs/BENCHMARKS.md#ignition-yolov8n-cut-preparation-parity)
+and [YOLO AdaRound parity](../docs/BENCHMARKS.md#ignition-yolov8n-cut-adaround-parity) sections; ResNet AdaRound evidence is in the
 [AdaRound parity section](../docs/BENCHMARKS.md#ignition-adaround-parity); CLE evidence is in the
 [CLE parity section](../docs/BENCHMARKS.md#ignition-cle-parity-and-the-default-xint8-preset). The audit is in
 [`notes_xint8_dialect.log`](../results/quant/notes_xint8_dialect.log); remaining unknowns
@@ -362,7 +364,7 @@ Flatten/Gemm) and head-cut YOLOv8 (Conv/Sigmoid/Mul/Add/Concat/MaxPool/Resize an
 Split, rewritten to Slice). It rejects anything else, non-unit Gemm beta, MaxPool
 indices, a float initializer feeding a non-Conv operator, and GAP shapes other than
 the measured 7×7 case. Nested graphs remain unsupported; AdaRound is the separate
-`adaround` command on an emitted ResNet file (its YOLO gate is open). Probe mutations are separate from
+`adaround` command on an emitted file of either family. Probe mutations are separate from
 the parity emitter. Degenerate
 UINT8 calibration ranges are rejected because the vendor would emit zp0, outside
 this slice's zp128 contract. No general XINT8 preset replacement is claimed.
@@ -652,7 +654,7 @@ rule that moved it and by how much. That list is the per-layer transparency of i
 ```
 @dataclass
 class FastFinetuneConfig          # Quark's extra_options["FastFinetune"] keys plus its fixed TrainParameters
-def layer_targets(qg: Graph, fg: Graph) -> list[Layer]   # Conv/Gemm in the quantized file's node order, with QDQ params
+def layer_targets(qg: Graph, fg: Graph) -> list[Layer]   # Conv/Gemm in the float graph's vendor_order (ORT topological_sort, Quark's loop order), with QDQ params
 def finetune(float_graph: Graph, quant_graph: Graph, source: ImageFolderSource,
              cfg: FastFinetuneConfig | None = None, log=print) -> AdaRoundReport
         # per layer, sequentially: quantized pre-Q input (ORT_DISABLE_ALL) and float input/output
@@ -802,7 +804,7 @@ machine. Log names carry model and variant, never a bare name (`CLAUDE.md`).
 | 0 | `notes_xint8_dialect.log`, subsequent scaffold inspection logs | §2 with every [U] either resolved (file:line quoted) or listed as still open; initial throwaway inspection followed by `Graph.fingerprint()` once the audit is folded. ResNet/YOLO XINT8, ResNet A8W8 and the ResNet float export. Vendor source read verbatim, no hardware — the `quant_grid_audit.log` precedent |
 | 1 | `quant_resnet50_quark_nocle.log`, `quant_resnet50_own_reemit.log`, `diff_resnet50_own_vs_quark.log`, `run_resnet50_own_reemit_{cpu,npu}.log`, `diag_resnet50_own_reemit.log` | Starting from `models/resnet50_fp32.onnx`, against a **fresh** Quark run with `include_cle=False` on the same machine: `graph_diff.ok()` with the weight-LSB count printed; `refine()` run on the positions read out of the Quark model reports zero moves (every bound in §2.3 validated); identical full-set CPU top-1 through the existing `4_run.py`; EP report with the same node split as the Quark model's own `diag_*`; NPU latency captured in the same sitting as the Quark model's, and reported as a pair |
 | 2 | `quant_resnet50_own_xint8.log`, `quant_yolov8n_cut_own_xint8.log`, `diff_*_own_vs_quark.log`, `run_*_own_xint8_npu.log`, `map_yolov8n_cut_own_xint8_npu.log` (full 5000), `diag_*` | Same machine, same sorted listing, same `--limit`: position table equal to Quark's for every tensor (or the diff listed and explained); full-set top-1 / full-5000 mAP beside Quark's from the same sitting. A slice is labelled a slice. ResNet closed (no-CLE and CLE sections); yolov8n-cut closed 2026-09-08 (`quant_yolov8n_cut_{quark,ignition}_cle_c64.log`, `diff_yolov8n_cut_ignition_cle_c64.log`, `map_yolov8n_cut_ignition_cle_c64_{reference,own}_{cpu,npu}.log`) |
-| 3 | `quant_*_own_xint8_adaround.log`, `run_*`/`map_*` | Accuracy within session noise of `XINT8_ADAROUND` on resnet50 and yolov8n-cut; peak RSS logged beside Quark's on the same machine. Stretch: the laptop finishes where Quark SIGSEGVs. ResNet closed 2026-09-08 bitwise (`quant_resnet50_ignition_cle_adaround_c64.log`, `diff_*`, `run_*`); yolov8n-cut waits on YOLO preparation; the laptop stretch is unrun |
+| 3 | `quant_*_own_xint8_adaround.log`, `run_*`/`map_*` | Accuracy within session noise of `XINT8_ADAROUND` on resnet50 and yolov8n-cut; peak RSS logged beside Quark's on the same machine. Stretch: the laptop finishes where Quark SIGSEGVs. ResNet closed 2026-09-08 bitwise (`quant_resnet50_ignition_cle_adaround_c64.log`, `diff_*`, `run_*`); yolov8n-cut closed 2026-09-08 bitwise once the layer order followed the vendor's sort (`quant_yolov8n_cut_ignition_cle_adaround_c64.log`, `diff_*`, `map_*`); the laptop stretch is unrun |
 | 4 | `probe_resnet50_<mutation>.log` per mutation, plus `probe_resnet50_summary.log` | For every mutation: EP node split, NPU-vs-CPU output agreement on N images, same-sitting latency; foreign-context check before each. The A8W8 attribution in DECISIONS #3 rewritten from the single-variable result — kept beside the old wording, not replacing it |
 | 5 | one log per item | Each item measured and folded like any other experiment |
 
@@ -822,7 +824,7 @@ as a witness and the log says so.
 | 0 | Fingerprint | `notes_xint8_dialect.log`; §2 corrected | every [U] closed or explicitly open | any machine, no hardware |
 | 1 | Re-emit | `graph.py`, `pow2.py`, `qdq.py`, `refine.py` (`apply` + rules), `passes.simulate_dpu`, `verify.py`, `quantize --scales-from`, `3d_quantize_compare.py`, `npu/ep_report.py` | resnet50 from the float export: `graph_diff.ok()` against a fresh no-CLE Quark model (scales exact, weights ≤1 LSB, count logged); `refine()` on Quark's positions moves nothing; identical CPU top-1; same EP split; paired latency | quantize D1/D2 → NPU L/D2 |
 | 2 | Calibrate | `sources.py`, `calib.py` (exact store), `weights.py`, `cle.py`, `passes.prepare`, `3c_quantize_own.py` ×2, `scripts/quant-own.sh` | position-for-position equal to Quark on resnet50 and yolov8n-cut, same machine + listing; full-set top-1 and full-5000 mAP paired. ResNet and yolov8n-cut closed 2026-09-08 | Desktop 2 |
-| 3 | AdaRound | `adaround.py`, `FastFinetuneConfig`, RSS logging | accuracy parity with `XINT8_ADAROUND`; RSS beside Quark's. ResNet: byte-identical on Desktop 2 (2026-09-08); YOLO open | D1/D2, then the laptop as the stretch |
+| 3 | AdaRound | `adaround.py`, `FastFinetuneConfig`, RSS logging | accuracy parity with `XINT8_ADAROUND`; RSS beside Quark's. ResNet and yolov8n-cut: byte-identical on Desktop 2 (2026-09-08) | D1/D2, then the laptop as the stretch |
 | 4 | Acceptance map | `probe.py`, `tools/quant_probe.py`, `scripts/quant-probe.sh` | every mutation in §4.2 measured with output check; new BENCHMARKS section; DECISIONS #3 amended | L/D2 |
 | 5 | Beyond Quark | per-layer error budget in the sidecar → a BENCHMARKS table; MODNet re-calibrated through `npu.modnet` (closes the RESEARCH open item); `calib_store="hist"` with its accuracy cost measured; MobileViT per-channel **only if** Phase 4 admits it; QAT hook (`sources` + `pow2` reused from torch) | each a logged, folded experiment | per `CLAUDE.md` routing |
 

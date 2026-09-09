@@ -1,0 +1,1107 @@
+Ignition 0.1.0a1: AdaRound on models/yolov8n_cut_ignition_cle_c64.onnx (CLE base, 64 images)
+IMPORT_BLOCK_ACTIVE quark
+ADAROUND layers=63 images=64 seed=1705472343 torch=2.4.1+cpu threads=8 ort=1.22.1
+Quark_latency_profiler: finetuning layer 0, onnx inference (quantized model + float model) time consumed 0.277440s
+Module (images)->(/model.0/conv/Conv_output_0) will be optimized by adaround on cpu
+adaround iterations=0, lr=0.100000, loss=0.030648 (Recons loss=0.030648, Rounding loss=0.000000)
+adaround iterations=100, lr=0.100000, loss=0.039807 (Recons loss=0.039807, Rounding loss=0.000000)
+adaround iterations=200, lr=0.100000, loss=3.999555 (Recons loss=0.025695, Rounding loss=3.973860)
+adaround iterations=300, lr=0.100000, loss=2.497980 (Recons loss=0.019650, Rounding loss=2.478330)
+adaround iterations=400, lr=0.100000, loss=2.230568 (Recons loss=0.021000, Rounding loss=2.209569)
+adaround iterations=500, lr=0.100000, loss=2.079553 (Recons loss=0.019776, Rounding loss=2.059777)
+adaround iterations=600, lr=0.100000, loss=1.783496 (Recons loss=0.037162, Rounding loss=1.746334)
+adaround iterations=700, lr=0.100000, loss=1.249172 (Recons loss=0.021978, Rounding loss=1.227194)
+adaround iterations=800, lr=0.100000, loss=0.388553 (Recons loss=0.039036, Rounding loss=0.349517)
+adaround iterations=900, lr=0.100000, loss=0.056356 (Recons loss=0.056356, Rounding loss=0.000000)
+adaround iterations=999, lr=0.100000, loss=0.064362 (Recons loss=0.064362, Rounding loss=0.000000)
+Module (images)->(/model.0/conv/Conv_output_0) recons metrics was optimized from 0.031570 to 0.004143 (diff=-0.027427)
+Quark_latency_profiler: finetuning layer 0, torch training time consumed 21.338124s
+LAYER 0/63 /model.0/conv/Conv changed=56/432 max_lsb=1 iterations=1000 early_stop=False
+Quark_latency_profiler: finetuning layer 1, onnx inference (quantized model + float model) time consumed 0.583631s
+Module (/model.0/act/Mul_output_0)->(/model.1/conv/Conv_output_0) will be optimized by adaround on cpu
+adaround iterations=0, lr=0.100000, loss=5.104279 (Recons loss=5.104279, Rounding loss=0.000000)
+adaround iterations=100, lr=0.100000, loss=3.505421 (Recons loss=3.505421, Rounding loss=0.000000)
+adaround iterations=200, lr=0.100000, loss=40.149323 (Recons loss=3.268377, Rounding loss=36.880947)
+adaround iterations=300, lr=0.100000, loss=25.626751 (Recons loss=4.044675, Rounding loss=21.582075)
+adaround iterations=400, lr=0.100000, loss=22.184887 (Recons loss=3.468696, Rounding loss=18.716190)
+adaround iterations=500, lr=0.100000, loss=19.889101 (Recons loss=3.906930, Rounding loss=15.982170)
+adaround iterations=600, lr=0.100000, loss=17.488838 (Recons loss=4.263285, Rounding loss=13.225553)
+adaround iterations=700, lr=0.100000, loss=14.316753 (Recons loss=5.288690, Rounding loss=9.028064)
+adaround iterations=800, lr=0.100000, loss=6.738762 (Recons loss=3.297940, Rounding loss=3.440822)
+adaround iterations=900, lr=0.100000, loss=4.052086 (Recons loss=3.906096, Rounding loss=0.145990)
+adaround iterations=999, lr=0.100000, loss=3.891884 (Recons loss=3.876169, Rounding loss=0.015714)
+Module (/model.0/act/Mul_output_0)->(/model.1/conv/Conv_output_0) recons metrics was optimized from 0.245230 to 0.132814 (diff=-0.112417)
+Quark_latency_profiler: finetuning layer 1, torch training time consumed 14.277795s
+LAYER 1/63 /model.1/conv/Conv changed=1086/4608 max_lsb=1 iterations=1000 early_stop=False
+Quark_latency_profiler: finetuning layer 2, onnx inference (quantized model + float model) time consumed 0.684638s
+Module (/model.1/act/Mul_output_0)->(/model.2/cv1/conv/Conv_output_0) will be optimized by adaround on cpu
+adaround iterations=0, lr=0.100000, loss=3.045313 (Recons loss=3.045313, Rounding loss=0.000000)
+adaround iterations=100, lr=0.100000, loss=2.031315 (Recons loss=2.031315, Rounding loss=0.000000)
+adaround iterations=200, lr=0.100000, loss=9.496990 (Recons loss=2.073555, Rounding loss=7.423435)
+adaround iterations=300, lr=0.100000, loss=7.058655 (Recons loss=2.218431, Rounding loss=4.840224)
+adaround iterations=400, lr=0.100000, loss=6.451109 (Recons loss=1.945933, Rounding loss=4.505176)
+adaround iterations=500, lr=0.100000, loss=6.408944 (Recons loss=2.209074, Rounding loss=4.199871)
+adaround iterations=600, lr=0.100000, loss=5.809770 (Recons loss=2.173630, Rounding loss=3.636140)
+adaround iterations=700, lr=0.100000, loss=4.780531 (Recons loss=2.095927, Rounding loss=2.684604)
+adaround iterations=800, lr=0.100000, loss=3.627457 (Recons loss=2.503417, Rounding loss=1.124039)
+adaround iterations=900, lr=0.100000, loss=2.686321 (Recons loss=2.684337, Rounding loss=0.001984)
+adaround iterations=999, lr=0.100000, loss=3.039716 (Recons loss=3.039716, Rounding loss=0.000000)
+Module (/model.1/act/Mul_output_0)->(/model.2/cv1/conv/Conv_output_0) recons metrics was optimized from 0.097933 to 0.076618 (diff=-0.021315)
+Quark_latency_profiler: finetuning layer 2, torch training time consumed 8.710575s
+LAYER 2/63 /model.2/cv1/conv/Conv changed=198/1024 max_lsb=1 iterations=1000 early_stop=False
+Quark_latency_profiler: finetuning layer 3, onnx inference (quantized model + float model) time consumed 0.765127s
+Module (/model.2/Split_output_1)->(/model.2/m.0/cv1/conv/Conv_output_0) will be optimized by adaround on cpu
+adaround iterations=0, lr=0.100000, loss=7.307540 (Recons loss=7.307540, Rounding loss=0.000000)
+adaround iterations=100, lr=0.100000, loss=6.791635 (Recons loss=6.791635, Rounding loss=0.000000)
+adaround iterations=200, lr=0.100000, loss=18.799446 (Recons loss=6.752789, Rounding loss=12.046659)
+adaround iterations=300, lr=0.100000, loss=12.005272 (Recons loss=5.955023, Rounding loss=6.050248)
+adaround iterations=400, lr=0.100000, loss=11.683519 (Recons loss=6.553874, Rounding loss=5.129645)
+adaround iterations=500, lr=0.100000, loss=11.319599 (Recons loss=6.958883, Rounding loss=4.360715)
+adaround iterations=600, lr=0.100000, loss=10.972275 (Recons loss=7.562787, Rounding loss=3.409487)
+adaround iterations=700, lr=0.100000, loss=8.610738 (Recons loss=6.638155, Rounding loss=1.972584)
+adaround iterations=800, lr=0.100000, loss=6.659106 (Recons loss=6.142244, Rounding loss=0.516862)
+adaround iterations=900, lr=0.100000, loss=5.726764 (Recons loss=5.707215, Rounding loss=0.019549)
+adaround iterations=999, lr=0.100000, loss=6.396464 (Recons loss=6.396464, Rounding loss=0.000000)
+Module (/model.2/Split_output_1)->(/model.2/m.0/cv1/conv/Conv_output_0) recons metrics was optimized from 0.483291 to 0.414550 (diff=-0.068741)
+Quark_latency_profiler: finetuning layer 3, torch training time consumed 6.797496s
+LAYER 3/63 /model.2/m.0/cv1/conv/Conv changed=848/2304 max_lsb=1 iterations=1000 early_stop=False
+Quark_latency_profiler: finetuning layer 4, onnx inference (quantized model + float model) time consumed 0.867493s
+Module (/model.2/m.0/cv1/act/Mul_output_0)->(/model.2/m.0/cv2/conv/Conv_output_0) will be optimized by adaround on cpu
+adaround iterations=0, lr=0.100000, loss=10.799546 (Recons loss=10.799546, Rounding loss=0.000000)
+adaround iterations=100, lr=0.100000, loss=9.749792 (Recons loss=9.749792, Rounding loss=0.000000)
+adaround iterations=200, lr=0.100000, loss=16.051085 (Recons loss=8.323113, Rounding loss=7.727972)
+adaround iterations=300, lr=0.100000, loss=12.270120 (Recons loss=9.585147, Rounding loss=2.684973)
+adaround iterations=400, lr=0.100000, loss=9.663818 (Recons loss=7.675716, Rounding loss=1.988102)
+adaround iterations=500, lr=0.100000, loss=11.397972 (Recons loss=9.841510, Rounding loss=1.556462)
+adaround iterations=600, lr=0.100000, loss=11.250998 (Recons loss=10.156757, Rounding loss=1.094241)
+adaround iterations=700, lr=0.100000, loss=9.366735 (Recons loss=8.874285, Rounding loss=0.492450)
+adaround iterations=800, lr=0.100000, loss=9.934669 (Recons loss=9.934669, Rounding loss=0.000000)
+adaround iterations=900, lr=0.100000, loss=10.615745 (Recons loss=10.615745, Rounding loss=0.000000)
+adaround Iterations=999, mean loss 0.000000 (in 100 batches) is not better than best loss 0.000000, early stop
+Module (/model.2/m.0/cv1/act/Mul_output_0)->(/model.2/m.0/cv2/conv/Conv_output_0) recons metrics was optimized from 0.643449 to 0.610522 (diff=-0.032927)
+Quark_latency_profiler: finetuning layer 4, torch training time consumed 7.027004s
+LAYER 4/63 /model.2/m.0/cv2/conv/Conv changed=911/2304 max_lsb=1 iterations=999 early_stop=True
+Quark_latency_profiler: finetuning layer 5, onnx inference (quantized model + float model) time consumed 1.207090s
+Module (/model.2/Concat_output_0)->(/model.2/cv2/conv/Conv_output_0) will be optimized by adaround on cpu
+adaround iterations=0, lr=0.100000, loss=3.187044 (Recons loss=3.187044, Rounding loss=0.000000)
+adaround iterations=100, lr=0.100000, loss=3.066428 (Recons loss=3.066428, Rounding loss=0.000000)
+adaround iterations=200, lr=0.100000, loss=7.546376 (Recons loss=2.687541, Rounding loss=4.858835)
+adaround iterations=300, lr=0.100000, loss=5.224948 (Recons loss=3.231702, Rounding loss=1.993246)
+adaround iterations=400, lr=0.100000, loss=4.207239 (Recons loss=2.722506, Rounding loss=1.484733)
+adaround iterations=500, lr=0.100000, loss=4.221201 (Recons loss=3.041244, Rounding loss=1.179957)
+adaround iterations=600, lr=0.100000, loss=4.006150 (Recons loss=3.207223, Rounding loss=0.798927)
+adaround iterations=700, lr=0.100000, loss=3.248795 (Recons loss=2.848942, Rounding loss=0.399853)
+adaround iterations=800, lr=0.100000, loss=3.236898 (Recons loss=3.212806, Rounding loss=0.024092)
+adaround iterations=900, lr=0.100000, loss=3.277817 (Recons loss=3.277817, Rounding loss=0.000000)
+adaround iterations=999, lr=0.100000, loss=3.153536 (Recons loss=3.153536, Rounding loss=0.000000)
+Module (/model.2/Concat_output_0)->(/model.2/cv2/conv/Conv_output_0) recons metrics was optimized from 0.105289 to 0.095781 (diff=-0.009507)
+Quark_latency_profiler: finetuning layer 5, torch training time consumed 11.157827s
+LAYER 5/63 /model.2/cv2/conv/Conv changed=655/1536 max_lsb=1 iterations=1000 early_stop=False
+Quark_latency_profiler: finetuning layer 6, onnx inference (quantized model + float model) time consumed 1.284359s
+Module (/model.2/cv2/act/Mul_output_0)->(/model.3/conv/Conv_output_0) will be optimized by adaround on cpu
+adaround iterations=0, lr=0.100000, loss=3.889345 (Recons loss=3.889345, Rounding loss=0.000000)
+adaround iterations=100, lr=0.100000, loss=3.776224 (Recons loss=3.776224, Rounding loss=0.000000)
+adaround iterations=200, lr=0.100000, loss=77.037689 (Recons loss=2.926805, Rounding loss=74.110886)
+adaround iterations=300, lr=0.100000, loss=24.454197 (Recons loss=3.864273, Rounding loss=20.589924)
+adaround iterations=400, lr=0.100000, loss=15.115338 (Recons loss=3.411906, Rounding loss=11.703432)
+adaround iterations=500, lr=0.100000, loss=10.098554 (Recons loss=3.386491, Rounding loss=6.712063)
+adaround iterations=600, lr=0.100000, loss=6.613740 (Recons loss=3.632408, Rounding loss=2.981332)
+adaround iterations=700, lr=0.100000, loss=3.624950 (Recons loss=3.269033, Rounding loss=0.355917)
+adaround iterations=800, lr=0.100000, loss=3.658829 (Recons loss=3.648832, Rounding loss=0.009997)
+adaround iterations=900, lr=0.100000, loss=3.434993 (Recons loss=3.434993, Rounding loss=0.000000)
+adaround iterations=999, lr=0.100000, loss=3.040947 (Recons loss=3.040947, Rounding loss=0.000000)
+Module (/model.2/cv2/act/Mul_output_0)->(/model.3/conv/Conv_output_0) recons metrics was optimized from 0.060630 to 0.053592 (diff=-0.007038)
+Quark_latency_profiler: finetuning layer 6, torch training time consumed 7.167253s
+LAYER 6/63 /model.3/conv/Conv changed=7464/18432 max_lsb=1 iterations=1000 early_stop=False
+Quark_latency_profiler: finetuning layer 7, onnx inference (quantized model + float model) time consumed 1.226561s
+Module (/model.3/act/Mul_output_0)->(/model.4/cv1/conv/Conv_output_0) will be optimized by adaround on cpu
+adaround iterations=0, lr=0.100000, loss=4.009205 (Recons loss=4.009205, Rounding loss=0.000000)
+adaround iterations=100, lr=0.100000, loss=2.778353 (Recons loss=2.778353, Rounding loss=0.000000)
+adaround iterations=200, lr=0.100000, loss=22.537605 (Recons loss=3.356557, Rounding loss=19.181047)
+adaround iterations=300, lr=0.100000, loss=10.402988 (Recons loss=3.394996, Rounding loss=7.007992)
+adaround iterations=400, lr=0.100000, loss=8.161095 (Recons loss=3.086261, Rounding loss=5.074833)
+adaround iterations=500, lr=0.100000, loss=6.961727 (Recons loss=3.425365, Rounding loss=3.536362)
+adaround iterations=600, lr=0.100000, loss=4.951896 (Recons loss=2.898300, Rounding loss=2.053595)
+adaround iterations=700, lr=0.100000, loss=3.665885 (Recons loss=2.934763, Rounding loss=0.731122)
+adaround iterations=800, lr=0.100000, loss=3.373548 (Recons loss=3.373548, Rounding loss=0.000000)
+adaround iterations=900, lr=0.100000, loss=3.288104 (Recons loss=3.288104, Rounding loss=0.000000)
+adaround Iterations=999, mean loss 0.000000 (in 100 batches) is not better than best loss 0.000000, early stop
+Module (/model.3/act/Mul_output_0)->(/model.4/cv1/conv/Conv_output_0) recons metrics was optimized from 0.063302 to 0.053301 (diff=-0.010001)
+Quark_latency_profiler: finetuning layer 7, torch training time consumed 4.317254s
+LAYER 7/63 /model.4/cv1/conv/Conv changed=1410/4096 max_lsb=1 iterations=999 early_stop=True
+Quark_latency_profiler: finetuning layer 8, onnx inference (quantized model + float model) time consumed 1.261183s
+Module (/model.4/Split_output_1)->(/model.4/m.0/cv1/conv/Conv_output_0) will be optimized by adaround on cpu
+adaround iterations=0, lr=0.100000, loss=1.575850 (Recons loss=1.575850, Rounding loss=0.000000)
+adaround iterations=100, lr=0.100000, loss=1.125325 (Recons loss=1.125325, Rounding loss=0.000000)
+adaround iterations=200, lr=0.100000, loss=57.567059 (Recons loss=1.232076, Rounding loss=56.334984)
+adaround iterations=300, lr=0.100000, loss=20.308283 (Recons loss=1.159179, Rounding loss=19.149103)
+adaround iterations=400, lr=0.100000, loss=14.319179 (Recons loss=1.071469, Rounding loss=13.247709)
+adaround iterations=500, lr=0.100000, loss=9.619487 (Recons loss=1.079921, Rounding loss=8.539565)
+adaround iterations=600, lr=0.100000, loss=5.915002 (Recons loss=1.058890, Rounding loss=4.856112)
+adaround iterations=700, lr=0.100000, loss=2.558598 (Recons loss=1.112781, Rounding loss=1.445817)
+adaround iterations=800, lr=0.100000, loss=1.045319 (Recons loss=1.035319, Rounding loss=0.010000)
+adaround iterations=900, lr=0.100000, loss=1.288968 (Recons loss=1.288968, Rounding loss=0.000000)
+adaround iterations=999, lr=0.100000, loss=1.078196 (Recons loss=1.078196, Rounding loss=0.000000)
+Module (/model.4/Split_output_1)->(/model.4/m.0/cv1/conv/Conv_output_0) recons metrics was optimized from 0.048916 to 0.033104 (diff=-0.015813)
+Quark_latency_profiler: finetuning layer 8, torch training time consumed 3.773504s
+LAYER 8/63 /model.4/m.0/cv1/conv/Conv changed=3233/9216 max_lsb=1 iterations=1000 early_stop=False
+Quark_latency_profiler: finetuning layer 9, onnx inference (quantized model + float model) time consumed 1.336728s
+Module (/model.4/m.0/cv1/act/Mul_output_0)->(/model.4/m.0/cv2/conv/Conv_output_0) will be optimized by adaround on cpu
+adaround iterations=0, lr=0.100000, loss=1.994500 (Recons loss=1.994500, Rounding loss=0.000000)
+adaround iterations=100, lr=0.100000, loss=1.459562 (Recons loss=1.459562, Rounding loss=0.000000)
+adaround iterations=200, lr=0.100000, loss=54.278465 (Recons loss=1.465967, Rounding loss=52.812500)
+adaround iterations=300, lr=0.100000, loss=19.579832 (Recons loss=1.260387, Rounding loss=18.319445)
+adaround iterations=400, lr=0.100000, loss=13.540583 (Recons loss=1.531888, Rounding loss=12.008695)
+adaround iterations=500, lr=0.100000, loss=8.493661 (Recons loss=1.332268, Rounding loss=7.161393)
+adaround iterations=600, lr=0.100000, loss=5.318722 (Recons loss=1.498716, Rounding loss=3.820006)
+adaround iterations=700, lr=0.100000, loss=2.302629 (Recons loss=1.283537, Rounding loss=1.019091)
+adaround iterations=800, lr=0.100000, loss=1.232565 (Recons loss=1.220896, Rounding loss=0.011669)
+adaround iterations=900, lr=0.100000, loss=1.433764 (Recons loss=1.433764, Rounding loss=0.000000)
+adaround iterations=999, lr=0.100000, loss=1.403124 (Recons loss=1.403124, Rounding loss=0.000000)
+Module (/model.4/m.0/cv1/act/Mul_output_0)->(/model.4/m.0/cv2/conv/Conv_output_0) recons metrics was optimized from 0.063111 to 0.042858 (diff=-0.020253)
+Quark_latency_profiler: finetuning layer 9, torch training time consumed 3.829175s
+LAYER 9/63 /model.4/m.0/cv2/conv/Conv changed=3161/9216 max_lsb=1 iterations=1000 early_stop=False
+Quark_latency_profiler: finetuning layer 10, onnx inference (quantized model + float model) time consumed 1.426923s
+Module (/model.4/m.0/Add_output_0)->(/model.4/m.1/cv1/conv/Conv_output_0) will be optimized by adaround on cpu
+adaround iterations=0, lr=0.100000, loss=1.924235 (Recons loss=1.924235, Rounding loss=0.000000)
+adaround iterations=100, lr=0.100000, loss=1.338440 (Recons loss=1.338440, Rounding loss=0.000000)
+adaround iterations=200, lr=0.100000, loss=54.861549 (Recons loss=1.460869, Rounding loss=53.400681)
+adaround iterations=300, lr=0.100000, loss=17.617947 (Recons loss=1.200553, Rounding loss=16.417393)
+adaround iterations=400, lr=0.100000, loss=12.271307 (Recons loss=1.293012, Rounding loss=10.978295)
+adaround iterations=500, lr=0.100000, loss=7.637611 (Recons loss=1.115602, Rounding loss=6.522009)
+adaround iterations=600, lr=0.100000, loss=4.428912 (Recons loss=0.999022, Rounding loss=3.429890)
+adaround iterations=700, lr=0.100000, loss=2.311607 (Recons loss=1.551109, Rounding loss=0.760498)
+adaround iterations=800, lr=0.100000, loss=1.220973 (Recons loss=1.220973, Rounding loss=0.000000)
+adaround iterations=900, lr=0.100000, loss=1.336807 (Recons loss=1.336807, Rounding loss=0.000000)
+adaround Iterations=999, mean loss 0.000000 (in 100 batches) is not better than best loss 0.000000, early stop
+Module (/model.4/m.0/Add_output_0)->(/model.4/m.1/cv1/conv/Conv_output_0) recons metrics was optimized from 0.059324 to 0.037311 (diff=-0.022013)
+Quark_latency_profiler: finetuning layer 10, torch training time consumed 3.838255s
+LAYER 10/63 /model.4/m.1/cv1/conv/Conv changed=3374/9216 max_lsb=1 iterations=999 early_stop=True
+Quark_latency_profiler: finetuning layer 11, onnx inference (quantized model + float model) time consumed 1.482090s
+Module (/model.4/m.1/cv1/act/Mul_output_0)->(/model.4/m.1/cv2/conv/Conv_output_0) will be optimized by adaround on cpu
+adaround iterations=0, lr=0.100000, loss=8.000552 (Recons loss=8.000552, Rounding loss=0.000000)
+adaround iterations=100, lr=0.100000, loss=3.616156 (Recons loss=3.616156, Rounding loss=0.000000)
+adaround iterations=200, lr=0.100000, loss=31.898912 (Recons loss=3.523998, Rounding loss=28.374914)
+adaround iterations=300, lr=0.100000, loss=10.492969 (Recons loss=3.181882, Rounding loss=7.311086)
+adaround iterations=400, lr=0.100000, loss=7.972185 (Recons loss=3.490573, Rounding loss=4.481612)
+adaround iterations=500, lr=0.100000, loss=6.480548 (Recons loss=3.951954, Rounding loss=2.528594)
+adaround iterations=600, lr=0.100000, loss=4.865424 (Recons loss=3.685544, Rounding loss=1.179880)
+adaround iterations=700, lr=0.100000, loss=4.291814 (Recons loss=4.061858, Rounding loss=0.229956)
+adaround iterations=800, lr=0.100000, loss=3.548202 (Recons loss=3.548202, Rounding loss=0.000000)
+adaround iterations=900, lr=0.100000, loss=3.960057 (Recons loss=3.960057, Rounding loss=0.000000)
+adaround Iterations=999, mean loss 0.000000 (in 100 batches) is not better than best loss 0.000000, early stop
+Module (/model.4/m.1/cv1/act/Mul_output_0)->(/model.4/m.1/cv2/conv/Conv_output_0) recons metrics was optimized from 0.243773 to 0.111083 (diff=-0.132690)
+Quark_latency_profiler: finetuning layer 11, torch training time consumed 3.832182s
+LAYER 11/63 /model.4/m.1/cv2/conv/Conv changed=3976/9216 max_lsb=1 iterations=999 early_stop=True
+Quark_latency_profiler: finetuning layer 12, onnx inference (quantized model + float model) time consumed 1.637362s
+Module (/model.4/Concat_output_0)->(/model.4/cv2/conv/Conv_output_0) will be optimized by adaround on cpu
+adaround iterations=0, lr=0.100000, loss=3.799297 (Recons loss=3.799297, Rounding loss=0.000000)
+adaround iterations=100, lr=0.100000, loss=2.810871 (Recons loss=2.810871, Rounding loss=0.000000)
+adaround iterations=200, lr=0.100000, loss=41.007233 (Recons loss=2.719968, Rounding loss=38.287266)
+adaround iterations=300, lr=0.100000, loss=14.784204 (Recons loss=2.468457, Rounding loss=12.315747)
+adaround iterations=400, lr=0.100000, loss=10.656028 (Recons loss=2.747208, Rounding loss=7.908819)
+adaround iterations=500, lr=0.100000, loss=7.227771 (Recons loss=2.701478, Rounding loss=4.526293)
+adaround iterations=600, lr=0.100000, loss=5.228473 (Recons loss=2.970221, Rounding loss=2.258252)
+adaround iterations=700, lr=0.100000, loss=3.430274 (Recons loss=2.697445, Rounding loss=0.732829)
+adaround iterations=800, lr=0.100000, loss=2.579523 (Recons loss=2.539544, Rounding loss=0.039979)
+adaround iterations=900, lr=0.100000, loss=2.822700 (Recons loss=2.822700, Rounding loss=0.000000)
+adaround iterations=999, lr=0.100000, loss=2.694830 (Recons loss=2.694830, Rounding loss=0.000000)
+Module (/model.4/Concat_output_0)->(/model.4/cv2/conv/Conv_output_0) recons metrics was optimized from 0.061065 to 0.043563 (diff=-0.017503)
+Quark_latency_profiler: finetuning layer 12, torch training time consumed 6.276004s
+LAYER 12/63 /model.4/cv2/conv/Conv changed=3105/8192 max_lsb=1 iterations=1000 early_stop=False
+Quark_latency_profiler: finetuning layer 13, onnx inference (quantized model + float model) time consumed 1.655981s
+Module (/model.4/cv2/act/Mul_output_0)->(/model.5/conv/Conv_output_0) will be optimized by adaround on cpu
+adaround iterations=0, lr=0.100000, loss=8.102647 (Recons loss=8.102647, Rounding loss=0.000000)
+adaround iterations=100, lr=0.100000, loss=5.770780 (Recons loss=5.770780, Rounding loss=0.000000)
+adaround iterations=200, lr=0.100000, loss=274.667511 (Recons loss=4.872863, Rounding loss=269.794647)
+adaround iterations=300, lr=0.100000, loss=64.245605 (Recons loss=6.787489, Rounding loss=57.458115)
+adaround iterations=400, lr=0.100000, loss=34.858791 (Recons loss=5.655940, Rounding loss=29.202850)
+adaround iterations=500, lr=0.100000, loss=18.559521 (Recons loss=5.470062, Rounding loss=13.089458)
+adaround iterations=600, lr=0.100000, loss=10.067768 (Recons loss=5.758700, Rounding loss=4.309069)
+adaround iterations=700, lr=0.100000, loss=4.937235 (Recons loss=4.540433, Rounding loss=0.396802)
+adaround iterations=800, lr=0.100000, loss=5.348197 (Recons loss=5.339335, Rounding loss=0.008861)
+adaround iterations=900, lr=0.100000, loss=5.317181 (Recons loss=5.317181, Rounding loss=0.000000)
+adaround iterations=999, lr=0.100000, loss=4.620229 (Recons loss=4.620229, Rounding loss=0.000000)
+Module (/model.4/cv2/act/Mul_output_0)->(/model.5/conv/Conv_output_0) recons metrics was optimized from 0.059478 to 0.042152 (diff=-0.017326)
+Quark_latency_profiler: finetuning layer 13, torch training time consumed 6.118927s
+LAYER 13/63 /model.5/conv/Conv changed=29836/73728 max_lsb=1 iterations=1000 early_stop=False
+Quark_latency_profiler: finetuning layer 14, onnx inference (quantized model + float model) time consumed 1.707178s
+Module (/model.5/act/Mul_output_0)->(/model.6/cv1/conv/Conv_output_0) will be optimized by adaround on cpu
+adaround iterations=0, lr=0.100000, loss=10.784889 (Recons loss=10.784889, Rounding loss=0.000000)
+adaround iterations=100, lr=0.100000, loss=7.340847 (Recons loss=7.340847, Rounding loss=0.000000)
+adaround iterations=200, lr=0.100000, loss=70.683540 (Recons loss=10.059527, Rounding loss=60.624016)
+adaround iterations=300, lr=0.100000, loss=25.123716 (Recons loss=7.155380, Rounding loss=17.968336)
+adaround iterations=400, lr=0.100000, loss=20.238968 (Recons loss=8.645108, Rounding loss=11.593861)
+adaround iterations=500, lr=0.100000, loss=14.408010 (Recons loss=7.365886, Rounding loss=7.042125)
+adaround iterations=600, lr=0.100000, loss=11.061110 (Recons loss=8.101119, Rounding loss=2.959991)
+adaround iterations=700, lr=0.100000, loss=9.420115 (Recons loss=8.711425, Rounding loss=0.708690)
+adaround iterations=800, lr=0.100000, loss=8.898158 (Recons loss=8.878512, Rounding loss=0.019646)
+adaround iterations=900, lr=0.100000, loss=9.319261 (Recons loss=9.319261, Rounding loss=0.000000)
+adaround iterations=999, lr=0.100000, loss=7.396113 (Recons loss=7.396113, Rounding loss=0.000000)
+Module (/model.5/act/Mul_output_0)->(/model.6/cv1/conv/Conv_output_0) recons metrics was optimized from 0.091497 to 0.063104 (diff=-0.028393)
+Quark_latency_profiler: finetuning layer 14, torch training time consumed 3.347389s
+LAYER 14/63 /model.6/cv1/conv/Conv changed=6456/16384 max_lsb=1 iterations=1000 early_stop=False
+Quark_latency_profiler: finetuning layer 15, onnx inference (quantized model + float model) time consumed 1.750127s
+Module (/model.6/Split_output_1)->(/model.6/m.0/cv1/conv/Conv_output_0) will be optimized by adaround on cpu
+adaround iterations=0, lr=0.100000, loss=9.562127 (Recons loss=9.562127, Rounding loss=0.000000)
+adaround iterations=100, lr=0.100000, loss=4.220845 (Recons loss=4.220845, Rounding loss=0.000000)
+adaround iterations=200, lr=0.100000, loss=227.636978 (Recons loss=4.199022, Rounding loss=223.437958)
+adaround iterations=300, lr=0.100000, loss=83.091599 (Recons loss=4.242096, Rounding loss=78.849503)
+adaround iterations=400, lr=0.100000, loss=56.535515 (Recons loss=4.138483, Rounding loss=52.397034)
+adaround iterations=500, lr=0.100000, loss=37.472717 (Recons loss=4.149392, Rounding loss=33.323326)
+adaround iterations=600, lr=0.100000, loss=21.332609 (Recons loss=3.622430, Rounding loss=17.710180)
+adaround iterations=700, lr=0.100000, loss=9.585194 (Recons loss=4.079174, Rounding loss=5.506019)
+adaround iterations=800, lr=0.100000, loss=3.737140 (Recons loss=3.586365, Rounding loss=0.150775)
+adaround iterations=900, lr=0.100000, loss=3.789314 (Recons loss=3.789314, Rounding loss=0.000000)
+adaround iterations=999, lr=0.100000, loss=4.344244 (Recons loss=4.344244, Rounding loss=0.000000)
+Module (/model.6/Split_output_1)->(/model.6/m.0/cv1/conv/Conv_output_0) recons metrics was optimized from 0.138156 to 0.063567 (diff=-0.074589)
+Quark_latency_profiler: finetuning layer 15, torch training time consumed 4.278207s
+LAYER 15/63 /model.6/m.0/cv1/conv/Conv changed=12938/36864 max_lsb=1 iterations=1000 early_stop=False
+Quark_latency_profiler: finetuning layer 16, onnx inference (quantized model + float model) time consumed 1.796542s
+Module (/model.6/m.0/cv1/act/Mul_output_0)->(/model.6/m.0/cv2/conv/Conv_output_0) will be optimized by adaround on cpu
+adaround iterations=0, lr=0.100000, loss=6.268369 (Recons loss=6.268369, Rounding loss=0.000000)
+adaround iterations=100, lr=0.100000, loss=2.777635 (Recons loss=2.777635, Rounding loss=0.000000)
+adaround iterations=200, lr=0.100000, loss=141.664658 (Recons loss=2.783840, Rounding loss=138.880814)
+adaround iterations=300, lr=0.100000, loss=36.466679 (Recons loss=2.847138, Rounding loss=33.619541)
+adaround iterations=400, lr=0.100000, loss=23.107515 (Recons loss=2.916895, Rounding loss=20.190620)
+adaround iterations=500, lr=0.100000, loss=15.606689 (Recons loss=3.633435, Rounding loss=11.973254)
+adaround iterations=600, lr=0.100000, loss=7.350422 (Recons loss=2.803739, Rounding loss=4.546683)
+adaround iterations=700, lr=0.100000, loss=4.097796 (Recons loss=3.359849, Rounding loss=0.737947)
+adaround iterations=800, lr=0.100000, loss=2.887023 (Recons loss=2.858329, Rounding loss=0.028694)
+adaround iterations=900, lr=0.100000, loss=3.161313 (Recons loss=3.161313, Rounding loss=0.000000)
+adaround iterations=999, lr=0.100000, loss=3.130831 (Recons loss=3.130831, Rounding loss=0.000000)
+Module (/model.6/m.0/cv1/act/Mul_output_0)->(/model.6/m.0/cv2/conv/Conv_output_0) recons metrics was optimized from 0.106034 to 0.047500 (diff=-0.058534)
+Quark_latency_profiler: finetuning layer 16, torch training time consumed 4.389540s
+LAYER 16/63 /model.6/m.0/cv2/conv/Conv changed=14595/36864 max_lsb=1 iterations=1000 early_stop=False
+Quark_latency_profiler: finetuning layer 17, onnx inference (quantized model + float model) time consumed 1.788090s
+Module (/model.6/m.0/Add_output_0)->(/model.6/m.1/cv1/conv/Conv_output_0) will be optimized by adaround on cpu
+adaround iterations=0, lr=0.100000, loss=8.038448 (Recons loss=8.038448, Rounding loss=0.000000)
+adaround iterations=100, lr=0.100000, loss=3.942135 (Recons loss=3.942135, Rounding loss=0.000000)
+adaround iterations=200, lr=0.100000, loss=141.756546 (Recons loss=3.696152, Rounding loss=138.060394)
+adaround iterations=300, lr=0.100000, loss=35.632156 (Recons loss=3.359907, Rounding loss=32.272247)
+adaround iterations=400, lr=0.100000, loss=20.693508 (Recons loss=3.323775, Rounding loss=17.369734)
+adaround iterations=500, lr=0.100000, loss=12.520153 (Recons loss=3.284194, Rounding loss=9.235959)
+adaround iterations=600, lr=0.100000, loss=6.413651 (Recons loss=3.228133, Rounding loss=3.185519)
+adaround iterations=700, lr=0.100000, loss=4.218284 (Recons loss=3.612908, Rounding loss=0.605377)
+adaround iterations=800, lr=0.100000, loss=3.514962 (Recons loss=3.514962, Rounding loss=0.000000)
+adaround iterations=900, lr=0.100000, loss=4.214569 (Recons loss=4.214569, Rounding loss=0.000000)
+adaround Iterations=999, mean loss 0.000000 (in 100 batches) is not better than best loss 0.000000, early stop
+Module (/model.6/m.0/Add_output_0)->(/model.6/m.1/cv1/conv/Conv_output_0) recons metrics was optimized from 0.124151 to 0.057135 (diff=-0.067015)
+Quark_latency_profiler: finetuning layer 17, torch training time consumed 4.318726s
+LAYER 17/63 /model.6/m.1/cv1/conv/Conv changed=14270/36864 max_lsb=1 iterations=999 early_stop=True
+Quark_latency_profiler: finetuning layer 18, onnx inference (quantized model + float model) time consumed 1.865523s
+Module (/model.6/m.1/cv1/act/Mul_output_0)->(/model.6/m.1/cv2/conv/Conv_output_0) will be optimized by adaround on cpu
+adaround iterations=0, lr=0.100000, loss=15.549524 (Recons loss=15.549524, Rounding loss=0.000000)
+adaround iterations=100, lr=0.100000, loss=7.922159 (Recons loss=7.922159, Rounding loss=0.000000)
+adaround iterations=200, lr=0.100000, loss=194.013428 (Recons loss=7.211669, Rounding loss=186.801758)
+adaround iterations=300, lr=0.100000, loss=62.374611 (Recons loss=5.644961, Rounding loss=56.729649)
+adaround iterations=400, lr=0.100000, loss=42.710052 (Recons loss=6.789756, Rounding loss=35.920296)
+adaround iterations=500, lr=0.100000, loss=27.255747 (Recons loss=6.131101, Rounding loss=21.124645)
+adaround iterations=600, lr=0.100000, loss=17.140511 (Recons loss=5.605541, Rounding loss=11.534969)
+adaround iterations=700, lr=0.100000, loss=8.679167 (Recons loss=6.155043, Rounding loss=2.524124)
+adaround iterations=800, lr=0.100000, loss=5.340604 (Recons loss=5.250632, Rounding loss=0.089972)
+adaround iterations=900, lr=0.100000, loss=6.753603 (Recons loss=6.753603, Rounding loss=0.000000)
+adaround iterations=999, lr=0.100000, loss=6.510564 (Recons loss=6.510564, Rounding loss=0.000000)
+Module (/model.6/m.1/cv1/act/Mul_output_0)->(/model.6/m.1/cv2/conv/Conv_output_0) recons metrics was optimized from 0.241154 to 0.102631 (diff=-0.138523)
+Quark_latency_profiler: finetuning layer 18, torch training time consumed 4.309140s
+LAYER 18/63 /model.6/m.1/cv2/conv/Conv changed=14109/36864 max_lsb=1 iterations=1000 early_stop=False
+Quark_latency_profiler: finetuning layer 19, onnx inference (quantized model + float model) time consumed 1.983698s
+Module (/model.6/Concat_output_0)->(/model.6/cv2/conv/Conv_output_0) will be optimized by adaround on cpu
+adaround iterations=0, lr=0.100000, loss=9.160773 (Recons loss=9.160773, Rounding loss=0.000000)
+adaround iterations=100, lr=0.100000, loss=6.225261 (Recons loss=6.225261, Rounding loss=0.000000)
+adaround iterations=200, lr=0.100000, loss=100.824165 (Recons loss=6.329736, Rounding loss=94.494431)
+adaround iterations=300, lr=0.100000, loss=26.299147 (Recons loss=6.214630, Rounding loss=20.084517)
+adaround iterations=400, lr=0.100000, loss=15.969225 (Recons loss=5.936447, Rounding loss=10.032778)
+adaround iterations=500, lr=0.100000, loss=10.632832 (Recons loss=5.834108, Rounding loss=4.798724)
+adaround iterations=600, lr=0.100000, loss=7.426524 (Recons loss=5.786924, Rounding loss=1.639600)
+adaround iterations=700, lr=0.100000, loss=6.585762 (Recons loss=6.255425, Rounding loss=0.330336)
+adaround iterations=800, lr=0.100000, loss=6.358325 (Recons loss=6.348325, Rounding loss=0.010000)
+adaround iterations=900, lr=0.100000, loss=6.547757 (Recons loss=6.547757, Rounding loss=0.000000)
+adaround iterations=999, lr=0.100000, loss=6.040239 (Recons loss=6.040239, Rounding loss=0.000000)
+Module (/model.6/Concat_output_0)->(/model.6/cv2/conv/Conv_output_0) recons metrics was optimized from 0.071298 to 0.047295 (diff=-0.024003)
+Quark_latency_profiler: finetuning layer 19, torch training time consumed 4.396336s
+LAYER 19/63 /model.6/cv2/conv/Conv changed=13754/32768 max_lsb=1 iterations=1000 early_stop=False
+Quark_latency_profiler: finetuning layer 20, onnx inference (quantized model + float model) time consumed 1.997363s
+Module (/model.6/cv2/act/Mul_output_0)->(/model.7/conv/Conv_output_0) will be optimized by adaround on cpu
+adaround iterations=0, lr=0.100000, loss=36.494816 (Recons loss=36.494816, Rounding loss=0.000000)
+adaround iterations=100, lr=0.100000, loss=17.280136 (Recons loss=17.280136, Rounding loss=0.000000)
+adaround iterations=200, lr=0.100000, loss=1044.485107 (Recons loss=17.418228, Rounding loss=1027.066895)
+adaround iterations=300, lr=0.100000, loss=212.289230 (Recons loss=16.722469, Rounding loss=195.566757)
+adaround iterations=400, lr=0.100000, loss=114.718857 (Recons loss=19.906929, Rounding loss=94.811928)
+adaround iterations=500, lr=0.100000, loss=48.146664 (Recons loss=15.160020, Rounding loss=32.986645)
+adaround iterations=600, lr=0.100000, loss=26.245171 (Recons loss=16.890976, Rounding loss=9.354196)
+adaround iterations=700, lr=0.100000, loss=21.516113 (Recons loss=20.363401, Rounding loss=1.152713)
+adaround iterations=800, lr=0.100000, loss=18.343260 (Recons loss=18.323467, Rounding loss=0.019793)
+adaround iterations=900, lr=0.100000, loss=17.670509 (Recons loss=17.670509, Rounding loss=0.000000)
+adaround iterations=999, lr=0.100000, loss=17.824421 (Recons loss=17.824421, Rounding loss=0.000000)
+Module (/model.6/cv2/act/Mul_output_0)->(/model.7/conv/Conv_output_0) recons metrics was optimized from 0.133797 to 0.067597 (diff=-0.066201)
+Quark_latency_profiler: finetuning layer 20, torch training time consumed 6.532703s
+LAYER 20/63 /model.7/conv/Conv changed=121035/294912 max_lsb=1 iterations=1000 early_stop=False
+Quark_latency_profiler: finetuning layer 21, onnx inference (quantized model + float model) time consumed 2.034972s
+Module (/model.7/act/Mul_output_0)->(/model.8/cv1/conv/Conv_output_0) will be optimized by adaround on cpu
+adaround iterations=0, lr=0.100000, loss=44.475986 (Recons loss=44.475986, Rounding loss=0.000000)
+adaround iterations=100, lr=0.100000, loss=36.040810 (Recons loss=36.040810, Rounding loss=0.000000)
+adaround iterations=200, lr=0.100000, loss=117.784134 (Recons loss=33.674530, Rounding loss=84.109604)
+adaround iterations=300, lr=0.100000, loss=57.299267 (Recons loss=40.383232, Rounding loss=16.916035)
+adaround iterations=400, lr=0.100000, loss=46.556644 (Recons loss=38.827694, Rounding loss=7.728951)
+adaround iterations=500, lr=0.100000, loss=40.885635 (Recons loss=37.784168, Rounding loss=3.101466)
+adaround iterations=600, lr=0.100000, loss=41.707279 (Recons loss=40.849224, Rounding loss=0.858057)
+adaround iterations=700, lr=0.100000, loss=35.409641 (Recons loss=35.269791, Rounding loss=0.139851)
+adaround iterations=800, lr=0.100000, loss=48.046425 (Recons loss=48.046425, Rounding loss=0.000000)
+adaround iterations=900, lr=0.100000, loss=43.901459 (Recons loss=43.901459, Rounding loss=0.000000)
+adaround Iterations=999, mean loss 0.000000 (in 100 batches) is not better than best loss 0.000000, early stop
+Module (/model.7/act/Mul_output_0)->(/model.8/cv1/conv/Conv_output_0) recons metrics was optimized from 0.186497 to 0.150497 (diff=-0.035999)
+Quark_latency_profiler: finetuning layer 21, torch training time consumed 4.428103s
+LAYER 21/63 /model.8/cv1/conv/Conv changed=30564/65536 max_lsb=1 iterations=999 early_stop=True
+Quark_latency_profiler: finetuning layer 22, onnx inference (quantized model + float model) time consumed 2.151340s
+Module (/model.8/Split_output_1)->(/model.8/m.0/cv1/conv/Conv_output_0) will be optimized by adaround on cpu
+adaround iterations=0, lr=0.100000, loss=29.610371 (Recons loss=29.610371, Rounding loss=0.000000)
+adaround iterations=100, lr=0.100000, loss=18.836269 (Recons loss=18.836269, Rounding loss=0.000000)
+adaround iterations=200, lr=0.100000, loss=456.270905 (Recons loss=18.038960, Rounding loss=438.231934)
+adaround iterations=300, lr=0.100000, loss=112.398834 (Recons loss=17.327509, Rounding loss=95.071327)
+adaround iterations=400, lr=0.100000, loss=63.489258 (Recons loss=16.609892, Rounding loss=46.879364)
+adaround iterations=500, lr=0.100000, loss=38.200363 (Recons loss=17.415947, Rounding loss=20.784414)
+adaround iterations=600, lr=0.100000, loss=22.708155 (Recons loss=15.802136, Rounding loss=6.906018)
+adaround iterations=700, lr=0.100000, loss=19.213192 (Recons loss=18.146185, Rounding loss=1.067008)
+adaround iterations=800, lr=0.100000, loss=18.139677 (Recons loss=18.129677, Rounding loss=0.010000)
+adaround iterations=900, lr=0.100000, loss=16.924620 (Recons loss=16.924620, Rounding loss=0.000000)
+adaround iterations=999, lr=0.100000, loss=16.093634 (Recons loss=16.093634, Rounding loss=0.000000)
+Module (/model.8/Split_output_1)->(/model.8/m.0/cv1/conv/Conv_output_0) recons metrics was optimized from 0.233138 to 0.134655 (diff=-0.098483)
+Quark_latency_profiler: finetuning layer 22, torch training time consumed 4.737992s
+LAYER 22/63 /model.8/m.0/cv1/conv/Conv changed=63287/147456 max_lsb=1 iterations=1000 early_stop=False
+Quark_latency_profiler: finetuning layer 23, onnx inference (quantized model + float model) time consumed 2.190228s
+Module (/model.8/m.0/cv1/act/Mul_output_0)->(/model.8/m.0/cv2/conv/Conv_output_0) will be optimized by adaround on cpu
+adaround iterations=0, lr=0.100000, loss=48.728390 (Recons loss=48.728390, Rounding loss=0.000000)
+adaround iterations=100, lr=0.100000, loss=28.776817 (Recons loss=28.776817, Rounding loss=0.000000)
+adaround iterations=200, lr=0.100000, loss=496.705383 (Recons loss=28.491243, Rounding loss=468.214142)
+adaround iterations=300, lr=0.100000, loss=139.919464 (Recons loss=29.992670, Rounding loss=109.926796)
+adaround iterations=400, lr=0.100000, loss=83.327652 (Recons loss=31.134956, Rounding loss=52.192699)
+adaround iterations=500, lr=0.100000, loss=51.654739 (Recons loss=28.800776, Rounding loss=22.853964)
+adaround iterations=600, lr=0.100000, loss=33.196293 (Recons loss=26.663950, Rounding loss=6.532342)
+adaround iterations=700, lr=0.100000, loss=34.728737 (Recons loss=33.481224, Rounding loss=1.247514)
+adaround iterations=800, lr=0.100000, loss=34.635712 (Recons loss=34.571373, Rounding loss=0.064338)
+adaround iterations=900, lr=0.100000, loss=26.237843 (Recons loss=26.237843, Rounding loss=0.000000)
+adaround iterations=999, lr=0.100000, loss=30.679653 (Recons loss=30.679653, Rounding loss=0.000000)
+Module (/model.8/m.0/cv1/act/Mul_output_0)->(/model.8/m.0/cv2/conv/Conv_output_0) recons metrics was optimized from 0.330318 to 0.240832 (diff=-0.089486)
+Quark_latency_profiler: finetuning layer 23, torch training time consumed 4.666191s
+LAYER 23/63 /model.8/m.0/cv2/conv/Conv changed=63217/147456 max_lsb=1 iterations=1000 early_stop=False
+Quark_latency_profiler: finetuning layer 24, onnx inference (quantized model + float model) time consumed 2.306864s
+Module (/model.8/Concat_output_0)->(/model.8/cv2/conv/Conv_output_0) will be optimized by adaround on cpu
+adaround iterations=0, lr=0.100000, loss=36.689964 (Recons loss=36.689964, Rounding loss=0.000000)
+adaround iterations=100, lr=0.100000, loss=35.493980 (Recons loss=35.493980, Rounding loss=0.000000)
+adaround iterations=200, lr=0.100000, loss=246.549500 (Recons loss=30.309547, Rounding loss=216.239960)
+adaround iterations=300, lr=0.100000, loss=74.362335 (Recons loss=33.749138, Rounding loss=40.613201)
+adaround iterations=400, lr=0.100000, loss=50.102276 (Recons loss=32.860981, Rounding loss=17.241295)
+adaround iterations=500, lr=0.100000, loss=41.743980 (Recons loss=33.938751, Rounding loss=7.805228)
+adaround iterations=600, lr=0.100000, loss=36.653362 (Recons loss=34.334885, Rounding loss=2.318476)
+adaround iterations=700, lr=0.100000, loss=33.597084 (Recons loss=33.208771, Rounding loss=0.388312)
+adaround iterations=800, lr=0.100000, loss=40.103348 (Recons loss=40.083405, Rounding loss=0.019944)
+adaround iterations=900, lr=0.100000, loss=35.797543 (Recons loss=35.797543, Rounding loss=0.000000)
+adaround iterations=999, lr=0.100000, loss=34.259701 (Recons loss=34.259701, Rounding loss=0.000000)
+Module (/model.8/Concat_output_0)->(/model.8/cv2/conv/Conv_output_0) recons metrics was optimized from 0.150823 to 0.131494 (diff=-0.019329)
+Quark_latency_profiler: finetuning layer 24, torch training time consumed 5.091561s
+LAYER 24/63 /model.8/cv2/conv/Conv changed=44036/98304 max_lsb=1 iterations=1000 early_stop=False
+Quark_latency_profiler: finetuning layer 25, onnx inference (quantized model + float model) time consumed 2.517801s
+Module (/model.8/cv2/act/Mul_output_0)->(/model.9/cv1/conv/Conv_output_0) will be optimized by adaround on cpu
+adaround iterations=0, lr=0.100000, loss=14.227680 (Recons loss=14.227680, Rounding loss=0.000000)
+adaround iterations=100, lr=0.100000, loss=11.684358 (Recons loss=11.684358, Rounding loss=0.000000)
+adaround iterations=200, lr=0.100000, loss=90.841309 (Recons loss=10.158639, Rounding loss=80.682671)
+adaround iterations=300, lr=0.100000, loss=31.447075 (Recons loss=13.956050, Rounding loss=17.491026)
+adaround iterations=400, lr=0.100000, loss=19.208637 (Recons loss=11.493937, Rounding loss=7.714701)
+adaround iterations=500, lr=0.100000, loss=16.851654 (Recons loss=13.898267, Rounding loss=2.953387)
+adaround iterations=600, lr=0.100000, loss=14.697025 (Recons loss=13.773208, Rounding loss=0.923818)
+adaround iterations=700, lr=0.100000, loss=9.555106 (Recons loss=9.436099, Rounding loss=0.119007)
+adaround iterations=800, lr=0.100000, loss=9.838737 (Recons loss=9.838737, Rounding loss=0.000000)
+adaround iterations=900, lr=0.100000, loss=14.799607 (Recons loss=14.799607, Rounding loss=0.000000)
+adaround Iterations=999, mean loss 0.000000 (in 100 batches) is not better than best loss 0.000000, early stop
+Module (/model.8/cv2/act/Mul_output_0)->(/model.9/cv1/conv/Conv_output_0) recons metrics was optimized from 0.100749 to 0.086687 (diff=-0.014062)
+Quark_latency_profiler: finetuning layer 25, torch training time consumed 3.585506s
+LAYER 25/63 /model.9/cv1/conv/Conv changed=14623/32768 max_lsb=1 iterations=999 early_stop=True
+Quark_latency_profiler: finetuning layer 26, onnx inference (quantized model + float model) time consumed 2.597444s
+Module (/model.9/Concat_output_0)->(/model.9/cv2/conv/Conv_output_0) will be optimized by adaround on cpu
+adaround iterations=0, lr=0.100000, loss=28.090794 (Recons loss=28.090794, Rounding loss=0.000000)
+adaround iterations=100, lr=0.100000, loss=25.820728 (Recons loss=25.820728, Rounding loss=0.000000)
+adaround iterations=200, lr=0.100000, loss=1039.662109 (Recons loss=24.590948, Rounding loss=1015.071167)
+adaround iterations=300, lr=0.100000, loss=500.541840 (Recons loss=24.786924, Rounding loss=475.754913)
+adaround iterations=400, lr=0.100000, loss=385.613770 (Recons loss=32.920914, Rounding loss=352.692871)
+adaround iterations=500, lr=0.100000, loss=267.897705 (Recons loss=22.661938, Rounding loss=245.235779)
+adaround iterations=600, lr=0.100000, loss=176.228455 (Recons loss=21.621635, Rounding loss=154.606827)
+adaround iterations=700, lr=0.100000, loss=97.657104 (Recons loss=22.650173, Rounding loss=75.006935)
+adaround iterations=800, lr=0.100000, loss=36.700771 (Recons loss=24.838213, Rounding loss=11.862558)
+adaround iterations=900, lr=0.100000, loss=34.117970 (Recons loss=34.103065, Rounding loss=0.014904)
+adaround iterations=999, lr=0.100000, loss=24.223999 (Recons loss=24.223999, Rounding loss=0.000000)
+Module (/model.9/Concat_output_0)->(/model.9/cv2/conv/Conv_output_0) recons metrics was optimized from 0.125130 to 0.093520 (diff=-0.031609)
+Quark_latency_profiler: finetuning layer 26, torch training time consumed 6.145011s
+LAYER 26/63 /model.9/cv2/conv/Conv changed=35487/131072 max_lsb=1 iterations=1000 early_stop=False
+Quark_latency_profiler: finetuning layer 27, onnx inference (quantized model + float model) time consumed 2.629454s
+Module (/model.11/Concat_output_0)->(/model.12/cv1/conv/Conv_output_0) will be optimized by adaround on cpu
+adaround iterations=0, lr=0.100000, loss=15.169822 (Recons loss=15.169822, Rounding loss=0.000000)
+adaround iterations=100, lr=0.100000, loss=10.015284 (Recons loss=10.015284, Rounding loss=0.000000)
+adaround iterations=200, lr=0.100000, loss=233.138687 (Recons loss=9.903606, Rounding loss=223.235077)
+adaround iterations=300, lr=0.100000, loss=71.032150 (Recons loss=10.454104, Rounding loss=60.578045)
+adaround iterations=400, lr=0.100000, loss=45.029366 (Recons loss=11.144487, Rounding loss=33.884876)
+adaround iterations=500, lr=0.100000, loss=26.413734 (Recons loss=9.511697, Rounding loss=16.902037)
+adaround iterations=600, lr=0.100000, loss=16.490343 (Recons loss=8.824150, Rounding loss=7.666193)
+adaround iterations=700, lr=0.100000, loss=12.940079 (Recons loss=11.242741, Rounding loss=1.697338)
+adaround iterations=800, lr=0.100000, loss=9.087686 (Recons loss=9.067439, Rounding loss=0.020246)
+adaround iterations=900, lr=0.100000, loss=10.618832 (Recons loss=10.618832, Rounding loss=0.000000)
+adaround iterations=999, lr=0.100000, loss=11.687272 (Recons loss=11.687272, Rounding loss=0.000000)
+Module (/model.11/Concat_output_0)->(/model.12/cv1/conv/Conv_output_0) recons metrics was optimized from 0.121865 to 0.079851 (diff=-0.042013)
+Quark_latency_profiler: finetuning layer 27, torch training time consumed 7.713699s
+LAYER 27/63 /model.12/cv1/conv/Conv changed=18931/49152 max_lsb=1 iterations=1000 early_stop=False
+Quark_latency_profiler: finetuning layer 28, onnx inference (quantized model + float model) time consumed 2.643074s
+Module (/model.12/Split_output_1)->(/model.12/m.0/cv1/conv/Conv_output_0) will be optimized by adaround on cpu
+adaround iterations=0, lr=0.100000, loss=5.935194 (Recons loss=5.935194, Rounding loss=0.000000)
+adaround iterations=100, lr=0.100000, loss=3.902788 (Recons loss=3.902788, Rounding loss=0.000000)
+adaround iterations=200, lr=0.100000, loss=171.258575 (Recons loss=3.910465, Rounding loss=167.348114)
+adaround iterations=300, lr=0.100000, loss=40.718178 (Recons loss=3.922949, Rounding loss=36.795227)
+adaround iterations=400, lr=0.100000, loss=20.836414 (Recons loss=3.853295, Rounding loss=16.983120)
+adaround iterations=500, lr=0.100000, loss=11.175070 (Recons loss=4.242069, Rounding loss=6.933001)
+adaround iterations=600, lr=0.100000, loss=5.800921 (Recons loss=3.913926, Rounding loss=1.886995)
+adaround iterations=700, lr=0.100000, loss=4.178276 (Recons loss=3.953366, Rounding loss=0.224910)
+adaround iterations=800, lr=0.100000, loss=4.008151 (Recons loss=3.991361, Rounding loss=0.016789)
+adaround iterations=900, lr=0.100000, loss=3.738762 (Recons loss=3.738762, Rounding loss=0.000000)
+adaround iterations=999, lr=0.100000, loss=4.237774 (Recons loss=4.237774, Rounding loss=0.000000)
+Module (/model.12/Split_output_1)->(/model.12/m.0/cv1/conv/Conv_output_0) recons metrics was optimized from 0.090561 to 0.061790 (diff=-0.028771)
+Quark_latency_profiler: finetuning layer 28, torch training time consumed 5.111949s
+LAYER 28/63 /model.12/m.0/cv1/conv/Conv changed=13995/36864 max_lsb=1 iterations=1000 early_stop=False
+Quark_latency_profiler: finetuning layer 29, onnx inference (quantized model + float model) time consumed 2.629599s
+Module (/model.12/m.0/cv1/act/Mul_output_0)->(/model.12/m.0/cv2/conv/Conv_output_0) will be optimized by adaround on cpu
+adaround iterations=0, lr=0.100000, loss=7.377899 (Recons loss=7.377899, Rounding loss=0.000000)
+adaround iterations=100, lr=0.100000, loss=4.810326 (Recons loss=4.810326, Rounding loss=0.000000)
+adaround iterations=200, lr=0.100000, loss=154.675095 (Recons loss=6.124353, Rounding loss=148.550735)
+adaround iterations=300, lr=0.100000, loss=40.234386 (Recons loss=6.048580, Rounding loss=34.185806)
+adaround iterations=400, lr=0.100000, loss=22.669605 (Recons loss=5.167617, Rounding loss=17.501987)
+adaround iterations=500, lr=0.100000, loss=13.083397 (Recons loss=5.043649, Rounding loss=8.039747)
+adaround iterations=600, lr=0.100000, loss=6.580779 (Recons loss=4.394595, Rounding loss=2.186184)
+adaround iterations=700, lr=0.100000, loss=5.296805 (Recons loss=5.063456, Rounding loss=0.233350)
+adaround iterations=800, lr=0.100000, loss=4.792737 (Recons loss=4.792737, Rounding loss=0.000000)
+adaround iterations=900, lr=0.100000, loss=5.483975 (Recons loss=5.483975, Rounding loss=0.000000)
+adaround Iterations=999, mean loss 0.000000 (in 100 batches) is not better than best loss 0.000000, early stop
+Module (/model.12/m.0/cv1/act/Mul_output_0)->(/model.12/m.0/cv2/conv/Conv_output_0) recons metrics was optimized from 0.112654 to 0.075930 (diff=-0.036724)
+Quark_latency_profiler: finetuning layer 29, torch training time consumed 5.226292s
+LAYER 29/63 /model.12/m.0/cv2/conv/Conv changed=14760/36864 max_lsb=1 iterations=999 early_stop=True
+Quark_latency_profiler: finetuning layer 30, onnx inference (quantized model + float model) time consumed 2.733574s
+Module (/model.12/Concat_output_0)->(/model.12/cv2/conv/Conv_output_0) will be optimized by adaround on cpu
+adaround iterations=0, lr=0.100000, loss=10.705574 (Recons loss=10.705574, Rounding loss=0.000000)
+adaround iterations=100, lr=0.100000, loss=7.755848 (Recons loss=7.755848, Rounding loss=0.000000)
+adaround iterations=200, lr=0.100000, loss=92.335236 (Recons loss=9.398293, Rounding loss=82.936943)
+adaround iterations=300, lr=0.100000, loss=28.627651 (Recons loss=10.214720, Rounding loss=18.412931)
+adaround iterations=400, lr=0.100000, loss=17.770809 (Recons loss=8.628523, Rounding loss=9.142286)
+adaround iterations=500, lr=0.100000, loss=11.230391 (Recons loss=7.330211, Rounding loss=3.900179)
+adaround iterations=600, lr=0.100000, loss=8.453538 (Recons loss=7.189819, Rounding loss=1.263719)
+adaround iterations=700, lr=0.100000, loss=7.384628 (Recons loss=7.115265, Rounding loss=0.269364)
+adaround iterations=800, lr=0.100000, loss=8.996592 (Recons loss=8.986591, Rounding loss=0.010000)
+adaround iterations=900, lr=0.100000, loss=8.361345 (Recons loss=8.361345, Rounding loss=0.000000)
+adaround iterations=999, lr=0.100000, loss=7.311685 (Recons loss=7.311685, Rounding loss=0.000000)
+Module (/model.12/Concat_output_0)->(/model.12/cv2/conv/Conv_output_0) recons metrics was optimized from 0.083872 to 0.064406 (diff=-0.019466)
+Quark_latency_profiler: finetuning layer 30, torch training time consumed 3.887281s
+LAYER 30/63 /model.12/cv2/conv/Conv changed=10028/24576 max_lsb=1 iterations=1000 early_stop=False
+Quark_latency_profiler: finetuning layer 31, onnx inference (quantized model + float model) time consumed 2.766133s
+Module (/model.14/Concat_output_0)->(/model.15/cv1/conv/Conv_output_0) will be optimized by adaround on cpu
+adaround iterations=0, lr=0.100000, loss=3.378639 (Recons loss=3.378639, Rounding loss=0.000000)
+adaround iterations=100, lr=0.100000, loss=2.053248 (Recons loss=2.053248, Rounding loss=0.000000)
+adaround iterations=200, lr=0.100000, loss=52.300159 (Recons loss=1.922481, Rounding loss=50.377678)
+adaround iterations=300, lr=0.100000, loss=13.875900 (Recons loss=1.925537, Rounding loss=11.950363)
+adaround iterations=400, lr=0.100000, loss=7.891592 (Recons loss=1.971341, Rounding loss=5.920251)
+adaround iterations=500, lr=0.100000, loss=4.952772 (Recons loss=2.037951, Rounding loss=2.914821)
+adaround iterations=600, lr=0.100000, loss=3.142242 (Recons loss=2.052620, Rounding loss=1.089622)
+adaround iterations=700, lr=0.100000, loss=2.227524 (Recons loss=1.942913, Rounding loss=0.284611)
+adaround iterations=800, lr=0.100000, loss=2.148052 (Recons loss=2.148052, Rounding loss=0.000000)
+adaround iterations=900, lr=0.100000, loss=1.905670 (Recons loss=1.905670, Rounding loss=0.000000)
+adaround Iterations=999, mean loss 0.000000 (in 100 batches) is not better than best loss 0.000000, early stop
+Module (/model.14/Concat_output_0)->(/model.15/cv1/conv/Conv_output_0) recons metrics was optimized from 0.041119 to 0.031385 (diff=-0.009734)
+Quark_latency_profiler: finetuning layer 31, torch training time consumed 8.565952s
+LAYER 31/63 /model.15/cv1/conv/Conv changed=4704/12288 max_lsb=1 iterations=999 early_stop=True
+Quark_latency_profiler: finetuning layer 32, onnx inference (quantized model + float model) time consumed 2.767420s
+Module (/model.15/Split_output_1)->(/model.15/m.0/cv1/conv/Conv_output_0) will be optimized by adaround on cpu
+adaround iterations=0, lr=0.100000, loss=1.480712 (Recons loss=1.480712, Rounding loss=0.000000)
+adaround iterations=100, lr=0.100000, loss=1.062631 (Recons loss=1.062631, Rounding loss=0.000000)
+adaround iterations=200, lr=0.100000, loss=55.997375 (Recons loss=1.136634, Rounding loss=54.860741)
+adaround iterations=300, lr=0.100000, loss=18.256001 (Recons loss=1.096612, Rounding loss=17.159389)
+adaround iterations=400, lr=0.100000, loss=11.410823 (Recons loss=1.124470, Rounding loss=10.286353)
+adaround iterations=500, lr=0.100000, loss=6.975111 (Recons loss=1.003211, Rounding loss=5.971900)
+adaround iterations=600, lr=0.100000, loss=4.040526 (Recons loss=0.994231, Rounding loss=3.046295)
+adaround iterations=700, lr=0.100000, loss=2.189480 (Recons loss=1.174378, Rounding loss=1.015103)
+adaround iterations=800, lr=0.100000, loss=0.996735 (Recons loss=0.976745, Rounding loss=0.019990)
+adaround iterations=900, lr=0.100000, loss=1.066778 (Recons loss=1.066778, Rounding loss=0.000000)
+adaround iterations=999, lr=0.100000, loss=0.985696 (Recons loss=0.985696, Rounding loss=0.000000)
+Module (/model.15/Split_output_1)->(/model.15/m.0/cv1/conv/Conv_output_0) recons metrics was optimized from 0.051020 to 0.032998 (diff=-0.018022)
+Quark_latency_profiler: finetuning layer 32, torch training time consumed 3.916305s
+LAYER 32/63 /model.15/m.0/cv1/conv/Conv changed=3121/9216 max_lsb=1 iterations=1000 early_stop=False
+Quark_latency_profiler: finetuning layer 33, onnx inference (quantized model + float model) time consumed 2.793023s
+Module (/model.15/m.0/cv1/act/Mul_output_0)->(/model.15/m.0/cv2/conv/Conv_output_0) will be optimized by adaround on cpu
+adaround iterations=0, lr=0.100000, loss=2.451482 (Recons loss=2.451482, Rounding loss=0.000000)
+adaround iterations=100, lr=0.100000, loss=1.647903 (Recons loss=1.647903, Rounding loss=0.000000)
+adaround iterations=200, lr=0.100000, loss=48.246071 (Recons loss=1.232831, Rounding loss=47.013241)
+adaround iterations=300, lr=0.100000, loss=14.355997 (Recons loss=1.401934, Rounding loss=12.954062)
+adaround iterations=400, lr=0.100000, loss=9.555017 (Recons loss=1.625995, Rounding loss=7.929023)
+adaround iterations=500, lr=0.100000, loss=6.206984 (Recons loss=1.650599, Rounding loss=4.556386)
+adaround iterations=600, lr=0.100000, loss=3.528813 (Recons loss=1.376332, Rounding loss=2.152481)
+adaround iterations=700, lr=0.100000, loss=1.757560 (Recons loss=1.254552, Rounding loss=0.503009)
+adaround iterations=800, lr=0.100000, loss=1.825682 (Recons loss=1.825682, Rounding loss=0.000000)
+adaround iterations=900, lr=0.100000, loss=1.556055 (Recons loss=1.556055, Rounding loss=0.000000)
+adaround Iterations=999, mean loss 0.000000 (in 100 batches) is not better than best loss 0.000000, early stop
+Module (/model.15/m.0/cv1/act/Mul_output_0)->(/model.15/m.0/cv2/conv/Conv_output_0) recons metrics was optimized from 0.071728 to 0.046568 (diff=-0.025160)
+Quark_latency_profiler: finetuning layer 33, torch training time consumed 3.769340s
+LAYER 33/63 /model.15/m.0/cv2/conv/Conv changed=3483/9216 max_lsb=1 iterations=999 early_stop=True
+Quark_latency_profiler: finetuning layer 34, onnx inference (quantized model + float model) time consumed 2.953572s
+Module (/model.15/Concat_output_0)->(/model.15/cv2/conv/Conv_output_0) will be optimized by adaround on cpu
+adaround iterations=0, lr=0.100000, loss=2.703926 (Recons loss=2.703926, Rounding loss=0.000000)
+adaround iterations=100, lr=0.100000, loss=2.195309 (Recons loss=2.195309, Rounding loss=0.000000)
+adaround iterations=200, lr=0.100000, loss=25.941151 (Recons loss=2.172990, Rounding loss=23.768162)
+adaround iterations=300, lr=0.100000, loss=7.640656 (Recons loss=2.003976, Rounding loss=5.636681)
+adaround iterations=400, lr=0.100000, loss=4.708872 (Recons loss=2.019771, Rounding loss=2.689101)
+adaround iterations=500, lr=0.100000, loss=3.446341 (Recons loss=2.177317, Rounding loss=1.269024)
+adaround iterations=600, lr=0.100000, loss=2.816511 (Recons loss=2.267506, Rounding loss=0.549005)
+adaround iterations=700, lr=0.100000, loss=2.391001 (Recons loss=2.291019, Rounding loss=0.099982)
+adaround iterations=800, lr=0.100000, loss=2.113256 (Recons loss=2.103256, Rounding loss=0.010000)
+adaround iterations=900, lr=0.100000, loss=1.875667 (Recons loss=1.875667, Rounding loss=0.000000)
+adaround iterations=999, lr=0.100000, loss=2.372641 (Recons loss=2.372641, Rounding loss=0.000000)
+Module (/model.15/Concat_output_0)->(/model.15/cv2/conv/Conv_output_0) recons metrics was optimized from 0.041398 to 0.034889 (diff=-0.006509)
+Quark_latency_profiler: finetuning layer 34, torch training time consumed 5.389013s
+LAYER 34/63 /model.15/cv2/conv/Conv changed=2530/6144 max_lsb=1 iterations=1000 early_stop=False
+Quark_latency_profiler: finetuning layer 35, onnx inference (quantized model + float model) time consumed 2.921939s
+Module (/model.15/cv2/act/Mul_output_0)->(/model.16/conv/Conv_output_0) will be optimized by adaround on cpu
+adaround iterations=0, lr=0.100000, loss=5.645718 (Recons loss=5.645718, Rounding loss=0.000000)
+adaround iterations=100, lr=0.100000, loss=3.554208 (Recons loss=3.554208, Rounding loss=0.000000)
+adaround iterations=200, lr=0.100000, loss=163.559631 (Recons loss=3.283513, Rounding loss=160.276123)
+adaround iterations=300, lr=0.100000, loss=42.397327 (Recons loss=3.601326, Rounding loss=38.796001)
+adaround iterations=400, lr=0.100000, loss=25.799711 (Recons loss=3.811260, Rounding loss=21.988451)
+adaround iterations=500, lr=0.100000, loss=14.485650 (Recons loss=3.675835, Rounding loss=10.809815)
+adaround iterations=600, lr=0.100000, loss=6.189911 (Recons loss=3.341063, Rounding loss=2.848847)
+adaround iterations=700, lr=0.100000, loss=4.471658 (Recons loss=4.115991, Rounding loss=0.355667)
+adaround iterations=800, lr=0.100000, loss=3.587567 (Recons loss=3.587567, Rounding loss=0.000000)
+adaround iterations=900, lr=0.100000, loss=3.599684 (Recons loss=3.599684, Rounding loss=0.000000)
+adaround Iterations=999, mean loss 0.000000 (in 100 batches) is not better than best loss 0.000000, early stop
+Module (/model.15/cv2/act/Mul_output_0)->(/model.16/conv/Conv_output_0) recons metrics was optimized from 0.084762 to 0.057953 (diff=-0.026809)
+Quark_latency_profiler: finetuning layer 35, torch training time consumed 5.228491s
+LAYER 35/63 /model.16/conv/Conv changed=14329/36864 max_lsb=1 iterations=999 early_stop=True
+Quark_latency_profiler: finetuning layer 36, onnx inference (quantized model + float model) time consumed 3.176988s
+Module (/model.15/cv2/act/Mul_output_0)->(/model.22/cv2.0/cv2.0.0/conv/Conv_output_0) will be optimized by adaround on cpu
+adaround iterations=0, lr=0.100000, loss=7.786933 (Recons loss=7.786933, Rounding loss=0.000000)
+adaround iterations=100, lr=0.100000, loss=4.697338 (Recons loss=4.697338, Rounding loss=0.000000)
+adaround iterations=200, lr=0.100000, loss=218.467560 (Recons loss=4.415731, Rounding loss=214.051834)
+adaround iterations=300, lr=0.100000, loss=74.603683 (Recons loss=4.638473, Rounding loss=69.965210)
+adaround iterations=400, lr=0.100000, loss=49.281704 (Recons loss=4.549144, Rounding loss=44.732559)
+adaround iterations=500, lr=0.100000, loss=32.976486 (Recons loss=6.072625, Rounding loss=26.903862)
+adaround iterations=600, lr=0.100000, loss=20.081644 (Recons loss=5.732579, Rounding loss=14.349066)
+adaround iterations=700, lr=0.100000, loss=9.383971 (Recons loss=4.825721, Rounding loss=4.558250)
+adaround iterations=800, lr=0.100000, loss=4.465815 (Recons loss=4.257794, Rounding loss=0.208021)
+adaround iterations=900, lr=0.100000, loss=4.749030 (Recons loss=4.749030, Rounding loss=0.000000)
+adaround iterations=999, lr=0.100000, loss=4.932042 (Recons loss=4.932042, Rounding loss=0.000000)
+Module (/model.15/cv2/act/Mul_output_0)->(/model.22/cv2.0/cv2.0.0/conv/Conv_output_0) recons metrics was optimized from 0.128648 to 0.072735 (diff=-0.055913)
+Quark_latency_profiler: finetuning layer 36, torch training time consumed 8.708630s
+LAYER 36/63 /model.22/cv2.0/cv2.0.0/conv/Conv changed=13027/36864 max_lsb=1 iterations=1000 early_stop=False
+Quark_latency_profiler: finetuning layer 37, onnx inference (quantized model + float model) time consumed 3.228021s
+Module (/model.15/cv2/act/Mul_output_0)->(/model.22/cv3.0/cv3.0.0/conv/Conv_output_0) will be optimized by adaround on cpu
+adaround iterations=0, lr=0.100000, loss=7.372880 (Recons loss=7.372880, Rounding loss=0.000000)
+adaround iterations=100, lr=0.100000, loss=3.772600 (Recons loss=3.772600, Rounding loss=0.000000)
+adaround iterations=200, lr=0.100000, loss=287.358826 (Recons loss=3.041877, Rounding loss=284.316956)
+adaround iterations=300, lr=0.100000, loss=96.279984 (Recons loss=3.562265, Rounding loss=92.717720)
+adaround iterations=400, lr=0.100000, loss=63.815701 (Recons loss=3.264630, Rounding loss=60.551071)
+adaround iterations=500, lr=0.100000, loss=40.759457 (Recons loss=3.405200, Rounding loss=37.354256)
+adaround iterations=600, lr=0.100000, loss=23.495823 (Recons loss=3.627543, Rounding loss=19.868280)
+adaround iterations=700, lr=0.100000, loss=8.765156 (Recons loss=3.395555, Rounding loss=5.369601)
+adaround iterations=800, lr=0.100000, loss=4.152733 (Recons loss=3.975527, Rounding loss=0.177206)
+adaround iterations=900, lr=0.100000, loss=4.108006 (Recons loss=4.108006, Rounding loss=0.000000)
+adaround iterations=999, lr=0.100000, loss=3.519358 (Recons loss=3.519358, Rounding loss=0.000000)
+Module (/model.15/cv2/act/Mul_output_0)->(/model.22/cv3.0/cv3.0.0/conv/Conv_output_0) recons metrics was optimized from 0.085769 to 0.047189 (diff=-0.038580)
+Quark_latency_profiler: finetuning layer 37, torch training time consumed 9.735154s
+LAYER 37/63 /model.22/cv3.0/cv3.0.0/conv/Conv changed=15145/46080 max_lsb=1 iterations=1000 early_stop=False
+Quark_latency_profiler: finetuning layer 38, onnx inference (quantized model + float model) time consumed 3.342856s
+Module (/model.22/cv2.0/cv2.0.0/act/Mul_output_0)->(/model.22/cv2.0/cv2.0.1/conv/Conv_output_0) will be optimized by adaround on cpu
+adaround iterations=0, lr=0.100000, loss=56.709660 (Recons loss=56.709660, Rounding loss=0.000000)
+adaround iterations=100, lr=0.100000, loss=43.254185 (Recons loss=43.254185, Rounding loss=0.000000)
+adaround iterations=200, lr=0.100000, loss=262.272705 (Recons loss=41.358551, Rounding loss=220.914169)
+adaround iterations=300, lr=0.100000, loss=132.436295 (Recons loss=44.670067, Rounding loss=87.766228)
+adaround iterations=400, lr=0.100000, loss=95.602837 (Recons loss=35.637913, Rounding loss=59.964924)
+adaround iterations=500, lr=0.100000, loss=84.720200 (Recons loss=43.514072, Rounding loss=41.206131)
+adaround iterations=600, lr=0.100000, loss=65.877304 (Recons loss=42.003895, Rounding loss=23.873407)
+adaround iterations=700, lr=0.100000, loss=62.042194 (Recons loss=52.858055, Rounding loss=9.184139)
+adaround iterations=800, lr=0.100000, loss=46.251305 (Recons loss=45.344337, Rounding loss=0.906968)
+adaround iterations=900, lr=0.100000, loss=46.345516 (Recons loss=46.345516, Rounding loss=0.000000)
+adaround iterations=999, lr=0.100000, loss=46.750378 (Recons loss=46.750378, Rounding loss=0.000000)
+Module (/model.22/cv2.0/cv2.0.0/act/Mul_output_0)->(/model.22/cv2.0/cv2.0.1/conv/Conv_output_0) recons metrics was optimized from 0.927451 to 0.715146 (diff=-0.212305)
+Quark_latency_profiler: finetuning layer 38, torch training time consumed 8.127552s
+LAYER 38/63 /model.22/cv2.0/cv2.0.1/conv/Conv changed=12553/36864 max_lsb=1 iterations=1000 early_stop=False
+Quark_latency_profiler: finetuning layer 39, onnx inference (quantized model + float model) time consumed 3.294276s
+Module (/model.22/cv3.0/cv3.0.0/act/Mul_output_0)->(/model.22/cv3.0/cv3.0.1/conv/Conv_output_0) will be optimized by adaround on cpu
+adaround iterations=0, lr=0.100000, loss=166.696228 (Recons loss=166.696228, Rounding loss=0.000000)
+adaround iterations=100, lr=0.100000, loss=79.060822 (Recons loss=79.060822, Rounding loss=0.000000)
+adaround iterations=200, lr=0.100000, loss=475.753967 (Recons loss=72.165207, Rounding loss=403.588745)
+adaround iterations=300, lr=0.100000, loss=273.844788 (Recons loss=75.571701, Rounding loss=198.273087)
+adaround iterations=400, lr=0.100000, loss=219.627258 (Recons loss=71.641747, Rounding loss=147.985504)
+adaround iterations=500, lr=0.100000, loss=180.192169 (Recons loss=72.916298, Rounding loss=107.275864)
+adaround iterations=600, lr=0.100000, loss=140.634460 (Recons loss=69.658684, Rounding loss=70.975777)
+adaround iterations=700, lr=0.100000, loss=97.801857 (Recons loss=58.454117, Rounding loss=39.347740)
+adaround iterations=800, lr=0.100000, loss=72.057816 (Recons loss=60.834755, Rounding loss=11.223057)
+adaround iterations=900, lr=0.100000, loss=82.028603 (Recons loss=81.791542, Rounding loss=0.237060)
+adaround iterations=999, lr=0.100000, loss=64.508713 (Recons loss=64.508713, Rounding loss=0.000000)
+Module (/model.22/cv3.0/cv3.0.0/act/Mul_output_0)->(/model.22/cv3.0/cv3.0.1/conv/Conv_output_0) recons metrics was optimized from 1.726187 to 0.864918 (diff=-0.861268)
+Quark_latency_profiler: finetuning layer 39, torch training time consumed 10.350152s
+LAYER 39/63 /model.22/cv3.0/cv3.0.1/conv/Conv changed=17487/57600 max_lsb=1 iterations=1000 early_stop=False
+Quark_latency_profiler: finetuning layer 40, onnx inference (quantized model + float model) time consumed 3.088887s
+Module (/model.17/Concat_output_0)->(/model.18/cv1/conv/Conv_output_0) will be optimized by adaround on cpu
+adaround iterations=0, lr=0.100000, loss=13.707655 (Recons loss=13.707655, Rounding loss=0.000000)
+adaround iterations=100, lr=0.100000, loss=10.206429 (Recons loss=10.206429, Rounding loss=0.000000)
+adaround iterations=200, lr=0.100000, loss=73.357552 (Recons loss=11.682270, Rounding loss=61.675282)
+adaround iterations=300, lr=0.100000, loss=24.175529 (Recons loss=11.008507, Rounding loss=13.167023)
+adaround iterations=400, lr=0.100000, loss=17.246447 (Recons loss=11.391132, Rounding loss=5.855315)
+adaround iterations=500, lr=0.100000, loss=12.942753 (Recons loss=10.655143, Rounding loss=2.287611)
+adaround iterations=600, lr=0.100000, loss=12.291643 (Recons loss=11.650625, Rounding loss=0.641018)
+adaround iterations=700, lr=0.100000, loss=11.935648 (Recons loss=11.806296, Rounding loss=0.129352)
+adaround iterations=800, lr=0.100000, loss=9.857939 (Recons loss=9.857939, Rounding loss=0.000000)
+adaround iterations=900, lr=0.100000, loss=12.206088 (Recons loss=12.206088, Rounding loss=0.000000)
+adaround Iterations=999, mean loss 0.000000 (in 100 batches) is not better than best loss 0.000000, early stop
+Module (/model.17/Concat_output_0)->(/model.18/cv1/conv/Conv_output_0) recons metrics was optimized from 0.098522 to 0.081606 (diff=-0.016916)
+Quark_latency_profiler: finetuning layer 40, torch training time consumed 4.022541s
+LAYER 40/63 /model.18/cv1/conv/Conv changed=10696/24576 max_lsb=1 iterations=999 early_stop=True
+Quark_latency_profiler: finetuning layer 41, onnx inference (quantized model + float model) time consumed 3.373862s
+Module (/model.22/cv2.0/cv2.0.1/act/Mul_output_0)->(/model.22/cv2.0/cv2.0.2/Conv_output_0_QuantizeLinear_Input) will be optimized by adaround on cpu
+adaround iterations=0, lr=0.100000, loss=12.366001 (Recons loss=12.366001, Rounding loss=0.000000)
+adaround iterations=100, lr=0.100000, loss=13.169477 (Recons loss=13.169477, Rounding loss=0.000000)
+adaround iterations=200, lr=0.100000, loss=36.549282 (Recons loss=13.582220, Rounding loss=22.967062)
+adaround iterations=300, lr=0.100000, loss=21.152895 (Recons loss=14.246873, Rounding loss=6.906022)
+adaround iterations=400, lr=0.100000, loss=16.129179 (Recons loss=12.052595, Rounding loss=4.076584)
+adaround iterations=500, lr=0.100000, loss=15.091339 (Recons loss=12.698252, Rounding loss=2.393087)
+adaround iterations=600, lr=0.100000, loss=15.171658 (Recons loss=13.913449, Rounding loss=1.258209)
+adaround iterations=700, lr=0.100000, loss=12.662364 (Recons loss=12.390471, Rounding loss=0.271893)
+adaround iterations=800, lr=0.100000, loss=12.535254 (Recons loss=12.525254, Rounding loss=0.010000)
+adaround iterations=900, lr=0.100000, loss=10.700479 (Recons loss=10.700479, Rounding loss=0.000000)
+adaround iterations=999, lr=0.100000, loss=10.466303 (Recons loss=10.466303, Rounding loss=0.000000)
+Module (/model.22/cv2.0/cv2.0.1/act/Mul_output_0)->(/model.22/cv2.0/cv2.0.2/Conv_output_0_QuantizeLinear_Input) recons metrics was optimized from 0.200053 to 0.197643 (diff=-0.002410)
+Quark_latency_profiler: finetuning layer 41, torch training time consumed 4.422392s
+LAYER 41/63 /model.22/cv2.0/cv2.0.2/Conv changed=1379/4096 max_lsb=1 iterations=1000 early_stop=False
+Quark_latency_profiler: finetuning layer 42, onnx inference (quantized model + float model) time consumed 3.494169s
+Module (/model.22/cv3.0/cv3.0.1/act/Mul_output_0)->(/model.22/cv3.0/cv3.0.2/Conv_output_0_QuantizeLinear_Input) will be optimized by adaround on cpu
+adaround iterations=0, lr=0.100000, loss=26.645710 (Recons loss=26.645710, Rounding loss=0.000000)
+adaround iterations=100, lr=0.100000, loss=21.819963 (Recons loss=21.819963, Rounding loss=0.000000)
+adaround iterations=200, lr=0.100000, loss=27.981415 (Recons loss=18.497643, Rounding loss=9.483772)
+adaround iterations=300, lr=0.100000, loss=22.972719 (Recons loss=20.847998, Rounding loss=2.124721)
+adaround iterations=400, lr=0.100000, loss=17.254396 (Recons loss=16.713346, Rounding loss=0.541051)
+adaround iterations=500, lr=0.100000, loss=22.988947 (Recons loss=22.771734, Rounding loss=0.217213)
+adaround iterations=600, lr=0.100000, loss=16.188292 (Recons loss=16.108292, Rounding loss=0.079999)
+adaround iterations=700, lr=0.100000, loss=22.752893 (Recons loss=22.727228, Rounding loss=0.025666)
+adaround iterations=800, lr=0.100000, loss=25.032280 (Recons loss=25.032280, Rounding loss=0.000000)
+adaround iterations=900, lr=0.100000, loss=22.903114 (Recons loss=22.903114, Rounding loss=0.000000)
+adaround Iterations=999, mean loss 0.000000 (in 100 batches) is not better than best loss 0.000000, early stop
+Module (/model.22/cv3.0/cv3.0.1/act/Mul_output_0)->(/model.22/cv3.0/cv3.0.2/Conv_output_0_QuantizeLinear_Input) recons metrics was optimized from 0.304023 to 0.292363 (diff=-0.011660)
+Quark_latency_profiler: finetuning layer 42, torch training time consumed 5.222661s
+LAYER 42/63 /model.22/cv3.0/cv3.0.2/Conv changed=2982/6400 max_lsb=1 iterations=999 early_stop=True
+Quark_latency_profiler: finetuning layer 43, onnx inference (quantized model + float model) time consumed 3.095039s
+Module (/model.18/Split_output_1)->(/model.18/m.0/cv1/conv/Conv_output_0) will be optimized by adaround on cpu
+adaround iterations=0, lr=0.100000, loss=3.943259 (Recons loss=3.943259, Rounding loss=0.000000)
+adaround iterations=100, lr=0.100000, loss=3.467508 (Recons loss=3.467508, Rounding loss=0.000000)
+adaround iterations=200, lr=0.100000, loss=199.894302 (Recons loss=3.141338, Rounding loss=196.752960)
+adaround iterations=300, lr=0.100000, loss=56.484119 (Recons loss=3.133875, Rounding loss=53.350243)
+adaround iterations=400, lr=0.100000, loss=32.658588 (Recons loss=3.034645, Rounding loss=29.623941)
+adaround iterations=500, lr=0.100000, loss=19.085270 (Recons loss=3.173740, Rounding loss=15.911530)
+adaround iterations=600, lr=0.100000, loss=9.198404 (Recons loss=2.605276, Rounding loss=6.593129)
+adaround iterations=700, lr=0.100000, loss=4.003272 (Recons loss=2.945447, Rounding loss=1.057825)
+adaround iterations=800, lr=0.100000, loss=2.771738 (Recons loss=2.761739, Rounding loss=0.009999)
+adaround iterations=900, lr=0.100000, loss=3.008722 (Recons loss=3.008722, Rounding loss=0.000000)
+adaround iterations=999, lr=0.100000, loss=3.286714 (Recons loss=3.286714, Rounding loss=0.000000)
+Module (/model.18/Split_output_1)->(/model.18/m.0/cv1/conv/Conv_output_0) recons metrics was optimized from 0.063730 to 0.048655 (diff=-0.015075)
+Quark_latency_profiler: finetuning layer 43, torch training time consumed 4.564429s
+LAYER 43/63 /model.18/m.0/cv1/conv/Conv changed=13197/36864 max_lsb=1 iterations=1000 early_stop=False
+Quark_latency_profiler: finetuning layer 44, onnx inference (quantized model + float model) time consumed 3.139042s
+Module (/model.18/m.0/cv1/act/Mul_output_0)->(/model.18/m.0/cv2/conv/Conv_output_0) will be optimized by adaround on cpu
+adaround iterations=0, lr=0.100000, loss=14.009983 (Recons loss=14.009983, Rounding loss=0.000000)
+adaround iterations=100, lr=0.100000, loss=7.518956 (Recons loss=7.518956, Rounding loss=0.000000)
+adaround iterations=200, lr=0.100000, loss=196.318649 (Recons loss=7.942374, Rounding loss=188.376282)
+adaround iterations=300, lr=0.100000, loss=67.974731 (Recons loss=11.702288, Rounding loss=56.272442)
+adaround iterations=400, lr=0.100000, loss=40.403629 (Recons loss=7.671797, Rounding loss=32.731831)
+adaround iterations=500, lr=0.100000, loss=26.528507 (Recons loss=7.577602, Rounding loss=18.950905)
+adaround iterations=600, lr=0.100000, loss=18.149590 (Recons loss=9.239289, Rounding loss=8.910300)
+adaround iterations=700, lr=0.100000, loss=10.981825 (Recons loss=9.238394, Rounding loss=1.743431)
+adaround iterations=800, lr=0.100000, loss=9.508675 (Recons loss=9.428725, Rounding loss=0.079950)
+adaround iterations=900, lr=0.100000, loss=8.539813 (Recons loss=8.539813, Rounding loss=0.000000)
+adaround iterations=999, lr=0.100000, loss=8.236032 (Recons loss=8.236032, Rounding loss=0.000000)
+Module (/model.18/m.0/cv1/act/Mul_output_0)->(/model.18/m.0/cv2/conv/Conv_output_0) recons metrics was optimized from 0.215573 to 0.130782 (diff=-0.084791)
+Quark_latency_profiler: finetuning layer 44, torch training time consumed 4.585396s
+LAYER 44/63 /model.18/m.0/cv2/conv/Conv changed=13964/36864 max_lsb=1 iterations=1000 early_stop=False
+Quark_latency_profiler: finetuning layer 45, onnx inference (quantized model + float model) time consumed 3.226822s
+Module (/model.18/Concat_output_0)->(/model.18/cv2/conv/Conv_output_0) will be optimized by adaround on cpu
+adaround iterations=0, lr=0.100000, loss=8.176609 (Recons loss=8.176609, Rounding loss=0.000000)
+adaround iterations=100, lr=0.100000, loss=8.825985 (Recons loss=8.825985, Rounding loss=0.000000)
+adaround iterations=200, lr=0.100000, loss=134.977112 (Recons loss=7.940869, Rounding loss=127.036247)
+adaround iterations=300, lr=0.100000, loss=50.954144 (Recons loss=6.341677, Rounding loss=44.612465)
+adaround iterations=400, lr=0.100000, loss=36.773251 (Recons loss=7.916074, Rounding loss=28.857178)
+adaround iterations=500, lr=0.100000, loss=25.406691 (Recons loss=7.379243, Rounding loss=18.027447)
+adaround iterations=600, lr=0.100000, loss=16.694500 (Recons loss=7.751078, Rounding loss=8.943421)
+adaround iterations=700, lr=0.100000, loss=11.037270 (Recons loss=8.614333, Rounding loss=2.422936)
+adaround iterations=800, lr=0.100000, loss=7.553701 (Recons loss=7.495697, Rounding loss=0.058005)
+adaround iterations=900, lr=0.100000, loss=9.419723 (Recons loss=9.419723, Rounding loss=0.000000)
+adaround iterations=999, lr=0.100000, loss=8.156626 (Recons loss=8.156626, Rounding loss=0.000000)
+Module (/model.18/Concat_output_0)->(/model.18/cv2/conv/Conv_output_0) recons metrics was optimized from 0.073308 to 0.063759 (diff=-0.009549)
+Quark_latency_profiler: finetuning layer 45, torch training time consumed 3.957619s
+LAYER 45/63 /model.18/cv2/conv/Conv changed=8537/24576 max_lsb=1 iterations=1000 early_stop=False
+Quark_latency_profiler: finetuning layer 46, onnx inference (quantized model + float model) time consumed 3.263043s
+Module (/model.18/cv2/act/Mul_output_0)->(/model.19/conv/Conv_output_0) will be optimized by adaround on cpu
+adaround iterations=0, lr=0.100000, loss=12.629923 (Recons loss=12.629923, Rounding loss=0.000000)
+adaround iterations=100, lr=0.100000, loss=8.687660 (Recons loss=8.687660, Rounding loss=0.000000)
+adaround iterations=200, lr=0.100000, loss=654.964355 (Recons loss=9.737893, Rounding loss=645.226440)
+adaround iterations=300, lr=0.100000, loss=146.851410 (Recons loss=10.026125, Rounding loss=136.825287)
+adaround iterations=400, lr=0.100000, loss=72.802780 (Recons loss=7.967407, Rounding loss=64.835373)
+adaround iterations=500, lr=0.100000, loss=36.560066 (Recons loss=11.606611, Rounding loss=24.953457)
+adaround iterations=600, lr=0.100000, loss=15.237329 (Recons loss=7.818401, Rounding loss=7.418928)
+adaround iterations=700, lr=0.100000, loss=8.789803 (Recons loss=7.663600, Rounding loss=1.126202)
+adaround iterations=800, lr=0.100000, loss=9.537108 (Recons loss=9.537108, Rounding loss=0.000000)
+adaround iterations=900, lr=0.100000, loss=7.534051 (Recons loss=7.534051, Rounding loss=0.000000)
+adaround Iterations=999, mean loss 0.000000 (in 100 batches) is not better than best loss 0.000000, early stop
+Module (/model.18/cv2/act/Mul_output_0)->(/model.19/conv/Conv_output_0) recons metrics was optimized from 0.107021 to 0.071154 (diff=-0.035867)
+Quark_latency_profiler: finetuning layer 46, torch training time consumed 5.031325s
+LAYER 46/63 /model.19/conv/Conv changed=56149/147456 max_lsb=1 iterations=999 early_stop=True
+Quark_latency_profiler: finetuning layer 47, onnx inference (quantized model + float model) time consumed 3.246417s
+Module (/model.18/cv2/act/Mul_output_0)->(/model.22/cv2.1/cv2.1.0/conv/Conv_output_0) will be optimized by adaround on cpu
+adaround iterations=0, lr=0.100000, loss=17.147329 (Recons loss=17.147329, Rounding loss=0.000000)
+adaround iterations=100, lr=0.100000, loss=9.851365 (Recons loss=9.851365, Rounding loss=0.000000)
+adaround iterations=200, lr=0.100000, loss=496.145416 (Recons loss=11.493462, Rounding loss=484.651947)
+adaround iterations=300, lr=0.100000, loss=186.851288 (Recons loss=12.807988, Rounding loss=174.043304)
+adaround iterations=400, lr=0.100000, loss=123.051117 (Recons loss=9.808599, Rounding loss=113.242516)
+adaround iterations=500, lr=0.100000, loss=79.949539 (Recons loss=9.597797, Rounding loss=70.351738)
+adaround iterations=600, lr=0.100000, loss=51.080093 (Recons loss=12.969812, Rounding loss=38.110283)
+adaround iterations=700, lr=0.100000, loss=22.787407 (Recons loss=10.026733, Rounding loss=12.760674)
+adaround iterations=800, lr=0.100000, loss=10.270333 (Recons loss=9.982358, Rounding loss=0.287976)
+adaround iterations=900, lr=0.100000, loss=12.148789 (Recons loss=12.148789, Rounding loss=0.000000)
+adaround iterations=999, lr=0.100000, loss=12.473566 (Recons loss=12.473566, Rounding loss=0.000000)
+Module (/model.18/cv2/act/Mul_output_0)->(/model.22/cv2.1/cv2.1.0/conv/Conv_output_0) recons metrics was optimized from 0.280299 to 0.165242 (diff=-0.115056)
+Quark_latency_profiler: finetuning layer 47, torch training time consumed 5.750159s
+LAYER 47/63 /model.22/cv2.1/cv2.1.0/conv/Conv changed=24124/73728 max_lsb=1 iterations=1000 early_stop=False
+Quark_latency_profiler: finetuning layer 48, onnx inference (quantized model + float model) time consumed 3.301217s
+Module (/model.18/cv2/act/Mul_output_0)->(/model.22/cv3.1/cv3.1.0/conv/Conv_output_0) will be optimized by adaround on cpu
+adaround iterations=0, lr=0.100000, loss=13.114342 (Recons loss=13.114342, Rounding loss=0.000000)
+adaround iterations=100, lr=0.100000, loss=5.628450 (Recons loss=5.628450, Rounding loss=0.000000)
+adaround iterations=200, lr=0.100000, loss=550.290771 (Recons loss=6.228212, Rounding loss=544.062561)
+adaround iterations=300, lr=0.100000, loss=170.622269 (Recons loss=5.061763, Rounding loss=165.560501)
+adaround iterations=400, lr=0.100000, loss=101.908501 (Recons loss=5.718938, Rounding loss=96.189560)
+adaround iterations=500, lr=0.100000, loss=57.236526 (Recons loss=6.883970, Rounding loss=50.352558)
+adaround iterations=600, lr=0.100000, loss=27.364279 (Recons loss=7.981658, Rounding loss=19.382622)
+adaround iterations=700, lr=0.100000, loss=11.171251 (Recons loss=7.267447, Rounding loss=3.903804)
+adaround iterations=800, lr=0.100000, loss=7.615926 (Recons loss=7.512377, Rounding loss=0.103549)
+adaround iterations=900, lr=0.100000, loss=7.372272 (Recons loss=7.372272, Rounding loss=0.000000)
+adaround iterations=999, lr=0.100000, loss=6.801420 (Recons loss=6.801420, Rounding loss=0.000000)
+Module (/model.18/cv2/act/Mul_output_0)->(/model.22/cv3.1/cv3.1.0/conv/Conv_output_0) recons metrics was optimized from 0.142634 to 0.087349 (diff=-0.055285)
+Quark_latency_profiler: finetuning layer 48, torch training time consumed 6.269024s
+LAYER 48/63 /model.22/cv3.1/cv3.1.0/conv/Conv changed=31110/92160 max_lsb=1 iterations=1000 early_stop=False
+Quark_latency_profiler: finetuning layer 49, onnx inference (quantized model + float model) time consumed 3.275572s
+Module (/model.22/cv2.1/cv2.1.0/act/Mul_output_0)->(/model.22/cv2.1/cv2.1.1/conv/Conv_output_0) will be optimized by adaround on cpu
+adaround iterations=0, lr=0.100000, loss=52.121506 (Recons loss=52.121506, Rounding loss=0.000000)
+adaround iterations=100, lr=0.100000, loss=66.726013 (Recons loss=66.726013, Rounding loss=0.000000)
+adaround iterations=200, lr=0.100000, loss=301.900360 (Recons loss=58.070602, Rounding loss=243.829758)
+adaround iterations=300, lr=0.100000, loss=159.003235 (Recons loss=53.445030, Rounding loss=105.558197)
+adaround iterations=400, lr=0.100000, loss=126.491272 (Recons loss=49.581425, Rounding loss=76.909851)
+adaround iterations=500, lr=0.100000, loss=110.533295 (Recons loss=55.548214, Rounding loss=54.985077)
+adaround iterations=600, lr=0.100000, loss=69.269806 (Recons loss=34.905483, Rounding loss=34.364319)
+adaround iterations=700, lr=0.100000, loss=46.848003 (Recons loss=32.138924, Rounding loss=14.709079)
+adaround iterations=800, lr=0.100000, loss=54.439350 (Recons loss=52.872738, Rounding loss=1.566614)
+adaround iterations=900, lr=0.100000, loss=51.254612 (Recons loss=51.243481, Rounding loss=0.011130)
+adaround iterations=999, lr=0.100000, loss=56.120804 (Recons loss=56.120804, Rounding loss=0.000000)
+Module (/model.22/cv2.1/cv2.1.0/act/Mul_output_0)->(/model.22/cv2.1/cv2.1.1/conv/Conv_output_0) recons metrics was optimized from 0.813573 to 0.753199 (diff=-0.060374)
+Quark_latency_profiler: finetuning layer 49, torch training time consumed 4.542780s
+LAYER 49/63 /model.22/cv2.1/cv2.1.1/conv/Conv changed=10340/36864 max_lsb=1 iterations=1000 early_stop=False
+Quark_latency_profiler: finetuning layer 50, onnx inference (quantized model + float model) time consumed 3.335773s
+Module (/model.22/cv3.1/cv3.1.0/act/Mul_output_0)->(/model.22/cv3.1/cv3.1.1/conv/Conv_output_0) will be optimized by adaround on cpu
+adaround iterations=0, lr=0.100000, loss=117.420898 (Recons loss=117.420898, Rounding loss=0.000000)
+adaround iterations=100, lr=0.100000, loss=126.799309 (Recons loss=126.799309, Rounding loss=0.000000)
+adaround iterations=200, lr=0.100000, loss=574.619507 (Recons loss=126.495018, Rounding loss=448.124481)
+adaround iterations=300, lr=0.100000, loss=354.195312 (Recons loss=91.935509, Rounding loss=262.259796)
+adaround iterations=400, lr=0.100000, loss=324.398438 (Recons loss=110.741119, Rounding loss=213.657303)
+adaround iterations=500, lr=0.100000, loss=266.588989 (Recons loss=93.473610, Rounding loss=173.115387)
+adaround iterations=600, lr=0.100000, loss=263.906311 (Recons loss=131.903030, Rounding loss=132.003296)
+adaround iterations=700, lr=0.100000, loss=211.970734 (Recons loss=123.574242, Rounding loss=88.396500)
+adaround iterations=800, lr=0.100000, loss=100.486671 (Recons loss=61.916336, Rounding loss=38.570335)
+adaround iterations=900, lr=0.100000, loss=81.671997 (Recons loss=77.556076, Rounding loss=4.115922)
+adaround iterations=999, lr=0.100000, loss=140.012375 (Recons loss=139.865692, Rounding loss=0.146682)
+Module (/model.22/cv3.1/cv3.1.0/act/Mul_output_0)->(/model.22/cv3.1/cv3.1.1/conv/Conv_output_0) recons metrics was optimized from 1.966415 to 1.287118 (diff=-0.679297)
+Quark_latency_profiler: finetuning layer 50, torch training time consumed 5.279094s
+LAYER 50/63 /model.22/cv3.1/cv3.1.1/conv/Conv changed=12407/57600 max_lsb=1 iterations=1000 early_stop=False
+Quark_latency_profiler: finetuning layer 51, onnx inference (quantized model + float model) time consumed 3.275191s
+Module (/model.20/Concat_output_0)->(/model.21/cv1/conv/Conv_output_0) will be optimized by adaround on cpu
+adaround iterations=0, lr=0.100000, loss=48.306519 (Recons loss=48.306519, Rounding loss=0.000000)
+adaround iterations=100, lr=0.100000, loss=29.071314 (Recons loss=29.071314, Rounding loss=0.000000)
+adaround iterations=200, lr=0.100000, loss=282.937317 (Recons loss=37.665894, Rounding loss=245.271408)
+adaround iterations=300, lr=0.100000, loss=89.618515 (Recons loss=35.746864, Rounding loss=53.871651)
+adaround iterations=400, lr=0.100000, loss=56.075970 (Recons loss=30.839275, Rounding loss=25.236694)
+adaround iterations=500, lr=0.100000, loss=46.562893 (Recons loss=36.201534, Rounding loss=10.361359)
+adaround iterations=600, lr=0.100000, loss=38.057625 (Recons loss=35.141548, Rounding loss=2.916076)
+adaround iterations=700, lr=0.100000, loss=33.426186 (Recons loss=32.972572, Rounding loss=0.453614)
+adaround iterations=800, lr=0.100000, loss=36.986923 (Recons loss=36.986923, Rounding loss=0.000000)
+adaround iterations=900, lr=0.100000, loss=38.954056 (Recons loss=38.954056, Rounding loss=0.000000)
+adaround Iterations=999, mean loss 0.000000 (in 100 batches) is not better than best loss 0.000000, early stop
+Module (/model.20/Concat_output_0)->(/model.21/cv1/conv/Conv_output_0) recons metrics was optimized from 0.177852 to 0.135186 (diff=-0.042666)
+Quark_latency_profiler: finetuning layer 51, torch training time consumed 4.842840s
+LAYER 51/63 /model.21/cv1/conv/Conv changed=43078/98304 max_lsb=1 iterations=999 early_stop=True
+Quark_latency_profiler: finetuning layer 52, onnx inference (quantized model + float model) time consumed 3.300897s
+Module (/model.22/cv2.1/cv2.1.1/act/Mul_output_0)->(/model.22/cv2.1/cv2.1.2/Conv_output_0_QuantizeLinear_Input) will be optimized by adaround on cpu
+adaround iterations=0, lr=0.100000, loss=11.977497 (Recons loss=11.977497, Rounding loss=0.000000)
+adaround iterations=100, lr=0.100000, loss=9.955055 (Recons loss=9.955055, Rounding loss=0.000000)
+adaround iterations=200, lr=0.100000, loss=35.845169 (Recons loss=10.276240, Rounding loss=25.568930)
+adaround iterations=300, lr=0.100000, loss=20.770893 (Recons loss=11.672451, Rounding loss=9.098443)
+adaround iterations=400, lr=0.100000, loss=17.255655 (Recons loss=11.549870, Rounding loss=5.705786)
+adaround iterations=500, lr=0.100000, loss=11.851338 (Recons loss=9.208867, Rounding loss=2.642472)
+adaround iterations=600, lr=0.100000, loss=11.504698 (Recons loss=10.456826, Rounding loss=1.047871)
+adaround iterations=700, lr=0.100000, loss=10.962020 (Recons loss=10.703749, Rounding loss=0.258271)
+adaround iterations=800, lr=0.100000, loss=14.431378 (Recons loss=14.391385, Rounding loss=0.039993)
+adaround iterations=900, lr=0.100000, loss=13.850144 (Recons loss=13.850144, Rounding loss=0.000000)
+adaround iterations=999, lr=0.100000, loss=10.523349 (Recons loss=10.523349, Rounding loss=0.000000)
+Module (/model.22/cv2.1/cv2.1.1/act/Mul_output_0)->(/model.22/cv2.1/cv2.1.2/Conv_output_0_QuantizeLinear_Input) recons metrics was optimized from 0.192349 to 0.190658 (diff=-0.001691)
+Quark_latency_profiler: finetuning layer 52, torch training time consumed 2.324510s
+LAYER 52/63 /model.22/cv2.1/cv2.1.2/Conv changed=1254/4096 max_lsb=1 iterations=1000 early_stop=False
+Quark_latency_profiler: finetuning layer 53, onnx inference (quantized model + float model) time consumed 3.304721s
+Module (/model.22/cv3.1/cv3.1.1/act/Mul_output_0)->(/model.22/cv3.1/cv3.1.2/Conv_output_0_QuantizeLinear_Input) will be optimized by adaround on cpu
+adaround iterations=0, lr=0.100000, loss=54.575607 (Recons loss=54.575607, Rounding loss=0.000000)
+adaround iterations=100, lr=0.100000, loss=51.825439 (Recons loss=51.825439, Rounding loss=0.000000)
+adaround iterations=200, lr=0.100000, loss=55.861401 (Recons loss=49.061035, Rounding loss=6.800365)
+adaround iterations=300, lr=0.100000, loss=40.204525 (Recons loss=38.934982, Rounding loss=1.269543)
+adaround iterations=400, lr=0.100000, loss=49.319901 (Recons loss=49.010361, Rounding loss=0.309539)
+adaround iterations=500, lr=0.100000, loss=55.669621 (Recons loss=55.559624, Rounding loss=0.109996)
+adaround iterations=600, lr=0.100000, loss=65.868935 (Recons loss=65.819061, Rounding loss=0.049870)
+adaround iterations=700, lr=0.100000, loss=37.693424 (Recons loss=37.683537, Rounding loss=0.009887)
+adaround iterations=800, lr=0.100000, loss=37.815704 (Recons loss=37.815704, Rounding loss=0.000000)
+adaround iterations=900, lr=0.100000, loss=61.739697 (Recons loss=61.739697, Rounding loss=0.000000)
+adaround Iterations=999, mean loss 0.000000 (in 100 batches) is not better than best loss 0.000000, early stop
+Module (/model.22/cv3.1/cv3.1.1/act/Mul_output_0)->(/model.22/cv3.1/cv3.1.2/Conv_output_0_QuantizeLinear_Input) recons metrics was optimized from 0.729202 to 0.709790 (diff=-0.019412)
+Quark_latency_profiler: finetuning layer 53, torch training time consumed 2.511128s
+LAYER 53/63 /model.22/cv3.1/cv3.1.2/Conv changed=2928/6400 max_lsb=1 iterations=999 early_stop=True
+Quark_latency_profiler: finetuning layer 54, onnx inference (quantized model + float model) time consumed 3.326647s
+Module (/model.21/Split_output_1)->(/model.21/m.0/cv1/conv/Conv_output_0) will be optimized by adaround on cpu
+adaround iterations=0, lr=0.100000, loss=23.037868 (Recons loss=23.037868, Rounding loss=0.000000)
+adaround iterations=100, lr=0.100000, loss=12.704804 (Recons loss=12.704804, Rounding loss=0.000000)
+adaround iterations=200, lr=0.100000, loss=816.565369 (Recons loss=11.068865, Rounding loss=805.496521)
+adaround iterations=300, lr=0.100000, loss=226.124451 (Recons loss=12.656748, Rounding loss=213.467697)
+adaround iterations=400, lr=0.100000, loss=122.943581 (Recons loss=11.908761, Rounding loss=111.034821)
+adaround iterations=500, lr=0.100000, loss=67.455101 (Recons loss=10.327532, Rounding loss=57.127567)
+adaround iterations=600, lr=0.100000, loss=34.175812 (Recons loss=12.860037, Rounding loss=21.315777)
+adaround iterations=700, lr=0.100000, loss=12.480245 (Recons loss=8.872181, Rounding loss=3.608064)
+adaround iterations=800, lr=0.100000, loss=10.137156 (Recons loss=10.094036, Rounding loss=0.043120)
+adaround iterations=900, lr=0.100000, loss=11.128139 (Recons loss=11.128139, Rounding loss=0.000000)
+adaround iterations=999, lr=0.100000, loss=13.395729 (Recons loss=13.395729, Rounding loss=0.000000)
+Module (/model.21/Split_output_1)->(/model.21/m.0/cv1/conv/Conv_output_0) recons metrics was optimized from 0.150905 to 0.094320 (diff=-0.056586)
+Quark_latency_profiler: finetuning layer 54, torch training time consumed 4.511978s
+LAYER 54/63 /model.21/m.0/cv1/conv/Conv changed=52996/147456 max_lsb=1 iterations=1000 early_stop=False
+Quark_latency_profiler: finetuning layer 55, onnx inference (quantized model + float model) time consumed 3.345625s
+Module (/model.21/m.0/cv1/act/Mul_output_0)->(/model.21/m.0/cv2/conv/Conv_output_0) will be optimized by adaround on cpu
+adaround iterations=0, lr=0.100000, loss=37.792938 (Recons loss=37.792938, Rounding loss=0.000000)
+adaround iterations=100, lr=0.100000, loss=20.013199 (Recons loss=20.013199, Rounding loss=0.000000)
+adaround iterations=200, lr=0.100000, loss=707.458984 (Recons loss=29.921057, Rounding loss=677.537903)
+adaround iterations=300, lr=0.100000, loss=183.673187 (Recons loss=28.997866, Rounding loss=154.675323)
+adaround iterations=400, lr=0.100000, loss=92.859497 (Recons loss=17.429335, Rounding loss=75.430161)
+adaround iterations=500, lr=0.100000, loss=60.447762 (Recons loss=28.159435, Rounding loss=32.288326)
+adaround iterations=600, lr=0.100000, loss=39.471512 (Recons loss=29.649853, Rounding loss=9.821657)
+adaround iterations=700, lr=0.100000, loss=20.613981 (Recons loss=18.966856, Rounding loss=1.647126)
+adaround iterations=800, lr=0.100000, loss=27.629583 (Recons loss=27.605236, Rounding loss=0.024347)
+adaround iterations=900, lr=0.100000, loss=25.807405 (Recons loss=25.807405, Rounding loss=0.000000)
+adaround iterations=999, lr=0.100000, loss=25.794060 (Recons loss=25.794060, Rounding loss=0.000000)
+Module (/model.21/m.0/cv1/act/Mul_output_0)->(/model.21/m.0/cv2/conv/Conv_output_0) recons metrics was optimized from 0.255559 to 0.179563 (diff=-0.075996)
+Quark_latency_profiler: finetuning layer 55, torch training time consumed 4.566680s
+LAYER 55/63 /model.21/m.0/cv2/conv/Conv changed=56285/147456 max_lsb=1 iterations=1000 early_stop=False
+Quark_latency_profiler: finetuning layer 56, onnx inference (quantized model + float model) time consumed 3.428212s
+Module (/model.21/Concat_output_0)->(/model.21/cv2/conv/Conv_output_0) will be optimized by adaround on cpu
+adaround iterations=0, lr=0.100000, loss=47.792236 (Recons loss=47.792236, Rounding loss=0.000000)
+adaround iterations=100, lr=0.100000, loss=31.071796 (Recons loss=31.071796, Rounding loss=0.000000)
+adaround iterations=200, lr=0.100000, loss=492.036652 (Recons loss=36.480400, Rounding loss=455.556244)
+adaround iterations=300, lr=0.100000, loss=169.790314 (Recons loss=38.052040, Rounding loss=131.738281)
+adaround iterations=400, lr=0.100000, loss=109.006134 (Recons loss=40.045544, Rounding loss=68.960587)
+adaround iterations=500, lr=0.100000, loss=70.174072 (Recons loss=33.218365, Rounding loss=36.955711)
+adaround iterations=600, lr=0.100000, loss=60.002502 (Recons loss=43.585365, Rounding loss=16.417139)
+adaround iterations=700, lr=0.100000, loss=43.688709 (Recons loss=39.048504, Rounding loss=4.640207)
+adaround iterations=800, lr=0.100000, loss=37.269737 (Recons loss=37.008301, Rounding loss=0.261435)
+adaround iterations=900, lr=0.100000, loss=34.497704 (Recons loss=34.497704, Rounding loss=0.000000)
+adaround iterations=999, lr=0.100000, loss=45.876381 (Recons loss=45.876381, Rounding loss=0.000000)
+Module (/model.21/Concat_output_0)->(/model.21/cv2/conv/Conv_output_0) recons metrics was optimized from 0.172354 to 0.140840 (diff=-0.031514)
+Quark_latency_profiler: finetuning layer 56, torch training time consumed 4.842876s
+LAYER 56/63 /model.21/cv2/conv/Conv changed=37117/98304 max_lsb=1 iterations=1000 early_stop=False
+Quark_latency_profiler: finetuning layer 57, onnx inference (quantized model + float model) time consumed 3.445936s
+Module (/model.21/cv2/act/Mul_output_0)->(/model.22/cv2.2/cv2.2.0/conv/Conv_output_0) will be optimized by adaround on cpu
+adaround iterations=0, lr=0.100000, loss=22.989338 (Recons loss=22.989338, Rounding loss=0.000000)
+adaround iterations=100, lr=0.100000, loss=12.495214 (Recons loss=12.495214, Rounding loss=0.000000)
+adaround iterations=200, lr=0.100000, loss=844.088318 (Recons loss=15.643332, Rounding loss=828.445007)
+adaround iterations=300, lr=0.100000, loss=244.477386 (Recons loss=25.280519, Rounding loss=219.196869)
+adaround iterations=400, lr=0.100000, loss=122.019241 (Recons loss=13.710668, Rounding loss=108.308571)
+adaround iterations=500, lr=0.100000, loss=66.688873 (Recons loss=18.425488, Rounding loss=48.263382)
+adaround iterations=600, lr=0.100000, loss=29.732943 (Recons loss=10.243391, Rounding loss=19.489552)
+adaround iterations=700, lr=0.100000, loss=14.301525 (Recons loss=10.965458, Rounding loss=3.336067)
+adaround iterations=800, lr=0.100000, loss=14.558045 (Recons loss=14.536565, Rounding loss=0.021481)
+adaround iterations=900, lr=0.100000, loss=11.291939 (Recons loss=11.291939, Rounding loss=0.000000)
+adaround iterations=999, lr=0.100000, loss=19.981527 (Recons loss=19.981527, Rounding loss=0.000000)
+Module (/model.21/cv2/act/Mul_output_0)->(/model.22/cv2.2/cv2.2.0/conv/Conv_output_0) recons metrics was optimized from 0.320716 to 0.238623 (diff=-0.082094)
+Quark_latency_profiler: finetuning layer 57, torch training time consumed 4.636647s
+LAYER 57/63 /model.22/cv2.2/cv2.2.0/conv/Conv changed=54238/147456 max_lsb=1 iterations=1000 early_stop=False
+Quark_latency_profiler: finetuning layer 58, onnx inference (quantized model + float model) time consumed 3.478792s
+Module (/model.21/cv2/act/Mul_output_0)->(/model.22/cv3.2/cv3.2.0/conv/Conv_output_0) will be optimized by adaround on cpu
+adaround iterations=0, lr=0.100000, loss=20.792324 (Recons loss=20.792324, Rounding loss=0.000000)
+adaround iterations=100, lr=0.100000, loss=18.530830 (Recons loss=18.530830, Rounding loss=0.000000)
+adaround iterations=200, lr=0.100000, loss=1274.275757 (Recons loss=9.140822, Rounding loss=1265.134888)
+adaround iterations=300, lr=0.100000, loss=467.777832 (Recons loss=12.749506, Rounding loss=455.028320)
+adaround iterations=400, lr=0.100000, loss=295.949738 (Recons loss=10.144865, Rounding loss=285.804871)
+adaround iterations=500, lr=0.100000, loss=176.827713 (Recons loss=8.744538, Rounding loss=168.083176)
+adaround iterations=600, lr=0.100000, loss=96.601349 (Recons loss=12.446581, Rounding loss=84.154770)
+adaround iterations=700, lr=0.100000, loss=39.268597 (Recons loss=14.956281, Rounding loss=24.312317)
+adaround iterations=800, lr=0.100000, loss=13.259330 (Recons loss=12.382586, Rounding loss=0.876744)
+adaround iterations=900, lr=0.100000, loss=10.211283 (Recons loss=10.211283, Rounding loss=0.000000)
+adaround iterations=999, lr=0.100000, loss=14.094144 (Recons loss=14.094144, Rounding loss=0.000000)
+Module (/model.21/cv2/act/Mul_output_0)->(/model.22/cv3.2/cv3.2.0/conv/Conv_output_0) recons metrics was optimized from 0.251178 to 0.160967 (diff=-0.090211)
+Quark_latency_profiler: finetuning layer 58, torch training time consumed 5.321707s
+LAYER 58/63 /model.22/cv3.2/cv3.2.0/conv/Conv changed=60666/184320 max_lsb=1 iterations=1000 early_stop=False
+Quark_latency_profiler: finetuning layer 59, onnx inference (quantized model + float model) time consumed 3.468007s
+Module (/model.22/cv2.2/cv2.2.0/act/Mul_output_0)->(/model.22/cv2.2/cv2.2.1/conv/Conv_output_0) will be optimized by adaround on cpu
+adaround iterations=0, lr=0.100000, loss=51.223244 (Recons loss=51.223244, Rounding loss=0.000000)
+adaround iterations=100, lr=0.100000, loss=37.440067 (Recons loss=37.440067, Rounding loss=0.000000)
+adaround iterations=200, lr=0.100000, loss=274.130432 (Recons loss=51.870602, Rounding loss=222.259842)
+adaround iterations=300, lr=0.100000, loss=117.648849 (Recons loss=34.968536, Rounding loss=82.680313)
+adaround iterations=400, lr=0.100000, loss=121.506706 (Recons loss=69.563690, Rounding loss=51.943016)
+adaround iterations=500, lr=0.100000, loss=62.593819 (Recons loss=30.698044, Rounding loss=31.895773)
+adaround iterations=600, lr=0.100000, loss=78.521835 (Recons loss=62.339542, Rounding loss=16.182293)
+adaround iterations=700, lr=0.100000, loss=51.558453 (Recons loss=45.902130, Rounding loss=5.656322)
+adaround iterations=800, lr=0.100000, loss=43.359943 (Recons loss=42.985107, Rounding loss=0.374835)
+adaround iterations=900, lr=0.100000, loss=63.414902 (Recons loss=63.414902, Rounding loss=0.000000)
+adaround iterations=999, lr=0.100000, loss=64.420990 (Recons loss=64.420990, Rounding loss=0.000000)
+Module (/model.22/cv2.2/cv2.2.0/act/Mul_output_0)->(/model.22/cv2.2/cv2.2.1/conv/Conv_output_0) recons metrics was optimized from 0.895848 to 0.832812 (diff=-0.063036)
+Quark_latency_profiler: finetuning layer 59, torch training time consumed 3.547833s
+LAYER 59/63 /model.22/cv2.2/cv2.2.1/conv/Conv changed=11885/36864 max_lsb=1 iterations=1000 early_stop=False
+Quark_latency_profiler: finetuning layer 60, onnx inference (quantized model + float model) time consumed 3.672088s
+Module (/model.22/cv3.2/cv3.2.0/act/Mul_output_0)->(/model.22/cv3.2/cv3.2.1/conv/Conv_output_0) will be optimized by adaround on cpu
+adaround iterations=0, lr=0.100000, loss=188.182220 (Recons loss=188.182220, Rounding loss=0.000000)
+adaround iterations=100, lr=0.100000, loss=164.457382 (Recons loss=164.457382, Rounding loss=0.000000)
+adaround iterations=200, lr=0.100000, loss=485.080658 (Recons loss=80.895653, Rounding loss=404.184998)
+adaround iterations=300, lr=0.100000, loss=367.096161 (Recons loss=154.180969, Rounding loss=212.915192)
+adaround iterations=400, lr=0.100000, loss=258.498779 (Recons loss=100.554344, Rounding loss=157.944443)
+adaround iterations=500, lr=0.100000, loss=228.487274 (Recons loss=117.205673, Rounding loss=111.281601)
+adaround iterations=600, lr=0.100000, loss=245.785782 (Recons loss=174.307388, Rounding loss=71.478394)
+adaround iterations=700, lr=0.100000, loss=115.842186 (Recons loss=76.865784, Rounding loss=38.976402)
+adaround iterations=800, lr=0.100000, loss=142.388092 (Recons loss=130.031738, Rounding loss=12.356347)
+adaround iterations=900, lr=0.100000, loss=150.063721 (Recons loss=149.170105, Rounding loss=0.893617)
+adaround iterations=999, lr=0.100000, loss=160.704498 (Recons loss=160.686020, Rounding loss=0.018477)
+Module (/model.22/cv3.2/cv3.2.0/act/Mul_output_0)->(/model.22/cv3.2/cv3.2.1/conv/Conv_output_0) recons metrics was optimized from 2.290891 to 1.642406 (diff=-0.648485)
+Quark_latency_profiler: finetuning layer 60, torch training time consumed 3.814155s
+LAYER 60/63 /model.22/cv3.2/cv3.2.1/conv/Conv changed=15909/57600 max_lsb=1 iterations=1000 early_stop=False
+Quark_latency_profiler: finetuning layer 61, onnx inference (quantized model + float model) time consumed 3.396535s
+Module (/model.22/cv2.2/cv2.2.1/act/Mul_output_0)->(/model.22/cv2.2/cv2.2.2/Conv_output_0_QuantizeLinear_Input) will be optimized by adaround on cpu
+adaround iterations=0, lr=0.100000, loss=11.978881 (Recons loss=11.978881, Rounding loss=0.000000)
+adaround iterations=100, lr=0.100000, loss=14.495194 (Recons loss=14.495194, Rounding loss=0.000000)
+adaround iterations=200, lr=0.100000, loss=36.110321 (Recons loss=8.718229, Rounding loss=27.392092)
+adaround iterations=300, lr=0.100000, loss=24.679729 (Recons loss=13.895422, Rounding loss=10.784308)
+adaround iterations=400, lr=0.100000, loss=20.564081 (Recons loss=14.027860, Rounding loss=6.536222)
+adaround iterations=500, lr=0.100000, loss=25.440781 (Recons loss=21.706823, Rounding loss=3.733958)
+adaround iterations=600, lr=0.100000, loss=16.421707 (Recons loss=14.765930, Rounding loss=1.655776)
+adaround iterations=700, lr=0.100000, loss=13.991653 (Recons loss=13.642091, Rounding loss=0.349563)
+adaround iterations=800, lr=0.100000, loss=12.151995 (Recons loss=12.141994, Rounding loss=0.010000)
+adaround iterations=900, lr=0.100000, loss=12.142792 (Recons loss=12.142792, Rounding loss=0.000000)
+adaround iterations=999, lr=0.100000, loss=11.068381 (Recons loss=11.068381, Rounding loss=0.000000)
+Module (/model.22/cv2.2/cv2.2.1/act/Mul_output_0)->(/model.22/cv2.2/cv2.2.2/Conv_output_0_QuantizeLinear_Input) recons metrics was optimized from 0.211792 to 0.209922 (diff=-0.001870)
+Quark_latency_profiler: finetuning layer 61, torch training time consumed 1.985355s
+LAYER 61/63 /model.22/cv2.2/cv2.2.2/Conv changed=1206/4096 max_lsb=1 iterations=1000 early_stop=False
+Quark_latency_profiler: finetuning layer 62, onnx inference (quantized model + float model) time consumed 3.742730s
+Module (/model.22/cv3.2/cv3.2.1/act/Mul_output_0)->(/model.22/cv3.2/cv3.2.2/Conv_output_0_QuantizeLinear_Input) will be optimized by adaround on cpu
+adaround iterations=0, lr=0.100000, loss=85.571678 (Recons loss=85.571678, Rounding loss=0.000000)
+adaround iterations=100, lr=0.100000, loss=86.079178 (Recons loss=86.079178, Rounding loss=0.000000)
+adaround iterations=200, lr=0.100000, loss=64.448250 (Recons loss=54.675156, Rounding loss=9.773096)
+adaround iterations=300, lr=0.100000, loss=99.649353 (Recons loss=96.874153, Rounding loss=2.775201)
+adaround iterations=400, lr=0.100000, loss=67.325333 (Recons loss=65.849426, Rounding loss=1.475909)
+adaround iterations=500, lr=0.100000, loss=90.542976 (Recons loss=89.631828, Rounding loss=0.911150)
+adaround iterations=600, lr=0.100000, loss=60.950615 (Recons loss=60.429832, Rounding loss=0.520781)
+adaround iterations=700, lr=0.100000, loss=64.527130 (Recons loss=64.389114, Rounding loss=0.138014)
+adaround iterations=800, lr=0.100000, loss=108.440445 (Recons loss=108.430801, Rounding loss=0.009647)
+adaround iterations=900, lr=0.100000, loss=42.741287 (Recons loss=42.741287, Rounding loss=0.000000)
+adaround iterations=999, lr=0.100000, loss=52.752110 (Recons loss=52.752110, Rounding loss=0.000000)
+Module (/model.22/cv3.2/cv3.2.1/act/Mul_output_0)->(/model.22/cv3.2/cv3.2.2/Conv_output_0_QuantizeLinear_Input) recons metrics was optimized from 1.019503 to 0.955803 (diff=-0.063701)
+Quark_latency_profiler: finetuning layer 62, torch training time consumed 2.273224s
+LAYER 62/63 /model.22/cv3.2/cv3.2.2/Conv changed=2970/6400 max_lsb=1 iterations=1000 early_stop=False
+ONNX inference costs 157.3s and Torch training costs 353.2s
+ADAROUND_REPORT {
+  "config": {
+    "DataSize": 1000,
+    "FixedSeed": 1705472343,
+    "BatchSize": 2,
+    "NumIterations": 1000,
+    "LearningRate": 0.1,
+    "OptimAlgorithm": "adaround",
+    "OptimDevice": "cpu",
+    "InferDevice": "cpu",
+    "EarlyStop": true,
+    "RegParam": 0.01,
+    "BetaRange": [
+      20,
+      2
+    ],
+    "WarmStart": 0.2,
+    "DropRatio": 1.0
+  },
+  "images": 64,
+  "torch_version": "2.4.1+cpu",
+  "torch_threads": 8,
+  "onnxruntime_version": "1.22.1",
+  "float_graph_optimization": "ORT default (ENABLE_ALL), as Quark's float reference session",
+  "quant_graph_optimization": "ORT_DISABLE_ALL, as Quark's quantized data session",
+  "peak_rss_bytes": 5742055424,
+  "data_seconds": 157.28892980001547,
+  "train_seconds": 353.2439453999541,
+  "wall_seconds": 510.9576642999964
+}
+ADAROUND_LAYERS index name iterations early_stop changed max_lsb recons_before recons_after
+ADAROUND_LAYER 0 /model.0/conv/Conv 1000 False 56 1 0.031570 0.004143
+ADAROUND_LAYER 1 /model.1/conv/Conv 1000 False 1086 1 0.245230 0.132814
+ADAROUND_LAYER 2 /model.2/cv1/conv/Conv 1000 False 198 1 0.097933 0.076618
+ADAROUND_LAYER 3 /model.2/m.0/cv1/conv/Conv 1000 False 848 1 0.483291 0.414550
+ADAROUND_LAYER 4 /model.2/m.0/cv2/conv/Conv 999 True 911 1 0.643449 0.610522
+ADAROUND_LAYER 5 /model.2/cv2/conv/Conv 1000 False 655 1 0.105289 0.095781
+ADAROUND_LAYER 6 /model.3/conv/Conv 1000 False 7464 1 0.060630 0.053592
+ADAROUND_LAYER 7 /model.4/cv1/conv/Conv 999 True 1410 1 0.063302 0.053301
+ADAROUND_LAYER 8 /model.4/m.0/cv1/conv/Conv 1000 False 3233 1 0.048916 0.033104
+ADAROUND_LAYER 9 /model.4/m.0/cv2/conv/Conv 1000 False 3161 1 0.063111 0.042858
+ADAROUND_LAYER 10 /model.4/m.1/cv1/conv/Conv 999 True 3374 1 0.059324 0.037311
+ADAROUND_LAYER 11 /model.4/m.1/cv2/conv/Conv 999 True 3976 1 0.243773 0.111083
+ADAROUND_LAYER 12 /model.4/cv2/conv/Conv 1000 False 3105 1 0.061065 0.043563
+ADAROUND_LAYER 13 /model.5/conv/Conv 1000 False 29836 1 0.059478 0.042152
+ADAROUND_LAYER 14 /model.6/cv1/conv/Conv 1000 False 6456 1 0.091497 0.063104
+ADAROUND_LAYER 15 /model.6/m.0/cv1/conv/Conv 1000 False 12938 1 0.138156 0.063567
+ADAROUND_LAYER 16 /model.6/m.0/cv2/conv/Conv 1000 False 14595 1 0.106034 0.047500
+ADAROUND_LAYER 17 /model.6/m.1/cv1/conv/Conv 999 True 14270 1 0.124151 0.057135
+ADAROUND_LAYER 18 /model.6/m.1/cv2/conv/Conv 1000 False 14109 1 0.241154 0.102631
+ADAROUND_LAYER 19 /model.6/cv2/conv/Conv 1000 False 13754 1 0.071298 0.047295
+ADAROUND_LAYER 20 /model.7/conv/Conv 1000 False 121035 1 0.133797 0.067597
+ADAROUND_LAYER 21 /model.8/cv1/conv/Conv 999 True 30564 1 0.186497 0.150497
+ADAROUND_LAYER 22 /model.8/m.0/cv1/conv/Conv 1000 False 63287 1 0.233138 0.134655
+ADAROUND_LAYER 23 /model.8/m.0/cv2/conv/Conv 1000 False 63217 1 0.330318 0.240832
+ADAROUND_LAYER 24 /model.8/cv2/conv/Conv 1000 False 44036 1 0.150823 0.131494
+ADAROUND_LAYER 25 /model.9/cv1/conv/Conv 999 True 14623 1 0.100749 0.086687
+ADAROUND_LAYER 26 /model.9/cv2/conv/Conv 1000 False 35487 1 0.125130 0.093520
+ADAROUND_LAYER 27 /model.12/cv1/conv/Conv 1000 False 18931 1 0.121865 0.079851
+ADAROUND_LAYER 28 /model.12/m.0/cv1/conv/Conv 1000 False 13995 1 0.090561 0.061790
+ADAROUND_LAYER 29 /model.12/m.0/cv2/conv/Conv 999 True 14760 1 0.112654 0.075930
+ADAROUND_LAYER 30 /model.12/cv2/conv/Conv 1000 False 10028 1 0.083872 0.064406
+ADAROUND_LAYER 31 /model.15/cv1/conv/Conv 999 True 4704 1 0.041119 0.031385
+ADAROUND_LAYER 32 /model.15/m.0/cv1/conv/Conv 1000 False 3121 1 0.051020 0.032998
+ADAROUND_LAYER 33 /model.15/m.0/cv2/conv/Conv 999 True 3483 1 0.071728 0.046568
+ADAROUND_LAYER 34 /model.15/cv2/conv/Conv 1000 False 2530 1 0.041398 0.034889
+ADAROUND_LAYER 35 /model.16/conv/Conv 999 True 14329 1 0.084762 0.057953
+ADAROUND_LAYER 36 /model.22/cv2.0/cv2.0.0/conv/Conv 1000 False 13027 1 0.128648 0.072735
+ADAROUND_LAYER 37 /model.22/cv3.0/cv3.0.0/conv/Conv 1000 False 15145 1 0.085769 0.047189
+ADAROUND_LAYER 38 /model.22/cv2.0/cv2.0.1/conv/Conv 1000 False 12553 1 0.927451 0.715146
+ADAROUND_LAYER 39 /model.22/cv3.0/cv3.0.1/conv/Conv 1000 False 17487 1 1.726187 0.864918
+ADAROUND_LAYER 40 /model.18/cv1/conv/Conv 999 True 10696 1 0.098522 0.081606
+ADAROUND_LAYER 41 /model.22/cv2.0/cv2.0.2/Conv 1000 False 1379 1 0.200053 0.197643
+ADAROUND_LAYER 42 /model.22/cv3.0/cv3.0.2/Conv 999 True 2982 1 0.304023 0.292363
+ADAROUND_LAYER 43 /model.18/m.0/cv1/conv/Conv 1000 False 13197 1 0.063730 0.048655
+ADAROUND_LAYER 44 /model.18/m.0/cv2/conv/Conv 1000 False 13964 1 0.215573 0.130782
+ADAROUND_LAYER 45 /model.18/cv2/conv/Conv 1000 False 8537 1 0.073308 0.063759
+ADAROUND_LAYER 46 /model.19/conv/Conv 999 True 56149 1 0.107021 0.071154
+ADAROUND_LAYER 47 /model.22/cv2.1/cv2.1.0/conv/Conv 1000 False 24124 1 0.280299 0.165242
+ADAROUND_LAYER 48 /model.22/cv3.1/cv3.1.0/conv/Conv 1000 False 31110 1 0.142634 0.087349
+ADAROUND_LAYER 49 /model.22/cv2.1/cv2.1.1/conv/Conv 1000 False 10340 1 0.813573 0.753199
+ADAROUND_LAYER 50 /model.22/cv3.1/cv3.1.1/conv/Conv 1000 False 12407 1 1.966415 1.287118
+ADAROUND_LAYER 51 /model.21/cv1/conv/Conv 999 True 43078 1 0.177852 0.135186
+ADAROUND_LAYER 52 /model.22/cv2.1/cv2.1.2/Conv 1000 False 1254 1 0.192349 0.190658
+ADAROUND_LAYER 53 /model.22/cv3.1/cv3.1.2/Conv 999 True 2928 1 0.729202 0.709790
+ADAROUND_LAYER 54 /model.21/m.0/cv1/conv/Conv 1000 False 52996 1 0.150905 0.094320
+ADAROUND_LAYER 55 /model.21/m.0/cv2/conv/Conv 1000 False 56285 1 0.255559 0.179563
+ADAROUND_LAYER 56 /model.21/cv2/conv/Conv 1000 False 37117 1 0.172354 0.140840
+ADAROUND_LAYER 57 /model.22/cv2.2/cv2.2.0/conv/Conv 1000 False 54238 1 0.320716 0.238623
+ADAROUND_LAYER 58 /model.22/cv3.2/cv3.2.0/conv/Conv 1000 False 60666 1 0.251178 0.160967
+ADAROUND_LAYER 59 /model.22/cv2.2/cv2.2.1/conv/Conv 1000 False 11885 1 0.895848 0.832812
+ADAROUND_LAYER 60 /model.22/cv3.2/cv3.2.1/conv/Conv 1000 False 15909 1 2.290891 1.642406
+ADAROUND_LAYER 61 /model.22/cv2.2/cv2.2.2/Conv 1000 False 1206 1 0.211792 0.209922
+ADAROUND_LAYER 62 /model.22/cv3.2/cv3.2.2/Conv 1000 False 2970 1 1.019503 0.955803
+ADAROUND_COMPLETE {"output_sha256": "7de7e9f90cc97d6a88443309ec3aea3f2c0b65951ce85083762ff767a2dfd535", "wall_seconds": 511.9737567999982, "peak_rss_bytes": 5742055424, "changed_elements": 1177194}

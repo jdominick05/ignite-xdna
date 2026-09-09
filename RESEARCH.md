@@ -1607,9 +1607,15 @@ sections above.
   extends the gate to the head-cut YOLOv8n export: the prepared float graph equals
   Quark's pre-calibration graph, a fresh same-listing oracle matches position for
   position and integer for integer, and both files read 27.03 mAP@50-95 paired on the
-  NPU with byte-identical detections. Safe departures from power-of-two scales,
-  product-scale INT32 bias execution, per-channel compiler memory growth and YOLO
-  AdaRound remain open. See
+  NPU with byte-identical detections.
+  [YOLO AdaRound parity](docs/BENCHMARKS.md#ignition-yolov8n-cut-adaround-parity) closes
+  AdaRound on that export too, once the layers are walked in the vendor's topological
+  order of the float model rather than the emitted file's: every integer byte-identical
+  to a fresh same-listing `XINT8_ADAROUND` oracle, all 819 per-layer log lines equal,
+  32.04 mAP@50-95 paired on the NPU for both, and the first same-listing AdaRound
+  toggle on this graph: 5.01 points over the plain-XINT8 c64 pair.
+  Safe departures from power-of-two scales, product-scale INT32 bias execution and
+  per-channel compiler memory growth remain open. See
   [`quant/DESIGN.md`](quant/DESIGN.md) for the ordered gates and remaining source questions.
 - **Does MODNet's alpha error move once calibration and inference agree?** Every MODNet
   model measured so far was calibrated through PIL bilinear while inference resized with

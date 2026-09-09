@@ -3162,7 +3162,12 @@ integer weights of every Conv/Gemm in the finished, refined QDQ file and touches
 else. `quant/adaround.py` transcribes that path and `python -m quant adaround` runs it on
 an emitted Ignition file, importing torch inside the finetune only; `quantize` and
 `inspect` still block torch, and Quark stays blocked throughout. The transcription:
-layers in the quantized file's node order, one at a time, each seeing the rounding
+layers one at a time in the order Quark's loop visits them (its quantized file's node
+order, which is ORT's `topological_sort` of the pre-processed float model, not the
+export's file order: on this graph the downsample Conv precedes conv2 of its block; the
+first run took Ignition's own file order, which coincides on ResNet, and the
+[YOLO AdaRound section](#ignition-yolov8n-cut-adaround-parity) below records where it does
+not), each seeing the rounding
 already chosen upstream; the layer's pre-QuantizeLinear input from the current quantized
 graph (ONNX Runtime CPU, `ORT_DISABLE_ALL`) and its float input and output from the
 equalized float graph (ONNX Runtime CPU, default optimization) for every calibration
@@ -3325,9 +3330,94 @@ ResNet, downward here. The repo's c200 head-cut artifact reads 26.94 / 40.15 on 
 NPU (the yolov8n XINT8 head-cut row above); the c64 pair is not compared to it because
 the calibration count differs.
 
-What remains open on YOLO: AdaRound (`python -m quant adaround` raises for a non-ResNet
-base), a calibration that fires the shift rules, and traversal-order equivalence where
-refinement rules interact, which this graph does not test.
+What remains open on YOLO: a calibration that fires the shift rules, and traversal-order
+equivalence where refinement rules interact, which this graph does not test. AdaRound
+on this base is the next section.
+
+### Ignition: YOLOv8n-cut AdaRound parity
+
+`python -m quant adaround` now takes a head-cut YOLOv8n base: the family comes from the
+base's sidecar, the float reference is the export letterboxed through `CocoSource` on
+the sidecar's own listing, equalized (zero patterns here) and prepared (Split to Slice)
+in the order `quantize` applies them, which is Quark's pre-processed float model. The
+Conv/Q/DQ/HardSigmoid graph needed nothing new in the module: every Conv output feeds
+its `QuantizeLinear` directly, so no layer carries an activation and each subgraph ends
+at the Conv output, as Quark's `find_end` decides.
+
+What the graph did need was the layer order. Quark's loop walks its quantized file, and
+that file keeps the original nodes in the order ORT's quantization `topological_sort`
+gave the pre-processed float model (Quark sorts it before quantizing: nodes without an
+input first, then the consumers of the sorted initializer and input names, then
+breadth-first by output, consumers in file order). On folded ResNet that order puts the
+downsample Conv before conv2 of its block, and Ignition's own emitted order happened to
+agree, which is why the ResNet run above was bitwise without anyone deciding the
+question. On yolov8n-cut the two diverge at the 39th conv: the export interleaves the
+P3 head convs with the neck (`/model.22/cv2.0/cv2.0.1/conv/Conv` before
+`/model.18/cv1/conv/Conv`), the vendor sort keeps that, and Ignition's emitted file does
+not. `Graph.vendor_order` transcribes the vendor sort and `layer_targets` now walks the
+float graph in that order; checked in-session against ORT's own routine on eight files
+(both float exports, both c64 pairs, both repo AdaRound artifacts: identical node order
+on all), against the ResNet log above (the 54 `ADAROUND_LAYER` names in the same
+order, so that run needs no repeat) and against the fresh oracle's file (63 convs in
+the same order). Layer order is a parity condition in its own right: each layer's
+rounding is chosen against inputs that already carry the rounding of every layer
+visited before it, and the torch generator advances per layer, so a different order
+draws different batches.
+
+Fresh same-listing oracle: [`XINT8_ADAROUND` on the sorted first 64 COCO calibration images](../results/quant/quant_yolov8n_cut_quark_cle_adaround_c64.log)
+(`scripts/quant-reference.sh --in-model models/yolov8n_cut.onnx --calib-dir data/coco_calib --cle --adaround`):
+0 CLE patterns, 63 modules, 16 early stops, 161.0 s of ONNX inference plus 361.6 s of
+torch training, 696.6 s end to end including calibration, peak working set
+5,393,625,088 bytes, SHA256 `505cf451…6d86`. Ignition on its CLE c64 artifact
+([log](../results/quant/quant_yolov8n_cut_ignition_cle_adaround_c64.log),
+`scripts/quant-adaround.sh --in-model models/yolov8n_cut.onnx --calib-dir data/coco_calib`,
+Quark import-blocked): 157.3 s of data plus 353.2 s of training, 512.0 s for the
+finetune alone, peak working set 5,742,055,424 bytes, SHA256 `7de7e9f9…d535`. Both in
+`resnet_env` (torch 2.4.1+cpu, 8 threads, ONNX Runtime 1.22.1), one after the other on
+an otherwise idle box. Result ([diff](../results/quant/diff_yolov8n_cut_ignition_cle_adaround_c64.log)):
+empty position delta; listing, preprocessing, float hash, CLE and every FastFinetune
+parameter equal; **126/126 int8 initializers byte-identical**; refinement fixed point on
+both. The two logs agree line for line: all 819 per-layer lines (63 module banners in
+the same order, the loss lines, the 16 early-stop lines and 63 reconstruction metrics)
+are identical to the last printed digit. AdaRound moved 1,177,194 of the 3,146,160
+weight elements by exactly one LSB relative to the CLE base (37.42 percent), the same
+count on both sides, biases untouched, and 90 of them sit at −128, Quark's dtype clamp;
+the base had none there. The files hash differently, as the CLE pair did: the gate is
+the graph and every parameter, not the serialization.
+
+**Full-set evaluation.** `scripts/quant-validate.sh --family yolo`, all 5,000 val2017
+images at conf 0.001, IoU 0.7, max_det 300, per-class NMS, decode outside "infer". CPU:
+both files read **32.21 mAP@50-95 / 46.97 mAP@50** (small/medium/large 15.41 / 34.52 /
+47.13; [reference](../results/quant/map_yolov8n_cut_ignition_cle_adaround_c64_reference_cpu.log),
+[own](../results/quant/map_yolov8n_cut_ignition_cle_adaround_c64_own_cpu.log)), 614,151
+detections each, detection files byte-identical in-session (60,003,158 bytes,
+git-ignored). NPU, paired in one sitting with a clean `xrt-smi` context witness before
+each model and `--fresh` compilation
+([reference](../results/quant/map_yolov8n_cut_ignition_cle_adaround_c64_reference_npu.log),
+[own](../results/quant/map_yolov8n_cut_ignition_cle_adaround_c64_own_npu.log),
+[EP reports](../results/quant/diag_yolov8n_cut_ignition_cle_adaround_c64_own.log)): both
+read **32.04 mAP@50-95 / 46.78 mAP@50** (14.81 / 34.29 / 46.37), 922 of 929 nodes on
+the NPU with the same seven on CPU as the XINT8 pair, identical EP reports, 611,937
+detections each and byte-identical NPU detection files (59,796,355 bytes). Mean
+`sess.run` at eval conf was 6.94 ms (reference) and 6.86 ms (own); the CPU means
+(34.58 and 36.80 ms, medians 34.20 and 34.11 ms) differ by session noise, not by
+model, since the files compute identically.
+
+This pair is also the first like-for-like AdaRound toggle on yolov8n-cut. The repo's
+earlier artifacts varied the calibration count with the algorithm (32 images plain, 300
+with AdaRound, the caveat `scripts/yolo-bench.sh` carries), so their gap could not be
+attributed. Here the same 64-image listing quantized plain reads 27.43 CPU / 27.03 NPU
+([above](#ignition-yolov8n-cut-preparation-parity)) and with AdaRound 32.21 / 32.04:
+AdaRound alone adds 4.78 points on CPU and 5.01 on the NPU, recovering 5.01 of the 9.66
+points plain XINT8 loses against the 36.69 FP32 baseline, at the same placement and
+the same latency band as the plain file. The repo's c300 AdaRound row (32.19 / 47.04)
+is 0.15 points above this c64 pair on the NPU; that is a different calibration count in
+a different session, so the two are not compared beyond noting that 64 images reach
+within session noise of 300 here.
+
+What remains open on YOLO AdaRound: it ran on the yolov8n-cut graph only (no Gemm, no
+activation-bearing layer, no early-stop-free layer set to compare the schedule against
+ResNet's), the laptop stretch is unrun, and GPU finetune waits on Desktop 1.
 
 ## Key findings
 

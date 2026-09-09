@@ -1,0 +1,53 @@
+deleted stale cache C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\scratch\quant-worktree\yolocutcachekey
+loading annotations into memory...
+Done (t=0.27s)
+creating index...
+index created!
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\scratch\quant-worktree\yolocutcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+model: head-cut (6 outputs), numpy decode, input 640x640
+eval : 5000 images, conf 0.001, iou 0.7, max_det 300, per-class NMS
+  500/5000  (60519 detections so far)
+  1000/5000  (120654 detections so far)
+  1500/5000  (184267 detections so far)
+  2000/5000  (245383 detections so far)
+  2500/5000  (305113 detections so far)
+  3000/5000  (366006 detections so far)
+  3500/5000  (426699 detections so far)
+  4000/5000  (488353 detections so far)
+  4500/5000  (552069 detections so far)
+  5000/5000  (611937 detections so far)
+
+611937 detections over 5000 images in 78s
+inference  mean 6.86 ms   median 6.80 ms
+wrote results/dets_yolov8n_cut_ignition_cle_adaround_c64_own_npu.json
+Loading and preparing results...
+DONE (t=1.84s)
+creating index...
+index created!
+Running per image evaluation...
+Evaluate annotation type *bbox*
+DONE (t=24.76s).
+Accumulating evaluation results...
+DONE (t=4.99s).
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.320
+ Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] = 0.468
+ Average Precision  (AP) @[ IoU=0.75      | area=   all | maxDets=100 ] = 0.349
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.148
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.343
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.464
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=  1 ] = 0.282
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets= 10 ] = 0.466
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.514
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.280
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.573
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.675
+
+=== yolov8n_cut_ignition_cle_adaround_c64 | NPU | 640px | 5000 images ===
+mAP@50-95  32.04
+mAP@50     46.78
+mAP small / medium / large   14.81 / 34.29 / 46.37
+latency    6.86 ms
