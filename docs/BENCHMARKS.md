@@ -1911,29 +1911,40 @@ nothing about data movement: same bytes, same DMA, same fifo depth, same functio
   floor is real, the separated build's issuing cycles fall by ~96 per call and its lock stall
   rises by the same, leaving `ACTIVE` unchanged — an equality needing no timing at all. The
   obstacle is the one `RESEARCH.md` already names: `whole_array` carries no trace hook.
-  **That plan was tested as an instrument on 2026-09-09 and it does not work — do not run it as
-  written.** A same-bank dual-load conflict has to surface as `MEMORY_STALL`, and
-  `results/aie/pmu_probe_npu.log` had already flagged that event as never having read nonzero
-  here. `kernels/bank_placement/bank_stall_probe.py` is the positive control: one loop, two
-  independent 16-lane loads, one compile-time flag moving stream A's base and nothing else, with
-  the arm read back from the addresses the kernel reports. **`MEMORY_STALL` reads 0 in every run
-  of both placements, at every trip count** — including an arm built to collide as hard as this
-  design permits. So zero on the GEMM's arms would not distinguish "no conflict" from "the event
-  does not fire", and the sitting would buy nothing. There is no bank-specific event to fall back
-  on (the enum has `GROUP_STALL` 22, `MEMORY_STALL` 23, `DM_ACCESS_TO_UNAVAILABLE` 66 and nothing
-  else), and `GROUP_STALL` read *exactly* equal to `ACTIVE` in all six eight-event runs, so it is
-  not an independent signal either. Backing log `results/aie/bank_stall_control_npu.log`.
-  **The control did produce a clean instruction-matched comparison, and it found no rate effect:**
-  with identical `INSTR_LOAD` in both arms, colliding costs a *constant* **6 cycles** more at 256,
-  512 and 2048 iterations (3850/3844, 7690/7684, 30730/30724). A one-cycle per-iteration stall
-  would have cost 256, 512 and 2048, so **the invariance is the finding** — those 6 cycles are
-  paid once, whatever they are. Two causes fit and this run separates neither: a fixed loop-setup
-  difference (one base is a static address, the other a function argument), or a one-time
-  bank-arbitration warm-up on first touch of the second bank, which only the separated arm
-  touches. Neither is ruled out; the headline does not depend on which. **The
-  caveat that keeps H12 open:** the loop runs at 15.0 cycles/iteration for 4 loads, so it is not
-  load-bound and has slack to absorb a one-cycle stall — this bounds the penalty in a *slack*
-  loop, not in the GEMM's tight inner loop.
+  **That plan was tested on 2026-09-09 and the observable WORKS — better than proposed.**
+  A same-bank paired load has to surface as `MEMORY_STALL`, and `results/aie/pmu_probe_npu.log`
+  had flagged that event as never having read nonzero here, so the premise needed a positive
+  control on a kernel *known* to have the conflict. `kernels/memory_placement/` is that kernel:
+  it places both operands at explicit `aie.buffer` addresses — the very mechanism this item
+  asks for — and it **asserts the compiler bundled the two loads** (`vlda` and `vldb` on one
+  line), refusing to run otherwise. Routing the stall taxonomy through it settles the question
+  (`results/aie/bank_stall_observable_npu.log`):
+
+  | trip count | separate cycles / `MEMORY_STALL` | same cycles / `MEMORY_STALL` | Δcycles |
+  |---|---|---|---|
+  | 512 | 5672 / 2 | 6184 / 514 | 512 |
+  | 1024 | 11304 / 2 | 12328 / 1026 | 1024 |
+  | 2048 | 22568 / 2 | 24616 / 2050 | 2048 |
+  | 4096 | 45096 / 2 | 49192 / 4098 | 4096 |
+
+  **Three quantities agree exactly at every trip count** — the extra cycles, the extra
+  `MEMORY_STALL` events, and the iteration count are the same number. So **one same-bank
+  paired load costs exactly one cycle and raises exactly one `MEMORY_STALL`.** Slopes are
+  11.0 vs 12.0 cycles/iteration at r²=1.0, the compiled kernel is byte-identical across arms
+  (function sha256 `87ab8a82…`), the MLIR confirms `mem_bank = 1/2` vs `1/1`, and all twenty
+  samples per arm were identical — zero variance. `LOCK_STALL` was routed alongside and is
+  useless here: 10,466–10,869 in both arms with no trend, i.e. ObjectFifo wait, not memory.
+  **H12 is therefore measurable now**: the reason it stalled was that a ~3% wall-clock effect
+  is inseparable from this machine's drift, and this observable is exact and inside the
+  dispatch. Pointing it at the production int8 GEMM is a well-posed experiment.
+  **RETRACTED, same day: `results/aie/bank_stall_control_npu.log`'s headline.** That log
+  concluded `MEMORY_STALL` "cannot be trusted as a bank-conflict signal" and that this plan
+  "should not be run as written". Both are wrong. The fault was its probe, not the event: its
+  loop ran at 15.0 cycles/iteration for 4 loads, far too loose to be issuing the two loads in
+  one instruction, and the penalty exists only for *paired* loads — so there was no conflict to
+  detect and reading zero was correct. It named that as one of three unseparated candidates; it
+  was the right one. Its "constant 6 cycles, no rate effect" finding is retracted with it, as a
+  measurement of a loop that never collided.
   **Three structural facts from the same run, each of which cost an attempt**: a core's `.bss` is
   ~16 KB, not 64 KB (a 32 KB static array fails to link); it lies *entirely inside one 16 KB
   bank* (measured 0x75000–0x77C00, bank 29, with the input fifo buffer starting exactly at
