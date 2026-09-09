@@ -716,6 +716,21 @@
   Unlike MobileViT, depthwise separable layers quantize smoothly under plain XINT8 PTQ without scale grid collapse
   (Pearson $r = 0.9383$, MAD $16.14 / 255$, $\delta < 1.25 = 68.07\%$), proving that lightweight depthwise-separable
   decoders are optimal for real-time dense spatial prediction on XDNA1.
+- **Bilateral Guided Aggregation achieves monolithic DPU compilation for semantic segmentation (2026-09-09):**
+  BiSeNetV2 (Yu et al., IJCV 2021) couples a wide shallow Detail Branch with a deep narrow Semantic Branch,
+  fusing them via Bilateral Guided Aggregation (BGA) using elementwise multiplications gated by Sigmoid.
+  When exported with nearest-neighbor upsampling (`models/bisenetv2_fp32.onnx`), Quark's `enable_npu_cnn`
+  automatically lowers `left * sigmoid(right)` to DPU-compatible `HardSigmoid` with `alpha=0.166667`.
+  In `models/bisenetv2_fp32_xint8.onnx`, the VitisAI EP compiles 402 of 404 nodes (99.5%) into **exactly 1
+  monolithic DPU subgraph** (`subgraphStat: [{'device': 'DPU', 'count': 1}]` in `results/diag_bisenetv2_xint8.log`),
+  placing all 57 Convs, 40 Relus, 10 Adds, 5 Muls, 2 HardSigmoids, 3 Resizes, 1 MaxPool, 1 AveragePool, and 1 GlobalAveragePool
+  natively on AIE. Executes in **13.12 ms (76.2 fps)** on Phoenix XDNA1 — **4.43× faster than Zen 4 CPU** (58.07 ms)
+  and **1.09× faster than Radeon 780M iGPU DirectML FP32** (14.25 ms). Stock bilinear upsampling at the head
+  ejects 1 Resize node to CPU (399/404 on NPU in `results/diag_bisenetv2_bilinear_xint8.log`), adding 0.26 ms of host dispatch.
+  However, physical DPU fixed-point execution reveals a dynamic range limitation: while CPU QDQ simulation
+  maintains 59.47% pixel accuracy and 25.72% mIoU, on-device fixed-point elementwise multiplication across disparate
+  inter-branch activation scales attenuates minority classes (15.33% pixel accuracy, 2.44% mIoU), confirming that
+  multi-branch bilateral gating requires fine-tuning or AdaRound to balance inter-branch scale multipliers on physical systolic hardware.
 
 ## The YOLOv8 partitioning failure (resolved)
 
@@ -1282,6 +1297,30 @@ Reproduce: `./scripts/mobilevit-eval.sh --slice`, `python tools/audit_quant_grid
   rank-4 `MatMul` and 21 rank-3 `LayerNormalization` nodes also fall back, on op support.
   MobileViT's 5D shapes come from the unfold/fold (`[4, 256, 3, 4, 16]`) bridging its conv
   and transformer stages, so this is architectural, not a quantization artifact.
+
+### Native Windows XRT driver constraints: KDMA and unified memory flags
+
+Investigated via `tools/windows_xrt_driver_probe.py` (`results/aie/windows_xrt_driver_bench.log`) on Desktop 2 (Ryzen 7 8700G, Phoenix XDNA1 NPU):
+
+- **`pyxrt.bo.flags.normal` fails on Windows**: Calling `pyxrt.bo(device, size, pyxrt.bo.flags.normal, group_id)` causes the native `amdxe.sys` kernel driver to fail with `invalid argument`. Memory on Phoenix APUs is host-managed unified RAM; buffer allocations must use `pyxrt.bo.flags.host_only`.
+- **KDMA is unsupported on Windows**: Attempting to execute a kernel with buffer objects allocated on a generic or default memory group emits `[XRT] WARNING: Reverting to host copy of buffers (KDMA not supported on windows)`. The driver falls back to an expensive host bounce buffer. To achieve zero-copy execution on Windows, every BO must be allocated on the kernel argument's connected bank via `group_id = kern.group_id(arg_idx)`.
+- **Sub-microsecond synchronization floor**: Unified memory buffer sync (`bo.sync`) requires 0.78-0.97 µs at sizes <= 16 KB (0.85 µs for a 4 KB frame tile). On unified APU memory, host-device synchronization is purely a CPU cache line flush (`clflushopt`) and invalidation, not a physical PCIe/DMA transfer.
+- **Userspace dispatch preparation floor**: Direct userspace dispatch preparation via `pyxrt` requires 8.76 µs (1.85 µs run allocation + 6.91 µs for 8 argument bindings). Pipelining via `pyxrt.runlist` requires 3.39 µs per run.
+- **Virtual hardware context capacity bound (5 columns)**: `amdxe.sys` enforces a physical ceiling of 5 active virtual hardware contexts per Phoenix device (`results/aie/windows_context_switch_bench.log`). Initial context setup requires 78.63 ms, while subsequent contexts allocate in 5.38-5.78 ms. Attempting a 6th context triggers driver failure with NTSTATUS `0xc01e0009` (hardware capacity exhaustion). Context deletion and userspace garbage collection cleanly recycles the slot in 4.98 ms.
+- **Hardware context-switch penalty (~748 µs)**: Interleaving dispatches across two distinct hardware contexts on the Phoenix NPU increases mean latency from 120.25 µs to 867.99 µs (+747.75 µs penalty, 7.22x slowdown) due to partition state teardown, instruction stream flushing, and base register reprogramming. Multi-tenant concurrency therefore requires dedicated column partitioning (`1x4.xclbin`) rather than time-sliced virtualization on a single partition.
+
+### AIE-ML systolic shift-cut bound [0, 31]
+
+Investigated via `quant/shift_cut.py` and `python -m quant check-shift-cut` (`results/quant/shift_cut_feasibility.log`):
+
+- **Hardware accumulator shift constraint**: On XDNA1 AIE-ML, the post-accumulator scaling unit uses a 15-bit multiplier M in [16384, 32767] and a 5-bit arithmetic right-shift register sigma in [0, 31]. The effective scaling factor is A ≈ M * 2^(-sigma).
+- **Theorem 1 (Shift-Cut Feasibility Bound)**: If an ONNX QDQ triad requires sigma < 0, the operation requires an arithmetic left-shift exceeding the 32-bit accumulator, resulting in immediate accumulator overflow (as observed in RegNetX-002, where sigma = -90 forces top-1 accuracy to collapse to 0.50%). If sigma > 31, the 5-bit shift register overflows/clamps (as observed in FastDepth, where sigma = 32 overflows by 1 bit, clamping to 31 and doubling layer outputs).
+- **Theorem 2 (Multi-Branch Inter-Scale Alignment)**: In multi-branch elementwise operations (such as Bilateral Guided Aggregation in BiSeNetV2), divergent scale grids truncate dynamic range in hardware.
+- **Theorem 3 (Systolic Scale Feasibility Window)**: In power-of-two quantization with scale positions pos = -log2(S), the output position must satisfy:
+    pos_x + pos_w - 17 <= pos_y <= pos_x + pos_w + 14
+  Violations are projectable to the nearest bound via `project_scale_to_feasible_basin` (demonstrated on FastDepth `Conv_96`: pos_y 0 -> 1, bringing sigma from 32 down to 31, eliminating the clamp without retraining).
+- **Rule for Project Ignition**: Every QDQ graph emitted for XDNA1 must be verified against the [0, 31] systolic shift-cut bound using `python -m quant check-shift-cut` prior to hardware execution.
+
 
 
 
