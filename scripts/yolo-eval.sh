@@ -5,6 +5,16 @@
 #   ./scripts/yolo-eval.sh --n 5000        # the real number, slow
 #   ./scripts/yolo-eval.sh --n 200 --quick # float models on CPU only
 #   ./scripts/yolo-eval.sh --model models/yolov8n_cut_xint8.onnx   # just one
+#   ./scripts/yolo-eval.sh --model models/yolov8l_cut_xint8.onnx --n 5000 \
+#       --witness --progress 100      # the yolov8l DPU-timeout investigation
+#
+# --witness runs tools/hwinfo_npu_bridge.exe alongside every NPU eval, one JSON
+# sample per second into results/witness_<stem>_<ep>.jsonl, each carrying the
+# active hardware contexts BY IDENTITY, the live clock and the power mode. It is
+# for long runs that might hang: without it, a mid-run DPU timeout cannot be told
+# apart from another session having been on the device, and "a crash alone is not
+# a finding". --progress N (default 500) sets how precisely such a crash can be
+# located; 100 is reasonable when actively hunting one.
 #
 # Float models (.onnx with no xint8 in the name) run on CPU; quantized ones run
 # on the NPU. Uses eval conventions, not demo ones: conf 0.001, per-class NMS at
@@ -15,14 +25,16 @@
 
 . "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
-N=500 QUICK=0 ONLY=""
+N=500 QUICK=0 ONLY="" WITNESS=0 PROGRESS=500
 while [ $# -gt 0 ]; do
     case "$1" in
-        --n)       N="$2"; shift ;;
-        --quick)   QUICK=1 ;;
-        --model)   ONLY="$2"; shift ;;
-        -h|--help) usage "${BASH_SOURCE[0]}"; exit 0 ;;
-        *)         die "unknown flag $1" ;;
+        --n)        N="$2"; shift ;;
+        --quick)    QUICK=1 ;;
+        --model)    ONLY="$2"; shift ;;
+        --witness)  WITNESS=1 ;;
+        --progress) PROGRESS="$2"; shift ;;
+        -h|--help)  usage "${BASH_SOURCE[0]}"; exit 0 ;;
+        *)          die "unknown flag $1" ;;
     esac
     shift
 done
@@ -61,9 +73,15 @@ for m in "${MODELS[@]}"; do
     log="results/map_${stem}_${ep}.log"
     fresh=()
     [ "$ep" = npu ] && fresh=(--fresh)
+    [ "$WITNESS" = 1 ] && [ "$ep" = npu ] \
+        && witness_start "results/witness_${stem}_${ep}.jsonl"
     run_logged "$log" python pipelines/yolov8n/5_eval_map.py \
-        --model "$m" --ep "$ep" --n "$N" --log 3 "${fresh[@]}" || {
-            warn "$stem failed; see $log"; continue; }
+        --model "$m" --ep "$ep" --n "$N" --log 3 \
+        --progress-every "$PROGRESS" "${fresh[@]}" || {
+            warn "$stem failed; see $log"
+            [ "$WITNESS" = 1 ] && witness_stop
+            continue; }
+    [ "$WITNESS" = 1 ] && [ "$ep" = npu ] && witness_stop
     # || echo "" on every one: under `set -euo pipefail` a grep that matches
     # nothing fails the whole assignment and kills the script before the table
     # ever prints, which would make the ${map:-?} fallbacks below unreachable.
