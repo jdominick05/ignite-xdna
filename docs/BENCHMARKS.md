@@ -4850,6 +4850,59 @@ benign would be disarmed by it and nothing here has found one.
 
 ---
 
+### AdaRound peak memory: six copies of the activation set down to two (2026-09-09, Desktop 2)
+
+AdaRound is the one place Ignition was measured *worse* than Quark -- 22,299,271,168 bytes against
+15,771,942,912 on MODNet-Cut, same `psutil peak_wset` on both sides. Reading the loop, each layer
+held the activation set roughly six times over:
+
+- the three per-image lists ORT returns (`q_inputs`, `f_inputs`, `f_outputs`),
+- the three stacked arrays `_stack` builds from them, which is `np.array(list)` and therefore a
+  full copy while the list is still live,
+- plus torch views, which cost nothing because `torch.from_numpy(np.expand_dims(arr[i], 0))` does
+  not copy.
+
+Only two of those are read after the shape check: `q_input` feeds the module and `f_output` is the
+target. `f_input` exists solely for that check -- `cfg.check()` pins `DropRatio` at 1, so the float
+inputs are never fed to anything -- and the source's `inputs_f` list is built and never read.
+
+Two changes, neither touching a value, an RNG draw or a log line:
+
+1. Release `f_input` after the shape check and stop building `inputs_f`.
+2. Collect activations straight into one preallocated buffer (`_Collector`) instead of appending to
+   a list and copying it with `_stack`.
+
+The second is what matters. Releasing the lists moves the steady state but not the high-water mark,
+because at the moment `_stack` runs the list and its copy are both alive -- that *is* the peak.
+
+**ResNet50 AdaRound, 54 layers, 64-image listing, host witness `CLEAR` for both new runs:**
+
+| Build | Peak working set | Against baseline | Output SHA-256 | Weights moved |
+|---|---|---|---|---|
+| Baseline (as committed) | 3,055,075,328 | — | `bf605321…` | 8,954,279 |
+| Release the lists only | 2,960,109,568 | **−3.1%** | `bf605321…` | 8,954,279 |
+| **Collect into one buffer** | **2,543,427,584** | **−16.7%** | `bf605321…` | 8,954,279 |
+
+**The output is bit-identical at every step** -- same file hash, same count of weights moved by one
+LSB -- which is the point: this is an allocation change, not an algorithm change. `_Collector` is
+checked against `_stack` directly and produces the same array, same dtype, same order.
+
+Against Quark's own ResNet50 AdaRound peak of 3,582,218,240, Ignition moves from 0.85x to **0.71x**.
+
+**Not verified where the regression actually is.** MODNet-Cut is the case where Ignition loses, and
+it was deliberately not re-run: free memory on the box was 16.5 GB against a 22.3 GB baseline peak,
+and this repo has already recorded that peak working set reads *low* under memory pressure because
+the OS trims the set. Measuring it there and then would have produced a number that looks like an
+improvement for the wrong reason. It needs a quiet box, and until it has one the 22.3 GB figure
+stands unchallenged.
+
+Wall times were 528 s, 568 s and 584 s in that order, but the baseline is from a different day and
+each row is a single run, so that is not a controlled timing comparison and no cost is claimed from
+it. What can be said is that the direction is the one to expect: filling a buffer element by element
+does more Python-level work than one bulk `np.array`.
+
+---
+
 ## Native Windows XRT driver latency and DPU microcode disassembly
 
 A characterization of AMD's native Windows kernel driver (`amdxe.sys`) and userspace runtime (`pyxrt.pyd`, Python 3.13) on Desktop 2 (Ryzen 7 8700G, Phoenix XDNA1 NPU), measuring the driver floor, unified memory synchronization bandwidth, command submission overhead, and reverse-engineering the compiled DPU microcode transaction stream.

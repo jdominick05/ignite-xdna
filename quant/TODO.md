@@ -114,6 +114,16 @@ recorded in the handoff and Git history rather than treated as future features.
   The Zero-Concat variant and the listing sweep stay open.
 - [ ] Consider histogram calibration only with measured error/accuracy and memory
   tradeoffs against the exact-sample store; label approximation explicitly.
+- [x] Cut AdaRound's peak memory. Closed 2026-09-09 for ResNet50: the loop held roughly six
+  copies of each layer's activation set, three per-image ORT lists and three stacked copies, of
+  which two are ever read. Releasing the dead ones and collecting into one preallocated buffer
+  instead of `np.array(list)` takes the peak from 3,055,075,328 to **2,543,427,584** bytes, −16.7%,
+  with the emitted file bit-identical and the same 8,954,279 weights moved.
+  [Evidence](../docs/BENCHMARKS.md#adaround-peak-memory-six-copies-of-the-activation-set-down-to-two-2026-09-09-desktop-2).
+- [ ] Re-measure that on MODNet-Cut, which is the family where Ignition is actually worse than
+  Quark (22,299,271,168 against 15,771,942,912). It was not re-run because free memory was 16.5 GB
+  against a 22.3 GB peak, and peak working set reads low under memory pressure -- the measurement
+  needs a quiet box or it will flatter itself.
 - [x] Add a CLE stability guard. Closed 2026-09-09: `cross_layer_equalize(max_scale_log2=...)`,
   `python -m quant quantize --cle-guard BITS`, off by default. **The signal is not the
   post-transform weight range**, as this item originally assumed -- CLE narrows the weight

@@ -255,19 +255,24 @@ def _sub_model(model: onnx.ModelProto, starts: list[str], ends: list[str]) -> on
     return onnx.utils.Extractor(inferred).extract_model(starts, ends)
 
 
-def _run_quantized_inputs(qg: Graph, layer: Layer, images: list[np.ndarray], input_name: str) -> list[np.ndarray]:
+def _run_quantized_inputs(qg: Graph, layer: Layer, images: list[np.ndarray], input_name: str) -> np.ndarray:
+    collector = _Collector(len(images))
     if layer.start == input_name:
         # Quark runs the whole quantized model and reads back its own input; the values
         # are the images themselves.
-        return [np.array(image) for image in images]
+        for image in images:
+            collector.add(image)
+        return collector.done()
     sub = _sub_model(qg.model, [input_name], [layer.start])
     options = ort.SessionOptions()
     options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_DISABLE_ALL
     session = ort.InferenceSession(sub.SerializeToString(), sess_options=options, providers=["CPUExecutionProvider"])
-    return [np.array(session.run([layer.start], {input_name: image})[0]) for image in images]
+    for image in images:
+        collector.add(session.run([layer.start], {input_name: image})[0])
+    return collector.done()
 
 
-def _run_float(fg: Graph, layer: Layer, images: list[np.ndarray], input_name: str) -> tuple[list[np.ndarray], list[np.ndarray]]:
+def _run_float(fg: Graph, layer: Layer, images: list[np.ndarray], input_name: str) -> tuple[np.ndarray, np.ndarray]:
     sub = _sub_model(fg.model, [input_name], [layer.f_end])
     outputs = [layer.f_end]
     if layer.start != input_name:
@@ -275,22 +280,53 @@ def _run_float(fg: Graph, layer: Layer, images: list[np.ndarray], input_name: st
             sub.graph.output.extend([onnx.ValueInfoProto(name=layer.start)])
         outputs = [layer.start, layer.f_end]
     session = ort.InferenceSession(sub.SerializeToString(), providers=["CPUExecutionProvider"])
-    f_in, f_out = [], []
+    f_in, f_out = _Collector(len(images)), _Collector(len(images))
     for image in images:
         result = session.run(outputs, {input_name: image})
         if layer.start == input_name:
-            f_in.append(np.array(image))
-            f_out.append(np.array(result[0]))
+            f_in.add(image)
+            f_out.add(result[0])
         else:
-            f_in.append(np.array(result[0]))
-            f_out.append(np.array(result[1]))
-    return f_in, f_out
+            f_in.add(result[0])
+            f_out.add(result[1])
+    return f_in.done(), f_out.done()
 
 
 def _stack(samples: list[np.ndarray]) -> np.ndarray:
     """Quark: np.array(list of (1, ...)) then reshape((-1, *shape[2:]))."""
     array = np.array(samples)
     return array.reshape((-1, *array.shape[2:]))
+
+
+class _Collector:
+    """Fill one contiguous array instead of building a list and copying it.
+
+    `_stack` is `np.array(list)` followed by a reshape, so at the moment it runs the whole
+    activation set exists twice -- once as per-image arrays and once as the stacked copy.
+    That doubling *is* the peak, which is why releasing the list afterwards moves the
+    steady state and not the high-water mark. Writing each sample straight into a
+    preallocated buffer produces the identical array: same values in the same order with
+    the dtype of the first sample, which is what `np.array` over equal-shaped float32
+    samples yields.
+    """
+
+    def __init__(self, count: int):
+        self.count = count
+        self.buffer = None
+        self.index = 0
+
+    def add(self, sample: np.ndarray) -> None:
+        if self.buffer is None:
+            self.buffer = np.empty((self.count, *sample.shape[1:]), dtype=sample.dtype)
+        elif sample.dtype != self.buffer.dtype:
+            raise ValueError(f"calibration sample dtype changed: {sample.dtype} vs {self.buffer.dtype}")
+        self.buffer[self.index] = sample[0]
+        self.index += 1
+
+    def done(self) -> np.ndarray:
+        if self.buffer is None or self.index != self.count:
+            raise ValueError(f"incomplete activation collection: {self.index} of {self.count}")
+        return self.buffer
 
 
 def _print(*args) -> None:
@@ -475,11 +511,14 @@ def finetune(float_graph: Graph, quant_graph: Graph, source: ImageFolderSource,
 
     for layer in layers:
         data_start = time.perf_counter()
-        q_inputs = _run_quantized_inputs(quant_graph, layer, images, input_name)
-        f_inputs, f_outputs = _run_float(float_graph, layer, images, input_name)
-        q_input, f_input, f_output = _stack(q_inputs), _stack(f_inputs), _stack(f_outputs)
+        q_input = _run_quantized_inputs(quant_graph, layer, images, input_name)
+        f_input, f_output = _run_float(float_graph, layer, images, input_name)
         if q_input.shape != f_input.shape:
             raise ValueError(f"{layer.name}: quantized/float input shapes differ")
+        # f_input exists only for the shape check above: DropRatio is pinned at 1 by
+        # cfg.check(), so the float inputs are never fed to the module and holding the list
+        # the source builds from them would pin a third activation set for the whole layer.
+        del f_input
         data_seconds = time.perf_counter() - data_start
         log(f"Quark_latency_profiler: finetuning layer {layer.index}, onnx inference (quantized model + float model) "
             f"time consumed {data_seconds:1f}s")
@@ -496,8 +535,11 @@ def finetune(float_graph: Graph, quant_graph: Graph, source: ImageFolderSource,
         if batch_size < 1 or batch_size > q_input.shape[0]:
             log(f"The batch size {batch_size} is invalid, set it to 1")
             batch_size = 1
+        # Views into q_input and f_output, so these lists cost indexing overhead and no
+        # data. The source also builds an inputs_f list here; it is never read, because
+        # DropRatio 1 feeds the module quantized inputs only, and holding it would pin a
+        # third activation set alive for the whole layer.
         inputs_q = [torch.from_numpy(np.expand_dims(q_input[i], axis=0)) for i in range(q_input.shape[0])]
-        inputs_f = [torch.from_numpy(np.expand_dims(f_input[i], axis=0)) for i in range(f_input.shape[0])]
         outputs_f = [torch.from_numpy(np.expand_dims(f_output[i], axis=0)) for i in range(f_output.shape[0])]
         module.use_soft_rounding = True
         optimizer = torch.optim.Adam([module.alpha], lr=cfg.LearningRate)
