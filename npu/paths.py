@@ -27,6 +27,10 @@ YOLOV6_CUT_CACHE_KEY = "yolov6cutcachekey"
 YOLO11_CACHE_KEY = "yolo11cachekey"
 YOLO11_CUT_CACHE_KEY = "yolo11cutcachekey"
 YOLO11_NO_C2PSA_CACHE_KEY = "yolo11noc2psacachekey"
+# YOLO-World v2: open-vocabulary detector with text-guided cross-attention (MaxSigmoidAttnBlock)
+YOLOW_CACHE_KEY = "yolowcachekey"
+YOLOW_CUT_CACHE_KEY = "yolowcutcachekey"
+YOLOW_NO_ATTN_CACHE_KEY = "yolownoattncachekey"
 # MobileViT: the attention-free CNN (mobilevit_cut_backbone_xint8.onnx) and the
 # stock 49-subgraph graph. Both sit at the repo root like every key above.
 # tools/demo_attention.py and tools/pipeline_splice_bench.py once hardcoded
@@ -125,4 +129,15 @@ def yolo11_cache_key(model_path):
     if "cut" in stem:
         return YOLO11_CUT_CACHE_KEY
     return YOLO11_CACHE_KEY
+
+
+def yolow_cache_key(model_path):
+    """Pick a YOLO-World variant's compile-cache key from its filename."""
+    stem = Path(model_path).stem.lower()
+    if "no_attn" in stem or "noattn" in stem:
+        return YOLOW_NO_ATTN_CACHE_KEY
+    if "cut" in stem:
+        return YOLOW_CUT_CACHE_KEY
+    return YOLOW_CACHE_KEY
+
 

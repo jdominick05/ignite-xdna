@@ -1,0 +1,165 @@
+"""
+YOLO-World v2 step 3b: quantize the head-cut vision backbone to XINT8.
+
+Difference from stock YOLOv8: YOLO-World v2's backbone/neck contains C2fAttn
+text cross-attention blocks (5D Einsum + 5D ReduceMax). Quark XINT8 quantizes
+all standard Conv layers and inserts QDQ nodes.
+
+    conda activate resnet_env
+    python pipelines/yolow/3b_quantize_cut.py --calib-dir data/coco_calib --limit 200
+    python pipelines/yolow/3b_quantize_cut.py --calib-dir data/coco_calib --adaround
+
+Writes models/yolov8s-worldv2_cut_xint8.onnx (or _no_attn_cut_xint8.onnx).
+"""
+import argparse
+import copy
+import glob
+import os
+import sys
+from collections import Counter
+from pathlib import Path
+
+import cv2
+import onnx
+from onnxruntime.quantization import CalibrationDataReader
+from quark.onnx import ModelQuantizer
+from quark.onnx.quantization.config import Config, get_default_config
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))  # repo root on sys.path
+
+from npu.paths import MODELS
+from npu.yolow import HEAD_OUTS, input_size, letterbox
+
+IN_MODEL = MODELS / "yolov8s-worldv2_cut.onnx"
+
+ADAROUND = {
+    "DataSize": 1000, "FixedSeed": 1705472343, "BatchSize": 2,
+    "NumIterations": 1000, "LearningRate": 0.1, "OptimAlgorithm": "adaround",
+    "OptimDevice": "cpu", "InferDevice": "cpu", "EarlyStop": True,
+}
+
+
+class CocoCalibReader(CalibrationDataReader):
+    """Uses npu.yolow.letterbox, the same transform inference uses. Do not
+    inline a second copy: calibration and inference must be byte-identical."""
+
+    def __init__(self, folder, limit, imgsz, input_name="images"):
+        self.files = sorted(glob.glob(os.path.join(folder, "*.jpg")))[:limit]
+        if not self.files:
+            raise SystemExit(f"no jpgs in {folder}")
+        print(f"calibrating on {len(self.files)} images at {imgsz}x{imgsz}")
+        self.input_name = input_name
+        self.imgsz = imgsz
+        self.i = 0
+
+    def get_next(self):
+        if self.i >= len(self.files):
+            return None
+        img = cv2.imread(self.files[self.i])
+        if img is None:
+            raise RuntimeError(f"cv2 could not read {self.files[self.i]}")
+        self.i += 1
+        if self.i % 50 == 0:
+            print(f"  calib {self.i}/{len(self.files)}")
+        x, _, _ = letterbox(img, self.imgsz)
+        return {self.input_name: x}
+
+    def rewind(self):
+        self.i = 0
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--in", dest="src", default=str(IN_MODEL))
+    ap.add_argument("--calib-dir", default=str(Path("data") / "coco_calib"))
+    ap.add_argument("--limit", type=int, default=200)
+    ap.add_argument("--adaround", action="store_true")
+    ap.add_argument("--iters", type=int, default=1000)
+    ap.add_argument("--device", default="cpu",
+                    help="OptimDevice/InferDevice for AdaRound's FastFinetune")
+    ap.add_argument("--threads", type=int, default=None,
+                    help="number of CPU threads for PyTorch/OpenMP (default: respects OMP_NUM_THREADS or 8)")
+    ap.add_argument("--out", default=None)
+    args = ap.parse_args()
+
+    threads = args.threads
+    if threads is None:
+        threads = int(os.environ.get("OMP_NUM_THREADS", "8"))
+    os.environ["OMP_NUM_THREADS"] = str(threads)
+    os.environ["MKL_NUM_THREADS"] = str(threads)
+    os.environ["OPENBLAS_NUM_THREADS"] = str(threads)
+    try:
+        import torch
+        torch.set_num_threads(threads)
+    except ImportError:
+        pass
+
+    if sys.platform == "win32" and (os.cpu_count() or 0) >= 16:
+        try:
+            import ctypes
+            from ctypes import wintypes
+            k32 = ctypes.windll.kernel32
+            k32.SetProcessAffinityMask.argtypes = [wintypes.HANDLE, ctypes.c_size_t]
+            k32.SetProcessAffinityMask.restype = wintypes.BOOL
+            mask = 0x5555 if threads == 8 else (0x55 if threads == 4 else None)
+            if mask is not None:
+                if k32.SetProcessAffinityMask(k32.GetCurrentProcess(), mask):
+                    print(f"Pinned process affinity mask to 0x{mask:X} ({threads} real cores, no SMT)")
+        except Exception:
+            pass
+
+    print(f"CPU threads: {threads}")
+
+    if not os.path.isfile(args.src):
+        raise SystemExit(f"{args.src} missing - run 1b_cut_head.py first")
+
+    m = onnx.load(args.src)
+    got = [o.name for o in m.graph.output]
+    if got != HEAD_OUTS:
+        raise SystemExit(f"expected the 6 head outputs in HEAD_OUTS order, got {got}")
+
+    imgsz = input_size([d.dim_value for d in
+                        m.graph.input[0].type.tensor_type.shape.dim], args.src)
+    print(f"input model: {args.src}, {len(m.graph.node)} nodes, {len(got)} outputs, "
+          f"{imgsz}x{imgsz} input")
+
+    qc = copy.deepcopy(get_default_config("XINT8"))
+    if not hasattr(qc, "calibrate_method"):
+        raise SystemExit(f"get_default_config('XINT8') returned {type(qc)}, not the "
+                         "legacy QuantizationConfig - check the Quark version")
+
+    tag = "xint8"
+    if args.adaround:
+        tag = "xint8_adaround"
+        params = dict(ADAROUND)
+        params["NumIterations"] = args.iters
+        params["DataSize"] = min(args.limit, params["DataSize"])
+        params["OptimDevice"] = args.device
+        params["InferDevice"] = args.device
+        qc.include_fast_ft = True
+        qc.extra_options["FastFinetune"] = params
+        print(f"AdaRound: {args.iters} iterations on {args.device} "
+              f"(slow - expect many minutes on cpu)")
+
+    out = args.out or str(MODELS / f"{Path(args.src).stem}_{tag}.onnx")
+    os.makedirs(os.path.dirname(out) or ".", exist_ok=True)
+
+    dr = CocoCalibReader(args.calib_dir, args.limit, imgsz)
+    print(f"quantizing with XINT8{' + AdaRound' if args.adaround else ''} -> {out}")
+    ModelQuantizer(Config(global_quant_config=qc)).quantize_model(args.src, out, dr)
+
+    q = onnx.load(out)
+    ops = Counter(n.op_type for n in q.graph.node)
+    print(f"\nwrote {out}")
+    print("ops:", ops.most_common())
+    print(f"QuantizeLinear {ops['QuantizeLinear']}  DequantizeLinear {ops['DequantizeLinear']}")
+    first = q.graph.node[0]
+    print(f"first node: {first.op_type} {first.name}")
+    if first.op_type != "QuantizeLinear":
+        print("WARNING: graph does not start with QuantizeLinear - check that the "
+              "input tensor got quantized.")
+    print(f"\nNext: tools/diag_ep.py --model {out}, then 4_detect.py --ep npu --fresh")
+
+
+if __name__ == "__main__":
+    main()

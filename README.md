@@ -32,6 +32,7 @@ Full environment split, install steps and footguns: [`docs/SETUP.md`](docs/SETUP
 | `pipelines/yolov8n-pose` | YOLOv8n-pose, 17-point COCO keypoints | **Working** — 9.35 ms on the NPU (1015/1025 nodes), OKS mAP@50-95 34.32 AdaRound vs 32.64 plain XINT8 and 49.86 float (5000 images) |
 | `pipelines/yolov6n` | YOLOv6n detection (RepVGG backbone, no DFL) | **Working** — 6.62 ms on the NPU (518/525 nodes), mAP@50-95 33.57 AdaRound vs 22.92 plain XINT8 and 36.95 float (5000 images) |
 | `pipelines/yolov11` | YOLOv11n detection (C3k2 + C2PSA attention) | **Fractured (6/1300 nodes, 33.29 ms)** due to C2PSA 4D MatMul; ablated backbone runs at **7.08 ms (1173/1180 nodes)** |
+| `pipelines/yolow` | YOLO-World v2 open-vocabulary (cross-attention) | **Fractured (48/1081 nodes, 103.31 ms)** due to 5D Einsum/ReduceMax; ablated backbone runs at **15.89 ms (946/953 nodes)** |
 | `pipelines/midas` | MiDaS v2.1 Small (monocular depth) | **Working** — 10.81 ms on NPU (682/684 nodes, single subgraph), r = 0.8706 vs FP32 (50 scenes) |
 | `pipelines/sesr` | SESR-M7 (2x super-resolution) | **Working** — 1.48 ms on NPU (50/52 nodes, single subgraph), 35.16 dB PSNR on Set5 (XINT8+AdaRound) |
 | `pipelines/realesrgan` | Real-ESRGAN 10-RRDB (4x super-resolution) | **Working** — 14.02 ms on NPU (1773/1775 nodes, single subgraph), 24.50 dB on Set5 (XINT8+AdaRound) |
@@ -201,8 +202,7 @@ See [`kernels/README.md`](kernels/README.md) and `results/aie/`.
 
 ```
 npu/                  Shared library code. MUST NOT import Quark
-pipelines/<name>/     1_export -> 2_fetch_data -> 3_quantize -> 4_run/detect/pose -> 5_eval_map
-                      1b_cut_head / 3b_quantize_cut are the head-cut variant
+pipelines/<name>/     1_export -> 2_fetch_data -> 3_quantize -> 4_run/detect/pose -> 5_eval_map (1b/3b for cut)
 tools/                diag_ep.py, estimate_tops.py, the *_bench.py harnesses
 kernels/              Hand-written mlir-aie/IRON kernels; run from the ironenv, not resnet_env17
 scripts/              Bash wrappers: env activation, logging, disk guards

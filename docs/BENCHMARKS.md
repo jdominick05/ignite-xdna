@@ -2340,6 +2340,76 @@ Three findings:
    and accuracy therefore requires either custom fused AIE attention kernels or NPU-aware retraining
    without C2PSA.
 
+### Category C, third candidate: YOLO-World v2 (Vision-Language Decoupled Cross-Attention)
+
+`pipelines/yolow/` — new pipeline, built against Ultralytics YOLO-World v2 (`yolov8s-worldv2.pt`).
+Tests the Category C hypothesis on open-vocabulary object detection: text-guided multi-scale
+cross-attention (`MaxSigmoidAttnBlock` within `C2fAttn` blocks at stages 12, 15, 18, 21) and
+decoupled contrastive text-visual projection heads.
+
+Head-cut at the six raw per-level convolution outputs (3 box regression heads from `cv2.{0,1,2}.2`
+with 64 channels, 3 visual projection heads from `cv3.{0,1,2}.2` with 512 channels), following the
+established `1b_cut_head.py` recipe (`models/yolov8s-worldv2_cut.onnx`, opset 17, 257 nodes).
+Offline text embeddings for the 80 COCO classes (`models/yolow_coco_txt_feats.npy`, `[80, 512]`)
+are extracted from the PyTorch model's text encoder. Contrastive dot-product projection and NumPy
+DFL/anchor decode (`npu/yolow.py::decode_yolow`) execute on host CPU in 11–17 ms, reproducing
+full-graph CPU detections bit-for-bit (19 identical detections on `assets/test_image.jpg`, see
+`results/lat_yolow_cut_fp32_cpu.log` and `results/lat_yolow_cut_fp32_dml.log`).
+
+Node placement and the cross-attention fracture:
+- **Stock quantized YOLO-World v2** (`models/yolov8s-worldv2_cut_xint8.onnx`, plain XINT8, 200-image
+  COCO calibration): **48 / 1081 nodes (4.4%) on NPU**, 1033 nodes on CPU
+  (`results/diag_yolow_cut_xint8.log`). The VitisAI level-1 DPU compiler rejects the 5D `Einsum`
+  (`bmchw,bnmc->bmhwn`) and 5D `ReduceMax` operations inside the cross-attention blocks (`/model.12`,
+  `/model.15`, `/model.18`, `/model.21`). The compiler places only 4 tiny 12-node subgraphs
+  (`Add`, `Div`, `HardSigmoid`, `Mul`) on NPU, leaving all 67 Convolutions on CPU. The resulting
+  PCIe/XRT boundary round trips balloon single-image latency to **178.53 ms**
+  (`results/lat_yolow_cut_xint8_npu.log`) — 1.74× slower than host CPU FP32 (102.36 ms).
+- **The Reshape rejection trap & pure-conv ablation**: An initial ablation replacing `MaxSigmoidAttnBlock`
+  with channel attention using `.view(bs, nh, -1, h, w)` generated 8 `Reshape` operators. The DPU compiler
+  unconditionally rejected `Reshape` inside standard conv streams, leaving 0 / 993 nodes on NPU.
+  Replacing cross-attention with precomputed static learned-bias channel scaling
+  (`(bias.sigmoid() * scale).repeat_interleave(hc)`) eliminated all `Reshape` nodes, producing a
+  pure-convolutional graph (`models/yolov8s-worldv2_no_attn_cut_xint8.onnx`).
+- **Ablated YOLO-World v2 on NPU**: **946 / 953 nodes (99.3%) on NPU**, a single monolithic DPU subgraph
+  (`results/diag_yolow_no_attn_cut_xint8.log`). Only the 1 input `QuantizeLinear` and 6 output
+  `DequantizeLinear` nodes stay on CPU, with zero internal CPU fallbacks. Single-image demo latency
+  drops to **16.43 ms (60.9 fps)**.
+
+Single-image latency on Desktop 2 (Phoenix 8700G, 640×640):
+- Stock CPU (FP32): **102.36 ms** (`results/lat_yolow_cut_fp32_cpu.log`)
+- Stock DirectML (Radeon 780M iGPU, FP32): **40.42 ms** (`results/lat_yolow_cut_fp32_dml.log`)
+- Stock NPU (XINT8, fractured): **178.53 ms** (`results/lat_yolow_cut_xint8_npu.log`)
+- Ablated NPU (XINT8, monolithic): **16.43 ms** (`results/lat_yolow_no_attn_cut_xint8_npu.log`)
+
+Full COCO val2017 evaluation (5000 images, conf 0.001, IoU 0.7, max_det 300, per-class NMS;
+inference is `sess.run` alone):
+
+| Variant | Precision | Device | Latency (eval) | mAP@50-95 | mAP@50 | NPU nodes | Backing log |
+|---|---|---|---|---|---|---|---|
+| Stock | FP32 | CPU | 81.11 ms | 37.0% | 51.5% | — | `results/eval_yolow_cut_fp32_cpu.log` |
+| Stock | Plain XINT8 | NPU | 103.31 ms | 1.8% | 3.2% | 48 / 1081 | `results/eval_yolow_cut_xint8_npu.log` |
+| No-Attn (ablated) | Plain XINT8 | NPU | **15.89 ms** (62.9 fps) | 0.3% | 0.5% | **946 / 953** | `results/eval_yolow_no_attn_cut_xint8_npu.log` |
+
+Three findings:
+
+1. **5D text cross-attention fractures the graph and ejects all Convolutions to CPU.** The 5D
+   `Einsum` and 5D `ReduceMax` operations in YOLO-World v2 cannot be compiled onto the XDNA1 DPU.
+   Rather than compiling the backbone convolutions around the attention blocks, the compiler ejects
+   all 67 Convs to CPU and places only four isolated 12-node subgraphs on NPU. The resulting driver
+   handoff overhead inflates latency to 178.53 ms demo / 103.31 ms eval, running slower than FP32 CPU.
+2. **The 12.7M-parameter vision backbone executes in 15.89 ms when pure-convolutional.**
+   Ablating cross-attention into static channel scaling unlocks a single monolithic DPU subgraph of
+   946 / 953 nodes running at **15.89 ms over 5,000 images (62.9 fps)**. This outperforms the
+   Radeon 780M iGPU DirectML FP32 (40.42 ms) by **2.46×** and Zen 4 CPU FP32 (81.11 ms) by **5.10×**,
+   confirming that the XDNA1 DPU excels at high-channel vision backbones once non-conv layers are removed.
+3. **Decoupled contrastive detection cannot be evaluated zero-shot without backbone attention.**
+   Because YOLO-World's detection heads rely on visual features being projected into CLIP text embedding
+   space via backbone cross-attention, bypassing attention reduces mAP to 0.3%. Furthermore, plain
+   XINT8 PTQ on the stock 5D cross-attention blocks destroys attention dynamic range, collapsing stock
+   XINT8 mAP to 1.8%. Open-vocabulary architectures on XDNA1 require either hybrid CPU/iGPU attention
+   execution or re-distillation into standard fixed-class detection heads.
+
 ### Category D: Monocular Depth Estimation (MiDaS v2.1 Small)
 
 `pipelines/midas/` — new pipeline, built against `isl-org/MiDaS` (`MiDaS_small`, v2.1).
