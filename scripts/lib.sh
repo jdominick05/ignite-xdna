@@ -165,6 +165,59 @@ load_witness() {
     printf '%s/load_%s\n' "$d" "${b#quant_}"
 }
 
+# witness_start <jsonlog> -- run the NPU monitor for the whole of a measurement,
+# one JSON object per line. check_host_load samples the HOST once, at the start;
+# this samples the DEVICE continuously, which is what a long run needs: each
+# sample carries the active hardware contexts BY IDENTITY (not just a count),
+# the live clock readback and the power mode. That makes "was the device
+# contended, or did it downclock, while this ran" answerable after the fact
+# instead of guessable -- the thing a crash mid-run otherwise leaves unknowable.
+# It opens no hardware context of its own; it only queries.
+#
+# Note it installs its own EXIT trap, so do not pair it with quark_guard in one
+# script without merging the two cleanups first.
+_witness_pid=""
+_witness_log=""
+witness_start() {
+    local log="$1" exe="$REPO_ROOT/tools/hwinfo_npu_bridge.exe" common main
+    # The bridge is a built binary and *.exe is gitignored, so it exists in the
+    # main checkout and in no worktree. Fall back to the main checkout rather
+    # than run blind -- measured: from a worktree this was silently unwitnessed.
+    if [ ! -x "$exe" ]; then
+        common="$(git rev-parse --git-common-dir 2>/dev/null || true)"
+        if [ -n "$common" ]; then
+            main="$(dirname "$common")"
+            [ -x "$main/tools/hwinfo_npu_bridge.exe" ] \
+                && exe="$main/tools/hwinfo_npu_bridge.exe"
+        fi
+    fi
+    # Refuse, never warn-and-continue. A caller that asked for a witness asked
+    # because the run is the kind whose failure is meaningless without one;
+    # proceeding would burn the run and produce an uninterpretable result.
+    [ -x "$exe" ] || die "no tools/hwinfo_npu_bridge.exe (looked in $REPO_ROOT and the main checkout).
+Build it with scripts/build-hwinfo-bridge.sh, or drop --witness and accept that a
+hang in this run cannot be told apart from contention afterwards."
+    mkdir -p "$(dirname "$log")"
+    "$exe" --json --no-hwinfo --interval 1 --smi-interval 1 > "$log" 2>&1 &
+    _witness_pid=$!
+    _witness_log="$log"
+    trap witness_stop EXIT INT TERM
+    info "witness: $log (pid $_witness_pid)"
+}
+
+# witness_stop -- also the EXIT trap, so a crashed or interrupted run still
+# leaves the samples it did collect. Those are the interesting ones.
+witness_stop() {
+    local rc=$? n=0
+    [ -n "$_witness_pid" ] || return $rc
+    kill "$_witness_pid" 2>/dev/null || true
+    wait "$_witness_pid" 2>/dev/null || true
+    [ -f "$_witness_log" ] && n=$(wc -l < "$_witness_log" 2>/dev/null || echo 0)
+    info "witness stopped: $n samples in $_witness_log"
+    _witness_pid=""
+    return $rc
+}
+
 need_file() { [ -f "$1" ] || die "missing $1${2:+ -- $2}"; }
 need_dir()  { [ -d "$1" ] || die "missing directory $1${2:+ -- $2}"; }
 

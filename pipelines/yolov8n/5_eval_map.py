@@ -71,6 +71,10 @@ def main():
     ap.add_argument("--ann", default=str(DATA / "coco" / "annotations" /
                                          "instances_val2017.json"))
     ap.add_argument("--n", type=int, default=0, help="0 = all 5000")
+    ap.add_argument("--progress-every", type=int, default=500,
+                    help="print progress every N images (default 500). Lower it "
+                         "when a run is being watched for a mid-run hardware "
+                         "hang -- it sets how precisely a crash can be located")
     ap.add_argument("--conf", type=float, default=0.001)
     ap.add_argument("--iou", type=float, default=0.7)
     ap.add_argument("--max-det", type=int, default=300)
@@ -117,7 +121,7 @@ def main():
         info = coco.loadImgs(iid)[0]
         img = cv2.imread(os.path.join(args.images, info["file_name"]))
         if img is None:
-            print(f"  skip unreadable {info['file_name']}")
+            print(f"  skip unreadable {info['file_name']}", flush=True)
             continue
         x, pad, scale = yc.letterbox(img, imgsz)
         t0 = time.perf_counter()
@@ -132,8 +136,16 @@ def main():
                          "bbox": [round(float(x0), 2), round(float(y0), 2),
                                   round(float(w), 2), round(float(h), 2)],
                          "score": round(float(s), 5)})
-        if (k + 1) % 500 == 0:
-            print(f"  {k + 1}/{len(img_ids)}  ({len(dets)} detections so far)")
+        # flush=True is load-bearing, not tidiness. This runs under run_logged's
+        # tee, so stdout is a pipe and Python block-buffers it -- and a run that
+        # dies on a hardware DPU timeout never flushes, taking the last progress
+        # lines with it. That is exactly the run whose position you need. It is
+        # also why --progress-every exists: at the default 500 a crash localises
+        # only to a 500-image window, which is too coarse to say which image or
+        # subgraph was in flight.
+        if (k + 1) % args.progress_every == 0:
+            print(f"  {k + 1}/{len(img_ids)}  ({len(dets)} detections so far)",
+                  flush=True)
 
     wall = time.perf_counter() - t_start
     times = np.array(times) * 1000
