@@ -144,7 +144,7 @@ accumulator registers the allocator names, and stack references anywhere in the 
 Live aie::mmul<4,8,8,int8,int8,acc32> accumulators vs register pressure
   source   C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\.claude\worktrees\curious-tinkering-whistle\kernels\acc_spill_probe\acc_kernels.cc
   clang    C:\Users\<user>/mlir-aie/ironenv/Lib/site-packages/llvm-aie/bin/clang++.exe
-  objects  C:\Users\<user>\AppData\Local\Temp\acc_spill_yv_7sju9
+  objects  C:\Users\<user>\AppData\Local\Temp\acc_spill_gene80av
 
 live acc  acc regs  loop cycles  cycles/MAC  stack refs  frame B  bundles
 -------------------------------------------------------------------------
@@ -280,6 +280,62 @@ per-iteration throughput.
 
 
 --------------------------------------------------------------------------------
+6. HAND-WRITTEN ASSEMBLY, AND WHY THE CYCLE COUNTER IS STILL OUT OF REACH
+--------------------------------------------------------------------------------
+docs/DECISIONS.md records that Peano "rejects inline asm", which closed hand-scheduling on this
+part. That is true of STATEMENT-LEVEL inline asm inside a C++ function, which dies in the
+IRTranslator, and it is where S0 hit the wall. It says nothing about a standalone assembly
+file, which never enters instruction selection and goes straight to the integrated assembler.
+kernels/asm_probe/ tests that directly:
+
+assemble asm_core_id.s: ok
+disassembly of the assembled object:
+    C:\Users\<user>\AppData\Local\Temp\asm_probe_vl6w0wge\asm_core_id.o:	file format elf32-aie
+    Disassembly of section .text:
+    00000000 <asm_core_id>:
+           0:      	mov	r0, CORE_ID
+           4:      	ret lr	
+           8:      	nop	
+           a:      	nop	
+           c:      	nop	
+           e:      	nop	
+          10:      	nop	
+          12:      	nopa	;		nops	;		nopm	;		nopv	
+compile C++ caller: ok
+link the two: ok
+symbols in the linked object:
+    00000000 T asm_core_id
+    00000000 T caller
+
+RESULT: PASS -- hand-written AIE2 assembly assembles and links with compiled C++.
+Statement-level inline asm still fails in the IRTranslator; a standalone .s does not.
+
+So hand-scheduled AIE2 assembly IS available here. The door was half closed, not closed.
+
+That reopens S0's other question -- reading the tile timer from inside a kernel -- so the
+assembler's special-register namespace was enumerated by trying to assemble `mov r0, <NAME>`
+for each candidate:
+
+  ACCEPTED  mov r0, CORE_ID
+
+accepted: CORE_ID
+rejected: TIMER, TIMER_LOW, TIMER_HIGH, TM, TM0, TM1, TIMER_L, TIMER_H, TIMERLOW, TIMERHIGH, CYCLE, CYCLES, CYCLE_LOW, CYCLE_HIGH, PERF0, PERF_CNT0, PC, SP, LR, LC, LS, LE, CR, SR, MC0, MC1, DC0, DP, S0, S1, DJ0, DN0
+
+Only CORE_ID is accepted, and even PC, SP and LR are refused in that position. The register
+database shipped with mlir-aie puts the core's timer at memory-mapped offsets 0x000340F8
+(Timer_Low) and 0x000340FC (Timer_High), inside the tile's configuration register space
+reached over the AXI-MM interface from the host or a DMA -- not in the core's own data address
+space, whose stack this toolchain places at 0x70000. Nothing in the assembler's namespace
+names it.
+
+CONCLUSION: the trace unit remains the only path to the tile timer from a Peano kernel, which
+is what S0 concluded from three failures. This is a fourth independent route to the same
+answer rather than a way around it. What IS new is that hand-written assembly assembles and
+links, so a hand-scheduled inner loop is available for any kernel where the compiler's
+schedule is the binding constraint.
+
+
+--------------------------------------------------------------------------------
 WHAT THIS DOES NOT SHOW
 --------------------------------------------------------------------------------
 - Nothing here is a hardware measurement. It is what the compiler emitted. The bundle-equals-
@@ -288,5 +344,7 @@ WHAT THIS DOES NOT SHOW
   how much. That is what the trace unit's stall events are for and it is the next objective.
 - The 88.9 percent figure is the inner loop's issue density, not the kernel's utilisation.
 - One accumulator shape, one optimisation level, one compiler version.
+- The assembly result is a toolchain result: the object assembles, disassembles and links,
+  but nothing here ran a hand-written kernel on the NPU.
 - Slot names come from the nop mnemonics llvm-objdump prints. They are not from a published
   AIE-ML ISA document, which this project does not have.

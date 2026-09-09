@@ -42,6 +42,7 @@ array program) into `~/.npu/cache/<hash>/`; later runs of the same shape hit the
 | `clock_probe/` | Nothing — measures the AIE core clock itself, per power mode | **1.80 GHz** in `default`/`performance`/`turbo`, 1.03 `balanced`, 0.80 `powersaver` |
 | `acc_spill_probe/` | Nothing — finds where the AIE2 accumulator file runs out | **5** live 4×8×8 int8 `aie::mmul` accumulators fit; 6 is the first that spills. Compile only, no NPU |
 | `pmu_probe/` | Nothing — routes the trace unit's stall taxonomy and occupancy | Calibrated on `clock_probe`'s own loops (2.0003, 9.0001). **68%** of a short kernel's cycles are lock wait |
+| `asm_probe/` | Nothing — asks whether hand-written AIE2 assembly is usable | **It assembles and links.** Only statement-level inline asm fails. Compile only, no NPU |
 
 Each kernel's own findings, warnings and retractions follow. They are prose rather than
 table cells because several of them are corrections to what an earlier version of this
@@ -340,6 +341,26 @@ input ObjectFifo's lock, flat as the loop grows 16×, and **68% of the shortest 
 are lock wait against 32% computing** — on a loop `tools/aie_disasm.py` rates as perfectly
 scheduled. Three of the four stall categories were zero throughout; they are unexercised by
 this design, not verified. `results/aie/pmu_probe_npu.log`.
+
+## `asm_probe/`
+
+One question: is hand-written AIE2 assembly usable on this machine? `docs/DECISIONS.md`
+records that Peano "rejects inline asm", which closed hand-scheduling. That turns out to be
+half the story. Statement-level inline asm inside a C++ function does fail, in the
+IRTranslator, which is the wall the clock work hit. A standalone `.s` file never enters
+instruction selection at all and goes straight to the integrated assembler — `check.py`
+assembles one, compiles a C++ caller, links them, and confirms both symbols resolve with
+nothing undefined. **So a hand-scheduled inner loop is available** wherever the compiler's
+schedule is the binding constraint, which `tools/aie_disasm.py` can now identify.
+
+It does not rescue the cycle counter. `reg_probe.py` enumerates the special registers the
+assembler will accept as a `mov` source by trying to assemble each: only `CORE_ID` is taken,
+and even `PC`, `SP` and `LR` are refused there. The register database puts the tile timer at
+memory-mapped `0x340F8` and `0x340FC`, in the configuration space reached over AXI-MM from the
+host or a DMA, not in the core's data space. The trace unit stays the only path to it, which
+is what the clock work concluded from three other failures.
+
+Compile only, no NPU, runs in seconds. `results/aie/aie2_isa_static.log`.
 
 ## `acc_spill_probe/`
 

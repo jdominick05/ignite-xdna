@@ -1130,8 +1130,26 @@ spill, a 416-byte frame and 37 stack references, consistent with it holding eigh
 accumulators where five is the ceiling; but none of that traffic is in the nine loop bundles,
 so the spills cost setup per call and not per-iteration throughput.
 
-**What this does not show.** Nothing here is a hardware measurement. The bundle-equals-cycle
-identity is checked against two measured loops and no more. The 88.9% is the inner loop's
+**Hand-written assembly is available; the cycle counter still is not.** `docs/DECISIONS.md`
+recorded that Peano "rejects inline asm", which closed hand-scheduling on this part. That is
+true only of statement-level inline asm inside a C++ function, which dies in the IRTranslator.
+A standalone `.s` file never enters instruction selection: `kernels/asm_probe/` assembles one,
+compiles a C++ caller, links them, and both symbols resolve with nothing undefined. So a
+hand-scheduled inner loop is available wherever the compiler's schedule is the binding
+constraint, which the tool above can now identify.
+
+It does not rescue the cycle counter. Enumerating the special registers the assembler accepts
+as a `mov` source, by trying to assemble each, yields only `CORE_ID` — even `PC`, `SP` and `LR`
+are refused there. The register database puts the tile timer at memory-mapped `0x340F8` and
+`0x340FC`, in the configuration space reached over AXI-MM from the host or a DMA, not in the
+core's data space, whose stack this toolchain places at `0x70000`. The trace unit remains the
+only path to it, which is what the clock work concluded from three other failures; this is a
+fourth independent route to the same answer.
+
+**What this does not show.** Nothing here is a hardware measurement, the assembly result
+included — the object assembles, disassembles and links, but no hand-written kernel has been
+run on the NPU. The bundle-equals-cycle identity is checked against two measured loops and no
+more. The 88.9% is the inner loop's
 issue density, not the kernel's utilisation. The slot names come from the nop mnemonics
 `llvm-objdump` prints, not from a published AIE-ML ISA document, which this project does not
 have.

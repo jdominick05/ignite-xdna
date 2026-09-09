@@ -627,6 +627,12 @@
   (2026-09-07).** `aie::tile::current().cycles()` links against a `get_cycles()` that
   llvm-aie 22 declares and never defines (`ld.lld: undefined symbol`);
   `__builtin_readcyclecounter()` fails in the legalizer; inline asm fails in IRTranslator.
+  *(Narrowed 2026-09-09: it is statement-level inline asm inside a C++ function that fails
+  there. A standalone `.s` file assembles and links fine, so hand-written AIE2 assembly is
+  available — `kernels/asm_probe/`, `results/aie/aie2_isa_static.log`. It does not rescue the
+  cycle counter: the assembler exposes no timer register name, and the timer is memory-mapped
+  at `0x340F8`/`0x340FC` in the tile's configuration space, not in the core's data space. The
+  conclusion below is unchanged; only the reason "inline asm" was recorded is more specific.)*
   What works: `event0()`/`event1()` in the kernel, `Program.enable_trace` with
   `INSTR_EVENT_0/1`, and the stamps decoded from the trace stream — with two traps. Fewer
   events than fill a 32-byte packet never reach host memory (emit filler events after the
