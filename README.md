@@ -187,8 +187,8 @@ Outcomes, mostly negative and all measured:
   `n=64` fits int8's half-size tiles for **4448–4607 GOPS**, a **1.10×–1.83× win at M ≥ 512,
   N ≥ 2048** (thin at K=N=4096; prefill loses). Single-buffering the C output tile frees bf16's
   missing 16 KB too: **2700 GFLOPS** at 2048×4096×4096, **1.89×** same-sitting CPU bf16; int8 gains 13%.
-- **Int8 conv loses, and the op class is closed.** NPU marginal throughput 146.1 GOPS
-  against the CPU's 819.0; at ResNet50's real 56×56 conv2_x shape the CPU wins **12.75×**.
+- **Int8 conv loses, and the op class is closed** — still, after a **3×** fix (register-resident
+  accumulators, 116 → 350 GOPS): CPU wins **2.4×** on marginal rate, **12.75×** at 56×56.
 - **bf16 attention for MobileViT loses by 71×–240×**, and its recorded diagnosis was
   wrong: not dispatch cost, but `attention_kernels.cc` never calling `aie::mmul` — 0.61 GFLOPS vs 895.
 - **A bf16 GroupNorm beat the CPU on 33 of 49 nodes** of `resnetv2_50x3_bit` — and then
