@@ -139,6 +139,14 @@ def main():
     ap.add_argument("--bias-shift", type=float, default=4.5, help="Baseline logit bias shift for outline sensitivity")
     ap.add_argument("--max-seconds", type=float, default=None, help="Auto-quit after N seconds")
     ap.add_argument("--fresh", action="store_true", help="Clear NPU compile cache on startup")
+    # Snapshots used to be hardcoded into results/modnet/, which is TRACKED and
+    # holds images the docs cite -- a webcam photo of whoever is at the machine
+    # ended up staged into the public history with no flag to send it elsewhere.
+    # The default is unchanged so existing invocations behave exactly as before.
+    ap.add_argument("--snapshot-dir", default=None,
+                    help="where the 'p' key writes snapshots (default: results/modnet). "
+                         "Point this at outputs/, or outside the repo, for camera frames "
+                         "you do not want in the tracked evidence tree.")
     args = ap.parse_args()
 
     # Determine camera source
@@ -412,7 +420,7 @@ def main():
             toast = (f"Switched EP to {active_ep.upper()}", time.perf_counter() + 2.0)
             print(f"[portrait_demo] Switched execution provider to {active_ep.upper()}")
         elif key == ord('p'):
-            out_dir = ROOT / "results" / "modnet"
+            out_dir = Path(args.snapshot_dir) if args.snapshot_dir else ROOT / "results" / "modnet"
             out_dir.mkdir(parents=True, exist_ok=True)
             ts = int(time.time())
             snap_path = out_dir / f"snapshot_{ts}_{active_ep}.png"
