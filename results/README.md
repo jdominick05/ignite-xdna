@@ -5,6 +5,13 @@ log is the UTF-8 stdout of one script invocation, written by the wrappers in `sc
 nothing here is edited by hand except that the local user profile path has been replaced
 with `C:\Users\<user>`.
 
+Two kinds of log say what else was on the machine while a number was taken, so a latency,
+wall time or peak-memory figure can be read back against the contention it saw. A
+`contexts_` log is the `xrt-smi` witness for an NPU run; a `load_` log is the host-CPU
+witness for the run it is named after, written by `tools/host_load.ps1` through
+`check_host_load` in `scripts/lib.sh`. Its name is derived from the run's log rather than
+chosen (`quant_<tag>.log` gives `load_<tag>.log`), so two variants cannot land on one file.
+
 The third column links to the section each directory backs. They are real anchor links so
 that a section being renamed or moved breaks loudly (`python tools/check_links.py`) rather
 than going quietly stale.
