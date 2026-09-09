@@ -28,12 +28,42 @@ from aie.utils.trace.events import CoreEvent
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'kernels/clock_probe'))
+sys.path.insert(0, str(ROOT / 'kernels/pmu_probe'))
 from clock_probe import TraceReader, fit_line, _npu_time_ns, platform_report
+# Reused for the stall taxonomy only: pmu_probe owns the frame decoding that
+# results/aie/pmu_probe_npu.log calibrated against two loops of known cycle count.
+import pmu_probe
+
+
+DEFAULT_EVENTS = 'INSTR_EVENT_0,INSTR_EVENT_1'
+
+
+def resolve_events(names):
+    """CoreEvent members by name, with INSTR_EVENT_0/1 pinned to slots 0 and 1.
+
+    The cycle measurement reads the first INSTR_EVENT_0 and INSTR_EVENT_1 stamps by slot
+    index, so those two must stay first or `cycles` silently becomes another event's
+    timestamp difference. The trace unit takes at most eight events per tile.
+    """
+    out = []
+    for n in names:
+        n = n.strip()
+        if not n:
+            continue
+        if not hasattr(CoreEvent, n):
+            raise SystemExit(f'unknown CoreEvent {n!r}')
+        out.append(getattr(CoreEvent, n))
+    if out[:2] != [CoreEvent.INSTR_EVENT_0, CoreEvent.INSTR_EVENT_1]:
+        raise SystemExit('INSTR_EVENT_0,INSTR_EVENT_1 must be the first two events')
+    if len(out) > 8:
+        raise SystemExit(f'the trace unit takes at most 8 events per tile, got {len(out)}')
+    return out
 
 
 @iron.jit
 def memory_design(a_in: In, c_out: Out, *, b_address: CompileTime[int] = 0x8000,
-                  a_offset: CompileTime[int] = 0, trace_size: CompileTime[int] = 65536):
+                  a_offset: CompileTime[int] = 0, trace_size: CompileTime[int] = 65536,
+                  events: CompileTime[str] = DEFAULT_EVENTS):
     io_ty = np.ndarray[(64,), np.dtype[np.int32]]
     operand_ty = np.ndarray[(512,), np.dtype[np.int16]]
     fn = ExternalFunction('memory_probe', object_file_name='memory_kernels.o',
@@ -58,7 +88,7 @@ def memory_design(a_in: In, c_out: Out, *, b_address: CompileTime[int] = 0x8000,
     program = Program(iron.get_current_device(), runtime, workers=[worker])
     if trace_size:
         program.enable_trace(trace_size=trace_size, workers=[worker],
-                             coretile_events=[CoreEvent.INSTR_EVENT_0, CoreEvent.INSTR_EVENT_1])
+                             coretile_events=resolve_events(events.split(',')))
     return program.resolve_program()
 
 
@@ -140,6 +170,13 @@ def main():
     ap.add_argument('--iters', type=int, default=10)
     ap.add_argument('--warmup', type=int, default=2)
     ap.add_argument('--seed', type=int, default=3)
+    ap.add_argument('--events', default=DEFAULT_EVENTS,
+                    help='comma-separated CoreEvent names, at most 8. The first two '
+                         'must stay INSTR_EVENT_0,INSTR_EVENT_1 because the cycle '
+                         'measurement reads those slots by index. Beyond ~4 events the '
+                         'counters stop being reproducible at long trip counts: ACTIVE '
+                         'alone overflows the 64 KB trace buffer '
+                         '(results/aie/bank_stall_control_npu.log).')
     ap.add_argument('--trace-size', type=int, choices=[0, 65536], default=65536)
     ap.add_argument('--out', type=Path, required=True)
     ap.add_argument('--reference', type=Path, help='Other variant result.json; require identical final instruction bytes')
@@ -172,7 +209,8 @@ def main():
     def call(n):
         inp[0], inp[1], inp[2] = n, mode, a.seed
         t = time.perf_counter()
-        result = memory_design(inp, out, b_address=address, a_offset=a.a_offset, trace_size=a.trace_size)
+        result = memory_design(inp, out, b_address=address, a_offset=a.a_offset,
+                               trace_size=a.trace_size, events=a.events)
         wall = time.perf_counter()-t
         y = out.numpy()
         if tuple(int(v) for v in y[:3]) != (n, mode, expected(n, mode, a.seed)) or int(y[5]) != a.seed:
@@ -186,8 +224,18 @@ def main():
                 raise AssertionError('trace/core tile identity mismatch')
             cycles = e-s
         ns = _npu_time_ns(result)
-        return {'target': n, 'cycles': cycles, 'hardware_ns': ns, 'wall_seconds': wall,
-                'checksum': int(y[2]), 'tile': [int(y[3]), int(y[4])]}
+        row = {'target': n, 'cycles': cycles, 'hardware_ns': ns, 'wall_seconds': wall,
+               'checksum': int(y[2]), 'tile': [int(y[3]), int(y[4])]}
+        # Stall taxonomy, when any event beyond the two clock events was routed. This is
+        # the observable RESEARCH.md and bank_ab_h12_npu.log asked for -- read the stall
+        # inside the dispatch instead of the wall clock. Counted here rather than in
+        # TraceReader because TraceReader.stamps() is specialised to slots 0 and 1.
+        names = [x.strip() for x in a.events.split(',') if x.strip()]
+        if reader and len(names) > 2:
+            bs = pmu_probe.core_byte_stream(tc)[2]
+            counts, _first, _last = pmu_probe.event_counts(bs, names)
+            row['events'] = {nm: counts.get(i, 0) for i, nm in enumerate(names)}
+        return row
     call(128)
     artifacts = artifact_report(a.out, address, a.a_offset)
     if a.reference:

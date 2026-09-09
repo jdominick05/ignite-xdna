@@ -1,0 +1,124 @@
+MEMORY_STALL counts the bank conflict exactly: one stall, one cycle, one iteration
+2026-09-09. env: mlir-aie ironenv (v1.4.2, llvm-aie 22.0.0.2026090201) + XRT SDK 2.21.75, native
+Windows; driver 32.0.20101.3760. Desktop 2 (Phoenix, Ryzen 7 8700G), power mode Default (1.80 GHz
+per results/aie/clock_probe_npu.log). Driven through scripts/research-lowlevel.sh, which refuses
+to start without a CLEAR host and an idle device and prints both witnesses: HOST_LOAD_VERDICT
+CLEAR and "No hardware contexts running on device" before every run, no foreign contention
+observed, timing_eligible true. Compiled into a worktree-local scratch/iron-cache, so none of the
+repo's eleven named compile caches was touched.
+
+Commands (from the repo root):
+  bash scripts/research-lowlevel.sh --log results/aie/bank_stall_observable_separate_npu.log \
+      --npu -- bash scripts/research-iron.sh kernels/memory_placement/probe.py \
+      --layout separate --events INSTR_EVENT_0,INSTR_EVENT_1,MEMORY_STALL,LOCK_STALL \
+      --targets 512,1024,2048,4096 --iters 5 --out scratch/bt_sep_full
+  ... and the same with --layout same
+
+Raw evidence: results/aie/bank_stall_observable_separate_npu.log and
+results/aie/bank_stall_observable_same_npu.log. This file is the analysis over those two.
+
+WHY: results/aie/bank_ab_h12_npu.log could not resolve H12 on wall time and named the fix --
+read the stall taxonomy through the trace unit, inside the dispatch, where host contention
+cannot reach. TODO.md's "Deterministic Bank-Conflict Elimination -- Re-open with a Trace
+Observable" carries that as its whole point. The premise was untested: pmu_probe_npu.log had
+never seen MEMORY_STALL read nonzero, so a zero on the GEMM's arms would not have distinguished
+"no conflict" from "the event does not fire". This settles it on a kernel that is KNOWN to have
+the conflict.
+
+METHOD, AND WHY THIS KERNEL RATHER THAN A NEW ONE. kernels/memory_placement/ already exists and
+already produces the effect: it is the controlled experiment that measured 11.0 vs 12.0 cycles
+per iteration at r-squared 1.0, quoted by results/aie/bank_conflict_survey.log. It places both
+operands with explicit `aie.buffer` addresses -- the mechanism TODO.md asks for -- and it
+ASSERTS that the compiler bundled the two loads into one instruction (`vlda` and `vldb` on the
+same line), raising if it did not. That assertion is the part that matters, and it is what makes
+this a valid positive control. All that was added here is an `--events` flag routing the stall
+taxonomy alongside the two clock events that were already traced.
+
+
+--------------------------------------------------------------------------------
+1. THE RESULT
+--------------------------------------------------------------------------------
+Both operands are 512xi16. `separate` puts them at 0x4000 and 0x8000; `same` at 0x4000 and
+0x4800. The emitted MLIR confirms the intervention landed rather than assuming it:
+
+  separate   operand_a address=16384 mem_bank=1     operand_b address=32768 mem_bank=2
+  same       operand_a address=16384 mem_bank=1     operand_b address=18432 mem_bank=1
+
+The compiled kernel is byte-identical across the two arms -- object sha256
+08ed0d9543bf5af47391d769a2aca2eed3720a0d8894e8548d8e186f6f26fdc4 and core function sha256
+87ab8a827f0ec7852b1418be7a6cef374e96dec2d0cc32c6c5eee7107cb9c10e in both. Only the addresses
+moved.
+
+Five dispatches per point. Every one of the twenty samples per arm was IDENTICAL -- the cycle
+counts and the event counts below carry no spread at all:
+
+   target    separate            same              delta      MEMORY_STALL
+             cycles  MEM_STALL   cycles  MEM_STALL cycles     minus baseline
+     512      5672       2        6184     514       512          512
+    1024     11304       2       12328    1026      1024         1024
+    2048     22568       2       24616    2050      2048         2048
+    4096     45096       2       49192    4098      4096          4096
+
+   fit: separate slope 11.0 cycles/iteration, r^2 = 1.0
+        same     slope 12.0 cycles/iteration, r^2 = 1.0
+
+THREE QUANTITIES AGREE EXACTLY, AT EVERY TRIP COUNT. The extra cycles the colliding arm spends,
+the extra MEMORY_STALL events it raises, and the trip count are the same number: 512, 1024, 2048,
+4096. So **one same-bank paired load costs exactly one cycle and raises exactly one
+MEMORY_STALL**. The separated arm holds a constant 2 MEMORY_STALL at every trip count -- a fixed
+cost outside the loop, not a rate.
+
+THE OBSERVABLE WORKS, AND IT IS BETTER THAN THE ONE THAT WAS PROPOSED. bank_ab_h12_npu.log
+suggested reading ACTIVE against LOCK_STALL and inferring the conflict from an equality. That is
+unnecessary: MEMORY_STALL is a direct, exact, per-event count of the thing itself. LOCK_STALL was
+routed alongside and is useless here -- it reads 10,466-10,869 in both arms with no trend in
+either the layout or the trip count, which is ObjectFifo wait, not memory.
+
+SO H12 IS NOW MEASURABLE. The reason H12 stalled was that a ~3% wall-clock effect is
+inseparable from this machine's run-to-run drift. This observable has no such problem: it is
+exact, it is inside the dispatch, and it reproduced identically across twenty dispatches per arm
+with zero variance. Pointing it at the production int8 GEMM is now a well-posed experiment.
+
+
+--------------------------------------------------------------------------------
+2. A RETRACTION OF THIS SESSION'S OWN EARLIER CONCLUSION
+--------------------------------------------------------------------------------
+results/aie/bank_stall_control_npu.log, written earlier the same day, concluded that
+"MEMORY_STALL cannot be trusted as a bank-conflict signal on this machine" and that the
+measurement bank_ab_h12 proposed "should not be run as written". **That conclusion is WRONG and
+is retracted here.** MEMORY_STALL is exact.
+
+The error was in the probe, not the event. That log's kernel ran at 15.0 cycles per iteration
+while issuing 4 loads per iteration; a loop that loose is not issuing its two loads in the same
+instruction, and a same-bank penalty only exists for loads that are PAIRED. So there was never a
+conflict for the event to report, and reading zero was correct behaviour rather than a broken
+counter. The log did name "the compiler may not have paired the two loads into one cycle, so no
+conflict was ever created" as one of three unseparated candidates -- it was the right one, and
+the headline should not have been written before separating them.
+
+What kernels/memory_placement/ does and the earlier probe did not: it asserts the pairing in the
+disassembly (`vlda` and `vldb` on one line) and refuses to run otherwise. That check is the
+difference between a positive control and a null result about nothing.
+
+What survives from that log, unaffected: the three structural facts (a core's .bss is ~16 KB and
+lies inside one bank; stack_size does not relocate a kernel's .bss, only ObjectFifo buffers), and
+the methodological finding that at eight traced events the counters are not reproducible because
+ACTIVE overflows the 64 KB buffer. All four measurements here used four events, for that reason.
+
+
+--------------------------------------------------------------------------------
+WHAT THIS DOES NOT SHOW
+--------------------------------------------------------------------------------
+- This is the synthetic two-load probe, NOT the production int8 GEMM. It shows the instrument
+  works and that the penalty is real and exactly one cycle per paired same-bank load. It does not
+  say what the GEMM's own conflict costs -- bank_conflict_survey.log's estimate of ten paired-load
+  bundles out of 96 in the software body is still an estimate, and H12 remains open.
+- One operand shape (512xi16), one access pattern, one core tile, one power mode. No stores, no
+  scalar loads, and nothing about three or four operands contending.
+- MEMORY_STALL is shown to COUNT the conflict; nothing here shows it is specific to bank
+  conflicts. Another memory hazard could raise the same event, so a nonzero reading on a
+  different kernel is not by itself proof of a bank conflict.
+- The constant 2 MEMORY_STALL in the separated arm is unexplained. It does not scale with the
+  trip count, so it is outside the loop, but no attempt was made to attribute it.
+- LOCK_STALL's 10.5k is reported as measured and not investigated; it is presumably the input
+  ObjectFifo wait that pmu_probe_npu.log already characterised, but that was not checked here.

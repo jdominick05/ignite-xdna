@@ -1,4 +1,28 @@
+RETRACTED 2026-09-09 -- its headline conclusion is wrong; see the banner below
 MEMORY_STALL cannot see a bank conflict, so H12's named fix does not work as an instrument
+
+*** RETRACTION, same day, by results/aie/bank_stall_observable_npu.log ***
+This log concluded that MEMORY_STALL 'cannot be trusted as a bank-conflict signal on this
+machine' and that bank_ab_h12's proposed measurement 'should not be run as written'. BOTH
+ARE WRONG. On kernels/memory_placement/, a kernel that asserts the two loads are bundled
+into one instruction, MEMORY_STALL counts the conflict EXACTLY: 514/1026/2050/4098 events
+at trip counts 512/1024/2048/4096 against a constant 2 when the operands are separated, and
+the extra cycles match one for one (slope 12.0 vs 11.0, r^2 = 1.0, zero variance across five
+dispatches per point).
+
+THE FAULT WAS THIS PROBE'S KERNEL, NOT THE EVENT. Its loop ran at 15.0 cycles per iteration
+for 4 loads, far too loose to be issuing its two loads in the same instruction -- and a
+same-bank penalty exists only for PAIRED loads. There was no conflict to detect, so reading
+zero was correct behaviour rather than a broken counter. Section 3 below names this as one of
+three unseparated candidates; it was the right one, and the headline should not have been
+written until they were separated.
+
+WHAT STILL STANDS, and is why this file is kept rather than deleted: section 1's three
+structural facts (a core's .bss is ~16 KB, lies entirely inside one 16 KB bank, and is NOT
+relocated by stack_size, which moves only ObjectFifo buffers), and section 2's finding that
+at eight traced events the counters are not reproducible because ACTIVE overflows the 64 KB
+trace buffer. The replacement measurement uses four events for exactly that reason.
+*** end retraction ***
 2026-09-09. env: mlir-aie ironenv (v1.4.2, llvm-aie 22.0.0.2026090201) + XRT SDK 2.21.75, native
 Windows; driver 32.0.20101.3760. Desktop 2 (Phoenix, Ryzen 7 8700G), power mode Default (1.80 GHz
 per results/aie/clock_probe_npu.log). No foreign hardware contexts: `xrt-smi examine -r

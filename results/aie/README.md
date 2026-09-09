@@ -348,7 +348,30 @@ widths fit with room to spare, so **do not write a conv kernel against
 `ObjectFifo.forward(dims_to_stream=...)`** -- try a raw BD outside the ObjectFifo abstraction.
 Harness `kernels/im2col_bd/im2col_probe.py`.
 
-**`bank_stall_control_npu.log`** — the positive control for the instrument
+**`bank_stall_observable_npu.log`** — the trace observable `bank_ab_h12_npu.log` asked for,
+run on a kernel KNOWN to have the conflict, and **it works exactly**. `kernels/memory_placement/`
+places both operands at explicit `aie.buffer` addresses and asserts the compiler bundled the two
+loads (`vlda`/`vldb` on one line), refusing to run otherwise -- that assertion is what makes it a
+valid positive control. Routing `MEMORY_STALL` through it: **one same-bank paired load costs
+exactly one cycle and raises exactly one `MEMORY_STALL`.** At trip counts 512/1024/2048/4096 the
+colliding arm reads 514/1026/2050/4098 events against a constant 2 separated, and the extra
+cycles are 512/1024/2048/4096 -- the extra cycles, the extra events and the iteration count are
+the same number at every point. Slopes 12.0 vs 11.0 cycles/iteration at r^2 = 1.0, kernel
+byte-identical across arms, MLIR confirming `mem_bank = 1/1` vs `1/2`, zero variance over twenty
+samples per arm. `LOCK_STALL` is useless here (10.5k in both arms, no trend). **H12 is now
+measurable**: the reason it stalled was a ~3% wall-clock effect inseparable from machine drift,
+and this observable is exact and inside the dispatch. Raw evidence in
+`bank_stall_observable_separate_npu.log` and `bank_stall_observable_same_npu.log`.
+
+**`bank_stall_control_npu.log`** -- **RETRACTED headline** (see above). Concluded that
+`MEMORY_STALL` "cannot be trusted as a bank-conflict signal"; wrong, and the fault was its own
+probe rather than the event -- its loop ran at 15.0 cycles/iteration for 4 loads, too loose to
+pair them, and the penalty exists only for paired loads, so there was nothing to detect. Its
+"constant 6 cycles, no rate effect" goes with it. Kept because two findings stand: the three
+structural facts (a core's `.bss` is ~16 KB, lies entirely inside ONE 16 KB bank, and is NOT
+moved by `stack_size`, which relocates only ObjectFifo buffers), and that at eight traced events
+the counters are not reproducible because `ACTIVE` overflows the 64 KB buffer -- which is why the
+replacement used four. Originally described as: the positive control for the instrument
 `bank_ab_h12_npu.log` proposed, run BEFORE spending a sitting on it, and **the instrument does
 not work**. A same-bank dual-load conflict has to appear as `MEMORY_STALL`, which
 `pmu_probe_npu.log` had already flagged as never having read nonzero here. In a loop built to
