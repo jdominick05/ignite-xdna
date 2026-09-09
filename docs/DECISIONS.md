@@ -662,6 +662,12 @@
   (2026-09-07).** `aie::tile::current().cycles()` links against a `get_cycles()` that
   llvm-aie 22 declares and never defines (`ld.lld: undefined symbol`);
   `__builtin_readcyclecounter()` fails in the legalizer; inline asm fails in IRTranslator.
+  *(Narrowed 2026-09-09: it is statement-level inline asm inside a C++ function that fails
+  there. A standalone `.s` file assembles and links fine, so hand-written AIE2 assembly is
+  available — `kernels/asm_probe/`, `results/aie/aie2_isa_static.log`. It does not rescue the
+  cycle counter: the assembler exposes no timer register name, and the timer is memory-mapped
+  at `0x340F8`/`0x340FC` in the tile's configuration space, not in the core's data space. The
+  conclusion below is unchanged; only the reason "inline asm" was recorded is more specific.)*
   What works: `event0()`/`event1()` in the kernel, `Program.enable_trace` with
   `INSTR_EVENT_0/1`, and the stamps decoded from the trace stream — with two traps. Fewer
   events than fill a 32-byte packet never reach host memory (emit filler events after the
@@ -931,6 +937,28 @@ caches.
     are **lower bounds** — this is a no-compute passthrough, and a multi-core kernel's own
     configuration cost lands inside the hardware bracket and pushes its floor above 169.8 µs.
     One design, one data point: a floor, not a universal constant.
+  - **SUPERSEDED 2026-09-09 for batchable work: ~36 µs.** The "hypothetical zero-overhead
+    resubmit path" above was measured. Batched `pyxrt.runlist` submission amortises the same
+    passthrough to **36.3 µs** per dispatch, 17× below the IRON figure and a quarter of the
+    169.8 µs hardware bracket — so that bracket is not irreducible silicon cost either.
+    Reproduced at 35.9 / 36.3 / 36.0 / 36.3 µs across four runs
+    (`results/aie/dispatch_runlist_npu.log`). **It is a throughput figure**: it holds with 64
+    dispatches in flight, while one unbatched call still costs ~140 µs raw or 617 µs through
+    IRON, and N=1 through a runlist is slightly *slower* than a raw single dispatch. The old
+    rule governs one-shot latency-critical work; ~36 µs governs anything batchable.
+  - **SCOPED the same day: ~36 µs is a raw-pyxrt figure, and through IRON the batched floor is
+    ~531 µs.** Batching was wired into IRON's own host path (`kernels/dispatch_floor/
+    iron_batch.py`, `results/aie/iron_batch_npu.log`) rather than measured around it. The
+    device half reproduces from inside IRON — 37.5–37.9 µs per dispatch at N=64, against the
+    raw harness's 36.3 — but IRON's **per-call host work is a near-constant ~500 µs that
+    batching never touches**, so a batched `@iron.jit` call still costs ~531 µs end to end, a
+    1.26–1.37× gain rather than 17×. That ~500 µs is the same term `dispatch_floor_npu.log`
+    called 447.3 µs of host-side cost, measured from a different direction and shown to be
+    independent of how the submit is done. **There are three thresholds, not two:** ~617 µs
+    unbatched through IRON, ~531 µs batched through IRON, ~36 µs batched through raw pyxrt.
+    The 36 µs number is real but it is only available to a caller willing to give up IRON's
+    argument handling. The open question is no longer dispatch — it is IRON's host path, now
+    the larger term by more than an order of magnitude.
   - **REPRODUCED on an independent design the same day.** `ml/resnet/layers_conv2_x` (a
     3-block int8 CNN with real weights, nothing like a passthrough) reports both brackets
     from its own harness: end-to-end 2497.8 µs − hardware 1869.6 µs = **628.2 µs** of
@@ -947,6 +975,16 @@ caches.
     **Nothing has been run** — this is an API-existence check and the next measurement to
     make, not a result. It does not rescue attention (see above), but it would move the
     go/no-go threshold for every future kernel.
+    **RUN 2026-09-09, and both guesses in this paragraph were right.** Batching amortises a
+    dispatch to **36.3 µs**, 17× below the IRON floor; and part of the 169.8 µs did amortize —
+    the batched figure is a quarter of it. It still does not rescue attention stages 3 and 4
+    (34 µs and 12 µs of CPU time, both under the new floor), but stage 2 at 240 µs now clears
+    it 6.7×. `results/aie/dispatch_runlist_npu.log`. Getting there needed two fixes to
+    `kernels/dispatch_floor/measure_runlist.py`, both of which had produced a *wrong answer*
+    rather than an error: `kernel(...)` creates and **starts** a run, so runlist entries must
+    be built with `pyxrt.run(kernel)` + `set_arg` instead; and the cache resolver looked for
+    `*.txt` when the instruction stream is `insts.bin`, and took the newest xclbin in the
+    cache rather than one belonging to this design.
 - **Chained int8 CNN vs CPU — measured before building anything (2026-09-07).**
   `ml/resnet/layers_conv2_x` (3 ResNet bottlenecks chained core-to-core across 3 columns,
   int8, ObjectFifo→ObjectFifo, **one dispatch for the chain**) had run and PASSed here since
@@ -1032,7 +1070,8 @@ caches.
     `Tile(0,4)`, `Tile(0,5)` + one more) already spans 4 cores of one column, so the "~7%
     of one column's peak" framing was already accounting for multi-core, not comparing
     against a single core. **What was wrong:** the "8 live pipelined accumulators" were not
-    a performance-only design choice — AIE2 has only 6 hardware accumulator registers, so
+    a performance-only design choice — AIE2 spills past 5 live accumulators of that shape
+    (measured 2026-09-09; this entry originally said 6 registers, see below), so
     8 concurrent accumulators is itself the correctness bug fixed below (register
     spill/pointer corruption in conv2dk3, dead remainder code in conv2dk1/conv2dk1_skip).
     The throughput gap at width 32 (where the bug never fired) reads as structural —
@@ -1061,7 +1100,14 @@ caches.
     in both `conv2dk3_ui8_vector` and `conv2dk3_i8_vector` in both wheel and clone copies:
     - **Mechanism of the bug:**
       1. **Hardware accumulator limit vs compile-time unrolling:** The AIE2 vector unit has
-         6 hardware accumulator registers. Upstream mlir-aie attempted to fully unroll the
+         6 hardware accumulator registers. *(Superseded 2026-09-09. The count was inferred
+         from this kernel alone and is wrong. Sweeping the live-accumulator count and
+         reading the object code shows the allocator names nine accumulator registers,
+         `cm0`–`cm8`, and that five live 4×8×8 int8 accumulators compile with no stack
+         traffic while six is the first count that spills — `kernels/acc_spill_probe/`,
+         `results/aie/aie2_isa_static.log`. The spill this bug rests on is real and the fix
+         is unchanged; only the register count named here was wrong.)* Upstream mlir-aie
+         attempted to fully unroll the
          middle section by 8 chunks (`acc_tmp[8]`, 8 concurrent `MMUL4x8x8` accumulators).
          At width 36, `iw_32_rem = 7` allocated 7 accumulators; at width ≥ 40, the aligned
          block allocated 8 accumulators. When > 6 accumulators are live concurrently, Peano

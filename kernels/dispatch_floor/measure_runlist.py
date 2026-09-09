@@ -123,24 +123,20 @@ def compile_and_find_cache(n):
     if not cache_dir.exists():
         sys.exit("Cannot find IRON cache at ~/.npu/cache/ — run measure_floor.py first")
 
-    # Find all xclbins, take the most recent
-    xclbins = sorted(cache_dir.glob("*/final.xclbin"), key=lambda p: p.stat().st_mtime, reverse=True)
-    if not xclbins:
-        sys.exit("No compiled designs found in ~/.npu/cache/")
+    # Take the most recent cache entry that has BOTH an xclbin and an instruction
+    # binary. "Most recent xclbin" alone is wrong: any other design compiled since
+    # (a GEMM, say) would be picked up, and its instruction stream and argument
+    # layout are not this design's. The instruction file is `insts.bin`; earlier
+    # versions of this script looked only for `*.txt` and would silently fall
+    # through to `input_with_addresses.mlir`, which is not an instruction stream.
+    entries = [p.parent for p in cache_dir.glob("*/final.xclbin")
+               if (p.parent / "insts.bin").exists()]
+    if not entries:
+        sys.exit("No compiled design with final.xclbin + insts.bin in ~/.npu/cache/")
+    cache_entry = max(entries, key=lambda d: (d / "final.xclbin").stat().st_mtime)
 
-    xclbin_path = str(xclbins[0].resolve())
-    cache_entry = xclbins[0].parent
-
-    # Find the instruction file: try common names in priority order
-    for pattern in ("insts.txt", "*.txt", "input_with_addresses.mlir"):
-        candidates = list(cache_entry.glob(pattern))
-        if candidates:
-            insts_path = str(candidates[0].resolve())
-            break
-    else:
-        sys.exit(f"No instruction file found in {cache_entry}")
-
-    return xclbin_path, insts_path, None
+    return (str((cache_entry / "final.xclbin").resolve()),
+            str((cache_entry / "insts.bin").resolve()), None)
 
 
 # --------------------------------------------------------------------------- #
@@ -260,7 +256,18 @@ def time_runlist_batch(device, context, kernel, insts_bo, insts_data, n,
         rl = pyxrt.runlist(context)
         runs = []
         for bo_a, bo_b, bo_c in buf_sets:
-            run = kernel(3, insts_bo, len(insts_data), bo_a, bo_b, bo_c)
+            # Build the run WITHOUT starting it. `kernel(...)` in pyxrt both
+            # creates and STARTS a run, so adding one to a runlist hands
+            # execute() a run that is already in flight -- which is why every
+            # batch failed verification before this was fixed. `pyxrt.run(kernel)`
+            # plus set_arg leaves it unstarted for the runlist to launch.
+            run = pyxrt.run(kernel)
+            run.set_arg(0, 3)
+            run.set_arg(1, insts_bo)
+            run.set_arg(2, len(insts_data))
+            run.set_arg(3, bo_a)
+            run.set_arg(4, bo_b)
+            run.set_arg(5, bo_c)
             rl.add(run)
             runs.append(run)
 
@@ -269,6 +276,11 @@ def time_runlist_batch(device, context, kernel, insts_bo, insts_data, n,
         rl.wait()
         wall_ms = (time.perf_counter() - t0) * 1e3
         times.append(wall_ms)
+        # Drop the runlist before the next iteration allocates another. Leaving
+        # these alive to be torn down at interpreter exit crashes with an access
+        # violation on this driver.
+        del runs
+        del rl
 
     # Verify all outputs after the timed runs
     all_ok = all(verify_output(bo_c, n) for _, _, bo_c in buf_sets)
@@ -299,6 +311,8 @@ def main():
     print(f"  xclbin: {xclbin_path}")
     print(f"  instr:  {insts_path}")
     print(f"  kernel: {kernel_name}")
+    print(f"  cache:  {Path(xclbin_path).parent.name}   "
+          f"(resolved by newest entry holding BOTH final.xclbin and insts.bin)")
 
     # Step 2: set up raw pyxrt
     print("\nStep 2: loading design via raw pyxrt...")
@@ -411,6 +425,16 @@ def main():
         best_us = min(r["per_run_us"] for r in results)
         print(f"  with D1: an op must cost >{best_us:.0f} us on the CPU to win through")
         print(f"           a batched raw-pyxrt path")
+
+    # Tear the pyxrt handles down in dependency order. Left to the interpreter's
+    # own exit-time collection they are destroyed in arbitrary order and this
+    # driver faults with an access violation -- harmless, since every result has
+    # already been printed, but it makes the script look like it crashed and
+    # gives any log assembler a non-zero exit code to reject.
+    del kernel
+    del insts_bo
+    del context
+    del device
 
 
 if __name__ == "__main__":

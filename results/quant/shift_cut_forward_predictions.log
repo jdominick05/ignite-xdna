@@ -1,0 +1,101 @@
+Shift-cut hazard predictor: predictions recorded BEFORE any of these models was run
+2026-09-09. Desktop 2 (Phoenix, Ryzen 7 8700G), resnet_env17, onnx only. NO NPU SESSION was
+built by this run and no hardware context was taken; it reads ONNX files and computes.
+
+THIS LOG IS HALF AN EXPERIMENT. It exists to be committed before the hardware runs it sets
+up, so that the outcome cannot be read back into the prediction. The result is in
+results/quant/shift_cut_forward_results.log.
+
+WHAT IS BEING TESTED, AND WHY IT NEEDED TESTING. quant/shift_cut.py (on branch `main`,
+unmerged at the time of writing) formulates a feasibility bound for the DPU's requantizer:
+the 32-bit accumulator is mapped to int8 through a 15-bit multiplier M and an arithmetic
+right shift sigma constrained to [0, 31], so a scale triple whose ideal factor
+A = (S_x * S_w) / S_y cannot be written as M * 2^-sigma in that window is infeasible on the
+hardware. The audit flags such convolutions. Its evidence so far is entirely RETRODICTIVE:
+every model it had been pointed at already had a known outcome. That makes it a pattern that
+fits the past, not yet a predictor.
+
+The failure class matters because this repo has hit it: a model that is correct under CPU
+execution and wrong on the DPU, invisible to placement reports. BiSeNetV2 is the example --
+402/404 nodes placed, 13.12 ms, beating the iGPU, and 15.33% pixel accuracy on physical
+hardware against 59.47% under CPU simulation.
+
+METHOD. Every XINT8 artifact in models/ was cross-referenced against every .log and .md in
+results/ and docs/, and those with no NPU mention anywhere near them were taken as the
+candidate set. The audit was then run over ALL of them and EVERY verdict is printed below.
+The set was fixed before any result was seen and nothing has been dropped from it.
+
+--------------------------------------------------------------------------------
+1. THE CANDIDATE SET AND EVERY PREDICTION
+--------------------------------------------------------------------------------
+
+model                              prediction   ops  hazards  sigma range
+--------------------------------------------------------------------------
+bisenetv2_bilinear_fp32_xint8      HAZARD        63        1        7..24
+bisenetv2_test_xint8               clean         63        0        7..26
+mobilevit_xint8                    HAZARD       177        3        7..26
+mobilevit_xxs_hybrid_xint8         clean        168        0        7..23
+realesrgan_compact_r64_xint8       clean         34        0       20..21
+sesr_m7_fp32_xint8                 HAZARD         9        9       17..23
+sesr_m7_nchw_xint8                 HAZARD         9        9       17..23
+test_sr_leaky_xint8                clean          2        0       22..23
+test_sr_xint8                      clean          2        0       22..23
+yolov8n_cut_xint8_c32              clean        177        0        7..23
+yolov8n_r416_cut_xint8_c32         clean        177        0        7..23
+yolov8n_r512_cut_xint8_c32         clean        177        0        7..23
+yolov8s_r1280_cut_xint8            clean        177        0        7..24
+yolov8x_r1280_cut_xint8            clean        297        0        7..25
+
+
+--------------------------------------------------------------------------------
+2. THE PREDICTIONS THIS COMMITS TO
+--------------------------------------------------------------------------------
+Predicted to FAIL on the DPU while being acceptable on CPU, i.e. the audit says the
+requantizer cannot represent these scale triples:
+
+    sesr_m7_fp32_xint8              9 of 9 operations flagged
+    sesr_m7_nchw_xint8              9 of 9 operations flagged
+    mobilevit_xint8                 3 of 177
+    bisenetv2_bilinear_fp32_xint8   1 of 63
+
+Predicted to be FINE:
+
+    realesrgan_compact_r64_xint8    0 of 34
+    bisenetv2_test_xint8            0 of 63
+    mobilevit_xxs_hybrid_xint8      0 of 168
+    test_sr_xint8, test_sr_leaky_xint8              0 of 2
+    yolov8n_cut_xint8_c32                           0 of 177
+    yolov8n_r416_cut_xint8_c32                      0 of 177
+    yolov8n_r512_cut_xint8_c32                      0 of 177
+    yolov8s_r1280_cut_xint8                         0 of 177
+    yolov8x_r1280_cut_xint8                         0 of 297
+
+THE TWO THAT WILL BE RUN, AND WHY THOSE TWO.
+
+  sesr_m7_fp32_xint8, predicted to fail on every one of its nine operations. This is the
+  boldest claim available: 100% of the model is called infeasible. SESR-M7 as an
+  ARCHITECTURE is one of this repo's successes -- 1.48 ms on the NPU, a 3.02x win over the
+  integrated GPU, and measured super-resolution quality on hardware of 34.06 dB PSNR on
+  Set5 against a 35.64 dB float reference. If this artifact runs correctly, a 9-of-9
+  prediction is a false positive of the worst kind.
+
+  realesrgan_compact_r64_xint8, predicted clean, 0 of 34. It tests the other direction on a
+  different architecture, and it has no NPU record of any kind.
+
+A NOTE THAT ALREADY WEIGHS AGAINST THE PREDICTOR, RECORDED HERE RATHER THAN AFTER THE FACT.
+The audit's own committed log (results/quant/shift_cut_feasibility.log, branch `main`) shows
+`sesr_m7_xint8.onnx` -- a sibling artifact of the same architecture, and one of the six the
+audit's author ran -- at 9 of 9 violations, 100%. That model's measured NPU quality is the
+34.06 dB quoted above. The author's commit message lists ResNet-50, YOLOv8n, YOLOv8n-pose and
+FastDepth as sitting cleanly and does not mention this result. So a false positive may
+already be present in the audit's own evidence, and the runs set up here are partly a check
+of that.
+
+WHAT WOULD COUNT AS WHAT
+  Prediction confirmed  a flagged model's NPU output departs structurally from its own CPU
+                        output -- large deviation relative to peak AND a fallen correlation
+                        -- while a clean model's does not.
+  Prediction refuted    a flagged model's NPU output tracks its CPU output at ordinary
+                        requantization noise, correlation essentially 1.
+  Inconclusive          the EP does not place the model, so the comparison says nothing
+                        about the DPU. Placement is reported for exactly this reason.

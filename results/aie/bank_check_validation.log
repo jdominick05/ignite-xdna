@@ -1,0 +1,224 @@
+The bank check predicts a number someone else measured: 1,024 cycles per panel, exactly
+2026-09-09. Desktop 2 (Phoenix, Ryzen 7 8700G). NO HARDWARE WAS USED and no context was taken;
+this reads two build caches produced by another session and computes.
+
+Commands (from the repo root, in the ironenv):
+  python tools/aie_bank_check.py <same-bank cache>     --operands operand_a,operand_b
+  python tools/aie_bank_check.py <separate-bank cache> --operands operand_a,operand_b
+  python tools/aie_bank_check.py ~/.npu/cache/e9ed1c603d42d8bb153dfb76 \
+      --kernel matmul_i8_i32 --operands A_L2L1_0_0_cons,B_L2L1_0_0_cons
+
+WHY. results/aie/bank_conflict_survey.log introduced tools/aie_bank_check.py and used it to
+find a same-bank paired load in the production int8 GEMM. It had never been checked against a
+kernel whose penalty is actually MEASURED. The `research/windows-lowlevel` branch has one, and
+it left both build caches on disk: one placement where the two operands share a bank and one
+where they do not, from a single kernel source whose compiled object hash is identical in both
+(983417317932ae2e...). Its measured slopes are 15,232 cycles per panel same-bank against
+14,208 separate, a difference of 1,024.
+
+That is a prediction target the tool had no part in producing.
+
+--------------------------------------------------------------------------------
+1. A BUG THE VALIDATION FOUND IMMEDIATELY
+--------------------------------------------------------------------------------
+The first version of aie_bank_check.py looked for paired loads only inside HARDWARE loops --
+the `.L_LEnd*` bodies whose bundle count is their cycle count. Run against the measured kernel
+it reported "0 of 8 bundles" and concluded "no loop issues two loads at once; no penalty", on
+the very kernel whose measured penalty is 1,024 cycles per panel.
+
+The reason is that this kernel keeps its compute in a SOFTWARE loop. Its only hardware loop is
+the trace-flush loop, eight bundles of alternating event0/event1. The same is true of mm.cc's
+matmul, whose hardware loop is only the innermost k-reduction and whose accumulator-group body
+is a software loop. A hardware-loop-only check is therefore wrong for both kernels this repo
+cares about.
+
+The tool now also walks software-loop bodies, taking the nearest preceding label that does not
+belong to a hardware loop through to a backward branch. Branch TARGETS are unresolved
+relocations in an object file, so a latch cannot be matched to its own head; where two latches
+of a nest resolve to one label the shortest body is kept, so nothing is counted twice.
+
+A second over-report was fixed at the same time. "Some bank holds two buffers" is not the
+question -- a padding buffer sharing a bank with an operand is harmless, because a paired load
+never reads it, and the measured kernel has exactly such a buffer named `bank2_reserve`. The
+new `--operands` flag names the two buffers a paired load really reads and makes the verdict
+about those alone.
+
+--------------------------------------------------------------------------------
+2. THE PLACEMENT THE TOOL READS BACK, AGAINST THE LABELS THE EXPERIMENT USED
+--------------------------------------------------------------------------------
+Same kernel, same object bytes, two builds. The tool is told nothing but the cache directory
+and the two operand names; the "same" and "separate" labels below are the experiment's own.
+
+== the build its log calls SEPARATE, measured 14,208 cycles per panel
+
+WHERE THE BUFFERS LANDED
+  elfs_main_core_0_2.elf
+    own local memory window 0x70000-0x7ffff, 4 banks of 16 KB
+    bank 0: 1
+      0x70400  parameters_cons_buff_0
+    bank 1: 1
+      0x74000  operand_a
+    bank 2: 2
+      0x78000  operand_b
+      0x7a000  bank2_reserve
+    bank 3: 1
+      0x7c000  gemm_result_buff_0
+
+BANK SHARING
+  bank 2 holds 2 distinct buffers: bank2_reserve, operand_b
+
+  the two buffers a paired load actually reads
+    operand_a                    bank [1]
+    operand_b                    bank [2]
+    -> different banks
+
+BUNDLES THAT ISSUE TWO LOADS
+  .text.gemm_placement: 3 of 345 bundles
+    hardware loop .L_LEnd0: 0 of 8 bundles
+    software loop .LBB0_7: 1 of 8 bundles  <-- one extra cycle per iteration each
+      0x04aa  vlda	wl0, [p2, #0x0] | vldb	wl2, [p1, dj1]
+
+VERDICT
+  Paired loads exist, but the buffers they read are in different banks;
+  no collision to fix.
+
+== the build its log calls SAME, measured 15,232 cycles per panel
+
+WHERE THE BUFFERS LANDED
+  elfs_main_core_0_2.elf
+    own local memory window 0x70000-0x7ffff, 4 banks of 16 KB
+    bank 0: 1
+      0x70400  parameters_cons_buff_0
+    bank 1: 2
+      0x74000  operand_a
+      0x76000  operand_b
+    bank 2: 1
+      0x7a000  bank2_reserve
+    bank 3: 1
+      0x7c000  gemm_result_buff_0
+
+BANK SHARING
+  bank 1 holds 2 distinct buffers: operand_a, operand_b
+
+  the two buffers a paired load actually reads
+    operand_a                    bank [1]
+    operand_b                    bank [1]
+    -> COLLIDE
+
+BUNDLES THAT ISSUE TWO LOADS
+  .text.gemm_placement: 3 of 345 bundles
+    hardware loop .L_LEnd0: 0 of 8 bundles
+    software loop .LBB0_7: 1 of 8 bundles  <-- one extra cycle per iteration each
+      0x04aa  vlda	wl0, [p2, #0x0] | vldb	wl2, [p1, dj1]
+
+VERDICT
+  HAZARD. 1 paired-load bundle(s) in loop bodies, hardware and
+  software, and a bank holds more than one buffer. If a paired load reads two
+  buffers in the same bank it costs one extra cycle per iteration, so the
+  loop's bundle count understates its cycles by that much.
+  Predicted penalty = 1 x the iteration count of the loop it is in.
+
+--------------------------------------------------------------------------------
+3. THE PREDICTION, AND THE ARITHMETIC BEHIND IT
+--------------------------------------------------------------------------------
+The tool reproduces the experiment's own labels from the ELF alone: operands in banks 1 and 2
+in the build called separate, both in bank 1 in the build called same. It had no access to
+those labels.
+
+It also finds exactly ONE paired-load bundle in the compute loop's body, at 0x04aa,
+  vlda wl0, [p2, #0x0] | vldb wl2, [p1, dj1]
+reading the two operand pointers on the two memory ports in a single cycle.
+
+The kernel's own source fixes the iteration count without any inference. It is a
+64 x (64*panels) x 64 int8 GEMM over `aie::mmul<4, 8, 8, int8_t, int8_t, acc32>` with loop
+bounds mb < 16, nb < 8, kb < 8, so one panel issues 16 x 8 x 8 = 1,024 MAC operations, and the
+body carrying that paired load runs once per MAC.
+
+  predicted penalty = 1 paired-load bundle x 1,024 iterations = 1,024 cycles per panel
+  measured penalty  = 15,232 - 14,208                        = 1,024 cycles per panel
+
+Exact, on a kernel this session did not write, against a measurement this session did not take,
+from a static read of an object file. The mechanism is confirmed as SAME-BUNDLE paired loads
+specifically, not two loads merely near each other: the body is eight bundles and only one of
+them names both ports.
+
+--------------------------------------------------------------------------------
+4. THE PRODUCTION int8 GEMM, RE-READ WITH THE FIXED TOOL
+--------------------------------------------------------------------------------
+
+WHERE THE BUFFERS LANDED
+  elfs_main_core_0_2.elf
+    own local memory window 0x70000-0x7ffff, 4 banks of 16 KB
+    bank 0: 1
+      0x70d00  C_L1L2_0_0_buff_0
+    bank 1: 1
+      0x74d00  C_L1L2_0_0_buff_1
+    bank 2: 4
+      0x78d00  B_L2L1_0_0_cons_buff_0
+      0x79d00  B_L2L1_0_0_cons_buff_1
+      0x7ad00  A_L2L1_0_0_cons_buff_0
+      0x7bd00  A_L2L1_0_0_cons_buff_1
+    bank 3: EMPTY
+  (16 core ELFs in this build; the first is shown, and the allocation is per core)
+
+BANK SHARING
+  bank 2 holds 2 distinct buffers: A_L2L1_0_0_cons, B_L2L1_0_0_cons
+
+  the two buffers a paired load actually reads
+    A_L2L1_0_0_cons              bank [2, 2]
+    B_L2L1_0_0_cons              bank [2, 2]
+    -> COLLIDE
+  banks with nothing in them: [3]
+
+BUNDLES THAT ISSUE TWO LOADS
+  .text.matmul_i8_i32: 10 of 144 bundles
+    hardware loop .L_LEnd0: 1 of 9 bundles  <-- in the hardware loop
+      0x0200  vlda	wl3, [p4], #0x20 | vldb	wl8, [p3], #0x20 | vmov	x0, x4 | vmac	cm3, cm3, x10, x9, r4
+    software loop .LBB0_2: 10 of 96 bundles  <-- one extra cycle per iteration each
+      0x0108  vlda	amhl0, [p0, #0x40] | vldb	wh2, [p6, #0x20] | mov	m0, r12
+      0x0124  vlda	amhl2, [p0], #0x40 | vldb	wh9, [p1, #0x20]
+      0x013a  vlda	amhl3, [p0, #0x40] | vldb	wh7, [p1, #0x20]
+      0x0172  vlda	amhl5, [p0], #0x40 | vldb	wl5, [p3], #0x20 | mov	p4, r31
+      0x017c  vlda	amlh6, [p0, #0x20] | vldb	wl1, [p4], #0x20
+      0x0192  vlda	amhl6, [p0, #0x40] | vldb	wh1, [p6, #0x20] | mov	p0, r29
+      0x019c  vlda	wl1, [p6], #0x200 | vldb	wl10, [p0], #0x20 | mov	p7, r28
+      0x01a6  vlda	wl0, [p7], #0x20 | vldb	wl8, [p3], #0x20 | movxm	le, #0x0
+      0x01b2  vlda	wl3, [p4], #0x20 | vldb	wl6, [p0], #0x20 | mov	r14, p5 | vmac	cm7, cm7, x5, x9, r4
+      0x0200  vlda	wl3, [p4], #0x20 | vldb	wl8, [p3], #0x20 | vmov	x0, x4 | vmac	cm3, cm3, x10, x9, r4
+
+VERDICT
+  HAZARD. 10 paired-load bundle(s) in loop bodies, hardware and
+  software, and a bank holds more than one buffer. If a paired load reads two
+  buffers in the same bank it costs one extra cycle per iteration, so the
+  loop's bundle count understates its cycles by that much.
+  Predicted penalty = 10 x the iteration count of the loop it is in.
+  Bank(s) [3] are empty, so the collision is avoidable.
+
+READING. The hardware-loop finding in results/aie/bank_conflict_survey.log is unchanged:
+one paired load in the nine-bundle k-reduction loop, and the two input tiles do collide, now
+confirmed by name rather than by the weaker "some bank holds two buffers". What the fixed tool
+adds is the surrounding software-loop body, which carries ten paired-load bundles across its 96
+-- the one inside the hardware loop plus nine more in the accumulator load, store and spill
+traffic that runs once per accumulator group.
+
+That reconciles with the cost model rather than changing it. Charging all ten was already the
+`--bank-collision all` upper bound in results/aie/gemm_cost_model_nest.log: nine per group over
+16 groups is 144 cycles, and one per hardware-loop iteration over 6 x 16 iterations is 96, for
+240 cycles per call, which is exactly the 2,682 - 2,442 that option reports. The difference is
+that the ten are now located rather than merely counted.
+
+--------------------------------------------------------------------------------
+WHAT THIS DOES NOT SHOW
+--------------------------------------------------------------------------------
+- Nothing was measured here. The 15,232 and 14,208 are quoted from
+  results/aie/gemm_desktop2_20260909_g03_{same,separate}_1.log on the unmerged
+  `research/windows-lowlevel` branch, and the caches read are that session's, left in scratch.
+- The validation is one kernel with one paired load per iteration. Whether the penalty composes
+  linearly when a body carries several -- which is exactly the int8 GEMM's case, with ten --
+  is still untested, so the ten-paired-load charge remains an upper bound and not a prediction.
+- `--operands` is only as good as the names given it. The tool still does not resolve which
+  buffer a pointer register holds; naming the operands asserts it.
+- The software-loop body is found by nearest-preceding-label, not by resolving branch targets,
+  which an object file does not carry. Where a nest's latches share a label the shortest body
+  is kept, which is conservative but not proven correct for every shape.
+- One machine, one power mode, two kernels, first core ELF of each build.

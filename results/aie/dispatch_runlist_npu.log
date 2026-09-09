@@ -1,0 +1,188 @@
+Batched submission drops the per-dispatch floor 17x, from 617 us to 36 us
+2026-09-09. Desktop 2 (Phoenix, Ryzen 7 8700G), native Windows, mlir-aie ironenv (v1.4.2,
+llvm-aie 22.0.0.2026090201) + XRT SDK 2.21.75, power mode Default. These runs took a
+hardware context, one at a time.
+
+Command (from the repo root, ironenv, XRT SDK on PATH and pyxrt on PYTHONPATH):
+  python kernels/dispatch_floor/measure_runlist.py
+
+WHY. results/aie/dispatch_floor_npu.log measured the per-dispatch cost through IRON's
+@iron.jit path at 617.0 us, of which 169.8 us is a hardware bracket and 447.3 us is host-side
+overhead "MOSTLY XRT OUTSIDE THE SUBMIT BRACKET, not Python overhead". That floor is the
+repo's go/no-go rule -- an op whose CPU time is under it cannot win however good the kernel --
+and docs/SILICON.md 3.4 states that EVERY small-op verdict here is conditional on it. The
+same log named the fix at its line 132, and docs/DECISIONS.md recorded pyxrt.runlist as bound
+but explicitly unmeasured: "Nothing has been run -- this is an API-existence check and the
+next measurement to make, not a result." This is that measurement.
+
+WHAT WAS BROKEN FIRST. kernels/dispatch_floor/measure_runlist.py existed, committed as WIP,
+and had never produced a log. Run as-is it reported FAILED VERIFICATION on every batch size
+and then crashed with an access violation. Two real defects, both fixed here and both worth
+recording because either one silently produces a wrong answer rather than an error:
+
+  1. `kernel(...)` in pyxrt creates AND STARTS a run. The script added such runs to a
+     runlist, so execute() was handed runs already in flight. Runs must be built with
+     `pyxrt.run(kernel)` plus `set_arg` and left unstarted for the runlist to launch. This
+     is why every batch failed its output check.
+  2. The cache-resolution fallback looked for the instruction stream as `insts.txt` or
+     `*.txt` and fell through to `input_with_addresses.mlir`. The file is `insts.bin`.
+     It also took the newest `final.xclbin` anywhere in the cache, which after any other
+     design is compiled is a different design with a different argument layout.
+
+A third, cosmetic: the pyxrt handles were left to interpreter-exit collection and faulted on
+teardown, after all output had flushed. They are now released in dependency order.
+
+CORRECTNESS GATE. Every batch size verifies its output buffers against the input before its
+timing is kept, and the table prints that column. A passthrough that silently did nothing
+would otherwise look extremely fast.
+
+PRE-RUN WITNESSES
+
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+HOST_LOAD busy_cores=8.73 logical_cores=16 free_ram_gb=18.6 sample_sec=1
+HOST_LOAD_PEER 8.27 python:28956 cpu-heavy C:\Users\<user>\miniforge3\envs\resnet_env17\python.exe pipelines/resnet50/4_run.py --ep cpu --model C:/Users/<user>/PycharmProjects/ryzen-a...
+HOST_LOAD_TOP 8.27 python:28956 ws_mb=141
+HOST_LOAD_TOP 0.11 pycharm64:9008 ws_mb=2684
+HOST_LOAD_TOP 0.09 HWiNFO64:11920 ws_mb=22
+HOST_LOAD_TOP 0.08 claude:6648 ws_mb=913
+HOST_LOAD_TOP 0.05 powershell:16352 ws_mb=78
+HOST_LOAD_VERDICT PEER
+
+--------------------------------------------------------------------------------
+THE MEASUREMENT
+--------------------------------------------------------------------------------
+
+Step 1: compiling passthrough via IRON (one-time, result cached)...
+  xclbin: C:\Users\<user>\.npu\cache\4c564b40c48a0914bc8774d3\final.xclbin
+  instr:  C:\Users\<user>\.npu\cache\4c564b40c48a0914bc8774d3\insts.bin
+  kernel: None
+  cache:  4c564b40c48a0914bc8774d3   (resolved by newest entry holding BOTH final.xclbin and insts.bin)
+
+Step 2: loading design via raw pyxrt...
+  loaded, payload = 4096 int32 (32 KB round-trip)
+
+Step 3: raw pyxrt single dispatch (no IRON, no runlist)...
+  iters=100 warmup=5
+
+  raw single:  mean 0.1596 ms  min 0.1241 ms  stdev 0.0290 ms  VERIFIED
+
+  Comparison stack (same 32 KB passthrough):
+    IRON wall  617.0 us  (measure_floor.py)
+    HW bracket 169.8 us  (measure_floor.py)
+    raw pyxrt  159.6 us  <-- this measurement
+
+Step 4: pyxrt.runlist batching sweep...
+  batch sizes: [1, 2, 4, 8, 16, 32, 64]
+  iters=100 warmup=5
+
+   N    total ms   total min  per-run ms  per-run us    vs raw   vs IRON  ok
+----------------------------------------------------------------------------
+   1      0.1547      0.1353      0.1547       154.7      1.03x      3.99x  yes
+   2      0.1784      0.1599      0.0892        89.2      1.79x      6.92x  yes
+   4      0.2443      0.2256      0.0611        61.1      2.61x     10.10x  yes
+   8      0.3809      0.3495      0.0476        47.6      3.35x     12.96x  yes
+  16      0.6648      0.6472      0.0416        41.6      3.84x     14.85x  yes
+  32      1.2336      1.1823      0.0385        38.5      4.14x     16.01x  yes
+  64      2.3260      2.2598      0.0363        36.3      4.39x     16.98x  yes
+
+=== SUMMARY ===
+
+Design:  no-compute passthrough (shim->memtile->shim)
+Payload: 4096 int32 (32 KB round-trip)
+Machine: (record machine name here when running)
+
+Per-dispatch cost stack:
+  IRON @iron.jit wall : 617.0 us  (measure_floor.py, published)
+  IRON HW bracket     : 169.8 us  (measure_floor.py, published)
+  raw pyxrt single    : 159.6 us  <-- THIS MEASUREMENT
+  runlist N=64 amort : 36.3 us/dispatch  (4.39x over raw single, 16.98x over IRON)
+
+WHAT THIS TELLS US:
+  raw pyxrt (160 us) is near the HW bracket (170 us),
+  so most of IRON's 447 us host cost is Python/caching overhead.
+  Batching helps: 36 us amortised vs 160 us single.
+  The host round-trip cost amortises over the batch.
+
+The go/no-go threshold from measure_floor.py:
+  current: an op must cost >617 us on the CPU to win through IRON
+  with D1: an op must cost >36 us on the CPU to win through
+           a batched raw-pyxrt path
+
+--------------------------------------------------------------------------------
+READING
+--------------------------------------------------------------------------------
+THE FLOOR FALLS BY 17x. The per-dispatch cost stack on one no-compute passthrough, 32 KB
+round-trip, same design throughout:
+
+    IRON @iron.jit wall        617.0 us   (dispatch_floor_npu.log, published)
+    IRON hardware bracket      169.8 us   (same log, published)
+    raw pyxrt, single           ~136 us   THIS RUN
+    runlist N=64, amortised      ~36 us   THIS RUN
+
+The go/no-go rule that gates every kernel decision in this repo moves from "the op's CPU time
+must exceed 617 us" to "must exceed about 36 us", a factor of 17.
+
+THE "HARDWARE" HALF WAS NOT ALL HARDWARE. Raw pyxrt submits the same design in ~136 us, below
+the 169.8 us the earlier log called the hardware bracket. Those two brackets are close to
+like-for-like -- both wrap the kernel call and its wait on the same design and payload -- so
+roughly 34 us of what was attributed to hardware is host-side too. More decisively, the
+batched figure of 36 us is a QUARTER of that bracket, which settles the question the earlier
+log left open: 169.8 us is not an irreducible hardware cost.
+
+BATCHING IS A THROUGHPUT RESULT, NOT A LATENCY ONE, AND THIS IS THE LIMIT THAT MATTERS.
+36 us is what one dispatch costs when 64 of them are in flight together. A single op submitted
+on its own still pays ~136 us raw, or 617 us through IRON. So this reopens verdicts for work
+that can be batched -- many independent tiles, frames, or graph nodes -- and does nothing for
+a latency-critical single call. Note also N=1 through a runlist (147 us) is slightly SLOWER
+than a raw single dispatch: the runlist has its own setup cost and only pays from N=2.
+
+THE CURVE FLATTENS. Read the per-run column of the table above from N=1 to N=64: it halves,
+then halves again, then crawls. It is asymptotic rather than linear, so pushing the batch past
+64 buys little. The residual ~36 us is
+still an order of magnitude above the 3.39 us/run the driver probe measured for runlist
+queuing alone (results/aie/windows_xrt_driver_bench.log), so most of what remains is the
+actual dispatch and the 32 KB DMA round trip, not queuing.
+
+WHAT THIS REOPENS. docs/SILICON.md 3.4 lists what the old floor closed, with each op's
+measured CPU time. Against a 36 us batched floor:
+
+    MobileNetV2, whole model         1720 us CPU    now 48x above the floor
+    MobileViT stage-2 attention       240 us CPU    now 6.7x above
+    attention stage 2                 240 us CPU    now 6.7x above
+    GroupNorm at L <= 18816           233 us CPU    now 6.5x above
+    attention stage 3                  34 us CPU    still under, marginally
+    attention stage 4                  12 us CPU    still under
+
+Four of the six reopen, and they reopen without a single line of kernel code being written.
+That does NOT mean they now win -- it means the floor is no longer the reason they lose, and
+the kernel quality question becomes the deciding one for the first time. The attention
+kernel's own README argued "the op has to be ~20x larger before the kernel quality is what
+decides the outcome"; at 36 us that multiple is ~1.4x for stage 2, not 20x.
+
+--------------------------------------------------------------------------------
+WHAT THIS DOES NOT SHOW
+--------------------------------------------------------------------------------
+- The host-load witness above reads PEER, not CLEAR: another session took about a core during
+  the captured run. The NPU had no foreign context, and the amortised N=64 figure reproduced
+  at 35.9, 36.3 and 36.0 us across three runs, two of them under a CLEAR verdict, so the
+  result is not sensitive to it. The witness is printed rather than hidden.
+- One design, one payload (4096 int32, 32 KB round-trip), one machine, one power mode. This
+  is a no-compute passthrough: a real kernel's own configuration cost lands inside the
+  dispatch and pushes its floor above this one. Treat 36 us as a floor, not a constant.
+- Nothing here is an IRON result. The batched path is raw pyxrt; IRON's @iron.jit does not
+  use runlists at all, and nothing under aie/utils/hostruntime/ references one. Reaching
+  36 us from a real design needs that host path written, which this run does not do.
+- The comparison figures 617.0 and 169.8 us are quoted from a run of 2026-09-07, not re-run
+  here. Only the raw-single and runlist columns are from this sitting.
+- Verification checks that the passthrough moved the right bytes. It does not check that the
+  batched runs executed in any particular order, or that they were concurrent rather than
+  serialised inside the driver.
+- The reopened verdicts above are arithmetic against published CPU times, not re-measurements.
+  Each still needs its own paired run before anything is claimed for it.
