@@ -1,0 +1,130 @@
+MEMORY_STALL cannot see a bank conflict, so H12's named fix does not work as an instrument
+2026-09-09. env: mlir-aie ironenv (v1.4.2, llvm-aie 22.0.0.2026090201) + XRT SDK 2.21.75, native
+Windows; driver 32.0.20101.3760. Desktop 2 (Phoenix, Ryzen 7 8700G), power mode Default (1.80 GHz
+per results/aie/clock_probe_npu.log). No foreign hardware contexts: `xrt-smi examine -r
+aie-partitions` reported "No hardware contexts running on device" before the runs.
+
+Commands (from the ironenv; --help carries the setup):
+  python3 kernels/bank_placement/bank_stall_probe.py --target 2048 --repeats 3 --arms 0,1
+  python3 kernels/bank_placement/bank_stall_probe.py --target 512 --repeats 3 --arms 0,1 \
+      --events INSTR_EVENT_0,INSTR_EVENT_1,MEMORY_STALL,INSTR_LOAD
+  ... the same at --target 256, 1024, 2048
+
+WHY: results/aie/bank_ab_h12_npu.log moved the int8 GEMM's operands out of a shared 16 KB bank
+exactly as designed and could NOT resolve the effect -- seven alternating series, the sign
+changing between them, because wall time on a shared machine cannot see a ~3% core-side change
+(96 cycles of a 3,274-cycle call). Its closing paragraph names the fix: "point kernels/pmu_probe/'s
+event routing at one core of this design and read ACTIVE against LOCK_STALL in core cycles,
+inside the dispatch, where host contention cannot reach."
+
+That plan has an untested premise. A same-bank dual-load conflict should surface as MEMORY_STALL,
+and results/aie/pmu_probe_npu.log states plainly that MEMORY_STALL, STREAM_STALL and
+CASCADE_STALL "are not shown to work by this run. A kernel that uses them is needed before any
+of those three can be trusted." So MEMORY_STALL = 0 on the GEMM's two arms could not distinguish
+"no conflict" from "the event does not fire", and a whole sitting would have bought nothing.
+This is the positive control that had to come first. There is no BANK_CONFLICT event to fall
+back on: the CoreEvent enum this toolchain ships has GROUP_STALL 22, MEMORY_STALL 23,
+LOCK_STALL 26, ACTIVE 28, DM_ACCESS_TO_UNAVAILABLE 66 and nothing bank-specific.
+
+METHOD: kernels/bank_placement/bank_stall_kernels.cc runs one loop with two independent 16-lane
+int32 loads per iteration -- nothing forces an order, so the scheduler may pair them, and that
+pairing is what a same-bank conflict would have to break. One compile-time flag moves stream A's
+base and nothing else; the host classifies each run from the ADDRESSES THE KERNEL REPORTS rather
+than assuming the intervention landed.
+
+
+--------------------------------------------------------------------------------
+1. THREE STRUCTURAL FACTS THAT FORCED THE DESIGN, ALL MEASURED HERE
+--------------------------------------------------------------------------------
+These are recorded because each one cost an attempt, and each one constrains any future
+core-memory experiment on this hardware.
+
+a) A CORE'S .bss IS ABOUT 16 KB, NOT 64 KB. A 32 KB static array is rejected at link time:
+   "ld.lld: error: section '.bss' will not fit in region 'data': overflowed by 16640 bytes".
+   The tile has 64 KB of local memory; a kernel's own statics get a fraction of it.
+
+b) .bss LIES ENTIRELY INSIDE ONE 16 KB BANK. It was measured spanning 0x75000-0x77C00 -- bank 29
+   throughout -- and the input ObjectFifo buffer begins exactly on the next bank boundary,
+   0x78000, bank 30. So NO static array can straddle a bank boundary here, and no offset within
+   .bss can reach the fifo's bank. A same-bank/different-bank experiment built only from statics
+   is impossible by construction, which is why stream B is taken from the fifo buffer.
+
+c) stack_size DOES NOT MOVE A KERNEL'S .bss. bank_ab_h12 shifted the GEMM's operands with it, so
+   it was the obvious lever. At stack 0x400 and 0x1400 the streams landed at 0x74100/0x76100
+   BOTH times -- identical. The allocator lays ObjectFifo buffers above the stack, which is what
+   that log moved; a kernel's own .bss is placed by the linker and the stack does not touch it.
+
+
+--------------------------------------------------------------------------------
+2. THE TRACE UNIT'S COUNTERS ARE NOT REPRODUCIBLE AT EIGHT EVENTS
+--------------------------------------------------------------------------------
+First measured with the full eight-event set (INSTR_EVENT_0/1, ACTIVE, MEMORY_STALL, GROUP_STALL,
+LOCK_STALL, INSTR_LOAD, INSTR_VECTOR) at target=2048. Three runs of the SAME COMPILED BINARY,
+same addresses every time:
+
+  separated arm   cycles 15665, 30724, 15879     INSTR_LOAD 4179, 8195, 4235
+  colliding arm   cycles 30730, 30730, 30730     INSTR_LOAD 8195, 8195, 8195
+
+The separated arm's own numbers vary by a factor of two across identical dispatches of identical
+code. ACTIVE alone emits 38,000-54,000 frames at this trip count and the trace buffer is 64 KB,
+so it overflows and truncates differently per run. ANY conclusion drawn from an eight-event
+capture at this loop length would have been an artefact -- including the tempting one that the
+colliding arm is 2x slower, which is only the separated arm's counters having been truncated.
+
+Dropping to four events (INSTR_EVENT_0/1, MEMORY_STALL, INSTR_LOAD) makes everything exact and
+repeatable. Every figure in section 3 is from that configuration.
+
+GROUP_STALL is worth one line: across all six eight-event runs it read EXACTLY equal to ACTIVE
+(38214/38214, 47315/47315, 47329/47329, 53960/53960, 38034/38034, 47255/47255). It is not an
+independent stall signal on this part, whatever it is.
+
+
+--------------------------------------------------------------------------------
+3. THE RESULT: NO PER-ITERATION PENALTY, AND THE EVENT NEVER FIRES
+--------------------------------------------------------------------------------
+Four events, arms alternating and the order reversed between repeats. The two arms are
+INSTRUCTION-MATCHED -- identical INSTR_LOAD -- so cycles are comparable, and every run of a
+given arm reproduced its cycle count exactly.
+
+  target   loads/arm    separated (bank 29/30)   colliding (bank 30/30)   gap
+     256        1027            3844                     3850              6
+     512        2051            7684                     7690              6
+    2048        8195           30724                    30730              6
+
+  MEMORY_STALL = 0 in every run of both arms, at every trip count.
+
+THE GAP IS A CONSTANT SIX CYCLES, NOT A RATE. It does not move as the trip count goes 256 ->
+512 -> 2048. A one-cycle same-bank dual-load stall per iteration would have cost 256, 512 and
+2048 cycles respectively; it costs 6 every time, which is a fixed difference in loop setup
+(one base pointer is a static address, the other is a function argument) and not a memory-system
+effect at all. So there is NO per-iteration same-bank dual-load penalty in this loop.
+
+MEMORY_STALL NEVER FIRES, INCLUDING IN THE ARM BUILT TO COLLIDE. Combined with pmu_probe_npu.log
+never having seen it nonzero, the conclusion is the one that matters for H12: MEMORY_STALL
+cannot be trusted as a bank-conflict signal on this machine. Reading zero from it on the GEMM's
+two arms would not have distinguished "no conflict" from "the event does not fire", so the
+measurement bank_ab_h12 proposed would not have resolved H12 either. That plan should not be
+run as written.
+
+
+--------------------------------------------------------------------------------
+WHAT THIS DOES NOT SHOW
+--------------------------------------------------------------------------------
+- THE LOOP IS NOT LOAD-BOUND, and this is the important caveat. It runs at 15.0 cycles per
+  iteration (3850/256, 7690/512, 30730/2048 all give 15.0) while issuing 4 loads per iteration.
+  A tight, well-scheduled loop would be a small number of cycles per iteration. With that much
+  slack the core has room to absorb a one-cycle stall without the wall moving, so this bounds
+  the penalty as small IN A LOOP WITH SLACK -- it does not prove there is none in the int8
+  GEMM's tight inner loop, which is the case H12 is actually about.
+- It does not show WHY MEMORY_STALL reads zero. Three candidates are unseparated: the event may
+  not cover bank arbitration; the compiler may not have paired the two loads into one cycle, so
+  no conflict was ever created; or the conflict may be resolved without raising the event.
+  Reading the disassembly of this loop would separate the second from the other two and has not
+  been done.
+- One access pattern (two 16-lane int32 loads, 1 KB windows, unit stride), one core tile, one
+  power mode. Nothing here covers stores, scalar loads, or the 4-bank striping a real GEMM tile
+  sees.
+- The 6-cycle constant is attributed to loop setup by its INVARIANCE with trip count, not by
+  reading the schedule. That attribution is inference from three points, not disassembly.
+- H12 itself remains NOT confirmed and NOT refuted. This run removes one proposed instrument;
+  it does not answer the question that instrument was meant to answer.

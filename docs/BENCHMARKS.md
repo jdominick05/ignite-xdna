@@ -1856,6 +1856,38 @@ nothing about data movement: same bytes, same DMA, same fifo depth, same functio
   floor is real, the separated build's issuing cycles fall by ~96 per call and its lock stall
   rises by the same, leaving `ACTIVE` unchanged — an equality needing no timing at all. The
   obstacle is the one `RESEARCH.md` already names: `whole_array` carries no trace hook.
+  **That plan was tested as an instrument on 2026-09-09 and it does not work — do not run it as
+  written.** A same-bank dual-load conflict has to surface as `MEMORY_STALL`, and
+  `results/aie/pmu_probe_npu.log` had already flagged that event as never having read nonzero
+  here. `kernels/bank_placement/bank_stall_probe.py` is the positive control: one loop, two
+  independent 16-lane loads, one compile-time flag moving stream A's base and nothing else, with
+  the arm read back from the addresses the kernel reports. **`MEMORY_STALL` reads 0 in every run
+  of both placements, at every trip count** — including an arm built to collide as hard as this
+  design permits. So zero on the GEMM's arms would not distinguish "no conflict" from "the event
+  does not fire", and the sitting would buy nothing. There is no bank-specific event to fall back
+  on (the enum has `GROUP_STALL` 22, `MEMORY_STALL` 23, `DM_ACCESS_TO_UNAVAILABLE` 66 and nothing
+  else), and `GROUP_STALL` read *exactly* equal to `ACTIVE` in all six eight-event runs, so it is
+  not an independent signal either. Backing log `results/aie/bank_stall_control_npu.log`.
+  **The control did produce a clean instruction-matched comparison, and it found no rate effect:**
+  with identical `INSTR_LOAD` in both arms, colliding costs a *constant* **6 cycles** more at 256,
+  512 and 2048 iterations (3850/3844, 7690/7684, 30730/30724). A one-cycle per-iteration stall
+  would have cost 256, 512 and 2048; a constant 6 is loop setup, not the memory system. **The
+  caveat that keeps H12 open:** the loop runs at 15.0 cycles/iteration for 4 loads, so it is not
+  load-bound and has slack to absorb a one-cycle stall — this bounds the penalty in a *slack*
+  loop, not in the GEMM's tight inner loop.
+  **Three structural facts from the same run, each of which cost an attempt**: a core's `.bss` is
+  ~16 KB, not 64 KB (a 32 KB static array fails to link); it lies *entirely inside one 16 KB
+  bank* (measured 0x75000–0x77C00, bank 29, with the input fifo buffer starting exactly at
+  0x78000, bank 30), so no static array can straddle a boundary and the second stream had to come
+  from the fifo buffer; and **`stack_size` does not move a kernel's `.bss`** — at 0x400 and
+  0x1400 the streams landed identically — because it moves ObjectFifo buffers, which is what H12
+  shifted, not linker-placed statics.
+  **A methodological trap worth carrying forward:** at eight traced events the counters are *not
+  reproducible*. Three dispatches of one identical binary gave 15665 / 30724 / 15879 cycles and
+  4179 / 8195 / 4235 loads, because `ACTIVE` alone emits 38–54k frames into a 64 KB buffer, which
+  overflows and truncates differently each run. Every figure above is from a four-event capture,
+  where all of it is exact and repeatable. An eight-event capture at this loop length would have
+  made the colliding arm look 2× slower — a pure artefact of the *separated* arm being truncated.
 
 **A tempting join with the driver work, tested and refuted.** Local `main` measures an NPU
 hardware-context-switch penalty of **+747.75 µs** (same-context dispatch 120.25 µs, alternating
