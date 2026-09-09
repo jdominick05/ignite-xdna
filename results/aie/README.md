@@ -82,6 +82,15 @@ Read these before quoting anything below.
   `lda`/`mova` in a, and `ret` in the scalar slot x. The slot **count** of six and every
   cycle figure derived from bundle counts are unaffected. The correction matters because two
   load units are what make a same-bank paired load, and its extra cycle, possible at all.
+- **`dispatch_floor_npu.log`'s 617 µs go/no-go threshold is superseded for batchable work**
+  by `dispatch_runlist_npu.log`: batched `pyxrt.runlist` submission amortises the same
+  passthrough to **36.3 µs** per dispatch, a 17× drop, and a quarter of the 169.8 µs that log
+  attributed to hardware — so its "hardware half" is not silicon either. The 617 µs figure is
+  **not retracted**: it still governs a single unbatched IRON dispatch, which is what that log
+  measured, and a one-shot call still pays ~140 µs even through raw pyxrt. What changes is the
+  rule built on it — restated in four places (`README.md`, `kernels/README.md`,
+  `docs/DECISIONS.md`, `docs/BENCHMARKS.md`) — and the four small-op verdicts
+  `docs/SILICON.md` §3.4 closed on it.
 
 ## Toolchain bring-up
 
@@ -525,6 +534,24 @@ each config recompiles (seconds). CPU timings were taken beside another session'
 evaluation runs. Cited by [`kernels/README.md`](../../kernels/README.md).
 
 ## Dispatch floor and the int8 conv verdict
+
+**`dispatch_runlist_npu.log`** — the measurement `dispatch_floor_npu.log` asked for and
+`docs/DECISIONS.md` recorded as unrun (*"Nothing has been run -- this is an API-existence
+check and the next measurement to make"*). Batched `pyxrt.runlist` submission amortises the
+same 32 KB passthrough to **36.3 us** per dispatch against IRON's 617.0 us, a **17x** drop,
+reproduced at 35.9/36.3/36.0/36.3 across four runs. Raw pyxrt single-dispatch is ~140 us,
+already **below** the 169.8 us the earlier log called the hardware bracket, and the batched
+figure is a quarter of it — so that bracket is not irreducible silicon. Four of the six ops
+`docs/SILICON.md` 3.4 lists as closed by the floor now clear it (MobileNetV2 48x, MobileViT
+stage-2 attention and bf16 attention stage 2 6.7x, GroupNorm at L<=18816 6.5x); attention
+stages 3 and 4 stay under. **Two limits:** it is a THROUGHPUT figure — 36 us holds with 64
+dispatches in flight, a one-shot call still pays ~140 us raw — and it is raw pyxrt, while
+`@iron.jit` uses no runlists, so a real design pays the old floor until that host path is
+written. Getting the harness working needed two fixes that had each produced a wrong answer
+rather than an error: `kernel(...)` creates and **starts** a run, so runlist entries must use
+`pyxrt.run(kernel)` + `set_arg`; and the cache resolver looked for `*.txt` when the
+instruction stream is `insts.bin`. Written up in
+[`docs/BENCHMARKS.md`](../../docs/BENCHMARKS.md#batched-submission-drops-the-dispatch-floor-17-and-reopens-four-closed-verdicts).
 
 **`dispatch_floor_npu.log`** — the per-dispatch cost measured IN ISOLATION at last
 (`kernels/dispatch_floor/measure_floor.py`), with a design that has no compute tile at all

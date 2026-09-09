@@ -299,6 +299,14 @@ were actually charged while their write-ups reasoned with 185 µs.
 (zero-overhead best case). Run this before writing a kernel.**
 `results/aie/dispatch_floor_npu.log`.
 
+**Superseded 2026-09-09 for batchable work: the threshold is ~36 µs.** The zero-overhead
+resubmit path is no longer hypothetical — batched `pyxrt.runlist` submission amortises a
+dispatch to **36.3 µs**, 17× below the IRON figure and below the 169.8 µs hardware bracket
+(`results/aie/dispatch_runlist_npu.log`). It is a **throughput** result: 36 µs holds when 64
+dispatches are in flight together, while a single unbatched call still pays ~140 µs raw or
+617 µs through IRON. So the 617 µs rule still governs one-shot latency-critical work, and
+~36 µs governs anything batchable.
+
 ## `clock_probe/`
 
 Not an operator — measures the **AIE core clock**, the number every per-second ceiling in

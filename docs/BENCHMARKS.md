@@ -482,6 +482,75 @@ zero-overhead resubmit path. Both are lower bounds — this is a no-compute pass
 real multi-core kernel's own configuration cost sits inside the hardware bracket. Dispatch
 also dominates *everything* below ~0.5 MB: wall time is flat across a 64× payload range.
 
+> **Superseded 2026-09-09 for batchable work: the threshold is ~36 µs, not 617 µs.** The
+> "hypothetical zero-overhead resubmit path" was measured and is not hypothetical. Batched
+> submission through `pyxrt.runlist` amortises a dispatch to **36.3 µs**, a **17×** drop, and
+> that is below the 169.8 µs this section calls the hardware floor. See
+> [Batched submission drops the dispatch floor 17×](#batched-submission-drops-the-dispatch-floor-17-and-reopens-four-closed-verdicts).
+> The 617 µs figure still governs a **single** unbatched IRON dispatch, which is what this
+> section measured, so it is superseded rather than retracted.
+
+### Batched submission drops the dispatch floor 17×, and reopens four closed verdicts
+
+The dispatch floor above is the single most consequential number in this repo: `docs/SILICON.md`
+§3.4 states that **every** small-op verdict here is conditional on it. The same log named its
+own fix, and `docs/DECISIONS.md` recorded `pyxrt.runlist` as bound but explicitly unmeasured —
+*"Nothing has been run — this is an API-existence check and the next measurement to make, not
+a result."* This is that measurement. Backing log `results/aie/dispatch_runlist_npu.log`.
+
+| Path, same 32 KB passthrough | Per dispatch |
+|---|---|
+| IRON `@iron.jit` wall | 617.0 µs |
+| IRON hardware bracket | 169.8 µs |
+| **raw pyxrt, single** | **~140 µs** |
+| **`pyxrt.runlist`, N=64, amortised** | **36.3 µs** |
+
+**The go/no-go threshold moves from 617 µs to about 36 µs, a factor of 17.** The amortised
+figure reproduced at 35.9, 36.3, 36.0 and 36.3 µs across four runs.
+
+**The "hardware" half was not all hardware.** Raw pyxrt submits the same design in ~140 µs,
+below the 169.8 µs the earlier work called the hardware bracket, and the batched figure is a
+*quarter* of that bracket. That settles the question the earlier log left open: 169.8 µs is
+not irreducible silicon cost.
+
+**This is a throughput result, not a latency one, and that is the binding limit.** 36 µs is
+what a dispatch costs when 64 are in flight together; a single op still pays ~140 µs raw or
+617 µs through IRON. It reopens work that can be batched — many independent tiles, frames or
+graph nodes — and does nothing for a latency-critical single call. N=1 *through* a runlist is
+slightly slower than a raw single dispatch, so batching only pays from N=2.
+
+**What reopens.** Against §3.4's own list of what the old floor closed, with its CPU times:
+
+| Op | CPU time | Against a 36 µs floor |
+|---|---|---|
+| MobileNetV2, whole model | 1720 µs | 48× above |
+| MobileViT stage-2 attention | 240 µs | 6.7× above |
+| bf16 attention stage 2 | 240 µs | 6.7× above |
+| GroupNorm at L ≤ 18816 | 233 µs | 6.5× above |
+| bf16 attention stage 3 | 34 µs | still under |
+| bf16 attention stage 4 | 12 µs | still under |
+
+Four of six reopen, without a line of kernel code. That does **not** mean they now win — it
+means the floor is no longer why they lose, and kernel quality becomes the deciding question
+for the first time. The attention kernel's README argued *"the op has to be ~20× larger before
+the kernel quality is what decides the outcome"*; at a 36 µs floor that multiple is ~1.4× for
+stage 2.
+
+**Two real defects were fixed to get here**, both of which produced a wrong answer rather than
+an error. `kernel(...)` in pyxrt creates *and starts* a run, so adding one to a runlist hands
+`execute()` a run already in flight — this is why every batch had failed its output check;
+runs must be built with `pyxrt.run(kernel)` plus `set_arg`. And the cache resolver looked for
+the instruction stream as `*.txt` when the file is `insts.bin`, and took the newest xclbin
+anywhere in the cache, which after any other design is compiled is a different design.
+
+**What this does not show.** One design, one payload, one machine. It is a no-compute
+passthrough, so a real kernel's configuration cost lands inside the dispatch and pushes its
+floor above this one — treat 36 µs as a floor, not a constant. Nothing here is an IRON result:
+the batched path is raw pyxrt, `@iron.jit` does not use runlists, and reaching 36 µs from a
+real design means writing that host path. The 617.0 and 169.8 µs comparators are quoted from
+2026-09-07, not re-run. The reopened verdicts are arithmetic against published CPU times, not
+re-measurements — each still needs its own paired run.
+
 ### The chained int8 CNN also loses — and this time it was measured before anything was built
 
 `ml/resnet/layers_conv2_x` (three ResNet bottlenecks chained core-to-core across three

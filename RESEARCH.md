@@ -1845,6 +1845,23 @@ sections above.
   decoded detections are byte-identical between CPU and NPU — a task-level metric is needed
   to test it; and the audit's positive claims on BiSeNetV2 and RegNetX-002 remain untested
   forward.
+- **The dispatch floor fell 17×, and it was never a kernel problem.** The single most
+  consequential number here is the per-dispatch floor: `docs/SILICON.md` §3.4 says every
+  small-op verdict in this repo is conditional on it, and at 617 µs it closed most of them.
+  The fix was named in the same log that measured it and then sat unrun for two days, recorded
+  as *"Nothing has been run — this is an API-existence check and the next measurement to make,
+  not a result."* Run now: batched `pyxrt.runlist` submission amortises a dispatch to
+  **36.3 µs**, reproduced at 35.9/36.3/36.0/36.3 across four runs. That is 17× below the IRON
+  floor and a **quarter** of the 169.8 µs that was attributed to hardware — so the hardware
+  half was not silicon either. Four of the six ops §3.4 lists as closed now clear the floor:
+  MobileNetV2 by 48×, MobileViT stage-2 attention and bf16 attention stage 2 by 6.7×,
+  GroupNorm at L ≤ 18816 by 6.5×. **They are not thereby wins** — the floor has stopped being
+  the reason they lose, which makes kernel quality the deciding question for the first time,
+  and the attention README's "the op has to be ~20× larger" becomes ~1.4× for stage 2. Two
+  caveats bound it: this is a **throughput** result (36 µs with 64 dispatches in flight; a
+  one-shot call still pays ~140 µs raw), and it is **raw pyxrt** — `@iron.jit` uses no
+  runlists, so a real design pays the old floor until that host path is written. That, not the
+  measurement, is what the objective now blocks on.
 - **Candidate model pipelines (Categories A, B, C, D, E).** Test plans, target shapes, and falsification criteria:
   - **Category A:** Image Super-Resolution — SESR-M7 (placement, 1.48 ms latency, 3.02x iGPU win,
     70% AdaRound recovery) and Real-ESRGAN Compact (activation memory spill) closed above.

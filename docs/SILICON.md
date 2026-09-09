@@ -354,6 +354,18 @@ The vendor path's 90 µs host-side gap (2.5) shows that the 447 µs host half of
 is software; whether the 169.8 µs hardware half is silicon is what D1–D3 measure, and every
 small-op verdict in this repo is conditional on where it lands.
 
+**MEASURED 2026-09-09, and it lands low: ~36 µs for batchable work.** Batched `pyxrt.runlist`
+submission amortises the same passthrough to **36.3 µs** per dispatch — 17× below the 617 µs
+IRON floor and a *quarter* of the 169.8 µs bracket, so the hardware half is not silicon
+either (`results/aie/dispatch_runlist_npu.log`). Of the six ops listed above, four now clear
+the floor: MobileNetV2 by 48×, MobileViT stage-2 attention and bf16 attention stage 2 by 6.7×,
+GroupNorm at L ≤ 18816 by 6.5×. Attention stages 3 and 4 (34 µs, 12 µs) remain under it.
+**The caveat is the shape of the result:** 36 µs is a throughput figure that holds with 64
+dispatches in flight, so it reopens batchable work only, and a one-shot latency-critical call
+still pays ~140 µs raw or 617 µs through IRON. Those four verdicts are not overturned — the
+floor has simply stopped being the reason they lose, which makes kernel quality the deciding
+question for the first time.
+
 ## 4. Objectives
 
 Ordered by dependency, and weighted toward where the NPU has *measured* edge — large bf16
@@ -529,7 +541,17 @@ here.
 
 ### Tier 1 — the dispatch path
 
-**D1. `xrt::runlist` batching.**
+**D1. `xrt::runlist` batching. — ANSWERED 2026-09-09: 36.3 µs per dispatch, a 17× drop.**
+The sweep this objective asked for was run at N = 1, 2, 4, 8, 16, 32, 64
+(`results/aie/dispatch_runlist_npu.log`). Amortised cost per dispatch falls from 147 µs at
+N=1 to **36.3 µs** at N=64 and is asymptotic there, so a larger batch buys little. Raw pyxrt
+single-dispatch is ~140 µs, already below the 169.8 µs "hardware" bracket, and the batched
+figure is a quarter of it — the hardware half of the floor is not silicon. The prediction in
+this entry's physical basis was correct: most of the host term is software and a list of N
+runs costs one host round trip. **Remaining:** this is raw pyxrt; `@iron.jit` does not use
+runlists, and nothing under `aie/utils/hostruntime/` references one, so a real design still
+pays the old floor until that host path is written. That, not the measurement, is what D1
+now blocks on.
 Physical basis: the vendor path's host-side cost per call is about 90 µs against IRON's
 447 µs on the same driver (2.5), so most of the host term is software, and a list of N
 runs costs one host round trip. Tooling: none new — `xrt::runlist` is in this
