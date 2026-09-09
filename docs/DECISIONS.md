@@ -970,7 +970,8 @@ caches.
     `Tile(0,4)`, `Tile(0,5)` + one more) already spans 4 cores of one column, so the "~7%
     of one column's peak" framing was already accounting for multi-core, not comparing
     against a single core. **What was wrong:** the "8 live pipelined accumulators" were not
-    a performance-only design choice — AIE2 has only 6 hardware accumulator registers, so
+    a performance-only design choice — AIE2 spills past 5 live accumulators of that shape
+    (measured 2026-09-09; this entry originally said 6 registers, see below), so
     8 concurrent accumulators is itself the correctness bug fixed below (register
     spill/pointer corruption in conv2dk3, dead remainder code in conv2dk1/conv2dk1_skip).
     The throughput gap at width 32 (where the bug never fired) reads as structural —
@@ -999,7 +1000,14 @@ caches.
     in both `conv2dk3_ui8_vector` and `conv2dk3_i8_vector` in both wheel and clone copies:
     - **Mechanism of the bug:**
       1. **Hardware accumulator limit vs compile-time unrolling:** The AIE2 vector unit has
-         6 hardware accumulator registers. Upstream mlir-aie attempted to fully unroll the
+         6 hardware accumulator registers. *(Superseded 2026-09-09. The count was inferred
+         from this kernel alone and is wrong. Sweeping the live-accumulator count and
+         reading the object code shows the allocator names nine accumulator registers,
+         `cm0`–`cm8`, and that five live 4×8×8 int8 accumulators compile with no stack
+         traffic while six is the first count that spills — `kernels/acc_spill_probe/`,
+         `results/aie/aie2_isa_static.log`. The spill this bug rests on is real and the fix
+         is unchanged; only the register count named here was wrong.)* Upstream mlir-aie
+         attempted to fully unroll the
          middle section by 8 chunks (`acc_tmp[8]`, 8 concurrent `MMUL4x8x8` accumulators).
          At width 36, `iw_32_rem = 7` allocated 7 accumulators; at width ≥ 40, the aligned
          block allocated 8 accumulators. When > 6 accumulators are live concurrently, Peano

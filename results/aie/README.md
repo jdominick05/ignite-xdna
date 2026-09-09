@@ -129,6 +129,21 @@ why the cycle counter cannot be read from a Peano kernel and that mlir-aie v1.4.
 parser mis-times gaps over 2^18 cycles. Written up in
 [`docs/BENCHMARKS.md`](../../docs/BENCHMARKS.md#the-aie-core-clock-measured-180-ghz-default-080-powersaver).
 
+**`aie2_isa_static.log`** — AIE2 machine code read statically, no hardware used:
+`tools/aie_disasm.py` disassembles a core ELF or kernel object with Peano's own
+`llvm-objdump` and `kernels/acc_spill_probe/` sweeps register pressure with Peano's
+`clang`. Establishes that a hardware loop's bundle count IS its cycle count — S0's two
+loops measured 9.000 and 2.000 cycles per iteration and disassemble to **9** and **2**
+bundles — because the core is a statically scheduled VLIW that covers operand latency with
+explicit nop bundles. Also: six issue slots per bundle, which no document in this repo
+stated; a scalar load's result reaching the 7th bundle after it issues; and the accumulator
+file, where five live 4×8×8 int8 `aie::mmul` accumulators compile with zero stack traffic
+and six is the first count that spills, superseding both `docs/DECISIONS.md`'s "6 hardware
+accumulator registers" and `docs/SILICON.md`'s "≤4 stays in registers". Reads the production
+int8 GEMM's inner loop at 88.9% of the MAC issue rate against a whole-kernel 31.3% of peak,
+placing the loss outside the loop. Written up in
+[`docs/BENCHMARKS.md`](../../docs/BENCHMARKS.md#aie2-machine-code-the-bundle-count-of-a-loop-is-its-cycle-count).
+
 > The two entries above were read as disagreeing — whether XRT's `max_clock_frequency_mhz`
 > tracks the live clock (`xrt_api_live_clock_and_pdh_npu.log`, 800 idle / 1800 under an
 > active context) or is pinned at 800 (`clock_probe_npu.log`, read across all five power

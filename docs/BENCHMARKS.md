@@ -1045,6 +1045,97 @@ GEMM running; `turbo` printed its escape error under load and idle and applied a
 same log's first run is kept as contaminated: it overlapped another session's 128-stream
 classifier sweep, and the hold hung in the second that sweep's XRT aborted.
 
+### AIE2 machine code: the bundle count of a loop is its cycle count
+
+Backing log: `results/aie/aie2_isa_static.log`. Tools: `tools/aie_disasm.py`,
+`kernels/acc_spill_probe/`. **No hardware was used.** Every figure here comes from
+disassembling object code with Peano's own `llvm-objdump` or compiling with Peano's `clang`,
+so the whole thing runs in seconds against a busy device.
+
+The clock measurement above made cycles convertible to seconds. It did not say where the
+cycles go. `docs/SILICON.md` 1.2 carried MACs per cycle and the vector width as SPEC rows
+copied from AMD's `device.yaml`, issue width appeared in no document in this repo, and two
+documents disagreed about the accumulator file. All three are now read off the machine code.
+
+**The bundle format.** The nop mnemonics name the slots: `nopb ; nopa ; nops ; nopx ; nopm ;
+nopv`, so six slots — branch, load, store, scalar, move, vector. `nopxm` is the fused
+encoding printed when x and m are both idle, so a five-field bundle still occupies six slots.
+Bundles using few slots are emitted compressed, shorter than 16 bytes, and still issue in one
+cycle, so cycles count by bundle and never by byte.
+
+**The calibration, and the finding that comes out of it.** S0 measured two loops at exactly
+9.000 and 2.000 cycles per iteration, constant from 2^18 to 2^25 iterations. Disassembled,
+the same two loops are 9 and 2 bundles. Both exact.
+
+| Loop | Measured cycles/iteration | Bundles in the loop body |
+|---|---|---|
+| scalar, `volatile` load-add-store | 9.000 | 9 |
+| vector, dependent 16-lane `aie::add` | 2.000 | **2** |
+
+That equality is the point. AIE2 is a statically scheduled VLIW with an exposed pipeline, so
+Peano covers every operand latency with explicit nop bundles instead of leaving it to a
+hardware interlock. The scalar loop shows the mechanism: six consecutive all-nop bundles sit
+between the load and the add that consumes it, so a scalar load's result reaches the seventh
+bundle after it issues, and that latency is the whole reason the loop costs 9 cycles to do
+one add. **An inner loop's cycles per iteration can therefore be read before the kernel is
+ever run.** The exception is a loop that waits on a lock, a stream or a DMA, which takes
+longer than its bundle count; the disassembly cannot say how much longer, and that is what
+the trace unit's stall events are for.
+
+**Compiling for the core without IRON.** `clang++ --target=aie2-none-unknown-elf -std=c++20
+-O2 -D__AIE_API_AIE_ADF_HPP__=1 -c -I <mlir_aie>/include` builds a kernel object directly.
+The flag predefines the include guard of `aie_api`'s graph-level ADF header so its body is
+skipped; that header includes `<adf.h>`, which ships with Vitis and exists nowhere on this
+machine. Recompiling the clock probe's own source this way reproduces the object IRON built
+for the hardware run — same 102 bundles, same 29 full-width and 73 compressed, same 32-byte
+frame, same four loops at the same addresses — which is what makes the flag safe to use.
+
+**The accumulator file, and two documents corrected.** `kernels/acc_spill_probe/` holds K
+live `aie::mmul<4,8,8,int8,int8,acc32>` accumulators across a k-reduction loop, the shape
+upstream's `conv2dk3` uses, and sweeps K.
+
+| Live accumulators | Accumulator registers named | Stack references |
+|---|---|---|
+| 1–5 | 1 to 6 | **0** |
+| 6 | 9 | 5 |
+| 7 | 9 | 17 |
+| 8–12 | 9 | 25 to 96 |
+
+The allocator names nine accumulator registers, `cm0`–`cm8`, reaches nine at six live
+accumulators and never goes past it however many more are asked for. Five live accumulators
+of this shape compile with no stack traffic at all; six is the first count that touches the
+stack. Both prior claims were wrong in opposite directions: `docs/DECISIONS.md`'s "only 6
+hardware accumulator registers" is below the nine names that appear, and `docs/SILICON.md`'s
+"≤4 stays in registers" is one below the real spill-free ceiling. Both were inferred from the
+single `conv2dk3` kernel that spilled at 8, and both are now marked superseded rather than
+removed. The width fix in `kernels/conv2dk3_widthfix/` was written to N ≤ 4 for safety, so it
+is correct but one accumulator short of what fits.
+
+Caveat: one accumulator shape, one optimisation level, one compiler version. A wider
+accumulator fits fewer, and nine register names is a lower bound on the architectural file
+since the allocator may simply never have needed a tenth.
+
+**The production int8 GEMM, read the same way.** The kernel behind the 4607.05 GOPS above has
+a nine-bundle inner loop issuing eight `vmac` instructions, one per live accumulator
+`cm0`–`cm7`, with its operands arriving on the load and store slots of the same bundles. One
+int8 `vmac` is the 256-MAC operation the 256 MACs/cycle nameplate describes, so the loop
+issues 0.889 vector MACs per cycle, **88.9% of the machine's MAC issue rate**.
+
+Set that against the measured whole-kernel figure. 4607.05 GOPS over 16 cores at 1.7983 GHz
+is 31.3% of the 14,730 GOPS those cores can issue. The inner loop is at 88.9%. **The missing
+factor is not the inner loop's instruction schedule**, so rewriting it is not where the time
+is — the question is how much of the elapsed time is spent inside that loop at all, which is
+a dispatch, DMA and occupancy question rather than a kernel-quality one. The function does
+spill, a 416-byte frame and 37 stack references, consistent with it holding eight live
+accumulators where five is the ceiling; but none of that traffic is in the nine loop bundles,
+so the spills cost setup per call and not per-iteration throughput.
+
+**What this does not show.** Nothing here is a hardware measurement. The bundle-equals-cycle
+identity is checked against two measured loops and no more. The 88.9% is the inner loop's
+issue density, not the kernel's utilisation. The slot names come from the nop mnemonics
+`llvm-objdump` prints, not from a published AIE-ML ISA document, which this project does not
+have.
+
 ### MobileViT-XXS does not survive per-tensor INT8, and AdaRound cannot save it
 
 The accuracy question the attention work deferred, now measured on the full 1000-image

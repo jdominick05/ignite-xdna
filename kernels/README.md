@@ -40,6 +40,7 @@ array program) into `~/.npu/cache/<hash>/`; later runs of the same shape hit the
 | `conv2dk3_widthfix/` | Nothing — an upstream mlir-aie bug fix | **Resolved.** Bit-exact at every width tested |
 | `dispatch_floor/` | Nothing — measures the per-dispatch fixed cost itself | Hardware floor **169.8 µs**, wall floor through IRON **617.0 µs** |
 | `clock_probe/` | Nothing — measures the AIE core clock itself, per power mode | **1.80 GHz** in `default`/`performance`/`turbo`, 1.03 `balanced`, 0.80 `powersaver` |
+| `acc_spill_probe/` | Nothing — finds where the AIE2 accumulator file runs out | **5** live 4×8×8 int8 `aie::mmul` accumulators fit; 6 is the first that spills. Compile only, no NPU |
 
 Each kernel's own findings, warnings and retractions follow. They are prose rather than
 table cells because several of them are corrections to what an earlier version of this
@@ -315,3 +316,23 @@ traps the script works around and documents: one event pair alone never fills a 
 run). Run from the ironenv; one fresh process per power mode (`xrt-smi configure --pmode`,
 then `--label <mode>`); the script prints the platform report so the mode is evidenced.
 `results/aie/clock_probe_npu.log`.
+
+## `acc_spill_probe/`
+
+Not an operator either, and the only thing in this directory that never opens the NPU.
+It holds K live `aie::mmul<4,8,8,int8,int8,acc32>` accumulators across a k-reduction loop —
+the shape upstream's `conv2dk3` uses — compiles once per K with Peano, and reads the object
+code back with `tools/aie_disasm.py`. A few seconds, and it runs while the device is busy.
+
+**Five live accumulators of that shape compile with zero stack traffic; six is the first
+count that touches the stack.** The allocator names nine accumulator registers, `cm0`–`cm8`,
+and never goes past nine however many more are asked for. That corrects two documents at
+once: `docs/DECISIONS.md` said AIE2 has 6 accumulator registers and `docs/SILICON.md` said
+≤4 stay in registers, both inferred from the single `conv2dk3` kernel that spilled at 8.
+The width fix below was written to N ≤ 4 and is therefore correct but one short of what fits.
+
+Compiling for the core without IRON needs one non-obvious flag,
+`-D__AIE_API_AIE_ADF_HPP__=1`, which skips `aie_api`'s graph-level ADF header; that header
+includes `<adf.h>`, which ships with Vitis and is not on this machine. The flag is safe
+because rebuilding `clock_probe`'s source this way reproduces the object IRON itself built,
+bundle for bundle. `results/aie/aie2_isa_static.log`.

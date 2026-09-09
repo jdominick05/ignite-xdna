@@ -1706,6 +1706,18 @@ sections above.
   full trace, whose upstream parser mis-times gaps over 2^18 cycles; and S4, the
   package-power delta that would let a work-per-watt verdict exist at all — nothing here
   has ever measured a watt, and no per-NPU rail is exposed to read one from.
+- **The cycles themselves, read off the machine code.** Peano's `llvm-objdump` disassembles
+  AIE2, so a kernel's inner-loop cost is readable without hardware: the core is a statically
+  scheduled VLIW that covers operand latency with explicit nop bundles, and a hardware loop's
+  bundle count is its cycle count. S0's two loops measured 9.000 and 2.000 cycles per
+  iteration and disassemble to 9 and 2 bundles (`results/aie/aie2_isa_static.log`,
+  `tools/aie_disasm.py`). That closed two questions the docs had carried as unverified —
+  six issue slots per bundle, stated nowhere before, and the accumulator file, where five
+  live 4×8×8 int8 accumulators fit and six spill, correcting both documents that had guessed
+  from one kernel. It also reframes the int8 GEMM: its inner loop issues 88.9% of the
+  machine's MAC rate while the whole kernel reaches 31.3% of peak, so the loss is outside the
+  loop and a kernel rewrite is the wrong lever. Open from it: what the elapsed time is spent
+  on instead, which is the trace unit's stall events rather than the disassembly.
 - **Candidate model pipelines (Categories A, C, D, E).** Test plans, target shapes, and falsification criteria:
   - **Category A:** Image Super-Resolution — SESR-M7 (placement, 1.48 ms latency, 3.02x iGPU win,
     70% AdaRound recovery) and Real-ESRGAN Compact (activation memory spill) closed above.
