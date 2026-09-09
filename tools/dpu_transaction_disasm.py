@@ -103,19 +103,22 @@ def disassemble_xmodel(xmodel_path: Path):
     print("-" * 80)
     print(f"{'TOTAL':>8} | {'':<28} | {total_insts:>7} | 100.00%")
 
-    # Print first 20 instructions disassembly listing
+    # Print first 20 instructions disassembly listing with decoded field semantics
     print("\n" + "=" * 80)
     print("DPU Instruction Disassembly Listing (First 20 Packets):")
-    print(f"{'Idx':>4} | {'Tag':>4} | {'Opcode / Name':<20} | {'Input BO':>10} | {'Output BO':>10} | {'Spatial/Dim':>12} | {'Scale Reg':>10}")
+    print(f"{'Idx':>4} | {'Step':>4} | {'Seq':>3} | {'Col':>4} | {'Opcode / Name':<20} | {'L1 Buffer':>10} | {'Dim Reg':>10} | {'Inst Ptr':>10}")
     print("-" * 80)
     for i, (offset, tag, words) in enumerate(all_packets[:20]):
         op = words[1]
         desc = OPCODE_MAP.get(op, f"OP_{op}")
-        in_bo = f"0x{words[2]:08X}"
-        out_bo = f"0x{words[7]:08X}"
-        spatial = f"0x{words[11]:08X}"
-        scale = f"0x{words[9]:08X}"
-        print(f"{i:04d} | 0x{tag:02X} | {desc:<20} | {in_bo:>10} | {out_bo:>10} | {spatial:>12} | {scale:>10}")
+        step = (words[0] >> 16) & 0xFF
+        seq = words[0] & 0xFF
+        col_id = words[11] & 0x0F
+        col_name = f"Col{col_id - 12}" if 12 <= col_id <= 15 else f"0x{col_id:X}"
+        l1_offset = f"0x{words[2]:06X}"
+        dim_reg = f"0x{words[7]:08X}"
+        inst_ptr = f"0x{words[10]:08X}"
+        print(f"{i:04d} | {step:>4d} | {seq:>3d} | {col_name:>4} | {desc:<20} | {l1_offset:>10} | {dim_reg:>10} | {inst_ptr:>10}")
 
     print("\nDISASSEMBLY COMPLETE.")
 

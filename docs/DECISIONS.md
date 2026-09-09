@@ -1293,6 +1293,8 @@ Investigated via `tools/windows_xrt_driver_probe.py` (`results/aie/windows_xrt_d
 - **KDMA is unsupported on Windows**: Attempting to execute a kernel with buffer objects allocated on a generic or default memory group emits `[XRT] WARNING: Reverting to host copy of buffers (KDMA not supported on windows)`. The driver falls back to an expensive host bounce buffer. To achieve zero-copy execution on Windows, every BO must be allocated on the kernel argument's connected bank via `group_id = kern.group_id(arg_idx)`.
 - **Sub-microsecond synchronization floor**: Unified memory buffer sync (`bo.sync`) requires 0.78-0.97 µs at sizes <= 16 KB (0.85 µs for a 4 KB frame tile). On unified APU memory, host-device synchronization is purely a CPU cache line flush (`clflushopt`) and invalidation, not a physical PCIe/DMA transfer.
 - **Userspace dispatch preparation floor**: Direct userspace dispatch preparation via `pyxrt` requires 8.76 µs (1.85 µs run allocation + 6.91 µs for 8 argument bindings). Pipelining via `pyxrt.runlist` requires 3.39 µs per run.
+- **Virtual hardware context capacity bound (5 columns)**: `amdxe.sys` enforces a physical ceiling of 5 active virtual hardware contexts per Phoenix device (`results/aie/windows_context_switch_bench.log`). Initial context setup requires 78.63 ms, while subsequent contexts allocate in 5.38-5.78 ms. Attempting a 6th context triggers driver failure with NTSTATUS `0xc01e0009` (hardware capacity exhaustion). Context deletion and userspace garbage collection cleanly recycles the slot in 4.98 ms.
+- **Hardware context-switch penalty (~748 µs)**: Interleaving dispatches across two distinct hardware contexts on the Phoenix NPU increases mean latency from 120.25 µs to 867.99 µs (+747.75 µs penalty, 7.22x slowdown) due to partition state teardown, instruction stream flushing, and base register reprogramming. Multi-tenant concurrency therefore requires dedicated column partitioning (`1x4.xclbin`) rather than time-sliced virtualization on a single partition.
 
 ### AIE-ML systolic shift-cut bound [0, 31]
 
@@ -1301,6 +1303,9 @@ Investigated via `quant/shift_cut.py` and `python -m quant check-shift-cut` (`re
 - **Hardware accumulator shift constraint**: On XDNA1 AIE-ML, the post-accumulator scaling unit uses a 15-bit multiplier M in [16384, 32767] and a 5-bit arithmetic right-shift register sigma in [0, 31]. The effective scaling factor is A ≈ M * 2^(-sigma).
 - **Theorem 1 (Shift-Cut Feasibility Bound)**: If an ONNX QDQ triad requires sigma < 0, the operation requires an arithmetic left-shift exceeding the 32-bit accumulator, resulting in immediate accumulator overflow (as observed in RegNetX-002, where sigma = -90 forces top-1 accuracy to collapse to 0.50%). If sigma > 31, the 5-bit shift register overflows/clamps (as observed in FastDepth, where sigma = 32 overflows by 1 bit, clamping to 31 and doubling layer outputs).
 - **Theorem 2 (Multi-Branch Inter-Scale Alignment)**: In multi-branch elementwise operations (such as Bilateral Guided Aggregation in BiSeNetV2), divergent scale grids truncate dynamic range in hardware.
+- **Theorem 3 (Systolic Scale Feasibility Window)**: In power-of-two quantization with scale positions pos = -log2(S), the output position must satisfy:
+    pos_x + pos_w - 17 <= pos_y <= pos_x + pos_w + 14
+  Violations are projectable to the nearest bound via `project_scale_to_feasible_basin` (demonstrated on FastDepth `Conv_96`: pos_y 0 -> 1, bringing sigma from 32 down to 31, eliminating the clamp without retraining).
 - **Rule for Project Ignition**: Every QDQ graph emitted for XDNA1 must be verified against the [0, 31] systolic shift-cut bound using `python -m quant check-shift-cut` prior to hardware execution.
 
 
