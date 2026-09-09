@@ -1,0 +1,41 @@
+cache key: yolocutcachekey
+deleted stale cache C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\yolocutcachekey
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\yolocutcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+model: head-cut (6 outputs), decode tail runs in numpy
+input: 640x640
+source: 1280x720 @ 30.0 fps capture rate -- that, not the NPU, may be the ceiling here
+running - press q to quit
+t=  1.0s  infer   6.9 ms  loop  29.7 ms  33.7 fps  frames=27  dets=2
+t=  2.0s  infer   6.9 ms  loop  37.6 ms  26.6 fps  frames=50  dets=2
+t=  3.1s  infer   6.9 ms  loop  17.1 ms  58.3 fps  frames=80  dets=1
+t=  4.1s  infer   6.9 ms  loop  17.7 ms  56.6 fps  frames=110  dets=1
+t=  5.1s  infer   6.8 ms  loop  16.8 ms  59.4 fps  frames=141  dets=1
+t=  6.1s  infer   6.8 ms  loop  16.9 ms  59.1 fps  frames=170  dets=0
+t=  7.1s  infer   6.9 ms  loop  40.9 ms  24.5 fps  frames=201  dets=2
+t=  8.1s  infer   6.8 ms  loop  26.0 ms  38.4 fps  frames=232  dets=1
+t=  9.1s  infer   6.8 ms  loop  28.7 ms  34.8 fps  frames=262  dets=1
+t= 10.1s  infer   6.9 ms  loop  20.1 ms  49.7 fps  frames=293  dets=2
+t= 11.2s  infer   6.8 ms  loop  17.7 ms  56.5 fps  frames=323  dets=2
+t= 12.2s  infer   6.9 ms  loop  44.6 ms  22.4 fps  frames=354  dets=1
+t= 13.2s  infer   6.9 ms  loop  21.0 ms  47.7 fps  frames=384  dets=1
+t= 14.2s  infer   6.8 ms  loop  16.6 ms  60.2 fps  frames=415  dets=2
+reached --max-seconds 15s, quitting
+
+=== NPU | models/yolov8n_cut_xint8_adaround.onnx | 640px | source 0 (1280x720 @ 30.0 fps) ===
+frames  439 in 15.0s (29.2 fps end to end)
+infer   mean 6.86 ms   median 6.79 ms   p95 7.39 ms   (145.7 fps if infer-bound)
+post    mean 2.90 ms
+loop    mean 24.53 ms   median 19.82 ms   p95 43.90 ms
+detections 579 across 439 frames (1.32/frame):
+   person           394
+   couch            82
+   chair            64
+   laptop           39
+wrote C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\outputs\webcam\webcam_yolov8n_cut_xint8_adaround_npu_best.jpg  (4 detections)
+wrote C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\outputs\webcam\webcam_yolov8n_cut_xint8_adaround_npu_last.jpg
+
+  VERDICT: 922/929 nodes on the NPU. The EP engaged.
