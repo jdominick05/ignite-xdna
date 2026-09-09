@@ -1128,7 +1128,10 @@ AdaRound's failure is now mechanically explained rather than asserted: it picks 
 `floor(w/Δ)` and `ceil(w/Δ)` and **never changes Δ**. The audit confirms the scale grid is
 byte-identical before and after AdaRound; only the dead-channel count shifts at the
 rounding boundary (28/432 → 24/432), worth 0.8 points. **Deploying a SiLU/GELU backbone to
-XDNA1 needs QAT or per-channel scale support, not a better PTQ recipe.**
+XDNA1 needs QAT or per-channel scale support, not a better PTQ recipe.** *(Narrowed 2026-09-09:
+per-channel scale support is measured to be unavailable -- the EP places 0 of N nodes for any
+weight scale with more than one element, so QAT is the remaining half.
+[Verdict](#per-channel-weight-scales-are-rejected-outright-2026-09-09-desktop-2).)*
 
 **A rank-5 tensor never reaches the NPU.** Across `mobilevit_stock`'s 1585 nodes, **207
 touch a rank-5 tensor and all 207 are on CPU — zero exceptions** (`--rank-audit`). The
@@ -4706,6 +4709,59 @@ which is the same arithmetic Ignition would use but is not the same thing as Ign
 So this guard is a defence for graphs Ignition already supports, and the measured separation is the
 argument for its threshold -- not an accuracy result. Closing that gap needs the depthwise triple
 path implemented and gated against a fresh oracle first.
+
+---
+
+### Per-channel weight scales are rejected outright (2026-09-09, Desktop 2)
+
+Per-channel weight quantization is named in two places as the remedy for MobileViT-XXS, and the
+only evidence about it was a ResNet50 session build that reached 11,973,251,072 bytes and was
+stopped by hand at 273.7 s **without ever returning a verdict**. That experiment asked the question
+with 54 convolutions at once. Asked with one, a compile costs seconds.
+
+The mutation is `quant/probe.py`'s own `weights_per_channel`: each scalar weight scale and zero
+point is repeated across the output channels and the DequantizeLinear gains an `axis`. The integers
+and the real grid are untouched, so a correct implementation must return exactly the per-tensor
+result ([log](../results/quant/perchannel_verdict_desktop2_20260909.log), device idle per its
+[witness](../results/quant/contexts_perchannel_desktop2_20260909.log)):
+
+| Fixture | Channels | Per-tensor placed | Per-channel placed |
+|---|---|---|---|
+| 1 Conv | 64 | 5 / 7 | **0 / 7** |
+| 2 Conv | 64 | 10 / 12 | **0 / 12** |
+| 4 Conv | 64 | 20 / 22 | **0 / 22** |
+| 8 Conv | 64 | 40 / 42 | **0 / 42** |
+| 1 Conv | **1** | 5 / 7 | **5 / 7** |
+
+**The EP takes nothing.** Not a partial placement, not a fallback of the affected Convs: the whole
+graph goes to CPU, `deviceStat` reading `{'CPU': 22}` for the four-Conv case with all four Convs,
+13 DequantizeLinear and 5 QuantizeLinear on CPU. Note this is plain `CPU`, not the `VITIS_EP_CPU`
+that appears in the A8W8 and A16W8 fallbacks. The per-tensor baseline of the *same* fixture places
+normally at every size.
+
+**The last row is the control, and it changes what the verdict means.** With a single output
+channel the scale vector has length 1 and only the `axis` attribute distinguishes it from the
+per-tensor form -- and it places 5/7, with NPU output identical to per-tensor to the last bit. So
+the rejection is not the `axis` attribute, and it is not a schema or parsing failure. It is also
+not about the values differing, because every value in these fixtures is the *same repeated
+scalar*. **What the EP rejects is a weight scale with more than one element, whatever it contains.**
+
+Two supporting checks confirm the fixtures are honest. On CPU the per-tensor and per-channel models
+agree exactly (`cpu_pt_vs_pc_max = 0`), which is the mutation's design. And the rejected models'
+"NPU" output equals their CPU output exactly (`npu_vs_cpu_perchannel_max = 0`), which is the
+signature of full fallback rather than a silent miscompute.
+
+**Consequence.** MobileViT-XXS's collapse is driven by a depthwise weight-scale grid reaching
+delta = 1.0, and per-channel scales are the standard fix for exactly that. They are not available
+on this hardware through this EP at opset 17. The recorded verdict that a SiLU/GELU backbone
+"requires QAT or per-channel scale support" therefore narrows to **QAT**, since the other half is
+now measured to be unreachable. This also retires the open question of whether the compiler's
+memory growth was hiding a usable feature: the growth was on the way to a rejection.
+
+**Scope.** One fixture family, 3x3 Convs with equal input and output channels, batch 1, opset 17,
+Ryzen AI 1.7.1 on Phoenix. Per-channel *activation* scales and per-channel *bias* were not tested,
+and neither was a genuinely differing channel grid -- though a vector of identical values being
+refused makes a differing one very unlikely to fare better.
 
 ---
 

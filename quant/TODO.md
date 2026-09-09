@@ -136,9 +136,15 @@ recorded in the handoff and Git history rather than treated as future features.
 
 ## Compiler research, separate from production options
 
-- [ ] Minimize the repeated-per-channel-parameter compiler memory growth under the
-  bounded runner. Obtain a placement and numerical verdict before trying differing
-  channel grids or proposing MobileViT recovery.
+- [x] Obtain the per-channel placement verdict. Closed 2026-09-09, and the answer is no: the
+  EP places **0 of N** nodes for any weight scale with more than one element, at 1, 2, 4 and 8
+  convolutions, sending the whole graph to CPU. A single-output-channel control places normally,
+  so the `axis` attribute is fine and it is the vector length that is refused; the fixture values
+  are identical repeats, so it is not about differing channel grids. Asked with one convolution
+  instead of 54 the compile costs seconds, which is why the earlier attempt's memory growth never
+  needed minimizing -- it was on the way to a rejection.
+  [Verdict and controls](../docs/BENCHMARKS.md#per-channel-weight-scales-are-rejected-outright-2026-09-09-desktop-2). Differing channel grids and
+  MobileViT recovery via per-channel are closed with it.
 - [ ] Isolate product-scale INT32-bias NPU numerical failure. Separately isolate the
   optimizer-dependent CPU discrepancy for dtype-only INT32 bias; neither mechanism
   is established by the current output comparisons.

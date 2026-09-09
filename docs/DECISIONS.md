@@ -39,8 +39,14 @@
    Perturbing activation scales off the power-of-two grid can retain NPU placement
    while breaking numerical agreement. INT32 bias dtype alone also retains placement
    and baseline NPU outputs, but the input×weight-scale representation produces wrong
-   NPU results. Keep both as experimental mutations. Per-channel construction was
-   stopped for memory growth before a placement verdict. Stripping metadata or naming
+   NPU results. Keep both as experimental mutations. **Per-channel weight scales are now
+   measured and rejected (2026-09-09): the EP places 0 of N nodes -- whole graph to CPU, all
+   Convs included -- for any weight scale with more than one element, at 1, 2, 4 and 8
+   convolutions. A single-output-channel control, where the vector has length 1 and only the
+   `axis` attribute differs, places normally with identical output, so it is the vector length
+   and not the attribute. The values in these fixtures are identical repeats, so it is not about
+   channel grids differing either.**
+   [Verdict and controls](BENCHMARKS.md#per-channel-weight-scales-are-rejected-outright-2026-09-09-desktop-2). Stripping metadata or naming
    the producer `Ignition` preserves measured placement and outputs. These findings
    bound this artifact and runtime, not every graph the compiler may see.
    **A16W8 (INT16 activations / INT8 weights) now measured,
@@ -1310,7 +1316,9 @@ Reproduce: `./scripts/mobilevit-eval.sh --slice`, `python tools/audit_quant_grid
   `ceil(w/Δ)`; it never changes Δ. The audit confirms the scale grid is byte-identical
   before and after AdaRound; only the dead-channel count shifts at the rounding boundary
   (28/432 → 24/432), which buys 0.00% → 0.80% top-1. **Deploying a SiLU/GELU backbone on
-  XDNA1 requires QAT or per-channel scale support — no PTQ recipe reaches it.**
+  XDNA1 requires QAT or per-channel scale support — no PTQ recipe reaches it.** *(Narrowed
+  2026-09-09: per-channel scale support is measured to be unavailable on this EP, so QAT is the
+  remaining half. [Verdict](BENCHMARKS.md#per-channel-weight-scales-are-rejected-outright-2026-09-09-desktop-2).)*
 - **Rank-5 tensors never reach the NPU.** Across `mobilevit_stock`'s 1585 nodes, 207 touch a
   rank-5 tensor and **all 207 are on CPU, no exceptions** (`--rank-audit`). Control: YOLOv8's
   16 rank-4 `Slice` nodes all place on NPU, and MobileViT is the only model in this repo that
