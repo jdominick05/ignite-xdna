@@ -1326,7 +1326,7 @@ Super-resolution models are structurally matched to XDNA1: 100% convolutional, z
   3. Profile latency and achieved TOPS via `tools/estimate_tops.py`.
 - **Falsification criteria:** The pipeline fails if sub-pixel shuffling or spatial upsampling operations fall back to CPU, incurring cross-device transfer overhead that negates convolutional acceleration.
 - **Negative result (Real-ESRGAN Compact at 256x256):** Real-ESRGAN Compact (64-channel residual dense chain) explodes intermediate activation memory across residual concatenations (12.6 MB per activation tensor), exceeding on-chip tile memory and fracturing into **81 DPU subgraphs** with **1,068 nodes on CPU** and only 707 on NPU.
-- **Real-ESRGAN 10-RRDB at 64x64 sweet spot:** Sizing static input tiles to 64x64 drops activation tensors to ~196 KB (INT8), allowing AMD's 10-RRDB architecture (156 Convs, 120 Concats, 123 LeakyReLUs) to compile into **exactly 1 monolithic DPU subgraph (1,773 / 1,775 nodes on NPU, 99.9%)** with 0 internal CPU fallbacks. Runs at **14.02 ms per tile (71.3 fps)** on Phoenix XDNA1 with AdaRound — **3.71x faster than 8-core Zen 4 CPU (51.95 ms)** and outperforming Radeon 780M iGPU DML on full Set5/Set14 tiled evaluation (14.39 ms vs 18.34 ms on Set5). AdaRound recovers Set5 fidelity to 24.50 dB (0.7085 SSIM). Conversely, SRVGGNet-v3 Compact revealed an unsupported op rejection: `PRelu` is refused by the VitisAI EP on AIE, falling back to CPU. Full working: [docs/BENCHMARKS.md](docs/BENCHMARKS.md#category-a-cont-high-capacity-super-resolution-real-esrgan-on-xdna1-npu).
+- **Real-ESRGAN 10-RRDB at 64x64 and 128x128 monolithic scaling:** Sizing static input tiles to 64x64 (~196 KB INT8) and 128x128 (~786 KB INT8) drops activation tensors below the host-spill threshold, allowing AMD's 10-RRDB architecture (156 Convs, 120 Concats, 123 LeakyReLUs) to compile into **exactly 1 monolithic DPU subgraph (1,773 / 1,775 nodes on NPU, 99.9%)** with 0 internal CPU fallbacks. At 64x64, runs at **14.02 ms per tile (71.3 fps)** on Phoenix XDNA1 with AdaRound — **3.71x faster than 8-core Zen 4 CPU (51.95 ms)** and outperforming Radeon 780M iGPU DML on full Set5/Set14 tiled evaluation (14.39 ms vs 18.34 ms on Set5). At 128x128, runs at **27.27 ms per tile (36.7 fps)** on NPU plain XINT8 — **9.82x faster than Zen 4 CPU (267.74 ms)** and **1.27x faster than Radeon 780M iGPU DML FP32 (34.67 ms)** on single-tile execution, while delivering **2.06x faster throughput** than four stitched 64x64 tiles (56.08 ms). Conversely, SRVGGNet-v3 Compact revealed an unsupported op rejection: `PRelu` is refused by the VitisAI EP on AIE, falling back to CPU. Full working: [docs/BENCHMARKS.md](docs/BENCHMARKS.md#category-a-cont-high-capacity-super-resolution-real-esrgan-on-xdna1-npu).
 
 ### Category B: Real-Time Portrait Matting and Semantic Segmentation
 
@@ -1573,11 +1573,11 @@ sections above.
   1.58 dB on Set5 (34.06 dB vs 35.64 FP32); **AdaRound FastFinetune recovers 69.6% (+1.10 dB)
   to reach 35.16 dB (0.9437 SSIM)** at zero latency cost. For high-capacity 4x restoration,
   Real-ESRGAN Compact at 256x256 fractured into 81 subgraphs (12.6 MB activation spill), but
-  sizing static tiles to 64x64 input resolves SRAM exhaustion completely: AMD 10-RRDBNet
+  sizing static tiles to 64x64 and 128x128 resolves SRAM exhaustion completely: AMD 10-RRDBNet
   compiles into a **single monolithic DPU subgraph (1,773 / 1,775 nodes on NPU, 99.9%)**, running
-  at **14.02 ms per tile (71.3 fps)** on NPU (3.71x faster than Zen 4 CPU, 1.27x faster than
-  DML on Set5 tiling) with AdaRound recovering Set5 fidelity to 24.50 dB (0.7085 SSIM). Both
-  hypotheses closed. [Working](docs/BENCHMARKS.md#category-a-image-super-resolution-sesr-m7).
+  at **14.02 ms per tile (71.3 fps)** at 64x64 with AdaRound and **27.27 ms (36.7 fps)** at 128x128 on
+  plain XINT8 (9.82x faster than Zen 4 CPU, 1.27x faster than Radeon 780M iGPU DML FP32 at 34.67 ms,
+  and 2.06x faster throughput than four 64x64 tiles). Both hypotheses closed. [Working](docs/BENCHMARKS.md#category-a-cont-high-capacity-super-resolution-real-esrgan-on-xdna1-npu).
 
 **Still open.**
 

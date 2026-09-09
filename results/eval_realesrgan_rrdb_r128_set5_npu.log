@@ -1,0 +1,20 @@
+﻿Loaded 5 image pairs for Set5.
+Running Bicubic interpolation baseline on Set5...
+Evaluating FP32 Reference (realesrgan_rrdb_r128_fp32.onnx) on CPU...
+Evaluating XINT8 (Plain) (realesrgan_rrdb_r128_xint8.onnx) on NPU...
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\realesrgan_rrdb_128_cache
+First run compiles the model. It takes a while and looks frozen. It isn't.
+
+==========================================================================
+ Real-ESRGAN Evaluation Benchmark: Set5 (Scale 4x) on NPU
+==========================================================================
+| Model Variant       | PSNR (Y)  | SSIM (Y)  | PSNR (RGB)| SSIM (RGB)| Latency (ms)| Throughput |
+|---------------------|-----------|-----------|-----------|-----------|-------------|------------|
+| Bicubic Baseline    |   27.30 dB |   0.7941  |   26.88 dB |   0.7762  |          ù  |          ù |
+| FP32 Reference (CPU) |   24.40 dB |   0.7379  |   23.40 dB |   0.6820  |     237.75  |    4.2 fps |
+| XINT8 (Plain) (NPU) |   24.41 dB |   0.7008  |   23.33 dB |   0.6537  |      29.65  |   33.7 fps |
+==========================================================================
+
