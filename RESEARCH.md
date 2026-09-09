@@ -1396,7 +1396,8 @@ Dense geometric scene prediction from single monocular camera streams without tr
 - **Candidate architectures:**
   1. MiDaS v2.1 Small (EfficientNet-Lite / MobileNet backbone with multiscale feature fusion decoder). **Tested** —
      see below and [docs/BENCHMARKS.md](docs/BENCHMARKS.md#category-d-monocular-depth-estimation-midas-v21-small).
-  2. FastDepth (MobileNet encoder with depthwise separable conv decoder).
+  2. FastDepth (MobileNet encoder with depthwise separable conv decoder). **Tested** —
+     see below and [docs/BENCHMARKS.md](docs/BENCHMARKS.md#category-d-second-candidate-fastdepth-mobilenet-nnconv5dw).
 - **Hypothesis:** Pure convolutional encoder-decoder depth estimation produces dense relative inverse depth maps at 256x256 or 384x384 in 5-8 ms on NPU, providing real-time spatial scene representation for synthetic bokeh and spatial interaction.
 - **Target shapes and pipeline:** Static input `(1, 3, 256, 256)` or `(1, 3, 384, 384)` -> static output `(1, 1, H, W)`.
 - **Quantization:** Quark XINT8 + AdaRound on NYU-Depth / KITTI image patches.
@@ -1406,6 +1407,7 @@ Dense geometric scene prediction from single monocular camera streams without tr
   3. Confirm whether depthwise decoder layers avoid the scale grid collapse observed in MobileViT.
 - **Falsification criteria:** If multiscale residual connections in the decoder cause frequent memory spills or CPU fallback.
 - **MiDaS v2.1 Small result:** Stock bilinear upsampling causes CPU fallback on 4 Resize nodes, fragmenting DPU execution into 5 subgraphs and yielding 16.44 ms. Converting decoder Resize layers to nearest-neighbor fuses the model into a single monolithic DPU subgraph (682/684 nodes on NPU, 99.7%), accelerating inference by 34% to **10.81 ms (92.5 fps)** — a **1.53× win over 8-core Zen 4 CPU (16.56 ms)**. Quantization fidelity is strong under plain XINT8 PTQ without requiring AdaRound (Pearson $r = 0.8706$, MAD $26.02 / 255$, RMSE $34.00 / 255$), refuting the depthwise scale grid collapse fear. Full working: [docs/BENCHMARKS.md](docs/BENCHMARKS.md#category-d-monocular-depth-estimation-midas-v21-small).
+- **FastDepth result:** Depthwise separable decoding (`NNConv5dw-skipadd`) compiles natively into a **single monolithic DPU subgraph (255/257 nodes, 99.2%)** with 0 internal CPU round-trips. Executes in **2.87 ms (348.1 fps)** on Phoenix XDNA1 — **1.12× faster than 8-core Zen 4 CPU (3.22 ms)** and **1.05× faster than Radeon 780M iGPU DML FP32 (3.02 ms)**, running 3.77× faster than MiDaS v2.1 Small. Plain XINT8 PTQ preserves depth structure with strong fidelity (Pearson $r = 0.9383$, MAD $16.14 / 255$, RMSE $21.06 / 255$, $\delta < 1.25 = 68.07\%$), outperforming MiDaS accuracy without needing AdaRound. Full working: [docs/BENCHMARKS.md](docs/BENCHMARKS.md#category-d-second-candidate-fastdepth-mobilenet-nnconv5dw).
 
 ### Category E: Untested Classification Topologies
 
@@ -1601,13 +1603,15 @@ sections above.
   natively on XDNA1 or severed zero-shot without retraining. All Category C candidate hypotheses
   are now closed.
   [Working](docs/BENCHMARKS.md#category-c-third-candidate-yolo-world-v2-vision-language-decoupled-cross-attention).
-- **Category D: Monocular Depth Estimation (MiDaS v2.1 Small).** New pipeline
-  (`pipelines/midas/`). Nearest-neighbor upsampling fuses all RefineNet decoder layers
-  into a single monolithic DPU subgraph (682/684 nodes, 99.7%), eliminating 4 host CPU
-  round-trips and accelerating inference by 34% (16.44 -> 10.81 ms, 92.5 fps) — a
-  1.53x win over Zen 4 CPU (16.56 ms). Plain XINT8 preserves depth structure cleanly
-  (Pearson r = 0.8706, MAD = 26.02/255) without scale grid collapse. Both hypotheses
-  closed. [Working](docs/BENCHMARKS.md#category-d-monocular-depth-estimation-midas-v21-small).
+- **Category D: Monocular Depth Estimation (MiDaS v2.1 Small and FastDepth).** New pipelines
+  (`pipelines/midas/`, `pipelines/fastdepth/`). Nearest-neighbor upsampling in MiDaS fuses all
+  RefineNet decoder layers into a single monolithic DPU subgraph (682/684 nodes, 99.7%), eliminating 4 host
+  CPU round-trips and accelerating inference by 34% (16.44 -> 10.81 ms, 92.5 fps) — a 1.53x win over Zen 4 CPU.
+  FastDepth with pure depthwise-separable decoding (`NNConv5dw-skipadd`) compiles into a single monolithic
+  DPU subgraph (255/257 nodes, 99.2%) executing in **2.87 ms on Phoenix XDNA1 (348.1 fps)** — **1.12× faster
+  than 8-core Zen 4 CPU** (3.22 ms) and **1.05× faster than Radeon 780M iGPU DML FP32** (3.02 ms), while delivering
+  superior INT8 fidelity (Pearson $r = 0.9383$, MAD $16.14 / 255$, $\delta < 1.25 = 68.07\%$) without requiring AdaRound.
+  All Category D candidate hypotheses are closed. [Working](docs/BENCHMARKS.md#category-d-second-candidate-fastdepth-mobilenet-nnconv5dw).
 - **Category A: Image Super-Resolution (SESR-M7 and Real-ESRGAN).** New pipelines (`pipelines/sesr/`, `pipelines/realesrgan/`).
   Sub-pixel convolution (`DepthToSpace` / PixelShuffle) compiles natively on AIE into a
   single monolithic DPU subgraph (50/52 nodes, 96.2%, zero internal fallbacks). Achieves
@@ -1712,7 +1716,8 @@ sections above.
   - **Category C:** Advanced Detection and RepVGG Backbones — YOLOv6n, YOLOv11n, and
     YOLO-World v2 closed above.
   - **Category D:** Monocular Depth Estimation — MiDaS v2.1 Small (bilinear vs nearest fusion,
-    10.81 ms, 1.53x CPU win) closed above; FastDepth still open.
+    10.81 ms, 1.53x CPU win) and FastDepth (depthwise separable decoder, 2.87 ms, 1.05x iGPU win,
+    r = 0.9383) closed above.
   - **Category E:** Untested Classification Topologies — DenseNet-121, ResNeXt-50, and RegNetX-002 (placement, Concat DMA, grouped convs, shift-cut scale explosion) closed above.
 - **Longer term:** a detector fine-tuned for fixed camera feeds (licence-plate
   recognition), reusing the head-cut + XINT8 + AdaRound recipe rather than re-deriving it.

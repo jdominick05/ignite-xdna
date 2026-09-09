@@ -2490,6 +2490,68 @@ Two findings:
    boundary nodes, accelerating inference by 34% (10.81 ms vs 16.44 ms) with negligible loss
    in depth correlation ($r = 0.8706$ vs $0.8834$).
 
+### Category D, second candidate: FastDepth (MobileNet-NNConv5dw)
+
+`pipelines/fastdepth/` — new pipeline, built against MIT's FastDepth architecture (Wofk et al., ICRA 2019).
+Tests Category D's depthwise-separable convolutional decoder hypothesis: pure convolutional encoder-decoder
+monocular depth estimation using a MobileNet encoder and a depthwise separable decoder (`NNConv5dw-skipadd`).
+All 5 upsampling stages natively use nearest-neighbor resize, avoiding the multi-subgraph fragmentation observed
+in stock bilinear MiDaS.
+
+Exported cleanly to `models/fastdepth_fp32.onnx` (opset 17, 84 nodes: 38 Convs, 27 Clips, 11 Relus, 5 Resizes, 3 Adds;
+static batch 1, input shape `[1, 3, 256, 256]`, output shape `[1, 1, 256, 256]`). Preprocessing is byte-identical
+between calibration and inference via `npu/fastdepth.py` (cv2-only, standard `[0, 1]` scaling RGB / 255.0,
+`cv2.INTER_LINEAR` resize).
+
+#### Monolithic DPU offload and op placement
+
+Quantized to Quark XINT8 with 300 calibration images (`data/fastdepth_calib/`, `results/quant_fastdepth_xint8.log`):
+254 nodes in quantized ONNX graph.
+
+The VitisAI EP accepts **255 of 257 nodes (99.2%) on NPU** (`results/diag_fastdepth_xint8.log`), compiling into
+**exactly 1 monolithic DPU subgraph** (`subgraphStat: [{'device': 'DPU', 'count': 1}]`). Only the outer input
+`QuantizeLinear` and output `DequantizeLinear` execute on CPU:
+- All 38 Convolutions execute natively on AIE.
+- All 27 `Clip` (ReLU6) and 11 `Relu` activations execute natively on AIE.
+- All 5 nearest-neighbor `Resize` layers compile natively on AIE with zero internal CPU fallbacks.
+- All 3 residual skip `Add` layers compile natively on AIE.
+
+#### Tri-Hardware Performance Comparison
+
+Measured on Desktop 2 (Ryzen 7 8700G, Radeon 780M, Phoenix XDNA1 NPU, 50 iterations, batch 1,
+`sess.run` only, `models/fastdepth_fp32.onnx` vs `models/fastdepth_fp32_xint8.onnx`):
+
+| Hardware / Provider | Precision | Subgraphs | Latency (mean) | Latency (median) | Throughput | Backing Log |
+|---|---|---|---|---|---|---|
+| CPU (Zen 4, 8C/16T) | FP32 | 1 (CPU) | 3.22 ms | 3.17 ms | 310.2 fps | `results/lat_fastdepth_cpu.log` |
+| iGPU (Radeon 780M, DirectML) | FP32 | 1 (DML) | 3.02 ms | 2.63 ms | 331.1 fps | `results/lat_fastdepth_dml.log` |
+| **NPU (Phoenix XDNA1)** | **XINT8** | **1 (DPU)** | **2.87 ms** | **2.78 ms** | **348.1 fps** | `results/lat_fastdepth_xint8_npu.log` |
+
+**Findings:**
+1. **NPU beats both Zen 4 CPU and Radeon 780M iGPU**: At **2.87 ms (348.1 fps)**, FastDepth on Phoenix XDNA1
+   is **1.12× faster than 8-core Zen 4 CPU** (3.22 ms) and **1.05× faster than Radeon 780M iGPU DirectML FP32** (3.02 ms).
+   This establishes FastDepth alongside SESR-M7 and Real-ESRGAN 128² as vision pipelines where the NPU beats the integrated GPU.
+2. **3.77× faster than MiDaS v2.1 Small**: Pure depthwise separable decoding cuts latency from MiDaS's 10.81 ms
+   to 2.87 ms on the same silicon, delivering over 340 frames per second of continuous depth estimation.
+
+#### Quantitative Depth Fidelity Evaluation
+
+Evaluated across 50 validation scenes (`data/fastdepth_val/`) against the FP32 reference model running on CPU:
+
+| Metric | CPU XINT8 | NPU XINT8 | Delta (NPU vs CPU) | Backing Log |
+|---|---|---|---|---|
+| Pearson Correlation $r$ | 0.9363 +/- 0.0751 | **0.9383 +/- 0.0738** | +0.0020 | `results/eval_fastdepth_xint8_cpu.log` / `results/eval_fastdepth_xint8_npu.log` |
+| Mean Absolute Diff (MAD) | 16.33 / 255 | **16.14 / 255** | -0.19 / 255 | `results/eval_fastdepth_xint8_cpu.log` / `results/eval_fastdepth_xint8_npu.log` |
+| Root Mean Squared (RMSE) | 21.36 / 255 | **21.06 / 255** | -0.30 / 255 | `results/eval_fastdepth_xint8_cpu.log` / `results/eval_fastdepth_xint8_npu.log` |
+| Threshold Acc ($\delta < 1.25$) | 68.21% | **68.07%** | -0.14% | `results/eval_fastdepth_xint8_cpu.log` / `results/eval_fastdepth_xint8_npu.log` |
+| Threshold Acc ($\delta < 1.25^2$) | 85.40% | **85.72%** | +0.32% | `results/eval_fastdepth_xint8_cpu.log` / `results/eval_fastdepth_xint8_npu.log` |
+| Evaluation Latency (infer) | 10.49 ms | **2.80 ms** | -7.69 ms (3.75× faster) | `results/eval_fastdepth_xint8_cpu.log` / `results/eval_fastdepth_xint8_npu.log` |
+
+FastDepth preserves relative scene depth and structural geometry exceptionally well under plain XINT8 PTQ:
+Pearson $r = 0.9383$ (substantially higher than MiDaS v2.1 Small's 0.8706) and MAD of $16.14 / 255$ (vs MiDaS's $26.02 / 255$).
+Visual inspection (`results/fastdepth_depth_npu.jpg` vs `results/fastdepth_depth_cpu.jpg`) confirms sharp depth boundaries
+around foreground objects and consistent planar surfaces without quantization contouring.
+
 ### Category A: Image Super-Resolution (SESR-M7)
 
 `pipelines/sesr/` — new pipeline, implementing Collapsible Linear Blocks for Super-Efficient

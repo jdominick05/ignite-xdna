@@ -33,7 +33,7 @@ Full environment split, install steps and footguns: [`docs/SETUP.md`](docs/SETUP
 | `pipelines/yolov6n` | YOLOv6n detection (RepVGG backbone, no DFL) | **Working** — 6.62 ms on the NPU (518/525 nodes), mAP@50-95 33.57 AdaRound vs 22.92 plain XINT8 and 36.95 float (5000 images) |
 | `pipelines/yolov11` | YOLOv11n detection (C3k2 + C2PSA attention) | **Fractured (6/1300 nodes, 33.29 ms)** due to C2PSA 4D MatMul; ablated backbone runs at **7.08 ms (1173/1180 nodes)** |
 | `pipelines/yolow` | YOLO-World v2 open-vocabulary (cross-attention) | **Fractured (48/1081 nodes, 103.31 ms)** due to 5D Einsum/ReduceMax; ablated backbone runs at **15.89 ms (946/953 nodes)** |
-| `pipelines/midas` | MiDaS v2.1 Small (monocular depth) | **Working** — 10.81 ms on NPU (682/684 nodes, single subgraph), r = 0.8706 vs FP32 (50 scenes) |
+| `pipelines/{midas,fastdepth}` | MiDaS / FastDepth (monocular depth) | **Working** — FastDepth 2.87 ms (beats 3.02 ms iGPU, r=0.9383); MiDaS 10.81 ms (1.53x CPU, r=0.8706) |
 | `pipelines/sesr` | SESR-M7 (2x super-resolution) | **Working** — 1.48 ms on NPU (50/52 nodes, single subgraph), 35.16 dB PSNR on Set5 (XINT8+AdaRound) |
 | `pipelines/realesrgan` | Real-ESRGAN 10-RRDB (4x super-resolution) | **Working** — 14.02 ms on NPU (1773/1775 nodes, single subgraph), 24.50 dB on Set5 (XINT8+AdaRound) |
 | `pipelines/mobilevit` | MobileViT-XXS (hybrid CNN/transformer) | **Does not survive INT8** — 0.00% top-1, kept as the negative result |

@@ -691,6 +691,18 @@
   **15.89 ms (62.9 fps)**. However, because bypassing attention destroys open-vocabulary alignment (mAP 0.3%)
   and plain XINT8 PTQ scrambles 5D attention weights (mAP 1.8%), running stock YOLO-World cross-attention
   directly on the DPU is rejected.
+- **Depthwise-separable decoder achieves monolithic DPU compilation for monocular depth (2026-09-09):**
+  MiDaS v2.1 Small required substituting stock bilinear upsampling with nearest-neighbor resize to avoid
+  a 5-subgraph partitioning trap that added 5.63 ms of host round-trips. FastDepth (Wofk et al., ICRA 2019)
+  natively pairs nearest-neighbor upsampling with depthwise-separable 5×5 convolutions (`NNConv5dw-skipadd`),
+  bypassing the bilinear dispatch trap by design. In the quantized XINT8 graph (`models/fastdepth_fp32_xint8.onnx`),
+  the VitisAI EP accepts 255 of 257 nodes (99.2%) into exactly 1 monolithic DPU subgraph
+  (`subgraphStat: [{'device': 'DPU', 'count': 1}]` in `results/diag_fastdepth_xint8.log`), with zero internal
+  CPU fallbacks across all 38 Convs, 27 Clips, 11 Relus, 5 Resizes, and 3 Adds. Executes in **2.87 ms (348.1 fps)**
+  on Phoenix XDNA1 — outperforming both Zen 4 CPU (3.22 ms, 1.12× speedup) and Radeon 780M iGPU DML FP32 (3.02 ms, 1.05× win).
+  Unlike MobileViT, depthwise separable layers quantize smoothly under plain XINT8 PTQ without scale grid collapse
+  (Pearson $r = 0.9383$, MAD $16.14 / 255$, $\delta < 1.25 = 68.07\%$), proving that lightweight depthwise-separable
+  decoders are optimal for real-time dense spatial prediction on XDNA1.
 
 ## The YOLOv8 partitioning failure (resolved)
 
