@@ -1,11 +1,26 @@
 #!/usr/bin/env python3
-"""DPU Microcode & Transaction Disassembly Engine for AMD XDNA1.
+"""Heuristic byte scan of the mc_code fields in a compiled .xmodel (AMD XDNA1).
 
-Directly disassembles compiled .xmodel artifacts produced by the VitisAI EP
-into low-level DPU micro-instruction packets, revealing:
-1. Low-level DPU opcode taxonomy (Op 3 = Conv/Dense, Op 6 = Depthwise Conv, etc.).
-2. Packet framing (48 bytes / 12 words per microcode instruction).
-3. Memory bank address offsets, activation dimensions, and hardware shift scaling.
+NOT a disassembler, despite the filename. Read this before citing its output.
+
+What it does: finds the mc_code bytefield by a literal ASCII b"mc_code" search, then
+walks the archive one byte at a time looking for any 32-bit word whose high byte is
+0x0B, and consumes 48 bytes from each hit. Alignment is never validated. OPCODE_MAP
+below is a six-entry hand-written guess; no AIE-ML or DPU ISA document backs it, and
+none is cited anywhere in this repo.
+
+What its output supports: that the archive contains a dense ~48-byte-strided record
+stream, and that the assumed opcode position is strongly bimodal (on FastDepth, 49.38%
+"3" and 37.35% "6"), which is CONSISTENT WITH a mostly pointwise-and-depthwise graph.
+
+What it does not support: any semantic decode. On FastDepth 13.27% of the reported
+opcodes are ASCII metadata strings read as instruction words -- 0x74746F62 is "bott",
+0x6E617274 is "tran", and 0x6F630A0A is "oc" followed by two newline bytes, which no
+instruction opcode contains. So an unquantified share of the "packets" are not
+instructions and the record boundary is not established. Every packet in the listing
+also carries the identical Inst Ptr, the signature of a misaligned constant-offset read.
+
+For real AIE2 core machine code, use tools/aie_disasm.py (Peano's own llvm-objdump).
 
 Usage:
   python tools/dpu_transaction_disasm.py --cache fastdepthcachekey
