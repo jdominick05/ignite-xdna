@@ -3620,7 +3620,9 @@ Fresh same-listing oracle: [`XINT8_ADAROUND` on the sorted 64-image portrait lis
 (`scripts/quant-reference.sh --in-model models/modnet/modnet_cut_fp32.onnx --calib-dir
 data/modnet_calib --cfg-path models/modnet/preprocess_config.json --cle --adaround`): 9 CLE
 patterns, 71 modules, 33 early stops, 2,881.1 s end to end including calibration and the
-MinMSE search, peak working set 15,801,147,392 bytes, SHA256 `8ec93db8…1524d`. Ignition on
+MinMSE search, peak working set 15,801,147,392 bytes, SHA256 `8ec93db8…1524d`. That run was
+contended and was repeated on a quiet box; the timings here and below are **not** a producer
+comparison, for the reasons set out after the diff. Ignition on
 its CLE c64 artifact ([log](../results/quant/quant_modnet_cut_ignition_cle_adaround_c64.log),
 `scripts/quant-adaround.sh --in-model models/modnet/modnet_cut_fp32.onnx --calib-dir
 data/modnet_calib --cfg-path models/modnet/preprocess_config.json`, Quark import-blocked):
