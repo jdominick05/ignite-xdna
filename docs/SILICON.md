@@ -382,7 +382,7 @@ small-op verdict in this repo is conditional on where it lands.
 **MEASURED 2026-09-09, and it lands low: ~36 µs for batchable work.** Batched `pyxrt.runlist`
 submission amortises the same passthrough to **36.3 µs** per dispatch — 17× below the 617 µs
 IRON floor and a *quarter* of the 169.8 µs bracket, so the hardware half is not silicon
-either (`results/aie/dispatch_runlist_npu.log`). Of the six ops listed above, four now clear
+either (`results/aie/dispatch_runlist_npu.log`). (**Sitting label**, because two figures for this same measurement class are both live: 36.3 µs is the original 2026-09-09 pyxrt run; the same-sitting rerun in `results/aie/dispatch_cpp_runlist_npu.log` reads **35.9 µs**, and the C++ figure is compared against *that*, not against 36.3 — see this repo's rule that every config being compared must be captured together.) Of the six ops listed above, four now clear
 the floor: MobileNetV2 by 48×, MobileViT stage-2 attention and bf16 attention stage 2 by 6.7×,
 GroupNorm at L ≤ 18816 by 6.5×. Attention stages 3 and 4 (34 µs, 12 µs) remain under it.
 **The caveat is the shape of the result:** 36 µs is a throughput figure that holds with 64
@@ -405,6 +405,21 @@ same run also closed this section's other caveat: a real 8-core bf16 kernel (Gro
 L=150528) batches to 823.8–838.3 µs per dispatch, which is its own compute — the independently
 measured 835.8 µs — so a real kernel's configuration cost does *not* swamp the passthrough's
 floor.
+
+**CLOSED 2026-09-09 by a C++ host: the 36 µs floor is the driver's, not the binding's, and a
+deployable runner reaches it.** The scoping above rested on "a caller willing to write a
+raw-pyxrt driver", which left open whether the residual cost was pybind or the driver.
+`kernels/dispatch_floor/dispatch_runner.cpp` — a standalone C++ XRT host, no Python — drives the
+same cache entry to **36.7 µs** at N=64 against pyxrt's 35.9 µs in the same sitting, the two
+agreeing within ~2% from N=4 up (`results/aie/dispatch_cpp_runlist_npu.log`). So removing the
+binding does not move the batched floor: **36 µs is a property of the driver and the device**,
+and no host-side rewrite goes below it. Against the same design in the same sitting the stack is
+671.5 µs (IRON unbatched) · 498.5 µs (IRON batched 64) · ~108 µs (C++, one call) · **36.7 µs**
+(C++ batched 64) — so IRON's ~500 µs host share is work a cached-handle host pays *once* at
+startup, not per call. Two limits survive intact: the four reopens still need ≥ 8 independent
+dispatches in flight, and they still need a caller outside IRON — that caller is now known to be
+writable in C++ rather than hypothetical. A single dispatch costs ~108 µs even in C++, of which
+only ~20–30 µs was ever the binding.
 
 ## 4. Objectives
 
@@ -584,7 +599,7 @@ here.
 **D1. `xrt::runlist` batching. — ANSWERED 2026-09-09: 36.3 µs per dispatch, a 17× drop.**
 The sweep this objective asked for was run at N = 1, 2, 4, 8, 16, 32, 64
 (`results/aie/dispatch_runlist_npu.log`). Amortised cost per dispatch falls from 147 µs at
-N=1 to **36.3 µs** at N=64 and is asymptotic there, so a larger batch buys little. Raw pyxrt
+N=1 to **36.3 µs** at N=64 and is asymptotic there, so a larger batch buys little. (**Sitting label**, because two figures for this same measurement class are both live: 36.3 µs is the original 2026-09-09 pyxrt run; the same-sitting rerun in `results/aie/dispatch_cpp_runlist_npu.log` reads **35.9 µs**, and the C++ figure is compared against *that*, not against 36.3 — see this repo's rule that every config being compared must be captured together.) Raw pyxrt
 single-dispatch is ~140 µs, already below the 169.8 µs "hardware" bracket, and the batched
 figure is a quarter of it — the hardware half of the floor is not silicon. The prediction in
 this entry's physical basis was correct: most of the host term is software and a list of N
@@ -603,6 +618,16 @@ dispatch half of the floor and nothing else. The ~500 µs residue is the same te
 `dispatch_floor_npu.log` measured as 447.3 µs, now confirmed independent of how the submit is
 done, and at 37.5 µs of device against ~500 µs of host **it is the larger term by more than an
 order of magnitude**. Whatever removes it is D2's question, not D1's.
+**And that residue is removable — measured 2026-09-09 in C++.** A standalone C++ XRT host with
+no Python in it (`kernels/dispatch_floor/dispatch_runner.cpp`) drives the same cache entry at
+**36.7 µs** per dispatch at N=64, against pyxrt's 35.9 µs in the same sitting; the two agree
+within ~2% from N=4 up, so the batched floor is the *driver's* and the binding was never in it
+(`results/aie/dispatch_cpp_runlist_npu.log`). The same-sitting stack is 671.5 µs (IRON
+unbatched) · 498.5 µs (IRON batched 64) · ~108 µs (C++, one call) · **36.7 µs** (C++ batched 64):
+**13.6× better than batched IRON.** So IRON's ~500 µs is not a property of the device or the
+driver but of IRON's per-call work, and a cached-handle host pays it once at startup (33–60 ms)
+instead. Two limits stand: it needs ≥ 8 dispatches in flight, and one dispatch still costs
+~108 µs even in C++ — only ~20–30 µs of the single-dispatch path was ever the binding.
 Physical basis: the vendor path's host-side cost per call is about 90 µs against IRON's
 447 µs on the same driver (2.5), so most of the host term is software, and a list of N
 runs costs one host round trip. Tooling: none new — `xrt::runlist` is in this
@@ -671,6 +696,25 @@ the mem tile's 4-D BDs. Reaching 1 TOPS needs 6.8×; the 1×1's defect alone is 
 on that kernel. **What this does not establish** is that a rewrite would get there — the 20×
 and 4× are ceilings on what the schedule leaves unused, not predictions, and the per-loop
 densities are unweighted by trip count.
+**The tooling half was gated on hardware 2026-09-09, and the proposed mechanism does not work
+through IRON.** This entry proposes moving the ten `vshift`/`vmov` bundles "to the mem tile's
+4-D BDs", and 2.6 calls that BD "the one address generator on the chip that can do an im2col
+or a transpose in flight". `kernels/im2col_bd/im2col_probe.py` tests exactly that and nothing
+else — compute-free, shim → mem tile → shim, the 4-D pattern on the mem tile's outbound stream,
+verified byte-for-byte against a host im2col (`results/aie/im2col_bd_probe_npu.log`).
+**Non-overlapping patterns pass and every overlapping one hangs the device:** k=1 returns all
+256 elements correct at 16×16 and all 64 at 8×8, while k=2 (3.52× expansion) and k=3 (6.89×)
+both return `ERT_CMD_STATE_TIMEOUT` — as does k=3 with the forwarded fifo given the expanded
+object type, so it is not a simple length mismatch. Since k=2 is the smallest overlap a square
+window can ask for, the boundary is not a large expansion factor: any re-reading pattern tried
+here times out. This does **not** refute 2.6's claim about the silicon — the BD field widths
+fit with room to spare — it refutes the *route*: do not write a conv kernel against
+`ObjectFifo.forward(dims_to_stream=...)`. A raw buffer descriptor outside the ObjectFifo
+abstraction, where length and access pattern are set independently, is the next thing to try.
+**Bandwidth is not what would kill the design, though** — DERIVED, gate 1 of the same run: an
+im2col conv's expansion cancels, giving **1/C_out bytes per MAC**, so against 3.1's int8 ceiling
+of 0.03125 B/MAC it is stream-bound only below C_out = 32 and has 2× headroom at C_out = 64.
+(That ceiling inherits 1.5's TO VERIFY on the 4 B/cycle stream rate.)
 Bar: 1.65 TOPS per column, clock-independent (2.2); today 146 GOPS (2.3). Physical
 basis: 3.3 — conv has ten times the reuse the core needs, the weights fit on-chip, and the
 same column sustains the bar under AMD's compiler. Tooling: a conv design of this repo's

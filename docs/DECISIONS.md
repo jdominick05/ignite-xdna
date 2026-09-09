@@ -1004,6 +1004,22 @@ caches.
     The 36 µs number is real but it is only available to a caller willing to give up IRON's
     argument handling. The open question is no longer dispatch — it is IRON's host path, now
     the larger term by more than an order of magnitude.
+  - **THAT CALLER IS NOW WRITTEN, AND THE FLOOR IS THE DRIVER'S — measured 2026-09-09 in C++.**
+    `kernels/dispatch_floor/dispatch_runner.cpp` is a standalone C++ XRT host with no Python in
+    it, driving the same cache entry back to back with the Python arm in one sitting
+    (`results/aie/dispatch_cpp_runlist_npu.log`). It reaches **36.7 µs** at N=64 against pyxrt's
+    35.9 µs, the two agreeing within ~2% from N=4 up — so **~36 µs is a property of the driver
+    and the device, not of pybind**, and no host-side rewrite goes below it. **Four thresholds
+    now, none retracted:** 671.5 µs (IRON unbatched) · 498.5 µs (IRON batched 64) · ~108 µs
+    (C++, one call) · **36.7 µs** (C++ batched 64), all same-design same-sitting. So the
+    decision for a new small-op design is: *a C++ XRT host is the sub-100 µs path, and the only
+    one*; IRON's ~500 µs is per-call work a cached-handle host pays once at startup (33–60 ms).
+    Two limits stand — it needs ≥ 4–8 dispatches in flight, and a single dispatch still costs
+    ~108 µs in C++, of which only ~20–30 µs was ever the binding. **Persistent runlists are not
+    worth reaching for**: ~9% at N=64 end to end. Note the correction folded into that log — the
+    rebuild/persistent gap is *not* runlist construction, which sits outside the timed region in
+    every arm; timed properly, construction is ~18 µs fixed plus ~3.3 µs per run added and
+    *grows* with the batch rather than amortising.
   - **REPRODUCED on an independent design the same day.** `ml/resnet/layers_conv2_x` (a
     3-block int8 CNN with real weights, nothing like a passthrough) reports both brackets
     from its own harness: end-to-end 2497.8 µs − hardware 1869.6 µs = **628.2 µs** of

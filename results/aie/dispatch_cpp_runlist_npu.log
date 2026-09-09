@@ -1,0 +1,195 @@
+A C++ XRT host reaches the device dispatch floor, and 36 us is not a Python artifact
+2026-09-09. env: mlir-aie ironenv (v1.4.2, llvm-aie 22.0.0.2026090201) + XRT SDK 2.21.75, native
+Windows; driver 32.0.20101.3760; MSVC x64 (VS 2022 Build Tools), /std:c++17 /O2 /MD, linking
+xrt_coreutil.lib. Desktop 2 (Phoenix, Ryzen 7 8700G), power mode Default (1.80 GHz per
+results/aie/clock_probe_npu.log). No foreign hardware contexts: `xrt-smi examine -r
+aie-partitions` reported "No hardware contexts running on device" before AND after every run,
+and tools/host_load.ps1 reported HOST_LOAD_VERDICT CLEAR bracketing every series. Both
+witnesses are printed by the driver script rather than asserted here.
+
+Commands:
+  scripts\build_dispatch_runner.bat
+  ./scripts/run-dispatch-cpp.sh --iters 100 --batch-sizes 1,2,4,8,16,32,64      (twice)
+  python3 kernels/dispatch_floor/measure_iron_batch.py --design passthrough \
+      --payload 4096 --batch-sizes 1,8,64 --reps 3
+
+WHY: results/aie/dispatch_runlist_npu.log reached 36.3 us per dispatch from raw pyxrt, and
+results/aie/dispatch_iron_batch_npu.log showed IRON's own host path adds a near-constant ~500 us
+per call that is FLAT IN BATCH SIZE. Both were measured through pybind11, so neither could say
+how much of the remaining cost was the Python binding and how much was the driver -- and that
+distinction decides whether a DEPLOYABLE runner can reach the device floor or whether ~500 us is
+what a real caller always pays. dispatch_iron_batch_npu.log closed by naming this as the open
+item: "reaching 36 us from a real design needs that host path written". This writes it in C++.
+
+METHOD: kernels/dispatch_floor/dispatch_runner.cpp is a standalone C++ XRT host with no Python
+anywhere in it. It loads the SAME compiled design the Python harness resolves out of
+~/.npu/cache/ -- same final.xclbin, same insts.bin, same argument layout (opcode 3, instruction
+BO, instruction word count, A, B, C) -- and drives it three ways: `single` (kernel()+wait, one at
+a time), `rebuild` (a fresh xrt::runlist per iteration, which is exactly what measure_runlist.py
+does, so the difference is the binding), and `persistent` (the runlist built ONCE and
+execute()/wait() in a loop, which the Python harness never tried). scripts/run-dispatch-cpp.sh
+runs the Python and C++ arms BACK TO BACK on the same cache entry in one sitting, because
+CLAUDE.md's standing rule is that NPU latency on this machine drifts between sittings
+independent of any code change -- the committed 2026-09-09 Python figures are not a valid
+baseline for a C++ number measured on a different day.
+
+The timed region is submit-to-completion only. One-time setup (device open, xclbin register,
+hw_context, kernel, buffer allocation, instruction upload) is measured separately and excluded,
+because the entire point of a cached-handle runner is that this is paid once: it read 33.1 ms in
+run A and 60.3 ms in run B, i.e. it is large, variable, and irrelevant per-call after the first.
+
+CORRECTNESS GATE: a run inside a runlist cannot be polled (xrt_kernel.h: run::state() "cannot be
+called for run objects that are part of a runlist"), so runlist::wait() is the only completion
+signal and VERIFYING OUTPUT BUFFERS IS THE ONLY CORRECTNESS GATE. Every row below verified all of
+its output buffers against its inputs before its timing was kept, and the harness prints that
+column. Every queued run owns its own buffer set; sharing them inside a runlist is undefined and
+its symptom is wrong data rather than an error.
+
+
+--------------------------------------------------------------------------------
+0. A WRONG-DESIGN BUG THAT HAD TO BE FIXED FIRST, AND WHAT IT PRODUCED
+--------------------------------------------------------------------------------
+The first attempt reported FAILED VERIFICATION on every batch size in BOTH arms, with the Python
+arm's single dispatch reading 777.7 us against the ~140 us this design costs. The cause was not
+the C++ host: measure_runlist.py resolved the wrong design out of ~/.npu/cache/.
+
+Its rule was "the newest cache entry holding BOTH final.xclbin and insts.bin". Its own comment
+claimed the insts.bin condition stopped "a GEMM, say" from being picked up -- but EVERY IRON
+design writes insts.bin, so the extra condition excluded nothing at all. It was written when the
+passthrough happened to be the newest thing in the cache. Once kernels/bank_placement/ and
+kernels/gemm_reblock/ were compiled later the same day, "newest" was one of those, and the
+harness timed a different design through the passthrough's argument layout.
+
+That is a WRONG ANSWER, not an error, and it is worth recording because the same log that fixed
+an earlier version of this same resolver had already warned about exactly this failure mode.
+The two designs are not subtle: the passthrough is 75 instruction words, what it resolved was
+1052.
+
+FIXED by capturing the paths IRON itself resolved, rather than inferring them afterwards:
+CompilableDesign.compile() returns (xclbin_path, inst_path) for the design being built and is
+called on the first use of a specialization in a process -- on a cache HIT too, because compile()
+is what consults the on-disk cache. measure_runlist.py now spies on it and REFUSES to fall back
+to "newest" if the capture fails. Two other resolvers were tried first and are recorded in the
+code so they are not re-attempted: CallableDesign.compilable.compile() recompiles (it is the
+UNSPECIALIZED design, so it misses the cache and then dies on xclbinutil not being on PATH), and
+importing the harness under a synthetic module name changes IRON's recipe hash and misses the
+cache that way too.
+
+Every number below this line was measured after the fix, with all arms verifying.
+
+
+--------------------------------------------------------------------------------
+1. THE SAME DESIGN THROUGH FOUR HOST PATHS, ONE SITTING
+--------------------------------------------------------------------------------
+No-compute passthrough (shim -> memtile -> shim), 4096 int32 = 32 KB round-trip, 75 instruction
+words, cache entry 1e368a7255a02a574bf86142. Two independent series, run A and run B.
+
+Per-dispatch microseconds, mean (min):
+
+   N     Python runlist        C++ rebuild          C++ persistent
+         A        B            A          B          A          B
+   1   144.0    146.9      148.5(130.8) 152.4(117.5) 125.7(104.9) 123.0(103.9)
+   2    85.4     88.2       95.6( 84.2)  86.1( 70.4)  83.9( 71.3)  79.6( 70.6)
+   4    59.8     59.7       61.5( 53.5)  63.2( 57.6)  58.4( 53.9)  57.9( 49.3)
+   8    47.1     47.3       48.7( 46.0)  48.8( 45.5)  47.4( 45.1)  47.6( 45.2)
+  16    40.8     41.2       41.9( 40.5)  41.8( 39.9)  42.0( 40.1)  42.1( 40.0)
+  32    37.5     37.8       38.8( 38.1)  38.8( 37.3)  38.9( 37.9)  38.7( 37.7)
+  64    35.9     35.9       36.7( 35.3)  36.8( 35.7)  36.7( 34.9)  36.7( 35.5)
+
+Single dispatch, no runlist:
+  raw pyxrt single    140.8 us (A)   127.0 us (B)
+  C++ single          108.1 us mean / 88.0 min (A)   109.8 / 89.9 (B)
+
+IRON, same sitting, same design (measure_iron_batch.py, medians over 3 reps):
+  unbatched @iron.jit          671.5 us/call   (min 654.9)
+  batched N=1  wall            740.3 us/call   device 166.8   IRON host share 573.5
+  batched N=8  wall            581.2 us/call   device  54.0   IRON host share 527.1
+  batched N=64 wall            498.5 us/call   device  38.5   IRON host share 460.0
+
+
+--------------------------------------------------------------------------------
+2. WHAT THE NUMBERS SAY
+--------------------------------------------------------------------------------
+THE 36 US FLOOR IS THE DRIVER'S, NOT PYTHON'S. This is the result. At N=64 the C++ host reads
+36.7 us and pyxrt reads 35.9 us, in both series; from N=4 upward the two languages agree within
+about 2%, and Python is marginally the FASTER of the two at every batch size >= 16. Removing
+the binding entirely does not move the batched floor, so ~36 us is a property of the driver and
+the device, and no host-side rewrite will go below it. That closes the question
+dispatch_runlist_npu.log left open in the direction that makes its figure MORE trustworthy, not
+less: 36.3 us was never a measurement of pybind overhead.
+
+A DEPLOYABLE C++ RUNNER REACHES THAT FLOOR, WHICH IS THE OPEN ITEM CLOSED. Against the same
+design in the same sitting, per dispatch: 671.5 us unbatched through IRON, 498.5 us batched
+through IRON, 36.7 us through the C++ host. That is 18.3x better than IRON unbatched and 13.6x
+better than IRON batched. IRON's ~460-573 us host share is not irreducible -- it is work a
+cached-handle host does once at startup (33-60 ms here) instead of on every call.
+
+THE SINGLE-DISPATCH PATH IS ONLY PARTLY PYTHON. C++ single runs 108.1/109.8 us mean against raw
+pyxrt's 140.8/127.0, so roughly 20-30 us of the single-dispatch cost is binding overhead -- real,
+but a minority. The C++ host still pays ~108 us for one dispatch against ~36.7 us batched, so
+about 70 us per submission is driver-side work that ONLY batching amortizes, in any language.
+Latency-critical single calls do not benefit from the rewrite; throughput does.
+
+PERSISTENT RUNLISTS BUY LITTLE, AND THE FIRST VERSION OF THIS LOG GOT THE MECHANISM WRONG.
+Building the runlist once and re-executing it beats rebuilding it only at N=1 (125.7 vs 148.5 us,
+A) and N=2 (83.9 vs 95.6), and the two are indistinguishable from N=8 upward (47.4 vs 48.7;
+36.7 vs 36.7 at N=64). The first version of this log attributed that gap to runlist CONSTRUCTION
+costing "on the order of 20 us". That attribution was unfounded: in `rebuild`, in `persistent`
+and in the Python harness alike, the timer starts AFTER the xrt::run/set_arg/add loop, so
+construction was never inside any timed region and its cost had not been measured at all. The
+gap between those two arms is something else -- executing a FRESHLY BUILT list versus
+re-executing a used one.
+
+MEASURED PROPERLY, in run C, by adding a `built` arm identical to `rebuild` except that the
+timer starts BEFORE the construction loop. `built` minus `rebuild` is the construction cost:
+
+   N    rebuild   built   built-rebuild   per list      persistent
+   1     147.54  169.19       21.65 us     21.7 us        120.79
+   2      91.11  100.89        9.78         19.6           79.56
+   8      47.85   53.19        5.34         42.7           47.45
+  64      36.82   40.26        3.44        220.2           36.80
+
+So CONSTRUCTING a runlist costs roughly 18 us fixed plus ~3.3 us per run added -- it does not
+amortise away, it grows with the batch, reaching ~220 us to build a 64-run list. And the
+fresh-versus-reused EXECUTION gap, which is what the earlier claim actually pointed at, is
+~27 us at N=1 (147.54 vs 120.79) and is gone by N=8.
+
+THE END-TO-END COMPARISON A REAL CALLER FACES is `built` versus `persistent`, since a caller who
+rebuilds every time pays construction too: 169.19 vs 120.79 us at N=1 (1.40x) and 40.26 vs
+36.80 us at N=64 (1.09x). That is more than "almost nothing" -- reusing the list is worth about
+9% at N=64 -- but it is still small beside the 13.6x that comes from not being IRON. xrt::runlist
+has no reset() in this SDK; re-execution works because execute() only refuses a list that is
+currently executing.
+
+THE GO/NO-GO THRESHOLD, STATED HONESTLY. docs/SILICON.md 3.4 makes every small-op verdict
+conditional on this floor. There are now FOUR thresholds for the same design, not three, and
+which one applies depends entirely on the host: 671.5 us (IRON, one call), 498.5 us (IRON,
+batched 64), ~108 us (C++, one call), 36.7 us (C++ or pyxrt, batched 64). The 36 us figure is
+reachable by a real deployable host -- but only for throughput workloads with >= 8 independent
+dispatches in flight, and only outside IRON.
+
+
+--------------------------------------------------------------------------------
+WHAT THIS DOES NOT SHOW
+--------------------------------------------------------------------------------
+- One design: a 32 KB no-compute passthrough. A real kernel's compute plateaus above this floor
+  (dispatch_iron_batch_npu.log measured bf16 GroupNorm plateauing at its own 838 us), so this
+  bounds the HOST, not any model's latency.
+- One payload (4096 int32) and one machine. No payload sweep was run in C++.
+- The C++ host was not driven from a real model pipeline; it is a benchmark host, not an
+  inference runtime. Nothing here shows that VitisAI EP or any ONNX path can use a runlist.
+- Batching gives up per-call completion status entirely, so any deployment at 36 us inherits
+  output verification as its only correctness gate.
+- The one-time setup cost (33-60 ms) varied 1.8x between two runs of the identical binary and
+  was not investigated.
+- The C++ single-dispatch arm uses kernel()+wait() and so includes XRT's own run-object
+  construction per call; a lower single-dispatch number may exist behind a pre-built run.
+- UNEXPLAINED: Python reads about 2% FASTER than C++ at every N >= 16, in both series
+  (35.9 vs 36.7-36.8 us at N=64). The direction is consistent rather than noise, and nothing
+  here accounts for it -- the C++ arm does strictly less work per iteration. Candidates not
+  separated: pyxrt may hold the GIL across execute()+wait() in a way that changes the polling
+  path, the two may differ in how wait() is entered, or the timer bases differ
+  (time.perf_counter vs std::chrono::steady_clock). It is well inside the spread that matters
+  for the headline, and is recorded rather than explained.
+- Run C (the `built` arm) was measured at batch sizes 1,2,8,64 only, and its rebuild/persistent
+  rows are a third series -- consistent with A and B but not identical to either.
