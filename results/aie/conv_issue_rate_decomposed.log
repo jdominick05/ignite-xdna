@@ -1,0 +1,184 @@
+The open int8 conv's 11.3x gap to the vendor is ISSUE RATE, and it is visible statically
+2026-09-09. Desktop 2 (Phoenix, Ryzen 7 8700G), native Windows, mlir-aie ironenv (v1.4.2,
+llvm-aie 22.0.0.2026090201). One short NPU run to rebuild the design; the analysis itself
+reads object code and takes no context. `xrt-smi examine -r aie-partitions` reported no
+hardware contexts before the build.
+
+Commands (from the repo root, in the ironenv):
+  python kernels/bottleneck_sweep/sweep.py --shapes 32x32 --iters 10 --warmup 3
+  python tools/aie_disasm.py ~/.npu/cache/<conv>/conv2dk1_i8_*.o --loops --regs --verbose
+  python tools/aie_disasm.py ~/.npu/cache/<conv>/conv2dk3_ui8_*.o --loops --regs --verbose
+  python tools/aie_bank_check.py ~/.npu/cache/<conv> --kernel <conv2dk3 symbol>
+
+WHY. docs/SILICON.md 2.3 puts the vendor DPU at 1650 GOPS per column on int8 conv against the
+open ml/bottleneck kernel's 146.1 GOPS -- 4.5% of what the same column does under AMD's own
+compiler, an 11.3x gap that is clock-independent because both ran on the same silicon.
+Objective K1 says of it: "the first trace will say whether it is data movement or issue rate."
+No trace was ever run, and docs/BENCHMARKS.md records why: "The conv kernels have no surviving
+build cache, so this repo's most-lost op class was not surveyed." The cache is rebuilt here and
+the question is answered without a trace at all, from the instruction schedule.
+
+A NOTE ON WHAT WAS ALREADY CLOSED, BECAUSE IT IS EASY TO MISREAD. kernels/README.md closed a
+"kernel quality" item with "both vectorize correctly with aie::mmul". That is a CORRECTNESS
+statement and it is true. It is not a throughput statement, and the numbers below are the
+throughput one.
+
+--------------------------------------------------------------------------------
+1. THE REBUILD
+--------------------------------------------------------------------------------
+
+mlir-aie ml/bottleneck (int8, 1 column) -- spatial sweep
+iters=10 warmup=3 (compile excluded, jit-cached)
+design: C:\Users\<user>\mlir-aie\programming_examples\ml\bottleneck
+
+      HxW     MFLOP   wall ms     hw ms   host ms   hw GOPS  e2e GOPS  ok
+----------------------------------------------------------------------------------
+    32x32    142.61    2.1946    1.4928    0.7018      95.5      65.0  yes
+
+not enough verified shapes to fit
+
+--------------------------------------------------------------------------------
+2. MAC ISSUE DENSITY, EVERY HARDWARE LOOP IN THE THREE CONV KERNELS
+--------------------------------------------------------------------------------
+Bundle count is cycle count on this core (results/aie/aie2_isa_static.log), so vmac per
+bundle IS vmac per cycle. The int8 GEMM's loop is included as the reference point: it is the
+same silicon, the same dtype, and this repo's best measured kernel.
+
+kernel                   loop         bundles  vmac  vmac/cyc    pct
+------------------------------------------------------------------
+_Z18conv2dk1_i8_vector   .L_LEnd2          15     0     0.000   0.0%
+_Z18conv2dk1_i8_vector   .L_LEnd1          22     1     0.045   4.5%
+_Z18conv2dk1_i8_vector   .L_LEnd0          15     0     0.000   0.0%
+_Z23conv2dk1_skip_i8_v   .L_LEnd3          15     0     0.000   0.0%
+_Z23conv2dk1_skip_i8_v   .L_LEnd2          22     1     0.045   4.5%
+_Z23conv2dk1_skip_i8_v   .L_LEnd1          22     1     0.045   4.5%
+_Z23conv2dk1_skip_i8_v   .L_LEnd0          25     0     0.000   0.0%
+_Z19conv2dk3_ui8_vecto   .L_LEnd14          3     1     0.333  33.3%
+_Z19conv2dk3_ui8_vecto   .L_LEnd13         11     0     0.000   0.0%
+_Z19conv2dk3_ui8_vecto   .L_LEnd12         11     0     0.000   0.0%
+_Z19conv2dk3_ui8_vecto   .L_LEnd11         11     0     0.000   0.0%
+_Z19conv2dk3_ui8_vecto   .L_LEnd10         18     4     0.222  22.2%
+_Z19conv2dk3_ui8_vecto   .L_LEnd9          11     0     0.000   0.0%
+_Z19conv2dk3_ui8_vecto   .L_LEnd8          14     0     0.000   0.0%
+_Z19conv2dk3_ui8_vecto   .L_LEnd7          13     2     0.154  15.4%
+_Z19conv2dk3_ui8_vecto   .L_LEnd6          11     0     0.000   0.0%
+_Z19conv2dk3_ui8_vecto   .L_LEnd5          14     0     0.000   0.0%
+_Z19conv2dk3_ui8_vecto   .L_LEnd4          12     0     0.000   0.0%
+_Z19conv2dk3_ui8_vecto   .L_LEnd3          12     0     0.000   0.0%
+_Z19conv2dk3_ui8_vecto   .L_LEnd2          14     0     0.000   0.0%
+_Z19conv2dk3_ui8_vecto   .L_LEnd1           3     1     0.333  33.3%
+_Z19conv2dk3_ui8_vecto   .L_LEnd0          11     0     0.000   0.0%
+matmul_i8_i32            .L_LEnd0           9     8     0.889  88.9%
+
+--------------------------------------------------------------------------------
+3. THE 1x1 KERNEL'S HOT LOOP, WHICH IS THE WORST OF THEM
+--------------------------------------------------------------------------------
+
+0x230-0x280: 22 bundles = 22 cycles/iteration, 20 live ops, density 0.91 of 6
+        0x0230  mul	r30, r29, r14
+        0x0236  mov	p3, p4
+        0x023a  mov	m1, r30
+        0x023e  paddb	[p3], m1
+        0x0242  vlda	amhh1, [p3, #0x60]
+        0x0246  lda.u8	r30, [p3, dj0] | mov	dj1, r28
+        0x024c  vlda	amhl1, [p3, #0x40] | vldb	wl2, [p7, dj1]
+        0x0252  vlda	amlh1, [p3, #0x20]
+        0x0256  vlda	amll1, [p3, #0x0]
+        0x025a  (all nop)
+        0x025c  (all nop)
+        0x025e  st.s8	r9, [p3, dj0]
+        0x0262  or	r30, r30, r10
+        0x0266  vmac	cm2, cm1, x2, x0, r30
+        0x026a  (all nop)
+        0x026c  (all nop)
+        0x026e  (all nop)
+        0x0270  (all nop)
+        0x0272  vst	amhh2, [p3, #0x60]
+        0x0276  vst	amhl2, [p3, #0x40]
+        0x027a  vst	amlh2, [p3, #0x20] | add	r29, r29, #0x1
+        0x0280  vst	amll2, [p3, #0x0] | add	r28, r28, #0x20
+    
+--------------------------------------------------------------------------------
+4. THE 3x3 KERNEL'S HOT LOOP, WHICH IS THE BEST OF THEM
+--------------------------------------------------------------------------------
+
+0x700-0x780: 18 bundles = 18 cycles/iteration, 39 live ops, density 2.17 of 6
+        0x0700  mov	p5, p1
+        0x0708  vldb	wh6, [p6, #0x20] | mov	p6, p7
+        0x070e  lshl	r10, r26, r17 | vshift	x9, x11, x11, r23
+        0x0716  lshl	r31, r10, r27 | vmov	wh9, wh7
+        0x071e  mov	dj1, r31
+        0x0722  vshift	x9, x9, x9, r22
+        0x0726  vshift	x10, x9, x9, r23
+        0x072a  vmov	wh10, wl5 | vmac	cm1, cm1, x10, x6, r7
+        0x0732  vldb	wh5, [p3, dj1] | vmov	wl6, wl1
+        0x0738  paddb	[p5], #64 | sub	r22, r25, r31 | vshift	x3, x10, x10, r22
+        0x0742  vldb	wh7, [p5, dj1] | and	r31, r12, r28 | mov	p5, p1
+        0x074c  sub	r31, r29, r31 | vmov	x10, x8
+        0x0754  lshl	r10, r10, r30 | vshift	x9, x2, x4, r31
+        0x075c  vshift	x8, x9, x9, r10 | vmac	cm3, cm3, x9, x6, r7
+        0x0764  add	r26, r26, #0x1 | vshift	x11, x8, x8, r6
+        0x076c  add	r12, r12, #-0x4 | vmov	wh11, wh5 | vmac	cm4, cm4, x11, x6, r7
+        0x0776  paddb	[p5], #96 | add	r25, r25, #0x8 | mov	r23, r6
+        0x0780  vldb	wl5, [p5, dj1] | vlda	wl1, [p7], #0x40 | add	r6, r6, #0x8 | vshift	x11, x11, x11, r22 | vmac	cm2, cm2, x3, x6, r7
+    
+--------------------------------------------------------------------------------
+5. READING
+--------------------------------------------------------------------------------
+IT IS ISSUE RATE, DECISIVELY, AND K1's QUESTION IS ANSWERED WITHOUT A TRACE. The int8 GEMM
+issues 0.889 vmac per cycle. The best conv loop in the whole design issues 0.333, the 3x3's
+main loop issues 0.222, and the 1x1's hot loop issues 0.045 -- with two of its three loops
+issuing no MAC at all. A 4x to 20x shortfall in MAC issue density, against a measured 11.3x
+throughput gap. The schedule alone more than accounts for the gap; nothing about data movement
+needs to be invoked to explain it.
+
+THE TWO KERNELS FAIL FOR DIFFERENT REASONS, AND ONLY ONE OF THEM IS SUBTLE.
+
+The 1x1 (section 3) never keeps an accumulator in a register. Its 22-bundle loop loads all
+four quarters of the accumulator from memory (vlda amhh1/amhl1/amlh1/amll1), issues ONE vmac,
+and stores four quarters back (vst amhh2/amhl2/amlh2/amll2). Six of the 22 bundles are
+entirely nop -- exposed pipeline latency waiting on the accumulator load. The kernel names
+three accumulator registers, cm0 to cm2, out of a file of nine. This is not a subtle
+scheduling loss: the accumulator is memory-resident when the hardware has room to keep it
+resident, and the fix is the one mm.cc already demonstrates.
+
+The 3x3 (section 4) does keep its accumulators live -- cm1 through cm4, no accumulator
+traffic to memory in the loop -- and still reaches only 0.222 vmac per cycle, because six of
+its eighteen bundles are vshift and four more are vmov. Those are the sliding-window
+realignment for a 3x3 convolution, done in the core's issue slots. This is the classic
+conv-on-SIMD cost, and it is exactly what K1's own tooling section proposes removing:
+"im2col or row shifting done by the mem tile's 4-D BDs rather than by core code". The static
+read confirms the proposal and prices it: about half the issue slots of the best conv loop
+are window alignment rather than arithmetic.
+
+A MINOR THIRD FINDING. tools/aie_bank_check.py reports one paired-load bundle inside the 3x3's
+hot loop and a bank holding two distinct buffers, so the same-bank penalty measured elsewhere
+(results/aie/bank_conflict_survey.log) applies here too. At one bundle in eighteen it is worth
+about 5%, which is noise beside a 4x issue-density shortfall. Recorded so it is not mistaken
+for a lever.
+
+WHAT IT MEANS FOR K1. K1's go/no-go is "nothing below ~1 TOPS per column is worth a second
+week". Reaching 1 TOPS from 146 GOPS needs 6.8x. The 1x1's defect is worth up to 20x on that
+kernel alone and is a known-good pattern away; the 3x3's needs the DMA-side rework K1 already
+specifies. So the gap is NOT evidence that the silicon cannot do it -- the same column does
+1650 GOPS under AMD's compiler -- and it is not evidence that the op class is intrinsically
+lost. It is evidence that these two kernels leave most of their issue slots empty. Whether
+closing that is worth the week is a judgement this log does not make; what it removes is the
+excuse that nobody knew where the 11.3x went.
+
+--------------------------------------------------------------------------------
+WHAT THIS DOES NOT SHOW
+--------------------------------------------------------------------------------
+- Issue density per loop is not weighted by trip count. Which loop dominates the runtime was
+  not measured, so "the schedule more than accounts for the gap" rests on every candidate loop
+  being far below the GEMM, not on a weighted average. A trace or a trip-count analysis would
+  sharpen it.
+- The rebuild ran one shape (32x32) for one sitting at 10 iterations, and its 95.5 hw GOPS is
+  a single point that includes fixed cost, not the 146.1 GOPS marginal fit it is compared
+  against. The 146.1 and 1650 figures are quoted from earlier logs, not re-measured here.
+- No claim is made that a rewritten kernel WOULD reach 1 TOPS. The 20x and 4x are ceilings on
+  what the schedule leaves on the table, not predictions of a rewrite.
+- One column, one dtype, one bottleneck configuration, one optimisation level.
+- The vendor's 1650 GOPS is measured on yolov8l through the DPU, a different graph and
+  different layer shapes from this bottleneck. It is the bar this repo chose; it is not a
+  like-for-like kernel comparison.

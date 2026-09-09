@@ -1,0 +1,146 @@
+H11 run at last: reblocking removes every spill and does not move the wall clock
+2026-09-09. Desktop 2 (Phoenix, Ryzen 7 8700G), native Windows, mlir-aie ironenv (v1.4.2,
+llvm-aie 22.0.0.2026090201) + XRT SDK. The A/B took a hardware context, one arm at a time.
+`xrt-smi examine -r aie-partitions` reported no foreign contexts beforehand.
+
+Commands (from the repo root, ironenv, XRT SDK on PATH and pyxrt on PYTHONPATH):
+  python kernels/gemm_reblock/build_reblocked.py --cache-home <dir>            # reblocked
+  python kernels/gemm_reblock/build_reblocked.py --cache-home <dir> --stock    # upstream
+  python kernels/gemm_reblock/reblock_ab_test.py --repeats 4 --iters 40
+
+WHY. H11 was proposed twice in this repo and never run. mm.cc dispatches int8->int32 to
+matmul_vectorized_4x2_mmul, which holds EIGHT live 4x8x8 accumulators; five is this machine's
+measured spill-free ceiling, the compiled object spills twelve vector values into a 416-byte
+frame, and results/aie/accumulator_width_vs_count.log showed the bf16 path at the same total
+accumulator width spilling nothing at all. mm.cc already contains a 2x2 template holding four.
+The change is two lines in one wrapper.
+
+HOW IT WAS BUILT WITHOUT TOUCHING SHARED STATE. kernels.mm() takes no source override; the
+path resolves into the installed toolchain, which every session on this machine shares. So the
+reblocked mm.cc lives in kernels/gemm_reblock/aie2/, and build_reblocked.py redirects the one
+lookup in-process. Nothing outside this repo is modified.
+
+A TRAP WORTH RECORDING, BECAUSE ITS ONLY SYMPTOM IS SILENCE. The first attempt appeared to
+succeed -- it compiled, verified, and timed -- while actually running the STOCK kernel.
+@iron.jit keys its cache on the design and its compile-time arguments, NOT on the kernel
+source, so the reblocked build found a matching cache entry and reused the whole xclbin
+without recompiling anything. The only evidence was that no new .o appeared on disk. Each arm
+therefore gets its own NPU_CACHE_HOME, and the A/B driver requires it.
+
+--------------------------------------------------------------------------------
+1. WHAT THE CHANGE DID TO THE OBJECT
+--------------------------------------------------------------------------------
+Stock, matmul_vectorized_4x2_mmul, 8 live accumulators:
+
+== C:\Users\<user>/.npu/cache/e9ed1c603d42d8bb153dfb76/matmul_i8_i32_86901378.o
+  section .text.matmul_i8_i32: 144 bundles (2 full-width, 142 compressed), frame 416 B, stack refs 33
+      acc registers (9): cm0 cm1 cm2 cm3 cm4 cm5 cm6 cm7 cm8
+      vec registers (12): x0 x1 x2 x3 x4 x5 x6 x7 x8 x9 x10 x11
+    loop .L_LEnd0 0x1d0-0x220: 9 bundles = 9 cycles/iteration, 25 live ops, density 2.78 of 6
+  
+Reblocked, matmul_vectorized_2x2_mmul, 4 live accumulators:
+
+== C:\Users\<user>/.claude/jobs/8a20f3f5/tmp/abcache\reblock\9ea9ae1823bc2a5e0dd42395\matmul_i8_i32_4e833b59.o
+  section .text.matmul_i8_i32: 88 bundles (9 full-width, 79 compressed), frame 32 B, stack refs 5
+      acc registers (8): cm0 cm1 cm2 cm3 cm4 cm5 cm6 cm7
+      vec registers (9): x0 x1 x2 x3 x4 x5 x6 x8 x10
+    loop .L_LEnd0 0x130-0x190: 8 bundles = 8 cycles/iteration, 25 live ops, density 3.12 of 6
+  
+  metric                      stock 4x2        reblocked 2x2
+  ------------------------------------------------------------
+  bundles in the function           144                   88
+  stack frame                     416 B                 32 B
+  stack references                   33                    5
+  hardware loop                 9 bundles            8 bundles
+  vmac in that loop                   8                    8
+  MAC issue rate                  0.889/cyc          1.000/cyc
+
+Every static metric improves, and the spill is gone: twelve vector spill slots become none.
+The reblocked loop issues one MAC every cycle, which is the ceiling.
+
+--------------------------------------------------------------------------------
+2. THE PAIRED MEASUREMENT
+--------------------------------------------------------------------------------
+Arms alternate, and the order reverses on alternate repeats. Each arm builds and runs from
+its own cache, so neither can reuse the other's compile.
+
+shape 4096x2048x2048  tile 64/64/64  4 columns  int8->int32
+4 alternating repeats per arm, 5 warmup + 40 timed iterations each
+caches: C:\Users\<user>\.claude\jobs\8a20f3f5\tmp\abcache
+
+ rep arm           avg us     min us     max us    GFLOPS  verify
+------------------------------------------------------------
+   1 stock         7911.6     7624.9     8354.6    4342.9  PASS
+   1 reblock       7856.4     7580.7     8154.5    4373.5  PASS
+   2 reblock       7758.0     7577.5     8153.0    4428.9  PASS
+   2 stock         7873.8     7510.9     8455.8    4363.8  PASS
+   3 stock         7907.4     7484.1     8304.1    4345.3  PASS
+   3 reblock       7860.4     7714.7     8378.3    4371.2  PASS
+   4 reblock       7884.8     7543.6     9249.1    4357.7  PASS
+   4 stock         7866.3     7390.3     8702.8    4368.0  PASS
+
+arm          best us   median avg  best GFLOPS  n
+-------------------------------------------------
+stock         7390.3       7890.6       4368.0  4
+reblock       7543.6       7858.4       4428.9  4
+
+  best-to-best   reblock is -2.1% vs stock
+  median-to-med  reblock is +0.4% vs stock
+
+  Positive means the reblocked kernel is FASTER. Its inner loop issues
+  1.000 vmac/cycle against stock's 0.889 and it spills nothing, so an
+  issue-bound design should show roughly +12%. The per-buffer floor
+  reading predicts approximately 0%.
+
+--------------------------------------------------------------------------------
+3. READING
+--------------------------------------------------------------------------------
+THE KERNEL GOT STRICTLY BETTER AND THE DISPATCH BARELY MOVED. Static MAC issue rate rises
+from 0.889 to 1.000 per cycle, a 12.5% improvement, and every accumulator spill disappears.
+An issue-bound design should show roughly +12% on the wall clock. Two A/B series were run,
+the one above and one before it:
+
+    series          best-to-best   median-to-median
+    exploratory        +0.8%            +2.0%
+    captured above     -2.1%            +0.4%
+
+Positive means the reblocked kernel is faster. The effect is inside +/-2% and its sign is not
+even stable between series, against a predicted +12%.
+
+THIS IS THE TEST H12 FAILED TO BE. results/aie/bank_ab_h12_npu.log tried to settle whether
+this design is bound by its core or by a per-buffer delivery floor, using a bank-placement
+change worth about 3% -- and could not resolve it, because the machine's own run-to-run drift
+is about 5%. This intervention is worth four times as much, its static improvement is
+unambiguous and multi-dimensional rather than a single cycle per iteration -- and the wall
+clock still refuses to move. That is a stronger result than H12 reached: not "we could not
+resolve a 3% effect", but "a 12.5% improvement in the kernel produced no measurable change".
+The core is not the critical path, and the per-buffer floor that
+results/aie/gemm_cost_model_nest.log inferred is now supported by an intervention large enough
+that its absence is itself the evidence.
+
+TAKE THE CHANGE ANYWAY, BUT STOP EXPECTING WALL CLOCK FROM KERNEL CODE HERE. The two lines
+are free and strictly better: fewer bundles, no spills, a full MAC every cycle, no correctness
+cost, every run verified. Keep it. But it converts a 12.5% improvement in the kernel into
+nothing measurable, and THAT is the finding. On this design, at this tile, further work on the
+inner loop is close to worthless -- which is what the cost model said before this kernel was
+built, and this is the first time that prediction has been checked against a real kernel
+change rather than against itself.
+
+--------------------------------------------------------------------------------
+WHAT THIS DOES NOT SHOW
+--------------------------------------------------------------------------------
+- One shape (4096x2048x2048), one tile (64/64/64), one dtype, four columns, one machine, one
+  sitting. The 2x2 blocking's own trade -- half the accumulators means twice the accumulator
+  groups per call -- was not swept across tiles, and a different tile could favour it more or
+  less.
+- +0.8% and +2.0% are within this machine's drift, which the H12 log measured at about 5% for
+  repeats of an identical build. The claim made here is NOT that 2% is real; it is that the
+  measured change is far below the ~12% an issue-bound design would show. That is a bound, not
+  a point estimate.
+- Correctness is the design's own numpy check on every run, which for integer dtypes is exact
+  equality. It is not an accuracy evaluation on a model.
+- The static comparison is between two objects built from the same source file differing in
+  one wrapper's dispatch, but they were compiled into different cache roots by different
+  processes; the compiler version and flags are identical.
+- Nothing here says the 2x2 blocking is better in general. It is better on this kernel, at
+  this tile, on this silicon, by the static measures listed.

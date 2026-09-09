@@ -482,6 +482,316 @@ zero-overhead resubmit path. Both are lower bounds — this is a no-compute pass
 real multi-core kernel's own configuration cost sits inside the hardware bracket. Dispatch
 also dominates *everything* below ~0.5 MB: wall time is flat across a 64× payload range.
 
+> **Superseded 2026-09-09 for batchable work: the threshold is ~36 µs, not 617 µs.** The
+> "hypothetical zero-overhead resubmit path" was measured and is not hypothetical. Batched
+> submission through `pyxrt.runlist` amortises a dispatch to **36.3 µs**, a **17×** drop, and
+> that is below the 169.8 µs this section calls the hardware floor. See
+> [Batched submission drops the dispatch floor 17×](#batched-submission-drops-the-dispatch-floor-17-and-reopens-four-closed-verdicts).
+> The 617 µs figure still governs a **single** unbatched IRON dispatch, which is what this
+> section measured, so it is superseded rather than retracted.
+>
+> **Scoped 2026-09-09 (same day): ~36 µs is a raw-pyxrt figure. Through IRON the batched
+> floor is ~531 µs.** Batching was then wired into IRON's own host path and measured there:
+> the device cost per dispatch does fall to 37.5–37.9 µs, but IRON's per-call host work is a
+> near-constant ~500 µs that batching never touches, so a batched `@iron.jit` call still costs
+> ~531 µs. See [Batching reaches the device floor from inside IRON](#batching-reaches-the-device-floor-from-inside-iron--and-irons-own-host-work-eats-almost-all-of-it).
+
+### The open conv's 11.3× gap to the vendor is issue rate, and it is visible without a trace
+
+§2.3 of `docs/SILICON.md` puts the vendor DPU at **1650 GOPS per column** on int8 conv against
+the open `ml/bottleneck` kernel's **146.1** — 4.5% of what the same silicon does under AMD's
+compiler. Objective K1 said "the first trace will say whether it is data movement or issue
+rate", and no trace was ever run, because *"the conv kernels have no surviving build cache, so
+this repo's most-lost op class was not surveyed"*. The cache was rebuilt and the question
+answered from the instruction schedule alone. Backing log
+`results/aie/conv_issue_rate_decomposed.log`.
+
+Bundle count is cycle count on this core, so `vmac` per bundle **is** MACs per cycle:
+
+| Loop | Bundles | `vmac` | Per cycle |
+|---|---|---|---|
+| int8 GEMM, hardware loop | 9 | 8 | **0.889** |
+| conv2dk3 (3×3), main loop | 18 | 4 | 0.222 |
+| conv2dk3, best loop | 3 | 1 | 0.333 |
+| conv2dk1 (1×1), hot loop | 22 | 1 | **0.045** |
+| conv2dk1, other two loops | 15, 15 | 0, 0 | 0.000 |
+
+**A 4×–20× shortfall in MAC issue density against an 11.3× throughput gap.** The schedule
+alone more than accounts for it; nothing about data movement needs invoking.
+
+**The two kernels fail differently, and only one is subtle.** The 1×1 never keeps an
+accumulator in a register — its loop loads all four quarters from memory (`vlda amhh1/amhl1/
+amlh1/amll1`), issues **one** `vmac`, stores four quarters back, and idles **six of 22
+bundles** on load-to-use latency, while naming 3 of the file's 9 accumulators. *(The cause was
+found and fixed the same day — a runtime-indexed accumulator array — and the fix is worth
+2.99×; see [the 1×1 conv's accumulators](#the-11-convs-accumulators-were-in-memory-putting-them-in-registers-is-worth-3-and-the-op-class-still-loses).)* The 3×3 *does*
+keep `cm1`–`cm4` live with no accumulator traffic, and still reaches only 0.222, because six
+of its eighteen bundles are `vshift` and four more `vmov`: sliding-window realignment spent in
+issue slots. That is the classic conv-on-SIMD cost, and it is exactly what K1's tooling
+section proposes removing by moving row shifting to the mem tile's 4-D descriptors.
+
+One minor third finding, recorded so it is not mistaken for a lever: the 3×3's hot loop
+carries one paired-load bundle and a bank holds two distinct buffers, so the same-bank penalty
+applies — about 5%, noise beside a 4× issue shortfall.
+
+**Note what this does and does not overturn.** `kernels/README.md` closed a "kernel quality"
+item with *"both vectorize correctly with `aie::mmul`"*. That is a **correctness** statement
+and it remains true; these are the throughput numbers, which were never taken. Reaching K1's
+1 TOPS bar needs 6.8× and the 1×1's defect alone is worth up to 20× on that kernel — but the
+20× and 4× are **ceilings on unused issue slots, not predictions of a rewrite**, and the
+per-loop densities are unweighted by trip count, so which loop dominates runtime is still
+unmeasured. What this removes is the excuse that nobody knew where the 11.3× went.
+
+### The 1×1 conv's accumulators were in memory. Putting them in registers is worth 3×, and the op class still loses
+
+The section above located the open int8 conv's 11.3× gap to the vendor DPU as issue rate, with
+the 1×1's hot loop the worst of it at **0.045 MACs/cycle** against the GEMM's 0.889, and named
+the cause: the kernel keeps its accumulator in *memory*. This is the fix, measured. Backing log
+`results/aie/conv_accum_residency_npu.log`.
+
+**The defect is one declaration.** `conv2dk1_i8_vector` holds `MMUL4x8x8 acc_tmp[4]` and indexes
+it with `for (int x = 0; x < n; x++)` where `n` is a **runtime** value. Registers cannot be
+dynamically addressed, so the array is forced to memory and every `.mac()` becomes
+load-four-quarters / mac / store-four-quarters. Peeling the `n == 4` case into four **named**
+accumulators — the pattern `mm.cc`'s `matmul_vectorized_2x2_mmul` already uses — fixes it. The
+array loop is kept as the tail and is genuinely reached: `total_chunks = iw/4`, so `iw=56` gives
+14 = 4+4+4+2, and the 56×56 shape runs the tail at n=2 and verifies.
+
+| `conv2dk1_i8_vector` hot loop | Stock | Peeled |
+|---|---|---|
+| Bundles per iteration | 22 | 14 |
+| `vmac` per iteration | 1 | 4 |
+| **MAC issue rate** | **0.045/cyc** | **0.286/cyc** |
+| Accumulator quarter loads / stores | 4 / 4 | 0 / 0 |
+| Bundles issuing nothing | 6 | 3 |
+| Accumulator registers named | 3 (`cm0`–`cm2`) | 5 (`cm0`–`cm4`) |
+
+**This is the falsifiable prediction H11 set up, and it held.** H11 improved the int8 GEMM's
+kernel by 12.5% — every spill gone, a full MAC every cycle — and the wall clock did not move,
+because that design is bound by a per-buffer delivery floor. The conv sat at 4.5% of peak rather
+than 41.9%, so it should be genuinely issue-bound and should actually speed up. It does. The two
+designs are bound by different things, and this is the first result here that shows it by
+*intervening* rather than by modelling.
+
+| Marginal GOPS (fit slope, shape-free) | Series A | Series B |
+|---|---|---|
+| Stock | 117.1 | 115.6 |
+| Both 1×1 stages peeled | **350.3** | **348.4** |
+| Gain | 2.99× | 3.01× |
+
+Both series agree in sign and magnitude, well outside this machine's ~5% drift, r² ≥ 0.9987, and
+every shape in every arm passes the sweep's own correctness gate.
+
+**A single-stage fix would have been reported as a null result, and that is the transferable
+lesson.** The bottleneck is a three-stage core-to-core pipeline — `conv2dk1`, `conv2dk3`,
+`conv2dk1_skip` — and the third stage carries the *same* defect. Patching only `conv2dk1.cc`, at
+32×32:
+
+| Arm | hw ms | GOPS |
+|---|---|---|
+| Stock | 1.4844 | 96.1 |
+| `conv2dk1.cc` only | 1.4486 | 98.4 |
+| Both 1×1 stages | **0.6133** | **232.5** |
+
+2.4% alone, 2.42× together. A pipeline runs at the rate of its slowest stage, so a single-stage
+intervention measures the pipeline's balance, not the intervention.
+
+**And the op class stays closed.** The CPU baseline, named and measured in the same sitting:
+onnxruntime 1.22.1, ORT CPU EP, QDQ int8 reaching VNNI, same six shapes, run twice — **823.7 and
+839.5 marginal GOPS** (consistent with the 819.0 already published for this sweep).
+
+| | Marginal GOPS | CPU wins by |
+|---|---|---|
+| Stock NPU | 115.6–117.1 | 7.1–7.2× |
+| Peeled NPU | 348.4–350.3 | **2.4×** |
+| CPU (VNNI int8) | 823.7–839.5 | — |
+
+A 3× kernel improvement moves the deficit from 7.2× to 2.4× and does not close it. What changes
+is the *reason* the op class is closed: it was "the kernel uses 5% of its issue slots"; it is now
+"even with the slots used, one column of this array does not reach a VNNI-equipped Zen4." Against
+the vendor DPU the per-column gap narrows from ~14× (this sitting's stock arm) to **~4.7×**.
+
+**A discrepancy that has to be stated because it looks like a contradiction.** The published
+stock figure is **146.1** GOPS; this sitting's stock arm measures **115.6–117.1** at the same
+shapes. The kernel is not the same code — that sweep predates the 2026-09-07 width fix, which
+rewrote this very loop to walk the width in ≤4-chunk blocks where upstream used eight concurrent
+accumulators, and the published run could not compile 56×56 at all while this one can. *Inference,
+not measurement:* the width fix appears to have cost ~20% at w=32 while making non-multiple-of-32
+widths correct, and was never measured at the time. The A/B is like-for-like within one sitting,
+so the 2.99× is unaffected — but 350 should be read as **2.4× the last published figure**, not 3×
+it. The pre-fix kernel was not built as a third arm: a peer producer held ~13 GB with free RAM at
+zero throughout the window, and contending with another session's job was not worth it.
+
+**What this does not show.** One design, one column, int8, one machine, one sitting; the w=64
+shapes fail to compile in *both* arms (a memtile limit, unrelated) and are excluded from both
+fits. The host-load witness reads **PEER**, not CLEAR — but contention can only *depress* the CPU
+figure, which makes "the CPU still wins by 2.4×" conservative rather than flattered. The MAC issue
+rates are static ceilings from the schedule, not counters, which is why the whole-kernel 2.99× is
+smaller than the hot loop's 6.29× — the loop is not all of the kernel. The correctness gate is
+`np.allclose(rtol=0, atol=INP_SCALE)` against a torch int8 golden, a tolerance check rather than a
+bit-exact one. **`conv2dk3` was not touched** and is the likeliest remaining rate-limiter; nothing
+here establishes where the residual 2.4× to the CPU sits.
+
+### Batched submission drops the dispatch floor 17×, and reopens four closed verdicts
+
+The dispatch floor above is the single most consequential number in this repo: `docs/SILICON.md`
+§3.4 states that **every** small-op verdict here is conditional on it. The same log named its
+own fix, and `docs/DECISIONS.md` recorded `pyxrt.runlist` as bound but explicitly unmeasured —
+*"Nothing has been run — this is an API-existence check and the next measurement to make, not
+a result."* This is that measurement. Backing log `results/aie/dispatch_runlist_npu.log`.
+
+| Path, same 32 KB passthrough | Per dispatch |
+|---|---|
+| IRON `@iron.jit` wall | 617.0 µs |
+| IRON hardware bracket | 169.8 µs |
+| **raw pyxrt, single** | **~140 µs** |
+| **`pyxrt.runlist`, N=64, amortised** | **36.3 µs** |
+
+**The go/no-go threshold moves from 617 µs to about 36 µs, a factor of 17 — for a caller
+driving raw pyxrt.** The amortised figure reproduced at 35.9, 36.3, 36.0 and 36.3 µs across
+four runs. It was later measured *through IRON* as well, where the device half reproduces but
+the end-to-end threshold only falls to ~531 µs; see
+[Batching reaches the device floor from inside IRON](#batching-reaches-the-device-floor-from-inside-iron--and-irons-own-host-work-eats-almost-all-of-it).
+
+**The "hardware" half was not all hardware.** Raw pyxrt submits the same design in ~140 µs,
+below the 169.8 µs the earlier work called the hardware bracket, and the batched figure is a
+*quarter* of that bracket. That settles the question the earlier log left open: 169.8 µs is
+not irreducible silicon cost.
+
+**This is a throughput result, not a latency one, and that is the binding limit.** 36 µs is
+what a dispatch costs when 64 are in flight together; a single op still pays ~140 µs raw or
+617 µs through IRON. It reopens work that can be batched — many independent tiles, frames or
+graph nodes — and does nothing for a latency-critical single call. N=1 *through* a runlist is
+slightly slower than a raw single dispatch, so batching only pays from N=2.
+
+**What reopens.** Against §3.4's own list of what the old floor closed, with its CPU times:
+
+| Op | CPU time | Against a 36 µs raw-pyxrt floor | Against a ~531 µs batched-IRON floor |
+|---|---|---|---|
+| MobileNetV2, whole model | 1720 µs | 48× above | whole-model time, not per dispatch — see below |
+| MobileViT stage-2 attention | 240 µs | 6.7× above | still under |
+| bf16 attention stage 2 | 240 µs | 6.7× above | still under |
+| GroupNorm at L ≤ 18816 | 233 µs | 6.5× above | still under |
+| bf16 attention stage 3 | 34 µs | still under | still under |
+| bf16 attention stage 4 | 12 µs | still under | still under |
+
+Four of six reopen, without a line of kernel code. That does **not** mean they now win — it
+means the floor is no longer why they lose, and kernel quality becomes the deciding question
+for the first time. The attention kernel's README argued *"the op has to be ~20× larger before
+the kernel quality is what decides the outcome"*; at a 36 µs floor that multiple is ~1.4× for
+stage 2.
+
+**The fourth column is the one to read if you are writing an `@iron.jit` design**, and it says
+that none of the four reopens survive there. Three are single ops under 250 µs against a
+~531 µs batched-IRON floor. MobileNetV2's 1720 µs is a *whole-model* CPU time being compared
+against a *per-dispatch* floor — a comparison the 36 µs column inherits from §3.4 and does not
+justify; the model is many dispatches, and whether it clears the floor needs per-layer
+arithmetic nobody has done. Reopening any of these at 36 µs means committing to a raw-pyxrt
+driver that gives up IRON's argument handling.
+
+**Two real defects were fixed to get here**, both of which produced a wrong answer rather than
+an error. `kernel(...)` in pyxrt creates *and starts* a run, so adding one to a runlist hands
+`execute()` a run already in flight — this is why every batch had failed its output check;
+runs must be built with `pyxrt.run(kernel)` plus `set_arg`. And the cache resolver looked for
+the instruction stream as `*.txt` when the file is `insts.bin`, and took the newest xclbin
+anywhere in the cache, which after any other design is compiled is a different design.
+
+**What this does not show.** One design, one payload, one machine. It is a no-compute
+passthrough, so a real kernel's configuration cost lands inside the dispatch and pushes its
+floor above this one — treat 36 µs as a floor, not a constant. Nothing here is an IRON result:
+the batched path is raw pyxrt, `@iron.jit` does not use runlists, and reaching 36 µs from a
+real design means writing that host path. *(Both of those caveats were closed the same day —
+the host path was written and a real kernel run through it; see the next section.)* The 617.0
+and 169.8 µs comparators are quoted from
+2026-09-07, not re-run. The reopened verdicts are arithmetic against published CPU times, not
+re-measurements — each still needs its own paired run.
+
+### Batching reaches the device floor from inside IRON — and IRON's own host work eats almost all of it
+
+The section above measured 36.3 µs by driving raw pyxrt and closed with two caveats: *"Nothing
+here is an IRON result… reaching 36 µs from a real design means writing that host path"*, and
+*"this is a no-compute passthrough: a real kernel's own configuration cost lands inside the
+dispatch and pushes its floor above this one."* Both are now closed. `kernels/dispatch_floor/
+iron_batch.py` puts runlist submission inside IRON's own host path, and a real 8-core bf16
+kernel was run through it. Backing log `results/aie/iron_batch_npu.log`.
+
+The mechanism: `XRTHostRuntime.run()` submits with `kernel_handle.kernel(3, insts_bo, …)`, and
+in pyxrt `kernel(…)` creates *and starts* a run — exactly what cannot go into a runlist. A
+context manager swaps that kernel for a proxy which builds the run **unstarted**
+(`pyxrt.run(kernel)` + `set_arg`) and queues it. Every other step of IRON's `run()` executes
+unchanged: same ABI validation, same instruction buffer, same argument order. Nothing outside
+this repo is modified, and the patch is removed on leaving the block.
+
+| No-compute passthrough, 32 KB | Series A | Series B |
+|---|---|---|
+| Unbatched, median | 676.2 µs | 729.0 µs |
+| Batched N=64, **device** (runlist bracket) | **37.9 µs** | **37.5 µs** |
+| Batched N=64, **wall per call** | **537.1 µs** | **530.9 µs** |
+| Batched N=64, host share | 499.2 µs | 493.4 µs |
+| End-to-end gain | 1.26× | 1.37× |
+
+**The device half works, and it reproduces the raw-pyxrt number from inside IRON.** The
+runlist bracket falls monotonically — 167.3/170.7 µs at N=1, 45.7/45.5 at N=16, 37.9/37.5 at
+N=64 — against the raw-pyxrt harness's 36.3 µs on the same design. The 17× survives going
+*through* IRON's argument handling rather than around it.
+
+**The real kernel closes the other caveat and confirms the reading from the other side.** bf16
+GroupNorm at L=150528 (8 cores, 32 groups) batches to 838.3, 823.8 and 829.8 µs per dispatch
+at N=4, 16 and 64, then stops. That plateau is not a measurement floor — it is the kernel's own
+compute: `results/aie/groupnorm_bf16_kernel_npu.log` independently measured this design at this
+L at **835.8 µs** per call (min 807.7) against 1899.3 µs on the CPU. All three batched figures
+land within 1.5% of it. Batching removed ~140 µs of device-side dispatch overhead and left the
+work. So a real kernel's dispatch cost is the *same order* as the passthrough's; its
+configuration cost does not swamp it.
+
+**And the end-to-end gain is 1.2–1.4×, not 17×.** That is the half a caller feels. Wall time
+per call improves 1.26× and 1.37× on the passthrough and 1.23× on GroupNorm (1844.5 → 1495.7
+µs). The reason is the host-share column, and it is **flat in batch size**: 478–529 µs on the
+passthrough at every N ≥ 4 across both series, 666–781 µs on GroupNorm. Batching cannot touch
+it because it is not dispatch — it is what IRON does per call *before* the submit: ABI
+validation, buffer preparation, instruction-buffer setup.
+
+**This reproduces and localises the 447 µs host term.** `dispatch_floor_npu.log` split the
+617.0 µs floor into a 169.8 µs hardware bracket and 447.3 µs of host cost. This measures that
+term from a different direction — 478–529 µs on the same design, at every batch size — and
+shows it is independent of *how* the submit is done. Batching fixed the dispatch half of the
+floor; the host half needs a different fix and is now the larger by more than an order of
+magnitude: **37.5 µs of device against ~500 µs of host.**
+
+**There are three thresholds, not two.** This is the correction to the section above:
+
+| Path | Per-dispatch threshold |
+|---|---|
+| Unbatched `@iron.jit` call | 617.0 µs published; 676–729 µs this sitting |
+| **Batched `@iron.jit` call** | **~531–537 µs** |
+| Batched raw-pyxrt driver | 36.3 µs |
+
+~531 µs is 14% below the published 617.0 µs and 21–27% below this sitting's own unbatched
+medians — not 17× below either. Reopening a verdict at 36 µs means committing to a raw-pyxrt
+driver that gives up IRON's argument handling.
+
+**N=1 and N=2 are slower than unbatched, and that is not noise.** A one-call batch pays to
+construct a runlist and amortises nothing: 0.91×/0.86× on the passthrough, 0.96× on GroupNorm.
+Batching is only worth reaching for at N ≥ 4.
+
+**What this does not show.** Two designs, one machine, one sitting; the passthrough was run
+twice and both series are printed in the log, with the N=1 and N=2 rows moving between them.
+The host share is a *subtraction* (wall minus runlist bracket), not a profile of `run()`, so it
+is an upper bound that includes Python loop and buffer-allocation time. Nothing here *reduces*
+the host share — identifying which part of IRON's per-call work dominates it would need a
+profile, and is now worth more than any further dispatch work. Only the transaction submit path
+is batched; the full-ELF path builds its own `pyxrt.run()` and is refused with a clear message.
+Verification is per batch after the flush, so a batch whose runs executed in the wrong *order*
+would still pass. The GroupNorm arm checks finiteness and non-zeroness — enough to catch a
+batch that silently did nothing, which is the failure mode batching introduces, but not an
+accuracy check.
+
+**Batching gives up per-call completion status entirely, and it cannot be recovered.** A run
+inside a runlist cannot be polled on this binding — `run.state()` raises *"Cannot poll a command
+that has not been submitted"* — so `runlist.wait()` is the only completion signal. **Verifying
+output buffers is the only correctness gate under batching**, and a batch that silently did
+nothing would otherwise look extremely fast.
+
 ### The chained int8 CNN also loses — and this time it was measured before anything was built
 
 `ml/resnet/layers_conv2_x` (three ResNet bottlenecks chained core-to-core across three
@@ -1045,6 +1355,492 @@ GEMM running; `turbo` printed its escape error under load and idle and applied a
 same log's first run is kept as contaminated: it overlapped another session's 128-stream
 classifier sweep, and the hold hung in the second that sweep's XRT aborted.
 
+### AIE2 machine code: the bundle count of a loop is its cycle count
+
+Backing log: `results/aie/aie2_isa_static.log`. Tools: `tools/aie_disasm.py`,
+`kernels/acc_spill_probe/`. **No hardware was used.** Every figure here comes from
+disassembling object code with Peano's own `llvm-objdump` or compiling with Peano's `clang`,
+so the whole thing runs in seconds against a busy device.
+
+The clock measurement above made cycles convertible to seconds. It did not say where the
+cycles go. `docs/SILICON.md` 1.2 carried MACs per cycle and the vector width as SPEC rows
+copied from AMD's `device.yaml`, issue width appeared in no document in this repo, and two
+documents disagreed about the accumulator file. All three are now read off the machine code.
+
+**The bundle format.** The nop mnemonics name the slots: `nopb ; nopa ; nops ; nopx ; nopm ;
+nopv`, so six slots — branch, load, store, scalar, move, vector. `nopxm` is the fused
+encoding printed when x and m are both idle, so a five-field bundle still occupies six slots.
+Bundles using few slots are emitted compressed, shorter than 16 bytes, and still issue in one
+cycle, so cycles count by bundle and never by byte.
+
+**The calibration, and the finding that comes out of it.** S0 measured two loops at exactly
+9.000 and 2.000 cycles per iteration, constant from 2^18 to 2^25 iterations. Disassembled,
+the same two loops are 9 and 2 bundles. Both exact.
+
+| Loop | Measured cycles/iteration | Bundles in the loop body |
+|---|---|---|
+| scalar, `volatile` load-add-store | 9.000 | 9 |
+| vector, dependent 16-lane `aie::add` | 2.000 | **2** |
+
+That equality is the point. AIE2 is a statically scheduled VLIW with an exposed pipeline, so
+Peano covers every operand latency with explicit nop bundles instead of leaving it to a
+hardware interlock. The scalar loop shows the mechanism: six consecutive all-nop bundles sit
+between the load and the add that consumes it, so a scalar load's result reaches the seventh
+bundle after it issues, and that latency is the whole reason the loop costs 9 cycles to do
+one add. **An inner loop's cycles per iteration can therefore be read before the kernel is
+ever run.** The exception is a loop that waits on a lock, a stream or a DMA, which takes
+longer than its bundle count; the disassembly cannot say how much longer, and that is what
+the trace unit's stall events are for.
+
+**Compiling for the core without IRON.** `clang++ --target=aie2-none-unknown-elf -std=c++20
+-O2 -D__AIE_API_AIE_ADF_HPP__=1 -c -I <mlir_aie>/include` builds a kernel object directly.
+The flag predefines the include guard of `aie_api`'s graph-level ADF header so its body is
+skipped; that header includes `<adf.h>`, which ships with Vitis and exists nowhere on this
+machine. Recompiling the clock probe's own source this way reproduces the object IRON built
+for the hardware run — same 102 bundles, same 29 full-width and 73 compressed, same 32-byte
+frame, same four loops at the same addresses — which is what makes the flag safe to use.
+
+**The accumulator file, and two documents corrected.** `kernels/acc_spill_probe/` holds K
+live `aie::mmul<4,8,8,int8,int8,acc32>` accumulators across a k-reduction loop, the shape
+upstream's `conv2dk3` uses, and sweeps K.
+
+| Live accumulators | Accumulator registers named | Stack references |
+|---|---|---|
+| 1–5 | 1 to 6 | **0** |
+| 6 | 9 | 5 |
+| 7 | 9 | 17 |
+| 8–12 | 9 | 25 to 96 |
+
+The allocator names nine accumulator registers, `cm0`–`cm8`, reaches nine at six live
+accumulators and never goes past it however many more are asked for. Five live accumulators
+of this shape compile with no stack traffic at all; six is the first count that touches the
+stack. Both prior claims were wrong in opposite directions: `docs/DECISIONS.md`'s "only 6
+hardware accumulator registers" is below the nine names that appear, and `docs/SILICON.md`'s
+"≤4 stays in registers" is one below the real spill-free ceiling. Both were inferred from the
+single `conv2dk3` kernel that spilled at 8, and both are now marked superseded rather than
+removed. The width fix in `kernels/conv2dk3_widthfix/` was written to N ≤ 4 for safety, so it
+is correct but one accumulator short of what fits.
+
+Caveat: one accumulator shape, one optimisation level, one compiler version. A wider
+accumulator fits fewer, and nine register names is a lower bound on the architectural file
+since the allocator may simply never have needed a tenth.
+
+**The production int8 GEMM, read the same way.** The kernel behind the 4607.05 GOPS above has
+a nine-bundle inner loop issuing eight `vmac` instructions, one per live accumulator
+`cm0`–`cm7`, with its operands arriving on the load and store slots of the same bundles. One
+int8 `vmac` is the 256-MAC operation the 256 MACs/cycle nameplate describes, so the loop
+issues 0.889 vector MACs per cycle, **88.9% of the machine's MAC issue rate**.
+
+Set that against the measured whole-kernel figure. 4607.05 GOPS over 16 cores at 1.7983 GHz
+is 31.3% of the 14,730 GOPS those cores can issue. The inner loop is at 88.9%. **The missing
+factor is not the inner loop's instruction schedule**, so rewriting it is not where the time
+is — the question is how much of the elapsed time is spent inside that loop at all, which is
+a dispatch, DMA and occupancy question rather than a kernel-quality one. The function does
+spill, a 416-byte frame and 37 stack references, consistent with it holding eight live
+accumulators where five is the ceiling; but none of that traffic is in the nine loop bundles,
+so the spills cost setup per call and not per-iteration throughput.
+
+**Hand-written assembly is available; the cycle counter still is not.** `docs/DECISIONS.md`
+recorded that Peano "rejects inline asm", which closed hand-scheduling on this part. That is
+true only of statement-level inline asm inside a C++ function, which dies in the IRTranslator.
+A standalone `.s` file never enters instruction selection: `kernels/asm_probe/` assembles one,
+compiles a C++ caller, links them, and both symbols resolve with nothing undefined. So a
+hand-scheduled inner loop is available wherever the compiler's schedule is the binding
+constraint, which the tool above can now identify.
+
+It does not rescue the cycle counter. Enumerating the special registers the assembler accepts
+as a `mov` source, by trying to assemble each, yields only `CORE_ID` — even `PC`, `SP` and `LR`
+are refused there. The register database puts the tile timer at memory-mapped `0x340F8` and
+`0x340FC`, in the configuration space reached over AXI-MM from the host or a DMA, not in the
+core's data space, whose stack this toolchain places at `0x70000`. The trace unit remains the
+only path to it, which is what the clock work concluded from three other failures; this is a
+fourth independent route to the same answer.
+
+**What this does not show.** Nothing here is a hardware measurement, the assembly result
+included — the object assembles, disassembles and links, but no hand-written kernel has been
+run on the NPU. The bundle-equals-cycle identity is checked against two measured loops and no
+more. The 88.9% is the inner loop's
+issue density, not the kernel's utilisation. The slot names come from the nop mnemonics
+`llvm-objdump` prints, not from a published AIE-ML ISA document, which this project does not
+have.
+
+### The trace unit as a performance-monitoring unit: 68% of a short kernel's cycles are lock wait
+
+Backing log: `results/aie/pmu_probe_npu.log`. Tool: `kernels/pmu_probe/`.
+
+The clock made cycles convertible to seconds and the disassembly made an issuing loop's cost
+readable. Neither says anything about a core that is *not* issuing, which is where every
+losing verdict in this repo actually lives. The AIE2 trace unit carries a stall taxonomy
+(`MEMORY_STALL`, `STREAM_STALL`, `LOCK_STALL`, `CASCADE_STALL`), an occupancy signal
+(`ACTIVE`, `DISABLED`) and an instruction mix, eight events at a time per tile. None had been
+used on this machine.
+
+`kernels/pmu_probe/` reuses the clock probe's kernel and design unchanged and swaps only the
+event list, so its loops are the two whose cycles per iteration are already measured here.
+That makes the first run a calibration, not a measurement.
+
+**How a level event is encoded.** One frame per cycle. `ACTIVE` returns 27,864 hits over a
+span of 27,863 cycles. The trace unit compresses consecutive identical frames into Repeat
+frames itself, which is why this does not overflow: the vector loop at 65,536 iterations spans
+142,730 cycles and still fits in 1,344 bytes.
+
+**Calibration.** Cycles per iteration converge on the measured values as the loop grows and
+the fixed entry cost amortises.
+
+| Loop | Iterations | Cycles/iteration | Measured by S0 |
+|---|---|---|---|
+| vector | 4,096 | 2.0051 | 2.000 |
+| vector | 16,384 | 2.0013 | 2.000 |
+| vector | 65,536 | **2.0003** | 2.000 |
+| scalar | 2,048 | 9.0020 | 9.000 |
+| scalar | 8,192 | 9.0005 | 9.000 |
+| scalar | 32,768 | **9.0001** | 9.000 |
+
+**The accounting, which is the stronger result.** Subtracting the traced stall cycles and the
+loop's own cycles from the cycles the core was alive leaves exactly 190 cycles on every vector
+run and exactly 198 on every scalar run, across a 16× range of work. A residual that is
+constant rather than proportional is the kernel's prologue and epilogue, and it is what says
+
+```
+cycles the core is alive = issuing + memory + stream + lock + cascade stalls
+```
+
+closes on this hardware. `ACTIVE` is inclusive of stall cycles, not exclusive of them — a core
+waiting on a lock is still enabled and not halted — so issuing cycles are what remains after
+the stalls are subtracted rather than a figure the hardware reports directly.
+
+**What it found.** `LOCK_STALL` is the only non-zero stall term in any run, and it is large.
+The core waits 8,500–12,700 cycles per dispatch on the input ObjectFifo's lock, about 5–7 µs
+at 1.80 GHz, and that barely moves as the loop grows 16×, so it is a fixed cost of getting
+data to the core rather than a function of the work. On the shortest run it is 18,926 cycles
+against 8,915 of issuing: **the core spends 68% of its life waiting and 32% computing**, on a
+kernel whose inner loop the disassembly rates as perfectly scheduled. That is the mechanism
+this project has been inferring from throughput fits since the first kernel lost.
+
+It also sharpens the 169.8 µs hardware dispatch floor above. Some of that floor is visible
+from inside the core as lock wait, but only a little: 10,000 cycles is about 3% of 169.8 µs,
+so the rest is outside the core entirely.
+
+**What a buffer costs, and the rule that comes out of it.** A single dispatch does not
+amortise anything. Streaming 16 buffers through the same core and sweeping the compute per
+buffer separates the fixed and per-buffer terms.
+
+| Compute per buffer (cycles) | Issuing cycles per buffer | Difference | Lock stall (total) |
+|---|---|---|---|
+| 32 | 740 | 708 | 7,523 |
+| 128 | 824 | 696 | 12,059 |
+| 512 | 1,229 | 717 | 11,912 |
+| 2,048 | 2,765 | 717 | 11,876 |
+| 8,192 | 8,909 | 717 | 6,948 |
+| 32,768 | 33,485 | 717 | 12,173 |
+| 131,072 | 131,789 | **717** | 9,835 |
+
+The per-buffer overhead is a constant 717 cycles — not a fit or a trend, the same residual at
+131,072 cycles of compute as at 512, four thousand times smaller. The lock wait stays flat too,
+7,000–12,000 cycles regardless of the work, and varies as much between repeats of one point as
+across the whole sweep, because it is DMA timing. The issuing side is deterministic: the large
+points come back bit-identical between runs.
+
+That 717 decomposes entirely into things already measured here. 512 cycles are this probe
+kernel's own flush loop, the 256 event pairs it emits so the trace packet reaches host memory,
+which the disassembly rates at 8 bundles per 4 pairs. 190–198 cycles are the kernel prologue
+and epilogue isolated above. What is left, about 15 cycles, is the genuine ObjectFifo acquire
+and release. So for a kernel shaped like this one, on one core:
+
+```
+cycles = n_buffers x (compute_per_buffer + ~205) + ~10,000
+```
+
+where the 205 is the per-buffer handoff including the kernel call and the 10,000 is the fixed
+dispatch lock wait. **A buffer carrying less than a few hundred cycles of work is mostly
+handoff, and a dispatch carrying less than about 10,000 cycles of work in total is mostly
+waiting.** Both are lower bounds, measured on the easiest kernel available: one core, no
+cascade, no neighbour traffic, operands already in registers. A real kernel pays more.
+
+**What this does not show.** Only `LOCK_STALL` has been seen non-zero, so three of the four
+stall categories are unexercised and are not shown to work by this run. One core tile, one
+power mode. The traced window starts when the trace unit is enabled rather than when the
+dispatch begins, so the cycles the core was alive are not the whole submit-to-wait bracket and
+must not be compared against it directly. `ACTIVE` being inclusive of stalls is inferred from
+the accounting closing, not from a document.
+
+### The int8 GEMM issues at 40% of nameplate, and a ~3,200-cycle per-buffer floor caps it
+
+The two results above compose into something neither gives alone. If a hardware loop's bundle
+count is its cycle count, and a buffer costs a constant on top of its work, then a kernel's
+**issuing time is computable from its object file without running it**. Subtracting that from a
+measured time leaves the cycles the core spent not issuing — the quantity every losing verdict
+in this repo has been missing. `tools/gemm_cost_model.py` does that computation for the
+`mm.cc`-shaped tiled GEMM; backing log `results/aie/gemm_cost_model.log`.
+
+**A correction first.** The static-ISA section above is headed "the kernel behind
+`results/aie/int8_matmul_sweep_npu.log`'s 4607.05 GOPS" and disassembles the object in cache
+`0816364bbbaf03f83e2f0bcd`. That cache carries `memref<64x32xi8>` buffers, so it is the
+**default n=32 build**, which measured 2387.01 GOPS — not the tuned n=64 build that produced
+4607.05. The tuned kernel is a different object hash, `matmul_i8_i32_86901378.o`. Every number
+in that section survives, because the two objects' loops are identical: nine bundles, eight
+`vmac`, `cm0`–`cm7`, 88.9% MAC issue density. Only the attribution was wrong, and it is
+corrected here rather than edited out of the log.
+
+**A first reading of this was wrong, and the correction moves the answer.** The kernel was
+modelled as one hardware loop with straight-line setup, charging its 135 non-loop bundles once
+per call. `matmul_i8_i32` is a **nest**: two software loops around the hardware loop, with the
+accumulators loaded before it and stored after it, and that whole body re-run once per group of
+live accumulators. Three things in the disassembly say so — two backward branches after the
+hardware loop each with their own induction update and bound test, a loop body with eight
+`vmac` and **no accumulator store**, and compile-time loop bounds (`mova r3, #0x8` →
+6 hardware-loop trips, `mova r7, #0x6` → 4 inner, `mov r8, #0xc` → 4 outer). The trip counts
+reconcile exactly: 16 groups × 64 `vmac` = 1,024 = 64³/(4·8·8), nothing left over.
+Superseded numbers are kept below; backing log `results/aie/gemm_cost_model_nest.log`.
+
+Both tiles, same 4096×2048×2048 problem, same 16 cores, same sitting in the source log:
+
+| Tile | `vmac`/call | Issuing cycles/call | Measured cycles/call | Issuing | MAC rate over the call |
+|---|---|---|---|---|---|
+| m64 k64 **n64** | 1024 | 2442 | 3274 | **74.6%** | 107.3 (41.9% of 256) |
+| m64 k64 **n32** | 512 | 1306 | 3160 | **41.3%** | 100.4 (39.2% of 256) |
+| *superseded, one-loop reading* | | *1323 / 738* | | *40.4% / 23.4%* | *198.1 / 177.5* |
+
+**The schedule is the larger loss, and the first reading put it in the wrong place.** Over a
+whole call the kernel issues about 100–107 MACs per cycle against the 256 the tile can retire,
+roughly 40% — not the 77.4% the one-loop reading gave. The 88.9% figure for the inner loop is
+correct and unchanged, but it covers only 54 of the 141 cycles an accumulator group costs. The
+other 87 bundles per group are accumulator loads, accumulator stores and stack spill traffic,
+run 16 times per call at n=64. **That is a direct consequence of a number measured two sections
+above:** five live 4×8×8 int8 accumulators is the spill-free ceiling and this kernel holds
+eight, with a 416-byte frame and 33 stack references.
+
+**And the spill is a blocking defect, not a width limit — bf16 proves it.** The two dtype paths
+in `mm.cc` ask the register file for the *same* total accumulator width: int8 takes 8
+accumulators of 1024 bit, bf16 takes 16 of 512 bit, both 8192 bits across the same 8 of the
+file's 9 registers. If the ceiling were a width budget, bf16 would spill too and reblocking
+int8 would buy nothing. It does not spill at all: a **64-byte frame** whose 15 stack references
+are every one of them scalar, against int8's **416-byte frame** carrying **12 vector spills**
+(12 slots × 32 B + 32 B of scalar reconciles 416 exactly). The file itself is 9 registers
+addressed at three granularities — `cm` full, `bml`/`bmh` halves, `amll`…`amhh` quarters —
+so it was never 9 *or more*. Backing log `results/aie/accumulator_width_vs_count.log`. This is
+the existence proof H11 needed: a blocking that fits spills nothing.
+
+**The per-buffer floor is the finding that survived the correction.** Measured cycles per call
+are 3,274 at n=64 and 3,160 at n=32 — a 3.6% difference for buffers whose compute differs by
+2×. That is a measurement, not a model output, and neither reading changes it. What the
+corrected model changes is how full the slot is: n=32 puts 1,306 issuing cycles into a
+~3,200-cycle slot and n=64 puts 2,442 into it. So n=64 is 1.93× faster because it nearly fills
+a slot whose length barely moves, and the remaining headroom is about **1.3×, not 2.4×**.
+
+**A candidate constant is now falsified.** The first reading bounded the handoff by charging
+the trace probe's entire measured 717 cycles per buffer. At the corrected issuing cost that
+bound predicts **117.5%** of the measured time at n=64, which is impossible. The probe's 717
+does not transfer to another kernel — exactly as its own decomposition said, since 512 of it
+was that probe's trace-flush loop and 190 its kernel prologue, leaving only the ~15-cycle
+acquire/release as a property of the ObjectFifo.
+
+Note that the schedule × issuing identity reproducing the measured fraction of peak is
+**arithmetic, not evidence**: the per-call cost cancels, so it holds for any value and checks
+only the tool's bookkeeping. The evidence for the nest reading is the trip-count reconciliation
+above, and the tool refuses to produce a number when that reconciliation fails.
+
+Three hypotheses:
+
+- **H9.** Stream-port tracing measures a sustained input rate at or below **2.5 B/cycle** into a
+  core. Bytes into L1 per call are 8,192 (n=64) and 6,144 (n=32); over the measured cycles per
+  call that is 2.50 and 1.94 B/cycle, against the 3.35 and 4.71 a never-starved core would
+  need. Fails if the ports read faster, which would move the missing time elsewhere.
+- **H10.** Per-buffer wall time is a floor set by the data path, so throughput rises with work
+  per buffer until the issuing cost approaches ~3,200 cycles — about 1.3× headroom at n=64.
+  Fails if a larger tile does not raise throughput. **Already obstructed:**
+  `results/aie/int8_matmul_sweep_npu.log`'s probes at m=128 and at k=128 both failed to build
+  with `'aie.tile' op Basic sequential allocation failed`, an L1 capacity limit. Reaching the
+  headroom means changing what occupies L1 — buffer depth, or the 16 KB single-buffered output
+  tile — not asking for a bigger tile.
+- **H11 — RUN 2026-09-09. The kernel improved on every static measure and the wall clock did
+  not move.** Switching the int8 path from `matmul_vectorized_4x2_mmul` (8 live accumulators)
+  to the `2x2` template already in `mm.cc` (4) gives: 144 → **88** bundles, a 416 → **32**-byte
+  frame, 33 → **5** stack references, **every one of the twelve vector spills gone**, and a
+  hardware loop of 8 bundles issuing 8 MACs — **1.000 `vmac`/cycle**, up from 0.889 and at the
+  ceiling. An issue-bound design should then run ~12% faster. Two alternating A/B series gave
+  best-to-best **+0.8%** and **−2.1%**, medians **+2.0%** and **+0.4%** — inside ±2%, with the
+  sign not even stable. Backing log `results/aie/gemm_reblock_h11_npu.log`; harness
+  `kernels/gemm_reblock/`. **This is the test H12 could not be:** not "we could not resolve 3%"
+  but "a 12.5% kernel improvement produced nothing measurable". The core is not the critical
+  path, and the per-buffer floor now rests on an intervention large enough that its absence is
+  the evidence. Keep the two lines — they are free and strictly better — but stop expecting
+  wall clock from inner-loop work on this design.
+
+**What this does not show.** Nothing here was measured on hardware; the issuing-cycle figures
+are computed from object code and the microseconds come from a run two days earlier. "Not
+issuing" is a residual, not an observation — consistent with lock stall, the only category seen
+non-zero so far, but not attributed by this run. The nest walk assumes the two backward branches
+target the two labels in order; the branch targets are unresolved relocations in an object file
+and were not read directly, so the trip-count reconciliation is the evidence. One power mode,
+one dtype, one design.
+
+### Two loads in one bank cost a cycle, and the int8 GEMM has that collision where bf16 does not
+
+An AIE2 core tile has 64 KB of local data memory in four banks of 16 KB, and **two load
+units**, so a bundle can issue two loads in one cycle. When both address the same bank the
+pair costs one extra cycle. That price is measured, not assumed: a controlled experiment on
+branch `research/windows-lowlevel` holds the compiled function bytes identical and changes only
+the operand addresses, fitting a length sweep at r² 1.0.
+
+| Case | Core cycles per iteration |
+|---|---|
+| Two loads, same bank | **12.0** |
+| Two loads, separate banks | **11.0** |
+| One load, same bank | 11.0 |
+| Same bank, operand offset 64 / 128 / 256 B | 12.0 / 12.0 / 12.0 |
+
+The second load is free across banks and costs exactly one cycle inside one, and the
+granularity is the bank rather than the address. The same branch carries it into a single-core
+tiled GEMM at this section's own 64×64×64 panel geometry: **15,232 cycles per panel with the
+operands in one bank against 14,208 separated**, a 1,024-cycle difference which is one cycle
+for each of that kernel's 1,024 inner iterations. Those logs are not merged here, so they are
+named rather than linked; backing log for the survey below is
+`results/aie/bank_conflict_survey.log`.
+
+**A correction to this repo's own issue-width row falls out first.** The six VLIW slots were
+named "`b` branch, `a` load, `s` store, `x` scalar, `m` move, `v` vector" from the nop
+mnemonics alone. Tabulating every operation in each slot of 226 *strictly six-field* bundles —
+the only encoding whose slot identity is unambiguous — puts `vldb` and `paddb` in slot b,
+`vlda`/`lda`/`mova` in slot a, and `ret` in the scalar slot. **Slot b is the second load unit,
+not the branch slot.** That is not a footnote: it is the reason a bank conflict can happen.
+
+`tools/aie_bank_check.py` reads the allocated buffer addresses out of a core ELF's symbol
+table — they are absent from the cached `aie.mlir`, which is pre-allocation — assigns each to
+a bank, and counts the bundles that issue two loads:
+
+| Build | C | A | B | Empty | Paired loads in the loop | Verdict |
+|---|---|---|---|---|---|---|
+| int8 GEMM, 4607.05 GOPS | banks 0, 1 | **bank 2** | **bank 2** | bank 3 | 1 of 9 bundles | **hazard** |
+| bf16 GEMM, the repo's NPU win | bank 0 | bank 1 | bank 2 | bank 3 | 1 of 32 bundles | clean |
+
+**The reason is inverted from what you would guess.** int8's operand tiles are half the size of
+bf16's, so the pair fits inside one 16 KB bank and the allocator packs them there, while bf16's
+larger tiles are forced apart. The int8 kernel is penalised *because* its data is smaller. The
+exposure is worse than the count suggests, too: both kernels have exactly one paired-load bundle
+in their steady-state loop, but that is 3.1% of the bf16 loop's 32 bundles and 11.1% of the
+int8 loop's 9.
+
+**The check predicts a number someone else measured, exactly.** That branch left both build
+caches on disk — one placement with the operands sharing a bank, one without, from a single
+kernel source whose compiled object hash is identical in both. Given nothing but the cache
+directory and the two operand names, `tools/aie_bank_check.py` reproduces the experiment's own
+labels from the ELF alone: banks 1 and 2 in the build it calls separate, both bank 1 in the
+build it calls same. It finds exactly **one** paired-load bundle in the compute loop's body,
+and the kernel's source fixes the trip count without inference — a 64×(64·panels)×64 int8 GEMM
+over `aie::mmul<4,8,8>` with bounds 16 × 8 × 8, so one panel issues 1,024 MACs and that body
+runs once per MAC.
+
+```
+predicted   1 paired-load bundle x 1,024 iterations = 1,024 cycles per panel
+measured    15,232 - 14,208                         = 1,024 cycles per panel
+```
+
+Backing log `results/aie/bank_check_validation.log`. It also confirms the mechanism is
+**same-bundle** paired loads specifically, not two loads merely near each other: the body is
+eight bundles and only one names both ports.
+
+**The validation found a bug in the check on its first run**, which is the point of doing it.
+The first version looked only inside *hardware* loops and reported "no penalty" on that very
+kernel — because the kernel keeps its compute in a **software** loop, its only hardware loop
+being the trace-flush loop. `mm.cc` is the same shape: its hardware loop is only the innermost
+k-reduction, and the accumulator-group body around it is a software loop. The check now walks
+software-loop bodies too, and a `--operands` flag makes the verdict about the two buffers a
+paired load really reads, rather than "some bank holds two buffers" — which over-reports, since
+a padding buffer sharing a bank is harmless. Re-read that way, the int8 GEMM's software body
+carries **ten** paired-load bundles across its 96, the one in the hardware loop plus nine in
+the accumulator spill traffic. That does not change the cost model, it locates it: nine per
+group over 16 groups plus one per hardware-loop iteration over 96 iterations is 240 cycles per
+call, exactly the `--bank-collision all` figure below.
+
+**What it does to the cost model.** Charging the loop's paired load raises the int8 GEMM's
+issuing cost per call from 2,442 to 2,538 cycles and its issuing fraction from 74.6% to 77.5%;
+charging every paired-load bundle in the function, an upper bound since this tool does not
+resolve which buffers the ones outside the loop read, gives 2,682 and 81.9%. So the residual
+this document has been calling starvation narrows from 25.4% to between 18% and 23%.
+
+**And the fix is free, which makes it a controlled experiment.** Bank 3 is empty in both builds.
+Moving one input tile into it changes the core's issuing time by a known amount and changes
+nothing about data movement: same bytes, same DMA, same fifo depth, same function bytes.
+
+- **H12 — attempted 2026-09-09, and the machine could not resolve it.** The intervention
+  worked exactly as designed: raising the per-core `stack_size` from `0xD00` to `0x2000` shifts
+  every buffer up, moving both A halves wholly into the empty bank 3 while B stays in bank 2,
+  with the same kernel source, tile shapes, fifo depths, DMA and schedule, and a **byte-identical
+  compiled kernel object**. Only the addresses moved. But across **seven** alternating series
+  the two arms overlap and the sign of the difference changes between series — best-to-best
+  −4.6%, −2.9%, +2.5%, −2.7%, −0.4%, −5.8%, −1.1%, where positive means separating was faster.
+  The colliding arm's *own* floor drifted 5.0% between repeats of the identical build, which is
+  larger than the ~3% effect being looked for. **So a large speedup is excluded and H12 is
+  neither confirmed nor refuted.** Backing log `results/aie/bank_ab_h12_npu.log`; harness
+  `kernels/bank_placement/`. A peer session held about a core throughout, and this should be
+  repeated on a quiet machine.
+  **What would settle it is an instrument this branch already has.** Wall time is the wrong
+  observable for a 3% core-side change on a shared machine; the trace unit is not. Pointing
+  `kernels/pmu_probe/`'s event routing at one core of this design reads `ACTIVE` against
+  `LOCK_STALL` in core cycles, inside the dispatch, where host contention cannot reach. If the
+  floor is real, the separated build's issuing cycles fall by ~96 per call and its lock stall
+  rises by the same, leaving `ACTIVE` unchanged — an equality needing no timing at all. The
+  obstacle is the one `RESEARCH.md` already names: `whole_array` carries no trace hook.
+
+**A tempting join with the driver work, tested and refuted.** Local `main` measures an NPU
+hardware-context-switch penalty of **+747.75 µs** (same-context dispatch 120.25 µs, alternating
+across two contexts 867.99 µs, a 7.22× slowdown) and an exact five-context ceiling in
+`amdxe.sys` matching Phoenix's five columns. This repo's largest unexplained blocker is the
+two-process handoff floor that erased all 33 bf16 GroupNorm node wins, whose smallest shape is
+**789.8 µs**. The two numbers are close enough to be worth testing, and the test refutes it:
+fitting that log's whole table against element count gives a slope of 78.4 ns per element, an
+intercept of **147.2 µs**, and r² 0.9997. The floor is 99.97% a per-element cost, its fixed
+component is a fifth of the context-switch penalty, and the agreement at the smallest shape is
+a coincidence of one row. The original diagnosis stands — the floor is conversion-bound, bf16
+pack and unpack being ~90% of the round trip at the largest shape. **Do not write that the
+handoff floor is the context switch.**
+
+What the driver work *does* settle here: its userspace dispatch-preparation floor is 8.76 µs
+and its hardware runlist batching overhead 3.39 µs per run. The int8 GEMM is **one** dispatch
+containing 65,536 kernel calls, so those are paid once over 7,458 µs and cannot be the per-call
+residual. That eliminates the host and the driver, and leaves on-chip data movement — which is
+what H9 predicts and what a stream-port trace would confirm.
+
+**A contradiction to report, not resolve.** The same driver log finds an exact five-context
+ceiling in `amdxe.sys` — contexts 1–5 allocate, the sixth is rejected with NTSTATUS
+`0xc01e0009` — and annotates it as "exactly matches physical Phoenix silicon column count (5
+columns)". **That reading conflicts with a measurement this repo already holds.** The
+measurements themselves do not conflict; only the causal claim does. Backing log
+`results/aie/context_ceiling_crosscheck.log`.
+
+- `results/multi_partition_yolov8n_5col.log` ran N processes against the per-column
+  `1x4.xclbin` and recorded the partitions actually handed out. At N=5 the set **stays at
+  four**, on columns 1–4. The fifth process gets no fifth partition. This is already in §1.1 of
+  `docs/SILICON.md` as "Columns any path on this machine can drive: 4".
+- The context benchmark loaded **`4x4.xclbin`**, which this repo has measured as occupying all
+  four columns as *one* partition. Five contexts each wanting a four-column overlay is twenty
+  column-occupancies on a device that exposes four. They cannot be one-per-column, so the
+  ceiling of five cannot be a column count. It is a driver context-table limit.
+- The benchmark's own second half agrees. Two contexts on separate columns would run
+  concurrently — which is what `1x4.xclbin` measurably does, scaling to 3.65×. Instead
+  alternating between two contexts costs +747.75 µs, and a large switch penalty is the
+  signature of time-slicing one partition. The driver work's own conclusion, that multi-stream
+  execution needs physical column isolation, is the right reading of its own data.
+
+Worth adding in the other direction: that penalty is better supported than its headline 7.22×
+suggests. The mean ratio is taken over overlapping distributions — the same-context *maximum*,
+881.50 µs, exceeds the cross-context *mean* of 867.99 µs — but the minima separate cleanly at
+61.10 µs against 467.90 µs, a factor of 7.7, and a minimum is the right statistic for a floor.
+**The deciding run** is the same context-scaling benchmark against `1x4.xclbin`: a ceiling
+still at five makes it a driver context-table limit outright, a ceiling at four makes it track
+partitions. Neither outcome makes it five columns, and A1 in `docs/SILICON.md` — reach the
+fifth column — stays open either way.
+
+**What this does not show.** Nothing here was measured on hardware by this run; the cycle costs,
+panel slopes and driver floors are quoted from logs on two unmerged branches. The collision is
+a hazard, not a measured cost, for these two kernels — the tool does not resolve which buffers
+a given paired load reads, so it is certain only inside the hardware loop where the operands are
+the `mmul` tiles. Whether the penalty composes linearly for several paired loads per iteration
+is untested. The bank map is read from the first of 16 core ELFs and allocation is per core. The
+conv kernels have no surviving build cache, so this repo's most-lost op class was **not**
+surveyed.
+
 ### MobileViT-XXS does not survive per-tensor INT8, and AdaRound cannot save it
 
 The accuracy question the attention work deferred, now measured on the full 1000-image
@@ -1458,6 +2254,15 @@ Both evaluated on 1,000 ImageNet-1k validation images against their FP32 Zen 4 C
      produce wide dynamic range divergence across groups. A single per-tensor INT8 scale cannot span
      all 32 groups simultaneously, triggering numerical overflow (`rmax/rmin set to inf/-inf`) and
      extreme weight shift cut adjustments (up to 128, far outside `[0, 16]`).
+     **Superseded 2026-09-09, same correction as RegNetX-002:** the shift-cut adjustments are
+     downstream of cross-layer equalization, not of the grouped-conv structure. With CLE off,
+     ResNeXt-50 recovers to **68.90% top-1**
+     (`results/quant/eval_resnext50_32x4d_quark_nocle_c64_cpu.log`), and the corrected analyzer
+     finds zero sigma violations in the graph
+     (`results/quant/shift_cut_reaudit_20260909_desktop2.log`). The dynamic-range divergence
+     across groups is real; blaming the clamp for the collapse is not. DenseNet-121's bullet
+     above carries the same caveat — its shift-cut observation has not been re-tested with CLE
+     off.
 
 ### Batching: does it help throughput?
 
@@ -3324,6 +4129,101 @@ and now (5.22 ms) are different days on the shared machine and are not compared.
 What this does not show: CLE on grouped or depthwise convolutions, on Gemm pairs, or on
 graphs whose matcher walk crosses Pad or ReduceMean; each raises until it has a gate.
 
+### Does byte parity survive the vendor compiler?
+
+Backing log: `results/quant/ignition_quark_pair_diff.log`. Tool: `tools/quant_pair_diff.py`.
+No NPU session was built.
+
+Every Ignition parity result above is reported as `INT8_EXACT`, which is the gate in
+`quant/verify.py`: zero structural node delta, zero byte mismatch on any scale, zero-point or
+non-int8 initializer, and at most 1 LSB on int8 weights, in practice 0. That is a claim about
+the numbers. It is not a claim that the two files are byte-identical, and they are not —
+`resnet50_ignition_cle_c64.onnx` and its Quark oracle differ by 8,171 bytes.
+
+Splitting that difference into numeric and non-numeric parts:
+
+| | Ignition | Quark |
+|---|---|---|
+| Nodes / initializers | 380 / 470 | 380 / 470 |
+| Structural node delta | — | **0** |
+| Initializers differing by a byte | — | 0 |
+| int8 initializers over 0 LSB | — | 0 of 108 |
+| `producer_name` | `Ignition` 0.1.0a1 | `quark.onnx` 0.11rc1 |
+| `opset_import` entries | 1 | **9** |
+| Node names matching in order | — | 209 of 380 |
+
+Every number and every edge matches. The whole 8,171 bytes is producer metadata, eight extra
+opset domain declarations, and 171 renamed nodes — exactly the material a compiler is entitled
+to ignore, and exactly the material it is entitled not to.
+
+**The test this sets up was not run.** Compiling both files through the EP with a fresh cache
+and comparing the resulting `compiled.*.xmodel` and `4x4.xclbin` would say whether parity
+extends from the file to the program the silicon actually runs, which is a stronger claim than
+this repo makes anywhere. It was skipped because the host-load check reported
+`HOST_LOAD_VERDICT PEER` — another session was part-way through a bisenetv2 quantize on the
+CPU, an EP compile is CPU-heavy, and the repo's own wrappers refuse to start on a contended
+machine. The NPU itself was idle. Re-run it on a clear machine; the eight extra opset domains
+are the first thing to suspect if the two compiles differ.
+
+### The shift-cut hazard predictor calls a working architecture 100% infeasible
+
+`quant/shift_cut.py` (branch `main`, unmerged at the time of writing) formulates a real
+hardware constraint: the DPU maps its 32-bit accumulator to int8 through a 15-bit multiplier
+and an arithmetic right shift confined to σ ∈ [0, 31], so a scale triple whose ideal factor
+cannot be written in that window is infeasible on the silicon. The audit flags such
+convolutions, and its flags line up with two documented failures — RegNetX-002's collapse to
+0.50% top-1, and BiSeNetV2's fall from 59.47% pixel accuracy under CPU simulation to 15.33%
+on hardware. That second case is exactly the class this repo keeps being burned by: fully
+placed, fast, and numerically wrong only on the device.
+
+But all of that evidence was **retrodictive** — every model the audit had been pointed at
+already had a known outcome. This is the forward test. Predictions for a fixed candidate set
+were committed before anything ran (`results/quant/shift_cut_forward_predictions.log`), and
+the results are in `results/quant/shift_cut_forward_results.log`.
+
+| Model | Prediction | NPU nodes | Correlation vs CPU | Max/peak |
+|---|---|---|---|---|
+| `sesr_m7_fp32_xint8` | **hazard, 9 of 9** | 50 / 52 | **0.99912** | 0.040 |
+| `sesr_m7_nchw_xint8` | **hazard, 9 of 9** | 50 / 52 | **0.99913** | 0.041 |
+| `test_sr_xint8` | clean, 0 of 2 | 8 / 17 | 1.00000 | 0.008 |
+| `yolov8n_cut_xint8_c32` | clean, 0 of 177 | 922 / 929 | 0.880–0.979 | ≤ 0.543 |
+
+**The boldest prediction is refuted, twice.** Both SESR artifacts were called infeasible on
+every one of their nine operations. Both place 50 of 52 nodes on the NPU, the two exceptions
+being a quantize/dequantize pair rather than compute, and both track their own CPU reference
+at a correlation of 0.999 with a worst-case deviation of 4% of peak on a smooth pixel
+mapping. That is ordinary requantization divergence, not a requantizer that cannot represent
+its scales.
+
+**A third case was already inside the audit's own evidence.** Its committed log shows
+`sesr_m7_xint8.onnx` at 9 of 9 violations. That artifact's measured NPU quality is **34.06 dB
+PSNR on Set5** against a 35.64 dB float reference, rising to 35.16 dB with AdaRound. So three
+SESR artifacts are called 100% hardware-infeasible and all three work. The rule fires on the
+whole architecture family, and the commit that introduced it lists ResNet-50, YOLOv8n,
+YOLOv8n-pose and FastDepth as sitting cleanly without mentioning this row.
+
+**The clean direction is not settled here, and the metric is why.** `test_sr_xint8` agrees to
+a correlation of 1.00000 but reaches the NPU with only 8 of 17 nodes, so it exercises little
+of the DPU. `yolov8n_cut_xint8_c32` places 922 of 929 and still shows 0.880–0.979 on its raw
+head tensors — yet this repo's own known-good yolov8n-cut reports **byte-identical decoded
+detections** between CPU and NPU. Raw-tensor correlation is too sensitive for a detection
+head; it moves for reasons that never reach the task output. The metric is sound for
+super-resolution, where the tensor *is* the output, which is where the decisive result sits.
+
+**What this means for the quantizer.** The audit must not gate Ignition in its current form:
+a rule that rejects an entire working architecture family would silently discard good
+artifacts, which is worse than missing bad ones. It does **not** show the bound is wrong as
+physics — the multiplier width and shift window are read from the hardware — only that the
+classifier built on them has a false-positive mode of the widest possible kind. Its
+BiSeNetV2 and RegNetX-002 flags are undisturbed by this and remain retrodictive.
+
+**What this does not show.** One seeded input per model, one real image for the detection
+model; an output-agreement probe, not a dataset evaluation. `realesrgan_compact_r64_xint8`
+was in the prediction set and is reported as discarded rather than quoted: its run fed a
+0–255 input to a model that `npu/realesrgan.py` scales to 0–1, saturating both paths, and it
+places only 12 of 248 nodes. Every other model in the prediction set is still unrun and those
+predictions stand as recorded.
+
 ### Ignition: calibration spool without the pruned pre-Relu tensors
 
 Both producers' calibration had spooled all 123 activations of the folded ResNet,
@@ -4409,11 +5309,22 @@ ImageNet-1k validation images:
   - Activation scales span 0.015625 to 1.329e+36 (an 8.5e35 range across 61 sites).
   - Depthwise scale grid reaches 3.245e+32 (2^108).
   - Other conv scales collapse to 9.40e-38 (2^-123).
-- **The DPU shift-cut clamp mechanism**:
+- **The DPU shift-cut clamp mechanism** — *observation stands, attribution retracted
+  2026-09-09*:
   During compilation Quark logs `Shift cut of layer onnx::Conv_418 exceeds range [0, 16] (131). Modify wpos from 7 to -108.`
-  The Phoenix DPU accumulator shift register only allows shifts in `[0, 16]`. To avoid hardware
-  overflow, Quark modifies weight positions by 100+ powers of 2. Since scale is 2^-pos,
-  shifting `wpos` to -108 forces scale to 2^108, annihilating activation resolution.
+  Quark modifies weight positions by 100+ powers of 2; since scale is 2^-pos, shifting `wpos`
+  to -108 forces scale to 2^108, annihilating activation resolution. That much is reproducible.
+  **What is wrong is calling it a property of the architecture.** The clamp fires only because
+  cross-layer equalization has already inflated the per-channel ranges: the same graph, producer
+  and calibration listing with **CLE off** logs *no* shift-cut adjustment at all and scores
+  **66.20% top-1** against **69.50%** FP32, where the CLE-on artifact scores **0.10%**
+  (`results/quant/quant_regnetx_002_ignition_nocle_c64.log`,
+  `eval_regnetx_002_ignition_nocle_c64_cpu.log`, `eval_regnetx_002_fp32_full1000_cpu.log`,
+  `eval_regnetx_002_quark_cle_full1000_cpu.log`). The corrected analyzer finds **zero sigma
+  violations** in this graph (`results/quant/shift_cut_reaudit_20260909_desktop2.log`). Also
+  note the `[0, 16]` here is Quark's own producer-side contract, not the `[0, 31]` hardware
+  bound asserted elsewhere in this file — the two were being used interchangeably, and neither
+  is measured.
 - **Why AdaRound cannot rescue this**:
   As established in the MobileViT study, AdaRound optimizes ternary rounding {-1, 0, 1} over
   fixed quantization intervals Delta. It never changes Delta. When Delta has suffered
@@ -5012,10 +5923,48 @@ Model instruction distributions measured:
 
 ## AIE-ML systolic shift-cut feasibility theorem for Project Ignition
 
+> **Substantially retracted on 2026-09-09 (Desktop 2). The section is kept in full,
+> superseded numbers included, because what it got wrong is the useful part.**
+>
+> 1. **The audit does not reproduce.** The corrected analyzer over eleven quantized models
+>    finds **zero sigma violations on every one**
+>    (`results/quant/shift_cut_reaudit_20260909_desktop2.log`). RegNetX-002 reads
+>    min 11 / median 21 / max 30, not the -90 / 24 / 27 tabulated below. FastDepth reads
+>    min 18 / median 21 / **max 23** and never approaches the sigma = 32 that this section's
+>    "shift clamp" case rests on. `results/quant/shift_cut_feasibility.log` no longer matches
+>    the tool that wrote it.
+> 2. **Both worked examples were confounds.** RegNetX-002's collapse is cross-layer
+>    equalization, not the shifter: CLE **off** on the same graph, producer and calibration
+>    listing takes zero shift-cut adjustments and scores **66.20% top-1** against **69.50%**
+>    FP32, where the CLE-on artifact scores **0.10%**. FastDepth's "doubled layer outputs"
+>    was never measured, and its NPU fidelity is in fact better than its CPU-QDQ fidelity.
+> 3. **The repair was breaking working models.** `project_scale_to_feasible_basin` clamped
+>    pos_x/pos_w into [0, 31] while sigma came from the unclamped scales, so it projected an
+>    already-feasible RegNetX-002 layer at sigma = 30 to **sigma = -90** — manufacturing the
+>    overflow it exists to prevent. Repairs on real models went SESR-M7 9 -> 0,
+>    MODNet-Cut 1 -> 0, RegNetX-002 5 -> 0; each had targeted a working op.
+> 4. **The "if and only if" has never been tested at either edge.** Fixtures built to reach
+>    sigma 0, 31 and 32 are refused by the VitisAI EP and execute on the CPU EP instead
+>    (`"tested_conv_on_npu": false`), so they cannot speak to the DPU in either direction.
+>    **The highest sigma ever executed on this hardware is 30.** Neither the 15-bit
+>    multiplier nor the 5-bit shifter is measured, and no ISA document in this repo states
+>    either width.
+>
+> What survives: sigma as a computable property of a QDQ triad, and the audit as an
+> **advisory** report. It must not gate the quantizer.
+
 Analytical formulation and verification of the post-accumulator scaling unit on XDNA1 AIE-ML, isolating the mathematical mechanism causing catastrophic accuracy collapse in quantized topologies.
 
-Backing log:
-- `results/quant/shift_cut_feasibility.log`: analytical shift-cut audit across 7 quantized ONNX models.
+Backing logs:
+- `results/quant/shift_cut_reaudit_20260909_desktop2.log`: the corrected audit across eleven
+  quantized ONNX models, zero violations on all of them. **This supersedes the log below.**
+- `results/quant/shift_cut_feasibility.log`: the original audit across 7 quantized ONNX
+  models. **Superseded — it no longer matches its own tool.**
+- `results/quant/eval_regnetx_002_ignition_nocle_c64_cpu.log`,
+  `eval_regnetx_002_fp32_full1000_cpu.log`, `eval_regnetx_002_quark_cle_full1000_cpu.log`,
+  `quant_regnetx_002_ignition_nocle_c64.log`,
+  `eval_resnext50_32x4d_quark_nocle_c64_cpu.log`: the CLE re-attribution (measured on branch
+  `research/windows-lowlevel`, imported here as the evidence for the retraction above).
 
 ### Mathematical formulation
 
@@ -5034,7 +5983,9 @@ The hardware compiler approximates A using (M, sigma):
 ### Theorems
 
 **Theorem 1 (Systolic Shift-Cut Bound):**
-An operation is physically executable without numerical distortion on XDNA1 if and only if:
+An operation is physically executable without numerical distortion on XDNA1 if and only if
+(**hypothesis, not a result — see the retraction at the top of this section; neither edge has
+been reached on hardware and the highest sigma ever executed is 30**):
 
     0 <= sigma <= 31
 
@@ -5054,15 +6005,26 @@ Both input branches must satisfy identical power-of-two scale alignments; diverg
 
 ### Empirical audit across 7 models
 
-Evaluated with `python -m quant check-shift-cut` (`results/quant/shift_cut_feasibility.log`).
+> **Superseded 2026-09-09 — this whole table.** Re-running `check-shift-cut` over these
+> same files with the corrected analyzer gives **zero violations on every model**
+> (`results/quant/shift_cut_reaudit_20260909_desktop2.log`). The two CRITICAL rows do not
+> reproduce: **RegNetX-002 reads min 11 / median 21 / max 30**, not -90 / 24 / 27, and
+> **FastDepth reads min 18 / median 21 / max 23**, not 25 / 29 / 32 — its sigma never gets
+> near the 32 the clamp story needs. Three defects caused the original numbers: the position
+> check sat in an `elif` after the sigma checks so it only fired when sigma was already
+> feasible; `--repair` gated on different positions than the analyzer flagged; and the
+> projection clamped pos_x/pos_w into [0, 31] while sigma came from the unclamped scales.
+> The rows below are kept as the record of what was reported.
 
-> **Superseded on 2026-09-09.** Re-running the same tool on the same files gives **zero
-> violations on every model**, and different sigma ranges -- RegNetX-002 reads 11 / 21 / 30, not
-> -90 / 24 / 27, and FastDepth reads 18 / 21 / 23, not 25 / 29 / 32. The log predates the
-> analyzer's activation-traversal change and was never regenerated, so this table does not match
-> its own tool. Both flagged "violations" below were also Theorem 3 false positives rather than
-> sigma hazards. See
+Evaluated with `python -m quant check-shift-cut` (`results/quant/shift_cut_feasibility.log`):
+
+> Two sessions re-ran this independently on Desktop 2 the same day and agree: the
+> `research/windows-lowlevel` re-audit
+> ([log](../results/quant/shift_cut_feasibility_desktop2_20260909.log)) covers eleven models and
+> also reads zero violations, with the same RegNetX-002 11 / 21 / 30 and FastDepth 18 / 21 / 23.
+> The defects behind the original numbers are itemised in
 > [the audit re-run](#the-shift-cut-audit-re-run-theorem-3-retracted-and-three-defects-in-the-verifier-2026-09-09-desktop-2).
+
 
 | Model | Quantized Ops | Violations | Sigma Range (min / median / max) | Hardware Status | Backing Log |
 |---|---|---|---|---|---|
@@ -5074,10 +6036,10 @@ Evaluated with `python -m quant check-shift-cut` (`results/quant/shift_cut_feasi
 | **MiDaS Small** (`midas_small_cut_xint8`) | 97 | **0 (0.0%)** | 17 / 23 / 27 | PASS: Centered in systolic basin | `results/quant/shift_cut_feasibility.log` |
 | **BiSeNetV2** (`bisenetv2_fp32_xint8`) | 63 | **0 (0.0%)** | 7 / 22 / 26 | PASS: Centered in systolic basin | `results/quant/shift_cut_feasibility.log` |
 
-Diagnosis of identified violations:
-- **RegNetX-002**: Layer `/s1/b1/conv2/conv/Conv` has scale factor A = 2.028241e+31, yielding M = 16384 and sigma = -90. **The causal half of this bullet is superseded (2026-09-09).** The out-of-range sigma is real, but it is not why the network scores 0.50%: quantizing the same graph with the same producer and listing and only CLE turned off gives positions 2..10, no sigma violation anywhere, and 66.20% top-1 -- see [the collapse is CLE](#regnetx-002-and-resnext-50-recovered-the-collapse-is-cle-not-a-hardware-bound-2026-09-09-desktop-2). The audit correctly reports what the emitted file contains; it does not establish that the hardware bound caused the collapse.
-- **FastDepth**: Layer `Conv_96` has scale factor A = 3.814697e-06, yielding M = 16384 and sigma = 32. The hardware shifter is 5 bits wide (maximum shift 31); sigma = 32 overflows by exactly 1 bit, clamping to 31 and doubling the layer's output activations. **Superseded (2026-09-09):** the current analyzer computes sigma 18..23 for this file with no violation, and FastDepth's NPU fidelity is *better* than its CPU-QDQ fidelity (r 0.9383 vs 0.9363), which is the opposite of a doubled layer output. The doubling was never measured.
-- **MODNet**: Upper bound hits sigma = 31 exactly. Any scale perturbation exceeding 1 bit would push it into the clamp hazard regime.
+Diagnosis of identified violations — **all three retracted 2026-09-09, kept as the record**:
+- **RegNetX-002**: Layer `/s1/b1/conv2/conv/Conv` has scale factor A = 2.028241e+31, yielding M = 16384 and sigma = -90. Because sigma < 0, the post-accumulator ALU cannot scale the 32-bit register down to int8; this forces top-1 accuracy to collapse to 0.50% (random chance). — **Retracted.** The corrected analyzer reads that layer at **sigma = 30**, inside the basin; the -90 was produced by the defective projection, not by the graph. The accuracy collapse is real but is caused by cross-layer equalization: CLE off gives **66.20% top-1** against **69.50%** FP32 with no shift-cut adjustment logged, CLE on gives **0.10%** ([full matrix](#regnetx-002-and-resnext-50-recovered-the-collapse-is-cle-not-a-hardware-bound-2026-09-09-desktop-2)).
+- **FastDepth**: Layer `Conv_96` has scale factor A = 3.814697e-06, yielding M = 16384 and sigma = 32. The hardware shifter is 5 bits wide (maximum shift 31); sigma = 32 overflows by exactly 1 bit, clamping to 31 and doubling the layer's output activations. — **Retracted.** The corrected analyzer reads FastDepth at max sigma **23**. The "doubling" was never measured, and FastDepth's NPU fidelity is in fact better than its CPU-QDQ fidelity (r = 0.9383 vs 0.9363), which is the opposite of what a clamped layer would give.
+- **MODNet**: Upper bound hits sigma = 31 exactly. Any scale perturbation exceeding 1 bit would push it into the clamp hazard regime. — **Not reproduced**; the re-audit reads MODNet-Cut with zero violations, and in any case "the clamp hazard regime" above sigma 31 has never been observed on hardware.
 
 ### Closed-form systolic scale feasibility window and repair projection
 
@@ -5157,7 +6119,36 @@ Note the sigma edges remain **unmeasured**: the probe only ever reached sigma in
    emitting a scale the analyzer would flag. The documented FastDepth demo still reproduces
    exactly (pos_y 0 -> 1, sigma -> 31).
 
-### Theorem 1's sigma window, measured at both edges (2026-09-09, Desktop 2)
+### Theorem 1's sigma window: the edges are unreachable, not measured (2026-09-09, Desktop 2)
+
+> **This section originally claimed sigma = 32 executes exactly and sigma = 0 does not, and both
+> claims are RETRACTED.** Every fixture built outside the producer's shift-cut rule was refused by
+> the VitisAI EP and ran entirely on CPU -- `"tested_conv_on_npu": false`, 7 of 7 nodes off the NPU
+> -- so those rows compared CPU against CPU and say nothing about the DPU. The mistake was reading
+> mismatch counts without checking placement, which is the failure this repo warns about most
+> often. Caught by the forward test on `main` (`79ee4fe`, `311a672`), which reached the same
+> conclusion independently. What the sweep does establish is below, and it is a better result.
+
+**The EP's acceptance boundary is the producer's shift-cut rule.** Across all sixteen fixtures, the
+Conv places if and only if its shift-cut lies in `[0, 16]` -- exactly the bound `quant/refine.py`
+enforces and Quark logs. There are no exceptions in either direction:
+
+| shift-cut | sigma | inside [0, 16] | Conv on NPU | Nodes off NPU |
+|---|---|---|---|---|
+| -20, -17, -15, -14, -8 | -6, -3, -1, 0, 6 | no | **false** | 7 of 7 |
+| 0, 1, 3, 4, 8, 16 | 14, 15, 17, 18, 22, 30 | yes | **true** | 2 |
+| 17, 18, 20, 24, 31 | 31, 32, 34, 38, 45 | no | **false** | 7 of 7 |
+
+So sigma is reachable on this hardware only in **[14, 30]**, and Theorem 1's `[0, 31]` window can
+never be tested at either edge with a Conv the DPU will actually run. That also explains, without
+any appeal to a shift register's width, why no model in this repo has ever shown a sigma outside
+7..30: the compiler will not accept the graph in the first place. The highest sigma ever executed
+here is 30.
+
+The rounding results from the in-contract sweep are unaffected -- those fixtures did place, at 5 of
+7 nodes, and are reported in the arithmetic section above.
+
+
 
 Theorem 1 claims an operation is executable **iff** `0 <= sigma <= 31`, and it had never been
 tested at either edge: the arithmetic probe's guard is the producer's own `[0, 16]` shift-cut
@@ -5181,14 +6172,14 @@ each `--fresh` with an idle-device precheck
 | 38 | 24 | 0 / 57344 | 0 | 0 | **1** | degenerate, proves nothing |
 | 45 | 31 | 0 / 57344 | 0 | 0 | **1** | degenerate, proves nothing |
 
-**The upper bound is not observed.** At sigma = 32 the fixture produces five distinct output
-levels and the NPU reproduces every one of the 57,344 elements exactly. Theorem 1 says the 5-bit
-shifter clamps or overflows past 31; nothing here does. Sigma = 31 is likewise exact.
+**On the retracted upper-bound row.** At sigma = 32 the fixture produced five distinct output
+levels and the two providers agreed on all 57,344 elements -- but both were the CPU, so this says
+nothing about the shifter. Retained only to show what the numbers were.
 
-**The lower bound is real but sits one step higher than claimed.** Sigma = 0 is inside Theorem 1's
-window and it diverges: 3,052 elements wrong, worst case 255, with the NPU returning 0 where the
-reference returns 255 -- a wrap, not a clamp. The optimized CPU session matches the reference
-exactly on the same file, so this is the DPU, not the graph.
+**On the retracted lower-bound row.** Sigma = 0 showed 3,052 elements wrong against the plain CPU
+session, worst case 255 -- but that graph also ran wholly on CPU, through the VitisAI EP's fallback
+rather than the DPU, so the divergence is between two CPU paths and not evidence about hardware
+saturation. It is left here as the record of what was measured and how it was misread.
 
 Saturation alone does not explain it. Sigma = 6 saturates identically -- the same three distinct
 reference values, 0/128/255 -- and reads **zero** mismatches. Something changes between sigma = 6
@@ -5209,9 +6200,9 @@ take roughly 6,500 input channels against the probe's 64. **This is why no model
 ever exceeded sigma = 30**: real layers sit where their accumulators put them, and the upper edge
 of the window is not somewhere a convolution can go.
 
-**What this leaves.** Theorem 1's *iff* is wrong in both directions -- sigma = 0 fails, sigma = 32
-works -- so the tool's criterion should be treated as a heuristic with a measured lower edge and an
-untested upper one. What is *not* claimed here: that sigma = 33 or beyond is safe, which no fixture
+**What this leaves.** Theorem 1 is untested at both edges and cannot be tested with a single Conv
+on this stack, because the compiler refuses every graph that would reach them. What is *not*
+claimed here: that sigma = 33 or beyond is safe, which no fixture
 in this family can show; that the divergence at sigma <= 0 is specifically shifter behaviour rather
 than accumulator overflow, which these fixtures cannot separate; or anything at all about
 multi-layer graphs, since every case is one 1x1 Conv at batch 1 with 5 of 7 nodes on the NPU.
@@ -5226,7 +6217,7 @@ multi-layer graphs, since every case is one 1x1 Conv at batch 1 with 5 of 7 node
 | RegNetX-002 | **5** | 0 | sigma 30 -> **-90** on `/s1/b1/conv2/conv/Conv` |
 
 Every one of those rewrites targeted a feasible operation on a model that works. The standing rule
-in [DECISIONS](DECISIONS.md#aie-ml-systolic-shift-cut-bound-0-31) that every emitted graph be
+in [DECISIONS](DECISIONS.md#aie-ml-systolic-shift-cut-bound-0-31--substantially-retracted-2026-09-09) that every emitted graph be
 verified before hardware execution is kept, but it now means the sigma window alone, and `--repair`
 is not something to run on a model that already places and scores.
 
@@ -5243,6 +6234,15 @@ Tested on FastDepth `Conv_96`:
 - Feasible pos_y window: [18 - 17, 18 + 14] = [1, 32].
 - Projected: pos_y = 1 (S_y = 0.5), yielding sigma = 31 <= 31.
 - Outcome: The layer is 100% physically compliant with zero shift-cut violations, eliminating the clamp hazard without retraining.
+
+> **Retracted 2026-09-09.** This projection was measured to move layers that were already
+> feasible. On RegNetX-002 `/s1/b1/conv2/conv/Conv` it took sigma = 30 to **sigma = -90**,
+> because the window was built from pos_x/pos_w clamped into [0, 31] while sigma was computed
+> from the unclamped scales. Across real models the "repairs" it reported were SESR-M7 9,
+> MODNet-Cut 1 and RegNetX-002 5 — all of which drop to 0 once the analyzer is corrected,
+> i.e. every one had targeted a working op. `quant/shift_cut.py` now uses unclamped positions
+> and raises rather than emitting a scale the analyzer would flag. Do not run `--repair` on a
+> model that already places and scores.
 
 ---
 

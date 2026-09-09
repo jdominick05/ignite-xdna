@@ -1,0 +1,234 @@
+Predicting the int8 GEMM's cycles from its machine code, and what the gap to the
+measurement means
+2026-09-09. Desktop 2 (Phoenix, Ryzen 7 8700G), mlir-aie ironenv (v1.4.2, llvm-aie
+22.0.0.2026090201). NO NPU SESSION was built and no hardware context was taken: this reads two
+already-compiled kernel objects out of ~/.npu/cache and computes. The measured microseconds it
+is compared against were taken on 2026-09-07 and are quoted from
+results/aie/int8_matmul_sweep_npu.log, not re-run.
+
+Commands (from the repo root, in the ironenv):
+  python tools/gemm_cost_model.py ~/.npu/cache/e9ed1c603d42d8bb153dfb76/matmul_i8_i32_86901378.o \
+      --tile 64,64,64 --measured-us 7458.1
+  python tools/gemm_cost_model.py ~/.npu/cache/0816364bbbaf03f83e2f0bcd/matmul_i8_i32_170456c5.o \
+      --tile 64,64,32 --measured-us 14394.5
+
+WHY: results/aie/aie2_isa_static.log established that a hardware-loop body's bundle count is its
+cycle count on AIE2, and results/aie/pmu_probe_npu.log established that a buffer costs a core a
+constant number of cycles on top of its work. Those two together are enough to compute a
+kernel's issuing time from its object file, WITHOUT running it. Doing that and subtracting the
+answer from a measured time gives the cycles the core spent not issuing, which is the quantity
+every losing verdict in this repo has been missing. The int8 GEMM is the test case because it is
+the strongest NPU result here (4607.05 GOPS) and because the same log rates its inner loop as
+essentially perfectly scheduled, so whatever costs it the other two thirds is not the schedule.
+
+--------------------------------------------------------------------------------
+0. A CORRECTION TO results/aie/aie2_isa_static.log, SECTION 5
+--------------------------------------------------------------------------------
+That log's section 5 is headed "the kernel behind results/aie/int8_matmul_sweep_npu.log's
+4607.05 GOPS" and disassembles
+  ~/.npu/cache/0816364bbbaf03f83e2f0bcd/matmul_i8_i32_170456c5.o
+
+That object is NOT the kernel behind 4607.05 GOPS. Its cache carries memref<64x32xi8> and
+memref<64x32xi32> buffers, so it is the DEFAULT m=64 k=64 n=32 build, which measured 2387.01
+GOPS on that shape. The 4607.05 row is the tuned n=64 build, whose kernel object is a different
+hash, matmul_i8_i32_86901378.o, in eleven caches including e9ed1c603d42d8bb153dfb76.
+
+The provenance line is wrong. Every NUMBER in that section is unaffected, because the n=64
+object's loop is identical to the n=32 object's: nine bundles, eight vmac, accumulators cm0
+through cm7, same 88.9% MAC issue density. The disassembly below shows it. The original log
+stands as evidence of what was run and is not edited; this section supersedes its attribution.
+
+--------------------------------------------------------------------------------
+1. THE TUNED n=64 KERNEL, THE ONE THAT ACTUALLY PRODUCED 4607.05 GOPS
+--------------------------------------------------------------------------------
+
+== C:\Users\<user>/.npu/cache\e9ed1c603d42d8bb153dfb76\matmul_i8_i32_86901378.o
+   tile m=64 k=64 n=64   mac dims 4x8x8 = 256 MACs per vmac
+
+the machine code
+  matmul_i8_i32              144 bundles total
+  steady-state loop            9 bundles = 9 cycles per iteration
+  vmac in that loop            8  -> 0.889 vmac/cycle, 88.9% of one per cycle
+  vmac peeled outside         16  (software-pipeline prologue and epilogue)
+  bundles executed once      135
+
+  zero_i32               6 bundles/iter, 4 vst/iter -> 783 cycles per 64x64 output tile,
+                         amortised over 32 calls = 24.5 cycles per call
+
+one call, one buffer pair
+  vmac the tile requires         1024
+  loop iterations               126.0
+  loop cycles                    1134
+  prologue/epilogue               135   (from this object's own code)
+  zero, amortised                24.5
+  handoff, 2 fifos                30   (acquire+release only; see the note in this file)
+  ISSUING CYCLES PER CALL        1323
+  MAC issue rate                198.1 MACs/cycle over the whole call, 77.4% of 256
+  pessimistic variant            2727   cycles/call if the probe's full 717 is charged per fifo
+
+the problem: 4096x2048x2048 on 16 cores at 1.7983 GHz
+  calls total                   65536
+  calls per core                 4096
+  predicted issuing cycles    5420928
+  predicted time               3014.5 us   (never starved)
+  input bytes per call           8192
+  demand at that rate            6.19 B/cycle into one core's L1, 99.0 B/cycle summed over 16 cores
+
+against the measurement
+  measured NPU time            7458.1 us
+  measured cycles/core       13411901
+  measured cycles/call           3274
+  CORE ISSUING FRACTION          40.4 %   (pessimistic handoff: 83.3 %)
+  not issuing                    59.6 %  (1951 cycles per call)
+  achieved input rate            2.50 B/cycle per core
+
+  closure check -- the two factors must multiply to the measured rate
+  schedule      77.4 %  x  issuing  40.4 %  =   31.3 %
+  measured 4607.0 GOPS / peak 14732 GOPS  =   31.3 %
+
+  PREDICTION: if a port trace measures a sustained input rate at or below
+  2.50 B/cycle into a core, this GEMM is bandwidth-bound and the
+  60% is fully explained. If the ports read faster than that, it is not.
+
+--------------------------------------------------------------------------------
+2. THE SAME PROBLEM SHAPE AT THE DEFAULT n=32 TILE
+--------------------------------------------------------------------------------
+Same M, K, N; same 16 cores; same sitting in the source log. Only the tile differs, which
+halves the work carried by one buffer while leaving the loop, the prologue and the handoff
+alone.
+
+== C:\Users\<user>/.npu/cache\0816364bbbaf03f83e2f0bcd\matmul_i8_i32_170456c5.o
+   tile m=64 k=64 n=32   mac dims 4x8x8 = 256 MACs per vmac
+
+the machine code
+  matmul_i8_i32              147 bundles total
+  steady-state loop            9 bundles = 9 cycles per iteration
+  vmac in that loop            8  -> 0.889 vmac/cycle, 88.9% of one per cycle
+  vmac peeled outside         16  (software-pipeline prologue and epilogue)
+  bundles executed once      138
+
+  zero_i32               6 bundles/iter, 4 vst/iter -> 400 cycles per 64x32 output tile,
+                         amortised over 32 calls = 12.5 cycles per call
+
+one call, one buffer pair
+  vmac the tile requires          512
+  loop iterations                62.0
+  loop cycles                     558
+  prologue/epilogue               138   (from this object's own code)
+  zero, amortised                12.5
+  handoff, 2 fifos                30   (acquire+release only; see the note in this file)
+  ISSUING CYCLES PER CALL         738
+  MAC issue rate                177.5 MACs/cycle over the whole call, 69.3% of 256
+  pessimistic variant            2142   cycles/call if the probe's full 717 is charged per fifo
+
+the problem: 4096x2048x2048 on 16 cores at 1.7983 GHz
+  calls total                  131072
+  calls per core                 8192
+  predicted issuing cycles    6049792
+  predicted time               3364.2 us   (never starved)
+  input bytes per call           6144
+  demand at that rate            8.32 B/cycle into one core's L1, 133.1 B/cycle summed over 16 cores
+
+against the measurement
+  measured NPU time           14394.5 us
+  measured cycles/core       25885629
+  measured cycles/call           3160
+  CORE ISSUING FRACTION          23.4 %   (pessimistic handoff: 67.8 %)
+  not issuing                    76.6 %  (2421 cycles per call)
+  achieved input rate            1.94 B/cycle per core
+
+  closure check -- the two factors must multiply to the measured rate
+  schedule      69.3 %  x  issuing  23.4 %  =   16.2 %
+  measured 2387.0 GOPS / peak 14732 GOPS  =   16.2 %
+
+  PREDICTION: if a port trace measures a sustained input rate at or below
+  1.94 B/cycle into a core, this GEMM is bandwidth-bound and the
+  77% is fully explained. If the ports read faster than that, it is not.
+
+--------------------------------------------------------------------------------
+3. READING: THE CORE TAKES THE SAME TIME PER BUFFER WHATEVER IS IN IT
+--------------------------------------------------------------------------------
+Side by side, 4096x2048x2048 int8 on 16 cores, the two tiles measured in the same sitting:
+
+  tile          vmac      issuing cycles   predicted    measured   issuing   measured
+                per call     per call        us            us      fraction  cycles/call
+  ------------------------------------------------------------------------------------
+  m64 k64 n64      1024          1323        3014.5      7458.1      40.4%        3274
+  m64 k64 n32       512           738        3364.2     14394.5      23.4%        3160
+
+Three things follow and the third is the finding.
+
+FIRST, the model closes against the source log's own throughput figure without being fitted to
+it. The schedule term and the issuing term multiply to the measured fraction of peak in both
+rows: 77.4% x 40.4% = 31.3%, and 4607.0 GOPS over the 14,732 GOPS those 16 cores can issue at
+1.7983 GHz is 31.3%. For n=32, 69.3% x 23.4% = 16.2%, and 2387.0/14732 = 16.2%. The loop
+iteration count also lands on a whole number, 126.0 exactly, which it would not if the MAC
+geometry (4x8x8 for every int8 input on AIE2, from _MM_MAC_DIMS in the compiler's own
+linalg.py) or the peeling count were wrong.
+
+SECOND, the schedule is not where the GEMM loses. Over the whole call -- loop, software-pipeline
+prologue and epilogue, amortised output zeroing and the ObjectFifo handoff -- the n=64 kernel
+issues 198.1 MACs per cycle against the 256 the tile can retire, 77.4%. The remaining 22.6% is
+mostly the 135 bundles of prologue and epilogue that run once per call and are dominated by
+reloading the eight accumulators the register file cannot keep (416-byte frame, 33 stack
+references). That is worth something, but it is not the missing factor of three.
+
+THIRD, and this is the mechanism: THE MEASURED CYCLES PER CALL ARE THE SAME FOR BOTH TILES.
+3,274 against 3,160, a 3.6% difference, for buffers whose compute differs by 2x. A core handed
+twice the work per buffer finishes in the same wall time. That is not what an issue-bound
+design does; it is what a design does when the time per buffer is set by getting the buffer
+there. The 1,323 issuing cycles the n=64 call needs fit inside a 3,274-cycle slot with 1,951
+cycles to spare, and the n=32 call's 738 fit inside 3,160 with 2,422 to spare.
+
+That also explains the tile result the source log reported without a mechanism. Going from n=32
+to n=64 measured 1.93x faster. The cost model says the two should differ by 12% in issuing time
+(3364 vs 3015 us). The 1.93x therefore comes almost entirely from doing twice the work inside a
+per-buffer slot whose length barely moved.
+
+HOW STRONG IS THE 40.4%. The one constant carried over from another kernel is the ObjectFifo
+handoff, 15 cycles per acquire/release pair. The pessimistic alternative is to charge the
+probe's entire measured 717 cycles per buffer instead, even though 512 of those were that
+probe's own trace-flush loop, which production code does not contain, and 190 were its kernel
+prologue, which is counted here from the GEMM's own disassembly instead. Charging the full 717
+per fifo raises the prediction to 2,727 cycles per call and the issuing fraction to 83.3% --
+and even then 547 cycles per call, 16.7%, remain unaccounted. So the core is starved for
+somewhere between 17% and 60% of the dispatch, and the low end of that range is the one built
+on a constant that does not transfer.
+
+WHAT THIS PREDICTS, AND HOW TO FALSIFY IT
+Bytes into one core's L1 per call are 8,192 at n=64 and 6,144 at n=32. Divided by the measured
+cycles per call, the core is being fed at 2.50 and 1.94 bytes per cycle. The never-starved rate
+would need 6.19 and 8.32. So:
+
+  H9. Stream-port tracing on this design will measure a sustained input rate at or below
+      2.5 bytes per cycle into a core. Fails if the ports read faster than that, which would
+      move the missing time somewhere other than input bandwidth.
+
+  H10. Per-buffer wall time on this design is a constant set by the data path, so throughput
+      rises with work per buffer until the issuing time approaches roughly 3,200 cycles.
+      At n=64 the kernel uses 1,323 of those, leaving about 2.4x of headroom. Fails if a
+      larger tile does not raise throughput.
+
+H10 has a known obstacle already on record: results/aie/int8_matmul_sweep_npu.log's PROBE A
+(m=128, n=64) and PROBE B (k=128, n=64) both failed to build with "'aie.tile' op Basic
+sequential allocation failed", which is an L1 capacity limit, not a performance result. So the
+headroom this model identifies is currently unreachable through the tile parameters alone, and
+reaching it means changing what occupies L1 -- buffer depth, or the 16 KB single-buffered
+output tile -- rather than asking for a bigger tile.
+
+--------------------------------------------------------------------------------
+WHAT THIS DOES NOT SHOW
+--------------------------------------------------------------------------------
+- Nothing here was measured on hardware in this run. The issuing-cycle predictions are computed
+  from object code; the microsecond figures they are compared against come from a run two days
+  earlier under conditions documented in that log, not this one.
+- The 15-cycle acquire/release constant was measured on a one-core, one-fifo probe with a
+  different kernel. Its transfer to a two-fifo GEMM is an assumption, bounded above in section 3
+  but not measured.
+- "Not issuing" is a residual, not an observation. It is consistent with lock stall, which is
+  the only stall category results/aie/pmu_probe_npu.log has yet seen non-zero, but this run
+  does not attribute it. A port or stall trace on this design is what would.
+- The 135 once-per-call bundles are assumed to execute once. That holds if the function has no
+  branch other than its one hardware loop, which the disassembly is consistent with but which
+  was not proved by walking every branch target.
+- One power mode (Default, 1.7983 GHz), one dtype, one design. The conv kernels are untouched.

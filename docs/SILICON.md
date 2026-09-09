@@ -70,9 +70,15 @@ New numbers use 1.80 GHz and say which power mode they were taken in.
 | BD fields | length ≤ 2¹⁴−1 words (65,532 B); 3-D addressing; 8-bit wrap; 13-bit step; 6-bit iteration wrap | SPEC: `getDmaBdMaxLen`, `getBDMaxDims`, `getDmaBdWrapBits`, `getDmaBdStepBits`, `getDmaBdIterBits`. MEASURED as a wall: a 64×688 bf16 B-tile (22,016 words) is refused with "exceeds the maximum of 16383 words supported by this tile type" (`results/aie/bf16_matmul_ffn_real_shape_npu.log`). |
 | Neighbour memories a core can address directly | its own, west, north, and south unless the south tile is the mem tile | SPEC: `AIE2TargetModel::isLegalMemAffinity` (`AIETargetModel.cpp:809-823`). DERIVED: a core in the lowest core row sees 3 × 64 KB, the other three rows see 4 × 64 KB. |
 | Stack | Peano defaults to 1024 B and grows *upward into tile buffers* | MEASURED: silent corruption until `Worker(..., stack_size=2048)` (`kernels/attention_bf16/README.md`). |
-| Live accumulators | 8 concurrently-live 4×8×8 int8 `aie::mmul` accumulators spill to the stack; ≤4 stays in registers | MEASURED: the root cause of the `conv2dk3` width-32 corruption (`results/aie/conv2dk3_widthfix_npu.log`, `kernels/README.md`). TO VERIFY the exact register count from the AIE-ML ISA rather than from that one kernel. |
-| Cycle counter | `aie::tile::current().cycles()` → `get_cycles()` — **not reachable from a Peano kernel**; the trace unit reads the same timer | SPEC: `ironenv/Lib/site-packages/mlir_aie/include/aie_api/tile.hpp`. MEASURED 2026-09-07: Peano (llvm-aie 22) declares `get_cycles()` and never defines it (`ld.lld: undefined symbol`), does not lower `__builtin_readcyclecounter`, and rejects inline asm; S0 read the timer through trace-unit event stamps instead (`results/aie/clock_probe_npu.log`). |
-| `aie::mmul` shapes in mlir-aie's GEMM library | bf16 4×8×4; int8 4×8×8; int16 4×4×4 | SPEC: `aie_kernels/aie2/mm.cc`. |
+| Issue width | 6 slots per bundle: **`b` and `a` are the two load units**, `s` store, `x` scalar and control flow, `m` move/broadcast, `v` vector | MEASURED 2026-09-09 (`results/aie/aie2_isa_static.log`, corrected by `results/aie/bank_conflict_survey.log`). **Supersedes this row's earlier "`b` branch"**, which was inferred from the nop mnemonic alone. Tabulating every operation appearing in each slot of 226 *strictly six-field* bundles — the only encoding whose slot identity is unambiguous — puts `vldb` and `paddb` in slot b, `vlda`/`lda`/`mova` in slot a, and `ret` in the scalar slot x. So the core has **two load units**, which is what makes a same-bank paired load possible at all. `nopxm` is the fused encoding when x and m are both idle, so a five-field bundle still occupies six slots; bundles using few slots are emitted compressed and shorter than 16 B but still issue in one cycle. |
+| Local memory banks | 64 KB of core-tile data memory in **4 banks of 16 KB**. Two loads issued in one bundle cost **one extra cycle** when both address the same bank | SPEC: `getLocalMemorySize()` 0x10000 and `getNumBanks()` 4 for a core tile in mlir-aie's `AIETargetModel.h`. MEASURED 2026-09-09 on branch `research/windows-lowlevel` (`results/aie/memory_desktop2_20260909_m01_*.log`), holding the compiled function bytes identical and changing only operand addresses: two loads same bank 12.0 cycles/iteration, separate banks 11.0, one load same bank 11.0, r² 1.0. Operand offsets of 64/128/256 B within a bank make no difference, so the granularity is the bank. Buffer addresses are not in the cached `aie.mlir`, which is pre-allocation; they are in the core ELF's symbol table (`tools/aie_bank_check.py`). |
+| Cycles per hardware-loop iteration | equal to the loop body's bundle count | MEASURED 2026-09-09: the core is a statically scheduled VLIW with an exposed pipeline, so Peano covers operand latency with explicit nop bundles rather than an interlock. S0's two loops measured 9.000 and 2.000 cycles/iteration and disassemble to 9 and 2 bundles (`results/aie/aie2_isa_static.log`). An inner loop's cost is therefore readable before the kernel runs; a loop that waits on a lock, stream or DMA is the exception and needs the trace unit. **A fourth exception, added 2026-09-09:** a bundle issuing two loads whose addresses share a 16 KB bank costs one extra cycle, so the law holds for a loop whose simultaneous loads are in *different* banks (`results/aie/bank_conflict_survey.log`). The production int8 GEMM violates this and its 9-bundle loop should cost 10. |
+| Scalar load-to-use | result available to the 7th bundle after the load issues | MEASURED 2026-09-09: six all-nop bundles separate the `lda` from the `add` consuming it in S0's scalar loop, which is why that loop costs 9 cycles for one add (`results/aie/aie2_isa_static.log`). |
+| Live accumulators | **5** concurrently-live 4×8×8 int8 `aie::mmul` accumulators compile with no stack traffic; 6 is the first count that spills. The allocator names 9 accumulator registers, `cm0`–`cm8` | MEASURED 2026-09-09 by sweeping the count and reading the object code (`kernels/acc_spill_probe/`, `results/aie/aie2_isa_static.log`). Supersedes this row's earlier "≤4 stays in registers" and `docs/DECISIONS.md`'s "only 6 hardware accumulator registers"; both were inferred from the one `conv2dk3` kernel that spilled at 8. One shape and one optimisation level. The production int8 GEMM demonstrates the ceiling — it holds 8 live `mmul` accumulators, uses all 9 names, and spills, with a 416-byte frame and 33 stack references (`results/aie/gemm_cost_model.log`). **Refined 2026-09-09 (`results/aie/accumulator_width_vs_count.log`):** the file is **9 registers addressable at three granularities** — full 1024-bit `cm0`–`cm8`, 512-bit halves `bml`/`bmh`, 256-bit quarters `amll`…`amhh` — so "9 names" is the file, not a lower bound on it. And **the ceiling is not a width budget**, which this row previously implied by saying a wider accumulator fits fewer: bf16's `matmul_vectorized_4x4` holds 16×512-bit for the *same* 8192-bit total across the *same* 8 of 9 registers, and spills **nothing** — a 64-byte frame whose 15 stack references are all scalar, against int8's 12 vector spills. int8's 4×2 blocking is the defect, not the width. |
+| Cycle counter | `aie::tile::current().cycles()` → `get_cycles()` — **not reachable from a Peano kernel**; the trace unit reads the same timer | SPEC: `ironenv/Lib/site-packages/mlir_aie/include/aie_api/tile.hpp`. MEASURED 2026-09-07: Peano (llvm-aie 22) declares `get_cycles()` and never defines it (`ld.lld: undefined symbol`), does not lower `__builtin_readcyclecounter`, and rejects inline asm; S0 read the timer through trace-unit event stamps instead (`results/aie/clock_probe_npu.log`). Re-checked 2026-09-09 from the machine-code side and the conclusion holds by a fourth route: the assembler accepts `CORE_ID` as a `mov` source and no timer name at all, and the register database puts the timer at memory-mapped `0x340F8`/`0x340FC` in the tile's configuration space rather than in the core's data space (`results/aie/aie2_isa_static.log`). |
+| Hand-written assembly | **Assembles and links.** A standalone `.s` never enters instruction selection, so it reaches the integrated assembler intact | MEASURED 2026-09-09 (`kernels/asm_probe/`, `results/aie/aie2_isa_static.log`). Only statement-level inline asm inside a C++ function fails, in the IRTranslator, which is the wall S0 hit. Hand-scheduling an inner loop is therefore available where the compiler's schedule is the binding constraint. Toolchain result: the object assembles, disassembles and links, but no hand-written kernel has been run on the NPU. |
+| `aie::mmul` shapes in mlir-aie's GEMM library | bf16 4×8×4; int8 4×8×8; int16 4×4×4 | SPEC: `aie_kernels/aie2/mm.cc`, and the compiler's own dispatch table `_MM_MAC_DIMS` in `python/iron/kernels/linalg.py`. One AIE2 int8 `vmac` therefore retires 4·8·8 = 256 MACs, which is exactly the 256 MACs/cycle nameplate. The same table gives AIE2P (Strix) 8×8×8 for int8, i.e. 512 per `vmac` — the generational difference is the MAC shape, not the issue rate. |
+| MAC issue rate, production int8 GEMM | **107.3 MACs/cycle** over a whole kernel call, 41.9% of the 256 nameplate; 88.9% inside the hardware loop alone | MEASURED 2026-09-09 by walking the compiled object's control flow and dividing the tile's required MACs by the cycles the nest costs (`tools/gemm_cost_model.py`, `results/aie/gemm_cost_model_nest.log`). Supersedes the same day's first reading of **198.1 / 77.4%**, which modelled `matmul_i8_i32` as one hardware loop with straight-line setup; it is a nest, two software loops around the hardware loop, re-running the accumulator load/store body once per group. The gap between 88.9% and 41.9% is those 87 non-loop bundles per group — accumulator load, store and stack spill — and it follows directly from the row above: this kernel holds 8 live accumulators where 5 is the spill-free ceiling. A computed issue rate, not a hardware-counter reading; the branch targets are unresolved relocations in the object, so the evidence for the nest reading is that its trip counts reconcile exactly against the required `vmac` count. Charging the same-bank paired load this kernel is now known to carry lowers it further to **103.3 MACs/cycle, 40.3%** (`results/aie/bank_conflict_survey.log`). |
 | Numerics | `aie::set_rounding(conv_even)` needed to match host round-to-nearest-even; Peano's AIE libc has no float `sqrtf` | MEASURED: `results/aie/groupnorm_bf16_kernel_npu.log`. |
 
 ### 1.3 One mem tile
@@ -190,7 +196,9 @@ it is the bar every open kernel in section 4 is held to.
 | Kernel | Marginal rate, one column | Per core | Share of 819 GOPS/core (1.6 GHz) | Tag and evidence |
 |---|---|---|---|---|
 | VitisAI DPU, yolov8l, `1x4.xclbin` | 1650 GOPS (node time, not a fit) | 412 GOPS | 50.3% | MEASURED `results/percall_overhead_yolov8_1x4.log`; DERIVED split |
+| mlir-aie `ml/bottleneck`, **accumulators in registers** | **348.4–350.3 GOPS** (two fits, r² ≥ 0.9987) | 87.6 GOPS | 10.7% | MEASURED `results/aie/conv_accum_residency_npu.log` |
 | mlir-aie `ml/bottleneck`, h-axis sweep | 146.1 GOPS (fit, r² = 0.99999) | 36.5 GOPS | 4.5% | MEASURED `results/aie/bottleneck_spatial_sweep_npu.log` |
+| mlir-aie `ml/bottleneck`, stock, re-measured 2026-09-09 | 115.6–117.1 GOPS (two fits) | 29.0 GOPS | 3.5% | MEASURED `results/aie/conv_accum_residency_npu.log` |
 | mlir-aie `ml/bottleneck`, 56×56 | 111.1 GOPS (2-point fit) | 27.8 GOPS | 3.4% | MEASURED `results/aie/bottleneck_w56_npu.log` |
 | CPU, ORT QDQ int8 on 8 Zen4 cores, same shapes | 819.0 (sweep) / 1678.8 (56×56) GOPS | — | — | MEASURED, same two logs |
 
@@ -202,8 +210,31 @@ column. That gap, not the CPU, is the real statement about the open int8 conv ke
 op class was closed against the CPU (12.75× at 56×56), and it was closed by a kernel
 running at one-eleventh of what the same column does under AMD's compiler. At the DPU's
 rate one column matches the CPU's 1678.8 GOPS and four columns are ~4× ahead of it.
+
+**Most of that 11.3× was one line of C++, and removing it did not reopen the op class.**
+Both 1×1 kernels held their four accumulators in a **runtime-indexed array**, which cannot
+live in registers, so every `.mac()` was load-four-quarters / mac / store-four-quarters.
+Peeling the `n == 4` case into named accumulators takes the hot loop from 22 bundles with
+one `vmac` to 14 with four — **0.045 → 0.286 MACs/cycle** — and marginal throughput from
+115.6–117.1 to **348.4–350.3 GOPS**, a **2.99–3.01×** gain reproduced across two series with
+every shape verifying. The vendor gap narrows to **~4.7×**. But the CPU, measured in the same
+sitting on the same shapes (ORT CPU EP, QDQ int8, VNNI), still runs at 823.7–839.5 GOPS, so
+**the CPU still wins by 2.4× and the op class stays closed** — for a new reason. It was "the
+kernel uses 5% of its issue slots"; it is now "even with the slots used, one column does not
+reach a VNNI-equipped Zen4." MEASURED `results/aie/conv_accum_residency_npu.log`.
+
+Two caveats travel with that. **The stock arm re-measured at 115.6–117.1, not 146.1**: the
+published figure predates the 2026-09-07 width fix, which rewrote the same loop, so the
+kernel is not the same code — the A/B above is like-for-like within one sitting, but 350 is
+2.4× the last *published* figure rather than 3× it. And **conv2dk3, the 3×3 middle stage, was
+not touched** and is the likeliest remaining rate-limiter.
 Whether an open kernel can reach the DPU's rate is objective K1; nothing physical says it
-can't.
+can't. **And 2026-09-09 located where the 11.3× goes: MAC issue density.** The open kernels'
+hardware loops issue 0.045–0.333 `vmac` per cycle against the int8 GEMM's 0.889 on the same
+silicon — a 4×–20× shortfall that more than covers the throughput gap, with no appeal to data
+movement (`results/aie/conv_issue_rate_decomposed.log`). The 1×1 keeps its accumulator in
+memory rather than in registers; the 3×3 spends half its issue slots on `vshift` window
+alignment. Both are kernel defects, not silicon limits.
 
 ### 2.4 bf16 GEMM
 
@@ -348,6 +379,33 @@ The vendor path's 90 µs host-side gap (2.5) shows that the 447 µs host half of
 is software; whether the 169.8 µs hardware half is silicon is what D1–D3 measure, and every
 small-op verdict in this repo is conditional on where it lands.
 
+**MEASURED 2026-09-09, and it lands low: ~36 µs for batchable work.** Batched `pyxrt.runlist`
+submission amortises the same passthrough to **36.3 µs** per dispatch — 17× below the 617 µs
+IRON floor and a *quarter* of the 169.8 µs bracket, so the hardware half is not silicon
+either (`results/aie/dispatch_runlist_npu.log`). Of the six ops listed above, four now clear
+the floor: MobileNetV2 by 48×, MobileViT stage-2 attention and bf16 attention stage 2 by 6.7×,
+GroupNorm at L ≤ 18816 by 6.5×. Attention stages 3 and 4 (34 µs, 12 µs) remain under it.
+**The caveat is the shape of the result:** 36 µs is a throughput figure that holds with 64
+dispatches in flight, so it reopens batchable work only, and a one-shot latency-critical call
+still pays ~140 µs raw or 617 µs through IRON. Those four verdicts are not overturned — the
+floor has simply stopped being the reason they lose, which makes kernel quality the deciding
+question for the first time.
+
+**SCOPED the same day, and it matters for all four: ~36 µs is a raw-pyxrt figure.** Batching
+was then wired into IRON's own host path and measured there
+(`results/aie/iron_batch_npu.log`). The device half reproduces from inside IRON — 37.5–37.9 µs
+per dispatch at N=64 — but IRON's per-call host work is a near-constant ~500 µs that batching
+does not touch, so a batched `@iron.jit` call still costs **~531 µs**, a 1.26–1.37× gain
+rather than 17×. Against that floor none of the four reopens survive: MobileViT stage-2
+attention (240 µs), bf16 attention stage 2 (240 µs) and GroupNorm at L ≤ 18816 (233 µs) are
+all still under it, and MobileNetV2's 1720 µs is a whole-model CPU time being compared against
+a per-dispatch floor, which needs per-layer arithmetic nobody has done. **The four reopen only
+for a caller willing to write a raw-pyxrt driver and give up IRON's argument handling.** The
+same run also closed this section's other caveat: a real 8-core bf16 kernel (GroupNorm,
+L=150528) batches to 823.8–838.3 µs per dispatch, which is its own compute — the independently
+measured 835.8 µs — so a real kernel's configuration cost does *not* swamp the passthrough's
+floor.
+
 ## 4. Objectives
 
 Ordered by dependency, and weighted toward where the NPU has *measured* edge — large bf16
@@ -384,7 +442,20 @@ query as a flat 800 in every power mode — an idle reading, as `results/aie/pmo
 clock to the MHz (1800 / 1028 / 800); idle, 800 in every mode. The trace unit is the
 measurement of the clock; the readback is its live indicator.
 
-**S1. Pin the data-movement constants.**
+**S1. Pin the data-movement constants. — Bounded from the demand side 2026-09-09; the port
+measurement itself is unstarted.** `tools/gemm_cost_model.py` computes what the int8 GEMM's
+cores would need if never starved (**3.35** B/cycle into one core's L1 at n=64) against what the
+measured time says they get (2.50 B/cycle), and finds the measured cycles per call almost
+unchanged, 3,274 vs 3,160, when the work per buffer is halved — a per-buffer floor set by
+delivery rather than by the work (`results/aie/gemm_cost_model_nest.log`). The demand figure
+supersedes the 6.19 B/cycle of the same day's first reading, which mis-modelled the kernel's
+loop nest; the two measured rates are unaffected. That brackets the answer but does not measure
+a port. **The route to measuring one is `PORT_RUNNING` /
+`PORT_STALLED` / `PORT_IDLE` on shim and mem-tile DMA ports, and none of that reader exists
+yet**: those events need their own wrapper classes and `shimtile_events=` / `memtile_events=`
+parameters, and `kernels/pmu_probe/`'s reader takes `streams[0]`, the CORE packet type, which
+is empty in a no-compute passthrough design. The frame encoding for the shim and mem-tile
+packet types is also unconfirmed against the core format.
 Physical basis: 1.5–1.6 hold three mutually inconsistent inferences. Tooling: extend the
 dispatch-floor passthrough with `--direction {read,write,both}` and `--channels 1..8`,
 plus two more variants — mem tile → four cores by broadcast, and core → adjacent core by
@@ -395,7 +466,18 @@ bandwidth, and the neighbour-memory read rate. Decides: the 8 B/cycle assumption
 at all. Reuses: the same script; `results/aie/mlir_aie_examples_npu.log`'s memcpy as the
 cross-check.
 
-**S2. Hardware trace on npu1, end to end. — First step taken by S0.**
+**S2. Hardware trace on npu1, end to end. — Instrument built and calibrated 2026-09-09; the
+applied measurement is what remains.** `kernels/pmu_probe/` routes the stall taxonomy,
+occupancy and instruction mix instead of S0's two instruction events, and gates on
+reproducing S0's own loops before any of it is believed: cycles per iteration come back at
+2.0003 and 9.0001 against the measured 2.000 and 9.000. A level event emits one frame per
+cycle, compressed into Repeat frames by the hardware, so a 142,730-cycle window fits in 1,344
+bytes. The decomposition `cycles alive = issuing + memory + stream + lock + cascade stalls`
+closes to a constant 190/198-cycle prologue across a 16× range of work. First finding:
+`LOCK_STALL` alone accounts for 8,500–12,700 cycles per dispatch, flat in the work done, and
+68% of the shortest run's cycles (`results/aie/pmu_probe_npu.log`). Still open from S2: three
+of the four stall categories have never been non-zero here, so they are unexercised rather
+than verified; and the applied Perfetto-style timelines below.
 S0 ran `Program.enable_trace` on this machine end to end: `input_with_addresses.mlir` was
 present in the design cache, packets arrived, and the stamps decoded. Two things it
 learned that every later trace here inherits: a core that emits fewer events than fill a
@@ -417,7 +499,20 @@ showing per-core MAC busy time, DMA stalls and lock waits. Decides: which half o
 "instruction/tile-level profiling this repo's toolchain does not expose" that closed two
 threads in `RESEARCH.md` — the silicon exposes it, the post-step didn't.
 
-**S3. In-kernel cycle accounting without trace.**
+**S3. In-kernel cycle accounting without trace. — Answered statically for one kernel
+2026-09-09; the hardware-counter route is unstarted.** MACs per cycle per core no longer has to
+be inferred from throughput. `tools/gemm_cost_model.py` reads it off the object code: the int8
+GEMM's hardware loop issues 8 `vmac` per 9-bundle iteration, 88.9% of one per cycle, but that
+loop is only 54 of the 141 cycles an accumulator group costs, so across the whole call the
+kernel manages **107.3 MACs per cycle, 41.9% of the 256 nameplate**
+(`results/aie/gemm_cost_model_nest.log`, superseding the same day's 198.1 / 77.4%). The core
+issues for 74.6% of the dispatch, so the **larger loss is the schedule, not delivery** — and it
+is accumulator spill, since the kernel holds 8 live accumulators where 5 is the measured
+spill-free ceiling. **Unstarted:** the decimating hardware counter — subclass
+`GenericEvent`, override `get_register_writes()` to program `Performance_Control0` / `Control2`
+— which would measure the issue rate rather than compute it, and would cover kernels whose
+control flow the static route cannot walk. Whether a counter may reset on the event it
+generated itself is unverified; the fallback is two chained counters.
 Physical basis: the same counter as S0, read inside the kernel around the `mmul` loop and
 around each fifo acquire — except that S0 found Peano cannot read it (1.2), so "without
 trace" now means the S0 mechanism itself: `event0()`/`event1()` brackets, two events per
@@ -486,7 +581,28 @@ here.
 
 ### Tier 1 — the dispatch path
 
-**D1. `xrt::runlist` batching.**
+**D1. `xrt::runlist` batching. — ANSWERED 2026-09-09: 36.3 µs per dispatch, a 17× drop.**
+The sweep this objective asked for was run at N = 1, 2, 4, 8, 16, 32, 64
+(`results/aie/dispatch_runlist_npu.log`). Amortised cost per dispatch falls from 147 µs at
+N=1 to **36.3 µs** at N=64 and is asymptotic there, so a larger batch buys little. Raw pyxrt
+single-dispatch is ~140 µs, already below the 169.8 µs "hardware" bracket, and the batched
+figure is a quarter of it — the hardware half of the floor is not silicon. The prediction in
+this entry's physical basis was correct: most of the host term is software and a list of N
+runs costs one host round trip. **Remaining:** this is raw pyxrt; `@iron.jit` does not use
+runlists, and nothing under `aie/utils/hostruntime/` references one, so a real design still
+pays the old floor until that host path is written. That, not the measurement, is what D1
+now blocks on.
+**Remaining: CLOSED the same day, and the answer moves the problem to D2.** That host path
+was written — `kernels/dispatch_floor/iron_batch.py` patches IRON's own transaction submit to
+queue unstarted runs into a `pyxrt.runlist`, with nothing outside this repo modified
+(`results/aie/iron_batch_npu.log`). From inside IRON the device cost per dispatch does fall to
+**37.5–37.9 µs**, reproducing the raw figure. But the wall clock only improves **1.26–1.37×**,
+because IRON's per-call host work is a near-constant **~500 µs** that batching never touches,
+leaving a batched `@iron.jit` call at ~531 µs. So D1 is answered in full: batching removes the
+dispatch half of the floor and nothing else. The ~500 µs residue is the same term
+`dispatch_floor_npu.log` measured as 447.3 µs, now confirmed independent of how the submit is
+done, and at 37.5 µs of device against ~500 µs of host **it is the larger term by more than an
+order of magnitude**. Whatever removes it is D2's question, not D1's.
 Physical basis: the vendor path's host-side cost per call is about 90 µs against IRON's
 447 µs on the same driver (2.5), so most of the host term is software, and a list of N
 runs costs one host round trip. Tooling: none new — `xrt::runlist` is in this
@@ -538,7 +654,23 @@ Reuses: the kernel, `extract_golden.py`, the handoff harnesses on both branches.
 
 ### Tier 2 — kernel quality, held to measured bars
 
-**K1. int8 conv at DPU-class efficiency.**
+**K1. int8 conv at DPU-class efficiency. — The 11.3× is ISSUE RATE, answered 2026-09-09
+without a trace.** This entry's own go/no-go said "the first trace will say whether it is data
+movement or issue rate". It is issue rate, and the instruction schedule says so on its own
+(`results/aie/conv_issue_rate_decomposed.log`). The int8 GEMM issues **0.889 vmac/cycle**; the
+best conv loop in the design manages **0.333**, the 3×3's main loop **0.222**, and the 1×1's
+hot loop **0.045**, with two of its three loops issuing no MAC at all. A 4×–20× shortfall in
+MAC issue density against an 11.3× throughput gap — the schedule alone more than accounts for
+it. **Two different causes, and the fixes differ.** The 1×1 never keeps an accumulator in a
+register: its 22-bundle loop loads all four quarters from memory, issues one `vmac`, stores
+four quarters back, and idles six bundles on load-to-use latency, while naming only 3 of the
+file's 9 accumulators. The 3×3 *does* keep `cm1`–`cm4` live and still reaches 0.222, because
+six of its eighteen bundles are `vshift` and four more `vmov` — sliding-window realignment
+spent in issue slots, which is precisely what this entry's tooling section proposes moving to
+the mem tile's 4-D BDs. Reaching 1 TOPS needs 6.8×; the 1×1's defect alone is worth up to 20×
+on that kernel. **What this does not establish** is that a rewrite would get there — the 20×
+and 4× are ceilings on what the schedule leaves unused, not predictions, and the per-loop
+densities are unweighted by trip count.
 Bar: 1.65 TOPS per column, clock-independent (2.2); today 146 GOPS (2.3). Physical
 basis: 3.3 — conv has ten times the reuse the core needs, the weights fit on-chip, and the
 same column sustains the bar under AMD's compiler. Tooling: a conv design of this repo's

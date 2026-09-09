@@ -1,0 +1,350 @@
+AIE2 machine code, read statically: VLIW bundles, the accumulator file, and the cost model
+2026-09-09. env: mlir-aie ironenv (v1.4.2, llvm-aie 22.0.0.2026090201 Peano) on native Windows,
+Desktop 2 (Phoenix, Ryzen 7 8700G). NO HARDWARE WAS USED. Every number below comes from
+disassembling object code with Peano's own llvm-objdump, or from compiling with Peano's clang.
+The NPU was not opened, no hardware context was taken, and this runs while the device is busy.
+
+Commands (from the repo root; no ironenv activation needed):
+  python tools/aie_disasm.py <object> --loops --slots --regs [--verbose]
+  python kernels/acc_spill_probe/sweep.py --max 12
+
+WHY: docs/SILICON.md 1.2 carries MACs per cycle, vector width and the mmul shapes as SPEC rows
+copied out of AMD's device.yaml, never measured. VLIW slot count and issue width appear in no
+document in this repo at all. docs/DECISIONS.md says "AIE2 has only 6 hardware accumulator
+registers" while docs/SILICON.md 1.2 says "<=4 stays in registers ... TO VERIFY the exact
+register count from the AIE-ML ISA rather than from that one kernel" -- two documents, two
+different numbers, neither measured. S0 measured the clock, which makes cycles convertible to
+seconds; this reads the cycles themselves off the machine code.
+
+METHOD: llvm-objdump from the llvm-aie wheel disassembles elf32-aie and prints each VLIW
+bundle's slots separated by ';'. tools/aie_disasm.py parses that, groups bundles into
+hardware-loop bodies, and counts slot occupancy, allocated registers and stack references.
+A loop body is taken as every bundle from the nearest preceding label through the bundle
+labelled .L_LEnd*, which is the last bundle of a zero-overhead hardware loop.
+
+
+--------------------------------------------------------------------------------
+1. THE BUNDLE FORMAT
+--------------------------------------------------------------------------------
+The nop mnemonics name the slots. A full-width bundle is 16 bytes and prints six fields:
+
+    nopb ; nopa ; nops ; nopx ; nopm ; nopv
+
+so the slots are b (branch), a (load), s (store), x (scalar), m (move), v (vector). When both
+x and m are empty they print as one fused `nopxm` field, so a five-field bundle still occupies
+six slots. Bundles that use few slots are emitted in a compressed encoding shorter than 16
+bytes; they still issue in one cycle, so cycles are counted by bundle and never by byte.
+
+Evidence, one bundle of each kind from the clock probe's own kernel:
+
+    0x0170  nopb ; nopa ; nops ; nopxm ; nopv                             (5 fields, all idle)
+    0x00c0  nopb ; nopa ; nops ; nopx ; vbcst.32 x0, r17 ; nopv           (6 fields, m busy)
+    0x01b0  nopb ; nopa ; st r2,[p0,#0] ; add r17,r17,#0x1 ; nopm ; nopv  (6 fields, s and x)
+
+
+--------------------------------------------------------------------------------
+2. CALIBRATION: STATIC BUNDLE COUNT IS THE CYCLE COUNT
+--------------------------------------------------------------------------------
+results/aie/clock_probe_npu.log measured two loops on hardware at exactly 9.000 and 2.000
+cycles per iteration, constant from 2^18 to 2^25 iterations. Those same two loops, read out of
+the object the JIT compiled for that run:
+
+== C:\Users\<user>/.npu/cache\1a0df11de1bfd54080e1a5ef\clock_kernels.o
+  section .text.clock_probe: 102 bundles (29 full-width, 73 compressed), frame 32 B, stack refs 0
+    loop .L_LEnd3 0xc0-0xd0: 2 bundles = 2 cycles/iteration, 3 live ops, density 1.50 of 6
+        0x00c0  vbcst.32	x0, r17
+        0x00d0  add	r17, r17, #0x1 | vadd.32	x4, x0, x4
+    loop .L_LEnd2 0x150-0x1b0: 9 bundles = 9 cycles/iteration, 4 live ops, density 0.44 of 6
+        0x0150  lda	r2, [p0, #0]
+        0x0160  (all nop)
+        0x0170  (all nop)
+        0x0180  (all nop)
+        0x0190  (all nop)
+        0x01a0  (all nop)
+        0x01aa  (all nop)
+        0x01ac  add	r2, r17, r2
+        0x01b0  st	r2, [p0, #0] | add	r17, r17, #0x1
+    loop .L_LEnd1 0x200-0x260: 8 bundles = 8 cycles/iteration, 8 live ops, density 1.00 of 6
+        0x0200  event	#0x0
+        0x0210  event	#0x1
+        0x0220  event	#0x0
+        0x0230  event	#0x1
+        0x0240  event	#0x0
+        0x0250  event	#0x1
+        0x025c  event	#0x0
+        0x0260  event	#0x1
+    loop .L_LEnd0 0x2d0-0x300: 8 bundles = 8 cycles/iteration, 13 live ops, density 1.62 of 6
+        0x02d0  st	r16, [p1, dj0] | lshl	r7, r6, r5
+        0x02e0  mov	dj0, r7
+        0x02e4  st	r16, [p1, dj0] | add	r8, r7, #0xc
+        0x02ea  add	r9, r7, #0x8 | mov	dj0, r8
+        0x02f2  mov	dj1, r9
+        0x02f6  st	r16, [p1, dj0] | add	r10, r7, #0x4
+        0x02fc  mov	dj0, r10
+        0x0300  st	r16, [p1, dj1] | add	r6, r6, #0x4
+
+The scalar loop is 9 bundles and measured 9.000 cycles. The vector loop is 2 bundles and
+measured 2.000. Both exact.
+
+That equality is not a coincidence and it generalises: AIE2 is a statically scheduled VLIW with
+an exposed pipeline, so the compiler covers every operand latency with explicit nop bundles
+instead of leaving it to a hardware interlock. The scalar loop shows the mechanism directly --
+six consecutive all-nop bundles sit between the load at 0x0150 and the add at 0x01ac that
+consumes it, so a scalar load's result is available to the seventh bundle after it issues.
+
+CONSEQUENCE, and this is the useful part: the cycles per iteration of any hardware loop on this
+part can be read off the disassembly before the kernel is ever run. A kernel's inner-loop cost
+no longer needs a throughput fit.
+
+
+--------------------------------------------------------------------------------
+3. COMPILING FOR AIE2 WITHOUT IRON, AND THE CHECK THAT IT IS THE SAME COMPILE
+--------------------------------------------------------------------------------
+Peano's clang compiles a kernel for the core directly:
+
+  clang++ --target=aie2-none-unknown-elf -std=c++20 -O2 -D__AIE_API_AIE_ADF_HPP__=1 \
+      -c -I <mlir_aie>/include kernel.cc -o kernel.o
+
+The one non-obvious flag predefines the include guard of aie_api's graph-level ADF header so
+its body is skipped. That header includes <adf.h>, which ships with Vitis and exists nowhere on
+this machine (searched: the mlir-aie tree, the llvm-aie wheel, C:\Program Files\RyzenAI,
+C:\Xilinx). Nothing in a Peano kernel uses the ADF graph API.
+
+The flag is safe because recompiling the clock probe's own source this way reproduces the
+object IRON built for the hardware run, structure for structure:
+
+  IRON's cached object:
+== C:\Users\<user>/.npu/cache\1a0df11de1bfd54080e1a5ef\clock_kernels.o
+  section .text.clock_probe: 102 bundles (29 full-width, 73 compressed), frame 32 B, stack refs 0
+    loop .L_LEnd3 0xc0-0xd0: 2 bundles = 2 cycles/iteration, 3 live ops, density 1.50 of 6
+    loop .L_LEnd2 0x150-0x1b0: 9 bundles = 9 cycles/iteration, 4 live ops, density 0.44 of 6
+    loop .L_LEnd1 0x200-0x260: 8 bundles = 8 cycles/iteration, 8 live ops, density 1.00 of 6
+    loop .L_LEnd0 0x2d0-0x300: 8 bundles = 8 cycles/iteration, 13 live ops, density 1.62 of 6
+
+  rebuilt standalone with the command above:
+== C:\Users\<user>\.claude\jobs\8a20f3f5\tmp\clock_rebuilt.o
+  section .text.clock_probe: 102 bundles (29 full-width, 73 compressed), frame 32 B, stack refs 0
+    loop .L_LEnd3 0xc0-0xd0: 2 bundles = 2 cycles/iteration, 3 live ops, density 1.50 of 6
+    loop .L_LEnd2 0x150-0x1b0: 9 bundles = 9 cycles/iteration, 4 live ops, density 0.44 of 6
+    loop .L_LEnd1 0x200-0x260: 8 bundles = 8 cycles/iteration, 8 live ops, density 1.00 of 6
+    loop .L_LEnd0 0x2d0-0x300: 8 bundles = 8 cycles/iteration, 13 live ops, density 1.62 of 6
+
+Same bundle count, same split of full-width and compressed, same frame, same four loops at
+the same addresses. Static analysis of AIE2 therefore needs no NPU, no hardware context and no
+IRON, and can run against a busy device.
+
+
+--------------------------------------------------------------------------------
+4. THE ACCUMULATOR REGISTER FILE
+--------------------------------------------------------------------------------
+kernels/acc_spill_probe/ holds K live aie::mmul<4,8,8,int8,int8,acc32> accumulators across a
+k-reduction loop, the shape upstream's conv2dk3 uses, and sweeps K. Two signals: the distinct
+accumulator registers the allocator names, and stack references anywhere in the function.
+
+Live aie::mmul<4,8,8,int8,int8,acc32> accumulators vs register pressure
+  source   C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\.claude\worktrees\curious-tinkering-whistle\kernels\acc_spill_probe\acc_kernels.cc
+  clang    C:\Users\<user>/mlir-aie/ironenv/Lib/site-packages/llvm-aie/bin/clang++.exe
+  objects  C:\Users\<user>\AppData\Local\Temp\acc_spill_gene80av
+
+live acc  acc regs  loop cycles  cycles/MAC  stack refs  frame B  bundles
+-------------------------------------------------------------------------
+       1         1            -         nan           0        -       42
+       2         2            8        4.00           0        -       38
+       3         4           14        4.67           0        -       44
+       4         6           15        3.75           0        -       47
+       5         6           13        2.60           0        -       50
+       6         9           15        2.50           5        -       61
+       7         9           24        3.43          17       96       81
+       8         9           27        3.38          25        -      100
+       9         9           28        3.11          32      256      105
+      10         9           24        2.40          48        -       95
+      11         9           29        2.64          72        -      114
+      12         9           36        3.00          96        -      133
+
+Highest count with zero stack traffic: 5
+First count with any stack traffic:    6
+Most accumulator registers allocated:  9 at 6 live accumulators (cm0 cm1 cm2 cm3 cm4 cm5 cm6 cm7 cm8)
+Cheapest cycles per MAC without spill: 2.60 at 5 accumulators
+
+READING: the allocator names nine accumulator registers, cm0 through cm8. It reaches nine at
+six live accumulators and never goes past it however many more are asked for. Five live
+accumulators of this shape compile with zero stack traffic; six is the first count that touches
+the stack at all.
+
+Both existing claims in the docs are wrong, in opposite directions. docs/DECISIONS.md's "only 6
+hardware accumulator registers" is below the nine register names that actually appear.
+docs/SILICON.md's "<=4 stays in registers" is one below the real spill-free ceiling of five.
+The conv2dk3 width fix in kernels/conv2dk3_widthfix/ was written to N<=4 for safety and is
+therefore correct but conservative; five is available.
+
+CAVEAT: this is the spill-free ceiling for ONE accumulator shape, 4x8x8 int8 with an int32
+accumulator, under -O2. A wider accumulator would fit fewer. The nine register names are a
+lower bound on the architectural file, since the allocator also needs accumulators for
+temporaries and may simply never have needed a tenth.
+
+
+--------------------------------------------------------------------------------
+5. THE PRODUCTION int8 GEMM, READ THE SAME WAY
+--------------------------------------------------------------------------------
+The kernel behind results/aie/int8_matmul_sweep_npu.log's 4607.05 GOPS:
+
+== C:\Users\<user>/.npu/cache\0816364bbbaf03f83e2f0bcd\matmul_i8_i32_170456c5.o
+  section .text.matmul_i8_i32: 147 bundles (4 full-width, 143 compressed), frame 416 B, stack refs 37
+      acc registers (9): cm0 cm1 cm2 cm3 cm4 cm5 cm6 cm7 cm8
+      vec registers (12): x0 x1 x2 x3 x4 x5 x6 x7 x8 x9 x10 x11
+    loop .L_LEnd0 0x1f0-0x240: 9 bundles = 9 cycles/iteration, 25 live ops, density 2.78 of 6
+        0x01f0  vmov	x11, x7
+        0x01f8  vldb	wh7, [p1, #0x20] | mov	p1, r18 | vmac	cm4, cm4, x5, x2, r6
+        0x0202  vlda	wl7, [p5], #0x100 | vmov	x2, x1 | vmac	cm2, cm2, x10, x2, r6
+        0x020c  vlda	wl1, [p6], #0x100 | vmov	x5, x8 | vmac	cm1, cm1, x0, x2, r6
+        0x0216  vldb	wh1, [p1, #0x20] | vmov	x10, x6 | vmac	cm6, cm6, x3, x7, r6
+        0x0220  vlda	wl3, [p4], #0x20 | vldb	wl8, [p3], #0x20 | vmov	x0, x4 | vmac	cm3, cm3, x10, x9, r6
+        0x022c  vlda	wl6, [p0], #0x20 | mov	p1, p5 | vmac	cm0, cm0, x0, x9, r6
+        0x0236  vldb	wl4, [p7], #0x20 | mov	r18, p6 | vmac	cm5, cm5, x3, x1, r6
+        0x0240  vmov	x9, x11 | vmac	cm7, cm7, x5, x11, r6
+  section .text.zero_i32: 22 bundles (6 full-width, 16 compressed), frame none B, stack refs 0
+      vec registers (1): x0
+    loop .L_LEnd1 0x70-0xa0: 6 bundles = 6 cycles/iteration, 14 live ops, density 2.33 of 6
+        0x0070  mov	p1, p0
+        0x007a  vst	wl0, [p0, dj0] | paddb	[p1], #64 | mov	r2, dj1
+        0x0084  vst	wl0, [p1, dj1] | add	r3, r2, r1 | mov	p1, p0
+        0x008e  paddb	[p1], #32 | or	r2, r2, r0 | mov	dj0, dj1
+        0x0098  vst	wl0, [p1, dj1] | mov	dj1, r2
+        0x00a0  vst	wl0, [p0, dj1] | mov	dj1, r3
+  section .text.matmul_scalar_i8_i32: 141 bundles (6 full-width, 135 compressed), frame 32 B, stack refs 14
+    loop .L_LEnd3 0xe0-0x160: 18 bundles = 18 cycles/iteration, 34 live ops, density 1.89 of 6
+        0x00e0  mul	r17, r29, r15
+        0x00f0  mul	r18, r16, r27
+        0x00f6  mul	r19, r31, r25
+        0x00fa  mul	r20, r30, r26
+        0x00fe  (all nop)
+        0x0100  add	r15, r11, r24
+        0x0104  add	r25, r15, #0x3 | mov	dj0, r15
+        0x010c  lda.s8	r15, [p0, dj0] | add	r26, r15, #0x2 | mov	dj0, r25
+        0x0116  lda.s8	r27, [p0, dj0] | add	r29, r15, #0x1 | mov	dj0, r26
+        0x0120  lda.s8	r25, [p0, dj0] | add	r30, r28, r4 | mov	dj0, r29
+        0x012a  lda.s8	r26, [p0, dj0] | add	r21, r28, r5 | mov	dj0, r30
+        0x0134  lda.s8	r29, [p1, dj0] | add	r30, r28, #-0x20 | mov	dj0, r28
+        0x013e  lda.s8	r16, [p1, dj0] | add	r22, r28, #-0x40 | mov	dj0, r30
+        0x0148  lda.s8	r31, [p1, dj0] | add	r24, r24, #0x4 | mov	dj0, r22
+        0x0152  lda.s8	r30, [p1, dj0] | add	r14, r17, r14
+        0x0158  add	r14, r20, r14
+        0x015c  add	r14, r19, r14
+        0x0160  add	r14, r18, r14 | mov	r28, r21
+    loop .L_LEnd2 0x230-0x2b0: 18 bundles = 18 cycles/iteration, 34 live ops, density 1.89 of 6
+        0x0230  mul	r17, r29, r15
+        0x0240  mul	r18, r16, r27
+        0x0246  mul	r19, r31, r25
+        0x024a  mul	r20, r30, r26
+        0x024e  (all nop)
+        0x0250  add	r15, r11, r24
+        0x0254  add	r25, r15, #0x3 | mov	dj0, r15
+        0x025c  lda.s8	r15, [p0, dj0] | add	r26, r15, #0x2 | mov	dj0, r25
+        0x0266  lda.s8	r27, [p0, dj0] | add	r29, r15, #0x1 | mov	dj0, r26
+        0x0270  lda.s8	r25, [p0, dj0] | add	r30, r28, r4 | mov	dj0, r29
+        0x027a  lda.s8	r26, [p0, dj0] | add	r21, r28, r5 | mov	dj0, r30
+        0x0284  lda.s8	r29, [p1, dj0] | add	r30, r28, #-0x20 | mov	dj0, r28
+        0x028e  lda.s8	r16, [p1, dj0] | add	r22, r28, #-0x40 | mov	dj0, r30
+        0x0298  lda.s8	r31, [p1, dj0] | add	r24, r24, #0x4 | mov	dj0, r22
+        0x02a2  lda.s8	r30, [p1, dj0] | add	r13, r17, r13
+        0x02a8  add	r13, r20, r13
+        0x02ac  add	r13, r19, r13
+        0x02b0  add	r13, r18, r13 | mov	r28, r21
+  section .text.zero_scalar_i32: 25 bundles (5 full-width, 20 compressed), frame none B, stack refs 0
+    loop .L_LEnd4 0x60-0x90: 8 bundles = 8 cycles/iteration, 13 live ops, density 1.62 of 6
+        0x0060  st	r0, [p0, dj0] | lshl	r3, r2, r1
+        0x0070  mov	dj0, r3
+        0x0074  st	r0, [p0, dj0] | add	r4, r3, #0xc
+        0x007a  add	r5, r3, #0x8 | mov	dj0, r4
+        0x0082  mov	dj1, r5
+        0x0086  st	r0, [p0, dj0] | add	r6, r3, #0x4
+        0x008c  mov	dj0, r6
+        0x0090  st	r0, [p0, dj1] | add	r2, r2, #0x4
+
+READING: the inner loop is nine bundles and issues eight vmac instructions, one per live
+accumulator cm0..cm7. On AIE2 one int8 vmac is the 256-MAC operation the 256 MACs/cycle
+nameplate describes, so the loop issues 8/9 = 0.889 vector MACs per cycle, 88.9 percent of the
+machine's MAC issue rate. Its operands arrive on the a and s slots in the same bundles, four
+vlda and four vldb per iteration, so the loads are free.
+
+That number sits against the measured whole-kernel rate. 4607.05 GOPS over 16 cores at the
+measured 1.7983 GHz is 31.3 percent of the 14,730 GOPS those cores can issue. The inner loop is
+at 88.9 percent. The missing factor is therefore NOT the inner loop's instruction schedule, and
+rewriting it is not where the time is; it is in how much of the elapsed time is spent inside
+that loop at all.
+
+The function does spill -- 416 byte frame, 37 stack references, consistent with section 4 since
+it holds eight live accumulators where five is the spill-free ceiling -- but none of that
+traffic is in the nine loop bundles above, so the spills cost setup time per call and not
+per-iteration throughput.
+
+
+--------------------------------------------------------------------------------
+6. HAND-WRITTEN ASSEMBLY, AND WHY THE CYCLE COUNTER IS STILL OUT OF REACH
+--------------------------------------------------------------------------------
+docs/DECISIONS.md records that Peano "rejects inline asm", which closed hand-scheduling on this
+part. That is true of STATEMENT-LEVEL inline asm inside a C++ function, which dies in the
+IRTranslator, and it is where S0 hit the wall. It says nothing about a standalone assembly
+file, which never enters instruction selection and goes straight to the integrated assembler.
+kernels/asm_probe/ tests that directly:
+
+assemble asm_core_id.s: ok
+disassembly of the assembled object:
+    C:\Users\<user>\AppData\Local\Temp\asm_probe_vl6w0wge\asm_core_id.o:	file format elf32-aie
+    Disassembly of section .text:
+    00000000 <asm_core_id>:
+           0:      	mov	r0, CORE_ID
+           4:      	ret lr	
+           8:      	nop	
+           a:      	nop	
+           c:      	nop	
+           e:      	nop	
+          10:      	nop	
+          12:      	nopa	;		nops	;		nopm	;		nopv	
+compile C++ caller: ok
+link the two: ok
+symbols in the linked object:
+    00000000 T asm_core_id
+    00000000 T caller
+
+RESULT: PASS -- hand-written AIE2 assembly assembles and links with compiled C++.
+Statement-level inline asm still fails in the IRTranslator; a standalone .s does not.
+
+So hand-scheduled AIE2 assembly IS available here. The door was half closed, not closed.
+
+That reopens S0's other question -- reading the tile timer from inside a kernel -- so the
+assembler's special-register namespace was enumerated by trying to assemble `mov r0, <NAME>`
+for each candidate:
+
+  ACCEPTED  mov r0, CORE_ID
+
+accepted: CORE_ID
+rejected: TIMER, TIMER_LOW, TIMER_HIGH, TM, TM0, TM1, TIMER_L, TIMER_H, TIMERLOW, TIMERHIGH, CYCLE, CYCLES, CYCLE_LOW, CYCLE_HIGH, PERF0, PERF_CNT0, PC, SP, LR, LC, LS, LE, CR, SR, MC0, MC1, DC0, DP, S0, S1, DJ0, DN0
+
+Only CORE_ID is accepted, and even PC, SP and LR are refused in that position. The register
+database shipped with mlir-aie puts the core's timer at memory-mapped offsets 0x000340F8
+(Timer_Low) and 0x000340FC (Timer_High), inside the tile's configuration register space
+reached over the AXI-MM interface from the host or a DMA -- not in the core's own data address
+space, whose stack this toolchain places at 0x70000. Nothing in the assembler's namespace
+names it.
+
+CONCLUSION: the trace unit remains the only path to the tile timer from a Peano kernel, which
+is what S0 concluded from three failures. This is a fourth independent route to the same
+answer rather than a way around it. What IS new is that hand-written assembly assembles and
+links, so a hand-scheduled inner loop is available for any kernel where the compiler's
+schedule is the binding constraint.
+
+
+--------------------------------------------------------------------------------
+WHAT THIS DOES NOT SHOW
+--------------------------------------------------------------------------------
+- Nothing here is a hardware measurement. It is what the compiler emitted. The bundle-equals-
+  cycle identity is checked against two measured loops and no more; a loop that waits on a
+  lock, a stream or a DMA takes longer than its bundle count and the disassembly cannot say by
+  how much. That is what the trace unit's stall events are for and it is the next objective.
+- The 88.9 percent figure is the inner loop's issue density, not the kernel's utilisation.
+- One accumulator shape, one optimisation level, one compiler version.
+- The assembly result is a toolchain result: the object assembles, disassembles and links,
+  but nothing here ran a hand-written kernel on the NPU.
+- Slot names come from the nop mnemonics llvm-objdump prints. They are not from a published
+  AIE-ML ISA document, which this project does not have.

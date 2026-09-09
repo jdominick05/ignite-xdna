@@ -1,0 +1,226 @@
+H12 attempted: separating the int8 GEMM's operands into different banks changes its
+wall time by less than this machine can resolve
+2026-09-09. Desktop 2 (Phoenix, Ryzen 7 8700G), native Windows, mlir-aie ironenv (v1.4.2,
+llvm-aie 22.0.0.2026090201) + XRT SDK, power mode Default (1.7983 GHz per
+results/aie/clock_probe_npu.log). This run DID take a hardware context. `xrt-smi examine -r
+aie-partitions` reported "No hardware contexts running on device" before it, and
+tools/host_load.ps1 reported HOST_LOAD_VERDICT CLEAR, though a peer session held about one
+core throughout and the spread below reflects that.
+
+Command (from the repo root, ironenv, XRT SDK on PATH and pyxrt on PYTHONPATH):
+  python kernels/bank_placement/bank_ab_test.py --repeats 4 --iters 60 --warmup 5
+
+WHAT WAS PREDICTED, AND BY WHOM. results/aie/bank_conflict_survey.log found the production
+whole_array int8 GEMM landing both input tiles in bank 2 with bank 3 empty, and one
+paired-load bundle inside its nine-bundle hardware loop -- the situation measured elsewhere to
+cost one extra cycle per iteration. results/aie/gemm_cost_model_nest.log put the core's issuing
+cost at 2,442 cycles per call against 3,274 measured, i.e. issuing about 75% of the time, and
+proposed that a per-buffer floor set by data delivery is what caps the design. H12 was the test
+that separates the two readings:
+
+  H12. Placing A and B in different banks will NOT change the measured NPU time, because the
+       core is not the critical path. Fails if the dispatch speeds up by about the 3% the
+       issuing-cost change predicts (96 cycles of 3,274), which would mean the design is
+       issue-bound after all.
+
+THE LEVER, AND WHY IT IS CLEAN. The allocator lays a core's local buffers immediately above its
+stack, so raising `stack_size` shifts every buffer up by the same amount and changes nothing
+else: same kernel source, same tile shapes, same ObjectFifo depths, same DMA, same schedule.
+The compiled kernel object is byte-identical in both arms -- its cache filename carries a
+content hash and both builds produced matmul_i8_i32_86901378.o. Only the addresses moved.
+
+NOTE ON PROVENANCE. kernels/bank_placement/whole_array_bankpad.py is a LOCAL COPY of
+mlir-aie's whole_array.py, taken while the shared checkout carried only this repo's known
+--c-single-buffer patch, with a --stack-size option added. The shared ~/mlir-aie checkout was
+NOT modified by this work, deliberately, because another session was working in it.
+
+--------------------------------------------------------------------------------
+1. THE INTERVENTION, READ BACK OUT OF THE COMPILED ELF
+--------------------------------------------------------------------------------
+Stock, stack 0xD00 -- the layout that produced 4607.05 GOPS on 2026-09-07:
+
+WHERE THE BUFFERS LANDED
+  elfs_main_core_0_2.elf
+    own local memory window 0x70000-0x7ffff, 4 banks of 16 KB
+    bank 0: 1
+      0x70d00-0x74cff   16 KB  C_L1L2_0_0_buff_0  (spans banks [0, 1])
+    bank 1: 2
+      0x70d00-0x74cff   16 KB  C_L1L2_0_0_buff_0  (spans banks [0, 1])
+      0x74d00-0x78cff   16 KB  C_L1L2_0_0_buff_1  (spans banks [1, 2])
+    bank 2: 5
+      0x74d00-0x78cff   16 KB  C_L1L2_0_0_buff_1  (spans banks [1, 2])
+      0x78d00-0x79cff    4 KB  B_L2L1_0_0_cons_buff_0
+      0x79d00-0x7acff    4 KB  B_L2L1_0_0_cons_buff_1
+      0x7ad00-0x7bcff    4 KB  A_L2L1_0_0_cons_buff_0
+      0x7bd00-0x7ffff   16 KB  A_L2L1_0_0_cons_buff_1  (spans banks [2, 3])
+    bank 3: 1
+      0x7bd00-0x7ffff   16 KB  A_L2L1_0_0_cons_buff_1  (spans banks [2, 3])
+  (16 core ELFs in this build; the first is shown, and the allocation is per core)
+
+BANK SHARING
+  bank 2 holds 3 distinct buffers: A_L2L1_0_0_cons, B_L2L1_0_0_cons, C_L1L2_0_0
+
+  the two buffers a paired load actually reads
+    A_L2L1_0_0_cons              bank [2, 2, 3]
+    B_L2L1_0_0_cons              bank [2, 2]
+    -> COLLIDE
+
+
+Raised, stack 0x2000 -- A moves wholly into the empty bank 3:
+
+WHERE THE BUFFERS LANDED
+  elfs_main_core_0_2.elf
+    own local memory window 0x70000-0x7ffff, 4 banks of 16 KB
+    bank 0: 1
+      0x72000-0x75fff   16 KB  C_L1L2_0_0_buff_0  (spans banks [0, 1])
+    bank 1: 2
+      0x72000-0x75fff   16 KB  C_L1L2_0_0_buff_0  (spans banks [0, 1])
+      0x76000-0x79fff   16 KB  C_L1L2_0_0_buff_1  (spans banks [1, 2])
+    bank 2: 3
+      0x76000-0x79fff   16 KB  C_L1L2_0_0_buff_1  (spans banks [1, 2])
+      0x7a000-0x7afff    4 KB  B_L2L1_0_0_cons_buff_0
+      0x7b000-0x7bfff    4 KB  B_L2L1_0_0_cons_buff_1
+    bank 3: 2
+      0x7c000-0x7cfff    4 KB  A_L2L1_0_0_cons_buff_0
+      0x7d000-0x7ffff   12 KB  A_L2L1_0_0_cons_buff_1
+  (16 core ELFs in this build; the first is shown, and the allocation is per core)
+
+BANK SHARING
+  bank 2 holds 2 distinct buffers: B_L2L1_0_0_cons, C_L1L2_0_0
+
+  the two buffers a paired load actually reads
+    A_L2L1_0_0_cons              bank [3, 3]
+    B_L2L1_0_0_cons              bank [2, 2]
+    -> different banks
+
+
+The separation is exactly what the arithmetic predicted before the build: raising the
+stack by 0x1300 pushes both A halves past 0x7c000, the bank-3 boundary, while both B halves
+stay inside bank 2. Nothing else about the design changed.
+
+--------------------------------------------------------------------------------
+2. THE MEASUREMENT
+--------------------------------------------------------------------------------
+Arms are run ALTERNATELY, and the order within each repeat is reversed on alternate repeats,
+so neither arm consistently follows the other or a neighbour's burst. The statistic that
+matters is the MINIMUM: this measurement's spread is dominated by upward excursions from host
+contention, not by anything the NPU is doing, and a minimum is the right estimator for a floor.
+
+== series A ==
+
+shape 4096x2048x2048  tile m=64 k=64 n=64  4 columns  int8->int32
+4 alternating repeats per arm, 5 warmup + 60 timed iterations each
+
+ rep arm            avg us     min us     max us    GFLOPS  verify
+--------------------------------------------------------------
+   1 collide        9985.9     7415.4    14453.6    3440.8  PASS
+   1 separate       9887.3     7844.5    14245.0    3475.1  PASS
+   2 separate       9277.9     8235.6    10241.8    3703.4  PASS
+   2 collide        9975.1     8194.8    14311.6    3444.6  PASS
+   3 collide       10288.2     7919.3    14162.1    3339.7  PASS
+   3 separate       9877.0     7933.8    13791.8    3478.8  PASS
+   4 separate       9283.9     7874.1    14157.2    3701.0  PASS
+   4 collide        9995.9     7941.7    14511.4    3437.4  PASS
+
+arm           best us   median avg  best GFLOPS  n
+--------------------------------------------------
+collide        7415.4       9990.9       3444.6  4
+separate       7844.5       9580.5       3703.4  4
+
+  best-to-best   separate is -5.8% vs collide
+  median-to-med  separate is +4.1% vs collide
+
+  A positive number means separating the banks made it FASTER.
+  The cost model predicts about +4% if the core is the critical path,
+  and about 0% if the per-buffer delivery floor is.
+
+== series B, immediately after, same settings ==
+
+shape 4096x2048x2048  tile m=64 k=64 n=64  4 columns  int8->int32
+4 alternating repeats per arm, 5 warmup + 60 timed iterations each
+
+ rep arm            avg us     min us     max us    GFLOPS  verify
+--------------------------------------------------------------
+   1 collide        9799.0     7813.1    14337.8    3506.4  PASS
+   1 separate       9936.7     7935.8    14481.6    3457.8  PASS
+   2 separate       9994.5     7986.2    14165.6    3437.9  PASS
+   2 collide        9755.1     7916.3    14638.2    3522.2  PASS
+   3 collide        9947.5     8054.0    14354.3    3454.1  PASS
+   3 separate       9909.0     7883.7    14441.2    3467.5  PASS
+   4 separate       9559.7     8033.3    14508.9    3594.2  PASS
+   4 collide        9554.2     7797.7    13947.8    3596.3  PASS
+
+arm           best us   median avg  best GFLOPS  n
+--------------------------------------------------
+collide        7797.7       9777.0       3596.3  4
+separate       7883.7       9922.9       3594.2  4
+
+  best-to-best   separate is -1.1% vs collide
+  median-to-med  separate is -1.5% vs collide
+
+  A positive number means separating the banks made it FASTER.
+  The cost model predicts about +4% if the core is the critical path,
+  and about 0% if the per-buffer delivery floor is.
+
+--------------------------------------------------------------------------------
+3. READING
+--------------------------------------------------------------------------------
+THE EFFECT IS NOT RESOLVABLE ON THIS MACHINE, AND THAT IS THE RESULT. SEVEN series were run
+this sitting. In every one the two arms overlap, and the SIGN OF THE DIFFERENCE CHANGES BETWEEN
+SERIES. Best-to-best, in the order run:
+
+    -4.6%   -2.9%   +2.5%   -2.7%   -0.4%   -5.8%   -1.1%
+
+The last two are the ones printed above; the other five are reported here so the set is
+complete rather than filtered. A positive number means separating the banks was faster. The
+mean is about -2%, the range spans 8 points, and no series reaches the +3% the issue-bound
+reading predicts. Anyone quoting a single series would get a different answer depending which
+they picked, which is the reason for running seven.
+
+WHAT IS EXCLUDED, AND WHAT IS NOT. The colliding arm's OWN floor across the three earlier
+series was 7,638.5, 7,398.9 and 7,275.6 microseconds, a 5.0% drift between repeats of the
+IDENTICAL build, which is larger than the ~3% effect being looked for (96 cycles of a
+3,274-cycle call). So this measurement excludes a large speedup -- nothing like a 10% gain is
+hiding here -- but it cannot separate +3% from 0%. H12 is therefore NOT confirmed and NOT
+refuted. It is untested at the resolution this machine allowed today, with a peer session
+holding about a core throughout.
+
+WHAT WOULD SETTLE IT, AND IT IS AN INSTRUMENT THIS BRANCH ALREADY HAS. Wall time is the wrong
+observable for a 3% core-side change on a shared machine. The trace unit is not: point
+kernels/pmu_probe/'s event routing at one core of this design and read ACTIVE against
+LOCK_STALL directly in core cycles, inside the dispatch, where host contention cannot reach.
+If the floor is real, the separated build's issuing cycles fall by about 96 per call and its
+lock stall rises by the same amount, leaving ACTIVE unchanged -- an equality that needs no
+timing at all. The obstacle is known and named in RESEARCH.md: the upstream whole_array design
+carries no trace hook, so one has to be added to the local copy first.
+
+WHAT THIS DOES NOT RETRACT. The bank penalty itself is not in question here. It is measured
+elsewhere and predicted exactly on a kernel that is compute-bound
+(results/aie/bank_check_validation.log: 1,024 cycles per panel, predicted and measured, on a
+design whose compute sits in a software loop with one paired load per MAC). What this run
+tried and failed to resolve is the narrower question of whether that penalty is VISIBLE in the
+wall time of this particular whole-array design, where the cost model says the core finishes
+early and waits.
+
+A VALIDITY CHECK WORTH RECORDING. The colliding arm is a local copy of the design driven
+through a new script, so it has to reproduce the original result. Its best time this sitting,
+7,275.6 microseconds, taken in one of the three earlier series, sits just under the 2026-09-07
+sweep's 7,359.9 microsecond minimum for the identical shape and tile. The control reproduces,
+and the harness is not introducing a systematic offset.
+
+--------------------------------------------------------------------------------
+WHAT THIS DOES NOT SHOW
+--------------------------------------------------------------------------------
+- One shape (4096x2048x2048), one tile (m=64 k=64 n=64), one dtype, one power mode, four
+  columns, one machine, one sitting.
+- A peer session held roughly one core throughout. The verdict was CLEAR by this repo's own
+  gate and the NPU had no foreign context, but the spread is far wider than the 2026-09-07
+  sweep's 3.7%, reaching 82% in the noisiest run, and every number here should be read that
+  way. This experiment should be repeated on a quiet machine before anyone leans on it.
+- No mechanism is claimed for either direction of the observed differences. They are within
+  the drift.
+- The intervention was verified in the first of 16 core ELFs. Allocation is per core and the
+  other 15 were not checked.
+- The conclusion that the core is not the critical path REMAINS AN INFERENCE from the cost
+  model, not something this run established. That was the point of the test, and the test did
+  not have the resolution to deliver it.
