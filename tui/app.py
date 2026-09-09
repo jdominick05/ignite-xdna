@@ -108,10 +108,20 @@ def _pick_model(entry):
 
 
 def _pick_input(entry):
-    if "image" not in entry.inputs and "video" not in entry.inputs:
+    live = bool({"webcam", "video"} & set(entry.inputs))
+    if "image" not in entry.inputs and not live:
         return entry.sample or None
     default = entry.sample
-    raw = ui.ask("Input image (path, or Enter for the sample):", default)
+    if live:
+        # The registry has declared "webcam" on six task entries since the launcher
+        # landed, and this prompt never said so -- a camera index was a legal answer
+        # nothing told the user about. Say it, and say which camera 0 is.
+        kinds = "path, camera index (0 = default camera)"
+        if "video" in entry.inputs:
+            kinds = "path, video file, camera index (0 = default camera)"
+        raw = ui.ask(f"Input ({kinds}, or Enter for the sample):", default)
+    else:
+        raw = ui.ask("Input image (path, or Enter for the sample):", default)
     return raw
 
 

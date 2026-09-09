@@ -208,12 +208,141 @@ DISPATCH = {
 }
 
 
+# --------------------------------------------------------------------------
+# The live lane.
+#
+# The registry has declared "webcam" on six task entries since the launcher
+# landed, and until now this file answered every one of them with "webcam input
+# is not wired into the task lane yet". The UI never offered a camera either, so
+# the declaration was unreachable from both ends.
+# --------------------------------------------------------------------------
+
+VIDEO_SUFFIXES = {".mp4", ".avi", ".mov", ".mkv", ".webm", ".m4v"}
+
+
+def _is_live_source(src) -> bool:
+    """A camera index, or a video file -- both stream through one VideoCapture.
+
+    "video" is declared alongside "webcam" for detect, detect-v6 and pose, and it was
+    broken in the same way and for the same reason: cv2.imread on an .mp4 returns None,
+    so the still path rejected it as an unreadable image. One loop serves both rather
+    than a second code path that would drift from this one.
+    """
+    if isinstance(src, int):
+        return True
+    return Path(str(src)).suffix.lower() in VIDEO_SUFFIXES
+
+
+def _draw_hud(frame, entry, ep, ms, fps):
+    """Burn the numbers into the frame so a saved snapshot carries its own provenance.
+
+    The two figures are deliberately both shown and deliberately not the same quantity:
+    `ms` is sess.run alone -- the same span the still path times, and the only one that
+    describes the hardware -- while `fps` is the whole loop, including capture, pre/post
+    and drawing. When they disagree the gap is host work. results/aie's webcam log made
+    exactly this split: infer never left 6.8-6.9 ms while the loop swung 16.6-44.6 ms
+    under a peer's CPU load.
+    """
+    label = f"{entry.title} | {ep.upper()} | {ms:5.1f} ms sess.run | {fps:4.1f} fps loop"
+    cv2.rectangle(frame, (0, 0), (frame.shape[1], 26), (0, 0, 0), -1)
+    cv2.putText(frame, label, (8, 18), cv2.FONT_HERSHEY_SIMPLEX, 0.5,
+                (255, 255, 255), 1, cv2.LINE_AA)
+    cv2.putText(frame, "q/ESC quit   s snapshot", (8, frame.shape[0] - 8),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 255, 0), 1, cv2.LINE_AA)
+    return frame
+
+
+def _run_live(entry, sess, handler, args, src, ep, out_dir):
+    """Stream a camera or video through the SAME per-frame adapter the still path uses.
+
+    DISPATCH[family] is called once per frame exactly as it is called once for an image.
+    That is the whole design: MODNet already shipped with its transform copied five times
+    and two of them disagreed, so the live view shares the still view's preprocess or it
+    will drift from it. Nothing about a frame is preprocessed here.
+
+    A source that will not open is FATAL. demos/portrait_matting_demo.py falls back to a
+    synthetic stream, which is right for a demo that must always have something on screen
+    and wrong here: a task that quietly runs on stock images when the camera failed is
+    npu.session.resolve_xclbin's warn-and-continue in a different costume -- a CPU run in
+    an NPU costume, the incident that invariant exists for.
+    """
+    cap = cv2.VideoCapture(src)
+    if not cap.isOpened():
+        what = f"camera index {src}" if isinstance(src, int) else str(src)
+        raise SystemExit(f"could not open {what}; nothing was run. This does not fall "
+                         "back to stock images on purpose -- a result you cannot tell "
+                         "from a live one is worse than no result.")
+    if isinstance(src, int):
+        cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+        cap.set(cv2.CAP_PROP_FPS, 30)
+
+    window = f"tui.task -- {entry.key}"
+    latencies, loop_ms, snapshots = [], [], []
+    frames = 0
+    render = None
+    warmed = False
+    t_prev = time.perf_counter()
+
+    try:
+        while True:
+            ok, frame = cap.read()
+            if not ok:
+                break                      # camera unplugged, or the video ended
+            if not warmed:
+                # One untimed call, for the reason the still path makes one: without it
+                # the first number is compile tail rather than inference.
+                handler(sess, frame, args, entry.family)
+                warmed = True
+                t_prev = time.perf_counter()
+
+            result, ms, _ = handler(sess, frame, args, entry.family)
+            now = time.perf_counter()
+            loop_ms.append((now - t_prev) * 1000)
+            t_prev = now
+            latencies.append(ms)
+            frames += 1
+
+            fps = 1000.0 / max(float(np.median(loop_ms[-30:])), 1e-6)
+            render = _draw_hud(result.copy(), entry, ep, ms, fps)
+
+            if not args.no_window:
+                cv2.imshow(window, render)
+                key = cv2.waitKey(1) & 0xFF
+                if key in (ord("q"), 27):
+                    break
+                if key == ord("s"):
+                    snap = out_dir / f"{datetime.now():%Y%m%d-%H%M%S}_snap_{ep}.png"
+                    cv2.imwrite(str(snap), render)
+                    snapshots.append(str(snap))
+                    print(f"[tui] snapshot {snap}")
+            if args.frames and frames >= args.frames:
+                break
+    finally:
+        # Released even on Ctrl-C or a handler raising: a camera left open survives the
+        # process on Windows and the next run then cannot have it.
+        cap.release()
+        if not args.no_window:
+            cv2.destroyAllWindows()
+
+    if not frames:
+        raise SystemExit(f"{src} opened but produced no frames")
+    return render, latencies, loop_ms, snapshots, frames
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(
         prog="python -m tui.task",
         description="Run one model on one input. Results go to outputs/tasks/, never results/.")
     ap.add_argument("entry", help="registry key, e.g. matte / detect / depth / segment")
-    ap.add_argument("--input", default=None, help="image file, directory, or camera index")
+    ap.add_argument("--input", default=None,
+                    help="image file, directory, video file, or camera index (0 = default camera)")
+    ap.add_argument("--frames", type=int, default=0,
+                    help="live sources: stop after N frames (0 = until q/ESC). Set it to "
+                         "smoke-test the live path unattended.")
+    ap.add_argument("--no-window", action="store_true",
+                    help="live sources: do not open a window. Needed for an unattended run, "
+                         "and it removes the only way to quit early, so pair it with --frames.")
     ap.add_argument("--model", default=None, help="models/-relative path; default is the entry's first")
     ap.add_argument("--ep", default=None, choices=["npu", "dml", "cpu"])
     ap.add_argument("--fresh", action="store_true", help="clear the compile cache first")
@@ -254,26 +383,51 @@ def main(argv=None):
         clear_cache(cache_key)
 
     src = _resolve_input(entry, args.input)
-    img = cv2.imread(str(src)) if not isinstance(src, int) else None
-    if img is None and not isinstance(src, int):
-        raise SystemExit(f"could not read image: {src}")
-    if isinstance(src, int):
-        raise SystemExit("webcam input is not wired into the task lane yet; "
-                         "use the portrait-matting demo for a live camera")
+    live = _is_live_source(src)
+    if live and not ({"webcam", "video"} & set(entry.inputs)):
+        raise SystemExit(f"{entry.key} does not take a live source; it accepts {entry.inputs}")
+    img = None
+    if not live:
+        img = cv2.imread(str(src))
+        if img is None:
+            raise SystemExit(f"could not read image: {src}")
 
     sess = build_session(str(choice.path), ep, cache_key, log_severity=2)
     handler = DISPATCH.get(entry.family)
     if handler is None:
         raise SystemExit(f"no adapter for family {entry.family!r}")
 
-    # One untimed call first. Without it the number below is compile tail, not
-    # inference -- pipelines/resnet50/4_run.py does the same for the same reason.
-    handler(sess, img, args, entry.family)
-    result, ms, extra = handler(sess, img, args, entry.family)
-
-    stem = Path(str(src)).stem
+    out_dir = _out_dir(entry.key)
     ts = datetime.now().strftime("%Y%m%d-%H%M%S")
-    out_path = _out_dir(entry.key) / f"{ts}_{stem}_{ep}.png"
+    snapshots = []
+
+    if live:
+        result, latencies, loop_ms, snapshots, frames = _run_live(
+            entry, sess, handler, args, src, ep, out_dir)
+        ms = float(np.median(latencies))
+        extra = {
+            "frames": frames,
+            "infer_ms_mean": round(float(np.mean(latencies)), 3),
+            "infer_ms_median": round(ms, 3),
+            "infer_ms_p95": round(float(np.percentile(latencies, 95)), 3),
+            "loop_ms_median": round(float(np.median(loop_ms)), 3),
+            "fps_loop": round(1000.0 / max(float(np.median(loop_ms)), 1e-6), 2),
+            "snapshots": snapshots,
+        }
+        stem = f"cam{src}" if isinstance(src, int) else Path(str(src)).stem
+    else:
+        frames = 1
+        # One untimed call first. Without it the number below is compile tail, not
+        # inference -- pipelines/resnet50/4_run.py does the same for the same reason.
+        handler(sess, img, args, entry.family)
+        result, ms, extra = handler(sess, img, args, entry.family)
+        stem = Path(str(src)).stem
+
+    # A live run leaves its last frame behind on purpose. TODO.md's webcam item recorded
+    # that the camera path "leaves no artifact to inspect afterwards" as the reason it
+    # could not be closed unattended; the HUD is burned in, so the PNG carries the EP and
+    # the latency it was captured at.
+    out_path = out_dir / f"{ts}_{stem}_{ep}.png"
     cv2.imwrite(str(out_path), result)
 
     verdict = guards.ep_verdict(cache_key) if ep == "npu" else None
@@ -291,8 +445,14 @@ def main(argv=None):
                            f"{ep} has no EP report -- only VitisAI writes one"),
         "indicative_ms": round(ms, 3),
         "quotable": False,
-        "quotable_note": "sess.run only, one image, one sitting. Not a measurement: "
-                         "see docs/BENCHMARKS.md for numbers with method and caveats.",
+        "quotable_note": (
+            f"median of {frames} live frames, sess.run only, one sitting, host contention "
+            "unmeasured -- and the fps figure additionally includes capture, pre/post and "
+            "drawing, so it is not a hardware number at all. Not a measurement: see "
+            "docs/BENCHMARKS.md for numbers with method and caveats."
+            if live else
+            "sess.run only, one image, one sitting. Not a measurement: "
+            "see docs/BENCHMARKS.md for numbers with method and caveats."),
         "input": str(src), "output": str(out_path),
         "machine": guards.check_machine().detail,
         "timestamp": ts,
@@ -302,8 +462,15 @@ def main(argv=None):
     side_path.write_text(json.dumps(sidecar, indent=2), encoding="utf-8")
 
     print(f"[tui] wrote {out_path}")
+    for snap in snapshots:
+        print(f"[tui] snapshot {snap}")
     print(f"[tui] {sidecar['ep_report_note']}")
-    print(f"[tui] {ms:.2f} ms (indicative, sess.run only -- not doc-quotable)")
+    if live:
+        print(f"[tui] {frames} frames; sess.run median {ms:.2f} ms, "
+              f"p95 {extra['infer_ms_p95']:.2f} ms; loop {extra['fps_loop']:.1f} fps "
+              "(indicative, not doc-quotable)")
+    else:
+        print(f"[tui] {ms:.2f} ms (indicative, sess.run only -- not doc-quotable)")
     return 0
 
 
