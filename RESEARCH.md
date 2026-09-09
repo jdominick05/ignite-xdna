@@ -1677,7 +1677,9 @@ sections above.
   trace unit because Peano cannot read the cycle counter (`results/aie/clock_probe_npu.log`).
   Open from it: S0's concurrent-VitisAI-EP leg; S1's bandwidth constants, now with a
   clock behind them (the 7.0 GB/s shim channel is one 32-bit word per cycle); and S2's
-  full trace, whose upstream parser mis-times gaps over 2^18 cycles.
+  full trace, whose upstream parser mis-times gaps over 2^18 cycles; and S4, the
+  package-power delta that would let a work-per-watt verdict exist at all — nothing here
+  has ever measured a watt, and no per-NPU rail is exposed to read one from.
 - **Candidate model pipelines (Categories A, C, D, E).** Test plans, target shapes, and falsification criteria:
   - **Category A:** Image Super-Resolution — SESR-M7 (placement, 1.48 ms latency, 3.02x iGPU win,
     70% AdaRound recovery) and Real-ESRGAN Compact (activation memory spill) closed above.
