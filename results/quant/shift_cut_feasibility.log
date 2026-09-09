@@ -1,0 +1,76 @@
+================================================================================
+AIE-ML Systolic Shift-Cut Verification Report: models\regnetx_002_xint8.onnx
+================================================================================
+Analyzed 46 quantized systolic operation(s).
+Shift-cut violations found: 1 / 46 (2.2%)
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+CRITICAL HARDWARE INFEASIBILITY HAZARDS DETECTED:
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+  - [HAZARD] Conv '/s1/b1/conv2/conv/Conv': A=2.028241e+31, M=16384, sigma=-90 -> ACCUMULATOR OVERFLOW HAZARD: sigma=-90 < 0 (requires left-shift beyond accumulator)
+
+Shift-Cut Register Distribution: min=-90, median=24, max=27
+================================================================================
+================================================================================
+AIE-ML Systolic Shift-Cut Verification Report: models\bisenetv2_fp32_xint8.onnx
+================================================================================
+Analyzed 63 quantized systolic operation(s).
+Shift-cut violations found: 0 / 63 (0.0%)
+
+PASS: All layers reside cleanly within the [0, 31] systolic shift-cut basin.
+
+Shift-Cut Register Distribution: min=7, median=22, max=26
+================================================================================
+================================================================================
+AIE-ML Systolic Shift-Cut Verification Report: models\fastdepth_fp32_xint8.onnx
+================================================================================
+Analyzed 38 quantized systolic operation(s).
+Shift-cut violations found: 1 / 38 (2.6%)
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+CRITICAL HARDWARE INFEASIBILITY HAZARDS DETECTED:
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+  - [HAZARD] Conv 'Conv_96': A=3.814697e-06, M=16384, sigma=32 -> SHIFT CLAMP HAZARD: sigma=32 > 31 (hardware 5-bit shifter clamps/overflows)
+
+Shift-Cut Register Distribution: min=25, median=29, max=32
+================================================================================
+================================================================================
+AIE-ML Systolic Shift-Cut Verification Report: models\resnet50_xint8_c64.onnx
+================================================================================
+Analyzed 55 quantized systolic operation(s).
+Shift-cut violations found: 0 / 55 (0.0%)
+
+PASS: All layers reside cleanly within the [0, 31] systolic shift-cut basin.
+
+Shift-Cut Register Distribution: min=12, median=24, max=26
+================================================================================
+================================================================================
+AIE-ML Systolic Shift-Cut Verification Report: models\yolov8n_cut_xint8.onnx
+================================================================================
+Analyzed 177 quantized systolic operation(s).
+Shift-cut violations found: 0 / 177 (0.0%)
+
+PASS: All layers reside cleanly within the [0, 31] systolic shift-cut basin.
+
+Shift-Cut Register Distribution: min=7, median=20, max=23
+================================================================================
+================================================================================
+AIE-ML Systolic Shift-Cut Verification Report: models\midas_small_cut_xint8.onnx
+================================================================================
+Analyzed 97 quantized systolic operation(s).
+Shift-cut violations found: 0 / 97 (0.0%)
+
+PASS: All layers reside cleanly within the [0, 31] systolic shift-cut basin.
+
+Shift-Cut Register Distribution: min=17, median=23, max=27
+================================================================================
+================================================================================
+AIE-ML Systolic Shift-Cut Verification Report: models\modnet\modnet_cut_xint8.onnx
+================================================================================
+Analyzed 74 quantized systolic operation(s).
+Shift-cut violations found: 0 / 74 (0.0%)
+
+PASS: All layers reside cleanly within the [0, 31] systolic shift-cut basin.
+
+Shift-Cut Register Distribution: min=7, median=24, max=31
+================================================================================

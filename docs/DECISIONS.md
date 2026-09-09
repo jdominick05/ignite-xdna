@@ -1285,5 +1285,24 @@ Reproduce: `./scripts/mobilevit-eval.sh --slice`, `python tools/audit_quant_grid
   MobileViT's 5D shapes come from the unfold/fold (`[4, 256, 3, 4, 16]`) bridging its conv
   and transformer stages, so this is architectural, not a quantization artifact.
 
+### Native Windows XRT driver constraints: KDMA and unified memory flags
+
+Investigated via `tools/windows_xrt_driver_probe.py` (`results/aie/windows_xrt_driver_bench.log`) on Desktop 2 (Ryzen 7 8700G, Phoenix XDNA1 NPU):
+
+- **`pyxrt.bo.flags.normal` fails on Windows**: Calling `pyxrt.bo(device, size, pyxrt.bo.flags.normal, group_id)` causes the native `amdxe.sys` kernel driver to fail with `invalid argument`. Memory on Phoenix APUs is host-managed unified RAM; buffer allocations must use `pyxrt.bo.flags.host_only`.
+- **KDMA is unsupported on Windows**: Attempting to execute a kernel with buffer objects allocated on a generic or default memory group emits `[XRT] WARNING: Reverting to host copy of buffers (KDMA not supported on windows)`. The driver falls back to an expensive host bounce buffer. To achieve zero-copy execution on Windows, every BO must be allocated on the kernel argument's connected bank via `group_id = kern.group_id(arg_idx)`.
+- **Sub-microsecond synchronization floor**: Unified memory buffer sync (`bo.sync`) requires 0.78-0.97 µs at sizes <= 16 KB (0.85 µs for a 4 KB frame tile). On unified APU memory, host-device synchronization is purely a CPU cache line flush (`clflushopt`) and invalidation, not a physical PCIe/DMA transfer.
+- **Userspace dispatch preparation floor**: Direct userspace dispatch preparation via `pyxrt` requires 8.76 µs (1.85 µs run allocation + 6.91 µs for 8 argument bindings). Pipelining via `pyxrt.runlist` requires 3.39 µs per run.
+
+### AIE-ML systolic shift-cut bound [0, 31]
+
+Investigated via `quant/shift_cut.py` and `python -m quant check-shift-cut` (`results/quant/shift_cut_feasibility.log`):
+
+- **Hardware accumulator shift constraint**: On XDNA1 AIE-ML, the post-accumulator scaling unit uses a 15-bit multiplier M in [16384, 32767] and a 5-bit arithmetic right-shift register sigma in [0, 31]. The effective scaling factor is A ≈ M * 2^(-sigma).
+- **Theorem 1 (Shift-Cut Feasibility Bound)**: If an ONNX QDQ triad requires sigma < 0, the operation requires an arithmetic left-shift exceeding the 32-bit accumulator, resulting in immediate accumulator overflow (as observed in RegNetX-002, where sigma = -90 forces top-1 accuracy to collapse to 0.50%). If sigma > 31, the 5-bit shift register overflows/clamps (as observed in FastDepth, where sigma = 32 overflows by 1 bit, clamping to 31 and doubling layer outputs).
+- **Theorem 2 (Multi-Branch Inter-Scale Alignment)**: In multi-branch elementwise operations (such as Bilateral Guided Aggregation in BiSeNetV2), divergent scale grids truncate dynamic range in hardware.
+- **Rule for Project Ignition**: Every QDQ graph emitted for XDNA1 must be verified against the [0, 31] systolic shift-cut bound using `python -m quant check-shift-cut` prior to hardware execution.
+
+
 
 

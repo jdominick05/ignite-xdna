@@ -464,8 +464,15 @@ torch golden. **The verdict got worse, not better:** NPU hardware 4.2435 ms vs C
 ms, **CPU wins 12.75×**, against the 5.7–11.4× range at every compile-limited 32-wide
 shape.
 
+## Native Windows XRT driver and DPU microcode disassembly
+
+**`windows_xrt_driver_bench.log`** — micro-benchmarks of AMD's native Windows kernel driver (`amdxe.sys`) via `pyxrt.pyd` (Python 3.13) on Desktop 2 (Ryzen 7 8700G, Phoenix XDNA1 NPU): one-time device open floor (61.69 ms), hardware context allocation (77.71 ms), unified memory BO allocation/mapping/sync across 64 B to 16 MB (0.78–0.90 µs sub-microsecond sync floor at <= 4 KB, peaking at 296.17 GB/s D2H at 16 MB), userspace command dispatch preparation (8.76 µs across 8 arguments), and hardware runlist batching (3.39 µs/run). Documents the Windows KDMA restriction and `pyxrt.bo.flags.host_only` requirement.
+
+**`dpu_transaction_disasm.log`** — binary disassembly of compiled DPU instruction streams extracted from `.xmodel` Protobuf bytefields (`mc_code`) via `tools/dpu_transaction_disasm.py`. Decodes 48-byte instruction packets across FastDepth (2,570 packets: 49.38% Opcode 3 Conv2D/dense, 37.35% Opcode 6 DWConv) and BiSeNetV2 (4,630 packets: 43.17% Opcode 3, 32.61% Opcode 6, 0.24% Bilateral Guided Aggregation gating, 23.97% DMA/barrier).
+
 ## Also here
 
 `aiecompiler_help.log` and `aiecompiler_x86sim_passthrough.log` are on disk but were not
 covered by the `results/README.md` entry this file was built from, so nothing is claimed
 about them here.
+
