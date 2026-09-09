@@ -1724,6 +1724,17 @@ sections above.
 
 ## How to read the rest of this repository
 
+The [Windows low-level experiments](docs/BENCHMARKS.md#windows-low-level-research-placement-and-xint8-arithmetic)
+add three independent research directions. Local operand placement changes measured
+cycle slopes while the complete function bytes stay fixed, including a transfer to
+a single-core tiled GEMM. Weighted placement of operands loaded together is the next
+testable optimization; unseen layouts and DMA overlap remain unverified. Synthetic
+Conv fixtures identify a half-up output-rounding candidate for the observable XINT8
+stack, motivating a real-activation surrogate comparison without changing the producer's
+ONNX rounding contract. Exact float16 counts can certify some legacy calibration
+choices, but the conservative bound leaves most sample storage to exact fallback.
+The linked record separates those measurements from the untested optimization claims.
+
 If you want *what works and how fast*: `README.md`.
 If you want *every decision, rejection, and environment trap that produced it*:
 `docs/DECISIONS.md`.

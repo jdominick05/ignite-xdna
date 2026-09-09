@@ -1,0 +1,11 @@
+RESEARCH_PLATFORM {"machine": "Desktop 2", "cpu": "AMD Ryzen 7 8700G w/ Radeon 780M Graphics", "os": "Windows-11-10.0.26200-SP0", "ram_bytes": 33381138432, "source_sha256": {"tools/research_process.py": "44e2c37a3ccbb9439c219e29c91fb8238d2d3bfb73734800ca81461eb756a11c", "tools/quant_calib_alphabet.py": "88cbdf7ceeb39e7de5a6bca25c360b89b93da0e7182516e3960c4414087248e9", "tools/xint8_arithmetic_probe.py": "f9c4b7def7909edbf5a5394b3bc31e1d10f2732ebb6a445b5febc6a9e078aa5c", "scripts/research-lowlevel.sh": "01577c5293fc3601e26aa57ea1f32204e3f318cf7c154162daf8593c8f440109", "scripts/research-iron.sh": "eb3e68dad67727528407f4ae41698c5f52178f9a24c53ef2705a7639fe55ac44", "kernels/memory_placement/probe.py": "4ef7ea560f776f309a441f14d78cccd529b36e1600d212455485038035bf1770", "kernels/memory_placement/memory_kernels.cc": "01fbe2cb8ed6ed153eef0f20512422e3eb44e5a1f5b8759956d039f04eef46f3", "scripts/research-matrix.sh": "b558fbf6381ee793863ef2ee467319edec47f79fc2ccbb8e88c138efdda48372", "kernels/memory_placement/gemm.py": "1061e1906006ab372ea17604a3b90bc26a7e76f39c5299e4ffd0098a7f65e6c7", "kernels/memory_placement/gemm_placement.cc": "2fa1d57cf316cdd8c3599eae4581284c26ee392ad7dbbf289bafd175342ad9bc"}, "commit": "1e27c5d48b30b9e83a821d36a27a0e8b81fa2bbc", "command": ["bash", "scripts/research-iron.sh", "kernels/memory_placement/gemm.py", "--targets", "1,2,4,8", "--out", "scratch/research_desktop2_20260909_g01/same_1", "--layout", "same", "--reference", "scratch/research_desktop2_20260909_g01/separate_1/result.json"], "seconds_limit": 240.0, "rss_gib_limit": 6.0, "checks_only": false, "free_ram_bytes": 21643755520}
+HOST_LOAD busy_cores=3.19 logical_cores=16 free_ram_gb=20.1 sample_sec=1
+HOST_LOAD_PEER 2.4 agy:22084 cpu-heavy "C:\Users\<user>\AppData\Local\agy\bin\agy.exe"
+HOST_LOAD_TOP 2.4 agy:22084 ws_mb=515
+HOST_LOAD_TOP 0.47 pycharm64:9008 ws_mb=2135
+HOST_LOAD_TOP 0.12 HWiNFO64:11920 ws_mb=15
+HOST_LOAD_TOP 0.05 powershell:15692 ws_mb=80
+HOST_LOAD_TOP 0.05 OpenConsole:17636 ws_mb=3
+HOST_LOAD_VERDICT PEER
+
+RESEARCH_STOP {"reason": "host_not_clear"}

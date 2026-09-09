@@ -4250,3 +4250,196 @@ ImageNet-1k validation images:
   measured after, through a `scripts/*.sh` wrapper, is. Don't diff a pre- and post-change
   CPU number as if the only variable were the model.
 
+## Windows low-level research: placement and XINT8 arithmetic
+
+**2026-09-09, Desktop 2, Ryzen 7 8700G / Phoenix, Windows.** These experiments
+intervene on local operand addresses, probe observable Conv arithmetic, and evaluate
+an exact-count calibration alternative. They use an isolated checkout at
+`1e27c5d48b30b9e83a821d36a27a0e8b81fa2bbc`; production Ignition defaults are unchanged.
+The machine, source hashes, command, resource limits and host witness are embedded in
+each log. NPU runs require an idle-device precheck and record sampled context ownership.
+The [toolchain capture](../results/aie/toolchain_desktop2_20260909_01.log) identifies the
+existing mlir-aie release and local patches; this work did not modify that toolchain.
+
+### Local operand placement: an address intervention
+
+The [paired-load probe](../kernels/memory_placement/probe.py) fixes the external
+function and changes only buffer placement in the array program. On the measured
+physical tile `(row=2, col=1)`, operand A starts at `0x4000`; B starts at `0x4800`
+(same allocator bank) or `0x8000` (separate allocator bank). Each iteration loads
+two vectors and accumulates their product. Input transfer, initialization, checksum
+reduction, output transfer and trace-flush fillers lie outside the event bracket.
+
+| Timed body | B placement | Fitted core cycles for N iterations |
+|---|---|---|
+| Two loads and MAC | Same | `40 + 12*N` |
+| Two loads and MAC | Separate | `40 + 11*N` |
+| One load and MAC | Either | `41 + 11*N` |
+
+The dual-load matrix runs three sessions per placement in alternating order, with
+N = 512, 1024, 2048, 4096, 8192 and 16384 and five measured samples per N.
+Every checksum passes, every selected fit has R-squared 1, and no foreign context
+was observed. A offsets of 64, 128 and 256 bytes retain the same-bank slope of 12.
+The complete final function is 1760 bytes, SHA-256
+`87ab8a827f0ec7852b1418be7a6cef374e96dec2d0cc32c6c5eee7107cb9c10e`,
+identical across the intervention, including the single-load control. Object and final
+function equality are controls against compiler scheduling changes; the array programs
+necessarily differ. The disassembly shows bundled operand loads. This supports a
+placement-dependent load conflict for this access pattern, without determining the
+complete physical banking map or a bandwidth ceiling.
+
+Evidence: [same](../results/aie/memory_desktop2_20260909_m01_same_1.log),
+[separate](../results/aie/memory_desktop2_20260909_m01_separate_1.log),
+[single same](../results/aie/memory_desktop2_20260909_m01_single_same.log),
+[single separate replacement](../results/aie/memory_single_separate_desktop2_20260909_02.log).
+The [AIE index](../results/aie/README.md#windows-local-memory-placement) identifies all
+repeats, offsets and failed preflights.
+
+### Transfer to a tiled INT8 GEMM
+
+The [GEMM intervention](../kernels/memory_placement/gemm.py) uses a single core,
+`aie::mmul<4,8,8,int8,int8,acc32>`, and a `64 x (64*P) x 64` product. A starts at
+`0x4000`, B at `0x6000` or `0x8000`, and C stays at `0xC000`, verified from the
+lowered buffers. Every call checks all 4096 output integers against an independent
+int64 NumPy matrix product. The timed bracket includes the GEMM and local C stores;
+operand initialization and DMA are outside it.
+
+| Placement | Core-cycle fit, P = 1, 2, 4, 8 |
+|---|---|
+| Same allocator bank | `2659 + 15232*P` |
+| Separate allocator banks | `2659 + 14208*P` |
+
+Two sessions per placement, followed by one per placement alternating between two
+resident operand panels, all give the same fits with R-squared 1 and exact repeated
+cycle counts. Each target has five measured samples and a warmup. Host pacing of
+100 ms is outside the event bracket. The complete final function is 1632 bytes,
+SHA-256 `29b4b56e0bc42df03e7e8325937425c7237c26429faa7edc93cba21b36f1a044`,
+identical for every variant.
+
+The measured difference is `1024*P` cycles. There are
+`(64/4)*(64/8)*8*P = 1024*P` logical mmul updates: **one cycle saved per logical
+update in this layout**, or **6.72% of the reduction slope**. This is a local-kernel
+result; alternating resident panels does not test DMA overlap, and it establishes
+no whole-array or application speedup.
+
+Evidence: [separate](../results/aie/gemm_desktop2_20260909_g03_separate_1.log),
+[same](../results/aie/gemm_desktop2_20260909_g03_same_1.log),
+[alternating separate](../results/aie/gemm_desktop2_20260909_g03_separate_alternate.log),
+[alternating same](../results/aie/gemm_desktop2_20260909_g03_same_alternate.log).
+The unpaced exploratory `g02` attempt ended in XRT context-creation error
+`0xc01e0009`; its cause remains unknown. It contributes no performance claim.
+
+**Testable optimization hypothesis:** construct a weighted graph of operand pairs
+loaded together and minimize `sum(weight[u,v] * same_bank[u,v])`, subject to buffer
+size, alignment and fixed output placement. Use dynamic joint-load counts as weights.
+For this GEMM the measured penalty coefficient is one cycle per logical update.
+The next test is to predict an unseen layout or panel shape, freeze the function
+bytes, and compare predicted versus measured cycle differences. The present evidence
+does not validate this objective for arbitrary kernels, address strides or DMA traffic.
+The address mechanism is documented by the upstream
+[buffer allocator](https://xilinx.github.io/mlir-aie/dev/doxygen/html/AIEAssignBuffers_8cpp_source.html);
+the cycle results above come from these local experiments.
+
+### Observable XINT8 Conv rounding
+
+[The arithmetic probe](../tools/xint8_arithmetic_probe.py) generates static batch-one
+QDQ models containing one 1x1 Conv. Channel counts 1, 31, 32, 33 and 64, output
+shifts 0, 1, 4, 8 and 16, fractional/integer bias shifts, saturation, cancellation
+and reversed input/weight channels distinguish 150 arithmetic candidates. Each model
+uses three fitting fixtures and four held-out fixtures, including adjacent float32
+values on both sides of input half ties. An independent scalar rational check
+validates the vectorized reference. Both CPU optimization settings agree exactly
+with the nearest-even ONNX reference.
+
+Every one of the 17 NPU models places the tested Conv: the EP report assigns 5/7
+nodes to the NPU, with input QuantizeLinear and terminal DequantizeLinear on CPU.
+Therefore input rounding is a CPU boundary observation. Across 974848 output
+elements, 94412 differ from the ONNX reference, each by exactly one output code.
+Repeated NPU outputs agree exactly; reversing channels at C = 31, 32 and 33
+preserves every output. No foreign NPU context was observed.
+
+One candidate survives the intersection across all models and held-out fixtures:
+
+```text
+qx = clip(round_even(x), -128, 127)
+yq = clip(128 + floor((sum(qx*qw) + qb*2^shift_bias)/2^shift_cut + 0.5), 0, 255)
+```
+
+This is half-up output rounding, including negative ties, with the fractional bias
+retained in the tested combined expression. It describes the **observable compiled
+stack** among the candidates tested; it does not uniquely identify the silicon's
+internal accumulator implementation. No accuracy, latency or general Conv-kernel
+claim follows. ONNX specifies nearest-even rounding in
+[QuantizeLinear](https://onnx.ai/onnx/operators/onnx__QuantizeLinear.html#quantizelinear-13).
+Ignition's existing producer rounding remains unchanged.
+
+Evidence: [baseline](../results/quant/arithmetic_desktop2_20260909_a01_c32_sc1_sb0.log),
+[fractional bias at zero output shift](../results/quant/arithmetic_desktop2_20260909_a02_c32_sc0_sb-1.log),
+[large output/bias shift](../results/quant/arithmetic_desktop2_20260909_a02_c32_sc16_sb15.log),
+[independent oracle check](../results/quant/check_arithmetic_desktop2_20260909_01.log).
+All `a01` and `a02` fixtures, raw outputs and per-node placement reports are retained
+in the evidence archive described below.
+
+**Testable optimization hypothesis:** use an observed-stack rounding surrogate when
+ranking quantization positions, while preserving the emitted ONNX contract. On these
+fixtures, output-space discrepancy from nearest-even obeys
+`MSE = output_scale^2 * mismatch_fraction`, since every difference is one code.
+That identity measures disagreement between execution paths, not accuracy loss against
+float output. A next test would compare the two position rankings on saved real
+activations, then run both resulting models on the same full evaluation set; a lower
+surrogate loss alone would not establish an accuracy improvement.
+
+### Exact-count calibration: certificate and fallback
+
+[The calibration experiment](../tools/quant_calib_alphabet.py) counts every float16
+bit pattern using uint64 frequencies and evaluates the same float32 element errors
+as the ordered-spool producer. Counts lose sample order. A conservative interval
+using `gamma_(N-1)` bounds any float32 reduction tree; a separate float64 bound covers
+the weighted count reduction. Every interval operation rounds outward. Disjoint loss
+intervals certify a winner; pointwise-identical errors preserve first-minimum ties;
+all other cases use the exact ordered legacy reduction. The guard also rejects
+nonfinite samples and counter overflow. It does not assume a particular
+[NumPy reduction tree](https://raw.githubusercontent.com/numpy/numpy/v1.26.4/numpy/core/src/umath/loops_utils.h.src).
+
+In `dual` mode every certified position is checked against the full ordered spool.
+In `alphabet` mode ambiguous tensors are spooled by replaying the same unoptimized
+ORT graph and output list; ordered float16 hashes must match the first pass. Both
+modes leave preparation, CLE, QDQ emission and refinement unchanged. The research
+collector replacement exists only inside the experiment process.
+
+The completed ResNet50 CLE pair uses the same 64 calibration images and produces
+byte-identical ONNX against a fresh legacy run: SHA-256
+`eafed96b7096caed5a306a94ed1e6edcdae6adc81c4d13a3fb2abbc9ee8e46ab`.
+It certifies 17/74 activation tensors and falls back on 57. The full sample spool
+is 2174678016 bytes; ambiguous tensors require 2100166656 bytes, while count tables
+occupy 38797312 bytes. Thus only 3.43% of sample bytes can be avoided before count
+storage and replay costs. This correctness run establishes no speedup.
+Evidence: [fresh legacy](../results/quant/alphabet_desktop2_20260909_c02_resnet50_cle_legacy_1.log),
+[dual](../results/quant/alphabet_desktop2_20260909_c02_resnet50_cle_dual_1.log),
+[certificate checks](../results/quant/check_alphabet_desktop2_20260909_02.log).
+
+An earlier comparison against a historical artifact failed file identity despite
+identical initializers; graph node order differed. It is retained as a failed
+comparison, not pooled with fresh same-producer pairs. Resource-guard failures and
+the interrupted no-CLE run are likewise retained. The result index distinguishes
+completed checks from these attempts.
+
+### Evidence and reproduction
+
+The [checkpoint evidence archive](../results/quant/lowlevel_desktop2_20260909_evidence.zip)
+contains raw arithmetic arrays, tiny QDQ models, placement reports, kernel result
+arrays, function disassembly/bytes and final trace captures. Calibration sidecars
+record the input listing and hashes; full generated model weights stay in ignored
+scratch storage. The [archive validation log](../results/quant/summary_lowlevel_desktop2_20260909_01.log)
+recounts NPU mismatches, intersects held-out candidates and checks channel permutations
+from those arrays. It records unsuccessful attempts separately from completed cases.
+
+From Git Bash, `bash scripts/research-matrix.sh <suite> <new_machine_date_tag>` runs a
+bounded sequential matrix. Suites are `memory`, `gemm`, `arithmetic`,
+`arithmetic-boundaries`, `calibration-dual` and `calibration-time`; see `--help` for
+asset paths and selections. Existing output directories and log names are refused.
+The AIE wrapper activates the existing ironenv and uses a private checkout-local JIT
+cache. The parent runs in activated `resnet_env17`. Every NPU fixture uses a fresh
+private compile cache. `--checks-only` records correctness evidence while explicitly
+disqualifying performance claims. No NPU test here substitutes CPU placement evidence.
+

@@ -1,0 +1,31 @@
+RESEARCH_PLATFORM {"machine": "Desktop 2 / Ryzen 7 8700G / Phoenix", "commit": "1e27c5d48b30b9e83a821d36a27a0e8b81fa2bbc", "command": ["bash", "scripts/research-iron.sh", "kernels/memory_placement/probe.py", "--layout", "separate", "--targets", "512,2048,8192", "--iters", "5", "--out", "scratch/memory_separate_dual_01"], "seconds_limit": 240.0, "rss_gib_limit": 6.0, "checks_only": false, "free_ram_bytes": 24106508288}
+HOST_LOAD busy_cores=3.11 logical_cores=16 free_ram_gb=22.4 sample_sec=1
+HOST_LOAD_TOP 1.56 agy:22084 ws_mb=445
+HOST_LOAD_TOP 0.93 pycharm64:9008 ws_mb=1869
+HOST_LOAD_TOP 0.14 HWiNFO64:11920 ws_mb=13
+HOST_LOAD_TOP 0.08 powershell:20964 ws_mb=79
+HOST_LOAD_TOP 0.06 xrt-smi:22672 ws_mb=10
+HOST_LOAD_VERDICT CLEAR
+
+PRE_NPU_CONTEXT_WITNESS "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+PLACEMENT_PLATFORM 
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+Platform
+  Name                   : NPU Phoenix 
+  Power Mode             : Default 
+  Total Columns          : 5 
+
+Estimated Power          : N/A
+pyxrt device.get_info(max_clock_frequency_mhz) = 800
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+HOST_TIMELINE {"elapsed_seconds": 2.641, "tree_rss_bytes": 184983552, "foreign_peers": []}
+PLACEMENT_ARTIFACTS {"object_sha256": "08ed0d9543bf5af47391d769a2aca2eed3720a0d8894e8548d8e186f6f26fdc4", "cache_directory": "C:\\Users\\<user>\\PycharmProjects\\ryzen-ai-xdna1-quantization\\scratch\\windows-lowlevel\\scratch\\iron-cache\\c4e52e319059b7073caf104f", "a_address_requested": 16384, "b_address_requested": 32768, "final_functions": [{"elf": "elfs_main_core_0_2.elf", "function_bytes": 1760, "function_sha256": "87ab8a827f0ec7852b1418be7a6cef374e96dec2d0cc32c6c5eee7107cb9c10e"}], "buffer_declarations": ["%operand_a = aie.buffer(%logical_core) {address = 16384 : i32, sym_name = \"operand_a\"} : memref<512xi16>", "%operand_b = aie.buffer(%logical_core) {address = 32768 : i32, sym_name = \"operand_b\"} : memref<512xi16>", "%operand_a = aie.buffer(%tile_0_2) {address = 16384 : i32, mem_bank = 1 : i32, sym_name = \"operand_a\"} : memref<512xi16>  loc(#loc4)", "%operand_b = aie.buffer(%tile_0_2) {address = 32768 : i32, mem_bank = 2 : i32, sym_name = \"operand_b\"} : memref<512xi16>  loc(#loc5)"]}
+HOST_TIMELINE {"elapsed_seconds": 5.172, "tree_rss_bytes": 370790400, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 8 KB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |22120               |111        |0           |0           |0    |Normal   |\n      |python.exe          |Active     |0           |0           |     |N/A      |\n      |8 KB                |N/A        |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+PLACEMENT_SAMPLES [{"target": 512, "cycles": 5672, "hardware_ns": 317000, "wall_seconds": 0.08308039999974426, "checksum": 8176, "tile": [2, 1]}, {"target": 512, "cycles": 5672, "hardware_ns": 321600, "wall_seconds": 0.07880740000109654, "checksum": 8176, "tile": [2, 1]}, {"target": 512, "cycles": 5672, "hardware_ns": 386000, "wall_seconds": 0.08538379999663448, "checksum": 8176, "tile": [2, 1]}, {"target": 512, "cycles": 5672, "hardware_ns": 340100, "wall_seconds": 0.564579899997625, "checksum": 8176, "tile": [2, 1]}, {"target": 512, "cycles": 5672, "hardware_ns": 304900, "wall_seconds": 0.08170539999991888, "checksum": 8176, "tile": [2, 1]}]
+PLACEMENT_SAMPLES [{"target": 2048, "cycles": 22568, "hardware_ns": 324500, "wall_seconds": 0.0772108000019216, "checksum": 32704, "tile": [2, 1]}, {"target": 2048, "cycles": 22568, "hardware_ns": 311800, "wall_seconds": 0.08396150000044145, "checksum": 32704, "tile": [2, 1]}, {"target": 2048, "cycles": 22568, "hardware_ns": 311900, "wall_seconds": 0.08720639999955893, "checksum": 32704, "tile": [2, 1]}, {"target": 2048, "cycles": 22568, "hardware_ns": 328500, "wall_seconds": 0.08387239999865415, "checksum": 32704, "tile": [2, 1]}, {"target": 2048, "cycles": 22568, "hardware_ns": 313400, "wall_seconds": 0.07930140000098618, "checksum": 32704, "tile": [2, 1]}]
+PLACEMENT_SAMPLES [{"target": 8192, "cycles": 90152, "hardware_ns": 361300, "wall_seconds": 0.06740060000447556, "checksum": 130816, "tile": [2, 1]}, {"target": 8192, "cycles": 90152, "hardware_ns": 334400, "wall_seconds": 0.07726930000353605, "checksum": 130816, "tile": [2, 1]}, {"target": 8192, "cycles": 90152, "hardware_ns": 359900, "wall_seconds": 0.06417739999596961, "checksum": 130816, "tile": [2, 1]}, {"target": 8192, "cycles": 90152, "hardware_ns": 396100, "wall_seconds": 0.07641940000030445, "checksum": 130816, "tile": [2, 1]}, {"target": 8192, "cycles": 90152, "hardware_ns": 351500, "wall_seconds": 0.06871349999710219, "checksum": 130816, "tile": [2, 1]}]
+PLACEMENT_RESULT {"layout": "separate", "a_offset": 0, "mode": "dual", "trace_size": 65536, "seed": 3, "fit": {"intercept": 40.0, "slope": 11.0, "r2": 1.0, "units": "core_cycles_per_iteration"}, "reference_function_identical": false, "dma_during_bracket": false}
+RESEARCH_PROCESS_RESULT {"exit_code": 0, "stop": null, "peak_tree_rss_bytes": 572190720, "elapsed_seconds": 7.3289999999979045, "foreign_contention_observed": false, "timing_eligible": true}

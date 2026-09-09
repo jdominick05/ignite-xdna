@@ -30,6 +30,7 @@ array program) into `~/.npu/cache/<hash>/`; later runs of the same shape hit the
 
 | Kernel | Op it replaces | Verdict |
 |---|---|---|
+| `memory_placement/` | Controlled operand-address intervention in a paired-load loop and a single-core INT8 GEMM | Local placement changes cycle slopes with identical function bytes; [method, limits and logs](../docs/BENCHMARKS.md#local-operand-placement-an-address-intervention) |
 | `bf16_matmul_sweep/` | Nothing — the bf16 GEMM shape sweep | **Wins.** NPU 1.18×–1.78× over CPU bf16 once M/N ≥ 1024 |
 | `int8_matmul_sweep/` | Nothing — the int8 GEMM sweep, with the CPU int8 GEMM baseline | **Loses at the default tile; wins 1.10×–1.83× at M ≥ 512, N ≥ 2048 with `n=64`**, a tile bf16 can't fit |
 | `gemm_tile_sweep/` | Nothing — a local `whole_array.py` patch, not a design | Adds `--c-single-buffer`, which frees the 16 KB that puts the 64×64 tile in reach for bf16 |

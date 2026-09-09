@@ -1,0 +1,11 @@
+RESEARCH_PLATFORM {"machine": "Desktop 2 / Ryzen 7 8700G / Phoenix", "commit": "1e27c5d48b30b9e83a821d36a27a0e8b81fa2bbc", "command": ["python", "tools/quant_calib_alphabet.py", "--in-model", "../../models/resnet50_fp32.onnx", "--calib-dir", "../../data/calib", "--cfg-path", "../../models/preprocess_config.json", "--out", "scratch/resnet50_cle_dual.onnx", "--reference", "../../models/resnet50_ignition_cle_c64.onnx", "--cle", "--method", "dual"], "seconds_limit": 300, "rss_gib_limit": 8, "checks_only": false, "free_ram_bytes": 12505055232}
+HOST_LOAD busy_cores=2.81 logical_cores=16 free_ram_gb=12.9 sample_sec=1
+HOST_LOAD_PEER 1.04 python:22680 repo-producer C:\Users\<user>\miniforge3\envs\resnet_env\python.exe pipelines/bisenetv2/3_quantize.py --src models/bisenetv2_fp32.onnx --calib-dir data/bi...
+HOST_LOAD_TOP 1.04 python:22680 ws_mb=7923
+HOST_LOAD_TOP 0.97 pycharm64:9008 ws_mb=1420
+HOST_LOAD_TOP 0.31 agy:22084 ws_mb=350
+HOST_LOAD_TOP 0.12 claude:23452 ws_mb=325
+HOST_LOAD_TOP 0.09 HWiNFO64:11920 ws_mb=12
+HOST_LOAD_VERDICT PEER
+
+RESEARCH_STOP {"reason": "host_not_clear"}

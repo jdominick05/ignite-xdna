@@ -5,6 +5,7 @@
 #   ./scripts/commit.sh --subject "..." --body-file /tmp/body.txt \
 #       --session-url https://claude.ai/code/session_XXXX \
 #       results/foo.log RESEARCH.md
+# Codex sessions use --session-trailer Codex-Session and their own --coauthor.
 #
 #   ./scripts/commit.sh -m "..." -F body.txt -s <url>   # short flags, uses
 #                                                        # whatever is already staged
@@ -28,6 +29,7 @@
 . "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 SUBJECT="" BODY_FILE="" SESSION_URL="${CLAUDE_SESSION_URL:-}"
+SESSION_TRAILER="Claude-Session"
 # Override with --coauthor (or CLAUDE_COAUTHOR) when the session is running a
 # different model -- the trailer should name the model that actually wrote the
 # commit, and a session can switch models partway through.
@@ -39,6 +41,7 @@ while [ $# -gt 0 ]; do
         -m|--subject)     SUBJECT="$2"; shift ;;
         -F|--body-file)   BODY_FILE="$2"; shift ;;
         -s|--session-url) SESSION_URL="$2"; shift ;;
+        --session-trailer) SESSION_TRAILER="$2"; shift ;;
         -c|--coauthor)    COAUTHOR="$2"; shift ;;
         -h|--help)        usage "${BASH_SOURCE[0]}"; exit 0 ;;
         --)               shift; while [ $# -gt 0 ]; do FILES+=("$1"); shift; done; continue ;;
@@ -50,6 +53,7 @@ done
 
 [ -n "$SUBJECT" ]     || die "need --subject/-m"
 [ -n "$SESSION_URL" ] || die "need --session-url/-s (or export CLAUDE_SESSION_URL)"
+case "$SESSION_TRAILER" in Claude-Session|Codex-Session) ;; *) die "unsupported session trailer" ;; esac
 
 if [ "${#FILES[@]}" -gt 0 ]; then
     step "staging ${#FILES[@]} file(s)"
@@ -97,7 +101,7 @@ trap 'rm -f "$TMPMSG"' EXIT
         printf '\n'
         cat "$BODY_FILE"
     fi
-    printf '\nCo-Authored-By: %s\nClaude-Session: %s\n' "$COAUTHOR" "$SESSION_URL"
+    printf '\nCo-Authored-By: %s\n%s: %s\n' "$COAUTHOR" "$SESSION_TRAILER" "$SESSION_URL"
 } > "$TMPMSG"
 
 step "committing"

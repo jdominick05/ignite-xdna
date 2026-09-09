@@ -464,6 +464,33 @@ torch golden. **The verdict got worse, not better:** NPU hardware 4.2435 ms vs C
 ms, **CPU wins 12.75×**, against the 5.7–11.4× range at every compile-limited 32-wide
 shape.
 
+## Windows local memory placement
+
+Desktop 2, 2026-09-09: [method, formulas and limits](../../docs/BENCHMARKS.md#windows-low-level-research-placement-and-xint8-arithmetic).
+
+- `memory_desktop2_20260909_m01_{separate_1,same_1,same_2,separate_2,separate_3,same_3}.log`
+  are the repeated address intervention; `same_offset_{64,128,256}` are address-offset
+  controls and `single_same` is the single-load control. The `single_separate` preflight
+  stopped; [the successful replacement](memory_single_separate_desktop2_20260909_02.log)
+  completes that control. Earlier `memory_{same,separate}_dual_desktop2_20260909_01.log`
+  are exploratory successful runs.
+- `gemm_desktop2_20260909_g03_{separate_1,same_1,same_2,separate_2,separate_alternate,same_alternate}.log`
+  are the selected GEMM matrix. Earlier `gemm_placement_*`, `g01` and `g02` logs retain
+  bring-up, preflight failures and a partial context-creation failure; they are not
+  pooled into the selected matrix. All complete selected runs check every output.
+- `check_memory_object_desktop2_20260909_01.log` exposed truncated disassembly;
+  `02` validates the corrected full-function extraction. Neither is a timing run.
+- [Toolchain capture](toolchain_desktop2_20260909_01.log) records the existing release,
+  compiler hashes and local patch hashes. The measurement logs carry research source
+  hashes and host/device witnesses. No external toolchain files were changed.
+
+The [checkpoint archive](../quant/lowlevel_desktop2_20260909_evidence.zip) retains
+numerical outputs, small fixture models, placement reports, function disassemblies,
+extracted function bytes and final trace captures. Each run's JSON retains all measured
+cycle samples; a trace file is the final capture, not a trace of every call.
+[Archive validation and aggregate](../quant/summary_lowlevel_desktop2_20260909_01.log)
+record its hash and recount the arithmetic results from the saved output arrays.
+
 ## Also here
 
 `aiecompiler_help.log` and `aiecompiler_x86sim_passthrough.log` are on disk but were not

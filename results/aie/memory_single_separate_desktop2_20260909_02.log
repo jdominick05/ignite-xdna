@@ -1,0 +1,60 @@
+RESEARCH_PLATFORM {"machine": "Desktop 2", "cpu": "AMD Ryzen 7 8700G w/ Radeon 780M Graphics", "os": "Windows-11-10.0.26200-SP0", "ram_bytes": 33381138432, "source_sha256": {"tools/research_process.py": "23103a955f6830de62e1208f172577cd7a887be7d360ed7d234a8f8e0f12db2c", "tools/quant_calib_alphabet.py": "88cbdf7ceeb39e7de5a6bca25c360b89b93da0e7182516e3960c4414087248e9", "tools/xint8_arithmetic_probe.py": "f9c4b7def7909edbf5a5394b3bc31e1d10f2732ebb6a445b5febc6a9e078aa5c", "scripts/research-lowlevel.sh": "800bfc258200fec9695442c58cb7578ad4c4f3f6d6d49f55dadc14fc06ff425f", "scripts/research-iron.sh": "eb3e68dad67727528407f4ae41698c5f52178f9a24c53ef2705a7639fe55ac44", "kernels/memory_placement/probe.py": "4ef7ea560f776f309a441f14d78cccd529b36e1600d212455485038035bf1770", "kernels/memory_placement/memory_kernels.cc": "01fbe2cb8ed6ed153eef0f20512422e3eb44e5a1f5b8759956d039f04eef46f3", "scripts/research-matrix.sh": "a75975b7bc71326641182acd414db0bb47ac135dc5244d243f7ed2eee2f8595a", "kernels/memory_placement/gemm.py": "8dbf48f8f4a356cc69bc65793b8dd7eab9b18074d414a1e01fb7e0abe42319a3", "kernels/memory_placement/gemm_placement.cc": "2fa1d57cf316cdd8c3599eae4581284c26ee392ad7dbbf289bafd175342ad9bc"}, "commit": "1e27c5d48b30b9e83a821d36a27a0e8b81fa2bbc", "command": ["bash", "scripts/research-iron.sh", "kernels/memory_placement/probe.py", "--layout", "separate", "--mode", "single", "--iters", "5", "--out", "scratch/memory_single_separate_02", "--reference", "scratch/research_desktop2_20260909_m01/separate_1/result.json"], "seconds_limit": 240.0, "rss_gib_limit": 6.0, "checks_only": false, "free_ram_bytes": 21506789376}
+HOST_LOAD busy_cores=3.38 logical_cores=16 free_ram_gb=20 sample_sec=1
+HOST_LOAD_PEER 2.61 agy:22084 cpu-heavy "C:\Users\<user>\AppData\Local\agy\bin\agy.exe"
+HOST_LOAD_TOP 2.61 agy:22084 ws_mb=529
+HOST_LOAD_TOP 0.22 pycharm64:9008 ws_mb=2169
+HOST_LOAD_TOP 0.12 HWiNFO64:11920 ws_mb=15
+HOST_LOAD_TOP 0.06 Taskmgr:17380 ws_mb=121
+HOST_LOAD_TOP 0.05 claude:23452 ws_mb=427
+HOST_LOAD_VERDICT PEER
+
+HOST_LOAD busy_cores=4.07 logical_cores=16 free_ram_gb=20 sample_sec=1
+HOST_LOAD_PEER 2.37 pycharm64:9008 cpu-heavy "C:\Program Files\JetBrains\PyCharm 2026.2.1\bin\pycharm64.exe" 
+HOST_LOAD_TOP 2.37 pycharm64:9008 ws_mb=2169
+HOST_LOAD_TOP 1.5 agy:22084 ws_mb=513
+HOST_LOAD_TOP 0.06 HWiNFO64:11920 ws_mb=15
+HOST_LOAD_TOP 0.05 powershell:25528 ws_mb=80
+HOST_LOAD_TOP 0.03 Taskmgr:17380 ws_mb=122
+HOST_LOAD_VERDICT PEER
+
+HOST_LOAD busy_cores=2.88 logical_cores=16 free_ram_gb=20 sample_sec=1
+HOST_LOAD_PEER 2.06 agy:22084 cpu-heavy "C:\Users\<user>\AppData\Local\agy\bin\agy.exe"
+HOST_LOAD_TOP 2.06 agy:22084 ws_mb=510
+HOST_LOAD_TOP 0.36 pycharm64:9008 ws_mb=2171
+HOST_LOAD_TOP 0.15 HWiNFO64:11920 ws_mb=15
+HOST_LOAD_TOP 0.08 codex:19884 ws_mb=138
+HOST_LOAD_TOP 0.08 powershell:15616 ws_mb=80
+HOST_LOAD_VERDICT PEER
+
+HOST_LOAD busy_cores=0.7 logical_cores=16 free_ram_gb=20 sample_sec=1
+HOST_LOAD_TOP 0.25 pycharm64:9008 ws_mb=2081
+HOST_LOAD_TOP 0.09 powershell:26820 ws_mb=76
+HOST_LOAD_TOP 0.06 bash:27252 ws_mb=10
+HOST_LOAD_TOP 0.06 agy:22084 ws_mb=507
+HOST_LOAD_TOP 0.06 powershell:27396 ws_mb=80
+HOST_LOAD_VERDICT CLEAR
+
+PRE_NPU_CONTEXT_WITNESS "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+PLACEMENT_PLATFORM 
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+Platform
+  Name                   : NPU Phoenix 
+  Power Mode             : Default 
+  Total Columns          : 5 
+
+Estimated Power          : N/A
+pyxrt device.get_info(max_clock_frequency_mhz) = 800
+PLACEMENT_ARTIFACTS {"object_sha256": "08ed0d9543bf5af47391d769a2aca2eed3720a0d8894e8548d8e186f6f26fdc4", "cache_directory": "C:\\Users\\<user>\\PycharmProjects\\ryzen-ai-xdna1-quantization\\scratch\\windows-lowlevel\\scratch\\iron-cache\\c4e52e319059b7073caf104f", "a_address_requested": 16384, "b_address_requested": 32768, "final_functions": [{"elf": "elfs_main_core_0_2.elf", "function_bytes": 1760, "function_sha256": "87ab8a827f0ec7852b1418be7a6cef374e96dec2d0cc32c6c5eee7107cb9c10e"}], "buffer_declarations": ["%operand_a = aie.buffer(%logical_core) {address = 16384 : i32, sym_name = \"operand_a\"} : memref<512xi16>", "%operand_b = aie.buffer(%logical_core) {address = 32768 : i32, sym_name = \"operand_b\"} : memref<512xi16>", "%operand_a = aie.buffer(%tile_0_2) {address = 16384 : i32, mem_bank = 1 : i32, sym_name = \"operand_a\"} : memref<512xi16>  loc(#loc4)", "%operand_b = aie.buffer(%tile_0_2) {address = 32768 : i32, mem_bank = 2 : i32, sym_name = \"operand_b\"} : memref<512xi16>  loc(#loc5)"]}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [4588, 25648, 25924, 26500, 27004], "foreign_pids": []}
+PLACEMENT_SAMPLES [{"target": 512, "cycles": 5673, "hardware_ns": 376800, "wall_seconds": 0.08971429999655811, "checksum": 0, "tile": [2, 1]}, {"target": 512, "cycles": 5673, "hardware_ns": 311000, "wall_seconds": 0.08693460000358755, "checksum": 0, "tile": [2, 1]}, {"target": 512, "cycles": 5673, "hardware_ns": 309800, "wall_seconds": 0.078313199999684, "checksum": 0, "tile": [2, 1]}, {"target": 512, "cycles": 5673, "hardware_ns": 316500, "wall_seconds": 0.08121509999909904, "checksum": 0, "tile": [2, 1]}, {"target": 512, "cycles": 5673, "hardware_ns": 381900, "wall_seconds": 0.08124779999343446, "checksum": 0, "tile": [2, 1]}]
+PLACEMENT_SAMPLES [{"target": 1024, "cycles": 11305, "hardware_ns": 322800, "wall_seconds": 0.06895219999569235, "checksum": 0, "tile": [2, 1]}, {"target": 1024, "cycles": 11305, "hardware_ns": 319900, "wall_seconds": 0.07816859999729786, "checksum": 0, "tile": [2, 1]}, {"target": 1024, "cycles": 11305, "hardware_ns": 305000, "wall_seconds": 0.08333240000501974, "checksum": 0, "tile": [2, 1]}, {"target": 1024, "cycles": 11305, "hardware_ns": 388500, "wall_seconds": 0.08201480000570882, "checksum": 0, "tile": [2, 1]}, {"target": 1024, "cycles": 11305, "hardware_ns": 309400, "wall_seconds": 0.08503719999862369, "checksum": 0, "tile": [2, 1]}]
+PLACEMENT_SAMPLES [{"target": 2048, "cycles": 22569, "hardware_ns": 328700, "wall_seconds": 0.09201469999970868, "checksum": 0, "tile": [2, 1]}, {"target": 2048, "cycles": 22569, "hardware_ns": 320500, "wall_seconds": 0.07956089999788674, "checksum": 0, "tile": [2, 1]}, {"target": 2048, "cycles": 22569, "hardware_ns": 384500, "wall_seconds": 0.092352599996957, "checksum": 0, "tile": [2, 1]}, {"target": 2048, "cycles": 22569, "hardware_ns": 383500, "wall_seconds": 0.10397250000096392, "checksum": 0, "tile": [2, 1]}, {"target": 2048, "cycles": 22569, "hardware_ns": 485200, "wall_seconds": 0.08166489999712212, "checksum": 0, "tile": [2, 1]}]
+HOST_TIMELINE {"elapsed_seconds": 2.953, "tree_rss_bytes": 100892672, "foreign_peers": []}
+PLACEMENT_SAMPLES [{"target": 4096, "cycles": 45097, "hardware_ns": 376600, "wall_seconds": 0.5594322999968426, "checksum": 0, "tile": [2, 1]}, {"target": 4096, "cycles": 45097, "hardware_ns": 344400, "wall_seconds": 0.08467100000416394, "checksum": 0, "tile": [2, 1]}, {"target": 4096, "cycles": 45097, "hardware_ns": 370900, "wall_seconds": 0.0800941999987117, "checksum": 0, "tile": [2, 1]}, {"target": 4096, "cycles": 45097, "hardware_ns": 379700, "wall_seconds": 0.08497219999844674, "checksum": 0, "tile": [2, 1]}, {"target": 4096, "cycles": 45097, "hardware_ns": 341300, "wall_seconds": 0.08136319999903208, "checksum": 0, "tile": [2, 1]}]
+PLACEMENT_SAMPLES [{"target": 8192, "cycles": 90153, "hardware_ns": 329900, "wall_seconds": 0.08596280000347178, "checksum": 0, "tile": [2, 1]}, {"target": 8192, "cycles": 90153, "hardware_ns": 380400, "wall_seconds": 0.08008320000226377, "checksum": 0, "tile": [2, 1]}, {"target": 8192, "cycles": 90153, "hardware_ns": 350400, "wall_seconds": 0.0724527999991551, "checksum": 0, "tile": [2, 1]}, {"target": 8192, "cycles": 90153, "hardware_ns": 364400, "wall_seconds": 0.07598250000592088, "checksum": 0, "tile": [2, 1]}, {"target": 8192, "cycles": 90153, "hardware_ns": 409200, "wall_seconds": 0.09631639999861363, "checksum": 0, "tile": [2, 1]}]
+PLACEMENT_SAMPLES [{"target": 16384, "cycles": 180265, "hardware_ns": 416900, "wall_seconds": 0.08832430000620661, "checksum": 0, "tile": [2, 1]}, {"target": 16384, "cycles": 180265, "hardware_ns": 418400, "wall_seconds": 0.08873039999889443, "checksum": 0, "tile": [2, 1]}, {"target": 16384, "cycles": 180265, "hardware_ns": 443900, "wall_seconds": 0.08335729999816976, "checksum": 0, "tile": [2, 1]}, {"target": 16384, "cycles": 180265, "hardware_ns": 421600, "wall_seconds": 0.0854066999963834, "checksum": 0, "tile": [2, 1]}, {"target": 16384, "cycles": 180265, "hardware_ns": 427700, "wall_seconds": 0.08754500000213739, "checksum": 0, "tile": [2, 1]}]
+PLACEMENT_RESULT {"layout": "separate", "a_offset": 0, "mode": "single", "trace_size": 65536, "seed": 3, "fit": {"intercept": 41.0, "slope": 11.0, "r2": 1.0, "units": "core_cycles_per_iteration"}, "reference_function_identical": true, "dma_during_bracket": false}
+RESEARCH_PROCESS_RESULT {"exit_code": 0, "stop": null, "peak_tree_rss_bytes": 570880000, "elapsed_seconds": 5.046999999998661, "foreign_contention_observed": false, "timing_eligible": true}
