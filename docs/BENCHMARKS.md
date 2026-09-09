@@ -2251,6 +2251,15 @@ Both evaluated on 1,000 ImageNet-1k validation images against their FP32 Zen 4 C
      produce wide dynamic range divergence across groups. A single per-tensor INT8 scale cannot span
      all 32 groups simultaneously, triggering numerical overflow (`rmax/rmin set to inf/-inf`) and
      extreme weight shift cut adjustments (up to 128, far outside `[0, 16]`).
+     **Superseded 2026-09-09, same correction as RegNetX-002:** the shift-cut adjustments are
+     downstream of cross-layer equalization, not of the grouped-conv structure. With CLE off,
+     ResNeXt-50 recovers to **68.90% top-1**
+     (`results/quant/eval_resnext50_32x4d_quark_nocle_c64_cpu.log`), and the corrected analyzer
+     finds zero sigma violations in the graph
+     (`results/quant/shift_cut_reaudit_20260909_desktop2.log`). The dynamic-range divergence
+     across groups is real; blaming the clamp for the collapse is not. DenseNet-121's bullet
+     above carries the same caveat — its shift-cut observation has not been re-tested with CLE
+     off.
 
 ### Batching: does it help throughput?
 
@@ -5158,11 +5167,22 @@ ImageNet-1k validation images:
   - Activation scales span 0.015625 to 1.329e+36 (an 8.5e35 range across 61 sites).
   - Depthwise scale grid reaches 3.245e+32 (2^108).
   - Other conv scales collapse to 9.40e-38 (2^-123).
-- **The DPU shift-cut clamp mechanism**:
+- **The DPU shift-cut clamp mechanism** — *observation stands, attribution retracted
+  2026-09-09*:
   During compilation Quark logs `Shift cut of layer onnx::Conv_418 exceeds range [0, 16] (131). Modify wpos from 7 to -108.`
-  The Phoenix DPU accumulator shift register only allows shifts in `[0, 16]`. To avoid hardware
-  overflow, Quark modifies weight positions by 100+ powers of 2. Since scale is 2^-pos,
-  shifting `wpos` to -108 forces scale to 2^108, annihilating activation resolution.
+  Quark modifies weight positions by 100+ powers of 2; since scale is 2^-pos, shifting `wpos`
+  to -108 forces scale to 2^108, annihilating activation resolution. That much is reproducible.
+  **What is wrong is calling it a property of the architecture.** The clamp fires only because
+  cross-layer equalization has already inflated the per-channel ranges: the same graph, producer
+  and calibration listing with **CLE off** logs *no* shift-cut adjustment at all and scores
+  **66.20% top-1** against **69.50%** FP32, where the CLE-on artifact scores **0.10%**
+  (`results/quant/quant_regnetx_002_ignition_nocle_c64.log`,
+  `eval_regnetx_002_ignition_nocle_c64_cpu.log`, `eval_regnetx_002_fp32_full1000_cpu.log`,
+  `eval_regnetx_002_quark_cle_full1000_cpu.log`). The corrected analyzer finds **zero sigma
+  violations** in this graph (`results/quant/shift_cut_reaudit_20260909_desktop2.log`). Also
+  note the `[0, 16]` here is Quark's own producer-side contract, not the `[0, 31]` hardware
+  bound asserted elsewhere in this file — the two were being used interchangeably, and neither
+  is measured.
 - **Why AdaRound cannot rescue this**:
   As established in the MobileViT study, AdaRound optimizes ternary rounding {-1, 0, 1} over
   fixed quantization intervals Delta. It never changes Delta. When Delta has suffered
@@ -5279,10 +5299,48 @@ Model instruction distributions measured:
 
 ## AIE-ML systolic shift-cut feasibility theorem for Project Ignition
 
+> **Substantially retracted on 2026-09-09 (Desktop 2). The section is kept in full,
+> superseded numbers included, because what it got wrong is the useful part.**
+>
+> 1. **The audit does not reproduce.** The corrected analyzer over eleven quantized models
+>    finds **zero sigma violations on every one**
+>    (`results/quant/shift_cut_reaudit_20260909_desktop2.log`). RegNetX-002 reads
+>    min 11 / median 21 / max 30, not the -90 / 24 / 27 tabulated below. FastDepth reads
+>    min 18 / median 21 / **max 23** and never approaches the sigma = 32 that this section's
+>    "shift clamp" case rests on. `results/quant/shift_cut_feasibility.log` no longer matches
+>    the tool that wrote it.
+> 2. **Both worked examples were confounds.** RegNetX-002's collapse is cross-layer
+>    equalization, not the shifter: CLE **off** on the same graph, producer and calibration
+>    listing takes zero shift-cut adjustments and scores **66.20% top-1** against **69.50%**
+>    FP32, where the CLE-on artifact scores **0.10%**. FastDepth's "doubled layer outputs"
+>    was never measured, and its NPU fidelity is in fact better than its CPU-QDQ fidelity.
+> 3. **The repair was breaking working models.** `project_scale_to_feasible_basin` clamped
+>    pos_x/pos_w into [0, 31] while sigma came from the unclamped scales, so it projected an
+>    already-feasible RegNetX-002 layer at sigma = 30 to **sigma = -90** — manufacturing the
+>    overflow it exists to prevent. Repairs on real models went SESR-M7 9 -> 0,
+>    MODNet-Cut 1 -> 0, RegNetX-002 5 -> 0; each had targeted a working op.
+> 4. **The "if and only if" has never been tested at either edge.** Fixtures built to reach
+>    sigma 0, 31 and 32 are refused by the VitisAI EP and execute on the CPU EP instead
+>    (`"tested_conv_on_npu": false`), so they cannot speak to the DPU in either direction.
+>    **The highest sigma ever executed on this hardware is 30.** Neither the 15-bit
+>    multiplier nor the 5-bit shifter is measured, and no ISA document in this repo states
+>    either width.
+>
+> What survives: sigma as a computable property of a QDQ triad, and the audit as an
+> **advisory** report. It must not gate the quantizer.
+
 Analytical formulation and verification of the post-accumulator scaling unit on XDNA1 AIE-ML, isolating the mathematical mechanism causing catastrophic accuracy collapse in quantized topologies.
 
-Backing log:
-- `results/quant/shift_cut_feasibility.log`: analytical shift-cut audit across 7 quantized ONNX models.
+Backing logs:
+- `results/quant/shift_cut_reaudit_20260909_desktop2.log`: the corrected audit across eleven
+  quantized ONNX models, zero violations on all of them. **This supersedes the log below.**
+- `results/quant/shift_cut_feasibility.log`: the original audit across 7 quantized ONNX
+  models. **Superseded — it no longer matches its own tool.**
+- `results/quant/eval_regnetx_002_ignition_nocle_c64_cpu.log`,
+  `eval_regnetx_002_fp32_full1000_cpu.log`, `eval_regnetx_002_quark_cle_full1000_cpu.log`,
+  `quant_regnetx_002_ignition_nocle_c64.log`,
+  `eval_resnext50_32x4d_quark_nocle_c64_cpu.log`: the CLE re-attribution (measured on branch
+  `research/windows-lowlevel`, imported here as the evidence for the retraction above).
 
 ### Mathematical formulation
 
@@ -5301,7 +5359,9 @@ The hardware compiler approximates A using (M, sigma):
 ### Theorems
 
 **Theorem 1 (Systolic Shift-Cut Bound):**
-An operation is physically executable without numerical distortion on XDNA1 if and only if:
+An operation is physically executable without numerical distortion on XDNA1 if and only if
+(**hypothesis, not a result — see the retraction at the top of this section; neither edge has
+been reached on hardware and the highest sigma ever executed is 30**):
 
     0 <= sigma <= 31
 
@@ -5316,6 +5376,17 @@ Both input branches must satisfy identical power-of-two scale alignments; diverg
 
 ### Empirical audit across 7 models
 
+> **Superseded 2026-09-09 — this whole table.** Re-running `check-shift-cut` over these
+> same files with the corrected analyzer gives **zero violations on every model**
+> (`results/quant/shift_cut_reaudit_20260909_desktop2.log`). The two CRITICAL rows do not
+> reproduce: **RegNetX-002 reads min 11 / median 21 / max 30**, not -90 / 24 / 27, and
+> **FastDepth reads min 18 / median 21 / max 23**, not 25 / 29 / 32 — its sigma never gets
+> near the 32 the clamp story needs. Three defects caused the original numbers: the position
+> check sat in an `elif` after the sigma checks so it only fired when sigma was already
+> feasible; `--repair` gated on different positions than the analyzer flagged; and the
+> projection clamped pos_x/pos_w into [0, 31] while sigma came from the unclamped scales.
+> The rows below are kept as the record of what was reported.
+
 Evaluated with `python -m quant check-shift-cut` (`results/quant/shift_cut_feasibility.log`):
 
 | Model | Quantized Ops | Violations | Sigma Range (min / median / max) | Hardware Status | Backing Log |
@@ -5328,10 +5399,10 @@ Evaluated with `python -m quant check-shift-cut` (`results/quant/shift_cut_feasi
 | **MiDaS Small** (`midas_small_cut_xint8`) | 97 | **0 (0.0%)** | 17 / 23 / 27 | PASS: Centered in systolic basin | `results/quant/shift_cut_feasibility.log` |
 | **BiSeNetV2** (`bisenetv2_fp32_xint8`) | 63 | **0 (0.0%)** | 7 / 22 / 26 | PASS: Centered in systolic basin | `results/quant/shift_cut_feasibility.log` |
 
-Diagnosis of identified violations:
-- **RegNetX-002**: Layer `/s1/b1/conv2/conv/Conv` has scale factor A = 2.028241e+31, yielding M = 16384 and sigma = -90. Because sigma < 0, the post-accumulator ALU cannot scale the 32-bit register down to int8; this forces top-1 accuracy to collapse to 0.50% (random chance).
-- **FastDepth**: Layer `Conv_96` has scale factor A = 3.814697e-06, yielding M = 16384 and sigma = 32. The hardware shifter is 5 bits wide (maximum shift 31); sigma = 32 overflows by exactly 1 bit, clamping to 31 and doubling the layer's output activations.
-- **MODNet**: Upper bound hits sigma = 31 exactly. Any scale perturbation exceeding 1 bit would push it into the clamp hazard regime.
+Diagnosis of identified violations — **all three retracted 2026-09-09, kept as the record**:
+- **RegNetX-002**: Layer `/s1/b1/conv2/conv/Conv` has scale factor A = 2.028241e+31, yielding M = 16384 and sigma = -90. Because sigma < 0, the post-accumulator ALU cannot scale the 32-bit register down to int8; this forces top-1 accuracy to collapse to 0.50% (random chance). — **Retracted.** The corrected analyzer reads that layer at **sigma = 30**, inside the basin; the -90 was produced by the defective projection, not by the graph. The accuracy collapse is real but is caused by cross-layer equalization: CLE off gives **66.20% top-1** against **69.50%** FP32 with no shift-cut adjustment logged, CLE on gives **0.10%**.
+- **FastDepth**: Layer `Conv_96` has scale factor A = 3.814697e-06, yielding M = 16384 and sigma = 32. The hardware shifter is 5 bits wide (maximum shift 31); sigma = 32 overflows by exactly 1 bit, clamping to 31 and doubling the layer's output activations. — **Retracted.** The corrected analyzer reads FastDepth at max sigma **23**. The "doubling" was never measured, and FastDepth's NPU fidelity is in fact better than its CPU-QDQ fidelity (r = 0.9383 vs 0.9363), which is the opposite of what a clamped layer would give.
+- **MODNet**: Upper bound hits sigma = 31 exactly. Any scale perturbation exceeding 1 bit would push it into the clamp hazard regime. — **Not reproduced**; the re-audit reads MODNet-Cut with zero violations, and in any case "the clamp hazard regime" above sigma 31 has never been observed on hardware.
 
 ### Closed-form systolic scale feasibility window and repair projection
 
@@ -5360,6 +5431,15 @@ Tested on FastDepth `Conv_96`:
 - Feasible pos_y window: [18 - 17, 18 + 14] = [1, 32].
 - Projected: pos_y = 1 (S_y = 0.5), yielding sigma = 31 <= 31.
 - Outcome: The layer is 100% physically compliant with zero shift-cut violations, eliminating the clamp hazard without retraining.
+
+> **Retracted 2026-09-09.** This projection was measured to move layers that were already
+> feasible. On RegNetX-002 `/s1/b1/conv2/conv/Conv` it took sigma = 30 to **sigma = -90**,
+> because the window was built from pos_x/pos_w clamped into [0, 31] while sigma was computed
+> from the unclamped scales. Across real models the "repairs" it reported were SESR-M7 9,
+> MODNet-Cut 1 and RegNetX-002 5 — all of which drop to 0 once the analyzer is corrected,
+> i.e. every one had targeted a working op. `quant/shift_cut.py` now uses unclamped positions
+> and raises rather than emitting a scale the analyzer would flag. Do not run `--repair` on a
+> model that already places and scores.
 
 ---
 
