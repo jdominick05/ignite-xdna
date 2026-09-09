@@ -261,6 +261,22 @@ deciding run is the same benchmark against `1x4.xclbin`. Written up in
 [`docs/BENCHMARKS.md`](../../docs/BENCHMARKS.md#two-loads-in-one-bank-cost-a-cycle-and-the-int8-gemm-has-that-collision-where-bf16-does-not).
 
 
+**`gemm_reblock_h11_npu.log`** — H11 run at last, proposed twice in this repo and never
+executed. Switching the int8 path from `matmul_vectorized_4x2_mmul` (8 live accumulators) to
+the `2x2` template already in `mm.cc` (4) improves EVERY static measure: 144 -> **88** bundles,
+416 -> **32** byte frame, 33 -> **5** stack references, all twelve vector spills gone, and an
+8-bundle hardware loop issuing 8 MACs — **1.000 vmac/cycle**, up from 0.889 and at the ceiling.
+An issue-bound design should then gain ~12%. Two alternating A/B series gave best-to-best
+**+0.8%** and **-2.1%**, medians **+2.0%** and **+0.4%** — inside +/-2%, sign unstable. **This
+is the test `bank_ab_h12_npu.log` could not be:** not "we could not resolve 3%" but "a 12.5%
+kernel improvement produced nothing measurable", which makes the absence itself the evidence
+that the core is not the critical path. Also records a trap whose only symptom is silence:
+`@iron.jit` keys its cache on the design and its compile-time arguments, NOT the kernel source,
+so the first reblocked build silently reran the STOCK kernel — each arm now gets its own
+`NPU_CACHE_HOME`. The shared toolchain was not modified; the reblocked `mm.cc` lives in
+`kernels/gemm_reblock/aie2/` and the source lookup is redirected in-process. Written up in
+[`docs/BENCHMARKS.md`](../../docs/BENCHMARKS.md#the-int8-gemm-issues-at-40-of-nameplate-and-a-3200-cycle-per-buffer-floor-caps-it).
+
 **`accumulator_width_vs_count.log`** — the cheapest test in the current plan, and it refutes
 its own hypothesis. `aie2_isa_static.log` measured five live 4x8x8 int8 accumulators as the
 spill-free ceiling and the production int8 GEMM holds eight and spills (416-byte frame). But

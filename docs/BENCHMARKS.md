@@ -1456,12 +1456,19 @@ Three hypotheses:
   with `'aie.tile' op Basic sequential allocation failed`, an L1 capacity limit. Reaching the
   headroom means changing what occupies L1 — buffer depth, or the 16 KB single-buffered output
   tile — not asking for a bigger tile.
-- **H11, which the correction opens and which is the cheapest of the three.** The 87 non-loop
-  bundles per group are spill traffic from holding eight accumulators where five is the
-  spill-free ceiling. A variant blocked to four or five accumulators trades more groups against
-  a shorter body. Testable entirely statically — rebuild `mm.cc` with different accumulator
-  blocking and re-run the tool. Fails if the per-group bundle count does not fall, which would
-  mean those 87 bundles are the output tile's mandatory load and store rather than spill.
+- **H11 — RUN 2026-09-09. The kernel improved on every static measure and the wall clock did
+  not move.** Switching the int8 path from `matmul_vectorized_4x2_mmul` (8 live accumulators)
+  to the `2x2` template already in `mm.cc` (4) gives: 144 → **88** bundles, a 416 → **32**-byte
+  frame, 33 → **5** stack references, **every one of the twelve vector spills gone**, and a
+  hardware loop of 8 bundles issuing 8 MACs — **1.000 `vmac`/cycle**, up from 0.889 and at the
+  ceiling. An issue-bound design should then run ~12% faster. Two alternating A/B series gave
+  best-to-best **+0.8%** and **−2.1%**, medians **+2.0%** and **+0.4%** — inside ±2%, with the
+  sign not even stable. Backing log `results/aie/gemm_reblock_h11_npu.log`; harness
+  `kernels/gemm_reblock/`. **This is the test H12 could not be:** not "we could not resolve 3%"
+  but "a 12.5% kernel improvement produced nothing measurable". The core is not the critical
+  path, and the per-buffer floor now rests on an intervention large enough that its absence is
+  the evidence. Keep the two lines — they are free and strictly better — but stop expecting
+  wall clock from inner-loop work on this design.
 
 **What this does not show.** Nothing here was measured on hardware; the issuing-cycle figures
 are computed from object code and the microseconds come from a run two days earlier. "Not
