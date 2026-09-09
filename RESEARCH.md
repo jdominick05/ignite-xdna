@@ -1579,6 +1579,22 @@ sections above.
   plain XINT8 (9.82x faster than Zen 4 CPU, 1.27x faster than Radeon 780M iGPU DML FP32 at 34.67 ms,
   and 2.06x faster throughput than four 64x64 tiles). Both hypotheses closed. [Working](docs/BENCHMARKS.md#category-a-cont-high-capacity-super-resolution-real-esrgan-on-xdna1-npu).
 
+- **Does MODNet's alpha error move once calibration and inference agree?** It moves, and
+  the Zero-Concat penalty survives the fix. Every MODNet model measured before 2026-09-08
+  was calibrated through PIL bilinear while inference resized with cv2 bilinear — Pillow
+  antialiases on downscale, OpenCV does not, so the two were never byte-identical. Both
+  variants were re-quantized through the unified `npu/modnet.py` transform and re-evaluated
+  on the same 50 validation images: Cut MAD fell **0.19022 → 0.18629** (-2.1%, SAD 50.75k →
+  49.11k) and Zero-Concat **0.35269 → 0.33187** (-5.9%, SAD 93.18k → 90.03k), with node
+  placement unchanged on both. Under that identical calibration Zero-Concat still reads
+  **1.78×** Cut's error, so its worse matte is structural to replacing the skip connections
+  with zero-padded channels, not calibration drift.
+  [Working](docs/BENCHMARKS.md#5-opencv-calibration-fix-error-reduction-and-the-structural-zero-concat-gap-2026-09-08-desktop-2).
+  What the rerun did not close: the calibration reader is still a per-pipeline copy of the
+  transform, so nothing structural stops the two drifting apart again. An owned calibration
+  source that *is* `npu.modnet.preprocess` is the [Ignition](quant/README.md) backlog item
+  that would, and it is unmeasured on this graph.
+
 **Still open.**
 
 - **How far does Ignition's XINT8 parity extend beyond folded ResNet?**
@@ -1617,13 +1633,6 @@ sections above.
   Safe departures from power-of-two scales, product-scale INT32 bias execution and
   per-channel compiler memory growth remain open. See
   [`quant/DESIGN.md`](quant/DESIGN.md) for the ordered gates and remaining source questions.
-- **Does MODNet's alpha error move once calibration and inference agree?** Every MODNet
-  model measured so far was calibrated through PIL bilinear while inference resized with
-  cv2 bilinear — Pillow antialiases on downscale, OpenCV does not, so the two were never
-  byte-identical. Both now share `npu/modnet.py`, but nothing has been re-quantized, so
-  MAD 0.19022 (Cut) and 0.35269 (Zero-Concat) are what a rebuild has to beat. Whether the
-  Zero-Concat variant's 1.85× worse matte is inherent to dropping the concats or partly
-  this calibration drift is exactly what the rerun would separate.
 - **The webcam path (single `4x4.xclbin` session, `./scripts/yolo-demo.sh`) has not
   been exercised end to end.** The related but distinct round-robin-across-4-columns
   demo *has* — see
