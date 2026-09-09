@@ -1,0 +1,73 @@
+What differs between an Ignition artifact and its Quark oracle, and what does not
+2026-09-09. Desktop 2 (Phoenix, Ryzen 7 8700G), resnet_env17, onnx only. NO NPU SESSION was
+built and no hardware context was taken; this reads two files.
+
+Command (from the repo root):
+  python tools/quant_pair_diff.py \
+      models/resnet50_ignition_cle_c64.onnx models/resnet50_quark_cle_c64.onnx \
+      --label-a ignition --label-b quark
+
+WHY: docs/BENCHMARKS.md's Ignition sections report parity against a fresh Quark oracle as
+INT8_EXACT, which is the gate in quant/verify.py: zero structural node delta, zero byte
+mismatch on any scale, zero-point or non-int8 initializer, and at most 1 LSB on the int8
+weights, in practice 0. That is a claim about the NUMBERS. It is not a claim that the two
+files are byte-identical, and they are not. This separates the two so the next question can
+be asked precisely: the VitisAI EP compiles the ONNX file into a DPU program, and whether two
+files that agree on every number but disagree on names and metadata compile to the SAME
+program is something no parity gate here can answer.
+
+file bytes
+  ignition   resnet50_ignition_cle_c64.onnx             25661876 B  sha256:74f2b9a180e05b22
+  quark      resnet50_quark_cle_c64.onnx                25670047 B  sha256:2df63ef320dcdb49
+
+model metadata
+  ignition   producer='Ignition' version='0.1.0a1' ir=8 opset=[17]
+  quark      producer='quark.onnx' version='0.11rc1' ir=8 opset=[17, 1, 5, 1, 1, 1, 1, 1, 1]
+
+graph shape
+  ignition   nodes=380 initializers=470 inputs=1 outputs=1
+  quark      nodes=380 initializers=470 inputs=1 outputs=1
+
+graph_diff -- the same gate scripts/quant-validate.sh applies
+  structural node delta      : 0
+  initializers byte-mismatch : 0
+  int8 initializers compared : 108
+  int8 weights over 0 LSB    : 0
+  ok(0 LSB)                  : True
+  ok(1 LSB)                  : True
+
+names, which the numbers do not depend on
+  node names identical in order : 209/380
+  initializer name sets equal   : True
+
+byte-size difference: 8171 B
+
+READING.
+
+Identical: 380 nodes, 470 initializers, one input, one output; zero structural node delta;
+zero initializers differing by a byte; all 108 int8 initializers equal at 0 LSB, not 1; and
+the initializer name sets are equal. Every number and every edge in the two graphs matches.
+
+Different: 8,171 bytes, and all of it is non-numeric.
+  - producer_name and producer_version, 'Ignition' 0.1.0a1 against 'quark.onnx' 0.11rc1.
+  - the opset_import list. Ignition declares one entry, opset 17. Quark declares nine, the
+    same opset 17 plus eight further domain entries.
+  - 171 of 380 node names, the rest matching in order.
+
+So the difference between the two files is producer metadata, extra domain declarations, and
+names. That is exactly the material a compiler is entitled to ignore, and exactly the material
+it is entitled not to.
+
+WHAT IS NOT ANSWERED, AND WHY IT WAS NOT RUN
+The test this sets up is: compile both files through the VitisAI EP with a fresh cache and
+compare the resulting compiled.*.xmodel and 4x4.xclbin. If they match, parity extends from
+the file to the program the silicon actually runs, which is a stronger claim than this repo
+currently makes anywhere. If they differ, the difference names what the vendor compiler keys
+on beyond the numbers, and the eight extra opset domains are the first suspect.
+
+That was NOT run. The host-load check reported HOST_LOAD_VERDICT PEER: another session was
+part-way through `pipelines/bisenetv2/3_quantize.py` on the CPU. An EP compile is CPU-heavy,
+the repo's own wrappers refuse to start on a contended machine without --allow-busy, and
+starting one here risked corrupting a measurement in flight that this session does not own.
+The NPU itself was idle -- `xrt-smi examine -r aie-partitions` reported no hardware contexts.
+Re-run the comparison on a clear machine.

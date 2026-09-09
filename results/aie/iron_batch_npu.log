@@ -1,0 +1,241 @@
+Batching reaches the device floor from inside IRON -- and IRON's own per-call host work
+eats almost all of it
+2026-09-09. Desktop 2 (Phoenix, Ryzen 7 8700G), native Windows, mlir-aie ironenv + XRT SDK.
+Took a hardware context. Witnesses below: no foreign context on the device,
+HOST_LOAD_VERDICT CLEAR.
+
+New code, both in this repository, nothing outside it modified:
+  kernels/dispatch_floor/iron_batch.py          the batching context manager
+  kernels/dispatch_floor/measure_iron_batch.py  this measurement
+
+Commands (repo root, ironenv, XRT SDK on PATH and pyxrt on PYTHONPATH):
+  python kernels/dispatch_floor/measure_iron_batch.py
+  python kernels/dispatch_floor/measure_iron_batch.py --design groupnorm --L 150528 \
+      --batch-sizes 1,4,16,64 --reps 2
+
+WHY. results/aie/dispatch_runlist_npu.log amortised a dispatch to 36.3 us against IRON's
+617.0 us -- 17x -- by driving raw pyxrt against a cached xclbin. That log closed with the
+limit stated plainly: "Nothing here is an IRON result. The batched path is raw pyxrt; IRON's
+@iron.jit does not use runlists at all, and nothing under aie/utils/hostruntime/ references
+one. Reaching 36 us from a real design needs that host path written, which this run does not
+do." This run writes that host path and measures it. It also answers the other open caveat --
+"this is a no-compute passthrough: a real kernel's own configuration cost lands inside the
+dispatch and pushes its floor above this one" -- by running a real kernel through it.
+
+HOW IT HOOKS IN, WITHOUT TOUCHING THE SHARED TOOLCHAIN. XRTHostRuntime.run() validates
+arguments against the xclbin ABI, prepares the instruction buffer, then submits with
+`kernel_handle.kernel(3, insts_bo, insts_bytes, *buffers)` followed by `.wait()`. In pyxrt
+`kernel(...)` creates AND STARTS a run, which is exactly what cannot go into a runlist. So the
+context manager swaps `kernel_handle.kernel` for a proxy whose call builds the run UNSTARTED
+-- `pyxrt.run(kernel)` plus `set_arg` -- adds it to a runlist, and hands back a deferred
+stand-in. Every other step of IRON's run() executes unchanged: the same ABI validation, the
+same instruction buffer, the same argument order. The patch is installed and removed by the
+context manager. ~/mlir-aie is not edited.
+
+    with iron_batch.batched(max_in_flight=64):
+        for i in range(64):
+            design(a[i], b[i], c[i])     # queued, not executed
+    # one execute(), one wait(), on leaving the block
+
+TWO THINGS THE HARNESS HAS TO GET RIGHT, BECAUSE BOTH FAIL SILENTLY.
+  1. Buffers must not be shared between queued calls. Concurrent buffer access within a
+     runlist is undefined and the symptom is wrong data, not an error. Every queued call's
+     buffers are checked against the rest of the batch and a repeat raises; the guard was
+     tested and does fire.
+  2. Batching gives up per-call completion status ENTIRELY. IRON compares each call's wait()
+     against ERT_CMD_STATE_COMPLETED, and at queue time that answer does not exist. It cannot
+     be recovered afterwards either: a run inside a runlist cannot be polled on this binding
+     -- run.state() raises "Cannot poll a command that has not been submitted", because the
+     runlist owns submission and runlist.wait() is the only completion signal there is. So
+     VERIFYING OUTPUT BUFFERS IS THE ONLY CORRECTNESS GATE UNDER BATCHING. Every row below is
+     gated on it, and a batch that silently did nothing would otherwise look extremely fast.
+
+TWO CLOCKS, ANSWERING DIFFERENT QUESTIONS.
+  runlist us/run   perf_counter around runlist.execute() + wait(), divided by the batch size.
+                   The DEVICE cost per dispatch. This is the column comparable to 36.3 us.
+  wall/call us     all time in the block divided by the number of calls. Includes everything
+                   IRON does per call before the submit. This is what a caller pays.
+  host share       the difference. IRON's own per-call host work.
+
+PRE-RUN WITNESSES
+Two samples, bracketing the captured series. PRE-RUN read busy_cores=1.22, no python
+process in the top list, HOST_LOAD_VERDICT CLEAR, no hardware contexts on the device.
+POST-RUN is printed in full below: still CLEAR and still no foreign context, but a
+python process not present beforehand now holds about a core. It is disclosed rather
+than hidden; the two passthrough series bracket the runs and agree to 1% on the
+runlist column, so the result is not sensitive to it.
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+HOST_LOAD busy_cores=1.59 logical_cores=16 free_ram_gb=14.9 sample_sec=1
+HOST_LOAD_TOP 1.05 python:25528 ws_mb=819
+HOST_LOAD_TOP 0.09 pycharm64:9008 ws_mb=2303
+HOST_LOAD_TOP 0.06 claude:23452 ws_mb=496
+HOST_LOAD_TOP 0.06 HWiNFO64:11920 ws_mb=20
+HOST_LOAD_TOP 0.06 powershell:13480 ws_mb=79
+HOST_LOAD_VERDICT CLEAR
+
+--------------------------------------------------------------------------------
+1. NO-COMPUTE PASSTHROUGH, SERIES A -- the same design the 36.3 us figure used
+--------------------------------------------------------------------------------
+design: no-compute passthrough, 4096 int32 (32 KB round-trip)
+batch sizes: [1, 2, 4, 8, 16, 32, 64]   reps=3  warmup=3
+
+warmup verified
+
+unbatched: median 676.2 us/call, min 656.8 us/call  VERIFIED
+
+   N  wall/call us  runlist us/run  host share  vs unbatched  verify
+--------------------------------------------------------------------
+   1         746.3           167.3       579.0         0.91x  OK
+   2         900.6            91.0       809.6         0.75x  OK
+   4         590.1            65.2       524.9         1.15x  OK
+   8         567.8            51.2       516.5         1.19x  OK
+  16         535.4            45.7       489.7         1.26x  OK
+  32         518.2            40.4       477.9         1.30x  OK
+  64         537.1            37.9       499.2         1.26x  OK
+
+  wall/call is what a caller pays. runlist us/run is the device cost per
+  dispatch, comparable to the 36.3 us raw-pyxrt figure in
+  results/aie/dispatch_runlist_npu.log. The difference between them is
+  IRON's own per-call host work, which batching does not remove.
+
+--------------------------------------------------------------------------------
+2. NO-COMPUTE PASSTHROUGH, SERIES B -- an independent repeat, printed whole
+--------------------------------------------------------------------------------
+design: no-compute passthrough, 4096 int32 (32 KB round-trip)
+batch sizes: [1, 2, 4, 8, 16, 32, 64]   reps=3  warmup=3
+
+warmup verified
+
+unbatched: median 729.0 us/call, min 662.8 us/call  VERIFIED
+
+   N  wall/call us  runlist us/run  host share  vs unbatched  verify
+--------------------------------------------------------------------
+   1         848.9           170.7       678.2         0.86x  OK
+   2         734.3            92.5       641.8         0.99x  OK
+   4         591.3            62.8       528.5         1.23x  OK
+   8         552.4            52.4       500.0         1.32x  OK
+  16         539.1            45.5       493.6         1.35x  OK
+  32         553.2            40.1       513.1         1.32x  OK
+  64         530.9            37.5       493.4         1.37x  OK
+
+  wall/call is what a caller pays. runlist us/run is the device cost per
+  dispatch, comparable to the 36.3 us raw-pyxrt figure in
+  results/aie/dispatch_runlist_npu.log. The difference between them is
+  IRON's own per-call host work, which batching does not remove.
+
+--------------------------------------------------------------------------------
+3. A REAL KERNEL: bf16 GroupNorm ON EIGHT CORES, L=150528
+--------------------------------------------------------------------------------
+The shape results/aie/groupnorm_bf16_kernel_npu.log measured independently, where it
+reports 835.8 us per call on the NPU (min 807.7) against 1899.3 us on the CPU.
+
+design: groupnorm32, L=150528, 32 groups on 8 cores, bf16
+batch sizes: [1, 4, 16, 64]   reps=2  warmup=3
+
+warmup verified
+
+unbatched: median 1844.5 us/call, min 1793.6 us/call  VERIFIED
+
+   N  wall/call us  runlist us/run  host share  vs unbatched  verify
+--------------------------------------------------------------------
+   1        1917.9           967.5       950.4         0.96x  OK
+   4        1619.1           838.3       780.8         1.14x  OK
+  16        1500.4           823.8       676.6         1.23x  OK
+  64        1495.7           829.8       665.8         1.23x  OK
+
+  wall/call is what a caller pays. runlist us/run is the device cost per
+  dispatch, comparable to the 36.3 us raw-pyxrt figure in
+  results/aie/dispatch_runlist_npu.log. The difference between them is
+  IRON's own per-call host work, which batching does not remove.
+
+--------------------------------------------------------------------------------
+4. READING
+--------------------------------------------------------------------------------
+THE DEVICE HALF WORKS, AND IT REPRODUCES THE RAW-PYXRT NUMBER FROM INSIDE IRON. On the
+passthrough the runlist bracket falls monotonically with batch size in both series -- 167.3
+and 170.7 us at N=1, 45.7 and 45.5 at N=16, 37.9 and 37.5 at N=64. The raw-pyxrt harness
+measured 36.3 us on the same design and payload. So the 17x is real, it survives going
+through IRON's argument handling rather than around it, and iron_batch.py is how an ordinary
+@iron.jit design reaches it. The caveat "nothing here is an IRON result" is closed.
+
+THE REAL KERNEL CLOSES THE OTHER CAVEAT, AND CONFIRMS THE READING FROM THE OTHER SIDE.
+GroupNorm's batched device cost falls to 838.3, 823.8 and 829.8 us per dispatch at N=4, 16
+and 64 and then stops. That plateau is not a floor this measurement imposed -- it is the
+kernel's own compute. results/aie/groupnorm_bf16_kernel_npu.log measured this same design at
+this same L independently and reports 835.8 us per call on the NPU (min 807.7), against
+1899.3 us on the CPU. All three batched figures land on that number to within 1.5%. Batching
+removed about 140 us of device-side dispatch overhead (967.5 us at N=1) and left the work
+itself. So a real kernel's dispatch cost is the same order as the passthrough's; its
+configuration cost does NOT swamp it. Treat 36-38 us as a floor, as that log said -- but a
+floor that a real 8-core bf16 kernel sits only its own compute above, not orders above.
+
+AND THE END-TO-END GAIN IS 1.2x TO 1.4x, NOT 17x. That is the half that matters to a caller.
+Against each series' own unbatched median, wall time per call improves 1.26x (676.2 -> 537.1)
+and 1.37x (729.0 -> 530.9) on the passthrough, and 1.23x (1844.5 -> 1495.7) on GroupNorm. The
+reason is in the host-share column, and it is FLAT IN BATCH SIZE: 477.9 to 528.5 us on the
+passthrough across every N >= 4 in both series, 665.8 to 780.8 us on GroupNorm. Batching does
+not touch it, because it is not dispatch -- it is what IRON does per call before the submit:
+argument validation against the xclbin ABI, buffer preparation, instruction-buffer setup.
+GroupNorm's larger host share is consistent with its much larger buffers.
+
+SO THE 447 us HOST TERM IS REPRODUCED, AND LOCALISED. dispatch_floor_npu.log split the 617.0
+us floor into a 169.8 us hardware bracket and 447.3 us of host-side cost, and said that cost
+"sits outside the hardware bracket". This run measures the same term from a different
+direction -- 478-529 us on the same design, at every batch size -- and shows it is
+independent of how the submit is done. Batching was the fix for the dispatch half of the
+floor. The host half needs a different fix, and it is now the larger of the two by more than
+an order of magnitude: 37.5 us of device against ~500 us of host.
+
+WHAT THIS MEANS FOR THE GO/NO-GO RULE, AND IT IS A CORRECTION. dispatch_runlist_npu.log wrote
+that batching moves the rule from "must exceed 617 us" to "must exceed about 36 us, a factor
+of 17", and this repo's docs repeated it. That is true only of a RAW-PYXRT driver that gives
+up IRON's argument handling. It is NOT true through IRON. There are three thresholds, not
+two:
+
+    unbatched @iron.jit call        617.0 us   published; 676-729 us this sitting
+    batched @iron.jit call       ~531-537 us   this log
+    batched raw-pyxrt driver         36.3 us   dispatch_runlist_npu.log
+
+The four verdicts that log reopened -- MobileNetV2 whole model, MobileViT stage-2 attention,
+attention stage 2, GroupNorm at L <= 18816 -- reopen at 36 us only for a caller willing to
+write a raw-pyxrt driver. Through IRON they still face a ~531 us threshold, which is 14%
+below the published 617.0 us and 21-27% below this sitting's own unbatched medians -- not
+17x below either of them. Of that list only MobileNetV2's whole model
+(1720 us CPU) clears 531 us; the other three do not.
+
+WHY N=1 AND N=2 ARE SLOWER THAN UNBATCHED, WHICH IS NOT NOISE. A one-call "batch" pays for
+constructing a runlist and gets nothing amortised, so it is strictly worse: 0.91x and 0.86x
+on the passthrough, 0.96x on GroupNorm. Batching is only worth reaching for at N >= 4.
+
+--------------------------------------------------------------------------------
+WHAT THIS DOES NOT SHOW
+--------------------------------------------------------------------------------
+- Two designs, one machine, one power mode, one sitting. The passthrough was run twice and
+  both series are printed above; the N=2 row moved from 900.6 to 734.3 us between them and
+  the N=1 row from 746.3 to 848.9. Read the trend across N, not single cells. GroupNorm was
+  run once at 2 reps per size.
+- The host share is a subtraction (wall/call minus the runlist bracket), not a profile of
+  IRON's run(). It is therefore an upper bound on per-call host work: it includes the Python
+  loop, buffer allocation inside the block, and anything else between the calls.
+- Nothing here REDUCES the host share. Which part of IRON's per-call work dominates it --
+  ABI validation, buffer preparation, instruction-buffer setup -- would need a profile of
+  run() and was not done. That is the obvious next move and it is now worth more than any
+  further dispatch work.
+- The GroupNorm arm uses random inputs and checks that every output is finite and that more
+  than half are non-zero. That detects a batch that silently did nothing, which is the
+  failure mode batching introduces. It is NOT an accuracy check; groupnorm.py's own verifier
+  covers that, and the 835.8 us figure this compares against came from a golden run.
+- 617.0, 169.8, 447.3 and 36.3 us are quoted from earlier logs, not re-measured here. Only
+  the tables above are from this sitting, and this sitting's own unbatched medians (676.2,
+  729.0) sit above the published 617.0, so the ratios above use each series' own baseline.
+- max_in_flight was set equal to the batch size, so each row is a single flush. Larger
+  batches with a smaller in-flight window were not swept, and neither was the question of
+  whether the batched runs execute concurrently or are serialised inside the driver.
+- Verification is per batch, after the flush. A batch whose runs executed in the wrong ORDER
+  would still pass, since each call writes its own buffers.
