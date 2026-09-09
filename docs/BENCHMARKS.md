@@ -4493,6 +4493,87 @@ to begin with. Nothing here suggests turning CLE off would help it.
 
 ---
 
+### BiSeNetV2's CPU/NPU gap, localised to one Mul (2026-09-09, Desktop 2)
+
+BiSeNetV2 is the repo's largest divergence between providers on a byte-identical file, and it
+reproduces exactly: 50 images, same artifact, same sitting
+([CPU](../results/quant/bga_bisenetv2_xint8_cpu_desktop2_20260909.log),
+[NPU](../results/quant/bga_bisenetv2_xint8_npu_desktop2_20260909.log)).
+
+| | Pixel accuracy | mIoU | Softmax MAD | Softmax RMSE | Infer |
+|---|---|---|---|---|---|
+| CPU | 59.47% | 25.72% | 0.00357 | 0.00464 | 99.80 ms |
+| NPU | 15.33% | 2.44% | **0.01476** | **0.01924** | 13.06 ms |
+
+**Read the right number.** BiSeNetV2 is a Cityscapes model scored on 50 COCO scenes against a
+reference session pinned to CPU whatever `--ep` says, so 59.47% and 15.33% are *not* segmentation
+accuracy -- they are two models disagreeing on out-of-domain images. What is valid is the
+**divergence between providers on identical parameters**, and the softmax MAD/RMSE, which need no
+ground truth. The NPU's softmax error is **4.13x** the CPU's.
+
+**It is not a gain error.** Fitting `npu = k * cpu` on unsaturated elements gives k = 0.73, 0.60,
+0.61 across three images -- not a power of two -- with correlation **0.34 to 0.37**, and removing
+the fitted gain barely moves the residual (0.267 against 0.273). The NPU output is largely
+*decorrelated* from the CPU's, which is a stronger failure than a misplaced requantisation shift.
+
+**It is not localised in space or class either.** The worst 10% of pixels carry only 13-14% of the
+total error, against 10% for a perfectly uniform spread, and the worst class is only 1.8-3.0x the
+median class. The NPU output does sit on the full output grid -- 256 distinct values pinned at
+[-1.000, 0.992] with 0.27-0.63% of elements at the rails -- where the CPU uses 175-217 values and
+0.003% at the rails.
+
+**Where it enters.** Cutting the graph at each `DequantizeLinear` and running the sub-model on both
+providers ([log](../results/quant/bga_tail_scan_desktop2_20260909.log)) puts the failure on a single
+node:
+
+| Cut | Tensor | Correlation | Mean abs diff | Placed |
+|---|---|---|---|---|
+| 180 | `/bga/right2/right2.2/Conv` | 0.9913 | 0.041 | 285/287 |
+| 181 | `/bga/Sigmoid_output_0` (gate) | 0.9858 | 0.019 | 288/290 |
+| **182** | **`/bga/Mul_output_0`** | **0.6869** | **0.640** | 349/351 |
+| 183 | `/bga/Sigmoid_1_output_0` (sibling gate) | 0.9904 | 0.007 | 289/291 |
+| **184** | **`/bga/Mul_1_output_0`** (sibling) | **0.9984** | 0.036 | 350/352 |
+| 185 | `/bga/up2/Resize` | 0.9984 | 0.036 | 353/355 |
+| 186 | `/bga/Add` (the two branches meet) | 0.8516 | 0.646 | 382/384 |
+| 187 | `/bga/conv/conv.2/Relu` | 0.6462 | 1.703 | 388/390 |
+| 188 | `/head/conv/relu` | 0.2552 | 0.324 | 394/396 |
+| 190 | `logits` | 0.3455 | 0.273 | 402/404 |
+
+Both of `/bga/Mul`'s inputs arrive correlated at 0.986 and above. Its output is 0.687. **One node
+takes it.** Its sibling gate `/bga/Mul_1`, the same operation in the same block, goes 0.990 into
+0.998 and loses nothing. Everything after cut 186, where the two branches are added, is downstream
+amplification of what `/bga/Mul` already produced.
+
+**This does not support Theorem 2 as stated.** The claim is that divergent power-of-two scales on a
+multi-branch elementwise operation truncate dynamic range. But the sibling has the *larger*
+divergence and is the one that works:
+
+| | Feature branch | Gate branch | Position gap | sigma | Shape | Correlation out |
+|---|---|---|---|---|---|---|
+| `/bga/Mul` | pos 3, from Conv | pos 7, HardSigmoid | **4** | 20 | `[1,128,64,64]` | **0.687** |
+| `/bga/Mul_1` | pos 1, from AveragePool | pos 7, HardSigmoid | **6** | 18 | `[1,128,16,16]` | 0.998 |
+
+Both sigmas are inside [0, 31], so this is not a shift-cut hazard either -- consistent with the
+audit finding no violation in this model.
+
+**What is left standing** is a structural difference the scan cannot decide between: the failing Mul
+is **16x larger spatially** (524,288 elements against 32,768, at the same 128 channels), and its
+feature branch sits at position 3 rather than 1. Which of those is the trigger -- or whether it is
+the `Conv` versus `AveragePool` provenance of the feature branch -- is not established here. A
+minimal two-input Mul fixture, varying one of those at a time the way the XINT8 arithmetic probe
+does for Conv, is what would decide it, and it has not been run.
+
+Method notes worth keeping. A binary search over cut depth was tried first and its assumption is
+false: divergence is **not monotonic** in depth -- cut 145 reads 0.9731 while cuts 148 and 154 read
+0.9859 and 0.9889 -- so the "first divergent cut" it returned was a threshold crossing, not a
+culprit, and the linear scan above replaces it. Sub-models also have to be topologically sorted
+before `onnx.utils.extract_model` will accept them, because `passes.avgpool_dpu_scale` appends its
+`Mul` after the consumer; `Graph.topo_sort` is the repo's own fix and changes node order only.
+Every sub-model's placement is reported above because one that fell back to CPU would be comparing
+CPU against CPU and would look perfect.
+
+---
+
 ## Native Windows XRT driver latency and DPU microcode disassembly
 
 A characterization of AMD's native Windows kernel driver (`amdxe.sys`) and userspace runtime (`pyxrt.pyd`, Python 3.13) on Desktop 2 (Ryzen 7 8700G, Phoenix XDNA1 NPU), measuring the driver floor, unified memory synchronization bandwidth, command submission overhead, and reverse-engineering the compiled DPU microcode transaction stream.
@@ -4636,6 +4717,11 @@ For multi-branch elementwise tensor operations C = A * B or C = A + B:
     A_elem = (S_A * S_B) / S_C
 
 Both input branches must satisfy identical power-of-two scale alignments; divergent scale grids cause dynamic range truncation in the fixed-point ALU.
+
+> **Not supported as stated (2026-09-09).** BiSeNetV2's two Bilateral Guided Aggregation gates were
+> measured node by node. The one that fails has a position gap of 4; the one that works has a gap of
+> **6**. Divergence alone therefore does not predict which Mul breaks, and both sit at feasible
+> sigma. [Evidence](#bisenetv2s-cpunpu-gap-localised-to-one-mul-2026-09-09-desktop-2).
 
 ### Empirical audit across 7 models
 
