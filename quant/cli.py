@@ -29,10 +29,16 @@ def main(argv=None):
     commands = parser.add_subparsers(dest="command", required=True)
     inspect = commands.add_parser("inspect", help="Print a static fingerprint of any ONNX file; does not run a model")
     inspect.add_argument("models", type=Path, nargs="+")
-    check_shift = commands.add_parser("check-shift-cut", help="Audit ONNX QDQ models against AIE-ML systolic shift-cut bounds [0, 31]")
+    check_shift = commands.add_parser(
+        "check-shift-cut",
+        help="Audit ONNX QDQ models against the producer's shift-cut contract [0, 16] and the "
+             "stated (unvalidated) hardware bound sigma in [0, 31]")
     check_shift.add_argument("models", type=Path, nargs="+", help="Quantized ONNX model paths to audit")
+    check_shift.add_argument("--branches", action="store_true",
+                             help="Also report inter-branch scale spread at Add/Concat (advisory only)")
     check_shift.add_argument("--repair", type=Path, default=None,
-                             help="Optional output path to project and repair violating scales into the feasible basin")
+                             help="Optional output path to project scales outside [0, 31] into the feasible "
+                                  "basin. Operations whose scales cannot be read are skipped, never repaired")
     emit = commands.add_parser("quantize", help="Calibrate and emit XINT8 QDQ for folded ResNet, head-cut YOLOv8 or MODNet")
     emit.add_argument("--in-model", type=Path, default=Path("models/resnet50_fp32.onnx"),
                       help="Float export; the family (folded ResNet, head-cut YOLO or MODNet) is read from its operators")
@@ -69,6 +75,13 @@ def main(argv=None):
     ada.add_argument("--data-size", type=int, default=1000, help="Quark's DataSize (images used, capped by the listing)")
     ada.add_argument("--iters", type=int, default=1000, help="Quark's NumIterations per layer")
     ada.add_argument("--seed", type=int, default=1705472343, help="Quark's FixedSeed")
+    ada.add_argument("--device", default="cpu",
+                     help="torch device for the Adam rounding loop (Quark's OptimDevice). ORT activation "
+                          "extraction stays on the cpu either way. Anything but 'cpu' leaves the "
+                          "byte-parity path and needs --accept-non-parity")
+    ada.add_argument("--accept-non-parity", action="store_true",
+                     help="Acknowledge that --device off cpu produces weights that are NOT byte-identical "
+                          "to a Quark XINT8_ADAROUND oracle, and must never be reported as an oracle match")
     args = parser.parse_args(argv)
     # Install only while the command runs; importing the CLI has no global side effects.
     guard = BlockProducerImports(("quark",) if args.command == "adaround" else ("quark", "torch"))
@@ -95,10 +108,12 @@ def main(argv=None):
                                   "models": reports}, indent=2))
                 return
             if args.command == "check-shift-cut":
-                from .shift_cut import analyze_model_shift_cut, print_shift_cut_report, repair_model_shift_cut
+                from .shift_cut import (analyze_branch_divergence, analyze_model_shift_cut,
+                                        print_shift_cut_report, repair_model_shift_cut)
                 for path in args.models:
                     hazards = analyze_model_shift_cut(str(path))
-                    print_shift_cut_report(str(path), hazards)
+                    divergence = analyze_branch_divergence(str(path)) if args.branches else None
+                    print_shift_cut_report(str(path), hazards, divergence)
                     if args.repair:
                         if len(args.models) > 1:
                             parser.error("--repair can only be used with a single input model")
@@ -167,9 +182,11 @@ def main(argv=None):
                 prepare(float_graph, family)
                 float_graph.infer_shapes()
                 quant_graph = Graph.load(args.quant)
-                config = FastFinetuneConfig(DataSize=args.data_size, FixedSeed=args.seed, NumIterations=args.iters)
+                config = FastFinetuneConfig(DataSize=args.data_size, FixedSeed=args.seed, NumIterations=args.iters,
+                                            OptimDevice=args.device, AllowNonParityDevice=args.accept_non_parity)
                 print(f"Ignition {__version__}: AdaRound on {args.quant.as_posix()} "
-                      f"({'CLE' if provenance['cle'] else 'no CLE'} base, {len(listing)} images)", flush=True)
+                      f"({'CLE' if provenance['cle'] else 'no CLE'} base, {len(listing)} images, "
+                      f"device={args.device})", flush=True)
                 print("IMPORT_BLOCK_ACTIVE quark", flush=True)
                 start = time.perf_counter()
                 adaround_report = finetune(float_graph, quant_graph, source, config)
