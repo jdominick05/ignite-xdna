@@ -3366,7 +3366,9 @@ draws different batches.
 
 Fresh same-listing oracle: [`XINT8_ADAROUND` on the sorted first 64 COCO calibration images](../results/quant/quant_yolov8n_cut_quark_cle_adaround_c64.log)
 (`scripts/quant-reference.sh --in-model models/yolov8n_cut.onnx --calib-dir data/coco_calib --cle --adaround`):
-0 CLE patterns, 63 modules, 16 early stops, 161.0 s of ONNX inference plus 361.6 s of
+0 CLE patterns, 63 modules, 16 early stops (every one at the last windowed check,
+iteration 999, so each dropped a single final update rather than truncating a
+schedule; ResNet's run above had none), 161.0 s of ONNX inference plus 361.6 s of
 torch training, 696.6 s end to end including calibration, peak working set
 5,393,625,088 bytes, SHA256 `505cf451…6d86`. Ignition on its CLE c64 artifact
 ([log](../results/quant/quant_yolov8n_cut_ignition_cle_adaround_c64.log),
@@ -3397,7 +3399,8 @@ each model and `--fresh` compilation
 [own](../results/quant/map_yolov8n_cut_ignition_cle_adaround_c64_own_npu.log),
 [EP reports](../results/quant/diag_yolov8n_cut_ignition_cle_adaround_c64_own.log)): both
 read **32.04 mAP@50-95 / 46.78 mAP@50** (14.81 / 34.29 / 46.37), 922 of 929 nodes on
-the NPU with the same seven on CPU as the XINT8 pair, identical EP reports, 611,937
+the NPU with the same seven on CPU as the XINT8 pair (the two EP reports differ only in
+their timing lines, checked in-session), identical EP reports for the pair, 611,937
 detections each and byte-identical NPU detection files (59,796,355 bytes). Mean
 `sess.run` at eval conf was 6.94 ms (reference) and 6.86 ms (own); the CPU means
 (34.58 and 36.80 ms, medians 34.20 and 34.11 ms) differ by session noise, not by
@@ -3416,8 +3419,8 @@ a different session, so the two are not compared beyond noting that 64 images re
 within session noise of 300 here.
 
 What remains open on YOLO AdaRound: it ran on the yolov8n-cut graph only (no Gemm, no
-activation-bearing layer, no early-stop-free layer set to compare the schedule against
-ResNet's), the laptop stretch is unrun, and GPU finetune waits on Desktop 1.
+activation-bearing layer), the laptop stretch is unrun, and GPU finetune waits on
+Desktop 1.
 
 ## Key findings
 
