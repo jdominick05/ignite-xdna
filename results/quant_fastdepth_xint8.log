@@ -1,0 +1,154 @@
+Pinned process affinity mask to 0x5555 (8 real cores, no SMT)
+
+CPU threads: 8
+
+Input model: C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\models\fastdepth_fp32.onnx, 84 nodes, 256x256 resolution
+
+Calibrating on 300 images at 256x256
+
+Quantizing with XINT8 -> C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\models\fastdepth_fp32_xint8.onnx
+
+[QUARK_INFO]: Time information:
+
+2026-09-09 00:41:40.667961
+
+[QUARK_INFO]: OS and CPU information:
+
+                                        system --- Windows
+
+                                          node --- DESKTOP-CBL5NUA
+
+                                       release --- 11
+
+                                       version --- 10.0.26200
+
+                                       machine --- AMD64
+
+                                     processor --- AMD64 Family 25 Model 117 Stepping 2, AuthenticAMD
+
+[QUARK_INFO]: Tools version information:
+
+                                        python --- 3.12.11
+
+                                          onnx --- 1.19.0
+
+                                   onnxruntime --- 1.22.1
+
+                                    quark.onnx --- 0.11rc1
+
+[QUARK_INFO]: Quantized Configuration information:
+
+                                   model_input --- C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\models\fastdepth_fp32.onnx
+
+                                  model_output --- C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\models\fastdepth_fp32_xint8.onnx
+
+                       calibration_data_reader --- <__main__.FastDepthCalibReader object at 0x000002852F66C0B0>
+
+                         calibration_data_path --- None
+
+                                  quant_format --- QDQ
+
+                                   input_nodes --- []
+
+                                  output_nodes --- []
+
+                          op_types_to_quantize --- []
+
+                    extra_op_types_to_quantize --- []
+
+                                   per_channel --- False
+
+                                  reduce_range --- False
+
+                               activation_type --- QUInt8
+
+                                   weight_type --- QInt8
+
+                             nodes_to_quantize --- []
+
+                              nodes_to_exclude --- []
+
+                          subgraphs_to_exclude --- []
+
+                                optimize_model --- True
+
+                      use_external_data_format --- False
+
+                              calibrate_method --- PowerOfTwoMethod.MinMSE
+
+                           execution_providers --- ['CPUExecutionProvider']
+
+                                enable_npu_cnn --- True
+
+                        enable_npu_transformer --- False
+
+                     specific_tensor_precision --- False
+
+                                    debug_mode --- False
+
+                          convert_fp16_to_fp32 --- False
+
+                          convert_nchw_to_nhwc --- False
+
+                                   include_cle --- True
+
+                                    include_sq --- False
+
+                              include_rotation --- False
+
+                               include_fast_ft --- False
+
+                                 extra_options --- {'ActivationSymmetric': True}
+
+  calib 50/300
+
+  calib 100/300
+
+  calib 150/300
+
+  calib 200/300
+
+  calib 250/300
+
+  calib 300/300
+
++-----------------------------------------------------------------------------+
+
+| Op Type              | Float Model                                          |
+
+|----------------------+------------------------------------------------------|
+
+| Conv                 | 38                                                   |
+
+| Clip                 | 27                                                   |
+
+| Relu                 | 11                                                   |
+
+| Resize               | 5                                                    |
+
+| Add                  | 3                                                    |
+
+|----------------------+------------------------------------------------------|
+
+| Quantized model path | C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quant뿯½ |
+
++-----------------------------------------------------------------------------+
+
++--------------------------------------------+
+
+| Op Type | Activation | Weights  | Bias     |
+
+|---------+------------+----------+----------|
+
+| Conv    | UINT8(38)  | INT8(38) | INT8(38) |
+
+| Resize  | UINT8(5)   |          |          |
+
+| Add     | UINT8(3)   |          |          |
+
++--------------------------------------------+
+
+Wrote C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\models\fastdepth_fp32_xint8.onnx: 254 nodes
+
+  Ops: [('DequantizeLinear', 123), ('QuantizeLinear', 47), ('Conv', 38), ('Clip', 27), ('Relu', 11), ('Resize', 5), ('Add', 3)]
+

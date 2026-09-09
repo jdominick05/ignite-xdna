@@ -1,0 +1,53 @@
+﻿================================================================================
+XDNA1 Windows Low-Level Driver & XRT Runtime Probe
+Python: C:\Users\<user>\mlir-aie\ironenv\Scripts\python.exe (v3.13.15)
+XRT Python Binding: C:\Xilinx\XRT\xrt_sdk\xrt\python\pyxrt.pyd
+================================================================================
+
+[1] Native Device Open (device 0): 61690.90 us
+Loading XCLBIN: C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\fastdepthcachekey\4x4.xclbin
+XCLBIN Register UUID: <pyxrt.uuid object at 0x0000019355ADF470> (3198.90 us)
+Hardware Context Created: 77712.90 us
+XCLBIN Kernels (17): vadd, DPU_PDI_0, DPU_PDI_1, DPU_PDI_2, DPU_PDI_3, DPU_PDI_4, DPU_PDI_5, DPU_PDI_6 ...
+
+================================================================================
+Buffer Object (BO) Unified Memory Performance on Windows (amdxe.sys)
+      Size |  Alloc (us) |  Map (us) | H2D Sync (us) |  H2D (GB/s) | D2H Sync (us) |  D2H (GB/s)
+--------------------------------------------------------------------------------
+      64 B |       31.53 |      1.76 |          0.83 |        0.07 |          0.78 |        0.08
+     256 B |       29.74 |      1.58 |          0.87 |        0.27 |          0.79 |        0.30
+    1.0 KB |       28.65 |      1.90 |          0.85 |        1.12 |          0.82 |        1.16
+    4.0 KB |       30.19 |      0.94 |          0.90 |        4.23 |          0.82 |        4.63
+   16.0 KB |       26.78 |      0.84 |          0.97 |       15.67 |          0.95 |       16.03
+   64.0 KB |       30.38 |      1.54 |          1.48 |       41.18 |          1.46 |       41.72
+  256.0 KB |       37.52 |      1.42 |          3.59 |       68.08 |          3.50 |       69.83
+    1.0 MB |       69.64 |      2.28 |         13.34 |       73.18 |         11.34 |       86.12
+    4.0 MB |      164.13 |      3.27 |         46.14 |       84.66 |         60.08 |       65.02
+   16.0 MB |      541.97 |      6.66 |         59.46 |      262.79 |         52.76 |      296.17
+
+================================================================================
+DPU Kernel Creation & Preparation Overhead via native pyxrt
+================================================================================
+Kernel 'DPU_PDI_0' Instantiation: 73.60 us
+Arg 1: Memory Group = 6291456, BO Address = 0x376b000
+Arg 2: Memory Group = 6291456, BO Address = 0x376c000
+Arg 3: Memory Group = 6291456, BO Address = 0x376d000
+Arg 4: Memory Group = 6291456, BO Address = 0x376e000
+Arg 5: Memory Group = 6291457, BO Address = 0x376f000
+Arg 7: Memory Group = 6291456, BO Address = 0x3770000
+
+Run Object Allocation: 1.85 us
+8 Argument Bindings (set_arg): 6.91 us (0.86 us/arg)
+Total Userspace Dispatch Preparation: 8.76 us
+runlist.add(10 runs): 33.90 us (3.39 us/run)
+
+================================================================================
+Architectural Breakdown & Windows Driver Floor:
+  - Device Open Floor: 61690.90 us (one-time)
+  - HW Context Allocation: 77712.90 us (one-time)
+  - Buffer Sync (4 KB Frame Tile): 0.85 us (Host -> Device)
+  - Userspace Command Prep (8 Args): 8.76 us
+  - Hardware Runlist Queuing: 3.39 us/run
+================================================================================
+
+PROBE COMPLETE.
