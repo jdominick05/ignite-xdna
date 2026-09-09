@@ -1862,6 +1862,22 @@ sections above.
   one-shot call still pays ~140 µs raw), and it is **raw pyxrt** — `@iron.jit` uses no
   runlists, so a real design pays the old floor until that host path is written. That, not the
   measurement, is what the objective now blocks on.
+- **The conv op class was closed on a kernel using 5% of its issue slots.** This repo's
+  most-lost verdict is int8 conv: the vendor DPU does 1650 GOPS per column, the open kernel
+  146.1, an 11.3× gap on the same silicon. Objective K1 said "the first trace will say whether
+  it is data movement or issue rate", and no trace was ever run because the build cache had
+  not survived — *"this repo's most-lost op class was not surveyed"*. Rebuilt and read
+  statically: **it is issue rate, and not marginally.** The int8 GEMM issues 0.889 MACs per
+  cycle; the best conv loop manages 0.333, the 3×3's main loop 0.222, and the 1×1's hot loop
+  **0.045**, with two of its three loops issuing no MAC at all. The 1×1 keeps its accumulator
+  in *memory*, loading four quarters and storing four back around a single `vmac` and idling
+  six of 22 bundles, while naming 3 of the 9 accumulator registers available. The 3×3 keeps
+  its accumulators live and still burns six of eighteen bundles on `vshift` window alignment —
+  the exact cost K1 proposes moving to the mem tile's descriptors. So the op class was closed
+  against the CPU by a kernel leaving 95% of its MAC slots empty, which is a statement about
+  the kernels and not about the silicon. Open, and stated carefully: the 4×–20× are **ceilings
+  on unused issue slots, not predictions**, the densities are unweighted by trip count, and
+  reaching K1's 1 TOPS bar still needs 6.8×.
 - **Candidate model pipelines (Categories A, B, C, D, E).** Test plans, target shapes, and falsification criteria:
   - **Category A:** Image Super-Resolution — SESR-M7 (placement, 1.48 ms latency, 3.02x iGPU win,
     70% AdaRound recovery) and Real-ESRGAN Compact (activation memory spill) closed above.

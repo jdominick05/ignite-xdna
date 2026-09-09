@@ -549,6 +549,22 @@ evaluation runs. Cited by [`kernels/README.md`](../../kernels/README.md).
 
 ## Dispatch floor and the int8 conv verdict
 
+**`conv_issue_rate_decomposed.log`** — the measurement objective K1 asked for and that no
+instrument had ever been pointed at, because the conv build cache had not survived. Rebuilt,
+and the 11.3x vendor-to-open gap resolves without a trace: bundle count is cycle count, so
+`vmac` per bundle is MACs per cycle, and the int8 GEMM issues **0.889** against the best conv
+loop's **0.333**, the 3x3's main loop's **0.222** and the 1x1's hot loop's **0.045** — with two
+of the 1x1's three loops issuing no MAC at all. **It is issue rate, not data movement.** Two
+different defects: the 1x1 never keeps an accumulator in a register (loads four quarters from
+memory, issues one `vmac`, stores four back, idles six of 22 bundles, names 3 of 9
+accumulators), while the 3x3 keeps `cm1`-`cm4` live and still spends six of eighteen bundles on
+`vshift` plus four on `vmov` doing sliding-window realignment in issue slots — precisely what
+K1's own tooling section proposes moving to the mem tile's 4-D descriptors. Also notes the 3x3
+carries one same-bank paired load, worth ~5% and not a lever. **Careful:** the 20x and 4x are
+ceilings on unused issue slots, not predictions of a rewrite, and per-loop densities are
+unweighted by trip count. Written up in
+[`docs/BENCHMARKS.md`](../../docs/BENCHMARKS.md#the-open-convs-113-gap-to-the-vendor-is-issue-rate-and-it-is-visible-without-a-trace).
+
 **`dispatch_runlist_npu.log`** — the measurement `dispatch_floor_npu.log` asked for and
 `docs/DECISIONS.md` recorded as unrun (*"Nothing has been run -- this is an API-existence
 check and the next measurement to make"*). Batched `pyxrt.runlist` submission amortises the

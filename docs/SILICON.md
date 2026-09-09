@@ -209,7 +209,12 @@ op class was closed against the CPU (12.75× at 56×56), and it was closed by a 
 running at one-eleventh of what the same column does under AMD's compiler. At the DPU's
 rate one column matches the CPU's 1678.8 GOPS and four columns are ~4× ahead of it.
 Whether an open kernel can reach the DPU's rate is objective K1; nothing physical says it
-can't.
+can't. **And 2026-09-09 located where the 11.3× goes: MAC issue density.** The open kernels'
+hardware loops issue 0.045–0.333 `vmac` per cycle against the int8 GEMM's 0.889 on the same
+silicon — a 4×–20× shortfall that more than covers the throughput gap, with no appeal to data
+movement (`results/aie/conv_issue_rate_decomposed.log`). The 1×1 keeps its accumulator in
+memory rather than in registers; the 3×3 spends half its issue slots on `vshift` window
+alignment. Both are kernel defects, not silicon limits.
 
 ### 2.4 bf16 GEMM
 
@@ -603,7 +608,23 @@ Reuses: the kernel, `extract_golden.py`, the handoff harnesses on both branches.
 
 ### Tier 2 — kernel quality, held to measured bars
 
-**K1. int8 conv at DPU-class efficiency.**
+**K1. int8 conv at DPU-class efficiency. — The 11.3× is ISSUE RATE, answered 2026-09-09
+without a trace.** This entry's own go/no-go said "the first trace will say whether it is data
+movement or issue rate". It is issue rate, and the instruction schedule says so on its own
+(`results/aie/conv_issue_rate_decomposed.log`). The int8 GEMM issues **0.889 vmac/cycle**; the
+best conv loop in the design manages **0.333**, the 3×3's main loop **0.222**, and the 1×1's
+hot loop **0.045**, with two of its three loops issuing no MAC at all. A 4×–20× shortfall in
+MAC issue density against an 11.3× throughput gap — the schedule alone more than accounts for
+it. **Two different causes, and the fixes differ.** The 1×1 never keeps an accumulator in a
+register: its 22-bundle loop loads all four quarters from memory, issues one `vmac`, stores
+four quarters back, and idles six bundles on load-to-use latency, while naming only 3 of the
+file's 9 accumulators. The 3×3 *does* keep `cm1`–`cm4` live and still reaches 0.222, because
+six of its eighteen bundles are `vshift` and four more `vmov` — sliding-window realignment
+spent in issue slots, which is precisely what this entry's tooling section proposes moving to
+the mem tile's 4-D BDs. Reaching 1 TOPS needs 6.8×; the 1×1's defect alone is worth up to 20×
+on that kernel. **What this does not establish** is that a rewrite would get there — the 20×
+and 4× are ceilings on what the schedule leaves unused, not predictions, and the per-loop
+densities are unweighted by trip count.
 Bar: 1.65 TOPS per column, clock-independent (2.2); today 146 GOPS (2.3). Physical
 basis: 3.3 — conv has ten times the reuse the core needs, the weights fit on-chip, and the
 same column sustains the bar under AMD's compiler. Tooling: a conv design of this repo's

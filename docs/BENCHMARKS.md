@@ -490,6 +490,50 @@ also dominates *everything* below ~0.5 MB: wall time is flat across a 64× paylo
 > The 617 µs figure still governs a **single** unbatched IRON dispatch, which is what this
 > section measured, so it is superseded rather than retracted.
 
+### The open conv's 11.3× gap to the vendor is issue rate, and it is visible without a trace
+
+§2.3 of `docs/SILICON.md` puts the vendor DPU at **1650 GOPS per column** on int8 conv against
+the open `ml/bottleneck` kernel's **146.1** — 4.5% of what the same silicon does under AMD's
+compiler. Objective K1 said "the first trace will say whether it is data movement or issue
+rate", and no trace was ever run, because *"the conv kernels have no surviving build cache, so
+this repo's most-lost op class was not surveyed"*. The cache was rebuilt and the question
+answered from the instruction schedule alone. Backing log
+`results/aie/conv_issue_rate_decomposed.log`.
+
+Bundle count is cycle count on this core, so `vmac` per bundle **is** MACs per cycle:
+
+| Loop | Bundles | `vmac` | Per cycle |
+|---|---|---|---|
+| int8 GEMM, hardware loop | 9 | 8 | **0.889** |
+| conv2dk3 (3×3), main loop | 18 | 4 | 0.222 |
+| conv2dk3, best loop | 3 | 1 | 0.333 |
+| conv2dk1 (1×1), hot loop | 22 | 1 | **0.045** |
+| conv2dk1, other two loops | 15, 15 | 0, 0 | 0.000 |
+
+**A 4×–20× shortfall in MAC issue density against an 11.3× throughput gap.** The schedule
+alone more than accounts for it; nothing about data movement needs invoking.
+
+**The two kernels fail differently, and only one is subtle.** The 1×1 never keeps an
+accumulator in a register — its loop loads all four quarters from memory (`vlda amhh1/amhl1/
+amlh1/amll1`), issues **one** `vmac`, stores four quarters back, and idles **six of 22
+bundles** on load-to-use latency, while naming 3 of the file's 9 accumulators. The 3×3 *does*
+keep `cm1`–`cm4` live with no accumulator traffic, and still reaches only 0.222, because six
+of its eighteen bundles are `vshift` and four more `vmov`: sliding-window realignment spent in
+issue slots. That is the classic conv-on-SIMD cost, and it is exactly what K1's tooling
+section proposes removing by moving row shifting to the mem tile's 4-D descriptors.
+
+One minor third finding, recorded so it is not mistaken for a lever: the 3×3's hot loop
+carries one paired-load bundle and a bank holds two distinct buffers, so the same-bank penalty
+applies — about 5%, noise beside a 4× issue shortfall.
+
+**Note what this does and does not overturn.** `kernels/README.md` closed a "kernel quality"
+item with *"both vectorize correctly with `aie::mmul`"*. That is a **correctness** statement
+and it remains true; these are the throughput numbers, which were never taken. Reaching K1's
+1 TOPS bar needs 6.8× and the 1×1's defect alone is worth up to 20× on that kernel — but the
+20× and 4× are **ceilings on unused issue slots, not predictions of a rewrite**, and the
+per-loop densities are unweighted by trip count, so which loop dominates runtime is still
+unmeasured. What this removes is the excuse that nobody knew where the 11.3× went.
+
 ### Batched submission drops the dispatch floor 17×, and reopens four closed verdicts
 
 The dispatch floor above is the single most consequential number in this repo: `docs/SILICON.md`
