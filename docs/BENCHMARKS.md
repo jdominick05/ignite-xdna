@@ -836,10 +836,18 @@ minority. C++ still pays ~108 µs for one dispatch against 36.7 µs batched, so 
 submission is driver-side work that only batching amortises, in any language.** Latency-critical
 single calls do not benefit from the rewrite; throughput does.
 
-**Persistent runlists buy almost nothing, which answers a reasonable guess.** Building the list
+**Persistent runlists buy a little, and the mechanism is not the obvious one.** Building the list
 once and re-executing beats rebuilding only at N=1 (125.7 vs 148.5 µs) and N=2, and the two are
-indistinguishable from N=8 up. Runlist *construction* costs ~20 µs and is fully amortised by
-N=8: the win in a C++ host comes from not being IRON, not from reusing the list.
+indistinguishable from N=8 up. The first version of this section attributed that to runlist
+*construction* — wrongly: in every arm, and in the Python harness, the timer starts *after* the
+`set_arg`/`add` loop, so construction was never timed at all. A `built` arm that starts the timer
+before the build loop measures it properly: construction costs ~18 µs fixed **plus ~3.3 µs per
+run added**, so it *grows* with the batch (21.7 µs at N=1, ~220 µs to build a 64-run list) rather
+than amortising away. The fresh-versus-reused *execution* gap — what the earlier claim was
+actually pointing at — is ~27 µs at N=1 and gone by N=8. End to end, which is what a caller who
+rebuilds every time faces, `built` vs `persistent` is 169.2 vs 120.8 µs at N=1 (1.40×) and
+40.3 vs 36.8 µs at N=64 (**1.09×**). Reusing the list is worth ~9% at N=64 — real, but small
+beside the 13.6× that comes from not being IRON.
 
 **A wrong-design bug had to be fixed first, and it produced a plausible wrong number rather than
 an error.** The first attempt read FAILED VERIFICATION in both arms with a 777.7 µs single

@@ -130,11 +130,34 @@ but a minority. The C++ host still pays ~108 us for one dispatch against ~36.7 u
 about 70 us per submission is driver-side work that ONLY batching amortizes, in any language.
 Latency-critical single calls do not benefit from the rewrite; throughput does.
 
-PERSISTENT RUNLISTS BUY ALMOST NOTHING, AND THAT IS ITSELF THE ANSWER TO A REASONABLE GUESS.
+PERSISTENT RUNLISTS BUY LITTLE, AND THE FIRST VERSION OF THIS LOG GOT THE MECHANISM WRONG.
 Building the runlist once and re-executing it beats rebuilding it only at N=1 (125.7 vs 148.5 us,
 A) and N=2 (83.9 vs 95.6), and the two are indistinguishable from N=8 upward (47.4 vs 48.7;
-36.7 vs 36.7 at N=64). So runlist CONSTRUCTION costs on the order of 20 us and is fully amortized
-by N=8. The win in a C++ host comes from not being IRON, not from reusing the list. xrt::runlist
+36.7 vs 36.7 at N=64). The first version of this log attributed that gap to runlist CONSTRUCTION
+costing "on the order of 20 us". That attribution was unfounded: in `rebuild`, in `persistent`
+and in the Python harness alike, the timer starts AFTER the xrt::run/set_arg/add loop, so
+construction was never inside any timed region and its cost had not been measured at all. The
+gap between those two arms is something else -- executing a FRESHLY BUILT list versus
+re-executing a used one.
+
+MEASURED PROPERLY, in run C, by adding a `built` arm identical to `rebuild` except that the
+timer starts BEFORE the construction loop. `built` minus `rebuild` is the construction cost:
+
+   N    rebuild   built   built-rebuild   per list      persistent
+   1     147.54  169.19       21.65 us     21.7 us        120.79
+   2      91.11  100.89        9.78         19.6           79.56
+   8      47.85   53.19        5.34         42.7           47.45
+  64      36.82   40.26        3.44        220.2           36.80
+
+So CONSTRUCTING a runlist costs roughly 18 us fixed plus ~3.3 us per run added -- it does not
+amortise away, it grows with the batch, reaching ~220 us to build a 64-run list. And the
+fresh-versus-reused EXECUTION gap, which is what the earlier claim actually pointed at, is
+~27 us at N=1 (147.54 vs 120.79) and is gone by N=8.
+
+THE END-TO-END COMPARISON A REAL CALLER FACES is `built` versus `persistent`, since a caller who
+rebuilds every time pays construction too: 169.19 vs 120.79 us at N=1 (1.40x) and 40.26 vs
+36.80 us at N=64 (1.09x). That is more than "almost nothing" -- reusing the list is worth about
+9% at N=64 -- but it is still small beside the 13.6x that comes from not being IRON. xrt::runlist
 has no reset() in this SDK; re-execution works because execute() only refuses a list that is
 currently executing.
 
@@ -161,3 +184,12 @@ WHAT THIS DOES NOT SHOW
   was not investigated.
 - The C++ single-dispatch arm uses kernel()+wait() and so includes XRT's own run-object
   construction per call; a lower single-dispatch number may exist behind a pre-built run.
+- UNEXPLAINED: Python reads about 2% FASTER than C++ at every N >= 16, in both series
+  (35.9 vs 36.7-36.8 us at N=64). The direction is consistent rather than noise, and nothing
+  here accounts for it -- the C++ arm does strictly less work per iteration. Candidates not
+  separated: pyxrt may hold the GIL across execute()+wait() in a way that changes the polling
+  path, the two may differ in how wait() is entered, or the timer bases differ
+  (time.perf_counter vs std::chrono::steady_clock). It is well inside the spread that matters
+  for the headline, and is recorded rather than explained.
+- Run C (the `built` arm) was measured at batch sizes 1,2,8,64 only, and its rebuild/persistent
+  rows are a third series -- consistent with A and B but not identical to either.

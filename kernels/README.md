@@ -363,8 +363,12 @@ binding was never in it** (`results/aie/dispatch_cpp_runlist_npu.log`). The stac
 once at startup (33–60 ms). **So use ~531 µs for a batched `@iron.jit` design and ~36.7 µs for a
 C++ host** — the latter is now a written, measured runner rather than a hypothetical caller.
 Caveats that survive: batching only pays from N ≥ 4–8; one dispatch costs ~108 µs even in C++
-(only ~20–30 µs of it was the binding); and a persistent runlist buys almost nothing, since
-construction is ~20 µs and gone by N=8. If you write a host of your own, note that
+(only ~20–30 µs of it was the binding); and a persistent runlist is worth ~9% at N=64 end to end
+(40.3 → 36.8 µs), 1.40× at N=1. **Note the correction**: the gap is *not* runlist construction,
+which sits outside the timed region in every arm and had not been measured. Timed properly,
+construction is ~18 µs fixed **plus ~3.3 µs per run added**, so it grows with the batch (~220 µs
+for a 64-run list) instead of amortising; the fresh-versus-reused *execution* gap is ~27 µs at
+N=1 and gone by N=8. If you write a host of your own, note that
 `xrt::runlist` holds references to its runs — declare the run vector **before** the runlist so
 it outlives it, or teardown segfaults rather than raising.
 
