@@ -1,40 +1,4 @@
-================================================================================
-AIE-ML Systolic Shift-Cut Verification Report: models\regnetx_002_xint8.onnx
-================================================================================
-Analyzed 46 quantized systolic operation(s).
-Shift-cut violations found: 1 / 46 (2.2%)
-
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-CRITICAL HARDWARE INFEASIBILITY HAZARDS DETECTED:
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-  - [HAZARD] Conv '/s1/b1/conv2/conv/Conv': A=2.028241e+31, M=16384, sigma=-90 -> ACCUMULATOR OVERFLOW HAZARD: sigma=-90 < 0 (requires left-shift beyond accumulator)
-
-Shift-Cut Register Distribution: min=-90, median=24, max=27
-================================================================================
-================================================================================
-AIE-ML Systolic Shift-Cut Verification Report: models\bisenetv2_fp32_xint8.onnx
-================================================================================
-Analyzed 63 quantized systolic operation(s).
-Shift-cut violations found: 0 / 63 (0.0%)
-
-PASS: All layers reside cleanly within the [0, 31] systolic shift-cut basin.
-
-Shift-Cut Register Distribution: min=7, median=22, max=26
-================================================================================
-================================================================================
-AIE-ML Systolic Shift-Cut Verification Report: models\fastdepth_fp32_xint8.onnx
-================================================================================
-Analyzed 38 quantized systolic operation(s).
-Shift-cut violations found: 1 / 38 (2.6%)
-
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-CRITICAL HARDWARE INFEASIBILITY HAZARDS DETECTED:
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-  - [HAZARD] Conv 'Conv_96': A=3.814697e-06, M=16384, sigma=32 -> SHIFT CLAMP HAZARD: sigma=32 > 31 (hardware 5-bit shifter clamps/overflows)
-
-Shift-Cut Register Distribution: min=25, median=29, max=32
-================================================================================
-================================================================================
+﻿================================================================================
 AIE-ML Systolic Shift-Cut Verification Report: models\resnet50_xint8_c64.onnx
 ================================================================================
 Analyzed 55 quantized systolic operation(s).
@@ -42,7 +6,7 @@ Shift-cut violations found: 0 / 55 (0.0%)
 
 PASS: All layers reside cleanly within the [0, 31] systolic shift-cut basin.
 
-Shift-Cut Register Distribution: min=12, median=24, max=26
+Shift-Cut Register Distribution: min=12, median=21, max=24
 ================================================================================
 ================================================================================
 AIE-ML Systolic Shift-Cut Verification Report: models\yolov8n_cut_xint8.onnx
@@ -55,22 +19,89 @@ PASS: All layers reside cleanly within the [0, 31] systolic shift-cut basin.
 Shift-Cut Register Distribution: min=7, median=20, max=23
 ================================================================================
 ================================================================================
-AIE-ML Systolic Shift-Cut Verification Report: models\midas_small_cut_xint8.onnx
+AIE-ML Systolic Shift-Cut Verification Report: models\yolov8n-pose_cut_xint8.onnx
 ================================================================================
-Analyzed 97 quantized systolic operation(s).
-Shift-cut violations found: 0 / 97 (0.0%)
+Analyzed 198 quantized systolic operation(s).
+Shift-cut violations found: 0 / 198 (0.0%)
 
 PASS: All layers reside cleanly within the [0, 31] systolic shift-cut basin.
 
-Shift-Cut Register Distribution: min=17, median=23, max=27
+Shift-Cut Register Distribution: min=7, median=21, max=23
 ================================================================================
 ================================================================================
 AIE-ML Systolic Shift-Cut Verification Report: models\modnet\modnet_cut_xint8.onnx
 ================================================================================
 Analyzed 74 quantized systolic operation(s).
-Shift-cut violations found: 0 / 74 (0.0%)
+Shift-cut violations found: 1 / 74 (1.4%)
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+CRITICAL HARDWARE INFEASIBILITY HAZARDS DETECTED:
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+  - [HAZARD] Conv '/f_branch/conv_f/conv_f.2/Conv': A=7.812500e-03, M=16384, sigma=21 (pos_x=0, pos_w=6, pos_y=-1) -> DYNAMIC RANGE OVERFLOW: negative position (pos_x=0, pos_w=6, pos_y=-1) exceeds unit scale
+
+Shift-Cut Register Distribution: min=7, median=22, max=27
+================================================================================
+================================================================================
+AIE-ML Systolic Shift-Cut Verification Report: models\sesr_m7_xint8.onnx
+================================================================================
+Analyzed 9 quantized systolic operation(s).
+Shift-cut violations found: 9 / 9 (100.0%)
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+CRITICAL HARDWARE INFEASIBILITY HAZARDS DETECTED:
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+  - [HAZARD] Conv '/head/Conv': A=7.812500e-03, M=16384, sigma=21 (pos_x=0, pos_w=6, pos_y=-1) -> DYNAMIC RANGE OVERFLOW: negative position (pos_x=0, pos_w=6, pos_y=-1) exceeds unit scale
+  - [HAZARD] Conv '/body.0/body.0.0/Conv': A=1.953125e-03, M=16384, sigma=23 (pos_x=-1, pos_w=7, pos_y=-3) -> DYNAMIC RANGE OVERFLOW: negative position (pos_x=-1, pos_w=7, pos_y=-3) exceeds unit scale
+  - [HAZARD] Conv '/body.1/body.1.0/Conv': A=3.906250e-03, M=16384, sigma=22 (pos_x=-3, pos_w=7, pos_y=-4) -> DYNAMIC RANGE OVERFLOW: negative position (pos_x=-3, pos_w=7, pos_y=-4) exceeds unit scale
+  - [HAZARD] Conv '/body.2/body.2.0/Conv': A=7.812500e-03, M=16384, sigma=21 (pos_x=-4, pos_w=7, pos_y=-4) -> DYNAMIC RANGE OVERFLOW: negative position (pos_x=-4, pos_w=7, pos_y=-4) exceeds unit scale
+  - [HAZARD] Conv '/body.3/body.3.0/Conv': A=7.812500e-03, M=16384, sigma=21 (pos_x=-4, pos_w=7, pos_y=-4) -> DYNAMIC RANGE OVERFLOW: negative position (pos_x=-4, pos_w=7, pos_y=-4) exceeds unit scale
+  - [HAZARD] Conv '/body.4/body.4.0/Conv': A=7.812500e-03, M=16384, sigma=21 (pos_x=-4, pos_w=6, pos_y=-5) -> DYNAMIC RANGE OVERFLOW: negative position (pos_x=-4, pos_w=6, pos_y=-5) exceeds unit scale
+  - [HAZARD] Conv '/body.5/body.5.0/Conv': A=1.562500e-02, M=16384, sigma=20 (pos_x=-5, pos_w=6, pos_y=-5) -> DYNAMIC RANGE OVERFLOW: negative position (pos_x=-5, pos_w=6, pos_y=-5) exceeds unit scale
+  - [HAZARD] Conv '/body.6/body.6.0/Conv': A=1.250000e-01, M=16384, sigma=17 (pos_x=-5, pos_w=6, pos_y=-2) -> DYNAMIC RANGE OVERFLOW: negative position (pos_x=-5, pos_w=6, pos_y=-2) exceeds unit scale
+  - [HAZARD] Conv '/tail/Conv': A=7.812500e-03, M=16384, sigma=21 (pos_x=-2, pos_w=8, pos_y=-1) -> DYNAMIC RANGE OVERFLOW: negative position (pos_x=-2, pos_w=8, pos_y=-1) exceeds unit scale
+
+Shift-Cut Register Distribution: min=17, median=21, max=23
+================================================================================
+================================================================================
+AIE-ML Systolic Shift-Cut Verification Report: models\fastdepth_fp32_xint8.onnx
+================================================================================
+Analyzed 38 quantized systolic operation(s).
+Shift-cut violations found: 0 / 38 (0.0%)
 
 PASS: All layers reside cleanly within the [0, 31] systolic shift-cut basin.
 
-Shift-Cut Register Distribution: min=7, median=24, max=31
+Shift-Cut Register Distribution: min=18, median=21, max=23
+================================================================================
+================================================================================
+AIE-ML Systolic Shift-Cut Verification Report: models\bisenetv2_fp32_xint8.onnx
+================================================================================
+Analyzed 63 quantized systolic operation(s).
+Shift-cut violations found: 1 / 63 (1.6%)
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+CRITICAL HARDWARE INFEASIBILITY HAZARDS DETECTED:
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+  - [HAZARD] Conv '/segment/S3/S3.0/shortcut/shortcut.2/Conv': A=7.812500e-03, M=16384, sigma=21 (pos_x=0, pos_w=6, pos_y=-1) -> DYNAMIC RANGE OVERFLOW: negative position (pos_x=0, pos_w=6, pos_y=-1) exceeds unit scale
+
+Shift-Cut Register Distribution: min=7, median=21, max=24
+================================================================================
+================================================================================
+AIE-ML Systolic Shift-Cut Verification Report: models\regnetx_002_xint8.onnx
+================================================================================
+Analyzed 46 quantized systolic operation(s).
+Shift-cut violations found: 8 / 46 (17.4%)
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+CRITICAL HARDWARE INFEASIBILITY HAZARDS DETECTED:
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+  - [HAZARD] Conv '/s1/b1/conv2/conv/Conv': A=1.525879e-05, M=16384, sigma=30 (pos_x=4, pos_w=-108, pos_y=-120) -> DYNAMIC RANGE OVERFLOW: negative position (pos_x=4, pos_w=-108, pos_y=-120) exceeds unit scale
+  - [HAZARD] Conv '/s1/b1/conv3/conv/Conv': A=1.000000e+00, M=16384, sigma=14 (pos_x=-120, pos_w=123, pos_y=3) -> DYNAMIC RANGE OVERFLOW: negative position (pos_x=-120, pos_w=123, pos_y=3) exceeds unit scale
+  - [HAZARD] Conv '/s4/b3/conv2/conv/Conv': A=1.525879e-05, M=16384, sigma=30 (pos_x=4, pos_w=5, pos_y=-7) -> DYNAMIC RANGE OVERFLOW: negative position (pos_x=4, pos_w=5, pos_y=-7) exceeds unit scale
+  - [HAZARD] Conv '/s4/b3/conv3/conv/Conv': A=1.000000e+00, M=16384, sigma=14 (pos_x=-7, pos_w=12, pos_y=5) -> DYNAMIC RANGE OVERFLOW: negative position (pos_x=-7, pos_w=12, pos_y=5) exceeds unit scale
+  - [HAZARD] Conv '/s4/b5/conv2/conv/Conv': A=3.051758e-05, M=16384, sigma=29 (pos_x=4, pos_w=8, pos_y=-3) -> DYNAMIC RANGE OVERFLOW: negative position (pos_x=4, pos_w=8, pos_y=-3) exceeds unit scale
+  - [HAZARD] Conv '/s4/b5/conv3/conv/Conv': A=1.000000e+00, M=16384, sigma=14 (pos_x=-3, pos_w=8, pos_y=5) -> DYNAMIC RANGE OVERFLOW: negative position (pos_x=-3, pos_w=8, pos_y=5) exceeds unit scale
+  - [HAZARD] Conv '/s4/b7/conv2/conv/Conv': A=6.103516e-05, M=16384, sigma=28 (pos_x=3, pos_w=7, pos_y=-4) -> DYNAMIC RANGE OVERFLOW: negative position (pos_x=3, pos_w=7, pos_y=-4) exceeds unit scale
+  - [HAZARD] Conv '/s4/b7/conv3/conv/Conv': A=1.000000e+00, M=16384, sigma=14 (pos_x=-4, pos_w=8, pos_y=4) -> DYNAMIC RANGE OVERFLOW: negative position (pos_x=-4, pos_w=8, pos_y=4) exceeds unit scale
+
+Shift-Cut Register Distribution: min=11, median=21, max=30
 ================================================================================

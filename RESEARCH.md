@@ -1706,21 +1706,28 @@ sections above.
   per-channel compiler memory growth remain open. See
   [`quant/DESIGN.md`](quant/DESIGN.md) for the ordered gates and remaining source questions.
 - **Native Windows driver overhead floor and DPU microcode stream — closed.** Low-level
-  driver characterization via `pyxrt.pyd` and `amdxe.sys` (`results/aie/windows_xrt_driver_bench.log`)
-  determined that the physical userspace dispatch preparation floor is **8.76 µs** (1.85 µs
-  run allocation + 6.91 µs across 8 arguments), and hardware runlist batching overhead is
-  **3.39 µs/run**. Sub-microsecond buffer synchronization (0.85 µs at 4 KB) establishes that
-  on unified APU memory, host-device synchronization is purely CPU cache flush/invalidation.
-  Reverse engineering of compiled `.xmodel` microcode (`results/aie/dpu_transaction_disasm.log`)
-  revealed 48-byte transaction packets dominated by Opcode 3 (Conv2D / 1x1 dense, 43–49%)
-  and Opcode 6 (Depthwise Conv, 33–37%). [Working](docs/BENCHMARKS.md#native-windows-xrt-driver-latency-and-dpu-microcode-disassembly).
+  driver characterization via `pyxrt.pyd` and `amdxe.sys` (`results/aie/windows_xrt_driver_bench.log`,
+  `results/aie/windows_context_switch_bench.log`) determined that the physical userspace
+  dispatch preparation floor is **8.76 µs** (1.85 µs run allocation + 6.91 µs across 8 arguments),
+  hardware runlist batching overhead is **3.39 µs/run**, and sub-microsecond buffer synchronization
+  (0.85 µs at 4 KB) establishes that host-device sync on unified APU memory is purely CPU cache
+  flush/invalidation. Context scaling discovered a hard driver ceiling of **5 virtual hardware contexts**
+  (matching the 5 physical silicon columns, with context 6 rejecting at NTSTATUS `0xc01e0009`), and
+  interleaved execution quantified a **747.75 µs context-switch penalty** (7.22x slowdown) when switching
+  contexts on a shared partition. Reverse engineering of compiled `.xmodel` microcode
+  (`results/aie/dpu_transaction_disasm.log`) revealed 48-byte transaction packets dominated by
+  Opcode 3 (Conv2D / 1x1 dense, 43–49%) and Opcode 6 (Depthwise Conv, 33–37%).
+  [Working](docs/BENCHMARKS.md#native-windows-xrt-driver-latency-and-dpu-microcode-disassembly).
 - **AIE-ML systolic shift-cut feasibility theorem for Project Ignition — closed.** Mathematical
   formulation of the post-accumulator scaling unit proved that operations are physically feasible
   on XDNA1 without numerical distortion if and only if the arithmetic right-shift register
-  sigma in [0, 31] (`results/quant/shift_cut_feasibility.log`). If sigma < 0, 32-bit accumulator
-  overflow destroys accuracy (as observed in RegNetX-002, sigma = -90, collapsing top-1 accuracy
-  to 0.50%). If sigma > 31, the 5-bit physical shifter clamps (as in FastDepth, sigma = 32, clamping
-  to 31). Models can now be analytically pre-screened with `python -m quant check-shift-cut`.
+  sigma in [0, 31] (`results/quant/shift_cut_feasibility.log`). In power-of-two quantization, this yields
+  the exact closed-form Systolic Scale Feasibility Window: `pos_y in [pos_x + pos_w - 17, pos_x + pos_w + 14]`.
+  If sigma < 0 (pos_y > upper bound), 32-bit accumulator overflow destroys accuracy (as observed in
+  RegNetX-002, sigma = -90, collapsing top-1 accuracy to 0.50%). If sigma > 31 (pos_y < lower bound),
+  the 5-bit physical shifter clamps (as in FastDepth, sigma = 32, clamping to 31). Automated scale
+  repair projection (`quant/shift_cut.py::project_scale_to_feasible_basin`) successfully projects FastDepth
+  `Conv_96` pos_y 0 -> 1, eliminating the 1-bit overflow without retraining.
   [Working](docs/BENCHMARKS.md#aie-ml-systolic-shift-cut-feasibility-theorem-for-project-ignition).
 - **The webcam path (single `4x4.xclbin` session, `./scripts/yolo-demo.sh`) has not
   been exercised end to end.** The related but distinct round-robin-across-4-columns

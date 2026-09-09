@@ -4333,6 +4333,32 @@ Two Windows driver constraints identified:
 1. **`pyxrt.bo.flags.normal` is rejected**: `amdxe.sys` throws `invalid argument` on `normal` allocation. On Phoenix APUs, memory is unified host RAM and must be allocated with `pyxrt.bo.flags.host_only`.
 2. **KDMA is unsupported on Windows**: XRT emits `[XRT] WARNING: Reverting to host copy of buffers (KDMA not supported on windows)` if a buffer's memory group ID does not match the kernel compute unit's connected bank. To prevent fallback copies, all zero-copy buffers must be allocated using `group_id = kern.group_id(arg_idx)`.
 
+### Hardware context scaling and driver context-switch penalty
+
+Benchmarked via `tools/windows_context_switch_bench.py` (`results/aie/windows_context_switch_bench.log`) on Desktop 2 (Phoenix XDNA1 NPU):
+
+Virtual hardware context capacity allocation:
+
+| Context Instance | Allocation Time | Status | Hardware Meaning |
+|---|---|---|---|
+| Context #1 | **78.63 ms** | Allocated | Cold firmware partition allocation and descriptor mapping |
+| Context #2 | **5.78 ms** | Allocated | Warm slot mapping (13.6x faster than cold setup) |
+| Context #3 | **5.66 ms** | Allocated | Warm slot mapping |
+| Context #4 | **5.38 ms** | Allocated | Warm slot mapping |
+| Context #5 | **5.72 ms** | Allocated | Warm slot mapping (matches 5 physical Phoenix columns) |
+| Context #6 | **1.71 ms** | **REJECTED (0xc01e0009)** | Hardware resource exhaustion / 5-column capacity ceiling |
+
+When Context #5 is deleted and garbage collected from userspace, reallocation succeeds in 4.98 ms, confirming clean slot recycling.
+
+Interleaved dispatch latency and context-switch penalty (25 iterations):
+
+| Dispatch Configuration | Mean Latency | Min Latency | Max Latency | Context-Switch Penalty |
+|---|---|---|---|---|
+| Same-Context (Baseline) | **120.25 µs** | 61.10 µs | 881.50 µs | Baseline |
+| Cross-Context Alternation | **867.99 µs** | 467.90 µs | 933.50 µs | **+747.75 µs (+0.748 ms, 7.22x slowdown)** |
+
+Alternating between two distinct hardware contexts on the Phoenix NPU incurs a 747.75 µs kernel driver / ERT firmware context-switch penalty due to DMA stream quiescing, micro-register state invalidation, and base register reprogramming. This explains why time-sliced multi-tenancy collapses throughput and why independent multi-process execution requires physical partition isolation across separate columns (`1x4.xclbin`).
+
 ### DPU microcode transaction stream disassembly
 
 The VitisAI compiler bundles compiled DPU instruction streams inside `.xmodel` Protobuf archives under the `mc_code` bytefield. Disassembly with `tools/dpu_transaction_disasm.py` reveals the transaction structure:
@@ -4415,6 +4441,34 @@ Diagnosis of identified violations:
 - **RegNetX-002**: Layer `/s1/b1/conv2/conv/Conv` has scale factor A = 2.028241e+31, yielding M = 16384 and sigma = -90. Because sigma < 0, the post-accumulator ALU cannot scale the 32-bit register down to int8; this forces top-1 accuracy to collapse to 0.50% (random chance).
 - **FastDepth**: Layer `Conv_96` has scale factor A = 3.814697e-06, yielding M = 16384 and sigma = 32. The hardware shifter is 5 bits wide (maximum shift 31); sigma = 32 overflows by exactly 1 bit, clamping to 31 and doubling the layer's output activations.
 - **MODNet**: Upper bound hits sigma = 31 exactly. Any scale perturbation exceeding 1 bit would push it into the clamp hazard regime.
+
+### Closed-form systolic scale feasibility window and repair projection
+
+In power-of-two quantization where scale is parameterized by position (S = 2^(-pos)), the post-accumulator scaling formula reduces to:
+
+    sigma = pos_x + pos_w - pos_y + 14
+
+Because the physical shift register is bounded by 0 <= sigma <= 31, the output scale position pos_y must satisfy the **Systolic Scale Feasibility Window**:
+
+    pos_x + pos_w - 17 <= pos_y <= pos_x + pos_w + 14
+
+Or equivalently in real scales:
+
+    2^(-14) * (S_x * S_w) <= S_y <= 2^(17) * (S_x * S_w)
+
+If pos_y < pos_x + pos_w - 17, sigma > 31 and the hardware shifter clamps/overflows. If pos_y > pos_x + pos_w + 14, sigma < 0 and the 32-bit accumulator overflows.
+
+**Automated Scale Repair Projection:**
+When an ONNX graph contains violating nodes, `quant/shift_cut.py::project_scale_to_feasible_basin` projects pos_y to the nearest boundary:
+
+    pos_y_repaired = clamp(pos_y, pos_x + pos_w - 17, pos_x + pos_w + 14)
+
+Tested on FastDepth `Conv_96`:
+- Original: pos_x = 7 (S_x = 2^-7), pos_w = 11 (S_w = 2^-11), pos_y = 0 (S_y = 1.0).
+- Analytical sigma: 7 + 11 - 0 + 14 = 32 > 31 (overflows 5-bit shifter by 1 bit).
+- Feasible pos_y window: [18 - 17, 18 + 14] = [1, 32].
+- Projected: pos_y = 1 (S_y = 0.5), yielding sigma = 31 <= 31.
+- Outcome: The layer is 100% physically compliant with zero shift-cut violations, eliminating the clamp hazard without retraining.
 
 ---
 
