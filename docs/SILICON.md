@@ -73,10 +73,11 @@ New numbers use 1.80 GHz and say which power mode they were taken in.
 | Issue width | 6 slots per bundle: `b` branch, `a` load, `s` store, `x` scalar, `m` move, `v` vector | MEASURED 2026-09-09 from the nop mnemonics Peano's `llvm-objdump` prints for each slot (`results/aie/aie2_isa_static.log`). `nopxm` is the fused encoding when x and m are both idle, so a five-field bundle still occupies six slots; bundles using few slots are emitted compressed and shorter than 16 B but still issue in one cycle. |
 | Cycles per hardware-loop iteration | equal to the loop body's bundle count | MEASURED 2026-09-09: the core is a statically scheduled VLIW with an exposed pipeline, so Peano covers operand latency with explicit nop bundles rather than an interlock. S0's two loops measured 9.000 and 2.000 cycles/iteration and disassemble to 9 and 2 bundles (`results/aie/aie2_isa_static.log`). An inner loop's cost is therefore readable before the kernel runs; a loop that waits on a lock, stream or DMA is the exception and needs the trace unit. |
 | Scalar load-to-use | result available to the 7th bundle after the load issues | MEASURED 2026-09-09: six all-nop bundles separate the `lda` from the `add` consuming it in S0's scalar loop, which is why that loop costs 9 cycles for one add (`results/aie/aie2_isa_static.log`). |
-| Live accumulators | **5** concurrently-live 4×8×8 int8 `aie::mmul` accumulators compile with no stack traffic; 6 is the first count that spills. The allocator names 9 accumulator registers, `cm0`–`cm8` | MEASURED 2026-09-09 by sweeping the count and reading the object code (`kernels/acc_spill_probe/`, `results/aie/aie2_isa_static.log`). Supersedes this row's earlier "≤4 stays in registers" and `docs/DECISIONS.md`'s "only 6 hardware accumulator registers"; both were inferred from the one `conv2dk3` kernel that spilled at 8. One shape and one optimisation level; a wider accumulator fits fewer, and 9 register names is a lower bound on the file. |
+| Live accumulators | **5** concurrently-live 4×8×8 int8 `aie::mmul` accumulators compile with no stack traffic; 6 is the first count that spills. The allocator names 9 accumulator registers, `cm0`–`cm8` | MEASURED 2026-09-09 by sweeping the count and reading the object code (`kernels/acc_spill_probe/`, `results/aie/aie2_isa_static.log`). Supersedes this row's earlier "≤4 stays in registers" and `docs/DECISIONS.md`'s "only 6 hardware accumulator registers"; both were inferred from the one `conv2dk3` kernel that spilled at 8. One shape and one optimisation level; a wider accumulator fits fewer, and 9 register names is a lower bound on the file. The 5 and the 9 are not in tension: the allocator needs accumulator registers for operands and temporaries around the MACs, not only for the accumulators themselves. The production int8 GEMM demonstrates it — it holds 8 live `mmul` accumulators, uses all 9 names, and spills, with a 416-byte frame and 33 stack references (`results/aie/gemm_cost_model.log`). |
 | Cycle counter | `aie::tile::current().cycles()` → `get_cycles()` — **not reachable from a Peano kernel**; the trace unit reads the same timer | SPEC: `ironenv/Lib/site-packages/mlir_aie/include/aie_api/tile.hpp`. MEASURED 2026-09-07: Peano (llvm-aie 22) declares `get_cycles()` and never defines it (`ld.lld: undefined symbol`), does not lower `__builtin_readcyclecounter`, and rejects inline asm; S0 read the timer through trace-unit event stamps instead (`results/aie/clock_probe_npu.log`). Re-checked 2026-09-09 from the machine-code side and the conclusion holds by a fourth route: the assembler accepts `CORE_ID` as a `mov` source and no timer name at all, and the register database puts the timer at memory-mapped `0x340F8`/`0x340FC` in the tile's configuration space rather than in the core's data space (`results/aie/aie2_isa_static.log`). |
 | Hand-written assembly | **Assembles and links.** A standalone `.s` never enters instruction selection, so it reaches the integrated assembler intact | MEASURED 2026-09-09 (`kernels/asm_probe/`, `results/aie/aie2_isa_static.log`). Only statement-level inline asm inside a C++ function fails, in the IRTranslator, which is the wall S0 hit. Hand-scheduling an inner loop is therefore available where the compiler's schedule is the binding constraint. Toolchain result: the object assembles, disassembles and links, but no hand-written kernel has been run on the NPU. |
-| `aie::mmul` shapes in mlir-aie's GEMM library | bf16 4×8×4; int8 4×8×8; int16 4×4×4 | SPEC: `aie_kernels/aie2/mm.cc`. |
+| `aie::mmul` shapes in mlir-aie's GEMM library | bf16 4×8×4; int8 4×8×8; int16 4×4×4 | SPEC: `aie_kernels/aie2/mm.cc`, and the compiler's own dispatch table `_MM_MAC_DIMS` in `python/iron/kernels/linalg.py`. One AIE2 int8 `vmac` therefore retires 4·8·8 = 256 MACs, which is exactly the 256 MACs/cycle nameplate. The same table gives AIE2P (Strix) 8×8×8 for int8, i.e. 512 per `vmac` — the generational difference is the MAC shape, not the issue rate. |
+| MAC issue rate, production int8 GEMM | **198.1 MACs/cycle** over a whole kernel call, 77.4% of the 256 nameplate; 88.9% inside the inner loop alone | MEASURED 2026-09-09 by counting `vmac` per bundle in the compiled object and dividing the tile's required MACs by the call's bundle count (`tools/gemm_cost_model.py`, `results/aie/gemm_cost_model.log`). The gap between 88.9% and 77.4% is the 135 once-per-call prologue/epilogue bundles, dominated by accumulator spill reloads. This is a computed issue rate, not a hardware-counter reading; it assumes the function's only branch is its one hardware loop. |
 | Numerics | `aie::set_rounding(conv_even)` needed to match host round-to-nearest-even; Peano's AIE libc has no float `sqrtf` | MEASURED: `results/aie/groupnorm_bf16_kernel_npu.log`. |
 
 ### 1.3 One mem tile
@@ -388,7 +389,18 @@ query as a flat 800 in every power mode — an idle reading, as `results/aie/pmo
 clock to the MHz (1800 / 1028 / 800); idle, 800 in every mode. The trace unit is the
 measurement of the clock; the readback is its live indicator.
 
-**S1. Pin the data-movement constants.**
+**S1. Pin the data-movement constants. — Bounded from the demand side 2026-09-09; the port
+measurement itself is unstarted.** `tools/gemm_cost_model.py` computes what the int8 GEMM's
+cores would need if never starved (6.19 B/cycle into one core's L1 at n=64) against what the
+measured time says they get (2.50 B/cycle), and finds the measured cycles per call almost
+unchanged, 3,274 vs 3,160, when the work per buffer is halved — the signature of a design
+bound by buffer delivery rather than issue (`results/aie/gemm_cost_model.log`). That brackets
+the answer but does not measure a port. **The route to measuring one is `PORT_RUNNING` /
+`PORT_STALLED` / `PORT_IDLE` on shim and mem-tile DMA ports, and none of that reader exists
+yet**: those events need their own wrapper classes and `shimtile_events=` / `memtile_events=`
+parameters, and `kernels/pmu_probe/`'s reader takes `streams[0]`, the CORE packet type, which
+is empty in a no-compute passthrough design. The frame encoding for the shim and mem-tile
+packet types is also unconfirmed against the core format.
 Physical basis: 1.5–1.6 hold three mutually inconsistent inferences. Tooling: extend the
 dispatch-floor passthrough with `--direction {read,write,both}` and `--channels 1..8`,
 plus two more variants — mem tile → four cores by broadcast, and core → adjacent core by
@@ -432,7 +444,18 @@ showing per-core MAC busy time, DMA stalls and lock waits. Decides: which half o
 "instruction/tile-level profiling this repo's toolchain does not expose" that closed two
 threads in `RESEARCH.md` — the silicon exposes it, the post-step didn't.
 
-**S3. In-kernel cycle accounting without trace.**
+**S3. In-kernel cycle accounting without trace. — Answered statically for one kernel
+2026-09-09; the hardware-counter route is unstarted.** MACs per cycle per core no longer has to
+be inferred from throughput. `tools/gemm_cost_model.py` reads it off the object code: the int8
+GEMM's inner loop issues 8 `vmac` per 9-bundle iteration, 88.9% of one per cycle, and across
+the whole call — loop, prologue, amortised zeroing, handoff — **198.1 MACs per cycle, 77.4% of
+the 256 nameplate** (`results/aie/gemm_cost_model.log`). Multiplied by the 40.4% of the
+dispatch the core actually spends issuing, that reproduces the measured 31.3% of peak exactly,
+without being fitted to it. **Unstarted:** the decimating hardware counter — subclass
+`GenericEvent`, override `get_register_writes()` to program `Performance_Control0` / `Control2`
+— which would measure the issue rate rather than compute it, and would cover kernels whose
+control flow the static route cannot walk. Whether a counter may reset on the event it
+generated itself is unverified; the fallback is two chained counters.
 Physical basis: the same counter as S0, read inside the kernel around the `mmul` loop and
 around each fifo acquire — except that S0 found Peano cannot read it (1.2), so "without
 trace" now means the S0 mechanism itself: `event0()`/`event1()` brackets, two events per

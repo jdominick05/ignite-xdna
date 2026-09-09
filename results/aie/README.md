@@ -129,6 +129,14 @@ why the cycle counter cannot be read from a Peano kernel and that mlir-aie v1.4.
 parser mis-times gaps over 2^18 cycles. Written up in
 [`docs/BENCHMARKS.md`](../../docs/BENCHMARKS.md#the-aie-core-clock-measured-180-ghz-default-080-powersaver).
 
+> The two entries above were read as disagreeing — whether XRT's `max_clock_frequency_mhz`
+> tracks the live clock (`xrt_api_live_clock_and_pdh_npu.log`, 800 idle / 1800 under an
+> active context) or is pinned at 800 (`clock_probe_npu.log`, read across all five power
+> modes) — and the 2026-09-07 merge flagged it UNRESOLVED and the first entry's "retires"
+> claim premature. `pmode_clock_readback_npu.log` below settled it by varying load and
+> power mode in one sitting: both were right for what they varied. The trace-unit 1.80 GHz
+> remains the measurement of the clock; the readback is its live indicator.
+
 **`aie2_isa_static.log`** — AIE2 machine code read statically, no hardware used:
 `tools/aie_disasm.py` disassembles a core ELF or kernel object with Peano's own
 `llvm-objdump` and `kernels/acc_spill_probe/` sweeps register pressure with Peano's
@@ -161,13 +169,21 @@ work is done, giving `cycles = n_buffers x (compute + ~205) + ~10,000`. Three of
 stall categories were zero throughout and are unexercised, not verified. Written up in
 [`docs/BENCHMARKS.md`](../../docs/BENCHMARKS.md#the-trace-unit-as-a-performance-monitoring-unit-68-of-a-short-kernels-cycles-are-lock-wait).
 
-> The two entries above were read as disagreeing — whether XRT's `max_clock_frequency_mhz`
-> tracks the live clock (`xrt_api_live_clock_and_pdh_npu.log`, 800 idle / 1800 under an
-> active context) or is pinned at 800 (`clock_probe_npu.log`, read across all five power
-> modes) — and the 2026-09-07 merge flagged it UNRESOLVED and the first entry's "retires"
-> claim premature. `pmode_clock_readback_npu.log` below settled it by varying load and
-> power mode in one sitting: both were right for what they varied. The trace-unit 1.80 GHz
-> remains the measurement of the clock; the readback is its live indicator.
+**`gemm_cost_model.log`** — `aie2_isa_static.log` and `pmu_probe_npu.log` composed into a
+predictor, no hardware used: `tools/gemm_cost_model.py` computes a tiled GEMM's issuing cycles from its compiled
+object and compares them with an already-measured time, so the remainder is the cycles the
+core spent NOT issuing. On the best int8 GEMM the model closes against the sweep's own
+throughput without being fitted to it — schedule **77.4%** × issuing **40.4%** = 31.3% of
+peak, matching 4607.05 GOPS over 14,732. The mechanism is one number: halving the work per
+buffer leaves measured cycles per call at **3,274** against **3,160**, so a core handed twice
+the work per buffer finishes in the same wall time, which is buffer delivery setting the pace
+and not the instruction schedule. Predicts ≤2.5 B/cycle into a core for a port trace to
+confirm, and ~2.4× of unused headroom inside the per-buffer slot that the m=128 and k=128
+probes could not reach because they exhaust L1. **Corrects the provenance line in
+`aie2_isa_static.log` section 5**: the object disassembled there is the default n=32 build
+(2387.01 GOPS), not the tuned n=64 one behind 4607.05; the two loops are identical, so every
+number in that section stands and only the attribution was wrong. Written up in
+[`docs/BENCHMARKS.md`](../../docs/BENCHMARKS.md#the-int8-gemm-is-not-issue-bound-a-core-takes-the-same-time-per-buffer-whatever-is-in-it).
 
 **`pmode_clock_readback_npu.log`** — XRT's `max_clock_frequency_mhz` against power mode
 *and* load, varied together: a 2048³ bf16 GEMM hold with `xrt-smi configure --pmode`
@@ -189,7 +205,6 @@ Windows for a 1 ms timer tick — before that every period ran ~22 ms long. A cl
 monitor beside a hold did not disturb it; the two hangs seen that evening are attributed,
 with timestamps, to another session's concurrent-stream runs on the same device. Cited by
 [`docs/SETUP.md`](../../docs/SETUP.md).
-
 
 ## mlir-aie examples on this hardware
 

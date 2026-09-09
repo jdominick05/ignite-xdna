@@ -1254,6 +1254,84 @@ dispatch begins, so the cycles the core was alive are not the whole submit-to-wa
 must not be compared against it directly. `ACTIVE` being inclusive of stalls is inferred from
 the accounting closing, not from a document.
 
+### The int8 GEMM is not issue-bound: a core takes the same time per buffer whatever is in it
+
+The two results above compose into something neither gives alone. If a hardware loop's bundle
+count is its cycle count, and a buffer costs a constant on top of its work, then a kernel's
+**issuing time is computable from its object file without running it**. Subtracting that from a
+measured time leaves the cycles the core spent not issuing — the quantity every losing verdict
+in this repo has been missing. `tools/gemm_cost_model.py` does that computation for the
+`mm.cc`-shaped tiled GEMM; backing log `results/aie/gemm_cost_model.log`.
+
+**A correction first.** The static-ISA section above is headed "the kernel behind
+`results/aie/int8_matmul_sweep_npu.log`'s 4607.05 GOPS" and disassembles the object in cache
+`0816364bbbaf03f83e2f0bcd`. That cache carries `memref<64x32xi8>` buffers, so it is the
+**default n=32 build**, which measured 2387.01 GOPS — not the tuned n=64 build that produced
+4607.05. The tuned kernel is a different object hash, `matmul_i8_i32_86901378.o`. Every number
+in that section survives, because the two objects' loops are identical: nine bundles, eight
+`vmac`, `cm0`–`cm7`, 88.9% MAC issue density. Only the attribution was wrong, and it is
+corrected here rather than edited out of the log.
+
+Both tiles, same 4096×2048×2048 problem, same 16 cores, same sitting in the source log:
+
+| Tile | `vmac`/call | Issuing cycles/call | Predicted µs | Measured µs | Issuing | Measured cycles/call |
+|---|---|---|---|---|---|---|
+| m64 k64 **n64** | 1024 | 1323 | 3014.5 | 7458.1 | **40.4%** | 3274 |
+| m64 k64 **n32** | 512 | 738 | 3364.2 | 14394.5 | **23.4%** | 3160 |
+
+**The model closes against the source log's own throughput without being fitted to it.** The
+schedule term and the issuing term multiply to the measured fraction of peak in both rows:
+77.4% × 40.4% = 31.3%, and 4607.05 GOPS over the 14,732 GOPS those cores can issue at the
+measured 1.7983 GHz is 31.3%. For n=32, 69.3% × 23.4% = 16.2%, matching 2387.01/14732. The loop
+trip count also lands on a whole number, 126.0 exactly, which it would not if the MAC geometry
+or the software-pipeline peeling count were wrong. The geometry is the compiler's own —
+`_MM_MAC_DIMS` gives AIE2 (4, 8, 8) for every int8 input, so one `vmac` retires 256 int8 MACs.
+
+**The schedule is not where the GEMM loses.** Across the whole call — loop, prologue and
+epilogue, amortised output zeroing, ObjectFifo handoff — the n=64 kernel issues 198.1 MACs per
+cycle against the 256 the tile can retire, 77.4%. Most of the missing 22.6% is the 135
+once-per-call bundles, dominated by reloading the accumulators the register file cannot hold
+(416-byte frame, 33 stack references). Real, but not a factor of three.
+
+**The mechanism is that measured cycles per call barely move: 3,274 against 3,160, for buffers
+whose compute differs by 2×.** A core handed twice the work per buffer finishes in the same
+wall time. That is not an issue-bound design; it is a design whose per-buffer time is set by
+getting the buffer there. The n=64 call's 1,323 issuing cycles fit inside a 3,274-cycle slot
+with 1,951 to spare. It also explains the tile result the source log reported without a
+mechanism: n=32 → n=64 measured 1.93× faster where the cost model says the two differ by 12% in
+issuing time, so the speedup is almost entirely doing twice the work inside a slot whose length
+hardly changed.
+
+**How strong is the 40.4%.** The one constant carried from another kernel is the 15-cycle
+acquire/release. Charging instead the probe's entire 717 cycles per buffer — even though 512 of
+those were that probe's trace-flush loop, absent from production code, and 190 its kernel
+prologue, counted here from the GEMM's own disassembly — raises the issuing fraction to 83.3%,
+and **even then 547 cycles per call, 16.7%, remain unaccounted.** So the core is starved for
+between 17% and 60% of the dispatch, and the low end rests on the constant that does not
+transfer.
+
+Two hypotheses, both falsifiable by Phase 4's port trace:
+
+- **H9.** Stream-port tracing measures a sustained input rate at or below **2.5 B/cycle** into a
+  core. Bytes into L1 per call are 8,192 (n=64) and 6,144 (n=32); over the measured cycles per
+  call that is 2.50 and 1.94 B/cycle, against the 6.19 and 8.32 a never-starved core would
+  need. Fails if the ports read faster, which would move the missing time elsewhere.
+- **H10.** Per-buffer wall time is a constant set by the data path, so throughput rises with
+  work per buffer until issuing time approaches ~3,200 cycles — about 2.4× headroom at n=64.
+  Fails if a larger tile does not raise throughput. **Already obstructed:**
+  `results/aie/int8_matmul_sweep_npu.log`'s probes at m=128 and at k=128 both failed to build
+  with `'aie.tile' op Basic sequential allocation failed`, an L1 capacity limit. Reaching the
+  headroom means changing what occupies L1 — buffer depth, or the 16 KB single-buffered output
+  tile — not asking for a bigger tile.
+
+**What this does not show.** Nothing here was measured on hardware in this run; the
+issuing-cycle predictions are computed from object code and the microseconds they are compared
+against come from a run two days earlier. "Not issuing" is a residual, not an observation — it
+is consistent with lock stall, the only category seen non-zero so far, but this run does not
+attribute it. The 135 once-per-call bundles are assumed to execute once, which holds if the
+function has no branch besides its one hardware loop; the disassembly is consistent with that
+but every branch target was not walked. One power mode, one dtype, one design.
+
 ### MobileViT-XXS does not survive per-tensor INT8, and AdaRound cannot save it
 
 The accuracy question the attention work deferred, now measured on the full 1000-image
