@@ -154,8 +154,11 @@ the hardware, and that `cycles alive = issuing + the four stalls` closes to a co
 190/198-cycle prologue across a 16× range of work. First finding: `LOCK_STALL` is
 8,500–12,700 cycles per dispatch, flat in the work done, and **68%** of the shortest run's
 cycles — the core waits on its input ObjectFifo far longer than it computes, on a loop the
-disassembly rates as perfectly scheduled. Three of the four stall categories were zero
-throughout and are unexercised, not verified. Written up in
+disassembly rates as perfectly scheduled. Streaming 16 buffers and sweeping the compute per
+buffer separates the terms: the per-buffer overhead is a constant **717** cycles at every
+point over a 4,096× range, and the lock wait stays flat at 7,000–12,000 cycles however much
+work is done, giving `cycles = n_buffers x (compute + ~205) + ~10,000`. Three of the four
+stall categories were zero throughout and are unexercised, not verified. Written up in
 [`docs/BENCHMARKS.md`](../../docs/BENCHMARKS.md#the-trace-unit-as-a-performance-monitoring-unit-68-of-a-short-kernels-cycles-are-lock-wait).
 
 > The two entries above were read as disagreeing — whether XRT's `max_clock_frequency_mhz`

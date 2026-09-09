@@ -45,6 +45,7 @@ from pathlib import Path
 import numpy as np
 
 import aie.iron as iron
+from aie.iron.controlflow import range_
 from aie.iron import CompileTime, In, ObjectFifo, Out, Program, Runtime, Worker
 from aie.iron.device import Tile
 from aie.iron.kernel import ExternalFunction
@@ -132,6 +133,65 @@ def pmu_probe(a_in: In, c_out: Out, *, trace_size: CompileTime[int] = 0,
     rt = Runtime(
         sequence,
         [io_ty, io_ty, of_in.prod(tile=Tile(0, 0)), of_out.cons(tile=Tile(0, 0))],
+    )
+    prog = Program(iron.get_current_device(), rt, workers=[worker])
+    if trace_size > 0:
+        prog.enable_trace(
+            trace_size=trace_size,
+            workers=[worker],
+            coretile_events=resolve_events(events.split(",")),
+        )
+    return prog.resolve_program()
+
+
+@iron.jit
+def pmu_pipeline(a_in: In, c_out: Out, *, trace_size: CompileTime[int] = 0,
+                 n_buf: CompileTime[int] = 16,
+                 events: CompileTime[str] = ",".join(DEFAULT_EVENTS)):
+    """The same core, fed a stream of buffers instead of one.
+
+    The single-buffer design measures the cost of getting data to a core once. A real
+    kernel amortises that: while the core works on buffer i the DMA is fetching i+1, so
+    the lock wait shrinks as the compute per buffer grows and vanishes once the core is
+    slower than the stream. Sweeping the compute per buffer finds where that crossover
+    sits on this hardware, which is the arithmetic intensity a kernel must clear before
+    it is worth putting on the array at all.
+    """
+    io_ty = np.ndarray[(N_IO,), np.dtype[np.int32]]
+    all_ty = np.ndarray[(N_IO * n_buf,), np.dtype[np.int32]]
+    probe = ExternalFunction(
+        "clock_probe",
+        source_file=str(_KERNEL_SRC),
+        object_file_name="clock_kernels.o",
+        arg_types=[io_ty, io_ty],
+        include_dirs=[config.cxx_header_path()],
+        compile_flags=[f"-DN_OUT={N_IO}"],
+    )
+    of_in = ObjectFifo(io_ty, name="pin")
+    of_out = ObjectFifo(io_ty, name="pout")
+
+    def core_fn(of_in, of_out, fn):
+        for _ in range_(n_buf):
+            e = of_in.acquire(1)
+            o = of_out.acquire(1)
+            fn(e, o)
+            of_in.release(1)
+            of_out.release(1)
+
+    worker = Worker(
+        core_fn,
+        fn_args=[of_in.cons(), of_out.prod(), probe],
+        tile=Tile(0, 2),
+        trace=1 if trace_size > 0 else None,
+    )
+
+    def sequence(a, c, in_h, out_h):
+        in_h.fill(a)
+        out_h.drain(c, wait=True)
+
+    rt = Runtime(
+        sequence,
+        [all_ty, all_ty, of_in.prod(tile=Tile(0, 0)), of_out.cons(tile=Tile(0, 0))],
     )
     prog = Program(iron.get_current_device(), rt, workers=[worker])
     if trace_size > 0:
@@ -330,6 +390,68 @@ def calibrate(a, c_out, names, trace_size, tc, points):
     return 0 if (ok and any_stall) else 1
 
 
+def pipeline_sweep(names, trace_size, tc, n_buf, computes, mode="vector"):
+    """Sweep the compute per buffer and watch the lock wait collapse.
+
+    Each buffer carries its own mode/target header, so one xclbin serves every point.
+    """
+    stall_names = [n for n in names if n.endswith("_STALL")]
+    a = iron.zeros(N_IO * n_buf, dtype=np.int32, device="npu")
+    c = iron.zeros_like(a)
+    print()
+    print(f"PIPELINE SWEEP -- {n_buf} buffers of {N_IO} int32 through one core, "
+          f"{mode} loop")
+    print()
+    hdr = (f"{'cyc/buf':>9} {'active':>10} {'lock':>10} {'issuing':>10} "
+           f"{'lock %':>7} {'issue/buf':>10} {'hw us':>8}")
+    print(hdr)
+    print("-" * len(hdr))
+    rows = []
+    per_iter = 2 if mode == "vector" else 9
+
+    def dispatch(target):
+        header = np.zeros(N_IO, dtype=np.int32)
+        header[0] = MODES[mode]
+        header[1] = target
+        a[:] = np.tile(header, n_buf)
+        return pmu_pipeline(a, c, trace_size=trace_size, n_buf=n_buf,
+                            events=",".join(names))
+
+    # The first calls carry JIT and cache warm-up; without this the hw column is
+    # dominated by it and reads backwards against the work done.
+    for _ in range(2):
+        dispatch(computes[0])
+
+    for target in computes:
+        res = dispatch(target)
+        row, col, bs = core_byte_stream(tc)
+        counts, first, last = event_counts(bs, names)
+        idx = {n: i for i, n in enumerate(names)}
+        active = counts.get(idx.get("ACTIVE", -1), 0)
+        lock = counts.get(idx.get("LOCK_STALL", -1), 0)
+        stalled = sum(counts.get(idx[n], 0) for n in stall_names)
+        issuing = active - stalled
+        hw_us = (cp._npu_time_ns(res) or float("nan")) / 1e3
+        pct = 100.0 * lock / active if active else float("nan")
+        print(f"{target * per_iter:>9} {active:>10} {lock:>10} {issuing:>10} "
+              f"{pct:>7.1f} {issuing / n_buf:>10.0f} {hw_us:>8.1f}")
+        rows.append((target * per_iter, active, lock, issuing, pct))
+    print()
+    if rows:
+        locks = [r[2] for r in rows]
+        span = rows[-1][0] / rows[0][0] if rows[0][0] else float("nan")
+        print(f"Lock wait over a {span:.0f}x range of compute per buffer: "
+              f"min {min(locks)}, max {max(locks)}, median "
+              f"{sorted(locks)[len(locks) // 2]} cycles -- flat, not proportional.")
+        # issuing per buffer should be compute + a constant handoff; report the fit.
+        deltas = [r[3] / n_buf - r[0] for r in rows]
+        print(f"Issuing cycles per buffer minus compute: "
+              f"{', '.join(f'{d:.0f}' for d in deltas)}")
+        print(f"  -> per-buffer overhead is constant at about {sorted(deltas)[len(deltas) // 2]:.0f} "
+              f"cycles, independent of the work in the buffer.")
+    return 0
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--events", default=",".join(DEFAULT_EVENTS),
@@ -340,6 +462,11 @@ def main(argv=None):
     ap.add_argument("--trace-file", default=None)
     ap.add_argument("--calibrate", action="store_true",
                     help="run the two loops S0 measured and gate on reproducing them")
+    ap.add_argument("--pipeline", action="store_true",
+                    help="stream many buffers and sweep the compute per buffer")
+    ap.add_argument("--n-buf", type=int, default=16, help="buffers for --pipeline")
+    ap.add_argument("--computes", default="16,64,256,1024,4096,16384,65536",
+                    help="loop iterations per buffer for --pipeline")
     ap.add_argument("--raw", action="store_true", help="dump the frame stream")
     ap.add_argument("--raw-limit", type=int, default=60)
     ap.add_argument("--label", default="pmu")
@@ -362,7 +489,14 @@ def main(argv=None):
         os.environ.get("TEMP", "/tmp"), f"pmu_probe_{os.getpid()}.txt"
     )
     tc = TraceConfig(trace_size=args.trace_size, trace_file=trace_file)
+    # trace_config is per jitted callable; both designs need it or read_trace finds no file.
     pmu_probe.trace_config = tc
+    pmu_pipeline.trace_config = tc
+
+    if args.pipeline:
+        computes = [int(x) for x in args.computes.split(",") if x.strip()]
+        return pipeline_sweep(names, args.trace_size, tc, args.n_buf, computes,
+                              mode=args.mode)
 
     if args.calibrate:
         points = [

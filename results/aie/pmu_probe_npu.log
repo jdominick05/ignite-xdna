@@ -7,6 +7,7 @@ aie-partitions` reported "No hardware contexts running on device" before the run
 Commands (from the ironenv; kernels/pmu_probe/pmu_probe.py --help has the setup):
   python3 kernels/pmu_probe/pmu_probe.py --calibrate
   python3 kernels/pmu_probe/pmu_probe.py --raw --target 4096 --mode vector
+  python3 kernels/pmu_probe/pmu_probe.py --pipeline --n-buf 16 --mode vector
 
 WHY: S0 measured the clock, so cycles convert to seconds. results/aie/aie2_isa_static.log showed
 a hardware loop's bundle count is its cycle count, so an issuing loop's cost is readable off the
@@ -32,7 +33,60 @@ S0 only ever traced two point events, which fire once each. A level event such a
 true for many consecutive cycles and how the trace unit encodes that is documented nowhere this
 project has found. Read off the hardware with --raw:
 
-Python was not found; run without arguments to install from the Microsoft Store, or disable this shortcut from Settings > Apps > Advanced app settings > App execution aliases.
+== pmu_probe [pmu] mode=vector target=4096 trace_size=65536
+   events: 0:INSTR_EVENT_0, 1:INSTR_EVENT_1, 2:ACTIVE, 3:MEMORY_STALL, 4:STREAM_STALL, 5:LOCK_STALL, 6:CASCADE_STALL, 7:DISABLED
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+Platform
+  Name                   : NPU Phoenix 
+  Power Mode             : Default 
+  Total Columns          : 5 
+
+Estimated Power          : N/A
+pyxrt device.get_info(max_clock_frequency_mhz) = 800
+   kernel echo: mode=1 target=4096 tile=(2,1) checksum ok
+   verify: PASS   hw 1.042 ms
+   trace: 1120 bytes from physical tile (2,1)
+   frame stream:
+         0  0xf0  Start      absolute timer
+         8  0xc2  Multiple0  slots=00100100 +0
+        10  0xdb  Repeat1    x1023
+        12  0xdb  Repeat1    x1023
+        14  0xdb  Repeat1    x1023
+        16  0xdb  Repeat1    x1023
+        18  0xdb  Repeat1    x1023
+        20  0xd8  Repeat1    x32
+        22  0x20  Single0    slots=00000100 +0
+        23  0xea  Repeat0    x10
+        24  0xc2  Multiple0  slots=00100100 +0
+        26  0x20  Single0    slots=00000100 +0
+        27  0xfe  Filler     
+        28  0xd8  Repeat1    x16
+        30  0xc0  Multiple0  slots=00000101 +0
+        32  0x20  Single0    slots=00000100 +0
+        33  0xdb  Repeat1    x1023
+        35  0xfe  Filler     
+        36  0xdb  Repeat1    x1023
+        38  0xdb  Repeat1    x1023
+        40  0xdb  Repeat1    x1023
+        42  0xdb  Repeat1    x1023
+        44  0xdb  Repeat1    x1023
+        46  0xdb  Repeat1    x1023
+    ... 1120 bytes total, showed 24 frames
+    frame kinds: Filler=2, Multiple0=3, Repeat0=1, Repeat1=14, Single0=3, Start=1
+
+   slot  event                hits         first          last          span
+   ------------------------------------------------------------------------
+      0  INSTR_EVENT_0         257          5178         13905          8727
+      1  INSTR_EVENT_1         257         13391         13906           515
+      2  ACTIVE              27366             1         27366         27365
+      3  MEMORY_STALL            0             -             -             -
+      4  STREAM_STALL            0             -             -             -
+      5  LOCK_STALL          18451             1         27366         27365
+      6  CASCADE_STALL           0             -             -             -
+      7  DISABLED                0             -             -             -
 
 ANSWER: one frame per cycle. ACTIVE returns 27,864 hits over a span of 27,863 cycles -- a
 frame for every cycle it is true -- and consecutive identical frames are compressed into Repeat
@@ -49,11 +103,121 @@ pairs, and it is a second independent confirmation that one frame is one cycle.
 2. CALIBRATION AND CYCLE ACCOUNTING
 --------------------------------------------------------------------------------
 
-Python was not found; run without arguments to install from the Microsoft Store, or disable this shortcut from Settings > Apps > Advanced app settings > App execution aliases.
+== pmu_probe [pmu] mode=vector target=4096 trace_size=65536
+   events: 0:INSTR_EVENT_0, 1:INSTR_EVENT_1, 2:ACTIVE, 3:MEMORY_STALL, 4:STREAM_STALL, 5:LOCK_STALL, 6:CASCADE_STALL, 7:DISABLED
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+Platform
+  Name                   : NPU Phoenix 
+  Power Mode             : Default 
+  Total Columns          : 5 
+
+Estimated Power          : N/A
+pyxrt device.get_info(max_clock_frequency_mhz) = 800
+
+CALIBRATION -- the two loops results/aie/clock_probe_npu.log already measured
+
+   loop    iters       span  cyc/iter  expect   err %    active   stalled   issuing  bytes
+------------------------------------------------------------------------------------------
+ vector     4096       8213    2.0051   2.000   +0.26     27976     19061      8915   1120
+ vector    16384      32789    2.0013   2.000   +0.06     48033     14542     33491   1176
+ vector    65536     131093    2.0003   2.000   +0.02    142669     10874    131795   1344
+ scalar     2048      18436    9.0020   9.000   +0.02     27414      8268     19146   1120
+ scalar     8192      73732    9.0005   9.000   +0.01     85421     10979     74442   1232
+ scalar    32768     294916    9.0001   9.000   +0.00    307726     12100    295626   1680
+
+CYCLE ACCOUNTING -- does the traced work add up to the cycles the core was alive?
+
+   loop    iters    active   stalled   issuing  loop+flush unaccounted
+----------------------------------------------------------------------
+ vector     4096     27976     19061      8915        8725         190
+ vector    16384     48033     14542     33491       33301         190
+ vector    65536    142669     10874    131795      131605         190
+ scalar     2048     27414      8268     19146       18948         198
+ scalar     8192     85421     10979     74442       74244         198
+ scalar    32768    307726     12100    295626      295428         198
+
+GATE 1 cycles per iteration within 1% of the measured values: PASS
+GATE 2 at least one stall term non-zero: PASS
 
 
 --------------------------------------------------------------------------------
-3. WHAT THE NUMBERS SAY
+3. WHAT A BUFFER COSTS: SWEEPING THE COMPUTE PER OBJECTFIFO BUFFER
+--------------------------------------------------------------------------------
+The calibration above dispatches one buffer, so the lock wait it sees is the cost of getting
+data to a core once, unamortised. A real kernel streams: while the core works on buffer i the
+DMA fetches i+1. This sweeps the compute per buffer with 16 buffers in flight and watches what
+the lock wait does. Same kernel, same core, one xclbin for every point -- only the per-buffer
+loop count changes, carried in each buffer's own header.
+
+== pmu_probe [pmu] mode=vector target=4096 trace_size=65536
+   events: 0:INSTR_EVENT_0, 1:INSTR_EVENT_1, 2:ACTIVE, 3:MEMORY_STALL, 4:STREAM_STALL, 5:LOCK_STALL, 6:CASCADE_STALL, 7:DISABLED
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+Platform
+  Name                   : NPU Phoenix 
+  Power Mode             : Default 
+  Total Columns          : 5 
+
+Estimated Power          : N/A
+pyxrt device.get_info(max_clock_frequency_mhz) = 800
+
+PIPELINE SWEEP -- 16 buffers of 64 int32 through one core, vector loop
+
+  cyc/buf     active       lock    issuing  lock %  issue/buf    hw us
+----------------------------------------------------------------------
+       32      19357       7523      11834    38.9        740    325.5
+      128      25253      12059      13192    47.8        824    322.2
+      512      31581      11912      19668    37.7       1229    266.0
+     2048      56120      11876      44244    21.2       2765    351.0
+     8192     149498       6948     142548     4.6       8909    365.0
+    32768     547938      12173     535764     2.2      33485    566.6
+   131072    2118464       9835    2108628     0.5     131789   1497.6
+
+Lock wait over a 4096x range of compute per buffer: min 6948, max 12173, median 11876 cycles -- flat, not proportional.
+Issuing cycles per buffer minus compute: 708, 696, 717, 717, 717, 717, 717
+  -> per-buffer overhead is constant at about 717 cycles, independent of the work in the buffer.
+
+READING, and this is the reusable part. Two constants fall out and both are flat.
+
+The lock wait does not scale with the work. Across a 4,096x range of compute per buffer it
+stays in the low thousands to low ten-thousands of cycles with no trend, and it varies as much
+between repeats of the same point as it does across the sweep, because it is DMA timing. It is
+a fixed cost of the dispatch, order 10,000 cycles or 5.6 us at 1.80 GHz, not a per-buffer or
+per-byte cost.
+
+The issuing cycles per buffer are the compute plus a constant 717 cycles, at every point in the
+sweep. That is not a fit or a trend; the residual is 717 at 131,072 cycles of compute and 717 at
+512, four thousand times smaller. The large points are also bit-identical between runs, so the
+issuing side of this instrument is deterministic while the lock side is not. That 717
+decomposes against numbers already measured here: 512 cycles are this probe kernel's own flush
+loop, the 256 event pairs it emits so the trace packet reaches host memory (8 bundles per 4
+pairs, results/aie/aie2_isa_static.log), and 190 to 198 cycles are the kernel prologue and
+epilogue the section above isolated. The genuine per-buffer handoff -- acquire, release, and
+the call -- is what is left, about 15 cycles.
+
+So for a kernel shaped like this one, on one core:
+
+    cycles = n_buffers x (compute_per_buffer + handoff) + fixed_dispatch_lock_wait
+    handoff ~ 205 cycles including the kernel call, ~15 of it the ObjectFifo acquire/release
+    fixed_dispatch_lock_wait ~ 10,000 cycles (5.6 us at 1.80 GHz)
+
+which says a buffer carrying less than a few hundred cycles of work is mostly handoff, and a
+dispatch carrying less than about 10,000 cycles of total work is mostly waiting. Those are
+lower bounds for the easiest possible kernel: one core, no cascade, no neighbour traffic, and
+operands already in registers.
+
+The hw microseconds column is wall time for the whole dispatch and is NOT the core's view; it
+includes the host and DMA costs that results/aie/dispatch_floor_npu.log measured separately.
+Two warm-up dispatches precede the sweep, without which the first points are dominated by JIT
+and cache warming and read backwards against the work done.
+
+--------------------------------------------------------------------------------
+4. WHAT THE NUMBERS SAY
 --------------------------------------------------------------------------------
 Cycles per iteration converge on the measured values from above as the loop grows -- 2.0051 ->
 2.0013 -> 2.0003 and 9.0020 -> 9.0005 -> 9.0001 -- because the fixed loop-entry cost amortises.

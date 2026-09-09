@@ -1193,6 +1193,42 @@ It also sharpens the 169.8 µs hardware dispatch floor above. Some of that floor
 from inside the core as lock wait, but only a little: 10,000 cycles is about 3% of 169.8 µs,
 so the rest is outside the core entirely.
 
+**What a buffer costs, and the rule that comes out of it.** A single dispatch does not
+amortise anything. Streaming 16 buffers through the same core and sweeping the compute per
+buffer separates the fixed and per-buffer terms.
+
+| Compute per buffer (cycles) | Issuing cycles per buffer | Difference | Lock stall (total) |
+|---|---|---|---|
+| 32 | 740 | 708 | 7,523 |
+| 128 | 824 | 696 | 12,059 |
+| 512 | 1,229 | 717 | 11,912 |
+| 2,048 | 2,765 | 717 | 11,876 |
+| 8,192 | 8,909 | 717 | 6,948 |
+| 32,768 | 33,485 | 717 | 12,173 |
+| 131,072 | 131,789 | **717** | 9,835 |
+
+The per-buffer overhead is a constant 717 cycles — not a fit or a trend, the same residual at
+131,072 cycles of compute as at 512, four thousand times smaller. The lock wait stays flat too,
+7,000–12,000 cycles regardless of the work, and varies as much between repeats of one point as
+across the whole sweep, because it is DMA timing. The issuing side is deterministic: the large
+points come back bit-identical between runs.
+
+That 717 decomposes entirely into things already measured here. 512 cycles are this probe
+kernel's own flush loop, the 256 event pairs it emits so the trace packet reaches host memory,
+which the disassembly rates at 8 bundles per 4 pairs. 190–198 cycles are the kernel prologue
+and epilogue isolated above. What is left, about 15 cycles, is the genuine ObjectFifo acquire
+and release. So for a kernel shaped like this one, on one core:
+
+```
+cycles = n_buffers x (compute_per_buffer + ~205) + ~10,000
+```
+
+where the 205 is the per-buffer handoff including the kernel call and the 10,000 is the fixed
+dispatch lock wait. **A buffer carrying less than a few hundred cycles of work is mostly
+handoff, and a dispatch carrying less than about 10,000 cycles of work in total is mostly
+waiting.** Both are lower bounds, measured on the easiest kernel available: one core, no
+cascade, no neighbour traffic, operands already in registers. A real kernel pays more.
+
 **What this does not show.** Only `LOCK_STALL` has been seen non-zero, so three of the four
 stall categories are unexercised and are not shown to work by this run. One core tile, one
 power mode. The traced window starts when the trace unit is enabled rather than when the

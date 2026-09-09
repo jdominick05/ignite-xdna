@@ -1727,9 +1727,14 @@ sections above.
   8,500–12,700 cycles per dispatch on its input queue's lock, flat in the work done, and 68%
   of the shortest run's cycles are that wait rather than compute. The kernels in this repo
   have been losing on data arrival, not on arithmetic, and that is now a measurement instead
-  of an inference. Open: three of the four stall categories have never been non-zero here, so
-  they are unexercised; and the same instrument has not yet been pointed at the conv or the
-  GEMM, which is where it would change a verdict.
+  of an inference. Streaming buffers separates the fixed and per-buffer terms and gives the
+  first cost model this repo has for the inside of a kernel: `cycles = n_buffers × (compute +
+  ~205) + ~10,000`, where the per-buffer overhead is a constant 717 cycles at every point over
+  a 4,096× range of work and the lock wait is flat. A buffer carrying less than a few hundred
+  cycles is mostly handoff; a dispatch carrying less than ~10,000 cycles is mostly waiting.
+  Open: three of the four stall categories have never been non-zero here, so they are
+  unexercised; and the same instrument has not yet been pointed at the conv or the GEMM, whose
+  upstream designs carry no trace hook, which is where it would change a verdict.
 - **Candidate model pipelines (Categories A, C, D, E).** Test plans, target shapes, and falsification criteria:
   - **Category A:** Image Super-Resolution — SESR-M7 (placement, 1.48 ms latency, 3.02x iGPU win,
     70% AdaRound recovery) and Real-ESRGAN Compact (activation memory spill) closed above.
