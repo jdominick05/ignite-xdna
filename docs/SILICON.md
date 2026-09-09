@@ -382,7 +382,7 @@ small-op verdict in this repo is conditional on where it lands.
 **MEASURED 2026-09-09, and it lands low: ~36 µs for batchable work.** Batched `pyxrt.runlist`
 submission amortises the same passthrough to **36.3 µs** per dispatch — 17× below the 617 µs
 IRON floor and a *quarter* of the 169.8 µs bracket, so the hardware half is not silicon
-either (`results/aie/dispatch_runlist_npu.log`). Of the six ops listed above, four now clear
+either (`results/aie/dispatch_runlist_npu.log`). (**Sitting label**, because two figures for this same measurement class are both live: 36.3 µs is the original 2026-09-09 pyxrt run; the same-sitting rerun in `results/aie/dispatch_cpp_runlist_npu.log` reads **35.9 µs**, and the C++ figure is compared against *that*, not against 36.3 — see this repo's rule that every config being compared must be captured together.) Of the six ops listed above, four now clear
 the floor: MobileNetV2 by 48×, MobileViT stage-2 attention and bf16 attention stage 2 by 6.7×,
 GroupNorm at L ≤ 18816 by 6.5×. Attention stages 3 and 4 (34 µs, 12 µs) remain under it.
 **The caveat is the shape of the result:** 36 µs is a throughput figure that holds with 64
@@ -599,7 +599,7 @@ here.
 **D1. `xrt::runlist` batching. — ANSWERED 2026-09-09: 36.3 µs per dispatch, a 17× drop.**
 The sweep this objective asked for was run at N = 1, 2, 4, 8, 16, 32, 64
 (`results/aie/dispatch_runlist_npu.log`). Amortised cost per dispatch falls from 147 µs at
-N=1 to **36.3 µs** at N=64 and is asymptotic there, so a larger batch buys little. Raw pyxrt
+N=1 to **36.3 µs** at N=64 and is asymptotic there, so a larger batch buys little. (**Sitting label**, because two figures for this same measurement class are both live: 36.3 µs is the original 2026-09-09 pyxrt run; the same-sitting rerun in `results/aie/dispatch_cpp_runlist_npu.log` reads **35.9 µs**, and the C++ figure is compared against *that*, not against 36.3 — see this repo's rule that every config being compared must be captured together.) Raw pyxrt
 single-dispatch is ~140 µs, already below the 169.8 µs "hardware" bracket, and the batched
 figure is a quarter of it — the hardware half of the floor is not silicon. The prediction in
 this entry's physical basis was correct: most of the host term is software and a list of N

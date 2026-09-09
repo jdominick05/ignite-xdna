@@ -333,7 +333,7 @@ were actually charged while their write-ups reasoned with 185 µs.
 
 **Superseded 2026-09-09 for batchable work: the threshold is ~36 µs.** The zero-overhead
 resubmit path is no longer hypothetical — batched `pyxrt.runlist` submission amortises a
-dispatch to **36.3 µs**, 17× below the IRON figure and below the 169.8 µs hardware bracket
+dispatch to **36.3 µs** (**Sitting label**, because two figures for this same measurement class are both live: 36.3 µs is the original 2026-09-09 pyxrt run; the same-sitting rerun in `results/aie/dispatch_cpp_runlist_npu.log` reads **35.9 µs**, and the C++ figure is compared against *that*, not against 36.3 — see this repo's rule that every config being compared must be captured together.), 17× below the IRON figure and below the 169.8 µs hardware bracket
 (`results/aie/dispatch_runlist_npu.log`). It is a **throughput** result: 36 µs holds when 64
 dispatches are in flight together, while a single unbatched call still pays ~140 µs raw or
 617 µs through IRON. So the 617 µs rule still governs one-shot latency-critical work, and

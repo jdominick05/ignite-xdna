@@ -76,7 +76,10 @@ repeatable. Every figure in section 3 is from that configuration.
 
 GROUP_STALL is worth one line: across all six eight-event runs it read EXACTLY equal to ACTIVE
 (38214/38214, 47315/47315, 47329/47329, 53960/53960, 38034/38034, 47255/47255). It is not an
-independent stall signal on this part, whatever it is.
+independent stall signal on this part. What it IS was not established: the enum this toolchain
+ships carries no docstring for it, and its position (22, immediately before the four specific
+stalls at 23-26) merely SUGGESTS a group/OR of them -- suggestive ordering is not documentation,
+and no reading of GROUP_STALL is claimed here.
 
 
 --------------------------------------------------------------------------------
@@ -95,9 +98,13 @@ given arm reproduced its cycle count exactly.
 
 THE GAP IS A CONSTANT SIX CYCLES, NOT A RATE. It does not move as the trip count goes 256 ->
 512 -> 2048. A one-cycle same-bank dual-load stall per iteration would have cost 256, 512 and
-2048 cycles respectively; it costs 6 every time, which is a fixed difference in loop setup
-(one base pointer is a static address, the other is a function argument) and not a memory-system
-effect at all. So there is NO per-iteration same-bank dual-load penalty in this loop.
+2048 cycles respectively; it costs 6 every time. THE HEADLINE IS THE INVARIANCE, not the cause:
+whatever those 6 cycles are, they are paid ONCE, so there is NO per-iteration same-bank
+dual-load penalty in this loop. Two causes fit a trip-count-invariant constant and this run
+separates neither -- a fixed difference in loop setup (one base pointer is a static address, the
+other a function argument), or a one-time bank-arbitration warm-up on first access to the second
+bank, which only the separated arm touches. See WHAT THIS DOES NOT SHOW; do not quote either as
+settled.
 
 MEMORY_STALL NEVER FIRES, INCLUDING IN THE ARM BUILT TO COLLIDE. Combined with pmu_probe_npu.log
 never having seen it nonzero, the conclusion is the one that matters for H12: MEMORY_STALL
@@ -124,7 +131,13 @@ WHAT THIS DOES NOT SHOW
 - One access pattern (two 16-lane int32 loads, 1 KB windows, unit stride), one core tile, one
   power mode. Nothing here covers stores, scalar loads, or the 4-bank striping a real GEMM tile
   sees.
-- The 6-cycle constant is attributed to loop setup by its INVARIANCE with trip count, not by
-  reading the schedule. That attribution is inference from three points, not disassembly.
+- THE 6-CYCLE CONSTANT HAS TWO CANDIDATE CAUSES AND THIS RUN SEPARATES NEITHER. It is
+  attributed above to loop setup -- one base pointer is a static address, the other a function
+  argument -- by its INVARIANCE with trip count, not by reading the schedule. The competing
+  explanation is a ONE-TIME BANK-ARBITRATION WARM-UP: the separated arm touches two banks where
+  the colliding arm touches one, and a fixed cost on first access to the second bank would also
+  be trip-count invariant. The data cannot tell them apart, because the separated arm always
+  touches two banks. Both readings leave the headline intact -- no PER-ITERATION penalty either
+  way -- but neither is ruled out, and the loop-setup reading should not be quoted as settled.
 - H12 itself remains NOT confirmed and NOT refuted. This run removes one proposed instrument;
   it does not answer the question that instrument was meant to answer.

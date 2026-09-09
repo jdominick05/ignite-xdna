@@ -1871,7 +1871,11 @@ nothing about data movement: same bytes, same DMA, same fifo depth, same functio
   **The control did produce a clean instruction-matched comparison, and it found no rate effect:**
   with identical `INSTR_LOAD` in both arms, colliding costs a *constant* **6 cycles** more at 256,
   512 and 2048 iterations (3850/3844, 7690/7684, 30730/30724). A one-cycle per-iteration stall
-  would have cost 256, 512 and 2048; a constant 6 is loop setup, not the memory system. **The
+  would have cost 256, 512 and 2048, so **the invariance is the finding** — those 6 cycles are
+  paid once, whatever they are. Two causes fit and this run separates neither: a fixed loop-setup
+  difference (one base is a static address, the other a function argument), or a one-time
+  bank-arbitration warm-up on first touch of the second bank, which only the separated arm
+  touches. Neither is ruled out; the headline does not depend on which. **The
   caveat that keeps H12 open:** the loop runs at 15.0 cycles/iteration for 4 loads, so it is not
   load-bound and has slack to absorb a one-cycle stall — this bounds the penalty in a *slack*
   loop, not in the GEMM's tight inner loop.
