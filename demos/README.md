@@ -39,6 +39,31 @@ $env:RYZEN_AI_INSTALLATION_PATH = 'C:\Program Files\RyzenAI\1.7.1'
 
 ## Running the Demos
 
+`./scripts/tui.sh` (or `python -m tui` from PowerShell) is a menu over everything
+below, plus the models as tasks. It shows the command line before running it, warns
+about the two traps in the next section, sends output to `outputs/` instead of
+`results/`, and reads `<cacheKey>/vitisai_ep_report.json` afterwards so "did the NPU
+actually take it" is answered rather than assumed. `python -m tui --selftest` checks
+the whole catalogue without opening a hardware context.
+
+### Two things to know before running any of these by hand
+
+**`--ep cpu` still destroys the NPU compile cache.** Six of the eight non-interactive
+demos call `clear_cache()` unconditionally rather than only for an NPU run --
+`width_ladder:69`, `adaround_diff:44`, `conf_sweep:72`, `pose_adaround:50`,
+`classifier_width:86`, `resolution_ladder:63`. Only `tri_hardware_showdown:92` guards
+it with `if ep == "npu"`. So a quick CPU look costs a full recompile on the next NPU
+run of that cache key. `batch_failure` clears unconditionally too, but it always runs
+an NPU pass, so there is nothing to warn about there.
+
+**`portrait_matting_demo.py` writes camera frames to disk in two places, and only one
+of them is documented above.** The `p` key saves a snapshot, and the `t` (calibrate)
+key writes **25 frames automatically** to `data/user_calib/`. `data/` is git-ignored
+so those stay local, but snapshots went to `results/modnet/`, which *is* tracked and
+holds images this page links. `--snapshot-dir` now exists to send them somewhere
+else; the default is unchanged.
+
+
 ### 1. Model Width Scaling: YOLO Ladder
 Runs `yolov8n`, `s`, `m`, and `x` sequentially on the NPU, flushing the compiled cache between variants:
 ```bash

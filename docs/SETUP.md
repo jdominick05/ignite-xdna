@@ -124,6 +124,22 @@ build removes it at start-up.
 
 ---
 
+## The launcher (optional)
+
+`./scripts/tui.sh` runs the models and demos from a menu. It needs
+[`rich`](https://rich.readthedocs.io/) in `resnet_env17` -- already present there and
+in `resnet_env` on Desktop 2, since it arrived as a transitive dependency, but this
+repo pins nothing and the other two machines may not have it:
+
+```powershell
+conda activate resnet_env17
+pip install rich
+```
+
+Nothing else in the repo needs it. Run the launcher from **PowerShell** for arrow-key
+menus; through `scripts/tui.sh` in Git Bash you get numbered menus instead, because
+mintty is not a real Windows console and `msvcrt` cannot read keys there.
+
 ## Quick install
 
 The common pipelines are wrapped in shell scripts under `scripts/`. They handle

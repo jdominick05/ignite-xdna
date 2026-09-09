@@ -88,6 +88,10 @@ dev-tools/
 # The *.log files in results/ are small and ARE tracked deliberately.
 results/dets_*.json
 scratch/
+# The TUI (tui/, scripts/tui.sh) writes every result it produces here, never into
+# results/ -- that tree is the tracked evidence base and 69 of its images are cited
+# from the docs. Sidecar JSONs here record a hostname, so this stays local.
+outputs/
 
 # --- Build artifacts -----------------------------------------------------
 tools/build/

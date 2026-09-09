@@ -132,6 +132,41 @@
 
 ## Rejected approaches and known pitfalls
 
+- **The launcher (`tui/`) is a front end, not a measurement tool, and the boundary is
+  load-bearing.** It writes only to `outputs/` (git-ignored): every demo defaults
+  `--out-dir` to `results/`, which is the tracked evidence base -- 69 of its images
+  are cited from the docs, and `adaround_diff_demo.py` writes exactly
+  `results/adaround_diff_yolov8n_npu.jpg`, which `demos/README.md` links. A launcher
+  that did not override that flag would overwrite cited evidence on its first
+  successful run, so `tui/runner.py` passes an absolute `--out-dir` every time and
+  `--selftest` asserts no output path resolves inside `results/`. Latencies it prints
+  carry `quotable: false` in their sidecar next to the contention verdict, because a
+  number-shaped artifact taken under an unknown host load is not a measurement.
+  Rejected along the way: a cross-hardware compare mode (a same-sitting CPU/iGPU/NPU
+  table is exactly the thing that should be a logged run, not a menu item); an
+  in-process task lane (an ORT session inside the UI means a DPU timeout kills the
+  launcher, a lingering session holds a context on single-tenant silicon and blocks
+  the next run, and structured results would have to come from parsing stdout -- so
+  tasks are `python -m tui.task`, spawned like a demo, returning a sidecar JSON); and
+  a `classify` task, because no ImageNet index-to-name mapping exists anywhere in this
+  repo and a task that answers `285` is not one anyone can use.
+
+- **Compile-cache staleness is exactly detectable, and nothing was using the
+  detection.** The cache is keyed by name rather than by model hash, so switching
+  model within a family silently reuses the previous compile -- the documented
+  wrong-weights failure. But `<cacheKey>/context.json` records `config.onnxPath`, the
+  model that compile was actually built from, and it is present in all 31 caches on
+  Desktop 2. Comparing it against the model about to run turns "always pass
+  `--fresh`" from a rule people remember into a check, with no sidecar state to
+  drift. Measured on 2026-09-09 while writing this: `modelcachekey` (ResNet50's key)
+  held a compile of `wide_resnet101_2_xint8_c64.onnx`, left by `classifier_width_demo`
+  which shares `RESNET_CACHE_KEY` across all three classifiers, and `yolocutcachekey`
+  held `yolov8n_cut_xint8_adaround.onnx`. A `4_run.py --ep npu` or a plain yolov8n run
+  without `--fresh` at that moment would have executed the wrong weights and reported
+  a plausible number. Paths in that field are recorded three ways (relative posix,
+  relative windows, absolute), so any comparison has to resolve against `ROOT` first.
+
+
 - **A wall-time or peak-memory figure from Desktop 2 without a host-load witness is a
   guess.** That box runs three Claude sessions, `agy` and PyCharm against the same 16
   threads, and `xrt-smi` answers only the device question -- nothing was watching the CPU.
