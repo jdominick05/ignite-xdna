@@ -3468,6 +3468,42 @@ and now (5.22 ms) are different days on the shared machine and are not compared.
 What this does not show: CLE on grouped or depthwise convolutions, on Gemm pairs, or on
 graphs whose matcher walk crosses Pad or ReduceMean; each raises until it has a gate.
 
+### Does byte parity survive the vendor compiler?
+
+Backing log: `results/quant/ignition_quark_pair_diff.log`. Tool: `tools/quant_pair_diff.py`.
+No NPU session was built.
+
+Every Ignition parity result above is reported as `INT8_EXACT`, which is the gate in
+`quant/verify.py`: zero structural node delta, zero byte mismatch on any scale, zero-point or
+non-int8 initializer, and at most 1 LSB on int8 weights, in practice 0. That is a claim about
+the numbers. It is not a claim that the two files are byte-identical, and they are not —
+`resnet50_ignition_cle_c64.onnx` and its Quark oracle differ by 8,171 bytes.
+
+Splitting that difference into numeric and non-numeric parts:
+
+| | Ignition | Quark |
+|---|---|---|
+| Nodes / initializers | 380 / 470 | 380 / 470 |
+| Structural node delta | — | **0** |
+| Initializers differing by a byte | — | 0 |
+| int8 initializers over 0 LSB | — | 0 of 108 |
+| `producer_name` | `Ignition` 0.1.0a1 | `quark.onnx` 0.11rc1 |
+| `opset_import` entries | 1 | **9** |
+| Node names matching in order | — | 209 of 380 |
+
+Every number and every edge matches. The whole 8,171 bytes is producer metadata, eight extra
+opset domain declarations, and 171 renamed nodes — exactly the material a compiler is entitled
+to ignore, and exactly the material it is entitled not to.
+
+**The test this sets up was not run.** Compiling both files through the EP with a fresh cache
+and comparing the resulting `compiled.*.xmodel` and `4x4.xclbin` would say whether parity
+extends from the file to the program the silicon actually runs, which is a stronger claim than
+this repo makes anywhere. It was skipped because the host-load check reported
+`HOST_LOAD_VERDICT PEER` — another session was part-way through a bisenetv2 quantize on the
+CPU, an EP compile is CPU-heavy, and the repo's own wrappers refuse to start on a contended
+machine. The NPU itself was idle. Re-run it on a clear machine; the eight extra opset domains
+are the first thing to suspect if the two compiles differ.
+
 ### Ignition: calibration spool without the pruned pre-Relu tensors
 
 Both producers' calibration had spooled all 123 activations of the folded ResNet,
