@@ -45,6 +45,42 @@ def can_use_keys(plain=False) -> bool:
     return bool(_INTERACTIVE and msvcrt and not plain)
 
 
+def clear_screen():
+    """Wipe the terminal before drawing a new screen.
+
+    Called when *entering* a menu, never when leaving a run -- a demo's output
+    stays on screen until the user presses Enter to go back, and only then does
+    the next menu clear it.
+
+    The guard asks the destination stream itself rather than rich's
+    Console.is_terminal, which is not the same question: `FORCE_COLOR` is set in
+    some environments (it is `3` in this one) and makes is_terminal report True
+    even when output is a pipe or a file, which would bake `\\x1b[2J\\x1b[H` into a
+    redirected log. results/ logs are grepped, and an escape code that silently
+    breaks a later match is exactly the failure this repo keeps hitting.
+    """
+    isatty = getattr(console.file, "isatty", None)
+    try:
+        if isatty is not None and isatty():
+            console.clear()
+    except (ValueError, OSError):
+        pass                        # closed or detached stream: nothing to clear
+
+
+def read_line(prompt):
+    """input(), minus the Windows encoding traps. Returns None on EOF/Ctrl-C.
+
+    str.strip() does not remove U+FEFF, so a BOM on the first line survives it and
+    turns "3" into "\\ufeff3" -- not a digit, silently rejected as invalid input.
+    PowerShell puts one there when a file or string is piped into a native command,
+    which is how anything drives this non-interactively.
+    """
+    try:
+        return input(prompt).lstrip("﻿").strip()
+    except (EOFError, KeyboardInterrupt):
+        return None
+
+
 def rule(text):
     console.rule(f"[bold]{text}[/bold]")
 
@@ -102,23 +138,30 @@ def _render(title, rows, cursor=None, allow_back=True):
 
 def _choose_numbered(title, options, rows, allow_back):
     numbered = [(f"{i + 1}. {label}", detail) for i, (label, detail) in enumerate(rows)]
-    _render(title, numbered, allow_back=allow_back)
+    error = ""
     while True:
-        try:
-            raw = input("select> ").strip().lower()
-        except (EOFError, KeyboardInterrupt):
+        # Redraw the whole screen each time round rather than appending an error
+        # under a menu that is already scrolled off -- otherwise a couple of
+        # mistyped selections leave the list somewhere above the fold.
+        clear_screen()
+        _render(title, numbered, allow_back=allow_back)
+        if error:
+            console.print(f"[red]{error}[/red]")
+        raw = read_line("select> ")
+        if raw is None:
             return None
+        raw = raw.lower()
         if raw in ("q", "quit", "b", "back", ""):
             return None
         if raw.isdigit() and 1 <= int(raw) <= len(options):
             return options[int(raw) - 1]
-        console.print(f"[red]enter 1-{len(options)}, or b/q[/red]")
+        error = f"enter 1-{len(options)}, or b/q"
 
 
 def _choose_keys(title, options, rows, allow_back):
     cursor = 0
     while True:
-        console.clear()
+        clear_screen()
         _render(title, rows, cursor, allow_back)
         key = _getkey()
         if key == "up":
@@ -135,21 +178,20 @@ def _choose_keys(title, options, rows, allow_back):
 
 def confirm(question, default=True):
     suffix = "[Y/n]" if default else "[y/N]"
-    try:
-        raw = input(f"{question} {suffix} ").strip().lower()
-    except (EOFError, KeyboardInterrupt):
+    raw = read_line(f"{question} {suffix} ")
+    if raw is None:
         return False
     if not raw:
         return default
-    return raw.startswith("y")
+    return raw.lower().startswith("y")
 
 
 def ask(question, default=""):
     hint = f" [{default}]" if default else ""
-    try:
-        raw = input(f"{question}{hint} ").strip()
-    except (EOFError, KeyboardInterrupt):
+    raw = read_line(f"{question}{hint} ")
+    if raw is None:
         return default
+    # Windows path completion happily hands you a quoted path.
     return raw.strip('"').strip("'") or default
 
 
