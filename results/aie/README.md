@@ -627,6 +627,26 @@ likeliest remaining rate-limiter. Host-load witness reads PEER, which can only d
 figure and so makes the verdict conservative. Written up in
 [`docs/BENCHMARKS.md`](../../docs/BENCHMARKS.md#the-11-convs-accumulators-were-in-memory-putting-them-in-registers-is-worth-3-and-the-op-class-still-loses).
 
+**`dispatch_cpp_runlist_npu.log`** — the same passthrough through a standalone **C++** XRT host
+(`kernels/dispatch_floor/dispatch_runner.cpp`, no Python in it), run back to back with the
+Python arm in one sitting because latency drifts between sittings. **The 36 us floor is the
+driver's, not the binding's:** C++ reads 36.7 us at N=64 against pyxrt's 35.9 us, the two
+agreeing within ~2% from N=4 up, with Python marginally *faster* at N >= 16. So no host-side
+rewrite goes below it, and `dispatch_runlist_npu.log`'s figure was never pybind overhead.
+**A deployable C++ runner does reach it**, which closes the open item both earlier logs named:
+same design, same sitting, 671.5 us (IRON unbatched) / 498.5 us (IRON batched 64) / ~108 us
+(C++ one call) / **36.7 us** (C++ batched 64) — 13.6x better than batched IRON, because IRON's
+~500 us host share is work a cached-handle host pays once at startup (33-60 ms) rather than per
+call. **Four thresholds now, not three**, none of them retracted. Two limits stand: batching
+only pays from N >= 4-8, and a single dispatch costs ~108 us even in C++, of which only
+~20-30 us was ever the binding. Persistent runlists buy almost nothing (~20 us of construction,
+gone by N=8) — the win is not being IRON, not reusing the list. **Also fixes a wrong-design
+bug** in `measure_runlist.py`: its "newest cache entry holding both files" rule excluded nothing
+(every IRON design writes `insts.bin`) and timed a 1052-instruction-word design as if it were
+the 75-word passthrough, reporting 777.7 us and FAILED VERIFICATION; it now captures the paths
+`CompilableDesign.compile()` returns and refuses to guess. Written up in
+[`docs/BENCHMARKS.md`](../../docs/BENCHMARKS.md#a-c-xrt-host-reaches-the-device-floor-and-36-µs-is-not-a-python-artifact).
+
 **`iron_batch_npu.log`** — the host path `dispatch_runlist_npu.log` said was missing, written
 and measured. `kernels/dispatch_floor/iron_batch.py` patches IRON's own transaction submit so
 an ordinary `@iron.jit` design queues unstarted runs into a `pyxrt.runlist`, with nothing

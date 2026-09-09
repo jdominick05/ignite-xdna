@@ -792,6 +792,72 @@ that has not been submitted"* — so `runlist.wait()` is the only completion sig
 output buffers is the only correctness gate under batching**, and a batch that silently did
 nothing would otherwise look extremely fast.
 
+### A C++ XRT host reaches the device floor, and 36 µs is not a Python artifact
+
+The two sections above both measured through pybind11, which left one question open and it was
+the one that mattered: is the residual per-call cost the *binding* or the *driver*? A C++ host
+answers it, and the answer decides whether a deployable runner can reach 36 µs or whether
+~500 µs is what a real caller always pays. `kernels/dispatch_floor/dispatch_runner.cpp` is a
+standalone C++ XRT host with no Python in it, driving the **same** cache entry — same
+`final.xclbin`, same `insts.bin`, same argument layout. `scripts/run-dispatch-cpp.sh` runs the
+Python and C++ arms back to back **in one sitting**, because this repo's own rule is that NPU
+latency drifts between sittings independent of any code change. Backing log
+`results/aie/dispatch_cpp_runlist_npu.log`.
+
+Per-dispatch µs on the 32 KB no-compute passthrough, two independent series each:
+
+| N | Python runlist (A / B) | C++ rebuild (A / B) | C++ persistent (A / B) |
+|---|---|---|---|
+| 1 | 144.0 / 146.9 | 148.5 / 152.4 | 125.7 / 123.0 |
+| 4 | 59.8 / 59.7 | 61.5 / 63.2 | 58.4 / 57.9 |
+| 8 | 47.1 / 47.3 | 48.7 / 48.8 | 47.4 / 47.6 |
+| 64 | **35.9 / 35.9** | **36.7 / 36.8** | **36.7 / 36.7** |
+
+**The 36 µs floor belongs to the driver, not to Python.** At N=64 C++ reads 36.7 µs against
+pyxrt's 35.9 µs, in both series, and from N=4 upward the two languages agree within ~2% — with
+Python marginally the *faster* of the two at every N ≥ 16. Removing the binding entirely does
+not move the batched floor. This closes the question the runlist section left open in the
+direction that makes its figure **more** trustworthy: 36.3 µs was never a measurement of pybind
+overhead.
+
+**A deployable C++ runner reaches that floor — the open item is closed.** Same design, same
+sitting, per dispatch: **671.5 µs** unbatched through IRON, **498.5 µs** batched through IRON,
+**36.7 µs** through the C++ host. That is 18.3× better than IRON unbatched and 13.6× better
+than IRON batched. IRON's 460–573 µs host share is *not* irreducible; it is work a cached-handle
+host does once at startup (33–60 ms here) instead of on every call.
+
+**So there are four thresholds, not three**, and which applies depends entirely on the host:
+671.5 µs (IRON, one call) · 498.5 µs (IRON, batched 64) · ~108 µs (C++, one call) · **36.7 µs**
+(C++ or pyxrt, batched 64). Nothing above is retracted — each still governs its own host path.
+
+**The single-dispatch path is only partly Python.** C++ single runs 108.1 / 109.8 µs mean
+against raw pyxrt's 140.8 / 127.0, so roughly 20–30 µs of it is binding overhead — real, but a
+minority. C++ still pays ~108 µs for one dispatch against 36.7 µs batched, so **~70 µs per
+submission is driver-side work that only batching amortises, in any language.** Latency-critical
+single calls do not benefit from the rewrite; throughput does.
+
+**Persistent runlists buy almost nothing, which answers a reasonable guess.** Building the list
+once and re-executing beats rebuilding only at N=1 (125.7 vs 148.5 µs) and N=2, and the two are
+indistinguishable from N=8 up. Runlist *construction* costs ~20 µs and is fully amortised by
+N=8: the win in a C++ host comes from not being IRON, not from reusing the list.
+
+**A wrong-design bug had to be fixed first, and it produced a plausible wrong number rather than
+an error.** The first attempt read FAILED VERIFICATION in both arms with a 777.7 µs single
+dispatch. `measure_runlist.py` resolved the wrong design: its rule was "newest cache entry
+holding both `final.xclbin` and `insts.bin`", and its own comment claimed the `insts.bin`
+condition stopped "a GEMM, say" being picked up — but *every* IRON design writes `insts.bin`, so
+the condition excluded nothing. Once `bank_placement/` and `gemm_reblock/` were compiled later
+the same day, "newest" was one of those. The two designs are not subtle: the passthrough is 75
+instruction words, what it resolved was 1052. It now captures the paths IRON itself returns from
+`CompilableDesign.compile()` and **refuses** to fall back to "newest".
+
+**What this does not show.** One design (a no-compute passthrough), one payload, one machine —
+this bounds the *host*, not any model's latency; a real kernel plateaus on its own compute. The
+C++ host is a benchmark host, not an inference runtime, and nothing here shows the VitisAI EP or
+any ONNX path can use a runlist. Batching still gives up per-call completion status, so any
+deployment at 36 µs inherits output verification as its only correctness gate. The one-time
+setup cost varied 1.8× between two runs of the identical binary and was not investigated.
+
 ### The chained int8 CNN also loses — and this time it was measured before anything was built
 
 `ml/resnet/layers_conv2_x` (three ResNet bottlenecks chained core-to-core across three
