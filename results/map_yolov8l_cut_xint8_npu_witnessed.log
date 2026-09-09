@@ -1,0 +1,93 @@
+deleted stale cache C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\yolocutcachekey
+loading annotations into memory...
+Done (t=0.27s)
+creating index...
+index created!
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\yolocutcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+model: head-cut (6 outputs), numpy decode, input 640x640
+eval : 5000 images, conf 0.001, iou 0.7, max_det 300, per-class NMS
+  100/5000  (9317 detections so far)
+  200/5000  (19089 detections so far)
+  300/5000  (27708 detections so far)
+  400/5000  (37447 detections so far)
+  500/5000  (46731 detections so far)
+  600/5000  (57110 detections so far)
+  700/5000  (67731 detections so far)
+  800/5000  (77465 detections so far)
+  900/5000  (86854 detections so far)
+  1000/5000  (95993 detections so far)
+  1100/5000  (106449 detections so far)
+  1200/5000  (116095 detections so far)
+  1300/5000  (127141 detections so far)
+  1400/5000  (137173 detections so far)
+  1500/5000  (146331 detections so far)
+  1600/5000  (157053 detections so far)
+  1700/5000  (166706 detections so far)
+  1800/5000  (174535 detections so far)
+  1900/5000  (184488 detections so far)
+  2000/5000  (194479 detections so far)
+  2100/5000  (203468 detections so far)
+  2200/5000  (212349 detections so far)
+  2300/5000  (221294 detections so far)
+  2400/5000  (230304 detections so far)
+  2500/5000  (240595 detections so far)
+  2600/5000  (251313 detections so far)
+  2700/5000  (260514 detections so far)
+  2800/5000  (269716 detections so far)
+  2900/5000  (278315 detections so far)
+  3000/5000  (288350 detections so far)
+  3100/5000  (297165 detections so far)
+  3200/5000  (306764 detections so far)
+  3300/5000  (318270 detections so far)
+  3400/5000  (328603 detections so far)
+  3500/5000  (338707 detections so far)
+  3600/5000  (348032 detections so far)
+  3700/5000  (358336 detections so far)
+  3800/5000  (368498 detections so far)
+  3900/5000  (377497 detections so far)
+  4000/5000  (386931 detections so far)
+  4100/5000  (397917 detections so far)
+  4200/5000  (408362 detections so far)
+  4300/5000  (418522 detections so far)
+  4400/5000  (427815 detections so far)
+  4500/5000  (437851 detections so far)
+  4600/5000  (447516 detections so far)
+  4700/5000  (457931 detections so far)
+  4800/5000  (467389 detections so far)
+  4900/5000  (476257 detections so far)
+  5000/5000  (486694 detections so far)
+
+486694 detections over 5000 images in 273s
+inference  mean 46.33 ms   median 46.31 ms
+wrote C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\results\dets_yolov8l_cut_xint8_npu.json
+Loading and preparing results...
+DONE (t=1.42s)
+creating index...
+index created!
+Running per image evaluation...
+Evaluate annotation type *bbox*
+DONE (t=21.49s).
+Accumulating evaluation results...
+DONE (t=5.43s).
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.454
+ Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] = 0.623
+ Average Precision  (AP) @[ IoU=0.75      | area=   all | maxDets=100 ] = 0.492
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.288
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.504
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.582
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=  1 ] = 0.354
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets= 10 ] = 0.581
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.626
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.450
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.687
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.760
+
+=== yolov8l_cut_xint8 | NPU | 640px | 5000 images ===
+mAP@50-95  45.37
+mAP@50     62.34
+mAP small / medium / large   28.78 / 50.39 / 58.24
+latency    46.33 ms

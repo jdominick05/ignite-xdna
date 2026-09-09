@@ -6,7 +6,13 @@
 #   ./scripts/yolo-eval.sh --n 200 --quick # float models on CPU only
 #   ./scripts/yolo-eval.sh --model models/yolov8n_cut_xint8.onnx   # just one
 #   ./scripts/yolo-eval.sh --model models/yolov8l_cut_xint8.onnx --n 5000 \
-#       --witness --progress 100      # the yolov8l DPU-timeout investigation
+#       --witness --progress 100 --tag witnessed   # the yolov8l DPU-timeout re-run
+#
+# --tag SUFFIX writes results/map_<stem>_<ep>_<SUFFIX>.log instead of the bare
+# name. Required whenever the bare name is already committed: re-running a model
+# that another machine already logged would otherwise silently replace evidence,
+# and this script now refuses rather than doing that. Say what is different
+# (--tag witnessed, --tag d2), not that it is a rerun.
 #
 # --witness runs tools/hwinfo_npu_bridge.exe alongside every NPU eval, one JSON
 # sample per second into results/witness_<stem>_<ep>.jsonl, each carrying the
@@ -25,7 +31,7 @@
 
 . "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
-N=500 QUICK=0 ONLY="" WITNESS=0 PROGRESS=500
+N=500 QUICK=0 ONLY="" WITNESS=0 PROGRESS=500 TAG=""
 while [ $# -gt 0 ]; do
     case "$1" in
         --n)        N="$2"; shift ;;
@@ -33,6 +39,7 @@ while [ $# -gt 0 ]; do
         --model)    ONLY="$2"; shift ;;
         --witness)  WITNESS=1 ;;
         --progress) PROGRESS="$2"; shift ;;
+        --tag)      TAG="$2"; shift ;;
         -h|--help)  usage "${BASH_SOURCE[0]}"; exit 0 ;;
         *)          die "unknown flag $1" ;;
     esac
@@ -70,11 +77,21 @@ for m in "${MODELS[@]}"; do
         continue
     fi
     step "$stem on ${ep^^}  ($N images)"
-    log="results/map_${stem}_${ep}.log"
+    log="results/map_${stem}_${ep}${TAG:+_$TAG}.log"
+    # Refuse to overwrite a COMMITTED log. CLAUDE.md: "never rewrite or tidy an
+    # existing log -- add a new one", and the derived name collides for any
+    # re-run of the same model on a second machine. Measured the hard way: a
+    # re-run of yolov8l here silently replaced the tracked 1532s laptop-era log
+    # with a 273s one, destroying the very number it was being compared against.
+    # An untracked log is fine to replace; it is scratch by definition.
+    if git ls-files --error-unmatch "$log" >/dev/null 2>&1; then
+        die "$log is committed evidence and this run would overwrite it.
+Pass --tag <what-is-different> (e.g. --tag witnessed) to write beside it instead."
+    fi
     fresh=()
     [ "$ep" = npu ] && fresh=(--fresh)
     [ "$WITNESS" = 1 ] && [ "$ep" = npu ] \
-        && witness_start "results/witness_${stem}_${ep}.jsonl"
+        && witness_start "results/witness_${stem}_${ep}${TAG:+_$TAG}.jsonl"
     run_logged "$log" python pipelines/yolov8n/5_eval_map.py \
         --model "$m" --ep "$ep" --n "$N" --log 3 \
         --progress-every "$PROGRESS" "${fresh[@]}" || {

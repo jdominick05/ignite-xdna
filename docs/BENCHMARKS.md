@@ -192,6 +192,45 @@ aie-partitions`, sampled every 15s) — so it is not a simple memory leak accumu
 over a long run. Root cause unresolved; not seen at all on n/s/m/x. Worth a closer look
 before trusting long unattended l runs in a real deployment.
 
+**It does not reproduce on Desktop 2, under a witness — and the re-run turned up a
+6.2× timing gap that is now the more interesting question**
+(`results/map_yolov8l_cut_xint8_npu_witnessed.log`,
+`results/witness_yolov8l_cut_xint8_npu.jsonl`, 2026-09-09). The same model
+(`yolov8l_cut_xint8.onnx`), the same 5000 images, with `tools/hwinfo_npu_bridge.exe`
+sampling the device once a second for the whole run: **it completed**, and produced
+**486694 detections and 45.37 mAP@50-95 — identical, to the detection, to the original
+run.** So the numerics are the same and only the environment differs.
+
+The witness rules out, *for this run on this machine*, four of the candidates:
+
+| candidate | what the 347 samples show |
+|---|---|
+| a foreign hardware context | exactly one context throughout — pid 33088, 4 columns, `start_col` 1; never a second |
+| a power-mode change or downclock | `power_mode` `Default` in all 347; clock 1800 MHz whenever submitting, 800 MHz only when idle |
+| NPU memory growth | flat 231 MB while running (64 MB during session setup) — matching the original run's flat 231 MB |
+| a progressive stall | submissions 16.71–19.36/s across 273 working samples, no trend; the only zero-throughput stretch is the 34 s tail, which is the CPU-side pycocotools accumulate |
+
+**None of that explains the original failure, and it must not be read as doing so.**
+Two things block that. First, the machine the failures happened on is **unestablished**:
+the original log records a compile cache under `C:\Users\<user>\src\ryzen-ai-xdna1-quantization`,
+a checkout that does not exist on Desktop 2 (which uses `PycharmProjects\`), and 22
+tracked logs share that `src\` prefix. Desktop 1 has no XDNA1 device, so those NPU runs
+were most likely the laptop — but commit `533b83a` predates this repo's name-the-machine
+rule and does not say. A clean run on Phoenix/32 GB cannot clear a failure that may have
+happened on Hawk Point/16 GB, and host RAM pressure there is untouched by "NPU memory
+flat at 231 MB": NPU memory and host memory are different pools.
+
+Second, and the reason this re-run is worth more than a null result: **the original took
+1532 s at 287.94 ms mean inference; this one took 273 s at 46.33 ms — 5.6× the wall clock
+and 6.2× the per-image figure, for byte-identical output.** Whether that gap is a longer
+*DPU command* in the original environment, or only a timing definition that once folded
+the numpy DFL decode into "inference" (the split described below under the iGPU section
+was made for exactly this reason), is **unresolved and is now the load-bearing question**
+— because a ~288 ms command sits ~6× closer to any fixed command watchdog than a ~46 ms
+one, which would make a watchdog the leading candidate rather than contention. Deciding
+it needs the original environment, not another Desktop 2 run: the same model re-timed on
+the laptop, with the current infer/post split, under a witness.
+
 ### iGPU vs NPU: is Ryzen AI worth it over DirectML?
 
 The Radeon 780M/760M iGPU on these same chips is reachable through
