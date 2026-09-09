@@ -4523,8 +4523,13 @@ median class. The NPU output does sit on the full output grid -- 256 distinct va
 0.003% at the rails.
 
 **Where it enters.** Cutting the graph at each `DequantizeLinear` and running the sub-model on both
-providers ([log](../results/quant/bga_tail_scan_desktop2_20260909.log)) puts the failure on a single
-node:
+providers ([log](../results/quant/bga_tail_scan_desktop2_20260909.log)) points at `/bga/Mul`:
+
+> **The "single node" reading below is superseded (same day).** Cuts 181 and 182 differ by **60
+> nodes**, not one -- cut 182 adds the whole `left1` detail branch along with the Mul -- so this
+> scan never isolated the operator. Measured separately, the Mul is not at fault at all:
+> [the Mul is not the fault](#the-mul-is-not-the-fault-a-long-lived-activation-is-2026-09-09-desktop-2). The correlations in the table are correct; the
+> attribution is not.
 
 | Cut | Tensor | Correlation | Mean abs diff | Placed |
 |---|---|---|---|---|
@@ -4539,10 +4544,10 @@ node:
 | 188 | `/head/conv/relu` | 0.2552 | 0.324 | 394/396 |
 | 190 | `logits` | 0.3455 | 0.273 | 402/404 |
 
-Both of `/bga/Mul`'s inputs arrive correlated at 0.986 and above. Its output is 0.687. **One node
-takes it.** Its sibling gate `/bga/Mul_1`, the same operation in the same block, goes 0.990 into
-0.998 and loses nothing. Everything after cut 186, where the two branches are added, is downstream
-amplification of what `/bga/Mul` already produced.
+Both of `/bga/Mul`'s inputs arrive correlated at 0.986 and above. Its output is 0.687. Its sibling
+gate `/bga/Mul_1`, the same operation in the same block, goes 0.990 into 0.998 and loses nothing.
+Everything after cut 186, where the two branches are added, is downstream amplification. **What
+this does not show, contrary to the first reading, is that the Mul is responsible** -- see below.
 
 **This does not support Theorem 2 as stated.** The claim is that divergent power-of-two scales on a
 multi-branch elementwise operation truncate dynamic range. But the sibling has the *larger*
@@ -4571,6 +4576,75 @@ before `onnx.utils.extract_model` will accept them, because `passes.avgpool_dpu_
 `Mul` after the consumer; `Graph.topo_sort` is the repo's own fix and changes node order only.
 Every sub-model's placement is reported above because one that fell back to CPU would be comparing
 CPU against CPU and would look perfect.
+
+---
+
+### The Mul is not the fault, a long-lived activation is (2026-09-09, Desktop 2)
+
+Four measurements, each holding everything else fixed, take `/bga/Mul` off the hook.
+
+**The operator is exact in isolation.** A minimal QDQ graph -- two quantised inputs, one
+elementwise `Mul`, one quantised output -- was built at the failing node's exact shape and
+positions and walked toward the working sibling's
+([log](../results/quant/mul_fixture_desktop2_20260909.log)). Every configuration is perfect:
+
+| Fixture | C | HxW | positions | Correlation | Mean abs diff | Placed |
+|---|---|---|---|---|---|---|
+| the failing node's configuration | 128 | 64 | 3 x 7 -> 4 | **1.0000** | 0.00122 | 4/7 |
+| spatial 32 | 128 | 32 | 3 x 7 -> 4 | 1.0000 | 0.00124 | 4/7 |
+| spatial 16 | 128 | 16 | 3 x 7 -> 4 | 1.0000 | 0.00123 | 4/7 |
+| feature position 1 | 128 | 64 | 1 x 7 -> 4 | 1.0000 | 0.00151 | 4/7 |
+| the working sibling's configuration | 128 | 16 | 1 x 7 -> 4 | 1.0000 | 0.00150 | 4/7 |
+| 32 channels | 32 | 64 | 3 x 7 -> 4 | 1.0000 | 0.00124 | 4/7 |
+
+Neither the 64x64 spatial size nor the position gap of 4 breaks a Mul on its own.
+
+**Both operands are clean measured separately**
+([log](../results/quant/bga_branches_desktop2_20260909.log)). The detail branch that feeds the Mul
+reads 0.9979 at its own output, and the gate reads 0.9858 -- yet their product reads 0.6869.
+
+| Cut | Tensor | Correlation |
+|---|---|---|
+| 133 | `/bga/left1/left1.0/Conv` | 0.9929 |
+| 136 | `/bga/left1/left1.2/Conv` (the Mul's feature input) | **0.9979** |
+| 171 | `/bga/left2/left2.2/AveragePool` (sibling's feature input) | 0.9987 |
+| 182 | `/bga/Mul_output_0` | **0.6869** |
+| 184 | `/bga/Mul_1_output_0` | 0.9984 |
+
+**Scale choice does not fix it.** Walking the feature branch's position from 3 to 7 raises the
+correlation from 0.687 to 0.787, which looks like progress until the signal is accounted for: the
+CPU reference's own standard deviation falls from 0.6200 to 0.2432 over the same walk, because a
+finer scale simply clips the feature. Normalised, the error is flat at essentially 100% of the
+signal throughout -- 1.03, 1.03, 1.07, 0.99, 1.00
+([log](../results/quant/mul_repair_desktop2_20260909.log)). There is no position that helps, which
+also means this is not something the quantiser can choose its way out of.
+
+**The deep branch is what breaks it.** Rebuilding the same Mul with the same `left1` branch, but
+feeding the gate in as a graph input so the ~280-node semantic branch is never compiled
+([log](../results/quant/mul_context_desktop2_20260909.log)):
+
+| Sub-model | Nodes | Correlation | Mean abs diff | CPU std | Normalised error |
+|---|---|---|---|---|---|
+| full cut 182 | 343 | 0.6869 | 0.63986 | 0.6200 | **1.032** |
+| gate supplied as an input | 62 | **0.9981** | 0.01814 | 0.6200 | **0.029** |
+
+The CPU reference is identical in both -- same standard deviation to four decimals -- so the
+arithmetic being asked for is the same. Only the compilation differs, and the error falls by 35x.
+
+**What this points at.** `/bga/left1/left1.2/Conv`'s output is `[1,128,64,64]`, **512 KB** at int8,
+and it has to stay live from early in the network until the semantic branch has finished so the two
+can be multiplied. The sibling's equivalent is `[1,128,16,16]`, **32 KB**, sixteen times smaller,
+crosses the same span, and is unaffected. AIE tile local memory is 64 KB per core. A 512 KB
+activation held across ~280 nodes of unrelated computation is the one thing the failing case has
+that none of the working cases do.
+
+**Not established.** That the mechanism is specifically a spill or an overwrite, which nothing here
+observes directly; the exact live-size threshold, since only 512 KB and 32 KB were measured; whether
+other models carry a long-lived activation of this size without a visible problem. This is a
+compiler and allocator behaviour, so the ordinary levers -- calibration, scales, AdaRound -- have
+nothing to act on. The fix directions that follow from it are structural: shrink the long-lived
+tensor, or force a subgraph boundary so it round-trips through DDR instead of living on-chip.
+Neither is measured here, and the second trades latency for correctness.
 
 ---
 
