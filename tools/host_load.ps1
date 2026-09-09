@@ -87,9 +87,13 @@ function Get-Sample([double]$seconds) {
 # C:\Users\<user> rather than the profile that produced it. Redact here rather than
 # leaving it to whoever stages the file: scripts/commit.sh would reject it, but only
 # after the run that wrote it is long finished.
+# Three separator forms reach a command line here: a Windows path from the exe itself,
+# a forward-slash Windows path from a script argument, and Git Bash's /c/Users/ form.
 function Redact([string]$s) {
     if ($null -eq $s) { return "" }
-    return ($s -replace '(?i)([A-Za-z]:\\Users\\)[^\\\s"]+', '${1}<user>')
+    $s = $s -replace '(?i)([A-Za-z]:[\\/]Users[\\/])[^\\/\s"]+', '${1}<user>'
+    $s = $s -replace '(?i)(/[A-Za-z]/Users/)[^/\s"]+', '${1}<user>'
+    return $s
 }
 
 function Get-FreeRamGb {
