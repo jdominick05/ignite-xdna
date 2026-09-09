@@ -1333,16 +1333,19 @@ Super-resolution models are structurally matched to XDNA1: 100% convolutional, z
 Matting and bilateral segmentation provide zero-trimap background separation for real-time video conferencing, pairing with the multi-partition camera capture infrastructure in `scripts/yolo-demo.sh`.
 
 - **Candidate architectures:**
-  1. MODNet (Objective-Oriented Trimap-Free Portrait Matting; MobileNetV2-derived backbone with semantic, detail, and fusion branches).
-  2. BiSeNetV2 / STDC (Bilateral Segmentation Network; separate wide shallow detail branch and deep semantic branch).
+  1. MODNet (Objective-Oriented Trimap-Free Portrait Matting; MobileNetV2-derived backbone with semantic, detail, and fusion branches). **Tested** —
+     see [docs/BENCHMARKS.md](docs/BENCHMARKS.md#5-opencv-calibration-fix-error-reduction-and-the-structural-zero-concat-gap-2026-09-08-desktop-2).
+  2. BiSeNetV2 / STDC (Bilateral Segmentation Network; separate wide shallow detail branch and deep semantic branch). **Tested** —
+     see below and [docs/BENCHMARKS.md](docs/BENCHMARKS.md#category-b-second-candidate-bisenetv2-bilateral-segmentation-network).
 - **Hypothesis:** Multi-branch convolutional matting executes trimap-free at 512x512 with >98% NPU node residency, delivering sub-10 ms alpha matte generation suitable for 30+ fps webcam background replacement with near-zero CPU load.
-- **Target shapes and pipeline:** Static input `(1, 3, 512, 512)` -> static output `(1, 1, 512, 512)` alpha matte in `[0, 1]`.
+- **Target shapes and pipeline:** Static input `(1, 3, 512, 512)` -> static output `(1, 1, 512, 512)` alpha matte in `[0, 1]`, or `(1, 19, 512, 512)` multi-class segmentation logits.
 - **Quantization:** Quark XINT8 PTQ with portrait calibration (PPM-100 / portrait subsets) + AdaRound for fine boundary refinement.
 - **Verification protocol:**
   1. Verify compiler node acceptance in `vitisai_ep_report.json`. Check whether bilinear upsampling in the fusion branch triggers subgraph partitioning.
   2. Evaluate alpha matte boundary fidelity: Mean Absolute Difference (MAD), Sum of Absolute Differences (SAD), and Mean Squared Error (MSE) relative to FP32 reference.
   3. Deploy in an interactive video pipeline (`pipelines/modnet/4_matte.py`) under `resnet_env17` to measure end-to-end webcam frame latency, alpha composition overhead, and NPU utilization.
 - **Falsification criteria:** If depthwise separable layers in MODNet's backbone exhibit the Delta=1.0 scale grid collapse observed in MobileViT, or if multi-scale feature fusion forces CPU round-trips, the model requires backbone replacement (e.g. standard ResNet/BiSeNet detail branch).
+- **BiSeNetV2 result:** Bilateral Guided Aggregation (BGA) with nearest-neighbor upsampling compiles natively into **1 monolithic DPU subgraph of 402 / 404 nodes (99.5%)** with 0 internal CPU fallbacks (`subgraphStat: [{'device': 'DPU', 'count': 1}]`). All 57 Convs, 40 Relus, 10 Adds, 5 Muls, 3 nearest-neighbor Resizes, and both HardSigmoid gating activations execute natively on AIE. Runs in **13.12 ms (76.2 fps)** on Phoenix XDNA1 — **4.43× faster than 8-core Zen 4 CPU (58.07 ms)** and **1.09× faster than Radeon 780M iGPU DML FP32 (14.25 ms)**, and 2.17× faster than MODNet Cut (28.45 ms). Bilinear upsampling at the head triggers host CPU fallback on 1 Resize (399/404 on NPU, +0.26 ms). Under CPU floating-point QDQ simulation, XINT8 maintains good fidelity (59.47% Pixel Accuracy, 25.72% mIoU against FP32 across 50 scenes); however, on physical DPU hardware, fixed-point dynamic range truncation across the elementwise bilateral multiplication (`left * HardSigmoid(right)`) attenuates minority class activations (15.33% Pixel Accuracy, 2.44% mIoU), confirming that multi-branch bilateral gating requires fine-tuning or AdaRound to balance inter-branch scale grids on physical systolic hardware. Full working: [docs/BENCHMARKS.md](docs/BENCHMARKS.md#category-b-second-candidate-bisenetv2-bilateral-segmentation-network).
 
 ### Category C: Advanced Detection and RepVGG Backbones
 
@@ -1640,8 +1643,18 @@ sections above.
   [Working](docs/BENCHMARKS.md#5-opencv-calibration-fix-error-reduction-and-the-structural-zero-concat-gap-2026-09-08-desktop-2).
   What the rerun did not close: the calibration reader is still a per-pipeline copy of the
   transform, so nothing structural stops the two drifting apart again. An owned calibration
-  source that *is* `npu.modnet.preprocess` is the [Ignition](quant/README.md) backlog item
-  that would, and it is unmeasured on this graph.
+- **Category B: Real-Time Portrait Matting and Semantic Segmentation (MODNet and BiSeNetV2).**
+  MODNet (`pipelines/modnet/`) demonstrated the zero-concat trade-off and confirmed calibration sensitivity.
+  BiSeNetV2 (`pipelines/bisenetv2/`) tests bilateral multi-branch segmentation (wide shallow Detail Branch +
+  deep Semantic Branch fused via HardSigmoid-gated Bilateral Guided Aggregation). Nearest-neighbor upsampling
+  compiles into a **single monolithic DPU subgraph (402/404 nodes, 99.5%)** executing in **13.12 ms on
+  Phoenix XDNA1 (76.2 fps)** — **4.43× faster than 8-core Zen 4 CPU (58.07 ms)** and **1.09× faster than
+  Radeon 780M iGPU DML FP32 (14.25 ms)**. Bilinear head upsampling causes CPU fallback on 1 Resize (+0.26 ms).
+  Under CPU QDQ simulation, XINT8 maintains good fidelity (59.47% Pixel Accuracy, 25.72% mIoU); on physical
+  DPU hardware, fixed-point dynamic range truncation across the elementwise bilateral multiplication
+  attenuates minority classes (15.33% Pixel Accuracy, 2.44% mIoU), confirming that multi-branch bilateral
+  gating requires fine-tuning or AdaRound for physical systolic hardware. All Category B candidate hypotheses
+  are closed. [Working](docs/BENCHMARKS.md#category-b-second-candidate-bisenetv2-bilateral-segmentation-network).
 
 **Still open.**
 
@@ -1710,9 +1723,10 @@ sections above.
   full trace, whose upstream parser mis-times gaps over 2^18 cycles; and S4, the
   package-power delta that would let a work-per-watt verdict exist at all — nothing here
   has ever measured a watt, and no per-NPU rail is exposed to read one from.
-- **Candidate model pipelines (Categories A, C, D, E).** Test plans, target shapes, and falsification criteria:
+- **Candidate model pipelines (Categories A, B, C, D, E).** Test plans, target shapes, and falsification criteria:
   - **Category A:** Image Super-Resolution — SESR-M7 (placement, 1.48 ms latency, 3.02x iGPU win,
     70% AdaRound recovery) and Real-ESRGAN Compact (activation memory spill) closed above.
+  - **Category B:** Real-Time Portrait Matting and Semantic Segmentation — MODNet (zero-concat trade-off, calibration fix) and BiSeNetV2 (13.12 ms, 1.09x iGPU win, monolithic DPU subgraph, fixed-point bilateral gating distortion) closed above.
   - **Category C:** Advanced Detection and RepVGG Backbones — YOLOv6n, YOLOv11n, and
     YOLO-World v2 closed above.
   - **Category D:** Monocular Depth Estimation — MiDaS v2.1 Small (bilinear vs nearest fusion,

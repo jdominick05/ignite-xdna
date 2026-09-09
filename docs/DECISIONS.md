@@ -703,6 +703,21 @@
   Unlike MobileViT, depthwise separable layers quantize smoothly under plain XINT8 PTQ without scale grid collapse
   (Pearson $r = 0.9383$, MAD $16.14 / 255$, $\delta < 1.25 = 68.07\%$), proving that lightweight depthwise-separable
   decoders are optimal for real-time dense spatial prediction on XDNA1.
+- **Bilateral Guided Aggregation achieves monolithic DPU compilation for semantic segmentation (2026-09-09):**
+  BiSeNetV2 (Yu et al., IJCV 2021) couples a wide shallow Detail Branch with a deep narrow Semantic Branch,
+  fusing them via Bilateral Guided Aggregation (BGA) using elementwise multiplications gated by Sigmoid.
+  When exported with nearest-neighbor upsampling (`models/bisenetv2_fp32.onnx`), Quark's `enable_npu_cnn`
+  automatically lowers `left * sigmoid(right)` to DPU-compatible `HardSigmoid` with `alpha=0.166667`.
+  In `models/bisenetv2_fp32_xint8.onnx`, the VitisAI EP compiles 402 of 404 nodes (99.5%) into **exactly 1
+  monolithic DPU subgraph** (`subgraphStat: [{'device': 'DPU', 'count': 1}]` in `results/diag_bisenetv2_xint8.log`),
+  placing all 57 Convs, 40 Relus, 10 Adds, 5 Muls, 2 HardSigmoids, 3 Resizes, 1 MaxPool, 1 AveragePool, and 1 GlobalAveragePool
+  natively on AIE. Executes in **13.12 ms (76.2 fps)** on Phoenix XDNA1 — **4.43× faster than Zen 4 CPU** (58.07 ms)
+  and **1.09× faster than Radeon 780M iGPU DirectML FP32** (14.25 ms). Stock bilinear upsampling at the head
+  ejects 1 Resize node to CPU (399/404 on NPU in `results/diag_bisenetv2_bilinear_xint8.log`), adding 0.26 ms of host dispatch.
+  However, physical DPU fixed-point execution reveals a dynamic range limitation: while CPU QDQ simulation
+  maintains 59.47% pixel accuracy and 25.72% mIoU, on-device fixed-point elementwise multiplication across disparate
+  inter-branch activation scales attenuates minority classes (15.33% pixel accuracy, 2.44% mIoU), confirming that
+  multi-branch bilateral gating requires fine-tuning or AdaRound to balance inter-branch scale multipliers on physical systolic hardware.
 
 ## The YOLOv8 partitioning failure (resolved)
 

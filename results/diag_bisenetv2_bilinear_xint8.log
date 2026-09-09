@@ -1,0 +1,34 @@
+
+=== C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\bisenetv2bilinearcache\vitisai_ep_report.json ===
+  all            nodeNum=  404  opTypes=12
+  CPU            nodeNum=    1  opTypes=1
+  NPU            nodeNum=  399  opTypes=12
+  VITIS_EP_CPU   nodeNum=    4  opTypes=2
+
+  per-node device counts: {'CPU': 5, 'NPU': 399}
+
+  399 nodes on the NPU, 5 elsewhere.
+
+  op type x device:
+    CPU           DequantizeLinear     2
+    CPU           QuantizeLinear       2
+    CPU           Resize               1
+    NPU           Add                  10
+    NPU           AveragePool          1
+    NPU           Concat               1
+    NPU           Conv                 57
+    NPU           DequantizeLinear     202
+    NPU           GlobalAveragePool    1
+    NPU           HardSigmoid          2
+    NPU           MaxPool              1
+    NPU           Mul                  5
+    NPU           QuantizeLinear       77
+    NPU           Relu                 40
+    NPU           Resize               2
+
+  5 nodes NOT on the NPU (first 25):
+    CPU           QuantizeLinear       ['image_QuantizeLinear_Output']
+    CPU           DequantizeLinear     ['/head/conv_out/Conv_output_0_DequantizeLinear_Output']
+    CPU           Resize               ['logits_QuantizeLinear_Input']
+    CPU           QuantizeLinear       ['logits_QuantizeLinear_Output']
+    CPU           DequantizeLinear     ['logits']

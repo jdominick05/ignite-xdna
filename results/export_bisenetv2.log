@@ -1,0 +1,35 @@
+C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\pipelines\bisenetv2\1_export.py:238: FutureWarning: You are using `torch.load` with `weights_only=False` (the current default value), which uses the default pickle module implicitly. It is possible to construct malicious pickle data which will execute arbitrary code during unpickling (See https://github.com/pytorch/pytorch/blob/main/SECURITY.md#untrusted-models for more details). In a future release, the default value for `weights_only` will be flipped to `True`. This limits the functions that could be executed during unpickling. Arbitrary objects will no longer be allowed to be loaded via this mode unless they are explicitly allowlisted by the user via `torch.serialization.add_safe_globals`. We recommend you start setting `weights_only=True` for any use case where you don't have full control of the loaded file. Please open an issue on GitHub for any issues related to this experimental feature.
+  sd = torch.load(weights_path, map_location="cpu")
+C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\pipelines\bisenetv2\1_export.py:238: FutureWarning: You are using `torch.load` with `weights_only=False` (the current default value), which uses the default pickle module implicitly. It is possible to construct malicious pickle data which will execute arbitrary code during unpickling (See https://github.com/pytorch/pytorch/blob/main/SECURITY.md#untrusted-models for more details). In a future release, the default value for `weights_only` will be flipped to `True`. This limits the functions that could be executed during unpickling. Arbitrary objects will no longer be allowed to be loaded via this mode unless they are explicitly allowlisted by the user via `torch.serialization.add_safe_globals`. We recommend you start setting `weights_only=True` for any use case where you don't have full control of the loaded file. Please open an issue on GitHub for any issues related to this experimental feature.
+  sd = torch.load(weights_path, map_location="cpu")
+
+--- Exporting BiSeNetV2 (nearest upsample) -> C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\models\bisenetv2_fp32.onnx ---
+Optimizing graph with onnxslim...
+Exported C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\models\bisenetv2_fp32.onnx: 118 nodes
+  Conv: 56
+  Relu: 40
+  Add: 10
+  Resize: 3
+  Sigmoid: 2
+  Mul: 2
+  MaxPool: 1
+  Concat: 1
+  AveragePool: 1
+  ReduceMean: 1
+  BatchNormalization: 1
+
+--- Exporting BiSeNetV2 (bilinear upsample) -> C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\models\bisenetv2_bilinear_fp32.onnx ---
+Optimizing graph with onnxslim...
+Exported C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\models\bisenetv2_bilinear_fp32.onnx: 118 nodes
+  Conv: 56
+  Relu: 40
+  Add: 10
+  Resize: 3
+  Sigmoid: 2
+  Mul: 2
+  MaxPool: 1
+  Concat: 1
+  AveragePool: 1
+  ReduceMean: 1
+  BatchNormalization: 1
+Saved metadata to C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\models\preprocess_config_bisenetv2.json

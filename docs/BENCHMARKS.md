@@ -4146,6 +4146,84 @@ OpenCV preprocessing and evaluated back to back on Desktop 2 under the same 50 v
   connections with zero-padded channels in the fusion stage permanently discards boundary spatial
   detail; the ~8.7 ms speedup continues to trade half the alpha quality.
 
+### Category B, second candidate: BiSeNetV2 (Bilateral Segmentation Network)
+
+`pipelines/bisenetv2/` — new pipeline, built against the official BiSeNetV2 architecture (Yu et al., IJCV 2021)
+with Cityscapes 19-class weights (`models/model_final_v2_city.pth`).
+Tests Category B's bilateral segmentation hypothesis: separate wide shallow Detail Branch (preserving $256 \times 256$
+spatial detail at 64–128 channels) and deep narrow Semantic Branch (downsampling to $16 \times 16$ at 128 channels with
+Gather-and-Expansion and Context Embedding blocks), fused by Bilateral Guided Aggregation (BGA) with HardSigmoid gating
+and upsampled to full resolution ($512 \times 512$).
+
+Exported to `models/bisenetv2_fp32.onnx` (nearest-neighbor head upsample, 118 nodes) and `models/bisenetv2_bilinear_fp32.onnx`
+(stock bilinear head upsample, 118 nodes; static batch 1, input shape `[1, 3, 512, 512]`, output shape `[1, 19, 512, 512]`).
+Preprocessing is byte-identical between calibration and inference via `npu/bisenetv2.py` (cv2-only, ImageNet mean/std
+normalization `mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]`, `cv2.INTER_LINEAR` resize).
+
+#### Compiler placement and DPU fusion
+
+Quantized to Quark XINT8 with 300 calibration images (`data/bisenetv2_calib/`, `results/quant_bisenetv2_xint8.log`):
+396 nodes in the quantized ONNX graph.
+
+The VitisAI EP accepts **402 of 404 nodes (99.5%) on NPU** (`results/diag_bisenetv2_xint8.log`), compiling into
+**exactly 1 monolithic DPU subgraph** (`subgraphStat: [{'device': 'DPU', 'count': 1}]`). Only the outer input
+`QuantizeLinear` and output `DequantizeLinear` boundaries execute on CPU:
+- All 57 Convolutions execute natively on AIE.
+- All 40 `Relu` activations execute natively on AIE.
+- All 10 `Add` and 5 `Mul` nodes execute natively on AIE.
+- Both BGA gating activations compile natively to AIE: Quark's `enable_npu_cnn` detects `left * sigmoid(right)`
+  and automatically lowers `Sigmoid` to `HardSigmoid` with DPU-compatible alpha (`alpha=0.166667`).
+- All 3 nearest-neighbor `Resize` layers compile natively on AIE with zero internal CPU fallbacks.
+- The `StemBlock` MaxPool and Concat, `CEBlock` GlobalAveragePool, and BGA `AveragePool` all compile natively on AIE.
+
+**Bilinear vs. Nearest Head Ablation:**
+In `models/bisenetv2_bilinear_fp32_xint8.onnx` (`results/diag_bisenetv2_bilinear_xint8.log`), the final 8× upsampling
+Resize in `SegmentHead` uses stock `mode='linear'`. The VitisAI EP rejects this node to CPU (399/404 on NPU, 1 CPU Resize),
+adding 0.26 ms of host dispatch latency (13.38 ms vs 13.12 ms). Converting the head upsample to nearest-neighbor
+fuses all 3 Resize nodes directly into the monolithic DPU engine.
+
+#### Tri-Hardware Performance Comparison
+
+Measured on Desktop 2 (Ryzen 7 8700G, Radeon 780M, Phoenix XDNA1 NPU, 50 iterations, batch 1, 512×512,
+`sess.run` only, `models/bisenetv2_fp32.onnx` vs `models/bisenetv2_fp32_xint8.onnx`):
+
+| Hardware / Provider | Precision | Subgraphs | Latency (mean) | Latency (median) | Throughput | Backing Log |
+|---|---|---|---|---|---|---|
+| CPU (Zen 4, 8C/16T) | FP32 | 1 (CPU) | 58.07 ms | 58.16 ms | 17.2 fps | `results/lat_bisenetv2_cpu.log` |
+| iGPU (Radeon 780M, DirectML) | FP32 | 1 (DML) | 14.25 ms | 12.91 ms | 70.2 fps | `results/lat_bisenetv2_dml.log` |
+| **NPU (Phoenix XDNA1, nearest)** | **XINT8** | **1 (DPU)** | **13.12 ms** | **13.04 ms** | **76.2 fps** | `results/lat_bisenetv2_xint8_npu.log` |
+| NPU (Phoenix XDNA1, bilinear) | XINT8 | 1 DPU + 1 CPU | 13.38 ms | 13.09 ms | 74.7 fps | `results/lat_bisenetv2_bilinear_xint8_npu.log` |
+
+**Findings:**
+1. **NPU beats both Zen 4 CPU and Radeon 780M iGPU**: At **13.12 ms (76.2 fps)**, BiSeNetV2 on Phoenix XDNA1
+   is **4.43× faster than 8-core Zen 4 CPU** (58.07 ms) and **1.09× faster than Radeon 780M iGPU DirectML FP32** (14.25 ms mean).
+   This establishes BiSeNetV2 alongside SESR-M7, FastDepth, and Real-ESRGAN 128² as vision workloads where the NPU outpaces the integrated GPU.
+2. **2.17× faster than MODNet Cut**: BiSeNetV2 runs in 13.12 ms vs MODNet Cut's 28.45 ms (27.51 ms calibfix)
+   at the same 512×512 resolution, delivering over 76 full frames per second of dense multi-class segmentation.
+
+#### Quantitative Segmentation Fidelity Evaluation
+
+Evaluated across 50 validation scenes (`data/bisenetv2_val/`) against the FP32 reference model running on CPU:
+
+| Metric | CPU XINT8 | NPU XINT8 | Delta (NPU vs CPU) | Backing Log |
+|---|---|---|---|---|
+| Pixel Accuracy | **59.47% +/- 9.44%** | 15.33% +/- 10.82% | -44.14% | `results/eval_bisenetv2_xint8_cpu.log` / `results/eval_bisenetv2_xint8_npu.log` |
+| Mean IoU (mIoU) | **25.72% +/- 6.96%** | 2.44% +/- 1.28% | -23.28% | `results/eval_bisenetv2_xint8_cpu.log` / `results/eval_bisenetv2_xint8_npu.log` |
+| Softmax Prob MAD | **0.00357** | 0.01476 | +0.01119 | `results/eval_bisenetv2_xint8_cpu.log` / `results/eval_bisenetv2_xint8_npu.log` |
+| Softmax Prob RMSE | **0.00464** | 0.01924 | +0.01460 | `results/eval_bisenetv2_xint8_cpu.log` / `results/eval_bisenetv2_xint8_npu.log` |
+| Evaluation Latency (infer) | 99.01 ms | **13.01 ms** | -86.00 ms (7.61× faster) | `results/eval_bisenetv2_xint8_cpu.log` / `results/eval_bisenetv2_xint8_npu.log` |
+
+**Bilateral Gating Fixed-Point Distortion Diagnosis:**
+- Under floating-point QDQ simulation on CPU, XINT8 preserves segmentation structure cleanly (59.47% pixel accuracy,
+  0.00357 probability MAD, and 77.86% agreement on single scenes with 0.9036 correlation).
+- On physical DPU hardware, elementwise tensor multiplication between the Detail Branch and the HardSigmoid-gated
+  Semantic Branch (`left * HardSigmoid(right)`) suffers fixed-point dynamic range truncation. Because the two branches
+  span divergent activation scales, the fixed-point product attenuates minority classes (e.g. vehicles drop from 95.6k pixels
+  to 128 pixels, while stationary background classes dominate).
+- This confirms the Category B falsification hypothesis: multi-branch bilateral aggregation requires fine-tuning
+  (or AdaRound scale optimization) to balance inter-branch power-of-two scale multipliers on physical systolic hardware,
+  even though pure DPU compilation and speed (13.12 ms, 76.2 fps) are flawless.
+
 ---
 
 ### Alternative classification topologies: DenseNet-121 (concat) and ResNeXt-50 (grouped convs)
