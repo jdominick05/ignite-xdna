@@ -1,0 +1,59 @@
+﻿
+=== C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\yolowcutcachekey\vitisai_ep_report.json ===
+  all            nodeNum= 1081  opTypes=15
+  CPU            nodeNum=  306  opTypes=12
+  NPU            nodeNum=   48  opTypes=6
+  VITIS_EP_CPU   nodeNum=  727  opTypes=2
+
+  per-node device counts: {'CPU': 1033, 'NPU': 48}
+
+  48 nodes on the NPU, 1033 elsewhere.
+
+  op type x device:
+    CPU           Add                  6
+    CPU           Concat               13
+    CPU           Conv                 67
+    CPU           DequantizeLinear     481
+    CPU           Einsum               4
+    CPU           HardSigmoid          57
+    CPU           MaxPool              3
+    CPU           Mul                  118
+    CPU           QuantizeLinear       246
+    CPU           ReduceMax            4
+    CPU           Reshape              12
+    CPU           Resize               2
+    CPU           Slice                16
+    CPU           Unsqueeze            4
+    NPU           Add                  4
+    NPU           DequantizeLinear     20
+    NPU           Div                  4
+    NPU           HardSigmoid          4
+    NPU           Mul                  4
+    NPU           QuantizeLinear       12
+
+  1033 nodes NOT on the NPU (first 25):
+    CPU           QuantizeLinear       ['images_QuantizeLinear_Output']
+    CPU           DequantizeLinear     ['images_DequantizeLinear_Output']
+    CPU           DequantizeLinear     ['model.0.conv.weight_DequantizeLinear_Output']
+    CPU           DequantizeLinear     ['model.0.conv.bias_DequantizeLinear_Output']
+    CPU           Conv                 ['/model.0/conv/Conv_output_0']
+    CPU           QuantizeLinear       ['/model.0/conv/Conv_output_0_QuantizeLinear_Output']
+    CPU           DequantizeLinear     ['/model.0/conv/Conv_output_0_DequantizeLinear_Output/duplicated']
+    CPU           HardSigmoid          ['/model.0/act/Sigmoid_output_0_Mul']
+    CPU           Mul                  ['/model.0/act/Sigmoid_output_0']
+    CPU           QuantizeLinear       ['/model.0/act/Sigmoid_output_0_QuantizeLinear_Output']
+    CPU           DequantizeLinear     ['/model.0/act/Sigmoid_output_0_DequantizeLinear_Output']
+    CPU           DequantizeLinear     ['/model.0/conv/Conv_output_0_DequantizeLinear_Output']
+    CPU           Mul                  ['/model.0/act/Mul_output_0']
+    CPU           QuantizeLinear       ['/model.0/act/Mul_output_0_QuantizeLinear_Output']
+    CPU           DequantizeLinear     ['/model.0/act/Mul_output_0_DequantizeLinear_Output']
+    CPU           DequantizeLinear     ['model.1.conv.weight_DequantizeLinear_Output']
+    CPU           DequantizeLinear     ['model.1.conv.bias_DequantizeLinear_Output']
+    CPU           Conv                 ['/model.1/conv/Conv_output_0']
+    CPU           QuantizeLinear       ['/model.1/conv/Conv_output_0_QuantizeLinear_Output']
+    CPU           DequantizeLinear     ['/model.1/conv/Conv_output_0_DequantizeLinear_Output/duplicated']
+    CPU           HardSigmoid          ['/model.1/act/Sigmoid_output_0_Mul']
+    CPU           Mul                  ['/model.1/act/Sigmoid_output_0']
+    CPU           QuantizeLinear       ['/model.1/act/Sigmoid_output_0_QuantizeLinear_Output']
+    CPU           DequantizeLinear     ['/model.1/act/Sigmoid_output_0_DequantizeLinear_Output']
+    CPU           DequantizeLinear     ['/model.1/conv/Conv_output_0_DequantizeLinear_Output']

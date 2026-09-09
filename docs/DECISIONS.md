@@ -662,6 +662,18 @@
   executing in **7.08 ms** on 5,000 val2017 images (141.2 fps) — the fastest YOLO model recorded on
   XDNA1. However, because identity ablation collapses unweighted mAP to 0.19, deploying stock YOLOv11
   natively on XDNA1 without DPU attention kernel fusion is rejected.
+- **5D Einsum/ReduceMax in YOLO-World v2 forces CPU fallback; Reshape inside conv streams rejected (2026-09-08):**
+  YOLO-World v2 embeds multi-scale text cross-attention (`MaxSigmoidAttnBlock`) inside `C2fAttn` blocks at
+  layers 12, 15, 18, 21. The VitisAI level-1 DPU compiler rejects the 5D `Einsum` (`bmchw,bnmc->bmhwn`) and
+  5D `ReduceMax` operations, placing only 48 of 1081 nodes (4.4%) on NPU while all 67 Convolutions fall
+  back to CPU (`results/diag_yolow_cut_xint8.log`), inflating latency to 178.53 ms. An initial ablation
+  using `.view(bs, nh, -1, h, w)` revealed a second DPU compiler trap: `Reshape` operations inside conv
+  streams are unconditionally rejected on Phoenix, leaving 0 / 993 nodes on NPU. Eliminating `Reshape` via
+  precomputed static channel scaling (`(bias.sigmoid() * scale).repeat_interleave(hc)`) unlocked a
+  monolithic DPU subgraph of 946 / 953 nodes (99.3%, `results/diag_yolow_no_attn_cut_xint8.log`) running at
+  **15.89 ms (62.9 fps)**. However, because bypassing attention destroys open-vocabulary alignment (mAP 0.3%)
+  and plain XINT8 PTQ scrambles 5D attention weights (mAP 1.8%), running stock YOLO-World cross-attention
+  directly on the DPU is rejected.
 
 ## The YOLOv8 partitioning failure (resolved)
 

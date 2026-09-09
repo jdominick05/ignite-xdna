@@ -1351,7 +1351,8 @@ Structurally re-parameterized networks collapse multi-branch training graphs int
 - **Candidate architectures:**
   1. YOLOv6 (Meituan RepVGG backbone; pure 3x3 convs + ReLU in inference mode). **Tested** —
      see below and [docs/BENCHMARKS.md](docs/BENCHMARKS.md#category-c-first-candidate-yolov6n-repvgg-backbone).
-  2. YOLO-World v2 (Open-vocabulary detection; decoupled CPU text embedding + NPU vision backbone).
+  2. YOLO-World v2 (Open-vocabulary detection; decoupled CPU text embedding + NPU vision backbone). **Tested** —
+     see below and [docs/BENCHMARKS.md](docs/BENCHMARKS.md#category-c-third-candidate-yolo-world-v2-vision-language-decoupled-cross-attention).
   3. YOLOv11 (Successor detection architecture with C3k2 blocks, evaluated under the established 6-output head-cut pattern). **Tested** —
      see below and [docs/BENCHMARKS.md](docs/BENCHMARKS.md#category-c-second-candidate-yolov11n-c2psa-attention-block--decoupled-dwconv-head).
 - **Hypothesis:** Eliminating residual `Add` branches via structural re-parameterization reduces SRAM buffer contention and DMA ping-ponging, improving single-column execution efficiency relative to YOLOv8 CSPDarknet blocks while plain ReLU avoids SiLU->HardSwish quantization distortion.
@@ -1379,6 +1380,14 @@ Structurally re-parameterized networks collapse multi-branch training graphs int
   Radeon 780M iGPU DML). Plain XINT8 stock loses 12.90 mAP (38.72 → 25.82), while identity
   ablation collapses mAP to 0.19, proving attention cannot be stripped post-hoc without retraining:
   [docs/BENCHMARKS.md](docs/BENCHMARKS.md#category-c-second-candidate-yolov11n-c2psa-attention-block--decoupled-dwconv-head).
+- **YOLO-World v2 result:** 5D text cross-attention (`Einsum`, `ReduceMax`) in `C2fAttn` is rejected
+  by the DPU compiler, placing only 48 / 1081 nodes on NPU and forcing all 67 Convolutions to CPU
+  (178.53 ms latency). Eliminating `Reshape` and cross-attention unlocks a single monolithic DPU subgraph
+  of 946 / 953 nodes running at **15.89 ms (62.9 fps)** over 5,000 images — **2.46× faster than
+  Radeon 780M iGPU DML** (40.42 ms) and **5.10× faster than Zen 4 CPU** (81.11 ms). Plain XINT8 stock
+  collapses to 1.8% mAP due to 5D quantization error, while attention-free ablation collapses to 0.3%
+  mAP due to severed CLIP alignment:
+  [docs/BENCHMARKS.md](docs/BENCHMARKS.md#category-c-third-candidate-yolo-world-v2-vision-language-decoupled-cross-attention).
 
 ### Category D: Monocular Depth Estimation
 
@@ -1580,6 +1589,18 @@ sections above.
   identity ablation collapses mAP to 0.19, demonstrating that attention cannot be bypassed
   without retraining. Both candidate hypotheses closed.
   [Working](docs/BENCHMARKS.md#category-c-second-candidate-yolov11n-c2psa-attention-block--decoupled-dwconv-head).
+- **Category C, third candidate: YOLO-World v2 (Vision-Language Decoupled Cross-Attention).**
+  New pipeline (`pipelines/yolow/`). Multi-scale text cross-attention (`MaxSigmoidAttnBlock` in
+  `C2fAttn`) is rejected by the DPU compiler due to 5D `Einsum` and `ReduceMax` operations,
+  ejecting all 67 Convolutions to CPU (48/1081 nodes on NPU, 178.53 ms latency). Eliminating
+  `Reshape` and cross-attention unlocks a **single monolithic DPU subgraph of 946 / 953 nodes (99.3%)**,
+  running at **15.89 ms across 5,000 val2017 images (62.9 fps)** — **2.46× faster than
+  Radeon 780M iGPU DML FP32** (40.42 ms) and **5.10× faster than Zen 4 CPU** (81.11 ms).
+  However, open-vocabulary alignment collapses under both plain XINT8 PTQ (1.8% mAP) and attention
+  ablation (0.3% mAP), demonstrating that multi-dimensional attention mechanisms cannot be executed
+  natively on XDNA1 or severed zero-shot without retraining. All Category C candidate hypotheses
+  are now closed.
+  [Working](docs/BENCHMARKS.md#category-c-third-candidate-yolo-world-v2-vision-language-decoupled-cross-attention).
 - **Category D: Monocular Depth Estimation (MiDaS v2.1 Small).** New pipeline
   (`pipelines/midas/`). Nearest-neighbor upsampling fuses all RefineNet decoder layers
   into a single monolithic DPU subgraph (682/684 nodes, 99.7%), eliminating 4 host CPU
@@ -1660,8 +1681,8 @@ sections above.
 - **Candidate model pipelines (Categories A, C, D, E).** Test plans, target shapes, and falsification criteria:
   - **Category A:** Image Super-Resolution — SESR-M7 (placement, 1.48 ms latency, 3.02x iGPU win,
     70% AdaRound recovery) and Real-ESRGAN Compact (activation memory spill) closed above.
-  - **Category C:** Advanced Detection and RepVGG Backbones — YOLOv6n and YOLOv11n
-    closed above; YOLO-World v2 still open.
+  - **Category C:** Advanced Detection and RepVGG Backbones — YOLOv6n, YOLOv11n, and
+    YOLO-World v2 closed above.
   - **Category D:** Monocular Depth Estimation — MiDaS v2.1 Small (bilinear vs nearest fusion,
     10.81 ms, 1.53x CPU win) closed above; FastDepth still open.
   - **Category E:** Untested Classification Topologies — DenseNet-121, ResNeXt-50, and RegNetX-002 (placement, Concat DMA, grouped convs, shift-cut scale explosion) closed above.

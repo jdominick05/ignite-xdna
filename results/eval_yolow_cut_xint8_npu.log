@@ -1,0 +1,50 @@
+﻿[0;93m2026-09-08 23:46:46.3912937 [W:onnxruntime:, session_state.cc:1316 onnxruntime::VerifyEachNodeIsAssignedToAnEp] Some nodes were not assigned to the preferred execution providers which may or may not have an negative impact on performance. e.g. ORT explicitly assigns shape related ops to CPU to improve perf.[m
+[0;93m2026-09-08 23:46:46.3916463 [W:onnxruntime:, session_state.cc:1318 onnxruntime::VerifyEachNodeIsAssignedToAnEp] Rerunning with verbose output on a non-minimal build will show node assignments.[m
+loading annotations into memory...
+Done (t=0.29s)
+creating index...
+index created!
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\yolowcutcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+model: head-cut (6 outputs), contrastive + numpy decode, input 640x640
+eval : 5000 images, conf 0.001, iou 0.7, max_det 300, per-class NMS
+  [ 500/5000]  infer 108.05 ms  elapsed  63.9s
+  [1000/5000]  infer 101.33 ms  elapsed 123.4s
+  [1500/5000]  infer 98.31 ms  elapsed 181.2s
+  [2000/5000]  infer 101.22 ms  elapsed 240.6s
+  [2500/5000]  infer 105.75 ms  elapsed 302.5s
+  [3000/5000]  infer 104.82 ms  elapsed 364.2s
+  [3500/5000]  infer 104.42 ms  elapsed 425.3s
+  [4000/5000]  infer 98.88 ms  elapsed 483.4s
+  [4500/5000]  infer 105.28 ms  elapsed 544.9s
+  [5000/5000]  infer 105.06 ms  elapsed 606.4s
+
+Timing (5000 images):
+  mean   : 103.31 ms  (9.7 fps)
+  median : 103.87 ms
+  p95    : 110.73 ms
+wrote 1206176 detections to results/dets_yolow_cut_xint8_npu.json
+Loading and preparing results...
+DONE (t=3.86s)
+creating index...
+index created!
+Running per image evaluation...
+Evaluate annotation type *bbox*
+DONE (t=20.65s).
+Accumulating evaluation results...
+DONE (t=12.07s).
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.018
+ Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] = 0.032
+ Average Precision  (AP) @[ IoU=0.75      | area=   all | maxDets=100 ] = 0.018
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.010
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.040
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.017
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=  1 ] = 0.034
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets= 10 ] = 0.060
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.065
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.022
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.113
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.072

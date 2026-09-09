@@ -1,0 +1,43 @@
+﻿loading annotations into memory...
+Done (t=0.43s)
+creating index...
+index created!
+model: head-cut (6 outputs), contrastive + numpy decode, input 640x640
+eval : 5000 images, conf 0.001, iou 0.7, max_det 300, per-class NMS
+  [ 500/5000]  infer 100.37 ms  elapsed  70.1s
+  [1000/5000]  infer 93.45 ms  elapsed 135.1s
+  [1500/5000]  infer 98.83 ms  elapsed 204.1s
+  [2000/5000]  infer 86.09 ms  elapsed 260.6s
+  [2500/5000]  infer 71.72 ms  elapsed 306.2s
+  [3000/5000]  infer 74.50 ms  elapsed 354.4s
+  [3500/5000]  infer 71.19 ms  elapsed 399.8s
+  [4000/5000]  infer 70.30 ms  elapsed 445.0s
+  [4500/5000]  infer 71.47 ms  elapsed 490.7s
+  [5000/5000]  infer 73.20 ms  elapsed 537.2s
+
+Timing (5000 images):
+  mean   : 81.11 ms  (12.3 fps)
+  median : 75.86 ms
+  p95    : 114.89 ms
+wrote 726403 detections to results/dets_yolow_cut_fp32_cpu.json
+Loading and preparing results...
+DONE (t=2.16s)
+creating index...
+index created!
+Running per image evaluation...
+Evaluate annotation type *bbox*
+DONE (t=27.35s).
+Accumulating evaluation results...
+DONE (t=7.52s).
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.370
+ Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] = 0.515
+ Average Precision  (AP) @[ IoU=0.75      | area=   all | maxDets=100 ] = 0.401
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.207
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.407
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.489
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=  1 ] = 0.317
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets= 10 ] = 0.522
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.569
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.372
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.623
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.710
