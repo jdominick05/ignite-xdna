@@ -68,6 +68,9 @@ class FastFinetuneConfig:
     OptimAlgorithm: str = "adaround"
     OptimDevice: str = "cpu"
     InferDevice: str = "cpu"
+    # Not a Quark key. Guards the one thing a device change costs: OptimDevice != "cpu"
+    # leaves the byte-parity path, so it has to be asked for rather than fallen into.
+    AllowNonParityDevice: bool = False
     EarlyStop: bool = True
     # Fixed inside Quark's TrainParameters, not exposed by the preset:
     RegParam: float = 0.01
@@ -78,8 +81,18 @@ class FastFinetuneConfig:
     def check(self) -> None:
         if self.OptimAlgorithm != "adaround":
             raise NotImplementedError("Only the adaround algorithm is transcribed")
-        if self.OptimDevice != "cpu" or self.InferDevice != "cpu":
-            raise NotImplementedError("Only cpu optimisation/inference is transcribed")
+        if self.InferDevice != "cpu":
+            # Activation extraction is onnxruntime, and the CPU EP is the reference the
+            # oracle parity was established against. Moving it is a separate exercise.
+            raise NotImplementedError("Only cpu inference (ORT activation extraction) is transcribed")
+        if self.OptimDevice != "cpu" and not self.AllowNonParityDevice:
+            raise NotImplementedError(
+                f"OptimDevice={self.OptimDevice!r} is not the byte-parity path. Ignition's AdaRound "
+                "is byte-identical to a fresh Quark XINT8_ADAROUND oracle on cpu only; a GPU changes "
+                "float reduction order in Adam and the convolutions, so the emitted weights will "
+                "differ from the oracle in the low bits. Set AllowNonParityDevice=True (CLI: "
+                "--device <dev> --accept-non-parity) to run it anyway, and never quote the result "
+                "as an oracle match.")
         if self.DataSize < 1 or self.BatchSize < 1 or self.NumIterations < 1:
             raise ValueError("DataSize, BatchSize and NumIterations must be positive")
         if self.DropRatio < 1:
@@ -138,6 +151,11 @@ class AdaRoundReport:
     torch_version: str = ""
     torch_threads: int = 0
     onnxruntime_version: str = ""
+    optim_device: str = "cpu"
+    # False as soon as the optimisation left the cpu. A run with this False must never be
+    # quoted as matching a Quark oracle: the weights are a different, valid AdaRound
+    # result, not the transcribed one.
+    byte_parity_path: bool = True
     float_graph_optimization: str = "ORT default (ENABLE_ALL), as Quark's float reference session"
     quant_graph_optimization: str = "ORT_DISABLE_ALL, as Quark's quantized data session"
     peak_rss_bytes: int | None = None
@@ -270,6 +288,27 @@ def _print(*args) -> None:
     print(*args, flush=True)
 
 
+def _device_available(torch, device) -> bool:
+    """Is this accelerator actually usable by the installed torch build?
+
+    Kept generic on purpose. Windows plus an AMD card reaches torch through several
+    different backends depending on what is installed (a ROCm/HIP build reports itself
+    through ``torch.cuda``; DirectML registers a private backend module), so this asks
+    torch about the device type rather than testing for one vendor.
+    """
+    kind = device.type
+    if kind == "cuda":                      # also true of ROCm/HIP builds, which reuse this API
+        return torch.cuda.is_available()
+    backend = getattr(torch, kind, None)    # e.g. torch.xpu, torch.mps, torch.privateuseone
+    if backend is not None and hasattr(backend, "is_available"):
+        return bool(backend.is_available())
+    try:
+        torch.zeros(1, device=device)
+        return True
+    except Exception:
+        return False
+
+
 def finetune(float_graph: Graph, quant_graph: Graph, source: ImageFolderSource,
              cfg: FastFinetuneConfig | None = None, log=_print) -> AdaRoundReport:
     """Optimise every Conv/Gemm weight rounding in ``quant_graph`` in place; return the report."""
@@ -278,6 +317,12 @@ def finetune(float_graph: Graph, quant_graph: Graph, source: ImageFolderSource,
 
     cfg = cfg or FastFinetuneConfig()
     cfg.check()
+    device = torch.device(cfg.OptimDevice)
+    if device.type != "cpu" and not _device_available(torch, device):
+        raise RuntimeError(
+            f"OptimDevice={cfg.OptimDevice!r} is not available to this torch build "
+            f"({torch.__version__}, cuda={torch.version.cuda}, hip={getattr(torch.version, 'hip', None)}). "
+            "Install a torch build for the accelerator, or leave OptimDevice at 'cpu'.")
     wall_start = time.perf_counter()
     input_name = quant_graph.model.graph.input[0].name
     if float_graph.model.graph.input[0].name != input_name:
@@ -291,7 +336,8 @@ def finetune(float_graph: Graph, quant_graph: Graph, source: ImageFolderSource,
     if not images:
         raise ValueError("No finetune images")
     report = AdaRoundReport(config=asdict(cfg), images=len(images), torch_version=torch.__version__,
-                            torch_threads=torch.get_num_threads(), onnxruntime_version=ort.__version__)
+                            torch_threads=torch.get_num_threads(), onnxruntime_version=ort.__version__,
+                            optim_device=str(device), byte_parity_path=(device.type == "cpu"))
     # Quark's setup_seed, once, before any module is built.
     random.seed(cfg.FixedSeed)
     np.random.seed(cfg.FixedSeed)
@@ -301,13 +347,33 @@ def finetune(float_graph: Graph, quant_graph: Graph, source: ImageFolderSource,
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
     log(f"ADAROUND layers={len(layers)} images={len(images)} seed={cfg.FixedSeed} torch={torch.__version__} "
-        f"threads={torch.get_num_threads()} ort={ort.__version__}")
+        f"threads={torch.get_num_threads()} ort={ort.__version__} optim_device={device} "
+        f"byte_parity_path={device.type == 'cpu'}")
+    if device.type != "cpu":
+        log("ADAROUND WARNING: optimisation is off the cpu, so the emitted weights are NOT the "
+            "byte-identical transcription of Quark's XINT8_ADAROUND. Do not report this run as an "
+            "oracle match; compare accuracy, not bytes.")
+
+    # The four constants a qdq call needs are functions of the QParams alone, so they are
+    # built once per (params, device) instead of once per call. On cpu the values are the
+    # same objects the per-call version produced, so the arithmetic is unchanged; off cpu
+    # this is what stops a host-to-device copy landing inside the 1000-iteration loop.
+    _const_cache: dict = {}
+
+    def _consts(params: QParams, dev):
+        key = (id(params), str(dev))
+        cached = _const_cache.get(key)
+        if cached is None:
+            low, high = QRANGE[params.dtype]
+            cached = (torch.from_numpy(np.array(params.scale, dtype=np.float32)).to(dev),
+                      torch.from_numpy(np.array(params.zero_point, dtype=np.int64)).to(dev),
+                      torch.from_numpy(np.array(low)).to(dev),
+                      torch.from_numpy(np.array(high)).to(dev))
+            _const_cache[key] = cached
+        return cached
 
     def qdq(tensor, params: QParams, round_func):
-        low, high = QRANGE[params.dtype]
-        scale = torch.from_numpy(np.array(params.scale, dtype=np.float32))
-        zero_point = torch.from_numpy(np.array(params.zero_point, dtype=np.int64))
-        min_q, max_q = torch.from_numpy(np.array(low)), torch.from_numpy(np.array(high))
+        scale, zero_point, min_q, max_q = _consts(params, tensor.device)
         quant_t = round_func(tensor / scale) + zero_point
         return (torch.clamp(quant_t, min_q, max_q) - zero_point) * scale
 
@@ -367,8 +433,8 @@ def finetune(float_graph: Graph, quant_graph: Graph, source: ImageFolderSource,
                 raise NotImplementedError(f"Activation {layer.act_op} is not transcribed")
 
         def initialize_alpha(self):
-            scale = torch.from_numpy(np.array(self.layer.weight_q.scale, dtype=np.float32))
             tensor = self.compute.weight.data
+            scale = torch.from_numpy(np.array(self.layer.weight_q.scale, dtype=np.float32)).to(tensor.device)
             tensor_floor = torch.floor(tensor / scale)
             tensor_diff = (tensor / scale) - tensor_floor
             alpha = -torch.log((ZETA - GAMMA) / (tensor_diff - GAMMA) - 1)
@@ -387,11 +453,12 @@ def finetune(float_graph: Graph, quant_graph: Graph, source: ImageFolderSource,
             """Quark's get_modules_optimized_weight: hard rounding, integer values as float."""
             self.use_soft_rounding = False
             params = self.layer.weight_q
-            low, high = QRANGE[params.dtype]
-            scale = torch.from_numpy(np.array(params.scale, dtype=np.float32))
-            zero_point = torch.from_numpy(np.array(params.zero_point, dtype=np.int64))
-            quant_t = self.weight_round()(self.compute.weight.detach() / scale) + zero_point
-            return torch.clamp(quant_t, torch.from_numpy(np.array(low)), torch.from_numpy(np.array(high))).numpy()
+            weight = self.compute.weight.detach()
+            scale, zero_point, min_q, max_q = _consts(params, weight.device)
+            quant_t = self.weight_round()(weight / scale) + zero_point
+            # .cpu() before .numpy(): the optimised weight goes back into the ONNX
+            # initializer, which is host memory whatever device the loop ran on.
+            return torch.clamp(quant_t, min_q, max_q).cpu().numpy()
 
         def forward(self, x):
             x = qdq(x, self.layer.input_q, RoundHalfToEven.apply)
@@ -424,7 +491,9 @@ def finetune(float_graph: Graph, quant_graph: Graph, source: ImageFolderSource,
 
     def round_loss(module, cur_iter):
         if cur_iter < cfg.NumIterations * cfg.WarmStart:
-            return torch.tensor(0.0)
+            # Same 0-dim float32 zero as torch.tensor(0.0), but on the loop's device so it
+            # can be added to the reconstruction term without an implicit transfer.
+            return torch.zeros((), device=module.alpha.device)
         h_alpha = torch.clamp(torch.sigmoid(module.alpha) * (ZETA - GAMMA) + GAMMA, 0, 1)
         reg_term = torch.add(1, -(torch.add(2 * h_alpha, -1).abs()).pow(beta_at(cur_iter))).sum()
         return cfg.RegParam * reg_term
@@ -452,19 +521,26 @@ def finetune(float_graph: Graph, quant_graph: Graph, source: ImageFolderSource,
         train_start = time.perf_counter()
         weight = np.array(float_graph.initializer(layer.weight_float))
         bias = None if layer.bias_float is None else np.array(float_graph.initializer(layer.bias_float)).reshape(-1)
+        # Built and alpha-initialised on cpu whatever OptimDevice is, then moved. Quark's
+        # QuantizeWrapper draws twice from the torch RNG per layer (reset_parameters, see
+        # tools/quant_adaround_rng_probe.py) and the byte-parity result depends on that
+        # stream; constructing on an accelerator would draw from a different generator.
         module = Module(layer, weight, bias)
         module.initialize_alpha()
-        log(f"Module ({layer.start})->({layer.end}) will be optimized by adaround on cpu")
-        all_q = torch.from_numpy(q_input)
-        all_f_out = torch.from_numpy(f_output)
+        module.to(device)
+        log(f"Module ({layer.start})->({layer.end}) will be optimized by adaround on {cfg.OptimDevice}")
+        all_q = torch.from_numpy(q_input).to(device)
+        all_f_out = torch.from_numpy(f_output).to(device)
         before = recons_metric(module, all_q, all_f_out)
         batch_size = cfg.BatchSize
         if batch_size < 1 or batch_size > q_input.shape[0]:
             log(f"The batch size {batch_size} is invalid, set it to 1")
             batch_size = 1
-        inputs_q = [torch.from_numpy(np.expand_dims(q_input[i], axis=0)) for i in range(q_input.shape[0])]
-        inputs_f = [torch.from_numpy(np.expand_dims(f_input[i], axis=0)) for i in range(f_input.shape[0])]
-        outputs_f = [torch.from_numpy(np.expand_dims(f_output[i], axis=0)) for i in range(f_output.shape[0])]
+        # Staged on the device once, before the loop, so the per-iteration torch.cat and the
+        # 1000 forward/backward passes never touch host memory.
+        inputs_q = [torch.from_numpy(np.expand_dims(q_input[i], axis=0)).to(device) for i in range(q_input.shape[0])]
+        inputs_f = [torch.from_numpy(np.expand_dims(f_input[i], axis=0)).to(device) for i in range(f_input.shape[0])]
+        outputs_f = [torch.from_numpy(np.expand_dims(f_output[i], axis=0)).to(device) for i in range(f_output.shape[0])]
         module.use_soft_rounding = True
         optimizer = torch.optim.Adam([module.alpha], lr=cfg.LearningRate)
         best_loss, mean_loss = float("inf"), 0.0

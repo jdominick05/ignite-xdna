@@ -1,0 +1,156 @@
+================================================================================
+AdaRound: adding an OptimDevice leaves the cpu path bit-for-bit unchanged
+================================================================================
+Date        : 2026-09-09 13:22
+Machine     : DESKTOP-CBL5NUA (Desktop 2), Ryzen 7 8700G, Phoenix XDNA1
+Env         : resnet_env (torch 2.4.1+cpu)
+Branch      : worktree-ignition-dev
+Hardware    : NONE on the NPU. The only onnxruntime use is Quark's own CPU
+              activation extraction; no VitisAI session, no hardware context.
+Host load   : OMP_NUM_THREADS=4. This is a fixture run (a 2-channel 4x4 Conv,
+              one layer), not a producer pass.
+
+WHAT THIS IS NOT
+----------------
+There is NO GPU measurement here and none was possible on this machine. resnet_env
+carries torch 2.4.1+cpu -- a cpu-only build, no CUDA and no HIP -- and Desktop 2's
+GPU is a Radeon 780M iGPU. The RX 7900 XTX the GPU path targets is on DESKTOP 1.
+Nothing in this log says AdaRound is faster on a GPU, or that it runs on one at all.
+
+What it does establish is the precondition: that adding the device plumbing did not
+disturb the cpu path, which is the one that is byte-identical to a fresh Quark
+XINT8_ADAROUND oracle. That property is the reason quant/adaround.py exists, and a
+silent regression in it is the only serious risk the refactor carried.
+
+METHOD
+------
+tools/quant_adaround_device_checks.py runs the transcription on a synthetic QDQ Conv
+built by tools/quant_fixtures.py::adaround_pair, whose float weights sit deliberately
+off the quantization grid so AdaRound has a real rounding decision to make. The same
+script is pointed at two checkouts with --repo: the pre-change code in the main
+checkout at 311a672, and the post-change code in this worktree. It compares the
+emitted int8 weights, the per-layer report figures, and every transcribed log line.
+
+Ignition's own ADAROUND banner is excluded from the trace comparison and named as
+such in the tool: it is this project's telemetry, not transcribed Quark output, and
+it gained optim_device/byte_parity_path fields on purpose. Everything Quark itself
+prints -- "Module ...", "adaround iterations=...", "LAYER ..." -- is compared exactly.
+================================================================================
+
+--------------------------------------------------------------------------------
+A. 8 iterations, 4 images
+--------------------------------------------------------------------------------
+$ python tools/quant_adaround_device_checks.py --repo <main checkout @ 311a672> --iters 8 --data-size 4 --batch-size 2 --write <ref>
+quant/ imported from C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization
+device=cpu iterations=8 images=4 batch=2 seed=1705472343
+emitted W_quantized: shape=(2, 2, 3, 3) dtype=int8 sum=-158
+  | Module (input)->(relu_out) will be optimized by adaround on cpu
+  | adaround iterations=0, lr=0.100000, loss=0.055023 (Recons loss=0.055023, Rounding loss=0.000000)
+  | adaround iterations=7, lr=0.100000, loss=0.251176 (Recons loss=0.008119, Rounding loss=0.243057)
+  | Module (input)->(relu_out) recons metrics was optimized from 0.015761 to 0.015613 (diff=-0.000148)
+  | LAYER 0/1 the_conv changed=3/36 max_lsb=1 iterations=8 early_stop=False
+
+reference written to C:\Users\<user>\.claude\jobs\74a3351c\tmp\ada_ref_8.json
+(exit 0)
+$ python tools/quant_adaround_device_checks.py --iters 8 --data-size 4 --batch-size 2 --compare <ref>
+quant/ imported from C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\.claude\worktrees\ignition-dev
+device=cpu iterations=8 images=4 batch=2 seed=1705472343
+emitted W_quantized: shape=(2, 2, 3, 3) dtype=int8 sum=-158
+  | Module (input)->(relu_out) will be optimized by adaround on cpu
+  | adaround iterations=0, lr=0.100000, loss=0.055023 (Recons loss=0.055023, Rounding loss=0.000000)
+  | adaround iterations=7, lr=0.100000, loss=0.251176 (Recons loss=0.008119, Rounding loss=0.243057)
+  | Module (input)->(relu_out) recons metrics was optimized from 0.015761 to 0.015613 (diff=-0.000148)
+  | LAYER 0/1 the_conv changed=3/36 max_lsb=1 iterations=8 early_stop=False
+
+IDENTICAL to C:\Users\<user>\.claude\jobs\74a3351c\tmp\ada_ref_8.json: emitted weights, report figures and loop trace all match.
+(exit 0)
+
+--------------------------------------------------------------------------------
+B. 200 iterations, 8 images
+--------------------------------------------------------------------------------
+$ python tools/quant_adaround_device_checks.py --repo <main checkout @ 311a672> --iters 200 --data-size 8 --batch-size 2 --write <ref>
+quant/ imported from C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization
+device=cpu iterations=200 images=8 batch=2 seed=1705472343
+emitted W_quantized: shape=(2, 2, 3, 3) dtype=int8 sum=-161
+  | Module (input)->(relu_out) will be optimized by adaround on cpu
+  | adaround iterations=0, lr=0.100000, loss=0.032081 (Recons loss=0.032081, Rounding loss=0.000000)
+  | adaround iterations=20, lr=0.100000, loss=0.006532 (Recons loss=0.006532, Rounding loss=0.000000)
+  | adaround iterations=40, lr=0.100000, loss=0.218166 (Recons loss=0.012274, Rounding loss=0.205892)
+  | adaround iterations=60, lr=0.100000, loss=0.089004 (Recons loss=0.029172, Rounding loss=0.059832)
+  | adaround iterations=80, lr=0.100000, loss=0.076750 (Recons loss=0.036750, Rounding loss=0.040000)
+  | adaround iterations=100, lr=0.100000, loss=0.076333 (Recons loss=0.036740, Rounding loss=0.039593)
+  | adaround iterations=120, lr=0.100000, loss=0.065177 (Recons loss=0.035177, Rounding loss=0.030000)
+  | adaround iterations=140, lr=0.100000, loss=0.032052 (Recons loss=0.012053, Rounding loss=0.019999)
+  | adaround iterations=160, lr=0.100000, loss=0.027818 (Recons loss=0.017818, Rounding loss=0.010000)
+  | adaround iterations=180, lr=0.100000, loss=0.014774 (Recons loss=0.014774, Rounding loss=0.000000)
+  | adaround iterations=199, lr=0.100000, loss=0.026852 (Recons loss=0.026852, Rounding loss=0.000000)
+  | Module (input)->(relu_out) recons metrics was optimized from 0.012398 to 0.011960 (diff=-0.000437)
+  | LAYER 0/1 the_conv changed=16/36 max_lsb=1 iterations=200 early_stop=False
+
+reference written to C:\Users\<user>\.claude\jobs\74a3351c\tmp\ada_ref_200.json
+(exit 0)
+$ python tools/quant_adaround_device_checks.py --iters 200 --data-size 8 --batch-size 2 --compare <ref>
+quant/ imported from C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\.claude\worktrees\ignition-dev
+device=cpu iterations=200 images=8 batch=2 seed=1705472343
+emitted W_quantized: shape=(2, 2, 3, 3) dtype=int8 sum=-161
+  | Module (input)->(relu_out) will be optimized by adaround on cpu
+  | adaround iterations=0, lr=0.100000, loss=0.032081 (Recons loss=0.032081, Rounding loss=0.000000)
+  | adaround iterations=20, lr=0.100000, loss=0.006532 (Recons loss=0.006532, Rounding loss=0.000000)
+  | adaround iterations=40, lr=0.100000, loss=0.218166 (Recons loss=0.012274, Rounding loss=0.205892)
+  | adaround iterations=60, lr=0.100000, loss=0.089004 (Recons loss=0.029172, Rounding loss=0.059832)
+  | adaround iterations=80, lr=0.100000, loss=0.076750 (Recons loss=0.036750, Rounding loss=0.040000)
+  | adaround iterations=100, lr=0.100000, loss=0.076333 (Recons loss=0.036740, Rounding loss=0.039593)
+  | adaround iterations=120, lr=0.100000, loss=0.065177 (Recons loss=0.035177, Rounding loss=0.030000)
+  | adaround iterations=140, lr=0.100000, loss=0.032052 (Recons loss=0.012053, Rounding loss=0.019999)
+  | adaround iterations=160, lr=0.100000, loss=0.027818 (Recons loss=0.017818, Rounding loss=0.010000)
+  | adaround iterations=180, lr=0.100000, loss=0.014774 (Recons loss=0.014774, Rounding loss=0.000000)
+  | adaround iterations=199, lr=0.100000, loss=0.026852 (Recons loss=0.026852, Rounding loss=0.000000)
+  | Module (input)->(relu_out) recons metrics was optimized from 0.012398 to 0.011960 (diff=-0.000437)
+  | LAYER 0/1 the_conv changed=16/36 max_lsb=1 iterations=200 early_stop=False
+
+IDENTICAL to C:\Users\<user>\.claude\jobs\74a3351c\tmp\ada_ref_200.json: emitted weights, report figures and loop trace all match.
+(exit 0)
+
+--------------------------------------------------------------------------------
+C. Fail-closed boundaries around a non-cpu device
+--------------------------------------------------------------------------------
+$ python tools/quant_adaround_device_checks.py --guards
+quant/ imported from C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\.claude\worktrees\ignition-dev
+a non-cpu OptimDevice must be acknowledged
+  PASS  cuda without AllowNonParityDevice is refused
+  PASS  cpu is accepted with no acknowledgement
+  PASS  cuda with AllowNonParityDevice passes check()
+
+ORT activation extraction stays on the cpu
+  PASS  a non-cpu InferDevice is refused
+
+an acknowledged device that torch cannot reach fails loudly, not silently on cpu
+  PASS  unavailable cuda raises RuntimeError naming the torch build
+
+ALL GUARDS PASS
+(exit 0)
+
+--------------------------------------------------------------------------------
+READING
+--------------------------------------------------------------------------------
+The emitted int8 weights, the recon metrics, the changed-element counts and every
+transcribed log line are identical between the two checkouts at both settings. The
+200-iteration case moves 16 of 36 weights, so the loop is genuinely exercised rather
+than terminating early on an untouched tensor.
+
+The guard that matters most is the last one: an OptimDevice torch cannot reach raises
+RuntimeError naming the torch build, instead of silently falling back to the cpu. A
+"GPU run" that is quietly a cpu run is the same failure shape as this repo's CPU run
+in an NPU costume (npu.session.resolve_xclbin), and it is refused the same way.
+
+STILL OPEN
+----------
+- No GPU has run this. Whether a Radeon RX 7900 XTX shortens the 1000-iteration loop
+  on a wide model is unmeasured, and so is whether a torch build that can reach it
+  exists on Windows. torch's official ROCm wheels are Linux-only; on Windows the
+  candidates are AMD's ROCm-on-Windows preview or torch-directml, and neither is
+  installed on any machine here. Installing one is a Desktop 1 decision.
+- A GPU run will NOT be byte-identical to the oracle, by construction. The config
+  refuses to leave the cpu without AllowNonParityDevice, the report records
+  byte_parity_path=false, and the run logs a warning. Compare accuracy, never bytes.
+================================================================================
