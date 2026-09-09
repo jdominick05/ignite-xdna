@@ -19,6 +19,11 @@
 # is why "does the single 4x4.xclbin session drive a live webcam" stayed open in
 # RESEARCH.md long after every piece of code for it existed. A run with nobody in
 # front of the camera verifies nothing; the summary says so when it sees 0 dets.
+#
+# The derived log name says single_4x4 because that is the overlay npu/session.py
+# resolves by default. This script has no --xclbin passthrough, so it cannot
+# currently be wrong -- but add one and the name stops being true; pass --log-file
+# yourself in that case rather than writing a lie into the filename.
 
 . "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
