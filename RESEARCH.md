@@ -1761,8 +1761,27 @@ sections above.
     and no AIE-ML or DPU ISA document in this repo states either; AMD's AI Engine
     documentation describes the path as SRS (shift-round-saturate) without giving the field
     width.
+  - **The criterion cannot fire on a file this producer emitted, so the zero was never
+    evidence** (added 2026-09-09,
+    `results/quant/shift_cut_contract_20260909_desktop2.log`). Quark's `adjust_shift_cut`
+    clamps `shift_cut = wpos + ipos - opos` into `[0, 16]`, and the module's sigma is that
+    same quantity **+ 14** — so the producer contract is **sigma in [14, 30]**, strictly
+    inside `[0, 31]`. Every analyzed Conv/Gemm on all eleven models lies in `[14, 30]`, as
+    it must. This also explains the "highest sigma ever executed is 30" above without new
+    hardware: 30 is the contract's upper edge, the producer's ceiling rather than the
+    silicon's. Separately, **166 of 1102** candidate operations were being scored on scales
+    that were never read — the `_Scale`/`_Mul` DPU-simulation pairs, defaulted to 1.0 and
+    counted as passing; they are the sub-14 minima in the tables above, and no Conv ever
+    produced one.
   Open: whether the bound is real physics at all, and what a forward test that actually
-  reaches the edges would look like, given the EP refuses out-of-contract scales.
+  reaches the edges would look like, given the EP refuses out-of-contract scales — and note
+  the constraint is now sharper, since any file the producer emits is confined to
+  `[14, 30]` by construction, so reaching an edge means defeating `adjust_shift_cut` first,
+  not just choosing scales. A second, cheaper open question was opened by the same work:
+  **two-sided contract-edge saturation** occurs on exactly the two CLE-confounded models
+  (regnetx_002, resnext50_32x4d) and on no healthy one, but at n = 2 with grouped-convolution
+  architecture perfectly confounded with equalization in the available models. The deciding
+  run is a one-graph `--cle` / `--no-cle` A/B through Ignition, on Desktop 1.
   [Working](docs/BENCHMARKS.md#aie-ml-systolic-shift-cut-feasibility-theorem-for-project-ignition).
 - **The webcam path (single `4x4.xclbin` session, `./scripts/yolo-demo.sh`) has not
   been exercised end to end.** The related but distinct round-robin-across-4-columns
