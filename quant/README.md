@@ -20,8 +20,8 @@ ONNX quantizer. Its internal package remains `quant`. See the
 | Export | Opset 17, IR 8, fully static batch 1 |
 | Quantization | Exact-sample MinMSE over each pipeline's own reader (the timm transform, `npu.yolo.letterbox`, or `npu.modnet.preprocess`, all at the graph's input size); scalar power-of-two scales; UINT8/zp128 activations and INT8/zp0 weights/biases; a MaxPool/Resize output shares its input's parameters only when that input is already marked at the vendor's visit order, and otherwise gets its own; optional transcribed CLE (`--cle`, Conv→Conv pairs only; 33 patterns on ResNet, 9 on MODNet, zero on the SiLU net, as in the vendor's default preset) |
 | Execution target | Windows, Phoenix/Hawk Point XDNA1, Ryzen AI 1.7.1; measured on Phoenix |
-| AdaRound | `python -m quant adaround` on an emitted file of the ResNet or YOLO families (MODNet is not wired): Quark's FastFinetune AdaRound transcribed (torch, `resnet_env`), layers walked in the vendor's topological order of the float model; byte-identical to fresh same-listing `XINT8_ADAROUND` oracles on ResNet50 and yolov8n-cut, same machine and runtime |
-| Additional tools | Static inspection of any ONNX file (contract violations reported, not enforced), position-table replay, graph comparison, full classification evaluation, controlled EP probes, a refinement probe and a preparation probe against Quark |
+| AdaRound | `python -m quant adaround` on an emitted file of the ResNet or YOLO families (MODNet is not wired): Quark's FastFinetune AdaRound transcribed (torch, `resnet_env`), layers walked in the vendor's topological order of the float model; byte-identical to fresh same-listing `XINT8_ADAROUND` oracles on ResNet50 and yolov8n-cut, same machine and runtime. The rounding loop takes Quark's `OptimDevice` via `--device`; **cpu is the default and the only byte-parity path**, and anything else needs `--accept-non-parity` |
+| Additional tools | Static inspection of any ONNX file (contract violations reported, not enforced), position-table replay, graph comparison, full classification evaluation, controlled EP probes, a refinement probe and a preparation probe against Quark. `check-shift-cut` is **advisory and must not gate**: it reports sigma per operation, the producer's `[14, 30]` band for Conv/Gemm only, operations whose scales it could not read (never counted as passing), and with `--branches` the inter-branch scale spread at Add/Concat |
 
 Other graphs are unvalidated even if they share those operators. Unsupported operators
 and batch/opset contracts fail explicitly. The MODNet family additionally needs
@@ -107,6 +107,15 @@ checks the float model's hash, and writes a new model plus sidecar (an `adaround
 section with per-layer reconstruction metrics, iterations, changed elements, peak
 working set and versions; scales and positions are unchanged). It imports torch, so
 the wrapper uses `resnet_env`; Quark stays blocked:
+
+`--device` selects the torch device for the Adam rounding loop (Quark's `OptimDevice`).
+ORT activation extraction always stays on the CPU. **The default `cpu` is the only
+byte-parity path**: a GPU changes float reduction order in Adam and in the convolutions,
+so `--device` off `cpu` requires `--accept-non-parity`, records `byte_parity_path: false`
+in the sidecar's `adaround` section, and logs a warning. A run made that way must be
+compared on accuracy, never quoted as matching a CPU oracle. A device torch cannot reach
+raises rather than silently falling back to the CPU. No GPU run has been made — no torch
+build on any machine here can reach one; see `quant/TODO.md`.
 
 ```bash
 ./scripts/quant-adaround.sh --quant models/resnet50_ignition_cle_c64.onnx --out models/resnet50_ignition_cle_adaround_c64.onnx --log results/quant/quant_resnet50_ignition_cle_adaround_c64.log

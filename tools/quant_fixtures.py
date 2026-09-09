@@ -141,6 +141,22 @@ def unresolved_mul_model():
     return _model(nodes + q_nodes, [value("input", [1, 3, 4, 4])], [value(y, [1, 3, 4, 4])], q_inits)
 
 
+def qdq_mul_model(pos_a=4, pos_b=4, pos_out=2):
+    """A genuinely quantized elementwise Mul: both inputs arrive through Q->DQ.
+
+    Distinct from unresolved_mul_model, which is the Constant-times-HardSigmoid shape the
+    DPU-simulation pass writes. This one IS analyzable, and its sigma can be placed outside
+    the Conv/Gemm contract band -- which must NOT be reported as a contract breach, because
+    adjust_shift_cut clamps Conv and Gemm only.
+    """
+    nodes_a, inits_a, a = _qdq("a", "input", 2.0 ** -pos_a, 128, TensorProto.UINT8)
+    nodes_b, inits_b, b = _qdq("b", "input", 2.0 ** -pos_b, 128, TensorProto.UINT8)
+    mul = helper.make_node("Mul", [a, b], ["mul_out"], "the_mul")
+    y_nodes, y_inits, y = _qdq("y", "mul_out", 2.0 ** -pos_out, 128, TensorProto.UINT8)
+    return _model(nodes_a + nodes_b + [mul] + y_nodes, [value("input", [1, 3, 4, 4])],
+                  [value(y, [1, 3, 4, 4])], inits_a + inits_b + y_inits)
+
+
 def branch_add_model(pos_a=4, pos_b=9):
     """Two QDQ branches meeting at an Add, with a chosen position spread between them."""
     nodes_a, inits_a, a = _qdq("a", "input", 2.0 ** -pos_a, 128, TensorProto.UINT8)

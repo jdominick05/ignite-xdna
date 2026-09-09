@@ -158,14 +158,33 @@ class ShiftCutHazard:
         self.unresolved_reason = unresolved_reason
 
     @property
+    def clamp_bound(self) -> bool:
+        """Is this operation the one adjust_shift_cut actually clamps?
+
+        Quark's shift_cut rule applies to Conv and Gemm ONLY (quant/refine.py::shift_cut,
+        `if node.op_type not in ("Conv", "Gemm"): continue`; sourced at
+        results/quant/notes_xint8_dialect.log:37). MatMul is not refined by it at all, and a
+        Mul goes through shift_write_mul (clamp 0..32) and shift_swish (clamp 0..15) --
+        different rules over different quantities. Judging either against [14, 30] would
+        report "this file was not emitted by Quark/Ignition" about a file that was.
+        """
+        return self.op_type in ("Conv", "Gemm")
+
+    @property
     def in_contract(self) -> bool:
-        """Inside Quark's own adjust_shift_cut window. Only meaningful when resolved."""
+        """Inside Quark's own adjust_shift_cut window.
+
+        Vacuously True for an operation the clamp does not bind, so that a caller filtering
+        on `not in_contract` never collects one.
+        """
+        if not self.clamp_bound:
+            return True
         return CONTRACT_SIGMA[0] <= self.sigma <= CONTRACT_SIGMA[1]
 
     @property
     def at_contract_edge(self) -> Optional[str]:
         """"low"/"high" when the producer's clamp had this op hard against an edge."""
-        if not self.resolved:
+        if not self.resolved or not self.clamp_bound:
             return None
         if self.sigma == CONTRACT_SIGMA[0]:
             return "low"
@@ -282,13 +301,14 @@ def _position(scale: float) -> int:
     return int(round(-math.log2(scale))) if scale > 0 else 0
 
 
-def _classify(sigma: int, kind: str) -> Tuple[bool, str]:
+def _classify(sigma: int, kind: str, op_type: str) -> Tuple[bool, str]:
     """Hazard verdict for a resolved operation, plus its reason line.
 
     Only Theorem 1's [0, 31] is treated as a hazard, and the docstring records that an
     in-contract file cannot reach it. Sitting outside the producer's own [14, 30] is
     reported, but as an observation: it means the file did not come from this producer,
-    which is a provenance fact rather than a measured hardware failure.
+    which is a provenance fact rather than a measured hardware failure -- and it is only
+    asked of Conv and Gemm, the only operations adjust_shift_cut clamps.
     """
     low, high = STATED_SIGMA
     if sigma < low:
@@ -297,6 +317,9 @@ def _classify(sigma: int, kind: str) -> Tuple[bool, str]:
     if sigma > high:
         return True, (f"SHIFT CLAMP HAZARD: sigma={sigma} > {high} "
                       f"(5-bit shifter would clamp; UNVALIDATED bound)")
+    if op_type not in ("Conv", "Gemm"):
+        return False, (f"Feasible {kind} shift. No producer contract is asserted: "
+                       f"adjust_shift_cut clamps Conv/Gemm only, not {op_type}")
     if not (CONTRACT_SIGMA[0] <= sigma <= CONTRACT_SIGMA[1]):
         return False, (f"Outside the producer contract sigma in {list(CONTRACT_SIGMA)} "
                        f"(shift_cut={sigma - 14} outside {list(CONTRACT_SHIFT_CUT)}): this file "
@@ -395,7 +418,7 @@ def analyze_model_shift_cut(model_path: str) -> List[ShiftCutHazard]:
                 note="", resolved=False, unresolved_reason="; ".join(reasons)))
             continue
 
-        is_hazard, reason_text = _classify(sigma, kind)
+        is_hazard, reason_text = _classify(sigma, kind, node.op_type)
         note_kwargs = ({"pos_x": pos_a, "pos_w": pos_b, "pos_y": pos_y} if kind == "systolic"
                        else {"pos_a": pos_a, "pos_b": pos_b, "pos_out": pos_y})
         hazards.append(ShiftCutHazard(
@@ -477,12 +500,21 @@ def print_shift_cut_report(model_path: str, hazards: List[ShiftCutHazard],
         if len(notes) > 15:
             print(f"  ... and {len(notes) - 15} more advisory notes.")
 
-    systolic = [h for h in resolved if h.op_type in ("Conv", "Gemm", "MatMul")]
+    matmul = [h for h in resolved if h.op_type == "MatMul"]
+    if matmul:
+        sigmas = [h.sigma for h in matmul]
+        print(f"\nMatMul distribution over {len(matmul)} analyzed op(s): "
+              f"sigma min={min(sigmas)}, median={int(np.median(sigmas))}, max={max(sigmas)}")
+        print("  Reported without a contract verdict: adjust_shift_cut clamps Conv/Gemm only,")
+        print("  so a MatMul's sigma is not bound by [14, 30] even when it happens to land there.")
+
+    systolic = [h for h in resolved if h.clamp_bound]
     if systolic:
         sigmas = [h.sigma for h in systolic]
         low = [h for h in systolic if h.at_contract_edge == "low"]
         high = [h for h in systolic if h.at_contract_edge == "high"]
-        print(f"\nConv/Gemm/MatMul shift-cut distribution over {len(systolic)} analyzed op(s):")
+        print(f"\nConv/Gemm shift-cut distribution over {len(systolic)} analyzed op(s) "
+              f"(the operations adjust_shift_cut actually clamps):")
         print(f"  sigma      min={min(sigmas)}, median={int(np.median(sigmas))}, max={max(sigmas)}")
         print(f"  shift_cut  min={min(sigmas) - 14}, median={int(np.median(sigmas)) - 14}, max={max(sigmas) - 14}"
               f"   (the vendor's own quantity, contract {list(CONTRACT_SHIFT_CUT)})")
