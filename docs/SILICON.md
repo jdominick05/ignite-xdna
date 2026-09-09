@@ -428,6 +428,62 @@ and of `conv2dk3` that writes cycle deltas into a side buffer. Measurement: MACs
 per core directly, independent of host timing and of S2. Decides: the same questions as
 S2 at lower fidelity and zero toolchain risk; use whichever lands first.
 
+**S4. Package power under load, and the NPU's share of it.**
+Physical basis: nothing in this repo has ever measured a watt. 1.7 has the clock and the
+GPU-engine utilization percentage, and every "is it worth it" verdict in
+`docs/BENCHMARKS.md` — the iGPU comparison, MobileNetV2 being too cheap to accelerate,
+`resnetv2_50x3_bit` losing by 25% — is a latency verdict, while the part's stated reason
+to exist is work per watt. There is no per-NPU rail to read, and this repo has established
+that rather than assumed it: `Estimated Power : N/A` in every `xrt-smi examine -r platform`
+capture taken here (MEASURED `results/aie/xrt_smi_platform_pmode.log`,
+`results/aie/clock_probe_npu.log`), and the electrical query itself failing at the driver
+escape (MEASURED `results/aie/xrt_api_live_clock_and_pdh_npu.log`; `docs/SETUP.md` lists
+power among what the monitor cannot show). So the measurable quantity is a package-power
+delta with an attribution control — never an isolated NPU wattage, which on this silicon
+can only be inferred.
+
+Tooling: a fourth source in `tools/hwinfo_npu_bridge.exe`, which today publishes to
+HWiNFO's custom-sensor registry interface and reads nothing back. Package and core power
+are platform SMU sensors, so the candidate read paths are HWiNFO's own shared-memory
+export — a separate documented interface from the registry one the bridge writes — or a
+direct SMU read; which of them is available here is the first thing S4 has to settle, and
+it may be neither. The sampling loop the bridge already runs (0.1 s PDH and XRT readback)
+then gains a power column, an idle baseline before and an idle tail after the workload,
+and a marker for the workload window.
+
+Measurement: mean package power and mean core power, idle versus loaded, across a matched
+pair taken in one sitting — the NPU run, and a CPU-only run of the same arithmetic — with
+the machine and the power mode named. The attribution is only as good as the core column:
+package rising while the cores stay flat puts the draw outside the cores; both rising says
+nothing about the NPU. Report the delta and its CPU-only control, never a bare wattage.
+
+Decides: whether the NPU's edge is work per watt where it is not work per second. Every
+comparison the NPU loses or barely wins becomes a different question if the package draw
+differs — MobileNetV2 at 1.72 ms CPU against 2.68 ms NPU, `resnetv2_50x3_bit` at 470.79
+against 588.58 ms CPU-to-NPU, and yolov8n at 9.9–10.5 ms on the iGPU against 6.8–6.9 ms on
+the NPU, a margin the demos re-run reversed outright (DML FP16 6.08 ms against the NPU's
+6.59, `results/demos/demo_tri_hardware_showdown.log`). That last one is the case for S4 in
+miniature: the latency verdict is already unstable between sittings, so watts would be the
+tiebreaker rather than another way to restate it. It also decides whether
+the 2.25× power-mode clock lever (1.7) is efficiency-neutral, and gives 1.7's
+unattributed session-to-session latency drift a second signature to test.
+
+Reuses: the bridge and its PDH/XRT sampling loop; the load-and-mode-in-one-sitting shape
+of `results/aie/pmode_clock_readback_npu.log`; section 6's first rule (name the CPU
+implementation) for the matched-arithmetic control.
+
+Prior art, third-party, and not evidence for this repo: `open-xdna`
+(`Scottcjn/open-xdna`) runs this measurement on Linux on a Ryzen 7 8845HS — package RAPL
+against the x86-core domain, with the NPU's DPM level from the staging driver's debugfs as
+a corroborating signal — and its `docs/POWER_INSTRUMENTATION.md` is a working model for
+the method, including the discipline of reporting `package − core` as an upper bound
+rather than an NPU wattage. Its figures are another machine, OS, driver and workload, and
+its README headline reports +6.6 W from a script not in the published tree against the
++2.88 W its documented method measures, so none of its numbers travels into this file. What corroborates the paragraph
+above is the direction: it reports the firmware telemetry buffer unpopulated on production
+firmware (amd/xdna-driver#1447), the Linux-side counterpart of the failed electrical query
+here.
+
 ### Tier 1 — the dispatch path
 
 **D1. `xrt::runlist` batching.**
@@ -645,6 +701,10 @@ decomposition per shape, not a generic one.
   route on this machine already.
 - mlir-aie's 4-column NPU1 model — A1's tooling deliverable.
 - The 617 µs IRON floor — D1–D3.
+- Per-NPU voltage and power: `Estimated Power` reads N/A and the electrical query fails at
+  the driver escape (`results/aie/xrt_api_live_clock_and_pdh_npu.log`); the Linux side
+  reports the firmware telemetry buffer unpopulated too (`open-xdna`, third-party,
+  amd/xdna-driver#1447) — S4 measures a package delta instead.
 
 ## 6. Rules every objective inherits
 
