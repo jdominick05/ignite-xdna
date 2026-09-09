@@ -1735,23 +1735,28 @@ sections above.
   Open: three of the four stall categories have never been non-zero here, so they are
   unexercised; and the same instrument has not yet been pointed at the conv or the GEMM, whose
   upstream designs carry no trace hook, which is where it would change a verdict.
-- **The int8 GEMM is not issue-bound, and that was settled without running it.** The two
-  results above compose: if a loop's bundle count is its cycle count and a buffer costs a
+- **The int8 GEMM's loss is accumulator spill, and that was settled without running it.** The
+  two results above compose: if a loop's bundle count is its cycle count and a buffer costs a
   constant on top of its work, a kernel's issuing time is computable from its object file, and
   the difference from a measured time is the cycles the core spent not issuing.
-  `tools/gemm_cost_model.py` does that for the best int8 GEMM and the model closes against the
-  sweep's own throughput without being fitted to it — schedule 77.4% × issuing 40.4% = 31.3% of
-  peak, matching 4607.05 GOPS over the 14,732 those cores can issue. The mechanism is visible in
-  one number: **halving the work per buffer leaves the measured cycles per call essentially
-  unchanged, 3,274 against 3,160.** A core handed twice the work per buffer finishes in the same
-  wall time, which is what a design bound by buffer delivery does and not what an issue-bound
-  one does. It also explains the tile result the sweep reported without a mechanism, n=32 → n=64
-  at 1.93× where the schedule alone predicts 12%. Two falsifiable claims follow: a port trace
-  should measure ≤2.5 B/cycle into a core, and there is ~2.4× of headroom inside the per-buffer
-  slot — already obstructed, since the m=128 and k=128 probes both failed to build on L1
-  capacity, so reaching it means changing what occupies L1 rather than asking for a bigger tile.
-  Open: "not issuing" is a residual here, not an observation, and attributing it needs the
-  stream-port events that `kernels/pmu_probe/`'s core-stream reader cannot yet decode.
+  `tools/gemm_cost_model.py` does that for the best int8 GEMM. The kernel is a **loop nest** —
+  two software loops around the hardware loop, with eight accumulators loaded before it and
+  stored after it — and the whole body re-runs once per group of accumulators, 16 times per
+  call. So the celebrated 88.9% inner-loop MAC density covers only 54 of the 141 cycles a group
+  costs. Over a whole call the kernel issues **107.3 MACs per cycle, 41.9% of nameplate**, while
+  the core is issuing for **74.6%** of the dispatch. **The larger loss is the schedule, and it
+  is spill:** the kernel holds eight live accumulators where five is this branch's measured
+  spill-free ceiling, and the 87 non-loop bundles per group are the resulting load, store and
+  stack traffic. What survives from the measurement side is a per-buffer floor — halving the
+  work per buffer leaves measured cycles per call at **3,274 against 3,160** — which n=32 fills
+  to 41% and n=64 to 75%, explaining the sweep's 1.93× tile result and leaving ~1.3× of
+  headroom. The cheapest next test is static: rebuild the kernel blocked to four or five
+  accumulators and re-run the tool; if the per-group bundle count does not fall, those 87
+  bundles are the output tile's mandatory traffic rather than spill. Open: "not issuing" is a
+  residual here, not an observation, and attributing it needs the stream-port events that
+  `kernels/pmu_probe/`'s core-stream reader cannot yet decode. **An earlier reading of this,
+  superseded the same day, modelled the kernel as one loop and reported the core as starved for
+  60% of the dispatch with 2.4× of headroom; both were artefacts of missing the nest.**
 - **Candidate model pipelines (Categories A, C, D, E).** Test plans, target shapes, and falsification criteria:
   - **Category A:** Image Super-Resolution — SESR-M7 (placement, 1.48 ms latency, 3.02x iGPU win,
     70% AdaRound recovery) and Real-ESRGAN Compact (activation memory spill) closed above.

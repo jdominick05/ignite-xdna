@@ -66,6 +66,14 @@ Read these before quoting anything below.
   tuned n=64 kernel behind 4607.05 is a different object hash. **Every number in that section
   survives**: the two objects' loops are identical, nine bundles and eight `vmac` on `cm0`–
   `cm7` at 88.9% MAC issue density. Only the provenance line was wrong.
+- **`gemm_cost_model.log`'s cost model is superseded** by `gemm_cost_model_nest.log`, written
+  the same day. It read `matmul_i8_i32` as one hardware loop with straight-line setup and
+  charged the 135 non-loop bundles once per kernel call. The function is a nest: two software
+  loops around the hardware loop, re-running that body once per group of live accumulators.
+  The error overstated starvation by 1.8× — "the core is starved for 60% of the dispatch"
+  becomes **25.4%**, and the dominant cost moves from data delivery to accumulator spill
+  traffic inside the core. The measured per-buffer floor (3,274 vs 3,160 cycles per call for
+  2× the work) is a measurement and is unaffected.
 
 ## Toolchain bring-up
 
@@ -177,20 +185,31 @@ stall categories were zero throughout and are unexercised, not verified. Written
 [`docs/BENCHMARKS.md`](../../docs/BENCHMARKS.md#the-trace-unit-as-a-performance-monitoring-unit-68-of-a-short-kernels-cycles-are-lock-wait).
 
 **`gemm_cost_model.log`** — `aie2_isa_static.log` and `pmu_probe_npu.log` composed into a
-predictor, no hardware used: `tools/gemm_cost_model.py` computes a tiled GEMM's issuing cycles from its compiled
-object and compares them with an already-measured time, so the remainder is the cycles the
-core spent NOT issuing. On the best int8 GEMM the model closes against the sweep's own
-throughput without being fitted to it — schedule **77.4%** × issuing **40.4%** = 31.3% of
-peak, matching 4607.05 GOPS over 14,732. The mechanism is one number: halving the work per
-buffer leaves measured cycles per call at **3,274** against **3,160**, so a core handed twice
-the work per buffer finishes in the same wall time, which is buffer delivery setting the pace
-and not the instruction schedule. Predicts ≤2.5 B/cycle into a core for a port trace to
-confirm, and ~2.4× of unused headroom inside the per-buffer slot that the m=128 and k=128
-probes could not reach because they exhaust L1. **Corrects the provenance line in
-`aie2_isa_static.log` section 5**: the object disassembled there is the default n=32 build
-(2387.01 GOPS), not the tuned n=64 one behind 4607.05; the two loops are identical, so every
-number in that section stands and only the attribution was wrong. Written up in
-[`docs/BENCHMARKS.md`](../../docs/BENCHMARKS.md#the-int8-gemm-is-not-issue-bound-a-core-takes-the-same-time-per-buffer-whatever-is-in-it).
+predictor, no hardware used: `tools/gemm_cost_model.py` computes a tiled GEMM's issuing cycles
+from its compiled object and compares them with an already-measured time, so the remainder is
+the cycles the core spent NOT issuing. **Its model numbers are superseded the same day by
+`gemm_cost_model_nest.log`**, which found it had read `matmul_i8_i32` as one loop when it is a
+nest. Two things in it stand: the measured observation that halving the work per buffer leaves
+cycles per call at **3,274** against **3,160**, and the **correction to `aie2_isa_static.log`
+section 5's provenance** — the object disassembled there is the default n=32 build (2387.01
+GOPS), not the tuned n=64 one behind 4607.05. The two loops are identical, so every number in
+that section stands and only the attribution was wrong.
+
+**`gemm_cost_model_nest.log`** — the correction, and the better answer. `matmul_i8_i32` is two
+software loops around the hardware loop, with the eight accumulators loaded before it and
+stored after it; the first reading charged the 135 non-loop bundles once per CALL instead of
+once per accumulator GROUP and overstated starvation by 1.8×. The trip counts are compile-time
+constants in the object and reconcile exactly — 16 groups × 64 `vmac` = 1,024, which is
+64³/(4·8·8) with nothing left over. Corrected: the core issues **74.6%** of the dispatch at
+n=64, not 40.4%, and the **larger loss is the schedule** — about **107 MACs/cycle over a whole
+call, 41.9% of the 256 nameplate** — because 87 of the 141 cycles an accumulator group costs
+are accumulator load, store and stack spill, the direct consequence of holding eight
+accumulators where five is this branch's measured spill-free ceiling. What survives untouched
+is the per-buffer floor: ~3,200 measured cycles per call whatever the tile, which n=32 fills to
+41% and n=64 to 75%, leaving **~1.3×** of headroom rather than 2.4×. Also falsifies charging the
+trace probe's 717 cycles per buffer to a different kernel, which would predict 117.5% of the
+measured time. Written up in
+[`docs/BENCHMARKS.md`](../../docs/BENCHMARKS.md#the-int8-gemm-issues-at-40-of-nameplate-and-a-3200-cycle-per-buffer-floor-caps-it).
 
 **`pmode_clock_readback_npu.log`** — XRT's `max_clock_frequency_mhz` against power mode
 *and* load, varied together: a 2048³ bf16 GEMM hold with `xrt-smi configure --pmode`

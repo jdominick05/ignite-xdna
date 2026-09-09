@@ -68,6 +68,11 @@ def triple(s: str) -> tuple[int, int, int]:
     return a, b, c
 
 
+def pair(s: str) -> tuple[int, int]:
+    a, b = (int(x) for x in s.split(","))
+    return a, b
+
+
 def count_op(bundles, op: str) -> int:
     return sum(1 for b in bundles for f in b.live if f.split()[0].startswith(op))
 
@@ -80,20 +85,53 @@ def pick(sections, want: str):
 
 
 def analyse_kernel(section, op: str):
-    """Split a function into its steady-state loop and everything executed once."""
+    """Walk the function's control flow: two software loops around one hardware loop.
+
+    `mm.cc`'s vectorized matmul is a nest, NOT a single loop with straight-line setup.
+    The hardware loop is only the k-reduction over one group of live accumulators; the
+    accumulators are loaded before it and stored after it, and that whole body is re-run
+    once per group. An earlier version of this tool charged the non-loop bundles once per
+    CALL instead of once per GROUP and under-counted issuing cycles by about 1.8x.
+
+    Regions, taken from the labels and the two backward branches rather than assumed:
+
+        entry          once
+        outer header   once per outer pass          .LBB0_1 .. .LBB0_2
+        inner body     once per accumulator group   .LBB0_2 .. first jnz after the hw loop
+          (the hardware loop lives inside this)
+        outer tail     once per outer pass          .. second jnz
+        epilogue       once
+    """
     loops = ad.find_loops(section)
     hot = max(loops, key=lambda L: count_op(L.bundles, op)) if loops else None
     if hot is None or count_op(hot.bundles, op) == 0:
         raise SystemExit(f"no loop in {section.name} issues a '{op}'")
+
+    bundles = section.bundles
+    labels = [i for i, b in enumerate(bundles) if b.label and b.label.startswith(".LBB")]
+    end_i = next(i for i, b in enumerate(bundles) if b.addr == hot.end)
+    latches = [i for i in range(end_i + 1, len(bundles))
+               if any(f.split()[0].startswith("jnz") for f in bundles[i].live)]
+    if len(labels) < 2 or len(latches) < 2:
+        raise SystemExit(
+            f"{section.name}: expected two software loops around the hardware loop, found "
+            f"{len(labels)} labels and {len(latches)} backward branches. This tool models "
+            "the mm.cc nest specifically; check the disassembly before trusting a number.")
+    outer_head, inner_head = labels[0], labels[1]
+    inner_latch, outer_latch = latches[0], latches[1]
+
     in_loop = count_op(hot.bundles, op)
-    total = count_op(section.bundles, op)
     return {
         "loop": hot,
         "loop_bundles": hot.n_bundles,
         "op_in_loop": in_loop,
-        "op_total": total,
-        "op_peeled": total - in_loop,
-        "once_bundles": len(section.bundles) - hot.n_bundles,
+        "op_total": count_op(bundles, op),
+        "op_peeled": count_op(bundles[inner_head:inner_latch + 1], op) - in_loop,
+        "entry": outer_head,
+        "outer_header": inner_head - outer_head,
+        "inner_body": (inner_latch + 1 - inner_head) - hot.n_bundles,
+        "outer_tail": outer_latch - inner_latch,
+        "epilogue": len(bundles) - 1 - outer_latch,
     }
 
 
@@ -113,6 +151,9 @@ def main(argv=None) -> int:
     ap.add_argument("--clock-ghz", type=float, default=CLOCK_GHZ)
     ap.add_argument("--fifos", type=int, default=2,
                     help="input ObjectFifos acquired and released per call")
+    ap.add_argument("--acc-grid", type=pair, default=(4, 2), metavar="rows,cols",
+                    help="how the live accumulators tile the output block; read off the "
+                         "loop bounds in the object (default 4,2 for mm.cc int8)")
     ap.add_argument("--objdump", default=None)
     args = ap.parse_args(argv)
 
@@ -132,23 +173,57 @@ def main(argv=None) -> int:
     if (m * k * n) % macs_per_op:
         raise SystemExit("tile is not a whole number of MAC operations")
 
-    iters = (ops_per_call - a["op_peeled"]) / a["op_in_loop"]
-    loop_cycles = iters * a["loop_bundles"]
-    call_cycles = loop_cycles + a["once_bundles"]
+    # One pass through the inner body reduces the whole k extent for one group of live
+    # accumulators: n_acc accumulators x (k/s) k-steps. The software pipeline peels two
+    # of those k-steps, which is why the hardware loop's trip count is k/s - 2.
+    n_acc = a["op_in_loop"]
+    ksteps = k // s
+    ops_per_group = n_acc * ksteps
+    hw_trips = ksteps - a["op_peeled"] // n_acc
+    groups = ops_per_call / ops_per_group
+    if groups != int(groups) or hw_trips < 1:
+        raise SystemExit(f"nest does not reconcile: {ops_per_call} vmac, "
+                         f"{ops_per_group} per group, {hw_trips} hardware-loop trips")
+    groups = int(groups)
+
+    # Accumulator group geometry: n_acc register accumulators arranged rows x cols, each
+    # an r x t output block. The outer software loop walks m, the inner walks n.
+    grid_rows, grid_cols = args.acc_grid
+    if grid_rows * grid_cols != n_acc:
+        raise SystemExit(f"--acc-grid {grid_rows},{grid_cols} does not multiply to the "
+                         f"{n_acc} accumulators the loop body writes")
+    outer_passes = m // (grid_rows * r)
+    if outer_passes * (n // (grid_cols * t)) != groups:
+        raise SystemExit(f"--acc-grid does not reproduce the {groups} groups the vmac "
+                         f"count requires; check the disassembly")
+
+    inner_cycles = a["inner_body"] + hw_trips * a["loop_bundles"]
+    call_cycles = (a["entry"] + a["epilogue"]
+                   + outer_passes * (a["outer_header"] + a["outer_tail"])
+                   + groups * inner_cycles)
 
     print(f"== {obj}")
     print(f"   tile m={m} k={k} n={n}   mac dims {r}x{s}x{t} = {macs_per_op} MACs per vmac")
     print()
-    print("the machine code")
+    print("the machine code, walked as a nest")
     print(f"  {args.fn:<22} {len(mm.bundles):>7} bundles total")
-    print(f"  steady-state loop      {a['loop_bundles']:>7} bundles = "
-          f"{a['loop_bundles']} cycles per iteration")
-    print(f"  vmac in that loop      {a['op_in_loop']:>7}  -> "
-          f"{a['op_in_loop'] / a['loop_bundles']:.3f} vmac/cycle, "
-          f"{100 * a['op_in_loop'] / a['loop_bundles']:.1f}% of one per cycle")
-    print(f"  vmac peeled outside    {a['op_peeled']:>7}  (software-pipeline prologue "
-          f"and epilogue)")
-    print(f"  bundles executed once  {a['once_bundles']:>7}")
+    print(f"  entry, once            {a['entry']:>7}")
+    print(f"  outer header, x{outer_passes:<7}{a['outer_header']:>7}")
+    print(f"  inner body, x{groups:<9}{a['inner_body']:>7} bundles outside the hardware loop")
+    print(f"  hardware loop          {a['loop_bundles']:>7} bundles = "
+          f"{a['loop_bundles']} cycles/iteration, x{hw_trips} per inner body")
+    print(f"  outer tail, x{outer_passes:<9}{a['outer_tail']:>7}")
+    print(f"  epilogue, once         {a['epilogue']:>7}")
+    print(f"  vmac in the loop body  {n_acc:>7}  -> "
+          f"{n_acc / a['loop_bundles']:.3f} vmac/cycle inside the loop, "
+          f"{100 * n_acc / a['loop_bundles']:.1f}% of one per cycle")
+    print(f"  vmac peeled per group  {a['op_peeled']:>7}  (software-pipeline prologue "
+          f"and epilogue, {a['op_peeled'] // n_acc} k-steps)")
+    print(f"  accumulator groups     {groups:>7}  ({grid_rows}x{grid_cols} accumulators = "
+          f"a {grid_rows * r}x{grid_cols * t} output region, {outer_passes} outer x "
+          f"{groups // outer_passes} inner)")
+    print(f"  cycles per inner body  {inner_cycles:>7}  for {ops_per_group} vmac -> "
+          f"{100 * ops_per_group / inner_cycles:.1f}% of one vmac per cycle")
     print()
 
     zcycles = 0.0
@@ -181,9 +256,7 @@ def main(argv=None) -> int:
 
     print("one call, one buffer pair")
     print(f"  vmac the tile requires   {ops_per_call:>10}")
-    print(f"  loop iterations          {iters:>10.1f}")
-    print(f"  loop cycles              {loop_cycles:>10.0f}")
-    print(f"  prologue/epilogue        {a['once_bundles']:>10}   (from this object's own code)")
+    print(f"  cycles in the nest       {call_cycles:>10.0f}   (from this object's own code)")
     print(f"  zero, amortised          {zcycles:>10.1f}")
     print(f"  handoff, {args.fifos} fifos        {handoff:>10}   "
           f"(acquire+release only; see the note in this file)")
@@ -229,7 +302,8 @@ def main(argv=None) -> int:
         print(f"  achieved input rate      "
               f"{in_bytes_per_call / meas_per_call:>10.2f} B/cycle per core")
         print()
-        print("  closure check -- the two factors must multiply to the measured rate")
+        print("  arithmetic consistency (NOT evidence -- per_call cancels, so this")
+        print("  identity holds for any per_call and only checks the tool's bookkeeping)")
         print(f"  schedule    {100 * macs_per_op * ops_per_call / per_call / 256:>6.1f} %"
               f"  x  issuing {100 * frac:>5.1f} %"
               f"  =  {100 * macs_per_op * ops_per_call / per_call / 256 * frac:>5.1f} %")

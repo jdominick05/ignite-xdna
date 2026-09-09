@@ -77,7 +77,7 @@ New numbers use 1.80 GHz and say which power mode they were taken in.
 | Cycle counter | `aie::tile::current().cycles()` → `get_cycles()` — **not reachable from a Peano kernel**; the trace unit reads the same timer | SPEC: `ironenv/Lib/site-packages/mlir_aie/include/aie_api/tile.hpp`. MEASURED 2026-09-07: Peano (llvm-aie 22) declares `get_cycles()` and never defines it (`ld.lld: undefined symbol`), does not lower `__builtin_readcyclecounter`, and rejects inline asm; S0 read the timer through trace-unit event stamps instead (`results/aie/clock_probe_npu.log`). Re-checked 2026-09-09 from the machine-code side and the conclusion holds by a fourth route: the assembler accepts `CORE_ID` as a `mov` source and no timer name at all, and the register database puts the timer at memory-mapped `0x340F8`/`0x340FC` in the tile's configuration space rather than in the core's data space (`results/aie/aie2_isa_static.log`). |
 | Hand-written assembly | **Assembles and links.** A standalone `.s` never enters instruction selection, so it reaches the integrated assembler intact | MEASURED 2026-09-09 (`kernels/asm_probe/`, `results/aie/aie2_isa_static.log`). Only statement-level inline asm inside a C++ function fails, in the IRTranslator, which is the wall S0 hit. Hand-scheduling an inner loop is therefore available where the compiler's schedule is the binding constraint. Toolchain result: the object assembles, disassembles and links, but no hand-written kernel has been run on the NPU. |
 | `aie::mmul` shapes in mlir-aie's GEMM library | bf16 4×8×4; int8 4×8×8; int16 4×4×4 | SPEC: `aie_kernels/aie2/mm.cc`, and the compiler's own dispatch table `_MM_MAC_DIMS` in `python/iron/kernels/linalg.py`. One AIE2 int8 `vmac` therefore retires 4·8·8 = 256 MACs, which is exactly the 256 MACs/cycle nameplate. The same table gives AIE2P (Strix) 8×8×8 for int8, i.e. 512 per `vmac` — the generational difference is the MAC shape, not the issue rate. |
-| MAC issue rate, production int8 GEMM | **198.1 MACs/cycle** over a whole kernel call, 77.4% of the 256 nameplate; 88.9% inside the inner loop alone | MEASURED 2026-09-09 by counting `vmac` per bundle in the compiled object and dividing the tile's required MACs by the call's bundle count (`tools/gemm_cost_model.py`, `results/aie/gemm_cost_model.log`). The gap between 88.9% and 77.4% is the 135 once-per-call prologue/epilogue bundles, dominated by accumulator spill reloads. This is a computed issue rate, not a hardware-counter reading; it assumes the function's only branch is its one hardware loop. |
+| MAC issue rate, production int8 GEMM | **107.3 MACs/cycle** over a whole kernel call, 41.9% of the 256 nameplate; 88.9% inside the hardware loop alone | MEASURED 2026-09-09 by walking the compiled object's control flow and dividing the tile's required MACs by the cycles the nest costs (`tools/gemm_cost_model.py`, `results/aie/gemm_cost_model_nest.log`). Supersedes the same day's first reading of **198.1 / 77.4%**, which modelled `matmul_i8_i32` as one hardware loop with straight-line setup; it is a nest, two software loops around the hardware loop, re-running the accumulator load/store body once per group. The gap between 88.9% and 41.9% is those 87 non-loop bundles per group — accumulator load, store and stack spill — and it follows directly from the row above: this kernel holds 8 live accumulators where 5 is the spill-free ceiling. A computed issue rate, not a hardware-counter reading; the branch targets are unresolved relocations in the object, so the evidence for the nest reading is that its trip counts reconcile exactly against the required `vmac` count. |
 | Numerics | `aie::set_rounding(conv_even)` needed to match host round-to-nearest-even; Peano's AIE libc has no float `sqrtf` | MEASURED: `results/aie/groupnorm_bf16_kernel_npu.log`. |
 
 ### 1.3 One mem tile
@@ -391,11 +391,13 @@ measurement of the clock; the readback is its live indicator.
 
 **S1. Pin the data-movement constants. — Bounded from the demand side 2026-09-09; the port
 measurement itself is unstarted.** `tools/gemm_cost_model.py` computes what the int8 GEMM's
-cores would need if never starved (6.19 B/cycle into one core's L1 at n=64) against what the
+cores would need if never starved (**3.35** B/cycle into one core's L1 at n=64) against what the
 measured time says they get (2.50 B/cycle), and finds the measured cycles per call almost
-unchanged, 3,274 vs 3,160, when the work per buffer is halved — the signature of a design
-bound by buffer delivery rather than issue (`results/aie/gemm_cost_model.log`). That brackets
-the answer but does not measure a port. **The route to measuring one is `PORT_RUNNING` /
+unchanged, 3,274 vs 3,160, when the work per buffer is halved — a per-buffer floor set by
+delivery rather than by the work (`results/aie/gemm_cost_model_nest.log`). The demand figure
+supersedes the 6.19 B/cycle of the same day's first reading, which mis-modelled the kernel's
+loop nest; the two measured rates are unaffected. That brackets the answer but does not measure
+a port. **The route to measuring one is `PORT_RUNNING` /
 `PORT_STALLED` / `PORT_IDLE` on shim and mem-tile DMA ports, and none of that reader exists
 yet**: those events need their own wrapper classes and `shimtile_events=` / `memtile_events=`
 parameters, and `kernels/pmu_probe/`'s reader takes `streams[0]`, the CORE packet type, which
@@ -447,11 +449,13 @@ threads in `RESEARCH.md` — the silicon exposes it, the post-step didn't.
 **S3. In-kernel cycle accounting without trace. — Answered statically for one kernel
 2026-09-09; the hardware-counter route is unstarted.** MACs per cycle per core no longer has to
 be inferred from throughput. `tools/gemm_cost_model.py` reads it off the object code: the int8
-GEMM's inner loop issues 8 `vmac` per 9-bundle iteration, 88.9% of one per cycle, and across
-the whole call — loop, prologue, amortised zeroing, handoff — **198.1 MACs per cycle, 77.4% of
-the 256 nameplate** (`results/aie/gemm_cost_model.log`). Multiplied by the 40.4% of the
-dispatch the core actually spends issuing, that reproduces the measured 31.3% of peak exactly,
-without being fitted to it. **Unstarted:** the decimating hardware counter — subclass
+GEMM's hardware loop issues 8 `vmac` per 9-bundle iteration, 88.9% of one per cycle, but that
+loop is only 54 of the 141 cycles an accumulator group costs, so across the whole call the
+kernel manages **107.3 MACs per cycle, 41.9% of the 256 nameplate**
+(`results/aie/gemm_cost_model_nest.log`, superseding the same day's 198.1 / 77.4%). The core
+issues for 74.6% of the dispatch, so the **larger loss is the schedule, not delivery** — and it
+is accumulator spill, since the kernel holds 8 live accumulators where 5 is the measured
+spill-free ceiling. **Unstarted:** the decimating hardware counter — subclass
 `GenericEvent`, override `get_register_writes()` to program `Performance_Control0` / `Control2`
 — which would measure the issue rate rather than compute it, and would cover kernels whose
 control flow the static route cannot walk. Whether a counter may reset on the event it

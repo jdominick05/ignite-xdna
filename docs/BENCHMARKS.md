@@ -1254,7 +1254,7 @@ dispatch begins, so the cycles the core was alive are not the whole submit-to-wa
 must not be compared against it directly. `ACTIVE` being inclusive of stalls is inferred from
 the accounting closing, not from a document.
 
-### The int8 GEMM is not issue-bound: a core takes the same time per buffer whatever is in it
+### The int8 GEMM issues at 40% of nameplate, and a ~3,200-cycle per-buffer floor caps it
 
 The two results above compose into something neither gives alone. If a hardware loop's bundle
 count is its cycle count, and a buffer costs a constant on top of its work, then a kernel's
@@ -1272,65 +1272,80 @@ in that section survives, because the two objects' loops are identical: nine bun
 `vmac`, `cm0`–`cm7`, 88.9% MAC issue density. Only the attribution was wrong, and it is
 corrected here rather than edited out of the log.
 
+**A first reading of this was wrong, and the correction moves the answer.** The kernel was
+modelled as one hardware loop with straight-line setup, charging its 135 non-loop bundles once
+per call. `matmul_i8_i32` is a **nest**: two software loops around the hardware loop, with the
+accumulators loaded before it and stored after it, and that whole body re-run once per group of
+live accumulators. Three things in the disassembly say so — two backward branches after the
+hardware loop each with their own induction update and bound test, a loop body with eight
+`vmac` and **no accumulator store**, and compile-time loop bounds (`mova r3, #0x8` →
+6 hardware-loop trips, `mova r7, #0x6` → 4 inner, `mov r8, #0xc` → 4 outer). The trip counts
+reconcile exactly: 16 groups × 64 `vmac` = 1,024 = 64³/(4·8·8), nothing left over.
+Superseded numbers are kept below; backing log `results/aie/gemm_cost_model_nest.log`.
+
 Both tiles, same 4096×2048×2048 problem, same 16 cores, same sitting in the source log:
 
-| Tile | `vmac`/call | Issuing cycles/call | Predicted µs | Measured µs | Issuing | Measured cycles/call |
-|---|---|---|---|---|---|---|
-| m64 k64 **n64** | 1024 | 1323 | 3014.5 | 7458.1 | **40.4%** | 3274 |
-| m64 k64 **n32** | 512 | 738 | 3364.2 | 14394.5 | **23.4%** | 3160 |
+| Tile | `vmac`/call | Issuing cycles/call | Measured cycles/call | Issuing | MAC rate over the call |
+|---|---|---|---|---|---|
+| m64 k64 **n64** | 1024 | 2442 | 3274 | **74.6%** | 107.3 (41.9% of 256) |
+| m64 k64 **n32** | 512 | 1306 | 3160 | **41.3%** | 100.4 (39.2% of 256) |
+| *superseded, one-loop reading* | | *1323 / 738* | | *40.4% / 23.4%* | *198.1 / 177.5* |
 
-**The model closes against the source log's own throughput without being fitted to it.** The
-schedule term and the issuing term multiply to the measured fraction of peak in both rows:
-77.4% × 40.4% = 31.3%, and 4607.05 GOPS over the 14,732 GOPS those cores can issue at the
-measured 1.7983 GHz is 31.3%. For n=32, 69.3% × 23.4% = 16.2%, matching 2387.01/14732. The loop
-trip count also lands on a whole number, 126.0 exactly, which it would not if the MAC geometry
-or the software-pipeline peeling count were wrong. The geometry is the compiler's own —
-`_MM_MAC_DIMS` gives AIE2 (4, 8, 8) for every int8 input, so one `vmac` retires 256 int8 MACs.
+**The schedule is the larger loss, and the first reading put it in the wrong place.** Over a
+whole call the kernel issues about 100–107 MACs per cycle against the 256 the tile can retire,
+roughly 40% — not the 77.4% the one-loop reading gave. The 88.9% figure for the inner loop is
+correct and unchanged, but it covers only 54 of the 141 cycles an accumulator group costs. The
+other 87 bundles per group are accumulator loads, accumulator stores and stack spill traffic,
+run 16 times per call at n=64. **That is a direct consequence of a number measured two sections
+above:** five live 4×8×8 int8 accumulators is the spill-free ceiling and this kernel holds
+eight, with a 416-byte frame and 33 stack references.
 
-**The schedule is not where the GEMM loses.** Across the whole call — loop, prologue and
-epilogue, amortised output zeroing, ObjectFifo handoff — the n=64 kernel issues 198.1 MACs per
-cycle against the 256 the tile can retire, 77.4%. Most of the missing 22.6% is the 135
-once-per-call bundles, dominated by reloading the accumulators the register file cannot hold
-(416-byte frame, 33 stack references). Real, but not a factor of three.
+**The per-buffer floor is the finding that survived the correction.** Measured cycles per call
+are 3,274 at n=64 and 3,160 at n=32 — a 3.6% difference for buffers whose compute differs by
+2×. That is a measurement, not a model output, and neither reading changes it. What the
+corrected model changes is how full the slot is: n=32 puts 1,306 issuing cycles into a
+~3,200-cycle slot and n=64 puts 2,442 into it. So n=64 is 1.93× faster because it nearly fills
+a slot whose length barely moves, and the remaining headroom is about **1.3×, not 2.4×**.
 
-**The mechanism is that measured cycles per call barely move: 3,274 against 3,160, for buffers
-whose compute differs by 2×.** A core handed twice the work per buffer finishes in the same
-wall time. That is not an issue-bound design; it is a design whose per-buffer time is set by
-getting the buffer there. The n=64 call's 1,323 issuing cycles fit inside a 3,274-cycle slot
-with 1,951 to spare. It also explains the tile result the source log reported without a
-mechanism: n=32 → n=64 measured 1.93× faster where the cost model says the two differ by 12% in
-issuing time, so the speedup is almost entirely doing twice the work inside a slot whose length
-hardly changed.
+**A candidate constant is now falsified.** The first reading bounded the handoff by charging
+the trace probe's entire measured 717 cycles per buffer. At the corrected issuing cost that
+bound predicts **117.5%** of the measured time at n=64, which is impossible. The probe's 717
+does not transfer to another kernel — exactly as its own decomposition said, since 512 of it
+was that probe's trace-flush loop and 190 its kernel prologue, leaving only the ~15-cycle
+acquire/release as a property of the ObjectFifo.
 
-**How strong is the 40.4%.** The one constant carried from another kernel is the 15-cycle
-acquire/release. Charging instead the probe's entire 717 cycles per buffer — even though 512 of
-those were that probe's trace-flush loop, absent from production code, and 190 its kernel
-prologue, counted here from the GEMM's own disassembly — raises the issuing fraction to 83.3%,
-and **even then 547 cycles per call, 16.7%, remain unaccounted.** So the core is starved for
-between 17% and 60% of the dispatch, and the low end rests on the constant that does not
-transfer.
+Note that the schedule × issuing identity reproducing the measured fraction of peak is
+**arithmetic, not evidence**: the per-call cost cancels, so it holds for any value and checks
+only the tool's bookkeeping. The evidence for the nest reading is the trip-count reconciliation
+above, and the tool refuses to produce a number when that reconciliation fails.
 
-Two hypotheses, both falsifiable by Phase 4's port trace:
+Three hypotheses:
 
 - **H9.** Stream-port tracing measures a sustained input rate at or below **2.5 B/cycle** into a
   core. Bytes into L1 per call are 8,192 (n=64) and 6,144 (n=32); over the measured cycles per
-  call that is 2.50 and 1.94 B/cycle, against the 6.19 and 8.32 a never-starved core would
+  call that is 2.50 and 1.94 B/cycle, against the 3.35 and 4.71 a never-starved core would
   need. Fails if the ports read faster, which would move the missing time elsewhere.
-- **H10.** Per-buffer wall time is a constant set by the data path, so throughput rises with
-  work per buffer until issuing time approaches ~3,200 cycles — about 2.4× headroom at n=64.
+- **H10.** Per-buffer wall time is a floor set by the data path, so throughput rises with work
+  per buffer until the issuing cost approaches ~3,200 cycles — about 1.3× headroom at n=64.
   Fails if a larger tile does not raise throughput. **Already obstructed:**
   `results/aie/int8_matmul_sweep_npu.log`'s probes at m=128 and at k=128 both failed to build
   with `'aie.tile' op Basic sequential allocation failed`, an L1 capacity limit. Reaching the
   headroom means changing what occupies L1 — buffer depth, or the 16 KB single-buffered output
   tile — not asking for a bigger tile.
+- **H11, which the correction opens and which is the cheapest of the three.** The 87 non-loop
+  bundles per group are spill traffic from holding eight accumulators where five is the
+  spill-free ceiling. A variant blocked to four or five accumulators trades more groups against
+  a shorter body. Testable entirely statically — rebuild `mm.cc` with different accumulator
+  blocking and re-run the tool. Fails if the per-group bundle count does not fall, which would
+  mean those 87 bundles are the output tile's mandatory load and store rather than spill.
 
-**What this does not show.** Nothing here was measured on hardware in this run; the
-issuing-cycle predictions are computed from object code and the microseconds they are compared
-against come from a run two days earlier. "Not issuing" is a residual, not an observation — it
-is consistent with lock stall, the only category seen non-zero so far, but this run does not
-attribute it. The 135 once-per-call bundles are assumed to execute once, which holds if the
-function has no branch besides its one hardware loop; the disassembly is consistent with that
-but every branch target was not walked. One power mode, one dtype, one design.
+**What this does not show.** Nothing here was measured on hardware; the issuing-cycle figures
+are computed from object code and the microseconds come from a run two days earlier. "Not
+issuing" is a residual, not an observation — consistent with lock stall, the only category seen
+non-zero so far, but not attributed by this run. The nest walk assumes the two backward branches
+target the two labels in order; the branch targets are unresolved relocations in an object file
+and were not read directly, so the trip-count reconciliation is the evidence. One power mode,
+one dtype, one design.
 
 ### MobileViT-XXS does not survive per-tensor INT8, and AdaRound cannot save it
 
