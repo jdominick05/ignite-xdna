@@ -149,6 +149,20 @@
   not comparable across runs that saw different load, and peak working set can read *low*
   under memory pressure because the OS trims the set.
 
+- **Do not apply CLE to a grouped or depthwise architecture without checking what it did to the
+  ranges.** Cross-layer equalization is on in the default XINT8 preset and it is what destroys
+  this repo's grouped classifiers -- not the DPU, not the calibrator, not the rounding. Holding
+  producer, graph and 64-image listing fixed and changing only CLE: RegNetX-002 goes 0.10% ->
+  **66.20%** top-1 and ResNeXt-50 32x4d 0.10% -> **68.90%**, both on the full 1,000-image set.
+  With CLE the emitted scale positions span -120..123 and Quark's own shift-cut rule has to move
+  a weight position from 7 to -108 to keep them representable; without it every position is in
+  2..10 and no adjustment fires at all. Placement is identical either way (324/326 for RegNetX),
+  which is why this is invisible unless accuracy is actually measured. CLE remains the right
+  default for the plain-convolution families where it is worth 10.8-12.2 points on ResNet50 --
+  the rule is to check, not to abandon it. Ignition currently refuses `--cle` on these graphs, but
+  only because the depthwise path is unimplemented, so that is fail-closed by accident rather than
+  a guard. [Full matrix, scale grids and caveats](BENCHMARKS.md#regnetx-002-and-resnext-50-recovered-the-collapse-is-cle-not-a-hardware-bound-2026-09-09-desktop-2).
+
 - **Exact float16 frequency tables do not replace the calibration spool.** Counting every
   distinct stored float16 value, and bounding the reduction conservatively enough that a
   certified position cannot be wrong, is sound: it reproduced the emitted ONNX byte for
@@ -1314,7 +1328,7 @@ Investigated via `tools/windows_xrt_driver_probe.py` (`results/aie/windows_xrt_d
 Investigated via `quant/shift_cut.py` and `python -m quant check-shift-cut` (`results/quant/shift_cut_feasibility.log`):
 
 - **Hardware accumulator shift constraint**: On XDNA1 AIE-ML, the post-accumulator scaling unit uses a 15-bit multiplier M in [16384, 32767] and a 5-bit arithmetic right-shift register sigma in [0, 31]. The effective scaling factor is A ≈ M * 2^(-sigma).
-- **Theorem 1 (Shift-Cut Feasibility Bound)**: If an ONNX QDQ triad requires sigma < 0, the operation requires an arithmetic left-shift exceeding the 32-bit accumulator, resulting in immediate accumulator overflow (as observed in RegNetX-002, where sigma = -90 forces top-1 accuracy to collapse to 0.50%). If sigma > 31, the 5-bit shift register overflows/clamps (as observed in FastDepth, where sigma = 32 overflows by 1 bit, clamping to 31 and doubling layer outputs).
+- **Theorem 1 (Shift-Cut Feasibility Bound)**: If an ONNX QDQ triad requires sigma < 0, the operation requires an arithmetic left-shift exceeding the 32-bit accumulator, resulting in immediate accumulator overflow. **The RegNetX-002 citation for this is superseded (2026-09-09)**: sigma = -90 is really in that file, but it is a consequence of cross-layer equalization inflating the ranges, not a bound the network inherently hits. Turning CLE off, same producer and same listing, gives positions 2..10, no sigma violation and 66.20% top-1 against 0.10% -- [measured](BENCHMARKS.md#regnetx-002-and-resnext-50-recovered-the-collapse-is-cle-not-a-hardware-bound-2026-09-09-desktop-2). No hardware measurement supports the overflow mechanism yet; the theorem is unvalidated on this device. If sigma > 31, the 5-bit shift register overflows/clamps (as observed in FastDepth, where sigma = 32 overflows by 1 bit, clamping to 31 and doubling layer outputs).
 - **Theorem 2 (Multi-Branch Inter-Scale Alignment)**: In multi-branch elementwise operations (such as Bilateral Guided Aggregation in BiSeNetV2), divergent scale grids truncate dynamic range in hardware.
 - **Theorem 3 (Systolic Scale Feasibility Window)**: In power-of-two quantization with scale positions pos = -log2(S), the output position must satisfy:
     pos_x + pos_w - 17 <= pos_y <= pos_x + pos_w + 14

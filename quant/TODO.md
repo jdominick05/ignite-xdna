@@ -114,6 +114,18 @@ recorded in the handoff and Git history rather than treated as future features.
   The Zero-Concat variant and the listing sweep stay open.
 - [ ] Consider histogram calibration only with measured error/accuracy and memory
   tradeoffs against the exact-sample store; label approximation explicitly.
+- [ ] Add a CLE stability guard. Ignition refuses `--cle` on grouped/depthwise graphs today
+  only because `equalize_pair` raises on the depthwise triple, which is fail-closed by accident.
+  A guard that measures each pair's post-transform range and skips or damps it would let CLE run
+  where it is worth 10.8-12.2 points and stop it where it costs 66. Evidence for the failure it
+  must catch: [the collapse is CLE](../docs/BENCHMARKS.md#regnetx-002-and-resnext-50-recovered-the-collapse-is-cle-not-a-hardware-bound-2026-09-09-desktop-2).
+  Gate on the RegNetX-002 and ResNeXt-50 rows plus no change to the three parity families.
+- [x] RegNetX-002 is a fourth family reproduced with no code change. Its export is
+  Conv/Relu/Add/GlobalAveragePool/Flatten/Gemm at 224, routes to `folded_resnet`, and Ignition's
+  no-CLE artifact is byte-identical to a fresh Quark no-CLE oracle: 90/90 int8 initializers,
+  empty node delta, `INT8_EXACT True`, `GRAPH_DIFF_PASS True`. 66.20% CPU / 66.40% NPU top-1 at
+  324/326 placed. Closed 2026-09-09. DenseNet-121 is *not* reachable this way -- its export
+  carries unfolded `BatchNormalization`, which `qdq.quantizable_tensors` rejects.
 
 ## Compiler research, separate from production options
 

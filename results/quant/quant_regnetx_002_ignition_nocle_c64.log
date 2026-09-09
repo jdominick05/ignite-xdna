@@ -1,0 +1,158 @@
+Ignition 0.1.0a1: folded_resnet / no CLE
+IMPORT_BLOCK_ACTIVE quark torch
+CALIBRATION images=64 tensors=61 skipped_prunable=40 sample_bytes=343024640
+COLLECT 16/64
+COLLECT 32/64
+COLLECT 48/64
+COLLECT 64/64
+CHOOSE 16/61
+CHOOSE 32/61
+CHOOSE 48/61
+CHOOSE 61/61
+{
+  "producer": "Ignition",
+  "producer_version": "0.1.0a1",
+  "family": "folded_resnet",
+  "scope": "folded_resnet_nocle",
+  "format": "XINT8_QDQ",
+  "mode": "own_minmse_nocle",
+  "cle": false,
+  "input_sha256": "e137954092b9a18f64fb6146f02da16a4f1ab876798f764e1529a21aa4680190",
+  "versions": {
+    "numpy": "1.26.4",
+    "onnx": "1.18.0"
+  },
+  "simplify": {},
+  "prepare": {},
+  "preprocess": {
+    "input_size": [
+      3,
+      224,
+      224
+    ],
+    "interpolation": "bicubic",
+    "mean": [
+      0.485,
+      0.456,
+      0.406
+    ],
+    "std": [
+      0.229,
+      0.224,
+      0.225
+    ],
+    "crop_pct": 0.875,
+    "crop_mode": "center"
+  },
+  "emit": {
+    "activations": 61,
+    "initializers": 90,
+    "pruned": 40
+  },
+  "gap_mul": {
+    "scaled": 1,
+    "skipped_not_square": []
+  },
+  "hardsigmoid": {
+    "replaced": 0,
+    "scaled": 0
+  },
+  "refine": {
+    "loops": 2,
+    "changes_by_rule": {
+      "align_pool": 1
+    },
+    "log": [
+      {
+        "scale": "/head/global_pool/pool/GlobalAveragePool_output_0_scale",
+        "old": 3,
+        "new": 2,
+        "rule": "align_pool",
+        "node": "/head/global_pool/pool/GlobalAveragePool"
+      }
+    ],
+    "converged": true
+  },
+  "output_sha256": "183795af7a83e7ad1814bca2b5ae447cdda1464c670552ab69c2b07b72294159",
+  "wall_seconds": 11.333305000007385,
+  "quark_imported": false,
+  "torch_imported": false
+}
+CALIBRATION_REPORT {
+  "store": "exact_float16",
+  "mode": "All",
+  "images": 64,
+  "listing": [
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000000.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000001.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000002.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000003.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000004.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000005.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000006.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000007.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000008.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000009.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000010.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000011.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000012.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000013.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000014.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000015.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000016.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000017.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000018.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000019.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000020.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000021.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000022.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000023.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000024.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000025.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000026.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000027.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000028.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000029.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000030.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000031.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000032.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000033.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000034.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000035.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000036.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000037.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000038.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000039.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000040.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000041.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000042.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000043.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000044.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000045.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000046.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000047.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000048.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000049.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000050.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000051.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000052.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000053.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000054.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000055.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000056.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000057.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000058.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000059.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000060.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000061.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000062.jpg",
+    "C:/Users/<user>/PycharmProjects/ryzen-ai-xdna1-quantization/data/calib/000063.jpg"
+  ],
+  "spooled_tensors": 61,
+  "skipped_prunable_tensors": 40,
+  "sample_bytes": 343024640,
+  "free_bytes_before": 773583097856,
+  "ort_version": "1.23.3.dev20260320",
+  "graph_optimization": "ORT_DISABLE_ALL",
+  "sharing": {}
+}

@@ -4381,6 +4381,14 @@ or ResNeXt's narrow 4-channel groups, `regnetx_002` (2.68M parameters, regular l
 capacity, no concat, standard grouped convs) was exported and evaluated on Desktop 2 across 200
 ImageNet-1k validation images:
 
+> **Superseded on 2026-09-09, in two ways.** The figures below are a 200-image slice; the full
+> 1,000-image set reads 69.50% FP32 and 0.10% XINT8. And the root cause named in this section --
+> a hardware shift-cut bound that RegNetX inherently violates -- is wrong: the same graph, the
+> same producer and the same calibration listing **without CLE** produce positions 2..10, no
+> shift-cut adjustment at all, and 66.20% top-1. See
+> [the collapse is CLE](#regnetx-002-and-resnext-50-recovered-the-collapse-is-cle-not-a-hardware-bound-2026-09-09-desktop-2).
+> The measurements here stand; the attribution does not.
+
 | Model Variant | Execution Target | Top-1 | Top-5 | Latency | Placement | Log |
 |---|---|---|---|---|---|---|
 | RegNetX-002 FP32 | CPU (Zen 4) | **68.50%** | **90.50%** | 1.89 ms | Reference baseline | `results/regnet/eval_regnetx_002_fp32_cpu.log` |
@@ -4407,6 +4415,81 @@ ImageNet-1k validation images:
   As established in the MobileViT study, AdaRound optimizes ternary rounding {-1, 0, 1} over
   fixed quantization intervals Delta. It never changes Delta. When Delta has suffered
   floating-point scale explosion, integer rounding cannot recover the network.
+
+#### RegNetX-002 and ResNeXt-50 recovered: the collapse is CLE, not a hardware bound (2026-09-09, Desktop 2)
+
+Cross-layer equalization is on in the repo's default XINT8 preset, and on grouped architectures it
+is what destroys them. Holding the producer, the graph and the 64-image calibration listing fixed
+and changing only whether CLE runs moves RegNetX-002 from **0.10%** to **66.20%** top-1. Every row
+below is the full 1,000-image labeled set with the model's own preprocessing config, CPU unless
+stated, measured in one sitting on Desktop 2.
+
+| RegNetX-002 | EP | Top-1 | Top-5 | Log |
+|---|---|---|---|---|
+| FP32 reference | CPU | **69.50%** | 88.60% | [log](../results/quant/eval_regnetx_002_fp32_full1000_cpu.log) |
+| Quark, default preset (CLE) | CPU | **0.10%** | 0.60% | [log](../results/quant/eval_regnetx_002_quark_cle_full1000_cpu.log) |
+| Quark, default preset + AdaRound | CPU | 0.30% | 0.70% | [log](../results/quant/eval_regnetx_002_quark_cle_adaround_full1000_cpu.log) |
+| Quark, **no CLE** | CPU | **66.20%** | 86.70% | [log](../results/quant/eval_regnetx_002_quark_nocle_c64_cpu.log) |
+| Ignition, **no CLE** | CPU | **66.20%** | 86.70% | [log](../results/quant/eval_regnetx_002_ignition_nocle_c64_cpu.log) |
+| Ignition, **no CLE** | **NPU** | **66.40%** | 86.20% | [log](../results/quant/eval_regnetx_002_ignition_nocle_c64_npu.log) |
+
+The recovered model is not slower and not worse placed: **324 of 326 nodes on the NPU**, the same
+count the collapsed artifact reaches, with only the boundary Q/DQ pair on CPU
+([placement](../results/quant/diag_regnetx_002_ignition_nocle_c64.log), device idle beforehand per
+its [witness](../results/quant/contexts_regnetx_002_ignition_nocle_c64.log)), at 2.47 ms and about
+405 images/s. Placement was never the problem, and this is another instance of the recurring
+finding that a fully placed graph says nothing about whether it computes anything.
+
+**The scale grids say it plainly.** All three artifacts have 151 scalar scales:
+
+| Artifact | Scale range | Position range | Negative positions |
+|---|---|---|---|
+| Quark, default preset (CLE) | 9.40e-38 .. 1.32923e+36 | **-120 .. 123** | 17 |
+| Quark, no CLE | 0.000976562 .. 0.25 | 2 .. 10 | 0 |
+| Ignition, no CLE | 0.000976562 .. 0.25 | 2 .. 10 | 0 |
+
+Without CLE nothing is out of range, so Quark's `Shift cut ... exceeds range [0, 16] (131). Modify
+wpos from 7 to -108` never fires and Ignition's own transcribed `shift_cut` rule never fires either
+-- its refinement converges in 2 loops having made a single `align_pool` change
+([log](../results/quant/quant_regnetx_002_ignition_nocle_c64.log)). The shift-cut clamp was
+reacting to a range CLE created, not enforcing a bound this network inherently hits.
+
+**This is not Ignition beating Quark.** The two producers emit the *same file*: 90 of 90 int8
+initializers byte-identical, empty node delta, `INT8_EXACT True` and `GRAPH_DIFF_PASS True`. What
+that buys is a fourth family reproduced bit-for-bit at zero cost -- RegNetX-002's export is
+Conv/Relu/Add/GlobalAveragePool/Flatten/Gemm and routes to `folded_resnet` with no new code -- and
+an attribution, not an accuracy win.
+
+The one behavioural difference is worth stating precisely, because it is smaller than it looks.
+Asked for `--cle` on this graph Ignition **refuses and writes nothing** (`Depthwise CLE triples are
+not implemented`), where Quark applies CLE and emits a plausible-looking 0.10% model. Failing
+closed is the better outcome, but Ignition gets there because that CLE path is unimplemented, not
+because it detected an instability. A designed guard -- measure the post-transform range and skip
+or damp the pair -- is what would turn an accident into a capability, and it does not exist yet.
+
+**It generalizes to the second grouped collapse.** ResNeXt-50 32x4d, same treatment, same 1,000
+images:
+
+| ResNeXt-50 32x4d | EP | Top-1 | Top-5 | Log |
+|---|---|---|---|---|
+| FP32 reference | CPU | **80.90%** | 93.80% | [log](../results/quant/eval_resnext50_32x4d_fp32_full1000_cpu.log) |
+| Quark, default preset (CLE) | CPU | **0.10%** | 0.50% | [log](../results/quant/eval_resnext50_32x4d_quark_cle_full1000_cpu.log) |
+| Quark, **no CLE** | CPU | **68.90%** | 88.20% | [log](../results/quant/eval_resnext50_32x4d_quark_nocle_c64_cpu.log) |
+
+68.8 points recovered, though ResNeXt still gives up 12.0 points against FP32 where RegNetX gives
+up 3.3 -- so grouped convolutions remain genuinely harder to quantize, and only the *catastrophe*
+is CLE's doing.
+
+**DenseNet-121, the third collapse, is untested here** and stays open. `scripts/quant-reference.sh`
+sizes its disk guard through Ignition's `prepared_graph`, and that export carries unfolded
+`BatchNormalization`, which `qdq.quantizable_tensors` rejects
+(`ValueError: Unsupported float operator: :BatchNormalization`). The wrapper therefore cannot start
+a run for a family Ignition does not yet parse, which is a limitation of the harness rather than a
+result about DenseNet.
+
+**MobileViT is a different failure and is not addressed by this.** Its discriminator is a depthwise
+weight-scale grid reaching delta = 1.0, measured independently, and it has only two equalized pairs
+to begin with. Nothing here suggests turning CLE off would help it.
 
 ---
 
@@ -4569,7 +4652,7 @@ Evaluated with `python -m quant check-shift-cut` (`results/quant/shift_cut_feasi
 | **BiSeNetV2** (`bisenetv2_fp32_xint8`) | 63 | **0 (0.0%)** | 7 / 22 / 26 | PASS: Centered in systolic basin | `results/quant/shift_cut_feasibility.log` |
 
 Diagnosis of identified violations:
-- **RegNetX-002**: Layer `/s1/b1/conv2/conv/Conv` has scale factor A = 2.028241e+31, yielding M = 16384 and sigma = -90. Because sigma < 0, the post-accumulator ALU cannot scale the 32-bit register down to int8; this forces top-1 accuracy to collapse to 0.50% (random chance).
+- **RegNetX-002**: Layer `/s1/b1/conv2/conv/Conv` has scale factor A = 2.028241e+31, yielding M = 16384 and sigma = -90. **The causal half of this bullet is superseded (2026-09-09).** The out-of-range sigma is real, but it is not why the network scores 0.50%: quantizing the same graph with the same producer and listing and only CLE turned off gives positions 2..10, no sigma violation anywhere, and 66.20% top-1 -- see [the collapse is CLE](#regnetx-002-and-resnext-50-recovered-the-collapse-is-cle-not-a-hardware-bound-2026-09-09-desktop-2). The audit correctly reports what the emitted file contains; it does not establish that the hardware bound caused the collapse.
 - **FastDepth**: Layer `Conv_96` has scale factor A = 3.814697e-06, yielding M = 16384 and sigma = 32. The hardware shifter is 5 bits wide (maximum shift 31); sigma = 32 overflows by exactly 1 bit, clamping to 31 and doubling the layer's output activations.
 - **MODNet**: Upper bound hits sigma = 31 exactly. Any scale perturbation exceeding 1 bit would push it into the clamp hazard regime.
 
