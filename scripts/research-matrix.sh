@@ -4,11 +4,13 @@
 #   bash scripts/research-matrix.sh arithmetic <unique-tag>
 #   bash scripts/research-matrix.sh arithmetic-boundaries <unique-tag>
 #   bash scripts/research-matrix.sh gemm <unique-tag>
-#   bash scripts/research-matrix.sh calibration-dual <unique-tag> [remaining]
+#   bash scripts/research-matrix.sh calibration-dual <unique-tag> [selection]
 #   bash scripts/research-matrix.sh calibration-time <unique-tag>
 # Tags must include machine/date. RESEARCH_ASSET_ROOT can select models/data;
 # otherwise use this checkout, then the parent main checkout for nested worktrees.
-# The optional 'remaining' selection skips the completed ResNet50 CLE pair.
+# calibration-dual selections: 'remaining' skips the completed ResNet50 CLE pair,
+# or name one pair -- resnet50_cle, resnet50_no-cle, yolov8n_cle, modnet_cle -- to
+# rerun just that family's legacy/dual pair into a fresh tag.
 # Each case has its own immutable log, resource limit and host/device guard.
 # The first failure stops the matrix; keep that evidence and use a new tag to rerun.
 
@@ -17,8 +19,16 @@ if [ "${1:-}" = --help ]; then usage "${BASH_SOURCE[0]}"; exit 0; fi
 [ $# -ge 2 ] && [ $# -le 3 ] || die "need suite, unique machine/date tag and optional selection"
 suite="$1" tag="$2"
 selection="${3:-all}"
+CALIB_PAIRS=(resnet50:cle resnet50:no-cle yolov8n:cle modnet:cle)
 if [ "$selection" != all ]; then
-    [ "$suite" = calibration-dual ] && [ "$selection" = remaining ] || die "selection is only calibration-dual remaining"
+    [ "$suite" = calibration-dual ] || die "a selection is only valid for calibration-dual"
+    if [ "$selection" != remaining ]; then
+        ok=0
+        for pair in "${CALIB_PAIRS[@]}"; do
+            [ "$selection" = "${pair%:*}_${pair#*:}" ] && ok=1
+        done
+        [ "$ok" = 1 ] || die "selection must be remaining or one of ${CALIB_PAIRS[*]//:/_}"
+    fi
 fi
 [[ "$tag" =~ ^[a-zA-Z0-9_]+$ ]] || die "tag must use letters, digits and underscores"
 base="scratch/research_$tag"
@@ -111,16 +121,17 @@ case "$suite" in
         done
         ;;
     calibration-dual)
-        if [ "$selection" = all ]; then
-            calibration_case resnet50 cle legacy 1
-            calibration_case resnet50 cle dual 1
-        fi
-        calibration_case resnet50 no-cle legacy 1
-        calibration_case resnet50 no-cle dual 1
-        calibration_case yolov8n cle legacy 1
-        calibration_case yolov8n cle dual 1
-        calibration_case modnet cle legacy 1
-        calibration_case modnet cle dual 1
+        for pair in "${CALIB_PAIRS[@]}"; do
+            family="${pair%:*}" cle="${pair#*:}"
+            case "$selection" in
+                all) ;;
+                remaining) [ "$pair" = resnet50:cle ] && continue || : ;;
+                "${family}_${cle}") ;;
+                *) continue ;;
+            esac
+            calibration_case "$family" "$cle" legacy 1
+            calibration_case "$family" "$cle" dual 1
+        done
         ;;
     calibration-time)
         for block in 1 2 3 4 5; do
