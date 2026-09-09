@@ -4639,7 +4639,15 @@ Both input branches must satisfy identical power-of-two scale alignments; diverg
 
 ### Empirical audit across 7 models
 
-Evaluated with `python -m quant check-shift-cut` (`results/quant/shift_cut_feasibility.log`):
+Evaluated with `python -m quant check-shift-cut` (`results/quant/shift_cut_feasibility.log`).
+
+> **Superseded on 2026-09-09.** Re-running the same tool on the same files gives **zero
+> violations on every model**, and different sigma ranges -- RegNetX-002 reads 11 / 21 / 30, not
+> -90 / 24 / 27, and FastDepth reads 18 / 21 / 23, not 25 / 29 / 32. The log predates the
+> analyzer's activation-traversal change and was never regenerated, so this table does not match
+> its own tool. Both flagged "violations" below were also Theorem 3 false positives rather than
+> sigma hazards. See
+> [the audit re-run](#the-shift-cut-audit-re-run-theorem-3-retracted-and-three-defects-in-the-verifier-2026-09-09-desktop-2).
 
 | Model | Quantized Ops | Violations | Sigma Range (min / median / max) | Hardware Status | Backing Log |
 |---|---|---|---|---|---|
@@ -4653,7 +4661,7 @@ Evaluated with `python -m quant check-shift-cut` (`results/quant/shift_cut_feasi
 
 Diagnosis of identified violations:
 - **RegNetX-002**: Layer `/s1/b1/conv2/conv/Conv` has scale factor A = 2.028241e+31, yielding M = 16384 and sigma = -90. **The causal half of this bullet is superseded (2026-09-09).** The out-of-range sigma is real, but it is not why the network scores 0.50%: quantizing the same graph with the same producer and listing and only CLE turned off gives positions 2..10, no sigma violation anywhere, and 66.20% top-1 -- see [the collapse is CLE](#regnetx-002-and-resnext-50-recovered-the-collapse-is-cle-not-a-hardware-bound-2026-09-09-desktop-2). The audit correctly reports what the emitted file contains; it does not establish that the hardware bound caused the collapse.
-- **FastDepth**: Layer `Conv_96` has scale factor A = 3.814697e-06, yielding M = 16384 and sigma = 32. The hardware shifter is 5 bits wide (maximum shift 31); sigma = 32 overflows by exactly 1 bit, clamping to 31 and doubling the layer's output activations.
+- **FastDepth**: Layer `Conv_96` has scale factor A = 3.814697e-06, yielding M = 16384 and sigma = 32. The hardware shifter is 5 bits wide (maximum shift 31); sigma = 32 overflows by exactly 1 bit, clamping to 31 and doubling the layer's output activations. **Superseded (2026-09-09):** the current analyzer computes sigma 18..23 for this file with no violation, and FastDepth's NPU fidelity is *better* than its CPU-QDQ fidelity (r 0.9383 vs 0.9363), which is the opposite of a doubled layer output. The doubling was never measured.
 - **MODNet**: Upper bound hits sigma = 31 exactly. Any scale perturbation exceeding 1 bit would push it into the clamp hazard regime.
 
 ### Closed-form systolic scale feasibility window and repair projection
@@ -4669,6 +4677,84 @@ Because the physical shift register is bounded by 0 <= sigma <= 31, the output s
 Or equivalently in real scales:
 
     2^(-14) * (S_x * S_w) <= S_y <= 2^(17) * (S_x * S_w)
+
+### The shift-cut audit re-run: Theorem 3 retracted, and three defects in the verifier (2026-09-09, Desktop 2)
+
+Re-auditing eleven quantized models with the current tool finds **no sigma hazard anywhere**
+([log](../results/quant/shift_cut_feasibility_desktop2_20260909.log)). Sigma spans 7 to 30 across
+every model and never reaches either edge of [0, 31]. Every flag the original audit raised was
+Theorem 3 -- a position rule, not a sigma rule -- which means **`--repair` has never had a genuine
+hazard to act on, and the standing "verify before hardware execution" rule has never caught
+anything real.**
+
+| Model | Ops | Sigma violations | Sigma min / median / max | Advisory position notes |
+|---|---|---|---|---|
+| ResNet50 `xint8_c64` | 55 | 0 | 12 / 21 / 24 | 0 |
+| YOLOv8n-cut | 177 | 0 | 7 / 20 / 23 | 0 |
+| YOLOv8n-pose-cut | 198 | 0 | 7 / 21 / 23 | 0 |
+| MODNet-Cut | 74 | 0 | 7 / 22 / 27 | 1 |
+| SESR-M7 | 9 | 0 | 17 / 21 / 23 | **9** |
+| FastDepth | 38 | 0 | 18 / 21 / 23 | 0 |
+| RegNetX-002 | 46 | 0 | 11 / 21 / 30 | 8 |
+| MiDaS-Small nearest-cut | 97 | 0 | 15 / 22 / 26 | 16 |
+| BiSeNetV2 | 63 | 0 | 7 / 21 / 24 | 1 |
+| MobileViT-XXS | 177 | 0 | 7 / 21 / 23 | 0 |
+| ResNeXt-50 32x4d | 55 | 0 | 11 / 21 / 30 | 8 |
+
+MobileViT is worth noting: 0 violations and 0 notes, so the shift-cut theory has nothing to say
+about its 0.00% collapse either way.
+
+**Theorem 3 is retracted.** It held that positions must lie in [0, 31] and that `pos < 0`
+(scale > 1.0) causes dynamic range overflow. Three independent measurements contradict it:
+
+- `tools/xint8_arithmetic_probe.py` sets the output position to `-sc`. **Fifteen of its seventeen
+  NPU fixtures ran at pos_y in {-1, -4, -8, -16}** -- output scales up to 2^16 -- placed on the DPU,
+  and matched an independent integer reference apart from the uniform one-code half-up rounding
+  difference documented above.
+- SESR-M7 was flagged **9/9** while placing 50 of 52 nodes and scoring 34.06 dB; MODNet-Cut was
+  flagged 1/74 while placing 502 of 507.
+- RegNetX-002's `pos = -120`, cited as the theorem's evidence, is
+  [CLE's doing](#regnetx-002-and-resnext-50-recovered-the-collapse-is-cle-not-a-hardware-bound-2026-09-09-desktop-2),
+  not a hardware bound.
+
+Positions outside [0, 31] are now reported as an **advisory note**, never a hazard. Theorem 1's
+sigma window remains the executability criterion -- as Theorem 1 itself always said, with an *iff*.
+Note the sigma edges remain **unmeasured**: the probe only ever reached sigma in
+{14, 15, 18, 22, 30}.
+
+**Three defects in `quant/shift_cut.py`, all fixed here.**
+
+1. **In-range sigma reported as CRITICAL.** The position check sat in an `elif` after the sigma
+   checks, so it fired *only* when sigma was feasible -- flagging exactly the operations Theorem 1
+   calls executable. SESR-M7 read `9/9 CRITICAL HARDWARE INFEASIBILITY` for a model that runs.
+2. **`--repair` skipped hazards it had just reported, and its two operator branches disagreed.**
+   The repair gate tested `pos_y` only, while the analyzer flagged on `pos_x`, `pos_w` or `pos_y`,
+   so a node flagged for an input position was reported and then silently not repaired -- with a
+   repair count printed regardless. Separately, the `Mul` analyzer checked `< 0` but not `> 31`,
+   which the `Conv` branch did. Both branches now share one `position_note` helper, and the repair
+   gate is exactly the hazard criterion.
+3. **The projection could manufacture the hazard it exists to prevent.**
+   `project_scale_to_feasible_basin` clamped `pos_x` and `pos_w` into [0, 31] to build its window,
+   but recomputed sigma from the *unclamped* scales, so the window and sigma came from different
+   numbers. Measured on RegNetX-002 `/s1/b1/conv2/conv/Conv`: a layer at **sigma = 30, already
+   feasible**, was projected to **sigma = -90** -- the accumulator-overflow case the module exists
+   to catch. Positions are now used unclamped and the result is checked, raising rather than
+   emitting a scale the analyzer would flag. The documented FastDepth demo still reproduces
+   exactly (pos_y 0 -> 1, sigma -> 31).
+
+**What the repair fix prevents, measured on three shipped models.** Running the old and new
+`repair_model_shift_cut` over the same files:
+
+| Model | Scales rewritten before | After | What it would have done |
+|---|---|---|---|
+| SESR-M7 (50/52 placed, 34.06 dB) | **9** | 0 | scale 2 -> 1 on `/head/Conv`, sigma 21 -> 20 |
+| MODNet-Cut (502/507 placed) | **1** | 0 | scale 2 -> 1 on `/f_branch/conv_f/conv_f.2/Conv` |
+| RegNetX-002 | **5** | 0 | sigma 30 -> **-90** on `/s1/b1/conv2/conv/Conv` |
+
+Every one of those rewrites targeted a feasible operation on a model that works. The standing rule
+in [DECISIONS](DECISIONS.md#aie-ml-systolic-shift-cut-bound-0-31) that every emitted graph be
+verified before hardware execution is kept, but it now means the sigma window alone, and `--repair`
+is not something to run on a model that already places and scores.
 
 If pos_y < pos_x + pos_w - 17, sigma > 31 and the hardware shifter clamps/overflows. If pos_y > pos_x + pos_w + 14, sigma < 0 and the 32-bit accumulator overflows.
 

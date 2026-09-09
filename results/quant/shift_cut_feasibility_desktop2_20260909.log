@@ -1,0 +1,183 @@
+================================================================================
+AIE-ML Systolic Shift-Cut Verification Report: C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\models\resnet50_xint8_c64.onnx
+================================================================================
+Analyzed 55 quantized systolic operation(s).
+Shift-cut violations found: 0 / 55 (0.0%)
+
+PASS: All layers reside cleanly within the [0, 31] systolic shift-cut basin.
+
+Shift-Cut Register Distribution: min=12, median=21, max=24
+================================================================================
+================================================================================
+AIE-ML Systolic Shift-Cut Verification Report: C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\models\yolov8n_cut_xint8.onnx
+================================================================================
+Analyzed 177 quantized systolic operation(s).
+Shift-cut violations found: 0 / 177 (0.0%)
+
+PASS: All layers reside cleanly within the [0, 31] systolic shift-cut basin.
+
+Shift-Cut Register Distribution: min=7, median=20, max=23
+================================================================================
+================================================================================
+AIE-ML Systolic Shift-Cut Verification Report: C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\models\yolov8n-pose_cut_xint8.onnx
+================================================================================
+Analyzed 198 quantized systolic operation(s).
+Shift-cut violations found: 0 / 198 (0.0%)
+
+PASS: All layers reside cleanly within the [0, 31] systolic shift-cut basin.
+
+Shift-Cut Register Distribution: min=7, median=21, max=23
+================================================================================
+================================================================================
+AIE-ML Systolic Shift-Cut Verification Report: C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\models\modnet\modnet_cut_xint8.onnx
+================================================================================
+Analyzed 74 quantized systolic operation(s).
+Shift-cut violations found: 0 / 74 (0.0%)
+
+PASS: All layers reside cleanly within the [0, 31] systolic shift-cut basin.
+
+Advisory notes (NOT violations): 1 / 74 operation(s) carry a
+scale position outside [0, 31]. Measured on this device to execute correctly:
+15 of 17 NPU arithmetic fixtures ran at output positions -1 to -16 and matched
+an independent integer reference. Theorem 3 is retracted; see the module docstring.
+  - [NOTE] Conv '/f_branch/conv_f/conv_f.2/Conv': A=7.812500e-03, M=16384, sigma=21 (pos_x=0, pos_w=6, pos_y=-1) -> Feasible systolic shift; ADVISORY, not a hazard (Theorem 3 retracted): position(s) below 0 (scale > 1.0): pos_y=-1
+
+Shift-Cut Register Distribution: min=7, median=22, max=27
+================================================================================
+================================================================================
+AIE-ML Systolic Shift-Cut Verification Report: C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\models\sesr_m7_xint8.onnx
+================================================================================
+Analyzed 9 quantized systolic operation(s).
+Shift-cut violations found: 0 / 9 (0.0%)
+
+PASS: All layers reside cleanly within the [0, 31] systolic shift-cut basin.
+
+Advisory notes (NOT violations): 9 / 9 operation(s) carry a
+scale position outside [0, 31]. Measured on this device to execute correctly:
+15 of 17 NPU arithmetic fixtures ran at output positions -1 to -16 and matched
+an independent integer reference. Theorem 3 is retracted; see the module docstring.
+  - [NOTE] Conv '/head/Conv': A=7.812500e-03, M=16384, sigma=21 (pos_x=0, pos_w=6, pos_y=-1) -> Feasible systolic shift; ADVISORY, not a hazard (Theorem 3 retracted): position(s) below 0 (scale > 1.0): pos_y=-1
+  - [NOTE] Conv '/body.0/body.0.0/Conv': A=1.953125e-03, M=16384, sigma=23 (pos_x=-1, pos_w=7, pos_y=-3) -> Feasible systolic shift; ADVISORY, not a hazard (Theorem 3 retracted): position(s) below 0 (scale > 1.0): pos_x=-1, pos_y=-3
+  - [NOTE] Conv '/body.1/body.1.0/Conv': A=3.906250e-03, M=16384, sigma=22 (pos_x=-3, pos_w=7, pos_y=-4) -> Feasible systolic shift; ADVISORY, not a hazard (Theorem 3 retracted): position(s) below 0 (scale > 1.0): pos_x=-3, pos_y=-4
+  - [NOTE] Conv '/body.2/body.2.0/Conv': A=7.812500e-03, M=16384, sigma=21 (pos_x=-4, pos_w=7, pos_y=-4) -> Feasible systolic shift; ADVISORY, not a hazard (Theorem 3 retracted): position(s) below 0 (scale > 1.0): pos_x=-4, pos_y=-4
+  - [NOTE] Conv '/body.3/body.3.0/Conv': A=7.812500e-03, M=16384, sigma=21 (pos_x=-4, pos_w=7, pos_y=-4) -> Feasible systolic shift; ADVISORY, not a hazard (Theorem 3 retracted): position(s) below 0 (scale > 1.0): pos_x=-4, pos_y=-4
+  - [NOTE] Conv '/body.4/body.4.0/Conv': A=7.812500e-03, M=16384, sigma=21 (pos_x=-4, pos_w=6, pos_y=-5) -> Feasible systolic shift; ADVISORY, not a hazard (Theorem 3 retracted): position(s) below 0 (scale > 1.0): pos_x=-4, pos_y=-5
+  - [NOTE] Conv '/body.5/body.5.0/Conv': A=1.562500e-02, M=16384, sigma=20 (pos_x=-5, pos_w=6, pos_y=-5) -> Feasible systolic shift; ADVISORY, not a hazard (Theorem 3 retracted): position(s) below 0 (scale > 1.0): pos_x=-5, pos_y=-5
+  - [NOTE] Conv '/body.6/body.6.0/Conv': A=1.250000e-01, M=16384, sigma=17 (pos_x=-5, pos_w=6, pos_y=-2) -> Feasible systolic shift; ADVISORY, not a hazard (Theorem 3 retracted): position(s) below 0 (scale > 1.0): pos_x=-5, pos_y=-2
+  - [NOTE] Conv '/tail/Conv': A=7.812500e-03, M=16384, sigma=21 (pos_x=-2, pos_w=8, pos_y=-1) -> Feasible systolic shift; ADVISORY, not a hazard (Theorem 3 retracted): position(s) below 0 (scale > 1.0): pos_x=-2, pos_y=-1
+
+Shift-Cut Register Distribution: min=17, median=21, max=23
+================================================================================
+================================================================================
+AIE-ML Systolic Shift-Cut Verification Report: C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\models\fastdepth_fp32_xint8.onnx
+================================================================================
+Analyzed 38 quantized systolic operation(s).
+Shift-cut violations found: 0 / 38 (0.0%)
+
+PASS: All layers reside cleanly within the [0, 31] systolic shift-cut basin.
+
+Shift-Cut Register Distribution: min=18, median=21, max=23
+================================================================================
+================================================================================
+AIE-ML Systolic Shift-Cut Verification Report: C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\models\regnetx_002_xint8.onnx
+================================================================================
+Analyzed 46 quantized systolic operation(s).
+Shift-cut violations found: 0 / 46 (0.0%)
+
+PASS: All layers reside cleanly within the [0, 31] systolic shift-cut basin.
+
+Advisory notes (NOT violations): 8 / 46 operation(s) carry a
+scale position outside [0, 31]. Measured on this device to execute correctly:
+15 of 17 NPU arithmetic fixtures ran at output positions -1 to -16 and matched
+an independent integer reference. Theorem 3 is retracted; see the module docstring.
+  - [NOTE] Conv '/s1/b1/conv2/conv/Conv': A=1.525879e-05, M=16384, sigma=30 (pos_x=4, pos_w=-108, pos_y=-120) -> Feasible systolic shift; ADVISORY, not a hazard (Theorem 3 retracted): position(s) below 0 (scale > 1.0): pos_w=-108, pos_y=-120
+  - [NOTE] Conv '/s1/b1/conv3/conv/Conv': A=1.000000e+00, M=16384, sigma=14 (pos_x=-120, pos_w=123, pos_y=3) -> Feasible systolic shift; ADVISORY, not a hazard (Theorem 3 retracted): position(s) below 0 (scale > 1.0): pos_x=-120; position(s) above 31: pos_w=123
+  - [NOTE] Conv '/s4/b3/conv2/conv/Conv': A=1.525879e-05, M=16384, sigma=30 (pos_x=4, pos_w=5, pos_y=-7) -> Feasible systolic shift; ADVISORY, not a hazard (Theorem 3 retracted): position(s) below 0 (scale > 1.0): pos_y=-7
+  - [NOTE] Conv '/s4/b3/conv3/conv/Conv': A=1.000000e+00, M=16384, sigma=14 (pos_x=-7, pos_w=12, pos_y=5) -> Feasible systolic shift; ADVISORY, not a hazard (Theorem 3 retracted): position(s) below 0 (scale > 1.0): pos_x=-7
+  - [NOTE] Conv '/s4/b5/conv2/conv/Conv': A=3.051758e-05, M=16384, sigma=29 (pos_x=4, pos_w=8, pos_y=-3) -> Feasible systolic shift; ADVISORY, not a hazard (Theorem 3 retracted): position(s) below 0 (scale > 1.0): pos_y=-3
+  - [NOTE] Conv '/s4/b5/conv3/conv/Conv': A=1.000000e+00, M=16384, sigma=14 (pos_x=-3, pos_w=8, pos_y=5) -> Feasible systolic shift; ADVISORY, not a hazard (Theorem 3 retracted): position(s) below 0 (scale > 1.0): pos_x=-3
+  - [NOTE] Conv '/s4/b7/conv2/conv/Conv': A=6.103516e-05, M=16384, sigma=28 (pos_x=3, pos_w=7, pos_y=-4) -> Feasible systolic shift; ADVISORY, not a hazard (Theorem 3 retracted): position(s) below 0 (scale > 1.0): pos_y=-4
+  - [NOTE] Conv '/s4/b7/conv3/conv/Conv': A=1.000000e+00, M=16384, sigma=14 (pos_x=-4, pos_w=8, pos_y=4) -> Feasible systolic shift; ADVISORY, not a hazard (Theorem 3 retracted): position(s) below 0 (scale > 1.0): pos_x=-4
+
+Shift-Cut Register Distribution: min=11, median=21, max=30
+================================================================================
+================================================================================
+AIE-ML Systolic Shift-Cut Verification Report: C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\models\midas_small_nearest_cut_xint8.onnx
+================================================================================
+Analyzed 97 quantized systolic operation(s).
+Shift-cut violations found: 0 / 97 (0.0%)
+
+PASS: All layers reside cleanly within the [0, 31] systolic shift-cut basin.
+
+Advisory notes (NOT violations): 16 / 97 operation(s) carry a
+scale position outside [0, 31]. Measured on this device to execute correctly:
+15 of 17 NPU arithmetic fixtures ran at output positions -1 to -16 and matched
+an independent integer reference. Theorem 3 is retracted; see the module docstring.
+  - [NOTE] Conv '/refinenet1/resConfUnit1/conv2/Conv': A=9.765625e-04, M=16384, sigma=24 (pos_x=0, pos_w=9, pos_y=-1) -> Feasible systolic shift; ADVISORY, not a hazard (Theorem 3 retracted): position(s) below 0 (scale > 1.0): pos_y=-1
+  - [NOTE] Conv '/refinenet4/resConfUnit2/conv1/Conv': A=2.441406e-04, M=16384, sigma=26 (pos_x=1, pos_w=10, pos_y=-1) -> Feasible systolic shift; ADVISORY, not a hazard (Theorem 3 retracted): position(s) below 0 (scale > 1.0): pos_y=-1
+  - [NOTE] Conv '/refinenet4/resConfUnit2/conv2/Conv': A=1.953125e-03, M=16384, sigma=23 (pos_x=-1, pos_w=10, pos_y=0) -> Feasible systolic shift; ADVISORY, not a hazard (Theorem 3 retracted): position(s) below 0 (scale > 1.0): pos_x=-1
+  - [NOTE] Conv '/refinenet4/out_conv/Conv': A=4.882812e-04, M=16384, sigma=25 (pos_x=0, pos_w=10, pos_y=-1) -> Feasible systolic shift; ADVISORY, not a hazard (Theorem 3 retracted): position(s) below 0 (scale > 1.0): pos_y=-1
+  - [NOTE] Conv '/refinenet3/resConfUnit2/conv1/Conv': A=9.765625e-04, M=16384, sigma=24 (pos_x=-1, pos_w=10, pos_y=-1) -> Feasible systolic shift; ADVISORY, not a hazard (Theorem 3 retracted): position(s) below 0 (scale > 1.0): pos_x=-1, pos_y=-1
+  - [NOTE] Conv '/refinenet3/resConfUnit2/conv2/Conv': A=9.765625e-04, M=16384, sigma=24 (pos_x=-1, pos_w=10, pos_y=-1) -> Feasible systolic shift; ADVISORY, not a hazard (Theorem 3 retracted): position(s) below 0 (scale > 1.0): pos_x=-1, pos_y=-1
+  - [NOTE] Conv '/refinenet3/out_conv/Conv': A=4.882812e-04, M=16384, sigma=25 (pos_x=-2, pos_w=10, pos_y=-3) -> Feasible systolic shift; ADVISORY, not a hazard (Theorem 3 retracted): position(s) below 0 (scale > 1.0): pos_x=-2, pos_y=-3
+  - [NOTE] Conv '/refinenet2/resConfUnit2/conv1/Conv': A=3.906250e-03, M=16384, sigma=22 (pos_x=-2, pos_w=9, pos_y=-1) -> Feasible systolic shift; ADVISORY, not a hazard (Theorem 3 retracted): position(s) below 0 (scale > 1.0): pos_x=-2, pos_y=-1
+  - [NOTE] Conv '/refinenet2/resConfUnit2/conv2/Conv': A=1.953125e-03, M=16384, sigma=23 (pos_x=-1, pos_w=9, pos_y=-1) -> Feasible systolic shift; ADVISORY, not a hazard (Theorem 3 retracted): position(s) below 0 (scale > 1.0): pos_x=-1, pos_y=-1
+  - [NOTE] Conv '/refinenet2/out_conv/Conv': A=1.953125e-03, M=16384, sigma=23 (pos_x=-3, pos_w=9, pos_y=-3) -> Feasible systolic shift; ADVISORY, not a hazard (Theorem 3 retracted): position(s) below 0 (scale > 1.0): pos_x=-3, pos_y=-3
+  - [NOTE] Conv '/refinenet1/resConfUnit2/conv1/Conv': A=1.953125e-03, M=16384, sigma=23 (pos_x=-3, pos_w=9, pos_y=-3) -> Feasible systolic shift; ADVISORY, not a hazard (Theorem 3 retracted): position(s) below 0 (scale > 1.0): pos_x=-3, pos_y=-3
+  - [NOTE] Conv '/refinenet1/resConfUnit2/conv2/Conv': A=3.906250e-03, M=16384, sigma=22 (pos_x=-3, pos_w=9, pos_y=-2) -> Feasible systolic shift; ADVISORY, not a hazard (Theorem 3 retracted): position(s) below 0 (scale > 1.0): pos_x=-3, pos_y=-2
+  - [NOTE] Conv '/refinenet1/out_conv/Conv': A=1.953125e-03, M=16384, sigma=23 (pos_x=-3, pos_w=9, pos_y=-3) -> Feasible systolic shift; ADVISORY, not a hazard (Theorem 3 retracted): position(s) below 0 (scale > 1.0): pos_x=-3, pos_y=-3
+  - [NOTE] Conv '/output_conv/output_conv.0/Conv': A=9.765625e-04, M=16384, sigma=24 (pos_x=-3, pos_w=9, pos_y=-4) -> Feasible systolic shift; ADVISORY, not a hazard (Theorem 3 retracted): position(s) below 0 (scale > 1.0): pos_x=-3, pos_y=-4
+  - [NOTE] Conv '/output_conv/output_conv.2/Conv': A=9.765625e-04, M=16384, sigma=24 (pos_x=-4, pos_w=9, pos_y=-5) -> Feasible systolic shift; ADVISORY, not a hazard (Theorem 3 retracted): position(s) below 0 (scale > 1.0): pos_x=-4, pos_y=-5
+  ... and 1 more advisory notes.
+
+Shift-Cut Register Distribution: min=15, median=22, max=26
+================================================================================
+================================================================================
+AIE-ML Systolic Shift-Cut Verification Report: C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\models\bisenetv2_fp32_xint8.onnx
+================================================================================
+Analyzed 63 quantized systolic operation(s).
+Shift-cut violations found: 0 / 63 (0.0%)
+
+PASS: All layers reside cleanly within the [0, 31] systolic shift-cut basin.
+
+Advisory notes (NOT violations): 1 / 63 operation(s) carry a
+scale position outside [0, 31]. Measured on this device to execute correctly:
+15 of 17 NPU arithmetic fixtures ran at output positions -1 to -16 and matched
+an independent integer reference. Theorem 3 is retracted; see the module docstring.
+  - [NOTE] Conv '/segment/S3/S3.0/shortcut/shortcut.2/Conv': A=7.812500e-03, M=16384, sigma=21 (pos_x=0, pos_w=6, pos_y=-1) -> Feasible systolic shift; ADVISORY, not a hazard (Theorem 3 retracted): position(s) below 0 (scale > 1.0): pos_y=-1
+
+Shift-Cut Register Distribution: min=7, median=21, max=24
+================================================================================
+================================================================================
+AIE-ML Systolic Shift-Cut Verification Report: C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\models\mobilevit_xxs_xint8.onnx
+================================================================================
+Analyzed 177 quantized systolic operation(s).
+Shift-cut violations found: 0 / 177 (0.0%)
+
+PASS: All layers reside cleanly within the [0, 31] systolic shift-cut basin.
+
+Shift-Cut Register Distribution: min=7, median=21, max=23
+================================================================================
+================================================================================
+AIE-ML Systolic Shift-Cut Verification Report: C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\models\resnext50_32x4d_xint8.onnx
+================================================================================
+Analyzed 55 quantized systolic operation(s).
+Shift-cut violations found: 0 / 55 (0.0%)
+
+PASS: All layers reside cleanly within the [0, 31] systolic shift-cut basin.
+
+Advisory notes (NOT violations): 8 / 55 operation(s) carry a
+scale position outside [0, 31]. Measured on this device to execute correctly:
+15 of 17 NPU arithmetic fixtures ran at output positions -1 to -16 and matched
+an independent integer reference. Theorem 3 is retracted; see the module docstring.
+  - [NOTE] Conv '/layer1/layer1.0/conv2/Conv': A=1.525879e-05, M=16384, sigma=30 (pos_x=1, pos_w=-105, pos_y=-120) -> Feasible systolic shift; ADVISORY, not a hazard (Theorem 3 retracted): position(s) below 0 (scale > 1.0): pos_w=-105, pos_y=-120
+  - [NOTE] Conv '/layer1/layer1.0/conv3/Conv': A=1.000000e+00, M=16384, sigma=14 (pos_x=-120, pos_w=122, pos_y=2) -> Feasible systolic shift; ADVISORY, not a hazard (Theorem 3 retracted): position(s) below 0 (scale > 1.0): pos_x=-120; position(s) above 31: pos_w=122
+  - [NOTE] Conv '/layer1/layer1.1/conv2/Conv': A=1.525879e-05, M=16384, sigma=30 (pos_x=2, pos_w=-106, pos_y=-120) -> Feasible systolic shift; ADVISORY, not a hazard (Theorem 3 retracted): position(s) below 0 (scale > 1.0): pos_w=-106, pos_y=-120
+  - [NOTE] Conv '/layer1/layer1.1/conv3/Conv': A=1.000000e+00, M=16384, sigma=14 (pos_x=-120, pos_w=121, pos_y=1) -> Feasible systolic shift; ADVISORY, not a hazard (Theorem 3 retracted): position(s) below 0 (scale > 1.0): pos_x=-120; position(s) above 31: pos_w=121
+  - [NOTE] Conv '/layer2/layer2.1/conv2/Conv': A=1.525879e-05, M=16384, sigma=30 (pos_x=1, pos_w=-105, pos_y=-120) -> Feasible systolic shift; ADVISORY, not a hazard (Theorem 3 retracted): position(s) below 0 (scale > 1.0): pos_w=-105, pos_y=-120
+  - [NOTE] Conv '/layer2/layer2.1/conv3/Conv': A=1.000000e+00, M=16384, sigma=14 (pos_x=-120, pos_w=121, pos_y=1) -> Feasible systolic shift; ADVISORY, not a hazard (Theorem 3 retracted): position(s) below 0 (scale > 1.0): pos_x=-120; position(s) above 31: pos_w=121
+  - [NOTE] Conv '/layer3/layer3.1/conv2/Conv': A=1.525879e-05, M=16384, sigma=30 (pos_x=1, pos_w=-105, pos_y=-120) -> Feasible systolic shift; ADVISORY, not a hazard (Theorem 3 retracted): position(s) below 0 (scale > 1.0): pos_w=-105, pos_y=-120
+  - [NOTE] Conv '/layer3/layer3.1/conv3/Conv': A=1.000000e+00, M=16384, sigma=14 (pos_x=-120, pos_w=121, pos_y=1) -> Feasible systolic shift; ADVISORY, not a hazard (Theorem 3 retracted): position(s) below 0 (scale > 1.0): pos_x=-120; position(s) above 31: pos_w=121
+
+Shift-Cut Register Distribution: min=11, median=21, max=30
+================================================================================
