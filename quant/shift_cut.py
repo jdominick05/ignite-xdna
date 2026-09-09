@@ -39,11 +39,25 @@ Theorem 2 (Systolic Scale Feasibility Window):
     Any scale chosen outside this interval cannot be executed on the physical
     AIE-ML systolic array without numerical clamping or overflow.
 
-Theorem 3 (Fixed-Point Position Feasibility):
-    Fixed-point scale positions on XDNA1 must satisfy pos in [0, 31] (S in [2^-31, 1.0]).
-    Scales with pos < 0 (S > 1.0) cause dynamic range overflow, while pos > 31 causes
-    arithmetic underflow (as observed in RegNetX-002 where CLE drove pos to -120, collapsing
-    top-1 accuracy to 0.50%).
+Theorem 3 (Fixed-Point Position Feasibility) -- RETRACTED 2026-09-09:
+    This claimed that positions must satisfy pos in [0, 31], and that pos < 0 (S > 1.0)
+    causes dynamic range overflow. It is contradicted by measurement on this device.
+
+    tools/xint8_arithmetic_probe.py builds a QDQ Conv whose output position is -sc. Fifteen
+    of its seventeen NPU fixtures ran at pos_y in {-1, -4, -8, -16} -- output scales up to
+    2^16 -- placed on the DPU, and matched an independent integer reference exactly apart
+    from a uniform one-code half-up rounding difference explained elsewhere. Two shipped
+    models also contradict it: SESR-M7 was flagged 9/9 while placing 50 of 52 nodes and
+    scoring 34.06 dB, and MODNet-Cut was flagged 1/74 while placing 502 of 507.
+
+    The RegNetX-002 evidence cited above was also misattributed: its pos = -120 comes from
+    cross-layer equalization inflating the ranges, not from a hardware bound. The same graph
+    and producer without CLE gives positions 2..10 and 66.20% top-1 against 0.10%.
+
+    Positions outside [0, 31] are therefore reported as an advisory note, never as a hazard.
+    Theorem 1's sigma window remains the executability criterion, as Theorem 1 itself states.
+    Note that the sigma edges have NOT been measured either: the probe only ever reached
+    sigma in {14, 15, 18, 22, 30}, all comfortably inside [0, 31].
 """
 
 import math
@@ -56,7 +70,7 @@ from onnx import numpy_helper
 class ShiftCutHazard:
     def __init__(self, node_name: str, op_type: str, scale_x: float, scale_w: float, scale_y: float,
                  A: float, M: int, sigma: int, pos_x: int, pos_w: int, pos_y: int,
-                 is_hazard: bool, reason: str):
+                 is_hazard: bool, reason: str, note: str = ""):
         self.node_name = node_name
         self.op_type = op_type
         self.scale_x = scale_x
@@ -70,12 +84,36 @@ class ShiftCutHazard:
         self.pos_y = pos_y
         self.is_hazard = is_hazard
         self.reason = reason
+        # Advisory only: an out-of-[0,31] position. Measured NOT to be a hazard on its own
+        # (see Theorem 3, retracted). Never counted as a violation.
+        self.note = note
 
     def __repr__(self):
-        status = "HAZARD" if self.is_hazard else "OK"
+        status = "HAZARD" if self.is_hazard else ("NOTE" if self.note else "OK")
         return (f"[{status}] {self.op_type} '{self.node_name}': "
                 f"A={self.A:.6e}, M={self.M}, sigma={self.sigma} "
-                f"(pos_x={self.pos_x}, pos_w={self.pos_w}, pos_y={self.pos_y}) -> {self.reason}")
+                f"(pos_x={self.pos_x}, pos_w={self.pos_w}, pos_y={self.pos_y}) -> "
+                f"{self.reason}{('; ' + self.note) if self.note else ''}")
+
+
+def position_note(**positions: int) -> str:
+    """Advisory text for positions outside [0, 31]; never a hazard on its own.
+
+    Both operator branches call this, so Conv and Mul classify positions identically.
+    The previous code checked > 31 for Conv but not for Mul, and treated either side as
+    CRITICAL -- which fired on exactly the operations Theorem 1 calls feasible.
+    """
+    low = {k: v for k, v in positions.items() if v < 0}
+    high = {k: v for k, v in positions.items() if v > 31}
+    parts = []
+    if low:
+        parts.append("position(s) below 0 (scale > 1.0): "
+                     + ", ".join(f"{k}={v}" for k, v in sorted(low.items())))
+    if high:
+        parts.append("position(s) above 31: " + ", ".join(f"{k}={v}" for k, v in sorted(high.items())))
+    if not parts:
+        return ""
+    return "ADVISORY, not a hazard (Theorem 3 retracted): " + "; ".join(parts)
 
 
 def compute_shift_cut(A: float) -> Tuple[int, int]:
@@ -187,12 +225,7 @@ def analyze_model_shift_cut(model_path: str) -> List[ShiftCutHazard]:
             elif sigma > 31:
                 is_hazard = True
                 reason = f"SHIFT CLAMP HAZARD: sigma={sigma} > 31 (hardware 5-bit shifter clamps/overflows)"
-            elif pos_x < 0 or pos_w < 0 or pos_y < 0:
-                is_hazard = True
-                reason = f"DYNAMIC RANGE OVERFLOW: negative position (pos_x={pos_x}, pos_w={pos_w}, pos_y={pos_y}) exceeds unit scale"
-            elif pos_x > 31 or pos_w > 31 or pos_y > 31:
-                is_hazard = True
-                reason = f"EXPONENT UNDERFLOW: position > 31 (pos_x={pos_x}, pos_w={pos_w}, pos_y={pos_y}) exceeds fixed-point range"
+            note = position_note(pos_x=pos_x, pos_w=pos_w, pos_y=pos_y)
 
             hazards.append(ShiftCutHazard(
                 node_name=node.name or out0,
@@ -207,7 +240,8 @@ def analyze_model_shift_cut(model_path: str) -> List[ShiftCutHazard]:
                 pos_w=pos_w,
                 pos_y=pos_y,
                 is_hazard=is_hazard,
-                reason=reason
+                reason=reason,
+                note=note
             ))
 
         elif node.op_type == "Mul":
@@ -244,9 +278,7 @@ def analyze_model_shift_cut(model_path: str) -> List[ShiftCutHazard]:
             if sigma < 0 or sigma > 31:
                 is_hazard = True
                 reason = f"BILATERAL GATING HAZARD: sigma={sigma} outside [0, 31] (branch scale ratio divergent)"
-            elif pos_a < 0 or pos_b < 0 or pos_out < 0:
-                is_hazard = True
-                reason = f"DYNAMIC RANGE OVERFLOW: negative position (pos_a={pos_a}, pos_b={pos_b}, pos_out={pos_out})"
+            note = position_note(pos_a=pos_a, pos_b=pos_b, pos_out=pos_out)
 
             hazards.append(ShiftCutHazard(
                 node_name=node.name or out0,
@@ -261,7 +293,8 @@ def analyze_model_shift_cut(model_path: str) -> List[ShiftCutHazard]:
                 pos_w=pos_b,
                 pos_y=pos_out,
                 is_hazard=is_hazard,
-                reason=reason
+                reason=reason,
+                note=note
             ))
 
     return hazards
@@ -274,6 +307,7 @@ def print_shift_cut_report(model_path: str, hazards: List[ShiftCutHazard]):
     
     total = len(hazards)
     violations = [h for h in hazards if h.is_hazard]
+    notes = [h for h in hazards if h.note and not h.is_hazard]
     
     print(f"Analyzed {total} quantized systolic operation(s).")
     print(f"Shift-cut violations found: {len(violations)} / {total} ({(len(violations)/max(1, total))*100:.1f}%)")
@@ -288,6 +322,16 @@ def print_shift_cut_report(model_path: str, hazards: List[ShiftCutHazard]):
             print(f"  ... and {len(violations) - 15} more violations.")
     else:
         print("\nPASS: All layers reside cleanly within the [0, 31] systolic shift-cut basin.")
+
+    if notes:
+        print(f"\nAdvisory notes (NOT violations): {len(notes)} / {total} operation(s) carry a")
+        print("scale position outside [0, 31]. Measured on this device to execute correctly:")
+        print("15 of 17 NPU arithmetic fixtures ran at output positions -1 to -16 and matched")
+        print("an independent integer reference. Theorem 3 is retracted; see the module docstring.")
+        for h in notes[:15]:
+            print(f"  - {h}")
+        if len(notes) > 15:
+            print(f"  ... and {len(notes) - 15} more advisory notes.")
         
     sigmas = [h.sigma for h in hazards]
     if sigmas:
@@ -312,18 +356,34 @@ def calculate_feasible_scale_bounds(scale_x: float, scale_w: float) -> Tuple[int
 
 
 def project_scale_to_feasible_basin(scale_x: float, scale_w: float, scale_y: float) -> Tuple[float, int, int]:
-    """Project violating output scale S_y to the nearest boundary of the systolic feasibility window."""
+    """Project violating output scale S_y to the nearest boundary of the systolic feasibility window.
+
+    The window must be built from the SAME positions sigma is computed from. The earlier version
+    clamped pos_x and pos_w into [0, 31] before deriving the window, while sigma was recomputed
+    from the unclamped scales, so the two disagreed whenever an input position sat outside that
+    range -- and the "repair" could return a sigma far outside [0, 31]. Measured on RegNetX-002
+    `/s1/b1/conv2/conv/Conv`: a layer at sigma = 30, already feasible, was projected to sigma =
+    -90, manufacturing the accumulator-overflow hazard this module exists to prevent.
+
+    Positions are therefore used unclamped, and the result is checked rather than trusted.
+    """
     if scale_x <= 0 or scale_w <= 0 or scale_y <= 0:
         return scale_y, 0, 0
-    pos_x = max(0, min(31, int(round(-math.log2(scale_x)))))
-    pos_w = max(0, min(31, int(round(-math.log2(scale_w)))))
+    pos_x = int(round(-math.log2(scale_x)))
+    pos_w = int(round(-math.log2(scale_w)))
     pos_y = int(round(-math.log2(scale_y)))
-    min_pos_y = max(0, pos_x + pos_w - 17)
-    max_pos_y = min(31, pos_x + pos_w + 14)
+    min_pos_y = pos_x + pos_w - 17
+    max_pos_y = pos_x + pos_w + 14
     repaired_pos_y = max(min_pos_y, min(max_pos_y, pos_y))
     repaired_scale_y = 2.0 ** (-repaired_pos_y)
     A = (scale_x * scale_w) / repaired_scale_y
     M, sigma = compute_shift_cut(A)
+    if not 0 <= sigma <= 31:
+        raise ValueError(
+            f"projection did not land in the feasible window: sigma={sigma} from "
+            f"pos_x={pos_x}, pos_w={pos_w}, pos_y={pos_y} -> {repaired_pos_y}. "
+            "Refusing to emit a scale the analyzer would flag."
+        )
     return repaired_scale_y, M, sigma
 
 
@@ -366,7 +426,11 @@ def repair_model_shift_cut(model_path: str, output_path: Optional[str] = None) -
             M, sigma = compute_shift_cut(A)
             pos_y = int(round(-math.log2(scale_y))) if scale_y > 0 else 0
 
-            if sigma < 0 or sigma > 31 or pos_y < 0 or pos_y > 31:
+            # Must match analyze_model_shift_cut's hazard criterion exactly, or the
+            # repair count claims work it never did. project_scale_to_feasible_basin
+            # only moves pos_y, and sigma is a function of pos_y, so every hazard it
+            # accepts is one it can actually fix.
+            if sigma < 0 or sigma > 31:
                 repaired_scale_y, new_M, new_sigma = project_scale_to_feasible_basin(scale_x, scale_w, scale_y)
                 repairs.append({
                     "node": node.name or node.output[0],
@@ -407,7 +471,11 @@ def repair_model_shift_cut(model_path: str, output_path: Optional[str] = None) -
             M, sigma = compute_shift_cut(A)
             pos_y = int(round(-math.log2(scale_out))) if scale_out > 0 else 0
 
-            if sigma < 0 or sigma > 31 or pos_y < 0 or pos_y > 31:
+            # Must match analyze_model_shift_cut's hazard criterion exactly, or the
+            # repair count claims work it never did. project_scale_to_feasible_basin
+            # only moves pos_y, and sigma is a function of pos_y, so every hazard it
+            # accepts is one it can actually fix.
+            if sigma < 0 or sigma > 31:
                 repaired_scale_out, new_M, new_sigma = project_scale_to_feasible_basin(scale_a, scale_b, scale_out)
                 repairs.append({
                     "node": node.name or node.output[0],
