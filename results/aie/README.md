@@ -91,6 +91,17 @@ Read these before quoting anything below.
   rule built on it — restated in four places (`README.md`, `kernels/README.md`,
   `docs/DECISIONS.md`, `docs/BENCHMARKS.md`) — and the four small-op verdicts
   `docs/SILICON.md` §3.4 closed on it.
+- **`bottleneck_spatial_sweep_npu.log`'s 146.1 marginal GOPS is superseded by
+  `conv_accum_residency_npu.log`, and its stock baseline does not reproduce.** Making both 1×1
+  kernels' accumulators register-resident raises marginal throughput to **348.4–350.3 GOPS**
+  (2.99–3.01× across two series). Separately, and more awkwardly: that log's own stock figure
+  **re-measures at 115.6–117.1**, not 146.1, at the same shapes. The kernel is not the same
+  code — 146.1 predates the 2026-09-07 width fix, which rewrote the very loop in question, and
+  that run could not compile 56×56 at all while the new one can. 146.1 is **not retracted**; it
+  is a measurement of a kernel that no longer exists in this tree. The inference that the width
+  fix cost ~20% is stated as inference in the log: the pre-fix kernel was not built as a third
+  arm. **The op-class verdict is unchanged** — the CPU still wins 2.4× — so nothing downstream
+  of "int8 conv is closed" moves.
 - **`dispatch_runlist_npu.log`'s 36 µs is in turn scoped by `iron_batch_npu.log` to raw
   pyxrt.** Batching was wired into IRON's own host path and measured there: the device cost
   per dispatch reproduces at **37.5–37.9 µs**, but IRON's per-call host work is a
@@ -590,6 +601,31 @@ carries one same-bank paired load, worth ~5% and not a lever. **Careful:** the 2
 ceilings on unused issue slots, not predictions of a rewrite, and per-loop densities are
 unweighted by trip count. Written up in
 [`docs/BENCHMARKS.md`](../../docs/BENCHMARKS.md#the-open-convs-113-gap-to-the-vendor-is-issue-rate-and-it-is-visible-without-a-trace).
+
+**`conv_accum_residency_npu.log`** — the fix for the defect `conv_issue_rate_decomposed.log`
+found, measured end to end. Both 1x1 conv kernels held `MMUL4x8x8 acc_tmp[4]` indexed by a loop
+whose trip count is a RUNTIME value; registers cannot be dynamically addressed, so the array
+lived in memory and every `.mac()` was load-four-quarters / mac / store-four-quarters. Peeling
+the `n == 4` case into four NAMED accumulators takes the hot loop from **22 bundles with one
+vmac to 14 with four -- 0.045 to 0.286 MACs/cycle** -- and marginal throughput from
+**115.6-117.1 to 348.4-350.3 GOPS**, 2.99x and 3.01x across two series, every shape passing the
+sweep's golden gate. **This is the falsifiable prediction gemm_reblock_h11_npu.log set up and it
+held:** the same class of change to the int8 GEMM moved the wall clock by nothing because that
+design is delivery-bound, while the conv at 4.5% of peak was genuinely issue-bound -- the first
+time this repo separated the two by intervening rather than modelling. **The op class does NOT
+reopen:** the CPU (onnxruntime 1.22.1, ORT CPU EP, QDQ int8 on VNNI, same sitting, run twice)
+holds 823.7-839.5 GOPS and still wins **2.4x**, down from 7.2x. What changed is the reason, from
+"the kernel uses 5% of its issue slots" to "even with the slots used, one column does not reach a
+VNNI-equipped Zen4". **A methodological warning worth more than the number:** the bottleneck is a
+three-stage core-to-core pipeline and patching only stage 1 moved 32x32 by 2.4% -- a null result
+that would have been reported as "the conv is delivery-bound too". It was Amdahl; stage 3 still
+had its accumulators in memory, and fixing both gave 2.42x at the same shape. Two caveats: the
+stock arm re-measured at 115.6-117.1 rather than the published 146.1, because that figure
+predates the 2026-09-07 width fix that rewrote the same loop (INFERENCE, the pre-fix kernel was
+not built as a third arm); and conv2dk3, the 3x3 middle stage, was not touched and is the
+likeliest remaining rate-limiter. Host-load witness reads PEER, which can only depress the CPU
+figure and so makes the verdict conservative. Written up in
+[`docs/BENCHMARKS.md`](../../docs/BENCHMARKS.md#the-11-convs-accumulators-were-in-memory-putting-them-in-registers-is-worth-3-and-the-op-class-still-loses).
 
 **`iron_batch_npu.log`** — the host path `dispatch_runlist_npu.log` said was missing, written
 and measured. `kernels/dispatch_floor/iron_batch.py` patches IRON's own transaction submit so

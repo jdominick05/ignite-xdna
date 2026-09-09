@@ -522,7 +522,9 @@ alone more than accounts for it; nothing about data movement needs invoking.
 **The two kernels fail differently, and only one is subtle.** The 1×1 never keeps an
 accumulator in a register — its loop loads all four quarters from memory (`vlda amhh1/amhl1/
 amlh1/amll1`), issues **one** `vmac`, stores four quarters back, and idles **six of 22
-bundles** on load-to-use latency, while naming 3 of the file's 9 accumulators. The 3×3 *does*
+bundles** on load-to-use latency, while naming 3 of the file's 9 accumulators. *(The cause was
+found and fixed the same day — a runtime-indexed accumulator array — and the fix is worth
+2.99×; see [the 1×1 conv's accumulators](#the-11-convs-accumulators-were-in-memory-putting-them-in-registers-is-worth-3-and-the-op-class-still-loses).)* The 3×3 *does*
 keep `cm1`–`cm4` live with no accumulator traffic, and still reaches only 0.222, because six
 of its eighteen bundles are `vshift` and four more `vmov`: sliding-window realignment spent in
 issue slots. That is the classic conv-on-SIMD cost, and it is exactly what K1's tooling
@@ -539,6 +541,96 @@ and it remains true; these are the throughput numbers, which were never taken. R
 20× and 4× are **ceilings on unused issue slots, not predictions of a rewrite**, and the
 per-loop densities are unweighted by trip count, so which loop dominates runtime is still
 unmeasured. What this removes is the excuse that nobody knew where the 11.3× went.
+
+### The 1×1 conv's accumulators were in memory. Putting them in registers is worth 3×, and the op class still loses
+
+The section above located the open int8 conv's 11.3× gap to the vendor DPU as issue rate, with
+the 1×1's hot loop the worst of it at **0.045 MACs/cycle** against the GEMM's 0.889, and named
+the cause: the kernel keeps its accumulator in *memory*. This is the fix, measured. Backing log
+`results/aie/conv_accum_residency_npu.log`.
+
+**The defect is one declaration.** `conv2dk1_i8_vector` holds `MMUL4x8x8 acc_tmp[4]` and indexes
+it with `for (int x = 0; x < n; x++)` where `n` is a **runtime** value. Registers cannot be
+dynamically addressed, so the array is forced to memory and every `.mac()` becomes
+load-four-quarters / mac / store-four-quarters. Peeling the `n == 4` case into four **named**
+accumulators — the pattern `mm.cc`'s `matmul_vectorized_2x2_mmul` already uses — fixes it. The
+array loop is kept as the tail and is genuinely reached: `total_chunks = iw/4`, so `iw=56` gives
+14 = 4+4+4+2, and the 56×56 shape runs the tail at n=2 and verifies.
+
+| `conv2dk1_i8_vector` hot loop | Stock | Peeled |
+|---|---|---|
+| Bundles per iteration | 22 | 14 |
+| `vmac` per iteration | 1 | 4 |
+| **MAC issue rate** | **0.045/cyc** | **0.286/cyc** |
+| Accumulator quarter loads / stores | 4 / 4 | 0 / 0 |
+| Bundles issuing nothing | 6 | 3 |
+| Accumulator registers named | 3 (`cm0`–`cm2`) | 5 (`cm0`–`cm4`) |
+
+**This is the falsifiable prediction H11 set up, and it held.** H11 improved the int8 GEMM's
+kernel by 12.5% — every spill gone, a full MAC every cycle — and the wall clock did not move,
+because that design is bound by a per-buffer delivery floor. The conv sat at 4.5% of peak rather
+than 41.9%, so it should be genuinely issue-bound and should actually speed up. It does. The two
+designs are bound by different things, and this is the first result here that shows it by
+*intervening* rather than by modelling.
+
+| Marginal GOPS (fit slope, shape-free) | Series A | Series B |
+|---|---|---|
+| Stock | 117.1 | 115.6 |
+| Both 1×1 stages peeled | **350.3** | **348.4** |
+| Gain | 2.99× | 3.01× |
+
+Both series agree in sign and magnitude, well outside this machine's ~5% drift, r² ≥ 0.9987, and
+every shape in every arm passes the sweep's own correctness gate.
+
+**A single-stage fix would have been reported as a null result, and that is the transferable
+lesson.** The bottleneck is a three-stage core-to-core pipeline — `conv2dk1`, `conv2dk3`,
+`conv2dk1_skip` — and the third stage carries the *same* defect. Patching only `conv2dk1.cc`, at
+32×32:
+
+| Arm | hw ms | GOPS |
+|---|---|---|
+| Stock | 1.4844 | 96.1 |
+| `conv2dk1.cc` only | 1.4486 | 98.4 |
+| Both 1×1 stages | **0.6133** | **232.5** |
+
+2.4% alone, 2.42× together. A pipeline runs at the rate of its slowest stage, so a single-stage
+intervention measures the pipeline's balance, not the intervention.
+
+**And the op class stays closed.** The CPU baseline, named and measured in the same sitting:
+onnxruntime 1.22.1, ORT CPU EP, QDQ int8 reaching VNNI, same six shapes, run twice — **823.7 and
+839.5 marginal GOPS** (consistent with the 819.0 already published for this sweep).
+
+| | Marginal GOPS | CPU wins by |
+|---|---|---|
+| Stock NPU | 115.6–117.1 | 7.1–7.2× |
+| Peeled NPU | 348.4–350.3 | **2.4×** |
+| CPU (VNNI int8) | 823.7–839.5 | — |
+
+A 3× kernel improvement moves the deficit from 7.2× to 2.4× and does not close it. What changes
+is the *reason* the op class is closed: it was "the kernel uses 5% of its issue slots"; it is now
+"even with the slots used, one column of this array does not reach a VNNI-equipped Zen4." Against
+the vendor DPU the per-column gap narrows from ~14× (this sitting's stock arm) to **~4.7×**.
+
+**A discrepancy that has to be stated because it looks like a contradiction.** The published
+stock figure is **146.1** GOPS; this sitting's stock arm measures **115.6–117.1** at the same
+shapes. The kernel is not the same code — that sweep predates the 2026-09-07 width fix, which
+rewrote this very loop to walk the width in ≤4-chunk blocks where upstream used eight concurrent
+accumulators, and the published run could not compile 56×56 at all while this one can. *Inference,
+not measurement:* the width fix appears to have cost ~20% at w=32 while making non-multiple-of-32
+widths correct, and was never measured at the time. The A/B is like-for-like within one sitting,
+so the 2.99× is unaffected — but 350 should be read as **2.4× the last published figure**, not 3×
+it. The pre-fix kernel was not built as a third arm: a peer producer held ~13 GB with free RAM at
+zero throughout the window, and contending with another session's job was not worth it.
+
+**What this does not show.** One design, one column, int8, one machine, one sitting; the w=64
+shapes fail to compile in *both* arms (a memtile limit, unrelated) and are excluded from both
+fits. The host-load witness reads **PEER**, not CLEAR — but contention can only *depress* the CPU
+figure, which makes "the CPU still wins by 2.4×" conservative rather than flattered. The MAC issue
+rates are static ceilings from the schedule, not counters, which is why the whole-kernel 2.99× is
+smaller than the hot loop's 6.29× — the loop is not all of the kernel. The correctness gate is
+`np.allclose(rtol=0, atol=INP_SCALE)` against a torch int8 golden, a tolerance check rather than a
+bit-exact one. **`conv2dk3` was not touched** and is the likeliest remaining rate-limiter; nothing
+here establishes where the residual 2.4× to the CPU sits.
 
 ### Batched submission drops the dispatch floor 17×, and reopens four closed verdicts
 
