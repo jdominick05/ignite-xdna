@@ -102,6 +102,31 @@ def main():
         c.check("sigma -6 is a hazard", under.is_hazard, f"reason={under.reason}")
         c.check("sigma -6 names the accumulator", "ACCUMULATOR" in under.reason, under.reason)
 
+        print("\nthe producer contract is asserted of Conv/Gemm only")
+        # adjust_shift_cut skips everything but Conv and Gemm (quant/refine.py::shift_cut).
+        # A Mul is refined by shift_write_mul (clamp 0..32) and shift_swish (clamp 0..15),
+        # over different quantities, so judging it against [14, 30] would report a false
+        # provenance claim about a file the producer really did emit.
+        # Below the band, inside it, and above it: 0+0-4+14=10, 2+2-1+14=17, 9+9-1+14=31.
+        for pos_a, pos_b, pos_out, want_sigma in ((0, 0, 4, 10), (2, 2, 1, 17), (9, 9, 1, 31)):
+            path = save(fx.qdq_mul_model(pos_a, pos_b, pos_out), tmp, f"mul_{want_sigma}")
+            muls = [h for h in analyze_model_shift_cut(path) if h.op_type == "Mul" and h.resolved]
+            c.equal(f"quantized Mul pos({pos_a},{pos_b},{pos_out}) -> sigma",
+                    muls[0].sigma if muls else None, want_sigma)
+            c.check(f"Mul at sigma={want_sigma} is not clamp-bound", bool(muls) and not muls[0].clamp_bound)
+            c.check(f"Mul at sigma={want_sigma} is never 'outside the producer contract'",
+                    bool(muls) and muls[0].in_contract,
+                    muls[0].reason if muls else "")
+            c.equal(f"Mul at sigma={want_sigma} has no contract edge",
+                    muls[0].at_contract_edge if muls else "unset", None)
+            c.check(f"Mul at sigma={want_sigma} says the contract does not apply",
+                    bool(muls) and "Conv/Gemm only" in muls[0].reason, muls[0].reason if muls else "")
+        # A Conv at the same sigma 10 IS outside the band, and must say so.
+        conv10 = systolic(analyze_model_shift_cut(save(fx.qdq_conv_model(4, 4, 12), tmp, "conv_10")))[0]
+        c.equal("Conv pos(4,4,12) -> sigma", conv10.sigma, 10)
+        c.check("a Conv at sigma 10 IS outside the producer contract", not conv10.in_contract)
+        c.check("and is still not a hazard", not conv10.is_hazard, conv10.reason)
+
         print("\nan operation whose scales cannot be read is UNRESOLVED, never a pass")
         path = save(fx.unresolved_mul_model(), tmp, "unresolved_mul")
         hazards = analyze_model_shift_cut(path)

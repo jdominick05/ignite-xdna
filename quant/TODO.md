@@ -76,6 +76,20 @@ recorded in the handoff and Git history rather than treated as future features.
   `OptimDevice = "cuda"` for PyTorch training loop on Desktop 1 (RX 7900 XTX 24 GB)
   while keeping ORT activation caching on CPU. Validate paired convergence against
   Quark GPU oracle (`--device cuda`). See design note in [DESIGN.md §4.2](DESIGN.md#note-for-implementation-gpu--rocm-acceleration-for-adaround).
+  **Plumbing landed 2026-09-09 (Desktop 2), the acceleration has not.** `OptimDevice` is
+  wired through `--device`, ORT extraction stays on CPU (`InferDevice` still refuses to
+  move), and the CPU path is shown bit-for-bit unchanged
+  ([AdaRound gains an OptimDevice](../docs/BENCHMARKS.md#ignition-adaround-gains-an-optimdevice-and-the-cpu-path-does-not-move-2026-09-09-desktop-2)).
+  What remains is entirely on Desktop 1 and needs a decision first: **no torch build on
+  any machine here can reach a GPU** (`resnet_env` is `torch 2.4.1+cpu`; official ROCm
+  wheels are Linux-only, so the Windows candidates are AMD's ROCm preview or
+  `torch-directml`). Pick and install one, then run
+  `python -m quant adaround ... --device cuda --accept-non-parity` and time it against
+  the CPU wall on a wide model. Note the parity target changes with the device: the
+  transcription is byte-identical to the **CPU** `XINT8_ADAROUND` oracle, and a GPU run
+  can only be gated against a **GPU** oracle produced on the same box and runtime — the
+  code refuses to let a GPU run be quoted as matching the CPU one
+  (`AllowNonParityDevice`, `byte_parity_path` in the sidecar).
 - [x] Connect MODNet's calibration source to the shared inference preprocessing,
   then re-evaluate matte quality against the documented mismatched-preprocessing
   baseline. Do not claim this fixes the quality gap before measuring it.

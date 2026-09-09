@@ -5537,19 +5537,29 @@ operation was still scored and still counted as passing. Those rows are the `<ou
 a `Constant` and a `HardSigmoid`. They are the sub-14 minima in the published distributions —
 no Conv ever produced one.
 
-| model | candidates | analyzed | unresolved | Conv/Gemm sigma min/med/max |
-|---|---|---|---|---|
-| resnet50_xint8_c64 | 55 | 54 | 1 | 18 / 21 / 24 |
-| yolov8n_cut_xint8 | 177 | 120 | **57** | 19 / 21 / 23 |
-| yolov8n-pose_cut_xint8 | 198 | 135 | **63** | 20 / 21 / 23 |
-| regnetx_002_xint8 | 46 | 45 | 1 | **14** / 21 / **30** |
-| resnext50_32x4d_xint8 | 55 | 54 | 1 | **14** / 21 / **30** |
-| bisenetv2_fp32_xint8 | 63 | 59 | 4 | 16 / 21 / 24 |
-| fastdepth_fp32_xint8 | 38 | 38 | 0 | 18 / 21 / 23 |
-| sesr_m7_xint8 | 9 | 9 | 0 | 17 / 21 / 23 |
-| midas_small_cut_xint8 | 97 | 97 | 0 | 15 / 22 / 26 |
-| mobilevit_xint8 | 177 | 142 | 35 | 18 / 22 / 26 |
-| densenet121_xint8 | 187 | 183 | 4 | **14** / 21 / 29 |
+| model | candidates | analyzed | unresolved | Conv/Gemm n | Conv/Gemm sigma min/med/max |
+|---|---|---|---|---|---|
+| resnet50_xint8_c64 | 55 | 54 | 1 | 54 | 18 / 21 / 24 |
+| yolov8n_cut_xint8 | 177 | 120 | **57** | 63 | 19 / 21 / 23 |
+| yolov8n-pose_cut_xint8 | 198 | 135 | **63** | 72 | 20 / 21 / 23 |
+| regnetx_002_xint8 | 46 | 45 | 1 | 45 | **14** / 21 / **30** |
+| resnext50_32x4d_xint8 | 55 | 54 | 1 | 54 | **14** / 21 / **30** |
+| bisenetv2_fp32_xint8 | 63 | 59 | 4 | 57 | 16 / 21 / 24 |
+| fastdepth_fp32_xint8 | 38 | 38 | 0 | 38 | 18 / 21 / 23 |
+| sesr_m7_xint8 | 9 | 9 | 0 | 9 | 17 / 21 / 23 |
+| midas_small_cut_xint8 | 97 | 97 | 0 | 97 | 15 / 22 / 26 |
+| mobilevit_xint8 | 177 | 142 | 35 | 72 (+18 MatMul) | 18 / 22 / 26 |
+| densenet121_xint8 | 187 | 183 | 4 | 183 | **14** / 21 / 29 |
+
+**Scope, because getting this wrong would be the same defect again.** The contract is
+asserted of **Conv and Gemm only** — `adjust_shift_cut` skips every other `op_type`
+(`quant/refine.py::shift_cut`). All 744 analyzed Conv/Gemm across the eleven models sit in
+`[14, 30]`. The 18 analyzed MatMuls and 174 analyzed Muls get a sigma and the `[0, 31]`
+hazard test but **no contract verdict**: they happen to land inside `[14, 30]` here, which
+is a coincidence of these models rather than a rule. A Mul is refined by `shift_write_mul`
+(clamp 0..32) and `shift_swish` (clamp 0..15) — different rules over different quantities —
+so judging one against `[14, 30]` would report "this file was not emitted by
+Quark/Ignition" about a file that was.
 
 Unresolved operations are now excluded from the violation denominator and from every
 distribution, and counted on their own line. `--repair` skips them too: projecting from an
@@ -5579,10 +5589,10 @@ where that alignment costs most, but no divergence has been measured to change a
 this device. BiSeNetV2 — the model the check was asked for — reads zero violations under
 every criterion in the module, and its Add/Concat spread is unremarkable.
 
-**Fixture checks.** `tools/quant_shift_cut_checks.py` (47 checks) builds ONNX graphs whose
+**Fixture checks.** `tools/quant_shift_cut_checks.py` (65 checks) builds ONNX graphs whose
 sigma is chosen by construction and asserts the analyzer reads it back, bands it correctly,
-refuses to score an operation whose scales it cannot read, and leaves an in-contract model
-byte-identical under `--repair`. `tools/quant_passes_checks.py` (54 checks) pins each
+declines to band a Mul at all, refuses to score an operation whose scales it cannot read,
+and leaves an in-contract model byte-identical under `--repair`. `tools/quant_passes_checks.py` (54 checks) pins each
 `quant/passes.py` rewrite against a fixture whose expected node list is known. Neither
 establishes vendor parity — the oracle diff remains that gate — and neither touches hardware.
 

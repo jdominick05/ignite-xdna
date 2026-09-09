@@ -1,11 +1,14 @@
 ================================================================================
 Shift-cut: the producer contract, and the coverage the audit was not reporting
 ================================================================================
-Date        : 2026-09-09 13:20
+Date        : 2026-09-09 13:35
 Machine     : DESKTOP-CBL5NUA (Desktop 2), Ryzen 7 8700G, Phoenix XDNA1
 Env         : resnet_env17
 Branch      : worktree-ignition-dev
-Command     : python -m quant check-shift-cut --branches <models>
+Produced by : a script calling quant.shift_cut.analyze_model_shift_cut directly over
+              the eleven models, NOT eleven CLI invocations. Section 6 is the CLI's
+              own output for one model, verbatim; the equivalent command is
+              `python -m quant check-shift-cut --branches <model>`.
 Hardware    : NONE. Static ONNX inspection only; no InferenceSession was built
               and no hardware context was opened. Safe under peer NPU load.
 Host load   : OMP_NUM_THREADS=4 for every command in this sitting. Note that this
@@ -68,24 +71,37 @@ every distribution, and counted on their own line.
 have called it. "viol" is against the stated [0, 31]; "OoC" is outside the producer
 contract [14, 30] but inside [0, 31] -- an observation about provenance, not a hazard.
 
-model                          cand  anlyz  unres  viol  OoC   Conv/Gemm sigma
+The sigma columns are Conv/Gemm ONLY -- the operations adjust_shift_cut actually
+clamps (quant/refine.py::shift_cut skips every other op_type). "MM" counts analyzed
+MatMuls, which are reported without a contract verdict for the same reason.
+
+model                          cand  anlyz  unres  viol  OoC   Conv/Gemm sigma   MM
                                                                n   min med max
-resnet50_xint8_c64                55     54      1     0    0    54  18  21  24
-yolov8n_cut_xint8                177    120     57     0    0    63  19  21  23
-yolov8n-pose_cut_xint8           198    135     63     0    0    72  20  21  23
-regnetx_002_xint8                 46     45      1     0    0    45  14  21  30
-resnext50_32x4d_xint8             55     54      1     0    0    54  14  21  30
-bisenetv2_fp32_xint8              63     59      4     0    0    57  16  21  24
-fastdepth_fp32_xint8              38     38      0     0    0    38  18  21  23
-sesr_m7_xint8                      9      9      0     0    0     9  17  21  23
-midas_small_cut_xint8             97     97      0     0    0    97  15  22  26
-mobilevit_xint8                  177    142     35     0    0    90  18  22  26
-densenet121_xint8                187    183      4     0    0   183  14  21  29
+resnet50_xint8_c64                55     54      1     0    0    54  18  21  24    0
+yolov8n_cut_xint8                177    120     57     0    0    63  19  21  23    0
+yolov8n-pose_cut_xint8           198    135     63     0    0    72  20  21  23    0
+regnetx_002_xint8                 46     45      1     0    0    45  14  21  30    0
+resnext50_32x4d_xint8             55     54      1     0    0    54  14  21  30    0
+bisenetv2_fp32_xint8              63     59      4     0    0    57  16  21  24    0
+fastdepth_fp32_xint8              38     38      0     0    0    38  18  21  23    0
+sesr_m7_xint8                      9      9      0     0    0     9  17  21  23    0
+midas_small_cut_xint8             97     97      0     0    0    97  15  22  26    0
+mobilevit_xint8                  177    142     35     0    0    72  18  22  26   18
+densenet121_xint8                187    183      4     0    0   183  14  21  29    0
 
 Violations against [0, 31]: 0 on every model, matching the re-audit exactly.
-Outside the producer contract: 0 on every model -- every analyzed Conv/Gemm sits in
-[14, 30], which is what section 1 says must happen and is now checked
-rather than assumed.
+Outside the producer contract: 0 on every model -- all 744 analyzed Conv/Gemm across
+the eleven sit in [14, 30], which is what section 1 says must happen and
+is now checked rather than assumed.
+
+SCOPE, because getting this wrong would be the same defect again. The contract is
+asserted of Conv and Gemm ONLY. adjust_shift_cut skips every other op_type, so the
+18 analyzed MatMuls and 174 analyzed Muls get a sigma and the [0, 31] hazard test but
+NO contract verdict -- they all happen to land inside [14, 30] here, and that is a
+coincidence of these models rather than a rule. A Mul is refined by shift_write_mul
+(clamp 0..32) and shift_swish (clamp 0..15), different rules over different
+quantities; judging one against [14, 30] would report "this file was not emitted by
+Quark/Ignition" about a file that was.
 
 Coverage: 166 of 1102 candidate operations across the eleven models were
 being scored on invented scales. The two head-cut YOLO files are the worst affected
@@ -108,7 +124,7 @@ bisenetv2_fp32_xint8                  57            0            0       0.0%
 fastdepth_fp32_xint8                  38            0            0       0.0%
 sesr_m7_xint8                          9            0            0       0.0%
 midas_small_cut_xint8                 97            0            0       0.0%
-mobilevit_xint8                       90            0            0       0.0%
+mobilevit_xint8                       72            0            0       0.0%
 densenet121_xint8                    183           18            0       9.8%
 
 Two models saturate at both edges: regnetx_002 and resnext50_32x4d. Those are exactly
@@ -197,7 +213,7 @@ These were silently counted as passing before 2026-09-09; they are excluded now.
   - [UNRESOLVED] Mul '/model.4/m.0/cv2/act/Sigmoid_output_0_Mul': a: producer of '/model.4/m.0/cv2/act/Sigmoid_output_0_Mul' is HardSigmoid, not DequantizeLinear; b: producer of '/model.4/m.0/cv2/act/Sigmoid_output_0_Scale' is Constant, not DequantizeLinear -- not analyzed (a sigma here would rest on invented 1.0 scales)
   ... and 47 more.
 
-Conv/Gemm/MatMul shift-cut distribution over 63 analyzed op(s):
+Conv/Gemm shift-cut distribution over 63 analyzed op(s) (the operations adjust_shift_cut actually clamps):
   sigma      min=19, median=21, max=23
   shift_cut  min=5, median=7, max=9   (the vendor's own quantity, contract [0, 16])
   at contract edges: 0 at sigma=14, 0 at sigma=30
@@ -221,7 +237,7 @@ construction and asserts the analyzer reads it back, bands it correctly, and ref
 to score an operation whose scales it cannot read.
 
 $ python tools/quant_shift_cut_checks.py
-47 passed, 0 failed   (exit 0)
+65 passed, 0 failed   (exit 0)
 
 $ python tools/quant_passes_checks.py
 54 passed, 0 failed   (exit 0)
