@@ -92,6 +92,10 @@ with `Select-String` or decode it first.
 [archive](quant/lowlevel_desktop2_20260909_evidence.zip),
 [archive validation](quant/summary_lowlevel_desktop2_20260909_01.log),
 [repository completion checks](quant/check_lowlevel_checkpoint_desktop2_20260909_01.log).
+Both of those describe the tree at the checkpoint commit, `9904662`; the matrix runner
+was extended afterwards to select one calibration pair and to let the timing suite wait
+for a clear host, so its hash in their `source_sha256` manifests no longer matches the
+current file. The `c04` and `t01` logs carry their own manifests and their own commits.
 The checkpoint covers Desktop 2, 2026-09-09:
 
 - `arithmetic_desktop2_20260909_a01_*.log` and `a02_*.log`: all placed Conv fixtures;
