@@ -222,14 +222,30 @@ flat at 231 MB": NPU memory and host memory are different pools.
 
 Second, and the reason this re-run is worth more than a null result: **the original took
 1532 s at 287.94 ms mean inference; this one took 273 s at 46.33 ms — 5.6× the wall clock
-and 6.2× the per-image figure, for byte-identical output.** Whether that gap is a longer
-*DPU command* in the original environment, or only a timing definition that once folded
-the numpy DFL decode into "inference" (the split described below under the iGPU section
-was made for exactly this reason), is **unresolved and is now the load-bearing question**
-— because a ~288 ms command sits ~6× closer to any fixed command watchdog than a ~46 ms
-one, which would make a watchdog the leading candidate rather than contention. Deciding
-it needs the original environment, not another Desktop 2 run: the same model re-timed on
-the laptop, with the current infer/post split, under a witness.
+and 6.2× the per-image figure, for byte-identical output.** Part of that is a timing
+definition, and that part is now settled rather than guessed: at `533b83a` the timed call
+was `forward = lambda x: decode_heads([sess.run(...)…])`, so the original's 287.94 ms
+**included the numpy DFL decode**, where this run's 46.33 ms is `sess.run` alone. The
+per-image figures are therefore not comparable as they stand.
+
+**The wall clock is, and it does not go away.** 1532 s against 273 s is the same loop
+doing the same work — and `npu/yolo_decode.py` and `npu/yolo.py` have had no commits
+since `533b83a`, so the decode being blamed is byte-identical code on both sides. Two
+readings survive, and this repo cannot yet choose between them:
+
+- decode really did cost ~240 ms/image there against ~8 ms/image here, which would be a
+  30× gap in identical numpy on two Zen 4-class CPUs — implausible on its face; or
+- `sess.run` itself was ~270–280 ms there against 46.33 ms here, i.e. the **device** was
+  genuinely ~6× slower, which is what a lower NPU power mode would look like (S0 measured
+  1.80 GHz `default` against 1.03 `balanced` and 0.80 `powersaver` — a 2.25× span on its
+  own) possibly compounded by the contention that this whole line of enquiry started from.
+
+The second is the more likely, and it keeps a **command watchdog** in play as the
+mechanism: a ~280 ms command sits far closer to any fixed timeout than a 46 ms one, and a
+downclocked, contended device is exactly where a long command would get longer still.
+Nothing here measures that, and it is not claimed. What settles it is one run nobody has
+done: **the same model on the laptop, under the current infer/post split and a witness**,
+which yields `sess.run` alone on the machine where the failures actually happened.
 
 ### iGPU vs NPU: is Ryzen AI worth it over DirectML?
 

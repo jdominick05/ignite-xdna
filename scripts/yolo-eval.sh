@@ -84,9 +84,18 @@ for m in "${MODELS[@]}"; do
     # re-run of yolov8l here silently replaced the tracked 1532s laptop-era log
     # with a 273s one, destroying the very number it was being compared against.
     # An untracked log is fine to replace; it is scratch by definition.
+    # Skip, not die: with no --model this loops over every yolov8*.onnx, and most
+    # of their bare logs are committed, so dying would turn the documented
+    # "every model found" default into a refusal on the first model. Refusing
+    # loudly is right only when the caller named one model and meant it.
     if git ls-files --error-unmatch "$log" >/dev/null 2>&1; then
-        die "$log is committed evidence and this run would overwrite it.
+        if [ -n "$ONLY" ]; then
+            die "$log is committed evidence and this run would overwrite it.
 Pass --tag <what-is-different> (e.g. --tag witnessed) to write beside it instead."
+        fi
+        warn "skipping $stem: $log is committed evidence and would be overwritten
+(pass --tag <what-is-different> to re-run every model beside its existing log)"
+        continue
     fi
     fresh=()
     [ "$ep" = npu ] && fresh=(--fresh)
