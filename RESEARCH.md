@@ -644,9 +644,14 @@ been closed:
   MAC/cycle against int8's 204.8–227.6 (`results/aie/w4a8_probe_npu.log`,
   [BENCHMARKS](docs/BENCHMARKS.md#int8int4-is-a-native-vmac-on-aie2-and-int4-weights-cost-nothing-to-store)).
   So the table overstates what AIE2 lacks: W4A8 here is a native multiply, not an unpack.
-  What stays open is whether it helps the *array*, whose int8 GEMM spends ~40% of each tile
-  call outside the kernel (DERIVED from the tile sweep's NPU bracket and this probe's cycles)
-  — that needs a packed-B `whole_array`, not a faster core.
+  **At the array (measured the same day) it helps — through bytes, not MACs.** Packed int4 B
+  makes `whole_array`'s int8 GEMM 1.23–1.26× faster at its best tile (6,195 GOPS, the best
+  `whole_array` rate in this repo) whether the core multiplies natively or widens to int8,
+  while a faster int8 kernel gains nothing: the core is not the critical path there. The gain
+  is tile-dependent (1.06–1.13× at 64/64/64, none at 128/64/64), and what sets it is open —
+  neither the kernel, nor total L3 bytes at a fixed bandwidth, nor bytes per MAC into the core
+  explains all three tiles (`results/aie/w4a8_array_npu.log`,
+  [BENCHMARKS](docs/BENCHMARKS.md#w4a8-on-the-whole-array-int4-weights-pay-at-the-best-int8-tile-through-bytes-rather-than-macs)).
   **Checked whether an actual custom kernel could be built and run on Phoenix from
   material already in this install — a real dead end, confirmed rather than assumed.**
   The same `waic` wheel also bundles `aie4_models/`, a large internal AMD kernel-source

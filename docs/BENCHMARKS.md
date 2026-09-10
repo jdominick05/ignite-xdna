@@ -1835,6 +1835,10 @@ Three hypotheses:
   the 4×2 in the k loop on silicon and is slower per call at every K tested, because its loop
   carries two same-buffer paired loads to the 4×2's one — see
   [int8×int4 is a native `vmac`](#int8int4-is-a-native-vmac-on-aie2-and-int4-weights-cost-nothing-to-store).
+  **Confirmed a second way, 2026-09-10 (the array):** a *measured* one-core gain — the int8 k
+  loop unrolled twice, 176 cycles per call faster — vanishes at the array too (0.995× at
+  64/128/64), and so does int8×int4's doubled MAC rate over the unpack arm there — see
+  [W4A8 on the whole array](#w4a8-on-the-whole-array-int4-weights-pay-at-the-best-int8-tile-through-bytes-rather-than-macs).
 
 **What this does not show.** Nothing here was measured on hardware; the issuing-cycle figures
 are computed from object code and the microseconds come from a run two days earlier. "Not
@@ -2165,11 +2169,75 @@ and not the array.
 array. The `whole_array` int8 GEMM's best tile, 64/128/64 at 2048³ over 16 cores (4852.06
 GOPS, 3,540.7 µs NPU bracket), spends about 6,224 cycles per tile call per core (DERIVED at
 1.80 GHz), of which this probe's control kernel is 3,735; the native kernel's saving at that
-tile, 944 cycles, would be at most ~1.18× if nothing else moved (DERIVED). The other half of
-W4A8 — B at half the bytes through the shim and mem tile — needs a `whole_array` derivative
-with packed B and is unmeasured. The paired-load attribution reads pointer roles from
+tile, 944 cycles, would be at most ~1.18× if nothing else moved (DERIVED). *(Superseded the
+same day, in the wrong direction: at that tile the kernel is not on the array's critical path,
+and packed int4 B alone gives 1.23–1.26× — see
+[W4A8 on the whole array](#w4a8-on-the-whole-array-int4-weights-pay-at-the-best-int8-tile-through-bytes-rather-than-macs).)*
+The other half of W4A8 — B at half the bytes through the shim and mem tile — was not measured
+here; the next section does. The paired-load attribution reads pointer roles from
 post-increments, not resolved addresses. int16×int4 has no AIE2 `mmul` in `aie_api` and was not
 tried. Nothing here touches the accuracy of a W4 network.
+
+### W4A8 on the whole array: int4 weights pay at the best int8 tile, through bytes rather than MACs
+
+2026-09-10, Desktop 2, `whole_array`'s 4 × 4 cores. Backing log `results/aie/w4a8_array_npu.log`;
+design and tools `kernels/w4a8_array/`; every run in `results/aie/w4a8_array_raw.jsonl`.
+
+`whole_array_w4a8.py` is upstream's `whole_array.py` (by way of the bank-placement copy) with
+two things varied: the kernel every core links, and whether B travels as int8 or as packed
+int4 — K × N/2 bytes, low nibble first, at half the bytes through shim, memtile and core DMA.
+The **unpack** arm stores int4 but multiplies at int8's rate, so it isolates the bytes; the
+**native** arm adds the doubled MAC rate. Every arm draws the same A and B, and all 49 runs
+matched numpy exactly and returned the same C.
+
+| 2048³, one sitting, time vs the same tile's upstream | upstream int8 | int8, re-typed | int4, unpack | int4, native (k loop ×2) |
+|---|---|---|---|---|
+| 64/128/64 — the int8 GEMM's best tile | 4,906.23 GOPS | 1.008× | 1.241× | **1.263× — 6,195.33 GOPS** |
+| 64/64/64 | 4,395.14 GOPS | 1.015× | 1.057× | 1.127× |
+| 128/64/64 | 4,753.23 GOPS | 1.016× | 0.971× | 1.015× (not resolved) |
+
+GOPS = 2MKN over the NPU-bracket average, 3 processes × 10 iterations per arm, as the tile sweep
+ran; the upstream arm reproduces that sweep's 4,852.06 and 4,683.89 within this machine's
+day-to-day drift.
+
+- **At 64/128/64 the gain is B's bytes, not the MAC rate.** Every int4 arm lands at
+  1.23–1.26× — the unpack arms included — with ranges that overlap each other and clear every
+  int8 run, while a faster int8 kernel (`i8:unroll2`, 176 fewer cycles per call on one core)
+  runs 0.995×. The kernel is not on the critical path there. Mean int4 time is 0.8035 of
+  upstream's, against 0.800 from packing B's 40% share of the design's 80 MiB of L3 traffic —
+  a prediction written before the run. That makes **6,195.33 GOPS the fastest `whole_array`
+  rate in this repo** (42% of the 16-core int8 peak at 1.80 GHz; the op count is the same 2MKN,
+  the operands int8 × int4).
+- **It is not a bytes law.** At 64/64/64 the MAC rate shows: native beats unpack by 6.7%, ranges
+  disjoint. At 128/64/64 int4 buys nothing, and all three unpack runs sit above every int8 run
+  there — observed, not explained.
+- **The mechanism is unexplained, with three candidates ruled out.** Not the kernel (above).
+  Not total L3 bytes at a fixed bandwidth: the int4 arms at 64/128/64 and upstream int8 at
+  128/64/64 both move 64 MiB, in 2,773–2,846 µs against 3,614 µs, and upstream int8 alone runs
+  23.96 / 21.46 / 18.57 GB/s of L3 traffic at the three tiles. Not bytes into each core per call
+  ([SILICON 3.1](SILICON.md#31-gemm-the-tile-decides-whether-the-core-is-fed)'s bytes-per-MAC
+  model): those same two configurations deliver 8 KB of A and 4 KB of B per call and take
+  4,874–5,002 against 6,353 cycles (DERIVED at 1.80 GHz). That pair also differs in k, in A's
+  and B's DMA run lengths and in B's L3 re-stream count, and 64/64/64 lands between the two, so
+  the effect tracks neither m nor k alone.
+- **The capacity half bought nothing here.** Halving B lets 64/128/64 double-buffer C (60,672 B;
+  the allocator refused int8's 68,864 B, as the L1 arithmetic predicted): 1.255× against 1.263×
+  single-buffered.
+
+**How it was checked.** Compile-only builds of every arm before any device use: the packed-B
+transform lowers with an innermost dimension of one 32-bit word (int8's is two), and all nine
+compile outcomes match the L1 arithmetic, the refused build to the byte. `object_check.py`
+shows every array kernel identical, bundle for bundle, to the one-core probe's compile and to
+the object each run linked, so the probe's loop table describes what ran. One pilot of the
+riskiest arm before the sweep; predictions written down before each block; `xrt-smi` clean at
+the start and end of every block, host load clear, and a 1 s witness that never saw more than
+one context — the runs are short, so it caught one in 10 of its 526 samples.
+
+**What this does not establish.** One shape, three tiles, 3 processes per arm; the spread of
+per-process averages is 2–4%, and every arm whose range overlaps upstream's is reported as
+unresolved. Cycles per call are DERIVED from the NPU bracket, not traced. The tile pair that
+would separate k from DMA run length from B's re-stream count was not run. Nothing here says a
+W4 network keeps its accuracy.
 
 ### MobileViT-XXS does not survive per-tensor INT8, and AdaRound cannot save it
 

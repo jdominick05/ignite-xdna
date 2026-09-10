@@ -222,6 +222,12 @@ Read these before quoting anything below.
   excerpt of `device.yaml` and stays accurate about the table; read as an ISA listing it was
   wrong: `aie::mmul<4,16,8,int8,int4>` is a native `vmac` on AIE2, bit-exact on hardware at one
   per cycle and 512 MACs. `docs/SILICON.md` 1.2 and 5 were re-tagged in the same change.
+- **`w4a8_probe_npu.log`'s "the native kernel would cut at most ~944 of those cycles: <= 1.18x"
+  (DERIVED) is superseded, in the wrong direction,** by `w4a8_array_npu.log`. The bound
+  assumed the array's time outside the kernel stays fixed; at that tile the kernel is not on
+  the critical path at all, and packed int4 B gives 1.23–1.26× through bytes, unpack and native
+  alike. Its "kernel is ~60% of the array's per-call time" is arithmetic, not a reading of what
+  limits the array. The one-core measurements in that log stand.
 
 ## Toolchain bring-up
 
@@ -543,6 +549,20 @@ so moving A away from B could not remove it; and it qualifies H11's 2×2 as not 
 on the core. One core, M = N = 64, K ≤ 256; not the array. Kernels `kernels/w4a8_probe/`;
 written up in
 [`docs/BENCHMARKS.md`](../../docs/BENCHMARKS.md#int8int4-is-a-native-vmac-on-aie2-and-int4-weights-cost-nothing-to-store).
+
+**`w4a8_array_npu.log`** (+ `w4a8_array_raw.jsonl`, `witness_w4a8_array.jsonl`) — the same
+kernels on `whole_array`'s 4 × 4 cores with B packed int4, 2026-09-10, 2048³. **At the int8
+GEMM's best tile, 64/128/64, int4 B makes the array 1.23–1.26× faster through bytes, not
+MACs**: the unpack kernel (int8 MACs) gains as much as the native one, a faster int8 kernel
+gains nothing (0.995×), and `native:unroll2` runs 6,195 GOPS, the best `whole_array` rate in
+this repo. Tile-dependent: 1.06–1.13× at 64/64/64 (native over unpack there), nothing at
+128/64/64. The kernel, total L3 bytes at a fixed bandwidth and bytes per MAC into the core are
+each ruled out as the whole explanation; the mechanism is unexplained. Compile-only builds
+first (packed-B lowering, nine L1 outcomes predicted to the byte), every linked kernel object
+identical to the probe's, 49 of 49 runs bit-exact with one C across all arms, xrt-smi clean at
+every block edge, witness at most one context. Supersedes the probe's ≤ 1.18× bound (above).
+Kernels `kernels/w4a8_array/`; written up in
+[`docs/BENCHMARKS.md`](../../docs/BENCHMARKS.md#w4a8-on-the-whole-array-int4-weights-pay-at-the-best-int8-tile-through-bytes-rather-than-macs).
 
 
 **`pmode_clock_readback_npu.log`** — XRT's `max_clock_frequency_mhz` against power mode

@@ -778,28 +778,6 @@
   there: pyxrt's `max_clock_frequency_mhz` reads 800 in every power mode and is not the
   live clock (an idle reading, it turned out — see the resolution below); `xrt-smi configure
   --pmode turbo` prints a device error and switches anyway. `results/aie/clock_probe_npu.log`.
-- **`device.yaml`'s MAC table is a cost model, not an ISA listing — a missing row is not a
-  missing instruction (2026-09-10).** int8×int4 has no row in its AIE2 `macs_per_cycle` table
-  and was recorded here and in `docs/SILICON.md` as AIE2p only, which is why the W4A8 plan
-  began with an int4→int8 unpack. `aie::mmul<4,16,8,int8,int4>` compiles for aie2 to the same
-  `vmac` builtin as int8×int8 with one configuration field changed, and on this Phoenix core it
-  is bit-exact, one `vmac` per cycle, 512 MACs each (`results/aie/w4a8_probe_npu.log`). Before
-  designing around a "missing" data type, look for it in `aie_api`'s `detail/aie2/` headers and
-  disassemble a build. (Rejected with it: the unpack route as a way to get MACs — AIE2 widens
-  int4 for free in its second load unit, `vldb.unpack.s8.s4`, but that buys bytes, not MACs.)
-- **Upstream `mm.cc`'s k-loop hint never reaches Peano; `AIE_LOOP_UNROLL` does
-  (2026-09-10).** Peano predefines `__AIECC__` for `--target=aie2-none-unknown-elf` — it is not on
-  IRON's command line (`aie/utils/compile/utils.py`, mlir-aie v1.4.2), so check with
-  `clang++ -dM -E`, not by reading the command. An IRON build therefore gets
-  `aie_kernel_utils.h`'s Peano branch: `AIE_LOOP_UNROLL(n)` and `AIE_LOOP_MIN_ITERATION_COUNT(n)`
-  become `clang loop` pragmas, while `AIE_PREPARE_FOR_PIPELINING` and `AIE_LOOP_FLATTEN` are
-  empty — and `AIE_LOOP_FLATTEN` is the only hint on upstream `mm.cc`'s k loop, so Peano sees none
-  there. Unrolling that loop twice (`AIE_LOOP_UNROLL(2)`, byte-identical to the
-  `_Pragma("clang loop unroll_count(2)")` the probe spells it as) is what took the native
-  int8×int4 k loop from 0.5 to 0.8 `vmac` per cycle (`kernels/w4a8_probe/`,
-  `results/aie/w4a8_probe_npu.log` section H). The command itself is reproducible:
-  `kernels/w4a8_probe/static_probe.py --match-cache` reproduces 10 of 10 IRON-built
-  `matmul_i8_i32` objects bundle for bundle.
 - **RESOLVED 2026-09-08 (flagged UNRESOLVED on 2026-09-07) — the two bullets above disagreed
   about `max_clock_frequency_mhz`, and both were right for what they varied.** As flagged: the
   monitoring bullet calls it a live readback (800 idle, 1800 with an active context); the
@@ -829,6 +807,36 @@
   inside another session's 32- and 128-stream classifier sweeps on the same device, the
   second's timeout expiring in the same second that session's XRT aborted; a clean 10 Hz
   monitor beside a hold did not (`results/aie/npu_monitor_poll_rate_npu.log`).
+- **`device.yaml`'s MAC table is a cost model, not an ISA listing — a missing row is not a
+  missing instruction (2026-09-10).** int8×int4 has no row in its AIE2 `macs_per_cycle` table
+  and was recorded here and in `docs/SILICON.md` as AIE2p only, which is why the W4A8 plan
+  began with an int4→int8 unpack. `aie::mmul<4,16,8,int8,int4>` compiles for aie2 to the same
+  `vmac` builtin as int8×int8 with one configuration field changed, and on this Phoenix core it
+  is bit-exact, one `vmac` per cycle, 512 MACs each (`results/aie/w4a8_probe_npu.log`). Before
+  designing around a "missing" data type, look for it in `aie_api`'s `detail/aie2/` headers and
+  disassemble a build. (Rejected with it: the unpack route as a way to get MACs — AIE2 widens
+  int4 for free in its second load unit, `vldb.unpack.s8.s4`, but that buys bytes, not MACs.)
+- **Upstream `mm.cc`'s k-loop hint never reaches Peano; `AIE_LOOP_UNROLL` does
+  (2026-09-10).** Peano predefines `__AIECC__` for `--target=aie2-none-unknown-elf` — it is not on
+  IRON's command line (`aie/utils/compile/utils.py`, mlir-aie v1.4.2), so check with
+  `clang++ -dM -E`, not by reading the command. An IRON build therefore gets
+  `aie_kernel_utils.h`'s Peano branch: `AIE_LOOP_UNROLL(n)` and `AIE_LOOP_MIN_ITERATION_COUNT(n)`
+  become `clang loop` pragmas, while `AIE_PREPARE_FOR_PIPELINING` and `AIE_LOOP_FLATTEN` are
+  empty — and `AIE_LOOP_FLATTEN` is the only hint on upstream `mm.cc`'s k loop, so Peano sees none
+  there. Unrolling that loop twice (`AIE_LOOP_UNROLL(2)`, byte-identical to the
+  `_Pragma("clang loop unroll_count(2)")` the probe spells it as) is what took the native
+  int8×int4 k loop from 0.5 to 0.8 `vmac` per cycle (`kernels/w4a8_probe/`,
+  `results/aie/w4a8_probe_npu.log` section H). The command itself is reproducible:
+  `kernels/w4a8_probe/static_probe.py --match-cache` reproduces 10 of 10 IRON-built
+  `matmul_i8_i32` objects bundle for bundle.
+- **A one-core kernel speedup does not predict the array at these tiles (2026-09-10).** The
+  W4A8 probe bounded the native int8×int4 kernel's array gain at ≤ ~1.18× by assuming the time
+  outside the kernel stays fixed. At the int8 GEMM's best tile (64/128/64) the kernel is not on
+  the critical path at all — the int8 k loop unrolled twice, 176 cycles per call faster on one
+  core, runs 0.995× — and packed int4 B gave 1.23–1.26× through bytes, unpack and native alike;
+  at 64/64/64 the MAC rate does show, at 128/64/64 nothing does (`results/aie/w4a8_array_npu.log`).
+  Measure the design, not the kernel: H11 learned this from a static improvement, this from a
+  measured one.
 - **C2PSA spatial self-attention in YOLOv11 fractures into CPU fallback on XDNA1 (2026-09-08):**
   YOLOv11 introduces the C2PSA (Convolutional 2-Stage Pointwise Spatial Attention) block at the
   deepest stage of the backbone (`/model.10`). In the XINT8 quantized model, the VitisAI EP rejects
