@@ -4727,6 +4727,74 @@ official ROCm wheels are Linux-only, leaving AMD's ROCm-on-Windows preview or
 decision. A GPU run will not be byte-identical to the oracle by construction; the report
 records `byte_parity_path=false` and the run logs a warning. Compare accuracy, never bytes.
 
+### Ignition: a GPU-built AdaRound file on the NPU (2026-09-10, Desktop 2)
+
+Desktop 1 (`JORDAN-PC`, RX 7900 XTX) built two AdaRound files from the same CLE c64 base,
+`models/resnet50_ignition_cle_c64.onnx`, in one conda env (`resnet_env_rocm`: torch
+`2.9.1+rocm7.2.1`, ONNX Runtime 1.29.0). The only difference between them is `--device`:
+- `cuda` wrote `resnet50_ignition_cle_adaround_c64_gpu_desktop1.onnx` (`811a699e…`), with
+  `byte_parity_path: false` in its sidecar.
+- `cpu` wrote `…_cpu_desktop1.onnx` (`93c7d95d…`).
+
+Their build times, and the byte comparison between the two files, belong to Desktop 1's own
+section, "Ignition: AdaRound on the RX 7900 XTX (2026-09-10, Desktop 1)", on branch
+`gpu-adaround-desktop1`. That branch was not merged when this was written, so no figure from
+it is repeated here. This section is the accuracy half the paragraph above asks for, measured
+on the machine that has the NPU.
+
+Both files reached Desktop 2 through `models/` and were hash-checked before running
+(`results/quant/sha256_resnet50_ignition_cle_adaround_c64_desktop1_eval.log`). All three files
+below ran in one sitting on Desktop 2, through `pipelines/resnet50/4_run.py` over the 1,000
+labeled images in `data/eval`:
+- CPU first, then NPU with `--fresh` into a worktree-local `modelcachekey`.
+- `xrt-smi` read "No hardware contexts running" before each model (`contexts_…`), and the EP
+  report was read after each (`diag_…`).
+- `tools/hwinfo_npu_bridge.exe` recorded the whole NPU half
+  (`witness_resnet50_ignition_cle_adaround_c64_desktop1_eval.jsonl`). Over 60 samples there
+  was never more than one hardware context, there were three context identities (one
+  `python.exe` per model), and the power mode stayed Default throughout.
+
+The pair wrapper `scripts/quant-validate.sh` could not run unchanged. Its first step,
+`tools/quant_compare.py`, needs a Quark oracle's `.reference.json`, and none of these three is
+a Quark oracle. The rest of its ResNet branch was run by hand, with the same runner,
+labeled-count assertion, context gate and log naming.
+
+| File | Built | CPU top-1 / top-5 | NPU top-1 / top-5 | NPU mean | Placed |
+|---|---|---|---|---|---|
+| `resnet50_ignition_cle_adaround_c64.onnx` (`bf6053…`) | Desktop 2, `resnet_env`, torch `2.4.1+cpu` | 79.40 / 93.00 | 79.50 / 93.30 | 5.24 ms | 393 / 395 |
+| `…_c64_gpu_desktop1.onnx` (`811a699e…`) | Desktop 1, `--device cuda`, torch `2.9.1+rocm7.2.1` | 78.80 / 93.20 | 78.90 / 92.80 | 5.26 ms | 393 / 395 |
+| `…_c64_cpu_desktop1.onnx` (`93c7d95d…`) | Desktop 1, `--device cpu`, same env | 79.00 / 92.70 | 78.90 / 93.10 | 5.24 ms | 393 / 395 |
+
+**The reference is the control, and it holds.** 79.40% CPU and 79.50% NPU are the figures
+[AdaRound parity](#ignition-adaround-parity) recorded on 2026-09-08, so this sitting and its
+fresh compiles are sound. Its latency (5.24 ms here, 5.21 ms then) comes from a different day
+and is not compared.
+
+**The GPU changes neither placement nor speed.** The GPU-built file compiles to the same
+393/395 split and runs at the same ~5.2 ms. That is expected: AdaRound moves weight values,
+never the graph or a scale.
+
+**Its effect on accuracy is small and not yet attributable.**
+- Against the reference, the GPU-built file reads 0.60 points lower on both CPU and NPU: six
+  images out of 1,000.
+- Its CPU-built twin comes from the same env and torch, with only the device changed, and reads
+  79.00 CPU / 78.90 NPU. **The device-only difference is 0.20 points on CPU and 0.00 on the
+  NPU.**
+- What remains goes with what separates both Desktop 1 files from the reference, which is the
+  torch build (2.9.1 against 2.4.1) and the ONNX Runtime (1.29.0 against 1.22.1). Desktop 1's
+  section reports a control that separates those two. Until its logs are merged, both stay
+  candidates here.
+- Nothing here separates any of it from sampling noise. Every difference is between zero and
+  six images on a 1,000-image set, top-5 moves in both directions across the three files
+  (92.70 to 93.30), the runner logs no per-image predictions, and no paired test was run.
+
+The standing reading is **no measurable GPU penalty at this resolution**. The 0.4 to 0.6-point
+gap between Desktop 1's files and the reference is unexplained. The GPU-built file is not an
+oracle match and must not be quoted as one.
+
+Not measured: a paired per-image test over these three files, an evaluation set larger than
+the repo's 1,000 labeled images, and any GPU-built YOLO or MODNet file.
+
 ### Ignition: YOLOv8n-cut AdaRound parity
 
 `python -m quant adaround` now takes a head-cut YOLOv8n base: the family comes from the
