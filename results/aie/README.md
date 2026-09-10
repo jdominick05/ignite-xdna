@@ -217,6 +217,11 @@ Read these before quoting anything below.
 - **The consumer-sizing compression experiment in `notes_yolov8s_gap.md` is VOID**, as the note itself records: its
   multi-channel design timed out on its own golden `arange` input unpatched, so consumer sizing was not the only
   variable. The later single-channel results in the same note stand.
+- **`notes_aie2_device_dtypes.log`'s "AIE2 is missing entries AIE2p has: … no int8xint4" is
+  superseded as a statement about the silicon** by `w4a8_probe_npu.log`. The log is a verbatim
+  excerpt of `device.yaml` and stays accurate about the table; read as an ISA listing it was
+  wrong: `aie::mmul<4,16,8,int8,int4>` is a native `vmac` on AIE2, bit-exact on hardware at one
+  per cycle and 512 MACs. `docs/SILICON.md` 1.2 and 5 were re-tagged in the same change.
 
 ## Toolchain bring-up
 
@@ -520,6 +525,23 @@ that would settle it is the trace unit rather than wall time — read `ACTIVE` a
 `LOCK_STALL` in core cycles inside the dispatch, where host contention cannot reach — which
 needs a trace hook in `whole_array`. Harness `kernels/bank_placement/`; written up in
 [`docs/BENCHMARKS.md`](../../docs/BENCHMARKS.md#two-loads-in-one-bank-cost-a-cycle-and-the-int8-gemm-has-that-collision-where-bf16-does-not).
+
+**`w4a8_probe_npu.log`** (+ `w4a8_probe_raw.jsonl`, `witness_w4a8_probe.jsonl`) — int4
+weights on one core, 2026-09-10. **int8×int4 is a native `vmac` on AIE2**, which `device.yaml`'s
+MAC table omits: `aie::mmul<4,16,8,int8,int4>` is bit-exact on hardware (B two per byte, low
+nibble first, two's complement) and issues one per cycle at 512 MACs, so a k loop runs 372.4
+MAC/cycle against 204.8 for upstream's int8 loop as IRON builds it and 227.6 for the best int8
+schedule — 1.82× / 1.64×, one pragma (k loop unrolled twice) away from its default build's 1.17×.
+Widening int4 to int8 on load (`vldb.unpack.s8.s4`) costs nothing and buys only bytes. Static
+tables from IRON's exact compile command (10/10 cached objects reproduced), trace-unit cycles
+per call identical across 2 processes × 20 calls in every cell, the IRON object compared with
+the static compile in all 54 processes, calibration gate PASS, witness at most one context.
+Also carries a reading that bears on H12: the extra cycles in these loops match paired loads of
+two rows of one buffer, and upstream's int8 loop's one pair reads two A tiles — not A with B —
+so moving A away from B could not remove it; and it qualifies H11's 2×2 as not strictly better
+on the core. One core, M = N = 64, K ≤ 256; not the array. Kernels `kernels/w4a8_probe/`;
+written up in
+[`docs/BENCHMARKS.md`](../../docs/BENCHMARKS.md#int8int4-is-a-native-vmac-on-aie2-and-int4-weights-cost-nothing-to-store).
 
 
 **`pmode_clock_readback_npu.log`** — XRT's `max_clock_frequency_mhz` against power mode

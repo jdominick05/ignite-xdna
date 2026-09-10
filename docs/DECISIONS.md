@@ -778,6 +778,23 @@
   there: pyxrt's `max_clock_frequency_mhz` reads 800 in every power mode and is not the
   live clock (an idle reading, it turned out — see the resolution below); `xrt-smi configure
   --pmode turbo` prints a device error and switches anyway. `results/aie/clock_probe_npu.log`.
+- **`device.yaml`'s MAC table is a cost model, not an ISA listing — a missing row is not a
+  missing instruction (2026-09-10).** int8×int4 has no row in its AIE2 `macs_per_cycle` table
+  and was recorded here and in `docs/SILICON.md` as AIE2p only, which is why the W4A8 plan
+  began with an int4→int8 unpack. `aie::mmul<4,16,8,int8,int4>` compiles for aie2 to the same
+  `vmac` builtin as int8×int8 with one configuration field changed, and on this Phoenix core it
+  is bit-exact, one `vmac` per cycle, 512 MACs each (`results/aie/w4a8_probe_npu.log`). Before
+  designing around a "missing" data type, look for it in `aie_api`'s `detail/aie2/` headers and
+  disassemble a build. (Rejected with it: the unpack route as a way to get MACs — AIE2 widens
+  int4 for free in its second load unit, `vldb.unpack.s8.s4`, but that buys bytes, not MACs.)
+- **An IRON build ignores `aie_kernel_utils.h`'s loop hints (2026-09-10).** IRON's Peano
+  compile (`aie/utils/compile/utils.py`, mlir-aie v1.4.2) defines neither `__chess__` nor
+  `__AIECC__`, so every `AIE_LOOP_*` and `AIE_PREPARE_FOR_PIPELINING` in an mlir-aie kernel —
+  upstream `mm.cc`'s included — expands to nothing when IRON builds it. A raw
+  `_Pragma("clang loop unroll_count(2)")` in the kernel source does survive, and it is what took
+  the native int8×int4 k loop from 0.5 to 0.8 `vmac` per cycle (`kernels/w4a8_probe/`). The
+  command itself is reproducible: `kernels/w4a8_probe/static_probe.py --match-cache`
+  reproduces 10 of 10 IRON-built `matmul_i8_i32` objects bundle for bundle.
 - **RESOLVED 2026-09-08 (flagged UNRESOLVED on 2026-09-07) — the two bullets above disagreed
   about `max_clock_frequency_mhz`, and both were right for what they varied.** As flagged: the
   monitoring bullet calls it a live readback (800 idle, 1800 with an active context); the

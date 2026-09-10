@@ -1,0 +1,775 @@
+W4A8 on AIE2: int8 x int4 is a native vmac on this silicon, and int4 storage costs nothing
+==========================================================================================
+
+Desktop 2 (DESKTOP-CBL5NUA; Ryzen 7 8700G, Phoenix XDNA1, Windows 11), 2026-09-10, mlir-aie
+v1.4.2 ironenv (Peano llvm-aie 22). One core tile: IRON Tile(0, 2), which the trace packet
+header reports as row 2, physical column 1. Power mode Default throughout.
+
+QUESTION
+--------
+TODO 3.2's W4A8 item set a "step zero": build an int4 unpack primitive and confirm it is
+single-cycle before making any tile-geometry claim, because docs/SILICON.md (1.2 and 5) lists
+int8 x int4 MACs as AIE2p (Strix) only. That listing is SPEC from OGOAT's device.yaml, whose
+AIE2 macs_per_cycle table has no int8 x int4 row -- a cost model, the same source whose missing
+int16 x int16 row was once read as an ISA statement. aie_api's AIE2 headers define
+aie::mmul<M,K,N,int8,int4> (include/aie_api/detail/aie2/mmul_8_4.hpp: shapes 4x16x8, 8x16x8,
+4x32x8), and Peano's aiev2/aiev2_vmult.h lowers the 4x16x8 mac to
+__builtin_aiev2_I512_I512_ACC1024_acc32_mac_conf -- the same builtin int8 x int8's 4x8x8 mac
+uses -- with the B-mode field of the MAC configuration word set to 0 where int8 x int8 sets 1.
+So the question became two: does the silicon run that B mode correctly and at one vmac per
+cycle, and what does the alternative the item proposed (store int4, unpack to int8 in the core,
+run the stock int8 mmul) actually cost.
+
+ANSWER
+------
+1. int8 x int4 IS native on AIE2. mm_i8i4_native -- aie::mmul<4,16,8,int8,int4>, 512 MACs per
+   vmac against int8 x int8's 256 -- matched an int64 reference exactly in every build it was
+   run in: 9 builds, 18 processes, each checked on its first call and again on its last timed
+   call, 0 mismatches of 4,096 outputs each time. The layout that matches is B packed two per
+   byte, element 2i in the LOW nibble, two's complement (MEASURED; the verifier would also have
+   reported a match under nibble-swapped or unsigned readings, and none was needed).
+   SILICON.md's "int8 x int4 -- AIE2p only" is SUPERSEDED.
+
+2. It issues at one vmac per cycle. native:default's k loop is 16 bundles whose last 8 are
+   back-to-back int8 x int4 vmacs (no loads between them); one execution of it measures 17.03
+   cycles (the K = 128 -> 256 slope, one execution per unit K). A B mode that held the
+   multiplier for two cycles would need at least 24. The latency has a second, independent
+   check: this core is statically scheduled and the compiler covers operand latency with
+   explicit nops rather than a hardware interlock (tools/aie_disasm.py), so an int4-mode vmac
+   slower to produce its result than Peano's machine model assumes would have been read early
+   and come out WRONG, not slow. Every output was exact.
+
+3. The marginal k-loop rate on one core goes from 204.8 MAC/cycle (upstream's int8 loop as
+   IRON builds it) or 227.6 (the best int8 schedule found here) to 372.4 with the native
+   kernel: 1.82x / 1.64x. Per call at 64x256x64 that is 6,295 -> 4,199 cycles (1.50x against
+   the control, 1.40x against the best int8); at 64x64x64, where a call is mostly C going in and
+   out, 2,447 -> 2,160 (1.13x). Reaching it takes one clang pragma: the native loop is only
+   software-pipelined with its k loop unrolled twice (INNER_UNROLL2, a raw pragma in the .cc,
+   which survives an IRON build where aie_kernel_utils.h's AIE_LOOP_* hints do not). As IRON
+   builds it by default it runs 17.03 cycles per unit K -- 240.5 MAC/cycle, 1.17x -- because
+   its 512-bit A operands double the registers a 4x2 expansion holds and the loads never
+   overlap the vmacs.
+
+4. The unpack alternative costs nothing and buys only bytes. AIE2's second load unit
+   sign-extends int4 to int8 inside the load -- vldb.unpack.s8.s4 -- so a standalone unpack
+   loop runs at a plain copy's 2 cycles per 64 elements, and inside the int8 mmul loop (the
+   no-unroll build) it is the same 9 bundles and 8 vmacs as int8 and ran exactly that on
+   silicon: 18.01 cycles per unit K against 18.0 static. It halves B's bytes in L1 and on the
+   wire and adds no MACs. Two compiler outcomes worth knowing: under IRON's default build at
+   K=64 the unpack kernel unrolls its k loop fully and spills (113-bundle loop, 1,312 B frame,
+   48 stack references inside the loop) -- and still measures 2,119 cycles per call, faster
+   than every int8 arm at K=64 and 13 cycles behind native:default's 2,106, because that large
+   loop absorbs the C loads (311 cycles outside it against 1,082-1,693 for every other arm); at
+   K >= 128 the same default build
+   compiles to a clean 32-bundle loop of 32 vmacs and measures 17.01 cycles per unit K, faster
+   than any int8 schedule here -- a better unroll, not int4. Read the static "spill" column as a
+   schedule shape, not as a verdict.
+
+5. A second, unrelated mechanism runs through every k loop here: extra cycles per loop
+   execution that no bundle accounts for, matching the loop's paired loads from ONE buffer.
+   The placement settles which pair it cannot be. A, B and C land in three different banks in
+   every build (tools/aie_bank_check.py: bank 0 empty, C in bank 1, A and B in banks 2 and 3),
+   so a pair reading A and B is cross-bank and costs nothing -- yet the int8 control's single
+   paired load costs exactly 1 cycle per iteration. That pair is therefore not A with B; the
+   pointer roles name it (both loads advance by one A tile: two rows of A, one bank). The
+   positive control is unpack:no-unroll: the same 9 bundles and 8 vmacs, its one paired load
+   an A with a B by the same reading, and it measures 0.03 extra cycles per unit K -- zero.
+   Where every paired load's pointer role resolves (6 builds) the same-buffer pair count equals
+   the measured extra cycles per execution exactly: 1/1, 2/2, 2/2, 2/2, 0/0, 1/1. The 3 native
+   builds have unresolved pointers and each sits inside its bounds. None of this contradicts
+   the bank validation in docs/BENCHMARKS.md, where separating A from B removed 1,024 cycles
+   per panel: that was a different kernel whose paired load read A and B. Upstream mm.cc's own int8 loop, rebuilt with IRON's exact command (at
+   64/64/64 that is bundle for bundle the matmul_i8_i32_86901378.o behind the 4607.05 GOPS
+   build, section B), has exactly one paired load in its 9-bundle hardware loop, and it is
+   `vlda [p4], #0x20 | vldb [p3], #0x20`: both pointers advance by one A tile (0x20), where
+   every B pointer in this kernel advances by 0x200 (section D). It reads two rows of A. The
+   local control has the same one A&A pair and measured 20.0 cycles per unit K against 18.0
+   static, so upstream's loop is predicted -- not measured here -- to take 10 cycles per
+   9-bundle iteration, 11% over its schedule. This bears on TODO 3.1's H12: docs/BENCHMARKS.md
+   reads that loop's paired load as A colliding with B (both sat in bank 2 in that build), and
+   H12 moved A into the empty bank 3 and saw no reliable change. A pair that reads two rows of
+   one buffer collides in whatever bank the buffer sits, so that move could not have removed
+   it -- a reason for H12's null that is independent of H11's (the core not being the critical
+   path). It does not say which reason dominates.
+
+6. The same data qualifies H11. i8i8_2x2 is this probe's re-typed copy of the 2x2 template
+   H11 switched the int8 path to, and statically it is exactly H11's figures: an 8-bundle loop
+   of 8 vmacs, 1.000 vmac/cycle, 32-byte frame. On one core it TIES the 4x2 in the k loop
+   (20.008 against 20.000 cycles per unit K) because its 8-bundle body carries two same-buffer
+   pairs to the 4x2's one, which eats the static gain exactly, and it is SLOWER per call at
+   every K -- 2,717 / 3,998 / 6,559 against 2,447 / 3,735 / 6,295, a per-call intercept of
+   1,436 against 1,167 cycles. Both move the same 128 C tiles per call; the 2x2 splits them over
+   twice as many accumulator groups (32 against 16), each with its own k-loop prologue and
+   epilogue, which is consistent with the higher intercept but was not isolated.
+   docs/BENCHMARKS.md's H11 bullet says to keep the 2x2 lines as "free and strictly better"; on
+   this core and these tiles they are neither, and a per-call loss of that size sits inside
+   the +-2% the array showed. That is this probe's copy, one core, M = N = 64 -- not upstream's
+   own 2x2 build and not the array. Separately, i8i8:unroll2 (the 4x2 with one raw pragma) is
+   the best int8 schedule here: 18.0 cycles per unit K and 5,863 cycles per call at K=256, 6.9%
+   under the control. It is a lever, not a recommendation: nothing here puts it on the array.
+
+WHAT THIS DOES NOT ESTABLISH
+----------------------------
+- One core, M = N = 64, K = 64/128/256, one A/B/C placement. Not the array. The whole_array
+  int8 GEMM's best measured tile, 64/128/64 at 2048^3 over 16 cores (4852.06 GOPS, 3,540.7 us
+  NPU-bracket average; results/aie/gemm_tile_sweep_c_single_buffer_npu.log), spends about 6,224
+  cycles per tile call per core (DERIVED: 3,540.7 us x 1.80 GHz / 1,024 calls per core). This
+  probe's int8 control spends 3,735 on one call of that tile, so the kernel is ~60% of the
+  array's per-call time, and the native kernel (2,791 at that tile) would cut at most ~944 of
+  those cycles: <= 1.18x if everything else stayed fixed (DERIVED). The bandwidth half of W4A8 -- B
+  at half the bytes through the shim and mem tile -- is the unmeasured part, and needs a
+  whole_array derivative with packed B. That is the next step, not this one.
+- The paired-load attribution (5) reads pointer roles off each loop's post-increments; it is not
+  a resolved address trace. Exact where it resolves, unproven for the three native builds.
+- int16 x int4 has no AIE2 mmul in aie_api and was not tried; bfp16 was not tried.
+- Nothing here touches the accuracy of a W4 network: this is the arithmetic unit, not a
+  quantization recipe.
+- Trace cycles are clock-independent. Only the DERIVED array comparison uses 1.80 GHz.
+
+METHOD
+------
+Static (compile only): kernels/w4a8_probe/static_probe.py compiles w4a8_kernels.cc and upstream
+aie_kernels/aie2/mm.cc with the Peano command IRON's own compile step builds
+(aie/utils/compile/utils.py, minus the -MD dependency-file pair) and reads each kernel's
+hardware-loop body with tools/aie_disasm.py. --match-cache compiles upstream mm.cc over a dims
+grid and compares against every IRON-built matmul_i8_i32 object left in ~/.npu/cache: 10 of 10
+distinct cached bodies (41 objects) reproduced bundle for bundle. IRON defines neither
+__chess__ nor __AIECC__, so every AIE_LOOP_* hint in aie_kernel_utils.h is empty in an IRON
+build; the probe's k-loop modes are raw clang pragmas in the .cc (INNER_NO_UNROLL,
+INNER_UNROLL2). mm_i8i8_local is upstream's 4x2 kernel source re-typed; Peano gives it a
+different 9-bundle schedule from upstream's (rotation and register moves differ) with the same
+8 vmacs, 8 loads and one A&A paired load. It is the control because upstream's own function
+fires event0/event1 itself and cannot sit inside the wrapper's bracket.
+
+Hardware: kernels/w4a8_probe/w4a8_probe.py -- one Worker on Tile(0, 2); A, B, C single-buffered
+ObjectFifos; stack 4,096 B in every arm. The kernel wrapper zeroes C, brackets ONE kernel call
+with event0/event1 (no DMA or lock inside the bracket), then emits 256 filler event pairs so
+the packet reaches host memory; clock_probe's corrected frame decoder reads the stamps. A is
+uniform int8 including -128 and 127, B uniform in [-8, 7] including both, for every kernel --
+the int8 control too -- so one int64 reference serves all of them. After the first call the
+kernel function inside IRON's built object is compared bundle for bundle against static_probe's
+compile of the same source and defines: identical in all 54 processes. kernels/w4a8_probe/
+sweep.py ran 9 arms x K in {64, 128, 256} x 2 repetitions, one fresh process per row (@iron.jit
+keys its cache on the generator and its CompileTime args only, so a source hash goes in as
+`rev`; two designs in one process once returned wrong data on this machine), arms rotated
+within each K and K rotated across repetitions. Every (arm, K) cell returned ONE cycle count
+across its 2 processes x 20 timed calls. kernels/w4a8_probe/fit.py fits cycles = a + b*K.
+
+Gates: xrt-smi "No hardware contexts running on device" before the block, at the sweep's
+start and at its end; tools/host_load.ps1 CLEAR (0.23 busy cores of 16, 17.8 GB free);
+pmu_probe --calibrate reproduced 2.0003 and 9.0001 cycles/iteration against 2.000 and 9.000
+(GATE 1 PASS); hwinfo_npu_bridge at 1 s for the whole block (witness_w4a8_probe.jsonl: 798
+samples 11:06:00-11:19:17, never more than one hardware context, power mode Default in every
+sample). The one other session on this machine confirmed it held no NPU context.
+
+THE K LOOP, K = 128 -> 256 (computed from the per-K table in section E; exact two-point slope)
+  arm                  cyc/unit K  MAC/cycle  vs control  static cyc/K  extra/K  extra/exec  same-buffer pairs (unresolved)
+  i8i8:default           20.000      204.8      1.00x        18.0        2.0        1           1 (0)
+  i8i8:unroll2           18.000      227.6      1.11x        16.0        2.0        2           2 (0)
+  i8i8_2x2:default       20.008      204.7      1.00x        16.0        4.0        2           2 (0)
+  unpack:default         17.008      240.8      1.18x        16.0        1.0        2           2 (0)
+  unpack:no-unroll       18.008      227.5      1.11x        18.0        0.0        0           0 (0)
+  unpack:unroll2         18.008      227.5      1.11x        17.0        1.0        1           1 (0)
+  native:default         17.031      240.5      1.17x        16.0        1.0        1           0 (2)
+  native:unroll2         11.000      372.4      1.82x        10.0        1.0        2           1 (3)
+  native_2x2:unroll2     14.008      292.4      1.43x        13.0        1.0        1           0 (3)
+MAC/cycle = 64*64 / slope. static cyc/K = (vmacs per unit K / vmacs per loop execution) x loop
+bundles, from the IRON object's own loop (section E). extra/exec = the extra cycles per loop
+execution. The pair counts are static_probe --paired on the K=128 builds (section D), which the
+build check shows are the objects that ran.
+
+FILES
+-----
+kernels/w4a8_probe/{w4a8_kernels.cc, static_probe.py, w4a8_probe.py, sweep.py, fit.py};
+results/aie/w4a8_probe_raw.jsonl (every row, every call's cycle count, verification and build
+check); results/aie/witness_w4a8_probe.jsonl (the 1 s monitor for the whole block).
+Sections below are the raw outputs, in the order they were produced: A static tables,
+B the recipe check, C the calibration gate, D the paired-load reading, E the hardware pilot,
+sweep and fit, F the local-vs-upstream loop comparison, G the witness summary.
+
+==========================================================================================
+A. STATIC TABLES -- python kernels/w4a8_probe/static_probe.py --dims 64x64x64,64x128x64,64x256x64
+==========================================================================================
+W4A8 static probe (Peano, IRON's compile command)
+  clang    C:\Users\<user>/mlir-aie/ironenv/Lib/site-packages\llvm-aie\bin\clang++.exe
+  flags    -std=c++20 -Wno-parentheses -Wno-attributes -Wno-macro-redefined -Wno-empty-body -O2 -DNDEBUG -D__AIE_API_AIE_ADF_HPP__ --target=aie2-none-unknown-elf
+  source   C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\<worktree>\kernels\w4a8_probe\w4a8_kernels.cc
+  upstream C:\Users\<user>/mlir-aie/ironenv/Lib/site-packages\mlir_aie\include\aie_kernels\aie2\mm.cc
+
+Standalone loops, 64 elements per iteration
+  copy_i8    2 bundles/iteration = 32 elements/cycle, unpack ops 0, stack refs 0
+        0x0090  vldb	wh0, [p0, #0x20] | vst	wh2, [p1], #0x40
+        0x00a0  vlda	wh2, [p0], #0x40 | vst	wh0, [p1, #0x20]
+  unpack_i4  2 bundles/iteration = 32 elements/cycle, unpack ops 1, stack refs 0
+        0x0090  vldb.unpack.s8.s4	x0, [p0], m0 | vst	wl0, [p1], #0x40
+        0x00a0  vst	wh0, [p1, #0x20]
+
+GEMM kernels: the hardware loop that issues the most vmacs, per kernel
+       MxKxN     k loop  kernel               bundles vmacs  vmac/cyc   MAC/cyc unpacks lp stk fn stk  frame
+  ----------------------------------------------------------------------------------------------------------
+    64x64x64   upstream  matmul_i8_i32              9     8     0.889     227.6       0      0     30    416
+    64x64x64    default  mm_i8i8_local              9     8     0.889     227.6       0      0     14    160
+    64x64x64    default  mm_i8i4_unpack           113    64     0.566     145.0      14     48     84   1312
+    64x64x64    default  mm_i8i4_native            16     8     0.500     256.0       0      0     16     32
+    64x64x64    default  mm_i8i8_local_2x2          8     8     1.000     256.0       0      0      4     32
+    64x64x64    default  mm_i8i4_unpack_2x2        63    32     0.508     130.0      14     14     32    480
+    64x64x64    default  mm_i8i4_native_2x2         9     4     0.444     227.6       0      0      4     32
+    64x64x64  no-unroll  mm_i8i8_local              9     8     0.889     227.6       0      0     14    160
+    64x64x64  no-unroll  mm_i8i4_unpack             9     8     0.889     227.6       2      0      4     32
+    64x64x64  no-unroll  mm_i8i4_native            16     8     0.500     256.0       0      0     16     32
+    64x64x64  no-unroll  mm_i8i8_local_2x2          7     4     0.571     146.3       0      0      4     32
+    64x64x64  no-unroll  mm_i8i4_unpack_2x2         6     4     0.667     170.7       2      0      4     32
+    64x64x64  no-unroll  mm_i8i4_native_2x2         9     4     0.444     227.6       0      0      4     32
+    64x64x64    unroll2  mm_i8i8_local             16    16     1.000     256.0       0      0     22    288
+    64x64x64    unroll2  mm_i8i4_unpack            17    16     0.941     240.9       4      0     20    160
+    64x64x64    unroll2  mm_i8i4_native            18    16     0.889     455.1       0      0     22    160
+    64x64x64    unroll2  mm_i8i8_local_2x2          8     8     1.000     256.0       0      0      4     32
+    64x64x64    unroll2  mm_i8i4_unpack_2x2         9     8     0.889     227.6       4      0      4     32
+    64x64x64    unroll2  mm_i8i4_native_2x2        13     8     0.615     315.1       0      0      4     32
+
+   64x128x64   upstream  matmul_i8_i32              9     8     0.889     227.6       0      0     38    416
+   64x128x64    default  mm_i8i8_local              9     8     0.889     227.6       0      0     22    160
+   64x128x64    default  mm_i8i4_unpack            32    32     1.000     256.0       8      0     12     32
+   64x128x64    default  mm_i8i4_native            16     8     0.500     256.0       0      0     20     64
+   64x128x64    default  mm_i8i8_local_2x2          8     8     1.000     256.0       0      0      4     32
+   64x128x64    default  mm_i8i4_unpack_2x2        17    16     0.941     240.9       8      0      4     32
+   64x128x64    default  mm_i8i4_native_2x2         9     4     0.444     227.6       0      0      4     32
+   64x128x64  no-unroll  mm_i8i8_local              9     8     0.889     227.6       0      0     22    160
+   64x128x64  no-unroll  mm_i8i4_unpack             9     8     0.889     227.6       2      0     12     32
+   64x128x64  no-unroll  mm_i8i4_native            16     8     0.500     256.0       0      0     20     64
+   64x128x64  no-unroll  mm_i8i8_local_2x2          7     4     0.571     146.3       0      0      4     32
+   64x128x64  no-unroll  mm_i8i4_unpack_2x2         6     4     0.667     170.7       2      0      4     32
+   64x128x64  no-unroll  mm_i8i4_native_2x2         9     4     0.444     227.6       0      0      4     32
+   64x128x64    unroll2  mm_i8i8_local             16    16     1.000     256.0       0      0     30    288
+   64x128x64    unroll2  mm_i8i4_unpack            17    16     0.941     240.9       4      0     28    160
+   64x128x64    unroll2  mm_i8i4_native            20    16     0.800     409.6       0      0     30    160
+   64x128x64    unroll2  mm_i8i8_local_2x2          8     8     1.000     256.0       0      0      4     32
+   64x128x64    unroll2  mm_i8i4_unpack_2x2         9     8     0.889     227.6       4      0      4     32
+   64x128x64    unroll2  mm_i8i4_native_2x2        13     8     0.615     315.1       0      0      4     32
+
+   64x256x64   upstream  matmul_i8_i32              9     8     0.889     227.6       0      0     38    416
+   64x256x64    default  mm_i8i8_local              9     8     0.889     227.6       0      0     22    160
+   64x256x64    default  mm_i8i4_unpack            32    32     1.000     256.0       8      0     12     32
+   64x256x64    default  mm_i8i4_native            16     8     0.500     256.0       0      0     20     64
+   64x256x64    default  mm_i8i8_local_2x2          8     8     1.000     256.0       0      0      4     32
+   64x256x64    default  mm_i8i4_unpack_2x2        17    16     0.941     240.9       8      0      4     32
+   64x256x64    default  mm_i8i4_native_2x2         9     4     0.444     227.6       0      0      4     32
+   64x256x64  no-unroll  mm_i8i8_local              9     8     0.889     227.6       0      0     22    160
+   64x256x64  no-unroll  mm_i8i4_unpack             9     8     0.889     227.6       2      0     12     32
+   64x256x64  no-unroll  mm_i8i4_native            16     8     0.500     256.0       0      0     20     64
+   64x256x64  no-unroll  mm_i8i8_local_2x2          7     4     0.571     146.3       0      0      4     32
+   64x256x64  no-unroll  mm_i8i4_unpack_2x2         6     4     0.667     170.7       2      0      4     32
+   64x256x64  no-unroll  mm_i8i4_native_2x2         9     4     0.444     227.6       0      0      4     32
+   64x256x64    unroll2  mm_i8i8_local             16    16     1.000     256.0       0      0     30    288
+   64x256x64    unroll2  mm_i8i4_unpack            17    16     0.941     240.9       4      0     28    160
+   64x256x64    unroll2  mm_i8i4_native            20    16     0.800     409.6       0      0     30    160
+   64x256x64    unroll2  mm_i8i8_local_2x2          8     8     1.000     256.0       0      0      4     32
+   64x256x64    unroll2  mm_i8i4_unpack_2x2         9     8     0.889     227.6       4      0      4     32
+   64x256x64    unroll2  mm_i8i4_native_2x2        13     8     0.615     315.1       0      0      4     32
+
+vmac/cyc is the loop's issue rate against a ceiling of 1.000; MAC/cyc multiplies
+it by the MACs each vmac performs (256 int8 x int8, 512 int8 x int4). Both are the
+steady state of ONE loop, not a whole-kernel figure: C loads and stores, and the
+loop's prologue and epilogue, sit outside it. lp stk / fn stk count loads and
+stores through the stack pointer inside that loop and in the whole function.
+
+==========================================================================================
+B. RECIPE CHECK -- python kernels/w4a8_probe/static_probe.py --match-cache
+==========================================================================================
+W4A8 static probe (Peano, IRON's compile command)
+  clang    C:\Users\<user>/mlir-aie/ironenv/Lib/site-packages\llvm-aie\bin\clang++.exe
+  flags    -std=c++20 -Wno-parentheses -Wno-attributes -Wno-macro-redefined -Wno-empty-body -O2 -DNDEBUG -D__AIE_API_AIE_ADF_HPP__ --target=aie2-none-unknown-elf
+  source   C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\<worktree>\kernels\w4a8_probe\w4a8_kernels.cc
+  upstream C:\Users\<user>/mlir-aie/ironenv/Lib/site-packages\mlir_aie\include\aie_kernels\aie2\mm.cc
+
+41 cached objects, 10 distinct matmul_i8_i32 bodies
+  m/k/n 64/64/32         identical to IRON's matmul_i8_i32_170456c5.o (15 cache dirs)
+  m/k/n 16/64/32         identical to IRON's matmul_i8_i32_f07646e6.o (4 cache dirs)
+  m/k/n 128/64/32        identical to IRON's matmul_i8_i32_e240d037.o (1 cache dir)
+  m/k/n 32/64/32         identical to IRON's matmul_i8_i32_065d7a88.o (4 cache dirs)
+  m/k/n 64/128/32        identical to IRON's matmul_i8_i32_a287bdb9.o (1 cache dir)
+  m/k/n 64/64/64         identical to IRON's matmul_i8_i32_86901378.o (12 cache dirs)
+  m/k/n 32/64/64         identical to IRON's matmul_i8_i32_e88d1f50.o (1 cache dir)
+  m/k/n 64/128/64        identical to IRON's matmul_i8_i32_7192da7e.o (1 cache dir)
+  m/k/n 16/64/64         identical to IRON's matmul_i8_i32_a41b2beb.o (1 cache dir)
+  m/k/n 128/64/64        identical to IRON's matmul_i8_i32_935fd2cd.o (1 cache dir)
+matched 10 of 10 distinct cached bodies bundle for bundle
+
+==========================================================================================
+C. CALIBRATION GATE -- python kernels/pmu_probe/pmu_probe.py --calibrate
+==========================================================================================
+== pmu_probe [pmu] mode=vector target=4096 trace_size=65536
+   events: 0:INSTR_EVENT_0, 1:INSTR_EVENT_1, 2:ACTIVE, 3:MEMORY_STALL, 4:STREAM_STALL, 5:LOCK_STALL, 6:CASCADE_STALL, 7:DISABLED
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+Platform
+  Name                   : NPU Phoenix 
+  Power Mode             : Default 
+  Total Columns          : 5 
+
+Estimated Power          : N/A
+pyxrt device.get_info(max_clock_frequency_mhz) = 800
+
+CALIBRATION -- the two loops results/aie/clock_probe_npu.log already measured
+
+   loop    iters       span  cyc/iter  expect   err %    active   stalled   issuing  bytes
+------------------------------------------------------------------------------------------
+ vector     4096       8213    2.0051   2.000   +0.26     28336     19421      8915   1120
+ vector    16384      32789    2.0013   2.000   +0.06     45445     11954     33491   1176
+ vector    65536     131093    2.0003   2.000   +0.02    142777     10982    131795   1344
+ scalar     2048      18436    9.0020   9.000   +0.02     27881      8735     19146   1120
+ scalar     8192      73732    9.0005   9.000   +0.01     85256     10814     74442   1232
+ scalar    32768     294916    9.0001   9.000   +0.00    307516     11890    295626   1680
+
+CYCLE ACCOUNTING -- does the traced work add up to the cycles the core was alive?
+
+   loop    iters    active   stalled   issuing  loop+flush unaccounted
+----------------------------------------------------------------------
+ vector     4096     28336     19421      8915        8725         190
+ vector    16384     45445     11954     33491       33301         190
+ vector    65536    142777     10982    131795      131605         190
+ scalar     2048     27881      8735     19146       18948         198
+ scalar     8192     85256     10814     74442       74244         198
+ scalar    32768    307516     11890    295626      295428         198
+
+GATE 1 cycles per iteration within 1% of the measured values: PASS
+GATE 2 at least one stall term non-zero: PASS
+
+==========================================================================================
+D. PAIRED LOADS -- python kernels/w4a8_probe/static_probe.py --dims 64x64x64,64x128x64 --paired
+==========================================================================================
+W4A8 static probe (Peano, IRON's compile command)
+  clang    C:\Users\<user>/mlir-aie/ironenv/Lib/site-packages\llvm-aie\bin\clang++.exe
+  flags    -std=c++20 -Wno-parentheses -Wno-attributes -Wno-macro-redefined -Wno-empty-body -O2 -DNDEBUG -D__AIE_API_AIE_ADF_HPP__ --target=aie2-none-unknown-elf
+  source   C:\Users\<user>\PycharmProjects\ryzen-ai-xdna1-quantization\<worktree>\kernels\w4a8_probe\w4a8_kernels.cc
+  upstream C:\Users\<user>/mlir-aie/ironenv/Lib/site-packages\mlir_aie\include\aie_kernels\aie2\mm.cc
+
+Standalone loops, 64 elements per iteration
+  copy_i8    2 bundles/iteration = 32 elements/cycle, unpack ops 0, stack refs 0
+        0x0090  vldb	wh0, [p0, #0x20] | vst	wh2, [p1], #0x40
+        0x00a0  vlda	wh2, [p0], #0x40 | vst	wh0, [p1, #0x20]
+  unpack_i4  2 bundles/iteration = 32 elements/cycle, unpack ops 1, stack refs 0
+        0x0090  vldb.unpack.s8.s4	x0, [p0], m0 | vst	wl0, [p1], #0x40
+        0x00a0  vst	wh0, [p1, #0x20]
+
+GEMM kernels: the hardware loop that issues the most vmacs, per kernel
+       MxKxN     k loop  kernel               bundles vmacs  vmac/cyc   MAC/cyc unpacks lp stk fn stk  frame
+  ----------------------------------------------------------------------------------------------------------
+    64x64x64   upstream  matmul_i8_i32              9     8     0.889     227.6       0      0     30    416
+      two-load bundles: 1 (same buffer 1, A&B 0, unresolved 0)
+        same    vlda [p4]=A & vldb [p3]=A
+    64x64x64    default  mm_i8i8_local              9     8     0.889     227.6       0      0     14    160
+      two-load bundles: 1 (same buffer 1, A&B 0, unresolved 0)
+        same    vlda [p0]=A & vldb [p7]=A
+    64x64x64    default  mm_i8i4_unpack           113    64     0.566     145.0      14     48     84   1312
+      two-load bundles: 2 (same buffer 0, A&B 0, unresolved 2)
+        unknown vlda [p0]=? & vldb.unpack.s8.s4 [p7]=?
+        unknown vlda [p3]=? & vldb.unpack.s8.s4 [p7]=?
+    64x64x64    default  mm_i8i4_native            16     8     0.500     256.0       0      0     16     32
+      two-load bundles: 2 (same buffer 0, A&B 0, unresolved 2)
+        unknown vlda [p7]=A & vldb [p1]=?
+        unknown vlda [p3]=A & vldb [p1]=?
+    64x64x64    default  mm_i8i8_local_2x2          8     8     1.000     256.0       0      0      4     32
+      two-load bundles: 4 (same buffer 2, A&B 2, unresolved 0)
+        cross   vldb [p4]=B & vlda [p6]=A
+        same    vldb [p3]=B & vlda [p4]=B
+        cross   vlda [p0]=B & vldb [p6]=A
+        same    vlda [p7]=B & vldb [p4]=B
+    64x64x64    default  mm_i8i4_unpack_2x2        63    32     0.508     130.0      14     14     32    480
+      two-load bundles: 2 (same buffer 0, A&B 0, unresolved 2)
+        unknown vlda [p0]=? & vldb.unpack.s8.s4 [p4]=B
+        unknown vlda [p5]=? & vldb.unpack.s8.s4 [p4]=B
+    64x64x64    default  mm_i8i4_native_2x2         9     4     0.444     227.6       0      0      4     32
+      two-load bundles: 2 (same buffer 0, A&B 0, unresolved 2)
+        unknown vlda [p7]=B & vldb [p1]=?
+        unknown vlda [p3]=? & vldb [p4]=?
+    64x64x64  no-unroll  mm_i8i8_local              9     8     0.889     227.6       0      0     14    160
+      two-load bundles: 1 (same buffer 1, A&B 0, unresolved 0)
+        same    vlda [p0]=A & vldb [p7]=A
+    64x64x64  no-unroll  mm_i8i4_unpack             9     8     0.889     227.6       2      0      4     32
+      two-load bundles: 1 (same buffer 0, A&B 1, unresolved 0)
+        cross   vldb.unpack.s8.s4 [p6]=B & vlda [p4]=A
+    64x64x64  no-unroll  mm_i8i4_native            16     8     0.500     256.0       0      0     16     32
+      two-load bundles: 2 (same buffer 0, A&B 0, unresolved 2)
+        unknown vlda [p7]=A & vldb [p1]=?
+        unknown vlda [p3]=A & vldb [p1]=?
+    64x64x64  no-unroll  mm_i8i8_local_2x2          7     4     0.571     146.3       0      0      4     32
+      two-load bundles: 2 (same buffer 0, A&B 1, unresolved 1)
+        cross   vldb [p7]=A & vlda [p3]=B
+        unknown vldb [p4]=? & vlda [p5]=B
+    64x64x64  no-unroll  mm_i8i4_unpack_2x2         6     4     0.667     170.7       2      0      4     32
+      two-load bundles: 1 (same buffer 0, A&B 1, unresolved 0)
+        cross   vldb.unpack.s8.s4 [p7]=B & vlda [p5]=A
+    64x64x64  no-unroll  mm_i8i4_native_2x2         9     4     0.444     227.6       0      0      4     32
+      two-load bundles: 2 (same buffer 0, A&B 0, unresolved 2)
+        unknown vlda [p7]=B & vldb [p1]=?
+        unknown vlda [p3]=? & vldb [p4]=?
+    64x64x64    unroll2  mm_i8i8_local             16    16     1.000     256.0       0      0     22    288
+      two-load bundles: 6 (same buffer 2, A&B 4, unresolved 0)
+        cross   vlda [p5]=B & vldb [p0]=A
+        same    vlda [p1]=B & vldb [p5]=B
+        cross   vlda [p6]=B & vldb [p0]=A
+        same    vlda [p3]=A & vldb [p7]=A
+        cross   vlda [p3]=A & vldb [p5]=B
+        cross   vldb [p7]=A & vlda [p1]=B
+    64x64x64    unroll2  mm_i8i4_unpack            17    16     0.941     240.9       4      0     20    160
+      two-load bundles: 1 (same buffer 1, A&B 0, unresolved 0)
+        same    vlda [p0]=A & vldb [p3]=A
+    64x64x64    unroll2  mm_i8i4_native            18    16     0.889     455.1       0      0     22    160
+      two-load bundles: 8 (same buffer 2, A&B 0, unresolved 6)
+        unknown vlda [p6]=A & vldb [p1]=?
+        same    vlda [p2]=B & vldb [p0]=B
+        unknown vlda [p1]=? & vldb [p5]=A
+        same    vlda [p6]=A & vldb [p7]=A
+        unknown vlda [p5]=A & vldb [p1]=?
+        unknown vlda [p0]=B & vldb [p1]=?
+        unknown vlda [p3]=A & vldb [p1]=?
+        unknown vldb [p1]=? & vlda [p4]=A
+    64x64x64    unroll2  mm_i8i8_local_2x2          8     8     1.000     256.0       0      0      4     32
+      two-load bundles: 4 (same buffer 2, A&B 2, unresolved 0)
+        cross   vldb [p4]=B & vlda [p6]=A
+        same    vldb [p3]=B & vlda [p4]=B
+        cross   vlda [p0]=B & vldb [p6]=A
+        same    vlda [p7]=B & vldb [p4]=B
+    64x64x64    unroll2  mm_i8i4_unpack_2x2         9     8     0.889     227.6       4      0      4     32
+      two-load bundles: 1 (same buffer 0, A&B 1, unresolved 0)
+        cross   vlda [p6]=A & vldb.unpack.s8.s4 [p1]=B
+    64x64x64    unroll2  mm_i8i4_native_2x2        13     8     0.615     315.1       0      0      4     32
+      two-load bundles: 4 (same buffer 0, A&B 1, unresolved 3)
+        unknown vlda [p5]=A & vldb [p3]=?
+        unknown vlda [p0]=B & vldb [p3]=?
+        unknown vlda [p6]=A & vldb [p3]=?
+        cross   vldb [p5]=A & vlda [p7]=B
+
+   64x128x64   upstream  matmul_i8_i32              9     8     0.889     227.6       0      0     38    416
+      two-load bundles: 1 (same buffer 1, A&B 0, unresolved 0)
+        same    vlda [p4]=A & vldb [p3]=A
+   64x128x64    default  mm_i8i8_local              9     8     0.889     227.6       0      0     22    160
+      two-load bundles: 1 (same buffer 1, A&B 0, unresolved 0)
+        same    vlda [p0]=A & vldb [p7]=A
+   64x128x64    default  mm_i8i4_unpack            32    32     1.000     256.0       8      0     12     32
+      two-load bundles: 9 (same buffer 2, A&B 7, unresolved 0)
+        same    vldb [p4]=A & vlda [p3]=A
+        cross   vlda [p7]=A & vldb.unpack.s8.s4 [p6]=B
+        cross   vlda [p0]=A & vldb.unpack.s8.s4 [p5]=B
+        cross   vlda [p4]=A & vldb.unpack.s8.s4 [p6]=B
+        cross   vlda [p3]=A & vldb.unpack.s8.s4 [p5]=B
+        same    vlda [p4]=A & vldb [p7]=A
+        cross   vlda [p3]=A & vldb.unpack.s8.s4 [p6]=B
+        cross   vlda [p0]=A & vldb.unpack.s8.s4 [p5]=B
+        cross   vlda [p0]=A & vldb.unpack.s8.s4 [p5]=B
+   64x128x64    default  mm_i8i4_native            16     8     0.500     256.0       0      0     20     64
+      two-load bundles: 2 (same buffer 0, A&B 0, unresolved 2)
+        unknown vlda [p7]=A & vldb [p1]=?
+        unknown vlda [p3]=A & vldb [p1]=?
+   64x128x64    default  mm_i8i8_local_2x2          8     8     1.000     256.0       0      0      4     32
+      two-load bundles: 4 (same buffer 2, A&B 2, unresolved 0)
+        cross   vldb [p4]=B & vlda [p6]=A
+        same    vldb [p3]=B & vlda [p4]=B
+        cross   vlda [p0]=B & vldb [p6]=A
+        same    vlda [p7]=B & vldb [p4]=B
+   64x128x64    default  mm_i8i4_unpack_2x2        17    16     0.941     240.9       8      0      4     32
+      two-load bundles: 2 (same buffer 0, A&B 2, unresolved 0)
+        cross   vlda [p5]=A & vldb.unpack.s8.s4 [p1]=B
+        cross   vlda [p6]=A & vldb.unpack.s8.s4 [p1]=B
+   64x128x64    default  mm_i8i4_native_2x2         9     4     0.444     227.6       0      0      4     32
+      two-load bundles: 2 (same buffer 0, A&B 0, unresolved 2)
+        unknown vlda [p7]=B & vldb [p1]=?
+        unknown vlda [p3]=? & vldb [p4]=?
+   64x128x64  no-unroll  mm_i8i8_local              9     8     0.889     227.6       0      0     22    160
+      two-load bundles: 1 (same buffer 1, A&B 0, unresolved 0)
+        same    vlda [p0]=A & vldb [p7]=A
+   64x128x64  no-unroll  mm_i8i4_unpack             9     8     0.889     227.6       2      0     12     32
+      two-load bundles: 1 (same buffer 0, A&B 1, unresolved 0)
+        cross   vldb.unpack.s8.s4 [p6]=B & vlda [p4]=A
+   64x128x64  no-unroll  mm_i8i4_native            16     8     0.500     256.0       0      0     20     64
+      two-load bundles: 2 (same buffer 0, A&B 0, unresolved 2)
+        unknown vlda [p7]=A & vldb [p1]=?
+        unknown vlda [p3]=A & vldb [p1]=?
+   64x128x64  no-unroll  mm_i8i8_local_2x2          7     4     0.571     146.3       0      0      4     32
+      two-load bundles: 2 (same buffer 0, A&B 1, unresolved 1)
+        cross   vldb [p7]=A & vlda [p3]=B
+        unknown vldb [p4]=? & vlda [p5]=B
+   64x128x64  no-unroll  mm_i8i4_unpack_2x2         6     4     0.667     170.7       2      0      4     32
+      two-load bundles: 1 (same buffer 0, A&B 1, unresolved 0)
+        cross   vldb.unpack.s8.s4 [p7]=B & vlda [p5]=A
+   64x128x64  no-unroll  mm_i8i4_native_2x2         9     4     0.444     227.6       0      0      4     32
+      two-load bundles: 2 (same buffer 0, A&B 0, unresolved 2)
+        unknown vlda [p7]=B & vldb [p1]=?
+        unknown vlda [p3]=? & vldb [p4]=?
+   64x128x64    unroll2  mm_i8i8_local             16    16     1.000     256.0       0      0     30    288
+      two-load bundles: 6 (same buffer 2, A&B 4, unresolved 0)
+        cross   vlda [p5]=B & vldb [p0]=A
+        same    vlda [p1]=B & vldb [p5]=B
+        cross   vlda [p6]=B & vldb [p0]=A
+        same    vlda [p3]=A & vldb [p7]=A
+        cross   vlda [p3]=A & vldb [p5]=B
+        cross   vldb [p7]=A & vlda [p1]=B
+   64x128x64    unroll2  mm_i8i4_unpack            17    16     0.941     240.9       4      0     28    160
+      two-load bundles: 1 (same buffer 1, A&B 0, unresolved 0)
+        same    vlda [p0]=A & vldb [p3]=A
+   64x128x64    unroll2  mm_i8i4_native            20    16     0.800     409.6       0      0     30    160
+      two-load bundles: 6 (same buffer 1, A&B 2, unresolved 3)
+        unknown vlda [p0]=A & vldb [p7]=?
+        unknown vlda [p6]=B & vldb [p7]=?
+        cross   vlda [p1]=B & vldb [p0]=A
+        cross   vlda [p6]=B & vldb [p5]=A
+        unknown vlda [p3]=A & vldb [p7]=?
+        same    vldb [p3]=A & vlda [p4]=A
+   64x128x64    unroll2  mm_i8i8_local_2x2          8     8     1.000     256.0       0      0      4     32
+      two-load bundles: 4 (same buffer 2, A&B 2, unresolved 0)
+        cross   vldb [p4]=B & vlda [p6]=A
+        same    vldb [p3]=B & vlda [p4]=B
+        cross   vlda [p0]=B & vldb [p6]=A
+        same    vlda [p7]=B & vldb [p4]=B
+   64x128x64    unroll2  mm_i8i4_unpack_2x2         9     8     0.889     227.6       4      0      4     32
+      two-load bundles: 1 (same buffer 0, A&B 1, unresolved 0)
+        cross   vlda [p6]=A & vldb.unpack.s8.s4 [p1]=B
+   64x128x64    unroll2  mm_i8i4_native_2x2        13     8     0.615     315.1       0      0      4     32
+      two-load bundles: 4 (same buffer 0, A&B 1, unresolved 3)
+        unknown vlda [p5]=A & vldb [p3]=?
+        unknown vlda [p0]=B & vldb [p3]=?
+        unknown vlda [p6]=A & vldb [p3]=?
+        cross   vldb [p5]=A & vlda [p7]=B
+
+vmac/cyc is the loop's issue rate against a ceiling of 1.000; MAC/cyc multiplies
+it by the MACs each vmac performs (256 int8 x int8, 512 int8 x int4). Both are the
+steady state of ONE loop, not a whole-kernel figure: C loads and stores, and the
+loop's prologue and epilogue, sit outside it. lp stk / fn stk count loads and
+stores through the stack pointer inside that loop and in the whole function.
+
+==========================================================================================
+E1. HARDWARE PILOT -- python kernels/w4a8_probe/w4a8_probe.py --kernel native --mode unroll2 --K 64 (not recorded in the raw JSONL)
+==========================================================================================
+w4a8_probe native (mm_i8i4_native) mode=unroll2 M/K/N=64/64/64 rev=dcac763949bff596 stack=4096 host=DESKTOP-CBL5NUA
+first call 3.35 s (compile or cache), cycles 2160, traced tile row 2 col 1
+verify: 0 of 4096 mismatches; output matches reading: low nibble first, signed
+build check: IRON object vs static compile of mm_i8i4_native: identical (cache 5bebe9829bd97e000bca8cb7; loop 18 bundles, 16 vmacs)
+cycles per call over 20 of 20 traced calls: median 2160.0, min 2160, max 2160
+  262144 MACs, 512 vmacs per call -> 121.4 MAC/cycle, 0.237 vmac/cycle (whole call: loop, C loads/stores, prologue)
+  static steady-state loop alone would take 576 cycles (32 executions x 18 bundles); measured - that = 1584
+last timed call re-verified: 0 mismatches
+
+==========================================================================================
+E2. HARDWARE SWEEP -- python kernels/w4a8_probe/sweep.py --out results/aie/w4a8_probe_raw.jsonl --tag main-20260910
+==========================================================================================
+rep0 K=64   i8i8:default    exit 0  12.0s  verify: 0 of 4096 mismatches; output matches reading: int8 || build check: IRON object vs static compile of mm_i8i8_local: identical (cache 77b81798d0a38b8d9e36ffd4; loop 9 bundles, 8 vmacs) || cycles per call over 20 of 20 traced calls: median 2447.0, min 2447, max 2447
+rep0 K=64   i8i8:unroll2    exit 0   8.7s  verify: 0 of 4096 mismatches; output matches reading: int8 || build check: IRON object vs static compile of mm_i8i8_local: identical (cache 4b49fe6697bcb00e0f266fd4; loop 16 bundles, 16 vmacs) || cycles per call over 20 of 20 traced calls: median 2399.0, min 2399, max 2399
+rep0 K=64   unpack:default    exit 0  10.8s  verify: 0 of 4096 mismatches; output matches reading: low nibble first, signed || build check: IRON object vs static compile of mm_i8i4_unpack: identical (cache 6fcc3378eebbd5f211b8f934; loop 113 bundles, 64 vmacs) || cycles per call over 20 of 20 traced calls: median 2119.0, min 2119, max 2119
+rep0 K=64   unpack:no-unroll  exit 0   9.7s  verify: 0 of 4096 mismatches; output matches reading: low nibble first, signed || build check: IRON object vs static compile of mm_i8i4_unpack: identical (cache 907205b8ae81b963b56ac5ac; loop 9 bundles, 8 vmacs) || cycles per call over 20 of 20 traced calls: median 2351.0, min 2351, max 2351
+rep0 K=64   unpack:unroll2    exit 0   8.7s  verify: 0 of 4096 mismatches; output matches reading: low nibble first, signed || build check: IRON object vs static compile of mm_i8i4_unpack: identical (cache e9e5b8dac21b8cceb3fc26ba; loop 17 bundles, 16 vmacs) || cycles per call over 20 of 20 traced calls: median 2591.0, min 2591, max 2591
+rep0 K=64   native:default    exit 0  11.4s  verify: 0 of 4096 mismatches; output matches reading: low nibble first, signed || build check: IRON object vs static compile of mm_i8i4_native: identical (cache b539946c736b32b4eee9b56b; loop 16 bundles, 8 vmacs) || cycles per call over 20 of 20 traced calls: median 2106.0, min 2106, max 2106
+rep0 K=64   native:unroll2    exit 0   5.9s  verify: 0 of 4096 mismatches; output matches reading: low nibble first, signed || build check: IRON object vs static compile of mm_i8i4_native: identical (cache 5bebe9829bd97e000bca8cb7; loop 18 bundles, 16 vmacs) || cycles per call over 20 of 20 traced calls: median 2160.0, min 2160, max 2160
+rep0 K=64   i8i8_2x2:default    exit 0  12.0s  verify: 0 of 4096 mismatches; output matches reading: int8 || build check: IRON object vs static compile of mm_i8i8_local_2x2: identical (cache d10bc3b162e70d6b0bd6b3d1; loop 8 bundles, 8 vmacs) || cycles per call over 20 of 20 traced calls: median 2717.0, min 2717, max 2717
+rep0 K=64   native_2x2:unroll2    exit 0   9.9s  verify: 0 of 4096 mismatches; output matches reading: low nibble first, signed || build check: IRON object vs static compile of mm_i8i4_native_2x2: identical (cache 40e4818376493b75124575e1; loop 13 bundles, 8 vmacs) || cycles per call over 20 of 20 traced calls: median 2205.0, min 2205, max 2205
+rep0 K=128  i8i8:unroll2    exit 0   9.3s  verify: 0 of 4096 mismatches; output matches reading: int8 || build check: IRON object vs static compile of mm_i8i8_local: identical (cache 3771c5a864a0e0ba338abf71; loop 16 bundles, 16 vmacs) || cycles per call over 20 of 20 traced calls: median 3559.0, min 3559, max 3559
+rep0 K=128  unpack:default    exit 0   9.4s  verify: 0 of 4096 mismatches; output matches reading: low nibble first, signed || build check: IRON object vs static compile of mm_i8i4_unpack: identical (cache 197054b0acd510466366a3f3; loop 32 bundles, 32 vmacs) || cycles per call over 20 of 20 traced calls: median 3413.0, min 3413, max 3413
+rep0 K=128  unpack:no-unroll  exit 0   9.8s  verify: 0 of 4096 mismatches; output matches reading: low nibble first, signed || build check: IRON object vs static compile of mm_i8i4_unpack: identical (cache edb9cb1f6166400510efdaa5; loop 9 bundles, 8 vmacs) || cycles per call over 20 of 20 traced calls: median 3509.0, min 3509, max 3509
+rep0 K=128  unpack:unroll2    exit 0   9.4s  verify: 0 of 4096 mismatches; output matches reading: low nibble first, signed || build check: IRON object vs static compile of mm_i8i4_unpack: identical (cache 9445449894b3eabaf68786f7; loop 17 bundles, 16 vmacs) || cycles per call over 20 of 20 traced calls: median 3749.0, min 3749, max 3749
+rep0 K=128  native:default    exit 0   9.9s  verify: 0 of 4096 mismatches; output matches reading: low nibble first, signed || build check: IRON object vs static compile of mm_i8i4_native: identical (cache a6100b862a6f84343f9f1bb9; loop 16 bundles, 8 vmacs) || cycles per call over 20 of 20 traced calls: median 3202.0, min 3202, max 3202
+rep0 K=128  native:unroll2    exit 0   8.9s  verify: 0 of 4096 mismatches; output matches reading: low nibble first, signed || build check: IRON object vs static compile of mm_i8i4_native: identical (cache 31cb6b8aceb08bd25b3e7a68; loop 20 bundles, 16 vmacs) || cycles per call over 20 of 20 traced calls: median 2791.0, min 2791, max 2791
+rep0 K=128  i8i8_2x2:default    exit 0   9.9s  verify: 0 of 4096 mismatches; output matches reading: int8 || build check: IRON object vs static compile of mm_i8i8_local_2x2: identical (cache 20c50f83ca6b81a0a11e2ba8; loop 8 bundles, 8 vmacs) || cycles per call over 20 of 20 traced calls: median 3998.0, min 3998, max 3998
+rep0 K=128  native_2x2:unroll2    exit 0   9.4s  verify: 0 of 4096 mismatches; output matches reading: low nibble first, signed || build check: IRON object vs static compile of mm_i8i4_native_2x2: identical (cache 20e99579c0554dd02af3e545; loop 13 bundles, 8 vmacs) || cycles per call over 20 of 20 traced calls: median 3102.0, min 3102, max 3102
+rep0 K=128  i8i8:default    exit 0   9.4s  verify: 0 of 4096 mismatches; output matches reading: int8 || build check: IRON object vs static compile of mm_i8i8_local: identical (cache 6ed939b785b999af63360fc4; loop 9 bundles, 8 vmacs) || cycles per call over 20 of 20 traced calls: median 3735.0, min 3735, max 3735
+rep0 K=256  unpack:default    exit 0   8.8s  verify: 0 of 4096 mismatches; output matches reading: low nibble first, signed || build check: IRON object vs static compile of mm_i8i4_unpack: identical (cache 0298ad029c149fa9ad5b5d26; loop 32 bundles, 32 vmacs) || cycles per call over 20 of 20 traced calls: median 5590.0, min 5590, max 5590
+rep0 K=256  unpack:no-unroll  exit 0   9.8s  verify: 0 of 4096 mismatches; output matches reading: low nibble first, signed || build check: IRON object vs static compile of mm_i8i4_unpack: identical (cache 1cdb655633411ea57556e090; loop 9 bundles, 8 vmacs) || cycles per call over 20 of 20 traced calls: median 5814.0, min 5814, max 5814
+rep0 K=256  unpack:unroll2    exit 0   8.4s  verify: 0 of 4096 mismatches; output matches reading: low nibble first, signed || build check: IRON object vs static compile of mm_i8i4_unpack: identical (cache 754846ec6ba0007d8ebae6f0; loop 17 bundles, 16 vmacs) || cycles per call over 20 of 20 traced calls: median 6054.0, min 6054, max 6054
+rep0 K=256  native:default    exit 0   9.4s  verify: 0 of 4096 mismatches; output matches reading: low nibble first, signed || build check: IRON object vs static compile of mm_i8i4_native: identical (cache 19aae8d8d5e4da692c626ddd; loop 16 bundles, 8 vmacs) || cycles per call over 20 of 20 traced calls: median 5382.0, min 5382, max 5382
+rep0 K=256  native:unroll2    exit 0   9.9s  verify: 0 of 4096 mismatches; output matches reading: low nibble first, signed || build check: IRON object vs static compile of mm_i8i4_native: identical (cache a8a6b8df2bf530f7fa2f1ec6; loop 20 bundles, 16 vmacs) || cycles per call over 20 of 20 traced calls: median 4199.0, min 4199, max 4199
+rep0 K=256  i8i8_2x2:default    exit 0   9.8s  verify: 0 of 4096 mismatches; output matches reading: int8 || build check: IRON object vs static compile of mm_i8i8_local_2x2: identical (cache 77f2a2becf0019365828f4bc; loop 8 bundles, 8 vmacs) || cycles per call over 20 of 20 traced calls: median 6559.0, min 6559, max 6559
+rep0 K=256  native_2x2:unroll2    exit 0   8.9s  verify: 0 of 4096 mismatches; output matches reading: low nibble first, signed || build check: IRON object vs static compile of mm_i8i4_native_2x2: identical (cache cdf5655c9098ebf4c7a23a46; loop 13 bundles, 8 vmacs) || cycles per call over 20 of 20 traced calls: median 4895.0, min 4895, max 4895
+rep0 K=256  i8i8:default    exit 0   9.4s  verify: 0 of 4096 mismatches; output matches reading: int8 || build check: IRON object vs static compile of mm_i8i8_local: identical (cache 0ad115ffc4c98c989bf4a2bf; loop 9 bundles, 8 vmacs) || cycles per call over 20 of 20 traced calls: median 6295.0, min 6295, max 6295
+rep0 K=256  i8i8:unroll2    exit 0   9.4s  verify: 0 of 4096 mismatches; output matches reading: int8 || build check: IRON object vs static compile of mm_i8i8_local: identical (cache 8c0e279f755289d294098d65; loop 16 bundles, 16 vmacs) || cycles per call over 20 of 20 traced calls: median 5863.0, min 5863, max 5863
+rep1 K=128  i8i8:unroll2    exit 0   6.0s  verify: 0 of 4096 mismatches; output matches reading: int8 || build check: IRON object vs static compile of mm_i8i8_local: identical (cache 3771c5a864a0e0ba338abf71; loop 16 bundles, 16 vmacs) || cycles per call over 20 of 20 traced calls: median 3559.0, min 3559, max 3559
+rep1 K=128  unpack:default    exit 0   5.7s  verify: 0 of 4096 mismatches; output matches reading: low nibble first, signed || build check: IRON object vs static compile of mm_i8i4_unpack: identical (cache 197054b0acd510466366a3f3; loop 32 bundles, 32 vmacs) || cycles per call over 20 of 20 traced calls: median 3413.0, min 3413, max 3413
+rep1 K=128  unpack:no-unroll  exit 0   5.7s  verify: 0 of 4096 mismatches; output matches reading: low nibble first, signed || build check: IRON object vs static compile of mm_i8i4_unpack: identical (cache edb9cb1f6166400510efdaa5; loop 9 bundles, 8 vmacs) || cycles per call over 20 of 20 traced calls: median 3509.0, min 3509, max 3509
+rep1 K=128  unpack:unroll2    exit 0   5.4s  verify: 0 of 4096 mismatches; output matches reading: low nibble first, signed || build check: IRON object vs static compile of mm_i8i4_unpack: identical (cache 9445449894b3eabaf68786f7; loop 17 bundles, 16 vmacs) || cycles per call over 20 of 20 traced calls: median 3749.0, min 3749, max 3749
+rep1 K=128  native:default    exit 0   5.9s  verify: 0 of 4096 mismatches; output matches reading: low nibble first, signed || build check: IRON object vs static compile of mm_i8i4_native: identical (cache a6100b862a6f84343f9f1bb9; loop 16 bundles, 8 vmacs) || cycles per call over 20 of 20 traced calls: median 3202.0, min 3202, max 3202
+rep1 K=128  native:unroll2    exit 0   6.1s  verify: 0 of 4096 mismatches; output matches reading: low nibble first, signed || build check: IRON object vs static compile of mm_i8i4_native: identical (cache 31cb6b8aceb08bd25b3e7a68; loop 20 bundles, 16 vmacs) || cycles per call over 20 of 20 traced calls: median 2791.0, min 2791, max 2791
+rep1 K=128  i8i8_2x2:default    exit 0   6.5s  verify: 0 of 4096 mismatches; output matches reading: int8 || build check: IRON object vs static compile of mm_i8i8_local_2x2: identical (cache 20c50f83ca6b81a0a11e2ba8; loop 8 bundles, 8 vmacs) || cycles per call over 20 of 20 traced calls: median 3998.0, min 3998, max 3998
+rep1 K=128  native_2x2:unroll2    exit 0   6.6s  verify: 0 of 4096 mismatches; output matches reading: low nibble first, signed || build check: IRON object vs static compile of mm_i8i4_native_2x2: identical (cache 20e99579c0554dd02af3e545; loop 13 bundles, 8 vmacs) || cycles per call over 20 of 20 traced calls: median 3102.0, min 3102, max 3102
+rep1 K=128  i8i8:default    exit 0   5.6s  verify: 0 of 4096 mismatches; output matches reading: int8 || build check: IRON object vs static compile of mm_i8i8_local: identical (cache 6ed939b785b999af63360fc4; loop 9 bundles, 8 vmacs) || cycles per call over 20 of 20 traced calls: median 3735.0, min 3735, max 3735
+rep1 K=256  unpack:default    exit 0   6.0s  verify: 0 of 4096 mismatches; output matches reading: low nibble first, signed || build check: IRON object vs static compile of mm_i8i4_unpack: identical (cache 0298ad029c149fa9ad5b5d26; loop 32 bundles, 32 vmacs) || cycles per call over 20 of 20 traced calls: median 5590.0, min 5590, max 5590
+rep1 K=256  unpack:no-unroll  exit 0   6.1s  verify: 0 of 4096 mismatches; output matches reading: low nibble first, signed || build check: IRON object vs static compile of mm_i8i4_unpack: identical (cache 1cdb655633411ea57556e090; loop 9 bundles, 8 vmacs) || cycles per call over 20 of 20 traced calls: median 5814.0, min 5814, max 5814
+rep1 K=256  unpack:unroll2    exit 0   5.7s  verify: 0 of 4096 mismatches; output matches reading: low nibble first, signed || build check: IRON object vs static compile of mm_i8i4_unpack: identical (cache 754846ec6ba0007d8ebae6f0; loop 17 bundles, 16 vmacs) || cycles per call over 20 of 20 traced calls: median 6054.0, min 6054, max 6054
+rep1 K=256  native:default    exit 0   6.2s  verify: 0 of 4096 mismatches; output matches reading: low nibble first, signed || build check: IRON object vs static compile of mm_i8i4_native: identical (cache 19aae8d8d5e4da692c626ddd; loop 16 bundles, 8 vmacs) || cycles per call over 20 of 20 traced calls: median 5382.0, min 5382, max 5382
+rep1 K=256  native:unroll2    exit 0   6.7s  verify: 0 of 4096 mismatches; output matches reading: low nibble first, signed || build check: IRON object vs static compile of mm_i8i4_native: identical (cache a8a6b8df2bf530f7fa2f1ec6; loop 20 bundles, 16 vmacs) || cycles per call over 20 of 20 traced calls: median 4199.0, min 4199, max 4199
+rep1 K=256  i8i8_2x2:default    exit 0   6.0s  verify: 0 of 4096 mismatches; output matches reading: int8 || build check: IRON object vs static compile of mm_i8i8_local_2x2: identical (cache 77f2a2becf0019365828f4bc; loop 8 bundles, 8 vmacs) || cycles per call over 20 of 20 traced calls: median 6559.0, min 6559, max 6559
+rep1 K=256  native_2x2:unroll2    exit 0   5.5s  verify: 0 of 4096 mismatches; output matches reading: low nibble first, signed || build check: IRON object vs static compile of mm_i8i4_native_2x2: identical (cache cdf5655c9098ebf4c7a23a46; loop 13 bundles, 8 vmacs) || cycles per call over 20 of 20 traced calls: median 4895.0, min 4895, max 4895
+rep1 K=256  i8i8:default    exit 0   5.4s  verify: 0 of 4096 mismatches; output matches reading: int8 || build check: IRON object vs static compile of mm_i8i8_local: identical (cache 0ad115ffc4c98c989bf4a2bf; loop 9 bundles, 8 vmacs) || cycles per call over 20 of 20 traced calls: median 6295.0, min 6295, max 6295
+rep1 K=256  i8i8:unroll2    exit 0   5.9s  verify: 0 of 4096 mismatches; output matches reading: int8 || build check: IRON object vs static compile of mm_i8i8_local: identical (cache 8c0e279f755289d294098d65; loop 16 bundles, 16 vmacs) || cycles per call over 20 of 20 traced calls: median 5863.0, min 5863, max 5863
+rep1 K=64   unpack:no-unroll  exit 0   6.5s  verify: 0 of 4096 mismatches; output matches reading: low nibble first, signed || build check: IRON object vs static compile of mm_i8i4_unpack: identical (cache 907205b8ae81b963b56ac5ac; loop 9 bundles, 8 vmacs) || cycles per call over 20 of 20 traced calls: median 2351.0, min 2351, max 2351
+rep1 K=64   unpack:unroll2    exit 0   5.6s  verify: 0 of 4096 mismatches; output matches reading: low nibble first, signed || build check: IRON object vs static compile of mm_i8i4_unpack: identical (cache e9e5b8dac21b8cceb3fc26ba; loop 17 bundles, 16 vmacs) || cycles per call over 20 of 20 traced calls: median 2591.0, min 2591, max 2591
+rep1 K=64   native:default    exit 0   6.9s  verify: 0 of 4096 mismatches; output matches reading: low nibble first, signed || build check: IRON object vs static compile of mm_i8i4_native: identical (cache b539946c736b32b4eee9b56b; loop 16 bundles, 8 vmacs) || cycles per call over 20 of 20 traced calls: median 2106.0, min 2106, max 2106
+rep1 K=64   native:unroll2    exit 0   5.2s  verify: 0 of 4096 mismatches; output matches reading: low nibble first, signed || build check: IRON object vs static compile of mm_i8i4_native: identical (cache 5bebe9829bd97e000bca8cb7; loop 18 bundles, 16 vmacs) || cycles per call over 20 of 20 traced calls: median 2160.0, min 2160, max 2160
+rep1 K=64   i8i8_2x2:default    exit 0   7.9s  verify: 0 of 4096 mismatches; output matches reading: int8 || build check: IRON object vs static compile of mm_i8i8_local_2x2: identical (cache d10bc3b162e70d6b0bd6b3d1; loop 8 bundles, 8 vmacs) || cycles per call over 20 of 20 traced calls: median 2717.0, min 2717, max 2717
+rep1 K=64   native_2x2:unroll2    exit 0   6.1s  verify: 0 of 4096 mismatches; output matches reading: low nibble first, signed || build check: IRON object vs static compile of mm_i8i4_native_2x2: identical (cache 40e4818376493b75124575e1; loop 13 bundles, 8 vmacs) || cycles per call over 20 of 20 traced calls: median 2205.0, min 2205, max 2205
+rep1 K=64   i8i8:default    exit 0   7.4s  verify: 0 of 4096 mismatches; output matches reading: int8 || build check: IRON object vs static compile of mm_i8i8_local: identical (cache 77b81798d0a38b8d9e36ffd4; loop 9 bundles, 8 vmacs) || cycles per call over 20 of 20 traced calls: median 2447.0, min 2447, max 2447
+rep1 K=64   i8i8:unroll2    exit 0   6.1s  verify: 0 of 4096 mismatches; output matches reading: int8 || build check: IRON object vs static compile of mm_i8i8_local: identical (cache 4b49fe6697bcb00e0f266fd4; loop 16 bundles, 16 vmacs) || cycles per call over 20 of 20 traced calls: median 2399.0, min 2399, max 2399
+rep1 K=64   unpack:default    exit 0   7.0s  verify: 0 of 4096 mismatches; output matches reading: low nibble first, signed || build check: IRON object vs static compile of mm_i8i4_unpack: identical (cache 6fcc3378eebbd5f211b8f934; loop 113 bundles, 64 vmacs) || cycles per call over 20 of 20 traced calls: median 2119.0, min 2119, max 2119
+done; 0 failed rows: []
+
+==========================================================================================
+E3. FIT -- python kernels/w4a8_probe/fit.py results/aie/w4a8_probe_raw.jsonl --tag main
+==========================================================================================
+Per call, per K: trace cycles (every call of every process), verify, build check
+  arm                       K         cycles procs     verify      build      loop  frame
+  i8i8:default             64           2447     2         ok  identical     9b/8v    160
+  i8i8:default            128           3735     2         ok  identical     9b/8v    160
+  i8i8:default            256           6295     2         ok  identical     9b/8v    160
+  i8i8:unroll2             64           2399     2         ok  identical   16b/16v    288
+  i8i8:unroll2            128           3559     2         ok  identical   16b/16v    288
+  i8i8:unroll2            256           5863     2         ok  identical   16b/16v    288
+  i8i8_2x2:default         64           2717     2         ok  identical     8b/8v     32
+  i8i8_2x2:default        128           3998     2         ok  identical     8b/8v     32
+  i8i8_2x2:default        256           6559     2         ok  identical     8b/8v     32
+  native:default           64           2106     2         ok  identical    16b/8v     32
+  native:default          128           3202     2         ok  identical    16b/8v     64
+  native:default          256           5382     2         ok  identical    16b/8v     64
+  native:unroll2           64           2160     2         ok  identical   18b/16v    160
+  native:unroll2          128           2791     2         ok  identical   20b/16v    160
+  native:unroll2          256           4199     2         ok  identical   20b/16v    160
+  native_2x2:unroll2       64           2205     2         ok  identical    13b/8v     32
+  native_2x2:unroll2      128           3102     2         ok  identical    13b/8v     32
+  native_2x2:unroll2      256           4895     2         ok  identical    13b/8v     32
+  unpack:default           64           2119     2         ok  identical  113b/64v   1312
+  unpack:default          128           3413     2         ok  identical   32b/32v     32
+  unpack:default          256           5590     2         ok  identical   32b/32v     32
+  unpack:no-unroll         64           2351     2         ok  identical     9b/8v     32
+  unpack:no-unroll        128           3509     2         ok  identical     9b/8v     32
+  unpack:no-unroll        256           5814     2         ok  identical     9b/8v     32
+  unpack:unroll2           64           2591     2         ok  identical   17b/16v    160
+  unpack:unroll2          128           3749     2         ok  identical   17b/16v    160
+  unpack:unroll2          256           6054     2         ok  identical   17b/16v    160
+
+Fit over K: cycles = a + b*K (medians per K)
+  arm                      a (cyc)  b (cyc/K)       r^2  MAC/cyc  b static  b/static  vs ctl
+  i8i8:default              1167.0     20.036  0.999998    204.4      18.0     1.113   1.00x
+  i8i8:unroll2              1247.0     18.036  0.999997    227.1      16.0     1.127   1.11x
+  i8i8_2x2:default          1436.5     20.010  1.000000    204.7      16.0     1.251   1.00x
+  native:default            1016.0     17.058  0.999998    240.1      16.0     1.066   1.17x
+  native:unroll2            1456.0     10.674  0.999301    383.7       9.0     1.186   1.88x
+  native_2x2:unroll2        1308.5     14.010  1.000000    292.4      13.0     1.078   1.43x
+  unpack:default            1030.5     17.925  0.998039    228.5      28.2     0.635   1.12x
+  unpack:no-unroll          1198.5     18.032  0.999999    227.1      18.0     1.002   1.11x
+  unpack:unroll2            1438.5     18.032  0.999999    227.1      17.0     1.061   1.11x
+
+MAC/cyc = M*N / b, the marginal rate of the k loop; 'vs ctl' = the control's slope over this arm's (i8i8:default). b static here is the K=64 build's loop only; a schedule that changes with K (native:unroll2 is 18 bundles at K=64 and 20 above) is handled by the per-build table below.
+
+Per build: measured vs the IRON object's own steady-state loop
+  arm                       K  measured      loop   static   beyond per loop exec
+  i8i8:default             64      2447     9b/8v     1152     1295           128
+  i8i8:default            128      3735     9b/8v     2304     1431           256
+  i8i8:default            256      6295     9b/8v     4608     1687           512
+  i8i8:unroll2             64      2399   16b/16v     1024     1375            64
+  i8i8:unroll2            128      3559   16b/16v     2048     1511           128
+  i8i8:unroll2            256      5863   16b/16v     4096     1767           256
+  i8i8_2x2:default         64      2717     8b/8v     1024     1693           128
+  i8i8_2x2:default        128      3998     8b/8v     2048     1950           256
+  i8i8_2x2:default        256      6559     8b/8v     4096     2463           512
+  native:default           64      2106    16b/8v     1024     1082            64
+  native:default          128      3202    16b/8v     2048     1154           128
+  native:default          256      5382    16b/8v     4096     1286           256
+  native:unroll2           64      2160   18b/16v      576     1584            32
+  native:unroll2          128      2791   20b/16v     1280     1511            64
+  native:unroll2          256      4199   20b/16v     2560     1639           128
+  native_2x2:unroll2       64      2205    13b/8v      832     1373            64
+  native_2x2:unroll2      128      3102    13b/8v     1664     1438           128
+  native_2x2:unroll2      256      4895    13b/8v     3328     1567           256
+  unpack:default           64      2119  113b/64v     1808      311            16
+  unpack:default          128      3413   32b/32v     2048     1365            64
+  unpack:default          256      5590   32b/32v     4096     1494           128
+  unpack:no-unroll         64      2351     9b/8v     1152     1199           128
+  unpack:no-unroll        128      3509     9b/8v     2304     1205           256
+  unpack:no-unroll        256      5814     9b/8v     4608     1206           512
+  unpack:unroll2           64      2591   17b/16v     1088     1503            64
+  unpack:unroll2          128      3749   17b/16v     2176     1573           128
+  unpack:unroll2          256      6054   17b/16v     4352     1702           256
+
+Residual (measured - static loop) = c + d*K
+  arm                    c overhead  d stall/K       r^2
+  i8i8:default               1167.0      2.036  0.999769
+  i8i8:unroll2               1247.0      2.036  0.999769
+  i8i8_2x2:default           1436.5      4.010  1.000000
+  native:default             1016.0      1.058  0.999520
+  native:unroll2             1520.0      0.388  0.349676
+  native_2x2:unroll2         1308.5      1.010  0.999996
+  unpack:default              246.5      5.425  0.667898
+  unpack:no-unroll           1198.5      0.032  0.698505
+  unpack:unroll2             1438.5      1.032  0.999576
+d near 0 = the k loop ran exactly its static schedule; d > 0 = stall cycles per
+unit K that no bundle accounts for. A schedule that changes with K puts its own
+difference into d too, so read d next to the per-build table, not alone.
+
+==========================================================================================
+F. LOCAL CONTROL vs UPSTREAM LOOP (the vmac loop of each, register numbers masked for the second comparison)
+==========================================================================================
+64x64x64: upstream 9 bundles, local 9; text identical: False; identical up to register names: False
+   up  vmov	x11, x7
+   lo  vmac	cm1, cm1, x1, x0, r3
+   up  vldb	wh7, [p1, #0x20] | mov	p1, r16 | vmac	cm4, cm4, x5, x2, r4
+   lo  vmov	x0, x3 | vmac	cm3, cm3, x4, x0, r3
+   up  vlda	wl7, [p5], #0x200 | vmov	x2, x1 | vmac	cm2, cm2, x10, x2, r4
+   lo  vldb	wh3, [p1, #0x20] | mov	p1, r16 | vmac	cm0, cm0, x9, x2, r3
+   up  vlda	wl1, [p6], #0x200 | vmov	x5, x8 | vmac	cm1, cm1, x0, x2, r4
+   lo  vlda	wl3, [p4], #0x200 | vmov	x2, x7 | vmac	cm2, cm2, x1, x2, r3
+   up  vldb	wh1, [p1, #0x20] | vmov	x10, x6 | vmac	cm6, cm6, x3, x7, r4
+   lo  vlda	wl7, [p6], #0x200 | vmov	x4, x5 | vmac	cm4, cm4, x4, x2, r3
+   up  vlda	wl3, [p4], #0x20 | vldb	wl8, [p3], #0x20 | vmov	x0, x4 | vmac	cm3, cm3, x10, x9, r4
+   lo  vlda	wh7, [p1, #0x20] | vmov	x1, x10
+   up  vlda	wl6, [p0], #0x20 | mov	p1, p5 | vmac	cm0, cm0, x0, x9, r4
+   lo  vldb	wl5, [p3], #0x20 | vmov	x9, x8 | vmac	cm8, cm8, x6, x0, r3
+   up  vldb	wl4, [p7], #0x20 | mov	r16, p6 | vmac	cm5, cm5, x3, x1, r4
+   lo  vlda	wl10, [p0], #0x20 | vldb	wl8, [p7], #0x20 | mov	r16, p6 | vmac	cm6, cm6, x6, x2, r3
+   up  vmov	x9, x11 | vmac	cm7, cm7, x5, x11, r4
+   lo  vldb	wl6, [p5], #0x20 | mov	p1, p4 | vmac	cm5, cm5, x9, x0, r3
+64x128x64: upstream 9 bundles, local 9; text identical: False; identical up to register names: False
+   up  vmov	x11, x7
+   lo  vmac	cm1, cm1, x1, x0, r5
+   up  vldb	wh7, [p1, #0x20] | mov	p1, r20 | vmac	cm4, cm4, x5, x2, r4
+   lo  vmov	x0, x3 | vmac	cm3, cm3, x4, x0, r5
+   up  vlda	wl7, [p5], #0x200 | vmov	x2, x1 | vmac	cm2, cm2, x10, x2, r4
+   lo  vldb	wh3, [p1, #0x20] | mov	p1, r20 | vmac	cm0, cm0, x9, x2, r5
+   up  vlda	wl1, [p6], #0x200 | vmov	x5, x8 | vmac	cm1, cm1, x0, x2, r4
+   lo  vlda	wl3, [p4], #0x200 | vmov	x2, x7 | vmac	cm2, cm2, x1, x2, r5
+   up  vldb	wh1, [p1, #0x20] | vmov	x10, x6 | vmac	cm6, cm6, x3, x7, r4
+   lo  vlda	wl7, [p6], #0x200 | vmov	x4, x5 | vmac	cm4, cm4, x4, x2, r5
+   up  vlda	wl3, [p4], #0x20 | vldb	wl8, [p3], #0x20 | vmov	x0, x4 | vmac	cm3, cm3, x10, x9, r4
+   lo  vlda	wh7, [p1, #0x20] | vmov	x1, x10
+   up  vlda	wl6, [p0], #0x20 | mov	p1, p5 | vmac	cm0, cm0, x0, x9, r4
+   lo  vldb	wl5, [p3], #0x20 | vmov	x9, x8 | vmac	cm8, cm8, x6, x0, r5
+   up  vldb	wl4, [p7], #0x20 | mov	r20, p6 | vmac	cm5, cm5, x3, x1, r4
+   lo  vlda	wl10, [p0], #0x20 | vldb	wl8, [p7], #0x20 | mov	r20, p6 | vmac	cm6, cm6, x6, x2, r5
+   up  vmov	x9, x11 | vmac	cm7, cm7, x5, x11, r4
+   lo  vldb	wl6, [p5], #0x20 | mov	p1, p4 | vmac	cm5, cm5, x9, x0, r5
+64x256x64: upstream 9 bundles, local 9; text identical: False; identical up to register names: False
+   up  vmov	x11, x7
+   lo  vmac	cm1, cm1, x1, x0, r5
+   up  vldb	wh7, [p1, #0x20] | mov	p1, r20 | vmac	cm4, cm4, x5, x2, r4
+   lo  vmov	x0, x3 | vmac	cm3, cm3, x4, x0, r5
+   up  vlda	wl7, [p5], #0x200 | vmov	x2, x1 | vmac	cm2, cm2, x10, x2, r4
+   lo  vldb	wh3, [p1, #0x20] | mov	p1, r20 | vmac	cm0, cm0, x9, x2, r5
+   up  vlda	wl1, [p6], #0x200 | vmov	x5, x8 | vmac	cm1, cm1, x0, x2, r4
+   lo  vlda	wl3, [p4], #0x200 | vmov	x2, x7 | vmac	cm2, cm2, x1, x2, r5
+   up  vldb	wh1, [p1, #0x20] | vmov	x10, x6 | vmac	cm6, cm6, x3, x7, r4
+   lo  vlda	wl7, [p6], #0x200 | vmov	x4, x5 | vmac	cm4, cm4, x4, x2, r5
+   up  vlda	wl3, [p4], #0x20 | vldb	wl8, [p3], #0x20 | vmov	x0, x4 | vmac	cm3, cm3, x10, x9, r4
+   lo  vlda	wh7, [p1, #0x20] | vmov	x1, x10
+   up  vlda	wl6, [p0], #0x20 | mov	p1, p5 | vmac	cm0, cm0, x0, x9, r4
+   lo  vldb	wl5, [p3], #0x20 | vmov	x9, x8 | vmac	cm8, cm8, x6, x0, r5
+   up  vldb	wl4, [p7], #0x20 | mov	r20, p6 | vmac	cm5, cm5, x3, x1, r4
+   lo  vlda	wl10, [p0], #0x20 | vldb	wl8, [p7], #0x20 | mov	r20, p6 | vmac	cm6, cm6, x6, x2, r5
+   up  vmov	x9, x11 | vmac	cm7, cm7, x5, x11, r4
+   lo  vldb	wl6, [p5], #0x20 | mov	p1, p4 | vmac	cm5, cm5, x9, x0, r5
+
+==========================================================================================
+G. WITNESS SUMMARY -- results/aie/witness_w4a8_probe.jsonl
+==========================================================================================
+samples 798 (unparsed 0), 11:06:00.607 .. 11:19:17.614
+max hardware contexts in one sample: 1; samples with a context: 166
+context owners (pid -> samples): {'19296': 2, '9340': 3, '18028': 3, '15576': 3, '15840': 3, '12824': 2, '6532': 2, '11068': 3, '8': 2, '16740': 3, '10076': 3, '10828': 3, '13804': 3, '13964': 4, '19988': 3, '12868': 2, '10636': 4, '10280': 7, '21424': 3, '20676': 3, '844': 3, '21380': 2, '19932': 3, '20824': 5, '21844': 3, '22128': 3, '22156': 6, '21928': 3, '21944': 3, '21100': 3, '23160': 3, '23372': 1, '24104': 2, '24120': 3, '24072': 5, '23616': 3, '25420': 2, '25248': 3, '21536': 2, '19660': 4, '23312': 4, '23556': 3, '26308': 2, '25972': 3, '22824': 3, '25772': 3, '22648': 4, '26828': 4, '24644': 2, '27304': 5, '27504': 3, '24604': 3, '25824': 2, '27800': 2}
+power modes: {'Default': 798}
+XRT clock readback while a context was up (MHz -> samples): {1800.0: 86, 800.0: 69, 960.0: 11}
+first context record: {"completions": -1.0, "completions_per_s": -1.0, "context_id": -1, "egops": -1.0, "engine_pct": 0.1718599807753925, "errors": -1.0, "fps": -1.0, "gops": -1.0, "instr_bo_mb": -1.0, "latency": -1.0, "listed_by_xrt_smi": false, "memory_mb": -1.0, "migrations": -1.0, "num_cols": 0, "partition": 0, "pid"

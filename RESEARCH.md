@@ -637,6 +637,16 @@ been closed:
   Strix's `AIE2p` block, for contrast, adds `bfp16` and `int16xint16`/`int8xint4`
   combinations AIE2 lacks and roughly doubles most throughput figures — an asymmetry
   that is itself evidence this is a real per-chip table, not a copy-pasted default.
+  **Measured follow-up (2026-09-10): the missing `int8xint4` row is a cost-model gap, not a
+  missing instruction.** `aie::mmul<4,16,8,int8,int4>` compiles for Phoenix to the same
+  `vmac` builtin int8×int8 uses with one configuration field changed, runs bit-exact on one
+  core at one `vmac` per cycle — 512 MACs each, twice int8's — and its k loop reaches 372.4
+  MAC/cycle against int8's 204.8–227.6 (`results/aie/w4a8_probe_npu.log`,
+  [BENCHMARKS](docs/BENCHMARKS.md#int8int4-is-a-native-vmac-on-aie2-and-int4-weights-cost-nothing-to-store)).
+  So the table overstates what AIE2 lacks: W4A8 here is a native multiply, not an unpack.
+  What stays open is whether it helps the *array*, whose int8 GEMM spends ~40% of each tile
+  call outside the kernel (DERIVED from the tile sweep's NPU bracket and this probe's cycles)
+  — that needs a packed-B `whole_array`, not a faster core.
   **Checked whether an actual custom kernel could be built and run on Phoenix from
   material already in this install — a real dead end, confirmed rather than assumed.**
   The same `waic` wheel also bundles `aie4_models/`, a large internal AMD kernel-source

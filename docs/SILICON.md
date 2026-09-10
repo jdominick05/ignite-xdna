@@ -70,6 +70,7 @@ New numbers use 1.80 GHz and say which power mode they were taken in.
 | Data memory | 64 KB, 4 banks | SPEC: `device.yaml` `core_data_memory: 64`, `core_num_banks: 4`; target model `getLocalMemorySize() = 0x10000`. MEASURED as a wall: every `bottleneck.py` width past 44 and every bf16 GEMM tile past `m=64,n=32`/f32 dies with `allocated buffers exceeded available memory` (`results/aie/bottleneck_spatial_sweep_npu.log`, `results/aie/bf16_matmul_ffn_shape_variants_npu.log`). The bf16 `n=64` tile needs 68,864 B — over by exactly the 3,328 B stack — while int8's fits at 52,480 B (`results/aie/int8_matmul_sweep_npu.log`). |
 | Program memory | 16 KB | SPEC: `device.yaml` `core_program_memory: 16`. MEASURED (static, 2026-09-23): the graph engine's current core ELF (`kernels/aie2/conv_engine/engine.cc`, shared by 56 of 68 builds under `build/conv_engine/`) has a `.text` of **16,160 of 16,384 B, 224 B free**. One experimental variant (`yolov8n_stride2ctrl`) sits at 16,368 B, and `yolov8n_full`, the build behind `build/yolov8n_full.ignite`, is the older 10,704-B version. Across the 68 builds there are four distinct core ELFs, so "one fixed core program" holds per engine version, not across the tree (`results/aie/engine_core_issue_census_desktop2_20260923.log`, `tools/engine_core_census.py`). |
 | MACs per cycle | int8×int8 **256**; bf16×bf16 **128**; int16×int8 **128** | SPEC: `device.yaml` AIE2 `macs_per_cycle`. |
+| int8×int4 MACs | **512 per `vmac`** (4×16×8), one `vmac` per cycle — native on AIE2, absent from the table below | MEASURED 2026-09-10 on one core: `aie::mmul<4,16,8,int8,int4>` lowers to int8×int8's `vmac` builtin with the configuration word's B-mode field cleared, is bit-exact on hardware (B two per byte, low nibble first, two's complement), and issues 8 back-to-back `vmac`s in 17.03 cycles per 16-bundle loop; a k loop reaches 372.4 MAC/cycle against int8's 204.8–227.6. AIE2's second load unit also widens int4 to int8 in the load (`vldb.unpack.s8.s4`) at no cycle cost. `results/aie/w4a8_probe_npu.log`; [BENCHMARKS](BENCHMARKS.md#int8int4-is-a-native-vmac-on-aie2-and-int4-weights-cost-nothing-to-store). |
 | Adds per cycle | int8, int4: 64; bf16, int16: 32 | SPEC: `device.yaml` AIE2 `adds_per_cycle`. |
 | Absent from the table | int16×int16, int8×int4, int16×int4, bfp16×bfp16 | SPEC: those appear only in the AIE2p (Strix) block. **int8×int4 is CONTRADICTED as "AIE2p only", 2026-09-23**, by two AMD sources fetched that day. SPEC(AIE-API): the AIE-API 2024.1 `mmul` modes page lists for AIE-ML "8b x 4b: 4x16x8, 8x16x8a, 4x32x8ab", where *a* marks an emulated mode and *b* one that needs extra data manipulation, so 4×16×8 is native: 512 MACs per instruction, 512 MAC/cycle per core ([group__group__mmul](https://download.amd.com/docnav/aiengine/xilinx2024_1/aiengine_api/aie_api/doc/group__group__mmul.html)). Riallto says the same: "an AIE can achieve 512 MAC/cycle when operating using int4 x int8 number formats" ([3_2_Ryzenai_capabilities](https://riallto.ai/notebooks/3_2_Ryzenai_capabilities.html)). `device.yaml`'s AIE2 table simply omits the mode. A silicon run exists only on the unmerged branch `worktree-int4-study` (commits `56b4e88`, `2fe7624`: `w4a8_probe_npu.log`, `w4a8_array_npu.log`), so on `main` the MEASURED tag waits for that branch. int16×int16, int16×int4 and bfp16 are unchanged: no evidence in this tree says otherwise. No vector fp32 multiply path is listed either; fp32 *accumulation* is native (`accfloat`), and `kernels/groupnorm_bf16/groupnorm_kernels.cc` gets fp32-grade products by splitting a coefficient into a bf16 hi part and a bf16 residual — two MACs, not one. |
 | Vector load/store bus | 256 bits | SPEC: `getComputeTileLoadStoreBusWidth() = 256`. |
@@ -1129,11 +1130,13 @@ decomposition per shape, not a generic one.
 
 **Cannot (design around, don't chase):**
 
-- int16×int16, int8×int4, int16×int4 and bfp16 MACs — AIE2p only (SPEC 1.2).
-  **CONTRADICTED 2026-09-23 for int8×int4:** AIE-ML has a native 8b×4b 4×16×8 `mmul`, 512 MAC/cycle
-  per core, per SPEC(AIE-API 2024.1) and Riallto (1.2, "Absent from the table" row). So it belongs
-  under "blocked", not "cannot": the silicon run is on the unmerged branch `worktree-int4-study`.
-  int16×int16, int16×int4 and bfp16 stand as written.
+- int16×int16, int16×int4 and bfp16 MACs — AIE2p only (SPEC 1.2), and untested here. They stand
+  as written. **int8×int4 no longer belongs on this list** (it read "int16×int16, int8×int4,
+  int16×int4 and bfp16 MACs — AIE2p only"). **CONTRADICTED 2026-09-23:** AIE-ML has a native
+  8b×4b 4×16×8 `mmul`, 512 MAC/cycle per core, per SPEC(AIE-API 2024.1) and Riallto (1.2,
+  "Absent from the table" row), so it belongs under "blocked", not "cannot". The Phoenix run
+  confirms it: a native `vmac`, bit-exact on hardware (MEASURED, 1.2's int8×int4 row;
+  `results/aie/w4a8_probe_npu.log`, on the unmerged branch `worktree-int4-study`).
 - A vector fp32 multiply path — not in the table; fp32 products cost two bf16 MACs, fp32
   accumulation is free.
 - More than 64 KB per core, 512 KB per mem tile, 16 BDs and 16 locks per core or shim tile,

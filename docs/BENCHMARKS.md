@@ -1830,6 +1830,11 @@ Three hypotheses:
   path, and the per-buffer floor now rests on an intervention large enough that its absence is
   the evidence. Keep the two lines — they are free and strictly better — but stop expecting
   wall clock from inner-loop work on this design.
+  **Qualified 2026-09-10 (one core, a local copy):** "strictly better" does not hold on the
+  core. A re-typed copy of the 2×2 template, statically identical to the figures above, ties
+  the 4×2 in the k loop on silicon and is slower per call at every K tested, because its loop
+  carries two same-buffer paired loads to the 4×2's one — see
+  [int8×int4 is a native `vmac`](#int8int4-is-a-native-vmac-on-aie2-and-int4-weights-cost-nothing-to-store).
 
 **What this does not show.** Nothing here was measured on hardware; the issuing-cycle figures
 are computed from object code and the microseconds come from a run two days earlier. "Not
@@ -1890,6 +1895,15 @@ exposure is worse than the count suggests, too: both kernels have exactly one pa
 in their steady-state loop, but that is 3.1% of the bf16 loop's 32 bundles and 11.1% of the
 int8 loop's 9.
 
+**Which pair it is — corrected 2026-09-10.** The int8 row's hazard verdict stands; the reading of
+it does not. That loop's one paired load is `vlda [p4], #0x20 | vldb [p3], #0x20`: both pointers
+advance by one A tile, where every B pointer in this kernel advances by 0x200, so it reads **two
+rows of A** and collides in whatever bank A sits, whether or not B shares it. A probe with A and B
+in separate banks pays exactly that one cycle per iteration on silicon
+([int8×int4 is a native `vmac`](#int8int4-is-a-native-vmac-on-aie2-and-int4-weights-cost-nothing-to-store)).
+The paragraph above explains why A and B share bank 2 in that build; it is not what the loop's
+pair pays for. The bf16 row's pair was not re-read.
+
 **The check predicts a number someone else measured, exactly.** That branch left both build
 caches on disk — one placement with the operands sharing a bank, one without, from a single
 kernel source whose compiled object hash is identical in both. Given nothing but the cache
@@ -1944,6 +1958,9 @@ nothing about data movement: same bytes, same DMA, same fifo depth, same functio
   neither confirmed nor refuted.** Backing log `results/aie/bank_ab_h12_npu.log`; harness
   `kernels/bank_placement/`. A peer session held about a core throughout, and this should be
   repeated on a quiet machine.
+  **A second reason for the null, 2026-09-10:** the hardware loop's paired load reads two rows
+  of A, not A and B (the correction under the bank table), so moving A away from B could not
+  remove it. That is independent of H11's reason, and nothing here says which dominates.
   **What would settle it is an instrument this branch already has.** Wall time is the wrong
   observable for a 3% core-side change on a shared machine; the trace unit is not. Pointing
   `kernels/pmu_probe/`'s event routing at one core of this design reads `ACTIVE` against
@@ -2055,7 +2072,97 @@ a given paired load reads, so it is certain only inside the hardware loop where 
 the `mmul` tiles. Whether the penalty composes linearly for several paired loads per iteration
 is untested. The bank map is read from the first of 16 core ELFs and allocation is per core. The
 conv kernels have no surviving build cache, so this repo's most-lost op class was **not**
-surveyed.
+surveyed. *(2026-09-10: inside that hardware loop the pair is two A tiles, not the two `mmul`
+operands — see the correction under the bank table above.)*
+
+### int8×int4 is a native `vmac` on AIE2, and int4 weights cost nothing to store
+
+2026-09-10, Desktop 2, one core. Backing log `results/aie/w4a8_probe_npu.log`; kernels and
+tools `kernels/w4a8_probe/`; every call's cycle count in `results/aie/w4a8_probe_raw.jsonl`.
+
+The W4A8 item in the backlog assumed Phoenix has no int4 multiply — `docs/SILICON.md` listed
+int8×int4 as AIE2p only, from `device.yaml`'s AIE2 MAC table, which has no such row — so its
+first step was an int4→int8 unpack. Both halves came out differently. `aie_api` defines
+`aie::mmul<4,16,8,int8,int4>` for AIE2 (`detail/aie2/mmul_8_4.hpp`), and Peano lowers it to the
+same `vmac` builtin int8×int8 uses, with the B-mode field of the MAC configuration word cleared.
+On this core that instruction:
+
+- **computes exactly.** 9 builds × 2 processes, each checked at its first and last timed call
+  against an int64 reference: 0 mismatches of 4,096. B is packed two per byte, element 2i in the
+  low nibble, two's complement — measured, with the verifier ready to report a nibble-swapped
+  or unsigned reading, and none was needed.
+- **issues one per cycle, 512 MACs each** against int8's 256. A loop whose 8 int4 `vmac`s sit in
+  8 consecutive bundles runs 17.03 cycles per 16-bundle execution; a multiplier held two cycles
+  per `vmac` would need at least 24. The latency is covered too: the compiler hides latency
+  behind explicit nops rather than an interlock ([AIE2 machine code](#aie2-machine-code-the-bundle-count-of-a-loop-is-its-cycle-count)),
+  so an int4 mode slower than Peano's model would have produced wrong answers, not slow ones.
+
+| k loop, K = 128 → 256, one core, 64×K×64 | Cycles per unit K | MAC per cycle | vs control | Static | Extra |
+|---|---|---|---|---|---|
+| int8, upstream's loop as IRON builds it (control) | 20.0 | 204.8 | 1.00× | 18.0 | 2.0 |
+| int8, the same loop unrolled twice (best int8 here) | 18.0 | 227.6 | 1.11× | 16.0 | 2.0 |
+| int4 stored, widened on load, k loop kept a loop | 18.0 | 227.5 | 1.11× | 18.0 | 0.0 |
+| int8×int4 native, as IRON builds it | 17.0 | 240.5 | 1.17× | 16.0 | 1.0 |
+| **int8×int4 native, k loop unrolled twice** | **11.0** | **372.4** | **1.82×** | 10.0 | 1.0 |
+
+Per call, the int8×int4 kernel takes 4,199 cycles at 64×256×64 against the control's 6,295
+(1.50×) and the best int8's 5,863 (1.40×); at 64×64×64, where a call is mostly C going in and
+out, 2,160 against 2,447 (1.13×). "Static" is the IRON object's own loop, assuming every `vmac`
+issues inside it; "extra" is what the silicon spent beyond it.
+
+- **The unpack is free, and buys only bytes.** AIE2's second load unit widens int4 to int8
+  inside the load (`vldb.unpack.s8.s4`), so a standalone unpack loop runs at a plain copy's 2
+  cycles per 64 elements, and in the int8 k loop the unpacking build is the same 9 bundles and 8
+  `vmac`s as int8 and ran exactly its schedule. It halves B's bytes; it adds no MACs.
+- **The native loop needs one pragma.** Built the way IRON builds it, the native loop never
+  overlaps its loads with its `vmac`s — 0.5 `vmac` per cycle statically — because its 4×16 A
+  operand is 512 bits, twice int8's, and the 4×2 expansion's six operands fill the vector file.
+  Unrolling the k loop twice with a raw clang pragma gives the scheduler two iterations to
+  interleave: 0.8 `vmac` per cycle, 409.6 MAC per cycle static, 372.4 measured. It has to be a
+  raw pragma because IRON's compile defines neither `__chess__` nor `__AIECC__`, so every
+  `AIE_LOOP_*` macro in `aie_kernel_utils.h` is empty in an IRON build.
+
+**How it was checked.** `static_probe.py` compiles with IRON's exact Peano command and
+reproduces 10 of 10 IRON-built `matmul_i8_i32` objects bundle for bundle; the IRON object each
+hardware process ran matched the static compile in all 54 processes; one Worker brackets exactly
+one kernel call with trace events, with no DMA or lock inside; `pmu_probe --calibrate` passed
+(2.0003 and 9.0001 cycles per iteration); `xrt-smi` was clean before, at the start and at the
+end; the 1 s witness saw at most one hardware context in 798 samples, power mode Default. Every
+(arm, K) cell returned one cycle count across 2 processes × 20 calls.
+
+**The extra cycles are paired loads from one buffer — which changes the reading of H12.** A, B
+and C sit in three different banks in every build, so a paired load of A with B is cross-bank
+and free — yet the control's single paired load costs exactly one cycle per iteration. It is
+therefore not A with B, and the loop's pointer increments name it: both loads advance by one A
+tile, two rows of A in one bank. The unpacking build is the positive control — the same 9
+bundles, its one pair an A with a B, and it pays 0.0. Where every pointer resolves (6 builds)
+the same-buffer pair count equals the extra cycles per loop execution exactly; the three native
+builds sit inside their unresolved bounds. **Upstream `mm.cc`'s own int8 loop has exactly that
+pair** — `vlda [p4], #0x20 | vldb [p3], #0x20`, and at 64/64/64 its object is bundle for bundle
+the 4607.05 GOPS build's — so it is predicted, not measured here, to run 10 cycles per 9-bundle
+iteration. That is the pair the bank table above reads as A colliding with B, and it is why
+H12's move of A into the empty bank could not have removed it: a reason for H12's null that is
+independent of H11's, which does not say which one dominates. No contradiction with the bank
+validation above, where separating A from B removed 1,024 cycles per panel — that kernel's pair
+read A and B.
+
+**It also qualifies H11.** This probe's re-typed copy of the 2×2 template statically matches
+H11's figures — 8 bundles, 8 `vmac`s, 1.000 per cycle — but carries two same-buffer pairs per
+execution to the 4×2's one. On one core it ties the 4×2 in the k loop (20.008 against 20.000
+cycles per unit K) and is slower per call at every K: 2,717 / 3,998 / 6,559 against 2,447 /
+3,735 / 6,295. "Strictly better" does not hold on this core, and a loss that size sits inside
+the array's ±2%. That is a local copy on one core at M = N = 64 — not upstream's own 2×2 build,
+and not the array.
+
+**What this does not establish.** One core, M = N = 64, K ≤ 256, one buffer placement — not the
+array. The `whole_array` int8 GEMM's best tile, 64/128/64 at 2048³ over 16 cores (4852.06
+GOPS, 3,540.7 µs NPU bracket), spends about 6,224 cycles per tile call per core (DERIVED at
+1.80 GHz), of which this probe's control kernel is 3,735; the native kernel's saving at that
+tile, 944 cycles, would be at most ~1.18× if nothing else moved (DERIVED). The other half of
+W4A8 — B at half the bytes through the shim and mem tile — needs a `whole_array` derivative
+with packed B and is unmeasured. The paired-load attribution reads pointer roles from
+post-increments, not resolved addresses. int16×int4 has no AIE2 `mmul` in `aie_api` and was not
+tried. Nothing here touches the accuracy of a W4 network.
 
 ### MobileViT-XXS does not survive per-tensor INT8, and AdaRound cannot save it
 
