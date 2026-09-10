@@ -2099,7 +2099,7 @@ On this core that instruction:
 
 | k loop, K = 128 → 256, one core, 64×K×64 | Cycles per unit K | MAC per cycle | vs control | Static | Extra |
 |---|---|---|---|---|---|
-| int8, upstream's loop as IRON builds it (control) | 20.0 | 204.8 | 1.00× | 18.0 | 2.0 |
+| int8 control: upstream's kernel, re-typed | 20.0 | 204.8 | 1.00× | 18.0 | 2.0 |
 | int8, the same loop unrolled twice (best int8 here) | 18.0 | 227.6 | 1.11× | 16.0 | 2.0 |
 | int4 stored, widened on load, k loop kept a loop | 18.0 | 227.5 | 1.11× | 18.0 | 0.0 |
 | int8×int4 native, as IRON builds it | 17.0 | 240.5 | 1.17× | 16.0 | 1.0 |
@@ -2108,7 +2108,10 @@ On this core that instruction:
 Per call, the int8×int4 kernel takes 4,199 cycles at 64×256×64 against the control's 6,295
 (1.50×) and the best int8's 5,863 (1.40×); at 64×64×64, where a call is mostly C going in and
 out, 2,160 against 2,447 (1.13×). "Static" is the IRON object's own loop, assuming every `vmac`
-issues inside it; "extra" is what the silicon spent beyond it.
+issues inside it; "extra" is what the silicon spent beyond it. The control is upstream
+`mm.cc`'s int8 kernel re-typed in the probe's own file, so all three B policies share one
+template: Peano gives it upstream's loop length, 8 `vmac`s and one same-buffer pair in a
+different order. Upstream's own object was compiled and read, not timed.
 
 - **The unpack is free, and buys only bytes.** AIE2's second load unit widens int4 to int8
   inside the load (`vldb.unpack.s8.s4`), so a standalone unpack loop runs at a plain copy's 2
@@ -2117,13 +2120,17 @@ issues inside it; "extra" is what the silicon spent beyond it.
 - **The native loop needs one pragma.** Built the way IRON builds it, the native loop never
   overlaps its loads with its `vmac`s — 0.5 `vmac` per cycle statically — because its 4×16 A
   operand is 512 bits, twice int8's, and the 4×2 expansion's six operands fill the vector file.
-  Unrolling the k loop twice with a raw clang pragma gives the scheduler two iterations to
-  interleave: 0.8 `vmac` per cycle, 409.6 MAC per cycle static, 372.4 measured. It has to be a
-  raw pragma because IRON's compile defines neither `__chess__` nor `__AIECC__`, so every
-  `AIE_LOOP_*` macro in `aie_kernel_utils.h` is empty in an IRON build.
+  Unrolling the k loop twice gives the scheduler two iterations to interleave: 0.8 `vmac` per
+  cycle, 409.6 MAC per cycle static, 372.4 measured. That is one `AIE_LOOP_UNROLL(2)` on the k
+  loop — Peano predefines `__AIECC__`, so an IRON build turns it into
+  `clang loop unroll_count(2)`, byte-identical to the pragma the probe spells directly — and
+  upstream's k loop carries no hint Peano reads (its only one, `AIE_LOOP_FLATTEN`, is
+  chess-only).
 
 **How it was checked.** `static_probe.py` compiles with IRON's exact Peano command and
-reproduces 10 of 10 IRON-built `matmul_i8_i32` objects bundle for bundle; the IRON object each
+reproduces 10 of 10 IRON-built `matmul_i8_i32` objects bundle for bundle; with the same flags,
+`clang++ -dM -E` shows `__AIECC__` predefined, and `AIE_LOOP_UNROLL(2)` builds the same object
+as the probe's pragma (log section H); the IRON object each
 hardware process ran matched the static compile in all 54 processes; one Worker brackets exactly
 one kernel call with trace events, with no DMA or lock inside; `pmu_probe --calibrate` passed
 (2.0003 and 9.0001 cycles per iteration); `xrt-smi` was clean before, at the start and at the

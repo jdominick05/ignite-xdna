@@ -530,8 +530,9 @@ needs a trace hook in `whole_array`. Harness `kernels/bank_placement/`; written 
 weights on one core, 2026-09-10. **int8×int4 is a native `vmac` on AIE2**, which `device.yaml`'s
 MAC table omits: `aie::mmul<4,16,8,int8,int4>` is bit-exact on hardware (B two per byte, low
 nibble first, two's complement) and issues one per cycle at 512 MACs, so a k loop runs 372.4
-MAC/cycle against 204.8 for upstream's int8 loop as IRON builds it and 227.6 for the best int8
-schedule — 1.82× / 1.64×, one pragma (k loop unrolled twice) away from its default build's 1.17×.
+MAC/cycle against 204.8 for the int8 control (upstream's kernel re-typed: its loop length and
+pair) and 227.6 for the best int8 schedule — 1.82× / 1.64×, one `AIE_LOOP_UNROLL(2)` on the k
+loop away from its default build's 1.17×.
 Widening int4 to int8 on load (`vldb.unpack.s8.s4`) costs nothing and buys only bytes. Static
 tables from IRON's exact compile command (10/10 cached objects reproduced), trace-unit cycles
 per call identical across 2 processes × 20 calls in every cell, the IRON object compared with

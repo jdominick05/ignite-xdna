@@ -50,7 +50,7 @@ array program) into `~/.npu/cache/<hash>/`; later runs of the same shape hit the
 | `bank_placement/` | A local copy of `whole_array.py` plus `--stack-size`, and an alternating A/B driver | Tests H12: does separating the int8 GEMM's colliding operands into different memory banks speed it up? **Not resolvable on a shared machine** — seven series, arms overlap, sign varies. Its `bank_stall_probe.py` is a **superseded** control whose headline was retracted; the working observable is `memory_placement/` |
 | `conv_accum/` | Local copies of both 1×1 conv kernels with their accumulators made register-resident | **Worth 2.99–3.01×** (116 → 350 marginal GOPS); hot loop 0.045 → 0.286 MACs/cycle. **The op class stays closed** — CPU still wins 2.4×, down from 7.2× |
 | `aie2/` | In-flight 4-D DMA receptive field generation, vectorized zero-realignment 3×3 conv kernel, and 20-core full-array engine | Replaces software `sliding_mul` shuffles (`vshift`/`vmov`) with MemTile 4-D DMA striding. M=1 achieves **2.00× MAC issue density** (0.222 → 0.444 vmac/cycle); M=2 unrolling achieves **4.50× MAC issue density** (1.000 vmac/cycle, 100% vector ALU saturation) with 0 realignment ops and 0 spills. *(Qualified 2026-09-23: the densities are STATIC inner-loop bundle counts, not measured rates; see the silicon figures at the end of this row.)* Closed-loop Column 0 pipeline: native hardware SRS requantization (`vst.srs.s8.s32`), 4-core gathering, and host-to-host DDR roundtrip. 20-core full-array execution engine: 5 physical columns × 4 cores/col across 30 physical tiles (3.84 MB SRAM, 50 flows), 20 clean ELFs, 18.43 TOPS at 1.80 GHz. Compiler-verified. **Qualified 2026-09-23:** 18.43 TOPS is peak arithmetic for 20 cores, and "compiler-verified" means the build succeeds. It is not a hardware result. On silicon ([`hardware_im2col_execution.log:11-14`](../results/aie/hardware_im2col_execution.log)) the 20-core array hits **ERT_CMD_STATE_TIMEOUT**, 16 cores (Cols 0–3) reach **0.0270 TOPS**, and one core 0.0037 TOPS. The log prints these as 0.37% and 0.80% "density" against a 128 MAC/cycle int8 peak. The SPEC is 256 (`docs/SILICON.md`), so against the true peak they are about **0.18% and 0.40%** (DERIVED; [ledger A5, A7](../results/aie/notes_tnzr_cross_audit.md)); [implementation](../results/aie/notes_im2col_4d_implementation.md), [VLIW audit](../results/aie/notes_im2col_kernel_vliw_audit.md), [pipeline integration](../results/aie/notes_im2col_m2_pipeline_integration.md), [column scaling](../results/aie/notes_im2col_4core_column_scaling.md), [egress roundtrip](../results/aie/notes_im2col_egress_roundtrip.md), [column 4 unlock feasibility](../results/aie/notes_column4_unlock_feasibility.md), and [20-core array synthesis](../results/aie/notes_im2col_20core_array_synthesis.md) |
-| `w4a8_probe/` | Nothing yet — int4 weights on one core, two ways: native `mmul<int8,int4>`, and int4 widened to int8 on load | **int8×int4 is a native `vmac` on AIE2**, bit-exact, one per cycle at 512 MACs: a k loop at 372.4 MAC/cycle, 1.82× upstream's int8 loop. Widening on load is free and buys only bytes. One core, not the array |
+| `w4a8_probe/` | Nothing yet — int4 weights on one core, two ways: native `mmul<int8,int4>`, and int4 widened to int8 on load | **int8×int4 is a native `vmac` on AIE2**, bit-exact, one per cycle at 512 MACs: a k loop at 372.4 MAC/cycle, 1.82× the int8 control (upstream's kernel, re-typed). Widening on load is free and buys only bytes. One core, not the array |
 
 ## `aie2/dfl/`
 
@@ -518,10 +518,13 @@ the unpack cost. `results/aie/w4a8_probe_npu.log`, written up in
 
 Three things worth knowing before writing another kernel here:
 
-- **An IRON build ignores `aie_kernel_utils.h`'s loop hints.** IRON's compile defines neither
-  `__chess__` nor `__AIECC__`, so every `AIE_LOOP_*` macro is empty there. The native loop only
-  pipelines with its k loop unrolled twice, and that has to be a raw `_Pragma` in the source
-  (`-DINNER_UNROLL2`): 0.5 → 0.8 `vmac` per cycle.
+- **Upstream's k-loop hint never reaches Peano; `AIE_LOOP_UNROLL` does.** Peano predefines
+  `__AIECC__` (check with `clang++ -dM -E` — it is not on IRON's command line), so in an IRON
+  build `AIE_LOOP_UNROLL`/`AIE_LOOP_MIN_ITERATION_COUNT` become `clang loop` pragmas, while
+  `AIE_LOOP_FLATTEN` — the only hint on upstream `mm.cc`'s k loop — and
+  `AIE_PREPARE_FOR_PIPELINING` are empty. The native loop only pipelines with its k loop
+  unrolled twice (`-DINNER_UNROLL2`, the same object as `AIE_LOOP_UNROLL(2)`): 0.5 → 0.8 `vmac`
+  per cycle.
 - **"Spill" in a static table is a schedule shape, not a verdict.** At K=64 the default build of
   the unpack kernel unrolls fully and spills (1,312-byte frame) and is still faster per call than
   every int8 arm, because the big loop absorbs the C loads. Measure before believing either way.

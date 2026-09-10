@@ -39,13 +39,14 @@ ANSWER
    slower to produce its result than Peano's machine model assumes would have been read early
    and come out WRONG, not slow. Every output was exact.
 
-3. The marginal k-loop rate on one core goes from 204.8 MAC/cycle (upstream's int8 loop as
-   IRON builds it) or 227.6 (the best int8 schedule found here) to 372.4 with the native
+3. The marginal k-loop rate on one core goes from 204.8 MAC/cycle (the int8 control:
+   upstream's kernel re-typed, with upstream's loop length and pair -- see METHOD) or 227.6
+   (the best int8 schedule found here) to 372.4 with the native
    kernel: 1.82x / 1.64x. Per call at 64x256x64 that is 6,295 -> 4,199 cycles (1.50x against
    the control, 1.40x against the best int8); at 64x64x64, where a call is mostly C going in and
-   out, 2,447 -> 2,160 (1.13x). Reaching it takes one clang pragma: the native loop is only
-   software-pipelined with its k loop unrolled twice (INNER_UNROLL2, a raw pragma in the .cc,
-   which survives an IRON build where aie_kernel_utils.h's AIE_LOOP_* hints do not). As IRON
+   out, 2,447 -> 2,160 (1.13x). Reaching it takes one loop hint: the native loop is only
+   software-pipelined with its k loop unrolled twice (INNER_UNROLL2 -- the same object as
+   AIE_LOOP_UNROLL(2), section H; upstream's k loop carries no hint Peano reads). As IRON
    builds it by default it runs 17.03 cycles per unit K -- 240.5 MAC/cycle, 1.17x -- because
    its 512-bit A operands double the registers a 4x2 expansion holds and the loads never
    overlap the vmacs.
@@ -104,7 +105,7 @@ ANSWER
    docs/BENCHMARKS.md's H11 bullet says to keep the 2x2 lines as "free and strictly better"; on
    this core and these tiles they are neither, and a per-call loss of that size sits inside
    the +-2% the array showed. That is this probe's copy, one core, M = N = 64 -- not upstream's
-   own 2x2 build and not the array. Separately, i8i8:unroll2 (the 4x2 with one raw pragma) is
+   own 2x2 build and not the array. Separately, i8i8:unroll2 (the 4x2, k loop unrolled twice) is
    the best int8 schedule here: 18.0 cycles per unit K and 5,863 cycles per call at K=256, 6.9%
    under the control. It is a lever, not a recommendation: nothing here puts it on the array.
 
@@ -133,13 +134,16 @@ aie_kernels/aie2/mm.cc with the Peano command IRON's own compile step builds
 (aie/utils/compile/utils.py, minus the -MD dependency-file pair) and reads each kernel's
 hardware-loop body with tools/aie_disasm.py. --match-cache compiles upstream mm.cc over a dims
 grid and compares against every IRON-built matmul_i8_i32 object left in ~/.npu/cache: 10 of 10
-distinct cached bodies (41 objects) reproduced bundle for bundle. IRON defines neither
-__chess__ nor __AIECC__, so every AIE_LOOP_* hint in aie_kernel_utils.h is empty in an IRON
-build; the probe's k-loop modes are raw clang pragmas in the .cc (INNER_NO_UNROLL,
-INNER_UNROLL2). mm_i8i8_local is upstream's 4x2 kernel source re-typed; Peano gives it a
-different 9-bundle schedule from upstream's (rotation and register moves differ) with the same
-8 vmacs, 8 loads and one A&A paired load. It is the control because upstream's own function
-fires event0/event1 itself and cannot sit inside the wrapper's bracket.
+distinct cached bodies (41 objects) reproduced bundle for bundle. Peano predefines __AIECC__
+(section H), so in an IRON build aie_kernel_utils.h's AIE_LOOP_UNROLL and
+AIE_LOOP_MIN_ITERATION_COUNT are live clang loop pragmas, while AIE_LOOP_FLATTEN -- the only
+hint on upstream's k loop -- and AIE_PREPARE_FOR_PIPELINING are empty. The probe's k-loop
+modes are those pragmas spelled directly in the .cc (INNER_NO_UNROLL, INNER_UNROLL2; the
+latter builds the same object as AIE_LOOP_UNROLL(2)). mm_i8i8_local is upstream's 4x2 kernel
+source re-typed; Peano gives it a different 9-bundle schedule from upstream's (rotation and
+register moves differ) with the same 8 vmacs, 8 loads and one A&A paired load. It is the
+control because upstream's own function fires event0/event1 itself and cannot sit inside the
+wrapper's bracket; upstream's object was compiled and read (sections B, F), never timed.
 
 Hardware: kernels/w4a8_probe/w4a8_probe.py -- one Worker on Tile(0, 2); A, B, C single-buffered
 ObjectFifos; stack 4,096 B in every arm. The kernel wrapper zeroes C, brackets ONE kernel call
@@ -773,3 +777,55 @@ context owners (pid -> samples): {'19296': 2, '9340': 3, '18028': 3, '15576': 3,
 power modes: {'Default': 798}
 XRT clock readback while a context was up (MHz -> samples): {1800.0: 86, 800.0: 69, 960.0: 11}
 first context record: {"completions": -1.0, "completions_per_s": -1.0, "context_id": -1, "egops": -1.0, "engine_pct": 0.1718599807753925, "errors": -1.0, "fps": -1.0, "gops": -1.0, "instr_bo_mb": -1.0, "latency": -1.0, "listed_by_xrt_smi": false, "memory_mb": -1.0, "migrations": -1.0, "num_cols": 0, "partition": 0, "pid"
+
+==========================================================================================
+H. ARE aie_kernel_utils.h's LOOP HINTS LIVE IN AN IRON BUILD? -- compile only, same session
+==========================================================================================
+Correction, made before this branch was pushed: the first version of this log (commit 632ee97)
+said IRON's Peano compile defines neither __chess__ nor __AIECC__, so every AIE_LOOP_* hint is
+empty in an IRON build. That was read off the command line, which carries no -D__AIECC__; the
+compiler predefines it. No measured number in this log moves -- the probe's k-loop modes were
+already the pragmas themselves -- but the explanation of why upstream's k loop is not unrolled
+changes: its only hint, AIE_LOOP_FLATTEN, is chess-only and empty under Peano, while
+AIE_LOOP_UNROLL(2) would have done exactly what INNER_UNROLL2 did.
+
+H1. Same clang and flags as static_probe.py's IRON_FLAGS (the recipe section B reproduces):
+  clang    ~/mlir-aie/ironenv/Lib/site-packages\llvm-aie\bin\clang++.exe
+  flags    -std=c++20 -Wno-parentheses -Wno-attributes -Wno-macro-redefined -Wno-empty-body -O2 -DNDEBUG -D__AIE_API_AIE_ADF_HPP__ --target=aie2-none-unknown-elf
+
+  predefined (clang++ -I<mlir_aie/include> <flags> -dM -E -x c++ <empty TU>):
+    __AIECC__      defined as 1
+    __chess__      NOT defined
+    __PEANO__      defined as 1
+    __AIEARCH__    defined as 20
+    __AIE_ARCH__   defined as 20
+
+  aie_kernel_utils.h (mlir-aie v1.4.2) therefore takes its `#elif defined(__AIECC__)` branch:
+    AIE_LOOP_UNROLL(x)               _Pragma("clang loop unroll_count(x)")
+    AIE_LOOP_NO_UNROLL               _Pragma("clang loop unroll(disable)")
+    AIE_LOOP_MIN_ITERATION_COUNT(x)  _Pragma("clang loop min_iteration_count(x)")
+    AIE_PREPARE_FOR_PIPELINING       (empty)
+    AIE_LOOP_FLATTEN                 (empty)   <- the only hint on upstream mm.cc's k loop
+                                                  (and only under -DOPT_PERF_ENABLED)
+
+H2. `#pragma clang loop` lines in the -E output of w4a8_kernels.cc -DINNER_UNROLL2:
+      2 x  #pragma clang loop min_iteration_count(1)
+      2 x  #pragma clang loop min_iteration_count(2)
+      2 x  #pragma clang loop min_iteration_count(4)
+      2 x  #pragma clang loop min_iteration_count(8)
+      2 x  #pragma clang loop unroll_count(2)
+  (min_iteration_count comes from the AIE_LOOP_MIN_ITERATION_COUNT hints the .cc copied from
+  upstream; unroll_count(2) is INNER_PRAGMA, once per template.)
+
+H3. -DINNER_UNROLL2 with INNER_PRAGMA spelled two ways, same basename, same flags:
+    raw    _Pragma("clang loop unroll_count(2)")   sha256 00c8f98833d5d797  7584 bytes
+    macro  AIE_LOOP_UNROLL(2)                       sha256 00c8f98833d5d797  7584 bytes
+    objects IDENTICAL
+    control: default build (no k-loop pragma)       sha256 40fe505567146574  7720 bytes -> differs
+
+H4. The source comment in w4a8_kernels.cc that repeated the wrong claim was rewritten in the
+  same number of lines. Every build a raw row ran (27, with its RUN_KERNEL) plus each
+  static-probe build (9, no RUN_KERNEL), compiled from the 632ee97 source and from the corrected
+  one: 36 compared, 36 byte-identical, 0 differ. The raw rows' rev=dcac763949bff596 is the
+  632ee97 source (w4a8_probe.py + w4a8_kernels.cc); after the comment fix the same function
+  returns 04ebed5418afbc87, for the same code.

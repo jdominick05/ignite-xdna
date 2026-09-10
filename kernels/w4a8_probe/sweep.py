@@ -36,7 +36,7 @@ _XRT_SMI = r"C:\Windows\System32\AMD\xrt-smi.exe"
 
 DEFAULT_ARMS = ",".join(
     [
-        "i8i8:default",  # upstream's loop, as IRON builds it -- the control
+        "i8i8:default",  # upstream's kernel re-typed, as IRON builds it -- the control
         "i8i8:unroll2",  # the same with the unroll native needs, to separate the two
         "unpack:default",
         "unpack:no-unroll",

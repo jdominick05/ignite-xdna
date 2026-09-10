@@ -28,9 +28,9 @@
 #define DIM_N 64
 #endif
 
-// IRON's Peano compile defines neither __chess__ nor __AIECC__, so every AIE_LOOP_*
-// macro in aie_kernel_utils.h expands to nothing there. These are raw clang pragmas
-// instead, which survive an IRON build because they are in this file:
+// Peano predefines __AIECC__, so AIE_LOOP_UNROLL(n) is this same clang pragma in an IRON
+// build (same object); upstream's k loop has only AIE_LOOP_FLATTEN, empty under Peano.
+// The k-loop modes, spelled as the pragmas themselves:
 //   -DINNER_NO_UNROLL  keep the k loop a loop rather than unrolling it into the j loop
 //   -DINNER_UNROLL2    unroll the k loop exactly twice, so the scheduler can overlap
 //                      one iteration's loads with the previous one's vmacs
