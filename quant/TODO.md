@@ -90,6 +90,13 @@ recorded in the handoff and Git history rather than treated as future features.
   can only be gated against a **GPU** oracle produced on the same box and runtime — the
   code refuses to let a GPU run be quoted as matching the CPU one
   (`AllowNonParityDevice`, `byte_parity_path` in the sidecar).
+  **ResNet50 timed 2026-09-10 on Desktop 1**
+  ([AdaRound on the RX 7900 XTX](../docs/BENCHMARKS.md#ignition-adaround-on-the-rx-7900-xtx-2026-09-10-desktop-1)).
+  The torch-build question above is answered: `resnet_env_rocm` (AMD's Windows ROCm wheels,
+  torch 2.9.1+rocm7.2.1) reaches the card. Torch phase 3.05×, whole step 2.27×; the GPU run
+  is byte-reproducible and 1 LSB off the same-env CPU run in 12.58 % of int8 elements.
+  Still open: the wide-model timing, a Quark GPU oracle on the same box and runtime, and
+  Desktop 2's accuracy and placement check of `models/resnet50_ignition_cle_adaround_c64_gpu_desktop1.onnx`.
 - [x] Connect MODNet's calibration source to the shared inference preprocessing,
   then re-evaluate matte quality against the documented mismatched-preprocessing
   baseline. Do not claim this fixes the quality gap before measuring it.

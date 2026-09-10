@@ -416,6 +416,9 @@ def finetune(float_graph: Graph, quant_graph: Graph, source: ImageFolderSource,
         log("ADAROUND WARNING: optimisation is off the cpu, so the emitted weights are NOT the "
             "byte-identical transcription of Quark's XINT8_ADAROUND. Do not report this run as an "
             "oracle match; compare accuracy, not bytes.")
+        if device.type == "cuda":           # which adapter "cuda" resolved to; ROCm builds answer here too
+            log(f"ADAROUND DEVICE name={torch.cuda.get_device_name(device)!r} "
+                f"hip={getattr(torch.version, 'hip', None)} cuda={torch.version.cuda}")
 
     # The four constants a qdq call needs are functions of the QParams alone, so they are
     # built once per (params, device) instead of once per call. On cpu the values are the
