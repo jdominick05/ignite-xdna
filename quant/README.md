@@ -106,7 +106,8 @@ calibration listing from the base's sidecar, rebuilds the equalized float refere
 checks the float model's hash, and writes a new model plus sidecar (an `adaround`
 section with per-layer reconstruction metrics, iterations, changed elements, peak
 working set and versions; scales and positions are unchanged). It imports torch, so
-the wrapper uses `resnet_env`; Quark stays blocked:
+the wrapper uses `resnet_env` (`--env` overrides that, for device timing only); Quark
+stays blocked:
 
 `--device` selects the torch device for the Adam rounding loop (Quark's `OptimDevice`).
 ORT activation extraction always stays on the CPU. **The default `cpu` is the only
@@ -114,8 +115,12 @@ byte-parity path**: a GPU changes float reduction order in Adam and in the convo
 so `--device` off `cpu` requires `--accept-non-parity`, records `byte_parity_path: false`
 in the sidecar's `adaround` section, and logs a warning. A run made that way must be
 compared on accuracy, never quoted as matching a CPU oracle. A device torch cannot reach
-raises rather than silently falling back to the CPU. No GPU run has been made — no torch
-build on any machine here can reach one; see `quant/TODO.md`.
+raises rather than silently falling back to the CPU. Until 2026-09-10 no GPU run had been
+made. Since then ResNet50 has run on Desktop 1's RX 7900 XTX
+(`scripts/quant-adaround.sh --env resnet_env_rocm --device cuda`): 2.27× faster end to
+end, and 1 LSB off the same-env CPU run in 12.58 % of int8 elements
+([BENCHMARKS](../docs/BENCHMARKS.md#ignition-adaround-on-the-rx-7900-xtx-2026-09-10-desktop-1)).
+See `quant/TODO.md` for what remains.
 
 ```bash
 ./scripts/quant-adaround.sh --quant models/resnet50_ignition_cle_c64.onnx --out models/resnet50_ignition_cle_adaround_c64.onnx --log results/quant/quant_resnet50_ignition_cle_adaround_c64.log
