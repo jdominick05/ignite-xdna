@@ -176,12 +176,12 @@ checks every stage against serial execution. [Scope, measurements and usage](doc
 
 The XINT8-only ceiling above is the *shipped runtime's*, not the silicon's. AMD's own
 `device.yaml` (same 1.7.1 install) gives Phoenix's AIE2 MACs/cycle — `bfloat16xbfloat16: 128`,
-`int16xint8: 128`, `int8xint8: 256` — and omits an **int8×int4 `vmac` at 512 the silicon has**;
-with int4 weights the array GEMM runs **6,195 GOPS**, 1.26× int8 (bit-exact; the halved bytes
-do it, not the MAC). Quark and the VitisAI EP expose none of it. The open-source
-`mlir-aie`/Peano toolchain does, natively on Windows, with no gated access — so `kernels/` holds
-bf16, int8 and int4 kernels written against the bare array. Outcomes, mostly negative and all
-measured:
+`int16xint8: 128`, `int8xint8: 256` — and omits an **int8×int4 `vmac` at 512 the silicon has**.
+int4 weights take the array GEMM to **6,195 GOPS**, 1.26× int8 at its best tile (bit-exact;
+from halved bytes, not the MAC), less or nothing at other tiles. Quark and the VitisAI EP expose
+none of it. The open-source `mlir-aie`/Peano toolchain does, natively on Windows, with no gated
+access — so `kernels/` holds bf16, int8 and int4 kernels written against the bare array.
+Outcomes, mostly negative and all measured:
 
 - **bf16 GEMM is the first genuine NPU win in this project.** 2072.5 GFLOPS at 1024³
   against CPU bf16's 1161.2 — the NPU wins 1.18×–1.78× once M/N ≥ 1024, and loses at
