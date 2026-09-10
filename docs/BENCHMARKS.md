@@ -4767,8 +4767,8 @@ labeled-count assertion, context gate and log naming.
 
 **The reference is the control, and it holds.** 79.40% CPU and 79.50% NPU are the figures
 [AdaRound parity](#ignition-adaround-parity) recorded on 2026-09-08, so this sitting and its
-fresh compiles are sound. Its latency (5.24 ms here, 5.21 ms then) comes from a different day
-and is not compared.
+fresh compiles are sound. Its latency (5.24 ms here, 5.23 ms for the same file then, in the
+`own` row) comes from a different day and is not compared.
 
 **The GPU changes neither placement nor speed.** The GPU-built file compiles to the same
 393/395 split and runs at the same ~5.2 ms. That is expected: AdaRound moves weight values,
