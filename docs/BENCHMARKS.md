@@ -4738,11 +4738,19 @@ timing and a GPU oracle are still open.
 
 ### Ignition: AdaRound on the RX 7900 XTX (2026-09-10, Desktop 1)
 
-The first GPU AdaRound measured in this repo: Ignition's transcription
-(`python -m quant adaround`) on ResNet50's c64 CLE base, on **Desktop 1** (`JORDAN-PC`,
-Ryzen 7 7800X3D, RX 7900 XTX, gfx1100, 24 GB). It is not Quark's FastFinetune on a GPU,
-and it makes no accuracy claim: Desktop 1 has no NPU, so full-set top-1 and EP placement
-for the new artifacts are Desktop 2's to run, with `--fresh`.
+A GPU AdaRound run with its adapter on record and a same-env CPU baseline beside it:
+Ignition's transcription (`python -m quant adaround`) on ResNet50's c64 CLE base, on
+**Desktop 1** (`JORDAN-PC`, Ryzen 7 7800X3D, RX 7900 XTX, gfx1100, 24 GB). It is not
+Quark's FastFinetune on a GPU, and it makes no accuracy claim: Desktop 1 has no NPU, so
+full-set top-1 and EP placement for the new artifacts are Desktop 2's to run, with
+`--fresh`.
+
+It is not the first GPU request here.
+[`yolo8m_adaround_gpu_compile.log`](../results/yolo8m_adaround_gpu_compile.log) (JORDAN-PC,
+`resnet_env_rocm`) shows Quark's own FastFinetune reporting "optimized by adaround on
+cuda" for yolov8m, with its ORT half falling back to the CPU. That log names no adapter
+and has no CPU arm beside it, yet RESEARCH credits yolov8m to "GPU-accelerated
+FastFinetune" on its strength. This run neither validates nor refutes that credit.
 
 `resnet_env_rocm` has torch 2.9.1+rocm7.2.1 (HIP 7.2.53211), where `cuda:0` is the 7900 XTX
 and the only device, plus ONNX Runtime 1.29.0, numpy 1.26.4 and onnx 1.19.0, with 8 torch
@@ -4829,7 +4837,8 @@ Desktop 2's (571.24 s against 528.17 s). That gap is unexplained: the machines d
 CPU, memory and ORT version. No speedup is quoted across machines. **Not measured
 here:** the accuracy of either GPU artifact (Desktop 2), a GPU oracle (Quark
 `XINT8_ADAROUND` with `OptimDevice=cuda` on this box and runtime) to gate a GPU run
-against, a wide model, and Quark's own FastFinetune on the GPU.
+against, a wide model, and a timed, adapter-recorded run of Quark's own FastFinetune on
+the GPU.
 
 ### Ignition: YOLOv8n-cut AdaRound parity
 

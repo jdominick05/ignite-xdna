@@ -21,6 +21,9 @@ Records, one per line, stable enough to grep:
     GPU_LOAD t=<hh:mm:ss> luid=<adapter> engtype=<type> pct=<f> summed over processes/engines
     GPU_LOAD_TOP t=<hh:mm:ss> pid=<pid> name=<proc> luid=<adapter> engtype=<type> pct=<f>
 
+`engtype` is Windows' own engine name and can contain a space (`compute 0`), so read it as
+everything between `engtype=` and ` pct=`, which is always the last field.
+
 The GPU records are Windows-only (the counters are WDDM's); DEVICE_INFO works anywhere.
 A failure to read them prints `GPU_LOAD unavailable` and exits 0, because a witness that
 kills the run it is watching is worse than a missing one. Beyond what
