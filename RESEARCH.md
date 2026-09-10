@@ -1686,6 +1686,12 @@ sections above.
   AdaRound: byte-identical to a fresh `XINT8_ADAROUND` oracle on the same machine,
   79.40% CPU top-1 for both, while a Sep 5 Quark artifact from an unrecorded machine
   differs by one LSB in 4.1 M weights, so cross-machine parity stays statistical.
+  Refined 2026-09-10: Desktop 1 reproduces Desktop 2's Ignition artifact byte for byte
+  at torch 2.4.1+cpu and 8 threads, across ONNX Runtime 1.22.1 and 1.29.0. A torch 2.9.1
+  build on the same machine moves 4.1 M weights by one LSB. So between these two Zen 4
+  boxes, with the thread count held at 8, the torch build has to match and the machine
+  need not. The Sep 5 difference stays unexplained
+  ([AdaRound on the RX 7900 XTX](docs/BENCHMARKS.md#ignition-adaround-on-the-rx-7900-xtx-2026-09-10-desktop-1)).
   [YOLO preparation parity](docs/BENCHMARKS.md#ignition-yolov8n-cut-preparation-parity)
   extends the gate to the head-cut YOLOv8n export: the prepared float graph equals
   Quark's pre-calibration graph, a fresh same-listing oracle matches position for

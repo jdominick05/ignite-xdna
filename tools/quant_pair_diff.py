@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import math
 import os
 import sys
 from pathlib import Path
@@ -82,8 +83,14 @@ def main(argv=None) -> int:
     print(f"  initializers byte-mismatch : {len(d.init_exact_mismatch)}")
     print(f"  int8 initializers compared : {d.compared_int8_initializers}")
     print(f"  int8 weights over 0 LSB    : {len(d.weight_lsb)}")
+    int8_total = sum(math.prod(t.dims) for t in ma.graph.initializer
+                     if t.data_type == onnx.TensorProto.INT8 and t.name.endswith("_quantized"))
+    print(f"  int8 elements differing    : {sum(d.weight_changed_elements.values())} of {int8_total}")
+    print(f"  int8 max delta (LSB)       : {max(d.weight_lsb.values(), default=0)}")
     print(f"  ok(0 LSB)                  : {d.ok(0)}")
     print(f"  ok(1 LSB)                  : {d.ok(1)}")
+    for line in d.init_exact_mismatch[:5]:
+        print(f"    {line}")
     for line in d.node_delta[:5]:
         print(f"    {line}")
     print()

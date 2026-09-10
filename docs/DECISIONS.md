@@ -1502,7 +1502,14 @@ shape as a CPU run in an NPU costume, refused the same way. If a GPU run is ever
 must be against a **GPU** oracle from the same box and runtime, never the CPU one. The CPU
 path is shown bit-for-bit unchanged by this refactor
 (`results/quant/adaround_device_cpu_parity_20260909_desktop2.log`). No GPU has run: no torch
-build on any machine here can reach one.
+build on any machine here can reach one. *Superseded 2026-09-10:* Desktop 1's
+`resnet_env_rocm` (torch 2.9.1+rocm7.2.1) reaches its RX 7900 XTX, and Ignition's AdaRound
+has run there on ResNet50. It was 2.27× faster end to end, byte-identical to itself on a
+rerun, and 1 LSB off the same-env CPU run in 12.58 % of int8 elements, which is the
+non-parity this decision anticipated
+([BENCHMARKS](BENCHMARKS.md#ignition-adaround-on-the-rx-7900-xtx-2026-09-10-desktop-1)).
+That is Ignition's transcription only. No GPU oracle exists yet to gate a GPU run against,
+so the decision itself stands.
 
 ### A log whose *encoding* is corrupt is fixed in place, not duplicated
 

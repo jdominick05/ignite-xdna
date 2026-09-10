@@ -4579,7 +4579,11 @@ layer-0 losses differ from the fresh run's in the sixth decimal (0.347939 agains
 exists), so that difference began in the float arithmetic (machine or thread count,
 neither recorded), not in a rounding decision. Parity is therefore stated as: same
 machine, same torch and ONNX Runtime
-builds, same thread count; across machines the comparison is statistical. Two
+builds, same thread count; across machines the comparison is statistical. (Refined
+2026-09-10: Desktop 1 reproduces Desktop 2's Ignition artifact byte for byte at torch
+2.4.1+cpu and 8 threads, across ONNX Runtime 1.22.1 and 1.29.0, while a torch 2.9.1 build
+on the same machine does not. The Sep 5 difference stays unexplained; see
+[AdaRound on the RX 7900 XTX](#ignition-adaround-on-the-rx-7900-xtx-2026-09-10-desktop-1).) Two
 provenance notes: this run's sidecar inherited the base's numpy/onnx versions (onnx
 1.18.0 from `resnet_env17`) although the finetune process ran onnx 1.19.0, fixed for
 later runs (`base_versions` now keeps the base's); and the finetuned file carries the
@@ -4726,6 +4730,106 @@ official ROCm wheels are Linux-only, leaving AMD's ROCm-on-Windows preview or
 `torch-directml`, neither installed on any machine here. Installing one is a Desktop 1
 decision. A GPU run will not be byte-identical to the oracle by construction; the report
 records `byte_parity_path=false` and the run logs a warning. Compare accuracy, never bytes.
+
+**Update 2026-09-10 (Desktop 1).** The torch-build half of that is answered: Desktop 1's
+`resnet_env_rocm` carries AMD's Windows ROCm wheels (torch 2.9.1+rocm7.2.1), which reach
+its 7900 XTX, and ResNet50 has been timed there — see the next section. The wide-model
+timing and a GPU oracle are still open.
+
+### Ignition: AdaRound on the RX 7900 XTX (2026-09-10, Desktop 1)
+
+The first GPU AdaRound measured in this repo: Ignition's transcription
+(`python -m quant adaround`) on ResNet50's c64 CLE base, on **Desktop 1** (`JORDAN-PC`,
+Ryzen 7 7800X3D, RX 7900 XTX, gfx1100, 24 GB). It is not Quark's FastFinetune on a GPU,
+and it makes no accuracy claim: Desktop 1 has no NPU, so full-set top-1 and EP placement
+for the new artifacts are Desktop 2's to run, with `--fresh`.
+
+`resnet_env_rocm` has torch 2.9.1+rocm7.2.1 (HIP 7.2.53211), where `cuda:0` is the 7900 XTX
+and the only device, plus ONNX Runtime 1.29.0, numpy 1.26.4 and onnx 1.19.0, with 8 torch
+threads. Desktop 1's `resnet_env` has the same ORT, numpy and onnx with torch 2.4.1+cpu,
+and that is what makes a torch-only control possible. For this run
+`scripts/quant-adaround.sh` gained `--env` and `--device`; a non-cpu device forwards
+`--accept-non-parity`. Every log now opens with a `DEVICE_INFO` block and a GPU-load
+snapshot (`tools/torch_device_info.py`) and closes with a second snapshot. A device run also
+writes a `gpuload_` witness sampled every 30 s, because `check_host_load` sees only the
+CPU. The four arms ran one after another in one sitting, and `check_host_load` was CLEAR
+before each:
+
+| Arm | Env, torch | `--device` | ORT extraction | torch training | Wall | Peak working set | SHA256 |
+|---|---|---|---:|---:|---:|---:|---|
+| [A](../results/quant/quant_resnet50_ignition_cle_adaround_c64_cpu_desktop1.log) | `resnet_env_rocm`, 2.9.1+rocm7.2.1 | cpu | 98.93 s | 467.69 s | 568.65 s | 2,745,245,696 | `93c7d95d…1ba323` |
+| [B](../results/quant/quant_resnet50_ignition_cle_adaround_c64_gpu_desktop1.log) | `resnet_env_rocm`, 2.9.1+rocm7.2.1 | cuda | 95.61 s | 153.10 s | 250.74 s | 2,364,456,960 † | `811a699e…49c697` |
+| [B, rerun](../results/quant/quant_resnet50_ignition_cle_adaround_c64_gpu_desktop1_rerun.log) | same | cuda | 92.23 s | 149.23 s | 243.31 s | 2,304,335,872 † | `811a699e…49c697` |
+| [A0](../results/quant/quant_resnet50_ignition_cle_adaround_c64_cpu_resnet_env_desktop1.log) | `resnet_env`, 2.4.1+cpu | cpu | 92.35 s | 477.29 s | 571.24 s | 2,551,861,248 | `bf605321…fc2bc` |
+
+† Host working set only. The GPU arms' device memory is not in it.
+
+The two phase columns are the summed per-layer `Quark_latency_profiler` lines
+(`tools/adaround_log_times.py`). Setup accounts for the remaining 1.60–2.04 s.
+
+**Speed.** On the 7900 XTX the torch phase ran **3.05×** faster (467.69 → 153.10 s) and
+the whole AdaRound step **2.27×** faster (568.65 → 250.74 s); the rerun reads 3.13× and
+2.34×. ORT activation extraction stays on the CPU by design (`InferDevice` refuses to
+move). That identical work read 92.2–98.9 s across the four arms, which is this box's
+run-to-run spread for a CPU phase. The first GPU run and its rerun differ by 3.9 s of
+torch time, which is inside that spread, so these runs cannot resolve a one-time
+kernel-compilation cost on the first run. With the torch phase at zero, arm A's split
+would cap the whole-run gain at 568.65 / (98.93 + 2.02) = **5.63×** on this box (derived,
+not measured). The GPU gets 2.27–2.34× because about 150 s of torch time remains, still
+more than the whole ORT phase.
+
+The GPU is far from saturated. The `gpuload_` witnesses put the AdaRound python process at
+5.7–36.7 % of the card's Compute engine across sixteen 30 s samples. Why is not measured:
+candidates are per-iteration launch or host-sync overhead at two-image batches, or
+something else. Before each GPU arm, other processes had already allocated 18,415 MiB of
+the card's dedicated memory (`GPU_MEM`), but no process except AdaRound's own showed engine
+load on the card in any sample; dwm's ~2 % 3D load is the desktop compositor. The
+Desktop 2 breakdown that motivated this run has ORT extraction and the MinMSE scale search
+dominating YOLO builds, so the ceiling there is far lower. Nothing YOLO was run here.
+
+**Bytes** ([diff log](../results/quant/diff_resnet50_ignition_cle_adaround_c64_devices_desktop1.log),
+`tools/quant_pair_diff.py`). In every pair the structure matches and every non-int8
+initializer is byte-identical. All the differences are in the 108 int8 initializers
+(25,530,472 elements), and none is larger than 1 LSB.
+
+- **The device alone** (A vs B, same env): 3,211,629 elements differ (12.58 %), in 38 of
+  the 108 initializers, and 679 of the 756 per-layer log lines differ (54 of them only in
+  the banner's device name). This is non-parity by construction, as decided ("GPU AdaRound
+  is opt-in and explicitly non-parity", `docs/DECISIONS.md`): compare it on accuracy,
+  never on bytes.
+- **The GPU reproduces itself.** B and its rerun are byte-identical (same SHA256, 0
+  elements), so on this card and runtime the GPU path is deterministic.
+- **The torch build alone** (A0 vs A, same machine, same ORT, numpy and onnx): 4,147,168
+  elements (16.24 %), in 54 of 108 initializers. The traces part at layer 0, iteration 100
+  (0.347940 against 0.347939), inside Adam's reconstruction-only warm start. On this
+  model, changing the torch build moved the CPU bytes further than moving to the GPU did.
+  B against Desktop 2's CPU artifact, which changes the torch build and the device
+  together, differs in 4,154,207 elements.
+- **Across machines at torch 2.4.1+cpu**, A0 is **byte-identical to Desktop 2's artifact**:
+  `bf605321…fc2bc` is the SHA256 of both Desktop 2 runs above, and all 756 per-layer lines
+  match Desktop 2's log to the last printed digit. That holds even though Desktop 2 ran
+  ONNX Runtime 1.22.1 and Desktop 1 ran 1.29.0. Between these two Zen 4 machines at 8
+  threads, neither the machine nor that ORT change reached the int8 weights. So arm A
+  misses Desktop 2's hash because of its torch build, not the device or the machine. That
+  build is torch 2.9.1+rocm7.2.1 with whatever math libraries the wheel bundles, and this
+  run cannot separate the version from the ROCm flavour. A0 also ran the post-change
+  `quant/`, so its identity with Desktop 2's pre-change artifact is the end-to-end check
+  that this change left the cpu path alone.
+
+That last result refines the parity statement in [AdaRound parity](#ignition-adaround-parity)
+("across machines the comparison is statistical"): across Desktop 1 and Desktop 2 it is
+exact, given the same torch build and thread count. It does not explain the Sep 5
+artifact there. Arm A's layer-0 iteration-100 loss prints the same 0.347939 that artifact's
+log does, but A differs from the oracle in 4,147,168 elements where the Sep 5 artifact
+differs in 4,149,415. So torch 2.9.1 at 8 threads does not reproduce it either, and that
+difference stays unexplained.
+
+On the byte-identical computation, Desktop 1's CPU arms took about 8 % longer than
+Desktop 2's (571.24 s against 528.17 s). That gap is unexplained: the machines differ in
+CPU, memory and ORT version. No speedup is quoted across machines. **Not measured
+here:** the accuracy of either GPU artifact (Desktop 2), a GPU oracle (Quark
+`XINT8_ADAROUND` with `OptimDevice=cuda` on this box and runtime) to gate a GPU run
+against, a wide model, and Quark's own FastFinetune on the GPU.
 
 ### Ignition: YOLOv8n-cut AdaRound parity
 

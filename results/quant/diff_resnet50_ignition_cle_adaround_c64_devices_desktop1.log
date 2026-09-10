@@ -1,0 +1,289 @@
+Desktop 1 (JORDAN-PC) AdaRound device arms, 2026-09-10: time split and int8 divergence
+Analysis only, run in resnet_env after all four arms had finished: no torch device, no NPU session.
+Arms (all Desktop 1, same sitting, sequential, check_host_load CLEAR before each):
+  A   = resnet_env_rocm (torch 2.9.1+rocm7.2.1) --device cpu
+  B   = resnet_env_rocm --device cuda (RX 7900 XTX)
+  B2  = B again, minutes later
+  A0  = resnet_env (torch 2.4.1+cpu) --device cpu; same ORT 1.29.0 / numpy 1.26.4 / onnx 1.19.0 as A
+  D2  = Desktop 2's cpu artifact models/resnet50_ignition_cle_adaround_c64.onnx (resnet_env there: torch 2.4.1+cpu, ORT 1.22.1)
+
+$ python tools/adaround_log_times.py --baseline results/quant/quant_resnet50_ignition_cle_adaround_c64_cpu_desktop1.log results/quant/quant_resnet50_ignition_cle_adaround_c64_cpu_desktop1.log results/quant/quant_resnet50_ignition_cle_adaround_c64_gpu_desktop1.log results/quant/quant_resnet50_ignition_cle_adaround_c64_gpu_desktop1_rerun.log results/quant/quant_resnet50_ignition_cle_adaround_c64_cpu_resnet_env_desktop1.log
+== results\quant\quant_resnet50_ignition_cle_adaround_c64_cpu_desktop1.log
+   hostname         JORDAN-PC
+   cpu              AMD Ryzen 7 7800X3D 8-Core Processor
+   conda_env        resnet_env_rocm
+   torch_hip        7.2.53211-158bd99533
+   cuda_device_0    AMD Radeon RX 7900 XTX total_mb=24560 arch=gfx1100
+   omp_num_threads  8
+   optim_device     cpu   torch=2.9.1+rocm7.2.1 threads=8 ort=1.29.0
+   layers=54 images=64
+   onnx inference (ORT extraction, cpu) :     98.93 s
+   torch training                       :    467.69 s
+   everything else                      :      2.02 s
+   wall_seconds                         :    568.65 s
+   peak_rss_bytes                       : 2745245696
+   changed_elements                     : 8950703
+   output_sha256                        : 93c7d95dc2ae863fea531c5c6c43cf2e4b1273dcabc1707e5cf23ed3fe1ba323
+   speedup vs quant_resnet50_ignition_cle_adaround_c64_cpu_desktop1.log: torch phase 1.00x, whole run 1.00x
+
+== results\quant\quant_resnet50_ignition_cle_adaround_c64_gpu_desktop1.log
+   hostname         JORDAN-PC
+   cpu              AMD Ryzen 7 7800X3D 8-Core Processor
+   conda_env        resnet_env_rocm
+   torch_hip        7.2.53211-158bd99533
+   cuda_device_0    AMD Radeon RX 7900 XTX total_mb=24560 arch=gfx1100
+   omp_num_threads  8
+   optim_device     cuda   torch=2.9.1+rocm7.2.1 threads=8 ort=1.29.0
+   adaround_device  name='AMD Radeon RX 7900 XTX' hip=7.2.53211-158bd99533 cuda=None
+   layers=54 images=64
+   onnx inference (ORT extraction, cpu) :     95.61 s
+   torch training                       :    153.10 s
+   everything else                      :      2.04 s
+   wall_seconds                         :    250.74 s
+   peak_rss_bytes                       : 2364456960
+   changed_elements                     : 8950880
+   output_sha256                        : 811a699ea20159b4600af53ca7e3cfad613447a33083f817feca2ff10449c697
+   speedup vs quant_resnet50_ignition_cle_adaround_c64_cpu_desktop1.log: torch phase 3.05x, whole run 2.27x
+
+== results\quant\quant_resnet50_ignition_cle_adaround_c64_gpu_desktop1_rerun.log
+   hostname         JORDAN-PC
+   cpu              AMD Ryzen 7 7800X3D 8-Core Processor
+   conda_env        resnet_env_rocm
+   torch_hip        7.2.53211-158bd99533
+   cuda_device_0    AMD Radeon RX 7900 XTX total_mb=24560 arch=gfx1100
+   omp_num_threads  8
+   optim_device     cuda   torch=2.9.1+rocm7.2.1 threads=8 ort=1.29.0
+   adaround_device  name='AMD Radeon RX 7900 XTX' hip=7.2.53211-158bd99533 cuda=None
+   layers=54 images=64
+   onnx inference (ORT extraction, cpu) :     92.23 s
+   torch training                       :    149.23 s
+   everything else                      :      1.85 s
+   wall_seconds                         :    243.31 s
+   peak_rss_bytes                       : 2304335872
+   changed_elements                     : 8950880
+   output_sha256                        : 811a699ea20159b4600af53ca7e3cfad613447a33083f817feca2ff10449c697
+   speedup vs quant_resnet50_ignition_cle_adaround_c64_cpu_desktop1.log: torch phase 3.13x, whole run 2.34x
+
+== results\quant\quant_resnet50_ignition_cle_adaround_c64_cpu_resnet_env_desktop1.log
+   hostname         JORDAN-PC
+   cpu              AMD Ryzen 7 7800X3D 8-Core Processor
+   conda_env        resnet_env
+   torch_hip        None
+   omp_num_threads  8
+   optim_device     cpu   torch=2.4.1+cpu threads=8 ort=1.29.0
+   layers=54 images=64
+   onnx inference (ORT extraction, cpu) :     92.35 s
+   torch training                       :    477.29 s
+   everything else                      :      1.60 s
+   wall_seconds                         :    571.24 s
+   peak_rss_bytes                       : 2551861248
+   changed_elements                     : 8954279
+   output_sha256                        : bf6053219f39a7094ab5614b68a9094d668aa9a391006a57bfe457e6f2bfc2bc
+   speedup vs quant_resnet50_ignition_cle_adaround_c64_cpu_desktop1.log: torch phase 0.98x, whole run 1.00x
+
+$ python tools/adaround_log_times.py results/quant/quant_resnet50_ignition_cle_adaround_c64.log results/quant/quant_resnet50_ignition_cle_adaround_c64_rerun.log   # Desktop 2, reference only
+== results\quant\quant_resnet50_ignition_cle_adaround_c64.log
+   optim_device     cpu (header predates optim_device)   torch=2.4.1+cpu threads=8 ort=1.22.1
+   layers=54 images=64
+   onnx inference (ORT extraction, cpu) :     82.69 s
+   torch training                       :    444.11 s
+   everything else                      :      1.36 s
+   wall_seconds                         :    528.17 s
+   peak_rss_bytes                       : 3055075328
+   changed_elements                     : 8954279
+   output_sha256                        : bf6053219f39a7094ab5614b68a9094d668aa9a391006a57bfe457e6f2bfc2bc
+
+== results\quant\quant_resnet50_ignition_cle_adaround_c64_rerun.log
+   optim_device     cpu (header predates optim_device)   torch=2.4.1+cpu threads=8 ort=1.22.1
+   layers=54 images=64
+   onnx inference (ORT extraction, cpu) :     81.87 s
+   torch training                       :    439.99 s
+   everything else                      :      1.30 s
+   wall_seconds                         :    523.16 s
+   peak_rss_bytes                       : 3053993984
+   changed_elements                     : 8954279
+   output_sha256                        : bf6053219f39a7094ab5614b68a9094d668aa9a391006a57bfe457e6f2bfc2bc
+
+file SHA256, recomputed from the files rather than read from the logs
+$ sha256sum <base, D2, A, B, B2, A0>
+74f2b9a180e05b22a203aeb896f2f31daf20a58beb759dc81f6aee52021e8bbe *models/resnet50_ignition_cle_c64.onnx
+bf6053219f39a7094ab5614b68a9094d668aa9a391006a57bfe457e6f2bfc2bc *models/resnet50_ignition_cle_adaround_c64.onnx
+93c7d95dc2ae863fea531c5c6c43cf2e4b1273dcabc1707e5cf23ed3fe1ba323 *models/resnet50_ignition_cle_adaround_c64_cpu_desktop1.onnx
+811a699ea20159b4600af53ca7e3cfad613447a33083f817feca2ff10449c697 *models/resnet50_ignition_cle_adaround_c64_gpu_desktop1.onnx
+811a699ea20159b4600af53ca7e3cfad613447a33083f817feca2ff10449c697 *models/resnet50_ignition_cle_adaround_c64_gpu_desktop1_rerun.onnx
+bf6053219f39a7094ab5614b68a9094d668aa9a391006a57bfe457e6f2bfc2bc *models/resnet50_ignition_cle_adaround_c64_cpu_resnet_env_desktop1.onnx
+
+$ python tools/quant_pair_diff.py models/resnet50_ignition_cle_adaround_c64_cpu_desktop1.onnx models/resnet50_ignition_cle_adaround_c64_gpu_desktop1.onnx --label-a A_cpu --label-b B_gpu
+file bytes
+  A_cpu      resnet50_ignition_cle_adaround_c64_cpu_desktop1.onnx   25661876 B  sha256:93c7d95dc2ae863f
+  B_gpu      resnet50_ignition_cle_adaround_c64_gpu_desktop1.onnx   25661876 B  sha256:811a699ea20159b4
+
+model metadata
+  A_cpu      producer='Ignition' version='0.1.0a1' ir=8 opset=[17]
+  B_gpu      producer='Ignition' version='0.1.0a1' ir=8 opset=[17]
+
+graph shape
+  A_cpu      nodes=380 initializers=470 inputs=1 outputs=1
+  B_gpu      nodes=380 initializers=470 inputs=1 outputs=1
+
+graph_diff -- the same gate scripts/quant-validate.sh applies
+  structural node delta      : 0
+  initializers byte-mismatch : 0
+  int8 initializers compared : 108
+  int8 weights over 0 LSB    : 38
+  int8 elements differing    : 3211629 of 25530472
+  int8 max delta (LSB)       : 1
+  ok(0 LSB)                  : False
+  ok(1 LSB)                  : True
+
+names, which the numbers do not depend on
+  node names identical in order : 380/380
+  initializer name sets equal   : True
+
+byte-size difference: 0 B
+
+$ python tools/quant_pair_diff.py models/resnet50_ignition_cle_adaround_c64_gpu_desktop1.onnx models/resnet50_ignition_cle_adaround_c64_gpu_desktop1_rerun.onnx --label-a B_gpu --label-b B2_gpu
+file bytes
+  B_gpu      resnet50_ignition_cle_adaround_c64_gpu_desktop1.onnx   25661876 B  sha256:811a699ea20159b4
+  B2_gpu     resnet50_ignition_cle_adaround_c64_gpu_desktop1_rerun.onnx   25661876 B  sha256:811a699ea20159b4
+
+model metadata
+  B_gpu      producer='Ignition' version='0.1.0a1' ir=8 opset=[17]
+  B2_gpu     producer='Ignition' version='0.1.0a1' ir=8 opset=[17]
+
+graph shape
+  B_gpu      nodes=380 initializers=470 inputs=1 outputs=1
+  B2_gpu     nodes=380 initializers=470 inputs=1 outputs=1
+
+graph_diff -- the same gate scripts/quant-validate.sh applies
+  structural node delta      : 0
+  initializers byte-mismatch : 0
+  int8 initializers compared : 108
+  int8 weights over 0 LSB    : 0
+  int8 elements differing    : 0 of 25530472
+  int8 max delta (LSB)       : 0
+  ok(0 LSB)                  : True
+  ok(1 LSB)                  : True
+
+names, which the numbers do not depend on
+  node names identical in order : 380/380
+  initializer name sets equal   : True
+
+byte-size difference: 0 B
+
+$ python tools/quant_pair_diff.py models/resnet50_ignition_cle_adaround_c64_cpu_resnet_env_desktop1.onnx models/resnet50_ignition_cle_adaround_c64_cpu_desktop1.onnx --label-a A0_t241 --label-b A_t291
+file bytes
+  A0_t241    resnet50_ignition_cle_adaround_c64_cpu_resnet_env_desktop1.onnx   25661876 B  sha256:bf6053219f39a709
+  A_t291     resnet50_ignition_cle_adaround_c64_cpu_desktop1.onnx   25661876 B  sha256:93c7d95dc2ae863f
+
+model metadata
+  A0_t241    producer='Ignition' version='0.1.0a1' ir=8 opset=[17]
+  A_t291     producer='Ignition' version='0.1.0a1' ir=8 opset=[17]
+
+graph shape
+  A0_t241    nodes=380 initializers=470 inputs=1 outputs=1
+  A_t291     nodes=380 initializers=470 inputs=1 outputs=1
+
+graph_diff -- the same gate scripts/quant-validate.sh applies
+  structural node delta      : 0
+  initializers byte-mismatch : 0
+  int8 initializers compared : 108
+  int8 weights over 0 LSB    : 54
+  int8 elements differing    : 4147168 of 25530472
+  int8 max delta (LSB)       : 1
+  ok(0 LSB)                  : False
+  ok(1 LSB)                  : True
+
+names, which the numbers do not depend on
+  node names identical in order : 380/380
+  initializer name sets equal   : True
+
+byte-size difference: 0 B
+
+$ python tools/quant_pair_diff.py models/resnet50_ignition_cle_adaround_c64.onnx models/resnet50_ignition_cle_adaround_c64_cpu_resnet_env_desktop1.onnx --label-a D2_cpu --label-b A0_t241
+file bytes
+  D2_cpu     resnet50_ignition_cle_adaround_c64.onnx    25661876 B  sha256:bf6053219f39a709
+  A0_t241    resnet50_ignition_cle_adaround_c64_cpu_resnet_env_desktop1.onnx   25661876 B  sha256:bf6053219f39a709
+
+model metadata
+  D2_cpu     producer='Ignition' version='0.1.0a1' ir=8 opset=[17]
+  A0_t241    producer='Ignition' version='0.1.0a1' ir=8 opset=[17]
+
+graph shape
+  D2_cpu     nodes=380 initializers=470 inputs=1 outputs=1
+  A0_t241    nodes=380 initializers=470 inputs=1 outputs=1
+
+graph_diff -- the same gate scripts/quant-validate.sh applies
+  structural node delta      : 0
+  initializers byte-mismatch : 0
+  int8 initializers compared : 108
+  int8 weights over 0 LSB    : 0
+  int8 elements differing    : 0 of 25530472
+  int8 max delta (LSB)       : 0
+  ok(0 LSB)                  : True
+  ok(1 LSB)                  : True
+
+names, which the numbers do not depend on
+  node names identical in order : 380/380
+  initializer name sets equal   : True
+
+byte-size difference: 0 B
+
+$ python tools/quant_pair_diff.py models/resnet50_ignition_cle_adaround_c64.onnx models/resnet50_ignition_cle_adaround_c64_cpu_desktop1.onnx --label-a D2_cpu --label-b A_t291
+file bytes
+  D2_cpu     resnet50_ignition_cle_adaround_c64.onnx    25661876 B  sha256:bf6053219f39a709
+  A_t291     resnet50_ignition_cle_adaround_c64_cpu_desktop1.onnx   25661876 B  sha256:93c7d95dc2ae863f
+
+model metadata
+  D2_cpu     producer='Ignition' version='0.1.0a1' ir=8 opset=[17]
+  A_t291     producer='Ignition' version='0.1.0a1' ir=8 opset=[17]
+
+graph shape
+  D2_cpu     nodes=380 initializers=470 inputs=1 outputs=1
+  A_t291     nodes=380 initializers=470 inputs=1 outputs=1
+
+graph_diff -- the same gate scripts/quant-validate.sh applies
+  structural node delta      : 0
+  initializers byte-mismatch : 0
+  int8 initializers compared : 108
+  int8 weights over 0 LSB    : 54
+  int8 elements differing    : 4147168 of 25530472
+  int8 max delta (LSB)       : 1
+  ok(0 LSB)                  : False
+  ok(1 LSB)                  : True
+
+names, which the numbers do not depend on
+  node names identical in order : 380/380
+  initializer name sets equal   : True
+
+byte-size difference: 0 B
+
+$ python tools/quant_pair_diff.py models/resnet50_ignition_cle_adaround_c64.onnx models/resnet50_ignition_cle_adaround_c64_gpu_desktop1.onnx --label-a D2_cpu --label-b B_gpu
+file bytes
+  D2_cpu     resnet50_ignition_cle_adaround_c64.onnx    25661876 B  sha256:bf6053219f39a709
+  B_gpu      resnet50_ignition_cle_adaround_c64_gpu_desktop1.onnx   25661876 B  sha256:811a699ea20159b4
+
+model metadata
+  D2_cpu     producer='Ignition' version='0.1.0a1' ir=8 opset=[17]
+  B_gpu      producer='Ignition' version='0.1.0a1' ir=8 opset=[17]
+
+graph shape
+  D2_cpu     nodes=380 initializers=470 inputs=1 outputs=1
+  B_gpu      nodes=380 initializers=470 inputs=1 outputs=1
+
+graph_diff -- the same gate scripts/quant-validate.sh applies
+  structural node delta      : 0
+  initializers byte-mismatch : 0
+  int8 initializers compared : 108
+  int8 weights over 0 LSB    : 54
+  int8 elements differing    : 4154207 of 25530472
+  int8 max delta (LSB)       : 1
+  ok(0 LSB)                  : False
+  ok(1 LSB)                  : True
+
+names, which the numbers do not depend on
+  node names identical in order : 380/380
+  initializer name sets equal   : True
+
+byte-size difference: 0 B
+
