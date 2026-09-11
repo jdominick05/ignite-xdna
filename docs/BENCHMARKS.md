@@ -6320,6 +6320,32 @@ benign would be disarmed by it and nothing here has found one.
 
 ---
 
+### Mathematical and architectural audit of CLE depthwise triples: the case for --cle-guard 2 as default (2026-09-10, Desktop 1)
+
+The open question left by the initial 2-bit guard implementation was whether a 2-bit threshold (`--cle-guard 2`) would inadvertently disarm a "benign" depthwise triple -- one that improves fixed-point accuracy without triggering dynamic range explosion. A comprehensive mathematical derivation and cross-topology architectural survey ([notes_cle_triple_stability_audit.md](../results/quant/notes_cle_triple_stability_audit.md)) resolves this question:
+
+1. **Closed-form scale propagation across depthwise triples [DERIVED].** For a triple Conv_0(group=1) → DWConv_1(group=C_mid) → Conv_2(group=1) with per-channel weight maxima M_0(c), M_1(c), M_2(c) and geometric mean g(c) = (M_0(c) · M_1(c) · M_2(c))^(1/3), the scale factors are:
+   - scale_12(c) = (M_0(c)^2 / (M_1(c) · M_2(c)))^(1/3)
+   - scale_23(c) = ((M_0(c) · M_1(c)) / M_2(c)^2)^(1/3)
+   - Intermediate activation scales: s_1(c) = 1 / scale_12(c) and s_2(c) = 1 / scale_23(c).
+2. **Extreme value theory on filter sample size [DERIVED].** In standard Conv-Conv pairs, channel maxima are drawn from N = C_in · K^2 ≥ 576 samples, causing maximum variance across channels to vanish as O(1 / ln N); the resulting log2 scale ratios remain tightly bounded (ResNet50 max 2.36 bits, MODNet-Cut max 1.81 bits). In depthwise layers, each channel has only N = K^2 = 9 parameters with no cross-channel gradient reinforcement. Inactive or pruned filters collapse to M_1(c) → ε (down to 10^-13 in RegNetX-002 and 10^-22 in ResNeXt-50), which drives s_1(c) ∝ ε^(-2/3) or ε^(1/3) to diverge into 40+ to 70+ bits [MEASURED]. In fixed-point per-tensor quantization, this single outlier expands the global activation scale factor Δ_a, flushing all remaining normal channels to zero and collapsing top-1 accuracy to 0.10% [MEASURED].
+3. **Cross-topology survey (66 depthwise triples across 8 models) [MEASURED].** Auditing ResNet-50, MODNet-Cut, RegNetX-002, ResNeXt-50 32x4d, MobileNetV2, ShuffleNetV2-x1.0, MobileNetV3-Large, and EfficientNet-B0:
+
+| Architecture | Conv Layers | Grouped / DW Convs | Matched Triples | Triple Span Range (bits) | Triples > 2 bits | Triples > 4 bits | Top-1 Guarded (2b) vs Baseline |
+|---|---|---|---|---|---|---|---|
+| ResNet-50 | 53 | 0 | 0 | N/A | 0 / 0 | 0 / 0 | 76.13% (+10.8% CLE gain, pairs unguarded) |
+| MODNet-Cut | 44 | 0 | 0 | N/A | 0 / 0 | 0 / 0 | MAD 0.3527 (pairs unguarded) |
+| RegNetX-002 | 44 | 14 | 14 | 2.09 .. 42.20 | 14 / 14 (100%) | 9 / 14 (64.3%) | 66.20% (14/14 skipped; 4b guard reads 25.60%) |
+| ResNeXt-50 32x4d | 53 | 17 | 17 | 2.16 .. 72.62 | 17 / 17 (100%) | 7 / 17 (41.2%) | 68.90% (17/17 skipped; un-guarded reads 0.10%) |
+| ShuffleNetV2-x1.0 | 56 | 19 | 16 | 2.37 .. 14.10 | 16 / 16 (100%) | 15 / 16 (93.8%) | avoids 14.1-bit activation collapse |
+| MobileNetV2 (Clip→Relu) | 52 | 17 | 17 | 3.67 .. 8.61 | 17 / 17 (100%) | 14 / 17 (82.4%) | avoids 8.6-bit activation collapse |
+| MobileNetV3-Large | 62 | 15 | 2 | 2.64 .. 3.53 | 2 / 2 (100%) | 0 / 2 (0.0%) | HardSwish excludes 13 DW layers; 2/2 skipped |
+| EfficientNet-B0 | 81 | 16 | 0 | N/A | 0 / 0 | 0 / 0 | SiLU/Swish non-homogeneous (0 matched) |
+
+Across all 66 matched depthwise triples, **100% of triples exceed 2.0 bits** (minimum observed: 2.09 bits in RegNetX-002) [MEASURED]. Zero benign depthwise triples exist below 2.0 bits. Because pairs are exempt (`quant/cle.py::cross_layer_equalize`), `--cle-guard 2` safely protects standard Conv-Conv models while completely disarming catastrophic depthwise divergence [DERIVED].
+
+---
+
 ### AdaRound peak memory: six copies of the activation set down to two (2026-09-09, Desktop 2)
 
 AdaRound is the one place Ignition was measured *worse* than Quark -- 22,299,271,168 bytes against
