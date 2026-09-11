@@ -1007,7 +1007,12 @@ the spatial height slicing 4-D striding formulas ($H_{\text{out}}=4$ slices), co
 (1,104 B text, 0 undefined symbols), and generates complete 4-core CDO packages (`main_aie_cdo_init.bin`, 2,632 B)
 and standalone NPU transaction binaries (`im2col_4d_col.bin`, 3,636 B).
 
+## End-to-End Column 0 im2col pipeline: hardware SRS requantization and host egress DMA
+
+[`notes_im2col_egress_roundtrip.md`](notes_im2col_egress_roundtrip.md) - end-to-end closed-loop Column 0 im2col pipeline integration with native hardware Shift-Round-Saturate (SRS) requantization in the compute kernel and autonomous host-to-host bi-directional streaming. Synthesizes `vst.srs.s8.s32` in the vector store unit with zero additional cycles or register shuffles, packs INT32 accumulators to INT8 vectors, routes Core MM2S:0 channels into four MemTile S2MM gathering channels (S2MM:1..4, 1,024 B total), and streams contiguous output back to Host DDR via MemTile MM2S:1 to Shim NoC S2MM:0. Verifies 4-bank collision-free physical memory allocation, compiles 4 clean core ELFs (0 undefined symbols), and synthesizes full NPU transaction (`im2col_4d_roundtrip.bin`, 5,608 B) and CDO packages (`main_aie_cdo_init.bin`, 4,160 B; `main_aie_cdo_enable.bin`, 104 B).
+
 ## Also here
+
 
 `aiecompiler_help.log` and `aiecompiler_x86sim_passthrough.log` are on disk but were not
 covered by the `results/README.md` entry this file was built from, so nothing is claimed
