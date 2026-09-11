@@ -52,7 +52,7 @@ New numbers use 1.80 GHz and say which power mode they were taken in.
 | Rows per column | 6: one shim tile, one mem tile, four core tiles | SPEC: `BaseNPU1TargetModel::rows()` returns 6 ("1 Shim row, 1 memtile row, and 4 Core rows"); `device.yaml` `phoenix:` block has `num_rows: 4`, `memtile_rows: 1`. |
 | Core tiles | 20 physical, 16 reachable today | DERIVED: 5 × 4 and 4 × 4. |
 | Columns any path on this machine can drive | 4 | MEASURED: `4x4.xclbin` always lands on `Partition Index: 0, Columns: [1, 2, 3, 4]` (`results/gops_yolov8n.log`, `tools/session_hold.py`); `1x4.xclbin` exposes at most 4 partitions and a 5th process time-slices column 4 (`results/multi_partition_yolov8n_5col.log`); the driver's own `5x4_*.xclbin` overlays build, run, match CPU output and place 0 nodes on the NPU — fingerprint mismatch, `docs/DECISIONS.md`. SPEC: mlir-aie v1.4.2 models NPU1 as at most 4 columns (`python/iron/device/__init__.py:42`, `_MAX_COLS = {"NPU1": 4}`; `AIEAttrs.td` defines `npu1` as the 4-column "whole array" plus `npu1_1col..3col`). |
-| Which column is the unreachable one | column 0, by elimination | DERIVED from the `[1, 2, 3, 4]` partition report. MEASURED 2026-09-07 that the numbering is physical: a Worker placed on IRON's logical `Tile(0, 2)` reports `get_coreid()` row 2, column 1, and its trace packets carry the same header — logical column 0 is physical column 1 (`results/aie/clock_probe_npu.log`). TO VERIFY: whether column 0's shim tile has a NoC DMA at all, or is compute-only (mlir-aie's "NPU1 has no ShimPL tiles" comment covers only the four columns it models). |
+| Which column is the unreachable one | column 0, by elimination | DERIVED from the `[1, 2, 3, 4]` partition report. MEASURED 2026-09-07 that the numbering is physical: a Worker placed on IRON's logical `Tile(0, 2)` reports `get_coreid()` row 2, column 1, and its trace packets carry the same header — logical column 0 is physical column 1 (`results/aie/clock_probe_npu.log`). Formally audited 2026-09-10 ([`results/aie/notes_column0_architecture_audit.md`](../results/aie/notes_column0_architecture_audit.md)): `amdxdna` kernel driver `dev_npu1_info.first_col = 1` excludes column 0 from 1- to 4-column partitions, but carries an explicit 5-column bypass (`aie2_ctx.c:654`) forcing `start_col = 0`. Switchbox provides 20 bidirectional 32-bit channels (144.0 GB/s @ 1.80 GHz) from column 1 to 0 even if Shim 0 DMA is unbonded. |
 | `device.yaml`'s own `phoenix:` block | `num_columns: 4` | SPEC — AMD's cost-model config describes the 4-column overlay, not the die. The two AMD sources disagree with each other; `xrt-smi` and `aiecompiler` are the ones that talk to hardware. |
 
 ### 1.2 One core tile
@@ -865,16 +865,26 @@ Go/no-go: CPU time must clear the floor that D1–D3 leave.
 ### Tier 3 — the array
 
 **A1. Reach the fifth column.**
-Known: five physical columns (1.1); AMD's compiler derives a 5×4 device for this part; the
-driver ships 5×4 overlays; mlir-aie stops at four. Unknown: whether column 0's shim has a
-NoC DMA, and whether the driver grants a 5-column `hw_context` to a non-vendor xclbin.
-Tooling: extend mlir-aie's NPU1 target model to five columns (`_MAX_COLS`, a
-`VirtualizedNPU1TargetModel(5)`, the `AIEAttrs.td` enum) and build the memcpy design for
-it. Measurement, in order: does the driver load it (`xrt-smi examine -r aie-partitions`
-during the run must show a 5-column partition); does column 0's shim move data; if not, do
-column 0's cores run when fed over the switch from column 1. Prize: 20 cores instead of
-16, and the missing 18% of nameplate (2.1). The first experiment is the driver grant, not
-a kernel.
+Known: five physical columns (1.1); AMD's compiler derives a 5×4 device for this part
+(`xc10AIE24x5-die-1LP-e-S-es1` resolving `Reading logical device aie2_5x4_device`); the driver
+ships 5×4 overlays (`5x4_*.xclbin`, failing in VitisAI EP with `target_factory.cpp:161` fingerprint
+mismatches, `docs/DECISIONS.md`); mlir-aie stops at four (`_MAX_COLS = {"NPU1": 4}`).
+Formally audited 2026-09-10 ([`results/aie/notes_column0_architecture_audit.md`](../results/aie/notes_column0_architecture_audit.md)):
+- Kernel driver mechanics: `drivers/accel/amdxdna/npu1_regs.c` hardcodes `dev_npu1_info.first_col = 1`,
+  restricting sub-allocations (1 to 4 columns) to columns 1–4. However, `aie2_ctx.c:654-657` contains
+  an explicit whole-die bypass: `if (start > 0 && end == 0) { start = 0; }` logging `Force start from col 0`.
+  A 5-column request (`num_col = 5`) forces `start_col = 0` and sends `MSG_OP_CREATE_CONTEXT` for `[0, 1, 2, 3, 4]`.
+- Interconnect bypass: between Column 1 and Column 0, the switchbox provides 20 bidirectional 32-bit
+  streaming channels (4 at Row 0 Shim, 16 across Rows 2–5 Cores), yielding 144.0 GB/s per direction @ 1.80 GHz.
+  Even if Column 0 Shim DMA is unbonded or reserved for management firmware, Column 0 compute cores and MemTile
+  can be fully fed and drained across the switchbox via Column 1 Shim DMA.
+- Tooling path: extend mlir-aie's NPU1 target model to five columns (`_MAX_COLS = 5` in `iron/device/__init__.py`,
+  `AIEDeviceNPU1_5col` in `AIEAttrs.td`, and `VirtualizedNPU1TargetModel(5, /*col_offset=*/0)` in
+  `AIETargetModel.cpp` so relative coordinate 0 matches physical coordinate 0).
+- Measurement roadmap on Desktop 2: Phase 1 driver context grant check via `xrt-smi examine -r aie-partitions`;
+  Phase 2 Column 0 Shim DMA probe; Phase 3 cross-column routed compute verification.
+Prize: 20 cores instead of 16 (+25.0% compute, +3.69 TOPS @ 1.80 GHz), 3.84 MB SRAM (+25.0%), unlocking the
+true 18.43 TOPS nameplate capacity.
 
 **A2. Heterogeneous partitions in one process.**
 Physical basis: `1x4.xclbin` gives independent per-column partitions that scale to 3.65×

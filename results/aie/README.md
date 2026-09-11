@@ -921,6 +921,20 @@ headroom at C_out = 64), and calculates the elimination of 9 standalone `vshift`
 bundles in `conv2dk3`'s 18-cycle hot loop to project a 4.0× MAC issue density uplift (0.222 to 0.889
 vmac/cycle) closing the 11.3× vendor DPU gap.
 
+## Column 0 architectural audit & 5th column feasibility specification
+
+[`notes_column0_architecture_audit.md`](notes_column0_architecture_audit.md) — comprehensive
+micro-architectural audit and feasibility specification for Column 0 (the 5th physical column) on AMD Phoenix
+AIE2 (XDNA1). Reconciles the physical 5-column die (20 cores, 5 MemTiles, 3.84 MB SRAM, 18.43 TOPS INT8 @ 1.80 GHz)
+with the 4-column overlay convention. Audits the in-tree `amdxdna` Linux kernel driver (`drivers/accel/amdxdna/`),
+revealing that `dev_npu1_info.first_col = 1` enforces the 4-column boundary for sub-allocations, but contains an
+explicit bypass (`aie2_ctx.c:654-657`) triggering `Force start from col 0` when `num_col = 5`. Proves that between
+Column 1 and Column 0, the switchbox provides 20 bidirectional 32-bit streaming channels (144.0 GB/s per direction @
+1.80 GHz), allowing Column 0 compute cores and MemTile to be completely fed and drained via Column 1's Shim DMA even
+if Column 0's NoC DMA is unbonded or reserved. Details the MLIR-AIE dialect modifications (`_MAX_COLS = 5`,
+`AIEDeviceNPU1_5col`, `VirtualizedNPU1TargetModel(5, 0)`) and outlines the three-phase hardware verification roadmap
+to unlock +25.0% compute and SRAM capacity.
+
 ## Also here
 
 `aiecompiler_help.log` and `aiecompiler_x86sim_passthrough.log` are on disk but were not
