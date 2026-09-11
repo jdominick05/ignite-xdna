@@ -1023,11 +1023,16 @@ and standalone NPU transaction binaries (`im2col_4d_col.bin`, 3,636 B).
 
 [`notes_im2col_hardware_bringup.md`](notes_im2col_hardware_bringup.md) — physical silicon hardware execution, bit-exact numerical parity validation against NumPy golden references, and latency profiling on AMD Phoenix XDNA1 silicon (Ryzen 7 8700G, NPU [003d:00:01.1], tile clock 1.80 GHz). Verifies pyxrt Embedded Runtime (ERT) ring-buffer command submission, instruction buffer caching, and shared DDR host-device memory synchronization via [`npu/test_im2col_hardware.py`](../../npu/test_im2col_hardware.py). Achieves 100.0% bit-exact parity across single-core (Tile 0,2, 142.14 µs) and 16-core whole-array (Columns 0–3, Rows 2–5, 155.28 µs, 0.0270 Effective TOPS) with zero numerical divergence (MAE 0.0000, RMSE 0.0000) against the native hardware Shift-Round-Saturate (SRS) requantization model (`vst.srs.s8.s32`). Dispatches the full 20-core array transaction stream (`im2col_4d_20core.bin`), confirming hardware ERT timeout on Column 4 NoC addresses and establishing that Columns 0–3 (a 4x6 tile physical grid) represent the complete physically addressable AIE2 execution grid on Phoenix silicon. Execution trace logged in [`hardware_im2col_execution.log`](hardware_im2col_execution.log).
 
+## Asynchronous double-buffered ring-buffer pipelining and driver dispatch floor breakdown
+
+[`notes_im2col_pipelined_dispatch.md`](notes_im2col_pipelined_dispatch.md) — design, implementation, and physical silicon validation of asynchronous double-buffered ring-buffer pipelining on AMD Phoenix XDNA1 silicon (Ryzen 7 8700G, NPU [003d:00:01.1], tile clock 1.80 GHz). Implements concurrent ping-pong DMA staging and non-blocking ERT command ring queueing in [`npu/test_im2col_hardware.py`](../../npu/test_im2col_hardware.py). Benchmarked over 500 consecutive pipelined iterations: hides **67.4–72.4 µs (44.8–48.6%)** of the synchronous XRT driver dispatch floor, scaling Column 0 im2col throughput from 7,008.4 FPS (142.7 µs) to **13,283.1 FPS (75.3 µs, 1.90× speedup)**, single-core MMUL from 6,708.8 FPS (149.1 µs) to **13,043.5 FPS (76.7 µs, 1.94× speedup)**, and 16-core whole-array throughput from 6,546.3 FPS (152.8 µs) to **11,857.4 FPS (84.3 µs, 1.81× speedup, 0.0497 Effective TOPS)**. Proves 100.0% bit-exact parity across both Ping and Pong buffer sets with zero memory races or buffer aliasing. Execution trace logged in [`hardware_im2col_pipelining.log`](hardware_im2col_pipelining.log).
+
 ## Also here
 
 
 `aiecompiler_help.log` and `aiecompiler_x86sim_passthrough.log` are on disk but were not
 covered by the `results/README.md` entry this file was built from, so nothing is claimed
 about them here.
+
 
 
