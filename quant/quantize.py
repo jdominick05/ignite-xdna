@@ -95,7 +95,8 @@ def prepared_graph(model_in: Path) -> tuple[Graph, str]:
 def quantize(model_in: Path, model_out: Path, *, scales_from: Path | None = None,
              source=None, preprocess: dict | None = None,
              scratch: Path | None = None, cle: bool = False,
-             cle_guard: float | None = None) -> dict:
+             cle_guard: float | None = 2.0,
+             calib_method: str = "hist", hist_bins: int = 2048) -> dict:
     _check_imports()
     if (scales_from is None) == (source is None):
         raise ValueError("Supply exactly one of a calibration source or scales_from")
@@ -142,10 +143,14 @@ def quantize(model_in: Path, model_out: Path, *, scales_from: Path | None = None
         report["scales_from_sha256"] = file_hash(scales_from)
         report["reference_refine"] = asdict(reference_refine)
     else:
-        if scratch is None or preprocess is None:
-            raise ValueError("Independent calibration requires scratch and preprocessing metadata")
+        if preprocess is None:
+            raise ValueError("Independent calibration requires preprocessing metadata")
+        if calib_method == "exact" and scratch is None:
+            raise ValueError("Exact calibration requires scratch directory")
         from .calib import collect_and_choose
-        positions, report["calibration"] = collect_and_choose(graph, source, scratch)
+        positions, report["calibration"] = collect_and_choose(
+            graph, source, scratch, method=calib_method, num_bins=hist_bins
+        )
         report["preprocess"] = preprocess
     report["emit"] = asdict(emit(graph, positions))
     graph.infer_shapes()

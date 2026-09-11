@@ -55,12 +55,20 @@ def main(argv=None):
     emit.add_argument("--scratch", type=Path, default=Path("scratch"))
     emit.add_argument("--scales-from", type=Path,
                       help="Replay a reference position table; skips independent calibration")
-    emit.add_argument("--cle-guard", type=float, default=None, metavar="BITS",
+    emit.add_argument("--calib-method", choices=["hist", "exact"], default="hist",
+                      help="Calibration method: 'hist' (in-memory streaming uniform 2048-bin histogram, 0 B disk I/O, default) "
+                           "or 'exact' (disk-cached float16 sample spool)")
+    emit.add_argument("--hist-bins", type=int, default=2048,
+                      help="Number of uniform histogram bins for streaming calibration (default: 2048)")
+    emit.add_argument("--cle-guard", type=float, default=2.0, metavar="BITS",
                       help="With --cle, skip any Conv/depthwise/pointwise TRIPLE whose "
                            "per-channel scale exceeds BITS powers of two. Pairs are never "
-                           "guarded. Off by default, which is the parity path. 2 recovers "
-                           "RegNetX-002 to 66.20%% and ResNeXt-50 to 68.90%% from 0.10%%, and "
-                           "leaves graphs with no triples byte-identical")
+                           "guarded. Default 2.0 (the safety boundary preventing depthwise "
+                           "triple scale explosion across vision topologies, recovering "
+                           "RegNetX-002 to 66.20%% and ResNeXt-50 to 68.90%% from 0.10%%). "
+                           "Use --no-cle-guard for unconstrained research runs")
+    emit.add_argument("--no-cle-guard", action="store_true",
+                      help="Disable CLE guard (set cle_guard=None) for unconstrained research runs")
     ada = commands.add_parser("adaround", help="AdaRound weight rounding for an emitted XINT8 file (torch; Quark stays blocked)")
     ada.add_argument("--in-model", type=Path, default=Path("models/resnet50_fp32.onnx"),
                      help="The float export the base was quantized from (hash-checked against its sidecar)")
@@ -82,6 +90,13 @@ def main(argv=None):
     ada.add_argument("--accept-non-parity", action="store_true",
                      help="Acknowledge that --device off cpu produces weights that are NOT byte-identical "
                           "to a Quark XINT8_ADAROUND oracle, and must never be reported as an oracle match")
+    rep = commands.add_parser("report", help="Structured verification and parity report across logs and models")
+    rep.add_argument("paths", nargs="*", type=Path, help="Log files (*.log), vitisai_ep_report.json, or models (*.onnx, *.quant.json)")
+    rep.add_argument("--logs", "-l", nargs="*", type=Path, default=[], help="Run logs or vitisai_ep_report.json")
+    rep.add_argument("--models", "-m", nargs="*", type=Path, default=[], help="Quantized ONNX models or .quant.json sidecars")
+    rep.add_argument("--ref", type=Path, default=None, help="Reference model/sidecar for parity comparison")
+    rep.add_argument("--candidate", type=Path, default=None, help="Candidate model/sidecar for parity comparison")
+    rep.add_argument("--format", choices=["table", "markdown", "json"], default="table", help="Output format")
     args = parser.parse_args(argv)
     # Install only while the command runs; importing the CLI has no global side effects.
     guard = BlockProducerImports(("quark",) if args.command == "adaround" else ("quark", "torch"))
@@ -122,6 +137,9 @@ def main(argv=None):
                         for r in repairs:
                             print(f"  - {r['node']} ({r['op_type']}): orig sigma={r['orig_sigma']} -> repaired sigma={r['repaired_sigma']}")
                 return
+            if args.command == "report":
+                from .report import run_report
+                return run_report(args)
             if args.command == "adaround":
                 from .adaround import FastFinetuneConfig, finetune
                 from .cle import cross_layer_equalize
@@ -254,8 +272,11 @@ def main(argv=None):
                 cfg = source.preprocess()
             print(f"Ignition {__version__}: {family} / {'CLE' if args.cle else 'no CLE'}", flush=True)
             print("IMPORT_BLOCK_ACTIVE quark torch", flush=True)
+            cle_guard = None if args.no_cle_guard else args.cle_guard
             report = quantize(args.in_model, args.out, scales_from=args.scales_from,
-                              source=source, preprocess=cfg, scratch=args.scratch, cle=args.cle, cle_guard=args.cle_guard)
+                              source=source, preprocess=cfg, scratch=args.scratch, cle=args.cle,
+                              cle_guard=cle_guard,
+                              calib_method=args.calib_method, hist_bins=args.hist_bins)
             print(json.dumps({k: v for k, v in report.items() if k not in ("positions", "calibration", "cle_report")}, indent=2))
             if "cle_report" in report:
                 print("CLE_REPORT", json.dumps({k: v for k, v in report["cle_report"].items() if k != "scaled"}, indent=2))

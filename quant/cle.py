@@ -40,8 +40,9 @@ class CleReport:
     append_bias: bool
     use_threshold: bool
     scaled: dict = field(default_factory=dict)
-    # None when the guard is off, which is the default and the parity path.
-    max_scale_log2: float | None = None
+    # Default 2.0 prevents depthwise triple scale explosion on vision topologies;
+    # set to None via --no-cle-guard for unconstrained research runs.
+    max_scale_log2: float | None = 2.0
     skipped_unstable: list = field(default_factory=list)
 
 
@@ -342,7 +343,7 @@ def equalize_triple(g: Graph, conv, conv_dw, conv_pw,
 def cross_layer_equalize(g: Graph, *, steps: int = 1, balance_method: str = "max",
                          weight_threshold: float = 0.5, append_bias: bool = True,
                          use_threshold: bool = True, diff_threshold: float = 2e-7,
-                         max_scale_log2: float | None = None) -> CleReport:
+                         max_scale_log2: float | None = 2.0) -> CleReport:
     """cle_transforms: match, then process_cle_transforms with the source's step loop."""
     if balance_method != "max":
         raise ValueError("The source implements only the max balance method")
