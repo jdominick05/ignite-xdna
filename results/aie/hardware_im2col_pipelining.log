@@ -1,0 +1,23 @@
+=============================================================================================================================
+AMD PHOENIX XDNA1 AIE2 HARDWARE PIPELINED EXECUTION PROFILING REPORT
+=============================================================================================================================
+Timestamp: 2026-09-11 08:11:25 UTC
+Platform: AMD Ryzen 7 8700G (Phoenix NPU [003d:00:01.1], Tile Clock: 1.80 GHz)
+Driver ABI: pyxrt / XRT 2.21.0 (HEAD), Asynchronous ERT Ring-Buffer Queueing
+Benchmark Iterations: Sync=100 iters (Warmup=10), Pipelined=500 iters (Warmup=50)
+
+Target Configuration                 | Sync Lat   | Sync FPS   | Pipe Lat   | Pipe FPS   | Speedup   | Hidden Floor     | Bit-Parity
+-----------------------------------------------------------------------------------------------------------------------------
+Stage 1a: Col 0 im2col (4 Cores)     | 142.7 us   | 7008.4     | 75.3 us    | 13283.1    | 1.90x     | 67.4 us (47.2%)  | 50% / 50% 
+Stage 1b: Single-Core MMUL (Tile 0,2) | 149.1 us   | 6708.8     | 76.7 us    | 13043.5    | 1.94x     | 72.4 us (48.6%)  | 100% / 100%
+Stage 2: 16-Core Array (Cols 0-3)    | 152.8 us   | 6546.3     | 84.3 us    | 11857.4    | 1.81x     | 68.4 us (44.8%)  | 100% / 100%
+Stage 2: 20-Core Array (Cols 0-4)    | TIMEOUT    | N/A        | N/A        | N/A        | N/A       | N/A              | N/A       
+-----------------------------------------------------------------------------------------------------------------------------
+
+PIPELINED LOOP STEP LATENCY DISTRIBUTION & THROUGHPUT METRICS:
+Target Configuration                 | Mean Step   | Median     | Min Step   | P95 Step   | Effective TOPS  | Issue Density 
+-----------------------------------------------------------------------------------------------------------------------------
+Stage 1a: Col 0 im2col (4 Cores)     | 74.64 us    | 86.20 us   | 38.60 us   | 111.41 us  | 0.0078 TOPS     | 0.43%         
+Stage 1b: Single-Core MMUL (Tile 0,2) | 76.09 us    | 86.10 us   | 45.00 us   | 113.72 us  | 0.0068 TOPS     | 1.48%         
+Stage 2: 16-Core Array (Cols 0-3)    | 83.76 us    | 91.70 us   | 46.40 us   | 119.45 us  | 0.0497 TOPS     | 0.67%         
+-----------------------------------------------------------------------------------------------------------------------------
