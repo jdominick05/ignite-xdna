@@ -49,7 +49,7 @@ def parse_eval_log(path: Path) -> dict:
     info: Dict[str, Any] = {"file": path.as_posix()}
 
     # Target EP detection
-    if "Execution Target:NPU" in content or "_npu" in path.name.lower():
+    if "Execution Target:NPU" in content or "Execution Target: NPU" in content or "Phoenix NPU" in content or "_npu" in path.name.lower():
         info["device"] = "NPU"
     elif "Execution Target:CPU" in content or "_cpu" in path.name.lower():
         info["device"] = "CPU"
@@ -59,7 +59,7 @@ def parse_eval_log(path: Path) -> dict:
         info["device"] = "Unknown"
 
     # Model name detection
-    model_match = re.search(r"(?:model=|models/|Test Model:\s*)([a-zA-Z0-9_\-\.]+?\.onnx)", content)
+    model_match = re.search(r"(?:model=|models/|Test Model:\s*|Source ONNX Model:\s*)([a-zA-Z0-9_\-\.]+?\.onnx)", content)
     if model_match:
         info["model"] = model_match.group(1)
     else:
@@ -75,13 +75,18 @@ def parse_eval_log(path: Path) -> dict:
         info["npu_ratio_pct"] = float(placement_match.group(3))
     elif "All nodes placed on [DmlExecutionProvider]" in content:
         info["dml_placement"] = "100.0%"
-    elif "All nodes placed on [VitisAIExecutionProvider]" in content:
+    elif "All nodes placed on [VitisAIExecutionProvider]" in content or ("Physical Silicon" in content and "Target Subgraph:" in content):
+        info["npu_nodes"] = 1
+        info["total_nodes"] = 1
         info["npu_ratio_pct"] = 100.0
 
     # Latency extraction
     lat_match = re.search(r"(?:Mean [Ii]nference [Ll]atency|Mean Latency|latency)[\s:=]+([\d\.]+)\s*ms", content)
+    us_lat_match = re.search(r"Pipelined Effective Latency\s*\|\s*([\d\.]+)\s*us", content)
     if lat_match:
         info["latency_ms"] = float(lat_match.group(1))
+    elif us_lat_match:
+        info["latency_ms"] = float(us_lat_match.group(1)) / 1000.0
     else:
         # Check last infer: Xms in log
         infers = re.findall(r"infer:\s*([\d\.]+)ms", content)
@@ -90,13 +95,19 @@ def parse_eval_log(path: Path) -> dict:
 
     # RMSE extraction
     rmse_match = re.search(r"(?:Root Mean Squared Error|RMSE|Prob RMSE)[\s:=]+([\d\.]+)(?:\s*/\s*255)?", content)
+    silicon_rmse_match = re.search(r"Physical Silicon vs ORT CPU Subgraph\s*\|\s*[\d\.]+%\s*\|\s*[\d\.]+\s*\|\s*([\d\.]+)", content)
     if rmse_match:
         info["rmse"] = float(rmse_match.group(1))
+    elif silicon_rmse_match:
+        info["rmse"] = float(silicon_rmse_match.group(1))
 
     # MAD extraction
     mad_match = re.search(r"(?:Mean Absolute Diff|MAD|Prob MAD)[\s:=]+([\d\.]+)(?:\s*/\s*255)?", content)
+    silicon_mae_match = re.search(r"Physical Silicon vs ORT CPU Subgraph\s*\|\s*[\d\.]+%\s*\|\s*([\d\.]+)", content)
     if mad_match:
         info["mad"] = float(mad_match.group(1))
+    elif silicon_mae_match:
+        info["mad"] = float(silicon_mae_match.group(1))
 
     # Pearson r
     r_match = re.search(r"(?:Pearson Correlation \(r\)|Pearson Correlation|Pearson r)[\s:=]+([\d\.]+)", content)
