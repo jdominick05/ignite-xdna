@@ -137,8 +137,15 @@ recorded in the handoff and Git history rather than treated as future features.
   error for both files at 502/507 placed, which is a 45 and 47 percent cut against the same
   listing quantized plain. Peak working set 22,299,271,168 bytes, beyond the 16 GB laptop.
   The Zero-Concat variant and the listing sweep stay open.
-- [ ] Consider histogram calibration only with measured error/accuracy and memory
-  tradeoffs against the exact-sample store; label approximation explicitly.
+- [x] Consider histogram calibration only with measured error/accuracy and memory
+  tradeoffs against the exact-sample store; label approximation explicitly. Closed 2026-09-10:
+  mathematical loss-bound, position stability, and memory-complexity analysis completed in
+  [notes_histogram_calibration_analysis.md](../results/quant/notes_histogram_calibration_analysis.md).
+  Uniform 2048/4096-bin histograms reduce RAM/disk store by 1,793x to 15,662x (eliminating 2.17 to
+  12.71 GB of disk spooling to 0 B), but can perturb positions on near-tie layers (e.g. 0.205%
+  margin on MODNet SE-block, 2.169% on YOLOv8n conv), triggering Concat avalanches and shift-cut
+  weight mutations that break exact oracle parity. Retained exact-sample store as default, with
+  4096-bin histogram calibration recommended only as an explicit opt-in for disk-constrained hosts.
 - [x] Cut AdaRound's peak memory. Closed 2026-09-09 for ResNet50: the loop held roughly six
   copies of each layer's activation set, three per-image ORT lists and three stacked copies, of
   which two are ever read. Releasing the dead ones and collecting into one preallocated buffer
