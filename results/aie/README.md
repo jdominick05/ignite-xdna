@@ -979,11 +979,13 @@ BD allocation, and `aie-translate --aie-generate-xaie`.
 [`notes_im2col_kernel_vliw_audit.md`](notes_im2col_kernel_vliw_audit.md) — implementation, Peano toolchain
 compilation, and static VLIW disassembly audit of the vectorized AIE2 C++ compute kernel for Tile(0, 2) consuming
 the 4-D im2col ping-pong buffers against stationary L1 weights ($C_{\text{out}}=32$). Confirms strictly 0 `vshift`
-and 0 `vmov` realignment instructions across all 9 bundles of the hardware loop (`.L_LEnd0`). Measures slot
-occupancy across the 6 execution units (`[b]` load 2: 88.9%, `[a]` load 1: 11.1%, `[s]` store: 0%, `[x]` scalar: 0%,
-`[m]` move: 22.2%, `[v]` vector: 44.4%), confirming the kernel executes at the hardware L1 memory bandwidth
-roofline. Achieves a vector MAC issue density of 0.444 vmac/cycle (4 vmac / 9 cycles), demonstrating an exact
-2.000× speedup over the reference `conv2dk3` baseline (0.222 vmac/cycle).
+and 0 `vmov` realignment instructions across all bundles of the hardware loops. Measures slot occupancy across
+the 6 execution units. In single-patch baseline (M=1), achieves 0.444 vmac/cycle (4 vmac / 9 cycles, 2.000× over
+the reference `conv2dk3` baseline of 0.222 vmac/cycle). In dual-patch unrolling (M=2), amortizes stationary weight
+loads across Patch A and Patch B, achieving **1.000 vmac/cycle** (8 vmac / 8 cycles, **100.0% physical vector slot
+saturation**), delivering an exact **4.500× speedup** over `conv2dk3` and **2.250× speedup** over M=1 with 0 stack
+spills (`frame none B, stack refs 0`).
+
 
 ## Also here
 
