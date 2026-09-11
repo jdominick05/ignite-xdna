@@ -949,6 +949,20 @@ eradicating the 1-cycle same-bank paired-load penalty and the 87 non-loop C-stag
 in `matmul_i8_i32`. Projects an inner loop MAC issue density uplift from 41.9% (107.3 MACs/cycle) to 90.9% (232.7
 MACs/cycle), delivering a 2.16× wall-clock throughput speedup (4,368 → ~9,450 GOPS at 4096×2048²) on Phoenix hardware.
 
+## Master closed-form roofline model and empirical pipeline reconciliation
+
+[`notes_master_xdna1_roofline_synthesis.md`](notes_master_xdna1_roofline_synthesis.md) — master
+closed-form roofline model and empirical pipeline reconciliation on AMD Phoenix AIE2 (XDNA1). Reconciles
+physical micro-architectural hardware ceilings (14.75 TOPS INT8 @ 1.80 GHz, 26–28 GB/s DRAM bandwidth, 7.0 GB/s
+shim stream rate, and 1-cycle paired same-bank load hazard) against measured end-to-end inference latencies
+across six vision architectures: ResNet50 (5.27 ms), YOLOv8n-cut (8.94 ms), YOLOv8s-cut (15.63 ms), YOLOv8m-cut
+(26.95 ms), FastDepth (2.87 ms), and SESR-M7 (1.48 ms). Formulates a unified analytical latency equation
+`T_model = max(T_compute, T_dram, T_stream) + T_dispatch` and decomposes the residual latency delta into
+orthogonal physical mechanisms: (a) compiler VLIW scheduling and 2D sliding-window shuffle overhead (`vshift`/`vmov`
+consuming up to 71% of vector slots), (b) DMA synchronization and ObjectFifo ping-pong buffering, and (c) host
+driver dispatch floors (~90 µs) plus boundary CPU-side QDQ data conversions (440–450 µs for 640×640, 120–250 µs
+for 256×256).
+
 ## Also here
 
 `aiecompiler_help.log` and `aiecompiler_x86sim_passthrough.log` are on disk but were not
