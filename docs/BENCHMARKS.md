@@ -4099,11 +4099,102 @@ RMSE 5.035656, maximum error 31.875 and zero argmax agreement. The initial probe
 The table uses the separate `ORT_DISABLE_ALL` audit instead:
 [initial audit](../results/quant/probe_resnet50_accept_c64_cpu_reference_audit.log),
 [v2 audit including Ignition metadata and input hashes](../results/quant/probe_resnet50_accept_c64_cpu_reference_audit_v2.log).
-This establishes optimizer-dependent behavior in this ORT build; the responsible
-rewrite has not been isolated. The input×weight-scale INT32 bias variant is different:
+The input*weight-scale INT32 bias variant is different:
 both CPU modes remain exact against baseline, while the NPU produces maximum error
 16.0 and zero argmax agreement. INT32 dtype alone is not a wholesale rejection rule,
 but the conventional product-scale representation is not numerically safe here.
+The mechanisms behind both anomalies are isolated below.
+
+#### Isolation of the INT32 bias anomalies: DPU product-scale failure vs ORT QLinearConv rewrite
+
+The two INT32 bias mutations in the acceptance matrix exhibit complementary failure
+modes across hardware and software runtimes:
+
+1. **Anomaly A (Hardware / DPU): product-scale numerical failure.**
+   - `[MEASURED]` In [`probe_resnet50_accept_c64_bias_int32_product.log`](../results/quant/probe_resnet50_accept_c64_bias_int32_product.log), setting
+     `S_bias = S_x * S_w` and storing rounded product-scale INT32 biases
+     passes the VitisAI EP compiler without objection (393 / 395 nodes placed on NPU).
+     Both CPU optimization modes match the baseline CPU reference bit-for-bit
+     (max abs 0.0, RMSE 0.0, argmax agreement 1.0 across all 32 images).
+     However, on-device execution fails catastrophically: NPU-vs-CPU max abs error is
+     16.0, RMSE is 8.025162, and argmax agreement drops to 0.0 (exact elements 0.01875%).
+     Against the baseline NPU output, max abs error is 16.25 and RMSE is 8.553107.
+   - `[MEASURED]` In [`probe_resnet50_accept_c64_bias_int32_dtype.log`](../results/quant/probe_resnet50_accept_c64_bias_int32_dtype.log), casting bias
+     dtype to INT32 while keeping original INT8 numerical magnitudes and independent
+     scales `S_bias` executes on NPU with bit-exact baseline parity: max abs 0.0,
+     RMSE 0.0, and 1.0 argmax agreement across all 32 images (393 / 395 nodes placed).
+   - `[MEASURED]` The compiled AIE2 arithmetic probe ([Observable XINT8 Conv rounding](#observable-xint8-conv-rounding),
+     [`results/quant/arithmetic_desktop2_20260909_a01_c32_sc1_sb0.log`](../results/quant/arithmetic_desktop2_20260909_a01_c32_sc1_sb0.log))
+     proves that the hardware DPU executes pre-SRS (shift-round-saturate) bias addition:
+     `yq = clip(128 + floor((sum(qx*qw) + qb*2^shift_bias)/2^shift_cut + 0.5), 0, 255)`
+     with `shift_bias = wpos + ipos - bpos`.
+   - `[SPEC]` AMD's compiler constraints (`AMD/quark/docs/source/quark_shapeshifter_onnx_passes.rst:146`
+     and `AMD/quark/quark/onnx/postprocess/refinement/refine.py:244-266`) enforce:
+     `shift_bias = wpos + ipos - bpos` clamped to `[min_sb, 15]`, where `min_sb = min(0, -(24 - (8 + shift_cut)))`.
+     The AIE2 instruction stream provides a 4-bit unsigned shift exponent field (`0 <= shift_bias <= 15`)
+     feeding a hardware barrel shifter that shifts compact parameters directly into the 32-bit vector
+     accumulator registers (`cm0`–`cm8`) on the fly.
+   - `[SPEC]` AMD's official RyzenAI-SW documentation (`AMD/RyzenAI-SW/WinML/CNN/ResNet/README.md:235`,
+     `AMD/RyzenAI-SW/WinML/CNN/ConvNeXt/README.md:171`) explicitly specifies `"Int32Bias": false` for
+     NPU CNN configurations because it *"keeps bias in 16-bit (not 32-bit) for better NPU memory efficiency"*.
+     In AMD Quark (`AMD/quark/docs/source/onnx/appendix_full_quant_config_features.rst:140` and
+     `AMD/quark/quark/onnx/quantizers/npu_cnn_quantizer.py:109, 204`), `Int32Bias` is hardcoded to default
+     to `False` when `enable_npu_cnn=True`, quantizing bias to INT8 (`QuantType.QInt8`) with independent
+     scale `S_bias = 2^-bpos`.
+   - `[DERIVED]` In baseline XINT8 and `bias_int32_dtype`, `bpos < wpos + ipos`, so
+     `shift_bias` is in `[5, 9] > 0`. The bias integer `qb` in `[-128, 127]` fits in a
+     compact parameter slot, while the hardware barrel shifter handles dynamic-range
+     alignment into the 32-bit accumulator without precision loss. In `bias_int32_product`, enforcing
+     `S_bias = S_x * S_w` forces `bpos = wpos + ipos`, yielding `shift_bias = 0`.
+     The bias integer must therefore be pre-shifted: `qb_prod = round(qb * 2^shift_bias)`.
+     In ResNet50 `/conv1/Conv`, with `wpos = 9, ipos = 7, bpos = 7` (`shift_bias = 9`), original `qb`
+     in `[-12, 125]` scales by `2^9 = 512` up to `[-6144, 64000]`. Value `64000` requires 17 signed bits
+     (`0x0000FA00`), exceeding the signed 16-bit integer maximum (`32767`).
+   - `[DERIVED]` Because the DPU CNN overlay parameter table allocates 16-bit parameter slots for bias
+     (as documented in AMD's RyzenAI-SW specification), storing product-scale integers overflows signed
+     16-bit storage: `64000 - 65536 = -1536` (`0xFA00` as signed `int16_t`). When serialized or loaded into
+     DPU parameter memory, values exceeding signed 16-bit range undergo signed truncation or clamping,
+     inverting signs and corrupting bias additions across all 53 convolution layers. The compiler places
+     393 / 395 nodes because graph-level operator topology matches, but on-device arithmetic executes
+     corrupted weights.
+   - `[SPEC]` **Vendor testing blind spot**: In `AMD/quark/test/test_for_onnx/test_quantize_int32_bias_npu_cnn_quantizer.py:170-194`,
+     AMD's unit tests verify `Int32Bias: True` solely by creating an `onnxruntime.InferenceSession` on CPU.
+     AMD never ran their `Int32Bias: True` model on the NPU / VitisAI Execution Provider. Because product-scale
+     INT32 biases pass CPU execution bit-for-bit, this hardware parameter truncation defect remained entirely
+     undetected in vendor testing.
+
+2. **Anomaly B (Software / CPU): ORT QLinearConv rewrite discrepancy.**
+   - `[MEASURED]` In [`probe_resnet50_accept_c64_bias_int32_dtype.log`](../results/quant/probe_resnet50_accept_c64_bias_int32_dtype.log), running the
+     dtype-only INT32 bias model with standard ONNX Runtime optimizations produces
+     an apparent divergence against baseline CPU: max abs 31.875, RMSE 5.035656, and
+     0.0 argmax agreement.
+   - `[MEASURED]` In [`probe_resnet50_accept_c64_cpu_reference_audit_v2.log`](../results/quant/probe_resnet50_accept_c64_cpu_reference_audit_v2.log), disabling
+     ORT optimizations (`ORT_DISABLE_ALL`) completely eliminates the discrepancy:
+     unoptimized CPU matches baseline unoptimized CPU bit-for-bit (max abs 0.0,
+     RMSE 0.0, exact elements 1.0). NPU vs unoptimized CPU yields max abs 3.0, RMSE
+     0.756329, and 87.5% argmax agreement, identically reproducing the baseline NPU-vs-CPU
+     relationship.
+   - `[SPEC]` The official ONNX operator specification for `com.microsoft:QLinearConv` and `ai.onnx:QLinearConv`
+     defines the optional bias input `B` as `tensor(int32)` with explicit constraint:
+     *"The scale of input B is equal to (`x_scale * w_scale`), and the 'zero_point' is 0."*
+     No independent `bias_scale` input parameter exists in the operator schema.
+   - `[SPEC]` In ONNX Runtime's QDQ optimizer (`ConvReplaceWithQLinear` in `onnxruntime/core/optimizer/qdq_transformer/qdq_conv.cc`),
+     the pattern matcher queries `B->type()`. If `B` has dtype `int8` (as in baseline XINT8), the matcher
+     rejects lowering to `QLinearConv`. The node remains float `Conv` / `FusedConv`, where `DequantizeLinear(B)`
+     evaluates `float_B = (B - B_zp) * S_bias` using the explicit calibrated `S_bias = 2^-bpos`. Both unoptimized
+     and optimized CPU match baseline bit-for-bit.
+   - `[DERIVED]` In `bias_int32_dtype`, mutating bias to INT32 satisfies `B->type() == int32`. ORT's matcher
+     triggers the `ConvReplaceWithQLinear` rewrite without validating whether `S_bias == S_x * S_w`.
+     ORT discards the `DequantizeLinear(B)` node and wires the unscaled INT8-range bias integers (`[-128, 127]`)
+     directly into `QLinearConv` input `B`.
+   - `[DERIVED]` At runtime, MLAS (`MlasConv`) computes the integer accumulator `Acc_32 = sum((qx - x_zp) * (qw - w_zp))`
+     and adds input `B` directly without shifting: `Acc_biased = Acc_32 + B`. Because `Acc_32` operates at product
+     scale (`wpos + ipos`), omitting the required `2^shift_bias` multiplier attenuates the bias contribution
+     by a factor of `2^shift_bias` (32x to 512x across ResNet50 convolutions where `shift_bias in [5, 9]`).
+     The bias is effectively erased, causing the large RMSE 5.035656 and max abs error 31.875 on optimized CPU.
+   - `[MEASURED]` In [`probe_resnet50_accept_c64_bias_int32_product.log`](../results/quant/probe_resnet50_accept_c64_bias_int32_product.log), because `S_bias` is explicitly set to
+     `S_x * S_w`, `QLinearConv`'s mathematical assumption holds; MLAS adding pre-scaled `B` directly is exact,
+     and optimized CPU matches unoptimized CPU bit-for-bit (max abs 0.0, RMSE 0.0, exact elements 1.0).
 
 Removing the GAP simulation factor preserves the NPU outputs exactly while changing
 the CPU approximation (CPU-vs-baseline RMSE 0.062496, maximum error 0.75). The factor's
