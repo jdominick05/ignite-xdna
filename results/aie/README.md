@@ -996,6 +996,16 @@ with zero bank conflict. Verifies bare-pointer ABI lowering, generates fully lin
 (`core_0_2.elf`, 2,436 B, 1,104 B text, 5,504 B L1 data = 8.4% capacity), hardware CDO binaries (`main_aie_cdo_init.bin`,
 968 B), and NPU instruction transaction stream (`im2col_4d_m2.bin`, 1,272 B).
 
+## Multi-Core Column 0 im2col scaling and hardware multicast distribution
+
+[`notes_im2col_4core_column_scaling.md`](notes_im2col_4core_column_scaling.md) — scaling the M=2 4-D im2col
+dataflow across all four compute tiles in Column 0 (Tiles 0,2 through 0,5). Establishes a 1-to-4 circuit-switched
+hardware multicast broadcast tree from MemTile MM2S Channel 0, achieving a 4.00× reduction in MemTile read
+bandwidth (1,728 B emitted delivers 6,912 B to compute tiles) with zero interconnect contention. Enforces
+identical zero-conflict 4-bank L1 allocations across all four cores (5,504 B per core, 8.4% tile capacity), derives
+the spatial height slicing 4-D striding formulas ($H_{\text{out}}=4$ slices), compiles 4 bit-for-bit identical ELFs
+(1,104 B text, 0 undefined symbols), and generates complete 4-core CDO packages (`main_aie_cdo_init.bin`, 2,632 B)
+and standalone NPU transaction binaries (`im2col_4d_col.bin`, 3,636 B).
 
 ## Also here
 
