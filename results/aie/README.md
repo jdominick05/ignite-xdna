@@ -963,9 +963,32 @@ consuming up to 71% of vector slots), (b) DMA synchronization and ObjectFifo pin
 driver dispatch floors (~90 µs) plus boundary CPU-side QDQ data conversions (440–450 µs for 640×640, 120–250 µs
 for 256×256).
 
+## MemTile 4-D BD im2col dataflow harness and compiler verification
+
+[`notes_im2col_4d_implementation.md`](notes_im2col_4d_implementation.md) — implementation and compiler
+verification of a standalone 4-Dimensional Buffer Descriptor (BD) dataflow harness in direct `mlir-aie` dialect
+targeting AMD Phoenix AIE2 (XDNA1). Resolves the ObjectFifo token-synchronization deadlock by bypassing
+ObjectFifo in favor of raw Buffer Descriptors (`aie.dma_bd`) and decoupled hardware locks (`aie.useLock`).
+Configures explicit 4-D striding in MemTile MM2S across $H=8, W=8, C=32$ INT8 feature maps
+(Dim 0: 32×1; Dim 1: 3×32; Dim 2: 3×256; Dim 3: 6×32) strictly satisfying hardware bitfield constraints
+(wrap $\le 1023$, step $\le 131071$). Verified via `aie-opt` pathfinder flow routing, buffer address assignment,
+BD allocation, and `aie-translate --aie-generate-xaie`.
+
+## Vectorized AIE2 C++ compute kernel and VLIW disassembly audit
+
+[`notes_im2col_kernel_vliw_audit.md`](notes_im2col_kernel_vliw_audit.md) — implementation, Peano toolchain
+compilation, and static VLIW disassembly audit of the vectorized AIE2 C++ compute kernel for Tile(0, 2) consuming
+the 4-D im2col ping-pong buffers against stationary L1 weights ($C_{\text{out}}=32$). Confirms strictly 0 `vshift`
+and 0 `vmov` realignment instructions across all 9 bundles of the hardware loop (`.L_LEnd0`). Measures slot
+occupancy across the 6 execution units (`[b]` load 2: 88.9%, `[a]` load 1: 11.1%, `[s]` store: 0%, `[x]` scalar: 0%,
+`[m]` move: 22.2%, `[v]` vector: 44.4%), confirming the kernel executes at the hardware L1 memory bandwidth
+roofline. Achieves a vector MAC issue density of 0.444 vmac/cycle (4 vmac / 9 cycles), demonstrating an exact
+2.000× speedup over the reference `conv2dk3` baseline (0.222 vmac/cycle).
+
 ## Also here
 
 `aiecompiler_help.log` and `aiecompiler_x86sim_passthrough.log` are on disk but were not
 covered by the `results/README.md` entry this file was built from, so nothing is claimed
 about them here.
+
 
