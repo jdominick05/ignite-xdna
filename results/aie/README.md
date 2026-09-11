@@ -986,6 +986,16 @@ loads across Patch A and Patch B, achieving **1.000 vmac/cycle** (8 vmac / 8 cyc
 saturation**), delivering an exact **4.500× speedup** over `conv2dk3` and **2.250× speedup** over M=1 with 0 stack
 spills (`frame none B, stack refs 0`).
 
+## Tile(0,2) M=2 im2col pipeline integration and CDO transaction synthesis
+
+[`notes_im2col_m2_pipeline_integration.md`](notes_im2col_m2_pipeline_integration.md) — end-to-end integration
+and compilation of the M=2 dual-patch vectorized compute engine into `im2col_4d.mlir`, Foreign Function Interface
+(FFI) linkage, Peano ELF linking, and NPU CDO/instruction binary synthesis. Expands ping-pong buffers to 576 B each
+across dedicated 16 KB L1 physical banks (Bank 2 Ping, Bank 3 Pong, Bank 0 stationary weights, Bank 1 accumulators)
+with zero bank conflict. Verifies bare-pointer ABI lowering, generates fully linked standalone AIE2 ELF
+(`core_0_2.elf`, 2,436 B, 1,104 B text, 5,504 B L1 data = 8.4% capacity), hardware CDO binaries (`main_aie_cdo_init.bin`,
+968 B), and NPU instruction transaction stream (`im2col_4d_m2.bin`, 1,272 B).
+
 
 ## Also here
 
