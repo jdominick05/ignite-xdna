@@ -196,4 +196,91 @@ void conv_im2col_ping_pong_m2(
     }
 }
 
+/// Compute two 288-byte receptive field patches simultaneously (M=2 unrolled)
+/// against identical stationary L1 weights, then apply hardware Shift-Round-Saturate (SRS)
+/// requantization to store 256 packed INT8 values into out_i8.
+///
+/// Parameters:
+///   patch_a    : Pointer to 288 contiguous INT8 bytes in L1 for Patch A (9 taps * 32 channels).
+///   patch_b    : Pointer to 288 contiguous INT8 bytes in L1 for Patch B (9 taps * 32 channels).
+///   weights    : Pointer to stationary L1 weights (9 taps * 4 blocks * 64 bytes = 2304 bytes).
+///   out_i8     : Destination L1 buffer for 256 packed INT8 outputs (128 for Patch A, 128 for Patch B).
+///   shift_bias : Shift amount for hardware Shift-Round-Saturate (SRS) requantization.
+void conv_im2col_kernel_m2_srs(
+    const int8_t *__restrict patch_a,
+    const int8_t *__restrict patch_b,
+    const int8_t *__restrict weights,
+    int8_t *__restrict out_i8,
+    int shift_bias)
+{
+    MMUL c0_a = aie::zeros<acc32, 32>();
+    MMUL c1_a = aie::zeros<acc32, 32>();
+    MMUL c2_a = aie::zeros<acc32, 32>();
+    MMUL c3_a = aie::zeros<acc32, 32>();
+
+    MMUL c0_b = aie::zeros<acc32, 32>();
+    MMUL c1_b = aie::zeros<acc32, 32>();
+    MMUL c2_b = aie::zeros<acc32, 32>();
+    MMUL c3_b = aie::zeros<acc32, 32>();
+
+    const int8_t *w_ptr = weights;
+    const int8_t *a_ptr = patch_a;
+    const int8_t *b_ptr = patch_b;
+
+    #pragma clang loop pipeline(disable)
+    for (int k = 0; k < 9; ++k) {
+        aie::vector<int8, 32> va = aie::load_v<32>(a_ptr);
+        a_ptr += 32;
+        aie::vector<int8, 32> vb = aie::load_v<32>(b_ptr);
+        b_ptr += 32;
+
+        aie::vector<int8, 64> w0 = aie::load_v<64>(w_ptr);
+        aie::vector<int8, 64> w1 = aie::load_v<64>(w_ptr + 64);
+        aie::vector<int8, 64> w2 = aie::load_v<64>(w_ptr + 128);
+        aie::vector<int8, 64> w3 = aie::load_v<64>(w_ptr + 192);
+        w_ptr += 256;
+
+        c0_a.mac(va, w0);
+        c1_a.mac(va, w1);
+        c2_a.mac(va, w2);
+        c3_a.mac(va, w3);
+
+        c0_b.mac(vb, w0);
+        c1_b.mac(vb, w1);
+        c2_b.mac(vb, w2);
+        c3_b.mac(vb, w3);
+    }
+
+    // Hardware Shift-Round-Saturate (SRS) requantization:
+    // Fuses into native AIE2 vst.srs.s8.s32 instructions to cast INT32 accumulators
+    // back into INT8 vectors, storing 256 bytes into out_i8 in Bank 1.
+    aie::store_v(out_i8 + 0,   c0_a.to_vector<int8_t>(shift_bias));
+    aie::store_v(out_i8 + 32,  c1_a.to_vector<int8_t>(shift_bias));
+    aie::store_v(out_i8 + 64,  c2_a.to_vector<int8_t>(shift_bias));
+    aie::store_v(out_i8 + 96,  c3_a.to_vector<int8_t>(shift_bias));
+
+    aie::store_v(out_i8 + 128, c0_b.to_vector<int8_t>(shift_bias));
+    aie::store_v(out_i8 + 160, c1_b.to_vector<int8_t>(shift_bias));
+    aie::store_v(out_i8 + 192, c2_b.to_vector<int8_t>(shift_bias));
+    aie::store_v(out_i8 + 224, c3_b.to_vector<int8_t>(shift_bias));
+}
+
+/// Dual-patch ping-pong pipeline driver with SRS requantization (M=2).
+/// Computes dual patches from ping buffer and/or pong buffer against stationary weights,
+/// requantizes via hardware SRS, and stores 256 packed INT8 outputs into out_i8.
+void conv_im2col_ping_pong_m2_srs(
+    const int8_t *__restrict ping_buf,
+    const int8_t *__restrict pong_buf,
+    const int8_t *__restrict weights,
+    int8_t *__restrict out_i8,
+    int shift_bias)
+{
+    conv_im2col_kernel_m2_srs(
+        ping_buf,
+        ping_buf + 288,
+        weights,
+        out_i8,
+        shift_bias);
+}
+
 } // extern "C"
