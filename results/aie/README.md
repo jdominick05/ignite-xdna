@@ -907,6 +907,20 @@ for `int16xint8`, 4,096 GOPS array peak) with physical VitisAI EP rejection (0/3
 32-bit accumulator headroom (K ≤ 516), and models dynamic range preservation (+48.2 dB SQNR)
 preventing PTQ collapse in MobileViT-XXS (softmax attention) and YOLOv8n-pose (OKS keypoint jitter).
 
+## MemTile 4-D BD in-flight receptive field generation (im2col) specification
+
+[`notes_memtile_4d_im2col_specification.md`](notes_memtile_4d_im2col_specification.md) — formal
+register-level 4-D Buffer Descriptor (BD) configuration and mathematical dataflow specification for
+Memory Tile in-flight receptive field generation (`im2col`) on AMD Phoenix AIE2 (XDNA1). Resolves the
+`ERT_CMD_STATE_TIMEOUT` in `results/aie/im2col_bd_probe_npu.log` as an ObjectFifo token-synchronization
+deadlock (ceil(1764/256) = 7 consumer lock acquisitions against 1 producer token) rather than an AGU
+bounds fault. Details concrete register bitfields (Registers 0–7 + Iteration/Lock control) for 2D spatial
+and 5-D multi-channel (H_out, W_out, K_h, K_w, C_in) streaming via the 6-bit `Iteration_Wrap` extension.
+Proves the mathematical cancellation law yielding strictly 1/C_out bytes per MAC (compute-bound with 2×
+headroom at C_out = 64), and calculates the elimination of 9 standalone `vshift`/`vmov` realignment
+bundles in `conv2dk3`'s 18-cycle hot loop to project a 4.0× MAC issue density uplift (0.222 to 0.889
+vmac/cycle) closing the 11.3× vendor DPU gap.
+
 ## Also here
 
 `aiecompiler_help.log` and `aiecompiler_x86sim_passthrough.log` are on disk but were not

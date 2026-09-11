@@ -772,6 +772,19 @@ here times out. This does **not** refute 2.6's claim about the silicon — the B
 fit with room to spare — it refutes the *route*: do not write a conv kernel against
 `ObjectFifo.forward(dims_to_stream=...)`. A raw buffer descriptor outside the ObjectFifo
 abstraction, where length and access pattern are set independently, is the next thing to try.
+**Formalized 2026-09-10 (`results/aie/notes_memtile_4d_im2col_specification.md`):** The timeout
+mechanism is an ObjectFifo token-synchronization deadlock, not an address-generation fault. The address
+generator never violates memory bounds: for a 16×16 tile with a 3×3 window, max address (13+2)·16 + (13+2) = 255
+words, fitting strictly inside the 256-word buffer [DERIVED]. But ObjectFifo lowers the 1764-word stream as
+requiring ceil(1764/256) = 7 lock acquisitions against a producer that signals only 1 token, causing the
+MemTile MM2S DMA controller to halt indefinitely on `acquire(lock_id, 1)` [DERIVED]. The register-level BD
+solution configures raw DMA descriptors (`AIE.dma_bd`) and decoupled lock synchronization (`AIE.useLock`),
+wrapping the full multi-pass stream under a single lock acquisition pair. MemTile BDs possess 4-D addressing
+(10-bit wrap, 17-bit step) plus a 6-bit `Iteration_Wrap` and 17-bit `Iteration_Step` register, providing
+five physical dimensions that natively map multi-channel tensors (H_out, W_out, K_h, K_w, C_in) without
+consuming core issue slots [SPEC]. Eliminating the 9 standalone `vshift` and `vmov` realignment bundles in
+`conv2dk3`'s 18-cycle hot loop (50.0% of loop latency) lifts MAC issue density from 0.222 vmac/cycle toward
+the 0.889 GEMM ceiling (a 4.0× density uplift), unlocking the path to 1.65 TOPS/column [DERIVED].
 **Bandwidth is not what would kill the design, though** — DERIVED, gate 1 of the same run: an
 im2col conv's expansion cancels, giving **1/C_out bytes per MAC**, so against 3.1's int8 ceiling
 of 0.03125 B/MAC it is stream-bound only below C_out = 32 and has 2× headroom at C_out = 64.
