@@ -135,3 +135,102 @@ def as_reader(source):
             return len(source)
 
     return Reader()
+
+
+class StreamingHistogramAccumulator:
+    """Online uniform histogram accumulator for in-memory streaming activations.
+
+    Accumulates per-tensor and per-channel activation histograms in-memory during
+    forward passes, eliminating disk spooling of intermediate float16 activations
+    (reducing I/O overhead from O(samples * elements * 2 B) to O(bins * tensors)).
+    """
+
+    def __init__(self, num_bins: int = 2048, per_channel: bool = False, channel_axis: int = 1):
+        if num_bins < 16:
+            raise ValueError("Histogram bin count must be at least 16")
+        self.num_bins = int(num_bins)
+        self.per_channel = per_channel
+        self.channel_axis = channel_axis
+        self.ranges: dict[str, tuple[np.ndarray, np.ndarray]] = {}
+        self.counts: dict[str, np.ndarray] = {}
+        self.total_elements: dict[str, int] = {}
+
+    def update_range(self, name: str, x: np.ndarray) -> None:
+        """Update global dynamic range [vmin, vmax] per tensor or per channel."""
+        arr = np.asarray(x, dtype=np.float32)
+        if not np.all(np.isfinite(arr)):
+            raise ValueError(f"Nonfinite values encountered during range collection for {name}")
+        if self.per_channel and arr.ndim > self.channel_axis:
+            axes = tuple(i for i in range(arr.ndim) if i != self.channel_axis)
+            c_min = arr.min(axis=axes)
+            c_max = arr.max(axis=axes)
+            if name not in self.ranges:
+                self.ranges[name] = (c_min.copy(), c_max.copy())
+            else:
+                curr_min, curr_max = self.ranges[name]
+                np.minimum(curr_min, c_min, out=curr_min)
+                np.maximum(curr_max, c_max, out=curr_max)
+        else:
+            vmin = float(arr.min())
+            vmax = float(arr.max())
+            if name not in self.ranges:
+                self.ranges[name] = (np.array(vmin, dtype=np.float32), np.array(vmax, dtype=np.float32))
+            else:
+                curr_min, curr_max = self.ranges[name]
+                if vmin < float(curr_min):
+                    self.ranges[name] = (np.array(vmin, dtype=np.float32), curr_max)
+                if vmax > float(curr_max):
+                    self.ranges[name] = (self.ranges[name][0], np.array(vmax, dtype=np.float32))
+
+    def init_histograms(self) -> None:
+        """Preallocate histogram count arrays after ranges are known."""
+        for name, (vmin, vmax) in self.ranges.items():
+            if self.per_channel and vmin.ndim > 0:
+                num_channels = vmin.shape[0]
+                self.counts[name] = np.zeros((num_channels, self.num_bins), dtype=np.int64)
+            else:
+                self.counts[name] = np.zeros(self.num_bins, dtype=np.int64)
+            self.total_elements[name] = 0
+
+    def accumulate(self, name: str, x: np.ndarray) -> None:
+        """Stream forward activations into uniform histogram bins in-memory."""
+        arr = np.asarray(x, dtype=np.float32)
+        if name not in self.ranges:
+            raise KeyError(f"Range not initialized for {name}; call update_range and init_histograms first")
+        if name not in self.counts:
+            self.init_histograms()
+
+        vmin, vmax = self.ranges[name]
+        self.total_elements[name] = self.total_elements.get(name, 0) + arr.size
+
+        if self.per_channel and vmin.ndim > 0:
+            num_channels = vmin.shape[0]
+            transposed = np.moveaxis(arr, self.channel_axis, 0)
+            reshaped = transposed.reshape((num_channels, -1))
+            for c in range(num_channels):
+                c_vmin = float(vmin[c])
+                c_vmax = float(vmax[c])
+                c_data = reshaped[c]
+                if c_vmax == c_vmin:
+                    self.counts[name][c, 0] += c_data.size
+                else:
+                    delta = (c_vmax - c_vmin) / self.num_bins
+                    bins = np.clip(((c_data - c_vmin) / delta).astype(np.int32), 0, self.num_bins - 1)
+                    self.counts[name][c] += np.bincount(bins, minlength=self.num_bins)
+        else:
+            s_vmin = float(vmin)
+            s_vmax = float(vmax)
+            if s_vmax == s_vmin:
+                self.counts[name][0] += arr.size
+            else:
+                delta = (s_vmax - s_vmin) / self.num_bins
+                bins = np.clip(((arr - s_vmin) / delta).astype(np.int32), 0, self.num_bins - 1)
+                self.counts[name] += np.bincount(bins.ravel(), minlength=self.num_bins)
+
+    def get_histogram(self, name: str) -> tuple[float | np.ndarray, float | np.ndarray, np.ndarray]:
+        """Return (vmin, vmax, counts) for tensor name."""
+        vmin, vmax = self.ranges[name]
+        return (vmin if vmin.ndim > 0 else float(vmin),
+                vmax if vmax.ndim > 0 else float(vmax),
+                self.counts[name])
+
