@@ -1011,6 +1011,10 @@ and standalone NPU transaction binaries (`im2col_4d_col.bin`, 3,636 B).
 
 [`notes_im2col_egress_roundtrip.md`](notes_im2col_egress_roundtrip.md) - end-to-end closed-loop Column 0 im2col pipeline integration with native hardware Shift-Round-Saturate (SRS) requantization in the compute kernel and autonomous host-to-host bi-directional streaming. Synthesizes `vst.srs.s8.s32` in the vector store unit with zero additional cycles or register shuffles, packs INT32 accumulators to INT8 vectors, routes Core MM2S:0 channels into four MemTile S2MM gathering channels (S2MM:1..4, 1,024 B total), and streams contiguous output back to Host DDR via MemTile MM2S:1 to Shim NoC S2MM:0. Verifies 4-bank collision-free physical memory allocation, compiles 4 clean core ELFs (0 undefined symbols), and synthesizes full NPU transaction (`im2col_4d_roundtrip.bin`, 5,608 B) and CDO packages (`main_aie_cdo_init.bin`, 4,160 B; `main_aie_cdo_enable.bin`, 104 B).
 
+## Physical 5th Column (Column 4) unlock feasibility and routing harness
+
+[`notes_column4_unlock_feasibility.md`](notes_column4_unlock_feasibility.md) — architectural audit, dialect target-model patch derivation, switchbox routing harness (`kernels/aie2/column4_probe.mlir`), and binary transaction synthesis for the 5th physical AIE2 column on AMD Phoenix XDNA1 silicon. Audits upstream MLIR-AIE hardcoded 4-column constraint and specifies the 5-point patch for `npu1_5col`. Evaluates dual-topology routing: Path A (direct Tile(4,0) Shim NoC DMA roundtrip) and Path B (West-to-East cross-column routing between Tile(3,1) MemTile and Tile(4,2) Core) lowering with zero pathfinder errors or assertions. Synthesizes executable NPU transaction binary (`column4_probe.bin`, 2,652 B) and complete CDO package (`main_aie_cdo_init.bin`, 2,080 B) with 85 register writes targeting Column 4. Verifies canonical AIE2 address mapping (`0x08000000` base, `0x14000` locks, `0x1D000` BDs, `0x3F000` switchbox), generates collision-free 4-bank linker script (`core_4_2.ld`, 1,050 B), and proves 144.0 GB/s crossbar interconnect throughput from Column 3 even under unbonded Shim PHY conditions.
+
 ## Also here
 
 
