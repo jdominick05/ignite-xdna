@@ -896,6 +896,17 @@ compilable tile geometry frontier under L1 capacity (2A + 2B_bytes + (1|2)C + 33
 unlocking double-buffered C at 64×128×64) and evaluates memory-bound (M <= 16, ~1.9x–2.0x win across
 28 GB/s DDR cap) and compute-bound (M >= 64, 1.24x–1.26x speedup tracking 20% L3 byte reduction) regimes.
 
+## Mixed-precision A16W8 feasibility and graph-lowering audit
+
+[`notes_a16w8_feasibility_audit.md`](notes_a16w8_feasibility_audit.md) — formal micro-architectural
+and graph-lowering feasibility audit of INT16 activation × INT8 weight (A16W8) mixed precision on
+AMD Phoenix AIE2 (XDNA1). Reconciles AMD's silicon specification (`device.yaml`: 128 MACs/cycle native
+for `int16xint8`, 4,096 GOPS array peak) with physical VitisAI EP rejection (0/394 nodes on NPU,
+26.18 ms CPU fallback in `results/a16w8/diag_resnet50_a16w8_npu.log`). Proves the opset-17
+`com.microsoft` domain lockout mechanism, details the AIE2 `aie::mmul<4,8,4>` vector intrinsic and
+32-bit accumulator headroom (K ≤ 516), and models dynamic range preservation (+48.2 dB SQNR)
+preventing PTQ collapse in MobileViT-XXS (softmax attention) and YOLOv8n-pose (OKS keypoint jitter).
+
 ## Also here
 
 `aiecompiler_help.log` and `aiecompiler_x86sim_passthrough.log` are on disk but were not
