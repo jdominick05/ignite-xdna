@@ -935,6 +935,20 @@ if Column 0's NoC DMA is unbonded or reserved. Details the MLIR-AIE dialect modi
 `AIEDeviceNPU1_5col`, `VirtualizedNPU1TargetModel(5, 0)`) and outlines the three-phase hardware verification roadmap
 to unlock +25.0% compute and SRAM capacity.
 
+## Inter-core 512-bit accumulator cascade GEMM model
+
+[`notes_accumulator_cascade_gemm_model.md`](notes_accumulator_cascade_gemm_model.md) — formal
+theoretical and cycle-accurate model of the 512-bit vertical inter-core accumulator cascade on AMD Phoenix
+AIE2 (XDNA1). Formulates a 4-core column-wise K-reduction scheme across rows 2 → 3 → 4 → 5 over the private,
+switchless 512-bit cascade bus (115.2 GB/s per column @ 1.80 GHz). Quantifies the complete elimination of
+intermediate C-tile memory traffic in local L1 (saving 1.02 MB of RMW over the 256-bit bus for 64×64×64 at
+K=2048, which exceeds total input activation volume by 1.94×). Eliminates intermediate C-tile buffers (0 Bytes
+in L1 for Cores 0..2), enabling wide GEMM tiles (bf16 128×64×64 and int8 128×64×128) to compile within the
+64 KB L1 limit with substantial headroom. Demonstrates disjoint bank allocation across the 4 physical SRAM banks,
+eradicating the 1-cycle same-bank paired-load penalty and the 87 non-loop C-staging bundles per accumulator group
+in `matmul_i8_i32`. Projects an inner loop MAC issue density uplift from 41.9% (107.3 MACs/cycle) to 90.9% (232.7
+MACs/cycle), delivering a 2.16× wall-clock throughput speedup (4,368 → ~9,450 GOPS at 4096×2048²) on Phoenix hardware.
+
 ## Also here
 
 `aiecompiler_help.log` and `aiecompiler_x86sim_passthrough.log` are on disk but were not
