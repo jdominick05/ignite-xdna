@@ -299,6 +299,61 @@ installed versions, source/model SHA256 values, and raw fingerprints are in
   no-CLE ResNet. See the [acceptance study](../docs/BENCHMARKS.md#ignition-controlled-resnet-qdq-acceptance).
   **[U]** other graphs and opset-import/version sensitivity remain open.
 
+### 2.7 Operator marking, retained QDQ pruning, and scale-sharing rules
+
+A comprehensive static graph audit across six vision topologies (ResNet50, YOLOv8n-cut,
+YOLOv6n-cut, MODNet-Cut, FastDepth, and BiSeNetV2) defines the exact compiler-lowering
+and QDQ placement rules for Project Ignition [SPEC][M]. The full audit report with per-layer
+breakdowns and empirical counts is in
+[`notes_qdq_pruning_and_sharing_audit.md`](../results/quant/notes_qdq_pruning_and_sharing_audit.md).
+
+- **Operator marking categories (`quant/qdq.py`):**
+  - `ANNOTATE_OPS = ("Conv", "Add", "MaxPool", "AveragePool", "GlobalAveragePool", "MatMul", "Gemm", "ConvTranspose")`:
+    producers whose single-consumer output feeding a fused activation (`needs_annotated`)
+    does not retain an intermediate QDQ pair.
+  - `SHARING_OPS = {"MaxPool", "Resize"}`: memoryless operators (`QDQDirect8BitOp`) whose output
+    tensor reuses the exact scalar power-of-two scale and zero point of `input[0]`.
+  - `PARAMETER_OPS = {"Clip": 1}`: operators where activation `input[0]` is quantized as `uint8`
+    while subsequent inputs (min/max bounds) remain unquantized float initializers.
+  - `QDQOperatorBase`: general operators (`Add`, `Mul`, `Relu`, `HardSigmoid`, `Concat`, `Slice`)
+    where every non-constant float activation input and output receives an independent calibrated QDQ pair.
+
+- **Retained QDQ pruning mechanics (`prune_conv_relu`):**
+  - Structural matching: requires single-consumer producer output (`len(consumers(conv.out)) == 1`),
+    single intermediate `QuantizeLinear → DequantizeLinear` pair, and single downstream activation
+    matching `needs_annotated` (`Relu`, `LeakyRelu`, `PRelu`, or `Clip` bounded to `[0, 6]` or `[0, 1]`).
+  - Rewriting: reconnects activation input directly to the producer output and deletes the intermediate
+    QDQ nodes and their initializers.
+  - Hardware rationale: Phoenix AIE2 vector accumulators execute activation clamping directly in the
+    accumulator writeback/SRS stage with zero latency overhead. Retaining intermediate QDQ breaks
+    VitisAI EP's `fuse_DPU` pattern matcher, forcing either catastrophic CPU fallback or redundant
+    int8 writeback/requantization round-trips with compounding `±0.5 LSB` rounding distortion.
+  - Measured pruning counts: 49 pairs in ResNet50 (33 Conv→Relu, 16 Add→Relu), 54 in YOLOv6n-cut,
+    52 in MODNet-Cut (17 Relu, 35 Clip), 38 in FastDepth (11 Relu, 27 Clip), 40 in BiSeNetV2 (32 Conv, 8 Add),
+    and 0 unpruned activations remaining across all vision pipelines.
+
+- **Scale-sharing invariants and visit-order dependency:**
+  - Order dependency (`Graph.vendor_order`): `quantizable_tensors` records parameter sharing
+    `sharing[output] = input[0]` only if `input[0]` is already in `acts` at the time of visit.
+    If `input[0]` is an unquantized graph input (as in MODNet's two root-level Resizes), sharing is skipped,
+    and downstream consumers assign independent calibrated scales.
+  - Transitive SPPF chains: cascaded MaxPools (YOLOv8n SPPF, YOLOv6n CSPSPPF) resolve transitively
+    to the root activation producer, sharing 1 scale across 4 distinct tensors.
+  - Multi-branch alignment constraints (`quant/refine.py`): `align_concat` forces `pos = min(opos, ipos_k)`
+    (coarsest scale wins, truncating precision from fine-amplitude branches); `shift_read` clamps Add
+    input position delta to `≤ 7`; `shift_write` bounds Add writeback to `[-7, 25]` and Mul writeback to `[0, 32]`.
+
+- **Multi-branch dynamic range truncation and the BiSeNetV2 case study:**
+  - BiSeNetV2 exhibits 15.33% pixel accuracy on NPU vs 59.47% on CPU ([log](../results/quant/bga_bisenetv2_xint8_npu_desktop2_20260909.log)),
+    with divergence entering at bilateral aggregation `/bga/Mul` (0.6869 NPU vs CPU correlation).
+  - Operator controls ([`mul_fixture`](../results/quant/mul_fixture_desktop2_20260909.log)) prove the
+    fixed-point multiplier arithmetic (`3 × 7 → 4`, `sw = 6`) achieves 1.0000 correlation in isolation.
+  - Bypassing the ~280-node semantic branch restores correlation to 0.9981 ([The Mul is not the fault](../docs/BENCHMARKS.md#the-mul-is-not-the-fault-a-long-lived-activation-is-2026-09-09-desktop-2)).
+    The physical root cause is memory allocation pressure: the detail branch activation (`[1, 128, 64, 64]`,
+    512 KB) exceeds the 64 KB local data memory of an AIE tile and must be held live across ~280 nodes,
+    forcing tile spilling/corruption, whereas the sibling's 32 KB activation (`[1, 128, 16, 16]`) fits
+    in tile memory and achieves 0.9984 correlation.
+
 ---
 
 ## 3. Scope
