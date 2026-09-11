@@ -351,6 +351,33 @@ L1 wall at a worse operating point (`results/aie/bf16_matmul_ffn_shape_variants_
 Mistral's `d_ff=14336` showed that the surviving `n`-tile size, not "real-shape-ness",
 decides the verdict (1.10× CPU at 11008, 1.13× NPU at 14336).
 
+### 2.7 Master closed-form roofline formulation
+
+Synthesized from the micro-architectural parameters of Sections 1 and 2 (fully documented in [`results/aie/notes_master_xdna1_roofline_synthesis.md`](../results/aie/notes_master_xdna1_roofline_synthesis.md)), the theoretical latency ceiling for an end-to-end workload on Phoenix AIE2 is bounded by the maximum execution time across the compute, off-chip DRAM, and on-chip interconnect streaming bottlenecks, plus an additive host dispatch floor:
+
+T_model = max(T_compute, T_dram, T_stream) + T_dispatch
+
+1. **Compute Execution Term**:
+   T_compute = (2 · MACs_total) / (P_peak · eta_array)
+   where P_peak = 14.7456 TOPS (INT8 @ 1.80 GHz, 16 cores) and eta_array = eta_VLIW · eta_bank · eta_nest · eta_spatial:
+   - **VLIW Issue Density (eta_VLIW)**: Fraction of bundles issuing valid arithmetic in slot [v]. Measured at 1.000 in reblocked 2×2 GEMM, 0.889 in stock 4×2 GEMM, 0.286 in peeled 1×1 conv, 0.222 in width-fixed 3×3 conv (where 6 bundles spend slot [v] on vshift and 4 on vmov), and 0.045 in stock unpeeled 1×1 conv [MEASURED: `results/aie/conv_issue_rate_decomposed.log`].
+   - **Bank Conflict Factor (eta_bank)**: 1 / (1 + p_hazard). Equals 0.900 when input buffers share the same 16 KB SRAM bank (+1 stall cycle per collided paired load), and 1.000 when mapped to disjoint banks [MEASURED: `results/aie/bank_conflict_survey.log`].
+   - **Loop Nest Amortization (eta_nest)**: Loop cycles divided by total cycles. Drops to 0.383 when spilling >5 live accumulators into Peano's 416-byte stack frame (87 non-loop bundles per group), rising to >0.92 when accumulators remain in registers cm0–cm3 [MEASURED: `results/aie/gemm_cost_model_nest.log`].
+   - **Spatial Array Utilization (eta_spatial)**: Active MAC lanes divided by array capacity. Drops to 0.40–0.60 on narrow channels (C ≤ 32) due to 64-channel matrix unit underfill, reaching >0.90 on wide layers (C ≥ 128).
+
+2. **Off-Chip DRAM Bandwidth Term**:
+   T_dram = (Weights_bytes + Spill_activations) / B_dram
+   where B_dram = 27.0 GB/s (the empirical shared DRAM bandwidth cap; 1.6). In XINT8, Weights_bytes = Parameters · 1 Byte. When total weights exceed on-chip Memory Tile capacity (2.048 MB across 4 columns), weights must be continuously streamed from system memory.
+   The operational ridge point is I_ridge = P_peak / B_dram = 14.7456 TOPS / 27.0 GB/s = **273.1 MACs/Byte** (546.1 FLOPs/Byte). Below 273.1 MACs/B, execution is strictly bandwidth-bound.
+
+3. **On-Chip Interconnect Streaming Term**:
+   T_stream = Volume_stream / (N_channels · B_shim)
+   where B_shim = 7.0 GB/s per channel (1.6) and N_channels = 8 across 4 columns (56.0 GB/s aggregate). For models fitting entirely in SRAM (e.g. SESR-M7), activation movement across MemTile ping-pong buffers bounds dataflow.
+
+4. **Additive Host Dispatch & Boundary Conversion Term**:
+   T_dispatch = N_subgraphs · t_dispatch_floor + t_boundary_QDQ + t_sync
+   where t_dispatch_floor = 0.090 ms (VitisAI EP host gap outside nodes; 2.5), t_boundary_QDQ = 0.440–0.450 ms for 640×640 detection or 0.120–0.250 ms for 256×256 super-res/depth (CPU QuantizeLinear / DequantizeLinear nodes), and t_sync ≈ 0.020–0.030 ms.
+
 ## 3. Rooflines per op class
 
 ### 3.1 GEMM: the tile decides whether the core is fed
@@ -484,6 +511,40 @@ startup, not per call. Two limits survive intact: the four reopens still need �
 dispatches in flight, and they still need a caller outside IRON — that caller is now known to be
 writable in C++ rather than hypothetical. A single dispatch costs ~108 µs even in C++, of which
 only ~20–30 µs was ever the binding.
+
+### 3.5 Cross-model empirical roofline reconciliation and discrepancy decomposition
+
+The master roofline model (2.7) was evaluated across six production vision models benchmarked on Phoenix XDNA1 (Ryzen 7 8700G, NPU @ 1.80 GHz). Full analysis and mathematical derivations are recorded in [`results/aie/notes_master_xdna1_roofline_synthesis.md`](../results/aie/notes_master_xdna1_roofline_synthesis.md).
+
+#### Cross-Model Roofline Validation Matrix
+
+| Model Architecture | Precision & Format | GMACs / Infer | Weight / Act Volume | Measured Latency | Achieved TOPS | Peak Array % (14.75 TOPS) | Operational Regime | Primary Backing Evidence |
+|---|---|---|---|---|---|---|---|---|
+| **ResNet50** | XINT8 c64 (AdaRound) | 4.236 GMAC | 25.53 MB / 85.96 MB | 5.27 ms | 1.608 TOPS | 10.9% | Memory/Compute Border (165.9 MAC/B) | [MEASURED: `docs/BENCHMARKS.md:36`, `results/adaround_latency_diff_adaround_npu.log`] |
+| **YOLOv8n-cut** | XINT8 c200 | 4.703 GMAC | 3.15 MB / 182.37 MB | 8.94 ms | 1.052 TOPS | 7.1% | Compute-Bound (1,493.0 MAC/B) | [MEASURED: `docs/BENCHMARKS.md:78`, `results/bench/lat_yolov8n_cut_xint8_c200_npu.log`] |
+| **YOLOv8s-cut** | XINT8 c200 | 14.932 GMAC | 11.16 MB / 347.38 MB | 15.63 ms | 1.910 TOPS | 13.0% | Compute-Bound (1,338.0 MAC/B) | [MEASURED: `docs/BENCHMARKS.md:79`, `results/bench/lat_yolov8s_cut_xint8_c200_npu.log`] |
+| **YOLOv8m-cut** | XINT8 c200 | 40.603 GMAC | 25.89 MB / 624.91 MB | 26.95 ms | 3.013 TOPS | 20.4% | Compute-Bound (1,568.3 MAC/B) | [MEASURED: `docs/BENCHMARKS.md:80`, `results/bench/lat_yolov8m_cut_xint8_c200_npu.log`] |
+| **FastDepth** | XINT8 PTQ | 0.549 GMAC | 1.35 MB / 43.80 MB | 2.87 ms | 0.383 TOPS | 2.6% | Dispatch/Compute (406.7 MAC/B) | [MEASURED: `docs/BENCHMARKS.md:3576`, `results/lat_fastdepth_xint8_npu.log`] |
+| **SESR-M7** | XINT8 (AdaRound) | 1.503 GMAC | 0.022 MB / 40.79 MB | 1.48 ms | 2.032 TOPS | 13.8% | On-Chip SRAM Bound (68,009 MAC/B) | [MEASURED: `docs/BENCHMARKS.md:3657`, `results/lat_sesr_m7_adaround_npu.log`] |
+
+#### Discrepancy Decomposition: Explaining the Residual Latency Delta
+
+The gap between theoretical lower bound `T_lower = max(T_compute_ideal, T_dram_min, T_stream_act) + T_dispatch` and measured runtime decomposes into three physical mechanisms:
+
+| Model Architecture | Measured Latency | Cat C: Dispatch & Boundary QDQ | Cat B: DMA Sync & Ping-Pong Stalls | Cat A: VLIW Slot Starvation & NOPs | Effective NPU Compute Time | Dominant Bottleneck Mechanism |
+|---|---|---|---|---|---|---|
+| **ResNet50** | 5.27 ms | 0.53 ms (10.1%) | 1.25 ms (23.7%) | 2.11 ms (40.0%) | 1.38 ms (26.2%) | Weight streaming from DDR + 1×1/3×3 conv issue density |
+| **YOLOv8n-cut** | 8.94 ms | 0.53 ms (5.9%) | 2.45 ms (27.4%) | 4.38 ms (49.0%) | 1.58 ms (17.7%) | Spatial under-utilization (narrow C) + vshift alignment |
+| **YOLOv8s-cut** | 15.63 ms | 0.53 ms (3.4%) | 3.62 ms (23.2%) | 7.15 ms (45.7%) | 4.33 ms (27.7%) | Multi-scale branching activation DMA sync + conv scheduling |
+| **YOLOv8m-cut** | 26.95 ms | 0.53 ms (2.0%) | 5.80 ms (21.5%) | 9.94 ms (36.9%) | 10.68 ms (39.6%) | Compute saturation; reaches 3.01 TOPS (20.4% array peak) |
+| **FastDepth** | 2.87 ms | 0.21 ms (7.3%) | 0.98 ms (34.1%) | 1.48 ms (51.6%) | 0.20 ms (7.0%) | Depthwise conv vector inefficiency (bypasses mmul engine) |
+| **SESR-M7** | 1.48 ms | 0.34 ms (23.0%) | 0.38 ms (25.7%) | 0.35 ms (23.6%) | 0.41 ms (27.7%) | On-chip activation streaming + host boundary conversion |
+
+#### Physical Root Causes
+
+1. **Category A (Compiler Scheduling & VLIW Slot Starvation)**: 2D spatial convolution sliding-window alignment requires emitting `vshift` and `vmov` instructions directly into vector slot `[v]`. In 3×3 convs, 10 out of 14 vector instructions (71.4%) are consumed by realignment rather than arithmetic (`results/aie/conv_issue_rate_decomposed.log`), capping inner-loop issue rate at 0.222 vmac/cycle. Furthermore, narrow channel dimensions (C=16 or C=32 in YOLOv8n and FastDepth) leave up to 75% of parallel MAC lanes idle.
+2. **Category B (DMA Synchronization & Ping-Pong Latency)**: Transferring feature maps between Shim DMA, Memory Tiles, and Core L1 requires acquiring hardware ObjectFifo locks and synchronizing buffer descriptors. Branching topologies (YOLO SPPF, feature pyramid concats, ResNet skip adds) exceed Memory Tile capacity, forcing intermediate activation ping-ponging and 1-cycle same-bank paired-load penalties.
+3. **Category C (Host Dispatch Floors & Boundary QDQ Conversions)**: Across all models, the VitisAI EP host submission gap outside compute nodes contributes ~0.090 ms, while CPU-side QuantizeLinear and DequantizeLinear operators contribute ~0.440–0.450 ms for 640×640 detection and ~0.120–0.250 ms for 256×256 depth/super-res (`results/percall_overhead_yolov8_1x4.log`). This establishes a non-NPU software floor of 0.34–0.54 ms across every single inference call.
 
 ## 4. Objectives
 
