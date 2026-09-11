@@ -64,11 +64,17 @@ module {
     %mem_lock_cons = aie.lock(%tile_0_1, 1) { init = 0 : i32, sym_name = "mem_lock_cons" }
 
     // ------------------------------------------------------------------------
-    // Core L1 Ping-Pong Buffers & Dedicated Hardware Locks (Tile 0,2)
+    // Core L1 Ping-Pong Buffers, Stationary Weights & Output (Tile 0,2)
     // ------------------------------------------------------------------------
-    // Two 288-byte L1 buffers (3x3x32 = 288 bytes per receptive field window)
-    %core_ping = aie.buffer(%tile_0_2) { sym_name = "core_ping" } : memref<288xi8>
-    %core_pong = aie.buffer(%tile_0_2) { sym_name = "core_pong" } : memref<288xi8>
+    // Two 576-byte L1 buffers (2 patches * 3x3x32 = 576 bytes per transfer)
+    %core_ping = aie.buffer(%tile_0_2) { sym_name = "core_ping" } : memref<576xi8>
+    %core_pong = aie.buffer(%tile_0_2) { sym_name = "core_pong" } : memref<576xi8>
+
+    // Stationary L1 weights: 9 taps * 4 blocks * 64 bytes = 2304 bytes
+    %core_weights = aie.buffer(%tile_0_2) { sym_name = "core_weights" } : memref<2304xi8>
+
+    // Output accumulator buffer (2 patches * 128 INT32 = 256 INT32 = 1024 bytes)
+    %core_out = aie.buffer(%tile_0_2) { sym_name = "core_out" } : memref<256xi32>
 
     // Dedicated Ping hardware locks (locks 0 and 1)
     %ping_prod_lock = aie.lock(%tile_0_2, 0) { init = 1 : i32, sym_name = "ping_prod_lock" }
@@ -77,6 +83,11 @@ module {
     // Dedicated Pong hardware locks (locks 2 and 3)
     %pong_prod_lock = aie.lock(%tile_0_2, 2) { init = 1 : i32, sym_name = "pong_prod_lock" }
     %pong_cons_lock = aie.lock(%tile_0_2, 3) { init = 0 : i32, sym_name = "pong_cons_lock" }
+
+    // ------------------------------------------------------------------------
+    // Foreign Function Interface (FFI) Declarations
+    // ------------------------------------------------------------------------
+    func.func private @conv_im2col_ping_pong_m2(memref<576xi8>, memref<576xi8>, memref<2304xi8>, memref<256xi32>, i32) -> () attributes {link_with = "conv_im2col_kernel_m2.o"}
 
     // ------------------------------------------------------------------------
     // Stream Interconnect (Circuit-Switched Flows)
@@ -138,17 +149,17 @@ module {
     %mem_0_2 = aie.mem(%tile_0_2) {
       %c1 = arith.constant 1 : i32
 
-      // S2MM Channel 0: Alternates between Core Ping and Core Pong buffers
+      // S2MM Channel 0: Alternates between Core Ping and Core Pong buffers (576 bytes each)
       aie.dma_start(S2MM, 0, ^bd_ping, ^end)
     ^bd_ping:
       aie.use_lock(%ping_prod_lock, AcquireGreaterEqual, %c1)
-      aie.dma_bd(%core_ping : memref<288xi8> offset = 0 len = 288)
+      aie.dma_bd(%core_ping : memref<576xi8> offset = 0 len = 576)
       aie.use_lock(%ping_cons_lock, Release, %c1)
       aie.next_bd ^bd_pong
 
     ^bd_pong:
       aie.use_lock(%pong_prod_lock, AcquireGreaterEqual, %c1)
-      aie.dma_bd(%core_pong : memref<288xi8> offset = 0 len = 288)
+      aie.dma_bd(%core_pong : memref<576xi8> offset = 0 len = 576)
       aie.use_lock(%pong_cons_lock, Release, %c1)
       aie.next_bd ^bd_ping
 
@@ -161,22 +172,19 @@ module {
     // ------------------------------------------------------------------------
     %core_0_2 = aie.core(%tile_0_2) {
       %c1 = arith.constant 1 : i32
-      %c0_idx = arith.constant 0 : index
-      %c1_idx = arith.constant 1 : index
-      %c3_idx = arith.constant 3 : index // 3 ping-pong iterations = 6 patches
 
-      // Core consumes 6 receptive field patches with zero lock contention
-      scf.for %arg0 = %c0_idx to %c3_idx step %c1_idx {
-        // Ping Phase: Acquire full ping buffer (lock 1), process, release empty (lock 0)
-        aie.use_lock(%ping_cons_lock, AcquireGreaterEqual, %c1)
-        // [In-flight GEMM kernel computes on %core_ping here]
-        aie.use_lock(%ping_prod_lock, Release, %c1)
+      // Synchronize with S2MM DMA: acquire initial ping and pong buffers
+      aie.use_lock(%ping_cons_lock, AcquireGreaterEqual, %c1)
+      aie.use_lock(%pong_cons_lock, AcquireGreaterEqual, %c1)
 
-        // Pong Phase: Acquire full pong buffer (lock 3), process, release empty (lock 2)
-        aie.use_lock(%pong_cons_lock, AcquireGreaterEqual, %c1)
-        // [In-flight GEMM kernel computes on %core_pong here]
-        aie.use_lock(%pong_prod_lock, Release, %c1)
-      }
+      // Call M=2 vectorized compute engine across ping-pong buffers
+      // Amortizes stationary L1 weights across dual spatial patches (M=2)
+      func.call @conv_im2col_ping_pong_m2(%core_ping, %core_pong, %core_weights, %core_out, %c1) : (memref<576xi8>, memref<576xi8>, memref<2304xi8>, memref<256xi32>, i32) -> ()
+
+      // Release ping and pong buffers back to S2MM DMA
+      aie.use_lock(%ping_prod_lock, Release, %c1)
+      aie.use_lock(%pong_prod_lock, Release, %c1)
+
       aie.end
     }
   }

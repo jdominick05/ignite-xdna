@@ -155,22 +155,44 @@ void conv_im2col_ping_pong(
     }
 }
 
+/// Dual-patch single buffer driver (computes 2 consecutive 288-byte patches in a 576-byte buffer).
+void conv_im2col_dual_patch(
+    const int8_t *__restrict dual_patch,
+    const int8_t *__restrict weights,
+    int32_t *__restrict out_buf)
+{
+    conv_im2col_kernel_m2(
+        dual_patch,
+        dual_patch + 288,
+        weights,
+        out_buf,
+        out_buf + 128);
+}
+
 /// Dual-patch ping-pong pipeline driver (M=2).
+/// Processes ping and pong buffers (576 bytes each = 2 patches x 288 B) against stationary L1 weights.
 void conv_im2col_ping_pong_m2(
     const int8_t *__restrict ping_buf,
     const int8_t *__restrict pong_buf,
     const int8_t *__restrict weights,
-    int32_t *__restrict out_ping,
-    int32_t *__restrict out_pong,
+    int32_t *__restrict out_buf,
     int n_pairs)
 {
     for (int iter = 0; iter < n_pairs; ++iter) {
+        // Dual-patch in ping buffer (Patch 0 & Patch 1)
         conv_im2col_kernel_m2(
             ping_buf,
-            pong_buf,
+            ping_buf + 288,
             weights,
-            out_ping + iter * 128,
-            out_pong + iter * 128);
+            out_buf + (iter * 4) * 128,
+            out_buf + (iter * 4 + 1) * 128);
+        // Dual-patch in pong buffer (Patch 2 & Patch 3)
+        conv_im2col_kernel_m2(
+            pong_buf,
+            pong_buf + 288,
+            weights,
+            out_buf + (iter * 4 + 2) * 128,
+            out_buf + (iter * 4 + 3) * 128);
     }
 }
 
