@@ -188,9 +188,14 @@ recorded in the handoff and Git history rather than treated as future features.
   needed minimizing -- it was on the way to a rejection.
   [Verdict and controls](../docs/BENCHMARKS.md#per-channel-weight-scales-are-rejected-outright-2026-09-09-desktop-2). Differing channel grids and
   MobileViT recovery via per-channel are closed with it.
-- [ ] Isolate product-scale INT32-bias NPU numerical failure. Separately isolate the
-  optimizer-dependent CPU discrepancy for dtype-only INT32 bias; neither mechanism
-  is established by the current output comparisons.
+- [x] Isolate product-scale INT32-bias NPU numerical failure. Separately isolate the
+  optimizer-dependent CPU discrepancy for dtype-only INT32 bias. Closed 2026-09-10:
+  the DPU hardware failure stems from pre-SRS accumulator mechanics (`shift_bias = 0`
+  forces product-scale integer biases to exceed compact microcode parameter packing, e.g. `[-6144, 64000]`
+  in `/conv1/Conv`, causing DPU parameter truncation/clamping), whereas the CPU discrepancy
+  stems from ORT's `ConvReplaceWithQLinear` rewrite dropping independent `S_bias` and
+  attenuating bias by `2^shift_bias` (32x to 512x) inside MLAS.
+  [Isolation report](../docs/BENCHMARKS.md#isolation-of-the-int32-bias-anomalies-dpu-product-scale-failure-vs-ort-qlinearconv-rewrite).
 - [ ] Probe retained Conv/Relu QDQ, Concat alignment and HardSigmoid correction
   independently on suitable baselines. Run numerical checks for every placement result.
 - [ ] Investigate opset/IR alternatives only as separate experiments with fresh
