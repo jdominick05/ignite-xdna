@@ -6,7 +6,8 @@
 **Toolchain:** Peano (`llvm-aie 22.0.0`, `clang++`, `llvm-objdump`)  
 **Artifacts Audited:**  
 - Source Kernel: [`kernels/aie2/conv_im2col_kernel.cc`](file:///C:/Users/Ignis/PycharmProjects/ryzen-ai-xdna1-quantization/kernels/aie2/conv_im2col_kernel.cc)  
-- Compiled ELF Object: [`build/conv_im2col_kernel.o`](file:///C:/Users/Ignis/PycharmProjects/ryzen-ai-xdna1-quantization/build/conv_im2col_kernel.o)  
+- Compiled ELF Object (M=1): [`build/conv_im2col_kernel.o`](file:///C:/Users/Ignis/PycharmProjects/ryzen-ai-xdna1-quantization/build/conv_im2col_kernel.o)  
+- Compiled ELF Object (M=2): [`build/conv_im2col_kernel_m2.o`](file:///C:/Users/Ignis/PycharmProjects/ryzen-ai-xdna1-quantization/build/conv_im2col_kernel_m2.o)  
 - Dataflow IR Harness: [`kernels/aie2/im2col_4d.mlir`](file:///C:/Users/Ignis/PycharmProjects/ryzen-ai-xdna1-quantization/kernels/aie2/im2col_4d.mlir)  
 - Lowered BD IR: [`build/im2col_4d_lowered_with_bds.mlir`](file:///C:/Users/Ignis/PycharmProjects/ryzen-ai-xdna1-quantization/build/im2col_4d_lowered_with_bds.mlir)  
 - Baseline Trace: [`results/aie/conv_issue_rate_decomposed.log`](file:///C:/Users/Ignis/PycharmProjects/ryzen-ai-xdna1-quantization/results/aie/conv_issue_rate_decomposed.log)  
@@ -24,13 +25,16 @@ By offloading the spatial 3x3 receptive field gathering entirely to the MemTile 
 
 ### Headline Results:
 1. **Zero Realignment Instructions `[MEASURED]`:**
-   Across the 9-cycle inner loop of `conv_im2col_kernel`, there are **strictly 0 `vshift`** and **strictly 0 `vmov`** instructions. All 13 realignment instructions from the baseline are eliminated (100% reduction).
-2. **2.000x Vector MAC Issue Density Speedup `[MEASURED]` / `[DERIVED]`:**
-   The inner loop executes **4 `vmac` instructions in 9 cycles**, achieving an issue density of **0.444 vmac/cycle** (44.4% vector slot saturation), exactly double the baseline `conv2dk3` density of **0.222 vmac/cycle**.
-3. **Zero Register Spills & Zero Stack Overhead `[MEASURED]`:**
-   The kernel maintains accumulators across 4 native 1024-bit vector registers (`cm0`–`cm3`), with frame size = 0 bytes, stack refs = 0, and zero register spills.
-4. **Single-Limiter Execution `[DERIVED]`:**
-   The loop execution time (9 cycles) is 100% bound by L1 weight fetch bandwidth on Load Unit 2 (`vldb` active in 8 of 9 cycles = 88.9% slot occupancy), operating at the theoretical hardware memory bound with zero unco-issued vector shuffle bubbles.
+   Across both the M=1 (9-cycle) and M=2 (8-cycle) inner loops of `conv_im2col_kernel`, there are **strictly 0 `vshift`** and **strictly 0 `vmov`** instructions. All 13 realignment instructions from the baseline are eliminated (100% reduction).
+2. **2.000x Vector MAC Issue Density Speedup (M=1) `[MEASURED]` / `[DERIVED]`:**
+   The single-patch inner loop executes **4 `vmac` instructions in 9 cycles**, achieving an issue density of **0.444 vmac/cycle** (44.4% vector slot saturation), exactly 2.000x the baseline `conv2dk3` density of **0.222 vmac/cycle**.
+3. **4.500x Vector MAC Issue Density Speedup (M=2 Unrolled) `[MEASURED]` / `[DERIVED]`:**
+   By tiling 2 spatial patches (Patch A and Patch B) across stationary L1 weights, the unrolled loop amortizes weight loads across both patches and executes **8 `vmac` instructions in 8 cycles**, achieving an issue density of **1.000 vmac/cycle** (**100.0% physical vector ALU saturation**), an exact **4.500x speedup** over `conv2dk3` and **2.250x speedup** over M=1.
+4. **Zero Register Spills & Zero Stack Overhead `[MEASURED]`:**
+   Both kernels maintain accumulators strictly hardware-resident (M=1: 4 accumulators `cm0`–`cm3`; M=2: 8 accumulators `cm0`–`cm7`), with frame size = 0 bytes, stack refs = 0, and zero register spills (`frame none B`).
+5. **Physical Vector Roofline Reached `[DERIVED]`:**
+   With M=2 unrolling, vector execution unit Slot `[v]` is active on 8 out of 8 cycles (100% occupancy). The AIE2 vector execution engine is fully saturated with zero idle cycles.
+
 
 ---
 
@@ -260,9 +264,88 @@ The companion driver function `conv_im2col_ping_pong` in [`kernels/aie2/conv_im2
 
 ---
 
-## 9. Verification & Sign-off
+## 9. Multi-Patch Register Tiling (M=2 Unrolling): Saturating the Vector Roofline
 
-- `kernels/aie2/conv_im2col_kernel.cc`: Implemented and compiled cleanly with Peano `clang++`.
-- `build/conv_im2col_kernel.o`: Disassembled via `llvm-objdump` and audited via `tools/aie_disasm.py`.
-- Hardware loop census: **Strictly 0 `vshift`**, **strictly 0 `vmov`**, **0.444 vmac/cycle**.
-- Speedup vs baseline `conv2dk3` (0.222 vmac/cycle): **2.000x** confirmed.
+### 1. The Amortization Principle
+While M=1 doubled MAC issue density from 0.222 to 0.444 vmac/cycle, it left Slot `[v]` idle for 5 out of 9 cycles (55.6% idle time) because it was throttled by the 8 cycles required to fetch 256 bytes of stationary weights from L1 over Load Unit 2 (`vldb`).
+
+In convolutional workloads, weights are **spatially stationary**: adjacent spatial output patches share the exact same kernel weights. By tiling across the spatial output dimension ($M=2$ spatial patches computed concurrently: Patch A and Patch B):
+- **Activation Data:** Load 32 bytes for Patch A + 32 bytes for Patch B = 64 bytes total.
+- **Weight Data:** Load 256 bytes once, reused across both Patch A and Patch B.
+- **Compute:** $4\ \text{MACs (Patch A)} + 4\ \text{MACs (Patch B)} = \mathbf{8\ \text{MACs}}$ per tap iteration.
+
+Because AIE2 features two independent 256-bit load units (`[a]` and `[b]`), the compiler co-issues the 64 bytes of activations and 256 bytes of weights concurrently across the 8 cycles, allowing **all 8 `vmac` instructions to issue back-to-back in 8 consecutive cycles**.
+
+### 2. Physical Accumulator File Allocation
+AIE2 provides 8 physical 1024-bit accumulator registers (`cm0` through `cm7`). The M=2 kernel allocates the entire hardware accumulator file with mathematical perfection:
+- **Patch A Accumulators:** `cm0`, `cm1`, `cm2`, `cm3` (128 INT32 output values)
+- **Patch B Accumulators:** `cm4`, `cm5`, `cm6`, `cm7` (128 INT32 output values)
+
+By disabling software pipelining via `#pragma clang loop pipeline(disable)`, register pressure during loop epilogue draining is avoided, maintaining **`frame none B, stack refs 0`**:
+- Stack frame allocated: **0 bytes**
+- Spill loads / stores to stack (`[sp]`): **0**
+- All 8 accumulators reside in hardware vector registers throughout the kernel lifecycle.
+
+### 3. VLIW Bundle Disassembly across 8 Inner Loop Cycles `[MEASURED]`
+
+The disassembled inner loop of `conv_im2col_kernel_m2` (`build/conv_im2col_kernel_m2.o`, loop `.L_LEnd0` at `0x0060–0x00a0`):
+
+| Address | Cycle | Encoded Instruction Bytes | Disassembled VLIW Bundle | Slot Mapping & Register Dataflow |
+|---|:---:|---|---|---|
+| **0x0060** | C0 | `27 9c a9 03 03 00 00 a8 2d 02 00 00` | `nopa ; vldb wh6, [p2, #0x20] ; nopx ; vmac cm7, cm7, x10, x6, r0` | `[b]` Load W3 high; `[v]` MAC Patch B tap with W3 (`cm7`) |
+| **0x006c** | C1 | `0b 8c a1 01 1d 88 16 38 b3 40` | `vlda wl6, [p2], #0x40 ; vldb wl10, [p0], #0x20 ; vmac cm3, cm3, x8, x6, r0` | `[a]` Load W3 low; `[b]` Load Act A (`wl10`); `[v]` MAC Patch A with W3 (`cm3`) |
+| **0x0076** | C2 | `0b 18 29 03 1d 28 2d 3a 74 20` | `vlda wl8, [p1], #0x20 ; vldb wh4, [p2, #0x20] ; vmac cm6, cm6, x10, x4, r0` | `[a]` Load Act B (`wl8`); `[b]` Load W2 high; `[v]` MAC Patch B with W2 (`cm6`) |
+| **0x0080** | C3 | `23 08 21 01 04 38 b2 40` | `vlda wl4, [p2], #0x40 ; vmac cm2, cm2, x8, x4, r0` | `[a]` Load W2 low; `[v]` MAC Patch A with W2 (`cm2`) |
+| **0x0088** | C4 | `23 94 a8 02 00 a8 2c 02` | `vldb wh2, [p2, #0x20] ; vmac cm5, cm5, x10, x2, r0` | `[b]` Load W1 high; `[v]` MAC Patch B with W1 (`cm5`) |
+| **0x0090** | C5 | `23 84 a0 00 04 38 b1 40` | `vlda wl2, [p2], #0x40 ; vmac cm1, cm1, x8, x2, r0` | `[a]` Load W1 low; `[v]` MAC Patch A with W1 (`cm1`) |
+| **0x0098** | C6 | `23 00 20 00 00 28 2c 02` | `vldb wh0, [p2, #0x20] ; vmac cm0, cm0, x8, x0, r0` | `[b]` Load W0 high; `[v]` MAC Patch A with W0 (`cm0`) |
+| **0x00a0** | C7 | `80 40 11 00 00 00 ... 38 b0 40 00 00` | `nopb ; vlda wl0, [p2], #0x40 ; nops ; nopxm ; vmac cm4, cm4, x10, x0, r0` | `[a]` Load W0 low; `[v]` MAC Patch B with W0 (`cm4`) |
+
+### 4. Six-Unit Slot Occupancy Census (M=2) `[MEASURED]`
+
+| Functional Unit | Active Cycles | Slot Occupancy (%) | Operations Executed | Primary Role in M=2 Loop |
+|---|:---:|:---:|:---:|---|
+| **Vector (`[v]`)** | **8 / 8** | **100.0%** | **8** | **Executes 8 `vmac` ops (2048 INT8 MACs / iteration). FULL SATURATION.** |
+| **Load 2 (`[b]`)** | **5 / 8** | **62.5%** | 5 | Fetches weights (`wh6, wh4, wh2, wh0`) + Patch A activation (`wl10`) |
+| **Load 1 (`[a]`)** | **5 / 8** | **62.5%** | 5 | Fetches weights (`wl6, wl4, wl2, wl0`) + Patch B activation (`wl8`) |
+| **Store (`[s]`)** | **0 / 8** | **0.0%** | 0 | Accumulators stay stationary in `cm0`–`cm7` (spill-free) |
+| **Scalar (`[x]`)** | **0 / 8** | **0.0%** | 0 | Loop iteration driven by hardware loop controller (`lc`) |
+| **Move (`[m]`)** | **0 / 8** | **0.0%** | 0 | Pointer increments handled via post-increment addressing |
+| **TOTAL** | **18 ops** | **37.5% (of 48 slots)** | **18 ops** | **Average density: 2.25 live ops / bundle** |
+
+### Critical M=2 Audit Findings:
+- **Vector MAC Issue Density `[MEASURED]`:** **1.000 vmac/cycle** (8 `vmac` / 8 cycles).
+- **Physical Vector Slot Saturation `[MEASURED]`:** **100.0%** (zero idle cycles on Slot `[v]`).
+- **`vshift` Count `[MEASURED]`:** **0** (0.0%).
+- **`vmov` Count `[MEASURED]`:** **0** (0.0%).
+- **Stack Spills `[MEASURED]`:** **0 bytes, 0 refs** (`frame none B`).
+
+---
+
+## 10. Comprehensive Three-Way Benchmark Comparison
+
+| Metric | Reference Baseline (`conv2dk3.cc`) | 4-D im2col Kernel M=1 (`conv_im2col_kernel.cc`) | 4-D im2col Kernel M=2 (`conv_im2col_kernel_m2`) | Delta (M=2 vs Baseline) | Delta (M=2 vs M=1) | Tag |
+|---|:---:|:---:|:---:|:---:|:---:|:---:|
+| **Inner Loop Latency** | 18 cycles | 9 cycles | **8 cycles** | **-55.6% (2.25x faster)** | **-11.1%** | `[MEASURED]` |
+| **Patches Processed / Iteration** | 1 patch | 1 patch | **2 patches (M=2)** | **2.00x spatial throughput** | **2.00x** | `[SPEC]` |
+| **`vmac` Instructions / Iteration** | 4 | 4 | **8** | **+100.0% compute density** | **+100.0%** | `[MEASURED]` |
+| **`vshift` Instructions** | 8 | 0 | **0** | **-100% (eliminated)** | 0 | `[MEASURED]` |
+| **`vmov` Instructions** | 5 | 0 | **0** | **-100% (eliminated)** | 0 | `[MEASURED]` |
+| **Realignment Instructions Total** | 13 | 0 | **0** | **-100% (eliminated)** | 0 | `[MEASURED]` |
+| **Vector Slot `[v]` Saturation** | 22.2% (4/18) | 44.4% (4/9) | **100.0% (8/8)** | **+77.8% utilization** | **+55.6%** | `[DERIVED]` |
+| **Vector MAC Issue Density** | **0.222 vmac/cycle** | **0.444 vmac/cycle** | **1.000 vmac/cycle** | **+350.0% (4.500x speedup)** | **+125.0% (2.250x)** | `[DERIVED]` |
+| **INT8 MACs per Cycle** | 56.9 MACs/cyc | 113.8 MACs/cyc | **256.0 MACs/cyc** | **4.500x compute throughput** | **2.250x** | `[DERIVED]` |
+| **Hardware Accumulator Registers** | Spilled to stack | 4 (`cm0`–`cm3`) | **8 (`cm0`–`cm7`)** | Full file residency | Full file residency | `[MEASURED]` |
+| **Stack Frame Overhead** | Spilled | 0 B (`frame none B`) | **0 B (`frame none B`)** | Clean zero-spill | Clean zero-spill | `[MEASURED]` |
+| **Primary Execution Limiter** | Software shift latency | L1 Load 2 Bandwidth | **Vector Compute Bound (Roofline)** | Reached physical roofline | Memory bound broken | `[DERIVED]` |
+
+---
+
+## 11. Verification & Sign-off
+
+- `kernels/aie2/conv_im2col_kernel.cc`: Both M=1 (`conv_im2col_kernel`) and M=2 (`conv_im2col_kernel_m2`, `conv_im2col_ping_pong_m2`) implemented and compiled cleanly with Peano `clang++`.
+- `build/conv_im2col_kernel_m2.o`: Disassembled via `llvm-objdump` and verified via `tools/aie_disasm.py`.
+- Hardware loop census (M=2): **Strictly 0 `vshift`**, **strictly 0 `vmov`**, **1.000 vmac/cycle** across 8 cycles.
+- Vector compute saturation: **100.0%** (8 / 8 bundles issue a `vmac`).
+- Speedup vs baseline `conv2dk3` (0.222 vmac/cycle): **4.500x confirmed**.
+- Speedup vs M=1 (0.444 vmac/cycle): **2.250x confirmed**.
