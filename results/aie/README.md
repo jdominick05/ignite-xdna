@@ -885,6 +885,17 @@ cycle samples; a trace file is the final capture, not a trace of every call.
 [Archive validation and aggregate](../quant/summary_lowlevel_desktop2_20260909_01.log)
 record its hash and recount the arithmetic results from the saved output arrays.
 
+## Sub-byte W4A8 weight quantization and roofline analysis
+
+[`notes_w4a8_aie2_roofline.md`](notes_w4a8_aie2_roofline.md) — formal micro-architectural,
+VLIW co-issuing, and roofline analysis of W4A8 sub-byte quantization on AMD Phoenix AIE2 (XDNA1).
+Resolves the ISA discrepancy between AMD's `device.yaml` (which omitted int8xint4 for AIE2) and
+physical silicon, proving that AIE2 possesses a native 512 MACs/cycle `aie::mmul<4,16,8,int8,int4>`
+engine alongside zero-overhead hardware load-unpack (`vldb.unpack.s8.s4` in slot `[b]`). Derives the
+compilable tile geometry frontier under L1 capacity (2A + 2B_bytes + (1|2)C + 3328 <= 65536 B,
+unlocking double-buffered C at 64×128×64) and evaluates memory-bound (M <= 16, ~1.9x–2.0x win across
+28 GB/s DDR cap) and compute-bound (M >= 64, 1.24x–1.26x speedup tracking 20% L3 byte reduction) regimes.
+
 ## Also here
 
 `aiecompiler_help.log` and `aiecompiler_x86sim_passthrough.log` are on disk but were not
