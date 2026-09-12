@@ -1033,6 +1033,10 @@ and standalone NPU transaction binaries (`im2col_4d_col.bin`, 3,636 B).
 
 [`notes_layer_conv0_parity_resolution.md`](notes_layer_conv0_parity_resolution.md) — root-cause diagnosis of the odd-core zero output split across Core 1 (Tile 0,3) and Core 3 (Tile 0,5) in the Column 0 im2col compute pipeline, formalization of the dynamic transaction binary generator in [`npu/lower_onnx_conv.py`](../../npu/lower_onnx_conv.py) and [`tools/disasm_txn.py`](../../tools/disasm_txn.py), and physical silicon verification of 100.00% bit-exact parity across all 4 active hardware cores on AMD Phoenix XDNA1 silicon (Ryzen 7 8700G, NPU `[003d:00:01.1]`). Execution trace logged in [`hardware_layer_conv0_verification.log`](hardware_layer_conv0_verification.log).
 
+## 16-Core physical array ONNX Conv2D execution and full-array numerical parity
+
+[`notes_16core_onnx_layer_execution.md`](notes_16core_onnx_layer_execution.md) — scaling the dynamic ONNX Conv2D lowering bridge across the full 16-core physical compute array (Columns 0–3, Rows 2–5) on AMD Phoenix XDNA1 silicon (Ryzen 7 8700G, NPU `[003d:00:01.1]`, tile clock 1.80 GHz). Implements multi-column runtime parameter injection (39,024 B across all 16 compute tiles: weights at `0x70400`, bias at `0x70380`, shift parameter at `0x7037C`), 4-column MemTile Lock 2 credit configuration (`val = 4`), and per-column Shim DMA DDR patch offsets (MM2S BD 0: `c * 2048`, S2MM BD 4: `c * 1024`). Evaluates full 16-core output tensor ($64\text{ pixels} \times 32\text{ channels} = 2,048\text{ B}$ INT8 active egress across 4,096 B buffer), achieving **100.00% bit-exact numerical parity ($\text{MAE}=0.0000$, $\text{RMSE}=0.0000$, $\text{MaxAE}=0$)** against the exact INT8 QDQ model, and meeting floating-point ORT CPU parity thresholds ($\text{MAE}=0.4844 \le 0.50$, $\text{MaxAE}=1 \le 1\text{ LSB}$). Sustains **$5,057.5\text{ FPS}$** ($197.73\ \mu\text{s}$) across 500 pipelined iterations ($1.56\times$ speedup over synchronous dispatch). Execution trace logged in [`hardware_16core_layer_verification.log`](hardware_16core_layer_verification.log).
+
 ## Also here
 
 
