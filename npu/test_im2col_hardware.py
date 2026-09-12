@@ -13,6 +13,11 @@ import time
 import argparse
 import numpy as np
 
+# Ensure repo root is on sys.path
+repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if repo_root not in sys.path:
+    sys.path.insert(0, repo_root)
+
 # Ensure XRT DLL and SDK search paths are registered on Windows
 def setup_xrt_environment():
     dll_paths = [
@@ -888,7 +893,28 @@ if __name__ == "__main__":
     parser.add_argument("--pipe-iters", type=int, default=500, help="Benchmark timed iterations for double-buffered pipeline")
     parser.add_argument("--pipe-warmup", type=int, default=50, help="Warmup iterations for double-buffered pipeline")
     parser.add_argument("--log-file", type=str, default="results/aie/hardware_im2col_pipelining.log", help="Path to write execution log")
+    parser.add_argument("--fused-2layer", action="store_true", default=False, help="Execute 2-layer MemTile L2 activation ping-pong fused pipeline on Phoenix silicon")
     args = parser.parse_args()
+
+    if args.fused_2layer:
+        from npu.lower_onnx_conv import lower_and_execute_conv
+        fused_args = argparse.Namespace(
+            model="models/yolov8n_cut_xint8.onnx",
+            node_name=None,
+            conv_index=None,
+            base_txn="build/im2col_4d_16core_clean.bin",
+            xclbin="build/im2col_4d_16core.xclbin",
+            image="data/bisenetv2_calib/000000000139.jpg",
+            iters=args.pipe_iters,
+            warmup=args.pipe_warmup,
+            device_idx=0,
+            log_dir="results/aie",
+            log_name="hardware_fused_layer_verification.log",
+            fused_2layer=True
+        )
+        lower_and_execute_conv(fused_args)
+        sys.stdout.flush()
+        os._exit(0)
 
     run_hardware_im2col_harness(
         iters=args.iters,
