@@ -210,18 +210,38 @@ void conv_im2col_kernel_m2_srs(
     const int8_t *__restrict patch_a,
     const int8_t *__restrict patch_b,
     const int8_t *__restrict weights,
+    const int32_t *__restrict bias,
     int8_t *__restrict out_i8,
     int shift_bias)
 {
-    MMUL c0_a = aie::zeros<acc32, 32>();
-    MMUL c1_a = aie::zeros<acc32, 32>();
-    MMUL c2_a = aie::zeros<acc32, 32>();
-    MMUL c3_a = aie::zeros<acc32, 32>();
+    // Pre-load cm0..cm3 (Patch A) and cm4..cm7 (Patch B) from 32 INT32 bias values.
+    // Each 8-channel bias block is broadcast across 4 spatial rows (pixels).
+    aie::vector<int32, 8> b0 = aie::load_v<8>(bias);
+    aie::vector<int32, 8> b1 = aie::load_v<8>(bias + 8);
+    aie::vector<int32, 8> b2 = aie::load_v<8>(bias + 16);
+    aie::vector<int32, 8> b3 = aie::load_v<8>(bias + 24);
 
-    MMUL c0_b = aie::zeros<acc32, 32>();
-    MMUL c1_b = aie::zeros<acc32, 32>();
-    MMUL c2_b = aie::zeros<acc32, 32>();
-    MMUL c3_b = aie::zeros<acc32, 32>();
+    aie::vector<int32, 16> b0_16 = aie::concat(b0, b0);
+    aie::vector<int32, 32> b0_32 = aie::concat(b0_16, b0_16);
+
+    aie::vector<int32, 16> b1_16 = aie::concat(b1, b1);
+    aie::vector<int32, 32> b1_32 = aie::concat(b1_16, b1_16);
+
+    aie::vector<int32, 16> b2_16 = aie::concat(b2, b2);
+    aie::vector<int32, 32> b2_32 = aie::concat(b2_16, b2_16);
+
+    aie::vector<int32, 16> b3_16 = aie::concat(b3, b3);
+    aie::vector<int32, 32> b3_32 = aie::concat(b3_16, b3_16);
+
+    MMUL c0_a(b0_32);
+    MMUL c1_a(b1_32);
+    MMUL c2_a(b2_32);
+    MMUL c3_a(b3_32);
+
+    MMUL c0_b(b0_32);
+    MMUL c1_b(b1_32);
+    MMUL c2_b(b2_32);
+    MMUL c3_b(b3_32);
 
     const int8_t *w_ptr = weights;
     const int8_t *a_ptr = patch_a;
@@ -253,21 +273,21 @@ void conv_im2col_kernel_m2_srs(
 
     // Hardware Shift-Round-Saturate (SRS) requantization:
     // Fuses into native AIE2 vst.srs.s8.s32 instructions to cast INT32 accumulators
-    // back into INT8 vectors, storing 256 bytes into out_i8 in Bank 1.
-    aie::store_v(out_i8 + 0,   c0_a.to_vector<int8_t>(shift_bias));
-    aie::store_v(out_i8 + 32,  c1_a.to_vector<int8_t>(shift_bias));
-    aie::store_v(out_i8 + 64,  c2_a.to_vector<int8_t>(shift_bias));
-    aie::store_v(out_i8 + 96,  c3_a.to_vector<int8_t>(shift_bias));
-
-    aie::store_v(out_i8 + 128, c0_b.to_vector<int8_t>(shift_bias));
-    aie::store_v(out_i8 + 160, c1_b.to_vector<int8_t>(shift_bias));
-    aie::store_v(out_i8 + 192, c2_b.to_vector<int8_t>(shift_bias));
-    aie::store_v(out_i8 + 224, c3_b.to_vector<int8_t>(shift_bias));
+    // back into INT8 vectors, storing 256 bytes into out_i8 in Bank 3.
+    aie::store_v(out_i8 + 0 * 32, c0_a.template to_vector<int8_t>(shift_bias));
+    aie::store_v(out_i8 + 1 * 32, c1_a.template to_vector<int8_t>(shift_bias));
+    aie::store_v(out_i8 + 2 * 32, c2_a.template to_vector<int8_t>(shift_bias));
+    aie::store_v(out_i8 + 3 * 32, c3_a.template to_vector<int8_t>(shift_bias));
+    aie::store_v(out_i8 + 4 * 32, c0_b.template to_vector<int8_t>(shift_bias));
+    aie::store_v(out_i8 + 5 * 32, c1_b.template to_vector<int8_t>(shift_bias));
+    aie::store_v(out_i8 + 6 * 32, c2_b.template to_vector<int8_t>(shift_bias));
+    aie::store_v(out_i8 + 7 * 32, c3_b.template to_vector<int8_t>(shift_bias));
 }
 
 /// Dual-patch ping-pong pipeline driver with SRS requantization (M=2).
 /// Computes dual patches from ping buffer and/or pong buffer against stationary weights,
 /// requantizes via hardware SRS, and stores 256 packed INT8 outputs into out_i8.
+/// Loads INT32 bias directly from Bank 0 at (weights - 128 bytes).
 void conv_im2col_ping_pong_m2_srs(
     const int8_t *__restrict ping_buf,
     const int8_t *__restrict pong_buf,
@@ -275,12 +295,19 @@ void conv_im2col_ping_pong_m2_srs(
     int8_t *__restrict out_i8,
     int shift_bias)
 {
+    const int32_t *bias = reinterpret_cast<const int32_t *>(weights - 128);
+    int effective_shift = shift_bias;
+    if (effective_shift == 0) {
+        int runtime_shift = *reinterpret_cast<const int32_t *>(weights - 132);
+        effective_shift = (runtime_shift > 0 && runtime_shift <= 30) ? runtime_shift : 7;
+    }
     conv_im2col_kernel_m2_srs(
         ping_buf,
         ping_buf + 288,
         weights,
+        bias,
         out_i8,
-        shift_bias);
+        effective_shift);
 }
 
 } // extern "C"

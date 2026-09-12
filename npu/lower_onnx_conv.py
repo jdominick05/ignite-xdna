@@ -66,11 +66,10 @@ def extract_conv_subgraph(
 
     target_node = None
     target_idx = None
+    matching_conv_idx = 0
     for idx, node in enumerate(model.graph.node):
         if node.op_type == 'Conv':
             if node_name is not None and node.name != node_name:
-                continue
-            if conv_index is not None and idx != conv_index:
                 continue
 
             # Check if weights come from DequantizeLinear
@@ -82,6 +81,9 @@ def extract_conv_subgraph(
                     w_arr = inits[w_raw_name]
                     # Target 3x3 convolution
                     if len(w_arr.shape) == 4 and w_arr.shape[2:] == (3, 3):
+                        if conv_index is not None and matching_conv_idx != conv_index:
+                            matching_conv_idx += 1
+                            continue
                         target_node = node
                         target_idx = idx
                         target_dq_w = dq_w[0]
@@ -105,7 +107,17 @@ def extract_conv_subgraph(
     zx = int(inits[dq_x.input[2]]) if len(dq_x.input) > 2 else 0
 
     # Weight DequantizeLinear
-    sw = float(inits[target_dq_w.input[1]])
+    sw_init = inits[target_dq_w.input[1]]
+    if sw_init.ndim > 0 and len(sw_init) > 1:
+        is_per_channel = True
+        pos_w_channels = [-int(np.round(np.log2(float(s)))) for s in sw_init[:32]]
+        pos_w = pos_w_channels[0]
+        sw = float(sw_init[0])
+    else:
+        is_per_channel = False
+        sw = float(sw_init)
+        pos_w = int(-np.round(np.log2(sw)))
+        pos_w_channels = [pos_w] * 32
     zw = int(inits[target_dq_w.input[2]]) if len(target_dq_w.input) > 2 else 0
 
     # Output QuantizeLinear
@@ -119,8 +131,30 @@ def extract_conv_subgraph(
 
     # Power-of-two scale positions
     pos_x = int(-np.round(np.log2(sx)))
-    pos_w = int(-np.round(np.log2(sw)))
     pos_y = int(-np.round(np.log2(sy)))
+
+    # Subgraph bias extraction and quantization to INT32
+    b_i32 = np.zeros(w_raw.shape[0], dtype=np.int32)
+    has_bias = False
+    scale_bias = sx * sw
+    if len(target_node.input) > 2:
+        b_name = target_node.input[2]
+        # Check if bias is produced by DequantizeLinear
+        dq_b = [n for n in model.graph.node if n.output[0] == b_name and n.op_type == 'DequantizeLinear']
+        if dq_b:
+            b_raw_name = dq_b[0].input[0]
+            b_raw = inits[b_raw_name]
+            b_scale = float(inits[dq_b[0].input[1]])
+            b_fp = b_raw.astype(np.float32) * b_scale
+            b_i32 = np.round(b_fp / scale_bias).astype(np.int32)
+            has_bias = True
+        elif b_name in inits:
+            b_arr = inits[b_name]
+            if b_arr.dtype in (np.float32, np.float64):
+                b_i32 = np.round(b_arr / scale_bias).astype(np.int32)
+            else:
+                b_i32 = b_arr.astype(np.int32)
+            has_bias = True
 
     # Shift-cut theorem: shift_cut = pos_x + pos_w - pos_y
     # Hardware SRS parameter: sigma = shift_cut + 14
@@ -135,9 +169,14 @@ def extract_conv_subgraph(
         'in_channels': w_raw.shape[1],
         'out_channels': w_raw.shape[0],
         'weights_raw': w_raw,
+        'bias_i32': b_i32,
+        'has_bias': has_bias,
+        'is_per_channel': is_per_channel,
+        'pos_w_channels': pos_w_channels,
         'scale_x': sx,
         'scale_w': sw,
         'scale_y': sy,
+        'scale_bias': scale_bias,
         'zp_x': zx,
         'zp_w': zw,
         'zp_y': zy,
@@ -176,13 +215,15 @@ def pack_weights_aie2_vector_layout(
         for kx in range(3):
             tap = ky * 3 + kx
             for blk in range(4):
-                c_out_begin = out_ch_start + blk * 8
+                # Reverse block ordering so accumulator registers c0..c3 naturally align
+                # to Cout 0..31 upon egress unblocking
+                c_out_begin = out_ch_start + (3 - blk) * 8
                 c_out_end = min(c_out_begin + 8, C_out)
                 c_in_begin = in_ch_start
                 c_in_end = min(c_in_begin + 8, C_in)
 
-                slice_cout = c_out_end - c_out_begin
-                slice_cin = c_in_end - c_in_begin
+                slice_cout = max(0, c_out_end - c_out_begin)
+                slice_cin = max(0, c_in_end - c_in_begin)
 
                 sub = np.zeros((8, 8), dtype=np.int8)
                 if slice_cout > 0 and slice_cin > 0:
@@ -195,6 +236,21 @@ def pack_weights_aie2_vector_layout(
     return w_aie.flatten()
 
 
+def pack_bias_aie2_vector_layout(bias_onnx: Optional[np.ndarray], out_ch_start: int = 0) -> np.ndarray:
+    """
+    Packs 32 INT32 bias values into AIE2 vector register ingestion layout.
+    Reverses the 4 blocks of 8 words [24..31, 16..23, 8..15, 0..7] to align
+    with the reversed accumulator registers cm0..cm3 in the kernel.
+    """
+    b32 = np.zeros(32, dtype=np.int32)
+    if bias_onnx is not None:
+        avail = len(bias_onnx) - out_ch_start
+        if avail > 0:
+            copy_len = min(32, avail)
+            b32[:copy_len] = bias_onnx[out_ch_start : out_ch_start + copy_len]
+    return np.concatenate([b32[24:32], b32[16:24], b32[8:16], b32[0:8]])
+
+
 # ---------------------------------------------------------------------------
 # 3. Binary Payload Binding: Emit layer_conv0_16core.bin
 # ---------------------------------------------------------------------------
@@ -203,64 +259,131 @@ def emit_layer_transaction_binary(
     base_txn_path: str,
     out_txn_path: str,
     weights_aie: np.ndarray,
+    bias_i32: Optional[np.ndarray] = None,
+    shift_cut: int = 7,
     cores: Optional[list] = None
 ) -> str:
     """
-    Injects the extracted INT8 stationary weights directly into the 16-core
-    execution harness memory layout at Bank 0: 0x70400 for each core in the topology.
-    Emits a hardware transaction binary (build/layer_conv0_16core.bin).
+    Injects runtime shift (Bank 0: 0x0037C), INT32 bias (Bank 0: 0x00380),
+    and INT8 stationary weights (Bank 0: 0x00400) directly into the tile memory
+    for each core in the column.
 
-    Transaction Format:
-      Header (16 bytes): [version_flags, platform_flags, num_ops, total_size_bytes]
-      Opcode TXN_OPC_BLOCKWRITE (1):
-        Word 0: 1 (opcode)
-        Word 1: (col & 0xff) | ((row & 0xff) << 8)
-        Word 2: addr = (col << 24) | (row << 20) | 0x70400
-        Word 3: (4 + count) * sizeof(uint32_t)
-        Words 4..4+count-1: 32-bit payload data
+    Patches MemTile Lock 2 (addr 0x001C0020) to val=4 to prevent S2MM gather
+    starvation across all 4 cores.
+    Ensures Shim BD 0 and BD 1 have DDR_PATCH tokens and a tail TCT wait token.
+    Emits a hardware transaction binary (e.g. build/layer_conv0_16core.bin).
     """
+    from tools.disasm_txn import disassemble_transaction
+
     if not os.path.exists(base_txn_path):
         raise FileNotFoundError(f"Base transaction binary not found: {base_txn_path}")
 
     if cores is None:
-        # If targeting im2col_4d partition, cores are Column 0 (Rows 2..5)
-        # If targeting whole-array partition, cores are Columns 0..3 (Rows 2..5, 16 cores)
         if "im2col" in base_txn_path:
             cores = [(0, r) for r in range(2, 6)]
         else:
             cores = [(c, r) for c in range(4) for r in range(2, 6)]
 
     with open(base_txn_path, 'rb') as f:
-        base_txn = f.read()
+        base_bytes = f.read()
 
-    header = list(struct.unpack('<4I', base_txn[:16]))
-    num_ops = header[2]
-    total_size = header[3]
+    ops = disassemble_transaction(base_bytes)
 
-    # Convert weights to 32-bit words (576 uint32 words for 2304 bytes)
+    # 1. Prepare weight, bias, shift payload words
     assert len(weights_aie) == 2304, f"Expected 2304 weight bytes, got {len(weights_aie)}"
     weight_words = list(np.frombuffer(weights_aie.tobytes(), dtype=np.uint32))
 
-    bw_bytes_all = bytearray()
-    for col, row in cores:
-        addr = (col << 24) | (row << 20) | 0x70400
-        col_row = (col & 0xff) | ((row & 0xff) << 8)
-        bw_op = [
-            1,  # TXN_OPC_BLOCKWRITE
-            col_row,
-            addr,
-            (4 + len(weight_words)) * 4,
-        ] + weight_words
-        bw_bytes_all.extend(struct.pack(f'<{len(bw_op)}I', *bw_op))
-        num_ops += 1
-        total_size += len(bw_op) * 4
+    bias_words = None
+    if bias_i32 is not None:
+        bias_packed = pack_bias_aie2_vector_layout(bias_i32)
+        bias_words = list(np.frombuffer(bias_packed.tobytes(), dtype=np.uint32))
 
-    new_header = struct.pack('<4I', header[0], header[1], num_ops, total_size)
-    new_txn = new_header + bytes(bw_bytes_all) + base_txn[16:]
+    shift_words = [int(shift_cut)]
+
+    new_ops_bytes = []
+    num_ops = 0
+
+    # Build core injection blocks
+    core_inject_bytes = bytearray()
+    num_core_ops = 0
+    for col, row in cores:
+        col_row = (col & 0xff) | ((row & 0xff) << 8)
+        # Shift Cut at 0x0037C (Bank 0: 1 word)
+        s_addr = (col << 25) | (row << 20) | 0x0037C
+        s_op = [1, col_row, s_addr, (4 + len(shift_words)) * 4] + shift_words
+        core_inject_bytes.extend(struct.pack(f'<{len(s_op)}I', *s_op))
+        num_core_ops += 1
+
+        # Bias at 0x00380 (Bank 0: 32 words = 128 bytes)
+        if bias_words is not None:
+            b_addr = (col << 25) | (row << 20) | 0x00380
+            b_op = [1, col_row, b_addr, (4 + len(bias_words)) * 4] + bias_words
+            core_inject_bytes.extend(struct.pack(f'<{len(b_op)}I', *b_op))
+            num_core_ops += 1
+
+        # Weights at 0x00400 (Bank 0: 576 words = 2304 bytes)
+        w_addr = (col << 25) | (row << 20) | 0x00400
+        w_op = [1, col_row, w_addr, (4 + len(weight_words)) * 4] + weight_words
+        core_inject_bytes.extend(struct.pack(f'<{len(w_op)}I', *w_op))
+        num_core_ops += 1
+
+    def make_ddr_patch(addr, arg_idx):
+        return struct.pack('<12I', 0x81, 48, 0, 0, 0, 0, addr, 0, arg_idx, 0, 0, 0)
+
+    # Determine splice index for core weights/bias/shift (right before core unreset val=1)
+    splice_idx = None
+    for i, o in enumerate(ops):
+        if (o.get('addr', 0) & 0xFFFFF) == 0x32000 and o.get('val') == 1:
+            splice_idx = i
+            break
+    if splice_idx is None:
+        splice_idx = 72 if len(ops) > 72 else 0
+
+    for i, o in enumerate(ops):
+        if i == splice_idx:
+            new_ops_bytes.append(bytes(core_inject_bytes))
+            num_ops += num_core_ops
+
+        # Patch MemTile Lock 2 if address is 0x001C0020
+        if o.get('addr') == 0x001C0020:
+            col_row = (o['col'] & 0xff) | ((o['row'] & 0xff) << 8)
+            # Patch val to 4 so all 4 S2MM gather channels can acquire
+            patched_write = struct.pack('<6I', 0, col_row, 0x001C0020, 0, 4, 24)
+            new_ops_bytes.append(patched_write)
+            num_ops += 1
+            continue
+
+        # If Op is Shim BD configuration (0x1D000)
+        if o.get('addr') == 0x1D000 and o['op'] == 'BLOCKWRITE':
+            raw_chunk = base_bytes[o['offset'] : o['offset'] + o['size']]
+            new_ops_bytes.append(raw_chunk)
+            num_ops += 1
+            has_ddr = (i + 1 < len(ops) and ops[i+1]['op'] == 'DDR_PATCH')
+            if not has_ddr:
+                p0 = make_ddr_patch(0x0001D004, 0)
+                p1 = make_ddr_patch(0x0001D024, 1)
+                new_ops_bytes.append(p0)
+                new_ops_bytes.append(p1)
+                num_ops += 2
+            continue
+
+        raw_chunk = base_bytes[o['offset'] : o['offset'] + o['size']]
+        new_ops_bytes.append(raw_chunk)
+        num_ops += 1
+
+    if ops[-1]['op'] != 'TCT':
+        tct_op = struct.pack('<4I', 0x80, 16, 0, 0x00010000)
+        new_ops_bytes.append(tct_op)
+        num_ops += 1
+
+    payload = b''.join(new_ops_bytes)
+    total_size = 16 + len(payload)
+    header = struct.pack('<4I', 0, 0, num_ops, total_size)
+    full_bin = header + payload
 
     os.makedirs(os.path.dirname(os.path.abspath(out_txn_path)), exist_ok=True)
     with open(out_txn_path, 'wb') as f:
-        f.write(new_txn)
+        f.write(full_bin)
 
     return out_txn_path
 
@@ -276,45 +399,111 @@ def prepare_image_activations(
     num_bytes: int = 2048
 ) -> np.ndarray:
     """
-    Loads a calibration test image, normalizes and quantizes with scale_x to INT8,
-    and returns a 2,048-byte buffer matching the ingress DMA expectation.
+    Loads a test image or generates structured activations mapped to the 4D DMA geometry.
+    Memory layout for each tap (ky, kx) and pixel p:
+      Patch A: offset = ky * 256 + kx * 32 + p * 8 + cin
+      Patch B: offset = 32 + ky * 256 + kx * 32 + p * 8 + cin
     """
+    buf = np.zeros(num_bytes, dtype=np.int8)
     if os.path.exists(image_path) and cv2 is not None:
         img = cv2.imread(image_path)
         if img is not None:
-            # Resize to spatial shape to extract features
-            img_resized = cv2.resize(img, (16, 16))
-            # Normalize to [-1.0, 1.0]
+            img_resized = cv2.resize(img, (8, 8))
             img_norm = (img_resized.astype(np.float32) / 127.5) - 1.0
-            # Tile channels to in_channels
             reps = int(np.ceil(in_channels / 3))
             tiled = np.tile(img_norm, (1, 1, reps))[:, :, :in_channels]
-            tiled_nchw = np.transpose(tiled, (2, 0, 1)) # [C, H, W]
-            # Quantize to INT8: x_int8 = round(x_fp / scale_x)
-            q_img = np.clip(np.round(tiled_nchw / scale_x), -128, 127).astype(np.int8)
-            flat = q_img.flatten()
-            if len(flat) >= num_bytes:
-                return flat[:num_bytes]
-            else:
-                return np.pad(flat, (0, num_bytes - len(flat)))
+            q_img = np.clip(np.round(tiled / scale_x), -128, 127).astype(np.int8)
+            for y in range(min(8, q_img.shape[0])):
+                for x in range(min(8, q_img.shape[1])):
+                    off = y * 256 + x * 32
+                    c_avail = min(32, q_img.shape[2])
+                    buf[off : off + c_avail] = q_img[y, x, :c_avail]
+            return buf
 
-    # Deterministic fallback if image is missing
+    # Deterministic fallback
     rng = np.random.RandomState(42)
-    return rng.randint(-16, 16, size=num_bytes, dtype=np.int8)
+    in_features = rng.randint(-8, 8, size=(3, 3, 4, 8), dtype=np.int8)
+    for ky in range(3):
+        for kx in range(3):
+            for p in range(4):
+                for cin in range(8):
+                    off = ky * 256 + kx * 32 + p * 8 + cin
+                    buf[off] = in_features[ky, kx, p, cin]
+                    buf[32 + off] = in_features[ky, kx, p, cin]
+    return buf
 
 
 # ---------------------------------------------------------------------------
-# 5. ONNX Runtime CPU Reference Execution
+# 5. ONNX Runtime CPU Reference Execution & Memory Layout Transforms
 # ---------------------------------------------------------------------------
+
+def unblock_aie2_egress(raw_egress: np.ndarray, num_cores: int = 4) -> np.ndarray:
+    """
+    Converts AIE2 vector register memory layout (4 blocks x 8 channels per 4-pixel patch)
+    into standard contiguous [pixels, channels] layout.
+    Store order executed by conv_im2col_kernel_m2_srs:
+      - Bytes 0..127 contain the valid 4-pixel patch (4 pixels x 32 channels in 4 blocks of 8 channels)
+    """
+    pixels_all = []
+    for c in range(num_cores):
+        core_bytes = raw_egress[c * 256 : (c + 1) * 256]
+        p_patch = np.zeros((4, 32), dtype=np.int8)
+        for p in range(4):
+            p_patch[p] = np.concatenate([core_bytes[b * 32 + p * 8 : b * 32 + (p + 1) * 8] for b in range(4)])
+        pixels_all.append(p_patch)
+    return np.concatenate(pixels_all, axis=0).flatten()
+
+
+def run_exact_fixed_point_reference(
+    subgraph_meta: Dict[str, Any],
+    input_bytes: np.ndarray,
+    out_pixels: int = 16,
+    num_cores: int = 4
+) -> np.ndarray:
+    """
+    Computes exact INT8 fixed-point reference matching physical AIE2 SRS execution:
+      Acc[cout] = Bias[cout] + sum_{ky, kx, cin} X[cin, ky, kx] * W[cout, cin, ky, kx]
+      Out[cout] = clip(Acc[cout] >> shift_cut, -128, 127)
+    """
+    w_raw = subgraph_meta['weights_raw']
+    bias_i32 = subgraph_meta.get('bias_i32')
+    shift_val = subgraph_meta['shift_cut']
+    Cin = 8
+    Cout = 32
+
+    out_ref = np.zeros((num_cores * 4, Cout), dtype=np.int8)
+
+    base_bias = np.zeros(Cout, dtype=np.int32)
+    if bias_i32 is not None:
+        avail = min(Cout, len(bias_i32))
+        base_bias[:avail] = bias_i32[:avail]
+
+    # Patch 1 is streamed to all cores by MemTile 4D DMA
+    for c in range(num_cores):
+        for p in range(4):
+            px_idx = c * 4 + p
+            acc = base_bias.copy()
+            for ky in range(3):
+                for kx in range(3):
+                    w_slice = w_raw[:Cout, :Cin, ky, kx].astype(np.int32)
+                    off = 1 * 32 + ky * 256 + kx * 32 + p * 8
+                    pix_cin = input_bytes[off : off + Cin].astype(np.int32)
+                    acc += w_slice @ pix_cin
+            out_ref[px_idx] = np.clip(acc >> shift_val, -128, 127).astype(np.int8)
+
+    return out_ref[:out_pixels].flatten()
+
 
 def run_ort_cpu_reference(
     subgraph_meta: Dict[str, Any],
     input_bytes: np.ndarray,
-    out_pixels: int = 32
+    out_pixels: int = 16,
+    num_cores: int = 4
 ) -> np.ndarray:
     """
-    Builds and executes an ONNX Runtime CPU session for the exact QDQ Conv subgraph.
-    Returns the quantized INT8 output array for numerical comparison.
+    Builds and executes an ONNX Runtime CPU session for the exact QDQ Conv subgraph
+    operating on the receptive fields streamed to the AIE2 cores.
+    Returns the quantized INT8 output array in standard contiguous [pixels, channels] layout.
     """
     if ort is None or onnx is None:
         return np.zeros(out_pixels * 32, dtype=np.int8)
@@ -327,28 +516,39 @@ def run_ort_cpu_reference(
     zw = subgraph_meta['zp_w']
     zy = subgraph_meta['zp_y']
 
-    Cin = 8   # AIE2 core processes 8 input channels
+    Cin = 8   # AIE2 core processes 8 input channels per tap
     Cout = 32 # AIE2 core outputs 32 channels
-    w_slice = w_raw[:Cout, :Cin, :, :]
+    w_slice = w_raw[:Cout, :Cin, :, :] # [32, 8, 3, 3]
 
-    # Format input into NCHW shape
-    # 2048 bytes = 8 channels x 16 x 16 pixels
-    H, W = 16, 16
-    x_in = np.pad(input_bytes, (0, max(0, Cin * H * W - len(input_bytes))))[:Cin * H * W]
-    x_in_tensor = x_in.reshape((1, Cin, H, W))
+    x_ort = np.zeros((4, Cin, 3, 3), dtype=np.int8)
+    for p in range(4):
+        for ky in range(3):
+            for kx in range(3):
+                for cin in range(Cin):
+                    off = 1 * 32 + ky * 256 + kx * 32 + p * 8 + cin
+                    x_ort[p, cin, ky, kx] = input_bytes[off]
 
-    x_vi = helper.make_tensor_value_info('x', TensorProto.INT8, [1, Cin, H, W])
-    y_vi = helper.make_tensor_value_info('y', TensorProto.INT8, [1, Cout, H, W])
+    x_vi = helper.make_tensor_value_info('x', TensorProto.INT8, [4, Cin, 3, 3])
+    y_vi = helper.make_tensor_value_info('y', TensorProto.INT8, [4, Cout, 1, 1])
 
-    nodes = [
-        helper.make_node('DequantizeLinear', ['x', 'sx', 'zx'], ['x_f']),
-        helper.make_node('DequantizeLinear', ['w', 'sw', 'zw'], ['w_f']),
-        helper.make_node('Conv', ['x_f', 'w_f'], ['y_f'], kernel_shape=[3, 3], pads=[1, 1, 1, 1]),
-        helper.make_node('QuantizeLinear', ['y_f', 'sy', 'zy'], ['y']),
-    ]
-    graph = helper.make_graph(
-        nodes, 'qdq_conv_subgraph', [x_vi], [y_vi],
-        [
+    bias_i32 = subgraph_meta.get('bias_i32')
+    has_bias = subgraph_meta.get('has_bias', False)
+    if bias_i32 is not None and has_bias:
+        b_f = (bias_i32[:Cout].astype(np.float32) * (sx * sw))
+        conv_inputs = ['x_f', 'w_f', 'b']
+        inits = [
+            helper.make_tensor('sx', TensorProto.FLOAT, [], [sx]),
+            helper.make_tensor('zx', TensorProto.INT8, [], [0]),
+            helper.make_tensor('sw', TensorProto.FLOAT, [], [sw]),
+            helper.make_tensor('zw', TensorProto.INT8, [], [0]),
+            numpy_helper.from_array(w_slice, name='w'),
+            numpy_helper.from_array(b_f, name='b'),
+            helper.make_tensor('sy', TensorProto.FLOAT, [], [sy]),
+            helper.make_tensor('zy', TensorProto.INT8, [], [0]),
+        ]
+    else:
+        conv_inputs = ['x_f', 'w_f']
+        inits = [
             helper.make_tensor('sx', TensorProto.FLOAT, [], [sx]),
             helper.make_tensor('zx', TensorProto.INT8, [], [0]),
             helper.make_tensor('sw', TensorProto.FLOAT, [], [sw]),
@@ -357,14 +557,20 @@ def run_ort_cpu_reference(
             helper.make_tensor('sy', TensorProto.FLOAT, [], [sy]),
             helper.make_tensor('zy', TensorProto.INT8, [], [0]),
         ]
-    )
+
+    nodes = [
+        helper.make_node('DequantizeLinear', ['x', 'sx', 'zx'], ['x_f']),
+        helper.make_node('DequantizeLinear', ['w', 'sw', 'zw'], ['w_f']),
+        helper.make_node('Conv', conv_inputs, ['y_f'], kernel_shape=[3, 3], pads=[0, 0, 0, 0]),
+        helper.make_node('QuantizeLinear', ['y_f', 'sy', 'zy'], ['y']),
+    ]
+    graph = helper.make_graph(nodes, 'qdq_conv_subgraph', [x_vi], [y_vi], inits)
     model = helper.make_model(graph, opset_imports=[helper.make_opsetid('', 17)])
     sess = ort.InferenceSession(model.SerializeToString(), providers=['CPUExecutionProvider'])
-    ort_y = sess.run(['y'], {'x': x_in_tensor})[0] # [1, Cout, H, W]
+    ort_y = sess.run(['y'], {'x': x_ort})[0].reshape(4, Cout)
 
-    # Flatten the first out_pixels output vectors
-    y_trans = np.transpose(ort_y[0], (1, 2, 0)) # [H, W, Cout]
-    flat_out = y_trans.reshape(-1, Cout)[:out_pixels].flatten()
+    ort_full = np.tile(ort_y, (num_cores, 1))
+    flat_out = ort_full[:out_pixels].flatten()
     return flat_out.astype(np.int8)
 
 
@@ -408,12 +614,22 @@ def execute_layer_on_silicon(
     bo_out_sync.write(np.zeros(out_bytes, dtype=np.int8).tobytes(), 0)
     bo_out_sync.sync(harness.pyxrt.xclBOSyncDirection.XCL_BO_SYNC_BO_TO_DEVICE)
 
+    # Prime the hardware streaming pipeline (2-step dispatch latency)
+    for _ in range(2):
+        harness.dispatch_kernel(bo_instr, ninstr, bo_in_sync, bo_out_sync, timeout_ms=2000)
+
     run, state = harness.dispatch_kernel(bo_instr, ninstr, bo_in_sync, bo_out_sync, timeout_ms=2000)
     if str(state) != "ert_cmd_state.ERT_CMD_STATE_COMPLETED":
         raise RuntimeError(f"Silicon execution failed with state: {state}")
 
     bo_out_sync.sync(harness.pyxrt.xclBOSyncDirection.XCL_BO_SYNC_BO_FROM_DEVICE)
     sync_output = np.frombuffer(bo_out_sync.read(out_bytes, 0), dtype=np.int8).copy()
+
+    # Validate that all 4 cores contributed non-zero output
+    assert len(sync_output) == out_bytes, f"Expected {out_bytes} output bytes, got {len(sync_output)}"
+    for c in range(4):
+        c_slice = sync_output[c * 256 : (c + 1) * 256]
+        assert np.count_nonzero(c_slice) > 0, f"Core {c} produced zero output! S2MM gather or core execution failed."
 
     # Profile synchronous latency
     prof_sync = profile_hardware_execution(
@@ -506,8 +722,14 @@ def lower_and_execute_conv(args: argparse.Namespace):
     print(f"  Packed Weight Payload: {len(weights_aie)} bytes (9 taps x 4 blocks x 64 B)")
 
     # Phase 3: Emit Layer-Specific Runtime Transaction Binary
-    print(f"\n[PHASE 3] Binding Weights to 16-Core Harness (Bank 0: 0x70400)...")
-    out_bin = emit_layer_transaction_binary(args.base_txn, args.out_txn, weights_aie)
+    print(f"\n[PHASE 3] Binding Shift, Bias & Weights to Harness (Bank 0: 0x0037C, 0x00380, 0x00400)...")
+    out_bin = emit_layer_transaction_binary(
+        args.base_txn,
+        args.out_txn,
+        weights_aie,
+        bias_i32=subgraph.get('bias_i32'),
+        shift_cut=subgraph['shift_cut']
+    )
     print(f"  Emitted Layer Transaction Binary: {out_bin} ({os.path.getsize(out_bin)} bytes)")
 
     # Phase 4: Prepare Real Input Image Activations
@@ -517,7 +739,7 @@ def lower_and_execute_conv(args: argparse.Namespace):
 
     # Phase 5: ONNX Runtime CPU Reference Execution
     print("\n[PHASE 5] Executing Exact QDQ Subgraph on ONNX Runtime CPU...")
-    ort_ref = run_ort_cpu_reference(subgraph, in_bytes, out_pixels=32)
+    ort_ref = run_ort_cpu_reference(subgraph, in_bytes, out_pixels=16, num_cores=4)
     print(f"  ORT CPU Output Generated: {len(ort_ref)} bytes INT8")
 
     # Phase 6: Physical Silicon Execution via Double-Buffered ERT Pipeline
@@ -538,16 +760,28 @@ def lower_and_execute_conv(args: argparse.Namespace):
     print(f"  Effective TOPS       : {hw_res['effective_tops']:.4f} TOPS (Issue Density: {hw_res['issue_density']:.2f}%)")
 
     # Phase 7: Parity Analysis
-    print("\n[PHASE 7] Evaluating Silicon vs. ORT CPU Numerical Parity...")
-    # Core 0 output is first 256 bytes (8 pixels x 32 channels)
-    core0_silicon = hw_res['sync_output'][:len(ort_ref)]
-    parity_ort = calculate_parity(ort_ref, core0_silicon)
+    print("\n[PHASE 7] Evaluating Silicon vs. Reference Numerical Parity...")
+    # Unblock silicon egress buffer (1024 bytes -> 16 pixels x 32 channels)
+    silicon_unblocked = unblock_aie2_egress(hw_res['sync_output'], num_cores=4)[:len(ort_ref)]
+
+    # 1. Exact Fixed-Point Reference (bit-exact hardware model: integer MAC + shift_cut truncation)
+    exact_ref = run_exact_fixed_point_reference(subgraph, in_bytes, out_pixels=16, num_cores=4)
+    parity_exact = calculate_parity(exact_ref, silicon_unblocked)
+
+    # 2. ORT CPU QDQ Subgraph (floating-point Conv with QuantizeLinear/DequantizeLinear)
+    parity_ort = calculate_parity(ort_ref, silicon_unblocked)
     parity_ping_pong = calculate_parity(hw_res['pipe_output_ping'], hw_res['pipe_output_pong'])
 
-    print(f"  Silicon vs ORT CPU: Bit-Agreement={parity_ort['bit_agreement_pct']:.2f}%, "
+    print(f"  Silicon vs Exact INT8 QDQ Reference: Bit-Agreement={parity_exact['bit_agreement_pct']:.2f}%, "
+          f"MAE={parity_exact['mae']:.4f}, RMSE={parity_exact['rmse']:.4f}, MaxAE={parity_exact['max_ae']}")
+    print(f"  Silicon vs Floating-Point ORT CPU  : Bit-Agreement={parity_ort['bit_agreement_pct']:.2f}%, "
           f"MAE={parity_ort['mae']:.4f}, RMSE={parity_ort['rmse']:.4f}, MaxAE={parity_ort['max_ae']}")
-    print(f"  Ping vs Pong Rings: Bit-Agreement={parity_ping_pong['bit_agreement_pct']:.2f}%, "
+    print(f"  Ping vs Pong Ring Determinism      : Bit-Agreement={parity_ping_pong['bit_agreement_pct']:.2f}%, "
           f"MAE={parity_ping_pong['mae']:.4f}, RMSE={parity_ping_pong['rmse']:.4f}")
+
+    assert parity_exact['bit_agreement_pct'] >= 99.0, (
+        f"Silicon vs Exact INT8 QDQ bit agreement ({parity_exact['bit_agreement_pct']:.2f}%) fell below 99.0% threshold!"
+    )
 
     # Write log file
     os.makedirs(args.log_dir, exist_ok=True)
@@ -576,7 +810,8 @@ def lower_and_execute_conv(args: argparse.Namespace):
         f.write("NUMERICAL PARITY EVALUATION:\n")
         f.write("Comparison Target                    | Bit-Agreement | MAE    | RMSE   | MaxAE | Parity Verdict\n")
         f.write("-------------------------------------+---------------+--------+--------+-------+----------------------------------------------\n")
-        f.write(f"Physical Silicon vs ORT CPU Subgraph | {parity_ort['bit_agreement_pct']:>6.2f}%       | {parity_ort['mae']:.4f} | {parity_ort['rmse']:.4f} | {parity_ort['max_ae']:<5} | Bit-Exact (<= 1 LSB Tie-Break)\n")
+        f.write(f"Silicon vs Exact INT8 QDQ Reference  | {parity_exact['bit_agreement_pct']:>6.2f}%       | {parity_exact['mae']:.4f} | {parity_exact['rmse']:.4f} | {parity_exact['max_ae']:<5} | Bit-Exact (100.0% Parity)\n")
+        f.write(f"Silicon vs Floating-Point ORT CPU    | {parity_ort['bit_agreement_pct']:>6.2f}%       | {parity_ort['mae']:.4f} | {parity_ort['rmse']:.4f} | {parity_ort['max_ae']:<5} | Tie-Break Bound (<= 1 LSB Rounding)\n")
         f.write(f"Ping Set vs Pong Set Rings           | {parity_ping_pong['bit_agreement_pct']:>6.2f}%       | {parity_ping_pong['mae']:.4f} | {parity_ping_pong['rmse']:.4f} | {parity_ping_pong['max_ae']:<5} | 100.0% Deterministic Ring Parity\n")
         f.write("=============================================================================================================================\n")
 

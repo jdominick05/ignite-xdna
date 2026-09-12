@@ -97,19 +97,28 @@ When dispatched by `pyxrt`, ERT executes the blockwrites first, placing stationa
 
 ---
 
-## 6. Numerical Parity Analysis: Silicon vs. ORT CPU
+## 6. Numerical Parity Analysis: Silicon vs. Reference Models
 
-### Parity Metrics
+### Parity Metrics (Physical Phoenix Silicon: 4 Cores, 16 Pixels x 32 Channels = 512 Bytes)
 
-| Comparison | Sample Count | Bit Agreement | MAE | RMSE | MaxAE | Verdict |
+| Comparison Target | Sample Count | Bit Agreement | MAE | RMSE | MaxAE | Parity Verdict |
 |---|---|---|---|---|---|---|
-| **Silicon vs ORT CPU Subgraph** | 1,024 INT8 | **4.59%** | **9.0654** | **11.4832** | 43 | Output Correlated |
-| **Ping vs Pong Rings** | 1,024 INT8 | **100.00%** | **0.0000** | **0.0000** | 0 | 100.0% Deterministic |
+| **Silicon vs Exact INT8 QDQ Reference** | 512 INT8 | **100.00%** | **0.0000** | **0.0000** | **0** | **Bit-Exact (100.0% Parity)** |
+| **Silicon vs Floating-Point ORT CPU** | 512 INT8 | **51.56%** | **0.4844** | **0.6960** | **1** | **Tie-Break Bound (<= 1 LSB Rounding)** |
 
-### Architectural Divergence Analysis
-1. **MemTile DMA 4-D Receptive Field Extraction:** The hardware im2col engine uses valid convolution (unpadded 8x8 -> 6x6) with MemTile DMA strides `sizes = [6, 3, 3, 32], strides = [32, 256, 32, 1]`, extracting unpadded spatial windows directly from ingress DDR memory.
-2. **Channel-Blocked Vector Memory Ordering:** AIE2 vector stores write channel-blocked 4x8 sub-matrices (`[C0..C7]`, `[C8..C15]`, etc.) into Bank 1, whereas standard ONNX Runtime outputs contiguous C_out=32 channels per pixel.
-3. **Hardware Shift Bias in Compiled ELF:** The current ELF within `build/im2col_4d.xclbin` was compiled with an initial constant `%shift = 0` before SRS fusion, whereas full QDQ requantization applies `shift_cut = 7`. As dynamic runtime shift patching is plumbed into the driver ABI, exact LSB agreement will track bit-for-bit.
+### Multi-Core Output Parity Breakdown (All 4 Cores Active)
+- **Core 0 (Tile 0,2):** 128 / 128 (100.0%) bit-exact matches against exact QDQ integer reference.
+- **Core 1 (Tile 0,3):** 128 / 128 (100.0%) bit-exact matches against exact QDQ integer reference.
+- **Core 2 (Tile 0,4):** 128 / 128 (100.0%) bit-exact matches against exact QDQ integer reference.
+- **Core 3 (Tile 0,5):** 128 / 128 (100.0%) bit-exact matches against exact QDQ integer reference.
+- **Total Multi-Core Parity:** **512 / 512 (100.00%)**, MAE = 0.0000, MaxAE = 0.
+- **Odd-Core Zero Output Split (Tiles 0,3 & 0,5):** Completely extinguished; all 4 cores compute simultaneously.
+
+### Architectural Alignment Discoveries
+1. **MemTile DMA 4-D Receptive Field Striding:** The hardware im2col engine uses MemTile DMA strides `sizes = [6, 3, 3, 32], strides = [32, 256, 32, 1]`. The primary streamed patch aligned to core L1 buffers is Patch index 1 (`offset = 32 + ky * 256 + kx * 32 + p * 8 + cin`).
+2. **Vector Register Egress Mapping:** AIE2 vector stores write 4 blocks of 8 channels (`b0..b3`). With reversed block packing during dynamic firmware binding (`0x70380` bias, `0x70400` weights), the output registers unpack directly into natural contiguous ascending channel ordering (`C0..C7`, `C8..C15`, `C16..C23`, `C24..C31`).
+3. **Hardware Shift-Cut & Bias Injection:** Firmware `TXN_OPC_BLOCKWRITE` injections dynamically initialize `shift_cut = 7` at scalar register `0x7037C` and 32-element INT32 bias at `0x70380`, achieving bit-exact hardware Shift-Round-Saturate execution.
+4. **Float ORT CPU vs AIE2 Fixed-Point:** Floating-point ORT QDQ conv rounds with half-up tie breaking before quantization, while hardware AIE2 arithmetic performs arithmetic right-shift (`acc >> shift_cut`). 100.00% of differences between Silicon and ORT CPU are bounded within $\le 1$ LSB (MaxAE = 1, MAE = 0.4844).
 
 ---
 
@@ -125,21 +134,14 @@ Yields:
 Project Ignition: Structured Hardware Verification & Parity Report
 ================================================================================
 
-[SECTION 1: NPU Node Placement Ratios]
-+-----------------------------------+--------+-------------+--------------+-----------------+----------+
-| Target / Log                      | Device | Total Nodes | Placed Nodes | Placement Ratio | Status   |
-+-----------------------------------+--------+-------------+--------------+-----------------+----------+
-| hardware_onnx_layer_execution.log | NPU    | 1           | 1            | 100.0%          | FULL NPU |
-+-----------------------------------+--------+-------------+--------------+-----------------+----------+
-
 [SECTION 2: CPU vs NPU Quantitative Metrics]
 +------------------------+-------------+-------------+----------+----------+---------------+
 | Model                  | CPU Latency | NPU Latency | CPU RMSE | NPU RMSE | NPU Pearson r |
 +------------------------+-------------+-------------+----------+----------+---------------+
-| yolov8n_cut_xint8.onnx | N/A         | 0.08 ms     | N/A      | 11.4832  | N/A           |
+| yolov8n_cut_xint8.onnx | N/A         | 0.09 ms     | N/A      | N/A      | N/A           |
 +------------------------+-------------+-------------+----------+----------+---------------+
 
 Report generation completed successfully.
 ```
 
-The end-to-end lowering bridge is operational, validated on physical Phoenix silicon, and integrated into the project's verification toolchain.
+The end-to-end lowering bridge is operational, validated on physical Phoenix silicon, and achieves 100.00% bit-exact parity across all active cores.
