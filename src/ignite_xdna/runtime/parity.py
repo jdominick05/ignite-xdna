@@ -123,3 +123,22 @@ def calculate_numerical_parity(golden: np.ndarray, actual: np.ndarray) -> Dict[s
         "bit_matches": bit_matches,
         "bit_agreement_pct": bit_agreement_pct,
     }
+
+
+def unblock_aie2_egress(raw_egress: np.ndarray, num_cores: int = 4) -> np.ndarray:
+    """
+    Converts AIE2 vector register memory layout (4 blocks x 8 channels per 4-pixel patch)
+    into standard contiguous [pixels, channels] layout.
+    Store order executed by conv_im2col_kernel_m2_srs:
+      - Bytes 0..127 contain the valid 4-pixel patch (4 pixels x 32 channels in 4 blocks of 8 channels)
+    """
+    raw_flat = np.asarray(raw_egress).flatten()
+    pixels_all = []
+    for c in range(num_cores):
+        core_bytes = raw_flat[c * 256 : (c + 1) * 256]
+        p_patch = np.zeros((4, 32), dtype=np.int8)
+        for p in range(4):
+            p_patch[p] = np.concatenate([core_bytes[b * 32 + p * 8 : b * 32 + (p + 1) * 8] for b in range(4)])
+        pixels_all.append(p_patch)
+    return np.concatenate(pixels_all, axis=0).flatten()
+
