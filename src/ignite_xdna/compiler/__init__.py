@@ -22,6 +22,23 @@ from .lower_onnx_conv import (
     run_fused_2layer_ort_cpu_reference,
 )
 from .generate_fused_mlir import generate_fused_mlir
+from .partitioner import (
+    GraphPartitioner,
+    ConvLayerMeta,
+    NpuFusedPartition,
+    CpuFallbackPartition,
+    PartitionedGraph,
+    build_synthetic_multi_layer_conv_model,
+)
+from .scheduler import (
+    MemTileMultiPassScheduler,
+    SchedulePlan,
+    PassDescriptor,
+    emit_multi_layer_transaction_bundle,
+    run_n_layer_fixed_point_reference,
+    run_n_layer_ort_cpu_reference,
+    execute_multi_layer_on_silicon,
+)
 
 __all__ = [
     "extract_conv_subgraph",
@@ -40,4 +57,17 @@ __all__ = [
     "run_fused_2layer_fixed_point_reference",
     "run_fused_2layer_ort_cpu_reference",
     "generate_fused_mlir",
+    "GraphPartitioner",
+    "ConvLayerMeta",
+    "NpuFusedPartition",
+    "CpuFallbackPartition",
+    "PartitionedGraph",
+    "build_synthetic_multi_layer_conv_model",
+    "MemTileMultiPassScheduler",
+    "SchedulePlan",
+    "PassDescriptor",
+    "emit_multi_layer_transaction_bundle",
+    "run_n_layer_fixed_point_reference",
+    "run_n_layer_ort_cpu_reference",
+    "execute_multi_layer_on_silicon",
 ]
