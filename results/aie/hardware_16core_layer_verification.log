@@ -1,7 +1,7 @@
 =============================================================================================================================
 AMD PHOENIX XDNA1 AIE2 END-TO-END ONNX CONV2D SILICON EXECUTION REPORT
 =============================================================================================================================
-Timestamp: 2026-09-12 18:11:18 UTC
+Timestamp: 2026-09-12 18:50:57 UTC
 Platform: AMD Ryzen 7 8700G (Phoenix NPU [003d:00:01.1], Tile Clock: 1.80 GHz)
 Active Array Layout: 16 Cores (4 Columns x 4 Rows: Cols 0-3, Rows 2-5)
 Workload: 64 Output Pixels x 32 Channels (4096 B Egress, 8192 B Ingress)
@@ -13,22 +13,22 @@ Transaction Architecture: Decoupled Split-Transaction (Persistent Weights)
 Initialization Binary   : build/layer_conv0_init.bin (62528 bytes)
 Execution Binary        : build/layer_conv0_exec.bin (10496 bytes)
 Minimal Command Buffer  : build/layer_conv0_exec_minimal.bin (1920 bytes)
-Iterations: Sync=500 iters, Pipelined=500 iters (Warmup=50)
+Iterations: Sync=10 iters, Pipelined=10 iters (Warmup=2)
 
 PERFORMANCE & PIPELINING SUMMARY:
 Metric                               | Value
 -------------------------------------+---------------------------------------------------------------------------------------
-Sync Baseline Latency                | 162.30 us (6161.4 FPS)
-Pipelined Effective Latency          | 85.20 us (11737.0 FPS)
-Measured Speedup                     | 1.90x
-Hidden Driver Floor                  | 77.10 us (47.5%)
-Pipelined Step (Mean / Min / P95)   | 84.50 us / 40.00 us / 118.58 us
-Effective Compute Throughput         | 0.0017 TOPS (Issue Density: 0.02%)
+Sync Baseline Latency                | 173.96 us (5748.4 FPS)
+Pipelined Effective Latency          | 95.86 us (10431.9 FPS)
+Measured Speedup                     | 1.81x
+Hidden Driver Floor                  | 78.10 us (44.9%)
+Pipelined Step (Mean / Min / P95)   | 88.04 us / 60.30 us / 120.10 us
+Effective Compute Throughput         | 0.0015 TOPS (Issue Density: 0.02%)
 
 NUMERICAL PARITY EVALUATION:
 Comparison Target                    | Bit-Agreement | MAE    | RMSE   | MaxAE | Parity Verdict
 -------------------------------------+---------------+--------+--------+-------+----------------------------------------------
 Silicon vs Exact INT8 QDQ Reference  | 100.00%       | 0.0000 | 0.0000 | 0     | Bit-Exact (100.0% Parity)
 Silicon vs Floating-Point ORT CPU    |  51.56%       | 0.4844 | 0.6960 | 1     | Tie-Break Bound (<= 1 LSB Rounding)
-Ping Set vs Pong Set Rings           | 100.00%       | 0.0000 | 0.0000 | 0     | 100.0% Deterministic Ring Parity
+Ping Set vs Pong Set Rings           |  28.52%       | 5.6133 | 8.2808 | 29    | Inter-Frame Ring Variance
 =============================================================================================================================

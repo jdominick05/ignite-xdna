@@ -201,12 +201,12 @@ See [`kernels/README.md`](kernels/README.md) and `results/aie/`.
 ## Repo layout
 
 ```
-npu/                  Shared library code. MUST NOT import Quark
-pipelines/<name>/     1_export -> 2_fetch_data -> 3_quantize -> 4_run/detect/pose -> 5_eval_map (1b/3b for cut)
-tools/                diag_ep.py, estimate_tops.py, the *_bench.py harnesses
-kernels/              Hand-written mlir-aie/IRON kernels; run from the ironenv, not resnet_env17
-scripts/              Bash wrappers: env activation, logging, disk guards
-results/              Tracked logs — the evidence for every number in the docs
+src/ignite_xdna/      Bare-metal AIE2 vector compute engine (compiler/ & runtime/)
+npu/                  Shared library code & backwards-compatibility shims
+pipelines/<name>/     1_export -> 2_fetch_data -> 3_quantize -> 4_run/detect/pose -> 5_eval_map
+benchmarks/           Silicon benchmark suites & Vitis AI vs ignite-xdna comparison
+kernels/ tools/       Hand-written AIE2 kernels (kernels/aie2/), disassemblers, auditors
+scripts/ results/     Bash wrappers & tracked logs — the evidence for every number
 models/  data/        Generated. Git-ignored, and expensive to regenerate
 ```
 

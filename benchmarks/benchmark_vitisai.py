@@ -24,6 +24,9 @@ from typing import Any, Dict, List, Optional, Tuple
 import numpy as np
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
+SRC_DIR = REPO_ROOT / "src"
+if str(SRC_DIR) not in sys.path:
+    sys.path.insert(0, str(SRC_DIR))
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
@@ -178,12 +181,20 @@ def measure_ignite_xdna_subgraphs(
     device_idx: int = 0,
 ) -> Dict[str, Any]:
     """Benchmark Model A and Model B using canonical silicon routines from npu.lower_onnx_conv."""
-    from npu.lower_onnx_conv import (
-        execute_layer_on_silicon,
-        execute_fused_2layer_on_silicon,
-        extract_conv_subgraph,
-        prepare_image_activations,
-    )
+    try:
+        from ignite_xdna.compiler import (
+            execute_layer_on_silicon,
+            execute_fused_2layer_on_silicon,
+            extract_conv_subgraph,
+            prepare_image_activations,
+        )
+    except (ImportError, ModuleNotFoundError):
+        from npu.lower_onnx_conv import (
+            execute_layer_on_silicon,
+            execute_fused_2layer_on_silicon,
+            extract_conv_subgraph,
+            prepare_image_activations,
+        )
 
     model_path = str(REPO_ROOT / "models" / "yolov8n_cut_xint8.onnx")
     calib_image = str(REPO_ROOT / "data" / "bisenetv2_calib" / "000000000139.jpg")
