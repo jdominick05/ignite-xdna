@@ -17,6 +17,9 @@ from .lower_onnx_conv import (
     execute_layer_on_silicon,
     execute_fused_2layer_on_silicon,
     lower_and_execute_conv,
+    run_exact_fixed_point_reference,
+    run_fused_2layer_fixed_point_reference,
+    run_fused_2layer_ort_cpu_reference,
 )
 from .generate_fused_mlir import generate_fused_mlir
 
@@ -33,5 +36,8 @@ __all__ = [
     "execute_layer_on_silicon",
     "execute_fused_2layer_on_silicon",
     "lower_and_execute_conv",
+    "run_exact_fixed_point_reference",
+    "run_fused_2layer_fixed_point_reference",
+    "run_fused_2layer_ort_cpu_reference",
     "generate_fused_mlir",
 ]

@@ -53,7 +53,7 @@ done
 
 [ -n "$SUBJECT" ]     || die "need --subject/-m"
 [ -n "$SESSION_URL" ] || die "need --session-url/-s (or export CLAUDE_SESSION_URL)"
-case "$SESSION_TRAILER" in Claude-Session|Codex-Session) ;; *) die "unsupported session trailer" ;; esac
+case "$SESSION_TRAILER" in Claude-Session|Codex-Session|Agy-Session) ;; *) die "unsupported session trailer" ;; esac
 
 if [ "${#FILES[@]}" -gt 0 ]; then
     step "staging ${#FILES[@]} file(s)"

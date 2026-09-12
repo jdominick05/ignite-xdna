@@ -8,5 +8,6 @@ __version__ = "0.2.0"
 
 from . import compiler
 from . import runtime
+from .runtime.session import InferenceSession, RunHandle
 
-__all__ = ["compiler", "runtime", "__version__"]
+__all__ = ["compiler", "runtime", "InferenceSession", "RunHandle", "__version__"]

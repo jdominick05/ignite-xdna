@@ -51,11 +51,9 @@ Detection width sweep, head-cut plain XINT8, full 5000-image val2017 mAP
 | yolov8x | **117.11 ms** | 45.09 | 61.37 | 1510 / 1517 | 24 |
 
 > **These rows are not like-for-like.** Calibration count drops across the table
-> because disk was the blocker (~1–1.5 GB of spooled activations per calibration
-> image at 640×640), so l (32) and x (24) are calibrated thinner than n/s/m (200).
-> Width dominates the accuracy story far more than sample count does: yolov8m at
-> 200 images shifted mAP by only -0.11 points (43.49 → 43.38) vs calib 64.
-> l's full eval is also flaky — two of three 5000-image attempts hit a hardware `DPU timeout`.
+> (~1–1.5 GB activations/image at 640²), so l (32) and x (24) are calibrated thinner than
+> n/s/m (200). Width dominates accuracy: yolov8m shifted mAP by only -0.11 (43.49 → 43.38)
+> vs calib 64. l's full eval is flaky (two of three attempts hit hardware `DPU timeout`).
 > Working: [Model size: n vs s](docs/BENCHMARKS.md#model-size-n-vs-s-measured-together).
 
 ## Headline findings
@@ -130,16 +128,7 @@ trend does break: l → x buys **no** accuracy (45.37 → 45.09) for 2.36× the 
 
 ## Quickstart
 
-Two conda environments, because the SDK version that can export and quantize is not the
-one that can run on the NPU:
-
-```powershell
-conda create -n resnet_env   --clone ryzen-ai-1.8.0    # export + quantize (torch, timm, quark)
-conda create -n resnet_env17 --clone ryzen-ai-1.7.1    # all NPU inference
-```
-
-Then, from **Git Bash** (not WSL — a WSL run is silently CPU-only). Every script takes
-`--help`, handles conda activation and logging, and writes UTF-8 logs to `results/`:
+Two conda environments (`resnet_env` for 1.8.0 export/quantize; `resnet_env17` for 1.7.1 inference; full setup in [`docs/SETUP.md`](docs/SETUP.md)). Run from **Git Bash**:
 
 ```bash
 ./scripts/setup.sh          # one-time: export, fetch datasets, quantize
@@ -149,8 +138,13 @@ Then, from **Git Bash** (not WSL — a WSL run is silently CPU-only). Every scri
 ./scripts/diag.sh           # what the VitisAI EP actually took
 ```
 
-Everything else — the environment split in full, manual per-step commands, and the
-footguns that cost the most time here — is in [`docs/SETUP.md`](docs/SETUP.md).
+Python runtime (`ignite_xdna.InferenceSession` on AMD Phoenix silicon):
+
+```python
+from ignite_xdna import InferenceSession
+with InferenceSession("build/layer_conv0_exec.bin") as s:
+    out = s.run(input_data)  # 86 us on Phoenix NPU (~11,000 FPS)
+```
 
 ## Where the detail lives
 
@@ -224,17 +218,14 @@ be faked). The full list, with the measurement behind each: [`docs/BENCHMARKS.md
 
 ## Acknowledgements
 
-Quantization configuration and the AdaRound parameter set are adapted from AMD's Ryzen
-AI `CNN-examples/object_detection` samples. Models are timm's `resnet50.a1_in1k`,
-`wide_resnet50_2.racm_in1k` and `wide_resnet101_2.tv2_in1k`, and Ultralytics YOLOv8.
+Adapted from AMD's Ryzen AI `CNN-examples/object_detection` samples. Models are timm's
+`resnet50.a1_in1k`, `wide_resnet50_2.racm_in1k`, `wide_resnet101_2.tv2_in1k`, and Ultralytics YOLOv8.
 
 ## Contributing
 
-Contributions are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md). Measurements on
-hardware not available here are especially useful: Strix, more RAM for the
-AdaRound-blocked configurations, more disk for yolov8l/x. Changes must pass the syntax
-and import gate in `CONTRIBUTING.md` and come with a logged measurement under `results/`
-for anything behavioural — there is no unit-test suite, because the hardware cannot be faked.
+Contributions welcome — see [CONTRIBUTING.md](CONTRIBUTING.md). Measurements on Strix or with
+more RAM/disk are especially useful. Changes must pass the syntax/import gate in
+`CONTRIBUTING.md` and include logged measurements under `results/`.
 
 ## License
 
