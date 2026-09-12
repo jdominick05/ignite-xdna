@@ -1,23 +1,22 @@
 =============================================================================================================================
 AMD PHOENIX XDNA1 AIE2 HARDWARE PIPELINED EXECUTION PROFILING REPORT
 =============================================================================================================================
-Timestamp: 2026-09-12 07:30:18 UTC
+Timestamp: 2026-09-12 18:50:44 UTC
 Platform: AMD Ryzen 7 8700G (Phoenix NPU [003d:00:01.1], Tile Clock: 1.80 GHz)
 Driver ABI: pyxrt / XRT 2.21.0 (HEAD), Asynchronous ERT Ring-Buffer Queueing
-Benchmark Iterations: Sync=100 iters (Warmup=10), Pipelined=500 iters (Warmup=50)
+Benchmark Iterations: Sync=5 iters (Warmup=2), Pipelined=10 iters (Warmup=2)
 
 Target Configuration                 | Sync Lat   | Sync FPS   | Pipe Lat   | Pipe FPS   | Speedup   | Hidden Floor     | Bit-Parity
 -----------------------------------------------------------------------------------------------------------------------------
-Stage 1a: Col 0 im2col (4 Cores)     | 145.2 us   | 6885.0     | 76.1 us    | 13138.3    | 1.91x     | 69.1 us (47.6%)  | 50% / 50% 
-Stage 1b: Single-Core MMUL (Tile 0,2) | 144.0 us   | 6946.8     | 74.0 us    | 13519.8    | 1.95x     | 70.0 us (48.6%)  | 100% / 100%
-Stage 2: 16-Core Array (Cols 0-3)    | 165.4 us   | 6046.3     | 83.1 us    | 12038.5    | 1.99x     | 82.3 us (49.8%)  | 100% / 100%
-Stage 2: 20-Core Array (Cols 0-4)    | TIMEOUT    | N/A        | N/A        | N/A        | N/A       | N/A              | N/A       
+Stage 1a: Col 0 im2col (4 Cores)     | 176.1 us   | 5678.6     | 91.7 us    | 10911.1    | 1.92x     | 84.4 us (48.0%)  | 50% / 50% 
+Stage 1b: Single-Core MMUL (Tile 0,2) | 164.3 us   | 6087.2     | 80.0 us    | 12500.0    | 2.05x     | 84.3 us (51.3%)  | 100% / 100%
+Stage 2: 16-Core Array (Cols 0-3)    | 175.7 us   | 5692.2     | 97.2 us    | 10283.8    | 1.81x     | 78.4 us (44.6%)  | 100% / 100%
 -----------------------------------------------------------------------------------------------------------------------------
 
 PIPELINED LOOP STEP LATENCY DISTRIBUTION & THROUGHPUT METRICS:
 Target Configuration                 | Mean Step   | Median     | Min Step   | P95 Step   | Effective TOPS  | Issue Density 
 -----------------------------------------------------------------------------------------------------------------------------
-Stage 1a: Col 0 im2col (4 Cores)     | 75.52 us    | 85.40 us   | 38.00 us   | 114.60 us  | 0.0077 TOPS     | 0.42%         
-Stage 1b: Single-Core MMUL (Tile 0,2) | 73.57 us    | 76.20 us   | 44.10 us   | 104.59 us  | 0.0071 TOPS     | 1.54%         
-Stage 2: 16-Core Array (Cols 0-3)    | 82.59 us    | 92.70 us   | 46.30 us   | 119.13 us  | 0.0505 TOPS     | 0.68%         
+Stage 1a: Col 0 im2col (4 Cores)     | 83.33 us    | 82.00 us   | 45.90 us   | 120.82 us  | 0.0064 TOPS     | 0.35%         
+Stage 1b: Single-Core MMUL (Tile 0,2) | 78.42 us    | 95.20 us   | 47.80 us   | 111.74 us  | 0.0066 TOPS     | 1.42%         
+Stage 2: 16-Core Array (Cols 0-3)    | 99.09 us    | 116.50 us  | 55.70 us   | 121.84 us  | 0.0431 TOPS     | 0.59%         
 -----------------------------------------------------------------------------------------------------------------------------

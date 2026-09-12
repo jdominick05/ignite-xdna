@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ignite-xdna"
+version = "0.2.0"
+description = "High-performance bare-metal AIE2 vector compute engine and compiler lowering for AMD XDNA1 NPU"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "Apache-2.0 WITH LLVM-exception"}
+authors = [
+    {name = "jdominick05", email = "j.dominick2005@proton.me"}
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Programming Language :: Python :: 3",
+    "Operating System :: Microsoft :: Windows",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-dir]
+"" = "src"
