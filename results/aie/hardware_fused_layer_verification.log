@@ -1,0 +1,33 @@
+=============================================================================================================================
+AMD PHOENIX XDNA1 AIE2 2-LAYER L2 MEMTILE ACTIVATION PING-PONG FUSION VERIFICATION REPORT
+=============================================================================================================================
+Timestamp: 2026-09-12 17:19:45 UTC
+Platform: AMD Ryzen 7 8700G (Phoenix NPU [003d:00:01.1], Tile Clock: 1.80 GHz)
+Active Array Layout: 16 Cores (4 Columns x 4 Rows: Cols 0-3, Rows 2-5)
+L2 Floorplan: MemTile Tile(0..3, 1) SRAM (0x40000 Ping, 0x60000 Pong, 4 KB / col)
+Synchronization Locks: MemTile Lock 4 (l2_ping_lock, init=1), Lock 5 (l2_pong_lock, init=0)
+Inter-Layer Host DDR Writebacks: 0 BYTES (Bypassed entirely; intermediate ping-pong remains in L2 MemTile SRAM)
+Source ONNX Model: models/yolov8n_cut_xint8.onnx
+Layer 0: /model.15/m.0/cv1/conv/Conv (3x3 Conv, Cin=32, Cout=32, shift=7)
+Layer 1: /model.15/m.0/cv2/conv/Conv (3x3 Conv, Cin=32, Cout=32, shift=8)
+Transaction Architecture: Decoupled Multi-Layer Fused Transaction Binary
+Initialization Binary   : build/layer_fused_init.bin (102272 bytes)
+Execution Binary        : build/layer_fused_exec.bin (10496 bytes)
+Benchmark Iterations    : 500 iterations (Warmup=50)
+
+PERFORMANCE & SPEEDUP SUMMARY:
+Metric                               | Value
+-------------------------------------+---------------------------------------------------------------------------------------
+Unfused Two-Dispatch Baseline Latency| 172.74 us (2 * 86.37 us)
+Fused Single-Dispatch Latency (Mean) | 164.63 us (6074.1 FPS)
+Fused Latency (Median / Min / P95)   | 161.25 us / 139.70 us / 187.19 us
+Driver Submission Tax Amortization   | 1.05x speedup (8.11 us saved per inference)
+Intermediate DDR Writeback Bypassed  | 100.0% (Zero host BO bounce for Layer 0 activations)
+
+NUMERICAL PARITY EVALUATION:
+Comparison Target                    | Bit-Agreement | MAE    | RMSE   | MaxAE | Parity Verdict
+-------------------------------------+---------------+--------+--------+-------+----------------------------------------------
+Layer 0 Silicon vs Exact INT8 QDQ    | 100.00%       | 0.0000 | 0.0000 | 0.0   | Bit-Exact (100.0% Parity)
+Layer 0 Silicon vs Floating ORT CPU  |  51.56%       | 0.4844 | 0.6960 | 1.0   | Tie-Break Bound (<= 1 LSB Rounding)
+Fused 2-Layer Exact vs Floating CPU  |  96.88%       | 0.0312 | 0.1768 | 1.0   | Validated Subgraph Parity
+=============================================================================================================================
