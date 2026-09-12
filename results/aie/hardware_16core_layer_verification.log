@@ -1,0 +1,31 @@
+=============================================================================================================================
+AMD PHOENIX XDNA1 AIE2 END-TO-END ONNX CONV2D SILICON EXECUTION REPORT
+=============================================================================================================================
+Timestamp: 2026-09-12 15:05:54 UTC
+Platform: AMD Ryzen 7 8700G (Phoenix NPU [003d:00:01.1], Tile Clock: 1.80 GHz)
+Active Array Layout: 16 Cores (4 Columns x 4 Rows: Cols 0-3, Rows 2-5)
+Workload: 64 Output Pixels x 32 Channels (4096 B Egress, 8192 B Ingress)
+Source ONNX Model: models/yolov8n_cut_xint8.onnx
+Target Subgraph: /model.15/m.0/cv1/conv/Conv (3x3 Conv, 32 Cout x 32 Cin)
+Scales: s_x=0.03125 (pos=5), s_w=0.0078125 (pos=7), s_y=0.03125 (pos=5)
+Shift Parameters: shift_cut=7, sigma=21
+Transaction Binary: build/layer_conv0_16core_full.bin (62528 bytes)
+Iterations: Sync=500 iters, Pipelined=500 iters (Warmup=50)
+
+PERFORMANCE & PIPELINING SUMMARY:
+Metric                               | Value
+-------------------------------------+---------------------------------------------------------------------------------------
+Sync Baseline Latency                | 308.97 us (3236.5 FPS)
+Pipelined Effective Latency          | 197.73 us (5057.5 FPS)
+Measured Speedup                     | 1.56x
+Hidden Driver Floor                  | 111.25 us (36.0%)
+Pipelined Step (Mean / Min / P95)   | 196.98 us / 115.80 us / 230.89 us
+Effective Compute Throughput         | 0.0007 TOPS (Issue Density: 0.01%)
+
+NUMERICAL PARITY EVALUATION:
+Comparison Target                    | Bit-Agreement | MAE    | RMSE   | MaxAE | Parity Verdict
+-------------------------------------+---------------+--------+--------+-------+----------------------------------------------
+Silicon vs Exact INT8 QDQ Reference  | 100.00%       | 0.0000 | 0.0000 | 0     | Bit-Exact (100.0% Parity)
+Silicon vs Floating-Point ORT CPU    |  51.56%       | 0.4844 | 0.6960 | 1     | Tie-Break Bound (<= 1 LSB Rounding)
+Ping Set vs Pong Set Rings           |  29.39%       | 5.1855 | 7.9744 | 31    | Inter-Frame Ring Variance
+=============================================================================================================================

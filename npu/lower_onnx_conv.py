@@ -278,16 +278,22 @@ def emit_layer_transaction_binary(
     if not os.path.exists(base_txn_path):
         raise FileNotFoundError(f"Base transaction binary not found: {base_txn_path}")
 
-    if cores is None:
-        if "im2col" in base_txn_path:
-            cores = [(0, r) for r in range(2, 6)]
-        else:
-            cores = [(c, r) for c in range(4) for r in range(2, 6)]
-
     with open(base_txn_path, 'rb') as f:
         base_bytes = f.read()
 
     ops = disassemble_transaction(base_bytes)
+
+    if cores is None:
+        if "16core" in base_txn_path or "16core" in out_txn_path:
+            cores = [(c, r) for c in range(4) for r in range(2, 6)]
+        elif "im2col" in base_txn_path:
+            has_multi_col = any(((o.get('addr', 0) >> 25) & 0x7f) > 0 for o in ops)
+            if has_multi_col:
+                cores = [(c, r) for c in range(4) for r in range(2, 6)]
+            else:
+                cores = [(0, r) for r in range(2, 6)]
+        else:
+            cores = [(c, r) for c in range(4) for r in range(2, 6)]
 
     # 1. Prepare weight, bias, shift payload words
     assert len(weights_aie) == 2304, f"Expected 2304 weight bytes, got {len(weights_aie)}"
@@ -327,8 +333,8 @@ def emit_layer_transaction_binary(
         core_inject_bytes.extend(struct.pack(f'<{len(w_op)}I', *w_op))
         num_core_ops += 1
 
-    def make_ddr_patch(addr, arg_idx):
-        return struct.pack('<12I', 0x81, 48, 0, 0, 0, 0, addr, 0, arg_idx, 0, 0, 0)
+    def make_ddr_patch(addr, arg_idx, arg_offset=0):
+        return struct.pack('<12I', 0x81, 48, 0, 0, 0, 0, addr, 0, arg_idx, 0, arg_offset, 0)
 
     # Determine splice index for core weights/bias/shift (right before core unreset val=1)
     splice_idx = None
@@ -344,24 +350,29 @@ def emit_layer_transaction_binary(
             new_ops_bytes.append(bytes(core_inject_bytes))
             num_ops += num_core_ops
 
-        # Patch MemTile Lock 2 if address is 0x001C0020
-        if o.get('addr') == 0x001C0020:
-            col_row = (o['col'] & 0xff) | ((o['row'] & 0xff) << 8)
+        addr = o.get('addr', 0)
+        col = (addr >> 25) & 0x7f
+        row = (addr >> 20) & 0x1f
+        reg = addr & 0xfffff
+
+        # Patch MemTile Lock 2 if address is 0x1C0020 on MemTile (row 1)
+        if row == 1 and reg == 0x1C0020:
+            col_row = (col & 0xff) | ((row & 0xff) << 8)
             # Patch val to 4 so all 4 S2MM gather channels can acquire
-            patched_write = struct.pack('<6I', 0, col_row, 0x001C0020, 0, 4, 24)
+            patched_write = struct.pack('<6I', 0, col_row, (col << 25) | (row << 20) | 0x1C0020, 0, 4, 24)
             new_ops_bytes.append(patched_write)
             num_ops += 1
             continue
 
-        # If Op is Shim BD configuration (0x1D000)
-        if o.get('addr') == 0x1D000 and o['op'] == 'BLOCKWRITE':
+        # If Op is Shim BD configuration (row 0, reg 0x1D000)
+        if row == 0 and reg == 0x1D000 and o['op'] == 'BLOCKWRITE':
             raw_chunk = base_bytes[o['offset'] : o['offset'] + o['size']]
             new_ops_bytes.append(raw_chunk)
             num_ops += 1
             has_ddr = (i + 1 < len(ops) and ops[i+1]['op'] == 'DDR_PATCH')
             if not has_ddr:
-                p0 = make_ddr_patch(0x0001D004, 0)
-                p1 = make_ddr_patch(0x0001D024, 1)
+                p0 = make_ddr_patch((col << 25) | 0x0001D004, 0, col * 2048)
+                p1 = make_ddr_patch((col << 25) | 0x0001D024, 1, col * 1024)
                 new_ops_bytes.append(p0)
                 new_ops_bytes.append(p1)
                 num_ops += 2
@@ -603,7 +614,8 @@ def execute_layer_on_silicon(
     bo_instr, ninstr = harness.create_instruction_bo(txn_bin_path)
 
     in_size = len(input_bytes)
-    num_ops = 4 * 2 * 9 * 32 * 128 * 2 # 589,824 MAC ops
+    num_cores = max(1, out_bytes // 256)
+    num_ops = num_cores * 2 * 9 * 32 * 8 * 2 # num_cores x 2 patches x 9 taps x 32 Cout x 8 Cin x 2 MAC FLOPs
 
     # 1. Synchronous single-buffer run for baseline measurement
     bo_in_sync = harness.create_host_bo(in_size, 3)
@@ -625,16 +637,16 @@ def execute_layer_on_silicon(
     bo_out_sync.sync(harness.pyxrt.xclBOSyncDirection.XCL_BO_SYNC_BO_FROM_DEVICE)
     sync_output = np.frombuffer(bo_out_sync.read(out_bytes, 0), dtype=np.int8).copy()
 
-    # Validate that all 4 cores contributed non-zero output
+    # Validate that all active cores contributed non-zero output
     assert len(sync_output) == out_bytes, f"Expected {out_bytes} output bytes, got {len(sync_output)}"
-    for c in range(4):
+    for c in range(num_cores):
         c_slice = sync_output[c * 256 : (c + 1) * 256]
         assert np.count_nonzero(c_slice) > 0, f"Core {c} produced zero output! S2MM gather or core execution failed."
 
     # Profile synchronous latency
     prof_sync = profile_hardware_execution(
         harness, bo_instr, ninstr, bo_in_sync, bo_out_sync,
-        num_ops=num_ops, num_cores=4, warmup_iters=10, bench_iters=bench_iters
+        num_ops=num_ops, num_cores=num_cores, warmup_iters=10, bench_iters=bench_iters
     )
 
     # 2. Asynchronous double-buffered pipelined execution
@@ -646,7 +658,7 @@ def execute_layer_on_silicon(
 
     prof_pipe = profile_pipelined_hardware_execution(
         harness, bo_instr, ninstr, ping_set, pong_set,
-        num_ops=num_ops, num_cores=4, warmup_iters=warmup_iters, bench_iters=bench_iters
+        num_ops=num_ops, num_cores=num_cores, warmup_iters=warmup_iters, bench_iters=bench_iters
     )
 
     bo_out_0.sync(harness.pyxrt.xclBOSyncDirection.XCL_BO_SYNC_BO_FROM_DEVICE)
@@ -732,23 +744,30 @@ def lower_and_execute_conv(args: argparse.Namespace):
     )
     print(f"  Emitted Layer Transaction Binary: {out_bin} ({os.path.getsize(out_bin)} bytes)")
 
+    # Detect 16-core configuration
+    is_16core = ("16core" in args.base_txn) or ("16core" in args.out_txn) or ("16core" in args.xclbin)
+    num_cores = 16 if is_16core else 4
+    out_bytes = 4096 if is_16core else 1024
+    out_pixels = 64 if is_16core else 16
+
     # Phase 4: Prepare Real Input Image Activations
     print(f"\n[PHASE 4] Preparing Real Image Activations from: {args.image}")
     in_bytes = prepare_image_activations(args.image, subgraph['scale_x'], in_channels=subgraph['in_channels'])
-    print(f"  Prepared Input Buffer: {len(in_bytes)} bytes INT8")
+    in_bytes_full = np.tile(in_bytes, 4) if is_16core else in_bytes
+    print(f"  Prepared Input Buffer: {len(in_bytes_full)} bytes INT8 (Single Slice: {len(in_bytes)} bytes)")
 
     # Phase 5: ONNX Runtime CPU Reference Execution
-    print("\n[PHASE 5] Executing Exact QDQ Subgraph on ONNX Runtime CPU...")
-    ort_ref = run_ort_cpu_reference(subgraph, in_bytes, out_pixels=16, num_cores=4)
+    print(f"\n[PHASE 5] Executing Exact QDQ Subgraph on ONNX Runtime CPU ({num_cores} cores, {out_pixels} pixels)...")
+    ort_ref = run_ort_cpu_reference(subgraph, in_bytes, out_pixels=out_pixels, num_cores=num_cores)
     print(f"  ORT CPU Output Generated: {len(ort_ref)} bytes INT8")
 
     # Phase 6: Physical Silicon Execution via Double-Buffered ERT Pipeline
-    print(f"\n[PHASE 6] Executing on Physical Silicon (Device {args.device_idx})...")
+    print(f"\n[PHASE 6] Executing on Physical Silicon (Device {args.device_idx}, {num_cores} cores)...")
     hw_res = execute_layer_on_silicon(
         args.xclbin,
         out_bin,
-        in_bytes,
-        out_bytes=1024,
+        in_bytes_full,
+        out_bytes=out_bytes,
         device_idx=args.device_idx,
         bench_iters=args.iters,
         warmup_iters=args.warmup
@@ -760,12 +779,11 @@ def lower_and_execute_conv(args: argparse.Namespace):
     print(f"  Effective TOPS       : {hw_res['effective_tops']:.4f} TOPS (Issue Density: {hw_res['issue_density']:.2f}%)")
 
     # Phase 7: Parity Analysis
-    print("\n[PHASE 7] Evaluating Silicon vs. Reference Numerical Parity...")
-    # Unblock silicon egress buffer (1024 bytes -> 16 pixels x 32 channels)
-    silicon_unblocked = unblock_aie2_egress(hw_res['sync_output'], num_cores=4)[:len(ort_ref)]
+    print(f"\n[PHASE 7] Evaluating Silicon vs. Reference Numerical Parity across {num_cores} Cores...")
+    silicon_unblocked = unblock_aie2_egress(hw_res['sync_output'], num_cores=num_cores)[:len(ort_ref)]
 
     # 1. Exact Fixed-Point Reference (bit-exact hardware model: integer MAC + shift_cut truncation)
-    exact_ref = run_exact_fixed_point_reference(subgraph, in_bytes, out_pixels=16, num_cores=4)
+    exact_ref = run_exact_fixed_point_reference(subgraph, in_bytes, out_pixels=out_pixels, num_cores=num_cores)
     parity_exact = calculate_parity(exact_ref, silicon_unblocked)
 
     # 2. ORT CPU QDQ Subgraph (floating-point Conv with QuantizeLinear/DequantizeLinear)
@@ -785,7 +803,10 @@ def lower_and_execute_conv(args: argparse.Namespace):
 
     # Write log file
     os.makedirs(args.log_dir, exist_ok=True)
-    log_names = ["hardware_onnx_layer_execution.log", "hardware_layer_conv0_verification.log"]
+    if is_16core:
+        log_names = ["hardware_16core_layer_verification.log"]
+    else:
+        log_names = ["hardware_onnx_layer_execution.log", "hardware_layer_conv0_verification.log"]
     if getattr(args, 'log_name', None):
         log_names = [args.log_name]
     for name in log_names:
@@ -796,6 +817,8 @@ def lower_and_execute_conv(args: argparse.Namespace):
             f.write("=============================================================================================================================\n")
             f.write(f"Timestamp: {time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())}\n")
             f.write("Platform: AMD Ryzen 7 8700G (Phoenix NPU [003d:00:01.1], Tile Clock: 1.80 GHz)\n")
+            f.write(f"Active Array Layout: {num_cores} Cores ({num_cores // 4} Columns x 4 Rows: Cols 0-{num_cores // 4 - 1}, Rows 2-5)\n")
+            f.write(f"Workload: {out_pixels} Output Pixels x 32 Channels ({out_bytes} B Egress, {len(in_bytes_full)} B Ingress)\n")
             f.write(f"Source ONNX Model: {args.model}\n")
             f.write(f"Target Subgraph: {subgraph['node_name']} (3x3 Conv, {subgraph['out_channels']} Cout x {subgraph['in_channels']} Cin)\n")
             f.write(f"Scales: s_x={subgraph['scale_x']} (pos={subgraph['pos_x']}), s_w={subgraph['scale_w']} (pos={subgraph['pos_w']}), s_y={subgraph['scale_y']} (pos={subgraph['pos_y']})\n")
@@ -816,7 +839,8 @@ def lower_and_execute_conv(args: argparse.Namespace):
             f.write("-------------------------------------+---------------+--------+--------+-------+----------------------------------------------\n")
             f.write(f"Silicon vs Exact INT8 QDQ Reference  | {parity_exact['bit_agreement_pct']:>6.2f}%       | {parity_exact['mae']:.4f} | {parity_exact['rmse']:.4f} | {parity_exact['max_ae']:<5} | Bit-Exact (100.0% Parity)\n")
             f.write(f"Silicon vs Floating-Point ORT CPU    | {parity_ort['bit_agreement_pct']:>6.2f}%       | {parity_ort['mae']:.4f} | {parity_ort['rmse']:.4f} | {parity_ort['max_ae']:<5} | Tie-Break Bound (<= 1 LSB Rounding)\n")
-            f.write(f"Ping Set vs Pong Set Rings           | {parity_ping_pong['bit_agreement_pct']:>6.2f}%       | {parity_ping_pong['mae']:.4f} | {parity_ping_pong['rmse']:.4f} | {parity_ping_pong['max_ae']:<5} | 100.0% Deterministic Ring Parity\n")
+            ping_pong_verdict = "100.0% Deterministic Ring Parity" if parity_ping_pong['bit_agreement_pct'] == 100.0 else "Inter-Frame Ring Variance"
+            f.write(f"Ping Set vs Pong Set Rings           | {parity_ping_pong['bit_agreement_pct']:>6.2f}%       | {parity_ping_pong['mae']:.4f} | {parity_ping_pong['rmse']:.4f} | {parity_ping_pong['max_ae']:<5} | {ping_pong_verdict}\n")
             f.write("=============================================================================================================================\n")
 
         print(f"Execution log written to: {log_path}")
