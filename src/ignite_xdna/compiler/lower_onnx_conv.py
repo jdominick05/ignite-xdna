@@ -220,7 +220,12 @@ def pack_weights_aie2_vector_layout(
     Total stationary weight payload: 9 * 4 * 64 = 2,304 bytes.
     """
     C_out, C_in, kh, kw = weights_onnx.shape
-    assert kh == 3 and kw == 3, f"Expected 3x3 filter, got {kh}x{kw}"
+    if kh == 1 and kw == 1:
+        w3x3 = np.zeros((C_out, C_in, 3, 3), dtype=weights_onnx.dtype)
+        w3x3[:, :, 0, 0] = weights_onnx[:, :, 0, 0]
+        weights_onnx = w3x3
+    else:
+        assert kh == 3 and kw == 3, f"Expected 3x3 or 1x1 filter, got {kh}x{kw}"
 
     w_aie = np.zeros((9, 4, 8, 8), dtype=np.int8)
 

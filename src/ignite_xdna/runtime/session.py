@@ -113,6 +113,7 @@ class InferenceSession:
         self.node_name = node_name
         self._closed = False
         self._repo_root = get_repo_root()
+        self.partitioned_graph: Optional[Any] = None
 
         # 1. Resolve buffer dimensions
         if in_bytes is not None:
@@ -195,6 +196,10 @@ class InferenceSession:
                 raise ValueError("Transaction bundle dictionary must contain an 'exec' key")
             return (str(self._abs_path(init_p)) if init_p else None, str(self._abs_path(exec_p)))
 
+        # Check if PartitionedGraph object was passed directly
+        if hasattr(model_or_bundle, "npu_partitions") and hasattr(model_or_bundle, "partitions"):
+            return self._compile_partitioned_graph(model_or_bundle)
+
         if isinstance(model_or_bundle, (tuple, list)):
             if len(model_or_bundle) >= 2:
                 return (str(self._abs_path(model_or_bundle[0])), str(self._abs_path(model_or_bundle[1])))
@@ -244,55 +249,40 @@ class InferenceSession:
         if not onnx_path.exists():
             raise FileNotFoundError(f"ONNX model file not found: {onnx_path}")
 
-        if self.enable_fusion:
-            out_init = self._repo_root / "build" / "layer_fused_init.bin"
-            out_exec = self._repo_root / "build" / "layer_fused_exec.bin"
-            if out_init.exists() and out_exec.exists():
-                return (str(out_init), str(out_exec))
+        from ignite_xdna.compiler.partitioner import GraphPartitioner
+        partitioner = GraphPartitioner(onnx_path)
+        pg = partitioner.partition()
+        return self._compile_partitioned_graph(pg)
 
-            from ignite_xdna.compiler import (
-                extract_conv_subgraph,
-                emit_fused_2layer_transaction_binary
-            )
-            node0 = self.node_name or "/model.15/m.0/cv1/conv/Conv"
-            node1 = "/model.15/m.0/cv2/conv/Conv"
-            sub0 = extract_conv_subgraph(str(onnx_path), node_name=node0)
-            sub1 = extract_conv_subgraph(str(onnx_path), node_name=node1)
-            base_txn = str(self._repo_root / "build" / "im2col_4d_16core.bin")
-            init_p, exec_p = emit_fused_2layer_transaction_binary(
-                base_txn_path=base_txn,
-                out_init_path=str(out_init),
-                out_exec_path=str(out_exec),
-                sub0=sub0,
-                sub1=sub1
-            )
-            return (str(init_p), str(exec_p))
-        else:
-            out_init = self._repo_root / "build" / "layer_conv0_init.bin"
-            out_exec = self._repo_root / "build" / "layer_conv0_exec.bin"
-            if out_init.exists() and out_exec.exists():
-                return (str(out_init), str(out_exec))
+    def _compile_partitioned_graph(self, pg: Any) -> Tuple[Optional[str], str]:
+        """Compiles an extracted PartitionedGraph with generalized N-layer scheduler."""
+        from ignite_xdna.compiler.scheduler import MemTileMultiPassScheduler, emit_multi_layer_transaction_bundle
 
-            from ignite_xdna.compiler import (
-                extract_conv_subgraph,
-                emit_layer_init_binary,
-                emit_layer_exec_binary,
-            )
-            node0 = self.node_name or "/model.15/m.0/cv1/conv/Conv"
-            sub = extract_conv_subgraph(str(onnx_path), node_name=node0)
+        self.partitioned_graph = pg
+        npu_parts = pg.npu_partitions
+        if not npu_parts:
+            raise ValueError(f"No fusible NPU subgraphs found in partitioned graph: {pg.model_name}")
+
+        npu_part = npu_parts[0]
+        n_layers = npu_part.num_layers
+
+        base_txn = str(self._repo_root / "build" / "layer_conv0_exec.bin")
+        if not os.path.exists(base_txn):
             base_txn = str(self._repo_root / "build" / "im2col_4d_16core.bin")
-            init_p = emit_layer_init_binary(
-                base_txn_path=base_txn,
-                out_init_path=str(out_init),
-                weights_aie=sub["weights_aie"],
-                bias_i32=sub.get("bias_i32"),
-                shift_cut=sub["shift_cut"],
-            )
-            exec_p = emit_layer_exec_binary(
-                base_txn_path=base_txn,
-                out_exec_path=str(out_exec),
-            )
-            return (str(init_p), str(exec_p))
+
+        out_init = self._repo_root / "build" / f"subgraph_{n_layers}layer_init.bin"
+        out_exec = self._repo_root / "build" / f"subgraph_{n_layers}layer_exec.bin"
+
+        scheduler = MemTileMultiPassScheduler(num_cores=self.num_cores)
+        plan = scheduler.schedule(npu_part)
+        init_p, exec_p = emit_multi_layer_transaction_bundle(
+            schedule=plan,
+            base_txn_path=base_txn,
+            out_init_path=str(out_init),
+            out_exec_path=str(out_exec),
+        )
+        return (str(init_p), str(exec_p))
+
 
     def _program_stationary_parameters(self):
         """Dispatches one-time parameter initialization and primes hardware pipeline."""
@@ -356,7 +346,8 @@ class InferenceSession:
 
     def run(self, input_tensor: Any, unswizzle: bool = True, timeout_ms: int = 2000) -> np.ndarray:
         """
-        Synchronously executes inference on physical AMD Phoenix NPU silicon.
+        Synchronously executes inference on physical AMD Phoenix NPU silicon,
+        orchestrating fallback CPU execution for pre/post-subgraph partitions if present.
 
         Args:
             input_tensor: NumPy array or PyTorch CPU tensor containing input activations.
@@ -369,6 +360,27 @@ class InferenceSession:
         if self._closed:
             raise RuntimeError("Cannot invoke run() on a closed InferenceSession")
 
+        if self.partitioned_graph is not None and self.partitioned_graph.cpu_partitions:
+            import onnxruntime as ort
+            from ignite_xdna.compiler.partitioner import CpuFallbackPartition, NpuFusedPartition
+
+            cur_data = input_tensor
+            for part in self.partitioned_graph.partitions:
+                if isinstance(part, CpuFallbackPartition):
+                    if part.onnx_model is not None:
+                        sess = ort.InferenceSession(part.onnx_model.SerializeToString(), providers=["CPUExecutionProvider"])
+                        inp_name = sess.get_inputs()[0].name
+                        if hasattr(cur_data, "detach"):
+                            cur_data = cur_data.detach().cpu().numpy()
+                        cur_data = sess.run(None, {inp_name: cur_data})[0]
+                elif isinstance(part, NpuFusedPartition):
+                    cur_data = self._execute_npu_direct(cur_data, unswizzle=unswizzle, timeout_ms=timeout_ms)
+            return cur_data
+
+        return self._execute_npu_direct(input_tensor, unswizzle=unswizzle, timeout_ms=timeout_ms)
+
+    def _execute_npu_direct(self, input_tensor: Any, unswizzle: bool = True, timeout_ms: int = 2000) -> np.ndarray:
+        """Direct NPU hardware execution without CPU fallback routing."""
         slot = self.buffers[self._current_slot]
         if slot["in_flight_run"] is not None:
             slot["in_flight_run"].wait(timeout_ms)
