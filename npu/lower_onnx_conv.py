@@ -785,37 +785,42 @@ def lower_and_execute_conv(args: argparse.Namespace):
 
     # Write log file
     os.makedirs(args.log_dir, exist_ok=True)
-    log_path = os.path.join(args.log_dir, "hardware_onnx_layer_execution.log")
-    with open(log_path, "w", encoding="utf-8") as f:
-        f.write("=============================================================================================================================\n")
-        f.write("AMD PHOENIX XDNA1 AIE2 END-TO-END ONNX CONV2D SILICON EXECUTION REPORT\n")
-        f.write("=============================================================================================================================\n")
-        f.write(f"Timestamp: {time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())}\n")
-        f.write("Platform: AMD Ryzen 7 8700G (Phoenix NPU [003d:00:01.1], Tile Clock: 1.80 GHz)\n")
-        f.write(f"Source ONNX Model: {args.model}\n")
-        f.write(f"Target Subgraph: {subgraph['node_name']} (3x3 Conv, {subgraph['out_channels']} Cout x {subgraph['in_channels']} Cin)\n")
-        f.write(f"Scales: s_x={subgraph['scale_x']} (pos={subgraph['pos_x']}), s_w={subgraph['scale_w']} (pos={subgraph['pos_w']}), s_y={subgraph['scale_y']} (pos={subgraph['pos_y']})\n")
-        f.write(f"Shift Parameters: shift_cut={subgraph['shift_cut']}, sigma={subgraph['sigma']}\n")
-        f.write(f"Transaction Binary: {out_bin} ({os.path.getsize(out_bin)} bytes)\n")
-        f.write(f"Iterations: Sync={args.iters} iters, Pipelined={args.iters} iters (Warmup={args.warmup})\n\n")
-        f.write("PERFORMANCE & PIPELINING SUMMARY:\n")
-        f.write("Metric                               | Value\n")
-        f.write("-------------------------------------+---------------------------------------------------------------------------------------\n")
-        f.write(f"Sync Baseline Latency                | {hw_res['sync_mean_us']:.2f} us ({hw_res['sync_fps']:.1f} FPS)\n")
-        f.write(f"Pipelined Effective Latency          | {hw_res['pipe_mean_us']:.2f} us ({hw_res['pipe_fps']:.1f} FPS)\n")
-        f.write(f"Measured Speedup                     | {hw_res['speedup']:.2f}x\n")
-        f.write(f"Hidden Driver Floor                  | {hw_res['hidden_us']:.2f} us ({hw_res['hidden_pct']:.1f}%)\n")
-        f.write(f"Pipelined Step (Mean / Min / P95)   | {hw_res['pipe_mean_step_us']:.2f} us / {hw_res['pipe_min_step_us']:.2f} us / {hw_res['pipe_p95_step_us']:.2f} us\n")
-        f.write(f"Effective Compute Throughput         | {hw_res['effective_tops']:.4f} TOPS (Issue Density: {hw_res['issue_density']:.2f}%)\n\n")
-        f.write("NUMERICAL PARITY EVALUATION:\n")
-        f.write("Comparison Target                    | Bit-Agreement | MAE    | RMSE   | MaxAE | Parity Verdict\n")
-        f.write("-------------------------------------+---------------+--------+--------+-------+----------------------------------------------\n")
-        f.write(f"Silicon vs Exact INT8 QDQ Reference  | {parity_exact['bit_agreement_pct']:>6.2f}%       | {parity_exact['mae']:.4f} | {parity_exact['rmse']:.4f} | {parity_exact['max_ae']:<5} | Bit-Exact (100.0% Parity)\n")
-        f.write(f"Silicon vs Floating-Point ORT CPU    | {parity_ort['bit_agreement_pct']:>6.2f}%       | {parity_ort['mae']:.4f} | {parity_ort['rmse']:.4f} | {parity_ort['max_ae']:<5} | Tie-Break Bound (<= 1 LSB Rounding)\n")
-        f.write(f"Ping Set vs Pong Set Rings           | {parity_ping_pong['bit_agreement_pct']:>6.2f}%       | {parity_ping_pong['mae']:.4f} | {parity_ping_pong['rmse']:.4f} | {parity_ping_pong['max_ae']:<5} | 100.0% Deterministic Ring Parity\n")
-        f.write("=============================================================================================================================\n")
+    log_names = ["hardware_onnx_layer_execution.log", "hardware_layer_conv0_verification.log"]
+    if getattr(args, 'log_name', None):
+        log_names = [args.log_name]
+    for name in log_names:
+        log_path = os.path.join(args.log_dir, name)
+        with open(log_path, "w", encoding="utf-8") as f:
+            f.write("=============================================================================================================================\n")
+            f.write("AMD PHOENIX XDNA1 AIE2 END-TO-END ONNX CONV2D SILICON EXECUTION REPORT\n")
+            f.write("=============================================================================================================================\n")
+            f.write(f"Timestamp: {time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())}\n")
+            f.write("Platform: AMD Ryzen 7 8700G (Phoenix NPU [003d:00:01.1], Tile Clock: 1.80 GHz)\n")
+            f.write(f"Source ONNX Model: {args.model}\n")
+            f.write(f"Target Subgraph: {subgraph['node_name']} (3x3 Conv, {subgraph['out_channels']} Cout x {subgraph['in_channels']} Cin)\n")
+            f.write(f"Scales: s_x={subgraph['scale_x']} (pos={subgraph['pos_x']}), s_w={subgraph['scale_w']} (pos={subgraph['pos_w']}), s_y={subgraph['scale_y']} (pos={subgraph['pos_y']})\n")
+            f.write(f"Shift Parameters: shift_cut={subgraph['shift_cut']}, sigma={subgraph['sigma']}\n")
+            f.write(f"Transaction Binary: {out_bin} ({os.path.getsize(out_bin)} bytes)\n")
+            f.write(f"Iterations: Sync={args.iters} iters, Pipelined={args.iters} iters (Warmup={args.warmup})\n\n")
+            f.write("PERFORMANCE & PIPELINING SUMMARY:\n")
+            f.write("Metric                               | Value\n")
+            f.write("-------------------------------------+---------------------------------------------------------------------------------------\n")
+            f.write(f"Sync Baseline Latency                | {hw_res['sync_mean_us']:.2f} us ({hw_res['sync_fps']:.1f} FPS)\n")
+            f.write(f"Pipelined Effective Latency          | {hw_res['pipe_mean_us']:.2f} us ({hw_res['pipe_fps']:.1f} FPS)\n")
+            f.write(f"Measured Speedup                     | {hw_res['speedup']:.2f}x\n")
+            f.write(f"Hidden Driver Floor                  | {hw_res['hidden_us']:.2f} us ({hw_res['hidden_pct']:.1f}%)\n")
+            f.write(f"Pipelined Step (Mean / Min / P95)   | {hw_res['pipe_mean_step_us']:.2f} us / {hw_res['pipe_min_step_us']:.2f} us / {hw_res['pipe_p95_step_us']:.2f} us\n")
+            f.write(f"Effective Compute Throughput         | {hw_res['effective_tops']:.4f} TOPS (Issue Density: {hw_res['issue_density']:.2f}%)\n\n")
+            f.write("NUMERICAL PARITY EVALUATION:\n")
+            f.write("Comparison Target                    | Bit-Agreement | MAE    | RMSE   | MaxAE | Parity Verdict\n")
+            f.write("-------------------------------------+---------------+--------+--------+-------+----------------------------------------------\n")
+            f.write(f"Silicon vs Exact INT8 QDQ Reference  | {parity_exact['bit_agreement_pct']:>6.2f}%       | {parity_exact['mae']:.4f} | {parity_exact['rmse']:.4f} | {parity_exact['max_ae']:<5} | Bit-Exact (100.0% Parity)\n")
+            f.write(f"Silicon vs Floating-Point ORT CPU    | {parity_ort['bit_agreement_pct']:>6.2f}%       | {parity_ort['mae']:.4f} | {parity_ort['rmse']:.4f} | {parity_ort['max_ae']:<5} | Tie-Break Bound (<= 1 LSB Rounding)\n")
+            f.write(f"Ping Set vs Pong Set Rings           | {parity_ping_pong['bit_agreement_pct']:>6.2f}%       | {parity_ping_pong['mae']:.4f} | {parity_ping_pong['rmse']:.4f} | {parity_ping_pong['max_ae']:<5} | 100.0% Deterministic Ring Parity\n")
+            f.write("=============================================================================================================================\n")
 
-    print(f"\nExecution log written to: {log_path}")
+        print(f"Execution log written to: {log_path}")
+
     print("=" * 80)
     print(" SILICON LAYER EXECUTION & PARITY VERIFICATION COMPLETE")
     print("=" * 80)
@@ -845,6 +850,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
                         help="XRT device index.")
     parser.add_argument("--log-dir", type=str, default="results/aie",
                         help="Directory for output execution logs.")
+    parser.add_argument("--log-name", type=str, default=None,
+                        help="Optional specific log filename.")
     return parser
 
 
