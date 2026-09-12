@@ -1,0 +1,44 @@
+=============================================================================================================================
+EMPIRICAL BENCHMARK TRACE: AMD ONNX RUNTIME VITIS AI EP VS. IGNITE-XDNA DIRECT AIE2 SILICON
+=============================================================================================================================
+Timestamp: 2026-09-12 18:19:25 UTC
+Platform: AMD Ryzen 7 8700G (Phoenix NPU [003d:00:01.1], Tile Clock: 1.80 GHz, 16 Vector Cores)
+Iterations: Warmup=50, Benchmark=500 steady-state
+
+--- [VITIS AI EXECUTION PROVIDER BASELINE] ---
+Model A (Single Conv):
+  Placement : 5/6 nodes placed on NPU
+  Latency   : Min=369.70 us, Median=423.35 us, Mean=433.97 us, P95=499.17 us
+  Throughput: 2304.3 FPS
+  Host CPU  : 28.7% single-core (CPU time: 0.062s / Wall: 0.218s)
+  Footprint : 8,699,904 bytes (8.70 MB compiled cache)
+
+Model B (Fused 2-Layer):
+  Placement : 18/19 nodes placed on NPU
+  Latency   : Min=449.40 us, Median=473.20 us, Mean=498.84 us, P95=557.01 us
+  Throughput: 2004.6 FPS
+  Host CPU  : 31.2% single-core (CPU time: 0.078s / Wall: 0.250s)
+  Footprint : 8,746,449 bytes (8.75 MB compiled cache)
+
+--- [IGNITE-XDNA DIRECT AIE2 ARCHITECTURE] ---
+Model A (Single Conv):
+  Sync Latency     : Mean=167.34 us (Throughput: 5976.0 FPS)
+  Pipelined Latency: Mean=83.94 us (Throughput: 11913.3 FPS)
+  Driver Floor Step: Min=44.60 us, Mean=83.39 us, P95=116.91 us
+  Host CPU         : 18.0% single-core (CPU time: 0.047s / Wall: 0.261s)
+  Binary Footprint : Minimal Exec=1,920 B (1.9 KB), Full Exec=10,496 B (10.5 KB)
+
+Model B (Fused 2-Layer MemTile SRAM):
+  Fused Latency    : Min=139.50 us, Median=161.00 us, Mean=168.93 us, P95=216.22 us
+  Fused Throughput : 5919.6 FPS
+  Host CPU         : 91.6% single-core (CPU time: 0.156s / Wall: 0.171s)
+  Intermediate DDR : 0 BYTES (DDR bounce completely eliminated via L2 MemTile ping-pong)
+  Binary Footprint : Exec=10,496 B (10.5 KB), Init=102,272 B (102 KB)
+
+--- [EXECUTIVE SPEEDUP & FOOTPRINT MATRIX] ---
+Model A Speedup (Sync)     : 2.59x
+Model A Speedup (Pipelined): 5.17x
+Model B Speedup (Fused)    : 2.95x
+Model A Footprint Reduction: 4531.2x (vs 1.9 KB minimal exec) / 828.9x (vs 10.5 KB full exec)
+Model B Footprint Reduction: 833.3x (vs 10.5 KB fused exec)
+=============================================================================================================================
