@@ -23,8 +23,14 @@ import numpy as np
 repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if repo_root not in sys.path:
     sys.path.insert(0, repo_root)
+tools_dir = os.path.join(repo_root, "tools")
+if tools_dir not in sys.path:
+    sys.path.insert(0, tools_dir)
 
-from tools.disasm_txn import disassemble_transaction
+try:
+    from tools.disasm_txn import disassemble_transaction
+except (ImportError, ModuleNotFoundError):
+    from disasm_txn import disassemble_transaction
 
 # Lazy imports for ONNX and ORT to ensure fast import check
 try:
