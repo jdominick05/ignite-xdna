@@ -268,7 +268,7 @@ module {
     }
     %core_0_2 = aie.core(%tile_0_2) {
       %c1 = arith.constant 1 : i32
-      %shift = arith.constant 0 : i32
+      %shift = arith.constant 7 : i32
       aie.use_lock(%ping_cons_0_2, AcquireGreaterEqual, %c1)
       aie.use_lock(%pong_cons_0_2, AcquireGreaterEqual, %c1)
       aie.use_lock(%out_prod_0_2, AcquireGreaterEqual, %c1)
@@ -307,7 +307,7 @@ module {
     }
     %core_0_3 = aie.core(%tile_0_3) {
       %c1 = arith.constant 1 : i32
-      %shift = arith.constant 0 : i32
+      %shift = arith.constant 7 : i32
       aie.use_lock(%ping_cons_0_3, AcquireGreaterEqual, %c1)
       aie.use_lock(%pong_cons_0_3, AcquireGreaterEqual, %c1)
       aie.use_lock(%out_prod_0_3, AcquireGreaterEqual, %c1)
@@ -346,7 +346,7 @@ module {
     }
     %core_0_4 = aie.core(%tile_0_4) {
       %c1 = arith.constant 1 : i32
-      %shift = arith.constant 0 : i32
+      %shift = arith.constant 7 : i32
       aie.use_lock(%ping_cons_0_4, AcquireGreaterEqual, %c1)
       aie.use_lock(%pong_cons_0_4, AcquireGreaterEqual, %c1)
       aie.use_lock(%out_prod_0_4, AcquireGreaterEqual, %c1)
@@ -385,7 +385,7 @@ module {
     }
     %core_0_5 = aie.core(%tile_0_5) {
       %c1 = arith.constant 1 : i32
-      %shift = arith.constant 0 : i32
+      %shift = arith.constant 7 : i32
       aie.use_lock(%ping_cons_0_5, AcquireGreaterEqual, %c1)
       aie.use_lock(%pong_cons_0_5, AcquireGreaterEqual, %c1)
       aie.use_lock(%out_prod_0_5, AcquireGreaterEqual, %c1)
