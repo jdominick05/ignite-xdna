@@ -127,9 +127,9 @@ struct Candidate {
 };
 
 struct ignite_engine {
-    // Double-buffering constant
-    static constexpr int NUM_SLOTS = 2;
-    static constexpr size_t RING_SIZE = 64;
+    // Multi-slot circular ring constant
+    static constexpr int NUM_SLOTS = 4;
+    static constexpr size_t RING_SIZE = 128;
 
     // Win32 memory-mapping handles
     HANDLE h_file = INVALID_HANDLE_VALUE;
@@ -148,13 +148,13 @@ struct ignite_engine {
     std::unique_ptr<xrt::hw_context> hw_ctx;
     std::unique_ptr<xrt::kernel> kernel;
 
-    // Double-buffered BOs (slot 0 and slot 1)
+    // Double-buffered BOs (slot 0..3)
     xrt::bo bo_in[NUM_SLOTS];
     xrt::bo bo_out[NUM_SLOTS];
     std::vector<int8_t> chw_buffer[NUM_SLOTS];
-    int slot_pad_top[NUM_SLOTS] = {0, 0};
-    int slot_pad_left[NUM_SLOTS] = {0, 0};
-    float slot_scale[NUM_SLOTS] = {1.0f, 1.0f};
+    int slot_pad_top[NUM_SLOTS] = {0, 0, 0, 0};
+    int slot_pad_left[NUM_SLOTS] = {0, 0, 0, 0};
+    float slot_scale[NUM_SLOTS] = {1.0f, 1.0f, 1.0f, 1.0f};
     std::chrono::high_resolution_clock::time_point slot_t_start[NUM_SLOTS];
     std::chrono::high_resolution_clock::time_point slot_t_prep[NUM_SLOTS];
 
@@ -195,42 +195,60 @@ struct ignite_engine {
     ignite_timings_t last_timings = { 0.0, 0.0, 0.0, 0.0 };
 
     // Threading and async queue coordination
-    struct WorkItem {
+    struct NpuWorkItem {
         uint64_t ticket;
         int slot;
+    };
+
+    struct PostWorkItem {
+        uint64_t ticket;
+        int slot;
+        std::chrono::high_resolution_clock::time_point t_npu_start;
+        std::chrono::high_resolution_clock::time_point t_npu_done;
     };
 
     std::atomic<uint64_t> next_ticket{1};
     std::atomic<uint64_t> last_completed_ticket{0};
     std::atomic<bool> worker_stop{false};
 
-    std::mutex queue_mutex;
-    std::condition_variable queue_cv;
-    std::queue<WorkItem> work_queue;
+    std::mutex npu_queue_mutex;
+    std::condition_variable npu_queue_cv;
+    std::queue<NpuWorkItem> npu_work_queue;
+
+    std::mutex post_queue_mutex;
+    std::condition_variable post_queue_cv;
+    std::queue<PostWorkItem> post_work_queue;
 
     std::mutex result_mutex;
     std::condition_variable result_cv;
     std::condition_variable slot_cv;
 
-    std::thread worker_thread;
+    std::thread npu_thread;
+    std::thread post_thread;
 
     void start_worker() {
-        worker_stop.store(false);
-        worker_thread = std::thread(&ignite_engine::worker_loop, this);
+        worker_stop.store(false, std::memory_order_relaxed);
+        npu_thread = std::thread(&ignite_engine::npu_worker_loop, this);
+        post_thread = std::thread(&ignite_engine::post_worker_loop, this);
     }
 
     void stop_worker() {
-        worker_stop.store(true);
-        queue_cv.notify_all();
+        worker_stop.store(true, std::memory_order_relaxed);
+        npu_queue_cv.notify_all();
+        post_queue_cv.notify_all();
         result_cv.notify_all();
         slot_cv.notify_all();
-        if (worker_thread.joinable()) {
-            worker_thread.join();
+        if (npu_thread.joinable()) {
+            npu_thread.join();
+        }
+        if (post_thread.joinable()) {
+            post_thread.join();
         }
     }
 
     void decode_detections_for_slot(int slot, std::vector<Candidate>& out_dets);
-    void worker_loop();
+    void npu_worker_loop();
+    void post_worker_loop();
 
     ~ignite_engine() {
         stop_worker();
@@ -339,17 +357,22 @@ void ignite_engine::decode_detections_for_slot(int slot, std::vector<Candidate>&
 
         float* max_logits = scratch_max_logits.data();
         int* best_cls_arr = scratch_best_cls.data();
-        std::memcpy(max_logits, cls_ptr, N * sizeof(float));
-        std::memset(best_cls_arr, 0, N * sizeof(int));
 
-        for (int c = 1; c < 80; ++c) {
-            const float* c_row = cls_ptr + c * N;
-            for (int i = 0; i < N; ++i) {
-                if (c_row[i] > max_logits[i]) {
-                    max_logits[i] = c_row[i];
-                    best_cls_arr[i] = c;
+#ifdef _OPENMP
+        #pragma omp parallel for schedule(static)
+#endif
+        for (int i = 0; i < N; ++i) {
+            float max_val = cls_ptr[i];
+            int best_c = 0;
+            for (int c = 1; c < 80; ++c) {
+                float v = cls_ptr[c * N + i];
+                if (v > max_val) {
+                    max_val = v;
+                    best_c = c;
                 }
             }
+            max_logits[i] = max_val;
+            best_cls_arr[i] = best_c;
         }
 
         for (int i = 0; i < N; ++i) {
@@ -442,17 +465,17 @@ void ignite_engine::decode_detections_for_slot(int slot, std::vector<Candidate>&
     }
 }
 
-void ignite_engine::worker_loop() {
-    while (!worker_stop.load()) {
-        WorkItem item;
+void ignite_engine::npu_worker_loop() {
+    while (!worker_stop.load(std::memory_order_relaxed)) {
+        NpuWorkItem item;
         {
-            std::unique_lock<std::mutex> lock(queue_mutex);
-            queue_cv.wait(lock, [this]() {
-                return !work_queue.empty() || worker_stop.load();
+            std::unique_lock<std::mutex> lock(npu_queue_mutex);
+            npu_queue_cv.wait(lock, [this]() {
+                return !npu_work_queue.empty() || worker_stop.load(std::memory_order_relaxed);
             });
-            if (worker_stop.load() && work_queue.empty()) break;
-            item = work_queue.front();
-            work_queue.pop();
+            if (worker_stop.load(std::memory_order_relaxed) && npu_work_queue.empty()) break;
+            item = npu_work_queue.front();
+            npu_work_queue.pop();
         }
 
         int slot = item.slot;
@@ -460,7 +483,7 @@ void ignite_engine::worker_loop() {
 
         auto t_npu_start = std::chrono::high_resolution_clock::now();
 
-        // 1. Physical AIE2 Silicon Execution
+        // 1. Physical AIE2 Silicon Execution (Single-Dispatch Fast Path)
         if (single_dispatch && bo_monolithic && ninstr_monolithic > 0) {
             xrt::run r = (*kernel)(3, bo_monolithic, ninstr_monolithic, bo_in[slot], bo_out[slot]);
             r.wait(2000);
@@ -475,27 +498,52 @@ void ignite_engine::worker_loop() {
         bo_out[slot].sync(XCL_BO_SYNC_BO_FROM_DEVICE);
         auto t_npu_done = std::chrono::high_resolution_clock::now();
 
-        // 2. Pure C++20 DFL Decode + Batched NMS
+        // 2. Enqueue to postprocessing worker for concurrent DFL decode + batched NMS
+        {
+            std::lock_guard<std::mutex> lock(post_queue_mutex);
+            post_work_queue.push({ticket, slot, t_npu_start, t_npu_done});
+        }
+        post_queue_cv.notify_one();
+    }
+}
+
+void ignite_engine::post_worker_loop() {
+    while (!worker_stop.load(std::memory_order_relaxed)) {
+        PostWorkItem item;
+        {
+            std::unique_lock<std::mutex> lock(post_queue_mutex);
+            post_queue_cv.wait(lock, [this]() {
+                return !post_work_queue.empty() || worker_stop.load(std::memory_order_relaxed);
+            });
+            if (worker_stop.load(std::memory_order_relaxed) && post_work_queue.empty()) break;
+            item = post_work_queue.front();
+            post_work_queue.pop();
+        }
+
+        int slot = item.slot;
+        uint64_t ticket = item.ticket;
+
+        // Pure C++20 DFL Decode + Batched NMS
         std::vector<Candidate> dets;
         dets.reserve(64);
         decode_detections_for_slot(slot, dets);
         auto t_post_done = std::chrono::high_resolution_clock::now();
 
-        // 3. Fine-grained latency records
+        // Fine-grained latency records
         ignite_timings_t timings;
         timings.preprocess_ms = std::chrono::duration<double, std::milli>(slot_t_prep[slot] - slot_t_start[slot]).count();
-        timings.npu_exec_ms = std::chrono::duration<double, std::milli>(t_npu_done - t_npu_start).count();
-        timings.postprocess_ms = std::chrono::duration<double, std::milli>(t_post_done - t_npu_done).count();
+        timings.npu_exec_ms = std::chrono::duration<double, std::milli>(item.t_npu_done - item.t_npu_start).count();
+        timings.postprocess_ms = std::chrono::duration<double, std::milli>(t_post_done - item.t_npu_done).count();
         timings.glass_to_glass_ms = std::chrono::duration<double, std::milli>(t_post_done - slot_t_start[slot]).count();
 
-        // 4. Update fixed circular ring buffer & signal completion
+        // Update fixed circular ring buffer & signal completion
         {
             std::lock_guard<std::mutex> lock(result_mutex);
             size_t ring_idx = static_cast<size_t>(ticket % RING_SIZE);
             result_ring[ring_idx].ticket = ticket;
             result_ring[ring_idx].detections = std::move(dets);
             result_ring[ring_idx].timings = timings;
-            last_completed_ticket.store(ticket);
+            last_completed_ticket.store(ticket, std::memory_order_release);
             last_timings = timings;
         }
         result_cv.notify_all();
@@ -792,10 +840,10 @@ int ignite_run_async(
 
     // Enqueue work item for concurrent NPU worker thread
     {
-        std::lock_guard<std::mutex> lock(engine->queue_mutex);
-        engine->work_queue.push({ticket, slot});
+        std::lock_guard<std::mutex> lock(engine->npu_queue_mutex);
+        engine->npu_work_queue.push({ticket, slot});
     }
-    engine->queue_cv.notify_one();
+    engine->npu_queue_cv.notify_one();
 
     *out_ticket = ticket;
     return 0;

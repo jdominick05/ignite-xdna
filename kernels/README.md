@@ -31,7 +31,7 @@ array program) into `~/.npu/cache/<hash>/`; later runs of the same shape hit the
 | Kernel | Op it replaces | Verdict |
 |---|---|---|
 | [aie2/fused_conv_epilogue](aie2/fused_conv_epilogue/README.md) | Standalone Conv + Residual Add + SiLU | Qualified below 8% compute overhead at Cin=512, Cout=32, with DMA overlap; Cin=32 misses. [Evidence and scope](../docs/BENCHMARKS.md#fused-conv-residual-silu-2026-09-13-desktop-2) |
-| [aie2/dfl](aie2/dfl/dfl_stage.py) | 16-bin DFL softmax, anchor decode and staged boxes/scores egress | Peano compile verified on 16 Phoenix cores with 48 native vector instructions; silicon qualification is blocked before dispatch by XRT context creation (`0xc01e0009`). [Evidence and limits](../docs/BENCHMARKS.md#phoenix-dfl-softmax-and-anchor-decode-2026-09-13-desktop-2) |
+| [aie2/dfl](aie2/dfl/dfl_stage.py) | 16-bin DFL softmax, anchor decode and staged boxes/scores egress | Peano compile verified on 16 Phoenix cores with 48 native vector instructions; restart cleared the initial `0xc01e0009`, but multi-core output transport still times out on silicon. [Evidence and limits](../docs/BENCHMARKS.md#phoenix-dfl-softmax-and-anchor-decode-2026-09-13-desktop-2) |
 | `memory_placement/` | Controlled operand-address intervention in a paired-load loop and a single-core INT8 GEMM | Local placement changes cycle slopes with identical function bytes; [method, limits and logs](../docs/BENCHMARKS.md#local-operand-placement-an-address-intervention) |
 | `bf16_matmul_sweep/` | Nothing — the bf16 GEMM shape sweep | **Wins.** NPU 1.18×–1.78× over CPU bf16 once M/N ≥ 1024 |
 | `int8_matmul_sweep/` | Nothing — the int8 GEMM sweep, with the CPU int8 GEMM baseline | **Loses at the default tile; wins 1.10×–1.83× at M ≥ 512, N ≥ 2048 with `n=64`**, a tile bf16 can't fit |
@@ -65,9 +65,13 @@ The offline float32 oracle check passes four fixtures within 0.411 pixels for bo
 0.000558 for scores. The Peano/aiecc build produces sixteen core ELFs and 48 vector
 instructions in the decoded object. The first silicon qualification attempt completed
 the Phoenix and host-load preflight but failed while creating the XRT hardware context
-with `0xc01e0009`, before any dispatch; there is therefore no silicon parity or latency
-result yet. The full evidence is in
+with `0xc01e0009`; a Windows restart cleared that context failure. Follow-up aggregate
+packet probes now reach dispatch but time out with four producers, including a no-egress
+variant, while a one-core aggregate control completes. There is therefore no full-design
+silicon parity or latency result yet. The full evidence is in
 [`dfl_decode_phoenix_context_block_20260913T0842Z.log`](../results/aie/dfl_decode_phoenix_context_block_20260913T0842Z.log).
+The transport checkpoint is in
+[`dfl_decode_phoenix_transport_checkpoint_20260913T0950Z.log`](../results/aie/dfl_decode_phoenix_transport_checkpoint_20260913T0950Z.log).
 
 Each kernel's own findings, warnings and retractions follow. They are prose rather than
 table cells because several of them are corrections to what an earlier version of this
