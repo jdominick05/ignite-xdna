@@ -1563,3 +1563,26 @@ order or selector. A one-core trace cannot prove full-array stall behavior;
 function identity and full-array numerical checks are recorded separately.
 Preserve the shape and cycle-bracket scope when citing the
 [measurement](BENCHMARKS.md#fused-conv-residual-silu-2026-09-13-desktop-2).
+
+### Low-level audit of the transaction emitter, AGU descriptors and native runtime (2026-09-13)
+
+[`docs/LOW_LEVEL_AUDIT.md`](LOW_LEVEL_AUDIT.md) is the record. Two decisions follow from it:
+
+- **`ignite-compile` refuses a flattened schedule whose parameter windows leave core data
+  memory.** Layer *k* lives at `0x400 + k * 0x1000`; sixteen windows fit the 64 KB, and the
+  shipped 63-layer `init_monolithic.bin` wrote 2,256 parameter blocks onto memory-module,
+  program-memory and core-module addresses. On silicon those writes did not change the
+  layer-0 egress (measured, same-input comparison against a 7-layer init), but an emitter
+  that programs weights into register space is not to be kept working by that accident.
+  Stage parameters per stage, or give the core program a window selector, before the
+  container is rebuilt.
+- **Emitted transaction streams are validated before they are written**, and the MemTile
+  lock initialisation that a masked-address comparison had left dead is emitted again.
+  A recompiled stage exec carries 8 more lock WRITEs than the shipped one; re-measure the
+  end-to-end numbers on a recompiled container before quoting them.
+
+Findings that are documented and deliberately not changed there: the chained frame has one
+completion wait at its very end (intermediate TCTs are stripped and lock-value WRITEs do not
+wait), every shipped stage exec is byte-identical to the single-layer template, 8,192 of the
+1,228,800 preprocessed bytes reach the device, and the non-fused native decode reads the
+cached reference heads rather than `bo_out`.

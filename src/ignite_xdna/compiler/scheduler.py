@@ -25,20 +25,23 @@ from ignite_xdna.compiler.lower_onnx_conv import (
     pack_weights_aie2_vector_layout,
     unblock_aie2_egress,
 )
-from ignite_xdna.compiler.memtile_agu import MEMTILE_BYTES
+from ignite_xdna.compiler.memtile_agu import (
+    L2_BANK_0_OFFSET,
+    L2_BANK_1_OFFSET,
+    L2_BANK_BYTES,
+    MEMTILE_BYTES,
+)
 from ignite_xdna.compiler.partitioner import (
     ConvLayerMeta,
     NpuFusedPartition,
     PartitionedGraph,
 )
-from tools.disasm_txn import disassemble_transaction
 
 
-# MemTile L2 Floorplan Geometry
+# MemTile L2 Floorplan Geometry (the two 64 KB activation banks, L2_BANK_0_OFFSET
+# = 0x40000 and L2_BANK_1_OFFSET = 0x60000, are defined in memtile_agu)
 L2_WEIGHTS_OFFSET = 0x00000        # 256 KB reserved for stationary multi-layer filter storage
 L2_FINAL_EGRESS_OFFSET = 0x04000   # Egress staging buffer to Shim DMA BD 4
-L2_BANK_0_OFFSET = 0x40000         # 64 KB L2 Bank 0 (Ping buffer)
-L2_BANK_1_OFFSET = 0x60000         # 64 KB L2 Bank 1 (Pong buffer)
 
 # MemTile Lock IDs
 LOCK_CORE_EGRESS_CREDIT = 2        # Gather credit (initial val = 4)
@@ -46,6 +49,246 @@ LOCK_L2_PING = 4                   # Protects L2_BANK_0 (initial val = 1: write-
 LOCK_L2_PONG = 5                   # Protects L2_BANK_1 (initial val = 0: idle)
 LOCK_STAGE_BARRIER_A = 6           # On-die inter-stage barrier lock A (even stages)
 LOCK_STAGE_BARRIER_B = 7           # On-die inter-stage barrier lock B (odd stages)
+
+# Tile address map (AIE2 / Phoenix). A register offset is the low 20 bits of a
+# transaction address: (col << 25) | (row << 20) | offset. The single-layer
+# template corroborates the map: it resets and enables cores through
+# Core_Control at 0x32000, programs core BDs at 0x1D000, core locks at
+# 0x1F000, MemTile BDs at 0xA0000, MemTile locks at 0xC0000 and shim BDs at
+# 0x1D000.
+CORE_DATA_MEMORY_BYTES = 0x10000     # core-tile data memory, 0x00000..0x0FFFF
+CORE_BD_BASE = 0x1D000               # core-tile DMA buffer descriptors, 16 x 0x20
+CORE_BD_END = 0x1D200
+CORE_LOCK_BASE = 0x1F000             # core-tile locks, 16 x 0x10
+CORE_LOCK_END = 0x1F100
+CORE_PROGRAM_MEMORY_BASE = 0x20000   # core-tile program memory, 16 KB
+CORE_PROGRAM_MEMORY_END = 0x24000
+CORE_MODULE_BASE = 0x30000           # core-module registers; Core_Control is 0x32000
+CORE_CONTROL_REG = 0x32000
+MEMTILE_BD_BASE = 0xA0000            # MemTile buffer descriptors, 48 x 0x20
+MEMTILE_BD_END = 0xA0600
+MEMTILE_LOCK_BASE = 0xC0000          # MemTile locks, 64 x 0x10
+MEMTILE_LOCK_STRIDE = 0x10
+SHIM_BD_BASE = 0x1D000               # shim DMA buffer descriptors, 16 x 0x20
+SHIM_BD_END = 0x1D200
+MAX_COLUMN = 4                       # Phoenix has five physical columns (0..4)
+MAX_ROW = 5                          # shim, MemTile, four core rows
+
+# Core-local parameter windows programmed by the init stream: one 0x1000 window
+# per resident layer holding the single-layer template's shift-cut, bias and
+# weights. 0x400 + 2304 bytes of weights ends at 0xD00, so 16 windows fit the
+# 64 KB data memory and window 16 already starts outside it.
+L1_PARAM_STRIDE = 0x1000
+L1_SHIFT_CUT_OFFSET = 0x0037C
+L1_BIAS_OFFSET = 0x00380
+L1_WEIGHTS_OFFSET = 0x00400
+TEMPLATE_WEIGHT_BYTES = 576 * 4
+TEMPLATE_BIAS_BYTES = 32 * 4
+
+# XDNA1 transaction stream framing (tools/disasm_txn.py decodes the same format).
+TXN_HEADER_BYTES = 16
+OP_WRITE = 0x00
+OP_BLOCKWRITE = 0x01
+OP_MASKWRITE = 0x03
+OP_TCT = 0x80
+OP_DDR_PATCH = 0x81
+OP_NAMES = {OP_WRITE: "WRITE", OP_BLOCKWRITE: "BLOCKWRITE", OP_MASKWRITE: "MASKWRITE",
+            OP_TCT: "TCT", OP_DDR_PATCH: "DDR_PATCH"}
+TXN_PAD_BYTES = 64
+
+
+def max_resident_l1_layers(weight_bytes: int = TEMPLATE_WEIGHT_BYTES) -> int:
+    """Parameter windows that fit core data memory at the template's stride."""
+    return (CORE_DATA_MEMORY_BYTES - L1_WEIGHTS_OFFSET - weight_bytes) // L1_PARAM_STRIDE + 1
+
+
+def memtile_lock_reg(lock_id: int) -> int:
+    """20-bit register offset of a MemTile lock value register."""
+    if not 0 <= lock_id < 64:
+        raise ValueError(f"MemTile lock id must be in [0, 64), got {lock_id}")
+    return MEMTILE_LOCK_BASE + MEMTILE_LOCK_STRIDE * lock_id
+
+
+def memtile_lock_address(col: int, lock_id: int) -> int:
+    """Absolute transaction address of a MemTile lock value register."""
+    return (col << 25) | (1 << 20) | memtile_lock_reg(lock_id)
+
+
+def memtile_lock_write(col: int, lock_id: int, value: int) -> bytes:
+    """A 24-byte WRITE op that sets one MemTile lock value on column ``col``.
+
+    This sets the value from the instruction stream; the format has no acquire
+    opcode, so it never waits for a DMA that still holds the lock.
+    """
+    col_row = (col & 0xFF) | (1 << 8)
+    return struct.pack("<6I", OP_WRITE, col_row, memtile_lock_address(col, lock_id), 0, value, 24)
+
+
+def _need(data: bytes, p: int, n: int, index: int) -> None:
+    if p + n > len(data):
+        raise ValueError(f"op {index} at offset {p} needs {n} bytes but only {len(data) - p} remain")
+
+
+def parse_transaction_stream(data: bytes) -> List[Dict[str, Any]]:
+    """Decode an XDNA1 transaction stream into op dicts.
+
+    Field names match ``tools/disasm_txn.py`` so both decoders agree on the
+    template walk. This decoder is bounded by the header's op count, so a
+    zero tail (the 64-byte padding of the chained stream) is never misread as
+    a WRITE, and a truncated or unknown op raises ``ValueError``.
+    """
+    data = bytes(data)
+    if len(data) < TXN_HEADER_BYTES:
+        raise ValueError(f"transaction stream too short: {len(data)} bytes")
+    _major, _minor, num_ops, _size = struct.unpack("<4I", data[:TXN_HEADER_BYTES])
+    ops: List[Dict[str, Any]] = []
+    p = TXN_HEADER_BYTES
+    for index in range(num_ops):
+        _need(data, p, 8, index)
+        op_code, col_row = struct.unpack("<2I", data[p:p + 8])
+        col = col_row & 0xFF
+        row = (col_row >> 8) & 0xFF
+        if op_code == OP_WRITE:
+            _need(data, p, 24, index)
+            _o, cr, addr, vl, vh, sz = struct.unpack("<6I", data[p:p + 24])
+            size = sz if sz > 0 else 24
+            ops.append({"op": "WRITE", "opcode": OP_WRITE, "col": col, "row": row, "col_row": cr,
+                        "addr": addr, "val": vh, "val_low": vl, "size": size, "offset": p})
+        elif op_code == OP_MASKWRITE:
+            _need(data, p, 28, index)
+            _o, cr, addr, _pad, mask, val, sz = struct.unpack("<7I", data[p:p + 28])
+            size = sz if sz > 0 else 28
+            ops.append({"op": "MASKWRITE", "opcode": OP_MASKWRITE, "col": col, "row": row,
+                        "col_row": cr, "addr": addr, "val": val, "mask": mask, "size": size,
+                        "offset": p})
+        elif op_code == OP_BLOCKWRITE:
+            _need(data, p, 16, index)
+            _o, cr, addr, sz = struct.unpack("<4I", data[p:p + 16])
+            if sz < 16 or (sz - 16) % 4:
+                raise ValueError(f"BLOCKWRITE op {index} at offset {p} has an invalid size {sz}")
+            _need(data, p, sz, index)
+            words = struct.unpack(f"<{(sz - 16) // 4}I", data[p + 16:p + sz])
+            size = sz
+            ops.append({"op": "BLOCKWRITE", "opcode": OP_BLOCKWRITE, "col": col, "row": row,
+                        "col_row": cr, "addr": addr, "size": size, "words": words, "offset": p})
+        elif op_code == OP_DDR_PATCH:
+            _need(data, p, 48, index)
+            w = struct.unpack("<12I", data[p:p + 48])
+            size = 48
+            ops.append({"op": "DDR_PATCH", "opcode": OP_DDR_PATCH, "size": size, "addr": w[6],
+                        "arg_idx": w[8], "arg_offset": w[10], "offset": p})
+        elif op_code == OP_TCT:
+            _need(data, p, 16, index)
+            size = 16
+            ops.append({"op": "TCT", "opcode": OP_TCT, "size": size,
+                        "word": struct.unpack("<I", data[p + 12:p + 16])[0], "offset": p})
+        else:
+            raise ValueError(f"unknown opcode {op_code:#x} at offset {p} (op {index})")
+        if size % 4:
+            raise ValueError(f"op {index} at offset {p} has size {size}, not a multiple of 4")
+        p += size
+    return ops
+
+
+def _core_window(reg: int) -> str:
+    """Classify a core-tile register offset; "memory_module" is 0x10000..0x1FFFF
+    (DMA, locks and other memory-module registers), "unmapped" is the span
+    between program memory and the core module (0x24000..0x2FFFF)."""
+    if reg < CORE_DATA_MEMORY_BYTES:
+        return "data"
+    if CORE_BD_BASE <= reg < CORE_BD_END:
+        return "bd"
+    if CORE_LOCK_BASE <= reg < CORE_LOCK_END:
+        return "lock"
+    if CORE_PROGRAM_MEMORY_BASE <= reg < CORE_PROGRAM_MEMORY_END:
+        return "program"
+    if reg >= CORE_MODULE_BASE:
+        return "core_module"
+    if reg >= CORE_PROGRAM_MEMORY_END:
+        return "unmapped"
+    return "memory_module"
+
+
+def _bulk_target_ok(row: int, reg: int, payload_end: int) -> bool:
+    """Whether a BLOCKWRITE payload [reg, payload_end) lands on memory or BD registers."""
+    if row == 0:
+        return SHIM_BD_BASE <= reg and payload_end <= SHIM_BD_END
+    if row == 1:
+        return payload_end <= MEMTILE_BYTES or (MEMTILE_BD_BASE <= reg and payload_end <= MEMTILE_BD_END)
+    window = _core_window(reg)
+    if window == "data":
+        return payload_end <= CORE_DATA_MEMORY_BYTES
+    if window == "bd":
+        return payload_end <= CORE_BD_END
+    return False
+
+
+def validate_transaction_stream(data: bytes, *, name: str = "transaction",
+                                require_tct: bool = True,
+                                require_terminal_tct: bool = False) -> Dict[str, Any]:
+    """Check stream framing and address windows; raise ValueError on any defect.
+
+    Checks that the header size equals the buffer length, every op is 4-byte
+    aligned and inside the buffer, opcodes are known, any tail after the last
+    op is an all-zero pad shorter than 64 bytes, at least one TCT completion
+    wait is present when ``require_tct`` (the last op must be one when
+    ``require_terminal_tct``; IRON streams may legitimately trail register
+    writes after their final wait), tiles are inside Phoenix's five columns
+    and six rows, DDR patches target shim BD registers, and bulk BLOCKWRITE
+    payloads land on data memory or BD registers only (never on program
+    memory, locks or core-module registers). Returns a summary dict.
+    """
+    data = bytes(data)
+    if len(data) < TXN_HEADER_BYTES:
+        raise ValueError(f"{name}: too short ({len(data)} bytes)")
+    major, minor, num_ops, size_bytes = struct.unpack("<4I", data[:TXN_HEADER_BYTES])
+    if size_bytes != len(data):
+        raise ValueError(f"{name}: header size {size_bytes} != buffer length {len(data)}")
+    if num_ops == 0:
+        raise ValueError(f"{name}: header declares zero ops")
+    ops = parse_transaction_stream(data)
+    end = ops[-1]["offset"] + ops[-1]["size"]
+    tail = data[end:]
+    if tail and (len(tail) >= TXN_PAD_BYTES or any(tail)):
+        raise ValueError(f"{name}: {len(tail)} trailing bytes after the last op are not a zero pad")
+    violations: List[str] = []
+    counts: Dict[str, int] = {}
+    tct_count = 0
+    bulk_bytes = 0
+    for i, o in enumerate(ops):
+        counts[o["op"]] = counts.get(o["op"], 0) + 1
+        if o["op"] == "TCT":
+            tct_count += 1
+            continue
+        addr = o["addr"]
+        col, row, reg = (addr >> 25) & 0x7F, (addr >> 20) & 0x1F, addr & 0xFFFFF
+        if o["op"] == "DDR_PATCH":
+            if row != 0 or col > MAX_COLUMN or not SHIM_BD_BASE <= reg < SHIM_BD_END:
+                violations.append(f"op {i}: DDR_PATCH targets {addr:#x}, not a shim BD register")
+            continue
+        if col > MAX_COLUMN or row > MAX_ROW:
+            violations.append(f"op {i}: {o['op']} addresses tile ({col},{row}) outside the array")
+            continue
+        if o["op"] == "BLOCKWRITE":
+            payload = o["size"] - 16
+            bulk_bytes += payload
+            if not _bulk_target_ok(row, reg, reg + payload):
+                violations.append(
+                    f"op {i}: BLOCKWRITE of {payload} bytes to tile ({col},{row}) offset {reg:#x} "
+                    f"lands outside data memory / BD registers")
+        elif row >= 2 and _core_window(reg) == "program":
+            violations.append(f"op {i}: {o['op']} to core program memory at ({col},{row}) offset {reg:#x}")
+    if require_tct and tct_count == 0:
+        violations.append("stream has no TCT completion wait")
+    elif require_terminal_tct and ops[-1]["op"] != "TCT":
+        violations.append("stream does not end with a TCT completion wait")
+    if violations:
+        shown = "\n  ".join(violations[:8])
+        more = f"\n  ... {len(violations) - 8} more" if len(violations) > 8 else ""
+        raise ValueError(f"{name}: {len(violations)} invalid op(s):\n  {shown}{more}")
+    return {"name": name, "num_ops": num_ops, "size_bytes": size_bytes, "op_counts": counts,
+            "tct_count": tct_count, "pad_bytes": len(tail),
+            "blockwrite_payload_bytes": bulk_bytes, "version": (major, minor)}
 
 
 @dataclass
@@ -160,7 +403,7 @@ class MemTileMultiPassScheduler:
             is_final = (k == n - 1)
             layer_meta = layers[k]
 
-            param_offset = k * 0x01000
+            param_offset = k * L1_PARAM_STRIDE
 
             if is_initial:
                 ing_src = "HOST_DDR"
@@ -299,6 +542,45 @@ class MemTileMultiPassScheduler:
         )
 
 
+def validate_l1_parameter_layout(
+    schedule: SchedulePlan,
+    *,
+    context: str = "",
+    data_memory_bytes: int = CORE_DATA_MEMORY_BYTES,
+) -> int:
+    """Raise unless every pass's parameter window stays inside core data memory.
+
+    A window is [param_l1_offset + 0x37C, param_l1_offset + 0x400 + weight
+    bytes) at the template's 0x1000 stride. Windows must be disjoint and end
+    at or below ``data_memory_bytes``; anything beyond lands on memory-module
+    registers, program memory or core-module registers. Returns the highest
+    byte any window writes.
+    """
+    windows = []
+    for p in schedule.passes:
+        layer = p.layer_meta
+        if layer is None:
+            continue
+        weights = getattr(layer, "weights_packed", None)
+        weight_bytes = np.asarray(weights).nbytes if weights is not None else TEMPLATE_WEIGHT_BYTES
+        start = p.param_l1_offset + L1_SHIFT_CUT_OFFSET
+        end = p.param_l1_offset + L1_WEIGHTS_OFFSET + weight_bytes
+        windows.append((start, end, p.pass_index))
+    windows.sort()
+    top = 0
+    for i, (start, end, k) in enumerate(windows):
+        if end > data_memory_bytes:
+            raise ValueError(
+                f"{len(windows)} resident parameter sets do not fit core data memory: set {k} "
+                f"spans [{start:#x}, {end:#x}) but data memory ends at {data_memory_bytes:#x}; "
+                f"at most {max_resident_l1_layers()} sets fit at the {L1_PARAM_STRIDE:#x} stride. "
+                f"{context}".rstrip())
+        if i and start < windows[i - 1][1]:
+            raise ValueError(f"parameter sets {windows[i - 1][2]} and {k} overlap in core data memory")
+        top = max(top, end)
+    return top
+
+
 def emit_multi_layer_transaction_bundle(
     schedule: SchedulePlan,
     base_txn_path: str,
@@ -310,6 +592,10 @@ def emit_multi_layer_transaction_bundle(
     Emits decoupled init and exec transaction binaries for an N-layer pipeline:
     - out_init_path: Stages all N parameter sets into distinct L1 SRAM offsets and initializes MemTile locks.
     - out_exec_path: Chains BD sequences and channel queue pushes with DDR patches strictly on initial/final buffers.
+
+    Refuses a schedule whose parameter windows leave core data memory
+    (``validate_l1_parameter_layout``) and validates both emitted streams
+    (``validate_transaction_stream``) before writing them.
     """
     if not os.path.exists(base_txn_path):
         raise FileNotFoundError(f"Base transaction binary not found: {base_txn_path}")
@@ -317,12 +603,13 @@ def emit_multi_layer_transaction_bundle(
     with open(base_txn_path, "rb") as f:
         base_bytes = f.read()
 
-    ops = disassemble_transaction(base_bytes)
+    ops = parse_transaction_stream(base_bytes)
 
     if cores is None:
         cores = [(c, r) for c in range(4) for r in range(2, 6)]
 
     n_layers = schedule.num_layers
+    validate_l1_parameter_layout(schedule)
 
     def make_ddr_patch(addr, arg_idx, arg_offset=0):
         return struct.pack("<12I", 0x81, 48, 0, 0, 0, 0, addr, 0, arg_idx, 0, arg_offset, 0)
@@ -353,26 +640,28 @@ def emit_multi_layer_transaction_bundle(
             col_row = (col & 0xFF) | ((row & 0xFF) << 8)
 
             # Shift Cut at 0x0037C + base_param_reg
-            s_addr = (col << 25) | (row << 20) | (0x0037C + base_param_reg)
+            s_addr = (col << 25) | (row << 20) | (L1_SHIFT_CUT_OFFSET + base_param_reg)
             s_op = [1, col_row, s_addr, (4 + len(s_words)) * 4] + s_words
             core_inject_bytes.extend(struct.pack(f"<{len(s_op)}I", *s_op))
             num_core_ops += 1
 
             # Bias at 0x00380 + base_param_reg
-            b_addr = (col << 25) | (row << 20) | (0x00380 + base_param_reg)
+            b_addr = (col << 25) | (row << 20) | (L1_BIAS_OFFSET + base_param_reg)
             b_op = [1, col_row, b_addr, (4 + len(b_words)) * 4] + b_words
             core_inject_bytes.extend(struct.pack(f"<{len(b_op)}I", *b_op))
             num_core_ops += 1
 
             # Weights at 0x00400 + base_param_reg
-            w_addr = (col << 25) | (row << 20) | (0x00400 + base_param_reg)
+            w_addr = (col << 25) | (row << 20) | (L1_WEIGHTS_OFFSET + base_param_reg)
             w_op = [1, col_row, w_addr, (4 + len(w_words)) * 4] + w_words
             core_inject_bytes.extend(struct.pack(f"<{len(w_op)}I", *w_op))
             num_core_ops += 1
 
+    # Parameters are injected before the first core enable (Core_Control = 1),
+    # while the cores are still held in reset by the template.
     splice_idx = None
     for i, o in enumerate(ops):
-        if (o.get("addr", 0) & 0xFFFFF) == 0x32000 and o.get("val") == 1:
+        if (o.get("addr", 0) & 0xFFFFF) == CORE_CONTROL_REG and o.get("val") == 1:
             splice_idx = i
             break
     if splice_idx is None:
@@ -391,15 +680,15 @@ def emit_multi_layer_transaction_bundle(
         row = (addr >> 20) & 0x1F
         reg = addr & 0xFFFFF
 
-        # Initialize MemTile Lock 2 (val=4), Lock 4 (val=1), Lock 5 (val=0)
-        if row == 1 and reg == 0x1C0020:
-            col_row = (col & 0xFF) | ((row & 0xFF) << 8)
-            # Lock 2: val = 4 (Credit for 4 cores)
-            init_ops_bytes.append(struct.pack("<6I", 0, col_row, addr, 0, 4, 24))
-            # Lock 4: val = 1 (L2 Ping write-ready for Layer 0)
-            init_ops_bytes.append(struct.pack("<6I", 0, col_row, (col << 25) | (1 << 20) | 0x1C0040, 0, 1, 24))
-            # Lock 5: val = 0 (L2 Pong idle)
-            init_ops_bytes.append(struct.pack("<6I", 0, col_row, (col << 25) | (1 << 20) | 0x1C0050, 0, 0, 24))
+        # Replace the template's MemTile Lock 2 init with Lock 2 (val=4, credit
+        # for 4 cores), Lock 4 (val=1, L2 Ping write-ready) and Lock 5 (val=0,
+        # L2 Pong idle). ``reg`` is the 20-bit offset, so the comparison must
+        # use the 0xC0020 lock register; the former absolute 0x1C0020 (row bit
+        # included) could never match and left this branch dead.
+        if row == 1 and reg == memtile_lock_reg(LOCK_CORE_EGRESS_CREDIT):
+            init_ops_bytes.append(memtile_lock_write(col, LOCK_CORE_EGRESS_CREDIT, 4))
+            init_ops_bytes.append(memtile_lock_write(col, LOCK_L2_PING, 1))
+            init_ops_bytes.append(memtile_lock_write(col, LOCK_L2_PONG, 0))
             num_init_ops += 3
             continue
 
@@ -418,12 +707,13 @@ def emit_multi_layer_transaction_bundle(
         num_init_ops += 1
 
     if ops[-1]["op"] != "TCT":
-        init_ops_bytes.append(struct.pack("<4I", 0x80, 16, 0, 0x00010000))
+        init_ops_bytes.append(struct.pack("<4I", OP_TCT, 16, 0, 0x00010000))
         num_init_ops += 1
 
     payload_init = b"".join(init_ops_bytes)
-    hdr_init = struct.pack("<4I", 0, 0, num_init_ops, 16 + len(payload_init))
+    hdr_init = struct.pack("<4I", 0, 0, num_init_ops, TXN_HEADER_BYTES + len(payload_init))
     full_init_bin = hdr_init + payload_init
+    validate_transaction_stream(full_init_bin, name=os.path.basename(out_init_path), require_terminal_tct=True)
 
     os.makedirs(os.path.dirname(os.path.abspath(out_init_path)), exist_ok=True)
     with open(out_init_path, "wb") as f:
@@ -444,13 +734,17 @@ def emit_multi_layer_transaction_bundle(
 
         # Skip parameter writes (already staged in L1)
         if op_name == "BLOCKWRITE" and row >= 2 and any(
-            reg in (0x0037C + k * 0x1000, 0x00380 + k * 0x1000, 0x00400 + k * 0x1000)
+            reg in (L1_SHIFT_CUT_OFFSET + k * L1_PARAM_STRIDE,
+                    L1_BIAS_OFFSET + k * L1_PARAM_STRIDE,
+                    L1_WEIGHTS_OFFSET + k * L1_PARAM_STRIDE)
             for k in range(n_layers + 1)
         ):
             continue
 
-        # Skip redundant BD zeroing writes
-        if op_name == "WRITE" and row >= 2 and 0x1F000 <= reg <= 0x1F0F0 and o.get("val") == 0:
+        # Skip the template's reset-time zeroing of core-tile locks. Locks with
+        # a non-zero initial value are still re-armed every frame below; a
+        # lock whose initial value is 0 is only reset by the init stream.
+        if op_name == "WRITE" and row >= 2 and CORE_LOCK_BASE <= reg < CORE_LOCK_END and o.get("val") == 0:
             continue
 
         # Skip static switchbox writes (already programmed in init)
@@ -458,11 +752,11 @@ def emit_multi_layer_transaction_bundle(
             continue
 
         # MemTile Lock 2 credit restore (val = 4) + Lock 4/5 initialization
-        if row == 1 and reg == 0x1C0020:
-            col_row = (col & 0xFF) | ((row & 0xFF) << 8)
-            exec_ops_bytes.append(struct.pack("<6I", 0, col_row, addr, 0, 4, 24))
-            exec_ops_bytes.append(struct.pack("<6I", 0, col_row, (col << 25) | (1 << 20) | 0x1C0040, 0, 1, 24))
-            exec_ops_bytes.append(struct.pack("<6I", 0, col_row, (col << 25) | (1 << 20) | 0x1C0050, 0, 0, 24))
+        # (same register match as the init build above).
+        if row == 1 and reg == memtile_lock_reg(LOCK_CORE_EGRESS_CREDIT):
+            exec_ops_bytes.append(memtile_lock_write(col, LOCK_CORE_EGRESS_CREDIT, 4))
+            exec_ops_bytes.append(memtile_lock_write(col, LOCK_L2_PING, 1))
+            exec_ops_bytes.append(memtile_lock_write(col, LOCK_L2_PONG, 0))
             num_exec_ops += 3
             continue
 
@@ -484,9 +778,10 @@ def emit_multi_layer_transaction_bundle(
         num_exec_ops += 1
 
     payload_exec = b"".join(exec_ops_bytes)
-    total_size_exec = 16 + len(payload_exec)
+    total_size_exec = TXN_HEADER_BYTES + len(payload_exec)
     header_exec = struct.pack("<4I", 0, 0, num_exec_ops, total_size_exec)
     full_exec_bin = header_exec + payload_exec
+    validate_transaction_stream(full_exec_bin, name=os.path.basename(out_exec_path), require_terminal_tct=True)
 
     os.makedirs(os.path.dirname(os.path.abspath(out_exec_path)), exist_ok=True)
     with open(out_exec_path, "wb") as f:
@@ -511,12 +806,12 @@ def validate_memtile_buffer_layout(
         if p.ingress_source in ("L2_BANK_0", "L2_BANK_1"):
             if not (0 <= p.ingress_addr < max_memtile_bytes):
                 raise ValueError(f"Ingress address {hex(p.ingress_addr)} exceeds MemTile capacity {max_memtile_bytes}")
-            if p.ingress_addr + 0x10000 > max_memtile_bytes:
+            if p.ingress_addr + L2_BANK_BYTES > max_memtile_bytes:
                 raise ValueError(f"Ingress buffer range at {hex(p.ingress_addr)} exceeds MemTile capacity")
         if p.egress_dest in ("L2_BANK_0", "L2_BANK_1"):
             if not (0 <= p.egress_addr < max_memtile_bytes):
                 raise ValueError(f"Egress address {hex(p.egress_addr)} exceeds MemTile capacity {max_memtile_bytes}")
-            if p.egress_addr + 0x10000 > max_memtile_bytes:
+            if p.egress_addr + L2_BANK_BYTES > max_memtile_bytes:
                 raise ValueError(f"Egress buffer range at {hex(p.egress_addr)} exceeds MemTile capacity")
         if p.egress_dest == "HOST_DDR" and p.egress_addr == L2_FINAL_EGRESS_OFFSET:
             if not (0 <= p.egress_addr + 0x4000 <= max_memtile_bytes):
@@ -582,85 +877,78 @@ def chain_stage_transaction_streams(
     if stage_names is None:
         stage_names = [f"Stage_{i}" for i in range(n_stages)]
 
-    def build_barrier_ops(stage_idx: int, bank_out: int) -> Tuple[bytes, int]:
+    # Both builders emit plain lock-value WRITEs (see memtile_lock_write): they
+    # set values from the instruction stream and do not wait for the previous
+    # stage's DMAs. Stripping the intermediate TCTs below removes the only
+    # completion wait between stages; the terminal TCT is the one wait left.
+    def build_barrier_ops(stage_idx: int) -> Tuple[bytes, int]:
+        barrier = LOCK_STAGE_BARRIER_A if stage_idx % 2 == 0 else LOCK_STAGE_BARRIER_B
         ops_bytes = []
-        num_ops = 0
-        barrier_reg = 0x1C0060 if stage_idx % 2 == 0 else 0x1C0070
         for c in range(4):
-            col_row = (c & 0xFF) | (1 << 8)
             # MemTile Lock 2 gather credit restore (val = 4)
-            addr_l2 = (c << 25) | (1 << 20) | 0x1C0020
-            ops_bytes.append(struct.pack("<6I", 0, col_row, addr_l2, 0, 4, 24))
-            # On-die stage barrier lock signal (val = 1)
-            addr_bar = (c << 25) | (1 << 20) | barrier_reg
-            ops_bytes.append(struct.pack("<6I", 0, col_row, addr_bar, 0, 1, 24))
-            # MemTile L2 Bank handoff: restore both Bank 0 (0x40000) and Bank 1 (0x60000) ready state
-            addr_p0 = (c << 25) | (1 << 20) | 0x1C0040
-            addr_p1 = (c << 25) | (1 << 20) | 0x1C0050
-            ops_bytes.append(struct.pack("<6I", 0, col_row, addr_p0, 0, 1, 24))
-            ops_bytes.append(struct.pack("<6I", 0, col_row, addr_p1, 0, 1, 24))
-            num_ops += 4
-        return b"".join(ops_bytes), num_ops
+            ops_bytes.append(memtile_lock_write(c, LOCK_CORE_EGRESS_CREDIT, 4))
+            # Stage barrier lock signal (val = 1)
+            ops_bytes.append(memtile_lock_write(c, barrier, 1))
+            # MemTile L2 Bank handoff: mark both Bank 0 and Bank 1 ready
+            ops_bytes.append(memtile_lock_write(c, LOCK_L2_PING, 1))
+            ops_bytes.append(memtile_lock_write(c, LOCK_L2_PONG, 1))
+        return b"".join(ops_bytes), len(ops_bytes)
 
     def build_frame_prologue_ops() -> Tuple[bytes, int]:
         ops_bytes = []
-        num_ops = 0
         for c in range(4):
-            col_row = (c & 0xFF) | (1 << 8)
             # MemTile Lock 2 gather credit restore (val = 4)
-            addr_l2 = (c << 25) | (1 << 20) | 0x1C0020
-            ops_bytes.append(struct.pack("<6I", 0, col_row, addr_l2, 0, 4, 24))
+            ops_bytes.append(memtile_lock_write(c, LOCK_CORE_EGRESS_CREDIT, 4))
             # Clear stage barriers (Locks 6 and 7)
-            addr_bar_a = (c << 25) | (1 << 20) | 0x1C0060
-            addr_bar_b = (c << 25) | (1 << 20) | 0x1C0070
-            ops_bytes.append(struct.pack("<6I", 0, col_row, addr_bar_a, 0, 0, 24))
-            ops_bytes.append(struct.pack("<6I", 0, col_row, addr_bar_b, 0, 0, 24))
+            ops_bytes.append(memtile_lock_write(c, LOCK_STAGE_BARRIER_A, 0))
+            ops_bytes.append(memtile_lock_write(c, LOCK_STAGE_BARRIER_B, 0))
             # Set Ping Bank 0 and Pong Bank 1 ready (val = 1)
-            addr_p0 = (c << 25) | (1 << 20) | 0x1C0040
-            addr_p1 = (c << 25) | (1 << 20) | 0x1C0050
-            ops_bytes.append(struct.pack("<6I", 0, col_row, addr_p0, 0, 1, 24))
-            ops_bytes.append(struct.pack("<6I", 0, col_row, addr_p1, 0, 1, 24))
-            num_ops += 5
-        return b"".join(ops_bytes), num_ops
+            ops_bytes.append(memtile_lock_write(c, LOCK_L2_PING, 1))
+            ops_bytes.append(memtile_lock_write(c, LOCK_L2_PONG, 1))
+        return b"".join(ops_bytes), len(ops_bytes)
 
     prologue_bytes, prologue_ops = build_frame_prologue_ops()
     chained_ops_bytes = [prologue_bytes]
     total_ops_count = prologue_ops
 
     for s_idx, (s_name, s_b) in enumerate(zip(stage_names, raw_txns)):
-        if len(s_b) < 16:
+        if len(s_b) < TXN_HEADER_BYTES:
             raise ValueError(f"Transaction data for stage {s_name} too short ({len(s_b)} B)")
 
-        ops_data = s_b[16:]
+        stage_ops = parse_transaction_stream(s_b)
+        declared_ops = struct.unpack("<I", s_b[8:12])[0]
+        if len(stage_ops) != declared_ops:
+            raise ValueError(f"stage {s_name}: header declares {declared_ops} ops, decoded {len(stage_ops)}")
         is_last = (s_idx == n_stages - 1)
-
-        has_tct = len(ops_data) >= 16 and ops_data[-16:-12] == struct.pack("<I", 0x80)
+        ends_with_tct = bool(stage_ops) and stage_ops[-1]["op"] == "TCT"
 
         if is_last:
-            stage_num_ops = struct.unpack("<I", s_b[8:12])[0]
-            chained_ops_bytes.append(ops_data)
-            total_ops_count += stage_num_ops
+            chained_ops_bytes.append(s_b[TXN_HEADER_BYTES:])
+            total_ops_count += declared_ops
         else:
-            if has_tct:
-                stage_num_ops = struct.unpack("<I", s_b[8:12])[0] - 1
-                chained_ops_bytes.append(ops_data[:-16])
+            if ends_with_tct:
+                # Drop this stage's terminal completion wait; only the final stage keeps one.
+                chained_ops_bytes.append(s_b[TXN_HEADER_BYTES:stage_ops[-1]["offset"]])
+                total_ops_count += declared_ops - 1
             else:
-                stage_num_ops = struct.unpack("<I", s_b[8:12])[0]
-                chained_ops_bytes.append(ops_data)
-            total_ops_count += stage_num_ops
+                chained_ops_bytes.append(s_b[TXN_HEADER_BYTES:])
+                total_ops_count += declared_ops
 
-            # Insert inter-stage hardware barrier locks
-            bank_out = s_idx % 2
-            bar_bytes, bar_ops = build_barrier_ops(s_idx, bank_out)
+            # Insert inter-stage lock-value writes
+            bar_bytes, bar_ops = build_barrier_ops(s_idx)
             chained_ops_bytes.append(bar_bytes)
             total_ops_count += bar_ops
 
     full_payload = b"".join(chained_ops_bytes)
-    total_size = 16 + len(full_payload)
-    rem = total_size % 64
-    pad = b"\x00" * (64 - rem) if rem != 0 else b""
+    total_size = TXN_HEADER_BYTES + len(full_payload)
+    rem = total_size % TXN_PAD_BYTES
+    # The zero pad sits inside the declared size; validate_transaction_stream
+    # accepts it because the op count bounds the decode.
+    pad = b"\x00" * (TXN_PAD_BYTES - rem) if rem != 0 else b""
     header = struct.pack("<4I", 0, 0, total_ops_count, total_size + len(pad))
-    return header + full_payload + pad
+    stream = header + full_payload + pad
+    validate_transaction_stream(stream, name="chained exec stream")
+    return stream
 
 
 def emit_unified_monolithic_transaction_bundle(
@@ -684,8 +972,17 @@ def emit_unified_monolithic_transaction_bundle(
     else:
         raise TypeError(f"Unsupported schedule type for monolithic unification: {type(schedule)}")
 
-    # 1. Synthesize unified init.bin containing all stationary parameters
+    # 1. Synthesize unified init.bin containing all stationary parameters.
+    # Flattening sums every stage's layers into ONE resident parameter set per
+    # core, so the layout check names the stages when it refuses.
     sched_plan = multi_plan.to_schedule_plan()
+    stage_summary = ", ".join(f"{name}={stage.num_layers}" for name, stage in multi_plan.stages.items())
+    validate_l1_parameter_layout(
+        sched_plan,
+        context=(f"({len(multi_plan.stages)} stages flattened into one resident set by "
+                 f"to_schedule_plan(): {stage_summary}; parameters must be staged per "
+                 f"stage instead)"),
+    )
     emit_multi_layer_transaction_bundle(
         schedule=sched_plan,
         base_txn_path=base_txn_path,
@@ -923,12 +1220,7 @@ def execute_multi_layer_on_silicon(
     bo_out = None
     bo_init = None
     bo_exec = None
-    try:
-        harness.kernel = None
-        harness.context = None
-        harness.dev = None
-    except Exception:
-        pass
+    harness.close()
 
     return {
         "num_layers": schedule.num_layers,
