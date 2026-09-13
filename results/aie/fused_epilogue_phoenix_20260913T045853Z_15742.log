@@ -1,0 +1,422 @@
+RESEARCH_PLATFORM {"machine": "Desktop 2", "cpu": "AMD Ryzen 7 8700G w/ Radeon 780M Graphics", "os": "Windows-11-10.0.26200-SP0", "ram_bytes": 33381138432, "source_sha256": {"tools/research_process.py": "b527a07958df0ed575df38dfe88da348c972ee79eb459974555cf2655f94d37f", "tools/quant_calib_alphabet.py": "2dc0b2878c564853f340880209a425dfcf63b8536b2b8e9fd32344daade58d37", "tools/xint8_arithmetic_probe.py": "6aa3df08b9870c3c2264b868459d7ffbac3070dddc1349d7c6f3f480075f7041", "scripts/research-lowlevel.sh": "3455ad7933697936487712665505c216891865c6deada647302785f6e37020bd", "scripts/research-iron.sh": "128f8b5ee21f2209f8dda004cefc39fbf87a5170ca61c5cf18dc97a6ea6669c8", "kernels/memory_placement/probe.py": "e8d990169ad6091fa1b53852e9f61eff495b5def72d35165a5c5cf1759e38898", "kernels/memory_placement/memory_kernels.cc": "182e7af7071a1e851afb4a7ca266069c489aea1fbaaa85eca129708daeba5ba6", "scripts/research-matrix.sh": "739254171629deae822b0ad7dabc875aee19ace56dde77d3e8aab61663f97516", "kernels/memory_placement/gemm.py": "17c905ad66110d3346bbf0db898dfc6b780df59fae1dfb0c1747057ce1e5844e", "kernels/memory_placement/gemm_placement.cc": "f21acf7250b12914ea30cc1f77613239dfa18421a85a1b9a5199017dd916278a", "tools/research_summary.py": "0c00dcceef07053d06731b41a1f1ed58d3ba4ea09f82497de354ce9cef17da20", "tools/research_toolchain.py": "f0a126a24ae213acfaa43460cfd9def0c86d9cb70cfee0228aa271688467b314"}, "commit": "02c3c114ab2f03f5e4a31c7cee789b7e915ed14a", "command": ["bash", "scripts/research-iron.sh", "tests/test_fused_epilogue_kernel.py", "--compile"], "seconds_limit": 1800.0, "rss_gib_limit": 10.0, "checks_only": false, "free_ram_bytes": 17777049600}
+HOST_LOAD busy_cores=0.6 logical_cores=16 free_ram_gb=16.6 sample_sec=1
+HOST_LOAD_TOP 0.18 agy:33604 ws_mb=920
+HOST_LOAD_TOP 0.17 pycharm64:8540 ws_mb=3086
+HOST_LOAD_TOP 0.11 HWiNFO64:1824 ws_mb=43
+HOST_LOAD_TOP 0.05 Taskmgr:13448 ws_mb=187
+HOST_LOAD_TOP 0.05 powershell:14432 ws_mb=80
+HOST_LOAD_VERDICT CLEAR
+
+PRE_NPU_CONTEXT_WITNESS "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+{"event": "offline_pass", "max_error_output_lsb": 1, "q8_inputs_checked": 65536, "scope": "CPU arithmetic and fixture validation; no hardware execution"}
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [12668, 14112, 17064, 20336, 30012, 32496], "foreign_pids": []}
+HOST_LOAD busy_cores=0.61 logical_cores=16 free_ram_gb=16.6 sample_sec=1
+HOST_LOAD_TOP 0.36 pycharm64:8540 ws_mb=3086
+HOST_LOAD_TOP 0.11 agy:33604 ws_mb=922
+HOST_LOAD_TOP 0.08 HWiNFO64:1824 ws_mb=43
+HOST_LOAD_TOP 0.03 Taskmgr:13448 ws_mb=187
+HOST_LOAD_TOP 0.03 powershell:12668 ws_mb=80
+HOST_LOAD_VERDICT CLEAR
+
+{"event": "compile_begin", "variant": "raw16"}
+HOST_TIMELINE {"elapsed_seconds": 2.64, "tree_rss_bytes": 147542016, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 5.125, "tree_rss_bytes": 152498176, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [12668, 12804, 14112, 17064, 20336, 21160, 30012, 32496], "foreign_pids": []}
+Traceback (most recent call last):
+  File "C:\Users\<user>\PycharmProjects\ignite-xdna\tests\test_fused_epilogue_kernel.py", line 405, in <module>
+    main()
+    ~~~~^^
+  File "C:\Users\<user>\PycharmProjects\ignite-xdna\tests\test_fused_epilogue_kernel.py", line 395, in main
+    compile_bundles(artifact_directory(args.build_dir))
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\<user>\PycharmProjects\ignite-xdna\tests\test_fused_epilogue_kernel.py", line 166, in compile_bundles
+    compile_mlir_module(lowered, insts_path=target / 'insts.bin',
+    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                        xclbin_path=target / 'design.xclbin', work_dir=work)
+                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\<user>\mlir-aie\ironenv\Lib\site-packages\mlir_aie\python\aie\utils\compile\utils.py", line 534, in compile_mlir_module
+    _run_aiecc(mlir_file, args)
+    ~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "C:\Users\<user>\mlir-aie\ironenv\Lib\site-packages\mlir_aie\python\aie\utils\compile\utils.py", line 409, in _run_aiecc
+    raise RuntimeError(
+    ...<2 lines>...
+    )
+RuntimeError: [aiecc] Compilation failed with exit code 1:
+
+(0/37) input.mlir
+(1/37)           
+(1/37) [0/1] placed.mlir
+(2/37)                  
+(2/37) [0/1] traced.mlir
+(3/37)                  
+(3/37) [0/1] input_with_addresses.mlir
+(4/37)                                
+(4/37) [0/1] input_physical.mlir
+(5/37)                          
+(5/37) perCore_{0}.mlir
+(6/37)                 
+(6/37) [0/1] npu_materialized.mlir
+(7/37)                            
+(7/37) perCoreInDevice
+(8/37)                
+(8/37) [0/1] npu_dma_lowered.mlir
+(9/37)                           
+(9/37) perCoreCompile
+(10/37)              
+(10/37) preBakedCores
+(12/37)              
+(12/37) [0/1] npu_lowered.mlir
+(13/37)                       
+(13/37) [0/16] perCoreArches_{0}.txt
+(13/37)                             
+(13/37) [1/16] perCoreArches_{0}.txt
+(13/37)                             
+(13/37) [2/16] perCoreArches_{0}.txt
+(13/37)                             
+(13/37) [3/16] perCoreArches_{0}.txt
+(13/37)                             
+(13/37) [4/16] perCoreArches_{0}.txt
+(13/37)                             
+(13/37) [5/16] perCoreArches_{0}.txt
+(13/37)                             
+(13/37) [6/16] perCoreArches_{0}.txt
+(13/37)                             
+(13/37) [7/16] perCoreArches_{0}.txt
+(13/37)                             
+(13/37) [8/16] perCoreArches_{0}.txt
+(13/37)                             
+(13/37) [9/16] perCoreArches_{0}.txt
+(13/37)                             
+(13/37) [10/16] perCoreArches_{0}.txt
+(13/37)                              
+(13/37) [11/16] perCoreArches_{0}.txt
+(13/37)                              
+(13/37) [12/16] perCoreArches_{0}.txt
+(13/37)                              
+(13/37) [13/16] perCoreArches_{0}.txt
+(13/37)                              
+(13/37) [14/16] perCoreArches_{0}.txt
+(13/37)                              
+(13/37) [15/16] perCoreArches_{0}.txt
+(14/37)                              
+(14/37) [0/16] lowered_{0}.mlir
+(14/37)                        
+(14/37) [1/16] lowered_{0}.mlir
+(14/37)                        
+(14/37) [2/16] lowered_{0}.mlir
+(14/37)                        
+(14/37) [3/16] lowered_{0}.mlir
+(14/37)                        
+(14/37) [4/16] lowered_{0}.mlir
+(14/37)                        
+(14/37) [5/16] lowered_{0}.mlir
+(14/37)                        
+(14/37) [6/16] lowered_{0}.mlir
+(14/37)                        
+(14/37) [7/16] lowered_{0}.mlir
+(14/37)                        
+(14/37) [8/16] lowered_{0}.mlir
+(14/37)                        
+(14/37) [9/16] lowered_{0}.mlir
+(14/37)                        
+(14/37) [10/16] lowered_{0}.mlir
+(14/37)                         
+(14/37) [11/16] lowered_{0}.mlir
+(14/37)                         
+(14/37) [12/16] lowered_{0}.mlir
+(14/37)                         
+(14/37) [13/16] lowered_{0}.mlir
+(14/37)                         
+(14/37) [14/16] lowered_{0}.mlir
+(14/37)                         
+(14/37) [15/16] lowered_{0}.mlir
+(15/37)                         
+(15/37) [0/16] perCoreIRLinkFiles_{0}.txt
+(15/37)                                  
+(15/37) [1/16] perCoreIRLinkFiles_{0}.txt
+(15/37)                                  
+(15/37) [2/16] perCoreIRLinkFiles_{0}.txt
+(15/37)                                  
+(15/37) [3/16] perCoreIRLinkFiles_{0}.txt
+(15/37)                                  
+(15/37) [4/16] perCoreIRLinkFiles_{0}.txt
+(15/37)                                  
+(15/37) [5/16] perCoreIRLinkFiles_{0}.txt
+(15/37)                                  
+(15/37) [6/16] perCoreIRLinkFiles_{0}.txt
+(15/37)                                  
+(15/37) [7/16] perCoreIRLinkFiles_{0}.txt
+(15/37)                                  
+(15/37) [8/16] perCoreIRLinkFiles_{0}.txt
+(15/37)                                  
+(15/37) [9/16] perCoreIRLinkFiles_{0}.txt
+(15/37)                                  
+(15/37) [10/16] perCoreIRLinkFiles_{0}.txt
+(15/37)                                   
+(15/37) [11/16] perCoreIRLinkFiles_{0}.txt
+(15/37)                                   
+(15/37) [12/16] perCoreIRLinkFiles_{0}.txt
+(15/37)                                   
+(15/37) [13/16] perCoreIRLinkFiles_{0}.txt
+(15/37)                                   
+(15/37) [14/16] perCoreIRLinkFiles_{0}.txt
+(15/37)                                   
+(15/37) [15/16] perCoreIRLinkFiles_{0}.txt
+(16/37)                                   
+(16/37) [0/16] ldScripts_{0}.ld.script
+(16/37)                               
+(16/37) [1/16] ldScripts_{0}.ld.script
+(16/37)                               
+(16/37) [2/16] ldScripts_{0}.ld.script
+(16/37)                               
+(16/37) [3/16] ldScripts_{0}.ld.script
+(16/37)                               
+(16/37) [4/16] ldScripts_{0}.ld.script
+(16/37)                               
+(16/37) [5/16] ldScripts_{0}.ld.script
+(16/37)                               
+(16/37) [6/16] ldScripts_{0}.ld.script
+(16/37)                               
+(16/37) [7/16] ldScripts_{0}.ld.script
+(16/37)                               
+(16/37) [8/16] ldScripts_{0}.ld.script
+(16/37)                               
+(16/37) [9/16] ldScripts_{0}.ld.script
+(16/37)                               
+(16/37) [10/16] ldScripts_{0}.ld.script
+(16/37)                                
+(16/37) [11/16] ldScripts_{0}.ld.script
+(16/37)                                
+(16/37) [12/16] ldScripts_{0}.ld.script
+(16/37)                                
+(16/37) [13/16] ldScripts_{0}.ld.script
+(16/37)                                
+(16/37) [14/16] ldScripts_{0}.ld.script
+(16/37)                                
+(16/37) [15/16] ldScripts_{0}.ld.script
+(17/37)                                
+(17/37) npu_seq_{0}.mlir
+(18/37)                 
+(18/37) [0/16] llvmIR_{0}.ll
+(18/37)                     
+(18/37) [1/16] llvmIR_{0}.ll
+(18/37)                     
+(18/37) [2/16] llvmIR_{0}.ll
+(18/37)                     
+(18/37) [3/16] llvmIR_{0}.ll
+(18/37)                     
+(18/37) [4/16] llvmIR_{0}.ll
+(18/37)                     
+(18/37) [5/16] llvmIR_{0}.ll
+(18/37)                     
+(18/37) [6/16] llvmIR_{0}.ll
+(18/37)                     
+(18/37) [7/16] llvmIR_{0}.ll
+(18/37)                     
+(18/37) [8/16] llvmIR_{0}.ll
+(18/37)                     
+(18/37) [9/16] llvmIR_{0}.ll
+(18/37)                     
+(18/37) [10/16] llvmIR_{0}.ll
+(18/37)                      
+(18/37) [11/16] llvmIR_{0}.ll
+(18/37)                      
+(18/37) [12/16] llvmIR_{0}.ll
+(18/37)                      
+(18/37) [13/16] llvmIR_{0}.ll
+(18/37)                      
+(18/37) [14/16] llvmIR_{0}.ll
+(18/37)                      
+(18/37) [15/16] llvmIR_{0}.ll
+(19/37)                      
+(19/37) perSeqMatching
+(20/37)               
+(20/37) [0/16] peano-compat_{0}.ll
+(20/37)                           
+(20/37) [1/16] peano-compat_{0}.ll
+(20/37) [1/16] peano-compat_{0}.ll, [0/16] peano-linked_{0}.ll
+(20/37) [0/16] peano-linked_{0}.ll                            
+(20/37) [2/16] peano-compat_{0}.ll, [0/16] peano-linked_{0}.ll
+(20/37) [2/16] peano-compat_{0}.ll, [0/16] peano-linked_{0}.ll
+(20/37) [0/16] peano-linked_{0}.ll                            
+(20/37) [3/16] peano-compat_{0}.ll, [0/16] peano-linked_{0}.ll
+(20/37) [3/16] peano-compat_{0}.ll, [0/16] peano-linked_{0}.ll
+(20/37) [0/16] peano-linked_{0}.ll                            
+(20/37) [4/16] peano-compat_{0}.ll, [0/16] peano-linked_{0}.ll
+(20/37) [4/16] peano-compat_{0}.ll, [0/16] peano-linked_{0}.ll
+(20/37) [0/16] peano-linked_{0}.ll                            
+(20/37) [5/16] peano-compat_{0}.ll, [0/16] peano-linked_{0}.ll
+(20/37) [5/16] peano-compat_{0}.ll, [0/16] peano-linked_{0}.ll
+(20/37) [0/16] peano-linked_{0}.ll                            
+(20/37) [6/16] peano-compat_{0}.ll, [0/16] peano-linked_{0}.ll
+(20/37) [6/16] peano-compat_{0}.ll, [0/16] peano-linked_{0}.ll
+(20/37) [0/16] peano-linked_{0}.ll                            
+(20/37) [7/16] peano-compat_{0}.ll, [0/16] peano-linked_{0}.ll
+(20/37) [7/16] peano-compat_{0}.ll, [0/16] peano-linked_{0}.ll
+(20/37) [0/16] peano-linked_{0}.ll                            
+(20/37) [8/16] peano-compat_{0}.ll, [0/16] peano-linked_{0}.ll
+(20/37) [8/16] peano-compat_{0}.ll, [0/16] peano-linked_{0}.ll
+(20/37) [0/16] peano-linked_{0}.ll                            
+(20/37) [9/16] peano-compat_{0}.ll, [0/16] peano-linked_{0}.ll
+(20/37) [9/16] peano-compat_{0}.ll, [0/16] peano-linked_{0}.ll
+(20/37) [0/16] peano-linked_{0}.ll                            
+(20/37) [10/16] peano-compat_{0}.ll, [0/16] peano-linked_{0}.ll
+(20/37) [10/16] peano-compat_{0}.ll, [0/16] peano-linked_{0}.ll
+(20/37) [0/16] peano-linked_{0}.ll                             
+(20/37) [11/16] peano-compat_{0}.ll, [0/16] peano-linked_{0}.ll
+(20/37) [11/16] peano-compat_{0}.ll, [0/16] peano-linked_{0}.ll
+(20/37) [0/16] peano-linked_{0}.ll                             
+(20/37) [12/16] peano-compat_{0}.ll, [0/16] peano-linked_{0}.ll
+(20/37) [12/16] peano-compat_{0}.ll, [0/16] peano-linked_{0}.ll
+(20/37) [0/16] peano-linked_{0}.ll                             
+(20/37) [13/16] peano-compat_{0}.ll, [0/16] peano-linked_{0}.ll
+(20/37) [13/16] peano-compat_{0}.ll, [0/16] peano-linked_{0}.ll
+(20/37) [0/16] peano-linked_{0}.ll                             
+(20/37) [14/16] peano-compat_{0}.ll, [0/16] peano-linked_{0}.ll
+(20/37) [14/16] peano-compat_{0}.ll, [0/16] peano-linked_{0}.ll
+(20/37) [0/16] peano-linked_{0}.ll                             
+(20/37) [15/16] peano-compat_{0}.ll, [0/16] peano-linked_{0}.ll
+(20/37) [15/16] peano-compat_{0}.ll, [0/16] peano-linked_{0}.ll
+(21/37) [0/16] peano-linked_{0}.ll                             
+(21/37) [0/16] peano-linked_{0}.ll, [0/1] npu_program_{0}.bin
+(21/37) [1/16] peano-linked_{0}.ll, [0/1] npu_program_{0}.bin
+(21/37) [1/16] peano-linked_{0}.ll, [0/1] npu_program_{0}.bin
+(21/37) [2/16] peano-linked_{0}.ll, [0/1] npu_program_{0}.bin
+(21/37) [2/16] peano-linked_{0}.ll, [0/16] opted_{0}.ll, [0/1] npu_program_{0}.bin
+(21/37) [3/16] peano-linked_{0}.ll, [0/16] opted_{0}.ll, [0/1] npu_program_{0}.bin
+(21/37) [3/16] peano-linked_{0}.ll, [0/16] opted_{0}.ll, [0/1] npu_program_{0}.bin
+(21/37) [4/16] peano-linked_{0}.ll, [0/16] opted_{0}.ll, [0/1] npu_program_{0}.bin
+(21/37) [4/16] peano-linked_{0}.ll, [0/16] opted_{0}.ll, [0/1] npu_program_{0}.bin
+(21/37) [5/16] peano-linked_{0}.ll, [0/16] opted_{0}.ll, [0/1] npu_program_{0}.bin
+(21/37) [5/16] peano-linked_{0}.ll, [0/16] opted_{0}.ll, [0/1] npu_program_{0}.bin
+(21/37) [6/16] peano-linked_{0}.ll, [0/16] opted_{0}.ll, [0/1] npu_program_{0}.bin
+(21/37) [6/16] peano-linked_{0}.ll, [0/16] opted_{0}.ll, [0/1] npu_program_{0}.bin
+(21/37) [7/16] peano-linked_{0}.ll, [0/16] opted_{0}.ll, [0/1] npu_program_{0}.bin
+(21/37) [7/16] peano-linked_{0}.ll, [0/16] opted_{0}.ll, [0/1] npu_program_{0}.bin
+(21/37) [8/16] peano-linked_{0}.ll, [0/16] opted_{0}.ll, [0/1] npu_program_{0}.bin
+(21/37) [8/16] peano-linked_{0}.ll, [0/16] opted_{0}.ll, [0/1] npu_program_{0}.bin
+(21/37) [9/16] peano-linked_{0}.ll, [0/16] opted_{0}.ll, [0/1] npu_program_{0}.bin
+(21/37) [9/16] peano-linked_{0}.ll, [0/16] opted_{0}.ll, [0/1] npu_program_{0}.bin
+(21/37) [10/16] peano-linked_{0}.ll, [0/16] opted_{0}.ll, [0/1] npu_program_{0}.bin
+(21/37) [10/16] peano-linked_{0}.ll, [0/16] opted_{0}.ll, [0/1] npu_program_{0}.bin
+(21/37) [11/16] peano-linked_{0}.ll, [0/16] opted_{0}.ll, [0/1] npu_program_{0}.bin
+(21/37) [11/16] peano-linked_{0}.ll, [0/16] opted_{0}.ll, [0/1] npu_program_{0}.bin
+(21/37) [12/16] peano-linked_{0}.ll, [0/16] opted_{0}.ll, [0/1] npu_program_{0}.bin
+(21/37) [12/16] peano-linked_{0}.ll, [0/16] opted_{0}.ll, [0/1] npu_program_{0}.bin
+(21/37) [13/16] peano-linked_{0}.ll, [0/16] opted_{0}.ll, [0/1] npu_program_{0}.bin
+(21/37) [13/16] peano-linked_{0}.ll, [0/16] opted_{0}.ll, [0/1] npu_program_{0}.bin
+(21/37) [14/16] peano-linked_{0}.ll, [0/16] opted_{0}.ll, [0/1] npu_program_{0}.bin
+(21/37) [14/16] peano-linked_{0}.ll, [0/16] opted_{0}.ll, [0/1] npu_program_{0}.bin
+(21/37) [15/16] peano-linked_{0}.ll, [0/16] opted_{0}.ll, [0/1] npu_program_{0}.bin
+(21/37) [15/16] peano-linked_{0}.ll, [0/16] opted_{0}.ll, [0/1] npu_program_{0}.bin
+(22/37) [0/16] opted_{0}.ll, [0/1] npu_program_{0}.bin                             
+(22/37) [0/16] opted_{0}.ll, [0/1] npu_program_{0}.bin
+(22/37) [1/16] opted_{0}.ll, [0/1] npu_program_{0}.bin
+(22/37) [1/16] opted_{0}.ll, [0/1] npu_program_{0}.bin
+(22/37) [2/16] opted_{0}.ll, [0/1] npu_program_{0}.bin
+(22/37) [2/16] opted_{0}.ll, [0/16] objects_{0}.o, [0/1] npu_program_{0}.bin
+(22/37) [3/16] opted_{0}.ll, [0/16] objects_{0}.o, [0/1] npu_program_{0}.bin
+(22/37) [3/16] opted_{0}.ll, [0/16] objects_{0}.o, [0/1] npu_program_{0}.bin
+(22/37) [4/16] opted_{0}.ll, [0/16] objects_{0}.o, [0/1] npu_program_{0}.bin
+(22/37) [4/16] opted_{0}.ll, [0/16] objects_{0}.o, [0/1] npu_program_{0}.bin
+(22/37) [5/16] opted_{0}.ll, [0/16] objects_{0}.o, [0/1] npu_program_{0}.bin
+(22/37) [5/16] opted_{0}.ll, [0/16] objects_{0}.o, [0/1] npu_program_{0}.bin
+(22/37) [6/16] opted_{0}.ll, [0/16] objects_{0}.o, [0/1] npu_program_{0}.bin
+(22/37) [6/16] opted_{0}.ll, [0/16] objects_{0}.o, [0/1] npu_program_{0}.bin
+(22/37) [7/16] opted_{0}.ll, [0/16] objects_{0}.o, [0/1] npu_program_{0}.bin
+(22/37) [7/16] opted_{0}.ll, [0/16] objects_{0}.o, [0/1] npu_program_{0}.bin
+(22/37) [8/16] opted_{0}.ll, [0/16] objects_{0}.o, [0/1] npu_program_{0}.bin
+(22/37) [8/16] opted_{0}.ll, [0/16] objects_{0}.o, [0/1] npu_program_{0}.bin
+(22/37) [9/16] opted_{0}.ll, [0/16] objects_{0}.o, [0/1] npu_program_{0}.bin
+(22/37) [9/16] opted_{0}.ll, [0/16] objects_{0}.o, [0/1] npu_program_{0}.bin
+(22/37) [10/16] opted_{0}.ll, [0/16] objects_{0}.o, [0/1] npu_program_{0}.bin
+(22/37) [10/16] opted_{0}.ll, [0/16] objects_{0}.o, [0/1] npu_program_{0}.bin
+(22/37) [11/16] opted_{0}.ll, [0/16] objects_{0}.o, [0/1] npu_program_{0}.bin
+(22/37) [11/16] opted_{0}.ll, [0/16] objects_{0}.o, [0/1] npu_program_{0}.bin
+(22/37) [12/16] opted_{0}.ll, [0/16] objects_{0}.o, [0/1] npu_program_{0}.bin
+(22/37) [12/16] opted_{0}.ll, [0/16] objects_{0}.o, [0/1] npu_program_{0}.bin
+(22/37) [13/16] opted_{0}.ll, [0/16] objects_{0}.o, [0/1] npu_program_{0}.bin
+(22/37) [13/16] opted_{0}.ll, [0/16] objects_{0}.o, [0/1] npu_program_{0}.bin
+(22/37) [14/16] opted_{0}.ll, [0/16] objects_{0}.o, [0/1] npu_program_{0}.bin
+(22/37) [14/16] opted_{0}.ll, [0/16] objects_{0}.o, [0/1] npu_program_{0}.bin
+(22/37) [15/16] opted_{0}.ll, [0/16] objects_{0}.o, [0/1] npu_program_{0}.bin
+(22/37) [15/16] opted_{0}.ll, [0/16] objects_{0}.o, [0/1] npu_program_{0}.bin
+(22/37) [15/16] opted_{0}.ll, [1/16] objects_{0}.o, [0/1] npu_program_{0}.bin
+(22/37) [15/16] opted_{0}.ll, [1/16] objects_{0}.o, [0/1] npu_program_{0}.bin
+(22/37) [15/16] opted_{0}.ll, [2/16] objects_{0}.o, [0/1] npu_program_{0}.bin
+(22/37) [15/16] opted_{0}.ll, [2/16] objects_{0}.o, [0/16] elfs_{0}.elf, [0/1] npu_program_{0}.bin
+(22/37) [15/16] opted_{0}.ll, [3/16] objects_{0}.o, [0/16] elfs_{0}.elf, [0/1] npu_program_{0}.bin
+(22/37) [15/16] opted_{0}.ll, [3/16] objects_{0}.o, [0/16] elfs_{0}.elf, [0/1] npu_program_{0}.bin
+(22/37) [15/16] opted_{0}.ll, [4/16] objects_{0}.o, [0/16] elfs_{0}.elf, [0/1] npu_program_{0}.bin
+(22/37) [15/16] opted_{0}.ll, [4/16] objects_{0}.o, [0/16] elfs_{0}.elf, [0/1] npu_program_{0}.bin
+(22/37) [15/16] opted_{0}.ll, [5/16] objects_{0}.o, [0/16] elfs_{0}.elf, [0/1] npu_program_{0}.bin
+(22/37) [15/16] opted_{0}.ll, [5/16] objects_{0}.o, [0/16] elfs_{0}.elf, [0/1] npu_program_{0}.bin
+(22/37) [15/16] opted_{0}.ll, [6/16] objects_{0}.o, [0/16] elfs_{0}.elf, [0/1] npu_program_{0}.bin
+(22/37) [15/16] opted_{0}.ll, [6/16] objects_{0}.o, [0/16] elfs_{0}.elf, [0/1] npu_program_{0}.bin
+(22/37) [15/16] opted_{0}.ll, [7/16] objects_{0}.o, [0/16] elfs_{0}.elf, [0/1] npu_program_{0}.bin
+(22/37) [15/16] opted_{0}.ll, [7/16] objects_{0}.o, [0/16] elfs_{0}.elf, [0/1] npu_program_{0}.bin
+(22/37) [15/16] opted_{0}.ll, [8/16] objects_{0}.o, [0/16] elfs_{0}.elf, [0/1] npu_program_{0}.bin
+(22/37) [15/16] opted_{0}.ll, [8/16] objects_{0}.o, [0/16] elfs_{0}.elf, [0/1] npu_program_{0}.bin
+(22/37) [15/16] opted_{0}.ll, [9/16] objects_{0}.o, [0/16] elfs_{0}.elf, [0/1] npu_program_{0}.bin
+(22/37) [15/16] opted_{0}.ll, [9/16] objects_{0}.o, [0/16] elfs_{0}.elf, [0/1] npu_program_{0}.bin
+(23/37) [9/16] objects_{0}.o, [0/16] elfs_{0}.elf, [0/1] npu_program_{0}.bin                      
+(23/37) [9/16] objects_{0}.o, [0/16] elfs_{0}.elf, [0/1] npu_program_{0}.bin
+(23/37) [10/16] objects_{0}.o, [0/16] elfs_{0}.elf, [0/1] npu_program_{0}.bin
+(23/37) [10/16] objects_{0}.o, [0/16] elfs_{0}.elf, [0/1] npu_program_{0}.bin
+(23/37) [11/16] objects_{0}.o, [0/16] elfs_{0}.elf, [0/1] npu_program_{0}.bin
+(23/37) [11/16] objects_{0}.o, [0/16] elfs_{0}.elf, [0/1] npu_program_{0}.bin
+(23/37) [12/16] objects_{0}.o, [0/16] elfs_{0}.elf, [0/1] npu_program_{0}.bin
+(23/37) [12/16] objects_{0}.o, [0/16] elfs_{0}.elf, [0/1] npu_program_{0}.bin
+(23/37) [13/16] objects_{0}.o, [0/16] elfs_{0}.elf, [0/1] npu_program_{0}.bin
+(23/37) [13/16] objects_{0}.o, [0/16] elfs_{0}.elf, [0/1] npu_program_{0}.bin
+(23/37) [14/16] objects_{0}.o, [0/16] elfs_{0}.elf, [0/1] npu_program_{0}.bin
+(23/37) [14/16] objects_{0}.o, [0/16] elfs_{0}.elf, [0/1] npu_program_{0}.bin
+(23/37) [15/16] objects_{0}.o, [0/16] elfs_{0}.elf, [0/1] npu_program_{0}.bin
+(23/37) [15/16] objects_{0}.o, [0/16] elfs_{0}.elf, [0/1] npu_program_{0}.bin
+(24/37) [0/16] elfs_{0}.elf, [0/1] npu_program_{0}.bin                       
+(24/37) [0/16] elfs_{0}.elf, [0/1] npu_program_{0}.bin
+(25/37) [0/16] elfs_{0}.elf                           
+(25/37) [0/16] elfs_{0}.elf
+(25/37) [1/16] elfs_{0}.elf
+(25/37) [1/16] elfs_{0}.elf, [0/1] insts.bin
+(26/37) [1/16] elfs_{0}.elf                 
+(26/37) [2/16] elfs_{0}.elf
+(26/37) [3/16] elfs_{0}.elf
+(26/37) [4/16] elfs_{0}.elf
+(26/37) [5/16] elfs_{0}.elf
+(26/37) [6/16] elfs_{0}.elf
+(26/37) [7/16] elfs_{0}.elf
+(26/37) [8/16] elfs_{0}.elf
+(26/37) [9/16] elfs_{0}.elf
+(26/37) [10/16] elfs_{0}.elf
+(26/37) [11/16] elfs_{0}.elf
+(26/37) [12/16] elfs_{0}.elf
+(26/37) [13/16] elfs_{0}.elf
+(26/37) [14/16] elfs_{0}.elf
+(26/37) [15/16] elfs_{0}.elf
+(27/37)                     
+(27/37) physical_with_elfs.mlir
+(28/37)                        
+(28/37) perDevice_{0}.mlir
+(29/37)                   
+(29/37) perDeviceMatching
+(30/37)                  
+(30/37) [0/1] cdo_{0}C:\Users\<user>\PycharmProjects\ignite-xdna\build\fused_conv_epilogue\29e2e66679a509f7\raw16\design.prj\aie.mlir:760:7: error: 'aie.use_lock' op buffer descriptor with a lock must have both use_lock(acquire) and use_lock(release)
+      aie.use_lock(%output_c0_join0_cons_lock_0, AcquireGreaterEqual, %c1_i32)
+      ^
+C:\Users\<user>\PycharmProjects\ignite-xdna\build\fused_conv_epilogue\29e2e66679a509f7\raw16\design.prj\aie.mlir:760:7: note: see current operation: "aie.use_lock"(%104, %374) <{action = 2 : i32}> : (index, i32) -> ()
+
+aiecc: edge 'cdo_{0}' (key 'main') failed
+aiecc: pipeline failed
+
+RESEARCH_PROCESS_RESULT {"exit_code": 1, "stop": null, "peak_tree_rss_bytes": 373850112, "rss_measurement": "maximum observed across sampled descendant working sets; zero observations reported as null", "elapsed_seconds": 7.2810000000026776, "foreign_contention_observed": false, "timing_eligible": false}

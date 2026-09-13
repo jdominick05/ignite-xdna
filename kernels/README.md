@@ -30,6 +30,7 @@ array program) into `~/.npu/cache/<hash>/`; later runs of the same shape hit the
 
 | Kernel | Op it replaces | Verdict |
 |---|---|---|
+| [aie2/fused_conv_epilogue](aie2/fused_conv_epilogue/README.md) | Standalone Conv + Residual Add + SiLU | Qualified below 8% compute overhead at Cin=512, Cout=32, with DMA overlap; Cin=32 misses. [Evidence and scope](../docs/BENCHMARKS.md#fused-conv-residual-silu-2026-09-13-desktop-2) |
 | `memory_placement/` | Controlled operand-address intervention in a paired-load loop and a single-core INT8 GEMM | Local placement changes cycle slopes with identical function bytes; [method, limits and logs](../docs/BENCHMARKS.md#local-operand-placement-an-address-intervention) |
 | `bf16_matmul_sweep/` | Nothing — the bf16 GEMM shape sweep | **Wins.** NPU 1.18×–1.78× over CPU bf16 once M/N ≥ 1024 |
 | `int8_matmul_sweep/` | Nothing — the int8 GEMM sweep, with the CPU int8 GEMM baseline | **Loses at the default tile; wins 1.10×–1.83× at M ≥ 512, N ≥ 2048 with `n=64`**, a tile bf16 can't fit |

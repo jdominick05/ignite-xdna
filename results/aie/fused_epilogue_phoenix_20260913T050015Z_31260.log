@@ -1,0 +1,60 @@
+RESEARCH_PLATFORM {"machine": "Desktop 2", "cpu": "AMD Ryzen 7 8700G w/ Radeon 780M Graphics", "os": "Windows-11-10.0.26200-SP0", "ram_bytes": 33381138432, "source_sha256": {"tools/research_process.py": "b527a07958df0ed575df38dfe88da348c972ee79eb459974555cf2655f94d37f", "tools/quant_calib_alphabet.py": "2dc0b2878c564853f340880209a425dfcf63b8536b2b8e9fd32344daade58d37", "tools/xint8_arithmetic_probe.py": "6aa3df08b9870c3c2264b868459d7ffbac3070dddc1349d7c6f3f480075f7041", "scripts/research-lowlevel.sh": "3455ad7933697936487712665505c216891865c6deada647302785f6e37020bd", "scripts/research-iron.sh": "128f8b5ee21f2209f8dda004cefc39fbf87a5170ca61c5cf18dc97a6ea6669c8", "kernels/memory_placement/probe.py": "e8d990169ad6091fa1b53852e9f61eff495b5def72d35165a5c5cf1759e38898", "kernels/memory_placement/memory_kernels.cc": "182e7af7071a1e851afb4a7ca266069c489aea1fbaaa85eca129708daeba5ba6", "scripts/research-matrix.sh": "739254171629deae822b0ad7dabc875aee19ace56dde77d3e8aab61663f97516", "kernels/memory_placement/gemm.py": "17c905ad66110d3346bbf0db898dfc6b780df59fae1dfb0c1747057ce1e5844e", "kernels/memory_placement/gemm_placement.cc": "f21acf7250b12914ea30cc1f77613239dfa18421a85a1b9a5199017dd916278a", "tools/research_summary.py": "0c00dcceef07053d06731b41a1f1ed58d3ba4ea09f82497de354ce9cef17da20", "tools/research_toolchain.py": "f0a126a24ae213acfaa43460cfd9def0c86d9cb70cfee0228aa271688467b314"}, "commit": "02c3c114ab2f03f5e4a31c7cee789b7e915ed14a", "command": ["bash", "scripts/research-iron.sh", "tests/test_fused_epilogue_kernel.py", "--compile"], "seconds_limit": 1800.0, "rss_gib_limit": 10.0, "checks_only": false, "free_ram_bytes": 17812193280}
+HOST_LOAD busy_cores=1.31 logical_cores=16 free_ram_gb=16.6 sample_sec=1
+HOST_LOAD_TOP 0.69 agy:33604 ws_mb=969
+HOST_LOAD_TOP 0.35 pycharm64:8540 ws_mb=3092
+HOST_LOAD_TOP 0.12 HWiNFO64:1824 ws_mb=43
+HOST_LOAD_TOP 0.08 Taskmgr:13448 ws_mb=187
+HOST_LOAD_TOP 0.05 powershell:19352 ws_mb=79
+HOST_LOAD_VERDICT CLEAR
+
+PRE_NPU_CONTEXT_WITNESS "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+{"event": "offline_pass", "max_error_output_lsb": 1, "q8_inputs_checked": 65536, "scope": "CPU arithmetic and fixture validation; no hardware execution"}
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [2916, 5720, 18116, 20360, 22896, 25324], "foreign_pids": []}
+HOST_LOAD busy_cores=2.08 logical_cores=16 free_ram_gb=16.5 sample_sec=1
+HOST_LOAD_TOP 1.29 agy:33604 ws_mb=955
+HOST_LOAD_TOP 0.22 pycharm64:8540 ws_mb=3092
+HOST_LOAD_TOP 0.17 python:22896 ws_mb=27
+HOST_LOAD_TOP 0.15 HWiNFO64:1824 ws_mb=43
+HOST_LOAD_TOP 0.06 Taskmgr:13448 ws_mb=187
+HOST_LOAD_VERDICT CLEAR
+
+{"event": "compile_begin", "variant": "raw16"}
+HOST_TIMELINE {"elapsed_seconds": 2.797, "tree_rss_bytes": 149614592, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 5.453, "tree_rss_bytes": 153288704, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [2624, 2916, 5720, 18116, 18448, 20360, 21160, 22896, 25324], "foreign_pids": []}
+{"directory": "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\build\\fused_conv_epilogue\\af93547cbf095a4d\\raw16", "elf_count": 16, "event": "compile_end", "variant": "raw16"}
+{"dma_overlap": "requires trace", "event": "disassembly", "file": "conv2d_raw.o", "memory_stalls": "requires trace", "srs": 8, "stack_references": 0, "variant": "raw16", "vmac": 16}
+{"event": "compile_begin", "variant": "fused16"}
+HOST_TIMELINE {"elapsed_seconds": 8.313, "tree_rss_bytes": 154083328, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 11.0, "tree_rss_bytes": 155119616, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [2624, 2916, 5720, 5800, 12964, 13332, 14600, 14844, 18116, 18448, 19148, 20124, 20168, 20360, 20812, 21160, 21244, 21764, 21864, 22812, 22892, 22896, 25324, 28536, 30236], "foreign_pids": []}
+{"directory": "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\build\\fused_conv_epilogue\\af93547cbf095a4d\\fused16", "elf_count": 16, "event": "compile_end", "variant": "fused16"}
+{"dma_overlap": "requires trace", "event": "disassembly", "file": "conv2d_fused.o", "memory_stalls": "requires trace", "srs": 48, "stack_references": 0, "variant": "fused16", "vmac": 16}
+{"event": "compile_begin", "variant": "raw1"}
+HOST_TIMELINE {"elapsed_seconds": 13.813, "tree_rss_bytes": 151945216, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 16.453, "tree_rss_bytes": 111091712, "foreign_peers": []}
+{"directory": "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\build\\fused_conv_epilogue\\af93547cbf095a4d\\raw1", "elf_count": 1, "event": "compile_end", "variant": "raw1"}
+{"dma_overlap": "requires trace", "event": "disassembly", "file": "conv2d_raw.o", "memory_stalls": "requires trace", "srs": 8, "stack_references": 0, "variant": "raw1", "vmac": 16}
+{"event": "compile_begin", "variant": "fused1"}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [2624, 2916, 4020, 5720, 5800, 6152, 6448, 7968, 9548, 9748, 10824, 12112, 12192, 12964, 13332, 13608, 13688, 13988, 14600, 14844, 15352, 15688, 16280, 16704, 17396, 18116, 18448, 18720, 19144, 19148, 19276, 19756, 20124, 20168, 20360, 20436, 20504, 20812, 20912, 21072, 21160, 21244, 21652, 21656, 21764, 21864, 22296, 22316, 22320, 22812, 22892, 22896, 22948, 23032, 23252, 23464, 23920, 25324, 25536, 26372, 28168, 28536, 28872, 30236, 30340, 31544, 31952, 32200, 33112, 33260, 34788], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 19.156, "tree_rss_bytes": 214056960, "foreign_peers": []}
+{"directory": "C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\build\\fused_conv_epilogue\\af93547cbf095a4d\\fused1", "elf_count": 1, "event": "compile_end", "variant": "fused1"}
+{"dma_overlap": "requires trace", "event": "disassembly", "file": "conv2d_fused.o", "memory_stalls": "requires trace", "srs": 48, "stack_references": 0, "variant": "fused1", "vmac": 16}
+{"activation_address": 16384, "core_elves": 16, "dma_overlap": "requires port trace", "event": "elf_audit", "function_sha256": "3285828dac7d6a8e718b4b97477aba3141540c8152d364490e9ed900c20b2fdb", "input_address": 1024, "instruction_bytes": 1152, "scope": "static instruction and ABI audit; stalls require trace", "shim_arguments": [0, 1], "stack_references": 0, "stage": "raw16"}
+HOST_TIMELINE {"elapsed_seconds": 21.828, "tree_rss_bytes": 149405696, "foreign_peers": []}
+{"activation_address": 16384, "core_elves": 16, "dma_overlap": "requires port trace", "event": "elf_audit", "function_sha256": "2f8cc073b33f4430de056ad3ae23b56b875da773fbbad4ebf3c44255782a11a4", "input_address": 1024, "instruction_bytes": 1152, "scope": "static instruction and ABI audit; stalls require trace", "shim_arguments": [0, 1], "stack_references": 0, "stage": "fused16"}
+{"activation_address": 16384, "core_elves": 1, "dma_overlap": "requires port trace", "event": "elf_audit", "function_sha256": "3285828dac7d6a8e718b4b97477aba3141540c8152d364490e9ed900c20b2fdb", "input_address": 1024, "instruction_bytes": 712, "scope": "static instruction and ABI audit; stalls require trace", "shim_arguments": [0, 1, 2], "stack_references": 0, "stage": "raw1"}
+{"activation_address": 16384, "core_elves": 1, "dma_overlap": "requires port trace", "event": "elf_audit", "function_sha256": "2f8cc073b33f4430de056ad3ae23b56b875da773fbbad4ebf3c44255782a11a4", "input_address": 1024, "instruction_bytes": 712, "scope": "static instruction and ABI audit; stalls require trace", "shim_arguments": [0, 1, 2], "stack_references": 0, "stage": "fused1"}
+RESEARCH_PROCESS_RESULT {"exit_code": 0, "stop": null, "peak_tree_rss_bytes": 514973696, "rss_measurement": "maximum observed across sampled descendant working sets; zero observations reported as null", "elapsed_seconds": 22.468999999997322, "foreign_contention_observed": false, "timing_eligible": true}

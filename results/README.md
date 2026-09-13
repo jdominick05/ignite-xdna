@@ -1,5 +1,9 @@
 # results/
 
+Fused Conv/Residual/SiLU build attempts and silicon checks are indexed under
+[AIE fused epilogue](aie/README.md#fused-conv-residual-silu), with
+[measurements and qualification scope](../docs/BENCHMARKS.md#fused-conv-residual-silu-2026-09-13-desktop-2).
+
 Native graph/custom-kernel BO handoff logs are indexed under
 [AIE native graph BO splicing](aie/README.md#native-graph-bo-splicing), with
 [measurements and scope](../docs/BENCHMARKS.md#native-bo-kernel-splicing-2026-09-13-desktop-2).

@@ -7452,3 +7452,107 @@ Evidence log: [`results/benchmarks/hardware_vitisai_comparison.log`](../results/
 Reproduce with: `python benchmarks/benchmark_vitisai.py --all --warmup 50 --iters 500`.
 
 
+
+## Fused Conv Residual SiLU (2026-09-13, Desktop 2)
+
+The standalone Peano kernel qualifies below 8% compute overhead at **Cin=512,
+Cout=32, 3x3, eight spatial outputs per core**. The Cin=32 comparison still misses
+that target. This qualification is shape-specific; it does not establish an
+end-to-end model speedup or change VitisAI EP placement. Add and SiLU execute in
+the AIE kernel without an intermediate CPU elementwise pass.
+
+Physical Device 0 was Phoenix `[003d:00:01.1]`, Ryzen 7 8700G (Desktop 2).
+Both checks began with no hardware contexts, passed the host-load check, and
+their process witnesses observed no foreign NPU contexts. The 32-channel command
+exits 1 because the overhead assertion fails, so its wrapper marks
+`timing_eligible=false`; this is an acceptance failure, not observed contention.
+
+| Conv / transport | Raw cycles | Fused cycles | Overhead | Fused memory-stall events | Epilogue DMA active events | Evidence |
+|---|---:|---:|---:|---:|---:|---|
+| Cin=512, streamed input, chunked output; 10 pairs | 5263 | 5520 | 4.88% | 0 in every sample | 48 in every sample | [Qualification log](../results/aie/fused_epilogue_phoenix_20260913T052611Z_4050.log) |
+| Cin=32, resident input, chunked output; 3 pairs | 381 | 645 | 69.29% | 0 in every sample | 48 in every sample | [Original-shape comparison](../results/aie/fused_epilogue_phoenix_20260913T052546Z_8609.log) |
+
+Each row is a same-run comparison of raw Conv and fused Conv with the same input,
+bias, scales and output transport. The raw control omits Residual Add and SiLU.
+Cycles were identical across samples within each variant. Alternating A/B order
+and fresh contexts were used for seeds 101 onward. The Cin=512 cycle sum is
+15 accumulator-initialization cycles + 64 real channel panels at 81 cycles each
++ 64 raw / 321 fused epilogue cycles. The raw control observes two memory-stall
+events during its output path; the fused path observes zero. Disassembly alone
+cannot establish zero stalls: these are trace observations, not an architectural
+guarantee across all inputs and placements.
+
+The measured sum excludes input DMA waits, activation and metadata staging,
+function entry/exit and trace flushing. Whole first-to-last spans, which retain
+input waits, are also logged: raw 53101-61439 cycles, fused 53110-55251 cycles.
+Those varying spans are not the denominator of the overhead claim. The input
+transport remains a substantial cost; no host-dispatch or model-latency claim is
+made from the compute sum.
+
+Numerical evidence comes from the full 16-core array: seeds 17 and 91, random
+feature maps, quantization boundaries, channel-basis inputs and residual
+cancellation after a Conv that would have saturated alone. Each dispatch checks
+all 4096 INT8 output bytes, both spatial groups, all Cout channels and the full
+Cin reduction, with independent data per core. Outputs are poisoned with the
+complement of expected bytes before dispatch. All outputs match the integer
+polynomial oracle exactly, and differ from the independent float32 direct
+Conv/Add/SiLU oracle by at most one output LSB. The offline SiLU sweep checks all
+65536 representable Q8 inputs at the same tolerance. This is synthetic coverage,
+not model accuracy validation or Quark numerical equivalence.
+
+The four-column/four-row transport leaves no legal route for an additional trace
+stream. Cycle, memory-stall and output-port evidence therefore comes from a
+separate one-core design on physical tile (row 2, column 1). Every final ELF is
+audited, and each raw/fused function is byte-identical between its one-core and
+16-core builds. This establishes instruction identity and full-array numerical
+coverage; it does not measure stalls or timing concurrently on all 16 cores.
+All final ELFs have zero vector spills and zero stack accesses inside compute;
+the wider fused function saves/restores one scalar pointer register at entry/exit.
+
+The epilogue adds a residual shifted by four in acc32, evaluates the factored
+fixed-point polynomial, and performs ties-to-even INT8 SRS stores. Each pair of
+32-byte stores releases one output-ready credit. Four 64-byte core DMA BDs drain
+those chunks while subsequent epilogue work continues, returning output ownership
+only after the fourth chunk. The port trace is configured for the core's output
+DMA source and reports activity inside the epilogue bracket. MemTile joins,
+Shim BO patching and lock initialization are retained from the compiler lowering.
+
+For the qualified shape, each core consumes 64 distinct Cin=8 panels, with ping,
+activation staging, pong and output in four separate local memory banks. This
+amortizes a fixed epilogue over a real wider reduction; it does not make the
+32-channel epilogue cheap. The generated `transaction.h` contains instructions
+and their byte count; manifest hashes bind sources, compiler, ELFs, xclbins and
+transactions. Final kernel hashes are raw
+`05d0afb3ca6c65e55a1386b550ae69d2fee3dc6c9b5fb8d342b9cc740c2f9ed9`
+and fused `1bcf8b2df2fae78bffc1f100b282a92e27d9430f41776b39e78e4059df630ece`.
+Full tensor/trace witnesses remain in the ignored build directory, with their
+hashes and decoded cycle samples in the tracked qualification log.
+
+Earlier attempts are preserved in the [complete log index](../results/aie/README.md#fused-conv-residual-silu).
+The clean resident result before chunking was 323 raw / 541 fused cycles (67.49%)
+and had no overlap ([log](../results/aie/fused_epilogue_phoenix_20260913T045004Z_14588.log)).
+An earlier 323/746 run had a foreign NPU context and is invalid for performance
+([log](../results/aie/fused_epilogue_phoenix_20260913T044608Z_7794.log)).
+The first chunked transaction timed out because local lock ID 1 was incorrectly
+used as the core selector; its corrected selector is 49
+([failure](../results/aie/fused_epilogue_phoenix_20260913T050248Z_6808.log)).
+Loop-internal trace barriers triggered a Peano scheduler assertion, full unrolling
+introduced vector spills, and disabling iterative scheduling slowed the raw MAC
+loop. The temporary 2.63% wider result with that slower scheduler is superseded
+by the qualified 4.88% row above
+([temporary result](../results/aie/fused_epilogue_phoenix_20260913T051950Z_16177.log)).
+The final build restores optimized VLIW loop scheduling and checks the MAC region
+between its event markers in every disassembly.
+
+Reproduce from Git Bash, serially:
+
+```bash
+./scripts/fused-epilogue.sh --compile --cin 512
+./scripts/fused-epilogue.sh --hardware --cin 512 --iters 10
+./scripts/fused-epilogue.sh --compile --cin 32
+./scripts/fused-epilogue.sh --hardware --cin 32 --iters 3  # expected overhead failure
+```
+
+See the [kernel ABI and numerical contract](../kernels/aie2/fused_conv_epilogue/README.md).
+General scales, other shapes, EP integration, model-level parity and all-core
+simultaneous trace coverage remain outside this qualification.

@@ -1,0 +1,186 @@
+RESEARCH_PLATFORM {"machine": "Desktop 2", "cpu": "AMD Ryzen 7 8700G w/ Radeon 780M Graphics", "os": "Windows-11-10.0.26200-SP0", "ram_bytes": 33381138432, "source_sha256": {"tools/research_process.py": "b527a07958df0ed575df38dfe88da348c972ee79eb459974555cf2655f94d37f", "tools/quant_calib_alphabet.py": "2dc0b2878c564853f340880209a425dfcf63b8536b2b8e9fd32344daade58d37", "tools/xint8_arithmetic_probe.py": "6aa3df08b9870c3c2264b868459d7ffbac3070dddc1349d7c6f3f480075f7041", "scripts/research-lowlevel.sh": "3455ad7933697936487712665505c216891865c6deada647302785f6e37020bd", "scripts/research-iron.sh": "128f8b5ee21f2209f8dda004cefc39fbf87a5170ca61c5cf18dc97a6ea6669c8", "kernels/memory_placement/probe.py": "e8d990169ad6091fa1b53852e9f61eff495b5def72d35165a5c5cf1759e38898", "kernels/memory_placement/memory_kernels.cc": "182e7af7071a1e851afb4a7ca266069c489aea1fbaaa85eca129708daeba5ba6", "scripts/research-matrix.sh": "739254171629deae822b0ad7dabc875aee19ace56dde77d3e8aab61663f97516", "kernels/memory_placement/gemm.py": "17c905ad66110d3346bbf0db898dfc6b780df59fae1dfb0c1747057ce1e5844e", "kernels/memory_placement/gemm_placement.cc": "f21acf7250b12914ea30cc1f77613239dfa18421a85a1b9a5199017dd916278a", "tools/research_summary.py": "0c00dcceef07053d06731b41a1f1ed58d3ba4ea09f82497de354ce9cef17da20", "tools/research_toolchain.py": "f0a126a24ae213acfaa43460cfd9def0c86d9cb70cfee0228aa271688467b314"}, "commit": "59c7cfd17f027442eda5f122df36ecdd16e754e3", "command": ["bash", "scripts/research-iron.sh", "tests/test_fused_epilogue_kernel.py", "--compile"], "seconds_limit": 1800.0, "rss_gib_limit": 10.0, "checks_only": false, "free_ram_bytes": 18056577024}
+HOST_LOAD busy_cores=0.49 logical_cores=16 free_ram_gb=16.8 sample_sec=1
+HOST_LOAD_TOP 0.09 agy:33604 ws_mb=994
+HOST_LOAD_TOP 0.08 pycharm64:8540 ws_mb=3149
+HOST_LOAD_TOP 0.06 powershell:8556 ws_mb=79
+HOST_LOAD_TOP 0.06 WindowsTerminal:25680 ws_mb=85
+HOST_LOAD_TOP 0.06 Taskmgr:13448 ws_mb=187
+HOST_LOAD_VERDICT CLEAR
+
+PRE_NPU_CONTEXT_WITNESS "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+{"event": "offline_pass", "max_error_output_lsb": 1, "q8_inputs_checked": 65536, "scope": "CPU arithmetic and fixture validation; no hardware execution"}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [9648, 13268, 18092, 30364, 32708, 34040, 34220], "foreign_pids": []}
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+HOST_LOAD busy_cores=0.81 logical_cores=16 free_ram_gb=16.7 sample_sec=1
+HOST_LOAD_TOP 0.28 agy:33604 ws_mb=1005
+HOST_LOAD_TOP 0.16 pycharm64:8540 ws_mb=3149
+HOST_LOAD_TOP 0.12 python:13268 ws_mb=27
+HOST_LOAD_TOP 0.11 HWiNFO64:1824 ws_mb=43
+HOST_LOAD_TOP 0.06 Taskmgr:13448 ws_mb=187
+HOST_LOAD_VERDICT CLEAR
+
+{"event": "compile_begin", "variant": "raw16"}
+HOST_TIMELINE {"elapsed_seconds": 2.656, "tree_rss_bytes": 140136448, "foreign_peers": []}
+Traceback (most recent call last):
+HOST_TIMELINE {"elapsed_seconds": 5.234, "tree_rss_bytes": 107515904, "foreign_peers": []}
+  File "C:\Users\<user>\PycharmProjects\ignite-xdna\tests\test_fused_epilogue_kernel.py", line 451, in <module>
+    main()
+    ~~~~^^
+  File "C:\Users\<user>\PycharmProjects\ignite-xdna\tests\test_fused_epilogue_kernel.py", line 441, in main
+    compile_bundles(artifact_directory(args.build_dir, args.cin), args.cin)
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\<user>\PycharmProjects\ignite-xdna\tests\test_fused_epilogue_kernel.py", line 170, in compile_bundles
+    specialization.compile(xclbin_path=bootstrap / 'design.xclbin', inst_path=bootstrap / 'insts.bin')
+    ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\<user>\mlir-aie\ironenv\Lib\site-packages\mlir_aie\python\aie\utils\compile\jit\compilabledesign.py", line 394, in compile
+    compile_external_kernel(func, kernel_dir, target_arch)
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\<user>\mlir-aie\ironenv\Lib\site-packages\mlir_aie\python\aie\utils\compile\utils.py", line 633, in compile_external_kernel
+    compile_cxx_core_function(
+    ~~~~~~~~~~~~~~~~~~~~~~~~~^
+        source_path=source_file,
+        ^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<9 lines>...
+        use_chess=getattr(func, "_use_chess", False),
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\<user>\mlir-aie\ironenv\Lib\site-packages\mlir_aie\python\aie\utils\compile\utils.py", line 354, in compile_cxx_core_function
+    raise RuntimeError(f"[{tool}] compilation failed:\n{ret.stderr.decode()}")
+RuntimeError: [Peano] compilation failed:
+Assertion failed: TopFixedBundles.empty() && "TopFixedBundles already set.", file D:\a\llvm-aie\llvm-aie\llvm-aie\llvm\lib\Target\AIE\AIEInterBlockScheduling.cpp, line 1462
+
+PLEASE submit a bug report to https://github.com/llvm/llvm-project/issues/ and include the crash backtrace, preprocessed source, and associated run script.
+
+Stack dump:
+
+0.	Program arguments: C:\\Users\\<user>\\mlir-aie\\ironenv\\Lib\\site-packages\\llvm-aie\\bin\\clang++.exe C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\build\\fused_conv_epilogue\\d71986560d79a192\\raw16\\_bootstrap\\design.prj\\conv2d_raw.cc -c -o C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\build\\fused_conv_epilogue\\d71986560d79a192\\raw16\\_bootstrap\\design.prj\\conv2d_raw.o -IC:\\Users\\<user>\\mlir-aie\\ironenv\\Lib\\site-packages\\mlir_aie\\include -std=c++20 -Wno-parentheses -Wno-attributes -Wno-macro-redefined -Wno-empty-body -O2 -DNDEBUG -MD -MF C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\build\\fused_conv_epilogue\\d71986560d79a192\\raw16\\_bootstrap\\design.prj\\conv2d_raw.o.d -D__AIE_API_AIE_ADF_HPP__ --target=aie2-none-unknown-elf -I C:\\Users\\<user>\\mlir-aie\\ironenv\\Lib\\site-packages\\mlir_aie\\include -I C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\aie2\\fused_conv_epilogue -O3 -DCHUNKED_OUTPUT=1 -DCIN=512 -DFUSED=0 -DKERNEL_NAME=conv2d_raw
+
+1.	<eof> parser at end of file
+
+2.	Code generation
+
+3.	Running pass 'Function Pass Manager' on module 'C:\Users\<user>\PycharmProjects\ignite-xdna\build\fused_conv_epilogue\d71986560d79a192\raw16\_bootstrap\design.prj\conv2d_raw.cc'.
+
+4.	Running pass 'PostRA Machine Instruction Scheduler' on function '@conv2d_raw'
+
+Exception Code: 0x80000003
+
+ #0 0x00007ff67d0b8ea5 (C:\Users\<user>\mlir-aie\ironenv\Lib\site-packages\llvm-aie\bin\clang++.exe+0x1488ea5)
+
+ #1 0x00007ff67ff97c6d (C:\Users\<user>\mlir-aie\ironenv\Lib\site-packages\llvm-aie\bin\clang++.exe+0x4367c6d)
+
+ #2 0x00007ff67ff842c8 (C:\Users\<user>\mlir-aie\ironenv\Lib\site-packages\llvm-aie\bin\clang++.exe+0x43542c8)
+
+ #3 0x00007ff67ff83d37 (C:\Users\<user>\mlir-aie\ironenv\Lib\site-packages\llvm-aie\bin\clang++.exe+0x4353d37)
+
+ #4 0x00007ff67ff83eba (C:\Users\<user>\mlir-aie\ironenv\Lib\site-packages\llvm-aie\bin\clang++.exe+0x4353eba)
+
+ #5 0x00007ff67be753ae (C:\Users\<user>\mlir-aie\ironenv\Lib\site-packages\llvm-aie\bin\clang++.exe+0x2453ae)
+
+ #6 0x00007ff67bd6f02d (C:\Users\<user>\mlir-aie\ironenv\Lib\site-packages\llvm-aie\bin\clang++.exe+0x13f02d)
+
+ #7 0x00007ff67c717dbe (C:\Users\<user>\mlir-aie\ironenv\Lib\site-packages\llvm-aie\bin\clang++.exe+0xae7dbe)
+
+ #8 0x00007ff67c7157a8 (C:\Users\<user>\mlir-aie\ironenv\Lib\site-packages\llvm-aie\bin\clang++.exe+0xae57a8)
+
+ #9 0x00007ff67c715fa3 (C:\Users\<user>\mlir-aie\ironenv\Lib\site-packages\llvm-aie\bin\clang++.exe+0xae5fa3)
+
+#10 0x00007ff67c6de2a2 (C:\Users\<user>\mlir-aie\ironenv\Lib\site-packages\llvm-aie\bin\clang++.exe+0xaae2a2)
+
+#11 0x00007ff67cb6a677 (C:\Users\<user>\mlir-aie\ironenv\Lib\site-packages\llvm-aie\bin\clang++.exe+0xf3a677)
+
+#12 0x00007ff67cb6a8bc (C:\Users\<user>\mlir-aie\ironenv\Lib\site-packages\llvm-aie\bin\clang++.exe+0xf3a8bc)
+
+#13 0x00007ff67cb6ab88 (C:\Users\<user>\mlir-aie\ironenv\Lib\site-packages\llvm-aie\bin\clang++.exe+0xf3ab88)
+
+#14 0x00007ff67cb6a376 (C:\Users\<user>\mlir-aie\ironenv\Lib\site-packages\llvm-aie\bin\clang++.exe+0xf3a376)
+
+#15 0x00007ff67d3d5612 (C:\Users\<user>\mlir-aie\ironenv\Lib\site-packages\llvm-aie\bin\clang++.exe+0x17a5612)
+
+#16 0x00007ff67d3d9269 (C:\Users\<user>\mlir-aie\ironenv\Lib\site-packages\llvm-aie\bin\clang++.exe+0x17a9269)
+
+#17 0x00007ff67d3d99cd (C:\Users\<user>\mlir-aie\ironenv\Lib\site-packages\llvm-aie\bin\clang++.exe+0x17a99cd)
+
+#18 0x00007ff67dbe19ff (C:\Users\<user>\mlir-aie\ironenv\Lib\site-packages\llvm-aie\bin\clang++.exe+0x1fb19ff)
+
+#19 0x00007ff67ea81805 (C:\Users\<user>\mlir-aie\ironenv\Lib\site-packages\llvm-aie\bin\clang++.exe+0x2e51805)
+
+#20 0x00007ff67de705d6 (C:\Users\<user>\mlir-aie\ironenv\Lib\site-packages\llvm-aie\bin\clang++.exe+0x22405d6)
+
+#21 0x00007ff67dbe05d6 (C:\Users\<user>\mlir-aie\ironenv\Lib\site-packages\llvm-aie\bin\clang++.exe+0x1fb05d6)
+
+#22 0x00007ff67de703d5 (C:\Users\<user>\mlir-aie\ironenv\Lib\site-packages\llvm-aie\bin\clang++.exe+0x22403d5)
+
+#23 0x00007ff67de58599 (C:\Users\<user>\mlir-aie\ironenv\Lib\site-packages\llvm-aie\bin\clang++.exe+0x2228599)
+
+#24 0x00007ff67df1d61c (C:\Users\<user>\mlir-aie\ironenv\Lib\site-packages\llvm-aie\bin\clang++.exe+0x22ed61c)
+
+#25 0x00007ff67bcf2f8b (C:\Users\<user>\mlir-aie\ironenv\Lib\site-packages\llvm-aie\bin\clang++.exe+0xc2f8b)
+
+#26 0x00007ff67bcec9ec (C:\Users\<user>\mlir-aie\ironenv\Lib\site-packages\llvm-aie\bin\clang++.exe+0xbc9ec)
+
+#27 0x00007ff67dd19491 (C:\Users\<user>\mlir-aie\ironenv\Lib\site-packages\llvm-aie\bin\clang++.exe+0x20e9491)
+
+#28 0x00007ff67d0ab029 (C:\Users\<user>\mlir-aie\ironenv\Lib\site-packages\llvm-aie\bin\clang++.exe+0x147b029)
+
+#29 0x00007ff67dd19c67 (C:\Users\<user>\mlir-aie\ironenv\Lib\site-packages\llvm-aie\bin\clang++.exe+0x20e9c67)
+
+#30 0x00007ff67dc55911 (C:\Users\<user>\mlir-aie\ironenv\Lib\site-packages\llvm-aie\bin\clang++.exe+0x2025911)
+
+#31 0x00007ff67dc55ad0 (C:\Users\<user>\mlir-aie\ironenv\Lib\site-packages\llvm-aie\bin\clang++.exe+0x2025ad0)
+
+#32 0x00007ff67dc374e6 (C:\Users\<user>\mlir-aie\ironenv\Lib\site-packages\llvm-aie\bin\clang++.exe+0x20074e6)
+
+#33 0x00007ff67bceecb6 (C:\Users\<user>\mlir-aie\ironenv\Lib\site-packages\llvm-aie\bin\clang++.exe+0xbecb6)
+
+#34 0x00007ff67bcfd644 (C:\Users\<user>\mlir-aie\ironenv\Lib\site-packages\llvm-aie\bin\clang++.exe+0xcd644)
+
+#35 0x00007ff67ff7d744 (C:\Users\<user>\mlir-aie\ironenv\Lib\site-packages\llvm-aie\bin\clang++.exe+0x434d744)
+
+#36 0x00007ffd8b28cd87 (C:\WINDOWS\System32\KERNEL32.DLL+0x2cd87)
+
+#37 0x00007ffd8be4caec (C:\WINDOWS\SYSTEM32\ntdll.dll+0xacaec)
+
+clang++: error: clang frontend command failed due to signal (use -v to see invocation)
+
+clang version 22.0.0 (https://github.com/Xilinx/llvm-aie a36c62b9d26291fb06604bc976c897791f0bb578)
+
+Target: aie2-none-unknown-elf
+
+Thread model: posix
+
+InstalledDir: C:\Users\<user>\mlir-aie\ironenv\Lib\site-packages\llvm-aie\bin
+
+Build config: +assertions
+
+clang++: note: diagnostic msg: 
+
+********************
+
+
+
+PLEASE ATTACH THE FOLLOWING FILES TO THE BUG REPORT:
+
+Preprocessed source(s) and associated run script(s) are located at:
+
+clang++: note: diagnostic msg: C:\Users\<user>\AppData\Local\Temp\conv2d_raw-1623dd.cpp
+
+clang++: note: diagnostic msg: C:\Users\<user>\AppData\Local\Temp\conv2d_raw-1623dd.sh
+
+clang++: note: diagnostic msg: 
+
+
+
+********************
+
+
+RESEARCH_PROCESS_RESULT {"exit_code": 1, "stop": null, "peak_tree_rss_bytes": 238747648, "rss_measurement": "maximum observed across sampled descendant working sets; zero observations reported as null", "elapsed_seconds": 5.780999999995402, "foreign_contention_observed": false, "timing_eligible": false}

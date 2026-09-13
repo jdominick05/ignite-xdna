@@ -2035,3 +2035,12 @@ If you want *what works and how fast*: `README.md`.
 If you want *every decision, rejection, and environment trap that produced it*:
 `docs/DECISIONS.md`.
 If you want *why any of this is being done*: you're reading it.
+
+## Native fused Conv epilogue qualification
+
+Can Conv, residual addition and SiLU remain on AIE2 without a CPU elementwise
+handoff? The standalone kernel now passes synthetic full-array numerical checks
+and the compute-overhead target for a defined wide-channel shape, with output
+DMA activity during the epilogue. The original narrow-channel shape misses the
+target. See [qualification and limits](docs/BENCHMARKS.md#fused-conv-residual-silu-2026-09-13-desktop-2).
+Connecting this ABI to model execution and establishing model-level parity remain open.
