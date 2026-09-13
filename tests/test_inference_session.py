@@ -183,6 +183,42 @@ class TestInferenceSession(unittest.TestCase):
                 f"Fused 2-layer throughput regressed: {bench_b['fps']} FPS"
             )
 
+    def test_05_monolithic_4stage_backbone(self):
+        """Test 5: Verify 4-stage monolithic transaction bundle execution on physical Phoenix silicon."""
+        with InferenceSession(
+            model_path_or_bundle=str(self.model_path),
+            enable_monolithic=True,
+            device_index=0,
+            num_cores=16,
+        ) as session:
+            self.assertTrue(session.is_monolithic)
+            self.assertEqual(session.stage_names, ["Stem", "P3", "P4", "P5"])
+            self.assertEqual(session.intermediate_ddr_bytes, 0)
+
+            # Test run with feature map extraction and hardware timestamps
+            out, hw_ts, feat_maps = session.run(
+                self.in_bytes_4col,
+                unswizzle=True,
+                return_timestamps=True,
+                extract_feature_maps=True,
+            )
+            self.assertEqual(len(out), 2048)
+            self.assertIn("P3", feat_maps)
+            self.assertIn("P4", feat_maps)
+            self.assertIn("P5", feat_maps)
+            for k, fmap in feat_maps.items():
+                self.assertEqual(len(fmap), 2048)
+                self.assertGreater(np.count_nonzero(fmap), 0)
+
+            # Test benchmark assertions
+            bench = session.benchmark(self.in_bytes_4col, warmup=10, iterations=30)
+            self.assertEqual(bench["ert_submissions_per_frame"], 4)
+            self.assertLessEqual(bench["ert_submissions_per_frame"], 4)
+            self.assertLess(bench["driver_tax_us"]["mean"] / 1000.0, 1.0)
+            self.assertLess(bench["hw_compute_us"]["mean"] / 1000.0, 10.0)
+            self.assertEqual(bench["intermediate_ddr_bytes"], 0)
+            self.assertGreater(bench["fps"], 500.0)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

@@ -492,7 +492,11 @@ def run_n_layer_fixed_point_reference(
     Computes exact INT8 fixed-point reference across arbitrary N-layer sequence
     matching physical AIE2 SRS execution with intermediate L2 ping-pong buffers.
     """
-    if isinstance(layers_or_partition, NpuFusedPartition):
+    if hasattr(layers_or_partition, "passes"):
+        layers = [p.layer_meta for p in layers_or_partition.passes]
+    elif hasattr(layers_or_partition, "layers"):
+        layers = layers_or_partition.layers
+    elif isinstance(layers_or_partition, NpuFusedPartition):
         layers = layers_or_partition.layers
     else:
         layers = list(layers_or_partition)
@@ -504,8 +508,9 @@ def run_n_layer_fixed_point_reference(
     cur_activations = input_bytes
     slice_in = cur_activations[:len(cur_activations) // 4] if len(cur_activations) == 8192 else cur_activations
 
-    Cin0 = 8
-    Cout0 = 8
+    l0 = layers[0]
+    Cin0 = min(8, l0.weights_raw.shape[1])
+    Cout0 = min(8, l0.weights_raw.shape[0])
     x_patch = np.zeros((4, Cin0, 3, 3), dtype=np.int8)
     for p in range(4):
         for ky in range(3):
@@ -516,16 +521,16 @@ def run_n_layer_fixed_point_reference(
                         x_patch[p, cin, ky, kx] = slice_in[off]
 
     # Layer 0 Compute
-    l0 = layers[0]
     w0 = l0.weights_raw[:Cout0, :Cin0, :, :]
     b0 = l0.bias_i32[:Cout0] if l0.bias_i32 is not None else np.zeros(Cout0, dtype=np.int32)
     shift0 = int(l0.shift_cut)
+    kh0, kw0 = w0.shape[2], w0.shape[3]
 
     y_cur = np.zeros((4, Cout0), dtype=np.int8)
     for p in range(4):
         acc = b0.copy().astype(np.int64)
-        for ky in range(3):
-            for kx in range(3):
+        for ky in range(kh0):
+            for kx in range(kw0):
                 acc += w0[:, :, ky, kx].astype(np.int64) @ x_patch[p, :, ky, kx].astype(np.int64)
         bias_round = 1 << (shift0 - 1)
         y_cur[p] = np.clip(np.right_shift(acc + bias_round, shift0), -128, 127).astype(np.int8)
@@ -533,8 +538,9 @@ def run_n_layer_fixed_point_reference(
     # Subsequent Intermediate & Final Layers
     for k in range(1, n):
         lk = layers[k]
-        Cout_k = 32 if k == n - 1 else 8
-        wk = lk.weights_raw[:Cout_k, :Cout0, :, :]
+        Cout_k = min(32 if k == n - 1 else 8, lk.weights_raw.shape[0])
+        Cin_k = min(Cout0, lk.weights_raw.shape[1])
+        wk = lk.weights_raw[:Cout_k, :Cin_k, :, :]
         bk = lk.bias_i32[:Cout_k] if lk.bias_i32 is not None else np.zeros(Cout_k, dtype=np.int32)
         shift_k = int(lk.shift_cut)
 
@@ -675,6 +681,17 @@ def execute_multi_layer_on_silicon(
     min_us = float(np.min(latencies_us))
     p95_us = float(np.percentile(latencies_us, 95))
     fps = 1e6 / mean_us if mean_us > 0 else 0.0
+
+    bo_in = None
+    bo_out = None
+    bo_init = None
+    bo_exec = None
+    try:
+        harness.kernel = None
+        harness.context = None
+        harness.dev = None
+    except Exception:
+        pass
 
     return {
         "num_layers": schedule.num_layers,
