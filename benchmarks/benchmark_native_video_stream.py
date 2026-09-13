@@ -214,11 +214,16 @@ def run_endurance_stress_test(
     print(f"  Asserting Zero Memory Leaks & Zero XRT BO Buffer Exhaustion")
     print(f"{'='*75}")
 
-    process = psutil.Process(os.getpid())
-    rss_initial_mb = process.memory_info().rss / (1024 * 1024)
-    print(f"Initial Process RSS: {rss_initial_mb:.2f} MB")
-
     with NativeIgniteEngine(model_path, device_id=0) as engine:
+        # Warmup and establish steady-state baseline
+        for _ in range(50):
+            t = engine.run_async(image_bgr)
+            engine.wait(t)
+
+        process = psutil.Process(os.getpid())
+        rss_baseline_mb = process.memory_info().rss / (1024 * 1024)
+        print(f"Baseline Steady-State RSS: {rss_baseline_mb:.2f} MB")
+
         t0 = time.perf_counter()
         in_flight: List[int] = []
 
@@ -242,13 +247,13 @@ def run_endurance_stress_test(
         t_total = time.perf_counter() - t0
         final_fps = total_frames / t_total
         rss_final_mb = process.memory_info().rss / (1024 * 1024)
-        rss_growth_mb = rss_final_mb - rss_initial_mb
+        rss_growth_mb = rss_final_mb - rss_baseline_mb
 
         print(f"\nEndurance Test Complete:")
         print(f"  Total Frames:       {total_frames}")
         print(f"  Total Elapsed Time: {t_total:.2f} s")
         print(f"  Average FPS:        {final_fps:.2f} FPS")
-        print(f"  Initial RSS:        {rss_initial_mb:.2f} MB")
+        print(f"  Baseline RSS:       {rss_baseline_mb:.2f} MB")
         print(f"  Final RSS:          {rss_final_mb:.2f} MB")
         print(f"  Net Memory Drift:   {rss_growth_mb:+.2f} MB")
 
@@ -260,7 +265,7 @@ def run_endurance_stress_test(
             "total_frames": total_frames,
             "elapsed_sec": t_total,
             "final_fps": final_fps,
-            "initial_rss_mb": rss_initial_mb,
+            "baseline_rss_mb": rss_baseline_mb,
             "final_rss_mb": rss_final_mb,
             "rss_growth_mb": rss_growth_mb,
         }
