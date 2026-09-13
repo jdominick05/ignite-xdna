@@ -1153,4 +1153,4 @@ container's streams to settle one question its static analysis could not.
 
 | Log | Outcome |
 |---|---|
-| [lowlevel_audit_silicon_checks_phoenix_20260913T1655Z.log](lowlevel_audit_silicon_checks_phoenix_20260913T1655Z.log) | The 63-layer `init_monolithic.bin` (2,256 parameter writes outside core data memory) and the 7-layer stem init both complete and give byte-identical layer-0 egress; the rebuilt native runtime runs 500 frames at 2,176.68 FPS with zero incomplete dispatches and refuses a bit-flipped and a truncated container at load |
+| [lowlevel_audit_silicon_checks_phoenix_20260913T1655Z.log](lowlevel_audit_silicon_checks_phoenix_20260913T1655Z.log) | The 63-layer `init_monolithic.bin` (2,256 parameter writes outside core data memory) and the 7-layer stem init both complete and give byte-identical layer-0 egress; the rebuilt native runtime runs 500 frames at 2,176.68 FPS with zero incomplete dispatches (functional check without contention preflight, not a benchmark figure) and refuses a bit-flipped and a truncated container at load |

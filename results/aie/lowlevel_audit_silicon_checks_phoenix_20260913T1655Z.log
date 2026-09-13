@@ -1,7 +1,7 @@
 Low-level audit silicon checks
 date_utc=2026-09-13
 machine=Desktop 2 (Ryzen 7 8700G), device=[003d:00:01.1] NPU Phoenix Device 0
-preflight=xrt-smi examine -r aie-partitions: No hardware contexts running (checked before each Python run)
+preflight=section A only: xrt-smi examine -r aie-partitions reported "No hardware contexts running" immediately before its two hardware contexts were opened. Sections B and C ran with NO contention check and NO host-load check; their timings are a functional check of the rebuilt runtime, not comparable throughput figures, and do not supersede the end-to-end benchmark numbers.
 xclbin=build/im2col_4d_16core.xclbin (shipped, unchanged); container=build/yolov8n.ignite (CRC 0x2e06f112, 5,315,840 B, 20 blobs)
 runtime=Python 3.13 ironenv with pyxrt (section A); ignite-run.exe built from this tree with MSVC 2022 (sections B, C)
 scope=docs/LOW_LEVEL_AUDIT.md section 11; no kernel source or transaction stream was changed for these runs
