@@ -63,6 +63,13 @@ class XrtSiliconHarness:
         self.kernel = self.pyxrt.kernel(self.context, kernel_name)
         return self.kernel
 
+    def create_instruction_bo_from_bytes(self, insts_bytes: Any) -> Tuple[Any, int]:
+        """Create cacheable instruction buffer directly from in-memory or memory-mapped bytes (zero-copy)."""
+        bo_instr = self.pyxrt.bo(self.dev, len(insts_bytes), self.pyxrt.bo.cacheable, self.kernel.group_id(1))
+        bo_instr.write(insts_bytes, 0)
+        bo_instr.sync(self.pyxrt.xclBOSyncDirection.XCL_BO_SYNC_BO_TO_DEVICE)
+        return bo_instr, len(insts_bytes)
+
     def create_instruction_bo(self, bin_path: str) -> Tuple[Any, int]:
         """Create cacheable instruction buffer for compiled NPU transaction stream."""
         if not os.path.isabs(bin_path):
@@ -71,10 +78,7 @@ class XrtSiliconHarness:
             raise FileNotFoundError(f"Instruction binary not found: {bin_path}")
         with open(bin_path, "rb") as f:
             insts_bytes = f.read()
-        bo_instr = self.pyxrt.bo(self.dev, len(insts_bytes), self.pyxrt.bo.cacheable, self.kernel.group_id(1))
-        bo_instr.write(insts_bytes, 0)
-        bo_instr.sync(self.pyxrt.xclBOSyncDirection.XCL_BO_SYNC_BO_TO_DEVICE)
-        return bo_instr, len(insts_bytes)
+        return self.create_instruction_bo_from_bytes(insts_bytes)
 
     def create_host_bo(self, size_bytes: int, group_id: int):
         """Create host-visible shared memory buffer object."""

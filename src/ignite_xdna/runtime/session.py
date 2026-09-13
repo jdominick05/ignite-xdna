@@ -146,6 +146,13 @@ class InferenceSession:
         self.profiler: Optional[Any] = None
         self.monolithic_stages: Dict[str, MonolithicStageHandle] = OrderedDict()
         self.multi_stage_plan: Optional[Any] = None
+        self._ignite_reader: Optional[Any] = None
+        self.ignite_manifest: Optional[Dict[str, Any]] = None
+
+        # Auto-detect .ignite container
+        if isinstance(model_path_or_bundle, (str, Path)) and str(model_path_or_bundle).endswith(".ignite"):
+            self.enable_monolithic = True
+            self.full_yolo = True
 
         # Auto-detect monolithic or neck/head/full_yolo request
         if full_yolo:
@@ -229,6 +236,42 @@ class InferenceSession:
             emit_multi_stage_transaction_bundle,
         )
         from ignite_xdna.compiler.partitioner import GraphPartitioner
+        from ignite_xdna.compiler.serializer import IgniteModelReader
+
+        # Direct zero-copy loading from .ignite container
+        if isinstance(model_or_bundle, IgniteModelReader) or (
+            isinstance(model_or_bundle, (str, Path)) and str(model_or_bundle).endswith(".ignite")
+        ):
+            if isinstance(model_or_bundle, IgniteModelReader):
+                reader = model_or_bundle
+            else:
+                reader = IgniteModelReader(self._abs_path(model_or_bundle))
+            self._ignite_reader = reader
+            self.ignite_manifest = reader.manifest
+            stages_meta = reader.manifest.get("stages", {})
+            for s_name, s_info in stages_meta.items():
+                exec_blob = s_info.get("exec_blob")
+                init_blob = s_info.get("init_blob")
+                exec_mv = reader.get_blob_memoryview(exec_blob)
+                bo_exec, ninstr_exec = self.harness.create_instruction_bo_from_bytes(exec_mv)
+                if init_blob and init_blob in reader.blobs:
+                    init_mv = reader.get_blob_memoryview(init_blob)
+                    bo_init, ninstr_init = self.harness.create_instruction_bo_from_bytes(init_mv)
+                else:
+                    bo_init, ninstr_init = (None, 0)
+                self.monolithic_stages[s_name] = MonolithicStageHandle(
+                    name=s_name,
+                    init_txn_path=None,
+                    exec_txn_path=None,
+                    bo_instr_init=bo_init,
+                    ninstr_init=ninstr_init,
+                    bo_instr_exec=bo_exec,
+                    ninstr_exec=ninstr_exec,
+                    num_layers=s_info.get("num_layers", 1),
+                    c2f_blocks=s_info.get("c2f_blocks", []),
+                    intermediate_ddr_bytes=0,
+                )
+            return
 
         base_txn = str(self._repo_root / "build" / "layer_conv0_exec.bin")
         if not os.path.exists(base_txn):
@@ -1291,6 +1334,13 @@ class InferenceSession:
                 stage.bo_instr_exec = None
             self.monolithic_stages.clear()
 
+        if hasattr(self, "_ignite_reader") and self._ignite_reader is not None:
+            try:
+                self._ignite_reader.close()
+            except Exception:
+                pass
+            self._ignite_reader = None
+
         if hasattr(self, "harness") and self.harness is not None:
             try:
                 self.harness.kernel = None
@@ -1300,6 +1350,24 @@ class InferenceSession:
                 pass
 
         self._closed = True
+
+    @classmethod
+    def from_file(
+        cls,
+        ignite_path: Union[str, Path],
+        device_index: int = 0,
+        **kwargs,
+    ) -> "InferenceSession":
+        """
+        Loads a compiled .ignite model container directly with zero-copy memory-mapped buffers.
+        """
+        return cls(
+            model_path_or_bundle=ignite_path,
+            device_index=device_index,
+            enable_monolithic=True,
+            full_yolo=True,
+            **kwargs,
+        )
 
     def __enter__(self):
         return self
