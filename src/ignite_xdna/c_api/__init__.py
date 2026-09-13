@@ -45,6 +45,7 @@ class NativeIgniteEngine:
         model_path: str | Path,
         device_id: int = 0,
         dll_path: Optional[str | Path] = None,
+        max_dets: int = 300,
     ):
         self.model_path = Path(model_path).resolve()
         if not self.model_path.exists():
@@ -143,8 +144,13 @@ class NativeIgniteEngine:
             err_msg = err.decode("utf-8") if err else "Unknown error"
             raise RuntimeError(f"ignite_load failed: {err_msg}")
 
-        self._max_dets = 100
+        self._max_dets = max_dets
         self._det_arr = (IgniteDetectionStruct * self._max_dets)()
+
+    def set_max_detections(self, max_dets: int) -> None:
+        if max_dets > 0:
+            self._max_dets = max_dets
+            self._det_arr = (IgniteDetectionStruct * self._max_dets)()
 
     def set_thresholds(self, conf_thres: float = 0.25, iou_thres: float = 0.50) -> None:
         if self.handle:
