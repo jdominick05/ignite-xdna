@@ -25,6 +25,7 @@ from ignite_xdna.compiler.partitioner import GraphPartitioner
 from ignite_xdna.compiler.scheduler import (
     MemTileMultiPassScheduler,
     emit_multi_stage_transaction_bundle,
+    emit_unified_monolithic_transaction_bundle,
 )
 from ignite_xdna.compiler.serializer import (
     ARCH_XDNA1_PHOENIX,
@@ -211,6 +212,31 @@ def compile_model(
         print(f"    - Stage {idx}: {s_name:<12} | Layers: {stage_plan.num_layers} | "
               f"Exec: {len(exec_bytes):>6} B | Init: {init_size:>7} B")
 
+    # 5b. Synthesize Unified Single-Dispatch Monolithic Transaction Stream
+    print("[*] Synthesizing continuous single-dispatch monolithic transaction stream...")
+    mono_init_name = "init_monolithic.bin"
+    mono_exec_name = "exec_monolithic.bin"
+    mono_init_path = str(build_staging / mono_init_name)
+    mono_exec_path = str(build_staging / mono_exec_name)
+
+    emit_unified_monolithic_transaction_bundle(
+        schedule=multi_plan,
+        base_txn_path=base_txn,
+        out_init_path=mono_init_path,
+        out_exec_path=mono_exec_path,
+        cores=None,
+    )
+
+    with open(mono_exec_path, "rb") as f:
+        mono_exec_bytes = f.read()
+    stage_blobs.append((mono_exec_name, mono_exec_bytes, "transaction_exec_monolithic"))
+
+    if os.path.exists(mono_init_path) and os.path.getsize(mono_init_path) > 0:
+        with open(mono_init_path, "rb") as f:
+            mono_init_bytes = f.read()
+        stage_blobs.append((mono_init_name, mono_init_bytes, "transaction_init_monolithic"))
+        print(f"    [OK] Unified Single-Dispatch Stream: Exec={len(mono_exec_bytes):>6} B | Init={len(mono_init_bytes):>7} B")
+
     # 6. Parse / Extract Quantization Scales
     quant_scales: Dict[str, Any] = {}
     if quant_scales_path is not None and os.path.exists(quant_scales_path):
@@ -248,6 +274,9 @@ def compile_model(
         },
         "num_stages": len(stages_meta),
         "stages": stages_meta,
+        "single_dispatch": True,
+        "monolithic_exec_blob": mono_exec_name,
+        "monolithic_init_blob": mono_init_name,
         "quant_scales": quant_scales,
     }
 

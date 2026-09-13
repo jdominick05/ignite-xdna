@@ -127,6 +127,7 @@ class InferenceSession:
         out_bytes: Optional[int] = None,
         scale_x: Optional[float] = None,
         node_name: Optional[str] = None,
+        single_dispatch: Optional[bool] = None,
     ):
         self.device_index = device_index
         self.ring_depth = max(1, ring_depth)
@@ -140,6 +141,7 @@ class InferenceSession:
         self.num_cores = num_cores
         self.scale_x = scale_x
         self.node_name = node_name
+        self._single_dispatch_override = single_dispatch
         self._closed = False
         self._repo_root = get_repo_root()
         self.partitioned_graph: Optional[Any] = None
@@ -148,6 +150,9 @@ class InferenceSession:
         self.multi_stage_plan: Optional[Any] = None
         self._ignite_reader: Optional[Any] = None
         self.ignite_manifest: Optional[Dict[str, Any]] = None
+        self.bo_instr_monolithic: Optional[Any] = None
+        self.ninstr_monolithic: int = 0
+        self.single_dispatch: bool = False
 
         # Auto-detect .ignite container
         if isinstance(model_path_or_bundle, (str, Path)) and str(model_path_or_bundle).endswith(".ignite"):
@@ -271,6 +276,20 @@ class InferenceSession:
                     c2f_blocks=s_info.get("c2f_blocks", []),
                     intermediate_ddr_bytes=0,
                 )
+            # Load unified single-dispatch monolithic stream if present
+            mono_exec_blob = reader.manifest.get("monolithic_exec_blob", "exec_monolithic.bin")
+            mono_init_blob = reader.manifest.get("monolithic_init_blob", "init_monolithic.bin")
+            single_dispatch_enabled = (
+                self._single_dispatch_override if self._single_dispatch_override is not None
+                else reader.manifest.get("single_dispatch", False)
+            )
+            if single_dispatch_enabled and mono_exec_blob in reader.blobs:
+                exec_mv = reader.get_blob_memoryview(mono_exec_blob)
+                self.bo_instr_monolithic, self.ninstr_monolithic = self.harness.create_instruction_bo_from_bytes(exec_mv)
+                self.single_dispatch = True
+            if single_dispatch_enabled and mono_init_blob in reader.blobs:
+                init_mv = reader.get_blob_memoryview(mono_init_blob)
+                self.bo_instr_init, self.ninstr_init = self.harness.create_instruction_bo_from_bytes(init_mv)
             return
 
         base_txn = str(self._repo_root / "build" / "layer_conv0_exec.bin")
@@ -303,6 +322,17 @@ class InferenceSession:
                     c2f_blocks=stage_plan.c2f_blocks,
                     intermediate_ddr_bytes=0,
                 )
+            if (self.full_yolo or len(model_or_bundle.stages) == 9) and self._single_dispatch_override is not False:
+                mono_init = str(build_dir / "init_monolithic.bin")
+                mono_exec = str(build_dir / "exec_monolithic.bin")
+                if not (os.path.exists(mono_init) and os.path.exists(mono_exec)):
+                    from ignite_xdna.compiler.scheduler import emit_unified_monolithic_transaction_bundle
+                    emit_unified_monolithic_transaction_bundle(model_or_bundle, base_txn, mono_init, mono_exec)
+                if os.path.exists(mono_exec):
+                    self.bo_instr_monolithic, self.ninstr_monolithic = self.harness.create_instruction_bo(mono_exec)
+                    self.single_dispatch = True
+                if os.path.exists(mono_init):
+                    self.bo_instr_init, self.ninstr_init = self.harness.create_instruction_bo(mono_init)
             return
 
         if isinstance(model_or_bundle, dict) and "stages" in model_or_bundle:
@@ -388,6 +418,18 @@ class InferenceSession:
                 c2f_blocks=stage_plan.c2f_blocks,
                 intermediate_ddr_bytes=0,
             )
+
+        if (self.full_yolo or len(multi_plan.stages) == 9) and self._single_dispatch_override is not False:
+            mono_init = str(build_dir / "init_monolithic.bin")
+            mono_exec = str(build_dir / "exec_monolithic.bin")
+            if not (os.path.exists(mono_init) and os.path.exists(mono_exec)):
+                from ignite_xdna.compiler.scheduler import emit_unified_monolithic_transaction_bundle
+                emit_unified_monolithic_transaction_bundle(multi_plan, base_txn, mono_init, mono_exec)
+            if os.path.exists(mono_exec):
+                self.bo_instr_monolithic, self.ninstr_monolithic = self.harness.create_instruction_bo(mono_exec)
+                self.single_dispatch = True
+            if os.path.exists(mono_init):
+                self.bo_instr_init, self.ninstr_init = self.harness.create_instruction_bo(mono_init)
 
     def _resolve_xclbin(self, explicit_path: Optional[Union[str, Path]]) -> Path:
         """Resolves target AIE2 firmware XCLBIN."""
@@ -523,6 +565,18 @@ class InferenceSession:
         bo_out.sync(self.harness.pyxrt.xclBOSyncDirection.XCL_BO_SYNC_BO_TO_DEVICE)
 
         if self.enable_monolithic:
+            if self.single_dispatch and hasattr(self, "bo_instr_init") and self.bo_instr_init is not None:
+                run_init, state_init = self.harness.dispatch_kernel(
+                    self.bo_instr_init, self.ninstr_init, bo_in, bo_out, timeout_ms=3000
+                )
+                if str(state_init) != "ert_cmd_state.ERT_CMD_STATE_COMPLETED":
+                    raise RuntimeError(f"Monolithic unified init failed with state: {state_init}")
+                if self.bo_instr_monolithic is not None:
+                    self.harness.dispatch_kernel(
+                        self.bo_instr_monolithic, self.ninstr_monolithic, bo_in, bo_out, timeout_ms=2000
+                    )
+                return
+
             for s_name, stage in self.monolithic_stages.items():
                 if stage.bo_instr_init is not None:
                     run_init, state_init = self.harness.dispatch_kernel(
@@ -533,6 +587,10 @@ class InferenceSession:
                 # Prime pipeline with 1 exec dispatch
                 self.harness.dispatch_kernel(
                     stage.bo_instr_exec, stage.ninstr_exec, bo_in, bo_out, timeout_ms=2000
+                )
+            if self.single_dispatch and self.bo_instr_monolithic is not None:
+                self.harness.dispatch_kernel(
+                    self.bo_instr_monolithic, self.ninstr_monolithic, bo_in, bo_out, timeout_ms=2000
                 )
             return
 
@@ -892,8 +950,37 @@ class InferenceSession:
         total_submission_us = 0.0
         total_exec_us = 0.0
 
-        if return_timestamps or extract_feature_maps:
-            stage_timings: List[Dict[str, float]] = []
+        if self.single_dispatch and self.bo_instr_monolithic is not None and not extract_feature_maps:
+            if return_timestamps:
+                t_sub_start = time.perf_counter_ns()
+                run = self.harness.kernel(
+                    3, self.bo_instr_monolithic, self.ninstr_monolithic, slot["bo_in"], slot["bo_out"]
+                )
+                t_sub_end = time.perf_counter_ns()
+
+                t_exec_start = time.perf_counter_ns()
+                state = run.wait(timeout_ms)
+                t_exec_end = time.perf_counter_ns()
+
+                if str(state) != "ert_cmd_state.ERT_CMD_STATE_COMPLETED":
+                    raise RuntimeError(f"Monolithic single-dispatch execution failed with state: {state}")
+
+                sub_us = (t_sub_end - t_sub_start) / 1000.0
+                exec_us = (t_exec_end - t_exec_start) / 1000.0
+                stage_timings.append({
+                    "stage": "monolithic_single_dispatch",
+                    "submission_us": sub_us,
+                    "execution_us": exec_us,
+                    "total_us": sub_us + exec_us,
+                })
+                total_submission_us = sub_us
+                total_exec_us = exec_us
+            else:
+                run = self.harness.kernel(
+                    3, self.bo_instr_monolithic, self.ninstr_monolithic, slot["bo_in"], slot["bo_out"]
+                )
+                run.wait(timeout_ms)
+        elif return_timestamps or extract_feature_maps:
             for s_idx, (s_name, stage) in enumerate(self.monolithic_stages.items()):
                 t_sub_start = time.perf_counter_ns()
                 run = self.harness.kernel(
@@ -946,28 +1033,49 @@ class InferenceSession:
 
         if self.profiler is not None and self.profiler.is_enabled:
             from .profiler import PartitionProfileRecord
-            for s_idx, (s_name, stage) in enumerate(self.monolithic_stages.items()):
-                st = stage_timings[s_idx]
-                is_first = (s_idx == 0)
-                is_last = (s_idx == len(self.monolithic_stages) - 1)
+            if len(stage_timings) == 1:
+                st = stage_timings[0]
                 rec = PartitionProfileRecord(
-                    partition_id=s_idx,
+                    partition_id=0,
                     partition_type="NPU",
-                    stage_group=f"Monolithic Stage {s_name}",
-                    stage_label=f"Stage {s_name} ({stage.num_layers} layers)",
-                    node_names=[f"{s_name}_layer_{i}" for i in range(stage.num_layers)],
-                    op_types=["Conv" for _ in range(stage.num_layers)],
-                    input_bytes=self.in_bytes if is_first else 0,
-                    output_bytes=self.out_bytes if is_last else 0,
+                    stage_group="Monolithic Single-Dispatch",
+                    stage_label="Monolithic Unified Stream (9 stages, 1 dispatch)",
+                    node_names=["monolithic_single_dispatch"],
+                    op_types=["UnifiedConvSequence"],
+                    input_bytes=self.in_bytes,
+                    output_bytes=self.out_bytes,
                     duration_us=st["total_us"],
-                    ingress_marshal_us=(t_marshal_end - t_marshal_start) / 1000.0 if is_first else 0.0,
-                    bo_in_sync_us=(t_sync_in_end - t_sync_in_start) / 1000.0 if is_first else 0.0,
+                    ingress_marshal_us=(t_marshal_end - t_marshal_start) / 1000.0,
+                    bo_in_sync_us=(t_sync_in_end - t_sync_in_start) / 1000.0,
                     dispatch_submission_us=st["submission_us"],
                     device_execution_us=st["execution_us"],
-                    bo_out_sync_us=(t_sync_out_end - t_sync_out_start) / 1000.0 if is_last else 0.0,
-                    egress_unswizzle_us=(t_unswizzle_end - t_unswizzle_start) / 1000.0 if is_last else 0.0,
+                    bo_out_sync_us=(t_sync_out_end - t_sync_out_start) / 1000.0,
+                    egress_unswizzle_us=(t_unswizzle_end - t_unswizzle_start) / 1000.0,
                 )
                 self.profiler.record_partition(rec)
+            else:
+                for s_idx, (s_name, stage) in enumerate(self.monolithic_stages.items()):
+                    st = stage_timings[s_idx]
+                    is_first = (s_idx == 0)
+                    is_last = (s_idx == len(self.monolithic_stages) - 1)
+                    rec = PartitionProfileRecord(
+                        partition_id=s_idx,
+                        partition_type="NPU",
+                        stage_group=f"Monolithic Stage {s_name}",
+                        stage_label=f"Stage {s_name} ({stage.num_layers} layers)",
+                        node_names=[f"{s_name}_layer_{i}" for i in range(stage.num_layers)],
+                        op_types=["Conv" for _ in range(stage.num_layers)],
+                        input_bytes=self.in_bytes if is_first else 0,
+                        output_bytes=self.out_bytes if is_last else 0,
+                        duration_us=st["total_us"],
+                        ingress_marshal_us=(t_marshal_end - t_marshal_start) / 1000.0 if is_first else 0.0,
+                        bo_in_sync_us=(t_sync_in_end - t_sync_in_start) / 1000.0 if is_first else 0.0,
+                        dispatch_submission_us=st["submission_us"],
+                        device_execution_us=st["execution_us"],
+                        bo_out_sync_us=(t_sync_out_end - t_sync_out_start) / 1000.0 if is_last else 0.0,
+                        egress_unswizzle_us=(t_unswizzle_end - t_unswizzle_start) / 1000.0 if is_last else 0.0,
+                    )
+                    self.profiler.record_partition(rec)
             self.profiler.end_iteration((t_end - t_start) / 1000.0)
 
         if return_timestamps:
@@ -1253,7 +1361,8 @@ class InferenceSession:
                 "p95_us": p95_us,
                 "p99_us": p99_us,
                 "fps": fps,
-                "ert_submissions_per_frame": len(self.monolithic_stages),
+                "single_dispatch": self.single_dispatch,
+                "ert_submissions_per_frame": 1 if self.single_dispatch else len(self.monolithic_stages),
                 "driver_tax_us": {
                     "mean": mean_tax_us,
                     "median": median_tax_us,
@@ -1339,6 +1448,8 @@ class InferenceSession:
         self.bo_out_ping = None
         self.bo_out_pong = None
         self.bo_instr_exec = None
+        self.bo_instr_monolithic = None
+        self.bo_instr_init = None
 
         if self.enable_monolithic:
             for stage in self.monolithic_stages.values():
