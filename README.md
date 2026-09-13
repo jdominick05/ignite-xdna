@@ -146,6 +146,10 @@ with InferenceSession("build/layer_conv0_exec.bin") as s:
     out = s.run(input_data)  # 86 us on Phoenix NPU (~11,000 FPS)
 ```
 
+Native graph stages can also share BOs with custom AIE kernels through
+`ignite_xdna.runtime.KernelSplicer`. The Phoenix Conv2D/GroupNorm/Conv2D validation
+checks every stage against serial execution. [Scope, measurements and usage](docs/BENCHMARKS.md#native-bo-kernel-splicing-2026-09-13-desktop-2).
+
 ## Where the detail lives
 
 | Document | What it is for |

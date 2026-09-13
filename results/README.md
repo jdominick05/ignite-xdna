@@ -1,5 +1,9 @@
 # results/
 
+Native graph/custom-kernel BO handoff logs are indexed under
+[AIE native graph BO splicing](aie/README.md#native-graph-bo-splicing), with
+[measurements and scope](../docs/BENCHMARKS.md#native-bo-kernel-splicing-2026-09-13-desktop-2).
+
 Raw logs behind every number in `README.md`, `RESEARCH.md` and `docs/BENCHMARKS.md`. Each
 log is the UTF-8 stdout of one script invocation, written by the wrappers in `scripts/`;
 nothing here is edited by hand except that the local user profile path has been replaced

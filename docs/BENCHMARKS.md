@@ -7318,6 +7318,103 @@ cache. The parent runs in activated `resnet_env17`. Every NPU fixture uses a fre
 private compile cache. `--checks-only` records correctness evidence while explicitly
 disqualifying performance claims. No NPU test here substitutes CPU placement evidence.
 
+## Native BO kernel splicing (2026-09-13, Desktop 2)
+
+Native `ignite_xdna` graph stages now share XRT BOs with the existing bf16
+GroupNorm(32) kernel through `runtime/splice.py`. This is a same-process native
+runtime result; VitisAI EP buffer export and fp32/bf16 or INT8 conversion are
+outside its scope. The intermediate allocation remains in system DDR. The measured
+zero is **host readback, host writes and host sync calls between stages**, not
+physical DDR traffic or on-chip SRAM residency.
+
+On Ryzen 7 8700G / Phoenix Device 0 `[003d:00:01.1]`, the fixture runs native
+Conv2D -> GroupNorm(32) -> native Conv2D in three hardware contexts. Both Conv2Ds
+are fixed bf16 NCHW depthwise 1x1 graphs: upstream `0.5*x + 0.25`, downstream
+`2*x + 1`. They use the real `InferenceSession` transaction/context adapter.
+GroupNorm uses `kernels/groupnorm_bf16/groupnorm.py` and its unchanged C++ kernel.
+This validates the physical buffer contract; it does not generalize the ONNX
+compiler to arbitrary bf16 convolutions or layouts.
+
+| Group length L | FIFO chunk | Bytes per intermediate | Direct median, ms | Serial host-copy median, ms | Completion-to-next-submit median, us |
+|---:|---:|---:|---:|---:|---:|
+| 1024 | 256 | 65,536 | 1.78470 | 1.84050 | 1.45 |
+| 301056 | 3072 | 19,267,584 | 8.72025 | 18.39125 | 2.10 |
+
+Backing logs:
+[small tensor](../results/aie/kernel_splice_conv_gn32_phoenix_20260913T040640Z_17573.log),
+[large tensor](../results/aie/kernel_splice_conv_gn32_phoenix_20260913T040745Z_27184.log).
+Each row has 3 warmups and 30 measured pairs, alternates direct/control order,
+and changes every group's input on every iteration (seed 20260912). Both paths
+prepare reusable ERT commands before timing. The wall bracket starts immediately
+before first dispatch and ends after final host readback; initial upload,
+output poisoning, CPU references, and post-chain diagnostic readbacks are outside
+it. Direct includes the splicer's checks and completion orchestration. The control
+reads and copies each intermediate into a distinct input BO, including both
+directions' sync calls. The large row improves the median by 2.109x; the small
+row's gain is slight. These are same-sitting comparisons within each row.
+
+All bytes of all three stages match serial host-copy execution, over 6,488,064
+compared bytes at the small shape and 1,907,490,816 at the large shape, including
+warmups. Every output is poisoned before each direct run. The independent CPU
+oracle checks both Conv2Ds bit-exactly and checks GroupNorm against a float64
+centered-variance reference with `abs(error) <= 0.016 + 0.008*abs(reference)`.
+Bit-exact *serial AIE parity* does not mean bit-exact fp32 CPU GroupNorm parity.
+Both logs contain complete input/output and artifact SHA256 hashes, downstream
+Shim relocation offsets, shared BO identity/device addresses, and audited zero
+inter-stage host reads/writes/syncs. CPU/RAM preflights report CLEAR; context
+witnesses before and after execution show only the test PID, with 66 submissions
+and completions per context and no errors. The host counters instrument
+`DeviceBuffer` operations; they are not a hardware bus-counter measurement.
+
+`KernelSplicer` binds the producer BO as the downstream XRT buffer argument, so
+existing `DDR_PATCH` records relocate downstream Shim BDs to that BO plus the
+compiled offsets. It preserves XRT buffer ownership and firmware address-space
+translation. `bo.address()` is recorded for audit, never passed as a scalar kernel
+argument. Shape, dtype, physical layout, device and memory-bank checks reject
+incompatible links. The full group ID is used at allocation: XRT encodes the
+context slot in bits 16..23, while connectivity uses the bank in bits 0..15
+(`xrt/detail/xrt_mem.h` in the installed SDK;
+[XRT connectivity validation](https://github.com/Xilinx/XRT/blob/master/src/runtime_src/core/common/api/xrt_kernel.cpp)).
+Different context slots on bank 0 are compatible here; no host-copy fallback
+warning appeared in either passing log.
+
+Synchronization uses bounded PyXRT completion waits and then starts the next
+prepared ERT command, with no sleeps, busy-spin IPC or invented cross-context
+semaphore primes. The compiled FIFO locks and per-call GroupNorm parameter/reset
+sequence remain intact. The microsecond gap is the host interval after completion
+returns and before the next submit; context scheduling is included in each
+stage's submit/wait bracket and remains substantial. The earlier
+[1,189.4 us two-process protocol measurement](../results/aie/groupnorm_bf16_handoff_floor_v2_npu.log)
+is retained: its shared-memory identity-copy protocol is a different path and
+timing bracket. Native splicing removes that protocol from this pipeline, not
+all dispatch costs or the need for dtype/layout conversion in other graphs.
+
+Bring-up evidence is also retained:
+[first attempt](../results/aie/kernel_splice_conv_gn32_phoenix_20260913T040052Z_27546.log)
+rejected unequal *encoded* group IDs before any dispatch and then exited 139
+during teardown. Subsequent runs use bank/slot validation and explicit resource
+teardown and exit cleanly; the teardown crash was not independently isolated.
+[Initial passing run](../results/aie/kernel_splice_conv_gn32_phoenix_20260913T040352Z_23328.log)
+used fresh command allocation per dispatch and is superseded for timing by the
+prepared-command rows above. Hardware timeouts, foreign-context interference,
+cross-process sharing and arbitrary graph conversion are not validated here.
+
+Reproduce through Git Bash (compilation and NPU execution are serial):
+
+```bash
+./scripts/kernel-splice.sh --compile --L 1024 --chunk 256 --iters 30 --warmup 3
+./scripts/kernel-splice.sh --compile --L 301056 --chunk 3072 --iters 30 --warmup 3
+```
+
+For integration, declare physical `TensorSpec`s and create `KernelStage`s from
+native `InferenceSession`s or explicit transaction files. Construct a
+`KernelSplicer([upstream, custom, downstream])`, upload the first stage's input
+and parameters once, then use `splicer.run().output.read()` for final readback.
+Keep borrowed sessions open and exclusive, read results before reusing the chain,
+and close the splicer before its stages and sessions. Unsupported transaction
+encodings and tensor arguments beyond the first five firmware-translated slots
+are rejected. A failed completion poisons the chain and retains its BOs.
+
 ## Empirical Silicon Benchmark: ignite-xdna vs AMD Vitis AI EP (2026-09-12, Desktop 2)
 
 An empirical comparative benchmark conducted on physical **AMD Ryzen 7 8700G (Phoenix APU, XDNA1 NPU `[003d:00:01.1]` @ 1.80 GHz)** evaluating `ignite-xdna`'s bare-metal AIE2 control engine against AMD's official proprietary ONNX Runtime Vitis AI Execution Provider (`VitisAIExecutionProvider`, Ryzen AI 1.7.1 VOE 4.0 stack with `4x4.xclbin`).

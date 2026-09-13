@@ -28,6 +28,7 @@ from .profiler import (
     CAT_CPU_FALLBACK,
 )
 from .session import InferenceSession, RunHandle
+from .splice import DeviceBuffer, KernelSplicer, KernelStage, SpliceResult, TensorSpec
 
 __all__ = [
     "XrtSiliconHarness",
@@ -50,4 +51,9 @@ __all__ = [
     "CAT_CPU_FALLBACK",
     "InferenceSession",
     "RunHandle",
+    "DeviceBuffer",
+    "KernelSplicer",
+    "KernelStage",
+    "SpliceResult",
+    "TensorSpec",
 ]

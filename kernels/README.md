@@ -321,6 +321,12 @@ the likeliest remaining rate-limiter.
 
 ## `dispatch_floor/`
 
+`splice_fixture.py` and `splice_conv.cc` now provide two small native bf16 Conv2D
+graph fixtures around the existing `groupnorm_bf16` kernel. Run
+`./scripts/kernel-splice.sh --compile` for physical BO-sharing validation with
+per-stage serial parity, CPU references and paired host-copy timing.
+[Measurements and limits](../docs/BENCHMARKS.md#native-bo-kernel-splicing-2026-09-13-desktop-2).
+
 Not an operator — measures the **per-dispatch fixed cost itself**, the constant every
 isolated-op verdict in this repo rests on.
 
