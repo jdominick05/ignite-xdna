@@ -1,0 +1,38 @@
+Phoenix DFL decode silicon qualification
+date_utc=2026-09-13T15:30:36+00:00
+host=DESKTOP-CBL5NUA
+command=C:\Users\<user>\mlir-aie\ironenv\Scripts\python.exe tests/test_dfl_kernel.py --hardware --skip-offline --cols 1 --cores-per-col 1 --iters 100 --warmup 10 --log results\aie\dfl_decode_phoenix_probe_1x1_20260913T153036Z.log
+shape=1x1 (1 cores)
+test_sha256=6ed9993c838c18fe6c8da2ac0ffae0af21445755cbee3f640263b5f5665182e2
+source_dfl_decode.cc_sha256=d1d84be79b04060a5168f846b49e86f8b492384f62b0ef3779f3ffa892087151
+source_dfl_stage.py_sha256=79239e7f49134072bc99ee53d3305e5529f3d863962dd4bf19f9e95509f0e56a
+{"active_anchors": 525, "active_cores": 1, "event": "build_identity", "full_design": false, "insts_sha256": "b7c3a1eb039534e4917c4f27dd5bbc28175bc19356035f4cbbd3438620f87e07", "shape": {"cols": 1, "cores_per_col": 1}, "sources": {"dfl_decode.cc": "d1d84be79b04060a5168f846b49e86f8b492384f62b0ef3779f3ffa892087151", "dfl_stage.py": "79239e7f49134072bc99ee53d3305e5529f3d863962dd4bf19f9e95509f0e56a"}, "test_sha256": "6ed9993c838c18fe6c8da2ac0ffae0af21445755cbee3f640263b5f5665182e2", "xclbin_sha256": "eec3020760e4d7126d7cb567336308aa168b9a5b77977d171c5a9920533e5413"}
+{"dispatches": 114, "distinct_fixtures": 12, "event": "references_ready", "measured_fixture_pool": 8}
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+HOST_LOAD busy_cores=1.81 logical_cores=16 free_ram_gb=15.9 sample_sec=1
+HOST_LOAD_TOP 0.91 <local-tool>:31940 ws_mb=1185
+HOST_LOAD_TOP 0.26 powershell:18644 ws_mb=68
+HOST_LOAD_TOP 0.23 pycharm64:8540 ws_mb=2680
+HOST_LOAD_TOP 0.23 python:33940 ws_mb=45
+HOST_LOAD_TOP 0.06 <local-tool>:15092 ws_mb=407
+HOST_LOAD_VERDICT CLEAR
+
+{"event": "context_ready", "group_ids": {"1": "0x00170001", "3": "0x00170000", "4": "0x00170000", "5": "0x00170000"}}
+{"boxes_max_abs_px": 0.078338623046875, "boxes_max_q4_lsb": 0.15667724609375, "dispatch_wait_us": 51148.6, "event": "comparison", "fixed_boxes_max_abs": 0.004638671875, "fixed_mismatched_values": 1, "fixed_scores_max_abs": 0.0, "index": 0, "mode": "random", "nonfinite_outputs": 0, "parity": "PASS", "role": "correctness", "scores_max_abs": 0.0005570650100708008, "seed": 17, "stray_writes": 0}
+{"event": "dispatch_failure", "index": 1, "mode": "extreme", "role": "correctness", "seed": 91, "state": "ert_cmd_state.ERT_CMD_STATE_TIMEOUT", "wait_us": 7019640.9}
+{"event": "postflight", "no_hardware_contexts": true}
+Traceback (most recent call last):
+  File "<worktree>\tests\test_dfl_kernel.py", line 554, in main
+    hardware(args, directory)
+    ~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "<worktree>\tests\test_dfl_kernel.py", line 443, in hardware
+    raise RuntimeError(f"hardware completion failed: {state}")
+RuntimeError: hardware completion failed: ert_cmd_state.ERT_CMD_STATE_TIMEOUT
+

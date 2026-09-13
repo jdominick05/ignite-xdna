@@ -11,6 +11,12 @@ channels.  The MemTile then uses two strided MM2S descriptors to deinterleave
 the shared output slot into contiguous boxes and scores on the two shim S2MM
 channels.  This preserves separate zero-copy host BOs without requiring eight
 core-to-MemTile routes from a six-channel MemTile.
+
+The shared output slot is handed from core to core by explicit turn locks, one
+per core, in anchor order.  ``module(cols, cores_per_col)`` instantiates a
+reduced design (the first ``cores_per_col`` cores of the first ``cols``
+columns) with the same anchor mapping, lock numbering and host BO layout as the
+full design, so a probe differs from production only in how many cores exist.
 """
 from pathlib import Path
 
@@ -35,20 +41,43 @@ CHUNK_INPUT_BYTES = 15 * INPUT_ANCHOR_BYTES
 CHUNK_BOX_BYTES = 15 * 4 * 4
 CHUNK_SCORE_BYTES = 15 * 80 * 4
 CHUNK_WIRE_BYTES = CHUNK_BOX_BYTES + CHUNK_SCORE_BYTES
+# One anchor's wire record: four box floats, then eighty score floats.
+RECORD_BOX_BYTES = 4 * 4
+RECORD_SCORE_BYTES = 80 * 4
+RECORD_BYTES = RECORD_BOX_BYTES + RECORD_SCORE_BYTES
 OUTPUT_DMA_PART_BYTES = CHUNK_WIRE_BYTES * 5
 OUTPUT_DMA_PARTS = CORE_WIRE_BYTES // OUTPUT_DMA_PART_BYTES
 MEM_IN_BYTES = CORE_INPUT_BYTES
 MEM_OUT_BYTES = CORE_WIRE_BYTES
 
+# MemTile lock numbers are fixed per core row, so a reduced probe uses the same
+# lock identities as the full design.
+LOCK_IN_SLOT = 0
+LOCK_IN_READY = 1
+LOCK_OUT_TURN = 5
+LOCK_BOX_READY = 9
+LOCK_SCORE_READY = 13
+LOCK_PART_READY = 17
+
 assert CORE_WIRE_BYTES % OUTPUT_DMA_PART_BYTES == 0
+
+
+def check_shape(cols, cores_per_col):
+    if not (1 <= cols <= COLS and 1 <= cores_per_col <= CORES_PER_COL):
+        raise ValueError(
+            f"cols must be 1..{COLS} and cores_per_col 1..{CORES_PER_COL}, "
+            f"got {cols} x {cores_per_col}"
+        )
+
+
+def active_cores(cols=COLS, cores_per_col=CORES_PER_COL):
+    """Global core indices instantiated by a (possibly reduced) design."""
+    check_shape(cols, cores_per_col)
+    return [col * CORES_PER_COL + row for col in range(cols) for row in range(cores_per_col)]
 
 
 def _emit(lines, text):
     lines.append("    " + text)
-
-
-def _lock(lines, name, tile, number, value):
-    _emit(lines, f"%{name} = aie.lock(%{tile}, {number}) {{init = {value} : i32}}")
 
 
 def _buffer(lines, name, tile, size):
@@ -91,7 +120,7 @@ def _core_dma(lines, tile, names):
     _emit(lines, "}")
 
 
-def _lock_set(prefix, tile, start, initial_free):
+def _lock_set(prefix, initial_free):
     names = {
         "free_ping": f"{prefix}_free_ping",
         "ready_ping": f"{prefix}_ready_ping",
@@ -107,14 +136,17 @@ def _lock_set(prefix, tile, start, initial_free):
     return names, locks
 
 
-def module():
+def module(cols=COLS, cores_per_col=CORES_PER_COL):
+    check_shape(cols, cores_per_col)
+    rows = range(cores_per_col)
+    last = cores_per_col - 1
     lines = ["module {", "  aie.device(npu1) {"]
     emit = lambda s: _emit(lines, s)
 
     emit(f"func.func private @dfl_decode_chunk(memref<{CHUNK_INPUT_BYTES}xi8>, memref<{CHUNK_WIRE_BYTES}xi8>, i32) -> ()")
 
-    for col in range(COLS):
-        tiles = [f"t{col}_{row}" for row in range(6)]
+    for col in range(cols):
+        tiles = [f"t{col}_{row}" for row in range(2 + cores_per_col)]
         for row, tile in enumerate(tiles):
             emit(f"%{tile} = aie.tile({col}, {row})")
         shim = tiles[0]
@@ -124,18 +156,23 @@ def module():
         emit(f"%mem_in_{col} = aie.buffer(%{mem}) {{sym_name = \"mem_in_{col}\", address = 0 : i32}} : memref<{MEM_IN_BYTES}xi8>")
         emit(f"%mem_out_{col} = aie.buffer(%{mem}) {{sym_name = \"mem_out_{col}\", address = 131072 : i32}} : memref<{MEM_OUT_BYTES}xi8>")
 
-        emit(f"%in_slot_free_{col} = aie.lock(%{mem}, 0) {{init = 1 : i32}}")
-        for row in range(CORES_PER_COL):
-            emit(f"%in_ready_{col}_{row} = aie.lock(%{mem}, {1 + row}) {{init = 0 : i32}}")
-        # The output slot is a single-token sequence: core output releases
-        # box_ready, boxes releases score_ready, and scores returns the slot.
-        emit(f"%out_slot_free_{col} = aie.lock(%{mem}, 5) {{init = 1 : i32}}")
-        for row in range(CORES_PER_COL):
-            emit(f"%box_ready_{col}_{row} = aie.lock(%{mem}, {6 + row}) {{init = 0 : i32}}")
-        for row in range(CORES_PER_COL):
-            emit(f"%score_ready_{col}_{row} = aie.lock(%{mem}, {10 + row}) {{init = 0 : i32}}")
-        for row in range(CORES_PER_COL):
-            emit(f"%part_ready_{col}_{row} = aie.lock(%{mem}, {14 + row}) {{init = 0 : i32}}")
+        emit(f"%in_slot_free_{col} = aie.lock(%{mem}, {LOCK_IN_SLOT}) {{init = 1 : i32}}")
+        for row in rows:
+            emit(f"%in_ready_{col}_{row} = aie.lock(%{mem}, {LOCK_IN_READY + row}) {{init = 0 : i32}}")
+        # The output slot is a single-token sequence per core: core output
+        # releases box_ready, boxes releases score_ready, and scores hands the
+        # slot to the next core's turn lock.  One shared slot lock acquired by
+        # all core S2MM channels let a channel whose core had no input yet win
+        # the slot; core 0's output then backed up, core 0 stopped draining its
+        # input, and the input slot never reached the next core.
+        for row in rows:
+            emit(f"%out_turn_{col}_{row} = aie.lock(%{mem}, {LOCK_OUT_TURN + row}) {{init = {1 if row == 0 else 0} : i32}}")
+        for row in rows:
+            emit(f"%box_ready_{col}_{row} = aie.lock(%{mem}, {LOCK_BOX_READY + row}) {{init = 0 : i32}}")
+        for row in rows:
+            emit(f"%score_ready_{col}_{row} = aie.lock(%{mem}, {LOCK_SCORE_READY + row}) {{init = 0 : i32}}")
+        for row in rows:
+            emit(f"%part_ready_{col}_{row} = aie.lock(%{mem}, {LOCK_PART_READY + row}) {{init = 0 : i32}}")
 
         emit(f"aie.flow(%{shim}, DMA : 0, %{mem}, DMA : 0)")
         emit(f"aie.flow(%{mem}, DMA : 4, %{shim}, DMA : 0)")
@@ -154,20 +191,20 @@ def module():
         emit(f"aie.memtile_dma(%{mem}) {{")
         emit("  %one = arith.constant 1 : i32")
         emit("  aie.dma_start(S2MM, 0, ^host_input_0, ^in_core_0)")
-        for row in range(CORES_PER_COL):
+        for row in rows:
             emit(f"^host_input_{row}:")
-            next_label = f"^host_input_{row + 1}" if row + 1 < CORES_PER_COL else "^mem_end"
+            next_label = f"^host_input_{row + 1}" if row < last else "^mem_end"
             emit(f"  aie.use_lock(%in_slot_free_{col}, AcquireGreaterEqual, %one)")
             emit(f"  aie.dma_bd(%mem_in_{col} : memref<{MEM_IN_BYTES}xi8> offset = 0 len = {CORE_INPUT_BYTES})")
             emit(f"  aie.use_lock(%in_ready_{col}_{row}, Release, %one)")
             emit(f"  aie.next_bd {next_label}")
         emit("^in_core_0:")
-        # The four input MM2S channels start independently and wait for their
+        # The input MM2S channels start independently and wait for their
         # corresponding host segment.  The labels are separate DMA programs.
-        for row in range(CORES_PER_COL):
+        for row in rows:
             if row:
                 emit(f"^in_core_{row}:")
-            next_channel = f"^in_core_{row + 1}" if row + 1 < CORES_PER_COL else "^out_core_0"
+            next_channel = f"^in_core_{row + 1}" if row < last else "^out_core_0"
             emit(f"  aie.dma_start(MM2S, {row}, ^in_core_bd_{row}, {next_channel})")
             emit(f"^in_core_bd_{row}:")
             emit(f"  aie.use_lock(%in_ready_{col}_{row}, AcquireGreaterEqual, %one)")
@@ -176,14 +213,14 @@ def module():
             emit("  aie.next_bd ^mem_end")
         # Each core emits one interleaved wire stream.  The output slot is
         # consumed in order: core output, boxes egress, then scores egress.
-        for row in range(CORES_PER_COL):
+        for row in rows:
             emit(f"^out_core_{row}:")
-            next_channel = f"^out_core_{row + 1}" if row + 1 < CORES_PER_COL else "^box_stream"
+            next_channel = f"^out_core_{row + 1}" if row < last else "^box_stream"
             emit(f"  aie.dma_start(S2MM, {row + 1}, ^out_core_bd_{row}_0, {next_channel})")
             for part in range(OUTPUT_DMA_PARTS):
                 emit(f"^out_core_bd_{row}_{part}:")
                 if part == 0:
-                    emit(f"  aie.use_lock(%out_slot_free_{col}, AcquireGreaterEqual, %one)")
+                    emit(f"  aie.use_lock(%out_turn_{col}_{row}, AcquireGreaterEqual, %one)")
                 else:
                     emit(f"  aie.use_lock(%part_ready_{col}_{row}, AcquireGreaterEqual, %one)")
                 offset = part * OUTPUT_DMA_PART_BYTES
@@ -198,28 +235,31 @@ def module():
                     emit(f"  aie.next_bd ^out_core_bd_{row}_{part + 1}")
         emit("^box_stream:")
         emit("  aie.dma_start(MM2S, 4, ^box_stream_0, ^score_stream)")
-        for row in range(CORES_PER_COL):
+        for row in rows:
             emit(f"^box_stream_{row}:")
             emit(f"  aie.use_lock(%box_ready_{col}_{row}, AcquireGreaterEqual, %one)")
-            emit(f"  aie.dma_bd(%mem_out_{col} : memref<{MEM_OUT_BYTES}xi8> offset = 0 len = {CORE_BOX_BYTES} sizes = [525, 16] strides = [336, 1])")
+            emit(f"  aie.dma_bd(%mem_out_{col} : memref<{MEM_OUT_BYTES}xi8> offset = 0 len = {CORE_BOX_BYTES} sizes = [{ANCHORS_PER_CORE}, {RECORD_BOX_BYTES}] strides = [{RECORD_BYTES}, 1])")
             emit(f"  aie.use_lock(%score_ready_{col}_{row}, Release, %one)")
-            emit(f"  aie.next_bd ^box_stream_{row + 1}" if row + 1 < CORES_PER_COL else "  aie.next_bd ^mem_end")
+            emit(f"  aie.next_bd ^box_stream_{row + 1}" if row < last else "  aie.next_bd ^mem_end")
         emit("^score_stream:")
         emit("  aie.dma_start(MM2S, 5, ^score_stream_0, ^mem_end)")
-        for row in range(CORES_PER_COL):
+        for row in rows:
             emit(f"^score_stream_{row}:")
             emit(f"  aie.use_lock(%score_ready_{col}_{row}, AcquireGreaterEqual, %one)")
-            emit(f"  aie.dma_bd(%mem_out_{col} : memref<{MEM_OUT_BYTES}xi8> offset = 0 len = {CORE_SCORE_BYTES} sizes = [525, 320] strides = [336, 1])")
-            emit(f"  aie.use_lock(%out_slot_free_{col}, Release, %one)")
-            emit(f"  aie.next_bd ^score_stream_{row + 1}" if row + 1 < CORES_PER_COL else "  aie.next_bd ^mem_end")
+            # Scores follow the four box floats inside each record.  Reading
+            # from record offset 0 (the original descriptor) returned the box
+            # floats as scores[0:4] and dropped scores[76:80] on silicon.
+            emit(f"  aie.dma_bd(%mem_out_{col} : memref<{MEM_OUT_BYTES}xi8> offset = {RECORD_BOX_BYTES} len = {CORE_SCORE_BYTES} sizes = [{ANCHORS_PER_CORE}, {RECORD_SCORE_BYTES}] strides = [{RECORD_BYTES}, 1])")
+            emit(f"  aie.use_lock(%out_turn_{col}_{(row + 1) % cores_per_col}, Release, %one)")
+            emit(f"  aie.next_bd ^score_stream_{row + 1}" if row < last else "  aie.next_bd ^mem_end")
         emit("^mem_end:")
         emit("  aie.end")
         emit("}")
 
         for row, core in enumerate(cores):
             prefix = f"c{col}_{row}"
-            in_names, in_locks = _lock_set(f"{prefix}_in", core, 0, 1)
-            wire_names, wire_locks = _lock_set(f"{prefix}_wire", core, 0, 1)
+            in_names, in_locks = _lock_set(f"{prefix}_in", 1)
+            wire_names, wire_locks = _lock_set(f"{prefix}_wire", 1)
             for number, (name, value) in enumerate(in_locks + wire_locks):
                 # The lock namespace is local to the tile; preserve the
                 # explicit order rather than depending on allocator ordering.
@@ -257,25 +297,27 @@ def module():
 
     # Host BOs are byte buffers.  Keeping this ABI byte typed makes DMA
     # offsets and lengths directly match the MemTile wire layout; the host
-    # test interprets the resulting bytes as float32 arrays.
+    # test interprets the resulting bytes as float32 arrays.  A reduced design
+    # keeps the full BO sizes and each column's full-design offsets, so the
+    # anchors it does not instantiate stay untouched in the host BOs.
     emit(f"aie.runtime_sequence(%x: memref<{INPUT_BYTES}xi8>, %boxes: memref<{BOXES_BYTES}xi8>, %scores: memref<{SCORES_BYTES}xi8>) {{")
-    for col in range(COLS):
+    for col in range(cols):
         emit(f"  %in_{col} = aiex.dma_configure_task_for @in_{col} {{")
-        emit(f"    aie.dma_bd(%x : memref<{INPUT_BYTES}xi8> offset = {col * COL_INPUT_BYTES} len = {COL_INPUT_BYTES})")
+        emit(f"    aie.dma_bd(%x : memref<{INPUT_BYTES}xi8> offset = {col * COL_INPUT_BYTES} len = {cores_per_col * CORE_INPUT_BYTES})")
         emit("    aie.end")
         emit("  }")
         emit(f"  %box_{col} = aiex.dma_configure_task_for @boxes_{col} {{")
-        emit(f"    aie.dma_bd(%boxes : memref<{BOXES_BYTES}xi8> offset = {col * COL_BOX_BYTES} len = {COL_BOX_BYTES})")
+        emit(f"    aie.dma_bd(%boxes : memref<{BOXES_BYTES}xi8> offset = {col * COL_BOX_BYTES} len = {cores_per_col * CORE_BOX_BYTES})")
         emit("    aie.end")
         emit("  } {issue_token = true}")
         emit(f"  %score_{col} = aiex.dma_configure_task_for @scores_{col} {{")
-        emit(f"    aie.dma_bd(%scores : memref<{SCORES_BYTES}xi8> offset = {col * COL_SCORE_BYTES} len = {COL_SCORE_BYTES})")
+        emit(f"    aie.dma_bd(%scores : memref<{SCORES_BYTES}xi8> offset = {col * COL_SCORE_BYTES} len = {cores_per_col * CORE_SCORE_BYTES})")
         emit("    aie.end")
         emit("  } {issue_token = true}")
         emit(f"  aiex.dma_start_task(%box_{col})")
         emit(f"  aiex.dma_start_task(%score_{col})")
         emit(f"  aiex.dma_start_task(%in_{col})")
-    for col in range(COLS):
+    for col in range(cols):
         emit(f"  aiex.dma_await_task(%box_{col})")
         emit(f"  aiex.dma_await_task(%score_{col})")
         emit(f"  aiex.dma_free_task(%in_{col})")
@@ -286,7 +328,7 @@ def module():
     return "\n".join(lines) + "\n"
 
 
-def compile_design(directory: Path):
+def compile_design(directory: Path, cols=COLS, cores_per_col=CORES_PER_COL):
     from aie.utils.compile.utils import compile_cxx_core_function, compile_mlir_module
 
     directory.mkdir(parents=True, exist_ok=True)
@@ -298,7 +340,7 @@ def compile_design(directory: Path):
         str(work / "dfl_decode.o"),
         compile_args=["-O3"],
     )
-    ir = module()
+    ir = module(cols, cores_per_col)
     (directory / "dfl_stage.mlir").write_text(ir, encoding="utf-8")
     compile_mlir_module(
         ir,

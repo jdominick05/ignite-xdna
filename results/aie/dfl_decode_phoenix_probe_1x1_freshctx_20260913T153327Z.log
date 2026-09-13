@@ -1,0 +1,42 @@
+Phoenix DFL decode silicon qualification
+date_utc=2026-09-13T15:33:27+00:00
+host=DESKTOP-CBL5NUA
+command=C:\Users\<user>\mlir-aie\ironenv\Scripts\python.exe tests/test_dfl_kernel.py --hardware --skip-offline --cols 1 --cores-per-col 1 --iters 100 --warmup 10 --context-per-dispatch --log results\aie\dfl_decode_phoenix_probe_1x1_freshctx_20260913T153327Z.log
+shape=1x1 (1 cores)
+test_sha256=32e41fe8e52a92105962e1191cca6db854ed2224c0fafec6e687ec6cfa74e680
+source_dfl_decode.cc_sha256=d1d84be79b04060a5168f846b49e86f8b492384f62b0ef3779f3ffa892087151
+source_dfl_stage.py_sha256=79239e7f49134072bc99ee53d3305e5529f3d863962dd4bf19f9e95509f0e56a
+{"active_anchors": 525, "active_cores": 1, "event": "build_identity", "full_design": false, "insts_sha256": "b7c3a1eb039534e4917c4f27dd5bbc28175bc19356035f4cbbd3438620f87e07", "shape": {"cols": 1, "cores_per_col": 1}, "sources": {"dfl_decode.cc": "d1d84be79b04060a5168f846b49e86f8b492384f62b0ef3779f3ffa892087151", "dfl_stage.py": "79239e7f49134072bc99ee53d3305e5529f3d863962dd4bf19f9e95509f0e56a"}, "test_sha256": "32e41fe8e52a92105962e1191cca6db854ed2224c0fafec6e687ec6cfa74e680", "xclbin_sha256": "eec3020760e4d7126d7cb567336308aa168b9a5b77977d171c5a9920533e5413"}
+{"dispatches": 114, "distinct_fixtures": 12, "event": "references_ready", "measured_fixture_pool": 8}
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+HOST_LOAD busy_cores=0.37 logical_cores=16 free_ram_gb=16.2 sample_sec=1
+HOST_LOAD_TOP 0.15 pycharm64:8540 ws_mb=2701
+HOST_LOAD_TOP 0.06 <local-tool>:15092 ws_mb=415
+HOST_LOAD_TOP 0.05 Taskmgr:13448 ws_mb=177
+HOST_LOAD_TOP 0.05 <local-tool>:22228 ws_mb=281
+HOST_LOAD_TOP 0.03 <local-tool>:31940 ws_mb=1187
+HOST_LOAD_VERDICT CLEAR
+
+{"event": "postflight", "no_hardware_contexts": true}
+Traceback (most recent call last):
+  File "<worktree>\tests\test_dfl_kernel.py", line 587, in main
+    hardware(args, directory)
+    ~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "<worktree>\tests\test_dfl_kernel.py", line 456, in hardware
+    session = open_session(directory)
+  File "<worktree>\tests\test_dfl_kernel.py", line 373, in open_session
+    harness.load_xclbin(str(directory / "design.xclbin"))
+    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<worktree>\src\ignite_xdna\runtime\driver.py", line 62, in load_xclbin
+    self.context = self.pyxrt.hw_context(self.dev, uuid)
+                   ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^
+RuntimeError: Failed to create context virtual (0xc01e0009): There was an error while creating context 
+
+

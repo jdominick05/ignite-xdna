@@ -7632,3 +7632,132 @@ remaining blocker to multi-core output transport or packet scheduling. They do n
 provide silicon parity or a latency result for the 8,400-anchor design, so the `<300 us`
 gate remains open. The checkpoint is in
 [`results/aie/dfl_decode_phoenix_transport_checkpoint_20260913T0950Z.log`](../results/aie/dfl_decode_phoenix_transport_checkpoint_20260913T0950Z.log).
+
+> **Corrected later the same day, by the qualification below.** The restart that cleared
+> `0xc01e0009` was an NPU device restart, not a Windows restart: the OS boot time is still
+> 2026-09-12 08:24 local in
+> [`dfl_decode_phoenix_device_state_after_restart_20260913T154425Z.log`](../results/aie/dfl_decode_phoenix_device_state_after_restart_20260913T154425Z.log).
+> The "foreign XRT context" reading is not supported either. `0xc01e0009` is the driver's
+> rejection of a hardware context beyond its five-entry table
+> ([DECISIONS](DECISIONS.md#native-windows-xrt-driver-constraints-kdma-and-unified-memory-flags)),
+> and it recurred below with no visible context on the device, directly after one of this
+> design's dispatches timed out. It is raised by context creation, before any BO exists, so
+> it is not a memory-bank or group-ID problem. The one-core aggregate control above had no
+> output check; it is superseded by the parity-checked one-core rows below.
+
+### Silicon qualification: parity on all 8,400 anchors, `<300 us` gate failed
+
+Measured on Desktop 2 (`DESKTOP-CBL5NUA`), Phoenix Device 0, mlir-aie ironenv, with a clean
+`xrt-smi` partition check and `HOST_LOAD_VERDICT CLEAR` before, and no hardware context left
+after, every run. `tests/test_dfl_kernel.py --hardware` times `run.start()` to `run.wait()`
+returning, which includes XRT submission, input and both output DMA streams and all core
+work; BO writes, syncs, readback and references are outside. Every dispatch runs in a
+fresh hardware context (see the one-shot finding below). Each run checks four correctness
+fixtures (random, extreme, uniform, ramp) and then every warmup and measured dispatch
+(a pool of eight random fixtures) against the float32 oracle over every instantiated
+anchor, with NaN-poisoned outputs, zero non-finite values and zero writes outside the
+instantiated anchors required. Tolerance is one INT8 Q4 LSB: `stride/16` pixels per box
+coordinate and `0.25/16` per score. The correctness fixtures are also compared with the
+fixed-point reference that models `dfl_decode.cc`.
+
+| Shape | Anchors | Dispatches checked | Box error vs float32, max | Score error vs float32, max | Scores vs fixed-point | Boxes vs fixed-point, max | Dispatch wait median (µs) | min / p95 / max (µs) | n |
+|---|---|---|---|---|---|---|---|---|---|
+| [1×1](../results/aie/dfl_decode_phoenix_probe_1x1_20260913T154447Z.log) | 525 | 114 | 0.215 Q4 LSB (0.107 px) | 0.000557 | bit-exact | 0.0046 px, 1 value differs | **51,145.4** | 51,077.1 / 51,475.9 / 51,728.9 | 100 |
+| [1×2](../results/aie/dfl_decode_phoenix_probe_1x2_20260913T154533Z.log) | 1,050 | 26 | 0.216 Q4 LSB (0.108 px) | 0.000557 | bit-exact | 0.0046 px, 3 values | **99,127.9** | 99,079.5 / 99,151.4 / 99,158.6 | 20 |
+| [1×4](../results/aie/dfl_decode_phoenix_probe_1x4_20260913T154541Z.log) | 2,100 | 26 | 0.230 Q4 LSB (0.115 px) | 0.000557 | bit-exact | 0.0110 px, 7 values | **195,129.7** | 195,063.9 / 195,486.5 / 195,511.3 | 20 |
+| [4×4, full design](../results/aie/dfl_decode_phoenix_qualification_4x4_20260913T154553Z.log) | 8,400 | 114 | 0.252 Q4 LSB (0.410 px) | 0.000557 | bit-exact | 0.0166 px, 27 values | **196,178.0** | 196,070.0 / 196,500.4 / 198,725.6 | 100 |
+
+**Numerics pass on silicon.** Scores are bit-exact with the fixed-point model on every
+fixture and shape. The full design's worst box error, 0.2523651 Q4 LSB, is exactly the
+fixed-point model's own worst case against float32 on the extreme fixture in
+[`dfl_decode_offline_q4lsb_20260913T155116Z.log`](../results/aie/dfl_decode_offline_q4lsb_20260913T155116Z.log),
+so the silicon reproduces the model. The few box values that differ from the fixed-point
+reference differ by at most 0.0166 px. That fits float32 on the core against the float64
+reference arithmetic in the final pixel conversion, but it was not separately verified.
+
+**The latency gate fails by 654×.** The full design's median dispatch wait is 196,178.0 µs
+against the 300 µs limit (mean 196,254.0, stdev 299.0). Within a column the cores run in
+sequence: 1, 2 and 4 cores take 1.00×, 1.94× and 3.82× the one-core time, while four columns
+add 0.5% to one column. That is what the MemTile output slot implies, because each column
+hands one slot from core to core.
+
+### Transport floor with the decode math removed
+
+`tests/test_dfl_transport_floor.py` links
+[`dfl_transport_probe.cc`](../kernels/aie2/dfl/dfl_transport_probe.cc) in place of
+`dfl_decode.cc` and leaves `dfl_stage.py`'s transport, the timing bracket and the
+fresh-context handling unchanged. The probe core writes `anchor * 256 + input byte` into
+every output float, so every box and score is checked exactly.
+
+| Shape | Dispatches checked, exact | Median (µs) | min / p95 / max (µs) | n |
+|---|---|---|---|---|
+| [1×1](../results/aie/dfl_decode_phoenix_transport_floor_1x1_20260913T154957Z.log) | 114 | **1,830.3** | 1,783.7 / 2,094.8 / 3,201.0 | 100 |
+| [4×4](../results/aie/dfl_decode_phoenix_transport_floor_4x4_20260913T155005Z.log) | 114 | **7,603.2** | 7,487.3 / 7,881.1 / 9,945.9 | 100 |
+
+**No kernel reaches `<300 us` on this transport.** With no decode math at all, the full
+transport's fastest dispatch is 7,487.3 µs, 25× the limit. The floor is an upper bound on
+pure transport rather than transport itself: the probe core still converts and adds 44,100
+floats per core, and the all-zero-DFL uniform fixture ran faster (1,354.0 µs at 1×1 and
+5,634.0 µs at 4×4, against about 1,810 and 7,600 µs for the other fixtures), which is
+unexplained. The floor grows 4.15× from one core to the full design, again consistent with
+the column-serial output slot.
+
+Subtracting medians of separate runs (DERIVED, not traced) leaves about 49.3 ms of
+decode-kernel time per 525-anchor core, or about 94 µs per anchor, which is roughly
+169,000 cycles per anchor at the MEASURED 1.80 GHz core clock. Nothing here measures how
+that time splits between the sixteen-bin expectations and the eighty per-class sigmoids,
+each of which runs a bit-serial restoring division. **No AIE trace was captured**, so
+there are no cycle counts, memory-stall events or DMA activity events for this kernel.
+Column 0's two shim S2MM channels already carry boxes and scores, and a trace route was not
+built.
+
+### Defects found on silicon
+
+- **Shared output-slot race, replaced by per-core turn locks.** The committed design had
+  all four core S2MM channels of a MemTile acquire one `out_slot_free` lock. At full scale
+  (4×4) the only generated-MLIR difference from that design, apart from the score offset
+  below, is 180 lock declaration and use lines. The earlier 4×4 build timed out
+  after dispatch, and every multi-core shape above completes. The mechanism is inferred
+  from the lock protocol, not observed: a channel whose core had no input yet could win the
+  slot, core 0's output then backs up, and the input slot never reaches the next core.
+- **Score egress offset.** The MemTile score descriptor read each 336-byte wire record from
+  offset 0 instead of 16. Before the fix, one core passed on boxes but scores were off by up
+  to 719.1 with 41,414 values mismatched
+  ([probe](../results/aie/dfl_decode_phoenix_probe_1x1_20260913T152731Z.log),
+  [witness reproduction](../results/aie/dfl_decode_phoenix_probe_1x1_score_witness_20260913T152835Z.log)).
+  In the witness, `scores[:, 0:4]` are bitwise the box floats, and shifting by four floats
+  matches the fixed-point reference on all 39,900 overlapping values, where the other shifts
+  from -8 to +8 match only 527 to 644
+  ([analysis](../results/aie/dfl_decode_phoenix_probe_1x1_score_offset_analysis_20260913T154254Z.log)).
+  With the offset at 16, the same fixtures pass.
+- **One-shot transport.** In a single context, dispatch 0 passed (51,148.6 µs) and dispatch 1
+  returned `ERT_CMD_STATE_TIMEOUT` after 7,019,640.9 µs
+  ([log](../results/aie/dfl_decode_phoenix_probe_1x1_20260913T153036Z.log)). The next context
+  creation failed with `0xc01e0009` before any dispatch
+  ([log](../results/aie/dfl_decode_phoenix_probe_1x1_freshctx_20260913T153327Z.log)), and so
+  did a bare create/teardown with nothing dispatched, with `xrt-smi` reporting no hardware
+  contexts, until the NPU device was restarted
+  ([state after restart](../results/aie/dfl_decode_phoenix_device_state_after_restart_20260913T154425Z.log)).
+  The extreme fixture itself is ruled out as the trigger: it passes as dispatch 1 in every
+  fresh-context run above. The cause stated for the timeout, that every core program and
+  MemTile DMA chain ends after one pass (the 35-chunk core body ends in `aie.end` and its
+  ping/pong alternation would restart out of step), is a static reading of the MLIR, not a
+  trace. The harness therefore opens a fresh context per dispatch by default and makes
+  `--shared-context` opt-in.
+
+Compile evidence for these sources (1×1, 1×2, 1×4 and 4×4 shapes with 1, 2, 4 and 16 ELFs and
+48 matched vector instructions each) is in
+[`dfl_decode_phoenix_compile_shapes_20260913T154303Z.log`](../results/aie/dfl_decode_phoenix_compile_shapes_20260913T154303Z.log).
+Still open: a re-entrant transport that survives a second dispatch, a transport that does
+not serialize the cores of a column, and a trace build. The transport floor above means
+none of them brings this I/O contract under 300 µs.
+
+Reproduce from the mlir-aie ironenv, with the XRT SDK directory on PATH for compilation:
+
+```powershell
+$env:PATH = "C:\Xilinx\XRT\xrt_sdk\xrt;$env:PATH"
+python tests/test_dfl_kernel.py --compile --skip-offline --cols 4 --cores-per-col 4
+python tests/test_dfl_kernel.py --hardware --skip-offline --cols 4 --cores-per-col 4 --log results/aie/<name>.log
+python tests/test_dfl_transport_floor.py --compile --cols 4 --cores-per-col 4
+python tests/test_dfl_transport_floor.py --hardware --cols 4 --cores-per-col 4 --log results/aie/<name>.log
+```
