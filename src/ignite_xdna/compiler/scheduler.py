@@ -24,6 +24,7 @@ from ignite_xdna.compiler.lower_onnx_conv import (
     pack_weights_aie2_vector_layout,
     unblock_aie2_egress,
 )
+from ignite_xdna.compiler.memtile_agu import MEMTILE_BYTES
 from ignite_xdna.compiler.partitioner import (
     ConvLayerMeta,
     NpuFusedPartition,
@@ -71,6 +72,34 @@ class SchedulePlan:
     @property
     def has_zero_intermediate_ddr_traffic(self) -> bool:
         return self.intermediate_ddr_bytes == 0
+
+
+@dataclass
+class StageSchedulePlan(SchedulePlan):
+    """Schedule plan for a monolithic stage (Stem, P3, P4, P5)."""
+    stage_name: str = "Stem"
+    c2f_blocks: List[str] = field(default_factory=list)
+
+
+@dataclass
+class MultiStageSchedulePlan:
+    """Unified multi-stage schedule plan combining all backbone stages."""
+    stages: Dict[str, StageSchedulePlan] = field(default_factory=dict)
+    total_stages: int = 0
+    total_layers: int = 0
+    intermediate_ddr_bytes: int = 0
+    total_l1_param_bytes_per_core: int = 0
+
+    @property
+    def has_zero_intermediate_ddr_traffic(self) -> bool:
+        return self.intermediate_ddr_bytes == 0
+
+    def to_schedule_plan(self) -> SchedulePlan:
+        """Flattens all stages into a unified monolithic SchedulePlan with 0 DDR roundtrips."""
+        all_layers: List[ConvLayerMeta] = []
+        for stage in self.stages.values():
+            all_layers.extend(p.layer_meta for p in stage.passes)
+        return MemTileMultiPassScheduler().schedule(all_layers)
 
 
 class MemTileMultiPassScheduler:
@@ -158,6 +187,45 @@ class MemTileMultiPassScheduler:
         return SchedulePlan(
             num_layers=n,
             passes=passes,
+            intermediate_ddr_bytes=0,
+            total_l1_param_bytes_per_core=total_param_bytes,
+        )
+
+    def schedule_stage(
+        self,
+        partition: NpuFusedPartition
+    ) -> StageSchedulePlan:
+        """Constructs an execution schedule for a monolithic stage (Stem, P3, P4, P5)."""
+        base_plan = self.schedule(partition)
+        return StageSchedulePlan(
+            num_layers=base_plan.num_layers,
+            passes=base_plan.passes,
+            intermediate_ddr_bytes=base_plan.intermediate_ddr_bytes,
+            total_l1_param_bytes_per_core=base_plan.total_l1_param_bytes_per_core,
+            stage_name=partition.stage_name or f"Stage_{partition.partition_id}",
+            c2f_blocks=partition.c2f_blocks,
+        )
+
+    def schedule_multi_stage(
+        self,
+        partitions: List[NpuFusedPartition]
+    ) -> MultiStageSchedulePlan:
+        """Constructs a consolidated multi-stage schedule with 0 intermediate DDR roundtrips."""
+        stages: Dict[str, StageSchedulePlan] = {}
+        total_layers = 0
+        total_param_bytes = 0
+
+        for p in partitions:
+            s_plan = self.schedule_stage(p)
+            s_name = p.stage_name or f"Stage_{p.partition_id}"
+            stages[s_name] = s_plan
+            total_layers += s_plan.num_layers
+            total_param_bytes += s_plan.total_l1_param_bytes_per_core
+
+        return MultiStageSchedulePlan(
+            stages=stages,
+            total_stages=len(stages),
+            total_layers=total_layers,
             intermediate_ddr_bytes=0,
             total_l1_param_bytes_per_core=total_param_bytes,
         )
@@ -357,6 +425,62 @@ def emit_multi_layer_transaction_bundle(
         f.write(full_exec_bin)
 
     return out_init_path, out_exec_path
+
+
+def validate_memtile_buffer_layout(
+    schedule: Union[SchedulePlan, StageSchedulePlan, MultiStageSchedulePlan],
+    max_memtile_bytes: int = MEMTILE_BYTES,
+) -> bool:
+    """
+    Verifies that all buffer allocations fit strictly within physical MemTile SRAM (512 KB per column).
+    """
+    if isinstance(schedule, MultiStageSchedulePlan):
+        sched_plan = schedule.to_schedule_plan()
+    else:
+        sched_plan = schedule
+
+    for p in sched_plan.passes:
+        if p.ingress_source in ("L2_BANK_0", "L2_BANK_1"):
+            if not (0 <= p.ingress_addr < max_memtile_bytes):
+                raise ValueError(f"Ingress address {hex(p.ingress_addr)} exceeds MemTile capacity {max_memtile_bytes}")
+            if p.ingress_addr + 0x10000 > max_memtile_bytes:
+                raise ValueError(f"Ingress buffer range at {hex(p.ingress_addr)} exceeds MemTile capacity")
+        if p.egress_dest in ("L2_BANK_0", "L2_BANK_1"):
+            if not (0 <= p.egress_addr < max_memtile_bytes):
+                raise ValueError(f"Egress address {hex(p.egress_addr)} exceeds MemTile capacity {max_memtile_bytes}")
+            if p.egress_addr + 0x10000 > max_memtile_bytes:
+                raise ValueError(f"Egress buffer range at {hex(p.egress_addr)} exceeds MemTile capacity")
+        if p.egress_dest == "HOST_DDR" and p.egress_addr == L2_FINAL_EGRESS_OFFSET:
+            if not (0 <= p.egress_addr + 0x4000 <= max_memtile_bytes):
+                raise ValueError(f"Egress buffer at {hex(p.egress_addr)} exceeds MemTile capacity")
+    return True
+
+
+def emit_multi_stage_transaction_bundle(
+    schedule: Union[StageSchedulePlan, MultiStageSchedulePlan, SchedulePlan],
+    base_txn_path: str,
+    out_init_path: str,
+    out_exec_path: str,
+    cores: Optional[List[Tuple[int, int]]] = None
+) -> Tuple[str, str]:
+    """
+    Generates unified init.bin and exec.bin transaction sequence covering
+    entire monolithic stages (Stem, P3, P4, P5), collapsing the 50 ERT dispatches
+    into a unified driver submission with zero intermediate DDR traffic.
+    """
+    validate_memtile_buffer_layout(schedule)
+    if isinstance(schedule, MultiStageSchedulePlan):
+        sched_plan = schedule.to_schedule_plan()
+    else:
+        sched_plan = schedule
+
+    return emit_multi_layer_transaction_bundle(
+        schedule=sched_plan,
+        base_txn_path=base_txn_path,
+        out_init_path=out_init_path,
+        out_exec_path=out_exec_path,
+        cores=cores,
+    )
 
 
 def run_n_layer_fixed_point_reference(
