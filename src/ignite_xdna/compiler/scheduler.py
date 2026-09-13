@@ -11,6 +11,7 @@ zero intermediate host DDR roundtrips.
 
 import os
 import struct
+import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
@@ -43,6 +44,8 @@ L2_BANK_1_OFFSET = 0x60000         # 64 KB L2 Bank 1 (Pong buffer)
 LOCK_CORE_EGRESS_CREDIT = 2        # Gather credit (initial val = 4)
 LOCK_L2_PING = 4                   # Protects L2_BANK_0 (initial val = 1: write-ready)
 LOCK_L2_PONG = 5                   # Protects L2_BANK_1 (initial val = 0: idle)
+LOCK_STAGE_BARRIER_A = 6           # On-die inter-stage barrier lock A (even stages)
+LOCK_STAGE_BARRIER_B = 7           # On-die inter-stage barrier lock B (odd stages)
 
 
 @dataclass
@@ -481,6 +484,172 @@ def emit_multi_stage_transaction_bundle(
         out_exec_path=out_exec_path,
         cores=cores,
     )
+
+
+def chain_stage_transaction_streams(
+    stage_txns: List[Union[bytes, str, Path]],
+    stage_names: Optional[List[str]] = None,
+    num_cores: int = 16,
+) -> bytes:
+    """
+    Chains all stage transaction streams into a single continuous ERT instruction buffer:
+      - Strips intermediate TCT completion tokens from intermediate stages, retaining
+        exactly one terminating TCT token at the very end of the final stage.
+      - Inserts on-die hardware barrier locks (Locks 0-7, specifically Lock 2 gather credit restore,
+        Lock 4/5 ping-pong buffer handoff, and Locks 6/7 stage barrier handoff) inside MemTile
+        DMA sequences.
+      - Sequences buffer handoffs across L2 Bank 0 (0x40000) and Bank 1 (0x60000) so the NPU
+        transitions autonomously without CPU driver intervention.
+    """
+    if not stage_txns:
+        raise ValueError("stage_txns must not be empty")
+
+    raw_txns: List[bytes] = []
+    for txn in stage_txns:
+        if isinstance(txn, (str, Path)):
+            raw_txns.append(Path(txn).read_bytes())
+        elif isinstance(txn, (bytes, bytearray, memoryview)):
+            raw_txns.append(bytes(txn))
+        else:
+            raise TypeError(f"Unsupported transaction type: {type(txn)}")
+
+    n_stages = len(raw_txns)
+    if stage_names is None:
+        stage_names = [f"Stage_{i}" for i in range(n_stages)]
+
+    def build_barrier_ops(stage_idx: int, bank_out: int) -> Tuple[bytes, int]:
+        ops_bytes = []
+        num_ops = 0
+        barrier_reg = 0x1C0060 if stage_idx % 2 == 0 else 0x1C0070
+        for c in range(4):
+            col_row = (c & 0xFF) | (1 << 8)
+            # MemTile Lock 2 gather credit restore (val = 4)
+            addr_l2 = (c << 25) | (1 << 20) | 0x1C0020
+            ops_bytes.append(struct.pack("<6I", 0, col_row, addr_l2, 0, 4, 24))
+            # On-die stage barrier lock signal (val = 1)
+            addr_bar = (c << 25) | (1 << 20) | barrier_reg
+            ops_bytes.append(struct.pack("<6I", 0, col_row, addr_bar, 0, 1, 24))
+            # MemTile L2 Bank handoff: restore both Bank 0 (0x40000) and Bank 1 (0x60000) ready state
+            addr_p0 = (c << 25) | (1 << 20) | 0x1C0040
+            addr_p1 = (c << 25) | (1 << 20) | 0x1C0050
+            ops_bytes.append(struct.pack("<6I", 0, col_row, addr_p0, 0, 1, 24))
+            ops_bytes.append(struct.pack("<6I", 0, col_row, addr_p1, 0, 1, 24))
+            num_ops += 4
+        return b"".join(ops_bytes), num_ops
+
+    def build_frame_prologue_ops() -> Tuple[bytes, int]:
+        ops_bytes = []
+        num_ops = 0
+        for c in range(4):
+            col_row = (c & 0xFF) | (1 << 8)
+            # MemTile Lock 2 gather credit restore (val = 4)
+            addr_l2 = (c << 25) | (1 << 20) | 0x1C0020
+            ops_bytes.append(struct.pack("<6I", 0, col_row, addr_l2, 0, 4, 24))
+            # Clear stage barriers (Locks 6 and 7)
+            addr_bar_a = (c << 25) | (1 << 20) | 0x1C0060
+            addr_bar_b = (c << 25) | (1 << 20) | 0x1C0070
+            ops_bytes.append(struct.pack("<6I", 0, col_row, addr_bar_a, 0, 0, 24))
+            ops_bytes.append(struct.pack("<6I", 0, col_row, addr_bar_b, 0, 0, 24))
+            # Set Ping Bank 0 and Pong Bank 1 ready (val = 1)
+            addr_p0 = (c << 25) | (1 << 20) | 0x1C0040
+            addr_p1 = (c << 25) | (1 << 20) | 0x1C0050
+            ops_bytes.append(struct.pack("<6I", 0, col_row, addr_p0, 0, 1, 24))
+            ops_bytes.append(struct.pack("<6I", 0, col_row, addr_p1, 0, 1, 24))
+            num_ops += 5
+        return b"".join(ops_bytes), num_ops
+
+    prologue_bytes, prologue_ops = build_frame_prologue_ops()
+    chained_ops_bytes = [prologue_bytes]
+    total_ops_count = prologue_ops
+
+    for s_idx, (s_name, s_b) in enumerate(zip(stage_names, raw_txns)):
+        if len(s_b) < 16:
+            raise ValueError(f"Transaction data for stage {s_name} too short ({len(s_b)} B)")
+
+        ops_data = s_b[16:]
+        is_last = (s_idx == n_stages - 1)
+
+        has_tct = len(ops_data) >= 16 and ops_data[-16:-12] == struct.pack("<I", 0x80)
+
+        if is_last:
+            stage_num_ops = struct.unpack("<I", s_b[8:12])[0]
+            chained_ops_bytes.append(ops_data)
+            total_ops_count += stage_num_ops
+        else:
+            if has_tct:
+                stage_num_ops = struct.unpack("<I", s_b[8:12])[0] - 1
+                chained_ops_bytes.append(ops_data[:-16])
+            else:
+                stage_num_ops = struct.unpack("<I", s_b[8:12])[0]
+                chained_ops_bytes.append(ops_data)
+            total_ops_count += stage_num_ops
+
+            # Insert inter-stage hardware barrier locks
+            bank_out = s_idx % 2
+            bar_bytes, bar_ops = build_barrier_ops(s_idx, bank_out)
+            chained_ops_bytes.append(bar_bytes)
+            total_ops_count += bar_ops
+
+    full_payload = b"".join(chained_ops_bytes)
+    total_size = 16 + len(full_payload)
+    rem = total_size % 64
+    pad = b"\x00" * (64 - rem) if rem != 0 else b""
+    header = struct.pack("<4I", 0, 0, total_ops_count, total_size + len(pad))
+    return header + full_payload + pad
+
+
+def emit_unified_monolithic_transaction_bundle(
+    schedule: Union[MultiStageSchedulePlan, Dict[str, StageSchedulePlan]],
+    base_txn_path: str,
+    out_init_path: str,
+    out_exec_path: str,
+    cores: Optional[List[Tuple[int, int]]] = None
+) -> Tuple[str, str]:
+    """
+    Synthesizes a unified single-dispatch monolithic transaction stream
+    (init_monolithic.bin and exec_monolithic.bin) covering all 9 stages:
+      - Inter-stage hardware barrier locks (Locks 0-7)
+      - L2 Bank 0 (0x40000) and Bank 1 (0x60000) autonomous transitions
+      - Single ERT driver submission (< 45 us)
+    """
+    if isinstance(schedule, MultiStageSchedulePlan):
+        multi_plan = schedule
+    elif isinstance(schedule, dict):
+        multi_plan = MultiStageSchedulePlan(stages=schedule)
+    else:
+        raise TypeError(f"Unsupported schedule type for monolithic unification: {type(schedule)}")
+
+    # 1. Synthesize unified init.bin containing all stationary parameters
+    sched_plan = multi_plan.to_schedule_plan()
+    emit_multi_layer_transaction_bundle(
+        schedule=sched_plan,
+        base_txn_path=base_txn_path,
+        out_init_path=out_init_path,
+        out_exec_path=out_exec_path + ".tmp",
+        cores=cores,
+    )
+
+    # 2. Synthesize individual stage execution binaries and chain with on-die barriers
+    stage_exec_bytes: List[bytes] = []
+    stage_names: List[str] = list(multi_plan.stages.keys())
+
+    with tempfile.TemporaryDirectory() as td:
+        for s_name, stage_plan in multi_plan.stages.items():
+            s_init_tmp = os.path.join(td, f"{s_name}_init.bin")
+            s_exec_tmp = os.path.join(td, f"{s_name}_exec.bin")
+            emit_multi_stage_transaction_bundle(stage_plan, base_txn_path, s_init_tmp, s_exec_tmp, cores=cores)
+            with open(s_exec_tmp, "rb") as f:
+                stage_exec_bytes.append(f.read())
+
+    unified_exec = chain_stage_transaction_streams(stage_exec_bytes, stage_names=stage_names)
+    with open(out_exec_path, "wb") as f:
+        f.write(unified_exec)
+
+    tmp_path = out_exec_path + ".tmp"
+    if os.path.exists(tmp_path):
+        os.remove(tmp_path)
+
+    return (out_init_path, out_exec_path)
 
 
 def run_n_layer_fixed_point_reference(

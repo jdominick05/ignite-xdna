@@ -160,6 +160,9 @@ struct ignite_engine {
 
     // Stage pipeline (CDO transaction blobs)
     std::vector<StageResource> stages;
+    bool single_dispatch = false;
+    uint32_t ninstr_monolithic = 0;
+    xrt::bo bo_monolithic;
 
     // Detection hyperparameters
     float conf_thres = 0.25f;
@@ -233,6 +236,7 @@ struct ignite_engine {
         stop_worker();
 
         stages.clear();
+        bo_monolithic = xrt::bo();
         for (int s = 0; s < NUM_SLOTS; ++s) {
             bo_in[s] = xrt::bo();
             bo_out[s] = xrt::bo();
@@ -457,10 +461,15 @@ void ignite_engine::worker_loop() {
         auto t_npu_start = std::chrono::high_resolution_clock::now();
 
         // 1. Physical AIE2 Silicon Execution
-        for (const auto& s : stages) {
-            if (s.ninstr_exec > 0 && s.bo_exec) {
-                xrt::run r = (*kernel)(3, s.bo_exec, s.ninstr_exec, bo_in[slot], bo_out[slot]);
-                r.wait(2000);
+        if (single_dispatch && bo_monolithic && ninstr_monolithic > 0) {
+            xrt::run r = (*kernel)(3, bo_monolithic, ninstr_monolithic, bo_in[slot], bo_out[slot]);
+            r.wait(2000);
+        } else {
+            for (const auto& s : stages) {
+                if (s.ninstr_exec > 0 && s.bo_exec) {
+                    xrt::run r = (*kernel)(3, s.bo_exec, s.ninstr_exec, bo_in[slot], bo_out[slot]);
+                    r.wait(2000);
+                }
             }
         }
         bo_out[slot].sync(XCL_BO_SYNC_BO_FROM_DEVICE);
@@ -669,6 +678,17 @@ ignite_engine_t* ignite_load(const char* model_path, int device_id) {
             });
         }
 
+        // 5b. Unified Single-Dispatch Monolithic ERT Instruction Stream
+        std::string mono_blob = manifest.value("monolithic_exec_blob", "exec_monolithic.bin");
+        if (blobs.count(mono_blob)) {
+            const auto& b = blobs.at(mono_blob);
+            eng->ninstr_monolithic = static_cast<uint32_t>(b.size);
+            eng->bo_monolithic = xrt::bo(*eng->device, eng->ninstr_monolithic, xrt::bo::flags::cacheable, eng->kernel->group_id(1));
+            eng->bo_monolithic.write(eng->mmap_base + b.offset, eng->ninstr_monolithic, 0);
+            eng->bo_monolithic.sync(XCL_BO_SYNC_BO_TO_DEVICE);
+            eng->single_dispatch = true;
+        }
+
         // 6. Stationary Parameter Programming & Double-Buffer Warmup
         for (const auto& s : eng->stages) {
             if (s.ninstr_init > 0 && s.bo_init) {
@@ -677,10 +697,15 @@ ignite_engine_t* ignite_load(const char* model_path, int device_id) {
             }
         }
         for (int s_idx = 0; s_idx < ignite_engine::NUM_SLOTS; ++s_idx) {
-            for (const auto& s : eng->stages) {
-                if (s.ninstr_exec > 0 && s.bo_exec) {
-                    xrt::run r = (*eng->kernel)(3, s.bo_exec, s.ninstr_exec, eng->bo_in[s_idx], eng->bo_out[s_idx]);
-                    r.wait(2000);
+            if (eng->single_dispatch && eng->bo_monolithic && eng->ninstr_monolithic > 0) {
+                xrt::run r = (*eng->kernel)(3, eng->bo_monolithic, eng->ninstr_monolithic, eng->bo_in[s_idx], eng->bo_out[s_idx]);
+                r.wait(2000);
+            } else {
+                for (const auto& s : eng->stages) {
+                    if (s.ninstr_exec > 0 && s.bo_exec) {
+                        xrt::run r = (*eng->kernel)(3, s.bo_exec, s.ninstr_exec, eng->bo_in[s_idx], eng->bo_out[s_idx]);
+                        r.wait(2000);
+                    }
                 }
             }
         }
