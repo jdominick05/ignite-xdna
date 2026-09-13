@@ -113,6 +113,24 @@ class NativeIgniteEngine:
         ]
         self.lib.ignite_load_reference_heads.restype = ctypes.c_int
 
+        self.lib.ignite_run_async.argtypes = [
+            ctypes.c_void_p,
+            ctypes.POINTER(ctypes.c_uint8),
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.POINTER(ctypes.c_uint64),
+        ]
+        self.lib.ignite_run_async.restype = ctypes.c_int
+
+        self.lib.ignite_wait.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_uint64,
+            ctypes.POINTER(IgniteDetectionStruct),
+            ctypes.c_int,
+        ]
+        self.lib.ignite_wait.restype = ctypes.c_int
+
         self.lib.ignite_get_last_error.argtypes = []
         self.lib.ignite_get_last_error.restype = ctypes.c_char_p
 
@@ -171,6 +189,75 @@ class NativeIgniteEngine:
             err = self.lib.ignite_get_last_error()
             err_msg = err.decode("utf-8") if err else "Unknown error"
             raise RuntimeError(f"ignite_run failed ({num_dets}): {err_msg}")
+
+        timings_struct = IgniteTimingsStruct()
+        self.lib.ignite_get_last_timings(self.handle, ctypes.byref(timings_struct))
+
+        timings = {
+            "preprocess_ms": timings_struct.preprocess_ms,
+            "npu_exec_ms": timings_struct.npu_exec_ms,
+            "postprocess_ms": timings_struct.postprocess_ms,
+            "glass_to_glass_ms": timings_struct.glass_to_glass_ms,
+        }
+
+        detections = []
+        for i in range(num_dets):
+            d = self._det_arr[i]
+            detections.append({
+                "x0": float(d.x0),
+                "y0": float(d.y0),
+                "w": float(d.w),
+                "h": float(d.h),
+                "score": float(d.score),
+                "class_id": int(d.class_id),
+                "class_name": d.class_name.decode("utf-8", errors="ignore"),
+            })
+
+        return detections, timings
+
+    def run_async(self, img_bgr: np.ndarray) -> int:
+        """Asynchronously enqueues an inference frame and returns the monotonic ticket."""
+        if not self.handle:
+            raise RuntimeError("Engine has been closed.")
+
+        if not img_bgr.flags["C_CONTIGUOUS"]:
+            img_bgr = np.ascontiguousarray(img_bgr)
+
+        h, w = img_bgr.shape[:2]
+        stride = img_bgr.strides[0]
+        data_ptr = img_bgr.ctypes.data_as(ctypes.POINTER(ctypes.c_uint8))
+
+        ticket = ctypes.c_uint64(0)
+        rc = self.lib.ignite_run_async(
+            self.handle,
+            data_ptr,
+            w,
+            h,
+            stride,
+            ctypes.byref(ticket),
+        )
+        if rc != 0:
+            err = self.lib.ignite_get_last_error()
+            err_msg = err.decode("utf-8") if err else "Unknown error"
+            raise RuntimeError(f"ignite_run_async failed ({rc}): {err_msg}")
+
+        return int(ticket.value)
+
+    def wait(self, ticket: int) -> Tuple[List[dict], dict]:
+        """Waits for specified ticket to finish and returns its detections and timings."""
+        if not self.handle:
+            raise RuntimeError("Engine has been closed.")
+
+        num_dets = self.lib.ignite_wait(
+            self.handle,
+            ctypes.c_uint64(ticket),
+            self._det_arr,
+            self._max_dets,
+        )
+        if num_dets < 0:
+            err = self.lib.ignite_get_last_error()
+            err_msg = err.decode("utf-8") if err else "Unknown error"
+            raise RuntimeError(f"ignite_wait failed ({num_dets}): {err_msg}")
 
         timings_struct = IgniteTimingsStruct()
         self.lib.ignite_get_last_timings(self.handle, ctypes.byref(timings_struct))

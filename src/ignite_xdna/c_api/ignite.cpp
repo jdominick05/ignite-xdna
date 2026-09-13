@@ -7,6 +7,9 @@
  * Memory-maps .ignite binary containers, directly programs Native XRT hardware buffers,
  * executes C-SIMD letterbox/bilinear ingress preprocessing, and decodes YOLOv8 bounding
  * boxes via pure C++20 DFL softmax projection and batched NMS.
+ *
+ * Implements asynchronous ping-pong double-buffering (bo_in[2], bo_out[2]) to completely
+ * overlap CPU ingress SIMD preprocessing and DMA transfer with physical AIE2 silicon execution.
  */
 
 #ifndef IGNITE_EXPORTS
@@ -28,6 +31,12 @@
 #include <algorithm>
 #include <cstring>
 #include <filesystem>
+#include <map>
+#include <thread>
+#include <mutex>
+#include <condition_variable>
+#include <queue>
+#include <atomic>
 
 #include <nlohmann/json.hpp>
 
@@ -53,22 +62,20 @@ static void set_error(const std::string& err) {
 #define PREPROCESS_API __attribute__((visibility("default")))
 #endif
 
-extern "C" {
-PREPROCESS_API int fused_preprocess_bgr_to_chw_int8(
-    const uint8_t* src_bgr,
+extern "C" PREPROCESS_API int fused_preprocess_bgr_to_chw_int8(
+    const uint8_t* __restrict src_bgr,
     int src_w,
     int src_h,
     int src_stride,
-    int8_t* dst_chw,
+    int8_t* __restrict dst_chw,
     int dst_w,
     int dst_h,
-    int* out_pad_top,
-    int* out_pad_left,
-    float* out_scale
+    int* __restrict out_pad_top,
+    int* __restrict out_pad_left,
+    float* __restrict out_scale
 );
-}
 
-// 80 COCO Classes
+// Standard 80 COCO Class Names
 static const char* COCO_CLASSES[80] = {
     "person", "bicycle", "car", "motorcycle", "airplane", "bus", "train", "truck", "boat", "traffic light",
     "fire hydrant", "stop sign", "parking meter", "bench", "bird", "cat", "dog", "horse", "sheep", "cow",
@@ -120,6 +127,10 @@ struct Candidate {
 };
 
 struct ignite_engine {
+    // Double-buffering constant
+    static constexpr int NUM_SLOTS = 2;
+    static constexpr size_t RING_SIZE = 64;
+
     // Win32 memory-mapping handles
     HANDLE h_file = INVALID_HANDLE_VALUE;
     HANDLE h_map = NULL;
@@ -136,14 +147,19 @@ struct ignite_engine {
     std::unique_ptr<xrt::device> device;
     std::unique_ptr<xrt::hw_context> hw_ctx;
     std::unique_ptr<xrt::kernel> kernel;
-    xrt::bo bo_in;
-    xrt::bo bo_out;
 
-    // Stage pipeline
+    // Double-buffered BOs (slot 0 and slot 1)
+    xrt::bo bo_in[NUM_SLOTS];
+    xrt::bo bo_out[NUM_SLOTS];
+    std::vector<int8_t> chw_buffer[NUM_SLOTS];
+    int slot_pad_top[NUM_SLOTS] = {0, 0};
+    int slot_pad_left[NUM_SLOTS] = {0, 0};
+    float slot_scale[NUM_SLOTS] = {1.0f, 1.0f};
+    std::chrono::high_resolution_clock::time_point slot_t_start[NUM_SLOTS];
+    std::chrono::high_resolution_clock::time_point slot_t_prep[NUM_SLOTS];
+
+    // Stage pipeline (CDO transaction blobs)
     std::vector<StageResource> stages;
-
-    // DMA ingress buffer (3 * 640 * 640 int8)
-    std::vector<int8_t> chw_buffer;
 
     // Detection hyperparameters
     float conf_thres = 0.25f;
@@ -158,21 +174,69 @@ struct ignite_engine {
     std::vector<float> ref_p4_cls;
     std::vector<float> ref_p5_cls;
 
-    // Reusable scratch vectors to eliminate heap allocation during inference
+    // Reusable scratch vectors for DFL decode
     std::vector<float> scratch_max_logits;
     std::vector<int> scratch_best_cls;
     std::vector<Candidate> scratch_candidates;
     std::vector<bool> scratch_suppressed;
-    std::vector<Candidate> scratch_nms_results;
+
+    // Fixed-size circular ring buffer for results
+    struct ResultItem {
+        uint64_t ticket = 0;
+        std::vector<Candidate> detections;
+        ignite_timings_t timings = { 0.0, 0.0, 0.0, 0.0 };
+    };
+    ResultItem result_ring[RING_SIZE];
 
     // Fine-grained latency records
     ignite_timings_t last_timings = { 0.0, 0.0, 0.0, 0.0 };
 
+    // Threading and async queue coordination
+    struct WorkItem {
+        uint64_t ticket;
+        int slot;
+    };
+
+    std::atomic<uint64_t> next_ticket{1};
+    std::atomic<uint64_t> last_completed_ticket{0};
+    std::atomic<bool> worker_stop{false};
+
+    std::mutex queue_mutex;
+    std::condition_variable queue_cv;
+    std::queue<WorkItem> work_queue;
+
+    std::mutex result_mutex;
+    std::condition_variable result_cv;
+    std::condition_variable slot_cv;
+
+    std::thread worker_thread;
+
+    void start_worker() {
+        worker_stop.store(false);
+        worker_thread = std::thread(&ignite_engine::worker_loop, this);
+    }
+
+    void stop_worker() {
+        worker_stop.store(true);
+        queue_cv.notify_all();
+        result_cv.notify_all();
+        slot_cv.notify_all();
+        if (worker_thread.joinable()) {
+            worker_thread.join();
+        }
+    }
+
+    void decode_detections_for_slot(int slot, std::vector<Candidate>& out_dets);
+    void worker_loop();
+
     ~ignite_engine() {
-        // Destroy BOs before hw context and device
+        stop_worker();
+
         stages.clear();
-        bo_in = xrt::bo();
-        bo_out = xrt::bo();
+        for (int s = 0; s < NUM_SLOTS; ++s) {
+            bo_in[s] = xrt::bo();
+            bo_out[s] = xrt::bo();
+        }
         kernel.reset();
         hw_ctx.reset();
         device.reset();
@@ -241,9 +305,194 @@ static void try_load_default_heads(ignite_engine* eng, const fs::path& model_pat
     }
 }
 
-// ----------------------------------------------------------------------------
-// Public C-API Implementation
-// ----------------------------------------------------------------------------
+void ignite_engine::decode_detections_for_slot(int slot, std::vector<Candidate>& out_dets) {
+    out_dets.clear();
+    if (!has_reference_heads) {
+        return;
+    }
+
+    const float* boxes[3] = {
+        ref_p3_box.data(), ref_p4_box.data(), ref_p5_box.data()
+    };
+    const float* clses[3] = {
+        ref_p3_cls.data(), ref_p4_cls.data(), ref_p5_cls.data()
+    };
+    const int grid_sizes[3] = { 80, 40, 20 };
+    const float strides[3] = { 8.0f, 16.0f, 32.0f };
+
+    float conf_t = conf_thres;
+    float iou_t = iou_thres;
+    float logit_t = std::log(conf_t / (1.0f - conf_t));
+
+    scratch_candidates.clear();
+
+    for (int h_idx = 0; h_idx < 3; ++h_idx) {
+        int G = grid_sizes[h_idx];
+        int N = G * G;
+        float stride_val = strides[h_idx];
+        const float* box_ptr = boxes[h_idx];
+        const float* cls_ptr = clses[h_idx];
+
+        float* max_logits = scratch_max_logits.data();
+        int* best_cls_arr = scratch_best_cls.data();
+        std::memcpy(max_logits, cls_ptr, N * sizeof(float));
+        std::memset(best_cls_arr, 0, N * sizeof(int));
+
+        for (int c = 1; c < 80; ++c) {
+            const float* c_row = cls_ptr + c * N;
+            for (int i = 0; i < N; ++i) {
+                if (c_row[i] > max_logits[i]) {
+                    max_logits[i] = c_row[i];
+                    best_cls_arr[i] = c;
+                }
+            }
+        }
+
+        for (int i = 0; i < N; ++i) {
+            float max_logit = max_logits[i];
+            if (max_logit <= logit_t) continue;
+
+            float score = 1.0f / (1.0f + std::exp(-max_logit));
+            if (score < conf_t) continue;
+
+            int best_cls = best_cls_arr[i];
+            int col = i % G;
+            int row = i / G;
+
+            // DFL Softmax Projection on 16 bins for 4 coordinates
+            float dist[4];
+            for (int d = 0; d < 4; ++d) {
+                float bin_vals[16];
+                float max_b = -1e9f;
+                for (int k = 0; k < 16; ++k) {
+                    float v = box_ptr[(d * 16 + k) * N + i];
+                    bin_vals[k] = v;
+                    if (v > max_b) max_b = v;
+                }
+                float sum_exp = 0.0f;
+                for (int k = 0; k < 16; ++k) {
+                    bin_vals[k] = std::exp(bin_vals[k] - max_b);
+                    sum_exp += bin_vals[k];
+                }
+                float exp_dist = 0.0f;
+                for (int k = 0; k < 16; ++k) {
+                    exp_dist += static_cast<float>(k) * (bin_vals[k] / sum_exp);
+                }
+                dist[d] = exp_dist;
+            }
+
+            // Anchor Grid Projection
+            float ax = static_cast<float>(col) + 0.5f;
+            float ay = static_cast<float>(row) + 0.5f;
+
+            float x1 = (ax - dist[0]) * stride_val;
+            float y1 = (ay - dist[1]) * stride_val;
+            float x2 = (ax + dist[2]) * stride_val;
+            float y2 = (ay + dist[3]) * stride_val;
+
+            float cx = (x1 + x2) * 0.5f;
+            float cy = (y1 + y2) * 0.5f;
+            float bw = (x2 - x1);
+            float bh = (y2 - y1);
+
+            // Letterbox Coordinate Inversion
+            float scale = slot_scale[slot];
+            int pad_left = slot_pad_left[slot];
+            int pad_top = slot_pad_top[slot];
+
+            float orig_x0 = (cx - bw * 0.5f - static_cast<float>(pad_left)) / scale;
+            float orig_y0 = (cy - bh * 0.5f - static_cast<float>(pad_top)) / scale;
+            float orig_w = bw / scale;
+            float orig_h = bh / scale;
+
+            Candidate cand;
+            cand.x0 = orig_x0;
+            cand.y0 = orig_y0;
+            cand.w = orig_w;
+            cand.h = orig_h;
+            cand.score = score;
+            cand.class_id = best_cls;
+            scratch_candidates.push_back(cand);
+        }
+    }
+
+    std::sort(scratch_candidates.begin(), scratch_candidates.end(), [](const Candidate& a, const Candidate& b) {
+        return a.score > b.score;
+    });
+
+    scratch_suppressed.assign(scratch_candidates.size(), false);
+    out_dets.clear();
+
+    for (size_t i = 0; i < scratch_candidates.size(); ++i) {
+        if (scratch_suppressed[i]) continue;
+        out_dets.push_back(scratch_candidates[i]);
+        for (size_t j = i + 1; j < scratch_candidates.size(); ++j) {
+            if (scratch_suppressed[j]) continue;
+            if (scratch_candidates[i].class_id == scratch_candidates[j].class_id) {
+                float iou = compute_iou(scratch_candidates[i], scratch_candidates[j]);
+                if (iou > iou_t) {
+                    scratch_suppressed[j] = true;
+                }
+            }
+        }
+    }
+}
+
+void ignite_engine::worker_loop() {
+    while (!worker_stop.load()) {
+        WorkItem item;
+        {
+            std::unique_lock<std::mutex> lock(queue_mutex);
+            queue_cv.wait(lock, [this]() {
+                return !work_queue.empty() || worker_stop.load();
+            });
+            if (worker_stop.load() && work_queue.empty()) break;
+            item = work_queue.front();
+            work_queue.pop();
+        }
+
+        int slot = item.slot;
+        uint64_t ticket = item.ticket;
+
+        auto t_npu_start = std::chrono::high_resolution_clock::now();
+
+        // 1. Physical AIE2 Silicon Execution
+        for (const auto& s : stages) {
+            if (s.ninstr_exec > 0 && s.bo_exec) {
+                xrt::run r = (*kernel)(3, s.bo_exec, s.ninstr_exec, bo_in[slot], bo_out[slot]);
+                r.wait(2000);
+            }
+        }
+        bo_out[slot].sync(XCL_BO_SYNC_BO_FROM_DEVICE);
+        auto t_npu_done = std::chrono::high_resolution_clock::now();
+
+        // 2. Pure C++20 DFL Decode + Batched NMS
+        std::vector<Candidate> dets;
+        dets.reserve(64);
+        decode_detections_for_slot(slot, dets);
+        auto t_post_done = std::chrono::high_resolution_clock::now();
+
+        // 3. Fine-grained latency records
+        ignite_timings_t timings;
+        timings.preprocess_ms = std::chrono::duration<double, std::milli>(slot_t_prep[slot] - slot_t_start[slot]).count();
+        timings.npu_exec_ms = std::chrono::duration<double, std::milli>(t_npu_done - t_npu_start).count();
+        timings.postprocess_ms = std::chrono::duration<double, std::milli>(t_post_done - t_npu_done).count();
+        timings.glass_to_glass_ms = std::chrono::duration<double, std::milli>(t_post_done - slot_t_start[slot]).count();
+
+        // 4. Update fixed circular ring buffer & signal completion
+        {
+            std::lock_guard<std::mutex> lock(result_mutex);
+            size_t ring_idx = static_cast<size_t>(ticket % RING_SIZE);
+            result_ring[ring_idx].ticket = ticket;
+            result_ring[ring_idx].detections = std::move(dets);
+            result_ring[ring_idx].timings = timings;
+            last_completed_ticket.store(ticket);
+            last_timings = timings;
+        }
+        result_cv.notify_all();
+        slot_cv.notify_all();
+    }
+}
 
 ignite_engine_t* ignite_load(const char* model_path, int device_id) {
     if (!model_path) {
@@ -368,11 +617,14 @@ ignite_engine_t* ignite_load(const char* model_path, int device_id) {
         eng->hw_ctx = std::make_unique<xrt::hw_context>(*eng->device, uuid);
         eng->kernel = std::make_unique<xrt::kernel>(*eng->hw_ctx, "MLIR_AIE");
 
-        // Allocate I/O BOs
+        // Allocate double-buffered I/O BOs
         eng->in_bytes = (eng->num_cores == 16) ? 8192 : 2048;
         eng->out_bytes = (eng->num_cores == 16) ? 4096 : 1024;
-        eng->bo_in = xrt::bo(*eng->device, eng->in_bytes, xrt::bo::flags::host_only, eng->kernel->group_id(3));
-        eng->bo_out = xrt::bo(*eng->device, eng->out_bytes, xrt::bo::flags::host_only, eng->kernel->group_id(4));
+        for (int s = 0; s < ignite_engine::NUM_SLOTS; ++s) {
+            eng->bo_in[s] = xrt::bo(*eng->device, eng->in_bytes, xrt::bo::flags::host_only, eng->kernel->group_id(3));
+            eng->bo_out[s] = xrt::bo(*eng->device, eng->out_bytes, xrt::bo::flags::host_only, eng->kernel->group_id(4));
+            eng->chw_buffer[s].resize(3 * 640 * 640, -14);
+        }
 
         // 5. Construct Stage Instruction Buffers directly from mmap
         if (manifest.contains("stages")) {
@@ -417,17 +669,19 @@ ignite_engine_t* ignite_load(const char* model_path, int device_id) {
             });
         }
 
-        // 6. Stationary Parameter Programming & Pipeline Warmup
+        // 6. Stationary Parameter Programming & Double-Buffer Warmup
         for (const auto& s : eng->stages) {
             if (s.ninstr_init > 0 && s.bo_init) {
-                xrt::run r = (*eng->kernel)(3, s.bo_init, s.ninstr_init, eng->bo_in, eng->bo_out);
+                xrt::run r = (*eng->kernel)(3, s.bo_init, s.ninstr_init, eng->bo_in[0], eng->bo_out[0]);
                 r.wait(3000);
             }
         }
-        for (const auto& s : eng->stages) {
-            if (s.ninstr_exec > 0 && s.bo_exec) {
-                xrt::run r = (*eng->kernel)(3, s.bo_exec, s.ninstr_exec, eng->bo_in, eng->bo_out);
-                r.wait(2000);
+        for (int s_idx = 0; s_idx < ignite_engine::NUM_SLOTS; ++s_idx) {
+            for (const auto& s : eng->stages) {
+                if (s.ninstr_exec > 0 && s.bo_exec) {
+                    xrt::run r = (*eng->kernel)(3, s.bo_exec, s.ninstr_exec, eng->bo_in[s_idx], eng->bo_out[s_idx]);
+                    r.wait(2000);
+                }
             }
         }
     } catch (const std::exception& e) {
@@ -435,18 +689,141 @@ ignite_engine_t* ignite_load(const char* model_path, int device_id) {
         return nullptr;
     }
 
-    // 7. Allocate ingress fast-path buffer (3 * 640 * 640 bytes) and zero-alloc scratch buffers
-    eng->chw_buffer.resize(3 * 640 * 640, -14);
+    // 7. Scratch vector allocations for DFL decode
     eng->scratch_max_logits.resize(6400, 0.0f);
     eng->scratch_best_cls.resize(6400, 0);
     eng->scratch_candidates.reserve(512);
     eng->scratch_suppressed.reserve(512);
-    eng->scratch_nms_results.reserve(128);
 
     // 8. Try loading reference heads if available
     try_load_default_heads(eng.get(), mp);
 
+    // 9. Start background NPU worker thread for async ping-pong processing
+    eng->start_worker();
+
     return eng.release();
+}
+
+int ignite_run_async(
+    ignite_engine_t* engine,
+    const uint8_t* bgr_data,
+    int width,
+    int height,
+    int stride,
+    uint64_t* out_ticket
+) {
+    if (!engine) {
+        set_error("Engine handle is NULL");
+        return -1;
+    }
+    if (!bgr_data || width <= 0 || height <= 0 || stride <= 0) {
+        set_error("Invalid input image buffer arguments");
+        return -2;
+    }
+    if (!out_ticket) {
+        set_error("out_ticket pointer cannot be NULL");
+        return -3;
+    }
+
+    uint64_t ticket = engine->next_ticket.fetch_add(1);
+    int slot = static_cast<int>(ticket % ignite_engine::NUM_SLOTS);
+
+    // Bounded pipeline: wait until this slot has completed previous work (at most NUM_SLOTS in flight)
+    {
+        std::unique_lock<std::mutex> lock(engine->result_mutex);
+        engine->slot_cv.wait(lock, [engine, ticket]() {
+            return (engine->last_completed_ticket.load() + ignite_engine::NUM_SLOTS) >= ticket || engine->worker_stop.load();
+        });
+        if (engine->worker_stop.load()) {
+            set_error("Worker thread stopped");
+            return -4;
+        }
+    }
+
+    auto t_start = std::chrono::high_resolution_clock::now();
+    engine->slot_t_start[slot] = t_start;
+
+    // Stage 1: C-SIMD Letterbox + Bilinear Interpolation + BGR->RGB + Int8 Quantize
+    int pad_top = 0, pad_left = 0;
+    float scale = 1.0f;
+    int prep_rc = fused_preprocess_bgr_to_chw_int8(
+        bgr_data, width, height, stride,
+        engine->chw_buffer[slot].data(), 640, 640,
+        &pad_top, &pad_left, &scale
+    );
+    if (prep_rc != 0) {
+        set_error("Ingress preprocessor failed with code: " + std::to_string(prep_rc));
+        return -5;
+    }
+    engine->slot_pad_top[slot] = pad_top;
+    engine->slot_pad_left[slot] = pad_left;
+    engine->slot_scale[slot] = scale;
+
+    // DMA Write and Sync to Device
+    engine->bo_in[slot].write(engine->chw_buffer[slot].data(), engine->in_bytes, 0);
+    engine->bo_in[slot].sync(XCL_BO_SYNC_BO_TO_DEVICE);
+
+    engine->slot_t_prep[slot] = std::chrono::high_resolution_clock::now();
+
+    // Enqueue work item for concurrent NPU worker thread
+    {
+        std::lock_guard<std::mutex> lock(engine->queue_mutex);
+        engine->work_queue.push({ticket, slot});
+    }
+    engine->queue_cv.notify_one();
+
+    *out_ticket = ticket;
+    return 0;
+}
+
+int ignite_wait(
+    ignite_engine_t* engine,
+    uint64_t ticket,
+    ignite_detection_t* out_detections,
+    int max_detections
+) {
+    if (!engine || ticket == 0) {
+        set_error("Invalid argument to ignite_wait");
+        return -1;
+    }
+
+    // Wait until ticket is completed by NPU worker thread
+    {
+        std::unique_lock<std::mutex> lock(engine->result_mutex);
+        engine->result_cv.wait(lock, [engine, ticket]() {
+            return engine->last_completed_ticket.load() >= ticket || engine->worker_stop.load();
+        });
+        if (engine->last_completed_ticket.load() < ticket) {
+            set_error("Worker stopped before ticket completion");
+            return -2;
+        }
+
+        size_t ring_idx = static_cast<size_t>(ticket % ignite_engine::RING_SIZE);
+        const auto& res = engine->result_ring[ring_idx];
+        if (res.ticket != ticket) {
+            set_error("Ticket sequence out of sync or expired in ring buffer");
+            return -3;
+        }
+
+        engine->last_timings = res.timings;
+
+        int num_dets = 0;
+        if (out_detections && max_detections > 0) {
+            num_dets = static_cast<int>(std::min(static_cast<size_t>(max_detections), res.detections.size()));
+            for (int i = 0; i < num_dets; ++i) {
+                out_detections[i].x0 = res.detections[i].x0;
+                out_detections[i].y0 = res.detections[i].y0;
+                out_detections[i].w = res.detections[i].w;
+                out_detections[i].h = res.detections[i].h;
+                out_detections[i].score = res.detections[i].score;
+                out_detections[i].class_id = res.detections[i].class_id;
+                const char* cname = (res.detections[i].class_id >= 0 && res.detections[i].class_id < 80)
+                    ? COCO_CLASSES[res.detections[i].class_id] : "unknown";
+                strncpy_s(out_detections[i].class_name, sizeof(out_detections[i].class_name), cname, _TRUNCATE);
+            }
+        }
+        return static_cast<int>(res.detections.size());
+    }
 }
 
 int ignite_run(
@@ -458,212 +835,12 @@ int ignite_run(
     ignite_detection_t* out_detections,
     int max_detections
 ) {
-    if (!engine) {
-        set_error("Engine handle is NULL");
-        return -1;
+    uint64_t ticket = 0;
+    int rc = ignite_run_async(engine, bgr_data, width, height, stride, &ticket);
+    if (rc != 0) {
+        return rc;
     }
-    if (!bgr_data || width <= 0 || height <= 0 || stride <= 0) {
-        set_error("Invalid input image buffer arguments");
-        return -2;
-    }
-    if (!out_detections || max_detections <= 0) {
-        set_error("Invalid out_detections buffer");
-        return -3;
-    }
-
-    auto t_start = std::chrono::high_resolution_clock::now();
-
-    // 1. Stage 1: C-SIMD Letterbox + Bilinear Interpolation + BGR->RGB + Int8 Quantize
-    int pad_top = 0, pad_left = 0;
-    float scale = 1.0f;
-    int prep_rc = fused_preprocess_bgr_to_chw_int8(
-        bgr_data, width, height, stride,
-        engine->chw_buffer.data(), 640, 640,
-        &pad_top, &pad_left, &scale
-    );
-    if (prep_rc != 0) {
-        set_error("Ingress preprocessor failed with code: " + std::to_string(prep_rc));
-        return -4;
-    }
-    auto t_prep_done = std::chrono::high_resolution_clock::now();
-
-    // 2. Stage 2: Physical Silicon NPU Dispatch across 9 Monolithic Stages
-    try {
-        engine->bo_in.write(engine->chw_buffer.data(), engine->in_bytes, 0);
-        engine->bo_in.sync(XCL_BO_SYNC_BO_TO_DEVICE);
-
-        for (const auto& s : engine->stages) {
-            if (s.ninstr_exec > 0 && s.bo_exec) {
-                xrt::run r = (*engine->kernel)(3, s.bo_exec, s.ninstr_exec, engine->bo_in, engine->bo_out);
-                r.wait(2000);
-            }
-        }
-        engine->bo_out.sync(XCL_BO_SYNC_BO_FROM_DEVICE);
-    } catch (const std::exception& e) {
-        set_error("Hardware silicon execution error: " + std::string(e.what()));
-        return -5;
-    }
-    auto t_npu_done = std::chrono::high_resolution_clock::now();
-
-    // 3. Stage 3: Pure C++20 DFL Decode and Batched NMS
-    int num_dets = 0;
-    if (engine->has_reference_heads) {
-        const float* boxes[3] = {
-            engine->ref_p3_box.data(), engine->ref_p4_box.data(), engine->ref_p5_box.data()
-        };
-        const float* clses[3] = {
-            engine->ref_p3_cls.data(), engine->ref_p4_cls.data(), engine->ref_p5_cls.data()
-        };
-        const int grid_sizes[3] = { 80, 40, 20 };
-        const float strides[3] = { 8.0f, 16.0f, 32.0f };
-
-        float conf_t = engine->conf_thres;
-        float iou_t = engine->iou_thres;
-        float logit_t = std::log(conf_t / (1.0f - conf_t));
-
-        std::vector<Candidate>& candidates = engine->scratch_candidates;
-        candidates.clear();
-
-        for (int h_idx = 0; h_idx < 3; ++h_idx) {
-            int G = grid_sizes[h_idx];
-            int N = G * G;
-            float stride_val = strides[h_idx];
-            const float* box_ptr = boxes[h_idx];
-            const float* cls_ptr = clses[h_idx];
-
-            // Vectorized contiguous class logit scan without allocations
-            float* max_logits = engine->scratch_max_logits.data();
-            int* best_cls_arr = engine->scratch_best_cls.data();
-            std::memcpy(max_logits, cls_ptr, N * sizeof(float));
-            std::memset(best_cls_arr, 0, N * sizeof(int));
-
-            for (int c = 1; c < 80; ++c) {
-                const float* c_row = cls_ptr + c * N;
-                for (int i = 0; i < N; ++i) {
-                    if (c_row[i] > max_logits[i]) {
-                        max_logits[i] = c_row[i];
-                        best_cls_arr[i] = c;
-                    }
-                }
-            }
-
-            for (int i = 0; i < N; ++i) {
-                float max_logit = max_logits[i];
-                if (max_logit <= logit_t) continue;
-
-                float score = 1.0f / (1.0f + std::exp(-max_logit));
-                if (score < conf_t) continue;
-
-                int best_cls = best_cls_arr[i];
-                int col = i % G;
-                int row = i / G;
-
-                    // 3.2. DFL Softmax Projection on 16 bins for 4 bounding coordinates
-                    float dist[4];
-                    for (int d = 0; d < 4; ++d) {
-                        float bin_vals[16];
-                        float max_b = -1e9f;
-                        for (int k = 0; k < 16; ++k) {
-                            float v = box_ptr[(d * 16 + k) * N + i];
-                            bin_vals[k] = v;
-                            if (v > max_b) max_b = v;
-                        }
-                        float sum_exp = 0.0f;
-                        for (int k = 0; k < 16; ++k) {
-                            bin_vals[k] = std::exp(bin_vals[k] - max_b);
-                            sum_exp += bin_vals[k];
-                        }
-                        float exp_dist = 0.0f;
-                        for (int k = 0; k < 16; ++k) {
-                            exp_dist += static_cast<float>(k) * (bin_vals[k] / sum_exp);
-                        }
-                        dist[d] = exp_dist;
-                    }
-
-                    // 3.3. Anchor Grid Projection
-                    float ax = static_cast<float>(col) + 0.5f;
-                    float ay = static_cast<float>(row) + 0.5f;
-
-                    float x1 = (ax - dist[0]) * stride_val;
-                    float y1 = (ay - dist[1]) * stride_val;
-                    float x2 = (ax + dist[2]) * stride_val;
-                    float y2 = (ay + dist[3]) * stride_val;
-
-                    float cx = (x1 + x2) * 0.5f;
-                    float cy = (y1 + y2) * 0.5f;
-                    float bw = (x2 - x1);
-                    float bh = (y2 - y1);
-
-                    // 3.4. Letterbox Coordinate Inversion
-                    float orig_x0 = (cx - bw * 0.5f - static_cast<float>(pad_left)) / scale;
-                    float orig_y0 = (cy - bh * 0.5f - static_cast<float>(pad_top)) / scale;
-                    float orig_w = bw / scale;
-                    float orig_h = bh / scale;
-
-                    Candidate cand;
-                    cand.x0 = orig_x0;
-                    cand.y0 = orig_y0;
-                    cand.w = orig_w;
-                    cand.h = orig_h;
-                    cand.score = score;
-                    cand.class_id = best_cls;
-                    candidates.push_back(cand);
-                }
-            }
-
-        // 3.5. Score Sort
-        std::sort(candidates.begin(), candidates.end(), [](const Candidate& a, const Candidate& b) {
-            return a.score > b.score;
-        });
-
-        // 3.6. Batched Greedy NMS
-        std::vector<bool>& suppressed = engine->scratch_suppressed;
-        suppressed.assign(candidates.size(), false);
-        std::vector<Candidate>& nms_results = engine->scratch_nms_results;
-        nms_results.clear();
-
-        for (size_t i = 0; i < candidates.size(); ++i) {
-            if (suppressed[i]) continue;
-            nms_results.push_back(candidates[i]);
-            for (size_t j = i + 1; j < candidates.size(); ++j) {
-                if (suppressed[j]) continue;
-                if (candidates[i].class_id == candidates[j].class_id) {
-                    float iou = compute_iou(candidates[i], candidates[j]);
-                    if (iou > iou_t) {
-                        suppressed[j] = true;
-                    }
-                }
-            }
-        }
-
-        num_dets = static_cast<int>(std::min(static_cast<size_t>(max_detections), nms_results.size()));
-        for (int i = 0; i < num_dets; ++i) {
-            out_detections[i].x0 = nms_results[i].x0;
-            out_detections[i].y0 = nms_results[i].y0;
-            out_detections[i].w = nms_results[i].w;
-            out_detections[i].h = nms_results[i].h;
-            out_detections[i].score = nms_results[i].score;
-            out_detections[i].class_id = nms_results[i].class_id;
-            const char* cname = (nms_results[i].class_id >= 0 && nms_results[i].class_id < 80)
-                ? COCO_CLASSES[nms_results[i].class_id] : "unknown";
-            strncpy_s(out_detections[i].class_name, sizeof(out_detections[i].class_name), cname, _TRUNCATE);
-        }
-    }
-
-    auto t_post_done = std::chrono::high_resolution_clock::now();
-
-    // Latency record calculations
-    std::chrono::duration<double, std::milli> prep_d = t_prep_done - t_start;
-    std::chrono::duration<double, std::milli> npu_d = t_npu_done - t_prep_done;
-    std::chrono::duration<double, std::milli> post_d = t_post_done - t_npu_done;
-    std::chrono::duration<double, std::milli> total_d = t_post_done - t_start;
-
-    engine->last_timings.preprocess_ms = prep_d.count();
-    engine->last_timings.npu_exec_ms = npu_d.count();
-    engine->last_timings.postprocess_ms = post_d.count();
-    engine->last_timings.glass_to_glass_ms = total_d.count();
-
-    return num_dets;
+    return ignite_wait(engine, ticket, out_detections, max_detections);
 }
 
 void ignite_free(ignite_engine_t* engine) {

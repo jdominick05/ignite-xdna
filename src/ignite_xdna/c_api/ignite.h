@@ -88,6 +88,43 @@ IGNITE_API int ignite_run(
 );
 
 /**
+ * Asynchronously enqueues an inference frame into the double-buffered ping-pong pipeline.
+ * Overlaps preprocessing and host-to-device DMA transfer concurrently with active NPU execution.
+ *
+ * @param engine          Engine handle returned by ignite_load.
+ * @param bgr_data        Pointer to raw uint8 BGR image data (HWC layout).
+ * @param width           Image width in pixels.
+ * @param height          Image height in pixels.
+ * @param stride          Image row stride in bytes.
+ * @param out_ticket      Destination pointer for monotonic sequence ticket representing this frame.
+ * @return 0 on success, negative error code on failure.
+ */
+IGNITE_API int ignite_run_async(
+    ignite_engine_t* engine,
+    const uint8_t* bgr_data,
+    int width,
+    int height,
+    int stride,
+    uint64_t* out_ticket
+);
+
+/**
+ * Waits for the specified inference ticket to complete execution and retrieves detections.
+ *
+ * @param engine          Engine handle.
+ * @param ticket          Ticket returned by ignite_run_async.
+ * @param out_detections  Caller-allocated array to receive detections (or NULL if only waiting).
+ * @param max_detections  Capacity of out_detections array.
+ * @return Number of detections populated, or negative error code on failure.
+ */
+IGNITE_API int ignite_wait(
+    ignite_engine_t* engine,
+    uint64_t ticket,
+    ignite_detection_t* out_detections,
+    int max_detections
+);
+
+/**
  * Frees all hardware resources, memory-mappings, and engine allocations.
  *
  * @param engine Engine handle to release.

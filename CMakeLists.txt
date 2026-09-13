@@ -92,6 +92,9 @@ target_link_libraries(ignite-run PRIVATE
     ignite_xdna
     xrt_coreutil
     gdiplus
+    mfplat
+    mfreadwrite
+    mfuuid
 )
 
 set_target_properties(ignite-run PROPERTIES
