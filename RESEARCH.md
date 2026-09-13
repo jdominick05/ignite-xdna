@@ -990,6 +990,13 @@ been closed:
   of this chain where the projected numbers point to a win, not a loss -- still a
   projection, not a measurement of the thing itself.
   `results/aie/groupnorm_bf16_handoff_floor_v2_npu.log`.
+- **Native BO handoff is now built (2026-09-13).** Native `ignite_xdna` graph stages
+  and the existing bf16 GroupNorm kernel share BOs across contexts without host
+  copies or sync calls between stages. The synthetic Conv2D/GroupNorm/Conv2D chain
+  passed full-byte serial parity on Phoenix. This closes native buffer plumbing;
+  VitisAI EP interoperability, real-model INT8 boundaries and dtype/layout conversion
+  remain open. BOs still traverse system DDR.
+  [Measurements and backing logs](docs/BENCHMARKS.md#native-bo-kernel-splicing-2026-09-13-desktop-2).
 - **Follow-up: GroupNorm was the wrong shape of op for bf16 to begin with -- pivoting
   to a compute-bound one.** Written after the reopening above, not unaware of it: even
   taking the reopened floor at face value, GroupNorm is ~6 ops per element with no

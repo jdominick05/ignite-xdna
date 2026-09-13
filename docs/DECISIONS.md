@@ -138,6 +138,18 @@
 
 ## Rejected approaches and known pitfalls
 
+- **Native kernel splicing passes BO objects, not integer device addresses.**
+  Existing Shim `DDR_PATCH` relocations retain firmware address translation and
+  XRT dependency tracking when a downstream argument receives the upstream BO.
+  Check dtype, shape, physical layout, device and bank first; a CPU unswizzle or
+  cast invalidates a zero-host-copy claim. XRT group IDs contain a context slot
+  as well as a bank: retain the full ID for allocation and compare the low
+  16-bit bank field for connectivity. Comparing whole IDs rejected a valid
+  cross-context link during bring-up. Use bounded completion waits between
+  contexts and preserve each compiled bundle's own lock initialization; unrelated
+  hardware contexts have no shared semaphore contract. BOs remain in system DDR.
+  [Validation and limits](BENCHMARKS.md#native-bo-kernel-splicing-2026-09-13-desktop-2).
+
 - **The launcher (`tui/`) is a front end, not a measurement tool, and the boundary is
   load-bearing.** It writes only to `outputs/` (git-ignored): every demo defaults
   `--out-dir` to `results/`, which is the tracked evidence base -- 69 of its images

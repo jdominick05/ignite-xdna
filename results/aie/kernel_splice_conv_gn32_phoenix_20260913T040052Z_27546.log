@@ -1,0 +1,52 @@
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+HOST_LOAD busy_cores=1.58 logical_cores=16 free_ram_gb=13.1 sample_sec=1
+HOST_LOAD_TOP 1.03 msedge:15060 ws_mb=1107
+HOST_LOAD_TOP 0.23 pycharm64:8540 ws_mb=2944
+HOST_LOAD_TOP 0.12 HWiNFO64:1824 ws_mb=42
+HOST_LOAD_TOP 0.09 Taskmgr:13448 ws_mb=163
+HOST_LOAD_TOP 0.06 powershell:25320 ws_mb=81
+HOST_LOAD_VERDICT CLEAR
+
+{"L": 1024, "chunk": 256, "device_index": 0, "event": "environment", "iters": 6, "machine": "Desktop 2 / Ryzen 7 8700G / Phoenix", "pid": 31172, "python": "3.13.15 | packaged by conda-forge | (main, Sep  2 2026, 21:52:43) [MSC v.1944 64 bit (AMD64)]", "scope": "native graph BOs; system DDR remains", "warmup": 2}
+COMPILE_BEGIN stage=conv_up L=1024 chunk=256
+COMPILE_END stage=conv_up
+COMPILE_BEGIN stage=groupnorm L=1024 chunk=256
+COMPILE_END stage=groupnorm
+COMPILE_BEGIN stage=conv_down L=1024 chunk=256
+COMPILE_END stage=conv_down
+{"event": "artifact", "instruction_bytes": 2288, "shim_patch_count": 16, "stage": "conv_up", "transaction_sha256": "63583237d6b9b0df66b426216b9de6e48d7b314e23e50a068986344e59e534a4", "xclbin_sha256": "eb45d9fd4dfece84161c59b893047da17f077ae146b93ce505ee71362dcfd85d"}
+{"event": "artifact", "instruction_bytes": 4208, "shim_patch_count": 32, "stage": "groupnorm", "transaction_sha256": "392b6160088f686096c617e6d6be389c47415b19e60df9e62f5cf1b05c8be5ed", "xclbin_sha256": "20122f5a1586e49e042923ce6baf93ac003420200ae3efb1acd2414397259714"}
+{"event": "artifact", "instruction_bytes": 2288, "shim_patch_count": 16, "stage": "conv_down", "transaction_sha256": "63583237d6b9b0df66b426216b9de6e48d7b314e23e50a068986344e59e534a4", "xclbin_sha256": "0939e1970c71eaf4a56114ed0bfff46d8d70827815af6f2c448384c008c4675f"}
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+HOST_LOAD busy_cores=0.62 logical_cores=16 free_ram_gb=13 sample_sec=1
+HOST_LOAD_TOP 0.28 pycharm64:8540 ws_mb=2952
+HOST_LOAD_TOP 0.14 HWiNFO64:1824 ws_mb=42
+HOST_LOAD_TOP 0.08 Taskmgr:13448 ws_mb=163
+HOST_LOAD_TOP 0.05 powershell:34716 ws_mb=81
+HOST_LOAD_TOP 0.03 AUEPMaster:16328 ws_mb=32
+HOST_LOAD_VERDICT CLEAR
+
+Traceback (most recent call last):
+  File "C:\Users\<user>\PycharmProjects\ignite-xdna\tests\test_kernel_splice.py", line 261, in <module>
+    run_hardware(args)
+    ~~~~~~~~~~~~^^^^^^
+  File "C:\Users\<user>\PycharmProjects\ignite-xdna\tests\test_kernel_splice.py", line 150, in run_hardware
+    splicer = KernelSplicer(stages)
+  File "C:\Users\<user>\PycharmProjects\ignite-xdna\src\ignite_xdna\runtime\splice.py", line 269, in __init__
+    raise ValueError("Memory-group mismatch would require a driver copy")
+ValueError: Memory-group mismatch would require a driver copy
+scripts/research-iron.sh: line 18:  2705 Segmentation fault         python "$@"

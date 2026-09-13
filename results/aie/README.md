@@ -1045,7 +1045,22 @@ and standalone NPU transaction binaries (`im2col_4d_col.bin`, 3,636 B).
 
 [`notes_n_layer_scheduler_architecture.md`](notes_n_layer_scheduler_architecture.md) — architectural specification, dynamic multi-pass transaction bundle lowering (`src/ignite_xdna/compiler/scheduler.py`), automated topological ONNX graph partitioning (`src/ignite_xdna/compiler/partitioner.py`), and physical silicon verification on AMD Phoenix XDNA1 silicon (Ryzen 7 8700G, NPU `[003d:00:01.1]`, tile clock 1.80 GHz). Generalizes 2-layer MemTile fusion into an arbitrary N-layer ping-pong scheduling engine, alternating activations between MemTile `L2_BANK_0` (`0x40000`) and `L2_BANK_1` (`0x60000`) across `Tile(0..3, 1)` with Lock 2, 4, and 5 state machine arbitration. Characterized on physical silicon across 1, 2, 3, and 4-layer Conv2D subgraphs: confirms strictly 0 bytes of intermediate DDR traffic, eliminating host PCIe roundtrips. Sustains 5,939–6,107 FPS (163.75–168.37 µs) on 16 AIE2 cores with host submission overhead paid once for the entire N-layer graph. Achieves 100.00% bit-exact parity against the Layer 0 AIE2 SRS reference and bounded 100.0% agreement within $\le 1$ LSB (MaxAE $\le 1$, 100.00% bit-exact for 4 layers) against ONNX Runtime CPU INT8. Dispatches heterogeneous graphs through `InferenceSession` with automatic CPU fallback orchestration at 11,675 FPS. Execution trace logged in [`hardware_multi_layer_scheduler.log`](hardware_multi_layer_scheduler.log).
 
+## Native graph BO splicing
+
+The [native BO splice measurement](../../docs/BENCHMARKS.md#native-bo-kernel-splicing-2026-09-13-desktop-2)
+uses the existing bf16 GroupNorm kernel between two native Conv2D graph stages.
+
+- [First attempt](kernel_splice_conv_gn32_phoenix_20260913T040052Z_27546.log):
+  pre-dispatch group-ID rejection and teardown exit 139; no performance finding.
+- [Initial passing run](kernel_splice_conv_gn32_phoenix_20260913T040352Z_23328.log):
+  full-byte serial parity; fresh command allocation, superseded for timing below.
+- [Small tensor](kernel_splice_conv_gn32_phoenix_20260913T040640Z_17573.log):
+  L=1024, chunk=256, prepared commands, all-byte parity and API transfer accounting.
+- [Large tensor](kernel_splice_conv_gn32_phoenix_20260913T040745Z_27184.log):
+  L=301056, chunk=3072, same checks and paired host-copy timing.
+
 ## Also here
+
 
 
 

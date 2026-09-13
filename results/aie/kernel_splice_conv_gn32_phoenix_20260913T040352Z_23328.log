@@ -1,0 +1,111 @@
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+HOST_LOAD busy_cores=0.39 logical_cores=16 free_ram_gb=13.4 sample_sec=1
+HOST_LOAD_TOP 0.18 pycharm64:8540 ws_mb=3005
+HOST_LOAD_TOP 0.08 Taskmgr:13448 ws_mb=163
+HOST_LOAD_TOP 0.06 powershell:34368 ws_mb=81
+HOST_LOAD_TOP 0.05 HWiNFO64:1824 ws_mb=42
+HOST_LOAD_TOP 0.02 agy:33604 ws_mb=785
+HOST_LOAD_VERDICT CLEAR
+
+{"L": 1024, "chunk": 256, "device_index": 0, "event": "environment", "iters": 6, "machine": "Desktop 2 / Ryzen 7 8700G / Phoenix", "pid": 7936, "python": "3.13.15 | packaged by conda-forge | (main, Sep  2 2026, 21:52:43) [MSC v.1944 64 bit (AMD64)]", "scope": "native graph BOs; system DDR remains", "warmup": 2}
+{"event": "artifact", "instruction_bytes": 2288, "shim_patch_count": 16, "stage": "conv_up", "transaction_sha256": "63583237d6b9b0df66b426216b9de6e48d7b314e23e50a068986344e59e534a4", "xclbin_sha256": "eb45d9fd4dfece84161c59b893047da17f077ae146b93ce505ee71362dcfd85d"}
+{"event": "artifact", "instruction_bytes": 4208, "shim_patch_count": 32, "stage": "groupnorm", "transaction_sha256": "392b6160088f686096c617e6d6be389c47415b19e60df9e62f5cf1b05c8be5ed", "xclbin_sha256": "20122f5a1586e49e042923ce6baf93ac003420200ae3efb1acd2414397259714"}
+{"event": "artifact", "instruction_bytes": 2288, "shim_patch_count": 16, "stage": "conv_down", "transaction_sha256": "63583237d6b9b0df66b426216b9de6e48d7b314e23e50a068986344e59e534a4", "xclbin_sha256": "0939e1970c71eaf4a56114ed0bfff46d8d70827815af6f2c448384c008c4675f"}
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+HOST_LOAD busy_cores=0.31 logical_cores=16 free_ram_gb=13.4 sample_sec=1
+HOST_LOAD_TOP 0.15 pycharm64:8540 ws_mb=3005
+HOST_LOAD_TOP 0.06 powershell:33028 ws_mb=81
+HOST_LOAD_TOP 0.05 HWiNFO64:1824 ws_mb=42
+HOST_LOAD_TOP 0.03 Taskmgr:13448 ws_mb=163
+HOST_LOAD_TOP 0.02 rdpclip:26688 ws_mb=28
+HOST_LOAD_VERDICT CLEAR
+
+{"event": "stage_buffers", "group_ids": {"3": 8388608, "4": 8388608}, "stage": "conv_up"}
+{"event": "stage_buffers", "group_ids": {"3": 8454144, "4": 8454144, "5": 8454144}, "stage": "groupnorm"}
+{"event": "stage_buffers", "group_ids": {"3": 8519680, "4": 8519680}, "stage": "conv_down"}
+{"consumer": "groupnorm", "consumer_group_id": 8454144, "consumer_patches": [{"bo_address_plus_offset": "0x43000", "offset": 0, "register": "0x1d024"}, {"bo_address_plus_offset": "0x43000", "offset": 0, "register": "0x1d044"}, {"bo_address_plus_offset": "0x45000", "offset": 8192, "register": "0x1d084"}, {"bo_address_plus_offset": "0x45000", "offset": 8192, "register": "0x1d0a4"}, {"bo_address_plus_offset": "0x47000", "offset": 16384, "register": "0x201d024"}, {"bo_address_plus_offset": "0x47000", "offset": 16384, "register": "0x201d044"}, {"bo_address_plus_offset": "0x49000", "offset": 24576, "register": "0x201d084"}, {"bo_address_plus_offset": "0x49000", "offset": 24576, "register": "0x201d0a4"}, {"bo_address_plus_offset": "0x4b000", "offset": 32768, "register": "0x401d024"}, {"bo_address_plus_offset": "0x4b000", "offset": 32768, "register": "0x401d044"}, {"bo_address_plus_offset": "0x4d000", "offset": 40960, "register": "0x401d084"}, {"bo_address_plus_offset": "0x4d000", "offset": 40960, "register": "0x401d0a4"}, {"bo_address_plus_offset": "0x4f000", "offset": 49152, "register": "0x601d024"}, {"bo_address_plus_offset": "0x4f000", "offset": 49152, "register": "0x601d044"}, {"bo_address_plus_offset": "0x51000", "offset": 57344, "register": "0x601d084"}, {"bo_address_plus_offset": "0x51000", "offset": 57344, "register": "0x601d0a4"}], "dpa": "0x43000", "event": "binding", "group_id": 8388608, "memory_bank": 0, "nbytes": 65536, "producer": "conv_up", "same_bo": true}
+{"consumer": "conv_down", "consumer_group_id": 8519680, "consumer_patches": [{"bo_address_plus_offset": "0x66000", "offset": 0, "register": "0x1d004"}, {"bo_address_plus_offset": "0x68000", "offset": 8192, "register": "0x1d044"}, {"bo_address_plus_offset": "0x6a000", "offset": 16384, "register": "0x201d004"}, {"bo_address_plus_offset": "0x6c000", "offset": 24576, "register": "0x201d044"}, {"bo_address_plus_offset": "0x6e000", "offset": 32768, "register": "0x401d004"}, {"bo_address_plus_offset": "0x70000", "offset": 40960, "register": "0x401d044"}, {"bo_address_plus_offset": "0x72000", "offset": 49152, "register": "0x601d004"}, {"bo_address_plus_offset": "0x74000", "offset": 57344, "register": "0x601d044"}], "dpa": "0x66000", "event": "binding", "group_id": 8454144, "memory_bank": 0, "nbytes": 65536, "producer": "groupnorm", "same_bo": true}
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  Total Memory Usage: 192 MB
+  Partition Index   : 0
+    Columns: [1, 2, 3, 4]
+    HW Contexts:
+      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |
+      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |
+      |Memory Usage        |Instr BO   |            |            |     |FPS      |
+      |                    |           |            |            |     |Latency  |
+      |====================|===========|============|============|=====|=========|
+      |7936                |128        |0           |0           |0    |Normal   |
+      |python.exe          |Active     |0           |0           |     |N/A      |
+      |192 MB              |64 KB      |            |            |     |N/A      |
+      |                    |           |            |            |     |N/A      |
+      |--------------------|-----------|------------|------------|-----|---------|
+      |7936                |129        |0           |0           |0    |Normal   |
+      |python.exe          |Active     |0           |0           |     |N/A      |
+      |192 MB              |96 KB      |            |            |     |N/A      |
+      |                    |           |            |            |     |N/A      |
+      |--------------------|-----------|------------|------------|-----|---------|
+      |7936                |130        |0           |0           |0    |Normal   |
+      |python.exe          |Active     |0           |0           |     |N/A      |
+      |192 MB              |64 KB      |            |            |     |N/A      |
+      |                    |           |            |            |     |N/A      |
+      |--------------------|-----------|------------|------------|-----|---------|
+
+{"event": "parameters", "sha256": "b00b5d6dcd25b30ec03bf4cee1d8dc977c7ec16604aadffe37f3d916a9f29b7b"}
+{"all_stages_bit_exact": true, "bytes_per_stage": 65536, "direct_wall_us": 1896.8, "event": "parity", "groupnorm_cpu_max_abs": 0.01478867080674462, "handoff_us": [4.0, 2.6], "input_sha256": "533e2fc7c5bb521e4b696d798aa2e5fd30a07992abe5218587996b283047f4b8", "interstage_host_read_bytes": 0, "interstage_host_sync_calls": 0, "interstage_host_write_bytes": 0, "iteration": 0, "output_sha256": ["9bd33dae09e9428fc74b599c005d577a7e1aae353957963eb6fbf8317e2891c2", "33757ea95d0d4c959a2266b7d1dff1b95b14a61d00adad743e67bddfe8cf8555", "6b2496f36c31af20db615acedb2beac3dc395addf94300dbce917b4324ac58f6"], "serial_wall_us": 2539.5, "stage_us": [601.6, 629.1, 569.0]}
+{"all_stages_bit_exact": true, "bytes_per_stage": 65536, "direct_wall_us": 2033.5, "event": "parity", "groupnorm_cpu_max_abs": 0.014989536954863603, "handoff_us": [2.7, 2.5], "input_sha256": "8f36602e9f10321e8077067d6e47cf374f54a81c84cc0a11c2d063231fd11582", "interstage_host_read_bytes": 0, "interstage_host_sync_calls": 0, "interstage_host_write_bytes": 0, "iteration": 1, "output_sha256": ["693df7dfc00123a36c38bd2c6ca1917f203e99944ec2ca712c0f83dffef0cb9b", "72a127d4a44ad9057b0f2cb19fdc7f3937caeaa3cd3ca53e78c0e8931a29810a", "9a569e7942782bdbe68b988a12da8df85c04895fcf20981a0e0307d234d9c000"], "serial_wall_us": 2007.4, "stage_us": [601.2, 684.9, 651.7]}
+{"all_stages_bit_exact": true, "bytes_per_stage": 65536, "direct_wall_us": 2081.0, "event": "parity", "groupnorm_cpu_max_abs": 0.015438235822896829, "handoff_us": [5.1, 2.5], "input_sha256": "07d2ed8c4d1683ce37baffaeedef00ed7dfccb84bca9ddb07b7e24685a846dfe", "interstage_host_read_bytes": 0, "interstage_host_sync_calls": 0, "interstage_host_write_bytes": 0, "iteration": 2, "output_sha256": ["96aed87c14687df0ba790714adb65ad0c693e346ba3774ea845b6d56fa08cc23", "080b4bdaae3e7a8fca79d0b2fd3a9c03c707d03f4f262ad2bdf8bb044d429622", "7ea1211c29d39d6323e3a59cb790ae00b6debd064a21d25535284af23d88efc3"], "serial_wall_us": 2075.8, "stage_us": [656.8, 690.9, 616.7]}
+{"all_stages_bit_exact": true, "bytes_per_stage": 65536, "direct_wall_us": 1947.2, "event": "parity", "groupnorm_cpu_max_abs": 0.015298153108304291, "handoff_us": [3.0, 2.7], "input_sha256": "56568a53b824896a9e7f90ccde32c7531e2cc8b8bed8e00b0b1b2a41b8487383", "interstage_host_read_bytes": 0, "interstage_host_sync_calls": 0, "interstage_host_write_bytes": 0, "iteration": 3, "output_sha256": ["b8e536afe68d209c99a9c357149bf3ad72885199699afc94c3ca1ccc35e8dfe9", "265fe0ecab972ce4c27bf5c1e86dff0b131eb097c07c2e4d44970050cdcf9cd8", "e487190c8ae06986d8acfde719be26af5a25cea536e47116940b421f69ac6784"], "serial_wall_us": 1825.3, "stage_us": [646.5, 630.0, 585.5]}
+{"all_stages_bit_exact": true, "bytes_per_stage": 65536, "direct_wall_us": 1924.6, "event": "parity", "groupnorm_cpu_max_abs": 0.015495327058763664, "handoff_us": [2.6, 2.0], "input_sha256": "42533110748c899e1f612976c0092632f00825bff641d6abd3f0639202e676a2", "interstage_host_read_bytes": 0, "interstage_host_sync_calls": 0, "interstage_host_write_bytes": 0, "iteration": 4, "output_sha256": ["9caa5b9dc00b741ca7b3f7f8521f7bc61800736555c7c29d325197eef91af659", "91456ceca5dcbea145244c88cce75e394a08b0e9e45f1ce43d4c0794e954edde", "ba41f633477fc34ac099f595b9aef4c099a1af90417cd40ce3dc66a8a7e9e49e"], "serial_wall_us": 1833.7, "stage_us": [568.0, 627.0, 599.7]}
+{"all_stages_bit_exact": true, "bytes_per_stage": 65536, "direct_wall_us": 2082.1, "event": "parity", "groupnorm_cpu_max_abs": 0.015446184811900743, "handoff_us": [3.2, 2.8], "input_sha256": "bf1860c794acc57e65d9e0857fdaf3623e1689d15ea24b70c08b16f639ed9d65", "interstage_host_read_bytes": 0, "interstage_host_sync_calls": 0, "interstage_host_write_bytes": 0, "iteration": 5, "output_sha256": ["a7ae8edfc249e3cd61e7cdc625e9e6784c74d824c77c1d364f0bb93c7d165a81", "df9a66f90e732481d4c9c95a41726c69c07a1b670b001a3c5b5604ab9e46e379", "9f0ce51418c277acbd61bd2899b3ebca03bb151f98ec1357ac5e2190e86fa5b1"], "serial_wall_us": 1955.1, "stage_us": [640.4, 689.4, 667.8]}
+{"all_stages_bit_exact": true, "bytes_per_stage": 65536, "direct_wall_us": 1928.4, "event": "parity", "groupnorm_cpu_max_abs": 0.015239790503116524, "handoff_us": [3.0, 2.5], "input_sha256": "179164acddccf4efeb8c6f61ae5ed1b1e9e2740ddeca8f3a8831fb1a2310624e", "interstage_host_read_bytes": 0, "interstage_host_sync_calls": 0, "interstage_host_write_bytes": 0, "iteration": 6, "output_sha256": ["111ded14d6c9aed2f92695c0d31d2092ae2ad3f89af590bf90c6d1285d8c8922", "bfd3cc123001e0421af1ed225764b5bb23da59d9e5dd8acd5ab203ac1dbf3be0", "edbe6b3003dd15b9861f6d9e301fa008d37262c8c7c6c82ccd2667ffe359df3b"], "serial_wall_us": 2052.2, "stage_us": [620.1, 629.5, 580.6]}
+{"all_stages_bit_exact": true, "bytes_per_stage": 65536, "direct_wall_us": 1968.7, "event": "parity", "groupnorm_cpu_max_abs": 0.01520659806357294, "handoff_us": [3.5, 1.6], "input_sha256": "877904be64b43b921d01f79c26d7d00c90b78e2017f2c003750deeb2c613ae33", "interstage_host_read_bytes": 0, "interstage_host_sync_calls": 0, "interstage_host_write_bytes": 0, "iteration": 7, "output_sha256": ["d38d79529f3331ebd3ecf45798502f07eb9a4fd769d822025d2c3c508468011f", "57a20b9de338ead1302f2d11d032452935767723dafa698ab614d3c658635116", "844dcaffa5ff579eecd01781d47da9b01b313f4ac073cc1330d7e7fbe5051035"], "serial_wall_us": 2033.2, "stage_us": [643.6, 643.3, 597.9]}
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  Total Memory Usage: 192 MB
+  Partition Index   : 0
+    Columns: [1, 2, 3, 4]
+    HW Contexts:
+      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |
+      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |
+      |Memory Usage        |Instr BO   |            |            |     |FPS      |
+      |                    |           |            |            |     |Latency  |
+      |====================|===========|============|============|=====|=========|
+      |7936                |128        |16          |0           |0    |Normal   |
+      |python.exe          |Active     |16          |0           |     |N/A      |
+      |192 MB              |64 KB      |            |            |     |N/A      |
+      |                    |           |            |            |     |N/A      |
+      |--------------------|-----------|------------|------------|-----|---------|
+      |7936                |129        |16          |0           |0    |Normal   |
+      |python.exe          |Active     |16          |0           |     |N/A      |
+      |192 MB              |96 KB      |            |            |     |N/A      |
+      |                    |           |            |            |     |N/A      |
+      |--------------------|-----------|------------|------------|-----|---------|
+      |7936                |130        |16          |0           |0    |Normal   |
+      |python.exe          |Active     |16          |0           |     |N/A      |
+      |192 MB              |64 KB      |            |            |     |N/A      |
+      |                    |           |            |            |     |N/A      |
+      |--------------------|-----------|------------|------------|-----|---------|
+
+{"compared_bytes": 1572864, "completion_to_next_submit": {"max_us": 5.1, "mean_us": 2.875, "median_us": 2.75, "min_us": 1.6}, "cpu_oracle": "Conv bit-exact; GroupNorm bf16 tolerance", "direct_submit_through_final_read": {"max_us": 2082.1, "mean_us": 1988.6666666666667, "median_us": 1957.95, "min_us": 1924.6}, "event": "summary", "interstage_host_read_bytes": 0, "interstage_host_sync_calls": 0, "interstage_host_write_bytes": 0, "parity_scope": "all bytes at all stages vs serial host-copy AIE execution", "serial_submit_through_final_read": {"max_us": 2075.8, "mean_us": 1962.55, "median_us": 1994.15, "min_us": 1825.3}, "stage_submit_wait": [{"max_us": 656.8, "mean_us": 629.2333333333333, "median_us": 642.0, "min_us": 568.0}, {"max_us": 690.9, "mean_us": 651.6833333333333, "median_us": 636.65, "min_us": 627.0}, {"max_us": 667.8, "mean_us": 608.0333333333333, "median_us": 598.8, "min_us": 580.6}], "traffic_scope": "DeviceBuffer API, not physical DDR bus counters", "verdict": "PASS"}
