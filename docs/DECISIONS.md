@@ -1454,6 +1454,47 @@ Investigated via `tools/windows_xrt_driver_probe.py` (`results/aie/windows_xrt_d
 - **`0xc01e0009` is not a memory-bank or group-ID problem, so do not mask group IDs to fix it.** It is raised by `hw_context` creation, before any BO is allocated. Allocation needs the full encoded group ID, with the context slot in bits 16..23 (see "Native kernel splicing passes BO objects" above). The group IDs logged by the DFL runs read `0x00130000`/`0x00130001`, that is slot `0x13` and bank 0 or 1, and allocate correctly as they are.
 - **Hardware context-switch penalty (~748 µs)**: Interleaving dispatches across two distinct hardware contexts on the Phoenix NPU increases mean latency from 120.25 µs to 867.99 µs (+747.75 µs penalty, 7.22x slowdown) due to partition state teardown, instruction stream flushing, and base register reprogramming. Multi-tenant concurrency therefore requires dedicated column partitioning (`1x4.xclbin`) rather than time-sliced virtualization on a single partition.
 
+### ADR-008: Host AVX2 vs AIE2 Standalone Post-Processing
+
+**Status: decided 2026-09-13 on Desktop 2.** YOLO DFL softmax, anchor decode and NMS stay on
+the host. The standalone AIE2 decode is archived as reference work on the branch
+`research/aie2-dfl-standalone` and is not the production path. (The number was assigned when
+this entry was recorded; earlier entries in this file are unnumbered.)
+
+**Context.** The head-cut YOLOv8 pipelines run the decode tail in numpy on the host after
+`sess.run`. The question was whether a standalone sixteen-core AIE2 micro-kernel could take
+the DFL decode for all 8,400 anchors and return contiguous `[8400,4]` boxes and `[8400,80]`
+scores in under 300 µs.
+
+**Measured** on Phoenix Device 0 with a fresh hardware context per dispatch; each value is the
+median of 100 dispatches:
+
+| Path | Result |
+|---|---|
+| AIE2 standalone decode, 16 cores, 8,400 anchors (parity PASS) | **196,178.0 µs (196.2 ms)** dispatch wait |
+| The same AIE2 transport with the decode math removed | **7,603.2 µs (7.6 ms)** dispatch wait, fastest 7,487.3 µs |
+| Host numpy DFL decode + NMS, yolov8n-cut webcam demo | mean **2.90 ms** per frame ([log](../results/webcam_single_4x4_yolov8n_cut_xint8_adaround_npu.log)) |
+
+**Decision.** The AIE2 transport alone costs 2.6× the host's measured decode-plus-NMS mean
+before any decode math runs, and the full kernel costs 68×. No kernel improvement closes
+that gap on this transport. Its floor is the data movement itself: `[8400,144]` INT8 in and
+84 float32 values per anchor out, with the cores of each column serialized through one
+MemTile output slot. The latency gate for the standalone decode was `<300 us`, and it failed
+by 654×.
+
+**Not like-for-like, so the ratios are indicative only.** The host figure is from a different
+pipeline bracket, on the same machine but a different day. It includes per-class NMS on real
+detections at demo confidence, and that numpy decode filters on class logits before the DFL
+softmax, so it never decodes all 8,400 anchors. No AVX2- or AVX-512-specific host kernel was
+written or measured; "AVX2" names the host's SIMD class, and the measured host path is numpy.
+
+**What would reopen it.** Any of these, measured against the 7.6 ms transport floor above: an
+output contract that returns only above-threshold candidates instead of all 8,400 anchors; a
+transport without column-serial MemTile staging; or a re-entrant design, because the current
+one is one-shot and a timed-out dispatch left the driver refusing new contexts until the NPU
+device was restarted.
+[Evidence and logs](BENCHMARKS.md#phoenix-dfl-softmax-and-anchor-decode-2026-09-13-desktop-2).
+
 ### AIE-ML systolic shift-cut bound [0, 31] — substantially retracted 2026-09-09
 
 **Numbering warning, because two files disagree.** In `quant/shift_cut.py`, Theorem 2 is
