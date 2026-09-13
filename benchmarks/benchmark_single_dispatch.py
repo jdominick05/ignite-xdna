@@ -121,7 +121,8 @@ def run_single_dispatch_benchmark(
     rng = np.random.RandomState(42)
     test_input = rng.randint(-30, 30, size=session.in_bytes, dtype=np.int8)
 
-    # Capture single-dispatch output on pristine state before benchmark loop
+    # Prime pipeline with test_input into double-buffered streaming FIFOs
+    _ = session.run_yolo_monolithic(test_input, unswizzle=False)
     out_single = session.run_yolo_monolithic(test_input, unswizzle=True)
     raw_single = out_single["raw_output"].copy()
 
@@ -185,6 +186,7 @@ def run_single_dispatch_benchmark(
         print("      Running 9-stage monolithic pipeline reference...")
         sess_9stage = InferenceSession(device_index=device_idx, full_yolo=True)
         try:
+            _ = sess_9stage.run_yolo_monolithic(test_input, unswizzle=False)
             out_9stage = sess_9stage.run_yolo_monolithic(test_input, unswizzle=True)
             raw_9stage = out_9stage["raw_output"].copy()
         finally:
