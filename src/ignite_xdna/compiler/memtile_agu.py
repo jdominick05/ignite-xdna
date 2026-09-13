@@ -78,6 +78,14 @@ class MemTileBD:
         return tuple((self.registers[i] >> 17) & 1023 for i in (2, 3, 4))
 
     @property
+    def sizes(self) -> tuple[int, ...]:
+        """Raw D0..D3 size/wrap fields."""
+        w0_2 = tuple((self.registers[i] >> 17) & 1023 for i in (2, 3, 4))
+        denom = w0_2[0] * w0_2[1] * w0_2[2]
+        w3 = self.registers[0] // denom if denom > 0 else 1
+        return w0_2 + (w3,)
+
+    @property
     def iteration_wrap(self) -> int:
         return (self.registers[6] >> 17) & 63
 
@@ -143,6 +151,43 @@ class ChannelConcatPlan:
 
 
 @dataclass(frozen=True)
+class Upsample2xPlan:
+    """Descriptor for in-flight spatial 2x Nearest-Neighbor upsampling directly in MemTile DMA."""
+    input_shape: tuple[int, int, int]
+    output_shape: tuple[int, int, int]
+    base_address: int
+    transfer_bytes: int
+    memory_bytes: int
+    bd: MemTileBD
+
+    @property
+    def total_output_bytes(self) -> int:
+        return self.transfer_bytes
+
+    @property
+    def has_zero_intermediate_ddr_traffic(self) -> bool:
+        return True
+
+
+@dataclass(frozen=True)
+class LateralConcatPlan:
+    """Descriptor for zero-copy lateral feature map concatenation in MemTile SRAM."""
+    spatial_pixels: int
+    chunk_channels: tuple[int, ...]
+    total_channels: int
+    base_address: int
+    bds: tuple[MemTileBD, ...]
+
+    @property
+    def buffer_descriptors(self) -> tuple[MemTileBD, ...]:
+        return self.bds
+
+    @property
+    def has_zero_intermediate_ddr_traffic(self) -> bool:
+        return True
+
+
+@dataclass(frozen=True)
 class C2fRoutingPlan:
     """Hardware routing plan for lowering C2f Split and Concat into MemTile BDs."""
     stage_name: str
@@ -186,16 +231,16 @@ class MemTileAGU:
         sizes = tuple(_integer(f"D{i} size", s, 1, 1023 if i < 3 else 131071)
                       for i, s in enumerate(sizes))
         strides = tuple(_words(f"D{i} step", s) for i, s in enumerate(steps))
-        if any(s == 0 for s in strides):
-            raise ValueError("steps must be positive")
+        if any(s < 0 for s in strides):
+            raise ValueError("steps must be non-negative")
         count = _integer("iteration_count", iteration_count, 1, 64)
         istep = _words("iteration_step", iteration_step)
-        if istep == 0:
-            raise ValueError("iteration_step must be positive")
+        if istep < 0:
+            raise ValueError("iteration_step must be non-negative")
         before = tuple(_integer(f"D{i} zero_before", n, 0, (63, 31, 15)[i])
                        for i, n in enumerate(zero_before))
         after = tuple(_integer(f"D{i} zero_after", n, 0, (63, 31, 15)[i])
-                      for i, n in enumerate(zero_after))
+                       for i, n in enumerate(zero_after))
         if direction == "S2MM" and any(before + after):
             raise ValueError("zero insertion is supported only by MM2S")
         address = _words("base_address", base_address, MEMTILE_BYTES - 4)
@@ -212,11 +257,11 @@ class MemTileAGU:
         regs = (
             length,
             (LOCAL_MEMORY_BASE // 4 + address) | (before[0] << 26),
-            (strides[0] - 1) | (sizes[0] << 17),
-            (strides[1] - 1) | (sizes[1] << 17) | (before[1] << 27),
-            (strides[2] - 1) | (sizes[2] << 17) | (before[2] << 27),
-            (strides[3] - 1) | (after[0] << 17) | (after[1] << 23) | (after[2] << 28),
-            (istep - 1) | ((count - 1) << 17),
+            (max(0, strides[0] - 1) if strides[0] > 0 else 0) | (sizes[0] << 17),
+            (max(0, strides[1] - 1) if strides[1] > 0 else 0) | (sizes[1] << 17) | (before[1] << 27),
+            (max(0, strides[2] - 1) if strides[2] > 0 else 0) | (sizes[2] << 17) | (before[2] << 27),
+            (max(0, strides[3] - 1) if strides[3] > 0 else 0) | (after[0] << 17) | (after[1] << 23) | (after[2] << 28),
+            (max(0, istep - 1) if istep > 0 else 0) | ((count - 1) << 17),
             locks.word(),
         )
         return MemTileBD(regs, count, prod(sizes) * count * 4,
@@ -296,10 +341,16 @@ class MemTileAGU:
             raise ValueError("spatial_pixels must be positive")
 
         addr = base_address + channel_offset
+        if spatial_pixels <= 1023:
+            sizes = (num_channels // 4, spatial_pixels, 1, 1)
+            steps = (4, total_channels, 4, 4)
+        else:
+            sizes = (num_channels // 4, 1, 1, spatial_pixels)
+            steps = (4, 4, 4, total_channels)
         return self.synthesize(
             base_address=addr,
-            sizes=(num_channels // 4, spatial_pixels, 1, 1),
-            steps=(4, total_channels, 4, 4),
+            sizes=sizes,
+            steps=steps,
             direction=direction,
             buffer_bounds=buffer_bounds,
             locks=locks,
@@ -322,10 +373,16 @@ class MemTileAGU:
         cur_offset = 0
         for ch in chunk_channels:
             _words("chunk channel", ch)
+            if spatial_pixels <= 1023:
+                sizes = (ch // 4, spatial_pixels, 1, 1)
+                steps = (4, total_channels, 4, 4)
+            else:
+                sizes = (ch // 4, 1, 1, spatial_pixels)
+                steps = (4, 4, 4, total_channels)
             bd = self.synthesize(
                 base_address=base_address + cur_offset,
-                sizes=(ch // 4, spatial_pixels, 1, 1),
-                steps=(4, total_channels, 4, 4),
+                sizes=sizes,
+                steps=steps,
                 direction=direction,
                 buffer_bounds=buffer_bounds,
                 locks=locks,
@@ -333,6 +390,96 @@ class MemTileAGU:
             bds.append(bd)
             cur_offset += ch
         return tuple(bds)
+
+    def upsample_2x_nearest_bd(
+        self,
+        *,
+        base_address: int,
+        height: int,
+        width: int,
+        channels: int,
+        direction: str = "MM2S",
+        buffer_bounds: tuple[int, int] = (0, MEMTILE_BYTES),
+        locks: LockConfig = LockConfig(),
+    ) -> MemTileBD:
+        """
+        Synthesize MemTile DMA BD for in-flight spatial 2x Nearest-Neighbor upsampling.
+        Duplicates pixels horizontally (step=0, wrap=2) and vertically across rows
+        without executing ALU instructions.
+        """
+        _words("channels", channels)
+        wc = channels // 4
+        sizes = (wc, 2, width, 2)
+        steps = (4, 0, channels, 0)
+        iteration_step = width * channels
+        iteration_count = height
+        return self.synthesize(
+            base_address=base_address,
+            sizes=sizes,
+            steps=steps,
+            iteration_count=iteration_count,
+            iteration_step=iteration_step,
+            direction=direction,
+            buffer_bounds=buffer_bounds,
+            locks=locks,
+        )
+
+    def plan_upsample_2x(
+        self,
+        *,
+        input_shape: tuple[int, int, int],
+        base_address: int,
+        direction: str = "MM2S",
+        buffer_bounds: tuple[int, int] = (0, MEMTILE_BYTES),
+        locks: LockConfig = LockConfig(),
+    ) -> Upsample2xPlan:
+        """Creates an Upsample2xPlan for 2x spatial nearest-neighbor upsampling."""
+        h, w, c = shape3(input_shape)
+        bd = self.upsample_2x_nearest_bd(
+            base_address=base_address,
+            height=h,
+            width=w,
+            channels=c,
+            direction=direction,
+            buffer_bounds=buffer_bounds,
+            locks=locks,
+        )
+        out_shape = (2 * h, 2 * w, c)
+        return Upsample2xPlan(
+            input_shape=(h, w, c),
+            output_shape=out_shape,
+            base_address=base_address,
+            transfer_bytes=prod(out_shape),
+            memory_bytes=prod(input_shape),
+            bd=bd,
+        )
+
+    def plan_lateral_concat(
+        self,
+        *,
+        base_address: int,
+        spatial_pixels: int,
+        chunk_channels: tuple[int, ...],
+        direction: str = "S2MM",
+        buffer_bounds: tuple[int, int] = (0, MEMTILE_BYTES),
+        locks: LockConfig = LockConfig(),
+    ) -> LateralConcatPlan:
+        """Synthesize strided S2MM DMA scatter plans for lateral feature map skip connections."""
+        bds = self.channel_concat_bds(
+            base_address=base_address,
+            spatial_pixels=spatial_pixels,
+            chunk_channels=chunk_channels,
+            direction=direction,
+            buffer_bounds=buffer_bounds,
+            locks=locks,
+        )
+        return LateralConcatPlan(
+            spatial_pixels=spatial_pixels,
+            chunk_channels=chunk_channels,
+            total_channels=sum(chunk_channels),
+            base_address=base_address,
+            bds=bds,
+        )
 
     def route_c2f_stage(
         self,

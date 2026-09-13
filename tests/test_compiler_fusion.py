@@ -273,6 +273,134 @@ class TestCompilerFusion(unittest.TestCase):
             self.assertGreater(os.path.getsize(init_res), 0)
             self.assertGreater(os.path.getsize(exec_res), 0)
 
+    def test_07_memtile_in_flight_2x_upsampling(self):
+        """
+        Verify MemTile AGU 2x Nearest-Neighbor upsampling programs MM2S step and wrap
+        registers to duplicate pixels horizontally (step=0, wrap=2) and vertically
+        (step=0, wrap=2) without executing ALU instructions and with 0 intermediate DDR bytes.
+        """
+        agu = MemTileAGU()
+
+        # 1. Test Layer 11 upsampling (per-column slice): 20x20x64 -> 40x40x64
+        plan_p5 = agu.plan_upsample_2x(
+            base_address=L2_BANK_0_OFFSET,
+            input_shape=(20, 20, 64),
+            direction="MM2S",
+        )
+        self.assertTrue(plan_p5.has_zero_intermediate_ddr_traffic)
+        self.assertEqual(plan_p5.total_output_bytes, 40 * 40 * 64)
+        self.assertEqual(plan_p5.bd.steps[1], 0)  # Horizontal duplication
+        self.assertEqual(plan_p5.bd.sizes[1], 2)
+        self.assertEqual(plan_p5.bd.steps[3], 0)  # Vertical duplication
+        self.assertEqual(plan_p5.bd.sizes[3], 2)
+
+        # 2. Test Layer 14 upsampling (per-column slice): 40x40x32 -> 80x80x32
+        plan_p4 = agu.plan_upsample_2x(
+            base_address=L2_BANK_1_OFFSET,
+            input_shape=(40, 40, 32),
+            direction="MM2S",
+        )
+        self.assertTrue(plan_p4.has_zero_intermediate_ddr_traffic)
+        self.assertEqual(plan_p4.total_output_bytes, 80 * 80 * 32)
+        self.assertEqual(plan_p4.bd.steps[1], 0)
+        self.assertEqual(plan_p4.bd.sizes[1], 2)
+        self.assertEqual(plan_p4.bd.steps[3], 0)
+        self.assertEqual(plan_p4.bd.sizes[3], 2)
+
+    def test_08_memtile_lateral_concatenations(self):
+        """
+        Verify lateral feature map concatenations (P4 + upsampled P5, P3 + upsampled L12)
+        are synthesized via strided S2MM DMA scatter into contiguous L2 MemTile SRAM.
+        """
+        agu = MemTileAGU()
+
+        # Lateral concat 1 (per-column slice): P4 (32 ch) + Upsampled P5 (64 ch) -> 96 ch
+        plan1 = agu.plan_lateral_concat(
+            base_address=L2_BANK_0_OFFSET,
+            chunk_channels=(32, 64),
+            spatial_pixels=256,
+        )
+        self.assertTrue(plan1.has_zero_intermediate_ddr_traffic)
+        self.assertEqual(plan1.total_channels, 96)
+        self.assertEqual(len(plan1.buffer_descriptors), 2)
+        self.assertEqual(plan1.buffer_descriptors[0].address_span[0], L2_BANK_0_OFFSET)
+        self.assertEqual(plan1.buffer_descriptors[1].address_span[0], L2_BANK_0_OFFSET + 32)
+
+        # Lateral concat 2 (per-column slice): P3 (16 ch) + Upsampled L12 (32 ch) -> 48 ch
+        plan2 = agu.plan_lateral_concat(
+            base_address=L2_BANK_1_OFFSET,
+            chunk_channels=(16, 32),
+            spatial_pixels=256,
+        )
+        self.assertTrue(plan2.has_zero_intermediate_ddr_traffic)
+        self.assertEqual(plan2.total_channels, 48)
+        self.assertEqual(len(plan2.buffer_descriptors), 2)
+        self.assertEqual(plan2.buffer_descriptors[0].address_span[0], L2_BANK_1_OFFSET)
+        self.assertEqual(plan2.buffer_descriptors[1].address_span[0], L2_BANK_1_OFFSET + 16)
+
+    def test_09_neck_fpn_pan_graph_partitioning(self):
+        """
+        Verify GraphPartitioner absorbs ONNX Resize and Concat nodes across Layers 10-21,
+        producing 2 monolithic NPU partitions (Neck_FPN, Neck_PAN) with strictly 0 CPU
+        fallback partitions across the entire Neck.
+        """
+        gp = GraphPartitioner(self.model_path, fuse_neck=True)
+        pg = gp.partition(backbone_only=False)
+
+        # 4 Backbone + 2 Neck = 6 NPU monolithic stages
+        self.assertEqual(len(pg.backbone_npu_partitions), 4)
+        self.assertEqual(len(pg.neck_npu_partitions), 2)
+        self.assertEqual(len(pg.neck_cpu_partitions), 0, "Zero CPU fallback partitions allowed in Neck")
+
+        neck_fpn = pg.neck_npu_partitions[0]
+        neck_pan = pg.neck_npu_partitions[1]
+
+        self.assertEqual(neck_fpn.stage_name, "Neck_FPN")
+        self.assertEqual(neck_fpn.num_layers, 8)
+        self.assertEqual(neck_fpn.c2f_blocks, ["model.12", "model.15"])
+        self.assertTrue(neck_fpn.has_zero_ddr_roundtrip)
+
+        self.assertEqual(neck_pan.stage_name, "Neck_PAN")
+        self.assertEqual(neck_pan.num_layers, 10)
+        self.assertEqual(neck_pan.c2f_blocks, ["model.18", "model.21"])
+        self.assertTrue(neck_pan.has_zero_ddr_roundtrip)
+
+        # Verify all 18 Neck Convs have SiLU activation fused
+        neck_layers = neck_fpn.layers + neck_pan.layers
+        self.assertEqual(len(neck_layers), 18)
+        for layer in neck_layers:
+            self.assertEqual(layer.activation, "SiLU")
+
+    def test_10_neck_multi_stage_schedule_layout(self):
+        """
+        Verify scheduling the 2-stage monolithic Neck transaction bundle alternates
+        feature handoffs between L2 Bank 0 (0x40000) and Bank 1 (0x60000) with Locks 4 and 5
+        and 0 intermediate DDR bytes.
+        """
+        gp = GraphPartitioner(self.model_path, fuse_neck=True)
+        pg = gp.partition(neck_only=True)
+
+        scheduler = MemTileMultiPassScheduler()
+        multi_plan = scheduler.schedule_multi_stage(pg.neck_npu_partitions)
+
+        self.assertEqual(multi_plan.total_stages, 2)
+        self.assertEqual(multi_plan.total_layers, 18)
+        self.assertEqual(multi_plan.intermediate_ddr_bytes, 0)
+        self.assertTrue(multi_plan.has_zero_intermediate_ddr_traffic)
+        self.assertTrue(validate_memtile_buffer_layout(multi_plan))
+
+        unified_plan = multi_plan.to_schedule_plan()
+        self.assertEqual(unified_plan.num_layers, 18)
+        self.assertEqual(len(unified_plan.passes), 18)
+        self.assertEqual(unified_plan.passes[0].ingress_source, "HOST_DDR")
+        self.assertEqual(unified_plan.passes[-1].egress_dest, "HOST_DDR")
+
+        # Intermediate passes alternate strictly between Bank 0 and Bank 1
+        for k in range(1, 17):
+            p = unified_plan.passes[k]
+            self.assertIn(p.ingress_source, ("L2_BANK_0", "L2_BANK_1"))
+            self.assertIn(p.egress_dest, ("L2_BANK_0", "L2_BANK_1"))
+
 
 if __name__ == "__main__":
     unittest.main()

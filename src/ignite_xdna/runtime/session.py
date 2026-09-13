@@ -116,6 +116,8 @@ class InferenceSession:
         ring_depth: int = 2,
         enable_fusion: bool = False,
         enable_monolithic: bool = False,
+        include_neck: bool = False,
+        neck_only: bool = False,
         xclbin_path: Optional[Union[str, Path]] = None,
         num_cores: int = 16,
         in_bytes: Optional[int] = None,
@@ -127,6 +129,8 @@ class InferenceSession:
         self.ring_depth = max(1, ring_depth)
         self.enable_fusion = enable_fusion
         self.enable_monolithic = enable_monolithic
+        self.include_neck = include_neck
+        self.neck_only = neck_only
         self.num_cores = num_cores
         self.scale_x = scale_x
         self.node_name = node_name
@@ -137,7 +141,9 @@ class InferenceSession:
         self.monolithic_stages: Dict[str, MonolithicStageHandle] = OrderedDict()
         self.multi_stage_plan: Optional[Any] = None
 
-        # Auto-detect monolithic request
+        # Auto-detect monolithic or neck request
+        if include_neck or neck_only:
+            self.enable_monolithic = True
         if hasattr(model_path_or_bundle, "stages") or (isinstance(model_path_or_bundle, dict) and "stages" in model_path_or_bundle):
             self.enable_monolithic = True
 
@@ -286,12 +292,20 @@ class InferenceSession:
                 model_path = self._repo_root / "models" / "yolov8n.onnx"
 
         model_path = self._abs_path(model_path)
-        partitioner = GraphPartitioner(model_path)
-        pg = partitioner.partition(backbone_only=True)
+        partitioner = GraphPartitioner(model_path, fuse_neck=self.include_neck or self.neck_only)
+        if self.neck_only:
+            pg = partitioner.partition(neck_only=True)
+            npu_parts = pg.neck_npu_partitions
+        elif self.include_neck:
+            pg = partitioner.partition(backbone_only=False)
+            npu_parts = pg.npu_partitions
+        else:
+            pg = partitioner.partition(backbone_only=True)
+            npu_parts = pg.backbone_npu_partitions
         self.partitioned_graph = pg
 
         scheduler = MemTileMultiPassScheduler(num_cores=self.num_cores)
-        multi_plan = scheduler.schedule_multi_stage(pg.npu_partitions)
+        multi_plan = scheduler.schedule_multi_stage(npu_parts)
         self.multi_stage_plan = multi_plan
 
         for s_name, stage_plan in multi_plan.stages.items():
@@ -841,7 +855,7 @@ class InferenceSession:
                 "total_us": sub_us + exec_us,
             })
 
-            if extract_feature_maps and s_name in ("P3", "P4", "P5"):
+            if extract_feature_maps and s_name in ("P3", "P4", "P5", "Neck_FPN", "Neck_PAN"):
                 slot["bo_out"].sync(self.harness.pyxrt.xclBOSyncDirection.XCL_BO_SYNC_BO_FROM_DEVICE)
                 raw_f = np.frombuffer(slot["bo_out"].read(self.out_bytes, 0), dtype=np.int8).copy()
                 feature_maps[s_name] = unblock_aie2_egress(raw_f, num_cores=self.num_cores) if unswizzle else raw_f
@@ -923,6 +937,39 @@ class InferenceSession:
             return_timestamps=False,
             extract_feature_maps=True,
         )
+        return features
+
+    def run_monolithic_neck(
+        self,
+        input_tensor: Any = None,
+        p3: Optional[np.ndarray] = None,
+        p4: Optional[np.ndarray] = None,
+        p5: Optional[np.ndarray] = None,
+        unswizzle: bool = True,
+        timeout_ms: int = 2000,
+        return_timestamps: bool = False,
+    ) -> Union[Dict[str, np.ndarray], Tuple[Dict[str, np.ndarray], Any]]:
+        """
+        Direct hardware execution of the monolithic Neck transaction bundle (Neck_FPN, Neck_PAN):
+          - Ingests P3/P4/P5 activations with strictly 0 intermediate host DDR roundtrips.
+          - Dispatches <= 2 monolithic ERT instruction buffers.
+          - Returns the 3 Neck output feature maps for the YOLOv8 detection heads.
+        """
+        inp = input_tensor if input_tensor is not None else (p5 if p5 is not None else p3)
+        if inp is None:
+            inp = np.zeros((1, 256, 20, 20), dtype=np.float32)
+
+        res = self._execute_monolithic_stages(
+            inp,
+            unswizzle=unswizzle,
+            timeout_ms=timeout_ms,
+            return_timestamps=return_timestamps,
+            extract_feature_maps=True,
+        )
+        if return_timestamps:
+            out, hw_ts, features = res
+            return features, hw_ts
+        out, features = res
         return features
 
     def run_async(self, input_tensor: Any, unswizzle: bool = True) -> RunHandle:
