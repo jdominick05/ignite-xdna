@@ -7615,10 +7615,20 @@ and the object disassembly contained **48** matched vector instructions (`vmul`,
 `vadd`, `vbcst` or `vsrs`). These are compile and offline numerical results, not
 silicon results.
 
-The physical qualification was attempted on Phoenix Device 0 `[003d:00:01.1]` with
-one measured iteration after the clean `xrt-smi` partition check and
+The initial physical qualification was attempted on Phoenix Device 0 `[003d:00:01.1]`
+with one measured iteration after the clean `xrt-smi` partition check and
 `HOST_LOAD_VERDICT CLEAR`. `pyxrt.hw_context` failed with **`0xc01e0009`** before
-dispatch. Consequently this run has no device output parity and no latency sample,
-so the requested `<300 us` gate remains open. The complete command output, source and
-xclbin hashes, and preflight are in
+dispatch. The complete command output, source and xclbin hashes, and preflight are in
 [`results/aie/dfl_decode_phoenix_context_block_20260913T0842Z.log`](../results/aie/dfl_decode_phoenix_context_block_20260913T0842Z.log).
+
+After a Windows restart, the same Device 0 accepted a fresh PyXRT context, which
+identifies the original error as a foreign XRT context or unreleased device state; the
+restart cleared it. The production four-stream design then reached dispatch but timed
+out. An aggregate packet-fanin probe also timed out with full output and with host
+egress removed (7,011,271 and 7,008,974 us wait samples), as did a one-column,
+four-core version (7,014,615 us). A one-core aggregate control completed in 50,840.5
+us including host dispatch, without output parity. These follow-up probes isolate the
+remaining blocker to multi-core output transport or packet scheduling. They do not
+provide silicon parity or a latency result for the 8,400-anchor design, so the `<300 us`
+gate remains open. The checkpoint is in
+[`results/aie/dfl_decode_phoenix_transport_checkpoint_20260913T0950Z.log`](../results/aie/dfl_decode_phoenix_transport_checkpoint_20260913T0950Z.log).

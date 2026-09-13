@@ -134,20 +134,32 @@ class YoloPipeline:
         repo_root = get_repo_root()
 
         if model_path_or_bundle is None:
-            cand = repo_root / "models" / "yolov8n_cut_xint8.onnx"
-            if not cand.exists():
-                cand = repo_root / "models" / "yolov8n.onnx"
+            ignite_cand = repo_root / "build" / "yolov8n.ignite"
+            if ignite_cand.exists():
+                cand = ignite_cand
+            else:
+                cand = repo_root / "models" / "yolov8n_cut_xint8.onnx"
+                if not cand.exists():
+                    cand = repo_root / "models" / "yolov8n.onnx"
             self.model_path = cand
         else:
             self.model_path = Path(model_path_or_bundle)
 
-        # 1. Initialize physical silicon monolithic session
-        self.session = InferenceSession(
-            model_path_or_bundle=self.model_path,
-            device_index=self.device_index,
-            enable_monolithic=True,
-            full_yolo=True,
-        )
+        # 1. Initialize physical silicon monolithic session (single-dispatch fast-path)
+        if str(self.model_path).endswith(".ignite"):
+            self.session = InferenceSession.from_file(
+                self.model_path,
+                device_index=self.device_index,
+                single_dispatch=True,
+            )
+        else:
+            self.session = InferenceSession(
+                model_path_or_bundle=self.model_path,
+                device_index=self.device_index,
+                enable_monolithic=True,
+                full_yolo=True,
+                single_dispatch=True,
+            )
 
         # 2. Pre-cache anchor grids and strides for fast vectorized DFL decode
         self._anchors, self._strides = self._build_anchors_and_strides(self.imgsz, STRIDES)
@@ -405,8 +417,8 @@ class YoloPipeline:
 
         meta_0 = [None, None, 0.0]
         meta_1 = [None, None, 0.0]
-        prep_times_0: Dict[int, float] = {}
-        prep_times_1: Dict[int, float] = {}
+        prep_times_0 = np.empty(total_runs, dtype=np.float64)
+        prep_times_1 = np.empty(total_runs, dtype=np.float64)
 
         def worker_even():
             for idx in range(0, total_runs, 2):
@@ -444,11 +456,11 @@ class YoloPipeline:
             t_even.start()
             t_odd.start()
 
-            prep_latencies_us: List[float] = []
-            npu_latencies_us: List[float] = []
-            post_latencies_us: List[float] = []
-            g2g_latencies_us: List[float] = []
-            wall_g2g_latencies_us: List[float] = []
+            prep_latencies_us = np.empty(iterations, dtype=np.float64)
+            npu_latencies_us = np.empty(iterations, dtype=np.float64)
+            post_latencies_us = np.empty(iterations, dtype=np.float64)
+            g2g_latencies_us = np.empty(iterations, dtype=np.float64)
+            wall_g2g_latencies_us = np.empty(iterations, dtype=np.float64)
 
             t_stream_start = time.perf_counter()
             t_steady_start = 0.0
@@ -485,11 +497,12 @@ class YoloPipeline:
                 wall_g2g_us = (t_post_1 - t_cap) * 1e6
 
                 if idx >= warmup:
-                    prep_latencies_us.append(p_us)
-                    npu_latencies_us.append(n_us)
-                    post_latencies_us.append(post_us)
-                    g2g_latencies_us.append(p_us + n_us + post_us)
-                    wall_g2g_latencies_us.append(wall_g2g_us)
+                    out_idx = idx - warmup
+                    prep_latencies_us[out_idx] = p_us
+                    npu_latencies_us[out_idx] = n_us
+                    post_latencies_us[out_idx] = post_us
+                    g2g_latencies_us[out_idx] = p_us + n_us + post_us
+                    wall_g2g_latencies_us[out_idx] = wall_g2g_us
 
             t_stream_end = time.perf_counter()
             t_even.join()
@@ -500,11 +513,11 @@ class YoloPipeline:
         elapsed_sec = t_stream_end - (t_steady_start if t_steady_start > 0 else t_stream_start)
         sustained_fps = iterations / elapsed_sec if elapsed_sec > 0 else 0.0
 
-        g2g_arr = np.array(g2g_latencies_us) / 1000.0  # to ms
-        wall_g2g_arr = np.array(wall_g2g_latencies_us) / 1000.0
-        npu_arr = np.array(npu_latencies_us) / 1000.0
-        prep_arr = np.array(prep_latencies_us) / 1000.0
-        post_arr = np.array(post_latencies_us) / 1000.0
+        g2g_arr = g2g_latencies_us / 1000.0  # to ms
+        wall_g2g_arr = wall_g2g_latencies_us / 1000.0
+        npu_arr = npu_latencies_us / 1000.0
+        prep_arr = prep_latencies_us / 1000.0
+        post_arr = post_latencies_us / 1000.0
 
         return {
             "iterations": iterations,

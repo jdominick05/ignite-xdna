@@ -1138,10 +1138,12 @@ The performance qualification remains open. See the [measurements and limits](..
 ## DFL softmax and anchor decode
 
 The [DFL decode qualification](../../docs/BENCHMARKS.md#phoenix-dfl-softmax-and-anchor-decode-2026-09-13-desktop-2)
-is compile verified but not silicon qualified. The log records the four-fixture offline
-parity check, sixteen Peano ELFs, the vector instruction audit, and the clean Phoenix
-preflight followed by the `0xc01e0009` XRT context-creation failure before dispatch.
+is compile verified but not silicon qualified. The logs record the four-fixture offline
+parity check, sixteen Peano ELFs, the vector instruction audit, the initial clean Phoenix
+preflight followed by the `0xc01e0009` XRT context-creation failure, and the follow-up
+multi-core transport timeouts after a restart.
 
 | Log | Outcome |
 |---|---|
 | [dfl_decode_phoenix_context_block_20260913T0842Z.log](dfl_decode_phoenix_context_block_20260913T0842Z.log) | Offline parity and Peano compile passed; hardware qualification blocked before dispatch by XRT context creation |
+| [dfl_decode_phoenix_transport_checkpoint_20260913T0950Z.log](dfl_decode_phoenix_transport_checkpoint_20260913T0950Z.log) | Restart cleared context creation; full and one-column four-core packet-fanin probes timed out after dispatch; one-core aggregate control completed; full-design parity and latency remain unmeasured |

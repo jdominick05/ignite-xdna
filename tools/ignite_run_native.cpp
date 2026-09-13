@@ -28,6 +28,9 @@
 #include <thread>
 #include <atomic>
 #include <memory>
+#include <fstream>
+#include <queue>
+#include <tuple>
 
 #ifndef NOMINMAX
 #define NOMINMAX
@@ -58,6 +61,25 @@ struct LoadedImage {
     int stride = 0;
     std::vector<uint8_t> bgr_data;
 };
+
+static LoadedImage make_1080p_frame(const LoadedImage& src) {
+    LoadedImage out;
+    out.width = 1920;
+    out.height = 1080;
+    out.stride = 1920 * 3;
+    out.bgr_data.assign(out.stride * out.height, 0);
+
+    int copy_w = std::min(src.width, 1920);
+    int copy_h = std::min(src.height, 1080);
+    for (int y = 0; y < copy_h; ++y) {
+        std::memcpy(
+            out.bgr_data.data() + y * out.stride,
+            src.bgr_data.data() + y * src.stride,
+            copy_w * 3
+        );
+    }
+    return out;
+}
 
 // High-performance single-producer single-consumer lock-free circular ring buffer
 template<typename T, size_t Capacity>
@@ -235,6 +257,9 @@ static void print_usage(const char* prog) {
               << "  --conf <float>             Confidence threshold (default: 0.25)\n"
               << "  --iou <float>              NMS IoU threshold (default: 0.50)\n"
               << "  --heads <path>             Path to reference heads binary dump\n"
+              << "  --streams <N>              Number of concurrent simulated camera streams (default: 1)\n"
+              << "  --resolution <res>         Simulated stream resolution: default or 1080p (default: default)\n"
+              << "  --json-out <path>          Output JSON file for benchmark metrics\n"
               << "  -h, --help                 Show this help message\n";
 }
 
@@ -243,6 +268,9 @@ int main(int argc, char** argv) {
     std::string image_path = "assets/bus.jpg";
     std::string video_path = "";
     std::string heads_path = "";
+    std::string json_out_path = "";
+    std::string resolution_str = "default";
+    int num_streams = 1;
     int device_id = 0;
     int benchmark_frames = 0;
     int warmup_frames = 10;
@@ -266,6 +294,13 @@ int main(int argc, char** argv) {
             benchmark_frames = std::stoi(argv[++i]);
         } else if (arg == "--warmup" && i + 1 < argc) {
             warmup_frames = std::stoi(argv[++i]);
+        } else if (arg == "--streams" && i + 1 < argc) {
+            num_streams = std::stoi(argv[++i]);
+            if (num_streams < 1) num_streams = 1;
+        } else if (arg == "--resolution" && i + 1 < argc) {
+            resolution_str = argv[++i];
+        } else if (arg == "--json-out" && i + 1 < argc) {
+            json_out_path = argv[++i];
         } else if (arg == "--async") {
             use_async = true;
         } else if (arg == "--conf" && i + 1 < argc) {
@@ -314,8 +349,13 @@ int main(int argc, char** argv) {
             Gdiplus::GdiplusShutdown(gdi_token);
             return 1;
         }
-        std::cout << "[INFO] Loaded input image: " << primary_input << " (" << single_img.width
-                  << "x" << single_img.height << ", stride=" << single_img.stride << " bytes)\n";
+        if (resolution_str == "1080p" && (single_img.width != 1920 || single_img.height != 1080)) {
+            single_img = make_1080p_frame(single_img);
+            std::cout << "[INFO] Converted input to 1080p simulated video feed: 1920x1080, stride=" << single_img.stride << " bytes\n";
+        } else {
+            std::cout << "[INFO] Loaded input image: " << primary_input << " (" << single_img.width
+                      << "x" << single_img.height << ", stride=" << single_img.stride << " bytes)\n";
+        }
         source = std::make_unique<SyntheticLoopSource>(single_img);
     }
 
@@ -449,40 +489,49 @@ int main(int argc, char** argv) {
         std::vector<double> latencies;
         latencies.reserve(benchmark_frames);
 
+        std::vector<std::vector<double>> stream_latencies(num_streams);
+        for (int s = 0; s < num_streams; ++s) {
+            stream_latencies[s].reserve(benchmark_frames / num_streams + 16);
+        }
+
         auto t_bench_start = std::chrono::high_resolution_clock::now();
 
         if (use_async) {
-            // High-throughput pipelined double-buffering execution
-            uint64_t prev_ticket = 0;
-            LoadedImage* prev_fb = nullptr;
+            // High-throughput pipelined multi-stream execution
+            std::queue<std::tuple<uint64_t, LoadedImage*, int>> in_flight;
 
             for (int i = 0; i < benchmark_frames; ++i) {
                 LoadedImage* curr_fb = nullptr;
                 while (!ready_ring.pop(curr_fb)) std::this_thread::yield();
 
+                int stream_id = i % num_streams;
                 uint64_t curr_ticket = 0;
                 ignite_run_async(
                     engine, curr_fb->bgr_data.data(), curr_fb->width, curr_fb->height, curr_fb->stride, &curr_ticket
                 );
+                in_flight.push({curr_ticket, curr_fb, stream_id});
 
-                if (prev_ticket > 0) {
-                    ignite_wait(engine, prev_ticket, detections, max_dets);
+                if (in_flight.size() >= 2) {
+                    auto [t_wait, fb_done, s_id] = in_flight.front();
+                    in_flight.pop();
+                    ignite_wait(engine, t_wait, detections, max_dets);
                     ignite_timings_t frame_t;
                     ignite_get_last_timings(engine, &frame_t);
                     latencies.push_back(frame_t.glass_to_glass_ms);
-                    free_ring.push(prev_fb);
+                    stream_latencies[s_id].push_back(frame_t.glass_to_glass_ms);
+                    free_ring.push(fb_done);
                 }
-
-                prev_ticket = curr_ticket;
-                prev_fb = curr_fb;
             }
 
-            if (prev_ticket > 0) {
-                ignite_wait(engine, prev_ticket, detections, max_dets);
+            while (!in_flight.empty()) {
+                auto [t_wait, fb_done, s_id] = in_flight.front();
+                in_flight.pop();
+                ignite_wait(engine, t_wait, detections, max_dets);
                 ignite_timings_t frame_t;
                 ignite_get_last_timings(engine, &frame_t);
                 latencies.push_back(frame_t.glass_to_glass_ms);
-                free_ring.push(prev_fb);
+                stream_latencies[s_id].push_back(frame_t.glass_to_glass_ms);
+                free_ring.push(fb_done);
             }
         } else {
             // Synchronous sequential execution
@@ -490,10 +539,12 @@ int main(int argc, char** argv) {
                 LoadedImage* fb = nullptr;
                 while (!ready_ring.pop(fb)) std::this_thread::yield();
 
+                int stream_id = i % num_streams;
                 ignite_run(engine, fb->bgr_data.data(), fb->width, fb->height, fb->stride, detections, max_dets);
                 ignite_timings_t frame_t;
                 ignite_get_last_timings(engine, &frame_t);
                 latencies.push_back(frame_t.glass_to_glass_ms);
+                stream_latencies[stream_id].push_back(frame_t.glass_to_glass_ms);
 
                 free_ring.push(fb);
             }
@@ -518,15 +569,72 @@ int main(int argc, char** argv) {
         std::cout << "  Native C++ (" << (use_async ? "Async Ping-Pong" : "Synchronous") << ") Streaming Benchmark\n";
         std::cout << "=============================================================\n";
         std::cout << "Stream Source:       " << primary_input << " (" << source->get_width() << "x" << source->get_height() << ")\n";
+        std::cout << "Concurrent Streams:  " << num_streams << " (Round-Robin Submission)\n";
         std::cout << "Frames Evaluated:    " << benchmark_frames << "\n";
         std::cout << "Glass-to-Glass Mean: " << std::fixed << std::setprecision(3) << mean << " ms\n";
         std::cout << "Glass-to-Glass Med:  " << std::fixed << std::setprecision(3) << median << " ms\n";
         std::cout << "Glass-to-Glass P90:  " << std::fixed << std::setprecision(3) << p90 << " ms\n";
         std::cout << "Glass-to-Glass P95:  " << std::fixed << std::setprecision(3) << p95 << " ms\n";
         std::cout << "Glass-to-Glass P99:  " << std::fixed << std::setprecision(3) << p99 << " ms\n";
-        std::cout << "Sustained FPS:       " << std::fixed << std::setprecision(2) << fps << " FPS\n";
+        std::cout << "Aggregate FPS:       " << std::fixed << std::setprecision(2) << fps << " FPS\n";
         std::cout << "Total Elapsed Time:  " << std::fixed << std::setprecision(2) << total_bench_d.count() << " ms\n";
+
+        if (num_streams > 1) {
+            std::cout << "\nPer-Stream Scaling Breakdown (" << num_streams << " Channels):\n";
+            for (int s = 0; s < num_streams; ++s) {
+                auto& s_lats = stream_latencies[s];
+                if (!s_lats.empty()) {
+                    std::sort(s_lats.begin(), s_lats.end());
+                    double s_sum = std::accumulate(s_lats.begin(), s_lats.end(), 0.0);
+                    double s_mean = s_sum / s_lats.size();
+                    double s_p95 = s_lats[static_cast<size_t>(s_lats.size() * 0.95)];
+                    double s_fps = (s_lats.size() * 1000.0) / total_bench_d.count();
+                    std::cout << "  Stream [" << s << "]: " << std::setw(5) << s_lats.size() << " frames | Mean: "
+                              << std::fixed << std::setprecision(3) << s_mean << " ms | P95: "
+                              << std::fixed << std::setprecision(3) << s_p95 << " ms | Throughput: "
+                              << std::fixed << std::setprecision(1) << s_fps << " FPS\n";
+                }
+            }
+        }
         std::cout << "=============================================================\n";
+
+        if (!json_out_path.empty()) {
+            std::ofstream jf(json_out_path);
+            if (jf.is_open()) {
+                jf << "{\n";
+                jf << "  \"num_streams\": " << num_streams << ",\n";
+                jf << "  \"total_frames\": " << benchmark_frames << ",\n";
+                jf << "  \"elapsed_ms\": " << total_bench_d.count() << ",\n";
+                jf << "  \"aggregate_fps\": " << fps << ",\n";
+                jf << "  \"glass_to_glass_ms\": {\n";
+                jf << "    \"mean\": " << mean << ",\n";
+                jf << "    \"median\": " << median << ",\n";
+                jf << "    \"p90\": " << p90 << ",\n";
+                jf << "    \"p95\": " << p95 << ",\n";
+                jf << "    \"p99\": " << p99 << "\n";
+                jf << "  },\n";
+                jf << "  \"per_stream\": [\n";
+                for (int s = 0; s < num_streams; ++s) {
+                    auto& s_lats = stream_latencies[s];
+                    std::sort(s_lats.begin(), s_lats.end());
+                    double s_sum = std::accumulate(s_lats.begin(), s_lats.end(), 0.0);
+                    double s_mean = s_lats.empty() ? 0.0 : s_sum / s_lats.size();
+                    double s_p95 = s_lats.empty() ? 0.0 : s_lats[static_cast<size_t>(s_lats.size() * 0.95)];
+                    double s_fps = s_lats.empty() ? 0.0 : (s_lats.size() * 1000.0) / total_bench_d.count();
+                    jf << "    {\n";
+                    jf << "      \"stream_id\": " << s << ",\n";
+                    jf << "      \"frames\": " << s_lats.size() << ",\n";
+                    jf << "      \"fps\": " << s_fps << ",\n";
+                    jf << "      \"mean_ms\": " << s_mean << ",\n";
+                    jf << "      \"p95_ms\": " << s_p95 << "\n";
+                    jf << "    }" << (s + 1 < num_streams ? "," : "") << "\n";
+                }
+                jf << "  ]\n";
+                jf << "}\n";
+                jf.close();
+                std::cout << "[INFO] Saved benchmark results JSON to: " << json_out_path << "\n";
+            }
+        }
     }
 
     ignite_free(engine);
