@@ -7632,3 +7632,72 @@ remaining blocker to multi-core output transport or packet scheduling. They do n
 provide silicon parity or a latency result for the 8,400-anchor design, so the `<300 us`
 gate remains open. The checkpoint is in
 [`results/aie/dfl_decode_phoenix_transport_checkpoint_20260913T0950Z.log`](../results/aie/dfl_decode_phoenix_transport_checkpoint_20260913T0950Z.log).
+
+## Oracle-free YOLOv8n path: no detect heads in the shipped container's egress (2026-09-13, Desktop 2)
+
+`YoloPipeline.predict_sync(img, use_oracle_for_boxes=False)` was meant to draw boxes
+from the NPU alone. It never could with the shipped `build/yolov8n.ignite`, and until
+this change it hid that: `InferenceSession.run_yolo_monolithic` returned six zero-filled
+float tensors as the heads (plus the egress scaled by a made-up `0.03125`), and
+`postprocess` mapped the all-zero box head to an empty list. The reason is structural,
+not a decoding gap. The session allocates a **4,096-byte** egress for the 16-core
+template (`session.py`, `out_bytes`), the manifest's `output_shapes` declare six heads
+totalling **1,209,600** int8 values, and every stage stream in the container is the
+single-layer conv0 template ([low-level audit, §1.5](LOW_LEVEL_AUDIT.md#15-documented-stream-unchanged)).
+There is nothing in `bo_out` to slice.
+
+What changed (branch `worktree-npu-heads`):
+
+- `runtime/heads.py` resolves a head layout only from a manifest that declares
+  `output_shapes` **and** a `head_layout` (per-head egress offset, dequantization scale
+  and zero point) whose six ranges are disjoint and fit the session's egress. Anything
+  less is `HeadStatus(present=False)` with the reason spelled out; the runtime does not
+  guess a packing order, so a container that merely had a large enough egress would
+  still resolve as absent. Unpacking is zero-copy (`reshape` views of the int8 egress,
+  checked with `np.shares_memory`).
+- `run_yolo_monolithic` returns `heads_present`, `head_status`, int8 head views plus
+  `scales` when present, and `None` per head otherwise. `predict_sync` records where the
+  boxes came from in `PipelineTimings.head_source` (`npu`, `oracle`, `none`) and warns
+  once when it is `none`. `ignite_xdna.load(...)` exposes the same as `engine.head_status`.
+- `YoloDecoder.postprocess` (the device-free half of the pipeline, now a base class of
+  `YoloPipeline`) prunes int8 heads in the int8 domain — the confidence threshold is
+  mapped to a quantized logit — and dequantizes survivors only.
+
+**Offline checks** (`tests/test_npu_inference.py`, `resnet_env17`, no device): the shipped
+manifest resolves as absent (1,209,600 declared vs 4,096 egress, no `head_layout`) and
+stays absent at 1,209,600 egress bytes; a synthetic `head_layout` packs and unpacks
+exactly and zero-copy; on synthetic heads carrying five objects the int8 path returns the
+same five detections as the float path (person ×3, car, bus; identical scores and boxes);
+the ONNX Runtime **CPU** oracle over `models/yolov8n_cut_xint8.onnx` on `assets/bus.jpg`,
+fed through the same `FusedPreprocessor`, decodes five detections — person 0.90, 0.88,
+0.88, 0.50 and bus 0.50 — which pins the preprocess → postprocess chain the NPU path
+would feed. That is a CPU result; no NPU figure follows from it.
+
+**On silicon** (`results/aie/npu_inference_oracle_free_phoenix_20260913T2050Z.log`;
+Device 0, ironenv Python 3.13, `xrt-smi examine -r aie-partitions` reported "No hardware
+contexts running" immediately before, host CPU 5.5 % busy before and 6.6 % after):
+
+| Check | Result |
+|---|---|
+| Head status of the shipped container | absent: "manifest declares no head_layout … Heads need 1209600 bytes, egress is 4096 bytes"; `predict_sync(…, use_oracle_for_boxes=False)` returns `[]` with `head_source == "none"`, and every head in `run_yolo_monolithic` is `None` |
+| ≥ 4 detections oracle-free, IoU ≥ 0.70 vs the oracle | **skipped by the suite, not passed** — there are no heads to decode |
+| 100 consecutive `predict_sync` frames, 1280×720 synthetic, after 10 warm-up | glass-to-glass **mean 1.015 ms**, median 1.007, p95 1.076, p99 1.159, max 1.199; preprocess 0.295 ms, NPU dispatch 0.720 ms, postprocess 0.001 ms |
+| Buffer objects allocated during those 100 frames | 0 host BOs, 0 instruction BOs (`create_host_bo` / `create_instruction_bo_from_bytes` counted); working set 266.9 → 266.9 MB (+0.02 MB) |
+| `tools/live_camera_ignition.py --source assets/bus.jpg --headless --frames 5 --boxes npu` | exit 0, five HUD lines, "NPU heads absent (4096 B egress, 1209600 B declared)", G2G mean 1.511 ms (median 1.163) with a 2.88 ms first frame, NPU mean 0.845 ms, no camera error |
+
+The 1.015 ms is the latency of preprocess + one NPU dispatch + an **empty** decode: the
+postprocess stage saw no candidates. It is not a detection pipeline's glass-to-glass
+figure and must not be quoted against the "< 2 ms with boxes" target, which stays
+unmet. A container that lowers the detect heads and writes a `head_layout` is what
+would let the skipped check run; the runtime, decoder and test are in place for it.
+
+The camera side (`tools/live_camera_ignition.py`, now tracked): `CameraManager` probes
+indices 0 and 1 across `CAP_MSMF → CAP_DSHOW → CAP_ANY`, each attempt in a worker thread
+with a timeout so a backend that blocks on an IR sensor is abandoned; every requested
+property (`FOURCC`, width, height, FPS) goes through a read-back check and a refused
+one keeps the sensor default instead of raising; `OPENCV_VIDEOIO_MSMF_ENABLE_HW_TRANSFORMS=0`
+sits above the first `cv2` import as the [camera-open measurement](#a-live-demo-does-the-multi-partition-finding-hold-on-a-real-webcam)
+requires. `--source` takes a webcam index list, a video file or a still image; `--boxes
+auto` uses the NPU heads when present and otherwise the CPU oracle, labelled as such on
+the HUD. The index-99 probe (three backends, no camera) completes in 0.16 s without
+raising in both OpenCV builds on this machine (4.11 and 5.0).
