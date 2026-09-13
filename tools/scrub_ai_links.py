@@ -210,6 +210,7 @@ def scrub_commits(commits: list[str], branch: str | None = None) -> int:
 
 def find_remote_base(remote: str, branch: str) -> str | None:
     """Find the tracking base commit on remote for branch."""
+    # 1. Exact remote branch ref
     res = subprocess.run(
         ["git", "rev-parse", "--verify", f"{remote}/{branch}"],
         capture_output=True,
@@ -217,6 +218,26 @@ def find_remote_base(remote: str, branch: str) -> str | None:
     )
     if res.returncode == 0:
         return res.stdout.strip()
+
+    # 2. Merge-base with remote tracking branches (e.g. origin/main, origin/HEAD)
+    for fallback in [f"{remote}/main", f"{remote}/master", f"{remote}/HEAD"]:
+        mb = subprocess.run(
+            ["git", "merge-base", "HEAD", fallback],
+            capture_output=True,
+            text=True,
+        )
+        if mb.returncode == 0 and mb.stdout.strip():
+            return mb.stdout.strip()
+
+    # 3. Fallback to HEAD~1 to avoid touching full history on untracked branches
+    res = subprocess.run(
+        ["git", "rev-parse", "--verify", "HEAD~1"],
+        capture_output=True,
+        text=True,
+    )
+    if res.returncode == 0:
+        return res.stdout.strip()
+
     return None
 
 
