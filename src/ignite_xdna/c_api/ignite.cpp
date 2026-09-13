@@ -822,7 +822,7 @@ int ignite_wait(
                 strncpy_s(out_detections[i].class_name, sizeof(out_detections[i].class_name), cname, _TRUNCATE);
             }
         }
-        return static_cast<int>(res.detections.size());
+        return num_dets;
     }
 }
 
