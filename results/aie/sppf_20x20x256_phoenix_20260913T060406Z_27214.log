@@ -1,0 +1,49 @@
+RESEARCH_PLATFORM {"machine": "Desktop 2", "cpu": "AMD Ryzen 7 8700G w/ Radeon 780M Graphics", "os": "Windows-11-10.0.26200-SP0", "ram_bytes": 33381138432, "source_sha256": {"tools/research_process.py": "b527a07958df0ed575df38dfe88da348c972ee79eb459974555cf2655f94d37f", "tools/quant_calib_alphabet.py": "2dc0b2878c564853f340880209a425dfcf63b8536b2b8e9fd32344daade58d37", "tools/xint8_arithmetic_probe.py": "6aa3df08b9870c3c2264b868459d7ffbac3070dddc1349d7c6f3f480075f7041", "scripts/research-lowlevel.sh": "3455ad7933697936487712665505c216891865c6deada647302785f6e37020bd", "scripts/research-iron.sh": "128f8b5ee21f2209f8dda004cefc39fbf87a5170ca61c5cf18dc97a6ea6669c8", "kernels/memory_placement/probe.py": "e8d990169ad6091fa1b53852e9f61eff495b5def72d35165a5c5cf1759e38898", "kernels/memory_placement/memory_kernels.cc": "182e7af7071a1e851afb4a7ca266069c489aea1fbaaa85eca129708daeba5ba6", "scripts/research-matrix.sh": "739254171629deae822b0ad7dabc875aee19ace56dde77d3e8aab61663f97516", "kernels/memory_placement/gemm.py": "17c905ad66110d3346bbf0db898dfc6b780df59fae1dfb0c1747057ce1e5844e", "kernels/memory_placement/gemm_placement.cc": "f21acf7250b12914ea30cc1f77613239dfa18421a85a1b9a5199017dd916278a", "tools/research_summary.py": "0c00dcceef07053d06731b41a1f1ed58d3ba4ea09f82497de354ce9cef17da20", "tools/research_toolchain.py": "f0a126a24ae213acfaa43460cfd9def0c86d9cb70cfee0228aa271688467b314"}, "commit": "2b7937b4e365f5b983d96ad9ac196182033c09e0", "command": ["bash", "scripts/research-iron.sh", "tests/test_sppf_kernel.py", "--hardware", "--iters", "3", "--warmup", "2"], "seconds_limit": 1800.0, "rss_gib_limit": 10.0, "checks_only": false, "free_ram_bytes": 17572876288}
+HOST_LOAD busy_cores=0.53 logical_cores=16 free_ram_gb=16.3 sample_sec=1
+HOST_LOAD_TOP 0.22 pycharm64:8540 ws_mb=2972
+HOST_LOAD_TOP 0.12 agy:33604 ws_mb=1162
+HOST_LOAD_TOP 0.08 Taskmgr:13448 ws_mb=188
+HOST_LOAD_TOP 0.08 HWiNFO64:1824 ws_mb=73
+HOST_LOAD_TOP 0.03 powershell:21616 ws_mb=80
+HOST_LOAD_VERDICT CLEAR
+
+PRE_NPU_CONTEXT_WITNESS "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [13592, 17288, 20760, 22924, 30136], "foreign_pids": []}
+{"cases": 5, "event": "offline_pass", "hardware": false, "oracle": "torch.nn.MaxPool2d(5,1,2)", "output_bytes_per_case": 409600}
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+HOST_TIMELINE {"elapsed_seconds": 2.625, "tree_rss_bytes": 324521984, "foreign_peers": []}
+HOST_LOAD busy_cores=1.08 logical_cores=16 free_ram_gb=16.2 sample_sec=1
+HOST_LOAD_TOP 0.31 python:17288 ws_mb=27
+HOST_LOAD_TOP 0.25 pycharm64:8540 ws_mb=2972
+HOST_LOAD_TOP 0.19 HWiNFO64:1824 ws_mb=73
+HOST_LOAD_TOP 0.09 codex:19240 ws_mb=252
+HOST_LOAD_TOP 0.08 Taskmgr:13448 ws_mb=188
+HOST_LOAD_VERDICT CLEAR
+
+{"bdf": "003d:00:01.1", "device": 0, "event": "identity", "machine": "Desktop 2 / Ryzen 7 8700G", "shim_patches": [{"argument": 0, "offset": 0, "register": 118788}, {"argument": 1, "offset": 0, "register": 118820}, {"argument": 0, "offset": 25600, "register": 33673220}, {"argument": 1, "offset": 102400, "register": 33673252}, {"argument": 0, "offset": 51200, "register": 67227652}, {"argument": 1, "offset": 204800, "register": 67227684}, {"argument": 0, "offset": 76800, "register": 100782084}, {"argument": 1, "offset": 307200, "register": 100782116}], "sources": {"maxpool5x5.cc": "394905f24c618ef07314fd0487c70d725064e8d29890d77e2e196ddcf7cd171b", "sppf_stage.py": "fe511cb767957e14ac3738ffd4dba0218872481148523b48c8f7aa4623fbbd84"}, "test_sha256": "7f01dcdbf339732d299b197171d8ab581a36873d40cd6a90578720b318286078", "transaction_sha256": "71914664c0af6186d069b888f469d5a365425a111b9773f43a260c72003eee81", "xclbin_sha256": "68a9b671f31ac1d13a84187b91fe973eefb4a2d33747ad5e1989845820ee3ba8"}
+HOST_TIMELINE {"elapsed_seconds": 5.218, "tree_rss_bytes": 334913536, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 64 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |13592               |198        |1           |0           |0    |Normal   |\n      |python.exe          |Active     |0           |0           |     |N/A      |\n      |64 MB               |96 KB      |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [13592], "owned_pids": [13592, 17288, 20028, 20760, 22924, 30136, 32036], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 7.828, "tree_rss_bytes": 334913536, "foreign_peers": []}
+Traceback (most recent call last):
+  File "C:\Users\<user>\PycharmProjects\ignite-xdna\tests\test_sppf_kernel.py", line 215, in <module>
+    main()
+    ~~~~^^
+HOST_TIMELINE {"elapsed_seconds": 10.375, "tree_rss_bytes": 334954496, "foreign_peers": []}
+  File "C:\Users\<user>\PycharmProjects\ignite-xdna\tests\test_sppf_kernel.py", line 211, in main
+    hardware(args, directory)
+    ~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "C:\Users\<user>\PycharmProjects\ignite-xdna\tests\test_sppf_kernel.py", line 167, in hardware
+    raise RuntimeError(f'Hardware completion failed: {state}')
+RuntimeError: Hardware completion failed: ert_cmd_state.ERT_CMD_STATE_TIMEOUT
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 416 KB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |13592               |198        |1           |0           |1    |Normal   |\n      |python.exe          |Active     |0           |0           |     |N/A      |\n      |416 KB              |96 KB      |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [13592], "owned_pids": [13592, 17288, 20028, 20760, 22924, 30136, 32036], "foreign_pids": []}
+RESEARCH_PROCESS_RESULT {"exit_code": 1, "stop": null, "peak_tree_rss_bytes": 335044608, "rss_measurement": "maximum observed across sampled descendant working sets; zero observations reported as null", "elapsed_seconds": 12.796000000002095, "foreign_contention_observed": false, "timing_eligible": false}

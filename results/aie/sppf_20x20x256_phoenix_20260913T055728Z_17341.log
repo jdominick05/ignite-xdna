@@ -1,0 +1,64 @@
+RESEARCH_PLATFORM {"machine": "Desktop 2", "cpu": "AMD Ryzen 7 8700G w/ Radeon 780M Graphics", "os": "Windows-11-10.0.26200-SP0", "ram_bytes": 33381138432, "source_sha256": {"tools/research_process.py": "b527a07958df0ed575df38dfe88da348c972ee79eb459974555cf2655f94d37f", "tools/quant_calib_alphabet.py": "2dc0b2878c564853f340880209a425dfcf63b8536b2b8e9fd32344daade58d37", "tools/xint8_arithmetic_probe.py": "6aa3df08b9870c3c2264b868459d7ffbac3070dddc1349d7c6f3f480075f7041", "scripts/research-lowlevel.sh": "3455ad7933697936487712665505c216891865c6deada647302785f6e37020bd", "scripts/research-iron.sh": "128f8b5ee21f2209f8dda004cefc39fbf87a5170ca61c5cf18dc97a6ea6669c8", "kernels/memory_placement/probe.py": "e8d990169ad6091fa1b53852e9f61eff495b5def72d35165a5c5cf1759e38898", "kernels/memory_placement/memory_kernels.cc": "182e7af7071a1e851afb4a7ca266069c489aea1fbaaa85eca129708daeba5ba6", "scripts/research-matrix.sh": "739254171629deae822b0ad7dabc875aee19ace56dde77d3e8aab61663f97516", "kernels/memory_placement/gemm.py": "17c905ad66110d3346bbf0db898dfc6b780df59fae1dfb0c1747057ce1e5844e", "kernels/memory_placement/gemm_placement.cc": "f21acf7250b12914ea30cc1f77613239dfa18421a85a1b9a5199017dd916278a", "tools/research_summary.py": "0c00dcceef07053d06731b41a1f1ed58d3ba4ea09f82497de354ce9cef17da20", "tools/research_toolchain.py": "f0a126a24ae213acfaa43460cfd9def0c86d9cb70cfee0228aa271688467b314"}, "commit": "2b7937b4e365f5b983d96ad9ac196182033c09e0", "command": ["bash", "scripts/research-iron.sh", "tests/test_sppf_kernel.py", "--compile"], "seconds_limit": 1800.0, "rss_gib_limit": 10.0, "checks_only": false, "free_ram_bytes": 17696161792}
+HOST_LOAD busy_cores=0.5 logical_cores=16 free_ram_gb=16.4 sample_sec=1
+HOST_LOAD_TOP 0.26 pycharm64:8540 ws_mb=2933
+HOST_LOAD_TOP 0.08 HWiNFO64:1824 ws_mb=73
+HOST_LOAD_TOP 0.06 agy:33604 ws_mb=1151
+HOST_LOAD_TOP 0.05 Taskmgr:13448 ws_mb=188
+HOST_LOAD_TOP 0.03 powershell:23252 ws_mb=80
+HOST_LOAD_VERDICT CLEAR
+
+PRE_NPU_CONTEXT_WITNESS "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [1420, 17328, 18336, 19796, 29772], "foreign_pids": []}
+{"cases": 5, "event": "offline_pass", "hardware": false, "oracle": "torch.nn.MaxPool2d(5,1,2)", "output_bytes_per_case": 409600}
+HOST_TIMELINE {"elapsed_seconds": 2.688, "tree_rss_bytes": 253566976, "foreign_peers": []}
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+HOST_LOAD busy_cores=2.17 logical_cores=16 free_ram_gb=16.2 sample_sec=1
+HOST_LOAD_TOP 1.1 agy:33604 ws_mb=1154
+HOST_LOAD_TOP 0.42 pycharm64:8540 ws_mb=2933
+HOST_LOAD_TOP 0.4 python:19796 ws_mb=28
+HOST_LOAD_TOP 0.06 HWiNFO64:1824 ws_mb=73
+HOST_LOAD_TOP 0.05 Taskmgr:13448 ws_mb=188
+HOST_LOAD_VERDICT CLEAR
+
+PEANO_COMMAND ['C:\\Users\\<user>\\mlir-aie\\ironenv\\Lib\\site-packages\\llvm-aie\\bin\\clang++.exe', '--target=aie2', '-O3', '-std=c++20', '-IC:\\Users\\<user>\\mlir-aie\\ironenv\\Lib\\site-packages\\mlir_aie\\include', '-c', 'C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\aie2\\sppf\\maxpool5x5.cc', '-o', 'C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\build\\sppf\\42cdd253fa640259\\design.prj\\maxpool5x5.o']
+In file included from <built-in>:1:
+In file included from C:\Users\<user>\mlir-aie\ironenv\Lib\site-packages\llvm-aie\lib\clang\22\include\aiev2intrin.h:24:
+In file included from C:\Users\<user>\mlir-aie\ironenv\Lib\site-packages\llvm-aie\lib\clang\22\include\aiebase_typedefs.h:17:
+In file included from C:\Users\<user>\mlir-aie\ironenv\Lib\site-packages\llvm-aie\bin\..\include\c++\v1\stdbool.h:25:
+C:\Users\<user>\mlir-aie\ironenv\Lib\site-packages\llvm-aie\bin\..\include\c++\v1\__config:13:10: fatal error: '__config_site' file not found
+   13 | #include <__config_site>
+      |          ^~~~~~~~~~~~~~~
+HOST_TIMELINE {"elapsed_seconds": 5.422, "tree_rss_bytes": 305115136, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [1420, 17196, 17328, 18336, 19796, 22348, 29772, 30348], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 8.141, "tree_rss_bytes": 326103040, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 10.86, "tree_rss_bytes": 352604160, "foreign_peers": []}
+1 error generated.
+Traceback (most recent call last):
+  File "C:\Users\<user>\PycharmProjects\ignite-xdna\tests\test_sppf_kernel.py", line 208, in <module>
+    main()
+    ~~~~^^
+  File "C:\Users\<user>\PycharmProjects\ignite-xdna\tests\test_sppf_kernel.py", line 201, in main
+    compile_bundle(directory)
+    ~~~~~~~~~~~~~~^^^^^^^^^^^
+  File "C:\Users\<user>\PycharmProjects\ignite-xdna\tests\test_sppf_kernel.py", line 103, in compile_bundle
+    compile_design(directory)
+    ~~~~~~~~~~~~~~^^^^^^^^^^^
+  File "C:\Users\<user>\PycharmProjects\ignite-xdna\kernels\aie2\sppf\sppf_stage.py", line 134, in compile_design
+    subprocess.run(command, check=True)
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\<user>\miniforge3\envs\mlir-aie-iron\Lib\subprocess.py", line 577, in run
+    raise CalledProcessError(retcode, process.args,
+                             output=stdout, stderr=stderr)
+subprocess.CalledProcessError: Command '['C:\\Users\\<user>\\mlir-aie\\ironenv\\Lib\\site-packages\\llvm-aie\\bin\\clang++.exe', '--target=aie2', '-O3', '-std=c++20', '-IC:\\Users\\<user>\\mlir-aie\\ironenv\\Lib\\site-packages\\mlir_aie\\include', '-c', 'C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\kernels\\aie2\\sppf\\maxpool5x5.cc', '-o', 'C:\\Users\\<user>\\PycharmProjects\\ignite-xdna\\build\\sppf\\42cdd253fa640259\\design.prj\\maxpool5x5.o']' returned non-zero exit status 1.
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [1420, 17196, 17328, 18336, 19796, 22348, 29772, 30348], "foreign_pids": []}
+RESEARCH_PROCESS_RESULT {"exit_code": 1, "stop": null, "peak_tree_rss_bytes": 352604160, "rss_measurement": "maximum observed across sampled descendant working sets; zero observations reported as null", "elapsed_seconds": 11.546999999998661, "foreign_contention_observed": false, "timing_eligible": false}

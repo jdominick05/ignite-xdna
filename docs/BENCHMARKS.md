@@ -7556,3 +7556,38 @@ Reproduce from Git Bash, serially:
 See the [kernel ABI and numerical contract](../kernels/aie2/fused_conv_epilogue/README.md).
 General scales, other shapes, EP integration, model-level parity and all-core
 simultaneous trace coverage remain outside this qualification.
+
+## SPPF checkpoint (2026-09-13, Desktop 2)
+
+The standalone Peano 5x5 INT8 MaxPool kernel and three-pass SPPF transport are
+implemented for 20x20x256 on Phoenix Device 0 `[003d:00:01.1]`. Sixteen cores
+process independent channel shards using 512-bit vector maxima and horizontal
+shuffles followed by a sliding vertical reduction. MemTile ping/pong holds the
+intermediate pools; a DMA5-to-DMA5 local loopback and strided S2MM descriptors
+assemble the four concatenands in SRAM. The host ABI is column-packed input
+`[4,4,20,20,16]` and output `[4,20,20,4,64]`; layout conversion is outside timing.
+
+This is an unfinished performance qualification. The
+[channel-shard silicon check](../results/aie/sppf_20x20x256_phoenix_20260913T061238Z_17350.log)
+matched all 409600 output bytes on every dispatch against three successive
+`torch.nn.MaxPool2d(5,1,2)` operations. Coverage includes two seeds across random,
+negative, minimum-value, spatial and impulse inputs, plus warmup and timing
+inputs. Output bytes were poisoned with the complement of the expected result.
+The three measured host start/wait samples ranged from 231.9 to 303.1 us, with
+median 275.8 us, so the explicit 150 us host-inclusive assertion failed. The
+wrapper reports no foreign contention and marks this failed run timing-ineligible.
+
+The subsequent [four-column Shim trace](../results/aie/sppf_20x20x256_phoenix_20260913T061700Z_14567.log)
+also matched all output bytes, for one spatial fixture. Input-DMA-start to
+output-DMA-completion spans were 111779, 109872, 107919 and 106004 trace cycles
+for physical columns 1 through 4. These are individual column intervals, not a
+calibrated whole-array time in microseconds. Clock calibration, reconciliation
+of the absolute trace timestamps across columns, and repeated timing coverage
+remain open. `--trace` currently checks cycle coverage and returns without a
+microsecond latency assertion; exit zero in that diagnostic mode does not
+establish the requested sub-150-us qualification.
+
+Earlier build errors, a repeat-dispatch credit race, the illegal cross-channel
+MemTile loopback attempt, and slower spatial-band variants remain in the
+[SPPF evidence index](../results/aie/README.md#sppf-checkpoint). No YOLOv8 model
+integration, end-to-end speedup, or production parity claim is made here.
