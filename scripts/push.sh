@@ -8,6 +8,12 @@
 #   ./scripts/push.sh --branch main
 #   ./scripts/push.sh --only origin
 #   ./scripts/push.sh --only github
+#   ./scripts/push.sh --no-scrub   # skip AI assistant link scrubbing/verification
+#
+# Before pushing, verifies that outgoing commits do not contain any links
+# for AI assistants (e.g. Claude, Codex, ChatGPT, Antigravity, Gemini).
+# Automatically scrubs any AI assistant links from unpushed commits so that
+# mirrors and remotes never receive AI assistant links.
 #
 # Never force-pushes. Fails loudly (and keeps going to try the other remote)
 # if either push is rejected -- e.g. another machine pushed to origin first,
@@ -18,12 +24,14 @@
 
 BRANCH="$(git rev-parse --abbrev-ref HEAD)"
 ONLY=""
+NO_SCRUB=0
 
 while [ $# -gt 0 ]; do
     case "$1" in
-        --branch) BRANCH="$2"; shift ;;
-        --only)   ONLY="$2"; shift ;;
-        -h|--help) usage "${BASH_SOURCE[0]}"; exit 0 ;;
+        --branch)   BRANCH="$2"; shift ;;
+        --only)     ONLY="$2"; shift ;;
+        --no-scrub) NO_SCRUB=1 ;;
+        -h|--help)  usage "${BASH_SOURCE[0]}"; exit 0 ;;
         *) die "unknown arg $1" ;;
     esac
     shift
@@ -37,6 +45,12 @@ esac
 for r in origin github; do
     git remote get-url "$r" >/dev/null 2>&1 || die "remote '$r' is not configured (git remote -v)"
 done
+
+if [ "$NO_SCRUB" -eq 0 ]; then
+    step "verifying no AI assistant links in outgoing commits"
+    python "$REPO_ROOT/tools/scrub_ai_links.py" --branch "$BRANCH" || die "failed to scrub or verify AI assistant links in outgoing commits"
+    ok "verified no AI assistant links in outgoing commits"
+fi
 
 step "pushing '$BRANCH'"
 info "origin: $(git remote get-url origin)"
