@@ -1132,3 +1132,5 @@ The performance qualification remains open. See the [measurements and limits](..
 | [sppf_20x20x256_phoenix_20260913T061238Z_17350.log](sppf_20x20x256_phoenix_20260913T061238Z_17350.log) | Full-output parity; host-inclusive latency assertion failed |
 | [sppf_20x20x256_phoenix_20260913T061627Z_15527.log](sppf_20x20x256_phoenix_20260913T061627Z_15527.log) | Peano build passed |
 | [sppf_20x20x256_phoenix_20260913T061700Z_14567.log](sppf_20x20x256_phoenix_20260913T061700Z_14567.log) | Full-output parity; trace cycles only, qualification open |
+| [sppf_20x20x256_phoenix_20260913T062646Z_8315.log](sppf_20x20x256_phoenix_20260913T062646Z_8315.log) | Peano build passed; 16 ELFs and 44 native vector maxima |
+| [sppf_20x20x256_phoenix_20260913T062850Z_5253.log](sppf_20x20x256_phoenix_20260913T062850Z_5253.log) | Full-output parity; clean 10-sample host-inclusive latency assertion failed |

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib.util
 import json
 from pathlib import Path
 import re
@@ -22,7 +23,15 @@ import numpy as np
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / 'src'))
-from kernels.aie2.sppf.sppf_stage import INPUT_BYTES, OUTPUT_BYTES, compile_design
+_STAGE_PATH = ROOT / 'kernels' / 'aie2' / 'sppf' / 'sppf_stage.py'
+_STAGE_SPEC = importlib.util.spec_from_file_location('ignite_xdna_sppf_stage', _STAGE_PATH)
+if _STAGE_SPEC is None or _STAGE_SPEC.loader is None:
+    raise ImportError(f'cannot load SPPF stage module from {_STAGE_PATH}')
+_STAGE = importlib.util.module_from_spec(_STAGE_SPEC)
+_STAGE_SPEC.loader.exec_module(_STAGE)
+INPUT_BYTES = _STAGE.INPUT_BYTES
+OUTPUT_BYTES = _STAGE.OUTPUT_BYTES
+compile_design = _STAGE.compile_design
 
 
 def emit(event, **data):

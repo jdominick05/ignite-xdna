@@ -7577,6 +7577,12 @@ The three measured host start/wait samples ranged from 231.9 to 303.1 us, with
 median 275.8 us, so the explicit 150 us host-inclusive assertion failed. The
 wrapper reports no foreign contention and marks this failed run timing-ineligible.
 
+A fresh clean run with ten measured dispatches also matched all 409600 bytes on
+every case. Its host start/wait samples ranged from 226.8 to 495.5 us, with
+median 274.0 us; the 150 us assertion failed again. The wrapper observed no
+foreign NPU context and records the run in
+[`sppf_20x20x256_phoenix_20260913T062850Z_5253.log`](../results/aie/sppf_20x20x256_phoenix_20260913T062850Z_5253.log).
+
 The subsequent [four-column Shim trace](../results/aie/sppf_20x20x256_phoenix_20260913T061700Z_14567.log)
 also matched all output bytes, for one spatial fixture. Input-DMA-start to
 output-DMA-completion spans were 111779, 109872, 107919 and 106004 trace cycles
