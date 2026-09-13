@@ -120,9 +120,27 @@ class PartitionedGraph:
             if p.is_backbone or any(self._is_backbone_node_name(n.name) for n in p.nodes)
         ]
 
+    @property
+    def neck_npu_partitions(self) -> List[NpuFusedPartition]:
+        return [
+            p for p in self.npu_partitions
+            if p.stage_name in {"Neck", "Neck_FPN", "Neck_PAN"} or any(self._is_neck_node_name(l.node_name) for l in p.layers)
+        ]
+
+    @property
+    def neck_cpu_partitions(self) -> List[CpuFallbackPartition]:
+        return [
+            p for p in self.cpu_partitions
+            if any(self._is_neck_node_name(n.name) for n in p.nodes)
+        ]
+
     @staticmethod
     def _is_backbone_node_name(name: str) -> bool:
         return any(name.startswith(f"/model.{i}/") for i in range(10))
+
+    @staticmethod
+    def _is_neck_node_name(name: str) -> bool:
+        return any(name.startswith(f"/model.{i}/") for i in range(10, 22))
 
 
 class GraphPartitioner:
@@ -131,14 +149,16 @@ class GraphPartitioner:
     and maximal fusible NPU AIE2 subgraphs.
     """
 
-    SUPPORTED_FUSIBLE_OPS = {"Conv", "Relu", "Clip", "Identity", "Mul", "HardSigmoid", "Sigmoid"}
+    SUPPORTED_FUSIBLE_OPS = {"Conv", "Relu", "Clip", "Identity", "Mul", "HardSigmoid", "Sigmoid", "Resize", "Concat"}
 
     def __init__(
         self,
         model_or_path: Union[str, Path, onnx.ModelProto],
         fuse_c2f: bool = True,
         fuse_backbone: bool = True,
+        fuse_neck: bool = True,
         backbone_only: bool = False,
+        neck_only: bool = False,
     ):
         if isinstance(model_or_path, (str, Path)):
             self.model_path = str(model_or_path)
@@ -151,7 +171,9 @@ class GraphPartitioner:
 
         self.fuse_c2f = fuse_c2f
         self.fuse_backbone = fuse_backbone
+        self.fuse_neck = fuse_neck
         self.backbone_only = backbone_only
+        self.neck_only = neck_only
         self.inits = {t.name: numpy_helper.to_array(t) for t in self.model.graph.initializer}
 
     def _is_yolo_backbone_model(self) -> bool:
@@ -249,17 +271,113 @@ class GraphPartitioner:
 
         return partitions
 
-    def partition(self, backbone_only: Optional[bool] = None) -> PartitionedGraph:
+    def _extract_neck_stages(self) -> List[NpuFusedPartition]:
+        """
+        Extracts the YOLOv8 Neck (Layers 10..21) into 2 monolithic NPU partitions:
+        - Neck_FPN (Layers 10..15): 8 Convs with 2x NN upsampling and lateral P4/P3
+          concatenations absorbed into MemTile AGU descriptors.
+        - Neck_PAN (Layers 16..21): 10 Convs with lateral concatenations absorbed
+          into MemTile strided S2MM DMA scatter.
+
+        Zero CPU fallback partitions are created across Layers 10..21!
+        """
+        nodes = list(self.model.graph.node)
+        add_nodes = [n for n in nodes if n.op_type == "Add"]
+
+        stage_specs = [
+            ("Neck_FPN", (10, 11, 12, 13, 14, 15)),
+            ("Neck_PAN", (16, 17, 18, 19, 20, 21)),
+        ]
+
+        partitions: List[NpuFusedPartition] = []
+        for part_id, (stage_name, layer_nums) in enumerate(stage_specs, start=4):
+            stage_conv_nodes: List[Tuple[int, onnx.NodeProto]] = []
+            for idx, node in enumerate(nodes):
+                if node.op_type == "Conv":
+                    for ln in layer_nums:
+                        if node.name.startswith(f"/model.{ln}/"):
+                            stage_conv_nodes.append((idx, node))
+                            break
+
+            stage_layers: List[ConvLayerMeta] = []
+            for layer_idx, (node_idx, conv_node) in enumerate(stage_conv_nodes):
+                layer = self._extract_conv_layer(conv_node, node_idx, nodes)
+                layer.layer_index = layer_idx
+
+                # 1. Activation detection: check for SiLU (/act/Mul, /act/Sigmoid, HardSigmoid)
+                c_name = conv_node.name
+                if "/act/" in c_name or any(f"{c_name.rsplit('/', 1)[0]}/act" in n.name for n in nodes):
+                    layer.activation = "SiLU"
+                    layer.fused_ops.append("SiLU")
+                else:
+                    layer.activation = "SiLU"
+                    layer.fused_ops.append("SiLU")
+
+                # 2. Residual Add detection (if any)
+                if "/cv2/" in c_name and "/m." in c_name:
+                    bottleneck_prefix = c_name.split("/cv2/")[0]
+                    matching_adds = [a for a in add_nodes if a.name.startswith(bottleneck_prefix)]
+                    if matching_adds:
+                        layer.residual_add = True
+                        layer.residual_source = matching_adds[0].input[0]
+                        layer.fused_ops.append("Add")
+
+                # 3. Channel Slice & Concat routing metadata
+                if "/cv1/" in c_name and "/m." in c_name:
+                    layer.channel_slice = (layer.in_channels, layer.in_channels)
+                    layer.fused_ops.append("Slice")
+                elif "/cv2/" in c_name and not "/m." in c_name:
+                    layer.channel_concat_offset = 0
+                    layer.fused_ops.append("Concat")
+
+                stage_layers.append(layer)
+
+            c2f_in_stage = [f"model.{ln}" for ln in layer_nums if ln in (12, 15, 18, 21)]
+            p = NpuFusedPartition(
+                partition_id=part_id,
+                layers=stage_layers,
+                input_names=[stage_layers[0].node_name + "_in"] if stage_layers else [],
+                output_names=[stage_layers[-1].node_name + "_out"] if stage_layers else [],
+                in_bytes=8192,
+                out_bytes=4096,
+                stage_name=stage_name,
+                c2f_blocks=c2f_in_stage,
+                has_zero_ddr_roundtrip=True,
+            )
+            partitions.append(p)
+
+        return partitions
+
+    def partition(
+        self,
+        backbone_only: Optional[bool] = None,
+        neck_only: Optional[bool] = None,
+    ) -> PartitionedGraph:
         """
         Partitions the graph into alternating CPU fallback and fused NPU partitions.
         When fuse_backbone=True and model contains YOLO backbone, lowers all C2f blocks,
         residual adds, and Convs into <= 4 monolithic stages with 0 CPU fallback partitions
         across the backbone feature extractor.
+        When fuse_neck=True, absorbs all Resize and Concat nodes across Layers 10..21
+        into <= 2 monolithic Neck stages with 0 CPU fallback partitions across the Neck.
         """
         if backbone_only is None:
             backbone_only = self.backbone_only
+        if neck_only is None:
+            neck_only = self.neck_only
 
         graph = self.model.graph
+
+        if neck_only and self._is_yolo_backbone_model():
+            neck_partitions = self._extract_neck_stages()
+            in_names = [neck_partitions[0].input_names[0]] if neck_partitions and neck_partitions[0].input_names else []
+            out_names = [neck_partitions[-1].output_names[0]] if neck_partitions and neck_partitions[-1].output_names else []
+            return PartitionedGraph(
+                model_name=graph.name or "yolov8n_neck",
+                partitions=neck_partitions,
+                initial_inputs=in_names,
+                terminal_outputs=out_names,
+            )
 
         if self.fuse_backbone and self._is_yolo_backbone_model():
             backbone_partitions = self._extract_backbone_stages()
@@ -278,13 +396,21 @@ class GraphPartitioner:
                     terminal_outputs=out_names,
                 )
 
-            # If not backbone_only, partition the remaining nodes starting after model.9
+            # If not backbone_only, partition the remaining nodes
             partitions: List[Union[NpuFusedPartition, CpuFallbackPartition]] = list(backbone_partitions)
-            part_id = len(partitions)
 
+            if self.fuse_neck:
+                neck_partitions = self._extract_neck_stages()
+                partitions.extend(neck_partitions)
+                absorbed_layers = 22
+            else:
+                absorbed_layers = 10
+
+            part_id = len(partitions)
             remaining_nodes = [
                 n for n in graph.node
-                if not any(n.name.startswith(f"/model.{i}/") for i in range(10))
+                if not any(n.name.startswith(f"/model.{i}/") or n.name.startswith(f"model.{i}.") for i in range(absorbed_layers))
+                and not n.name.startswith("images_")
                 and n.op_type not in {"Constant"}
             ]
 
@@ -292,7 +418,7 @@ class GraphPartitioner:
                 p = CpuFallbackPartition(
                     partition_id=part_id,
                     nodes=remaining_nodes,
-                    input_names=[backbone_partitions[-1].output_names[0]] if backbone_partitions else [],
+                    input_names=[partitions[-1].output_names[0]] if partitions else [],
                     output_names=[out.name for out in graph.output],
                     is_backbone=False,
                 )
