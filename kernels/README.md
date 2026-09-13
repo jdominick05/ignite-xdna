@@ -31,7 +31,7 @@ array program) into `~/.npu/cache/<hash>/`; later runs of the same shape hit the
 | Kernel | Op it replaces | Verdict |
 |---|---|---|
 | [aie2/fused_conv_epilogue](aie2/fused_conv_epilogue/README.md) | Standalone Conv + Residual Add + SiLU | Qualified below 8% compute overhead at Cin=512, Cout=32, with DMA overlap; Cin=32 misses. [Evidence and scope](../docs/BENCHMARKS.md#fused-conv-residual-silu-2026-09-13-desktop-2) |
-| [aie2/dfl](aie2/dfl/dfl_stage.py) | 16-bin DFL softmax, anchor decode and staged boxes/scores egress | Peano compile verified on 16 Phoenix cores with 48 native vector instructions; restart cleared the initial `0xc01e0009`, but multi-core output transport still times out on silicon. [Evidence and limits](../docs/BENCHMARKS.md#phoenix-dfl-softmax-and-anchor-decode-2026-09-13-desktop-2) |
+| [aie2/dfl](aie2/dfl/dfl_stage.py) | 16-bin DFL softmax, anchor decode and staged boxes/scores egress | **Numerics pass on silicon, latency loses.** All 8,400 anchors on 16 Phoenix cores: scores bit-exact with the fixed-point model, boxes within 0.252 Q4 LSB of float32. Median dispatch 196.2 ms against the `<300 us` gate, and 7.6 ms with the decode math removed, so no kernel meets the gate on this transport. [Evidence and limits](../docs/BENCHMARKS.md#phoenix-dfl-softmax-and-anchor-decode-2026-09-13-desktop-2) |
 | `memory_placement/` | Controlled operand-address intervention in a paired-load loop and a single-core INT8 GEMM | Local placement changes cycle slopes with identical function bytes; [method, limits and logs](../docs/BENCHMARKS.md#local-operand-placement-an-address-intervention) |
 | `bf16_matmul_sweep/` | Nothing — the bf16 GEMM shape sweep | **Wins.** NPU 1.18×–1.78× over CPU bf16 once M/N ≥ 1024 |
 | `int8_matmul_sweep/` | Nothing — the int8 GEMM sweep, with the CPU int8 GEMM baseline | **Loses at the default tile; wins 1.10×–1.83× at M ≥ 512, N ≥ 2048 with `n=64`**, a tile bf16 can't fit |
@@ -60,6 +60,27 @@ anchor-major wire record containing `[x1, y1, x2, y2, score_0 ... score_79]`.
 `dfl_stage.py` maps 8,400 anchors across four columns and sixteen cores, stages input
 through MemTile L2, and uses separate strided MemTile egress streams for contiguous
 box and score host BOs.
+
+**Status after silicon qualification (2026-09-13, Desktop 2).** The full design passes on
+Phoenix Device 0: scores are bit-exact with the fixed-point model and boxes are within 0.252
+Q4 LSB of float32, over 114 checked dispatches. It fails the `<300 us` gate with a
+196,178.0 µs median dispatch wait. With the decode math swapped for
+[`dfl_transport_probe.cc`](aie2/dfl/dfl_transport_probe.cc), the same transport still takes
+7,603.2 µs, so no kernel meets the gate with this I/O contract and transport. Getting there
+took three fixes, all found only on silicon. Per-core turn locks replace one shared MemTile
+output-slot lock. The score egress descriptor now reads each wire record from byte 16
+instead of 0. And every dispatch gets a fresh hardware context, because the design is
+one-shot: a second dispatch in one context timed out, after which the driver refused
+every new context with `0xc01e0009` until the NPU device was restarted. **Do not run
+`--shared-context` or an unproven shape casually.** `dfl_stage.py` now takes
+`module(cols, cores_per_col)` for reduced probes, and `tests/test_dfl_kernel.py`,
+`tests/test_dfl_transport_floor.py` and the Makefile accept `--cols`/`--cores-per-col`
+(`COLS`/`CORES_PER_COL`). No AIE trace was captured, so there are no cycle counts or stall
+events for this kernel. Full numbers and logs are in
+[BENCHMARKS](../docs/BENCHMARKS.md#phoenix-dfl-softmax-and-anchor-decode-2026-09-13-desktop-2).
+
+The status below is the `a36d3ea` checkpoint, kept as written. Its restart was a device
+restart, and its one-core control had no output check.
 
 The offline float32 oracle check passes four fixtures within 0.411 pixels for boxes and
 0.000558 for scores. The Peano/aiecc build produces sixteen core ELFs and 48 vector

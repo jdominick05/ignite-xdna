@@ -1,0 +1,9 @@
+Phoenix DFL decode silicon qualification
+date_utc=2026-09-13T15:51:16+00:00
+host=DESKTOP-CBL5NUA
+command=C:\Users\<user>\mlir-aie\ironenv\Scripts\python.exe tests/test_dfl_kernel.py --offline --log results\aie\dfl_decode_offline_q4lsb_20260913T155116Z.log
+shape=4x4 (16 cores)
+test_sha256=47d4d5fb741e046635f189cba73bc029ff2c5603a86961061d51cc6ee3d171a5
+source_dfl_decode.cc_sha256=d1d84be79b04060a5168f846b49e86f8b492384f62b0ef3779f3ffa892087151
+source_dfl_stage.py_sha256=79239e7f49134072bc99ee53d3305e5529f3d863962dd4bf19f9e95509f0e56a
+{"anchors": 8400, "box_tolerance_q4_lsb": 1.0, "cases": [{"box_max_abs": 0.2645263671875, "box_max_q4_lsb": 0.184112548828125, "mode": "random", "score_max_abs": 0.0005570650100708008}, {"box_max_abs": 0.4100341796875, "box_max_q4_lsb": 0.2523651123046875, "mode": "extreme", "score_max_abs": 0.0005570650100708008}, {"box_max_abs": 0.0, "box_max_q4_lsb": 0.0, "mode": "uniform", "score_max_abs": 5.3316354751586914e-05}, {"box_max_abs": 0.05303955078125, "box_max_q4_lsb": 0.026519775390625, "mode": "ramp", "score_max_abs": 0.0005570650100708008}], "event": "offline_pass", "input_layout": "[8400,144] int8 Q4", "output_layout": "boxes[8400,4] + scores[8400,80] float32", "score_tolerance": 0.015625}

@@ -1,0 +1,30 @@
+Phoenix DFL decode 1x1 score parity attribution (offline analysis of a silicon witness)
+date_utc=20260913T154254Z
+host=DESKTOP-CBL5NUA
+source_log=results/aie/dfl_decode_phoenix_probe_1x1_score_witness_20260913T152835Z.log
+witness=<worktree>\build\dfl_decode\48ff4ee57002a400\parity_witness_1789313318657710100_0.npz (git-ignored build output)
+witness_sha256=d5fdabb8ebf94bcd50c9a179a113b0be2abce39025848fa4b497e4c79081f7ee
+build=pre-fix one-core design, MemTile score descriptor offset = 0
+method=compare actual_scores against the fixed-point reference at every whole-float shift k in [-8, 8]; H1 predicts scores[:, :4] == boxes bitwise and exact equality at k=+4
+
+active_anchors=525
+boxes_vs_fixed_max_abs=0.00463867
+H1 scores[:, :4] == actual boxes (bitwise): True; max_abs=0
+shift=-8 compared=37800 exact=559 max_abs=719.457 median_abs=0.271393
+shift=-7 compared=38325 exact=534 max_abs=718.819 median_abs=0.267426
+shift=-6 compared=38850 exact=527 max_abs=718.752 median_abs=0.270538
+shift=-5 compared=39375 exact=551 max_abs=718.716 median_abs=0.270508
+shift=-4 compared=39900 exact=581 max_abs=718.716 median_abs=0.268341
+shift=-3 compared=40425 exact=572 max_abs=719.204 median_abs=0.270538
+shift=-2 compared=40950 exact=600 max_abs=718.819 median_abs=0.268341
+shift=-1 compared=41475 exact=631 max_abs=718.809 median_abs=0.270813
+shift=+0 compared=42000 exact=587 max_abs=719.097 median_abs=0.267395
+shift=+1 compared=41475 exact=632 max_abs=718.819 median_abs=0.259247
+shift=+2 compared=40950 exact=644 max_abs=719.415 median_abs=0.25705
+shift=+3 compared=40425 exact=628 max_abs=136.393 median_abs=0.257568
+shift=+4 compared=39900 exact=39900 max_abs=0 median_abs=0
+shift=+5 compared=39375 exact=617 max_abs=0.762085 median_abs=0.252899
+shift=+6 compared=38850 exact=628 max_abs=0.762085 median_abs=0.246429
+shift=+7 compared=38325 exact=609 max_abs=0.762085 median_abs=0.245026
+shift=+8 compared=37800 exact=560 max_abs=0.762085 median_abs=0.250153
+scores_in_[0,1]=39904/42000

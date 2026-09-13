@@ -15,6 +15,14 @@ invisible to anyone scanning it.
 
 Read these before quoting anything below.
 
+- **`dfl_decode_phoenix_transport_checkpoint_20260913T0950Z.log` is partly superseded.** Its
+  "restart" was an NPU device restart; the OS boot time was unchanged
+  (`dfl_decode_phoenix_device_state_after_restart_20260913T154425Z.log`). Its root cause for
+  `0xc01e0009`, a foreign Python XRT context, is not supported: the code is the driver's
+  context-table rejection, and it recurred with no visible context right after a DFL
+  dispatch timed out (`dfl_decode_phoenix_probe_1x1_freshctx_20260913T153327Z.log`). Its
+  one-core control had no output check; parity-checked results are in the DFL section below.
+
 - **`conv2x_int8_cpu_baseline.log`'s "628.2 µs reproduces `dispatch_floor`'s 617.0 µs to
   ~2%" is retracted** as a bracket mismatch. 617.0 µs is the passthrough's *wall*
   intercept (447.3 host + 169.8 hardware); the like-for-like host floor is **447.3 µs**,
@@ -1138,12 +1146,26 @@ The performance qualification remains open. See the [measurements and limits](..
 ## DFL softmax and anchor decode
 
 The [DFL decode qualification](../../docs/BENCHMARKS.md#phoenix-dfl-softmax-and-anchor-decode-2026-09-13-desktop-2)
-is compile verified but not silicon qualified. The logs record the four-fixture offline
-parity check, sixteen Peano ELFs, the vector instruction audit, the initial clean Phoenix
-preflight followed by the `0xc01e0009` XRT context-creation failure, and the follow-up
-multi-core transport timeouts after a restart.
+passes numerically on silicon for all 8,400 anchors and fails the `<300 us` latency gate,
+with both the decode kernel and a no-math transport probe. The first two logs are the
+`a36d3ea` attempt and its checkpoint (read the supersession note at the top of this file);
+the rest are the qualification, in the order they were taken.
 
 | Log | Outcome |
 |---|---|
 | [dfl_decode_phoenix_context_block_20260913T0842Z.log](dfl_decode_phoenix_context_block_20260913T0842Z.log) | Offline parity and Peano compile passed; hardware qualification blocked before dispatch by XRT context creation |
-| [dfl_decode_phoenix_transport_checkpoint_20260913T0950Z.log](dfl_decode_phoenix_transport_checkpoint_20260913T0950Z.log) | Restart cleared context creation; full and one-column four-core packet-fanin probes timed out after dispatch; one-core aggregate control completed; full-design parity and latency remain unmeasured |
+| [dfl_decode_phoenix_transport_checkpoint_20260913T0950Z.log](dfl_decode_phoenix_transport_checkpoint_20260913T0950Z.log) | Restart cleared context creation; full and one-column four-core packet-fanin probes timed out after dispatch; one-core aggregate control completed; full-design parity and latency remain unmeasured. **Partly superseded**, see the top of this file |
+| [dfl_decode_phoenix_probe_1x1_20260913T152731Z.log](dfl_decode_phoenix_probe_1x1_20260913T152731Z.log) | Before the score-offset fix: one core completed in 51,161.0 µs; boxes passed, scores failed (max error 719.1) |
+| [dfl_decode_phoenix_probe_1x1_score_witness_20260913T152835Z.log](dfl_decode_phoenix_probe_1x1_score_witness_20260913T152835Z.log) | Same failure reproduced; parity witness saved (git-ignored `build/`, SHA256 logged) |
+| [dfl_decode_phoenix_probe_1x1_score_offset_analysis_20260913T154254Z.log](dfl_decode_phoenix_probe_1x1_score_offset_analysis_20260913T154254Z.log) | Offline attribution: scores[:, 0:4] are the box floats; a four-float shift matches the fixed-point reference on all 39,900 overlapping values |
+| [dfl_decode_phoenix_compile_shapes_20260913T154303Z.log](dfl_decode_phoenix_compile_shapes_20260913T154303Z.log) | Fixed sources compiled at 1×1, 1×2, 1×4 and 4×4: 1, 2, 4 and 16 ELFs, 48 vector instructions each |
+| [dfl_decode_phoenix_probe_1x1_20260913T153036Z.log](dfl_decode_phoenix_probe_1x1_20260913T153036Z.log) | Shared context: dispatch 0 passed parity at 51,148.6 µs; dispatch 1 `ERT_CMD_STATE_TIMEOUT` after 7,019,640.9 µs |
+| [dfl_decode_phoenix_probe_1x1_freshctx_20260913T153327Z.log](dfl_decode_phoenix_probe_1x1_freshctx_20260913T153327Z.log) | Next context creation failed with `0xc01e0009` after a clean preflight; no dispatch |
+| [dfl_decode_phoenix_device_state_after_restart_20260913T154425Z.log](dfl_decode_phoenix_device_state_after_restart_20260913T154425Z.log) | After an NPU device restart (OS boot time unchanged): context created in 22.41 ms, no contexts left |
+| [dfl_decode_phoenix_probe_1x1_20260913T154447Z.log](dfl_decode_phoenix_probe_1x1_20260913T154447Z.log) | One core, fresh context per dispatch: 114 dispatches pass; median 51,145.4 µs over 100 |
+| [dfl_decode_phoenix_probe_1x2_20260913T154533Z.log](dfl_decode_phoenix_probe_1x2_20260913T154533Z.log) | Two cores in one column: 26 dispatches pass; median 99,127.9 µs over 20 |
+| [dfl_decode_phoenix_probe_1x4_20260913T154541Z.log](dfl_decode_phoenix_probe_1x4_20260913T154541Z.log) | Four cores in one column: 26 dispatches pass; median 195,129.7 µs over 20 |
+| [dfl_decode_phoenix_qualification_4x4_20260913T154553Z.log](dfl_decode_phoenix_qualification_4x4_20260913T154553Z.log) | Full design, 8,400 anchors: 114 dispatches pass (scores bit-exact to fixed point, boxes ≤ 0.252 Q4 LSB); median 196,178.0 µs over 100, `<300 us` gate FAIL |
+| [dfl_decode_phoenix_transport_floor_1x1_20260913T154957Z.log](dfl_decode_phoenix_transport_floor_1x1_20260913T154957Z.log) | Decode math removed, one core: exact outputs; median 1,830.3 µs over 100 |
+| [dfl_decode_phoenix_transport_floor_4x4_20260913T155005Z.log](dfl_decode_phoenix_transport_floor_4x4_20260913T155005Z.log) | Decode math removed, full transport: exact outputs; median 7,603.2 µs, min 7,487.3 µs over 100 |
+| [dfl_decode_offline_q4lsb_20260913T155116Z.log](dfl_decode_offline_q4lsb_20260913T155116Z.log) | CPU only: fixed-point model against float32 in Q4 LSB units; worst box 0.2523651 Q4 LSB (extreme fixture) |
