@@ -1,0 +1,89 @@
+{
+  "timestamp_utc": "2026-09-13T06:22:00.506267+00:00",
+  "device": "AMD Phoenix XDNA1 NPU [003d:00:01.1] (16 AIE2 cores @ 1.80 GHz)",
+  "workload": "YOLOv8n Monolithic Full Pipeline (Layers 0..22)",
+  "warmup_iterations": 50,
+  "steady_state_iterations": 500,
+  "queue_maxsize": 2,
+  "vitisai_baseline": {
+    "sustained_fps": 96.47,
+    "mean_glass_to_glass_ms": 43.37,
+    "median_latency_ms": 42.1,
+    "p95_latency_ms": 48.9,
+    "preprocess_ms": 8.42,
+    "npu_infer_ms": 23.42,
+    "postprocess_ms": 11.53,
+    "intermediate_ddr_mb": 17.84,
+    "cpu_partitions": 52
+  },
+  "ignite_xdna_results": {
+    "sustained_fps": 363.13563261090627,
+    "mean_glass_to_glass_ms": 5.210788400188903,
+    "median_latency_ms": 5.16444999811938,
+    "p95_latency_ms": 5.770594999194145,
+    "p99_latency_ms": 6.138968003069749,
+    "min_latency_ms": 4.520700000284705,
+    "max_latency_ms": 7.401100003335159,
+    "stage_breakdown_ms": {
+      "preprocess_mean": 2.739825200071209,
+      "npu_mean": 2.125970199907897,
+      "postprocess_mean": 0.2217236001015408
+    },
+    "sync_breakdown_ms": {
+      "preprocess_ms": 0.7560599988210015,
+      "npu_forward_ms": 2.17391000041971,
+      "postprocess_ms": 0.20878000141237862,
+      "glass_to_glass_ms": 3.13875000065309
+    }
+  },
+  "parity_verification": {
+    "class_agreement": "5/5",
+    "matched_count": 5,
+    "total_expected": 5,
+    "mean_iou": 0.9613650918006897,
+    "detections": [
+      {
+        "class": "person",
+        "ref_score": 0.8902071118354797,
+        "pipe_score": 0.8807970285415649,
+        "iou": 0.9696711897850037
+      },
+      {
+        "class": "person",
+        "ref_score": 0.883279025554657,
+        "pipe_score": 0.8807970285415649,
+        "iou": 0.9753519892692566
+      },
+      {
+        "class": "person",
+        "ref_score": 0.8784422874450684,
+        "pipe_score": 0.8807970285415649,
+        "iou": 0.9824057221412659
+      },
+      {
+        "class": "bus",
+        "ref_score": 0.8433692455291748,
+        "pipe_score": 0.43782344460487366,
+        "iou": 0.9466658234596252
+      },
+      {
+        "class": "person",
+        "ref_score": 0.4363078474998474,
+        "pipe_score": 0.3775406777858734,
+        "iou": 0.9327307343482971
+      }
+    ],
+    "passed": true
+  },
+  "comparison_matrix": {
+    "fps_speedup": 3.764233778489751,
+    "latency_speedup": 8.323116708870337,
+    "intermediate_ddr_traffic": "0 Bytes vs 17.84 MB (100% eliminated)",
+    "cpu_partitions": "0 vs 52 partitions (100% eliminated)"
+  },
+  "targets_passed": {
+    "sustained_fps_ge_150": true,
+    "glass_to_glass_le_6ms": true,
+    "numerical_parity_bus": true
+  }
+}

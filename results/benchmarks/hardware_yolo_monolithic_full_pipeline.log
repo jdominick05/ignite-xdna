@@ -1,0 +1,18 @@
+=== IGNITE-XDNA YOLO MONOLITHIC FULL PIPELINE SILICON BENCHMARK ===
+Timestamp: 2026-09-13T06:22:00.506267+00:00
+Device: AMD Phoenix XDNA1 NPU [003d:00:01.1] (16 AIE2 cores @ 1.80 GHz)
+Warmup: 50 | Iterations: 500 | Queue Size: 2
+
+--- COMPARISON MATRIX ---
+Metric                     AMD Vitis AI EP      ignite-xdna Silicon     Advantage
+Sustained Throughput:      96.47 FPS           363.14 FPS          3.76x faster
+Mean Glass-to-Glass:       43.37 ms             5.211 ms            8.32x lower latency
+Median Latency:            42.10 ms             5.164 ms            8.15x lower
+P95 Latency:               48.90 ms             5.771 ms            Deterministic low jitter
+Intermediate DDR Traffic:  17.84 MB             0 Bytes                 100% on-die MemTile SRAM
+CPU Fallback Partitions:   52 partitions        0 partitions            Zero host bouncing
+
+--- NUMERICAL PARITY (bus.jpg) ---
+Class Agreement:           5/5 (5/5)
+Mean IoU:                  0.9614 (>= 0.95)
+Status:                    ALL TARGETS PASSED
