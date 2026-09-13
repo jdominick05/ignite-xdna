@@ -1,0 +1,92 @@
+==============================================================================================================
+RAW SILICON EXECUTION TRACE: YOLOV8N BACKBONE PROFILING (PHOENIX XDNA1 / AIE2)
+==============================================================================================================
+Timestamp: 2026-09-13 03:52:57 UTC
+Platform: AMD Ryzen 7 8700G (Phoenix NPU [003d:00:01.1], 16 AIE2 Vector Cores @ 1.80 GHz)
+Model: yolov8n_cut_xint8.onnx | Steady-state iterations: 100 (warmup=20)
+
+--- [1. HETEROGENEOUS EXECUTION FRAGMENTATION AUDIT] ---
+  Total Partitions Walked     : 101
+  Discrete NPU Subgraphs      : 50
+  CPU Fallback Subgraphs      : 51
+  Cumulative Driver Tax Floor : 3750.00 us (3.75 ms)
+  Intermediate Host RAM Bounce: 19,148,800 bytes (18.26 MB / frame)
+
+--- [2. PHYSICAL SILICON PYXRT HARDWARE DISPATCH METRICS] ---
+  Ingress Data Copy to BO     : 1.31 us
+  bo_in Device Sync (DDR->NPU): 1.35 us
+  Driver ERT Submission       : 239.48 us
+  AIE2 Hardware Kernel Exec   : 136.85 us
+  bo_out Device Sync(NPU->DDR): 3.20 us
+  Egress Unswizzle            : 7.13 us
+  Total Single-Dispatch Cycle : 391.05 us
+
+--- [3. PER-STAGE LATENCY WATERFALL BREAKDOWN] ---
+Stage Group                                   | Mean (us)    | Mean (ms)  | Pct Total 
+-------------------------------------------------------------------------------------
+0 - Stem Layer 0 (3->16, s=2, 320x320)        | 2170.02      | 2.17       | 4.78      %
+1 - Stem Layer 1 (16->32, s=2, 160x160)       | 1266.51      | 1.27       | 2.79      %
+10-21 - Neck FPN/PAN (Layer 10)               | 84.81        | 0.08       | 0.19      %
+10-21 - Neck FPN/PAN (Layer 11)               | 515.24       | 0.52       | 1.13      %
+10-21 - Neck FPN/PAN (Layer 12)               | 2054.34      | 2.05       | 4.52      %
+10-21 - Neck FPN/PAN (Layer 13)               | 151.78       | 0.15       | 0.33      %
+10-21 - Neck FPN/PAN (Layer 14)               | 655.29       | 0.66       | 1.44      %
+10-21 - Neck FPN/PAN (Layer 15)               | 2923.15      | 2.92       | 6.44      %
+10-21 - Neck FPN/PAN (Layer 16)               | 483.43       | 0.48       | 1.06      %
+10-21 - Neck FPN/PAN (Layer 17)               | 114.16       | 0.11       | 0.25      %
+10-21 - Neck FPN/PAN (Layer 18)               | 2134.14      | 2.13       | 4.70      %
+10-21 - Neck FPN/PAN (Layer 19)               | 419.39       | 0.42       | 0.92      %
+10-21 - Neck FPN/PAN (Layer 20)               | 70.74        | 0.07       | 0.16      %
+10-21 - Neck FPN/PAN (Layer 21)               | 1684.64      | 1.68       | 3.71      %
+2 - Stage 2 C2f (c=32, 160x160)               | 3590.01      | 3.59       | 7.91      %
+22 - Detect Head (Decodes)                    | 10993.42     | 10.99      | 24.21     %
+3 - Downsample Conv (32->64, s=2, 80x80)      | 922.41       | 0.92       | 2.03      %
+4 - Stage 3 C2f (c=64, 80x80)                 | 3615.04      | 3.62       | 7.96      %
+5 - Downsample Conv (64->128, s=2, 40x40)     | 864.54       | 0.86       | 1.90      %
+6 - Stage 4 C2f (c=128, 40x40)                | 3000.67      | 3.00       | 6.61      %
+7 - Downsample Conv (128->256, s=2, 20x20)    | 755.88       | 0.76       | 1.66      %
+8 - Stage 5 C2f (c=256, 20x20)                | 1710.09      | 1.71       | 3.77      %
+9 - Neck SPPF (c=256, 20x20)                  | 1531.57      | 1.53       | 3.37      %
+Misc / Preamble                               | 3699.24      | 3.70       | 8.15      %
+-------------------------------------------------------------------------------------
+Total Backbone Latency                        | 45410.51     | 45.41      | 100.00%
+
+--- [4. TOP 20 PARETO BOTTLENECK NODES] ---
+Rank  | Node Name                                  | Category                         | Mean (us) 
+-----------------------------------------------------------------------------------------------
+1     | /model.22/cv3.0/cv3.0.1/conv/Conv          | CPU Fallback Compute             | 1277.03   
+2     | /model.22/cv3.0/cv3.0.0/conv/Conv          | CPU Fallback Compute             | 1059.22   
+3     | /model.0/conv/Conv                         | Spatial Stem Compute             | 896.06    
+4     | /model.22/cv2.0/cv2.0.0/conv/Conv          | CPU Fallback Compute             | 865.97    
+5     | /model.22/cv2.0/cv2.0.1/conv/Conv          | CPU Fallback Compute             | 845.39    
+6     | images_DequantizeLinear                    | CPU Fallback Compute             | 657.86    
+7     | /model.14/Concat_output_0_DequantizeLinear | High-Channel Bottleneck Compute  | 575.87    
+8     | /model.1/conv/Conv                         | Spatial Stem Compute             | 572.87    
+9     | /model.5/conv/Conv                         | CPU Fallback Compute             | 564.48    
+10    | /model.22/cv3.1/cv3.1.0/conv/Conv          | CPU Fallback Compute             | 533.00    
+11    | /model.7/conv/Conv                         | CPU Fallback Compute             | 521.40    
+12    | /model.3/conv/Conv                         | CPU Fallback Compute             | 499.22    
+13    | /model.0/conv/Conv_output_0_DequantizeLinear/duplicated | Spatial Stem Compute             | 477.42    
+14    | /model.11/Concat_output_0_DequantizeLinear | High-Channel Bottleneck Compute  | 464.64    
+15    | /model.22/cv2.1/cv2.1.0/conv/Conv          | CPU Fallback Compute             | 439.15    
+16    | /model.15/cv1/conv/Conv                    | High-Channel Bottleneck Compute  | 419.50    
+17    | /model.22/cv2.2/cv2.2.0/conv/Conv          | CPU Fallback Compute             | 370.96    
+18    | /model.22/cv3.1/cv3.1.1/conv/Conv          | CPU Fallback Compute             | 349.83    
+19    | /model.12/cv1/conv/Conv                    | High-Channel Bottleneck Compute  | 337.22    
+20    | /model.0/act/Mul_output_0_DequantizeLinear | Spatial Stem Compute             | 335.54    
+-----------------------------------------------------------------------------------------------
+
+--- [5. CATEGORICAL BOTTLENECK DECOMPOSITION] ---
+  [Host Dispatch Overhead]
+    Description : Driver ERT submission floor (50 dispatches * 239.5 us)
+    Contribution: 11,974.00 us (11.97 ms) [26.37%]
+  [Intermediate DDR Bounce]
+    Description : Intermediate Host DDR copies & PyXRT sync (18.26 MB across 101 boundaries)
+    Contribution: 584.00 us (0.58 ms) [1.29%]
+  [Spatial Stem Compute]
+    Description : Stem Layers 0..3 large activation compute (640x640, 320x320, 160x160)
+    Contribution: 7,026.54 us (7.03 ms) [15.47%]
+  [High-Channel Bottleneck Compute]
+    Description : Deep C2f, SPPF & Neck bottleneck compute (128 and 256 channels)
+    Contribution: 17,533.44 us (17.53 ms) [38.61%]
+==============================================================================================================

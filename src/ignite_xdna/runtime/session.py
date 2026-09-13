@@ -114,6 +114,7 @@ class InferenceSession:
         self._closed = False
         self._repo_root = get_repo_root()
         self.partitioned_graph: Optional[Any] = None
+        self.profiler: Optional[Any] = None
 
         # 1. Resolve buffer dimensions
         if in_bytes is not None:
@@ -357,18 +358,65 @@ class InferenceSession:
         Returns:
             NumPy array of INT8 output activations.
         """
+    def enable_profiling(self, profiler: Optional[Any] = None) -> Any:
+        """Enables high-resolution hardware and host event profiling."""
+        if profiler is None:
+            from .profiler import HardwareEventProfiler
+            self.profiler = HardwareEventProfiler()
+        else:
+            self.profiler = profiler
+        self.profiler.enable()
+        return self.profiler
+
+    def disable_profiling(self):
+        """Disables profiling."""
+        if self.profiler is not None:
+            self.profiler.disable()
+
+    def get_profile_report(self) -> Dict[str, Any]:
+        """Returns the summarized profiling report."""
+        if self.profiler is not None:
+            return self.profiler.summarize()
+        return {"error": "Profiling was not enabled"}
+
+    def run(self, input_tensor: Any, unswizzle: bool = True, timeout_ms: int = 2000) -> np.ndarray:
+        """
+        Synchronously executes inference on physical AMD Phoenix NPU silicon,
+        orchestrating fallback CPU execution for pre/post-subgraph partitions if present.
+
+        Args:
+            input_tensor: NumPy array or PyTorch CPU tensor containing input activations.
+            unswizzle: When True, unswizzles vector register format into contiguous [pixels, channels].
+            timeout_ms: Maximum wait duration before raising hardware timeout.
+
+        Returns:
+            NumPy array of INT8 output activations.
+        """
         if self._closed:
             raise RuntimeError("Cannot invoke run() on a closed InferenceSession")
+
+        is_profiling = self.profiler is not None and self.profiler.is_enabled
+        t_wall_start = time.perf_counter_ns() if is_profiling else 0
 
         if self.partitioned_graph is not None and self.partitioned_graph.cpu_partitions:
             import onnxruntime as ort
             from ignite_xdna.compiler.partitioner import CpuFallbackPartition, NpuFusedPartition
+            from .profiler import PartitionProfileRecord, map_yolo_node_to_stage
 
             cur_data = input_tensor
             for part in self.partitioned_graph.partitions:
+                p_start = time.perf_counter_ns() if is_profiling else 0
                 if isinstance(part, CpuFallbackPartition):
+                    t_eval_start = 0
+                    t_eval_end = 0
                     if part.onnx_model is not None:
-                        sess = ort.InferenceSession(part.onnx_model.SerializeToString(), providers=["CPUExecutionProvider"])
+                        # Pre-cache ORT session on partition instance to measure true execution
+                        if not hasattr(part, "_cached_session") or part._cached_session is None:
+                            part._cached_session = ort.InferenceSession(
+                                part.onnx_model.SerializeToString(),
+                                providers=["CPUExecutionProvider"]
+                            )
+                        sess = part._cached_session
                         inp_node = sess.get_inputs()[0]
                         inp_name = inp_node.name
                         if hasattr(cur_data, "detach"):
@@ -377,34 +425,172 @@ class InferenceSession:
                             cur_data = cur_data.astype(np.float32)
                         elif "int8" in inp_node.type and cur_data.dtype != np.int8:
                             cur_data = cur_data.astype(np.int8)
+
+                        in_bytes = cur_data.nbytes if hasattr(cur_data, "nbytes") else 0
+                        t_eval_start = time.perf_counter_ns()
                         cur_data = sess.run(None, {inp_name: cur_data})[0]
+                        t_eval_end = time.perf_counter_ns()
+                        out_bytes = cur_data.nbytes if hasattr(cur_data, "nbytes") else 0
+                    else:
+                        in_bytes = 0
+                        out_bytes = 0
+
+                    if is_profiling:
+                        p_end = time.perf_counter_ns()
+                        first_node = part.nodes[0].name if part.nodes else f"cpu_part_{part.partition_id}"
+                        stage_group, stage_label = map_yolo_node_to_stage(first_node, [n.op_type for n in part.nodes])
+                        rec = PartitionProfileRecord(
+                            partition_id=part.partition_id,
+                            partition_type="CPU",
+                            stage_group=stage_group,
+                            stage_label=stage_label,
+                            node_names=[n.name for n in part.nodes],
+                            op_types=[n.op_type for n in part.nodes],
+                            input_names=part.input_names,
+                            output_names=part.output_names,
+                            input_bytes=in_bytes,
+                            output_bytes=out_bytes,
+                            duration_us=(p_end - p_start) / 1000.0,
+                            cpu_eval_us=(t_eval_end - t_eval_start) / 1000.0 if t_eval_start > 0 else 0.0,
+                        )
+                        self.profiler.record_partition(rec)
+
                 elif isinstance(part, NpuFusedPartition):
-                    cur_data = self._execute_npu_direct(cur_data, unswizzle=unswizzle, timeout_ms=timeout_ms)
+                    in_bytes = cur_data.nbytes if hasattr(cur_data, "nbytes") else self.in_bytes
+                    if is_profiling:
+                        cur_data, hw_ts = self._execute_npu_direct(
+                            cur_data, unswizzle=unswizzle, timeout_ms=timeout_ms, return_timestamps=True
+                        )
+                        p_end = time.perf_counter_ns()
+                        out_bytes = cur_data.nbytes if hasattr(cur_data, "nbytes") else self.out_bytes
+                        first_layer = part.layers[0].node_name if part.layers else f"npu_part_{part.partition_id}"
+                        stage_group, stage_label = map_yolo_node_to_stage(first_layer, ["Conv"])
+                        rec = PartitionProfileRecord(
+                            partition_id=part.partition_id,
+                            partition_type="NPU",
+                            stage_group=stage_group,
+                            stage_label=stage_label,
+                            node_names=[l.node_name for l in part.layers],
+                            op_types=["Conv" for _ in part.layers],
+                            input_names=part.input_names,
+                            output_names=part.output_names,
+                            input_bytes=in_bytes,
+                            output_bytes=out_bytes,
+                            duration_us=hw_ts.total_partition_us,
+                            ingress_marshal_us=hw_ts.ingress_marshal_us,
+                            bo_in_sync_us=hw_ts.bo_in_sync_us,
+                            dispatch_submission_us=hw_ts.dispatch_submission_us,
+                            device_execution_us=hw_ts.device_execution_us,
+                            bo_out_sync_us=hw_ts.bo_out_sync_us,
+                            egress_unswizzle_us=hw_ts.egress_unswizzle_us,
+                        )
+                        self.profiler.record_partition(rec)
+                    else:
+                        cur_data = self._execute_npu_direct(cur_data, unswizzle=unswizzle, timeout_ms=timeout_ms)
+
+            if is_profiling:
+                t_wall_end = time.perf_counter_ns()
+                self.profiler.end_iteration((t_wall_end - t_wall_start) / 1000.0)
+
             return cur_data
+
+        if is_profiling:
+            from .profiler import PartitionProfileRecord, map_yolo_node_to_stage
+            in_bytes = input_tensor.nbytes if hasattr(input_tensor, "nbytes") else self.in_bytes
+            out, hw_ts = self._execute_npu_direct(
+                input_tensor, unswizzle=unswizzle, timeout_ms=timeout_ms, return_timestamps=True
+            )
+            t_wall_end = time.perf_counter_ns()
+            out_bytes = out.nbytes if hasattr(out, "nbytes") else self.out_bytes
+            node_name = self.node_name or "conv_npu"
+            stage_group, stage_label = map_yolo_node_to_stage(node_name, ["Conv"])
+            rec = PartitionProfileRecord(
+                partition_id=0,
+                partition_type="NPU",
+                stage_group=stage_group,
+                stage_label=stage_label,
+                node_names=[node_name],
+                op_types=["Conv"],
+                input_bytes=in_bytes,
+                output_bytes=out_bytes,
+                duration_us=hw_ts.total_partition_us,
+                ingress_marshal_us=hw_ts.ingress_marshal_us,
+                bo_in_sync_us=hw_ts.bo_in_sync_us,
+                dispatch_submission_us=hw_ts.dispatch_submission_us,
+                device_execution_us=hw_ts.device_execution_us,
+                bo_out_sync_us=hw_ts.bo_out_sync_us,
+                egress_unswizzle_us=hw_ts.egress_unswizzle_us,
+            )
+            self.profiler.record_partition(rec)
+            self.profiler.end_iteration((t_wall_end - t_wall_start) / 1000.0)
+            return out
 
         return self._execute_npu_direct(input_tensor, unswizzle=unswizzle, timeout_ms=timeout_ms)
 
-    def _execute_npu_direct(self, input_tensor: Any, unswizzle: bool = True, timeout_ms: int = 2000) -> np.ndarray:
+    def _execute_npu_direct(
+        self,
+        input_tensor: Any,
+        unswizzle: bool = True,
+        timeout_ms: int = 2000,
+        return_timestamps: bool = False
+    ) -> Union[np.ndarray, Tuple[np.ndarray, Any]]:
         """Direct NPU hardware execution without CPU fallback routing."""
+        t_start = time.perf_counter_ns() if return_timestamps else 0
         slot = self.buffers[self._current_slot]
         if slot["in_flight_run"] is not None:
             slot["in_flight_run"].wait(timeout_ms)
             slot["in_flight_run"] = None
 
+        t_marshal_start = time.perf_counter_ns() if return_timestamps else 0
         data_bytes = self._marshal_ingress(input_tensor)
+        t_marshal_end = time.perf_counter_ns() if return_timestamps else 0
+
         slot["bo_in"].write(data_bytes, 0)
+        t_sync_in_start = time.perf_counter_ns() if return_timestamps else 0
         slot["bo_in"].sync(self.harness.pyxrt.xclBOSyncDirection.XCL_BO_SYNC_BO_TO_DEVICE)
+        t_sync_in_end = time.perf_counter_ns() if return_timestamps else 0
 
         # In physical AIE2 double-buffered streaming pipeline, 2 dispatches push
         # input into MemTile ping-pong stage and drain bit-exact egress to host.
+        t_sub_start = time.perf_counter_ns() if return_timestamps else 0
         self.harness.dispatch_kernel(self.bo_instr_exec, self.ninstr_exec, slot["bo_in"], slot["bo_out"], timeout_ms=timeout_ms)
         run = self.harness.kernel(3, self.bo_instr_exec, self.ninstr_exec, slot["bo_in"], slot["bo_out"])
+        t_sub_end = time.perf_counter_ns() if return_timestamps else 0
+
+        t_exec_start = time.perf_counter_ns() if return_timestamps else 0
         state = run.wait(timeout_ms)
+        t_exec_end = time.perf_counter_ns() if return_timestamps else 0
         if str(state) != "ert_cmd_state.ERT_CMD_STATE_COMPLETED":
             raise RuntimeError(f"Hardware execution failed with state: {state}")
 
-        out = self._marshal_egress(slot["bo_out"], unswizzle=unswizzle)
+        t_sync_out_start = time.perf_counter_ns() if return_timestamps else 0
+        slot["bo_out"].sync(self.harness.pyxrt.xclBOSyncDirection.XCL_BO_SYNC_BO_FROM_DEVICE)
+        t_sync_out_end = time.perf_counter_ns() if return_timestamps else 0
+
+        t_unswizzle_start = time.perf_counter_ns() if return_timestamps else 0
+        raw_bytes = np.frombuffer(slot["bo_out"].read(self.out_bytes, 0), dtype=np.int8).copy()
+        if unswizzle:
+            out = unblock_aie2_egress(raw_bytes, num_cores=self.num_cores)
+        else:
+            out = raw_bytes
+        t_unswizzle_end = time.perf_counter_ns() if return_timestamps else 0
+
         self._current_slot = (self._current_slot + 1) % self.ring_depth
+        t_end = time.perf_counter_ns() if return_timestamps else 0
+
+        if return_timestamps:
+            from .profiler import HardwareTimestamps
+            hw_ts = HardwareTimestamps(
+                ingress_marshal_ns=t_marshal_end - t_marshal_start,
+                bo_in_sync_ns=t_sync_in_end - t_sync_in_start,
+                dispatch_submission_ns=t_sub_end - t_sub_start,
+                device_execution_ns=t_exec_end - t_exec_start,
+                bo_out_sync_ns=t_sync_out_end - t_sync_out_start,
+                egress_unswizzle_ns=t_unswizzle_end - t_unswizzle_start,
+                total_partition_ns=t_end - t_start,
+            )
+            return out, hw_ts
+
         return out
 
     def run_async(self, input_tensor: Any, unswizzle: bool = True) -> RunHandle:
