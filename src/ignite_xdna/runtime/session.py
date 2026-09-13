@@ -563,8 +563,8 @@ class InferenceSession:
         elif arr.dtype != np.int8:
             arr = arr.astype(np.int8)
 
-        flat = arr.flatten()
-        n = len(flat)
+        flat = arr.reshape(-1)
+        n = flat.size
 
         if n == self.in_bytes:
             return flat.tobytes()
@@ -889,51 +889,60 @@ class InferenceSession:
         stage_timings: List[Dict[str, float]] = []
         feature_maps: Dict[str, np.ndarray] = {}
 
-        # 4-stage monolithic pipeline execution across physical Phoenix silicon
-        # ZERO intermediate bo_in.sync or bo_out.sync between internal layers!
-        for s_idx, (s_name, stage) in enumerate(self.monolithic_stages.items()):
-            t_sub_start = time.perf_counter_ns()
-            run = self.harness.kernel(
-                3, stage.bo_instr_exec, stage.ninstr_exec, slot["bo_in"], slot["bo_out"]
-            )
-            t_sub_end = time.perf_counter_ns()
+        total_submission_us = 0.0
+        total_exec_us = 0.0
 
-            t_exec_start = time.perf_counter_ns()
-            state = run.wait(timeout_ms)
-            t_exec_end = time.perf_counter_ns()
+        if return_timestamps or extract_feature_maps:
+            stage_timings: List[Dict[str, float]] = []
+            for s_idx, (s_name, stage) in enumerate(self.monolithic_stages.items()):
+                t_sub_start = time.perf_counter_ns()
+                run = self.harness.kernel(
+                    3, stage.bo_instr_exec, stage.ninstr_exec, slot["bo_in"], slot["bo_out"]
+                )
+                t_sub_end = time.perf_counter_ns()
 
-            if str(state) != "ert_cmd_state.ERT_CMD_STATE_COMPLETED":
-                raise RuntimeError(f"Monolithic stage {s_name} execution failed with state: {state}")
+                t_exec_start = time.perf_counter_ns()
+                state = run.wait(timeout_ms)
+                t_exec_end = time.perf_counter_ns()
 
-            sub_us = (t_sub_end - t_sub_start) / 1000.0
-            exec_us = (t_exec_end - t_exec_start) / 1000.0
-            stage_timings.append({
-                "stage": s_name,
-                "submission_us": sub_us,
-                "execution_us": exec_us,
-                "total_us": sub_us + exec_us,
-            })
+                if str(state) != "ert_cmd_state.ERT_CMD_STATE_COMPLETED":
+                    raise RuntimeError(f"Monolithic stage {s_name} execution failed with state: {state}")
 
-            if extract_feature_maps and s_name in ("P3", "P4", "P5", "Neck_FPN", "Neck_PAN", "Detect_P3", "Detect_P4", "Detect_P5"):
-                slot["bo_out"].sync(self.harness.pyxrt.xclBOSyncDirection.XCL_BO_SYNC_BO_FROM_DEVICE)
-                raw_f = np.frombuffer(slot["bo_out"].read(self.out_bytes, 0), dtype=np.int8).copy()
-                feature_maps[s_name] = unblock_aie2_egress(raw_f, num_cores=self.num_cores) if unswizzle else raw_f
+                sub_us = (t_sub_end - t_sub_start) / 1000.0
+                exec_us = (t_exec_end - t_exec_start) / 1000.0
+                stage_timings.append({
+                    "stage": s_name,
+                    "submission_us": sub_us,
+                    "execution_us": exec_us,
+                    "total_us": sub_us + exec_us,
+                })
+
+                if extract_feature_maps and s_name in ("P3", "P4", "P5", "Neck_FPN", "Neck_PAN", "Detect_P3", "Detect_P4", "Detect_P5"):
+                    slot["bo_out"].sync(self.harness.pyxrt.xclBOSyncDirection.XCL_BO_SYNC_BO_FROM_DEVICE)
+                    raw_f = np.frombuffer(slot["bo_out"].read(self.out_bytes, 0), dtype=np.int8)
+                    feature_maps[s_name] = unblock_aie2_egress(raw_f, num_cores=self.num_cores) if unswizzle else raw_f
+            total_submission_us = sum(st["submission_us"] for st in stage_timings)
+            total_exec_us = sum(st["execution_us"] for st in stage_timings)
+        else:
+            kernel = self.harness.kernel
+            bo_in = slot["bo_in"]
+            bo_out = slot["bo_out"]
+            for stage in self.monolithic_stages.values():
+                run = kernel(3, stage.bo_instr_exec, stage.ninstr_exec, bo_in, bo_out)
+                run.wait(timeout_ms)
 
         # Egress synchronization (NPU MemTile SRAM -> Host DDR)
-        t_sync_out_start = time.perf_counter_ns()
+        t_sync_out_start = time.perf_counter_ns() if return_timestamps else 0
         slot["bo_out"].sync(self.harness.pyxrt.xclBOSyncDirection.XCL_BO_SYNC_BO_FROM_DEVICE)
-        t_sync_out_end = time.perf_counter_ns()
+        t_sync_out_end = time.perf_counter_ns() if return_timestamps else 0
 
-        t_unswizzle_start = time.perf_counter_ns()
-        raw_bytes = np.frombuffer(slot["bo_out"].read(self.out_bytes, 0), dtype=np.int8).copy()
+        t_unswizzle_start = time.perf_counter_ns() if return_timestamps else 0
+        raw_bytes = np.frombuffer(slot["bo_out"].read(self.out_bytes, 0), dtype=np.int8)
         out = unblock_aie2_egress(raw_bytes, num_cores=self.num_cores) if unswizzle else raw_bytes
-        t_unswizzle_end = time.perf_counter_ns()
+        t_unswizzle_end = time.perf_counter_ns() if return_timestamps else 0
 
         self._current_slot = (self._current_slot + 1) % self.ring_depth
         t_end = time.perf_counter_ns()
-
-        total_submission_us = sum(st["submission_us"] for st in stage_timings)
-        total_exec_us = sum(st["execution_us"] for st in stage_timings)
 
         if self.profiler is not None and self.profiler.is_enabled:
             from .profiler import PartitionProfileRecord
@@ -1072,16 +1081,19 @@ class InferenceSession:
             out = res
             hw_ts = None
 
-        head_outputs = {
-            "p3_box": np.zeros((1, 64, 80, 80), dtype=np.float32),
-            "p3_cls": np.zeros((1, 80, 80, 80), dtype=np.float32),
-            "p4_box": np.zeros((1, 64, 40, 40), dtype=np.float32),
-            "p4_cls": np.zeros((1, 80, 40, 40), dtype=np.float32),
-            "p5_box": np.zeros((1, 64, 20, 20), dtype=np.float32),
-            "p5_cls": np.zeros((1, 80, 20, 20), dtype=np.float32),
-            "raw_output": out,
-            "raw_heads": out.astype(np.float32) * 0.03125,
-        }
+        if not hasattr(self, "_cached_zero_heads") or self._cached_zero_heads is None:
+            self._cached_zero_heads = {
+                "p3_box": np.zeros((1, 64, 80, 80), dtype=np.float32),
+                "p3_cls": np.zeros((1, 80, 80, 80), dtype=np.float32),
+                "p4_box": np.zeros((1, 64, 40, 40), dtype=np.float32),
+                "p4_cls": np.zeros((1, 80, 40, 40), dtype=np.float32),
+                "p5_box": np.zeros((1, 64, 20, 20), dtype=np.float32),
+                "p5_cls": np.zeros((1, 80, 20, 20), dtype=np.float32),
+            }
+
+        head_outputs = dict(self._cached_zero_heads)
+        head_outputs["raw_output"] = out
+        head_outputs["raw_heads"] = out.astype(np.float32) * 0.03125
 
         if return_timestamps:
             return head_outputs, hw_ts
