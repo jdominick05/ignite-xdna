@@ -77,10 +77,12 @@ layers before the unified init is emitted. The shipped `build/yolov8n.ignite`
 = 63 layers; header CRC `0x2e06f112`, 5,315,840 bytes, 20 blobs) therefore carries an
 `init_monolithic.bin` of 3,381 ops = 349 template ops + 16 cores × 63 layers × 3 BLOCKWRITEs
 + 8 DDR patches (DERIVED; every count reproduced by `parse_transaction_stream`). Of the
-3,024 parameter BLOCKWRITEs, 768 land in data memory (windows 0–15), 1,344 on
-memory-module addresses `0x10000..0x1CFFF` (windows 16–43), 192 on program memory
-`0x20000..0x23FFF` (windows 32–35) and 720 on core-module register space `≥ 0x30000`
-(windows 48–62) (DERIVED; `validate_transaction_stream` rejects the blob with exactly
+3,024 parameter BLOCKWRITEs (48 per window), 768 land in data memory (windows 0–15), 768
+on memory-module register space `0x10000..0x1FFFF` (windows 16–31), 192 on program memory
+`0x20000..0x23FFF` (windows 32–35), 576 on the unmapped span `0x24000..0x2FFFF` between
+program memory and the core module (windows 36–47) and 720 on core-module register space
+`≥ 0x30000` (windows 48–62) (MEASURED by classifying the shipped blob's row ≥ 2
+BLOCKWRITEs with `_core_window`; `validate_transaction_stream` rejects the blob with exactly
 2,256 violations). What the firmware does with those writes is settled only as far as §11
 goes: the stream dispatches to completion and the layer-0 egress is byte-identical to the
 egress after a 7-layer init.
@@ -89,7 +91,17 @@ Fix: `validate_l1_parameter_layout` (`scheduler.py:540`) computes every window f
 packed sizes, requires them disjoint and inside data memory, and is called by
 `emit_multi_layer_transaction_bundle` and — with the stage breakdown in the message — by
 `emit_unified_monolithic_transaction_bundle` (`scheduler.py:974`). Stage-wise emission of
-≤ 16 layers is unaffected.
+≤ 16 layers is unaffected. `ignite-compile` on `models/yolov8n_cut_xint8.onnx` with the
+shipped `build/layer_conv0_exec.bin` as base transaction now prints the nine-stage partition
+summary and stops with (MEASURED):
+
+```
+63 resident parameter sets do not fit core data memory: set 16 spans [0x1037c, 0x10d00)
+but data memory ends at 0x10000; at most 16 sets fit at the 0x1000 stride. (9 stages
+flattened into one resident set by to_schedule_plan(): Stem=7, P3=7, P4=7, P5=6,
+Neck_FPN=8, Neck_PAN=10, Detect_P3=6, Detect_P4=6, Detect_P5=6; parameters must be
+staged per stage instead)
+```
 
 ### 1.2 Dead lock-initialisation branch (FIXED)
 
@@ -107,8 +119,10 @@ changed).
 
 `from tools.disasm_txn import disassemble_transaction` made `import ignite_xdna` depend on
 the repo root being on `sys.path` and on no other `tools` package being importable; in
-`resnet_env17` a regular `tools` package shadows the repo's namespace directory, so the
-installed copy failed to import at all (MEASURED). `parse_transaction_stream`
+`resnet_env17` `import tools` resolves to the regular package
+`Lib/site-packages/tools/__init__.py`, which shadows the repo's namespace directory even
+with the repo root first on `sys.path`, so `tools.disasm_txn` raised `ModuleNotFoundError`
+and the installed copy failed to import at all (MEASURED). `parse_transaction_stream`
 (`scheduler.py:132`) decodes the same fields (`test_parser_matches_disasm_field_by_field`),
 is bounded by the header's op count instead of the buffer length — the tool decodes the
 chained stream's 32-byte zero pad as a WRITE and raises — and reports truncation and unknown
@@ -375,9 +389,16 @@ DFL kernel; MSVC 2022 build of `libignite_xdna` and `ignite-run` (no warnings); 
 Not run: the DFL kernel on silicon (its transport is unqualified); any recompiled
 container (refused by §1.1); the multi-layer scheduler's silicon tests.
 
-## 11. Silicon checks (MEASURED, Device 0, no other hardware context running)
+## 11. Silicon checks (MEASURED, Device 0)
 
 Witness: [`results/aie/lowlevel_audit_silicon_checks_phoenix_20260913T1655Z.log`](../results/aie/lowlevel_audit_silicon_checks_phoenix_20260913T1655Z.log).
+
+Preflight: only item 1 was preceded by the contention check (`xrt-smi examine -r
+aie-partitions` reported "No hardware contexts running" immediately before its two
+hardware contexts were opened). Item 2's native runs had no contention check and no
+host-load check, so their timings are a functional check of the rebuilt runtime, not
+comparable throughput figures; they do not supersede the end-to-end benchmark numbers in
+`docs/BENCHMARKS.md`.
 
 1. **Out-of-window init versus in-window init.** With the shipped `im2col_4d_16core.xclbin`
    and one random 8,192-byte input, the 7-layer `stage_stem_init.bin` (289,088 B) and the
@@ -394,7 +415,8 @@ Witness: [`results/aie/lowlevel_audit_silicon_checks_phoenix_20260913T1655Z.log`
    container (CRC verified at load), decodes 5 objects on `assets/bus.jpg` and exits
    cleanly: single frame NPU 0.564 ms, glass-to-glass 1.827 ms; 500 asynchronous frames
    after 20 warm-up at 2,176.68 FPS aggregate, glass-to-glass mean 1.322 ms / P95 1.396 /
-   P99 1.514, NPU 0.447 ms, ingress 0.381 ms, DFL+NMS 0.108 ms, zero incomplete dispatches.
+   P99 1.514, NPU 0.447 ms, ingress 0.381 ms, DFL+NMS 0.108 ms, zero incomplete dispatches
+   (no preflight; functional check only, see above).
    A copy with one flipped byte (`Container CRC32 mismatch: header 0x2e06f112, body
    0x39a591bf`) and a copy truncated by 64 bytes (`declares 5315840 bytes but the file
    holds 5315776`) are refused at load before the device is touched.
