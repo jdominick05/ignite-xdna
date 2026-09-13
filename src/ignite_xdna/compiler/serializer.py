@@ -119,6 +119,12 @@ class IgniteHeader:
             raise ValueError(f"Invalid .ignite magic bytes: {magic!r} (expected {MAGIC_BYTES!r})")
         if header_size != HEADER_SIZE:
             raise ValueError(f"Invalid header size: {header_size} (expected {HEADER_SIZE})")
+        if version != FORMAT_VERSION:
+            raise ValueError(f"Unsupported .ignite format version {version} (expected {FORMAT_VERSION})")
+        if arch_id not in (ARCH_XDNA1_PHOENIX, ARCH_XDNA2_STRIX):
+            raise ValueError(f"Unknown .ignite arch id {arch_id}")
+        if manifest_offset != HEADER_SIZE:
+            raise ValueError(f"Manifest must follow the header at offset {HEADER_SIZE}, got {manifest_offset}")
 
         return cls(
             magic=magic,
@@ -182,10 +188,46 @@ class IgniteModelWriter:
 
     def add_blob(self, name: str, data: bytes, content_type: str = "raw") -> "IgniteModelWriter":
         """Adds a binary blob to be packed into the container."""
+        if not isinstance(name, str) or not name:
+            raise ValueError("Blob name must be a non-empty string")
+        if any(existing == name for existing, _, _ in self._blobs):
+            raise ValueError(f"Duplicate blob name {name!r}; the reader keys blobs by name")
         if not isinstance(data, (bytes, bytearray)):
             raise TypeError(f"Blob data must be bytes or bytearray, got {type(data)}")
         self._blobs.append((name, bytes(data), content_type))
         return self
+
+    def _plan_layout(self) -> Tuple[bytes, int, List[Tuple[IgniteBlobEntry, bytes, int]]]:
+        """Fixed-point layout of manifest and blobs.
+
+        The blob directory lives inside the manifest, and every blob offset
+        depends on the manifest's padded size, which depends on the digits of
+        those offsets. The padded size is only ever grown, so the loop
+        terminates; a single re-layout could leave the manifest longer than
+        its pad and overrun the first blob.
+        """
+        base_manifest = {k: v for k, v in self.manifest.items() if k != "blobs"}
+        crcs = [zlib.crc32(data) & 0xFFFFFFFF for _, data, _ in self._blobs]
+        manifest_padded = align_up(len(json.dumps(base_manifest, indent=2).encode("utf-8")), ALIGNMENT)
+        for _ in range(32):
+            cur_offset = HEADER_SIZE + manifest_padded
+            payloads: List[Tuple[IgniteBlobEntry, bytes, int]] = []
+            for (name, data, ctype), crc in zip(self._blobs, crcs):
+                cur_offset = align_up(cur_offset, ALIGNMENT)
+                entry = IgniteBlobEntry(name=name, offset=cur_offset, size=len(data),
+                                        content_type=ctype, crc32=crc)
+                pad_len = align_up(len(data), ALIGNMENT) - len(data)
+                payloads.append((entry, data, pad_len))
+                cur_offset += len(data) + pad_len
+            manifest = dict(base_manifest)
+            manifest["blobs"] = [entry.to_dict() for entry, _, _ in payloads]
+            manifest_bytes = json.dumps(manifest, indent=2).encode("utf-8")
+            needed = align_up(len(manifest_bytes), ALIGNMENT)
+            if needed <= manifest_padded:
+                self.manifest = manifest
+                return manifest_bytes, manifest_padded, payloads
+            manifest_padded = needed
+        raise RuntimeError("container layout did not converge")
 
     def write(self, output_path: Union[str, Path]) -> int:
         """
@@ -199,66 +241,13 @@ class IgniteModelWriter:
         out_p = Path(output_path)
         out_p.parent.mkdir(parents=True, exist_ok=True)
 
-        # 1. First pass: layout planning with provisional manifest
-        manifest_json_bytes = json.dumps(self.manifest, indent=2).encode("utf-8")
-        manifest_size = len(manifest_json_bytes)
-        manifest_padded_size = align_up(manifest_size, ALIGNMENT)
-
-        blob_section_offset = HEADER_SIZE + manifest_padded_size
-
-        # Plan blob offsets
-        blob_entries: List[IgniteBlobEntry] = []
-        cur_offset = blob_section_offset
-
-        blob_payloads: List[Tuple[IgniteBlobEntry, bytes, int]] = []
-        for name, data, ctype in self._blobs:
-            cur_offset = align_up(cur_offset, ALIGNMENT)
-            b_size = len(data)
-            b_crc = zlib.crc32(data) & 0xFFFFFFFF
-            entry = IgniteBlobEntry(
-                name=name,
-                offset=cur_offset,
-                size=b_size,
-                content_type=ctype,
-                crc32=b_crc,
-            )
-            blob_entries.append(entry)
-            pad_len = align_up(b_size, ALIGNMENT) - b_size
-            blob_payloads.append((entry, data, pad_len))
-            cur_offset += b_size + pad_len
-
-        # Embed blob table into manifest
-        self.manifest["blobs"] = [e.to_dict() for e in blob_entries]
-        final_manifest_bytes = json.dumps(self.manifest, indent=2).encode("utf-8")
-
-        # If embedding blob directory changed manifest padded size, recalculate offsets
-        if len(final_manifest_bytes) > manifest_padded_size:
-            manifest_padded_size = align_up(len(final_manifest_bytes), ALIGNMENT)
-            blob_section_offset = HEADER_SIZE + manifest_padded_size
-            cur_offset = blob_section_offset
-            blob_entries.clear()
-            blob_payloads.clear()
-            for name, data, ctype in self._blobs:
-                cur_offset = align_up(cur_offset, ALIGNMENT)
-                b_size = len(data)
-                b_crc = zlib.crc32(data) & 0xFFFFFFFF
-                entry = IgniteBlobEntry(
-                    name=name,
-                    offset=cur_offset,
-                    size=b_size,
-                    content_type=ctype,
-                    crc32=b_crc,
-                )
-                blob_entries.append(entry)
-                pad_len = align_up(b_size, ALIGNMENT) - b_size
-                blob_payloads.append((entry, data, pad_len))
-                cur_offset += b_size + pad_len
-            self.manifest["blobs"] = [e.to_dict() for e in blob_entries]
-            final_manifest_bytes = json.dumps(self.manifest, indent=2).encode("utf-8")
-
+        # 1. Layout: manifest (with embedded blob directory) and 64-byte aligned blobs
+        final_manifest_bytes, manifest_padded_size, blob_payloads = self._plan_layout()
         manifest_pad_len = manifest_padded_size - len(final_manifest_bytes)
-        total_blob_size = cur_offset - blob_section_offset
-        total_file_size = cur_offset
+        assert manifest_pad_len >= 0, "manifest overruns its padded section"
+        blob_section_offset = HEADER_SIZE + manifest_padded_size
+        total_file_size = blob_section_offset + sum(len(d) + pad for _, d, pad in blob_payloads)
+        total_blob_size = total_file_size - blob_section_offset
 
         # 2. Write file
         with open(out_p, "wb") as f:
@@ -270,7 +259,7 @@ class IgniteModelWriter:
                 manifest_size=len(final_manifest_bytes),
                 blob_offset=blob_section_offset,
                 blob_size=total_blob_size,
-                num_blobs=len(blob_entries),
+                num_blobs=len(blob_payloads),
             )
             f.write(hdr.pack())
 
@@ -333,12 +322,20 @@ class IgniteModelReader:
             raise TypeError(f"Unsupported input type for IgniteModelReader: {type(file_path_or_bytes)}")
 
         try:
-            # Parse header
+            # Parse header. Every offset/size below is checked against the
+            # buffer before it is used, so a truncated or corrupted directory
+            # fails here instead of producing a short memoryview later.
             self.header = IgniteHeader.unpack(bytes(self._buffer[:HEADER_SIZE]))
+            if self.header.total_file_size != self.total_size:
+                raise ValueError(
+                    f"Container declares {self.header.total_file_size} bytes but the buffer holds "
+                    f"{self.total_size} (truncated or trailing data)")
 
             # Parse manifest
             m_start = self.header.manifest_offset
             m_end = m_start + self.header.manifest_size
+            if m_end > self.total_size:
+                raise ValueError(f"Manifest range [{m_start}, {m_end}) exceeds the container")
             manifest_raw = bytes(self._buffer[m_start:m_end]).decode("utf-8")
             self.manifest: Dict[str, Any] = json.loads(manifest_raw)
 
@@ -346,16 +343,36 @@ class IgniteModelReader:
             self.blobs: Dict[str, IgniteBlobEntry] = {}
             for b_dict in self.manifest.get("blobs", []):
                 entry = IgniteBlobEntry.from_dict(b_dict)
+                if entry.name in self.blobs:
+                    raise ValueError(f"Duplicate blob name {entry.name!r} in the container directory")
+                if entry.offset % ALIGNMENT != 0:
+                    raise ValueError(f"Blob {entry.name!r} at offset {entry.offset} is not {ALIGNMENT}-byte aligned")
+                if entry.offset < m_end or entry.size < 0 or entry.offset + entry.size > self.total_size:
+                    raise ValueError(
+                        f"Blob {entry.name!r} range [{entry.offset}, {entry.offset + entry.size}) "
+                        f"is outside the blob section")
                 self.blobs[entry.name] = entry
         except Exception:
             self.close()
             raise
 
     def verify_checksum(self) -> bool:
-        """Verifies that the container's CRC32 checksum matches the body."""
+        """Verifies that the container's CRC32 checksum matches the body.
+
+        The CRC covers offset 64 to the end of the file; the header's own
+        fields are validated structurally at load, not by this checksum.
+        """
         body = self._buffer[HEADER_SIZE : self.header.total_file_size]
         computed_crc = zlib.crc32(body) & 0xFFFFFFFF
         return computed_crc == self.header.crc32
+
+    def verify_blob(self, name: str) -> bool:
+        """Verifies one blob against the per-blob CRC32 stored in the directory."""
+        entry = self.blobs[name]
+        return (zlib.crc32(self.get_blob_memoryview(name)) & 0xFFFFFFFF) == entry.crc32
+
+    def verify_all_blobs(self) -> Dict[str, bool]:
+        return {name: self.verify_blob(name) for name in self.blobs}
 
     def get_blob_memoryview(self, name: str) -> memoryview:
         """
@@ -367,9 +384,12 @@ class IgniteModelReader:
         entry = self.blobs[name]
         start = entry.offset
         end = start + entry.size
-        # Assert strict 64-byte alignment
+        # The directory was validated at load; keep the guards so a mutated
+        # entry cannot yield a short or misaligned view.
         if start % ALIGNMENT != 0:
             raise RuntimeError(f"Blob '{name}' is at offset {start}, which is not {ALIGNMENT}-byte aligned!")
+        if end > self.total_size:
+            raise RuntimeError(f"Blob '{name}' range [{start}, {end}) exceeds the container ({self.total_size} bytes)")
         return self._buffer[start:end]
 
     def get_blob_bytes(self, name: str) -> bytes:
