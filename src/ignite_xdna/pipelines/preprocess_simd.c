@@ -95,9 +95,20 @@ PREPROCESS_API int fused_preprocess_bgr_to_chw_int8(
     int8_t* __restrict dst_g_plane = dst_chw + plane_size;
     int8_t* __restrict dst_b_plane = dst_chw + (plane_size * 2);
 
-    // 2. Initialize entire canvas to pad value (-14)
-    // 3 * 640 * 640 = 1,228,800 bytes, takes ~0.03 ms
+    // 2. Initialize entire canvas to pad value (-14) across parallel threads
+#ifdef _OPENMP
+    #pragma omp parallel sections
+    {
+        #pragma omp section
+        memset(dst_r_plane, PAD_VALUE_INT8, (size_t)plane_size);
+        #pragma omp section
+        memset(dst_g_plane, PAD_VALUE_INT8, (size_t)plane_size);
+        #pragma omp section
+        memset(dst_b_plane, PAD_VALUE_INT8, (size_t)plane_size);
+    }
+#else
     memset(dst_chw, PAD_VALUE_INT8, (size_t)plane_size * 3);
+#endif
 
     // 3. Precompute 1D horizontal interpolation table on stack (no heap malloc/free)
     XCoordTable x_tab[1024];
