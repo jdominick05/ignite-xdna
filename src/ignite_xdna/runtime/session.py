@@ -369,9 +369,14 @@ class InferenceSession:
                 if isinstance(part, CpuFallbackPartition):
                     if part.onnx_model is not None:
                         sess = ort.InferenceSession(part.onnx_model.SerializeToString(), providers=["CPUExecutionProvider"])
-                        inp_name = sess.get_inputs()[0].name
+                        inp_node = sess.get_inputs()[0]
+                        inp_name = inp_node.name
                         if hasattr(cur_data, "detach"):
                             cur_data = cur_data.detach().cpu().numpy()
+                        if "float" in inp_node.type and cur_data.dtype in (np.int8, np.uint8):
+                            cur_data = cur_data.astype(np.float32)
+                        elif "int8" in inp_node.type and cur_data.dtype != np.int8:
+                            cur_data = cur_data.astype(np.int8)
                         cur_data = sess.run(None, {inp_name: cur_data})[0]
                 elif isinstance(part, NpuFusedPartition):
                     cur_data = self._execute_npu_direct(cur_data, unswizzle=unswizzle, timeout_ms=timeout_ms)
