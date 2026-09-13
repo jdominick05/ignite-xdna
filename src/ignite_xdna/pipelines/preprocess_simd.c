@@ -56,6 +56,9 @@ extern "C" {
  * @param out_pad_top  Output pointer for top padding pixels
  * @param out_pad_left Output pointer for left padding pixels
  * @param out_scale    Output pointer for aspect ratio scale factor
+ * @return 0 on success; -1 null pointer or non-positive size; -2 coordinate
+ *         table allocation failed (targets wider than 1024 px use the heap);
+ *         -3 src_stride shorter than src_w * 3.
  */
 PREPROCESS_API int fused_preprocess_bgr_to_chw_int8(
     const uint8_t* __restrict src_bgr,
@@ -71,6 +74,11 @@ PREPROCESS_API int fused_preprocess_bgr_to_chw_int8(
 ) {
     if (!src_bgr || !dst_chw || src_w <= 0 || src_h <= 0 || dst_w <= 0 || dst_h <= 0) {
         return -1;
+    }
+    // A row is read up to byte (src_w - 1) * 3 + 2; a shorter stride would
+    // pull the tail of every row from the next row's memory.
+    if (src_stride < src_w * 3) {
+        return -3;
     }
 
     // 1. Calculate letterbox dimensions
@@ -110,9 +118,17 @@ PREPROCESS_API int fused_preprocess_bgr_to_chw_int8(
     memset(dst_chw, PAD_VALUE_INT8, (size_t)plane_size * 3);
 #endif
 
-    // 3. Precompute 1D horizontal interpolation table on stack (no heap malloc/free)
-    XCoordTable x_tab[1024];
-    if (nw > 1024) return -2;
+    // 3. Precompute 1D horizontal interpolation table. nw never exceeds dst_w,
+    //    so stack storage covers every target width up to 1024 px; wider
+    //    targets use a heap table instead of being refused.
+    XCoordTable x_tab_stack[1024];
+    XCoordTable* x_tab = x_tab_stack;
+    XCoordTable* x_tab_heap = NULL;
+    if (nw > 1024) {
+        x_tab_heap = (XCoordTable*)malloc((size_t)nw * sizeof(XCoordTable));
+        if (!x_tab_heap) return -2;
+        x_tab = x_tab_heap;
+    }
 
     float fx = (float)src_w / (float)nw;
     for (int x = 0; x < nw; ++x) {
@@ -202,6 +218,7 @@ PREPROCESS_API int fused_preprocess_bgr_to_chw_int8(
         }
     }
 
+    free(x_tab_heap);
     return 0;
 }
 

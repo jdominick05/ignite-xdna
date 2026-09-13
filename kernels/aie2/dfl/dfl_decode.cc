@@ -127,7 +127,14 @@ static inline __attribute__((always_inline)) float dfl_expectation(
   // numerator is increased by the same factor, retaining the full Q15 output
   // range while keeping the reciprocal in int16.
   const uint32_t reduced_sum = static_cast<uint32_t>(sum > 16 ? sum >> 4 : 1);
-  const int32_t reciprocal = reciprocal_fixed(reduced_sum, 26);
+  // The maximum bin always contributes 32767, so reduced_sum >= 2047, and
+  // 2^26 / reduced_sum reaches 32768 (reduced_sum == 2048) and 32784
+  // (reduced_sum == 2047) when only that bin survives.  Both exceed int16;
+  // the cast below would wrap them negative and flip the sign of the
+  // expectation.  Clamping to Q15 one costs at most 1/32768 of scale.
+  int32_t reciprocal = reciprocal_fixed(reduced_sum, 26);
+  if (reciprocal > kQ15One)
+    reciprocal = kQ15One;
   const I16x32 exp_vec = aie::load_v<32>(exp_q15);
   const I16x32 reciprocal_vec =
       aie::broadcast<int16_t, 32>(static_cast<int16_t>(reciprocal));
@@ -161,7 +168,12 @@ static inline __attribute__((always_inline)) int16_t sigmoid_q15(
   int16_t exp_q15[32] __attribute__((aligned(64))) = {};
   exp_negative_q15(negative_abs, 0, exp_q15);
   const int32_t denominator = 32768 + exp_q15[0];
-  const int32_t inverse = reciprocal_fixed(denominator, 30);
+  // exp_q15[0] >= 10 for every int8 magnitude, so 2^30 / denominator stays
+  // below int16 here; the clamp guards the exp_q15[0] == 0 case (denominator
+  // 32768, inverse 32768) should the exponent range ever widen.
+  int32_t inverse = reciprocal_fixed(denominator, 30);
+  if (inverse > kQ15One)
+    inverse = kQ15One;
   if (logit >= 0)
     return static_cast<int16_t>(inverse);
   const int32_t product = static_cast<int32_t>(exp_q15[0]) * inverse;

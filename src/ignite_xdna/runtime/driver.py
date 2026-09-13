@@ -38,6 +38,13 @@ class XrtSiliconHarness:
     """
     Manages physical AMD Phoenix XDNA1 NPU device context, XCLBIN registration,
     and asynchronous / synchronous ERT command submission via pyxrt.
+
+    Release handles with ``close()`` (or use the harness as a context manager).
+    The hardware context is one of the five the driver allows per device
+    (docs/DECISIONS.md: the sixth fails with NTSTATUS 0xc01e0009); dropping the
+    references in order returns the slot deterministically instead of waiting
+    for garbage collection after an exception. No finalizer is installed: XRT
+    handles must not be torn down from interpreter shutdown.
     """
     def __init__(self, device_idx: int = 0):
         setup_xrt_environment()
@@ -49,14 +56,31 @@ class XrtSiliconHarness:
         self.kernel = None
         self.xclbin = None
 
+    def close(self):
+        """Release kernel, hardware context, xclbin and device, in that order. Idempotent."""
+        self.kernel = None
+        self.context = None
+        self.xclbin = None
+        self.dev = None
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        self.close()
+        return False
+
     def load_xclbin(self, xclbin_path: str, kernel_name: str = "MLIR_AIE"):
         """Load and register XCLBIN on Phoenix silicon."""
         if not os.path.isabs(xclbin_path):
             xclbin_path = str(get_repo_root() / xclbin_path)
         if not os.path.exists(xclbin_path):
             raise FileNotFoundError(f"XCLBIN not found: {xclbin_path}")
+        if self.dev is None:
+            raise RuntimeError("harness is closed")
         self.kernel = None
         self.context = None
+        self.xclbin = None
         self.xclbin = self.pyxrt.xclbin(xclbin_path)
         uuid = self.dev.register_xclbin(self.xclbin)
         self.context = self.pyxrt.hw_context(self.dev, uuid)
@@ -81,7 +105,13 @@ class XrtSiliconHarness:
         return self.create_instruction_bo_from_bytes(insts_bytes)
 
     def create_host_bo(self, size_bytes: int, group_id: int):
-        """Create host-visible shared memory buffer object."""
+        """Create host-visible shared memory buffer object.
+
+        ``kernel.group_id(arg)`` is the memory-bank index connected to that
+        kernel argument and is passed through unmasked: it carries no context
+        bits, and zero-copy on Windows requires the connected bank
+        (docs/DECISIONS.md, "KDMA is unsupported on Windows").
+        """
         return self.pyxrt.bo(self.dev, size_bytes, self.pyxrt.bo.host_only, self.kernel.group_id(group_id))
 
     def create_double_buffered_pair(self, size_bytes: int, group_id: int):
