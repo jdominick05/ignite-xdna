@@ -73,6 +73,19 @@ class IgniteEngine:
         """Alias for __call__."""
         return self.__call__(input_data)
 
+    @property
+    def head_status(self) -> str:
+        """Why the container's egress does or does not carry the six detect heads.
+
+        When it does not, ``engine(image)`` returns an empty list for every
+        frame; the reason is spelled out here instead of failing silently.
+        """
+        return self.session.head_status.reason
+
+    @property
+    def heads_present(self) -> bool:
+        return self.session.head_status.present
+
     def close(self):
         """Releases hardware context, memory mappings, and buffers."""
         if self.pipeline is not None:

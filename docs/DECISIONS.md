@@ -1586,3 +1586,30 @@ completion wait at its very end (intermediate TCTs are stripped and lock-value W
 wait), every shipped stage exec is byte-identical to the single-layer template, 8,192 of the
 1,228,800 preprocessed bytes reach the device, and the non-fused native decode reads the
 cached reference heads rather than `bo_out`.
+
+### Oracle-free detections need a container that emits the heads; the runtime now says when it does not (2026-09-13)
+
+- **`run_yolo_monolithic` reports `heads_present` / `head_status` and returns `None` per
+  head unless the manifest declares `output_shapes` and a `head_layout` (offset, scale,
+  zero point per head) that fits the session's egress.** The six zero-filled float heads
+  and the `* 0.03125` pseudo-dequantization are gone; `predict_sync` records
+  `head_source` (`npu`, `oracle`, `none`) and warns once when no heads exist. The runtime
+  never guesses a packing order — a byte count that happens to match still resolves as
+  absent. `runtime/heads.py` holds the contract.
+- **Postprocess takes int8 head views with scales and prunes in the int8 domain**, so a
+  future head egress is decoded without a float copy of 1.2 M values; the float path is
+  unchanged and the two agree exactly on synthetic heads (`tests/test_npu_inference.py`).
+- **Rejected: slicing the shipped container's `bo_out` into heads.** Its egress is 4,096
+  bytes, the heads need 1,209,600, and every stage stream is the conv0 template
+  ([LOW_LEVEL_AUDIT.md §1.5](LOW_LEVEL_AUDIT.md#15-documented-stream-unchanged)); any
+  slicing would have produced numbers from bytes that are not heads.
+- **Rejected: a silent CPU-oracle fallback inside `use_oracle_for_boxes=False`.** That
+  would be a CPU run in an NPU costume. `tools/live_camera_ignition.py --boxes auto`
+  does fall back, but labels the source on the HUD and in its summary.
+- Camera capture goes through `CameraManager` (MSMF → DSHOW → ANY, per-attempt timeout,
+  property read-back, no raise on a refused setting); the measured backend finding is in
+  [BENCHMARKS](BENCHMARKS.md#a-live-demo-does-the-multi-partition-finding-hold-on-a-real-webcam).
+- Measured on Device 0 ([BENCHMARKS](BENCHMARKS.md#oracle-free-yolov8n-path-no-detect-heads-in-the-shipped-containers-egress-2026-09-13-desktop-2)):
+  100 oracle-free frames at 1.015 ms mean glass-to-glass with zero buffer allocations —
+  the latency of an empty decode, not of a detection pipeline. The "< 2 ms with boxes"
+  target stays unmet until a container emits the heads.
