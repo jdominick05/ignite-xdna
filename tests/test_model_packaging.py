@@ -140,6 +140,7 @@ class TestModelPackaging(unittest.TestCase):
         # 1. From .ignite file
         sess_ignite = InferenceSession.from_file(self.model_ignite, device_index=0)
         try:
+            _ = sess_ignite.run_yolo_monolithic(dummy_in)
             out_ignite = sess_ignite.run_yolo_monolithic(dummy_in)
         finally:
             sess_ignite.close()
@@ -147,6 +148,7 @@ class TestModelPackaging(unittest.TestCase):
         # 2. From in-memory compiled session
         sess_mem = InferenceSession(device_index=0, full_yolo=True)
         try:
+            _ = sess_mem.run_yolo_monolithic(dummy_in)
             out_mem = sess_mem.run_yolo_monolithic(dummy_in)
         finally:
             sess_mem.close()
