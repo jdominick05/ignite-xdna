@@ -137,15 +137,37 @@ class GraphPartitioner:
                     node_inps.update(n.input)
                 part_inits = [t for t in graph.initializer if t.name in node_inps]
 
-                inp_names = [current_cpu_nodes[0].input[0]]
-                out_names = [current_cpu_nodes[-1].output[0]]
+                produced = {out for n in current_cpu_nodes for out in n.output}
+                consumed = {inp for n in current_cpu_nodes for inp in n.input if inp and inp not in {t.name for t in graph.initializer}}
+                inp_names = [inp for inp in consumed if inp not in produced]
+                if not inp_names:
+                    inp_names = [n.input[0] for n in current_cpu_nodes if len(n.input) > 0][:1]
+                if not inp_names:
+                    inp_names = ["dummy_in"]
 
-                in_vis = [inp for inp in graph.input if inp.name in inp_names]
-                if not in_vis:
-                    in_vis = [helper.make_tensor_value_info(inp_names[0], TensorProto.INT8, None)]
-                out_vis = [out for out in graph.output if out.name in out_names]
-                if not out_vis:
-                    out_vis = [helper.make_tensor_value_info(out_names[0], TensorProto.INT8, None)]
+                out_names = [current_cpu_nodes[-1].output[0]] if len(current_cpu_nodes[-1].output) > 0 else ["dummy_out"]
+
+                in_vis = []
+                for in_name in inp_names:
+                    match_in = [inp for inp in graph.input if inp.name == in_name]
+                    match_vi = [vi for vi in graph.value_info if vi.name == in_name]
+                    if match_in:
+                        in_vis.append(match_in[0])
+                    elif match_vi:
+                        in_vis.append(match_vi[0])
+                    else:
+                        in_vis.append(helper.make_tensor_value_info(in_name, TensorProto.FLOAT, None))
+
+                out_vis = []
+                for out_name in out_names:
+                    match_out = [out for out in graph.output if out.name == out_name]
+                    match_vi = [vi for vi in graph.value_info if vi.name == out_name]
+                    if match_out:
+                        out_vis.append(match_out[0])
+                    elif match_vi:
+                        out_vis.append(match_vi[0])
+                    else:
+                        out_vis.append(helper.make_tensor_value_info(out_name, TensorProto.FLOAT, None))
 
                 sub_graph = helper.make_graph(
                     list(current_cpu_nodes),
