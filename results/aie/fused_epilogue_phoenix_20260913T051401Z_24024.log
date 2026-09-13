@@ -1,0 +1,82 @@
+RESEARCH_PLATFORM {"machine": "Desktop 2", "cpu": "AMD Ryzen 7 8700G w/ Radeon 780M Graphics", "os": "Windows-11-10.0.26200-SP0", "ram_bytes": 33381138432, "source_sha256": {"tools/research_process.py": "b527a07958df0ed575df38dfe88da348c972ee79eb459974555cf2655f94d37f", "tools/quant_calib_alphabet.py": "2dc0b2878c564853f340880209a425dfcf63b8536b2b8e9fd32344daade58d37", "tools/xint8_arithmetic_probe.py": "6aa3df08b9870c3c2264b868459d7ffbac3070dddc1349d7c6f3f480075f7041", "scripts/research-lowlevel.sh": "3455ad7933697936487712665505c216891865c6deada647302785f6e37020bd", "scripts/research-iron.sh": "128f8b5ee21f2209f8dda004cefc39fbf87a5170ca61c5cf18dc97a6ea6669c8", "kernels/memory_placement/probe.py": "e8d990169ad6091fa1b53852e9f61eff495b5def72d35165a5c5cf1759e38898", "kernels/memory_placement/memory_kernels.cc": "182e7af7071a1e851afb4a7ca266069c489aea1fbaaa85eca129708daeba5ba6", "scripts/research-matrix.sh": "739254171629deae822b0ad7dabc875aee19ace56dde77d3e8aab61663f97516", "kernels/memory_placement/gemm.py": "17c905ad66110d3346bbf0db898dfc6b780df59fae1dfb0c1747057ce1e5844e", "kernels/memory_placement/gemm_placement.cc": "f21acf7250b12914ea30cc1f77613239dfa18421a85a1b9a5199017dd916278a", "tools/research_summary.py": "0c00dcceef07053d06731b41a1f1ed58d3ba4ea09f82497de354ce9cef17da20", "tools/research_toolchain.py": "f0a126a24ae213acfaa43460cfd9def0c86d9cb70cfee0228aa271688467b314"}, "commit": "02c3c114ab2f03f5e4a31c7cee789b7e915ed14a", "command": ["bash", "scripts/research-iron.sh", "tests/test_fused_epilogue_kernel.py", "--compile"], "seconds_limit": 1800.0, "rss_gib_limit": 10.0, "checks_only": false, "free_ram_bytes": 18076889088}
+HOST_LOAD busy_cores=0.58 logical_cores=16 free_ram_gb=16.8 sample_sec=1
+HOST_LOAD_TOP 0.23 agy:33604 ws_mb=988
+HOST_LOAD_TOP 0.19 pycharm64:8540 ws_mb=3148
+HOST_LOAD_TOP 0.06 Taskmgr:13448 ws_mb=187
+HOST_LOAD_TOP 0.05 powershell:21236 ws_mb=79
+HOST_LOAD_TOP 0.05 HWiNFO64:1824 ws_mb=43
+HOST_LOAD_VERDICT CLEAR
+
+PRE_NPU_CONTEXT_WITNESS "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+{"event": "offline_pass", "max_error_output_lsb": 1, "q8_inputs_checked": 65536, "scope": "CPU arithmetic and fixture validation; no hardware execution"}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [13116, 16208, 18408, 21448, 22544, 28820, 32784], "foreign_pids": []}
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+HOST_LOAD busy_cores=0.8 logical_cores=16 free_ram_gb=16.8 sample_sec=1
+HOST_LOAD_TOP 0.31 agy:33604 ws_mb=988
+HOST_LOAD_TOP 0.12 HWiNFO64:1824 ws_mb=43
+HOST_LOAD_TOP 0.11 pycharm64:8540 ws_mb=3148
+HOST_LOAD_TOP 0.11 python:21448 ws_mb=27
+HOST_LOAD_TOP 0.06 Taskmgr:13448 ws_mb=187
+HOST_LOAD_VERDICT CLEAR
+
+{"event": "compile_begin", "variant": "raw16"}
+HOST_TIMELINE {"elapsed_seconds": 2.734, "tree_rss_bytes": 143470592, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 5.25, "tree_rss_bytes": 150646784, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [3020, 8264, 10456, 10968, 13080, 13116, 15236, 16168, 16208, 17060, 17404, 18408, 18668, 20252, 20388, 20776, 21448, 22544, 22876, 28564, 28820, 32116, 32784, 34804], "foreign_pids": []}
+Traceback (most recent call last):
+  File "C:\Users\<user>\PycharmProjects\ignite-xdna\tests\test_fused_epilogue_kernel.py", line 444, in <module>
+    main()
+    ~~~~^^
+  File "C:\Users\<user>\PycharmProjects\ignite-xdna\tests\test_fused_epilogue_kernel.py", line 434, in main
+    compile_bundles(artifact_directory(args.build_dir, args.cin), args.cin)
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\<user>\PycharmProjects\ignite-xdna\tests\test_fused_epilogue_kernel.py", line 180, in compile_bundles
+    compile_mlir_module(lowered, insts_path=target / 'insts.bin',
+    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                        xclbin_path=target / 'design.xclbin', work_dir=work)
+                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\<user>\mlir-aie\ironenv\Lib\site-packages\mlir_aie\python\aie\utils\compile\utils.py", line 534, in compile_mlir_module
+    _run_aiecc(mlir_file, args)
+    ~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "C:\Users\<user>\mlir-aie\ironenv\Lib\site-packages\mlir_aie\python\aie\utils\compile\utils.py", line 409, in _run_aiecc
+    raise RuntimeError(
+    ...<2 lines>...
+    )
+RuntimeError: [aiecc] Compilation failed with exit code 1:
+
+(0/37) input.mlir
+(1/37)           
+(1/37) [0/1] placed.mlir
+(2/37)                  
+(2/37) [0/1] traced.mlir
+(3/37)                  
+(3/37) [0/1] input_with_addresses.mlirC:\Users\<user>\PycharmProjects\ignite-xdna\build\fused_conv_epilogue\62596e1e41e3e9f7\raw16\_bootstrap\design.prj\aie.mlir:57:5: error: 'aie.buffer' op would override allocated address
+    aie.objectfifo @input_c3_split3(%logical_mem_20, {%logical_core_14}, 2 : i32) : !aie.objectfifo<memref<3264xi8>>  
+    ^
+C:\Users\<user>\PycharmProjects\ignite-xdna\build\fused_conv_epilogue\62596e1e41e3e9f7\raw16\_bootstrap\design.prj\aie.mlir:57:5: note: see current operation: %117 = "aie.buffer"(%8) <{address = 32768 : i32, aligned = true, mem_bank = 2 : i32, sym_name = "input_c3_split3_cons_buff_1"}> : (index) -> memref<3264xi8>
+C:\Users\<user>\PycharmProjects\ignite-xdna\build\fused_conv_epilogue\62596e1e41e3e9f7\raw16\_bootstrap\design.prj\aie.mlir:2:3: warning: Bank-aware allocation failed, trying basic sequential allocation.
+  aie.device(npu1) {
+  ^
+C:\Users\<user>\PycharmProjects\ignite-xdna\build\fused_conv_epilogue\62596e1e41e3e9f7\raw16\_bootstrap\design.prj\aie.mlir:2:3: note: see current operation: %tile_3_5 = aie.tile(3, 5) {controller_id = #aie.packet_info<pkt_type = 0, pkt_id = 31>}
+C:\Users\<user>\PycharmProjects\ignite-xdna\build\fused_conv_epilogue\62596e1e41e3e9f7\raw16\_bootstrap\design.prj\aie.mlir:57:5: error: 'aie.buffer' op buffer '"input_c3_split3_cons_buff_1"' at address 0x8000 overlaps with '"output_c3_join3_buff_0"' at address 0x8000 (size: 256 bytes)
+    aie.objectfifo @input_c3_split3(%logical_mem_20, {%logical_core_14}, 2 : i32) : !aie.objectfifo<memref<3264xi8>>  
+    ^
+C:\Users\<user>\PycharmProjects\ignite-xdna\build\fused_conv_epilogue\62596e1e41e3e9f7\raw16\_bootstrap\design.prj\aie.mlir:57:5: note: see current operation: %117 = "aie.buffer"(%8) <{address = 32768 : i32, aligned = true, mem_bank = 2 : i32, sym_name = "input_c3_split3_cons_buff_1"}> : (index) -> memref<3264xi8>
+C:\Users\<user>\PycharmProjects\ignite-xdna\build\fused_conv_epilogue\62596e1e41e3e9f7\raw16\_bootstrap\design.prj\aie.mlir:2:3: error: 'aie.tile' op Basic sequential allocation also failed.
+  aie.device(npu1) {
+  ^
+C:\Users\<user>\PycharmProjects\ignite-xdna\build\fused_conv_epilogue\62596e1e41e3e9f7\raw16\_bootstrap\design.prj\aie.mlir:2:3: note: see current operation: %8 = "aie.tile"() <{col = 3 : i32, row = 5 : i32}> {controller_id = #aie.packet_info<pkt_type = 0, pkt_id = 31>} : () -> index
+
+aiecc: edge 'input_with_addresses.mlir' (key 'input.mlir') failed
+aiecc: pipeline failed
+
+RESEARCH_PROCESS_RESULT {"exit_code": 1, "stop": null, "peak_tree_rss_bytes": 331075584, "rss_measurement": "maximum observed across sampled descendant working sets; zero observations reported as null", "elapsed_seconds": 6.828000000001339, "foreign_contention_observed": false, "timing_eligible": false}

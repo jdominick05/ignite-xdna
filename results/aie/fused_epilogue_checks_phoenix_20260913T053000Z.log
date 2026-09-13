@@ -1,0 +1,972 @@
+RESEARCH_PLATFORM {"machine": "Desktop 2", "cpu": "AMD Ryzen 7 8700G w/ Radeon 780M Graphics", "os": "Windows-11-10.0.26200-SP0", "ram_bytes": 33381138432, "source_sha256": {"tools/research_process.py": "b527a07958df0ed575df38dfe88da348c972ee79eb459974555cf2655f94d37f", "tools/quant_calib_alphabet.py": "2dc0b2878c564853f340880209a425dfcf63b8536b2b8e9fd32344daade58d37", "tools/xint8_arithmetic_probe.py": "6aa3df08b9870c3c2264b868459d7ffbac3070dddc1349d7c6f3f480075f7041", "scripts/research-lowlevel.sh": "3455ad7933697936487712665505c216891865c6deada647302785f6e37020bd", "scripts/research-iron.sh": "128f8b5ee21f2209f8dda004cefc39fbf87a5170ca61c5cf18dc97a6ea6669c8", "kernels/memory_placement/probe.py": "e8d990169ad6091fa1b53852e9f61eff495b5def72d35165a5c5cf1759e38898", "kernels/memory_placement/memory_kernels.cc": "182e7af7071a1e851afb4a7ca266069c489aea1fbaaa85eca129708daeba5ba6", "scripts/research-matrix.sh": "739254171629deae822b0ad7dabc875aee19ace56dde77d3e8aab61663f97516", "kernels/memory_placement/gemm.py": "17c905ad66110d3346bbf0db898dfc6b780df59fae1dfb0c1747057ce1e5844e", "kernels/memory_placement/gemm_placement.cc": "f21acf7250b12914ea30cc1f77613239dfa18421a85a1b9a5199017dd916278a", "tools/research_summary.py": "0c00dcceef07053d06731b41a1f1ed58d3ba4ea09f82497de354ce9cef17da20", "tools/research_toolchain.py": "f0a126a24ae213acfaa43460cfd9def0c86d9cb70cfee0228aa271688467b314"}, "commit": "59c7cfd17f027442eda5f122df36ecdd16e754e3", "command": ["bash", "scratch/fused_gates.sh"], "seconds_limit": 180.0, "rss_gib_limit": 4.0, "checks_only": false, "free_ram_bytes": 17805766656}
+HOST_LOAD busy_cores=1.65 logical_cores=16 free_ram_gb=16.5 sample_sec=1
+HOST_LOAD_TOP 1.11 agy:33604 ws_mb=1057
+HOST_LOAD_TOP 0.31 pycharm64:8540 ws_mb=3067
+HOST_LOAD_TOP 0.09 HWiNFO64:1824 ws_mb=43
+HOST_LOAD_TOP 0.06 Taskmgr:13448 ws_mb=187
+HOST_LOAD_TOP 0.03 codex:19240 ws_mb=266
+HOST_LOAD_VERDICT CLEAR
+
+[2m    env: resnet_env17  (3.12.11)[0m
+HOST_TIMELINE {"elapsed_seconds": 2.641, "tree_rss_bytes": 17027072, "foreign_peers": []}
+PIPELINE CHECKS PASS
+checked 43 markdown files
+all links resolve; README within budget
+========================================================================
+UNTRACED FIGURES — quoted in a doc, not found in any results/ log
+========================================================================
+HOST_TIMELINE {"elapsed_seconds": 5.454, "tree_rss_bytes": 153432064, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 8.094, "tree_rss_bytes": 153436160, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 10.719, "tree_rss_bytes": 153075712, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 13.329, "tree_rss_bytes": 153210880, "foreign_peers": []}
+
+RESEARCH.md  (1)
+  L1355  399/404      - **BiSeNetV2 result:** Bilateral Guided Aggregation (BGA) with nearest-neighbor upsampling compiles natively 
+
+benchmarks\monolithic_backbone_results.md  (4)
+  L12    709.1        By collapsing 50 un-fused isolated dispatches into a 4-stage continuous monolithic transaction bundle staged e
+  L16    709.1        | **Total Backbone Latency** | 45.41 ms | 6.61 ms | **0.709 ms** (709.1 μs) | **64.04x Speedup** |
+  L28    685.00       - **Median Latency:** `685.00 μs`
+  L30    1104.50      - **Max Latency:** `1104.50 μs`
+
+benchmarks\vitisai_vs_ignite_xdna.md  (2)
+  L13    9609.0       | | **Sustained Throughput** | `2304.3 FPS` | `11913.3 FPS` | **+9609.0 FPS** |
+  L19    3915.0       | | **Sustained Throughput** | `2004.6 FPS` | `5919.6 FPS` | **+3915.0 FPS** |
+
+benchmarks\yolov8n_bottleneck_analysis.md  (3)
+  L34    238.35       | **Driver ERT Submission** | **239.48 us** | **238.35 us** | **277.15 us** | **PyXRT ERT command packet queue
+  L34    277.15       | **Driver ERT Submission** | **239.48 us** | **238.35 us** | **277.15 us** | **PyXRT ERT command packet queue
+  L38    391.85       | **Total Single Dispatch Cycle** | **391.05 us** | **391.85 us** | **423.35 us** | Complete roundtrip per iso
+
+docs\BENCHMARKS.md  (41)
+  L1731  1323 / 738   | *superseded, one-loop reading* | | *1323 / 738* | | *40.4% / 23.4%* | *198.1 / 177.5* |
+  L1930  6184 / 514   | 512 | 5672 / 2 | 6184 / 514 | 512 |
+  L1931  12328 / 1026 | 1024 | 11304 / 2 | 12328 / 1026 | 1024 |
+  L1932  24616 / 2050 | 2048 | 22568 / 2 | 24616 / 2050 | 2048 |
+  L1933  49192 / 4098 | 4096 | 45096 / 2 | 49192 / 4098 | 4096 |
+  L1961  15665 / 30724 reproducible*. Three dispatches of one identical binary gave 15665 / 30724 / 15879 cycles and
+  L1962  4179 / 8195  4179 / 8195 / 4235 loads, because `ACTIVE` alone emits 38–54k frames into a 64 KB buffer, which
+  L3860  74 / 182     | `resnet50_xint8_c64.onnx` | 380 | 74 / 182 | UINT8 activation zp=128; INT8 weight/bias zp=0; scalar power-of
+  L3861  218 / 344    | `yolov8n_cut_xint8.onnx` | 957 | 218 / 344 | Same dtype/scale dialect; HardSigmoid beta omitted |
+  L3862  74 / 182     | `resnet50_a8w8.onnx` | 378 | 74 / 182 | Microsoft-domain QDQ, INT8 activation zp=0, non-power-of-two scales,
+  L4478  380 / 470    | Nodes / initializers | 380 / 470 | 380 / 470 |
+  L4478  380 / 470    | Nodes / initializers | 380 / 470 | 380 / 470 |
+  L5326  065.1        | [oracle, re-run](../results/quant/load_modnet_cut_quark_cle_adaround_c64_rerun.log) | 0.68 | 9.1 GB | 266.8 
+  L5671  132.07       | MODNet Stock XINT8 | CPU fallback (VitisAI EP) | 132.07 ms | 7.3 fps | 0 / 872 (0.0%) | Rejected graph |
+  L5774  399/404      Resize in `SegmentHead` uses stock `mode='linear'`. The VitisAI EP rejects this node to CPU (399/404 on NPU, 1
+  L5807  86.00        | Evaluation Latency (infer) | 99.01 ms | **13.01 ms** | -86.00 ms (7.61× faster) | `results/eval_bisenetv2_xi
+  L6266  13 / 14      | RegNetX-002 | 13 / 14 | 13 / 14 |
+  L6266  13 / 14      | RegNetX-002 | 13 / 14 | 13 / 14 |
+  L6267  16 / 17      | ResNeXt-50 32x4d | 16 / 17 | 16 / 17 |
+  L6267  16 / 17      | ResNeXt-50 32x4d | 16 / 17 | 16 / 17 |
+  L6338  14 / 14      | RegNetX-002 | 44 | 14 | 14 | 2.09 .. 42.20 | 14 / 14 (100%) | 9 / 14 (64.3%) | 66.20% (14/14 skipped; 4b gua
+  L6338  14/14        | RegNetX-002 | 44 | 14 | 14 | 2.09 .. 42.20 | 14 / 14 (100%) | 9 / 14 (64.3%) | 66.20% (14/14 skipped; 4b gua
+  L6341  14 / 17      | MobileNetV2 (Clip→Relu) | 52 | 17 | 17 | 3.67 .. 8.61 | 17 / 17 (100%) | 14 / 17 (82.4%) | avoids 8.6-bit ac
+  L6421  139.40       Device opening and hardware context creation together cost 139.40 ms. This cost is paid once per process sessi
+  L6664  25 / 29      > **FastDepth reads min 18 / median 21 / max 23**, not 25 / 29 / 32 — its sigma never gets
+  L6684  25 / 29      | **FastDepth** | 38 | **1 (2.6%)** | **25 / 29 / 32** | **CRITICAL: Shift Clamp (sigma = 32 > 31)** | `result
+  L6685  24 / 31      | **MODNet** (`modnet_cut_xint8`) | 74 | **0 (0.0%)** | 7 / 24 / 31 | PASS: Reaches upper register bound (sigm
+  L6689  22 / 26      | **BiSeNetV2** (`bisenetv2_fp32_xint8`) | 63 | **0 (0.0%)** | 7 / 22 / 26 | PASS: Centered in systolic basin 
+  L6724  22 / 27      | MODNet-Cut | 74 | 0 | 7 / 22 / 27 | 1 |
+  L6728  15 / 22      | MiDaS-Small nearest-cut | 97 | 0 | 15 / 22 / 26 | 16 |
+  L6815  7763 / 57344 | -6 | -20 | 7763 / 57344 | **255** | 0 | 3 | diverges |
+  L6816  4488 / 57344 | -3 | -17 | 4488 / 57344 | **255** | 0 | 3 | diverges |
+  L6817  3564 / 57344 | -1 | -15 | 3564 / 57344 | **255** | 0 | 3 | diverges |
+  L6818  3052 / 57344 | **0** | -14 | **3052 / 57344** | **255** | 0 | 3 | **diverges, though Theorem 1 calls it feasible** |
+  L6820  1056 / 57344 | 17 | 3 | 1056 / 57344 | 1 | 0 | 101 | agrees, up to the known half-up rounding |
+  L6837  128/255      reference values, 0/128/255 -- and reads **zero** mismatches. Something changes between sigma = 6
+  L6944  15 / 22      | midas_small_cut_xint8 | 97 | 97 | 0 | 97 | 15 / 22 / 26 |
+  L6945  18 / 22      | mobilevit_xint8 | 177 | 142 | 35 | 72 (+18 MatMul) | 18 / 22 / 26 |
+  L6946  21 / 29      | densenet121_xint8 | 187 | 183 | 4 | 183 | **14** / 21 / 29 |
+  L7433  609.0        | | **Sustained Throughput** | `2,304.3 FPS` | `11,913.3 FPS` | **+9,609.0 FPS** |
+  ... 1 more
+
+docs\DECISIONS.md  (1)
+  L814   399/404      ejects 1 Resize node to CPU (399/404 on NPU in `results/diag_bisenetv2_bilinear_xint8.log`), adding 0.26 ms of
+
+docs\SILICON.md  (6)
+  L371   546.1        The operational ridge point is I_ridge = P_peak / B_dram = 14.7456 TOPS / 27.0 GB/s = **273.1 MACs/Byte** (546
+  L524   182.37       | **YOLOv8n-cut** | XINT8 c200 | 4.703 GMAC | 3.15 MB / 182.37 MB | 8.94 ms | 1.052 TOPS | 7.1% | Compute-Boun
+  L525   347.38       | **YOLOv8s-cut** | XINT8 c200 | 14.932 GMAC | 11.16 MB / 347.38 MB | 15.63 ms | 1.910 TOPS | 13.0% | Compute-
+  L526   624.91       | **YOLOv8m-cut** | XINT8 c200 | 40.603 GMAC | 25.89 MB / 624.91 MB | 26.95 ms | 3.013 TOPS | 20.4% | Compute-
+  L527   406.7        | **FastDepth** | XINT8 PTQ | 0.549 GMAC | 1.35 MB / 43.80 MB | 2.87 ms | 0.383 TOPS | 2.6% | Dispatch/Compute
+  L616   190/198      closes to a constant 190/198-cycle prologue across a 16× range of work. First finding:
+
+quant\TODO.md  (1)
+  L182   90/90        no-CLE artifact is byte-identical to a fresh Quark no-CLE oracle: 90/90 int8 initializers,
+
+results\README.md  (2)
+  L46    25 / 29      | `quant/` | `shift_cut_reaudit_20260909_desktop2.log`: the corrected shift-cut audit across eleven quantized 
+  L101   399/404      | top level | `export_bisenetv2.log`, `fetch_bisenetv2_data.log`, `quant_bisenetv2_{bilinear,}_xint8.log` (Qua
+
+results\aie\README.md  (9)
+  L215   190/198      190/198-cycle prologue across a 16× range of work. First finding: `LOCK_STALL` is
+  L390   256/512      cost 256/512/2048 -- so the INVARIANCE is the finding: those 6 cycles are paid once. Two causes
+  L398   15665/30724  one identical binary gave 15665/30724/15879 cycles -- because `ACTIVE` overflows the 64 KB trace
+  L1028  708.8        [`notes_im2col_pipelined_dispatch.md`](notes_im2col_pipelined_dispatch.md) — design, implementation, and physi
+  L1028  546.3        [`notes_im2col_pipelined_dispatch.md`](notes_im2col_pipelined_dispatch.md) — design, implementation, and physi
+  L1032  170.22       [`notes_onnx_layer_silicon_execution.md`](notes_onnx_layer_silicon_execution.md) — automated subgraph ingestio
+  L1032  512/512      [`notes_onnx_layer_silicon_execution.md`](notes_onnx_layer_silicon_execution.md) — automated subgraph ingestio
+  L1042  164.63       [`notes_l2_memtile_fusion_architecture.md`](notes_l2_memtile_fusion_architecture.md) — architectural design, M
+  L1042  074.1        [`notes_l2_memtile_fusion_architecture.md`](notes_l2_memtile_fusion_architecture.md) — architectural design, M
+
+results\aie\notes_16core_onnx_layer_execution.md  (10)
+  L16    057.5        3. **Pipelined Execution Throughput:** **$5,057.5$ FPS** ($197.73\ \mu\text{s}$ effective per frame) at 500 it
+  L16    308.97       3. **Pipelined Execution Throughput:** **$5,057.5$ FPS** ($197.73\ \mu\text{s}$ effective per frame) at 500 it
+  L16    111.25       3. **Pipelined Execution Throughput:** **$5,057.5$ FPS** ($197.73\ \mu\text{s}$ effective per frame) at 500 it
+  L114   308.97       Sync Baseline Latency                | 308.97 us (3236.5 FPS)
+  L114   3236.5       Sync Baseline Latency                | 308.97 us (3236.5 FPS)
+  L115   5057.5       Pipelined Effective Latency          | 197.73 us (5057.5 FPS)
+  L117   111.25       Hidden Driver Floor                  | 111.25 us (36.0%)
+  L118   196.98       Pipelined Step (Mean / Min / P95)   | 196.98 us / 115.80 us / 230.89 us
+  L118   115.80       Pipelined Step (Mean / Min / P95)   | 196.98 us / 115.80 us / 230.89 us
+  L118   230.89       Pipelined Step (Mean / Min / P95)   | 196.98 us / 115.80 us / 230.89 us
+
+results\aie\notes_a16w8_feasibility_audit.md  (1)
+  L287   49.92        - SQNR_INT8 ≈ 49.92 dB (256 discrete levels).
+
+results\aie\notes_accumulator_cascade_gemm_model.md  (3)
+  L143   128/128      | 128/128/64 | INT8 | 93,440 | OVER by 27,904 B | 60,672 | FITS | 44,288 | **COMPILES** (+17.9 KB headroom) |
+  L144   128/128      | 128/128/128 | INT8 | 150,784 | OVER by 85,248 B | 85,248 | OVER by 19,712 B | 68,864 | OVER (Needs single-bu
+  L226   256 / 2442   - **Effective MAC Issue Rate:** 1024 × 256 / 2442 = **107.3 MACs/cycle** (**41.9%** of 256 nameplate).
+
+results\aie\notes_column0_architecture_audit.md  (1)
+  L4     7040 / 8040  **Hardware:** AMD Phoenix AIE2 (XDNA1, Ryzen 7 7040 / 8040 series, Ryzen 7 8700G, Ryzen 5 8645HS).
+
+results\aie\notes_im2col_hardware_bringup.md  (3)
+  L97    768 / 32     - Bit Agreement: **100.0%** (32,768 / 32,768 elements bit-identical).
+  L107   768 / 32     - Bit Agreement: **100.0%** (32,768 / 32,768 elements bit-identical).
+  L153   2005.12      20-Core Array Dispatch Result: ert_cmd_state.ERT_CMD_STATE_TIMEOUT in 2005.12 us
+
+results\aie\notes_im2col_kernel_vliw_audit.md  (1)
+  L234   13 / 18      | **Realignment Bundle Contamination** | 72.2% (13 / 18) | **0.0% (0 / 9)** | **Clean execution** | `[DERIVED]
+
+results\aie\notes_im2col_pipelined_dispatch.md  (6)
+  L16    708.8        | **Stage 1b: Single-Core Vector MMUL** | Tile(0,2) (1 Vector Core) | 149.1 µs | 6,708.8 | **76.7 µs** | **13,
+  L17    546.3        | **Stage 2a: 16-Core Whole-Array Engine** | Columns 0–3, Rows 2–5 (16 Cores) | 152.8 µs | 6,546.3 | **84.3 µs
+  L141   708.8        - **Synchronous Baseline**: $149.1\text{ µs}$ ($6,708.8\text{ FPS}$).
+  L144   113.72       - Pipelined Loop Step Distribution: Mean = $76.09\text{ µs}$, Median = $86.10\text{ µs}$, Min = $45.00\text{ µ
+  L153   546.3        - **Synchronous Baseline**: $152.8\text{ µs}$ ($6,546.3\text{ FPS}$, $0.0270\text{ Effective TOPS}$).
+  L156   119.45       - Pipelined Loop Step Distribution: Mean = $83.76\text{ µs}$, Median = $91.70\text{ µs}$, Min = $46.40\text{ µ
+
+results\aie\notes_l2_memtile_fusion_architecture.md  (7)
+  L113   164.63       | **Per-Frame Latency (Mean)** | 172.74 μs | **164.63 μs** | **+8.11 μs saved** (1.05x) |
+  L116   187.19       | **P95 Latency** | 172.74 μs | **187.19 μs** | Tail bounded |
+  L117   789.0        | **Throughput** | 5,789.0 FPS | **6,074.1 FPS** | **+285.1 FPS** |
+  L117   074.1        | **Throughput** | 5,789.0 FPS | **6,074.1 FPS** | **+285.1 FPS** |
+  L117   285.1        | **Throughput** | 5,789.0 FPS | **6,074.1 FPS** | **+285.1 FPS** |
+  L124   1056/2048    | **Layer 0 Silicon vs Float ORT CPU** | 51.56% (1056/2048) | 0.4844 | 0.6960 | 1.0 | Tie-Break Bound ($\le 1$
+  L125   1984/2048    | **Fused 2-Layer Reference (Exact vs ORT)**| 96.88% (1984/2048) | 0.0312 | 0.1768 | 1.0 | Subgraph Parity Ver
+
+results\aie\notes_layer_conv0_parity_resolution.md  (6)
+  L5     512/512      This study documents the diagnosis and resolution of the odd-core zero output split across Core 1 (Tile 0,3) a
+  L98    128 / 128    - **Core 0 (Tile 0,2):** 128 / 128 bit-exact matches (100.0%), $\text{MAE} = 0.0000$, $\text{MaxAE} = 0$
+  L99    128 / 128    - **Core 1 (Tile 0,3):** 128 / 128 bit-exact matches (100.0%), $\text{MAE} = 0.0000$, $\text{MaxAE} = 0$
+  L100   128 / 128    - **Core 2 (Tile 0,4):** 128 / 128 bit-exact matches (100.0%), $\text{MAE} = 0.0000$, $\text{MaxAE} = 0$
+  L101   128 / 128    - **Core 3 (Tile 0,5):** 128 / 128 bit-exact matches (100.0%), $\text{MAE} = 0.0000$, $\text{MaxAE} = 0$
+  L102   512 / 512    - **Combined 4-Core Column Parity:** **512 / 512 bytes (100.00%)**, $\text{MAE} = 0.0000$, $\text{MaxAE} = 0$.
+
+results\aie\notes_master_xdna1_roofline_synthesis.md  (5)
+  L124   546.1        I_ridge = P_peak / B_dram = 14.7456 TOPS / 27.0 GB/s = 546.1 FLOPs/Byte (273.1 MACs/Byte)
+  L161   182.37       | **YOLOv8n-cut** | XINT8 c200 | 4.703 GMAC | 3.15 MB | 182.37 MB | 8.94 ms | 8.41 ms | 1.052 TOPS | 7.1% | [M
+  L162   347.38       | **YOLOv8s-cut** | XINT8 c200 | 14.932 GMAC | 11.16 MB | 347.38 MB | 15.63 ms | 15.10 ms | 1.910 TOPS | 13.0%
+  L163   624.91       | **YOLOv8m-cut** | XINT8 c200 | 40.603 GMAC | 25.89 MB | 624.91 MB | 26.95 ms | 26.42 ms | 3.013 TOPS | 20.4%
+  L180   406.7        | **FastDepth** | 406.7 MAC/B | Dispatch/Compute | 0.074 ms | 0.050 ms | 0.391 ms | 0.210 ms | 0.601 ms | 2.87
+
+results\aie\notes_onnx_layer_silicon_execution.md  (10)
+  L11    898.2        4. **Physical Silicon Execution & Pipelining:** Executes on physical silicon via `pyxrt` with 500-iteration do
+  L28    168.02       | **Sync Baseline Latency** | **168.02 us** (5,951.6 FPS) | Sequential CPU dispatch + ERT `wait()` |
+  L29    898.2        | **Pipelined Effective Latency** | **84.05 us** (**11,898.2 FPS**) | Asynchronous ping-pong ring buffer overl
+  L31    83.98        | **Hidden Driver Overhead** | **83.98 us (50.0%)** | Complete masking of OS kernel dispatch floor |
+  L32    120.05       | **Pipelined Step Latency** | Mean: 83.47 us, Min: 43.00 us, P95: 120.05 us | Monotonic step latencies over 5
+  L110   128 / 128    - **Core 0 (Tile 0,2):** 128 / 128 (100.0%) bit-exact matches against exact QDQ integer reference.
+  L111   128 / 128    - **Core 1 (Tile 0,3):** 128 / 128 (100.0%) bit-exact matches against exact QDQ integer reference.
+  L112   128 / 128    - **Core 2 (Tile 0,4):** 128 / 128 (100.0%) bit-exact matches against exact QDQ integer reference.
+  L113   128 / 128    - **Core 3 (Tile 0,5):** 128 / 128 (100.0%) bit-exact matches against exact QDQ integer reference.
+  L114   512 / 512    - **Total Multi-Core Parity:** **512 / 512 (100.00%)**, MAE = 0.0000, MaxAE = 0.
+
+results\aie\notes_persistent_weight_optimization.md  (10)
+  L13    054.7        - **Pipelined Throughput:** Scaled from **5,054.7 FPS** (197.84 $\mu$s) to **11,578.1 FPS** (**86.37 $\mu$s**)
+  L13    197.84       - **Pipelined Throughput:** Scaled from **5,054.7 FPS** (197.84 $\mu$s) to **11,578.1 FPS** (**86.37 $\mu$s**)
+  L14    308.98       - **Synchronous Latency:** Reduced from 308.98 $\mu$s down to **164.04 $\mu$s** (**1.88× speedup**).
+  L14    164.04       - **Synchronous Latency:** Reduced from 308.98 $\mu$s down to **164.04 $\mu$s** (**1.88× speedup**).
+  L80    111.14       | **Monolithic Baseline** | 62,528 B | 111.14 $\mu$s (36.0%) | 308.98 $\mu$s (3,236.5 FPS) | 197.84 $\mu$s | 5
+  L80    308.98       | **Monolithic Baseline** | 62,528 B | 111.14 $\mu$s (36.0%) | 308.98 $\mu$s (3,236.5 FPS) | 197.84 $\mu$s | 5
+  L80    197.84       | **Monolithic Baseline** | 62,528 B | 111.14 $\mu$s (36.0%) | 308.98 $\mu$s (3,236.5 FPS) | 197.84 $\mu$s | 5
+  L80    054.7        | **Monolithic Baseline** | 62,528 B | 111.14 $\mu$s (36.0%) | 308.98 $\mu$s (3,236.5 FPS) | 197.84 $\mu$s | 5
+  L81    164.04       | **Split Txn (Persistent Weights)** | **10,496 B** | **77.67 $\mu$s (47.3%)** | **164.04 $\mu$s (6,095.9 FPS)
+  L81    095.9        | **Split Txn (Persistent Weights)** | **10,496 B** | **77.67 $\mu$s (47.3%)** | **164.04 $\mu$s (6,095.9 FPS)
+
+results\aie\notes_w4a8_aie2_roofline.md  (13)
+  L79    256/512      | [v] | Vector Compute / MAC | vmac, vmac.f, vshift, vashr, nopv | 256/512 MAC arithmetic pipelines, vector sh
+  L263   603.8        - INT8: 599.2 µs + 4.55 µs ≈ 603.8 µs.
+  L287   906.23       | **64 / 128 / 64** (Best Tile) | Upstream INT8 | int8 x int8 (256 MAC/cyc) | 4,906.23 | 1.000x (3,501 µs) | 1
+  L288   945.48       | **64 / 128 / 64** (Best Tile) | INT8 Re-typed | int8 x int8 (256 MAC/cyc) | 4,945.48 | 1.008x | 0.9921 | Rep
+  L289   881.70       | **64 / 128 / 64** (Best Tile) | INT8 Unroll 2 | int8 x int8 (256 MAC/cyc) | 4,881.70 | 0.995x | 1.0050 | Cor
+  L290   088.63       | **64 / 128 / 64** (Best Tile) | W4A8 Unpack | Load Unpack -> int8 (256 MAC/cyc) | 6,088.63 | 1.241x | 0.8058
+  L291   195.33       | **64 / 128 / 64** (Best Tile) | W4A8 Native | Native mmul (512 MAC/cyc) | 6,195.33 | 1.263x | 0.7919 | Best 
+  L292   395.14       | **64 / 64 / 64** | Upstream INT8 | int8 x int8 (256 MAC/cyc) | 4,395.14 | 1.000x | 1.0000 | Baseline at squa
+  L293   645.66       | **64 / 64 / 64** | W4A8 Unpack | Load Unpack -> int8 (256 MAC/cyc) | 4,645.66 | 1.057x | 0.9460 | Moderate b
+  L294   953.32       | **64 / 64 / 64** | W4A8 Native | Native mmul (512 MAC/cyc) | 4,953.32 | 1.127x | 0.8873 | Native MAC rate ad
+  L295   753.23       | **128 / 64 / 64** | Upstream INT8 | int8 x int8 (256 MAC/cyc) | 4,753.23 | 1.000x | 1.0000 | Baseline where 
+  L296   615.38       | **128 / 64 / 64** | W4A8 Unpack | Load Unpack -> int8 (256 MAC/cyc) | 4,615.38 | 0.971x | 1.0298 | Null / sl
+  L297   824.52       | **128 / 64 / 64** | W4A8 Native | Native mmul (512 MAC/cyc) | 4,824.52 | 1.015x | 0.9852 | Inside measuremen
+
+results\quant\notes_cle_triple_stability_audit.md  (3)
+  L12    14/14        - `results/quant/eval_regnetx_002_ignition_cle_g2_cpu.log` (Strict 2-bit guard recovery: 66.20% top-1, 14/14 s
+  L167   14 / 14      | **RegNetX-002** | 44 | 14 | 13 (unsupported) | 14 | 2.09 .. 42.20 (median 32.54) | **14 / 14 (100%)** | 9 / 
+  L170   14 / 17      | **MobileNetV2** (Clip → Relu) | 52 | 17 | 37 | 17 | 3.67 .. 8.61 (median 5.30) | **17 / 17 (100%)** | 14 / 1
+
+results\quant\notes_histogram_calibration_analysis.md  (13)
+  L66    419.4        | YOLOv8n-cut (CLE) | 218 | 218 | 0 | 7,106,560,000 B (7.11 GB) | 419.4 MB | 14.21 GB | 170.44 s |
+  L170   255 / 2048   | 2048 | 255 / 2048 = 0.1245 | 8 · (255 / 2048) = 0.9961 | Coarse: bin width equals quantization step |
+  L170   255 / 2048   | 2048 | 255 / 2048 = 0.1245 | 8 · (255 / 2048) = 0.9961 | Coarse: bin width equals quantization step |
+  L171   255 / 4096   | 4096 | 255 / 4096 = 0.0623 | 8 · (255 / 4096) = 0.4980 | Medium: bin width is half of quantization step |
+  L171   255 / 4096   | 4096 | 255 / 4096 = 0.0623 | 8 · (255 / 4096) = 0.4980 | Medium: bin width is half of quantization step |
+  L172   255 / 8192   | 8192 | 255 / 8192 = 0.0311 | 8 · (255 / 8192) = 0.2490 | Fine: 4 bins per finest quantization step |
+  L172   255 / 8192   | 8192 | 255 / 8192 = 0.0311 | 8 · (255 / 8192) = 0.2490 | Fine: 4 bins per finest quantization step |
+  L173   255 / 65536  | 65536 (Alphabet) | 255 / 65536 = 0.0039 | 8 · (255 / 65536) = 0.0311 | Bit-exact float16: no binning distort
+  L173   255 / 65536  | 65536 (Alphabet) | 255 / 65536 = 0.0039 | 8 · (255 / 65536) = 0.0311 | Bit-exact float16: no binning distort
+  L212   738.00       - Best pos = 4: loss = 6,458,738.00
+  L213   613.50       - Runner-up pos = 5: loss = 6,525,613.50
+  L216   165.50       - Best pos = 3: loss = 34,165.50
+  L292   811.8        | MODNet-Cut (99 tensors) | 12,714,516,480 B (12.71 GB) | 25.43 GB | 811.8 KB | 1.62 MB | 100.0% (0 B) | 7,836
+
+results\quant\notes_qdq_pruning_and_sharing_audit.md  (3)
+  L65    11/27        | **FastDepth** | 254 | 47 | 123 | 38 (38/0) | 38 (11/27) | 3 (3/0) | 0 | 0 | 5 |
+  L353   16256/64     q_out in [-16256/64, 16129/64] = [-254, 252]
+  L353   16129/64     q_out in [-16256/64, 16129/64] = [-254, 252]
+
+total untraced: 165
+
+Not all of these are bugs — derived figures (a ratio you computed, a
+percentage of nameplate) legitimately won't appear in a log. Check that
+each one is derived and not remembered.
+
+========================================================================
+RETRACTION / SUPERSESSION NOTICES — check each for orphaned old figures
+========================================================================
+
+demos\README.md:157
+  **not reproduced** rather than retracted, and re-run both before quoting either.
+
+docs\BENCHMARKS.md:19
+  | XINT8 | 71.70% | 88.40% | 5.63 ms *(superseded, see below)* | NPU (393 ops NPU / 2 CPU, 1 subgraph) |
+  figures on this line: 5.63, 71.70, 88.40
+
+docs\BENCHMARKS.md:21
+  | **XINT8 + AdaRound** | **79.80%** | **92.50%** | 6.93 ms *(superseded, see below)* | **NPU** |
+  figures on this line: 6.93, 79.80, 92.50
+
+docs\BENCHMARKS.md:28
+  **The 1.3 ms AdaRound latency cost above does not reproduce, and is retracted.**
+  figures on this line: 1.3
+
+docs\BENCHMARKS.md:117
+  yolov8n at 40.49 where the full 5000 gives 36.69. The table above supersedes them.
+  figures on this line: 40.49
+
+docs\BENCHMARKS.md:319
+  > was not repeated. Both numbers stand, neither is retracted, and the 1.3-1.5× lead should
+  figures on this line: 1.3, 1.5
+
+docs\BENCHMARKS.md:326
+  the standing rule that a slice is not the answer, the full-set 4.5 supersedes it) — against
+  figures on this line: 4.5
+
+docs\BENCHMARKS.md:540
+  > **Superseded 2026-09-09 for batchable work: the threshold is ~36 µs, not 617 µs.** The
+
+docs\BENCHMARKS.md:546
+  > section measured, so it is superseded rather than retracted.
+
+docs\BENCHMARKS.md:734
+  means the floor is no longer why they lose, and kernel quality becomes the deciding question
+
+docs\BENCHMARKS.md:886
+  (C++ or pyxrt, batched 64). Nothing above is retracted — each still governs its own host path.
+
+docs\BENCHMARKS.md:985
+  **`tensor_w` = 32 was recorded here as a hard ceiling; corrected to 44 (2026-09-07).**
+
+docs\BENCHMARKS.md:996
+  `layers_conv2_x` runs still is not the network's real 56×56 shape — the corrected ceiling
+
+docs\BENCHMARKS.md:1012
+  Kernel quality is no longer an open question in the attention-kernel sense: `conv2dk1.cc`/
+
+docs\BENCHMARKS.md:1022
+  but the agreement was numerology and is retracted here.
+
+docs\BENCHMARKS.md:1295
+  **Superseded the same day (kept as written):** the C tile was single-buffered after all, once the other session had finished with `whole_array.py` — the section above — and the tile sweep it enables i
+
+docs\BENCHMARKS.md:1532
+  **The accumulator file, and two documents corrected.** `kernels/acc_spill_probe/` holds K
+
+docs\BENCHMARKS.md:1549
+  single `conv2dk3` kernel that spilled at 8, and both are now marked superseded rather than
+
+docs\BENCHMARKS.md:1711
+  `vmac`, `cm0`–`cm7`, 88.9% MAC issue density. Only the attribution was wrong, and it is
+  figures on this line: 88.9
+
+docs\BENCHMARKS.md:1712
+  corrected here rather than edited out of the log.
+
+docs\BENCHMARKS.md:1714
+  **A first reading of this was wrong, and the correction moves the answer.** The kernel was
+
+docs\BENCHMARKS.md:1723
+  Superseded numbers are kept below; backing log `results/aie/gemm_cost_model_nest.log`.
+
+docs\BENCHMARKS.md:1731
+  | *superseded, one-loop reading* | | *1323 / 738* | | *40.4% / 23.4%* | *198.1 / 177.5* |
+  figures on this line: 1323 / 738, 177.5, 198.1, 23.4, 40.4
+
+docs\BENCHMARKS.md:1756
+  corrected model changes is how full the slot is: n=32 puts 1,306 issuing cycles into a
+
+docs\BENCHMARKS.md:1761
+  the trace probe's entire measured 717 cycles per buffer. At the corrected issuing cost that
+
+docs\BENCHMARKS.md:1909
+  neither confirmed nor refuted.** Backing log `results/aie/bank_ab_h12_npu.log`; harness
+
+docs\BENCHMARKS.md:1945
+  **RETRACTED, same day: `results/aie/bank_stall_control_npu.log`'s headline.** That log
+
+docs\BENCHMARKS.md:1951
+  was the right one. Its "constant 6 cycles, no rate effect" finding is retracted with it, as a
+
+docs\BENCHMARKS.md:1967
+  **A tempting join with the driver work, tested and refuted.** Local `main` measures an NPU
+
+docs\BENCHMARKS.md:2051
+  **Retraction: the FP32 baseline is 68.30%, not the 75.0% previously published here.**
+  figures on this line: 68.30, 75.0
+
+docs\BENCHMARKS.md:2438
+  **Superseded 2026-09-09, same correction as RegNetX-002:** the shift-cut adjustments are
+
+docs\BENCHMARKS.md:2441
+  (`results/quant/eval_resnext50_32x4d_quark_nocle_c64_cpu.log`), and the corrected analyzer
+
+docs\BENCHMARKS.md:2784
+  **Retracted: every absolute %-of-16-TOPS number this repo previously reported from
+
+docs\BENCHMARKS.md:2823
+  Ryzen AI 1.5 — "no longer supported and should not be used," per AMD's own release
+  figures on this line: 1.5
+
+docs\BENCHMARKS.md:2895
+  Two things fall out of this table that the retracted GOPS numbers never showed:
+
+docs\BENCHMARKS.md:2909
+  best number this repo has measured** — nearly 6× yolov8n's old, now-retracted "~1.1"
+  figures on this line: 1.1
+
+docs\BENCHMARKS.md:3850
+  the corrected contract and phase gates are in [`quant/DESIGN.md`](../quant/DESIGN.md).
+
+docs\BENCHMARKS.md:3894
+  the corrected design and the table above.
+
+docs\BENCHMARKS.md:4231
+  is **superseded**: it joined CPU audits by model hash alone and incorrectly reused the
+
+docs\BENCHMARKS.md:4233
+  [corrected summary](../results/quant/probe_resnet50_acceptance_summary_v2.log) binds an
+
+docs\BENCHMARKS.md:4522
+  **The boldest prediction is refuted, twice.** Both SESR artifacts were called infeasible on
+
+docs\BENCHMARKS.md:4663
+  Ignition reproduces itself too, and its sidecar carries the corrected version
+
+docs\BENCHMARKS.md:5729
+  | MODNet Cut XINT8 (PIL, superseded) | Ryzen AI NPU (Phoenix 4x4) | 26.44 ms | 37.8 fps | 502 / 507 (99.0%) | 0.19022 | 50.75 | `results/modnet/eval_modnet_cut_xint8_npu.log` |
+  figures on this line: 26.44, 37.8, 50.75, 502 / 507, 99.0
+
+docs\BENCHMARKS.md:5731
+  | MODNet Zero-Concat XINT8 (PIL, superseded) | Ryzen AI NPU (Phoenix 4x4) | 17.75 ms | 56.3 fps | 533 / 538 (99.1%) | 0.35269 | 93.18 | `results/modnet/eval_modnet_zero_concat_xint8_npu.log` |
+  figures on this line: 17.75, 533 / 538, 56.3, 93.18, 99.1
+
+docs\BENCHMARKS.md:5846
+  > **Superseded on 2026-09-09, in two ways.** The figures below are a 200-image slice; the full
+
+docs\BENCHMARKS.md:5871
+  - **The DPU shift-cut clamp mechanism** — *observation stands, attribution retracted
+
+docs\BENCHMARKS.md:5882
+  `eval_regnetx_002_quark_cle_full1000_cpu.log`). The corrected analyzer finds **zero sigma
+
+docs\BENCHMARKS.md:6001
+  > **The "single node" reading below is superseded (same day).** Cuts 181 and 182 differ by **60
+
+docs\BENCHMARKS.md:6142
+  > **Superseded the same day.** These spans were computed by reading Quark's pattern list as
+
+docs\BENCHMARKS.md:6487
+  > the BiSeNetV2 row is **retracted** — no log backs it. The superseded figures are kept
+
+docs\BENCHMARKS.md:6529
+  **Superseded FastDepth listing** (kept for the record; the percentages are a byte-scan
+
+docs\BENCHMARKS.md:6535
+  **Retracted: the BiSeNetV2 row.** It reported 4,630 packets at 43.17% opcode 3, 32.61%
+  figures on this line: 32.61, 43.17
+
+docs\BENCHMARKS.md:6541
+  semantic decode the six-entry guess table cannot support. Retracted rather than revised:
+
+docs\BENCHMARKS.md:6563
+  > **Substantially retracted on 2026-09-09 (Desktop 2). The section is kept in full,
+
+docs\BENCHMARKS.md:6564
+  > superseded numbers included, because what it got wrong is the useful part.**
+
+docs\BENCHMARKS.md:6566
+  > 1. **The audit does not reproduce.** The corrected analyzer over eleven quantized models
+
+docs\BENCHMARKS.md:6571
+  >    "shift clamp" case rests on. `results/quant/shift_cut_feasibility.log` no longer matches
+
+docs\BENCHMARKS.md:6609
+  Supersedes neither log below — every violation count in them still reads zero — but it is
+
+docs\BENCHMARKS.md:6611
+  - `results/quant/shift_cut_reaudit_20260909_desktop2.log`: the corrected audit across eleven
+
+docs\BENCHMARKS.md:6612
+  quantized ONNX models, zero violations on all of them. **This supersedes the log below.**
+
+docs\BENCHMARKS.md:6614
+  models. **Superseded — it no longer matches its own tool.**
+
+docs\BENCHMARKS.md:6619
+  `research/windows-lowlevel`, imported here as the evidence for the retraction above).
+
+docs\BENCHMARKS.md:6639
+  (**hypothesis, not a result — see the retraction at the top of this section; neither edge has
+
+docs\BENCHMARKS.md:6660
+  > **Superseded 2026-09-09 — this whole table.** Re-running `check-shift-cut` over these
+
+docs\BENCHMARKS.md:6661
+  > same files with the corrected analyzer gives **zero violations on every model**
+
+docs\BENCHMARKS.md:6678
+  > [the audit re-run](#the-shift-cut-audit-re-run-theorem-3-retracted-and-three-defects-in-the-verifier-2026-09-09-desktop-2).
+
+docs\BENCHMARKS.md:6691
+  Diagnosis of identified violations — **all three retracted 2026-09-09, kept as the record**:
+
+docs\BENCHMARKS.md:6692
+  - **RegNetX-002**: Layer `/s1/b1/conv2/conv/Conv` has scale factor A = 2.028241e+31, yielding M = 16384 and sigma = -90. Because sigma < 0, the post-accumulator ALU cannot scale the 32-bit register do
+  figures on this line: 0.10, 0.50, 66.20, 69.50
+
+docs\BENCHMARKS.md:6693
+  - **FastDepth**: Layer `Conv_96` has scale factor A = 3.814697e-06, yielding M = 16384 and sigma = 32. The hardware shifter is 5 bits wide (maximum shift 31); sigma = 32 overflows by exactly 1 bit, cl
+
+docs\BENCHMARKS.md:6710
+  ### The shift-cut audit re-run: Theorem 3 retracted, and three defects in the verifier (2026-09-09, Desktop 2)
+
+docs\BENCHMARKS.md:6736
+  **Theorem 3 is retracted.** It held that positions must lie in [0, 31] and that `pos < 0`
+
+docs\BENCHMARKS.md:6777
+  > claims are RETRACTED.** Every fixture built outside the producer's shift-cut rule was refused by
+
+docs\BENCHMARKS.md:6827
+  **On the retracted upper-bound row.** At sigma = 32 the fixture produced five distinct output
+
+docs\BENCHMARKS.md:6831
+  **On the retracted lower-bound row.** Sigma = 0 showed 3,052 elements wrong against the plain CPU
+
+docs\BENCHMARKS.md:6872
+  in [DECISIONS](DECISIONS.md#aie-ml-systolic-shift-cut-bound-0-31--substantially-retracted-2026-09-09) that every emitted graph be
+
+docs\BENCHMARKS.md:6890
+  > **Retracted 2026-09-09.** This projection was measured to move layers that were already
+
+docs\BENCHMARKS.md:6894
+  > MODNet-Cut 1 and RegNetX-002 5 — all of which drop to 0 once the analyzer is corrected,
+
+docs\BENCHMARKS.md:7398
+  used fresh command allocation per dispatch and is superseded for timing by the
+
+docs\BENCHMARKS.md:7537
+  used as the core selector; its corrected selector is 49
+
+docs\BENCHMARKS.md:7541
+  loop. The temporary 2.63% wider result with that slower scheduler is superseded
+  figures on this line: 2.63
+
+docs\DECISIONS.md:36
+  is superseded by [Ignition's controlled probes](BENCHMARKS.md#ignition-controlled-resnet-qdq-acceptance).**
+
+docs\DECISIONS.md:250
+  expose the converse failure: NPU placement with incorrect numerical execution.
+
+docs\DECISIONS.md:369
+  below 6 GB free and no longer lets one crashed model abort the rest of a matrix.
+
+docs\DECISIONS.md:694
+  if bf16 gains what int8 gained, the bf16 niche roughly doubles. **Superseded the same
+
+docs\DECISIONS.md:734
+  the corrected decoder, cross-checked against upstream on a sync-free run. Also learned
+
+docs\DECISIONS.md:743
+  retracted. They may not actually conflict — one varied *load* at a fixed power mode, the
+
+docs\DECISIONS.md:876
+  - **Not the SiLU rewrite.** This was the leading hypothesis and it was wrong. Quark's
+
+docs\DECISIONS.md:976
+  confirmation, not a retraction.
+
+docs\DECISIONS.md:980
+  constant's value, is what was wrong.
+
+docs\DECISIONS.md:997
+  - **SUPERSEDED 2026-09-09 for batchable work: ~36 µs.** The "hypothetical zero-overhead
+
+docs\DECISIONS.md:1017
+  argument handling. The open question is no longer dispatch — it is IRON's host path, now
+
+docs\DECISIONS.md:1025
+  now, none retracted:** 671.5 µs (IRON unbatched) · 498.5 µs (IRON batched 64) · ~108 µs
+  figures on this line: 498.5, 671.5
+
+docs\DECISIONS.md:1099
+  *(Superseded 2026-09-07 by the spatial sweep below — the op class IS now closed, on the
+
+docs\DECISIONS.md:1121
+  - **`tensor_w` = 32 was recorded as a structural ceiling here; corrected below to 44
+
+docs\DECISIONS.md:1133
+  real conv2_x (56×56) still cannot compile — the corrected ceiling of 44 is short of
+
+docs\DECISIONS.md:1138
+  but the "8 live pipelined accumulators" read below was wrong; corrected 2026-09-07.**
+
+docs\DECISIONS.md:1145
+  against a single core. **What was wrong:** the "8 live pipelined accumulators" were not
+
+docs\DECISIONS.md:1176
+  6 hardware accumulator registers. *(Superseded 2026-09-09. The count was inferred
+
+docs\DECISIONS.md:1182
+  is unchanged; only the register count named here was wrong.)* Upstream mlir-aie
+
+docs\DECISIONS.md:1293
+  - **DIAGNOSIS CORRECTED (2026-09-07) — the verdict stands, the stated cause was wrong.**
+
+docs\DECISIONS.md:1340
+  ### MobileViT-XXS accuracy: measured, and the FP32 baseline retracted
+
+docs\DECISIONS.md:1353
+  - **RETRACTED: the FP32 baseline is 68.30% top-1, not 75.0%.** 75.0% was the first 100
+  figures on this line: 68.30, 75.0
+
+docs\DECISIONS.md:1455
+  ### AIE-ML systolic shift-cut bound [0, 31] — substantially retracted 2026-09-09
+
+docs\DECISIONS.md:1459
+  Multi-Branch and Theorem 3 is the `pos_y` window. So "Theorem 3 is retracted" means
+
+docs\DECISIONS.md:1460
+  different things in the two files. What is retracted in the *code* is the rule that
+
+docs\DECISIONS.md:1461
+  positions must lie in `[0, 31]`. The `pos_y` window itself is not retracted; the
+
+docs\DECISIONS.md:1466
+  (`results/quant/shift_cut_reaudit_20260909_desktop2.log`, which supersedes
+
+docs\DECISIONS.md:1470
+  - **Theorem 1 (Shift-Cut Feasibility Bound)**: If an ONNX QDQ triad requires sigma < 0, the operation requires an arithmetic left-shift exceeding the 32-bit accumulator, resulting in immediate accumul
+  figures on this line: 0.10, 0.50, 66.20, 69.50
+
+docs\DECISIONS.md:1471
+  - **Theorem 2 (Multi-Branch Inter-Scale Alignment)**: In multi-branch elementwise operations (such as Bilateral Guided Aggregation in BiSeNetV2), divergent scale grids truncate dynamic range in hardwa
+  figures on this line: 0.687
+
+docs\DECISIONS.md:1474
+  Violations are projectable to the nearest bound via `project_scale_to_feasible_basin` (demonstrated on FastDepth `Conv_96`: pos_y 0 -> 1, bringing sigma from 32 down to 31, eliminating the clamp witho
+
+docs\DECISIONS.md:1517
+  build on any machine here can reach one. *Superseded 2026-09-10:* Desktop 1's
+
+docs\SILICON.md:73
+  | Issue width | 6 slots per bundle: **`b` and `a` are the two load units**, `s` store, `x` scalar and control flow, `m` move/broadcast, `v` vector | MEASURED 2026-09-09 (`results/aie/aie2_isa_static.l
+
+docs\SILICON.md:77
+  | Live accumulators | **5** concurrently-live 4×8×8 int8 `aie::mmul` accumulators compile with no stack traffic; 6 is the first count that spills. The allocator names 9 accumulator registers, `cm0`–`c
+
+docs\SILICON.md:81
+  | MAC issue rate, production int8 GEMM | **107.3 MACs/cycle** over a whole kernel call, 41.9% of the 256 nameplate; 88.9% inside the hardware loop alone | MEASURED 2026-09-09 by walking the compiled o
+  figures on this line: 103.3, 107.3, 198.1, 40.3, 41.9, 77.4, 88.9
+
+docs\SILICON.md:141
+  | Core clock | **1.80 GHz** in `default`, `performance` and `turbo`; 1.03 GHz in `balanced`; 0.80 GHz in `powersaver` (1.7983 / 1.8002 / 1.7998 / 1.0274 / 0.7985 GHz by the scalar-loop fit; 1.7990 re-
+  figures on this line: 0.33, 0.80, 1.03, 1.6, 1.80, 2.000, 7.0, 9.000
+
+docs\SILICON.md:241
+  To isolate why open AIE2 compute kernels deviate from hardware nameplate limits, the compiled machine code for eight core kernel variants across `kernels/` and `results/aie/` was audited at the VLIW b
+
+docs\SILICON.md:591
+  supersedes the 6.19 B/cycle of the same day's first reading, which mis-modelled the kernel's
+  figures on this line: 6.19
+
+docs\SILICON.md:627
+  `kernels/clock_probe/clock_probe.py` carries a corrected decoder, cross-checked against
+
+docs\SILICON.md:643
+  2026-09-09; the hardware-counter route is unstarted.** MACs per cycle per core no longer has to
+
+kernels\attention_bf16\README.md:52
+  **Why? Two reasons, and the one originally written here was wrong.**
+
+kernels\attention_bf16\README.md:110
+  > here was a 100-image slice and has been retracted. Every XINT8 variant collapses: full XINT8
+
+kernels\README.md:48
+  | `bank_placement/` | A local copy of `whole_array.py` plus `--stack-size`, and an alternating A/B driver | Tests H12: does separating the int8 GEMM's colliding operands into different memory banks sp
+
+kernels\README.md:199
+  **Its recorded diagnosis was wrong.** The loss was blamed on per-dispatch cost, which is
+
+kernels\README.md:218
+  **Retracted:** its host-cost claim, that "628.2 µs reproduces 617.0 µs to ~2%". Those are
+  figures on this line: 617.0, 628.2
+
+kernels\README.md:223
+  **Superseded:** its scope note that the op class is *not* closed. It closed *this design at
+
+kernels\README.md:239
+  **Corrected (2026-09-07): the `tensor_w`=32 ceiling.** The real `aiecc`/Tile(0,4) L1
+
+kernels\README.md:343
+  **Superseded 2026-09-09 for batchable work: the threshold is ~36 µs.** The zero-overhead
+
+kernels\README.md:344
+  resubmit path is no longer hypothetical — batched `pyxrt.runlist` submission amortises a
+
+quant\DESIGN.md:111
+  `align_quantize_info` path, and are superseded by the `QuantPosManager` rows above.
+
+quant\DESIGN.md:159
+  [Q] `refine.py:686-724`. The draft's ConvTranspose/MatMul cut/bias coverage was incorrect.
+
+quant\DESIGN.md:914
+  | 0 | Fingerprint | `notes_xint8_dialect.log`; §2 corrected | every [U] closed or explicitly open | any machine, no hardware |
+
+quant\DESIGN.md:973
+  before every doc commit; `tools/audit_numbers.py` when a number is superseded — the A8W8
+
+quant\TODO.md:164
+  MODNet against 42.20 on RegNetX-002 and 72.62 on ResNeXt-50 (corrected 2026-09-09: those two
+  figures on this line: 42.20, 72.62
+
+README.md:118
+  retracted**: the ~1.1 TOPS FLOPs-derived estimate for yolov8n, and every %-of-nameplate
+  figures on this line: 1.1
+
+README.md:159
+  | [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md) | Every measurement with its full working, caveats and superseded history |
+
+RESEARCH.md:83
+  off it is retracted, not revised.** `tools/gops_sweep.py`
+
+RESEARCH.md:120
+  deprecated `1x4.xclbin` starting Ryzen AI 1.5 ("no longer supported and should not
+  figures on this line: 1.5
+
+RESEARCH.md:147
+  5. **A real achieved-ops/s number now exists, replacing every retracted GOPS
+
+RESEARCH.md:189
+  for yolov8n solo elsewhere in this repo (status table, README) are retracted by
+
+RESEARCH.md:190
+  this same number, not merely superseded** — 6.6%, not "~1.1", is yolov8n's correct
+  figures on this line: 1.1, 6.6
+
+RESEARCH.md:399
+  independent of the retracted GOPS number — see the concurrency and width findings
+
+RESEARCH.md:501
+  | AdaRound at width | Does AdaRound recover less on a wider model, as the YOLO n→s pattern predicts? | **Answered: no, the prediction was wrong.** resnet50 recovers 90.0% of its quantization loss, `wi
+  figures on this line: 1.80, 16.64, 4.97, 66.7, 79.90, 80.10, 80.20, 9.66, 90.0, 90.5, 92.90, 93.90, 94.40
+
+RESEARCH.md:540
+  - **Direct NPU utilization measurement — the GOPS path is closed and retracted, but
+
+RESEARCH.md:555
+  GOPS is retracted, not revised. That same discovery opened a real lever instead:
+
+RESEARCH.md:961
+  with a measurement: (1) DMA-floor retraction -- L is per-group length, so
+
+RESEARCH.md:1071
+  **Diagnosis corrected 2026-09-07 -- the verdict holds, the stated cause did not.**
+
+RESEARCH.md:1161
+  floor either. No verdict depends on it; the agreement was numerology and is retracted.
+
+RESEARCH.md:1182
+  corrected decoder, cross-checked against upstream on a sync-free run. Not run: the
+
+RESEARCH.md:1261
+  **Retraction: the FP32 baseline is 68.30%, not the 75.0% previously published.** 75.0%
+  figures on this line: 68.30, 75.0
+
+RESEARCH.md:1278
+  and **refuted** (`results/mobilevit/cle_pattern_count.log`, raw Quark logs in
+
+RESEARCH.md:1435
+  3. **RegNetX-002's collapse is cross-layer equalization, not a DPU shift-cut bound — the original attribution here is retracted (2026-09-09)**: RegNetX-002 (2.68M parameters, regular linear channel ca
+  figures on this line: 0.10, 2.45, 3.25, 324 / 326, 407.9, 66.20, 69.50, 99.4
+
+RESEARCH.md:1436
+  - **Falsification verdict:** Refuted for latency (neither `Concat` memory copies nor grouped conv micro-kernels stall the NPU), but confirmed as a severe failure mode for plain per-tensor INT8 PTQ and
+  figures on this line: 66.20
+
+RESEARCH.md:1490
+  retracted.** GOPS scales exactly linearly with stream count while measured completion
+
+RESEARCH.md:1515
+  retracted.** A same-sitting `--fresh` rerun of both models at 1000 images (2026-09-07)
+
+RESEARCH.md:1556
+  Those latencies had no backing log and are superseded by a same-sitting re-measurement
+
+RESEARCH.md:1573
+  10^{32}$) that integer rounding cannot recover. **Attribution corrected 2026-09-09:** the clamp is
+
+RESEARCH.md:1745
+  companion BiSeNetV2 row is retracted — no log reproduces it.
+
+RESEARCH.md:1752
+  - **The audit does not reproduce.** The corrected analyzer over eleven quantized models
+
+RESEARCH.md:1757
+  `results/quant/shift_cut_feasibility.log` no longer matches the tool that wrote it; it is
+
+RESEARCH.md:1758
+  superseded and kept, not deleted.
+
+RESEARCH.md:1885
+  superseded the same day, modelled the kernel as one loop and reported the core as starved for
+
+RESEARCH.md:1913
+  already noted above. Also tested and refuted here: the two-process handoff floor is **not**
+
+RESEARCH.md:1922
+  cross-layer equalization, not a shift-cut bound, and the corrected analyzer finds zero
+
+results\aie\notes_w4a8_aie2_roofline.md:48
+  Hardware characterization conducted on Desktop 2 (Phoenix, Ryzen 7 8700G, NPU driver 32.0.20101.3760) on 2026-09-10 (`results/aie/w4a8_probe_npu.log` on branch `worktree-w4a8-unpack`) superseded this 
+
+results\aie\README.md:19
+  ~2%" is retracted** as a bracket mismatch. 617.0 µs is the passthrough's *wall*
+  figures on this line: 617.0
+
+results\aie\README.md:22
+  - **`conv2x_int8_cpu_baseline.log`'s "the op class is NOT closed" is superseded** by
+
+results\aie\README.md:24
+  - **`bottleneck_spatial_sweep_npu.log`'s `tensor_w`=32 hard ceiling is superseded.** The
+
+results\aie\README.md:31
+  - **`attention_bf16_kernel_npu.log`'s diagnosis is corrected** by `dispatch_floor_npu.log`:
+
+results\aie\README.md:39
+  corrected/reversed** at the real (non-square) shape by
+
+results\aie\README.md:45
+  win at an unconstrained tile size is not retracted — it just doesn't automatically
+
+results\aie\README.md:55
+  corrected** by `bf16_matmul_k_limit_diagnosed_npu.log`: not a threshold, and not
+
+results\aie\README.md:62
+  - **`aie2_isa_static.log`'s section-5 attribution is corrected** by `gemm_cost_model.log`.
+
+results\aie\README.md:68
+  `cm7` at 88.9% MAC issue density. Only the provenance line was wrong.
+  figures on this line: 88.9
+
+results\aie\README.md:69
+  - **`gemm_cost_model.log`'s cost model is superseded** by `gemm_cost_model_nest.log`, written
+
+results\aie\README.md:77
+  - **`aie2_isa_static.log`'s VLIW slot naming is corrected** by `bank_conflict_survey.log`.
+
+results\aie\README.md:85
+  - **`dispatch_floor_npu.log`'s 617 µs go/no-go threshold is superseded for batchable work**
+
+results\aie\README.md:89
+  **not retracted**: it still governs a single unbatched IRON dispatch, which is what that log
+
+results\aie\README.md:94
+  - **`bottleneck_spatial_sweep_npu.log`'s 146.1 marginal GOPS is superseded by
+  figures on this line: 146.1
+
+results\aie\README.md:100
+  that run could not compile 56×56 at all while the new one can. 146.1 is **not retracted**; it
+  figures on this line: 146.1
+
+results\aie\README.md:101
+  is a measurement of a kernel that no longer exists in this tree. The inference that the width
+
+results\aie\README.md:109
+  costs **~531 µs** — a 1.26–1.37× gain, not 17×. 36.3 µs is **not retracted**: it is what a
+  figures on this line: 1.26, 1.37, 36.3
+
+results\aie\README.md:179
+  restored to `default` and the clock re-measured. Supersedes the 1.6 GHz RESEARCH.md cited
+  figures on this line: 1.6
+
+results\aie\README.md:228
+  the cycles the core spent NOT issuing. **Its model numbers are superseded the same day by
+
+results\aie\README.md:234
+  that section stands and only the attribution was wrong.
+
+results\aie\README.md:241
+  64³/(4·8·8) with nothing left over. Corrected: the core issues **74.6%** of the dispatch at
+  figures on this line: 74.6
+
+results\aie\README.md:367
+  **`bank_stall_control_npu.log`** -- **RETRACTED headline** (see above). Concluded that
+
+results\aie\README.md:377
+  Its original entry is kept below verbatim as the superseded record -- every claim in it
+
+results\aie\README.md:411
+  confirmed nor refuted. A peer session held about a core throughout; repeat on a quiet machine.
+
+results\aie\README.md:496
+  a measurement: a DMA-floor arithmetic retraction (no new measurement — L is per-group
+
+results\aie\README.md:523
+  4.57 ms on Stage 3, 57.61 ms on Stage 2). Its recorded diagnosis is corrected by
+  figures on this line: 4.57, 57.61
+
+results\aie\README.md:524
+  `dispatch_floor_npu.log` — see the retraction list above.
+
+results\aie\README.md:637
+  L1. Supersedes an 18:33 screen of the same tiles taken under a running AdaRound job, kept in
+
+results\aie\README.md:707
+  call. **Four thresholds now, not three**, none of them retracted. Two limits stand: batching
+
+results\aie\README.md:802
+  > agreement is **retracted** as a bracket mismatch, and "the op class is NOT closed" is
+
+results\aie\README.md:803
+  > **superseded** by `bottleneck_spatial_sweep_npu.log` below — the op class **is** now
+
+results\aie\README.md:822
+  bracket confusion is corrected — the like-for-like dispatch floor for a wall-minus-hardware
+
+results\aie\README.md:829
+  > The op-class verdict stands. Its **`tensor_w`=32 ceiling is superseded** (the real
+
+results\aie\README.md:859
+  **`dpu_transaction_disasm.log`** — a heuristic byte scan (not a disassembly) of the `mc_code` bytefields inside a compiled `.xmodel`, via `tools/dpu_transaction_disasm.py`. On FastDepth it finds 2,570
+  figures on this line: 0.24, 13.27, 23.97, 32.61, 37.35, 43.17, 49.38
+
+results\aie\README.md:876
+  `02` validates the corrected full-function extraction. Neither is a timing run.
+
+results\aie\README.md:1056
+  full-byte serial parity; fresh command allocation, superseded for timing below.
+
+results\aie\README.md:1084
+  | [043839Z_29368](fused_epilogue_phoenix_20260913T043839Z_29368.log) | Initial polynomial compile; vector spills. Superseded. |
+
+results\aie\README.md:1085
+  | [044213Z_15444](fused_epilogue_phoenix_20260913T044213Z_15444.log) | Factored polynomial compile, separate one-core trace build. Superseded. |
+
+results\aie\README.md:1087
+  | [044450Z_10245](fused_epilogue_phoenix_20260913T044450Z_10245.log) | Bank-separated resident compile. Superseded. |
+
+results\aie\README.md:1090
+  | [044832Z_1665](fused_epilogue_phoenix_20260913T044832Z_1665.log) | Paired Q14 polynomial compile; spills. Superseded. |
+
+results\aie\README.md:1092
+  | [045122Z_18639](fused_epilogue_phoenix_20260913T045122Z_18639.log) | Q11 paired polynomial compile. Superseded transport. |
+
+results\aie\README.md:1096
+  | [050338Z_12394](fused_epilogue_phoenix_20260913T050338Z_12394.log) | Corrected core selector 49, chunked output compile. |
+
+results\aie\README.md:1105
+  | [051950Z_16177](fused_epilogue_phoenix_20260913T051950Z_16177.log) | Clean Cin=512 pass with slower raw scheduler; superseded performance. |
+
+results\README.md:36
+  | `quant/` | `perchannel_verdict_`, `perchannel_axis_control_`, `contexts_perchannel_desktop2_20260909.log`: the per-channel weight-scale acceptance verdict, asked on 1 to 8 convolutions instead of Re
+
+results\README.md:38
+  | `quant/` | `mul_fixture_`, `bga_branches_`, `mul_repair_`, `mul_context_desktop2_20260909.log`: the four controls that take `/bga/Mul` off the hook -- the isolated operator at the failing shape, eac
+
+results\README.md:40
+  | `quant/` | `arithmetic_desktop2_20260909_s01_*` and `s02_*`: sixteen synthetic Conv fixtures probing Theorem 1's sigma window via the probe's `--out-of-contract` opt-in. Every fixture outside the pr
+
+results\README.md:41
+  | `quant/` | `shift_cut_feasibility_desktop2_20260909.log`: the shift-cut audit re-run over eleven quantized models after Theorem 3 was retracted and three verifier defects fixed. Zero sigma violation
+
+results\README.md:46
+  | `quant/` | `shift_cut_reaudit_20260909_desktop2.log`: the corrected shift-cut audit across eleven quantized models — **zero sigma violations on every one**, RegNetX-002 at min 11 / median 21 / max 3
+  figures on this line: 25 / 29, 90 / 24
+
+results\README.md:47
+  | `quant/` | `shift_cut_contract_20260909_desktop2.log`: why that zero was never evidence. Quark's own `adjust_shift_cut` clamps `shift_cut = wpos + ipos - opos` into `[0, 16]`, and the module's sigma
+
+results\README.md:50
+  | `quant/` | The cross-layer-equalization re-attribution behind that retraction (measured on branch `research/windows-lowlevel`, imported as evidence): `eval_regnetx_002_ignition_nocle_c64_cpu.log` (6
+  figures on this line: 0.10, 66.20, 68.90, 69.50
+
+results\README.md:54
+  | `quant/` | `shift_cut_forward_predictions.log`: the shift-cut hazard audit's verdict on 14 XINT8 artifacts with no NPU record, committed BEFORE any of them ran so the outcome could not be read back 
+  figures on this line: 0.999, 34.06, 50/52
+
+results\README.md:64
+  | `quant/` | `notes_xint8_dialect.log`: Quark 0.11rc1 source excerpts, source/model hashes, static XINT8/A8W8 fingerprints, corrected refinement rules and explicit remaining unknowns; no quantization 
+
+results\README.md:70
+  | `quant/` | `probe_resnet50_acceptance_summary_v2.log`: summary bound to model and input hashes; initial `probe_resnet50_acceptance_summary.log` is superseded for its full-set RMSE; `check_ignition_a
+
+results\README.md:80
+  | `mobilevit/` | `mobilevit_xxs`: the full-1000-image accuracy table behind the MobileViT quantization collapse -- `eval_fp32_cpu.log` (68.30%/88.20%, the FP32 baseline, matching the paper's ~69.0%), 
+  figures on this line: 0.00, 0.10, 0.13, 0.25, 0.5, 0.80, 1.0, 1.41, 1.71, 108.00, 108.29, 14.57, 25.0, 29/36, 3.25, 4.47, 68.30, 69.0, 7.51, 73.40, 75.00, 88.20
+
+results\README.md:82
+  | `modnet/` | MODNet portrait matting at 512²: the same-sitting NPU/iGPU/CPU capture behind Category B — `eval_modnet_zero_concat_xint8_npu.log` (17.75 ms, 533/538 nodes, MAD 0.35269), `eval_modnet_cu
+  figures on this line: 17.75, 18.46, 209.60, 26.44, 27.51, 46.14, 502/507, 533/538
+
+results\README.md:83
+  | `regnet/` | Category E RegNetX-002: FP32 baseline (`eval_regnetx_002_fp32_cpu.log`, 68.50% top-1, 1.89 ms), NPU plain XINT8 (`eval_regnetx_002_xint8_npu.log`, 2.45 ms / 407.9 FPS, 324/326 nodes, 0.5
+  figures on this line: 0.50, 1.89, 2.45, 324/326, 407.9, 66.20, 68.50
+
+results\README.md:86
+  | `aie/` | `windows_xrt_driver_bench.log` (device/context floor, unified memory BO sync across 64 B–16 MB, userspace command dispatch prep, runlist batching), `windows_context_switch_bench.log` (a 5-c
+
+results\README.md:88
+  | top level | `adaround_latency_diff_{xint8,adaround}_npu.log`: same-sitting `--fresh` rerun of both ResNet50 models settling RESEARCH.md's AdaRound-latency-cost question; `adaround_latency_diff_diag_
+  figures on this line: 5.63, 6.93
+
+results\README.md:133
+  for a clear host, so its hash in their `source_sha256` manifests no longer matches the
+
+total notices: 223
+
+For each: grep the retracted figure across all docs. If it still appears
+anywhere without the retraction attached, that's the orphan to fix.
+
+RESEARCH_PROCESS_RESULT {"exit_code": 0, "stop": null, "peak_tree_rss_bytes": 313233408, "rss_measurement": "maximum observed across sampled descendant working sets; zero observations reported as null", "elapsed_seconds": 14.453999999997905, "foreign_contention_observed": false, "timing_eligible": true}

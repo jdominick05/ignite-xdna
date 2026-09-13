@@ -1,0 +1,1471 @@
+RESEARCH_PLATFORM {"machine": "Desktop 2", "cpu": "AMD Ryzen 7 8700G w/ Radeon 780M Graphics", "os": "Windows-11-10.0.26200-SP0", "ram_bytes": 33381138432, "source_sha256": {"tools/research_process.py": "b527a07958df0ed575df38dfe88da348c972ee79eb459974555cf2655f94d37f", "tools/quant_calib_alphabet.py": "2dc0b2878c564853f340880209a425dfcf63b8536b2b8e9fd32344daade58d37", "tools/xint8_arithmetic_probe.py": "6aa3df08b9870c3c2264b868459d7ffbac3070dddc1349d7c6f3f480075f7041", "scripts/research-lowlevel.sh": "3455ad7933697936487712665505c216891865c6deada647302785f6e37020bd", "scripts/research-iron.sh": "128f8b5ee21f2209f8dda004cefc39fbf87a5170ca61c5cf18dc97a6ea6669c8", "kernels/memory_placement/probe.py": "e8d990169ad6091fa1b53852e9f61eff495b5def72d35165a5c5cf1759e38898", "kernels/memory_placement/memory_kernels.cc": "182e7af7071a1e851afb4a7ca266069c489aea1fbaaa85eca129708daeba5ba6", "scripts/research-matrix.sh": "739254171629deae822b0ad7dabc875aee19ace56dde77d3e8aab61663f97516", "kernels/memory_placement/gemm.py": "17c905ad66110d3346bbf0db898dfc6b780df59fae1dfb0c1747057ce1e5844e", "kernels/memory_placement/gemm_placement.cc": "f21acf7250b12914ea30cc1f77613239dfa18421a85a1b9a5199017dd916278a", "tools/research_summary.py": "0c00dcceef07053d06731b41a1f1ed58d3ba4ea09f82497de354ce9cef17da20", "tools/research_toolchain.py": "f0a126a24ae213acfaa43460cfd9def0c86d9cb70cfee0228aa271688467b314"}, "commit": "878887829000186d482221baeac2afbc624b8c2f", "command": ["bash", "scripts/research-iron.sh", "tests/test_fused_epilogue_kernel.py", "--compile"], "seconds_limit": 1800.0, "rss_gib_limit": 10.0, "checks_only": false, "free_ram_bytes": 17619697664}
+HOST_LOAD busy_cores=1.1 logical_cores=16 free_ram_gb=16.3 sample_sec=1
+HOST_LOAD_TOP 0.34 pycharm64:8540 ws_mb=2879
+HOST_LOAD_TOP 0.19 python:32968 ws_mb=30
+HOST_LOAD_TOP 0.12 HWiNFO64:1824 ws_mb=43
+HOST_LOAD_TOP 0.09 powershell:18936 ws_mb=79
+HOST_LOAD_TOP 0.09 codex:19240 ws_mb=250
+HOST_LOAD_VERDICT CLEAR
+
+PRE_NPU_CONTEXT_WITNESS "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+{"event": "offline_pass", "max_error_output_lsb": 1, "q8_inputs_checked": 65536, "scope": "CPU arithmetic and fixture validation; no hardware execution"}
+{"event": "compile_begin", "variant": "raw"}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [9940, 13400, 16844, 17648, 18824, 19880], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 2.609, "tree_rss_bytes": 212631552, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 5.187, "tree_rss_bytes": 147283968, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [9940, 13400, 16844, 17648, 18824, 18968, 19880], "foreign_pids": []}
+Traceback (most recent call last):
+  File "C:\Users\<user>\PycharmProjects\ignite-xdna\tests\test_fused_epilogue_kernel.py", line 194, in <module>
+    main()
+    ~~~~^^
+  File "C:\Users\<user>\PycharmProjects\ignite-xdna\tests\test_fused_epilogue_kernel.py", line 188, in main
+    compile_bundles(args.build_dir.resolve())
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\<user>\PycharmProjects\ignite-xdna\tests\test_fused_epilogue_kernel.py", line 153, in compile_bundles
+    specialization.compile(xclbin_path=target / 'design.xclbin', inst_path=target / 'insts.bin')
+    ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\<user>\mlir-aie\ironenv\Lib\site-packages\mlir_aie\python\aie\utils\compile\jit\compilabledesign.py", line 396, in compile
+    compile_mlir_module(
+    ~~~~~~~~~~~~~~~~~~~^
+        mlir_module=mlir_module,
+        ^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+        fold_ddr_addr_offset=fold_ddr_addr_offset,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\<user>\mlir-aie\ironenv\Lib\site-packages\mlir_aie\python\aie\utils\compile\utils.py", line 534, in compile_mlir_module
+    _run_aiecc(mlir_file, args)
+    ~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "C:\Users\<user>\mlir-aie\ironenv\Lib\site-packages\mlir_aie\python\aie\utils\compile\utils.py", line 409, in _run_aiecc
+    raise RuntimeError(
+    ...<2 lines>...
+    )
+RuntimeError: [aiecc] Compilation failed with exit code 1:
+
+(0/37) input.mlir
+(1/37)           
+(1/37) [0/1] placed.mlir
+(2/37)                  
+(2/37) [0/1] traced.mlir
+(3/37)                  
+(3/37) [0/1] input_with_addresses.mlir
+(4/37)                                
+(4/37) [0/1] input_physical.mlirC:\Users\<user>\PycharmProjects\ignite-xdna\build\fused_conv_epilogue\raw\design.prj\aie.mlir:2:3: error: Unable to find a legal routing
+  aie.device(npu1) {
+  ^
+C:\Users\<user>\PycharmProjects\ignite-xdna\build\fused_conv_epilogue\raw\design.prj\aie.mlir:2:3: note: see current operation: 
+"aie.device"() <{device = 4 : i32, sym_name = "main"}> ({
+  %0 = "aie.tile"() <{col = 3 : i32, row = 1 : i32}> {controller_id = #aie.packet_info<pkt_type = 0, pkt_id = 26>} : () -> index
+  %1 = "aie.tile"() <{col = 3 : i32, row = 0 : i32}> {controller_id = #aie.packet_info<pkt_type = 0, pkt_id = 15>} : () -> index
+  %2 = "aie.tile"() <{col = 2 : i32, row = 1 : i32}> {controller_id = #aie.packet_info<pkt_type = 0, pkt_id = 26>} : () -> index
+  %3 = "aie.tile"() <{col = 2 : i32, row = 0 : i32}> {controller_id = #aie.packet_info<pkt_type = 0, pkt_id = 15>} : () -> index
+  %4 = "aie.tile"() <{col = 1 : i32, row = 1 : i32}> {controller_id = #aie.packet_info<pkt_type = 0, pkt_id = 26>} : () -> index
+  %5 = "aie.tile"() <{col = 1 : i32, row = 0 : i32}> {controller_id = #aie.packet_info<pkt_type = 0, pkt_id = 15>} : () -> index
+  %6 = "aie.tile"() <{col = 0 : i32, row = 1 : i32}> {controller_id = #aie.packet_info<pkt_type = 0, pkt_id = 26>} : () -> index
+  %7 = "aie.tile"() <{col = 0 : i32, row = 0 : i32}> {controller_id = #aie.packet_info<pkt_type = 0, pkt_id = 15>} : () -> index
+  %8 = "aie.tile"() <{col = 3 : i32, row = 5 : i32}> {controller_id = #aie.packet_info<pkt_type = 0, pkt_id = 31>} : () -> index
+  %9 = "aie.tile"() <{col = 3 : i32, row = 4 : i32}> {controller_id = #aie.packet_info<pkt_type = 0, pkt_id = 30>} : () -> index
+  %10 = "aie.tile"() <{col = 3 : i32, row = 3 : i32}> {controller_id = #aie.packet_info<pkt_type = 0, pkt_id = 29>} : () -> index
+  %11 = "aie.tile"() <{col = 3 : i32, row = 2 : i32}> {controller_id = #aie.packet_info<pkt_type = 0, pkt_id = 27>} : () -> index
+  %12 = "aie.tile"() <{col = 2 : i32, row = 5 : i32}> {controller_id = #aie.packet_info<pkt_type = 0, pkt_id = 31>} : () -> index
+  %13 = "aie.tile"() <{col = 2 : i32, row = 4 : i32}> {controller_id = #aie.packet_info<pkt_type = 0, pkt_id = 30>} : () -> index
+  %14 = "aie.tile"() <{col = 2 : i32, row = 3 : i32}> {controller_id = #aie.packet_info<pkt_type = 0, pkt_id = 29>} : () -> index
+  %15 = "aie.tile"() <{col = 2 : i32, row = 2 : i32}> {controller_id = #aie.packet_info<pkt_type = 0, pkt_id = 27>} : () -> index
+  %16 = "aie.tile"() <{col = 1 : i32, row = 5 : i32}> {controller_id = #aie.packet_info<pkt_type = 0, pkt_id = 31>} : () -> index
+  %17 = "aie.tile"() <{col = 1 : i32, row = 4 : i32}> {controller_id = #aie.packet_info<pkt_type = 0, pkt_id = 30>} : () -> index
+  %18 = "aie.tile"() <{col = 1 : i32, row = 3 : i32}> {controller_id = #aie.packet_info<pkt_type = 0, pkt_id = 29>} : () -> index
+  %19 = "aie.tile"() <{col = 1 : i32, row = 2 : i32}> {controller_id = #aie.packet_info<pkt_type = 0, pkt_id = 27>} : () -> index
+  %20 = "aie.tile"() <{col = 0 : i32, row = 5 : i32}> {controller_id = #aie.packet_info<pkt_type = 0, pkt_id = 31>} : () -> index
+  %21 = "aie.tile"() <{col = 0 : i32, row = 4 : i32}> {controller_id = #aie.packet_info<pkt_type = 0, pkt_id = 30>} : () -> index
+  %22 = "aie.tile"() <{col = 0 : i32, row = 3 : i32}> {controller_id = #aie.packet_info<pkt_type = 0, pkt_id = 29>} : () -> index
+  %23 = "aie.tile"() <{col = 0 : i32, row = 2 : i32}> {controller_id = #aie.packet_info<pkt_type = 0, pkt_id = 27>} : () -> index
+  %24 = "aie.buffer"(%8) <{address = 16384 : i32, aligned = true, mem_bank = 1 : i32, sym_name = "output_c3_join3_buff_0"}> : (index) -> memref<256xi8>
+  %25 = "aie.lock"(%8) <{init = 1 : i32, lockID = 0 : i32, sym_name = "output_c3_join3_prod_lock_0"}> : (index) -> index
+  %26 = "aie.lock"(%8) <{init = 0 : i32, lockID = 1 : i32, sym_name = "output_c3_join3_cons_lock_0"}> : (index) -> index
+  %27 = "aie.buffer"(%9) <{address = 16384 : i32, aligned = true, mem_bank = 1 : i32, sym_name = "output_c3_join2_buff_0"}> : (index) -> memref<256xi8>
+  %28 = "aie.lock"(%9) <{init = 1 : i32, lockID = 0 : i32, sym_name = "output_c3_join2_prod_lock_0"}> : (index) -> index
+  %29 = "aie.lock"(%9) <{init = 0 : i32, lockID = 1 : i32, sym_name = "output_c3_join2_cons_lock_0"}> : (index) -> index
+  %30 = "aie.buffer"(%10) <{address = 16384 : i32, aligned = true, mem_bank = 1 : i32, sym_name = "output_c3_join1_buff_0"}> : (index) -> memref<256xi8>
+  %31 = "aie.lock"(%10) <{init = 1 : i32, lockID = 0 : i32, sym_name = "output_c3_join1_prod_lock_0"}> : (index) -> index
+  %32 = "aie.lock"(%10) <{init = 0 : i32, lockID = 1 : i32, sym_name = "output_c3_join1_cons_lock_0"}> : (index) -> index
+  %33 = "aie.buffer"(%11) <{address = 16384 : i32, aligned = true, mem_bank = 1 : i32, sym_name = "output_c3_join0_buff_0"}> : (index) -> memref<256xi8>
+  %34 = "aie.lock"(%11) <{init = 1 : i32, lockID = 0 : i32, sym_name = "output_c3_join0_prod_lock_0"}> : (index) -> index
+  %35 = "aie.lock"(%11) <{init = 0 : i32, lockID = 1 : i32, sym_name = "output_c3_join0_cons_lock_0"}> : (index) -> index
+  %36 = "aie.lock"(%1) <{init = 0 : i32, lockID = 0 : i32, sym_name = "output_c3_cons_prod_lock_0"}> : (index) -> index
+  %37 = "aie.lock"(%1) <{init = 0 : i32, lockID = 1 : i32, sym_name = "output_c3_cons_cons_lock_0"}> : (index) -> index
+  %38 = "aie.buffer"(%12) <{address = 16384 : i32, aligned = true, mem_bank = 1 : i32, sym_name = "output_c2_join3_buff_0"}> : (index) -> memref<256xi8>
+  %39 = "aie.lock"(%12) <{init = 1 : i32, lockID = 0 : i32, sym_name = "output_c2_join3_prod_lock_0"}> : (index) -> index
+  %40 = "aie.lock"(%12) <{init = 0 : i32, lockID = 1 : i32, sym_name = "output_c2_join3_cons_lock_0"}> : (index) -> index
+  %41 = "aie.buffer"(%13) <{address = 16384 : i32, aligned = true, mem_bank = 1 : i32, sym_name = "output_c2_join2_buff_0"}> : (index) -> memref<256xi8>
+  %42 = "aie.lock"(%13) <{init = 1 : i32, lockID = 0 : i32, sym_name = "output_c2_join2_prod_lock_0"}> : (index) -> index
+  %43 = "aie.lock"(%13) <{init = 0 : i32, lockID = 1 : i32, sym_name = "output_c2_join2_cons_lock_0"}> : (index) -> index
+  %44 = "aie.buffer"(%14) <{address = 16384 : i32, aligned = true, mem_bank = 1 : i32, sym_name = "output_c2_join1_buff_0"}> : (index) -> memref<256xi8>
+  %45 = "aie.lock"(%14) <{init = 1 : i32, lockID = 0 : i32, sym_name = "output_c2_join1_prod_lock_0"}> : (index) -> index
+  %46 = "aie.lock"(%14) <{init = 0 : i32, lockID = 1 : i32, sym_name = "output_c2_join1_cons_lock_0"}> : (index) -> index
+  %47 = "aie.buffer"(%15) <{address = 16384 : i32, aligned = true, mem_bank = 1 : i32, sym_name = "output_c2_join0_buff_0"}> : (index) -> memref<256xi8>
+  %48 = "aie.lock"(%15) <{init = 1 : i32, lockID = 0 : i32, sym_name = "output_c2_join0_prod_lock_0"}> : (index) -> index
+  %49 = "aie.lock"(%15) <{init = 0 : i32, lockID = 1 : i32, sym_name = "output_c2_join0_cons_lock_0"}> : (index) -> index
+  %50 = "aie.lock"(%3) <{init = 0 : i32, lockID = 0 : i32, sym_name = "output_c2_cons_prod_lock_0"}> : (index) -> index
+  %51 = "aie.lock"(%3) <{init = 0 : i32, lockID = 1 : i32, sym_name = "output_c2_cons_cons_lock_0"}> : (index) -> index
+  %52 = "aie.buffer"(%16) <{address = 16384 : i32, aligned = true, mem_bank = 1 : i32, sym_name = "output_c1_join3_buff_0"}> : (index) -> memref<256xi8>
+  %53 = "aie.lock"(%16) <{init = 1 : i32, lockID = 0 : i32, sym_name = "output_c1_join3_prod_lock_0"}> : (index) -> index
+  %54 = "aie.lock"(%16) <{init = 0 : i32, lockID = 1 : i32, sym_name = "output_c1_join3_cons_lock_0"}> : (index) -> index
+  %55 = "aie.buffer"(%17) <{address = 16384 : i32, aligned = true, mem_bank = 1 : i32, sym_name = "output_c1_join2_buff_0"}> : (index) -> memref<256xi8>
+  %56 = "aie.lock"(%17) <{init = 1 : i32, lockID = 0 : i32, sym_name = "output_c1_join2_prod_lock_0"}> : (index) -> index
+  %57 = "aie.lock"(%17) <{init = 0 : i32, lockID = 1 : i32, sym_name = "output_c1_join2_cons_lock_0"}> : (index) -> index
+  %58 = "aie.buffer"(%18) <{address = 16384 : i32, aligned = true, mem_bank = 1 : i32, sym_name = "output_c1_join1_buff_0"}> : (index) -> memref<256xi8>
+  %59 = "aie.lock"(%18) <{init = 1 : i32, lockID = 0 : i32, sym_name = "output_c1_join1_prod_lock_0"}> : (index) -> index
+  %60 = "aie.lock"(%18) <{init = 0 : i32, lockID = 1 : i32, sym_name = "output_c1_join1_cons_lock_0"}> : (index) -> index
+  %61 = "aie.buffer"(%19) <{address = 16384 : i32, aligned = true, mem_bank = 1 : i32, sym_name = "output_c1_join0_buff_0"}> : (index) -> memref<256xi8>
+  %62 = "aie.lock"(%19) <{init = 1 : i32, lockID = 0 : i32, sym_name = "output_c1_join0_prod_lock_0"}> : (index) -> index
+  %63 = "aie.lock"(%19) <{init = 0 : i32, lockID = 1 : i32, sym_name = "output_c1_join0_cons_lock_0"}> : (index) -> index
+  %64 = "aie.lock"(%5) <{init = 0 : i32, lockID = 0 : i32, sym_name = "output_c1_cons_prod_lock_0"}> : (index) -> index
+  %65 = "aie.lock"(%5) <{init = 0 : i32, lockID = 1 : i32, sym_name = "output_c1_cons_cons_lock_0"}> : (index) -> index
+  %66 = "aie.buffer"(%20) <{address = 16384 : i32, aligned = true, mem_bank = 1 : i32, sym_name = "output_c0_join3_buff_0"}> : (index) -> memref<256xi8>
+  %67 = "aie.lock"(%20) <{init = 1 : i32, lockID = 0 : i32, sym_name = "output_c0_join3_prod_lock_0"}> : (index) -> index
+  %68 = "aie.lock"(%20) <{init = 0 : i32, lockID = 1 : i32, sym_name = "output_c0_join3_cons_lock_0"}> : (index) -> index
+  %69 = "aie.buffer"(%0) <{address = 65536 : i32, aligned = true, mem_bank = 1 : i32, sym_name = "output_c3_buff_0"}> : (index) -> memref<1024xi8>
+  %70 = "aie.lock"(%0) <{init = 1 : i32, lockID = 0 : i32, sym_name = "output_c3_prod_lock_0"}> : (index) -> index
+  %71 = "aie.lock"(%0) <{init = 0 : i32, lockID = 1 : i32, sym_name = "output_c3_cons_lock_0"}> : (index) -> index
+  %72 = "aie.lock"(%0) <{init = 1 : i32, lockID = 2 : i32, sym_name = "output_c3_prod_lock_1"}> : (index) -> index
+  %73 = "aie.lock"(%0) <{init = 0 : i32, lockID = 3 : i32, sym_name = "output_c3_cons_lock_1"}> : (index) -> index
+  %74 = "aie.lock"(%0) <{init = 1 : i32, lockID = 4 : i32, sym_name = "output_c3_prod_lock_2"}> : (index) -> index
+  %75 = "aie.lock"(%0) <{init = 0 : i32, lockID = 5 : i32, sym_name = "output_c3_cons_lock_2"}> : (index) -> index
+  %76 = "aie.lock"(%0) <{init = 1 : i32, lockID = 6 : i32, sym_name = "output_c3_prod_lock_3"}> : (index) -> index
+  %77 = "aie.lock"(%0) <{init = 0 : i32, lockID = 7 : i32, sym_name = "output_c3_cons_lock_3"}> : (index) -> index
+  %78 = "aie.buffer"(%21) <{address = 16384 : i32, aligned = true, mem_bank = 1 : i32, sym_name = "output_c0_join2_buff_0"}> : (index) -> memref<256xi8>
+  %79 = "aie.lock"(%21) <{init = 1 : i32, lockID = 0 : i32, sym_name = "output_c0_join2_prod_lock_0"}> : (index) -> index
+  %80 = "aie.lock"(%21) <{init = 0 : i32, lockID = 1 : i32, sym_name = "output_c0_join2_cons_lock_0"}> : (index) -> index
+  %81 = "aie.buffer"(%2) <{address = 65536 : i32, aligned = true, mem_bank = 1 : i32, sym_name = "output_c2_buff_0"}> : (index) -> memref<1024xi8>
+  %82 = "aie.lock"(%2) <{init = 1 : i32, lockID = 0 : i32, sym_name = "output_c2_prod_lock_0"}> : (index) -> index
+  %83 = "aie.lock"(%2) <{init = 0 : i32, lockID = 1 : i32, sym_name = "output_c2_cons_lock_0"}> : (index) -> index
+  %84 = "aie.lock"(%2) <{init = 1 : i32, lockID = 2 : i32, sym_name = "output_c2_prod_lock_1"}> : (index) -> index
+  %85 = "aie.lock"(%2) <{init = 0 : i32, lockID = 3 : i32, sym_name = "output_c2_cons_lock_1"}> : (index) -> index
+  %86 = "aie.lock"(%2) <{init = 1 : i32, lockID = 4 : i32, sym_name = "output_c2_prod_lock_2"}> : (index) -> index
+  %87 = "aie.lock"(%2) <{init = 0 : i32, lockID = 5 : i32, sym_name = "output_c2_cons_lock_2"}> : (index) -> index
+  %88 = "aie.lock"(%2) <{init = 1 : i32, lockID = 6 : i32, sym_name = "output_c2_prod_lock_3"}> : (index) -> index
+  %89 = "aie.lock"(%2) <{init = 0 : i32, lockID = 7 : i32, sym_name = "output_c2_cons_lock_3"}> : (index) -> index
+  %90 = "aie.buffer"(%22) <{address = 16384 : i32, aligned = true, mem_bank = 1 : i32, sym_name = "output_c0_join1_buff_0"}> : (index) -> memref<256xi8>
+  %91 = "aie.lock"(%22) <{init = 1 : i32, lockID = 0 : i32, sym_name = "output_c0_join1_prod_lock_0"}> : (index) -> index
+  %92 = "aie.lock"(%22) <{init = 0 : i32, lockID = 1 : i32, sym_name = "output_c0_join1_cons_lock_0"}> : (index) -> index
+  %93 = "aie.buffer"(%4) <{address = 65536 : i32, aligned = true, mem_bank = 1 : i32, sym_name = "output_c1_buff_0"}> : (index) -> memref<1024xi8>
+  %94 = "aie.lock"(%4) <{init = 1 : i32, lockID = 0 : i32, sym_name = "output_c1_prod_lock_0"}> : (index) -> index
+  %95 = "aie.lock"(%4) <{init = 0 : i32, lockID = 1 : i32, sym_name = "output_c1_cons_lock_0"}> : (index) -> index
+  %96 = "aie.lock"(%4) <{init = 1 : i32, lockID = 2 : i32, sym_name = "output_c1_prod_lock_1"}> : (index) -> index
+  %97 = "aie.lock"(%4) <{init = 0 : i32, lockID = 3 : i32, sym_name = "output_c1_cons_lock_1"}> : (index) -> index
+  %98 = "aie.lock"(%4) <{init = 1 : i32, lockID = 4 : i32, sym_name = "output_c1_prod_lock_2"}> : (index) -> index
+  %99 = "aie.lock"(%4) <{init = 0 : i32, lockID = 5 : i32, sym_name = "output_c1_cons_lock_2"}> : (index) -> index
+  %100 = "aie.lock"(%4) <{init = 1 : i32, lockID = 6 : i32, sym_name = "output_c1_prod_lock_3"}> : (index) -> index
+  %101 = "aie.lock"(%4) <{init = 0 : i32, lockID = 7 : i32, sym_name = "output_c1_cons_lock_3"}> : (index) -> index
+  %102 = "aie.buffer"(%23) <{address = 16384 : i32, aligned = true, mem_bank = 1 : i32, sym_name = "output_c0_join0_buff_0"}> : (index) -> memref<256xi8>
+  %103 = "aie.lock"(%23) <{init = 1 : i32, lockID = 0 : i32, sym_name = "output_c0_join0_prod_lock_0"}> : (index) -> index
+  %104 = "aie.lock"(%23) <{init = 0 : i32, lockID = 1 : i32, sym_name = "output_c0_join0_cons_lock_0"}> : (index) -> index
+  %105 = "aie.lock"(%7) <{init = 0 : i32, lockID = 0 : i32, sym_name = "output_c0_cons_prod_lock_0"}> : (index) -> index
+  %106 = "aie.lock"(%7) <{init = 0 : i32, lockID = 1 : i32, sym_name = "output_c0_cons_cons_lock_0"}> : (index) -> index
+  %107 = "aie.buffer"(%6) <{address = 65536 : i32, aligned = true, mem_bank = 1 : i32, sym_name = "output_c0_buff_0"}> : (index) -> memref<1024xi8>
+  %108 = "aie.lock"(%6) <{init = 1 : i32, lockID = 0 : i32, sym_name = "output_c0_prod_lock_0"}> : (index) -> index
+  %109 = "aie.lock"(%6) <{init = 0 : i32, lockID = 1 : i32, sym_name = "output_c0_cons_lock_0"}> : (index) -> index
+  %110 = "aie.lock"(%6) <{init = 1 : i32, lockID = 2 : i32, sym_name = "output_c0_prod_lock_1"}> : (index) -> index
+  %111 = "aie.lock"(%6) <{init = 0 : i32, lockID = 3 : i32, sym_name = "output_c0_cons_lock_1"}> : (index) -> index
+  %112 = "aie.lock"(%6) <{init = 1 : i32, lockID = 4 : i32, sym_name = "output_c0_prod_lock_2"}> : (index) -> index
+  %113 = "aie.lock"(%6) <{init = 0 : i32, lockID = 5 : i32, sym_name = "output_c0_cons_lock_2"}> : (index) -> index
+  %114 = "aie.lock"(%6) <{init = 1 : i32, lockID = 6 : i32, sym_name = "output_c0_prod_lock_3"}> : (index) -> index
+  %115 = "aie.lock"(%6) <{init = 0 : i32, lockID = 7 : i32, sym_name = "output_c0_cons_lock_3"}> : (index) -> index
+  %116 = "aie.buffer"(%8) <{address = 1024 : i32, aligned = true, mem_bank = 0 : i32, sym_name = "input_c3_split3_cons_buff_0"}> : (index) -> memref<11904xi8>
+  %117 = "aie.lock"(%8) <{init = 1 : i32, lockID = 2 : i32, sym_name = "input_c3_split3_cons_prod_lock_0"}> : (index) -> index
+  %118 = "aie.lock"(%8) <{init = 0 : i32, lockID = 3 : i32, sym_name = "input_c3_split3_cons_cons_lock_0"}> : (index) -> index
+  %119 = "aie.buffer"(%9) <{address = 1024 : i32, aligned = true, mem_bank = 0 : i32, sym_name = "input_c3_split2_cons_buff_0"}> : (index) -> memref<11904xi8>
+  %120 = "aie.lock"(%9) <{init = 1 : i32, lockID = 2 : i32, sym_name = "input_c3_split2_cons_prod_lock_0"}> : (index) -> index
+  %121 = "aie.lock"(%9) <{init = 0 : i32, lockID = 3 : i32, sym_name = "input_c3_split2_cons_cons_lock_0"}> : (index) -> index
+  %122 = "aie.buffer"(%10) <{address = 1024 : i32, aligned = true, mem_bank = 0 : i32, sym_name = "input_c3_split1_cons_buff_0"}> : (index) -> memref<11904xi8>
+  %123 = "aie.lock"(%10) <{init = 1 : i32, lockID = 2 : i32, sym_name = "input_c3_split1_cons_prod_lock_0"}> : (index) -> index
+  %124 = "aie.lock"(%10) <{init = 0 : i32, lockID = 3 : i32, sym_name = "input_c3_split1_cons_cons_lock_0"}> : (index) -> index
+  %125 = "aie.buffer"(%11) <{address = 1024 : i32, aligned = true, mem_bank = 0 : i32, sym_name = "input_c3_split0_cons_buff_0"}> : (index) -> memref<11904xi8>
+  %126 = "aie.lock"(%11) <{init = 1 : i32, lockID = 2 : i32, sym_name = "input_c3_split0_cons_prod_lock_0"}> : (index) -> index
+  %127 = "aie.lock"(%11) <{init = 0 : i32, lockID = 3 : i32, sym_name = "input_c3_split0_cons_cons_lock_0"}> : (index) -> index
+  %128 = "aie.lock"(%1) <{init = 0 : i32, lockID = 2 : i32, sym_name = "input_c3_prod_lock_0"}> : (index) -> index
+  %129 = "aie.lock"(%1) <{init = 0 : i32, lockID = 3 : i32, sym_name = "input_c3_cons_lock_0"}> : (index) -> index
+  %130 = "aie.buffer"(%12) <{address = 1024 : i32, aligned = true, mem_bank = 0 : i32, sym_name = "input_c2_split3_cons_buff_0"}> : (index) -> memref<11904xi8>
+  %131 = "aie.lock"(%12) <{init = 1 : i32, lockID = 2 : i32, sym_name = "input_c2_split3_cons_prod_lock_0"}> : (index) -> index
+  %132 = "aie.lock"(%12) <{init = 0 : i32, lockID = 3 : i32, sym_name = "input_c2_split3_cons_cons_lock_0"}> : (index) -> index
+  %133 = "aie.buffer"(%13) <{address = 1024 : i32, aligned = true, mem_bank = 0 : i32, sym_name = "input_c2_split2_cons_buff_0"}> : (index) -> memref<11904xi8>
+  %134 = "aie.lock"(%13) <{init = 1 : i32, lockID = 2 : i32, sym_name = "input_c2_split2_cons_prod_lock_0"}> : (index) -> index
+  %135 = "aie.lock"(%13) <{init = 0 : i32, lockID = 3 : i32, sym_name = "input_c2_split2_cons_cons_lock_0"}> : (index) -> index
+  %136 = "aie.buffer"(%14) <{address = 1024 : i32, aligned = true, mem_bank = 0 : i32, sym_name = "input_c2_split1_cons_buff_0"}> : (index) -> memref<11904xi8>
+  %137 = "aie.lock"(%14) <{init = 1 : i32, lockID = 2 : i32, sym_name = "input_c2_split1_cons_prod_lock_0"}> : (index) -> index
+  %138 = "aie.lock"(%14) <{init = 0 : i32, lockID = 3 : i32, sym_name = "input_c2_split1_cons_cons_lock_0"}> : (index) -> index
+  %139 = "aie.buffer"(%15) <{address = 1024 : i32, aligned = true, mem_bank = 0 : i32, sym_name = "input_c2_split0_cons_buff_0"}> : (index) -> memref<11904xi8>
+  %140 = "aie.lock"(%15) <{init = 1 : i32, lockID = 2 : i32, sym_name = "input_c2_split0_cons_prod_lock_0"}> : (index) -> index
+  %141 = "aie.lock"(%15) <{init = 0 : i32, lockID = 3 : i32, sym_name = "input_c2_split0_cons_cons_lock_0"}> : (index) -> index
+  %142 = "aie.lock"(%3) <{init = 0 : i32, lockID = 2 : i32, sym_name = "input_c2_prod_lock_0"}> : (index) -> index
+  %143 = "aie.lock"(%3) <{init = 0 : i32, lockID = 3 : i32, sym_name = "input_c2_cons_lock_0"}> : (index) -> index
+  %144 = "aie.buffer"(%16) <{address = 1024 : i32, aligned = true, mem_bank = 0 : i32, sym_name = "input_c1_split3_cons_buff_0"}> : (index) -> memref<11904xi8>
+  %145 = "aie.lock"(%16) <{init = 1 : i32, lockID = 2 : i32, sym_name = "input_c1_split3_cons_prod_lock_0"}> : (index) -> index
+  %146 = "aie.lock"(%16) <{init = 0 : i32, lockID = 3 : i32, sym_name = "input_c1_split3_cons_cons_lock_0"}> : (index) -> index
+  %147 = "aie.buffer"(%17) <{address = 1024 : i32, aligned = true, mem_bank = 0 : i32, sym_name = "input_c1_split2_cons_buff_0"}> : (index) -> memref<11904xi8>
+  %148 = "aie.lock"(%17) <{init = 1 : i32, lockID = 2 : i32, sym_name = "input_c1_split2_cons_prod_lock_0"}> : (index) -> index
+  %149 = "aie.lock"(%17) <{init = 0 : i32, lockID = 3 : i32, sym_name = "input_c1_split2_cons_cons_lock_0"}> : (index) -> index
+  %150 = "aie.buffer"(%18) <{address = 1024 : i32, aligned = true, mem_bank = 0 : i32, sym_name = "input_c1_split1_cons_buff_0"}> : (index) -> memref<11904xi8>
+  %151 = "aie.lock"(%18) <{init = 1 : i32, lockID = 2 : i32, sym_name = "input_c1_split1_cons_prod_lock_0"}> : (index) -> index
+  %152 = "aie.lock"(%18) <{init = 0 : i32, lockID = 3 : i32, sym_name = "input_c1_split1_cons_cons_lock_0"}> : (index) -> index
+  %153 = "aie.buffer"(%19) <{address = 1024 : i32, aligned = true, mem_bank = 0 : i32, sym_name = "input_c1_split0_cons_buff_0"}> : (index) -> memref<11904xi8>
+  %154 = "aie.lock"(%19) <{init = 1 : i32, lockID = 2 : i32, sym_name = "input_c1_split0_cons_prod_lock_0"}> : (index) -> index
+  %155 = "aie.lock"(%19) <{init = 0 : i32, lockID = 3 : i32, sym_name = "input_c1_split0_cons_cons_lock_0"}> : (index) -> index
+  %156 = "aie.lock"(%5) <{init = 0 : i32, lockID = 2 : i32, sym_name = "input_c1_prod_lock_0"}> : (index) -> index
+  %157 = "aie.lock"(%5) <{init = 0 : i32, lockID = 3 : i32, sym_name = "input_c1_cons_lock_0"}> : (index) -> index
+  %158 = "aie.buffer"(%20) <{address = 1024 : i32, aligned = true, mem_bank = 0 : i32, sym_name = "input_c0_split3_cons_buff_0"}> : (index) -> memref<11904xi8>
+  %159 = "aie.lock"(%20) <{init = 1 : i32, lockID = 2 : i32, sym_name = "input_c0_split3_cons_prod_lock_0"}> : (index) -> index
+  %160 = "aie.lock"(%20) <{init = 0 : i32, lockID = 3 : i32, sym_name = "input_c0_split3_cons_cons_lock_0"}> : (index) -> index
+  %161 = "aie.buffer"(%21) <{address = 1024 : i32, aligned = true, mem_bank = 0 : i32, sym_name = "input_c0_split2_cons_buff_0"}> : (index) -> memref<11904xi8>
+  %162 = "aie.lock"(%21) <{init = 1 : i32, lockID = 2 : i32, sym_name = "input_c0_split2_cons_prod_lock_0"}> : (index) -> index
+  %163 = "aie.lock"(%21) <{init = 0 : i32, lockID = 3 : i32, sym_name = "input_c0_split2_cons_cons_lock_0"}> : (index) -> index
+  %164 = "aie.buffer"(%0) <{address = 0 : i32, aligned = true, mem_bank = 0 : i32, sym_name = "input_c3_cons_buff_0"}> : (index) -> memref<47616xi8>
+  %165 = "aie.lock"(%0) <{init = 1 : i32, lockID = 8 : i32, sym_name = "input_c3_cons_prod_lock_0"}> : (index) -> index
+  %166 = "aie.lock"(%0) <{init = 0 : i32, lockID = 9 : i32, sym_name = "input_c3_cons_cons_lock_0"}> : (index) -> index
+  %167 = "aie.lock"(%0) <{init = 1 : i32, lockID = 10 : i32, sym_name = "input_c3_cons_prod_lock_1"}> : (index) -> index
+  %168 = "aie.lock"(%0) <{init = 0 : i32, lockID = 11 : i32, sym_name = "input_c3_cons_cons_lock_1"}> : (index) -> index
+  %169 = "aie.lock"(%0) <{init = 1 : i32, lockID = 12 : i32, sym_name = "input_c3_cons_prod_lock_2"}> : (index) -> index
+  %170 = "aie.lock"(%0) <{init = 0 : i32, lockID = 13 : i32, sym_name = "input_c3_cons_cons_lock_2"}> : (index) -> index
+  %171 = "aie.lock"(%0) <{init = 1 : i32, lockID = 14 : i32, sym_name = "input_c3_cons_prod_lock_3"}> : (index) -> index
+  %172 = "aie.lock"(%0) <{init = 0 : i32, lockID = 15 : i32, sym_name = "input_c3_cons_cons_lock_3"}> : (index) -> index
+  %173 = "aie.buffer"(%22) <{address = 1024 : i32, aligned = true, mem_bank = 0 : i32, sym_name = "input_c0_split1_cons_buff_0"}> : (index) -> memref<11904xi8>
+  %174 = "aie.lock"(%22) <{init = 1 : i32, lockID = 2 : i32, sym_name = "input_c0_split1_cons_prod_lock_0"}> : (index) -> index
+  %175 = "aie.lock"(%22) <{init = 0 : i32, lockID = 3 : i32, sym_name = "input_c0_split1_cons_cons_lock_0"}> : (index) -> index
+  %176 = "aie.buffer"(%2) <{address = 0 : i32, aligned = true, mem_bank = 0 : i32, sym_name = "input_c2_cons_buff_0"}> : (index) -> memref<47616xi8>
+  %177 = "aie.lock"(%2) <{init = 1 : i32, lockID = 8 : i32, sym_name = "input_c2_cons_prod_lock_0"}> : (index) -> index
+  %178 = "aie.lock"(%2) <{init = 0 : i32, lockID = 9 : i32, sym_name = "input_c2_cons_cons_lock_0"}> : (index) -> index
+  %179 = "aie.lock"(%2) <{init = 1 : i32, lockID = 10 : i32, sym_name = "input_c2_cons_prod_lock_1"}> : (index) -> index
+  %180 = "aie.lock"(%2) <{init = 0 : i32, lockID = 11 : i32, sym_name = "input_c2_cons_cons_lock_1"}> : (index) -> index
+  %181 = "aie.lock"(%2) <{init = 1 : i32, lockID = 12 : i32, sym_name = "input_c2_cons_prod_lock_2"}> : (index) -> index
+  %182 = "aie.lock"(%2) <{init = 0 : i32, lockID = 13 : i32, sym_name = "input_c2_cons_cons_lock_2"}> : (index) -> index
+  %183 = "aie.lock"(%2) <{init = 1 : i32, lockID = 14 : i32, sym_name = "input_c2_cons_prod_lock_3"}> : (index) -> index
+  %184 = "aie.lock"(%2) <{init = 0 : i32, lockID = 15 : i32, sym_name = "input_c2_cons_cons_lock_3"}> : (index) -> index
+  %185 = "aie.buffer"(%23) <{address = 1024 : i32, aligned = true, mem_bank = 0 : i32, sym_name = "input_c0_split0_cons_buff_0"}> : (index) -> memref<11904xi8>
+  %186 = "aie.lock"(%23) <{init = 1 : i32, lockID = 2 : i32, sym_name = "input_c0_split0_cons_prod_lock_0"}> : (index) -> index
+  %187 = "aie.lock"(%23) <{init = 0 : i32, lockID = 3 : i32, sym_name = "input_c0_split0_cons_cons_lock_0"}> : (index) -> index
+  %188 = "aie.buffer"(%4) <{address = 0 : i32, aligned = true, mem_bank = 0 : i32, sym_name = "input_c1_cons_buff_0"}> : (index) -> memref<47616xi8>
+  %189 = "aie.lock"(%4) <{init = 1 : i32, lockID = 8 : i32, sym_name = "input_c1_cons_prod_lock_0"}> : (index) -> index
+  %190 = "aie.lock"(%4) <{init = 0 : i32, lockID = 9 : i32, sym_name = "input_c1_cons_cons_lock_0"}> : (index) -> index
+  %191 = "aie.lock"(%4) <{init = 1 : i32, lockID = 10 : i32, sym_name = "input_c1_cons_prod_lock_1"}> : (index) -> index
+  %192 = "aie.lock"(%4) <{init = 0 : i32, lockID = 11 : i32, sym_name = "input_c1_cons_cons_lock_1"}> : (index) -> index
+  %193 = "aie.lock"(%4) <{init = 1 : i32, lockID = 12 : i32, sym_name = "input_c1_cons_prod_lock_2"}> : (index) -> index
+  %194 = "aie.lock"(%4) <{init = 0 : i32, lockID = 13 : i32, sym_name = "input_c1_cons_cons_lock_2"}> : (index) -> index
+  %195 = "aie.lock"(%4) <{init = 1 : i32, lockID = 14 : i32, sym_name = "input_c1_cons_prod_lock_3"}> : (index) -> index
+  %196 = "aie.lock"(%4) <{init = 0 : i32, lockID = 15 : i32, sym_name = "input_c1_cons_cons_lock_3"}> : (index) -> index
+  %197 = "aie.buffer"(%6) <{address = 0 : i32, aligned = true, mem_bank = 0 : i32, sym_name = "input_c0_cons_buff_0"}> : (index) -> memref<47616xi8>
+  %198 = "aie.lock"(%6) <{init = 1 : i32, lockID = 8 : i32, sym_name = "input_c0_cons_prod_lock_0"}> : (index) -> index
+  %199 = "aie.lock"(%6) <{init = 0 : i32, lockID = 9 : i32, sym_name = "input_c0_cons_cons_lock_0"}> : (index) -> index
+  %200 = "aie.lock"(%6) <{init = 1 : i32, lockID = 10 : i32, sym_name = "input_c0_cons_prod_lock_1"}> : (index) -> index
+  %201 = "aie.lock"(%6) <{init = 0 : i32, lockID = 11 : i32, sym_name = "input_c0_cons_cons_lock_1"}> : (index) -> index
+  %202 = "aie.lock"(%6) <{init = 1 : i32, lockID = 12 : i32, sym_name = "input_c0_cons_prod_lock_2"}> : (index) -> index
+  %203 = "aie.lock"(%6) <{init = 0 : i32, lockID = 13 : i32, sym_name = "input_c0_cons_cons_lock_2"}> : (index) -> index
+  %204 = "aie.lock"(%6) <{init = 1 : i32, lockID = 14 : i32, sym_name = "input_c0_cons_prod_lock_3"}> : (index) -> index
+  %205 = "aie.lock"(%6) <{init = 0 : i32, lockID = 15 : i32, sym_name = "input_c0_cons_cons_lock_3"}> : (index) -> index
+  %206 = "aie.lock"(%7) <{init = 0 : i32, lockID = 2 : i32, sym_name = "input_c0_prod_lock_0"}> : (index) -> index
+  %207 = "aie.lock"(%7) <{init = 0 : i32, lockID = 3 : i32, sym_name = "input_c0_cons_lock_0"}> : (index) -> index
+  "aie.flow"(%7, %6) <{dest_bundle = 1 : i32, dest_channel = 0 : i32, source_bundle = 1 : i32, source_channel = 0 : i32}> : (index, index) -> ()
+  "aie.flow"(%6, %23) <{dest_bundle = 1 : i32, dest_channel = 0 : i32, source_bundle = 1 : i32, source_channel = 0 : i32}> : (index, index) -> ()
+  "aie.flow"(%6, %22) <{dest_bundle = 1 : i32, dest_channel = 0 : i32, source_bundle = 1 : i32, source_channel = 1 : i32}> : (index, index) -> ()
+  "aie.flow"(%6, %21) <{dest_bundle = 1 : i32, dest_channel = 0 : i32, source_bundle = 1 : i32, source_channel = 2 : i32}> : (index, index) -> ()
+  "aie.flow"(%6, %20) <{dest_bundle = 1 : i32, dest_channel = 0 : i32, source_bundle = 1 : i32, source_channel = 3 : i32}> : (index, index) -> ()
+  "aie.flow"(%5, %4) <{dest_bundle = 1 : i32, dest_channel = 0 : i32, source_bundle = 1 : i32, source_channel = 0 : i32}> : (index, index) -> ()
+  "aie.flow"(%4, %19) <{dest_bundle = 1 : i32, dest_channel = 0 : i32, source_bundle = 1 : i32, source_channel = 0 : i32}> : (index, index) -> ()
+  "aie.flow"(%4, %18) <{dest_bundle = 1 : i32, dest_channel = 0 : i32, source_bundle = 1 : i32, source_channel = 1 : i32}> : (index, index) -> ()
+  "aie.flow"(%4, %17) <{dest_bundle = 1 : i32, dest_channel = 0 : i32, source_bundle = 1 : i32, source_channel = 2 : i32}> : (index, index) -> ()
+  "aie.flow"(%4, %16) <{dest_bundle = 1 : i32, dest_channel = 0 : i32, source_bundle = 1 : i32, source_channel = 3 : i32}> : (index, index) -> ()
+  "aie.flow"(%3, %2) <{dest_bundle = 1 : i32, dest_channel = 0 : i32, source_bundle = 1 : i32, source_channel = 0 : i32}> : (index, index) -> ()
+  "aie.flow"(%2, %15) <{dest_bundle = 1 : i32, dest_channel = 0 : i32, source_bundle = 1 : i32, source_channel = 0 : i32}> : (index, index) -> ()
+  "aie.flow"(%2, %14) <{dest_bundle = 1 : i32, dest_channel = 0 : i32, source_bundle = 1 : i32, source_channel = 1 : i32}> : (index, index) -> ()
+  "aie.flow"(%2, %13) <{dest_bundle = 1 : i32, dest_channel = 0 : i32, source_bundle = 1 : i32, source_channel = 2 : i32}> : (index, index) -> ()
+  "aie.flow"(%2, %12) <{dest_bundle = 1 : i32, dest_channel = 0 : i32, source_bundle = 1 : i32, source_channel = 3 : i32}> : (index, index) -> ()
+  "aie.flow"(%1, %0) <{dest_bundle = 1 : i32, dest_channel = 0 : i32, source_bundle = 1 : i32, source_channel = 0 : i32}> : (index, index) -> ()
+  "aie.flow"(%0, %11) <{dest_bundle = 1 : i32, dest_channel = 0 : i32, source_bundle = 1 : i32, source_channel = 0 : i32}> : (index, index) -> ()
+  "aie.flow"(%0, %10) <{dest_bundle = 1 : i32, dest_channel = 0 : i32, source_bundle = 1 : i32, source_channel = 1 : i32}> : (index, index) -> ()
+  "aie.flow"(%0, %9) <{dest_bundle = 1 : i32, dest_channel = 0 : i32, source_bundle = 1 : i32, source_channel = 2 : i32}> : (index, index) -> ()
+  "aie.flow"(%0, %8) <{dest_bundle = 1 : i32, dest_channel = 0 : i32, source_bundle = 1 : i32, source_channel = 3 : i32}> : (index, index) -> ()
+  "aie.flow"(%6, %7) <{dest_bundle = 1 : i32, dest_channel = 0 : i32, source_bundle = 1 : i32, source_channel = 4 : i32}> : (index, index) -> ()
+  "aie.flow"(%23, %6) <{dest_bundle = 1 : i32, dest_channel = 1 : i32, source_bundle = 1 : i32, source_channel = 0 : i32}> : (index, index) -> ()
+  "aie.flow"(%22, %6) <{dest_bundle = 1 : i32, dest_channel = 2 : i32, source_bundle = 1 : i32, source_channel = 0 : i32}> : (index, index) -> ()
+  "aie.flow"(%21, %6) <{dest_bundle = 1 : i32, dest_channel = 3 : i32, source_bundle = 1 : i32, source_channel = 0 : i32}> : (index, index) -> ()
+  "aie.flow"(%20, %6) <{dest_bundle = 1 : i32, dest_channel = 4 : i32, source_bundle = 1 : i32, source_channel = 0 : i32}> : (index, index) -> ()
+  "aie.flow"(%4, %5) <{dest_bundle = 1 : i32, dest_channel = 0 : i32, source_bundle = 1 : i32, source_channel = 4 : i32}> : (index, index) -> ()
+  "aie.flow"(%19, %4) <{dest_bundle = 1 : i32, dest_channel = 1 : i32, source_bundle = 1 : i32, source_channel = 0 : i32}> : (index, index) -> ()
+  "aie.flow"(%18, %4) <{dest_bundle = 1 : i32, dest_channel = 2 : i32, source_bundle = 1 : i32, source_channel = 0 : i32}> : (index, index) -> ()
+  "aie.flow"(%17, %4) <{dest_bundle = 1 : i32, dest_channel = 3 : i32, source_bundle = 1 : i32, source_channel = 0 : i32}> : (index, index) -> ()
+  "aie.flow"(%16, %4) <{dest_bundle = 1 : i32, dest_channel = 4 : i32, source_bundle = 1 : i32, source_channel = 0 : i32}> : (index, index) -> ()
+  "aie.flow"(%2, %3) <{dest_bundle = 1 : i32, dest_channel = 0 : i32, source_bundle = 1 : i32, source_channel = 4 : i32}> : (index, index) -> ()
+  "aie.flow"(%15, %2) <{dest_bundle = 1 : i32, dest_channel = 1 : i32, source_bundle = 1 : i32, source_channel = 0 : i32}> : (index, index) -> ()
+  "aie.flow"(%14, %2) <{dest_bundle = 1 : i32, dest_channel = 2 : i32, source_bundle = 1 : i32, source_channel = 0 : i32}> : (index, index) -> ()
+  "aie.flow"(%13, %2) <{dest_bundle = 1 : i32, dest_channel = 3 : i32, source_bundle = 1 : i32, source_channel = 0 : i32}> : (index, index) -> ()
+  "aie.flow"(%12, %2) <{dest_bundle = 1 : i32, dest_channel = 4 : i32, source_bundle = 1 : i32, source_channel = 0 : i32}> : (index, index) -> ()
+  "aie.flow"(%0, %1) <{dest_bundle = 1 : i32, dest_channel = 0 : i32, source_bundle = 1 : i32, source_channel = 4 : i32}> : (index, index) -> ()
+  "aie.flow"(%11, %0) <{dest_bundle = 1 : i32, dest_channel = 1 : i32, source_bundle = 1 : i32, source_channel = 0 : i32}> : (index, index) -> ()
+  "aie.flow"(%10, %0) <{dest_bundle = 1 : i32, dest_channel = 2 : i32, source_bundle = 1 : i32, source_channel = 0 : i32}> : (index, index) -> ()
+  "aie.flow"(%9, %0) <{dest_bundle = 1 : i32, dest_channel = 3 : i32, source_bundle = 1 : i32, source_channel = 0 : i32}> : (index, index) -> ()
+  "aie.flow"(%8, %0) <{dest_bundle = 1 : i32, dest_channel = 4 : i32, source_bundle = 1 : i32, source_channel = 0 : i32}> : (index, index) -> ()
+  "func.func"() <{function_type = (memref<11904xi8>, memref<256xi8>) -> (), sym_name = "conv2d_raw", sym_visibility = "private"}> ({
+  }) {link_with = "conv2d_raw.o"} : () -> ()
+  %208 = "aie.core"(%23) <{link_files = ["conv2d_raw.o"]}> ({
+    %470 = "arith.constant"() <{value = 1 : index}> : () -> index
+    %471 = "arith.constant"() <{value = 9223372036854775807 : index}> : () -> index
+    %472 = "arith.constant"() <{value = 0 : index}> : () -> index
+    %473 = "arith.constant"() <{value = 1 : i32}> : () -> i32
+    "cf.br"(%472)[^bb1] : (index) -> ()
+  ^bb1(%474: index):  // 2 preds: ^bb0, ^bb2
+    %475 = "arith.cmpi"(%474, %471) <{predicate = 2 : i64}> : (index, index) -> i1
+    "cf.cond_br"(%475)[^bb2, ^bb3] <{operandSegmentSizes = array<i32: 1, 0, 0>}> : (i1) -> ()
+  ^bb2:  // pred: ^bb1
+    "aie.use_lock"(%187, %473) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "aie.use_lock"(%103, %473) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "func.call"(%185, %102) <{callee = @conv2d_raw}> : (memref<11904xi8>, memref<256xi8>) -> ()
+    "aie.use_lock"(%186, %473) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    "aie.use_lock"(%104, %473) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    %476 = "arith.addi"(%474, %470) <{overflowFlags = #arith.overflow<none>}> : (index, index) -> index
+    "cf.br"(%476)[^bb1] : (index) -> ()
+  ^bb3:  // pred: ^bb1
+    "aie.end"() : () -> ()
+  }) : (index) -> index
+  %209 = "aie.core"(%22) <{link_files = ["conv2d_raw.o"]}> ({
+    %463 = "arith.constant"() <{value = 1 : index}> : () -> index
+    %464 = "arith.constant"() <{value = 9223372036854775807 : index}> : () -> index
+    %465 = "arith.constant"() <{value = 0 : index}> : () -> index
+    %466 = "arith.constant"() <{value = 1 : i32}> : () -> i32
+    "cf.br"(%465)[^bb1] : (index) -> ()
+  ^bb1(%467: index):  // 2 preds: ^bb0, ^bb2
+    %468 = "arith.cmpi"(%467, %464) <{predicate = 2 : i64}> : (index, index) -> i1
+    "cf.cond_br"(%468)[^bb2, ^bb3] <{operandSegmentSizes = array<i32: 1, 0, 0>}> : (i1) -> ()
+  ^bb2:  // pred: ^bb1
+    "aie.use_lock"(%175, %466) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "aie.use_lock"(%91, %466) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "func.call"(%173, %90) <{callee = @conv2d_raw}> : (memref<11904xi8>, memref<256xi8>) -> ()
+    "aie.use_lock"(%174, %466) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    "aie.use_lock"(%92, %466) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    %469 = "arith.addi"(%467, %463) <{overflowFlags = #arith.overflow<none>}> : (index, index) -> index
+    "cf.br"(%469)[^bb1] : (index) -> ()
+  ^bb3:  // pred: ^bb1
+    "aie.end"() : () -> ()
+  }) : (index) -> index
+  %210 = "aie.core"(%21) <{link_files = ["conv2d_raw.o"]}> ({
+    %456 = "arith.constant"() <{value = 1 : index}> : () -> index
+    %457 = "arith.constant"() <{value = 9223372036854775807 : index}> : () -> index
+    %458 = "arith.constant"() <{value = 0 : index}> : () -> index
+    %459 = "arith.constant"() <{value = 1 : i32}> : () -> i32
+    "cf.br"(%458)[^bb1] : (index) -> ()
+  ^bb1(%460: index):  // 2 preds: ^bb0, ^bb2
+    %461 = "arith.cmpi"(%460, %457) <{predicate = 2 : i64}> : (index, index) -> i1
+    "cf.cond_br"(%461)[^bb2, ^bb3] <{operandSegmentSizes = array<i32: 1, 0, 0>}> : (i1) -> ()
+  ^bb2:  // pred: ^bb1
+    "aie.use_lock"(%163, %459) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "aie.use_lock"(%79, %459) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "func.call"(%161, %78) <{callee = @conv2d_raw}> : (memref<11904xi8>, memref<256xi8>) -> ()
+    "aie.use_lock"(%162, %459) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    "aie.use_lock"(%80, %459) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    %462 = "arith.addi"(%460, %456) <{overflowFlags = #arith.overflow<none>}> : (index, index) -> index
+    "cf.br"(%462)[^bb1] : (index) -> ()
+  ^bb3:  // pred: ^bb1
+    "aie.end"() : () -> ()
+  }) : (index) -> index
+  %211 = "aie.core"(%20) <{link_files = ["conv2d_raw.o"]}> ({
+    %449 = "arith.constant"() <{value = 1 : index}> : () -> index
+    %450 = "arith.constant"() <{value = 9223372036854775807 : index}> : () -> index
+    %451 = "arith.constant"() <{value = 0 : index}> : () -> index
+    %452 = "arith.constant"() <{value = 1 : i32}> : () -> i32
+    "cf.br"(%451)[^bb1] : (index) -> ()
+  ^bb1(%453: index):  // 2 preds: ^bb0, ^bb2
+    %454 = "arith.cmpi"(%453, %450) <{predicate = 2 : i64}> : (index, index) -> i1
+    "cf.cond_br"(%454)[^bb2, ^bb3] <{operandSegmentSizes = array<i32: 1, 0, 0>}> : (i1) -> ()
+  ^bb2:  // pred: ^bb1
+    "aie.use_lock"(%160, %452) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "aie.use_lock"(%67, %452) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "func.call"(%158, %66) <{callee = @conv2d_raw}> : (memref<11904xi8>, memref<256xi8>) -> ()
+    "aie.use_lock"(%159, %452) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    "aie.use_lock"(%68, %452) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    %455 = "arith.addi"(%453, %449) <{overflowFlags = #arith.overflow<none>}> : (index, index) -> index
+    "cf.br"(%455)[^bb1] : (index) -> ()
+  ^bb3:  // pred: ^bb1
+    "aie.end"() : () -> ()
+  }) : (index) -> index
+  %212 = "aie.core"(%19) <{link_files = ["conv2d_raw.o"]}> ({
+    %442 = "arith.constant"() <{value = 1 : index}> : () -> index
+    %443 = "arith.constant"() <{value = 9223372036854775807 : index}> : () -> index
+    %444 = "arith.constant"() <{value = 0 : index}> : () -> index
+    %445 = "arith.constant"() <{value = 1 : i32}> : () -> i32
+    "cf.br"(%444)[^bb1] : (index) -> ()
+  ^bb1(%446: index):  // 2 preds: ^bb0, ^bb2
+    %447 = "arith.cmpi"(%446, %443) <{predicate = 2 : i64}> : (index, index) -> i1
+    "cf.cond_br"(%447)[^bb2, ^bb3] <{operandSegmentSizes = array<i32: 1, 0, 0>}> : (i1) -> ()
+  ^bb2:  // pred: ^bb1
+    "aie.use_lock"(%155, %445) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "aie.use_lock"(%62, %445) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "func.call"(%153, %61) <{callee = @conv2d_raw}> : (memref<11904xi8>, memref<256xi8>) -> ()
+    "aie.use_lock"(%154, %445) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    "aie.use_lock"(%63, %445) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    %448 = "arith.addi"(%446, %442) <{overflowFlags = #arith.overflow<none>}> : (index, index) -> index
+    "cf.br"(%448)[^bb1] : (index) -> ()
+  ^bb3:  // pred: ^bb1
+    "aie.end"() : () -> ()
+  }) : (index) -> index
+  %213 = "aie.core"(%18) <{link_files = ["conv2d_raw.o"]}> ({
+    %435 = "arith.constant"() <{value = 1 : index}> : () -> index
+    %436 = "arith.constant"() <{value = 9223372036854775807 : index}> : () -> index
+    %437 = "arith.constant"() <{value = 0 : index}> : () -> index
+    %438 = "arith.constant"() <{value = 1 : i32}> : () -> i32
+    "cf.br"(%437)[^bb1] : (index) -> ()
+  ^bb1(%439: index):  // 2 preds: ^bb0, ^bb2
+    %440 = "arith.cmpi"(%439, %436) <{predicate = 2 : i64}> : (index, index) -> i1
+    "cf.cond_br"(%440)[^bb2, ^bb3] <{operandSegmentSizes = array<i32: 1, 0, 0>}> : (i1) -> ()
+  ^bb2:  // pred: ^bb1
+    "aie.use_lock"(%152, %438) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "aie.use_lock"(%59, %438) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "func.call"(%150, %58) <{callee = @conv2d_raw}> : (memref<11904xi8>, memref<256xi8>) -> ()
+    "aie.use_lock"(%151, %438) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    "aie.use_lock"(%60, %438) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    %441 = "arith.addi"(%439, %435) <{overflowFlags = #arith.overflow<none>}> : (index, index) -> index
+    "cf.br"(%441)[^bb1] : (index) -> ()
+  ^bb3:  // pred: ^bb1
+    "aie.end"() : () -> ()
+  }) : (index) -> index
+  %214 = "aie.core"(%17) <{link_files = ["conv2d_raw.o"]}> ({
+    %428 = "arith.constant"() <{value = 1 : index}> : () -> index
+    %429 = "arith.constant"() <{value = 9223372036854775807 : index}> : () -> index
+    %430 = "arith.constant"() <{value = 0 : index}> : () -> index
+    %431 = "arith.constant"() <{value = 1 : i32}> : () -> i32
+    "cf.br"(%430)[^bb1] : (index) -> ()
+  ^bb1(%432: index):  // 2 preds: ^bb0, ^bb2
+    %433 = "arith.cmpi"(%432, %429) <{predicate = 2 : i64}> : (index, index) -> i1
+    "cf.cond_br"(%433)[^bb2, ^bb3] <{operandSegmentSizes = array<i32: 1, 0, 0>}> : (i1) -> ()
+  ^bb2:  // pred: ^bb1
+    "aie.use_lock"(%149, %431) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "aie.use_lock"(%56, %431) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "func.call"(%147, %55) <{callee = @conv2d_raw}> : (memref<11904xi8>, memref<256xi8>) -> ()
+    "aie.use_lock"(%148, %431) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    "aie.use_lock"(%57, %431) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    %434 = "arith.addi"(%432, %428) <{overflowFlags = #arith.overflow<none>}> : (index, index) -> index
+    "cf.br"(%434)[^bb1] : (index) -> ()
+  ^bb3:  // pred: ^bb1
+    "aie.end"() : () -> ()
+  }) : (index) -> index
+  %215 = "aie.core"(%16) <{link_files = ["conv2d_raw.o"]}> ({
+    %421 = "arith.constant"() <{value = 1 : index}> : () -> index
+    %422 = "arith.constant"() <{value = 9223372036854775807 : index}> : () -> index
+    %423 = "arith.constant"() <{value = 0 : index}> : () -> index
+    %424 = "arith.constant"() <{value = 1 : i32}> : () -> i32
+    "cf.br"(%423)[^bb1] : (index) -> ()
+  ^bb1(%425: index):  // 2 preds: ^bb0, ^bb2
+    %426 = "arith.cmpi"(%425, %422) <{predicate = 2 : i64}> : (index, index) -> i1
+    "cf.cond_br"(%426)[^bb2, ^bb3] <{operandSegmentSizes = array<i32: 1, 0, 0>}> : (i1) -> ()
+  ^bb2:  // pred: ^bb1
+    "aie.use_lock"(%146, %424) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "aie.use_lock"(%53, %424) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "func.call"(%144, %52) <{callee = @conv2d_raw}> : (memref<11904xi8>, memref<256xi8>) -> ()
+    "aie.use_lock"(%145, %424) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    "aie.use_lock"(%54, %424) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    %427 = "arith.addi"(%425, %421) <{overflowFlags = #arith.overflow<none>}> : (index, index) -> index
+    "cf.br"(%427)[^bb1] : (index) -> ()
+  ^bb3:  // pred: ^bb1
+    "aie.end"() : () -> ()
+  }) : (index) -> index
+  %216 = "aie.core"(%15) <{link_files = ["conv2d_raw.o"]}> ({
+    %414 = "arith.constant"() <{value = 1 : index}> : () -> index
+    %415 = "arith.constant"() <{value = 9223372036854775807 : index}> : () -> index
+    %416 = "arith.constant"() <{value = 0 : index}> : () -> index
+    %417 = "arith.constant"() <{value = 1 : i32}> : () -> i32
+    "cf.br"(%416)[^bb1] : (index) -> ()
+  ^bb1(%418: index):  // 2 preds: ^bb0, ^bb2
+    %419 = "arith.cmpi"(%418, %415) <{predicate = 2 : i64}> : (index, index) -> i1
+    "cf.cond_br"(%419)[^bb2, ^bb3] <{operandSegmentSizes = array<i32: 1, 0, 0>}> : (i1) -> ()
+  ^bb2:  // pred: ^bb1
+    "aie.use_lock"(%141, %417) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "aie.use_lock"(%48, %417) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "func.call"(%139, %47) <{callee = @conv2d_raw}> : (memref<11904xi8>, memref<256xi8>) -> ()
+    "aie.use_lock"(%140, %417) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    "aie.use_lock"(%49, %417) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    %420 = "arith.addi"(%418, %414) <{overflowFlags = #arith.overflow<none>}> : (index, index) -> index
+    "cf.br"(%420)[^bb1] : (index) -> ()
+  ^bb3:  // pred: ^bb1
+    "aie.end"() : () -> ()
+  }) : (index) -> index
+  %217 = "aie.core"(%14) <{link_files = ["conv2d_raw.o"]}> ({
+    %407 = "arith.constant"() <{value = 1 : index}> : () -> index
+    %408 = "arith.constant"() <{value = 9223372036854775807 : index}> : () -> index
+    %409 = "arith.constant"() <{value = 0 : index}> : () -> index
+    %410 = "arith.constant"() <{value = 1 : i32}> : () -> i32
+    "cf.br"(%409)[^bb1] : (index) -> ()
+  ^bb1(%411: index):  // 2 preds: ^bb0, ^bb2
+    %412 = "arith.cmpi"(%411, %408) <{predicate = 2 : i64}> : (index, index) -> i1
+    "cf.cond_br"(%412)[^bb2, ^bb3] <{operandSegmentSizes = array<i32: 1, 0, 0>}> : (i1) -> ()
+  ^bb2:  // pred: ^bb1
+    "aie.use_lock"(%138, %410) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "aie.use_lock"(%45, %410) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "func.call"(%136, %44) <{callee = @conv2d_raw}> : (memref<11904xi8>, memref<256xi8>) -> ()
+    "aie.use_lock"(%137, %410) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    "aie.use_lock"(%46, %410) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    %413 = "arith.addi"(%411, %407) <{overflowFlags = #arith.overflow<none>}> : (index, index) -> index
+    "cf.br"(%413)[^bb1] : (index) -> ()
+  ^bb3:  // pred: ^bb1
+    "aie.end"() : () -> ()
+  }) : (index) -> index
+  %218 = "aie.core"(%13) <{link_files = ["conv2d_raw.o"]}> ({
+    %400 = "arith.constant"() <{value = 1 : index}> : () -> index
+    %401 = "arith.constant"() <{value = 9223372036854775807 : index}> : () -> index
+    %402 = "arith.constant"() <{value = 0 : index}> : () -> index
+    %403 = "arith.constant"() <{value = 1 : i32}> : () -> i32
+    "cf.br"(%402)[^bb1] : (index) -> ()
+  ^bb1(%404: index):  // 2 preds: ^bb0, ^bb2
+    %405 = "arith.cmpi"(%404, %401) <{predicate = 2 : i64}> : (index, index) -> i1
+    "cf.cond_br"(%405)[^bb2, ^bb3] <{operandSegmentSizes = array<i32: 1, 0, 0>}> : (i1) -> ()
+  ^bb2:  // pred: ^bb1
+    "aie.use_lock"(%135, %403) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "aie.use_lock"(%42, %403) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "func.call"(%133, %41) <{callee = @conv2d_raw}> : (memref<11904xi8>, memref<256xi8>) -> ()
+    "aie.use_lock"(%134, %403) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    "aie.use_lock"(%43, %403) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    %406 = "arith.addi"(%404, %400) <{overflowFlags = #arith.overflow<none>}> : (index, index) -> index
+    "cf.br"(%406)[^bb1] : (index) -> ()
+  ^bb3:  // pred: ^bb1
+    "aie.end"() : () -> ()
+  }) : (index) -> index
+  %219 = "aie.core"(%12) <{link_files = ["conv2d_raw.o"]}> ({
+    %393 = "arith.constant"() <{value = 1 : index}> : () -> index
+    %394 = "arith.constant"() <{value = 9223372036854775807 : index}> : () -> index
+    %395 = "arith.constant"() <{value = 0 : index}> : () -> index
+    %396 = "arith.constant"() <{value = 1 : i32}> : () -> i32
+    "cf.br"(%395)[^bb1] : (index) -> ()
+  ^bb1(%397: index):  // 2 preds: ^bb0, ^bb2
+    %398 = "arith.cmpi"(%397, %394) <{predicate = 2 : i64}> : (index, index) -> i1
+    "cf.cond_br"(%398)[^bb2, ^bb3] <{operandSegmentSizes = array<i32: 1, 0, 0>}> : (i1) -> ()
+  ^bb2:  // pred: ^bb1
+    "aie.use_lock"(%132, %396) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "aie.use_lock"(%39, %396) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "func.call"(%130, %38) <{callee = @conv2d_raw}> : (memref<11904xi8>, memref<256xi8>) -> ()
+    "aie.use_lock"(%131, %396) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    "aie.use_lock"(%40, %396) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    %399 = "arith.addi"(%397, %393) <{overflowFlags = #arith.overflow<none>}> : (index, index) -> index
+    "cf.br"(%399)[^bb1] : (index) -> ()
+  ^bb3:  // pred: ^bb1
+    "aie.end"() : () -> ()
+  }) : (index) -> index
+  %220 = "aie.core"(%11) <{link_files = ["conv2d_raw.o"]}> ({
+    %386 = "arith.constant"() <{value = 1 : index}> : () -> index
+    %387 = "arith.constant"() <{value = 9223372036854775807 : index}> : () -> index
+    %388 = "arith.constant"() <{value = 0 : index}> : () -> index
+    %389 = "arith.constant"() <{value = 1 : i32}> : () -> i32
+    "cf.br"(%388)[^bb1] : (index) -> ()
+  ^bb1(%390: index):  // 2 preds: ^bb0, ^bb2
+    %391 = "arith.cmpi"(%390, %387) <{predicate = 2 : i64}> : (index, index) -> i1
+    "cf.cond_br"(%391)[^bb2, ^bb3] <{operandSegmentSizes = array<i32: 1, 0, 0>}> : (i1) -> ()
+  ^bb2:  // pred: ^bb1
+    "aie.use_lock"(%127, %389) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "aie.use_lock"(%34, %389) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "func.call"(%125, %33) <{callee = @conv2d_raw}> : (memref<11904xi8>, memref<256xi8>) -> ()
+    "aie.use_lock"(%126, %389) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    "aie.use_lock"(%35, %389) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    %392 = "arith.addi"(%390, %386) <{overflowFlags = #arith.overflow<none>}> : (index, index) -> index
+    "cf.br"(%392)[^bb1] : (index) -> ()
+  ^bb3:  // pred: ^bb1
+    "aie.end"() : () -> ()
+  }) : (index) -> index
+  %221 = "aie.core"(%10) <{link_files = ["conv2d_raw.o"]}> ({
+    %379 = "arith.constant"() <{value = 1 : index}> : () -> index
+    %380 = "arith.constant"() <{value = 9223372036854775807 : index}> : () -> index
+    %381 = "arith.constant"() <{value = 0 : index}> : () -> index
+    %382 = "arith.constant"() <{value = 1 : i32}> : () -> i32
+    "cf.br"(%381)[^bb1] : (index) -> ()
+  ^bb1(%383: index):  // 2 preds: ^bb0, ^bb2
+    %384 = "arith.cmpi"(%383, %380) <{predicate = 2 : i64}> : (index, index) -> i1
+    "cf.cond_br"(%384)[^bb2, ^bb3] <{operandSegmentSizes = array<i32: 1, 0, 0>}> : (i1) -> ()
+  ^bb2:  // pred: ^bb1
+    "aie.use_lock"(%124, %382) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "aie.use_lock"(%31, %382) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "func.call"(%122, %30) <{callee = @conv2d_raw}> : (memref<11904xi8>, memref<256xi8>) -> ()
+    "aie.use_lock"(%123, %382) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    "aie.use_lock"(%32, %382) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    %385 = "arith.addi"(%383, %379) <{overflowFlags = #arith.overflow<none>}> : (index, index) -> index
+    "cf.br"(%385)[^bb1] : (index) -> ()
+  ^bb3:  // pred: ^bb1
+    "aie.end"() : () -> ()
+  }) : (index) -> index
+  %222 = "aie.core"(%9) <{link_files = ["conv2d_raw.o"]}> ({
+    %372 = "arith.constant"() <{value = 1 : index}> : () -> index
+    %373 = "arith.constant"() <{value = 9223372036854775807 : index}> : () -> index
+    %374 = "arith.constant"() <{value = 0 : index}> : () -> index
+    %375 = "arith.constant"() <{value = 1 : i32}> : () -> i32
+    "cf.br"(%374)[^bb1] : (index) -> ()
+  ^bb1(%376: index):  // 2 preds: ^bb0, ^bb2
+    %377 = "arith.cmpi"(%376, %373) <{predicate = 2 : i64}> : (index, index) -> i1
+    "cf.cond_br"(%377)[^bb2, ^bb3] <{operandSegmentSizes = array<i32: 1, 0, 0>}> : (i1) -> ()
+  ^bb2:  // pred: ^bb1
+    "aie.use_lock"(%121, %375) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "aie.use_lock"(%28, %375) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "func.call"(%119, %27) <{callee = @conv2d_raw}> : (memref<11904xi8>, memref<256xi8>) -> ()
+    "aie.use_lock"(%120, %375) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    "aie.use_lock"(%29, %375) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    %378 = "arith.addi"(%376, %372) <{overflowFlags = #arith.overflow<none>}> : (index, index) -> index
+    "cf.br"(%378)[^bb1] : (index) -> ()
+  ^bb3:  // pred: ^bb1
+    "aie.end"() : () -> ()
+  }) : (index) -> index
+  %223 = "aie.core"(%8) <{link_files = ["conv2d_raw.o"]}> ({
+    %365 = "arith.constant"() <{value = 1 : index}> : () -> index
+    %366 = "arith.constant"() <{value = 9223372036854775807 : index}> : () -> index
+    %367 = "arith.constant"() <{value = 0 : index}> : () -> index
+    %368 = "arith.constant"() <{value = 1 : i32}> : () -> i32
+    "cf.br"(%367)[^bb1] : (index) -> ()
+  ^bb1(%369: index):  // 2 preds: ^bb0, ^bb2
+    %370 = "arith.cmpi"(%369, %366) <{predicate = 2 : i64}> : (index, index) -> i1
+    "cf.cond_br"(%370)[^bb2, ^bb3] <{operandSegmentSizes = array<i32: 1, 0, 0>}> : (i1) -> ()
+  ^bb2:  // pred: ^bb1
+    "aie.use_lock"(%118, %368) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "aie.use_lock"(%25, %368) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "func.call"(%116, %24) <{callee = @conv2d_raw}> : (memref<11904xi8>, memref<256xi8>) -> ()
+    "aie.use_lock"(%117, %368) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    "aie.use_lock"(%26, %368) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    %371 = "arith.addi"(%369, %365) <{overflowFlags = #arith.overflow<none>}> : (index, index) -> index
+    "cf.br"(%371)[^bb1] : (index) -> ()
+  ^bb3:  // pred: ^bb1
+    "aie.end"() : () -> ()
+  }) : (index) -> index
+  "aie.trace.config"(%23) <{packet_type = 0 : i32, sym_name = "trace_core_1_config"}> ({
+    "aie.trace.reg"() <{comment = "trace mode + start event + stop event", mask = 2139029507 : i32, reg_name = "Trace_Control0", value = 2038038528 : i32}> : () -> ()
+    "aie.trace.reg"() <{comment = "packet ID + packet type", mask = 28703 : i32, reg_name = "Trace_Control1", value = 1 : i32}> : () -> ()
+    "aie.trace.reg"() <{comment = "INSTR_EVENT_0 + INSTR_EVENT_1 + MEMORY_STALL + NONE", mask = 2139062143 : i32, reg_name = "Trace_Event0", value = 1516065 : i32}> : () -> ()
+    "aie.trace.reg"() <{comment = "NONE + NONE + NONE + NONE", mask = 2139062143 : i32, reg_name = "Trace_Event1", value = 0 : i32}> : () -> ()
+    "aie.end"() : () -> ()
+  }) : (index) -> ()
+  "aie.runtime_sequence"() <{sym_name = "sequence"}> ({
+  ^bb0(%arg0: memref<190464xi8>, %arg1: memref<4096xi8>, %arg2: memref<65536xi8>):
+    %336 = "arith.constant"() <{value = 213200 : i32}> : () -> i32
+    %337 = "arith.constant"() <{value = 2038038528 : i32}> : () -> i32
+    %338 = "arith.constant"() <{value = 1 : i32}> : () -> i32
+    %339 = "arith.constant"() <{value = 213204 : i32}> : () -> i32
+    %340 = "arith.constant"() <{value = 1516065 : i32}> : () -> i32
+    %341 = "arith.constant"() <{value = 213216 : i32}> : () -> i32
+    %342 = "arith.constant"() <{value = 0 : i32}> : () -> i32
+    %343 = "arith.constant"() <{value = 213220 : i32}> : () -> i32
+    %344 = "arith.constant"() <{value = 31232 : i32}> : () -> i32
+    %345 = "arith.constant"() <{value = 212992 : i32}> : () -> i32
+    %346 = "arith.constant"() <{value = 65280 : i32}> : () -> i32
+    %347 = "arith.constant"() <{value = 3840 : i32}> : () -> i32
+    %348 = "arith.constant"() <{value = 119304 : i32}> : () -> i32
+    %349 = "arith.constant"() <{value = -2147483633 : i32}> : () -> i32
+    %350 = "arith.constant"() <{value = 119308 : i32}> : () -> i32
+    %351 = "arith.constant"() <{value = 32512 : i32}> : () -> i32
+    %352 = "arith.constant"() <{value = 127 : i32}> : () -> i32
+    %353 = "arith.constant"() <{value = 213068 : i32}> : () -> i32
+    %354 = "arith.constant"() <{value = 213000 : i32}> : () -> i32
+    %355 = "arith.constant"() <{value = 126 : i32}> : () -> i32
+    %356 = "arith.constant"() <{value = 213064 : i32}> : () -> i32
+    "aiex.npu.write32"(%336, %337) <{column = 0 : i32, row = 2 : i32}> : (i32, i32) -> ()
+    "aiex.npu.write32"(%339, %338) <{column = 0 : i32, row = 2 : i32}> : (i32, i32) -> ()
+    "aiex.npu.write32"(%341, %340) <{column = 0 : i32, row = 2 : i32}> : (i32, i32) -> ()
+    "aiex.npu.write32"(%343, %342) <{column = 0 : i32, row = 2 : i32}> : (i32, i32) -> ()
+    "aiex.npu.write32"(%345, %344) <{column = 0 : i32, row = 2 : i32}> : (i32, i32) -> ()
+    "aiex.npu.writebd"() <{bd_id = 15 : i32, buffer_length = 16384 : i32, buffer_offset = 0 : i32, burst_length = 64 : i32, column = 0 : i32, d0_size = 0 : i32, d0_stride = 0 : i32, d0_zero_after = 0 : i32, d0_zero_before = 0 : i32, d1_size = 0 : i32, d1_stride = 0 : i32, d1_zero_after = 0 : i32, d1_zero_before = 0 : i32, d2_size = 0 : i32, d2_stride = 0 : i32, d2_zero_after = 0 : i32, d2_zero_before = 0 : i32, enable_packet = 1 : i32, iteration_current = 0 : i32, iteration_size = 0 : i32, iteration_stride = 0 : i32, lock_acq_enable = 0 : i32, lock_acq_id = 0 : i32, lock_acq_val = 0 : i32, lock_rel_id = 0 : i32, lock_rel_val = 0 : i32, next_bd = 0 : i32, out_of_order_id = 0 : i32, packet_id = 0 : i32, packet_type = 0 : i32, row = 0 : i32, use_next_bd = 0 : i32, valid_bd = 1 : i32}> : () -> ()
+    "aiex.npu.address_patch"(%342) <{addr = 119268 : ui32, arg_idx = 2 : i32}> : (i32) -> ()
+    "aiex.npu.maskwrite32"(%348, %347, %346) <{column = 0 : i32, row = 0 : i32}> : (i32, i32, i32) -> ()
+    "aiex.npu.write32"(%350, %349) <{column = 0 : i32, row = 0 : i32}> : (i32, i32) -> ()
+    "aiex.npu.write32"(%345, %351) <{column = 0 : i32, row = 0 : i32}> : (i32, i32) -> ()
+    "aiex.npu.write32"(%353, %352) <{column = 0 : i32, row = 0 : i32}> : (i32, i32) -> ()
+    "aiex.npu.write32"(%354, %352) <{column = 0 : i32, row = 0 : i32}> : (i32, i32) -> ()
+    %357 = "aiex.dma_configure_task_for"() <{alloc = @input_c0_shim_alloc}> ({
+      "aie.dma_bd"(%arg0) <{operandSegmentSizes = array<i32: 1, 0, 0, 0, 0>, static_len = 47616 : i32, static_offset = 0 : i32, static_sizes = array<i64: 1, 1, 1, 47616>, static_strides = array<i64: 0, 0, 0, 1>}> : (memref<190464xi8>) -> ()
+      "aie.end"() : () -> ()
+    }) : () -> index
+    "aiex.dma_start_task"(%357) : (index) -> ()
+    %358 = "aiex.dma_configure_task_for"() <{alloc = @output_c0_shim_alloc, issue_token = true}> ({
+      "aie.dma_bd"(%arg1) <{operandSegmentSizes = array<i32: 1, 0, 0, 0, 0>, static_len = 1024 : i32, static_offset = 0 : i32, static_sizes = array<i64: 1, 1, 1, 1024>, static_strides = array<i64: 0, 0, 0, 1>}> : (memref<4096xi8>) -> ()
+      "aie.end"() : () -> ()
+    }) : () -> index
+    "aiex.dma_start_task"(%358) : (index) -> ()
+    %359 = "aiex.dma_configure_task_for"() <{alloc = @input_c1_shim_alloc}> ({
+      "aie.dma_bd"(%arg0) <{operandSegmentSizes = array<i32: 1, 0, 0, 0, 0>, static_len = 47616 : i32, static_offset = 47616 : i32, static_sizes = array<i64: 1, 1, 1, 47616>, static_strides = array<i64: 0, 0, 0, 1>}> : (memref<190464xi8>) -> ()
+      "aie.end"() : () -> ()
+    }) : () -> index
+    "aiex.dma_start_task"(%359) : (index) -> ()
+    %360 = "aiex.dma_configure_task_for"() <{alloc = @output_c1_shim_alloc, issue_token = true}> ({
+      "aie.dma_bd"(%arg1) <{operandSegmentSizes = array<i32: 1, 0, 0, 0, 0>, static_len = 1024 : i32, static_offset = 1024 : i32, static_sizes = array<i64: 1, 1, 1, 1024>, static_strides = array<i64: 0, 0, 0, 1>}> : (memref<4096xi8>) -> ()
+      "aie.end"() : () -> ()
+    }) : () -> index
+    "aiex.dma_start_task"(%360) : (index) -> ()
+    %361 = "aiex.dma_configure_task_for"() <{alloc = @input_c2_shim_alloc}> ({
+      "aie.dma_bd"(%arg0) <{operandSegmentSizes = array<i32: 1, 0, 0, 0, 0>, static_len = 47616 : i32, static_offset = 95232 : i32, static_sizes = array<i64: 1, 1, 1, 47616>, static_strides = array<i64: 0, 0, 0, 1>}> : (memref<190464xi8>) -> ()
+      "aie.end"() : () -> ()
+    }) : () -> index
+    "aiex.dma_start_task"(%361) : (index) -> ()
+    %362 = "aiex.dma_configure_task_for"() <{alloc = @output_c2_shim_alloc, issue_token = true}> ({
+      "aie.dma_bd"(%arg1) <{operandSegmentSizes = array<i32: 1, 0, 0, 0, 0>, static_len = 1024 : i32, static_offset = 2048 : i32, static_sizes = array<i64: 1, 1, 1, 1024>, static_strides = array<i64: 0, 0, 0, 1>}> : (memref<4096xi8>) -> ()
+      "aie.end"() : () -> ()
+    }) : () -> index
+    "aiex.dma_start_task"(%362) : (index) -> ()
+    %363 = "aiex.dma_configure_task_for"() <{alloc = @input_c3_shim_alloc}> ({
+      "aie.dma_bd"(%arg0) <{operandSegmentSizes = array<i32: 1, 0, 0, 0, 0>, static_len = 47616 : i32, static_offset = 142848 : i32, static_sizes = array<i64: 1, 1, 1, 47616>, static_strides = array<i64: 0, 0, 0, 1>}> : (memref<190464xi8>) -> ()
+      "aie.end"() : () -> ()
+    }) : () -> index
+    "aiex.dma_start_task"(%363) : (index) -> ()
+    %364 = "aiex.dma_configure_task_for"() <{alloc = @output_c3_shim_alloc, issue_token = true}> ({
+      "aie.dma_bd"(%arg1) <{operandSegmentSizes = array<i32: 1, 0, 0, 0, 0>, static_len = 1024 : i32, static_offset = 3072 : i32, static_sizes = array<i64: 1, 1, 1, 1024>, static_strides = array<i64: 0, 0, 0, 1>}> : (memref<4096xi8>) -> ()
+      "aie.end"() : () -> ()
+    }) : () -> index
+    "aiex.dma_start_task"(%364) : (index) -> ()
+    "aiex.dma_await_task"(%358) : (index) -> ()
+    "aiex.dma_await_task"(%360) : (index) -> ()
+    "aiex.dma_await_task"(%362) : (index) -> ()
+    "aiex.dma_await_task"(%364) : (index) -> ()
+    "aiex.dma_free_task"(%357) : (index) -> ()
+    "aiex.dma_free_task"(%358) : (index) -> ()
+    "aiex.dma_free_task"(%359) : (index) -> ()
+    "aiex.dma_free_task"(%360) : (index) -> ()
+    "aiex.dma_free_task"(%361) : (index) -> ()
+    "aiex.dma_free_task"(%362) : (index) -> ()
+    "aiex.dma_free_task"(%363) : (index) -> ()
+    "aiex.dma_free_task"(%364) : (index) -> ()
+    "aiex.npu.write32"(%356, %355) <{column = 0 : i32, row = 0 : i32}> : (i32, i32) -> ()
+    "aiex.npu.write32"(%354, %355) <{column = 0 : i32, row = 0 : i32}> : (i32, i32) -> ()
+  }) : () -> ()
+  "aie.packet_flow"() <{ID = 1 : i8, keep_pkt_header = true}> ({
+    "aie.packet_source"(%23) <{bundle = 9 : i32, channel = 0 : i32}> : (index) -> ()
+    "aie.packet_dest"(%7) <{bundle = 1 : i32, channel = 1 : i32}> : (index) -> ()
+    "aie.end"() : () -> ()
+  }) : () -> ()
+  "aie.shim_dma_allocation"(%7) <{channel_dir = 1 : i32, channel_index = 0 : i64, plio = false, sym_name = "input_c0_shim_alloc"}> : (index) -> ()
+  %224 = "aie.memtile_dma"(%6) ({
+    %325 = "arith.constant"() <{value = 1 : i32}> : () -> i32
+    %326 = "aie.dma_start"()[^bb1, ^bb5] <{channel_dir = 0 : i32, channel_index = 0 : i32, pad_value = 0 : i32, repeat_count = 0 : i32}> : () -> i1
+  ^bb1:  // 2 preds: ^bb0, ^bb4
+    "aie.use_lock"(%198, %325) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "aie.dma_bd"(%197) <{bd_id = 0 : i32, next_bd_id = 1 : i32, operandSegmentSizes = array<i32: 1, 0, 0, 0, 0>, static_len = 11904 : i32, static_offset = 0 : i32}> : (memref<47616xi8>) -> ()
+    "aie.use_lock"(%199, %325) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    "aie.next_bd"()[^bb2] : () -> ()
+  ^bb2:  // pred: ^bb1
+    "aie.use_lock"(%200, %325) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "aie.dma_bd"(%197) <{bd_id = 1 : i32, next_bd_id = 2 : i32, operandSegmentSizes = array<i32: 1, 0, 0, 0, 0>, static_len = 11904 : i32, static_offset = 11904 : i32}> : (memref<47616xi8>) -> ()
+    "aie.use_lock"(%201, %325) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    "aie.next_bd"()[^bb3] : () -> ()
+  ^bb3:  // pred: ^bb2
+    "aie.use_lock"(%202, %325) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "aie.dma_bd"(%197) <{bd_id = 2 : i32, next_bd_id = 3 : i32, operandSegmentSizes = array<i32: 1, 0, 0, 0, 0>, static_len = 11904 : i32, static_offset = 23808 : i32}> : (memref<47616xi8>) -> ()
+    "aie.use_lock"(%203, %325) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    "aie.next_bd"()[^bb4] : () -> ()
+  ^bb4:  // pred: ^bb3
+    "aie.use_lock"(%204, %325) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "aie.dma_bd"(%197) <{bd_id = 3 : i32, next_bd_id = 0 : i32, operandSegmentSizes = array<i32: 1, 0, 0, 0, 0>, static_len = 11904 : i32, static_offset = 35712 : i32}> : (memref<47616xi8>) -> ()
+    "aie.use_lock"(%205, %325) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    "aie.next_bd"()[^bb1] : () -> ()
+  ^bb5:  // pred: ^bb0
+    %327 = "aie.dma_start"()[^bb6, ^bb7] <{channel_dir = 1 : i32, channel_index = 0 : i32, pad_value = 0 : i32, repeat_count = 0 : i32}> : () -> i1
+  ^bb6:  // 2 preds: ^bb5, ^bb6
+    "aie.use_lock"(%199, %325) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "aie.dma_bd"(%197) <{bd_id = 4 : i32, next_bd_id = 4 : i32, operandSegmentSizes = array<i32: 1, 0, 0, 0, 0>, static_len = 11904 : i32, static_offset = 0 : i32}> : (memref<47616xi8>) -> ()
+    "aie.use_lock"(%198, %325) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    "aie.next_bd"()[^bb6] : () -> ()
+  ^bb7:  // pred: ^bb5
+    %328 = "aie.dma_start"()[^bb8, ^bb9] <{channel_dir = 1 : i32, channel_index = 1 : i32, pad_value = 0 : i32, repeat_count = 0 : i32}> : () -> i1
+  ^bb8:  // 2 preds: ^bb7, ^bb8
+    "aie.use_lock"(%201, %325) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "aie.dma_bd"(%197) <{bd_id = 24 : i32, next_bd_id = 24 : i32, operandSegmentSizes = array<i32: 1, 0, 0, 0, 0>, static_len = 11904 : i32, static_offset = 11904 : i32}> : (memref<47616xi8>) -> ()
+    "aie.use_lock"(%200, %325) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    "aie.next_bd"()[^bb8] : () -> ()
+  ^bb9:  // pred: ^bb7
+    %329 = "aie.dma_start"()[^bb10, ^bb11] <{channel_dir = 1 : i32, channel_index = 2 : i32, pad_value = 0 : i32, repeat_count = 0 : i32}> : () -> i1
+  ^bb10:  // 2 preds: ^bb9, ^bb10
+    "aie.use_lock"(%203, %325) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "aie.dma_bd"(%197) <{bd_id = 5 : i32, next_bd_id = 5 : i32, operandSegmentSizes = array<i32: 1, 0, 0, 0, 0>, static_len = 11904 : i32, static_offset = 23808 : i32}> : (memref<47616xi8>) -> ()
+    "aie.use_lock"(%202, %325) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    "aie.next_bd"()[^bb10] : () -> ()
+  ^bb11:  // pred: ^bb9
+    %330 = "aie.dma_start"()[^bb12, ^bb13] <{channel_dir = 1 : i32, channel_index = 3 : i32, pad_value = 0 : i32, repeat_count = 0 : i32}> : () -> i1
+  ^bb12:  // 2 preds: ^bb11, ^bb12
+    "aie.use_lock"(%205, %325) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "aie.dma_bd"(%197) <{bd_id = 25 : i32, next_bd_id = 25 : i32, operandSegmentSizes = array<i32: 1, 0, 0, 0, 0>, static_len = 11904 : i32, static_offset = 35712 : i32}> : (memref<47616xi8>) -> ()
+    "aie.use_lock"(%204, %325) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    "aie.next_bd"()[^bb12] : () -> ()
+  ^bb13:  // pred: ^bb11
+    %331 = "aie.dma_start"()[^bb14, ^bb18] <{channel_dir = 1 : i32, channel_index = 4 : i32, pad_value = 0 : i32, repeat_count = 0 : i32}> : () -> i1
+  ^bb14:  // 2 preds: ^bb13, ^bb17
+    "aie.use_lock"(%109, %325) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "aie.dma_bd"(%107) <{bd_id = 6 : i32, next_bd_id = 7 : i32, operandSegmentSizes = array<i32: 1, 0, 0, 0, 0>, static_len = 256 : i32, static_offset = 0 : i32}> : (memref<1024xi8>) -> ()
+    "aie.use_lock"(%108, %325) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    "aie.next_bd"()[^bb15] : () -> ()
+  ^bb15:  // pred: ^bb14
+    "aie.use_lock"(%111, %325) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "aie.dma_bd"(%107) <{bd_id = 7 : i32, next_bd_id = 8 : i32, operandSegmentSizes = array<i32: 1, 0, 0, 0, 0>, static_len = 256 : i32, static_offset = 256 : i32}> : (memref<1024xi8>) -> ()
+    "aie.use_lock"(%110, %325) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    "aie.next_bd"()[^bb16] : () -> ()
+  ^bb16:  // pred: ^bb15
+    "aie.use_lock"(%113, %325) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "aie.dma_bd"(%107) <{bd_id = 8 : i32, next_bd_id = 9 : i32, operandSegmentSizes = array<i32: 1, 0, 0, 0, 0>, static_len = 256 : i32, static_offset = 512 : i32}> : (memref<1024xi8>) -> ()
+    "aie.use_lock"(%112, %325) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    "aie.next_bd"()[^bb17] : () -> ()
+  ^bb17:  // pred: ^bb16
+    "aie.use_lock"(%115, %325) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "aie.dma_bd"(%107) <{bd_id = 9 : i32, next_bd_id = 6 : i32, operandSegmentSizes = array<i32: 1, 0, 0, 0, 0>, static_len = 256 : i32, static_offset = 768 : i32}> : (memref<1024xi8>) -> ()
+    "aie.use_lock"(%114, %325) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    "aie.next_bd"()[^bb14] : () -> ()
+  ^bb18:  // pred: ^bb13
+    %332 = "aie.dma_start"()[^bb19, ^bb20] <{channel_dir = 0 : i32, channel_index = 1 : i32, pad_value = 0 : i32, repeat_count = 0 : i32}> : () -> i1
+  ^bb19:  // 2 preds: ^bb18, ^bb19
+    "aie.use_lock"(%108, %325) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "aie.dma_bd"(%107) <{bd_id = 26 : i32, next_bd_id = 26 : i32, operandSegmentSizes = array<i32: 1, 0, 0, 0, 0>, static_len = 256 : i32, static_offset = 0 : i32}> : (memref<1024xi8>) -> ()
+    "aie.use_lock"(%109, %325) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    "aie.next_bd"()[^bb19] : () -> ()
+  ^bb20:  // pred: ^bb18
+    %333 = "aie.dma_start"()[^bb21, ^bb22] <{channel_dir = 0 : i32, channel_index = 2 : i32, pad_value = 0 : i32, repeat_count = 0 : i32}> : () -> i1
+  ^bb21:  // 2 preds: ^bb20, ^bb21
+    "aie.use_lock"(%110, %325) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "aie.dma_bd"(%107) <{bd_id = 10 : i32, next_bd_id = 10 : i32, operandSegmentSizes = array<i32: 1, 0, 0, 0, 0>, static_len = 256 : i32, static_offset = 256 : i32}> : (memref<1024xi8>) -> ()
+    "aie.use_lock"(%111, %325) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    "aie.next_bd"()[^bb21] : () -> ()
+  ^bb22:  // pred: ^bb20
+    %334 = "aie.dma_start"()[^bb23, ^bb24] <{channel_dir = 0 : i32, channel_index = 3 : i32, pad_value = 0 : i32, repeat_count = 0 : i32}> : () -> i1
+  ^bb23:  // 2 preds: ^bb22, ^bb23
+    "aie.use_lock"(%112, %325) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "aie.dma_bd"(%107) <{bd_id = 27 : i32, next_bd_id = 27 : i32, operandSegmentSizes = array<i32: 1, 0, 0, 0, 0>, static_len = 256 : i32, static_offset = 512 : i32}> : (memref<1024xi8>) -> ()
+    "aie.use_lock"(%113, %325) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    "aie.next_bd"()[^bb23] : () -> ()
+  ^bb24:  // pred: ^bb22
+    %335 = "aie.dma_start"()[^bb25, ^bb26] <{channel_dir = 0 : i32, channel_index = 4 : i32, pad_value = 0 : i32, repeat_count = 0 : i32}> : () -> i1
+  ^bb25:  // 2 preds: ^bb24, ^bb25
+    "aie.use_lock"(%114, %325) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "aie.dma_bd"(%107) <{bd_id = 11 : i32, next_bd_id = 11 : i32, operandSegmentSizes = array<i32: 1, 0, 0, 0, 0>, static_len = 256 : i32, static_offset = 768 : i32}> : (memref<1024xi8>) -> ()
+    "aie.use_lock"(%115, %325) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    "aie.next_bd"()[^bb25] : () -> ()
+  ^bb26:  // pred: ^bb24
+    "aie.end"() : () -> ()
+  }) : (index) -> index
+  %225 = "aie.mem"(%23) ({
+    %322 = "arith.constant"() <{value = 1 : i32}> : () -> i32
+    %323 = "aie.dma_start"()[^bb1, ^bb2] <{channel_dir = 0 : i32, channel_index = 0 : i32, pad_value = 0 : i32, repeat_count = 0 : i32}> : () -> i1
+  ^bb1:  // 2 preds: ^bb0, ^bb1
+    "aie.use_lock"(%186, %322) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "aie.dma_bd"(%185) <{bd_id = 0 : i32, next_bd_id = 0 : i32, operandSegmentSizes = array<i32: 1, 0, 0, 0, 0>, static_len = 11904 : i32, static_offset = 0 : i32}> : (memref<11904xi8>) -> ()
+    "aie.use_lock"(%187, %322) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    "aie.next_bd"()[^bb1] : () -> ()
+  ^bb2:  // pred: ^bb0
+    %324 = "aie.dma_start"()[^bb3, ^bb4] <{channel_dir = 1 : i32, channel_index = 0 : i32, pad_value = 0 : i32, repeat_count = 0 : i32}> : () -> i1
+  ^bb3:  // 2 preds: ^bb2, ^bb3
+    "aie.use_lock"(%104, %322) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "aie.dma_bd"(%102) <{bd_id = 1 : i32, next_bd_id = 1 : i32, operandSegmentSizes = array<i32: 1, 0, 0, 0, 0>, static_len = 256 : i32, static_offset = 0 : i32}> : (memref<256xi8>) -> ()
+    "aie.use_lock"(%103, %322) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    "aie.next_bd"()[^bb3] : () -> ()
+  ^bb4:  // pred: ^bb2
+    "aie.end"() : () -> ()
+  }) : (index) -> index
+  %226 = "aie.mem"(%22) ({
+    %319 = "arith.constant"() <{value = 1 : i32}> : () -> i32
+    %320 = "aie.dma_start"()[^bb1, ^bb2] <{channel_dir = 0 : i32, channel_index = 0 : i32, pad_value = 0 : i32, repeat_count = 0 : i32}> : () -> i1
+  ^bb1:  // 2 preds: ^bb0, ^bb1
+    "aie.use_lock"(%174, %319) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "aie.dma_bd"(%173) <{bd_id = 0 : i32, next_bd_id = 0 : i32, operandSegmentSizes = array<i32: 1, 0, 0, 0, 0>, static_len = 11904 : i32, static_offset = 0 : i32}> : (memref<11904xi8>) -> ()
+    "aie.use_lock"(%175, %319) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    "aie.next_bd"()[^bb1] : () -> ()
+  ^bb2:  // pred: ^bb0
+    %321 = "aie.dma_start"()[^bb3, ^bb4] <{channel_dir = 1 : i32, channel_index = 0 : i32, pad_value = 0 : i32, repeat_count = 0 : i32}> : () -> i1
+  ^bb3:  // 2 preds: ^bb2, ^bb3
+    "aie.use_lock"(%92, %319) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "aie.dma_bd"(%90) <{bd_id = 1 : i32, next_bd_id = 1 : i32, operandSegmentSizes = array<i32: 1, 0, 0, 0, 0>, static_len = 256 : i32, static_offset = 0 : i32}> : (memref<256xi8>) -> ()
+    "aie.use_lock"(%91, %319) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    "aie.next_bd"()[^bb3] : () -> ()
+  ^bb4:  // pred: ^bb2
+    "aie.end"() : () -> ()
+  }) : (index) -> index
+  %227 = "aie.mem"(%21) ({
+    %316 = "arith.constant"() <{value = 1 : i32}> : () -> i32
+    %317 = "aie.dma_start"()[^bb1, ^bb2] <{channel_dir = 0 : i32, channel_index = 0 : i32, pad_value = 0 : i32, repeat_count = 0 : i32}> : () -> i1
+  ^bb1:  // 2 preds: ^bb0, ^bb1
+    "aie.use_lock"(%162, %316) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "aie.dma_bd"(%161) <{bd_id = 0 : i32, next_bd_id = 0 : i32, operandSegmentSizes = array<i32: 1, 0, 0, 0, 0>, static_len = 11904 : i32, static_offset = 0 : i32}> : (memref<11904xi8>) -> ()
+    "aie.use_lock"(%163, %316) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    "aie.next_bd"()[^bb1] : () -> ()
+  ^bb2:  // pred: ^bb0
+    %318 = "aie.dma_start"()[^bb3, ^bb4] <{channel_dir = 1 : i32, channel_index = 0 : i32, pad_value = 0 : i32, repeat_count = 0 : i32}> : () -> i1
+  ^bb3:  // 2 preds: ^bb2, ^bb3
+    "aie.use_lock"(%80, %316) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "aie.dma_bd"(%78) <{bd_id = 1 : i32, next_bd_id = 1 : i32, operandSegmentSizes = array<i32: 1, 0, 0, 0, 0>, static_len = 256 : i32, static_offset = 0 : i32}> : (memref<256xi8>) -> ()
+    "aie.use_lock"(%79, %316) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    "aie.next_bd"()[^bb3] : () -> ()
+  ^bb4:  // pred: ^bb2
+    "aie.end"() : () -> ()
+  }) : (index) -> index
+  %228 = "aie.mem"(%20) ({
+    %313 = "arith.constant"() <{value = 1 : i32}> : () -> i32
+    %314 = "aie.dma_start"()[^bb1, ^bb2] <{channel_dir = 0 : i32, channel_index = 0 : i32, pad_value = 0 : i32, repeat_count = 0 : i32}> : () -> i1
+  ^bb1:  // 2 preds: ^bb0, ^bb1
+    "aie.use_lock"(%159, %313) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "aie.dma_bd"(%158) <{bd_id = 0 : i32, next_bd_id = 0 : i32, operandSegmentSizes = array<i32: 1, 0, 0, 0, 0>, static_len = 11904 : i32, static_offset = 0 : i32}> : (memref<11904xi8>) -> ()
+    "aie.use_lock"(%160, %313) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    "aie.next_bd"()[^bb1] : () -> ()
+  ^bb2:  // pred: ^bb0
+    %315 = "aie.dma_start"()[^bb3, ^bb4] <{channel_dir = 1 : i32, channel_index = 0 : i32, pad_value = 0 : i32, repeat_count = 0 : i32}> : () -> i1
+  ^bb3:  // 2 preds: ^bb2, ^bb3
+    "aie.use_lock"(%68, %313) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "aie.dma_bd"(%66) <{bd_id = 1 : i32, next_bd_id = 1 : i32, operandSegmentSizes = array<i32: 1, 0, 0, 0, 0>, static_len = 256 : i32, static_offset = 0 : i32}> : (memref<256xi8>) -> ()
+    "aie.use_lock"(%67, %313) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    "aie.next_bd"()[^bb3] : () -> ()
+  ^bb4:  // pred: ^bb2
+    "aie.end"() : () -> ()
+  }) : (index) -> index
+  "aie.shim_dma_allocation"(%5) <{channel_dir = 1 : i32, channel_index = 0 : i64, plio = false, sym_name = "input_c1_shim_alloc"}> : (index) -> ()
+  %229 = "aie.memtile_dma"(%4) ({
+    %302 = "arith.constant"() <{value = 1 : i32}> : () -> i32
+    %303 = "aie.dma_start"()[^bb1, ^bb5] <{channel_dir = 0 : i32, channel_index = 0 : i32, pad_value = 0 : i32, repeat_count = 0 : i32}> : () -> i1
+  ^bb1:  // 2 preds: ^bb0, ^bb4
+    "aie.use_lock"(%189, %302) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "aie.dma_bd"(%188) <{bd_id = 0 : i32, next_bd_id = 1 : i32, operandSegmentSizes = array<i32: 1, 0, 0, 0, 0>, static_len = 11904 : i32, static_offset = 0 : i32}> : (memref<47616xi8>) -> ()
+    "aie.use_lock"(%190, %302) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    "aie.next_bd"()[^bb2] : () -> ()
+  ^bb2:  // pred: ^bb1
+    "aie.use_lock"(%191, %302) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "aie.dma_bd"(%188) <{bd_id = 1 : i32, next_bd_id = 2 : i32, operandSegmentSizes = array<i32: 1, 0, 0, 0, 0>, static_len = 11904 : i32, static_offset = 11904 : i32}> : (memref<47616xi8>) -> ()
+    "aie.use_lock"(%192, %302) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    "aie.next_bd"()[^bb3] : () -> ()
+  ^bb3:  // pred: ^bb2
+    "aie.use_lock"(%193, %302) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "aie.dma_bd"(%188) <{bd_id = 2 : i32, next_bd_id = 3 : i32, operandSegmentSizes = array<i32: 1, 0, 0, 0, 0>, static_len = 11904 : i32, static_offset = 23808 : i32}> : (memref<47616xi8>) -> ()
+    "aie.use_lock"(%194, %302) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    "aie.next_bd"()[^bb4] : () -> ()
+  ^bb4:  // pred: ^bb3
+    "aie.use_lock"(%195, %302) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "aie.dma_bd"(%188) <{bd_id = 3 : i32, next_bd_id = 0 : i32, operandSegmentSizes = array<i32: 1, 0, 0, 0, 0>, static_len = 11904 : i32, static_offset = 35712 : i32}> : (memref<47616xi8>) -> ()
+    "aie.use_lock"(%196, %302) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    "aie.next_bd"()[^bb1] : () -> ()
+  ^bb5:  // pred: ^bb0
+    %304 = "aie.dma_start"()[^bb6, ^bb7] <{channel_dir = 1 : i32, channel_index = 0 : i32, pad_value = 0 : i32, repeat_count = 0 : i32}> : () -> i1
+  ^bb6:  // 2 preds: ^bb5, ^bb6
+    "aie.use_lock"(%190, %302) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "aie.dma_bd"(%188) <{bd_id = 4 : i32, next_bd_id = 4 : i32, operandSegmentSizes = array<i32: 1, 0, 0, 0, 0>, static_len = 11904 : i32, static_offset = 0 : i32}> : (memref<47616xi8>) -> ()
+    "aie.use_lock"(%189, %302) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    "aie.next_bd"()[^bb6] : () -> ()
+  ^bb7:  // pred: ^bb5
+    %305 = "aie.dma_start"()[^bb8, ^bb9] <{channel_dir = 1 : i32, channel_index = 1 : i32, pad_value = 0 : i32, repeat_count = 0 : i32}> : () -> i1
+  ^bb8:  // 2 preds: ^bb7, ^bb8
+    "aie.use_lock"(%192, %302) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "aie.dma_bd"(%188) <{bd_id = 24 : i32, next_bd_id = 24 : i32, operandSegmentSizes = array<i32: 1, 0, 0, 0, 0>, static_len = 11904 : i32, static_offset = 11904 : i32}> : (memref<47616xi8>) -> ()
+    "aie.use_lock"(%191, %302) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    "aie.next_bd"()[^bb8] : () -> ()
+  ^bb9:  // pred: ^bb7
+    %306 = "aie.dma_start"()[^bb10, ^bb11] <{channel_dir = 1 : i32, channel_index = 2 : i32, pad_value = 0 : i32, repeat_count = 0 : i32}> : () -> i1
+  ^bb10:  // 2 preds: ^bb9, ^bb10
+    "aie.use_lock"(%194, %302) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "aie.dma_bd"(%188) <{bd_id = 5 : i32, next_bd_id = 5 : i32, operandSegmentSizes = array<i32: 1, 0, 0, 0, 0>, static_len = 11904 : i32, static_offset = 23808 : i32}> : (memref<47616xi8>) -> ()
+    "aie.use_lock"(%193, %302) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    "aie.next_bd"()[^bb10] : () -> ()
+  ^bb11:  // pred: ^bb9
+    %307 = "aie.dma_start"()[^bb12, ^bb13] <{channel_dir = 1 : i32, channel_index = 3 : i32, pad_value = 0 : i32, repeat_count = 0 : i32}> : () -> i1
+  ^bb12:  // 2 preds: ^bb11, ^bb12
+    "aie.use_lock"(%196, %302) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "aie.dma_bd"(%188) <{bd_id = 25 : i32, next_bd_id = 25 : i32, operandSegmentSizes = array<i32: 1, 0, 0, 0, 0>, static_len = 11904 : i32, static_offset = 35712 : i32}> : (memref<47616xi8>) -> ()
+    "aie.use_lock"(%195, %302) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    "aie.next_bd"()[^bb12] : () -> ()
+  ^bb13:  // pred: ^bb11
+    %308 = "aie.dma_start"()[^bb14, ^bb18] <{channel_dir = 1 : i32, channel_index = 4 : i32, pad_value = 0 : i32, repeat_count = 0 : i32}> : () -> i1
+  ^bb14:  // 2 preds: ^bb13, ^bb17
+    "aie.use_lock"(%95, %302) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "aie.dma_bd"(%93) <{bd_id = 6 : i32, next_bd_id = 7 : i32, operandSegmentSizes = array<i32: 1, 0, 0, 0, 0>, static_len = 256 : i32, static_offset = 0 : i32}> : (memref<1024xi8>) -> ()
+    "aie.use_lock"(%94, %302) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    "aie.next_bd"()[^bb15] : () -> ()
+  ^bb15:  // pred: ^bb14
+    "aie.use_lock"(%97, %302) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "aie.dma_bd"(%93) <{bd_id = 7 : i32, next_bd_id = 8 : i32, operandSegmentSizes = array<i32: 1, 0, 0, 0, 0>, static_len = 256 : i32, static_offset = 256 : i32}> : (memref<1024xi8>) -> ()
+    "aie.use_lock"(%96, %302) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    "aie.next_bd"()[^bb16] : () -> ()
+  ^bb16:  // pred: ^bb15
+    "aie.use_lock"(%99, %302) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "aie.dma_bd"(%93) <{bd_id = 8 : i32, next_bd_id = 9 : i32, operandSegmentSizes = array<i32: 1, 0, 0, 0, 0>, static_len = 256 : i32, static_offset = 512 : i32}> : (memref<1024xi8>) -> ()
+    "aie.use_lock"(%98, %302) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    "aie.next_bd"()[^bb17] : () -> ()
+  ^bb17:  // pred: ^bb16
+    "aie.use_lock"(%101, %302) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "aie.dma_bd"(%93) <{bd_id = 9 : i32, next_bd_id = 6 : i32, operandSegmentSizes = array<i32: 1, 0, 0, 0, 0>, static_len = 256 : i32, static_offset = 768 : i32}> : (memref<1024xi8>) -> ()
+    "aie.use_lock"(%100, %302) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    "aie.next_bd"()[^bb14] : () -> ()
+  ^bb18:  // pred: ^bb13
+    %309 = "aie.dma_start"()[^bb19, ^bb20] <{channel_dir = 0 : i32, channel_index = 1 : i32, pad_value = 0 : i32, repeat_count = 0 : i32}> : () -> i1
+  ^bb19:  // 2 preds: ^bb18, ^bb19
+    "aie.use_lock"(%94, %302) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "aie.dma_bd"(%93) <{bd_id = 26 : i32, next_bd_id = 26 : i32, operandSegmentSizes = array<i32: 1, 0, 0, 0, 0>, static_len = 256 : i32, static_offset = 0 : i32}> : (memref<1024xi8>) -> ()
+    "aie.use_lock"(%95, %302) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    "aie.next_bd"()[^bb19] : () -> ()
+  ^bb20:  // pred: ^bb18
+    %310 = "aie.dma_start"()[^bb21, ^bb22] <{channel_dir = 0 : i32, channel_index = 2 : i32, pad_value = 0 : i32, repeat_count = 0 : i32}> : () -> i1
+  ^bb21:  // 2 preds: ^bb20, ^bb21
+    "aie.use_lock"(%96, %302) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "aie.dma_bd"(%93) <{bd_id = 10 : i32, next_bd_id = 10 : i32, operandSegmentSizes = array<i32: 1, 0, 0, 0, 0>, static_len = 256 : i32, static_offset = 256 : i32}> : (memref<1024xi8>) -> ()
+    "aie.use_lock"(%97, %302) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    "aie.next_bd"()[^bb21] : () -> ()
+  ^bb22:  // pred: ^bb20
+    %311 = "aie.dma_start"()[^bb23, ^bb24] <{channel_dir = 0 : i32, channel_index = 3 : i32, pad_value = 0 : i32, repeat_count = 0 : i32}> : () -> i1
+  ^bb23:  // 2 preds: ^bb22, ^bb23
+    "aie.use_lock"(%98, %302) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "aie.dma_bd"(%93) <{bd_id = 27 : i32, next_bd_id = 27 : i32, operandSegmentSizes = array<i32: 1, 0, 0, 0, 0>, static_len = 256 : i32, static_offset = 512 : i32}> : (memref<1024xi8>) -> ()
+    "aie.use_lock"(%99, %302) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    "aie.next_bd"()[^bb23] : () -> ()
+  ^bb24:  // pred: ^bb22
+    %312 = "aie.dma_start"()[^bb25, ^bb26] <{channel_dir = 0 : i32, channel_index = 4 : i32, pad_value = 0 : i32, repeat_count = 0 : i32}> : () -> i1
+  ^bb25:  // 2 preds: ^bb24, ^bb25
+    "aie.use_lock"(%100, %302) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "aie.dma_bd"(%93) <{bd_id = 11 : i32, next_bd_id = 11 : i32, operandSegmentSizes = array<i32: 1, 0, 0, 0, 0>, static_len = 256 : i32, static_offset = 768 : i32}> : (memref<1024xi8>) -> ()
+    "aie.use_lock"(%101, %302) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    "aie.next_bd"()[^bb25] : () -> ()
+  ^bb26:  // pred: ^bb24
+    "aie.end"() : () -> ()
+  }) : (index) -> index
+  %230 = "aie.mem"(%19) ({
+    %299 = "arith.constant"() <{value = 1 : i32}> : () -> i32
+    %300 = "aie.dma_start"()[^bb1, ^bb2] <{channel_dir = 0 : i32, channel_index = 0 : i32, pad_value = 0 : i32, repeat_count = 0 : i32}> : () -> i1
+  ^bb1:  // 2 preds: ^bb0, ^bb1
+    "aie.use_lock"(%154, %299) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "aie.dma_bd"(%153) <{bd_id = 0 : i32, next_bd_id = 0 : i32, operandSegmentSizes = array<i32: 1, 0, 0, 0, 0>, static_len = 11904 : i32, static_offset = 0 : i32}> : (memref<11904xi8>) -> ()
+    "aie.use_lock"(%155, %299) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    "aie.next_bd"()[^bb1] : () -> ()
+  ^bb2:  // pred: ^bb0
+    %301 = "aie.dma_start"()[^bb3, ^bb4] <{channel_dir = 1 : i32, channel_index = 0 : i32, pad_value = 0 : i32, repeat_count = 0 : i32}> : () -> i1
+  ^bb3:  // 2 preds: ^bb2, ^bb3
+    "aie.use_lock"(%63, %299) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "aie.dma_bd"(%61) <{bd_id = 1 : i32, next_bd_id = 1 : i32, operandSegmentSizes = array<i32: 1, 0, 0, 0, 0>, static_len = 256 : i32, static_offset = 0 : i32}> : (memref<256xi8>) -> ()
+    "aie.use_lock"(%62, %299) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    "aie.next_bd"()[^bb3] : () -> ()
+  ^bb4:  // pred: ^bb2
+    "aie.end"() : () -> ()
+  }) : (index) -> index
+  %231 = "aie.mem"(%18) ({
+    %296 = "arith.constant"() <{value = 1 : i32}> : () -> i32
+    %297 = "aie.dma_start"()[^bb1, ^bb2] <{channel_dir = 0 : i32, channel_index = 0 : i32, pad_value = 0 : i32, repeat_count = 0 : i32}> : () -> i1
+  ^bb1:  // 2 preds: ^bb0, ^bb1
+    "aie.use_lock"(%151, %296) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "aie.dma_bd"(%150) <{bd_id = 0 : i32, next_bd_id = 0 : i32, operandSegmentSizes = array<i32: 1, 0, 0, 0, 0>, static_len = 11904 : i32, static_offset = 0 : i32}> : (memref<11904xi8>) -> ()
+    "aie.use_lock"(%152, %296) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    "aie.next_bd"()[^bb1] : () -> ()
+  ^bb2:  // pred: ^bb0
+    %298 = "aie.dma_start"()[^bb3, ^bb4] <{channel_dir = 1 : i32, channel_index = 0 : i32, pad_value = 0 : i32, repeat_count = 0 : i32}> : () -> i1
+  ^bb3:  // 2 preds: ^bb2, ^bb3
+    "aie.use_lock"(%60, %296) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "aie.dma_bd"(%58) <{bd_id = 1 : i32, next_bd_id = 1 : i32, operandSegmentSizes = array<i32: 1, 0, 0, 0, 0>, static_len = 256 : i32, static_offset = 0 : i32}> : (memref<256xi8>) -> ()
+    "aie.use_lock"(%59, %296) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    "aie.next_bd"()[^bb3] : () -> ()
+  ^bb4:  // pred: ^bb2
+    "aie.end"() : () -> ()
+  }) : (index) -> index
+  %232 = "aie.mem"(%17) ({
+    %293 = "arith.constant"() <{value = 1 : i32}> : () -> i32
+    %294 = "aie.dma_start"()[^bb1, ^bb2] <{channel_dir = 0 : i32, channel_index = 0 : i32, pad_value = 0 : i32, repeat_count = 0 : i32}> : () -> i1
+  ^bb1:  // 2 preds: ^bb0, ^bb1
+    "aie.use_lock"(%148, %293) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "aie.dma_bd"(%147) <{bd_id = 0 : i32, next_bd_id = 0 : i32, operandSegmentSizes = array<i32: 1, 0, 0, 0, 0>, static_len = 11904 : i32, static_offset = 0 : i32}> : (memref<11904xi8>) -> ()
+    "aie.use_lock"(%149, %293) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    "aie.next_bd"()[^bb1] : () -> ()
+  ^bb2:  // pred: ^bb0
+    %295 = "aie.dma_start"()[^bb3, ^bb4] <{channel_dir = 1 : i32, channel_index = 0 : i32, pad_value = 0 : i32, repeat_count = 0 : i32}> : () -> i1
+  ^bb3:  // 2 preds: ^bb2, ^bb3
+    "aie.use_lock"(%57, %293) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "aie.dma_bd"(%55) <{bd_id = 1 : i32, next_bd_id = 1 : i32, operandSegmentSizes = array<i32: 1, 0, 0, 0, 0>, static_len = 256 : i32, static_offset = 0 : i32}> : (memref<256xi8>) -> ()
+    "aie.use_lock"(%56, %293) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    "aie.next_bd"()[^bb3] : () -> ()
+  ^bb4:  // pred: ^bb2
+    "aie.end"() : () -> ()
+  }) : (index) -> index
+  %233 = "aie.mem"(%16) ({
+    %290 = "arith.constant"() <{value = 1 : i32}> : () -> i32
+    %291 = "aie.dma_start"()[^bb1, ^bb2] <{channel_dir = 0 : i32, channel_index = 0 : i32, pad_value = 0 : i32, repeat_count = 0 : i32}> : () -> i1
+  ^bb1:  // 2 preds: ^bb0, ^bb1
+    "aie.use_lock"(%145, %290) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "aie.dma_bd"(%144) <{bd_id = 0 : i32, next_bd_id = 0 : i32, operandSegmentSizes = array<i32: 1, 0, 0, 0, 0>, static_len = 11904 : i32, static_offset = 0 : i32}> : (memref<11904xi8>) -> ()
+    "aie.use_lock"(%146, %290) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    "aie.next_bd"()[^bb1] : () -> ()
+  ^bb2:  // pred: ^bb0
+    %292 = "aie.dma_start"()[^bb3, ^bb4] <{channel_dir = 1 : i32, channel_index = 0 : i32, pad_value = 0 : i32, repeat_count = 0 : i32}> : () -> i1
+  ^bb3:  // 2 preds: ^bb2, ^bb3
+    "aie.use_lock"(%54, %290) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "aie.dma_bd"(%52) <{bd_id = 1 : i32, next_bd_id = 1 : i32, operandSegmentSizes = array<i32: 1, 0, 0, 0, 0>, static_len = 256 : i32, static_offset = 0 : i32}> : (memref<256xi8>) -> ()
+    "aie.use_lock"(%53, %290) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    "aie.next_bd"()[^bb3] : () -> ()
+  ^bb4:  // pred: ^bb2
+    "aie.end"() : () -> ()
+  }) : (index) -> index
+  "aie.shim_dma_allocation"(%3) <{channel_dir = 1 : i32, channel_index = 0 : i64, plio = false, sym_name = "input_c2_shim_alloc"}> : (index) -> ()
+  %234 = "aie.memtile_dma"(%2) ({
+    %279 = "arith.constant"() <{value = 1 : i32}> : () -> i32
+    %280 = "aie.dma_start"()[^bb1, ^bb5] <{channel_dir = 0 : i32, channel_index = 0 : i32, pad_value = 0 : i32, repeat_count = 0 : i32}> : () -> i1
+  ^bb1:  // 2 preds: ^bb0, ^bb4
+    "aie.use_lock"(%177, %279) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "aie.dma_bd"(%176) <{bd_id = 0 : i32, next_bd_id = 1 : i32, operandSegmentSizes = array<i32: 1, 0, 0, 0, 0>, static_len = 11904 : i32, static_offset = 0 : i32}> : (memref<47616xi8>) -> ()
+    "aie.use_lock"(%178, %279) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    "aie.next_bd"()[^bb2] : () -> ()
+  ^bb2:  // pred: ^bb1
+    "aie.use_lock"(%179, %279) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "aie.dma_bd"(%176) <{bd_id = 1 : i32, next_bd_id = 2 : i32, operandSegmentSizes = array<i32: 1, 0, 0, 0, 0>, static_len = 11904 : i32, static_offset = 11904 : i32}> : (memref<47616xi8>) -> ()
+    "aie.use_lock"(%180, %279) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    "aie.next_bd"()[^bb3] : () -> ()
+  ^bb3:  // pred: ^bb2
+    "aie.use_lock"(%181, %279) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "aie.dma_bd"(%176) <{bd_id = 2 : i32, next_bd_id = 3 : i32, operandSegmentSizes = array<i32: 1, 0, 0, 0, 0>, static_len = 11904 : i32, static_offset = 23808 : i32}> : (memref<47616xi8>) -> ()
+    "aie.use_lock"(%182, %279) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    "aie.next_bd"()[^bb4] : () -> ()
+  ^bb4:  // pred: ^bb3
+    "aie.use_lock"(%183, %279) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "aie.dma_bd"(%176) <{bd_id = 3 : i32, next_bd_id = 0 : i32, operandSegmentSizes = array<i32: 1, 0, 0, 0, 0>, static_len = 11904 : i32, static_offset = 35712 : i32}> : (memref<47616xi8>) -> ()
+    "aie.use_lock"(%184, %279) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    "aie.next_bd"()[^bb1] : () -> ()
+  ^bb5:  // pred: ^bb0
+    %281 = "aie.dma_start"()[^bb6, ^bb7] <{channel_dir = 1 : i32, channel_index = 0 : i32, pad_value = 0 : i32, repeat_count = 0 : i32}> : () -> i1
+  ^bb6:  // 2 preds: ^bb5, ^bb6
+    "aie.use_lock"(%178, %279) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "aie.dma_bd"(%176) <{bd_id = 4 : i32, next_bd_id = 4 : i32, operandSegmentSizes = array<i32: 1, 0, 0, 0, 0>, static_len = 11904 : i32, static_offset = 0 : i32}> : (memref<47616xi8>) -> ()
+    "aie.use_lock"(%177, %279) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    "aie.next_bd"()[^bb6] : () -> ()
+  ^bb7:  // pred: ^bb5
+    %282 = "aie.dma_start"()[^bb8, ^bb9] <{channel_dir = 1 : i32, channel_index = 1 : i32, pad_value = 0 : i32, repeat_count = 0 : i32}> : () -> i1
+  ^bb8:  // 2 preds: ^bb7, ^bb8
+    "aie.use_lock"(%180, %279) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "aie.dma_bd"(%176) <{bd_id = 24 : i32, next_bd_id = 24 : i32, operandSegmentSizes = array<i32: 1, 0, 0, 0, 0>, static_len = 11904 : i32, static_offset = 11904 : i32}> : (memref<47616xi8>) -> ()
+    "aie.use_lock"(%179, %279) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    "aie.next_bd"()[^bb8] : () -> ()
+  ^bb9:  // pred: ^bb7
+    %283 = "aie.dma_start"()[^bb10, ^bb11] <{channel_dir = 1 : i32, channel_index = 2 : i32, pad_value = 0 : i32, repeat_count = 0 : i32}> : () -> i1
+  ^bb10:  // 2 preds: ^bb9, ^bb10
+    "aie.use_lock"(%182, %279) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "aie.dma_bd"(%176) <{bd_id = 5 : i32, next_bd_id = 5 : i32, operandSegmentSizes = array<i32: 1, 0, 0, 0, 0>, static_len = 11904 : i32, static_offset = 23808 : i32}> : (memref<47616xi8>) -> ()
+    "aie.use_lock"(%181, %279) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    "aie.next_bd"()[^bb10] : () -> ()
+  ^bb11:  // pred: ^bb9
+    %284 = "aie.dma_start"()[^bb12, ^bb13] <{channel_dir = 1 : i32, channel_index = 3 : i32, pad_value = 0 : i32, repeat_count = 0 : i32}> : () -> i1
+  ^bb12:  // 2 preds: ^bb11, ^bb12
+    "aie.use_lock"(%184, %279) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "aie.dma_bd"(%176) <{bd_id = 25 : i32, next_bd_id = 25 : i32, operandSegmentSizes = array<i32: 1, 0, 0, 0, 0>, static_len = 11904 : i32, static_offset = 35712 : i32}> : (memref<47616xi8>) -> ()
+    "aie.use_lock"(%183, %279) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    "aie.next_bd"()[^bb12] : () -> ()
+  ^bb13:  // pred: ^bb11
+    %285 = "aie.dma_start"()[^bb14, ^bb18] <{channel_dir = 1 : i32, channel_index = 4 : i32, pad_value = 0 : i32, repeat_count = 0 : i32}> : () -> i1
+  ^bb14:  // 2 preds: ^bb13, ^bb17
+    "aie.use_lock"(%83, %279) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "aie.dma_bd"(%81) <{bd_id = 6 : i32, next_bd_id = 7 : i32, operandSegmentSizes = array<i32: 1, 0, 0, 0, 0>, static_len = 256 : i32, static_offset = 0 : i32}> : (memref<1024xi8>) -> ()
+    "aie.use_lock"(%82, %279) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    "aie.next_bd"()[^bb15] : () -> ()
+  ^bb15:  // pred: ^bb14
+    "aie.use_lock"(%85, %279) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "aie.dma_bd"(%81) <{bd_id = 7 : i32, next_bd_id = 8 : i32, operandSegmentSizes = array<i32: 1, 0, 0, 0, 0>, static_len = 256 : i32, static_offset = 256 : i32}> : (memref<1024xi8>) -> ()
+    "aie.use_lock"(%84, %279) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    "aie.next_bd"()[^bb16] : () -> ()
+  ^bb16:  // pred: ^bb15
+    "aie.use_lock"(%87, %279) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "aie.dma_bd"(%81) <{bd_id = 8 : i32, next_bd_id = 9 : i32, operandSegmentSizes = array<i32: 1, 0, 0, 0, 0>, static_len = 256 : i32, static_offset = 512 : i32}> : (memref<1024xi8>) -> ()
+    "aie.use_lock"(%86, %279) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    "aie.next_bd"()[^bb17] : () -> ()
+  ^bb17:  // pred: ^bb16
+    "aie.use_lock"(%89, %279) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "aie.dma_bd"(%81) <{bd_id = 9 : i32, next_bd_id = 6 : i32, operandSegmentSizes = array<i32: 1, 0, 0, 0, 0>, static_len = 256 : i32, static_offset = 768 : i32}> : (memref<1024xi8>) -> ()
+    "aie.use_lock"(%88, %279) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    "aie.next_bd"()[^bb14] : () -> ()
+  ^bb18:  // pred: ^bb13
+    %286 = "aie.dma_start"()[^bb19, ^bb20] <{channel_dir = 0 : i32, channel_index = 1 : i32, pad_value = 0 : i32, repeat_count = 0 : i32}> : () -> i1
+  ^bb19:  // 2 preds: ^bb18, ^bb19
+    "aie.use_lock"(%82, %279) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "aie.dma_bd"(%81) <{bd_id = 26 : i32, next_bd_id = 26 : i32, operandSegmentSizes = array<i32: 1, 0, 0, 0, 0>, static_len = 256 : i32, static_offset = 0 : i32}> : (memref<1024xi8>) -> ()
+    "aie.use_lock"(%83, %279) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    "aie.next_bd"()[^bb19] : () -> ()
+  ^bb20:  // pred: ^bb18
+    %287 = "aie.dma_start"()[^bb21, ^bb22] <{channel_dir = 0 : i32, channel_index = 2 : i32, pad_value = 0 : i32, repeat_count = 0 : i32}> : () -> i1
+  ^bb21:  // 2 preds: ^bb20, ^bb21
+    "aie.use_lock"(%84, %279) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "aie.dma_bd"(%81) <{bd_id = 10 : i32, next_bd_id = 10 : i32, operandSegmentSizes = array<i32: 1, 0, 0, 0, 0>, static_len = 256 : i32, static_offset = 256 : i32}> : (memref<1024xi8>) -> ()
+    "aie.use_lock"(%85, %279) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    "aie.next_bd"()[^bb21] : () -> ()
+  ^bb22:  // pred: ^bb20
+    %288 = "aie.dma_start"()[^bb23, ^bb24] <{channel_dir = 0 : i32, channel_index = 3 : i32, pad_value = 0 : i32, repeat_count = 0 : i32}> : () -> i1
+  ^bb23:  // 2 preds: ^bb22, ^bb23
+    "aie.use_lock"(%86, %279) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "aie.dma_bd"(%81) <{bd_id = 27 : i32, next_bd_id = 27 : i32, operandSegmentSizes = array<i32: 1, 0, 0, 0, 0>, static_len = 256 : i32, static_offset = 512 : i32}> : (memref<1024xi8>) -> ()
+    "aie.use_lock"(%87, %279) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    "aie.next_bd"()[^bb23] : () -> ()
+  ^bb24:  // pred: ^bb22
+    %289 = "aie.dma_start"()[^bb25, ^bb26] <{channel_dir = 0 : i32, channel_index = 4 : i32, pad_value = 0 : i32, repeat_count = 0 : i32}> : () -> i1
+  ^bb25:  // 2 preds: ^bb24, ^bb25
+    "aie.use_lock"(%88, %279) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "aie.dma_bd"(%81) <{bd_id = 11 : i32, next_bd_id = 11 : i32, operandSegmentSizes = array<i32: 1, 0, 0, 0, 0>, static_len = 256 : i32, static_offset = 768 : i32}> : (memref<1024xi8>) -> ()
+    "aie.use_lock"(%89, %279) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    "aie.next_bd"()[^bb25] : () -> ()
+  ^bb26:  // pred: ^bb24
+    "aie.end"() : () -> ()
+  }) : (index) -> index
+  %235 = "aie.mem"(%15) ({
+    %276 = "arith.constant"() <{value = 1 : i32}> : () -> i32
+    %277 = "aie.dma_start"()[^bb1, ^bb2] <{channel_dir = 0 : i32, channel_index = 0 : i32, pad_value = 0 : i32, repeat_count = 0 : i32}> : () -> i1
+  ^bb1:  // 2 preds: ^bb0, ^bb1
+    "aie.use_lock"(%140, %276) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "aie.dma_bd"(%139) <{bd_id = 0 : i32, next_bd_id = 0 : i32, operandSegmentSizes = array<i32: 1, 0, 0, 0, 0>, static_len = 11904 : i32, static_offset = 0 : i32}> : (memref<11904xi8>) -> ()
+    "aie.use_lock"(%141, %276) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    "aie.next_bd"()[^bb1] : () -> ()
+  ^bb2:  // pred: ^bb0
+    %278 = "aie.dma_start"()[^bb3, ^bb4] <{channel_dir = 1 : i32, channel_index = 0 : i32, pad_value = 0 : i32, repeat_count = 0 : i32}> : () -> i1
+  ^bb3:  // 2 preds: ^bb2, ^bb3
+    "aie.use_lock"(%49, %276) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "aie.dma_bd"(%47) <{bd_id = 1 : i32, next_bd_id = 1 : i32, operandSegmentSizes = array<i32: 1, 0, 0, 0, 0>, static_len = 256 : i32, static_offset = 0 : i32}> : (memref<256xi8>) -> ()
+    "aie.use_lock"(%48, %276) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    "aie.next_bd"()[^bb3] : () -> ()
+  ^bb4:  // pred: ^bb2
+    "aie.end"() : () -> ()
+  }) : (index) -> index
+  %236 = "aie.mem"(%14) ({
+    %273 = "arith.constant"() <{value = 1 : i32}> : () -> i32
+    %274 = "aie.dma_start"()[^bb1, ^bb2] <{channel_dir = 0 : i32, channel_index = 0 : i32, pad_value = 0 : i32, repeat_count = 0 : i32}> : () -> i1
+  ^bb1:  // 2 preds: ^bb0, ^bb1
+    "aie.use_lock"(%137, %273) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "aie.dma_bd"(%136) <{bd_id = 0 : i32, next_bd_id = 0 : i32, operandSegmentSizes = array<i32: 1, 0, 0, 0, 0>, static_len = 11904 : i32, static_offset = 0 : i32}> : (memref<11904xi8>) -> ()
+    "aie.use_lock"(%138, %273) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    "aie.next_bd"()[^bb1] : () -> ()
+  ^bb2:  // pred: ^bb0
+    %275 = "aie.dma_start"()[^bb3, ^bb4] <{channel_dir = 1 : i32, channel_index = 0 : i32, pad_value = 0 : i32, repeat_count = 0 : i32}> : () -> i1
+  ^bb3:  // 2 preds: ^bb2, ^bb3
+    "aie.use_lock"(%46, %273) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "aie.dma_bd"(%44) <{bd_id = 1 : i32, next_bd_id = 1 : i32, operandSegmentSizes = array<i32: 1, 0, 0, 0, 0>, static_len = 256 : i32, static_offset = 0 : i32}> : (memref<256xi8>) -> ()
+    "aie.use_lock"(%45, %273) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    "aie.next_bd"()[^bb3] : () -> ()
+  ^bb4:  // pred: ^bb2
+    "aie.end"() : () -> ()
+  }) : (index) -> index
+  %237 = "aie.mem"(%13) ({
+    %270 = "arith.constant"() <{value = 1 : i32}> : () -> i32
+    %271 = "aie.dma_start"()[^bb1, ^bb2] <{channel_dir = 0 : i32, channel_index = 0 : i32, pad_value = 0 : i32, repeat_count = 0 : i32}> : () -> i1
+  ^bb1:  // 2 preds: ^bb0, ^bb1
+    "aie.use_lock"(%134, %270) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "aie.dma_bd"(%133) <{bd_id = 0 : i32, next_bd_id = 0 : i32, operandSegmentSizes = array<i32: 1, 0, 0, 0, 0>, static_len = 11904 : i32, static_offset = 0 : i32}> : (memref<11904xi8>) -> ()
+    "aie.use_lock"(%135, %270) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    "aie.next_bd"()[^bb1] : () -> ()
+  ^bb2:  // pred: ^bb0
+    %272 = "aie.dma_start"()[^bb3, ^bb4] <{channel_dir = 1 : i32, channel_index = 0 : i32, pad_value = 0 : i32, repeat_count = 0 : i32}> : () -> i1
+  ^bb3:  // 2 preds: ^bb2, ^bb3
+    "aie.use_lock"(%43, %270) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "aie.dma_bd"(%41) <{bd_id = 1 : i32, next_bd_id = 1 : i32, operandSegmentSizes = array<i32: 1, 0, 0, 0, 0>, static_len = 256 : i32, static_offset = 0 : i32}> : (memref<256xi8>) -> ()
+    "aie.use_lock"(%42, %270) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    "aie.next_bd"()[^bb3] : () -> ()
+  ^bb4:  // pred: ^bb2
+    "aie.end"() : () -> ()
+  }) : (index) -> index
+  %238 = "aie.mem"(%12) ({
+    %267 = "arith.constant"() <{value = 1 : i32}> : () -> i32
+    %268 = "aie.dma_start"()[^bb1, ^bb2] <{channel_dir = 0 : i32, channel_index = 0 : i32, pad_value = 0 : i32, repeat_count = 0 : i32}> : () -> i1
+  ^bb1:  // 2 preds: ^bb0, ^bb1
+    "aie.use_lock"(%131, %267) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "aie.dma_bd"(%130) <{bd_id = 0 : i32, next_bd_id = 0 : i32, operandSegmentSizes = array<i32: 1, 0, 0, 0, 0>, static_len = 11904 : i32, static_offset = 0 : i32}> : (memref<11904xi8>) -> ()
+    "aie.use_lock"(%132, %267) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    "aie.next_bd"()[^bb1] : () -> ()
+  ^bb2:  // pred: ^bb0
+    %269 = "aie.dma_start"()[^bb3, ^bb4] <{channel_dir = 1 : i32, channel_index = 0 : i32, pad_value = 0 : i32, repeat_count = 0 : i32}> : () -> i1
+  ^bb3:  // 2 preds: ^bb2, ^bb3
+    "aie.use_lock"(%40, %267) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "aie.dma_bd"(%38) <{bd_id = 1 : i32, next_bd_id = 1 : i32, operandSegmentSizes = array<i32: 1, 0, 0, 0, 0>, static_len = 256 : i32, static_offset = 0 : i32}> : (memref<256xi8>) -> ()
+    "aie.use_lock"(%39, %267) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    "aie.next_bd"()[^bb3] : () -> ()
+  ^bb4:  // pred: ^bb2
+    "aie.end"() : () -> ()
+  }) : (index) -> index
+  "aie.shim_dma_allocation"(%1) <{channel_dir = 1 : i32, channel_index = 0 : i64, plio = false, sym_name = "input_c3_shim_alloc"}> : (index) -> ()
+  %239 = "aie.memtile_dma"(%0) ({
+    %256 = "arith.constant"() <{value = 1 : i32}> : () -> i32
+    %257 = "aie.dma_start"()[^bb1, ^bb5] <{channel_dir = 0 : i32, channel_index = 0 : i32, pad_value = 0 : i32, repeat_count = 0 : i32}> : () -> i1
+  ^bb1:  // 2 preds: ^bb0, ^bb4
+    "aie.use_lock"(%165, %256) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "aie.dma_bd"(%164) <{bd_id = 0 : i32, next_bd_id = 1 : i32, operandSegmentSizes = array<i32: 1, 0, 0, 0, 0>, static_len = 11904 : i32, static_offset = 0 : i32}> : (memref<47616xi8>) -> ()
+    "aie.use_lock"(%166, %256) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    "aie.next_bd"()[^bb2] : () -> ()
+  ^bb2:  // pred: ^bb1
+    "aie.use_lock"(%167, %256) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "aie.dma_bd"(%164) <{bd_id = 1 : i32, next_bd_id = 2 : i32, operandSegmentSizes = array<i32: 1, 0, 0, 0, 0>, static_len = 11904 : i32, static_offset = 11904 : i32}> : (memref<47616xi8>) -> ()
+    "aie.use_lock"(%168, %256) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    "aie.next_bd"()[^bb3] : () -> ()
+  ^bb3:  // pred: ^bb2
+    "aie.use_lock"(%169, %256) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "aie.dma_bd"(%164) <{bd_id = 2 : i32, next_bd_id = 3 : i32, operandSegmentSizes = array<i32: 1, 0, 0, 0, 0>, static_len = 11904 : i32, static_offset = 23808 : i32}> : (memref<47616xi8>) -> ()
+    "aie.use_lock"(%170, %256) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    "aie.next_bd"()[^bb4] : () -> ()
+  ^bb4:  // pred: ^bb3
+    "aie.use_lock"(%171, %256) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "aie.dma_bd"(%164) <{bd_id = 3 : i32, next_bd_id = 0 : i32, operandSegmentSizes = array<i32: 1, 0, 0, 0, 0>, static_len = 11904 : i32, static_offset = 35712 : i32}> : (memref<47616xi8>) -> ()
+    "aie.use_lock"(%172, %256) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    "aie.next_bd"()[^bb1] : () -> ()
+  ^bb5:  // pred: ^bb0
+    %258 = "aie.dma_start"()[^bb6, ^bb7] <{channel_dir = 1 : i32, channel_index = 0 : i32, pad_value = 0 : i32, repeat_count = 0 : i32}> : () -> i1
+  ^bb6:  // 2 preds: ^bb5, ^bb6
+    "aie.use_lock"(%166, %256) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "aie.dma_bd"(%164) <{bd_id = 4 : i32, next_bd_id = 4 : i32, operandSegmentSizes = array<i32: 1, 0, 0, 0, 0>, static_len = 11904 : i32, static_offset = 0 : i32}> : (memref<47616xi8>) -> ()
+    "aie.use_lock"(%165, %256) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    "aie.next_bd"()[^bb6] : () -> ()
+  ^bb7:  // pred: ^bb5
+    %259 = "aie.dma_start"()[^bb8, ^bb9] <{channel_dir = 1 : i32, channel_index = 1 : i32, pad_value = 0 : i32, repeat_count = 0 : i32}> : () -> i1
+  ^bb8:  // 2 preds: ^bb7, ^bb8
+    "aie.use_lock"(%168, %256) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "aie.dma_bd"(%164) <{bd_id = 24 : i32, next_bd_id = 24 : i32, operandSegmentSizes = array<i32: 1, 0, 0, 0, 0>, static_len = 11904 : i32, static_offset = 11904 : i32}> : (memref<47616xi8>) -> ()
+    "aie.use_lock"(%167, %256) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    "aie.next_bd"()[^bb8] : () -> ()
+  ^bb9:  // pred: ^bb7
+    %260 = "aie.dma_start"()[^bb10, ^bb11] <{channel_dir = 1 : i32, channel_index = 2 : i32, pad_value = 0 : i32, repeat_count = 0 : i32}> : () -> i1
+  ^bb10:  // 2 preds: ^bb9, ^bb10
+    "aie.use_lock"(%170, %256) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "aie.dma_bd"(%164) <{bd_id = 5 : i32, next_bd_id = 5 : i32, operandSegmentSizes = array<i32: 1, 0, 0, 0, 0>, static_len = 11904 : i32, static_offset = 23808 : i32}> : (memref<47616xi8>) -> ()
+    "aie.use_lock"(%169, %256) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    "aie.next_bd"()[^bb10] : () -> ()
+  ^bb11:  // pred: ^bb9
+    %261 = "aie.dma_start"()[^bb12, ^bb13] <{channel_dir = 1 : i32, channel_index = 3 : i32, pad_value = 0 : i32, repeat_count = 0 : i32}> : () -> i1
+  ^bb12:  // 2 preds: ^bb11, ^bb12
+    "aie.use_lock"(%172, %256) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "aie.dma_bd"(%164) <{bd_id = 25 : i32, next_bd_id = 25 : i32, operandSegmentSizes = array<i32: 1, 0, 0, 0, 0>, static_len = 11904 : i32, static_offset = 35712 : i32}> : (memref<47616xi8>) -> ()
+    "aie.use_lock"(%171, %256) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    "aie.next_bd"()[^bb12] : () -> ()
+  ^bb13:  // pred: ^bb11
+    %262 = "aie.dma_start"()[^bb14, ^bb18] <{channel_dir = 1 : i32, channel_index = 4 : i32, pad_value = 0 : i32, repeat_count = 0 : i32}> : () -> i1
+  ^bb14:  // 2 preds: ^bb13, ^bb17
+    "aie.use_lock"(%71, %256) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "aie.dma_bd"(%69) <{bd_id = 6 : i32, next_bd_id = 7 : i32, operandSegmentSizes = array<i32: 1, 0, 0, 0, 0>, static_len = 256 : i32, static_offset = 0 : i32}> : (memref<1024xi8>) -> ()
+    "aie.use_lock"(%70, %256) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    "aie.next_bd"()[^bb15] : () -> ()
+  ^bb15:  // pred: ^bb14
+    "aie.use_lock"(%73, %256) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "aie.dma_bd"(%69) <{bd_id = 7 : i32, next_bd_id = 8 : i32, operandSegmentSizes = array<i32: 1, 0, 0, 0, 0>, static_len = 256 : i32, static_offset = 256 : i32}> : (memref<1024xi8>) -> ()
+    "aie.use_lock"(%72, %256) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    "aie.next_bd"()[^bb16] : () -> ()
+  ^bb16:  // pred: ^bb15
+    "aie.use_lock"(%75, %256) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "aie.dma_bd"(%69) <{bd_id = 8 : i32, next_bd_id = 9 : i32, operandSegmentSizes = array<i32: 1, 0, 0, 0, 0>, static_len = 256 : i32, static_offset = 512 : i32}> : (memref<1024xi8>) -> ()
+    "aie.use_lock"(%74, %256) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    "aie.next_bd"()[^bb17] : () -> ()
+  ^bb17:  // pred: ^bb16
+    "aie.use_lock"(%77, %256) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "aie.dma_bd"(%69) <{bd_id = 9 : i32, next_bd_id = 6 : i32, operandSegmentSizes = array<i32: 1, 0, 0, 0, 0>, static_len = 256 : i32, static_offset = 768 : i32}> : (memref<1024xi8>) -> ()
+    "aie.use_lock"(%76, %256) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    "aie.next_bd"()[^bb14] : () -> ()
+  ^bb18:  // pred: ^bb13
+    %263 = "aie.dma_start"()[^bb19, ^bb20] <{channel_dir = 0 : i32, channel_index = 1 : i32, pad_value = 0 : i32, repeat_count = 0 : i32}> : () -> i1
+  ^bb19:  // 2 preds: ^bb18, ^bb19
+    "aie.use_lock"(%70, %256) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "aie.dma_bd"(%69) <{bd_id = 26 : i32, next_bd_id = 26 : i32, operandSegmentSizes = array<i32: 1, 0, 0, 0, 0>, static_len = 256 : i32, static_offset = 0 : i32}> : (memref<1024xi8>) -> ()
+    "aie.use_lock"(%71, %256) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    "aie.next_bd"()[^bb19] : () -> ()
+  ^bb20:  // pred: ^bb18
+    %264 = "aie.dma_start"()[^bb21, ^bb22] <{channel_dir = 0 : i32, channel_index = 2 : i32, pad_value = 0 : i32, repeat_count = 0 : i32}> : () -> i1
+  ^bb21:  // 2 preds: ^bb20, ^bb21
+    "aie.use_lock"(%72, %256) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "aie.dma_bd"(%69) <{bd_id = 10 : i32, next_bd_id = 10 : i32, operandSegmentSizes = array<i32: 1, 0, 0, 0, 0>, static_len = 256 : i32, static_offset = 256 : i32}> : (memref<1024xi8>) -> ()
+    "aie.use_lock"(%73, %256) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    "aie.next_bd"()[^bb21] : () -> ()
+  ^bb22:  // pred: ^bb20
+    %265 = "aie.dma_start"()[^bb23, ^bb24] <{channel_dir = 0 : i32, channel_index = 3 : i32, pad_value = 0 : i32, repeat_count = 0 : i32}> : () -> i1
+  ^bb23:  // 2 preds: ^bb22, ^bb23
+    "aie.use_lock"(%74, %256) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "aie.dma_bd"(%69) <{bd_id = 27 : i32, next_bd_id = 27 : i32, operandSegmentSizes = array<i32: 1, 0, 0, 0, 0>, static_len = 256 : i32, static_offset = 512 : i32}> : (memref<1024xi8>) -> ()
+    "aie.use_lock"(%75, %256) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    "aie.next_bd"()[^bb23] : () -> ()
+  ^bb24:  // pred: ^bb22
+    %266 = "aie.dma_start"()[^bb25, ^bb26] <{channel_dir = 0 : i32, channel_index = 4 : i32, pad_value = 0 : i32, repeat_count = 0 : i32}> : () -> i1
+  ^bb25:  // 2 preds: ^bb24, ^bb25
+    "aie.use_lock"(%76, %256) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "aie.dma_bd"(%69) <{bd_id = 11 : i32, next_bd_id = 11 : i32, operandSegmentSizes = array<i32: 1, 0, 0, 0, 0>, static_len = 256 : i32, static_offset = 768 : i32}> : (memref<1024xi8>) -> ()
+    "aie.use_lock"(%77, %256) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    "aie.next_bd"()[^bb25] : () -> ()
+  ^bb26:  // pred: ^bb24
+    "aie.end"() : () -> ()
+  }) : (index) -> index
+  %240 = "aie.mem"(%11) ({
+    %253 = "arith.constant"() <{value = 1 : i32}> : () -> i32
+    %254 = "aie.dma_start"()[^bb1, ^bb2] <{channel_dir = 0 : i32, channel_index = 0 : i32, pad_value = 0 : i32, repeat_count = 0 : i32}> : () -> i1
+  ^bb1:  // 2 preds: ^bb0, ^bb1
+    "aie.use_lock"(%126, %253) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "aie.dma_bd"(%125) <{bd_id = 0 : i32, next_bd_id = 0 : i32, operandSegmentSizes = array<i32: 1, 0, 0, 0, 0>, static_len = 11904 : i32, static_offset = 0 : i32}> : (memref<11904xi8>) -> ()
+    "aie.use_lock"(%127, %253) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    "aie.next_bd"()[^bb1] : () -> ()
+  ^bb2:  // pred: ^bb0
+    %255 = "aie.dma_start"()[^bb3, ^bb4] <{channel_dir = 1 : i32, channel_index = 0 : i32, pad_value = 0 : i32, repeat_count = 0 : i32}> : () -> i1
+  ^bb3:  // 2 preds: ^bb2, ^bb3
+    "aie.use_lock"(%35, %253) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "aie.dma_bd"(%33) <{bd_id = 1 : i32, next_bd_id = 1 : i32, operandSegmentSizes = array<i32: 1, 0, 0, 0, 0>, static_len = 256 : i32, static_offset = 0 : i32}> : (memref<256xi8>) -> ()
+    "aie.use_lock"(%34, %253) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    "aie.next_bd"()[^bb3] : () -> ()
+  ^bb4:  // pred: ^bb2
+    "aie.end"() : () -> ()
+  }) : (index) -> index
+  %241 = "aie.mem"(%10) ({
+    %250 = "arith.constant"() <{value = 1 : i32}> : () -> i32
+    %251 = "aie.dma_start"()[^bb1, ^bb2] <{channel_dir = 0 : i32, channel_index = 0 : i32, pad_value = 0 : i32, repeat_count = 0 : i32}> : () -> i1
+  ^bb1:  // 2 preds: ^bb0, ^bb1
+    "aie.use_lock"(%123, %250) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "aie.dma_bd"(%122) <{bd_id = 0 : i32, next_bd_id = 0 : i32, operandSegmentSizes = array<i32: 1, 0, 0, 0, 0>, static_len = 11904 : i32, static_offset = 0 : i32}> : (memref<11904xi8>) -> ()
+    "aie.use_lock"(%124, %250) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    "aie.next_bd"()[^bb1] : () -> ()
+  ^bb2:  // pred: ^bb0
+    %252 = "aie.dma_start"()[^bb3, ^bb4] <{channel_dir = 1 : i32, channel_index = 0 : i32, pad_value = 0 : i32, repeat_count = 0 : i32}> : () -> i1
+  ^bb3:  // 2 preds: ^bb2, ^bb3
+    "aie.use_lock"(%32, %250) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "aie.dma_bd"(%30) <{bd_id = 1 : i32, next_bd_id = 1 : i32, operandSegmentSizes = array<i32: 1, 0, 0, 0, 0>, static_len = 256 : i32, static_offset = 0 : i32}> : (memref<256xi8>) -> ()
+    "aie.use_lock"(%31, %250) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    "aie.next_bd"()[^bb3] : () -> ()
+  ^bb4:  // pred: ^bb2
+    "aie.end"() : () -> ()
+  }) : (index) -> index
+  %242 = "aie.mem"(%9) ({
+    %247 = "arith.constant"() <{value = 1 : i32}> : () -> i32
+    %248 = "aie.dma_start"()[^bb1, ^bb2] <{channel_dir = 0 : i32, channel_index = 0 : i32, pad_value = 0 : i32, repeat_count = 0 : i32}> : () -> i1
+  ^bb1:  // 2 preds: ^bb0, ^bb1
+    "aie.use_lock"(%120, %247) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "aie.dma_bd"(%119) <{bd_id = 0 : i32, next_bd_id = 0 : i32, operandSegmentSizes = array<i32: 1, 0, 0, 0, 0>, static_len = 11904 : i32, static_offset = 0 : i32}> : (memref<11904xi8>) -> ()
+    "aie.use_lock"(%121, %247) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    "aie.next_bd"()[^bb1] : () -> ()
+  ^bb2:  // pred: ^bb0
+    %249 = "aie.dma_start"()[^bb3, ^bb4] <{channel_dir = 1 : i32, channel_index = 0 : i32, pad_value = 0 : i32, repeat_count = 0 : i32}> : () -> i1
+  ^bb3:  // 2 preds: ^bb2, ^bb3
+    "aie.use_lock"(%29, %247) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "aie.dma_bd"(%27) <{bd_id = 1 : i32, next_bd_id = 1 : i32, operandSegmentSizes = array<i32: 1, 0, 0, 0, 0>, static_len = 256 : i32, static_offset = 0 : i32}> : (memref<256xi8>) -> ()
+    "aie.use_lock"(%28, %247) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    "aie.next_bd"()[^bb3] : () -> ()
+  ^bb4:  // pred: ^bb2
+    "aie.end"() : () -> ()
+  }) : (index) -> index
+  %243 = "aie.mem"(%8) ({
+    %244 = "arith.constant"() <{value = 1 : i32}> : () -> i32
+    %245 = "aie.dma_start"()[^bb1, ^bb2] <{channel_dir = 0 : i32, channel_index = 0 : i32, pad_value = 0 : i32, repeat_count = 0 : i32}> : () -> i1
+  ^bb1:  // 2 preds: ^bb0, ^bb1
+    "aie.use_lock"(%117, %244) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "aie.dma_bd"(%116) <{bd_id = 0 : i32, next_bd_id = 0 : i32, operandSegmentSizes = array<i32: 1, 0, 0, 0, 0>, static_len = 11904 : i32, static_offset = 0 : i32}> : (memref<11904xi8>) -> ()
+    "aie.use_lock"(%118, %244) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    "aie.next_bd"()[^bb1] : () -> ()
+  ^bb2:  // pred: ^bb0
+    %246 = "aie.dma_start"()[^bb3, ^bb4] <{channel_dir = 1 : i32, channel_index = 0 : i32, pad_value = 0 : i32, repeat_count = 0 : i32}> : () -> i1
+  ^bb3:  // 2 preds: ^bb2, ^bb3
+    "aie.use_lock"(%26, %244) <{acq_en = true, action = 2 : i32}> : (index, i32) -> ()
+    "aie.dma_bd"(%24) <{bd_id = 1 : i32, next_bd_id = 1 : i32, operandSegmentSizes = array<i32: 1, 0, 0, 0, 0>, static_len = 256 : i32, static_offset = 0 : i32}> : (memref<256xi8>) -> ()
+    "aie.use_lock"(%25, %244) <{acq_en = true, action = 1 : i32}> : (index, i32) -> ()
+    "aie.next_bd"()[^bb3] : () -> ()
+  ^bb4:  // pred: ^bb2
+    "aie.end"() : () -> ()
+  }) : (index) -> index
+  "aie.shim_dma_allocation"(%7) <{channel_dir = 0 : i32, channel_index = 0 : i64, plio = false, sym_name = "output_c0_shim_alloc"}> : (index) -> ()
+  "aie.shim_dma_allocation"(%5) <{channel_dir = 0 : i32, channel_index = 0 : i64, plio = false, sym_name = "output_c1_shim_alloc"}> : (index) -> ()
+  "aie.shim_dma_allocation"(%3) <{channel_dir = 0 : i32, channel_index = 0 : i64, plio = false, sym_name = "output_c2_shim_alloc"}> : (index) -> ()
+  "aie.shim_dma_allocation"(%1) <{channel_dir = 0 : i32, channel_index = 0 : i64, plio = false, sym_name = "output_c3_shim_alloc"}> : (index) -> ()
+  "aie.packet_flow"() <{ID = 15 : i8, keep_pkt_header = true, priority_route = true}> ({
+    "aie.packet_source"(%1) <{bundle = 10 : i32, channel = 0 : i32}> : (index) -> ()
+    "aie.packet_dest"(%1) <{bundle = 3 : i32, channel = 0 : i32}> : (index) -> ()
+    "aie.end"() : () -> ()
+  }) : () -> ()
+  "aie.packet_flow"() <{ID = 15 : i8, keep_pkt_header = true, priority_route = true}> ({
+    "aie.packet_source"(%3) <{bundle = 10 : i32, channel = 0 : i32}> : (index) -> ()
+    "aie.packet_dest"(%3) <{bundle = 3 : i32, channel = 0 : i32}> : (index) -> ()
+    "aie.end"() : () -> ()
+  }) : () -> ()
+  "aie.packet_flow"() <{ID = 15 : i8, keep_pkt_header = true, priority_route = true}> ({
+    "aie.packet_source"(%5) <{bundle = 10 : i32, channel = 0 : i32}> : (index) -> ()
+    "aie.packet_dest"(%5) <{bundle = 3 : i32, channel = 0 : i32}> : (index) -> ()
+    "aie.end"() : () -> ()
+  }) : () -> ()
+  "aie.packet_flow"() <{ID = 15 : i8, keep_pkt_header = true, priority_route = true}> ({
+    "aie.packet_source"(%7) <{bundle = 10 : i32, channel = 0 : i32}> : (index) -> ()
+    "aie.packet_dest"(%7) <{bundle = 3 : i32, channel = 0 : i32}> : (index) -> ()
+    "aie.end"() : () -> ()
+  }) : () -> ()
+  "aie.end"() : () -> ()
+}) : () -> ()
+
+aiecc: edge 'input_physical.mlir' (key 'input.mlir') failed
+aiecc: pipeline failed
+
+RESEARCH_PROCESS_RESULT {"exit_code": 1, "stop": null, "peak_tree_rss_bytes": 212631552, "rss_measurement": "maximum observed across sampled descendant working sets; zero observations reported as null", "elapsed_seconds": 6.436999999998079, "foreign_contention_observed": false, "timing_eligible": false}

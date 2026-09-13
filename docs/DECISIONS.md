@@ -1545,3 +1545,21 @@ one canonical, greppable file per measurement.
 
 
 
+
+### Native fused epilogue: chunk ownership and core lock selectors
+
+The standalone [fused Conv epilogue](../kernels/aie2/fused_conv_epilogue/README.md)
+publishes completed output chunks from C++ so core DMA can drain them while the
+remaining epilogue executes. Keep the compiler's MemTile joins and Shim patches.
+Each output BD acquires one credit; only the last BD returns buffer ownership.
+The CDO emitter requires a release field even on intermediate BDs, which use a
+zero increment. Verify all local locks against the core selector namespace:
+local IDs and core instruction selectors are different. A wrong selector caused
+a bounded timeout during development. The transformed core wrapper and C++ must
+have exactly one owner for each input/output acquire/release.
+
+The build fails closed on an unexpected lowering, bank placement, publication
+order or selector. A one-core trace cannot prove full-array stall behavior;
+function identity and full-array numerical checks are recorded separately.
+Preserve the shape and cycle-bracket scope when citing the
+[measurement](BENCHMARKS.md#fused-conv-residual-silu-2026-09-13-desktop-2).

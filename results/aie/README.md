@@ -1070,3 +1070,42 @@ about them here.
 
 
 
+
+## Fused Conv Residual SiLU
+
+[Method, qualification and limitations](../../docs/BENCHMARKS.md#fused-conv-residual-silu-2026-09-13-desktop-2).
+All logs are from Phoenix Desktop 2. Earlier filenames predate the explicit
+Cin suffix; their variant is stated below and in the logged build identity.
+Failures and the run invalidated by a foreign context are retained.
+
+| Log | Scope / disposition |
+|---|---|
+| [043714Z_31424](fused_epilogue_phoenix_20260913T043714Z_31424.log) | Rejected: extra trace stream has no legal route in the 16-core design. |
+| [043839Z_29368](fused_epilogue_phoenix_20260913T043839Z_29368.log) | Initial polynomial compile; vector spills. Superseded. |
+| [044213Z_15444](fused_epilogue_phoenix_20260913T044213Z_15444.log) | Factored polynomial compile, separate one-core trace build. Superseded. |
+| [044308Z_7823](fused_epilogue_phoenix_20260913T044308Z_7823.log) | Full-array numerics passed; repeated trace capture failed. Incomplete timing. |
+| [044450Z_10245](fused_epilogue_phoenix_20260913T044450Z_10245.log) | Bank-separated resident compile. Superseded. |
+| [044608Z_7794](fused_epilogue_phoenix_20260913T044608Z_7794.log) | Foreign NPU context observed: timing invalid; old unpaired polynomial. |
+| [044805Z_8945](fused_epilogue_phoenix_20260913T044805Z_8945.log) | Compile failure: dependent-template syntax. |
+| [044832Z_1665](fused_epilogue_phoenix_20260913T044832Z_1665.log) | Paired Q14 polynomial compile; spills. Superseded. |
+| [045004Z_14588](fused_epilogue_phoenix_20260913T045004Z_14588.log) | Clean resident comparison misses overhead; no DMA overlap. |
+| [045122Z_18639](fused_epilogue_phoenix_20260913T045122Z_18639.log) | Q11 paired polynomial compile. Superseded transport. |
+| [045853Z_15742](fused_epilogue_phoenix_20260913T045853Z_15742.log) | CDO failure: intermediate output BDs need a release field. |
+| [050015Z_31260](fused_epilogue_phoenix_20260913T050015Z_31260.log) | Initial chunked compile; wrong core lock selector, not runnable. |
+| [050248Z_6808](fused_epilogue_phoenix_20260913T050248Z_6808.log) | Bounded hardware timeout from wrong output-ready selector. |
+| [050338Z_12394](fused_epilogue_phoenix_20260913T050338Z_12394.log) | Corrected core selector 49, chunked output compile. |
+| [050521Z_16822](fused_epilogue_phoenix_20260913T050521Z_16822.log) | Clean Cin=32 numerical pass and DMA overlap; overhead fails. |
+| [051244Z_8348](fused_epilogue_phoenix_20260913T051244Z_8348.log) | Streaming compile failure: wrong acquire intrinsic spelling. |
+| [051401Z_24024](fused_epilogue_phoenix_20260913T051401Z_24024.log) | Streaming placement failure: pong overlapped output. |
+| [051454Z_11109](fused_epilogue_phoenix_20260913T051454Z_11109.log) | Four-bank streaming compiled; initial audit rejected scalar ABI pointer saves. |
+| [051612Z_23284](fused_epilogue_phoenix_20260913T051612Z_23284.log) | Peano iterative scheduler assertion with loop-internal barriers. |
+| [051724Z_12691](fused_epilogue_phoenix_20260913T051724Z_12691.log) | Same scheduler assertion with reduced barrier arrangement. |
+| [051822Z_2086](fused_epilogue_phoenix_20260913T051822Z_2086.log) | Full unroll compiled but audit rejected vector spills. |
+| [051913Z_13541](fused_epilogue_phoenix_20260913T051913Z_13541.log) | Temporary build with iterative loop scheduling disabled. |
+| [051950Z_16177](fused_epilogue_phoenix_20260913T051950Z_16177.log) | Clean Cin=512 pass with slower raw scheduler; superseded performance. |
+| [052052Z_21267](fused_epilogue_phoenix_20260913T052052Z_21267.log) | Final optimized Cin=512 build and ELF audit. |
+| [052207Z_2656](fused_epilogue_phoenix_20260913T052207Z_2656.log) | Clean optimized Cin=512 pass, three pairs; confirmed by final qualification. |
+| [052357Z_20472](fused_epilogue_phoenix_20260913T052357Z_20472.log) | Final resident Cin=32 build and strengthened lock/ELF audit. |
+| [052546Z_8609](fused_epilogue_phoenix_20260913T052546Z_8609.log) | Final Cin=32 comparison: numerics and overlap pass, overhead fails. |
+| [052611Z_4050](fused_epilogue_phoenix_20260913T052611Z_4050.log) | Qualified Cin=512: ten pairs, full-array numerics, trace, lock/ELF and hash evidence. |
+| [Repository gates](fused_epilogue_checks_phoenix_20260913T053000Z.log) | Required test compileall, repository syntax/import and shell checks, link and advisory number audits. |
