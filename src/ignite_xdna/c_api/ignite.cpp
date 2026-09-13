@@ -37,6 +37,7 @@
 #include <condition_variable>
 #include <queue>
 #include <atomic>
+#include <stdexcept>
 
 #if defined(__AVX2__) || (defined(_M_X64) && defined(__AVX2__)) || defined(__x86_64__)
 #include <immintrin.h>
@@ -119,6 +120,36 @@ struct BlobEntry {
     size_t size = 0;
 };
 
+// IEEE 802.3 CRC-32 (zlib.crc32 equivalent) over the container body, so a
+// truncated or bit-flipped container is refused at load instead of being
+// programmed into the device.
+static uint32_t crc32_ieee(const uint8_t* data, size_t length) {
+    static uint32_t table[256];
+    static bool ready = false;
+    if (!ready) {
+        for (uint32_t i = 0; i < 256; ++i) {
+            uint32_t c = i;
+            for (int k = 0; k < 8; ++k) {
+                c = (c & 1u) ? (0xEDB88320u ^ (c >> 1)) : (c >> 1);
+            }
+            table[i] = c;
+        }
+        ready = true;
+    }
+    uint32_t crc = 0xFFFFFFFFu;
+    for (size_t i = 0; i < length; ++i) {
+        crc = table[(crc ^ data[i]) & 0xFFu] ^ (crc >> 8);
+    }
+    return crc ^ 0xFFFFFFFFu;
+}
+
+static void require_completed(ert_cmd_state state, const char* what) {
+    if (state != ERT_CMD_STATE_COMPLETED) {
+        throw std::runtime_error(std::string(what) + " did not complete (ert_cmd_state "
+                                 + std::to_string(static_cast<int>(state)) + ")");
+    }
+}
+
 struct StageResource {
     std::string name;
     int stage_idx = 0;
@@ -173,9 +204,10 @@ struct ignite_engine {
     uint32_t ninstr_monolithic = 0;
     xrt::bo bo_monolithic;
 
-    // Detection hyperparameters
-    float conf_thres = 0.25f;
-    float iou_thres = 0.50f;
+    // Detection hyperparameters: written by the API thread, read by the
+    // post-processing thread, so they are atomics rather than plain floats.
+    std::atomic<float> conf_thres{0.25f};
+    std::atomic<float> iou_thres{0.50f};
 
     // Pre-allocated / cached reference heads for visual detection decode
     bool has_reference_heads = false;
@@ -217,7 +249,8 @@ struct ignite_engine {
     };
 
     std::atomic<uint64_t> next_ticket{1};
-    std::atomic<uint64_t> last_completed_ticket{0};
+    std::atomic<uint64_t> last_completed_ticket{0};   // monotonic high-water mark
+    std::atomic<uint64_t> dispatch_timeouts{0};       // frames whose NPU run did not complete
     std::atomic<bool> worker_stop{false};
 
     std::mutex npu_queue_mutex;
@@ -242,7 +275,15 @@ struct ignite_engine {
     }
 
     void stop_worker() {
-        worker_stop.store(true, std::memory_order_relaxed);
+        // Set the flag while holding every mutex a waiter evaluates it under.
+        // A thread that has checked its predicate but not yet blocked would
+        // otherwise miss the notification and ignite_free would hang.
+        {
+            std::lock_guard<std::mutex> npu_lock(npu_queue_mutex);
+            std::lock_guard<std::mutex> post_lock(post_queue_mutex);
+            std::lock_guard<std::mutex> result_lock(result_mutex);
+            worker_stop.store(true, std::memory_order_release);
+        }
         npu_queue_cv.notify_all();
         post_queue_cv.notify_all();
         result_cv.notify_all();
@@ -882,16 +923,26 @@ void ignite_engine::npu_worker_loop() {
 
         auto t_npu_start = std::chrono::high_resolution_clock::now();
 
-        // 1. Physical AIE2 Silicon Execution (Single-Dispatch Fast Path)
+        // 1. Physical AIE2 Silicon Execution (Single-Dispatch Fast Path).
+        // A run that does not reach COMPLETED leaves stale bytes in bo_out;
+        // count it so a stream of timeouts is visible instead of silent.
+        bool completed = true;
         if (single_dispatch && bo_monolithic && ninstr_monolithic > 0) {
             xrt::run r = (*kernel)(3, bo_monolithic, ninstr_monolithic, bo_in[slot], bo_out[slot]);
-            r.wait(2000);
+            completed = (r.wait(2000) == ERT_CMD_STATE_COMPLETED);
         } else {
             for (const auto& s : stages) {
                 if (s.ninstr_exec > 0 && s.bo_exec) {
                     xrt::run r = (*kernel)(3, s.bo_exec, s.ninstr_exec, bo_in[slot], bo_out[slot]);
-                    r.wait(2000);
+                    completed = (r.wait(2000) == ERT_CMD_STATE_COMPLETED) && completed;
                 }
+            }
+        }
+        if (!completed) {
+            uint64_t n = dispatch_timeouts.fetch_add(1) + 1;
+            if (n == 1 || (n & (n - 1)) == 0) {
+                std::cerr << "[ignite] NPU dispatch for ticket " << ticket
+                          << " did not complete (" << n << " so far); output is stale" << std::endl;
             }
         }
         bo_out[slot].sync(XCL_BO_SYNC_BO_FROM_DEVICE);
@@ -942,7 +993,12 @@ void ignite_engine::post_worker_loop() {
             result_ring[ring_idx].ticket = ticket;
             result_ring[ring_idx].detections = std::move(dets);
             result_ring[ring_idx].timings = timings;
-            last_completed_ticket.store(ticket, std::memory_order_release);
+            // Tickets can complete out of order when several producers call
+            // ignite_run_async; keep the high-water mark monotonic and let
+            // waiters key on their own ring entry.
+            if (ticket > last_completed_ticket.load(std::memory_order_relaxed)) {
+                last_completed_ticket.store(ticket, std::memory_order_release);
+            }
             last_timings = timings;
         }
         result_cv.notify_all();
@@ -1007,6 +1063,25 @@ ignite_engine_t* ignite_load(const char* model_path, int device_id) {
         set_error("Unsupported .ignite container version: " + std::to_string(hdr->version));
         return nullptr;
     }
+    if (hdr->header_size != sizeof(IgniteHeaderRaw)) {
+        set_error("Unexpected .ignite header size: " + std::to_string(hdr->header_size));
+        return nullptr;
+    }
+    if (hdr->total_file_size != eng->mmap_size) {
+        set_error("Container declares " + std::to_string(hdr->total_file_size) + " bytes but the file holds "
+                  + std::to_string(eng->mmap_size) + " (truncated or trailing data)");
+        return nullptr;
+    }
+    {
+        const uint32_t body_crc = crc32_ieee(eng->mmap_base + sizeof(IgniteHeaderRaw),
+                                             eng->mmap_size - sizeof(IgniteHeaderRaw));
+        if (body_crc != hdr->crc32) {
+            char buf[96];
+            snprintf(buf, sizeof(buf), "Container CRC32 mismatch: header 0x%08x, body 0x%08x", hdr->crc32, body_crc);
+            set_error(buf);
+            return nullptr;
+        }
+    }
 
     // 3. Parse JSON Manifest
     if (hdr->manifest_offset + hdr->manifest_size > eng->mmap_size) {
@@ -1032,31 +1107,47 @@ ignite_engine_t* ignite_load(const char* model_path, int device_id) {
         eng->num_cores = manifest["architecture"].value("num_cores", 16);
     }
 
+    // Every blob range is checked against the mapping before any bo.write
+    // reads from it; a bad directory entry fails the load instead of reading
+    // past the file mapping.
     std::map<std::string, BlobEntry> blobs;
+    std::string blob_error;
     if (manifest.contains("blobs")) {
-        auto add_blob_node = [&](const nlohmann::json& binfo) {
+        auto add_blob_node = [&](const std::string& name, const nlohmann::json& binfo) {
             BlobEntry entry;
-            entry.name = binfo.value("name", "");
+            entry.name = name;
             entry.offset = binfo.value("offset", 0ULL);
             entry.size = binfo.value("size", 0ULL);
-            if (!entry.name.empty()) {
-                blobs[entry.name] = entry;
+            if (entry.name.empty()) {
+                return;
             }
+            const size_t manifest_end = static_cast<size_t>(hdr->manifest_offset + hdr->manifest_size);
+            if (entry.offset % 64 != 0 || entry.offset < manifest_end
+                || entry.size > eng->mmap_size || entry.offset > eng->mmap_size - entry.size) {
+                blob_error = "Blob '" + entry.name + "' range [" + std::to_string(entry.offset) + ", "
+                             + std::to_string(entry.offset + entry.size) + ") is outside the blob section";
+                return;
+            }
+            if (blobs.count(entry.name)) {
+                blob_error = "Duplicate blob name '" + entry.name + "' in the container directory";
+                return;
+            }
+            blobs[entry.name] = entry;
         };
 
         if (manifest["blobs"].is_array()) {
             for (const auto& binfo : manifest["blobs"]) {
-                add_blob_node(binfo);
+                add_blob_node(binfo.value("name", ""), binfo);
             }
         } else if (manifest["blobs"].is_object()) {
             for (auto& [bname, binfo] : manifest["blobs"].items()) {
-                BlobEntry entry;
-                entry.name = bname;
-                entry.offset = binfo.value("offset", 0ULL);
-                entry.size = binfo.value("size", 0ULL);
-                blobs[bname] = entry;
+                add_blob_node(bname, binfo);
             }
         }
+    }
+    if (!blob_error.empty()) {
+        set_error(blob_error);
+        return nullptr;
     }
 
     // 4. Initialize Native XRT Hardware Context
@@ -1093,6 +1184,10 @@ ignite_engine_t* ignite_load(const char* model_path, int device_id) {
                 s.name = s_node.value("stage_name", key_name);
                 s.stage_idx = s_node.value("index", s_node.value("stage_idx", 0));
                 s.ninstr_init = s_node.value("init_bytes", s_node.value("ninstr_init", 0U));
+                // exec_bytes was never read before, which left every stage
+                // without an exec buffer and made the non-monolithic path a
+                // silent no-op.
+                s.ninstr_exec = s_node.value("exec_bytes", s_node.value("ninstr_exec", 0U));
                 std::string init_blob = (s_node.contains("init_blob") && !s_node["init_blob"].is_null() && s_node["init_blob"].is_string())
                     ? s_node["init_blob"].get<std::string>() : "";
                 std::string exec_blob = (s_node.contains("exec_blob") && !s_node["exec_blob"].is_null() && s_node["exec_blob"].is_string())
@@ -1100,6 +1195,9 @@ ignite_engine_t* ignite_load(const char* model_path, int device_id) {
 
                 if (s.ninstr_init > 0 && !init_blob.empty() && blobs.count(init_blob)) {
                     const auto& b = blobs.at(init_blob);
+                    if (s.ninstr_init > b.size) {
+                        throw std::runtime_error("stage " + s.name + " init_bytes exceeds blob " + init_blob);
+                    }
                     s.bo_init = xrt::bo(*eng->device, s.ninstr_init, xrt::bo::flags::cacheable, eng->kernel->group_id(1));
                     s.bo_init.write(eng->mmap_base + b.offset, s.ninstr_init, 0);
                     s.bo_init.sync(XCL_BO_SYNC_BO_TO_DEVICE);
@@ -1107,6 +1205,9 @@ ignite_engine_t* ignite_load(const char* model_path, int device_id) {
 
                 if (s.ninstr_exec > 0 && !exec_blob.empty() && blobs.count(exec_blob)) {
                     const auto& b = blobs.at(exec_blob);
+                    if (s.ninstr_exec > b.size) {
+                        throw std::runtime_error("stage " + s.name + " exec_bytes exceeds blob " + exec_blob);
+                    }
                     s.bo_exec = xrt::bo(*eng->device, s.ninstr_exec, xrt::bo::flags::cacheable, eng->kernel->group_id(1));
                     s.bo_exec.write(eng->mmap_base + b.offset, s.ninstr_exec, 0);
                     s.bo_exec.sync(XCL_BO_SYNC_BO_TO_DEVICE);
@@ -1141,22 +1242,35 @@ ignite_engine_t* ignite_load(const char* model_path, int device_id) {
             eng->single_dispatch = true;
         }
 
-        // 6. Stationary Parameter Programming & Double-Buffer Warmup
+        // A container with neither a monolithic stream nor any stage exec
+        // stream would run nothing per frame and return stale detections.
+        bool any_stage_exec = false;
+        for (const auto& s : eng->stages) {
+            any_stage_exec = any_stage_exec || (s.ninstr_exec > 0 && s.bo_exec);
+        }
+        if (!eng->single_dispatch && !any_stage_exec) {
+            throw std::runtime_error("container has no executable transaction stream (no '" + mono_blob
+                                     + "' and no stage exec blob)");
+        }
+
+        // 6. Stationary Parameter Programming & Double-Buffer Warmup.
+        // Every dispatch state is checked: an init that times out would leave
+        // the cores unprogrammed while the engine reports success.
         for (const auto& s : eng->stages) {
             if (s.ninstr_init > 0 && s.bo_init) {
                 xrt::run r = (*eng->kernel)(3, s.bo_init, s.ninstr_init, eng->bo_in[0], eng->bo_out[0]);
-                r.wait(3000);
+                require_completed(r.wait(3000), ("init stream of stage " + s.name).c_str());
             }
         }
         for (int s_idx = 0; s_idx < ignite_engine::NUM_SLOTS; ++s_idx) {
             if (eng->single_dispatch && eng->bo_monolithic && eng->ninstr_monolithic > 0) {
                 xrt::run r = (*eng->kernel)(3, eng->bo_monolithic, eng->ninstr_monolithic, eng->bo_in[s_idx], eng->bo_out[s_idx]);
-                r.wait(2000);
+                require_completed(r.wait(2000), "monolithic warm-up dispatch");
             } else {
                 for (const auto& s : eng->stages) {
                     if (s.ninstr_exec > 0 && s.bo_exec) {
                         xrt::run r = (*eng->kernel)(3, s.bo_exec, s.ninstr_exec, eng->bo_in[s_idx], eng->bo_out[s_idx]);
-                        r.wait(2000);
+                        require_completed(r.wait(2000), ("warm-up dispatch of stage " + s.name).c_str());
                     }
                 }
             }
@@ -1205,11 +1319,18 @@ int ignite_run_async(
     uint64_t ticket = engine->next_ticket.fetch_add(1);
     int slot = static_cast<int>(ticket % ignite_engine::NUM_SLOTS);
 
-    // Bounded pipeline: wait until this slot has completed previous work (at most NUM_SLOTS in flight)
+    // Bounded pipeline: wait until the previous occupant of this slot (ticket
+    // - NUM_SLOTS) has been post-processed. Keyed on that ticket's own ring
+    // entry, so out-of-order completion by concurrent producers cannot free
+    // a slot that is still in flight.
     {
+        const uint64_t predecessor = ticket > ignite_engine::NUM_SLOTS ? ticket - ignite_engine::NUM_SLOTS : 0;
+        const size_t predecessor_idx = static_cast<size_t>(predecessor % ignite_engine::RING_SIZE);
         std::unique_lock<std::mutex> lock(engine->result_mutex);
-        engine->slot_cv.wait(lock, [engine, ticket]() {
-            return (engine->last_completed_ticket.load() + ignite_engine::NUM_SLOTS) >= ticket || engine->worker_stop.load();
+        engine->slot_cv.wait(lock, [engine, predecessor, predecessor_idx]() {
+            return predecessor == 0
+                || engine->result_ring[predecessor_idx].ticket == predecessor
+                || engine->worker_stop.load();
         });
         if (engine->worker_stop.load()) {
             set_error("Worker thread stopped");
@@ -1264,20 +1385,24 @@ int ignite_wait(
         return -1;
     }
 
-    // Wait until ticket is completed by NPU worker thread
+    // Wait for this ticket's own ring entry (tickets may complete out of
+    // order); give up when the entry has been overwritten by a ticket a full
+    // ring later, or when the workers stop.
     {
+        const size_t ring_idx = static_cast<size_t>(ticket % ignite_engine::RING_SIZE);
         std::unique_lock<std::mutex> lock(engine->result_mutex);
-        engine->result_cv.wait(lock, [engine, ticket]() {
-            return engine->last_completed_ticket.load() >= ticket || engine->worker_stop.load();
+        engine->result_cv.wait(lock, [engine, ticket, ring_idx]() {
+            return engine->result_ring[ring_idx].ticket == ticket
+                || engine->last_completed_ticket.load() >= ticket + ignite_engine::RING_SIZE
+                || engine->worker_stop.load();
         });
-        if (engine->last_completed_ticket.load() < ticket) {
-            set_error("Worker stopped before ticket completion");
-            return -2;
-        }
 
-        size_t ring_idx = static_cast<size_t>(ticket % ignite_engine::RING_SIZE);
         const auto& res = engine->result_ring[ring_idx];
         if (res.ticket != ticket) {
+            if (engine->worker_stop.load()) {
+                set_error("Worker stopped before ticket completion");
+                return -2;
+            }
             set_error("Ticket sequence out of sync or expired in ring buffer");
             return -3;
         }
@@ -1335,6 +1460,8 @@ void ignite_set_thresholds(ignite_engine_t* engine, float conf_thres, float iou_
 
 void ignite_get_last_timings(ignite_engine_t* engine, ignite_timings_t* out_timings) {
     if (engine && out_timings) {
+        // last_timings is written by the post-processing thread under result_mutex.
+        std::lock_guard<std::mutex> lock(engine->result_mutex);
         *out_timings = engine->last_timings;
     }
 }

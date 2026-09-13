@@ -1,0 +1,169 @@
+Low-level audit silicon checks
+date_utc=2026-09-13
+machine=Desktop 2 (Ryzen 7 8700G), device=[003d:00:01.1] NPU Phoenix Device 0
+preflight=section A only: xrt-smi examine -r aie-partitions reported "No hardware contexts running" immediately before its two hardware contexts were opened. Sections B and C ran with NO contention check and NO host-load check; their timings are a functional check of the rebuilt runtime, not comparable throughput figures, and do not supersede the end-to-end benchmark numbers.
+xclbin=build/im2col_4d_16core.xclbin (shipped, unchanged); container=build/yolov8n.ignite (CRC 0x2e06f112, 5,315,840 B, 20 blobs)
+runtime=Python 3.13 ironenv with pyxrt (section A); ignite-run.exe built from this tree with MSVC 2022 (sections B, C)
+scope=docs/LOW_LEVEL_AUDIT.md section 11; no kernel source or transaction stream was changed for these runs
+
+=== A. Layer-0 egress: 7-layer stem init vs 63-layer monolithic init, same input, three exec dispatches each ===
+{"contexts": "none running", "device": "[003d:00:01.1] NPU Phoenix", "event": "preflight"}
+{"event": "layer0", "node": "/model.0/conv/Conv", "packed_bytes": 2304, "shift_cut": 7, "weights_shape": [16, 3, 3, 3]}
+{"bytes": 512, "event": "reference"}
+{"event": "streams", "exec_mono": 97792, "init_mono": 2514752, "stem_exec": 10496, "stem_init": 289088}
+{"event": "dispatch", "state": "ert_cmd_state.ERT_CMD_STATE_COMPLETED", "what": "stem_stage_7_layers: init"}
+{"event": "dispatch", "state": "ert_cmd_state.ERT_CMD_STATE_COMPLETED", "what": "stem_stage_7_layers: exec 0"}
+{"event": "dispatch", "state": "ert_cmd_state.ERT_CMD_STATE_COMPLETED", "what": "stem_stage_7_layers: exec 1"}
+{"event": "dispatch", "state": "ert_cmd_state.ERT_CMD_STATE_COMPLETED", "what": "stem_stage_7_layers: exec 2"}
+{"event": "result", "init_ms": 1.9331000075908378, "label": "stem_stage_7_layers", "output_all_poison": false, "output_nonzero_bytes": 2012, "output_sha256": "21b9af363e67be0c7057cb6239b9935fe23715281bfb5770a621e6af2279de77", "parity_vs_n_layer_reference": {"bit_agreement_pct": 5.46875, "bit_matches": 28, "count": 512, "mae": 11.6875, "max_ae": 57.0, "rmse": 15.238212657657721}}
+{"event": "dispatch", "state": "ert_cmd_state.ERT_CMD_STATE_COMPLETED", "what": "monolithic_63_layers: init"}
+{"event": "dispatch", "state": "ert_cmd_state.ERT_CMD_STATE_COMPLETED", "what": "monolithic_63_layers: exec 0"}
+{"event": "dispatch", "state": "ert_cmd_state.ERT_CMD_STATE_COMPLETED", "what": "monolithic_63_layers: exec 1"}
+{"event": "dispatch", "state": "ert_cmd_state.ERT_CMD_STATE_COMPLETED", "what": "monolithic_63_layers: exec 2"}
+{"event": "result", "init_ms": 7.511699994211085, "label": "monolithic_63_layers", "output_all_poison": false, "output_nonzero_bytes": 2012, "output_sha256": "21b9af363e67be0c7057cb6239b9935fe23715281bfb5770a621e6af2279de77", "parity_vs_n_layer_reference": {"bit_agreement_pct": 5.46875, "bit_matches": 28, "count": 512, "mae": 11.6875, "max_ae": 57.0, "rmse": 15.238212657657721}}
+{"differing_bytes": 0, "event": "cross_comparison", "identical": true, "max_abs_diff": 0}
+{"event": "summary", "monolithic_63_layers": {"init_ms": 7.511699994211085, "output_all_poison": false, "output_nonzero_bytes": 2012, "output_sha256": "21b9af363e67be0c7057cb6239b9935fe23715281bfb5770a621e6af2279de77", "parity_vs_n_layer_reference": {"bit_agreement_pct": 5.46875, "bit_matches": 28, "count": 512, "mae": 11.6875, "max_ae": 57.0, "rmse": 15.238212657657721}}, "stem_stage_7_layers": {"init_ms": 1.9331000075908378, "output_all_poison": false, "output_nonzero_bytes": 2012, "output_sha256": "21b9af363e67be0c7057cb6239b9935fe23715281bfb5770a621e6af2279de77", "parity_vs_n_layer_reference": {"bit_agreement_pct": 5.46875, "bit_matches": 28, "count": 512, "mae": 11.6875, "max_ae": 57.0, "rmse": 15.238212657657721}}}
+
+=== B. Rebuilt native runtime, 500 asynchronous frames (20 warm-up), assets/bus.jpg ===
+cmd: <scratch>\build_native\Release\ignite-run.exe --model C:\Users\<user>\PycharmProjects\ignite-xdna\build\yolov8n.ignite --video C:\Users\<user>\PycharmProjects\ignite-xdna\assets\bus.jpg --async --benchmark-frames 500 --warmup 20 --json-out <scratch>\native_async.json
+returncode: 0
+[INFO] Loaded input image: C:\Users\<user>\PycharmProjects\ignite-xdna\assets\bus.jpg (810x1080, stride=2432 bytes)
+[INFO] Initializing libignite_xdna engine on Device 0 from: C:\Users\<user>\PycharmProjects\ignite-xdna\build\yolov8n.ignite
+[INFO] Model loaded and stationary hardware initialized in 51.71 ms
+
+=============================================================
+  Single-Frame Native Inference Results (Async)
+=============================================================
+Detected Objects: 5
+  [1] person          score=0.905  bbox=(668.3, 371.8, 142.1, 507.3)
+  [2] person          score=0.881  bbox=(219.8, 406.7, 126.3, 448.5)
+  [3] person          score=0.881  bbox=(49.4, 399.2, 195.2, 503.3)
+  [4] bus             score=0.500  bbox=(29.7, 228.6, 769.1, 549.0)
+  [5] person          score=0.500  bbox=(1.6, 545.6, 59.3, 322.6)
+
+Timing Breakdown:
+  Ingress SIMD Preprocess: 1.386 ms
+  Physical Silicon NPU:    0.604 ms
+  Pure C++20 DFL + NMS:    0.134 ms
+  Glass-to-Glass Latency:  2.135 ms
+=============================================================
+
+[INFO] Starting video pipeline benchmark (Asynchronous Ping-Pong): 20 warmup, 500 steady-state frames...
+
+=============================================================
+  Native C++ (Async Ping-Pong) Streaming Benchmark
+=============================================================
+Stream Source:       C:\Users\<user>\PycharmProjects\ignite-xdna\assets\bus.jpg (810x1080)
+Concurrent Streams:  1 (Round-Robin Submission)
+Frames Evaluated:    500
+Glass-to-Glass Mean: 1.322 ms
+Glass-to-Glass Med:  1.325 ms
+Glass-to-Glass P90:  1.372 ms
+Glass-to-Glass P95:  1.396 ms
+Glass-to-Glass P99:  1.514 ms
+Aggregate FPS:       2176.68 FPS
+Total Elapsed Time:  229.71 ms
+
+Steady-State Stage Breakdown (Averages):
+  Ingress SIMD Preprocess: 0.381 ms
+  Physical Silicon NPU:    0.447 ms
+  AVX2 DFL + Bitmask NMS:  0.108 ms
+  Pipeline Hardware Floor: 0.936 ms
+=============================================================
+[INFO] Saved benchmark results JSON to: <scratch>\native_async.json
+
+
+{
+ "num_streams": 1,
+ "total_frames": 500,
+ "elapsed_ms": 229.707,
+ "aggregate_fps": 2176.68,
+ "stage_breakdown_ms": {
+  "preprocess_ms": 0.381179,
+  "npu_exec_ms": 0.446881,
+  "postprocess_ms": 0.108438,
+  "hardware_floor_ms": 0.936497
+ },
+ "glass_to_glass_ms": {
+  "mean": 1.3221,
+  "median": 1.3254,
+  "p90": 1.3719,
+  "p95": 1.3965,
+  "p99": 1.5136
+ },
+ "per_stream": [
+  {
+   "stream_id": 0,
+   "frames": 500,
+   "fps": 2176.68,
+   "mean_ms": 1.3221,
+   "p95_ms": 1.3965
+  }
+ ]
+}
+
+=== C. Rebuilt native runtime: single frame, then a bit-flipped and a truncated container ===
+=== single frame, shipped container ===
+cmd: <scratch>\build_native\Release\ignite-run.exe --model C:\Users\<user>\PycharmProjects\ignite-xdna\build\yolov8n.ignite --video C:\Users\<user>\PycharmProjects\ignite-xdna\assets\bus.jpg --benchmark-frames 1 --warmup 0
+returncode: 0
+[INFO] Loaded input image: C:\Users\<user>\PycharmProjects\ignite-xdna\assets\bus.jpg (810x1080, stride=2432 bytes)
+[INFO] Initializing libignite_xdna engine on Device 0 from: C:\Users\<user>\PycharmProjects\ignite-xdna\build\yolov8n.ignite
+[INFO] Model loaded and stationary hardware initialized in 110.03 ms
+
+=============================================================
+  Single-Frame Native Inference Results (Sync)
+=============================================================
+Detected Objects: 5
+  [1] person          score=0.905  bbox=(668.3, 371.8, 142.1, 507.3)
+  [2] person          score=0.881  bbox=(219.8, 406.7, 126.3, 448.5)
+  [3] person          score=0.881  bbox=(49.4, 399.2, 195.2, 503.3)
+  [4] bus             score=0.500  bbox=(29.7, 228.6, 769.1, 549.0)
+  [5] person          score=0.500  bbox=(1.6, 545.6, 59.3, 322.6)
+
+Timing Breakdown:
+  Ingress SIMD Preprocess: 1.103 ms
+  Physical Silicon NPU:    0.564 ms
+  Pure C++20 DFL + NMS:    0.151 ms
+  Glass-to-Glass Latency:  1.827 ms
+=============================================================
+
+[INFO] Starting video pipeline benchmark (Synchronous): 0 warmup, 1 steady-state frames...
+
+=============================================================
+  Native C++ (Synchronous) Streaming Benchmark
+=============================================================
+Stream Source:       C:\Users\<user>\PycharmProjects\ignite-xdna\assets\bus.jpg (810x1080)
+Concurrent Streams:  1 (Round-Robin Submission)
+Frames Evaluated:    1
+Glass-to-Glass Mean: 0.943 ms
+Glass-to-Glass Med:  0.943 ms
+Glass-to-Glass P90:  0.943 ms
+Glass-to-Glass P95:  0.943 ms
+Glass-to-Glass P99:  0.943 ms
+Aggregate FPS:       1015.85 FPS
+Total Elapsed Time:  0.98 ms
+
+Steady-State Stage Breakdown (Averages):
+  Ingress SIMD Preprocess: 0.363 ms
+  Physical Silicon NPU:    0.465 ms
+  AVX2 DFL + Bitmask NMS:  0.109 ms
+  Pipeline Hardware Floor: 0.937 ms
+=============================================================
+
+
+=== one flipped byte at offset 8000 ===
+cmd: <scratch>\build_native\Release\ignite-run.exe --model <scratch>\yolov8n_corrupt.ignite --video C:\Users\<user>\PycharmProjects\ignite-xdna\assets\bus.jpg --benchmark-frames 1 --warmup 0
+returncode: 1
+[INFO] Loaded input image: C:\Users\<user>\PycharmProjects\ignite-xdna\assets\bus.jpg (810x1080, stride=2432 bytes)
+[INFO] Initializing libignite_xdna engine on Device 0 from: <scratch>\yolov8n_corrupt.ignite
+
+[ERROR] ignite_load failed: Container CRC32 mismatch: header 0x2e06f112, body 0x39a591bf
+
+=== container truncated by 64 bytes ===
+cmd: <scratch>\build_native\Release\ignite-run.exe --model <scratch>\yolov8n_truncated.ignite --video C:\Users\<user>\PycharmProjects\ignite-xdna\assets\bus.jpg --benchmark-frames 1 --warmup 0
+returncode: 1
+[INFO] Loaded input image: C:\Users\<user>\PycharmProjects\ignite-xdna\assets\bus.jpg (810x1080, stride=2432 bytes)
+[INFO] Initializing libignite_xdna engine on Device 0 from: <scratch>\yolov8n_truncated.ignite
+
+[ERROR] ignite_load failed: Container declares 5315840 bytes but the file holds 5315776 (truncated or trailing data)
+
