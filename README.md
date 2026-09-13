@@ -142,8 +142,9 @@ Python runtime (`ignite_xdna.InferenceSession` on AMD Phoenix silicon):
 
 ```python
 from ignite_xdna import InferenceSession
-with InferenceSession("build/layer_conv0_exec.bin") as s:
-    out = s.run(input_data)  # 86 us on Phoenix NPU (~11,000 FPS)
+with InferenceSession(full_yolo=True) as s:
+    heads = s.run_yolo_monolithic(input_data)  # 1.73 ms on Phoenix NPU (577 FPS, 0 DDR bytes)
+    preds = s.decode_yolo_predictions(heads)
 ```
 
 Native graph stages can also share BOs with custom AIE kernels through
