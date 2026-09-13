@@ -191,6 +191,9 @@ def parse_transaction_stream(data: bytes) -> List[Dict[str, Any]]:
 
 
 def _core_window(reg: int) -> str:
+    """Classify a core-tile register offset; "memory_module" is 0x10000..0x1FFFF
+    (DMA, locks and other memory-module registers), "unmapped" is the span
+    between program memory and the core module (0x24000..0x2FFFF)."""
     if reg < CORE_DATA_MEMORY_BYTES:
         return "data"
     if CORE_BD_BASE <= reg < CORE_BD_END:
@@ -201,6 +204,8 @@ def _core_window(reg: int) -> str:
         return "program"
     if reg >= CORE_MODULE_BASE:
         return "core_module"
+    if reg >= CORE_PROGRAM_MEMORY_END:
+        return "unmapped"
     return "memory_module"
 
 
