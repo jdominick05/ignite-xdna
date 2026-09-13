@@ -38,6 +38,14 @@
 #include <queue>
 #include <atomic>
 
+#if defined(__AVX2__) || (defined(_M_X64) && defined(__AVX2__)) || defined(__x86_64__)
+#include <immintrin.h>
+#define IGNITE_USE_AVX2 1
+#elif defined(__ARM_NEON) || defined(__aarch64__)
+#include <arm_neon.h>
+#define IGNITE_USE_NEON 1
+#endif
+
 #include <nlohmann/json.hpp>
 
 #include <xrt/xrt_device.h>
@@ -142,6 +150,7 @@ struct ignite_engine {
     int num_cores = 16;
     size_t in_bytes = 8192;
     size_t out_bytes = 4096;
+    bool fused_dfl = false;
 
     // Native XRT Hardware Context
     std::unique_ptr<xrt::device> device;
@@ -327,105 +336,333 @@ static void try_load_default_heads(ignite_engine* eng, const fs::path& model_pat
     }
 }
 
-void ignite_engine::decode_detections_for_slot(int slot, std::vector<Candidate>& out_dets) {
+static void run_vectorized_bitmask_nms(
+    std::vector<Candidate>& candidates,
+    float iou_threshold,
+    std::vector<Candidate>& out_dets
+) {
     out_dets.clear();
-    if (!has_reference_heads) {
+    const size_t K = candidates.size();
+    if (K == 0) return;
+
+    if (K == 1) {
+        out_dets.push_back(candidates[0]);
         return;
     }
 
-    const float* boxes[3] = {
-        ref_p3_box.data(), ref_p4_box.data(), ref_p5_box.data()
-    };
-    const float* clses[3] = {
-        ref_p3_cls.data(), ref_p4_cls.data(), ref_p5_cls.data()
-    };
-    const int grid_sizes[3] = { 80, 40, 20 };
-    const float strides[3] = { 8.0f, 16.0f, 32.0f };
+    // Sort descending by confidence score
+    std::sort(candidates.begin(), candidates.end(), [](const Candidate& a, const Candidate& b) {
+        return a.score > b.score;
+    });
+
+    // Limit to top 256 candidates for optimal NMS cache efficiency
+    const size_t num_cands = std::min(K, size_t(256));
+
+    // Structure of Arrays (SoA) layout aligned to 32 bytes for AVX2 load
+    alignas(32) float cand_x1[256];
+    alignas(32) float cand_y1[256];
+    alignas(32) float cand_x2[256];
+    alignas(32) float cand_y2[256];
+    alignas(32) float cand_area[256];
+    alignas(32) int32_t cand_cls[256];
+
+    for (size_t i = 0; i < num_cands; ++i) {
+        const auto& c = candidates[i];
+        cand_x1[i] = c.x0;
+        cand_y1[i] = c.y0;
+        cand_x2[i] = c.x0 + c.w;
+        cand_y2[i] = c.y0 + c.h;
+        cand_area[i] = std::max(0.0f, c.w * c.h);
+        cand_cls[i] = c.class_id;
+    }
+    // Zero-pad remainder up to 256
+    for (size_t i = num_cands; i < 256; ++i) {
+        cand_x1[i] = 0.0f;
+        cand_y1[i] = 0.0f;
+        cand_x2[i] = 0.0f;
+        cand_y2[i] = 0.0f;
+        cand_area[i] = 0.0f;
+        cand_cls[i] = -1;
+    }
+
+    // 64-bit integer bitmask array (4 x 64-bit = 256 bits, 32 bytes on stack, 0 heap allocations)
+    uint64_t suppressed[4] = {0, 0, 0, 0};
+
+#if defined(IGNITE_USE_AVX2)
+    const __m256 v_iou_thresh = _mm256_set1_ps(iou_threshold);
+    const __m256 v_zero = _mm256_setzero_ps();
+
+    for (size_t i = 0; i < num_cands; ++i) {
+        const size_t word_i = i >> 6;
+        const uint64_t bit_i = 1ULL << (i & 63);
+        if ((suppressed[word_i] & bit_i) != 0) {
+            continue;
+        }
+
+        out_dets.push_back(candidates[i]);
+
+        // Broadcast anchor box i to 256-bit SIMD registers
+        const __m256 ax1 = _mm256_set1_ps(cand_x1[i]);
+        const __m256 ay1 = _mm256_set1_ps(cand_y1[i]);
+        const __m256 ax2 = _mm256_set1_ps(cand_x2[i]);
+        const __m256 ay2 = _mm256_set1_ps(cand_y2[i]);
+        const __m256 a_area = _mm256_set1_ps(cand_area[i]);
+        const __m256i a_cls = _mm256_set1_epi32(cand_cls[i]);
+
+        // Process candidate boxes starting from i+1
+        for (size_t j = i + 1; j < num_cands; ) {
+            // Handle scalar prefix if not 8-aligned
+            if ((j & 7) != 0) {
+                const size_t word_j = j >> 6;
+                const uint64_t bit_j = 1ULL << (j & 63);
+                if ((suppressed[word_j] & bit_j) == 0 && cand_cls[i] == cand_cls[j]) {
+                    float ix1 = std::max(cand_x1[i], cand_x1[j]);
+                    float iy1 = std::max(cand_y1[i], cand_y1[j]);
+                    float ix2 = std::min(cand_x2[i], cand_x2[j]);
+                    float iy2 = std::min(cand_y2[i], cand_y2[j]);
+                    float iw = std::max(0.0f, ix2 - ix1);
+                    float ih = std::max(0.0f, iy2 - iy1);
+                    float inter = iw * ih;
+                    float uni = cand_area[i] + cand_area[j] - inter;
+                    if (uni > 0.0f && (inter / uni) > iou_threshold) {
+                        suppressed[word_j] |= bit_j;
+                    }
+                }
+                ++j;
+                continue;
+            }
+
+            // j is 8-aligned!
+            const size_t word_j = j >> 6;
+            const size_t shift_j = j & 63;
+
+            // Fast block skip: if all 8 candidates are already suppressed, skip entire block in 1 cycle
+            if (((suppressed[word_j] >> shift_j) & 0xFF) == 0xFF) {
+                j += 8;
+                continue;
+            }
+
+            const __m256 bx1 = _mm256_load_ps(&cand_x1[j]);
+            const __m256 by1 = _mm256_load_ps(&cand_y1[j]);
+            const __m256 bx2 = _mm256_load_ps(&cand_x2[j]);
+            const __m256 by2 = _mm256_load_ps(&cand_y2[j]);
+            const __m256 b_area = _mm256_load_ps(&cand_area[j]);
+            const __m256i b_cls = _mm256_load_si256(reinterpret_cast<const __m256i*>(&cand_cls[j]));
+
+            const __m256i cls_eq = _mm256_cmpeq_epi32(a_cls, b_cls);
+
+            const __m256 ix1 = _mm256_max_ps(ax1, bx1);
+            const __m256 iy1 = _mm256_max_ps(ay1, by1);
+            const __m256 ix2 = _mm256_min_ps(ax2, bx2);
+            const __m256 iy2 = _mm256_min_ps(ay2, by2);
+
+            const __m256 iw = _mm256_max_ps(v_zero, _mm256_sub_ps(ix2, ix1));
+            const __m256 ih = _mm256_max_ps(v_zero, _mm256_sub_ps(iy2, iy1));
+            const __m256 inter_area = _mm256_mul_ps(iw, ih);
+
+            const __m256 union_area = _mm256_sub_ps(_mm256_add_ps(a_area, b_area), inter_area);
+            const __m256 iou = _mm256_div_ps(inter_area, union_area);
+
+            const __m256 iou_gt = _mm256_cmp_ps(iou, v_iou_thresh, _CMP_GT_OQ);
+            const __m256 match = _mm256_and_ps(iou_gt, _mm256_castsi256_ps(cls_eq));
+
+            int sup_bits = _mm256_movemask_ps(match);
+            if (j + 8 > num_cands) {
+                int valid_lanes = static_cast<int>(num_cands - j);
+                sup_bits &= ((1 << valid_lanes) - 1);
+            }
+
+            if (sup_bits) {
+                suppressed[word_j] |= (static_cast<uint64_t>(sup_bits) << shift_j);
+            }
+            j += 8;
+        }
+    }
+#elif defined(IGNITE_USE_NEON)
+    const float32x4_t v_iou_thresh = vdupq_n_f32(iou_threshold);
+    const float32x4_t v_zero = vdupq_n_f32(0.0f);
+
+    for (size_t i = 0; i < num_cands; ++i) {
+        const size_t word_i = i >> 6;
+        const uint64_t bit_i = 1ULL << (i & 63);
+        if ((suppressed[word_i] & bit_i) != 0) continue;
+
+        out_dets.push_back(candidates[i]);
+
+        const float32x4_t ax1 = vdupq_n_f32(cand_x1[i]);
+        const float32x4_t ay1 = vdupq_n_f32(cand_y1[i]);
+        const float32x4_t ax2 = vdupq_n_f32(cand_x2[i]);
+        const float32x4_t ay2 = vdupq_n_f32(cand_y2[i]);
+        const float32x4_t a_area = vdupq_n_f32(cand_area[i]);
+        const int32x4_t a_cls = vdupq_n_s32(cand_cls[i]);
+
+        for (size_t j = i + 1; j < num_cands; ) {
+            if ((j & 3) != 0) {
+                const size_t word_j = j >> 6;
+                const uint64_t bit_j = 1ULL << (j & 63);
+                if ((suppressed[word_j] & bit_j) == 0 && cand_cls[i] == cand_cls[j]) {
+                    float ix1 = std::max(cand_x1[i], cand_x1[j]);
+                    float iy1 = std::max(cand_y1[i], cand_y1[j]);
+                    float ix2 = std::min(cand_x2[i], cand_x2[j]);
+                    float iy2 = std::min(cand_y2[i], cand_y2[j]);
+                    float iw = std::max(0.0f, ix2 - ix1);
+                    float ih = std::max(0.0f, iy2 - iy1);
+                    float inter = iw * ih;
+                    float uni = cand_area[i] + cand_area[j] - inter;
+                    if (uni > 0.0f && (inter / uni) > iou_threshold) {
+                        suppressed[word_j] |= bit_j;
+                    }
+                }
+                ++j;
+                continue;
+            }
+
+            const size_t word_j = j >> 6;
+            const size_t shift_j = j & 63;
+            if (((suppressed[word_j] >> shift_j) & 0xF) == 0xF) {
+                j += 4;
+                continue;
+            }
+
+            const float32x4_t bx1 = vld1q_f32(&cand_x1[j]);
+            const float32x4_t by1 = vld1q_f32(&cand_y1[j]);
+            const float32x4_t bx2 = vld1q_f32(&cand_x2[j]);
+            const float32x4_t by2 = vld1q_f32(&cand_y2[j]);
+            const float32x4_t b_area = vld1q_f32(&cand_area[j]);
+            const int32x4_t b_cls = vld1q_s32(&cand_cls[j]);
+
+            const uint32x4_t cls_eq = vceqq_s32(a_cls, b_cls);
+
+            const float32x4_t ix1 = vmaxq_f32(ax1, bx1);
+            const float32x4_t iy1 = vmaxq_f32(ay1, by1);
+            const float32x4_t ix2 = vminq_f32(ax2, bx2);
+            const float32x4_t iy2 = vminq_f32(ay2, by2);
+
+            const float32x4_t iw = vmaxq_f32(v_zero, vsubq_f32(ix2, ix1));
+            const float32x4_t ih = vmaxq_f32(v_zero, vsubq_f32(iy2, iy1));
+            const float32x4_t inter_area = vmulq_f32(iw, ih);
+
+            const float32x4_t union_area = vsubq_f32(vaddq_f32(a_area, b_area), inter_area);
+            const float32x4_t iou = vdivq_f32(inter_area, union_area);
+
+            const uint32x4_t iou_gt = vcgtq_f32(iou, v_iou_thresh);
+            const uint32x4_t match = vandq_u32(iou_gt, cls_eq);
+
+            uint32_t m_arr[4];
+            vst1q_u32(m_arr, match);
+            int sup_bits = 0;
+            for (int k = 0; k < 4; ++k) {
+                if (m_arr[k]) sup_bits |= (1 << k);
+            }
+            if (j + 4 > num_cands) {
+                int valid_lanes = static_cast<int>(num_cands - j);
+                sup_bits &= ((1 << valid_lanes) - 1);
+            }
+            if (sup_bits) {
+                suppressed[word_j] |= (static_cast<uint64_t>(sup_bits) << shift_j);
+            }
+            j += 4;
+        }
+    }
+#else
+    // Pure Scalar Bitmask Tracking (0 heap allocations)
+    for (size_t i = 0; i < num_cands; ++i) {
+        const size_t word_i = i >> 6;
+        const uint64_t bit_i = 1ULL << (i & 63);
+        if ((suppressed[word_i] & bit_i) != 0) continue;
+
+        out_dets.push_back(candidates[i]);
+
+        for (size_t j = i + 1; j < num_cands; ++j) {
+            const size_t word_j = j >> 6;
+            const uint64_t bit_j = 1ULL << (j & 63);
+            if ((suppressed[word_j] & bit_j) != 0) continue;
+
+            if (cand_cls[i] == cand_cls[j]) {
+                float ix1 = std::max(cand_x1[i], cand_x1[j]);
+                float iy1 = std::max(cand_y1[i], cand_y1[j]);
+                float ix2 = std::min(cand_x2[i], cand_x2[j]);
+                float iy2 = std::min(cand_y2[i], cand_y2[j]);
+                float iw = std::max(0.0f, ix2 - ix1);
+                float ih = std::max(0.0f, iy2 - iy1);
+                float inter = iw * ih;
+                float uni = cand_area[i] + cand_area[j] - inter;
+                if (uni > 0.0f && (inter / uni) > iou_threshold) {
+                    suppressed[word_j] |= bit_j;
+                }
+            }
+        }
+    }
+#endif
+}
+
+void ignite_engine::decode_detections_for_slot(int slot, std::vector<Candidate>& out_dets) {
+    out_dets.clear();
+    scratch_candidates.clear();
 
     float conf_t = conf_thres;
     float iou_t = iou_thres;
-    float logit_t = std::log(conf_t / (1.0f - conf_t));
+    float scale = slot_scale[slot];
+    int pad_left = slot_pad_left[slot];
+    int pad_top = slot_pad_top[slot];
 
-    scratch_candidates.clear();
+    if (fused_dfl) {
+        // FAST PATH: On-die AIE2 micro-kernel decoded boxes and class scores
+        const uint8_t* raw_out = bo_out[slot].map<uint8_t*>();
+        const float* boxes_ptr = reinterpret_cast<const float*>(raw_out);
+        const float* scores_ptr = reinterpret_cast<const float*>(raw_out + 134400);
 
-    for (int h_idx = 0; h_idx < 3; ++h_idx) {
-        int G = grid_sizes[h_idx];
-        int N = G * G;
-        float stride_val = strides[h_idx];
-        const float* box_ptr = boxes[h_idx];
-        const float* cls_ptr = clses[h_idx];
+#if defined(IGNITE_USE_AVX2)
+        const __m256 v_thresh = _mm256_set1_ps(conf_t);
+        for (int i = 0; i < 8400; ++i) {
+            const float* score_row = scores_ptr + i * 80;
+            // 80 classes = 10 x 8-lane AVX2 vectors
+            __m256 v0 = _mm256_loadu_ps(score_row + 0);
+            __m256 v1 = _mm256_loadu_ps(score_row + 8);
+            __m256 v2 = _mm256_loadu_ps(score_row + 16);
+            __m256 v3 = _mm256_loadu_ps(score_row + 24);
+            __m256 v4 = _mm256_loadu_ps(score_row + 32);
+            __m256 v5 = _mm256_loadu_ps(score_row + 40);
+            __m256 v6 = _mm256_loadu_ps(score_row + 48);
+            __m256 v7 = _mm256_loadu_ps(score_row + 56);
+            __m256 v8 = _mm256_loadu_ps(score_row + 64);
+            __m256 v9 = _mm256_loadu_ps(score_row + 72);
 
-        float* max_logits = scratch_max_logits.data();
-        int* best_cls_arr = scratch_best_cls.data();
+            __m256 m01 = _mm256_max_ps(v0, v1);
+            __m256 m23 = _mm256_max_ps(v2, v3);
+            __m256 m45 = _mm256_max_ps(v4, v5);
+            __m256 m67 = _mm256_max_ps(v6, v7);
+            __m256 m89 = _mm256_max_ps(v8, v9);
 
-#ifdef _OPENMP
-        #pragma omp parallel for schedule(static)
-#endif
-        for (int i = 0; i < N; ++i) {
-            float max_val = cls_ptr[i];
-            int best_c = 0;
+            __m256 m0123 = _mm256_max_ps(m01, m23);
+            __m256 m4567 = _mm256_max_ps(m45, m67);
+            __m256 m_all = _mm256_max_ps(_mm256_max_ps(m0123, m4567), m89);
+
+            __m256 gt = _mm256_cmp_ps(m_all, v_thresh, _CMP_GT_OQ);
+            if (_mm256_movemask_ps(gt) == 0) {
+                continue;
+            }
+
+            float max_val = score_row[0];
+            int best_cls = 0;
             for (int c = 1; c < 80; ++c) {
-                float v = cls_ptr[c * N + i];
-                if (v > max_val) {
-                    max_val = v;
-                    best_c = c;
+                if (score_row[c] > max_val) {
+                    max_val = score_row[c];
+                    best_cls = c;
                 }
             }
-            max_logits[i] = max_val;
-            best_cls_arr[i] = best_c;
-        }
+            if (max_val < conf_t) continue;
 
-        for (int i = 0; i < N; ++i) {
-            float max_logit = max_logits[i];
-            if (max_logit <= logit_t) continue;
+            const float* box = boxes_ptr + i * 4;
+            float x1 = box[0];
+            float y1 = box[1];
+            float x2 = box[2];
+            float y2 = box[3];
 
-            float score = 1.0f / (1.0f + std::exp(-max_logit));
-            if (score < conf_t) continue;
-
-            int best_cls = best_cls_arr[i];
-            int col = i % G;
-            int row = i / G;
-
-            // DFL Softmax Projection on 16 bins for 4 coordinates
-            float dist[4];
-            for (int d = 0; d < 4; ++d) {
-                float bin_vals[16];
-                float max_b = -1e9f;
-                for (int k = 0; k < 16; ++k) {
-                    float v = box_ptr[(d * 16 + k) * N + i];
-                    bin_vals[k] = v;
-                    if (v > max_b) max_b = v;
-                }
-                float sum_exp = 0.0f;
-                for (int k = 0; k < 16; ++k) {
-                    bin_vals[k] = std::exp(bin_vals[k] - max_b);
-                    sum_exp += bin_vals[k];
-                }
-                float exp_dist = 0.0f;
-                for (int k = 0; k < 16; ++k) {
-                    exp_dist += static_cast<float>(k) * (bin_vals[k] / sum_exp);
-                }
-                dist[d] = exp_dist;
-            }
-
-            // Anchor Grid Projection
-            float ax = static_cast<float>(col) + 0.5f;
-            float ay = static_cast<float>(row) + 0.5f;
-
-            float x1 = (ax - dist[0]) * stride_val;
-            float y1 = (ay - dist[1]) * stride_val;
-            float x2 = (ax + dist[2]) * stride_val;
-            float y2 = (ay + dist[3]) * stride_val;
-
+            float bw = x2 - x1;
+            float bh = y2 - y1;
             float cx = (x1 + x2) * 0.5f;
             float cy = (y1 + y2) * 0.5f;
-            float bw = (x2 - x1);
-            float bh = (y2 - y1);
-
-            // Letterbox Coordinate Inversion
-            float scale = slot_scale[slot];
-            int pad_left = slot_pad_left[slot];
-            int pad_top = slot_pad_top[slot];
 
             float orig_x0 = (cx - bw * 0.5f - static_cast<float>(pad_left)) / scale;
             float orig_y0 = (cy - bh * 0.5f - static_cast<float>(pad_top)) / scale;
@@ -437,32 +674,194 @@ void ignite_engine::decode_detections_for_slot(int slot, std::vector<Candidate>&
             cand.y0 = orig_y0;
             cand.w = orig_w;
             cand.h = orig_h;
-            cand.score = score;
+            cand.score = max_val;
             cand.class_id = best_cls;
             scratch_candidates.push_back(cand);
         }
-    }
-
-    std::sort(scratch_candidates.begin(), scratch_candidates.end(), [](const Candidate& a, const Candidate& b) {
-        return a.score > b.score;
-    });
-
-    scratch_suppressed.assign(scratch_candidates.size(), false);
-    out_dets.clear();
-
-    for (size_t i = 0; i < scratch_candidates.size(); ++i) {
-        if (scratch_suppressed[i]) continue;
-        out_dets.push_back(scratch_candidates[i]);
-        for (size_t j = i + 1; j < scratch_candidates.size(); ++j) {
-            if (scratch_suppressed[j]) continue;
-            if (scratch_candidates[i].class_id == scratch_candidates[j].class_id) {
-                float iou = compute_iou(scratch_candidates[i], scratch_candidates[j]);
-                if (iou > iou_t) {
-                    scratch_suppressed[j] = true;
+#else
+        for (int i = 0; i < 8400; ++i) {
+            const float* score_row = scores_ptr + i * 80;
+            float max_val = score_row[0];
+            int best_cls = 0;
+            for (int c = 1; c < 80; ++c) {
+                if (score_row[c] > max_val) {
+                    max_val = score_row[c];
+                    best_cls = c;
                 }
+            }
+            if (max_val < conf_t) continue;
+
+            const float* box = boxes_ptr + i * 4;
+            float x1 = box[0];
+            float y1 = box[1];
+            float x2 = box[2];
+            float y2 = box[3];
+
+            float bw = x2 - x1;
+            float bh = y2 - y1;
+            float cx = (x1 + x2) * 0.5f;
+            float cy = (y1 + y2) * 0.5f;
+
+            float orig_x0 = (cx - bw * 0.5f - static_cast<float>(pad_left)) / scale;
+            float orig_y0 = (cy - bh * 0.5f - static_cast<float>(pad_top)) / scale;
+            float orig_w = bw / scale;
+            float orig_h = bh / scale;
+
+            Candidate cand;
+            cand.x0 = orig_x0;
+            cand.y0 = orig_y0;
+            cand.w = orig_w;
+            cand.h = orig_h;
+            cand.score = max_val;
+            cand.class_id = best_cls;
+            scratch_candidates.push_back(cand);
+        }
+#endif
+    } else {
+        if (!has_reference_heads) {
+            return;
+        }
+
+        const float* boxes[3] = {
+            ref_p3_box.data(), ref_p4_box.data(), ref_p5_box.data()
+        };
+        const float* clses[3] = {
+            ref_p3_cls.data(), ref_p4_cls.data(), ref_p5_cls.data()
+        };
+        const int grid_sizes[3] = { 80, 40, 20 };
+        const float strides[3] = { 8.0f, 16.0f, 32.0f };
+        float logit_t = std::log(conf_t / (1.0f - conf_t));
+
+        for (int h_idx = 0; h_idx < 3; ++h_idx) {
+            int G = grid_sizes[h_idx];
+            int N = G * G;
+            float stride_val = strides[h_idx];
+            const float* box_ptr = boxes[h_idx];
+            const float* cls_ptr = clses[h_idx];
+
+            float* max_logits = scratch_max_logits.data();
+            int* best_cls_arr = scratch_best_cls.data();
+
+            // Cache-optimal vectorized logit reduction: loop c on the outside
+            std::memcpy(max_logits, cls_ptr, N * sizeof(float));
+            std::memset(best_cls_arr, 0, N * sizeof(int));
+
+            for (int c = 1; c < 80; ++c) {
+                const float* class_c_ptr = cls_ptr + c * N;
+#if defined(IGNITE_USE_AVX2)
+                const __m256i v_c = _mm256_set1_epi32(c);
+                int i = 0;
+                for (; i + 15 < N; i += 16) {
+                    __m256 v_curr0 = _mm256_loadu_ps(class_c_ptr + i);
+                    __m256 v_max0 = _mm256_loadu_ps(max_logits + i);
+                    __m256 cmp0 = _mm256_cmp_ps(v_curr0, v_max0, _CMP_GT_OQ);
+                    _mm256_storeu_ps(max_logits + i, _mm256_max_ps(v_curr0, v_max0));
+                    __m256i cur_cls0 = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(best_cls_arr + i));
+                    __m256i updated_cls0 = _mm256_blendv_epi8(cur_cls0, v_c, _mm256_castps_si256(cmp0));
+                    _mm256_storeu_si256(reinterpret_cast<__m256i*>(best_cls_arr + i), updated_cls0);
+
+                    __m256 v_curr1 = _mm256_loadu_ps(class_c_ptr + i + 8);
+                    __m256 v_max1 = _mm256_loadu_ps(max_logits + i + 8);
+                    __m256 cmp1 = _mm256_cmp_ps(v_curr1, v_max1, _CMP_GT_OQ);
+                    _mm256_storeu_ps(max_logits + i + 8, _mm256_max_ps(v_curr1, v_max1));
+                    __m256i cur_cls1 = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(best_cls_arr + i + 8));
+                    __m256i updated_cls1 = _mm256_blendv_epi8(cur_cls1, v_c, _mm256_castps_si256(cmp1));
+                    _mm256_storeu_si256(reinterpret_cast<__m256i*>(best_cls_arr + i + 8), updated_cls1);
+                }
+                for (; i + 7 < N; i += 8) {
+                    __m256 v_curr = _mm256_loadu_ps(class_c_ptr + i);
+                    __m256 v_max = _mm256_loadu_ps(max_logits + i);
+                    __m256 cmp = _mm256_cmp_ps(v_curr, v_max, _CMP_GT_OQ);
+                    _mm256_storeu_ps(max_logits + i, _mm256_max_ps(v_curr, v_max));
+                    __m256i cur_cls = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(best_cls_arr + i));
+                    __m256i updated_cls = _mm256_blendv_epi8(cur_cls, v_c, _mm256_castps_si256(cmp));
+                    _mm256_storeu_si256(reinterpret_cast<__m256i*>(best_cls_arr + i), updated_cls);
+                }
+                for (; i < N; ++i) {
+                    float v = class_c_ptr[i];
+                    if (v > max_logits[i]) {
+                        max_logits[i] = v;
+                        best_cls_arr[i] = c;
+                    }
+                }
+#else
+                for (int i = 0; i < N; ++i) {
+                    float v = class_c_ptr[i];
+                    if (v > max_logits[i]) {
+                        max_logits[i] = v;
+                        best_cls_arr[i] = c;
+                    }
+                }
+#endif
+            }
+
+            for (int i = 0; i < N; ++i) {
+                float max_logit = max_logits[i];
+                if (max_logit <= logit_t) continue;
+
+                float score = 1.0f / (1.0f + std::exp(-max_logit));
+                if (score < conf_t) continue;
+
+                int best_cls = best_cls_arr[i];
+                int col = i % G;
+                int row = i / G;
+
+                // DFL Softmax Projection on 16 bins for 4 coordinates
+                float dist[4];
+                for (int d = 0; d < 4; ++d) {
+                    float bin_vals[16];
+                    float max_b = -1e9f;
+                    for (int k = 0; k < 16; ++k) {
+                        float v = box_ptr[(d * 16 + k) * N + i];
+                        bin_vals[k] = v;
+                        if (v > max_b) max_b = v;
+                    }
+                    float sum_exp = 0.0f;
+                    for (int k = 0; k < 16; ++k) {
+                        bin_vals[k] = std::exp(bin_vals[k] - max_b);
+                        sum_exp += bin_vals[k];
+                    }
+                    float exp_dist = 0.0f;
+                    for (int k = 0; k < 16; ++k) {
+                        exp_dist += static_cast<float>(k) * (bin_vals[k] / sum_exp);
+                    }
+                    dist[d] = exp_dist;
+                }
+
+                // Anchor Grid Projection
+                float ax = static_cast<float>(col) + 0.5f;
+                float ay = static_cast<float>(row) + 0.5f;
+
+                float x1 = (ax - dist[0]) * stride_val;
+                float y1 = (ay - dist[1]) * stride_val;
+                float x2 = (ax + dist[2]) * stride_val;
+                float y2 = (ay + dist[3]) * stride_val;
+
+                float cx = (x1 + x2) * 0.5f;
+                float cy = (y1 + y2) * 0.5f;
+                float bw = (x2 - x1);
+                float bh = (y2 - y1);
+
+                // Letterbox Coordinate Inversion
+                float orig_x0 = (cx - bw * 0.5f - static_cast<float>(pad_left)) / scale;
+                float orig_y0 = (cy - bh * 0.5f - static_cast<float>(pad_top)) / scale;
+                float orig_w = bw / scale;
+                float orig_h = bh / scale;
+
+                Candidate cand;
+                cand.x0 = orig_x0;
+                cand.y0 = orig_y0;
+                cand.w = orig_w;
+                cand.h = orig_h;
+                cand.score = score;
+                cand.class_id = best_cls;
+                scratch_candidates.push_back(cand);
             }
         }
     }
+
+    // Run Vectorized SIMD Bitmask NMS (0 heap allocations)
+    run_vectorized_bitmask_nms(scratch_candidates, iou_t, out_dets);
 }
 
 void ignite_engine::npu_worker_loop() {
@@ -677,6 +1076,10 @@ ignite_engine_t* ignite_load(const char* model_path, int device_id) {
         // Allocate double-buffered I/O BOs
         eng->in_bytes = (eng->num_cores == 16) ? 8192 : 2048;
         eng->out_bytes = (eng->num_cores == 16) ? 4096 : 1024;
+        eng->fused_dfl = manifest.value("fused_dfl", false);
+        if (eng->fused_dfl) {
+            eng->out_bytes = 134400 + 2688000;
+        }
         for (int s = 0; s < ignite_engine::NUM_SLOTS; ++s) {
             eng->bo_in[s] = xrt::bo(*eng->device, eng->in_bytes, xrt::bo::flags::host_only, eng->kernel->group_id(3));
             eng->bo_out[s] = xrt::bo(*eng->device, eng->out_bytes, xrt::bo::flags::host_only, eng->kernel->group_id(4));
@@ -690,9 +1093,10 @@ ignite_engine_t* ignite_load(const char* model_path, int device_id) {
                 s.name = s_node.value("stage_name", key_name);
                 s.stage_idx = s_node.value("index", s_node.value("stage_idx", 0));
                 s.ninstr_init = s_node.value("init_bytes", s_node.value("ninstr_init", 0U));
-                s.ninstr_exec = s_node.value("exec_bytes", s_node.value("ninstr_exec", 0U));
-                std::string init_blob = s_node.value("init_blob", "");
-                std::string exec_blob = s_node.value("exec_blob", "");
+                std::string init_blob = (s_node.contains("init_blob") && !s_node["init_blob"].is_null() && s_node["init_blob"].is_string())
+                    ? s_node["init_blob"].get<std::string>() : "";
+                std::string exec_blob = (s_node.contains("exec_blob") && !s_node["exec_blob"].is_null() && s_node["exec_blob"].is_string())
+                    ? s_node["exec_blob"].get<std::string>() : "";
 
                 if (s.ninstr_init > 0 && !init_blob.empty() && blobs.count(init_blob)) {
                     const auto& b = blobs.at(init_blob);

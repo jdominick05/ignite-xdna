@@ -148,23 +148,23 @@ def run_native_benchmark(
     metrics = {}
     for line in out.splitlines():
         line = line.strip()
-        if line.startswith("Mean Latency:"):
+        if line.startswith("Mean Latency:") or line.startswith("Glass-to-Glass Mean:"):
             metrics["mean_ms"] = float(line.split(":")[1].replace("ms", "").strip())
-        elif line.startswith("Median Latency:"):
+        elif line.startswith("Median Latency:") or line.startswith("Glass-to-Glass Med:"):
             metrics["median_ms"] = float(line.split(":")[1].replace("ms", "").strip())
-        elif line.startswith("P90 Latency:"):
+        elif line.startswith("P90 Latency:") or line.startswith("Glass-to-Glass P90:"):
             metrics["p90_ms"] = float(line.split(":")[1].replace("ms", "").strip())
-        elif line.startswith("P95 Latency:"):
+        elif line.startswith("P95 Latency:") or line.startswith("Glass-to-Glass P95:"):
             metrics["p95_ms"] = float(line.split(":")[1].replace("ms", "").strip())
-        elif line.startswith("P99 Latency:"):
+        elif line.startswith("P99 Latency:") or line.startswith("Glass-to-Glass P99:"):
             metrics["p99_ms"] = float(line.split(":")[1].replace("ms", "").strip())
-        elif line.startswith("Throughput:"):
+        elif line.startswith("Throughput:") or line.startswith("Aggregate FPS:"):
             metrics["fps"] = float(line.split(":")[1].replace("FPS", "").strip())
         elif line.startswith("Ingress SIMD Preprocess:"):
             metrics["prep_ms"] = float(line.split(":")[1].replace("ms", "").strip())
         elif line.startswith("Physical Silicon NPU:"):
             metrics["npu_ms"] = float(line.split(":")[1].replace("ms", "").strip())
-        elif line.startswith("Pure C++20 DFL + NMS:"):
+        elif line.startswith("Pure C++20 DFL + NMS:") or line.startswith("AVX2 DFL + Bitmask NMS:"):
             metrics["post_ms"] = float(line.split(":")[1].replace("ms", "").strip())
 
     return metrics

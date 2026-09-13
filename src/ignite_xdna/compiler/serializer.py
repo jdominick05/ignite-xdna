@@ -376,6 +376,11 @@ class IgniteModelReader:
         """Returns blob content as bytes."""
         return bytes(self.get_blob_memoryview(name))
 
+    @property
+    def is_dfl_fused(self) -> bool:
+        """Indicates whether on-die AIE2 DFL decode micro-kernel is fused in this container."""
+        return bool(self.manifest.get("fused_dfl", False))
+
     def close(self):
         """Closes memory map and underlying file handle."""
         if self._buffer is not None:

@@ -52,16 +52,16 @@ LOCK_STAGE_BARRIER_B = 7           # On-die inter-stage barrier lock B (odd stag
 class PassDescriptor:
     """Execution descriptor for a single layer pass in the multi-layer pipeline."""
     pass_index: int
-    layer_meta: ConvLayerMeta
-    ingress_source: str            # "HOST_DDR", "L2_BANK_0", "L2_BANK_1"
-    ingress_addr: int
-    egress_dest: str               # "L2_BANK_0", "L2_BANK_1", "HOST_DDR"
-    egress_addr: int
-    ingress_lock_id: Optional[int]
-    egress_lock_id: Optional[int]
-    param_l1_offset: int           # Core L1 offset for layer parameters
-    is_initial: bool
-    is_final: bool
+    layer_meta: Optional[ConvLayerMeta] = None
+    ingress_source: str = "HOST_DDR"            # "HOST_DDR", "L2_BANK_0", "L2_BANK_1"
+    ingress_addr: int = 0
+    egress_dest: str = "HOST_DDR"  # "L2_BANK_0", "L2_BANK_1", "HOST_DDR"
+    egress_addr: int = 0
+    ingress_lock_id: Optional[int] = None
+    egress_lock_id: Optional[int] = None
+    param_l1_offset: int = 0       # Core L1 offset for layer parameters
+    is_initial: bool = False
+    is_final: bool = False
 
 
 @dataclass
@@ -79,9 +79,10 @@ class SchedulePlan:
 
 @dataclass
 class StageSchedulePlan(SchedulePlan):
-    """Schedule plan for a monolithic stage (Stem, P3, P4, P5)."""
+    """Schedule plan for a monolithic stage (Stem, P3, P4, P5, DFL_Decode)."""
     stage_name: str = "Stem"
     c2f_blocks: List[str] = field(default_factory=list)
+    custom_exec_bytes: Optional[bytes] = None
 
 
 @dataclass
@@ -100,9 +101,31 @@ class MultiStageSchedulePlan:
     def to_schedule_plan(self) -> SchedulePlan:
         """Flattens all stages into a unified monolithic SchedulePlan with 0 DDR roundtrips."""
         all_layers: List[ConvLayerMeta] = []
-        for stage in self.stages.values():
-            all_layers.extend(p.layer_meta for p in stage.passes)
+        for s_name, stage in self.stages.items():
+            if s_name == "DFL_Decode":
+                continue
+            all_layers.extend(p.layer_meta for p in stage.passes if p.layer_meta is not None)
         return MemTileMultiPassScheduler().schedule(all_layers)
+
+
+def get_dfl_decode_transaction_binary(repo_root: Optional[Path] = None) -> bytes:
+    """Retrieves pre-compiled DFL decode transaction binary (insts.bin)."""
+    if repo_root is None:
+        repo_root = Path(__file__).resolve().parents[3]
+
+    # Priority 1: build/dfl_decode/<hash>/insts.bin
+    dfl_dir = repo_root / "build" / "dfl_decode"
+    if dfl_dir.exists():
+        for p in sorted(dfl_dir.glob("*/insts.bin"), key=lambda x: x.stat().st_mtime, reverse=True):
+            if p.is_file() and p.stat().st_size > 0:
+                return p.read_bytes()
+
+    # Priority 2: build/stage_dfl_decode_exec.bin
+    cand = repo_root / "build" / "stage_dfl_decode_exec.bin"
+    if cand.is_file() and cand.stat().st_size > 0:
+        return cand.read_bytes()
+
+    raise FileNotFoundError(f"DFL decode transaction binary not found under {dfl_dir}")
 
 
 class MemTileMultiPassScheduler:
@@ -211,7 +234,8 @@ class MemTileMultiPassScheduler:
 
     def schedule_multi_stage(
         self,
-        partitions: List[NpuFusedPartition]
+        partitions: List[NpuFusedPartition],
+        fuse_dfl: bool = False,
     ) -> MultiStageSchedulePlan:
         """Constructs a consolidated multi-stage schedule with 0 intermediate DDR roundtrips."""
         stages: Dict[str, StageSchedulePlan] = {}
@@ -224,6 +248,47 @@ class MemTileMultiPassScheduler:
             stages[s_name] = s_plan
             total_layers += s_plan.num_layers
             total_param_bytes += s_plan.total_l1_param_bytes_per_core
+
+        if fuse_dfl:
+            # Re-route the final pass of the preceding stage (Detect_P5) to MemTile Bank 0 (0x40000)
+            # without host DDR bounce
+            stage_keys = list(stages.keys())
+            if stage_keys:
+                last_stage_key = stage_keys[-1]
+                last_stage = stages[last_stage_key]
+                if last_stage.passes:
+                    final_pass = last_stage.passes[-1]
+                    final_pass.egress_dest = "L2_BANK_0"
+                    final_pass.egress_addr = L2_BANK_0_OFFSET
+                    final_pass.egress_lock_id = LOCK_L2_PING
+                    final_pass.is_final = False
+
+            # Add 10th monolithic stage: DFL_Decode
+            dfl_txn = get_dfl_decode_transaction_binary()
+            dfl_pass = PassDescriptor(
+                pass_index=len(stages),
+                layer_meta=None,
+                ingress_source="L2_BANK_0",
+                ingress_addr=L2_BANK_0_OFFSET,
+                egress_dest="HOST_DDR",
+                egress_addr=L2_FINAL_EGRESS_OFFSET,
+                ingress_lock_id=LOCK_L2_PING,
+                egress_lock_id=LOCK_CORE_EGRESS_CREDIT,
+                param_l1_offset=0,
+                is_initial=False,
+                is_final=True,
+            )
+            dfl_plan = StageSchedulePlan(
+                num_layers=1,
+                passes=[dfl_pass],
+                intermediate_ddr_bytes=0,
+                total_l1_param_bytes_per_core=0,
+                stage_name="DFL_Decode",
+                c2f_blocks=[],
+                custom_exec_bytes=dfl_txn,
+            )
+            stages["DFL_Decode"] = dfl_plan
+            total_layers += 1
 
         return MultiStageSchedulePlan(
             stages=stages,
@@ -635,6 +700,9 @@ def emit_unified_monolithic_transaction_bundle(
 
     with tempfile.TemporaryDirectory() as td:
         for s_name, stage_plan in multi_plan.stages.items():
+            if s_name == "DFL_Decode" and getattr(stage_plan, "custom_exec_bytes", None):
+                stage_exec_bytes.append(stage_plan.custom_exec_bytes)
+                continue
             s_init_tmp = os.path.join(td, f"{s_name}_init.bin")
             s_exec_tmp = os.path.join(td, f"{s_name}_exec.bin")
             emit_multi_stage_transaction_bundle(stage_plan, base_txn_path, s_init_tmp, s_exec_tmp, cores=cores)

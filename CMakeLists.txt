@@ -22,6 +22,7 @@ if(MSVC)
         /fp:fast
         /utf-8
         /openmp
+        /arch:AVX2
         $<$<CONFIG:Release>:/O2>
         $<$<CONFIG:Release>:/Oi>
         $<$<CONFIG:Release>:/GL>

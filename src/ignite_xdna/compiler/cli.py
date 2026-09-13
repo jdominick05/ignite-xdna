@@ -91,6 +91,11 @@ def parse_args(args: Optional[List[str]] = None) -> argparse.Namespace:
         default=16,
         help="Number of AIE2 compute cores to target",
     )
+    parser.add_argument(
+        "--fuse-dfl",
+        action="store_true",
+        help="Fuse on-die AIE2 DFL micro-kernel stage to decode bounding boxes directly to host bo_out without CPU Softmax",
+    )
     return parser.parse_args(args)
 
 
@@ -124,9 +129,10 @@ def compile_model(
     quant_scales_path: Optional[Union[str, Path]] = None,
     base_txn_path: Optional[Union[str, Path]] = None,
     num_cores: int = 16,
+    fuse_dfl: bool = False,
 ) -> int:
     """
-    Compiles an ONNX model into a standalone zero-copy .ignite container artifact.
+    One-click bare-metal compiler lowering ONNX models directly into .ignite binary containers.
     Returns the total file size in bytes.
     """
     repo_root = get_repo_root()
@@ -162,7 +168,7 @@ def compile_model(
     # 4. MemTile AGU Scheduling
     print("[*] Scheduling MemTile L2 SRAM ping-pong buffer layouts...")
     scheduler = MemTileMultiPassScheduler(num_cores=num_cores)
-    multi_plan = scheduler.schedule_multi_stage(npu_partitions)
+    multi_plan = scheduler.schedule_multi_stage(npu_partitions, fuse_dfl=fuse_dfl)
 
     if not multi_plan.has_zero_intermediate_ddr_traffic:
         raise RuntimeError("Compilation failed: Schedule requires intermediate host DDR roundtrips.")
@@ -184,27 +190,35 @@ def compile_model(
         init_path = str(build_staging / init_bin_name)
         exec_path = str(build_staging / exec_bin_name)
 
-        emit_multi_stage_transaction_bundle(stage_plan, base_txn, init_path, exec_path)
-
-        with open(exec_path, "rb") as f:
-            exec_bytes = f.read()
-        stage_blobs.append((exec_bin_name, exec_bytes, "transaction_exec"))
-
-        has_init = os.path.exists(init_path) and os.path.getsize(init_path) > 0
-        if has_init:
-            with open(init_path, "rb") as f:
-                init_bytes = f.read()
-            stage_blobs.append((init_bin_name, init_bytes, "transaction_init"))
-            init_size = len(init_bytes)
-        else:
+        if s_name == "DFL_Decode" and getattr(stage_plan, "custom_exec_bytes", None):
+            exec_bytes = stage_plan.custom_exec_bytes
+            with open(exec_path, "wb") as f:
+                f.write(exec_bytes)
             init_size = 0
+            has_init = False
+        else:
+            emit_multi_stage_transaction_bundle(stage_plan, base_txn, init_path, exec_path)
+
+            with open(exec_path, "rb") as f:
+                exec_bytes = f.read()
+
+            has_init = os.path.exists(init_path) and os.path.getsize(init_path) > 0
+            if has_init:
+                with open(init_path, "rb") as f:
+                    init_bytes = f.read()
+                stage_blobs.append((init_bin_name, init_bytes, "transaction_init"))
+                init_size = len(init_bytes)
+            else:
+                init_size = 0
+
+        stage_blobs.append((exec_bin_name, exec_bytes, "transaction_exec"))
 
         stages_meta[s_name] = {
             "index": idx,
             "stage_name": s_name,
             "num_layers": stage_plan.num_layers,
             "c2f_blocks": stage_plan.c2f_blocks,
-            "init_blob": init_bin_name if has_init else None,
+            "init_blob": init_bin_name if has_init else "",
             "exec_blob": exec_bin_name,
             "init_bytes": init_size,
             "exec_bytes": len(exec_bytes),
@@ -252,6 +266,18 @@ def compile_model(
         }
 
     # 7. Assemble Manifest
+    output_shapes = {
+        "boxes": [1, 8400, 4],
+        "scores": [1, 8400, 80],
+    } if fuse_dfl else {
+        "p3_box": [1, 64, 80, 80],
+        "p3_cls": [1, 80, 80, 80],
+        "p4_box": [1, 64, 40, 40],
+        "p4_cls": [1, 80, 40, 40],
+        "p5_box": [1, 64, 20, 20],
+        "p5_cls": [1, 80, 20, 20],
+    }
+
     manifest = {
         "model_name": in_p.stem,
         "format_version": 1,
@@ -264,14 +290,8 @@ def compile_model(
         "strides": [8, 16, 32],
         "reg_max": 16,
         "num_classes": 80,
-        "output_shapes": {
-            "p3_box": [1, 64, 80, 80],
-            "p3_cls": [1, 80, 80, 80],
-            "p4_box": [1, 64, 40, 40],
-            "p4_cls": [1, 80, 40, 40],
-            "p5_box": [1, 64, 20, 20],
-            "p5_cls": [1, 80, 20, 20],
-        },
+        "fused_dfl": fuse_dfl,
+        "output_shapes": output_shapes,
         "num_stages": len(stages_meta),
         "stages": stages_meta,
         "single_dispatch": True,
@@ -292,7 +312,6 @@ def compile_model(
     with IgniteModelReader(out_p) as reader:
         if not reader.verify_checksum():
             raise RuntimeError("Generated container failed CRC32 checksum verification!")
-        # Verify 64-byte alignment of every blob
         for b_name, b_entry in reader.blobs.items():
             if b_entry.offset % 64 != 0:
                 raise RuntimeError(f"Blob '{b_name}' misaligned: offset {b_entry.offset} % 64 != 0")
@@ -302,21 +321,18 @@ def compile_model(
     print(f"    [OK] CRC32 Checksum Verified: 0x{reader.header.crc32:08X}")
     print(f"    [OK] Total 64-Byte Aligned Blobs: {len(stage_blobs)}")
     print(f"    [OK] Model Size Constraint (< 10 MB): PASSED ({size_mb:.2f} MB)")
-
     return total_size
 
 
-def verify_on_silicon(ignite_path: Path, device_idx: int = 0):
-    """Loads the compiled .ignite artifact directly onto physical silicon and runs a verification pass."""
-    print(f"\n[*] Running bare-metal verification on Device {device_idx} ([003d:00:01.1])...")
-    from ignite_xdna.runtime.session import InferenceSession
+def verify_on_silicon(container_path: Path, device_idx: int = 0):
+    """Verifies that the compiled container executes on physical NPU hardware."""
+    from ignite_xdna.runtime.session import IgniteSession
+    print(f"\n[*] Verifying container on physical NPU silicon (Device {device_idx})...")
 
-    session = InferenceSession.from_file(ignite_path, device_index=device_idx)
+    session = IgniteSession(container_path, device_idx=device_idx, monolithic=True)
     try:
-        # Create synthetic input
-        dummy_in = np.zeros((1, 3, 640, 640), dtype=np.int8)
+        dummy_in = np.random.randint(-128, 127, size=(1, 3, 640, 640), dtype=np.int8)
 
-        # Run warmup + profile iterations
         t0 = time.perf_counter()
         outputs = session.run_yolo_monolithic(dummy_in)
         t_first = (time.perf_counter() - t0) * 1000.0
@@ -348,6 +364,7 @@ def main(args: Optional[List[str]] = None):
             quant_scales_path=parsed.quant_scales,
             base_txn_path=parsed.base_txn,
             num_cores=parsed.num_cores,
+            fuse_dfl=parsed.fuse_dfl,
         )
 
         if parsed.verify_silicon:
