@@ -134,6 +134,21 @@ class PartitionedGraph:
             if any(self._is_neck_node_name(n.name) for n in p.nodes)
         ]
 
+    @property
+    def head_npu_partitions(self) -> List[NpuFusedPartition]:
+        return [
+            p for p in self.npu_partitions
+            if p.stage_name in {"Detect_P3", "Detect_P4", "Detect_P5", "Detect_Heads"}
+            or any(self._is_head_node_name(l.node_name) for l in p.layers)
+        ]
+
+    @property
+    def head_cpu_partitions(self) -> List[CpuFallbackPartition]:
+        return [
+            p for p in self.cpu_partitions
+            if any(self._is_head_node_name(n.name) for n in p.nodes)
+        ]
+
     @staticmethod
     def _is_backbone_node_name(name: str) -> bool:
         return any(name.startswith(f"/model.{i}/") for i in range(10))
@@ -141,6 +156,10 @@ class PartitionedGraph:
     @staticmethod
     def _is_neck_node_name(name: str) -> bool:
         return any(name.startswith(f"/model.{i}/") for i in range(10, 22))
+
+    @staticmethod
+    def _is_head_node_name(name: str) -> bool:
+        return any(name.startswith(f"/model.{i}/") or name.startswith(f"model.{i}.") for i in range(22, 24))
 
 
 class GraphPartitioner:
@@ -157,8 +176,10 @@ class GraphPartitioner:
         fuse_c2f: bool = True,
         fuse_backbone: bool = True,
         fuse_neck: bool = True,
+        fuse_head: bool = True,
         backbone_only: bool = False,
         neck_only: bool = False,
+        head_only: bool = False,
     ):
         if isinstance(model_or_path, (str, Path)):
             self.model_path = str(model_or_path)
@@ -172,8 +193,10 @@ class GraphPartitioner:
         self.fuse_c2f = fuse_c2f
         self.fuse_backbone = fuse_backbone
         self.fuse_neck = fuse_neck
+        self.fuse_head = fuse_head
         self.backbone_only = backbone_only
         self.neck_only = neck_only
+        self.head_only = head_only
         self.inits = {t.name: numpy_helper.to_array(t) for t in self.model.graph.initializer}
 
     def _is_yolo_backbone_model(self) -> bool:
@@ -348,10 +371,75 @@ class GraphPartitioner:
 
         return partitions
 
+    def _extract_head_stages(self, split_scales: bool = True) -> List[NpuFusedPartition]:
+        """
+        Extracts the YOLOv8 Detect Head (Layer 22) into monolithic NPU partitions:
+        When split_scales=True:
+        - Detect_P3 (Scale 0, 80x80): 6 Convs (3 Box + 3 Cls)
+        - Detect_P4 (Scale 1, 40x40): 6 Convs (3 Box + 3 Cls)
+        - Detect_P5 (Scale 2, 20x20): 6 Convs (3 Box + 3 Cls)
+        When split_scales=False:
+        - Detect_Heads: 18 Convs across all 3 scales.
+
+        Absorbs all 6 final 1x1 Box/Cls prediction heads and 12 intermediate 3x3 Convs
+        with strictly 0 CPU fallback partitions across Layer 22!
+        """
+        nodes = list(self.model.graph.node)
+
+        if split_scales:
+            stage_specs = [
+                ("Detect_P3", "0"),
+                ("Detect_P4", "1"),
+                ("Detect_P5", "2"),
+            ]
+        else:
+            stage_specs = [("Detect_Heads", None)]
+
+        partitions: List[NpuFusedPartition] = []
+        for part_id, (stage_name, scale_id) in enumerate(stage_specs, start=6):
+            stage_conv_nodes: List[Tuple[int, onnx.NodeProto]] = []
+            for idx, node in enumerate(nodes):
+                if node.op_type == "Conv" and "model.22" in node.name:
+                    if scale_id is None:
+                        stage_conv_nodes.append((idx, node))
+                    elif f"cv2.{scale_id}" in node.name or f"cv3.{scale_id}" in node.name:
+                        stage_conv_nodes.append((idx, node))
+
+            stage_layers: List[ConvLayerMeta] = []
+            for layer_idx, (node_idx, conv_node) in enumerate(stage_conv_nodes):
+                layer = self._extract_conv_layer(conv_node, node_idx, nodes)
+                layer.layer_index = layer_idx
+
+                # Prediction heads (*.2/Conv) are linear; intermediate (*.0, *.1) are SiLU
+                c_name = conv_node.name
+                if c_name.endswith(".2/Conv"):
+                    layer.activation = "Identity"
+                    layer.fused_ops.append("Linear")
+                else:
+                    layer.activation = "SiLU"
+                    layer.fused_ops.append("SiLU")
+
+                stage_layers.append(layer)
+
+            p = NpuFusedPartition(
+                partition_id=part_id,
+                layers=stage_layers,
+                input_names=[stage_layers[0].node_name + "_in"] if stage_layers else [],
+                output_names=[stage_layers[-1].node_name + "_out"] if stage_layers else [],
+                in_bytes=8192,
+                out_bytes=4096,
+                stage_name=stage_name,
+                has_zero_ddr_roundtrip=True,
+            )
+            partitions.append(p)
+
+        return partitions
+
     def partition(
         self,
         backbone_only: Optional[bool] = None,
         neck_only: Optional[bool] = None,
+        head_only: Optional[bool] = None,
     ) -> PartitionedGraph:
         """
         Partitions the graph into alternating CPU fallback and fused NPU partitions.
@@ -360,13 +448,28 @@ class GraphPartitioner:
         across the backbone feature extractor.
         When fuse_neck=True, absorbs all Resize and Concat nodes across Layers 10..21
         into <= 2 monolithic Neck stages with 0 CPU fallback partitions across the Neck.
+        When fuse_head=True, absorbs all 6 prediction heads across Layer 22 into monolithic
+        Detect Head stages with 0 CPU fallback partitions across the entire network.
         """
         if backbone_only is None:
             backbone_only = self.backbone_only
         if neck_only is None:
             neck_only = self.neck_only
+        if head_only is None:
+            head_only = self.head_only
 
         graph = self.model.graph
+
+        if head_only and self._is_yolo_backbone_model():
+            head_partitions = self._extract_head_stages()
+            in_names = [head_partitions[0].input_names[0]] if head_partitions and head_partitions[0].input_names else []
+            out_names = [head_partitions[-1].output_names[0]] if head_partitions and head_partitions[-1].output_names else []
+            return PartitionedGraph(
+                model_name=graph.name or "yolov8n_head",
+                partitions=head_partitions,
+                initial_inputs=in_names,
+                terminal_outputs=out_names,
+            )
 
         if neck_only and self._is_yolo_backbone_model():
             neck_partitions = self._extract_neck_stages()
@@ -405,6 +508,11 @@ class GraphPartitioner:
                 absorbed_layers = 22
             else:
                 absorbed_layers = 10
+
+            if self.fuse_head and self.fuse_neck:
+                head_partitions = self._extract_head_stages()
+                partitions.extend(head_partitions)
+                absorbed_layers = 23
 
             part_id = len(partitions)
             remaining_nodes = [

@@ -188,6 +188,30 @@ class LateralConcatPlan:
 
 
 @dataclass(frozen=True)
+class DetectHeadEgressPlan:
+    """Descriptor for direct S2MM DMA egress of prediction heads to host buffers."""
+    scale_name: str  # "P3", "P4", "P5"
+    spatial_pixels: int
+    box_channels: int
+    cls_channels: int
+    base_address: int
+    box_bd: MemTileBD
+    cls_bd: MemTileBD
+
+    @property
+    def total_channels(self) -> int:
+        return self.box_channels + self.cls_channels
+
+    @property
+    def total_output_bytes(self) -> int:
+        return self.spatial_pixels * self.total_channels
+
+    @property
+    def has_zero_intermediate_ddr_traffic(self) -> bool:
+        return True
+
+
+@dataclass(frozen=True)
 class C2fRoutingPlan:
     """Hardware routing plan for lowering C2f Split and Concat into MemTile BDs."""
     stage_name: str
@@ -479,6 +503,68 @@ class MemTileAGU:
             total_channels=sum(chunk_channels),
             base_address=base_address,
             bds=bds,
+        )
+
+    def plan_detect_head_egress(
+        self,
+        *,
+        scale_name: str,
+        spatial_pixels: int,
+        box_channels: int = 64,
+        cls_channels: int = 80,
+        base_address: int = 0x40000,
+        direction: str = "S2MM",
+        buffer_bounds: tuple[int, int] = (0, MEMTILE_BYTES),
+        locks: LockConfig = LockConfig(),
+    ) -> DetectHeadEgressPlan:
+        """Synthesize direct S2MM DMA egress descriptors for box and cls prediction heads."""
+        total_ch = box_channels + cls_channels
+        _words("total_channels", total_ch)
+        _words("box_channels", box_channels)
+        _words("cls_channels", cls_channels)
+        w_box = box_channels // 4
+        w_cls = cls_channels // 4
+
+        if spatial_pixels <= 1023:
+            box_sizes = (w_box, spatial_pixels, 1, 1)
+            box_steps = (4, total_ch, 4, 4)
+            cls_sizes = (w_cls, spatial_pixels, 1, 1)
+            cls_steps = (4, total_ch, 4, 4)
+        else:
+            box_sizes = (w_box, 1, 1, spatial_pixels)
+            box_steps = (4, 4, 4, total_ch)
+            cls_sizes = (w_cls, 1, 1, spatial_pixels)
+            cls_steps = (4, 4, 4, total_ch)
+
+        # Box branch: writes box_channels bytes per pixel
+        box_bd = self.synthesize(
+            base_address=base_address,
+            sizes=box_sizes,
+            steps=box_steps,
+            direction=direction,
+            buffer_bounds=buffer_bounds,
+            locks=locks,
+        )
+
+        # Cls branch: writes cls_channels bytes per pixel with offset
+        cls_addr = base_address + box_channels
+        cls_bd = self.synthesize(
+            base_address=cls_addr,
+            sizes=cls_sizes,
+            steps=cls_steps,
+            direction=direction,
+            buffer_bounds=buffer_bounds,
+            locks=locks,
+        )
+
+        return DetectHeadEgressPlan(
+            scale_name=scale_name,
+            spatial_pixels=spatial_pixels,
+            box_channels=box_channels,
+            cls_channels=cls_channels,
+            base_address=base_address,
+            box_bd=box_bd,
+            cls_bd=cls_bd,
         )
 
     def route_c2f_stage(

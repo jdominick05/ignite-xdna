@@ -29,6 +29,7 @@ from ignite_xdna.compiler.memtile_agu import (
     ChannelSlicePlan,
     ChannelConcatPlan,
     C2fRoutingPlan,
+    DetectHeadEgressPlan,
     MEMTILE_BYTES,
 )
 from ignite_xdna.compiler.partitioner import (
@@ -401,6 +402,73 @@ class TestCompilerFusion(unittest.TestCase):
             self.assertIn(p.ingress_source, ("L2_BANK_0", "L2_BANK_1"))
             self.assertIn(p.egress_dest, ("L2_BANK_0", "L2_BANK_1"))
 
+    def test_11_detect_heads_graph_partitioning(self):
+        """
+        Verify that absorbing YOLOv8n Detect Heads (Layer 22) into compiler graph:
+          1. Produces 3 head stages (Detect_P3, Detect_P4, Detect_P5) with 6 Convs each (18 total).
+          2. Absorbs all 6 final prediction 1x1 Convs with linear Identity activation.
+          3. Absorbs all 12 intermediate 3x3 Convs with fused SiLU activation.
+          4. Yields strictly 0 CPU fallback partitions across the entire network (Layers 0..22).
+        """
+        gp = GraphPartitioner(self.model_path, fuse_neck=True, fuse_head=True)
+        pg = gp.partition(backbone_only=False)
+
+        # 4 Backbone + 2 Neck + 3 Heads = 9 NPU monolithic stages
+        self.assertEqual(len(pg.backbone_npu_partitions), 4)
+        self.assertEqual(len(pg.neck_npu_partitions), 2)
+        self.assertEqual(len(pg.head_npu_partitions), 3)
+        self.assertEqual(len(pg.npu_partitions), 9)
+
+        # Strictly 0 CPU fallback partitions across the entire network!
+        self.assertEqual(len(pg.head_cpu_partitions), 0, "Zero CPU fallback partitions allowed in Detect Heads")
+        self.assertEqual(len(pg.cpu_partitions), 0, "Zero CPU fallback partitions across Layers 0..22")
+
+        head_stages = {p.stage_name: p for p in pg.head_npu_partitions}
+        self.assertIn("Detect_P3", head_stages)
+        self.assertIn("Detect_P4", head_stages)
+        self.assertIn("Detect_P5", head_stages)
+
+        for s_name in ("Detect_P3", "Detect_P4", "Detect_P5"):
+            st = head_stages[s_name]
+            self.assertEqual(st.num_layers, 6, f"{s_name} must contain 6 Convs (3 Box + 3 Cls)")
+            self.assertTrue(st.has_zero_ddr_roundtrip)
+
+            # Check that final 2 Convs in each head stage are 1x1 linear prediction heads
+            # and first 4 Convs are 3x3 SiLU intermediate Convs
+            for layer in st.layers:
+                if layer.node_name.endswith(".2/Conv"):
+                    self.assertEqual(layer.activation, "Identity")
+                    self.assertEqual(layer.kernel_shape, [1, 1])
+                    self.assertIn(layer.out_channels, (64, 80))
+                else:
+                    self.assertEqual(layer.activation, "SiLU")
+                    self.assertEqual(layer.kernel_shape, [3, 3])
+
+    def test_12_detect_head_s2mm_egress_plan(self):
+        """
+        Verify that MemTileAGU.plan_detect_head_egress configures direct S2MM DMA
+        scatter into host DDR buffers formatted for DFL/NMS post-processing:
+          - Total channels = 144 (64 box + 80 cls)
+          - Direct S2MM DMA egress with zero intermediate DDR traffic.
+        """
+        agu = MemTileAGU()
+        for scale, sp in (("P3", 100), ("P4", 200), ("P5", 400)):
+            plan = agu.plan_detect_head_egress(
+                scale_name=scale,
+                spatial_pixels=sp,
+                box_channels=64,
+                cls_channels=80,
+                base_address=0x40000,
+                buffer_bounds=(0x40000, 0x40000 + 144 * sp + 64),
+            )
+            self.assertTrue(plan.has_zero_intermediate_ddr_traffic)
+            self.assertEqual(plan.total_channels, 144)
+            self.assertEqual(plan.box_bd.direction, "S2MM")
+            self.assertEqual(plan.cls_bd.direction, "S2MM")
+            self.assertEqual(plan.box_bd.address_span[0], 0x40000)
+            self.assertEqual(plan.cls_bd.address_span[0], 0x40000 + 64)
+
 
 if __name__ == "__main__":
     unittest.main()
+
