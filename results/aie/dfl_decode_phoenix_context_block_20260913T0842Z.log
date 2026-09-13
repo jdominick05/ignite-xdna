@@ -1,0 +1,71 @@
+Phoenix DFL decode silicon qualification
+date_utc=2026-09-13T08:39Z
+device=[003d:00:01.1] NPU Phoenix
+command=C:\Users\<user>\mlir-aie\ironenv\Scripts\python.exe tests/test_dfl_kernel.py --hardware --iters 1 --warmup 0 --build-dir build/dfl_decode
+artifact=build/dfl_decode/23bfabb57307b203/design.xclbin
+artifact_sha256=bae0ed68d6fca222d3f1cb43cc55c8250d0cad3b00ce64e474d3a42c52fcf7bf
+source_dfl_stage_sha256=cc8b9b8e0aac9fe216b3c7fe9f77aff2250425546f8175743896c54b84a9877b
+source_dfl_decode_sha256=d63e8e6b25caada5f8eee134adfb8cb7d307279a7eb499927233063290ebeab9
+qualification=BLOCKED_BEFORE_DISPATCH
+reason=pyxrt hw_context creation failed with 0xc01e0009 after clean xrt-smi and host-load preflight
+{"anchors": 8400, "cases": [{"box_max_abs": 0.2645263671875, "mode": "random", "score_max_abs": 0.0005570650100708008}, {"box_max_abs": 0.4100341796875, "mode": "extreme", "score_max_abs": 0.0005570650100708008}, {"box_max_abs": 0.0, "mode": "uniform", "score_max_abs": 5.3316354751586914e-05}, {"box_max_abs": 0.05303955078125, "mode": "ramp", "score_max_abs": 0.0005570650100708008}], "event": "offline_pass", "input_layout": "[8400,144] int8 Q4", "output_layout": "boxes[8400,4] + scores[8400,80] float32"}
+
+
+
+-----------------------------
+
+[003d:00:01.1] : NPU Phoenix
+
+-----------------------------
+
+AIE Partitions
+
+  No hardware contexts running on device
+
+
+
+
+
+HOST_LOAD busy_cores=0.54 logical_cores=16 free_ram_gb=15.8 sample_sec=1
+
+HOST_LOAD_TOP 0.28 pycharm64:8540 ws_mb=3012
+
+HOST_LOAD_TOP 0.06 agy:31940 ws_mb=933
+
+HOST_LOAD_TOP 0.05 powershell:8084 ws_mb=81
+
+HOST_LOAD_TOP 0.05 HWiNFO64:1824 ws_mb=75
+
+HOST_LOAD_TOP 0.03 OpenConsole:33588 ws_mb=10
+
+HOST_LOAD_VERDICT CLEAR
+
+
+
+Traceback (most recent call last):
+
+  File "C:\Users\<user>\PycharmProjects\ignite-xdna\tests\test_dfl_kernel.py", line 360, in <module>
+
+    main()
+
+    ~~~~^^
+
+  File "C:\Users\<user>\PycharmProjects\ignite-xdna\tests\test_dfl_kernel.py", line 356, in main
+
+    hardware(args, directory)
+
+    ~~~~~~~~^^^^^^^^^^^^^^^^^
+
+  File "C:\Users\<user>\PycharmProjects\ignite-xdna\tests\test_dfl_kernel.py", line 278, in hardware
+
+    harness.load_xclbin(str(directory / "design.xclbin"))
+
+    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+  File "C:\Users\<user>\PycharmProjects\ignite-xdna\src\ignite_xdna\runtime\driver.py", line 62, in load_xclbin
+
+    self.context = self.pyxrt.hw_context(self.dev, uuid)
+
+                   ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^
+
+RuntimeError: Failed to create context virtual (0xc01e0009): There was an error while creating context

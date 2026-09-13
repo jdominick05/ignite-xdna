@@ -7597,3 +7597,28 @@ Earlier build errors, a repeat-dispatch credit race, the illegal cross-channel
 MemTile loopback attempt, and slower spatial-band variants remain in the
 [SPPF evidence index](../results/aie/README.md#sppf-checkpoint). No YOLOv8 model
 integration, end-to-end speedup, or production parity claim is made here.
+
+## Phoenix DFL softmax and anchor decode (2026-09-13, Desktop 2)
+
+The standalone [`aie2/dfl`](../kernels/aie2/dfl/dfl_stage.py) design moves the
+16-bin DFL expectation, class sigmoid, anchor geometry and output staging for 8,400
+anchors onto sixteen Phoenix AIE2 cores. The input ABI is `[8400,144]` INT8 Q4:
+four sixteen-bin DFL distributions followed by eighty class logits per anchor. The
+core emits an anchor-major wire record with four decoded coordinates and eighty class
+scores; MemTile L2 then deinterleaves that stream into contiguous `[8400,4]` and
+`[8400,80]` float32 host BOs.
+
+The offline NumPy float32 oracle check passed random, extreme, uniform and ramp
+fixtures. The fixed-point approximation's largest errors were **0.410034 pixels** for
+boxes and **0.000557065** for class scores. The Peano build produced **16 core ELFs**
+and the object disassembly contained **48** matched vector instructions (`vmul`,
+`vadd`, `vbcst` or `vsrs`). These are compile and offline numerical results, not
+silicon results.
+
+The physical qualification was attempted on Phoenix Device 0 `[003d:00:01.1]` with
+one measured iteration after the clean `xrt-smi` partition check and
+`HOST_LOAD_VERDICT CLEAR`. `pyxrt.hw_context` failed with **`0xc01e0009`** before
+dispatch. Consequently this run has no device output parity and no latency sample,
+so the requested `<300 us` gate remains open. The complete command output, source and
+xclbin hashes, and preflight are in
+[`results/aie/dfl_decode_phoenix_context_block_20260913T0842Z.log`](../results/aie/dfl_decode_phoenix_context_block_20260913T0842Z.log).

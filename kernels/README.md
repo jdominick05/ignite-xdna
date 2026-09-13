@@ -31,6 +31,7 @@ array program) into `~/.npu/cache/<hash>/`; later runs of the same shape hit the
 | Kernel | Op it replaces | Verdict |
 |---|---|---|
 | [aie2/fused_conv_epilogue](aie2/fused_conv_epilogue/README.md) | Standalone Conv + Residual Add + SiLU | Qualified below 8% compute overhead at Cin=512, Cout=32, with DMA overlap; Cin=32 misses. [Evidence and scope](../docs/BENCHMARKS.md#fused-conv-residual-silu-2026-09-13-desktop-2) |
+| [aie2/dfl](aie2/dfl/dfl_stage.py) | 16-bin DFL softmax, anchor decode and staged boxes/scores egress | Peano compile verified on 16 Phoenix cores with 48 native vector instructions; silicon qualification is blocked before dispatch by XRT context creation (`0xc01e0009`). [Evidence and limits](../docs/BENCHMARKS.md#phoenix-dfl-softmax-and-anchor-decode-2026-09-13-desktop-2) |
 | `memory_placement/` | Controlled operand-address intervention in a paired-load loop and a single-core INT8 GEMM | Local placement changes cycle slopes with identical function bytes; [method, limits and logs](../docs/BENCHMARKS.md#local-operand-placement-an-address-intervention) |
 | `bf16_matmul_sweep/` | Nothing — the bf16 GEMM shape sweep | **Wins.** NPU 1.18×–1.78× over CPU bf16 once M/N ≥ 1024 |
 | `int8_matmul_sweep/` | Nothing — the int8 GEMM sweep, with the CPU int8 GEMM baseline | **Loses at the default tile; wins 1.10×–1.83× at M ≥ 512, N ≥ 2048 with `n=64`**, a tile bf16 can't fit |
@@ -48,6 +49,25 @@ array program) into `~/.npu/cache/<hash>/`; later runs of the same shape hit the
 | `bank_placement/` | A local copy of `whole_array.py` plus `--stack-size`, and an alternating A/B driver | Tests H12: does separating the int8 GEMM's colliding operands into different memory banks speed it up? **Not resolvable on a shared machine** — seven series, arms overlap, sign varies. Its `bank_stall_probe.py` is a **superseded** control whose headline was retracted; the working observable is `memory_placement/` |
 | `conv_accum/` | Local copies of both 1×1 conv kernels with their accumulators made register-resident | **Worth 2.99–3.01×** (116 → 350 marginal GOPS); hot loop 0.045 → 0.286 MACs/cycle. **The op class stays closed** — CPU still wins 2.4×, down from 7.2× |
 | `aie2/` | In-flight 4-D DMA receptive field generation, vectorized zero-realignment 3×3 conv kernel, and 20-core full-array engine | Replaces software `sliding_mul` shuffles (`vshift`/`vmov`) with MemTile 4-D DMA striding. M=1 achieves **2.00× MAC issue density** (0.222 → 0.444 vmac/cycle); M=2 unrolling achieves **4.50× MAC issue density** (1.000 vmac/cycle, 100% vector ALU saturation) with 0 realignment ops and 0 spills. Closed-loop Column 0 pipeline: native hardware SRS requantization (`vst.srs.s8.s32`), 4-core gathering, and host-to-host DDR roundtrip. 20-core full-array execution engine: 5 physical columns × 4 cores/col across 30 physical tiles (3.84 MB SRAM, 50 flows), 20 clean ELFs, 18.43 TOPS at 1.80 GHz. Compiler-verified; [implementation](../results/aie/notes_im2col_4d_implementation.md), [VLIW audit](../results/aie/notes_im2col_kernel_vliw_audit.md), [pipeline integration](../results/aie/notes_im2col_m2_pipeline_integration.md), [column scaling](../results/aie/notes_im2col_4core_column_scaling.md), [egress roundtrip](../results/aie/notes_im2col_egress_roundtrip.md), [column 4 unlock feasibility](../results/aie/notes_column4_unlock_feasibility.md), and [20-core array synthesis](../results/aie/notes_im2col_20core_array_synthesis.md) |
+
+## `aie2/dfl/`
+
+This is the first implementation slice for moving YOLO DFL post-processing onto Phoenix.
+`dfl_decode.cc` consumes 15 anchor records per call: four groups of sixteen INT8 Q4
+logits and eighty class logits. It evaluates the four sixteen-bin expectations with
+512-bit AIE2 vector operations, applies the fixed-point sigmoid, and emits one
+anchor-major wire record containing `[x1, y1, x2, y2, score_0 ... score_79]`.
+`dfl_stage.py` maps 8,400 anchors across four columns and sixteen cores, stages input
+through MemTile L2, and uses separate strided MemTile egress streams for contiguous
+box and score host BOs.
+
+The offline float32 oracle check passes four fixtures within 0.411 pixels for boxes and
+0.000558 for scores. The Peano/aiecc build produces sixteen core ELFs and 48 vector
+instructions in the decoded object. The first silicon qualification attempt completed
+the Phoenix and host-load preflight but failed while creating the XRT hardware context
+with `0xc01e0009`, before any dispatch; there is therefore no silicon parity or latency
+result yet. The full evidence is in
+[`dfl_decode_phoenix_context_block_20260913T0842Z.log`](../results/aie/dfl_decode_phoenix_context_block_20260913T0842Z.log).
 
 Each kernel's own findings, warnings and retractions follow. They are prose rather than
 table cells because several of them are corrections to what an earlier version of this
