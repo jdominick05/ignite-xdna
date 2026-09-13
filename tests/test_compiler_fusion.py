@@ -31,6 +31,7 @@ from ignite_xdna.compiler.memtile_agu import (
     C2fRoutingPlan,
     DetectHeadEgressPlan,
     MEMTILE_BYTES,
+    assert_disjoint_destinations,
 )
 from ignite_xdna.compiler.partitioner import (
     GraphPartitioner,
@@ -276,37 +277,44 @@ class TestCompilerFusion(unittest.TestCase):
 
     def test_07_memtile_in_flight_2x_upsampling(self):
         """
-        Verify MemTile AGU 2x Nearest-Neighbor upsampling programs MM2S step and wrap
-        registers to duplicate pixels horizontally (step=0, wrap=2) and vertically
-        (step=0, wrap=2) without executing ALU instructions and with 0 intermediate DDR bytes.
+        Verify MemTile AGU 2x nearest-neighbour upsampling is lowered as four DMA passes:
+        BD step fields are encoded minus one, so a zero-step (step=0, wrap=2) duplication
+        is not expressible. Each pass streams the source once and scatters it into one
+        output phase with 2-pixel / 2-row destination strides; every output word is
+        written exactly once, with 0 intermediate DDR bytes and no core instruction.
         """
         agu = MemTileAGU()
 
-        # 1. Test Layer 11 upsampling (per-column slice): 20x20x64 -> 40x40x64
+        # 1. Layer 11 upsampling (per-column slice): 20x20x64 -> 40x40x64, Bank 0 -> scratch
         plan_p5 = agu.plan_upsample_2x(
             base_address=L2_BANK_0_OFFSET,
+            destination_address=L2_BANK_1_OFFSET,
             input_shape=(20, 20, 64),
-            direction="MM2S",
+            destination_bounds=(L2_BANK_1_OFFSET, MEMTILE_BYTES),
         )
         self.assertTrue(plan_p5.has_zero_intermediate_ddr_traffic)
         self.assertEqual(plan_p5.total_output_bytes, 40 * 40 * 64)
-        self.assertEqual(plan_p5.bd.steps[1], 0)  # Horizontal duplication
-        self.assertEqual(plan_p5.bd.sizes[1], 2)
-        self.assertEqual(plan_p5.bd.steps[3], 0)  # Vertical duplication
-        self.assertEqual(plan_p5.bd.sizes[3], 2)
+        self.assertEqual(plan_p5.passes, 4)
+        for bd in plan_p5.source_bds:
+            self.assertEqual(bd.direction, "MM2S")
+            self.assertEqual(bd.transfer_bytes, 20 * 20 * 64)
+        for bd in plan_p5.dest_bds:
+            self.assertEqual(bd.direction, "S2MM")
+            self.assertEqual(bd.step_words[1], 2 * 64 // 4)           # two output pixels
+            self.assertEqual(bd.step_words[2], 2 * 2 * 20 * 64 // 4)  # two output rows
+        self.assertEqual(assert_disjoint_destinations(plan_p5.dest_bds), 40 * 40 * 64 // 4)
 
-        # 2. Test Layer 14 upsampling (per-column slice): 40x40x32 -> 80x80x32
+        # 2. Layer 14 upsampling (per-column slice): 40x40x32 -> 80x80x32 (204,800 B), Bank 1 -> scratch
         plan_p4 = agu.plan_upsample_2x(
             base_address=L2_BANK_1_OFFSET,
+            destination_address=0x0,
             input_shape=(40, 40, 32),
-            direction="MM2S",
+            destination_bounds=(0x0, L2_BANK_0_OFFSET),
         )
         self.assertTrue(plan_p4.has_zero_intermediate_ddr_traffic)
         self.assertEqual(plan_p4.total_output_bytes, 80 * 80 * 32)
-        self.assertEqual(plan_p4.bd.steps[1], 0)
-        self.assertEqual(plan_p4.bd.sizes[1], 2)
-        self.assertEqual(plan_p4.bd.steps[3], 0)
-        self.assertEqual(plan_p4.bd.sizes[3], 2)
+        self.assertEqual(plan_p4.passes, 4)
+        self.assertEqual(assert_disjoint_destinations(plan_p4.dest_bds), 80 * 80 * 32 // 4)
 
     def test_08_memtile_lateral_concatenations(self):
         """

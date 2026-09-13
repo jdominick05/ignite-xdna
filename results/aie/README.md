@@ -1147,3 +1147,10 @@ multi-core transport timeouts after a restart.
 |---|---|
 | [dfl_decode_phoenix_context_block_20260913T0842Z.log](dfl_decode_phoenix_context_block_20260913T0842Z.log) | Offline parity and Peano compile passed; hardware qualification blocked before dispatch by XRT context creation |
 | [dfl_decode_phoenix_transport_checkpoint_20260913T0950Z.log](dfl_decode_phoenix_transport_checkpoint_20260913T0950Z.log) | Restart cleared context creation; full and one-column four-core packet-fanin probes timed out after dispatch; one-core aggregate control completed; full-design parity and latency remain unmeasured |
+
+The [low-level audit](../../docs/LOW_LEVEL_AUDIT.md) of 2026-09-13 dispatched the shipped
+container's streams to settle one question its static analysis could not.
+
+| Log | Outcome |
+|---|---|
+| [lowlevel_audit_silicon_checks_phoenix_20260913T1655Z.log](lowlevel_audit_silicon_checks_phoenix_20260913T1655Z.log) | The 63-layer `init_monolithic.bin` (2,256 parameter writes outside core data memory) and the 7-layer stem init both complete and give byte-identical layer-0 egress; the rebuilt native runtime runs 500 frames at 2,176.68 FPS with zero incomplete dispatches and refuses a bit-flipped and a truncated container at load |
