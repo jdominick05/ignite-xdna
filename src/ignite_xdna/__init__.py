@@ -8,6 +8,8 @@ __version__ = "0.2.0"
 
 from . import compiler
 from . import runtime
+from . import pipelines
 from .runtime.session import InferenceSession, RunHandle
+from .pipelines.yolo_pipeline import YoloPipeline
 
-__all__ = ["compiler", "runtime", "InferenceSession", "RunHandle", "__version__"]
+__all__ = ["compiler", "runtime", "pipelines", "InferenceSession", "RunHandle", "YoloPipeline", "__version__"]
