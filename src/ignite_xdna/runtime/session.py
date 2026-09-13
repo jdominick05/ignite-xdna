@@ -396,6 +396,8 @@ class InferenceSession:
             raise RuntimeError("Cannot invoke run() on a closed InferenceSession")
 
         is_profiling = self.profiler is not None and self.profiler.is_enabled
+        if is_profiling:
+            self.profiler.start_iteration(len(self.profiler.iterations))
         t_wall_start = time.perf_counter_ns() if is_profiling else 0
 
         if self.partitioned_graph is not None and self.partitioned_graph.cpu_partitions:
