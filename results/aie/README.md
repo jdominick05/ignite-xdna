@@ -1109,3 +1109,26 @@ Failures and the run invalidated by a foreign context are retained.
 | [052546Z_8609](fused_epilogue_phoenix_20260913T052546Z_8609.log) | Final Cin=32 comparison: numerics and overlap pass, overhead fails. |
 | [052611Z_4050](fused_epilogue_phoenix_20260913T052611Z_4050.log) | Qualified Cin=512: ten pairs, full-array numerics, trace, lock/ELF and hash evidence. |
 | [Repository gates](fused_epilogue_checks_phoenix_20260913T053000Z.log) | Required test compileall, repository syntax/import and shell checks, link and advisory number audits. |
+
+
+## SPPF checkpoint
+
+The performance qualification remains open. See the [measurements and limits](../../docs/BENCHMARKS.md#sppf-checkpoint-2026-09-13-desktop-2).
+
+| Log | Outcome |
+|---|---|
+| [sppf_20x20x256_phoenix_20260913T055728Z_17341.log](sppf_20x20x256_phoenix_20260913T055728Z_17341.log) | Compiler error; superseded diagnostic |
+| [sppf_20x20x256_phoenix_20260913T055844Z_17082.log](sppf_20x20x256_phoenix_20260913T055844Z_17082.log) | Peano build passed |
+| [sppf_20x20x256_phoenix_20260913T055918Z_31764.log](sppf_20x20x256_phoenix_20260913T055918Z_31764.log) | Hardware timeout; superseded diagnostic |
+| [sppf_20x20x256_phoenix_20260913T060039Z_31544.log](sppf_20x20x256_phoenix_20260913T060039Z_31544.log) | Peano build passed |
+| [sppf_20x20x256_phoenix_20260913T060108Z_25708.log](sppf_20x20x256_phoenix_20260913T060108Z_25708.log) | Full-output parity; host-inclusive latency assertion failed |
+| [sppf_20x20x256_phoenix_20260913T060212Z_22085.log](sppf_20x20x256_phoenix_20260913T060212Z_22085.log) | Full-output parity; host-inclusive latency assertion failed |
+| [sppf_20x20x256_phoenix_20260913T060331Z_9269.log](sppf_20x20x256_phoenix_20260913T060331Z_9269.log) | Peano build passed |
+| [sppf_20x20x256_phoenix_20260913T060406Z_27214.log](sppf_20x20x256_phoenix_20260913T060406Z_27214.log) | Hardware timeout; superseded diagnostic |
+| [sppf_20x20x256_phoenix_20260913T060610Z_29389.log](sppf_20x20x256_phoenix_20260913T060610Z_29389.log) | Compiler error; superseded diagnostic |
+| [sppf_20x20x256_phoenix_20260913T060709Z_5346.log](sppf_20x20x256_phoenix_20260913T060709Z_5346.log) | Peano build passed |
+| [sppf_20x20x256_phoenix_20260913T060745Z_12004.log](sppf_20x20x256_phoenix_20260913T060745Z_12004.log) | Full-output parity; host-inclusive latency assertion failed |
+| [sppf_20x20x256_phoenix_20260913T061157Z_990.log](sppf_20x20x256_phoenix_20260913T061157Z_990.log) | Peano build passed |
+| [sppf_20x20x256_phoenix_20260913T061238Z_17350.log](sppf_20x20x256_phoenix_20260913T061238Z_17350.log) | Full-output parity; host-inclusive latency assertion failed |
+| [sppf_20x20x256_phoenix_20260913T061627Z_15527.log](sppf_20x20x256_phoenix_20260913T061627Z_15527.log) | Peano build passed |
+| [sppf_20x20x256_phoenix_20260913T061700Z_14567.log](sppf_20x20x256_phoenix_20260913T061700Z_14567.log) | Full-output parity; trace cycles only, qualification open |

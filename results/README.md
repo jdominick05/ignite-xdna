@@ -1,5 +1,9 @@
 # results/
 
+The native SPPF work is an unfinished performance qualification; build and
+silicon logs are indexed under [AIE SPPF](aie/README.md#sppf-checkpoint), with
+[results and open gates](../docs/BENCHMARKS.md#sppf-checkpoint-2026-09-13-desktop-2).
+
 Fused Conv/Residual/SiLU build attempts and silicon checks are indexed under
 [AIE fused epilogue](aie/README.md#fused-conv-residual-silu), with
 [measurements and qualification scope](../docs/BENCHMARKS.md#fused-conv-residual-silu-2026-09-13-desktop-2).

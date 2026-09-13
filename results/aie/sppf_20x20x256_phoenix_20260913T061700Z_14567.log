@@ -1,0 +1,38 @@
+RESEARCH_PLATFORM {"machine": "Desktop 2", "cpu": "AMD Ryzen 7 8700G w/ Radeon 780M Graphics", "os": "Windows-11-10.0.26200-SP0", "ram_bytes": 33381138432, "source_sha256": {"tools/research_process.py": "b527a07958df0ed575df38dfe88da348c972ee79eb459974555cf2655f94d37f", "tools/quant_calib_alphabet.py": "2dc0b2878c564853f340880209a425dfcf63b8536b2b8e9fd32344daade58d37", "tools/xint8_arithmetic_probe.py": "6aa3df08b9870c3c2264b868459d7ffbac3070dddc1349d7c6f3f480075f7041", "scripts/research-lowlevel.sh": "3455ad7933697936487712665505c216891865c6deada647302785f6e37020bd", "scripts/research-iron.sh": "128f8b5ee21f2209f8dda004cefc39fbf87a5170ca61c5cf18dc97a6ea6669c8", "kernels/memory_placement/probe.py": "e8d990169ad6091fa1b53852e9f61eff495b5def72d35165a5c5cf1759e38898", "kernels/memory_placement/memory_kernels.cc": "182e7af7071a1e851afb4a7ca266069c489aea1fbaaa85eca129708daeba5ba6", "scripts/research-matrix.sh": "739254171629deae822b0ad7dabc875aee19ace56dde77d3e8aab61663f97516", "kernels/memory_placement/gemm.py": "17c905ad66110d3346bbf0db898dfc6b780df59fae1dfb0c1747057ce1e5844e", "kernels/memory_placement/gemm_placement.cc": "f21acf7250b12914ea30cc1f77613239dfa18421a85a1b9a5199017dd916278a", "tools/research_summary.py": "0c00dcceef07053d06731b41a1f1ed58d3ba4ea09f82497de354ce9cef17da20", "tools/research_toolchain.py": "f0a126a24ae213acfaa43460cfd9def0c86d9cb70cfee0228aa271688467b314"}, "commit": "9abb30d74fbc0e7860e57983a3e2a116d174d3fd", "command": ["bash", "scripts/research-iron.sh", "tests/test_sppf_kernel.py", "--hardware", "--trace"], "seconds_limit": 1800.0, "rss_gib_limit": 10.0, "checks_only": false, "free_ram_bytes": 16934989824}
+HOST_LOAD busy_cores=0.86 logical_cores=16 free_ram_gb=15.7 sample_sec=1
+HOST_LOAD_TOP 0.29 pycharm64:8540 ws_mb=3077
+HOST_LOAD_TOP 0.29 python:31552 ws_mb=68
+HOST_LOAD_TOP 0.08 agy:33604 ws_mb=1218
+HOST_LOAD_TOP 0.06 Taskmgr:13448 ws_mb=189
+HOST_LOAD_TOP 0.05 powershell:4128 ws_mb=80
+HOST_LOAD_VERDICT CLEAR
+
+PRE_NPU_CONTEXT_WITNESS "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [5492, 7528, 15704, 18612, 34664], "foreign_pids": []}
+{"cases": 5, "event": "offline_pass", "hardware": false, "oracle": "torch.nn.MaxPool2d(5,1,2)", "output_bytes_per_case": 409600}
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+HOST_TIMELINE {"elapsed_seconds": 2.672, "tree_rss_bytes": 324993024, "foreign_peers": []}
+HOST_LOAD busy_cores=0.87 logical_cores=16 free_ram_gb=15.6 sample_sec=1
+HOST_LOAD_TOP 0.26 pycharm64:8540 ws_mb=3077
+HOST_LOAD_TOP 0.23 python:5492 ws_mb=27
+HOST_LOAD_TOP 0.08 HWiNFO64:1824 ws_mb=73
+HOST_LOAD_TOP 0.08 codex:19240 ws_mb=257
+HOST_LOAD_TOP 0.05 powershell:9612 ws_mb=80
+HOST_LOAD_VERDICT CLEAR
+
+{"bdf": "003d:00:01.1", "device": 0, "event": "identity", "machine": "Desktop 2 / Ryzen 7 8700G", "shim_patches": [{"argument": 2, "offset": 0, "register": 119268}, {"argument": 0, "offset": 0, "register": 118788}, {"argument": 1, "offset": 0, "register": 118820}, {"argument": 0, "offset": 25600, "register": 33673220}, {"argument": 1, "offset": 102400, "register": 33673252}, {"argument": 0, "offset": 51200, "register": 67227652}, {"argument": 1, "offset": 204800, "register": 67227684}, {"argument": 0, "offset": 76800, "register": 100782084}, {"argument": 1, "offset": 307200, "register": 100782116}], "sources": {"maxpool5x5.cc": "813e60a0322605057962ab33f4e43ec0a1af1890f0441bee5d7e6075d50b6595", "sppf_stage.py": "cc5e5602611c6810a83385bcda6026b932e1f746b80e5f2c76e0fd45eb2689e0"}, "test_sha256": "6faa4284dcaae08d9bc580dec2fffbfbcb35d34a37720c490e5aae75887d65dd", "transaction_sha256": "9b61e5b27be6af7c08d6e21e0aa88f8f55ecca1cb251107a6d166d452736325a", "xclbin_sha256": "ebdee87d3f0c84c830952e5d73c6464be4b31007e8a1f537f5d69e11d14fca9e"}
+{"bytes_checked": 409600, "case": "spatial", "dispatch_wait_us": 1442.7, "event": "comparison", "index": 0, "input_sha256": "34eaf3b582bca7bcb9cc67f3a37ca3995f074221fc22edc00a356188597ef6fe", "measured": true, "mismatches": 0, "output_sha256": "33e7a4bb0a11058d3dfcfc7aaa9a822f1a1960897178cea0dea14e958d15e564", "per_stage_column_mismatches": [[0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]], "seed": 17}
+{"begins": [4663], "ends": [116442], "event": "trace_decode", "event_count": 2, "first_bytes": [240, 0, 0, 0, 0, 34, 146, 141, 160, 18, 54, 254, 165, 180, 162, 254], "location": "0,1", "starts": [0]}
+{"begins": [6613], "ends": [116485], "event": "trace_decode", "event_count": 66, "first_bytes": [240, 0, 0, 0, 0, 34, 146, 155, 160, 25, 212, 254, 165, 173, 47, 254], "location": "0,2", "starts": [0]}
+{"begins": [8610], "ends": [116529], "event": "trace_decode", "event_count": 66, "first_bytes": [240, 0, 0, 0, 0, 34, 146, 187, 160, 33, 161, 254, 165, 165, 142, 254], "location": "0,3", "starts": [0]}
+{"begins": [10539], "ends": [116543], "event": "trace_decode", "event_count": 65, "first_bytes": [240, 0, 0, 0, 0, 34, 146, 221, 160, 41, 42, 254, 165, 158, 19, 254], "location": "0,4", "starts": [0]}
+{"columns": [{"cycles": 111779, "location": "0,1", "per_frame_cycles": [111779]}, {"cycles": 109872, "location": "0,2", "per_frame_cycles": [109872]}, {"cycles": 107919, "location": "0,3", "per_frame_cycles": [107919]}, {"cycles": 106004, "location": "0,4", "per_frame_cycles": [106004]}], "event": "trace_result", "host_us": 1442.7, "qualification": "cycles only; frequency calibration required", "repeats": 1, "trace_sha256": "c4721fc184b5cd8edd34a333e15562e50bbe69eb3e671a7315bbf27f1a673199"}
+RESEARCH_PROCESS_RESULT {"exit_code": 0, "stop": null, "peak_tree_rss_bytes": 361414656, "rss_measurement": "maximum observed across sampled descendant working sets; zero observations reported as null", "elapsed_seconds": 3.8910000000032596, "foreign_contention_observed": false, "timing_eligible": true}
