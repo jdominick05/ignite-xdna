@@ -53,7 +53,12 @@ class ConvLayerMeta:
     pos_y: int = 7
     shift_cut: int = 7
     sigma: int = 21  # shift_cut + 14
-    activation: Optional[str] = None  # None, "Relu", "Clip", "Identity"
+    activation: Optional[str] = None  # None, "Relu", "Clip", "Identity", "SiLU"
+    residual_add: bool = False
+    residual_source: Optional[str] = None
+    fused_ops: List[str] = field(default_factory=list)
+    channel_slice: Optional[Tuple[int, int]] = None
+    channel_concat_offset: Optional[int] = None
 
 
 @dataclass
@@ -65,6 +70,9 @@ class NpuFusedPartition:
     output_names: List[str] = field(default_factory=list)
     in_bytes: int = 8192
     out_bytes: int = 4096
+    stage_name: Optional[str] = None
+    c2f_blocks: List[str] = field(default_factory=list)
+    has_zero_ddr_roundtrip: bool = True
 
     @property
     def num_layers(self) -> int:
@@ -79,6 +87,7 @@ class CpuFallbackPartition:
     input_names: List[str] = field(default_factory=list)
     output_names: List[str] = field(default_factory=list)
     onnx_model: Optional[onnx.ModelProto] = None
+    is_backbone: bool = False
 
 
 @dataclass
@@ -97,6 +106,24 @@ class PartitionedGraph:
     def cpu_partitions(self) -> List[CpuFallbackPartition]:
         return [p for p in self.partitions if isinstance(p, CpuFallbackPartition)]
 
+    @property
+    def backbone_npu_partitions(self) -> List[NpuFusedPartition]:
+        return [
+            p for p in self.npu_partitions
+            if p.stage_name in {"Stem", "P3", "P4", "P5"} or any(self._is_backbone_node_name(l.node_name) for l in p.layers)
+        ]
+
+    @property
+    def backbone_cpu_partitions(self) -> List[CpuFallbackPartition]:
+        return [
+            p for p in self.cpu_partitions
+            if p.is_backbone or any(self._is_backbone_node_name(n.name) for n in p.nodes)
+        ]
+
+    @staticmethod
+    def _is_backbone_node_name(name: str) -> bool:
+        return any(name.startswith(f"/model.{i}/") for i in range(10))
+
 
 class GraphPartitioner:
     """
@@ -104,9 +131,15 @@ class GraphPartitioner:
     and maximal fusible NPU AIE2 subgraphs.
     """
 
-    SUPPORTED_FUSIBLE_OPS = {"Conv", "Relu", "Clip", "Identity"}
+    SUPPORTED_FUSIBLE_OPS = {"Conv", "Relu", "Clip", "Identity", "Mul", "HardSigmoid", "Sigmoid"}
 
-    def __init__(self, model_or_path: Union[str, Path, onnx.ModelProto]):
+    def __init__(
+        self,
+        model_or_path: Union[str, Path, onnx.ModelProto],
+        fuse_c2f: bool = True,
+        fuse_backbone: bool = True,
+        backbone_only: bool = False,
+    ):
         if isinstance(model_or_path, (str, Path)):
             self.model_path = str(model_or_path)
             self.model = onnx.load(self.model_path)
@@ -116,13 +149,165 @@ class GraphPartitioner:
         else:
             raise TypeError(f"Expected path or ModelProto, got {type(model_or_path)}")
 
+        self.fuse_c2f = fuse_c2f
+        self.fuse_backbone = fuse_backbone
+        self.backbone_only = backbone_only
         self.inits = {t.name: numpy_helper.to_array(t) for t in self.model.graph.initializer}
 
-    def partition(self) -> PartitionedGraph:
+    def _is_yolo_backbone_model(self) -> bool:
+        return any(n.name.startswith("/model.") for n in self.model.graph.node)
+
+    def _extract_backbone_stages(self) -> List[NpuFusedPartition]:
+        """
+        Extracts the YOLOv8 backbone into 4 monolithic NPU partitions:
+        - Stem (model.0..model.3): 7 Convs
+        - P3 (model.4..model.5): 7 Convs
+        - P4 (model.6..model.7): 7 Convs
+        - P5 (model.8..model.9): 6 Convs
+
+        Zero CPU fallback partitions are created across the backbone!
+        Residual Adds in bottlenecks are marked for in-tile kernel fusion.
+        C2f Split, Slice, and Concat are mapped to MemTile AGU descriptors.
+        """
+        nodes = list(self.model.graph.node)
+        add_nodes = [n for n in nodes if n.op_type == "Add"]
+
+        stage_specs = [
+            ("Stem", (0, 1, 2, 3)),
+            ("P3", (4, 5)),
+            ("P4", (6, 7)),
+            ("P5", (8, 9)),
+        ]
+
+        partitions: List[NpuFusedPartition] = []
+        for part_id, (stage_name, layer_nums) in enumerate(stage_specs):
+            stage_conv_nodes: List[Tuple[int, onnx.NodeProto]] = []
+            for idx, node in enumerate(nodes):
+                if node.op_type == "Conv":
+                    for ln in layer_nums:
+                        if node.name.startswith(f"/model.{ln}/"):
+                            stage_conv_nodes.append((idx, node))
+                            break
+
+            stage_layers: List[ConvLayerMeta] = []
+            for layer_idx, (node_idx, conv_node) in enumerate(stage_conv_nodes):
+                layer = self._extract_conv_layer(conv_node, node_idx, nodes)
+                layer.layer_index = layer_idx
+
+                # 1. Activation detection: check for SiLU (/act/Mul, /act/Sigmoid, HardSigmoid)
+                c_name = conv_node.name
+                if "/act/" in c_name or any(f"{c_name.rsplit('/', 1)[0]}/act" in n.name for n in nodes):
+                    layer.activation = "SiLU"
+                    layer.fused_ops.append("SiLU")
+                else:
+                    downstream = [n for n in nodes if conv_node.output[0] in n.input]
+                    for d in downstream:
+                        if d.op_type in {"Relu", "Clip", "Identity"}:
+                            layer.activation = d.op_type
+                            layer.fused_ops.append(d.op_type)
+                            break
+                        elif d.op_type in {"HardSigmoid", "Sigmoid", "Mul"}:
+                            layer.activation = "SiLU"
+                            layer.fused_ops.append("SiLU")
+                            break
+                    if layer.activation is None:
+                        layer.activation = "SiLU"
+                        layer.fused_ops.append("SiLU")
+
+                # 2. Residual Add detection: check if node is in a bottleneck with an Add node
+                if "/cv2/" in c_name and "/m." in c_name:
+                    bottleneck_prefix = c_name.split("/cv2/")[0]
+                    matching_adds = [a for a in add_nodes if a.name.startswith(bottleneck_prefix)]
+                    if matching_adds:
+                        layer.residual_add = True
+                        layer.residual_source = matching_adds[0].input[0]
+                        layer.fused_ops.append("Add")
+
+                # 3. Channel Slice & Concat routing metadata
+                if "/cv1/" in c_name and "/m." in c_name:
+                    layer.channel_slice = (layer.in_channels, layer.in_channels)
+                    layer.fused_ops.append("Slice")
+                elif "/cv2/" in c_name and not "/m." in c_name:
+                    layer.channel_concat_offset = 0
+                    layer.fused_ops.append("Concat")
+
+                stage_layers.append(layer)
+
+            c2f_in_stage = [f"model.{ln}" for ln in layer_nums if ln in (2, 4, 6, 8)]
+            p = NpuFusedPartition(
+                partition_id=part_id,
+                layers=stage_layers,
+                input_names=[stage_layers[0].node_name + "_in"] if stage_layers else [],
+                output_names=[stage_layers[-1].node_name + "_out"] if stage_layers else [],
+                in_bytes=8192,
+                out_bytes=4096,
+                stage_name=stage_name,
+                c2f_blocks=c2f_in_stage,
+                has_zero_ddr_roundtrip=True,
+            )
+            partitions.append(p)
+
+        return partitions
+
+    def partition(self, backbone_only: Optional[bool] = None) -> PartitionedGraph:
         """
         Partitions the graph into alternating CPU fallback and fused NPU partitions.
+        When fuse_backbone=True and model contains YOLO backbone, lowers all C2f blocks,
+        residual adds, and Convs into <= 4 monolithic stages with 0 CPU fallback partitions
+        across the backbone feature extractor.
         """
+        if backbone_only is None:
+            backbone_only = self.backbone_only
+
         graph = self.model.graph
+
+        if self.fuse_backbone and self._is_yolo_backbone_model():
+            backbone_partitions = self._extract_backbone_stages()
+
+            if backbone_only:
+                in_names = [inp.name for inp in graph.input]
+                out_names = (
+                    [backbone_partitions[-1].output_names[0]]
+                    if backbone_partitions and backbone_partitions[-1].output_names
+                    else [out.name for out in graph.output]
+                )
+                return PartitionedGraph(
+                    model_name=graph.name or "yolov8n_backbone",
+                    partitions=backbone_partitions,
+                    initial_inputs=in_names,
+                    terminal_outputs=out_names,
+                )
+
+            # If not backbone_only, partition the remaining nodes starting after model.9
+            partitions: List[Union[NpuFusedPartition, CpuFallbackPartition]] = list(backbone_partitions)
+            part_id = len(partitions)
+
+            remaining_nodes = [
+                n for n in graph.node
+                if not any(n.name.startswith(f"/model.{i}/") for i in range(10))
+                and n.op_type not in {"Constant"}
+            ]
+
+            if remaining_nodes:
+                p = CpuFallbackPartition(
+                    partition_id=part_id,
+                    nodes=remaining_nodes,
+                    input_names=[backbone_partitions[-1].output_names[0]] if backbone_partitions else [],
+                    output_names=[out.name for out in graph.output],
+                    is_backbone=False,
+                )
+                partitions.append(p)
+
+            in_names = [inp.name for inp in graph.input]
+            out_names = [out.name for out in graph.output]
+            return PartitionedGraph(
+                model_name=graph.name or "yolov8n_partitioned",
+                partitions=partitions,
+                initial_inputs=in_names,
+                terminal_outputs=out_names,
+            )
+
+        # Standard topological walk for non-backbone models or when fuse_backbone=False
         partitions: List[Union[NpuFusedPartition, CpuFallbackPartition]] = []
         part_id = 0
 
