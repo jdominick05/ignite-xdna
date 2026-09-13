@@ -144,6 +144,9 @@ class TestModelPackaging(unittest.TestCase):
             out_ignite = sess_ignite.run_yolo_monolithic(dummy_in)
         finally:
             sess_ignite.close()
+            import gc, time
+            gc.collect()
+            time.sleep(0.02)
 
         # 2. From in-memory compiled session
         sess_mem = InferenceSession(device_index=0, full_yolo=True)
@@ -152,6 +155,9 @@ class TestModelPackaging(unittest.TestCase):
             out_mem = sess_mem.run_yolo_monolithic(dummy_in)
         finally:
             sess_mem.close()
+            import gc, time
+            gc.collect()
+            time.sleep(0.02)
 
         # Bit-exact parity assertions
         self.assertTrue(

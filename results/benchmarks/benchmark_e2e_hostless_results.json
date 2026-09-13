@@ -1,0 +1,93 @@
+{
+  "timestamp": "2026-09-13T15:51:18Z",
+  "target_silicon": "AMD Phoenix XDNA1 NPU Device 0 ([003d:00:01.1])",
+  "benchmark_config": {
+    "iterations": 2000,
+    "warmup": 10,
+    "model": "C:\\Users\\Ignis\\PycharmProjects\\ignite-xdna\\build\\yolov8n.ignite",
+    "image": "C:\\Users\\Ignis\\PycharmProjects\\ignite-xdna\\assets\\bus.jpg"
+  },
+  "numerical_parity": {
+    "mIoU": 0.9627874374389649,
+    "matched_detections": "5/5",
+    "passed": true,
+    "detections": [
+      {
+        "class_name": "person",
+        "class_id": 0,
+        "score": 0.905,
+        "x0": 668.3,
+        "y0": 371.8,
+        "w": 142.1,
+        "h": 507.3
+      },
+      {
+        "class_name": "person",
+        "class_id": 0,
+        "score": 0.881,
+        "x0": 219.8,
+        "y0": 406.7,
+        "w": 126.3,
+        "h": 448.5
+      },
+      {
+        "class_name": "person",
+        "class_id": 0,
+        "score": 0.881,
+        "x0": 49.4,
+        "y0": 399.2,
+        "w": 195.2,
+        "h": 503.3
+      },
+      {
+        "class_name": "bus",
+        "class_id": 5,
+        "score": 0.5,
+        "x0": 29.7,
+        "y0": 228.6,
+        "w": 769.1,
+        "h": 549.0
+      },
+      {
+        "class_name": "person",
+        "class_id": 0,
+        "score": 0.5,
+        "x0": 1.6,
+        "y0": 545.6,
+        "w": 59.3,
+        "h": 322.6
+      }
+    ]
+  },
+  "throughput_fps": 2240.59,
+  "timing_breakdown_ms": {
+    "ingress_preprocess_ms": 0.376371,
+    "physical_silicon_npu_ms": 0.443,
+    "avx2_dfl_bitmask_nms_ms": 0.096,
+    "core_execution_glass_to_glass_ms": 0.539,
+    "pipeline_hardware_floor_ms": 0.915
+  },
+  "streaming_glass_to_glass_ms": {
+    "mean": 1.321,
+    "median": 1.323,
+    "p95": 1.365,
+    "p99": 1.47
+  },
+  "targets": {
+    "throughput_ge_2200_fps": {
+      "target": 2200.0,
+      "actual": 2240.59,
+      "passed": true
+    },
+    "miou_ge_0_96": {
+      "target": 0.96,
+      "actual": 0.9627874374389649,
+      "passed": true
+    },
+    "core_latency_le_0_80_ms": {
+      "target": 0.8,
+      "actual": 0.539,
+      "passed": true
+    }
+  }
+}

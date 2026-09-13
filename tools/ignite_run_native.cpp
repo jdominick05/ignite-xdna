@@ -155,9 +155,8 @@ public:
         frame.height = template_img.height;
         frame.stride = template_img.stride;
         if (frame.bgr_data.size() != template_img.bgr_data.size()) {
-            frame.bgr_data.resize(template_img.bgr_data.size());
+            frame.bgr_data = template_img.bgr_data;
         }
-        std::memcpy(frame.bgr_data.data(), template_img.bgr_data.data(), template_img.bgr_data.size());
         return true;
     }
     int get_width() const override { return template_img.width; }
@@ -488,6 +487,10 @@ int main(int argc, char** argv) {
 
         std::vector<double> latencies;
         latencies.reserve(benchmark_frames);
+        std::vector<double> prep_latencies, npu_latencies, post_latencies;
+        prep_latencies.reserve(benchmark_frames);
+        npu_latencies.reserve(benchmark_frames);
+        post_latencies.reserve(benchmark_frames);
 
         std::vector<std::vector<double>> stream_latencies(num_streams);
         for (int s = 0; s < num_streams; ++s) {
@@ -511,13 +514,16 @@ int main(int argc, char** argv) {
                 );
                 in_flight.push({curr_ticket, curr_fb, stream_id});
 
-                if (in_flight.size() >= 2) {
+                if (in_flight.size() >= 3) {
                     auto [t_wait, fb_done, s_id] = in_flight.front();
                     in_flight.pop();
                     ignite_wait(engine, t_wait, detections, max_dets);
                     ignite_timings_t frame_t;
                     ignite_get_last_timings(engine, &frame_t);
                     latencies.push_back(frame_t.glass_to_glass_ms);
+                    prep_latencies.push_back(frame_t.preprocess_ms);
+                    npu_latencies.push_back(frame_t.npu_exec_ms);
+                    post_latencies.push_back(frame_t.postprocess_ms);
                     stream_latencies[s_id].push_back(frame_t.glass_to_glass_ms);
                     free_ring.push(fb_done);
                 }
@@ -530,6 +536,9 @@ int main(int argc, char** argv) {
                 ignite_timings_t frame_t;
                 ignite_get_last_timings(engine, &frame_t);
                 latencies.push_back(frame_t.glass_to_glass_ms);
+                prep_latencies.push_back(frame_t.preprocess_ms);
+                npu_latencies.push_back(frame_t.npu_exec_ms);
+                post_latencies.push_back(frame_t.postprocess_ms);
                 stream_latencies[s_id].push_back(frame_t.glass_to_glass_ms);
                 free_ring.push(fb_done);
             }
@@ -544,6 +553,9 @@ int main(int argc, char** argv) {
                 ignite_timings_t frame_t;
                 ignite_get_last_timings(engine, &frame_t);
                 latencies.push_back(frame_t.glass_to_glass_ms);
+                prep_latencies.push_back(frame_t.preprocess_ms);
+                npu_latencies.push_back(frame_t.npu_exec_ms);
+                post_latencies.push_back(frame_t.postprocess_ms);
                 stream_latencies[stream_id].push_back(frame_t.glass_to_glass_ms);
 
                 free_ring.push(fb);
@@ -579,6 +591,17 @@ int main(int argc, char** argv) {
         std::cout << "Aggregate FPS:       " << std::fixed << std::setprecision(2) << fps << " FPS\n";
         std::cout << "Total Elapsed Time:  " << std::fixed << std::setprecision(2) << total_bench_d.count() << " ms\n";
 
+        double prep_mean = prep_latencies.empty() ? 0.0 : std::accumulate(prep_latencies.begin(), prep_latencies.end(), 0.0) / prep_latencies.size();
+        double npu_mean = npu_latencies.empty() ? 0.0 : std::accumulate(npu_latencies.begin(), npu_latencies.end(), 0.0) / npu_latencies.size();
+        double post_mean = post_latencies.empty() ? 0.0 : std::accumulate(post_latencies.begin(), post_latencies.end(), 0.0) / post_latencies.size();
+        double pipe_floor = prep_mean + npu_mean + post_mean;
+
+        std::cout << "\nSteady-State Stage Breakdown (Averages):\n";
+        std::cout << "  Ingress SIMD Preprocess: " << std::fixed << std::setprecision(3) << prep_mean << " ms\n";
+        std::cout << "  Physical Silicon NPU:    " << std::fixed << std::setprecision(3) << npu_mean << " ms\n";
+        std::cout << "  AVX2 DFL + Bitmask NMS:  " << std::fixed << std::setprecision(3) << post_mean << " ms\n";
+        std::cout << "  Pipeline Hardware Floor: " << std::fixed << std::setprecision(3) << pipe_floor << " ms\n";
+
         if (num_streams > 1) {
             std::cout << "\nPer-Stream Scaling Breakdown (" << num_streams << " Channels):\n";
             for (int s = 0; s < num_streams; ++s) {
@@ -606,6 +629,12 @@ int main(int argc, char** argv) {
                 jf << "  \"total_frames\": " << benchmark_frames << ",\n";
                 jf << "  \"elapsed_ms\": " << total_bench_d.count() << ",\n";
                 jf << "  \"aggregate_fps\": " << fps << ",\n";
+                jf << "  \"stage_breakdown_ms\": {\n";
+                jf << "    \"preprocess_ms\": " << prep_mean << ",\n";
+                jf << "    \"npu_exec_ms\": " << npu_mean << ",\n";
+                jf << "    \"postprocess_ms\": " << post_mean << ",\n";
+                jf << "    \"hardware_floor_ms\": " << pipe_floor << "\n";
+                jf << "  },\n";
                 jf << "  \"glass_to_glass_ms\": {\n";
                 jf << "    \"mean\": " << mean << ",\n";
                 jf << "    \"median\": " << median << ",\n";
