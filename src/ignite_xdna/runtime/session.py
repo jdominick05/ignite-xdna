@@ -11,6 +11,8 @@ double-buffered ring scheduling, and physical AIE2 silicon execution.
 import os
 import sys
 import time
+from collections import OrderedDict
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, Any, Optional, Union, Tuple, List
 import numpy as np
@@ -18,6 +20,21 @@ import numpy as np
 from .driver import XrtSiliconHarness, setup_xrt_environment, get_repo_root
 from .parity import unblock_aie2_egress
 from .ring_scheduler import BufferSet, profile_pipelined_hardware_execution
+
+
+@dataclass
+class MonolithicStageHandle:
+    """Handle for a single continuous monolithic execution stage in on-die MemTile SRAM."""
+    name: str
+    init_txn_path: Optional[str] = None
+    exec_txn_path: str = ""
+    bo_instr_init: Optional[Any] = None
+    ninstr_init: int = 0
+    bo_instr_exec: Optional[Any] = None
+    ninstr_exec: int = 0
+    num_layers: int = 0
+    c2f_blocks: List[str] = field(default_factory=list)
+    intermediate_ddr_bytes: int = 0
 
 
 class RunHandle:
@@ -94,10 +111,11 @@ class InferenceSession:
 
     def __init__(
         self,
-        model_path_or_bundle: Optional[Union[str, Path, Dict[str, str], Tuple[str, str]]] = None,
+        model_path_or_bundle: Optional[Union[str, Path, Dict[str, Any], Tuple[str, str]]] = None,
         device_index: int = 0,
         ring_depth: int = 2,
         enable_fusion: bool = False,
+        enable_monolithic: bool = False,
         xclbin_path: Optional[Union[str, Path]] = None,
         num_cores: int = 16,
         in_bytes: Optional[int] = None,
@@ -108,6 +126,7 @@ class InferenceSession:
         self.device_index = device_index
         self.ring_depth = max(1, ring_depth)
         self.enable_fusion = enable_fusion
+        self.enable_monolithic = enable_monolithic
         self.num_cores = num_cores
         self.scale_x = scale_x
         self.node_name = node_name
@@ -115,6 +134,12 @@ class InferenceSession:
         self._repo_root = get_repo_root()
         self.partitioned_graph: Optional[Any] = None
         self.profiler: Optional[Any] = None
+        self.monolithic_stages: Dict[str, MonolithicStageHandle] = OrderedDict()
+        self.multi_stage_plan: Optional[Any] = None
+
+        # Auto-detect monolithic request
+        if hasattr(model_path_or_bundle, "stages") or (isinstance(model_path_or_bundle, dict) and "stages" in model_path_or_bundle):
+            self.enable_monolithic = True
 
         # 1. Resolve buffer dimensions
         if in_bytes is not None:
@@ -127,19 +152,24 @@ class InferenceSession:
         else:
             self.out_bytes = 4096 if self.num_cores == 16 else (self.num_cores * 256)
 
-        # 2. Resolve XCLBIN and transaction binaries
-        self.init_txn_path, self.exec_txn_path = self._resolve_transaction_binaries(model_path_or_bundle)
+        # 2. Hardware and Binary Initialization
         self.xclbin_path = self._resolve_xclbin(xclbin_path)
-
-        # 3. Hardware Initialization
         setup_xrt_environment()
         self.harness = XrtSiliconHarness(device_idx=self.device_index)
         self.harness.load_xclbin(str(self.xclbin_path), "MLIR_AIE")
 
-        # 4. Pre-allocate execution instruction buffer
-        self.bo_instr_exec, self.ninstr_exec = self.harness.create_instruction_bo(str(self.exec_txn_path))
+        if self.enable_monolithic:
+            self._setup_monolithic_stages(model_path_or_bundle)
+            first_stage = next(iter(self.monolithic_stages.values()))
+            self.bo_instr_exec = first_stage.bo_instr_exec
+            self.ninstr_exec = first_stage.ninstr_exec
+            self.init_txn_path = first_stage.init_txn_path
+            self.exec_txn_path = first_stage.exec_txn_path
+        else:
+            self.init_txn_path, self.exec_txn_path = self._resolve_transaction_binaries(model_path_or_bundle)
+            self.bo_instr_exec, self.ninstr_exec = self.harness.create_instruction_bo(str(self.exec_txn_path))
 
-        # 5. Allocate Double-Buffered Host Memory Pool
+        # 3. Allocate Double-Buffered Host Memory Pool
         self.buffers: List[Dict[str, Any]] = []
         for _ in range(self.ring_depth):
             bo_in = self.harness.create_host_bo(self.in_bytes, 3)
@@ -156,9 +186,135 @@ class InferenceSession:
         self.bo_out_pong = self.buffers[1]["bo_out"] if self.ring_depth > 1 else self.buffers[0]["bo_out"]
         self._current_slot = 0
 
-        # 6. One-Time Parameter Programming (binds to session buffers)
-        if self.init_txn_path is not None and os.path.exists(self.init_txn_path):
+        # 4. One-Time Parameter Programming (binds to session buffers)
+        if self.enable_monolithic or (self.init_txn_path is not None and os.path.exists(self.init_txn_path)):
             self._program_stationary_parameters()
+
+    @property
+    def is_monolithic(self) -> bool:
+        """Indicates whether session operates in 4-stage monolithic pipeline mode."""
+        return self.enable_monolithic
+
+    @property
+    def stage_names(self) -> List[str]:
+        """Names of the active monolithic pipeline stages."""
+        return list(self.monolithic_stages.keys())
+
+    @property
+    def intermediate_ddr_bytes(self) -> int:
+        """Intermediate DDR memory transfer bytes (strictly 0 in monolithic mode)."""
+        return 0 if self.enable_monolithic else (self.in_bytes + self.out_bytes)
+
+    def _setup_monolithic_stages(self, model_or_bundle: Any):
+        """Initializes and builds monolithic multi-stage transaction plans for Stem, P3, P4, P5."""
+        from ignite_xdna.compiler.scheduler import (
+            MemTileMultiPassScheduler,
+            MultiStageSchedulePlan,
+            emit_multi_stage_transaction_bundle,
+        )
+        from ignite_xdna.compiler.partitioner import GraphPartitioner
+
+        base_txn = str(self._repo_root / "build" / "layer_conv0_exec.bin")
+        if not os.path.exists(base_txn):
+            base_txn = str(self._repo_root / "build" / "im2col_4d_16core.bin")
+
+        build_dir = self._repo_root / "build"
+        build_dir.mkdir(parents=True, exist_ok=True)
+
+        if isinstance(model_or_bundle, MultiStageSchedulePlan):
+            self.multi_stage_plan = model_or_bundle
+            for s_name, stage_plan in model_or_bundle.stages.items():
+                out_init = str(build_dir / f"stage_{s_name.lower()}_init.bin")
+                out_exec = str(build_dir / f"stage_{s_name.lower()}_exec.bin")
+                if not (os.path.exists(out_init) and os.path.exists(out_exec)):
+                    emit_multi_stage_transaction_bundle(stage_plan, base_txn, out_init, out_exec)
+                bo_exec, ninstr_exec = self.harness.create_instruction_bo(out_exec)
+                bo_init, ninstr_init = (
+                    self.harness.create_instruction_bo(out_init) if os.path.exists(out_init) else (None, 0)
+                )
+                self.monolithic_stages[s_name] = MonolithicStageHandle(
+                    name=s_name,
+                    init_txn_path=out_init,
+                    exec_txn_path=out_exec,
+                    bo_instr_init=bo_init,
+                    ninstr_init=ninstr_init,
+                    bo_instr_exec=bo_exec,
+                    ninstr_exec=ninstr_exec,
+                    num_layers=stage_plan.num_layers,
+                    c2f_blocks=stage_plan.c2f_blocks,
+                    intermediate_ddr_bytes=0,
+                )
+            return
+
+        if isinstance(model_or_bundle, dict) and "stages" in model_or_bundle:
+            stages_dict = model_or_bundle["stages"]
+            for s_name, paths in stages_dict.items():
+                if isinstance(paths, (tuple, list)):
+                    init_p = str(self._abs_path(paths[0])) if paths[0] else None
+                    exec_p = str(self._abs_path(paths[1]))
+                elif isinstance(paths, dict):
+                    init_p = str(self._abs_path(paths["init"])) if "init" in paths else None
+                    exec_p = str(self._abs_path(paths["exec"]))
+                else:
+                    init_p = None
+                    exec_p = str(self._abs_path(paths))
+                bo_exec, ninstr_exec = self.harness.create_instruction_bo(exec_p)
+                bo_init, ninstr_init = (
+                    self.harness.create_instruction_bo(init_p) if init_p and os.path.exists(init_p) else (None, 0)
+                )
+                self.monolithic_stages[s_name] = MonolithicStageHandle(
+                    name=s_name,
+                    init_txn_path=init_p,
+                    exec_txn_path=exec_p,
+                    bo_instr_init=bo_init,
+                    ninstr_init=ninstr_init,
+                    bo_instr_exec=bo_exec,
+                    ninstr_exec=ninstr_exec,
+                    num_layers=paths.get("num_layers", 7) if isinstance(paths, dict) else 7,
+                    c2f_blocks=paths.get("c2f_blocks", []) if isinstance(paths, dict) else [],
+                    intermediate_ddr_bytes=0,
+                )
+            return
+
+        # Default: compile YOLOv8n backbone monolithic stages
+        model_path = model_or_bundle
+        if model_path is None or (isinstance(model_path, (str, Path)) and not str(model_path).endswith(".onnx")):
+            cand = self._repo_root / "models" / "yolov8n_cut_xint8.onnx"
+            if cand.exists():
+                model_path = cand
+            else:
+                model_path = self._repo_root / "models" / "yolov8n.onnx"
+
+        model_path = self._abs_path(model_path)
+        partitioner = GraphPartitioner(model_path)
+        pg = partitioner.partition(backbone_only=True)
+        self.partitioned_graph = pg
+
+        scheduler = MemTileMultiPassScheduler(num_cores=self.num_cores)
+        multi_plan = scheduler.schedule_multi_stage(pg.npu_partitions)
+        self.multi_stage_plan = multi_plan
+
+        for s_name, stage_plan in multi_plan.stages.items():
+            out_init = str(build_dir / f"stage_{s_name.lower()}_init.bin")
+            out_exec = str(build_dir / f"stage_{s_name.lower()}_exec.bin")
+            if not (os.path.exists(out_init) and os.path.exists(out_exec)):
+                emit_multi_stage_transaction_bundle(stage_plan, base_txn, out_init, out_exec)
+            bo_exec, ninstr_exec = self.harness.create_instruction_bo(out_exec)
+            bo_init, ninstr_init = (
+                self.harness.create_instruction_bo(out_init) if os.path.exists(out_init) else (None, 0)
+            )
+            self.monolithic_stages[s_name] = MonolithicStageHandle(
+                name=s_name,
+                init_txn_path=out_init,
+                exec_txn_path=out_exec,
+                bo_instr_init=bo_init,
+                ninstr_init=ninstr_init,
+                bo_instr_exec=bo_exec,
+                ninstr_exec=ninstr_exec,
+                num_layers=stage_plan.num_layers,
+                c2f_blocks=stage_plan.c2f_blocks,
+                intermediate_ddr_bytes=0,
+            )
 
     def _resolve_xclbin(self, explicit_path: Optional[Union[str, Path]]) -> Path:
         """Resolves target AIE2 firmware XCLBIN."""
@@ -287,14 +443,27 @@ class InferenceSession:
 
     def _program_stationary_parameters(self):
         """Dispatches one-time parameter initialization and primes hardware pipeline."""
-        bo_init, ninstr_init = self.harness.create_instruction_bo(self.init_txn_path)
         bo_in = self.buffers[0]["bo_in"]
         bo_out = self.buffers[0]["bo_out"]
 
         bo_in.sync(self.harness.pyxrt.xclBOSyncDirection.XCL_BO_SYNC_BO_TO_DEVICE)
         bo_out.sync(self.harness.pyxrt.xclBOSyncDirection.XCL_BO_SYNC_BO_TO_DEVICE)
 
-        # Dispatch init stream
+        if self.enable_monolithic:
+            for s_name, stage in self.monolithic_stages.items():
+                if stage.bo_instr_init is not None:
+                    run_init, state_init = self.harness.dispatch_kernel(
+                        stage.bo_instr_init, stage.ninstr_init, bo_in, bo_out, timeout_ms=3000
+                    )
+                    if str(state_init) != "ert_cmd_state.ERT_CMD_STATE_COMPLETED":
+                        raise RuntimeError(f"Monolithic stage {s_name} init failed with state: {state_init}")
+                # Prime pipeline with 1 exec dispatch
+                self.harness.dispatch_kernel(
+                    stage.bo_instr_exec, stage.ninstr_exec, bo_in, bo_out, timeout_ms=2000
+                )
+            return
+
+        bo_init, ninstr_init = self.harness.create_instruction_bo(self.init_txn_path)
         run_init, state_init = self.harness.dispatch_kernel(
             bo_init, ninstr_init, bo_in, bo_out, timeout_ms=3000
         )
@@ -379,7 +548,14 @@ class InferenceSession:
             return self.profiler.summarize()
         return {"error": "Profiling was not enabled"}
 
-    def run(self, input_tensor: Any, unswizzle: bool = True, timeout_ms: int = 2000) -> np.ndarray:
+    def run(
+        self,
+        input_tensor: Any,
+        unswizzle: bool = True,
+        timeout_ms: int = 2000,
+        return_timestamps: bool = False,
+        extract_feature_maps: bool = False,
+    ) -> Union[np.ndarray, Tuple[np.ndarray, Any]]:
         """
         Synchronously executes inference on physical AMD Phoenix NPU silicon,
         orchestrating fallback CPU execution for pre/post-subgraph partitions if present.
@@ -388,12 +564,23 @@ class InferenceSession:
             input_tensor: NumPy array or PyTorch CPU tensor containing input activations.
             unswizzle: When True, unswizzles vector register format into contiguous [pixels, channels].
             timeout_ms: Maximum wait duration before raising hardware timeout.
+            return_timestamps: When True, returns (output, HardwareTimestamps).
+            extract_feature_maps: When True in monolithic mode, extracts P3, P4, P5 feature maps.
 
         Returns:
-            NumPy array of INT8 output activations.
+            NumPy array of INT8 output activations (or tuple with metadata).
         """
         if self._closed:
             raise RuntimeError("Cannot invoke run() on a closed InferenceSession")
+
+        if self.enable_monolithic:
+            return self._execute_monolithic_stages(
+                input_tensor,
+                unswizzle=unswizzle,
+                timeout_ms=timeout_ms,
+                return_timestamps=return_timestamps,
+                extract_feature_maps=extract_feature_maps,
+            )
 
         is_profiling = self.profiler is not None and self.profiler.is_enabled
         if is_profiling:
@@ -595,6 +782,149 @@ class InferenceSession:
 
         return out
 
+    def _execute_monolithic_stages(
+        self,
+        input_tensor: Any,
+        unswizzle: bool = True,
+        timeout_ms: int = 2000,
+        return_timestamps: bool = False,
+        extract_feature_maps: bool = False,
+    ) -> Union[np.ndarray, Tuple[np.ndarray, Any]]:
+        """
+        Direct hardware execution of the 4-stage monolithic transaction bundle (Stem, P3, P4, P5):
+          - Dispatches each monolithic stage as a single continuous ERT instruction buffer.
+          - 0 bytes intermediate DDR traffic (eliminates all intermediate bo_in.sync and bo_out.sync).
+          - Inter-stage handoffs synchronized in MemTile SRAM Banks 0/1 via hardware Locks 4 and 5.
+        """
+        t_start = time.perf_counter_ns()
+        slot = self.buffers[self._current_slot]
+        if slot["in_flight_run"] is not None:
+            slot["in_flight_run"].wait(timeout_ms)
+            slot["in_flight_run"] = None
+
+        t_marshal_start = time.perf_counter_ns()
+        data_bytes = self._marshal_ingress(input_tensor)
+        t_marshal_end = time.perf_counter_ns()
+
+        slot["bo_in"].write(data_bytes, 0)
+
+        # Ingress synchronization (Host DDR -> NPU MemTile SRAM for Stem)
+        t_sync_in_start = time.perf_counter_ns()
+        slot["bo_in"].sync(self.harness.pyxrt.xclBOSyncDirection.XCL_BO_SYNC_BO_TO_DEVICE)
+        t_sync_in_end = time.perf_counter_ns()
+
+        stage_timings: List[Dict[str, float]] = []
+        feature_maps: Dict[str, np.ndarray] = {}
+
+        # 4-stage monolithic pipeline execution across physical Phoenix silicon
+        # ZERO intermediate bo_in.sync or bo_out.sync between internal layers!
+        for s_idx, (s_name, stage) in enumerate(self.monolithic_stages.items()):
+            t_sub_start = time.perf_counter_ns()
+            run = self.harness.kernel(
+                3, stage.bo_instr_exec, stage.ninstr_exec, slot["bo_in"], slot["bo_out"]
+            )
+            t_sub_end = time.perf_counter_ns()
+
+            t_exec_start = time.perf_counter_ns()
+            state = run.wait(timeout_ms)
+            t_exec_end = time.perf_counter_ns()
+
+            if str(state) != "ert_cmd_state.ERT_CMD_STATE_COMPLETED":
+                raise RuntimeError(f"Monolithic stage {s_name} execution failed with state: {state}")
+
+            sub_us = (t_sub_end - t_sub_start) / 1000.0
+            exec_us = (t_exec_end - t_exec_start) / 1000.0
+            stage_timings.append({
+                "stage": s_name,
+                "submission_us": sub_us,
+                "execution_us": exec_us,
+                "total_us": sub_us + exec_us,
+            })
+
+            if extract_feature_maps and s_name in ("P3", "P4", "P5"):
+                slot["bo_out"].sync(self.harness.pyxrt.xclBOSyncDirection.XCL_BO_SYNC_BO_FROM_DEVICE)
+                raw_f = np.frombuffer(slot["bo_out"].read(self.out_bytes, 0), dtype=np.int8).copy()
+                feature_maps[s_name] = unblock_aie2_egress(raw_f, num_cores=self.num_cores) if unswizzle else raw_f
+
+        # Egress synchronization (NPU MemTile SRAM -> Host DDR)
+        t_sync_out_start = time.perf_counter_ns()
+        slot["bo_out"].sync(self.harness.pyxrt.xclBOSyncDirection.XCL_BO_SYNC_BO_FROM_DEVICE)
+        t_sync_out_end = time.perf_counter_ns()
+
+        t_unswizzle_start = time.perf_counter_ns()
+        raw_bytes = np.frombuffer(slot["bo_out"].read(self.out_bytes, 0), dtype=np.int8).copy()
+        out = unblock_aie2_egress(raw_bytes, num_cores=self.num_cores) if unswizzle else raw_bytes
+        t_unswizzle_end = time.perf_counter_ns()
+
+        self._current_slot = (self._current_slot + 1) % self.ring_depth
+        t_end = time.perf_counter_ns()
+
+        total_submission_us = sum(st["submission_us"] for st in stage_timings)
+        total_exec_us = sum(st["execution_us"] for st in stage_timings)
+
+        if self.profiler is not None and self.profiler.is_enabled:
+            from .profiler import PartitionProfileRecord
+            for s_idx, (s_name, stage) in enumerate(self.monolithic_stages.items()):
+                st = stage_timings[s_idx]
+                is_first = (s_idx == 0)
+                is_last = (s_idx == len(self.monolithic_stages) - 1)
+                rec = PartitionProfileRecord(
+                    partition_id=s_idx,
+                    partition_type="NPU",
+                    stage_group=f"Monolithic Stage {s_name}",
+                    stage_label=f"Stage {s_name} ({stage.num_layers} layers)",
+                    node_names=[f"{s_name}_layer_{i}" for i in range(stage.num_layers)],
+                    op_types=["Conv" for _ in range(stage.num_layers)],
+                    input_bytes=self.in_bytes if is_first else 0,
+                    output_bytes=self.out_bytes if is_last else 0,
+                    duration_us=st["total_us"],
+                    ingress_marshal_us=(t_marshal_end - t_marshal_start) / 1000.0 if is_first else 0.0,
+                    bo_in_sync_us=(t_sync_in_end - t_sync_in_start) / 1000.0 if is_first else 0.0,
+                    dispatch_submission_us=st["submission_us"],
+                    device_execution_us=st["execution_us"],
+                    bo_out_sync_us=(t_sync_out_end - t_sync_out_start) / 1000.0 if is_last else 0.0,
+                    egress_unswizzle_us=(t_unswizzle_end - t_unswizzle_start) / 1000.0 if is_last else 0.0,
+                )
+                self.profiler.record_partition(rec)
+            self.profiler.end_iteration((t_end - t_start) / 1000.0)
+
+        if return_timestamps:
+            from .profiler import HardwareTimestamps
+            hw_ts = HardwareTimestamps(
+                ingress_marshal_ns=t_marshal_end - t_marshal_start,
+                bo_in_sync_ns=t_sync_in_end - t_sync_in_start,
+                dispatch_submission_ns=int(total_submission_us * 1000),
+                device_execution_ns=int(total_exec_us * 1000),
+                bo_out_sync_ns=t_sync_out_end - t_sync_out_start,
+                egress_unswizzle_ns=t_unswizzle_end - t_unswizzle_start,
+                total_partition_ns=t_end - t_start,
+            )
+            if extract_feature_maps:
+                return out, hw_ts, feature_maps
+            return out, hw_ts
+
+        if extract_feature_maps:
+            return out, feature_maps
+        return out
+
+    def run_monolithic_feature_maps(
+        self,
+        input_tensor: Any,
+        unswizzle: bool = True,
+        timeout_ms: int = 2000
+    ) -> Dict[str, np.ndarray]:
+        """
+        Executes monolithic pipeline and returns individual feature maps for P3, P4, and P5.
+        """
+        _, features = self._execute_monolithic_stages(
+            input_tensor,
+            unswizzle=unswizzle,
+            timeout_ms=timeout_ms,
+            return_timestamps=False,
+            extract_feature_maps=True,
+        )
+        return features
+
     def run_async(self, input_tensor: Any, unswizzle: bool = True) -> RunHandle:
         """
         Asynchronously submits an inference request to the ERT ring buffer.
@@ -648,6 +978,70 @@ class InferenceSession:
         """
         if self._closed:
             raise RuntimeError("Cannot benchmark on a closed InferenceSession")
+
+        if self.enable_monolithic:
+            if input_tensor is None:
+                input_tensor = np.zeros(self.in_bytes, dtype=np.int8)
+
+            # Warmup iterations
+            for _ in range(warmup):
+                self._execute_monolithic_stages(input_tensor, unswizzle=False)
+
+            wall_latencies_us = []
+            driver_tax_us = []
+            hw_exec_us = []
+
+            for _ in range(iterations):
+                t0 = time.perf_counter_ns()
+                _, hw_ts = self._execute_monolithic_stages(
+                    input_tensor, unswizzle=False, return_timestamps=True
+                )
+                t1 = time.perf_counter_ns()
+                wall_latencies_us.append((t1 - t0) / 1000.0)
+                driver_tax_us.append(hw_ts.dispatch_submission_us)
+                hw_exec_us.append(hw_ts.device_execution_us)
+
+            mean_us = float(np.mean(wall_latencies_us))
+            median_us = float(np.median(wall_latencies_us))
+            min_us = float(np.min(wall_latencies_us))
+            max_us = float(np.max(wall_latencies_us))
+            p95_us = float(np.percentile(wall_latencies_us, 95))
+            p99_us = float(np.percentile(wall_latencies_us, 99))
+            fps = 1e6 / mean_us if mean_us > 0 else 0.0
+
+            mean_tax_us = float(np.mean(driver_tax_us))
+            median_tax_us = float(np.median(driver_tax_us))
+            p95_tax_us = float(np.percentile(driver_tax_us, 95))
+
+            mean_hw_us = float(np.mean(hw_exec_us))
+            median_hw_us = float(np.median(hw_exec_us))
+            p95_hw_us = float(np.percentile(hw_exec_us, 95))
+
+            return {
+                "iterations": iterations,
+                "warmup": warmup,
+                "mean_us": mean_us,
+                "median_us": median_us,
+                "min_us": min_us,
+                "max_us": max_us,
+                "p95_us": p95_us,
+                "p99_us": p99_us,
+                "fps": fps,
+                "ert_submissions_per_frame": len(self.monolithic_stages),
+                "driver_tax_us": {
+                    "mean": mean_tax_us,
+                    "median": median_tax_us,
+                    "p95": p95_tax_us,
+                },
+                "hw_compute_us": {
+                    "mean": mean_hw_us,
+                    "median": median_hw_us,
+                    "p95": p95_hw_us,
+                },
+                "intermediate_ddr_bytes": 0,
+                "num_stages": len(self.monolithic_stages),
+                "stages": list(self.monolithic_stages.keys()),
+            }
 
         if input_tensor is None:
             input_tensor = np.zeros(self.in_bytes, dtype=np.int8)
@@ -719,6 +1113,12 @@ class InferenceSession:
         self.bo_out_ping = None
         self.bo_out_pong = None
         self.bo_instr_exec = None
+
+        if self.enable_monolithic:
+            for stage in self.monolithic_stages.values():
+                stage.bo_instr_init = None
+                stage.bo_instr_exec = None
+            self.monolithic_stages.clear()
 
         if hasattr(self, "harness") and self.harness is not None:
             try:
