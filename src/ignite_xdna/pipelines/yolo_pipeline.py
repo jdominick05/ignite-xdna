@@ -13,6 +13,7 @@ Supports both synchronous execution (predict_sync) and 3-stage overlapped asynch
 streaming pipelining (run_pipelined_stream) across bounded queues (maxsize=2).
 """
 
+import logging
 import os
 import queue
 import sys
@@ -30,6 +31,8 @@ import onnxruntime as ort
 from ignite_xdna.runtime.session import InferenceSession
 from ignite_xdna.runtime.driver import setup_xrt_environment, get_repo_root
 from .preprocess import FusedPreprocessor
+
+_log = logging.getLogger(__name__)
 
 COCO_CLASSES = [
     "person", "bicycle", "car", "motorcycle", "airplane", "bus", "train", "truck", "boat",
@@ -64,11 +67,18 @@ class YoloDetection:
 
 @dataclass
 class PipelineTimings:
-    """Detailed stage latencies for a single frame (in milliseconds)."""
+    """Detailed stage latencies for a single frame (in milliseconds).
+
+    ``head_source`` says where the decoded boxes came from: ``"npu"`` (heads
+    unpacked from the device egress), ``"oracle"`` (the ONNX Runtime CPU pass
+    over the cut model) or ``"none"`` (no head tensors were available, so the
+    frame has no detections by construction).
+    """
     preprocess_ms: float
     npu_forward_ms: float
     postprocess_ms: float
     glass_to_glass_ms: float
+    head_source: str = "none"
 
 
 class SequencedQueue:
@@ -110,77 +120,19 @@ class SequencedQueue:
             self._cond.notify_all()
 
 
-class YoloPipeline:
+class YoloDecoder:
     """
-    High-Performance Streaming Pipeline for YOLOv8n Object Detection on AMD Phoenix Silicon.
+    Device-free half of the pipeline: anchor grids plus the DFL decode + NMS
+    postprocess. Instantiable without an NPU so the decode can be verified
+    offline; ``YoloPipeline`` inherits it.
     """
 
-    def __init__(
-        self,
-        model_path_or_bundle: Optional[Union[str, Path]] = None,
-        device_index: int = 0,
-        conf_thres: float = 0.25,
-        iou_thres: float = 0.50,
-        imgsz: int = 640,
-        enable_pipelining: bool = True,
-    ):
-        self.device_index = device_index
+    def __init__(self, imgsz: int = 640, conf_thres: float = 0.25, iou_thres: float = 0.50):
+        self.imgsz = imgsz
         self.conf_thres = conf_thres
         self.iou_thres = iou_thres
-        self.imgsz = imgsz
-        self.enable_pipelining = enable_pipelining
-
-        setup_xrt_environment()
-        repo_root = get_repo_root()
-
-        if model_path_or_bundle is None:
-            ignite_cand = repo_root / "build" / "yolov8n.ignite"
-            if ignite_cand.exists():
-                cand = ignite_cand
-            else:
-                cand = repo_root / "models" / "yolov8n_cut_xint8.onnx"
-                if not cand.exists():
-                    cand = repo_root / "models" / "yolov8n.onnx"
-            self.model_path = cand
-        else:
-            self.model_path = Path(model_path_or_bundle)
-
-        # 1. Initialize physical silicon monolithic session (single-dispatch fast-path)
-        if str(self.model_path).endswith(".ignite"):
-            self.session = InferenceSession.from_file(
-                self.model_path,
-                device_index=self.device_index,
-                single_dispatch=True,
-            )
-        else:
-            self.session = InferenceSession(
-                model_path_or_bundle=self.model_path,
-                device_index=self.device_index,
-                enable_monolithic=True,
-                full_yolo=True,
-                single_dispatch=True,
-            )
-
-        # 2. Pre-cache anchor grids and strides for fast vectorized DFL decode
+        # Pre-cache anchor grids and strides for fast vectorized DFL decode
         self._anchors, self._strides = self._build_anchors_and_strides(self.imgsz, STRIDES)
-
-        # 3. Pre-load reference cut model for exact head outputs if required for visual verification
-        cut_cand = repo_root / "models" / "yolov8n_cut_xint8.onnx"
-        self._ort_cut_sess = None
-        if cut_cand.exists():
-            try:
-                cm = onnx.load(str(cut_cand))
-                self._ort_cut_sess = ort.InferenceSession(cm.SerializeToString(), providers=["CPUExecutionProvider"])
-                self._ort_cut_input_name = self._ort_cut_sess.get_inputs()[0].name
-            except Exception:
-                self._ort_cut_sess = None
-
-        # Pre-allocate scratch canvas and input buffer to enable zero-copy preprocessing
-        self._canvas = np.full((self.imgsz, self.imgsz, 3), 114, dtype=np.uint8)
-        self._input_chw = np.empty((1, 3, self.imgsz, self.imgsz), dtype=np.int8)
-
-        # Fused C/SIMD zero-copy preprocessor (< 0.80 ms)
-        self.preprocessor = FusedPreprocessor(imgsz=self.imgsz)
 
     @staticmethod
     def _build_anchors_and_strides(imgsz: int, strides: Tuple[int, int, int]) -> Tuple[np.ndarray, np.ndarray]:
@@ -194,39 +146,6 @@ class YoloPipeline:
             sts.append(np.full(g * g, float(s), np.float32))
         return np.concatenate(pts, 1)[None], np.concatenate(sts)[None]
 
-    def preprocess(
-        self,
-        img_bgr: np.ndarray,
-        out_buf: Optional[np.ndarray] = None,
-        canvas: Optional[np.ndarray] = None,
-    ) -> Tuple[np.ndarray, Tuple[int, int], float]:
-        """
-        Stage 1: Fused Zero-Copy Ingress Preprocessing (~0.28 - 0.35 ms).
-        Combines letterbox padding, bit-exact Q11 bilinear interpolation, BGR->RGB planar
-        transposition, and uint8->int8 scale conversion in a single pass directly into DMA memory.
-        Returns:
-            quant_tensor: int8 [1, 3, imgsz, imgsz] ready for direct DMA ingress
-            pad: (top, left) padding pixels
-            scale: aspect scaling factor
-        """
-        target = self._input_chw if out_buf is None else out_buf
-        return self.preprocessor.preprocess(img_bgr, out_buf=target)
-
-    def forward_npu(
-        self,
-        quant_tensor: np.ndarray,
-        return_timestamps: bool = False,
-    ) -> Union[Dict[str, np.ndarray], Tuple[Dict[str, np.ndarray], Any]]:
-        """
-        Stage 2: Monolithic 3-Stage Silicon Forward Pass on Phoenix Device 0 (~1.732 ms).
-        Chains Backbone (0.709 ms) -> Neck (0.407 ms) -> Detect Heads (0.616 ms).
-        Zero intermediate host DDR traffic throughout the entire network.
-        """
-        return self.session.run_yolo_monolithic(
-            quant_tensor,
-            return_timestamps=return_timestamps,
-        )
-
     def postprocess(
         self,
         heads: Union[Dict[str, np.ndarray], List[np.ndarray]],
@@ -239,26 +158,31 @@ class YoloPipeline:
         Stage 3: Vectorized CPU Postprocessing with DFL Softmax Decode + Batched NMS (~1.9 ms).
         Decodes box coordinates, projects against anchor grids, prunes via inverse-sigmoid threshold,
         and applies non-maximum suppression.
+
+        ``heads`` is either the six float tensors (dict keyed ``p3_box … p5_cls``
+        or a list ordered box P3/P4/P5 then cls P3/P4/P5) or, from
+        ``InferenceSession.run_yolo_monolithic``, int8 egress views with a
+        ``scales`` entry ``{name: (scale, zero_point)}``. int8 heads are pruned
+        in the int8 domain (the confidence threshold is mapped to a quantized
+        logit) and only the surviving candidates are dequantized. A head that is
+        ``None`` means no head tensor exists for this frame: the result is empty.
         """
         conf_t = conf_thres if conf_thres is not None else self.conf_thres
         iou_t = iou_thres if iou_thres is not None else self.iou_thres
 
         # Unpack head tensors
+        scales = None
+        cls_max = None  # optional {p*_cls: int8 per-anchor class maxima} from a graph-engine session
         if isinstance(heads, dict):
-            p3_box = heads.get("p3_box")
-            p4_box = heads.get("p4_box")
-            p5_box = heads.get("p5_box")
-            p3_cls = heads.get("p3_cls")
-            p4_cls = heads.get("p4_cls")
-            p5_cls = heads.get("p5_cls")
-            box_f = [p3_box, p4_box, p5_box]
-            cls_f = [p3_cls, p4_cls, p5_cls]
+            box_f = [heads.get("p3_box"), heads.get("p4_box"), heads.get("p5_box")]
+            cls_f = [heads.get("p3_cls"), heads.get("p4_cls"), heads.get("p5_cls")]
+            scales = heads.get("scales")
+            cls_max = heads.get("cls_max")
         else:
-            box_f = heads[:3]
-            cls_f = heads[3:]
+            box_f = list(heads[:3])
+            cls_f = list(heads[3:])
 
-        # If head boxes are unpopulated, return empty detections
-        if box_f[0] is None or np.all(box_f[0] == 0):
+        if any(b is None for b in box_f) or any(c is None for c in cls_f):
             return []
 
         # 1. Fast Inverse-Sigmoid Confidence Pruning per head (avoids 2.15 MB box concatenation)
@@ -266,11 +190,31 @@ class YoloPipeline:
         logit_t = np.log(c_clamped / (1.0 - c_clamped))
 
         offsets = [0, 6400, 8000]
+        head_names = (("p3_box", "p3_cls"), ("p4_box", "p4_cls"), ("p5_box", "p5_cls"))
         surviving_boxes = []
         surviving_cls = []
         surviving_indices = []
 
         for h_idx, (b, c) in enumerate(zip(box_f, cls_f)):
+            if c.dtype == np.int8:
+                if scales is None:
+                    raise ValueError("int8 head tensors need a 'scales' entry {name: (scale, zero_point)}")
+                s_b, zp_b = scales[head_names[h_idx][0]]
+                s_c, zp_c = scales[head_names[h_idx][1]]
+                # logit > logit_t  <=>  (q - zp) * s > logit_t  <=>  q > logit_t / s + zp
+                q_t = logit_t / float(s_c) + int(zp_c)
+                c_flat = c.reshape(NUM_CLASSES, -1)
+                c_max = cls_max.get(head_names[h_idx][1]) if cls_max else None
+                keep_local = np.flatnonzero((c_max if c_max is not None else c_flat.max(0)) > q_t)
+                if keep_local.size > 0:
+                    b_flat = b.reshape(4 * REG_MAX, -1)
+                    surviving_boxes.append(
+                        (b_flat[:, keep_local].astype(np.float32) - np.float32(zp_b)) * np.float32(s_b))
+                    surviving_cls.append(
+                        (c_flat[:, keep_local].astype(np.float32) - np.float32(zp_c)) * np.float32(s_c))
+                    surviving_indices.append(keep_local + offsets[h_idx])
+                continue
+
             c_flat = c.reshape(NUM_CLASSES, -1)
             keep_local = np.flatnonzero(c_flat.max(0) > logit_t)
             if keep_local.size > 0:
@@ -352,6 +296,112 @@ class YoloPipeline:
 
         return sorted(detections, key=lambda d: -d.score)
 
+
+class YoloPipeline(YoloDecoder):
+    """
+    High-Performance Streaming Pipeline for YOLOv8n Object Detection on AMD Phoenix Silicon.
+    """
+
+    def __init__(
+        self,
+        model_path_or_bundle: Optional[Union[str, Path]] = None,
+        device_index: int = 0,
+        conf_thres: float = 0.25,
+        iou_thres: float = 0.50,
+        imgsz: int = 640,
+        enable_pipelining: bool = True,
+    ):
+        super().__init__(imgsz=imgsz, conf_thres=conf_thres, iou_thres=iou_thres)
+        self.device_index = device_index
+        self.enable_pipelining = enable_pipelining
+        # Set by predict_sync: the session's HeadStatus reason for the last frame
+        self.last_head_status: Optional[str] = None
+        self._warned_heads_absent = False
+
+        setup_xrt_environment()
+        repo_root = get_repo_root()
+
+        if model_path_or_bundle is None:
+            ignite_cand = repo_root / "build" / "yolov8n.ignite"
+            if ignite_cand.exists():
+                cand = ignite_cand
+            else:
+                cand = repo_root / "models" / "yolov8n_cut_xint8.onnx"
+                if not cand.exists():
+                    cand = repo_root / "models" / "yolov8n.onnx"
+            self.model_path = cand
+        else:
+            self.model_path = Path(model_path_or_bundle)
+
+        # 1. Initialize physical silicon monolithic session (single-dispatch fast-path)
+        if str(self.model_path).endswith(".ignite"):
+            self.session = InferenceSession.from_file(
+                self.model_path,
+                device_index=self.device_index,
+                single_dispatch=True,
+            )
+        else:
+            self.session = InferenceSession(
+                model_path_or_bundle=self.model_path,
+                device_index=self.device_index,
+                enable_monolithic=True,
+                full_yolo=True,
+                single_dispatch=True,
+            )
+
+        # 2. Anchor grids and strides come from YoloDecoder.__init__
+
+        # 3. Pre-load reference cut model for exact head outputs if required for visual verification
+        cut_cand = repo_root / "models" / "yolov8n_cut_xint8.onnx"
+        self._ort_cut_sess = None
+        if cut_cand.exists():
+            try:
+                cm = onnx.load(str(cut_cand))
+                self._ort_cut_sess = ort.InferenceSession(cm.SerializeToString(), providers=["CPUExecutionProvider"])
+                self._ort_cut_input_name = self._ort_cut_sess.get_inputs()[0].name
+            except Exception:
+                self._ort_cut_sess = None
+
+        # Pre-allocate scratch canvas and input buffer to enable zero-copy preprocessing
+        self._canvas = np.full((self.imgsz, self.imgsz, 3), 114, dtype=np.uint8)
+        self._input_chw = np.empty((1, 3, self.imgsz, self.imgsz), dtype=np.int8)
+
+        # Fused C/SIMD zero-copy preprocessor (< 0.80 ms)
+        self.preprocessor = FusedPreprocessor(imgsz=self.imgsz)
+
+    def preprocess(
+        self,
+        img_bgr: np.ndarray,
+        out_buf: Optional[np.ndarray] = None,
+        canvas: Optional[np.ndarray] = None,
+    ) -> Tuple[np.ndarray, Tuple[int, int], float]:
+        """
+        Stage 1: Fused Zero-Copy Ingress Preprocessing (~0.28 - 0.35 ms).
+        Combines letterbox padding, bit-exact Q11 bilinear interpolation, BGR->RGB planar
+        transposition, and uint8->int8 scale conversion in a single pass directly into DMA memory.
+        Returns:
+            quant_tensor: int8 [1, 3, imgsz, imgsz] ready for direct DMA ingress
+            pad: (top, left) padding pixels
+            scale: aspect scaling factor
+        """
+        target = self._input_chw if out_buf is None else out_buf
+        return self.preprocessor.preprocess(img_bgr, out_buf=target)
+
+    def forward_npu(
+        self,
+        quant_tensor: np.ndarray,
+        return_timestamps: bool = False,
+    ) -> Union[Dict[str, np.ndarray], Tuple[Dict[str, np.ndarray], Any]]:
+        """
+        Stage 2: Monolithic 3-Stage Silicon Forward Pass on Phoenix Device 0 (~1.732 ms).
+        Chains Backbone (0.709 ms) -> Neck (0.407 ms) -> Detect Heads (0.616 ms).
+        Zero intermediate host DDR traffic throughout the entire network.
+        """
+        return self.session.run_yolo_monolithic(
+            quant_tensor,
+            return_timestamps=return_timestamps,
+        )
+
     def predict_sync(
         self,
         img_bgr: np.ndarray,
@@ -360,22 +410,41 @@ class YoloPipeline:
         """
         Synchronous single-frame inference returning detections and glass-to-glass timing breakdown.
         """
+        # Oracle-free frames on a graph-engine session skip the int8 host tensor: the
+        # native preprocessor quantizes straight into the NPU workspace input plane.
+        direct = not use_oracle_for_boxes and bool(getattr(self.session, "direct_ingress", False))
         t0 = time.perf_counter()
-        quant_tensor, pad, scale = self.preprocess(img_bgr)
+        if direct:
+            pad, scale = self.session.stage_image(img_bgr)
+            quant_tensor = None
+        else:
+            quant_tensor, pad, scale = self.preprocess(img_bgr)
         t1 = time.perf_counter()
 
         heads, hw_ts = self.forward_npu(quant_tensor, return_timestamps=True)
         t2 = time.perf_counter()
 
-        # If visual box outputs are requested and reference engine is loaded
+        heads_present = bool(heads.get("heads_present", False))
+        self.last_head_status = heads.get("head_status")
+
         if use_oracle_for_boxes and self._ort_cut_sess is not None:
+            # Reference boxes from the ONNX Runtime CPU pass over the cut model (~43 ms)
             x_float = (quant_tensor.astype(np.float32) + 128.0) / 255.0
             cut_outs = self._ort_cut_sess.run(None, {self._ort_cut_input_name: x_float})
-            head_feed = cut_outs
+            dets = self.postprocess(cut_outs, pad, scale)
+            head_source = "oracle"
+        elif heads_present:
+            dets = self.postprocess(heads, pad, scale)
+            head_source = "npu"
         else:
-            head_feed = heads
-
-        dets = self.postprocess(head_feed, pad, scale)
+            # No head tensors exist for this frame: report it once instead of decoding zeros
+            dets = []
+            head_source = "none"
+            if not self._warned_heads_absent:
+                self._warned_heads_absent = True
+                _log.warning(
+                    "NPU egress carries no detect heads, so predict_sync(use_oracle_for_boxes=False) "
+                    "returns no detections: %s", self.last_head_status)
         t3 = time.perf_counter()
 
         timings = PipelineTimings(
@@ -383,6 +452,7 @@ class YoloPipeline:
             npu_forward_ms=(t2 - t1) * 1000.0,
             postprocess_ms=(t3 - t2) * 1000.0,
             glass_to_glass_ms=(t3 - t0) * 1000.0,
+            head_source=head_source,
         )
         return dets, timings
 

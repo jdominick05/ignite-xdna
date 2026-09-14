@@ -1586,3 +1586,98 @@ completion wait at its very end (intermediate TCTs are stripped and lock-value W
 wait), every shipped stage exec is byte-identical to the single-layer template, 8,192 of the
 1,228,800 preprocessed bytes reach the device, and the non-fused native decode reads the
 cached reference heads rather than `bo_out`.
+
+### Oracle-free detections need a container that emits the heads; the runtime now says when it does not (2026-09-13)
+
+- **`run_yolo_monolithic` reports `heads_present` / `head_status` and returns `None` per
+  head unless the manifest declares `output_shapes` and a `head_layout` (offset, scale,
+  zero point per head) that fits the session's egress.** The six zero-filled float heads
+  and the `* 0.03125` pseudo-dequantization are gone; `predict_sync` records
+  `head_source` (`npu`, `oracle`, `none`) and warns once when no heads exist. The runtime
+  never guesses a packing order — a byte count that happens to match still resolves as
+  absent. `runtime/heads.py` holds the contract.
+- **Postprocess takes int8 head views with scales and prunes in the int8 domain**, so a
+  future head egress is decoded without a float copy of 1.2 M values; the float path is
+  unchanged and the two agree exactly on synthetic heads (`tests/test_npu_inference.py`).
+- **Rejected: slicing the shipped container's `bo_out` into heads.** Its egress is 4,096
+  bytes, the heads need 1,209,600, and every stage stream is the conv0 template
+  ([LOW_LEVEL_AUDIT.md §1.5](LOW_LEVEL_AUDIT.md#15-documented-stream-unchanged)); any
+  slicing would have produced numbers from bytes that are not heads.
+- **Rejected: a silent CPU-oracle fallback inside `use_oracle_for_boxes=False`.** That
+  would be a CPU run in an NPU costume. `tools/live_camera_ignition.py --boxes auto`
+  does fall back, but labels the source on the HUD and in its summary.
+- Camera capture goes through `CameraManager` (MSMF → DSHOW → ANY, per-attempt timeout,
+  property read-back, no raise on a refused setting); the measured backend finding is in
+  [BENCHMARKS](BENCHMARKS.md#a-live-demo-does-the-multi-partition-finding-hold-on-a-real-webcam).
+- Measured on Device 0 ([BENCHMARKS](BENCHMARKS.md#oracle-free-yolov8n-path-no-detect-heads-in-the-shipped-containers-egress-2026-09-13-desktop-2)):
+  100 oracle-free frames at 1.015 ms mean glass-to-glass with zero buffer allocations —
+  the latency of an empty decode, not of a detection pipeline. The "< 2 ms with boxes"
+  target stays unmet until a container emits the heads.
+
+### The graph engine lowers every layer onto one persistent core program; packets are fixed-size and the sequencer is the budget (2026-09-13)
+
+- **One persistent program per core, driven by packet headers, instead of a per-layer
+  xclbin or a template patched per layer.** The xclbin never changes with the model;
+  the compiler emits weight packets and a DMA instruction stream. Program memory is
+  16 KB, so the kernel keeps exactly one accumulator configuration (four output blocks
+  by two pixel groups, ~5 KB of text); six template variants were 23 KB and were cut.
+- **Fixed packet sizes with over-read into junk planes**, not variable-length transfers:
+  an ObjectFIFO object is a fixed number of bytes, so every activation packet is 6,400 B
+  and the tile geometry (5 × 20, four blocks out) is the same everywhere. The price is
+  extra DMA bytes on shallow layers; the alternative (per-layer packet sizes) needs
+  MemTile channels the column does not have.
+- **Activations round-trip DDR between layers by NPU DMA with no CPU involvement.**
+  YOLOv8n's early feature maps (1.6 MB after conv0) do not fit the MemTiles, and the
+  skip connections keep several maps alive across the neck; "no host roundtrip" here
+  means no host code touches an activation between the input plane and the heads.
+- **Exactness is asserted three ways before silicon**: the direct integer reference must
+  equal ONNX Runtime's uint8 intermediates, the packet emulation through the real DMA
+  descriptors must equal the direct reference, and silicon must equal the emulation.
+  Every layer of this model passes all three ([BENCHMARKS](BENCHMARKS.md#whole-network-yolov8n-on-a-16-core-convolution-engine-every-layer-on-the-npu-bit-exact-2026-09-13-desktop-2)).
+- **Raw shim DMA tasks with explicit awaits, capped at 14 live BDs and four pending per
+  channel.** IRON's `fill`/`drain` await only at the end of a sequence (the verifier
+  refuses more than 16 live BDs), and the hardware start queue holds four tasks per
+  channel — a fifth stalls the stream. A weight task that streams several objects is
+  never awaited before the activation fills it serves are issued.
+- **A completion token is issued only to tasks that will be awaited, and every tokened
+  task is awaited exactly once, in channel order.** Each `dma_await_task` consumes one
+  token; "await the newest, free the rest" leaves stale tokens and hangs the next layer.
+  Tokens go to every second task of a channel and to its last task in a layer.
+- **Default stream (2026-09-14): the coarse schedule.** A run of up to 16 vertically
+  adjacent quads at one tile column is one repeat task for a single-chunk layer's fills and
+  one for every layer's drains; a drain is issued ahead of its fills and held until they
+  are issued; a multi-chunk layer's weight run is one stride-0 repeat task per column (one
+  task for all output groups where each has a single round in that column); stride-2
+  chunk fills repeat over chunks; contiguous dimensions are folded before merging; the
+  upsampling fills of a quad merge using header phases 0-3. 2,972 tasks and 430 KB of
+  instructions per frame instead of 5,455 and 776 KB; one token per two tasks as before
+  (one per four measured slower). Every layer is bit-exact on Device 0 and in emulation.
+  The per-round schedule stays behind `--no-coarse` for bisection.
+- **The cost model that chose it (MEASURED on Phoenix):** ~0.25 ms fixed per dispatch,
+  ~145 ns per instruction op, ~26 GB/s of DMA transport that barely depends on the task
+  count while the cores keep up, and core compute as the difference to a dispatch whose
+  weight packets are NOPs.
+- **A layer's output groups rotate over the four columns when a group has fewer rounds
+  than columns.** Every 20×20 map has one round per group, and all of them queued on
+  column 0; with headers that advertise only the input blocks holding real channels, the
+  frame went from 10.4 to 8.2 ms.
+- **Shim DMA task limits from the verifier:** the repeat (outermost) dimension is at most
+  64, and it is the only dimension that may have stride 0.
+- **Kernel rule: the eight accumulators stay in vector registers.** Every loop over the
+  four output blocks has a constant trip count, `conv_pass` is always inlined, and no
+  run-time guard sits inside those loops. The fifth 4-pixel group of a tile row is
+  computed once (it was computed twice). Rejected after measuring: skipping junk output
+  blocks with a run-time bound or guard, and an outlined pass — each spilled the
+  accumulators (a 1.4 KB stack frame that overflowed the core stack and hung, or 2.6–3×
+  the core time). The core stack is 2 KB for margin.
+- **Host path: the native preprocessor writes the model's quantized input plane straight
+  into the mapped workspace buffer object, and readback transposes the heads and computes
+  the per-anchor class maxima for the decoder's prune natively.** Numpy staging and
+  transposes cost 6 + 1 ms per frame, buffer-object calls < 0.06 ms. Rejected after
+  measuring: fewer OpenMP threads, and polling `run.state()` instead of `run.wait()`.
+- **Latency target met (2026-09-14):** 7.898 ms mean glass-to-glass over 500 witnessed
+  1280×720 frames (p99 8.270 ms, no buffer-object allocations, +0.04 MB working set), and
+  7.929 ms mean over 60 witnessed live-camera frames with NPU boxes
+  ([BENCHMARKS](BENCHMARKS.md#graph-engine-latency-from-192-to-79-ms-glass-to-glass-2026-09-14-desktop-2)).
+  The margin is under 0.1 ms; the next levers are fewer fill tasks for multi-chunk rounds
+  and less over-read per activation packet.

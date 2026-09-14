@@ -1,0 +1,51 @@
+Oracle-free YOLOv8n path on the shipped container: head status, 100-frame buffer stability and latency, camera tool
+machine=Desktop 2 (Ryzen 7 8700G), device=[003d:00:01.1] NPU Phoenix Device 0
+container=build/yolov8n.ignite (CRC 0x2e06f112, 5,315,840 B, 20 blobs; every stage exec is the single-layer conv0 template, docs/LOW_LEVEL_AUDIT.md section 1.5)
+xclbin=build/im2col_4d_16core.xclbin (shipped, unchanged)
+runtime=Python 3.13 ironenv with pyxrt; tests/test_npu_inference.py run in-process by a runner that records the preflight and a 1 s CPU busy sample first
+what this measures=predict_sync(use_oracle_for_boxes=False) on the shipped container. Its egress is 4,096 B and it declares no head_layout, so the runtime reports the detect heads absent and the decode stage sees no candidates; the latency below is preprocess + one NPU dispatch + an empty decode, not a detection pipeline. The >= 4 detection and IoU >= 0.70 checks against the oracle are skipped by the suite for that reason and are recorded as skipped, not passed.
+
+date_utc=2026-09-13T20:50:04Z
+hostname=DESKTOP-CBL5NUA
+python=3.13.15 C:\Users\<user>\mlir-aie\ironenv\Scripts\python.exe
+=== preflight: xrt-smi examine -r aie-partitions ===
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+=== host load: CPU busy over 1 s before the run: 5.5% ===
+=== tests/test_npu_inference.py ===
+test_06_camera_manager_degrades_without_a_camera (test_npu_inference.CameraCaptureOffline.test_06_camera_manager_degrades_without_a_camera) ... 
+[camera] index 99: MSMF not opened 0.05s; DSHOW not opened 0.00s; ANY not opened 0.05s; MSMF not opened 0.05s; DSHOW not opened 0.00s; ANY not opened 0.05s
+ok
+test_07_image_source_and_property_readback (test_npu_inference.CameraCaptureOffline.test_07_image_source_and_property_readback) ... ok
+test_01_shipped_container_reports_heads_absent (test_npu_inference.DetectHeadLayoutOffline.test_01_shipped_container_reports_heads_absent) ... 
+[heads] shipped container: manifest declares no head_layout (per-head egress offset, scale, zero_point); the runtime does not guess a device packing order. Heads need 1209600 bytes, egress is 4096 bytes
+ok
+test_02_layout_rejects_malformed_declarations (test_npu_inference.DetectHeadLayoutOffline.test_02_layout_rejects_malformed_declarations) ... ok
+test_03_pack_unpack_round_trip_is_exact_and_zero_copy (test_npu_inference.DetectHeadLayoutOffline.test_03_pack_unpack_round_trip_is_exact_and_zero_copy) ... ok
+test_04_int8_pruning_matches_float_decode (test_npu_inference.DetectHeadLayoutOffline.test_04_int8_pruning_matches_float_decode) ... 
+[decode] synthetic heads: 5 detections, classes ['bus', 'car', 'person'], int8 path == float path
+ok
+test_05_cpu_oracle_on_bus_jpg_decodes_person_and_bus (test_npu_inference.DetectHeadLayoutOffline.test_05_cpu_oracle_on_bus_jpg_decodes_person_and_bus) ... 
+[oracle] bus.jpg: 5 detections: person 0.90, person 0.88, person 0.88, person 0.50, bus 0.50
+ok
+test_10_head_status_and_oracle_free_detections (test_npu_inference.NpuInferenceOnSilicon.test_10_head_status_and_oracle_free_detections) ... 
+[silicon] heads absent: manifest declares no head_layout (per-head egress offset, scale, zero_point); the runtime does not guess a device packing order. Heads need 1209600 bytes, egress is 4096 bytes
+skipped 'no detect heads in the device egress, so the >= 4 detection and IoU >= 0.70 checks cannot run: manifest declares no head_layout (per-head egress offset, scale, zero_point); the runtime does not guess a device packing order. Heads need 1209600 bytes, egress is 4096 bytes'
+test_11_hundred_frames_no_buffer_growth_and_latency (test_npu_inference.NpuInferenceOnSilicon.test_11_hundred_frames_no_buffer_growth_and_latency) ... 
+[silicon] 100 frames (1280x720 synthetic): G2G mean 1.015 ms median 1.007 p95 1.076 p99 1.159 max 1.199 | preprocess 0.295 | NPU 0.720 | postprocess 0.001 ms | boxes from ['none'] | buffer objects allocated after warm-up: {'host_bo': 0, 'instr_bo': 0} | working set 266.9 -> 266.9 MB (+0.02 MB)
+[silicon] note: the postprocess stage saw no head tensors, so this is the latency of preprocess + NPU dispatch + an empty decode, not of a detection pipeline
+ok
+test_12_camera_tool_headless_on_bus_jpg (test_npu_inference.NpuInferenceOnSilicon.test_12_camera_tool_headless_on_bus_jpg) ... 
+[camera-tool] [Ignition] Initializing bare-metal pipeline on Device 0 from <checkout>\build\yolov8n.ignite ... | [Ignition] NPU heads absent: manifest declares no head_layout (per-head egress offset, scale, zero_point); the runtime does not guess a device packing order. Heads need 1209600 bytes, egress is 4096 bytes | [Ignition] boxes: npu | [Ignition] source: image <checkout>\assets\bus.jpg | [hud] frame 1/5 | Ignition YOLOv8n | Device 0 | G2G  2.88 ms | NPU  1.05 ms | loop  320.5 FPS | objects 0 | boxes: none | NPU heads: absent (4096 B egress, 1209600 B declared) | [hud] frame 2/5 | Ignition YOLOv8n | Device 0 | G2G  1.24 ms | NPU  0.84 ms | loop  179.3 FPS | objects 0 | boxes: none | NPU heads: absent (4096 B egress, 1209600 B declared) | [hud] frame 3/5 | Ignition YOLOv8n | Device 0 | G2G  1.16 ms | NPU  0.80 ms | loop  320.5 FPS | objects 0 | boxes: none | NPU heads: absent (4096 B egress, 1209600 B declared) | [hud] frame 4/5 | Ignition YOLOv8n | Device 0 | G2G  1.16 ms | NPU  0.78 ms | loop  415.8 FPS | objects 0 | boxes: none | NPU heads: absent (4096 B egress, 1209600 B declared) | [hud] frame 5/5 | Ignition YOLOv8n | Device 0 | G2G  1.12 ms | NPU  0.75 ms | loop  591.9 FPS | objects 0 | boxes: none | NPU heads: absent (4096 B egress, 1209600 B declared) | [summary] frames 5 | source image | boxes npu | G2G mean 1.511 ms median 1.163 p95 2.550 | NPU mean 0.845 ms | NPU heads absent | [Ignition] Hardware context released.
+ok
+
+----------------------------------------------------------------------
+Ran 10 tests in 1.617s
+
+OK (skipped=1)
+=== result: ran 10, failures 0, errors 0, skipped 1 ===
+skipped test_npu_inference.NpuInferenceOnSilicon.test_10_head_status_and_oracle_free_detections: no detect heads in the device egress, so the >= 4 detection and IoU >= 0.70 checks cannot run: manifest declares no head_layout (per-head egress offset, scale, zero_point); the runtime does not guess a device packing order. Heads need 1209600 bytes, egress is 4096 bytes
+=== host load: CPU busy over 1 s after the run: 6.6% ===

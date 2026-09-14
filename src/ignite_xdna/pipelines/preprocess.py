@@ -88,6 +88,19 @@ def _load_preprocess_lib() -> Optional[ctypes.CDLL]:
             ctypes.POINTER(ctypes.c_float),
         ]
         lib.fused_preprocess_bgr_to_chw_int8.restype = ctypes.c_int
+        # Graph-engine ingress and head egress (absent from DLLs built before they existed).
+        if hasattr(lib, "fused_preprocess_bgr_to_c8_plane"):
+            lib.fused_preprocess_bgr_to_c8_plane.argtypes = [
+                ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int,
+                ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_void_p,
+                ctypes.POINTER(ctypes.c_int), ctypes.POINTER(ctypes.c_int), ctypes.POINTER(ctypes.c_float),
+            ]
+            lib.fused_preprocess_bgr_to_c8_plane.restype = ctypes.c_int
+        for name in ("c8_blocks_to_nchw_int8", "c8_blocks_class_max_int8"):
+            if hasattr(lib, name):
+                fn = getattr(lib, name)
+                fn.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_void_p]
+                fn.restype = ctypes.c_int
         return lib
     except Exception as e:
         sys.stderr.write(f"Warning: Failed to load preprocess_simd library: {e}\n")
@@ -96,6 +109,38 @@ def _load_preprocess_lib() -> Optional[ctypes.CDLL]:
 
 # Global singleton library instance
 _LIB = _load_preprocess_lib()
+
+
+def blocks_to_nchw_int8(src: np.ndarray, blocks: int, h: int, w: int, channels: int, dst: np.ndarray) -> bool:
+    """Channel-blocked uint8 [blocks][h][w][8] (zero point 128) -> int8 NCHW (zero point 0) into ``dst``.
+
+    Native single pass per channel; returns False (``dst`` untouched) when the
+    native library lacks the function or the buffers do not fit, so callers keep
+    a numpy fallback.
+    """
+    if _LIB is None or not hasattr(_LIB, "c8_blocks_to_nchw_int8"):
+        return False
+    if (src.dtype != np.uint8 or dst.dtype != np.int8 or not src.flags["C_CONTIGUOUS"]
+            or not dst.flags["C_CONTIGUOUS"] or src.size < blocks * h * w * 8 or dst.size < channels * h * w):
+        return False
+    return _LIB.c8_blocks_to_nchw_int8(ctypes.c_void_p(src.ctypes.data), blocks, h, w, channels,
+                                       ctypes.c_void_p(dst.ctypes.data)) == 0
+
+
+def blocks_class_max_int8(src: np.ndarray, blocks: int, h: int, w: int, channels: int, out: np.ndarray) -> bool:
+    """Per-pixel int8 maximum over the first ``channels`` channels of a channel-blocked uint8 tensor.
+
+    ``out[y * w + x]`` equals ``max_c((src channel c at (y, x)) ^ 0x80)``, i.e. the per-anchor
+    maximum of the int8 NCHW view of the same tensor. Returns False (``out`` untouched) when
+    the native library lacks the function or the buffers do not fit.
+    """
+    if _LIB is None or not hasattr(_LIB, "c8_blocks_class_max_int8"):
+        return False
+    if (src.dtype != np.uint8 or out.dtype != np.int8 or not src.flags["C_CONTIGUOUS"]
+            or not out.flags["C_CONTIGUOUS"] or src.size < blocks * h * w * 8 or out.size < h * w):
+        return False
+    return _LIB.c8_blocks_class_max_int8(ctypes.c_void_p(src.ctypes.data), blocks, h, w, channels,
+                                         ctypes.c_void_p(out.ctypes.data)) == 0
 
 
 class FusedPreprocessor:
@@ -121,6 +166,50 @@ class FusedPreprocessor:
     def has_simd(self) -> bool:
         """Returns True if the high-performance native C/SIMD kernel is loaded."""
         return self.lib is not None
+
+    @property
+    def has_plane_ingress(self) -> bool:
+        """True if the native library can write a graph-engine input plane directly."""
+        return self.lib is not None and hasattr(self.lib, "fused_preprocess_bgr_to_c8_plane")
+
+    def preprocess_to_plane(
+        self,
+        img_bgr: np.ndarray,
+        plane: np.ndarray,
+        halo: int,
+        lut: np.ndarray,
+    ) -> Tuple[Tuple[int, int], float]:
+        """Letterbox, resize and quantize ``img_bgr`` straight into a graph-engine input plane.
+
+        ``plane`` is the channel-blocked uint8 input tensor ``[imgsz + 2 halo][imgsz + 2 halo][8]``
+        (for example a view of the mapped workspace buffer object); only the interior of
+        channels 0..2 (R, G, B) is written, each value ``lut[pixel]`` for the same pixel
+        values ``preprocess`` produces as ``int8 + 128``.
+
+        Returns:
+            pad: (top, left) padding pixels.
+            scale: aspect-ratio scale factor.
+        """
+        if not self.has_plane_ingress:
+            raise RuntimeError("the native preprocessor has no plane ingress (rebuild preprocess_simd)")
+        side = self.imgsz + 2 * halo
+        if plane.shape != (side, side, 8) or plane.dtype != np.uint8 or not plane.flags["C_CONTIGUOUS"]:
+            raise ValueError(f"plane must be a contiguous uint8 array of shape {(side, side, 8)}")
+        lut = np.ascontiguousarray(lut, dtype=np.uint8)
+        if lut.size != 256:
+            raise ValueError("lut must have 256 entries")
+        if not img_bgr.flags["C_CONTIGUOUS"]:
+            img_bgr = np.ascontiguousarray(img_bgr)
+        src_h, src_w = img_bgr.shape[:2]
+        c_top, c_left, c_scale = ctypes.c_int(), ctypes.c_int(), ctypes.c_float()
+        ret = self.lib.fused_preprocess_bgr_to_c8_plane(
+            ctypes.c_void_p(img_bgr.ctypes.data), src_w, src_h, img_bgr.strides[0],
+            ctypes.c_void_p(plane.ctypes.data), self.imgsz, self.imgsz, halo, ctypes.c_void_p(lut.ctypes.data),
+            ctypes.byref(c_top), ctypes.byref(c_left), ctypes.byref(c_scale),
+        )
+        if ret != 0:
+            raise RuntimeError(f"fused_preprocess_bgr_to_c8_plane returned {ret}")
+        return (c_top.value, c_left.value), c_scale.value
 
     def preprocess(
         self,

@@ -96,7 +96,33 @@ def parse_args(args: Optional[List[str]] = None) -> argparse.Namespace:
         action="store_true",
         help="Fuse on-die AIE2 DFL micro-kernel stage to decode bounding boxes directly to host bo_out without CPU Softmax",
     )
-    return parser.parse_args(args)
+    parser.add_argument(
+        "--engine",
+        choices=("graph", "template"),
+        default="graph",
+        help="graph: lower the whole network onto the 16-core convolution engine (needs the mlir-aie "
+             "ironenv, produces detect heads on the NPU); template: the legacy conv0 transaction patcher",
+    )
+    parser.add_argument(
+        "--build-dir",
+        type=str,
+        default=None,
+        help="Scratch directory for the graph engine build (default: <output dir>/conv_engine/<name>)",
+    )
+    argv = list(sys.argv[1:] if args is None else args)
+    # ``ignite-compile compile --model X`` is accepted as a spelling of ``--input X``.
+    if argv and argv[0] == "compile":
+        argv = argv[1:]
+    argv = ["--input" if a == "--model" else a for a in argv]
+    parsed = parser.parse_args(argv)
+    # The repository ships the Quark-quantized cut model only; a request for the
+    # unquantized export name resolves to it rather than failing on a missing file.
+    requested = Path(parsed.input)
+    cut = repo_root / "models" / "yolov8n_cut_xint8.onnx"
+    if not requested.exists() and requested.name == "yolov8n.onnx" and cut.exists():
+        print(f"[*] {requested} is not present; compiling the quantized export {cut.name} instead")
+        parsed.input = str(cut)
+    return parsed
 
 
 def validate_onnx_compatibility(model_path: Path) -> onnx.ModelProto:
@@ -355,9 +381,41 @@ def verify_on_silicon(container_path: Path, device_idx: int = 0):
         session.close()
 
 
+def compile_graph_engine(input_path: Union[str, Path], output_path: Union[str, Path],
+                         build_dir: Optional[Union[str, Path]] = None) -> int:
+    """Lower the whole YOLOv8n graph onto the convolution engine (see engine_compile.py)."""
+    try:
+        import aie.iron  # noqa: F401
+    except ImportError as ex:
+        raise RuntimeError(
+            "the graph engine needs the mlir-aie IRON environment (run through scripts/research-iron.sh); "
+            f"import failed: {ex}") from ex
+    from ignite_xdna.compiler.engine_compile import compile_graph_container
+    manifest = compile_graph_container(input_path, output_path, build_dir=build_dir)
+    out_p = Path(output_path)
+    from ignite_xdna.runtime.heads import resolve_head_layout
+    status = resolve_head_layout(manifest, int(manifest["egress_bytes"]))
+    print(f"    [OK] head_status: {'present' if status.present else 'absent'} ({status.reason})")
+    print(f"    [OK] egress bytes: {manifest['egress_bytes']:,}")
+    return out_p.stat().st_size
+
+
 def main(args: Optional[List[str]] = None):
     parsed = parse_args(args)
     try:
+        if parsed.engine == "graph":
+            compile_graph_engine(parsed.input, parsed.output, parsed.build_dir)
+            if parsed.verify_silicon:
+                from ignite_xdna.runtime.graph_session import GraphSession
+                sess = GraphSession(parsed.output, device_index=parsed.device)
+                try:
+                    dummy = np.zeros((1, 3, 640, 640), dtype=np.int8)
+                    lat = [sess.run_yolo_monolithic(dummy, return_timestamps=True)[1]["npu_ms"] for _ in range(5)]
+                    print(f"    [OK] Physical silicon execution succeeded: NPU {np.mean(lat[1:]):.3f} ms/frame")
+                finally:
+                    sess.close()
+            print("\nAll compilation and packaging checks passed successfully!")
+            return
         total_size = compile_model(
             input_path=parsed.input,
             output_path=parsed.output,
