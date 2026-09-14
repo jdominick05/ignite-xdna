@@ -1694,5 +1694,6 @@ cached reference heads rather than `bo_out`.
   per frame needs a DMA channel reset IRON does not wrap, and `disable_synchronization`
   drops the locks on both ends. It would also not reach the 1.5 ms target: the same stream
   with NOP weights dispatches in 2.53 ms, because the floor is the activation round trip
-  through DDR (7,436 activation packets a frame), not weight traffic (36 weight fills)
+  through DDR (67.1 MB of activation fills and drains a frame), not weight traffic (36 fills,
+  6.4 MB, about 0.26 ms DERIVED by `tools/engine_stream_report.py`)
   ([MODEL_ZOO_BENCHMARKS](MODEL_ZOO_BENCHMARKS.md#sesr-the-15-ms-dispatch-and-sram-resident-weights-are-not-met)).
