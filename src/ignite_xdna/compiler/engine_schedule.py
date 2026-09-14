@@ -105,14 +105,14 @@ def _halos(ir: GraphIR) -> Tuple[Dict[str, int], Dict[str, int]]:
     value = {name: ZP for name in ir.tensors}
     pooled = set()
     for L in ir.layers:
-        if isinstance(L, ConvLayer) and L.k == 3:
+        if isinstance(L, ConvLayer) and L.k > 1:
             for s in L.inputs:
-                halo[s.tensor] = max(halo[s.tensor], 1)
+                halo[s.tensor] = max(halo[s.tensor], L.pad)   # 1 for 3x3, 2 for SESR's 5x5
         elif isinstance(L, PoolLayer):
             halo[L.input.tensor] = max(halo[L.input.tensor], 2)
             pooled.add(L.input.tensor)
     for name in pooled:
-        if any(isinstance(L, ConvLayer) and L.k == 3 and any(s.tensor == name for s in L.inputs) for L in ir.layers):
+        if any(isinstance(L, ConvLayer) and L.k > 1 and any(s.tensor == name for s in L.inputs) for L in ir.layers):
             raise ValueError(f"{name} feeds both a 3x3 conv and a max pool; halo values conflict")
         value[name] = 0
     return halo, value
@@ -164,14 +164,22 @@ class Chunk:
 def conv_chunk_kind(layer: ConvLayer, seg: Segment) -> str:
     if layer.k == 1:
         return "k1up2" if seg.up2 else "k1"
+    if layer.k == 5 and layer.stride == 1 and layer.pad == 2 and not seg.up2:
+        return "k5s1"
+    if layer.k != 3 or seg.up2:
+        raise ValueError(f"{layer.name}: no packet geometry for a {layer.k}x{layer.k} stride-{layer.stride} conv")
     return "k3s2" if layer.stride == 2 else "k3s1"
 
 
+# (rows_in, cols_in, plane_bytes, header ncin, blocks the DMA reads)
 CHUNK_GEOMETRY = {
     "k1": (5, 20, 800, 8, 8),
     "k1up2": (5, 20, 800, 8, 10),
     "k3s1": (8, 25, 1600, 4, 4),
     "k3s2": (16, 50, 6400, 1, 1),
+    # 5x5 stride 1 reads 9 rows x 24 pixels of one block; 25 taps x 256 weights fill 6,400 of the
+    # 9,216 weight bytes, so one input block per packet, read through the k3s2 plane layout.
+    "k5s1": (16, 50, 6400, 1, 1),
     "pool": (16, 25, 3200, 2, 2),
     "res": (5, 20, 800, 4, 8),
 }
@@ -220,6 +228,8 @@ def a_pattern(ws: Workspace, ir: GraphIR, layer, chunk: Chunk, y0: int, x0: int,
         return DmaPattern("ws", p.offset(b0, y0 - 1, x0 - 1), (4, 8, 200), (p.plane_bytes, p.pitch, 1))
     if chunk.kind == "k3s2":
         return DmaPattern("ws", p.offset(b0, 2 * y0 - 1, 2 * x0 - 1), (16, 400), (p.pitch, 1))
+    if chunk.kind == "k5s1":
+        return DmaPattern("ws", p.offset(b0, y0 - 2, x0 - 2), (16, 400), (p.pitch, 1))
     if chunk.kind == "pool":
         return DmaPattern("ws", p.offset(b0, y0 - 2, x0 - 2), (2, 16, 200), (p.plane_bytes, p.pitch, 1))
     raise ValueError(chunk.kind)
@@ -251,10 +261,23 @@ def quad_patterns(ws: Workspace, ir: GraphIR, layer, chunk: Chunk, y_quad: int, 
     return [a_pattern(ws, ir, layer, chunk, y_quad + TILE_R * r, x0, group) for r in range(ROWS)]
 
 
+def tile_origins(extent: int, step: int) -> List[int]:
+    """Tile origins covering ``extent`` pixels with tiles of ``step``: every multiple of ``step`` that
+    fits, plus ``extent - step`` when ``step`` does not divide ``extent``. The last tile then overlaps
+    its neighbour (SESR's 256-pixel maps: ..., 220, 236) and computes the shared pixels twice from
+    the same inputs, so both writes carry the same bytes. YOLO maps divide evenly and are unchanged."""
+    if extent < step:
+        raise ValueError(f"a {extent}-pixel map is smaller than one {step}-pixel tile")
+    origins = list(range(0, extent - step + 1, step))
+    if origins[-1] + step < extent:
+        origins.append(extent - step)
+    return origins
+
+
 def run_drain(ws: Workspace, layer, group: int, run: List[Tuple[int, int]]) -> DmaPattern:
-    """One drain for a run of vertically adjacent quads (at most 16) at one tile column."""
+    """One drain for a run of vertically adjacent quads (at most 16) at one tile column; rounds are (y, x0)."""
     q0, x0 = run[0]
-    o = o_pattern(ws, layer, group, q0 * TILE_R * ROWS, x0)
+    o = o_pattern(ws, layer, group, q0, x0)
     return DmaPattern("ws", o.offset, (ROWS * len(run),) + tuple(o.sizes[1:]), o.strides)
 
 
@@ -296,7 +319,7 @@ def conv_packet(layer: ConvLayer, group: int, chunk: Chunk, count_out: int, coun
         flags |= em.F_LOAD_PSUM
     if chunk.last:
         flags |= em.F_HOLD if layer.residual is not None else em.F_EMIT
-        if layer.act == "hswish":
+        if layer.hswish is not None:   # HardSwish, or ReLU through the same epilogue
             flags |= em.F_HSWISH
     if seg.up2:
         flags |= em.F_UP2
@@ -309,8 +332,13 @@ def conv_packet(layer: ConvLayer, group: int, chunk: Chunk, count_out: int, coun
 
 
 def residual_packet(layer: ConvLayer) -> np.ndarray:
-    hdr = em.PacketHeader(op=em.OP_RESIDUAL, ncin=4, nco=OUT_BLOCKS, flags=em.F_EMIT, rsh=layer.residual_shift,
-                          count_out=1)
+    flags, lsh_m, lsh_r = em.F_EMIT, 0, 0
+    if layer.residual_lsh_main or (layer.residual_lsh_res is not None
+                                   and layer.residual_lsh_res != layer.residual_shift):
+        flags |= em.F_RES_SHIFTS
+        lsh_m, lsh_r = layer.residual_lsh_main, layer.residual_lsh_res
+    hdr = em.PacketHeader(op=em.OP_RESIDUAL, ncin=4, nco=OUT_BLOCKS, flags=flags, rsh=layer.residual_shift,
+                          rlsh_m=lsh_m, rlsh_r=lsh_r, count_out=1)
     return em.pack_w_packet(hdr, np.zeros(32, np.int32), None)
 
 
@@ -423,9 +451,8 @@ def schedule_layer_coarse(ir: GraphIR, ws: Workspace, layer, store: PacketStore,
     chunks = layer_chunks(ir, layer)
     single = len(chunks) == 1
     n_groups = (t.blocks + OUT_BLOCKS - 1) // OUT_BLOCKS
-    quads = t.height // (TILE_R * ROWS)
-    if t.height % (TILE_R * ROWS) or t.width % TILE_C:
-        raise ValueError(f"{layer.name}: {t.height}x{t.width} is not tileable into 4x5 rows and 20 cols")
+    quad_rows = TILE_R * ROWS
+    ys, xs = tile_origins(t.height, quad_rows), tile_origins(t.width, TILE_C)
     max_quads = MAX_REPEAT // ROWS
     programs: List[List[tuple]] = [[] for _ in range(COLS)]
     n_rounds = n_packets = n_w = 0
@@ -433,7 +460,8 @@ def schedule_layer_coarse(ir: GraphIR, ws: Workspace, layer, store: PacketStore,
     # packets for all of its groups ahead of their drains and fills.
     per_col_groups: List[List[tuple]] = [[] for _ in range(COLS)]
     for g in range(n_groups):
-        rounds = [(q, x0) for x0 in range(0, t.width, TILE_C) for q in range(quads)]
+        # A round is (y, x0): the quad's first output row and the tile column, in pixels.
+        rounds = [(y, x0) for x0 in xs for y in ys]
         per_col = column_rounds(rounds, g, balance=balance_columns)
         for c in range(COLS):
             mine = per_col[c]
@@ -442,7 +470,7 @@ def schedule_layer_coarse(ir: GraphIR, ws: Workspace, layer, store: PacketStore,
             runs: List[List[Tuple[int, int]]] = []
             for q, x0 in mine:
                 last = runs[-1][-1] if runs else None
-                if last is not None and last[1] == x0 and last[0] == q - 1 and len(runs[-1]) < max_quads:
+                if last is not None and last[1] == x0 and last[0] == q - quad_rows and len(runs[-1]) < max_quads:
                     runs[-1].append((q, x0))
                 else:
                     runs.append([(q, x0)])
@@ -451,14 +479,14 @@ def schedule_layer_coarse(ir: GraphIR, ws: Workspace, layer, store: PacketStore,
             for run in runs:
                 if single:
                     strips = [p for q, x0 in run
-                              for p in quad_patterns(ws, ir, layer, chunks[0], q * TILE_R * ROWS, x0, g, coarse=True)]
+                              for p in quad_patterns(ws, ir, layer, chunks[0], q, x0, g, coarse=True)]
                     run_fills.append([merge_runs(strips)])
                 else:
                     per_round = []
                     for q, x0 in run:
                         pats: List[DmaPattern] = []
                         for ch in chunks:
-                            quad = quad_patterns(ws, ir, layer, ch, q * TILE_R * ROWS, x0, g, coarse=True)
+                            quad = quad_patterns(ws, ir, layer, ch, q, x0, g, coarse=True)
                             merged = merge_quad(quad)
                             pats.extend([merged] if merged is not None else quad)
                         per_round.append(merge_runs(pats))

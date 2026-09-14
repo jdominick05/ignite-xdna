@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 import onnx
@@ -88,7 +88,9 @@ class ConvLayer:
     act: Optional[str] = None            # "hswish" or None
     hswish: Optional[HardSwishFit] = None
     residual: Optional[Segment] = None   # added after the activation
-    residual_shift: int = 0              # log2(out_scale / act_scale)
+    residual_shift: int = 0              # log2(out_scale / finer operand scale): the rounding shift
+    residual_lsh_main: int = 0           # log2(act_scale / finer operand scale)
+    residual_lsh_res: Optional[int] = None  # log2(residual scale / finer operand scale); None: residual_shift
     act_scale: Optional[float] = None    # scale after the activation (s2)
 
     @property
@@ -135,6 +137,8 @@ class GraphIR:
     input: str
     outputs: List[Tuple[str, str]]  # (onnx float output name, physical tensor name)
     adjacency: List[List[str]] = field(default_factory=list)  # tensor groups that must be contiguous
+    # onnx output name -> host-side transform of the read-back tensor, e.g. {"op": "depth_to_space", ...}
+    output_transforms: Dict[str, Dict[str, Any]] = field(default_factory=dict)
 
 
 # ----------------------------------------------------------------------------
@@ -181,6 +185,18 @@ def fit_hardswish(s1: float, s2: float, k: float = 1.0001220703125) -> HardSwish
                 if err == 0:
                     return best
     return best
+
+
+def relu_epilogue() -> HardSwishFit:
+    """ReLU at a zero-point-128 quantization, max(q, 128), as constants of the HardSwish epilogue.
+
+    t = q - 128; hs = clip(t * 64, 0, 64) is 64 for t >= 1 and 0 otherwise; y = (t * hs) >> 6 = t or 0.
+    Exact for all 256 inputs, so ReLU layers need no second activation path in the core.
+    """
+    params = HardSwishParams(a1=64, b1=0, s1=0, qmax=64, k2=1, s2=0, ysh=6)
+    table = np.maximum(np.arange(256, dtype=np.int64), ZP).astype(np.uint8)
+    got = hswish_epilogue(np.arange(256, dtype=np.int64).astype(np.uint8), params)
+    return HardSwishFit(params, table, int(np.max(np.abs(got.astype(np.int64) - table.astype(np.int64)))))
 
 
 # ----------------------------------------------------------------------------
@@ -293,26 +309,37 @@ def lower_yolov8n(model_or_path) -> GraphIR:
             raise ValueError(f"{what}: scale {sa} != {q_b}")
 
     scales: Dict[str, float] = {q_in: s_in}
+    transforms: Dict[str, Tuple[str, Dict[str, Any]]] = {}  # host-side output transforms (DepthToSpace)
 
     for node in G.g.node:
-        if node.op_type in ("Constant", "QuantizeLinear", "DequantizeLinear", "HardSigmoid", "Mul"):
+        if node.op_type in ("Constant", "QuantizeLinear", "DequantizeLinear", "HardSigmoid", "Mul", "Relu"):
             continue
         if node.op_type == "Conv":
             x_q, sx, zx = G.q_source(node.input[0])
             w_q, sw, zw = G.q_source(node.input[1])
-            b_q, sb, zb = G.q_source(node.input[2])
+            y_f = node.output[0]
+            cout, oh, ow = dims_chw(y_f)
+            if len(node.input) > 2 and node.input[2]:
+                b_q, sb, zb = G.q_source(node.input[2])
+                bias = G.const(b_q)
+            else:  # bias-free conv (SESR): a zero bias at the product scale
+                sb, zb, bias = sx * sw, 0, np.zeros(cout, dtype=np.int8)
             if zx != ZP or zw != 0 or zb != 0:
                 raise ValueError(f"{node.name}: unsupported zero points x={zx} w={zw} b={zb}")
             weights = G.const(w_q)
-            bias = G.const(b_q)
             k = int(_attr(node, "kernel_shape")[0])
             stride = int(_attr(node, "strides", [1, 1])[0])
             pads = _attr(node, "pads", [0, 0, 0, 0])
             if any(int(p) != int(pads[0]) for p in pads):
                 raise ValueError(f"{node.name}: asymmetric pads {pads}")
-            y_f = node.output[0]
-            conv_q, s1, z1 = G.q_sink(y_f)
-            cout, oh, ow = dims_chw(y_f)
+            y_cons = G.consumers.get(y_f, [])
+            relu = len(y_cons) == 1 and y_cons[0].op_type == "Relu"
+            # Conv -> Relu -> QuantizeLinear: the ReLU clamps at the zero point of that one
+            # quantization, so the conv output is quantized at the ReLU's scale and the
+            # activation is max(q, 128).
+            conv_q, s1, z1 = G.q_sink(y_cons[0].output[0] if relu else y_f)
+            if z1 != ZP:
+                raise ValueError(f"{node.name}: output zero point {z1}")
             layer = ConvLayer(name=node.name, index=len(layers), inputs=resolve(x_q), in_scale=sx, k=k,
                               stride=stride, pad=int(pads[0]), weights=weights.astype(np.int8),
                               bias_q=bias.astype(np.int8), bias_scale=sb, weight_scale=sw, conv_scale=s1,
@@ -321,7 +348,12 @@ def lower_yolov8n(model_or_path) -> GraphIR:
             conv_f = G.dq_of(conv_q)
             cons = G.float_consumers(conv_f)
             kinds = sorted(c.op_type for c in cons)
-            if kinds == ["HardSigmoid", "Mul"]:
+            if relu:
+                layer.act = "relu"
+                layer.act_scale = s1
+                layer.hswish = relu_epilogue()
+                out_name, out_scale = conv_q, s1
+            elif kinds == ["HardSigmoid", "Mul"]:
                 hs_node = [c for c in cons if c.op_type == "HardSigmoid"][0]
                 mul_act = [c for c in cons if c.op_type == "Mul"][0]
                 alpha = float(_attr(hs_node, "alpha", 0.2))
@@ -340,31 +372,45 @@ def lower_yolov8n(model_or_path) -> GraphIR:
                 layer.output = act_q
                 out_name = act_q
                 out_scale = s2
-            elif not cons and conv_f in [o.name for o in G.g.output]:
-                out_name, out_scale = conv_q, s1
+            elif (not cons and conv_f in [o.name for o in G.g.output]) or \
+                    (cons and set(kinds) <= {"Conv", "Add", "DepthToSpace"}):
+                out_name, out_scale = conv_q, s1   # no activation (a head, or SESR's head/tail convs)
             else:
                 raise ValueError(f"{node.name}: unexpected consumers {kinds}")
-            # Residual add directly after the activation?
+            # Residual add directly after the activation? It attaches to the operand computed last:
+            # the other operand must already exist (SESR's head conv feeds the long skip Add that
+            # body.6 completes, so the Add belongs to body.6).
             act_f = G.dq_of(out_name)
-            adds = [c for c in G.float_consumers(act_f) if c.op_type == "Add"]
+            act_cons = G.float_consumers(act_f)
+
+            def ready(name: str) -> bool:
+                if name == act_f:
+                    return True
+                q = G.q_source(name)[0]
+                return q in tensors or q in views
+
+            adds = [c for c in act_cons if c.op_type == "Add" and all(ready(i) for i in c.input)]
             if adds:
-                if len(G.float_consumers(act_f)) != 1:
+                if len(act_cons) != 1:
                     raise ValueError(f"{node.name}: activation feeds more than the residual Add")
                 add = adds[0]
                 other = [i for i in add.input if i != act_f][0]
                 res_q, s_res, _ = G.q_source(other)
                 add_q, s_add, _ = G.q_sink(add.output[0])
-                if abs(s_add - s_res) > 1e-12:
-                    raise ValueError(f"{add.name}: residual scale {s_res} != output scale {s_add}")
                 segs = resolve(res_q)
                 if len(segs) != 1:
                     raise ValueError(f"{add.name}: residual must be one segment")
                 layer.residual = segs[0]
-                layer.residual_shift = _log2_exact(s_add / out_scale)
+                # Float semantics with power-of-two scales, exact in integers at the finer operand
+                # scale: y = rne((t_main << lsh_main) + (t_res << lsh_res), shift).
+                s_min = min(out_scale, s_res)
+                layer.residual_lsh_main = _log2_exact(out_scale / s_min)
+                layer.residual_lsh_res = _log2_exact(s_res / s_min)
+                layer.residual_shift = _log2_exact(s_add / s_min)
                 layer.output = add_q
                 out_name, out_scale = add_q, s_add
                 if layer.residual_shift < 0:
-                    raise ValueError(f"{add.name}: residual shift {layer.residual_shift}")
+                    raise ValueError(f"{add.name}: output scale {s_add} is finer than both operands")
             tensors[out_name] = TensorInfo(out_name, cout, oh, ow, out_scale, ZP, producer=layer.name)
             scales[out_name] = out_scale
             layers.append(layer)
@@ -433,14 +479,31 @@ def lower_yolov8n(model_or_path) -> GraphIR:
             tensors[out_q] = TensorInfo(out_q, c, h, w, so, ZP, producer=node.name)
             scales[out_q] = so
             layers.append(PoolLayer(name=node.name, index=len(layers), input=segs[0], output=out_q))
+        elif node.op_type == "DepthToSpace":
+            # A pure channel-to-space permutation at one quantization: the host applies it to
+            # the read-back tensor (SESR's pixel shuffle), the engine never computes it.
+            x_q, sx, _ = G.q_source(node.input[0])
+            out_q, so, zo = G.q_sink(node.output[0])
+            if abs(sx - so) > 1e-12 or zo != ZP or x_q not in tensors:
+                raise ValueError(f"{node.name}: depth-to-space must read a physical tensor at its own scale")
+            mode = _attr(node, "mode", b"DCR")
+            transforms[out_q] = (x_q, {"op": "depth_to_space", "blocksize": int(_attr(node, "blocksize")),
+                                       "mode": mode.decode() if isinstance(mode, bytes) else str(mode)})
         elif node.op_type == "Add":
             continue  # handled with the producing conv
         else:
             raise ValueError(f"unsupported op {node.op_type} ({node.name})")
 
+    for node in G.g.node:
+        if node.op_type == "Add" and G.q_sink(node.output[0])[0] not in tensors:
+            raise ValueError(f"{node.name}: no conv output absorbed this Add")
+
     outputs = []
+    output_transforms: Dict[str, Dict[str, Any]] = {}
     for o in G.g.output:
         q, s, _ = G.q_source(o.name)
+        if q in transforms:
+            q, output_transforms[o.name] = transforms[q]
         if q not in tensors:
             raise ValueError(f"graph output {o.name} is not a physical tensor")
         outputs.append((o.name, q))
@@ -453,7 +516,8 @@ def lower_yolov8n(model_or_path) -> GraphIR:
             for s in layer.inputs:
                 pass
     adjacency = _adjacency_groups(views, tensors)
-    return GraphIR(tensors=tensors, layers=layers, input=q_in, outputs=outputs, adjacency=adjacency)
+    return GraphIR(tensors=tensors, layers=layers, input=q_in, outputs=outputs, adjacency=adjacency,
+                   output_transforms=output_transforms)
 
 
 def _adjacency_groups(views, tensors) -> List[List[str]]:

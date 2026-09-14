@@ -352,7 +352,11 @@ class YoloPipeline(YoloDecoder):
         # 2. Anchor grids and strides come from YoloDecoder.__init__
 
         # 3. Pre-load reference cut model for exact head outputs if required for visual verification
-        cut_cand = repo_root / "models" / "yolov8n_cut_xint8.onnx"
+        # The oracle is the model the container was compiled from (manifest model_name), else yolov8n.
+        compiled_from = (getattr(self.session, "ignite_manifest", None) or {}).get("model_name")
+        cut_cand = repo_root / "models" / f"{compiled_from}.onnx" if compiled_from else None
+        if cut_cand is None or not cut_cand.exists():
+            cut_cand = repo_root / "models" / "yolov8n_cut_xint8.onnx"
         self._ort_cut_sess = None
         if cut_cand.exists():
             try:

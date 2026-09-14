@@ -53,7 +53,7 @@ def conv_direct(layer: ConvLayer, x: np.ndarray) -> np.ndarray:
             acc += np.tensordot(wts[:, :, ky, kx], patch, axes=([1], [0]))
     acc = acc.astype(np.int64) + layer.bias_acc()[:, None, None]
     q = em.sat_u8(em.rne_shift(acc, layer.shift_out))
-    if layer.act == "hswish":
+    if layer.hswish is not None:   # HardSwish, or ReLU expressed as the same epilogue
         q = layer.hswish.table[q]
     return q
 
@@ -84,7 +84,7 @@ def run_direct(ir: GraphIR, input_q: np.ndarray, stop_after: Optional[int] = Non
             y = conv_direct(L, x)
             if L.residual is not None:
                 r = gather_input(tensors, [L.residual], t.height, t.width)
-                y = em.residual_combine(y, r, L.residual_shift)
+                y = em.residual_combine(y, r, L.residual_shift, L.residual_lsh_main, L.residual_lsh_res)
             tensors[L.output] = y
         else:
             x = gather_input(tensors, [L.input], t.height, t.width)

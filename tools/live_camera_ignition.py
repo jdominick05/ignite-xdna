@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Live YOLOv8n on the Phoenix NPU from a webcam, a video file or a still image.
+"""Live detection (YOLOv8n/s) or super-resolution (SESR M7) on the Phoenix NPU from a webcam, a video file or a still image.
 
     conda activate resnet_env17         # pyxrt loads only in the mlir-aie ironenv:
     bash scripts/research-iron.sh tools/live_camera_ignition.py             # probe webcams 0 and 1
@@ -26,6 +26,15 @@ the HUD says why. --boxes oracle runs the ONNX Runtime CPU pass over the cut
 model (~43 ms/frame). --boxes auto (default) uses the NPU heads when present and
 otherwise the oracle, labelled as such on the HUD and in the summary. The model
 defaults to the graph-engine container when it exists.
+
+The container manifest's task picks the pipeline: "detect" draws boxes on the
+frame, "super_resolution" (build/sesr_m7.ignite) shows the upscaled image the NPU
+computed. The summary gives each stage separately — host staging (resize and
+quantize into the input plane), NPU dispatch, egress readback, postprocess and
+glass-to-glass — over the frames after --warmup; --json writes the same numbers.
+
+    bash scripts/research-iron.sh tools/live_camera_ignition.py --model build/sesr_m7.ignite \
+        --source assets/bus.jpg --headless --warmup 10 --frames 500 --json sesr.json
 """
 import os
 
@@ -36,6 +45,7 @@ os.environ.setdefault("OPENCV_VIDEOIO_MSMF_ENABLE_HW_TRANSFORMS", "0")
 
 import argparse
 import contextlib
+import json
 import sys
 import threading
 import time
@@ -52,7 +62,7 @@ for _p in (ROOT, ROOT / "src"):
         sys.path.insert(0, str(_p))
 
 IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".bmp", ".webp", ".tif", ".tiff"}
-WINDOW_NAME = "Ignition YOLOv8n - Bare-Metal XDNA1 Silicon"
+WINDOW_NAME = "Ignition - Bare-Metal XDNA1 Silicon"
 
 
 def backend_table() -> List[Tuple[str, int]]:
@@ -393,9 +403,14 @@ def draw_detections(frame, detections, conf_thresh: float = 0.25) -> int:
     return count
 
 
-def hud_line(g2g_ms: float, npu_ms: float, fps_loop: float, count: int, boxes_from: str) -> str:
-    return (f"Ignition YOLOv8n | Device 0 | G2G {g2g_ms:5.2f} ms | NPU {npu_ms:5.2f} ms | "
+def hud_line(label: str, g2g_ms: float, npu_ms: float, fps_loop: float, count: int, boxes_from: str) -> str:
+    return (f"Ignition {label} | Device 0 | G2G {g2g_ms:5.2f} ms | NPU {npu_ms:5.2f} ms | "
             f"loop {fps_loop:6.1f} FPS | objects {count} | boxes: {boxes_from}")
+
+
+def sr_hud_line(label: str, g2g_ms: float, dispatch_ms: float, readback_ms: float, fps_loop: float) -> str:
+    return (f"{label} | G2G {g2g_ms:5.2f} ms | NPU {dispatch_ms:4.2f} + {readback_ms:4.2f} ms | "
+            f"loop {fps_loop:6.1f} FPS")
 
 
 def draw_hud(frame, line1: str, line2: str):
@@ -418,7 +433,10 @@ def parse_args(argv=None):
     ap.add_argument("--boxes", choices=("auto", "npu", "oracle"), default="auto",
                     help="where boxes come from: NPU heads, the ONNX CPU oracle, or auto (NPU if present)")
     ap.add_argument("--headless", action="store_true", help="no window; print one HUD line per frame")
-    ap.add_argument("--frames", type=int, default=0, help="stop after N frames (0 = until quit / end of file)")
+    ap.add_argument("--frames", type=int, default=0,
+                    help="stop after N timed frames following --warmup (0 = until quit / end of file)")
+    ap.add_argument("--warmup", type=int, default=0, help="frames run before the timed ones (not in the summary)")
+    ap.add_argument("--json", default=None, help="write the per-stage summary to this JSON file")
     ap.add_argument("--loop", action="store_true", help="restart a video file at its end")
     ap.add_argument("--conf", type=float, default=0.25)
     ap.add_argument("--iou", type=float, default=0.5)
@@ -430,26 +448,64 @@ def parse_args(argv=None):
     return ap.parse_args(argv)
 
 
+def container_info(model: str) -> Tuple[str, str]:
+    """(task, model name) from the container manifest; a container without a task is a detector."""
+    from ignite_xdna.compiler.serializer import IgniteModelReader
+
+    with IgniteModelReader(Path(model)) as reader:
+        manifest = dict(reader.manifest)
+    return str(manifest.get("task", "detect")), str(manifest.get("model_name") or Path(model).stem)
+
+
+def stage_stats(samples: Sequence[float]) -> dict:
+    a = np.asarray(samples, dtype=np.float64)
+    return {"mean": float(a.mean()), "p50": float(np.median(a)), "p95": float(np.percentile(a, 95)),
+            "p99": float(np.percentile(a, 99)), "min": float(a.min()), "max": float(a.max())}
+
+
+STAGE_TITLES = (("staging", "host staging"), ("dispatch", "NPU dispatch"), ("readback", "egress readback"),
+                ("npu", "NPU forward"), ("post", "postprocess"))
+
+
 def main(argv=None) -> int:
     args = parse_args(argv)
-    from ignite_xdna.pipelines.yolo_pipeline import YoloPipeline
+    task, label = container_info(args.model)
+    status = None
+    boxes_mode = "none"
+    use_oracle = split_npu = False
+    print(f"[Ignition] Initializing bare-metal {task} pipeline ({label}) on Device 0 from {args.model} ...", flush=True)
+    if task == "super_resolution":
+        from ignite_xdna.pipelines.sr_pipeline import SuperResolutionPipeline
 
-    print(f"[Ignition] Initializing bare-metal pipeline on Device 0 from {args.model} ...", flush=True)
-    pipeline = YoloPipeline(model_path_or_bundle=args.model, device_index=0,
-                            conf_thres=args.conf, iou_thres=args.iou)
-    status = pipeline.session.head_status
-    if args.boxes == "auto":
-        boxes_mode = "npu" if status.present else "oracle"
+        pipeline = SuperResolutionPipeline(args.model, device_index=0)
+        h, w = pipeline.input_hw
+        status_line = f"x{pipeline.scale}: {w}x{h} -> {w * pipeline.scale}x{h * pipeline.scale} on the NPU"
+        print(f"[Ignition] super-resolution {status_line}", flush=True)
+    elif task == "detect":
+        from ignite_xdna.pipelines.yolo_pipeline import YoloPipeline
+
+        pipeline = YoloPipeline(model_path_or_bundle=args.model, device_index=0,
+                                conf_thres=args.conf, iou_thres=args.iou)
+        status = pipeline.session.head_status
+        if args.boxes == "auto":
+            boxes_mode = "npu" if status.present else "oracle"
+        else:
+            boxes_mode = args.boxes
+        use_oracle = boxes_mode == "oracle"
+        if use_oracle and pipeline._ort_cut_sess is None:
+            print("[Ignition] the ONNX cut model is not available, so boxes: oracle is unavailable; using NPU heads",
+                  flush=True)
+            use_oracle = False
+            boxes_mode = "npu"
+        # With the native ingress the frame is staged in preprocess, so the NPU forward is dispatch + readback.
+        split_npu = not use_oracle and bool(getattr(pipeline.session, "direct_ingress", False))
+        print(f"[Ignition] NPU heads {'present' if status.present else 'absent'}: {status.reason}", flush=True)
+        print(f"[Ignition] boxes: {boxes_mode}", flush=True)
+        status_line = (f"NPU heads: {'present' if status.present else 'absent'}"
+                       + ("" if status.present else f" ({status.egress_bytes} B egress, {status.declared_bytes} B declared)"))
     else:
-        boxes_mode = args.boxes
-    use_oracle = boxes_mode == "oracle"
-    if use_oracle and pipeline._ort_cut_sess is None:
-        print("[Ignition] the ONNX cut model is not available, so boxes: oracle is unavailable; using NPU heads",
-              flush=True)
-        use_oracle = False
-        boxes_mode = "npu"
-    print(f"[Ignition] NPU heads {'present' if status.present else 'absent'}: {status.reason}", flush=True)
-    print(f"[Ignition] boxes: {boxes_mode}", flush=True)
+        print(f"[Ignition] container task {task!r} has no live pipeline in this tool", flush=True)
+        return 2
 
     manager = CameraManager(open_timeout_s=args.open_timeout, width=args.width, height=args.height,
                             fps=args.fps, fourcc=args.fourcc)
@@ -464,14 +520,15 @@ def main(argv=None) -> int:
     if not args.headless:
         cv2.namedWindow(WINDOW_NAME, cv2.WINDOW_NORMAL)
 
-    g2g, npu, loop_dt = [], [], []
+    samples = {name: [] for name in ("g2g", "staging", "dispatch", "readback", "npu", "post")}
+    counts, loop_dt = [], []
+    out_shape = None
+    total = args.frames + args.warmup if args.frames else 0
     t_prev = time.perf_counter()
     frames_done = 0
-    status_line = (f"NPU heads: {'present' if status.present else 'absent'}"
-                   + ("" if status.present else f" ({status.egress_bytes} B egress, {status.declared_bytes} B declared)"))
     try:
         while True:
-            if args.frames and frames_done >= args.frames:
+            if total and frames_done >= total:
                 break
             ok, frame = source.read()
             if not ok or frame is None:
@@ -480,30 +537,50 @@ def main(argv=None) -> int:
                 time.sleep(0.002)
                 continue
 
-            dets, timings = pipeline.predict_sync(frame, use_oracle_for_boxes=use_oracle)
+            if task == "super_resolution":
+                shown, timings = pipeline.predict_sync(frame)
+                stage = {"dispatch": timings.dispatch_ms, "readback": timings.readback_ms}
+                out_shape = shown.shape
+            else:
+                dets, timings = pipeline.predict_sync(frame, use_oracle_for_boxes=use_oracle)
+                shown = frame
+                stage = {}
+                dispatch_ms = getattr(pipeline.session, "last_dispatch_ms", None)
+                if split_npu and dispatch_ms is not None:
+                    stage = {"dispatch": dispatch_ms, "readback": max(timings.npu_forward_ms - dispatch_ms, 0.0)}
+            stage.update(g2g=timings.glass_to_glass_ms, staging=timings.preprocess_ms, npu=timings.npu_forward_ms,
+                         post=timings.postprocess_ms)
             now = time.perf_counter()
             loop_dt.append(now - t_prev)
             t_prev = now
             fps = 1.0 / max(float(np.median(loop_dt[-30:])), 1e-6)
-            g2g.append(timings.glass_to_glass_ms)
-            npu.append(timings.npu_forward_ms)
             frames_done += 1
+            timed = frames_done > args.warmup
+            if timed:
+                for name, value in stage.items():
+                    samples[name].append(value)
 
-            count = draw_detections(frame, dets, args.conf)
-            line1 = hud_line(timings.glass_to_glass_ms, timings.npu_forward_ms, fps, count, timings.head_source)
+            if task == "super_resolution":
+                line1 = sr_hud_line(label, timings.glass_to_glass_ms, timings.dispatch_ms, timings.readback_ms, fps)
+            else:
+                count = draw_detections(frame, dets, args.conf)
+                if timed:
+                    counts.append(count)
+                line1 = hud_line(label, timings.glass_to_glass_ms, timings.npu_forward_ms, fps, count,
+                                 timings.head_source)
             if args.headless:
-                print(f"[hud] frame {frames_done}{'/' + str(args.frames) if args.frames else ''} | {line1} | {status_line}",
+                print(f"[hud] frame {frames_done}{'/' + str(total) if total else ''} | {line1} | {status_line}",
                       flush=True)
                 continue
-            draw_hud(frame, line1, status_line)
-            cv2.imshow(WINDOW_NAME, frame)
+            draw_hud(shown, line1, status_line)
+            cv2.imshow(WINDOW_NAME, shown)
             key = cv2.waitKey(1) & 0xFF
             if key in (ord("q"), 27):
                 break
             if key == ord("s"):
                 snap = ROOT / "outputs" / f"snapshot_{int(time.time())}.png"
                 snap.parent.mkdir(parents=True, exist_ok=True)
-                cv2.imwrite(str(snap), frame)
+                cv2.imwrite(str(snap), shown)
                 print(f"[Ignition] Snapshot saved: {snap}", flush=True)
     finally:
         source.release()
@@ -518,16 +595,37 @@ def main(argv=None) -> int:
         print("[summary] camera properties: " + "; ".join(
             f"{p.name} {p.requested:g}->{p.readback:g} {'ok' if p.accepted else 'refused'}" for p in manager.properties),
             flush=True)
-    if g2g:
-        arr = np.asarray(g2g)
-        print(f"[summary] frames {frames_done} | source {source.kind} | boxes {boxes_mode} | "
-              f"G2G mean {arr.mean():.3f} ms median {np.median(arr):.3f} p95 {np.percentile(arr, 95):.3f} | "
-              f"NPU mean {np.mean(npu):.3f} ms | NPU heads {'present' if status.present else 'absent'}", flush=True)
+    if not samples["g2g"]:
+        print(f"[summary] frames 0 | source {source.kind} delivered no timed frames", flush=True)
+        print("[Ignition] Hardware context released.", flush=True)
+        return 0
+
+    g = stage_stats(samples["g2g"])
+    if task == "super_resolution":
+        output = f"output image {out_shape[1]}x{out_shape[0]}x{out_shape[2]} from the NPU"
     else:
-        print(f"[summary] frames 0 | source {source.kind} delivered no frames", flush=True)
+        output = (f"boxes {boxes_mode} | {np.mean(counts):.2f} objects per frame | "
+                  f"NPU heads {'present' if status.present else 'absent'}")
+    print(f"[summary] frames {len(samples['g2g'])} | warm-up {args.warmup} | source {source.kind} | {label} ({task}) | "
+          f"G2G mean {g['mean']:.3f} ms median {g['p50']:.3f} p95 {g['p95']:.3f} p99 {g['p99']:.3f} "
+          f"max {g['max']:.3f} | {output}", flush=True)
+    stages = {name: stage_stats(values) for name, values in samples.items() if values}
+    print("[summary] stages (ms): " + " | ".join(
+        f"{title} mean {stages[name]['mean']:.3f} p50 {stages[name]['p50']:.3f} p99 {stages[name]['p99']:.3f}"
+        for name, title in STAGE_TITLES if name in stages), flush=True)
+    if args.json:
+        record = {"tool": "tools/live_camera_ignition.py", "container": Path(args.model).name, "model": label,
+                  "task": task, "device_index": 0, "source_kind": source.kind, "warmup": args.warmup,
+                  "frames_timed": len(samples["g2g"]), "stages_ms": stages}
+        if task == "super_resolution":
+            record["output_shape"] = list(out_shape)
+        else:
+            record.update(boxes=boxes_mode, heads_present=bool(status.present),
+                          objects_per_frame=float(np.mean(counts)))
+        Path(args.json).write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
+        print(f"[summary] wrote {args.json}", flush=True)
     print("[Ignition] Hardware context released.", flush=True)
     return 0
-
 
 if __name__ == "__main__":
     raise SystemExit(main())
