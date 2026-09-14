@@ -1,0 +1,49 @@
+{
+  "schema": 1,
+  "created_utc": "2026-09-14T22:12:55Z",
+  "model": "<ignite-xdna>\\build\\merged\\yolov8s.ignite",
+  "model_name": "yolov8s.ignite",
+  "model_bytes": 30743680,
+  "task": "detect",
+  "backend": "npu",
+  "source": "image bus.jpg 810x1080",
+  "source_kind": "image",
+  "frames_requested": 500,
+  "warmup": 10,
+  "frames_processed": 510,
+  "frames_timed": 500,
+  "stop_reason": "frame limit",
+  "host": {
+    "hostname": "DESKTOP-CBL5NUA",
+    "processor": "AMD64 Family 25 Model 117 Stepping 2, AuthenticAMD",
+    "python": "3.13.15",
+    "numpy": "2.5.3",
+    "opencv": "5.0.0",
+    "cpu_count": 16,
+    "onnxruntime": "1.30.0"
+  },
+  "g2g_ms": {
+    "mean": 17.148333400604315,
+    "p50": 17.119099997216836,
+    "p95": 17.328814991924446,
+    "p99": 17.491516005829908,
+    "min": 17.026899993652478,
+    "max": 17.837499995948747,
+    "cold_first_frame": 21.030799980508164
+  },
+  "fps_from_mean": 58.31470479602172,
+  "stages_ms": {
+    "preprocess": 0.3049581997329369,
+    "network": 16.80014239961747,
+    "postprocess": 0.037632800347637385,
+    "dispatch": 16.60889440070605,
+    "readback": 0.19124799891142175
+  },
+  "rss_mb": {
+    "first_timed": 243.7578125,
+    "end": 243.7578125,
+    "drift": 0.0
+  },
+  "npu_frames": 500,
+  "detections_per_frame": 6.0
+}

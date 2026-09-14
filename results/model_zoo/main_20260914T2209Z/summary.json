@@ -1,0 +1,511 @@
+{
+  "steps": [
+    {
+      "name": "pin_iron",
+      "title": "imports under scripts/research-iron.sh",
+      "rc": 0,
+      "seconds": 0.5,
+      "idle_before": null,
+      "idle_after": null,
+      "key_lines": [
+        "[pin] <ignite-xdna>\\src\\ignite_xdna\\__init__.py | decode_native <ignite-xdna>\\src\\ignite_xdna\\pipelines\\decode_native.py available True"
+      ]
+    },
+    {
+      "name": "pin_ignition",
+      "title": "imports under mlir-aie-iron from the Ignition worktree",
+      "rc": 0,
+      "seconds": 0.3,
+      "idle_before": null,
+      "idle_after": null,
+      "key_lines": [
+        "[pin] {\"ignition\": \"<Ignition>\\\\src\\\\ignition\\\\__init__.py\", \"vision\": \"<Ignition>\\\\src\\\\ignition\\\\pipelines\\\\vision.py\", \"ignite_xdna\": \"<ignite-xdna>\\\\src\\\\ignite_xdna\\\\__init__.py\", \"sr_pipeline\": \"<ignite-xdna>\\\\src\\\\ignite_xdna\\\\pipelines\\\\sr_pipeline.py\", \"decode_native_available\": true}"
+      ]
+    },
+    {
+      "name": "compile_yolov8n_full",
+      "title": "compile yolov8n_full from the merged tree",
+      "rc": 0,
+      "seconds": 12.5,
+      "idle_before": null,
+      "idle_after": null,
+      "key_lines": [
+        "[pin] <ignite-xdna>\\src\\ignite_xdna\\__init__.py <ignite-xdna>\\kernels\\aie2\\conv_engine\\design.py",
+        "[+] build\\merged\\yolov8n_full.ignite written: 8,823,680 bytes in 11.9 s (xclbin 188,542 B, insts 430,180 B, packets 8,164,864 B)",
+        "[OK] head_status: present (six heads declared in head_layout, 1209600 of 1209600 egress bytes)",
+        "[OK] egress bytes: 1,209,600"
+      ]
+    },
+    {
+      "name": "compile_yolov8s",
+      "title": "compile yolov8s from the merged tree",
+      "rc": 0,
+      "seconds": 26.1,
+      "idle_before": null,
+      "idle_after": null,
+      "key_lines": [
+        "[pin] <ignite-xdna>\\src\\ignite_xdna\\__init__.py <ignite-xdna>\\kernels\\aie2\\conv_engine\\design.py",
+        "[+] build\\merged\\yolov8s.ignite written: 30,743,680 bytes in 25.6 s (xclbin 188,542 B, insts 1,019,140 B, packets 29,495,808 B)",
+        "[OK] head_status: present (six heads declared in head_layout, 1209600 of 1209600 egress bytes)",
+        "[OK] egress bytes: 1,209,600"
+      ]
+    },
+    {
+      "name": "compile_sesr_m7",
+      "title": "compile sesr_m7 from the merged tree",
+      "rc": 0,
+      "seconds": 7.2,
+      "idle_before": null,
+      "idle_after": null,
+      "key_lines": [
+        "[pin] <ignite-xdna>\\src\\ignite_xdna\\__init__.py <ignite-xdna>\\kernels\\aie2\\conv_engine\\design.py",
+        "[+] build\\merged\\sesr_m7.ignite written: 511,168 bytes in 6.6 s (xclbin 188,542 B, insts 144,880 B, packets 170,496 B)",
+        "[OK] dense output: 12x256x256 uint8 at scale 2.0, host depth_to_space x2 -> image [1, 3, 512, 512]",
+        "[OK] egress bytes: 786,432"
+      ]
+    },
+    {
+      "name": "verify_yolov8n_full",
+      "title": "verify yolov8n_full per layer",
+      "rc": 0,
+      "seconds": 2.6,
+      "idle_before": true,
+      "idle_after": true,
+      "key_lines": [
+        "[pin] <ignite-xdna>\\src\\ignite_xdna\\__init__.py | decode_native <ignite-xdna>\\src\\ignite_xdna\\pipelines\\decode_native.py available True",
+        "[verify] detect container yolov8n_full.ignite: 66 layers, reference in 0.5 s",
+        "[verify] 66/66 layers exact | first dispatch 8.918 ms | dispatch mean 7.379 ms, min 7.161, max 7.873 over 200",
+        "[verify] PASS"
+      ],
+      "parsed": {
+        "exact": 66,
+        "layers": 66,
+        "dispatch_mean": 7.379
+      }
+    },
+    {
+      "name": "verify_yolov8s",
+      "title": "verify yolov8s per layer",
+      "rc": 0,
+      "seconds": 5.1,
+      "idle_before": true,
+      "idle_after": true,
+      "key_lines": [
+        "[pin] <ignite-xdna>\\src\\ignite_xdna\\__init__.py | decode_native <ignite-xdna>\\src\\ignite_xdna\\pipelines\\decode_native.py available True",
+        "[verify] detect container yolov8s.ignite: 66 layers, reference in 1.0 s",
+        "[verify] 66/66 layers exact | first dispatch 18.543 ms | dispatch mean 16.959 ms, min 16.684, max 17.517 over 200",
+        "[verify] PASS"
+      ],
+      "parsed": {
+        "exact": 66,
+        "layers": 66,
+        "dispatch_mean": 16.959
+      }
+    },
+    {
+      "name": "verify_sesr_m7",
+      "title": "verify sesr_m7 per layer",
+      "rc": 0,
+      "seconds": 1.9,
+      "idle_before": true,
+      "idle_after": true,
+      "key_lines": [
+        "[pin] <ignite-xdna>\\src\\ignite_xdna\\__init__.py | decode_native <ignite-xdna>\\src\\ignite_xdna\\pipelines\\decode_native.py available True",
+        "[verify] super_resolution container sesr_m7.ignite: 9 layers, reference in 0.4 s",
+        "[verify] 9/9 layers exact | first dispatch 5.830 ms | dispatch mean 4.291 ms, min 4.126, max 4.763 over 200",
+        "[verify] PASS"
+      ],
+      "parsed": {
+        "exact": 9,
+        "layers": 9,
+        "dispatch_mean": 4.291
+      }
+    },
+    {
+      "name": "tests_yolov8n_new_1",
+      "title": "tests yolov8n_full, rebuilt container (default budgets 8.0 / 9.5 ms)",
+      "rc": 0,
+      "seconds": 6.0,
+      "idle_before": true,
+      "idle_after": true,
+      "key_lines": [
+        "[pin] <ignite-xdna>\\src\\ignite_xdna\\__init__.py | decode_native <ignite-xdna>\\src\\ignite_xdna\\pipelines\\decode_native.py available True",
+        "[silicon] heads present: six heads declared in head_layout, 1209600 of 1209600 egress bytes",
+        "[silicon] IoU vs oracle per detection: [1.0, 1.0, 1.0, 1.0, 1.0]",
+        "[silicon] 500 frames (1280x720 synthetic): G2G mean 7.772 ms median 7.785 p95 7.904 p99 8.013 max 8.242 | preprocess 0.357 | NPU 7.403 | postprocess 0.013 ms | boxes from ['npu'] | buffer objects allocated after warm-up: {'host_bo': 0, 'instr_bo': 0} | working set 300.2 -> 300.2 MB (+0.04 MB)",
+        "Ran 10 tests in 5.547s",
+        "OK"
+      ],
+      "parsed": {
+        "tests_ran": 10,
+        "result": "OK",
+        "iou": [
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "frames": 500,
+        "g2g_mean": 7.772,
+        "median": 7.785,
+        "p95": 7.904,
+        "p99": 8.013,
+        "preprocess": 0.357,
+        "npu": 7.403,
+        "postprocess": 0.013
+      }
+    },
+    {
+      "name": "tests_yolov8n_old_1",
+      "title": "tests yolov8n_full, pre-model-zoo container (default budgets 8.0 / 9.5 ms)",
+      "rc": 0,
+      "seconds": 5.6,
+      "idle_before": true,
+      "idle_after": true,
+      "key_lines": [
+        "[pin] <ignite-xdna>\\src\\ignite_xdna\\__init__.py | decode_native <ignite-xdna>\\src\\ignite_xdna\\pipelines\\decode_native.py available True",
+        "[silicon] heads present: six heads declared in head_layout, 1209600 of 1209600 egress bytes",
+        "[silicon] IoU vs oracle per detection: [1.0, 1.0, 1.0, 1.0, 1.0]",
+        "[silicon] 500 frames (1280x720 synthetic): G2G mean 7.780 ms median 7.789 p95 7.918 p99 8.032 max 8.232 | preprocess 0.355 | NPU 7.413 | postprocess 0.013 ms | boxes from ['npu'] | buffer objects allocated after warm-up: {'host_bo': 0, 'instr_bo': 0} | working set 281.8 -> 281.9 MB (+0.06 MB)",
+        "Ran 3 tests in 5.191s",
+        "OK"
+      ],
+      "parsed": {
+        "tests_ran": 3,
+        "result": "OK",
+        "iou": [
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "frames": 500,
+        "g2g_mean": 7.78,
+        "median": 7.789,
+        "p95": 7.918,
+        "p99": 8.032,
+        "preprocess": 0.355,
+        "npu": 7.413,
+        "postprocess": 0.013
+      }
+    },
+    {
+      "name": "tests_yolov8n_new_2",
+      "title": "tests yolov8n_full, rebuilt container (default budgets 8.0 / 9.5 ms)",
+      "rc": 0,
+      "seconds": 5.6,
+      "idle_before": true,
+      "idle_after": true,
+      "key_lines": [
+        "[pin] <ignite-xdna>\\src\\ignite_xdna\\__init__.py | decode_native <ignite-xdna>\\src\\ignite_xdna\\pipelines\\decode_native.py available True",
+        "[silicon] heads present: six heads declared in head_layout, 1209600 of 1209600 egress bytes",
+        "[silicon] IoU vs oracle per detection: [1.0, 1.0, 1.0, 1.0, 1.0]",
+        "[silicon] 500 frames (1280x720 synthetic): G2G mean 7.755 ms median 7.764 p95 7.919 p99 8.071 max 8.526 | preprocess 0.356 | NPU 7.386 | postprocess 0.012 ms | boxes from ['npu'] | buffer objects allocated after warm-up: {'host_bo': 0, 'instr_bo': 0} | working set 280.8 -> 280.9 MB (+0.06 MB)",
+        "Ran 3 tests in 5.154s",
+        "OK"
+      ],
+      "parsed": {
+        "tests_ran": 3,
+        "result": "OK",
+        "iou": [
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "frames": 500,
+        "g2g_mean": 7.755,
+        "median": 7.764,
+        "p95": 7.919,
+        "p99": 8.071,
+        "preprocess": 0.356,
+        "npu": 7.386,
+        "postprocess": 0.012
+      }
+    },
+    {
+      "name": "tests_yolov8n_old_2",
+      "title": "tests yolov8n_full, pre-model-zoo container (default budgets 8.0 / 9.5 ms)",
+      "rc": 0,
+      "seconds": 5.6,
+      "idle_before": true,
+      "idle_after": true,
+      "key_lines": [
+        "[pin] <ignite-xdna>\\src\\ignite_xdna\\__init__.py | decode_native <ignite-xdna>\\src\\ignite_xdna\\pipelines\\decode_native.py available True",
+        "[silicon] heads present: six heads declared in head_layout, 1209600 of 1209600 egress bytes",
+        "[silicon] IoU vs oracle per detection: [1.0, 1.0, 1.0, 1.0, 1.0]",
+        "[silicon] 500 frames (1280x720 synthetic): G2G mean 7.712 ms median 7.720 p95 7.861 p99 8.096 max 8.341 | preprocess 0.360 | NPU 7.340 | postprocess 0.012 ms | boxes from ['npu'] | buffer objects allocated after warm-up: {'host_bo': 0, 'instr_bo': 0} | working set 281.5 -> 281.7 MB (+0.19 MB)",
+        "Ran 3 tests in 5.116s",
+        "OK"
+      ],
+      "parsed": {
+        "tests_ran": 3,
+        "result": "OK",
+        "iou": [
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "frames": 500,
+        "g2g_mean": 7.712,
+        "median": 7.72,
+        "p95": 7.861,
+        "p99": 8.096,
+        "preprocess": 0.36,
+        "npu": 7.34,
+        "postprocess": 0.012
+      }
+    },
+    {
+      "name": "tests_yolov8s",
+      "title": "tests yolov8s, rebuilt container (300 frames, budgets 25 / 27 ms)",
+      "rc": 0,
+      "seconds": 7.2,
+      "idle_before": true,
+      "idle_after": true,
+      "key_lines": [
+        "[pin] <ignite-xdna>\\src\\ignite_xdna\\__init__.py | decode_native <ignite-xdna>\\src\\ignite_xdna\\pipelines\\decode_native.py available True",
+        "[silicon] heads present: six heads declared in head_layout, 1209600 of 1209600 egress bytes",
+        "[silicon] IoU vs oracle per detection: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0]",
+        "[silicon] 300 frames (1280x720 synthetic): G2G mean 17.278 ms median 17.261 p95 17.400 p99 17.525 max 17.848 | preprocess 0.362 | NPU 16.901 | postprocess 0.015 ms | boxes from ['npu'] | buffer objects allocated after warm-up: {'host_bo': 0, 'instr_bo': 0} | working set 350.1 -> 350.1 MB (+0.04 MB)",
+        "Ran 3 tests in 6.734s",
+        "OK"
+      ],
+      "parsed": {
+        "tests_ran": 3,
+        "result": "OK",
+        "iou": [
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "frames": 300,
+        "g2g_mean": 17.278,
+        "median": 17.261,
+        "p95": 17.4,
+        "p99": 17.525,
+        "preprocess": 0.362,
+        "npu": 16.901,
+        "postprocess": 0.015
+      }
+    },
+    {
+      "name": "tests_sesr",
+      "title": "tests sesr_m7, rebuilt container (500 frames, dispatch budget 1.5 ms)",
+      "rc": 1,
+      "seconds": 4.2,
+      "idle_before": true,
+      "idle_after": true,
+      "key_lines": [
+        "[pin] <ignite-xdna>\\src\\ignite_xdna\\__init__.py | decode_native <ignite-xdna>\\src\\ignite_xdna\\pipelines\\decode_native.py available True",
+        "[silicon-sr] bus.jpg -> (512, 512, 3): 0 of 786432 values differ from ONNX Runtime | dispatch 5.780 ms, readback 0.016, G2G 7.678 ms",
+        "[silicon-sr] 500 frames (640x480 synthetic): G2G mean 6.606 ms p50 6.604 p95 7.104 p99 7.363 | dispatch mean 4.336 p50 4.269 p99 4.821 min 4.139 | preprocess 0.329 | readback 0.026 | postprocess 1.914 | buffer objects allocated after warm-up: {'host_bo': 0, 'instr_bo': 0} | working set +0.86 MB",
+        "Ran 3 tests in 3.800s",
+        "FAILED (failures=1)"
+      ],
+      "parsed": {
+        "frames": 500,
+        "g2g_mean": 6.606,
+        "p99": 7.363,
+        "dispatch_mean": 4.336,
+        "values_differ": [
+          0,
+          786432
+        ],
+        "tests_ran": 3,
+        "result": "FAILED (failures=1)"
+      }
+    },
+    {
+      "name": "camera_yolov8n_full",
+      "title": "camera tool yolov8n_full (500 timed frames)",
+      "rc": 0,
+      "seconds": 4.9,
+      "idle_before": true,
+      "idle_after": true,
+      "key_lines": [
+        "[pin] <ignite-xdna>\\src\\ignite_xdna\\__init__.py | decode_native <ignite-xdna>\\src\\ignite_xdna\\pipelines\\decode_native.py available True",
+        "[summary] frames 500 | warm-up 10 | source image | yolov8n_cut_xint8 (detect) | G2G mean 7.762 ms median 7.762 p95 7.938 p99 8.225 max 8.513 | boxes npu | 5.00 objects per frame | NPU heads present",
+        "[summary] stages (ms): host staging mean 0.317 p50 0.299 p99 0.469 | NPU dispatch mean 7.218 p50 7.222 p99 7.316 | egress readback mean 0.191 p50 0.173 p99 0.529 | NPU forward mean 7.409 p50 7.416 p99 7.802 | postprocess mean 0.036 p50 0.035 p99 0.075",
+        "[summary] wrote <sitting>\\json\\camera_yolov8n_full.json"
+      ],
+      "parsed": {
+        "g2g_mean": 7.762,
+        "p99": 8.225,
+        "staging": 0.317,
+        "dispatch": 7.218,
+        "readback": 0.191,
+        "postprocess": 0.036
+      }
+    },
+    {
+      "name": "camera_yolov8s",
+      "title": "camera tool yolov8s (500 timed frames)",
+      "rc": 0,
+      "seconds": 9.9,
+      "idle_before": true,
+      "idle_after": true,
+      "key_lines": [
+        "[pin] <ignite-xdna>\\src\\ignite_xdna\\__init__.py | decode_native <ignite-xdna>\\src\\ignite_xdna\\pipelines\\decode_native.py available True",
+        "[summary] frames 500 | warm-up 10 | source image | yolov8s_cut_xint8 (detect) | G2G mean 17.298 ms median 17.270 p95 17.490 p99 17.629 max 18.021 | boxes npu | 6.00 objects per frame | NPU heads present",
+        "[summary] stages (ms): host staging mean 0.319 p50 0.301 p99 0.475 | NPU dispatch mean 16.745 p50 16.743 p99 16.826 | egress readback mean 0.194 p50 0.178 p99 0.340 | NPU forward mean 16.939 p50 16.925 p99 17.136 | postprocess mean 0.041 p50 0.040 p99 0.055",
+        "[summary] wrote <sitting>\\json\\camera_yolov8s.json"
+      ],
+      "parsed": {
+        "g2g_mean": 17.298,
+        "p99": 17.629,
+        "staging": 0.319,
+        "dispatch": 16.745,
+        "readback": 0.194,
+        "postprocess": 0.041
+      }
+    },
+    {
+      "name": "camera_sesr_m7",
+      "title": "camera tool sesr_m7 (500 timed frames)",
+      "rc": 0,
+      "seconds": 4.1,
+      "idle_before": true,
+      "idle_after": true,
+      "key_lines": [
+        "[pin] <ignite-xdna>\\src\\ignite_xdna\\__init__.py | decode_native <ignite-xdna>\\src\\ignite_xdna\\pipelines\\decode_native.py available True",
+        "[summary] frames 500 | warm-up 10 | source image | sesr_m7_xint8 (super_resolution) | G2G mean 6.623 ms median 6.632 p95 7.066 p99 7.319 max 7.652 | output image 512x512x3 from the NPU",
+        "[summary] stages (ms): host staging mean 0.356 p50 0.341 p99 0.567 | NPU dispatch mean 4.344 p50 4.269 p99 4.913 | egress readback mean 0.026 p50 0.023 p99 0.046 | NPU forward mean 4.370 p50 4.297 p99 4.945 | postprocess mean 1.897 p50 1.907 p99 2.539",
+        "[summary] wrote <sitting>\\json\\camera_sesr_m7.json"
+      ],
+      "parsed": {
+        "g2g_mean": 6.623,
+        "p99": 7.319,
+        "staging": 0.356,
+        "dispatch": 4.344,
+        "readback": 0.026,
+        "postprocess": 1.897
+      }
+    },
+    {
+      "name": "ignition_yolov8n_full",
+      "title": "Ignition live_ignition.py yolov8n_full (500 timed frames)",
+      "rc": 0,
+      "seconds": 4.5,
+      "idle_before": true,
+      "idle_after": true,
+      "key_lines": [
+        "[summary] stop: frame limit | 510 frames processed (10 warm-up, 500 timed) | 1 distinct source frames | image bus.jpg 810x1080",
+        "[summary] G2G mean 7.681 ms | P50 7.686 | P95 7.872 | P99 8.037 | max 8.397 | over the last 500 timed frames; cold first frame 11.68 ms",
+        "[summary] stage means (ms): preprocess 0.301 | NPU forward 7.345 (dispatch 7.161, readback 0.184) | decode+NMS 0.031",
+        "[summary] boxes from NPU heads on 500/500 timed frames | 5.00 detections per frame",
+        "[summary] RSS 192.8 MB at the first timed frame, 192.8 MB at the end (+0.00 MB over 500 frames)",
+        "[summary] wrote <sitting>\\json\\ignition_yolov8n_full.json"
+      ],
+      "parsed": {
+        "g2g_mean": 7.681,
+        "p99": 8.037,
+        "decode_nms": 0.031,
+        "image_output": null,
+        "detections_per_frame": 5.0
+      }
+    },
+    {
+      "name": "ignition_yolov8s",
+      "title": "Ignition live_ignition.py yolov8s (500 timed frames)",
+      "rc": 0,
+      "seconds": 9.3,
+      "idle_before": true,
+      "idle_after": true,
+      "key_lines": [
+        "[summary] stop: frame limit | 510 frames processed (10 warm-up, 500 timed) | 1 distinct source frames | image bus.jpg 810x1080",
+        "[summary] G2G mean 17.148 ms | P50 17.119 | P95 17.329 | P99 17.492 | max 17.837 | over the last 500 timed frames; cold first frame 21.03 ms",
+        "[summary] stage means (ms): preprocess 0.305 | NPU forward 16.800 (dispatch 16.609, readback 0.191) | decode+NMS 0.038",
+        "[summary] boxes from NPU heads on 500/500 timed frames | 6.00 detections per frame",
+        "[summary] RSS 243.8 MB at the first timed frame, 243.8 MB at the end (+0.00 MB over 500 frames)",
+        "[summary] wrote <sitting>\\json\\ignition_yolov8s.json"
+      ],
+      "parsed": {
+        "g2g_mean": 17.148,
+        "p99": 17.492,
+        "decode_nms": 0.038,
+        "image_output": null,
+        "detections_per_frame": 6.0
+      }
+    },
+    {
+      "name": "ignition_sesr_m7",
+      "title": "Ignition live_ignition.py sesr_m7 (500 timed frames)",
+      "rc": 0,
+      "seconds": 3.8,
+      "idle_before": true,
+      "idle_after": true,
+      "key_lines": [
+        "[summary] stop: frame limit | 510 frames processed (10 warm-up, 500 timed) | 1 distinct source frames | image bus.jpg 810x1080",
+        "[summary] G2G mean 6.644 ms | P50 6.635 | P95 7.114 | P99 7.468 | max 7.857 | over the last 500 timed frames; cold first frame 8.39 ms",
+        "[summary] stage means (ms): preprocess 0.327 | NPU forward 4.396 (dispatch 4.369, readback 0.027) | image output 1.916",
+        "[summary] output image [512, 512, 3] from the NPU",
+        "[summary] RSS 164.6 MB at the first timed frame, 164.6 MB at the end (+0.00 MB over 500 frames)",
+        "[summary] wrote <sitting>\\json\\ignition_sesr_m7.json"
+      ],
+      "parsed": {
+        "g2g_mean": 6.644,
+        "p99": 7.468,
+        "decode_nms": null,
+        "image_output": 1.916,
+        "detections_per_frame": null
+      }
+    }
+  ],
+  "notes": {
+    "rebuilt_containers": {
+      "yolov8n_full": {
+        "sha16": "6748a1773bbc567b",
+        "bytes": 8823680,
+        "identical_to_branch_sitting_build": false
+      },
+      "yolov8s": {
+        "sha16": "ebae786b08737a2f",
+        "bytes": 30743680,
+        "identical_to_branch_sitting_build": false
+      },
+      "sesr_m7": {
+        "sha16": "296a0238b0fd6402",
+        "bytes": 511168,
+        "identical_to_branch_sitting_build": false
+      }
+    }
+  },
+  "preflight": {
+    "host": "DESKTOP-CBL5NUA",
+    "started": "2026-09-14 22:09:56 UTC",
+    "ignite_xdna_describe": "v0.1.0-phoenix-npu-9-g6bd2718",
+    "ignite_xdna_head": "6bd2718280793817142d11f4443253c087944ad7",
+    "ignite_xdna_tracked_changes": "",
+    "ignition_describe": "v0.2.0-20-g3cf2c49",
+    "ignition_head": "3cf2c490035f24d57ea99a90d9b380a89ed67eeb",
+    "ignition_tracked_changes": "",
+    "old_yolov8n_full": {
+      "sha16": "ce64c451ea9bd620",
+      "bytes": 8822528
+    },
+    "branch_sitting_builds": {
+      "yolov8n_full": {
+        "sha16": "d08bac20aa1c0d6e",
+        "bytes": 8823680
+      },
+      "yolov8s": {
+        "sha16": "5dd57f130c54ce9a",
+        "bytes": 30743680
+      },
+      "sesr_m7": {
+        "sha16": "6904efef68d32776",
+        "bytes": 511168
+      }
+    }
+  },
+  "finished": "2026-09-14 22:13:05 UTC"
+}
