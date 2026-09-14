@@ -16,7 +16,8 @@
 //   qh   = min(rne((hs * K2) >> S2), 127)
 //   y    = rne((t * qh) >> YSH)
 //   q2   = sat_u8(y + 128)                   (act = hswish) else q2 = q1
-//   residual packet: q = sat_u8(rne(((qr - 128) << RSH) + (qm - 128)) >> RSH) + 128)
+//   residual packet: q = sat_u8(rne(((qm - 128) << LSH_M) + ((qr - 128) << LSH_R)) >> RSH) + 128)
+//                    with LSH_M = 0 and LSH_R = RSH unless the header sets F_RES_SHIFTS
 // rne = round half to even (AIE conv_even rounding), sat_u8 = clamp to [0, 255].
 //
 // Program memory is 16 KB. The eight accumulators of a pass must stay in vector
@@ -37,9 +38,13 @@ enum {
     H_SHIFT_OUT = 6, H_A1 = 7, H_B1 = 8, H_S1 = 9, H_QMAX = 10, H_K2 = 11,
     H_S2 = 12, H_YSH = 13, H_RSH = 14, H_COUNT_OUT = 15, H_COUNT_ACC = 16,
     H_PHASE0 = 17, H_ROWS_IN = 21, H_COLS_IN = 22, H_PLANE_BYTES = 23,
+    H_RLSH_M = 24, H_RLSH_R = 25,
 };
 enum { OP_NOP = 0, OP_CONV = 1, OP_MAXPOOL = 2, OP_RESIDUAL = 3 };
-enum { F_LOAD_PSUM = 1, F_EMIT = 2, F_HSWISH = 4, F_UP2 = 8, F_HOLD = 16 };
+// F_RES_SHIFTS: a residual packet takes the left shifts of both operands from
+// H_RLSH_M / H_RLSH_R; without it the held tile is unshifted and the residual
+// tile is shifted by RSH (the rule every YOLOv8n residual uses).
+enum { F_LOAD_PSUM = 1, F_EMIT = 2, F_HSWISH = 4, F_UP2 = 8, F_HOLD = 16, F_RES_SHIFTS = 32 };
 constexpr int HDR_BYTES = 128;
 constexpr int BIAS_BYTES = 128;
 constexpr int W_OFFSET = HDR_BYTES + BIAS_BYTES;
@@ -62,6 +67,7 @@ using Acc = aie::accum<acc32, 32>;
 struct Hdr {
     int op, k, stride, ncin, flags, shift_out;
     int a1, b1, s1, qmax, k2, s2, ysh, rsh;
+    int rlsh_m, rlsh_r;
     int rows_in, cols_in, plane_bytes;
     int phase;
 };
@@ -72,6 +78,8 @@ inline Hdr read_header(const int32_t *h, int core_row) {
     d.flags = h[H_FLAGS]; d.shift_out = h[H_SHIFT_OUT];
     d.a1 = h[H_A1]; d.b1 = h[H_B1]; d.s1 = h[H_S1]; d.qmax = h[H_QMAX];
     d.k2 = h[H_K2]; d.s2 = h[H_S2]; d.ysh = h[H_YSH]; d.rsh = h[H_RSH];
+    d.rlsh_m = (d.flags & F_RES_SHIFTS) ? h[H_RLSH_M] : 0;
+    d.rlsh_r = (d.flags & F_RES_SHIFTS) ? h[H_RLSH_R] : d.rsh;
     d.rows_in = h[H_ROWS_IN]; d.cols_in = h[H_COLS_IN]; d.plane_bytes = h[H_PLANE_BYTES];
     d.phase = h[H_PHASE0 + (core_row & 3)];
     return d;
@@ -239,12 +247,13 @@ inline void up2_expand(uint8_t *a, int phase, uint8_t *tmp) {
 inline void residual_tile(const Hdr &d, const uint8_t *a, const int32_t *psum, uint8_t *out) {
     const uint8_t *held = reinterpret_cast<const uint8_t *>(psum) + HOLD_OFFSET_BYTES;
     const int rsh = d.rsh;
-    const int16_t rmul = int16_t(1 << rsh);
+    const int lsh_m = d.rlsh_m;
+    const int16_t rmul = int16_t(1 << d.rlsh_r);
     for (int off = 0; off < NCO * OUT_BLOCK_BYTES; off += 32) {
         V32i16 tm = unpack_centered(aie::load_v<32>(held + off));
         V32i16 tr = unpack_centered(aie::load_v<32>(a + off));
         Acc sa;
-        sa.from_vector(tm);
+        sa.from_vector(tm, lsh_m);
         sa = aie::mac(sa, tr, rmul);
         V32i16 y = sa.template to_vector<int16>(rsh);
         aie::store_v(out + off, sat_u8_from_i16(aie::add(y, int16_t(128))));

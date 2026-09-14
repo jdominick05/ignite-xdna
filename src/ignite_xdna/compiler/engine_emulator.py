@@ -24,7 +24,7 @@ W_OFFSET = 256
 W_MAX_BYTES = W_BYTES - W_OFFSET  # 9,216
 
 OP_NOP, OP_CONV, OP_MAXPOOL, OP_RESIDUAL = 0, 1, 2, 3
-F_LOAD_PSUM, F_EMIT, F_HSWISH, F_UP2, F_HOLD = 1, 2, 4, 8, 16
+F_LOAD_PSUM, F_EMIT, F_HSWISH, F_UP2, F_HOLD, F_RES_SHIFTS = 1, 2, 4, 8, 16, 32
 
 TILE_ROWS = 5
 TILE_COLS = 20
@@ -33,8 +33,8 @@ OUT_BLOCK_BYTES = TILE_ROWS * TILE_COLS * 8  # 800
 
 (H_OP, H_K, H_STRIDE, H_NCIN, H_NCO, H_FLAGS, H_SHIFT_OUT, H_A1, H_B1, H_S1,
  H_QMAX, H_K2, H_S2, H_YSH, H_RSH, H_COUNT_OUT, H_COUNT_ACC, H_PHASE0,
- H_ROWS_IN, H_COLS_IN, H_PLANE_BYTES) = (0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12,
-                                         13, 14, 15, 16, 17, 21, 22, 23)
+ H_ROWS_IN, H_COLS_IN, H_PLANE_BYTES, H_RLSH_M, H_RLSH_R) = (0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12,
+                                                             13, 14, 15, 16, 17, 21, 22, 23, 24, 25)
 
 # Packet geometries the header advertises: (rows_in, cols_in, plane_bytes, ncin).
 # The core always computes four output blocks; ``ncin`` is the number of input
@@ -78,6 +78,8 @@ class PacketHeader:
     rows_in: int = 5
     cols_in: int = 20
     plane_bytes: int = 800
+    rlsh_m: int = 0      # residual: left shift of the held tile (read with F_RES_SHIFTS)
+    rlsh_r: int = 0      # residual: left shift of the residual tile (read with F_RES_SHIFTS)
 
     def words(self) -> np.ndarray:
         h = np.zeros(HDR_BYTES // 4, dtype=np.int32)
@@ -90,6 +92,7 @@ class PacketHeader:
         for i in range(4):
             h[H_PHASE0 + i] = self.phases[i]
         h[H_ROWS_IN], h[H_COLS_IN], h[H_PLANE_BYTES] = self.rows_in, self.cols_in, self.plane_bytes
+        h[H_RLSH_M], h[H_RLSH_R] = self.rlsh_m, self.rlsh_r
         return h
 
     @classmethod
@@ -101,7 +104,8 @@ class PacketHeader:
                    nco=int(h[H_NCO]), flags=int(h[H_FLAGS]), shift_out=int(h[H_SHIFT_OUT]), hs=hs,
                    rsh=int(h[H_RSH]), count_out=int(h[H_COUNT_OUT]), count_acc=int(h[H_COUNT_ACC]),
                    phases=tuple(int(h[H_PHASE0 + i]) for i in range(4)), rows_in=int(h[H_ROWS_IN]),
-                   cols_in=int(h[H_COLS_IN]), plane_bytes=int(h[H_PLANE_BYTES]))
+                   cols_in=int(h[H_COLS_IN]), plane_bytes=int(h[H_PLANE_BYTES]),
+                   rlsh_m=int(h[H_RLSH_M]), rlsh_r=int(h[H_RLSH_R]))
 
 
 def rne_shift(x: np.ndarray, s: int) -> np.ndarray:
@@ -134,10 +138,15 @@ def hswish_epilogue(q1: np.ndarray, hs: HardSwishParams) -> np.ndarray:
     return sat_u8(y + 128)
 
 
-def residual_combine(qm: np.ndarray, qr: np.ndarray, rsh: int) -> np.ndarray:
+def residual_combine(qm: np.ndarray, qr: np.ndarray, rsh: int, lsh_m: int = 0,
+                     lsh_r: Optional[int] = None) -> np.ndarray:
+    """uint8 held tile ``qm`` + uint8 residual tile ``qr``: rne((tm << lsh_m) + (tr << lsh_r), rsh).
+
+    ``lsh_r=None`` is the original rule (residual shifted by ``rsh``, held tile unshifted)."""
+    lsh_r = rsh if lsh_r is None else lsh_r
     tm = qm.astype(np.int64) - 128
     tr = qr.astype(np.int64) - 128
-    y = sat_i16(rne_shift(tm + (tr << rsh), rsh))
+    y = sat_i16(rne_shift((tm << lsh_m) + (tr << lsh_r), rsh))
     return sat_u8(y + 128)
 
 
@@ -260,7 +269,10 @@ def run_packet(wpkt: np.ndarray, apkt: np.ndarray, state: CoreState, core_row: i
             state.hold[0:2] = pooled
     elif hdr.op == OP_RESIDUAL:
         res = a[:OUT_BLOCKS * OUT_BLOCK_BYTES].reshape(OUT_BLOCKS, TILE_ROWS, TILE_COLS, 8)
-        out[:] = residual_combine(state.hold, res, hdr.rsh)
+        if hdr.flags & F_RES_SHIFTS:
+            out[:] = residual_combine(state.hold, res, hdr.rsh, hdr.rlsh_m, hdr.rlsh_r)
+        else:
+            out[:] = residual_combine(state.hold, res, hdr.rsh)
     elif hdr.op == OP_NOP:
         pass
     else:

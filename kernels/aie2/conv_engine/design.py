@@ -76,11 +76,19 @@ def _core_fn(w_in, a_in, o_out, engine, psum, scratch_out, row):
     w_in.release(1)
 
 
-def build_program(device, sequence_body, w_depth=2):
+def ddr_extents(workspace_bytes, packet_bytes):
+    """Declared (workspace, packet) DDR extents: the defaults, raised to the next MiB for larger models."""
+    mib = 1 << 20
+    return (max(WS_BYTES, -(-int(workspace_bytes) // mib) * mib),
+            max(WP_BYTES, -(-int(packet_bytes) // mib) * mib))
+
+
+def build_program(device, sequence_body, w_depth=2, ws_bytes=WS_BYTES, wp_bytes=WP_BYTES):
     """Return an IRON Program for the engine with ``sequence_body(ws, wp)``.
 
     The body emits raw shim DMA tasks against the FIFO allocation symbols
-    ``fifo_names(c)`` (see ``ignite_xdna.compiler.engine_sequence``).
+    ``fifo_names(c)`` (see ``ignite_xdna.compiler.engine_sequence``). ``ws_bytes`` and
+    ``wp_bytes`` are the declared DDR extents every task must stay inside (``ddr_extents``).
     """
     engine = ExternalFunction(
         "engine",
@@ -130,5 +138,7 @@ def build_program(device, sequence_body, w_depth=2):
         # The handles only register the shim endpoints; transfers are emitted by name.
         sequence_body(ws, wp)
 
-    rt = Runtime(sequence, [ws_ty, wp_ty, w_prods, a_prods, o_conses])
+    ws_t = np.ndarray[(int(ws_bytes),), np.dtype[np.uint8]]
+    wp_t = np.ndarray[(int(wp_bytes),), np.dtype[np.uint8]]
+    rt = Runtime(sequence, [ws_t, wp_t, w_prods, a_prods, o_conses])
     return Program(device, rt, workers=workers)

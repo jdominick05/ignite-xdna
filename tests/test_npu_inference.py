@@ -82,7 +82,11 @@ def _default_container() -> Path:
 
 
 MODEL_IGNITE = _default_container()
-N_FRAMES = 500  # continuous frames in the stability/latency test
+N_FRAMES = int(os.environ.get("IGNITE_TEST_FRAMES", "500"))  # continuous frames in the stability/latency test
+# Glass-to-glass budgets of the stability/latency test (yolov8n_full defaults; IGNITE_MODEL=build/yolov8s.ignite
+# runs with IGNITE_G2G_MEAN_MS=25 and IGNITE_G2G_P99_MS=27).
+G2G_MEAN_BUDGET_MS = float(os.environ.get("IGNITE_G2G_MEAN_MS", "8.0"))
+G2G_P99_BUDGET_MS = float(os.environ.get("IGNITE_G2G_P99_MS", "9.5"))
 CUT_ONNX = REPO_ROOT / "models" / "yolov8n_cut_xint8.onnx"
 XCLBIN = REPO_ROOT / "build" / "im2col_4d_16core.xclbin"
 BUS_JPG = REPO_ROOT / "assets" / "bus.jpg"
@@ -109,7 +113,10 @@ def _hardware_skip_reason() -> Optional[str]:
     if not MODEL_IGNITE.exists():
         return f"missing {MODEL_IGNITE}"
     # A graph-engine container carries its own xclbin; the legacy one needs the conv0 template's.
-    if MODEL_IGNITE.name != "yolov8n_full.ignite" and not XCLBIN.exists():
+    from ignite_xdna.compiler.serializer import IgniteModelReader
+    with IgniteModelReader(MODEL_IGNITE) as reader:
+        graph_engine = reader.manifest.get("engine") == "conv_engine_v1"
+    if not graph_engine and not XCLBIN.exists():
         return f"missing {XCLBIN}"
     return None
 
@@ -432,7 +439,7 @@ class NpuInferenceOnSilicon(unittest.TestCase):
             self.assertGreaterEqual(float(np.mean(ious)), 0.70)
 
     def test_11_hundred_frames_no_buffer_growth_and_latency(self):
-        """500 continuous frames: no buffer objects allocated, < 5 MB working-set drift, G2G <= 8 ms."""
+        """N_FRAMES continuous frames: no buffer objects allocated, < 5 MB working-set drift, G2G within budget."""
         rng = np.random.default_rng(1234)
         frames = [rng.integers(0, 256, size=(720, 1280, 3), dtype=np.uint8) for _ in range(4)]
         with self._pipeline() as pipe:
@@ -484,9 +491,10 @@ class NpuInferenceOnSilicon(unittest.TestCase):
                   "preprocess + NPU dispatch + an empty decode, not of a detection pipeline")
         self.assertEqual(allocations, {"host_bo": 0, "instr_bo": 0})
         self.assertLess(growth_mb, 5.0, f"working set grew by {growth_mb:.2f} MB over {N_FRAMES} frames")
-        self.assertLessEqual(float(arr.mean()), 8.0, f"mean glass-to-glass {arr.mean():.3f} ms > 8.0 ms")
+        self.assertLessEqual(float(arr.mean()), G2G_MEAN_BUDGET_MS,
+                             f"mean glass-to-glass {arr.mean():.3f} ms > {G2G_MEAN_BUDGET_MS} ms")
         p99 = float(np.percentile(arr, 99))
-        self.assertLessEqual(p99, 9.5, f"p99 glass-to-glass {p99:.3f} ms > 9.5 ms")
+        self.assertLessEqual(p99, G2G_P99_BUDGET_MS, f"p99 glass-to-glass {p99:.3f} ms > {G2G_P99_BUDGET_MS} ms")
 
     def test_12_camera_tool_headless_on_bus_jpg(self):
         cmd = [sys.executable, str(CAMERA_TOOL), "--source", str(BUS_JPG), "--headless", "--frames", "5",
@@ -500,6 +508,123 @@ class NpuInferenceOnSilicon(unittest.TestCase):
         self.assertIn("source: image", res.stdout)
         self.assertNotIn("could not open source", out)
         self.assertNotIn("-2147023832", out)
+
+
+SR_IGNITE = Path(os.environ.get("IGNITE_SR_MODEL", str(REPO_ROOT / "build" / "sesr_m7.ignite")))
+SR_ONNX = REPO_ROOT / "models" / "sesr_m7_xint8.onnx"
+SR_FRAMES = int(os.environ.get("IGNITE_SR_FRAMES", "500"))
+SR_DISPATCH_BUDGET_MS = float(os.environ.get("IGNITE_SR_DISPATCH_MS", "1.5"))
+
+
+def _sr_skip_reason() -> Optional[str]:
+    try:
+        import pyxrt  # noqa: F401
+    except Exception as ex:  # noqa: BLE001
+        return f"pyxrt is not importable in this interpreter ({type(ex).__name__}); use scripts/research-iron.sh"
+    if not SR_IGNITE.exists():
+        return f"missing {SR_IGNITE} (ignite-compile --engine graph --input models/sesr_m7_xint8.onnx)"
+    return None
+
+
+SR_SKIP = _sr_skip_reason()
+
+
+@unittest.skipIf(SR_SKIP is not None, SR_SKIP or "")
+class SuperResolutionOnSilicon(unittest.TestCase):
+    """Device 0, SESR M7 2x (build/sesr_m7.ignite): image parity with ONNX Runtime, buffer stability, dispatch."""
+
+    @classmethod
+    def setUpClass(cls):
+        if not BUS_JPG.exists():
+            raise unittest.SkipTest(f"{BUS_JPG} missing")
+        cls.bus = cv2.imread(str(BUS_JPG))
+
+    def tearDown(self):
+        gc.collect()
+        time.sleep(0.05)
+
+    def test_20_image_matches_onnx_runtime(self):
+        """Every pixel of the NPU image equals ONNX Runtime's (graph optimizations off) SESR output."""
+        import onnxruntime as ort
+        from ignite_xdna.pipelines.sr_pipeline import SuperResolutionPipeline
+        with SuperResolutionPipeline(SR_IGNITE) as sr:
+            got, t = sr.predict_sync(self.bus)
+        if not SR_ONNX.exists():
+            self.skipTest(f"{SR_ONNX} missing: image checked for shape only")
+        options = ort.SessionOptions()
+        options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_DISABLE_ALL
+        sess = ort.InferenceSession(str(SR_ONNX), options, providers=["CPUExecutionProvider"])
+        small = cv2.resize(self.bus, (256, 256), interpolation=cv2.INTER_LINEAR)
+        x = np.transpose(cv2.cvtColor(small, cv2.COLOR_BGR2RGB).astype(np.float32) - 128.0, (2, 0, 1))[None]
+        y = sess.run(None, {sess.get_inputs()[0].name: x})[0][0]
+        ref = cv2.cvtColor(np.clip(np.transpose(y, (1, 2, 0)) + 128.0, 0, 255).astype(np.uint8), cv2.COLOR_RGB2BGR)
+        diff = int(np.count_nonzero(got != ref))
+        print(f"\n[silicon-sr] bus.jpg -> {got.shape}: {diff} of {ref.size} values differ from ONNX Runtime | "
+              f"dispatch {t.dispatch_ms:.3f} ms, readback {t.readback_ms:.3f}, G2G {t.glass_to_glass_ms:.3f} ms")
+        self.assertEqual(got.shape, (512, 512, 3))
+        self.assertEqual(diff, 0)
+
+    def _run_frames(self):
+        from ignite_xdna.pipelines.sr_pipeline import SuperResolutionPipeline
+        rng = np.random.default_rng(4321)
+        frames = [rng.integers(0, 256, size=(480, 640, 3), dtype=np.uint8) for _ in range(4)]
+        stats = {k: [] for k in ("g2g", "dispatch", "readback", "pre", "post")}
+        with SuperResolutionPipeline(SR_IGNITE) as sr:
+            harness = sr.session.harness
+            allocations = {"host_bo": 0, "instr_bo": 0}
+            real_host, real_instr = harness.create_host_bo, harness.create_instruction_bo_from_bytes
+
+            def counted_host(*a, **k):
+                allocations["host_bo"] += 1
+                return real_host(*a, **k)
+
+            def counted_instr(*a, **k):
+                allocations["instr_bo"] += 1
+                return real_instr(*a, **k)
+
+            harness.create_host_bo = counted_host
+            harness.create_instruction_bo_from_bytes = counted_instr
+            try:
+                for i in range(10):
+                    sr.predict_sync(frames[i % 4])
+                gc.collect()
+                rss_before = _rss_bytes()
+                for i in range(SR_FRAMES):
+                    _, t = sr.predict_sync(frames[i % 4])
+                    stats["g2g"].append(t.glass_to_glass_ms)
+                    stats["dispatch"].append(t.dispatch_ms)
+                    stats["readback"].append(t.readback_ms)
+                    stats["pre"].append(t.preprocess_ms)
+                    stats["post"].append(t.postprocess_ms)
+                gc.collect()
+                rss_after = _rss_bytes()
+            finally:
+                harness.create_host_bo = real_host
+                harness.create_instruction_bo_from_bytes = real_instr
+        return {k: np.asarray(v) for k, v in stats.items()}, allocations, (rss_after - rss_before) / 2 ** 20
+
+    def test_21_frames_without_buffer_growth(self):
+        """SR_FRAMES continuous frames: no buffer objects allocated, < 5 MB working-set drift, no dispatch errors."""
+        stats, allocations, growth_mb = self._run_frames()
+        type(self).stats = stats
+        g, d = stats["g2g"], stats["dispatch"]
+        print(f"\n[silicon-sr] {SR_FRAMES} frames (640x480 synthetic): G2G mean {g.mean():.3f} ms p50 "
+              f"{np.median(g):.3f} p95 {np.percentile(g, 95):.3f} p99 {np.percentile(g, 99):.3f} | dispatch mean "
+              f"{d.mean():.3f} p50 {np.median(d):.3f} p99 {np.percentile(d, 99):.3f} min {d.min():.3f} | preprocess "
+              f"{stats['pre'].mean():.3f} | readback {stats['readback'].mean():.3f} | postprocess "
+              f"{stats['post'].mean():.3f} | buffer objects allocated after warm-up: {allocations} | working set "
+              f"{growth_mb:+.2f} MB")
+        self.assertEqual(allocations, {"host_bo": 0, "instr_bo": 0})
+        self.assertLess(growth_mb, 5.0)
+
+    def test_22_dispatch_budget(self):
+        """Mean raw NPU dispatch within IGNITE_SR_DISPATCH_MS (default 1.5 ms)."""
+        stats = getattr(type(self), "stats", None)
+        if stats is None:
+            stats, _, _ = self._run_frames()
+        mean = float(stats["dispatch"].mean())
+        self.assertLessEqual(mean, SR_DISPATCH_BUDGET_MS,
+                             f"mean dispatch {mean:.3f} ms > {SR_DISPATCH_BUDGET_MS} ms")
 
 
 if __name__ == "__main__":

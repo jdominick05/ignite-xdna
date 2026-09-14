@@ -244,5 +244,101 @@ class GraphEngineOffline(unittest.TestCase):
         self.assertEqual(ref, got)
 
 
+YOLOV8S = ROOT / "models" / "yolov8s_cut_xint8.onnx"
+SESR = ROOT / "models" / "sesr_m7_xint8.onnx"
+
+
+def _emulate_layers(ir, ws, scheds, store, direct, indices):
+    """Seed a workspace with every reference tensor, clear each chosen layer's output, emulate it back."""
+    ws_arr = ws.halo_fill()
+    for name, arr in direct.items():
+        if name in ws.placements:
+            ws.write_tensor(ws_arr, name, arr)
+    mismatches = {}
+    for i in indices:
+        L = ir.layers[i]
+        c = ir.tensors[L.output].channels
+        ws.write_tensor(ws_arr, L.output, np.zeros_like(direct[L.output]))
+        es.emulate_layer(scheds[i], store, ws_arr)
+        mismatches[L.name] = int(np.sum(ws.read_tensor(ws_arr, L.output)[:c] != direct[L.output][:c]))
+    return mismatches
+
+
+class EngineGeneralizationOffline(unittest.TestCase):
+    """Rules added for the model zoo: shifted residual operands (yolov8s), ReLU as an epilogue, 5x5 packets,
+    overlapping edge tiles and a DepthToSpace output (SESR M7)."""
+
+    def test_20_relu_epilogue_is_exact(self):
+        fit = graph_ir.relu_epilogue()
+        q = np.arange(256).astype(np.uint8)
+        self.assertEqual(fit.max_error, 0)
+        self.assertTrue(np.array_equal(em.hswish_epilogue(q, fit.params), np.maximum(q, 128)))
+
+    def test_21_residual_shifts_match_float_semantics(self):
+        """rne((tm << a) + (tr << b), s) is the requantized float Add for every operand pair and scale relation."""
+        tm, tr = np.meshgrid(np.arange(256), np.arange(256), indexing="ij")
+        for s_main, s_res, s_out in ((0.03125, 0.0625, 0.0625), (0.125, 0.0625, 0.0625), (4.0, 2.0, 4.0),
+                                     (0.0625, 0.0625, 0.0625)):
+            s_min = min(s_main, s_res)
+            a, b, sh = (int(round(np.log2(v / s_min))) for v in (s_main, s_res, s_out))
+            got = em.residual_combine(tm.astype(np.uint8), tr.astype(np.uint8), sh, a, b)
+            x = (tm - 128).astype(np.float64) * s_main + (tr - 128).astype(np.float64) * s_res
+            ref = np.clip(np.round(x / s_out) + 128, 0, 255).astype(np.uint8)  # np.round rounds half to even
+            self.assertTrue(np.array_equal(got, ref), (s_main, s_res, s_out))
+        # The original rule (no F_RES_SHIFTS) is the a = 0, b = rsh case.
+        self.assertTrue(np.array_equal(em.residual_combine(tm.astype(np.uint8), tr.astype(np.uint8), 1),
+                                       em.residual_combine(tm.astype(np.uint8), tr.astype(np.uint8), 1, 0, 1)))
+
+    def test_22_tile_origins(self):
+        self.assertEqual(es.tile_origins(640, 20), list(range(0, 640, 20)))
+        self.assertEqual(es.tile_origins(256, 20), list(range(0, 240, 20)) + [236])
+        self.assertEqual(es.tile_origins(20, 20), [0])
+        with self.assertRaises(ValueError):
+            es.tile_origins(16, 20)
+
+    @unittest.skipUnless(YOLOV8S.exists(), "yolov8s model not present")
+    def test_23_yolov8s_shifted_main_residual_emulates_exactly(self):
+        from ignite_xdna.compiler import graph_reference as gr
+        ir = graph_ir.lower_yolov8n(YOLOV8S)
+        self.assertEqual(len(ir.layers), 66)
+        shifted = [L for L in ir.layers if isinstance(L, graph_ir.ConvLayer) and L.residual is not None
+                   and L.residual_lsh_main]
+        self.assertEqual([(L.index, L.residual_lsh_main, L.residual_lsh_res, L.residual_shift) for L in shifted],
+                         [(23, 1, 0, 0)])
+        ws = es.plan_workspace(ir)
+        scheds, store = es.schedule_graph(ir, ws)
+        manifest = build_manifest(ir, ws, scheds, store, "yolov8s_cut_xint8", 0, "x", "y", 0.0)
+        self.assertEqual(manifest["task"], "detect")
+        self.assertTrue(resolve_head_layout(manifest, int(manifest["egress_bytes"])).present)
+        rng = np.random.default_rng(23)
+        direct = gr.run_direct(ir, rng.integers(0, 256, size=(3, 640, 640), dtype=np.uint8))
+        self.assertEqual(_emulate_layers(ir, ws, scheds, store, direct, [23]), {shifted[0].name: 0})
+
+    @unittest.skipUnless(SESR.exists(), "sesr_m7 model not present")
+    def test_24_sesr_lowering_matches_onnx_runtime_and_emulates_exactly(self):
+        from ignite_xdna.compiler import graph_reference as gr
+        ir = graph_ir.lower_yolov8n(SESR)
+        self.assertEqual([L.k for L in ir.layers], [5] + [3] * 7 + [5])
+        self.assertEqual([L.act for L in ir.layers], [None] + ["relu"] * 7 + [None])
+        L7 = ir.layers[7]
+        self.assertEqual((L7.residual_lsh_main, L7.residual_lsh_res, L7.residual_shift), (1, 0, 1))
+        self.assertEqual(ir.output_transforms, {"output": {"op": "depth_to_space", "blocksize": 2, "mode": "CRD"}})
+        ws = es.plan_workspace(ir)
+        scheds, store = es.schedule_graph(ir, ws)
+        manifest = build_manifest(ir, ws, scheds, store, "sesr_m7_xint8", 0, "x", "y", 0.0)
+        self.assertEqual(manifest["task"], "super_resolution")
+        self.assertEqual(manifest["output_shapes"]["image"], [1, 3, 512, 512])
+        self.assertEqual(manifest["egress_bytes"], 12 * 256 * 256)
+        rng = np.random.default_rng(24)
+        x = rng.integers(0, 256, size=(3, 256, 256)).astype(np.float32) - 128.0
+        t_in = ir.tensors[ir.input]
+        direct = gr.run_direct(ir, gr.quantize_input(x, t_in.scale, t_in.zero_point))
+        ort = gr.ort_intermediates(SESR, x[None], [L.output for L in ir.layers])
+        for L in ir.layers:
+            c = ir.tensors[L.output].channels
+            self.assertTrue(np.array_equal(direct[L.output][:c], ort[L.output]), L.name)
+        self.assertEqual(set(_emulate_layers(ir, ws, scheds, store, direct, [0, 7, 8]).values()), {0})
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

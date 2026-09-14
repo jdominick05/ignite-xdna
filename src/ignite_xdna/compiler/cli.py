@@ -393,9 +393,14 @@ def compile_graph_engine(input_path: Union[str, Path], output_path: Union[str, P
     from ignite_xdna.compiler.engine_compile import compile_graph_container
     manifest = compile_graph_container(input_path, output_path, build_dir=build_dir)
     out_p = Path(output_path)
-    from ignite_xdna.runtime.heads import resolve_head_layout
-    status = resolve_head_layout(manifest, int(manifest["egress_bytes"]))
-    print(f"    [OK] head_status: {'present' if status.present else 'absent'} ({status.reason})")
+    if manifest.get("task", "detect") == "detect":
+        from ignite_xdna.runtime.heads import resolve_head_layout
+        status = resolve_head_layout(manifest, int(manifest["egress_bytes"]))
+        print(f"    [OK] head_status: {'present' if status.present else 'absent'} ({status.reason})")
+    else:
+        d = manifest["dense_output"]
+        print(f"    [OK] dense output: {d['channels']}x{d['height']}x{d['width']} uint8 at scale {d['scale']}, "
+              f"host {d['transform']['op']} x{d['transform']['blocksize']} -> image {manifest['output_shapes']['image']}")
     print(f"    [OK] egress bytes: {manifest['egress_bytes']:,}")
     return out_p.stat().st_size
 
