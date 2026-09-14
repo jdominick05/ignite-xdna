@@ -4790,7 +4790,7 @@ CPU path — the path that is byte-identical to a fresh `XINT8_ADAROUND` oracle.
 
 `tools/quant_adaround_device_checks.py` runs the transcription on a synthetic QDQ Conv from
 `tools/quant_fixtures.py`, pointed by `--repo` at the pre-change code in the main checkout
-at `311a672` and at the post-change code, and compares emitted int8 weights, per-layer
+at `46c022a` and at the post-change code, and compares emitted int8 weights, per-layer
 report figures and every transcribed log line. At **8 iterations / 4 images** and at
 **200 iterations / 8 images** (which moves 16 of 36 weights, so the loop is genuinely
 exercised) the two are **identical** — weights, recon metrics, changed-element counts and
@@ -6553,7 +6553,7 @@ under `results/` protects a measurement's *content*, not its byte encoding, and 
 `grep` can read is not serving as evidence. The recovery is byte-exact: the decoded text
 re-encodes to the original bytes exactly, asserted before anything was written, and the line
 count is unchanged at 82. Only the encoding changed; no number moved. The same fix was
-applied to `results/quant_fastdepth_xint8.log` in merge `4308a62`, and the rule is now
+applied to `results/quant_fastdepth_xint8.log` in merge `adc4468`, and the rule is now
 recorded in `docs/DECISIONS.md` so there is one policy rather than two precedents.
 
 ---
@@ -6778,7 +6778,7 @@ Note the sigma edges remain **unmeasured**: the probe only ever reached sigma in
 > the VitisAI EP and ran entirely on CPU -- `"tested_conv_on_npu": false`, 7 of 7 nodes off the NPU
 > -- so those rows compared CPU against CPU and say nothing about the DPU. The mistake was reading
 > mismatch counts without checking placement, which is the failure this repo warns about most
-> often. Caught by the forward test on `main` (`79ee4fe`, `311a672`), which reached the same
+> often. Caught by the forward test on `main` (`79ee4fe`, `46c022a`), which reached the same
 > conclusion independently. What the sweep does establish is below, and it is a better result.
 
 **The EP's acceptance boundary is the producer's shift-cut rule.** Across all sixteen fixtures, the
@@ -6918,7 +6918,7 @@ models" result is a tautology of that clamp, not a measurement of the hardware b
 Measured here and now checked rather than assumed: every analyzed Conv/Gemm on all eleven
 models lies in `[14, 30]`, zero outside.
 
-This also explains, with no new hardware, the fact recorded in `311a672` that the highest
+This also explains, with no new hardware, the fact recorded in `46c022a` that the highest
 sigma ever executed on this device is 30 — 30 is the contract's upper edge (`shift_cut` 16),
 i.e. the producer's ceiling rather than the silicon's. Both register widths behind Theorem 1
 remain unmeasured and both edges of `[0, 31]` remain unreached.
@@ -6957,7 +6957,7 @@ Quark/Ignition" about a file that was.
 
 Unresolved operations are now excluded from the violation denominator and from every
 distribution, and counted on their own line. `--repair` skips them too: projecting from an
-invented 1.0 is the same class of defect as the sigma = −90 incident in `311a672`.
+invented 1.0 is the same class of defect as the sigma = −90 incident in `46c022a`.
 
 **Contract-edge saturation, and what it does not prove.** An operation at sigma 14 or 30 is
 one the clamp had hard against an edge. Only three models touch an edge at all, and only two
@@ -7826,7 +7826,7 @@ next subsection, without bigger tiles: the task count was not the only wall.
 
 ### Graph engine latency from 19.2 to 7.9 ms glass-to-glass (2026-09-14, Desktop 2)
 
-Branch `worktree-npu-heads` after commit `c5c2817`; evidence
+Branch `worktree-npu-heads` after commit `56b3d70`; evidence
 `results/aie/graph_engine_latency_phoenix_20260914T0411Z.log` (every probe and step),
 `results/aie/npu_inference_graph_engine_phoenix_20260914T0426Z.log` (witnessed suite) and
 `results/aie/camera_npu_boxes_phoenix_20260914T0426Z.log` (witnessed camera run). Every
@@ -7846,7 +7846,7 @@ schedule was paying for ops and for columns waiting on each other, not for bytes
 
 | Step (each byte-exact on all 66 layers on Device 0) | Tasks | Instructions | Dispatch, real / NOP weights |
 |---|---|---|---|
-| per-round schedule (`c5c2817`) | 5,455 | 776,012 B | 11.43 / 8.59 ms |
+| per-round schedule (`56b3d70`) | 5,455 | 776,012 B | 11.43 / 8.59 ms |
 | coarse schedule (repeat tasks per run of quads, drains issued ahead and held, stride-0 weight repeats, chunk repeats, per-quad upsample fills) | 3,303 | 472,276 B | 10.40 / 6.95 ms |
 | + 20 × 20 groups rotated over the four columns (they all ran on column 0), headers trim junk input blocks | 3,303 | 474,652 B | 8.20 / 5.63 ms |
 | + kernel computes a row's fifth pixel group once (it computed it twice), pass always inlined | 3,303 | 474,652 B | 7.55 / 5.67 ms |
