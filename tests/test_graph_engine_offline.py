@@ -244,5 +244,61 @@ class GraphEngineOffline(unittest.TestCase):
         self.assertEqual(ref, got)
 
 
+class NativeDecodeOffline(unittest.TestCase):
+    """The native int8 decode (pipelines/decode_native.c) returns the numpy path's detections exactly."""
+
+    def test_native_decode_matches_numpy(self):
+        from ignite_xdna.pipelines import decode_native
+        from ignite_xdna.pipelines.yolo_pipeline import YoloDecoder
+        if not decode_native.available():
+            self.skipTest("native decode library not built")
+        rng = np.random.default_rng(21)
+        numpy_dec, native_dec = YoloDecoder(native_decode=False), YoloDecoder()
+        self.assertTrue(native_dec.uses_native_decode)
+        total = 0
+        for trial in range(150):
+            heads, scales = {}, {}
+            for name, g in (("p3", 80), ("p4", 40), ("p5", 20)):
+                scales[name + "_box"] = (float(2.0 ** rng.integers(-5, 1)), int(rng.integers(-8, 9)))
+                scales[name + "_cls"] = (float(2.0 ** rng.integers(-4, 0)), int(rng.integers(-8, 9)))
+                heads[name + "_cls"] = rng.integers(-128, -111, (1, 80, g, g), dtype=np.int8)
+                heads[name + "_box"] = rng.integers(-128, 128, (1, 64, g, g), dtype=np.int8)
+                for _ in range(int(rng.integers(0, 12))):  # same-class clusters with shared logits
+                    y, x, r = int(rng.integers(0, g)), int(rng.integers(0, g)), int(rng.integers(0, 3))
+                    c, q = int(rng.integers(0, 4)), int(rng.integers(-10, 128))
+                    ys, xs = slice(max(y - r, 0), y + r + 1), slice(max(x - r, 0), x + r + 1)
+                    heads[name + "_cls"][0, c, ys, xs] = q
+                    if rng.random() < 0.3:  # a lower-index class just below: saturated sigmoids tie in float32
+                        heads[name + "_cls"][0, (c + 79) % 80, ys, xs] = max(q - int(rng.integers(1, 7)), -128)
+                    heads[name + "_box"][0, :, ys, xs] = rng.integers(-128, 128, 64, dtype=np.int8)[:, None, None]
+            heads["scales"] = scales
+            if trial % 2:
+                heads["cls_max"] = {n: heads[n].reshape(80, -1).max(0) for n in ("p3_cls", "p4_cls", "p5_cls")}
+            pad = (int(rng.integers(0, 200)), int(rng.integers(0, 200)))
+            scale = float(np.float32(rng.uniform(0.3, 2.5)))
+            conf, iou = ((0.25, 0.5), (0.1, 0.45), (0.6, 0.7), (0.25, 0.0))[trial % 4]
+            ref = numpy_dec.postprocess(heads, pad, scale, conf, iou)
+            got = native_dec.postprocess(heads, pad, scale, conf, iou)
+            self.assertEqual(ref, got, f"trial {trial}")
+            total += len(ref)
+        self.assertGreater(total, 0)
+
+    def test_float_heads_keep_the_numpy_path(self):
+        from ignite_xdna.pipelines import decode_native
+        from ignite_xdna.pipelines.yolo_pipeline import YoloDecoder
+        if not decode_native.available():
+            self.skipTest("native decode library not built")
+        rng = np.random.default_rng(22)
+        heads = []
+        for channels in (64, 80):
+            for g in (80, 40, 20):
+                heads.append(rng.normal(-6.0 if channels == 80 else 0.0, 2.0, (1, channels, g, g)).astype(np.float32))
+        heads = heads[:3] + heads[3:]
+        native_dec = YoloDecoder()
+        self.assertIsNone(native_dec._native.decode(heads[:3], heads[3:], None, {}, (0, 0), 1.0, 0.25, 0.5))
+        self.assertEqual(YoloDecoder(native_decode=False).postprocess(heads, (0, 0), 1.0),
+                         native_dec.postprocess(heads, (0, 0), 1.0))
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

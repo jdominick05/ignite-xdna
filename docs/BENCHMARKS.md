@@ -7889,3 +7889,53 @@ The margin under 8 ms is under 0.1 ms. What is left in the frame (DERIVED from t
 split): ~1.9 ms of core compute, ~1.3 ms of instruction ops, ~3 ms of transport — most of
 it fill bytes that are fixed 6,400-byte packets with over-read — and ~0.7 ms of host work.
 The next levers are fewer fill tasks for multi-chunk rounds and less over-read per packet.
+
+### Native int8 head decode with identical detections (2026-09-14, Desktop 2)
+
+Branch `native-postprocess` from `main` `609bd68`; evidence
+`results/aie/decode_native_phoenix_20260914T2055Z.log`. Every figure is from
+`build/yolov8n_full.ignite` through `predict_sync(use_oracle_for_boxes=False)`, whose
+`postprocess_ms` is exactly `YoloDecoder.postprocess` on the NPU heads, with
+`xrt-smi examine -r aie-partitions` reporting no hardware contexts around the runs.
+
+**Why the live decode took 0.24–0.29 ms** (MEASURED): replaying a live frame's own int8
+heads took 0.09–0.11 ms, spread over nine numpy stages of 0.005–0.023 ms each. Decoding the
+same heads again inside the frame loop took 0.19–0.20 ms even with nothing in between, and a
+fixed `zlib.crc32` workload ran 1.6–1.9× slower after any blocking wait (a 0.5–33 ms sleep in
+a process with no NPU object, or an NPU dispatch awaited by `run.wait()` or by polling
+`run.state()`) but not after a busy spin of the same length. The factor multiplies the work
+rather than adding a fixed cost, so a decode that does less work loses proportionally less.
+Heads freshly written by the readback threads added ~0.04 ms. The earlier attribution of the
+whole live gap to the first read of the class logits
+([graph engine latency](#graph-engine-latency-from-192-to-79-ms-glass-to-glass-2026-09-14-desktop-2))
+covers only that part: with the class maxima computed natively, the numpy decode still took
+0.24–0.29 ms live.
+
+**What changed:** `pipelines/decode_native.c` decodes int8 heads in one ctypes call (prune,
+class scores, DFL expectation, boxes, letterbox removal and batched NMS), and `YoloDecoder`
+uses it for int8 heads with scales; `native_decode=False`, float heads or a missing library
+keep numpy. It returns the numpy path's detections float for float: float32 arithmetic in
+numpy's order, every `exp` read from tables numpy fills (`np.exp` on float32 gives an element
+the same bits in every layout, checked on numpy 1.26.4 and 2.5.3), numpy's argmax over
+saturated probabilities, and OpenCV's `NMSBoxesBatched` as written in 4.11.0 and 5.0.0, where
+it is identical. It is a separate library built with `/fp:precise`, because
+`preprocess_simd.c` is built with `/fp:fast`. SSE2 carries the survivor scan and the DFL
+divisions; prefetching the box logits gave no measurable gain and was removed.
+
+| Check on the final code | Result |
+|---|---|
+| Random-head stress, 3,000 trials per environment: same-class clusters, score and argmax ties, saturation, nonzero zero points, the threshold at a reachable score, more than 256 candidates | 0 mismatches on numpy 2.5.3 / OpenCV 5.0.0 and on numpy 1.26.4 / OpenCV 4.11.0 |
+| 312 recorded NPU frames (two recordings of `bus.jpg`, 35 camera JPEGs and 120 live frames) | 0 mismatches |
+| Live frames, both paths on the same heads | 0 mismatches over 340 frames |
+| `tests/test_npu_inference.py` | 10 tests, none skipped; `bus.jpg` IoU 1.0 against the CPU oracle; 500 frames at 7.832 ms mean glass-to-glass |
+
+| Decode, medians | numpy | native |
+|---|---|---|
+| Hot replay, 120 camera frames (two recordings) | 0.092–0.096 ms | 0.009–0.010 ms |
+| Live, 100 still frames, 5.44 objects | 0.281 ms (p95 0.343) | **0.044 ms** (p95 0.052) |
+| Live, 240 camera frames, 4.80 objects | 0.288 ms (p95 0.340) | **0.045 ms** (p95 0.055) |
+| Glass-to-glass in the same runs, stills / camera | 7.859 / 7.843 ms | 7.764 / 7.701 ms |
+
+A hot call costs 8.0 µs: 2.6 µs of C, 1.0 µs of ctypes argument conversion and ~4.4 µs of
+Python around it. `tools/decode_native_check.py` reruns every check (`stress`, `record`,
+`replay`, `live`, `slowdown`).
