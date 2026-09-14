@@ -1,0 +1,249 @@
+Whole-network YOLOv8n on the 16-core convolution engine: exactness offline and on Device 0, first latencies
+machine=Desktop 2 (Ryzen 7 8700G), device=[003d:00:01.1] NPU Phoenix Device 0, date=2026-09-13 (UTC evening)
+model=models/yolov8n_cut_xint8.onnx (Quark QDQ: uint8 activations zp 128, int8 per-tensor weights, power-of-two scales)
+engine=kernels/aie2/conv_engine (engine.cc + design.py), compiler=src/ignite_xdna/compiler/{graph_ir,engine_schedule,engine_sequence,engine_compile}.py
+container=build/yolov8n_full.ignite (ignite-compile --engine graph): engine.xclbin 131,710 B, insts.bin, wpackets.bin 8,079,616 B, egress 1,209,600 B
+runtime=Python 3.13 ironenv with pyxrt (scripts/research-iron.sh); offline checks in resnet_env17 (Python 3.12)
+preflight=xrt-smi examine -r aie-partitions reported "No hardware contexts running on device" before the first silicon run of the engine (21:3x local); the host was otherwise idle (no CPU busy sample was recorded for these bring-up runs; the witnessed measurement run with preflight + CPU sample is pending a device restart, see the note at the end)
+
+evidence tags: MEASURED = number printed by a run in this log; DERIVED = arithmetic on measured numbers; SPEC = datasheet/tool value.
+
+============================================================================================================
+SECTION 1 - offline: direct integer reference vs ONNX Runtime uint8 intermediates (66/66 layers, max abs diff 0)
+and packet-level emulation through the DMA descriptors (66/66 layers EXACT), bus.jpg, resnet_env17
+raw file: graph_check_all.log
+============================================================================================================
+workspace: 22.0 MB, 67 tensors, planned in 0.01s
+  images_QuantizeLinear_Output             base=        0 halo=1 640x640 blocks=1 planes=1 bytes=3297312
+  Mul_output_0_QuantizeLinear_Output       base=  3297344 halo=1 320x320 blocks=2 planes=4 bytes=3317888
+  Mul_output_0_QuantizeLinear_Output       base=  6615232 halo=0 160x160 blocks=4 planes=4 bytes=819200
+  Mul_output_0_QuantizeLinear_Output       base=  7434432 halo=1 160x160 blocks=4 planes=4 bytes=839808
+schedule: 1415 rounds, 12980 A packets, 2777 W fills, 8.08 MB static packets, in 1.5s
+  L 0 rounds= 256 packets= 1024 w=   4 /model.0/conv/Conv
+  L 1 rounds=  64 packets=  512 w= 128 /model.1/conv/Conv
+  L 2 rounds=  64 packets=  256 w=   4 /model.2/cv1/conv/Conv
+  L 3 rounds=  64 packets=  256 w=   4 /model.2/m.0/cv1/conv/Conv
+  L 4 rounds=  64 packets=  512 w= 128 /model.2/m.0/cv2/conv/Conv
+  L 5 rounds=  64 packets=  512 w= 128 /model.2/cv2/conv/Conv
+  L 6 rounds=  32 packets=  512 w= 128 /model.3/conv/Conv
+  L 7 rounds=  32 packets=  128 w=   8 /model.4/cv1/conv/Conv
+input q range 128 255
+direct reference for 66 layers in 0.5s
+ORT intermediates in 0.1s
+  L 0 /model.0/conv/Conv                     direct vs ORT: max=0 mean=0.0000 frac>0=0.0000
+  L 1 /model.1/conv/Conv                     direct vs ORT: max=0 mean=0.0000 frac>0=0.0000
+  L 2 /model.2/cv1/conv/Conv                 direct vs ORT: max=0 mean=0.0000 frac>0=0.0000
+  L 3 /model.2/m.0/cv1/conv/Conv             direct vs ORT: max=0 mean=0.0000 frac>0=0.0000
+  L 4 /model.2/m.0/cv2/conv/Conv             direct vs ORT: max=0 mean=0.0000 frac>0=0.0000
+  L 5 /model.2/cv2/conv/Conv                 direct vs ORT: max=0 mean=0.0000 frac>0=0.0000
+  L 6 /model.3/conv/Conv                     direct vs ORT: max=0 mean=0.0000 frac>0=0.0000
+  L 7 /model.4/cv1/conv/Conv                 direct vs ORT: max=0 mean=0.0000 frac>0=0.0000
+  L 8 /model.4/m.0/cv1/conv/Conv             direct vs ORT: max=0 mean=0.0000 frac>0=0.0000
+  L 9 /model.4/m.0/cv2/conv/Conv             direct vs ORT: max=0 mean=0.0000 frac>0=0.0000
+  L10 /model.4/m.1/cv1/conv/Conv             direct vs ORT: max=0 mean=0.0000 frac>0=0.0000
+  L11 /model.4/m.1/cv2/conv/Conv             direct vs ORT: max=0 mean=0.0000 frac>0=0.0000
+  L12 /model.4/cv2/conv/Conv                 direct vs ORT: max=0 mean=0.0000 frac>0=0.0000
+  L13 /model.5/conv/Conv                     direct vs ORT: max=0 mean=0.0000 frac>0=0.0000
+  L14 /model.6/cv1/conv/Conv                 direct vs ORT: max=0 mean=0.0000 frac>0=0.0000
+  L15 /model.6/m.0/cv1/conv/Conv             direct vs ORT: max=0 mean=0.0000 frac>0=0.0000
+  L16 /model.6/m.0/cv2/conv/Conv             direct vs ORT: max=0 mean=0.0000 frac>0=0.0000
+  L17 /model.6/m.1/cv1/conv/Conv             direct vs ORT: max=0 mean=0.0000 frac>0=0.0000
+  L18 /model.6/m.1/cv2/conv/Conv             direct vs ORT: max=0 mean=0.0000 frac>0=0.0000
+  L19 /model.6/cv2/conv/Conv                 direct vs ORT: max=0 mean=0.0000 frac>0=0.0000
+  L20 /model.7/conv/Conv                     direct vs ORT: max=0 mean=0.0000 frac>0=0.0000
+  L21 /model.8/cv1/conv/Conv                 direct vs ORT: max=0 mean=0.0000 frac>0=0.0000
+  L22 /model.8/m.0/cv1/conv/Conv             direct vs ORT: max=0 mean=0.0000 frac>0=0.0000
+  L23 /model.8/m.0/cv2/conv/Conv             direct vs ORT: max=0 mean=0.0000 frac>0=0.0000
+  L24 /model.8/cv2/conv/Conv                 direct vs ORT: max=0 mean=0.0000 frac>0=0.0000
+  L25 /model.9/cv1/conv/Conv                 direct vs ORT: max=0 mean=0.0000 frac>0=0.0000
+  L26 /model.9/m/MaxPool                     direct vs ORT: max=0 mean=0.0000 frac>0=0.0000
+  L27 /model.9/m_1/MaxPool                   direct vs ORT: max=0 mean=0.0000 frac>0=0.0000
+  L28 /model.9/m_2/MaxPool                   direct vs ORT: max=0 mean=0.0000 frac>0=0.0000
+  L29 /model.9/cv2/conv/Conv                 direct vs ORT: max=0 mean=0.0000 frac>0=0.0000
+  L30 /model.12/cv1/conv/Conv                direct vs ORT: max=0 mean=0.0000 frac>0=0.0000
+  L31 /model.12/m.0/cv1/conv/Conv            direct vs ORT: max=0 mean=0.0000 frac>0=0.0000
+  L32 /model.12/m.0/cv2/conv/Conv            direct vs ORT: max=0 mean=0.0000 frac>0=0.0000
+  L33 /model.12/cv2/conv/Conv                direct vs ORT: max=0 mean=0.0000 frac>0=0.0000
+  L34 /model.15/cv1/conv/Conv                direct vs ORT: max=0 mean=0.0000 frac>0=0.0000
+  L35 /model.15/m.0/cv1/conv/Conv            direct vs ORT: max=0 mean=0.0000 frac>0=0.0000
+  L36 /model.15/m.0/cv2/conv/Conv            direct vs ORT: max=0 mean=0.0000 frac>0=0.0000
+  L37 /model.15/cv2/conv/Conv                direct vs ORT: max=0 mean=0.0000 frac>0=0.0000
+  L38 /model.16/conv/Conv                    direct vs ORT: max=0 mean=0.0000 frac>0=0.0000
+  L39 /model.22/cv2.0/cv2.0.0/conv/Conv      direct vs ORT: max=0 mean=0.0000 frac>0=0.0000
+  L40 /model.22/cv3.0/cv3.0.0/conv/Conv      direct vs ORT: max=0 mean=0.0000 frac>0=0.0000
+  L41 /model.22/cv2.0/cv2.0.1/conv/Conv      direct vs ORT: max=0 mean=0.0000 frac>0=0.0000
+  L42 /model.22/cv3.0/cv3.0.1/conv/Conv      direct vs ORT: max=0 mean=0.0000 frac>0=0.0000
+  L43 /model.18/cv1/conv/Conv                direct vs ORT: max=0 mean=0.0000 frac>0=0.0000
+  L44 /model.22/cv2.0/cv2.0.2/Conv           direct vs ORT: max=0 mean=0.0000 frac>0=0.0000
+  L45 /model.22/cv3.0/cv3.0.2/Conv           direct vs ORT: max=0 mean=0.0000 frac>0=0.0000
+  L46 /model.18/m.0/cv1/conv/Conv            direct vs ORT: max=0 mean=0.0000 frac>0=0.0000
+  L47 /model.18/m.0/cv2/conv/Conv            direct vs ORT: max=0 mean=0.0000 frac>0=0.0000
+  L48 /model.18/cv2/conv/Conv                direct vs ORT: max=0 mean=0.0000 frac>0=0.0000
+  L49 /model.19/conv/Conv                    direct vs ORT: max=0 mean=0.0000 frac>0=0.0000
+  L50 /model.22/cv2.1/cv2.1.0/conv/Conv      direct vs ORT: max=0 mean=0.0000 frac>0=0.0000
+  L51 /model.22/cv3.1/cv3.1.0/conv/Conv      direct vs ORT: max=0 mean=0.0000 frac>0=0.0000
+  L52 /model.22/cv2.1/cv2.1.1/conv/Conv      direct vs ORT: max=0 mean=0.0000 frac>0=0.0000
+  L53 /model.22/cv3.1/cv3.1.1/conv/Conv      direct vs ORT: max=0 mean=0.0000 frac>0=0.0000
+  L54 /model.21/cv1/conv/Conv                direct vs ORT: max=0 mean=0.0000 frac>0=0.0000
+  L55 /model.22/cv2.1/cv2.1.2/Conv           direct vs ORT: max=0 mean=0.0000 frac>0=0.0000
+  L56 /model.22/cv3.1/cv3.1.2/Conv           direct vs ORT: max=0 mean=0.0000 frac>0=0.0000
+  L57 /model.21/m.0/cv1/conv/Conv            direct vs ORT: max=0 mean=0.0000 frac>0=0.0000
+  L58 /model.21/m.0/cv2/conv/Conv            direct vs ORT: max=0 mean=0.0000 frac>0=0.0000
+  L59 /model.21/cv2/conv/Conv                direct vs ORT: max=0 mean=0.0000 frac>0=0.0000
+  L60 /model.22/cv2.2/cv2.2.0/conv/Conv      direct vs ORT: max=0 mean=0.0000 frac>0=0.0000
+  L61 /model.22/cv3.2/cv3.2.0/conv/Conv      direct vs ORT: max=0 mean=0.0000 frac>0=0.0000
+  L62 /model.22/cv2.2/cv2.2.1/conv/Conv      direct vs ORT: max=0 mean=0.0000 frac>0=0.0000
+  L63 /model.22/cv3.2/cv3.2.1/conv/Conv      direct vs ORT: max=0 mean=0.0000 frac>0=0.0000
+  L64 /model.22/cv2.2/cv2.2.2/Conv           direct vs ORT: max=0 mean=0.0000 frac>0=0.0000
+  L65 /model.22/cv3.2/cv3.2.2/Conv           direct vs ORT: max=0 mean=0.0000 frac>0=0.0000
+  L 0 packet emulation EXACT in 1.1s
+  L 1 packet emulation EXACT in 0.5s
+  L 2 packet emulation EXACT in 0.2s
+  L 3 packet emulation EXACT in 0.8s
+  L 4 packet emulation EXACT in 0.9s
+  L 5 packet emulation EXACT in 0.4s
+  L 6 packet emulation EXACT in 0.5s
+  L 7 packet emulation EXACT in 0.1s
+  L 8 packet emulation EXACT in 0.2s
+  L 9 packet emulation EXACT in 0.2s
+  L10 packet emulation EXACT in 0.2s
+  L11 packet emulation EXACT in 0.2s
+  L12 packet emulation EXACT in 0.3s
+  L13 packet emulation EXACT in 0.4s
+  L14 packet emulation EXACT in 0.1s
+  L15 packet emulation EXACT in 0.2s
+  L16 packet emulation EXACT in 0.2s
+  L17 packet emulation EXACT in 0.2s
+  L18 packet emulation EXACT in 0.2s
+  L19 packet emulation EXACT in 0.2s
+  L20 packet emulation EXACT in 0.4s
+  L21 packet emulation EXACT in 0.1s
+  L22 packet emulation EXACT in 0.2s
+  L23 packet emulation EXACT in 0.2s
+  L24 packet emulation EXACT in 0.1s
+  L25 packet emulation EXACT in 0.1s
+  L26 packet emulation EXACT in 0.0s
+  L27 packet emulation EXACT in 0.0s
+  L28 packet emulation EXACT in 0.0s
+  L29 packet emulation EXACT in 0.2s
+  L30 packet emulation EXACT in 0.3s
+  L31 packet emulation EXACT in 0.2s
+  L32 packet emulation EXACT in 0.2s
+  L33 packet emulation EXACT in 0.1s
+  L34 packet emulation EXACT in 0.3s
+  L35 packet emulation EXACT in 0.2s
+  L36 packet emulation EXACT in 0.2s
+  L37 packet emulation EXACT in 0.2s
+  L38 packet emulation EXACT in 0.2s
+  L39 packet emulation EXACT in 0.9s
+  L40 packet emulation EXACT in 1.4s
+  L41 packet emulation EXACT in 0.9s
+  L42 packet emulation EXACT in 1.9s
+  L43 packet emulation EXACT in 0.2s
+  L44 packet emulation EXACT in 0.1s
+  L45 packet emulation EXACT in 0.3s
+  L46 packet emulation EXACT in 0.2s
+  L47 packet emulation EXACT in 0.2s
+  L48 packet emulation EXACT in 0.2s
+  L49 packet emulation EXACT in 0.2s
+  L50 packet emulation EXACT in 0.4s
+  L51 packet emulation EXACT in 0.6s
+  L52 packet emulation EXACT in 0.2s
+  L53 packet emulation EXACT in 0.5s
+  L54 packet emulation EXACT in 0.2s
+  L55 packet emulation EXACT in 0.0s
+  L56 packet emulation EXACT in 0.1s
+  L57 packet emulation EXACT in 0.2s
+  L58 packet emulation EXACT in 0.2s
+  L59 packet emulation EXACT in 0.2s
+  L60 packet emulation EXACT in 0.2s
+  L61 packet emulation EXACT in 0.3s
+  L62 packet emulation EXACT in 0.1s
+  L63 packet emulation EXACT in 0.1s
+  L64 packet emulation EXACT in 0.0s
+  L65 packet emulation EXACT in 0.0s
+packet emulation total 20.2s
+exit=0
+
+============================================================================================================
+SECTION 2 - silicon, first three real layers (conv0 3->16 k3 s2 on the 640x640 image, conv1, cv1 1x1), two dispatches
+raw file: graph3_hw.log (tests/test_engine_graph.py --hardware --layers 3 --iters 2)
+============================================================================================================
+[hardware] iter 0: dispatch 6.757 ms for 3 layers
+  L 0 /model.0/conv/Conv                     EXACT
+  L 1 /model.1/conv/Conv                     EXACT
+  L 2 /model.2/cv1/conv/Conv                 EXACT
+[hardware] iter 1: dispatch 5.423 ms for 3 layers
+  L 0 /model.0/conv/Conv                     EXACT
+  L 1 /model.1/conv/Conv                     EXACT
+  L 2 /model.2/cv1/conv/Conv                 EXACT
+[graph] PASS
+
+============================================================================================================
+SECTION 3 - silicon, pipeline acceptance on the graph-engine container: tests/test_npu_inference.py test_10
+(heads present, predict_sync(use_oracle_for_boxes=False), >= 4 detections on bus.jpg, IoU vs the CPU oracle)
+raw file: test10.log
+============================================================================================================
+test_10_head_status_and_oracle_free_detections (__main__.NpuInferenceOnSilicon.test_10_head_status_and_oracle_free_detections) ... ok
+
+----------------------------------------------------------------------
+Ran 1 test in 0.464s
+
+OK
+
+[silicon] heads present: six heads declared in head_layout, 1209600 of 1209600 egress bytes
+[silicon] IoU vs oracle per detection: [1.0, 1.0, 1.0, 1.0, 1.0]
+
+============================================================================================================
+SECTION 4 - silicon, camera tool headless on bus.jpg with --boxes npu (test_12 plus a direct invocation)
+raw file: test12.log
+============================================================================================================
+test_12_camera_tool_headless_on_bus_jpg (__main__.NpuInferenceOnSilicon.test_12_camera_tool_headless_on_bus_jpg) ... ok
+
+----------------------------------------------------------------------
+Ran 1 test in 0.855s
+
+OK
+
+[camera-tool] [Ignition] Initializing bare-metal pipeline on Device 0 from <checkout>\build\yolov8n_full.ignite ... | [Ignition] NPU heads present: six heads declared in head_layout, 1209600 of 1209600 egress bytes | [Ignition] boxes: npu | [Ignition] source: image <checkout>\assets\bus.jpg | [hud] frame 1/5 | Ignition YOLOv8n | Device 0 | G2G 50.54 ms | NPU 48.16 ms | loop   19.7 FPS | objects 5 | boxes: npu | NPU heads: present | [hud] frame 2/5 | Ignition YOLOv8n | Device 0 | G2G 47.32 ms | NPU 46.74 ms | loop   16.7 FPS | objects 5 | boxes: npu | NPU heads: present | [hud] frame 3/5 | Ignition YOLOv8n | Device 0 | G2G 47.44 ms | NPU 46.83 ms | loop   19.7 FPS | objects 5 | boxes: npu | NPU heads: present | [hud] frame 4/5 | Ignition YOLOv8n | Device 0 | G2G 47.65 ms | NPU 46.91 ms | loop   20.2 FPS | objects 5 | boxes: npu | NPU heads: present | [hud] frame 5/5 | Ignition YOLOv8n | Device 0 | G2G 47.85 ms | NPU 47.14 ms | loop   20.6 FPS | objects 5 | boxes: npu | NPU heads: present | [summary] frames 5 | source image | boxes npu | G2G mean 48.159 ms median 47.646 p95 50.001 | NPU mean 47.157 ms | NPU heads present | [Ignition] Hardware context released.
+
+============================================================================================================
+SECTION 5 - transcript excerpts for runs whose raw files were overwritten by later runs (numbers verbatim
+from the tool output at the time; MEASURED but without a surviving raw file)
+============================================================================================================
+[per-layer dispatch, stream built with one task per core packet (5 ops per task), tests/test_engine_graph.py --hardware --layers 66 --iters 1 --per-layer --timeout-ms 5000]
+[hardware] iter 0: 66 dispatch(es), 50.323 ms for 66 layers
+  66 of 66 layers EXACT (byte-for-byte equal to the direct reference, which equals ONNX Runtime)
+  slowest layers (ms): L0 /model.0/conv/Conv 4.54 | L42 cv3.0.1 1.833 | L20 /model.7/conv/Conv 1.659 | L13 /model.5/conv/Conv 1.609 | L45 cv3.0.2 1.261 | L34 /model.15/cv1 1.241
+[single dispatch, same stream, --iters 3 --timeout-ms 10000]
+[hardware] iter 0: 1 dispatch(es), 40.478 ms for 66 layers
+[hardware] iter 1: 1 dispatch(es), 38.561 ms for 66 layers
+[hardware] iter 2: 1 dispatch(es), 38.548 ms for 66 layers
+[graph] PASS
+[DMA volume of that schedule, from the scheduler: A 83.1 MB, W 26.3 MB, O 18.1 MB = 127.5 MB per frame; 17,172 DMA tasks; 85,860 instruction ops (DERIVED)]
+[single dispatch, stream with the four per-core activation fills of a round merged into one 4-D task (insts 1,282,660 B), --iters 3]
+[hardware] iter 0: 1 dispatch(es), 19.754 ms for 66 layers
+[hardware] iter 1: 1 dispatch(es), 18.226 ms for 66 layers
+[hardware] iter 2: 1 dispatch(es), 18.485 ms for 66 layers
+[graph] PASS   (all 66 layers EXACT in every iteration)
+[GraphSession per-frame split on the first container (four fills per round), 30 frames, first 3 excluded, 640x640 random int8 input]
+  stage_ms     mean   4.499  median   4.485  p95   4.866  max   4.921 ms
+  npu_ms       mean  38.882  median  38.865  p95  39.238  max  39.407 ms
+  readback_ms  mean   1.476  median   1.489  p95   1.755  max   2.216 ms
+  total_ms     mean  44.936  median  44.919  p95  45.387  max  45.443 ms
+[synthetic packet sequence, tests/test_conv_engine.py --hardware --iters 3 (every packet kind: k3s1+HardSwish, chunked k1 with partial sums, k3s2, up2, hold+residual, two-packet max pool)]
+[hardware] iter 0: 1.994 ms, mismatching bytes per column: none
+[hardware] iter 1: 0.736 ms, mismatching bytes per column: none
+[hardware] iter 2: 0.660 ms, mismatching bytes per column: none
+[hardware] PASS: 3 iterations bit-exact against the emulator
+[hangs seen and fixed on the way (MEASURED, each localised by per-layer dispatch)]
+  - stream with more than four pending tasks on one shim DMA channel: layer 20 (/model.7/conv/Conv, 16 input chunks per tile) timed out; fixed by a per-channel limit of 4 pending tasks
+  - stream with weight packets of a round streamed as one task plus paired output drains and batched awaits: timed out at the whole stream; the emitter awaited a weight task before all activation fills it serves were issued; both experiments are switched off by default and remain to be bisected
+  - after two timed-out dispatches the device refused every new hardware context (0xc01e0009; xrt-smi validate -r latency fails the same way, xrt-smi shows no contexts) until a device restart, which needs an elevated shell
+
+============================================================================================================
+NOTE - the formal witnessed measurement (preflight + 1 s CPU busy sample + the full tests/test_npu_inference.py
+suite incl. the 500-frame stability/latency test) could not be run in this session: the NPU stopped creating
+hardware contexts after two timed-out experimental dispatches and needs a device restart. This log is the
+bring-up evidence; the acceptance latency target (glass-to-glass <= 8.0 ms) is NOT met by the committed
+schedule (18.3 ms NPU dispatch + ~4.5 ms input staging + ~1.5 ms head readback on this container).

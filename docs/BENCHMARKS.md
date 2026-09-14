@@ -7701,3 +7701,105 @@ requires. `--source` takes a webcam index list, a video file or a still image; `
 auto` uses the NPU heads when present and otherwise the CPU oracle, labelled as such on
 the HUD. The index-99 probe (three backends, no camera) completes in 0.16 s without
 raising in both OpenCV builds on this machine (4.11 and 5.0).
+
+## Whole-network YOLOv8n on a 16-core convolution engine: every layer on the NPU, bit-exact (2026-09-13, Desktop 2)
+
+The previous section established that the shipped container computes no detect heads.
+This one replaces the transaction patcher with a compiler that lowers the whole
+`models/yolov8n_cut_xint8.onnx` graph — 63 convolutions and the three SPPF pools — onto
+one persistent 16-core program, so `predict_sync(img, use_oracle_for_boxes=False)` decodes
+heads the NPU produced (`head_source == "npu"`). Branch `worktree-npu-heads`;
+evidence `results/aie/graph_engine_yolov8n_phoenix_20260913T2210Z.log` (bring-up transcripts; see the latency
+caveat at the end).
+
+**Design** (`kernels/aie2/conv_engine/`, `src/ignite_xdna/compiler/graph_ir.py`,
+`engine_schedule.py`, `engine_sequence.py`, `engine_compile.py`, `runtime/graph_session.py`):
+
+- One xclbin. Each core runs the same program forever: acquire a weight packet, read its
+  header, process the activation packets it announces, release. A weight packet is
+  9,472 B (128 B header, 32 int32 biases, up to 9,216 B of int8 weights); an activation
+  packet is always 6,400 B; an output object is always four 8-channel blocks of a
+  5 × 20-pixel tile (3,200 B). Per column the weights are broadcast from the shim to
+  the four cores, activations are split at the MemTile, outputs are joined there.
+  Weights therefore stream from DDR through the MemTile into core memory with the
+  ObjectFIFO's own lock ping-pong; nothing is resident.
+- Activations live in one DDR workspace (22.0 MB for this model, MEASURED by the
+  planner) in a channel-blocked `[block][H+2h][W+2h][8]` uint8 layout with a halo ring
+  the runtime fills once (128, the zero point, for 3 × 3 consumers; 0 for the max-pool
+  inputs). Padding, C2f split/concat, the neck concats and the 2 × upsample are then
+  addressing: a conv reads channel-block ranges of one or two tensors, the up-sampled
+  segment is read at half resolution and duplicated in core memory. Every tensor's
+  height is a multiple of 20 and width of 20, so tiles are 5 × 20 everywhere and four
+  vertically adjacent tiles form one round (one packet per core of a column).
+- The fixed packet size is met by over-reading into junk planes the planner reserves
+  after every tensor (a 3 × 3 chunk reads 8 rows × 25 px of 4 blocks for the 7 × 22 it
+  needs; a stride-2 chunk 16 × 50 px of one block; 1 × 1 chunks are exact). Output
+  blocks past a tensor's real channels land in those junk planes too. Input channels
+  are chunked (4 blocks for 3 × 3, 8 for 1 × 1, 1 for stride 2) and partial sums stay in
+  a 16,000-byte core scratch between chunks; a residual add is one more packet
+  carrying the skip tile; SPPF's 5 × 5 pool is two packets per tile.
+- Arithmetic is the model's: uint8 × int8 into int32, the bias rescaled by the exact
+  power-of-two ratio, minus 128 × Σw, round-half-even shift to uint8; the Quark
+  HardSigmoid chain after each conv is a function of one uint8 and is reproduced by an
+  integer epilogue whose constants the compiler fits per layer against a float32
+  re-evaluation of the ONNX chain — **exact for all 57 activated layers** (MEASURED,
+  `graph_ir.fit_hardswish`). The residual add's one-bit rescale (two of the six adds)
+  is exact by construction.
+- The instruction stream is the whole frame: raw shim DMA tasks with completion
+  tokens, at most 14 live buffer descriptors per shim (the verifier's limit is 16) and
+  at most four pending tasks per channel (the start-queue depth; see the hang below),
+  a layer barrier between layers. It can be cut at layer boundaries by op count into
+  per-layer streams without recompiling (`engine_sequence.split_instruction_stream`),
+  which is how layers are verified and timed individually.
+- `ignite-compile --engine graph` (the default) builds the engine with IRON/aiecc/Peano
+  (54 s MEASURED for the whole model, of which the 16 core ELFs are the bulk) and writes
+  a container holding the xclbin, the stream, the static weight packets (8.08 MB, 2,777
+  packets deduplicated) and a `head_layout` for the int8 NCHW egress the runtime
+  assembles from the six head tensors (uint8 → int8 by flipping the top bit, so the
+  contract's zero point is 0). `InferenceSession.from_file` routes such a container to
+  `GraphSession`; `YoloPipeline`, `tools/live_camera_ignition.py` and
+  `tests/test_npu_inference.py` are unchanged apart from defaulting to it.
+
+**Exactness** — three independent oracles agree to the byte:
+
+| Check | Result |
+|---|---|
+| Direct integer reference (`graph_reference.run_direct`) vs ONNX Runtime's own uint8 intermediates on `bus.jpg` | **66 of 66 layers: max abs diff 0** (MEASURED, offline) |
+| Packet-level emulation through the exact DMA descriptors and packet headers vs the direct reference | **66 of 66 layers EXACT** (MEASURED, offline, 20 s) |
+| Device 0: every packet kind on synthetic data (3 × 3 + HardSwish, chunked 1 × 1, stride 2, up2, hold + residual, two-packet pool), 3 iterations | **bit-exact against the emulator on all 16 cores** (MEASURED) |
+| Device 0: the first three real layers, two dispatches | EXACT; 6.76 / 5.42 ms for 384 rounds (MEASURED) |
+| Device 0: all 66 layers, one dispatch per layer | **66 of 66 EXACT** (MEASURED, transcript excerpt in the log) |
+| Device 0: `tests/test_npu_inference.py` test_10 on the container | heads present (1,209,600 of 1,209,600 egress bytes), oracle-free `predict_sync` returns **5 detections** on `bus.jpg`, **IoU 1.0 against the CPU oracle for every one** (MEASURED) |
+| Device 0: `tools/live_camera_ignition.py --source assets/bus.jpg --headless --frames 5 --boxes npu` | exit 0, five HUD lines, `objects 5 | boxes: npu | NPU heads: present`, no oracle (MEASURED) |
+
+**Latency** (MEASURED, single dispatch of the 66-layer stream, Device 0):
+
+| Stream | Tasks / ops per frame | NPU dispatch, 66 layers |
+|---|---|---|
+| one task per core packet | 17,172 tasks / 85,860 ops (DERIVED) | 40.5, 38.6, 38.5 ms |
+| one 4-D task per round for the four cores (committed default) | ~7,400 tasks | **19.8, 18.2, 18.5 ms** |
+
+The time follows the task count, not the bytes (127.5 MB of DMA per frame either way,
+DERIVED from the schedule): about 2.5 µs per DMA task, which points at the instruction
+sequencer. `GraphSession` adds ~4.5 ms of input staging and ~1.5 ms of head readback
+per frame on the first container (30 frames, MEASURED), so the glass-to-glass figure of
+the committed build is about **25 ms** and the camera tool showed 47–48 ms on the
+pre-merge container. **The ≤ 8.0 ms target is not met.** Two further task reductions —
+streaming a round's weight packets as one task and draining two rounds per task — were
+built and hung the device; they are switched off by default and are the next thing to
+bisect (`tests/test_engine_graph.py --weight-runs --pair-drains`).
+
+**Hangs found on silicon and what fixed them** (all MEASURED by per-layer dispatch): a
+16-chunk round (`/model.7/conv/Conv`) stalled with more than four tasks pending on one
+shim DMA channel — the emitter now caps pending tasks per channel at four; a weight task
+that streams several objects completes only after the cores consumed all but the last,
+so awaiting it before its activation fills are issued deadlocks the sequencer. After two
+timed-out dispatches the NPU refused every new hardware context (`0xc01e0009`; `xrt-smi
+validate -r latency` fails identically, `xrt-smi` lists no contexts) until a device
+restart, which needs an elevated shell — the reason the witnessed measurement run with
+preflight and CPU sample, and the 500-frame stability test, are still pending.
+
+Not done: the ≤ 8 ms latency; the witnessed 500-frame RSS/latency run (the test now
+asks for 500 frames, < 5 MB drift and ≤ 8 ms and will fail on latency until the engine is
+faster); the two experimental task reductions; an NHWC/uint8 `HeadSpec` so the head
+readback needs no transpose.

@@ -159,3 +159,4 @@ The checkpoint covers Desktop 2, 2026-09-09:
   checks; `check_arithmetic_*_01.log` checks the independent oracle. Neither is a
   hardware result. The [AIE index](aie/README.md#windows-local-memory-placement)
   separates the completed placement matrix from its exploratory and failed runs.
+| [graph_engine_yolov8n_phoenix_20260913T2210Z.log](aie/graph_engine_yolov8n_phoenix_20260913T2210Z.log) | Whole YOLOv8n on the 16-core convolution engine: 66 of 66 layers bit-exact offline against ONNX Runtime and on Device 0 against the emulator; oracle-free `predict_sync` gives 5 detections on `bus.jpg` at IoU 1.0 vs the CPU oracle; the camera tool renders NPU boxes; 66-layer dispatch 38.5 ms with one task per core packet, 18.3 ms with one 4-D task per round (≤ 8 ms target not met); the witnessed measurement run is pending a device restart after two timed-out experimental streams |

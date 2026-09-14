@@ -72,7 +72,17 @@ from ignite_xdna.pipelines.yolo_pipeline import (  # noqa: E402
     YoloDetection,
 )
 
-MODEL_IGNITE = REPO_ROOT / "build" / "yolov8n.ignite"
+def _default_container() -> Path:
+    """IGNITE_MODEL, else the graph-engine container when compiled, else the legacy container."""
+    override = os.environ.get("IGNITE_MODEL")
+    if override:
+        return Path(override)
+    graph = REPO_ROOT / "build" / "yolov8n_full.ignite"
+    return graph if graph.exists() else REPO_ROOT / "build" / "yolov8n.ignite"
+
+
+MODEL_IGNITE = _default_container()
+N_FRAMES = 500  # continuous frames in the stability/latency test
 CUT_ONNX = REPO_ROOT / "models" / "yolov8n_cut_xint8.onnx"
 XCLBIN = REPO_ROOT / "build" / "im2col_4d_16core.xclbin"
 BUS_JPG = REPO_ROOT / "assets" / "bus.jpg"
@@ -96,9 +106,11 @@ def _hardware_skip_reason() -> Optional[str]:
         import pyxrt  # noqa: F401
     except Exception as ex:  # noqa: BLE001
         return f"pyxrt is not importable in this interpreter ({type(ex).__name__}); use scripts/research-iron.sh"
-    for p in (MODEL_IGNITE, XCLBIN):
-        if not p.exists():
-            return f"missing {p}"
+    if not MODEL_IGNITE.exists():
+        return f"missing {MODEL_IGNITE}"
+    # A graph-engine container carries its own xclbin; the legacy one needs the conv0 template's.
+    if MODEL_IGNITE.name != "yolov8n_full.ignite" and not XCLBIN.exists():
+        return f"missing {XCLBIN}"
     return None
 
 
@@ -414,6 +426,7 @@ class NpuInferenceOnSilicon(unittest.TestCase):
             self.assertGreaterEqual(float(np.mean(ious)), 0.70)
 
     def test_11_hundred_frames_no_buffer_growth_and_latency(self):
+        """500 continuous frames: no buffer objects allocated, < 5 MB working-set drift, G2G <= 8 ms."""
         rng = np.random.default_rng(1234)
         frames = [rng.integers(0, 256, size=(720, 1280, 3), dtype=np.uint8) for _ in range(4)]
         with self._pipeline() as pipe:
@@ -438,7 +451,7 @@ class NpuInferenceOnSilicon(unittest.TestCase):
                 rss_before = _rss_bytes()
                 g2g, npu, prep, post = [], [], [], []
                 sources = set()
-                for i in range(100):
+                for i in range(N_FRAMES):
                     _, t = pipe.predict_sync(frames[i % 4], use_oracle_for_boxes=False)
                     g2g.append(t.glass_to_glass_ms)
                     npu.append(t.npu_forward_ms)
@@ -454,7 +467,7 @@ class NpuInferenceOnSilicon(unittest.TestCase):
 
         arr = np.asarray(g2g)
         growth_mb = (rss_after - rss_before) / (1024 * 1024)
-        print(f"\n[silicon] 100 frames (1280x720 synthetic): G2G mean {arr.mean():.3f} ms median "
+        print(f"\n[silicon] {N_FRAMES} frames (1280x720 synthetic): G2G mean {arr.mean():.3f} ms median "
               f"{np.median(arr):.3f} p95 {np.percentile(arr, 95):.3f} p99 {np.percentile(arr, 99):.3f} "
               f"max {arr.max():.3f} | preprocess {np.mean(prep):.3f} | NPU {np.mean(npu):.3f} | "
               f"postprocess {np.mean(post):.3f} ms | boxes from {sorted(sources)} | "
@@ -464,8 +477,8 @@ class NpuInferenceOnSilicon(unittest.TestCase):
             print("[silicon] note: the postprocess stage saw no head tensors, so this is the latency of "
                   "preprocess + NPU dispatch + an empty decode, not of a detection pipeline")
         self.assertEqual(allocations, {"host_bo": 0, "instr_bo": 0})
-        self.assertLess(growth_mb, 16.0, "working set grew by more than 16 MB over 100 frames")
-        self.assertLess(float(arr.mean()), 2.0, f"mean glass-to-glass {arr.mean():.3f} ms >= 2.0 ms")
+        self.assertLess(growth_mb, 5.0, f"working set grew by {growth_mb:.2f} MB over {N_FRAMES} frames")
+        self.assertLessEqual(float(arr.mean()), 8.0, f"mean glass-to-glass {arr.mean():.3f} ms > 8.0 ms")
 
     def test_12_camera_tool_headless_on_bus_jpg(self):
         cmd = [sys.executable, str(CAMERA_TOOL), "--source", str(BUS_JPG), "--headless", "--frames", "5",

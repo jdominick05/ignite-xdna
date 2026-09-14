@@ -1613,3 +1613,36 @@ cached reference heads rather than `bo_out`.
   100 oracle-free frames at 1.015 ms mean glass-to-glass with zero buffer allocations —
   the latency of an empty decode, not of a detection pipeline. The "< 2 ms with boxes"
   target stays unmet until a container emits the heads.
+
+### The graph engine lowers every layer onto one persistent core program; packets are fixed-size and the sequencer is the budget (2026-09-13)
+
+- **One persistent program per core, driven by packet headers, instead of a per-layer
+  xclbin or a template patched per layer.** The xclbin never changes with the model;
+  the compiler emits weight packets and a DMA instruction stream. Program memory is
+  16 KB, so the kernel keeps exactly one accumulator configuration (four output blocks
+  by two pixel groups, ~5 KB of text); six template variants were 23 KB and were cut.
+- **Fixed packet sizes with over-read into junk planes**, not variable-length transfers:
+  an ObjectFIFO object is a fixed number of bytes, so every activation packet is 6,400 B
+  and the tile geometry (5 × 20, four blocks out) is the same everywhere. The price is
+  extra DMA bytes on shallow layers; the alternative (per-layer packet sizes) needs
+  MemTile channels the column does not have.
+- **Activations round-trip DDR between layers by NPU DMA with no CPU involvement.**
+  YOLOv8n's early feature maps (1.6 MB after conv0) do not fit the MemTiles, and the
+  skip connections keep several maps alive across the neck; "no host roundtrip" here
+  means no host code touches an activation between the input plane and the heads.
+- **Exactness is asserted three ways before silicon**: the direct integer reference must
+  equal ONNX Runtime's uint8 intermediates, the packet emulation through the real DMA
+  descriptors must equal the direct reference, and silicon must equal the emulation.
+  Every layer of this model passes all three ([BENCHMARKS](BENCHMARKS.md#whole-network-yolov8n-on-a-16-core-convolution-engine-every-layer-on-the-npu-bit-exact-2026-09-13-desktop-2)).
+- **Raw shim DMA tasks with explicit awaits, capped at 14 live BDs and four pending per
+  channel.** IRON's `fill`/`drain` await only at the end of a sequence (the verifier
+  refuses more than 16 live BDs), and the hardware start queue holds four tasks per
+  channel — a fifth stalls the stream. A weight task that streams several objects is
+  never awaited before the activation fills it serves are issued.
+- **Rejected for now: the two experimental task reductions** (weight runs, paired
+  drains). They hung the device and could not be bisected before the device stopped
+  creating contexts; they stay behind flags until measured.
+- **Latency target not met**: 18.3 ms NPU dispatch for the frame with the committed
+  stream (~2.5 µs per DMA task), against the 8 ms asked. The instruction sequencer, not
+  bandwidth, is the wall; the next steps are fewer tasks (the flagged experiments,
+  bigger tiles for shallow layers) and a cheaper head readback.

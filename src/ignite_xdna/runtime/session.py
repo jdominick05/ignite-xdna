@@ -1501,7 +1501,16 @@ class InferenceSession:
     ) -> "InferenceSession":
         """
         Loads a compiled .ignite model container directly with zero-copy memory-mapped buffers.
+
+        A graph-engine container (manifest ``engine == "conv_engine_v1"``) is
+        served by ``GraphSession``, which runs the whole network on the NPU.
         """
+        from ignite_xdna.compiler.serializer import IgniteModelReader as _Reader
+        from ignite_xdna.runtime.graph_session import GraphSession, is_graph_container
+        with _Reader(ignite_path) as reader:
+            manifest = reader.manifest
+        if is_graph_container(manifest):
+            return GraphSession(ignite_path, device_index=device_index)
         return cls(
             model_path_or_bundle=ignite_path,
             device_index=device_index,
