@@ -7920,7 +7920,9 @@ reporting no hardware contexts.
 **Not met:** SESR's dispatch is 4.25 ms against a 1.5 ms target, and its weights are not
 resident in tile SRAM. A copy of the same stream with NOP weights dispatches in 2.530 ms
 (yolov8s 12.727 of 16.932 ms, yolov8n 5.369 of 7.386 ms), so the floor is the engine's per-layer
-activation round trip through DDR — 7,436 activation packets a frame against 36 weight fills —
-not compute or weights. Tile memory is identical for all three models (compute tile 59,392 of
+activation round trip through DDR, not compute or weights: per frame 36 weight fills move
+6.4 MB against 67.1 MB of activation fills and drains, about 0.26 ms of the floor (DERIVED by
+`tools/engine_stream_report.py`, `results/model_zoo/stream_sesr_m7.log`), so resident weights
+would leave ~2.27 ms. Tile memory is identical for all three models (compute tile 59,392 of
 65,536 B, MemTile 76,800 of 524,288 B): more parameters means more packets streamed, not larger
 objects on a tile.

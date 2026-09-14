@@ -22,8 +22,9 @@ artifacts in [`results/model_zoo/`](../results/model_zoo/).
 | 1. CPU baselines for yolov8s, yolo11n (no C2PSA), SESR M7 and ResNet50, 300 frames each, return code 0, table here | **Met** | all four return 0; [table](#cpu-baselines-onnx-runtime-through-ignition) |
 | 2. `build/yolov8s.ignite` with `head_status` present; 300 oracle-free frames on Device 0 with no buffer-object leaks; glass-to-glass ≤ 25.0 ms | **Met** | heads present (P3/P4/P5 box and class heads, 1,209,600 of 1,209,600 egress bytes); 66 of 66 layers byte-exact on silicon; 300 frames at **17.35 ms** mean (p99 17.73), 0 buffer objects allocated, +0.03 MB working set; IoU 1.0 against the CPU oracle for all six detections |
 | 3a. `build/sesr_m7.ignite` runs 500 frames without hangs or queue desyncs | **Met** | 9 of 9 layers byte-exact; the image equals ONNX Runtime's in all 786,432 values; 500 frames, 0 buffer objects allocated, no dispatch errors |
-| 3b. SESR raw NPU dispatch ≤ 1.5 ms | **Not met** | **4.25 ms** mean (p99 4.74); the same stream with no core compute takes 2.53 ms, so no kernel change can reach 1.5 ms on this engine ([why](#sesr-the-15-ms-dispatch-and-sram-resident-weights-are-not-met)) |
+| 3b. SESR raw NPU dispatch ≤ 1.5 ms | **Not met** | **4.25 ms** mean (p99 4.74); the same stream with no core compute takes 2.53 ms, and all weight traffic accounts for ~0.26 ms of that, so neither a kernel change nor resident weights can reach 1.5 ms on this engine ([why](#sesr-the-15-ms-dispatch-and-sram-resident-weights-are-not-met)) |
 | 3c. SESR parameters resident in core / MemTile SRAM | **Not met** | the 18 weight packets (170,496 B) stream from DDR every frame, as for every engine container ([why](#sesr-the-15-ms-dispatch-and-sram-resident-weights-are-not-met)) |
+| 3d. SESR egress descriptor is a dense H × W × C image | **Met, with a host tail** | the manifest's `dense_output` declares the tail convolution as a dense 12 × 256 × 256 uint8 map (scale 2.0, zero point 128, 786,432 egress bytes, layout `blocks_hw8`); the model's final `DepthToSpace` × 2 (CRD) runs on the host through a lookup table and gives the 512 × 512 × 3 image (`output_shapes.image`), 1.93 ms of the 6.57 ms frame ([manifest](../results/model_zoo/manifest_sesr_m7.json)) |
 
 `tests/test_npu_inference.py`'s `SuperResolutionOnSilicon.test_22_dispatch_budget` asserts the
 1.5 ms line and fails; it is left failing rather than relaxed.
@@ -160,8 +161,14 @@ budgets by construction, and the placer would refuse a design that did not.
 
 **The floor is not weights or compute.** With every weight op a NOP, SESR's dispatch is still
 2.530 ms, above the 1.5 ms target, so removing all core compute (1.68 ms) and all weight
-traffic would not reach it. A frame issues 36 weight fills and moves 7,436 activation packets
-([manifest](../results/model_zoo/manifest_sesr_m7.json)). The floor is the engine's design: every layer's activations leave DDR, pass the MemTile to the cores and
+traffic would not reach it. Per frame the schedule issues 1,007 DMA tasks: 36 weight fills
+moving 6,403,072 B (the 18 packets repeated once per round), 710 activation fills moving
+47,590,400 B and 261 drains moving 19,468,800 B
+([`tools/engine_stream_report.py`](../results/model_zoo/stream_sesr_m7.log); packet counts in the
+[manifest](../results/model_zoo/manifest_sesr_m7.json)). Weights are 3.6 % of the tasks and
+8.7 % of the bytes; at the measured 26.8 GB/s fill rate and 145 ns per instruction op they come
+to about 0.26 ms (DERIVED), so perfectly resident weights would leave a floor near 2.27 ms,
+still above 1.5 ms. The floor is the engine's design: every layer's activations leave DDR, pass the MemTile to the cores and
 return to DDR, and SESR's 256 × 256 maps at 20-pixel tiles make 1,521 rounds and 7,436
 activation packets for a 22 KB network (the fixed dispatch cost, ~145 ns per instruction op
 and transport measured in the [latency work](BENCHMARKS.md#graph-engine-latency-from-192-to-79-ms-glass-to-glass-2026-09-14-desktop-2)
@@ -181,9 +188,10 @@ measurement:
   locks on both ends and lets a core read a half-updated object.
 - The core program acquires one weight object per round. Holding SESR's 18 layer packets
   (170,496 B, which would fit) needs a different core program that keeps a layer's weight
-  object across all its rounds; the expanded per-round stream does not fit a MemTile.
-- It would not change the result above: the NOP-weight floor already includes every weight
-  fill, and it is 2.53 ms.
+  object across all its rounds; the per-round stream as scheduled today is 6.4 MB a frame,
+  about 1.6 MB per column against a 512 KB MemTile.
+- It would not change the result above: removing all weight traffic takes about 0.26 ms off
+  the 2.53 ms floor (DERIVED above).
 
 ## Reproduce
 
