@@ -1,0 +1,17 @@
+$ C:\Users\<user>\miniforge3\envs\mlir-aie-iron\python.exe <Ignition>\live_ignition.py --model <ignite-xdna>\build\yolov8s.ignite --source <ignite-xdna>\assets\bus.jpg --headless --frames 500 --warmup 10 --json <ignite-xdna>\results\model_zoo\npu_yolov8s.json
+[Ignition] loading <ignite-xdna>\build\yolov8s.ignite (bare-metal .ignite container)
+[Ignition] Native XDNA1 NPU backend active (Device 0)
+[Ignition] task: detect
+[Ignition] source: image bus.jpg 810x1080
+[run] frame 100 | G2G 17.60 ms | 57 FPS | 6 objects | detect: npu
+[run] frame 200 | G2G 17.42 ms | 57 FPS | 6 objects | detect: npu
+[run] frame 300 | G2G 17.53 ms | 56 FPS | 6 objects | detect: npu
+[run] frame 400 | G2G 18.02 ms | 55 FPS | 6 objects | detect: npu
+[run] frame 500 | G2G 17.46 ms | 57 FPS | 6 objects | detect: npu
+[Ignition] shutdown: source released, window closed, NPU hardware context released
+[summary] stop: frame limit | 510 frames processed (10 warm-up, 500 timed) | 1 distinct source frames | image bus.jpg 810x1080
+[summary] G2G mean 17.727 ms | P50 17.686 | P95 18.124 | P99 18.354 | max 19.608 | over the last 500 timed frames; cold first frame 20.94 ms
+[summary] stage means (ms): preprocess 0.359 | NPU forward 17.055 (dispatch 16.805, readback 0.250) | decode+NMS 0.306
+[summary] boxes from NPU heads on 500/500 timed frames | 6.00 detections per frame
+[summary] RSS 243.4 MB at the first timed frame, 243.5 MB at the end (+0.10 MB over 500 frames)
+[summary] wrote <ignite-xdna>\results\model_zoo\npu_yolov8s.json

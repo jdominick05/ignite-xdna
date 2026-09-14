@@ -148,7 +148,7 @@ with InferenceSession.from_file("build/yolov8n_full.ignite") as s:   # ignite-co
 ```
 
 `ignite-compile --engine graph` builds that container (ironenv); the older `build/yolov8n.ignite` runs one
-conv layer per stage and carries no heads ([measured](docs/BENCHMARKS.md#whole-network-yolov8n-on-a-16-core-convolution-engine-every-layer-on-the-npu-bit-exact-2026-09-13-desktop-2)).
+conv layer per stage and carries no heads ([measured](docs/BENCHMARKS.md#whole-network-yolov8n-on-a-16-core-convolution-engine-every-layer-on-the-npu-bit-exact-2026-09-13-desktop-2)). The same engine runs YOLOv8s and SESR M7 ([model zoo](docs/MODEL_ZOO_BENCHMARKS.md)).
 
 Native graph stages can also share BOs with custom AIE kernels through
 `ignite_xdna.runtime.KernelSplicer`. The Phoenix Conv2D/GroupNorm/Conv2D validation

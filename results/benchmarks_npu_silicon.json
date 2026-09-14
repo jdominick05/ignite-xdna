@@ -1,0 +1,126 @@
+{
+  "suite": "npu",
+  "created_utc": "2026-09-14T12:50:31Z",
+  "frames": 500,
+  "warmup": 10,
+  "source": "<ignite-xdna>\\assets\\bus.jpg",
+  "ignite_xdna_commit": "v0.1.0-phoenix-npu-1-gd828678-dirty",
+  "ignition_commit": "v0.2.0-15-g91ace94",
+  "all_returncodes_zero": true,
+  "runs": [
+    {
+      "model_path": "build/yolov8s.ignite",
+      "log": "results/model_zoo/npu_yolov8s.log",
+      "xrt_smi_before": "-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device",
+      "wall_s": 9.6,
+      "returncode": 0,
+      "schema": 1,
+      "created_utc": "2026-09-14T12:50:27Z",
+      "model": "<ignite-xdna>\\build\\yolov8s.ignite",
+      "model_name": "yolov8s.ignite",
+      "model_bytes": 30743680,
+      "task": "detect",
+      "backend": "npu",
+      "source": "image bus.jpg 810x1080",
+      "source_kind": "image",
+      "frames_requested": 500,
+      "warmup": 10,
+      "frames_processed": 510,
+      "frames_timed": 500,
+      "stop_reason": "frame limit",
+      "host": {
+        "hostname": "DESKTOP-CBL5NUA",
+        "processor": "AMD64 Family 25 Model 117 Stepping 2, AuthenticAMD",
+        "python": "3.13.15",
+        "numpy": "2.5.3",
+        "opencv": "5.0.0",
+        "cpu_count": 16,
+        "onnxruntime": "1.30.0"
+      },
+      "g2g_ms": {
+        "mean": 17.7269796008477,
+        "p50": 17.685650003841147,
+        "p95": 18.12383499054704,
+        "p99": 18.354316001350526,
+        "min": 17.416599992429838,
+        "max": 19.60770000005141,
+        "cold_first_frame": 20.940499991411343
+      },
+      "fps_from_mean": 56.41118918826873,
+      "stages_ms": {
+        "preprocess": 0.35855079896282405,
+        "network": 17.05512380041182,
+        "postprocess": 0.30552020051982254,
+        "dispatch": 16.80545839993283,
+        "readback": 0.24966540047898889
+      },
+      "rss_mb": {
+        "first_timed": 243.44140625,
+        "end": 243.5390625,
+        "drift": 0.09765625
+      },
+      "npu_frames": 500,
+      "detections_per_frame": 6.0,
+      "xrt_smi_after": "-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device"
+    },
+    {
+      "model_path": "build/sesr_m7.ignite",
+      "log": "results/model_zoo/npu_sesr_m7.log",
+      "xrt_smi_before": "-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device",
+      "wall_s": 3.9,
+      "returncode": 0,
+      "schema": 1,
+      "created_utc": "2026-09-14T12:50:31Z",
+      "model": "<ignite-xdna>\\build\\sesr_m7.ignite",
+      "model_name": "sesr_m7.ignite",
+      "model_bytes": 511168,
+      "task": "super_resolution",
+      "backend": "npu",
+      "source": "image bus.jpg 810x1080",
+      "source_kind": "image",
+      "frames_requested": 500,
+      "warmup": 10,
+      "frames_processed": 510,
+      "frames_timed": 500,
+      "stop_reason": "frame limit",
+      "host": {
+        "hostname": "DESKTOP-CBL5NUA",
+        "processor": "AMD64 Family 25 Model 117 Stepping 2, AuthenticAMD",
+        "python": "3.13.15",
+        "numpy": "2.5.3",
+        "opencv": "5.0.0",
+        "cpu_count": 16,
+        "onnxruntime": "1.30.0"
+      },
+      "g2g_ms": {
+        "mean": 6.5742746004252695,
+        "p50": 6.573600010597147,
+        "p95": 7.080444983148482,
+        "p99": 7.3676689848070955,
+        "min": 5.960599984973669,
+        "max": 7.800399995176122,
+        "cold_first_frame": 8.069000003160909
+      },
+      "fps_from_mean": 152.10803636576316,
+      "stages_ms": {
+        "preprocess": 0.34564860054524615,
+        "network": 4.264078398933634,
+        "postprocess": 1.9591640006983653,
+        "dispatch": 4.239964199194219,
+        "readback": 0.0241141997394152
+      },
+      "rss_mb": {
+        "first_timed": 164.359375,
+        "end": 164.359375,
+        "drift": 0.0
+      },
+      "npu_frames": 500,
+      "output_shape": [
+        512,
+        512,
+        3
+      ],
+      "xrt_smi_after": "-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device"
+    }
+  ]
+}

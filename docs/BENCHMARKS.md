@@ -7889,3 +7889,38 @@ The margin under 8 ms is under 0.1 ms. What is left in the frame (DERIVED from t
 split): ~1.9 ms of core compute, ~1.3 ms of instruction ops, ~3 ms of transport — most of
 it fill bytes that are fixed 6,400-byte packets with over-read — and ~0.7 ms of host work.
 The next levers are fewer fill tasks for multi-chunk rounds and less over-read per packet.
+
+## Model zoo: YOLOv8s and SESR M7 on the graph engine, with ONNX CPU baselines (2026-09-14, Desktop 2)
+
+Branch `worktree-model-zoo` at `d828678`, Ignition `91ace94`; evidence
+`results/aie/model_zoo_phoenix_20260914T1247Z.log` (the whole sitting: builds, per-layer
+verification, witnessed suites, dispatch floors, 500-frame camera-tool runs and both Ignition
+suites), `results/benchmarks_onnx_cpu.json`, `results/benchmarks_npu_silicon.json` and
+`results/model_zoo/`. Tables, method and caveats are in
+[MODEL_ZOO_BENCHMARKS.md](MODEL_ZOO_BENCHMARKS.md). Every NPU step started with `xrt-smi`
+reporting no hardware contexts.
+
+**Result** (MEASURED):
+
+- CPU, ONNX Runtime through Ignition's `live_ignition.py` (300 frames on `bus.jpg`, all return
+  codes 0): yolov8s 83.66 ms mean glass-to-glass, yolo11n without C2PSA 35.79 ms (no
+  detections: the ablated graph), SESR M7 15.58 ms, ResNet50 34.24 ms.
+- `build/yolov8s.ignite`: 66 of 66 layers byte-exact on Device 0, `head_status: present`, six
+  oracle-free detections at IoU 1.0; the witnessed suite ran 300 frames at 17.348 ms mean (p99
+  17.732) with no buffer objects allocated; `tools/live_camera_ignition.py` ran 500 frames at
+  17.665 ms (staging 0.360, dispatch 16.745, readback 0.243, decode 0.316 ms); through Ignition
+  17.73 ms, 4.7× faster than the CPU row.
+- `build/sesr_m7.ignite`: 9 of 9 layers byte-exact and the image identical to ONNX Runtime in
+  all 786,432 values; 500 frames at 6.558 ms mean with no buffer objects allocated; the camera
+  tool ran 500 frames at 6.572 ms (staging 0.364, dispatch 4.256, readback 0.023, depth-to-space
+  1.929 ms); through Ignition 6.57 ms, 2.4× faster than the CPU row.
+- Regression: the YOLOv8n suite passes all ten tests on the rebuilt container (7.806 ms mean
+  over 500 frames).
+
+**Not met:** SESR's dispatch is 4.25 ms against a 1.5 ms target, and its weights are not
+resident in tile SRAM. A copy of the same stream with NOP weights dispatches in 2.530 ms
+(yolov8s 12.727 of 16.932 ms, yolov8n 5.369 of 7.386 ms), so the floor is the engine's per-layer
+activation round trip through DDR — 7,436 activation packets a frame against 36 weight fills —
+not compute or weights. Tile memory is identical for all three models (compute tile 59,392 of
+65,536 B, MemTile 76,800 of 524,288 B): more parameters means more packets streamed, not larger
+objects on a tile.

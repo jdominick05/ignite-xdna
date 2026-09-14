@@ -1,0 +1,15 @@
+$ C:\Users\<user>\miniforge3\envs\mlir-aie-iron\python.exe <Ignition>\live_ignition.py --model <ignite-xdna>\models\sesr_m7_xint8.onnx --source <ignite-xdna>\assets\bus.jpg --headless --frames 300 --warmup 10 --json <ignite-xdna>\results\model_zoo\onnx-cpu_sesr_m7_xint8.json
+[Ignition] loading <ignite-xdna>\models\sesr_m7_xint8.onnx (ONNX model)
+[Ignition] task: super_resolution
+[Ignition] ONNX Runtime CPU backend active
+[Ignition] source: image bus.jpg 810x1080
+[run] frame 100 | G2G 16.08 ms | 62 FPS | 512x512 output | super_resolution: onnxruntime
+[run] frame 200 | G2G 14.65 ms | 64 FPS | 512x512 output | super_resolution: onnxruntime
+[run] frame 300 | G2G 14.13 ms | 63 FPS | 512x512 output | super_resolution: onnxruntime
+[Ignition] shutdown: source released, window closed, NPU hardware context released
+[summary] stop: frame limit | 310 frames processed (10 warm-up, 300 timed) | 1 distinct source frames | image bus.jpg 810x1080
+[summary] G2G mean 15.575 ms | P50 15.203 | P95 18.837 | P99 19.644 | max 19.903 | over the last 300 timed frames; cold first frame 18.03 ms
+[summary] stage means (ms): preprocess 0.595 | ONNX Runtime 12.946 | image output 2.035
+[summary] output image [512, 512, 3] from ONNX Runtime
+[summary] RSS 148.6 MB at the first timed frame, 147.9 MB at the end (-0.71 MB over 300 frames)
+[summary] wrote <ignite-xdna>\results\model_zoo\onnx-cpu_sesr_m7_xint8.json
