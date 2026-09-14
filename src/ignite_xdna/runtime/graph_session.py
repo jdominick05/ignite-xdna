@@ -65,7 +65,7 @@ class GraphSession:
     """Session for ``engine == conv_engine_v1`` containers (see ``compiler/engine_compile.py``)."""
 
     def __init__(self, container_path: Union[str, Path], device_index: int = 0,
-                 xclbin_cache_dir: Optional[Union[str, Path]] = None, **_ignored):
+                 xclbin_cache_dir: Optional[Union[str, Path]] = None, map_workspace: bool = False, **_ignored):
         setup_xrt_environment()
         self.path = Path(container_path)
         self.device_index = device_index
@@ -106,10 +106,27 @@ class GraphSession:
         self.bo_ws.sync(self.harness.pyxrt.xclBOSyncDirection.XCL_BO_SYNC_BO_TO_DEVICE)
 
         # Input staging: the image plane (one 8-channel block with its halo ring).
+        # With ``map_workspace`` the plane is written in place through bo.map()
+        # and only synced; measured no faster than bo.write on Phoenix (3.5 vs
+        # 3.0 ms per frame), so the default is the host copy.
         self.input_placement = self.ge["placements"][self.ge["input_tensor"]]
         p = self.input_placement
-        self._input_plane = np.full((p["height"] + 2 * p["halo"], p["width"] + 2 * p["halo"], 8), ZP, dtype=np.uint8)
-        self._input_bytes = self._input_plane.size
+        plane_shape = (p["height"] + 2 * p["halo"], p["width"] + 2 * p["halo"], 8)
+        self._input_bytes = int(np.prod(plane_shape))
+        self._ws_map: Optional[np.ndarray] = None
+        if map_workspace:
+            try:
+                mapped = np.frombuffer(self.bo_ws.map(), dtype=np.uint8)
+                if mapped.size >= self.workspace_bytes:
+                    self._ws_map = mapped
+            except Exception:  # noqa: BLE001 - mapping is an optimisation only
+                self._ws_map = None
+        if self._ws_map is not None:
+            base = p["base"]
+            self._input_plane = self._ws_map[base:base + self._input_bytes].reshape(plane_shape)
+            self._input_plane[:] = ZP
+        else:
+            self._input_plane = np.full(plane_shape, ZP, dtype=np.uint8)
         self._input_lut = input_lut(float(self.ignite_manifest["quant_scales"]["input_scale"]),
                                     int(self.ignite_manifest["quant_scales"].get("input_zero_point", ZP)))
         # Head readback: each head tensor is contiguous (halo 0); egress is int8 NCHW.
@@ -146,12 +163,13 @@ class GraphSession:
         if x.dtype != np.int8:
             x = np.clip(np.asarray(x, dtype=np.int64), -128, 127).astype(np.int8)
         chw = x.reshape(3, self.input_placement["height"], self.input_placement["width"])
-        # The int8 bit pattern viewed as uint8 is exactly (value + 128): the LUT index.
-        q = self._input_lut[chw.view(np.uint8)]                   # uint8 [3][H][W]
+        # LUT index is value + 128; the int8 bit pattern viewed as uint8 is (value + 128) ^ 0x80.
+        q = self._input_lut[chw.view(np.uint8) ^ 0x80]            # uint8 [3][H][W]
         h = self.input_placement["halo"]
         self._input_plane[h:-h or None, h:-h or None, :3] = np.moveaxis(q, 0, -1)
         base = self.input_placement["base"]
-        self.bo_ws.write(self._input_plane, base)
+        if self._ws_map is None:
+            self.bo_ws.write(self._input_plane, base)
         self.bo_ws.sync(self.harness.pyxrt.xclBOSyncDirection.XCL_BO_SYNC_BO_TO_DEVICE, self._input_bytes, base)
 
     def read_heads(self) -> np.ndarray:
@@ -159,7 +177,10 @@ class GraphSession:
         d = self.harness.pyxrt.xclBOSyncDirection.XCL_BO_SYNC_BO_FROM_DEVICE
         for name, hm, hp, base, nbytes in self._head_regions:
             self.bo_ws.sync(d, nbytes, base)
-            raw = np.frombuffer(self.bo_ws.read(nbytes, base), dtype=np.uint8)
+            if self._ws_map is not None:
+                raw = self._ws_map[base:base + nbytes]
+            else:
+                raw = np.frombuffer(self.bo_ws.read(nbytes, base), dtype=np.uint8)
             blocked = raw.reshape(hp["blocks"], hp["height"], hp["width"], 8)
             chw = np.transpose(blocked, (0, 3, 1, 2)).reshape(hp["blocks"] * 8, hp["height"], hp["width"])
             c = hm["channels"]

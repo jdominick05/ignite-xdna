@@ -339,13 +339,14 @@ class LayerSchedule:
 
 
 def schedule_layer(ir: GraphIR, ws: Workspace, layer, store: PacketStore, merge_fills: bool = True,
-                   pair_drains: bool = False, weight_runs: bool = False) -> LayerSchedule:
+                   pair_drains: bool = True, weight_runs: bool = True) -> LayerSchedule:
     """Cut one layer into rounds and per-column item lists.
 
-    ``merge_fills`` (one 4-D task per round for the four cores) is silicon-verified
-    and halves the frame time. ``pair_drains`` and ``weight_runs`` cut tasks
-    further but the stream built with them hung on Device 0 and is not yet
-    bisected, so both default off (see docs/BENCHMARKS.md).
+    ``merge_fills`` (one 4-D task per round for the four cores), ``weight_runs``
+    (a round's weight packets streamed by one task) and ``pair_drains`` (two
+    vertically adjacent rounds drained by one task) are each silicon-verified
+    bit-exact on all 66 layers; together they take the frame from 38.5 to 11.7 ms
+    (docs/BENCHMARKS.md). The flags exist for bisection.
     """
     t = ir.tensors[layer.output]
     chunks = layer_chunks(ir, layer)
@@ -417,8 +418,8 @@ def schedule_layer(ir: GraphIR, ws: Workspace, layer, store: PacketStore, merge_
     return LayerSchedule(layer.index, layer.name, programs, n_rounds, n_packets, n_w)
 
 
-def schedule_graph(ir: GraphIR, ws: Workspace, merge_fills: bool = True, pair_drains: bool = False,
-                   weight_runs: bool = False) -> Tuple[List[LayerSchedule], PacketStore]:
+def schedule_graph(ir: GraphIR, ws: Workspace, merge_fills: bool = True, pair_drains: bool = True,
+                   weight_runs: bool = True) -> Tuple[List[LayerSchedule], PacketStore]:
     store = PacketStore()
     scheds = [schedule_layer(ir, ws, L, store, merge_fills=merge_fills, pair_drains=pair_drains,
                              weight_runs=weight_runs) for L in ir.layers]

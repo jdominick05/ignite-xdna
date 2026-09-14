@@ -40,7 +40,7 @@ def load_image_chw(path=BUS, size=640):
     return np.transpose(rgb, (2, 0, 1))
 
 
-OPTIONS = {"merge_fills": True, "pair_drains": False, "weight_runs": False, "retire_batch": 1, "w_depth": 1}
+OPTIONS = {"merge_fills": True, "pair_drains": True, "weight_runs": True, "retire_batch": 2, "w_depth": 2}
 
 
 def prepare(n_layers: int):
@@ -192,14 +192,14 @@ def main():
     parser.add_argument("--device", type=int, default=0)
     parser.add_argument("--per-layer", action="store_true", help="split the stream and dispatch one layer at a time")
     parser.add_argument("--timeout-ms", type=int, default=20000)
-    parser.add_argument("--no-merge-fills", action="store_true")
-    parser.add_argument("--pair-drains", action="store_true", help="experimental: drain two rounds per task")
-    parser.add_argument("--weight-runs", action="store_true", help="experimental: stream a round's weights in one task")
-    parser.add_argument("--retire-batch", type=int, default=1)
-    parser.add_argument("--w-depth", type=int, default=1)
+    parser.add_argument("--no-merge-fills", action="store_true", help="bisection: one task per core packet")
+    parser.add_argument("--no-pair-drains", action="store_true", help="bisection: one drain per round")
+    parser.add_argument("--no-weight-runs", action="store_true", help="bisection: one weight task per chunk")
+    parser.add_argument("--retire-batch", type=int, default=2, help="completion token every N tasks per channel")
+    parser.add_argument("--w-depth", type=int, default=2, help="weight FIFO depth at the cores")
     args = parser.parse_args()
-    OPTIONS.update(merge_fills=not args.no_merge_fills, pair_drains=args.pair_drains,
-                   weight_runs=args.weight_runs, retire_batch=args.retire_batch, w_depth=args.w_depth)
+    OPTIONS.update(merge_fills=not args.no_merge_fills, pair_drains=not args.no_pair_drains,
+                   weight_runs=not args.no_weight_runs, retire_batch=args.retire_batch, w_depth=args.w_depth)
     build_dir = Path(args.build_dir or (ROOT / "build" / "conv_engine" / f"graph{args.layers}")).resolve()
     ok = True
     if args.offline:

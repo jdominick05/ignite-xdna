@@ -76,7 +76,7 @@ def _core_fn(w_in, a_in, o_out, engine, psum, scratch_out, row):
     w_in.release(1)
 
 
-def build_program(device, sequence_body, w_depth=1):
+def build_program(device, sequence_body, w_depth=2):
     """Return an IRON Program for the engine with ``sequence_body(ws, wp)``.
 
     The body emits raw shim DMA tasks against the FIFO allocation symbols

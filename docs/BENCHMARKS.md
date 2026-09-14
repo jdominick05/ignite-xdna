@@ -7709,8 +7709,8 @@ This one replaces the transaction patcher with a compiler that lowers the whole
 `models/yolov8n_cut_xint8.onnx` graph — 63 convolutions and the three SPPF pools — onto
 one persistent 16-core program, so `predict_sync(img, use_oracle_for_boxes=False)` decodes
 heads the NPU produced (`head_source == "npu"`). Branch `worktree-npu-heads`;
-evidence `results/aie/graph_engine_yolov8n_phoenix_20260913T2210Z.log` (bring-up transcripts; see the latency
-caveat at the end).
+evidence `results/aie/graph_engine_yolov8n_phoenix_20260913T2210Z.log` (bring-up transcripts) and
+`results/aie/npu_inference_graph_engine_phoenix_20260914T0233Z.log` (the witnessed suite on the final container).
 
 **Design** (`kernels/aie2/conv_engine/`, `src/ignite_xdna/compiler/graph_ir.py`,
 `engine_schedule.py`, `engine_sequence.py`, `engine_compile.py`, `runtime/graph_session.py`):
@@ -7745,10 +7745,14 @@ caveat at the end).
   re-evaluation of the ONNX chain — **exact for all 57 activated layers** (MEASURED,
   `graph_ir.fit_hardswish`). The residual add's one-bit rescale (two of the six adds)
   is exact by construction.
-- The instruction stream is the whole frame: raw shim DMA tasks with completion
-  tokens, at most 14 live buffer descriptors per shim (the verifier's limit is 16) and
-  at most four pending tasks per channel (the start-queue depth; see the hang below),
-  a layer barrier between layers. It can be cut at layer boundaries by op count into
+- The instruction stream is the whole frame: raw shim DMA tasks, at most 14 live
+  buffer descriptors per shim (the verifier's limit is 16) and at most four pending
+  tasks per channel (the start-queue depth; see the hangs below), a completion token on
+  every second task of a channel (each `dma_await_task` consumes exactly one token, so
+  tokened tasks are awaited exactly once, in order, and untokened ones are freed on the
+  strength of the next awaited task of the same channel), one 4-D task per round for
+  the four cores' activation packets, one task streaming a round's weight packets, one
+  task draining two vertically adjacent rounds, a layer barrier between layers. It can be cut at layer boundaries by op count into
   per-layer streams without recompiling (`engine_sequence.split_instruction_stream`),
   which is how layers are verified and timed individually.
 - `ignite-compile --engine graph` (the default) builds the engine with IRON/aiecc/Peano
@@ -7774,32 +7778,50 @@ caveat at the end).
 
 **Latency** (MEASURED, single dispatch of the 66-layer stream, Device 0):
 
-| Stream | Tasks / ops per frame | NPU dispatch, 66 layers |
+| Stream (each step keeps all 66 layers byte-exact) | Instruction stream | NPU dispatch, 66 layers |
 |---|---|---|
-| one task per core packet | 17,172 tasks / 85,860 ops (DERIVED) | 40.5, 38.6, 38.5 ms |
-| one 4-D task per round for the four cores (committed default) | ~7,400 tasks | **19.8, 18.2, 18.5 ms** |
+| one task per core packet, every task awaited | 2,816,224 B (85,860 ops) | 40.5, 38.6, 38.5 ms |
+| one 4-D task per round for the four cores | 1,282,660 B | 20.0, 18.1, 18.2 ms |
+| + completion token on every second task | 1,111,764 B | 16.0, 14.3, 14.2 ms |
+| + weight runs, paired drains, W FIFO depth 2 (committed default) | 776,012 B | **13.1, 12.2, 11.7 ms** |
+| token on every fourth task instead of second | 719,648 B | 13.6, 11.6, 11.7 ms (no gain) |
 
-The time follows the task count, not the bytes (127.5 MB of DMA per frame either way,
+The time follows the task count, not the bytes (127.5 MB of DMA per frame in every row,
 DERIVED from the schedule): about 2.5 µs per DMA task, which points at the instruction
-sequencer. `GraphSession` adds ~4.5 ms of input staging and ~1.5 ms of head readback
-per frame on the first container (30 frames, MEASURED), so the glass-to-glass figure of
-the committed build is about **25 ms** and the camera tool showed 47–48 ms on the
-pre-merge container. **The ≤ 8.0 ms target is not met.** Two further task reductions —
-streaming a round's weight packets as one task and draining two rounds per task — were
-built and hung the device; they are switched off by default and are the next thing to
-bisect (`tests/test_engine_graph.py --weight-runs --pair-drains`).
+sequencer, and once tokens are one per two tasks the token count stops mattering.
+`GraphSession` adds ~3.0 ms of input staging (the model's input lookup, the channel
+transpose and a 3.3 MB write) and ~1.4 ms of head readback per frame (30 frames,
+MEASURED; writing through `bo.map()` instead measured 3.5 ms and is off). The witnessed
+suite (`results/aie/npu_inference_graph_engine_phoenix_20260914T0233Z.log`, preflight "No hardware contexts running",
+host 2.9 % busy before and 3.3 % after) ran 500 continuous 1280 × 720 frames through
+`predict_sync(use_oracle_for_boxes=False)` at **19.2 ms mean glass-to-glass** (median
+19.15, p95 19.7, p99 20.1, max 31.9; preprocess 0.35, NPU path 18.8, postprocess
+0.09 ms) with zero buffer objects allocated after warm-up and a working set that
+shrank by 66 MB; test_10 decoded five detections on `bus.jpg` at IoU 1.0 against the
+CPU oracle for every one, and the camera tool ran headless with `boxes: npu`. Ten tests
+ran, none skipped, one assertion failed: the latency line. **The ≤ 8.0 ms target is not
+met**: 11.7 ms of NPU dispatch plus ~5 ms of host staging and readback.
 
 **Hangs found on silicon and what fixed them** (all MEASURED by per-layer dispatch): a
 16-chunk round (`/model.7/conv/Conv`) stalled with more than four tasks pending on one
-shim DMA channel — the emitter now caps pending tasks per channel at four; a weight task
-that streams several objects completes only after the cores consumed all but the last,
-so awaiting it before its activation fills are issued deadlocks the sequencer. After two
-timed-out dispatches the NPU refused every new hardware context (`0xc01e0009`; `xrt-smi
-validate -r latency` fails identically, `xrt-smi` lists no contexts) until a device
-restart, which needs an elevated shell — the reason the witnessed measurement run with
-preflight and CPU sample, and the 500-frame stability test, are still pending.
+shim DMA channel — the emitter caps pending tasks per channel at four. The second hang,
+first blamed on the weight-run and paired-drain experiments, was the token accounting:
+an emitter that awaited only the newest task of a batch and freed the rest left the
+other tasks' completion tokens unconsumed, the next layer's awaits returned early on
+those stale tokens, the channel queue over-filled and the stream stalled at the first
+multi-chunk layer (`/model.1/conv/Conv`) even with every experiment off. With tokens
+issued only to the tasks that are awaited, all four experiments pass bit-exact on every
+layer, alone and combined. A weight task that streams several objects completes only
+after the cores consumed all but the last, so it is never awaited before its activation
+fills are issued. After two timed-out dispatches the NPU refused every new hardware
+context (`0xc01e0009`; `xrt-smi validate -r latency` failed identically, `xrt-smi` listed
+no contexts) until a device restart from an elevated shell. One host-side bug was caught
+only by the pipeline's classes, not by tensor equality: a staging shortcut indexed the
+input lookup table with the int8 tensor viewed as uint8, which is `(v + 128) ^ 0x80`
+rather than `v + 128`; every layer still matched a reference fed the same wrong input,
+while `bus.jpg` decoded to bicycles.
 
-Not done: the ≤ 8 ms latency; the witnessed 500-frame RSS/latency run (the test now
-asks for 500 frames, < 5 MB drift and ≤ 8 ms and will fail on latency until the engine is
-faster); the two experimental task reductions; an NHWC/uint8 `HeadSpec` so the head
-readback needs no transpose.
+Not done: the ≤ 8 ms latency (11.7 ms NPU + ~5 ms host); an NHWC/uint8 `HeadSpec` so
+the head readback needs no transpose; an input plane produced by the preprocessor
+itself instead of the numpy lookup and transpose; fewer, larger tasks for the shallow
+layers (bigger tiles), which is where the remaining ~4,500 tasks per frame sit.

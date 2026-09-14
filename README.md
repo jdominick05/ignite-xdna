@@ -143,7 +143,7 @@ Python runtime (`ignite_xdna.InferenceSession` on AMD Phoenix silicon):
 ```python
 from ignite_xdna import InferenceSession
 with InferenceSession.from_file("build/yolov8n_full.ignite") as s:   # ignite-compile --engine graph
-    heads = s.run_yolo_monolithic(input_data)  # whole network on the NPU: 18.3 ms/frame, every layer bit-exact
+    heads = s.run_yolo_monolithic(input_data)  # whole network on the NPU: 11.7 ms/frame, every layer bit-exact
     preds = s.decode_yolo_predictions(heads)
 ```
 
