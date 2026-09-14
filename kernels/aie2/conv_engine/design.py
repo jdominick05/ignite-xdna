@@ -118,7 +118,8 @@ def build_program(device, sequence_body, w_depth=2):
                     _core_fn,
                     [w_of.cons(), a_split[r].cons(), o_join[r].prod(), engine, psum, scratch, r],
                     tile=Tile(c, r + 2),
-                    stack_size=0x400,
+                    # engine() frames total ~0.7 KB; 2 KB leaves margin (an overflow hangs the core)
+                    stack_size=0x800,
                 )
             )
         w_prods.append(w_of.prod(tile=Tile(c, 0)))

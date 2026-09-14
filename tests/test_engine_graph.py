@@ -40,14 +40,19 @@ def load_image_chw(path=BUS, size=640):
     return np.transpose(rgb, (2, 0, 1))
 
 
-OPTIONS = {"merge_fills": True, "pair_drains": True, "weight_runs": True, "retire_batch": 2, "w_depth": 2}
+OPTIONS = {"merge_fills": True, "pair_drains": True, "weight_runs": True, "retire_batch": 2, "w_depth": 2,
+           "coarse": True, "weight_repeat": True, "trim_ncin": True, "balance_columns": True,
+           "merge_group_weights": True}
 
 
 def prepare(n_layers: int):
     ir = graph_ir.lower_yolov8n(MODEL)
     ws = es.plan_workspace(ir)
     scheds, store = es.schedule_graph(ir, ws, merge_fills=OPTIONS["merge_fills"], pair_drains=OPTIONS["pair_drains"],
-                                      weight_runs=OPTIONS["weight_runs"])
+                                      weight_runs=OPTIONS["weight_runs"], coarse=OPTIONS["coarse"],
+                                      weight_repeat=OPTIONS["weight_repeat"], trim_ncin=OPTIONS["trim_ncin"],
+                                      balance_columns=OPTIONS["balance_columns"],
+                                      merge_group_weights=OPTIONS["merge_group_weights"])
     chw = load_image_chw()
     q_in = gr.quantize_input(chw, ir.tensors[ir.input].scale)
     ws_arr = ws.halo_fill()
@@ -197,9 +202,18 @@ def main():
     parser.add_argument("--no-weight-runs", action="store_true", help="bisection: one weight task per chunk")
     parser.add_argument("--retire-batch", type=int, default=2, help="completion token every N tasks per channel")
     parser.add_argument("--w-depth", type=int, default=2, help="weight FIFO depth at the cores")
+    parser.add_argument("--no-coarse", action="store_true", help="bisection: the per-round schedule")
+    parser.add_argument("--no-weight-repeat", action="store_true", help="bisection: one weight task per round")
+    parser.add_argument("--no-trim-ncin", action="store_true", help="bisection: headers advertise every read block")
+    parser.add_argument("--no-balance-columns", action="store_true", help="bisection: 20x20 layers on column 0 only")
+    parser.add_argument("--no-merge-group-weights", action="store_true",
+                        help="bisection: one weight task per output group per column")
     args = parser.parse_args()
     OPTIONS.update(merge_fills=not args.no_merge_fills, pair_drains=not args.no_pair_drains,
-                   weight_runs=not args.no_weight_runs, retire_batch=args.retire_batch, w_depth=args.w_depth)
+                   weight_runs=not args.no_weight_runs, retire_batch=args.retire_batch, w_depth=args.w_depth,
+                   coarse=not args.no_coarse, weight_repeat=not args.no_weight_repeat,
+                   trim_ncin=not args.no_trim_ncin, balance_columns=not args.no_balance_columns,
+                   merge_group_weights=not args.no_merge_group_weights)
     build_dir = Path(args.build_dir or (ROOT / "build" / "conv_engine" / f"graph{args.layers}")).resolve()
     ok = True
     if args.offline:

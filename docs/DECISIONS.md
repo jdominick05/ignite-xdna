@@ -1643,11 +1643,41 @@ cached reference heads rather than `bo_out`.
   task is awaited exactly once, in channel order.** Each `dma_await_task` consumes one
   token; "await the newest, free the rest" leaves stale tokens and hangs the next layer.
   Tokens go to every second task of a channel and to its last task in a layer.
-- **Default stream: merged 4-D fills, weight runs, paired drains, one token per two
-  tasks, W FIFO depth 2** — each verified bit-exact on all 66 layers alone and together;
-  11.7 ms per 66-layer dispatch, down from 38.5 ms. One token per four tasks gains
-  nothing, so the token count is no longer the limiter.
-- **Latency target not met**: 11.7 ms NPU dispatch plus ~5 ms of host staging and
-  readback (19.2 ms mean over 500 witnessed frames) against the 8 ms asked. The
-  remaining wall is ~4,500 DMA tasks per frame at ~2.5 µs each; bigger tiles for the
-  shallow layers and a preprocessor-produced input plane are the next steps.
+- **Default stream (2026-09-14): the coarse schedule.** A run of up to 16 vertically
+  adjacent quads at one tile column is one repeat task for a single-chunk layer's fills and
+  one for every layer's drains; a drain is issued ahead of its fills and held until they
+  are issued; a multi-chunk layer's weight run is one stride-0 repeat task per column (one
+  task for all output groups where each has a single round in that column); stride-2
+  chunk fills repeat over chunks; contiguous dimensions are folded before merging; the
+  upsampling fills of a quad merge using header phases 0-3. 2,972 tasks and 430 KB of
+  instructions per frame instead of 5,455 and 776 KB; one token per two tasks as before
+  (one per four measured slower). Every layer is bit-exact on Device 0 and in emulation.
+  The per-round schedule stays behind `--no-coarse` for bisection.
+- **The cost model that chose it (MEASURED on Phoenix):** ~0.25 ms fixed per dispatch,
+  ~145 ns per instruction op, ~26 GB/s of DMA transport that barely depends on the task
+  count while the cores keep up, and core compute as the difference to a dispatch whose
+  weight packets are NOPs.
+- **A layer's output groups rotate over the four columns when a group has fewer rounds
+  than columns.** Every 20×20 map has one round per group, and all of them queued on
+  column 0; with headers that advertise only the input blocks holding real channels, the
+  frame went from 10.4 to 8.2 ms.
+- **Shim DMA task limits from the verifier:** the repeat (outermost) dimension is at most
+  64, and it is the only dimension that may have stride 0.
+- **Kernel rule: the eight accumulators stay in vector registers.** Every loop over the
+  four output blocks has a constant trip count, `conv_pass` is always inlined, and no
+  run-time guard sits inside those loops. The fifth 4-pixel group of a tile row is
+  computed once (it was computed twice). Rejected after measuring: skipping junk output
+  blocks with a run-time bound or guard, and an outlined pass — each spilled the
+  accumulators (a 1.4 KB stack frame that overflowed the core stack and hung, or 2.6–3×
+  the core time). The core stack is 2 KB for margin.
+- **Host path: the native preprocessor writes the model's quantized input plane straight
+  into the mapped workspace buffer object, and readback transposes the heads and computes
+  the per-anchor class maxima for the decoder's prune natively.** Numpy staging and
+  transposes cost 6 + 1 ms per frame, buffer-object calls < 0.06 ms. Rejected after
+  measuring: fewer OpenMP threads, and polling `run.state()` instead of `run.wait()`.
+- **Latency target met (2026-09-14):** 7.898 ms mean glass-to-glass over 500 witnessed
+  1280×720 frames (p99 8.270 ms, no buffer-object allocations, +0.04 MB working set), and
+  7.929 ms mean over 60 witnessed live-camera frames with NPU boxes
+  ([BENCHMARKS](BENCHMARKS.md#graph-engine-latency-from-192-to-79-ms-glass-to-glass-2026-09-14-desktop-2)).
+  The margin is under 0.1 ms; the next levers are fewer fill tasks for multi-chunk rounds
+  and less over-read per activation packet.

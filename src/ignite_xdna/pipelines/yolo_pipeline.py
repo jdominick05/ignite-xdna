@@ -172,10 +172,12 @@ class YoloDecoder:
 
         # Unpack head tensors
         scales = None
+        cls_max = None  # optional {p*_cls: int8 per-anchor class maxima} from a graph-engine session
         if isinstance(heads, dict):
             box_f = [heads.get("p3_box"), heads.get("p4_box"), heads.get("p5_box")]
             cls_f = [heads.get("p3_cls"), heads.get("p4_cls"), heads.get("p5_cls")]
             scales = heads.get("scales")
+            cls_max = heads.get("cls_max")
         else:
             box_f = list(heads[:3])
             cls_f = list(heads[3:])
@@ -202,7 +204,8 @@ class YoloDecoder:
                 # logit > logit_t  <=>  (q - zp) * s > logit_t  <=>  q > logit_t / s + zp
                 q_t = logit_t / float(s_c) + int(zp_c)
                 c_flat = c.reshape(NUM_CLASSES, -1)
-                keep_local = np.flatnonzero(c_flat.max(0) > q_t)
+                c_max = cls_max.get(head_names[h_idx][1]) if cls_max else None
+                keep_local = np.flatnonzero((c_max if c_max is not None else c_flat.max(0)) > q_t)
                 if keep_local.size > 0:
                     b_flat = b.reshape(4 * REG_MAX, -1)
                     surviving_boxes.append(
@@ -407,8 +410,15 @@ class YoloPipeline(YoloDecoder):
         """
         Synchronous single-frame inference returning detections and glass-to-glass timing breakdown.
         """
+        # Oracle-free frames on a graph-engine session skip the int8 host tensor: the
+        # native preprocessor quantizes straight into the NPU workspace input plane.
+        direct = not use_oracle_for_boxes and bool(getattr(self.session, "direct_ingress", False))
         t0 = time.perf_counter()
-        quant_tensor, pad, scale = self.preprocess(img_bgr)
+        if direct:
+            pad, scale = self.session.stage_image(img_bgr)
+            quant_tensor = None
+        else:
+            quant_tensor, pad, scale = self.preprocess(img_bgr)
         t1 = time.perf_counter()
 
         heads, hw_ts = self.forward_npu(quant_tensor, return_timestamps=True)
