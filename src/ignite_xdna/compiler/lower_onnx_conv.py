@@ -34,8 +34,15 @@ if tools_dir not in sys.path:
 
 try:
     from tools.disasm_txn import disassemble_transaction
-except (ImportError, ModuleNotFoundError):
-    from disasm_txn import disassemble_transaction
+except ImportError:
+    try:
+        from disasm_txn import disassemble_transaction
+    except ImportError:
+        # An installed wheel has no tools/ directory. Only the legacy per-layer lowering in this
+        # module disassembles templates, and it reads them from a checkout's build/ anyway.
+        def disassemble_transaction(*_args, **_kwargs):
+            raise ImportError("tools/disasm_txn.py is not installed: the per-layer lowering in "
+                              "ignite_xdna.compiler.lower_onnx_conv runs from an ignite-xdna checkout")
 
 # Lazy imports for ONNX and ORT to ensure fast import check
 try:
@@ -291,8 +298,6 @@ def emit_layer_init_binary(
       bias vectors (0x70380), and shift cut parameters (0x7037C).
     - Terminal 0x80 TXN_OPC_TCT wait token.
     """
-    from tools.disasm_txn import disassemble_transaction
-
     if not os.path.exists(base_txn_path):
         raise FileNotFoundError(f"Base transaction binary not found: {base_txn_path}")
 
@@ -436,8 +441,6 @@ def emit_layer_exec_binary(
       DDR patches, channel queue pushes, and Core enables.
     - Achieves 100.00% continuous bit-exact parity across 500+ iterations.
     """
-    from tools.disasm_txn import disassemble_transaction
-
     if not os.path.exists(base_txn_path):
         raise FileNotFoundError(f"Base transaction binary not found: {base_txn_path}")
 
