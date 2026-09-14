@@ -4,12 +4,20 @@ A column program is a list of items executed by one column's shim DMAs:
 
 * ``("w", offset, length, serves)`` stream ``length`` bytes of weight packets from
                            the static packet buffer (``serves`` activation items
-                           consume them, one object each),
+                           must be issued before the task may be awaited),
+* ``("W", pattern, serves)`` the same for a patterned weight stream (a run of
+                           packets repeated once per round),
 * ``("a", [p0, p1, p2, p3])`` fill the activation FIFO with one 6,400-byte packet
                            per core (four DMA tasks, one per pattern),
-* ``("A", pattern)``       the same as one 4-D task when the four packets are
-                           regularly spaced (``merge_quad``), and
-* ``("o", pattern)``       drain one 12,800-byte joined output object.
+* ``("A", pattern)``       one task for any number of packets that are regularly
+                           spaced (``merge_quad``, ``merge_runs``), and
+* ``("o", pattern[, serves])`` drain joined output objects; with ``serves`` the
+                           drain is issued ahead of the fills that feed it and is
+                           held until those ``serves`` activation items are issued.
+
+A task has three hardware access dimensions plus a repeat dimension (the
+outermost size, at most 64 on Phoenix), so one task can move up to 64
+regularly spaced packets or objects.
 
 Items are grouped into rounds (everything up to and including an output
 drain). The emitter keeps two rounds in flight per column: after issuing round
@@ -90,10 +98,35 @@ def linear(buffer: str, offset: int, length: int) -> DmaPattern:
     return DmaPattern(buffer, offset, (length,), (1,))
 
 
+def canonical(p: DmaPattern) -> DmaPattern:
+    """The same access with unit dimensions dropped and contiguous dimensions folded.
+
+    Dimension ``i`` folds into ``i + 1`` when its stride equals the inner extent
+    (``strides[i] == sizes[i + 1] * strides[i + 1]``), so the bytes and their order are
+    unchanged: a tile row of a 20-column tensor without a halo, ``[5 rows][160 B]`` at
+    a 160-byte pitch, becomes one 800-byte run. The compiler folds such patterns too;
+    folding them first lets patterns with more dimensions merge (``merge_runs``).
+    """
+    sizes, strides = list(p.sizes), list(p.strides)
+    changed = True
+    while changed and len(sizes) > 1:
+        changed = False
+        for i in range(len(sizes) - 2, -1, -1):
+            if sizes[i] == 1 or strides[i] == sizes[i + 1] * strides[i + 1]:
+                sizes[i + 1] *= sizes[i]
+                del sizes[i], strides[i]
+                changed = True
+                break
+    if tuple(sizes) == tuple(p.sizes):
+        return p
+    return DmaPattern(p.buffer, p.offset, tuple(sizes), tuple(strides))
+
+
 def merge_quad(patterns: Sequence[DmaPattern]) -> Optional[DmaPattern]:
     """One 4-D pattern covering four per-core patterns spaced by a constant byte delta, or None."""
     if len(patterns) != 4:
         return None
+    patterns = [canonical(p) for p in patterns]
     p0 = patterns[0]
     if any(p.buffer != p0.buffer or p.sizes != p0.sizes or p.strides != p0.strides for p in patterns[1:]):
         return None
@@ -103,6 +136,46 @@ def merge_quad(patterns: Sequence[DmaPattern]) -> Optional[DmaPattern]:
     if delta <= 0 or delta % 4 or any(patterns[i].offset - p0.offset != i * delta for i in range(4)):
         return None
     return DmaPattern(p0.buffer, p0.offset, (4,) + tuple(p0.sizes), (delta,) + tuple(p0.strides))
+
+
+MAX_REPEAT = 64  # the verifier's range for the repeat (outermost) dimension
+
+
+def merge_runs(patterns: Sequence[DmaPattern], max_n: int = MAX_REPEAT) -> List[DmaPattern]:
+    """Merge consecutive patterns of one shape spaced by a constant byte delta.
+
+    Each maximal run (at most ``max_n`` long) of patterns with at most three
+    dimensions becomes one pattern with an extra outermost dimension; patterns
+    that already have four dimensions, or that break the spacing, stand alone.
+    The stream order of the result is the order of ``patterns``; inputs are
+    ``canonical`` first, so contiguous rows do not use up a dimension.
+    """
+    patterns = [canonical(p) for p in patterns]
+    out: List[DmaPattern] = []
+    i = 0
+    while i < len(patterns):
+        p0 = patterns[i]
+        j = i + 1
+        delta = None
+        if len(p0.sizes) <= 3:
+            while j < len(patterns) and j - i < max_n:
+                p = patterns[j]
+                if p.buffer != p0.buffer or p.sizes != p0.sizes or p.strides != p0.strides:
+                    break
+                d = p.offset - patterns[j - 1].offset
+                if delta is None:
+                    if d <= 0 or d % 4:
+                        break
+                    delta = d
+                elif d != delta:
+                    break
+                j += 1
+        if j - i == 1:
+            out.append(p0)
+        else:
+            out.append(DmaPattern(p0.buffer, p0.offset, (j - i,) + tuple(p0.sizes), (delta,) + tuple(p0.strides)))
+        i = j
+    return out
 
 
 def program_task_count(items: Sequence[tuple]) -> int:
@@ -215,15 +288,16 @@ class SequenceEmitter:
         # the same channel (a channel completes its tasks in order). Tokens go to
         # every ``retire_batch``-th task of a channel and to its last task in
         # this program, so no token is ever left unconsumed at the layer barrier.
-        # A weight task streams one object per activation item it serves and only
-        # completes once the cores consumed all but the last, so it must not be
-        # awaited before those items are issued: ``hold`` counts them.
+        # A weight task only completes once the cores consumed (all but the last
+        # of) its objects, and a drain issued ahead of its fills only completes
+        # once those fills were consumed, so neither may be awaited before the
+        # activation items it serves are issued: ``hold`` counts them.
         queues: Dict[int, List[list]] = {c: [] for c in range(len(programs))}
         totals: Dict[int, Dict[str, int]] = {}
         for c, prog in enumerate(programs):
             t = {"w": 0, "a": 0, "o": 0}
             for it in prog:
-                if it[0] == "w":
+                if it[0] in ("w", "W"):
                     t["w"] += 1
                 elif it[0] == "a":
                     t["a"] += len(it[1])
@@ -273,14 +347,19 @@ class SequenceEmitter:
             queues[c].append([self.transfer(self._names[c][channel], pattern, token=token), channel, hold, token])
 
         def served(c: int) -> None:
-            for e in queues[c]:
-                if e[1] == "w" and e[2] > 0:
-                    e[2] -= 1
-                    return
+            # One activation item releases one unit of the oldest held weight task
+            # and of the oldest held drain.
+            for channel in ("w", "o"):
+                for e in queues[c]:
+                    if e[1] == channel and e[2] > 0:
+                        e[2] -= 1
+                        break
 
         def issue(c: int, item: tuple) -> None:
             if item[0] == "w":
                 push(c, "w", linear("wp", item[1], item[2]), hold=item[3] if len(item) > 3 else 0)
+            elif item[0] == "W":
+                push(c, "w", item[1], hold=item[2])
             elif item[0] == "a":
                 served(c)
                 for p in item[1]:
@@ -289,7 +368,7 @@ class SequenceEmitter:
                 served(c)
                 push(c, "a", item[1])
             elif item[0] == "o":
-                push(c, "o", item[1])
+                push(c, "o", item[1], hold=item[2] if len(item) > 2 else 0)
             else:
                 raise ValueError(item[0])
 

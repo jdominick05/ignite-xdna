@@ -18,8 +18,14 @@
 //   q2   = sat_u8(y + 128)                   (act = hswish) else q2 = q1
 //   residual packet: q = sat_u8(rne(((qr - 128) << RSH) + (qm - 128)) >> RSH) + 128)
 // rne = round half to even (AIE conv_even rounding), sat_u8 = clamp to [0, 255].
-// Program memory is 16 KB, so there is exactly one accumulator configuration:
-// four output blocks by two four-pixel groups (eight hardware accumulators).
+//
+// Program memory is 16 KB. The eight accumulators of a pass must stay in vector
+// registers: every loop over the four output blocks has a constant trip count and is
+// unrolled, conv_pass is always inlined, and nothing inside those loops depends on a
+// run-time value. An outlined pass (1.4 KB and 384 B stack frames) or a run-time
+// guard per output block spills them to memory and made the 66-layer frame's core
+// time 2.6 and 3 times longer on Phoenix. A row's five pixel groups are computed as
+// two dual passes (groups 0-1, 2-3) and one single pass (group 4).
 #include <aie_api/aie.hpp>
 #include <stdint.h>
 
@@ -99,10 +105,13 @@ inline V32u epilogue(MMUL &acc, const Hdr &d) {
     return sat_u8_from_i16(aie::add(y, int16_t(128)));
 }
 
-// One pass: output row r, pixel groups g0 and g0 + 1 (clamped), all four blocks.
+// One pass over output row r: pixel groups g0 and g0 + 1 (DUAL) or group g0 alone,
+// all four output blocks.
+template <bool DUAL>
+__attribute__((always_inline))
 inline void conv_pass(const Hdr &d, const uint8_t *a, const int8_t *w, const int32_t *bias,
                       int32_t *psum, uint8_t *out, int r, int g0) {
-    const int g1 = (g0 + 1 < TILE_COLS / 4) ? g0 + 1 : g0;  // duplicate stores alias harmlessly
+    const int g1 = DUAL ? g0 + 1 : g0;
     const int off0 = (r * TILE_COLS + g0 * 4) * 8;
     const int off1 = (r * TILE_COLS + g1 * 4) * 8;
     MMUL acc0[NCO], acc1[NCO];
@@ -110,14 +119,16 @@ inline void conv_pass(const Hdr &d, const uint8_t *a, const int8_t *w, const int
 #pragma unroll
         for (int b = 0; b < NCO; ++b) {
             acc0[b] = MMUL(aie::load_v<32>(psum + b * PSUM_BLOCK_WORDS + off0));
-            acc1[b] = MMUL(aie::load_v<32>(psum + b * PSUM_BLOCK_WORDS + off1));
+            if (DUAL)
+                acc1[b] = MMUL(aie::load_v<32>(psum + b * PSUM_BLOCK_WORDS + off1));
         }
     } else {
 #pragma unroll
         for (int b = 0; b < NCO; ++b) {
             aie::vector<int32, 8> bv = aie::load_v<8>(bias + b * 8);
             acc0[b] = MMUL(bv.template grow_replicate<32>());
-            acc1[b] = MMUL(bv.template grow_replicate<32>());
+            if (DUAL)
+                acc1[b] = MMUL(bv.template grow_replicate<32>());
         }
     }
     const int ncin = d.ncin;
@@ -134,14 +145,19 @@ inline void conv_pass(const Hdr &d, const uint8_t *a, const int8_t *w, const int
                     const uint8_t *plane = a + c * d.plane_bytes;
                     auto [av0, od0] = aie::interleave_unzip(aie::load_unaligned_v<32>(plane + aoff0),
                                                             aie::load_unaligned_v<32>(plane + aoff0 + 32), 8);
-                    auto [av1, od1] = aie::interleave_unzip(aie::load_unaligned_v<32>(plane + aoff1),
-                                                            aie::load_unaligned_v<32>(plane + aoff1 + 32), 8);
+                    V32u av1 = av0;
+                    if (DUAL) {
+                        auto [e1, o1] = aie::interleave_unzip(aie::load_unaligned_v<32>(plane + aoff1),
+                                                              aie::load_unaligned_v<32>(plane + aoff1 + 32), 8);
+                        av1 = e1;
+                    }
 #pragma unroll
                     for (int b = 0; b < NCO; ++b) {
                         V64s wv = aie::load_v<64>(wp);
                         wp += 64;
                         acc0[b].mac(av0, wv);
-                        acc1[b].mac(av1, wv);
+                        if (DUAL)
+                            acc1[b].mac(av1, wv);
                     }
                 }
             }
@@ -154,13 +170,16 @@ inline void conv_pass(const Hdr &d, const uint8_t *a, const int8_t *w, const int
                 for (int c = 0; c < ncin; ++c) {
                     const uint8_t *plane = a + c * d.plane_bytes;
                     V32u av0 = aie::load_unaligned_v<32>(plane + aoff0);
-                    V32u av1 = aie::load_unaligned_v<32>(plane + aoff1);
+                    V32u av1 = av0;
+                    if (DUAL)
+                        av1 = aie::load_unaligned_v<32>(plane + aoff1);
 #pragma unroll
                     for (int b = 0; b < NCO; ++b) {
                         V64s wv = aie::load_v<64>(wp);
                         wp += 64;
                         acc0[b].mac(av0, wv);
-                        acc1[b].mac(av1, wv);
+                        if (DUAL)
+                            acc1[b].mac(av1, wv);
                     }
                 }
             }
@@ -172,13 +191,15 @@ inline void conv_pass(const Hdr &d, const uint8_t *a, const int8_t *w, const int
 #pragma unroll
         for (int b = 0; b < NCO; ++b) {
             aie::store_v(dst + b * OUT_BLOCK_BYTES + off0, epilogue(acc0[b], d));
-            aie::store_v(dst + b * OUT_BLOCK_BYTES + off1, epilogue(acc1[b], d));
+            if (DUAL)
+                aie::store_v(dst + b * OUT_BLOCK_BYTES + off1, epilogue(acc1[b], d));
         }
     } else {
 #pragma unroll
         for (int b = 0; b < NCO; ++b) {
             aie::store_v(psum + b * PSUM_BLOCK_WORDS + off0, acc0[b].template to_vector<int32>());
-            aie::store_v(psum + b * PSUM_BLOCK_WORDS + off1, acc1[b].template to_vector<int32>());
+            if (DUAL)
+                aie::store_v(psum + b * PSUM_BLOCK_WORDS + off1, acc1[b].template to_vector<int32>());
         }
     }
 }
@@ -276,9 +297,11 @@ inline void run(int32_t *hdr, uint8_t *apkt, uint8_t *out, int32_t *psum, int co
     case OP_CONV:
         if (d.flags & F_UP2)
             up2_expand(apkt, d.phase, out);  // accumulate-only packets: out is scratch
-        for (int r = 0; r < TILE_ROWS; ++r)
-            for (int g0 = 0; g0 < TILE_COLS / 4; g0 += 2)
-                conv_pass(d, apkt, w, bias, psum, out, r, g0);
+        for (int r = 0; r < TILE_ROWS; ++r) {  // five pixel groups per row: 0-1, 2-3, 4
+            conv_pass<true>(d, apkt, w, bias, psum, out, r, 0);
+            conv_pass<true>(d, apkt, w, bias, psum, out, r, 2);
+            conv_pass<false>(d, apkt, w, bias, psum, out, r, 4);
+        }
         break;
     case OP_MAXPOOL:
         maxpool_tile(d, apkt, psum, out);

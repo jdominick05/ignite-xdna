@@ -65,7 +65,7 @@ class GraphSession:
     """Session for ``engine == conv_engine_v1`` containers (see ``compiler/engine_compile.py``)."""
 
     def __init__(self, container_path: Union[str, Path], device_index: int = 0,
-                 xclbin_cache_dir: Optional[Union[str, Path]] = None, map_workspace: bool = False, **_ignored):
+                 xclbin_cache_dir: Optional[Union[str, Path]] = None, map_workspace: bool = True, **_ignored):
         setup_xrt_environment()
         self.path = Path(container_path)
         self.device_index = device_index
@@ -106,9 +106,12 @@ class GraphSession:
         self.bo_ws.sync(self.harness.pyxrt.xclBOSyncDirection.XCL_BO_SYNC_BO_TO_DEVICE)
 
         # Input staging: the image plane (one 8-channel block with its halo ring).
-        # With ``map_workspace`` the plane is written in place through bo.map()
-        # and only synced; measured no faster than bo.write on Phoenix (3.5 vs
-        # 3.0 ms per frame), so the default is the host copy.
+        # With ``map_workspace`` (the default) the plane is a view of the mapped
+        # workspace buffer object: ``stage_image`` has the native preprocessor
+        # letterbox, resize and quantize a camera frame straight into it, and the
+        # head readback reads the mapped tensors without a host copy. Buffer
+        # object writes, syncs and reads cost < 0.06 ms per frame on Phoenix; the
+        # numpy lookup and transpose of ``stage_input`` cost 3.5 ms.
         self.input_placement = self.ge["placements"][self.ge["input_tensor"]]
         p = self.input_placement
         plane_shape = (p["height"] + 2 * p["halo"], p["width"] + 2 * p["halo"], 8)
@@ -129,6 +132,21 @@ class GraphSession:
             self._input_plane = np.full(plane_shape, ZP, dtype=np.uint8)
         self._input_lut = input_lut(float(self.ignite_manifest["quant_scales"]["input_scale"]),
                                     int(self.ignite_manifest["quant_scales"].get("input_zero_point", ZP)))
+        try:
+            from ignite_xdna.pipelines.preprocess import FusedPreprocessor, blocks_class_max_int8, blocks_to_nchw_int8
+            self._pre: Optional[Any] = FusedPreprocessor(imgsz=int(p["width"]))
+            self._to_nchw = blocks_to_nchw_int8
+            self._class_max = blocks_class_max_int8
+        except Exception:  # noqa: BLE001 - native helpers are optional
+            self._pre, self._to_nchw, self._class_max = None, None, None
+        self._direct_ingress = bool(self._pre is not None and self._pre.has_plane_ingress)
+        # Per-frame ingress call with everything but the frame bound once.
+        if self._direct_ingress:
+            import ctypes
+            self._lut_c = np.ascontiguousarray(self._input_lut, dtype=np.uint8)
+            self._c_top, self._c_left, self._c_scale = ctypes.c_int(), ctypes.c_int(), ctypes.c_float()
+            self._c_refs = (ctypes.byref(self._c_top), ctypes.byref(self._c_left), ctypes.byref(self._c_scale))
+            self._ingress_fn = self._pre.lib.fused_preprocess_bgr_to_c8_plane
         # Head readback: each head tensor is contiguous (halo 0); egress is int8 NCHW.
         self.heads_meta = self.ge["heads"]
         self._egress = np.zeros(self.out_bytes, dtype=np.int8)
@@ -138,8 +156,30 @@ class GraphSession:
             hp = self.ge["placements"][hm["tensor"]]
             nbytes = hp["blocks"] * hp["height"] * hp["width"] * 8
             self._head_regions.append((name, hm, hp, hp["base"], nbytes))
+        # Per-anchor class-logit maxima of the class heads (int8, zero point 0), filled natively
+        # during readback so the decoder's confidence prune does not scan the class tensors.
+        self._cls_max: Dict[str, np.ndarray] = {
+            name: np.empty(self.ge["placements"][self.heads_meta[name]["tensor"]]["height"]
+                           * self.ge["placements"][self.heads_meta[name]["tensor"]]["width"], dtype=np.int8)
+            for name in HEAD_NAMES if name.endswith("_cls")}
+        self._cls_max_valid = False
         self._head_status: Optional[HeadStatus] = None
+        self._head_views: Optional[Dict[str, np.ndarray]] = None  # int8 views of the persistent egress
+        self._head_scales: Optional[Dict[str, Any]] = None
         self.last_dispatch_ms = 0.0
+
+        # One XRT run object for every frame: its arguments (opcode, instructions,
+        # workspace, packets) never change, so each frame only starts and awaits it.
+        pyxrt = self.harness.pyxrt
+        self._completed = getattr(getattr(pyxrt, "ert_cmd_state", None), "ERT_CMD_STATE_COMPLETED", None)
+        self._run = None
+        try:
+            run = pyxrt.run(self.harness.kernel)
+            for i, arg in enumerate((3, self.bo_instr_exec, self.ninstr_exec, self.bo_ws, self.bo_wp)):
+                run.set_arg(i, arg)
+            self._run = run
+        except Exception:  # noqa: BLE001 - fall back to one run per dispatch
+            self._run = None
 
     # ------------------------------------------------------------------ status
     @property
@@ -157,6 +197,39 @@ class GraphSession:
         return [L["name"] for L in self.ge["layers"]]
 
     # ------------------------------------------------------------------ frame
+    @property
+    def direct_ingress(self) -> bool:
+        """True when ``stage_image`` can quantize camera frames straight into the input plane."""
+        return self._direct_ingress
+
+    def stage_image(self, img_bgr: np.ndarray) -> Tuple[Tuple[int, int], float]:
+        """Letterbox, resize and quantize a BGR frame into the input plane and upload it.
+
+        One native pass writes ``lut[pixel]`` into channels 0..2 of the plane (a view
+        of the mapped workspace buffer object when mapping is available), so no
+        int8 tensor, lookup pass or transpose exists on the host. Returns the
+        letterbox ``(pad, scale)`` for box decoding. The plane is byte-identical to
+        ``stage_input`` of the preprocessor's int8 tensor for the same frame.
+        """
+        if not self._direct_ingress:
+            raise RuntimeError("direct ingress needs the native preprocessor with plane ingress")
+        p = self.input_placement
+        if not img_bgr.flags["C_CONTIGUOUS"]:
+            img_bgr = np.ascontiguousarray(img_bgr)
+        if img_bgr.ndim != 3 or img_bgr.shape[2] != 3 or img_bgr.dtype != np.uint8:
+            raise ValueError(f"stage_image expects an HxWx3 uint8 BGR frame, got {img_bgr.shape} {img_bgr.dtype}")
+        ret = self._ingress_fn(img_bgr.ctypes.data, img_bgr.shape[1], img_bgr.shape[0], img_bgr.strides[0],
+                               self._input_plane.ctypes.data, int(p["width"]), int(p["height"]), int(p["halo"]),
+                               self._lut_c.ctypes.data, *self._c_refs)
+        if ret != 0:
+            raise RuntimeError(f"fused_preprocess_bgr_to_c8_plane returned {ret}")
+        pad, scale = (self._c_top.value, self._c_left.value), self._c_scale.value
+        base = p["base"]
+        if self._ws_map is None:
+            self.bo_ws.write(self._input_plane, base)
+        self.bo_ws.sync(self.harness.pyxrt.xclBOSyncDirection.XCL_BO_SYNC_BO_TO_DEVICE, self._input_bytes, base)
+        return pad, scale
+
     def stage_input(self, input_tensor: Any) -> None:
         """Quantize the preprocessor's int8 (1,3,640,640) tensor into the input plane and upload it."""
         x = np.asarray(input_tensor)
@@ -175,34 +248,50 @@ class GraphSession:
     def read_heads(self) -> np.ndarray:
         """Sync the six head tensors back and assemble the int8 NCHW egress buffer."""
         d = self.harness.pyxrt.xclBOSyncDirection.XCL_BO_SYNC_BO_FROM_DEVICE
+        cls_ok = self._class_max is not None
         for name, hm, hp, base, nbytes in self._head_regions:
             self.bo_ws.sync(d, nbytes, base)
             if self._ws_map is not None:
                 raw = self._ws_map[base:base + nbytes]
             else:
                 raw = np.frombuffer(self.bo_ws.read(nbytes, base), dtype=np.uint8)
-            blocked = raw.reshape(hp["blocks"], hp["height"], hp["width"], 8)
-            chw = np.transpose(blocked, (0, 3, 1, 2)).reshape(hp["blocks"] * 8, hp["height"], hp["width"])
             c = hm["channels"]
             off = hm["egress_offset"]
-            # uint8 with zero point 128 -> int8 with zero point 0 (flip the top bit)
-            self._egress[off:off + c * hp["height"] * hp["width"]] = (chw[:c] ^ 0x80).view(np.int8).reshape(-1)
+            dst = self._egress[off:off + c * hp["height"] * hp["width"]]
+            if name in self._cls_max:
+                cls_ok = cls_ok and self._class_max(raw, hp["blocks"], hp["height"], hp["width"], c,
+                                                    self._cls_max[name])
+            # uint8 with zero point 128 -> int8 with zero point 0 (flip the top bit), NHWC blocks -> NCHW
+            if self._to_nchw is not None and self._to_nchw(raw, hp["blocks"], hp["height"], hp["width"], c, dst):
+                continue
+            blocked = raw.reshape(hp["blocks"], hp["height"], hp["width"], 8)
+            chw = np.transpose(blocked, (0, 3, 1, 2)).reshape(hp["blocks"] * 8, hp["height"], hp["width"])
+            dst[:] = (chw[:c] ^ 0x80).view(np.int8).reshape(-1)
+        self._cls_max_valid = bool(cls_ok)
         return self._egress
 
     def dispatch(self, timeout_ms: int = 10000) -> float:
         t0 = time.perf_counter()
-        run, state = self.harness.dispatch_kernel(self.bo_instr_exec, self.ninstr_exec, self.bo_ws, self.bo_wp,
-                                                  timeout_ms=timeout_ms)
-        if str(state) != "ert_cmd_state.ERT_CMD_STATE_COMPLETED":
+        if self._run is not None:
+            self._run.start()
+            state = self._run.wait(timeout_ms)
+        else:
+            _, state = self.harness.dispatch_kernel(self.bo_instr_exec, self.ninstr_exec, self.bo_ws, self.bo_wp,
+                                                    timeout_ms=timeout_ms)
+        if state != self._completed and str(state) != "ert_cmd_state.ERT_CMD_STATE_COMPLETED":
             raise RuntimeError(f"graph engine dispatch ended in state {state}")
         self.last_dispatch_ms = (time.perf_counter() - t0) * 1e3
         return self.last_dispatch_ms
 
     def run_yolo_monolithic(self, input_tensor: Any, unswizzle: bool = True, timeout_ms: int = 10000,
                             return_timestamps: bool = False):
-        """Whole-network forward pass; returns the ``run_yolo_monolithic`` head dict of InferenceSession."""
+        """Whole-network forward pass; returns the ``run_yolo_monolithic`` head dict of InferenceSession.
+
+        ``input_tensor=None`` dispatches on the input plane already staged by ``stage_image``.
+        """
         t0 = time.perf_counter()
-        self.stage_input(input_tensor)
+        if input_tensor is not None:
+            self.stage_input(input_tensor)
         t1 = time.perf_counter()
         self.dispatch(timeout_ms=timeout_ms)
         t2 = time.perf_counter()
@@ -211,8 +300,14 @@ class GraphSession:
         status = self.head_status
         out: Dict[str, Any] = {name: None for name in HEAD_NAMES}
         if status.present:
-            out.update(status.layout.unpack(egress))
-            out["scales"] = status.layout.scales()
+            if self._head_views is None:
+                # The egress buffer is allocated once, so its head views and scales are too.
+                self._head_views = status.layout.unpack(egress)
+                self._head_scales = status.layout.scales()
+            out.update(self._head_views)
+            out["scales"] = self._head_scales
+            if self._cls_max_valid:
+                out["cls_max"] = self._cls_max  # {p*_cls: int8 per-anchor class maxima}, see YoloDecoder
         out["heads_present"] = status.present
         out["head_status"] = status.reason
         out["raw_output"] = egress
@@ -240,6 +335,10 @@ class GraphSession:
         if self._closed:
             return
         self._closed = True
+        self._run = None  # the run holds references to the buffer objects
+        self._head_views = None
+        self._ws_map = None
+        self._input_plane = None
         self.bo_ws = None
         self.bo_wp = None
         self.bo_instr_exec = None

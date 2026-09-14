@@ -1,0 +1,86 @@
+Witnessed camera acceptance on the coarsened graph-engine container: live camera, NPU boxes, no CPU oracle
+machine=Desktop 2 (Ryzen 7 8700G), device=[003d:00:01.1] NPU Phoenix Device 0, camera index 0 via MSMF
+container=build/yolov8n_full.ignite (same build as npu_inference_graph_engine log of this run's date)
+command=python tools/live_camera_ignition.py --headless --frames 60 --boxes npu (default source 0,1)
+what this measures=predict_sync(use_oracle_for_boxes=False) per camera frame; the summary G2G is the mean over all 60 frames including the first
+evidence tags: MEASURED = number printed below; the preflight line is the device state immediately before the run.
+
+date_utc=2026-09-14T04:26:44Z
+=== preflight: xrt-smi examine -r aie-partitions ===
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+=== host load: CPU busy over 1 s before the run: 2.1% ===
+=== python tools/live_camera_ignition.py --headless --frames 60 --boxes npu ===
+[Ignition] Initializing bare-metal pipeline on Device 0 from <checkout>\build\yolov8n_full.ignite ...
+[Ignition] NPU heads present: six heads declared in head_layout, 1209600 of 1209600 egress bytes
+[Ignition] boxes: npu
+[camera] index 0 via MSMF: opened, first frame read (0.99s)
+[Ignition] source: camera index 0 via MSMF
+[hud] frame 1/60 | Ignition YOLOv8n | Device 0 | G2G 11.36 ms | NPU  9.43 ms | loop   11.6 FPS | objects 3 | boxes: npu | NPU heads: present
+[hud] frame 2/60 | Ignition YOLOv8n | Device 0 | G2G  7.75 ms | NPU  7.29 ms | loop   17.1 FPS | objects 3 | boxes: npu | NPU heads: present
+[hud] frame 3/60 | Ignition YOLOv8n | Device 0 | G2G  7.76 ms | NPU  7.40 ms | loop   32.7 FPS | objects 3 | boxes: npu | NPU heads: present
+[hud] frame 4/60 | Ignition YOLOv8n | Device 0 | G2G  7.73 ms | NPU  7.38 ms | loop   51.9 FPS | objects 3 | boxes: npu | NPU heads: present
+[hud] frame 5/60 | Ignition YOLOv8n | Device 0 | G2G  8.12 ms | NPU  7.63 ms | loop  120.7 FPS | objects 3 | boxes: npu | NPU heads: present
+[hud] frame 6/60 | Ignition YOLOv8n | Device 0 | G2G  7.95 ms | NPU  7.45 ms | loop  121.1 FPS | objects 4 | boxes: npu | NPU heads: present
+[hud] frame 7/60 | Ignition YOLOv8n | Device 0 | G2G  7.89 ms | NPU  7.45 ms | loop  121.6 FPS | objects 4 | boxes: npu | NPU heads: present
+[hud] frame 8/60 | Ignition YOLOv8n | Device 0 | G2G  7.62 ms | NPU  7.24 ms | loop  121.9 FPS | objects 4 | boxes: npu | NPU heads: present
+[hud] frame 9/60 | Ignition YOLOv8n | Device 0 | G2G  7.75 ms | NPU  7.39 ms | loop  122.2 FPS | objects 4 | boxes: npu | NPU heads: present
+[hud] frame 10/60 | Ignition YOLOv8n | Device 0 | G2G  7.76 ms | NPU  7.37 ms | loop  123.8 FPS | objects 4 | boxes: npu | NPU heads: present
+[hud] frame 11/60 | Ignition YOLOv8n | Device 0 | G2G  8.02 ms | NPU  7.56 ms | loop  122.2 FPS | objects 4 | boxes: npu | NPU heads: present
+[hud] frame 12/60 | Ignition YOLOv8n | Device 0 | G2G  7.91 ms | NPU  7.45 ms | loop  122.2 FPS | objects 4 | boxes: npu | NPU heads: present
+[hud] frame 13/60 | Ignition YOLOv8n | Device 0 | G2G  8.14 ms | NPU  7.65 ms | loop  122.1 FPS | objects 4 | boxes: npu | NPU heads: present
+[hud] frame 14/60 | Ignition YOLOv8n | Device 0 | G2G  7.88 ms | NPU  7.43 ms | loop  122.2 FPS | objects 5 | boxes: npu | NPU heads: present
+[hud] frame 15/60 | Ignition YOLOv8n | Device 0 | G2G  8.11 ms | NPU  7.63 ms | loop  122.1 FPS | objects 5 | boxes: npu | NPU heads: present
+[hud] frame 16/60 | Ignition YOLOv8n | Device 0 | G2G  7.87 ms | NPU  7.40 ms | loop  122.2 FPS | objects 5 | boxes: npu | NPU heads: present
+[hud] frame 17/60 | Ignition YOLOv8n | Device 0 | G2G  8.12 ms | NPU  7.62 ms | loop  122.1 FPS | objects 5 | boxes: npu | NPU heads: present
+[hud] frame 18/60 | Ignition YOLOv8n | Device 0 | G2G  8.10 ms | NPU  7.52 ms | loop  121.9 FPS | objects 5 | boxes: npu | NPU heads: present
+[hud] frame 19/60 | Ignition YOLOv8n | Device 0 | G2G  8.15 ms | NPU  7.67 ms | loop  121.6 FPS | objects 5 | boxes: npu | NPU heads: present
+[hud] frame 20/60 | Ignition YOLOv8n | Device 0 | G2G  8.16 ms | NPU  7.68 ms | loop  121.6 FPS | objects 5 | boxes: npu | NPU heads: present
+[hud] frame 21/60 | Ignition YOLOv8n | Device 0 | G2G  8.03 ms | NPU  7.55 ms | loop  121.6 FPS | objects 5 | boxes: npu | NPU heads: present
+[hud] frame 22/60 | Ignition YOLOv8n | Device 0 | G2G  8.08 ms | NPU  7.59 ms | loop  121.1 FPS | objects 3 | boxes: npu | NPU heads: present
+[hud] frame 23/60 | Ignition YOLOv8n | Device 0 | G2G  7.85 ms | NPU  7.46 ms | loop  121.6 FPS | objects 3 | boxes: npu | NPU heads: present
+[hud] frame 24/60 | Ignition YOLOv8n | Device 0 | G2G  7.61 ms | NPU  7.26 ms | loop  121.6 FPS | objects 3 | boxes: npu | NPU heads: present
+[hud] frame 25/60 | Ignition YOLOv8n | Device 0 | G2G  7.70 ms | NPU  7.35 ms | loop  121.6 FPS | objects 3 | boxes: npu | NPU heads: present
+[hud] frame 26/60 | Ignition YOLOv8n | Device 0 | G2G  7.84 ms | NPU  7.42 ms | loop  121.9 FPS | objects 3 | boxes: npu | NPU heads: present
+[hud] frame 27/60 | Ignition YOLOv8n | Device 0 | G2G  7.72 ms | NPU  7.34 ms | loop  122.1 FPS | objects 3 | boxes: npu | NPU heads: present
+[hud] frame 28/60 | Ignition YOLOv8n | Device 0 | G2G  7.65 ms | NPU  7.29 ms | loop  122.2 FPS | objects 3 | boxes: npu | NPU heads: present
+[hud] frame 29/60 | Ignition YOLOv8n | Device 0 | G2G  7.94 ms | NPU  7.55 ms | loop  122.2 FPS | objects 3 | boxes: npu | NPU heads: present
+[hud] frame 30/60 | Ignition YOLOv8n | Device 0 | G2G  7.93 ms | NPU  7.46 ms | loop  122.6 FPS | objects 6 | boxes: npu | NPU heads: present
+[hud] frame 31/60 | Ignition YOLOv8n | Device 0 | G2G  7.77 ms | NPU  7.40 ms | loop  123.1 FPS | objects 6 | boxes: npu | NPU heads: present
+[hud] frame 32/60 | Ignition YOLOv8n | Device 0 | G2G  7.63 ms | NPU  7.28 ms | loop  123.3 FPS | objects 6 | boxes: npu | NPU heads: present
+[hud] frame 33/60 | Ignition YOLOv8n | Device 0 | G2G  7.78 ms | NPU  7.39 ms | loop  123.3 FPS | objects 6 | boxes: npu | NPU heads: present
+[hud] frame 34/60 | Ignition YOLOv8n | Device 0 | G2G  7.72 ms | NPU  7.29 ms | loop  123.3 FPS | objects 6 | boxes: npu | NPU heads: present
+[hud] frame 35/60 | Ignition YOLOv8n | Device 0 | G2G  7.80 ms | NPU  7.42 ms | loop  123.4 FPS | objects 6 | boxes: npu | NPU heads: present
+[hud] frame 36/60 | Ignition YOLOv8n | Device 0 | G2G  7.67 ms | NPU  7.30 ms | loop  123.5 FPS | objects 6 | boxes: npu | NPU heads: present
+[hud] frame 37/60 | Ignition YOLOv8n | Device 0 | G2G  7.99 ms | NPU  7.52 ms | loop  123.5 FPS | objects 6 | boxes: npu | NPU heads: present
+[hud] frame 38/60 | Ignition YOLOv8n | Device 0 | G2G  7.87 ms | NPU  7.41 ms | loop  123.5 FPS | objects 4 | boxes: npu | NPU heads: present
+[hud] frame 39/60 | Ignition YOLOv8n | Device 0 | G2G  7.75 ms | NPU  7.39 ms | loop  123.5 FPS | objects 4 | boxes: npu | NPU heads: present
+[hud] frame 40/60 | Ignition YOLOv8n | Device 0 | G2G  7.69 ms | NPU  7.34 ms | loop  123.5 FPS | objects 4 | boxes: npu | NPU heads: present
+[hud] frame 41/60 | Ignition YOLOv8n | Device 0 | G2G  7.74 ms | NPU  7.38 ms | loop  123.5 FPS | objects 4 | boxes: npu | NPU heads: present
+[hud] frame 42/60 | Ignition YOLOv8n | Device 0 | G2G  7.59 ms | NPU  7.25 ms | loop  123.6 FPS | objects 4 | boxes: npu | NPU heads: present
+[hud] frame 43/60 | Ignition YOLOv8n | Device 0 | G2G  7.71 ms | NPU  7.36 ms | loop  123.8 FPS | objects 4 | boxes: npu | NPU heads: present
+[hud] frame 44/60 | Ignition YOLOv8n | Device 0 | G2G  7.64 ms | NPU  7.28 ms | loop  124.6 FPS | objects 4 | boxes: npu | NPU heads: present
+[hud] frame 45/60 | Ignition YOLOv8n | Device 0 | G2G  7.79 ms | NPU  7.43 ms | loop  125.2 FPS | objects 4 | boxes: npu | NPU heads: present
+[hud] frame 46/60 | Ignition YOLOv8n | Device 0 | G2G  8.32 ms | NPU  7.65 ms | loop  125.2 FPS | objects 4 | boxes: npu | NPU heads: present
+[hud] frame 47/60 | Ignition YOLOv8n | Device 0 | G2G  8.03 ms | NPU  7.53 ms | loop  125.2 FPS | objects 4 | boxes: npu | NPU heads: present
+[hud] frame 48/60 | Ignition YOLOv8n | Device 0 | G2G  7.99 ms | NPU  7.52 ms | loop  125.2 FPS | objects 3 | boxes: npu | NPU heads: present
+[hud] frame 49/60 | Ignition YOLOv8n | Device 0 | G2G  7.98 ms | NPU  7.51 ms | loop  125.2 FPS | objects 3 | boxes: npu | NPU heads: present
+[hud] frame 50/60 | Ignition YOLOv8n | Device 0 | G2G  7.88 ms | NPU  7.42 ms | loop  125.2 FPS | objects 3 | boxes: npu | NPU heads: present
+[hud] frame 51/60 | Ignition YOLOv8n | Device 0 | G2G  7.73 ms | NPU  7.37 ms | loop  125.3 FPS | objects 3 | boxes: npu | NPU heads: present
+[hud] frame 52/60 | Ignition YOLOv8n | Device 0 | G2G  7.64 ms | NPU  7.29 ms | loop  125.4 FPS | objects 3 | boxes: npu | NPU heads: present
+[hud] frame 53/60 | Ignition YOLOv8n | Device 0 | G2G  7.76 ms | NPU  7.42 ms | loop  125.5 FPS | objects 3 | boxes: npu | NPU heads: present
+[hud] frame 54/60 | Ignition YOLOv8n | Device 0 | G2G  7.87 ms | NPU  7.44 ms | loop  125.4 FPS | objects 3 | boxes: npu | NPU heads: present
+[hud] frame 55/60 | Ignition YOLOv8n | Device 0 | G2G  7.88 ms | NPU  7.47 ms | loop  125.3 FPS | objects 5 | boxes: npu | NPU heads: present
+[hud] frame 56/60 | Ignition YOLOv8n | Device 0 | G2G  7.97 ms | NPU  7.49 ms | loop  125.3 FPS | objects 5 | boxes: npu | NPU heads: present
+[hud] frame 57/60 | Ignition YOLOv8n | Device 0 | G2G  8.19 ms | NPU  7.69 ms | loop  124.9 FPS | objects 5 | boxes: npu | NPU heads: present
+[hud] frame 58/60 | Ignition YOLOv8n | Device 0 | G2G  8.00 ms | NPU  7.45 ms | loop  124.3 FPS | objects 5 | boxes: npu | NPU heads: present
+[hud] frame 59/60 | Ignition YOLOv8n | Device 0 | G2G  8.07 ms | NPU  7.53 ms | loop  124.3 FPS | objects 5 | boxes: npu | NPU heads: present
+[hud] frame 60/60 | Ignition YOLOv8n | Device 0 | G2G  7.75 ms | NPU  7.33 ms | loop  124.7 FPS | objects 5 | boxes: npu | NPU heads: present
+[summary] camera attempts: 0/MSMF opened, first frame read 0.99s
+[summary] frames 60 | source camera | boxes npu | G2G mean 7.929 ms median 7.869 p95 8.158 | NPU mean 7.474 ms | NPU heads present
+[Ignition] Hardware context released.
+=== returncode 0 ===
+=== host load: CPU busy over 1 s after the run: 2.8% ===

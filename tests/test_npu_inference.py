@@ -485,6 +485,8 @@ class NpuInferenceOnSilicon(unittest.TestCase):
         self.assertEqual(allocations, {"host_bo": 0, "instr_bo": 0})
         self.assertLess(growth_mb, 5.0, f"working set grew by {growth_mb:.2f} MB over {N_FRAMES} frames")
         self.assertLessEqual(float(arr.mean()), 8.0, f"mean glass-to-glass {arr.mean():.3f} ms > 8.0 ms")
+        p99 = float(np.percentile(arr, 99))
+        self.assertLessEqual(p99, 9.5, f"p99 glass-to-glass {p99:.3f} ms > 9.5 ms")
 
     def test_12_camera_tool_headless_on_bus_jpg(self):
         cmd = [sys.executable, str(CAMERA_TOOL), "--source", str(BUS_JPG), "--headless", "--frames", "5",

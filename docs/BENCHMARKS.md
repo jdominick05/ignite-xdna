@@ -7821,7 +7821,71 @@ input lookup table with the int8 tensor viewed as uint8, which is `(v + 128) ^ 0
 rather than `v + 128`; every layer still matched a reference fed the same wrong input,
 while `bus.jpg` decoded to bicycles.
 
-Not done: the ≤ 8 ms latency (11.7 ms NPU + ~5 ms host); an NHWC/uint8 `HeadSpec` so
-the head readback needs no transpose; an input plane produced by the preprocessor
-itself instead of the numpy lookup and transpose; fewer, larger tasks for the shallow
-layers (bigger tiles), which is where the remaining ~4,500 tasks per frame sit.
+Not done at this point: the ≤ 8 ms latency (11.7 ms NPU + ~5 ms host). It is done in the
+next subsection, without bigger tiles: the task count was not the only wall.
+
+### Graph engine latency from 19.2 to 7.9 ms glass-to-glass (2026-09-14, Desktop 2)
+
+Branch `worktree-npu-heads` after commit `c5c2817`; evidence
+`results/aie/graph_engine_latency_phoenix_20260914T0411Z.log` (every probe and step),
+`results/aie/npu_inference_graph_engine_phoenix_20260914T0426Z.log` (witnessed suite) and
+`results/aie/camera_npu_boxes_phoenix_20260914T0426Z.log` (witnessed camera run). Every
+silicon number below was taken with `xrt-smi examine -r aie-partitions` reporting no
+hardware contexts, and every schedule and kernel was byte-exact on all 66 layers on
+Device 0 (per layer and as one dispatch) before it was timed.
+
+**Where the 19.1 ms went** (1280 × 720 synthetic frames, MEASURED): input staging 6.1 ms
+(numpy lookup, `moveaxis` and `bo.write` — the buffer-object calls themselves cost 0.08 ms),
+dispatch 11.3 ms, head readback 1.3 ms (numpy transposes), preprocess and decode 0.3 ms.
+The dispatch split three ways: a stream whose weight packets are all NOPs (same tasks and
+bytes, no core compute) took 8.6 ms, so core compute was ~2.85 ms; appending harmless BD
+writes to the instruction stream cost 145 ns per op (21,883 ops, ~3.2 ms), with ~0.25 ms
+fixed per dispatch; and a no-compute transport probe moved 78.7 MB of fills in 2.94 ms
+whether as 52 or 772 tasks (26.8 GB/s), fills and drains in parallel. The per-round
+schedule was paying for ops and for columns waiting on each other, not for bytes.
+
+| Step (each byte-exact on all 66 layers on Device 0) | Tasks | Instructions | Dispatch, real / NOP weights |
+|---|---|---|---|
+| per-round schedule (`c5c2817`) | 5,455 | 776,012 B | 11.43 / 8.59 ms |
+| coarse schedule (repeat tasks per run of quads, drains issued ahead and held, stride-0 weight repeats, chunk repeats, per-quad upsample fills) | 3,303 | 472,276 B | 10.40 / 6.95 ms |
+| + 20 × 20 groups rotated over the four columns (they all ran on column 0), headers trim junk input blocks | 3,303 | 474,652 B | 8.20 / 5.63 ms |
+| + kernel computes a row's fifth pixel group once (it computed it twice), pass always inlined | 3,303 | 474,652 B | 7.55 / 5.67 ms |
+| + contiguous dimensions folded before merging | 3,160 | 454,500 B | 7.50–7.55 ms |
+| + one weight task per column for single-round groups | 2,972 | 430,180 B | **7.23 ms** mean in the pipeline |
+
+Rejected on measurements: a completion token every fourth task (10.91 ms against 10.40);
+skipping junk output blocks in the kernel with a run-time bound (1.4 KB stack frame, which
+overflowed the 1 KB core stack and hung the synthetic test), with an outlined guarded pass
+(12.19 ms) or with inlined per-block guards (11.38 ms) — the accumulators left the vector
+registers each time; a stride-0 access dimension for multi-round weight runs (the
+verifier allows stride 0 only on the repeat dimension, which is at most 64); fewer OpenMP
+threads for the host passes; polling `run.state()` instead of `run.wait()` (7.237 ms
+either way).
+
+**Host path** (MEASURED): the native preprocessor now writes the model's quantized uint8
+input plane straight into the mapped workspace buffer object (`GraphSession.stage_image`,
+0.37 ms, byte-identical to quantizing the int8 preprocessor output for 1280 × 720,
+1080 × 607, 640 × 640, 640 × 480 and `bus.jpg`), and readback transposes the heads natively
+(0.16 ms). On a live 640 × 480 camera the decode took 0.35 ms instead of 0.09 ms: replaying
+the same captured heads took 0.17 ms, polling did not help, and the difference was the
+main thread's first read of 672 KB of class logits just written by worker threads. The
+readback now also computes the per-anchor class maxima natively (8,400 B for the
+decoder's prune, identical detections), and a frame that needs no scaling is copied
+through the lookup table without the bilinear arithmetic (byte-identical).
+
+**Result** (witnessed, MEASURED): `tests/test_npu_inference.py` — 10 tests, none skipped,
+none failed. test_11 ran 500 continuous 1280 × 720 frames at **7.898 ms mean
+glass-to-glass** (median 7.874, p99 8.270, max 8.516; preprocess 0.377, NPU path 7.461,
+postprocess 0.060 ms) with no buffer objects allocated after warm-up and a working set
+that moved +0.04 MB; test_10 decoded five detections on `bus.jpg`, IoU 1.0 against the CPU
+oracle for each. `python tools/live_camera_ignition.py --headless --frames 60 --boxes npu`
+on the live camera: **7.929 ms mean** (median 7.869, p95 8.158; NPU 7.474 ms), boxes from
+the NPU heads. `python -m ignite_xdna.compiler.cli compile --model models/yolov8n.onnx
+--output build/yolov8n_full.ignite` exits 0 with `head_status: present` and 1,209,600
+egress bytes (the CLI compiles the quantized cut export because `models/yolov8n.onnx` is
+not in the checkout).
+
+The margin under 8 ms is under 0.1 ms. What is left in the frame (DERIVED from the NOP
+split): ~1.9 ms of core compute, ~1.3 ms of instruction ops, ~3 ms of transport — most of
+it fill bytes that are fixed 6,400-byte packets with over-read — and ~0.7 ms of host work.
+The next levers are fewer fill tasks for multi-chunk rounds and less over-read per packet.

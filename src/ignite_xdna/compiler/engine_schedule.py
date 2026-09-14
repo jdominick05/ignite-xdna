@@ -22,7 +22,7 @@ from typing import Dict, List, Optional, Tuple
 import numpy as np
 
 from ignite_xdna.compiler import engine_emulator as em
-from ignite_xdna.compiler.engine_sequence import COLS, ROWS, DmaPattern, merge_quad
+from ignite_xdna.compiler.engine_sequence import COLS, MAX_REPEAT, ROWS, DmaPattern, linear, merge_quad, merge_runs
 from ignite_xdna.compiler.graph_ir import ConvLayer, GraphIR, PoolLayer, Segment, TensorInfo, ZP
 
 TILE_R, TILE_C = em.TILE_ROWS, em.TILE_COLS
@@ -232,6 +232,32 @@ def o_pattern(ws: Workspace, layer, group: int, y0: int, x0: int) -> DmaPattern:
                       (TILE_R * p.pitch, p.plane_bytes, p.pitch, 1))
 
 
+# Coarse schedule: core r of a quad expands source rows (y_quad / 2) + 2r .. + 3 with
+# phase r, so the four cores' upsampling packets are spaced by two source rows and
+# merge into one task ((5r + i) >> 1 - 2r == (i + r) >> 1 for output row i).
+UP2_PHASES_COARSE = (0, 1, 2, 3)
+UP2_PHASES_STRIP = (0, 1, 0, 1)
+
+
+def quad_patterns(ws: Workspace, ir: GraphIR, layer, chunk: Chunk, y_quad: int, x0: int, group: int = 0,
+                  coarse: bool = False) -> List[DmaPattern]:
+    """The four per-core fill patterns of the quad starting at output row ``y_quad``."""
+    if coarse and chunk.kind == "k1up2":
+        seg = layer.inputs[chunk.seg_index]
+        p = ws.placements[seg.tensor]
+        b0 = seg.block_offset + chunk.block_start
+        return [DmaPattern("ws", p.offset(b0, (y_quad >> 1) + 2 * r, x0 >> 1), (10, 4, 160), (p.plane_bytes, p.pitch, 1))
+                for r in range(ROWS)]
+    return [a_pattern(ws, ir, layer, chunk, y_quad + TILE_R * r, x0, group) for r in range(ROWS)]
+
+
+def run_drain(ws: Workspace, layer, group: int, run: List[Tuple[int, int]]) -> DmaPattern:
+    """One drain for a run of vertically adjacent quads (at most 16) at one tile column."""
+    q0, x0 = run[0]
+    o = o_pattern(ws, layer, group, q0 * TILE_R * ROWS, x0)
+    return DmaPattern("ws", o.offset, (ROWS * len(run),) + tuple(o.sizes[1:]), o.strides)
+
+
 # ----------------------------------------------------------------------------
 # Weight packets
 # ----------------------------------------------------------------------------
@@ -240,14 +266,20 @@ def _segment_channel_base(layer: ConvLayer, seg_index: int) -> int:
     return sum(s.blocks * 8 for s in layer.inputs[:seg_index])
 
 
-def conv_packet(layer: ConvLayer, group: int, chunk: Chunk, count_out: int, count_acc: int) -> np.ndarray:
+def conv_packet(layer: ConvLayer, group: int, chunk: Chunk, count_out: int, count_acc: int,
+                phases: Tuple[int, int, int, int] = (0, 1, 0, 1), trim_ncin: bool = False) -> np.ndarray:
+    """Weight packet of one chunk. ``trim_ncin`` advertises only the blocks that hold real
+    input channels, so the core skips the junk blocks the fixed-size packet over-reads.
+    Output blocks stay four: skipping junk output blocks needs a run-time guard inside the
+    core's block loops, which costs more than it saves (docs/DECISIONS.md)."""
     seg = layer.inputs[chunk.seg_index]
     taps = layer.k * layer.k
-    w = np.zeros((taps, chunk.ncin, OUT_BLOCKS, 8, 8), dtype=np.int8)
     cbase = _segment_channel_base(layer, chunk.seg_index) + chunk.block_start * 8
     # Channels beyond the segment's real blocks or beyond the ONNX Cin (the
     # 3-channel image is stored in one 8-channel block) get zero weights.
     cin_avail = min(chunk.ncin * 8, seg.blocks * 8 - chunk.block_start * 8, layer.cin - cbase)
+    ncin = max(1, min(chunk.ncin, -(-cin_avail // 8))) if trim_ncin else chunk.ncin
+    w = np.zeros((taps, ncin, OUT_BLOCKS, 8, 8), dtype=np.int8)
     co0 = group * OUT_BLOCKS * 8
     cout_avail = min(OUT_BLOCKS * 8, layer.cout - co0)
     if cin_avail > 0 and cout_avail > 0:
@@ -268,10 +300,10 @@ def conv_packet(layer: ConvLayer, group: int, chunk: Chunk, count_out: int, coun
             flags |= em.F_HSWISH
     if seg.up2:
         flags |= em.F_UP2
-    hdr = em.PacketHeader(op=em.OP_CONV, k=layer.k, stride=layer.stride, ncin=chunk.ncin, nco=OUT_BLOCKS,
+    hdr = em.PacketHeader(op=em.OP_CONV, k=layer.k, stride=layer.stride, ncin=ncin, nco=OUT_BLOCKS,
                           flags=flags, shift_out=layer.shift_out,
                           hs=layer.hswish.params if layer.hswish else None, count_out=count_out,
-                          count_acc=count_acc, phases=(0, 1, 0, 1), rows_in=chunk.rows_in,
+                          count_acc=count_acc, phases=phases, rows_in=chunk.rows_in,
                           cols_in=chunk.cols_in, plane_bytes=chunk.plane_bytes)
     return em.pack_w_packet(hdr, bias.astype(np.int32), w)
 
@@ -338,16 +370,174 @@ class LayerSchedule:
     w_fills: int
 
 
+def round_packets(layer, group: int, chunks: List[Chunk], coarse: bool = False,
+                  trim_ncin: bool = False) -> List[np.ndarray]:
+    """The weight packets one round of a multi-chunk layer consumes, in chunk order."""
+    run = []
+    for ch in chunks:
+        if ch.kind == "res":
+            run.append(residual_packet(layer))
+        elif ch.kind == "pool":
+            run.append(pool_packet(ch))
+        else:
+            emits = ch.last and layer.residual is None
+            phases = UP2_PHASES_COARSE if coarse and ch.kind == "k1up2" else UP2_PHASES_STRIP
+            run.append(conv_packet(layer, group, ch, count_out=1 if emits else 0, count_acc=0 if emits else 1,
+                                   phases=phases, trim_ncin=trim_ncin))
+    return run
+
+
+def column_rounds(rounds: List[Tuple[int, int]], group: int, balance: bool = True) -> List[List[Tuple[int, int]]]:
+    """Assign one output group's rounds to the four columns.
+
+    Rounds are sliced contiguously (tile column first), so vertically adjacent
+    quads share a column. A group with fewer rounds than columns (every 20x20
+    map has one round per group) is rotated by its group index with ``balance``,
+    so a layer's groups spread over all columns instead of queuing on column 0.
+    """
+    n_r = len(rounds)
+    if balance and n_r < COLS:
+        per_col: List[List[Tuple[int, int]]] = [[] for _ in range(COLS)]
+        for i, rnd in enumerate(rounds):
+            per_col[(group * n_r + i) % COLS].append(rnd)
+        return per_col
+    return [rounds[c * n_r // COLS:(c + 1) * n_r // COLS] for c in range(COLS)]
+
+
+def schedule_layer_coarse(ir: GraphIR, ws: Workspace, layer, store: PacketStore,
+                          weight_repeat: bool = True, trim_ncin: bool = True,
+                          balance_columns: bool = True, merge_group_weights: bool = True) -> LayerSchedule:
+    """Cut one layer into as few DMA tasks as the transport allows.
+
+    Rounds are taken tile column first, so a column's rounds form runs of
+    vertically adjacent quads at one tile column (at most 16, the repeat limit
+    of 64 packets). Per run: one drain, issued ahead of its fills and held
+    until they are issued; for a single-chunk layer one fill task streams every
+    strip of the run; for a multi-chunk layer each round's per-chunk fills are
+    merged across chunks where they are regularly spaced (stride-2 chunks) and
+    across the four cores. A multi-chunk layer's weight packets are one run per
+    round, streamed as that run repeated once per round (``weight_repeat``) by
+    one task per column.
+    """
+    t = ir.tensors[layer.output]
+    chunks = layer_chunks(ir, layer)
+    single = len(chunks) == 1
+    n_groups = (t.blocks + OUT_BLOCKS - 1) // OUT_BLOCKS
+    quads = t.height // (TILE_R * ROWS)
+    if t.height % (TILE_R * ROWS) or t.width % TILE_C:
+        raise ValueError(f"{layer.name}: {t.height}x{t.width} is not tileable into 4x5 rows and 20 cols")
+    max_quads = MAX_REPEAT // ROWS
+    programs: List[List[tuple]] = [[] for _ in range(COLS)]
+    n_rounds = n_packets = n_w = 0
+    # Gather every column's groups first, so one task can stream a column's weight
+    # packets for all of its groups ahead of their drains and fills.
+    per_col_groups: List[List[tuple]] = [[] for _ in range(COLS)]
+    for g in range(n_groups):
+        rounds = [(q, x0) for x0 in range(0, t.width, TILE_C) for q in range(quads)]
+        per_col = column_rounds(rounds, g, balance=balance_columns)
+        for c in range(COLS):
+            mine = per_col[c]
+            if not mine:
+                continue
+            runs: List[List[Tuple[int, int]]] = []
+            for q, x0 in mine:
+                last = runs[-1][-1] if runs else None
+                if last is not None and last[1] == x0 and last[0] == q - 1 and len(runs[-1]) < max_quads:
+                    runs[-1].append((q, x0))
+                else:
+                    runs.append([(q, x0)])
+            # run_fills[run][round] = merged fill patterns of that round (single chunk: one entry per run)
+            run_fills: List[List[List[DmaPattern]]] = []
+            for run in runs:
+                if single:
+                    strips = [p for q, x0 in run
+                              for p in quad_patterns(ws, ir, layer, chunks[0], q * TILE_R * ROWS, x0, g, coarse=True)]
+                    run_fills.append([merge_runs(strips)])
+                else:
+                    per_round = []
+                    for q, x0 in run:
+                        pats: List[DmaPattern] = []
+                        for ch in chunks:
+                            quad = quad_patterns(ws, ir, layer, ch, q * TILE_R * ROWS, x0, g, coarse=True)
+                            merged = merge_quad(quad)
+                            pats.extend([merged] if merged is not None else quad)
+                        per_round.append(merge_runs(pats))
+                    run_fills.append(per_round)
+                n_rounds += len(run)
+                n_packets += ROWS * len(run) * len(chunks)
+            per_col_groups[c].append((g, mine, runs, run_fills))
+
+    for c in range(COLS):
+        entries = per_col_groups[c]
+        if not entries:
+            continue
+        items_of = [sum(len(f) for per_round in rf for f in per_round) for _, _, _, rf in entries]
+        if single:
+            pkts = [pool_packet(chunks[0]) if isinstance(layer, PoolLayer)
+                    else conv_packet(layer, g, chunks[0], count_out=len(mine), count_acc=0, trim_ncin=trim_ncin)
+                    for g, mine, _, _ in entries]
+            if merge_group_weights:
+                # The groups' packets back to back: each serves its group's packets in order.
+                programs[c].append(("w", store.add_run(pkts), len(pkts) * em.W_BYTES, sum(items_of)))
+                n_w += 1
+            for k, (g, mine, runs, run_fills) in enumerate(entries):
+                if not merge_group_weights:
+                    programs[c].append(("w", store.add(pkts[k]), em.W_BYTES, items_of[k]))
+                    n_w += 1
+                for run, per_round in zip(runs, run_fills):
+                    programs[c].append(("o", run_drain(ws, layer, g, run), len(per_round[0])))
+                    programs[c].extend(("A", f) for f in per_round[0])
+            continue
+        runs_pkts = [round_packets(layer, g, chunks, coarse=True, trim_ncin=trim_ncin) for g, _, _, _ in entries]
+        run_len = len(runs_pkts[0]) * em.W_BYTES
+        rounds_col = [len(mine) for _, mine, _, _ in entries]
+        # Only the repeat (outermost) dimension of a DMA task may have stride 0, so the
+        # groups' runs share one task where every group has a single round in this column
+        # (20x20 and 40x40 maps): the groups' runs back to back, repeated with a positive
+        # stride. Columns with several rounds per group keep one repeated task per group.
+        merged_w = (merge_group_weights and weight_repeat and 1 < len(entries) <= MAX_REPEAT
+                    and all(n == 1 for n in rounds_col))
+        if merged_w:
+            off = store.add_run([p for run in runs_pkts for p in run])
+            programs[c].append(("W", DmaPattern("wp", off, (len(entries), 1, 1, run_len), (run_len, 0, 0, 1)),
+                                sum(items_of)))
+            n_w += 1
+        for k, (g, mine, runs, run_fills) in enumerate(entries):
+            run_offset = None if merged_w else store.add_run(runs_pkts[k])
+            if weight_repeat and not merged_w:
+                rounds_items = [len(f) for per_round in run_fills for f in per_round]
+                for start in range(0, len(rounds_items), MAX_REPEAT):
+                    part = rounds_items[start:start + MAX_REPEAT]
+                    pat = (DmaPattern("wp", run_offset, (len(part), 1, 1, run_len), (0, 0, 0, 1)) if len(part) > 1
+                           else linear("wp", run_offset, run_len))
+                    programs[c].append(("W", pat, sum(part)))
+                    n_w += 1
+            for run, per_round in zip(runs, run_fills):
+                programs[c].append(("o", run_drain(ws, layer, g, run), sum(len(f) for f in per_round)))
+                for fills in per_round:
+                    if not weight_repeat:
+                        programs[c].append(("w", run_offset, run_len, len(fills)))
+                        n_w += 1
+                    programs[c].extend(("A", f) for f in fills)
+    return LayerSchedule(layer.index, layer.name, programs, n_rounds, n_packets, n_w)
+
+
 def schedule_layer(ir: GraphIR, ws: Workspace, layer, store: PacketStore, merge_fills: bool = True,
-                   pair_drains: bool = True, weight_runs: bool = True) -> LayerSchedule:
+                   pair_drains: bool = True, weight_runs: bool = True, coarse: bool = True,
+                   weight_repeat: bool = True, trim_ncin: bool = True, balance_columns: bool = True,
+                   merge_group_weights: bool = True) -> LayerSchedule:
     """Cut one layer into rounds and per-column item lists.
 
-    ``merge_fills`` (one 4-D task per round for the four cores), ``weight_runs``
-    (a round's weight packets streamed by one task) and ``pair_drains`` (two
-    vertically adjacent rounds drained by one task) are each silicon-verified
-    bit-exact on all 66 layers; together they take the frame from 38.5 to 11.7 ms
-    (docs/BENCHMARKS.md). The flags exist for bisection.
+    ``coarse`` (the default) is ``schedule_layer_coarse``. Without it, the
+    per-round schedule applies: ``merge_fills`` (one 4-D task per round for the
+    four cores), ``weight_runs`` (a round's weight packets streamed by one task)
+    and ``pair_drains`` (two vertically adjacent rounds drained by one task) are
+    each silicon-verified bit-exact on all 66 layers; together they take the
+    frame from 38.5 to 11.7 ms (docs/BENCHMARKS.md). The flags exist for bisection.
     """
+    if coarse:
+        return schedule_layer_coarse(ir, ws, layer, store, weight_repeat=weight_repeat, trim_ncin=trim_ncin,
+                                     balance_columns=balance_columns, merge_group_weights=merge_group_weights)
     t = ir.tensors[layer.output]
     chunks = layer_chunks(ir, layer)
     single = len(chunks) == 1
@@ -376,15 +566,7 @@ def schedule_layer(ir: GraphIR, ws: Workspace, layer, store: PacketStore, merge_
                 programs[c].append(("w", store.add(pkt), em.W_BYTES, len(mine)))
                 n_w += 1
             else:
-                run = []
-                for ch in chunks:
-                    if ch.kind == "res":
-                        run.append(residual_packet(layer))
-                    elif ch.kind == "pool":
-                        run.append(pool_packet(ch))
-                    else:
-                        emits = ch.last and layer.residual is None
-                        run.append(conv_packet(layer, g, ch, count_out=1 if emits else 0, count_acc=0 if emits else 1))
+                run = round_packets(layer, g, chunks)
                 run_offset = store.add_run(run)
                 chunk_offsets = [run_offset + i * em.W_BYTES for i in range(len(run))]
             pending_drain: List[DmaPattern] = []
@@ -419,10 +601,15 @@ def schedule_layer(ir: GraphIR, ws: Workspace, layer, store: PacketStore, merge_
 
 
 def schedule_graph(ir: GraphIR, ws: Workspace, merge_fills: bool = True, pair_drains: bool = True,
-                   weight_runs: bool = True) -> Tuple[List[LayerSchedule], PacketStore]:
+                   weight_runs: bool = True, coarse: bool = True, weight_repeat: bool = True,
+                   trim_ncin: bool = True, balance_columns: bool = True,
+                   merge_group_weights: bool = True) -> Tuple[List[LayerSchedule], PacketStore]:
     store = PacketStore()
     scheds = [schedule_layer(ir, ws, L, store, merge_fills=merge_fills, pair_drains=pair_drains,
-                             weight_runs=weight_runs) for L in ir.layers]
+                             weight_runs=weight_runs, coarse=coarse, weight_repeat=weight_repeat,
+                             trim_ncin=trim_ncin, balance_columns=balance_columns,
+                             merge_group_weights=merge_group_weights)
+              for L in ir.layers]
     return scheds, store
 
 
@@ -431,47 +618,70 @@ def schedule_graph(ir: GraphIR, ws: Workspace, merge_fills: bool = True, pair_dr
 # ----------------------------------------------------------------------------
 
 def emulate_layer(sched: LayerSchedule, store: PacketStore, ws_arr: np.ndarray, wp_arr: Optional[np.ndarray] = None) -> None:
-    """Replay the column programs with the core emulator, updating ``ws_arr`` in place."""
+    """Replay the column programs with the core emulator, updating ``ws_arr`` in place.
+
+    Streams are replayed as the hardware sees them: fills and weight tasks
+    append packets to per-column FIFOs, every four activation packets form one
+    object (one packet per core), and a drain writes its objects once the cores
+    have emitted them, whether it was issued before or after its fills.
+    """
+    blob = wp_arr
     for c, items in enumerate(sched.programs):
         states = [em.CoreState() for _ in range(ROWS)]
         w_queue: List[np.ndarray] = []     # weight objects delivered, in FIFO order
         cur_w = None
-        remaining = 0                      # A packets the current weight object still serves
-        pending: List[np.ndarray] = []
+        remaining = 0                      # activation objects the current weight object still serves
+        pending: List[np.ndarray] = []     # emitted output objects
+        drains: List[DmaPattern] = []      # drains waiting for their objects
+        packets: List[np.ndarray] = []     # activation packets not yet grouped into an object
+
+        def flush_drains():
+            while drains:
+                n_obj = drains[0].nbytes // (ROWS * em.O_BYTES)
+                if len(pending) < n_obj:
+                    return
+                drains.pop(0).write(ws_arr, np.concatenate(pending[:n_obj]))
+                del pending[:n_obj]
+
         for it in items:
-            if it[0] == "w":
-                if wp_arr is None:
+            kind = it[0]
+            if kind == "w":
+                if blob is None:
                     w_queue.extend(store.packets_at(it[1], it[2]))
                 else:
-                    w_queue.extend(wp_arr[it[1] + k:it[1] + k + em.W_BYTES]
-                                   for k in range(0, it[2], em.W_BYTES))
-            elif it[0] in ("a", "A"):
-                if remaining == 0:
-                    if not w_queue:
-                        raise AssertionError(f"{sched.name}: activation packet without a weight object")
-                    cur_w = w_queue.pop(0)
-                    hdr = em.unpack_w_packet(cur_w)[0]
-                    remaining = hdr.count_out + hdr.count_acc
-                remaining -= 1
-                if it[0] == "A":
-                    data = it[1].read(ws_arr)
-                    packets = [data[r * em.A_BYTES:(r + 1) * em.A_BYTES] for r in range(ROWS)]
-                else:
-                    packets = [pat.read(ws_arr) for pat in it[1]]
-                outs = []
-                for r, pkt in enumerate(packets):
-                    outs.append(em.run_packet(cur_w, pkt, states[r], r))
-                if all(o is not None for o in outs):
-                    pending.append(np.concatenate(outs))
-                elif any(o is not None for o in outs):
-                    raise AssertionError("cores disagree on emission")
-            elif it[0] == "o":
-                n_obj = it[1].nbytes // (ROWS * em.O_BYTES)
-                if len(pending) < n_obj:
-                    raise AssertionError(f"{sched.name}: drain of {n_obj} objects with {len(pending)} emitted")
-                it[1].write(ws_arr, np.concatenate(pending[:n_obj]))
-                del pending[:n_obj]
-        if pending:
-            raise AssertionError(f"{sched.name}: {len(pending)} emitted objects never drained")
+                    w_queue.extend(blob[it[1] + k:it[1] + k + em.W_BYTES] for k in range(0, it[2], em.W_BYTES))
+            elif kind == "W":
+                if blob is None:
+                    blob = store.blob()
+                data = it[1].read(blob)
+                w_queue.extend(data[k:k + em.W_BYTES] for k in range(0, data.size, em.W_BYTES))
+            elif kind in ("a", "A"):
+                for pat in (it[1] if kind == "a" else [it[1]]):
+                    data = pat.read(ws_arr)
+                    if data.size % em.A_BYTES:
+                        raise AssertionError(f"{sched.name}: fill of {data.size} bytes is not whole packets")
+                    packets.extend(data[k:k + em.A_BYTES] for k in range(0, data.size, em.A_BYTES))
+                while len(packets) >= ROWS:
+                    obj, packets = packets[:ROWS], packets[ROWS:]
+                    if remaining == 0:
+                        if not w_queue:
+                            raise AssertionError(f"{sched.name}: activation packet without a weight object")
+                        cur_w = w_queue.pop(0)
+                        hdr = em.unpack_w_packet(cur_w)[0]
+                        remaining = hdr.count_out + hdr.count_acc
+                    remaining -= 1
+                    outs = [em.run_packet(cur_w, pkt, states[r], r) for r, pkt in enumerate(obj)]
+                    if all(o is not None for o in outs):
+                        pending.append(np.concatenate(outs))
+                    elif any(o is not None for o in outs):
+                        raise AssertionError("cores disagree on emission")
+                    flush_drains()
+            elif kind == "o":
+                drains.append(it[1])
+                flush_drains()
+        if packets:
+            raise AssertionError(f"{sched.name}: {len(packets)} activation packets do not form whole objects")
+        if pending or drains:
+            raise AssertionError(f"{sched.name}: {len(pending)} emitted objects, {len(drains)} drains left")
         if w_queue or remaining:
             raise AssertionError(f"{sched.name}: weight objects left over ({len(w_queue)}, {remaining})")
