@@ -7,7 +7,7 @@ End-to-End Streaming Object Detection Pipeline for YOLOv8n on AMD Phoenix XDNA1 
 Integrates:
   Stage 1: Zero-copy OpenCV letterboxing + INT8 quant-scaling (~1.88 ms)
   Stage 2: Monolithic 3-stage forward pass on Device 0 silicon (1.732 ms, 0 intermediate DDR bytes)
-  Stage 3: Vectorized CPU postprocessing with DFL decode + batched NMS (~1.9 ms)
+  Stage 3: CPU postprocessing with DFL decode + batched NMS (one native call for int8 heads)
 
 Supports both synchronous execution (predict_sync) and 3-stage overlapped asynchronous
 streaming pipelining (run_pipelined_stream) across bounded queues (maxsize=2).
@@ -30,6 +30,7 @@ import onnxruntime as ort
 
 from ignite_xdna.runtime.session import InferenceSession
 from ignite_xdna.runtime.driver import setup_xrt_environment, get_repo_root
+from . import decode_native
 from .preprocess import FusedPreprocessor
 
 _log = logging.getLogger(__name__)
@@ -127,12 +128,22 @@ class YoloDecoder:
     offline; ``YoloPipeline`` inherits it.
     """
 
-    def __init__(self, imgsz: int = 640, conf_thres: float = 0.25, iou_thres: float = 0.50):
+    def __init__(self, imgsz: int = 640, conf_thres: float = 0.25, iou_thres: float = 0.50,
+                 native_decode: bool = True):
         self.imgsz = imgsz
         self.conf_thres = conf_thres
         self.iou_thres = iou_thres
         # Pre-cache anchor grids and strides for fast vectorized DFL decode
         self._anchors, self._strides = self._build_anchors_and_strides(self.imgsz, STRIDES)
+        # int8 heads decode in one native call (decode_native.c, identical detections); float heads,
+        # native_decode=False and a missing library keep the numpy path below.
+        self._native = (decode_native.for_grid(self._anchors, self._strides, NUM_CLASSES)
+                        if native_decode else None)
+
+    @property
+    def uses_native_decode(self) -> bool:
+        """True when int8 heads are decoded by the native library rather than numpy."""
+        return self._native is not None
 
     @staticmethod
     def _build_anchors_and_strides(imgsz: int, strides: Tuple[int, int, int]) -> Tuple[np.ndarray, np.ndarray]:
@@ -155,9 +166,11 @@ class YoloDecoder:
         iou_thres: Optional[float] = None,
     ) -> List[YoloDetection]:
         """
-        Stage 3: Vectorized CPU Postprocessing with DFL Softmax Decode + Batched NMS (~1.9 ms).
+        Stage 3: CPU postprocessing: DFL softmax decode and batched NMS.
         Decodes box coordinates, projects against anchor grids, prunes via inverse-sigmoid threshold,
-        and applies non-maximum suppression.
+        and applies non-maximum suppression. int8 heads with scales go through one native call
+        (``decode_native``) that returns the same detections as the numpy code below, float for float;
+        float heads, ``native_decode=False`` or a missing native library use numpy.
 
         ``heads`` is either the six float tensors (dict keyed ``p3_box … p5_cls``
         or a list ordered box P3/P4/P5 then cls P3/P4/P5) or, from
@@ -184,6 +197,20 @@ class YoloDecoder:
 
         if any(b is None for b in box_f) or any(c is None for c in cls_f):
             return []
+
+        if self._native is not None and scales is not None:
+            # One native call from the prune to NMS; None means these heads need the numpy path.
+            decoded = self._native.decode(box_f, cls_f, cls_max, scales, pad, scale, conf_t, iou_t)
+            if decoded is not None:
+                boxes, scores, classes = decoded
+                return [
+                    YoloDetection(
+                        x0=boxes[4 * i], y0=boxes[4 * i + 1], w=boxes[4 * i + 2], h=boxes[4 * i + 3],
+                        score=scores[i], class_id=cid,
+                        class_name=COCO_CLASSES[cid] if cid < len(COCO_CLASSES) else f"class_{cid}",
+                    )
+                    for i, cid in enumerate(classes)
+                ]
 
         # 1. Fast Inverse-Sigmoid Confidence Pruning per head (avoids 2.15 MB box concatenation)
         c_clamped = min(max(float(conf_t), 1e-12), 1.0 - 1e-12)
@@ -310,8 +337,9 @@ class YoloPipeline(YoloDecoder):
         iou_thres: float = 0.50,
         imgsz: int = 640,
         enable_pipelining: bool = True,
+        native_decode: bool = True,
     ):
-        super().__init__(imgsz=imgsz, conf_thres=conf_thres, iou_thres=iou_thres)
+        super().__init__(imgsz=imgsz, conf_thres=conf_thres, iou_thres=iou_thres, native_decode=native_decode)
         self.device_index = device_index
         self.enable_pipelining = enable_pipelining
         # Set by predict_sync: the session's HeadStatus reason for the last frame

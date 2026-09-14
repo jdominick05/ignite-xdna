@@ -17,7 +17,7 @@ import platform
 import subprocess
 import sys
 from pathlib import Path
-from typing import Optional, Tuple, Union
+from typing import List, Optional, Tuple, Union
 
 import cv2
 import numpy as np
@@ -25,6 +25,11 @@ import numpy as np
 
 def _compile_simd_dll(c_path: Path, dll_path: Path) -> bool:
     """Compiles preprocess_simd.c into a shared library / DLL using MSVC cl.exe or clang."""
+    return _compile_native_dll(c_path, dll_path, "/O2 /fp:fast /openmp", ["-O3", "-fopenmp", "-mavx2"])
+
+
+def _compile_native_dll(c_path: Path, dll_path: Path, msvc_flags: str, cc_flags: List[str]) -> bool:
+    """Compiles a C source into a shared library / DLL beside it with MSVC cl.exe, else clang or gcc."""
     if not c_path.exists():
         return False
 
@@ -40,7 +45,7 @@ def _compile_simd_dll(c_path: Path, dll_path: Path) -> bool:
         ]
         for vcvars in vcvars_paths:
             if vcvars.exists():
-                cmd = f'cmd.exe /c "call "{vcvars}" && cd "{c_path.parent}" && cl.exe /O2 /fp:fast /openmp /LD "{c_path.name}" /Fe:"{dll_path.name}""'
+                cmd = f'cmd.exe /c "call "{vcvars}" && cd "{c_path.parent}" && cl.exe {msvc_flags} /LD "{c_path.name}" /Fe:"{dll_path.name}""'
                 try:
                     res = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=30)
                     if res.returncode == 0 and dll_path.exists():
@@ -51,7 +56,7 @@ def _compile_simd_dll(c_path: Path, dll_path: Path) -> bool:
     # 2. Try generic clang or gcc
     for cc in ["clang", "gcc"]:
         try:
-            cmd = [cc, "-O3", "-shared", "-fPIC", "-fopenmp", "-mavx2", str(c_path), "-o", str(dll_path)]
+            cmd = [cc, "-shared", "-fPIC", *cc_flags, str(c_path), "-o", str(dll_path)]
             res = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
             if res.returncode == 0 and dll_path.exists():
                 return True
