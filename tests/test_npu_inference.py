@@ -221,6 +221,12 @@ class DetectHeadLayoutOffline(unittest.TestCase):
         finally:
             reader.close()
         self.assertEqual(declared_head_bytes(manifest), DECLARED_HEAD_BYTES)
+        if manifest.get("engine") == "conv_engine_v1":
+            # The graph-engine container carries the six heads: present at its egress size,
+            # still absent at the legacy template's 4,096-byte egress.
+            self.assertTrue(resolve_head_layout(manifest, int(manifest["egress_bytes"])).present)
+            self.assertFalse(resolve_head_layout(manifest, SHIPPED_EGRESS_BYTES).present)
+            return
         status = resolve_head_layout(manifest, SHIPPED_EGRESS_BYTES)
         self.assertFalse(status.present)
         self.assertIn("head_layout", status.reason)

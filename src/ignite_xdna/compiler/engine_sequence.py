@@ -119,11 +119,13 @@ OPS_PER_TASK_ISSUE = 4  # BLOCKWRITE (BD), DDR_PATCH, MASKWRITE, WRITE (queue pu
 def split_instruction_stream(insts: bytes, tasks_per_segment: Sequence[int]) -> List[bytes]:
     """Cut one lowered instruction stream into per-segment streams.
 
-    The emitter awaits every task of a segment (a layer) before the next one
+    The emitter retires every task of a segment (a layer) before the next one
     starts, so a segment's ops are ``OPS_PER_TASK_ISSUE`` per task plus its
     TCT waits, and the ops are position independent. Segment boundaries are
     found by counting task issues (WRITE ops); each piece gets a fresh 16-byte
     header (the original major/minor words, its op count and its byte size).
+    A task without a completion token is a MASKWRITE short (its issue is then
+    three ops), which this count-by-push method tolerates.
     """
     import struct
     from ignite_xdna.compiler.scheduler import TXN_HEADER_BYTES, parse_transaction_stream
@@ -192,7 +194,7 @@ class SequenceEmitter:
         return task
 
     def run_column_programs(self, programs: Sequence[Sequence[tuple]], bd_budget: int = 14,
-                            queue_depth: int = 4, retire_batch: int = 1) -> None:
+                            queue_depth: int = 4, retire_batch: int = 2) -> None:
         """Issue every column's items interleaved within two hardware limits per shim.
 
         Every task carries a completion token. Before a new task is configured,
@@ -206,41 +208,69 @@ class SequenceEmitter:
         round's drain is always issued before any later round's fills, so no
         core ever waits for an output object that has no drain queued.
         """
-        # Queue entries: [task, channel, hold]. A weight task streams one object per
-        # activation item it serves and only completes once the cores consumed all
-        # but the last, so it must not be awaited before those items are issued:
-        # ``hold`` counts the activation items still to be issued for it.
+        # Queue entries: [task, channel, hold, token]. Every ``dma_await_task``
+        # consumes exactly one completion token of its channel, so a task that
+        # carries a token must be awaited exactly once, in issue order; tasks
+        # without a token are freed on the strength of a later awaited task on
+        # the same channel (a channel completes its tasks in order). Tokens go to
+        # every ``retire_batch``-th task of a channel and to its last task in
+        # this program, so no token is ever left unconsumed at the layer barrier.
+        # A weight task streams one object per activation item it serves and only
+        # completes once the cores consumed all but the last, so it must not be
+        # awaited before those items are issued: ``hold`` counts them.
         queues: Dict[int, List[list]] = {c: [] for c in range(len(programs))}
+        totals: Dict[int, Dict[str, int]] = {}
+        for c, prog in enumerate(programs):
+            t = {"w": 0, "a": 0, "o": 0}
+            for it in prog:
+                if it[0] == "w":
+                    t["w"] += 1
+                elif it[0] == "a":
+                    t["a"] += len(it[1])
+                elif it[0] == "A":
+                    t["a"] += 1
+                elif it[0] == "o":
+                    t["o"] += 1
+            totals[c] = t
+        issued: Dict[int, Dict[str, int]] = {c: {"w": 0, "a": 0, "o": 0} for c in range(len(programs))}
 
-        def retire_channel(c: int, channel: str, count: int) -> None:
-            """Retire the ``count`` oldest retirable tasks of one channel: await the
-            newest of them (tasks on a channel complete in order) and free them all."""
-            idx = [i for i, (_, ch, hold) in enumerate(queues[c]) if ch == channel and hold == 0][:count]
-            if not idx:
-                return
-            self._await(queues[c][idx[-1]][0])
-            for i in reversed(idx):
-                task, _, _ = queues[c].pop(i)
-                self._free(task)
+        def retire_channel(c: int, channel: str) -> bool:
+            """Retire the oldest token group of one channel (its tasks up to and
+            including the first tokened one); False if a held task blocks it."""
+            group = []
+            for i, (_, ch, hold, token) in enumerate(queues[c]):
+                if ch != channel:
+                    continue
+                if hold:
+                    return False
+                group.append(i)
+                if token:
+                    break
+            if not group or not queues[c][group[-1]][3]:
+                return False
+            self._await(queues[c][group[-1]][0])
+            for i in reversed(group):
+                self._free(queues[c].pop(i)[0])
+            return True
 
         def ensure(c: int, channel: str) -> None:
             guard = 0
             while len(queues[c]) >= bd_budget:
-                retirable = [e for e in queues[c] if e[2] == 0]
-                if not retirable:
-                    raise RuntimeError("every live task is held by unissued activation items")
-                retire_channel(c, retirable[0][1], retire_batch)
+                if not any(retire_channel(c, ch) for ch in ("w", "a", "o")):
+                    raise RuntimeError("every live task is held or lacks an awaitable token")
                 guard += 1
                 if guard > 64:
                     raise RuntimeError("could not free buffer descriptors")
-            while sum(1 for _, ch, _ in queues[c] if ch == channel) >= queue_depth:
-                if not any(ch == channel and hold == 0 for _, ch, hold in queues[c]):
+            while sum(1 for _, ch, _, _ in queues[c] if ch == channel) >= queue_depth:
+                if not retire_channel(c, channel):
                     raise RuntimeError(f"channel {channel} queue is full of held tasks")
-                retire_channel(c, channel, retire_batch)
 
         def push(c: int, channel: str, pattern: DmaPattern, hold: int = 0) -> None:
             ensure(c, channel)
-            queues[c].append([self.transfer(self._names[c][channel], pattern, token=True), channel, hold])
+            issued[c][channel] += 1
+            n = issued[c][channel]
+            token = n == totals[c][channel] or n % retire_batch == 0
+            queues[c].append([self.transfer(self._names[c][channel], pattern, token=token), channel, hold, token])
 
         def served(c: int) -> None:
             for e in queues[c]:
@@ -272,4 +302,5 @@ class SequenceEmitter:
             for e in queues[c]:
                 e[2] = 0  # every item has been issued
             while queues[c]:
-                retire_channel(c, queues[c][0][1], len(queues[c]))
+                if not retire_channel(c, queues[c][0][1]):
+                    raise RuntimeError("layer barrier: a channel's newest task carries no token")

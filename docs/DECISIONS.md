@@ -1639,10 +1639,15 @@ cached reference heads rather than `bo_out`.
   refuses more than 16 live BDs), and the hardware start queue holds four tasks per
   channel — a fifth stalls the stream. A weight task that streams several objects is
   never awaited before the activation fills it serves are issued.
-- **Rejected for now: the two experimental task reductions** (weight runs, paired
-  drains). They hung the device and could not be bisected before the device stopped
-  creating contexts; they stay behind flags until measured.
-- **Latency target not met**: 18.3 ms NPU dispatch for the frame with the committed
-  stream (~2.5 µs per DMA task), against the 8 ms asked. The instruction sequencer, not
-  bandwidth, is the wall; the next steps are fewer tasks (the flagged experiments,
-  bigger tiles for shallow layers) and a cheaper head readback.
+- **A completion token is issued only to tasks that will be awaited, and every tokened
+  task is awaited exactly once, in channel order.** Each `dma_await_task` consumes one
+  token; "await the newest, free the rest" leaves stale tokens and hangs the next layer.
+  Tokens go to every second task of a channel and to its last task in a layer.
+- **Default stream: merged 4-D fills, weight runs, paired drains, one token per two
+  tasks, W FIFO depth 2** — each verified bit-exact on all 66 layers alone and together;
+  11.7 ms per 66-layer dispatch, down from 38.5 ms. One token per four tasks gains
+  nothing, so the token count is no longer the limiter.
+- **Latency target not met**: 11.7 ms NPU dispatch plus ~5 ms of host staging and
+  readback (19.2 ms mean over 500 witnessed frames) against the 8 ms asked. The
+  remaining wall is ~4,500 DMA tasks per frame at ~2.5 µs each; bigger tiles for the
+  shallow layers and a preprocessor-produced input plane are the next steps.
