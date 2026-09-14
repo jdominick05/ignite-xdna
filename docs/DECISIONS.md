@@ -1538,7 +1538,7 @@ serving as evidence. Verify by asserting the round trip (the recovered text must
 to the original bytes exactly) before writing, and diff line counts across the change.
 
 This settles a split precedent: `results/quant_fastdepth_xint8.log` was fixed in place in
-merge `4308a62`, while `results/aie/dpu_transaction_disasm.log` was first handled by adding
+merge `adc4468`, while `results/aie/dpu_transaction_disasm.log` was first handled by adding
 a readable sibling and leaving the corrupt original. The sibling approach is withdrawn —
 one canonical, greppable file per measurement.
 

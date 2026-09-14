@@ -1,6 +1,6 @@
 """Check quant/shift_cut.py against ONNX fixtures whose answer is known by construction.
 
-The analyzer had three defects fixed in 311a672 and two more here, and every one of them
+The analyzer had three defects fixed in 46c022a and two more here, and every one of them
 was found by re-reading real models rather than by a check that could have caught it. These
 fixtures place an operation at a chosen sigma and assert the analyzer reads that sigma back,
 classifies it in the right band, and refuses to score an operation whose scales it cannot

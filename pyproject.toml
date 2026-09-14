@@ -20,6 +20,14 @@ classifiers = [
     "Programming Language :: Python :: 3",
     "Operating System :: Microsoft :: Windows",
 ]
+# pyxrt is not listed: it ships with the AMD XRT driver SDK and is found through
+# runtime/driver.py:setup_xrt_environment().
+dependencies = [
+    "numpy>=1.24",
+    "onnx>=1.15",
+    "onnxruntime>=1.15",
+    "opencv-python>=4.7",
+]
 
 [project.scripts]
 ignite-compile = "ignite_xdna.compiler.cli:main"
@@ -29,3 +37,9 @@ where = ["src"]
 
 [tool.setuptools.package-dir]
 "" = "src"
+
+# The native ingress kernel: the prebuilt Windows x64 DLL, and its C source so
+# pipelines/preprocess.py can rebuild a missing DLL in place. Without them an
+# installed copy silently falls back to the numpy ingress path.
+[tool.setuptools.package-data]
+"ignite_xdna.pipelines" = ["preprocess_simd.c", "preprocess_simd.dll", "decode_native.c", "decode_native.dll"]
