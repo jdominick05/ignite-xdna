@@ -7893,7 +7893,8 @@ The next levers are fewer fill tasks for multi-chunk rounds and less over-read p
 ### Native int8 head decode with identical detections (2026-09-14, Desktop 2)
 
 Branch `native-postprocess` from `main` `609bd68`; evidence
-`results/aie/decode_native_phoenix_20260914T2055Z.log`. Every figure is from
+`results/aie/decode_native_phoenix_20260914T2055Z.log` and the witnessed suite
+`results/aie/npu_inference_native_decode_phoenix_20260914T2104Z.log`. Every figure is from
 `build/yolov8n_full.ignite` through `predict_sync(use_oracle_for_boxes=False)`, whose
 `postprocess_ms` is exactly `YoloDecoder.postprocess` on the NPU heads, with
 `xrt-smi examine -r aie-partitions` reporting no hardware contexts around the runs.
@@ -7927,7 +7928,7 @@ divisions; prefetching the box logits gave no measurable gain and was removed.
 | Random-head stress, 3,000 trials per environment: same-class clusters, score and argmax ties, saturation, nonzero zero points, the threshold at a reachable score, more than 256 candidates | 0 mismatches on numpy 2.5.3 / OpenCV 5.0.0 and on numpy 1.26.4 / OpenCV 4.11.0 |
 | 312 recorded NPU frames (two recordings of `bus.jpg`, 35 camera JPEGs and 120 live frames) | 0 mismatches |
 | Live frames, both paths on the same heads | 0 mismatches over 340 frames |
-| `tests/test_npu_inference.py` | 10 tests, none skipped; `bus.jpg` IoU 1.0 against the CPU oracle; 500 frames at 7.832 ms mean glass-to-glass |
+| `tests/test_npu_inference.py`, witnessed | 10 tests, none skipped; `bus.jpg` IoU 1.0 against the CPU oracle; 500 frames at 7.832 ms mean glass-to-glass |
 
 | Decode, medians | numpy | native |
 |---|---|---|
