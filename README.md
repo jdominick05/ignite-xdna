@@ -142,10 +142,13 @@ Python runtime (`ignite_xdna.InferenceSession` on AMD Phoenix silicon):
 
 ```python
 from ignite_xdna import InferenceSession
-with InferenceSession(full_yolo=True) as s:
-    heads = s.run_yolo_monolithic(input_data)  # 1.73 ms on Phoenix NPU (577 FPS, 0 DDR bytes)
+with InferenceSession.from_file("build/yolov8n_full.ignite") as s:   # ignite-compile --engine graph
+    heads = s.run_yolo_monolithic(input_data)  # whole network on the NPU: 18.3 ms/frame, every layer bit-exact
     preds = s.decode_yolo_predictions(heads)
 ```
+
+`ignite-compile --engine graph` builds that container (ironenv); the older `build/yolov8n.ignite` runs one
+conv layer per stage and carries no heads ([measured](docs/BENCHMARKS.md#whole-network-yolov8n-on-a-16-core-convolution-engine-every-layer-on-the-npu-bit-exact-2026-09-13-desktop-2)).
 
 Native graph stages can also share BOs with custom AIE kernels through
 `ignite_xdna.runtime.KernelSplicer`. The Phoenix Conv2D/GroupNorm/Conv2D validation

@@ -17,12 +17,15 @@ pairs in the order MSMF -> DSHOW -> ANY, each in a worker thread with a timeout,
 applies every requested property through a read-back check, and never raises
 on a property the sensor refuses (the sensor default is kept).
 
-Boxes: --boxes npu decodes the heads the container's egress carries. The shipped
+Boxes: --boxes npu decodes the heads the container's egress carries. The graph
+engine container build/yolov8n_full.ignite (ignite-compile --engine graph) runs
+the whole network on the NPU and carries all six heads; the legacy
 build/yolov8n.ignite carries none (its stage streams are the single-layer conv0
 template, docs/LOW_LEVEL_AUDIT.md section 1.5), so that mode draws nothing and
 the HUD says why. --boxes oracle runs the ONNX Runtime CPU pass over the cut
 model (~43 ms/frame). --boxes auto (default) uses the NPU heads when present and
-otherwise the oracle, labelled as such on the HUD and in the summary.
+otherwise the oracle, labelled as such on the HUD and in the summary. The model
+defaults to the graph-engine container when it exists.
 """
 import os
 
@@ -408,7 +411,10 @@ def parse_args(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--source", default="0,1",
                     help="webcam index or comma list to probe (default 0,1), a video file, or a still image")
-    ap.add_argument("--model", default=str(ROOT / "build" / "yolov8n.ignite"))
+    default_model = ROOT / "build" / "yolov8n_full.ignite"   # graph-engine container (heads on the NPU)
+    if not default_model.exists():
+        default_model = ROOT / "build" / "yolov8n.ignite"
+    ap.add_argument("--model", default=str(default_model))
     ap.add_argument("--boxes", choices=("auto", "npu", "oracle"), default="auto",
                     help="where boxes come from: NPU heads, the ONNX CPU oracle, or auto (NPU if present)")
     ap.add_argument("--headless", action="store_true", help="no window; print one HUD line per frame")
