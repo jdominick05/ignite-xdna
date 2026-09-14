@@ -1,0 +1,1536 @@
+{
+  "model_name": "yolov8n_cut_xint8",
+  "format_version": 1,
+  "arch_id": 1,
+  "target_hardware": "AMD Phoenix APU (XDNA1, 16 AIE2 cores)",
+  "producer": "ignite-compile v0.4.0 (graph engine)",
+  "created_utc": "2026-09-14T12:47:46Z",
+  "engine": "conv_engine_v1",
+  "task": "detect",
+  "input_shape": [
+    1,
+    3,
+    640,
+    640
+  ],
+  "input_dtype": "int8",
+  "single_dispatch": true,
+  "quant_scales": {
+    "input_scale": 0.0078125,
+    "input_zero_point": 128,
+    "input_dtype": "uint8"
+  },
+  "graph_engine": {
+    "kernel_sha256": "0d7a7fa4e244fc9101cf91709935df0b79a8d05e2d33c33547a0e5474a5c8f8f",
+    "xclbin_sha256": "08b383ccc1f2ccc63de0ad779692c16e7bcf2a9a8118686ae8df6c5b23fc2db7",
+    "workspace_bytes": 22039296,
+    "input_tensor": "images_QuantizeLinear_Output",
+    "placements": {
+      "images_QuantizeLinear_Output": {
+        "base": 0,
+        "halo": 1,
+        "halo_value": 128,
+        "height": 640,
+        "width": 640,
+        "blocks": 1,
+        "planes": 1,
+        "channels": 3,
+        "scale": 0.0078125,
+        "zero_point": 128
+      },
+      "/model.0/act/Mul_output_0_QuantizeLinear_Output": {
+        "base": 3297344,
+        "halo": 1,
+        "halo_value": 128,
+        "height": 320,
+        "width": 320,
+        "blocks": 2,
+        "planes": 4,
+        "channels": 16,
+        "scale": 0.25,
+        "zero_point": 128
+      },
+      "/model.1/act/Mul_output_0_QuantizeLinear_Output": {
+        "base": 6615232,
+        "halo": 0,
+        "halo_value": 128,
+        "height": 160,
+        "width": 160,
+        "blocks": 4,
+        "planes": 4,
+        "channels": 32,
+        "scale": 1.0,
+        "zero_point": 128
+      },
+      "/model.2/cv1/act/Mul_output_0_QuantizeLinear_Output": {
+        "base": 7434432,
+        "halo": 1,
+        "halo_value": 128,
+        "height": 160,
+        "width": 160,
+        "blocks": 4,
+        "planes": 4,
+        "channels": 32,
+        "scale": 0.25,
+        "zero_point": 128
+      },
+      "/model.2/m.0/cv1/act/Mul_output_0_QuantizeLinear_Output": {
+        "base": 8274240,
+        "halo": 1,
+        "halo_value": 128,
+        "height": 160,
+        "width": 160,
+        "blocks": 2,
+        "planes": 4,
+        "channels": 16,
+        "scale": 0.25,
+        "zero_point": 128
+      },
+      "/model.2/m.0/Add_output_0_QuantizeLinear_Output": {
+        "base": 9114048,
+        "halo": 0,
+        "halo_value": 128,
+        "height": 160,
+        "width": 160,
+        "blocks": 2,
+        "planes": 4,
+        "channels": 16,
+        "scale": 0.25,
+        "zero_point": 128
+      },
+      "/model.2/cv2/act/Mul_output_0_QuantizeLinear_Output": {
+        "base": 9933248,
+        "halo": 1,
+        "halo_value": 128,
+        "height": 160,
+        "width": 160,
+        "blocks": 4,
+        "planes": 4,
+        "channels": 32,
+        "scale": 0.0625,
+        "zero_point": 128
+      },
+      "/model.3/act/Mul_output_0_QuantizeLinear_Output": {
+        "base": 10773056,
+        "halo": 0,
+        "halo_value": 128,
+        "height": 80,
+        "width": 80,
+        "blocks": 8,
+        "planes": 8,
+        "channels": 64,
+        "scale": 0.0625,
+        "zero_point": 128
+      },
+      "/model.4/cv1/act/Mul_output_0_QuantizeLinear_Output": {
+        "base": 11182656,
+        "halo": 1,
+        "halo_value": 128,
+        "height": 80,
+        "width": 80,
+        "blocks": 8,
+        "planes": 8,
+        "channels": 64,
+        "scale": 0.0625,
+        "zero_point": 128
+      },
+      "/model.4/m.0/cv1/act/Mul_output_0_QuantizeLinear_Output": {
+        "base": 11612992,
+        "halo": 1,
+        "halo_value": 128,
+        "height": 80,
+        "width": 80,
+        "blocks": 4,
+        "planes": 4,
+        "channels": 32,
+        "scale": 0.03125,
+        "zero_point": 128
+      },
+      "/model.4/m.0/Add_output_0_QuantizeLinear_Output": {
+        "base": 11828160,
+        "halo": 1,
+        "halo_value": 128,
+        "height": 80,
+        "width": 80,
+        "blocks": 4,
+        "planes": 4,
+        "channels": 32,
+        "scale": 0.0625,
+        "zero_point": 128
+      },
+      "/model.4/m.1/cv1/act/Mul_output_0_QuantizeLinear_Output": {
+        "base": 12043328,
+        "halo": 1,
+        "halo_value": 128,
+        "height": 80,
+        "width": 80,
+        "blocks": 4,
+        "planes": 4,
+        "channels": 32,
+        "scale": 0.03125,
+        "zero_point": 128
+      },
+      "/model.4/m.1/Add_output_0_QuantizeLinear_Output": {
+        "base": 12258496,
+        "halo": 0,
+        "halo_value": 128,
+        "height": 80,
+        "width": 80,
+        "blocks": 4,
+        "planes": 4,
+        "channels": 32,
+        "scale": 0.0625,
+        "zero_point": 128
+      },
+      "/model.4/cv2/act/Mul_output_0_QuantizeLinear_Output": {
+        "base": 12463296,
+        "halo": 1,
+        "halo_value": 128,
+        "height": 80,
+        "width": 80,
+        "blocks": 8,
+        "planes": 8,
+        "channels": 64,
+        "scale": 0.03125,
+        "zero_point": 128
+      },
+      "/model.5/act/Mul_output_0_QuantizeLinear_Output": {
+        "base": 12893632,
+        "halo": 0,
+        "halo_value": 128,
+        "height": 40,
+        "width": 40,
+        "blocks": 16,
+        "planes": 16,
+        "channels": 128,
+        "scale": 0.03125,
+        "zero_point": 128
+      },
+      "/model.6/cv1/act/Mul_output_0_QuantizeLinear_Output": {
+        "base": 13098432,
+        "halo": 1,
+        "halo_value": 128,
+        "height": 40,
+        "width": 40,
+        "blocks": 16,
+        "planes": 16,
+        "channels": 128,
+        "scale": 0.0625,
+        "zero_point": 128
+      },
+      "/model.6/m.0/cv1/act/Mul_output_0_QuantizeLinear_Output": {
+        "base": 13324224,
+        "halo": 1,
+        "halo_value": 128,
+        "height": 40,
+        "width": 40,
+        "blocks": 8,
+        "planes": 8,
+        "channels": 64,
+        "scale": 0.03125,
+        "zero_point": 128
+      },
+      "/model.6/m.0/Add_output_0_QuantizeLinear_Output": {
+        "base": 13437120,
+        "halo": 1,
+        "halo_value": 128,
+        "height": 40,
+        "width": 40,
+        "blocks": 8,
+        "planes": 8,
+        "channels": 64,
+        "scale": 0.0625,
+        "zero_point": 128
+      },
+      "/model.6/m.1/cv1/act/Mul_output_0_QuantizeLinear_Output": {
+        "base": 13550016,
+        "halo": 1,
+        "halo_value": 128,
+        "height": 40,
+        "width": 40,
+        "blocks": 8,
+        "planes": 8,
+        "channels": 64,
+        "scale": 0.03125,
+        "zero_point": 128
+      },
+      "/model.6/m.1/Add_output_0_QuantizeLinear_Output": {
+        "base": 13662912,
+        "halo": 0,
+        "halo_value": 128,
+        "height": 40,
+        "width": 40,
+        "blocks": 8,
+        "planes": 8,
+        "channels": 64,
+        "scale": 0.0625,
+        "zero_point": 128
+      },
+      "/model.6/cv2/act/Mul_output_0_QuantizeLinear_Output": {
+        "base": 13765312,
+        "halo": 1,
+        "halo_value": 128,
+        "height": 40,
+        "width": 40,
+        "blocks": 16,
+        "planes": 16,
+        "channels": 128,
+        "scale": 0.0625,
+        "zero_point": 128
+      },
+      "/model.7/act/Mul_output_0_QuantizeLinear_Output": {
+        "base": 13991104,
+        "halo": 0,
+        "halo_value": 128,
+        "height": 20,
+        "width": 20,
+        "blocks": 32,
+        "planes": 32,
+        "channels": 256,
+        "scale": 0.03125,
+        "zero_point": 128
+      },
+      "/model.8/cv1/act/Mul_output_0_QuantizeLinear_Output": {
+        "base": 14093504,
+        "halo": 1,
+        "halo_value": 128,
+        "height": 20,
+        "width": 20,
+        "blocks": 32,
+        "planes": 32,
+        "channels": 256,
+        "scale": 0.125,
+        "zero_point": 128
+      },
+      "/model.8/m.0/cv1/act/Mul_output_0_QuantizeLinear_Output": {
+        "base": 14217408,
+        "halo": 1,
+        "halo_value": 128,
+        "height": 20,
+        "width": 20,
+        "blocks": 16,
+        "planes": 16,
+        "channels": 128,
+        "scale": 0.0625,
+        "zero_point": 128
+      },
+      "/model.8/m.0/Add_output_0_QuantizeLinear_Output": {
+        "base": 14279360,
+        "halo": 0,
+        "halo_value": 128,
+        "height": 20,
+        "width": 20,
+        "blocks": 16,
+        "planes": 16,
+        "channels": 128,
+        "scale": 0.125,
+        "zero_point": 128
+      },
+      "/model.8/cv2/act/Mul_output_0_QuantizeLinear_Output": {
+        "base": 14330560,
+        "halo": 0,
+        "halo_value": 128,
+        "height": 20,
+        "width": 20,
+        "blocks": 32,
+        "planes": 32,
+        "channels": 256,
+        "scale": 0.03125,
+        "zero_point": 128
+      },
+      "/model.9/cv1/act/Mul_output_0_QuantizeLinear_Output": {
+        "base": 14432960,
+        "halo": 2,
+        "halo_value": 0,
+        "height": 20,
+        "width": 20,
+        "blocks": 16,
+        "planes": 16,
+        "channels": 128,
+        "scale": 0.0625,
+        "zero_point": 128
+      },
+      "/model.9/m/MaxPool_output_0_QuantizeLinear_Output": {
+        "base": 14506688,
+        "halo": 2,
+        "halo_value": 0,
+        "height": 20,
+        "width": 20,
+        "blocks": 16,
+        "planes": 16,
+        "channels": 128,
+        "scale": 0.0625,
+        "zero_point": 128
+      },
+      "/model.9/m_1/MaxPool_output_0_QuantizeLinear_Output": {
+        "base": 14580416,
+        "halo": 2,
+        "halo_value": 0,
+        "height": 20,
+        "width": 20,
+        "blocks": 16,
+        "planes": 16,
+        "channels": 128,
+        "scale": 0.0625,
+        "zero_point": 128
+      },
+      "/model.9/m_2/MaxPool_output_0_QuantizeLinear_Output": {
+        "base": 14654144,
+        "halo": 0,
+        "halo_value": 128,
+        "height": 20,
+        "width": 20,
+        "blocks": 16,
+        "planes": 16,
+        "channels": 128,
+        "scale": 0.0625,
+        "zero_point": 128
+      },
+      "/model.9/cv2/act/Mul_output_0_QuantizeLinear_Output": {
+        "base": 14705344,
+        "halo": 0,
+        "halo_value": 128,
+        "height": 20,
+        "width": 20,
+        "blocks": 32,
+        "planes": 32,
+        "channels": 256,
+        "scale": 0.0625,
+        "zero_point": 128
+      },
+      "/model.12/cv1/act/Mul_output_0_QuantizeLinear_Output": {
+        "base": 14807744,
+        "halo": 1,
+        "halo_value": 128,
+        "height": 40,
+        "width": 40,
+        "blocks": 16,
+        "planes": 16,
+        "channels": 128,
+        "scale": 0.03125,
+        "zero_point": 128
+      },
+      "/model.12/m.0/cv1/act/Mul_output_0_QuantizeLinear_Output": {
+        "base": 15033536,
+        "halo": 1,
+        "halo_value": 128,
+        "height": 40,
+        "width": 40,
+        "blocks": 8,
+        "planes": 8,
+        "channels": 64,
+        "scale": 0.03125,
+        "zero_point": 128
+      },
+      "/model.12/m.0/cv2/act/Mul_output_0_QuantizeLinear_Output": {
+        "base": 15146432,
+        "halo": 0,
+        "halo_value": 128,
+        "height": 40,
+        "width": 40,
+        "blocks": 8,
+        "planes": 8,
+        "channels": 64,
+        "scale": 0.03125,
+        "zero_point": 128
+      },
+      "/model.12/cv2/act/Mul_output_0_QuantizeLinear_Output": {
+        "base": 15248832,
+        "halo": 0,
+        "halo_value": 128,
+        "height": 40,
+        "width": 40,
+        "blocks": 16,
+        "planes": 16,
+        "channels": 128,
+        "scale": 0.03125,
+        "zero_point": 128
+      },
+      "/model.15/cv1/act/Mul_output_0_QuantizeLinear_Output": {
+        "base": 15453632,
+        "halo": 1,
+        "halo_value": 128,
+        "height": 80,
+        "width": 80,
+        "blocks": 8,
+        "planes": 8,
+        "channels": 64,
+        "scale": 0.03125,
+        "zero_point": 128
+      },
+      "/model.15/m.0/cv1/act/Mul_output_0_QuantizeLinear_Output": {
+        "base": 15883968,
+        "halo": 1,
+        "halo_value": 128,
+        "height": 80,
+        "width": 80,
+        "blocks": 4,
+        "planes": 4,
+        "channels": 32,
+        "scale": 0.015625,
+        "zero_point": 128
+      },
+      "/model.15/m.0/cv2/act/Mul_output_0_QuantizeLinear_Output": {
+        "base": 16099136,
+        "halo": 0,
+        "halo_value": 128,
+        "height": 80,
+        "width": 80,
+        "blocks": 4,
+        "planes": 4,
+        "channels": 32,
+        "scale": 0.03125,
+        "zero_point": 128
+      },
+      "/model.15/cv2/act/Mul_output_0_QuantizeLinear_Output": {
+        "base": 16303936,
+        "halo": 1,
+        "halo_value": 128,
+        "height": 80,
+        "width": 80,
+        "blocks": 8,
+        "planes": 8,
+        "channels": 64,
+        "scale": 0.03125,
+        "zero_point": 128
+      },
+      "/model.16/act/Mul_output_0_QuantizeLinear_Output": {
+        "base": 16734272,
+        "halo": 0,
+        "halo_value": 128,
+        "height": 40,
+        "width": 40,
+        "blocks": 8,
+        "planes": 8,
+        "channels": 64,
+        "scale": 0.03125,
+        "zero_point": 128
+      },
+      "/model.22/cv2.0/cv2.0.0/act/Mul_output_0_QuantizeLinear_Output": {
+        "base": 16836672,
+        "halo": 1,
+        "halo_value": 128,
+        "height": 80,
+        "width": 80,
+        "blocks": 8,
+        "planes": 8,
+        "channels": 64,
+        "scale": 0.03125,
+        "zero_point": 128
+      },
+      "/model.22/cv3.0/cv3.0.0/act/Mul_output_0_QuantizeLinear_Output": {
+        "base": 17267008,
+        "halo": 1,
+        "halo_value": 128,
+        "height": 80,
+        "width": 80,
+        "blocks": 10,
+        "planes": 12,
+        "channels": 80,
+        "scale": 0.03125,
+        "zero_point": 128
+      },
+      "/model.22/cv2.0/cv2.0.1/act/Mul_output_0_QuantizeLinear_Output": {
+        "base": 17912512,
+        "halo": 0,
+        "halo_value": 128,
+        "height": 80,
+        "width": 80,
+        "blocks": 8,
+        "planes": 8,
+        "channels": 64,
+        "scale": 0.25,
+        "zero_point": 128
+      },
+      "/model.22/cv3.0/cv3.0.1/act/Mul_output_0_QuantizeLinear_Output": {
+        "base": 18322112,
+        "halo": 0,
+        "halo_value": 128,
+        "height": 80,
+        "width": 80,
+        "blocks": 10,
+        "planes": 12,
+        "channels": 80,
+        "scale": 0.25,
+        "zero_point": 128
+      },
+      "/model.18/cv1/act/Mul_output_0_QuantizeLinear_Output": {
+        "base": 18936512,
+        "halo": 1,
+        "halo_value": 128,
+        "height": 40,
+        "width": 40,
+        "blocks": 16,
+        "planes": 16,
+        "channels": 128,
+        "scale": 0.0625,
+        "zero_point": 128
+      },
+      "/model.22/cv2.0/cv2.0.2/Conv_output_0_QuantizeLinear_Output": {
+        "base": 19162304,
+        "halo": 0,
+        "halo_value": 128,
+        "height": 80,
+        "width": 80,
+        "blocks": 8,
+        "planes": 8,
+        "channels": 64,
+        "scale": 0.125,
+        "zero_point": 128
+      },
+      "/model.22/cv3.0/cv3.0.2/Conv_output_0_QuantizeLinear_Output": {
+        "base": 19571904,
+        "halo": 0,
+        "halo_value": 128,
+        "height": 80,
+        "width": 80,
+        "blocks": 10,
+        "planes": 12,
+        "channels": 80,
+        "scale": 0.25,
+        "zero_point": 128
+      },
+      "/model.18/m.0/cv1/act/Mul_output_0_QuantizeLinear_Output": {
+        "base": 20186304,
+        "halo": 1,
+        "halo_value": 128,
+        "height": 40,
+        "width": 40,
+        "blocks": 8,
+        "planes": 8,
+        "channels": 64,
+        "scale": 0.03125,
+        "zero_point": 128
+      },
+      "/model.18/m.0/cv2/act/Mul_output_0_QuantizeLinear_Output": {
+        "base": 20299200,
+        "halo": 0,
+        "halo_value": 128,
+        "height": 40,
+        "width": 40,
+        "blocks": 8,
+        "planes": 8,
+        "channels": 64,
+        "scale": 0.0625,
+        "zero_point": 128
+      },
+      "/model.18/cv2/act/Mul_output_0_QuantizeLinear_Output": {
+        "base": 20401600,
+        "halo": 1,
+        "halo_value": 128,
+        "height": 40,
+        "width": 40,
+        "blocks": 16,
+        "planes": 16,
+        "channels": 128,
+        "scale": 0.03125,
+        "zero_point": 128
+      },
+      "/model.19/act/Mul_output_0_QuantizeLinear_Output": {
+        "base": 20627392,
+        "halo": 0,
+        "halo_value": 128,
+        "height": 20,
+        "width": 20,
+        "blocks": 16,
+        "planes": 16,
+        "channels": 128,
+        "scale": 0.0625,
+        "zero_point": 128
+      },
+      "/model.22/cv2.1/cv2.1.0/act/Mul_output_0_QuantizeLinear_Output": {
+        "base": 20678592,
+        "halo": 1,
+        "halo_value": 128,
+        "height": 40,
+        "width": 40,
+        "blocks": 8,
+        "planes": 8,
+        "channels": 64,
+        "scale": 0.0625,
+        "zero_point": 128
+      },
+      "/model.22/cv3.1/cv3.1.0/act/Mul_output_0_QuantizeLinear_Output": {
+        "base": 20791488,
+        "halo": 1,
+        "halo_value": 128,
+        "height": 40,
+        "width": 40,
+        "blocks": 10,
+        "planes": 12,
+        "channels": 80,
+        "scale": 0.0625,
+        "zero_point": 128
+      },
+      "/model.22/cv2.1/cv2.1.1/act/Mul_output_0_QuantizeLinear_Output": {
+        "base": 20960832,
+        "halo": 0,
+        "halo_value": 128,
+        "height": 40,
+        "width": 40,
+        "blocks": 8,
+        "planes": 8,
+        "channels": 64,
+        "scale": 0.25,
+        "zero_point": 128
+      },
+      "/model.22/cv3.1/cv3.1.1/act/Mul_output_0_QuantizeLinear_Output": {
+        "base": 21063232,
+        "halo": 0,
+        "halo_value": 128,
+        "height": 40,
+        "width": 40,
+        "blocks": 10,
+        "planes": 12,
+        "channels": 80,
+        "scale": 0.5,
+        "zero_point": 128
+      },
+      "/model.21/cv1/act/Mul_output_0_QuantizeLinear_Output": {
+        "base": 21216832,
+        "halo": 1,
+        "halo_value": 128,
+        "height": 20,
+        "width": 20,
+        "blocks": 32,
+        "planes": 32,
+        "channels": 256,
+        "scale": 0.0625,
+        "zero_point": 128
+      },
+      "/model.22/cv2.1/cv2.1.2/Conv_output_0_QuantizeLinear_Output": {
+        "base": 21340736,
+        "halo": 0,
+        "halo_value": 128,
+        "height": 40,
+        "width": 40,
+        "blocks": 8,
+        "planes": 8,
+        "channels": 64,
+        "scale": 0.125,
+        "zero_point": 128
+      },
+      "/model.22/cv3.1/cv3.1.2/Conv_output_0_QuantizeLinear_Output": {
+        "base": 21443136,
+        "halo": 0,
+        "halo_value": 128,
+        "height": 40,
+        "width": 40,
+        "blocks": 10,
+        "planes": 12,
+        "channels": 80,
+        "scale": 0.25,
+        "zero_point": 128
+      },
+      "/model.21/m.0/cv1/act/Mul_output_0_QuantizeLinear_Output": {
+        "base": 21596736,
+        "halo": 1,
+        "halo_value": 128,
+        "height": 20,
+        "width": 20,
+        "blocks": 16,
+        "planes": 16,
+        "channels": 128,
+        "scale": 0.03125,
+        "zero_point": 128
+      },
+      "/model.21/m.0/cv2/act/Mul_output_0_QuantizeLinear_Output": {
+        "base": 21658688,
+        "halo": 0,
+        "halo_value": 128,
+        "height": 20,
+        "width": 20,
+        "blocks": 16,
+        "planes": 16,
+        "channels": 128,
+        "scale": 0.0625,
+        "zero_point": 128
+      },
+      "/model.21/cv2/act/Mul_output_0_QuantizeLinear_Output": {
+        "base": 21709888,
+        "halo": 1,
+        "halo_value": 128,
+        "height": 20,
+        "width": 20,
+        "blocks": 32,
+        "planes": 32,
+        "channels": 256,
+        "scale": 0.03125,
+        "zero_point": 128
+      },
+      "/model.22/cv2.2/cv2.2.0/act/Mul_output_0_QuantizeLinear_Output": {
+        "base": 21833792,
+        "halo": 1,
+        "halo_value": 128,
+        "height": 20,
+        "width": 20,
+        "blocks": 8,
+        "planes": 8,
+        "channels": 64,
+        "scale": 0.0625,
+        "zero_point": 128
+      },
+      "/model.22/cv3.2/cv3.2.0/act/Mul_output_0_QuantizeLinear_Output": {
+        "base": 21864768,
+        "halo": 1,
+        "halo_value": 128,
+        "height": 20,
+        "width": 20,
+        "blocks": 10,
+        "planes": 12,
+        "channels": 80,
+        "scale": 0.0625,
+        "zero_point": 128
+      },
+      "/model.22/cv2.2/cv2.2.1/act/Mul_output_0_QuantizeLinear_Output": {
+        "base": 21911232,
+        "halo": 0,
+        "halo_value": 128,
+        "height": 20,
+        "width": 20,
+        "blocks": 8,
+        "planes": 8,
+        "channels": 64,
+        "scale": 0.25,
+        "zero_point": 128
+      },
+      "/model.22/cv3.2/cv3.2.1/act/Mul_output_0_QuantizeLinear_Output": {
+        "base": 21936832,
+        "halo": 0,
+        "halo_value": 128,
+        "height": 20,
+        "width": 20,
+        "blocks": 10,
+        "planes": 12,
+        "channels": 80,
+        "scale": 0.5,
+        "zero_point": 128
+      },
+      "/model.22/cv2.2/cv2.2.2/Conv_output_0_QuantizeLinear_Output": {
+        "base": 21975232,
+        "halo": 0,
+        "halo_value": 128,
+        "height": 20,
+        "width": 20,
+        "blocks": 8,
+        "planes": 8,
+        "channels": 64,
+        "scale": 0.125,
+        "zero_point": 128
+      },
+      "/model.22/cv3.2/cv3.2.2/Conv_output_0_QuantizeLinear_Output": {
+        "base": 22000832,
+        "halo": 0,
+        "halo_value": 128,
+        "height": 20,
+        "width": 20,
+        "blocks": 10,
+        "planes": 12,
+        "channels": 80,
+        "scale": 0.25,
+        "zero_point": 128
+      }
+    },
+    "layers": [
+      {
+        "index": 0,
+        "name": "/model.0/conv/Conv",
+        "output": "/model.0/act/Mul_output_0_QuantizeLinear_Output",
+        "rounds": 256,
+        "packets": 1024,
+        "w_fills": 4
+      },
+      {
+        "index": 1,
+        "name": "/model.1/conv/Conv",
+        "output": "/model.1/act/Mul_output_0_QuantizeLinear_Output",
+        "rounds": 64,
+        "packets": 512,
+        "w_fills": 4
+      },
+      {
+        "index": 2,
+        "name": "/model.2/cv1/conv/Conv",
+        "output": "/model.2/cv1/act/Mul_output_0_QuantizeLinear_Output",
+        "rounds": 64,
+        "packets": 256,
+        "w_fills": 4
+      },
+      {
+        "index": 3,
+        "name": "/model.2/m.0/cv1/conv/Conv",
+        "output": "/model.2/m.0/cv1/act/Mul_output_0_QuantizeLinear_Output",
+        "rounds": 64,
+        "packets": 256,
+        "w_fills": 4
+      },
+      {
+        "index": 4,
+        "name": "/model.2/m.0/cv2/conv/Conv",
+        "output": "/model.2/m.0/Add_output_0_QuantizeLinear_Output",
+        "rounds": 64,
+        "packets": 512,
+        "w_fills": 4
+      },
+      {
+        "index": 5,
+        "name": "/model.2/cv2/conv/Conv",
+        "output": "/model.2/cv2/act/Mul_output_0_QuantizeLinear_Output",
+        "rounds": 64,
+        "packets": 512,
+        "w_fills": 4
+      },
+      {
+        "index": 6,
+        "name": "/model.3/conv/Conv",
+        "output": "/model.3/act/Mul_output_0_QuantizeLinear_Output",
+        "rounds": 32,
+        "packets": 512,
+        "w_fills": 8
+      },
+      {
+        "index": 7,
+        "name": "/model.4/cv1/conv/Conv",
+        "output": "/model.4/cv1/act/Mul_output_0_QuantizeLinear_Output",
+        "rounds": 32,
+        "packets": 128,
+        "w_fills": 4
+      },
+      {
+        "index": 8,
+        "name": "/model.4/m.0/cv1/conv/Conv",
+        "output": "/model.4/m.0/cv1/act/Mul_output_0_QuantizeLinear_Output",
+        "rounds": 16,
+        "packets": 64,
+        "w_fills": 4
+      },
+      {
+        "index": 9,
+        "name": "/model.4/m.0/cv2/conv/Conv",
+        "output": "/model.4/m.0/Add_output_0_QuantizeLinear_Output",
+        "rounds": 16,
+        "packets": 128,
+        "w_fills": 4
+      },
+      {
+        "index": 10,
+        "name": "/model.4/m.1/cv1/conv/Conv",
+        "output": "/model.4/m.1/cv1/act/Mul_output_0_QuantizeLinear_Output",
+        "rounds": 16,
+        "packets": 64,
+        "w_fills": 4
+      },
+      {
+        "index": 11,
+        "name": "/model.4/m.1/cv2/conv/Conv",
+        "output": "/model.4/m.1/Add_output_0_QuantizeLinear_Output",
+        "rounds": 16,
+        "packets": 128,
+        "w_fills": 4
+      },
+      {
+        "index": 12,
+        "name": "/model.4/cv2/conv/Conv",
+        "output": "/model.4/cv2/act/Mul_output_0_QuantizeLinear_Output",
+        "rounds": 32,
+        "packets": 384,
+        "w_fills": 8
+      },
+      {
+        "index": 13,
+        "name": "/model.5/conv/Conv",
+        "output": "/model.5/act/Mul_output_0_QuantizeLinear_Output",
+        "rounds": 16,
+        "packets": 512,
+        "w_fills": 4
+      },
+      {
+        "index": 14,
+        "name": "/model.6/cv1/conv/Conv",
+        "output": "/model.6/cv1/act/Mul_output_0_QuantizeLinear_Output",
+        "rounds": 16,
+        "packets": 128,
+        "w_fills": 4
+      },
+      {
+        "index": 15,
+        "name": "/model.6/m.0/cv1/conv/Conv",
+        "output": "/model.6/m.0/cv1/act/Mul_output_0_QuantizeLinear_Output",
+        "rounds": 8,
+        "packets": 64,
+        "w_fills": 4
+      },
+      {
+        "index": 16,
+        "name": "/model.6/m.0/cv2/conv/Conv",
+        "output": "/model.6/m.0/Add_output_0_QuantizeLinear_Output",
+        "rounds": 8,
+        "packets": 96,
+        "w_fills": 4
+      },
+      {
+        "index": 17,
+        "name": "/model.6/m.1/cv1/conv/Conv",
+        "output": "/model.6/m.1/cv1/act/Mul_output_0_QuantizeLinear_Output",
+        "rounds": 8,
+        "packets": 64,
+        "w_fills": 4
+      },
+      {
+        "index": 18,
+        "name": "/model.6/m.1/cv2/conv/Conv",
+        "output": "/model.6/m.1/Add_output_0_QuantizeLinear_Output",
+        "rounds": 8,
+        "packets": 96,
+        "w_fills": 4
+      },
+      {
+        "index": 19,
+        "name": "/model.6/cv2/conv/Conv",
+        "output": "/model.6/cv2/act/Mul_output_0_QuantizeLinear_Output",
+        "rounds": 16,
+        "packets": 256,
+        "w_fills": 4
+      },
+      {
+        "index": 20,
+        "name": "/model.7/conv/Conv",
+        "output": "/model.7/act/Mul_output_0_QuantizeLinear_Output",
+        "rounds": 8,
+        "packets": 512,
+        "w_fills": 4
+      },
+      {
+        "index": 21,
+        "name": "/model.8/cv1/conv/Conv",
+        "output": "/model.8/cv1/act/Mul_output_0_QuantizeLinear_Output",
+        "rounds": 8,
+        "packets": 128,
+        "w_fills": 4
+      },
+      {
+        "index": 22,
+        "name": "/model.8/m.0/cv1/conv/Conv",
+        "output": "/model.8/m.0/cv1/act/Mul_output_0_QuantizeLinear_Output",
+        "rounds": 4,
+        "packets": 64,
+        "w_fills": 4
+      },
+      {
+        "index": 23,
+        "name": "/model.8/m.0/cv2/conv/Conv",
+        "output": "/model.8/m.0/Add_output_0_QuantizeLinear_Output",
+        "rounds": 4,
+        "packets": 80,
+        "w_fills": 4
+      },
+      {
+        "index": 24,
+        "name": "/model.8/cv2/conv/Conv",
+        "output": "/model.8/cv2/act/Mul_output_0_QuantizeLinear_Output",
+        "rounds": 8,
+        "packets": 192,
+        "w_fills": 4
+      },
+      {
+        "index": 25,
+        "name": "/model.9/cv1/conv/Conv",
+        "output": "/model.9/cv1/act/Mul_output_0_QuantizeLinear_Output",
+        "rounds": 4,
+        "packets": 64,
+        "w_fills": 4
+      },
+      {
+        "index": 26,
+        "name": "/model.9/m/MaxPool",
+        "output": "/model.9/m/MaxPool_output_0_QuantizeLinear_Output",
+        "rounds": 4,
+        "packets": 32,
+        "w_fills": 4
+      },
+      {
+        "index": 27,
+        "name": "/model.9/m_1/MaxPool",
+        "output": "/model.9/m_1/MaxPool_output_0_QuantizeLinear_Output",
+        "rounds": 4,
+        "packets": 32,
+        "w_fills": 4
+      },
+      {
+        "index": 28,
+        "name": "/model.9/m_2/MaxPool",
+        "output": "/model.9/m_2/MaxPool_output_0_QuantizeLinear_Output",
+        "rounds": 4,
+        "packets": 32,
+        "w_fills": 4
+      },
+      {
+        "index": 29,
+        "name": "/model.9/cv2/conv/Conv",
+        "output": "/model.9/cv2/act/Mul_output_0_QuantizeLinear_Output",
+        "rounds": 8,
+        "packets": 256,
+        "w_fills": 4
+      },
+      {
+        "index": 30,
+        "name": "/model.12/cv1/conv/Conv",
+        "output": "/model.12/cv1/act/Mul_output_0_QuantizeLinear_Output",
+        "rounds": 16,
+        "packets": 384,
+        "w_fills": 4
+      },
+      {
+        "index": 31,
+        "name": "/model.12/m.0/cv1/conv/Conv",
+        "output": "/model.12/m.0/cv1/act/Mul_output_0_QuantizeLinear_Output",
+        "rounds": 8,
+        "packets": 64,
+        "w_fills": 4
+      },
+      {
+        "index": 32,
+        "name": "/model.12/m.0/cv2/conv/Conv",
+        "output": "/model.12/m.0/cv2/act/Mul_output_0_QuantizeLinear_Output",
+        "rounds": 8,
+        "packets": 64,
+        "w_fills": 4
+      },
+      {
+        "index": 33,
+        "name": "/model.12/cv2/conv/Conv",
+        "output": "/model.12/cv2/act/Mul_output_0_QuantizeLinear_Output",
+        "rounds": 16,
+        "packets": 192,
+        "w_fills": 4
+      },
+      {
+        "index": 34,
+        "name": "/model.15/cv1/conv/Conv",
+        "output": "/model.15/cv1/act/Mul_output_0_QuantizeLinear_Output",
+        "rounds": 32,
+        "packets": 384,
+        "w_fills": 8
+      },
+      {
+        "index": 35,
+        "name": "/model.15/m.0/cv1/conv/Conv",
+        "output": "/model.15/m.0/cv1/act/Mul_output_0_QuantizeLinear_Output",
+        "rounds": 16,
+        "packets": 64,
+        "w_fills": 4
+      },
+      {
+        "index": 36,
+        "name": "/model.15/m.0/cv2/conv/Conv",
+        "output": "/model.15/m.0/cv2/act/Mul_output_0_QuantizeLinear_Output",
+        "rounds": 16,
+        "packets": 64,
+        "w_fills": 4
+      },
+      {
+        "index": 37,
+        "name": "/model.15/cv2/conv/Conv",
+        "output": "/model.15/cv2/act/Mul_output_0_QuantizeLinear_Output",
+        "rounds": 32,
+        "packets": 256,
+        "w_fills": 8
+      },
+      {
+        "index": 38,
+        "name": "/model.16/conv/Conv",
+        "output": "/model.16/act/Mul_output_0_QuantizeLinear_Output",
+        "rounds": 8,
+        "packets": 256,
+        "w_fills": 4
+      },
+      {
+        "index": 39,
+        "name": "/model.22/cv2.0/cv2.0.0/conv/Conv",
+        "output": "/model.22/cv2.0/cv2.0.0/act/Mul_output_0_QuantizeLinear_Output",
+        "rounds": 32,
+        "packets": 256,
+        "w_fills": 8
+      },
+      {
+        "index": 40,
+        "name": "/model.22/cv3.0/cv3.0.0/conv/Conv",
+        "output": "/model.22/cv3.0/cv3.0.0/act/Mul_output_0_QuantizeLinear_Output",
+        "rounds": 48,
+        "packets": 384,
+        "w_fills": 12
+      },
+      {
+        "index": 41,
+        "name": "/model.22/cv2.0/cv2.0.1/conv/Conv",
+        "output": "/model.22/cv2.0/cv2.0.1/act/Mul_output_0_QuantizeLinear_Output",
+        "rounds": 32,
+        "packets": 256,
+        "w_fills": 8
+      },
+      {
+        "index": 42,
+        "name": "/model.22/cv3.0/cv3.0.1/conv/Conv",
+        "output": "/model.22/cv3.0/cv3.0.1/act/Mul_output_0_QuantizeLinear_Output",
+        "rounds": 48,
+        "packets": 576,
+        "w_fills": 12
+      },
+      {
+        "index": 43,
+        "name": "/model.18/cv1/conv/Conv",
+        "output": "/model.18/cv1/act/Mul_output_0_QuantizeLinear_Output",
+        "rounds": 16,
+        "packets": 192,
+        "w_fills": 4
+      },
+      {
+        "index": 44,
+        "name": "/model.22/cv2.0/cv2.0.2/Conv",
+        "output": "/model.22/cv2.0/cv2.0.2/Conv_output_0_QuantizeLinear_Output",
+        "rounds": 32,
+        "packets": 128,
+        "w_fills": 4
+      },
+      {
+        "index": 45,
+        "name": "/model.22/cv3.0/cv3.0.2/Conv",
+        "output": "/model.22/cv3.0/cv3.0.2/Conv_output_0_QuantizeLinear_Output",
+        "rounds": 48,
+        "packets": 384,
+        "w_fills": 12
+      },
+      {
+        "index": 46,
+        "name": "/model.18/m.0/cv1/conv/Conv",
+        "output": "/model.18/m.0/cv1/act/Mul_output_0_QuantizeLinear_Output",
+        "rounds": 8,
+        "packets": 64,
+        "w_fills": 4
+      },
+      {
+        "index": 47,
+        "name": "/model.18/m.0/cv2/conv/Conv",
+        "output": "/model.18/m.0/cv2/act/Mul_output_0_QuantizeLinear_Output",
+        "rounds": 8,
+        "packets": 64,
+        "w_fills": 4
+      },
+      {
+        "index": 48,
+        "name": "/model.18/cv2/conv/Conv",
+        "output": "/model.18/cv2/act/Mul_output_0_QuantizeLinear_Output",
+        "rounds": 16,
+        "packets": 192,
+        "w_fills": 4
+      },
+      {
+        "index": 49,
+        "name": "/model.19/conv/Conv",
+        "output": "/model.19/act/Mul_output_0_QuantizeLinear_Output",
+        "rounds": 4,
+        "packets": 256,
+        "w_fills": 4
+      },
+      {
+        "index": 50,
+        "name": "/model.22/cv2.1/cv2.1.0/conv/Conv",
+        "output": "/model.22/cv2.1/cv2.1.0/act/Mul_output_0_QuantizeLinear_Output",
+        "rounds": 8,
+        "packets": 128,
+        "w_fills": 4
+      },
+      {
+        "index": 51,
+        "name": "/model.22/cv3.1/cv3.1.0/conv/Conv",
+        "output": "/model.22/cv3.1/cv3.1.0/act/Mul_output_0_QuantizeLinear_Output",
+        "rounds": 12,
+        "packets": 192,
+        "w_fills": 4
+      },
+      {
+        "index": 52,
+        "name": "/model.22/cv2.1/cv2.1.1/conv/Conv",
+        "output": "/model.22/cv2.1/cv2.1.1/act/Mul_output_0_QuantizeLinear_Output",
+        "rounds": 8,
+        "packets": 64,
+        "w_fills": 4
+      },
+      {
+        "index": 53,
+        "name": "/model.22/cv3.1/cv3.1.1/conv/Conv",
+        "output": "/model.22/cv3.1/cv3.1.1/act/Mul_output_0_QuantizeLinear_Output",
+        "rounds": 12,
+        "packets": 144,
+        "w_fills": 4
+      },
+      {
+        "index": 54,
+        "name": "/model.21/cv1/conv/Conv",
+        "output": "/model.21/cv1/act/Mul_output_0_QuantizeLinear_Output",
+        "rounds": 8,
+        "packets": 192,
+        "w_fills": 4
+      },
+      {
+        "index": 55,
+        "name": "/model.22/cv2.1/cv2.1.2/Conv",
+        "output": "/model.22/cv2.1/cv2.1.2/Conv_output_0_QuantizeLinear_Output",
+        "rounds": 8,
+        "packets": 32,
+        "w_fills": 4
+      },
+      {
+        "index": 56,
+        "name": "/model.22/cv3.1/cv3.1.2/Conv",
+        "output": "/model.22/cv3.1/cv3.1.2/Conv_output_0_QuantizeLinear_Output",
+        "rounds": 12,
+        "packets": 96,
+        "w_fills": 4
+      },
+      {
+        "index": 57,
+        "name": "/model.21/m.0/cv1/conv/Conv",
+        "output": "/model.21/m.0/cv1/act/Mul_output_0_QuantizeLinear_Output",
+        "rounds": 4,
+        "packets": 64,
+        "w_fills": 4
+      },
+      {
+        "index": 58,
+        "name": "/model.21/m.0/cv2/conv/Conv",
+        "output": "/model.21/m.0/cv2/act/Mul_output_0_QuantizeLinear_Output",
+        "rounds": 4,
+        "packets": 64,
+        "w_fills": 4
+      },
+      {
+        "index": 59,
+        "name": "/model.21/cv2/conv/Conv",
+        "output": "/model.21/cv2/act/Mul_output_0_QuantizeLinear_Output",
+        "rounds": 8,
+        "packets": 192,
+        "w_fills": 4
+      },
+      {
+        "index": 60,
+        "name": "/model.22/cv2.2/cv2.2.0/conv/Conv",
+        "output": "/model.22/cv2.2/cv2.2.0/act/Mul_output_0_QuantizeLinear_Output",
+        "rounds": 2,
+        "packets": 64,
+        "w_fills": 2
+      },
+      {
+        "index": 61,
+        "name": "/model.22/cv3.2/cv3.2.0/conv/Conv",
+        "output": "/model.22/cv3.2/cv3.2.0/act/Mul_output_0_QuantizeLinear_Output",
+        "rounds": 3,
+        "packets": 96,
+        "w_fills": 3
+      },
+      {
+        "index": 62,
+        "name": "/model.22/cv2.2/cv2.2.1/conv/Conv",
+        "output": "/model.22/cv2.2/cv2.2.1/act/Mul_output_0_QuantizeLinear_Output",
+        "rounds": 2,
+        "packets": 16,
+        "w_fills": 2
+      },
+      {
+        "index": 63,
+        "name": "/model.22/cv3.2/cv3.2.1/conv/Conv",
+        "output": "/model.22/cv3.2/cv3.2.1/act/Mul_output_0_QuantizeLinear_Output",
+        "rounds": 3,
+        "packets": 36,
+        "w_fills": 3
+      },
+      {
+        "index": 64,
+        "name": "/model.22/cv2.2/cv2.2.2/Conv",
+        "output": "/model.22/cv2.2/cv2.2.2/Conv_output_0_QuantizeLinear_Output",
+        "rounds": 2,
+        "packets": 8,
+        "w_fills": 2
+      },
+      {
+        "index": 65,
+        "name": "/model.22/cv3.2/cv3.2.2/Conv",
+        "output": "/model.22/cv3.2/cv3.2.2/Conv_output_0_QuantizeLinear_Output",
+        "rounds": 3,
+        "packets": 24,
+        "w_fills": 3
+      }
+    ],
+    "rounds": 1415,
+    "activation_packets": 12980,
+    "weight_fills": 303,
+    "wpackets_bytes": 8164864,
+    "insts_bytes": 430180,
+    "compile_seconds": 12.5,
+    "tile": {
+      "rows": 5,
+      "cols": 20,
+      "a_bytes": 6400,
+      "w_bytes": 9472,
+      "o_bytes": 3200
+    },
+    "heads": {
+      "p3_box": {
+        "tensor": "/model.22/cv2.0/cv2.0.2/Conv_output_0_QuantizeLinear_Output",
+        "onnx_output": "/model.22/cv2.0/cv2.0.2/Conv_output_0",
+        "channels": 64,
+        "height": 80,
+        "width": 80,
+        "egress_offset": 0
+      },
+      "p4_box": {
+        "tensor": "/model.22/cv2.1/cv2.1.2/Conv_output_0_QuantizeLinear_Output",
+        "onnx_output": "/model.22/cv2.1/cv2.1.2/Conv_output_0",
+        "channels": 64,
+        "height": 40,
+        "width": 40,
+        "egress_offset": 409600
+      },
+      "p5_box": {
+        "tensor": "/model.22/cv2.2/cv2.2.2/Conv_output_0_QuantizeLinear_Output",
+        "onnx_output": "/model.22/cv2.2/cv2.2.2/Conv_output_0",
+        "channels": 64,
+        "height": 20,
+        "width": 20,
+        "egress_offset": 512000
+      },
+      "p3_cls": {
+        "tensor": "/model.22/cv3.0/cv3.0.2/Conv_output_0_QuantizeLinear_Output",
+        "onnx_output": "/model.22/cv3.0/cv3.0.2/Conv_output_0",
+        "channels": 80,
+        "height": 80,
+        "width": 80,
+        "egress_offset": 537600
+      },
+      "p4_cls": {
+        "tensor": "/model.22/cv3.1/cv3.1.2/Conv_output_0_QuantizeLinear_Output",
+        "onnx_output": "/model.22/cv3.1/cv3.1.2/Conv_output_0",
+        "channels": 80,
+        "height": 40,
+        "width": 40,
+        "egress_offset": 1049600
+      },
+      "p5_cls": {
+        "tensor": "/model.22/cv3.2/cv3.2.2/Conv_output_0_QuantizeLinear_Output",
+        "onnx_output": "/model.22/cv3.2/cv3.2.2/Conv_output_0",
+        "channels": 80,
+        "height": 20,
+        "width": 20,
+        "egress_offset": 1177600
+      }
+    },
+    "ddr_extents_bytes": {
+      "workspace": 50331648,
+      "packets": 16777216
+    }
+  },
+  "num_stages": 66,
+  "stages": {},
+  "strides": [
+    8,
+    16,
+    32
+  ],
+  "reg_max": 16,
+  "num_classes": 80,
+  "fused_dfl": false,
+  "output_shapes": {
+    "p3_box": [
+      1,
+      64,
+      80,
+      80
+    ],
+    "p4_box": [
+      1,
+      64,
+      40,
+      40
+    ],
+    "p5_box": [
+      1,
+      64,
+      20,
+      20
+    ],
+    "p3_cls": [
+      1,
+      80,
+      80,
+      80
+    ],
+    "p4_cls": [
+      1,
+      80,
+      40,
+      40
+    ],
+    "p5_cls": [
+      1,
+      80,
+      20,
+      20
+    ]
+  },
+  "head_layout": {
+    "p3_box": {
+      "offset": 0,
+      "scale": 0.125,
+      "zero_point": 0
+    },
+    "p4_box": {
+      "offset": 409600,
+      "scale": 0.125,
+      "zero_point": 0
+    },
+    "p5_box": {
+      "offset": 512000,
+      "scale": 0.125,
+      "zero_point": 0
+    },
+    "p3_cls": {
+      "offset": 537600,
+      "scale": 0.25,
+      "zero_point": 0
+    },
+    "p4_cls": {
+      "offset": 1049600,
+      "scale": 0.25,
+      "zero_point": 0
+    },
+    "p5_cls": {
+      "offset": 1177600,
+      "scale": 0.25,
+      "zero_point": 0
+    }
+  },
+  "egress_bytes": 1209600,
+  "blobs": [
+    {
+      "name": "engine.xclbin",
+      "offset": 40064,
+      "size": 188542,
+      "content_type": "xclbin",
+      "crc32": 2785924976
+    },
+    {
+      "name": "insts.bin",
+      "offset": 228608,
+      "size": 430180,
+      "content_type": "npu_instructions",
+      "crc32": 1400677929
+    },
+    {
+      "name": "wpackets.bin",
+      "offset": 658816,
+      "size": 8164864,
+      "content_type": "weight_packets",
+      "crc32": 3799581121
+    }
+  ]
+}

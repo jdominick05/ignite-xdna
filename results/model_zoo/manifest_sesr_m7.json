@@ -1,0 +1,296 @@
+{
+  "model_name": "sesr_m7_xint8",
+  "format_version": 1,
+  "arch_id": 1,
+  "target_hardware": "AMD Phoenix APU (XDNA1, 16 AIE2 cores)",
+  "producer": "ignite-compile v0.4.0 (graph engine)",
+  "created_utc": "2026-09-14T12:48:23Z",
+  "engine": "conv_engine_v1",
+  "task": "super_resolution",
+  "input_shape": [
+    1,
+    3,
+    256,
+    256
+  ],
+  "input_dtype": "uint8",
+  "single_dispatch": true,
+  "quant_scales": {
+    "input_scale": 1.0,
+    "input_zero_point": 128,
+    "input_dtype": "uint8"
+  },
+  "graph_engine": {
+    "kernel_sha256": "0d7a7fa4e244fc9101cf91709935df0b79a8d05e2d33c33547a0e5474a5c8f8f",
+    "xclbin_sha256": "5f0b40d53114a67653b43a758619dcd2c72d774b11d91acebf826f5f288614fe",
+    "workspace_bytes": 19711552,
+    "input_tensor": "input_QuantizeLinear_Output",
+    "placements": {
+      "input_QuantizeLinear_Output": {
+        "base": 0,
+        "halo": 2,
+        "halo_value": 128,
+        "height": 256,
+        "width": 256,
+        "blocks": 1,
+        "planes": 1,
+        "channels": 3,
+        "scale": 1.0,
+        "zero_point": 128
+      },
+      "/head/Conv_output_0_QuantizeLinear_Output": {
+        "base": 540800,
+        "halo": 1,
+        "halo_value": 128,
+        "height": 256,
+        "width": 256,
+        "blocks": 2,
+        "planes": 4,
+        "channels": 16,
+        "scale": 2.0,
+        "zero_point": 128
+      },
+      "/body.0/body.0.1/Relu_output_0_QuantizeLinear_Output": {
+        "base": 2670848,
+        "halo": 1,
+        "halo_value": 128,
+        "height": 256,
+        "width": 256,
+        "blocks": 2,
+        "planes": 4,
+        "channels": 16,
+        "scale": 8.0,
+        "zero_point": 128
+      },
+      "/body.1/body.1.1/Relu_output_0_QuantizeLinear_Output": {
+        "base": 4800896,
+        "halo": 1,
+        "halo_value": 128,
+        "height": 256,
+        "width": 256,
+        "blocks": 2,
+        "planes": 4,
+        "channels": 16,
+        "scale": 16.0,
+        "zero_point": 128
+      },
+      "/body.2/body.2.1/Relu_output_0_QuantizeLinear_Output": {
+        "base": 6930944,
+        "halo": 1,
+        "halo_value": 128,
+        "height": 256,
+        "width": 256,
+        "blocks": 2,
+        "planes": 4,
+        "channels": 16,
+        "scale": 16.0,
+        "zero_point": 128
+      },
+      "/body.3/body.3.1/Relu_output_0_QuantizeLinear_Output": {
+        "base": 9060992,
+        "halo": 1,
+        "halo_value": 128,
+        "height": 256,
+        "width": 256,
+        "blocks": 2,
+        "planes": 4,
+        "channels": 16,
+        "scale": 16.0,
+        "zero_point": 128
+      },
+      "/body.4/body.4.1/Relu_output_0_QuantizeLinear_Output": {
+        "base": 11191040,
+        "halo": 1,
+        "halo_value": 128,
+        "height": 256,
+        "width": 256,
+        "blocks": 2,
+        "planes": 4,
+        "channels": 16,
+        "scale": 32.0,
+        "zero_point": 128
+      },
+      "/body.5/body.5.1/Relu_output_0_QuantizeLinear_Output": {
+        "base": 13321088,
+        "halo": 1,
+        "halo_value": 128,
+        "height": 256,
+        "width": 256,
+        "blocks": 2,
+        "planes": 4,
+        "channels": 16,
+        "scale": 32.0,
+        "zero_point": 128
+      },
+      "/Add_output_0_QuantizeLinear_Output": {
+        "base": 15451136,
+        "halo": 2,
+        "halo_value": 128,
+        "height": 256,
+        "width": 256,
+        "blocks": 2,
+        "planes": 4,
+        "channels": 16,
+        "scale": 4.0,
+        "zero_point": 128
+      },
+      "/tail/Conv_output_0_QuantizeLinear_Output": {
+        "base": 17614336,
+        "halo": 0,
+        "halo_value": 128,
+        "height": 256,
+        "width": 256,
+        "blocks": 2,
+        "planes": 4,
+        "channels": 12,
+        "scale": 2.0,
+        "zero_point": 128
+      }
+    },
+    "layers": [
+      {
+        "index": 0,
+        "name": "/head/Conv",
+        "output": "/head/Conv_output_0_QuantizeLinear_Output",
+        "rounds": 169,
+        "packets": 676,
+        "w_fills": 4
+      },
+      {
+        "index": 1,
+        "name": "/body.0/body.0.0/Conv",
+        "output": "/body.0/body.0.1/Relu_output_0_QuantizeLinear_Output",
+        "rounds": 169,
+        "packets": 676,
+        "w_fills": 4
+      },
+      {
+        "index": 2,
+        "name": "/body.1/body.1.0/Conv",
+        "output": "/body.1/body.1.1/Relu_output_0_QuantizeLinear_Output",
+        "rounds": 169,
+        "packets": 676,
+        "w_fills": 4
+      },
+      {
+        "index": 3,
+        "name": "/body.2/body.2.0/Conv",
+        "output": "/body.2/body.2.1/Relu_output_0_QuantizeLinear_Output",
+        "rounds": 169,
+        "packets": 676,
+        "w_fills": 4
+      },
+      {
+        "index": 4,
+        "name": "/body.3/body.3.0/Conv",
+        "output": "/body.3/body.3.1/Relu_output_0_QuantizeLinear_Output",
+        "rounds": 169,
+        "packets": 676,
+        "w_fills": 4
+      },
+      {
+        "index": 5,
+        "name": "/body.4/body.4.0/Conv",
+        "output": "/body.4/body.4.1/Relu_output_0_QuantizeLinear_Output",
+        "rounds": 169,
+        "packets": 676,
+        "w_fills": 4
+      },
+      {
+        "index": 6,
+        "name": "/body.5/body.5.0/Conv",
+        "output": "/body.5/body.5.1/Relu_output_0_QuantizeLinear_Output",
+        "rounds": 169,
+        "packets": 676,
+        "w_fills": 4
+      },
+      {
+        "index": 7,
+        "name": "/body.6/body.6.0/Conv",
+        "output": "/Add_output_0_QuantizeLinear_Output",
+        "rounds": 169,
+        "packets": 1352,
+        "w_fills": 4
+      },
+      {
+        "index": 8,
+        "name": "/tail/Conv",
+        "output": "/tail/Conv_output_0_QuantizeLinear_Output",
+        "rounds": 169,
+        "packets": 1352,
+        "w_fills": 4
+      }
+    ],
+    "rounds": 1521,
+    "activation_packets": 7436,
+    "weight_fills": 36,
+    "wpackets_bytes": 170496,
+    "insts_bytes": 144880,
+    "compile_seconds": 7.1,
+    "tile": {
+      "rows": 5,
+      "cols": 20,
+      "a_bytes": 6400,
+      "w_bytes": 9472,
+      "o_bytes": 3200
+    },
+    "ddr_extents_bytes": {
+      "workspace": 50331648,
+      "packets": 16777216
+    }
+  },
+  "num_stages": 9,
+  "stages": {},
+  "upscale": 2,
+  "input_normalization": {
+    "mean": 128.0,
+    "divisor": 1.0
+  },
+  "output_shapes": {
+    "image": [
+      1,
+      3,
+      512,
+      512
+    ]
+  },
+  "dense_output": {
+    "tensor": "/tail/Conv_output_0_QuantizeLinear_Output",
+    "onnx_output": "output",
+    "channels": 12,
+    "height": 256,
+    "width": 256,
+    "scale": 2.0,
+    "zero_point": 128,
+    "layout": "blocks_hw8",
+    "transform": {
+      "op": "depth_to_space",
+      "blocksize": 2,
+      "mode": "CRD"
+    }
+  },
+  "egress_bytes": 786432,
+  "blobs": [
+    {
+      "name": "engine.xclbin",
+      "offset": 7232,
+      "size": 188542,
+      "content_type": "xclbin",
+      "crc32": 4278543008
+    },
+    {
+      "name": "insts.bin",
+      "offset": 195776,
+      "size": 144880,
+      "content_type": "npu_instructions",
+      "crc32": 3729907254
+    },
+    {
+      "name": "wpackets.bin",
+      "offset": 340672,
+      "size": 170496,
+      "content_type": "weight_packets",
+      "crc32": 3365643459
+    }
+  ]
+}

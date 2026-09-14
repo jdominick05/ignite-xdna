@@ -1,0 +1,15 @@
+$ C:\Users\<user>\miniforge3\envs\mlir-aie-iron\python.exe <Ignition>\live_ignition.py --model <ignite-xdna>\models\resnet50_xint8_c64.onnx --source <ignite-xdna>\assets\bus.jpg --headless --frames 300 --warmup 10 --json <ignite-xdna>\results\model_zoo\onnx-cpu_resnet50_xint8_c64.json
+[Ignition] loading <ignite-xdna>\models\resnet50_xint8_c64.onnx (ONNX model)
+[Ignition] task: classify
+[Ignition] ONNX Runtime CPU backend active
+[Ignition] source: image bus.jpg 810x1080
+[run] frame 100 | G2G 34.28 ms | 30 FPS | top-1 class 654 (0.58) | classify: onnxruntime
+[run] frame 200 | G2G 35.08 ms | 31 FPS | top-1 class 654 (0.58) | classify: onnxruntime
+[run] frame 300 | G2G 30.87 ms | 29 FPS | top-1 class 654 (0.58) | classify: onnxruntime
+[Ignition] shutdown: source released, window closed, NPU hardware context released
+[summary] stop: frame limit | 310 frames processed (10 warm-up, 300 timed) | 1 distinct source frames | image bus.jpg 810x1080
+[summary] G2G mean 34.245 ms | P50 34.394 | P95 39.306 | P99 41.040 | max 41.830 | over the last 300 timed frames; cold first frame 42.71 ms
+[summary] stage means (ms): preprocess 0.935 | ONNX Runtime 33.225 | softmax+top-k 0.085
+[summary] top-1 class 654 on 300/300 timed frames
+[summary] RSS 167.3 MB at the first timed frame, 167.4 MB at the end (+0.06 MB over 300 frames)
+[summary] wrote <ignite-xdna>\results\model_zoo\onnx-cpu_resnet50_xint8_c64.json

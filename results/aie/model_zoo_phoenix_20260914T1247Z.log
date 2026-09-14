@@ -1,0 +1,463 @@
+# Model-zoo evidence on Device 0 [003d:00:01.1], started 2026-09-14 12:47:33 UTC
+# host DESKTOP-CBL5NUA (Desktop 2) | ignite-xdna v0.1.0-phoenix-npu-1-gd828678 | Ignition v0.2.0-15-g91ace94
+# Steps run one at a time from <ignite-xdna>. NPU steps read xrt-smi first; idle=False would make that
+# step contention, not a result. Camera-tool [hud] lines for runs over 20 frames are kept for frames 1-3,
+# every 100th and the last; their [summary] lines cover every timed frame.
+
+===== [1/18] compile yolov8n_full =====
+$ C:\Program Files\Git\usr\bin\bash.EXE scripts/research-iron.sh -c import sys; sys.path[:0] = ['src', '.']; import ignite_xdna, kernels.aie2.conv_engine.design as d; print('[pin]', ignite_xdna.__file__, d.__file__, flush=True); from ignite_xdna.compiler.cli import main; raise SystemExit(main(sys.argv[1:])) compile --model models/yolov8n_cut_xint8.onnx --output build/yolov8n_full.ignite
+[pin] <ignite-xdna>\src\ignite_xdna\__init__.py <ignite-xdna>\kernels\aie2\conv_engine\design.py
+[*] Lowered 66 layers; workspace 22.0 MB; 1415 rounds, 8.16 MB static packets
+[+] build\yolov8n_full.ignite written: 8,823,680 bytes in 12.5 s (xclbin 188,542 B, insts 430,180 B, packets 8,164,864 B)
+    [OK] head_status: present (six heads declared in head_layout, 1209600 of 1209600 egress bytes)
+    [OK] egress bytes: 1,209,600
+
+All compilation and packaging checks passed successfully!
+[rc] 0 in 13.1 s
+
+===== [2/18] compile yolov8s =====
+$ C:\Program Files\Git\usr\bin\bash.EXE scripts/research-iron.sh -c import sys; sys.path[:0] = ['src', '.']; import ignite_xdna, kernels.aie2.conv_engine.design as d; print('[pin]', ignite_xdna.__file__, d.__file__, flush=True); from ignite_xdna.compiler.cli import main; raise SystemExit(main(sys.argv[1:])) compile --model models/yolov8s_cut_xint8.onnx --output build/yolov8s.ignite
+[pin] <ignite-xdna>\src\ignite_xdna\__init__.py <ignite-xdna>\kernels\aie2\conv_engine\design.py
+[*] Lowered 66 layers; workspace 32.2 MB; 2173 rounds, 29.50 MB static packets
+[+] build\yolov8s.ignite written: 30,743,680 bytes in 28.2 s (xclbin 188,542 B, insts 1,019,140 B, packets 29,495,808 B)
+    [OK] head_status: present (six heads declared in head_layout, 1209600 of 1209600 egress bytes)
+    [OK] egress bytes: 1,209,600
+
+All compilation and packaging checks passed successfully!
+[rc] 0 in 28.8 s
+
+===== [3/18] compile sesr_m7 =====
+$ C:\Program Files\Git\usr\bin\bash.EXE scripts/research-iron.sh -c import sys; sys.path[:0] = ['src', '.']; import ignite_xdna, kernels.aie2.conv_engine.design as d; print('[pin]', ignite_xdna.__file__, d.__file__, flush=True); from ignite_xdna.compiler.cli import main; raise SystemExit(main(sys.argv[1:])) compile --model models/sesr_m7_xint8.onnx --output build/sesr_m7.ignite
+[pin] <ignite-xdna>\src\ignite_xdna\__init__.py <ignite-xdna>\kernels\aie2\conv_engine\design.py
+[*] Lowered 9 layers; workspace 19.7 MB; 1521 rounds, 0.17 MB static packets
+[+] build\sesr_m7.ignite written: 511,168 bytes in 7.1 s (xclbin 188,542 B, insts 144,880 B, packets 170,496 B)
+    [OK] dense output: 12x256x256 uint8 at scale 2.0, host depth_to_space x2 -> image [1, 3, 512, 512]
+    [OK] egress bytes: 786,432
+
+All compilation and packaging checks passed successfully!
+[rc] 0 in 7.7 s
+
+===== [4/18] memory report yolov8s =====
+$ C:\Users\<user>\miniforge3\envs\mlir-aie-iron\python.exe tools/engine_memory_report.py build/conv_engine/yolov8s --json results/model_zoo/memory_yolov8s.json
+tile (0, 1) memtile used  76,800 B of 524,288 ( 14.6%, headroom 447,488) stack     0 | a0_cons_buff_0 25,600, a0_cons_buff_1 25,600, o0_buff_0 12,800, o0_buff_1 12,800
+tile (0, 2) core    used  59,392 B of  65,536 ( 90.6%, headroom   6,144) stack 2,048 | psum_0_0 16,000, w0_0_cons_buff_0 9,472, w0_0_cons_buff_1 9,472, a0_0_cons_buff_0 6,400
+tile (0, 3) core    used  59,392 B of  65,536 ( 90.6%, headroom   6,144) stack 2,048 | psum_0_1 16,000, w0_1_cons_buff_0 9,472, w0_1_cons_buff_1 9,472, a0_1_cons_buff_0 6,400
+tile (0, 4) core    used  59,392 B of  65,536 ( 90.6%, headroom   6,144) stack 2,048 | psum_0_2 16,000, w0_2_cons_buff_0 9,472, w0_2_cons_buff_1 9,472, a0_2_cons_buff_0 6,400
+tile (0, 5) core    used  59,392 B of  65,536 ( 90.6%, headroom   6,144) stack 2,048 | psum_0_3 16,000, w0_3_cons_buff_0 9,472, w0_3_cons_buff_1 9,472, a0_3_cons_buff_0 6,400
+tile (1, 1) memtile used  76,800 B of 524,288 ( 14.6%, headroom 447,488) stack     0 | a1_cons_buff_0 25,600, a1_cons_buff_1 25,600, o1_buff_0 12,800, o1_buff_1 12,800
+tile (1, 2) core    used  59,392 B of  65,536 ( 90.6%, headroom   6,144) stack 2,048 | psum_1_0 16,000, w1_0_cons_buff_0 9,472, w1_0_cons_buff_1 9,472, a1_0_cons_buff_0 6,400
+tile (1, 3) core    used  59,392 B of  65,536 ( 90.6%, headroom   6,144) stack 2,048 | psum_1_1 16,000, w1_1_cons_buff_0 9,472, w1_1_cons_buff_1 9,472, a1_1_cons_buff_0 6,400
+tile (1, 4) core    used  59,392 B of  65,536 ( 90.6%, headroom   6,144) stack 2,048 | psum_1_2 16,000, w1_2_cons_buff_0 9,472, w1_2_cons_buff_1 9,472, a1_2_cons_buff_0 6,400
+tile (1, 5) core    used  59,392 B of  65,536 ( 90.6%, headroom   6,144) stack 2,048 | psum_1_3 16,000, w1_3_cons_buff_0 9,472, w1_3_cons_buff_1 9,472, a1_3_cons_buff_0 6,400
+tile (2, 1) memtile used  76,800 B of 524,288 ( 14.6%, headroom 447,488) stack     0 | a2_cons_buff_0 25,600, a2_cons_buff_1 25,600, o2_buff_0 12,800, o2_buff_1 12,800
+tile (2, 2) core    used  59,392 B of  65,536 ( 90.6%, headroom   6,144) stack 2,048 | psum_2_0 16,000, w2_0_cons_buff_0 9,472, w2_0_cons_buff_1 9,472, a2_0_cons_buff_0 6,400
+tile (2, 3) core    used  59,392 B of  65,536 ( 90.6%, headroom   6,144) stack 2,048 | psum_2_1 16,000, w2_1_cons_buff_0 9,472, w2_1_cons_buff_1 9,472, a2_1_cons_buff_0 6,400
+tile (2, 4) core    used  59,392 B of  65,536 ( 90.6%, headroom   6,144) stack 2,048 | psum_2_2 16,000, w2_2_cons_buff_0 9,472, w2_2_cons_buff_1 9,472, a2_2_cons_buff_0 6,400
+tile (2, 5) core    used  59,392 B of  65,536 ( 90.6%, headroom   6,144) stack 2,048 | psum_2_3 16,000, w2_3_cons_buff_0 9,472, w2_3_cons_buff_1 9,472, a2_3_cons_buff_0 6,400
+tile (3, 1) memtile used  76,800 B of 524,288 ( 14.6%, headroom 447,488) stack     0 | a3_cons_buff_0 25,600, a3_cons_buff_1 25,600, o3_buff_0 12,800, o3_buff_1 12,800
+tile (3, 2) core    used  59,392 B of  65,536 ( 90.6%, headroom   6,144) stack 2,048 | psum_3_0 16,000, w3_0_cons_buff_0 9,472, w3_0_cons_buff_1 9,472, a3_0_cons_buff_0 6,400
+tile (3, 3) core    used  59,392 B of  65,536 ( 90.6%, headroom   6,144) stack 2,048 | psum_3_1 16,000, w3_1_cons_buff_0 9,472, w3_1_cons_buff_1 9,472, a3_1_cons_buff_0 6,400
+tile (3, 4) core    used  59,392 B of  65,536 ( 90.6%, headroom   6,144) stack 2,048 | psum_3_2 16,000, w3_2_cons_buff_0 9,472, w3_2_cons_buff_1 9,472, a3_2_cons_buff_0 6,400
+tile (3, 5) core    used  59,392 B of  65,536 ( 90.6%, headroom   6,144) stack 2,048 | psum_3_3 16,000, w3_3_cons_buff_0 9,472, w3_3_cons_buff_1 9,472, a3_3_cons_buff_0 6,400
+max core tile 59,392 B of 65,536; max MemTile 76,800 B of 524,288
+[rc] 0 in 0.1 s
+
+===== [5/18] memory report sesr_m7 =====
+$ C:\Users\<user>\miniforge3\envs\mlir-aie-iron\python.exe tools/engine_memory_report.py build/conv_engine/sesr_m7 --json results/model_zoo/memory_sesr_m7.json
+tile (0, 1) memtile used  76,800 B of 524,288 ( 14.6%, headroom 447,488) stack     0 | a0_cons_buff_0 25,600, a0_cons_buff_1 25,600, o0_buff_0 12,800, o0_buff_1 12,800
+tile (0, 2) core    used  59,392 B of  65,536 ( 90.6%, headroom   6,144) stack 2,048 | psum_0_0 16,000, w0_0_cons_buff_0 9,472, w0_0_cons_buff_1 9,472, a0_0_cons_buff_0 6,400
+tile (0, 3) core    used  59,392 B of  65,536 ( 90.6%, headroom   6,144) stack 2,048 | psum_0_1 16,000, w0_1_cons_buff_0 9,472, w0_1_cons_buff_1 9,472, a0_1_cons_buff_0 6,400
+tile (0, 4) core    used  59,392 B of  65,536 ( 90.6%, headroom   6,144) stack 2,048 | psum_0_2 16,000, w0_2_cons_buff_0 9,472, w0_2_cons_buff_1 9,472, a0_2_cons_buff_0 6,400
+tile (0, 5) core    used  59,392 B of  65,536 ( 90.6%, headroom   6,144) stack 2,048 | psum_0_3 16,000, w0_3_cons_buff_0 9,472, w0_3_cons_buff_1 9,472, a0_3_cons_buff_0 6,400
+tile (1, 1) memtile used  76,800 B of 524,288 ( 14.6%, headroom 447,488) stack     0 | a1_cons_buff_0 25,600, a1_cons_buff_1 25,600, o1_buff_0 12,800, o1_buff_1 12,800
+tile (1, 2) core    used  59,392 B of  65,536 ( 90.6%, headroom   6,144) stack 2,048 | psum_1_0 16,000, w1_0_cons_buff_0 9,472, w1_0_cons_buff_1 9,472, a1_0_cons_buff_0 6,400
+tile (1, 3) core    used  59,392 B of  65,536 ( 90.6%, headroom   6,144) stack 2,048 | psum_1_1 16,000, w1_1_cons_buff_0 9,472, w1_1_cons_buff_1 9,472, a1_1_cons_buff_0 6,400
+tile (1, 4) core    used  59,392 B of  65,536 ( 90.6%, headroom   6,144) stack 2,048 | psum_1_2 16,000, w1_2_cons_buff_0 9,472, w1_2_cons_buff_1 9,472, a1_2_cons_buff_0 6,400
+tile (1, 5) core    used  59,392 B of  65,536 ( 90.6%, headroom   6,144) stack 2,048 | psum_1_3 16,000, w1_3_cons_buff_0 9,472, w1_3_cons_buff_1 9,472, a1_3_cons_buff_0 6,400
+tile (2, 1) memtile used  76,800 B of 524,288 ( 14.6%, headroom 447,488) stack     0 | a2_cons_buff_0 25,600, a2_cons_buff_1 25,600, o2_buff_0 12,800, o2_buff_1 12,800
+tile (2, 2) core    used  59,392 B of  65,536 ( 90.6%, headroom   6,144) stack 2,048 | psum_2_0 16,000, w2_0_cons_buff_0 9,472, w2_0_cons_buff_1 9,472, a2_0_cons_buff_0 6,400
+tile (2, 3) core    used  59,392 B of  65,536 ( 90.6%, headroom   6,144) stack 2,048 | psum_2_1 16,000, w2_1_cons_buff_0 9,472, w2_1_cons_buff_1 9,472, a2_1_cons_buff_0 6,400
+tile (2, 4) core    used  59,392 B of  65,536 ( 90.6%, headroom   6,144) stack 2,048 | psum_2_2 16,000, w2_2_cons_buff_0 9,472, w2_2_cons_buff_1 9,472, a2_2_cons_buff_0 6,400
+tile (2, 5) core    used  59,392 B of  65,536 ( 90.6%, headroom   6,144) stack 2,048 | psum_2_3 16,000, w2_3_cons_buff_0 9,472, w2_3_cons_buff_1 9,472, a2_3_cons_buff_0 6,400
+tile (3, 1) memtile used  76,800 B of 524,288 ( 14.6%, headroom 447,488) stack     0 | a3_cons_buff_0 25,600, a3_cons_buff_1 25,600, o3_buff_0 12,800, o3_buff_1 12,800
+tile (3, 2) core    used  59,392 B of  65,536 ( 90.6%, headroom   6,144) stack 2,048 | psum_3_0 16,000, w3_0_cons_buff_0 9,472, w3_0_cons_buff_1 9,472, a3_0_cons_buff_0 6,400
+tile (3, 3) core    used  59,392 B of  65,536 ( 90.6%, headroom   6,144) stack 2,048 | psum_3_1 16,000, w3_1_cons_buff_0 9,472, w3_1_cons_buff_1 9,472, a3_1_cons_buff_0 6,400
+tile (3, 4) core    used  59,392 B of  65,536 ( 90.6%, headroom   6,144) stack 2,048 | psum_3_2 16,000, w3_2_cons_buff_0 9,472, w3_2_cons_buff_1 9,472, a3_2_cons_buff_0 6,400
+tile (3, 5) core    used  59,392 B of  65,536 ( 90.6%, headroom   6,144) stack 2,048 | psum_3_3 16,000, w3_3_cons_buff_0 9,472, w3_3_cons_buff_1 9,472, a3_3_cons_buff_0 6,400
+max core tile 59,392 B of 65,536; max MemTile 76,800 B of 524,288
+[rc] 0 in 0.1 s
+
+===== [6/18] onnx-cpu suite (Ignition live_ignition.py, 300 frames) =====
+$ C:\Users\<user>\miniforge3\envs\mlir-aie-iron\python.exe tools/model_zoo_bench.py run --suite onnx-cpu --ignition <Ignition>
+[suite] onnx-cpu: yolov8s_cut_xint8.onnx (300 frames, source bus.jpg)
+[suite]   rc 0 | G2G mean 83.659 ms P99 98.083 | RSS drift +0.19 MB
+[suite] onnx-cpu: yolo11n_no_c2psa_cut_xint8.onnx (300 frames, source bus.jpg)
+[suite]   rc 0 | G2G mean 35.793 ms P99 42.191 | RSS drift +0.02 MB
+[suite] onnx-cpu: sesr_m7_xint8.onnx (300 frames, source bus.jpg)
+[suite]   rc 0 | G2G mean 15.575 ms P99 19.644 | RSS drift -0.71 MB
+[suite] onnx-cpu: resnet50_xint8_c64.onnx (300 frames, source bus.jpg)
+[suite]   rc 0 | G2G mean 34.245 ms P99 41.040 | RSS drift +0.06 MB
+[suite] wrote results\benchmarks_onnx_cpu.json
+[rc] 0 in 54.7 s
+
+===== [7/18] verify yolov8n_full per layer =====
+$ C:\Program Files\Git\usr\bin\bash.EXE scripts/research-iron.sh tools/verify_engine_container.py --container build/yolov8n_full.ignite --model models/yolov8n_cut_xint8.onnx --iters 200 --json results/model_zoo/verify_yolov8n_full.json
+[xrt-smi before] idle=True: ----------------------------- | [003d:00:01.1] : NPU Phoenix | ----------------------------- | AIE Partitions | No hardware contexts running on device
+[verify] detect container yolov8n_full.ignite: 66 layers, reference in 0.5 s
+  L 0 /model.0/conv/Conv                           EXACT
+  L 1 /model.1/conv/Conv                           EXACT
+  L 2 /model.2/cv1/conv/Conv                       EXACT
+  L 3 /model.2/m.0/cv1/conv/Conv                   EXACT
+  L 4 /model.2/m.0/cv2/conv/Conv                   EXACT
+  L 5 /model.2/cv2/conv/Conv                       EXACT
+  L 6 /model.3/conv/Conv                           EXACT
+  L 7 /model.4/cv1/conv/Conv                       EXACT
+  L 8 /model.4/m.0/cv1/conv/Conv                   EXACT
+  L 9 /model.4/m.0/cv2/conv/Conv                   EXACT
+  L10 /model.4/m.1/cv1/conv/Conv                   EXACT
+  L11 /model.4/m.1/cv2/conv/Conv                   EXACT
+  L12 /model.4/cv2/conv/Conv                       EXACT
+  L13 /model.5/conv/Conv                           EXACT
+  L14 /model.6/cv1/conv/Conv                       EXACT
+  L15 /model.6/m.0/cv1/conv/Conv                   EXACT
+  L16 /model.6/m.0/cv2/conv/Conv                   EXACT
+  L17 /model.6/m.1/cv1/conv/Conv                   EXACT
+  L18 /model.6/m.1/cv2/conv/Conv                   EXACT
+  L19 /model.6/cv2/conv/Conv                       EXACT
+  L20 /model.7/conv/Conv                           EXACT
+  L21 /model.8/cv1/conv/Conv                       EXACT
+  L22 /model.8/m.0/cv1/conv/Conv                   EXACT
+  L23 /model.8/m.0/cv2/conv/Conv                   EXACT
+  L24 /model.8/cv2/conv/Conv                       EXACT
+  L25 /model.9/cv1/conv/Conv                       EXACT
+  L26 /model.9/m/MaxPool                           EXACT
+  L27 /model.9/m_1/MaxPool                         EXACT
+  L28 /model.9/m_2/MaxPool                         EXACT
+  L29 /model.9/cv2/conv/Conv                       EXACT
+  L30 /model.12/cv1/conv/Conv                      EXACT
+  L31 /model.12/m.0/cv1/conv/Conv                  EXACT
+  L32 /model.12/m.0/cv2/conv/Conv                  EXACT
+  L33 /model.12/cv2/conv/Conv                      EXACT
+  L34 /model.15/cv1/conv/Conv                      EXACT
+  L35 /model.15/m.0/cv1/conv/Conv                  EXACT
+  L36 /model.15/m.0/cv2/conv/Conv                  EXACT
+  L37 /model.15/cv2/conv/Conv                      EXACT
+  L38 /model.16/conv/Conv                          EXACT
+  L39 /model.22/cv2.0/cv2.0.0/conv/Conv            EXACT
+  L40 /model.22/cv3.0/cv3.0.0/conv/Conv            EXACT
+  L41 /model.22/cv2.0/cv2.0.1/conv/Conv            EXACT
+  L42 /model.22/cv3.0/cv3.0.1/conv/Conv            EXACT
+  L43 /model.18/cv1/conv/Conv                      EXACT
+  L44 /model.22/cv2.0/cv2.0.2/Conv                 EXACT
+  L45 /model.22/cv3.0/cv3.0.2/Conv                 EXACT
+  L46 /model.18/m.0/cv1/conv/Conv                  EXACT
+  L47 /model.18/m.0/cv2/conv/Conv                  EXACT
+  L48 /model.18/cv2/conv/Conv                      EXACT
+  L49 /model.19/conv/Conv                          EXACT
+  L50 /model.22/cv2.1/cv2.1.0/conv/Conv            EXACT
+  L51 /model.22/cv3.1/cv3.1.0/conv/Conv            EXACT
+  L52 /model.22/cv2.1/cv2.1.1/conv/Conv            EXACT
+  L53 /model.22/cv3.1/cv3.1.1/conv/Conv            EXACT
+  L54 /model.21/cv1/conv/Conv                      EXACT
+  L55 /model.22/cv2.1/cv2.1.2/Conv                 EXACT
+  L56 /model.22/cv3.1/cv3.1.2/Conv                 EXACT
+  L57 /model.21/m.0/cv1/conv/Conv                  EXACT
+  L58 /model.21/m.0/cv2/conv/Conv                  EXACT
+  L59 /model.21/cv2/conv/Conv                      EXACT
+  L60 /model.22/cv2.2/cv2.2.0/conv/Conv            EXACT
+  L61 /model.22/cv3.2/cv3.2.0/conv/Conv            EXACT
+  L62 /model.22/cv2.2/cv2.2.1/conv/Conv            EXACT
+  L63 /model.22/cv3.2/cv3.2.1/conv/Conv            EXACT
+  L64 /model.22/cv2.2/cv2.2.2/Conv                 EXACT
+  L65 /model.22/cv3.2/cv3.2.2/Conv                 EXACT
+[verify] 66/66 layers exact | first dispatch 8.887 ms | dispatch mean 7.328 ms, min 7.114, max 7.815 over 200
+[verify] PASS
+[rc] 0 in 2.6 s
+
+===== [8/18] verify yolov8s per layer =====
+$ C:\Program Files\Git\usr\bin\bash.EXE scripts/research-iron.sh tools/verify_engine_container.py --container build/yolov8s.ignite --model models/yolov8s_cut_xint8.onnx --iters 200 --json results/model_zoo/verify_yolov8s.json
+[xrt-smi before] idle=True: ----------------------------- | [003d:00:01.1] : NPU Phoenix | ----------------------------- | AIE Partitions | No hardware contexts running on device
+[verify] detect container yolov8s.ignite: 66 layers, reference in 1.0 s
+  L 0 /model.0/conv/Conv                           EXACT
+  L 1 /model.1/conv/Conv                           EXACT
+  L 2 /model.2/cv1/conv/Conv                       EXACT
+  L 3 /model.2/m.0/cv1/conv/Conv                   EXACT
+  L 4 /model.2/m.0/cv2/conv/Conv                   EXACT
+  L 5 /model.2/cv2/conv/Conv                       EXACT
+  L 6 /model.3/conv/Conv                           EXACT
+  L 7 /model.4/cv1/conv/Conv                       EXACT
+  L 8 /model.4/m.0/cv1/conv/Conv                   EXACT
+  L 9 /model.4/m.0/cv2/conv/Conv                   EXACT
+  L10 /model.4/m.1/cv1/conv/Conv                   EXACT
+  L11 /model.4/m.1/cv2/conv/Conv                   EXACT
+  L12 /model.4/cv2/conv/Conv                       EXACT
+  L13 /model.5/conv/Conv                           EXACT
+  L14 /model.6/cv1/conv/Conv                       EXACT
+  L15 /model.6/m.0/cv1/conv/Conv                   EXACT
+  L16 /model.6/m.0/cv2/conv/Conv                   EXACT
+  L17 /model.6/m.1/cv1/conv/Conv                   EXACT
+  L18 /model.6/m.1/cv2/conv/Conv                   EXACT
+  L19 /model.6/cv2/conv/Conv                       EXACT
+  L20 /model.7/conv/Conv                           EXACT
+  L21 /model.8/cv1/conv/Conv                       EXACT
+  L22 /model.8/m.0/cv1/conv/Conv                   EXACT
+  L23 /model.8/m.0/cv2/conv/Conv                   EXACT
+  L24 /model.8/cv2/conv/Conv                       EXACT
+  L25 /model.9/cv1/conv/Conv                       EXACT
+  L26 /model.9/m/MaxPool                           EXACT
+  L27 /model.9/m_1/MaxPool                         EXACT
+  L28 /model.9/m_2/MaxPool                         EXACT
+  L29 /model.9/cv2/conv/Conv                       EXACT
+  L30 /model.12/cv1/conv/Conv                      EXACT
+  L31 /model.12/m.0/cv1/conv/Conv                  EXACT
+  L32 /model.12/m.0/cv2/conv/Conv                  EXACT
+  L33 /model.12/cv2/conv/Conv                      EXACT
+  L34 /model.15/cv1/conv/Conv                      EXACT
+  L35 /model.15/m.0/cv1/conv/Conv                  EXACT
+  L36 /model.15/m.0/cv2/conv/Conv                  EXACT
+  L37 /model.15/cv2/conv/Conv                      EXACT
+  L38 /model.16/conv/Conv                          EXACT
+  L39 /model.22/cv2.0/cv2.0.0/conv/Conv            EXACT
+  L40 /model.22/cv3.0/cv3.0.0/conv/Conv            EXACT
+  L41 /model.22/cv2.0/cv2.0.1/conv/Conv            EXACT
+  L42 /model.22/cv3.0/cv3.0.1/conv/Conv            EXACT
+  L43 /model.18/cv1/conv/Conv                      EXACT
+  L44 /model.22/cv2.0/cv2.0.2/Conv                 EXACT
+  L45 /model.22/cv3.0/cv3.0.2/Conv                 EXACT
+  L46 /model.18/m.0/cv1/conv/Conv                  EXACT
+  L47 /model.18/m.0/cv2/conv/Conv                  EXACT
+  L48 /model.18/cv2/conv/Conv                      EXACT
+  L49 /model.19/conv/Conv                          EXACT
+  L50 /model.22/cv2.1/cv2.1.0/conv/Conv            EXACT
+  L51 /model.22/cv3.1/cv3.1.0/conv/Conv            EXACT
+  L52 /model.22/cv2.1/cv2.1.1/conv/Conv            EXACT
+  L53 /model.22/cv3.1/cv3.1.1/conv/Conv            EXACT
+  L54 /model.21/cv1/conv/Conv                      EXACT
+  L55 /model.22/cv2.1/cv2.1.2/Conv                 EXACT
+  L56 /model.22/cv3.1/cv3.1.2/Conv                 EXACT
+  L57 /model.21/m.0/cv1/conv/Conv                  EXACT
+  L58 /model.21/m.0/cv2/conv/Conv                  EXACT
+  L59 /model.21/cv2/conv/Conv                      EXACT
+  L60 /model.22/cv2.2/cv2.2.0/conv/Conv            EXACT
+  L61 /model.22/cv3.2/cv3.2.0/conv/Conv            EXACT
+  L62 /model.22/cv2.2/cv2.2.1/conv/Conv            EXACT
+  L63 /model.22/cv3.2/cv3.2.1/conv/Conv            EXACT
+  L64 /model.22/cv2.2/cv2.2.2/Conv                 EXACT
+  L65 /model.22/cv3.2/cv3.2.2/Conv                 EXACT
+[verify] 66/66 layers exact | first dispatch 18.276 ms | dispatch mean 16.793 ms, min 16.628, max 17.246 over 200
+[verify] PASS
+[rc] 0 in 5.1 s
+
+===== [9/18] verify sesr_m7 per layer =====
+$ C:\Program Files\Git\usr\bin\bash.EXE scripts/research-iron.sh tools/verify_engine_container.py --container build/sesr_m7.ignite --model models/sesr_m7_xint8.onnx --iters 200 --json results/model_zoo/verify_sesr_m7.json
+[xrt-smi before] idle=True: ----------------------------- | [003d:00:01.1] : NPU Phoenix | ----------------------------- | AIE Partitions | No hardware contexts running on device
+[verify] super_resolution container sesr_m7.ignite: 9 layers, reference in 0.5 s
+  L 0 /head/Conv                                   EXACT
+  L 1 /body.0/body.0.0/Conv                        EXACT
+  L 2 /body.1/body.1.0/Conv                        EXACT
+  L 3 /body.2/body.2.0/Conv                        EXACT
+  L 4 /body.3/body.3.0/Conv                        EXACT
+  L 5 /body.4/body.4.0/Conv                        EXACT
+  L 6 /body.5/body.5.0/Conv                        EXACT
+  L 7 /body.6/body.6.0/Conv                        EXACT
+  L 8 /tail/Conv                                   EXACT
+[verify] 9/9 layers exact | first dispatch 5.601 ms | dispatch mean 4.216 ms, min 4.102, max 4.818 over 200
+[verify] PASS
+[rc] 0 in 1.9 s
+
+===== [10/18] tests yolov8n_full (default budgets 8.0 / 9.5 ms) =====
+$ C:\Program Files\Git\usr\bin\bash.EXE scripts/research-iron.sh tests/test_npu_inference.py DetectHeadLayoutOffline CameraCaptureOffline NpuInferenceOnSilicon
+env: {"IGNITE_MODEL": "build/yolov8n_full.ignite"}
+[xrt-smi before] idle=True: ----------------------------- | [003d:00:01.1] : NPU Phoenix | ----------------------------- | AIE Partitions | No hardware contexts running on device
+
+[decode] synthetic heads: 5 detections, classes ['bus', 'car', 'person'], int8 path == float path
+
+[oracle] bus.jpg: 5 detections: person 0.90, person 0.88, person 0.88, person 0.50, bus 0.50
+
+[camera] index 99: MSMF not opened 0.05s; DSHOW not opened 0.00s; ANY not opened 0.05s; MSMF not opened 0.05s; DSHOW not opened 0.00s; ANY not opened 0.05s
+
+[silicon] heads present: six heads declared in head_layout, 1209600 of 1209600 egress bytes
+[silicon] IoU vs oracle per detection: [1.0, 1.0, 1.0, 1.0, 1.0]
+
+[silicon] 500 frames (1280x720 synthetic): G2G mean 7.806 ms median 7.797 p95 8.045 p99 8.166 max 8.370 | preprocess 0.370 | NPU 7.389 | postprocess 0.047 ms | boxes from ['npu'] | buffer objects allocated after warm-up: {'host_bo': 0, 'instr_bo': 0} | working set 302.8 -> 302.9 MB (+0.04 MB)
+
+[camera-tool] [Ignition] Initializing bare-metal detect pipeline (yolov8n_cut_xint8) on Device 0 from build\yolov8n_full.ignite ... | [Ignition] NPU heads present: six heads declared in head_layout, 1209600 of 1209600 egress bytes | [Ignition] boxes: npu | [Ignition] source: image <ignite-xdna>\assets\bus.jpg | [hud] frame 1/5 | Ignition yolov8n_cut_xint8 | Device 0 | G2G 11.20 ms | NPU  9.23 ms | loop   87.5 FPS | objects 5 | boxes: npu | NPU heads: present | [hud] frame 2/5 | Ignition yolov8n_cut_xint8 | Device 0 | G2G  8.01 ms | NPU  7.38 ms | loop   48.0 FPS | objects 5 | boxes: npu | NPU heads: present | [hud] frame 3/5 | Ignition yolov8n_cut_xint8 | Device 0 | G2G  7.98 ms | NPU  7.42 ms | loop   87.5 FPS | objects 5 | boxes: npu | NPU heads: present | [hud] frame 4/5 | Ignition yolov8n_cut_xint8 | Device 0 | G2G  7.84 ms | NPU  7.30 ms | loop   99.8 FPS | objects 5 | boxes: npu | NPU heads: present | [hud] frame 5/5 | Ignition yolov8n_cut_xint8 | Device 0 | G2G  8.10 ms | NPU  7.50 ms | loop  114.7 FPS | objects 5 | boxes: npu | NPU heads: present | [summary] frames 5 | warm-up 0 | source image | yolov8n_cut_xint8 (detect) | G2G mean 8.626 ms median 8.009 p95 10.580 p99 11.076 max 11.200 | boxes npu | 5.00 objects per frame | NPU heads present | [summary] stages (ms): host staging mean 0.558 p50 0.311 p99 1.492 | NPU dispatch mean 7.517 p50 7.240 p99 8.718 | egress readback mean 0.247 p50 0.198 p99 0.444 | NPU forward mean 7.765 p50 7.420 p99 9.163 | postprocess mean 0.304 p50 0.295 p99 0.422 | [Ignition] Hardware context released.
+[stderr]
+test_01_shipped_container_reports_heads_absent (__main__.DetectHeadLayoutOffline.test_01_shipped_container_reports_heads_absent) ... ok
+test_02_layout_rejects_malformed_declarations (__main__.DetectHeadLayoutOffline.test_02_layout_rejects_malformed_declarations) ... ok
+test_03_pack_unpack_round_trip_is_exact_and_zero_copy (__main__.DetectHeadLayoutOffline.test_03_pack_unpack_round_trip_is_exact_and_zero_copy) ... ok
+test_04_int8_pruning_matches_float_decode (__main__.DetectHeadLayoutOffline.test_04_int8_pruning_matches_float_decode) ... ok
+test_05_cpu_oracle_on_bus_jpg_decodes_person_and_bus (__main__.DetectHeadLayoutOffline.test_05_cpu_oracle_on_bus_jpg_decodes_person_and_bus) ... ok
+test_06_camera_manager_degrades_without_a_camera (__main__.CameraCaptureOffline.test_06_camera_manager_degrades_without_a_camera) ... [ WARN:0@0.000] global cap_ffmpeg_impl.hpp:1246 open VIDEOIO/FFMPEG: OpenCV should be configured with libavdevice to open a camera device
+ok
+test_07_image_source_and_property_readback (__main__.CameraCaptureOffline.test_07_image_source_and_property_readback) ... ok
+test_10_head_status_and_oracle_free_detections (__main__.NpuInferenceOnSilicon.test_10_head_status_and_oracle_free_detections) ... ok
+test_11_hundred_frames_no_buffer_growth_and_latency (__main__.NpuInferenceOnSilicon.test_11_hundred_frames_no_buffer_growth_and_latency)
+N_FRAMES continuous frames: no buffer objects allocated, < 5 MB working-set drift, G2G within budget. ... ok
+test_12_camera_tool_headless_on_bus_jpg (__main__.NpuInferenceOnSilicon.test_12_camera_tool_headless_on_bus_jpg) ... ok
+
+----------------------------------------------------------------------
+Ran 10 tests in 5.633s
+
+OK
+[rc] 0 in 6.1 s
+
+===== [11/18] tests yolov8s (300 frames, budgets 25 / 27 ms) =====
+$ C:\Program Files\Git\usr\bin\bash.EXE scripts/research-iron.sh tests/test_npu_inference.py NpuInferenceOnSilicon
+env: {"IGNITE_MODEL": "build/yolov8s.ignite", "IGNITE_TEST_FRAMES": "300", "IGNITE_G2G_MEAN_MS": "25", "IGNITE_G2G_P99_MS": "27"}
+[xrt-smi before] idle=True: ----------------------------- | [003d:00:01.1] : NPU Phoenix | ----------------------------- | AIE Partitions | No hardware contexts running on device
+
+[silicon] heads present: six heads declared in head_layout, 1209600 of 1209600 egress bytes
+[silicon] IoU vs oracle per detection: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+
+[silicon] 300 frames (1280x720 synthetic): G2G mean 17.348 ms median 17.310 p95 17.595 p99 17.732 max 17.880 | preprocess 0.376 | NPU 16.911 | postprocess 0.060 ms | boxes from ['npu'] | buffer objects allocated after warm-up: {'host_bo': 0, 'instr_bo': 0} | working set 349.4 -> 349.4 MB (+0.03 MB)
+
+[camera-tool] [Ignition] Initializing bare-metal detect pipeline (yolov8s_cut_xint8) on Device 0 from build\yolov8s.ignite ... | [Ignition] NPU heads present: six heads declared in head_layout, 1209600 of 1209600 egress bytes | [Ignition] boxes: npu | [Ignition] source: image <ignite-xdna>\assets\bus.jpg | [hud] frame 1/5 | Ignition yolov8s_cut_xint8 | Device 0 | G2G 21.45 ms | NPU 19.24 ms | loop   46.1 FPS | objects 6 | boxes: npu | NPU heads: present | [hud] frame 2/5 | Ignition yolov8s_cut_xint8 | Device 0 | G2G 17.96 ms | NPU 17.08 ms | loop   31.1 FPS | objects 6 | boxes: npu | NPU heads: present | [hud] frame 3/5 | Ignition yolov8s_cut_xint8 | Device 0 | G2G 18.10 ms | NPU 17.15 ms | loop   46.1 FPS | objects 6 | boxes: npu | NPU heads: present | [hud] frame 4/5 | Ignition yolov8s_cut_xint8 | Device 0 | G2G 17.96 ms | NPU 17.13 ms | loop   49.3 FPS | objects 6 | boxes: npu | NPU heads: present | [hud] frame 5/5 | Ignition yolov8s_cut_xint8 | Device 0 | G2G 17.82 ms | NPU 16.99 ms | loop   53.0 FPS | objects 6 | boxes: npu | NPU heads: present | [summary] frames 5 | warm-up 0 | source image | yolov8s_cut_xint8 (detect) | G2G mean 18.657 ms median 17.962 p95 20.777 p99 21.314 max 21.448 | boxes npu | 6.00 objects per frame | NPU heads present | [summary] stages (ms): host staging mean 0.705 p50 0.485 p99 1.561 | NPU dispatch mean 17.112 p50 16.761 p99 18.469 | egress readback mean 0.405 p50 0.319 p99 0.691 | NPU forward mean 17.518 p50 17.135 p99 19.158 | postprocess mean 0.434 p50 0.380 p99 0.596 | [Ignition] Hardware context released.
+[stderr]
+test_10_head_status_and_oracle_free_detections (__main__.NpuInferenceOnSilicon.test_10_head_status_and_oracle_free_detections) ... ok
+test_11_hundred_frames_no_buffer_growth_and_latency (__main__.NpuInferenceOnSilicon.test_11_hundred_frames_no_buffer_growth_and_latency)
+N_FRAMES continuous frames: no buffer objects allocated, < 5 MB working-set drift, G2G within budget. ... ok
+test_12_camera_tool_headless_on_bus_jpg (__main__.NpuInferenceOnSilicon.test_12_camera_tool_headless_on_bus_jpg) ... ok
+
+----------------------------------------------------------------------
+Ran 3 tests in 6.870s
+
+OK
+[rc] 0 in 7.3 s
+
+===== [12/18] tests sesr_m7 (500 frames, dispatch budget 1.5 ms) =====
+$ C:\Program Files\Git\usr\bin\bash.EXE scripts/research-iron.sh tests/test_npu_inference.py SuperResolutionOnSilicon
+[xrt-smi before] idle=True: ----------------------------- | [003d:00:01.1] : NPU Phoenix | ----------------------------- | AIE Partitions | No hardware contexts running on device
+
+[silicon-sr] bus.jpg -> (512, 512, 3): 0 of 786432 values differ from ONNX Runtime | dispatch 5.839 ms, readback 0.024, G2G 8.727 ms
+
+[silicon-sr] 500 frames (640x480 synthetic): G2G mean 6.558 ms p50 6.541 p95 7.060 p99 7.341 | dispatch mean 4.251 p50 4.210 p99 4.741 min 4.126 | preprocess 0.348 | readback 0.023 | postprocess 1.936 | buffer objects allocated after warm-up: {'host_bo': 0, 'instr_bo': 0} | working set +0.84 MB
+[stderr]
+test_20_image_matches_onnx_runtime (__main__.SuperResolutionOnSilicon.test_20_image_matches_onnx_runtime)
+Every pixel of the NPU image equals ONNX Runtime's (graph optimizations off) SESR output. ... ok
+test_21_frames_without_buffer_growth (__main__.SuperResolutionOnSilicon.test_21_frames_without_buffer_growth)
+SR_FRAMES continuous frames: no buffer objects allocated, < 5 MB working-set drift, no dispatch errors. ... ok
+test_22_dispatch_budget (__main__.SuperResolutionOnSilicon.test_22_dispatch_budget)
+Mean raw NPU dispatch within IGNITE_SR_DISPATCH_MS (default 1.5 ms). ... FAIL
+
+======================================================================
+FAIL: test_22_dispatch_budget (__main__.SuperResolutionOnSilicon.test_22_dispatch_budget)
+Mean raw NPU dispatch within IGNITE_SR_DISPATCH_MS (default 1.5 ms).
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "<ignite-xdna>\tests\test_npu_inference.py", line 626, in test_22_dispatch_budget
+    self.assertLessEqual(mean, SR_DISPATCH_BUDGET_MS,
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                         f"mean dispatch {mean:.3f} ms > {SR_DISPATCH_BUDGET_MS} ms")
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 4.250610800052527 not less than or equal to 1.5 : mean dispatch 4.251 ms > 1.5 ms
+
+----------------------------------------------------------------------
+Ran 3 tests in 3.787s
+
+FAILED (failures=1)
+[rc] 1 in 4.2 s
+
+===== [13/18] dispatch floor yolov8n_full =====
+$ C:\Program Files\Git\usr\bin\bash.EXE scripts/research-iron.sh tools/engine_dispatch_floor.py build/yolov8n_full.ignite --json results/model_zoo/dispatch_floor_yolov8n_full.json
+[xrt-smi before] idle=True: ----------------------------- | [003d:00:01.1] : NPU Phoenix | ----------------------------- | AIE Partitions | No hardware contexts running on device
+[floor] yolov8n_full_nop.ignite: 862 weight packets, ops before [0, 849, 2, 11] -> all NOP, 430,180 instruction bytes
+[dispatch] yolov8n_full.ignite (detect): 300 dispatches mean 7.386 ms p50 7.348 p95 7.766 p99 7.944 min 7.181 max 8.129 | 135.3 dispatches/s
+[dispatch] yolov8n_full_nop.ignite (detect): 300 dispatches mean 5.369 ms p50 5.315 p95 5.720 p99 5.852 min 5.208 max 5.921 | 186.1 dispatches/s
+[floor] yolov8n_full.ignite: dispatch 7.386 ms = non-compute floor 5.369 ms + core compute 2.017 ms
+[rc] 0 in 4.7 s
+
+===== [14/18] dispatch floor yolov8s =====
+$ C:\Program Files\Git\usr\bin\bash.EXE scripts/research-iron.sh tools/engine_dispatch_floor.py build/yolov8s.ignite --json results/model_zoo/dispatch_floor_yolov8s.json
+[xrt-smi before] idle=True: ----------------------------- | [003d:00:01.1] : NPU Phoenix | ----------------------------- | AIE Partitions | No hardware contexts running on device
+[floor] yolov8s_nop.ignite: 3114 weight packets, ops before [0, 3089, 4, 21] -> all NOP, 1,019,140 instruction bytes
+[dispatch] yolov8s.ignite (detect): 300 dispatches mean 16.932 ms p50 16.865 p95 17.288 p99 17.551 min 16.732 max 17.790 | 59.0 dispatches/s
+[dispatch] yolov8s_nop.ignite (detect): 300 dispatches mean 12.727 ms p50 12.663 p95 13.057 p99 13.320 min 12.513 max 13.434 | 78.5 dispatches/s
+[floor] yolov8s.ignite: dispatch 16.932 ms = non-compute floor 12.727 ms + core compute 4.205 ms
+[rc] 0 in 10.2 s
+
+===== [15/18] dispatch floor sesr_m7 =====
+$ C:\Program Files\Git\usr\bin\bash.EXE scripts/research-iron.sh tools/engine_dispatch_floor.py build/sesr_m7.ignite --json results/model_zoo/dispatch_floor_sesr_m7.json
+[xrt-smi before] idle=True: ----------------------------- | [003d:00:01.1] : NPU Phoenix | ----------------------------- | AIE Partitions | No hardware contexts running on device
+[floor] sesr_m7_nop.ignite: 18 weight packets, ops before [0, 17, 0, 1] -> all NOP, 144,880 instruction bytes
+[dispatch] sesr_m7.ignite (super_resolution): 300 dispatches mean 4.208 ms p50 4.184 p95 4.464 p99 4.590 min 4.096 max 5.019 | 237.5 dispatches/s
+[dispatch] sesr_m7_nop.ignite (super_resolution): 300 dispatches mean 2.530 ms p50 2.508 p95 2.690 p99 2.879 min 2.448 max 3.257 | 394.9 dispatches/s
+[floor] sesr_m7.ignite: dispatch 4.208 ms = non-compute floor 2.530 ms + core compute 1.679 ms
+[rc] 0 in 2.8 s
+
+===== [16/18] camera tool yolov8s (500 timed frames) =====
+$ C:\Program Files\Git\usr\bin\bash.EXE scripts/research-iron.sh tools/live_camera_ignition.py --model build/yolov8s.ignite --source assets/bus.jpg --headless --warmup 10 --frames 500 --json results/model_zoo/camera_yolov8s.json
+[xrt-smi before] idle=True: ----------------------------- | [003d:00:01.1] : NPU Phoenix | ----------------------------- | AIE Partitions | No hardware contexts running on device
+[Ignition] Initializing bare-metal detect pipeline (yolov8s_cut_xint8) on Device 0 from build/yolov8s.ignite ...
+[Ignition] NPU heads present: six heads declared in head_layout, 1209600 of 1209600 egress bytes
+[Ignition] boxes: npu
+[Ignition] source: image assets\bus.jpg
+[hud] frame 1/510 | Ignition yolov8s_cut_xint8 | Device 0 | G2G 20.63 ms | NPU 18.85 ms | loop   47.9 FPS | objects 6 | boxes: npu | NPU heads: present
+[hud] frame 2/510 | Ignition yolov8s_cut_xint8 | Device 0 | G2G 17.61 ms | NPU 16.93 ms | loop   33.1 FPS | objects 6 | boxes: npu | NPU heads: present
+[hud] frame 3/510 | Ignition yolov8s_cut_xint8 | Device 0 | G2G 17.50 ms | NPU 16.95 ms | loop   47.9 FPS | objects 6 | boxes: npu | NPU heads: present
+[hud] frame 100/510 | Ignition yolov8s_cut_xint8 | Device 0 | G2G 17.42 ms | NPU 16.84 ms | loop   55.1 FPS | objects 6 | boxes: npu | NPU heads: present
+[hud] frame 200/510 | Ignition yolov8s_cut_xint8 | Device 0 | G2G 17.65 ms | NPU 16.93 ms | loop   54.5 FPS | objects 6 | boxes: npu | NPU heads: present
+[hud] frame 300/510 | Ignition yolov8s_cut_xint8 | Device 0 | G2G 17.86 ms | NPU 17.21 ms | loop   54.6 FPS | objects 6 | boxes: npu | NPU heads: present
+[hud] frame 400/510 | Ignition yolov8s_cut_xint8 | Device 0 | G2G 17.75 ms | NPU 16.92 ms | loop   54.6 FPS | objects 6 | boxes: npu | NPU heads: present
+[hud] frame 500/510 | Ignition yolov8s_cut_xint8 | Device 0 | G2G 18.06 ms | NPU 17.21 ms | loop   53.3 FPS | objects 6 | boxes: npu | NPU heads: present
+[hud] frame 510/510 | Ignition yolov8s_cut_xint8 | Device 0 | G2G 17.67 ms | NPU 17.04 ms | loop   53.3 FPS | objects 6 | boxes: npu | NPU heads: present
+[summary] frames 500 | warm-up 10 | source image | yolov8s_cut_xint8 (detect) | G2G mean 17.665 ms median 17.619 p95 18.019 p99 18.152 max 18.582 | boxes npu | 6.00 objects per frame | NPU heads present
+[summary] stages (ms): host staging mean 0.360 p50 0.315 p99 0.555 | NPU dispatch mean 16.745 p50 16.736 p99 16.901 | egress readback mean 0.243 p50 0.216 p99 0.425 | NPU forward mean 16.989 p50 16.960 p99 17.267 | postprocess mean 0.316 p50 0.319 p99 0.540
+[summary] wrote results/model_zoo/camera_yolov8s.json
+[Ignition] Hardware context released.
+[rc] 0 in 10.1 s
+
+===== [17/18] camera tool sesr_m7 (500 timed frames) =====
+$ C:\Program Files\Git\usr\bin\bash.EXE scripts/research-iron.sh tools/live_camera_ignition.py --model build/sesr_m7.ignite --source assets/bus.jpg --headless --warmup 10 --frames 500 --json results/model_zoo/camera_sesr_m7.json
+[xrt-smi before] idle=True: ----------------------------- | [003d:00:01.1] : NPU Phoenix | ----------------------------- | AIE Partitions | No hardware contexts running on device
+[Ignition] Initializing bare-metal super_resolution pipeline (sesr_m7_xint8) on Device 0 from build/sesr_m7.ignite ...
+[Ignition] super-resolution x2: 256x256 -> 512x512 on the NPU
+[Ignition] source: image assets\bus.jpg
+[hud] frame 1/510 | sesr_m7_xint8 | G2G  8.63 ms | NPU 5.59 + 0.03 ms | loop  113.1 FPS | x2: 256x256 -> 512x512 on the NPU
+[hud] frame 2/510 | sesr_m7_xint8 | G2G  6.64 ms | NPU 4.18 + 0.02 ms | loop   97.7 FPS | x2: 256x256 -> 512x512 on the NPU
+[hud] frame 3/510 | sesr_m7_xint8 | G2G  6.72 ms | NPU 4.21 + 0.02 ms | loop  113.1 FPS | x2: 256x256 -> 512x512 on the NPU
+[hud] frame 100/510 | sesr_m7_xint8 | G2G  6.69 ms | NPU 4.18 + 0.03 ms | loop  143.9 FPS | x2: 256x256 -> 512x512 on the NPU
+[hud] frame 200/510 | sesr_m7_xint8 | G2G  6.54 ms | NPU 4.16 + 0.02 ms | loop  141.9 FPS | x2: 256x256 -> 512x512 on the NPU
+[hud] frame 300/510 | sesr_m7_xint8 | G2G  6.35 ms | NPU 4.14 + 0.02 ms | loop  144.9 FPS | x2: 256x256 -> 512x512 on the NPU
+[hud] frame 400/510 | sesr_m7_xint8 | G2G  6.90 ms | NPU 4.46 + 0.03 ms | loop  141.7 FPS | x2: 256x256 -> 512x512 on the NPU
+[hud] frame 500/510 | sesr_m7_xint8 | G2G  6.58 ms | NPU 4.40 + 0.03 ms | loop  142.0 FPS | x2: 256x256 -> 512x512 on the NPU
+[hud] frame 510/510 | sesr_m7_xint8 | G2G  6.35 ms | NPU 4.15 + 0.03 ms | loop  144.3 FPS | x2: 256x256 -> 512x512 on the NPU
+[summary] frames 500 | warm-up 10 | source image | sesr_m7_xint8 (super_resolution) | G2G mean 6.572 ms median 6.584 p95 7.041 p99 7.255 max 7.661 | output image 512x512x3 from the NPU
+[summary] stages (ms): host staging mean 0.364 p50 0.358 p99 0.635 | NPU dispatch mean 4.256 p50 4.206 p99 4.828 | egress readback mean 0.023 p50 0.022 p99 0.040 | NPU forward mean 4.279 p50 4.229 p99 4.849 | postprocess mean 1.929 p50 1.955 p99 2.510
+[summary] wrote results/model_zoo/camera_sesr_m7.json
+[Ignition] Hardware context released.
+[rc] 0 in 4.1 s
+
+===== [18/18] npu suite (Ignition live_ignition.py, 500 frames) =====
+$ C:\Users\<user>\miniforge3\envs\mlir-aie-iron\python.exe tools/model_zoo_bench.py run --suite npu --ignition <Ignition>
+env: {"PYTHONPATH": "<ignite-xdna>\\src"}
+[xrt-smi before] idle=True: ----------------------------- | [003d:00:01.1] : NPU Phoenix | ----------------------------- | AIE Partitions | No hardware contexts running on device
+[suite] npu: yolov8s.ignite (500 frames, source bus.jpg)
+[suite]   rc 0 | G2G mean 17.727 ms P99 18.354 | RSS drift +0.10 MB
+[suite] npu: sesr_m7.ignite (500 frames, source bus.jpg)
+[suite]   rc 0 | G2G mean 6.574 ms P99 7.368 | RSS drift +0.00 MB
+[suite] wrote results\benchmarks_npu_silicon.json
+[rc] 0 in 13.8 s
+
+===== summary =====
+| step | rc | NPU idle before | seconds |
+|---|---|---|---|
+| compile yolov8n_full | 0 |  | 13.1 |
+| compile yolov8s | 0 |  | 28.8 |
+| compile sesr_m7 | 0 |  | 7.7 |
+| memory report yolov8s | 0 |  | 0.1 |
+| memory report sesr_m7 | 0 |  | 0.1 |
+| onnx-cpu suite (Ignition live_ignition.py, 300 frames) | 0 |  | 54.7 |
+| verify yolov8n_full per layer | 0 | True | 2.6 |
+| verify yolov8s per layer | 0 | True | 5.1 |
+| verify sesr_m7 per layer | 0 | True | 1.9 |
+| tests yolov8n_full (default budgets 8.0 / 9.5 ms) | 0 | True | 6.1 |
+| tests yolov8s (300 frames, budgets 25 / 27 ms) | 0 | True | 7.3 |
+| tests sesr_m7 (500 frames, dispatch budget 1.5 ms) | 1 | True | 4.2 |
+| dispatch floor yolov8n_full | 0 | True | 4.7 |
+| dispatch floor yolov8s | 0 | True | 10.2 |
+| dispatch floor sesr_m7 | 0 | True | 2.8 |
+| camera tool yolov8s (500 timed frames) | 0 | True | 10.1 |
+| camera tool sesr_m7 (500 timed frames) | 0 | True | 4.1 |
+| npu suite (Ignition live_ignition.py, 500 frames) | 0 | True | 13.8 |
+# finished 2026-09-14 12:50:31 UTC

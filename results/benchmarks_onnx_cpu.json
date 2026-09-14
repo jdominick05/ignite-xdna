@@ -1,0 +1,222 @@
+{
+  "suite": "onnx-cpu",
+  "created_utc": "2026-09-14T12:49:17Z",
+  "frames": 300,
+  "warmup": 10,
+  "source": "<ignite-xdna>\\assets\\bus.jpg",
+  "ignite_xdna_commit": "v0.1.0-phoenix-npu-1-gd828678",
+  "ignition_commit": "v0.2.0-15-g91ace94",
+  "all_returncodes_zero": true,
+  "runs": [
+    {
+      "model_path": "models/yolov8s_cut_xint8.onnx",
+      "log": "results/model_zoo/onnx-cpu_yolov8s_cut_xint8.log",
+      "wall_s": 26.5,
+      "returncode": 0,
+      "schema": 1,
+      "created_utc": "2026-09-14T12:48:49Z",
+      "model": "<ignite-xdna>\\models\\yolov8s_cut_xint8.onnx",
+      "model_name": "yolov8s_cut_xint8.onnx",
+      "model_bytes": 11491426,
+      "task": "detect",
+      "backend": "onnxruntime-cpu",
+      "source": "image bus.jpg 810x1080",
+      "source_kind": "image",
+      "frames_requested": 300,
+      "warmup": 10,
+      "frames_processed": 310,
+      "frames_timed": 300,
+      "stop_reason": "frame limit",
+      "host": {
+        "hostname": "DESKTOP-CBL5NUA",
+        "processor": "AMD64 Family 25 Model 117 Stepping 2, AuthenticAMD",
+        "python": "3.13.15",
+        "numpy": "2.5.3",
+        "opencv": "5.0.0",
+        "cpu_count": 16,
+        "onnxruntime": "1.30.0"
+      },
+      "g2g_ms": {
+        "mean": 83.65870033352014,
+        "p50": 83.89604999683797,
+        "p95": 93.58970999746816,
+        "p99": 98.08345097902928,
+        "min": 66.49440000182949,
+        "max": 116.59330001566559,
+        "cold_first_frame": 81.56950000557117
+      },
+      "fps_from_mean": 11.953329372956116,
+      "stages_ms": {
+        "preprocess": 1.8994756672570172,
+        "network": 79.6089066658169,
+        "postprocess": 2.1479339996585622
+      },
+      "rss_mb": {
+        "first_timed": 202.40234375,
+        "end": 202.59375,
+        "drift": 0.19140625
+      },
+      "npu_frames": 0,
+      "detections_per_frame": 6.0
+    },
+    {
+      "model_path": "models/yolo11n_no_c2psa_cut_xint8.onnx",
+      "log": "results/model_zoo/onnx-cpu_yolo11n_no_c2psa_cut_xint8.log",
+      "wall_s": 11.8,
+      "returncode": 0,
+      "schema": 1,
+      "created_utc": "2026-09-14T12:49:01Z",
+      "model": "<ignite-xdna>\\models\\yolo11n_no_c2psa_cut_xint8.onnx",
+      "model_name": "yolo11n_no_c2psa_cut_xint8.onnx",
+      "model_bytes": 2809909,
+      "task": "detect",
+      "backend": "onnxruntime-cpu",
+      "source": "image bus.jpg 810x1080",
+      "source_kind": "image",
+      "frames_requested": 300,
+      "warmup": 10,
+      "frames_processed": 310,
+      "frames_timed": 300,
+      "stop_reason": "frame limit",
+      "host": {
+        "hostname": "DESKTOP-CBL5NUA",
+        "processor": "AMD64 Family 25 Model 117 Stepping 2, AuthenticAMD",
+        "python": "3.13.15",
+        "numpy": "2.5.3",
+        "opencv": "5.0.0",
+        "cpu_count": 16,
+        "onnxruntime": "1.30.0"
+      },
+      "g2g_ms": {
+        "mean": 35.79324066697154,
+        "p50": 35.818500007735565,
+        "p95": 40.77245500229765,
+        "p99": 42.19093100109603,
+        "min": 28.07510001002811,
+        "max": 42.507899983320385,
+        "cold_first_frame": 42.79420000966638
+      },
+      "fps_from_mean": 27.93823586146411,
+      "stages_ms": {
+        "preprocess": 1.9347856673994102,
+        "network": 31.899158666298415,
+        "postprocess": 1.956839333094346
+      },
+      "rss_mb": {
+        "first_timed": 156.6171875,
+        "end": 156.6328125,
+        "drift": 0.015625
+      },
+      "npu_frames": 0,
+      "detections_per_frame": 0.0
+    },
+    {
+      "model_path": "models/sesr_m7_xint8.onnx",
+      "log": "results/model_zoo/onnx-cpu_sesr_m7_xint8.log",
+      "wall_s": 5.2,
+      "returncode": 0,
+      "schema": 1,
+      "created_utc": "2026-09-14T12:49:06Z",
+      "model": "<ignite-xdna>\\models\\sesr_m7_xint8.onnx",
+      "model_name": "sesr_m7_xint8.onnx",
+      "model_bytes": 38567,
+      "task": "super_resolution",
+      "backend": "onnxruntime-cpu",
+      "source": "image bus.jpg 810x1080",
+      "source_kind": "image",
+      "frames_requested": 300,
+      "warmup": 10,
+      "frames_processed": 310,
+      "frames_timed": 300,
+      "stop_reason": "frame limit",
+      "host": {
+        "hostname": "DESKTOP-CBL5NUA",
+        "processor": "AMD64 Family 25 Model 117 Stepping 2, AuthenticAMD",
+        "python": "3.13.15",
+        "numpy": "2.5.3",
+        "opencv": "5.0.0",
+        "cpu_count": 16,
+        "onnxruntime": "1.30.0"
+      },
+      "g2g_ms": {
+        "mean": 15.575137665728107,
+        "p50": 15.202849986962974,
+        "p95": 18.836800003191456,
+        "p99": 19.644299000792667,
+        "min": 12.414600001648068,
+        "max": 19.902800006093457,
+        "cold_first_frame": 18.033700005616993
+      },
+      "fps_from_mean": 64.20488996385716,
+      "stages_ms": {
+        "preprocess": 0.5945243319729343,
+        "network": 12.945825333687631,
+        "postprocess": 2.034788000067541
+      },
+      "rss_mb": {
+        "first_timed": 148.56640625,
+        "end": 147.8515625,
+        "drift": -0.71484375
+      },
+      "npu_frames": 0,
+      "output_shape": [
+        512,
+        512,
+        3
+      ]
+    },
+    {
+      "model_path": "models/resnet50_xint8_c64.onnx",
+      "log": "results/model_zoo/onnx-cpu_resnet50_xint8_c64.log",
+      "wall_s": 11.0,
+      "returncode": 0,
+      "schema": 1,
+      "created_utc": "2026-09-14T12:49:17Z",
+      "model": "<ignite-xdna>\\models\\resnet50_xint8_c64.onnx",
+      "model_name": "resnet50_xint8_c64.onnx",
+      "model_bytes": 25670065,
+      "task": "classify",
+      "backend": "onnxruntime-cpu",
+      "source": "image bus.jpg 810x1080",
+      "source_kind": "image",
+      "frames_requested": 300,
+      "warmup": 10,
+      "frames_processed": 310,
+      "frames_timed": 300,
+      "stop_reason": "frame limit",
+      "host": {
+        "hostname": "DESKTOP-CBL5NUA",
+        "processor": "AMD64 Family 25 Model 117 Stepping 2, AuthenticAMD",
+        "python": "3.13.15",
+        "numpy": "2.5.3",
+        "opencv": "5.0.0",
+        "cpu_count": 16,
+        "onnxruntime": "1.30.0"
+      },
+      "g2g_ms": {
+        "mean": 34.24483233257585,
+        "p50": 34.393949987133965,
+        "p95": 39.3063199808239,
+        "p99": 41.03971400269074,
+        "min": 24.94750000187196,
+        "max": 41.82980000041425,
+        "cold_first_frame": 42.70900000119582
+      },
+      "fps_from_mean": 29.201486235595812,
+      "stages_ms": {
+        "preprocess": 0.9351966659111591,
+        "network": 33.22474433332294,
+        "postprocess": 0.08489133334175374
+      },
+      "rss_mb": {
+        "first_timed": 167.34765625,
+        "end": 167.40625,
+        "drift": 0.05859375
+      },
+      "npu_frames": 0,
+      "top1_class_counts": {
+        "654": 300
+      }
+    }
+  ]
+}

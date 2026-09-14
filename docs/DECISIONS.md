@@ -1681,3 +1681,18 @@ cached reference heads rather than `bo_out`.
   ([BENCHMARKS](BENCHMARKS.md#graph-engine-latency-from-192-to-79-ms-glass-to-glass-2026-09-14-desktop-2)).
   The margin is under 0.1 ms; the next levers are fewer fill tasks for multi-chunk rounds
   and less over-read per activation packet.
+- **One engine program for every model (2026-09-14).** YOLOv8s and SESR M7 run on the same
+  xclbin program as YOLOv8n; what a model needs goes into packet headers, the schedule and
+  the host, not into a new core program. The residual op gained per-operand left shifts
+  behind header flag 32 (yolov8s adds need the main branch shifted left; old packets keep
+  their meaning), DDR extents follow the container, maps the tile does not divide use
+  overlapping edge tiles, ReLU is an integer epilogue, and SESR's `DepthToSpace` runs on the
+  host. Tile memory is the same for every model
+  ([MODEL_ZOO_BENCHMARKS](MODEL_ZOO_BENCHMARKS.md#tile-memory-with-35-the-parameters)).
+- **Rejected: SRAM-resident weights for SESR (2026-09-14, from reading IRON, not built).**
+  An `init_values` ObjectFIFO serves its objects once and then blocks on its lock; replaying
+  per frame needs a DMA channel reset IRON does not wrap, and `disable_synchronization`
+  drops the locks on both ends. It would also not reach the 1.5 ms target: the same stream
+  with NOP weights dispatches in 2.53 ms, because the floor is the activation round trip
+  through DDR (7,436 activation packets a frame), not weight traffic (36 weight fills)
+  ([MODEL_ZOO_BENCHMARKS](MODEL_ZOO_BENCHMARKS.md#sesr-the-15-ms-dispatch-and-sram-resident-weights-are-not-met)).

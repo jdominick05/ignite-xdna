@@ -1,0 +1,15 @@
+$ C:\Users\<user>\miniforge3\envs\mlir-aie-iron\python.exe <Ignition>\live_ignition.py --model <ignite-xdna>\models\yolo11n_no_c2psa_cut_xint8.onnx --source <ignite-xdna>\assets\bus.jpg --headless --frames 300 --warmup 10 --json <ignite-xdna>\results\model_zoo\onnx-cpu_yolo11n_no_c2psa_cut_xint8.json
+[Ignition] loading <ignite-xdna>\models\yolo11n_no_c2psa_cut_xint8.onnx (ONNX model)
+[Ignition] task: detect
+[Ignition] ONNX Runtime CPU backend active
+[Ignition] source: image bus.jpg 810x1080
+[run] frame 100 | G2G 36.20 ms | 28 FPS | 0 objects | detect: onnxruntime
+[run] frame 200 | G2G 32.18 ms | 28 FPS | 0 objects | detect: onnxruntime
+[run] frame 300 | G2G 35.22 ms | 27 FPS | 0 objects | detect: onnxruntime
+[Ignition] shutdown: source released, window closed, NPU hardware context released
+[summary] stop: frame limit | 310 frames processed (10 warm-up, 300 timed) | 1 distinct source frames | image bus.jpg 810x1080
+[summary] G2G mean 35.793 ms | P50 35.819 | P95 40.772 | P99 42.191 | max 42.508 | over the last 300 timed frames; cold first frame 42.79 ms
+[summary] stage means (ms): preprocess 1.935 | ONNX Runtime 31.899 | decode+NMS 1.957
+[summary] boxes from ONNX Runtime | 0.00 detections per frame
+[summary] RSS 156.6 MB at the first timed frame, 156.6 MB at the end (+0.02 MB over 300 frames)
+[summary] wrote <ignite-xdna>\results\model_zoo\onnx-cpu_yolo11n_no_c2psa_cut_xint8.json
