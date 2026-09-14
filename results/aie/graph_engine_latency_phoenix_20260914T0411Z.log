@@ -1,0 +1,88 @@
+Graph engine latency work on Phoenix Device 0: where the YOLOv8n frame time went and what removed it
+machine=Desktop 2 (Ryzen 7 8700G), device=[003d:00:01.1] NPU Phoenix Device 0
+branch=worktree-npu-heads, starting from commit c5c2817 (per-round schedule, 19.2 ms witnessed glass-to-glass)
+preflight=every silicon run below started with xrt-smi examine -r aie-partitions reporting "No hardware contexts running on device"; host CPU busy 1.8-6.8 % before each glass-to-glass run
+probes=scratch scripts outside the repository that drive the committed modules (GraphSession, YoloPipeline, tests/test_engine_graph.py builds, XrtSiliconHarness); every schedule and kernel below was byte-exact on all 66 layers on Device 0, per layer and as one dispatch, before it was timed
+evidence tags: MEASURED = printed on Device 0 or the host; DERIVED = arithmetic on MEASURED numbers
+
+== 1. Starting point: container of c5c2817, predict_sync on 1280x720 synthetic frames, 200 frames [MEASURED]
+glass-to-glass mean 19.096 ms = preprocess 0.247 + input staging 6.124 + dispatch 11.291 + head readback 1.265 + postprocess 0.083 + rest 0.087
+input staging is numpy: int8 tensor -> uint8 lookup, moveaxis into the channel-blocked plane, bo.write (3.5 ms on a GraphSession alone)
+head readback is numpy: six transposes of channel-blocked heads into int8 NCHW
+buffer-object calls: 3.3 MB write 0.053 ms, 3.3 MB sync 0.027 ms, six head syncs 0.014 ms, six head reads 0.030 ms
+dispatch with real weights 11.432 ms mean; with every weight packet's op set to NOP (same tasks, same bytes, no core compute) 8.587 ms
+-> core compute ~2.85 ms of the frame, the rest is instructions and transport (DERIVED)
+
+== 2. Instruction cost [MEASURED]
+frame stream 776,012 B, 21,883 ops (5,455 tasks: BLOCKWRITE + DDR_PATCH + WRITE each, 2,759 MASKWRITE + TCT awaits)
+frame                              11.278 ms median
+frame + 10,000 BD-config BLOCKWRITEs 12.766 ms
+frame + 20,000                     14.262 ms   -> 149 ns per appended op
+ops-only stream, 1 op              0.252 ms    (fixed cost of one dispatch)
+ops-only stream, 10,000 ops        1.622 ms
+ops-only stream, 20,000 ops        3.052 ms    -> 140 ns per op
+-> the frame's 21,883 ops cost ~3.2 ms (DERIVED)
+
+== 3. Transport with NOP weights: one compile of the unchanged engine design, scenarios split at their barriers [MEASURED]
+fills 78.7 MB, 52 tasks of 64 objects    2.939 ms   26.8 GB/s
+fills 39.4 MB, 28 tasks                  1.565 ms
+fills 78.7 MB, 196 tasks of 16 objects   2.954 ms
+fills 78.7 MB, 772 tasks of 4 objects    2.984 ms   (task count is nearly free when the cores do not compute)
+fills 52.5 MB + drains 26.2 MB, 68 tasks 2.116 ms   (fill and drain channels run in parallel)
+weights 29.1 MB, 48 tasks of 64 packets  1.203 ms
+verifier limits found on the way: a task's repeat (outermost) dimension is at most 64 ("Size 3 exceeds the [1:64] range"),
+and only that dimension may have stride 0 ("Stride 2 must be a positive integer"); the queue push carries the repeat in bits 16-23
+
+== 4. Schedule and kernel steps: 66-layer single dispatch [MEASURED]
+step                                                                     tasks  instructions  real / NOP-weight dispatch
+per-round schedule (c5c2817)                                             5,455  776,012 B     11.43 / 8.59 ms
+coarse schedule: one repeat task per run of vertically adjacent quads for single-chunk fills and every drain (issued ahead
+  of its fills and held until they are issued), stride-0 repeated weight run per column, chunk repeats for stride-2 rounds,
+  per-quad upsample fills (header phases 0-3)                             3,303  472,276 B     10.40 / 6.95 ms
+  per-layer NOP cost: ~0.15 ms fixed per dispatch + ~1.4 us per task; largest compute L20 0.29 ms, L0 0.23 ms
+  variant: completion token on every fourth task                         3,303  441,300 B     10.91 / 7.34 ms (rejected)
++ 20x20 layers: one round per output group, which all went to column 0; groups now rotate over the four columns;
+  headers advertise only input blocks that hold real channels           3,303  474,652 B      8.20 / 5.63 ms
++ kernel: a tile row has five 4-pixel groups and pass (4, 4) computed group 4 twice; group 4 now has a single pass,
+  conv_pass always inlined, constant four-block loops                    3,303  474,652 B      7.55 / 5.67 ms
+  rejected kernel variants of the same change:
+    run-time dual/single branches and a run-time output-block bound: 1.4 KB stack frame (committed kernel 128 B) overflowed
+      the 1 KB core stack; the synthetic engine test timed out
+    outlined pass with per-block output guards (384 B frame, 2 KB stack): 12.19 / 5.60 ms
+    inlined pass with per-block output guards (160 B frame):              11.38 / 5.62 ms
+    -> the eight accumulators must stay in vector registers; the core stack is now 2 KB for margin
++ contiguous dimensions folded before merging (20x20 tensors without halo) 3,160 454,500 B     7.50-7.55 ms
++ one weight task per column for groups with one round in that column   2,972  430,180 B      7.23 ms mean in the pipeline
+compute (real - NOP): 2.85 -> 3.45 -> 2.57 -> 1.88 ms (DERIVED)
+
+== 5. Host path [MEASURED]
+native plane ingress into the mapped workspace buffer object (GraphSession.stage_image): 6.12 -> 0.37 ms per 1280x720 frame
+native head transposes reading the mapped workspace: 1.27 -> 0.16 ms
+byte equality: the native plane equals the quantized int8 preprocessor output for 1280x720, 1080x607, 640x640 and bus.jpg
+  (tests/test_graph_engine_offline.py test_10); on Device 0 the heads from direct ingress equal the heads from the tensor path
+OpenMP sweep, host only (plane ingress / six head transposes, medians):
+  1 thread 1.397 / 0.286 ms, 2 threads 0.707 / 0.158, 4 threads 0.602 / 0.097, 8 threads 0.453 / 0.095, 16 (default) 0.301 / 0.079
+reused XRT run object vs one run per dispatch: 7.369 vs 7.346 ms median, identical heads (kept: no per-frame run object)
+cached head views and scales, bound native ingress call, cached flags: ~0.1 ms per frame
+
+== 6. Glass-to-glass progression: predict_sync(use_oracle_for_boxes=False), 1280x720 synthetic frames [MEASURED]
+start (200 frames)                                           19.096 ms mean
+coarse schedule + native ingress and readback (300 frames)  11.127 ms mean, p99 11.565
++ balanced columns, trimmed inputs, kernel fix (500 frames)   8.213 ms mean, p99 8.637
++ contiguous folding (500 frames)                              8.107 ms mean, p99 8.608
++ host hot-path trims (500 frames)                             7.940 ms mean, p99 8.347
++ merged weight tasks (500 frames)                             7.849 ms mean, p99 8.189; dispatch 7.225 ms
+witnessed test_11 on the final code: 7.898 ms mean, p99 8.270 ms (npu_inference_graph_engine_phoenix_20260914T0426Z.log)
+
+== 7. Live camera (index 0 via MSMF, 640x480 at 30 fps, contiguous frames) [MEASURED]
+tools/live_camera_ignition.py --headless --frames 60 --boxes npu before the two changes below: 8.134 ms mean (60 frames), 8.210 ms (120 frames)
+predict_sync split on 200 camera frames: preprocess 0.429, NPU 7.442, postprocess 0.351 ms (0.085 on random frames); ~6 objects per frame
+stage_image on a camera frame 0.364 ms median, the same as on a contiguous copy (no copy is made) and as on 1280x720 synthetic frames
+postprocess replayed on 40 captured camera frames: 0.167 ms median in total (prune 0.039, candidate gather 0.033, DFL 0.016, others < 0.014)
+blocking run.wait() vs polling run.state(): dispatch 7.237 vs 7.237 ms mean, decode 0.311 vs 0.313 ms (no idle-state effect)
+-> the live decode paid for its first read of 672 KB of class logits right after worker threads wrote them (DERIVED)
+changes: per-anchor class maxima computed natively during readback (8,400 B for the decoder's prune instead of the class
+  tensors; identical detections, tests/test_graph_engine_offline.py test_12), and an identity-resize lookup copy when the frame
+  needs no scaling (byte-identical, test_10 includes a 640x480 frame)
+after: 7.702 ms mean, median 7.617, p95 7.966 (60 frames, unwitnessed); witnessed run with preflight and CPU sample:
+  7.929 ms mean, median 7.869, p95 8.158, NPU 7.474 ms (camera_npu_boxes_phoenix_20260914T0426Z.log)

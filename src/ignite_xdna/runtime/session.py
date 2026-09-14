@@ -18,6 +18,7 @@ from typing import Dict, Any, Optional, Union, Tuple, List
 import numpy as np
 
 from .driver import XrtSiliconHarness, setup_xrt_environment, get_repo_root
+from .heads import HEAD_NAMES, HeadStatus, resolve_head_layout
 from .parity import unblock_aie2_egress
 from .ring_scheduler import BufferSet, profile_pipelined_hardware_execution
 
@@ -1156,28 +1157,35 @@ class InferenceSession:
         return_timestamps: bool = False,
     ) -> Union[Dict[str, np.ndarray], Tuple[Dict[str, np.ndarray], Any]]:
         """
-        Direct hardware execution of the complete end-to-end YOLOv8n network across physical Phoenix silicon:
-          - Ingests image [1, 3, 640, 640] ONCE via bo_in.sync
-          - Chained monolithic pipeline stages:
-            * Stage 1: Backbone (Stem, P3, P4, P5)
-            * Stage 2: Neck (Neck_FPN, Neck_PAN)
-            * Stage 3: Detect Heads (Detect_P3, Detect_P4, Detect_P5)
-          - Emits raw prediction heads ONCE via bo_out.sync
-          - Strictly 0 bytes intermediate DDR traffic across all 23 layers!
-          - Returns formatted dictionary of raw head tensors:
+        Dispatches the container's exec stream once (input via bo_in, egress via
+        bo_out) and returns the device egress together with the six raw
+        detection heads when the container declares where they live:
+
             {
-                "p3_box": np.ndarray (1, 64, 80, 80),
-                "p3_cls": np.ndarray (1, 80, 80, 80),
-                "p4_box": np.ndarray (1, 64, 40, 40),
-                "p4_cls": np.ndarray (1, 80, 40, 40),
-                "p5_box": np.ndarray (1, 64, 20, 20),
-                "p5_cls": np.ndarray (1, 80, 20, 20),
-                "raw_output": np.ndarray,
+                "p3_box" … "p5_cls": int8 views into the egress, or None,
+                "scales": {name: (scale, zero_point)} when the heads are present,
+                "heads_present": bool,
+                "head_status": str,      # why, either way (see runtime/heads.py)
+                "raw_output": np.ndarray # egress, unswizzled when `unswizzle`
+                "raw_heads": np.ndarray  # alias of raw_output (int8, no scaling)
             }
+
+        The heads are zero-copy ``reshape`` views of the egress bytes and stay
+        int8; ``YoloDecoder.postprocess`` prunes them in the int8 domain and
+        dequantizes survivors. ``heads_present`` is False unless the manifest
+        carries ``output_shapes`` and a ``head_layout`` that fits the session's
+        ``out_bytes`` — the runtime never guesses a packing order. The shipped
+        ``build/yolov8n.ignite`` resolves as absent: its stage streams are the
+        single-layer conv0 template and the egress is 4,096 bytes
+        (docs/LOW_LEVEL_AUDIT.md §1.5), so every head is None and the pipeline
+        reports no detections rather than decoding zeros.
         """
+        status = self.head_status
+        # Head views are cut from the raw egress bytes; the conv0 unswizzle only
+        # describes the single-layer template's 4 px x 32 ch patch layout.
         res = self._execute_monolithic_stages(
             input_tensor,
-            unswizzle=unswizzle,
+            unswizzle=unswizzle and not status.present,
             timeout_ms=timeout_ms,
             return_timestamps=return_timestamps,
             extract_feature_maps=False,
@@ -1189,23 +1197,27 @@ class InferenceSession:
             out = res
             hw_ts = None
 
-        if not hasattr(self, "_cached_zero_heads") or self._cached_zero_heads is None:
-            self._cached_zero_heads = {
-                "p3_box": np.zeros((1, 64, 80, 80), dtype=np.float32),
-                "p3_cls": np.zeros((1, 80, 80, 80), dtype=np.float32),
-                "p4_box": np.zeros((1, 64, 40, 40), dtype=np.float32),
-                "p4_cls": np.zeros((1, 80, 40, 40), dtype=np.float32),
-                "p5_box": np.zeros((1, 64, 20, 20), dtype=np.float32),
-                "p5_cls": np.zeros((1, 80, 20, 20), dtype=np.float32),
-            }
-
-        head_outputs = dict(self._cached_zero_heads)
+        head_outputs: Dict[str, Any] = {name: None for name in HEAD_NAMES}
+        if status.present:
+            head_outputs.update(status.layout.unpack(out))
+            head_outputs["scales"] = status.layout.scales()
+        head_outputs["heads_present"] = status.present
+        head_outputs["head_status"] = status.reason
         head_outputs["raw_output"] = out
-        head_outputs["raw_heads"] = out.astype(np.float32) * 0.03125
+        head_outputs["raw_heads"] = out
 
         if return_timestamps:
             return head_outputs, hw_ts
         return head_outputs
+
+    @property
+    def head_status(self) -> HeadStatus:
+        """Whether this session's egress carries the six raw detect heads, and why."""
+        cached = getattr(self, "_head_status", None)
+        if cached is None:
+            cached = resolve_head_layout(self.ignite_manifest, self.out_bytes)
+            self._head_status = cached
+        return cached
 
     @staticmethod
     def decode_yolo_predictions(
@@ -1218,15 +1230,21 @@ class InferenceSession:
           - Applies Sigmoid activation to 80 class logits
           - Concatenates across 8400 anchors (6400 @ P3, 1600 @ P4, 400 @ P5)
         """
-        p3_box = head_outputs.get("p3_box")
-        p4_box = head_outputs.get("p4_box")
-        p5_box = head_outputs.get("p5_box")
-        p3_cls = head_outputs.get("p3_cls")
-        p4_cls = head_outputs.get("p4_cls")
-        p5_cls = head_outputs.get("p5_cls")
+        scales = head_outputs.get("scales")
 
-        boxes = [p3_box, p4_box, p5_box]
-        clses = [p3_cls, p4_cls, p5_cls]
+        def _as_float(name: str) -> Optional[np.ndarray]:
+            t = head_outputs.get(name)
+            if t is None:
+                return None
+            if t.dtype == np.int8:
+                if scales is None:
+                    raise ValueError(f"{name} is int8 but head_outputs carries no 'scales'")
+                s, zp = scales[name]
+                return (t.astype(np.float32) - np.float32(zp)) * np.float32(s)
+            return t
+
+        boxes = [_as_float("p3_box"), _as_float("p4_box"), _as_float("p5_box")]
+        clses = [_as_float("p3_cls"), _as_float("p4_cls"), _as_float("p5_cls")]
         out_preds = []
         dfl_weights = np.arange(16, dtype=np.float32)
 
@@ -1483,7 +1501,16 @@ class InferenceSession:
     ) -> "InferenceSession":
         """
         Loads a compiled .ignite model container directly with zero-copy memory-mapped buffers.
+
+        A graph-engine container (manifest ``engine == "conv_engine_v1"``) is
+        served by ``GraphSession``, which runs the whole network on the NPU.
         """
+        from ignite_xdna.compiler.serializer import IgniteModelReader as _Reader
+        from ignite_xdna.runtime.graph_session import GraphSession, is_graph_container
+        with _Reader(ignite_path) as reader:
+            manifest = reader.manifest
+        if is_graph_container(manifest):
+            return GraphSession(ignite_path, device_index=device_index)
         return cls(
             model_path_or_bundle=ignite_path,
             device_index=device_index,

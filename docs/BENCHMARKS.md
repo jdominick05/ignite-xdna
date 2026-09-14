@@ -7632,3 +7632,260 @@ remaining blocker to multi-core output transport or packet scheduling. They do n
 provide silicon parity or a latency result for the 8,400-anchor design, so the `<300 us`
 gate remains open. The checkpoint is in
 [`results/aie/dfl_decode_phoenix_transport_checkpoint_20260913T0950Z.log`](../results/aie/dfl_decode_phoenix_transport_checkpoint_20260913T0950Z.log).
+
+## Oracle-free YOLOv8n path: no detect heads in the shipped container's egress (2026-09-13, Desktop 2)
+
+`YoloPipeline.predict_sync(img, use_oracle_for_boxes=False)` was meant to draw boxes
+from the NPU alone. It never could with the shipped `build/yolov8n.ignite`, and until
+this change it hid that: `InferenceSession.run_yolo_monolithic` returned six zero-filled
+float tensors as the heads (plus the egress scaled by a made-up `0.03125`), and
+`postprocess` mapped the all-zero box head to an empty list. The reason is structural,
+not a decoding gap. The session allocates a **4,096-byte** egress for the 16-core
+template (`session.py`, `out_bytes`), the manifest's `output_shapes` declare six heads
+totalling **1,209,600** int8 values, and every stage stream in the container is the
+single-layer conv0 template ([low-level audit, §1.5](LOW_LEVEL_AUDIT.md#15-documented-stream-unchanged)).
+There is nothing in `bo_out` to slice.
+
+What changed (branch `worktree-npu-heads`):
+
+- `runtime/heads.py` resolves a head layout only from a manifest that declares
+  `output_shapes` **and** a `head_layout` (per-head egress offset, dequantization scale
+  and zero point) whose six ranges are disjoint and fit the session's egress. Anything
+  less is `HeadStatus(present=False)` with the reason spelled out; the runtime does not
+  guess a packing order, so a container that merely had a large enough egress would
+  still resolve as absent. Unpacking is zero-copy (`reshape` views of the int8 egress,
+  checked with `np.shares_memory`).
+- `run_yolo_monolithic` returns `heads_present`, `head_status`, int8 head views plus
+  `scales` when present, and `None` per head otherwise. `predict_sync` records where the
+  boxes came from in `PipelineTimings.head_source` (`npu`, `oracle`, `none`) and warns
+  once when it is `none`. `ignite_xdna.load(...)` exposes the same as `engine.head_status`.
+- `YoloDecoder.postprocess` (the device-free half of the pipeline, now a base class of
+  `YoloPipeline`) prunes int8 heads in the int8 domain — the confidence threshold is
+  mapped to a quantized logit — and dequantizes survivors only.
+
+**Offline checks** (`tests/test_npu_inference.py`, `resnet_env17`, no device): the shipped
+manifest resolves as absent (1,209,600 declared vs 4,096 egress, no `head_layout`) and
+stays absent at 1,209,600 egress bytes; a synthetic `head_layout` packs and unpacks
+exactly and zero-copy; on synthetic heads carrying five objects the int8 path returns the
+same five detections as the float path (person ×3, car, bus; identical scores and boxes);
+the ONNX Runtime **CPU** oracle over `models/yolov8n_cut_xint8.onnx` on `assets/bus.jpg`,
+fed through the same `FusedPreprocessor`, decodes five detections — person 0.90, 0.88,
+0.88, 0.50 and bus 0.50 — which pins the preprocess → postprocess chain the NPU path
+would feed. That is a CPU result; no NPU figure follows from it.
+
+**On silicon** (`results/aie/npu_inference_oracle_free_phoenix_20260913T2050Z.log`;
+Device 0, ironenv Python 3.13, `xrt-smi examine -r aie-partitions` reported "No hardware
+contexts running" immediately before, host CPU 5.5 % busy before and 6.6 % after):
+
+| Check | Result |
+|---|---|
+| Head status of the shipped container | absent: "manifest declares no head_layout … Heads need 1209600 bytes, egress is 4096 bytes"; `predict_sync(…, use_oracle_for_boxes=False)` returns `[]` with `head_source == "none"`, and every head in `run_yolo_monolithic` is `None` |
+| ≥ 4 detections oracle-free, IoU ≥ 0.70 vs the oracle | **skipped by the suite, not passed** — there are no heads to decode |
+| 100 consecutive `predict_sync` frames, 1280×720 synthetic, after 10 warm-up | glass-to-glass **mean 1.015 ms**, median 1.007, p95 1.076, p99 1.159, max 1.199; preprocess 0.295 ms, NPU dispatch 0.720 ms, postprocess 0.001 ms |
+| Buffer objects allocated during those 100 frames | 0 host BOs, 0 instruction BOs (`create_host_bo` / `create_instruction_bo_from_bytes` counted); working set 266.9 → 266.9 MB (+0.02 MB) |
+| `tools/live_camera_ignition.py --source assets/bus.jpg --headless --frames 5 --boxes npu` | exit 0, five HUD lines, "NPU heads absent (4096 B egress, 1209600 B declared)", G2G mean 1.511 ms (median 1.163) with a 2.88 ms first frame, NPU mean 0.845 ms, no camera error |
+
+The 1.015 ms is the latency of preprocess + one NPU dispatch + an **empty** decode: the
+postprocess stage saw no candidates. It is not a detection pipeline's glass-to-glass
+figure and must not be quoted against the "< 2 ms with boxes" target, which stays
+unmet. A container that lowers the detect heads and writes a `head_layout` is what
+would let the skipped check run; the runtime, decoder and test are in place for it.
+
+The camera side (`tools/live_camera_ignition.py`, now tracked): `CameraManager` probes
+indices 0 and 1 across `CAP_MSMF → CAP_DSHOW → CAP_ANY`, each attempt in a worker thread
+with a timeout so a backend that blocks on an IR sensor is abandoned; every requested
+property (`FOURCC`, width, height, FPS) goes through a read-back check and a refused
+one keeps the sensor default instead of raising; `OPENCV_VIDEOIO_MSMF_ENABLE_HW_TRANSFORMS=0`
+sits above the first `cv2` import as the [camera-open measurement](#a-live-demo-does-the-multi-partition-finding-hold-on-a-real-webcam)
+requires. `--source` takes a webcam index list, a video file or a still image; `--boxes
+auto` uses the NPU heads when present and otherwise the CPU oracle, labelled as such on
+the HUD. The index-99 probe (three backends, no camera) completes in 0.16 s without
+raising in both OpenCV builds on this machine (4.11 and 5.0).
+
+## Whole-network YOLOv8n on a 16-core convolution engine: every layer on the NPU, bit-exact (2026-09-13, Desktop 2)
+
+The previous section established that the shipped container computes no detect heads.
+This one replaces the transaction patcher with a compiler that lowers the whole
+`models/yolov8n_cut_xint8.onnx` graph — 63 convolutions and the three SPPF pools — onto
+one persistent 16-core program, so `predict_sync(img, use_oracle_for_boxes=False)` decodes
+heads the NPU produced (`head_source == "npu"`). Branch `worktree-npu-heads`;
+evidence `results/aie/graph_engine_yolov8n_phoenix_20260913T2210Z.log` (bring-up transcripts) and
+`results/aie/npu_inference_graph_engine_phoenix_20260914T0233Z.log` (the witnessed suite on the final container).
+
+**Design** (`kernels/aie2/conv_engine/`, `src/ignite_xdna/compiler/graph_ir.py`,
+`engine_schedule.py`, `engine_sequence.py`, `engine_compile.py`, `runtime/graph_session.py`):
+
+- One xclbin. Each core runs the same program forever: acquire a weight packet, read its
+  header, process the activation packets it announces, release. A weight packet is
+  9,472 B (128 B header, 32 int32 biases, up to 9,216 B of int8 weights); an activation
+  packet is always 6,400 B; an output object is always four 8-channel blocks of a
+  5 × 20-pixel tile (3,200 B). Per column the weights are broadcast from the shim to
+  the four cores, activations are split at the MemTile, outputs are joined there.
+  Weights therefore stream from DDR through the MemTile into core memory with the
+  ObjectFIFO's own lock ping-pong; nothing is resident.
+- Activations live in one DDR workspace (22.0 MB for this model, MEASURED by the
+  planner) in a channel-blocked `[block][H+2h][W+2h][8]` uint8 layout with a halo ring
+  the runtime fills once (128, the zero point, for 3 × 3 consumers; 0 for the max-pool
+  inputs). Padding, C2f split/concat, the neck concats and the 2 × upsample are then
+  addressing: a conv reads channel-block ranges of one or two tensors, the up-sampled
+  segment is read at half resolution and duplicated in core memory. Every tensor's
+  height is a multiple of 20 and width of 20, so tiles are 5 × 20 everywhere and four
+  vertically adjacent tiles form one round (one packet per core of a column).
+- The fixed packet size is met by over-reading into junk planes the planner reserves
+  after every tensor (a 3 × 3 chunk reads 8 rows × 25 px of 4 blocks for the 7 × 22 it
+  needs; a stride-2 chunk 16 × 50 px of one block; 1 × 1 chunks are exact). Output
+  blocks past a tensor's real channels land in those junk planes too. Input channels
+  are chunked (4 blocks for 3 × 3, 8 for 1 × 1, 1 for stride 2) and partial sums stay in
+  a 16,000-byte core scratch between chunks; a residual add is one more packet
+  carrying the skip tile; SPPF's 5 × 5 pool is two packets per tile.
+- Arithmetic is the model's: uint8 × int8 into int32, the bias rescaled by the exact
+  power-of-two ratio, minus 128 × Σw, round-half-even shift to uint8; the Quark
+  HardSigmoid chain after each conv is a function of one uint8 and is reproduced by an
+  integer epilogue whose constants the compiler fits per layer against a float32
+  re-evaluation of the ONNX chain — **exact for all 57 activated layers** (MEASURED,
+  `graph_ir.fit_hardswish`). The residual add's one-bit rescale (two of the six adds)
+  is exact by construction.
+- The instruction stream is the whole frame: raw shim DMA tasks, at most 14 live
+  buffer descriptors per shim (the verifier's limit is 16) and at most four pending
+  tasks per channel (the start-queue depth; see the hangs below), a completion token on
+  every second task of a channel (each `dma_await_task` consumes exactly one token, so
+  tokened tasks are awaited exactly once, in order, and untokened ones are freed on the
+  strength of the next awaited task of the same channel), one 4-D task per round for
+  the four cores' activation packets, one task streaming a round's weight packets, one
+  task draining two vertically adjacent rounds, a layer barrier between layers. It can be cut at layer boundaries by op count into
+  per-layer streams without recompiling (`engine_sequence.split_instruction_stream`),
+  which is how layers are verified and timed individually.
+- `ignite-compile --engine graph` (the default) builds the engine with IRON/aiecc/Peano
+  (54 s MEASURED for the whole model, of which the 16 core ELFs are the bulk) and writes
+  a container holding the xclbin, the stream, the static weight packets (8.08 MB, 2,777
+  packets deduplicated) and a `head_layout` for the int8 NCHW egress the runtime
+  assembles from the six head tensors (uint8 → int8 by flipping the top bit, so the
+  contract's zero point is 0). `InferenceSession.from_file` routes such a container to
+  `GraphSession`; `YoloPipeline`, `tools/live_camera_ignition.py` and
+  `tests/test_npu_inference.py` are unchanged apart from defaulting to it.
+
+**Exactness** — three independent oracles agree to the byte:
+
+| Check | Result |
+|---|---|
+| Direct integer reference (`graph_reference.run_direct`) vs ONNX Runtime's own uint8 intermediates on `bus.jpg` | **66 of 66 layers: max abs diff 0** (MEASURED, offline) |
+| Packet-level emulation through the exact DMA descriptors and packet headers vs the direct reference | **66 of 66 layers EXACT** (MEASURED, offline, 20 s) |
+| Device 0: every packet kind on synthetic data (3 × 3 + HardSwish, chunked 1 × 1, stride 2, up2, hold + residual, two-packet pool), 3 iterations | **bit-exact against the emulator on all 16 cores** (MEASURED) |
+| Device 0: the first three real layers, two dispatches | EXACT; 6.76 / 5.42 ms for 384 rounds (MEASURED) |
+| Device 0: all 66 layers, one dispatch per layer | **66 of 66 EXACT** (MEASURED, transcript excerpt in the log) |
+| Device 0: `tests/test_npu_inference.py` test_10 on the container | heads present (1,209,600 of 1,209,600 egress bytes), oracle-free `predict_sync` returns **5 detections** on `bus.jpg`, **IoU 1.0 against the CPU oracle for every one** (MEASURED) |
+| Device 0: `tools/live_camera_ignition.py --source assets/bus.jpg --headless --frames 5 --boxes npu` | exit 0, five HUD lines, `objects 5 | boxes: npu | NPU heads: present`, no oracle (MEASURED) |
+
+**Latency** (MEASURED, single dispatch of the 66-layer stream, Device 0):
+
+| Stream (each step keeps all 66 layers byte-exact) | Instruction stream | NPU dispatch, 66 layers |
+|---|---|---|
+| one task per core packet, every task awaited | 2,816,224 B (85,860 ops) | 40.5, 38.6, 38.5 ms |
+| one 4-D task per round for the four cores | 1,282,660 B | 20.0, 18.1, 18.2 ms |
+| + completion token on every second task | 1,111,764 B | 16.0, 14.3, 14.2 ms |
+| + weight runs, paired drains, W FIFO depth 2 (committed default) | 776,012 B | **13.1, 12.2, 11.7 ms** |
+| token on every fourth task instead of second | 719,648 B | 13.6, 11.6, 11.7 ms (no gain) |
+
+The time follows the task count, not the bytes (127.5 MB of DMA per frame in every row,
+DERIVED from the schedule): about 2.5 µs per DMA task, which points at the instruction
+sequencer, and once tokens are one per two tasks the token count stops mattering.
+`GraphSession` adds ~3.0 ms of input staging (the model's input lookup, the channel
+transpose and a 3.3 MB write) and ~1.4 ms of head readback per frame (30 frames,
+MEASURED; writing through `bo.map()` instead measured 3.5 ms and is off). The witnessed
+suite (`results/aie/npu_inference_graph_engine_phoenix_20260914T0233Z.log`, preflight "No hardware contexts running",
+host 2.9 % busy before and 3.3 % after) ran 500 continuous 1280 × 720 frames through
+`predict_sync(use_oracle_for_boxes=False)` at **19.2 ms mean glass-to-glass** (median
+19.15, p95 19.7, p99 20.1, max 31.9; preprocess 0.35, NPU path 18.8, postprocess
+0.09 ms) with zero buffer objects allocated after warm-up and a working set that
+shrank by 66 MB; test_10 decoded five detections on `bus.jpg` at IoU 1.0 against the
+CPU oracle for every one, and the camera tool ran headless with `boxes: npu`. Ten tests
+ran, none skipped, one assertion failed: the latency line. **The ≤ 8.0 ms target is not
+met**: 11.7 ms of NPU dispatch plus ~5 ms of host staging and readback.
+
+**Hangs found on silicon and what fixed them** (all MEASURED by per-layer dispatch): a
+16-chunk round (`/model.7/conv/Conv`) stalled with more than four tasks pending on one
+shim DMA channel — the emitter caps pending tasks per channel at four. The second hang,
+first blamed on the weight-run and paired-drain experiments, was the token accounting:
+an emitter that awaited only the newest task of a batch and freed the rest left the
+other tasks' completion tokens unconsumed, the next layer's awaits returned early on
+those stale tokens, the channel queue over-filled and the stream stalled at the first
+multi-chunk layer (`/model.1/conv/Conv`) even with every experiment off. With tokens
+issued only to the tasks that are awaited, all four experiments pass bit-exact on every
+layer, alone and combined. A weight task that streams several objects completes only
+after the cores consumed all but the last, so it is never awaited before its activation
+fills are issued. After two timed-out dispatches the NPU refused every new hardware
+context (`0xc01e0009`; `xrt-smi validate -r latency` failed identically, `xrt-smi` listed
+no contexts) until a device restart from an elevated shell. One host-side bug was caught
+only by the pipeline's classes, not by tensor equality: a staging shortcut indexed the
+input lookup table with the int8 tensor viewed as uint8, which is `(v + 128) ^ 0x80`
+rather than `v + 128`; every layer still matched a reference fed the same wrong input,
+while `bus.jpg` decoded to bicycles.
+
+Not done at this point: the ≤ 8 ms latency (11.7 ms NPU + ~5 ms host). It is done in the
+next subsection, without bigger tiles: the task count was not the only wall.
+
+### Graph engine latency from 19.2 to 7.9 ms glass-to-glass (2026-09-14, Desktop 2)
+
+Branch `worktree-npu-heads` after commit `c5c2817`; evidence
+`results/aie/graph_engine_latency_phoenix_20260914T0411Z.log` (every probe and step),
+`results/aie/npu_inference_graph_engine_phoenix_20260914T0426Z.log` (witnessed suite) and
+`results/aie/camera_npu_boxes_phoenix_20260914T0426Z.log` (witnessed camera run). Every
+silicon number below was taken with `xrt-smi examine -r aie-partitions` reporting no
+hardware contexts, and every schedule and kernel was byte-exact on all 66 layers on
+Device 0 (per layer and as one dispatch) before it was timed.
+
+**Where the 19.1 ms went** (1280 × 720 synthetic frames, MEASURED): input staging 6.1 ms
+(numpy lookup, `moveaxis` and `bo.write` — the buffer-object calls themselves cost 0.08 ms),
+dispatch 11.3 ms, head readback 1.3 ms (numpy transposes), preprocess and decode 0.3 ms.
+The dispatch split three ways: a stream whose weight packets are all NOPs (same tasks and
+bytes, no core compute) took 8.6 ms, so core compute was ~2.85 ms; appending harmless BD
+writes to the instruction stream cost 145 ns per op (21,883 ops, ~3.2 ms), with ~0.25 ms
+fixed per dispatch; and a no-compute transport probe moved 78.7 MB of fills in 2.94 ms
+whether as 52 or 772 tasks (26.8 GB/s), fills and drains in parallel. The per-round
+schedule was paying for ops and for columns waiting on each other, not for bytes.
+
+| Step (each byte-exact on all 66 layers on Device 0) | Tasks | Instructions | Dispatch, real / NOP weights |
+|---|---|---|---|
+| per-round schedule (`c5c2817`) | 5,455 | 776,012 B | 11.43 / 8.59 ms |
+| coarse schedule (repeat tasks per run of quads, drains issued ahead and held, stride-0 weight repeats, chunk repeats, per-quad upsample fills) | 3,303 | 472,276 B | 10.40 / 6.95 ms |
+| + 20 × 20 groups rotated over the four columns (they all ran on column 0), headers trim junk input blocks | 3,303 | 474,652 B | 8.20 / 5.63 ms |
+| + kernel computes a row's fifth pixel group once (it computed it twice), pass always inlined | 3,303 | 474,652 B | 7.55 / 5.67 ms |
+| + contiguous dimensions folded before merging | 3,160 | 454,500 B | 7.50–7.55 ms |
+| + one weight task per column for single-round groups | 2,972 | 430,180 B | **7.23 ms** mean in the pipeline |
+
+Rejected on measurements: a completion token every fourth task (10.91 ms against 10.40);
+skipping junk output blocks in the kernel with a run-time bound (1.4 KB stack frame, which
+overflowed the 1 KB core stack and hung the synthetic test), with an outlined guarded pass
+(12.19 ms) or with inlined per-block guards (11.38 ms) — the accumulators left the vector
+registers each time; a stride-0 access dimension for multi-round weight runs (the
+verifier allows stride 0 only on the repeat dimension, which is at most 64); fewer OpenMP
+threads for the host passes; polling `run.state()` instead of `run.wait()` (7.237 ms
+either way).
+
+**Host path** (MEASURED): the native preprocessor now writes the model's quantized uint8
+input plane straight into the mapped workspace buffer object (`GraphSession.stage_image`,
+0.37 ms, byte-identical to quantizing the int8 preprocessor output for 1280 × 720,
+1080 × 607, 640 × 640, 640 × 480 and `bus.jpg`), and readback transposes the heads natively
+(0.16 ms). On a live 640 × 480 camera the decode took 0.35 ms instead of 0.09 ms: replaying
+the same captured heads took 0.17 ms, polling did not help, and the difference was the
+main thread's first read of 672 KB of class logits just written by worker threads. The
+readback now also computes the per-anchor class maxima natively (8,400 B for the
+decoder's prune, identical detections), and a frame that needs no scaling is copied
+through the lookup table without the bilinear arithmetic (byte-identical).
+
+**Result** (witnessed, MEASURED): `tests/test_npu_inference.py` — 10 tests, none skipped,
+none failed. test_11 ran 500 continuous 1280 × 720 frames at **7.898 ms mean
+glass-to-glass** (median 7.874, p99 8.270, max 8.516; preprocess 0.377, NPU path 7.461,
+postprocess 0.060 ms) with no buffer objects allocated after warm-up and a working set
+that moved +0.04 MB; test_10 decoded five detections on `bus.jpg`, IoU 1.0 against the CPU
+oracle for each. `python tools/live_camera_ignition.py --headless --frames 60 --boxes npu`
+on the live camera: **7.929 ms mean** (median 7.869, p95 8.158; NPU 7.474 ms), boxes from
+the NPU heads. `python -m ignite_xdna.compiler.cli compile --model models/yolov8n.onnx
+--output build/yolov8n_full.ignite` exits 0 with `head_status: present` and 1,209,600
+egress bytes (the CLI compiles the quantized cut export because `models/yolov8n.onnx` is
+not in the checkout).
+
+The margin under 8 ms is under 0.1 ms. What is left in the frame (DERIVED from the NOP
+split): ~1.9 ms of core compute, ~1.3 ms of instruction ops, ~3 ms of transport — most of
+it fill bytes that are fixed 6,400-byte packets with over-read — and ~0.7 ms of host work.
+The next levers are fewer fill tasks for multi-chunk rounds and less over-read per packet.
