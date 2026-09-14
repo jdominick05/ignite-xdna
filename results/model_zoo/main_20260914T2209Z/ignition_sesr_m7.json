@@ -1,0 +1,53 @@
+{
+  "schema": 1,
+  "created_utc": "2026-09-14T22:13:02Z",
+  "model": "<ignite-xdna>\\build\\merged\\sesr_m7.ignite",
+  "model_name": "sesr_m7.ignite",
+  "model_bytes": 511168,
+  "task": "super_resolution",
+  "backend": "npu",
+  "source": "image bus.jpg 810x1080",
+  "source_kind": "image",
+  "frames_requested": 500,
+  "warmup": 10,
+  "frames_processed": 510,
+  "frames_timed": 500,
+  "stop_reason": "frame limit",
+  "host": {
+    "hostname": "DESKTOP-CBL5NUA",
+    "processor": "AMD64 Family 25 Model 117 Stepping 2, AuthenticAMD",
+    "python": "3.13.15",
+    "numpy": "2.5.3",
+    "opencv": "5.0.0",
+    "cpu_count": 16,
+    "onnxruntime": "1.30.0"
+  },
+  "g2g_ms": {
+    "mean": 6.6440346000599675,
+    "p50": 6.635199999436736,
+    "p95": 7.113655003195163,
+    "p99": 7.468122993304859,
+    "min": 5.897700000787154,
+    "max": 7.857300020987168,
+    "cold_first_frame": 8.393600000999868
+  },
+  "fps_from_mean": 150.51095609751553,
+  "stages_ms": {
+    "preprocess": 0.32673280051676556,
+    "network": 4.395630399871152,
+    "postprocess": 1.916243999497965,
+    "dispatch": 4.3687701997114345,
+    "readback": 0.02686020015971735
+  },
+  "rss_mb": {
+    "first_timed": 164.6171875,
+    "end": 164.62109375,
+    "drift": 0.00390625
+  },
+  "npu_frames": 500,
+  "output_shape": [
+    512,
+    512,
+    3
+  ]
+}

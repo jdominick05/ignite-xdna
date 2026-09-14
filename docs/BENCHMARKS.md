@@ -7943,7 +7943,7 @@ Python around it. `tools/decode_native_check.py` reruns every check (`stress`, `
 
 ## Model zoo: YOLOv8s and SESR M7 on the graph engine, with ONNX CPU baselines (2026-09-14, Desktop 2)
 
-Branch `worktree-model-zoo` at `d828678`, Ignition `91ace94`; evidence
+Branch `worktree-model-zoo` at `91d0d7e` (`d828678` before the history rewrite, the ID the log quotes), Ignition `91ace94` (on no branch since Ignition's `model-zoo` was rebased; its `live_ignition.py` and pipelines are the files of `3cf2c49`); evidence
 `results/aie/model_zoo_phoenix_20260914T1247Z.log` (the whole sitting: builds, per-layer
 verification, witnessed suites, dispatch floors, 500-frame camera-tool runs and both Ignition
 suites), `results/benchmarks_onnx_cpu.json`, `results/benchmarks_npu_silicon.json` and
@@ -7977,3 +7977,34 @@ activation round trip through DDR, not compute or weights: per frame 36 weight f
 would leave ~2.27 ms. Tile memory is identical for all three models (compute tile 59,392 of
 65,536 B, MemTile 76,800 of 524,288 B): more parameters means more packets streamed, not larger
 objects on a tile.
+
+### Model zoo on main with the native decode (2026-09-14, Desktop 2)
+
+`worktree-model-zoo` merged with `main` `5688f6d` as `6bd2718`; evidence
+`results/aie/model_zoo_main_phoenix_20260914T2209Z.log` and
+`results/model_zoo/main_20260914T2209Z/`, one sitting from 22:09:56 to 22:13:05 UTC with
+`xrt-smi` reporting no hardware contexts before and after every NPU step. Tables are in
+[MODEL_ZOO_BENCHMARKS.md](MODEL_ZOO_BENCHMARKS.md#on-main-with-the-native-decode-2026-09-14-2209-utc).
+
+**Result** (MEASURED):
+
+- Containers compiled from `6bd2718` have instruction streams and weight packets byte-identical
+  to the 12:47 builds for yolov8n, yolov8s and SESR M7, and run 66 / 66, 66 / 66 and 9 / 9 layers
+  byte-exact on Device 0. Their xclbins differ from the 12:47 ones in 79 to 84 bytes with the same
+  kernel hash; which fields those are was not decoded.
+- The yolov8n container compiled before the model zoo (sha256[:16] `ce64c451ea9bd620`: same
+  instructions and packets, older kernel and xclbin) loads and passes `NpuInferenceOnSilicon` on
+  the merged runtime. Interleaved with the merged build over 500 frames each: 7.780 and 7.712 ms
+  against 7.772 and 7.755 ms mean glass-to-glass, postprocess 0.012 to 0.013 ms in all four runs.
+- YOLOv8s now decodes natively: postprocess 0.041 ms against 0.316 ms at 12:47 in the camera tool
+  (six objects), and 0.015 ms against 0.060 ms on the suite's synthetic frames. The camera tool ran
+  500 frames at 17.298 ms mean glass-to-glass, and Ignition's `live_ignition.py` (`3cf2c49`) at
+  17.148 ms.
+- SESR M7: image identical to ONNX Runtime; 500 frames at 6.606 ms with a 4.336 ms mean dispatch,
+  so the 1.5 ms target is still not met; 6.644 ms through Ignition.
+- YOLOv8n through Ignition on the merged build: 7.681 ms mean glass-to-glass, decode and NMS
+  0.031 ms.
+
+The sittings were not interleaved, so glass-to-glass differences between them are not attributed.
+The decode change is: every step loaded the native library, and the other host stages moved by at
+most 0.05 ms between the sittings, far less than the decode's 7.7× fall.

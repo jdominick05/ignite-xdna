@@ -4,10 +4,13 @@ Four ONNX models timed on the CPU through Ignition, and two of them (YOLOv8s and
 lowered onto the 16-core convolution engine that already runs YOLOv8n
 ([engine design](BENCHMARKS.md#whole-network-yolov8n-on-a-16-core-convolution-engine-every-layer-on-the-npu-bit-exact-2026-09-13-desktop-2),
 [latency work](BENCHMARKS.md#graph-engine-latency-from-192-to-79-ms-glass-to-glass-2026-09-14-desktop-2)).
-Every number on this page was measured in one sitting on Desktop 2 (`DESKTOP-CBL5NUA`,
+Every number above [On main with the native decode](#on-main-with-the-native-decode-2026-09-14-2209-utc) was measured in one sitting on Desktop 2 (`DESKTOP-CBL5NUA`,
 Phoenix NPU, Device 0 `[003d:00:01.1]`) on 2026-09-14 between 12:47 and
-12:51 UTC, from ignite-xdna `d828678` and Ignition `91ace94`. `xrt-smi examine -r
-aie-partitions` reported no hardware contexts before every NPU step.
+12:51 UTC, from ignite-xdna `91d0d7e` and Ignition `91ace94`. `xrt-smi examine -r
+aie-partitions` reported no hardware contexts before every NPU step. The log and the generated
+tables below quote ignite-xdna `91d0d7e` by `d828678`, its ID before the history rewrite. Ignition
+`91ace94` is on no branch now; its `live_ignition.py` and pipelines are the files of `3cf2c49`, the
+commit on Ignition's `model-zoo` branch.
 
 Evidence: [`results/aie/model_zoo_phoenix_20260914T1247Z.log`](../results/aie/model_zoo_phoenix_20260914T1247Z.log)
 (every step of the sitting, with commands and return codes),
@@ -67,7 +70,7 @@ imported modules). YOLOv8n is rebuilt as the regression reference.
 | `yolov8s.ignite` | 66 | 2,173 | 3,114 (29.50 MB) | 1,019,140 B | 32.2 MB | 30,743,680 B | six heads, 1,209,600 B, `head_status: present` |
 | `sesr_m7.ignite` | 9 | 1,521 | 18 (0.17 MB) | 144,880 B | 19.7 MB | 511,168 B | dense 12 × 256 × 256 uint8; host depth-to-space × 2 → 512 × 512 × 3 image |
 
-What the compiler and kernel needed beyond YOLOv8n (commit `d828678`):
+What the compiler and kernel needed beyond YOLOv8n (commit `91d0d7e`):
 
 - **Residual adds with a left-shifted main branch.** Some yolov8s adds put the main branch
   at a finer power-of-two scale than the sum, which `rne(main + (res << rsh))` cannot express
@@ -122,7 +125,7 @@ Suite `npu`, 2026-09-14T12:50:31Z, 500 timed frames after 10 warm-up, source `bu
 <!-- END npu -->
 
 The `-dirty` on this suite's ignite-xdna commit is a one-line `README.md` link edited while
-the sitting ran; no source file differed from `d828678`. Against the CPU rows above, the same
+the sitting ran; no source file differed from `91d0d7e`. Against the CPU rows above, the same
 models run **4.7×** faster end to end on the NPU for yolov8s (17.73 against 83.66 ms) and
 **2.4×** for SESR M7 (6.57 against 15.58 ms).
 
@@ -192,6 +195,69 @@ measurement:
   about 1.6 MB per column against a 512 KB MemTile.
 - It would not change the result above: removing all weight traffic takes about 0.26 ms off
   the 2.53 ms floor (DERIVED above).
+
+## On main with the native decode (2026-09-14, 22:09 UTC)
+
+The branch was merged with ignite-xdna `main` `5688f6d`, which carries the native int8 head
+decode, as `6bd2718`, and the checks above were repeated on that commit in one sitting from
+22:09:56 to 22:13:05 UTC, with Ignition's `model-zoo` branch at `3cf2c49`. `xrt-smi examine -r
+aie-partitions` reported no hardware contexts before and after every NPU step. Evidence:
+[`results/aie/model_zoo_main_phoenix_20260914T2209Z.log`](../results/aie/model_zoo_main_phoenix_20260914T2209Z.log)
+and the per-step JSON in [`results/model_zoo/main_20260914T2209Z/`](../results/model_zoo/main_20260914T2209Z/).
+
+- **Builds.** The three containers compiled from `6bd2718` have the 12:47 builds' sizes, and
+  their instruction streams and weight packets are byte-identical to them. The manifests differ
+  only in build time, compile seconds and xclbin hash; the xclbins differ in 79 to 84 bytes and
+  carry the same kernel hash. Which xclbin fields those bytes belong to was not decoded
+  ([`container_diff.json`](../results/model_zoo/main_20260914T2209Z/container_diff.json)).
+- **Exactness.** 66 / 66, 66 / 66 and 9 / 9 layers byte-exact on Device 0; yolov8n and yolov8s
+  detections at IoU 1.0 against the CPU oracle; SESR 0 of 786,432 values differ from ONNX Runtime.
+- **The yolov8n container compiled before the model zoo still runs.** The main checkout's
+  `build/yolov8n_full.ignite` (sha256[:16] `ce64c451ea9bd620`, `ignite-compile` v0.3.0) has the
+  merged build's instruction stream and packets, an older kernel and xclbin (187,518 against
+  188,542 B), and no `task` or `ddr_extents_bytes` in its manifest. It loads on the merged runtime
+  and passes `NpuInferenceOnSilicon`. Interleaved suites, 500 synthetic 1280 × 720 frames each:
+
+| `tests/test_npu_inference.py` run | Container | G2G mean | p99 | NPU | Postprocess |
+|---|---|---:|---:|---:|---:|
+| 1 (10 tests, all pass) | merged build | 7.772 | 8.013 | 7.403 | 0.013 |
+| 2 (3 tests, all pass) | compiled before the model zoo | 7.780 | 8.032 | 7.413 | 0.013 |
+| 3 (3 tests, all pass) | merged build | 7.755 | 8.071 | 7.386 | 0.012 |
+| 4 (3 tests, all pass) | compiled before the model zoo | 7.712 | 8.096 | 7.340 | 0.012 |
+
+All times in ms. The two containers fall within the 0.07 ms spread of these four runs.
+
+- **YOLOv8s decodes natively.** Postprocess is 0.041 ms in the camera tool (six objects) against
+  0.316 ms at 12:47, and 0.015 ms against 0.060 ms on the suite's synthetic frames. Every step
+  loaded the native decode library; the other host stages moved by at most 0.05 ms between the
+  two sittings, so the 7.7× fall is not sitting-to-sitting drift.
+
+`tools/live_camera_ignition.py --source assets/bus.jpg --headless --warmup 10 --frames 500`:
+
+| Container | Staging | Dispatch mean / p99 | Readback | Postprocess | Glass-to-glass mean | p50 | p95 | p99 |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| `yolov8n_full.ignite` (5 objects / frame) | 0.317 | 7.218 / 7.316 | 0.191 | 0.036 | **7.762** | 7.762 | 7.938 | 8.225 |
+| `yolov8s.ignite` (6 objects / frame) | 0.319 | 16.745 / 16.826 | 0.194 | 0.041 | **17.298** | 17.270 | 17.490 | 17.629 |
+| `sesr_m7.ignite` (512 × 512 × 3 out) | 0.356 | 4.344 / 4.913 | 0.026 | 1.897 | **6.623** | 6.632 | 7.066 | 7.319 |
+
+Through Ignition's `live_ignition.py` (`3cf2c49`, `--headless --warmup 10 --frames 500 --json`
+on `bus.jpg`; resident memory unchanged over each run):
+
+| Container | Glass-to-glass mean | P50 | P95 | P99 | Preprocess | Dispatch | Readback | Post | Output |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| `yolov8n_full.ignite` | **7.681** | 7.686 | 7.872 | 8.037 | 0.301 | 7.161 | 0.184 | 0.031 | 5.00 detections / frame |
+| `yolov8s.ignite` | **17.148** | 17.119 | 17.329 | 17.492 | 0.305 | 16.609 | 0.191 | 0.038 | 6.00 detections / frame |
+| `sesr_m7.ignite` | **6.644** | 6.635 | 7.114 | 7.468 | 0.327 | 4.369 | 0.027 | 1.916 | 512 × 512 × 3 image |
+
+- **Suites.** yolov8s `NpuInferenceOnSilicon` 3 / 3: 300 frames at 17.278 ms mean (p99 17.525),
+  no buffer objects allocated. SESR `SuperResolutionOnSilicon` 2 / 3: 500 frames at 6.606 ms mean
+  (p99 7.363), no buffer objects allocated; `test_22` still fails, at a 4.336 ms mean dispatch
+  against 1.5 ms.
+- **Not re-run:** the NOP-weight dispatch floors, the tile memory reports and the stream report
+  (the instruction streams and packets match the 12:47 builds), and the ONNX CPU suite.
+
+The two sittings ran on the same day but were not interleaved, so glass-to-glass differences
+between this section and the rows above are not attributed to the merge.
 
 ## Reproduce
 
