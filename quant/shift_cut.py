@@ -101,7 +101,7 @@ MEASURED, this sitting, on ten quantized models: every resolved Conv/Gemm sigma 
 
 Unresolved scales were being reported as feasible
 --------------------------------------------------
-The mirror of the false-positive problem this module was corrected for in 311a672. The
+The mirror of the false-positive problem this module was corrected for in 46c022a. The
 analyzer initialised scale_x/scale_w/scale_y to 1.0 and overwrote each only where a
 DequantizeLinear producer with an initializer scale existed; where none existed the op was
 still scored, still got a sigma, and still counted as a passing operation. On

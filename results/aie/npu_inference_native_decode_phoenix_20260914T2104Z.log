@@ -1,0 +1,62 @@
+Witnessed tests/test_npu_inference.py on the native int8 head decode, and the preprocessor DLL rebuilt through the refactored build helper
+machine=Desktop 2 (DESKTOP-CBL5NUA, Ryzen 7 8700G), device=[003d:00:01.1] NPU Phoenix Device 0
+code=commit e2867b6 on branch native-postprocess (git status --short printed nothing before the suite); container build/yolov8n_full.ignite
+env=bash scripts/research-iron.sh (the mlir-aie ironenv, where pyxrt imports) for the suite; resnet_env17 (Python 3.12.11) for section 1
+purpose=decode_native_phoenix_20260914T2055Z.log section 10 ran this suite after a preflight check whose output was cut to an empty line; this run records the full xrt-smi state before and after
+paths=the camera tool's absolute paths into the worktree checkout are shown as <worktree>
+evidence tags: MEASURED = printed on Device 0 or the host
+
+== 1. preprocess_simd.dll rebuilt through _compile_native_dll [MEASURED]
+the commit moved the preprocessor's cl / clang command into _compile_native_dll(c_path, dll_path, msvc_flags, cc_flags); to exercise it, src/ignite_xdna/pipelines/preprocess_simd.dll was deleted in the worktree and the next import rebuilt it (cl /O2 /fp:fast /openmp, 110,592 B, the size of the tracked DLL)
+preprocess._LIB loaded: True; FusedPreprocessor().has_plane_ingress: True; c8_blocks_class_max_int8 exported: True
+tests/test_graph_engine_offline.py -v on that DLL: Ran 15 tests, OK, including test_10 (direct-ingress plane byte-equal to the int8 staging path), test_11 (native head transpose equals numpy) and test_12 (native class maxima, decode parity)
+the tracked DLL was then restored with git checkout -- src/ignite_xdna/pipelines/preprocess_simd.dll, and section 2 ran on it
+
+== 2. Witnessed suite [MEASURED]
+== 2026-09-14T21:04:30Z xrt-smi examine -r aie-partitions (before)
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+== 2026-09-14T21:04:31Z bash scripts/research-iron.sh tests/test_npu_inference.py -v
+test_06_camera_manager_degrades_without_a_camera (__main__.CameraCaptureOffline.test_06_camera_manager_degrades_without_a_camera) ... [ WARN:0@0.000] global cap_ffmpeg_impl.hpp:1246 open VIDEOIO/FFMPEG: OpenCV should be configured with libavdevice to open a camera device
+ok
+test_07_image_source_and_property_readback (__main__.CameraCaptureOffline.test_07_image_source_and_property_readback) ... ok
+test_01_shipped_container_reports_heads_absent (__main__.DetectHeadLayoutOffline.test_01_shipped_container_reports_heads_absent) ... ok
+test_02_layout_rejects_malformed_declarations (__main__.DetectHeadLayoutOffline.test_02_layout_rejects_malformed_declarations) ... ok
+test_03_pack_unpack_round_trip_is_exact_and_zero_copy (__main__.DetectHeadLayoutOffline.test_03_pack_unpack_round_trip_is_exact_and_zero_copy) ... ok
+test_04_int8_pruning_matches_float_decode (__main__.DetectHeadLayoutOffline.test_04_int8_pruning_matches_float_decode) ... ok
+test_05_cpu_oracle_on_bus_jpg_decodes_person_and_bus (__main__.DetectHeadLayoutOffline.test_05_cpu_oracle_on_bus_jpg_decodes_person_and_bus) ... ok
+test_10_head_status_and_oracle_free_detections (__main__.NpuInferenceOnSilicon.test_10_head_status_and_oracle_free_detections) ... ok
+test_11_hundred_frames_no_buffer_growth_and_latency (__main__.NpuInferenceOnSilicon.test_11_hundred_frames_no_buffer_growth_and_latency)
+500 continuous frames: no buffer objects allocated, < 5 MB working-set drift, G2G <= 8 ms. ... ok
+test_12_camera_tool_headless_on_bus_jpg (__main__.NpuInferenceOnSilicon.test_12_camera_tool_headless_on_bus_jpg) ... ok
+
+----------------------------------------------------------------------
+Ran 10 tests in 5.627s
+
+OK
+
+[camera] index 99: MSMF not opened 0.05s; DSHOW not opened 0.00s; ANY not opened 0.05s; MSMF not opened 0.05s; DSHOW not opened 0.00s; ANY not opened 0.05s
+
+[decode] synthetic heads: 5 detections, classes ['bus', 'car', 'person'], int8 path == float path
+
+[oracle] bus.jpg: 5 detections: person 0.90, person 0.88, person 0.88, person 0.50, bus 0.50
+
+[silicon] heads present: six heads declared in head_layout, 1209600 of 1209600 egress bytes
+[silicon] IoU vs oracle per detection: [1.0, 1.0, 1.0, 1.0, 1.0]
+
+[silicon] 500 frames (1280x720 synthetic): G2G mean 7.832 ms median 7.825 p95 8.019 p99 8.331 max 8.515 | preprocess 0.364 | NPU 7.453 | postprocess 0.014 ms | boxes from ['npu'] | buffer objects allocated after warm-up: {'host_bo': 0, 'instr_bo': 0} | working set 299.7 -> 299.7 MB (+0.03 MB)
+
+[camera-tool] [Ignition] Initializing bare-metal pipeline on Device 0 from <worktree>\build\yolov8n_full.ignite ... | [Ignition] NPU heads present: six heads declared in head_layout, 1209600 of 1209600 egress bytes | [Ignition] boxes: npu | [Ignition] source: image <worktree>\assets\bus.jpg | [hud] frame 1/5 | Ignition YOLOv8n | Device 0 | G2G 11.50 ms | NPU  9.42 ms | loop   85.3 FPS | objects 5 | boxes: npu | NPU heads: present | [hud] frame 2/5 | Ignition YOLOv8n | Device 0 | G2G  8.04 ms | NPU  7.48 ms | loop   45.4 FPS | objects 5 | boxes: npu | NPU heads: present | [hud] frame 3/5 | Ignition YOLOv8n | Device 0 | G2G  8.44 ms | NPU  7.83 ms | loop   85.3 FPS | objects 5 | boxes: npu | NPU heads: present | [hud] frame 4/5 | Ignition YOLOv8n | Device 0 | G2G  8.14 ms | NPU  7.55 ms | loop   95.4 FPS | objects 5 | boxes: npu | NPU heads: present | [hud] frame 5/5 | Ignition YOLOv8n | Device 0 | G2G  8.41 ms | NPU  7.65 ms | loop  108.2 FPS | objects 5 | boxes: npu | NPU heads: present | [summary] frames 5 | source image | boxes npu | G2G mean 8.906 ms median 8.409 p95 10.884 | NPU mean 7.988 ms | NPU heads present | [Ignition] Hardware context released.
+suite exit 0
+== 2026-09-14T21:04:37Z xrt-smi examine -r aie-partitions (after)
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device

@@ -4790,7 +4790,7 @@ CPU path — the path that is byte-identical to a fresh `XINT8_ADAROUND` oracle.
 
 `tools/quant_adaround_device_checks.py` runs the transcription on a synthetic QDQ Conv from
 `tools/quant_fixtures.py`, pointed by `--repo` at the pre-change code in the main checkout
-at `311a672` and at the post-change code, and compares emitted int8 weights, per-layer
+at `46c022a` and at the post-change code, and compares emitted int8 weights, per-layer
 report figures and every transcribed log line. At **8 iterations / 4 images** and at
 **200 iterations / 8 images** (which moves 16 of 36 weights, so the loop is genuinely
 exercised) the two are **identical** — weights, recon metrics, changed-element counts and
@@ -6553,7 +6553,7 @@ under `results/` protects a measurement's *content*, not its byte encoding, and 
 `grep` can read is not serving as evidence. The recovery is byte-exact: the decoded text
 re-encodes to the original bytes exactly, asserted before anything was written, and the line
 count is unchanged at 82. Only the encoding changed; no number moved. The same fix was
-applied to `results/quant_fastdepth_xint8.log` in merge `4308a62`, and the rule is now
+applied to `results/quant_fastdepth_xint8.log` in merge `adc4468`, and the rule is now
 recorded in `docs/DECISIONS.md` so there is one policy rather than two precedents.
 
 ---
@@ -6778,7 +6778,7 @@ Note the sigma edges remain **unmeasured**: the probe only ever reached sigma in
 > the VitisAI EP and ran entirely on CPU -- `"tested_conv_on_npu": false`, 7 of 7 nodes off the NPU
 > -- so those rows compared CPU against CPU and say nothing about the DPU. The mistake was reading
 > mismatch counts without checking placement, which is the failure this repo warns about most
-> often. Caught by the forward test on `main` (`79ee4fe`, `311a672`), which reached the same
+> often. Caught by the forward test on `main` (`79ee4fe`, `46c022a`), which reached the same
 > conclusion independently. What the sweep does establish is below, and it is a better result.
 
 **The EP's acceptance boundary is the producer's shift-cut rule.** Across all sixteen fixtures, the
@@ -6918,7 +6918,7 @@ models" result is a tautology of that clamp, not a measurement of the hardware b
 Measured here and now checked rather than assumed: every analyzed Conv/Gemm on all eleven
 models lies in `[14, 30]`, zero outside.
 
-This also explains, with no new hardware, the fact recorded in `311a672` that the highest
+This also explains, with no new hardware, the fact recorded in `46c022a` that the highest
 sigma ever executed on this device is 30 — 30 is the contract's upper edge (`shift_cut` 16),
 i.e. the producer's ceiling rather than the silicon's. Both register widths behind Theorem 1
 remain unmeasured and both edges of `[0, 31]` remain unreached.
@@ -6957,7 +6957,7 @@ Quark/Ignition" about a file that was.
 
 Unresolved operations are now excluded from the violation denominator and from every
 distribution, and counted on their own line. `--repair` skips them too: projecting from an
-invented 1.0 is the same class of defect as the sigma = −90 incident in `311a672`.
+invented 1.0 is the same class of defect as the sigma = −90 incident in `46c022a`.
 
 **Contract-edge saturation, and what it does not prove.** An operation at sigma 14 or 30 is
 one the clamp had hard against an edge. Only three models touch an edge at all, and only two
@@ -7826,7 +7826,7 @@ next subsection, without bigger tiles: the task count was not the only wall.
 
 ### Graph engine latency from 19.2 to 7.9 ms glass-to-glass (2026-09-14, Desktop 2)
 
-Branch `worktree-npu-heads` after commit `c5c2817`; evidence
+Branch `worktree-npu-heads` after commit `56b3d70`; evidence
 `results/aie/graph_engine_latency_phoenix_20260914T0411Z.log` (every probe and step),
 `results/aie/npu_inference_graph_engine_phoenix_20260914T0426Z.log` (witnessed suite) and
 `results/aie/camera_npu_boxes_phoenix_20260914T0426Z.log` (witnessed camera run). Every
@@ -7846,7 +7846,7 @@ schedule was paying for ops and for columns waiting on each other, not for bytes
 
 | Step (each byte-exact on all 66 layers on Device 0) | Tasks | Instructions | Dispatch, real / NOP weights |
 |---|---|---|---|
-| per-round schedule (`c5c2817`) | 5,455 | 776,012 B | 11.43 / 8.59 ms |
+| per-round schedule (`56b3d70`) | 5,455 | 776,012 B | 11.43 / 8.59 ms |
 | coarse schedule (repeat tasks per run of quads, drains issued ahead and held, stride-0 weight repeats, chunk repeats, per-quad upsample fills) | 3,303 | 472,276 B | 10.40 / 6.95 ms |
 | + 20 × 20 groups rotated over the four columns (they all ran on column 0), headers trim junk input blocks | 3,303 | 474,652 B | 8.20 / 5.63 ms |
 | + kernel computes a row's fifth pixel group once (it computed it twice), pass always inlined | 3,303 | 474,652 B | 7.55 / 5.67 ms |
@@ -7889,6 +7889,57 @@ The margin under 8 ms is under 0.1 ms. What is left in the frame (DERIVED from t
 split): ~1.9 ms of core compute, ~1.3 ms of instruction ops, ~3 ms of transport — most of
 it fill bytes that are fixed 6,400-byte packets with over-read — and ~0.7 ms of host work.
 The next levers are fewer fill tasks for multi-chunk rounds and less over-read per packet.
+
+### Native int8 head decode with identical detections (2026-09-14, Desktop 2)
+
+Branch `native-postprocess` from `main` `609bd68`; evidence
+`results/aie/decode_native_phoenix_20260914T2055Z.log` and the witnessed suite
+`results/aie/npu_inference_native_decode_phoenix_20260914T2104Z.log`. Every figure is from
+`build/yolov8n_full.ignite` through `predict_sync(use_oracle_for_boxes=False)`, whose
+`postprocess_ms` is exactly `YoloDecoder.postprocess` on the NPU heads, with
+`xrt-smi examine -r aie-partitions` reporting no hardware contexts around the runs.
+
+**Why the live decode took 0.24–0.29 ms** (MEASURED): replaying a live frame's own int8
+heads took 0.09–0.11 ms, spread over nine numpy stages of 0.005–0.023 ms each. Decoding the
+same heads again inside the frame loop took 0.19–0.20 ms even with nothing in between, and a
+fixed `zlib.crc32` workload ran 1.6–1.9× slower after any blocking wait (a 0.5–33 ms sleep in
+a process with no NPU object, or an NPU dispatch awaited by `run.wait()` or by polling
+`run.state()`) but not after a busy spin of the same length. The factor multiplies the work
+rather than adding a fixed cost, so a decode that does less work loses proportionally less.
+Heads freshly written by the readback threads added ~0.04 ms. The earlier attribution of the
+whole live gap to the first read of the class logits
+([graph engine latency](#graph-engine-latency-from-192-to-79-ms-glass-to-glass-2026-09-14-desktop-2))
+covers only that part: with the class maxima computed natively, the numpy decode still took
+0.24–0.29 ms live.
+
+**What changed:** `pipelines/decode_native.c` decodes int8 heads in one ctypes call (prune,
+class scores, DFL expectation, boxes, letterbox removal and batched NMS), and `YoloDecoder`
+uses it for int8 heads with scales; `native_decode=False`, float heads or a missing library
+keep numpy. It returns the numpy path's detections float for float: float32 arithmetic in
+numpy's order, every `exp` read from tables numpy fills (`np.exp` on float32 gives an element
+the same bits in every layout, checked on numpy 1.26.4 and 2.5.3), numpy's argmax over
+saturated probabilities, and OpenCV's `NMSBoxesBatched` as written in 4.11.0 and 5.0.0, where
+it is identical. It is a separate library built with `/fp:precise`, because
+`preprocess_simd.c` is built with `/fp:fast`. SSE2 carries the survivor scan and the DFL
+divisions; prefetching the box logits gave no measurable gain and was removed.
+
+| Check on the final code | Result |
+|---|---|
+| Random-head stress, 3,000 trials per environment: same-class clusters, score and argmax ties, saturation, nonzero zero points, the threshold at a reachable score, more than 256 candidates | 0 mismatches on numpy 2.5.3 / OpenCV 5.0.0 and on numpy 1.26.4 / OpenCV 4.11.0 |
+| 312 recorded NPU frames (two recordings of `bus.jpg`, 35 camera JPEGs and 120 live frames) | 0 mismatches |
+| Live frames, both paths on the same heads | 0 mismatches over 340 frames |
+| `tests/test_npu_inference.py`, witnessed | 10 tests, none skipped; `bus.jpg` IoU 1.0 against the CPU oracle; 500 frames at 7.832 ms mean glass-to-glass |
+
+| Decode, medians | numpy | native |
+|---|---|---|
+| Hot replay, 120 camera frames (two recordings) | 0.092–0.096 ms | 0.009–0.010 ms |
+| Live, 100 still frames, 5.44 objects | 0.281 ms (p95 0.343) | **0.044 ms** (p95 0.052) |
+| Live, 240 camera frames, 4.80 objects | 0.288 ms (p95 0.340) | **0.045 ms** (p95 0.055) |
+| Glass-to-glass in the same runs, stills / camera | 7.859 / 7.843 ms | 7.764 / 7.701 ms |
+
+A hot call costs 8.0 µs: 2.6 µs of C, 1.0 µs of ctypes argument conversion and ~4.4 µs of
+Python around it. `tools/decode_native_check.py` reruns every check (`stress`, `record`,
+`replay`, `live`, `slowdown`).
 
 ## Model zoo: YOLOv8s and SESR M7 on the graph engine, with ONNX CPU baselines (2026-09-14, Desktop 2)
 

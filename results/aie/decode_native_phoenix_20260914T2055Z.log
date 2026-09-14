@@ -1,0 +1,113 @@
+Native int8 detect-head decode on Phoenix Device 0: where YoloDecoder.postprocess spent a live frame, and one native call that returns the same detections
+machine=Desktop 2 (DESKTOP-CBL5NUA, Ryzen 7 8700G), device=[003d:00:01.1] NPU Phoenix Device 0
+branch=native-postprocess from main 609bd68; the tool headers below print 609bd68 because the changes of this commit were uncommitted when they ran
+container=build/yolov8n_full.ignite (graph engine, 8,822,528 B); every NPU frame is predict_sync(use_oracle_for_boxes=False) with head_source "npu", whose postprocess_ms (t2 -> t3) is exactly YoloDecoder.postprocess on the NPU heads
+envs=mlir-aie-iron (Python 3.13.15, numpy 2.5.3, OpenCV 5.0.0) for every NPU and timing run; resnet_env17 (Python 3.12.11, numpy 1.26.4, OpenCV 4.11.0) for the second parity run
+preflight=xrt-smi examine -r aie-partitions reported "No hardware contexts running on device" before and after every NPU run
+frames=assets/bus.jpg; data/webcam_calib (10) and data/user_calib (25), 640x480 JPEGs from this webcam (gitignored); live Logitech C920 index 0 via MSMF at 640x480 in a lit room (frame mean 124-141)
+probes=sections 1-3 and the design runs in 5 are scratch scripts outside the repository driving the committed modules; sections 6-10 are tools/decode_native_check.py and the test files on the final code
+evidence tags: MEASURED = printed on Device 0 or the host; DERIVED = arithmetic on MEASURED numbers
+
+== 1. Before: the numpy decode, replayed and live [MEASURED]
+int8 heads recorded from the NPU (predict_sync, heads copied out) for bus.jpg, the 35 JPEGs and 120 live camera frames (3.73 detections/frame)
+decode during recording (postprocess_ms): camera median 0.285 ms, mean 0.290, p95 0.347 (glass-to-glass median 7.947 ms); JPEGs 0.168-0.350 ms per frame; bus.jpg 0.256 ms
+replay of the same heads, 300 calls per frame, medians of per-frame medians, stages of a copy of postprocess checked to return the same detections:
+  bus     1 frame,    candidates 43: total 0.1090 ms | prune 0.0135, gather+dequantize 0.0231, concat 0.0063, DFL 0.0155, boxes 0.0067, sigmoid+argmax+mask 0.0123, unletterbox 0.0087, NMSBoxesBatched with tolist 0.0101, detections+sort 0.0081
+  camera  120 frames, candidates 20: total 0.0922 ms | prune 0.0133, gather 0.0196, concat 0.0058, DFL 0.0129, boxes 0.0065, scores 0.0095, unletterbox 0.0085, NMS 0.0055, detections 0.0068
+  JPEGs   35 frames,  candidates 34: total 0.1018 ms | prune 0.0134, gather 0.0211, concat 0.0060, DFL 0.0143, boxes 0.0065, scores 0.0111, unletterbox 0.0086, NMS 0.0082, detections 0.0081
+-> no stage dominates: nine numpy stages of 0.005-0.023 ms each (DERIVED)
+-> a live frame decoded in 2.6-3.1x the replay time of its own heads (DERIVED)
+
+== 2. Live vs replay: the same heads decoded again in the frame loop [MEASURED]
+per frame after predict_sync (call A, live): B immediately; C after time.sleep(7.5 ms); D after the six head tensors are rewritten on the main thread; E after a second dispatch and readback of the same staged input (identical heads, asserted)
+  user_calib stills, 4 cycles, 100 frames, 5.44 detections/frame: A 0.2367, B 0.1968, C 0.2385, D 0.1908, E 0.2364 ms (medians)
+  live camera, 120 frames, 4.93 detections/frame:                 A 0.2869, B 0.2047, C 0.2462, D 0.1928, E 0.2327 ms
+-> heads freshly written by the readback threads cost ~0.04 ms (E - D), a 7.5 ms sleep ~0.04 ms (C - B), and even B, with nothing in between, is about twice the replay loop's 0.09-0.10 ms (DERIVED)
+
+== 3. Fixed host work in the frame loop: zlib.crc32 over private buffers [MEASURED]
+buffers calibrated in a tight loop: small 55,163 B at 0.0100 ms, large 501,507 B at 0.0896 ms; no decode in these frames
+                                   stills (100 frames)        camera (120 frames)
+  first thing after the NPU returns small 0.0193 / large 0.1629  small 0.0201 / large 0.1645 ms
+  after the prune and gather        small 0.0186 / large 0.1622  small 0.0187 / large 0.1628 ms
+  after a 7.5 ms sleep              small 0.0200 / large 0.1627  small 0.0199 / large 0.1638 ms
+  tight loop again at the end: small 0.0101, large 0.0900 ms
+  cold prune (flatnonzero of cls_max per head) 0.0521 / 0.0503 ms; cold ndarray.take of the surviving anchors' 144 bytes each: 0.0246 ms (38 candidates, 5,472 B) / 0.0154 ms (22 candidates, 3,168 B)
+the same crc32 workloads without any NPU object in the process (medians, x = ratio to the tight loop):
+  after sleep 0.5 / 2 / 7.5 / 33 ms: small x1.71 / x1.77 / x1.83 / x1.91, large x1.63 / x1.64 / x1.65 / x1.69
+  after a busy spin of the same lengths: small x1.04 / x1.05 / x1.07 / x1.16, large x1.00 / x1.00 / x1.00 / x1.02
+  after an NPU dispatch awaited by run.wait(): small x1.93, large x1.80; by polling run.state(): x1.88, x1.82; run.wait() with OMP_WAIT_POLICY=PASSIVE: x1.68, x1.63
+-> host work after the thread blocks runs 1.6-1.9x slower whatever blocked it, and the factor multiplies the work rather than adding a fixed cost; spinning instead of sleeping removes it, polling the NPU run does not (DERIVED)
+-> so a decode that does less work loses proportionally less to it. The earlier attribution of the live decode gap to the first read of 672 KB of class logits (graph_engine_latency_phoenix_20260914T0411Z.log section 7) covers at most the E - D part: with the class maxima native, the live numpy decode was still 0.24-0.29 ms (DERIVED)
+
+== 4. What a native decode must reproduce to return identical detections [MEASURED]
+np.exp on float32 gives an element the same bits whatever the layout: one element at a time, 15 sub-slice offsets, a 256x256 grid, the negated transposed (n, 80) view the decoder builds, in place on (1, 16, 4, n); on numpy 2.5.3 and on numpy 1.26.4: PASS
+sum(axis=1) over a C-contiguous (1, 16, 4, n) float32 array equals accumulation in index order ((e0 + e1) + e2) ... for 200 random shapes on both numpy versions: PASS; float32 array op Python float stays float32 on both
+OpenCV 5.0.0 and 4.11.0 sources (modules/dnn/src/nms.cpp, nms.inl.hpp, modules/core/include/opencv2/core/types.hpp): NMSBoxesBatchedImpl, NMSFast_, GetMaxScoreIndex, rectOverlap, Rect_ operator&= and jaccardDistance are identical (nms.cpp differs by one #include)
+  max_coord over x1, y1, x1 + w, y1 + h in double starting at 0; offset class_id * (max_coord + 1); scores strictly above score_threshold, std::stable_sort descending; greedy keep when (float)overlap <= nms_threshold with overlap = 1.f - (float)(1 - inter / (Aa + Ab - inter)); eta 1, top_k 0
+build: preprocess_simd.c is compiled with /fp:fast, which may reassociate or contract float arithmetic, so the decode is its own library built with cl /O2 /fp:precise (no /arch, so no FMA) and #pragma fp_contract(off); cl /W4 reports no warnings
+
+== 5. Design iterations [MEASURED]
+version 1 (scalar C; exp and sigmoid from numpy-filled tables; OpenCV NMS in C):
+  parity: stress 2,000 trials on each env, 0 mismatches; 156 recorded frames, 0 mismatches
+  replay hot medians native / numpy: camera 0.0215 / 0.0917, JPEGs 0.0246 / 0.1028, bus 0.0259 / 0.1088 ms
+  live, paths alternating per frame: stills native 0.0572 / numpy 0.2469 ms; camera (4.48 detections/frame) native 0.0649 / numpy 0.2804 ms
+  hot profile on 40 recorded camera frames: postprocess 21.1 us = C work 15.1 + ctypes arguments 1.0 + binding check and tolist 2.2 + detection objects 2.8; a C call with no survivors 3.6 us, so ~12.6 us of per-candidate work
+version 2 (final): integer threshold (for an integer m, m > q_t exactly when m > floor(q_t)) with one SSE2 movemask scan for survivors; the class score is the sigmoid table at the class maximum and the class is the first whose logit reaches the lowest logit with the same float32 sigmoid (numpy's argmax, saturation included); the 16 DFL divisions and weightings four at a time in SSE2 with the sums kept in index order
+  hot profile: postprocess 8.0 us = C work 2.6 + ctypes arguments 1.0 + binding check and tolist 1.5 + detection objects 2.9; a C call with no survivors 1.4 us
+prefetching the surviving anchors' box logits before decoding them: stills native 0.0377 ms with, 0.0397 ms without (two runs a minute apart); the camera comparison is void (0.49 detections/frame in the prefetch run) -> no measurable gain, removed
+
+== 6. Parity on the final code [MEASURED]
+tools/decode_native_check.py stress --trials 3000 --seed 4 (Python 3.13.15, numpy 2.5.3, cv2 5.0.0):
+  stress: 3000 trials (seed 4), 1530 with class maxima, 455 with the threshold at a reachable score, 764 with more than 256 candidates; 167703 detections, 243 empty results; mismatches 0
+tools/decode_native_check.py stress --trials 3000 --seed 5 (Python 3.12.11, numpy 1.26.4, cv2 4.11.0):
+  stress: 3000 trials (seed 5), 1495 with class maxima, 452 with the threshold at a reachable score, 753 with more than 256 candidates; 156098 detections, 255 empty results; mismatches 0
+tools/decode_native_check.py record (bus.jpg, webcam_calib, user_calib, 120 live camera frames): 156 frames written; xrt-smi after: No hardware contexts running on device
+tools/decode_native_check.py replay of those 156 frames: mismatches 0; replay of the 156 frames recorded in section 1: mismatches 0
+tests/test_graph_engine_offline.py (with models/yolov8n_cut_xint8.onnx present): Ran 15 tests, OK, on both envs (includes NativeDecodeOffline and test_12, whose decoder now takes the native path)
+python -m compileall -q src tools tests: ok; ignite_xdna imports from this worktree with the native decode active on both envs
+
+== 7. Hot replay on the final code, 300 calls per frame, medians of per-frame medians [MEASURED]
+recorded by the tool:     bus native 0.0124 / numpy 0.1094 ms; camera (120, 3.87 detections/frame) native 0.0096 / numpy 0.0955 ms; JPEGs (35, 4.63) native 0.0118 / numpy 0.1016 ms
+recorded in section 1:    bus native 0.0123 / numpy 0.1097 ms; camera (120, 3.73)               native 0.0086 / numpy 0.0919 ms; JPEGs (35, 4.63) native 0.0118 / numpy 0.1025 ms
+
+== 8. Live decode on the final code: tools/decode_native_check.py live --stills data/user_calib --cycles 4 --camera-frames 240 [MEASURED]
+decode_native_check live: 2026-09-14T20:55:39Z host DESKTOP-CBL5NUA commit 609bd68 python 3.13.15 numpy 2.5.3 cv2 5.0.0
+xrt-smi before: No hardware contexts running on device
+live stills: 100 frames (paths alternate), detections/frame 5.44 (min 4, max 7), brightness 138.7
+   native postprocess median 0.0438 ms, mean 0.0418, p95 0.0516 (50 frames) | glass-to-glass median 7.764 ms, mean 7.754
+   numpy  postprocess median 0.2813 ms, mean 0.2777, p95 0.3427 (50 frames) | glass-to-glass median 7.859 ms, mean 7.874
+live camera: 240 frames (paths alternate), detections/frame 4.80 (min 3, max 7), brightness 138.0
+   native postprocess median 0.0452 ms, mean 0.0454, p95 0.0552 (120 frames) | glass-to-glass median 7.701 ms, mean 7.723
+   numpy  postprocess median 0.2882 ms, mean 0.2906, p95 0.3400 (120 frames) | glass-to-glass median 7.843 ms, mean 7.978
+xrt-smi after: No hardware contexts running on device
+live: mismatches 0
+
+== 9. The slowdown controls on the final code: tools/decode_native_check.py slowdown [--pipeline --stills data/user_calib] [MEASURED]
+tight loop: small 0.0104 ms (57496 B), large 0.0903 ms (504771 B)
+after sleep 0.5 ms: small 0.0172 ms (x1.65), large 0.1471 ms (x1.63)
+after spin 0.5 ms: small 0.0103 ms (x0.99), large 0.0899 ms (x1.00)
+after sleep 2.0 ms: small 0.0177 ms (x1.70), large 0.1477 ms (x1.64)
+after spin 2.0 ms: small 0.0104 ms (x1.00), large 0.0886 ms (x0.98)
+after sleep 7.5 ms: small 0.0184 ms (x1.77), large 0.1490 ms (x1.65)
+after spin 7.5 ms: small 0.0104 ms (x1.00), large 0.0881 ms (x0.98)
+after sleep 33.0 ms: small 0.0189 ms (x1.82), large 0.1507 ms (x1.67)
+after spin 33.0 ms: small 0.0106 ms (x1.02), large 0.0880 ms (x0.97)
+--pipeline: tight loop small 0.0101 ms (57774 B), large 0.0906 ms (525058 B)
+after an NPU dispatch awaited by run.wait(): small 0.0191 ms (x1.89), large 0.1663 ms (x1.84)
+after an NPU dispatch awaited by polling run.state(): small 0.0191 ms (x1.89), large 0.1679 ms (x1.85)
+xrt-smi before and after: No hardware contexts running on device
+
+== 10. NPU inference suite on the final code [MEASURED]
+bash scripts/research-iron.sh tests/test_npu_inference.py -v: Ran 10 tests in 5.645s, OK (none skipped)
+test_10: [silicon] heads present: six heads declared in head_layout, 1209600 of 1209600 egress bytes
+         [silicon] IoU vs oracle per detection: [1.0, 1.0, 1.0, 1.0, 1.0]
+test_11: [silicon] 500 frames (1280x720 synthetic): G2G mean 7.832 ms median 7.831 p95 7.998 p99 8.127 max 8.253 | preprocess 0.364 | NPU 7.453 | postprocess 0.015 ms | boxes from ['npu'] | buffer objects allocated after warm-up: {'host_bo': 0, 'instr_bo': 0} | working set 300.4 -> 300.4 MB (+0.05 MB)
+test_12: tools/live_camera_ignition.py --source assets/bus.jpg --headless: 5 frames, 5 objects each, boxes npu, G2G median 7.992 ms, "Hardware context released."
+the same file run by mlir-aie-iron's python directly skipped test_10-12 (pyxrt is not importable there without the wrapper) and passed the other 7
+xrt-smi: the check chained before the suite printed an empty last line, so the suite has no before-witness of its own (the slowdown run that ended just before it reported no hardware contexts after); after the suite: No hardware contexts running on device
+
+== 11. Result [DERIVED]
+live decode with objects in view: numpy 0.281-0.288 ms -> native 0.044-0.045 ms median (p95 0.052-0.055), about 0.24 ms back per frame
+glass-to-glass medians in the same runs, paths alternating per frame: 7.859 -> 7.764 ms (stills), 7.843 -> 7.701 ms (camera)
+detections identical to the numpy path in every check on the final code: 6,000 random-head trials over two numpy/OpenCV versions, 312 recorded NPU frames (two recordings), 340 live frames; test_10 IoU 1.0 against the CPU oracle
+hot call 8.0 us: 2.6 us of C, 1.0 us of ctypes argument conversion, ~4.4 us of Python around it; the rest of a live decode is the 1.6-1.9x slowdown of host work after the NPU wait (section 3) and the first read of freshly written head bytes
