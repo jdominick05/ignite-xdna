@@ -262,7 +262,7 @@ between this section and the rows above are not attributed to the merge.
 ## Reproduce
 
 ```bash
-# CPU suite (Ignition checkout next to this repo, or --ignition <path>)
+# CPU suite through Ignition's `ignition suite` (Ignition f9c85fb or later next to this repo, or --ignition <path>)
 python tools/model_zoo_bench.py run --suite onnx-cpu
 # containers (mlir-aie ironenv)
 bash scripts/research-iron.sh -m ignite_xdna.compiler.cli compile --model models/yolov8s_cut_xint8.onnx --output build/yolov8s.ignite
@@ -282,6 +282,14 @@ python tools/engine_memory_report.py build/conv_engine/yolov8s
 elsewhere, put the checkout's `src` first on `sys.path` (the log's compile steps do). The
 tables between the markers above are rewritten from the JSON by
 `python tools/model_zoo_bench.py report`.
+
+`run` now hands the models to Ignition's `ignition suite`, which still runs each one in its own
+process, writes every record and log into a new `results/model_zoo/<suite>_<UTC time>/`
+directory, and records `xrt-smi` before and after each container. The tool checks that the suite
+loads Ignition from that checkout and ignite-xdna from this one, and rewrites the suite JSON and
+the tables only when every run is clean. Both tables above were produced before that change, when the tool ran
+`live_ignition.py` itself and wrote `results/model_zoo/<suite>_<model>.log`; they have not been
+re-run.
 
 ## Caveats
 
