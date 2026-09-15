@@ -148,7 +148,7 @@ with InferenceSession.from_file("build/yolov8n_full.ignite") as s:   # ignite-co
 ```
 
 `ignite-compile --engine graph` builds that container (ironenv); the older `build/yolov8n.ignite` runs one
-conv layer per stage and carries no heads ([measured](docs/BENCHMARKS.md#whole-network-yolov8n-on-a-16-core-convolution-engine-every-layer-on-the-npu-bit-exact-2026-09-13-desktop-2)). The same engine runs YOLOv8s and SESR M7 ([model zoo](docs/MODEL_ZOO_BENCHMARKS.md)), and stock YOLO11n with its C2PSA attention block on the CPU between two NPU dispatches: 11.0 ms against 34.4 ms on AMD's stack in one sitting ([how](docs/BENCHMARKS.md#stock-yolo11n-with-its-c2psa-attention-block-npu-segments-around-a-host-step-2026-09-15-desktop-2)).
+conv layer per stage and carries no heads ([measured](docs/BENCHMARKS.md#whole-network-yolov8n-on-a-16-core-convolution-engine-every-layer-on-the-npu-bit-exact-2026-09-13-desktop-2)). The same engine runs YOLOv8s and SESR M7 ([model zoo](docs/MODEL_ZOO_BENCHMARKS.md)), and stock YOLO11n with only its attention core (two MatMuls and a softmax) on the CPU between two NPU dispatches: 10.1–10.4 ms against 34.5–36.4 ms on AMD's stack in one sitting ([how](docs/BENCHMARKS.md#yolo11ns-c2psa-convolutions-on-the-npu-only-its-attention-core-on-the-host-2026-09-15-desktop-2)).
 
 Native graph stages can also share BOs with custom AIE kernels through
 `ignite_xdna.runtime.KernelSplicer`. The Phoenix Conv2D/GroupNorm/Conv2D validation

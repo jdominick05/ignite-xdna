@@ -12,8 +12,8 @@ graph once and produces:
   ``Segment`` views (tensor, channel block range, optional 2x upsampling), so
   Split, Concat and Resize never materialise, and
 * ``HostLayer`` records for regions named by ``host_regions`` (YOLO11's C2PSA
-  attention block): the region is extracted as a uint8 -> uint8 ONNX model and
-  run on the host between two dispatches.
+  attention block, or only its attention core): the region is extracted as a
+  uint8 -> uint8 ONNX model and run on the host between two dispatches.
 
 Exactness: the integer HardSwish constants are fitted against a float32
 re-evaluation of the ONNX chain for all 256 inputs; ``HardSwishFit.max_error``
@@ -143,7 +143,7 @@ class HostLayer:
     original graph does. The input is one whole physical tensor; the output is a physical tensor like
     a conv output.
     """
-    name: str                 # the region's node-name prefix, e.g. "/model.10/"
+    name: str                 # the region spec: a node-name prefix ("/model.10/") or "FROM=TO"
     index: int
     input: Segment
     output: str
@@ -289,13 +289,93 @@ def _attr(node, name, default=None):
     return default
 
 
-def _host_region(G: _Graph, prefix: str) -> Dict[str, Any]:
-    """Boundary of the nodes named ``prefix*``: exactly one uint8 activation input and one uint8 output.
+def _boundary_tensor(G: _Graph, spec: str, token: str) -> str:
+    """The uint8 tensor one side of a ``FROM=TO`` host region names: a QuantizeLinear output tensor, or the tensor a
+    node's output is quantized to."""
+    src = G.by_output.get(token)
+    if src is not None and src.op_type == "QuantizeLinear":
+        return token
+    node = next((n for n in G.g.node if n.name == token), None)
+    if node is None:
+        raise ValueError(f"host region {spec}: {token} is neither a uint8 tensor nor a node name")
+    if node.op_type == "QuantizeLinear":
+        return node.output[0]
+    return G.q_sink(node.output[0])[0]
 
-    Inputs read from initializers, Constant nodes or DequantizeLinear of an initializer (weights) are
-    part of the region's constants. The output is the float tensor of a DequantizeLinear inside the
-    region that nodes outside it consume; its QuantizeLinear input is the uint8 output tensor.
+
+def _boundary_region(G: _Graph, spec: str) -> Dict[str, Any]:
+    """The nodes on a path from ``FROM``'s uint8 tensor to ``TO``'s (see ``_host_region``)."""
+    first, _, last = spec.partition("=")
+    q_in, q_out = _boundary_tensor(G, spec, first.strip()), _boundary_tensor(G, spec, last.strip())
+    below = set()                       # nodes computed from q_in
+    stack = [q_in]
+    while stack:
+        for c in G.consumers.get(stack.pop(), []):
+            if c.name not in below:
+                below.add(c.name)
+                stack.extend(c.output)
+    above = set()                       # nodes q_out is computed from
+    stack = [q_out]
+    while stack:
+        n = G.by_output.get(stack.pop())
+        if n is not None and n.name not in above:
+            above.add(n.name)
+            stack.extend(i for i in n.input if i)
+    names = below & above
+    if not names:
+        raise ValueError(f"host region {spec}: no node lies between {q_in} and {q_out}")
+    nodes = [n for n in G.g.node if n.name in names]
+    produced = {o for n in nodes for o in n.output}
+    for n in nodes:
+        for i in n.input:
+            if not i or i == q_in or i in produced or i in G.inits:
+                continue
+            src = G.by_output.get(i)
+            if src is not None and src.op_type == "DequantizeLinear" and src.input[0] in G.inits:
+                continue  # a weight or scale constant
+            raise ValueError(f"host region {spec}: {n.name} reads {i} from outside the region")
+    graph_outputs = {o.name for o in G.g.output}
+    for o in sorted(produced - {q_out}):
+        if o in graph_outputs:
+            raise ValueError(f"host region {spec}: {o} inside the region is a graph output")
+        for c in G.consumers.get(o, []):
+            if c.name in names:
+                continue
+            # A channel view may read a dequantized tensor of the region directly, or through its own
+            # DequantizeLinear; the lowering resolves the Reshape or refuses it.
+            view = c.op_type == "Reshape" and G.by_output[o].op_type == "DequantizeLinear"
+            view = view or (c.op_type == "DequantizeLinear" and
+                            all(f.op_type == "Reshape" for f in G.consumers.get(c.output[0], [])))
+            if not view:
+                raise ValueError(f"host region {spec}: {c.op_type} {c.name} outside the region reads {o}")
+    dqs = [c for c in G.consumers.get(q_out, []) if c.op_type == "DequantizeLinear"]
+    if not dqs:
+        raise ValueError(f"host region {spec}: nothing dequantizes its output {q_out}")
+    order = {n.name: i for i, n in enumerate(G.g.node)}
+    return {"spec": spec, "names": names, "q_in": q_in, "q_out": q_out, "dq_out": dqs[0].output[0],
+            "q_node": G.by_output[q_out], "builder": min(names, key=order.__getitem__)}
+
+
+def _host_region(G: _Graph, spec: str) -> Dict[str, Any]:
+    """The nodes a host region names, with exactly one uint8 activation input and one uint8 output.
+
+    ``spec`` is a node-name prefix (``"/model.10/"``: every node named ``prefix*``) or ``"FROM=TO"``: the nodes on a
+    path from the uint8 output of ``FROM`` to the uint8 output of ``TO``, each a node name or a QuantizeLinear output
+    tensor (YOLO11's attention core, from its qkv convolution to the reshape after the second MatMul).
+
+    Prefix regions: inputs read from initializers, Constant nodes or DequantizeLinear of an initializer (weights) are
+    part of the region's constants. The output is the float tensor of a DequantizeLinear inside the region that nodes
+    outside it consume; its QuantizeLinear input is the uint8 output tensor. The layer is built at that
+    DequantizeLinear.
+
+    Boundary regions: a tensor inside the region may also be read outside it through DequantizeLinear -> Reshape,
+    which the lowering resolves as a channel view of a stored tensor (YOLO11's ``v``, read by the ``pe``
+    convolution). The layer is built at the region's first node, so engine layers that combine its output with
+    such a view come after it.
     """
+    if "=" in spec:
+        return _boundary_region(G, spec)
+    prefix = spec
     nodes = [n for n in G.g.node if n.name.startswith(prefix)]
     if not nodes:
         raise ValueError(f"host region {prefix}: no node names start with it")
@@ -327,13 +407,13 @@ def _host_region(G: _Graph, prefix: str) -> Dict[str, Any]:
     q_node = G.by_output.get(dq.input[0])
     if q_node is None or q_node.op_type != "QuantizeLinear" or q_node.name not in names:
         raise ValueError(f"host region {prefix}: {dq_out} does not dequantize a QuantizeLinear of the region")
-    return {"prefix": prefix, "names": names, "q_in": next(iter(acts)), "q_out": dq.input[0], "dq_out": dq_out,
+    return {"spec": prefix, "names": names, "q_in": next(iter(acts)), "q_out": dq.input[0], "dq_out": dq_out,
             "q_node": q_node, "builder": dq.name}
 
 
 def lower_yolov8n(model_or_path, host_regions: Sequence[str] = ()) -> GraphIR:
-    """Lower a QDQ graph to engine layers. ``host_regions`` are node-name prefixes (``"/model.10/"``) whose
-    nodes the engine does not lower; each becomes one ``HostLayer``."""
+    """Lower a QDQ graph to engine layers. ``host_regions`` name regions the engine does not lower, as node-name
+    prefixes (``"/model.10/"``) or ``"FROM=TO"`` boundaries (see ``_host_region``); each becomes one ``HostLayer``."""
     model = onnx.load(str(model_or_path)) if not isinstance(model_or_path, onnx.ModelProto) else model_or_path
     model = onnx.shape_inference.infer_shapes(model)
     G = _Graph(model)
@@ -370,6 +450,59 @@ def lower_yolov8n(model_or_path, host_regions: Sequence[str] = ()) -> GraphIR:
             raise ValueError(f"duplicate tensor {q_name}")
         views[q_name] = segments
 
+    def channel_view(node, so: float, zo: int) -> List[Segment]:
+        """Segments of a Reshape that only moves whole channels: its Reshape/Slice chain back to a stored tensor, at
+        one quantization, ends [1, 8k, H, W] with every output channel one input channel in pixel order."""
+        chain, f = [node], node.input[0]
+        while True:
+            q, s, z = G.q_source(f)
+            if abs(s - so) > 1e-12 or z != zo:
+                raise ValueError(f"{node.name}: channel view requantizes {q} ({s}, {z}) -> ({so}, {zo})")
+            if q in tensors or q in views:
+                break
+            qn = G.by_output.get(q)
+            src = G.by_output.get(qn.input[0]) if qn is not None and qn.op_type == "QuantizeLinear" else None
+            if src is None or src.op_type not in ("Reshape", "Slice"):
+                raise ValueError(f"{node.name}: {q} is not a reshape or slice of a stored tensor")
+            chain.append(src)
+            f = src.input[0]
+        base = resolve(q)
+        c, h, w = dims_chw(f)
+        # Label every element of the stored tensor with channel * H * W + pixel and replay the chain.
+        lab = (np.arange(c, dtype=np.int64)[:, None] * (h * w) + np.arange(h * w)[None, :]).reshape(1, c, h, w)
+        for op in reversed(chain):
+            if op.op_type == "Reshape":
+                if int(_attr(op, "allowzero", 0)):
+                    raise ValueError(f"{op.name}: allowzero reshape")
+                shape = [int(v) for v in G.const(op.input[1]).flatten()]
+                lab = lab.reshape([lab.shape[i] if d == 0 else d for i, d in enumerate(shape)])
+            else:
+                starts, ends = G.const(op.input[1]).flatten(), G.const(op.input[2]).flatten()
+                axes = G.const(op.input[3]).flatten() if len(op.input) > 3 and op.input[3] else range(len(starts))
+                steps = G.const(op.input[4]).flatten() if len(op.input) > 4 and op.input[4] else [1] * len(starts)
+                index = [slice(None)] * lab.ndim
+                for a, st, en, sp in zip(axes, starts, ends, steps):
+                    index[int(a) % lab.ndim] = slice(int(st), int(en), int(sp))
+                lab = lab[tuple(index)]
+        if lab.ndim != 4 or lab.shape[0] != 1 or tuple(lab.shape[2:]) != (h, w) or lab.shape[1] % 8:
+            raise ValueError(f"{node.name}: view shape {list(lab.shape)} is not [1, 8k, {h}, {w}]")
+        src_ch = lab[0, :, 0, 0] // (h * w)
+        if not np.array_equal(lab[0], src_ch[:, None, None] * (h * w) + np.arange(h * w).reshape(h, w)):
+            raise ValueError(f"{node.name}: moves pixels, not whole channels")
+        base_blocks = [(sg.tensor, sg.block_offset + b, sg.up2) for sg in base for b in range(sg.blocks)]
+        segs: List[Segment] = []
+        for k in range(0, len(src_ch), 8):
+            ch = src_ch[k:k + 8]
+            if ch[0] % 8 or not np.array_equal(ch, np.arange(ch[0], ch[0] + 8)):
+                raise ValueError(f"{node.name}: channels {ch.tolist()} are not one 8-channel block")
+            t_name, blk, up2 = base_blocks[int(ch[0]) // 8]
+            if segs and segs[-1].tensor == t_name and segs[-1].up2 == up2 and \
+                    segs[-1].block_offset + segs[-1].blocks == blk:
+                segs[-1] = Segment(t_name, segs[-1].block_offset, segs[-1].blocks + 1, up2)
+            else:
+                segs.append(Segment(t_name, blk, 1, up2))
+        return segs
+
     def check_same_scale(q_a, q_b, what):
         sa = tensors[q_a].scale if q_a in tensors else None
         if sa is None:
@@ -389,10 +522,10 @@ def lower_yolov8n(model_or_path, host_regions: Sequence[str] = ()) -> GraphIR:
                 # Own names: q_in, c, h, w and friends belong to the enclosing walk (q_in is the graph input).
                 r_in, r_out, r_qnode = region["q_in"], region["q_out"], region["q_node"]
                 if r_in not in tensors:
-                    raise ValueError(f"host region {region['prefix']}: input {r_in} is not a physical tensor")
+                    raise ValueError(f"host region {region['spec']}: input {r_in} is not a physical tensor")
                 r_scale, r_zp = G.scale_zp(r_qnode)
                 if r_zp != ZP:
-                    raise ValueError(f"host region {region['prefix']}: output zero point {r_zp}")
+                    raise ValueError(f"host region {region['spec']}: output zero point {r_zp}")
                 _log2_exact(r_scale)
                 r_c, r_h, r_w = dims_chw(region["dq_out"])
                 sub = onnx.utils.Extractor(model).extract_model([r_in], [r_out])
@@ -400,8 +533,8 @@ def lower_yolov8n(model_or_path, host_regions: Sequence[str] = ()) -> GraphIR:
                 if [i.name for i in sub_ins] != [r_in] or [o.name for o in sub_outs] != [r_out] or \
                         sub_ins[0].type.tensor_type.elem_type != onnx.TensorProto.UINT8 or \
                         sub_outs[0].type.tensor_type.elem_type != onnx.TensorProto.UINT8:
-                    raise ValueError(f"host region {region['prefix']}: extracted model is not uint8 {r_in} -> {r_out}")
-                host = HostLayer(name=region["prefix"], index=len(layers), input=Segment(r_in, 0, tensors[r_in].blocks),
+                    raise ValueError(f"host region {region['spec']}: extracted model is not uint8 {r_in} -> {r_out}")
+                host = HostLayer(name=region["spec"], index=len(layers), input=Segment(r_in, 0, tensors[r_in].blocks),
                                  output=r_out, onnx_bytes=sub.SerializeToString(),
                                  op_types=dict(Counter(n.op_type for n in sub.graph.node)))
                 tensors[r_out] = TensorInfo(r_out, r_c, r_h, r_w, r_scale, ZP, producer=host.name)
@@ -489,8 +622,9 @@ def lower_yolov8n(model_or_path, host_regions: Sequence[str] = ()) -> GraphIR:
                 out_name = act_q
                 out_scale = s2
             elif (not cons and conv_f in [o.name for o in G.g.output]) or \
-                    (cons and set(kinds) <= {"Conv", "Add", "DepthToSpace"}):
-                out_name, out_scale = conv_q, s1   # no activation (a head, or SESR's head/tail convs)
+                    (cons and {c.op_type for c in cons if c.name not in region_of} <= {"Conv", "Add", "DepthToSpace"}):
+                # No activation (a head, SESR's head/tail convs, or YOLO11's qkv read by a host region).
+                out_name, out_scale = conv_q, s1
             else:
                 raise ValueError(f"{node.name}: unexpected consumers {kinds}")
             # Residual add directly after the activation? It attaches to the operand computed last:
@@ -517,9 +651,10 @@ def lower_yolov8n(model_or_path, host_regions: Sequence[str] = ()) -> GraphIR:
                 if len(segs) != 1:
                     raise ValueError(f"{add.name}: residual must be one segment")
                 layer.residual = segs[0]
-                # Float semantics with power-of-two scales, exact in integers at the finer operand
-                # scale: y = rne((t_main << lsh_main) + (t_res << lsh_res), shift).
-                s_min = min(out_scale, s_res)
+                # Float semantics with power-of-two scales, exact in integers at the finest of the three
+                # scales: y = rne((t_main << lsh_main) + (t_res << lsh_res), shift). An output finer than both
+                # operands (YOLO11's attention Add) shifts both left and rounds nothing.
+                s_min = min(out_scale, s_res, s_add)
                 layer.residual_lsh_main = _log2_exact(out_scale / s_min)
                 layer.residual_lsh_res = _log2_exact(s_res / s_min)
                 layer.residual_shift = _log2_exact(s_add / s_min)
@@ -605,6 +740,12 @@ def lower_yolov8n(model_or_path, host_regions: Sequence[str] = ()) -> GraphIR:
             mode = _attr(node, "mode", b"DCR")
             transforms[out_q] = (x_q, {"op": "depth_to_space", "blocksize": int(_attr(node, "blocksize")),
                                        "mode": mode.decode() if isinstance(mode, bytes) else str(mode)})
+        elif node.op_type == "Reshape":
+            # Outside host regions a reshape must be a channel view (YOLO11's attention v: qkv channels 64-127,
+            # then 192-255, read by the pe convolution).
+            out_q, so, zo = G.q_sink(node.output[0])
+            add_view(out_q, channel_view(node, so, zo))
+            scales[out_q] = so
         elif node.op_type == "Add":
             continue  # handled with the producing conv
         else:
@@ -615,7 +756,7 @@ def lower_yolov8n(model_or_path, host_regions: Sequence[str] = ()) -> GraphIR:
             raise ValueError(f"{node.name}: no conv output absorbed this Add")
     for r in regions:
         if r["q_out"] not in tensors:
-            raise ValueError(f"host region {r['prefix']}: its output was never built")
+            raise ValueError(f"host region {r['spec']}: its output was never built")
 
     outputs = []
     output_transforms: Dict[str, Dict[str, Any]] = {}

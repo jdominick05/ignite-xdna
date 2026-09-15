@@ -180,7 +180,8 @@ def compile_graph_container(onnx_path, output_path, build_dir: Optional[Path] = 
                             verbose: bool = True, host_regions: Sequence[str] = ()) -> Dict[str, Any]:
     """Lower, schedule, build the device binaries and write the container. Returns the manifest.
 
-    ``host_regions`` are node-name prefixes run on the host between dispatches (``graph_ir.HostLayer``).
+    ``host_regions`` are node-name prefixes or ``FROM=TO`` boundaries run on the host between dispatches
+    (``graph_ir.HostLayer``).
     """
     import aie.iron as iron
     from aie.iron.device import NPU1

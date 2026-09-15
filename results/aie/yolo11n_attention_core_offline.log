@@ -1,0 +1,117 @@
+# YOLO11n attention core, offline evidence, 2026-09-15T15:25Z on DESKTOP-CBL5NUA (AMD64 Family 25 Model 117 Stepping 2, AuthenticAMD); no NPU used
+# Sections 1 and 2 are sizing on a host that was not kept quiet: shares and ratios, not figures.
+# Sections 3 and 4 are exactness checks (graph optimizations off for the ONNX Runtime reference).
+
+=== 1. ONNX Runtime per-node profile of the whole-block host model (mlir-aie-iron, ORT 1.30)
+$ python <scratch>\profile_host_region.py
+ORT 1.30.0; input /model.9/cv2/act/Mul_output_0_QuantizeLinear_Output tensor(uint8) [1, 256, 20, 20]; outputs ['/model.10/cv2/act/Mul_output_0_QuantizeLinear_Output']
+run mean 2.042 ms, median 1.956, p95 2.590 over 500
+profiled runs 550; kernel time per run 1.806 ms
+by op type (ms per run, share of kernel time):
+  DequantizeLinear               0.573   31.7%
+  Conv                           0.439   24.3%
+  QuantizeLinear                 0.158    8.7%
+  QLinearSoftmax                 0.108    6.0%
+  QLinearMatMul                  0.096    5.3%
+  HardSigmoid                    0.086    4.8%
+  QLinearMul                     0.085    4.7%
+  Mul                            0.068    3.7%
+  Transpose                      0.067    3.7%
+  QLinearAdd                     0.052    2.9%
+  Split                          0.031    1.7%
+  Reshape                        0.029    1.6%
+  QLinearConcat                  0.015    0.8%
+top nodes:
+  /model.10/m/m.0/attn/Softmax [QLinearSoftmax]                                                0.108
+  /model.10/cv1/conv/Conv [Conv]                                                               0.094
+  /model.10/cv2/conv/Conv [Conv]                                                               0.093
+  /model.10/m/m.0/attn/qkv/conv/Conv [Conv]                                                    0.064
+  /model.10/m/m.0/ffn/ffn.0/conv/Conv [Conv]                                                   0.064
+  /model.10/m/m.0/attn/MatMul_1 [QLinearMatMul]                                                0.054
+  /model.10/m/m.0/ffn/ffn.1/conv/Conv [Conv]                                                   0.054
+  /model.10/Concat_output_0_DequantizeLinear [DequantizeLinear]                                0.044
+  /model.9/cv2/act/Mul_output_0_DequantizeLinear [DequantizeLinear]                            0.043
+  /model.10/cv2/conv/Conv_output_0_DequantizeLinear/duplicated [DequantizeLinear]              0.043
+  /model.10/m/m.0/attn/MatMul [QLinearMatMul]                                                  0.042
+  /model.10/m/m.0/ffn/ffn.0/conv/Conv_output_0_DequantizeLinear/duplicated [DequantizeLinear   0.042
+  /model.10/cv1/conv/Conv_output_0_DequantizeLinear/duplicated [DequantizeLinear]              0.042
+  /model.10/m/m.0/attn/proj/conv/Conv [Conv]                                                   0.039
+  /model.10/m/m.0/attn/Transpose_1 [Transpose]                                                 0.037
+  /model.10/m/m.0/ffn/ffn.0/act/Mul_output_0_DequantizeLinear [DequantizeLinear]               0.036
+  model.10.cv1.conv.weight_DequantizeLinear [DequantizeLinear]                                 0.036
+  model.10.cv2.conv.weight_DequantizeLinear [DequantizeLinear]                                 0.032
+  /model.10/m/m.0/attn/pe/conv/Conv [Conv]                                                     0.031
+  /model.10/m/m.0/attn/Transpose [Transpose]                                                   0.030
+[exit 0 after 2.5 s]
+
+=== 2. Attention core vs whole block, alternating in one process (mlir-aie-iron, ORT 1.30)
+$ python <scratch>\size_attention_core.py
+core input : /model.10/m/m.0/attn/qkv/conv/Conv_output_0_QuantizeLinear_Output
+core output: /model.10/m/m.0/attn/Reshape_1_output_0_QuantizeLinear_Output
+core nodes 46: {'Constant': 12, 'DequantizeLinear': 12, 'MatMul': 2, 'Mul': 1, 'QuantizeLinear': 11, 'Reshape': 2, 'Slice': 3, 'Softmax': 1, 'Transpose': 2}
+region nodes 134
+core input [1, 256, 20, 20] output [[1, 128, 20, 20]]
+region input [1, 256, 20, 20] output [[1, 256, 20, 20]]
+core   mean 0.331 ms  median 0.327  p95 0.365
+region mean 1.474 ms  median 1.463  p95 1.552
+core / region (median): 0.223
+[exit 0 after 2.2 s]
+
+=== 3. v as a channel view of the qkv output (resnet_env17)
+$ python <scratch>\check_v_view.py
+Reshape_2 reads: DequantizeLinear <- QuantizeLinear <- Slice /model.10/m/m.0/attn/Split_output_2_2
+v Slice starts/ends/axes: [[64], [128], [2]]
+Reshape shape: [1, 2, 128, 400] Reshape_2 shape: [1, 128, 20, 20]
+channel map from ONNX semantics == [64:128]+[192:256]: True | spatial identity: True
+pixel order preserved: True
+bus.jpg: Reshape_2 == qkv[64:128]+qkv[192:256]: True (shapes (256, 20, 20) (128, 20, 20), differing bytes 0)
+random0: Reshape_2 == qkv[64:128]+qkv[192:256]: True (shapes (256, 20, 20) (128, 20, 20), differing bytes 0)
+random1: Reshape_2 == qkv[64:128]+qkv[192:256]: True (shapes (256, 20, 20) (128, 20, 20), differing bytes 0)
+V VIEW EXACT
+[exit 0 after 0.7 s]
+
+=== 4. Offline gate: lowering, reference, emulation, stream regressions (resnet_env17)
+$ python <scratch>\gate_attention_core.py
+[lower] yolo11n_cut_xint8.onnx: 91 layers (1 host) in 0.1 s
+[host] /model.10/m/m.0/attn/qkv/conv/Conv=/model.10/m/m.0/attn/Reshape_1
+       input /model.10/m/m.0/attn/qkv/conv/Conv_output_0_QuantizeLinear_Output, output /model.10/m/m.0/attn/Reshape_1_output_0_QuantizeLinear_Output, model 15,724 B, ops {'Constant': 12, 'DequantizeLinear': 12, 'MatMul': 2, 'Mul': 1, 'QuantizeLinear': 11, 'Reshape': 2, 'Slice': 3, 'Softmax': 1, 'Transpose': 2}
+   36 conv /model.10/cv1/conv/Conv                256->256 k1 s1 20x20 shift=6 hswish(err=0) in=[Mul_output_0_QuantizeLin[0:32]]
+   37 conv /model.10/m/m.0/attn/qkv/conv/Conv     128->256 k1 s1 20x20 shift=7 in=[Mul_output_0_QuantizeLin[16:32]]
+   38 host /model.10/m/m.0/attn/qkv/conv/Conv=/model.10/m/m.0/attn/Reshape_1 128 20x20 (Constant 12, DequantizeLinear 12, MatMul 2, Mul 1, QuantizeLinear 11, Reshape 2, Slice 3, Softmax 1, Transpose 2)
+   39 conv /model.10/m/m.0/attn/pe/conv/Conv      128->128 k3 s1 20x20 shift=5 +res>>0 in=[Conv_output_0_QuantizeLi[8:16], Conv_output_0_QuantizeLi[24:32]]
+   40 conv /model.10/m/m.0/attn/proj/conv/Conv    128->128 k1 s1 20x20 shift=6 +res>>1 in=[Add_output_0_QuantizeLin[0:16]]
+   41 conv /model.10/m/m.0/ffn/ffn.0/conv/Conv    128->256 k1 s1 20x20 shift=8 hswish(err=0) in=[Add_output_0_QuantizeLin[0:16]]
+   42 conv /model.10/m/m.0/ffn/ffn.1/conv/Conv    256->128 k1 s1 20x20 shift=7 +res>>0 in=[Mul_output_0_QuantizeLin[0:32]]
+   43 conv /model.10/cv2/conv/Conv                256->256 k1 s1 20x20 shift=8 hswish(err=0) in=[Mul_output_0_QuantizeLin[0:16], Add_1_output_0_QuantizeL[0:16]]
+[plan] segments ['npu', 'host', 'npu'], tasks per NPU segment [1416, 2092], workspace 25,077,120 B, static packets 10,637,056 B
+[DERIVED] attention core on the host: 3508 tasks, 155,564,288 B, 7.839 ms | whole C2PSA on the host: 3360 tasks, 149,810,432 B, 7.539 ms | added 0.301 ms (x1.12 0.337)
+[direct vs ORT] bus.jpg: 91/91 exact, heads True, host core with ORT optimizations identical True
+[emulation vs direct] bus.jpg: 91/91 exact (18.0 s)
+[direct vs ORT] 000000000139.jpg: 91/91 exact, heads True, host core with ORT optimizations identical True
+[emulation vs direct] 000000000139.jpg: 91/91 exact (18.0 s)
+[direct vs ORT] 000000001532.jpg: 91/91 exact, heads True, host core with ORT optimizations identical True
+[emulation vs direct] 000000001532.jpg: 91/91 exact (17.9 s)
+[direct vs ORT] 000000002592.jpg: 91/91 exact, heads True, host core with ORT optimizations identical True
+[direct vs ORT] 000000005037.jpg: 91/91 exact, heads True, host core with ORT optimizations identical True
+[direct vs ORT] 000000006763.jpg: 91/91 exact, heads True, host core with ORT optimizations identical True
+[direct vs ORT] 000000007888.jpg: 91/91 exact, heads True, host core with ORT optimizations identical True
+[direct vs ORT] 000000009590.jpg: 91/91 exact, heads True, host core with ORT optimizations identical True
+[direct vs ORT] 000000011511.jpg: 91/91 exact, heads True, host core with ORT optimizations identical True
+[direct vs ORT] 000000013291.jpg: 91/91 exact, heads True, host core with ORT optimizations identical True
+[direct vs ORT] 000000015079.jpg: 91/91 exact, heads True, host core with ORT optimizations identical True
+[direct vs ORT] 000000016249.jpg: 91/91 exact, heads True, host core with ORT optimizations identical True
+[direct vs ORT] 000000017899.jpg: 91/91 exact, heads True, host core with ORT optimizations identical True
+[direct vs ORT] 000000019402.jpg: 91/91 exact, heads True, host core with ORT optimizations identical True
+[direct vs ORT] 000000021839.jpg: 91/91 exact, heads True, host core with ORT optimizations identical True
+[direct vs ORT] 000000023126.jpg: 91/91 exact, heads True, host core with ORT optimizations identical True
+[direct vs ORT] 000000025057.jpg: 91/91 exact, heads True, host core with ORT optimizations identical True
+[direct vs ORT] 000000026690.jpg: 91/91 exact, heads True, host core with ORT optimizations identical True
+[direct vs ORT] 000000029393.jpg: 91/91 exact, heads True, host core with ORT optimizations identical True
+[direct vs ORT] 000000031248.jpg: 91/91 exact, heads True, host core with ORT optimizations identical True
+[direct vs ORT] 000000032817.jpg: 91/91 exact, heads True, host core with ORT optimizations identical True
+[host optimizations] identical on 21/21 images
+[stream] yolov8n_full: identical to results/model_zoo/stream_yolov8n_full.json: True (2972 tasks)
+[stream] yolov8s: identical to results/model_zoo/stream_yolov8s.json: True (7143 tasks)
+[stream] sesr_m7: identical to results/model_zoo/stream_sesr_m7.json: True (1007 tasks)
+ATTENTION CORE GATE PASS
+[exit 0 after 76.3 s]
