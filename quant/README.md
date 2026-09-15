@@ -91,7 +91,8 @@ all 218 activation tensors, 7,106,560,000 bytes for 64 images, under `scratch/`.
 file; `quantize` keeps the strict loader. Direct Python commands print to the
 terminal; use the shell wrappers when collecting repository evidence. Existing output models and sidecars are never overwritten.
 Calibration checks free disk from inferred tensor sizes and removes its private spool
-on normal completion or a Python exception. Hard process termination can leave a spool.
+on normal completion or a Python exception. Hard process termination can leave a spool
+and a partial model/sidecar pair; see [Recover from a killed run](#recover-from-a-killed-run).
 The historical `pipelines/resnet50/3c_quantize_own.py` entry point delegates to this CLI.
 
 `--scales-from <reference.onnx>` selects position-table replay instead of independent
@@ -136,6 +137,98 @@ half minutes and 5.7 GB for yolov8n-cut's 63 layers on 64 images. The matching o
 is `./scripts/quant-reference.sh --cle --adaround` (with `--in-model` and `--calib-dir`
 for YOLO), and `scripts/quant-validate.sh` gates the pair like any other artifact;
 `INT8_EXACT` in its diff log is the bitwise verdict.
+
+## Recover from a killed run
+
+Normal completion and a Python exception clean up after themselves. A hard termination
+(`taskkill /F`, a closed terminal, a crash or a power loss) ends the process before
+Python's cleanup or a wrapper's `trap` can run. It can leave a calibration spool, a
+partial model/sidecar pair and a partial log. Remove only what the killed run created,
+by exact name. `scratch/`, `%TEMP%`, `models/` and `results/quant/` also hold other
+runs' files, so never delete any of them wholesale or by a broad glob.
+
+First confirm the run has really ended; a live run's files look the same as a stranded
+run's. In PowerShell, none of the listed command lines may be a quantization
+(`-m quant`, `3d_quantize_compare.py` or another Quark script). Also look for the
+`tools/torch_device_info.py --watch` GPU sampler: `quant-adaround.sh --device` starts it,
+it runs until killed, and the wrapper stops it only from its EXIT trap
+(`scripts/quant-adaround.sh:78-83`). If one is still listed after its wrapper died, stop
+it with `Stop-Process -Id <ProcessId>`.
+
+```powershell
+Get-CimInstance Win32_Process -Filter "Name='python.exe'" | Select-Object ProcessId, CommandLine | Format-List
+```
+
+### Calibration spools
+
+| Killed command | Spool it can leave |
+|---|---|
+| `quant-own.sh`, `quant-adaround.sh`, or `python -m quant quantize` without `--calib-method exact` | None: `hist` calibration writes nothing to disk, `quant-own.sh` has no `--calib-method` flag, and `adaround` writes no spool |
+| `python -m quant quantize --calib-method exact` | `owned-calib-*` directories of `tensor_<i>.f16` files under the `--scratch` root, `scratch/` by default (`quant/calib.py:205`) |
+| `scripts/quant-reference.sh` | `quark_onnx.*` directories inside its private `scratch/quant-reference.*` (`scripts/quant-reference.sh:51-54`) |
+| Any other script that calls `quark_guard`, or a Quark pipeline script run by hand | `quark_onnx.*` directories directly under `%TEMP%` |
+
+Only those commands create `owned-calib-*` and `quant-reference.*`, so once no
+quantization is running, every such directory under the checkout's `scratch/` (or the
+`--scratch` root you passed) is stranded. List them with sizes, then delete each by the
+exact path `du` printed:
+
+```bash
+du -sh scratch/owned-calib-*/ scratch/quant-reference.*/ 2>/dev/null
+rm -rf -- scratch/owned-calib-XXXXXXXX
+```
+
+A normal `quant-reference.sh` exit leaves its `quant-reference.*` directory behind too:
+`quark_cleanup` (`scripts/lib.sh:320-336`) removes the `quark_onnx.*` directories and
+the marker inside it, not the directory itself.
+
+`%TEMP%` is shared with every other program and checkout. A killed wrapper leaves its
+`.quark_guard.<pid>` marker there, created when the run armed its cleanup
+(`scripts/lib.sh:314-318`). Its spools are among the `quark_onnx.*` directories newer
+than that marker, the test `quark_cleanup` applies on a normal exit. That test alone
+does not prove ownership, because a later or overlapping Quark run passes it too, so
+delete only the directories whose times also fall before the kill. A Quark script run
+by hand leaves no marker; use the time it started instead.
+
+```bash
+t="$(cygpath -u "$TEMP")"
+find "$t" -maxdepth 1 \( -name 'quark_onnx.*' -o -name '.quark_guard.*' \) -printf '%TY-%Tm-%Td %TH:%TM  %p\n' | sort
+find "$t" -maxdepth 1 -type d -name 'quark_onnx.*' -newer "$t/.quark_guard.PID" -print0 | xargs -0 -r du -sh
+rm -rf -- "$t/quark_onnx.calib.XXXXXXXX" "$t/quark_onnx.quant.XXXXXXXX" "$t/.quark_guard.PID"
+```
+
+### Partial output pairs
+
+Each producer writes the model first and its sidecar last, so a sidecar that matches
+the model marks a finished run:
+
+| Producer | Sidecar | Model hash field | Writes |
+|---|---|---|---|
+| `python -m quant quantize` (`quant-own.sh`) | `<out>.quant.json` | `output_sha256` | `quant/quantize.py:166-172` |
+| `python -m quant adaround` (`quant-adaround.sh`) | `<out>.quant.json` | `output_sha256` | `quant/cli.py:213-233` |
+| `quant-reference.sh` | `<out>` with `.onnx` replaced by `.reference.json` | `model_sha256` | `pipelines/resnet50/3d_quantize_compare.py:97-107` |
+
+A pair is complete only when the sidecar parses and that field equals the model's hash
+(any Python will do):
+
+```bash
+sha256sum models/resnet50_ignition_alpha.onnx
+python -c "import json, sys; print(json.load(open(sys.argv[1], encoding='utf-8'))['output_sha256'])" models/resnet50_ignition_alpha.onnx.quant.json
+```
+
+A missing sidecar, a JSON error from a truncated one, or two different hashes mark a
+partial pair. The producers refuse an existing model or sidecar
+(`quant/quantize.py:105-106`, `quant/cli.py:147`,
+`pipelines/resnet50/3d_quantize_compare.py:43-44`), so a retry under the same `--out`
+fails until that one pair's two paths are deleted by name; or choose a new `--out`.
+Output models are gitignored (`models/`, `*.onnx`), so nothing restores a deleted file.
+
+A killed wrapper also leaves its `--log` and, beside it, the `load_<name>` host-load
+witness (`scripts/lib.sh:162-166`); the wrappers refuse an existing `--log`.
+`quant-adaround.sh --device` also leaves a `gpuload_<name>` witness there and refuses to
+start while it exists (`scripts/quant-adaround.sh:58-59`). Logs under
+`results/` are tracked evidence: `git ls-files -- <path>` prints nothing for a file git
+does not track. Delete or rename only such a file, never a tracked log.
 
 ## Verify an output
 
