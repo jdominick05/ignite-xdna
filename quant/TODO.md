@@ -216,5 +216,8 @@ recorded in the handoff and Git history rather than treated as future features.
   document source artifacts and licenses without redistributing model/data assets.
 - [ ] Decide an installable package/distribution name when packaging is warranted.
   Keep the project name Ignition and internal package `quant` for this alpha.
-- [ ] Add recovery guidance for hard-terminated calibration spools and partial output
-  pairs without deleting unrelated shared artifacts.
+- [x] Add recovery guidance for hard-terminated calibration spools and partial output
+  pairs without deleting unrelated shared artifacts. Evidence: [Recover from a killed
+  run](README.md#recover-from-a-killed-run), which cites the code behind each step. Its
+  commands were run against synthetic spools, guard markers and pairs on Desktop 2
+  (2026-09-14); no calibration was killed to write it.
