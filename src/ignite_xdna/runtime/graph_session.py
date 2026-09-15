@@ -12,7 +12,8 @@ readback); the manifest's ``task`` picks the session on top of it:
   head tensors back and presents them through the ``head_layout`` contract of
   ``runtime/heads.py`` as int8 NCHW views of an egress buffer, so
   ``YoloPipeline.predict_sync(use_oracle_for_boxes=False)`` decodes them with
-  ``head_source == "npu"``.
+  ``head_source == "npu"``. A ``pose`` container (YOLOv8-pose) opens in the same session, which then reads
+  nine heads (one person class, plus the 51-channel keypoint heads) for ``PosePipeline`` to decode.
 * ``DenseGraphSession`` (``super_resolution``, SESR): stages the resized RGB
   frame, dispatches, reads the dense output tensor back and applies the
   manifest's ``dense_output`` transform (DepthToSpace and dequantization)
@@ -38,7 +39,7 @@ import numpy as np
 
 from ignite_xdna.compiler.serializer import IgniteModelReader
 from ignite_xdna.runtime.driver import XrtSiliconHarness, get_repo_root, setup_xrt_environment
-from ignite_xdna.runtime.heads import HEAD_NAMES, HeadStatus, resolve_head_layout
+from ignite_xdna.runtime.heads import HEAD_NAMES, POSE_HEAD_NAMES, HeadStatus, resolve_head_layout
 
 ENGINE_NAME = "conv_engine_v1"
 ZP = 128
@@ -330,16 +331,17 @@ class EngineSession:
 
 
 class GraphSession(EngineSession):
-    """Session for ``engine == conv_engine_v1`` detection containers (whole YOLOv8 on the NPU)."""
+    """Session for ``engine == conv_engine_v1`` detect and pose containers (whole YOLOv8 or YOLOv8-pose on the NPU)."""
 
     def __init__(self, container_path: Union[str, Path], device_index: int = 0,
                  xclbin_cache_dir: Optional[Union[str, Path]] = None, map_workspace: bool = True, **_ignored):
         super().__init__(container_path, device_index=device_index, xclbin_cache_dir=xclbin_cache_dir,
                          map_workspace=map_workspace)
-        if self.task != "detect":
+        if self.task not in ("detect", "pose"):
             task = self.task
             self.close()
             raise ValueError(f"{self.path} is a {task} container; open it with DenseGraphSession")
+        self.head_names = POSE_HEAD_NAMES if self.task == "pose" else HEAD_NAMES
         self.in_bytes = 3 * 640 * 640
         p = self.input_placement
         # With the mapped workspace, ``stage_image`` has the native preprocessor letterbox,
@@ -366,17 +368,18 @@ class GraphSession(EngineSession):
         self.heads_meta = self.ge["heads"]
         self._egress = np.zeros(self.out_bytes, dtype=np.int8)
         self._head_regions = []
-        for name in HEAD_NAMES:
+        for name in self.head_names:
             hm = self.heads_meta[name]
             hp = self.ge["placements"][hm["tensor"]]
             nbytes = hp["blocks"] * hp["height"] * hp["width"] * 8
             self._head_regions.append((name, hm, hp, hp["base"], nbytes))
         # Per-anchor class-logit maxima of the class heads (int8, zero point 0), filled natively
-        # during readback so the decoder's confidence prune does not scan the class tensors.
+        # during readback so the decoder's confidence prune does not scan the class tensors. A pose score
+        # head has one channel, so the pose decoder prunes on it directly.
         self._cls_max: Dict[str, np.ndarray] = {
             name: np.empty(self.ge["placements"][self.heads_meta[name]["tensor"]]["height"]
                            * self.ge["placements"][self.heads_meta[name]["tensor"]]["width"], dtype=np.int8)
-            for name in HEAD_NAMES if name.endswith("_cls")}
+            for name in self.head_names if name.endswith("_cls") and self.task == "detect"}
         self._cls_max_valid = False
         self._head_status: Optional[HeadStatus] = None
         self._head_views: Optional[Dict[str, np.ndarray]] = None  # int8 views of the persistent egress
@@ -386,7 +389,7 @@ class GraphSession(EngineSession):
     @property
     def head_status(self) -> HeadStatus:
         if self._head_status is None:
-            self._head_status = resolve_head_layout(self.ignite_manifest, self.out_bytes)
+            self._head_status = resolve_head_layout(self.ignite_manifest, self.out_bytes, self.head_names)
         return self._head_status
 
     # ------------------------------------------------------------------ frame
@@ -433,7 +436,7 @@ class GraphSession(EngineSession):
         self._upload_input()
 
     def read_heads(self) -> np.ndarray:
-        """Sync the six head tensors back and assemble the int8 NCHW egress buffer."""
+        """Sync the head tensors back and assemble the int8 NCHW egress buffer."""
         d = self.harness.pyxrt.xclBOSyncDirection.XCL_BO_SYNC_BO_FROM_DEVICE
         cls_ok = self._class_max is not None
         for name, hm, hp, base, nbytes in self._head_regions:
@@ -472,7 +475,7 @@ class GraphSession(EngineSession):
         egress = self.read_heads()
         t3 = time.perf_counter()
         status = self.head_status
-        out: Dict[str, Any] = {name: None for name in HEAD_NAMES}
+        out: Dict[str, Any] = {name: None for name in self.head_names}
         if status.present:
             if self._head_views is None:
                 # The egress buffer is allocated once, so its head views and scales are too.

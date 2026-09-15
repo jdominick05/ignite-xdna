@@ -1,0 +1,53 @@
+# host DESKTOP-CBL5NUA (Desktop 2)
+# start 2026-09-15T19:04:40Z
+# ignite-xdna HEAD d223e7b; d223e7b plus the uncommitted pose container changes committed with this log; build/yolov8n_pose.ignite built from them at 2026-09-15T18:57:30Z; Python 3.13 mlir-aie-iron conda env (onnxruntime 1.30, pycocotools)
+# cwd <ignite-xdna checkout>
+# command C:/Users/<user>/miniforge3/envs/mlir-aie-iron/python.exe pipelines/yolov8n-pose/5_eval_map.py --model build/yolov8n_pose.ignite --ep ignite --ingress native --images <ignite-xdna>/data/coco/val2017 --ann <ignite-xdna>/data/coco/annotations/person_keypoints_val2017.json --dets <scratch>/dets_kpts_yolov8n_pose_ignite_native.json
+
+loading annotations into memory...
+Done (t=0.16s)
+creating index...
+index created!
+ignite_xdna: <ignite-xdna>\ignite_xdna\__init__.py
+model: graph-engine container (task pose), every layer on the NPU, numpy decode, ingress native, input 640x640
+eval : 5000 images, conf 0.001, iou 0.7, max_det 300, class-agnostic NMS (single class)
+  500/5000  (13322 detections so far)
+  1000/5000  (27573 detections so far)
+  1500/5000  (42451 detections so far)
+  2000/5000  (56871 detections so far)
+  2500/5000  (70773 detections so far)
+  3000/5000  (84380 detections so far)
+  3500/5000  (98469 detections so far)
+  4000/5000  (112295 detections so far)
+  4500/5000  (124917 detections so far)
+  5000/5000  (138961 detections so far)
+
+138961 detections over 5000 images in 60s
+inference  mean 8.59 ms   median 8.46 ms  (letterbox, NPU, decode and NMS)
+wrote <scratch>/dets_kpts_yolov8n_pose_ignite_native.json
+Loading and preparing results...
+DONE (t=2.41s)
+creating index...
+index created!
+Running per image evaluation...
+Evaluate annotation type *keypoints*
+DONE (t=5.31s).
+Accumulating evaluation results...
+DONE (t=0.31s).
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets= 20 ] = 0.328
+ Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets= 20 ] = 0.678
+ Average Precision  (AP) @[ IoU=0.75      | area=   all | maxDets= 20 ] = 0.277
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=medium | maxDets= 20 ] = 0.236
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= large | maxDets= 20 ] = 0.453
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets= 20 ] = 0.429
+ Average Recall     (AR) @[ IoU=0.50      | area=   all | maxDets= 20 ] = 0.788
+ Average Recall     (AR) @[ IoU=0.75      | area=   all | maxDets= 20 ] = 0.409
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=medium | maxDets= 20 ] = 0.332
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets= 20 ] = 0.562
+
+=== yolov8n_pose | IGNITE_NATIVE | 640px | 5000 images ===
+OKS mAP@50-95  32.77
+OKS mAP@50     67.82
+latency        8.59 ms  (letterbox, NPU, decode and NMS)
+
+# end 2026-09-15T19:05:55Z exit 0

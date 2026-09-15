@@ -1,0 +1,443 @@
+# YOLOv8n-pose on Device 0 and against AMD's stack, host DESKTOP-CBL5NUA (Desktop 2), start 2026-09-15T19:19:02Z
+# ignite-xdna: d223e7b plus the uncommitted pose changes committed with this log; Ignition: 7abbe05 plus its uncommitted pose task; build/yolov8n_pose.ignite built from the former at 2026-09-15T18:57:30Z
+[xrt-smi before] [003d:00:01.1] : NPU Phoenix | AIE Partitions | No hardware contexts running on device
+[cpu] CPU 2.3 % over 5 s; busiest System Idle Process 0, System 0,  0, Registry 0
+
+## Witnesses
+
+== 2026-09-15T19:19:08Z [verify yolov8n_pose.ignite] C:\Program Files\Git\bin\bash.exe scripts/research-iron.sh tools/verify_engine_container.py --container build/yolov8n_pose.ignite --model models/yolov8n-pose_cut_xint8.onnx
+[verify] pose container yolov8n_pose.ignite: 75 layers, reference in 0.6 s
+  L 0 /model.0/conv/Conv                           EXACT
+  L 1 /model.1/conv/Conv                           EXACT
+  L 2 /model.2/cv1/conv/Conv                       EXACT
+  L 3 /model.2/m.0/cv1/conv/Conv                   EXACT
+  L 4 /model.2/m.0/cv2/conv/Conv                   EXACT
+  L 5 /model.2/cv2/conv/Conv                       EXACT
+  L 6 /model.3/conv/Conv                           EXACT
+  L 7 /model.4/cv1/conv/Conv                       EXACT
+  L 8 /model.4/m.0/cv1/conv/Conv                   EXACT
+  L 9 /model.4/m.0/cv2/conv/Conv                   EXACT
+  L10 /model.4/m.1/cv1/conv/Conv                   EXACT
+  L11 /model.4/m.1/cv2/conv/Conv                   EXACT
+  L12 /model.4/cv2/conv/Conv                       EXACT
+  L13 /model.5/conv/Conv                           EXACT
+  L14 /model.6/cv1/conv/Conv                       EXACT
+  L15 /model.6/m.0/cv1/conv/Conv                   EXACT
+  L16 /model.6/m.0/cv2/conv/Conv                   EXACT
+  L17 /model.6/m.1/cv1/conv/Conv                   EXACT
+  L18 /model.6/m.1/cv2/conv/Conv                   EXACT
+  L19 /model.6/cv2/conv/Conv                       EXACT
+  L20 /model.7/conv/Conv                           EXACT
+  L21 /model.8/cv1/conv/Conv                       EXACT
+  L22 /model.8/m.0/cv1/conv/Conv                   EXACT
+  L23 /model.8/m.0/cv2/conv/Conv                   EXACT
+  L24 /model.8/cv2/conv/Conv                       EXACT
+  L25 /model.9/cv1/conv/Conv                       EXACT
+  L26 /model.9/m/MaxPool                           EXACT
+  L27 /model.9/m_1/MaxPool                         EXACT
+  L28 /model.9/m_2/MaxPool                         EXACT
+  L29 /model.9/cv2/conv/Conv                       EXACT
+  L30 /model.12/cv1/conv/Conv                      EXACT
+  L31 /model.12/m.0/cv1/conv/Conv                  EXACT
+  L32 /model.12/m.0/cv2/conv/Conv                  EXACT
+  L33 /model.12/cv2/conv/Conv                      EXACT
+  L34 /model.15/cv1/conv/Conv                      EXACT
+  L35 /model.15/m.0/cv1/conv/Conv                  EXACT
+  L36 /model.15/m.0/cv2/conv/Conv                  EXACT
+  L37 /model.15/cv2/conv/Conv                      EXACT
+  L38 /model.16/conv/Conv                          EXACT
+  L39 /model.22/cv2.0/cv2.0.0/conv/Conv            EXACT
+  L40 /model.22/cv3.0/cv3.0.0/conv/Conv            EXACT
+  L41 /model.22/cv4.0/cv4.0.0/conv/Conv            EXACT
+  L42 /model.22/cv2.0/cv2.0.1/conv/Conv            EXACT
+  L43 /model.22/cv3.0/cv3.0.1/conv/Conv            EXACT
+  L44 /model.22/cv4.0/cv4.0.1/conv/Conv            EXACT
+  L45 /model.18/cv1/conv/Conv                      EXACT
+  L46 /model.22/cv2.0/cv2.0.2/Conv                 EXACT
+  L47 /model.22/cv3.0/cv3.0.2/Conv                 EXACT
+  L48 /model.22/cv4.0/cv4.0.2/Conv                 EXACT
+  L49 /model.18/m.0/cv1/conv/Conv                  EXACT
+  L50 /model.18/m.0/cv2/conv/Conv                  EXACT
+  L51 /model.18/cv2/conv/Conv                      EXACT
+  L52 /model.19/conv/Conv                          EXACT
+  L53 /model.22/cv2.1/cv2.1.0/conv/Conv            EXACT
+  L54 /model.22/cv3.1/cv3.1.0/conv/Conv            EXACT
+  L55 /model.22/cv4.1/cv4.1.0/conv/Conv            EXACT
+  L56 /model.22/cv2.1/cv2.1.1/conv/Conv            EXACT
+  L57 /model.22/cv3.1/cv3.1.1/conv/Conv            EXACT
+  L58 /model.22/cv4.1/cv4.1.1/conv/Conv            EXACT
+  L59 /model.21/cv1/conv/Conv                      EXACT
+  L60 /model.22/cv2.1/cv2.1.2/Conv                 EXACT
+  L61 /model.22/cv3.1/cv3.1.2/Conv                 EXACT
+  L62 /model.22/cv4.1/cv4.1.2/Conv                 EXACT
+  L63 /model.21/m.0/cv1/conv/Conv                  EXACT
+  L64 /model.21/m.0/cv2/conv/Conv                  EXACT
+  L65 /model.21/cv2/conv/Conv                      EXACT
+  L66 /model.22/cv2.2/cv2.2.0/conv/Conv            EXACT
+  L67 /model.22/cv3.2/cv3.2.0/conv/Conv            EXACT
+  L68 /model.22/cv4.2/cv4.2.0/conv/Conv            EXACT
+  L69 /model.22/cv2.2/cv2.2.1/conv/Conv            EXACT
+  L70 /model.22/cv3.2/cv3.2.1/conv/Conv            EXACT
+  L71 /model.22/cv4.2/cv4.2.1/conv/Conv            EXACT
+  L72 /model.22/cv2.2/cv2.2.2/Conv                 EXACT
+  L73 /model.22/cv3.2/cv3.2.2/Conv                 EXACT
+  L74 /model.22/cv4.2/cv4.2.2/Conv                 EXACT
+[verify] 75/75 layers exact | first dispatch 9.280 ms | dispatch mean 7.783 ms, min 7.603, max 8.162 over 20
+[verify] PASS
+== 2026-09-15T19:19:10Z [verify yolov8n_pose.ignite] exit 0 after 1.5 s
+[xrt-smi after verify yolov8n_pose.ignite] [003d:00:01.1] : NPU Phoenix | AIE Partitions | No hardware contexts running on device
+
+== 2026-09-15T19:19:10Z [verify yolov8n_full.ignite] C:\Program Files\Git\bin\bash.exe scripts/research-iron.sh tools/verify_engine_container.py --container build/yolov8n_full.ignite --model models/yolov8n_cut_xint8.onnx
+[verify] detect container yolov8n_full.ignite: 66 layers, reference in 0.5 s
+  L 0 /model.0/conv/Conv                           EXACT
+  L 1 /model.1/conv/Conv                           EXACT
+  L 2 /model.2/cv1/conv/Conv                       EXACT
+  L 3 /model.2/m.0/cv1/conv/Conv                   EXACT
+  L 4 /model.2/m.0/cv2/conv/Conv                   EXACT
+  L 5 /model.2/cv2/conv/Conv                       EXACT
+  L 6 /model.3/conv/Conv                           EXACT
+  L 7 /model.4/cv1/conv/Conv                       EXACT
+  L 8 /model.4/m.0/cv1/conv/Conv                   EXACT
+  L 9 /model.4/m.0/cv2/conv/Conv                   EXACT
+  L10 /model.4/m.1/cv1/conv/Conv                   EXACT
+  L11 /model.4/m.1/cv2/conv/Conv                   EXACT
+  L12 /model.4/cv2/conv/Conv                       EXACT
+  L13 /model.5/conv/Conv                           EXACT
+  L14 /model.6/cv1/conv/Conv                       EXACT
+  L15 /model.6/m.0/cv1/conv/Conv                   EXACT
+  L16 /model.6/m.0/cv2/conv/Conv                   EXACT
+  L17 /model.6/m.1/cv1/conv/Conv                   EXACT
+  L18 /model.6/m.1/cv2/conv/Conv                   EXACT
+  L19 /model.6/cv2/conv/Conv                       EXACT
+  L20 /model.7/conv/Conv                           EXACT
+  L21 /model.8/cv1/conv/Conv                       EXACT
+  L22 /model.8/m.0/cv1/conv/Conv                   EXACT
+  L23 /model.8/m.0/cv2/conv/Conv                   EXACT
+  L24 /model.8/cv2/conv/Conv                       EXACT
+  L25 /model.9/cv1/conv/Conv                       EXACT
+  L26 /model.9/m/MaxPool                           EXACT
+  L27 /model.9/m_1/MaxPool                         EXACT
+  L28 /model.9/m_2/MaxPool                         EXACT
+  L29 /model.9/cv2/conv/Conv                       EXACT
+  L30 /model.12/cv1/conv/Conv                      EXACT
+  L31 /model.12/m.0/cv1/conv/Conv                  EXACT
+  L32 /model.12/m.0/cv2/conv/Conv                  EXACT
+  L33 /model.12/cv2/conv/Conv                      EXACT
+  L34 /model.15/cv1/conv/Conv                      EXACT
+  L35 /model.15/m.0/cv1/conv/Conv                  EXACT
+  L36 /model.15/m.0/cv2/conv/Conv                  EXACT
+  L37 /model.15/cv2/conv/Conv                      EXACT
+  L38 /model.16/conv/Conv                          EXACT
+  L39 /model.22/cv2.0/cv2.0.0/conv/Conv            EXACT
+  L40 /model.22/cv3.0/cv3.0.0/conv/Conv            EXACT
+  L41 /model.22/cv2.0/cv2.0.1/conv/Conv            EXACT
+  L42 /model.22/cv3.0/cv3.0.1/conv/Conv            EXACT
+  L43 /model.18/cv1/conv/Conv                      EXACT
+  L44 /model.22/cv2.0/cv2.0.2/Conv                 EXACT
+  L45 /model.22/cv3.0/cv3.0.2/Conv                 EXACT
+  L46 /model.18/m.0/cv1/conv/Conv                  EXACT
+  L47 /model.18/m.0/cv2/conv/Conv                  EXACT
+  L48 /model.18/cv2/conv/Conv                      EXACT
+  L49 /model.19/conv/Conv                          EXACT
+  L50 /model.22/cv2.1/cv2.1.0/conv/Conv            EXACT
+  L51 /model.22/cv3.1/cv3.1.0/conv/Conv            EXACT
+  L52 /model.22/cv2.1/cv2.1.1/conv/Conv            EXACT
+  L53 /model.22/cv3.1/cv3.1.1/conv/Conv            EXACT
+  L54 /model.21/cv1/conv/Conv                      EXACT
+  L55 /model.22/cv2.1/cv2.1.2/Conv                 EXACT
+  L56 /model.22/cv3.1/cv3.1.2/Conv                 EXACT
+  L57 /model.21/m.0/cv1/conv/Conv                  EXACT
+  L58 /model.21/m.0/cv2/conv/Conv                  EXACT
+  L59 /model.21/cv2/conv/Conv                      EXACT
+  L60 /model.22/cv2.2/cv2.2.0/conv/Conv            EXACT
+  L61 /model.22/cv3.2/cv3.2.0/conv/Conv            EXACT
+  L62 /model.22/cv2.2/cv2.2.1/conv/Conv            EXACT
+  L63 /model.22/cv3.2/cv3.2.1/conv/Conv            EXACT
+  L64 /model.22/cv2.2/cv2.2.2/Conv                 EXACT
+  L65 /model.22/cv3.2/cv3.2.2/Conv                 EXACT
+[verify] 66/66 layers exact | first dispatch 8.882 ms | dispatch mean 7.476 ms, min 7.265, max 8.116 over 20
+[verify] PASS
+== 2026-09-15T19:19:11Z [verify yolov8n_full.ignite] exit 0 after 1.4 s
+[xrt-smi after verify yolov8n_full.ignite] [003d:00:01.1] : NPU Phoenix | AIE Partitions | No hardware contexts running on device
+
+== 2026-09-15T19:19:11Z [verify yolo11n_core.ignite] C:\Program Files\Git\bin\bash.exe scripts/research-iron.sh tools/verify_engine_container.py --container build/yolo11n_core.ignite --model models/yolo11n_cut_xint8.onnx
+[verify] detect container yolo11n_core.ignite: 91 layers, reference in 0.5 s
+  L 0 /model.0/conv/Conv                           EXACT
+  L 1 /model.1/conv/Conv                           EXACT
+  L 2 /model.2/cv1/conv/Conv                       EXACT
+  L 3 /model.2/m.0/cv1/conv/Conv                   EXACT
+  L 4 /model.2/m.0/cv2/conv/Conv                   EXACT
+  L 5 /model.2/cv2/conv/Conv                       EXACT
+  L 6 /model.3/conv/Conv                           EXACT
+  L 7 /model.4/cv1/conv/Conv                       EXACT
+  L 8 /model.4/m.0/cv1/conv/Conv                   EXACT
+  L 9 /model.4/m.0/cv2/conv/Conv                   EXACT
+  L10 /model.4/cv2/conv/Conv                       EXACT
+  L11 /model.5/conv/Conv                           EXACT
+  L12 /model.6/cv1/conv/Conv                       EXACT
+  L13 /model.6/m.0/cv1/conv/Conv                   EXACT
+  L14 /model.6/m.0/cv2/conv/Conv                   EXACT
+  L15 /model.6/m.0/m/m.0/cv1/conv/Conv             EXACT
+  L16 /model.6/m.0/m/m.0/cv2/conv/Conv             EXACT
+  L17 /model.6/m.0/m/m.1/cv1/conv/Conv             EXACT
+  L18 /model.6/m.0/m/m.1/cv2/conv/Conv             EXACT
+  L19 /model.6/m.0/cv3/conv/Conv                   EXACT
+  L20 /model.6/cv2/conv/Conv                       EXACT
+  L21 /model.7/conv/Conv                           EXACT
+  L22 /model.8/cv1/conv/Conv                       EXACT
+  L23 /model.8/m.0/cv1/conv/Conv                   EXACT
+  L24 /model.8/m.0/cv2/conv/Conv                   EXACT
+  L25 /model.8/m.0/m/m.0/cv1/conv/Conv             EXACT
+  L26 /model.8/m.0/m/m.0/cv2/conv/Conv             EXACT
+  L27 /model.8/m.0/m/m.1/cv1/conv/Conv             EXACT
+  L28 /model.8/m.0/m/m.1/cv2/conv/Conv             EXACT
+  L29 /model.8/m.0/cv3/conv/Conv                   EXACT
+  L30 /model.8/cv2/conv/Conv                       EXACT
+  L31 /model.9/cv1/conv/Conv                       EXACT
+  L32 /model.9/m/MaxPool                           EXACT
+  L33 /model.9/m_1/MaxPool                         EXACT
+  L34 /model.9/m_2/MaxPool                         EXACT
+  L35 /model.9/cv2/conv/Conv                       EXACT
+  L36 /model.10/cv1/conv/Conv                      EXACT
+  L37 /model.10/m/m.0/attn/qkv/conv/Conv           EXACT
+  L38 HOST /model.10/m/m.0/attn/qkv/conv/Conv=/model.10/m/m.0/attn/Reshape_1 EXACT
+  L39 /model.10/m/m.0/attn/pe/conv/Conv            EXACT
+  L40 /model.10/m/m.0/attn/proj/conv/Conv          EXACT
+  L41 /model.10/m/m.0/ffn/ffn.0/conv/Conv          EXACT
+  L42 /model.10/m/m.0/ffn/ffn.1/conv/Conv          EXACT
+  L43 /model.10/cv2/conv/Conv                      EXACT
+  L44 /model.13/cv1/conv/Conv                      EXACT
+  L45 /model.13/m.0/cv1/conv/Conv                  EXACT
+  L46 /model.13/m.0/cv2/conv/Conv                  EXACT
+  L47 /model.13/cv2/conv/Conv                      EXACT
+  L48 /model.16/cv1/conv/Conv                      EXACT
+  L49 /model.16/m.0/cv1/conv/Conv                  EXACT
+  L50 /model.16/m.0/cv2/conv/Conv                  EXACT
+  L51 /model.16/cv2/conv/Conv                      EXACT
+  L52 /model.17/conv/Conv                          EXACT
+  L53 /model.23/cv2.0/cv2.0.0/conv/Conv            EXACT
+  L54 /model.23/cv3.0/cv3.0.0/cv3.0.0.0/conv/Conv  EXACT
+  L55 /model.23/cv2.0/cv2.0.1/conv/Conv            EXACT
+  L56 /model.23/cv3.0/cv3.0.0/cv3.0.0.1/conv/Conv  EXACT
+  L57 /model.19/cv1/conv/Conv                      EXACT
+  L58 /model.23/cv2.0/cv2.0.2/Conv                 EXACT
+  L59 /model.23/cv3.0/cv3.0.1/cv3.0.1.0/conv/Conv  EXACT
+  L60 /model.19/m.0/cv1/conv/Conv                  EXACT
+  L61 /model.23/cv3.0/cv3.0.1/cv3.0.1.1/conv/Conv  EXACT
+  L62 /model.19/m.0/cv2/conv/Conv                  EXACT
+  L63 /model.23/cv3.0/cv3.0.2/Conv                 EXACT
+  L64 /model.19/cv2/conv/Conv                      EXACT
+  L65 /model.20/conv/Conv                          EXACT
+  L66 /model.23/cv2.1/cv2.1.0/conv/Conv            EXACT
+  L67 /model.23/cv3.1/cv3.1.0/cv3.1.0.0/conv/Conv  EXACT
+  L68 /model.23/cv2.1/cv2.1.1/conv/Conv            EXACT
+  L69 /model.23/cv3.1/cv3.1.0/cv3.1.0.1/conv/Conv  EXACT
+  L70 /model.22/cv1/conv/Conv                      EXACT
+  L71 /model.23/cv2.1/cv2.1.2/Conv                 EXACT
+  L72 /model.23/cv3.1/cv3.1.1/cv3.1.1.0/conv/Conv  EXACT
+  L73 /model.22/m.0/cv1/conv/Conv                  EXACT
+  L74 /model.22/m.0/cv2/conv/Conv                  EXACT
+  L75 /model.23/cv3.1/cv3.1.1/cv3.1.1.1/conv/Conv  EXACT
+  L76 /model.22/m.0/m/m.0/cv1/conv/Conv            EXACT
+  L77 /model.23/cv3.1/cv3.1.2/Conv                 EXACT
+  L78 /model.22/m.0/m/m.0/cv2/conv/Conv            EXACT
+  L79 /model.22/m.0/m/m.1/cv1/conv/Conv            EXACT
+  L80 /model.22/m.0/m/m.1/cv2/conv/Conv            EXACT
+  L81 /model.22/m.0/cv3/conv/Conv                  EXACT
+  L82 /model.22/cv2/conv/Conv                      EXACT
+  L83 /model.23/cv2.2/cv2.2.0/conv/Conv            EXACT
+  L84 /model.23/cv3.2/cv3.2.0/cv3.2.0.0/conv/Conv  EXACT
+  L85 /model.23/cv2.2/cv2.2.1/conv/Conv            EXACT
+  L86 /model.23/cv3.2/cv3.2.0/cv3.2.0.1/conv/Conv  EXACT
+  L87 /model.23/cv2.2/cv2.2.2/Conv                 EXACT
+  L88 /model.23/cv3.2/cv3.2.1/cv3.2.1.0/conv/Conv  EXACT
+  L89 /model.23/cv3.2/cv3.2.1/cv3.2.1.1/conv/Conv  EXACT
+  L90 /model.23/cv3.2/cv3.2.2/Conv                 EXACT
+[verify] 91/91 layers exact | first dispatch 10.470 ms | dispatch mean 8.778 ms, min 8.691, max 8.887 over 20
+[verify] 1 host segment(s) ['/model.10/m/m.0/attn/qkv/conv/Conv=/model.10/m/m.0/attn/Reshape_1']: host mean 0.505 ms, min 0.414, max 1.047 (NPU dispatch above excludes it)
+[verify] PASS
+== 2026-09-15T19:19:13Z [verify yolo11n_core.ignite] exit 0 after 1.5 s
+[xrt-smi after verify yolo11n_core.ignite] [003d:00:01.1] : NPU Phoenix | AIE Partitions | No hardware contexts running on device
+
+== 2026-09-15T19:19:13Z [tests PoseOnSilicon] C:\Program Files\Git\bin\bash.exe scripts/research-iron.sh tests/test_npu_inference.py PoseOnSilicon
+test_30_heads_and_people_match_onnx_runtime (__main__.PoseOnSilicon.test_30_heads_and_people_match_onnx_runtime)
+numpy ingress: the nine heads equal ONNX Runtime CPU's, people equal its numpy tail's bit for bit, no ORT call. ... ok
+test_31_native_ingress_frames_without_buffer_growth (__main__.PoseOnSilicon.test_31_native_ingress_frames_without_buffer_growth)
+POSE_FRAMES frames of bus.jpg through native ingress: no buffer objects allocated, < 5 MB working-set drift. ... ok
+
+----------------------------------------------------------------------
+Ran 2 tests in 4.756s
+
+OK
+
+[silicon-pose] bus.jpg, numpy ingress: heads 9/9 equal ONNX Runtime | people 4 at conf 0.25, 37 at conf 0.001 | InferenceSession.run calls 0
+
+[silicon-pose] 500 frames of bus.jpg (native ingress): G2G mean 8.290 ms p50 8.228 p99 8.752 | dispatch mean 7.503 | preprocess 0.321 | readback 0.171 | decode and NMS 0.283 | people per frame [3] | buffer objects allocated after warm-up: {'host_bo': 0, 'instr_bo': 0} | working set +0.30 MB
+== 2026-09-15T19:19:18Z [tests PoseOnSilicon] exit 0 after 5.2 s
+[xrt-smi after tests] [003d:00:01.1] : NPU Phoenix | AIE Partitions | No hardware contexts running on device
+
+## Timed runs
+[cpu] CPU 3.6 % over 5 s; busiest System Idle Process 0, System 0,  0, Registry 0
+
+== 2026-09-15T19:19:24Z [amd #1] C:\Users\<user>\miniforge3\envs\resnet_env17\python.exe pipelines/yolov8n-pose/4_pose.py --model models/yolov8n-pose_cut_xint8.onnx --ep npu --source assets/bus.jpg --warmup 50 --runs 500 --log 2 --out <scratch>\sit_amd1.jpg
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  <ignite-xdna>\yoloposecutcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+model: head-cut (9 outputs), decode tail runs in numpy
+input: 640x640
+
+=== NPU | models/yolov8n-pose_cut_xint8.onnx | 640px | assets/bus.jpg ===
+infer   mean 8.89 ms   median 8.86 ms   p95 9.37 ms   (112.5 fps)
+post    mean 0.09 ms
+pre     mean 2.961 ms
+g2g     mean 12.056 ms   p50 12.007   p95 12.758   p99 13.305 ms   over 500 runs (82.9 fps)
+3 people:
+   person 0.88  (45,397,196,509)  16/17 keypoints visible
+   person 0.85  (224,406,118,451)  17/17 keypoints visible
+   person 0.73  (669,399,140,477)  8/17 keypoints visible
+wrote <scratch>\sit_amd1.jpg
+== 2026-09-15T19:19:32Z [amd #1] exit 0 after 7.3 s
+[xrt-smi after amd #1] [003d:00:01.1] : NPU Phoenix | AIE Partitions | No hardware contexts running on device
+
+== 2026-09-15T19:19:32Z [ignite #1] C:\Program Files\Git\bin\bash.exe scripts/research-iron.sh pipelines/yolov8n-pose/4_pose.py --model build/yolov8n_pose.ignite --ep ignite --source assets/bus.jpg --warmup 50 --runs 500 --out <scratch>\sit_ignite1.jpg
+ignite_xdna: <ignite-xdna>\ignite_xdna\__init__.py
+model: graph-engine container (task pose), every layer on the NPU, decode tail runs in numpy, ingress native
+input: 640x640
+
+=== IGNITE | build/yolov8n_pose.ignite | 640px | assets/bus.jpg ===
+infer   mean 7.92 ms   median 7.88 ms   p95 8.09 ms   (126.3 fps)
+post    mean 0.08 ms
+pre     mean 0.321 ms
+g2g     mean 8.318 ms   p50 8.264   p95 8.599   p99 8.768 ms   over 500 runs (120.2 fps)
+3 people:
+   person 0.94  (218,405,124,450)  17/17 keypoints visible
+   person 0.92  (44,398,204,504)  16/17 keypoints visible
+   person 0.88  (668,393,143,484)  10/17 keypoints visible
+wrote <scratch>\sit_ignite1.jpg
+== 2026-09-15T19:19:37Z [ignite #1] exit 0 after 5.3 s
+[xrt-smi after ignite #1] [003d:00:01.1] : NPU Phoenix | AIE Partitions | No hardware contexts running on device
+
+== 2026-09-15T19:19:37Z [live pose #1] C:\Users\<user>\miniforge3\envs\mlir-aie-iron\python.exe live_ignition.py --model <ignite-xdna>\build\yolov8n_pose.ignite --source <ignite-xdna>\assets\bus.jpg --headless --warmup 50 --frames 500 --json <scratch>\sit_live_pose1.json
+[Ignition] loading <ignite-xdna>\build\yolov8n_pose.ignite (bare-metal .ignite container)
+[Ignition] Native XDNA1 NPU backend active (Device 0)
+[Ignition] task: pose
+[Ignition] source: image bus.jpg 810x1080
+[run] frame 100 | G2G 8.31 ms | 120 FPS | 3 people | pose: npu
+[run] frame 200 | G2G 8.40 ms | 120 FPS | 3 people | pose: npu
+[run] frame 300 | G2G 8.27 ms | 119 FPS | 3 people | pose: npu
+[run] frame 400 | G2G 8.25 ms | 120 FPS | 3 people | pose: npu
+[run] frame 500 | G2G 8.48 ms | 120 FPS | 3 people | pose: npu
+[Ignition] shutdown: source released, window closed, NPU hardware context released
+[summary] stop: frame limit | 550 frames processed (50 warm-up, 500 timed) | 1 distinct source frames | image bus.jpg 810x1080
+[summary] G2G mean 8.360 ms | P50 8.285 | P95 8.669 | P99 8.860 | max 9.035 | over the last 500 timed frames; cold first frame 11.69 ms
+[summary] stage means (ms): preprocess 0.331 | NPU forward 7.737 (dispatch 7.548, readback 0.176) | decode+NMS 0.288
+[summary] keypoints from NPU heads on 500/500 timed frames | 3.00 people per frame
+[summary] RSS 182.1 MB at the first timed frame, 182.1 MB at the end (+0.07 MB over 500 frames)
+[summary] wrote <scratch>\sit_live_pose1.json
+== 2026-09-15T19:19:42Z [live pose #1] exit 0 after 5.0 s
+[xrt-smi after live pose #1] [003d:00:01.1] : NPU Phoenix | AIE Partitions | No hardware contexts running on device
+[cpu] CPU 2.3 % over 2 s; busiest System Idle Process 0, System 0,  0, Registry 0
+
+== 2026-09-15T19:19:45Z [amd #2] C:\Users\<user>\miniforge3\envs\resnet_env17\python.exe pipelines/yolov8n-pose/4_pose.py --model models/yolov8n-pose_cut_xint8.onnx --ep npu --source assets/bus.jpg --warmup 50 --runs 500 --log 2 --out <scratch>\sit_amd2.jpg
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  <ignite-xdna>\yoloposecutcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+model: head-cut (9 outputs), decode tail runs in numpy
+input: 640x640
+
+=== NPU | models/yolov8n-pose_cut_xint8.onnx | 640px | assets/bus.jpg ===
+infer   mean 8.87 ms   median 8.84 ms   p95 9.33 ms   (112.8 fps)
+post    mean 0.09 ms
+pre     mean 3.004 ms
+g2g     mean 12.089 ms   p50 12.023   p95 12.933   p99 13.175 ms   over 500 runs (82.7 fps)
+3 people:
+   person 0.88  (45,397,196,509)  16/17 keypoints visible
+   person 0.85  (224,406,118,451)  17/17 keypoints visible
+   person 0.73  (669,399,140,477)  8/17 keypoints visible
+wrote <scratch>\sit_amd2.jpg
+== 2026-09-15T19:19:52Z [amd #2] exit 0 after 7.4 s
+[xrt-smi after amd #2] [003d:00:01.1] : NPU Phoenix | AIE Partitions | No hardware contexts running on device
+
+== 2026-09-15T19:19:52Z [ignite #2] C:\Program Files\Git\bin\bash.exe scripts/research-iron.sh pipelines/yolov8n-pose/4_pose.py --model build/yolov8n_pose.ignite --ep ignite --source assets/bus.jpg --warmup 50 --runs 500 --out <scratch>\sit_ignite2.jpg
+ignite_xdna: <ignite-xdna>\ignite_xdna\__init__.py
+model: graph-engine container (task pose), every layer on the NPU, decode tail runs in numpy, ingress native
+input: 640x640
+
+=== IGNITE | build/yolov8n_pose.ignite | 640px | assets/bus.jpg ===
+infer   mean 7.94 ms   median 7.90 ms   p95 8.10 ms   (126.0 fps)
+post    mean 0.08 ms
+pre     mean 0.324 ms
+g2g     mean 8.339 ms   p50 8.276   p95 8.620   p99 8.818 ms   over 500 runs (119.9 fps)
+3 people:
+   person 0.94  (218,405,124,450)  17/17 keypoints visible
+   person 0.92  (44,398,204,504)  16/17 keypoints visible
+   person 0.88  (668,393,143,484)  10/17 keypoints visible
+wrote <scratch>\sit_ignite2.jpg
+== 2026-09-15T19:19:58Z [ignite #2] exit 0 after 5.3 s
+[xrt-smi after ignite #2] [003d:00:01.1] : NPU Phoenix | AIE Partitions | No hardware contexts running on device
+
+== 2026-09-15T19:19:58Z [live pose #2] C:\Users\<user>\miniforge3\envs\mlir-aie-iron\python.exe live_ignition.py --model <ignite-xdna>\build\yolov8n_pose.ignite --source <ignite-xdna>\assets\bus.jpg --headless --warmup 50 --frames 500 --json <scratch>\sit_live_pose2.json
+[Ignition] loading <ignite-xdna>\build\yolov8n_pose.ignite (bare-metal .ignite container)
+[Ignition] Native XDNA1 NPU backend active (Device 0)
+[Ignition] task: pose
+[Ignition] source: image bus.jpg 810x1080
+[run] frame 100 | G2G 8.45 ms | 117 FPS | 3 people | pose: npu
+[run] frame 200 | G2G 8.82 ms | 115 FPS | 3 people | pose: npu
+[run] frame 300 | G2G 8.64 ms | 116 FPS | 3 people | pose: npu
+[run] frame 400 | G2G 8.49 ms | 119 FPS | 3 people | pose: npu
+[run] frame 500 | G2G 8.60 ms | 120 FPS | 3 people | pose: npu
+[Ignition] shutdown: source released, window closed, NPU hardware context released
+[summary] stop: frame limit | 550 frames processed (50 warm-up, 500 timed) | 1 distinct source frames | image bus.jpg 810x1080
+[summary] G2G mean 8.481 ms | P50 8.443 | P95 8.857 | P99 9.107 | max 9.414 | over the last 500 timed frames; cold first frame 11.79 ms
+[summary] stage means (ms): preprocess 0.368 | NPU forward 7.788 (dispatch 7.572, readback 0.201) | decode+NMS 0.320
+[summary] keypoints from NPU heads on 500/500 timed frames | 3.00 people per frame
+[summary] RSS 182.0 MB at the first timed frame, 182.1 MB at the end (+0.04 MB over 500 frames)
+[summary] wrote <scratch>\sit_live_pose2.json
+== 2026-09-15T19:20:03Z [live pose #2] exit 0 after 5.1 s
+[xrt-smi after live pose #2] [003d:00:01.1] : NPU Phoenix | AIE Partitions | No hardware contexts running on device
+[cpu] CPU 1.9 % over 2 s; busiest System Idle Process 0, System 0,  0, Registry 0
+
+== 2026-09-15T19:20:06Z [live yolov8n control] C:\Users\<user>\miniforge3\envs\mlir-aie-iron\python.exe live_ignition.py --model <ignite-xdna>\build\yolov8n_full.ignite --source <ignite-xdna>\assets\bus.jpg --headless --warmup 50 --frames 500 --json <scratch>\sit_live_yolov8n.json
+[Ignition] loading <ignite-xdna>\build\yolov8n_full.ignite (bare-metal .ignite container)
+[Ignition] Native XDNA1 NPU backend active (Device 0)
+[Ignition] task: detect
+[Ignition] source: image bus.jpg 810x1080
+[run] frame 100 | G2G 7.71 ms | 130 FPS | 5 objects | detect: npu
+[run] frame 200 | G2G 7.66 ms | 129 FPS | 5 objects | detect: npu
+[run] frame 300 | G2G 7.83 ms | 128 FPS | 5 objects | detect: npu
+[run] frame 400 | G2G 7.64 ms | 130 FPS | 5 objects | detect: npu
+[run] frame 500 | G2G 7.77 ms | 129 FPS | 5 objects | detect: npu
+[Ignition] shutdown: source released, window closed, NPU hardware context released
+[summary] stop: frame limit | 550 frames processed (50 warm-up, 500 timed) | 1 distinct source frames | image bus.jpg 810x1080
+[summary] G2G mean 7.765 ms | P50 7.750 | P95 8.028 | P99 8.203 | max 8.326 | over the last 500 timed frames; cold first frame 12.07 ms
+[summary] stage means (ms): preprocess 0.317 | NPU forward 7.410 (dispatch 7.211, readback 0.199) | decode+NMS 0.033
+[summary] boxes from NPU heads on 500/500 timed frames | 5.00 detections per frame
+[summary] RSS 192.0 MB at the first timed frame, 192.0 MB at the end (+0.00 MB over 500 frames)
+[summary] wrote <scratch>\sit_live_yolov8n.json
+== 2026-09-15T19:20:11Z [live yolov8n control] exit 0 after 4.8 s
+
+== 2026-09-15T19:20:11Z [live yolo11n attention-core control] C:\Users\<user>\miniforge3\envs\mlir-aie-iron\python.exe live_ignition.py --model <ignite-xdna>\build\yolo11n_core.ignite --source <ignite-xdna>\assets\bus.jpg --headless --warmup 50 --frames 500 --json <scratch>\sit_live_yolo11n_core.json
+[Ignition] loading <ignite-xdna>\build\yolo11n_core.ignite (bare-metal .ignite container)
+[Ignition] Native XDNA1 NPU backend active (Device 0)
+[Ignition] task: detect
+[Ignition] source: image bus.jpg 810x1080
+[run] frame 100 | G2G 10.03 ms | 98 FPS | 6 objects | detect: npu
+[run] frame 200 | G2G 10.40 ms | 96 FPS | 6 objects | detect: npu
+[run] frame 300 | G2G 52.89 ms | 48 FPS | 6 objects | detect: npu
+[run] frame 400 | G2G 10.01 ms | 99 FPS | 6 objects | detect: npu
+[run] frame 500 | G2G 10.37 ms | 99 FPS | 6 objects | detect: npu
+[Ignition] shutdown: source released, window closed, NPU hardware context released
+[summary] stop: frame limit | 550 frames processed (50 warm-up, 500 timed) | 1 distinct source frames | image bus.jpg 810x1080
+[summary] G2G mean 11.990 ms | P50 10.259 | P95 18.968 | P99 52.912 | max 72.727 | over the last 500 timed frames; cold first frame 14.04 ms
+[summary] stage means (ms): preprocess 0.728 | NPU + host forward 11.210 (dispatch 8.890, host 0.705, readback 1.615) | decode+NMS 0.044
+[summary] boxes from NPU heads on 500/500 timed frames | 6.00 detections per frame
+[summary] RSS 201.8 MB at the first timed frame, 201.8 MB at the end (+0.00 MB over 500 frames)
+[summary] wrote <scratch>\sit_live_yolo11n_core.json
+== 2026-09-15T19:20:18Z [live yolo11n attention-core control] exit 0 after 7.1 s
+[xrt-smi after] [003d:00:01.1] : NPU Phoenix | AIE Partitions | No hardware contexts running on device
+
+# end 2026-09-15T19:20:18Z exit 0

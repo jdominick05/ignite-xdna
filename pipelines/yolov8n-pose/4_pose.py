@@ -1,11 +1,18 @@
 """
-YOLO-pose step 4: run pose estimation on an image, video or webcam, on CPU or NPU.
+YOLO-pose step 4: run pose estimation on an image, video or webcam, on CPU, on
+AMD's NPU stack, or from a graph-engine .ignite container on the NPU.
 
 Head-cut only (9 outputs, HEAD_OUTS) - the tail runs in numpy via
 npu.yolo_pose_decode, see pipelines/yolov8n-pose/1b_cut_head.py. The full
 graph is not wired up here: the detect pipeline found the VitisAI EP takes
 zero nodes from the equivalent full yolov8 graph, and the pose tail ends in
 the same op types, so there is no reason to expect a different result.
+
+--ep ignite runs a container compiled from the same head-cut model
+(ignite-compile --input models/yolov8n-pose_cut_xint8.onnx --output
+build/yolov8n_pose.ignite) through ignite_xdna.pipelines.pose_pipeline: every
+layer on the NPU and the same numpy tail on the nine heads. It needs pyxrt
+(scripts/research-iron.sh or the mlir-aie-iron conda env).
 
     conda activate resnet_env17
     $env:RYZEN_AI_INSTALLATION_PATH = 'C:\\Program Files\\RyzenAI\\1.7.1'
@@ -16,6 +23,14 @@ the same op types, so there is no reason to expect a different result.
         --ep npu --source assets/test_image.jpg --fresh --log 1
     python pipelines/yolov8n-pose/4_pose.py --model models/yolov8n-pose_cut_xint8.onnx \
         --ep npu --source 0        # webcam, q quits
+    bash scripts/research-iron.sh pipelines/yolov8n-pose/4_pose.py --model build/yolov8n_pose.ignite \
+        --ep ignite --source assets/bus.jpg --warmup 50 --runs 500
+
+On an image source each timed run goes from the BGR frame to the finished list
+of people (g2g) and is split into pre (the letterbox; for ignite the letterbox,
+quantization and upload into the NPU input plane), infer (session.run and the
+head decode; for ignite the NPU dispatch, head readback and decode) and post
+(score filter and NMS).
 """
 import argparse
 import os
@@ -45,22 +60,36 @@ VIDEO_EXTS = (".mp4", ".avi", ".mov", ".mkv")
 IMAGE_EXTS = (".jpg", ".jpeg", ".png", ".bmp", ".webp")
 
 
-def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--model", required=True)
-    ap.add_argument("--ep", choices=["cpu", "npu"], default="cpu")
-    ap.add_argument("--source", default="0", help="image path, video path, or camera index")
-    ap.add_argument("--xclbin", default=None)
-    ap.add_argument("--conf", type=float, default=0.25)
-    ap.add_argument("--iou", type=float, default=0.5)
-    ap.add_argument("--cache-key", default=None)
-    ap.add_argument("--fresh", action="store_true", help="delete compile cache first")
-    ap.add_argument("--out", default=None, help="output image path (image source only)")
-    ap.add_argument("--runs", type=int, default=20, help="timed runs, image source only")
-    ap.add_argument("--log", type=int, default=1, help="0=verbose 1=info 2=warning")
-    args = ap.parse_args()
+def ignite_infer(args):
+    """-> infer(img) for a pose container, its input size and a close function."""
+    import ignite_xdna
+    from ignite_xdna.pipelines.pose_pipeline import PosePipeline
 
-    stem = os.path.splitext(os.path.basename(args.model))[0]
+    pipe = PosePipeline(args.model, conf_thres=args.conf, iou_thres=args.iou, ingress=args.ingress)
+    print(f"ignite_xdna: {ignite_xdna.__file__}")
+    print(f"model: graph-engine container (task {pipe.session.task}), every layer on the NPU, "
+          f"decode tail runs in numpy, ingress {args.ingress}")
+
+    def infer(img):
+        """-> dets, pre_ms, infer_ms, post_ms"""
+        t0 = time.perf_counter()
+        pad, scale = pipe.stage(img)
+        t1 = time.perf_counter()
+        heads = pipe.session.run_yolo_monolithic(None)
+        if not heads["heads_present"]:
+            raise SystemExit(f"{args.model}: no pose heads at the egress ({heads['head_status']})")
+        out = pipe.decode(heads, heads["scales"], args.conf)
+        t2 = time.perf_counter()
+        people = pipe.postprocess(out, pad, scale, args.conf, args.iou)
+        t3 = time.perf_counter()
+        dets = [(d.x0, d.y0, d.w, d.h, d.score, d.keypoints) for d in people]
+        return dets, (t1 - t0) * 1000, (t2 - t1) * 1000, (t3 - t2) * 1000
+
+    return infer, pipe.imgsz, pipe.close
+
+
+def onnx_infer(args):
+    """-> infer(img) for an ONNX Runtime session on --ep, its input size and a close function."""
     cache_key = args.cache_key or YOLO_POSE_CUT_CACHE_KEY
     if args.fresh:
         clear_cache(cache_key)
@@ -76,19 +105,52 @@ def main():
                          "models are not supported by this script.")
     order = head_order(sess, imgsz)
     print(f"model: head-cut ({n_out} outputs), decode tail runs in numpy")
-    print(f"input: {imgsz}x{imgsz}")
 
     def infer(img):
-        """-> dets, infer_ms, post_ms"""
-        x, pad, scale = yp.letterbox(img, imgsz)
+        """-> dets, pre_ms, infer_ms, post_ms"""
         t0 = time.perf_counter()
+        x, pad, scale = yp.letterbox(img, imgsz)
+        t1 = time.perf_counter()
         r = sess.run(None, {inp: x})
         out = decode_heads([r[i] for i in order], imgsz=imgsz, conf_thres=args.conf)
-        t1 = time.perf_counter()
-        dets = yp.postprocess(out, pad, scale, conf_thres=args.conf, iou_thres=args.iou)
         t2 = time.perf_counter()
-        return dets, (t1 - t0) * 1000, (t2 - t1) * 1000
+        dets = yp.postprocess(out, pad, scale, conf_thres=args.conf, iou_thres=args.iou)
+        t3 = time.perf_counter()
+        return dets, (t1 - t0) * 1000, (t2 - t1) * 1000, (t3 - t2) * 1000
 
+    return infer, imgsz, lambda: None
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--model", required=True)
+    ap.add_argument("--ep", choices=["cpu", "npu", "ignite"], default="cpu",
+                    help="ignite: --model is a graph-engine .ignite container")
+    ap.add_argument("--source", default="0", help="image path, video path, or camera index")
+    ap.add_argument("--xclbin", default=None)
+    ap.add_argument("--conf", type=float, default=0.25)
+    ap.add_argument("--iou", type=float, default=0.5)
+    ap.add_argument("--cache-key", default=None)
+    ap.add_argument("--fresh", action="store_true", help="delete compile cache first")
+    ap.add_argument("--ingress", choices=["native", "numpy"], default="native",
+                    help="--ep ignite only: native letterbox straight into the NPU input plane, "
+                         "or npu.yolo's letterbox and the model's QuantizeLinear")
+    ap.add_argument("--out", default=None, help="output image path (image source only)")
+    ap.add_argument("--warmup", type=int, default=1, help="untimed runs first, image source only")
+    ap.add_argument("--runs", type=int, default=20, help="timed runs, image source only")
+    ap.add_argument("--log", type=int, default=1, help="0=verbose 1=info 2=warning")
+    args = ap.parse_args()
+
+    infer, imgsz, close = ignite_infer(args) if args.ep == "ignite" else onnx_infer(args)
+    try:
+        run(args, infer, imgsz)
+    finally:
+        close()
+
+
+def run(args, infer, imgsz):
+    stem = os.path.splitext(os.path.basename(args.model))[0]
+    print(f"input: {imgsz}x{imgsz}")
     is_cam = args.source.isdigit()
     ext = os.path.splitext(args.source)[1].lower()
 
@@ -96,17 +158,25 @@ def main():
         img = cv2.imread(args.source)
         if img is None:
             raise SystemExit(f"could not read {args.source}")
-        infer(img)  # warm-up / compile, not timed
-        ts, ps = [], []
+        for _ in range(max(1, args.warmup)):
+            infer(img)  # warm-up / compile, not timed
+        g2g, pres, ts, ps = [], [], [], []
         for _ in range(max(1, args.runs)):
-            dets, ti, tp = infer(img)
+            t0 = time.perf_counter()
+            dets, tpre, ti, tp = infer(img)
+            g2g.append((time.perf_counter() - t0) * 1000)
+            pres.append(tpre)
             ts.append(ti)
             ps.append(tp)
         ts = np.array(ts)
+        g = np.array(g2g)
         print(f"\n=== {args.ep.upper()} | {args.model} | {imgsz}px | {args.source} ===")
         print(f"infer   mean {ts.mean():.2f} ms   median {np.median(ts):.2f} ms   "
               f"p95 {np.percentile(ts, 95):.2f} ms   ({1000 / ts.mean():.1f} fps)")
         print(f"post    mean {np.mean(ps):.2f} ms")
+        print(f"pre     mean {np.mean(pres):.3f} ms")
+        print(f"g2g     mean {g.mean():.3f} ms   p50 {np.percentile(g, 50):.3f}   p95 {np.percentile(g, 95):.3f}   "
+              f"p99 {np.percentile(g, 99):.3f} ms   over {g.size} runs ({1000 / g.mean():.1f} fps)")
         print(f"{len(dets)} people:")
         for x0, y0, w, h, s, kpts in sorted(dets, key=lambda d: -d[4]):
             n_vis = int((kpts[:, 2] >= 0.5).sum())
@@ -141,7 +211,7 @@ def main():
         ok, frame = cap.read()
         if not ok:
             break
-        dets, ti, tp = infer(frame)
+        dets, _, ti, tp = infer(frame)
         yp.draw(frame, dets)
         total = (time.perf_counter() - t_all) * 1000
         times.append(ti)

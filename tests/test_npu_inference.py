@@ -30,7 +30,12 @@ On silicon (skipped without pyxrt, the container or the xclbin):
     is allocated after warm-up, working-set growth is bounded, and the
     glass-to-glass latency is reported (mean, p95, p99);
   * tools/live_camera_ignition.py --source assets/bus.jpg --headless runs to
-    completion and prints HUD lines without a camera error.
+    completion and prints HUD lines without a camera error;
+  * YOLOv8n-pose (build/yolov8n_pose.ignite, PoseOnSilicon): on npu.yolo's
+    letterbox the nine heads equal ONNX Runtime CPU's and the people (boxes,
+    scores, 17 keypoints) equal its numpy tail's bit for bit, with no
+    InferenceSession.run call; POSE_FRAMES native-ingress frames allocate no
+    buffer objects and keep the working set within 5 MB.
 """
 import os
 
@@ -625,6 +630,134 @@ class SuperResolutionOnSilicon(unittest.TestCase):
         mean = float(stats["dispatch"].mean())
         self.assertLessEqual(mean, SR_DISPATCH_BUDGET_MS,
                              f"mean dispatch {mean:.3f} ms > {SR_DISPATCH_BUDGET_MS} ms")
+
+
+POSE_IGNITE = Path(os.environ.get("IGNITE_POSE_MODEL", str(REPO_ROOT / "build" / "yolov8n_pose.ignite")))
+POSE_ONNX = REPO_ROOT / "models" / "yolov8n-pose_cut_xint8.onnx"
+POSE_FRAMES = int(os.environ.get("IGNITE_POSE_FRAMES", "500"))
+
+
+def _pose_skip_reason() -> Optional[str]:
+    try:
+        import pyxrt  # noqa: F401
+    except Exception as ex:  # noqa: BLE001
+        return f"pyxrt is not importable in this interpreter ({type(ex).__name__}); use scripts/research-iron.sh"
+    if not POSE_IGNITE.exists():
+        return (f"missing {POSE_IGNITE} (ignite-compile --engine graph --input models/yolov8n-pose_cut_xint8.onnx "
+                f"--output build/yolov8n_pose.ignite)")
+    return None
+
+
+POSE_SKIP = _pose_skip_reason()
+
+
+@unittest.skipIf(POSE_SKIP is not None, POSE_SKIP or "")
+class PoseOnSilicon(unittest.TestCase):
+    """Device 0, YOLOv8n-pose (build/yolov8n_pose.ignite): heads and people equal ONNX Runtime's, buffer stability."""
+
+    @classmethod
+    def setUpClass(cls):
+        if not BUS_JPG.exists():
+            raise unittest.SkipTest(f"{BUS_JPG} missing")
+        cls.bus = cv2.imread(str(BUS_JPG))
+
+    def tearDown(self):
+        gc.collect()
+        time.sleep(0.05)
+
+    def test_30_heads_and_people_match_onnx_runtime(self):
+        """numpy ingress: the nine heads equal ONNX Runtime CPU's, people equal its numpy tail's bit for bit, no ORT call."""
+        if not POSE_ONNX.exists():
+            self.skipTest(f"{POSE_ONNX} missing")
+        import onnxruntime as ort
+        import npu.yolo as yolo
+        import npu.yolo_pose as yp
+        from npu.yolo_pose_decode import decode_heads
+        from ignite_xdna.pipelines.pose_pipeline import HEAD_ORDER, PosePipeline
+        settings = ((0.25, 0.5), (0.001, 0.7))
+        sess = ort.InferenceSession(str(POSE_ONNX), providers=["CPUExecutionProvider"])
+        x, pad, scale = yolo.letterbox(self.bus)
+        float_heads = sess.run(yp.HEAD_OUTS, {sess.get_inputs()[0].name: x})
+        calls = []
+        real_run = ort.InferenceSession.run
+
+        def counting_run(session, *args, **kwargs):
+            calls.append(1)
+            return real_run(session, *args, **kwargs)
+
+        with PosePipeline(POSE_IGNITE, ingress="numpy") as pose:
+            ort.InferenceSession.run = counting_run
+            try:
+                got = {conf: pose.predict_sync(self.bus, conf_thres=conf, iou_thres=iou)[0] for conf, iou in settings}
+                heads = pose.session.run_yolo_monolithic(None)
+            finally:
+                ort.InferenceSession.run = real_run
+            scales = heads["scales"]
+            bad_heads = [name for name, ref in zip(HEAD_ORDER, float_heads)
+                         if not np.array_equal((heads[name].astype(np.float32) - np.float32(scales[name][1]))
+                                               * np.float32(scales[name][0]), ref)]
+        print(f"\n[silicon-pose] bus.jpg, numpy ingress: heads {9 - len(bad_heads)}/9 equal ONNX Runtime | people "
+              f"{len(got[0.25])} at conf 0.25, {len(got[0.001])} at conf 0.001 | InferenceSession.run calls {len(calls)}")
+        self.assertEqual(bad_heads, [])
+        self.assertEqual(calls, [])
+        for conf, iou in settings:
+            ref = yp.postprocess(decode_heads(float_heads, conf_thres=conf), pad, scale, conf, iou, 300)
+            self.assertEqual(len(got[conf]), len(ref), f"conf {conf}")
+            for d, (x0, y0, w, h, s, kpts) in zip(got[conf], ref):
+                self.assertEqual((np.float32(d.x0), np.float32(d.y0), np.float32(d.w), np.float32(d.h),
+                                  np.float32(d.score)), (x0, y0, w, h, s))
+                self.assertTrue(np.array_equal(d.keypoints, kpts))
+        self.assertGreaterEqual(len(got[0.25]), 3)
+
+    def test_31_native_ingress_frames_without_buffer_growth(self):
+        """POSE_FRAMES frames of bus.jpg through native ingress: no buffer objects allocated, < 5 MB working-set drift."""
+        from ignite_xdna.pipelines.pose_pipeline import PosePipeline
+        stats = {k: [] for k in ("g2g", "dispatch", "readback", "pre", "post")}
+        counts = []
+        with PosePipeline(POSE_IGNITE) as pose:
+            harness = pose.session.harness
+            allocations = {"host_bo": 0, "instr_bo": 0}
+            real_host, real_instr = harness.create_host_bo, harness.create_instruction_bo_from_bytes
+
+            def counted_host(*a, **k):
+                allocations["host_bo"] += 1
+                return real_host(*a, **k)
+
+            def counted_instr(*a, **k):
+                allocations["instr_bo"] += 1
+                return real_instr(*a, **k)
+
+            harness.create_host_bo = counted_host
+            harness.create_instruction_bo_from_bytes = counted_instr
+            try:
+                for _ in range(10):
+                    pose.predict_sync(self.bus)
+                gc.collect()
+                rss_before = _rss_bytes()
+                for _ in range(POSE_FRAMES):
+                    people, t = pose.predict_sync(self.bus)
+                    counts.append(len(people))
+                    stats["g2g"].append(t.glass_to_glass_ms)
+                    stats["dispatch"].append(t.dispatch_ms)
+                    stats["readback"].append(t.readback_ms)
+                    stats["pre"].append(t.preprocess_ms)
+                    stats["post"].append(t.postprocess_ms)
+                gc.collect()
+                rss_after = _rss_bytes()
+            finally:
+                harness.create_host_bo = real_host
+                harness.create_instruction_bo_from_bytes = real_instr
+        s = {k: np.asarray(v) for k, v in stats.items()}
+        growth_mb = (rss_after - rss_before) / 2 ** 20
+        print(f"\n[silicon-pose] {POSE_FRAMES} frames of bus.jpg (native ingress): G2G mean {s['g2g'].mean():.3f} ms "
+              f"p50 {np.median(s['g2g']):.3f} p99 {np.percentile(s['g2g'], 99):.3f} | dispatch mean {s['dispatch'].mean():.3f} "
+              f"| preprocess {s['pre'].mean():.3f} | readback {s['readback'].mean():.3f} | decode and NMS "
+              f"{s['post'].mean():.3f} | people per frame {sorted(set(counts))} | buffer objects allocated after "
+              f"warm-up: {allocations} | working set {growth_mb:+.2f} MB")
+        self.assertEqual(allocations, {"host_bo": 0, "instr_bo": 0})
+        self.assertLess(growth_mb, 5.0)
+        self.assertEqual(len(set(counts)), 1)
+        self.assertGreaterEqual(counts[0], 3)
 
 
 if __name__ == "__main__":
