@@ -1697,3 +1697,22 @@ cached reference heads rather than `bo_out`.
   through DDR (67.1 MB of activation fills and drains a frame), not weight traffic (36 fills,
   6.4 MB, about 0.26 ms DERIVED by `tools/engine_stream_report.py`)
   ([MODEL_ZOO_BENCHMARKS](MODEL_ZOO_BENCHMARKS.md#sesr-the-15-ms-dispatch-and-sram-resident-weights-are-not-met)).
+- **Host segments for what the engine does not compute (2026-09-15).** A graph region named by a
+  node-name prefix (YOLO11's C2PSA block, `/model.10/`) runs on ONNX Runtime's CPU provider between two
+  NPU dispatches over the same workspace, instead of keeping the whole model off the NPU. The region
+  needs one uint8 input that is a physical tensor and one uint8 output at zero point 128 and a
+  power-of-two scale; it is extracted as its own model, stored in the container, and the manifest's
+  `segments` list is the execution order. The engine program does not change. A container can therefore
+  call ONNX Runtime, but only for its declared host segments: YOLO11n once per frame, a single-stream
+  container never. Chosen over the two routes named before it: attention on the NPU (the bf16 attention
+  kernel lost to the CPU 71–240×) and a model without the block (the ablated export detects nothing)
+  ([BENCHMARKS](BENCHMARKS.md#stock-yolo11n-with-its-c2psa-attention-block-npu-segments-around-a-host-step-2026-09-15-desktop-2)).
+- **Depthwise convolutions lower as dense diagonal convolutions, and the attributes the engine cannot
+  honour are refused (2026-09-15).** The lowering never read `group` or `dilations`, so YOLO11n's
+  depthwise heads compiled without error into one-input-channel convolutions. A depthwise convolution is
+  now the dense convolution with zero off-diagonal taps (exact, no kernel change, the same DMA traffic);
+  dilated convolutions, other grouped convolutions and 1 × 1 convolutions with a stride or padding raise.
+- **Pitfall: build one graph container per process.** IRON compiles the engine kernel's
+  `ExternalFunction` once per process and places `engine.o` only in the first design's work directory,
+  so a second `compile_graph_container` call in the same process fails to link (`unable to find
+  ...design.prj\engine.o`). The first container of the process is unaffected.

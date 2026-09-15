@@ -10,7 +10,10 @@ graph once and produces:
   SPPF pool), and
 * ``ConvLayer`` / ``PoolLayer`` records in execution order whose inputs are
   ``Segment`` views (tensor, channel block range, optional 2x upsampling), so
-  Split, Concat and Resize never materialise.
+  Split, Concat and Resize never materialise, and
+* ``HostLayer`` records for regions named by ``host_regions`` (YOLO11's C2PSA
+  attention block): the region is extracted as a uint8 -> uint8 ONNX model and
+  run on the host between two dispatches.
 
 Exactness: the integer HardSwish constants are fitted against a float32
 re-evaluation of the ONNX chain for all 256 inputs; ``HardSwishFit.max_error``
@@ -19,8 +22,9 @@ records the largest remaining deviation in output LSBs (0 when exact).
 from __future__ import annotations
 
 import math
+from collections import Counter
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
 import onnx
@@ -131,9 +135,26 @@ class PoolLayer:
 
 
 @dataclass
+class HostLayer:
+    """A graph region the engine does not lower, run on the host between two dispatches.
+
+    ``onnx_bytes`` is the region extracted by ``onnx.utils.Extractor`` between its input and output
+    QuantizeLinear tensors, so it maps the uint8 input tensor to the uint8 output tensor exactly as the
+    original graph does. The input is one whole physical tensor; the output is a physical tensor like
+    a conv output.
+    """
+    name: str                 # the region's node-name prefix, e.g. "/model.10/"
+    index: int
+    input: Segment
+    output: str
+    onnx_bytes: bytes
+    op_types: Dict[str, int] = field(default_factory=dict)
+
+
+@dataclass
 class GraphIR:
     tensors: Dict[str, TensorInfo]
-    layers: List[object]          # ConvLayer | PoolLayer in execution order
+    layers: List[object]          # ConvLayer | PoolLayer | HostLayer in execution order
     input: str
     outputs: List[Tuple[str, str]]  # (onnx float output name, physical tensor name)
     adjacency: List[List[str]] = field(default_factory=list)  # tensor groups that must be contiguous
@@ -268,10 +289,58 @@ def _attr(node, name, default=None):
     return default
 
 
-def lower_yolov8n(model_or_path) -> GraphIR:
+def _host_region(G: _Graph, prefix: str) -> Dict[str, Any]:
+    """Boundary of the nodes named ``prefix*``: exactly one uint8 activation input and one uint8 output.
+
+    Inputs read from initializers, Constant nodes or DequantizeLinear of an initializer (weights) are
+    part of the region's constants. The output is the float tensor of a DequantizeLinear inside the
+    region that nodes outside it consume; its QuantizeLinear input is the uint8 output tensor.
+    """
+    nodes = [n for n in G.g.node if n.name.startswith(prefix)]
+    if not nodes:
+        raise ValueError(f"host region {prefix}: no node names start with it")
+    names = {n.name for n in nodes}
+    produced = {o for n in nodes for o in n.output}
+    graph_outputs = {o.name for o in G.g.output}
+    acts = set()
+    for n in nodes:
+        for i in n.input:
+            if not i or i in produced or i in G.inits:
+                continue
+            src = G.by_output.get(i)
+            if src is None:
+                raise ValueError(f"host region {prefix}: {n.name} reads graph input {i}")
+            if src.op_type == "DequantizeLinear" and src.input[0] in G.inits:
+                continue  # a weight or bias constant
+            if src.op_type != "DequantizeLinear":
+                raise ValueError(f"host region {prefix}: {n.name} reads {i} from {src.op_type} {src.name} outside it")
+            acts.add(src.input[0])
+    outs = sorted({o for n in nodes for o in n.output
+                   if o in graph_outputs or any(c.name not in names for c in G.consumers.get(o, []))})
+    if len(acts) != 1 or len(outs) != 1:
+        raise ValueError(f"host region {prefix}: needs one activation input and one output, "
+                         f"found inputs {sorted(acts)} and outputs {outs}")
+    dq_out = outs[0]
+    dq = G.by_output[dq_out]
+    if dq_out in graph_outputs or dq.op_type != "DequantizeLinear":
+        raise ValueError(f"host region {prefix}: output {dq_out} is not a DequantizeLinear inside the graph")
+    q_node = G.by_output.get(dq.input[0])
+    if q_node is None or q_node.op_type != "QuantizeLinear" or q_node.name not in names:
+        raise ValueError(f"host region {prefix}: {dq_out} does not dequantize a QuantizeLinear of the region")
+    return {"prefix": prefix, "names": names, "q_in": next(iter(acts)), "q_out": dq.input[0], "dq_out": dq_out,
+            "q_node": q_node, "builder": dq.name}
+
+
+def lower_yolov8n(model_or_path, host_regions: Sequence[str] = ()) -> GraphIR:
+    """Lower a QDQ graph to engine layers. ``host_regions`` are node-name prefixes (``"/model.10/"``) whose
+    nodes the engine does not lower; each becomes one ``HostLayer``."""
     model = onnx.load(str(model_or_path)) if not isinstance(model_or_path, onnx.ModelProto) else model_or_path
     model = onnx.shape_inference.infer_shapes(model)
     G = _Graph(model)
+    regions = [_host_region(G, prefix) for prefix in host_regions]
+    region_of = {name: r for r in regions for name in r["names"]}
+    if len(region_of) != sum(len(r["names"]) for r in regions):
+        raise ValueError(f"host regions {list(host_regions)} overlap")
     tensors: Dict[str, TensorInfo] = {}
     views: Dict[str, List[Segment]] = {}   # virtual uint8 tensors -> segments
     layers: List[object] = []
@@ -312,6 +381,33 @@ def lower_yolov8n(model_or_path) -> GraphIR:
     transforms: Dict[str, Tuple[str, Dict[str, Any]]] = {}  # host-side output transforms (DepthToSpace)
 
     for node in G.g.node:
+        region = region_of.get(node.name)
+        if region is not None:
+            # The region's nodes are not lowered. Its layer is built at the DequantizeLinear that exposes the
+            # output: the input precedes that node and every consumer of the output follows it.
+            if node.name == region["builder"]:
+                # Own names: q_in, c, h, w and friends belong to the enclosing walk (q_in is the graph input).
+                r_in, r_out, r_qnode = region["q_in"], region["q_out"], region["q_node"]
+                if r_in not in tensors:
+                    raise ValueError(f"host region {region['prefix']}: input {r_in} is not a physical tensor")
+                r_scale, r_zp = G.scale_zp(r_qnode)
+                if r_zp != ZP:
+                    raise ValueError(f"host region {region['prefix']}: output zero point {r_zp}")
+                _log2_exact(r_scale)
+                r_c, r_h, r_w = dims_chw(region["dq_out"])
+                sub = onnx.utils.Extractor(model).extract_model([r_in], [r_out])
+                sub_ins, sub_outs = list(sub.graph.input), list(sub.graph.output)
+                if [i.name for i in sub_ins] != [r_in] or [o.name for o in sub_outs] != [r_out] or \
+                        sub_ins[0].type.tensor_type.elem_type != onnx.TensorProto.UINT8 or \
+                        sub_outs[0].type.tensor_type.elem_type != onnx.TensorProto.UINT8:
+                    raise ValueError(f"host region {region['prefix']}: extracted model is not uint8 {r_in} -> {r_out}")
+                host = HostLayer(name=region["prefix"], index=len(layers), input=Segment(r_in, 0, tensors[r_in].blocks),
+                                 output=r_out, onnx_bytes=sub.SerializeToString(),
+                                 op_types=dict(Counter(n.op_type for n in sub.graph.node)))
+                tensors[r_out] = TensorInfo(r_out, r_c, r_h, r_w, r_scale, ZP, producer=host.name)
+                scales[r_out] = r_scale
+                layers.append(host)
+            continue
         if node.op_type in ("Constant", "QuantizeLinear", "DequantizeLinear", "HardSigmoid", "Mul", "Relu"):
             continue
         if node.op_type == "Conv":
@@ -327,11 +423,31 @@ def lower_yolov8n(model_or_path) -> GraphIR:
             if zx != ZP or zw != 0 or zb != 0:
                 raise ValueError(f"{node.name}: unsupported zero points x={zx} w={zw} b={zb}")
             weights = G.const(w_q)
-            k = int(_attr(node, "kernel_shape")[0])
-            stride = int(_attr(node, "strides", [1, 1])[0])
+            kernel = [int(v) for v in _attr(node, "kernel_shape")]
+            strides = [int(v) for v in _attr(node, "strides", [1, 1])]
+            if len(set(kernel)) != 1 or len(set(strides)) != 1:
+                raise ValueError(f"{node.name}: non-square kernel {kernel} or strides {strides}")
+            k, stride = kernel[0], strides[0]
             pads = _attr(node, "pads", [0, 0, 0, 0])
             if any(int(p) != int(pads[0]) for p in pads):
                 raise ValueError(f"{node.name}: asymmetric pads {pads}")
+            dilations = [int(v) for v in _attr(node, "dilations", [1, 1])]
+            if any(d != 1 for d in dilations):
+                raise ValueError(f"{node.name}: dilations {dilations} are not supported")
+            group = int(_attr(node, "group", 1))
+            c_in = dims_chw(node.input[0])[0]
+            if group != 1:
+                if not (group == c_in == cout and weights.shape[1] == 1):
+                    raise ValueError(f"{node.name}: group {group} convolution ({c_in} -> {cout} channels) is not "
+                                     f"supported; only depthwise (group == Cin == Cout)")
+                # Depthwise as the dense convolution whose off-diagonal taps are zero: every
+                # off-diagonal product is 0 in the integer accumulator, so the output is exact and
+                # the per-channel weight sum in ConvLayer.bias_acc is unchanged.
+                dense = np.zeros((cout, cout) + tuple(weights.shape[2:]), dtype=weights.dtype)
+                dense[np.arange(cout), np.arange(cout)] = weights[:, 0]
+                weights = dense
+            elif weights.shape[1] != c_in:
+                raise ValueError(f"{node.name}: weights read {weights.shape[1]} input channels, the input has {c_in}")
             y_cons = G.consumers.get(y_f, [])
             relu = len(y_cons) == 1 and y_cons[0].op_type == "Relu"
             # Conv -> Relu -> QuantizeLinear: the ReLU clamps at the zero point of that one
@@ -495,8 +611,11 @@ def lower_yolov8n(model_or_path) -> GraphIR:
             raise ValueError(f"unsupported op {node.op_type} ({node.name})")
 
     for node in G.g.node:
-        if node.op_type == "Add" and G.q_sink(node.output[0])[0] not in tensors:
+        if node.op_type == "Add" and node.name not in region_of and G.q_sink(node.output[0])[0] not in tensors:
             raise ValueError(f"{node.name}: no conv output absorbed this Add")
+    for r in regions:
+        if r["q_out"] not in tensors:
+            raise ValueError(f"host region {r['prefix']}: its output was never built")
 
     outputs = []
     output_transforms: Dict[str, Dict[str, Any]] = {}
@@ -565,6 +684,10 @@ def summarize(ir: GraphIR) -> str:
             res = f" +res>>{L.residual_shift}" if L.residual else ""
             lines.append(f"{L.index:2d} conv {L.name:38s} {L.cin:3d}->{L.cout:3d} k{L.k} s{L.stride} "
                          f"{t.height}x{t.width} shift={L.shift_out}{hs}{res} in=[{segs}]")
+        elif isinstance(L, HostLayer):
+            t = ir.tensors[L.output]
+            ops = ", ".join(f"{k} {v}" for k, v in sorted(L.op_types.items()))
+            lines.append(f"{L.index:2d} host {L.name:38s} {t.channels:3d} {t.height}x{t.width} ({ops})")
         else:
             t = ir.tensors[L.output]
             lines.append(f"{L.index:2d} pool {L.name:38s} {t.channels:3d} {t.height}x{t.width}")

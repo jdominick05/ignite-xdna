@@ -58,9 +58,10 @@ def main() -> int:
     with IgniteModelReader(args.container) as reader:
         manifest = dict(reader.manifest)
     task = manifest.get("task", "detect")
-    ir = graph_ir.lower_yolov8n(args.model)
-    ws = es.plan_workspace(ir)
     ge = manifest["graph_engine"]
+    host_regions = [s["name"] for s in ge.get("segments", []) if s["kind"] == "host"]
+    ir = graph_ir.lower_yolov8n(args.model, host_regions=host_regions)
+    ws = es.plan_workspace(ir)
     if ws.nbytes != int(ge["workspace_bytes"]) or ir.input != ge["input_tensor"]:
         print(f"[verify] container plan differs from {args.model}: workspace {ge['workspace_bytes']} vs {ws.nbytes}")
         return 2
@@ -76,7 +77,7 @@ def main() -> int:
         from ignite_xdna.runtime.graph_session import DenseGraphSession  # noqa: E402
         session_cls = DenseGraphSession
     sess = session_cls(args.container, device_index=args.device)
-    results, timings = [], []
+    results, timings, host_timings = [], [], []
     try:
         p = sess.input_placement
         h = int(p["halo"])
@@ -87,25 +88,35 @@ def main() -> int:
             sess.bo_ws.write(plane, base)
         sess.bo_ws.sync(sess.harness.pyxrt.xclBOSyncDirection.XCL_BO_SYNC_BO_TO_DEVICE, sess._input_bytes, base)
         first_ms = sess.dispatch()
+        first_host_ms = sess.last_host_ms
         exact = 0
         for L in ir.layers:
             c = ir.tensors[L.output].channels
             got = sess.read_tensor(L.output)[:c]
             nd = int(np.sum(got != direct[L.output][:c]))
             exact += nd == 0
-            results.append({"index": L.index, "name": L.name, "mismatches": nd, "size": int(got.size)})
-            print(f"  L{L.index:2d} {L.name:44s} {'EXACT' if nd == 0 else f'MISMATCH {nd}/{got.size}'}", flush=True)
+            host = isinstance(L, graph_ir.HostLayer)
+            results.append({"index": L.index, "name": L.name, "mismatches": nd, "size": int(got.size),
+                            **({"host": True} if host else {})})
+            print(f"  L{L.index:2d} {'HOST ' if host else ''}{L.name:44s} "
+                  f"{'EXACT' if nd == 0 else f'MISMATCH {nd}/{got.size}'}", flush=True)
         for _ in range(args.iters):
             timings.append(sess.dispatch())
+            host_timings.append(sess.last_host_ms)
     finally:
         sess.close()
     arr = np.asarray(timings) if timings else np.asarray([first_ms])
+    harr = np.asarray(host_timings) if host_timings else np.asarray([first_host_ms])
     print(f"[verify] {exact}/{len(ir.layers)} layers exact | first dispatch {first_ms:.3f} ms | dispatch mean "
           f"{arr.mean():.3f} ms, min {arr.min():.3f}, max {arr.max():.3f} over {arr.size}", flush=True)
+    if host_regions:
+        print(f"[verify] {len(host_regions)} host segment(s) {host_regions}: host mean {harr.mean():.3f} ms, "
+              f"min {harr.min():.3f}, max {harr.max():.3f} (NPU dispatch above excludes it)", flush=True)
     if args.json:
         Path(args.json).write_text(json.dumps({"container": Path(args.container).name, "task": task,
                                                "layers_exact": exact, "layers": len(ir.layers),
                                                "first_dispatch_ms": first_ms, "dispatch_ms": arr.tolist(),
+                                               "host_regions": host_regions, "host_ms": harr.tolist(),
                                                "results": results}, indent=1), encoding="utf-8")
     print("[verify] PASS" if exact == len(ir.layers) else "[verify] FAIL", flush=True)
     return 0 if exact == len(ir.layers) else 1

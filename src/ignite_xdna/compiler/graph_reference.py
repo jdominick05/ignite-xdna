@@ -8,12 +8,13 @@ so the integer plan can be validated against the model's float semantics.
 """
 from __future__ import annotations
 
-from typing import Dict, List, Optional
+import hashlib
+from typing import Any, Dict, List, Optional
 
 import numpy as np
 
 from ignite_xdna.compiler import engine_emulator as em
-from ignite_xdna.compiler.graph_ir import ConvLayer, GraphIR, PoolLayer, Segment, ZP
+from ignite_xdna.compiler.graph_ir import ConvLayer, GraphIR, HostLayer, PoolLayer, Segment, ZP
 
 
 def quantize_input(image_chw_float: np.ndarray, scale: float, zp: int = ZP) -> np.ndarray:
@@ -69,6 +70,33 @@ def maxpool5_direct(x: np.ndarray) -> np.ndarray:
     return out
 
 
+_HOST_SESSIONS: Dict[tuple, Any] = {}
+
+
+def host_session(onnx_bytes: bytes, optimize: bool = False):
+    """ONNX Runtime CPU session for a host layer's extracted model, cached by content.
+
+    ``optimize`` False disables graph optimizations, as ``ort_intermediates`` does.
+    """
+    import onnxruntime as ort
+    key = (hashlib.sha256(onnx_bytes).hexdigest(), bool(optimize))
+    sess = _HOST_SESSIONS.get(key)
+    if sess is None:
+        so = ort.SessionOptions()
+        if not optimize:
+            so.graph_optimization_level = ort.GraphOptimizationLevel.ORT_DISABLE_ALL
+        sess = ort.InferenceSession(onnx_bytes, so, providers=["CPUExecutionProvider"])
+        _HOST_SESSIONS[key] = sess
+    return sess
+
+
+def run_host_layer(layer: HostLayer, x: np.ndarray, optimize: bool = False) -> np.ndarray:
+    """uint8 [C][H][W] -> uint8 [C'][H'][W'] through the host layer's extracted model."""
+    sess = host_session(layer.onnx_bytes, optimize)
+    y = sess.run(None, {sess.get_inputs()[0].name: np.ascontiguousarray(x[None], dtype=np.uint8)})[0]
+    return np.asarray(y, dtype=np.uint8)[0]
+
+
 def run_direct(ir: GraphIR, input_q: np.ndarray, stop_after: Optional[int] = None) -> Dict[str, np.ndarray]:
     """Evaluate the graph on uint8 tensors; returns {tensor name: uint8 [C][H][W]}."""
     tensors: Dict[str, np.ndarray] = {ir.input: input_q}
@@ -86,6 +114,10 @@ def run_direct(ir: GraphIR, input_q: np.ndarray, stop_after: Optional[int] = Non
                 r = gather_input(tensors, [L.residual], t.height, t.width)
                 y = em.residual_combine(y, r, L.residual_shift, L.residual_lsh_main, L.residual_lsh_res)
             tensors[L.output] = y
+        elif isinstance(L, HostLayer):
+            src = ir.tensors[L.input.tensor]
+            x = gather_input(tensors, [L.input], src.height, src.width)[:src.channels]
+            tensors[L.output] = run_host_layer(L, x)
         else:
             x = gather_input(tensors, [L.input], t.height, t.width)
             tensors[L.output] = maxpool5_direct(x)

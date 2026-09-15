@@ -109,6 +109,14 @@ def parse_args(args: Optional[List[str]] = None) -> argparse.Namespace:
         default=None,
         help="Scratch directory for the graph engine build (default: <output dir>/conv_engine/<name>)",
     )
+    parser.add_argument(
+        "--host-region",
+        action="append",
+        default=None,
+        metavar="PREFIX",
+        help="Graph engine: run the nodes whose names start with PREFIX (e.g. /model.10/, YOLO11's C2PSA "
+             "attention block) on the host between two NPU dispatches; repeatable",
+    )
     argv = list(sys.argv[1:] if args is None else args)
     # ``ignite-compile compile --model X`` is accepted as a spelling of ``--input X``.
     if argv and argv[0] == "compile":
@@ -382,8 +390,8 @@ def verify_on_silicon(container_path: Path, device_idx: int = 0):
 
 
 def compile_graph_engine(input_path: Union[str, Path], output_path: Union[str, Path],
-                         build_dir: Optional[Union[str, Path]] = None) -> int:
-    """Lower the whole YOLOv8n graph onto the convolution engine (see engine_compile.py)."""
+                         build_dir: Optional[Union[str, Path]] = None, host_regions: Optional[List[str]] = None) -> int:
+    """Lower the whole graph onto the convolution engine (see engine_compile.py); ``host_regions`` run on the host."""
     try:
         import aie.iron  # noqa: F401
     except ImportError as ex:
@@ -391,7 +399,11 @@ def compile_graph_engine(input_path: Union[str, Path], output_path: Union[str, P
             "the graph engine needs the mlir-aie IRON environment (run through scripts/research-iron.sh); "
             f"import failed: {ex}") from ex
     from ignite_xdna.compiler.engine_compile import compile_graph_container
-    manifest = compile_graph_container(input_path, output_path, build_dir=build_dir)
+    manifest = compile_graph_container(input_path, output_path, build_dir=build_dir,
+                                       host_regions=tuple(host_regions or ()))
+    for seg in manifest["graph_engine"].get("segments", []):
+        if seg["kind"] == "host":
+            print(f"    [OK] host segment: {seg['name']} (layer {seg['layer']}) between NPU segments")
     out_p = Path(output_path)
     if manifest.get("task", "detect") == "detect":
         from ignite_xdna.runtime.heads import resolve_head_layout

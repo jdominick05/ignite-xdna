@@ -8008,3 +8008,90 @@ objects on a tile.
 The sittings were not interleaved, so glass-to-glass differences between them are not attributed.
 The decode change is: every step loaded the native library, and the other host stages moved by at
 most 0.05 ms between the sittings, far less than the decode's 7.7× fall.
+
+## Stock YOLO11n with its C2PSA attention block: NPU segments around a host step (2026-09-15, Desktop 2)
+
+YOLO11n detects only with its C2PSA attention block. AMD's Vitis AI EP rejects the block's 4-D
+MatMuls and then places 6 of the stock model's 1,300 nodes on the NPU, and the export with the block
+ablated detects nothing
+([Category C, YOLOv11n](#category-c-second-candidate-yolov11n-c2psa-attention-block--decoupled-dwconv-head)).
+This section runs the stock `models/yolo11n_cut_xint8.onnx`: every convolution outside C2PSA on the
+graph engine, and the block itself on ONNX Runtime's CPU provider between two NPU dispatches over the
+same workspace. Branch `yolo11-hybrid` from `0da6135`; evidence
+`results/aie/yolo11n_hybrid_phoenix_20260915T0216Z.log` (exactness witnesses and the timed sitting),
+`results/aie/yolo11n_detections_input_rounding_offline.log` and `tests/test_engine_host_layer.py`.
+
+**Design:**
+
+- `lower_yolov8n(model, host_regions=("/model.10/",))` turns the nodes under a named prefix into one
+  `HostLayer`. The region must have one uint8 input that is a physical tensor
+  (`/model.9/cv2/act/Mul_output_0_QuantizeLinear_Output`, 256 × 20 × 20) and one uint8 output at zero
+  point 128 and a power-of-two scale (`/model.10/cv2/act/Mul_output_0_QuantizeLinear_Output`). It is
+  extracted with `onnx.utils.Extractor` as a 134-node uint8 → uint8 model (Conv 7, MatMul 2, Softmax 1,
+  Reshape 3, Transpose 2, Slice 5, Add 3, Concat 1, with its QuantizeLinear, DequantizeLinear,
+  HardSigmoid and Mul nodes). Its output is planned like a conv output.
+- A host layer issues no DMA tasks, and the emitter already retires every task at each layer barrier,
+  so the lowered stream is cut there: `insts_0.bin` (layers 0–35, 1,376 tasks, 200,160 B) and
+  `insts_1.bin` (layers 37–83, 1,984 tasks, 287,684 B), with `host_0.onnx` (295,565 B) and a
+  `graph_engine.segments` list in the manifest. `ignite-compile --host-region /model.10/` builds it;
+  the engine program is unchanged. Single-stream containers are unchanged too: a rebuilt
+  `yolov8n_full.ignite` has byte-identical `insts.bin` and `wpackets.bin`.
+- `EngineSession.dispatch` runs the segments in order. Each NPU segment has its own instruction buffer
+  and XRT run over the shared workspace and packet buffers. The host step syncs the 102,400-byte input
+  region, runs the model, writes the output tensor's interior and syncs its 102,400 bytes back.
+  `last_dispatch_ms` counts NPU segments only and `last_host_ms` the host step.
+- **The lowering read neither `group` nor `dilations`.** The six depthwise head convolutions
+  (`/model.23/cv3.*.*.0`, groups 64, 80, 128, 80, 256 and 80) lowered without error as
+  one-input-channel convolutions, and a 1 × 1 convolution's stride was ignored. Dilated convolutions,
+  grouped convolutions other than depthwise, and 1 × 1 convolutions with a stride or padding are now
+  refused. A depthwise convolution is lowered as the dense convolution whose off-diagonal taps are zero,
+  exact because every off-diagonal product is 0 in the accumulator. The schedule already chunks by
+  input blocks, so DMA traffic does not change: 3,360 tasks, 98,176,000 fill bytes and 9,235,200 packet
+  bytes before and after.
+
+**Exactness** (MEASURED):
+
+| Check | Result |
+|---|---|
+| Direct integer reference vs ONNX Runtime's uint8 intermediates (graph optimizations off), stock model with the host layer | all 84 layer tensors and the six heads equal on `bus.jpg` and 20 `coco128` images (offline) |
+| Packet emulation, host step included | 84 / 84 exact on three of those images (offline) |
+| Host layer with ONNX Runtime graph optimizations on, as the runtime runs it | output identical on all 21 images (offline) |
+| Ablated model (depthwise heads) and the existing containers | 83 / 83 equal ONNX Runtime; YOLOv8n, YOLOv8s and SESR M7 stream reports identical to `results/model_zoo/stream_*.json` (offline) |
+| Device 0, `tools/verify_engine_container.py` | 84 / 84 layers exact, host layer included; the rebuilt YOLOv8n 66 / 66 |
+| Device 0, oracle-free `predict_sync` on `bus.jpg` | detections identical to the ONNX Runtime CPU decode of the same input (IoU 1.0): 6 for YOLO11n, 5 for YOLOv8n; `onnxruntime.InferenceSession.run` called once per frame for YOLO11n and never for YOLOv8n; no hardware context after `close()` |
+
+**Against AMD's stack, one sitting** (MEASURED, 2026-09-15 from 02:16 UTC). `xrt-smi` reported no
+hardware contexts before and after every step and host CPU was 1.0–4.6 % before each. Each run is 50
+warm-up and 500 timed frames of `bus.jpg` (810 × 1080). AMD's arm mirrors Ignition's
+`benchmarks/benchmark_yolo_vitisai.py` Vitis AI loop with its own cache key; the Ignition arms ran
+Ignition's `live_ignition.py` on this branch's runtime.
+
+| Run | Stack | G2G mean | P95 | P99 | Stages (ms) | Objects | RSS |
+|---|---|---:|---:|---:|---|---:|---:|
+| 1 | ONNX Runtime + Vitis AI EP (Ryzen AI 1.7.1) | 34.492 | 36.783 | 37.600 | letterbox 1.732, `session.run` 30.905, decode and NMS 1.855 | 7 | 343.1 MB |
+| 2 | Ignition, `yolo11n.ignite` | **10.996** | 11.108 | 11.293 | preprocess 0.528, NPU dispatch 8.452, C2PSA on the CPU 1.685, readback 0.289, decode and NMS 0.036 | 6 | 203.8 MB |
+| 3 | ONNX Runtime + Vitis AI EP | 34.366 | 36.798 | 37.494 | 1.776, 30.743, 1.847 | 7 | 342.8 MB |
+| 4 | Ignition, `yolo11n.ignite` | **11.048** | 11.227 | 11.581 | 0.525, 8.442, 1.688, 0.349, 0.037 | 6 | 204.3 MB |
+| 5 | ONNX Runtime CPU provider, through Ignition | 31.328 | 35.706 | 37.327 | preprocess 1.671, `session.run` 27.815, decode and NMS 1.841 | 7 | 157.2 MB |
+| 6 | Ignition, `yolov8n_full.ignite` (control) | 7.756 | 7.891 | 8.007 | preprocess 0.297, dispatch 7.242, readback 0.182, decode and NMS 0.030 | 5 | 191.2 MB |
+
+- Stock YOLO11n ran **3.1×** faster end to end through Ignition than on AMD's stack (11.02 against
+  34.43 ms, each the mean of its two runs) and 2.8× faster than on ONNX Runtime's CPU provider. Run 4's
+  maximum was a single 25.0 ms frame; its P99 is 11.58 ms. Resident memory did not move in either
+  Ignition run.
+- The YOLOv8n control reads 7.756 ms, within the 7.68–7.78 ms of the earlier sittings.
+- AMD's cache for this key held no `vitisai_ep_report.json`, so this sitting has no placement report of
+  its own; the 6 of 1,300 nodes above is `results/diag_yolo11n_cut_xint8.log`'s.
+
+**Why 6 objects against 7** (MEASURED offline): the engine equals ONNX Runtime for a given input, and
+the arms differ in the input. AMD's arm and the CPU arm use Ignition's letterbox; the NPU arm uses
+ignite-xdna's native preprocessor. Both give pad (0, 80) and scale 0.592593, but 15.18 % of the pixel
+codes differ, each by one code (bilinear rounding). On Ignition's input ONNX Runtime finds 7 objects
+(five people, bus 0.622, handbag 0.321); on the native input it finds 6 (four people, bus 0.562, train
+0.378). Graph optimizations on or off give identical heads, and both decoders give the same lists. On
+this image YOLO11n's XINT8 detections change with one-code input rounding, where YOLOv8n's five did
+not.
+
+**Not done:** COCO mAP through the container; the C2PSA block on the NPU; a per-group depthwise schedule
+(the dense diagonal still computes the zero taps); the native preprocessor's rounding compared with
+OpenCV's.
