@@ -113,9 +113,11 @@ def parse_args(args: Optional[List[str]] = None) -> argparse.Namespace:
         "--host-region",
         action="append",
         default=None,
-        metavar="PREFIX",
-        help="Graph engine: run the nodes whose names start with PREFIX (e.g. /model.10/, YOLO11's C2PSA "
-             "attention block) on the host between two NPU dispatches; repeatable",
+        metavar="PREFIX|FROM=TO",
+        help="Graph engine: run a region on the host between two NPU dispatches; repeatable. PREFIX runs every "
+             "node whose name starts with it (e.g. /model.10/, YOLO11's C2PSA block); FROM=TO runs the nodes "
+             "between two nodes' quantized outputs (e.g. /model.10/m/m.0/attn/qkv/conv/Conv="
+             "/model.10/m/m.0/attn/Reshape_1, its attention core only)",
     )
     argv = list(sys.argv[1:] if args is None else args)
     # ``ignite-compile compile --model X`` is accepted as a spelling of ``--input X``.
@@ -393,9 +395,10 @@ def compile_graph_engine(input_path: Union[str, Path], output_path: Union[str, P
                          build_dir: Optional[Union[str, Path]] = None, host_regions: Optional[List[str]] = None) -> int:
     """Lower the whole graph onto the convolution engine (see engine_compile.py); ``host_regions`` run on the host."""
     for region in host_regions or ():
-        if len(region) > 2 and region[1] == ":" and region[2] in "/\\":
-            raise ValueError(f"--host-region {region}: a file path, not a node-name prefix (Git Bash rewrites "
-                             "arguments that start with '/'; run the command with MSYS_NO_PATHCONV=1)")
+        for part in region.split("="):
+            if len(part) > 2 and part[1] == ":" and part[2] in "/\\":
+                raise ValueError(f"--host-region {region}: {part} is a file path, not a node name (Git Bash "
+                                 "rewrites arguments that start with '/'; run the command with MSYS_NO_PATHCONV=1)")
     try:
         import aie.iron  # noqa: F401
     except ImportError as ex:

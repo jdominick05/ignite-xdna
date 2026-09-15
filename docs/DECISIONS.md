@@ -1707,6 +1707,18 @@ cached reference heads rather than `bo_out`.
   container never. Chosen over the two routes named before it: attention on the NPU (the bf16 attention
   kernel lost to the CPU 71–240×) and a model without the block (the ablated export detects nothing)
   ([BENCHMARKS](BENCHMARKS.md#stock-yolo11n-with-its-c2psa-attention-block-npu-segments-around-a-host-step-2026-09-15-desktop-2)).
+- **Host regions can be bounded by two tensors, and a reshape outside them is a channel view or an error
+  (2026-09-15).** A `FROM=TO` region (the nodes between two quantized outputs) lets YOLO11n keep only its
+  attention core, two MatMuls and a softmax, on the host while the block's seven convolutions run on the
+  engine: most of the whole block's host time was convolution and quantization work the engine already
+  computes exactly (profile in `results/aie/yolo11n_attention_core_offline.log`), and the frame fell from 11.048 to 10.263 ms in one sitting.
+  Reshape was an unsupported op; outside host regions it is now lowered only when replaying its
+  Reshape/Slice chain on a channel-and-pixel label array gives whole 8-channel blocks of a stored tensor in
+  pixel order, and it raises otherwise. Residuals work at the finest of the three scales, so an Add whose
+  output is finer than both operands is exact. Chosen over running the MatMuls on the engine as 1 × 1
+  convolutions whose weights are the frame's activations, which would rewrite those layers' weight packets
+  every frame and add host round trips for the softmax
+  ([BENCHMARKS](BENCHMARKS.md#yolo11ns-c2psa-convolutions-on-the-npu-only-its-attention-core-on-the-host-2026-09-15-desktop-2)).
 - **Depthwise convolutions lower as dense diagonal convolutions, and the attributes the engine cannot
   honour are refused (2026-09-15).** The lowering never read `group` or `dilations`, so YOLO11n's
   depthwise heads compiled without error into one-input-channel convolutions. A depthwise convolution is

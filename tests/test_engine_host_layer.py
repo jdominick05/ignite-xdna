@@ -10,6 +10,9 @@ Uses models/yolo11n_cut_xint8.onnx, models/yolo11n_no_c2psa_cut_xint8.onnx and m
 - stock YOLO11n with host region /model.10/ (its C2PSA attention block) lowers to 83 engine layers and one
   HostLayer, and every tensor, the host layer's output and the six heads equal ONNX Runtime's;
 - the host layer schedules no DMA items and ``plan_segments`` cuts the layers into NPU, host, NPU;
+- with the boundary region /model.10/m/m.0/attn/qkv/conv/Conv=/model.10/m/m.0/attn/Reshape_1 only the attention core
+  is on the host: C2PSA's seven convolutions lower (91 layers), the pe convolution reads v as qkv blocks 8-15 and
+  24-31, and every tensor equals ONNX Runtime's;
 - dilated and grouped (non-depthwise) convolutions, 1x1 stride-2 convolutions and a host region that names
   no node are refused;
 - ``ignite-compile --host-region`` reaches the graph compile, and a region Git Bash rewrote into a path is refused
@@ -40,6 +43,8 @@ ABLATED = MODELS / "yolo11n_no_c2psa_cut_xint8.onnx"
 YOLOV8N = MODELS / "yolov8n_cut_xint8.onnx"
 BUS = ROOT / "assets" / "bus.jpg"
 C2PSA = "/model.10/"
+CORE = "/model.10/m/m.0/attn/qkv/conv/Conv=/model.10/m/m.0/attn/Reshape_1"
+QKV_Q = "/model.10/m/m.0/attn/qkv/conv/Conv_output_0_QuantizeLinear_Output"
 
 
 def quantized_bus(ir):
@@ -123,6 +128,46 @@ class HostLayerLowering(_OrtCase):
     def test_region_without_nodes_is_refused(self):
         with self.assertRaisesRegex(ValueError, "no node names start with it"):
             graph_ir.lower_yolov8n(STOCK, host_regions=("/model.99/",))
+
+
+@unittest.skipUnless(STOCK.exists(), f"{STOCK.name} not present")
+class AttentionCoreLowering(_OrtCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.ir = graph_ir.lower_yolov8n(STOCK, host_regions=(CORE,))
+        cls.hosts = [L for L in cls.ir.layers if isinstance(L, graph_ir.HostLayer)]
+        cls.by_name = {L.name: L for L in cls.ir.layers}
+
+    def test_only_the_attention_core_is_on_the_host(self):
+        self.assertEqual(len(self.hosts), 1)
+        self.assertEqual(len(self.ir.layers), 91)
+        H = self.hosts[0]
+        self.assertEqual(H.name, CORE)
+        self.assertEqual(H.input.tensor, QKV_Q)
+        self.assertEqual(H.output, "/model.10/m/m.0/attn/Reshape_1_output_0_QuantizeLinear_Output")
+        self.assertEqual(H.op_types.get("MatMul"), 2)
+        self.assertEqual(H.op_types.get("Softmax"), 1)
+        self.assertNotIn("Conv", H.op_types)
+        self.assertLess(self.by_name["/model.10/m/m.0/attn/qkv/conv/Conv"].index, H.index)
+        self.assertGreater(self.by_name["/model.10/cv2/conv/Conv"].index, H.index)
+
+    def test_pe_reads_v_as_two_block_ranges_of_qkv(self):
+        pe = self.by_name["/model.10/m/m.0/attn/pe/conv/Conv"]
+        self.assertEqual([(s.tensor, s.block_offset, s.blocks) for s in pe.inputs], [(QKV_Q, 8, 8), (QKV_Q, 24, 8)])
+        self.assertEqual(pe.residual.tensor, self.hosts[0].output)
+
+    def test_every_tensor_matches_onnx_runtime(self):
+        self.assert_every_tensor_matches_ort(STOCK, self.ir)
+
+    def test_segments_stay_npu_host_npu(self):
+        from ignite_xdna.compiler.engine_compile import plan_segments
+        ws = es.plan_workspace(self.ir)
+        scheds, _ = es.schedule_graph(self.ir, ws)
+        self.assertEqual([s["kind"] for s in plan_segments(self.ir, scheds)], ["npu", "host", "npu"])
+
+    def test_unknown_boundary_is_refused(self):
+        with self.assertRaisesRegex(ValueError, "neither a uint8 tensor nor a node name"):
+            graph_ir.lower_yolov8n(STOCK, host_regions=("/model.10/m/m.0/attn/qkv/conv/Conv=/nope",))
 
 
 @unittest.skipUnless(YOLOV8N.exists(), f"{YOLOV8N.name} not present")

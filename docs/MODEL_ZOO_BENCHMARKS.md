@@ -270,6 +270,7 @@ evidence [`results/aie/yolo11n_hybrid_phoenix_20260915T0216Z.log`](../results/ai
 | Container | Layers | Rounds | Weight packets | Instructions | DDR workspace | Container size | Egress |
 |---|---:|---:|---:|---:|---:|---:|---|
 | `yolo11n.ignite` | 83 NPU + 1 host | 1,606 | 9.24 MB | 200,160 + 287,684 B (1,376 + 1,984 tasks) | 24.5 MB | 10,259,008 B | six heads; host model 295,565 B |
+| `yolo11n_core.ignite` | 90 NPU + 1 host | 1,650 | 10.64 MB | 206,016 + 303,812 B (1,416 + 2,092 tasks) | 25.1 MB | 11,406,848 B | six heads; attention-core host model 15,724 B |
 
 - **Exactness:** 84 / 84 layers byte-exact on Device 0, host layer included; oracle-free detections
   identical to ONNX Runtime's CPU decode of the same input.
@@ -279,10 +280,17 @@ evidence [`results/aie/yolo11n_hybrid_phoenix_20260915T0216Z.log`](../results/ai
   ONNX Runtime with the Vitis AI EP took 34.492 and 34.366 ms and the CPU provider 31.328 ms (seven
   objects: the input preprocessing differs by one pixel code in 15 % of values, which is enough to
   change this model's borderline boxes).
+- **Only the attention core on the host** (`yolo11n_core.ignite`, `--host-region /model.10/m/m.0/attn/qkv/conv/Conv=/model.10/m/m.0/attn/Reshape_1`,
+  2026-09-15 from 15:22 UTC): C2PSA's seven convolutions on the NPU, 91 / 91 layers exact on Device 0.
+  **10.411** and **10.115** ms mean glass-to-glass (NPU dispatch 8.784 and 8.708 ms, host 0.533 and 0.505 ms)
+  against 11.109 and 10.987 ms for `yolo11n.ignite` and 36.361 and 34.549 ms on AMD's stack in the same
+  sitting ([BENCHMARKS](BENCHMARKS.md#yolo11ns-c2psa-convolutions-on-the-npu-only-its-attention-core-on-the-host-2026-09-15-desktop-2)).
 
 ```bash
 MSYS_NO_PATHCONV=1 bash scripts/research-iron.sh -m ignite_xdna.compiler.cli compile --model models/yolo11n_cut_xint8.onnx --output build/yolo11n.ignite --host-region /model.10/
 bash scripts/research-iron.sh tools/verify_engine_container.py --container build/yolo11n.ignite --model models/yolo11n_cut_xint8.onnx
+MSYS_NO_PATHCONV=1 bash scripts/research-iron.sh -m ignite_xdna.compiler.cli compile --model models/yolo11n_cut_xint8.onnx --output build/yolo11n_core.ignite --host-region "/model.10/m/m.0/attn/qkv/conv/Conv=/model.10/m/m.0/attn/Reshape_1"
+bash scripts/research-iron.sh tools/verify_engine_container.py --container build/yolo11n_core.ignite --model models/yolo11n_cut_xint8.onnx
 python tests/test_engine_host_layer.py
 ```
 

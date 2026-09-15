@@ -8092,6 +8092,80 @@ codes differ, each by one code (bilinear rounding). On Ignition's input ONNX Run
 this image YOLO11n's XINT8 detections change with one-code input rounding, where YOLOv8n's five did
 not.
 
-**Not done:** COCO mAP through the container; the C2PSA block on the NPU; a per-group depthwise schedule
-(the dense diagonal still computes the zero taps); the native preprocessor's rounding compared with
-OpenCV's.
+**Not done:** COCO mAP through the container; the C2PSA block's attention core on the NPU (its
+convolutions moved there in [the next section](#yolo11ns-c2psa-convolutions-on-the-npu-only-its-attention-core-on-the-host-2026-09-15-desktop-2)); a per-group depthwise schedule (the dense
+diagonal still computes the zero taps); the native preprocessor's rounding compared with OpenCV's.
+
+
+## YOLO11n's C2PSA convolutions on the NPU, only its attention core on the host (2026-09-15, Desktop 2)
+
+The host step above runs all 134 nodes of C2PSA and took 1.685 and 1.688 ms of an 11.0 ms frame. Most of
+that time is not attention. An ONNX Runtime 1.30 per-node profile of the host model put 31.7 % of its
+kernel time in DequantizeLinear, 24.3 % in Conv and 8.7 % in QuantizeLinear, against 5.3 % for the two
+QLinearMatMul nodes and 6.0 % for QLinearSoftmax, and the attention core alone ran in 22.3 % of the whole
+block's time (median 0.327 against 1.463 ms, the two models alternating in one process). Both are sizing on
+a host that was not kept quiet. This section keeps only the attention core on the host and lowers the rest
+of the block. Branch `attention-core` from `06aef68`; evidence `results/aie/yolo11n_attention_core_phoenix_20260915T1522Z.log` (Device 0 witnesses and the timed
+sitting), `results/aie/yolo11n_attention_core_offline.log` (profile, sizing, the `v` check and the offline gate) and `tests/test_engine_host_layer.py`.
+
+**Design:**
+
+- `host_regions` also takes `FROM=TO`: the nodes on a path from `FROM`'s quantized output to `TO`'s, each a
+  node name or a QuantizeLinear output. `/model.10/m/m.0/attn/qkv/conv/Conv=/model.10/m/m.0/attn/Reshape_1` is 46 nodes (two reshapes, three slices, the scale Mul, two
+  transposes, both MatMuls and the softmax, with their Q/DQ nodes), a 15,724-byte model from the qkv
+  convolution's output (256 × 20 × 20, 2⁻⁴) to the attention result (128 × 20 × 20, 2⁻⁴). The layer is built
+  at the region's first node, so the engine layers that combine its output with other tensors follow it.
+- The `pe` depthwise convolution reads `v`, which the region computes by reshape → slice on axis 2 →
+  reshape. A Reshape outside a host region is lowered only as a channel view: the lowering replays its
+  Reshape/Slice chain on an array labelled with each element's channel and pixel, with ONNX semantics, and
+  accepts it when every output channel is one stored channel in pixel order, in whole 8-channel blocks;
+  anything else raises. `v` is qkv channels 64–127 then 192–255, so `pe` reads blocks 8–15 and 24–31 of the
+  stored qkv output. ONNX Runtime's own `v` equals that concatenation byte for byte on `bus.jpg` and two
+  random images.
+- C2PSA's other nodes lower as engine layers 36–43: cv1, qkv, pe (a dense diagonal 128 → 128 with the host
+  output as its residual), proj (residual `b`), ffn.0, ffn.1 (residual) and cv2 (two input segments). The
+  attention Add sums two 2⁻⁴ operands into a finer 2⁻⁵ output, which the residual rule refused. Residuals now
+  work at the finest of the three scales, which here shifts both operands left by one and rounds nothing. No
+  existing layer changes: the YOLOv8n, YOLOv8s and SESR M7 stream reports equal `results/model_zoo/stream_*.json`.
+- Per frame the stream grows from 3,360 to 3,508 DMA tasks (1,416 + 2,092) and from 149,810,432 to
+  155,564,288 bytes, +0.301 ms DERIVED. `ignite-compile --host-region FROM=TO` builds `yolo11n_core.ignite`
+  (11,406,848 B: `insts_0.bin` 206,016 B, `insts_1.bin` 303,812 B, packets 10,637,056 B; workspace 25,077,120 B).
+  The engine program and the runtime are unchanged.
+
+**Exactness** (MEASURED):
+
+| Check | Result |
+|---|---|
+| Direct integer reference vs ONNX Runtime's uint8 intermediates (graph optimizations off) | all 91 layer tensors and the six heads equal on `bus.jpg` and 20 `coco128` images (offline) |
+| Packet emulation, host step included | 91 / 91 exact on three of those images (offline) |
+| Attention core with ONNX Runtime graph optimizations on | output identical on all 21 images (offline) |
+| Device 0, `tools/verify_engine_container.py` | 91 / 91 layers exact; on the same runtime the whole-block container 84 / 84 and YOLOv8n 66 / 66 |
+| Device 0, oracle-free `predict_sync` on `bus.jpg` | for both YOLO11n containers: 6 detections identical to the ONNX Runtime CPU decode of the same input (IoU 1.0), one `InferenceSession.run` per frame, no hardware context after `close()` |
+
+**Against the whole-block container and AMD's stack, one sitting** (MEASURED, 2026-09-15 from 15:22 UTC).
+`xrt-smi` reported no hardware contexts before and after every step, and host CPU was 0.2–4.3 % before each
+timed run. Each run is 50 warm-up and 500 timed frames of `bus.jpg` (810 × 1080) through Ignition's
+`live_ignition.py`; AMD's arm mirrors Ignition's `benchmarks/benchmark_yolo_vitisai.py` Vitis AI loop as in
+the section above.
+
+| Run | Stack | G2G mean | P95 | P99 | Stages (ms) | Objects | RSS |
+|---|---|---:|---:|---:|---|---:|---:|
+| 1 | ONNX Runtime + Vitis AI EP (Ryzen AI 1.7.1) | 36.361 | 39.229 | 54.731 | letterbox 1.886, `session.run` 32.539, decode and NMS 1.936 | 7 | 343.4 MB |
+| 2 | Ignition, `yolo11n.ignite` (whole block on the host) | 11.109 | 11.460 | 11.710 | preprocess 0.616, NPU dispatch 8.372, host 1.728, readback 0.344, decode and NMS 0.042 | 6 | 203.9 MB |
+| 3 | Ignition, `yolo11n_core.ignite` (attention core on the host) | **10.411** | 11.104 | 12.609 | 0.654, 8.784, 0.533, 0.390, 0.042 | 6 | 201.7 MB |
+| 4 | ONNX Runtime + Vitis AI EP | 34.549 | 37.131 | 37.848 | 1.815, 30.872, 1.861 | 7 | 342.8 MB |
+| 5 | Ignition, `yolo11n.ignite` | 10.987 | 11.158 | 11.295 | 0.517, 8.436, 1.695, 0.296, 0.037 | 6 | 203.2 MB |
+| 6 | Ignition, `yolo11n_core.ignite` | **10.115** | 10.303 | 10.616 | 0.557, 8.708, 0.505, 0.304, 0.035 | 6 | 202.0 MB |
+| 7 | Ignition, `yolov8n_full.ignite` (control) | 7.722 | 7.861 | 7.969 | preprocess 0.297, dispatch 7.210, readback 0.181, decode and NMS 0.029 | 5 | 191.4 MB |
+
+- The attention-core container ran 0.785 ms faster than the whole-block one (10.263 against 11.048 ms, each
+  the mean of its two runs). Its host step fell from 1.712 to 0.519 ms and its NPU dispatch rose from 8.404 to
+  8.746 ms: +0.342 ms, against +0.301 ms of DERIVED traffic (0.337 ms with the 1.12 calibration of measured
+  dispatch to derived traffic). The host step is 0.52 ms where the sizing share implied about 0.38 ms.
+- Against AMD's stack in this sitting (35.455 ms) the attention-core container was 3.45× faster. AMD's run 1
+  had a slow tail (P99 54.7 ms); run 3's P99 of 12.6 ms and 15.1 ms maximum did not recur in run 6 (P99 10.6 ms).
+- The whole-block container reproduced the 02:16 sitting (11.109 and 10.987 against 10.996 and 11.048 ms),
+  and the YOLOv8n control read 7.722 ms, within the 7.68–7.78 ms of earlier sittings.
+
+**Not done:** the attention core itself on the NPU (both MatMuls and the softmax); COCO mAP through either
+container; a per-group depthwise schedule for `pe`.
