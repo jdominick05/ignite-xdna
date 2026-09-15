@@ -259,6 +259,36 @@ on `bus.jpg`; resident memory unchanged over each run):
 The two sittings ran on the same day but were not interleaved, so glass-to-glass differences
 between this section and the rows above are not attributed to the merge.
 
+## YOLO11n with C2PSA: two NPU segments and a host step (2026-09-15, 02:16 UTC)
+
+Stock `yolo11n_cut_xint8.onnx`, attention block included, as a segmented container: layers 0–35 and
+37–83 on the NPU, the C2PSA block (`/model.10/`) on ONNX Runtime's CPU provider between them. Design,
+exactness and the full sitting are in
+[BENCHMARKS](BENCHMARKS.md#stock-yolo11n-with-its-c2psa-attention-block-npu-segments-around-a-host-step-2026-09-15-desktop-2);
+evidence [`results/aie/yolo11n_hybrid_phoenix_20260915T0216Z.log`](../results/aie/yolo11n_hybrid_phoenix_20260915T0216Z.log).
+
+| Container | Layers | Rounds | Weight packets | Instructions | DDR workspace | Container size | Egress |
+|---|---:|---:|---:|---:|---:|---:|---|
+| `yolo11n.ignite` | 83 NPU + 1 host | 1,606 | 9.24 MB | 200,160 + 287,684 B (1,376 + 1,984 tasks) | 24.5 MB | 10,259,008 B | six heads; host model 295,565 B |
+
+- **Exactness:** 84 / 84 layers byte-exact on Device 0, host layer included; oracle-free detections
+  identical to ONNX Runtime's CPU decode of the same input.
+- **Through Ignition's `live_ignition.py`** (50 warm-up and 500 frames of `bus.jpg`, interleaved with
+  AMD's stack): **10.996** and **11.048** ms mean glass-to-glass (P99 11.293 and 11.581), NPU dispatch
+  8.452 and 8.442 ms, C2PSA on the CPU 1.685 and 1.688 ms, six objects per frame. In the same sitting
+  ONNX Runtime with the Vitis AI EP took 34.492 and 34.366 ms and the CPU provider 31.328 ms (seven
+  objects: the input preprocessing differs by one pixel code in 15 % of values, which is enough to
+  change this model's borderline boxes).
+
+```bash
+bash scripts/research-iron.sh -m ignite_xdna.compiler.cli compile --model models/yolo11n_cut_xint8.onnx --output build/yolo11n.ignite --host-region /model.10/
+bash scripts/research-iron.sh tools/verify_engine_container.py --container build/yolo11n.ignite --model models/yolo11n_cut_xint8.onnx
+python tests/test_engine_host_layer.py
+```
+
+Build one container per process: a second graph container compiled in the same Python process fails
+to link its kernel object ([DECISIONS](DECISIONS.md)).
+
 ## Reproduce
 
 ```bash

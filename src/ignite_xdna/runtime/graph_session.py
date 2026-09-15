@@ -18,6 +18,12 @@ readback); the manifest's ``task`` picks the session on top of it:
   manifest's ``dense_output`` transform (DepthToSpace and dequantization)
   into an upscaled BGR image.
 
+A container whose manifest lists ``graph_engine.segments`` (YOLO11's C2PSA block on the host) runs
+them in order in ``dispatch``: each NPU segment is its own instruction stream and XRT run over the
+shared workspace, and each host segment is a ``HostStep`` that reads its input tensor from the
+workspace, runs the layer's ONNX model on ONNX Runtime's CPU provider and writes the output tensor
+back before the next NPU segment reads it.
+
 All buffers are allocated once at construction.
 """
 from __future__ import annotations
@@ -26,7 +32,7 @@ import hashlib
 import os
 import time
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 
@@ -72,6 +78,68 @@ def input_lut(input_scale: float, input_zero_point: int = ZP) -> np.ndarray:
     return q  # index with (int8_value + 128)
 
 
+def _region(p: Dict[str, Any]) -> Tuple[int, int]:
+    """(base, bytes) of a placement's real channel blocks, halo ring included."""
+    h, w, halo = int(p["height"]), int(p["width"]), int(p["halo"])
+    return int(p["base"]), int(p["blocks"]) * (h + 2 * halo) * (w + 2 * halo) * 8
+
+
+class HostStep:
+    """One host layer between two NPU segments.
+
+    ``run`` syncs the input tensor from the workspace, runs the layer's extracted uint8 -> uint8 ONNX model
+    on ONNX Runtime's CPU provider and writes the result into the output tensor's interior (its halo ring
+    keeps the value the halo image set), then syncs that region to the device.
+    """
+
+    def __init__(self, session: "EngineSession", seg: Dict[str, Any]):
+        import onnxruntime as ort
+        blob = session._reader.get_blob_bytes(seg["blob"])
+        want = seg.get("onnx_sha256")
+        if want and hashlib.sha256(blob).hexdigest() != want:
+            raise ValueError(f"{session.path}: host model {seg['blob']} does not match the manifest's sha256")
+        self.name = seg.get("name", seg["blob"])
+        self.session = session
+        self.ort_session = ort.InferenceSession(blob, providers=["CPUExecutionProvider"])
+        self.input_name = self.ort_session.get_inputs()[0].name
+        placements = session.ge["placements"]
+        self.pin, self.pout = placements[seg["input"]], placements[seg["output"]]
+        self.in_base, self.in_bytes = _region(self.pin)
+        self.out_base, self.out_bytes = _region(self.pout)
+        self._x = np.empty((1, int(self.pin["channels"]), int(self.pin["height"]), int(self.pin["width"])),
+                           dtype=np.uint8)
+        self.last_ms = 0.0
+
+    def run(self) -> None:
+        s = self.session
+        t0 = time.perf_counter()
+        d = s.harness.pyxrt.xclBOSyncDirection
+        p = self.pin
+        h, w, halo, blocks = int(p["height"]), int(p["width"]), int(p["halo"]), int(p["blocks"])
+        s.bo_ws.sync(d.XCL_BO_SYNC_BO_FROM_DEVICE, self.in_bytes, self.in_base)
+        if s._ws_map is not None:
+            raw = s._ws_map[self.in_base:self.in_base + self.in_bytes]
+        else:
+            raw = np.frombuffer(s.bo_ws.read(self.in_bytes, self.in_base), dtype=np.uint8)
+        planes = raw.reshape(blocks, h + 2 * halo, w + 2 * halo, 8)[:, halo:halo + h, halo:halo + w, :]
+        self._x[0] = np.transpose(planes, (0, 3, 1, 2)).reshape(blocks * 8, h, w)[:self._x.shape[1]]
+        y = self.ort_session.run(None, {self.input_name: self._x})[0]
+        q = self.pout
+        oh, ow, ohalo, oblocks = int(q["height"]), int(q["width"]), int(q["halo"]), int(q["blocks"])
+        if s._ws_map is not None:
+            region = s._ws_map[self.out_base:self.out_base + self.out_bytes]
+        else:
+            region = np.frombuffer(s.bo_ws.read(self.out_bytes, self.out_base), dtype=np.uint8).copy()
+        full = np.full((oblocks * 8, oh, ow), ZP, dtype=np.uint8)
+        full[:y.shape[1]] = y[0]
+        interior = region.reshape(oblocks, oh + 2 * ohalo, ow + 2 * ohalo, 8)[:, ohalo:ohalo + oh, ohalo:ohalo + ow, :]
+        interior[:] = np.transpose(full.reshape(oblocks, 8, oh, ow), (0, 2, 3, 1))
+        if s._ws_map is None:
+            s.bo_ws.write(region, self.out_base)
+        s.bo_ws.sync(d.XCL_BO_SYNC_BO_TO_DEVICE, self.out_bytes, self.out_base)
+        self.last_ms = (time.perf_counter() - t0) * 1e3
+
+
 class EngineSession:
     """The convolution engine and its buffers for one graph-engine container (see ``compiler/engine_compile.py``)."""
 
@@ -103,8 +171,17 @@ class EngineSession:
 
         self.harness = XrtSiliconHarness(device_idx=device_index)
         self.harness.load_xclbin(str(self.xclbin_path), "MLIR_AIE")
-        self.bo_instr_exec, self.ninstr_exec = self.harness.create_instruction_bo_from_bytes(
-            self._reader.get_blob_memoryview("insts.bin"))
+        # Execution plan: one instruction stream, or NPU segments with host layers between them.
+        self.segments: List[Dict[str, Any]] = list(self.ge.get("segments") or [{"kind": "npu", "blob": "insts.bin"}])
+        self.single_dispatch = not self.ge.get("segments")
+        self._npu_streams = []
+        for seg in self.segments:
+            if seg["kind"] == "npu":
+                self._npu_streams.append(self.harness.create_instruction_bo_from_bytes(
+                    self._reader.get_blob_memoryview(seg["blob"])))
+            elif seg["kind"] != "host":
+                raise ValueError(f"{self.path}: unknown segment kind {seg['kind']!r}")
+        self.bo_instr_exec, self.ninstr_exec = self._npu_streams[0]
         wp = self._reader.get_blob_memoryview("wpackets.bin")
         self.workspace_bytes = int(self.ge["workspace_bytes"])
         self.bo_ws = self.harness.create_host_bo(self.workspace_bytes, 3)
@@ -145,14 +222,19 @@ class EngineSession:
         # workspace, packets) never change, so each frame only starts and awaits it.
         pyxrt = self.harness.pyxrt
         self._completed = getattr(getattr(pyxrt, "ert_cmd_state", None), "ERT_CMD_STATE_COMPLETED", None)
-        self._run = None
+        self._runs: List[Any] = []
         try:
-            run = pyxrt.run(self.harness.kernel)
-            for i, arg in enumerate((3, self.bo_instr_exec, self.ninstr_exec, self.bo_ws, self.bo_wp)):
-                run.set_arg(i, arg)
-            self._run = run
+            for bo_instr, n_instr in self._npu_streams:
+                run = pyxrt.run(self.harness.kernel)
+                for i, arg in enumerate((3, bo_instr, n_instr, self.bo_ws, self.bo_wp)):
+                    run.set_arg(i, arg)
+                self._runs.append(run)
         except Exception:  # noqa: BLE001 - fall back to one run per dispatch
-            self._run = None
+            self._runs = []
+        self._run = self._runs[0] if self._runs else None
+        self._host_steps = [HostStep(self, seg) for seg in self.segments if seg["kind"] == "host"]
+        self.last_host_ms = 0.0
+        self.last_segment_ms: List[float] = []
 
     # ------------------------------------------------------------------ status
     @property
@@ -177,17 +259,37 @@ class EngineSession:
         self._input_plane[h:h + p["height"], h:h + p["width"], :chw.shape[0]] = np.moveaxis(chw, 0, -1)
         self._upload_input()
 
-    def dispatch(self, timeout_ms: int = 10000) -> float:
-        t0 = time.perf_counter()
-        if self._run is not None:
-            self._run.start()
-            state = self._run.wait(timeout_ms)
+    def _dispatch_stream(self, k: int, timeout_ms: int) -> None:
+        if self._runs:
+            self._runs[k].start()
+            state = self._runs[k].wait(timeout_ms)
         else:
-            _, state = self.harness.dispatch_kernel(self.bo_instr_exec, self.ninstr_exec, self.bo_ws, self.bo_wp,
-                                                    timeout_ms=timeout_ms)
+            bo_instr, n_instr = self._npu_streams[k]
+            _, state = self.harness.dispatch_kernel(bo_instr, n_instr, self.bo_ws, self.bo_wp, timeout_ms=timeout_ms)
         if state != self._completed and str(state) != "ert_cmd_state.ERT_CMD_STATE_COMPLETED":
-            raise RuntimeError(f"graph engine dispatch ended in state {state}")
-        self.last_dispatch_ms = (time.perf_counter() - t0) * 1e3
+            where = f" (NPU segment {k})" if len(self._npu_streams) > 1 else ""
+            raise RuntimeError(f"graph engine dispatch{where} ended in state {state}")
+
+    def dispatch(self, timeout_ms: int = 10000) -> float:
+        """Run the container's segments in order and return the NPU dispatch milliseconds.
+
+        ``last_dispatch_ms`` counts NPU segments only, ``last_host_ms`` the host layers between them
+        (syncs and ONNX Runtime), and ``last_segment_ms`` every segment in order.
+        """
+        seg_ms: List[float] = []
+        npu_k = host_k = 0
+        for seg in self.segments:
+            t0 = time.perf_counter()
+            if seg["kind"] == "npu":
+                self._dispatch_stream(npu_k, timeout_ms)
+                npu_k += 1
+            else:
+                self._host_steps[host_k].run()
+                host_k += 1
+            seg_ms.append((time.perf_counter() - t0) * 1e3)
+        self.last_segment_ms = seg_ms
+        self.last_host_ms = sum(ms for ms, seg in zip(seg_ms, self.segments) if seg["kind"] == "host")
+        self.last_dispatch_ms = sum(seg_ms) - self.last_host_ms
         return self.last_dispatch_ms
 
     def read_tensor(self, name: str) -> np.ndarray:
@@ -205,7 +307,10 @@ class EngineSession:
         if self._closed:
             return
         self._closed = True
-        self._run = None  # the run holds references to the buffer objects
+        self._run = None  # the runs hold references to the buffer objects
+        self._runs = []
+        self._host_steps = []
+        self._npu_streams = []
         self._ws_map = None
         self._input_plane = None
         self.bo_ws = None
@@ -381,7 +486,9 @@ class GraphSession(EngineSession):
         out["head_status"] = status.reason
         out["raw_output"] = egress
         out["raw_heads"] = egress
-        timestamps = {"stage_ms": (t1 - t0) * 1e3, "npu_ms": (t2 - t1) * 1e3, "readback_ms": (t3 - t2) * 1e3}
+        # npu_ms is the NPU segments' dispatch; host_ms the host layers between them (0 without any).
+        timestamps = {"stage_ms": (t1 - t0) * 1e3, "npu_ms": self.last_dispatch_ms, "host_ms": self.last_host_ms,
+                      "readback_ms": (t3 - t2) * 1e3}
         if return_timestamps:
             return out, timestamps
         return out

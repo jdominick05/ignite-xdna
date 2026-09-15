@@ -4,7 +4,11 @@ The container carries everything the runtime needs to execute the whole
 network on the NPU without the CPU oracle:
 
 * ``engine.xclbin``   the 16-core convolution engine (kernels/aie2/conv_engine),
-* ``insts.bin``       one instruction stream for all layers (layer barriers inside),
+* ``insts.bin``       one instruction stream for all layers (layer barriers inside); a graph with
+                      host layers instead carries ``insts_<i>.bin`` per NPU segment and
+                      ``host_<j>.onnx`` per host layer, listed in ``graph_engine.segments`` in
+                      execution order (dispatch a segment, run the host layer on the workspace,
+                      dispatch the next),
 * ``wpackets.bin``    the static weight packets,
 * manifest ``graph_engine``: workspace size, tensor placements (so the runtime
   rebuilds the halo fill and finds the input and head tensors), per-layer
@@ -21,13 +25,13 @@ import json
 import shutil
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Sequence
 
 import numpy as np
 
 from ignite_xdna.compiler import engine_emulator as em
 from ignite_xdna.compiler import engine_schedule as es
-from ignite_xdna.compiler.graph_ir import ConvLayer, GraphIR, lower_yolov8n
+from ignite_xdna.compiler.graph_ir import ConvLayer, GraphIR, HostLayer, lower_yolov8n
 from ignite_xdna.compiler.serializer import ARCH_XDNA1_PHOENIX, IgniteModelReader, IgniteModelWriter
 
 ENGINE_NAME = "conv_engine_v1"
@@ -54,6 +58,41 @@ def graph_task(ir: GraphIR) -> str:
 SR_INPUT_NORMALIZATION = {"mean": 128.0, "divisor": 1.0}
 
 
+def plan_segments(ir: GraphIR, scheds: List[es.LayerSchedule]) -> List[Dict[str, Any]]:
+    """Cut the scheduled layers at host layers, in execution order.
+
+    An NPU segment is a half-open layer range with its DMA task count (the counts
+    ``engine_sequence.split_instruction_stream`` cuts the lowered stream by); a host segment names its
+    layer, input and output tensors. Blob names are assigned in order.
+    """
+    from ignite_xdna.compiler.engine_sequence import program_task_count
+    segments: List[Dict[str, Any]] = []
+    start, tasks = None, 0
+    for s in scheds:
+        L = ir.layers[s.layer_index]
+        if isinstance(L, HostLayer):
+            if start is not None:
+                segments.append({"kind": "npu", "layers": [start, s.layer_index], "tasks": tasks})
+            segments.append({"kind": "host", "layer": s.layer_index, "name": L.name, "input": L.input.tensor,
+                             "output": L.output, "op_types": dict(L.op_types)})
+            start, tasks = None, 0
+        else:
+            if start is None:
+                start = s.layer_index
+            tasks += sum(program_task_count(p) for p in s.programs)
+    if start is not None:
+        segments.append({"kind": "npu", "layers": [start, scheds[-1].layer_index + 1], "tasks": tasks})
+    n_npu = n_host = 0
+    for seg in segments:
+        if seg["kind"] == "npu":
+            seg["blob"] = f"insts_{n_npu}.bin"
+            n_npu += 1
+        else:
+            seg["blob"] = f"host_{n_host}.onnx"
+            n_host += 1
+    return segments
+
+
 def build_manifest(ir: GraphIR, ws: es.Workspace, scheds: List[es.LayerSchedule], store: es.PacketStore,
                    model_name: str, insts_bytes: int, xclbin_sha: str, kernel_sha: str, compile_s: float) -> Dict[str, Any]:
     placements = {}
@@ -64,7 +103,8 @@ def build_manifest(ir: GraphIR, ws: es.Workspace, scheds: List[es.LayerSchedule]
     task = graph_task(ir)
     t_in = ir.tensors[ir.input]
     layers = [{"index": s.layer_index, "name": s.name, "output": ir.layers[s.layer_index].output,
-               "rounds": s.rounds, "packets": s.packets, "w_fills": s.w_fills} for s in scheds]
+               "rounds": s.rounds, "packets": s.packets, "w_fills": s.w_fills,
+               **({"kind": "host"} if isinstance(ir.layers[s.layer_index], HostLayer) else {})} for s in scheds]
     graph_engine = {
         "kernel_sha256": kernel_sha,
         "xclbin_sha256": xclbin_sha,
@@ -137,8 +177,11 @@ def build_manifest(ir: GraphIR, ws: es.Workspace, scheds: List[es.LayerSchedule]
 
 
 def compile_graph_container(onnx_path, output_path, build_dir: Optional[Path] = None, layers: Optional[int] = None,
-                            verbose: bool = True) -> Dict[str, Any]:
-    """Lower, schedule, build the device binaries and write the container. Returns the manifest."""
+                            verbose: bool = True, host_regions: Sequence[str] = ()) -> Dict[str, Any]:
+    """Lower, schedule, build the device binaries and write the container. Returns the manifest.
+
+    ``host_regions`` are node-name prefixes run on the host between dispatches (``graph_ir.HostLayer``).
+    """
     import aie.iron as iron
     from aie.iron.device import NPU1
     from aie.utils.compile.utils import compile_mlir_module
@@ -149,13 +192,14 @@ def compile_graph_container(onnx_path, output_path, build_dir: Optional[Path] = 
     onnx_path = Path(onnx_path)
     out_p = Path(output_path)
     build_dir = Path(build_dir or out_p.parent / "conv_engine" / out_p.stem).resolve()
-    ir = lower_yolov8n(onnx_path)
+    ir = lower_yolov8n(onnx_path, host_regions=host_regions)
     ws = es.plan_workspace(ir)
     scheds, store = es.schedule_graph(ir, ws)
     if layers is not None:
         scheds = scheds[:layers]
     if verbose:
-        print(f"[*] Lowered {len(ir.layers)} layers; workspace {ws.nbytes / 1e6:.1f} MB; "
+        n_host = sum(isinstance(L, HostLayer) for L in ir.layers)
+        print(f"[*] Lowered {len(ir.layers)} layers ({n_host} on the host); workspace {ws.nbytes / 1e6:.1f} MB; "
               f"{sum(s.rounds for s in scheds)} rounds, {store.nbytes / 1e6:.2f} MB static packets")
 
     # yolov8s streams 29.5 MB of weight packets, past the 16 MB default packet extent.
@@ -185,10 +229,30 @@ def compile_graph_container(onnx_path, output_path, build_dir: Optional[Path] = 
     manifest = build_manifest(ir, ws, scheds, store, onnx_path.stem, len(insts),
                               hashlib.sha256(xclbin).hexdigest(), kernel_sha, time.perf_counter() - t0)
     manifest["graph_engine"]["ddr_extents_bytes"] = {"workspace": ws_extent, "packets": wp_extent}
+    segments = plan_segments(ir, scheds)
+    hosts = [seg for seg in segments if seg["kind"] == "host"]
+    blobs = [("engine.xclbin", xclbin, "xclbin")]
+    if hosts:
+        # One stream per NPU segment: the emitter retires every task at each layer barrier, so the lowered
+        # stream cuts cleanly before and after a host layer (which issues no tasks).
+        from ignite_xdna.compiler.engine_sequence import split_instruction_stream
+        npu = [seg for seg in segments if seg["kind"] == "npu"]
+        pieces = split_instruction_stream(insts, [seg["tasks"] for seg in npu])
+        for seg, piece in zip(npu, pieces):
+            seg["insts_bytes"] = len(piece)
+            blobs.append((seg["blob"], piece, "npu_instructions"))
+        for seg in hosts:
+            onnx_bytes = ir.layers[seg["layer"]].onnx_bytes
+            seg["onnx_sha256"] = hashlib.sha256(onnx_bytes).hexdigest()
+            blobs.append((seg["blob"], onnx_bytes, "onnx_host_model"))
+        manifest["single_dispatch"] = False
+        manifest["graph_engine"]["segments"] = segments
+    else:
+        blobs.append(("insts.bin", insts, "npu_instructions"))
+    blobs.append(("wpackets.bin", store.blob().tobytes(), "weight_packets"))
     writer = IgniteModelWriter(manifest_meta=manifest, arch_id=ARCH_XDNA1_PHOENIX)
-    writer.add_blob("engine.xclbin", xclbin, content_type="xclbin")
-    writer.add_blob("insts.bin", insts, content_type="npu_instructions")
-    writer.add_blob("wpackets.bin", store.blob().tobytes(), content_type="weight_packets")
+    for name, data, content_type in blobs:
+        writer.add_blob(name, data, content_type=content_type)
     total = writer.write(out_p)
     with IgniteModelReader(out_p) as reader:
         if not reader.verify_checksum():

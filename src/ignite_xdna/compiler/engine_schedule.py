@@ -23,7 +23,7 @@ import numpy as np
 
 from ignite_xdna.compiler import engine_emulator as em
 from ignite_xdna.compiler.engine_sequence import COLS, MAX_REPEAT, ROWS, DmaPattern, linear, merge_quad, merge_runs
-from ignite_xdna.compiler.graph_ir import ConvLayer, GraphIR, PoolLayer, Segment, TensorInfo, ZP
+from ignite_xdna.compiler.graph_ir import ConvLayer, GraphIR, HostLayer, PoolLayer, Segment, TensorInfo, ZP
 
 TILE_R, TILE_C = em.TILE_ROWS, em.TILE_COLS
 OUT_BLOCKS = em.OUT_BLOCKS
@@ -162,12 +162,16 @@ class Chunk:
 
 
 def conv_chunk_kind(layer: ConvLayer, seg: Segment) -> str:
+    geometry = f"{layer.k}x{layer.k} stride-{layer.stride} pad-{layer.pad}"
     if layer.k == 1:
+        # The k1 access pattern reads the output tile's own pixels: no stride, no padding.
+        if layer.stride != 1 or layer.pad != 0:
+            raise ValueError(f"{layer.name}: no packet geometry for a {geometry} conv")
         return "k1up2" if seg.up2 else "k1"
     if layer.k == 5 and layer.stride == 1 and layer.pad == 2 and not seg.up2:
         return "k5s1"
-    if layer.k != 3 or seg.up2:
-        raise ValueError(f"{layer.name}: no packet geometry for a {layer.k}x{layer.k} stride-{layer.stride} conv")
+    if layer.k != 3 or layer.pad != 1 or layer.stride not in (1, 2) or seg.up2:
+        raise ValueError(f"{layer.name}: no packet geometry for a {geometry} conv")
     return "k3s2" if layer.stride == 2 else "k3s1"
 
 
@@ -187,6 +191,8 @@ CHUNK_GEOMETRY = {
 
 def layer_chunks(ir: GraphIR, layer) -> List[Chunk]:
     chunks: List[Chunk] = []
+    if isinstance(layer, HostLayer):
+        return chunks  # computed on the host; the engine reads no packets for it
     if isinstance(layer, PoolLayer):
         rows_in, cols_in, pb, ncin, rb = CHUNK_GEOMETRY["pool"]
         for i in range(2):  # blocks 0-1 held, blocks 2-3 emitted
@@ -563,6 +569,9 @@ def schedule_layer(ir: GraphIR, ws: Workspace, layer, store: PacketStore, merge_
     each silicon-verified bit-exact on all 66 layers; together they take the
     frame from 38.5 to 11.7 ms (docs/BENCHMARKS.md). The flags exist for bisection.
     """
+    if isinstance(layer, HostLayer):
+        # No DMA traffic: the runtime ends the dispatch before this layer and starts the next one after it.
+        return LayerSchedule(layer.index, layer.name, [[] for _ in range(COLS)], 0, 0, 0)
     if coarse:
         return schedule_layer_coarse(ir, ws, layer, store, weight_repeat=weight_repeat, trim_ncin=trim_ncin,
                                      balance_columns=balance_columns, merge_group_weights=merge_group_weights)
@@ -713,3 +722,11 @@ def emulate_layer(sched: LayerSchedule, store: PacketStore, ws_arr: np.ndarray, 
             raise AssertionError(f"{sched.name}: {len(pending)} emitted objects, {len(drains)} drains left")
         if w_queue or remaining:
             raise AssertionError(f"{sched.name}: weight objects left over ({len(w_queue)}, {remaining})")
+
+
+def emulate_host_layer(ir: GraphIR, ws: Workspace, layer: HostLayer, ws_arr: np.ndarray, optimize: bool = False) -> None:
+    """The host step between two dispatches on a workspace array: read the input tensor, run the layer's
+    extracted model and write the output tensor's interior (its halo ring is left as planned)."""
+    from ignite_xdna.compiler.graph_reference import run_host_layer
+    x = ws.read_tensor(ws_arr, layer.input.tensor)[:ir.tensors[layer.input.tensor].channels]
+    ws.write_tensor(ws_arr, layer.output, run_host_layer(layer, x, optimize=optimize))
