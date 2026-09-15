@@ -73,7 +73,7 @@ def main() -> int:
 
     from ignite_xdna.runtime.graph_session import GraphSession, is_graph_container  # noqa: E402
     session_cls = GraphSession
-    if task != "detect":
+    if task == "super_resolution":
         from ignite_xdna.runtime.graph_session import DenseGraphSession  # noqa: E402
         session_cls = DenseGraphSession
     sess = session_cls(args.container, device_index=args.device)

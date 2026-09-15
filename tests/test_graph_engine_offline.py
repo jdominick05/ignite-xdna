@@ -246,6 +246,7 @@ class GraphEngineOffline(unittest.TestCase):
 
 YOLOV8S = ROOT / "models" / "yolov8s_cut_xint8.onnx"
 SESR = ROOT / "models" / "sesr_m7_xint8.onnx"
+POSE = ROOT / "models" / "yolov8n-pose_cut_xint8.onnx"
 
 
 def _emulate_layers(ir, ws, scheds, store, direct, indices):
@@ -338,6 +339,34 @@ class EngineGeneralizationOffline(unittest.TestCase):
             c = ir.tensors[L.output].channels
             self.assertTrue(np.array_equal(direct[L.output][:c], ort[L.output]), L.name)
         self.assertEqual(set(_emulate_layers(ir, ws, scheds, store, direct, [0, 7, 8]).values()), {0})
+
+    @unittest.skipUnless(POSE.exists(), "yolov8n-pose model not present")
+    def test_25_pose_heads_resolve_and_emulate_exactly(self):
+        from ignite_xdna.compiler import graph_reference as gr
+        from ignite_xdna.compiler.engine_compile import graph_task, head_name_for
+        from ignite_xdna.runtime.heads import POSE_HEAD_NAMES
+        ir = graph_ir.lower_yolov8n(POSE)
+        convs = [L for L in ir.layers if isinstance(L, graph_ir.ConvLayer)]
+        self.assertEqual((len(convs), len(ir.layers)), (72, 75))
+        self.assertEqual(sorted(head_name_for(o) for o, _ in ir.outputs), sorted(POSE_HEAD_NAMES))
+        self.assertEqual(graph_task(ir), "pose")
+        ws = es.plan_workspace(ir)
+        scheds, store = es.schedule_graph(ir, ws)
+        manifest = build_manifest(ir, ws, scheds, store, "yolov8n-pose_cut_xint8", 0, "x", "y", 0.0)
+        self.assertEqual((manifest["task"], manifest["input_dtype"], manifest["num_classes"], manifest["kpt_shape"]),
+                         ("pose", "int8", 1, [17, 3]))
+        self.assertEqual(manifest["egress_bytes"], (64 + 1 + 51) * (80 * 80 + 40 * 40 + 20 * 20))
+        status = resolve_head_layout(manifest, int(manifest["egress_bytes"]))
+        self.assertTrue(status.present, status.reason)
+        self.assertEqual(len(status.layout.heads), 9)
+        self.assertEqual(status.layout.spec("p4_kpt").shape, (1, 51, 40, 40))
+        self.assertEqual(status.layout.spec("p5_cls").shape, (1, 1, 20, 20))
+        # The 1- and 51-channel heads fill 1 and 7 of their 8-channel blocks; the packets compute them exactly.
+        index = {head_name_for(o): L.index for o, t in ir.outputs for L in ir.layers if L.output == t}
+        rng = np.random.default_rng(25)
+        direct = gr.run_direct(ir, rng.integers(0, 256, size=(3, 640, 640), dtype=np.uint8))
+        picked = [index["p3_cls"], index["p3_kpt"], index["p5_kpt"]]
+        self.assertEqual(set(_emulate_layers(ir, ws, scheds, store, direct, picked).values()), {0})
 
 
 class NativeDecodeOffline(unittest.TestCase):

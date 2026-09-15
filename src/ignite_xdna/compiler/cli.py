@@ -412,7 +412,7 @@ def compile_graph_engine(input_path: Union[str, Path], output_path: Union[str, P
         if seg["kind"] == "host":
             print(f"    [OK] host segment: {seg['name']} (layer {seg['layer']}) between NPU segments")
     out_p = Path(output_path)
-    if manifest.get("task", "detect") == "detect":
+    if manifest.get("task", "detect") in ("detect", "pose"):
         from ignite_xdna.runtime.heads import resolve_head_layout
         status = resolve_head_layout(manifest, int(manifest["egress_bytes"]))
         print(f"    [OK] head_status: {'present' if status.present else 'absent'} ({status.reason})")

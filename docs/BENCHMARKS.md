@@ -8169,3 +8169,106 @@ the section above.
 
 **Not done:** the attention core itself on the NPU (both MatMuls and the softmax); COCO mAP through either
 container; a per-group depthwise schedule for `pe`.
+
+## YOLOv8n-pose on the graph engine: every layer on the NPU, keypoints through the container (2026-09-15, Desktop 2)
+
+AMD's stack runs the head-cut YOLOv8n-pose with 1,015 of its 1,025 nodes on the NPU
+([above](#yolov8n-pose-end-to-end-on-the-npu)). This section compiles the same
+`models/yolov8n-pose_cut_xint8.onnx` into a graph-engine container, scores its keypoints on COCO through the
+container and times it against AMD's stack in one sitting. Branch `pose-engine` from `d223e7b`. Evidence:
+`results/aie/yolov8n_pose_phoenix_20260915T1919Z.log` (Device 0 witnesses and the timed sitting),
+`results/aie/yolov8n_pose_offline.log` (the lowering gate and the detection-file comparison), the COCO logs
+`results/map_kpts_yolov8n_pose_ignite_native_full5000.log`, `results/map_kpts_yolov8n_pose_ignite_numpy_full5000.log`
+and `results/map_kpts_yolov8n-pose_cut_xint8_full5000_cpu_ort130.log`, and the tests
+`tests/test_graph_engine_offline.py` (test 25), `tests/test_pose_pipeline_offline.py` and
+`tests/test_npu_inference.py` (`PoseOnSilicon`).
+
+**Design:**
+
+- The model lowers with no compiler change: 72 convolutions and 3 max pools, 1,457 rounds. Its nine heads are box
+  distributions (64 channels), a one-channel person score and 51 keypoint channels (17 × x, y, visibility) at
+  strides 8, 16 and 32; the score and keypoint heads fill 1 and 7 of their 8-channel blocks. Per frame the stream
+  has 2,947 DMA tasks and 125,935,104 fill bytes against YOLOv8n's 2,972 and 126,976,256 (0.053 ms less, DERIVED).
+- `graph_task` names a graph `pose` when its outputs are the nine `cv2`, `cv3` and `cv4` heads with one score
+  channel and 51 keypoint channels per level. The manifest adds `num_classes` 1, `kpt_shape` [17, 3] and nine
+  `head_layout` entries (974,400 egress bytes). `GraphSession` opens detect and pose containers and reads the head
+  names the task declares; a detect container reads the same six heads as before.
+- `pipelines/pose_pipeline.py` decodes on the host with the numpy tail of `pipelines/yolov8n-pose`, operation for
+  operation: DFL boxes, a sigmoid score, keypoints `(raw × 2 + grid) × stride` with a sigmoid visibility, and
+  class-agnostic NMS. int8 heads are pruned on each level's dequantized score before the rest is dequantized.
+  `ingress="native"` letterboxes straight into the NPU input plane; `ingress="numpy"` uses `npu/yolo.py`'s
+  letterbox and the model's QuantizeLinear, the input the ONNX runs get. `4_pose.py` and `5_eval_map.py` take
+  `--ep ignite`.
+- `ignite-compile` builds `yolov8n_pose.ignite` in 13 s: 8,845,248 B, with `insts.bin` 426,564 B, weight packets
+  8,183,808 B and the unchanged 188,542 B engine xclbin, over a 22,595,200 B workspace.
+
+**Exactness** (MEASURED):
+
+| Check | Result |
+|---|---|
+| Direct integer reference vs ONNX Runtime's uint8 intermediates | all 75 layer tensors and nine heads equal on `bus.jpg` and 20 `coco128` images (offline) |
+| Packet emulation | 75 / 75 layers exact on three of those images (offline) |
+| `PoseDecoder` on the container's int8 heads vs `npu/yolo_pose_decode.py` and `npu/yolo_pose.py` on ONNX Runtime's float heads | identical people, boxes, scores and keypoints on `bus.jpg` and three `coco128` images at conf 0.001 / IoU 0.7 and 0.25 / 0.5 (offline test) |
+| Device 0, `tools/verify_engine_container.py` | 75 / 75 layers exact; on the same runtime YOLOv8n 66 / 66 and the YOLO11n attention-core container 91 / 91 |
+| Device 0, `PoseOnSilicon` on `bus.jpg` | numpy ingress: nine heads equal ONNX Runtime CPU's and people identical to its numpy tail at both settings (4 and 37 people), no `InferenceSession.run` call; 500 native-ingress frames: 3 people each, no buffer objects allocated after warm-up, working set +0.30 MB |
+| Device 0, COCO val2017, 5,000 images, numpy ingress | the detection file is byte-identical to ONNX Runtime 1.30 CPU's (54,518,779 B, 138,848 people over 4,996 images) |
+
+**COCO val2017 keypoints** (MEASURED; 5,000 images, conf 0.001, IoU 0.7, up to 300 people, class-agnostic NMS):
+
+| Run | Input | OKS mAP@50-95 | OKS mAP@50 | People kept | Log |
+|---|---|---:|---:|---:|---|
+| Container | native letterbox into the NPU input plane | **32.77** | **67.82** | 138,961 | `map_kpts_yolov8n_pose_ignite_native_full5000.log` |
+| Container | `npu/yolo.py` letterbox | 32.71 | 67.77 | 138,848 | `map_kpts_yolov8n_pose_ignite_numpy_full5000.log` |
+| ONNX Runtime 1.30, CPU provider | `npu/yolo.py` letterbox | 32.71 | 67.77 | 138,848 | `map_kpts_yolov8n-pose_cut_xint8_full5000_cpu_ort130.log` |
+| ONNX Runtime 1.23.3 + Vitis AI EP (recorded in `db518e2`) | `npu/yolo.py` letterbox | 32.64 | 66.90 | 118,729 | `map_kpts_yolov8n-pose_cut_xint8_full5000_npu.log` |
+| FP32 on the CPU (recorded) | `npu/yolo.py` letterbox | 49.86 | 78.69 | 177,660 | `map_kpts_yolov8n-pose_cut_full5000_cpu.log` |
+
+- Through the container the quantized model scores what ONNX Runtime's CPU provider scores: given the same input,
+  the two detection files are the same bytes. AMD's recorded EP run kept 20,119 fewer people and scored 0.07 and
+  0.87 points lower; in the sitting below its scores on `bus.jpg` also differ from the CPU provider's on the same
+  input.
+- The native letterbox scored 0.06 and 0.05 points higher than the numpy one and kept 113 more people; the two
+  inputs differ by one code in some pixel values, as YOLO11n's did, which moves borderline scores either way.
+- The latency lines of these COCO logs span different stages and were not taken on a quiet host; the sitting below
+  is the latency comparison.
+
+**Against AMD's stack, one sitting** (MEASURED, 2026-09-15 from 19:19 UTC). `xrt-smi` reported no hardware
+contexts before and after every step, and host CPU was 3.6 % before the timed runs and 1.9–2.3 % between them. Each
+run is 50 warm-up and 500 timed frames of `bus.jpg` (810 × 1080). `pipelines/yolov8n-pose/4_pose.py` times both
+stacks the same way, from the BGR frame to the list of people: *pre* is the letterbox (for the container the native
+letterbox, quantization and upload into the NPU input plane), *infer* the network and head decode (AMD:
+`session.run` on ONNX Runtime 1.23.3 with the Vitis AI EP, Ryzen AI 1.7.1; container: NPU dispatch, head readback
+and decode) and *post* NMS. Runs 3 and 6 are Ignition's `live_ignition.py` on the container; runs 7 and 8 are
+Ignition controls.
+
+| Run | Stack | Mean | P95 | P99 | Stages (ms) | Output |
+|---|---|---:|---:|---:|---|---|
+| 1 | AMD, `4_pose.py --ep npu` | 12.056 | 12.758 | 13.305 | pre 2.961, infer 8.89, post 0.09 | 3 people |
+| 2 | container, `4_pose.py --ep ignite` | **8.318** | 8.599 | 8.768 | pre 0.321, infer 7.92, post 0.08 | 3 people |
+| 3 | container, `live_ignition.py` | 8.360 | 8.669 | 8.860 | preprocess 0.331, dispatch 7.548, readback 0.176, decode and NMS 0.288 | 3 people |
+| 4 | AMD, `4_pose.py --ep npu` | 12.089 | 12.933 | 13.175 | 3.004, 8.87, 0.09 | 3 people |
+| 5 | container, `4_pose.py --ep ignite` | **8.339** | 8.620 | 8.818 | 0.324, 7.94, 0.08 | 3 people |
+| 6 | container, `live_ignition.py` | 8.481 | 8.857 | 9.107 | 0.368, 7.572, 0.201, 0.320 | 3 people |
+| 7 | `yolov8n_full.ignite`, `live_ignition.py` | 7.765 | 8.028 | 8.203 | 0.317, 7.211, 0.199, 0.033 | 5 objects |
+| 8 | `yolo11n_core.ignite`, `live_ignition.py` | 11.990 | 18.968 | 52.912 | 0.728, 8.890, host 0.705, readback 1.615, 0.044 | 6 objects |
+
+- Through the same script the container took 8.33 ms against AMD's 12.07 ms (each the mean of two runs): 3.74 ms
+  or 31 % less, 1.45× faster. The letterbox accounts for 2.66 ms of it; AMD's runtime leaves it to the application,
+  numpy here, and the container's is native and writes into the NPU's buffer. The network and head decode account
+  for 0.95 ms (7.93 against 8.88 ms).
+- AMD's stack found 3 people with scores 0.88, 0.85 and 0.73, and the container with native ingress 3 with 0.94,
+  0.92 and 0.88. On the numpy letterbox AMD's run used, the container and ONNX Runtime's CPU provider find 4
+  (`PoseOnSilicon`).
+- Ignition's app took 8.360 and 8.481 ms with resident memory 182.1 MB, unchanged over each run. The YOLOv8n control
+  read 7.765 ms, within earlier sittings' 7.68–7.78 ms.
+- The YOLO11n attention-core control found its 6 objects on every frame, but its timing was disturbed: its progress
+  lines read 10.0–10.4 ms at frames 100, 200, 400 and 500 and 52.89 ms at frame 300, its median was 10.259 ms, and
+  readback averaged 1.615 ms against 0.30–0.39 ms in the 15:22 sitting. Host load was not sampled just before it,
+  so it counts here as a correctness control only.
+- The pose container's NPU dispatch (7.503–7.572 ms) is about 0.3 ms above YOLOv8n's in the same sitting (7.211 ms)
+  although its DERIVED traffic is 0.05 ms lower. It runs 1,457 rounds against YOLOv8n's 1,415, and core compute is
+  outside the cost model; not investigated further.
+
+**Not done:** a container from the AdaRound model (`yolov8n-pose_cut_xint8_adaround.onnx`, 34.32 OKS mAP@50-95 on
+AMD's stack); a native keypoint decode (decode and NMS take 0.29–0.32 ms, against 0.033 ms for YOLOv8n's native
+decode); energy per frame.

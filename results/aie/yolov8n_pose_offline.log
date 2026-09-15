@@ -1,0 +1,53 @@
+# host DESKTOP-CBL5NUA (Desktop 2)
+# start 2026-09-15T19:24:39Z
+# ignite-xdna HEAD d223e7b; d223e7b plus the uncommitted pose changes committed with this log; Python 3.12 resnet_env17; no NPU
+# cwd <ignite-xdna checkout>
+# command C:/Users/<user>/miniforge3/envs/resnet_env17/python.exe <scratch>/offline_log_pose.py
+
+## 1. Lowering gate (resnet_env17, onnxruntime 1.23.3.dev20260320)
+ignite_xdna: <ignite-xdna>\src\ignite_xdna\compiler\graph_ir.py
+[lower] yolov8n-pose_cut_xint8.onnx: 75 layers in 0.0 s
+[head] cv2.0.2: C=64 blocks=8 80x80 scale=0.125 zp=128
+[head] cv2.1.2: C=64 blocks=8 40x40 scale=0.125 zp=128
+[head] cv2.2.2: C=64 blocks=8 20x20 scale=0.125 zp=128
+[head] cv3.0.2: C= 1 blocks=1 80x80 scale=0.25 zp=128
+[head] cv3.1.2: C= 1 blocks=1 40x40 scale=0.25 zp=128
+[head] cv3.2.2: C= 1 blocks=1 20x20 scale=0.25 zp=128
+[head] cv4.0.2: C=51 blocks=7 80x80 scale=0.0625 zp=128
+[head] cv4.1.2: C=51 blocks=7 40x40 scale=0.0625 zp=128
+[head] cv4.2.2: C=51 blocks=7 20x20 scale=0.0625 zp=128
+[DERIVED] pose: 2947 tasks, 125,935,104 B fills, 6.408 ms, static packets 8,183,808 B, workspace 22,595,200 B | yolov8n: 2972 tasks, 126,976,256 B, 6.462 ms, static 8,164,864 B | added -0.053 ms (x1.12 -0.060)
+[direct vs ORT] bus.jpg: 75/75 exact, heads True
+[emulation vs direct] bus.jpg: 75/75 exact (18.6 s)
+[direct vs ORT] 000000000139.jpg: 75/75 exact, heads True
+[emulation vs direct] 000000000139.jpg: 75/75 exact (18.8 s)
+[direct vs ORT] 000000001532.jpg: 75/75 exact, heads True
+[emulation vs direct] 000000001532.jpg: 75/75 exact (18.4 s)
+[direct vs ORT] 000000002592.jpg: 75/75 exact, heads True
+[direct vs ORT] 000000005037.jpg: 75/75 exact, heads True
+[direct vs ORT] 000000006763.jpg: 75/75 exact, heads True
+[direct vs ORT] 000000007888.jpg: 75/75 exact, heads True
+[direct vs ORT] 000000009590.jpg: 75/75 exact, heads True
+[direct vs ORT] 000000011511.jpg: 75/75 exact, heads True
+[direct vs ORT] 000000013291.jpg: 75/75 exact, heads True
+[direct vs ORT] 000000015079.jpg: 75/75 exact, heads True
+[direct vs ORT] 000000016249.jpg: 75/75 exact, heads True
+[direct vs ORT] 000000017899.jpg: 75/75 exact, heads True
+[direct vs ORT] 000000019402.jpg: 75/75 exact, heads True
+[direct vs ORT] 000000021839.jpg: 75/75 exact, heads True
+[direct vs ORT] 000000023126.jpg: 75/75 exact, heads True
+[direct vs ORT] 000000025057.jpg: 75/75 exact, heads True
+[direct vs ORT] 000000026690.jpg: 75/75 exact, heads True
+[direct vs ORT] 000000029393.jpg: 75/75 exact, heads True
+[direct vs ORT] 000000031248.jpg: 75/75 exact, heads True
+[direct vs ORT] 000000032817.jpg: 75/75 exact, heads True
+POSE OFFLINE GATE PASS
+[gate] exit 0
+
+## 2. COCO val2017 detection files: container, numpy ingress (results/map_kpts_yolov8n_pose_ignite_numpy_full5000.log) against ONNX Runtime 1.30 CPU (results/map_kpts_yolov8n-pose_cut_xint8_full5000_cpu_ort130.log)
+[bytes] [54518779, 54518779] sha256[:16] ['5eaeeb93d9a34d14', '5eaeeb93d9a34d14'] identical True
+[detections] 138848 and 138848
+[images] 4996 with detections; 0 differ
+[compare] exit 0
+
+# end 2026-09-15T19:25:53Z exit 0

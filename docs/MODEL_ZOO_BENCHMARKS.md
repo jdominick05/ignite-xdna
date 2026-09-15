@@ -297,6 +297,35 @@ python tests/test_engine_host_layer.py
 Build one container per process: a second graph container compiled in the same Python process fails
 to link its kernel object ([DECISIONS](DECISIONS.md)).
 
+## YOLOv8n-pose: every layer on the NPU (2026-09-15, 19:19 UTC)
+
+The head-cut `yolov8n-pose_cut_xint8.onnx` as a single-dispatch container whose nine heads carry the box, a person
+score and 17 keypoints at three strides. Design, exactness, COCO accuracy and the full sitting are in
+[BENCHMARKS](BENCHMARKS.md#yolov8n-pose-on-the-graph-engine-every-layer-on-the-npu-keypoints-through-the-container-2026-09-15-desktop-2);
+evidence [`results/aie/yolov8n_pose_phoenix_20260915T1919Z.log`](../results/aie/yolov8n_pose_phoenix_20260915T1919Z.log).
+
+| Container | Layers | Rounds | Weight packets | Instructions | DDR workspace | Container size | Egress |
+|---|---:|---:|---:|---:|---:|---:|---|
+| `yolov8n_pose.ignite` | 75 | 1,457 | 864 (8.18 MB) | 426,564 B (2,947 tasks) | 22.6 MB | 8,845,248 B | nine heads, 974,400 B, `head_status: present` |
+
+- **Exactness:** 75 / 75 layers byte-exact on Device 0. With `npu/yolo.py`'s letterbox, its detections on the 5,000
+  COCO val2017 images are the same bytes as ONNX Runtime's CPU provider's.
+- **COCO keypoints, 5,000 images:** OKS mAP@50-95 **32.77** and mAP@50 **67.82** through the native letterbox, 32.71
+  and 67.77 through the numpy one (ONNX Runtime CPU's figures), against 32.64 and 66.90 recorded for AMD's Vitis AI EP.
+- **Against AMD's stack** (`4_pose.py`, 50 warm-up and 500 frames of `bus.jpg`, interleaved): **8.318** and **8.339**
+  ms from frame to people, against 12.056 and 12.089 ms; through Ignition's `live_ignition.py` 8.360 and 8.481 ms
+  (NPU dispatch 7.548 and 7.572 ms, decode and NMS 0.288 and 0.320 ms), three people per frame.
+
+```bash
+bash scripts/research-iron.sh -m ignite_xdna.compiler.cli compile --model models/yolov8n-pose_cut_xint8.onnx --output build/yolov8n_pose.ignite
+bash scripts/research-iron.sh tools/verify_engine_container.py --container build/yolov8n_pose.ignite --model models/yolov8n-pose_cut_xint8.onnx
+bash scripts/research-iron.sh tests/test_npu_inference.py PoseOnSilicon
+bash scripts/research-iron.sh pipelines/yolov8n-pose/4_pose.py --model build/yolov8n_pose.ignite --ep ignite --source assets/bus.jpg --warmup 50 --runs 500
+conda activate mlir-aie-iron   # pyxrt and pycocotools
+python pipelines/yolov8n-pose/5_eval_map.py --model build/yolov8n_pose.ignite --ep ignite [--ingress numpy]
+python tests/test_pose_pipeline_offline.py
+```
+
 ## Reproduce
 
 ```bash

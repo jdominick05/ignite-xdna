@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import shutil
 import time
 from pathlib import Path
@@ -36,21 +37,36 @@ from ignite_xdna.compiler.serializer import ARCH_XDNA1_PHOENIX, IgniteModelReade
 
 ENGINE_NAME = "conv_engine_v1"
 HEAD_NAMES = ("p3_box", "p4_box", "p5_box", "p3_cls", "p4_cls", "p5_cls")
+# YOLOv8-pose keeps the detect heads with one class (person) and adds a keypoint branch (cv4): 17 COCO
+# keypoints x (x, y, visibility) per anchor.
+POSE_HEAD_NAMES = HEAD_NAMES + ("p3_kpt", "p4_kpt", "p5_kpt")
+POSE_KPT_SHAPE = (17, 3)
+_HEAD_OUTPUT = re.compile(r"/cv([234])\.([012])/")
+_HEAD_BRANCH = {"2": "box", "3": "cls", "4": "kpt"}
 
 
 def head_name_for(onnx_output: str) -> str:
-    """Map an ONNX head output name (/model.22/cv2.0/... -> p3_box, cv3.1 -> p4_cls)."""
-    branch = "box" if "/cv2." in onnx_output else "cls"
-    level = {"0": "p3", "1": "p4", "2": "p5"}[onnx_output.split("/cv2.")[-1].split("/cv3.")[-1][0]]
-    return f"{level}_{branch}"
+    """Map an ONNX head output name (/model.22/cv2.0/... -> p3_box, cv3.1 -> p4_cls, cv4.2 -> p5_kpt)."""
+    m = _HEAD_OUTPUT.search(onnx_output)
+    if m is None:
+        raise ValueError(f"{onnx_output} is not a YOLOv8 head output (/cv2.*, /cv3.* or /cv4.*)")
+    return f"p{3 + int(m.group(2))}_{_HEAD_BRANCH[m.group(1)]}"
 
 
 def graph_task(ir: GraphIR) -> str:
-    """The runtime contract a lowered graph's outputs fit: YOLO detect heads or a dense upscaled image."""
+    """The runtime contract a lowered graph's outputs fit: YOLO detect heads, YOLO pose heads (one person class
+    plus 51 keypoint channels per level) or a dense upscaled image."""
     if len(ir.outputs) == 1 and ir.output_transforms.get(ir.outputs[0][0], {}).get("op") == "depth_to_space":
         return "super_resolution"
     if len(ir.outputs) == len(HEAD_NAMES):
         return "detect"
+    if len(ir.outputs) == len(POSE_HEAD_NAMES) and all(_HEAD_OUTPUT.search(o) for o, _ in ir.outputs):
+        heads = {head_name_for(o): ir.tensors[t] for o, t in ir.outputs}
+        kpt_channels = POSE_KPT_SHAPE[0] * POSE_KPT_SHAPE[1]
+        if (sorted(heads) == sorted(POSE_HEAD_NAMES)
+                and all(heads[f"p{i}_cls"].channels == 1 and heads[f"p{i}_kpt"].channels == kpt_channels
+                        for i in (3, 4, 5))):
+            return "pose"
     raise ValueError(f"no runtime contract for graph outputs {[o for o, _ in ir.outputs]}")
 
 
@@ -131,14 +147,14 @@ def build_manifest(ir: GraphIR, ws: es.Workspace, scheds: List[es.LayerSchedule]
         "engine": ENGINE_NAME,
         "task": task,
         "input_shape": [1, t_in.channels, t_in.height, t_in.width],
-        "input_dtype": "int8" if task == "detect" else "uint8",
+        "input_dtype": "int8" if task in ("detect", "pose") else "uint8",
         "single_dispatch": True,
         "quant_scales": {"input_scale": t_in.scale, "input_zero_point": t_in.zero_point, "input_dtype": "uint8"},
         "graph_engine": graph_engine,
         "num_stages": len(scheds),
         "stages": {},
     }
-    if task == "detect":
+    if task in ("detect", "pose"):
         heads = {}
         offset = 0
         output_shapes = {}
@@ -155,8 +171,11 @@ def build_manifest(ir: GraphIR, ws: es.Workspace, scheds: List[es.LayerSchedule]
             head_layout[hn] = {"offset": offset, "scale": t.scale, "zero_point": 0}
             offset += nbytes
         graph_engine["heads"] = heads
-        manifest.update({"strides": [8, 16, 32], "reg_max": 16, "num_classes": 80, "fused_dfl": False,
-                         "output_shapes": output_shapes, "head_layout": head_layout, "egress_bytes": offset})
+        manifest.update({"strides": [8, 16, 32], "reg_max": 16, "num_classes": 80 if task == "detect" else 1,
+                         "fused_dfl": False, "output_shapes": output_shapes, "head_layout": head_layout,
+                         "egress_bytes": offset})
+        if task == "pose":
+            manifest["kpt_shape"] = list(POSE_KPT_SHAPE)
     else:
         # Dense egress: the tail tensor is read back as [blocks][H][W][8] uint8 (zero point 128) and the
         # host applies the model's DepthToSpace; the image is clip((q - zp) * scale + mean).

@@ -1724,6 +1724,16 @@ cached reference heads rather than `bo_out`.
   depthwise heads compiled without error into one-input-channel convolutions. A depthwise convolution is
   now the dense convolution with zero off-diagonal taps (exact, no kernel change, the same DMA traffic);
   dilated convolutions, other grouped convolutions and 1 × 1 convolutions with a stride or padding raise.
+- **Pose estimation is a container task on the detect session, decoded by the pipeline's own numpy tail
+  (2026-09-15).** YOLOv8n-pose's head-cut model lowers with no compiler change: 72 convolutions and 3 max
+  pools, and nine heads (the detect heads with one person class, plus 51 keypoint channels per level) that
+  fill 1 and 7 of their 8-channel blocks exactly. The manifest's `task` is `pose` (`num_classes` 1,
+  `kpt_shape` [17, 3], nine `head_layout` entries); `GraphSession` reads the head names the task declares,
+  so detect containers are unchanged. `pipelines/pose_pipeline.py` repeats `npu/yolo_pose_decode.py` and
+  `npu/yolo_pose.py` operation for operation rather than adding a native decode: on the same heads it
+  returns ONNX Runtime's people bit for bit, which is what lets a COCO keypoint evaluation through the
+  container be compared with the ONNX runs. The engine program does not change
+  ([BENCHMARKS](BENCHMARKS.md#yolov8n-pose-on-the-graph-engine-every-layer-on-the-npu-keypoints-through-the-container-2026-09-15-desktop-2)).
 - **Pitfall: build one graph container per process.** IRON compiles the engine kernel's
   `ExternalFunction` once per process and places `engine.o` only in the first design's work directory,
   so a second `compile_graph_container` call in the same process fails to link (`unable to find
