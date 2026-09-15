@@ -11,12 +11,15 @@ Uses models/yolo11n_cut_xint8.onnx, models/yolo11n_no_c2psa_cut_xint8.onnx and m
   HostLayer, and every tensor, the host layer's output and the six heads equal ONNX Runtime's;
 - the host layer schedules no DMA items and ``plan_segments`` cuts the layers into NPU, host, NPU;
 - dilated and grouped (non-depthwise) convolutions, 1x1 stride-2 convolutions and a host region that names
-  no node are refused.
+  no node are refused;
+- ``ignite-compile --host-region`` reaches the graph compile, and a region Git Bash rewrote into a path is refused
+  (no model needed).
 """
 import dataclasses
 import sys
 import unittest
 from pathlib import Path
+from unittest import mock
 
 import numpy as np
 
@@ -147,6 +150,21 @@ class ConvolutionGuard(unittest.TestCase):
         bad = dataclasses.replace(k1, stride=2)
         with self.assertRaisesRegex(ValueError, "1x1 stride-2"):
             es.conv_chunk_kind(bad, bad.inputs[0])
+
+
+class HostRegionArgument(unittest.TestCase):
+    def test_command_line_passes_host_regions_to_the_graph_compile(self):
+        from ignite_xdna.compiler import cli
+        with mock.patch.object(cli, "compile_graph_engine") as compile_graph_engine:
+            cli.main(["compile", "--model", "m.onnx", "--output", "m.ignite",
+                      "--host-region", C2PSA, "--host-region", "/model.11/"])
+        compile_graph_engine.assert_called_once()
+        self.assertEqual(compile_graph_engine.call_args.kwargs["host_regions"], [C2PSA, "/model.11/"])
+
+    def test_region_rewritten_into_a_path_is_refused(self):
+        from ignite_xdna.compiler import cli
+        with self.assertRaisesRegex(ValueError, "MSYS_NO_PATHCONV=1"):
+            cli.compile_graph_engine("m.onnx", "m.ignite", host_regions=["C:/Program Files/Git/model.10/"])
 
 
 if __name__ == "__main__":

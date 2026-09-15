@@ -281,7 +281,7 @@ evidence [`results/aie/yolo11n_hybrid_phoenix_20260915T0216Z.log`](../results/ai
   change this model's borderline boxes).
 
 ```bash
-bash scripts/research-iron.sh -m ignite_xdna.compiler.cli compile --model models/yolo11n_cut_xint8.onnx --output build/yolo11n.ignite --host-region /model.10/
+MSYS_NO_PATHCONV=1 bash scripts/research-iron.sh -m ignite_xdna.compiler.cli compile --model models/yolo11n_cut_xint8.onnx --output build/yolo11n.ignite --host-region /model.10/
 bash scripts/research-iron.sh tools/verify_engine_container.py --container build/yolo11n.ignite --model models/yolo11n_cut_xint8.onnx
 python tests/test_engine_host_layer.py
 ```

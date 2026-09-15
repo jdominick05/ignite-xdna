@@ -392,6 +392,10 @@ def verify_on_silicon(container_path: Path, device_idx: int = 0):
 def compile_graph_engine(input_path: Union[str, Path], output_path: Union[str, Path],
                          build_dir: Optional[Union[str, Path]] = None, host_regions: Optional[List[str]] = None) -> int:
     """Lower the whole graph onto the convolution engine (see engine_compile.py); ``host_regions`` run on the host."""
+    for region in host_regions or ():
+        if len(region) > 2 and region[1] == ":" and region[2] in "/\\":
+            raise ValueError(f"--host-region {region}: a file path, not a node-name prefix (Git Bash rewrites "
+                             "arguments that start with '/'; run the command with MSYS_NO_PATHCONV=1)")
     try:
         import aie.iron  # noqa: F401
     except ImportError as ex:
@@ -421,7 +425,7 @@ def main(args: Optional[List[str]] = None):
     parsed = parse_args(args)
     try:
         if parsed.engine == "graph":
-            compile_graph_engine(parsed.input, parsed.output, parsed.build_dir)
+            compile_graph_engine(parsed.input, parsed.output, parsed.build_dir, host_regions=parsed.host_region)
             if parsed.verify_silicon:
                 from ignite_xdna.runtime.graph_session import GraphSession
                 sess = GraphSession(parsed.output, device_index=parsed.device)
