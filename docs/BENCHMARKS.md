@@ -8213,7 +8213,8 @@ and `results/map_kpts_yolov8n-pose_cut_xint8_full5000_cpu_ort130.log`, and the t
 | Device 0, `PoseOnSilicon` on `bus.jpg` | numpy ingress: nine heads equal ONNX Runtime CPU's and people identical to its numpy tail at both settings (4 and 37 people), no `InferenceSession.run` call; 500 native-ingress frames: 3 people each, no buffer objects allocated after warm-up, working set +0.30 MB |
 | Device 0, COCO val2017, 5,000 images, numpy ingress | the detection file is byte-identical to ONNX Runtime 1.30 CPU's (54,518,779 B, 138,848 people over 4,996 images) |
 
-**COCO val2017 keypoints** (MEASURED; 5,000 images, conf 0.001, IoU 0.7, up to 300 people, class-agnostic NMS):
+**COCO val2017 keypoints** (MEASURED; 5,000 images, conf 0.001, IoU 0.7, up to 300 people, class-agnostic NMS).
+Every row but the last runs the XINT8 `models/yolov8n-pose_cut_xint8.onnx`; the last is the unquantized FP32 export:
 
 | Run | Input | OKS mAP@50-95 | OKS mAP@50 | People kept | Log |
 |---|---|---:|---:|---:|---|
@@ -8221,7 +8222,7 @@ and `results/map_kpts_yolov8n-pose_cut_xint8_full5000_cpu_ort130.log`, and the t
 | Container | `npu/yolo.py` letterbox | 32.71 | 67.77 | 138,848 | `map_kpts_yolov8n_pose_ignite_numpy_full5000.log` |
 | ONNX Runtime 1.30, CPU provider | `npu/yolo.py` letterbox | 32.71 | 67.77 | 138,848 | `map_kpts_yolov8n-pose_cut_xint8_full5000_cpu_ort130.log` |
 | ONNX Runtime 1.23.3 + Vitis AI EP (recorded in `db518e2`) | `npu/yolo.py` letterbox | 32.64 | 66.90 | 118,729 | `map_kpts_yolov8n-pose_cut_xint8_full5000_npu.log` |
-| FP32 on the CPU (recorded) | `npu/yolo.py` letterbox | 49.86 | 78.69 | 177,660 | `map_kpts_yolov8n-pose_cut_full5000_cpu.log` |
+| FP32 `yolov8n-pose_cut.onnx` on the CPU (recorded) | `npu/yolo.py` letterbox | 49.86 | 78.69 | 177,660 | `map_kpts_yolov8n-pose_cut_full5000_cpu.log` |
 
 - Through the container the quantized model scores what ONNX Runtime's CPU provider scores: given the same input,
   the two detection files are the same bytes. AMD's recorded EP run kept 20,119 fewer people and scored 0.07 and
@@ -8250,7 +8251,7 @@ Ignition controls.
 | 5 | container, `4_pose.py --ep ignite` | **8.339** | 8.620 | 8.818 | 0.324, 7.94, 0.08 | 3 people |
 | 6 | container, `live_ignition.py` | 8.481 | 8.857 | 9.107 | 0.368, 7.572, 0.201, 0.320 | 3 people |
 | 7 | `yolov8n_full.ignite`, `live_ignition.py` | 7.765 | 8.028 | 8.203 | 0.317, 7.211, 0.199, 0.033 | 5 objects |
-| 8 | `yolo11n_core.ignite`, `live_ignition.py` | 11.990 | 18.968 | 52.912 | 0.728, 8.890, host 0.705, readback 1.615, 0.044 | 6 objects |
+| 8 | `yolo11n_core.ignite`, `live_ignition.py` (control; disturbed, see below) | 11.990 | 18.968 | 52.912 | 0.728, 8.890, host 0.705, readback 1.615, 0.044 | 6 objects |
 
 - Through the same script the container took 8.33 ms against AMD's 12.07 ms (each the mean of two runs): 3.74 ms
   or 31 % less, 1.45× faster. The letterbox accounts for 2.66 ms of it; AMD's runtime leaves it to the application,
