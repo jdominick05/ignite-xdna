@@ -113,6 +113,24 @@ synthetic frames): yolov8s 300 frames at 17.348 ms mean (p99 17.732), 0 buffer o
 +0.03 MB; SESR 500 frames at 6.558 ms mean (p99 7.341), dispatch 4.251 ms mean (p99 4.741),
 0 buffer objects, +0.84 MB.
 
+### Against AMD's stack (2026-09-15)
+
+One sitting on Desktop 2 ([log](../results/aie/yolov8s_sesr_vs_amd_phoenix_20260915T2146Z.log)): both
+containers rebuilt at `9351cc1` by the toolchain Ignition's `install.ps1` installs (25.8 s and 6.9 s), 66/66 and 9/9
+layers exact on Device 0, then AMD / Ignition / AMD / Ignition per model at 50 warm-up and 500 timed frames of
+Ignition's `examples/assets/bus.jpg`, with `xrt-smi` idle before every run (host CPU 1.2–3.6 %). AMD's arm is ONNX
+Runtime + Vitis AI EP (Ryzen AI 1.7.1, `resnet_env17`) with Ignition's own letterbox and decode, or its
+`sr_preprocess` / `sr_postprocess`; Ignition's arm is `live_ignition.py` at `6985ef7`.
+
+| Model | AMD glass-to-glass, runs 1 / 2 | AMD `session.run` | Ignition glass-to-glass, runs 1 / 2 | Ignition dispatch | RSS, AMD 2nd session / Ignition |
+|---|---:|---:|---:|---:|---:|
+| YOLOv8s | **16.954 / 16.958** | 13.137 / 13.167 | 17.240 / 17.265 | 16.704 / 16.743 | 339.2 / 242.0 MB |
+| SESR M7 | **3.654 / 3.632** | 1.461 / 1.473 | 6.671 / 6.662 | 4.405 / 4.392 | 265.0 / 162.1 MB |
+
+All times in ms. AMD's stack is faster on both: its NPU stage is 3.6 ms shorter on YOLOv8s and 2.9 ms shorter on
+SESR M7, more than Ignition's native letterbox and decode recover on YOLOv8s (0.34 ms of host work against 3.82 ms).
+The control, `build/yolov8n_full.ignite` through `live_ignition.py`, ran at 7.771 ms.
+
 ### Through Ignition (`live_ignition.py`, 500 frames)
 
 <!-- BEGIN npu (tools/model_zoo_bench.py) -->
