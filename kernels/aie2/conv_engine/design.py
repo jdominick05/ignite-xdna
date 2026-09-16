@@ -15,7 +15,7 @@ import numpy as np
 from aie.dialects import arith, memref
 from aie.dialects._aie_enum_gen import AIETileType, DMAChannelDir
 from aie.ir import IndexType
-from aie.iron import (Acquire, Bd, BdIteration, Buffer, DmaChannel, Flow, Lock, ObjectFifo, Program, Release,
+from aie.iron import (Acquire, Bd, Buffer, DmaChannel, Flow, Lock, ObjectFifo, Program, Release,
                       Runtime, TileDma, Worker)
 from aie.iron.controlflow import range_
 from aie.iron.device import Tile
@@ -112,31 +112,43 @@ def ddr_extents(workspace_bytes, packet_bytes):
             max(WP_BYTES, -(-int(packet_bytes) // mib) * mib))
 
 
-# The ring is split into windows, so the next tile's fetch lands while this tile's groups are still being
-# served. Its buffer descriptors are placeholders the instruction stream rewrites per layer, so their ids are
-# pinned and the lowering assigns the output join's BDs around them.
-# One window. A second would need its own descriptors, but a buffer descriptor no ``aie.dma_start`` reaches is
-# dropped from the id allocator and its id handed to another fifo: with two windows the generated CDO configured
-# ids 1, 3, 5, 25 and 27 as output-join descriptors, 800 words long, so arming the second window rewrote live
-# ones. Overlapping a fetch with a replay is a follow-up, and needs ids reserved by a channel that starts them.
-RING_WINDOWS = 1
-RING_BD_FILL = 0                              # one arrival BD per window, on the (even) S2MM channel 0
-RING_BD_SERVE = RING_BD_FILL + RING_WINDOWS   # then one serve BD per core per window
-RING_BD_ODD = 24                              # a MemTile's odd channels may only reach ids 24 and above
-# The instruction stream restores these when it recycles a window, so their ids are pinned too.
-RING_LOCK_ARRIVED = 0                         # one per window
-RING_LOCK_SPACE = RING_LOCK_ARRIVED + RING_WINDOWS
+# One buffer descriptor per slot, on each of five chains: the arrival, and a serve per core. That is what a
+# lock per slot costs, because a descriptor's lock id is a fixed field and no descriptor can release a
+# different lock on each execution.
+#
+# Six slots is the most the MemTile's descriptors allow. It has 48, the output join already holds 16 of them,
+# and ``AIETargetModel::isBdChannelAccessible`` splits the rest by channel parity - an even channel reaches only
+# ids below 24, an odd channel only 24 and above, and no other tile type is split. Five chains of six is 30, and
+# the only arrangement that fits puts two chains in the even half and three in the odd: the arrival on an odd
+# S2MM channel, and the serves split across MM2S 0 and 2 (even) and 1 and 3 (odd). Leaving the arrival on an
+# even channel caps the window at four.
+#
+# The ids are pinned because the lowering assigns the output join's descriptors around them, and a descriptor no
+# ``aie.dma_start`` reaches is dropped from the id allocator and its id handed to another fifo. The join needs
+# twelve ids in the even half and four in the odd, so the ring takes 0-11 and 24-41 and leaves 12-23 and 42-47.
+RING_SLOTS_MAX = 6
+RING_FILL_CHANNEL = 5           # an odd S2MM channel; the join holds S2MM 1-4 and MM2S 4
+RING_BD_SERVE_EVEN = 0          # MM2S 0 and 2
+RING_BD_FILL = 24               # the arrival, in the odd half
+RING_BD_SERVE_ODD = 30          # MM2S 1 and 3
+# Two locks per slot, so the accounting balances itself and nothing has to be rewritten between tiles.
+RING_LOCK_ARRIVED = 0           # one per slot
+RING_LOCK_SPACE = 16            # one per slot, clear of the arrivals at any window size
 
 
-def _ring_bd(channel, window):
-    """The pinned id of a serve BD, inside the half of the MemTile's 48 that its channel can reach.
+def _ring_fill_bd(slot, slots):
+    """The pinned id of the arrival descriptor that writes one slot."""
+    return RING_BD_FILL + slot
 
-    ``AIETargetModel::isBdChannelAccessible`` splits a MemTile's buffer descriptors by channel parity: an even
-    channel may use only ids below 24, an odd channel only 24 and above. No other tile type is split. Ids are a
-    per-tile resource, so the two halves are packed independently, after the arrival's.
+
+def _ring_bd(channel, slot, slots):
+    """The pinned id of a serve descriptor, in the half of the MemTile's 48 its channel can reach.
+
+    Ids are a per-tile resource and the two parity halves are packed independently: the even channels (MM2S 0
+    and 2) take ids from 0 upwards, the odd ones (MM2S 1 and 3) from 30, above the arrival's own six.
     """
-    base = RING_BD_ODD if channel % 2 else RING_BD_SERVE
-    return base + (channel // 2) * RING_WINDOWS + window
+    base = RING_BD_SERVE_ODD if channel % 2 else RING_BD_SERVE_EVEN
+    return base + (channel // 2) * slots + slot
 
 
 def _activation_ring(col, name, slots):
@@ -178,28 +190,37 @@ def _activation_ring(col, name, slots):
     Returns ``(handles, parts)``: one ``(buffer, cons lock, prod lock)`` per core, and the flows, locks and DMA
     programs to register on the Runtime.
     """
-    if slots % RING_WINDOWS:
-        raise ValueError(f"a {slots}-slot ring does not divide into {RING_WINDOWS} windows")
+    if not 1 <= slots <= RING_SLOTS_MAX:
+        raise ValueError(f"a {slots}-slot ring needs {5 * slots} of the MemTile's 48 buffer descriptors, and "
+                         f"the output join already holds 16: at most {RING_SLOTS_MAX} slots fit")
     shim = Tile(col, 0, tile_type=AIETileType.ShimNOCTile)
     mem = Tile(col, 1, tile_type=AIETileType.MemTile)
     slot_bytes = ROWS * A_BYTES
-    window = slots // RING_WINDOWS
     ring_ty = np.ndarray[(slots * slot_bytes,), np.dtype[np.uint8]]
     ring = Buffer(ring_ty, name=f"{name}_ring", tile=mem)
-    # One pair of locks per window, so a tile landing in one window cannot disturb the tile being served from
-    # the other. A buffer descriptor that touches a lock at all must both acquire and release one, so the
-    # arrival takes a slot from ``space`` and hands it to ``arrived`` rather than releasing alone; the runtime
-    # restores both when it recycles the window, which is the re-arm the aie2p DMA model wants regardless.
-    arrived = [Lock(mem, lock_id=RING_LOCK_ARRIVED + w, init=0, name=f"{name}_arrived{w}")
-               for w in range(RING_WINDOWS)]
-    space = [Lock(mem, lock_id=RING_LOCK_SPACE + w, init=window, name=f"{name}_space{w}")
-             for w in range(RING_WINDOWS)]
-    # The arrival walks its window's slots, one token per slot; the layer's chunk count replaces the iteration
-    # size at runtime.
-    fills = [Bd(ring, offset=w * window * slot_bytes, length=slot_bytes, bd_id=RING_BD_FILL + w,
-                acquires=[Acquire(space[w], 1)], releases=[Release(arrived[w], 1)],
-                iteration=BdIteration(size=window, stride=slot_bytes))
-             for w in range(RING_WINDOWS)]
+    # Two locks per slot, and the pair balances itself over a tile so nothing has to be rewritten between
+    # tiles. The arrival takes ``N`` from a slot's ``space`` and hands ``N`` to its ``arrived``; each of the N
+    # serves of that slot takes one ``arrived`` and gives one ``space`` back, so both locks end a tile exactly
+    # where they started. ``N`` is ROWS * serves - one token per core per replay - which is at most 32 and so
+    # inside the 63 a MemTile lock value holds. A single counter cannot do this: shared across the window it
+    # reaches slots * ROWS * serves, which is 128 by yolov8n's layer 13 and 512 on yolov8s.
+    #
+    # ``N`` is the only thing the instruction stream writes, and it writes it once per layer rather than once
+    # per tile: the acquire value and the release value share word 7 of a descriptor, and ``space`` is set at
+    # the same layer boundary, where every task has been retired and the channel is quiescent.
+    arrived = [Lock(mem, lock_id=RING_LOCK_ARRIVED + i, init=0, name=f"{name}_arrived{i}")
+               for i in range(slots)]
+    space = [Lock(mem, lock_id=RING_LOCK_SPACE + i, init=ROWS, name=f"{name}_space{i}")
+             for i in range(slots)]
+    # One arrival descriptor per slot, chained into a cycle. A cycle is one task that never completes, so the
+    # hardware never clears its Valid_BD and never advances an iteration counter, and nothing has to be pushed
+    # to make it run: the channel free-runs from the configuration CDO's ``aie.dma_start`` and the locks alone
+    # sequence it. That is how the output join's own eight-descriptor cycle already works - it takes no runtime
+    # push at all - and it is what makes an arm per tile unnecessary.
+    fills = [Bd(ring, offset=i * slot_bytes, length=slot_bytes, bd_id=_ring_fill_bd(i, slots),
+                acquires=[Acquire(space[i], ROWS)], releases=[Release(arrived[i], ROWS)],
+                next=(i + 1) % slots)
+             for i in range(slots)]
     # A serve sends one core's 6,400-byte slice from every slot of the window, taking one arrival token for it
     # and giving nothing back - see above for why acquiring the whole count deadlocks the four channels against
     # each other. The release is written explicitly as zero rather than omitted: a descriptor that touches a
@@ -209,15 +230,15 @@ def _activation_ring(col, name, slots):
     # one it is about to read. These counts never vary, so the instruction stream leaves these descriptors
     # alone.
     serves = [DmaChannel(DMAChannelDir.MM2S, r,
-                         [Bd(ring, offset=w * window * slot_bytes + r * A_BYTES, length=A_BYTES,
-                             bd_id=_ring_bd(r, w),
-                             acquires=[Acquire(arrived[w], 1)], releases=[Release(arrived[w], 0)],
-                             iteration=BdIteration(size=window, stride=slot_bytes))
-                          for w in range(RING_WINDOWS)])
+                         [Bd(ring, offset=i * slot_bytes + r * A_BYTES, length=A_BYTES,
+                             bd_id=_ring_bd(r, i, slots),
+                             acquires=[Acquire(arrived[i], 1)], releases=[Release(space[i], 1)],
+                             next=(i + 1) % slots)
+                          for i in range(slots)])
               for r in range(ROWS)]
-    flows = [Flow(shim, mem, src_channel=0, dst_channel=0, shim_symbol=name)]
+    flows = [Flow(shim, mem, src_channel=0, dst_channel=RING_FILL_CHANNEL, shim_symbol=name)]
     locks = arrived + space
-    tile_dmas = [TileDma(mem, [DmaChannel(DMAChannelDir.S2MM, 0, fills), *serves])]
+    tile_dmas = [TileDma(mem, [DmaChannel(DMAChannelDir.S2MM, RING_FILL_CHANNEL, fills), *serves])]
     handles = []
     for r in range(ROWS):
         core = Tile(col, r + 2, tile_type=AIETileType.CoreTile)
