@@ -1,0 +1,265 @@
+{
+ "host": "DESKTOP-CBL5NUA",
+ "started_utc": "2026-09-16T17:02:53Z",
+ "finished_utc": "2026-09-16T17:13:27Z",
+ "counter": "\\Energy Meter(RAPL_Package0_PKG)\\Power",
+ "idle_s": 30,
+ "skip_lines": 2,
+ "median_idle_mw": 34707.89973951652,
+ "arms": [
+  {
+   "label": "AMD @30 #1",
+   "returncode": 0,
+   "launch_to_exit_s": 41.347548723220825,
+   "window_s": 29.999733924865723,
+   "window_frames": 900,
+   "window_fps": 30.000266077494164,
+   "power_samples": 29,
+   "package_mw_mean": 41234.64156119887,
+   "package_mw_stdev": 1175.497230520656,
+   "cpu_percent_mean": 8.398497734999351,
+   "summary_lines": [
+    "[amd] ort 1.23.3.dev20260320 | model yolov8n_cut_xint8.onnx | session load 0.45 s | EP report node devices report not found",
+    "[amd] G2G mean 11.039 ms | P50 10.984 | P95 11.871 | P99 12.377 | max 13.891 | over 1200 timed frames after 50 warm-up",
+    "[amd] stage means (ms): letterbox 2.187 | session.run 6.663 | decode+NMS 2.189",
+    "[amd] detections on the last frame: 5 {'person': 4, 'bus': 1} | RSS 304.2 MB"
+   ],
+   "idle_mw_mean": 35078.57491531799,
+   "idle_mw_stdev": 1565.5727961599762,
+   "idle_samples": 29,
+   "idle_cpu_percent": 8.52905801736893,
+   "idle_suspect": false,
+   "env": {
+    "RYZEN_AI_INSTALLATION_PATH": "C:\\Program Files\\RyzenAI\\1.7.1"
+   },
+   "delta_w": 6.156066645880878,
+   "mj_per_frame": 205.200401555741,
+   "delta_w_vs_median_idle": 6.52674182168235,
+   "mj_per_frame_vs_median_idle": 217.556131163071,
+   "command": "<home>/miniforge3/envs/resnet_env17/python.exe tools/amd_vitisai_yolo.py --model <home>/PycharmProjects/ignite-xdna/models/yolov8n_cut_xint8.onnx --image <home>/PycharmProjects/ignite-xdna/Ignition/examples/assets/bus.jpg --ignition-src <home>/PycharmProjects/ignite-xdna/Ignition/src --cache-dir <scratch>/vitisai_cache --cache-key yolov8n_energy --xclbin <home>/PycharmProjects/ignite-xdna/yolocutcachekey/4x4.xclbin --warmup 50 --iterations 1200 --max-fps 30"
+  },
+  {
+   "label": "Ignition performance @30 #1",
+   "returncode": 0,
+   "launch_to_exit_s": 42.13054347038269,
+   "window_s": 29.999833822250366,
+   "window_frames": 900,
+   "window_fps": 30.000166178670142,
+   "power_samples": 29,
+   "package_mw_mean": 76251.62652697216,
+   "package_mw_stdev": 429.52721585426843,
+   "cpu_percent_mean": 99.94312777457158,
+   "summary_lines": [
+    "[summary] stop: frame limit | 1250 frames processed (50 warm-up, 1200 timed) | 1 distinct source frames | image bus.jpg 810x1080",
+    "[summary] G2G mean 7.976 ms | P50 7.967 | P95 8.131 | P99 8.363 | max 9.096 | over the last 1200 timed frames; cold first frame 12.11 ms",
+    "[summary] stage means (ms): preprocess 0.445 | NPU forward 7.478 (dispatch 7.192, readback 0.286) | decode+NMS 0.044",
+    "[summary] boxes from NPU heads on 1200/1200 timed frames | 5.00 detections per frame",
+    "[summary] RSS 183.3 MB at the first timed frame, 183.3 MB at the end (+0.00 MB over 1200 frames)"
+   ],
+   "idle_mw_mean": 34628.917103356864,
+   "idle_mw_stdev": 770.1600451908015,
+   "idle_samples": 29,
+   "idle_cpu_percent": 7.159810506104682,
+   "idle_suspect": false,
+   "env": {
+    "PYTHONPATH": "<ignite-xdna worktree>\\src"
+   },
+   "delta_w": 41.6227094236153,
+   "mj_per_frame": 1387.4159621558592,
+   "delta_w_vs_median_idle": 41.54372678745564,
+   "mj_per_frame_vs_median_idle": 1384.7832222007114,
+   "command": "<home>/miniforge3/envs/mlir-aie-iron/python.exe <Ignition worktree>/live_ignition.py --model <home>/PycharmProjects/ignite-xdna/build/yolov8n_full.ignite --source <home>/PycharmProjects/ignite-xdna/Ignition/examples/assets/bus.jpg --headless --warmup 50 --frames 1200 --power-mode performance --max-fps 30"
+  },
+  {
+   "label": "Ignition balanced @30 #1",
+   "returncode": 0,
+   "launch_to_exit_s": 42.12180757522583,
+   "window_s": 29.999651432037354,
+   "window_frames": 900,
+   "window_fps": 30.00034857201268,
+   "power_samples": 29,
+   "package_mw_mean": 40613.70109159918,
+   "package_mw_stdev": 450.23383298295226,
+   "cpu_percent_mean": 7.772615722746394,
+   "summary_lines": [
+    "[summary] stop: frame limit | 1250 frames processed (50 warm-up, 1200 timed) | 1 distinct source frames | image bus.jpg 810x1080",
+    "[summary] G2G mean 8.736 ms | P50 8.696 | P95 9.326 | P99 9.491 | max 9.917 | over the last 1200 timed frames; cold first frame 11.30 ms",
+    "[summary] stage means (ms): preprocess 0.787 | NPU forward 7.891 (dispatch 7.227, readback 0.664) | decode+NMS 0.049",
+    "[summary] boxes from NPU heads on 1200/1200 timed frames | 5.00 detections per frame",
+    "[summary] RSS 182.6 MB at the first timed frame, 182.6 MB at the end (+0.00 MB over 1200 frames)"
+   ],
+   "idle_mw_mean": 34728.02130853655,
+   "idle_mw_stdev": 1154.54024482939,
+   "idle_samples": 29,
+   "idle_cpu_percent": 7.1628354577691375,
+   "idle_suspect": false,
+   "env": {
+    "PYTHONPATH": "<ignite-xdna worktree>\\src"
+   },
+   "delta_w": 5.885679783062631,
+   "mj_per_frame": 196.1870465916313,
+   "delta_w_vs_median_idle": 5.905801352082657,
+   "mj_per_frame_vs_median_idle": 196.85775776592737,
+   "command": "<home>/miniforge3/envs/mlir-aie-iron/python.exe <Ignition worktree>/live_ignition.py --model <home>/PycharmProjects/ignite-xdna/build/yolov8n_full.ignite --source <home>/PycharmProjects/ignite-xdna/Ignition/examples/assets/bus.jpg --headless --warmup 50 --frames 1200 --power-mode balanced --max-fps 30"
+  },
+  {
+   "label": "Ignition efficiency @30 #1",
+   "returncode": 0,
+   "launch_to_exit_s": 42.11593174934387,
+   "window_s": 30.00062870979309,
+   "window_frames": 900,
+   "window_fps": 29.9993713033825,
+   "power_samples": 29,
+   "package_mw_mean": 39816.140385260805,
+   "package_mw_stdev": 1009.8924604710674,
+   "cpu_percent_mean": 7.903127602826242,
+   "summary_lines": [
+    "[summary] stop: frame limit | 1250 frames processed (50 warm-up, 1200 timed) | 1 distinct source frames | image bus.jpg 810x1080",
+    "[summary] G2G mean 9.532 ms | P50 9.521 | P95 10.007 | P99 10.287 | max 10.879 | over the last 1200 timed frames; cold first frame 11.67 ms",
+    "[summary] stage means (ms): preprocess 1.562 | NPU forward 7.914 (dispatch 7.212, readback 0.702) | decode+NMS 0.047",
+    "[summary] boxes from NPU heads on 1200/1200 timed frames | 5.00 detections per frame",
+    "[summary] RSS 182.3 MB at the first timed frame, 182.3 MB at the end (+0.00 MB over 1200 frames)"
+   ],
+   "idle_mw_mean": 34662.18593224435,
+   "idle_mw_stdev": 476.44788117687034,
+   "idle_samples": 29,
+   "idle_cpu_percent": 6.903725334431302,
+   "idle_suspect": false,
+   "env": {
+    "PYTHONPATH": "<ignite-xdna worktree>\\src"
+   },
+   "delta_w": 5.153954453016457,
+   "mj_per_frame": 171.80208214681272,
+   "delta_w_vs_median_idle": 5.108240645744285,
+   "mj_per_frame_vs_median_idle": 170.27825663694222,
+   "command": "<home>/miniforge3/envs/mlir-aie-iron/python.exe <Ignition worktree>/live_ignition.py --model <home>/PycharmProjects/ignite-xdna/build/yolov8n_full.ignite --source <home>/PycharmProjects/ignite-xdna/Ignition/examples/assets/bus.jpg --headless --warmup 50 --frames 1200 --power-mode efficiency --max-fps 30"
+  },
+  {
+   "label": "AMD @30 #2",
+   "returncode": 0,
+   "launch_to_exit_s": 41.268975496292114,
+   "window_s": 30.000495195388794,
+   "window_frames": 900,
+   "window_fps": 29.99950481278502,
+   "power_samples": 29,
+   "package_mw_mean": 40720.34861145966,
+   "package_mw_stdev": 1090.1753891219012,
+   "cpu_percent_mean": 8.472456832321823,
+   "summary_lines": [
+    "[amd] ort 1.23.3.dev20260320 | model yolov8n_cut_xint8.onnx | session load 0.44 s | EP report node devices report not found",
+    "[amd] G2G mean 10.969 ms | P50 10.904 | P95 11.729 | P99 12.194 | max 12.799 | over 1200 timed frames after 50 warm-up",
+    "[amd] stage means (ms): letterbox 2.087 | session.run 6.644 | decode+NMS 2.238",
+    "[amd] detections on the last frame: 5 {'person': 4, 'bus': 1} | RSS 304.8 MB"
+   ],
+   "idle_mw_mean": 34687.77817049649,
+   "idle_mw_stdev": 521.6508734909634,
+   "idle_samples": 29,
+   "idle_cpu_percent": 7.1472460774903634,
+   "idle_suspect": false,
+   "env": {
+    "RYZEN_AI_INSTALLATION_PATH": "C:\\Program Files\\RyzenAI\\1.7.1"
+   },
+   "delta_w": 6.032570440963172,
+   "mj_per_frame": 201.08900058884458,
+   "delta_w_vs_median_idle": 6.012448871943139,
+   "mj_per_frame_vs_median_idle": 200.4182705502788,
+   "command": "<home>/miniforge3/envs/resnet_env17/python.exe tools/amd_vitisai_yolo.py --model <home>/PycharmProjects/ignite-xdna/models/yolov8n_cut_xint8.onnx --image <home>/PycharmProjects/ignite-xdna/Ignition/examples/assets/bus.jpg --ignition-src <home>/PycharmProjects/ignite-xdna/Ignition/src --cache-dir <scratch>/vitisai_cache --cache-key yolov8n_energy --xclbin <home>/PycharmProjects/ignite-xdna/yolocutcachekey/4x4.xclbin --warmup 50 --iterations 1200 --max-fps 30"
+  },
+  {
+   "label": "Ignition performance @30 #2",
+   "returncode": 0,
+   "launch_to_exit_s": 42.14082884788513,
+   "window_s": 29.999807596206665,
+   "window_frames": 900,
+   "window_fps": 30.000192405027317,
+   "power_samples": 29,
+   "package_mw_mean": 75861.09588893465,
+   "package_mw_stdev": 525.147601952812,
+   "cpu_percent_mean": 99.96988404877283,
+   "summary_lines": [
+    "[summary] stop: frame limit | 1250 frames processed (50 warm-up, 1200 timed) | 1 distinct source frames | image bus.jpg 810x1080",
+    "[summary] G2G mean 8.042 ms | P50 8.019 | P95 8.246 | P99 8.701 | max 9.433 | over the last 1200 timed frames; cold first frame 11.89 ms",
+    "[summary] stage means (ms): preprocess 0.462 | NPU forward 7.528 (dispatch 7.243, readback 0.285) | decode+NMS 0.044",
+    "[summary] boxes from NPU heads on 1200/1200 timed frames | 5.00 detections per frame",
+    "[summary] RSS 183.4 MB at the first timed frame, 183.4 MB at the end (+0.00 MB over 1200 frames)"
+   ],
+   "idle_mw_mean": 34613.33710634545,
+   "idle_mw_stdev": 473.91082182068766,
+   "idle_samples": 29,
+   "idle_cpu_percent": 6.993305566091516,
+   "idle_suspect": false,
+   "env": {
+    "PYTHONPATH": "<ignite-xdna worktree>\\src"
+   },
+   "delta_w": 41.2477587825892,
+   "mj_per_frame": 1374.9164747249108,
+   "delta_w_vs_median_idle": 41.15319614941813,
+   "mj_per_frame_vs_median_idle": 1371.7644071683299,
+   "command": "<home>/miniforge3/envs/mlir-aie-iron/python.exe <Ignition worktree>/live_ignition.py --model <home>/PycharmProjects/ignite-xdna/build/yolov8n_full.ignite --source <home>/PycharmProjects/ignite-xdna/Ignition/examples/assets/bus.jpg --headless --warmup 50 --frames 1200 --power-mode performance --max-fps 30"
+  },
+  {
+   "label": "Ignition balanced @30 #2",
+   "returncode": 0,
+   "launch_to_exit_s": 42.12936234474182,
+   "window_s": 29.999671697616577,
+   "window_frames": 900,
+   "window_fps": 30.00032830597621,
+   "power_samples": 29,
+   "package_mw_mean": 40068.45866563574,
+   "package_mw_stdev": 305.2808778111994,
+   "cpu_percent_mean": 7.819576136415014,
+   "summary_lines": [
+    "[summary] stop: frame limit | 1250 frames processed (50 warm-up, 1200 timed) | 1 distinct source frames | image bus.jpg 810x1080",
+    "[summary] G2G mean 8.795 ms | P50 8.751 | P95 9.347 | P99 9.540 | max 9.888 | over the last 1200 timed frames; cold first frame 11.40 ms",
+    "[summary] stage means (ms): preprocess 0.778 | NPU forward 7.959 (dispatch 7.295, readback 0.664) | decode+NMS 0.049",
+    "[summary] boxes from NPU heads on 1200/1200 timed frames | 5.00 detections per frame",
+    "[summary] RSS 182.6 MB at the first timed frame, 182.6 MB at the end (+0.00 MB over 1200 frames)"
+   ],
+   "idle_mw_mean": 34975.50793174226,
+   "idle_mw_stdev": 1065.2978241696403,
+   "idle_samples": 29,
+   "idle_cpu_percent": 7.205221329951353,
+   "idle_suspect": false,
+   "env": {
+    "PYTHONPATH": "<ignite-xdna worktree>\\src"
+   },
+   "delta_w": 5.092950733893486,
+   "mj_per_frame": 169.76316665437776,
+   "delta_w_vs_median_idle": 5.3605589261192215,
+   "mj_per_frame_vs_median_idle": 178.68334211033857,
+   "command": "<home>/miniforge3/envs/mlir-aie-iron/python.exe <Ignition worktree>/live_ignition.py --model <home>/PycharmProjects/ignite-xdna/build/yolov8n_full.ignite --source <home>/PycharmProjects/ignite-xdna/Ignition/examples/assets/bus.jpg --headless --warmup 50 --frames 1200 --power-mode balanced --max-fps 30"
+  },
+  {
+   "label": "Ignition efficiency @30 #2",
+   "returncode": 0,
+   "launch_to_exit_s": 42.124802350997925,
+   "window_s": 30.00042414665222,
+   "window_frames": 900,
+   "window_fps": 29.99957585934437,
+   "power_samples": 29,
+   "package_mw_mean": 39479.43575759473,
+   "package_mw_stdev": 397.64946042495757,
+   "cpu_percent_mean": 7.945215805009924,
+   "summary_lines": [
+    "[summary] stop: frame limit | 1250 frames processed (50 warm-up, 1200 timed) | 1 distinct source frames | image bus.jpg 810x1080",
+    "[summary] G2G mean 9.583 ms | P50 9.581 | P95 10.007 | P99 10.326 | max 10.588 | over the last 1200 timed frames; cold first frame 11.82 ms",
+    "[summary] stage means (ms): preprocess 1.545 | NPU forward 7.984 (dispatch 7.291, readback 0.692) | decode+NMS 0.046",
+    "[summary] boxes from NPU heads on 1200/1200 timed frames | 5.00 detections per frame",
+    "[summary] RSS 182.4 MB at the first timed frame, 182.4 MB at the end (+0.00 MB over 1200 frames)"
+   ],
+   "idle_mw_mean": 34774.02330714655,
+   "idle_mw_stdev": 935.2877375042167,
+   "idle_samples": 29,
+   "idle_cpu_percent": 7.185516560544549,
+   "idle_suspect": false,
+   "env": {
+    "PYTHONPATH": "<ignite-xdna worktree>\\src"
+   },
+   "delta_w": 4.705412450448181,
+   "mj_per_frame": 156.84929922042622,
+   "delta_w_vs_median_idle": 4.7715360180782085,
+   "mj_per_frame_vs_median_idle": 159.0534493037492,
+   "command": "<home>/miniforge3/envs/mlir-aie-iron/python.exe <Ignition worktree>/live_ignition.py --model <home>/PycharmProjects/ignite-xdna/build/yolov8n_full.ignite --source <home>/PycharmProjects/ignite-xdna/Ignition/examples/assets/bus.jpg --headless --warmup 50 --frames 1200 --power-mode efficiency --max-fps 30"
+  }
+ ]
+}
