@@ -127,8 +127,15 @@ def _core_fn_wbuf(w_buf, w_cons, w_prod, a_in, o_out, engine, psum, scratch_out,
     """
     w_cons.acquire(1)
     idx_ty = IndexType.get()
-    n_out = memref.load(w_buf, [arith.constant(idx_ty, H_COUNT_OUT)])
-    n_acc = memref.load(w_buf, [arith.constant(idx_ty, H_COUNT_ACC)])
+    # An ObjectFifo acquire hands back an MLIR Value, which is what the other two core functions load the
+    # header out of. A raw Buffer is an IRON wrapper instead, and ``memref.load`` wants the Value beneath
+    # it - "Operand 0 of operation memref.load must be a Value". ExternalFunction calls DO accept the
+    # wrapper, so ``engine`` below still takes ``w_buf`` itself, exactly as the ring passes ``a_buf``.
+    # Unwrapped by getattr rather than ``.op`` so this keeps working if IRON ever passes a Value directly,
+    # which is the same idiom the sequence emitter uses for its runtime-data handles.
+    w_mem = getattr(w_buf, "op", w_buf)
+    n_out = memref.load(w_mem, [arith.constant(idx_ty, H_COUNT_OUT)])
+    n_acc = memref.load(w_mem, [arith.constant(idx_ty, H_COUNT_ACC)])
     n_out = arith.index_cast(idx_ty, n_out)
     n_acc = arith.index_cast(idx_ty, n_acc)
     for _ in range_(n_out):
