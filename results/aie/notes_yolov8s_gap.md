@@ -176,9 +176,61 @@ length (736 and 2,944) to the raw length (1,024 and 4,096), leaving a consumer d
 raw payload.
 
 **It times out, and it times out on `arange`** - the one input whose compressed length is known, where the run
-must have returned 2,944 words. Consumer sizing was the only variable, so the cause is isolated: **a consumer
-descriptor must MATCH the compressed byte count, not merely accommodate it.** The README's warning is exact
-rather than approximate, and sizing generously is not a way around it.
+must have returned 2,944 words.
+
+**That experiment is VOID, and the retraction matters more than the result.** It assumed consumer sizing was the
+only variable. It was not: `multi_cmp_only` **times out on its own golden `arange` input, unpatched and as
+shipped, on this device** - a committed, lit-gated config that simply does not run here. The patched run proves
+nothing about oversizing, and the conclusion drawn from it is withdrawn.
+
+What survives is a sound experiment with a different shape. `cmp_only` **passes** on `arange` here (31 ms) and
+**times out on our real weight data**, with no patching at all: same config, same sizing, only the data
+differing. So a fixed-size consumer does stall when the compressed length differs from what it was sized for -
+that much holds. Whether sizing the consumer *generously* rescues it was **reopened** - and then answered.
+
+**An oversized consumer descriptor completes short, with no FoT at all.** Against `cmp_only`, which is
+known-good on this part, with `RATIOED_N` patched from 2,944 up to the raw 4,096 and FoT left off: `arange`
+returns **2,944 words** - its known compressed length - through a 4,096-word consumer. So `Buffer_Length`
+already behaves as a cap on this path, a compressed stream of unknown length *is* receivable, and the original
+"must match exactly" claim was an artifact of a broken config rather than a hardware rule.
+
+That also explains the very first failure in this section: `cmp_only` stalled on real weight data because its
+consumer was sized to arange's 2,944 words, not because unknown lengths cannot be received. Sizing the consumer
+for the raw payload is the one change between "times out" and "measures", and it makes the ratio on real data
+measurable without any of the FoT machinery below.
+
+### FoT: the hardware has both halves, and no software uses either
+
+`FoT_Mode` is bits 17:16 of the **S2MM** control register - MemTile `0xA0600 + 8*ch`, core tile
+`0x1DE00 + 8*ch`, shim `0x1D200 + 8*ch` - encoded `00` disabled, `01` no_counts, `10` counts_with_task_tokens,
+`11` counts_from_mm_register. MM2S has no such field, which is coherent: finishing on TLAST is a receive-side
+rule. npu1's reginit marks `.HasFoTMode = XAIE_FEATURE_AVAILABLE` with `.MaxFoTMode =
+DMA_FoT_COUNTS_FROM_MM_REG` on all three tile types.
+
+**`Buffer_Length` becomes a cap, not a required count** - inferred from an error bit rather than from prose, but
+the inference is tight: `Error_FoT_Length_Exceeded` is *"Channel in FoT mode, Buffer_Length words received but
+no TLAST received"*. Running out of buffer **without** TLAST being the error case only makes sense if TLAST
+arriving first is the normal path, ending the descriptor short. That is exactly the generously-sized consumer
+this file needs.
+
+**The length is readable.** `DMA_S2MM_FoT_Count_FIFO_Pop` at MemTile `0xA06C8 + 4*ch` carries `Valid` (31),
+`Last_in_Task` (30), `BD_ID` (29:24) and `Write_Count` (17:0), *"number of words (32-bit) written to memory this
+transfer"*. There is also a live `DMA_S2MM_Current_Write_Count` at `0xA06B0 + 4*ch`. Two traps: **`Write_Count`
+counts 32-bit words, not bytes**, and **the pop is destructive** - reading it consumes the entry, so a status
+dump would steal the count from its real consumer. (The same word-vs-byte care applies to `RATIOED_N` = 2,944,
+which the example's README calls a byte count but uses as an int32 element count: 11,776 bytes.)
+
+**No software anywhere uses it.** No aie-rt API touches the count FIFO, no `aiex` op returns a value, the
+transaction format's `READ_REGS` opcode is defined but referenced nowhere, and a control-packet read has no
+return route. So the bits get written directly, the same way compression must be. The one in-tree mechanism for
+getting an arbitrary DMA register back to the host is the `regdump` pattern: a core reads it with `read_tm` into
+an ObjectFifo, after the host enables the processor bus at `0x32038`.
+
+**The load-bearing assumption is unsourced.** TLAST is asserted by default at the end of every MM2S BD transfer
+(`TLAST_Suppress`, bit 31 of MemTile BD word 2), but nothing in the tree says whether TLAST still arrives at the
+end of a *compressed* stream. The whole plan rests on it, and mode `01` tests it for one masked write and no
+readback at all: size the consumer generously, set FoT, and see whether `arange` completes at its known 2,944
+words instead of stalling.
 
 That makes variable-length receive load-bearing rather than a convenience. Either the `FoT_Mode` field in the
 same control register (bits 17:16, "finish on TLAST", with a `FoT_counts_from_mm_register` encoding that
