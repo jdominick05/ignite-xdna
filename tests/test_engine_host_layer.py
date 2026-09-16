@@ -13,6 +13,10 @@ Uses models/yolo11n_cut_xint8.onnx, models/yolo11n_no_c2psa_cut_xint8.onnx and m
 - with the boundary region /model.10/m/m.0/attn/qkv/conv/Conv=/model.10/m/m.0/attn/Reshape_1 only the attention core
   is on the host: C2PSA's seven convolutions lower (91 layers), the pe convolution reads v as qkv blocks 8-15 and
   24-31, and every tensor equals ONNX Runtime's;
+- stock YOLO-World v2 with its four text cross-attention blocks (/model.{12,15,18,21}/attn/) on the host lowers to 70
+  layers with four HostLayers, alternating NPU and host segments; the text guide those blocks share, built from
+  Constant nodes inside /model.12/attn/, is a constant rather than a region boundary, and every tensor equals ONNX
+  Runtime's;
 - dilated and grouped (non-depthwise) convolutions, 1x1 stride-2 convolutions and a host region that names
   no node are refused;
 - ``ignite-compile --host-region`` reaches the graph compile, and a region Git Bash rewrote into a path is refused
@@ -41,6 +45,8 @@ MODELS = ROOT / "models"
 STOCK = MODELS / "yolo11n_cut_xint8.onnx"
 ABLATED = MODELS / "yolo11n_no_c2psa_cut_xint8.onnx"
 YOLOV8N = MODELS / "yolov8n_cut_xint8.onnx"
+YOLOW = MODELS / "yolov8s-worldv2_cut_xint8.onnx"
+YOLOW_ATTN = ("/model.12/attn/", "/model.15/attn/", "/model.18/attn/", "/model.21/attn/")
 BUS = ROOT / "assets" / "bus.jpg"
 C2PSA = "/model.10/"
 CORE = "/model.10/m/m.0/attn/qkv/conv/Conv=/model.10/m/m.0/attn/Reshape_1"
@@ -168,6 +174,38 @@ class AttentionCoreLowering(_OrtCase):
     def test_unknown_boundary_is_refused(self):
         with self.assertRaisesRegex(ValueError, "neither a uint8 tensor nor a node name"):
             graph_ir.lower_yolov8n(STOCK, host_regions=("/model.10/m/m.0/attn/qkv/conv/Conv=/nope",))
+
+
+@unittest.skipUnless(YOLOW.exists(), f"{YOLOW.name} not present")
+class TextAttentionLowering(_OrtCase):
+    """YOLO-World v2's four text cross-attention blocks on the host. Their text guide is built once from Constant
+    nodes inside /model.12/attn/ and read by the other three blocks: a constant, not a region boundary."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.ir = graph_ir.lower_yolov8n(YOLOW, host_regions=YOLOW_ATTN)
+        cls.hosts = [L for L in cls.ir.layers if isinstance(L, graph_ir.HostLayer)]
+
+    def test_each_attention_block_is_one_host_layer(self):
+        self.assertEqual([H.name for H in self.hosts], list(YOLOW_ATTN))
+        self.assertEqual(len(self.ir.layers), 70)
+        for H in self.hosts:
+            self.assertEqual(H.op_types.get("Einsum"), 1, H.name)
+
+    def test_a_tensor_derived_only_from_constants_is_constant(self):
+        G = graph_ir._Graph(onnx.load(str(YOLOW)))
+        self.assertTrue(G.is_constant("/model.12/attn/Constant_2_output_0_DequantizeLinear_Output"))
+        self.assertFalse(G.is_constant("/model.12/m.0/cv2/act/Mul_output_0_QuantizeLinear_Output"))
+
+    def test_every_tensor_matches_onnx_runtime(self):
+        self.assert_every_tensor_matches_ort(YOLOW, self.ir)
+
+    def test_segments_alternate_npu_and_host(self):
+        from ignite_xdna.compiler.engine_compile import plan_segments
+        ws = es.plan_workspace(self.ir)
+        scheds, _ = es.schedule_graph(self.ir, ws)
+        kinds = [s["kind"] for s in plan_segments(self.ir, scheds)]
+        self.assertEqual(kinds, ["npu", "host"] * 4 + ["npu"])
 
 
 @unittest.skipUnless(YOLOV8N.exists(), f"{YOLOV8N.name} not present")

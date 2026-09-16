@@ -79,6 +79,9 @@ def main():
                     help="OptimDevice/InferDevice for AdaRound's FastFinetune")
     ap.add_argument("--threads", type=int, default=None,
                     help="number of CPU threads for PyTorch/OpenMP (default: respects OMP_NUM_THREADS or 8)")
+    ap.add_argument("--exclude", action="append", default=[], metavar="PREFIX",
+                    help="keep every node whose name starts with PREFIX in FP32 (repeatable), e.g. /model.12/attn/ "
+                         "for a text cross-attention block, which the graph engine can then run as a host region")
     ap.add_argument("--out", default=None)
     args = ap.parse_args()
 
@@ -127,6 +130,14 @@ def main():
     if not hasattr(qc, "calibrate_method"):
         raise SystemExit(f"get_default_config('XINT8') returned {type(qc)}, not the "
                          "legacy QuantizationConfig - check the Quark version")
+
+    if args.exclude:
+        excluded = [n.name for n in m.graph.node if any(n.name.startswith(p) for p in args.exclude)]
+        missing = [p for p in args.exclude if not any(x.startswith(p) for x in excluded)]
+        if missing:
+            raise SystemExit(f"--exclude matched no node: {missing}")
+        qc.nodes_to_exclude = list(qc.nodes_to_exclude or []) + excluded
+        print(f"keeping {len(excluded)} nodes in FP32: {', '.join(args.exclude)}")
 
     tag = "xint8"
     if args.adaround:
