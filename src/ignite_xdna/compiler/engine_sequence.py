@@ -200,8 +200,9 @@ def program_task_count(items: Sequence[tuple]) -> int:
     directions: ``_configure_ring`` emits a lock write and five pushes per layer, and ``_configure_wbuf``
     emits two lock writes and two pushes, all of them WRITE ops that belong to no shim task. Single-segment
     containers never call the splitter, so neither structure has met it - but a host-segment model (YOLO11n)
-    built with either one WILL cut its stream in the wrong place, and silently, because the op counts still
-    sum. Reconcile the push accounting before combining them.
+    built with either one would cut its stream in the wrong place. ``compile_graph_container`` therefore
+    refuses ``host_regions`` together with either structure; both are measured slower than the default, so
+    reconciling the push accounting is not worth doing unless one of them ever wins.
     """
     n = 0
     for it in items:
