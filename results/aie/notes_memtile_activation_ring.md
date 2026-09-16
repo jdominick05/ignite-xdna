@@ -697,6 +697,56 @@ on yolov8s, and every arm rewrites descriptors that the hardware consumed by run
 close to nothing - or a tile is armed once and reused across many layers instead of once per tile - no window
 makes this ring pay, and the lock protocol is not worth compiling.
 
+## Costing the arm-once ring
+
+**The shape.** Let the descriptors form a cycle and never clear `Use_Next_BD`. The task then never completes,
+so `Valid_BD` is never cleared and `Iteration_Current` never has to be rewound - the two fields that force a
+rewrite today - and no queue push is needed at all, because the channel free-runs the way an objectFIFO's does.
+The locks alone sequence it.
+
+**The lock shape that makes it balance,** two per slot:
+
+    fill  bd i : Acquire(space[i], N)    Release(arrived[i], N)      N = ROWS * serves
+    serve (r,i): Acquire(arrived[i], 1)  Release(space[i], 1)
+
+Every slot returns to its starting value at the end of a tile, so nothing needs rewriting between tiles at all.
+Both locks peak at `N`, at most 32 and inside the 63 ceiling, and twelve locks for a six-slot window sit
+comfortably in the MemTile's 64. What remains is per layer: the fill descriptors' lock values when `serves`
+changes - one maskwrite each, since the acquire value (bits 8-14) and the release value (bits 24-30) share
+word 7 - and the chain links when `chunks` changes.
+
+| model | design | config ops | arm ms | total ms | vs flag-off |
+|---|---|---|---|---|---|
+| yolov8n | flag-off | 0 | 0.000 | 6.481 | |
+| yolov8n | per-tile arming (today) | 25,392 | 3.682 | 10.312 | +3.832 |
+| yolov8n | **arm-once** | 4,926 | 0.714 | 7.345 | **+0.864** |
+| yolov8s | flag-off | 0 | 0.000 | 17.169 | |
+| yolov8s | per-tile arming (today) | 42,619 | 6.180 | 21.497 | +4.328 |
+| yolov8s | **arm-once** | 7,224 | 1.047 | 16.365 | **-0.804** |
+
+A 5.1 ms swing on yolov8s and 3.0 ms on yolov8n: enough to turn yolov8s from a loss into a win, and to leave
+yolov8n 0.86 ms short. The floor, if configuration were free, is +0.150 and -1.852 - the figures from before
+arming was counted.
+
+**The remainder is in tasks, and removing the re-arm is what unlocks it.** The ring issues 1,620 more tasks
+than flag-off on yolov8n and 1,200 more on yolov8s - 0.940 and 0.696 ms - because its `serves == 1` path loses
+drain merging. Merging was blocked by the drain barrier, and the barrier exists only to order re-arms. With no
+re-arm there is no barrier and no reason not to merge, which would take yolov8n to about **-0.08 ms** and
+yolov8s to about **-1.50 ms**.
+
+**One precondition fails, and it is what to solve first.** A layer's shape is not constant across its tiles: on
+yolov8s every one of the 66 ring layers has a column that arms two different widths, and on yolov8n 25 do -
+shapes like `(6 slots)` alternating with `(2 slots)`. The cause is the multi-pass path, where a 32-chunk layer
+served in passes of six leaves a remainder of two. That is why configuring "on change" costs exactly what
+configuring "every layer" costs: the shape alternates rather than settling. It also means a chain would have to
+be relinked while the layer is in flight, and a cycle can only be relinked when its channel is quiesced - a
+layer barrier is a safe place for that, mid-layer is not, and nothing today proves the channel idle there.
+
+**Which leaves three candidates, none of them built or costed further:** pad every pass to the full window so a
+layer has exactly one shape, paying fills on the padding; or split a layer at its shape change and quiesce
+there; or keep per-tile arming for the minority of layers that change shape and arm-once for the rest, which on
+yolov8n is 25 layers of 66 and on yolov8s all of them - so that third option helps yolov8n and not yolov8s.
+
 A hazard this narrows without closing, recorded so it is not rediscovered: `ensure` retires a channel once it
 holds `queue_depth` tasks, and retiring means awaiting. A tile whose column owns five or more groups pushes
 that many drains before its `S`, and such a drain cannot complete until that `S` runs. Over the schedules,
