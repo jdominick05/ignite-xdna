@@ -557,6 +557,61 @@ column owns eight groups against a four-deep queue - and was reverted.
 **The iteration counter wrapping inside one task.** Refuted by the object map: a descriptor asked to wrap
 mid-task would misaddress bytes, and what was missing were whole objects that had never been produced.
 
+## The fix that fits the locks, and what the descriptors leave of it
+
+**One lock per slot is the shape that fits.** A slot's lock only ever reaches `ROWS * serves` - 32 at the worst
+layer of either model - and, unlike a single counter, it does not grow with the window at all. Against the
+plans: the peak falls from 128 to 16 on yolov8n and from 512 to 32 on yolov8s, both far inside 63.
+
+**The descriptors are what it costs.** A descriptor's lock id is a fixed field, so one lock per slot means one
+descriptor per slot on each of the five chains - the arrival, and a serve per core. The MemTile's allocation,
+read out of `input_with_addresses.mlir` of the build that ran on silicon rather than assumed:
+
+| user | channel | descriptor ids |
+|---|---|---|
+| ring arrival | S2MM 0 | 0 |
+| ring serves | MM2S 0, 1, 2, 3 | 1, 24, 2, 25 |
+| output join, to the shim | MM2S 4 | 3-10 |
+| output join, from the cores | S2MM 1, 2, 3, 4 | 26, 27 / 11, 12 / 28, 29 / 13, 14 |
+
+21 of 48 ids are taken, and `isBdChannelAccessible` splits the remainder by channel parity: an even channel
+reaches only ids below 24, an odd channel only 24 and above - nine free below, eighteen above. Five chains of
+`slots` descriptors into 34 free ids gives **`slots <= 6`**, and exactly one arrangement reaches it: the
+arrival moved to an odd S2MM channel (5), the serves split two even (MM2S 0, 2) and two odd (1, 3). Leaving
+the arrival on an even channel gives 4. The MemTile's SRAM would hold 16 slots and its 64 locks are ample;
+descriptors are the only scarce resource here.
+
+**So the question is not what fraction of the replay saving a 6-slot window preserves, but whether a 6-slot
+ring beats no ring at all.** Those differ, because the ring *replaces* the split ObjectFifo rather than sitting
+beside it: a layer too wide for the window does not return to the per-group schedule, it stays in the ring at
+`serves = 1` and pays the ring's task overhead for none of its saving.
+
+Measured over the scheduler at every window size (derived ms = total bytes at 26.8 GB/s plus four instruction
+ops per task at 145 ns; a comparator, not a measurement):
+
+| model | ring | layers replayed | tasks | total DDR bytes | derived ms |
+|---|---|---|---|---|---|
+| yolov8n | 0 | 0 | 2,972 | 127,487,744 | 6.481 |
+| yolov8n | **6** | 33 | 4,592 | 106,320,640 | **6.631 (+0.150)** |
+| yolov8n | 8 | 36 | 4,512 | 102,224,640 | 6.431 (-0.049) |
+| yolov8n | 16 | 37 | 4,496 | 100,586,240 | 6.361 (-0.120) |
+| yolov8s | 0 | 0 | 7,143 | 349,103,616 | 17.169 |
+| yolov8s | **6** | 31 | 8,343 | 280,821,248 | **15.317 (-1.852)** |
+| yolov8s | 8 | 40 | 7,615 | 256,245,248 | 13.978 (-3.191) |
+| yolov8s | 16 | 47 | 6,927 | 215,285,248 | 12.051 (-5.119) |
+
+**At the window the descriptors allow, the ring helps yolov8s and hurts yolov8n.** yolov8s moves 68 MB less for
+1,200 more tasks; yolov8n moves 21 MB less for 1,620 more. Break-even per task is 2.12 us for yolov8s and
+0.49 us for yolov8n, against the 0.58 us that four ops at 145 ns cost - so yolov8s wins with a 3.7x margin and
+yolov8n falls just the wrong side of it. (The 2.5 us per DMA task in `docs/BENCHMARKS.md` is itself derived,
+and from the 18.3 ms schedule that issued far more tasks; the 145 ns-per-op model is the one since fitted to a
+7.87 ms frame.)
+
+**yolov8n needs roughly 260 fewer tasks to break even, and where they went is already known:** the ring's
+`serves == 1` path loses the per-group schedule's drain merging and merged weight runs, which is what raises
+its count by 1,620 to begin with. That recovery needs no xclbin rebuild, and it belongs *before* the lock
+protocol rather than after - it decides whether a 6-slot ring is worth compiling for one model or for both.
+
 A hazard this narrows without closing, recorded so it is not rediscovered: `ensure` retires a channel once it
 holds `queue_depth` tasks, and retiring means awaiting. A tile whose column owns five or more groups pushes
 that many drains before its `S`, and such a drain cannot complete until that `S` runs. Over the schedules,
