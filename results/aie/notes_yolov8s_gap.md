@@ -296,3 +296,56 @@ So the necessary condition holds: **the codec does not corrupt our weight data, 
 the MemTile.** What remains is not correctness but plumbing - a compressed stream whose length is data-dependent
 cannot be received by a descriptor that must be sized in advance, and that is the whole of the remaining
 question.
+
+## What weight residency would actually cost, and one correction
+
+With compression parked, weight residency is the last live lever: **2.006 ms** of re-sent weights against a
+**0.29 ms** bar. This is what building it would take, recorded before anyone spends the hours on it.
+
+### The cheap version does not exist
+
+A layer's weights are re-sent once per tile, and the obvious fix is to raise the packet header's counts so one
+weight object serves every round. Single-chunk layers already do exactly that - `conv_packet(..., count_out=len(mine))`.
+It cannot be extended to a multi-chunk layer. `_core_fn` acquires **one** weight object, loops `range_(n_out)`
+emitting and `range_(n_acc)` accumulating into a single `psum`, then releases:
+
+```python
+w = w_in.acquire(1)
+n_out = memref.load(w, [arith.constant(idx_ty, H_COUNT_OUT)])
+n_acc = memref.load(w, [arith.constant(idx_ty, H_COUNT_ACC)])
+for _ in range_(n_out):
+    a = a_in.acquire(1); o = o_out.acquire(1)
+    engine(w, a, o, psum, row); a_in.release(1); o_out.release(1)
+for _ in range_(n_acc):
+    a = a_in.acquire(1); engine(w, a, scratch_out, psum, row); a_in.release(1)
+w_in.release(1)
+```
+
+A multi-chunk layer needs each chunk's own weights inside every round, in `ch.last` order, and `psum` retires at
+the emit. A larger count would therefore feed one chunk's weights to another chunk's activations - wrong data,
+not merely wrong timing. The emulator enforces the same contract (`remaining = count_out + count_acc`, one
+weight object per run of activation objects). Note the counts are consumed in `design.py`, not `engine.cc`, so a
+valid scheme would need no kernel change; the obstacle is the dataflow, not the one-program rule.
+
+### And no IRON fifo producer can live on a MemTile
+
+`ObjectFifo.prod(tile=)` is documented as *"the shim tile its host-side DMA binds to"*, and `build_program`
+already uses it as `Tile(c, 0)`; it does not place a producer on row 1. Combined with the recorded trap that
+IRON fifos "send once then stall on locks", a resident weight buffer has to be hand-written on raw locks like
+`_activation_ring` - which forces a **third core-function variant**, because cores take weights through
+`w_in.acquire(1)` on a fifo handle.
+
+So the real cost is a hand-written MemTile buffer, a third core function, scheduler changes to emit weights once
+per layer, and the per-layer reset-and-re-push idiom. That is the activation ring's shape with one more moving
+part. The ring needed four protocol revisions and hung silicon twice, and when finally correct was **slower on
+both models**. And the 2.006 ms comes from the same derived comparator that predicted yolov8s would win by
+0.748 ms when it lost by 3.40 - wrong by 4.1 ms on its most confident case. Whether that is worth the hours is a
+judgement to make before starting, not after.
+
+### Correction: sixteen free descriptors, not seventeen
+
+The free ids are **32-47**. The earlier count of seventeen counted `aie.dma_bd` operations rather than distinct
+ids. Read off a flag-off build, even channels hold 0-23 (S2MM 0 -> 0-7, MM2S 0 -> 8-9, MM2S 2 -> 10-11,
+MM2S 4 -> 12-19, S2MM 2 -> 20-21, S2MM 4 -> 22-23) and odd channels hold 24-31. The range is still usable, but
+for a specific reason worth stating: `isBdChannelAccessible` lets an odd channel use only ids >= 24, and both
+target channels - S2MM 5 and MM2S 5 - are odd.
