@@ -10,8 +10,9 @@ For each arm, in the order given:
 
 1. **Idle baseline.** Package power sampled for ``--idle-s`` seconds with nothing launched.
 2. **Run.** ``typeperf`` samples package power once a second for the arm's whole life; the arm is launched and every
-   ``[run] frame N`` line it prints is stamped with the host clock as it arrives (Ignition's headless loop and
-   ``tools/amd_vitisai_yolo.py`` both print one every 100 frames).
+   ``[run] frame N`` line it prints is stamped with the host clock as it arrives (Ignition's headless loop,
+   ``tools/amd_vitisai_yolo.py``, ``tools/amd_vitisai_sesr.py`` and ``pipelines/yolov8n-pose/4_pose.py`` on an image
+   each print one every 100 frames).
 3. **Window.** From the ``--skip-lines``-th progress line to the last one. Everything outside it - interpreter start,
    model or session load, hardware-context creation, warm-up, shutdown - is excluded. Frames per second is
    ``(N_last - N_first) / (t_last - t_first)`` in wall time, so any work the loop does between frames is counted.
@@ -175,8 +176,8 @@ def run_arm(arm: dict, skip_lines: int, tmp: Path, log: Log):
         m = PROGRESS.search(line)
         if m:
             marks.append((now, int(m.group(1))))
-        elif (line.startswith(("[summary]", "[amd]", "[verify]", "[Ignition] power mode", "Traceback", "RuntimeError",
-                               "Error")) or "Error" in line):
+        elif (line.startswith(("[summary]", "[amd]", "[verify]", "[Ignition] power mode", "g2g ", "pre ", "infer ",
+                               "Traceback", "RuntimeError", "Error")) or "Error" in line):
             tail.append(line)
     rc = child.wait()
     t_exit = time.time()
