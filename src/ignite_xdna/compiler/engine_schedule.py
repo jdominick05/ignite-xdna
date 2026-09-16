@@ -438,6 +438,72 @@ def column_rounds(rounds: List[Tuple[int, int]], group: int, balance: bool = Tru
     return [rounds[c * n_r // COLS:(c + 1) * n_r // COLS] for c in range(COLS)]
 
 
+# ----------------------------------------------------------------------------
+# MemTile activation ring
+# ----------------------------------------------------------------------------
+
+RING_WINDOWS = 2               # the ring is split into two windows (kernels/aie2/conv_engine/design.py)
+MEMTILE_RING_BYTES = 447488    # a column's free MemTile SRAM once the split and join buffers are counted
+
+
+@dataclass
+class RingPlan:
+    """How one layer uses the MemTile activation ring.
+
+    ``slots`` is how many slots of a window the layer fills, which is its group-invariant chunk count, and
+    ``serves`` how many times each fetched tile is replayed, which is how many of the tile's output groups its
+    column owns. ``replicas`` is how many columns hold a copy of the same tile: a tile is fetched once per
+    column that serves it, and a layer with fewer rounds than columns would idle three of them if its tile were
+    pinned to one, so it is replicated instead and each column takes its share of the groups.
+
+    ``windows`` is how many the layer cuts the ring into. Two lets the next tile land while this one is still
+    being served, but halves what a tile may hold, and the widest layers (16 chunks) are also among the
+    heaviest re-fetchers. Since the descriptors are rewritten per layer anyway, a layer too wide for half the
+    ring takes all of it as one window and gives up the overlap rather than the ring.
+    """
+    slots: int
+    serves: int
+    replicas: int
+    windows: int
+
+
+def ring_plan(ir: GraphIR, layer, ring_slots: int) -> Optional[RingPlan]:
+    """The layer's ring plan, or None if it keeps the per-group schedule.
+
+    A layer qualifies when it has more than one output group for a fetch to amortise and a tile that fits the
+    ring, and when every one of its chunks is group-invariant. ``a_pattern`` offsets by the output group for the
+    "res" and "pool" kinds, so those packets differ per group; every conv kind is group-invariant.
+
+    A layer that mixes the two is left on the per-group schedule. Every activation packet reaches a core through
+    the MemTile, so a mixed layer would have to interleave ring-served packets with per-group fetches in the
+    exact chunk order its weight packets encode, and that order cannot simply be rearranged: ``ch.last`` retires
+    the accumulators, so a residual moved after it changes the result. Modelled over the measured streams, the
+    restriction costs 0.18 ms of yolov8s's dispatch floor (7.69 ms against 7.51) and 0.01 ms of yolov8n's.
+    """
+    if ring_slots <= 0 or isinstance(layer, HostLayer):
+        return None
+    t = ir.tensors[layer.output]
+    groups = (t.blocks + OUT_BLOCKS - 1) // OUT_BLOCKS
+    if groups <= 1:
+        return None
+    try:
+        chunks = layer_chunks(ir, layer)
+    except (ValueError, KeyError, AttributeError):   # an op with no packet geometry
+        return None
+    invariant = sum(1 for c in chunks if c.kind not in ("res", "pool"))
+    if not invariant or invariant != len(chunks):
+        return None
+    windows = RING_WINDOWS if invariant <= ring_slots // RING_WINDOWS else 1
+    if invariant > ring_slots // windows:
+        return None
+    if ring_slots * ROWS * em.A_BYTES > MEMTILE_RING_BYTES:
+        raise ValueError(f"a {ring_slots}-slot ring needs more than the MemTile's {MEMTILE_RING_BYTES} B")
+    quad_rows = TILE_R * ROWS
+    tiles = len(tile_origins(t.height, quad_rows)) * len(tile_origins(t.width, TILE_C))
+    replicas = min(groups, max(1, -(-COLS // tiles)))
+    return RingPlan(slots=invariant, serves=-(-groups // replicas), replicas=replicas, windows=windows)
+
+
 def schedule_layer_coarse(ir: GraphIR, ws: Workspace, layer, store: PacketStore,
                           weight_repeat: bool = True, trim_ncin: bool = True,
                           balance_columns: bool = True, merge_group_weights: bool = True) -> LayerSchedule:
