@@ -532,6 +532,12 @@ counter would overflow the 63 a lock register holds", and this scheme walked int
 replay, so no batching of replays, no cap on `serves` and no re-arm schedule rescues a token-per-core-per-replay
 counter for the largest tiles.
 
+**And on yolov8s the scheme is not marginally short but short by an order of magnitude.** Its plans, read off a
+build rather than derived: `/model.5/conv/Conv` is 16 chunks with 8 serves and peaks at `16 * 4 * 8 = 512`,
+`/model.6/cv2/conv/Conv` at 256, `/model.6/cv1/conv/Conv` and `/model.12/cv1/conv/Conv` at 128. Against 63.
+Whatever replaces this counter has to be about eight times cheaper in tokens, not a little cheaper, and that
+rules out trimming `serves` or the window as a way out.
+
 **What the probes could reach, so this is not concluded from them again:** the eight-layer container's highest
 peak is 32, comfortably inside the ceiling. An eight-layer pass therefore says nothing about whether the scheme
 scales, and the full container is the only test that does.
