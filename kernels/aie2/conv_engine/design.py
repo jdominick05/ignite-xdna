@@ -105,6 +105,45 @@ def _core_fn_ring(w_in, a_buf, a_cons, a_prod, o_out, engine, psum, scratch, row
     w_in.release(1)
 
 
+def _core_fn_wbuf(w_buf, w_cons, w_prod, a_in, o_out, engine, psum, scratch_out, row):
+    """The same core program, taking WEIGHTS from the MemTile buffer through raw locks.
+
+    Today the shim re-sends a layer's whole weight run once per round with a stride-0 repeat, so a layer's
+    weight traffic is its run times its tile count. The MemTile holds that run instead: the shim fetches it
+    once per layer and one MM2S replays it per round, broadcast to all four cores - weights are the same
+    bytes for every core, so one channel does what the activation split needed four for.
+
+    A core still sees one weight object per chunk per round and the packet headers are unchanged, so
+    ``engine.cc`` is untouched; only where the object came from differs.
+
+    One core buffer, not a pair, for the same reason the ring uses one: alternating buffers inside ``range_``
+    would need the trip count's parity. Here it also removes a correctness hazard rather than only saving
+    space. With a double-buffered weight fifo the MM2S runs ahead into the spare slot whenever the core is
+    the slower party, so the last round of a layer can leave a prefetched object sitting in a core - which
+    the NEXT layer's first acquire would consume as its own weights. With a single buffer the serve can
+    never be more than one object ahead, and the per-layer barrier (``run_column_programs`` retires every
+    channel of every column, and an output drain completes only once all four cores produced that round -
+    which requires them to have consumed that round's weights) makes delivery and consumption exact.
+    """
+    w_cons.acquire(1)
+    idx_ty = IndexType.get()
+    n_out = memref.load(w_buf, [arith.constant(idx_ty, H_COUNT_OUT)])
+    n_acc = memref.load(w_buf, [arith.constant(idx_ty, H_COUNT_ACC)])
+    n_out = arith.index_cast(idx_ty, n_out)
+    n_acc = arith.index_cast(idx_ty, n_acc)
+    for _ in range_(n_out):
+        a = a_in.acquire(1)
+        o = o_out.acquire(1)
+        engine(w_buf, a, o, psum, row)
+        a_in.release(1)
+        o_out.release(1)
+    for _ in range_(n_acc):
+        a = a_in.acquire(1)
+        engine(w_buf, a, scratch_out, psum, row)
+        a_in.release(1)
+    w_prod.release(1)
+
+
 def ddr_extents(workspace_bytes, packet_bytes):
     """Declared (workspace, packet) DDR extents: the defaults, raised to the next MiB for larger models."""
     mib = 1 << 20
@@ -149,6 +188,98 @@ def _ring_bd(channel, slot, slots):
     """
     base = RING_BD_SERVE_ODD if channel % 2 else RING_BD_SERVE_EVEN
     return base + (channel // 2) * slots + slot
+
+
+# The resident weight buffer. Today the shim re-sends a layer's whole weight run once per round with a
+# stride-0 repeat, so a replayed layer's weight traffic is its run times its round count. Measured from the
+# emitted patterns: 27,279,360 B a frame on yolov8s (1.018 ms at 26.8 GB/s) across the 19 layers that
+# replay, and 9,888,768 B (0.369 ms) across yolov8n's 14. Only genuine stride-0 replays count - where
+# ``merge_group_weights`` concatenates distinct groups' runs the bytes are already fetched once.
+#
+# 303,104 B is the largest resident set AMONG THOSE LAYERS. The largest over all layers is 1,212,416 B, but
+# every layer that big replays exactly once and so never needs holding; sizing from one of those would size
+# the buffer for a layer that will never use it. The MemTile's largest contiguous free run is about
+# 314,880 B - an ``aie.buffer`` cannot straddle the banks the split and join already occupy - so this fits
+# with 11,776 B to spare.
+WBUF_BYTES = 303104
+WBUF_FILL_CHANNEL = 5           # an odd S2MM; the split holds S2MM 0 and the join S2MM 1-4
+WBUF_SERVE_CHANNEL = 5          # an odd MM2S; the split holds MM2S 0-3 and the join MM2S 4
+# Ids clear of BOTH allocations so a build may carry the ring and this together: the join takes MemTile
+# locks 0-7 and the split 8-15, while the ring takes descriptors 0-11 and 24-41 and locks 0-5 and 16-21,
+# leaving descriptors 42-47. Both channels here are odd, and ``isBdChannelAccessible`` lets an odd channel
+# reach only ids 24 and above.
+# Up to four ARMS. A layer's columns can carry several output groups, each with its own weight run, so the
+# buffer's contents change inside a layer - measured, four arms at most on yolov8s and three on yolov8n,
+# and only one of yolov8s's nineteen replaying layers needs just one (worth 0.042 ms of the 1.018).
+#
+# Each arm therefore gets its OWN serve descriptor, and every one of them is armed at the layer boundary;
+# the hardware start queue then sequences them, because a channel runs queued tasks in order. The
+# alternative - rewriting one descriptor's offset between groups - is a rewrite while the channel is live,
+# which is precisely the activation ring's narrowing transition and cost four protocol revisions and two
+# silicon hangs. A MemTile start queue holds exactly four entries, and the fill is on a different channel
+# from the serves, so four arms fit with nothing to spare.
+WBUF_ARMS_MAX = 4
+WBUF_BD_FILL = 42
+WBUF_BD_SERVE = 43              # 43..46, one per arm; 47 stays free
+WBUF_LOCK_SPACE = 32
+WBUF_LOCK_READY = 33
+
+
+def _weight_buffer(col, name):
+    """One column's weights through a MemTile buffer instead of a shim broadcast.
+
+    The shim fetches a layer's weight run once into the MemTile; one MM2S then replays it per round to all
+    four cores. Weights are the SAME bytes for every core, so a single channel broadcasts where the
+    activation split needed four - and the cores see the same objects in the same order, so ``engine.cc``
+    and the packet headers are untouched.
+
+    The lock discipline is the ring's, which is already proven on silicon, with one substitution: a fill
+    acquires ``space`` and releases ``ready``, both by the layer's replay count, and each serve takes one
+    ``ready`` and returns one ``space``, so both locks end a layer exactly where they started. The ring had
+    to range-check its ``ROWS * serves`` against the 63 a MemTile lock value holds; here the count is the
+    replay, whose measured maximum across both models is 16, so it never comes close.
+
+    A net-zero serve - acquiring and releasing the same lock - was considered and is WRONG: it would prove
+    only that the lock had been touched, not that the bytes this serve is about to read had landed, which is
+    the second failure the ring measured ("every layer came back wrong that way, including single-chunk ones
+    that had been byte-exact").
+
+    Lengths and lock counts here are placeholders. Both vary per layer and are written by the instruction
+    stream at the layer boundary, where ``run_column_programs`` has retired every channel of every column -
+    the same point, and for the same reason, that the ring reconfigures at.
+    """
+    shim = Tile(col, 0, tile_type=AIETileType.ShimNOCTile)
+    mem = Tile(col, 1, tile_type=AIETileType.MemTile)
+    buf_ty = np.ndarray[(WBUF_BYTES,), np.dtype[np.uint8]]
+    wbuf = Buffer(buf_ty, name=f"{name}_buf", tile=mem)
+    space = Lock(mem, lock_id=WBUF_LOCK_SPACE, init=1, name=f"{name}_space")
+    ready = Lock(mem, lock_id=WBUF_LOCK_READY, init=0, name=f"{name}_ready")
+    fill = Bd(wbuf, offset=0, length=W_BYTES, bd_id=WBUF_BD_FILL,
+              acquires=[Acquire(space, 1)], releases=[Release(ready, 1)])
+    # One serve per arm. Offsets and lengths are placeholders: a layer writes its own, and a layer that
+    # uses fewer arms simply never pushes the rest.
+    serves = [Bd(wbuf, offset=k * W_BYTES, length=W_BYTES, bd_id=WBUF_BD_SERVE + k,
+                 acquires=[Acquire(ready, 1)], releases=[Release(space, 1)])
+              for k in range(WBUF_ARMS_MAX)]
+    flows = [Flow(shim, mem, src_channel=1, dst_channel=WBUF_FILL_CHANNEL, shim_symbol=name)]
+    locks = [space, ready]
+    tile_dmas = [TileDma(mem, [DmaChannel(DMAChannelDir.S2MM, WBUF_FILL_CHANNEL, [fill]),
+                               DmaChannel(DMAChannelDir.MM2S, WBUF_SERVE_CHANNEL, serves)])]
+    handles = []
+    for r in range(ROWS):
+        core = Tile(col, r + 2, tile_type=AIETileType.CoreTile)
+        cbuf = Buffer(w_ty, name=f"{name}_{r}_buf", tile=core)
+        c_prod = Lock(core, init=1, name=f"{name}_{r}_prod")
+        c_cons = Lock(core, init=0, name=f"{name}_{r}_cons")
+        # One core buffer, not the fifo's pair: see ``_core_fn_wbuf`` for why double buffering here would
+        # let a prefetched object outlive a layer boundary and be consumed as the next layer's weights.
+        tile_dmas.append(TileDma(core, [DmaChannel(DMAChannelDir.S2MM, 1,
+                                                   [Bd(cbuf, acquires=[Acquire(c_prod, 1)],
+                                                       releases=[Release(c_cons, 1)])])]))
+        locks += [c_prod, c_cons]
+        flows.append(Flow(mem, core, src_channel=WBUF_SERVE_CHANNEL, dst_channel=1))
+        handles.append((cbuf, c_cons, c_prod))
+    return handles, (flows, locks, tile_dmas)
 
 
 def _activation_ring(col, name, slots):
@@ -254,7 +385,8 @@ def _activation_ring(col, name, slots):
     return handles, (flows, locks, tile_dmas)
 
 
-def build_program(device, sequence_body, w_depth=2, ws_bytes=WS_BYTES, wp_bytes=WP_BYTES, a_ring: int = 0):
+def build_program(device, sequence_body, w_depth=2, ws_bytes=WS_BYTES, wp_bytes=WP_BYTES, a_ring: int = 0,
+                  w_buf: bool = False):
     """Return an IRON Program for the engine with ``sequence_body(ws, wp)``.
 
     The body emits raw shim DMA tasks against the FIFO allocation symbols
@@ -268,12 +400,23 @@ def build_program(device, sequence_body, w_depth=2, ws_bytes=WS_BYTES, wp_bytes=
         include_dirs=[config.cxx_header_path()],
         compile_flags=["-O2"],
     )
+    if a_ring and w_buf:
+        # Both would hand the core raw locks for BOTH operands, which needs a fourth core function; and
+        # measuring them together would make neither attributable, which is the mistake that left the
+        # ring's costing uninterpretable. The ring is off by default and slower, so this stays unbuilt
+        # until there is a reason to pay for it.
+        raise ValueError("the activation ring and the resident weight buffer cannot be built together yet")
     workers = []
     w_prods, a_prods, o_conses = [], [], []
     rings = []                       # (flows, locks, tile dmas) of each column's ring, registered below
+    wbufs = []                       # the same, for each column's resident weight buffer
     for c in range(COLS):
         names = fifo_names(c)
-        w_of = ObjectFifo(w_ty, name=names["w"], depth=w_depth)
+        if w_buf:
+            w_split, wbuf_parts = _weight_buffer(c, names["w"])
+            wbufs.append(wbuf_parts)
+        else:
+            w_of = ObjectFifo(w_ty, name=names["w"], depth=w_depth)
         if a_ring:
             a_split, ring_parts = _activation_ring(c, names["a"], a_ring)
             rings.append(ring_parts)
@@ -301,6 +444,10 @@ def build_program(device, sequence_body, w_depth=2, ws_bytes=WS_BYTES, wp_bytes=
                 buf, a_cons, a_prod = a_split[r]
                 fn, args = _core_fn_ring, [w_of.cons(), buf, a_cons, a_prod, o_join[r].prod(),
                                            engine, psum, scratch, r]
+            elif w_buf:
+                wbuf_r, w_cons, w_prod = w_split[r]
+                fn, args = _core_fn_wbuf, [wbuf_r, w_cons, w_prod, a_split[r].cons(), o_join[r].prod(),
+                                           engine, psum, scratch, r]
             else:
                 fn, args = _core_fn, [w_of.cons(), a_split[r].cons(), o_join[r].prod(),
                                       engine, psum, scratch, r]
@@ -313,7 +460,10 @@ def build_program(device, sequence_body, w_depth=2, ws_bytes=WS_BYTES, wp_bytes=
                     stack_size=0x800,
                 )
             )
-        w_prods.append(w_of.prod(tile=Tile(c, 0)))
+        if not w_buf:
+            # With the buffer the shim's weight stream lands in the MemTile, not in a fifo whose producer
+            # is a shim endpoint, so there is no handle to register here - the flow carries the symbol.
+            w_prods.append(w_of.prod(tile=Tile(c, 0)))
         if not a_ring:
             a_prods.append(a_col.prod(tile=Tile(c, 0)))
         o_conses.append(o_col.cons(tile=Tile(c, 0)))
@@ -325,7 +475,7 @@ def build_program(device, sequence_body, w_depth=2, ws_bytes=WS_BYTES, wp_bytes=
     ws_t = np.ndarray[(int(ws_bytes),), np.dtype[np.uint8]]
     wp_t = np.ndarray[(int(wp_bytes),), np.dtype[np.uint8]]
     rt = Runtime(sequence, [ws_t, wp_t, w_prods, a_prods, o_conses])
-    for flows, locks, tile_dmas in rings:
+    for flows, locks, tile_dmas in rings + wbufs:
         for flow in flows:
             rt.add_flow(flow)
         for lock in locks:

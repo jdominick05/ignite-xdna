@@ -184,10 +184,29 @@ def merge_runs(patterns: Sequence[DmaPattern], max_n: int = MAX_REPEAT) -> List[
     return out
 
 
+CONFIG_ITEMS = ("R", "S", "B")   # arm a MemTile structure; issue no shim DMA task
+
+
 def program_task_count(items: Sequence[tuple]) -> int:
-    """Number of shim DMA tasks a column program issues."""
+    """Number of shim DMA tasks a column program issues.
+
+    Configuration items are not tasks. ``R`` and ``B`` reach MemTile registers directly and ``S`` emits
+    nothing at all, so none of them configures or pushes a SHIM descriptor, which is what a caller sizing
+    the shim's buffer-descriptor budget is asking about.
+
+    A CAVEAT that predates the weight buffer and is widened by it. ``split_instruction_stream`` finds
+    segment boundaries by counting WRITE ops and asserting they equal ``sum(tasks_per_segment)``, on the
+    reasoning that one task issue carries one queue push. Configuration items break that equality in both
+    directions: ``_configure_ring`` emits a lock write and five pushes per layer, and ``_configure_wbuf``
+    emits two lock writes and two pushes, all of them WRITE ops that belong to no shim task. Single-segment
+    containers never call the splitter, so neither structure has met it - but a host-segment model (YOLO11n)
+    built with either one WILL cut its stream in the wrong place, and silently, because the op counts still
+    sum. Reconcile the push accounting before combining them.
+    """
     n = 0
     for it in items:
+        if it[0] in CONFIG_ITEMS:
+            continue
         n += len(it[1]) if it[0] == "a" else 1
     return n
 
@@ -346,7 +365,7 @@ class SequenceEmitter:
     def __init__(self, ws, wp, ws_bytes: int, wp_bytes: int, fifo_names: Dict[int, Dict[str, str]],
                  a_ring: int = 0):
         from aie.dialects.aiex import (dma_await_task, dma_free_task, dma_start_task, npu_maskwrite32,
-                                       npu_push_queue, npu_write32, shim_dma_single_bd_task)
+                                       npu_push_queue, npu_write32, npu_writebd, shim_dma_single_bd_task)
         from aie.dialects._aie_enum_gen import DMAChannelDir
         self._maskwrite = npu_maskwrite32
         self._write32 = npu_write32
@@ -355,7 +374,9 @@ class SequenceEmitter:
         # The ring's descriptor and lock ids are pinned by the design that compiles them, and read from it here
         # rather than restated, so the two cannot drift: a maskwrite to the wrong descriptor is silent.
         from kernels.aie2.conv_engine.design import (ROWS as RING_ROWS, RING_FILL_CHANNEL, RING_LOCK_ARRIVED,
-                                                     RING_LOCK_SPACE, _ring_bd, _ring_fill_bd)
+                                                     RING_LOCK_SPACE, WBUF_BD_FILL, WBUF_BD_SERVE,
+                                                     WBUF_FILL_CHANNEL, WBUF_LOCK_READY, WBUF_LOCK_SPACE,
+                                                     WBUF_SERVE_CHANNEL, _ring_bd, _ring_fill_bd)
         from .scheduler import MEMTILE_BD_BASE, memtile_lock_reg
         self._ring_rows = RING_ROWS
         # How many slots the design was compiled with, which fixes the descriptor ids: a layer's pass may be
@@ -373,6 +394,15 @@ class SequenceEmitter:
         self._ring_serve = _ring_bd
         self._ring_bd_base = MEMTILE_BD_BASE
         self._ring_lock_reg = memtile_lock_reg
+        self._writebd = npu_writebd
+        # The resident weight buffer's pinned ids, read from the design that compiles them for the same
+        # reason the ring's are: a write to the wrong descriptor is silent.
+        self._wbuf_bd_fill = WBUF_BD_FILL
+        self._wbuf_bd_serve = WBUF_BD_SERVE
+        self._wbuf_fill_channel = WBUF_FILL_CHANNEL
+        self._wbuf_serve_channel = WBUF_SERVE_CHANNEL
+        self._wbuf_space = WBUF_LOCK_SPACE
+        self._wbuf_ready = WBUF_LOCK_READY
         self._ws, self._wp = ws, wp
         self._bytes = {"ws": ws_bytes, "wp": wp_bytes}
         self._names = fifo_names
@@ -524,6 +554,142 @@ class SequenceEmitter:
         for (direction, channel, _), ids in zip(channels, chains):
             self._push_queue(col, MEMTILE_ROW, direction, channel, False, 0, ids[0])
 
+    # Word 7's field layout, from the map derived above: bit 31 valid, 24-30 lock_rel_val, 16-23
+    # lock_rel_id, 15 lock_acq_enable, 8-14 lock_acq_val, 0-7 lock_acq_id.
+    WBUF_REL_ID_SHIFT = 16
+    WBUF_ACQ_ENABLE = 1 << 15
+
+    def _wbuf_descriptor(self, col: int, bd_id: int, length_words: int, offset_words: int,
+                         acq_id: int, acq_val: int, rel_id: int, rel_val: int) -> None:
+        """Write one whole weight-buffer descriptor. Every field is explicit because every field varies.
+
+        The ring rewrites two fields of a compiled descriptor and leaves the rest; this cannot, because a
+        layer's weight run has its own length. One ``writebd`` is a single BLOCKWRITE, against four
+        maskwrites to reach the same words, which is why it is worth the field-by-field spelling: six ops
+        per column per layer instead of twelve, 0.23 ms across a frame instead of 0.46.
+        """
+        self._writebd(
+            column=col, row=MEMTILE_ROW, bd_id=bd_id,
+            buffer_length=length_words,   # word 0 counts 32-BIT WORDS, not bytes
+            buffer_offset=offset_words,   # word 1, in the same units: an arm's slice of the concatenation
+            enable_packet=0, out_of_order_id=0, packet_id=0, packet_type=0,
+            d0_size=0, d0_stride=0, d1_size=0, d1_stride=0, d2_size=0, d2_stride=0,
+            iteration_current=0,          # the hardware advances this as the BD runs; restored before reuse
+            iteration_size=0, iteration_stride=0,
+            next_bd=0, use_next_bd=0,     # MUST be 0: a self-linked BD never completes, so it never retires,
+                                          # and IRON's Bd.next defaults to "self" when the design compiles it
+            valid_bd=1,                   # cleared by the hardware on completion; restored here
+            lock_acq_enable=1, lock_acq_id=acq_id, lock_acq_val=acq_val,
+            lock_rel_id=rel_id, lock_rel_val=rel_val,
+            d0_zero_before=0, d1_zero_before=0, d2_zero_before=0,
+            d0_zero_after=0, d1_zero_after=0, d2_zero_after=0,
+        )
+        # Then overwrite word 7 with the encoding this tree has already PROVEN on silicon, which makes it
+        # irrelevant whether writebd's lock_acq_val means the raw seven-bit field or the logical value.
+        # The field is stored NEGATED - AcquireGreaterEqual N is -N, an acquire of 8 appearing as 0x78 in
+        # the configuration CDO - and guessing that wrong parks a channel on an acquire that can never be
+        # satisfied, which is a device hang and a stop condition. One extra write per descriptor, about
+        # 0.077 ms across a frame against a 1.018 ms saving, buys certainty instead of a probe.
+        self._write32(self._ring_bd_base + RING_BD_STRIDE * bd_id + RING_BD_LOCK_WORD,
+                      RING_VALID_BD
+                      | ((rel_val & RING_LOCK_MASK) << RING_LOCK_REL_SHIFT)
+                      | (rel_id << self.WBUF_REL_ID_SHIFT)
+                      | self.WBUF_ACQ_ENABLE
+                      | ((-acq_val & RING_LOCK_MASK) << RING_LOCK_ACQ_SHIFT)
+                      | acq_id,
+                      column=col, row=MEMTILE_ROW)
+
+    def _stream_wbuf(self, col: int, piece_words: int, pieces: int) -> None:
+        """Pass a layer's weights THROUGH the buffer without holding them.
+
+        Holding only pays where a run is replayed. A layer whose groups each send their run once has
+        nothing to recover - and the largest of them are far too big to hold anyway: yolov8s's
+        /model.5/conv/Conv concatenates 1,212,416 B across eight groups, four times the buffer and twice
+        the four descriptors a start queue can hold. Those are exactly the layers the sizing measurement
+        said "re-send nothing, so they never need holding"; what it did not say, and what the offline gate
+        caught, is that they still have to be ROUTED, because with the buffer on there is no shim-to-core
+        weight flow left for them to take.
+
+        So the buffer doubles as a one-slot fifo: the fill writes a piece, the serve reads it, and the
+        locks recycle between them. Both are pushed with ``repeat = pieces - 1``, and the piece is sized to
+        divide the run exactly so no execution is short.
+        """
+        if pieces - 1 >= MAX_REPEAT:
+            raise ValueError(f"streaming {pieces} pieces needs a repeat of {pieces - 1}, past the "
+                             f"{MAX_REPEAT} the verifier allows")
+        self._wbuf_descriptor(col, self._wbuf_bd_fill, piece_words, 0,
+                              self._wbuf_space, 1, self._wbuf_ready, 1)
+        self._wbuf_descriptor(col, self._wbuf_bd_serve, piece_words, 0,
+                              self._wbuf_ready, 1, self._wbuf_space, 1)
+        self._write32(self._ring_lock_reg(self._wbuf_space), 1, column=col, row=MEMTILE_ROW)
+        self._write32(self._ring_lock_reg(self._wbuf_ready), 0, column=col, row=MEMTILE_ROW)
+        self._push_queue(col, MEMTILE_ROW, self._dir.S2MM, self._wbuf_fill_channel, False, pieces - 1,
+                         self._wbuf_bd_fill)
+        self._push_queue(col, MEMTILE_ROW, self._dir.MM2S, self._wbuf_serve_channel, False, pieces - 1,
+                         self._wbuf_bd_serve)
+
+    def _configure_wbuf(self, col: int, arms: Sequence[tuple]) -> None:
+        """Point one column's resident weight buffer at a layer's runs - once per layer, not once per tile.
+
+        The shim re-sends a replayed layer's whole weight run once per round with a stride-0 repeat. Here it
+        lands in the MemTile once and one MM2S replays it to all four cores, which are sent the SAME bytes -
+        so one channel broadcasts where the activation split needed four.
+
+        ``arms`` is ``(offset_words, run_words, replay)`` per output group this column owns, in the order
+        the column's items use them. A layer's columns can carry several groups, each with its own run, so
+        the buffer's contents change INSIDE a layer - measured, up to four arms. Each arm gets its own
+        serve descriptor and all of them are written and pushed here; the start queue then sequences them,
+        because a channel runs queued tasks in order. Nothing is rewritten while its channel is live, which
+        is what keeps the ring's narrowing transition out of this design.
+
+        The lock discipline is the ring's, proven on silicon, with the total serve count substituted for
+        ``ROWS * serves``: the fill takes ``sum(replay)`` from ``space`` and hands the same to ``ready``,
+        and each serve execution of every arm takes one ``ready`` and returns one ``space``, so both locks
+        end a layer exactly where they started. The measured worst case is 32 tokens against the 63 a
+        7-bit field holds. A net-zero serve was considered and rejected - it would prove only that the lock
+        had been touched, not that the bytes this serve is about to read had landed, which is the second
+        failure the ring measured.
+
+        How many times a serve runs comes from its queue push, whose repeat register holds one less than
+        the number asked for; one acquire and one release fire per execution.
+        """
+        from kernels.aie2.conv_engine.design import WBUF_ARMS_MAX, WBUF_BYTES
+        if not 1 <= len(arms) <= WBUF_ARMS_MAX:
+            raise ValueError(f"a layer arms {len(arms)} weight runs in one column, past the "
+                             f"{WBUF_ARMS_MAX} descriptors and the four entries a start queue holds")
+        tokens = sum(replay for _, _, replay in arms)
+        total_words = sum(run for _, run, _ in arms)
+        if not 1 <= tokens <= RING_LOCK_MASK:
+            raise ValueError(f"these runs need {tokens} tokens, past the {RING_LOCK_MASK} a 7-bit lock "
+                             f"field holds")
+        if total_words * 4 > WBUF_BYTES:
+            raise ValueError(f"{total_words * 4} bytes of weight runs do not fit the "
+                             f"{WBUF_BYTES}-byte buffer")
+        for _, run, replay in arms:
+            if replay - 1 >= MAX_REPEAT:
+                raise ValueError(f"a replay of {replay} needs a repeat of {replay - 1}, past the "
+                                 f"{MAX_REPEAT} the verifier allows")
+            if run > total_words:
+                raise ValueError("an arm is longer than the concatenation that holds it")
+        # One fill covering every arm, then one serve per arm at its own offset. All of them are written
+        # and pushed HERE, at the layer boundary; nothing is rewritten later while its channel is live.
+        self._wbuf_descriptor(col, self._wbuf_bd_fill, total_words, 0,
+                              self._wbuf_space, tokens, self._wbuf_ready, tokens)
+        for k, (offset, run, _) in enumerate(arms):
+            self._wbuf_descriptor(col, self._wbuf_bd_serve + k, run, offset,
+                                  self._wbuf_ready, 1, self._wbuf_space, 1)
+        # Absolute, not relative: a layer boundary is the one point where every channel of every column has
+        # been retired, so the state to start from is known rather than inherited.
+        self._write32(self._ring_lock_reg(self._wbuf_space), tokens, column=col, row=MEMTILE_ROW)
+        self._write32(self._ring_lock_reg(self._wbuf_ready), 0, column=col, row=MEMTILE_ROW)
+        self._push_queue(col, MEMTILE_ROW, self._dir.S2MM, self._wbuf_fill_channel, False, 0,
+                         self._wbuf_bd_fill)
+        # Queue order is execution order, so group k's serves finish before group k+1's begin - which is
+        # what lets several arms live in one layer without a descriptor ever being rewritten mid-flight.
+        for k, (_, _, replay) in enumerate(arms):
+            self._push_queue(col, MEMTILE_ROW, self._dir.MM2S, self._wbuf_serve_channel, False, replay - 1,
+                             self._wbuf_bd_serve + k)
+
     def run_column_programs(self, programs: Sequence[Sequence[tuple]], bd_budget: int = 14,
                             queue_depth: int = 4, retire_batch: int = 2) -> None:
         """Issue every column's items interleaved within two hardware limits per shim.
@@ -618,6 +784,9 @@ class SequenceEmitter:
         # There is no barrier and nothing to re-arm: the descriptors free-run as cycles, so a later tile has
         # nothing to overtake.
         configured: Dict[int, tuple] = {}
+        # The same, for the resident weight buffer: a layer's run and its replay count are properties of the
+        # layer, so the first tile writes them and every later tile of that layer finds them written.
+        wbuf_configured: Dict[int, tuple] = {}
 
         def issue(c: int, item: tuple) -> None:
             if item[0] == "w":
@@ -647,6 +816,29 @@ class SequenceEmitter:
                 elif configured[c] != shape:
                     raise ValueError(f"column {c} arms {shape} after {configured[c]} inside one layer; the "
                                      f"ring is configured once per layer and cannot change shape mid-layer")
+            elif item[0] == "B":
+                # ("B", run_words, replay): point this column's weight buffer at the layer's run. Once per
+                # layer, exactly like the ring's "R" - the first tile configures it and the rest cost
+                # nothing. A schedule that changed either value mid-layer would silently corrupt the run in
+                # flight, so it is checked rather than assumed.
+                # ("B", arms) HOLDS a layer's runs and replays them; ("T", piece_words, pieces) streams
+                # them through without holding, for layers that replay nothing and so have nothing to
+                # recover - see _stream_wbuf for why those still have to be routed.
+                shape = tuple(tuple(a) for a in item[1])
+                if c not in wbuf_configured:
+                    wbuf_configured[c] = shape
+                    self._configure_wbuf(c, item[1])
+                elif wbuf_configured[c] != shape:
+                    raise ValueError(f"column {c} arms weights {shape} after {wbuf_configured[c]} inside "
+                                     f"one layer; the buffer is configured once per layer")
+            elif item[0] == "T":
+                shape = ("stream", item[1], item[2])
+                if c not in wbuf_configured:
+                    wbuf_configured[c] = shape
+                    self._stream_wbuf(c, item[1], item[2])
+                elif wbuf_configured[c] != shape:
+                    raise ValueError(f"column {c} streams {shape} after {wbuf_configured[c]} inside one "
+                                     f"layer; the buffer is configured once per layer")
             elif item[0] == "S":
                 pass                  # the serves free-run on their locks; nothing is pushed for them
             else:

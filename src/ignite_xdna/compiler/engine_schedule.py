@@ -446,6 +446,28 @@ def column_rounds(rounds: List[Tuple[int, int]], group: int, balance: bool = Tru
 
 MEMTILE_RING_BYTES = 447488    # a column's free MemTile SRAM once the split and join buffers are counted
 
+# The resident weight buffer's limits, mirrored from kernels/aie2/conv_engine/design.py, which compiles
+# them. They are restated rather than imported because importing that module pulls in aie.dialects, which
+# exists only in ironenv, and the offline schedule gate is worth being runnable without it; the gate reads
+# design.py's source and asserts the two agree, so they cannot drift silently.
+WBUF_BYTES = 303104
+WBUF_ARMS_MAX = 4
+WBUF_OBJECTS = WBUF_BYTES // em.W_BYTES
+
+
+def _wbuf_pieces(n_objects: int) -> Tuple[int, int]:
+    """``(objects per piece, pieces)`` for streaming ``n_objects`` weight objects through the buffer.
+
+    A piece must DIVIDE the run exactly: the fill and serve are one fixed-length descriptor each, executed
+    ``pieces`` times by the queue push, so a remainder would make the last execution short and desynchronise
+    every later object. And ``pieces - 1`` is that push's repeat count, which the verifier caps.
+    """
+    for piece in range(min(n_objects, WBUF_OBJECTS), 0, -1):
+        if n_objects % piece == 0 and n_objects // piece <= MAX_REPEAT:
+            return piece, n_objects // piece
+    raise ValueError(f"cannot stream {n_objects} weight objects through a {WBUF_OBJECTS}-object buffer "
+                     f"in at most {MAX_REPEAT} pieces")
+
 
 @dataclass
 class RingPlan:
@@ -650,7 +672,8 @@ def schedule_layer_ring(ir: GraphIR, ws: Workspace, layer, store: PacketStore, p
 
 def schedule_layer_coarse(ir: GraphIR, ws: Workspace, layer, store: PacketStore,
                           weight_repeat: bool = True, trim_ncin: bool = True,
-                          balance_columns: bool = True, merge_group_weights: bool = True) -> LayerSchedule:
+                          balance_columns: bool = True, merge_group_weights: bool = True,
+                          weight_buffer: bool = False) -> LayerSchedule:
     """Cut one layer into as few DMA tasks as the transport allows.
 
     Rounds are taken tile column first, so a column's rounds form runs of
@@ -720,12 +743,21 @@ def schedule_layer_coarse(ir: GraphIR, ws: Workspace, layer, store: PacketStore,
             pkts = [pool_packet(chunks[0]) if isinstance(layer, PoolLayer)
                     else conv_packet(layer, g, chunks[0], count_out=len(mine), count_acc=0, trim_ncin=trim_ncin)
                     for g, mine, _, _ in entries]
-            if merge_group_weights:
+            if weight_buffer:
+                # A single-chunk layer amortises through the packet header (count_out), not through a
+                # stride-0 repeat, so it replays nothing and has nothing to recover. It still has to be
+                # ROUTED, because with the buffer on there is no shim-to-core weight flow left - so it is
+                # streamed THROUGH the buffer rather than held in it.
+                piece, pieces = _wbuf_pieces(len(pkts))
+                programs[c].append(("T", piece * em.W_BYTES // 4, pieces))
+                programs[c].append(("w", store.add_run(pkts), len(pkts) * em.W_BYTES, sum(items_of)))
+                n_w += 1
+            elif merge_group_weights:
                 # The groups' packets back to back: each serves its group's packets in order.
                 programs[c].append(("w", store.add_run(pkts), len(pkts) * em.W_BYTES, sum(items_of)))
                 n_w += 1
             for k, (g, mine, runs, run_fills) in enumerate(entries):
-                if not merge_group_weights:
+                if not merge_group_weights and not weight_buffer:
                     programs[c].append(("w", store.add(pkts[k]), em.W_BYTES, items_of[k]))
                     n_w += 1
                 for run, per_round in zip(runs, run_fills):
@@ -735,20 +767,41 @@ def schedule_layer_coarse(ir: GraphIR, ws: Workspace, layer, store: PacketStore,
         runs_pkts = [round_packets(layer, g, chunks, coarse=True, trim_ncin=trim_ncin) for g, _, _, _ in entries]
         run_len = len(runs_pkts[0]) * em.W_BYTES
         rounds_col = [len(mine) for _, mine, _, _ in entries]
+        if weight_buffer:
+            # The stride-0 repeat below is the re-send, and this is where it stops being the shim's job:
+            # one contiguous fetch of every group's run into the MemTile, then one ARM per group whose
+            # serve replays that group's slice for its own rounds. Arms are all armed at the layer
+            # boundary and sequenced by the start queue, so no descriptor is rewritten while it is live.
+            off = store.add_run([p for run in runs_pkts for p in run])
+            arms = tuple((k * run_len // 4, run_len // 4, sum(len(per_round) for per_round in rf))
+                         for k, (_, _, _, rf) in enumerate(entries))
+            held = (all(r > 1 for _, _, r in arms) and len(arms) <= WBUF_ARMS_MAX
+                    and sum(run for _, run, _ in arms) * 4 <= WBUF_BYTES)
+            if held:
+                programs[c].append(("B", arms))
+            else:
+                # Nothing to recover, or too big to hold. Layers whose groups each send their run once
+                # are exactly the ones the sizing measurement said never need holding - and the largest of
+                # them concatenate 1,212,416 B across eight groups, four times the buffer and twice the
+                # four descriptors a start queue holds. Stream those through instead.
+                piece, pieces = _wbuf_pieces(len(entries) * len(runs_pkts[0]))
+                programs[c].append(("T", piece * em.W_BYTES // 4, pieces))
+            programs[c].append(("w", off, len(entries) * run_len, sum(items_of)))
+            n_w += 1
         # Only the repeat (outermost) dimension of a DMA task may have stride 0, so the
         # groups' runs share one task where every group has a single round in this column
         # (20x20 and 40x40 maps): the groups' runs back to back, repeated with a positive
         # stride. Columns with several rounds per group keep one repeated task per group.
-        merged_w = (merge_group_weights and weight_repeat and 1 < len(entries) <= MAX_REPEAT
-                    and all(n == 1 for n in rounds_col))
+        merged_w = (merge_group_weights and weight_repeat and not weight_buffer
+                    and 1 < len(entries) <= MAX_REPEAT and all(n == 1 for n in rounds_col))
         if merged_w:
             off = store.add_run([p for run in runs_pkts for p in run])
             programs[c].append(("W", DmaPattern("wp", off, (len(entries), 1, 1, run_len), (run_len, 0, 0, 1)),
                                 sum(items_of)))
             n_w += 1
         for k, (g, mine, runs, run_fills) in enumerate(entries):
-            run_offset = None if merged_w else store.add_run(runs_pkts[k])
-            if weight_repeat and not merged_w:
+            run_offset = None if (merged_w or weight_buffer) else store.add_run(runs_pkts[k])
+            if weight_repeat and not merged_w and not weight_buffer:
                 rounds_items = [len(f) for per_round in run_fills for f in per_round]
                 for start in range(0, len(rounds_items), MAX_REPEAT):
                     part = rounds_items[start:start + MAX_REPEAT]
@@ -769,7 +822,8 @@ def schedule_layer_coarse(ir: GraphIR, ws: Workspace, layer, store: PacketStore,
 def schedule_layer(ir: GraphIR, ws: Workspace, layer, store: PacketStore, merge_fills: bool = True,
                    pair_drains: bool = True, weight_runs: bool = True, coarse: bool = True,
                    weight_repeat: bool = True, trim_ncin: bool = True, balance_columns: bool = True,
-                   merge_group_weights: bool = True, activation_ring: int = 0) -> LayerSchedule:
+                   merge_group_weights: bool = True, activation_ring: int = 0,
+                   weight_buffer: bool = False) -> LayerSchedule:
     """Cut one layer into rounds and per-column item lists.
 
     ``coarse`` (the default) is ``schedule_layer_coarse``. Without it, the
@@ -790,7 +844,8 @@ def schedule_layer(ir: GraphIR, ws: Workspace, layer, store: PacketStore, merge_
         if plan is not None:
             return schedule_layer_ring(ir, ws, layer, store, plan, trim_ncin=trim_ncin)
         return schedule_layer_coarse(ir, ws, layer, store, weight_repeat=weight_repeat, trim_ncin=trim_ncin,
-                                     balance_columns=balance_columns, merge_group_weights=merge_group_weights)
+                                     balance_columns=balance_columns, merge_group_weights=merge_group_weights,
+                                     weight_buffer=weight_buffer)
     t = ir.tensors[layer.output]
     chunks = layer_chunks(ir, layer)
     single = len(chunks) == 1
@@ -857,12 +912,14 @@ def schedule_graph(ir: GraphIR, ws: Workspace, merge_fills: bool = True, pair_dr
                    weight_runs: bool = True, coarse: bool = True, weight_repeat: bool = True,
                    trim_ncin: bool = True, balance_columns: bool = True,
                    merge_group_weights: bool = True,
-                   activation_ring: int = 0) -> Tuple[List[LayerSchedule], PacketStore]:
+                   activation_ring: int = 0,
+                   weight_buffer: bool = False) -> Tuple[List[LayerSchedule], PacketStore]:
     store = PacketStore()
     scheds = [schedule_layer(ir, ws, L, store, merge_fills=merge_fills, pair_drains=pair_drains,
                              weight_runs=weight_runs, coarse=coarse, weight_repeat=weight_repeat,
                              trim_ncin=trim_ncin, balance_columns=balance_columns,
-                             merge_group_weights=merge_group_weights, activation_ring=activation_ring)
+                             merge_group_weights=merge_group_weights, activation_ring=activation_ring,
+                             weight_buffer=weight_buffer)
               for L in ir.layers]
     return scheds, store
 
