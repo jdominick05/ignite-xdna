@@ -444,7 +444,6 @@ def column_rounds(rounds: List[Tuple[int, int]], group: int, balance: bool = Tru
 # MemTile activation ring
 # ----------------------------------------------------------------------------
 
-RING_WINDOWS = 2               # the ring is split into two windows (kernels/aie2/conv_engine/design.py)
 MEMTILE_RING_BYTES = 447488    # a column's free MemTile SRAM once the split and join buffers are counted
 
 
@@ -452,21 +451,29 @@ MEMTILE_RING_BYTES = 447488    # a column's free MemTile SRAM once the split and
 class RingPlan:
     """How one layer uses the MemTile activation ring.
 
-    ``slots`` is how many slots of a window the layer fills, which is its group-invariant chunk count, and
-    ``serves`` how many times each fetched tile is replayed, which is how many of the tile's output groups its
-    column owns. ``replicas`` is how many columns hold a copy of the same tile: a tile is fetched once per
-    column that serves it, and a layer with fewer rounds than columns would idle three of them if its tile were
-    pinned to one, so it is replicated instead and each column takes its share of the groups.
+    Every layer with packet geometry goes through the ring, because the ring replaces the split ObjectFifo
+    rather than sitting beside it. A MemTile has six DMA channels in each direction; the ring needs one S2MM
+    and four MM2S, and the output join already holds four S2MM and one MM2S. There is no second delivery path
+    to fall back to, so a layer that cannot amortise is still served by the ring and simply fetches once per
+    group, which moves exactly the bytes the per-group schedule moved.
 
-    ``windows`` is how many the layer cuts the ring into. Two lets the next tile land while this one is still
-    being served, but halves what a tile may hold, and the widest layers (16 chunks) are also among the
-    heaviest re-fetchers. Since the descriptors are rewritten per layer anyway, a layer too wide for half the
-    ring takes all of it as one window and gives up the overlap rather than the ring.
+    ``chunks`` is the tile's chunk count and ``capacity`` how many of them one pass of the ring holds. A tile
+    wider than the ring is filled and served in several passes, which is what yolov8s's two 32-chunk layers
+    need. ``serves`` is how many times a fetched pass is replayed: the number of the tile's output groups the
+    column owns when every chunk is group-invariant, and 1 otherwise. ``a_pattern`` offsets by the output
+    group for the "res" and "pool" kinds, so those packets differ per group and cannot be replayed; every conv
+    kind is group-invariant. ``replicas`` is how many columns hold a copy of the same tile: a layer with fewer
+    rounds than columns would idle three of them if its tile were pinned to one, so it is replicated instead
+    and each column takes its share of the groups.
     """
-    slots: int
+    chunks: int
+    capacity: int
     serves: int
     replicas: int
-    windows: int
+
+    @property
+    def passes(self) -> int:
+        return -(-self.chunks // self.capacity)
 
 
 def ring_plan(ir: GraphIR, layer, ring_slots: int) -> Optional[RingPlan]:
@@ -484,26 +491,27 @@ def ring_plan(ir: GraphIR, layer, ring_slots: int) -> Optional[RingPlan]:
     """
     if ring_slots <= 0 or isinstance(layer, HostLayer):
         return None
-    t = ir.tensors[layer.output]
-    groups = (t.blocks + OUT_BLOCKS - 1) // OUT_BLOCKS
-    if groups <= 1:
-        return None
     try:
         chunks = layer_chunks(ir, layer)
     except (ValueError, KeyError, AttributeError):   # an op with no packet geometry
         return None
-    invariant = sum(1 for c in chunks if c.kind not in ("res", "pool"))
-    if not invariant or invariant != len(chunks):
-        return None
-    windows = RING_WINDOWS if invariant <= ring_slots // RING_WINDOWS else 1
-    if invariant > ring_slots // windows:
+    if not chunks:
         return None
     if ring_slots * ROWS * em.A_BYTES > MEMTILE_RING_BYTES:
         raise ValueError(f"a {ring_slots}-slot ring needs more than the MemTile's {MEMTILE_RING_BYTES} B")
+    t = ir.tensors[layer.output]
+    groups = (t.blocks + OUT_BLOCKS - 1) // OUT_BLOCKS
+    invariant = all(c.kind not in ("res", "pool") for c in chunks)
     quad_rows = TILE_R * ROWS
     tiles = len(tile_origins(t.height, quad_rows)) * len(tile_origins(t.width, TILE_C))
-    replicas = min(groups, max(1, -(-COLS // tiles)))
-    return RingPlan(slots=invariant, serves=-(-groups // replicas), replicas=replicas, windows=windows)
+    # A tile that does not fit one pass cannot be replayed either: the next group would have to re-fetch the
+    # pass before it, so a multi-pass layer fetches per group like the per-group schedule and saves nothing.
+    if invariant and groups > 1 and len(chunks) <= ring_slots:
+        replicas = min(groups, max(1, -(-COLS // tiles)))
+        serves = -(-groups // replicas)
+    else:
+        replicas, serves = 1, 1
+    return RingPlan(chunks=len(chunks), capacity=ring_slots, serves=serves, replicas=replicas)
 
 
 def schedule_layer_ring(ir: GraphIR, ws: Workspace, layer, store: PacketStore, plan: RingPlan,
@@ -554,21 +562,46 @@ def schedule_layer_ring(ir: GraphIR, ws: Workspace, layer, store: PacketStore, p
                 tiles.append((tile_index, [g]))
         for tile_index, group_list in tiles:
             y, x0 = rounds[tile_index]
-            pats: List[DmaPattern] = []
-            for ch in chunks:
-                quad = quad_patterns(ws, ir, layer, ch, y, x0, 0, coarse=True)
-                merged = merge_quad(quad)
-                pats.extend([merged] if merged is not None else quad)
-            fills = merge_runs(pats)
-            programs[c].append(("R", plan.slots, plan.windows))
-            programs[c].extend(("A", f) for f in fills)
-            for g in group_list:
-                programs[c].append(("o", run_drain(ws, layer, g, [(y, x0)]), 0))
+
+            def pass_fills(part, group):
+                # ``a_pattern`` offsets a "res" or "pool" chunk by ``group * OUT_BLOCKS``, so a layer that is
+                # fetched once per group must name that group here. Only a replayed tile may pass 0, and only
+                # because every chunk of such a layer is group-invariant.
+                pats: List[DmaPattern] = []
+                for ch in part:
+                    quad = quad_patterns(ws, ir, layer, ch, y, x0, group, coarse=True)
+                    merged = merge_quad(quad)
+                    pats.extend([merged] if merged is not None else quad)
+                return merge_runs(pats)
+
+            def group_work(g):
                 pkts = round_packets(layer, g, chunks, coarse=True, trim_ncin=trim_ncin)
+                programs[c].append(("o", run_drain(ws, layer, g, [(y, x0)]), 0))
                 programs[c].append(("w", store.add_run(pkts), len(pkts) * em.W_BYTES, 0))
-                n_w += 1
-                n_packets += ROWS * len(chunks)
-            programs[c].append(("S", len(group_list)))
+
+            if plan.serves > 1:
+                # One fetch of the whole tile, replayed for every group this column owns.
+                programs[c].append(("R", len(chunks)))
+                programs[c].extend(("A", f) for f in pass_fills(chunks, 0))
+                for g in group_list:
+                    group_work(g)
+                    n_w += 1
+                    n_packets += ROWS * len(chunks)
+                programs[c].append(("S", len(group_list)))
+            else:
+                # No replay to amortise, so the tile is fetched per group, in passes the ring can hold. The
+                # drain and the weights follow the first pass's fills, as they do above: a ring fill lands in
+                # the MemTile and nothing computes until the "S" that follows it.
+                for g in group_list:
+                    for p in range(0, len(chunks), plan.capacity):
+                        part = chunks[p:p + plan.capacity]
+                        programs[c].append(("R", len(part)))
+                        programs[c].extend(("A", f) for f in pass_fills(part, g))
+                        if p == 0:
+                            group_work(g)
+                            n_w += 1
+                            n_packets += ROWS * len(chunks)
+                        programs[c].append(("S", 1))
             n_rounds += 1
     return LayerSchedule(layer.index, layer.name, programs, n_rounds, n_packets, n_w, ring=plan)
 
@@ -709,6 +742,8 @@ def schedule_layer(ir: GraphIR, ws: Workspace, layer, store: PacketStore, merge_
         return LayerSchedule(layer.index, layer.name, [[] for _ in range(COLS)], 0, 0, 0)
     if coarse:
         # `ring_plan` returns None when the ring is off, so a flag-off build takes exactly the path it did.
+        # With the ring on it returns a plan for every layer that moves packets: the ring replaces the split
+        # ObjectFifo, so a layer left on the per-group schedule would fetch activations nothing ever serves.
         plan = ring_plan(ir, layer, activation_ring)
         if plan is not None:
             return schedule_layer_ring(ir, ws, layer, store, plan, trim_ncin=trim_ncin)
