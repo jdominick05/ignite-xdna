@@ -1,0 +1,90 @@
+# Where yolov8s's frame goes, and which levers are real
+
+AMD's stack beats us on two models. On YOLOv8s the recorded sitting is 16.95 ms against our 17.24, a gap of
+0.29 ms on a 17 ms frame - 1.7%. (SESR M7 is the other, 3.64 against 6.67, and is a different problem.) This
+file measures where the yolov8s frame goes and sizes every lever found, so that effort goes at something real.
+
+Measured on Device 0 this sitting, both containers 66/66 byte-exact: the flag-off dispatch mean is **16.828 ms**
+over 20. The shape of the gap matters as much as its size: AMD's `session.run` is 13.14 ms against our 16.70 ms
+dispatch, but their host work is 3.82 ms against our 0.34. **We lose on dispatch and win on host**, so a lever
+has to be inside the dispatch.
+
+## The frame, by kind
+
+`tools/engine_stream_report.py`, per frame, per-group schedule:
+
+| kind | tasks | bytes | share of bytes |
+|---|---|---|---|
+| weight | 389 | 83,618,816 | 24% |
+| activation | 5,857 | 237,670,400 | 68% |
+| drain | 897 | 27,814,400 | 8% |
+| **total** | **7,143** | **349,103,616** | |
+
+At 26.8 GB/s that is 13.03 ms of transport, plus 7,143 tasks x 4 ops x 145 ns = 4.14 ms of sequencing, summing
+to about 17.2 ms against the 16.83 measured - close enough to reason with, unlike the ring's costing.
+
+## Lever 1: activation over-read - REAL BUT SMALL, and blocked
+
+`docs/DECISIONS.md` records "fixed packet sizes with over-read into junk planes ... every activation packet is
+6,400 B ... the price is extra DMA bytes on shallow layers". Measured per chunk kind, with the packet totals
+reconciled against the stream report exactly:
+
+| model | junk bytes | share of activation traffic | at 26.8 GB/s |
+|---|---|---|---|
+| yolov8n | 2,140,160 | 2.6% | 0.080 ms |
+| yolov8s | 4,771,840 | 2.0% | **0.178 ms** |
+
+It is concentrated where `a_pattern` says it would be: `res` packets are four real blocks plus four over-read
+(50% junk) and `k1up2` is 20%; `k1`, `k3s1`, `k3s2`, `k5s1` and `pool` waste nothing. Below the 0.29 ms needed,
+and collecting it needs per-layer packet sizes, which the same decision rules out because an ObjectFIFO object
+is a fixed size and variable ones need MemTile channels the column does not have.
+
+## Lever 2: fill-task saturation - AN ILLUSION
+
+yolov8s carries 37,136 activation packets in 5,857 tasks, a mean of 6.3 against a ceiling of 64 - and **5,406
+of those tasks carry exactly 4 packets**. Packing every task full would be 581 tasks, apparently worth 3.06 ms
+of instruction ops. It is not available:
+
+- the MemTile split chops the incoming stream into 25,600-byte objects and routes them to cores by offset, so
+  every object must be one chunk's four core packets - the order is forced to `[chunk][core]`;
+- merging a fixed chunk across rounds would force `[chunk][round][core]`, and `ch.last` retires the
+  accumulators, so a chunk moved across a round boundary changes the result.
+
+So a multi-chunk layer's fills are already at their structural floor of one task per (round, chunk). The
+64-packet tasks that do exist come from single-chunk layers, where `merge_runs` can flatten every (quad, core)
+pair of a run because rows advance uniformly by five across them. Nothing left here.
+
+## Lever 3: weight re-send - THE REAL ONE
+
+yolov8s moves 83,618,816 B of weight packets a frame against a static store of 29,495,808 B: **2.83x
+amplification, 54,123,008 B re-sent, 2.020 ms at 26.8 GB/s.** yolov8n is 3.22x, 18,138,880 B, 0.677 ms.
+
+The cause is exact and uniform: **the multiplier equals the layer's spatial tile count**, on every layer of both
+models - 64x for a 64-tile layer, 16x for 16, 4x for 4. The coarse schedule re-sends a layer's whole weight run
+per round with a stride-0 repeat, because neither the weights nor the partial sums can stay anywhere: core L1 is
+65,536 B with 59,392 already used, so a 9,472-byte weight object cannot live there, and the accumulator scratch
+holds one tile's sums.
+
+But the MemTile can hold them. With 447,488 B free per column, a layer's **per-column** weight working set -
+chunks x groups-owned x 9,472 - fits almost everywhere:
+
+| model | layers that fit | recoverable if fetched once per layer instead of once per tile |
+|---|---|---|
+| yolov8n | 66 of 66 | 18,014,412 B = **0.672 ms** |
+| yolov8s | 60 of 66 | 53,756,412 B = **2.006 ms** |
+
+The six yolov8s layers that do not fit all have **one tile**, so they re-send nothing and there is nothing to
+recover from them - the layers too big to hold are exactly the ones that do not need holding. The biggest
+winners are small: working sets of 18,944 to 303,104 B, most under 80 KB, against 2.4-4.8 MB of moved bytes
+each.
+
+**Why this is not the activation ring again.** The ring fetched a tile once and replayed it across `serves`
+groups, at most 8, and its per-layer configuration cost more than the bytes it saved. Weights replay across
+`tiles` - up to 64 - and are read-only, so the ratio that killed the ring is inverted here. And the blocker the
+record gives for resident weights ("IRON's `init_values` fifos send once then stall on locks, so per-frame
+resident weights would need `dma_channel_reset_for`") is exactly the primitive the ring work built and proved on
+silicon: reset the channel, re-arm its locks absolutely, re-push.
+
+Nothing here is built. These are byte counts and capacity checks; the MemTile descriptor and channel budget is
+what killed the six-slot activation ring, and only a measurement on Device 0 settles whether the configuration
+cost stays below the 2.006 ms.
