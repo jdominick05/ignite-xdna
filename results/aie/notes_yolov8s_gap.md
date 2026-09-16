@@ -432,3 +432,41 @@ needs a decision not yet taken would be spending dispatches to justify a choice 
 
 Correction to the table above: k3s2's slack is 42%, not the 60% first recorded here - 16x50 = 800
 pixels read against 11x42 = 462 used. k3s1's 23% and k5s1's 73% both recompute correctly.
+
+## Correction: the weight lever is 1.018 ms, not 2.006 ms
+
+The 2.006 ms recorded above for weight re-send is withdrawn. It was derived as "chunks x groups-owned x
+W_BYTES fetched once per layer instead of once per tile", which assumes every layer's run is re-sent per
+tile. Measured instead from the DMA patterns the scheduler actually emits, that is not what happens, and
+the STRIDE of the pattern is what tells the two apart:
+
+    ("W", sizes=(replay, 1, 1, run_len), strides=(0,       0, 0, 1))   stride-0 REPLAY - recoverable
+    ("W", sizes=(groups, 1, 1, run_len), strides=(run_len, 0, 0, 1))   groups CONCATENATED - already once
+
+`merge_group_weights` emits the second form wherever every group has a single round in a column, so those
+bytes are already fetched once and were wrongly counted as re-sends. Only genuine stride-0 replays can be
+recovered:
+
+| model | weight bytes moved | fetched-once would be | recoverable | layers that replay |
+|---|---|---|---|---|
+| yolov8s | 83,618,816 | 56,339,456 | **27,279,360 B = 1.018 ms** | 19 of 66 |
+| yolov8n | 26,303,744 | 16,414,976 | **9,888,768 B = 0.369 ms** | 14 of 66 |
+
+Still worth building - 1.018 ms against a 0.29 ms bar - but roughly half what this file claimed, and the
+claim is what a reader would have planned against.
+
+Three facts that size the design, all measured rather than assumed:
+
+- **The buffer needs 303,104 B**, the largest resident set among layers that replay (`/model.3/conv/Conv`),
+  which fits the 314,880 B contiguous run with 11,776 B to spare. The naive maximum over ALL layers is
+  1,212,416 B, but that layer replays once and so never needs holding - sizing from it would size the
+  buffer for a layer that will never use it. The thirteen yolov8s layers whose run exceeds the contiguous
+  run all replay exactly once, which is the earlier claim "the layers too big to hold are exactly the ones
+  that do not need holding", now checked rather than repeated.
+- **The largest replay is 16**, so a serve pushed with `repeat = replay - 1` stays far inside the
+  verifier's range of 64, and no layer needs splitting across pushes.
+- **The ring's lock discipline transfers unchanged.** A fill acquires `space` and releases `ready`, both by
+  `replay`; each serve acquires one `ready` and returns one `space`. That is the arrangement already proven
+  on silicon, and `replay <= 16` sits well inside the 63 a MemTile lock value holds - where the ring's own
+  `ROWS * serves` had to be range-checked. Weights are the same bytes for all four cores, so one MM2S
+  broadcasts where the activation split needed four channels.
