@@ -1035,10 +1035,39 @@ window-6 builds ran `passes 1`. Two variables moved, so the result separates not
 something in multi-pass or in the later layers breaks the first frame outright, which is a different fault from
 the frame-boundary one and is not yet localized.
 
-A properly controlled version has to hold the width fixed **without** introducing passes - for instance a
-container built only from layers whose chunk count already equals the window, so that width is constant and
-every layer still runs a single pass. `build_bounded_ring.py` takes a prefix count and cannot select layers by
-shape, so that needs a way to choose the layers, not another sweep of the window.
+A properly controlled version has to hold the width fixed **without** introducing passes - a container built
+only from layers whose chunk count already equals the window, so the width is constant and every layer still
+runs a single pass.
+
+## Controlled and confirmed: a constant width survives, a width change does not
+
+Selecting layers by shape gives that control. The selection cannot be "take these layers off the ring":
+`ring_plan` returns a plan for every layer that moves packets, because the ring replaces the split ObjectFifo,
+and a layer left on the per-group schedule would fetch activations nothing serves - a hang by construction,
+indistinguishable from the fault. So whole layers are dropped from the schedule instead. The graph is
+sequential, so a dropped predecessor leaves the next layer reading a region the frame never wrote: those layers
+cannot match the reference, and for them the only valid signal is hang versus no-hang.
+
+Six layers at **width 2, serves 1, single pass** - L1, L4, L5, L9, L11 and L26 - so that every one of the six
+`_configure_ring` calls writes exactly the same values, within a frame and across frames:
+
+| container | layers | widths | repeats |
+|---|---|---|---|
+| two-layer prefix | 2 | 1 then 2 | **times out** at `verify:104` |
+| shape-selected | 6 | 2 throughout | **survives 20**, mean 1.271 ms |
+| shape-selected | 6 | 1 throughout | **survives 20**, mean 1.752 ms, and **L0 EXACT** |
+
+Both carry several layers and several reconfigurations per frame, so "more than one layer in a frame" is
+exonerated. **The width change is the differentiator**, and with it held constant the ring runs frame after
+frame at six layers just as it did at one. The width-1 selection begins at L0, the one selected layer whose
+predecessor is also built, and that layer comes back byte-exact - so at a constant width the ring is exact and
+re-runnable together, which is what no container had managed before.
+
+The tool that does the selecting is `tools/ring_shape_probe.py`, and two things in it are worth keeping rather
+than rediscovering. Layers are dropped from the **schedule**, never from the ring, for the reason above. And it
+refuses to write a container unless the filter actually dropped layers: a filter that silently matched
+everything would emit an ordinary ring build whose clean run would be read as a result about constant width,
+which is the same trap that `yolov8n_ring8.ignite` set earlier in this file.
 
 A hazard this narrows without closing, recorded so it is not rediscovered: `ensure` retires a channel once it
 holds `queue_depth` tasks, and retiring means awaiting. A tile whose column owns five or more groups pushes
