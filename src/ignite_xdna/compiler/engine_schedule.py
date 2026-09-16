@@ -457,9 +457,10 @@ class RingPlan:
     to fall back to, so a layer that cannot amortise is still served by the ring and simply fetches once per
     group, which moves exactly the bytes the per-group schedule moved.
 
-    ``chunks`` is the tile's chunk count and ``capacity`` how many of them one pass of the ring holds. A tile
-    wider than the ring is filled and served in several passes, which is what yolov8s's two 32-chunk layers
-    need. ``serves`` is how many times a fetched pass is replayed: the number of the tile's output groups the
+    ``chunks`` is the tile's chunk count and ``capacity`` how wide one pass of the ring is. A tile wider than
+    the window is filled and served in several passes, which is what yolov8s's two 32-chunk layers need, and
+    that width is the window narrowed to a divisor of the tile so every pass of a layer has the same shape
+    (see ``_pass_width``). ``serves`` is how many times a fetched pass is replayed: the number of the tile's output groups the
     column owns when every chunk is group-invariant, and 1 otherwise. ``a_pattern`` offsets by the output
     group for the "res" and "pool" kinds, so those packets differ per group and cannot be replayed; every conv
     kind is group-invariant. ``replicas`` is how many columns hold a copy of the same tile: a layer with fewer
@@ -474,6 +475,33 @@ class RingPlan:
     @property
     def passes(self) -> int:
         return -(-self.chunks // self.capacity)
+
+
+def _pass_width(chunks: int, ring_slots: int) -> int:
+    """How wide one pass of the ring is: the window, narrowed to a divisor of the tile.
+
+    The descriptors that walk one pass form a cycle, and a cycle's length is that width. A cycle can only be
+    relinked while its channel is quiesced, which a layer boundary guarantees and a tile boundary does not, so
+    every pass of a layer has to be the same width. A window that does not divide the tile breaks that: 32
+    chunks in passes of six ends with a pass of two, and on yolov8s every one of the 66 ring layers had a
+    column arming two widths.
+
+    Narrowing the window to the largest divisor that fits removes the remainder without padding anything - 8
+    and 16 and 32 become 4, 9 becomes 3. The alternative was to pad each short pass out to the full window, but
+    a padding slot cannot be a hole: the cycle walks every slot, so each must be filled and served or its
+    ``space`` is never released, and the cores take their trip count from the weight packet header rather than
+    from packets arriving, so every padding slot needs a real fill and a NOP weight packet. Measured over both
+    models that came to 5.9-6.6 ms a frame, more than the whole ring saves.
+
+    Narrowing costs 12 DMA tasks on yolov8n and 96 on yolov8s and not one byte, because a pass merges its
+    fills over fewer chunks; against what arming per layer rather than per tile is worth, 0.2% and 1.1%.
+    """
+    if chunks <= ring_slots:
+        return chunks
+    for width in range(ring_slots, 0, -1):
+        if chunks % width == 0:
+            return width
+    return 1
 
 
 def ring_plan(ir: GraphIR, layer, ring_slots: int) -> Optional[RingPlan]:
@@ -511,7 +539,8 @@ def ring_plan(ir: GraphIR, layer, ring_slots: int) -> Optional[RingPlan]:
         serves = -(-groups // replicas)
     else:
         replicas, serves = 1, 1
-    return RingPlan(chunks=len(chunks), capacity=ring_slots, serves=serves, replicas=replicas)
+    return RingPlan(chunks=len(chunks), capacity=_pass_width(len(chunks), ring_slots),
+                    serves=serves, replicas=replicas)
 
 
 def schedule_layer_ring(ir: GraphIR, ws: Workspace, layer, store: PacketStore, plan: RingPlan,
