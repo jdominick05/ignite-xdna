@@ -234,6 +234,7 @@ class _Graph:
                     if a.name == "value":
                         self.inits[n.output[0]] = numpy_helper.to_array(a.t)
         self.by_output = {o: n for n in self.g.node for o in n.output}
+        self._const_memo: Dict[str, bool] = {}
         self.consumers: Dict[str, List[onnx.NodeProto]] = {}
         for n in self.g.node:
             for i in n.input:
@@ -245,6 +246,23 @@ class _Graph:
 
     def const(self, name):
         return self.inits.get(name)
+
+    def is_constant(self, name: str, _memo: Optional[Dict[str, bool]] = None) -> bool:
+        """True for an initializer or Constant output, or a tensor every input of whose producer is constant.
+
+        YOLO-World's text guide is such a tensor: built once from Constant nodes inside ``/model.12/attn/`` and read
+        by the other three attention blocks, so it belongs to no region's activation boundary."""
+        memo = self._const_memo if _memo is None else _memo
+        if name in memo:
+            return memo[name]
+        if name in self.inits:
+            memo[name] = True
+            return True
+        node = self.by_output.get(name)
+        memo[name] = False  # a cycle cannot make a tensor constant
+        result = node is not None and all(not i or self.is_constant(i, memo) for i in node.input)
+        memo[name] = result
+        return result
 
     def scale_zp(self, qdq_node) -> Tuple[float, int]:
         s = float(self.inits[qdq_node.input[1]].flatten()[0])
@@ -392,11 +410,14 @@ def _host_region(G: _Graph, spec: str) -> Dict[str, Any]:
                 raise ValueError(f"host region {prefix}: {n.name} reads graph input {i}")
             if src.op_type == "DequantizeLinear" and src.input[0] in G.inits:
                 continue  # a weight or bias constant
+            if G.is_constant(i):
+                continue  # derived from constants only, possibly by another region's nodes; extraction copies them
             if src.op_type != "DequantizeLinear":
                 raise ValueError(f"host region {prefix}: {n.name} reads {i} from {src.op_type} {src.name} outside it")
             acts.add(src.input[0])
     outs = sorted({o for n in nodes for o in n.output
-                   if o in graph_outputs or any(c.name not in names for c in G.consumers.get(o, []))})
+                   if o in graph_outputs or (not G.is_constant(o)
+                                             and any(c.name not in names for c in G.consumers.get(o, [])))})
     if len(acts) != 1 or len(outs) != 1:
         raise ValueError(f"host region {prefix}: needs one activation input and one output, "
                          f"found inputs {sorted(acts)} and outputs {outs}")
