@@ -781,11 +781,29 @@ And the variation is entirely in the width, which is the half that fixes for fre
 per-layer constant. After a divisor window **no layer+column pair needs a mid-layer rewrite**, and the
 precondition that blocked arm-once is met.
 
-**One axis is still unmeasured, and it should be measured before anything is built:** narrower passes give
-`pass_fills` fewer chunks to merge across, so a divisor window may cost DMA tasks even though it costs no
-bytes. A 16-chunk layer in four passes of four has fewer chances to merge than in three passes of six. Nothing
-here says how much, and the arm-once case is thin enough on yolov8n (+0.864 ms before drain merging) that a
-task regression could decide it.
+**Measured: the divisor window costs 12 tasks on yolov8n and 96 on yolov8s, and not one byte.** Narrower passes
+do merge slightly less well, and all of the cost lands in activation fills - 1,762 to 1,774, and 3,997 to
+4,093 - while weight tasks, drain tasks and every byte total are unchanged to the byte. In time that is
++0.007 ms and +0.056 ms, against the 3.0 and 5.1 ms arm-once is worth: 0.2% and 1.1% of the benefit.
+
+The measurement ran the real scheduler with `ring_plan` wrapped, rather than reimplementing `pass_fills`'
+merging and measuring the reimplementation, and it carried its own guard: a wrapper that failed to take effect
+would report a task delta of zero and read as good news, so width variation had to fall from 25 of 255 pairs
+and 66 of 257 to zero. It did, on both models.
+
+**Which closes the chain.** Arm-once with a divisor window, against the per-group schedule:
+
+| model | flag-off | ring today | arm-once + divisor window | with drain merging too |
+|---|---|---|---|---|
+| yolov8n | 6.481 ms | +3.832 | +0.871 | **-0.069** |
+| yolov8s | 17.169 ms | +4.328 | **-0.748** | **-1.444** |
+
+So the design is worth roughly 1.4 ms on yolov8s and about break-even on yolov8n, and every step is now costed
+rather than assumed. What remains is building it: cycle the descriptors instead of clearing `Use_Next_BD`, two
+locks per slot, a per-layer window equal to the largest divisor of the chunk count, configuration moved from
+the tile to the layer, and the drain barrier removed along with the re-arm it existed to order. None of that is
+written, and all of these milliseconds are derived - the case for building rests on a comparator, so the first
+build should be measured against flag-off on silicon before anything is claimed.
 
 A hazard this narrows without closing, recorded so it is not rediscovered: `ensure` retires a channel once it
 holds `queue_depth` tasks, and retiring means awaiting. A tile whose column owns five or more groups pushes
