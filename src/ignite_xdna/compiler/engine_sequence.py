@@ -249,13 +249,6 @@ MEMTILE_S2MM_CTRL = 0xA0600
 MEMTILE_MM2S_CTRL = 0xA0630
 MEMTILE_CHANNEL_STRIDE = 8
 MEMTILE_CHANNEL_RESET = 1 << 1
-# A hold that no activation item can walk down. ``served`` takes one unit off the oldest held weight and drain
-# per activation item, which is what the per-group schedule wants: there a drain is issued ahead of the fills
-# that feed it and becomes awaitable as they arrive. A ring tile's drains and weights are held for a different
-# reason - they cannot complete until the "S" that pushes the serves - and counting fills against them would
-# release them early, which is most of the way to the deadlock this exists to prevent. They carry this instead,
-# and only the "S" clears it.
-RING_HOLD = 1 << 30
 
 
 def split_instruction_stream(insts: bytes, tasks_per_segment: Sequence[int]) -> List[bytes]:
@@ -538,9 +531,7 @@ class SequenceEmitter:
             # and of the oldest held drain.
             for channel in ("w", "o"):
                 for e in queues[c]:
-                    # A ring hold is not a count of activation items and must not be walked down by them; only
-                    # the tile's "S" clears it.
-                    if e[1] == channel and 0 < e[2] < RING_HOLD:
+                    if e[1] == channel and e[2] > 0:
                         e[2] -= 1
                         break
 
@@ -571,12 +562,9 @@ class SequenceEmitter:
 
         def issue(c: int, item: tuple) -> None:
             if item[0] == "w":
-                # A weight run issued while a tile is armed completes only once the cores consumed its objects,
-                # which needs the serves this tile's "S" has not pushed yet, so it is held until then.
-                push(c, "w", linear("wp", item[1], item[2]),
-                     hold=RING_HOLD if c in serving else (item[3] if len(item) > 3 else 0))
+                push(c, "w", linear("wp", item[1], item[2]), hold=item[3] if len(item) > 3 else 0)
             elif item[0] == "W":
-                push(c, "w", item[1], hold=RING_HOLD if c in serving else item[2])
+                push(c, "w", item[1], hold=item[2])
             elif item[0] == "a":
                 served(c)
                 for p in item[1]:
@@ -586,15 +574,8 @@ class SequenceEmitter:
                 push(c, "a", item[1])
             elif item[0] == "o":
                 # A drain issued while a tile is armed is what the next re-arm waits on, so it carries a token
-                # of its own rather than sharing one with a later drain of the channel. It is held until this
-                # tile's "S" for the same reason a weight run is: until the serves are pushed it cannot
-                # complete, and ``ensure`` retiring it to free a descriptor would block the sequencer on work
-                # that has not been started. A layer whose column owns four groups queues four drains and four
-                # weight runs before its "S", which with its fills passes ``bd_budget`` - that is what stalled
-                # a full container at /model.5/conv/Conv, the first layer with four serves.
-                push(c, "o", item[1],
-                     hold=RING_HOLD if c in serving else (item[2] if len(item) > 2 else 0),
-                     force_token=c in serving)
+                # of its own rather than sharing one with a later drain of the channel.
+                push(c, "o", item[1], hold=item[2] if len(item) > 2 else 0, force_token=c in serving)
             elif item[0] == "R":      # arm this column's ring for a tile, before its fills are issued
                 if len(item) > 2 and item[2]:
                     ring_barrier(c)
@@ -604,12 +585,6 @@ class SequenceEmitter:
                 serving[c] = item[1]
             elif item[0] == "S":      # replay it, once the fills are in flight
                 self._serve_ring(c, serving.pop(c), item[1])
-                # The serves are pushed, so this tile's drains and weight runs can now complete and may be
-                # awaited. Fills were never held: they complete on the arrival alone and are what ``ensure``
-                # frees to stay inside the descriptor budget while the rest of the tile is held.
-                for e in queues[c]:
-                    if e[2] >= RING_HOLD:
-                        e[2] = 0
             else:
                 raise ValueError(item[0])
 
