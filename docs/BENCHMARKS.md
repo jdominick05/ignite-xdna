@@ -8475,7 +8475,8 @@ per run, median of 8 undisturbed 30 s idle baselines (34.708 W), two runs each:
 **Not done:** any host but the 8700G (the modes are defined relative to the host, and verified on this one); YOLOv8s,
 SESR M7, YOLOv8n-pose and YOLO11n; re-measuring the latency comparisons published before power modes, which were taken
 with spinning workers (since done: [the next section](#the-amd-comparisons-re-measured-in-the-balanced-default-2026-09-16-desktop-2));
-the NPU's own device-wide power modes (`xrt-smi configure --pmode`), which would also slow any other NPU application.
+the NPU's own device-wide power modes (`xrt-smi configure --pmode`), which would also slow any other NPU application
+(since measured: [the NPU's own power modes](#the-npus-own-power-modes-buy-energy-only-at-a-cameras-rate-and-cost-ignition-its-latency-lead-2026-09-16-desktop-2)).
 
 ## The AMD comparisons re-measured in the balanced default (2026-09-16, Desktop 2)
 
@@ -8554,3 +8555,54 @@ over 500 frames); `4_pose.py` reports none. Run 17's maximum frame was 27.024 ms
   unchanged (7.234 against 7.233 ms). The host's busier idle today is one candidate; the environments differ too.
 - **Not re-measured:** node placement on AMD's stack, accuracy (the pose container's COCO figures, box IoU between
   stacks), install footprints, and any host but the 8700G.
+
+## The NPU's own power modes buy energy only at a camera's rate, and cost Ignition its latency lead (2026-09-16, Desktop 2)
+
+Ignition's `efficiency` mode only reduces host threads. The NPU also has device-wide power modes
+(`xrt-smi configure --pmode`), which set the AIE core clock: 1.80 GHz in `default`, 1.03 in `balanced`, 0.80 in
+`powersaver` ([measured](#the-aie-core-clock-measured-180-ghz-default-080-powersaver)); the energy section above
+left this open. Whether `efficiency` should
+also switch the device was measured before deciding. Evidence: `results/aie/energy_npu_pmode_yolov8n_phoenix_20260916T1931Z.log`
+and its `.json`.
+
+**Method.** `tools/energy_sitting.py` (`c732b96`), YOLOv8n on `bus.jpg`. Before each AMD arm the sitting ran
+`xrt-smi configure --pmode <mode>` and read the mode back from `xrt-smi examine -r platform` together with the
+partitions report, before each Ignition arm it read both back again, and at the end it restored `default` (read back:
+`Default`, no hardware contexts). Every arm idled with no hardware context open. AMD's arm is
+`tools/amd_vitisai_yolo.py`, Ignition's `live_ignition.py --power-mode efficiency`. Round 1 ran the modes
+`default`, `powersaver`, `balanced`; round 2 the reverse. 1,200 frames per run at `--max-fps 30`, then 3,200 (AMD)
+and 4,000 (Ignition) at full speed. There were 24 undisturbed idle baselines, none shifted; the median was 34.902 W.
+Energy is scored against that median, and both runs are shown.
+
+| NPU pmode | Arm | mJ per frame at 30 fps | G2G at 30 fps | fps at full speed | G2G at full speed | mJ per frame at full speed |
+|---|---|---:|---:|---:|---:|---:|
+| `default` | AMD's stack | 175.4 / 182.8 | 10.852 / 10.800 ms | 95.63 / 94.84 | 10.455 / 10.538 ms | 126.0 / 128.2 |
+| `default` | Ignition, `efficiency` | 145.1 / 161.1 | 9.520 / 9.519 ms | 109.40 / 109.19 | **9.124 / 9.141 ms** | 108.8 / 111.2 |
+| `balanced` | AMD's stack | 139.3 / 202.7 | 14.406 / 14.757 ms | 70.30 / 69.98 | 14.217 / 14.280 ms | 124.2 / 119.3 |
+| `balanced` | Ignition, `efficiency` | 120.3 / 171.5 | 14.133 / 14.207 ms | 72.14 / 72.34 | 13.843 / 13.802 ms | 111.9 / 108.9 |
+| `powersaver` | AMD's stack | 138.1 / 152.1 | 17.049 / 17.229 ms | 58.66 / 58.71 | 17.037 / 17.026 ms | 160.0 / 119.4 |
+| `powersaver` | Ignition, `efficiency` | **133.0 / 130.6** | 18.091 / 18.147 ms | 56.04 / 56.18 | 17.824 / 17.776 ms | 112.0 / 109.1 |
+
+- **At 30 fps, `powersaver` saves Ignition 21.3 mJ per frame, 14 %,** at a price of 8.6 ms of G2G: 131.8 against
+  153.1 mJ on the means, 18.119 against 9.520 ms. Both `powersaver` runs read below both `default` runs. It saves
+  AMD's stack 19 % (145.1 against 179.1 mJ).
+- **At full speed it saves nothing.** Ignition's energy per frame is 110.0, 110.4 and 110.5 mJ on the means in
+  `default`, `balanced` and `powersaver`. The frame rate falls from 109.3 to 72.2 and 56.1 fps: the modes trade
+  frame rate for power at a fixed cost per frame.
+- **`balanced` is not separated from `default` on energy.** For both stacks its round-1 run read low and its round-2
+  run high (120.3 and 171.5 mJ for Ignition, 139.3 and 202.7 for AMD), a spread wider than any difference between
+  modes.
+- **The engine's dispatch is bound to the NPU clock, more than AMD's stack is.** At full speed Ignition's dispatch
+  took 7.20, 11.83 and 15.77 ms in `default`, `balanced` and `powersaver`: 1.64x and 2.19x, against clock ratios of
+  1.75x and 2.25x. AMD's `session.run` took 6.56, 10.20 and 12.91 ms (1.55x and 1.97x). So a slower clock erodes
+  Ignition's latency lead. At full speed it is 1.36 ms ahead in `default` and 0.43 ms ahead in `balanced`, and
+  0.77 ms behind in `powersaver`.
+- **At equal pmode, Ignition spends less than AMD's stack at 30 fps:** 153.1 against 179.1 mJ in `default` and 131.8
+  against 145.1 in `powersaver`, with both of Ignition's runs below both of AMD's each time.
+- **What this means for `efficiency`:** switching the device would buy 14 % energy per frame, only when the frame rate
+  is capped, for twice the latency. It would also slow every other NPU application on the machine, because the setting
+  is device-wide, and at 30 fps `efficiency` in `default` already spends about 15 % less than AMD's stack. No mode switches
+  the device today, and whether one should is a product decision this measurement informs.
+
+**Not done:** `performance` and `turbo` (the same 1.80 GHz clock as `default`), other models, `balanced` host mode
+under a lower pmode, and a host or NPU other than Desktop 2's.
