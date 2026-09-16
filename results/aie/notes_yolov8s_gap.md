@@ -553,3 +553,39 @@ DO allow is passing the negated value into `writebd` directly and dropping the r
 0.077 ms named above. Not done and not measured.
 
 Not run: the full-model weight-buffer container is NOT verified and NOT measured.
+
+## The weight buffer on silicon: byte-exact, and slower on both models
+
+Measured the same sitting, flag-off and buffer interleaved, 100 timed dispatches per run, every run 66/66
+byte-exact ([weight_buffer_phoenix_20260916T1508Z.log](weight_buffer_phoenix_20260916T1508Z.log)):
+
+| | flag-off | buffer | measured | derived beforehand |
+|---|---|---|---|---|
+| yolov8n | 7.314, 7.331 ms | 8.492, 8.474 ms | **1.160 ms slower** | 0.077 ms faster |
+| yolov8s | 16.752, 16.868 ms | 20.436, 20.443 ms | **3.630 ms slower** | 0.729 ms faster |
+
+The lever is closed. The flag stays off by default, no benchmark moves, and there is nothing to release.
+
+The size of the loss says where it comes from - by inference from two models, not a measured mechanism.
+It is NOT the arming, which is the same 264 column-layers on both models (+0.29 ms either way) and so
+cannot produce a loss three times larger on one of them. It tracks the weight bytes the cores receive,
+which the buffer does not change - it only changes where they come from:
+
+| | weight bytes delivered to cores | loss | loss per MB |
+|---|---|---|---|
+| yolov8n | 26,303,744 | 1.160 ms | 0.044 ms |
+| yolov8s | 83,618,816 | 3.630 ms | 0.043 ms |
+
+DDR transport at 26.8 GB/s costs 0.037 ms per MB. So every weight byte served out of the MemTile costs more
+than twice what it costs straight from DDR, and the replayed bytes the buffer stops re-fetching - a third of
+them on yolov8s - are nowhere near enough to pay for that. Streamed layers pay the hop with nothing saved at
+all, and a fill has to land completely before its serve can begin, where the shim path is cut-through; which
+of these dominates was not isolated.
+
+**This is the second MemTile residency design to lose the same way.** The activation ring lost 3.40 ms on
+yolov8s; the weight buffer loses 3.63 ms. Different data, different protocols, one conclusion: on this
+engine a MemTile store-and-forward hop is slower per byte than the DDR transport it replaces, so saving
+DDR bytes by routing them through the MemTile does not save time. The derived comparator missed both by
+3-4 ms in the same direction, because it prices DDR bytes and instruction ops and has no term for the hop.
+A future design whose saving is "bytes not fetched from DDR" should be priced with that term - about
+0.05 ms per MB served through a MemTile, net of arming - before it is built.
