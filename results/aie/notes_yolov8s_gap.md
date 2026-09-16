@@ -194,10 +194,41 @@ returns **2,944 words** - its known compressed length - through a 4,096-word con
 already behaves as a cap on this path, a compressed stream of unknown length *is* receivable, and the original
 "must match exactly" claim was an artifact of a broken config rather than a hardware rule.
 
-That also explains the very first failure in this section: `cmp_only` stalled on real weight data because its
-consumer was sized to arange's 2,944 words, not because unknown lengths cannot be received. Sizing the consumer
-for the raw payload is the one change between "times out" and "measures", and it makes the ratio on real data
-measurable without any of the FoT machinery below.
+That looked like it explained the very first failure in this section - `cmp_only` stalling on real weight data
+because its consumer was sized to arange's 2,944 words - but **oversizing is necessary and not sufficient**.
+With the consumer sized for the raw payload and the arange guard passing at 2,944 words, the first real weight
+chunk **still times out**. And that chunk is **81% zero words**, which rules out the explanation being reached
+for: a zero-run encoder would compress it far below the consumer, not overflow it.
+
+It also retires an assumption used earlier in this file. **Arange contains no zeros and still compresses to
+71.9%**, so this codec finds structure in sequential integers rather than suppressing zeros, and the claim that
+1.391x is "its floor because arange has no zeros" was unsupported. Our int8 weights packed into int32 words may
+look like high-entropy words to it - and may **expand**. The host output buffer is fixed at N, so expansion past
+N would make this path unusable whatever the ratio turns out to be.
+
+What separates the possibilities is synthetic input rather than more real chunks: all-zeros (if even that
+stalls, the stall is structural rather than about our data), all-ones and an alternating pattern (trivially
+compressible but not monotonic), and uniform random (incompressible - if only that stalls, expansion past the
+consumer is the stall mode). One dispatch each, one per invocation, because every miss is a ten-second timeout.
+
+**All-zeros stalls**, with the consumer sized at the full 4,096 words. That is the most trivially compressible
+input there is, so the stall is structural: not entropy, not expansion past the descriptor, not anything about
+weights.
+
+Two candidate explanations were then checked against the source rather than argued, because the obvious one was
+wrong. The consumer sizing *does* derive from `RATIOED_N` for these configs - `out_tap = _linear_tap(RATIOED_N)
+if has_mm2s_cmp else None`, used for every non-round-trip config - so the patch really did widen the consumer
+and the arange result is not a false positive. And the input side is not the culprit either: `in_tap =
+_linear_tap(RATIOED_N) if has_s2mm_dcmp else None`, and `cmp_only` has no decompression, so it is fed the full
+4,096 words.
+
+So an oversized consumer completes short on arange, and yet stalls on every other input tried. The mechanism is
+something this file has not identified, and three of the last four hypotheses about this codec were wrong -
+each time from reasoning past a gap instead of reading. The next step is to **observe** the stall rather than
+infer it: `DMA_S2MM_Status` at `0xA0660 + 4*ch` carries `Stalled_Lock_Acq` (bit 2),
+`Stalled_Stream_Starvation` (bit 4), `Stalled_TCT_or_Count_FIFO_Full` (bit 5) and `Error_FoT_Length_Exceeded`
+(bit 12), and the example's own `regdump` config shows how a core reads such a register back with `read_tm`
+into an ObjectFifo once the host enables the processor bus at `0x32038`.
 
 ### FoT: the hardware has both halves, and no software uses either
 
