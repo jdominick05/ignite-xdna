@@ -349,3 +349,54 @@ ids. Read off a flag-off build, even channels hold 0-23 (S2MM 0 -> 0-7, MM2S 0 -
 MM2S 4 -> 12-19, S2MM 2 -> 20-21, S2MM 4 -> 22-23) and odd channels hold 24-31. The range is still usable, but
 for a specific reason worth stating: `isBdChannelAccessible` lets an odd channel use only ids >= 24, and both
 target channels - S2MM 5 and MM2S 5 - are odd.
+
+## The intra-plane over-read is real, measurable, and not removable at a profit
+
+The earlier 0.178 ms for over-read counted only whole junk BLOCKS. It said nothing about slack inside
+each block, which is much larger. The kernel's real extent is its VECTOR extent, not the scalar tap
+range - the last group loads a `v<32>`, and two of them 32 B apart for stride 2:
+
+    stride 1   aoff0 = ((r + ky) * cols_in + 4 * g0 + kx) * 8      one  v<32>
+    stride 2   aoff0 = ((2r + ky) * cols_in + 8 * g0 + kx) * 8     two v<32>
+
+| kind | plane read today | vector extent | slack |
+|---|---|---|---|
+| k3s1 | 8 x 25 | 7 x 22 (176 B/row) | 23% |
+| k3s2 | 16 x 50 | 11 x 42 (336 B/row) | 60% |
+| k5s1 | 16 x 50 | 9 x 24 (192 B/row) | 73% |
+
+Each tight width lands exactly on a vector boundary, which is the check that the arithmetic is right.
+
+Two facts decide what can be done with it. First, tightening needs NO kernel change: `engine.cc` reads
+`d.rows_in`, `d.cols_in` and `d.plane_bytes` from the packet header at runtime, so plane geometry is
+data. Second, and fatally, the DMA transfer length IS the object size - the shim BD reads
+`len = 6400 sizes = [32, 4, 8, 200]` - so a shorter read would leave the MemTile S2MM waiting for
+bytes that never arrive, the same fixed-length-descriptor wall that parked compression. Tight planes
+save nothing on their own; `A_BYTES` itself has to shrink, and that reprices every chunk kind at once.
+
+Priced against the real workload, that trade loses. Per frame today:
+
+| model | activation fills | bytes | k1 | k3s2 | k3s1 |
+|---|---|---|---|---|---|
+| yolov8s | 35,088 | 224.6 MB | 38.4% | 32.1% | 27.0% |
+| yolov8n | 12,468 | 79.8 MB | 35.7% | 28.7% | 31.1% |
+
+The best object size found over 541 candidates is 7,920 B, worth **-0.265 ms on yolov8s and +0.143 ms
+on yolov8n**, where today's 6,400 is already optimal. Smaller objects do cut bytes, but they multiply
+packets: at A=4,032 yolov8n saves 0.384 ms of transport and spends 0.692 ms in task issue. **The
+activation path is task-bound, not byte-bound** - 224.6 MB at 26.8 GB/s is 8.4 ms of transport against
+roughly 5.1 ms of issue for 8,772 merged quad tasks, and the two move in opposite directions.
+
+So the over-read is genuinely 23-73% and genuinely not worth removing by resizing. A -0.265 ms modelled
+gain on one model, against a 0.29 ms bar, from the comparator that mispredicted the ring by 4.1 ms, and
+a regression on the other model, is not a result to build on.
+
+Two instrument errors were found and fixed before believing any of this, both of which had pointed the
+wrong way: activation fills are PER CORE and `merge_quad` folds each quad into one task, so counting
+fills as tasks overstated the task term fourfold (yolov8n's 12,468 fills against a recorded 2,972 total
+DMA tasks is the giveaway); and `ncin <= 8` for k1 is an artifact of today's 6,400 object rather than a
+limit, the real cap being weight capacity at `1 tap * ncin * 256 <= 9216`, so `ncin <= 36`.
+
+What this redirects to: halo exchange between neighbouring cores over the AIE2 cascade. Adjacent cores'
+input windows overlap by two rows and each re-reads its own halo from DDR. Cascade attacks those bytes
+WITHOUT adding packets, which is exactly the shape this measurement says is required. Untried.
