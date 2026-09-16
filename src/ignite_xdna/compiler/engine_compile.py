@@ -224,6 +224,13 @@ def compile_graph_container(onnx_path, output_path, build_dir: Optional[Path] = 
     ``activation_ring`` (slots, 0 = off) builds the engine with a hand-written MemTile ring for activations
     instead of the split ObjectFifo, so one shim fetch can serve several output groups of a tile.
     """
+    if host_regions and (activation_ring or weight_buffer):
+        # ``split_instruction_stream`` cuts a host-segment stream by counting WRITE ops as task pushes, and
+        # both MemTile structures emit configuration WRITEs that belong to no shim task, so the cut would land
+        # on the wrong op. Both structures are measured slower than the default and are off by default, so
+        # this refuses the combination rather than reconciling the accounting for a path worth nothing.
+        raise ValueError("host_regions cannot be combined with activation_ring or weight_buffer: their "
+                         "configuration writes break the instruction-stream split between segments")
     import aie.iron as iron
     from aie.iron.device import NPU1
     from aie.utils.compile.utils import compile_mlir_module
