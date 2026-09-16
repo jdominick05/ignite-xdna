@@ -504,6 +504,70 @@ def ring_plan(ir: GraphIR, layer, ring_slots: int) -> Optional[RingPlan]:
     return RingPlan(slots=invariant, serves=-(-groups // replicas), replicas=replicas, windows=windows)
 
 
+def schedule_layer_ring(ir: GraphIR, ws: Workspace, layer, store: PacketStore, plan: RingPlan,
+                        trim_ncin: bool = True) -> LayerSchedule:
+    """One layer's tile-outer schedule: fetch a tile once, replay it for every output group its column owns.
+
+    ``schedule_layer_coarse`` loops output groups outermost and re-issues the layer's whole input tile inside
+    each one. Here the loop is inverted. The layer's (tile, group) work is ordered tile first and sliced
+    contiguously across the columns, so a column that owns several groups of one tile fills it once, and a tile
+    whose groups are split across columns is filled once per column (``RingPlan.replicas``). Every chunk is
+    group-invariant - ``ring_plan`` admits no other layer - so the whole tile is replayed and nothing of it is
+    re-fetched.
+
+    Items per tile: ``R`` arms the arrival for the tile's window, the group's drain and weight run are issued
+    ahead of the fills and held exactly as the per-group schedule issues them, the fills follow, and ``S``
+    replays the window once per group. Ordering the drain and weights first keeps today's backpressure: a
+    drain is queued before the cores can emit into it, and ``served`` releases both holds as the fills are
+    issued. ``S`` comes after the fills so the replay is armed only once they are in flight; the ring's peek
+    lock is what actually gates it.
+
+    The drain is what this costs. A tile's groups are no longer consecutive for one group, so a drain covers
+    one quad and one group instead of a run of up to 16. Measured over the streams that is about 3,500 more
+    instruction ops on yolov8s, against the 9,901 the ring removes, and slightly net-negative on yolov8n; both
+    are second order against the bytes.
+    """
+    t = ir.tensors[layer.output]
+    chunks = layer_chunks(ir, layer)
+    n_groups = (t.blocks + OUT_BLOCKS - 1) // OUT_BLOCKS
+    quad_rows = TILE_R * ROWS
+    ys, xs = tile_origins(t.height, quad_rows), tile_origins(t.width, TILE_C)
+    rounds = [(y, x0) for x0 in xs for y in ys]
+    pairs = [(i, g) for i in range(len(rounds)) for g in range(n_groups)]
+    programs: List[List[tuple]] = [[] for _ in range(COLS)]
+    n_rounds = n_packets = n_w = 0
+    for c in range(COLS):
+        mine = pairs[c * len(pairs) // COLS:(c + 1) * len(pairs) // COLS]
+        if not mine:
+            continue
+        # Consecutive pairs of one tile: this column fills that tile once and replays it for those groups.
+        tiles: List[Tuple[int, List[int]]] = []
+        for tile_index, g in mine:
+            if tiles and tiles[-1][0] == tile_index:
+                tiles[-1][1].append(g)
+            else:
+                tiles.append((tile_index, [g]))
+        for tile_index, group_list in tiles:
+            y, x0 = rounds[tile_index]
+            pats: List[DmaPattern] = []
+            for ch in chunks:
+                quad = quad_patterns(ws, ir, layer, ch, y, x0, 0, coarse=True)
+                merged = merge_quad(quad)
+                pats.extend([merged] if merged is not None else quad)
+            fills = merge_runs(pats)
+            programs[c].append(("R", plan.slots, plan.windows))
+            for g in group_list:
+                programs[c].append(("o", run_drain(ws, layer, g, [(y, x0)]), len(fills)))
+                pkts = round_packets(layer, g, chunks, coarse=True, trim_ncin=trim_ncin)
+                programs[c].append(("w", store.add_run(pkts), len(pkts) * em.W_BYTES, len(fills)))
+                n_w += 1
+                n_packets += ROWS * len(chunks)
+            programs[c].extend(("A", f) for f in fills)
+            programs[c].append(("S", len(group_list)))
+            n_rounds += 1
+    return LayerSchedule(layer.index, layer.name, programs, n_rounds, n_packets, n_w)
+
+
 def schedule_layer_coarse(ir: GraphIR, ws: Workspace, layer, store: PacketStore,
                           weight_repeat: bool = True, trim_ncin: bool = True,
                           balance_columns: bool = True, merge_group_weights: bool = True) -> LayerSchedule:
@@ -737,6 +801,7 @@ def emulate_layer(sched: LayerSchedule, store: PacketStore, ws_arr: np.ndarray, 
         pending: List[np.ndarray] = []     # emitted output objects
         drains: List[DmaPattern] = []      # drains waiting for their objects
         packets: List[np.ndarray] = []     # activation packets not yet grouped into an object
+        tile: Optional[List[np.ndarray]] = None   # a ring tile being collected, replayed by its "S" item
 
         def flush_drains():
             while drains:
@@ -745,6 +810,27 @@ def emulate_layer(sched: LayerSchedule, store: PacketStore, ws_arr: np.ndarray, 
                     return
                 drains.pop(0).write(ws_arr, np.concatenate(pending[:n_obj]))
                 del pending[:n_obj]
+
+        def consume(stream):
+            """Feed activation packets through the cores, pairing every four of them with a weight object."""
+            nonlocal cur_w, remaining
+            packets.extend(stream)
+            while len(packets) >= ROWS:
+                obj = packets[:ROWS]
+                del packets[:ROWS]
+                if remaining == 0:
+                    if not w_queue:
+                        raise AssertionError(f"{sched.name}: activation packet without a weight object")
+                    cur_w = w_queue.pop(0)
+                    hdr = em.unpack_w_packet(cur_w)[0]
+                    remaining = hdr.count_out + hdr.count_acc
+                remaining -= 1
+                outs = [em.run_packet(cur_w, pkt, states[r], r) for r, pkt in enumerate(obj)]
+                if all(o is not None for o in outs):
+                    pending.append(np.concatenate(outs))
+                elif any(o is not None for o in outs):
+                    raise AssertionError("cores disagree on emission")
+                flush_drains()
 
         for it in items:
             kind = it[0]
@@ -759,26 +845,25 @@ def emulate_layer(sched: LayerSchedule, store: PacketStore, ws_arr: np.ndarray, 
                 data = it[1].read(blob)
                 w_queue.extend(data[k:k + em.W_BYTES] for k in range(0, data.size, em.W_BYTES))
             elif kind in ("a", "A"):
+                stream = []
                 for pat in (it[1] if kind == "a" else [it[1]]):
                     data = pat.read(ws_arr)
                     if data.size % em.A_BYTES:
                         raise AssertionError(f"{sched.name}: fill of {data.size} bytes is not whole packets")
-                    packets.extend(data[k:k + em.A_BYTES] for k in range(0, data.size, em.A_BYTES))
-                while len(packets) >= ROWS:
-                    obj, packets = packets[:ROWS], packets[ROWS:]
-                    if remaining == 0:
-                        if not w_queue:
-                            raise AssertionError(f"{sched.name}: activation packet without a weight object")
-                        cur_w = w_queue.pop(0)
-                        hdr = em.unpack_w_packet(cur_w)[0]
-                        remaining = hdr.count_out + hdr.count_acc
-                    remaining -= 1
-                    outs = [em.run_packet(cur_w, pkt, states[r], r) for r, pkt in enumerate(obj)]
-                    if all(o is not None for o in outs):
-                        pending.append(np.concatenate(outs))
-                    elif any(o is not None for o in outs):
-                        raise AssertionError("cores disagree on emission")
-                    flush_drains()
+                    stream.extend(data[k:k + em.A_BYTES] for k in range(0, data.size, em.A_BYTES))
+                # Inside a ring tile the fill only lands in the MemTile; the cores see it once per "S" replay.
+                if tile is None:
+                    consume(stream)
+                else:
+                    tile.extend(stream)
+            elif kind == "R":
+                tile = []
+            elif kind == "S":
+                if tile is None:
+                    raise AssertionError(f"{sched.name}: a ring replay with no tile filled")
+                for _ in range(it[1]):
+                    consume(list(tile))
+                tile = None
             elif kind == "o":
                 drains.append(it[1])
                 flush_drains()
