@@ -171,6 +171,10 @@ def _activation_ring(col, name, slots):
     token it took, and the count stays inside the 7-bit release field - four cores by at most eight replays is
     32. Nothing releases ``space``; the runtime restores both locks when it recycles the window.
 
+    "Returns none" is spelled as a release of zero, not as no release at all: a descriptor that touches a lock
+    must carry both a ``use_lock`` acquire and a ``use_lock`` release or the lowering rejects it, which is the
+    same rule that makes the arrival hand its slot to ``arrived`` rather than releasing ``space`` alone.
+
     Returns ``(handles, parts)``: one ``(buffer, cons lock, prod lock)`` per core, and the flows, locks and DMA
     programs to register on the Runtime.
     """
@@ -197,12 +201,17 @@ def _activation_ring(col, name, slots):
                 iteration=BdIteration(size=window, stride=slot_bytes))
              for w in range(RING_WINDOWS)]
     # A serve sends one core's 6,400-byte slice from every slot of the window, taking one arrival token for it
-    # and returning none - see above for why acquiring the whole count deadlocks the four channels against each
-    # other. These counts never vary, so the instruction stream leaves these descriptors' lock fields alone.
+    # and giving nothing back - see above for why acquiring the whole count deadlocks the four channels against
+    # each other. The release is written explicitly as zero rather than omitted: a descriptor that touches a
+    # lock must carry both ops or the lowering refuses it ("buffer descriptor with a lock must have both
+    # use_lock(acquire) and use_lock(release)"), and releasing 1 instead would make the pair net zero, leaving
+    # ``arrived`` permanently high so a serve would only ever prove that some slot had landed rather than the
+    # one it is about to read. These counts never vary, so the instruction stream leaves these descriptors
+    # alone.
     serves = [DmaChannel(DMAChannelDir.MM2S, r,
                          [Bd(ring, offset=w * window * slot_bytes + r * A_BYTES, length=A_BYTES,
                              bd_id=_ring_bd(r, w),
-                             acquires=[Acquire(arrived[w], 1)], releases=[],
+                             acquires=[Acquire(arrived[w], 1)], releases=[Release(arrived[w], 0)],
                              iteration=BdIteration(size=window, stride=slot_bytes))
                           for w in range(RING_WINDOWS)])
               for r in range(ROWS)]
