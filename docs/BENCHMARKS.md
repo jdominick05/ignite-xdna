@@ -8444,7 +8444,32 @@ One interleaved sitting, full speed, median of 8 undisturbed 30 s idle baselines
 - At full speed, then, the engine is faster at equal energy per frame, not cheaper per frame. The outputs do not
   change with the mode: every parallel loop writes disjoint indices.
 
-**Not done:** a paced load (a 30 fps camera), where sleeping workers should matter more and watts rather than joules
-per frame are the user's figure; any host but the 8700G (the modes are defined relative to the host, and verified on
-this one); YOLOv8s, SESR M7, YOLOv8n-pose and YOLO11n; the NPU's own device-wide power modes (`xrt-smi configure
---pmode`), which would also slow any other NPU application.
+**At a camera's rate** (MEASURED, `results/aie/energy_power_modes_paced30_yolov8n_phoenix_20260916T1702Z.log`). A live
+camera delivers 30 frames per second, so both stacks were paced to exactly that: AMD's arm with
+`tools/amd_vitisai_yolo.py --max-fps 30` (`a886f22`) and Ignition's with `live_ignition.py --power-mode <mode>
+--max-fps 30`, frames starting on an absolute schedule with the wait outside G2G. One interleaved sitting, 1,200 frames
+per run, median of 8 undisturbed 30 s idle baselines (34.708 W), two runs each:
+
+| Arm | G2G mean | CPU | W above idle | mJ per frame |
+|---|---:|---:|---:|---:|
+| AMD's stack | 11.039 / 10.969 ms | 8.4 / 8.5 % | 6.53 / 6.01 | 217.6 / 200.4 |
+| `performance` | 7.976 / 8.042 ms | 99.9 / 100.0 % | 41.54 / 41.15 | 1,384.8 / 1,371.8 |
+| `balanced` (default) | 8.736 / 8.795 ms | 7.8 / 7.8 % | 5.91 / 5.36 | 196.9 / 178.7 |
+| `efficiency` | 9.532 / 9.583 ms | 7.9 / 7.9 % | 5.11 / 4.77 | **170.3 / 159.1** |
+
+(W above idle is mJ per frame x 30 / 1000, against the median idle.)
+
+- At a camera's rate the engine spends less than AMD's stack: `balanced` 187.8 mJ per frame on the mean of its runs
+  and `efficiency` 164.7, against 209.0, 10 % and 21 % less, and both runs of each mode read below both of AMD's. Both
+  modes stay ahead on G2G.
+- Spinning is worst here: with a frame every 33 ms and only 8-10 ms of work in it, `performance` holds about 41 W
+  above idle for work the other modes do in 4.8-5.9 W, 6.6 times AMD's stack per frame on the means. That was every
+  Ignition run before `3bfebcd`.
+- Paced, G2G is 0.39 ms longer in `balanced` and 0.40 ms in `efficiency` than at full speed on the means, and only
+  0.09 ms in `performance`, whose workers never sleep: the sleeping workers, and perhaps the NPU, wake once per
+  frame instead of running back to back. Not isolated further.
+
+**Not done:** any host but the 8700G (the modes are defined relative to the host, and verified on this one); YOLOv8s,
+SESR M7, YOLOv8n-pose and YOLO11n; re-measuring the latency comparisons published before power modes, which were taken
+with spinning workers; the NPU's own device-wide power modes (`xrt-smi configure --pmode`), which would also slow any
+other NPU application.

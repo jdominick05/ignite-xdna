@@ -175,7 +175,8 @@ def run_arm(arm: dict, skip_lines: int, tmp: Path, log: Log):
         m = PROGRESS.search(line)
         if m:
             marks.append((now, int(m.group(1))))
-        elif line.startswith(("[summary]", "[amd]", "[verify]", "Traceback", "RuntimeError", "Error")) or "Error" in line:
+        elif (line.startswith(("[summary]", "[amd]", "[verify]", "[Ignition] power mode", "Traceback", "RuntimeError",
+                               "Error")) or "Error" in line):
             tail.append(line)
     rc = child.wait()
     t_exit = time.time()
