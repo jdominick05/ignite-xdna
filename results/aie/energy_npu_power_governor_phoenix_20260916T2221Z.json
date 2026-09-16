@@ -1,0 +1,597 @@
+{
+ "host": "DESKTOP-CBL5NUA",
+ "started_utc": "2026-09-16T22:21:00Z",
+ "finished_utc": "2026-09-16T22:39:46Z",
+ "counter": "\\Energy Meter(RAPL_Package0_PKG)\\Power",
+ "idle_s": 30,
+ "skip_lines": 2,
+ "median_idle_mw": 35110.378356541594,
+ "finally": [
+  [
+   "C:/Windows/System32/AMD/xrt-smi.exe",
+   "configure",
+   "--pmode",
+   "default"
+  ],
+  [
+   "<home>/miniforge3/envs/resnet_env17/python.exe",
+   "<scratch>/pmode_readback.py"
+  ]
+ ],
+ "arms": [
+  {
+   "label": "YOLOv8n AMD @30 #1",
+   "returncode": 0,
+   "launch_to_exit_s": 41.23818850517273,
+   "window_s": 30.00037145614624,
+   "window_frames": 900,
+   "window_fps": 29.999628548453025,
+   "power_samples": 28,
+   "package_mw_mean": 41581.535118889355,
+   "package_mw_stdev": 878.7684189798454,
+   "cpu_percent_mean": 8.612741803357155,
+   "summary_lines": [
+    "[amd] ort 1.23.3.dev20260320 | model yolov8n_cut_xint8.onnx | session load 0.42 s | EP report node devices report not found",
+    "[amd] G2G mean 10.850 ms | P50 10.810 | P95 11.510 | P99 11.900 | max 12.385 | over 1200 timed frames after 50 warm-up",
+    "[amd] stage means (ms): letterbox 2.067 | session.run 6.634 | decode+NMS 2.149",
+    "[amd] detections on the last frame: 5 {'person': 4, 'bus': 1} | RSS 304.4 MB"
+   ],
+   "idle_mw_mean": 36097.0194929946,
+   "idle_mw_stdev": 1866.793902333977,
+   "idle_samples": 29,
+   "idle_cpu_percent": 8.99024312451771,
+   "idle_suspect": false,
+   "idle_shifted": false,
+   "env": {
+    "RYZEN_AI_INSTALLATION_PATH": "C:\\Program Files\\RyzenAI\\1.7.1"
+   },
+   "setup": [
+    [
+     "<home>/miniforge3/envs/resnet_env17/python.exe",
+     "<scratch>/pmode_readback.py"
+    ]
+   ],
+   "delta_w": 5.484515625894754,
+   "mj_per_frame": 182.81945114875666,
+   "delta_w_vs_median_idle": 6.471156762347761,
+   "mj_per_frame_vs_median_idle": 215.70789624598385,
+   "command": "<home>/miniforge3/envs/resnet_env17/python.exe <ignite-xdna main>/tools/amd_vitisai_yolo.py --model <ignite-xdna main>/models/yolov8n_cut_xint8.onnx --image <Ignition main>/examples/assets/bus.jpg --ignition-src <Ignition main>/src --cache-dir <scratch>/vitisai_cache --cache-key yolov8n_energy --xclbin <ignite-xdna main>/yolocutcachekey/4x4.xclbin --warmup 50 --iterations 1200 --max-fps 30"
+  },
+  {
+   "label": "YOLOv8n efficiency npu-power auto @30 #1",
+   "returncode": 0,
+   "launch_to_exit_s": 42.30524468421936,
+   "window_s": 30.001422882080078,
+   "window_frames": 900,
+   "window_fps": 29.998577185403168,
+   "power_samples": 29,
+   "package_mw_mean": 39357.0935392486,
+   "package_mw_stdev": 494.9984769551271,
+   "cpu_percent_mean": 8.119884108777999,
+   "summary_lines": [
+    "[Ignition] power mode efficiency: 2 worker threads, sleeping between regions (8 cores / 16 threads on this host)",
+    "[summary] stop: frame limit | 1250 frames processed (50 warm-up, 1200 timed) | 1 distinct source frames | image bus.jpg 810x1080",
+    "[summary] NPU power mode: lowered to powersaver at frame 50, then session end; restored default",
+    "[summary] G2G mean 18.194 ms | P50 18.136 | P95 18.898 | P99 19.357 | max 20.125 | over the last 1200 timed frames; cold first frame 11.94 ms",
+    "[summary] stage means (ms): preprocess 1.601 | NPU forward 16.537 (dispatch 15.794, readback 0.742) | decode+NMS 0.048",
+    "[summary] boxes from NPU heads on 1200/1200 timed frames | 5.00 detections per frame",
+    "[summary] RSS 182.7 MB at the first timed frame, 182.7 MB at the end (+0.04 MB over 1200 frames)"
+   ],
+   "idle_mw_mean": 34854.58593656494,
+   "idle_mw_stdev": 454.8343156434148,
+   "idle_samples": 29,
+   "idle_cpu_percent": 7.4174118964507265,
+   "idle_suspect": false,
+   "idle_shifted": false,
+   "env": {
+    "PYTHONPATH": "<ignite-xdna worktree>\\src",
+    "IGNITE_XDNA_NPU_POWER_LEASE": "<scratch>/npu_power_energy_lease.json"
+   },
+   "setup": [
+    [
+     "<home>/miniforge3/envs/resnet_env17/python.exe",
+     "<scratch>/pmode_readback.py"
+    ]
+   ],
+   "delta_w": 4.502507602683662,
+   "mj_per_frame": 150.09070513099235,
+   "delta_w_vs_median_idle": 4.246715182707005,
+   "mj_per_frame_vs_median_idle": 141.56388672904757,
+   "command": "<home>/miniforge3/envs/mlir-aie-iron/python.exe <Ignition worktree>/live_ignition.py --model <ignite-xdna main>/build/yolov8n_full.ignite --source <Ignition main>/examples/assets/bus.jpg --headless --warmup 50 --frames 1200 --power-mode efficiency --npu-power auto --max-fps 30"
+  },
+  {
+   "label": "YOLOv8n efficiency npu-power off @30 #1",
+   "returncode": 0,
+   "launch_to_exit_s": 42.1136372089386,
+   "window_s": 30.000282287597656,
+   "window_frames": 900,
+   "window_fps": 29.999717715058527,
+   "power_samples": 29,
+   "package_mw_mean": 40095.055986280095,
+   "package_mw_stdev": 989.4650205514793,
+   "cpu_percent_mean": 8.05103814088386,
+   "summary_lines": [
+    "[Ignition] power mode efficiency: 2 worker threads, sleeping between regions (8 cores / 16 threads on this host)",
+    "[summary] stop: frame limit | 1250 frames processed (50 warm-up, 1200 timed) | 1 distinct source frames | image bus.jpg 810x1080",
+    "[summary] NPU power mode: default kept: IGNITE_XDNA_NPU_POWER=off",
+    "[summary] G2G mean 9.605 ms | P50 9.581 | P95 10.078 | P99 10.326 | max 10.801 | over the last 1200 timed frames; cold first frame 11.55 ms",
+    "[summary] stage means (ms): preprocess 1.562 | NPU forward 7.990 (dispatch 7.294, readback 0.696) | decode+NMS 0.044",
+    "[summary] boxes from NPU heads on 1200/1200 timed frames | 5.00 detections per frame",
+    "[summary] RSS 182.7 MB at the first timed frame, 182.7 MB at the end (+0.00 MB over 1200 frames)"
+   ],
+   "idle_mw_mean": 35469.64870800958,
+   "idle_mw_stdev": 1559.111931901094,
+   "idle_samples": 29,
+   "idle_cpu_percent": 7.885830463570801,
+   "idle_suspect": false,
+   "idle_shifted": false,
+   "env": {
+    "PYTHONPATH": "<ignite-xdna worktree>\\src",
+    "IGNITE_XDNA_NPU_POWER_LEASE": "<scratch>/npu_power_energy_lease.json"
+   },
+   "setup": [
+    [
+     "<home>/miniforge3/envs/resnet_env17/python.exe",
+     "<scratch>/pmode_readback.py"
+    ]
+   ],
+   "delta_w": 4.625407278270512,
+   "mj_per_frame": 154.18169338136013,
+   "delta_w_vs_median_idle": 4.9846776297385,
+   "mj_per_frame_vs_median_idle": 166.15748444980912,
+   "command": "<home>/miniforge3/envs/mlir-aie-iron/python.exe <Ignition worktree>/live_ignition.py --model <ignite-xdna main>/build/yolov8n_full.ignite --source <Ignition main>/examples/assets/bus.jpg --headless --warmup 50 --frames 1200 --power-mode efficiency --npu-power off --max-fps 30"
+  },
+  {
+   "label": "YOLOv8n efficiency npu-power auto, no watcher @30 #1",
+   "returncode": 0,
+   "launch_to_exit_s": 42.30201578140259,
+   "window_s": 29.999791145324707,
+   "window_frames": 900,
+   "window_fps": 30.000208856129312,
+   "power_samples": 29,
+   "package_mw_mean": 38838.26505290647,
+   "package_mw_stdev": 425.9486199911541,
+   "cpu_percent_mean": 7.9363497045913585,
+   "summary_lines": [
+    "[Ignition] power mode efficiency: 2 worker threads, sleeping between regions (8 cores / 16 threads on this host)",
+    "[summary] stop: frame limit | 1250 frames processed (50 warm-up, 1200 timed) | 1 distinct source frames | image bus.jpg 810x1080",
+    "[summary] NPU power mode: lowered to powersaver at frame 50, then session end; restored default",
+    "[summary] G2G mean 18.115 ms | P50 18.069 | P95 18.744 | P99 19.158 | max 19.952 | over the last 1200 timed frames; cold first frame 11.75 ms",
+    "[summary] stage means (ms): preprocess 1.578 | NPU forward 16.485 (dispatch 15.768, readback 0.717) | decode+NMS 0.044",
+    "[summary] boxes from NPU heads on 1200/1200 timed frames | 5.00 detections per frame",
+    "[summary] RSS 182.8 MB at the first timed frame, 182.8 MB at the end (+0.00 MB over 1200 frames)"
+   ],
+   "idle_mw_mean": 35072.402521695156,
+   "idle_mw_stdev": 292.9858484351119,
+   "idle_samples": 29,
+   "idle_cpu_percent": 7.481631370356178,
+   "idle_suspect": false,
+   "idle_shifted": false,
+   "env": {
+    "PYTHONPATH": "<ignite-xdna worktree>\\src",
+    "IGNITE_XDNA_NPU_POWER_LEASE": "<scratch>/npu_power_energy_lease.json",
+    "IGNITE_XDNA_NPU_POWER_WATCH_S": "0"
+   },
+   "setup": [
+    [
+     "<home>/miniforge3/envs/resnet_env17/python.exe",
+     "<scratch>/pmode_readback.py"
+    ]
+   ],
+   "delta_w": 3.7658625312113143,
+   "mj_per_frame": 125.52787713149253,
+   "delta_w_vs_median_idle": 3.7278866963648762,
+   "mj_per_frame_vs_median_idle": 124.26202478264531,
+   "command": "<home>/miniforge3/envs/mlir-aie-iron/python.exe <Ignition worktree>/live_ignition.py --model <ignite-xdna main>/build/yolov8n_full.ignite --source <Ignition main>/examples/assets/bus.jpg --headless --warmup 50 --frames 1200 --power-mode efficiency --npu-power auto --max-fps 30"
+  },
+  {
+   "label": "YOLOv8n AMD @30 #2",
+   "returncode": 0,
+   "launch_to_exit_s": 41.237934827804565,
+   "window_s": 30.000243425369263,
+   "window_frames": 900,
+   "window_fps": 29.999756576605918,
+   "power_samples": 28,
+   "package_mw_mean": 40613.66752020763,
+   "package_mw_stdev": 249.30971851903115,
+   "cpu_percent_mean": 8.530398310014963,
+   "summary_lines": [
+    "[amd] ort 1.23.3.dev20260320 | model yolov8n_cut_xint8.onnx | session load 0.42 s | EP report node devices report not found",
+    "[amd] G2G mean 10.804 ms | P50 10.785 | P95 11.387 | P99 11.843 | max 12.291 | over 1200 timed frames after 50 warm-up",
+    "[amd] stage means (ms): letterbox 2.047 | session.run 6.636 | decode+NMS 2.121",
+    "[amd] detections on the last frame: 5 {'person': 4, 'bus': 1} | RSS 305.0 MB"
+   ],
+   "idle_mw_mean": 34766.944591387415,
+   "idle_mw_stdev": 482.5490088237002,
+   "idle_samples": 29,
+   "idle_cpu_percent": 7.012531150611491,
+   "idle_suspect": false,
+   "idle_shifted": false,
+   "env": {
+    "RYZEN_AI_INSTALLATION_PATH": "C:\\Program Files\\RyzenAI\\1.7.1"
+   },
+   "setup": [
+    [
+     "<home>/miniforge3/envs/resnet_env17/python.exe",
+     "<scratch>/pmode_readback.py"
+    ]
+   ],
+   "delta_w": 5.846722928820214,
+   "mj_per_frame": 194.89234567254928,
+   "delta_w_vs_median_idle": 5.503289163666035,
+   "mj_per_frame_vs_median_idle": 183.44446061130876,
+   "command": "<home>/miniforge3/envs/resnet_env17/python.exe <ignite-xdna main>/tools/amd_vitisai_yolo.py --model <ignite-xdna main>/models/yolov8n_cut_xint8.onnx --image <Ignition main>/examples/assets/bus.jpg --ignition-src <Ignition main>/src --cache-dir <scratch>/vitisai_cache --cache-key yolov8n_energy --xclbin <ignite-xdna main>/yolocutcachekey/4x4.xclbin --warmup 50 --iterations 1200 --max-fps 30"
+  },
+  {
+   "label": "YOLOv8n efficiency npu-power auto @30 #2",
+   "returncode": 0,
+   "launch_to_exit_s": 42.31197500228882,
+   "window_s": 30.00029492378235,
+   "window_frames": 900,
+   "window_fps": 29.999705079116957,
+   "power_samples": 29,
+   "package_mw_mean": 39080.96971900005,
+   "package_mw_stdev": 1036.459916545283,
+   "cpu_percent_mean": 8.199032407459269,
+   "summary_lines": [
+    "[Ignition] power mode efficiency: 2 worker threads, sleeping between regions (8 cores / 16 threads on this host)",
+    "[summary] stop: frame limit | 1250 frames processed (50 warm-up, 1200 timed) | 1 distinct source frames | image bus.jpg 810x1080",
+    "[summary] NPU power mode: lowered to powersaver at frame 50, then session end; restored default",
+    "[summary] G2G mean 18.140 ms | P50 18.082 | P95 18.885 | P99 19.368 | max 19.767 | over the last 1200 timed frames; cold first frame 11.82 ms",
+    "[summary] stage means (ms): preprocess 1.600 | NPU forward 16.482 (dispatch 15.741, readback 0.740) | decode+NMS 0.048",
+    "[summary] boxes from NPU heads on 1200/1200 timed frames | 5.00 detections per frame",
+    "[summary] RSS 182.6 MB at the first timed frame, 182.6 MB at the end (+0.03 MB over 1200 frames)"
+   ],
+   "idle_mw_mean": 35297.70023475745,
+   "idle_mw_stdev": 519.630358177021,
+   "idle_samples": 29,
+   "idle_cpu_percent": 7.168716352085728,
+   "idle_suspect": false,
+   "idle_shifted": false,
+   "env": {
+    "PYTHONPATH": "<ignite-xdna worktree>\\src",
+    "IGNITE_XDNA_NPU_POWER_LEASE": "<scratch>/npu_power_energy_lease.json"
+   },
+   "setup": [
+    [
+     "<home>/miniforge3/envs/resnet_env17/python.exe",
+     "<scratch>/pmode_readback.py"
+    ]
+   ],
+   "delta_w": 3.783269484242599,
+   "mj_per_frame": 126.1102225593599,
+   "delta_w_vs_median_idle": 3.9705913624584572,
+   "mj_per_frame_vs_median_idle": 132.35434655064054,
+   "command": "<home>/miniforge3/envs/mlir-aie-iron/python.exe <Ignition worktree>/live_ignition.py --model <ignite-xdna main>/build/yolov8n_full.ignite --source <Ignition main>/examples/assets/bus.jpg --headless --warmup 50 --frames 1200 --power-mode efficiency --npu-power auto --max-fps 30"
+  },
+  {
+   "label": "YOLOv8n efficiency npu-power off @30 #2",
+   "returncode": 0,
+   "launch_to_exit_s": 42.1228141784668,
+   "window_s": 30.000004529953003,
+   "window_frames": 900,
+   "window_fps": 29.999995470047683,
+   "power_samples": 29,
+   "package_mw_mean": 40423.825005621446,
+   "package_mw_stdev": 657.0834273818649,
+   "cpu_percent_mean": 8.026980131610648,
+   "summary_lines": [
+    "[Ignition] power mode efficiency: 2 worker threads, sleeping between regions (8 cores / 16 threads on this host)",
+    "[summary] stop: frame limit | 1250 frames processed (50 warm-up, 1200 timed) | 1 distinct source frames | image bus.jpg 810x1080",
+    "[summary] NPU power mode: default kept: IGNITE_XDNA_NPU_POWER=off",
+    "[summary] G2G mean 9.551 ms | P50 9.542 | P95 10.025 | P99 10.270 | max 11.323 | over the last 1200 timed frames; cold first frame 11.76 ms",
+    "[summary] stage means (ms): preprocess 1.562 | NPU forward 7.934 (dispatch 7.239, readback 0.695) | decode+NMS 0.046",
+    "[summary] boxes from NPU heads on 1200/1200 timed frames | 5.00 detections per frame",
+    "[summary] RSS 182.3 MB at the first timed frame, 182.3 MB at the end (+0.00 MB over 1200 frames)"
+   ],
+   "idle_mw_mean": 35168.08459357076,
+   "idle_mw_stdev": 419.0308717623847,
+   "idle_samples": 29,
+   "idle_cpu_percent": 7.087571414890203,
+   "idle_suspect": false,
+   "idle_shifted": false,
+   "env": {
+    "PYTHONPATH": "<ignite-xdna worktree>\\src",
+    "IGNITE_XDNA_NPU_POWER_LEASE": "<scratch>/npu_power_energy_lease.json"
+   },
+   "setup": [
+    [
+     "<home>/miniforge3/envs/resnet_env17/python.exe",
+     "<scratch>/pmode_readback.py"
+    ]
+   ],
+   "delta_w": 5.255740412050684,
+   "mj_per_frame": 175.19137352197507,
+   "delta_w_vs_median_idle": 5.313446649079851,
+   "mj_per_frame_vs_median_idle": 177.11491504673236,
+   "command": "<home>/miniforge3/envs/mlir-aie-iron/python.exe <Ignition worktree>/live_ignition.py --model <ignite-xdna main>/build/yolov8n_full.ignite --source <Ignition main>/examples/assets/bus.jpg --headless --warmup 50 --frames 1200 --power-mode efficiency --npu-power off --max-fps 30"
+  },
+  {
+   "label": "YOLOv8n efficiency npu-power auto, no watcher @30 #2",
+   "returncode": 0,
+   "launch_to_exit_s": 42.32798457145691,
+   "window_s": 30.000311136245728,
+   "window_frames": 900,
+   "window_fps": 29.9996888669811,
+   "power_samples": 29,
+   "package_mw_mean": 38878.910831597794,
+   "package_mw_stdev": 413.5971788833959,
+   "cpu_percent_mean": 7.799253056532543,
+   "summary_lines": [
+    "[Ignition] power mode efficiency: 2 worker threads, sleeping between regions (8 cores / 16 threads on this host)",
+    "[summary] stop: frame limit | 1250 frames processed (50 warm-up, 1200 timed) | 1 distinct source frames | image bus.jpg 810x1080",
+    "[summary] NPU power mode: lowered to powersaver at frame 50, then session end; restored default",
+    "[summary] G2G mean 18.133 ms | P50 18.064 | P95 18.812 | P99 19.316 | max 20.760 | over the last 1200 timed frames; cold first frame 11.84 ms",
+    "[summary] stage means (ms): preprocess 1.588 | NPU forward 16.489 (dispatch 15.760, readback 0.729) | decode+NMS 0.047",
+    "[summary] boxes from NPU heads on 1200/1200 timed frames | 5.00 detections per frame",
+    "[summary] RSS 182.5 MB at the first timed frame, 182.5 MB at the end (+0.00 MB over 1200 frames)"
+   ],
+   "idle_mw_mean": 34959.49340970663,
+   "idle_mw_stdev": 334.54386095303664,
+   "idle_samples": 29,
+   "idle_cpu_percent": 7.006111162093888,
+   "idle_suspect": false,
+   "idle_shifted": false,
+   "env": {
+    "PYTHONPATH": "<ignite-xdna worktree>\\src",
+    "IGNITE_XDNA_NPU_POWER_LEASE": "<scratch>/npu_power_energy_lease.json",
+    "IGNITE_XDNA_NPU_POWER_WATCH_S": "0"
+   },
+   "setup": [
+    [
+     "<home>/miniforge3/envs/resnet_env17/python.exe",
+     "<scratch>/pmode_readback.py"
+    ]
+   ],
+   "delta_w": 3.919417421891165,
+   "mj_per_frame": 130.6486023661745,
+   "delta_w_vs_median_idle": 3.7685324750561993,
+   "mj_per_frame_vs_median_idle": 125.61905197636908,
+   "command": "<home>/miniforge3/envs/mlir-aie-iron/python.exe <Ignition worktree>/live_ignition.py --model <ignite-xdna main>/build/yolov8n_full.ignite --source <Ignition main>/examples/assets/bus.jpg --headless --warmup 50 --frames 1200 --power-mode efficiency --npu-power auto --max-fps 30"
+  },
+  {
+   "label": "YOLO11n AMD @30 #1",
+   "returncode": 0,
+   "launch_to_exit_s": 47.44680905342102,
+   "window_s": 33.57954406738281,
+   "window_frames": 900,
+   "window_fps": 26.802031564038028,
+   "power_samples": 32,
+   "package_mw_mean": 71506.0864203725,
+   "package_mw_stdev": 443.31101497445525,
+   "cpu_percent_mean": 57.5255145902864,
+   "summary_lines": [
+    "[amd] ort 1.23.3.dev20260320 | model yolo11n_cut_xint8.onnx | session load 0.50 s | EP report node devices report not found",
+    "[amd] G2G mean 37.294 ms | P50 37.335 | P95 39.171 | P99 39.851 | max 40.970 | over 1200 timed frames after 50 warm-up",
+    "[amd] stage means (ms): letterbox 1.917 | session.run 33.437 | decode+NMS 1.940",
+    "[amd] detections on the last frame: 7 {'person': 5, 'bus': 1, 'handbag': 1} | RSS 342.5 MB"
+   ],
+   "idle_mw_mean": 35175.25286586806,
+   "idle_mw_stdev": 887.3445466664531,
+   "idle_samples": 29,
+   "idle_cpu_percent": 7.063289751723734,
+   "idle_suspect": false,
+   "idle_shifted": false,
+   "env": {
+    "RYZEN_AI_INSTALLATION_PATH": "C:\\Program Files\\RyzenAI\\1.7.1"
+   },
+   "setup": [
+    [
+     "<home>/miniforge3/envs/resnet_env17/python.exe",
+     "<scratch>/pmode_readback.py"
+    ]
+   ],
+   "delta_w": 36.330833554504444,
+   "mj_per_frame": 1355.525362609147,
+   "delta_w_vs_median_idle": 36.39570806383091,
+   "mj_per_frame_vs_median_idle": 1357.945869770011,
+   "command": "<home>/miniforge3/envs/resnet_env17/python.exe <ignite-xdna main>/tools/amd_vitisai_yolo.py --model <ignite-xdna main>/models/yolo11n_cut_xint8.onnx --image <Ignition main>/examples/assets/bus.jpg --ignition-src <Ignition main>/src --cache-dir <scratch>/vitisai_cache --cache-key yolo11ncutcachekey_sitting --xclbin <ignite-xdna main>/yolocutcachekey/4x4.xclbin --warmup 50 --iterations 1200 --max-fps 30"
+  },
+  {
+   "label": "YOLO11n efficiency npu-power auto @30 #1",
+   "returncode": 0,
+   "launch_to_exit_s": 42.35306715965271,
+   "window_s": 29.99945878982544,
+   "window_frames": 900,
+   "window_fps": 30.000541219938352,
+   "power_samples": 29,
+   "package_mw_mean": 39729.62527464747,
+   "package_mw_stdev": 505.85431060465993,
+   "cpu_percent_mean": 8.72042916437278,
+   "summary_lines": [
+    "[Ignition] power mode efficiency: 2 worker threads, sleeping between regions (8 cores / 16 threads on this host)",
+    "[summary] stop: frame limit | 1250 frames processed (50 warm-up, 1200 timed) | 1 distinct source frames | image bus.jpg 810x1080",
+    "[summary] NPU power mode: lowered to powersaver at frame 50, then session end; restored default",
+    "[summary] G2G mean 22.494 ms | P50 22.413 | P95 23.294 | P99 23.889 | max 25.259 | over the last 1200 timed frames; cold first frame 14.81 ms",
+    "[summary] stage means (ms): preprocess 1.553 | NPU + host forward 20.879 (dispatch 18.884, host 1.258, readback 0.737) | decode+NMS 0.052",
+    "[summary] boxes from NPU heads on 1200/1200 timed frames | 6.00 detections per frame",
+    "[summary] RSS 199.0 MB at the first timed frame, 199.0 MB at the end (+0.07 MB over 1200 frames)"
+   ],
+   "idle_mw_mean": 35266.06042614804,
+   "idle_mw_stdev": 383.8009712370478,
+   "idle_samples": 29,
+   "idle_cpu_percent": 6.990496462492992,
+   "idle_suspect": false,
+   "idle_shifted": false,
+   "env": {
+    "PYTHONPATH": "<ignite-xdna worktree>\\src",
+    "IGNITE_XDNA_NPU_POWER_LEASE": "<scratch>/npu_power_energy_lease.json"
+   },
+   "setup": [
+    [
+     "<home>/miniforge3/envs/resnet_env17/python.exe",
+     "<scratch>/pmode_readback.py"
+    ]
+   ],
+   "delta_w": 4.463564848499431,
+   "mj_per_frame": 148.78281080919123,
+   "delta_w_vs_median_idle": 4.619246918105877,
+   "mj_per_frame_vs_median_idle": 153.97211951082824,
+   "command": "<home>/miniforge3/envs/mlir-aie-iron/python.exe <Ignition worktree>/live_ignition.py --model <ignite-xdna main>/build/yolo11n_core.ignite --source <Ignition main>/examples/assets/bus.jpg --headless --warmup 50 --frames 1200 --power-mode efficiency --npu-power auto --max-fps 30"
+  },
+  {
+   "label": "YOLO11n efficiency npu-power off @30 #1",
+   "returncode": 0,
+   "launch_to_exit_s": 42.14803886413574,
+   "window_s": 29.99928855895996,
+   "window_frames": 900,
+   "window_fps": 30.00071145791205,
+   "power_samples": 29,
+   "package_mw_mean": 41113.80217968798,
+   "package_mw_stdev": 994.5572725806993,
+   "cpu_percent_mean": 8.421571914880824,
+   "summary_lines": [
+    "[Ignition] power mode efficiency: 2 worker threads, sleeping between regions (8 cores / 16 threads on this host)",
+    "[summary] stop: frame limit | 1250 frames processed (50 warm-up, 1200 timed) | 1 distinct source frames | image bus.jpg 810x1080",
+    "[summary] NPU power mode: default kept: IGNITE_XDNA_NPU_POWER=off",
+    "[summary] G2G mean 12.282 ms | P50 12.236 | P95 12.900 | P99 13.299 | max 13.840 | over the last 1200 timed frames; cold first frame 15.38 ms",
+    "[summary] stage means (ms): preprocess 1.557 | NPU + host forward 10.668 (dispatch 8.737, host 1.229, readback 0.702) | decode+NMS 0.048",
+    "[summary] boxes from NPU heads on 1200/1200 timed frames | 6.00 detections per frame",
+    "[summary] RSS 198.7 MB at the first timed frame, 198.8 MB at the end (+0.01 MB over 1200 frames)"
+   ],
+   "idle_mw_mean": 35045.09009622179,
+   "idle_mw_stdev": 957.6286171670481,
+   "idle_samples": 29,
+   "idle_cpu_percent": 7.239099727976541,
+   "idle_suspect": false,
+   "idle_shifted": false,
+   "env": {
+    "PYTHONPATH": "<ignite-xdna worktree>\\src",
+    "IGNITE_XDNA_NPU_POWER_LEASE": "<scratch>/npu_power_energy_lease.json"
+   },
+   "setup": [
+    [
+     "<home>/miniforge3/envs/resnet_env17/python.exe",
+     "<scratch>/pmode_readback.py"
+    ]
+   ],
+   "delta_w": 6.068712083466184,
+   "mj_per_frame": 202.28560552572128,
+   "delta_w_vs_median_idle": 6.003423823146383,
+   "mj_per_frame_vs_median_idle": 200.1093817914477,
+   "command": "<home>/miniforge3/envs/mlir-aie-iron/python.exe <Ignition worktree>/live_ignition.py --model <ignite-xdna main>/build/yolo11n_core.ignite --source <Ignition main>/examples/assets/bus.jpg --headless --warmup 50 --frames 1200 --power-mode efficiency --npu-power off --max-fps 30"
+  },
+  {
+   "label": "YOLO11n AMD @30 #2",
+   "returncode": 0,
+   "launch_to_exit_s": 47.32119274139404,
+   "window_s": 33.52158260345459,
+   "window_frames": 900,
+   "window_fps": 26.848374393494474,
+   "power_samples": 32,
+   "package_mw_mean": 71541.05790831195,
+   "package_mw_stdev": 610.4298904336051,
+   "cpu_percent_mean": 57.508457183141715,
+   "summary_lines": [
+    "[amd] ort 1.23.3.dev20260320 | model yolo11n_cut_xint8.onnx | session load 0.50 s | EP report node devices report not found",
+    "[amd] G2G mean 37.212 ms | P50 37.245 | P95 39.050 | P99 39.701 | max 40.882 | over 1200 timed frames after 50 warm-up",
+    "[amd] stage means (ms): letterbox 1.928 | session.run 33.334 | decode+NMS 1.951",
+    "[amd] detections on the last frame: 7 {'person': 5, 'bus': 1, 'handbag': 1} | RSS 343.2 MB"
+   ],
+   "idle_mw_mean": 35139.989462200356,
+   "idle_mw_stdev": 476.37208994027856,
+   "idle_samples": 29,
+   "idle_cpu_percent": 7.063219401426957,
+   "idle_suspect": false,
+   "idle_shifted": false,
+   "env": {
+    "RYZEN_AI_INSTALLATION_PATH": "C:\\Program Files\\RyzenAI\\1.7.1"
+   },
+   "setup": [
+    [
+     "<home>/miniforge3/envs/resnet_env17/python.exe",
+     "<scratch>/pmode_readback.py"
+    ]
+   ],
+   "delta_w": 36.401068446111594,
+   "mj_per_frame": 1355.8015808559269,
+   "delta_w_vs_median_idle": 36.43067955177036,
+   "mj_per_frame_vs_median_idle": 1356.9044821051712,
+   "command": "<home>/miniforge3/envs/resnet_env17/python.exe <ignite-xdna main>/tools/amd_vitisai_yolo.py --model <ignite-xdna main>/models/yolo11n_cut_xint8.onnx --image <Ignition main>/examples/assets/bus.jpg --ignition-src <Ignition main>/src --cache-dir <scratch>/vitisai_cache --cache-key yolo11ncutcachekey_sitting --xclbin <ignite-xdna main>/yolocutcachekey/4x4.xclbin --warmup 50 --iterations 1200 --max-fps 30"
+  },
+  {
+   "label": "YOLO11n efficiency npu-power auto @30 #2",
+   "returncode": 0,
+   "launch_to_exit_s": 42.34661293029785,
+   "window_s": 30.00054121017456,
+   "window_frames": 900,
+   "window_fps": 29.99945879958888,
+   "power_samples": 29,
+   "package_mw_mean": 39556.702052543515,
+   "package_mw_stdev": 543.9824352076458,
+   "cpu_percent_mean": 8.27674675348693,
+   "summary_lines": [
+    "[Ignition] power mode efficiency: 2 worker threads, sleeping between regions (8 cores / 16 threads on this host)",
+    "[summary] stop: frame limit | 1250 frames processed (50 warm-up, 1200 timed) | 1 distinct source frames | image bus.jpg 810x1080",
+    "[summary] NPU power mode: lowered to powersaver at frame 50, then session end; restored default",
+    "[summary] G2G mean 22.466 ms | P50 22.376 | P95 23.361 | P99 23.955 | max 24.861 | over the last 1200 timed frames; cold first frame 14.62 ms",
+    "[summary] stage means (ms): preprocess 1.556 | NPU + host forward 20.848 (dispatch 18.868, host 1.258, readback 0.722) | decode+NMS 0.052",
+    "[summary] boxes from NPU heads on 1200/1200 timed frames | 6.00 detections per frame",
+    "[summary] RSS 199.2 MB at the first timed frame, 199.3 MB at the end (+0.09 MB over 1200 frames)"
+   ],
+   "idle_mw_mean": 35080.76725088283,
+   "idle_mw_stdev": 500.93961430224044,
+   "idle_samples": 29,
+   "idle_cpu_percent": 7.000479411100191,
+   "idle_suspect": false,
+   "idle_shifted": false,
+   "env": {
+    "PYTHONPATH": "<ignite-xdna worktree>\\src",
+    "IGNITE_XDNA_NPU_POWER_LEASE": "<scratch>/npu_power_energy_lease.json"
+   },
+   "setup": [
+    [
+     "<home>/miniforge3/envs/resnet_env17/python.exe",
+     "<scratch>/pmode_readback.py"
+    ]
+   ],
+   "delta_w": 4.4759348016606815,
+   "mj_per_frame": 149.20051830141753,
+   "delta_w_vs_median_idle": 4.446323696001921,
+   "mj_per_frame_vs_median_idle": 148.21346363964585,
+   "command": "<home>/miniforge3/envs/mlir-aie-iron/python.exe <Ignition worktree>/live_ignition.py --model <ignite-xdna main>/build/yolo11n_core.ignite --source <Ignition main>/examples/assets/bus.jpg --headless --warmup 50 --frames 1200 --power-mode efficiency --npu-power auto --max-fps 30"
+  },
+  {
+   "label": "YOLO11n efficiency npu-power off @30 #2",
+   "returncode": 0,
+   "launch_to_exit_s": 42.13654708862305,
+   "window_s": 30.000207662582397,
+   "window_frames": 900,
+   "window_fps": 29.999792338855052,
+   "power_samples": 29,
+   "package_mw_mean": 41499.93590879005,
+   "package_mw_stdev": 813.5516631380469,
+   "cpu_percent_mean": 8.195370016442915,
+   "summary_lines": [
+    "[Ignition] power mode efficiency: 2 worker threads, sleeping between regions (8 cores / 16 threads on this host)",
+    "[summary] stop: frame limit | 1250 frames processed (50 warm-up, 1200 timed) | 1 distinct source frames | image bus.jpg 810x1080",
+    "[summary] NPU power mode: default kept: IGNITE_XDNA_NPU_POWER=off",
+    "[summary] G2G mean 12.267 ms | P50 12.237 | P95 12.790 | P99 13.194 | max 13.616 | over the last 1200 timed frames; cold first frame 14.76 ms",
+    "[summary] stage means (ms): preprocess 1.556 | NPU + host forward 10.654 (dispatch 8.744, host 1.216, readback 0.694) | decode+NMS 0.047",
+    "[summary] boxes from NPU heads on 1200/1200 timed frames | 6.00 detections per frame",
+    "[summary] RSS 198.6 MB at the first timed frame, 198.6 MB at the end (+0.00 MB over 1200 frames)"
+   ],
+   "idle_mw_mean": 34531.447343745574,
+   "idle_mw_stdev": 1108.002477887182,
+   "idle_samples": 29,
+   "idle_cpu_percent": 7.2747875263946655,
+   "idle_suspect": false,
+   "idle_shifted": false,
+   "env": {
+    "PYTHONPATH": "<ignite-xdna worktree>\\src",
+    "IGNITE_XDNA_NPU_POWER_LEASE": "<scratch>/npu_power_energy_lease.json"
+   },
+   "setup": [
+    [
+     "<home>/miniforge3/envs/resnet_env17/python.exe",
+     "<scratch>/pmode_readback.py"
+    ]
+   ],
+   "delta_w": 6.968488565044478,
+   "mj_per_frame": 232.28456005073906,
+   "delta_w_vs_median_idle": 6.389557552248458,
+   "mj_per_frame_vs_median_idle": 212.98672604386155,
+   "command": "<home>/miniforge3/envs/mlir-aie-iron/python.exe <Ignition worktree>/live_ignition.py --model <ignite-xdna main>/build/yolo11n_core.ignite --source <Ignition main>/examples/assets/bus.jpg --headless --warmup 50 --frames 1200 --power-mode efficiency --npu-power off --max-fps 30"
+  }
+ ]
+}

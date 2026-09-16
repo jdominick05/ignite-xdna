@@ -1,0 +1,98 @@
+# NPU power-mode governor, silicon checks, host DESKTOP-CBL5NUA (Desktop 2), 22:17:52Z
+# ignite-xdna worktree e816bc5 pipelines: lower the NPU's own power mode where it pays, and always put it back through PYTHONPATH; Ignition worktree live_ignition.py; lease file <scratch>
+# before: mode Default | contexts none
+
+== 22:17:53Z [A yolov8n efficiency @30 lowers] $ <home>\miniforge3\envs\mlir-aie-iron\python.exe <Ignition worktree>\live_ignition.py --model <ignite-xdna main>\build\yolov8n_full.ignite --source <Ignition main>\examples\assets\bus.jpg --headless --warmup 50 --frames 600 --power-mode efficiency --max-fps 30
+[A yolov8n efficiency @30 lowers] at +8 s: mode Powersaver | contexts 33960
+    [Ignition] power mode efficiency: 2 worker threads, sleeping between regions (8 cores / 16 threads on this host)
+    [Ignition] NPU power mode: powersaver from frame 50: predicted G2G 18.3 ms fits 80% of the 33.3 ms frame period
+    [Ignition] [npu power] session end; restored default
+    [summary] stop: frame limit | 650 frames processed (50 warm-up, 600 timed) | 1 distinct source frames | image bus.jpg 810x1080
+    [summary] NPU power mode: lowered to powersaver at frame 50, then session end; restored default
+    [summary] G2G mean 18.181 ms | P50 18.145 | P95 18.903 | P99 19.178 | max 20.567 | over the last 600 timed frames; cold first frame 11.97 ms
+[A yolov8n efficiency @30 lowers] exit 0 | after exit: mode Default | contexts none
+
+== 22:18:15Z [B yolo11n efficiency @30 lowers] $ <home>\miniforge3\envs\mlir-aie-iron\python.exe <Ignition worktree>\live_ignition.py --model <ignite-xdna main>\build\yolo11n_core.ignite --source <Ignition main>\examples\assets\bus.jpg --headless --warmup 50 --frames 600 --power-mode efficiency --max-fps 30
+[B yolo11n efficiency @30 lowers] at +8 s: mode Powersaver | contexts 40492
+    [Ignition] power mode efficiency: 2 worker threads, sleeping between regions (8 cores / 16 threads on this host)
+    [Ignition] NPU power mode: powersaver from frame 50: predicted G2G 22.8 ms fits 80% of the 33.3 ms frame period
+    [Ignition] [npu power] session end; restored default
+    [summary] stop: frame limit | 650 frames processed (50 warm-up, 600 timed) | 1 distinct source frames | image bus.jpg 810x1080
+    [summary] NPU power mode: lowered to powersaver at frame 50, then session end; restored default
+    [summary] G2G mean 22.471 ms | P50 22.397 | P95 23.357 | P99 24.072 | max 25.144 | over the last 600 timed frames; cold first frame 15.19 ms
+[B yolo11n efficiency @30 lowers] exit 0 | after exit: mode Default | contexts none
+
+== 22:18:38Z [C yolov8s efficiency @30 keeps (does not fit)] $ <home>\miniforge3\envs\mlir-aie-iron\python.exe <Ignition worktree>\live_ignition.py --model <ignite-xdna main>\build\yolov8s.ignite --source <Ignition main>\examples\assets\bus.jpg --headless --warmup 50 --frames 600 --power-mode efficiency --max-fps 30
+[C yolov8s efficiency @30 keeps (does not fit)] at +8 s: mode Default | contexts 16612
+    [Ignition] power mode efficiency: 2 worker threads, sleeping between regions (8 cores / 16 threads on this host)
+    [Ignition] NPU power mode: default kept: predicted G2G 39.0 ms in powersaver does not fit 80% of the 33.3 ms frame period
+    [summary] stop: frame limit | 650 frames processed (50 warm-up, 600 timed) | 1 distinct source frames | image bus.jpg 810x1080
+    [summary] NPU power mode: default kept: predicted G2G 39.0 ms in powersaver does not fit 80% of the 33.3 ms frame period
+    [summary] G2G mean 19.070 ms | P50 19.071 | P95 19.463 | P99 19.820 | max 20.111 | over the last 600 timed frames; cold first frame 21.31 ms
+[C yolov8s efficiency @30 keeps (does not fit)] exit 0 | after exit: mode Default | contexts none
+
+== 22:19:00Z [D yolov8n balanced @30 keeps] $ <home>\miniforge3\envs\mlir-aie-iron\python.exe <Ignition worktree>\live_ignition.py --model <ignite-xdna main>\build\yolov8n_full.ignite --source <Ignition main>\examples\assets\bus.jpg --headless --warmup 50 --frames 600 --power-mode balanced --max-fps 30
+[D yolov8n balanced @30 keeps] at +8 s: mode Default | contexts 26240
+    [Ignition] power mode balanced: 8 worker threads, sleeping between regions (8 cores / 16 threads on this host)
+    [Ignition] NPU power mode: default kept: the balanced power mode leaves the NPU's mode alone
+    [summary] stop: frame limit | 650 frames processed (50 warm-up, 600 timed) | 1 distinct source frames | image bus.jpg 810x1080
+    [summary] NPU power mode: default kept: the balanced power mode leaves the NPU's mode alone
+    [summary] G2G mean 8.720 ms | P50 8.642 | P95 9.312 | P99 9.568 | max 9.923 | over the last 600 timed frames; cold first frame 11.13 ms
+[D yolov8n balanced @30 keeps] exit 0 | after exit: mode Default | contexts none
+
+== 22:19:22Z [E yolov8n efficiency flat out keeps] $ <home>\miniforge3\envs\mlir-aie-iron\python.exe <Ignition worktree>\live_ignition.py --model <ignite-xdna main>\build\yolov8n_full.ignite --source <Ignition main>\examples\assets\bus.jpg --headless --warmup 50 --frames 600 --power-mode efficiency
+[E yolov8n efficiency flat out keeps] at +3 s: mode Default | contexts 41620
+    [Ignition] power mode efficiency: 2 worker threads, sleeping between regions (8 cores / 16 threads on this host)
+    [Ignition] NPU power mode: default kept: frames are not paced, and lowering the NPU saves nothing flat out
+    [summary] stop: frame limit | 650 frames processed (50 warm-up, 600 timed) | 1 distinct source frames | image bus.jpg 810x1080
+    [summary] NPU power mode: default kept: frames are not paced, and lowering the NPU saves nothing flat out
+    [summary] G2G mean 9.175 ms | P50 9.150 | P95 9.573 | P99 9.805 | max 10.338 | over the last 600 timed frames; cold first frame 12.30 ms
+[E yolov8n efficiency flat out keeps] exit 0 | after exit: mode Default | contexts none
+
+== 22:19:29Z [F yolov8n efficiency @30 --npu-power off keeps] $ <home>\miniforge3\envs\mlir-aie-iron\python.exe <Ignition worktree>\live_ignition.py --model <ignite-xdna main>\build\yolov8n_full.ignite --source <Ignition main>\examples\assets\bus.jpg --headless --warmup 50 --frames 600 --power-mode efficiency --max-fps 30 --npu-power off
+[F yolov8n efficiency @30 --npu-power off keeps] at +8 s: mode Default | contexts 20364
+    [Ignition] power mode efficiency: 2 worker threads, sleeping between regions (8 cores / 16 threads on this host)
+    [Ignition] NPU power mode: default kept: IGNITE_XDNA_NPU_POWER=off
+    [summary] stop: frame limit | 650 frames processed (50 warm-up, 600 timed) | 1 distinct source frames | image bus.jpg 810x1080
+    [summary] NPU power mode: default kept: IGNITE_XDNA_NPU_POWER=off
+    [summary] G2G mean 9.564 ms | P50 9.563 | P95 9.993 | P99 10.314 | max 10.774 | over the last 600 timed frames; cold first frame 11.44 ms
+[F yolov8n efficiency @30 --npu-power off keeps] exit 0 | after exit: mode Default | contexts none
+
+== 22:19:51Z [G Ctrl+Break after lowering restores] $ <home>\miniforge3\envs\mlir-aie-iron\python.exe <Ignition worktree>\live_ignition.py --model <ignite-xdna main>\build\yolov8n_full.ignite --source <Ignition main>\examples\assets\bus.jpg --headless --warmup 50 --frames 3000 --power-mode efficiency --max-fps 30
+[G Ctrl+Break after lowering restores] at +8 s: mode Powersaver | contexts 25148
+    [Ignition] power mode efficiency: 2 worker threads, sleeping between regions (8 cores / 16 threads on this host)
+    [Ignition] NPU power mode: powersaver from frame 50: predicted G2G 18.3 ms fits 80% of the 33.3 ms frame period
+    [Ignition] [npu power] session end; restored default
+    [summary] stop: SIGBREAK | 232 frames processed (50 warm-up, 182 timed) | 1 distinct source frames | image bus.jpg 810x1080
+    [summary] NPU power mode: lowered to powersaver at frame 50, then session end; restored default
+    [summary] G2G mean 18.127 ms | P50 18.073 | P95 18.774 | P99 19.395 | max 20.247 | over the last 182 timed frames; cold first frame 11.37 ms
+[G Ctrl+Break after lowering restores] exit 0 | after exit: mode Default | contexts none
+
+== 22:20:00Z [H another NPU process makes the watcher restore] $ <home>\miniforge3\envs\mlir-aie-iron\python.exe <Ignition worktree>\live_ignition.py --model <ignite-xdna main>\build\yolov8n_full.ignite --source <Ignition main>\examples\assets\bus.jpg --headless --warmup 50 --frames 900 --power-mode efficiency --max-fps 30
+[H another NPU process makes the watcher restore] at +8 s: mode Powersaver | contexts 11484
+
+== 22:20:08Z [H second process (balanced, flat out)] $ <home>\miniforge3\envs\mlir-aie-iron\python.exe <Ignition worktree>\live_ignition.py --model <ignite-xdna main>\build\yolov8n_full.ignite --source <Ignition main>\examples\assets\bus.jpg --headless --warmup 50 --frames 1500 --power-mode balanced
+[H another NPU process makes the watcher restore] at +8 s: mode Default | contexts 11484,4720
+    [Ignition] power mode balanced: 8 worker threads, sleeping between regions (8 cores / 16 threads on this host)
+    [Ignition] NPU power mode: default kept: the balanced power mode leaves the NPU's mode alone
+    [summary] stop: frame limit | 1550 frames processed (50 warm-up, 1500 timed) | 1 distinct source frames | image bus.jpg 810x1080
+    [summary] NPU power mode: default kept: the balanced power mode leaves the NPU's mode alone
+    [summary] G2G mean 12.676 ms | P50 8.664 | P95 18.163 | P99 36.859 | max 90.754 | over the last 1500 timed frames; cold first frame 36.59 ms
+[H second process] exit 0 | after exit: mode Default | contexts 11484
+    [Ignition] power mode efficiency: 2 worker threads, sleeping between regions (8 cores / 16 threads on this host)
+    [Ignition] NPU power mode: powersaver from frame 50: predicted G2G 18.3 ms fits 80% of the 33.3 ms frame period
+    [Ignition] [npu power] another process opened the NPU (PID 4720); restored default
+    [summary] stop: frame limit | 950 frames processed (50 warm-up, 900 timed) | 1 distinct source frames | image bus.jpg 810x1080
+    [summary] NPU power mode: lowered to powersaver at frame 50, then another process opened the NPU (PID 4720); restored default
+    [summary] G2G mean 17.694 ms | P50 16.384 | P95 36.816 | P99 37.070 | max 81.184 | over the last 900 timed frames; cold first frame 12.17 ms
+[H another NPU process makes the watcher restore] exit 0 | after exit: mode Default | contexts none
+
+== 22:20:32Z [I hard kill leaves powersaver, next start restores] $ <home>\miniforge3\envs\mlir-aie-iron\python.exe <Ignition worktree>\live_ignition.py --model <ignite-xdna main>\build\yolov8n_full.ignite --source <Ignition main>\examples\assets\bus.jpg --headless --warmup 50 --frames 3000 --power-mode efficiency --max-fps 30
+[I hard kill leaves powersaver, next start restores] at +8 s: mode Powersaver | contexts 2960
+[I hard kill leaves powersaver, next start restores] killed: mode Powersaver | contexts none | lease file present True
+    restored the NPU power mode to default after process 2960 left it in powersaver
+    NPU power mode: default
+    ================================================================================
+[I hard kill leaves powersaver, next start restores] after `ignition devices --restore-npu-power`: exit 0 | mode Default | lease file present False
+
+# end 22:20:43Z | mode Default | contexts none | failures 0
