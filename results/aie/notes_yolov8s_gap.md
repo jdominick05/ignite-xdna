@@ -589,3 +589,44 @@ DDR bytes by routing them through the MemTile does not save time. The derived co
 3-4 ms in the same direction, because it prices DDR bytes and instruction ops and has no term for the hop.
 A future design whose saving is "bytes not fetched from DDR" should be priced with that term - about
 0.05 ms per MB served through a MemTile, net of arming - before it is built.
+
+## RETRACTED: a MemTile hop is not slower per byte - measured in isolation, it costs nothing
+
+The section above concluded that "a MemTile store-and-forward hop is slower per byte than the DDR transport
+it replaces" and proposed pricing future designs at ~0.05 ms per MB served through a MemTile. **Both are
+wrong.** They generalised from two protocol-specific losses to the hop itself, and the hop was never
+measured on its own. It now is ([memtile_hop_phoenix_20260916T1523Z.log](memtile_hop_phoenix_20260916T1523Z.log),
+`tools/memtile_hop_probe.py`).
+
+One core, the engine's object sizes (6,400 B in, 3,200 B out), no compute, transfers issued the way the
+engine issues them; four routes that differ only in whether each direction passes through a MemTile
+ObjectFifo `forward`; five volumes from 3.3 to 52.4 MB in; three interleaved rounds, 30 timed dispatches
+per point, each point in its own process:
+
+| route | ms per MB in | intercept |
+|---|---|---|
+| shim -> core -> shim | 0.14301 | 0.117 ms |
+| via MemTile on the way in | 0.14278 | 0.122 ms |
+| via MemTile on the way out | 0.14327 | 0.116 ms |
+| via MemTile both ways | 0.14280 | 0.127 ms |
+
+The hop costs **-0.0002 ms per MB in and +0.0005 ms per MB out**: zero within noise, and additive. The
+0.044 ms per MB the weight buffer lost would have been a 30% slope difference here.
+
+What this changes:
+
+- **The weight buffer and the ring lost to their protocols, not to the MemTile.** Likely causes, NOT
+  isolated: a fill has to land whole before its serve can begin, where the shim path is cut-through, so a
+  core idles while a run or piece is stored; plus per-layer channel resets and arming. The two losses
+  scaling with bytes fits that - a bigger run is a longer stall - as well as it fitted a hop tax.
+- **Taking the MemTile out of the default activation and output paths would save nothing.** yolov8s moves
+  237.7 MB of activations and 27.8 MB of outputs through a MemTile split and join per frame; at the measured
+  hop cost that is about 0.1 ms at most, inside noise, and the rewiring it would need (packet-switched
+  shim-to-core flows, with no clean replacement for the join) is large.
+- **So activation transport has no measured lever left.** Over-read is unrecoverable, compression is
+  parked, cascade reaches one halo row of two behind a kernel change, residency lost twice, and the hop is
+  free. The yolov8s gap to AMD's stack is recorded as a known limitation of this runtime.
+
+Not measured: the split and join shapes themselves (one MemTile channel to four cores), several columns at
+once, and other object sizes. The probe also cannot tell whether a column's transport rate is set per byte
+or per object, because the two scale together in every route; that question is open and is not pursued.
