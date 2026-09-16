@@ -265,8 +265,18 @@ def _weight_buffer(col, name):
               acquires=[Acquire(space, 1)], releases=[Release(ready, 1)])
     # One serve per arm. Offsets and lengths are placeholders: a layer writes its own, and a layer that
     # uses fewer arms simply never pushes the rest.
+    #
+    # They are chained into a CYCLE purely so the lowering can reach them. IRON's ``Bd.next`` defaults to
+    # "self", and a descriptor no ``aie.dma_start`` reaches is dropped from the id allocator and its id
+    # handed to another fifo - so four self-linked serves compile to ONE, and pushing 44..46 would push
+    # descriptors that do not exist. Measured: the first build emitted `bd_id = 43, next_bd_id = 43` and
+    # nothing else, and a single layer hung because arms 1-3 never served.
+    #
+    # The cycle is only a compile-time device. ``_configure_wbuf`` clears Use_Next_BD on each descriptor at
+    # runtime, so every serve completes and retires on its own and the queue sequences the arms.
     serves = [Bd(wbuf, offset=k * W_BYTES, length=W_BYTES, bd_id=WBUF_BD_SERVE + k,
-                 acquires=[Acquire(ready, 1)], releases=[Release(space, 1)])
+                 acquires=[Acquire(ready, 1)], releases=[Release(space, 1)],
+                 next=(k + 1) % WBUF_ARMS_MAX)
               for k in range(WBUF_ARMS_MAX)]
     flows = [Flow(shim, mem, src_channel=1, dst_channel=WBUF_FILL_CHANNEL, shim_symbol=name)]
     locks = [space, ready]
