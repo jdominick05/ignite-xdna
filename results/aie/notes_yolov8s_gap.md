@@ -470,3 +470,37 @@ Three facts that size the design, all measured rather than assumed:
   on silicon, and `replay <= 16` sits well inside the 63 a MemTile lock value holds - where the ring's own
   `ROWS * serves` had to be range-checked. Weights are the same bytes for all four cores, so one MM2S
   broadcasts where the activation split needed four channels.
+
+## The resident weight buffer, costed offline: net +0.729 ms derived on yolov8s
+
+Built and priced, not yet dispatched. Two containers per model from one driver, so the only difference is
+the flag; both streams confirmed distinct by sha256, because this investigation was already misled once by
+a rebuild whose insts.bin was byte-identical to the flag-off build's.
+
+| | yolov8n | yolov8s |
+|---|---|---|
+| weight bytes, flag-off | 26,303,744 | 83,618,816 |
+| weight bytes, buffer | 16,414,976 | 56,339,456 |
+| DDR saving | 0.369 ms | **1.018 ms** |
+| extra instruction ops | +2,016 | +1,992 |
+| arming cost at 145 ns/op | +0.292 ms | +0.289 ms |
+| **net, derived** | **+0.077 ms** | **+0.729 ms** |
+
+The arming cost is almost identical on the two models, which is the point: it scales with layers times
+columns - 66 x 4 either way - while the saving scales with the weight traffic. That is what makes yolov8s
+the candidate and yolov8n marginal.
+
+The op delta is exactly the design, which is the check that the emitter does what it was written to do:
++1,674 WRITE and +514 BLOCKWRITE over 264 column-layers is six writes and two block-writes each - two
+`writebd` descriptors, two word-7 rewrites, two absolute lock writes and two queue pushes. DDR_PATCH and
+TCT both FALL (-132 and -32), because the shim issues fewer weight tasks once it stops re-sending runs.
+
+Two things this does not say. It is derived from the same comparator that predicted the activation ring
+would win by 0.748 ms when it lost by 3.40, so it decides whether to spend a sitting and nothing else.
+And 0.077 ms on yolov8n is inside any reasonable error: if the buffer is worth anything it is worth it on
+yolov8s, where the 0.29 ms gap is.
+
+A cheaper arming is available if the measurement is marginal: the two word-7 rewrites per descriptor are
+0.077 ms of deliberate insurance against `writebd`'s undocumented acquire-sign convention, and the ring's
+shape-skip (e3b6028) would drop the arming entirely for a layer whose arms match the layer before it.
+Neither is worth doing before silicon says whether any of this survives contact.
