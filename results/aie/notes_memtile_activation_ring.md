@@ -805,6 +805,51 @@ the tile to the layer, and the drain barrier removed along with the re-arm it ex
 written, and all of these milliseconds are derived - the case for building rests on a comparator, so the first
 build should be measured against flag-off on silicon before anything is claimed.
 
+## Built, dispatched, and hung: a free-running cycle has no quiescent point
+
+It was built (`bd5579b`, `bfe6480`), and on the instruction stream it does exactly what it was costed to do.
+Ops counted from each container's `insts.bin`:
+
+| container | insts.bin | ops | above its own flag-off |
+|---|---|---|---|
+| yolov8n flag-off | 430,180 | 12,258 | |
+| yolov8n ring, per-tile arming | 1,371,652 | 45,521 | +33,263 |
+| yolov8n ring, **arm-once** | 793,060 | 23,529 | **+11,271** |
+| yolov8s flag-off | 1,019,140 | 28,791 | |
+| yolov8s ring, per-tile arming (16 slots) | 1,797,780 | 58,388 | +29,597 |
+| yolov8s ring, **arm-once** | 1,371,508 | 40,079 | **+11,288** |
+
+The descriptors landed precisely where the parity arithmetic said they would: the arrival cycling 24-29 on
+S2MM 5, the serves 0-5, 30-35, 6-11 and 36-41 on MM2S 0-3, every chain wrapping back to its own head, and the
+output join keeping MM2S 4 with 12-23 and 42-45. The even half is exactly full, as predicted.
+
+**Then the eight-layer probe timed out.** `ERT_CMD_STATE_TIMEOUT`, not `0xc01e0009`: the device granted a
+context and the dispatch simply never finished. The device was healthy on both sides of it - the known-good
+flag-off container verified 66/66 exact immediately before (7.366 ms mean over 20 dispatches) and immediately
+after (7.314 ms) - so the hang belongs to the design, not to the machine.
+
+**Why, and it is structural rather than a slip.** A descriptor acquires its lock *before* it transfers. The
+arrival descriptor for the next slot has therefore already taken that slot's `space` and is sitting waiting for
+stream bytes that will only arrive with the next layer's fills - so the chain is mid-flight at exactly the
+moment a layer boundary looks idle. Retiring every shim task proves nothing about the tile side.
+`_configure_ring` writes a `space[i]` the DMA has already consumed, crediting it twice, and relinks `next_bd`
+on a chain the hardware is walking.
+
+**The rule, stated generally so it is not rediscovered: a MemTile chain is quiescent only when something proves
+its last transfer was consumed, and the only such proof this engine has ever had is a completed drain.** That
+is what the reverse edge was, and it is what made arming per tile safe. Arm-once deletes the barrier, so it
+deletes the only evidence of quiescence there is; the two cannot be had together. The obvious repairs all
+collapse: a reset clears the run state and nothing but a queue push restarts it, and a pushed cycle is a task
+that never completes so the queue never advances - which is per-tile arming again; one shape for the whole
+model needs a fixed `ROWS * serves` and `serves` varies by layer; and reconfiguring only on change was measured
+to cost what reconfiguring every layer costs, besides not touching the race.
+
+**The first measured numbers on this branch, and they bear on everything above.** Flag-off on Desktop 2, one
+sitting, 20 dispatches each: 7.366 ms and 7.314 ms mean, 66/66 layers exact both times. The derived comparator
+for that same schedule is 6.481 ms, so **the model this investigation has used throughout runs about 13%
+optimistic**. Every ring verdict derived at 26.8 GB/s and 145 ns per op therefore sits further negative than
+written - yolov8s's -0.912 ms included - and nothing here should be quoted as a latency.
+
 A hazard this narrows without closing, recorded so it is not rediscovered: `ensure` retires a channel once it
 holds `queue_depth` tasks, and retiring means awaiting. A tile whose column owns five or more groups pushes
 that many drains before its `S`, and such a drain cannot complete until that `S` runs. Over the schedules,
