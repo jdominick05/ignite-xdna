@@ -296,11 +296,12 @@ class SequenceEmitter:
 
     def __init__(self, ws, wp, ws_bytes: int, wp_bytes: int, fifo_names: Dict[int, Dict[str, str]]):
         from aie.dialects.aiex import (dma_await_task, dma_free_task, dma_start_task, npu_maskwrite32,
-                                       npu_push_queue, npu_write32, shim_dma_single_bd_task)
+                                       npu_push_queue, npu_sync, npu_write32, shim_dma_single_bd_task)
         from aie.dialects._aie_enum_gen import DMAChannelDir
         self._maskwrite = npu_maskwrite32
         self._write32 = npu_write32
         self._push_queue = npu_push_queue
+        self._sync = npu_sync
         self._dir = DMAChannelDir
         # The ring's descriptor and lock ids are pinned by the design that compiles them, and read from it here
         # rather than restated, so the two cannot drift: a maskwrite to the wrong descriptor is silent.
@@ -395,14 +396,29 @@ class SequenceEmitter:
         self._push_queue(col, MEMTILE_ROW, self._dir.S2MM, 0, False, slots - 1, self._ring_fill)
 
     def _serve_ring(self, col: int, slots: int, serves: int) -> None:
-        """Replay one column's tile once per output group of it that the column owns.
+        """Replay one column's tile once per output group of it that the column owns, then wait for it.
 
         A serve sends one core's slice out of every slot, so one replay is ``slots`` executions and ``serves``
         replays that many again. The register holds one less than the executions asked for.
+
+        Each push asks for a completion token, and all four are awaited before this returns, which holds a
+        column to one tile in flight. **A MemTile DMA channel's task queue holds four entries and nothing else
+        here bounds it.** A tile pushes one arrival and four serves; a layer of 64 tiles would push 64 tasks
+        at a queue of 4, and past the fourth the hardware sets a sticky Task_Queue_Overflow bit rather than
+        blocking, so the rest are simply lost. These pushes are also invisible to the emitter's own
+        bookkeeping: ``ensure`` bounds shim channels by counting what ``push`` recorded, and a MemTile push
+        occupies no shim slot, so nothing there could ever have throttled them.
+
+        Waiting settles the other ordering this needs at the same time. The five descriptors and the lock pair
+        are shared by every tile, and ``_arm_ring`` rewrites the locks unconditionally, so a tile that re-armed
+        while the previous replay was still reading would zero an ``arrived`` those serves are waiting on -
+        tokens whose fill has already retired and will never be released again.
         """
         for r in range(self._ring_rows):
-            self._push_queue(col, MEMTILE_ROW, self._dir.MM2S, r, False, slots * serves - 1,
+            self._push_queue(col, MEMTILE_ROW, self._dir.MM2S, r, True, slots * serves - 1,
                              self._ring_serve(r, 0))
+        for r in range(self._ring_rows):
+            self._sync(col, MEMTILE_ROW, self._dir.MM2S, r)
 
     def run_column_programs(self, programs: Sequence[Sequence[tuple]], bd_budget: int = 14,
                             queue_depth: int = 4, retire_batch: int = 2) -> None:
