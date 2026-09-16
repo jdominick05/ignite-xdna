@@ -131,6 +131,10 @@ All times in ms. AMD's stack is faster on both: its NPU stage is 3.6 ms shorter 
 SESR M7, more than Ignition's native letterbox and decode recover on YOLOv8s (0.34 ms of host work against 3.82 ms).
 The control, `build/yolov8n_full.ignite` through `live_ignition.py`, ran at 7.771 ms.
 
+The YOLOv8s gap is now a known limitation of this runtime: every runtime-side way of shortening its NPU stage was
+built, measured or sized on 2026-09-16 and none survived
+([BENCHMARKS](BENCHMARKS.md#memtile-residency-does-not-pay-on-the-graph-engine-and-the-yolov8s-gap-is-a-known-limitation-2026-09-16-desktop-2)).
+
 ### Through Ignition (`live_ignition.py`, 500 frames)
 
 <!-- BEGIN npu (tools/model_zoo_bench.py) -->
@@ -213,6 +217,11 @@ measurement:
   about 1.6 MB per column against a 512 KB MemTile.
 - It would not change the result above: removing all weight traffic takes about 0.26 ms off
   the 2.53 ms floor (DERIVED above).
+
+(2026-09-16: a hand-written MemTile weight buffer with raw locks, not an `init_values` ObjectFIFO, was later built
+for YOLOv8n and YOLOv8s. It is 66/66 byte-exact and slower on both, by 1.160 and 3.630 ms
+([BENCHMARKS](BENCHMARKS.md#memtile-residency-does-not-pay-on-the-graph-engine-and-the-yolov8s-gap-is-a-known-limitation-2026-09-16-desktop-2)).
+It was not tried on SESR, so 3c above stays Not met.)
 
 ## On main with the native decode (2026-09-14, 22:09 UTC)
 

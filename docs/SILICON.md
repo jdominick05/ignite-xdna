@@ -89,6 +89,7 @@ New numbers use 1.80 GHz and say which power mode they were taken in.
 | DMA | 6 S2MM + 6 MM2S channels; 48 BDs (even channels use BDs 0–23, odd 24–47); 64 locks | SPEC: switchbox DMA bundle = 6 each way; `getNumBDs(MemTile) = 48`; `isBdChannelAccessible`; `getNumLocks(MemTile) = 64`. |
 | BD fields | length ≤ 2¹⁷−1 words (the whole tile); **4-D** addressing; 10-bit wrap; 17-bit step; 6-bit iteration wrap | SPEC: same accessors. The 4-D BD is the one address generator on the chip that can do an im2col or a transpose in flight without a core touching the data. |
 | Neighbour access | east and west mem tiles are addressable | SPEC: `isLegalMemAffinity`'s mem-tile branch. TO VERIFY on NPU1 hardware. |
+| BD encoding when a transaction stream writes a whole BD | word 0: length in 32-bit words. Word 1: low bits an absolute address in words, (0x80000 + the buffer's L1 address) / 4. Word 7: lock ids written as id + 64, while the lock value registers at `0xC0000 + 0x10 × id` take the raw id | MEASURED: read from the configuration CDO of the graph engine's weight-buffer build against its assigned addresses (`w0_buf` at 0 is 0x20000, `a0_cons_buff_0` at 303,104 is 0x32800, `o0_buff_0` at 354,304 is 0x35A00; lock 32 is 0x60), recorded in `results/aie/notes_yolov8s_gap.md`; a stream using this encoding runs 66/66 exact in `results/aie/weight_buffer_phoenix_20260916T1508Z.log`. |
 
 ### 1.4 One shim tile
 
@@ -133,6 +134,15 @@ S0 has settled its half (1.7): the clock is 1.80 GHz, so 7.0 GB/s is 3.9 bytes p
 — one 32-bit stream word per cycle, and `max_stream_bw: 4` reads as bytes per cycle after
 all. The DRAM figure at 1.8 GHz is 28.8 GB/s, still within 10% of the 26–28 GB/s shared
 cap. What S1 still owns is whether that cap is DRAM, NoC, or channel count.
+
+A fourth design isolates the mem tile hop rather than a rate. `tools/memtile_hop_probe.py` sends the graph engine's
+6,400 B input and 3,200 B output objects through one core with no compute, on four routes that differ only in
+whether each direction passes through a mem tile ObjectFIFO `forward`. Dispatch time against megabytes in (3.3 to
+52.4 MB, outputs half that) has slope 0.14301 ms per MB direct and 0.14280 through the mem tile both ways: the hop
+costs -0.00023 ms per MB in and +0.00053 ms per MB out, zero within noise. MEASURED
+`results/aie/memtile_hop_phoenix_20260916T1523Z.log`. The direct route moves 1.5 MB of read and write bytes per
+0.14301 ms, 10.5 GB/s on one channel (DERIVED), below the passthrough's 13.78 GB/s; unlike the passthrough it also
+pays a core's acquire and release per object, which this run cannot separate from the byte rate.
 
 ### 1.7 Clock and power mode
 
