@@ -1778,3 +1778,15 @@ cached reference heads rather than `bo_out`.
   against 16.954 and 16.958 ms, lost inside the NPU stage, with every runtime-side lever above closed. Further
   YOLOv8s latency work goes into model shape, not into the transport
   ([BENCHMARKS](BENCHMARKS.md#known-limitations)).
+- **The host side has power modes, balanced by default, sized to the host (2026-09-16).** The native preprocessor's
+  OpenMP workers spun through every NPU dispatch (YOLOv8n at 100 % CPU, about 380 mJ per frame above idle, three times
+  AMD's stack) because the passive wait policy the pipeline set through `os.environ` never reached MSVC's OpenMP
+  runtime, which reads the UCRT's table. `pipelines/power.py` writes both environments before the DLL loads and offers
+  `performance` (spinning, every logical processor), `balanced` (sleeping, one worker per physical core, the default)
+  and `efficiency` (sleeping, a quarter of the physical cores), chosen with `IGNITE_XDNA_POWER_MODE` before the package
+  is imported. Thread counts are fractions of the host's cores, never fixed numbers, because core counts differ from
+  one part to the next. Chosen over an LLVM OpenMP build (`/openmp:llvm` honours the policy too, but its runtime
+  ships only in Visual Studio's non-redistributable folder, so a user's install would fall back to numpy
+  preprocessing) and over a hand-written thread pool (unnecessary once the policy reaches the runtime). Balanced is
+  the default because spinning every core buys 5 % more frames per second for three times the energy per frame
+  ([BENCHMARKS](BENCHMARKS.md#energy-per-frame-against-amds-stack-and-power-modes-2026-09-16-desktop-2)).

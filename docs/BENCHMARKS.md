@@ -8389,3 +8389,62 @@ Both were sized above and are unavailable.
 **Not done:** isolating which part of the weight buffer's protocol costs the time; the hop on the engine's split and
 join shapes (one MemTile channel to four cores) and across several columns at once; SESR with either structure.
 No further YOLOv8s latency work is planned in the runtime; the remaining traffic is cut by model shape.
+
+## Energy per frame against AMD's stack, and power modes (2026-09-16, Desktop 2)
+
+Nothing in this repository had measured the graph engine's energy against AMD's stack. This section does, and the
+first thing it found was that Ignition on the engine ran every hardware thread flat out. Evidence:
+`results/aie/energy_power_modes_yolov8n_phoenix_20260916T1645Z.log` (the sitting) and
+`results/aie/energy_openmp_wait_policy_verify_phoenix_20260916T1640Z.log` (the root cause). Code: `3bfebcd`
+(`src/ignite_xdna/pipelines/power.py`); tools: `e06695a` (`tools/energy_sitting.py`, `tools/power_probe.py`,
+`tools/amd_vitisai_yolo.py`).
+
+**Method** (`tools/energy_sitting.py`). The NPU has no power domain of its own, so every figure is a delta of the AMD
+RAPL package counter (read through PDH) against an idle baseline taken right before each arm; it is what the whole
+application spends above idle, never an NPU figure. Each arm runs a fixed frame loop on `bus.jpg`; the window opens at
+its second progress line and closes at its last, so session load, warm-up and shutdown are excluded, and frames per
+second is wall frames over wall time. Energy per frame is (window package power - idle) / fps. A disturbed idle
+baseline is retaken, and every arm is also scored against the sitting's median undisturbed idle, the figure quoted
+here. AMD's arm is ONNX Runtime 1.23.3 with the Vitis AI EP (Ryzen AI 1.7.1) and Ignition's own letterbox, decode and
+NMS; its compiled model has the same hash as the repository cache whose EP report places 922 of 929 nodes on the NPU
+(this sitting's own compile wrote no report). Ignition's arm is `live_ignition.py` on `build/yolov8n_full.ignite`.
+
+**The spin** (MEASURED). OpenMP's workers busy-wait between parallel regions by default, and a frame is a few short
+regions in the native preprocessor around a 7 ms NPU dispatch, so every worker spun through every dispatch.
+`yolo_pipeline.py` sets `OMP_WAIT_POLICY=PASSIVE` with `os.environ` to prevent exactly this, and it never took effect:
+MSVC's OpenMP runtime (`vcomp140`, which the shipped `preprocess_simd.dll` imports) reads the UCRT's environment table,
+and since CPython 3.9 `os.environ` on Windows writes only the Win32 block. One short sitting, YOLOv8n:
+
+| Arm | fps | CPU | mJ per frame |
+|---|---:|---:|---:|
+| Policy set with `os.environ` as the first statement of the process, unchanged engine code | 124.51 | 100.0 % | 372.3 |
+| Policy also written with `ucrtbase._putenv_s` before the DLL loads (`power.py`) | 118.83 | 14.0 % | **134.5** |
+
+(Arm A ran from a scratch launcher that set the variable and then called Ignition's `main()`; arm B loaded this
+worktree's `ignite_xdna` through `PYTHONPATH`, because a script run imports the environment's editable install rather
+than the working directory - which is how two earlier arms measured unchanged code under a "fixed" label and were
+discarded.)
+
+**Power modes** (MEASURED). `IGNITE_XDNA_POWER_MODE` chooses how the workers wait and how many run, as fractions of the
+host's own cores (read from `GetLogicalProcessorInformationEx`); it must be set before `ignite_xdna` is first imported.
+One interleaved sitting, full speed, median of 8 undisturbed 30 s idle baselines (34.916 W), two runs each:
+
+| Arm | Workers on this 8C/16T host | fps | G2G mean | CPU | mJ per frame |
+|---|---|---:|---:|---:|---:|
+| AMD's stack | — | 89.08 / 95.77 | 11.223 / 10.446 ms | 10.8 / 11.6 % | 126.6 / 123.5 |
+| `performance` (the behaviour until `3bfebcd`) | 16, spinning | 125.81 / 126.25 | 7.934 / 7.906 ms | 99.9 / 100.0 % | 377.7 / 381.6 |
+| `balanced` (default) | 8, sleeping | 119.06 / 119.11 | 8.379 / 8.377 ms | 11.1 / 10.5 % | 128.7 / 124.5 |
+| `efficiency` | 2, sleeping | 109.56 / 108.53 | 9.112 / 9.196 ms | 9.3 / 10.8 % | 114.7 / 120.7 |
+
+- Performance mode spends about three times AMD's energy per frame for 31-42 % more frames per second.
+- The balanced default gives up 0.46 ms of G2G against performance and spends a third of its energy per frame: about
+  what AMD's stack spends, at 24-34 % more frames per second.
+- Efficiency averages 117.7 mJ against AMD's 125.1, 6 % less, but its two runs differ by 6 mJ; that is not claimed
+  as an energy win.
+- At full speed, then, the engine is faster at equal energy per frame, not cheaper per frame. The outputs do not
+  change with the mode: every parallel loop writes disjoint indices.
+
+**Not done:** a paced load (a 30 fps camera), where sleeping workers should matter more and watts rather than joules
+per frame are the user's figure; any host but the 8700G (the modes are defined relative to the host, and verified on
+this one); YOLOv8s, SESR M7, YOLOv8n-pose and YOLO11n; the NPU's own device-wide power modes (`xrt-smi configure
+--pmode`), which would also slow any other NPU application.

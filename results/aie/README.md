@@ -1202,3 +1202,10 @@ committed.
 hardware compression, cascade halo exchange, and the resident weight buffer built, debugged against the CDO and
 measured. Read the retractions above before quoting it. Full treatment in
 [BENCHMARKS](../../docs/BENCHMARKS.md#memtile-residency-does-not-pay-on-the-graph-engine-and-the-yolov8s-gap-is-a-known-limitation-2026-09-16-desktop-2).
+
+## Energy per frame against AMD's stack, and power modes
+
+| Log | Outcome |
+|---|---|
+| [energy_openmp_wait_policy_verify_phoenix_20260916T1640Z.log](energy_openmp_wait_policy_verify_phoenix_20260916T1640Z.log) | Why the native preprocessor's OpenMP workers spun: YOLOv8n through Ignition with `OMP_WAIT_POLICY=PASSIVE` set by `os.environ` as the first statement of the process (a scratch launcher that then called Ignition's `main()` on unchanged engine code) still ran at 100.0 % CPU and 372.3 mJ per frame above idle; with the policy also written through `ucrtbase._putenv_s` before the DLL loads (`pipelines/power.py`, loaded through `PYTHONPATH`), 14.0 % CPU and 134.5 mJ at 118.83 fps. Short windows, one run each ([JSON](energy_openmp_wait_policy_verify_phoenix_20260916T1640Z.json)) |
+| [energy_power_modes_yolov8n_phoenix_20260916T1645Z.log](energy_power_modes_yolov8n_phoenix_20260916T1645Z.log) | One interleaved sitting, YOLOv8n on bus.jpg at full speed, package power above the median of 8 undisturbed 30 s idle baselines: AMD's stack 89.08 / 95.77 fps and 126.6 / 123.5 mJ per frame; Ignition `performance` 125.81 / 126.25 fps and 377.7 / 381.6 mJ; `balanced` 119.06 / 119.11 fps and 128.7 / 124.5 mJ; `efficiency` 109.56 / 108.53 fps and 114.7 / 120.7 mJ ([JSON](energy_power_modes_yolov8n_phoenix_20260916T1645Z.json)) — [BENCHMARKS](../../docs/BENCHMARKS.md#energy-per-frame-against-amds-stack-and-power-modes-2026-09-16-desktop-2) |

@@ -1,0 +1,27 @@
+Energy sitting on DESKTOP-CBL5NUA, started 2026-09-16T16:40:06Z
+Package power: typeperf '\Energy Meter(RAPL_Package0_PKG)\Power', 1 s samples, milliwatts. Idle 10 s before each arm; window from progress line 2 to the last.
+== 2026-09-16T16:40:06Z [A: os.environ only at start, main code]
+  idle      9 samples, mean 34.499 W, stdev 0.445 W, CPU 7.6 %
+  $ <home>/miniforge3/envs/mlir-aie-iron/python.exe <scratch>/run_live_osenviron.py --model <home>/PycharmProjects/ignite-xdna/build/yolov8n_full.ignite --source <home>/PycharmProjects/ignite-xdna/Ignition/examples/assets/bus.jpg --headless --warmup 50 --frames 2500
+    [summary] stop: frame limit | 2550 frames processed (50 warm-up, 2500 timed) | 1 distinct source frames | image bus.jpg 810x1080
+    [summary] G2G mean 8.013 ms | P50 7.990 | P95 8.203 | P99 8.637 | max 23.129 | over the last 2500 timed frames; cold first frame 11.58 ms
+    [summary] stage means (ms): preprocess 0.434 | NPU forward 7.534 (dispatch 7.241, readback 0.293) | decode+NMS 0.039
+    [summary] boxes from NPU heads on 2500/2500 timed frames | 5.00 detections per frame
+    [summary] RSS 191.8 MB at the first timed frame, 191.8 MB at the end (+0.00 MB over 2500 frames)
+  window    2200 frames in 17.7 s = 124.51 fps, 16 power samples, CPU 100.0 %
+  energy    package 80.932 W - idle 34.499 W = +46.433 W -> 372.92 mJ per frame
+== 2026-09-16T16:40:44Z [B: loader fix via PYTHONPATH, no env]
+  idle      9 samples, mean 34.658 W, stdev 1.266 W, CPU 8.1 %
+  $ <home>/miniforge3/envs/mlir-aie-iron/python.exe <home>/PycharmProjects/ignite-xdna/Ignition/live_ignition.py --model <home>/PycharmProjects/ignite-xdna/build/yolov8n_full.ignite --source <home>/PycharmProjects/ignite-xdna/Ignition/examples/assets/bus.jpg --headless --warmup 50 --frames 2500
+    [summary] stop: frame limit | 2550 frames processed (50 warm-up, 2500 timed) | 1 distinct source frames | image bus.jpg 810x1080
+    [summary] G2G mean 8.395 ms | P50 8.380 | P95 8.637 | P99 8.985 | max 10.090 | over the last 2500 timed frames; cold first frame 11.64 ms
+    [summary] stage means (ms): preprocess 0.489 | NPU forward 7.855 (dispatch 7.182, readback 0.673) | decode+NMS 0.043
+    [summary] boxes from NPU heads on 2500/2500 timed frames | 5.00 detections per frame
+    [summary] RSS 183.9 MB at the first timed frame, 183.9 MB at the end (+0.00 MB over 2500 frames)
+  window    2200 frames in 18.5 s = 118.83 fps, 17 power samples, CPU 14.0 %
+  energy    package 50.554 W - idle 34.658 W = +15.896 W -> 133.78 mJ per frame
+
+Median idle over 2 undisturbed baselines: 34.578 W
+arm                                           fps  CPU %  +W own idle  mJ/frame  mJ vs median idle
+A: os.environ only at start, main code     124.51  100.0       46.433    372.92             372.28
+B: loader fix via PYTHONPATH, no env       118.83   14.0       15.896    133.78             134.45
