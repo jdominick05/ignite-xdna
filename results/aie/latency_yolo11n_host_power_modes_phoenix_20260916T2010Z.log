@@ -1,0 +1,119 @@
+# YOLO11n after the host-segment power-mode fix, host DESKTOP-CBL5NUA (Desktop 2), start 2026-09-16T20:10:33Z
+# ignite-xdna worktree at fbd53f5 pipelines: power modes cover host segments, whose ONNX Runtime threads spun in every mode, imported through PYTHONPATH; Ignition main (v0.3.2) live_ignition.py; AMD in resnet_env17 with Ryzen AI 1.7.1
+[xrt-smi before] [003d:00:01.1] : NPU Phoenix | AIE Partitions | No hardware contexts running on device
+[cpu] CPU 12.1 % over 5 s
+[cpu] CPU 8.1 % over 2 s
+[xrt-smi before yolo11n #1] [003d:00:01.1] : NPU Phoenix | AIE Partitions | No hardware contexts running on device
+
+== 2026-09-16T20:10:41Z [amd yolo11n #1] $ <conda envs>\resnet_env17\python.exe <ignite-xdna worktree>\tools\amd_vitisai_yolo.py --model <ignite-xdna main>\models\yolo11n_cut_xint8.onnx --image <Ignition main>\examples\assets\bus.jpg --ignition-src <Ignition main>\src --cache-dir <scratch>\vitisai_cache --cache-key yolo11ncutcachekey_sitting --xclbin <ignite-xdna main>\yolocutcachekey\4x4.xclbin --json <scratch>\sitting_yolo11n_hostfix\amd_yolo11n_1.json
+2026-09-16 16:10:41.6546909 [W:onnxruntime:, session_state.cc:1316 onnxruntime::VerifyEachNodeIsAssignedToAnEp] Some nodes were not assigned to the preferred execution providers which may or may not have an negative impact on performance. e.g. ORT explicitly assigns shape related ops to CPU to improve perf.
+2026-09-16 16:10:41.6553799 [W:onnxruntime:, session_state.cc:1318 onnxruntime::VerifyEachNodeIsAssignedToAnEp] Rerunning with verbose output on a non-minimal build will show node assignments.
+[amd] ort 1.23.3.dev20260320 | model yolo11n_cut_xint8.onnx | session load 0.52 s | EP report node devices report not found
+[amd] G2G mean 37.665 ms | P50 37.709 | P95 39.543 | P99 40.511 | max 41.040 | over 500 timed frames after 50 warm-up
+[amd] stage means (ms): letterbox 1.926 | session.run 33.776 | decode+NMS 1.963
+[amd] detections on the last frame: 7 {'person': 5, 'bus': 1, 'handbag': 1} | RSS 343.4 MB
+== 2026-09-16T20:11:02Z [amd yolo11n #1] exit 0 after 21.6 s
+
+== 2026-09-16T20:11:02Z [ignition whole_balanced #1] $ <conda envs>\mlir-aie-iron\python.exe live_ignition.py --model <ignite-xdna main>\build\yolo11n.ignite --source <Ignition main>\examples\assets\bus.jpg --headless --warmup 50 --frames 500 --power-mode balanced --json <scratch>\sitting_yolo11n_hostfix\ign_whole_balanced_1.json
+[Ignition] loading <ignite-xdna main>\build\yolo11n.ignite (bare-metal .ignite container)
+[Ignition] Native XDNA1 NPU backend active (Device 0)
+[Ignition] task: detect
+[Ignition] power mode balanced: 8 worker threads, sleeping between regions (8 cores / 16 threads on this host)
+[Ignition] source: image bus.jpg 810x1080
+[Ignition] shutdown: source released, window closed, NPU hardware context released
+[summary] stop: frame limit | 550 frames processed (50 warm-up, 500 timed) | 1 distinct source frames | image bus.jpg 810x1080
+[summary] G2G mean 11.588 ms | P50 11.531 | P95 12.153 | P99 12.589 | max 14.511 | over the last 500 timed frames; cold first frame 15.74 ms
+[summary] stage means (ms): preprocess 0.592 | NPU + host forward 10.937 (dispatch 8.386, host 1.983, readback 0.568) | decode+NMS 0.050
+[summary] boxes from NPU heads on 500/500 timed frames | 6.00 detections per frame
+[summary] RSS 202.2 MB at the first timed frame, 202.2 MB at the end (+0.00 MB over 500 frames)
+[summary] wrote <scratch>\sitting_yolo11n_hostfix\ign_whole_balanced_1.json
+== 2026-09-16T20:11:09Z [ignition whole_balanced #1] exit 0 after 6.8 s
+
+== 2026-09-16T20:11:09Z [ignition core_balanced #1] $ <conda envs>\mlir-aie-iron\python.exe live_ignition.py --model <ignite-xdna main>\build\yolo11n_core.ignite --source <Ignition main>\examples\assets\bus.jpg --headless --warmup 50 --frames 500 --power-mode balanced --json <scratch>\sitting_yolo11n_hostfix\ign_core_balanced_1.json
+[Ignition] loading <ignite-xdna main>\build\yolo11n_core.ignite (bare-metal .ignite container)
+[Ignition] Native XDNA1 NPU backend active (Device 0)
+[Ignition] task: detect
+[Ignition] power mode balanced: 8 worker threads, sleeping between regions (8 cores / 16 threads on this host)
+[Ignition] source: image bus.jpg 810x1080
+[Ignition] shutdown: source released, window closed, NPU hardware context released
+[summary] stop: frame limit | 550 frames processed (50 warm-up, 500 timed) | 1 distinct source frames | image bus.jpg 810x1080
+[summary] G2G mean 10.674 ms | P50 10.633 | P95 11.097 | P99 11.404 | max 11.634 | over the last 500 timed frames; cold first frame 14.14 ms
+[summary] stage means (ms): preprocess 0.631 | NPU + host forward 9.987 (dispatch 8.718, host 0.713, readback 0.556) | decode+NMS 0.047
+[summary] boxes from NPU heads on 500/500 timed frames | 6.00 detections per frame
+[summary] RSS 200.3 MB at the first timed frame, 200.3 MB at the end (+0.00 MB over 500 frames)
+[summary] wrote <scratch>\sitting_yolo11n_hostfix\ign_core_balanced_1.json
+== 2026-09-16T20:11:15Z [ignition core_balanced #1] exit 0 after 6.3 s
+
+== 2026-09-16T20:11:15Z [ignition core_performance #1] $ <conda envs>\mlir-aie-iron\python.exe live_ignition.py --model <ignite-xdna main>\build\yolo11n_core.ignite --source <Ignition main>\examples\assets\bus.jpg --headless --warmup 50 --frames 500 --power-mode performance --json <scratch>\sitting_yolo11n_hostfix\ign_core_performance_1.json
+[Ignition] loading <ignite-xdna main>\build\yolo11n_core.ignite (bare-metal .ignite container)
+[Ignition] Native XDNA1 NPU backend active (Device 0)
+[Ignition] task: detect
+[Ignition] power mode performance: 16 worker threads, spinning between regions (8 cores / 16 threads on this host)
+[Ignition] source: image bus.jpg 810x1080
+[Ignition] shutdown: source released, window closed, NPU hardware context released
+[summary] stop: frame limit | 550 frames processed (50 warm-up, 500 timed) | 1 distinct source frames | image bus.jpg 810x1080
+[summary] G2G mean 10.563 ms | P50 10.383 | P95 10.793 | P99 11.837 | max 42.723 | over the last 500 timed frames; cold first frame 43.90 ms
+[summary] stage means (ms): preprocess 0.681 | NPU + host forward 9.833 (dispatch 8.826, host 0.549, readback 0.457) | decode+NMS 0.043
+[summary] boxes from NPU heads on 500/500 timed frames | 6.00 detections per frame
+[summary] RSS 200.9 MB at the first timed frame, 200.9 MB at the end (+0.00 MB over 500 frames)
+[summary] wrote <scratch>\sitting_yolo11n_hostfix\ign_core_performance_1.json
+== 2026-09-16T20:11:22Z [ignition core_performance #1] exit 0 after 6.3 s
+[cpu] CPU 7.6 % over 2 s
+[xrt-smi before yolo11n #2] [003d:00:01.1] : NPU Phoenix | AIE Partitions | No hardware contexts running on device
+
+== 2026-09-16T20:11:24Z [amd yolo11n #2] $ <conda envs>\resnet_env17\python.exe <ignite-xdna worktree>\tools\amd_vitisai_yolo.py --model <ignite-xdna main>\models\yolo11n_cut_xint8.onnx --image <Ignition main>\examples\assets\bus.jpg --ignition-src <Ignition main>\src --cache-dir <scratch>\vitisai_cache --cache-key yolo11ncutcachekey_sitting --xclbin <ignite-xdna main>\yolocutcachekey\4x4.xclbin --json <scratch>\sitting_yolo11n_hostfix\amd_yolo11n_2.json
+2026-09-16 16:11:24.8545470 [W:onnxruntime:, session_state.cc:1316 onnxruntime::VerifyEachNodeIsAssignedToAnEp] Some nodes were not assigned to the preferred execution providers which may or may not have an negative impact on performance. e.g. ORT explicitly assigns shape related ops to CPU to improve perf.
+2026-09-16 16:11:24.8549861 [W:onnxruntime:, session_state.cc:1318 onnxruntime::VerifyEachNodeIsAssignedToAnEp] Rerunning with verbose output on a non-minimal build will show node assignments.
+[amd] ort 1.23.3.dev20260320 | model yolo11n_cut_xint8.onnx | session load 0.55 s | EP report node devices report not found
+[amd] G2G mean 37.702 ms | P50 37.597 | P95 39.915 | P99 40.981 | max 50.661 | over 500 timed frames after 50 warm-up
+[amd] stage means (ms): letterbox 1.954 | session.run 33.802 | decode+NMS 1.945
+[amd] detections on the last frame: 7 {'person': 5, 'bus': 1, 'handbag': 1} | RSS 342.6 MB
+== 2026-09-16T20:11:45Z [amd yolo11n #2] exit 0 after 21.6 s
+
+== 2026-09-16T20:11:45Z [ignition whole_balanced #2] $ <conda envs>\mlir-aie-iron\python.exe live_ignition.py --model <ignite-xdna main>\build\yolo11n.ignite --source <Ignition main>\examples\assets\bus.jpg --headless --warmup 50 --frames 500 --power-mode balanced --json <scratch>\sitting_yolo11n_hostfix\ign_whole_balanced_2.json
+[Ignition] loading <ignite-xdna main>\build\yolo11n.ignite (bare-metal .ignite container)
+[Ignition] Native XDNA1 NPU backend active (Device 0)
+[Ignition] task: detect
+[Ignition] power mode balanced: 8 worker threads, sleeping between regions (8 cores / 16 threads on this host)
+[Ignition] source: image bus.jpg 810x1080
+[Ignition] shutdown: source released, window closed, NPU hardware context released
+[summary] stop: frame limit | 550 frames processed (50 warm-up, 500 timed) | 1 distinct source frames | image bus.jpg 810x1080
+[summary] G2G mean 11.557 ms | P50 11.506 | P95 12.101 | P99 12.686 | max 13.152 | over the last 500 timed frames; cold first frame 15.40 ms
+[summary] stage means (ms): preprocess 0.594 | NPU + host forward 10.904 (dispatch 8.392, host 1.950, readback 0.562) | decode+NMS 0.050
+[summary] boxes from NPU heads on 500/500 timed frames | 6.00 detections per frame
+[summary] RSS 202.3 MB at the first timed frame, 202.3 MB at the end (+0.01 MB over 500 frames)
+[summary] wrote <scratch>\sitting_yolo11n_hostfix\ign_whole_balanced_2.json
+== 2026-09-16T20:11:52Z [ignition whole_balanced #2] exit 0 after 6.8 s
+
+== 2026-09-16T20:11:52Z [ignition core_balanced #2] $ <conda envs>\mlir-aie-iron\python.exe live_ignition.py --model <ignite-xdna main>\build\yolo11n_core.ignite --source <Ignition main>\examples\assets\bus.jpg --headless --warmup 50 --frames 500 --power-mode balanced --json <scratch>\sitting_yolo11n_hostfix\ign_core_balanced_2.json
+[Ignition] loading <ignite-xdna main>\build\yolo11n_core.ignite (bare-metal .ignite container)
+[Ignition] Native XDNA1 NPU backend active (Device 0)
+[Ignition] task: detect
+[Ignition] power mode balanced: 8 worker threads, sleeping between regions (8 cores / 16 threads on this host)
+[Ignition] source: image bus.jpg 810x1080
+[Ignition] shutdown: source released, window closed, NPU hardware context released
+[summary] stop: frame limit | 550 frames processed (50 warm-up, 500 timed) | 1 distinct source frames | image bus.jpg 810x1080
+[summary] G2G mean 10.627 ms | P50 10.568 | P95 11.077 | P99 11.348 | max 11.753 | over the last 500 timed frames; cold first frame 14.45 ms
+[summary] stage means (ms): preprocess 0.570 | NPU + host forward 10.001 (dispatch 8.728, host 0.733, readback 0.540) | decode+NMS 0.047
+[summary] boxes from NPU heads on 500/500 timed frames | 6.00 detections per frame
+[summary] RSS 200.4 MB at the first timed frame, 200.4 MB at the end (+0.01 MB over 500 frames)
+[summary] wrote <scratch>\sitting_yolo11n_hostfix\ign_core_balanced_2.json
+== 2026-09-16T20:11:59Z [ignition core_balanced #2] exit 0 after 6.3 s
+
+== 2026-09-16T20:11:59Z [ignition core_performance #2] $ <conda envs>\mlir-aie-iron\python.exe live_ignition.py --model <ignite-xdna main>\build\yolo11n_core.ignite --source <Ignition main>\examples\assets\bus.jpg --headless --warmup 50 --frames 500 --power-mode performance --json <scratch>\sitting_yolo11n_hostfix\ign_core_performance_2.json
+[Ignition] loading <ignite-xdna main>\build\yolo11n_core.ignite (bare-metal .ignite container)
+[Ignition] Native XDNA1 NPU backend active (Device 0)
+[Ignition] task: detect
+[Ignition] power mode performance: 16 worker threads, spinning between regions (8 cores / 16 threads on this host)
+[Ignition] source: image bus.jpg 810x1080
+[Ignition] shutdown: source released, window closed, NPU hardware context released
+[summary] stop: frame limit | 550 frames processed (50 warm-up, 500 timed) | 1 distinct source frames | image bus.jpg 810x1080
+[summary] G2G mean 10.456 ms | P50 10.231 | P95 11.373 | P99 14.532 | max 22.752 | over the last 500 timed frames; cold first frame 14.42 ms
+[summary] stage means (ms): preprocess 0.596 | NPU + host forward 9.809 (dispatch 8.731, host 0.572, readback 0.505) | decode+NMS 0.044
+[summary] boxes from NPU heads on 500/500 timed frames | 6.00 detections per frame
+[summary] RSS 201.2 MB at the first timed frame, 201.2 MB at the end (+0.00 MB over 500 frames)
+[summary] wrote <scratch>\sitting_yolo11n_hostfix\ign_core_performance_2.json
+== 2026-09-16T20:12:05Z [ignition core_performance #2] exit 0 after 6.2 s
+[xrt-smi after] [003d:00:01.1] : NPU Phoenix | AIE Partitions | No hardware contexts running on device
+
+# end 2026-09-16T20:12:05Z exit 0

@@ -1794,3 +1794,13 @@ cached reference heads rather than `bo_out`.
   preprocessing) and over a hand-written thread pool (unnecessary once the policy reaches the runtime). Balanced is
   the default because spinning every core buys 5 % more frames per second for three times the energy per frame
   ([BENCHMARKS](BENCHMARKS.md#energy-per-frame-against-amds-stack-and-power-modes-2026-09-16-desktop-2)).
+  **Host segments follow the mode too (`fbd53f5`).** ONNX Runtime's intra-op pool spins between runs and reads none of
+  OpenMP's settings, so YOLO11n's attention core held 53-54 % CPU in every mode. `ort_session_options` turns spinning
+  off in the sleeping modes and gives the pool the mode's thread count, and leaves `performance` on ONNX Runtime's
+  defaults. That costs the attention core about 0.14 ms per frame against `performance` and brings YOLO11n to
+  11.5-11.8 % CPU and 165 mJ per frame in `balanced`
+  ([BENCHMARKS](BENCHMARKS.md#energy-per-frame-on-yolov8s-sesr-m7-yolo11n-and-yolov8n-pose-2026-09-16-desktop-2)).
+- **Power modes leave the NPU's own power mode alone (measured 2026-09-16; not decided).** `xrt-smi configure --pmode
+  powersaver` would save `efficiency` 14 % energy per frame at 30 fps, for twice the G2G and nothing at full speed, and
+  it slows every NPU application on the machine. No mode switches it; whether one should is the maintainer's call
+  ([BENCHMARKS](BENCHMARKS.md#the-npus-own-power-modes-buy-energy-only-at-a-cameras-rate-and-cost-ignition-its-latency-lead-2026-09-16-desktop-2)).
