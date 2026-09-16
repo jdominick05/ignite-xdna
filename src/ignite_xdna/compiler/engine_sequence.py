@@ -188,6 +188,26 @@ def program_task_count(items: Sequence[tuple]) -> int:
 
 OPS_PER_TASK_ISSUE = 4  # BLOCKWRITE (BD), DDR_PATCH, MASKWRITE, WRITE (queue push); a TCT per await
 
+# ---------------------------------------------------------------------------
+# Arming the MemTile activation ring
+#
+# The ring's descriptors are compiled by kernels/aie2/conv_engine/design.py, which pins their ids and its lock
+# ids; the instruction stream only has to say how many slots of a window a layer fills and how many times the
+# window is replayed. Everything else - the buffer address, the offsets, the lengths, the stride - is already
+# in the descriptor, so a layer changes one field.
+#
+# A MemTile buffer descriptor is eight 32-bit words at MEMTILE_BD_BASE + 0x20 * bd_id. Confirmed by lowering
+# `aiex.npu.writebd` twice with different fields and reading the words it emits:
+#   word 0  transfer length, in 32-bit words     word 1  buffer offset
+#   word 6  (iteration_size << 17) | iteration_stride     word 7  bit 31 = valid
+# `iteration_size` is the hardware's 6-bit Iteration_Wrap and is stored off by one, so a tile of C slots writes
+# C - 1. One maskwrite sets it and leaves the compiled stride and address alone.
+RING_BD_STRIDE = 0x20
+RING_BD_ITERATION_WORD = 0x18
+RING_ITERATION_SHIFT = 17
+RING_ITERATION_MASK = 0x3F << RING_ITERATION_SHIFT
+MEMTILE_ROW = 1
+
 
 def split_instruction_stream(insts: bytes, tasks_per_segment: Sequence[int]) -> List[bytes]:
     """Cut one lowered instruction stream into per-segment streams.
@@ -246,7 +266,25 @@ class SequenceEmitter:
     """Emit raw shim DMA tasks inside an IRON runtime sequence body."""
 
     def __init__(self, ws, wp, ws_bytes: int, wp_bytes: int, fifo_names: Dict[int, Dict[str, str]]):
-        from aie.dialects.aiex import dma_await_task, dma_free_task, dma_start_task, shim_dma_single_bd_task
+        from aie.dialects.aiex import (dma_await_task, dma_free_task, dma_start_task, npu_maskwrite32,
+                                       npu_push_queue, npu_write32, shim_dma_single_bd_task)
+        from aie.dialects._aie_enum_gen import DMAChannelDir
+        self._maskwrite = npu_maskwrite32
+        self._write32 = npu_write32
+        self._push_queue = npu_push_queue
+        self._dir = DMAChannelDir
+        # The ring's descriptor and lock ids are pinned by the design that compiles them, and read from it here
+        # rather than restated, so the two cannot drift: a maskwrite to the wrong descriptor is silent.
+        from kernels.aie2.conv_engine.design import (ROWS as RING_ROWS, RING_BD_FILL, RING_LOCK_ARRIVED,
+                                                     RING_LOCK_SPACE, _ring_bd)
+        from .scheduler import MEMTILE_BD_BASE, memtile_lock_reg
+        self._ring_rows = RING_ROWS
+        self._ring_fill = RING_BD_FILL
+        self._ring_arrived = RING_LOCK_ARRIVED
+        self._ring_space = RING_LOCK_SPACE
+        self._ring_serve = _ring_bd
+        self._ring_bd_base = MEMTILE_BD_BASE
+        self._ring_lock_reg = memtile_lock_reg
         self._ws, self._wp = ws, wp
         self._bytes = {"ws": ws_bytes, "wp": wp_bytes}
         self._names = fifo_names
@@ -265,6 +303,33 @@ class SequenceEmitter:
                             issue_token=token)
         self._start(task)
         return task
+
+    def _arm_ring(self, col: int, window: int, slots: int, armed: Dict[int, int]) -> None:
+        """Point one column's ring descriptors at a tile of ``slots`` slots, and hand that window back empty.
+
+        Only the iteration count varies per layer, so the descriptors are edited in place: one maskwrite each,
+        leaving the compiled address, offset, length and stride alone. The count is the hardware's 6-bit
+        Iteration_Wrap, stored off by one. It is rewritten only when a layer's chunk count differs from the one
+        the descriptors already carry, so a run of like-shaped layers pays nothing.
+        """
+        if armed.get(col) != slots:
+            wrap = (slots - 1) << RING_ITERATION_SHIFT
+            for bd in (self._ring_fill + window,
+                       *(self._ring_serve(r, window) for r in range(self._ring_rows))):
+                self._maskwrite(self._ring_bd_base + RING_BD_STRIDE * bd + RING_BD_ITERATION_WORD,
+                                wrap, RING_ITERATION_MASK, column=col, row=MEMTILE_ROW)
+            armed[col] = slots
+        # A replay acquires and releases `arrived` by the same count, so the window is restored here rather
+        # than drained by being served: `space` back to a full window, `arrived` back to empty.
+        self._write32(self._ring_lock_reg(self._ring_arrived + window), 0, column=col, row=MEMTILE_ROW)
+        self._write32(self._ring_lock_reg(self._ring_space + window), slots, column=col, row=MEMTILE_ROW)
+        self._push_queue(col, MEMTILE_ROW, self._dir.S2MM, 0, False, 1, self._ring_fill + window)
+
+    def _serve_ring(self, col: int, window: int, serves: int) -> None:
+        """Replay one column's window once per output group of the tile that column owns."""
+        for r in range(self._ring_rows):
+            self._push_queue(col, MEMTILE_ROW, self._dir.MM2S, r, False, serves,
+                             self._ring_serve(r, window))
 
     def run_column_programs(self, programs: Sequence[Sequence[tuple]], bd_budget: int = 14,
                             queue_depth: int = 4, retire_batch: int = 2) -> None:
@@ -355,6 +420,12 @@ class SequenceEmitter:
                         e[2] -= 1
                         break
 
+        # Ring state per column: the window the next tile lands in, the tile being served, and the chunk count
+        # the column's descriptors currently carry (so a like-shaped run of layers rewrites nothing).
+        window: Dict[int, int] = {c: 0 for c in range(len(programs))}
+        serving: Dict[int, tuple] = {}
+        armed: Dict[int, int] = {}
+
         def issue(c: int, item: tuple) -> None:
             if item[0] == "w":
                 push(c, "w", linear("wp", item[1], item[2]), hold=item[3] if len(item) > 3 else 0)
@@ -369,6 +440,14 @@ class SequenceEmitter:
                 push(c, "a", item[1])
             elif item[0] == "o":
                 push(c, "o", item[1], hold=item[2] if len(item) > 2 else 0)
+            elif item[0] == "R":      # arm this column's ring for a tile, before its fills are issued
+                _, slots, windows = item
+                self._arm_ring(c, window[c], slots, armed)
+                serving[c] = (window[c], windows)
+            elif item[0] == "S":      # replay it, once the fills are in flight
+                w, windows = serving.pop(c)
+                self._serve_ring(c, w, item[1])
+                window[c] = (w + 1) % windows
             else:
                 raise ValueError(item[0])
 

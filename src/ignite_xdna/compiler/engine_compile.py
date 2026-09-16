@@ -218,7 +218,7 @@ def compile_graph_container(onnx_path, output_path, build_dir: Optional[Path] = 
     build_dir = Path(build_dir or out_p.parent / "conv_engine" / out_p.stem).resolve()
     ir = lower_yolov8n(onnx_path, host_regions=host_regions)
     ws = es.plan_workspace(ir)
-    scheds, store = es.schedule_graph(ir, ws)
+    scheds, store = es.schedule_graph(ir, ws, activation_ring=activation_ring)
     if layers is not None:
         scheds = scheds[:layers]
     if verbose:

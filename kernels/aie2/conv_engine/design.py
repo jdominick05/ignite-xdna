@@ -119,6 +119,9 @@ RING_WINDOWS = 2
 RING_BD_FILL = 0                              # one arrival BD per window, on the (even) S2MM channel 0
 RING_BD_SERVE = RING_BD_FILL + RING_WINDOWS   # then one serve BD per core per window
 RING_BD_ODD = 24                              # a MemTile's odd channels may only reach ids 24 and above
+# The instruction stream restores these when it recycles a window, so their ids are pinned too.
+RING_LOCK_ARRIVED = 0                         # one per window
+RING_LOCK_SPACE = RING_LOCK_ARRIVED + RING_WINDOWS
 
 
 def _ring_bd(channel, window):
@@ -166,8 +169,10 @@ def _activation_ring(col, name, slots):
     # the other. A buffer descriptor that touches a lock at all must both acquire and release one, so the
     # arrival takes a slot from ``space`` and hands it to ``arrived`` rather than releasing alone; the runtime
     # restores both when it recycles the window, which is the re-arm the aie2p DMA model wants regardless.
-    arrived = [Lock(mem, init=0, name=f"{name}_arrived{w}") for w in range(RING_WINDOWS)]
-    space = [Lock(mem, init=window, name=f"{name}_space{w}") for w in range(RING_WINDOWS)]
+    arrived = [Lock(mem, lock_id=RING_LOCK_ARRIVED + w, init=0, name=f"{name}_arrived{w}")
+               for w in range(RING_WINDOWS)]
+    space = [Lock(mem, lock_id=RING_LOCK_SPACE + w, init=window, name=f"{name}_space{w}")
+             for w in range(RING_WINDOWS)]
     # The arrival walks its window's slots, one token per slot; the layer's chunk count replaces the iteration
     # size at runtime.
     fills = [Bd(ring, offset=w * window * slot_bytes, length=slot_bytes, bd_id=RING_BD_FILL + w,
