@@ -30,7 +30,9 @@ On an image source each timed run goes from the BGR frame to the finished list
 of people (g2g) and is split into pre (the letterbox; for ignite the letterbox,
 quantization and upload into the NPU input plane), infer (session.run and the
 head decode; for ignite the NPU dispatch, head readback and decode) and post
-(score filter and NMS).
+(score filter and NMS). A "[run] frame N" line every 100 timed runs, and
+--max-fps to pace them like a camera, let tools/energy_sitting.py time energy
+per frame on this script.
 """
 import argparse
 import os
@@ -138,6 +140,9 @@ def main():
     ap.add_argument("--out", default=None, help="output image path (image source only)")
     ap.add_argument("--warmup", type=int, default=1, help="untimed runs first, image source only")
     ap.add_argument("--runs", type=int, default=20, help="timed runs, image source only")
+    ap.add_argument("--max-fps", type=float, default=0.0,
+                    help="image source only: pace timed runs to at most this rate, like a camera (0 = as fast as "
+                         "possible); runs start on a fixed schedule and the wait is outside each run's g2g")
     ap.add_argument("--log", type=int, default=1, help="0=verbose 1=info 2=warning")
     args = ap.parse_args()
 
@@ -161,13 +166,23 @@ def run(args, infer, imgsz):
         for _ in range(max(1, args.warmup)):
             infer(img)  # warm-up / compile, not timed
         g2g, pres, ts, ps = [], [], [], []
-        for _ in range(max(1, args.runs)):
+        period = 1.0 / args.max_fps if args.max_fps > 0 else 0.0
+        t_start = time.perf_counter()
+        for i in range(1, max(1, args.runs) + 1):
+            if period:
+                # Absolute schedule: a late run does not make the next one early, and the rate averages max_fps.
+                delay = t_start + (i - 1) * period - time.perf_counter()
+                if delay > 0:
+                    time.sleep(delay)
             t0 = time.perf_counter()
             dets, tpre, ti, tp = infer(img)
             g2g.append((time.perf_counter() - t0) * 1000)
             pres.append(tpre)
             ts.append(ti)
             ps.append(tp)
+            if i % 100 == 0:
+                # The same shape as Ignition's headless progress line, for tools/energy_sitting.py's window.
+                print(f"[run] frame {i} | G2G {g2g[-1]:.2f} ms | {len(dets)} people", flush=True)
         ts = np.array(ts)
         g = np.array(g2g)
         print(f"\n=== {args.ep.upper()} | {args.model} | {imgsz}px | {args.source} ===")
