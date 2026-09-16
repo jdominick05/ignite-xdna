@@ -77,6 +77,39 @@ class HostTest(unittest.TestCase):
         self.assertEqual(logical, os.cpu_count() or 1)
 
 
+class HostSegmentSessionOptionsTest(unittest.TestCase):
+    """A container's host segments run on ONNX Runtime, whose thread pool must follow the mode too."""
+
+    def setUp(self):
+        try:
+            import onnxruntime  # noqa: F401
+        except ImportError:
+            self.skipTest("onnxruntime is not installed")
+
+    def test_sleeping_modes_turn_spinning_off_and_size_the_pool(self):
+        for mode, threads in (("balanced", 8), ("efficiency", 2)):
+            s = power.resolve(mode, {}, physical=8, logical=16)
+            so = power.ort_session_options(s)
+            self.assertEqual(so.get_session_config_entry("session.intra_op.allow_spinning"), "0", mode)
+            self.assertEqual(so.intra_op_num_threads, threads, mode)
+
+    @staticmethod
+    def _spinning_entry(so):
+        try:
+            return so.get_session_config_entry("session.intra_op.allow_spinning") or None
+        except Exception:  # a key never set raises in some onnxruntime builds
+            return None
+
+    def test_performance_keeps_onnxruntime_defaults(self):
+        so = power.ort_session_options(power.resolve("performance", {}, physical=8, logical=16))
+        self.assertIsNone(self._spinning_entry(so))
+        self.assertEqual(so.intra_op_num_threads, 0)
+
+    def test_an_explicit_active_wait_policy_keeps_the_defaults(self):
+        so = power.ort_session_options(power.resolve("efficiency", {"OMP_WAIT_POLICY": "active"}, physical=8, logical=16))
+        self.assertIsNone(self._spinning_entry(so))
+
+
 @unittest.skipUnless(platform.system() == "Windows", "the UCRT table is a Windows concern")
 class ReachesTheCRuntimeTest(unittest.TestCase):
     def test_ucrt_getenv_sees_the_settings(self):

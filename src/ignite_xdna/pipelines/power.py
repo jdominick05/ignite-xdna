@@ -26,6 +26,12 @@ environment table, which ``os.environ`` has not written since CPython 3.9. Measu
 ``os.environ`` as the first statement of the process still spun every thread (100.0 % CPU, 372.9 mJ per frame);
 also written with ``_putenv_s``, it did not (14.0 % CPU, 133.8 mJ, 118.8 fps). So ``apply_openmp_settings`` writes
 both.
+
+A container's host segments (YOLO11n's attention core) run on ONNX Runtime, whose own intra-op thread pool spins
+between runs by default and ignores OpenMP's settings: YOLO11n through Ignition read 53-54 % CPU in every mode.
+``ort_session_options`` gives those sessions the same mode. Measured on the attention core alone, CPU only, each run
+followed by a 9 ms sleep standing in for the NPU dispatch: ONNX Runtime's defaults 0.417 ms per run holding 7.01
+cores; without spinning, 0.640 ms at 0.23 cores with 8 threads and 1.066 ms at 0.19 cores with 2.
 """
 from __future__ import annotations
 
@@ -148,3 +154,18 @@ def apply_openmp_settings() -> PowerSettings:
 def current_settings() -> Optional[PowerSettings]:
     """The settings the native preprocessor loaded with, or None if it has not loaded."""
     return _applied
+
+
+def ort_session_options(settings: Optional[PowerSettings] = None):
+    """``onnxruntime.SessionOptions`` for a host segment that follow the power mode.
+
+    A spinning wait policy (``performance``) keeps ONNX Runtime's defaults, its behaviour before power modes covered
+    host segments. A sleeping one turns intra-op spinning off and uses the mode's thread count.
+    """
+    import onnxruntime as ort
+    settings = settings or current_settings() or apply_openmp_settings()
+    so = ort.SessionOptions()
+    if settings.wait_policy != "ACTIVE":
+        so.add_session_config_entry("session.intra_op.allow_spinning", "0")
+        so.intra_op_num_threads = settings.threads
+    return so

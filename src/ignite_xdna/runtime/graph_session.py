@@ -101,7 +101,8 @@ class HostStep:
             raise ValueError(f"{session.path}: host model {seg['blob']} does not match the manifest's sha256")
         self.name = seg.get("name", seg["blob"])
         self.session = session
-        self.ort_session = ort.InferenceSession(blob, providers=["CPUExecutionProvider"])
+        from ignite_xdna.pipelines.power import ort_session_options  # the power mode covers host segments too
+        self.ort_session = ort.InferenceSession(blob, ort_session_options(), providers=["CPUExecutionProvider"])
         self.input_name = self.ort_session.get_inputs()[0].name
         placements = session.ge["placements"]
         self.pin, self.pout = placements[seg["input"]], placements[seg["output"]]
