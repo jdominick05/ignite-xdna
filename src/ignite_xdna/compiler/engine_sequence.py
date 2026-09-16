@@ -269,7 +269,14 @@ RING_NEXT_BD_MASK = 0x3F << RING_NEXT_BD_SHIFT
 # Only ``space`` is affected, and the asymmetry is the tell: ``space`` rests high so a parked acquire succeeds,
 # while ``arrived`` rests at zero so a parked serve blocks without taking anything. Per-tile arming never met
 # this because a completed task leaves the channel idle with no current descriptor holding anything.
-RING_HEAD_PARKED = True
+#
+# Now OFF, because ``_configure_ring`` resets the channels before it writes these locks. A reset clears the run
+# state, so nothing holds a lock until the push that follows and the head takes its acquire FROM the value
+# written here rather than before it - crediting the head nothing would strand it on an empty lock, the same
+# hang by the opposite route. The finding above still stands and is exactly why the reset is there: the head's
+# state has to be made deterministic rather than guessed. Turning this back on without removing the reset
+# re-creates the hang.
+RING_HEAD_PARKED = False
 MEMTILE_ROW = 1
 # A MemTile's DMA channel control registers, confirmed against both builds' configuration CDO: six channels
 # per direction at a stride of eight, S2MM first, each with its START_QUEUE in the word above. Bit 1 of the
@@ -393,6 +400,17 @@ class SequenceEmitter:
         for r in range(self._ring_rows):
             yield [self._ring_serve(r, i, slots) for i in range(slots)]
 
+    def _ring_channels(self):
+        """The (direction, channel, control register) of each of the ring's five channels, chain order.
+
+        The arrival is on an odd S2MM channel and the serves on MM2S 0..3; ``_ring_chains`` yields their
+        descriptors in the same order, so the two zip.
+        """
+        yield self._dir.S2MM, self._ring_fill_channel, \
+            MEMTILE_S2MM_CTRL + MEMTILE_CHANNEL_STRIDE * self._ring_fill_channel
+        for r in range(self._ring_rows):
+            yield self._dir.MM2S, r, MEMTILE_MM2S_CTRL + MEMTILE_CHANNEL_STRIDE * r
+
     def _configure_ring(self, col: int, width: int, serves: int, slots: int) -> None:
         """Point one column's ring at a layer's geometry - once per layer, not once per tile.
 
@@ -428,7 +446,29 @@ class SequenceEmitter:
         if tokens > RING_LOCK_MASK:
             raise ValueError(f"a tile replayed {serves} times needs {tokens} tokens per slot, past the "
                              f"{RING_LOCK_MASK} a 7-bit lock field holds")
-        for chain, ids in enumerate(self._ring_chains(slots)):
+        chains = list(self._ring_chains(slots))
+        channels = list(self._ring_channels())
+        # Reset every channel first, so the layer starts from a state that does not depend on the one before.
+        #
+        # A cyclic chain always has a current descriptor, and whether that descriptor is *holding* its acquire
+        # or *blocked* on it depends on whether a token was there when it became current - a difference that
+        # cannot be read back from the host. Measured, that difference is the whole remaining fault: at a
+        # constant width the ring is byte-exact and survives twenty repeat dispatches, but when the width
+        # changes it is exact for one frame and times out on the next, and crediting the head fully instead
+        # keeps every frame alive and corrupts them. The instruction stream is static and replayed per frame,
+        # so the layer that precedes this one in execution is the previous frame's LAST layer, whose width this
+        # emit cannot see - which is why the reset is unconditional rather than fired on a detected change.
+        #
+        # A reset drains the channel's start queue and clears its run state, so afterwards nothing is current
+        # and no lock is held. The head then takes its acquire fresh at the push below, FROM the lock values
+        # written here - which is why ``RING_HEAD_PARKED`` is off: crediting the head nothing was right only
+        # while it acquired before the write. The order is the one already proven on silicon by the per-tile
+        # arming this design replaced: reset, then restore the locks (a reset freezes the channel's bound lock
+        # counters), and push last.
+        for _, _, ctrl in channels:
+            self._maskwrite(ctrl, MEMTILE_CHANNEL_RESET, MEMTILE_CHANNEL_RESET, column=col, row=MEMTILE_ROW)
+            self._maskwrite(ctrl, 0, MEMTILE_CHANNEL_RESET, column=col, row=MEMTILE_ROW)
+        for chain, ids in enumerate(chains):
             for i in range(width):
                 bd = self._ring_bd_base + RING_BD_STRIDE * ids[i]
                 # Close the cycle at this layer's width: the last descriptor of the pass points back at the
@@ -446,13 +486,22 @@ class SequenceEmitter:
                                                                    << RING_LOCK_ACQ_SHIFT),
                                 RING_LOCK_REL_VALUE_MASK | RING_LOCK_ACQ_VALUE_MASK,
                                 column=col, row=MEMTILE_ROW)
-                # The head of the cycle is parked holding this slot's space, so it starts from nothing: its own
-                # serves credit the slot back up to ``tokens`` once its fill lands. Every pass is the full
-                # width - the window is narrowed to a divisor of the tile - so the chain returns to ids[0]
-                # after every tile, and the parked slot is always this one.
-                credit = 0 if (RING_HEAD_PARKED and i == 0) else tokens
-                self._write32(self._ring_lock_reg(self._ring_space + i), credit,
-                              column=col, row=MEMTILE_ROW)
+        # Restore both locks of EVERY slot, not only the ones this pass walks: after a reset the point is a
+        # fully known state, and a slot outside this layer's width is one a wider layer will walk next.
+        #
+        # ``space`` starts full here. Without the reset the head had already taken its acquire before this
+        # write and the slot had to be credited nothing (``RING_HEAD_PARKED``); with the reset nothing holds a
+        # lock until the push below, so crediting nothing would leave the head blocked on an empty lock for
+        # ever - the same hang by the opposite route.
+        for i in range(slots):
+            self._write32(self._ring_lock_reg(self._ring_space + i),
+                          0 if (RING_HEAD_PARKED and i == 0) else tokens, column=col, row=MEMTILE_ROW)
+            self._write32(self._ring_lock_reg(self._ring_arrived + i), 0, column=col, row=MEMTILE_ROW)
+        # Push last. The reset drained each start queue, so every chain needs one task to walk again, and a
+        # cyclic chain never completes - this single push is perpetual and the repeat count never comes into
+        # play, which is exactly what the configuration CDO's ``aie.dma_start`` does at load.
+        for (direction, channel, _), ids in zip(channels, chains):
+            self._push_queue(col, MEMTILE_ROW, direction, channel, False, 0, ids[0])
 
     def run_column_programs(self, programs: Sequence[Sequence[tuple]], bd_budget: int = 14,
                             queue_depth: int = 4, retire_batch: int = 2) -> None:
