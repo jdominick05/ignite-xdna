@@ -85,6 +85,33 @@ record gives for resident weights ("IRON's `init_values` fifos send once then st
 resident weights would need `dma_channel_reset_for`") is exactly the primitive the ring work built and proved on
 silicon: reset the channel, re-arm its locks absolutely, re-push.
 
-Nothing here is built. These are byte counts and capacity checks; the MemTile descriptor and channel budget is
-what killed the six-slot activation ring, and only a measurement on Device 0 settles whether the configuration
-cost stays below the 2.006 ms.
+### The budget a weight buffer would need, read off a flag-off build
+
+The MemTile descriptor and channel budget is what capped the activation ring at six slots, so it is checked
+here against `build/conv_engine/yolov8n_flagoff/design.prj/input_with_addresses.mlir` rather than assumed.
+
+**Channels are free.** The flag-off MemTile uses S2MM 0 for the activation split's arrival, MM2S 0-3 to send a
+different slice to each core, and the output join takes S2MM 1-4 in and MM2S 4 out. That is five of six in each
+direction, leaving **S2MM 5 and MM2S 5 free** - exactly the pair a weight buffer needs, since weights are the
+*same* bytes to all four cores and one MM2S can broadcast them where the split needed four.
+
+**Descriptors are free.** The split and join together use **31 of the MemTile's 48**, leaving 17.
+
+**SRAM fits, but it is bank-constrained, which the ring's byte figure hides.** The MemTile holds
+`a0_cons_buff_0/1` (25,600 B) at addresses 0 and 65,536 and `o0_buff_0/1` (12,800 B) at 131,072 and 196,608 -
+76,800 B of 524,288, one buffer per 65,536-byte bank across banks 0-3. So although 447,488 B are free in total,
+an `aie.buffer` must be contiguous: banks 4-7 give 262,144 B, and with the tail of bank 3 the largest
+contiguous run is about **314,880 B**. That only just clears the largest per-column working set (303,104 B for
+`/model.5/conv/Conv`). Most winning layers are far smaller - 18,944 to 75,776 B - and the two large ones could
+hold one group's chunks and re-fetch per group rather than per tile, keeping most of the saving.
+
+**And weights do not touch the MemTile today at all.** `w_of.prod(tile=Tile(c, 0))` places the producer on the
+shim and every core consumes it directly: the lowered design allocates `w*_cons_buff_0/1` as `memref<2368xi32>`
+- 9,472 B, double-buffered - in each core's L1 at addresses 32,768 and 49,152. So this is new MemTile occupancy
+feeding the same core buffers, not a relocation, and the cores' consumption pattern need not change. It is also
+why weights cannot simply stay in L1: two of them already take 18,944 B of a core's 65,536, beside the output
+and psum buffers.
+
+Nothing here is built. These are byte counts and capacity checks; only a measurement on Device 0 settles
+whether the configuration cost stays below the 2.006 ms - and the ring is the standing warning that a
+configuration cost can exceed the bytes it saves.
