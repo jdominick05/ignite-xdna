@@ -648,6 +648,55 @@ compiled for the models it helps and left off for those it does not - yolov8s ga
 the per-group schedule, and nothing regresses. What that costs is the one-program rule: a ring build and a
 flag-off build are different xclbins, and whether the engine ships two is a decision above a session's.
 
+## Arming is first order, and counting it reverses every comparison above
+
+Every traffic figure in this note counts DMA tasks and DDR bytes and **none of them counts the register writes
+that arm the ring**, because `engine_stream_report` skips the `R` and `S` items by construction: they move no
+bytes and issue no task. A flag-off schedule has no arms at all, so arming is overhead the ring must earn back
+out of the bytes it saves. It does not earn it back.
+
+Counted rather than modelled, out of the `insts.bin` of containers already built:
+
+| container | insts.bin | instruction ops | derived ms | vs flag-off |
+|---|---|---|---|---|
+| flag-off | 430,180 B | 12,258 | 1.777 | |
+| ring, 16 slots | 1,457,248 B | 48,578 | 7.044 | **+5.266** |
+| ring, as committed | 1,371,652 B | 45,521 | 6.601 | **+4.823** |
+
+The counting method checks out against the schedule: flag-off issues 2,972 tasks at `OPS_PER_TASK_ISSUE` of 4,
+which is 11,888 ops against 12,258 counted. The ring's 4,496 tasks account for 17,984 of its 45,521, leaving
+about 27,500 ops - close to 4 ms - in arming alone. That is against roughly 1.0 ms of transport the 16-slot
+window saves on yolov8n.
+
+Three containers in `build/` are the same stream - `yolov8n_flagoff`, `yolov8n_ring8` and `yolov8n_baseline`
+all hash `1638da1c474f5b6f`. **`yolov8n_ring8` is not a ring build despite its name** and is evidence of
+nothing; a container's manifest does not record `activation_ring`, so the digest is the only way to tell.
+
+With arming included at the 19 register writes `_arm_ring` emits per tile, plus a queue push per core per
+serve, the whole comparison inverts:
+
+| model | ring 0 | ring 4 | ring 6 | ring 8 | ring 16 |
+|---|---|---|---|---|---|
+| yolov8n, arms per frame | 0 | 1,184 | 1,104 | 1,035 | 1,019 |
+| yolov8n, total derived ms | 6.481 | +4.296 | **+3.832** | +3.402 | +3.278 |
+| yolov8s, arms per frame | 0 | 2,383 | 1,853 | 1,447 | 1,125 |
+| yolov8s, total derived ms | 17.169 | +7.367 | **+4.328** | +1.635 | -1.367 |
+
+yolov8n is worse at every window. yolov8s is worse at every window but 16, and that single win is thin enough
+to distrust: on yolov8n the model undercounts the measured arming by about 17%, which would take yolov8s's
+16-slot case to roughly a wash.
+
+**So the two constraints close on each other.** The window that would pay for itself is 16 - and 16 is exactly
+what the 63-value lock forbids under a shared counter, and what the descriptors cannot give per-slot locks. The
+window the descriptors do allow is 6, and at 6 arming costs more than the replay saves: 4.3 ms more on yolov8s.
+Per-slot locks make that worse rather than better, turning a flat 19-write arm into about 12 writes per chunk -
+9.2 to 11.8 ms of arming on yolov8s against 1.85 ms of saving.
+
+**The blocker was never the lock protocol.** It is that the ring arms 1,104 times a frame on yolov8n and 1,853
+on yolov8s, and every arm rewrites descriptors that the hardware consumed by running them. Until an arm costs
+close to nothing - or a tile is armed once and reused across many layers instead of once per tile - no window
+makes this ring pay, and the lock protocol is not worth compiling.
+
 A hazard this narrows without closing, recorded so it is not rediscovered: `ensure` retires a channel once it
 holds `queue_depth` tasks, and retiring means awaiting. A tile whose column owns five or more groups pushes
 that many drains before its `S`, and such a drain cannot complete until that `S` runs. Over the schedules,
