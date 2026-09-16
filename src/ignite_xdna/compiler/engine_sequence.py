@@ -599,6 +599,26 @@ class SequenceEmitter:
                       | acq_id,
                       column=col, row=MEMTILE_ROW)
 
+    def _reset_wbuf_channels(self, col: int) -> None:
+        """Reset both weight-buffer channels, so a layer starts from a state it did not inherit.
+
+        This was left out of the first build and it hung on one layer. The configuration CDO emits an
+        ``aie.dma_start`` for both channels and the compiled descriptors are cyclic, so at LOAD the fill
+        channel has already acquired ``space`` at its initial value and parked on the stream - a
+        free-running cycle is never quiescent. Writing absolute lock values and pushing on top of that
+        double-counts a token the DMA is still holding, which is the same asymmetry ``RING_HEAD_PARKED``
+        documents: ``space`` rests high so a parked acquire SUCCEEDS, while ``ready`` rests at zero so a
+        parked serve blocks without taking anything.
+
+        A reset drains the start queue and clears the run state, so afterwards nothing is current and no
+        lock is held, and the values written next are the ones the channel actually starts from. The order
+        is the ring's, proven on silicon: reset, then the descriptors, then the locks, then push last.
+        """
+        for ctrl in (MEMTILE_S2MM_CTRL + MEMTILE_CHANNEL_STRIDE * self._wbuf_fill_channel,
+                     MEMTILE_MM2S_CTRL + MEMTILE_CHANNEL_STRIDE * self._wbuf_serve_channel):
+            self._maskwrite(ctrl, MEMTILE_CHANNEL_RESET, MEMTILE_CHANNEL_RESET, column=col, row=MEMTILE_ROW)
+            self._maskwrite(ctrl, 0, MEMTILE_CHANNEL_RESET, column=col, row=MEMTILE_ROW)
+
     def _stream_wbuf(self, col: int, piece_words: int, pieces: int) -> None:
         """Pass a layer's weights THROUGH the buffer without holding them.
 
@@ -617,6 +637,7 @@ class SequenceEmitter:
         if pieces - 1 >= MAX_REPEAT:
             raise ValueError(f"streaming {pieces} pieces needs a repeat of {pieces - 1}, past the "
                              f"{MAX_REPEAT} the verifier allows")
+        self._reset_wbuf_channels(col)
         self._wbuf_descriptor(col, self._wbuf_bd_fill, piece_words, 0,
                               self._wbuf_space, 1, self._wbuf_ready, 1)
         self._wbuf_descriptor(col, self._wbuf_bd_serve, piece_words, 0,
@@ -673,6 +694,7 @@ class SequenceEmitter:
                 raise ValueError("an arm is longer than the concatenation that holds it")
         # One fill covering every arm, then one serve per arm at its own offset. All of them are written
         # and pushed HERE, at the layer boundary; nothing is rewritten later while its channel is live.
+        self._reset_wbuf_channels(col)
         self._wbuf_descriptor(col, self._wbuf_bd_fill, total_words, 0,
                               self._wbuf_space, tokens, self._wbuf_ready, tokens)
         for k, (offset, run, _) in enumerate(arms):
