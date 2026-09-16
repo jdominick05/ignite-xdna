@@ -112,6 +112,19 @@ Read these before quoting anything below.
   ~531 µs batched IRON, ~36 µs batched raw pyxrt) — and that against ~531 µs none of the four
   reopened §3.4 verdicts survives. The same run also closes that log's no-compute-passthrough
   caveat.
+- **`notes_yolov8s_gap.md`'s "a MemTile store-and-forward hop is slower per byte than DDR transport", and its
+  proposed ~0.05 ms per MB pricing term, are retracted** by `memtile_hop_phoenix_20260916T1523Z.log`, which
+  measures the hop in isolation at -0.00023 ms per MB in and +0.00053 ms per MB out. The inference generalised from
+  the activation ring's and the weight buffer's losses; those losses stand, and are the protocols', not the hop's.
+  The note records the retraction in its last section.
+- **`notes_yolov8s_gap.md`'s 2.006 ms weight re-send lever is superseded by 1.018 ms** (27,279,360 B on
+  yolov8s; 0.369 ms on yolov8n). The first figure counted weight runs already concatenated across output groups as
+  re-sends; only stride-0 replays are recoverable. The note's "Correction" section has the working.
+- **`notes_yolov8s_gap.md`'s k3s2 over-read slack of 60% is corrected to 42%** (16 × 50 = 800 pixels read against
+  11 × 42 = 462 used). The 23% for k3s1 and 73% for k5s1 recompute unchanged.
+- **The consumer-sizing compression experiment in `notes_yolov8s_gap.md` is VOID**, as the note itself records: its
+  multi-channel design timed out on its own golden `arange` input unpatched, so consumer sizing was not the only
+  variable. The later single-channel results in the same note stand.
 
 ## Toolchain bring-up
 
@@ -1172,3 +1185,20 @@ container's streams to settle one question its static analysis could not.
 | [yolov8n_pose_phoenix_20260915T1919Z.log](yolov8n_pose_phoenix_20260915T1919Z.log) | YOLOv8n-pose as a graph-engine container (75 layers, nine heads), one sitting with every NPU step idle before and after: 75/75 layers exact on Device 0, and on the same runtime yolov8n 66/66 and the YOLO11n attention-core container 91/91; `PoseOnSilicon` 2/2 (nine heads equal ONNX Runtime CPU's and people identical to its numpy tail on bus.jpg, no `InferenceSession.run` call; 500 native-ingress frames at 8.290 ms, 3 people each, no buffer objects allocated, +0.30 MB); timed AMD / container / Ignition app, twice, at 500 frames: 12.056, 8.318, 8.360, 12.089, 8.339 and 8.481 ms mean from frame to people; controls yolov8n 7.765 ms and the YOLO11n attention core 11.990 ms (median 10.259, a disturbed tail) |
 | [yolov8s_sesr_vs_amd_phoenix_20260915T2146Z.log](yolov8s_sesr_vs_amd_phoenix_20260915T2146Z.log) | YOLOv8s and SESR M7 containers against AMD's stack, one sitting with every NPU step idle before: both rebuilt at `9351cc1` by the toolchain Ignition's `install.ps1` installs (25.8 s and 6.9 s), 66/66 and 9/9 layers exact on Device 0; timed AMD / Ignition / AMD / Ignition at 500 frames with Ignition's own pre- and post-processing on AMD's arm: YOLOv8s 16.954, 17.240, 16.958 and 17.265 ms, SESR M7 3.654, 6.671, 3.632 and 6.662 ms mean glass-to-glass (AMD `session.run` 13.137–13.167 and 1.461–1.473 ms against dispatch 16.704–16.743 and 4.392–4.405 ms); Ignition RSS 242.0 and 162.1 MB against AMD's 339.2 and 265.0 MB in its second session; control yolov8n 7.771 ms |
 | [yolov8n_pose_offline.log](yolov8n_pose_offline.log) | Offline, no NPU: the YOLOv8n-pose lowering gate (75/75 tensors and nine heads equal ONNX Runtime on bus.jpg and 20 coco128 images, emulation 75/75 on three, DERIVED traffic against yolov8n) and the COCO val2017 detection files of the container's numpy-ingress run and ONNX Runtime 1.30's CPU run compared: byte-identical, 138,848 people over 4,996 images |
+| [weight_buffer_phoenix_20260916T1508Z.log](weight_buffer_phoenix_20260916T1508Z.log) | The resident MemTile weight buffer against flag-off, one sitting, interleaved at 100 timed dispatches per run, every run 66/66 byte-exact: yolov8n 7.314 / 7.331 ms off against 8.492 / 8.474 ms with the buffer, yolov8s 16.752 / 16.868 against 20.436 / 20.443 ms, slower by 1.160 and 3.630 ms where the costing predicted 0.077 and 0.729 ms faster; the one-layer container byte-exact first. [BENCHMARKS](../../docs/BENCHMARKS.md#memtile-residency-does-not-pay-on-the-graph-engine-and-the-yolov8s-gap-is-a-known-limitation-2026-09-16-desktop-2) |
+| [memtile_hop_phoenix_20260916T1523Z.log](memtile_hop_phoenix_20260916T1523Z.log) | A MemTile store-and-forward hop in isolation (`tools/memtile_hop_probe.py`; raw times in [the JSON](memtile_hop_phoenix_20260916T1523Z.json)): one core, 6,400 B in and 3,200 B out, four routes, 3.3–52.4 MB in, three interleaved rounds; slopes 0.14301 / 0.14278 / 0.14327 / 0.14280 ms per MB in, so the hop costs -0.00023 ms per MB in and +0.00053 per MB out. Retracts the hop-tax inference in `notes_yolov8s_gap.md` |
+
+## MemTile residency on the graph engine
+
+[`notes_memtile_activation_ring.md`](notes_memtile_activation_ring.md) — the opt-in MemTile activation ring from
+design to silicon: the arm-once hang, the parked-head lock credit, the width-change fault located with
+`tools/ring_shape_probe.py`, the per-layer channel reset that made the whole model run 66/66 byte-exact, and the
+measured result that it is slower (yolov8n 10.052 and, configuring only on a shape change, 9.758 ms against
+7.392 ms; yolov8s 20.228 against 16.828 ms). Its latencies were recorded in the note; no separate raw log was
+committed.
+
+[`notes_yolov8s_gap.md`](notes_yolov8s_gap.md) — where yolov8s's frame goes and every lever sized against AMD's
+0.29 ms lead: over-read (whole junk blocks and intra-plane slack), fill-task saturation, weight re-send, MemTile
+hardware compression, cascade halo exchange, and the resident weight buffer built, debugged against the CDO and
+measured. Read the retractions above before quoting it. Full treatment in
+[BENCHMARKS](../../docs/BENCHMARKS.md#memtile-residency-does-not-pay-on-the-graph-engine-and-the-yolov8s-gap-is-a-known-limitation-2026-09-16-desktop-2).
