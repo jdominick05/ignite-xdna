@@ -489,13 +489,67 @@ Activation bytes with replay off are identical to the flag-off figures. And repl
 yolov8n's 66 layers have `serves > 1` (histogram 1:29, 2:24, 3:6, 4:7) and 47 of yolov8s's (1:19, 2:17, 3:2,
 4:21, 8:7). So there is no partial result to measure and no benchmark to publish.
 
-**Where to resume.** The remaining question is the lock protocol across a replay, which lives in the compiled
-design and needs an xclbin rebuild: nothing releases `space` back - `_arm_ring` rewrites it per tile - and
-every serve execution acquires `arrived` by the whole chunk count and releases the same count, so with
-`arrived` sitting at `slots` the four serve channels are sequenced against each other and against the cores by
-nothing at all. Whether only the last serve should release `arrived`, and what should release `space`, is the
-question to answer first. Note also that a MemTile channel's task queue holds four entries while yolov8s has
-layers with `serves = 8`, so one task per replay is not universally available either.
+## The lock protocol, three attempts and the ceiling that stops the third
+
+**One: the serve acquires the window's whole count** (as compiled originally). That makes `arrived` a mutex. A
+serve holds it for the length of its transfer, a transfer ends only when its core has taken the bytes, so a
+core that runs ahead and fills the output join blocks with its serve still holding the lock, and the other
+three channels can never acquire. Measured: the first replayed layer emitted two objects from core 0 - the
+join's depth is two - one from core 1, none from cores 2 and 3, then deadlocked.
+
+**Two: the serve holds no lock.** The dispatch completes and every layer is wrong, `/model.0/conv/Conv`
+included, which is one chunk and one serve and had been byte-exact twice before. A shim fill task's completion
+token says the shim pushed its bytes into the stream, not that this tile's S2MM wrote them into the ring, so
+nothing off the tile can stand in for `arrived`: the serves read slots as they were being written. That also
+settles a question worth keeping - the ordering has to live on the tile.
+
+**Three: the arrival hands out one token per core per replay** - release count `ROWS * serves`, written per
+layer - and each serve takes one per slice and returns none. "Returns none" is a release of zero, not an
+omitted release, because a descriptor that touches a lock must carry both ops (`buffer descriptor with a lock
+must have both use_lock(acquire) and use_lock(release)`).
+
+This one works, up to a point that is worth stating precisely. An eight-layer container **completed, all eight
+layers byte-exact**, including `/model.3/conv/Conv` (four chunks, two replays) and `/model.4/cv1/conv/Conv`
+(one chunk, two replays). The full 66-layer container computes **layers 0-12 byte-exact** and then stops dead:
+layer 13 `/model.5/conv/Conv` and everything after it untouched, nothing wrong, nothing partial.
+
+**Why it stops is arithmetic.** Consumption matches production over a whole tile, but nothing forces them to
+interleave, and the fill is pushed first: if it runs ahead, `arrived` peaks at `slots * ROWS * serves`.
+
+| layer | slots | serves | release per execution | peak `arrived` |
+|---|---|---|---|---|
+| L6 `/model.3/conv/Conv` | 4 | 2 | 8 | 32 |
+| L12 `/model.4/cv2/conv/Conv` | 3 | 2 | 8 | 24 |
+| **L13 `/model.5/conv/Conv`** | **8** | **4** | **16** | **128** |
+| L20 `/model.7/conv/Conv` | 16 | 2 | 8 | 128 |
+
+A MemTile lock value holds **63** - `getMaxLockValue` returns `0x3F` in `AIETargetModel.h`, confirmed in the
+source rather than inferred. Layer 13 is the first of seven yolov8n layers to exceed it, and yolov8s exceeds it
+from its own layer 6. This is the ceiling `_activation_ring`'s docstring warned about all along, "one shared
+counter would overflow the 63 a lock register holds", and this scheme walked into it.
+
+**It is a structural limit, not a tuning problem.** A 16-slot tile needs `16 * 4 = 64` tokens at a *single*
+replay, so no batching of replays, no cap on `serves` and no re-arm schedule rescues a token-per-core-per-replay
+counter for the largest tiles.
+
+**What the probes could reach, so this is not concluded from them again:** the eight-layer container's highest
+peak is 32, comfortably inside the ceiling. An eight-layer pass therefore says nothing about whether the scheme
+scales, and the full container is the only test that does.
+
+**Where to resume:** how a MemTile ring signals per-slot arrival to four consumers, within a 63-value lock and
+the one acquire and one release a buffer descriptor can carry.
+
+## Two mechanisms ruled out, so they are not retried
+
+**`ensure` awaiting a drain or weight run before its `S`.** Plausible, and wrong. Holding those tasks so
+`ensure` could not retire them left the emitted `insts.bin` **bit-identical** - sha256 `01f6cc395e4f974563e08ea9`
+over 1,371,652 bytes, before and after. A hold changes which channel `ensure` retires and so where a TCT wait
+lands, so an identical stream proves `ensure` never retired such a task during a yolov8n emit. The change was
+also a regression - yolov8s could no longer emit, raising `channel o queue is full of held tasks` where a
+column owns eight groups against a four-deep queue - and was reverted.
+
+**The iteration counter wrapping inside one task.** Refuted by the object map: a descriptor asked to wrap
+mid-task would misaddress bytes, and what was missing were whole objects that had never been produced.
 
 A hazard this narrows without closing, recorded so it is not rediscovered: `ensure` retires a channel once it
 holds `queue_depth` tasks, and retiring means awaiting. A tile whose column owns five or more groups pushes
@@ -504,3 +558,8 @@ yolov8s has 196 ring episodes with four or more drains before their `S` (worst e
 (worst four, one below the depth). The barrier frees each tile's drains at the next re-arm, so far fewer tasks
 are ever live, but the ordering itself is untouched deliberately: it needs `hold` semantics, and a helper that
 changed those deadlocked the build once already. One variable per dispatch.
+
+**Later, and measured:** this hazard does not fire on yolov8n. Holding those tasks left the emitted stream
+bit-identical, which means `ensure` never retires one of them during that emit - see "Two mechanisms ruled
+out" below. It remains a real shape for a schedule that queues five or more drains before an `S`, which is
+yolov8s only, and yolov8s hits the four-deep queue first.
