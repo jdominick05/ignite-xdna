@@ -1,0 +1,47 @@
+MemTile store-and-forward hop vs direct shim<->core transport, same bytes
+=========================================================================
+
+Machine   Desktop 2 (DESKTOP-CBL5NUA), AMD Ryzen 7 8700G (Phoenix NPU), Windows 11 Pro build 26200
+Date      2026-09-16, sitting ended 15:23 UTC
+Env       mlir-aie ironenv via scripts/research-iron.sh; host otherwise idle
+Tool      tools/memtile_hop_probe.py (branch activation-residency)
+
+Design    one core at (0,2); objects 6,400 B in and 3,200 B out (the engine's activation packet and output
+          block); the core takes one input and produces one output per object with no compute. Transfers
+          issued as shim_dma_single_bd_task by fifo name, one input task and one awaited output task.
+Routes    dd  shim -> core,            core -> shim
+          md  shim -> MemTile -> core, core -> shim            (ObjectFifo forward on tile (0,1))
+          dm  shim -> core,            core -> MemTile -> shim
+          mm  shim -> MemTile -> core, core -> MemTile -> shim
+Volumes   512, 1024, 2048, 4096, 8192 objects = 3.3, 6.6, 13.1, 26.2, 52.4 MB in (outputs half)
+
+Commands
+  bash scripts/research-iron.sh tools/memtile_hop_probe.py build
+  bash scripts/research-iron.sh tools/memtile_hop_probe.py sit --rounds 3 --iters 30 --json <json>
+Every measurement ran in its own child process (3 warm-up + 30 timed dispatches); 3 rounds, order rotated
+and reversed between rounds. Raw per-dispatch times: memtile_hop_phoenix_20260916T1523Z.json.
+Smoke dispatches before the sitting: dd x512 mean 0.572 ms over 5; mm x8192 mean 7.760 ms over 5.
+
+Mean dispatch ms (mean of the three round means)
+  objects      512     1024     2048     4096     8192
+  dd         0.584    1.047    1.994    3.878    7.609
+  md         0.582    1.047    2.000    3.889    7.596
+  dm         0.585    1.044    1.990    3.898    7.617
+  mm         0.587    1.055    2.010    3.881    7.607
+
+Least-squares fit over all 15 points per route: dispatch ms = intercept + slope * MB in
+  dd  slope 0.14301 ms/MB  intercept 0.117 ms
+  md  slope 0.14278 ms/MB  intercept 0.122 ms
+  dm  slope 0.14327 ms/MB  intercept 0.116 ms
+  mm  slope 0.14280 ms/MB  intercept 0.127 ms
+
+  hop on the input path   md - dd                = -0.00023 ms per MB in
+  hop on the output path  (dm - dd) * 2          = +0.00053 ms per MB out
+  additivity              mm - dd = -0.00021;  (md - dd) + (dm - dd) = +0.00004 ms per MB in
+
+Result: a MemTile store-and-forward hop costs nothing measurable per byte at the engine's object sizes.
+The weight buffer's measured loss (0.044 ms per MB) would have been a 30% slope difference here.
+
+Not run: the engine's actual split (one MemTile S2MM to four cores) and join shapes, several columns in
+parallel, and object sizes other than 6,400 / 3,200 B. This sitting cannot say whether a column's rate is
+set per byte or per object, because both scale together in every route.
