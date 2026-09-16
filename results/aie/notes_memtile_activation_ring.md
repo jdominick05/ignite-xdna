@@ -1146,11 +1146,29 @@ is proven (a free-running cyclic MemTile chain, per-slot locks bounded by `ROWS 
 every layer), the parked-head semantics are documented and confirmed on silicon, and a whole class of derived
 verdicts in this file now has a measured correction factor.
 
-If anyone returns to it, the two levers not pulled are drain merging (worth a derived 0.940 ms on yolov8n and
-0.696 on yolov8s, unblocked once the drain barrier went) and resetting only when the shape actually changes:
-the first layer of a frame must reset unconditionally, since its predecessor in execution is the previous
-frame's last layer, but every later layer could reset only when its shape differs from the one before it in
-program order. Neither closes a 2.7-3.4 ms deficit.
+### One lever pulled: configure only when the shape changes
+
+A layer whose `(width, serves)` matches the layer before it needs nothing written at all - not merely no reset.
+The cycles already wrap where they should, the descriptors already carry those counts, a tile leaves both locks
+of every slot where it found them, and the channels are still running from the push that established the shape.
+The frame boundary is safe by construction rather than by luck: the emitter's shape map starts empty when it is
+built, so the stream's **first** layer always emits the full sequence, and the stream is static and replayed per
+frame - every frame therefore opens with a reset that clears whatever the last one left, and every later
+layer's predecessor is the same layer on every frame.
+
+It is correct - **66/66 byte-exact** - and it is worth **0.294 ms** on yolov8n:
+
+| yolov8n ring | `insts.bin` | dispatch mean over 20 |
+|---|---|---|
+| configure every layer | 951,580 B | 10.052 ms |
+| configure only on a shape change | **916,092 B** (-3.7%) | **9.758 ms** |
+
+The skip rate is low because a layer's `(width, serves)` genuinely changes most layers - the runs of identical
+shape are short. Against flag-off's 7.392 ms the ring is still **+2.37 ms**, so the lever is real, cheap and
+nowhere near enough; it recovers about a ninth of the deficit.
+
+The one lever still unpulled is drain merging, derived at 0.940 ms on yolov8n and 0.696 on yolov8s and
+unblocked once the drain barrier went. Even granting it in full, the ring stays behind on both models.
 
 The eight-layer container is the stronger correctness result: it changes the pass width *and* the lock values,
 so both kinds of reconfiguration now survive. It costs stream: `insts.bin` grows 138,640 -> 143,856 B at two layers and
