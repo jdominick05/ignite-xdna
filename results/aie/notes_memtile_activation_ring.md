@@ -980,6 +980,66 @@ The device is not the variable, said once for the whole sitting: the known-good 
 66/66 exact **six** times between these experiments - 7.366, 7.314, 7.321, 7.333, 7.227 and 7.293 ms mean over
 20 dispatches each - including immediately after every timeout.
 
+## The head is parked holding on the first frame and blocked on every later one
+
+Filling in the last cell of the two-by-two settles it. Every container below is two layers, widths 1 then 2,
+built from the same source but for the slot-0 credit and whether every slot is restored:
+
+| slot 0 credit | all slots restored | first dispatch | repeat dispatches |
+|---|---|---|---|
+| `0` | no | L0, L1 **byte-exact** | **times out** at `verify:104` |
+| `0` | yes | L0, L1 **byte-exact** | **times out** at `verify:104` |
+| `ROWS * serves` | yes | L0 **MISMATCH 51,554**, L1 **MISMATCH 77,485** | **survives 20**, mean 1.305 ms |
+
+So the two failures are not one bug with a single right answer: **crediting the head nothing is correct for the
+first frame and fatal for the second, and crediting it fully is correct for every frame after the first and
+wrong for the first.** The reason is that a descriptor's acquire either succeeds or blocks depending on whether
+a token was there when it became current. Frame 1 starts from the configuration CDO's `aie.dma_start`, where
+`space` is at its compiled initial value and the acquire is satisfied - the head is parked *holding*, so the
+count it holds must not be handed back. Every later frame starts with the head parked *blocked*, holding
+nothing, and zeroing its slot leaves it blocked forever. One absolute value written into a lock whose
+held-or-blocked state cannot be observed from the host cannot be right for both.
+
+Two things follow. A fix has to make the head's state at the start of a frame **deterministic** rather than
+inferred - and `aiex.dma_channel_reset` exists in the dialect for exactly this shape of problem; mlir-aie's
+`npu-xrt/local_reset` test describes its target as "a DMA channel stalled on a lock acquire with a BD queued
+behind the lock", which is precisely the later-frame state here. And the ring's byte-exactness and its
+re-runnability have now been demonstrated separately, on the same two layers, by containers differing in one
+written word - what has never been demonstrated is both at once.
+
+**Measured, and it is a width change rather than a second frame.** The one-layer container at a fixed width 1
+(`probe1_headparked`, credit 0) returns layer 0 **EXACT and survives all twenty repeat dispatches**, mean
+1.003 ms, no timeout. So with the width held constant, crediting the head nothing is correct *and*
+re-runnable - the lock protocol closes on itself frame after frame, and the parked head is holding at the end
+of a frame exactly as it is at `dma_start`.
+
+Then the full picture, all with credit 0:
+
+| container | widths | first dispatch | repeats |
+|---|---|---|---|
+| one layer | 1 | **EXACT** | **survives 20** |
+| two layers | 1 then 2 | **both EXACT** | **times out** |
+
+Note which transition is actually new at the boundary. *Inside* a frame the width only ever widens, 1 -> 2, and
+both layers come back exact, so widening a live cycle is sound. The frame boundary is the only place the width
+**narrows**, 2 -> 1, when the next frame's first layer reconfigures - and that is the one transition never
+exercised within a frame. Narrowing is the suspect, not reconfiguration in general.
+
+The cheap way to test that needs no new code looked like `--activation-ring 1`, which makes `_pass_width`
+return 1 for every layer so a multi-layer container holds one width throughout and across frames. **That test
+was run and it is confounded - do not read it as evidence about width changes.** An eight-layer window-1
+container times out on its *first* dispatch (`verify:90`), before a single layer is compared. But forcing the
+window to 1 changes a second thing at the same time: every layer whose chunk count exceeds 1 becomes
+**multi-pass** - `passes 2` on three of the eight layers and `passes 4` on another - where every layer of the
+window-6 builds ran `passes 1`. Two variables moved, so the result separates nothing. It does say that
+something in multi-pass or in the later layers breaks the first frame outright, which is a different fault from
+the frame-boundary one and is not yet localized.
+
+A properly controlled version has to hold the width fixed **without** introducing passes - for instance a
+container built only from layers whose chunk count already equals the window, so that width is constant and
+every layer still runs a single pass. `build_bounded_ring.py` takes a prefix count and cannot select layers by
+shape, so that needs a way to choose the layers, not another sweep of the window.
+
 A hazard this narrows without closing, recorded so it is not rediscovered: `ensure` retires a channel once it
 holds `queue_depth` tasks, and retiring means awaiting. A tile whose column owns five or more groups pushes
 that many drains before its `S`, and such a drain cannot complete until that `S` runs. Over the schedules,
