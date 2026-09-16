@@ -13,7 +13,12 @@ A column program is a list of items executed by one column's shim DMAs:
                            spaced (``merge_quad``, ``merge_runs``), and
 * ``("o", pattern[, serves])`` drain joined output objects; with ``serves`` the
                            drain is issued ahead of the fills that feed it and is
-                           held until those ``serves`` activation items are issued.
+                           held until those ``serves`` activation items are issued,
+* ``("R", slots, barrier)`` arm the MemTile activation ring for a tile of ``slots``
+                           chunks; with ``barrier`` the column's outstanding drains
+                           are awaited first, which orders the re-arm behind the
+                           serves of the tile before it, and
+* ``("S", serves)``        replay the armed tile once per output group it feeds.
 
 A task has three hardware access dimensions plus a repeat dimension (the
 outermost size, at most 64 on Phoenix), so one task can move up to 64
@@ -301,12 +306,11 @@ class SequenceEmitter:
 
     def __init__(self, ws, wp, ws_bytes: int, wp_bytes: int, fifo_names: Dict[int, Dict[str, str]]):
         from aie.dialects.aiex import (dma_await_task, dma_free_task, dma_start_task, npu_maskwrite32,
-                                       npu_push_queue, npu_sync, npu_write32, shim_dma_single_bd_task)
+                                       npu_push_queue, npu_write32, shim_dma_single_bd_task)
         from aie.dialects._aie_enum_gen import DMAChannelDir
         self._maskwrite = npu_maskwrite32
         self._write32 = npu_write32
         self._push_queue = npu_push_queue
-        self._sync = npu_sync
         self._dir = DMAChannelDir
         # The ring's descriptor and lock ids are pinned by the design that compiles them, and read from it here
         # rather than restated, so the two cannot drift: a maskwrite to the wrong descriptor is silent.
@@ -379,7 +383,8 @@ class SequenceEmitter:
         # Every tile, not only when the chunk count changes. Running a descriptor consumes it: the hardware
         # clears ``Valid_BD`` when its task completes and advances ``Iteration_Current`` as it executes, so a
         # descriptor left as the previous tile finished with it is not one the channel will run again. This is
-        # safe to do per tile only because the previous tile's serves were awaited, so nothing is in flight.
+        # safe to do per tile only because the previous tile's drain was awaited before this call, so its
+        # serves have been consumed to the last byte and nothing is in flight to disturb.
         wrap = (slots - 1) << RING_ITERATION_SHIFT
         counts = ((-slots & RING_LOCK_MASK) << RING_LOCK_ACQ_SHIFT) | \
                  ((slots & RING_LOCK_MASK) << RING_LOCK_REL_SHIFT)
@@ -408,29 +413,27 @@ class SequenceEmitter:
         self._push_queue(col, MEMTILE_ROW, self._dir.S2MM, 0, False, slots - 1, self._ring_fill)
 
     def _serve_ring(self, col: int, slots: int, serves: int) -> None:
-        """Replay one column's tile once per output group of it that the column owns, then wait for it.
+        """Replay one column's tile once per output group of it that the column owns.
 
         A serve sends one core's slice out of every slot, so one replay is ``slots`` executions and ``serves``
         replays that many again. The register holds one less than the executions asked for.
 
-        Each push asks for a completion token, and all four are awaited before this returns, which holds a
-        column to one tile in flight. **A MemTile DMA channel's task queue holds four entries and nothing else
-        here bounds it.** A tile pushes one arrival and four serves; a layer of 64 tiles would push 64 tasks
-        at a queue of 4, and past the fourth the hardware sets a sticky Task_Queue_Overflow bit rather than
-        blocking, so the rest are simply lost. These pushes are also invisible to the emitter's own
-        bookkeeping: ``ensure`` bounds shim channels by counting what ``push`` recorded, and a MemTile push
-        occupies no shim slot, so nothing there could ever have throttled them.
+        **No completion token is asked for and nothing is awaited here.** A MemTile task-completion token only
+        reaches the shim if its tile carries a ``controller_id`` attribute and a packet flow carries
+        TileControl to the shim's South port, and a design compiled the ordinary way has neither: aiecc runs
+        the column-control overlay with ``route-shim-to-tct`` at its default ``shim-only``, which filters every
+        non-shim tile out. Asking for a token here and waiting on it hangs the dispatch on work that has
+        already finished - measured, with the tile those serves produced sitting byte-exact in DDR.
 
-        Waiting settles the other ordering this needs at the same time. The five descriptors and the lock pair
-        are shared by every tile, and ``_arm_ring`` rewrites the locks unconditionally, so a tile that re-armed
-        while the previous replay was still reading would zero an ``arrived`` those serves are waiting on -
-        tokens whose fill has already retired and will never be released again.
+        Both jobs those waits were doing are taken instead by the drain of this tile, awaited before the next
+        ``R`` re-arms the descriptors. It orders the re-arm behind these serves, because the cores had to
+        consume every slice to emit the objects that drain moves. And it bounds the MemTile's four-deep task
+        queue, which nothing else here does: one arrival and one serve per channel are pushed per tile, and
+        the next tile cannot push until this one's output has reached DDR.
         """
         for r in range(self._ring_rows):
-            self._push_queue(col, MEMTILE_ROW, self._dir.MM2S, r, True, slots * serves - 1,
+            self._push_queue(col, MEMTILE_ROW, self._dir.MM2S, r, False, slots * serves - 1,
                              self._ring_serve(r, 0))
-        for r in range(self._ring_rows):
-            self._sync(col, MEMTILE_ROW, self._dir.MM2S, r)
 
     def run_column_programs(self, programs: Sequence[Sequence[tuple]], bd_budget: int = 14,
                             queue_depth: int = 4, retire_batch: int = 2) -> None:
@@ -505,11 +508,11 @@ class SequenceEmitter:
                 if not retire_channel(c, channel):
                     raise RuntimeError(f"channel {channel} queue is full of held tasks")
 
-        def push(c: int, channel: str, pattern: DmaPattern, hold: int = 0) -> None:
+        def push(c: int, channel: str, pattern: DmaPattern, hold: int = 0, force_token: bool = False) -> None:
             ensure(c, channel)
             issued[c][channel] += 1
             n = issued[c][channel]
-            token = n == totals[c][channel] or n % retire_batch == 0
+            token = force_token or n == totals[c][channel] or n % retire_batch == 0
             queues[c].append([self.transfer(self._names[c][channel], pattern, token=token), channel, hold, token])
 
         def served(c: int) -> None:
@@ -528,6 +531,24 @@ class SequenceEmitter:
         serving: Dict[int, int] = {}
         reset_done: set = set()
 
+        def ring_barrier(c: int) -> None:
+            """Await every drain this column still has outstanding, before its ring is re-armed.
+
+            The ring's five descriptors and its lock pair are shared by every tile, and ``_arm_ring`` rewrites
+            them unconditionally, so a re-arm that overtakes the serves still reading them corrupts the tile
+            in flight. A MemTile serve cannot say when it is done - its completion token has no route back to
+            the shim - but a drain can, and a drain completing means more: the cores had to consume every
+            slice those serves delivered in order to emit the objects it moves.
+
+            Each drain issued while a tile is armed carries its own token for exactly this, so each one here
+            is awaited once and freed. The drains outstanding at this point are the previous tile's, whose
+            ``S`` was issued before it, so every one of them can complete; the first tile of a layer finds an
+            empty queue and waits for nothing.
+            """
+            while any(e[1] == "o" for e in queues[c]):
+                if not retire_channel(c, "o"):
+                    raise RuntimeError("ring barrier: an outstanding drain cannot be awaited")
+
         def issue(c: int, item: tuple) -> None:
             if item[0] == "w":
                 push(c, "w", linear("wp", item[1], item[2]), hold=item[3] if len(item) > 3 else 0)
@@ -541,8 +562,12 @@ class SequenceEmitter:
                 served(c)
                 push(c, "a", item[1])
             elif item[0] == "o":
-                push(c, "o", item[1], hold=item[2] if len(item) > 2 else 0)
+                # A drain issued while a tile is armed is what the next re-arm waits on, so it carries a token
+                # of its own rather than sharing one with a later drain of the channel.
+                push(c, "o", item[1], hold=item[2] if len(item) > 2 else 0, force_token=c in serving)
             elif item[0] == "R":      # arm this column's ring for a tile, before its fills are issued
+                if len(item) > 2 and item[2]:
+                    ring_barrier(c)
                 self._arm_ring(c, item[1], reset_done)
                 serving[c] = item[1]
             elif item[0] == "S":      # replay it, once the fills are in flight
