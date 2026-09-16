@@ -362,7 +362,7 @@ range - the last group loads a `v<32>`, and two of them 32 B apart for stride 2:
 | kind | plane read today | vector extent | slack |
 |---|---|---|---|
 | k3s1 | 8 x 25 | 7 x 22 (176 B/row) | 23% |
-| k3s2 | 16 x 50 | 11 x 42 (336 B/row) | 60% |
+| k3s2 | 16 x 50 | 11 x 42 (336 B/row) | 42% |
 | k5s1 | 16 x 50 | 9 x 24 (192 B/row) | 73% |
 
 Each tight width lands exactly on a vector boundary, which is the check that the arithmetic is right.
@@ -400,3 +400,35 @@ limit, the real cap being weight capacity at `1 tap * ncin * 256 <= 9216`, so `n
 What this redirects to: halo exchange between neighbouring cores over the AIE2 cascade. Adjacent cores'
 input windows overlap by two rows and each re-reads its own halo from DDR. Cascade attacks those bytes
 WITHOUT adding packets, which is exactly the shape this measurement says is required. Untried.
+
+## Cascade halo exchange reaches one halo row of two, and needs a kernel change first
+
+Adjacent cores' input windows overlap, and each core re-reads its own halo from DDR, so the AIE2
+cascade looks like the right instrument: it attacks bytes WITHOUT adding packets, which is exactly the
+shape the section above says is required. Three checks, cheapest first. Two of them fail.
+
+**What the cascade carries.** `CascadeFlow` "only declares the directed topology edge" - "the kernel
+functions are responsible for using the `put_mcd` / `get_scd` intrinsics to actually drive/read the
+cascade stream". So a halo exchange is code inside `engine.cc`, not a compiler change, and it trips the
+recorded stop condition: a kernel program change is the user's decision under the one-program rule.
+The in-tree ML example is consistent with the designed use - mobilenet's bottleneck splits a 1x1 conv's
+channels across two tiles and forwards PARTIAL SUMS, not activations.
+
+**Direction.** "Each compute tile has at most one cascade input (from N or W) and one cascade output
+(to S or E)." A quad is one column, so flows run N->S only. Core r covers output rows [5r, 5r+5) and
+for k3s1 reads [5r-1, 5r+6). Its TOP halo row 5r-1 is core r-1's last output row, reachable from the
+north. Its BOTTOM halo row 5r+5 is core r+1's first output row, which would need S->N and is not
+available. So at most one of the two halo rows can come over the cascade, and the plane shrinks from
+seven rows to six, not to five.
+
+**Cost.** put/get inside the tap loop is a further core-function variant on top of the kernel change,
+and the first core of each quad still reads its top halo from DDR.
+
+Best case is therefore k3s1 losing one row of seven: 14% of its 60.7 MB on yolov8s, about 8.7 MB or
+0.32 ms of transport. But the row count IS part of the plane, so the object resizes, and the section
+above measured that resizing reprices every kind at once - at A=4,224 k1 pays 1.32x per block. Whether
+the net survives is unmeasured, deliberately: the kernel gate fires first, and pricing a design that
+needs a decision not yet taken would be spending dispatches to justify a choice rather than to test it.
+
+Correction to the table above: k3s2's slack is 42%, not the 60% first recorded here - 16x50 = 800
+pixels read against 11x42 = 462 used. k3s1's 23% and k5s1's 73% both recompute correctly.
