@@ -1800,7 +1800,9 @@ cached reference heads rather than `bo_out`.
   defaults. That costs the attention core about 0.14 ms per frame against `performance` and brings YOLO11n to
   11.5-11.8 % CPU and 165 mJ per frame in `balanced`
   ([BENCHMARKS](BENCHMARKS.md#energy-per-frame-on-yolov8s-sesr-m7-yolo11n-and-yolov8n-pose-2026-09-16-desktop-2)).
-- **Power modes leave the NPU's own power mode alone (measured 2026-09-16; not decided).** `xrt-smi configure --pmode
-  powersaver` would save `efficiency` 14 % energy per frame at 30 fps, for twice the G2G and nothing at full speed, and
-  it slows every NPU application on the machine. No mode switches it; whether one should is the maintainer's call
+- **A power mode will switch the NPU's own power mode (decided 2026-09-16; not yet designed or built).** `xrt-smi
+  configure --pmode powersaver` would save `efficiency` 14 % energy per frame at 30 fps, for twice the G2G and nothing
+  at full speed, and it slows every NPU application on the machine. After that measurement the maintainer decided
+  that a power mode should switch it anyway, so the design has to confine the switch to capped frame rates, keep
+  other NPU applications in view, and restore the device even after a crash. Nothing switches it yet
   ([BENCHMARKS](BENCHMARKS.md#the-npus-own-power-modes-buy-energy-only-at-a-cameras-rate-and-cost-ignition-its-latency-lead-2026-09-16-desktop-2)).
