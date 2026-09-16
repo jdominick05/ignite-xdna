@@ -135,6 +135,21 @@ The YOLOv8s gap is now a known limitation of this runtime: every runtime-side wa
 built, measured or sized on 2026-09-16 and none survived
 ([BENCHMARKS](BENCHMARKS.md#memtile-residency-does-not-pay-on-the-graph-engine-and-the-yolov8s-gap-is-a-known-limitation-2026-09-16-desktop-2)).
 
+**Re-measured in the `balanced` power mode (2026-09-16).** The sitting above ran the preprocessor's workers spinning,
+which is `--power-mode performance` since `3bfebcd`. In the `balanced` default, one sitting with every container
+re-verified exact ([log](../results/aie/latency_balanced_default_phoenix_20260916T1745Z.log),
+[BENCHMARKS](BENCHMARKS.md#the-amd-comparisons-re-measured-in-the-balanced-default-2026-09-16-desktop-2)):
+
+| Model | AMD glass-to-glass, runs 1 / 2 | AMD `session.run` | Ignition glass-to-glass, runs 1 / 2 | Ignition dispatch | RSS, AMD / Ignition |
+|---|---:|---:|---:|---:|---:|
+| YOLOv8s | **16.744 / 16.564** | 12.792 / 12.669 | 18.046 / 17.988 | 16.792 / 16.755 | 339.6 / 242.9 MB |
+| SESR M7 | **4.365 / 4.332** | 1.492 / 1.495 | 6.840 / 6.815 | 4.178 / 4.178 | 265.3 / 162.9 MB |
+
+All times in ms, RSS from each stack's second run. The dispatch barely moved; the gap on YOLOv8s is 1.36 ms on the
+means, against 0.30 ms above, and on SESR M7 2.48 ms against 3.02 ms. The environment changed too (the
+`mlir-aie-iron` env rather than an `install.ps1` installation), and AMD's SESR image output drifted 0.6 ms slower with
+nothing changed, so compare these rows with each other, not with the table above.
+
 ### Through Ignition (`live_ignition.py`, 500 frames)
 
 <!-- BEGIN npu (tools/model_zoo_bench.py) -->
@@ -312,6 +327,10 @@ evidence [`results/aie/yolo11n_hybrid_phoenix_20260915T0216Z.log`](../results/ai
   **10.411** and **10.115** ms mean glass-to-glass (NPU dispatch 8.784 and 8.708 ms, host 0.533 and 0.505 ms)
   against 11.109 and 10.987 ms for `yolo11n.ignite` and 36.361 and 34.549 ms on AMD's stack in the same
   sitting ([BENCHMARKS](BENCHMARKS.md#yolo11ns-c2psa-convolutions-on-the-npu-only-its-attention-core-on-the-host-2026-09-15-desktop-2)).
+- **Both, in the `balanced` power mode** (2026-09-16; the runs above spun the preprocessor's workers): 10.439 and
+  10.369 ms with the attention core on the host, 11.182 and 11.177 ms with the whole block, against 36.540 and
+  36.644 ms on AMD's stack, every container re-verified exact first
+  ([BENCHMARKS](BENCHMARKS.md#the-amd-comparisons-re-measured-in-the-balanced-default-2026-09-16-desktop-2)).
 
 ```bash
 MSYS_NO_PATHCONV=1 bash scripts/research-iron.sh -m ignite_xdna.compiler.cli compile --model models/yolo11n_cut_xint8.onnx --output build/yolo11n.ignite --host-region /model.10/
@@ -342,6 +361,9 @@ evidence [`results/aie/yolov8n_pose_phoenix_20260915T1919Z.log`](../results/aie/
 - **Against AMD's stack** (`4_pose.py`, 50 warm-up and 500 frames of `bus.jpg`, interleaved): **8.318** and **8.339**
   ms from frame to people, against 12.056 and 12.089 ms; through Ignition's `live_ignition.py` 8.360 and 8.481 ms
   (NPU dispatch 7.548 and 7.572 ms, decode and NMS 0.288 and 0.320 ms), three people per frame.
+- **The same, in the `balanced` power mode** (2026-09-16; the runs above spun the preprocessor's workers): 8.987 and
+  9.039 ms through `4_pose.py`, 9.025 and 8.970 ms through `live_ignition.py`, against 11.955 and 12.020 ms on AMD's
+  stack ([BENCHMARKS](BENCHMARKS.md#the-amd-comparisons-re-measured-in-the-balanced-default-2026-09-16-desktop-2)).
 
 ```bash
 bash scripts/research-iron.sh -m ignite_xdna.compiler.cli compile --model models/yolov8n-pose_cut_xint8.onnx --output build/yolov8n_pose.ignite

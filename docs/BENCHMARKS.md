@@ -7029,7 +7029,10 @@ establishes vendor parity — the oracle diff remains that gate — and neither 
   MemTile, routing around the MemTile, trimming packets, packing fill tasks, hardware compression and cascade halo
   exchange were each built, measured or sized, and none survived
   ([MemTile residency does not pay](#memtile-residency-does-not-pay-on-the-graph-engine-and-the-yolov8s-gap-is-a-known-limitation-2026-09-16-desktop-2)).
-  The traffic that remains is cut by model shape, not by the runtime.
+  The traffic that remains is cut by model shape, not by the runtime. Those figures ran with spinning workers, which
+  is `--power-mode performance` today; in the `balanced` default the gap measured 1.36 ms on the means (18.046 and
+  17.988 ms against 16.744 and 16.564 ms), with the NPU stage unchanged and the rest in host work around it
+  ([re-measured in the balanced default](#the-amd-comparisons-re-measured-in-the-balanced-default-2026-09-16-desktop-2)).
 - **No formal test suite.** Verification here is empirical (`compileall` + import checks
   as a syntax gate, then real pipeline runs read from `results/`) rather than unit tests
   — there's no fixture NPU to test against in CI.
@@ -8471,5 +8474,83 @@ per run, median of 8 undisturbed 30 s idle baselines (34.708 W), two runs each:
 
 **Not done:** any host but the 8700G (the modes are defined relative to the host, and verified on this one); YOLOv8s,
 SESR M7, YOLOv8n-pose and YOLO11n; re-measuring the latency comparisons published before power modes, which were taken
-with spinning workers; the NPU's own device-wide power modes (`xrt-smi configure --pmode`), which would also slow any
-other NPU application.
+with spinning workers (since done: [the next section](#the-amd-comparisons-re-measured-in-the-balanced-default-2026-09-16-desktop-2));
+the NPU's own device-wide power modes (`xrt-smi configure --pmode`), which would also slow any other NPU application.
+
+## The AMD comparisons re-measured in the balanced default (2026-09-16, Desktop 2)
+
+Every same-sitting latency comparison against AMD's stack published before `3bfebcd` ran with the preprocessor's
+workers spinning, which is `--power-mode performance` today, while users get `balanced`. This sitting repeats all of
+them in the default. Evidence: `results/aie/latency_balanced_default_phoenix_20260916T1745Z.log`.
+
+**Method.** One sitting, 17:45-17:49 UTC. ignite-xdna `554ab57` (0.3.0) through the `mlir-aie-iron` conda env's editable
+install, and Ignition `a16d7e9` (v0.3.2) `live_ignition.py`; the earlier sittings ran an `install.ps1` installation,
+so the environment differs as well as the mode. First `tools/verify_engine_container.py` checked every container in
+`build/` against today's runtime: yolov8n_full 66/66, yolov8s 66/66, sesr_m7 9/9, yolov8n_pose 75/75, yolo11n 84/84
+and yolo11n_core 91/91 layers exact. Then 50 warm-up and 500 timed frames per run on Ignition's
+`examples/assets/bus.jpg` (ignite-xdna's `assets/bus.jpg` for pose, as before), stacks interleaved per model and each
+group run twice, with `xrt-smi` reporting no hardware contexts before every group and at the end. Host CPU read
+7.2-9.4 % in the 2 s before each group (1.2-3.6 % in the 2026-09-15 sitting; today's energy sittings' idle baselines
+read 7.2-8.5 %). AMD's YOLO arms are `tools/amd_vitisai_yolo.py` (Ignition's letterbox, decode and NMS; the same loop as
+Ignition's `benchmarks/benchmark_yolo_vitisai.py`) on compiled caches, SESR's is the 2026-09-15 sitting's SESR arm
+with Ignition's `sr_preprocess`/`sr_postprocess`, and pose's is `pipelines/yolov8n-pose/4_pose.py --ep npu`. No AMD
+session wrote an EP report, so node placement is not re-read here: the placements quoted in earlier sections stand
+on their own records. Ignition ran in `balanced` unless the row says otherwise (every run logged its mode: 8 worker
+threads, sleeping).
+
+| Run | Model | Arm | G2G mean | P95 | P99 | Stage means (ms) | Output | RSS |
+|---|---|---|---:|---:|---:|---|---|---:|
+| 1 | YOLOv8n | AMD's stack | 10.392 | 10.862 | 11.164 | letterbox 1.784, `session.run` 6.539, decode+NMS 2.069 | 5 objects | 305.3 MB |
+| 2 | YOLOv8n | Ignition, balanced | **8.420** | 8.738 | 9.233 | preprocess 0.545, dispatch 7.221, readback 0.607, decode 0.041 | 5 objects | 191.8 MB |
+| 3 | YOLOv8n | Ignition, performance | 7.982 | 8.090 | 8.379 | preprocess 0.417, dispatch 7.248, readback 0.276, decode 0.036 | 5 objects | 191.8 MB |
+| 4 | YOLOv8n | AMD's stack | 10.335 | 10.820 | 11.246 | letterbox 1.774, `session.run` 6.513, decode+NMS 2.048 | 5 objects | 304.8 MB |
+| 5 | YOLOv8n | Ignition, balanced | **8.386** | 8.685 | 8.879 | preprocess 0.534, dispatch 7.203, readback 0.599, decode 0.042 | 5 objects | 191.7 MB |
+| 6 | YOLOv8n | Ignition, performance | 7.960 | 8.144 | 8.320 | preprocess 0.419, dispatch 7.219, readback 0.279, decode 0.037 | 5 objects | 192.1 MB |
+| 7 | YOLOv8s | AMD's stack | **16.744** | 17.093 | 17.565 | letterbox 1.779, `session.run` 12.792, decode+NMS 2.172 | 5 objects | 337.3 MB |
+| 8 | YOLOv8s | Ignition | 18.046 | 18.323 | 18.545 | preprocess 0.548, dispatch 16.792, readback 0.651, decode 0.047 | 6 objects | 241.8 MB |
+| 9 | YOLOv8s | AMD's stack | **16.564** | 16.972 | 17.239 | letterbox 1.756, `session.run` 12.669, decode+NMS 2.138 | 5 objects | 339.6 MB |
+| 10 | YOLOv8s | Ignition | 17.988 | 18.306 | 18.569 | preprocess 0.546, dispatch 16.755, readback 0.635, decode 0.046 | 6 objects | 242.9 MB |
+| 11 | SESR M7 | AMD's stack | **4.365** | 4.790 | 4.896 | preprocess 0.409, `session.run` 1.492, postprocess 2.464 | 512x512 | 265.3 MB |
+| 12 | SESR M7 | Ignition | 6.840 | 7.194 | 7.340 | preprocess 0.434, dispatch 4.178, readback 0.020, image output 2.202 | 512x512 | 163.4 MB |
+| 13 | SESR M7 | AMD's stack | **4.332** | 4.802 | 4.918 | preprocess 0.417, `session.run` 1.495, postprocess 2.420 | 512x512 | 265.3 MB |
+| 14 | SESR M7 | Ignition | 6.815 | 7.184 | 7.222 | preprocess 0.431, dispatch 4.178, readback 0.021, image output 2.181 | 512x512 | 162.9 MB |
+| 15 | YOLO11n | AMD's stack | 36.540 | 38.081 | 38.963 | letterbox 1.839, `session.run` 32.824, decode+NMS 1.877 | 7 objects | 343.2 MB |
+| 16 | YOLO11n | Ignition, `yolo11n.ignite` (whole C2PSA on the host) | 11.182 | 11.528 | 11.973 | preprocess 0.641, dispatch 8.362, host 1.636, readback 0.494, decode 0.041 | 6 objects | 203.1 MB |
+| 17 | YOLO11n | Ignition, `yolo11n_core.ignite` (attention core on the host) | **10.439** | 10.780 | 11.098 | preprocess 0.644, dispatch 8.748, host 0.527, readback 0.475, decode 0.038 | 6 objects | 201.2 MB |
+| 18 | YOLO11n | AMD's stack | 36.644 | 38.128 | 39.058 | letterbox 1.882, `session.run` 32.827, decode+NMS 1.935 | 7 objects | 343.1 MB |
+| 19 | YOLO11n | Ignition, `yolo11n.ignite` | 11.177 | 11.482 | 11.688 | preprocess 0.637, dispatch 8.380, host 1.631, readback 0.483, decode 0.039 | 6 objects | 203.3 MB |
+| 20 | YOLO11n | Ignition, `yolo11n_core.ignite` | **10.369** | 10.743 | 11.142 | preprocess 0.645, dispatch 8.692, host 0.500, readback 0.489, decode 0.036 | 6 objects | 201.6 MB |
+| 21 | YOLOv8n-pose | AMD, `4_pose.py --ep npu` | 11.955 | 12.215 | 12.777 | letterbox 2.969, `session.run` and head decode 8.72, NMS 0.11 | 3 people | — |
+| 22 | YOLOv8n-pose | container, `4_pose.py --ep ignite` | **8.987** | 9.225 | 9.500 | letterbox into the NPU's buffer 0.574, NPU and head decode 8.33, NMS 0.08 | 3 people | — |
+| 23 | YOLOv8n-pose | Ignition, `live_ignition.py` | 9.025 | 9.270 | 9.443 | preprocess 0.591, dispatch 7.564, readback 0.536, decode+NMS 0.314 | 3 people | 181.5 MB |
+| 24 | YOLOv8n-pose | AMD, `4_pose.py --ep npu` | 12.020 | 12.335 | 13.118 | letterbox 3.024, `session.run` and head decode 8.72, NMS 0.12 | 3 people | — |
+| 25 | YOLOv8n-pose | container, `4_pose.py --ep ignite` | 9.039 | 9.305 | 9.601 | letterbox into the NPU's buffer 0.599, NPU and head decode 8.35, NMS 0.08 | 3 people | — |
+| 26 | YOLOv8n-pose | Ignition, `live_ignition.py` | **8.970** | 9.278 | 9.623 | preprocess 0.577, dispatch 7.527, readback 0.526, decode+NMS 0.319 | 3 people | 181.7 MB |
+
+All times in ms. RSS is at the end of each run (Ignition's was flat to within 0.01 MB except pose, +0.10 and +0.21 MB
+over 500 frames); `4_pose.py` reports none. Run 17's maximum frame was 27.024 ms, one outlier inside a 11.098 ms P99.
+
+- **Where the engine leads, it still leads in the default.** YOLOv8n 8.403 ms against 10.364 ms on the means of the
+  runs, 1.96 ms or 19 % less; YOLO11n with its attention core on the host 10.404 against 36.592 ms, 3.52x faster;
+  YOLOv8n-pose through Ignition 8.998 against 11.988 ms, 2.99 ms less.
+- **What `balanced` costs on YOLOv8n, and where** (runs 2-3 and 5-6): 0.432 ms on the means, and none of it on the NPU.
+  Dispatch is 7.212 against 7.234 ms. Preprocess is 0.12 ms longer and readback 0.33 ms longer, 0.603 against
+  0.278 ms: host work right after a wake-up, consistent with the earlier finding that host work after a blocking wait
+  is slower on this machine ([native decode](#native-int8-head-decode-with-identical-detections-2026-09-14-desktop-2)),
+  and not isolated further. The NPU's own power state is not what moves here.
+- **Where AMD's stack leads, the gap is wider in the default.** YOLOv8s 18.017 against 16.654 ms on the means, 1.36 ms,
+  against 0.30 ms (17.253 against 16.956) in the 2026-09-15 sitting with spinning workers that the
+  [known-limitation decision](#memtile-residency-does-not-pay-on-the-graph-engine-and-the-yolov8s-gap-is-a-known-limitation-2026-09-16-desktop-2)
+  quotes. Ignition's dispatch barely moved (16.774 against 16.724 ms); the rest of its frame rose from 0.53 to
+  1.24 ms, and AMD's `session.run` read 0.42 ms shorter than in that sitting. `performance` was not run on YOLOv8s
+  here, so how much of the 0.71 ms is the mode and how much the environment is not separated. SESR M7 is 6.828
+  against 4.349 ms, 2.48 ms (3.02 ms on 2026-09-15).
+- **Drift between sittings, unexplained.** Comparisons hold only inside one sitting, and three figures moved without
+  a code change: AMD's SESR arm (same script, `resnet_env17`, ORT 1.23.3 build, and Ignition's unchanged
+  `sr_preprocess`/`sr_postprocess`) took 0.41 ms to preprocess and 2.44 ms to write its image against 0.32 and 1.86 ms
+  on 2026-09-15, and Ignition's image output moved likewise (2.19 against 1.92 ms); SESR's dispatch read 4.178 ms
+  against 4.39-4.41 ms; and YOLOv8n in `performance` (7.971 ms) is 0.20 ms slower than the 2026-09-15 control with
+  spinning workers in the `install.ps1` environment (7.771 ms, preprocess 0.309 and readback 0.194 ms), with dispatch
+  unchanged (7.234 against 7.233 ms). The host's busier idle today is one candidate; the environments differ too.
+- **Not re-measured:** node placement on AMD's stack, accuracy (the pose container's COCO figures, box IoU between
+  stacks), install footprints, and any host but the 8700G.

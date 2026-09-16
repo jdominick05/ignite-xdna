@@ -1777,7 +1777,11 @@ cached reference heads rather than `bo_out`.
 - **The YOLOv8s gap to AMD's stack is a known limitation of this runtime (2026-09-16).** 17.240 and 17.265 ms
   against 16.954 and 16.958 ms, lost inside the NPU stage, with every runtime-side lever above closed. Further
   YOLOv8s latency work goes into model shape, not into the transport
-  ([BENCHMARKS](BENCHMARKS.md#known-limitations)).
+  ([BENCHMARKS](BENCHMARKS.md#known-limitations)). Those figures ran with spinning host workers; in the `balanced`
+  default, measured after this decision, the gap is 1.36 ms on the means (18.046 and 17.988 against 16.744 and
+  16.564 ms), the NPU stage unchanged and the difference in host work around it
+  ([BENCHMARKS](BENCHMARKS.md#the-amd-comparisons-re-measured-in-the-balanced-default-2026-09-16-desktop-2)). The
+  decision was taken on the smaller figure and has not been revisited.
 - **The host side has power modes, balanced by default, sized to the host (2026-09-16).** The native preprocessor's
   OpenMP workers spun through every NPU dispatch (YOLOv8n at 100 % CPU, about 380 mJ per frame above idle, three times
   AMD's stack) because the passive wait policy the pipeline set through `os.environ` never reached MSVC's OpenMP
