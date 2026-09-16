@@ -166,3 +166,25 @@ decompresses **standalone** (every lossless demonstration in the tree uses match
 and the README notes a state-machine warm-up artifact in the first BD, which suggests the codec carries state
 across BDs); how to carry the per-packet compressed length, since the consumer BD must match it exactly; and
 whether a full CTRL write can clobber bit 4 when out-of-order is enabled on the same channel.
+
+### Tested and refuted: an oversized consumer descriptor does not complete short
+
+The obvious way to measure an unknown compressed length is to size the consumer generously and see how much
+arrives. `_build_multi_cmp_only` takes its sizing from module constants read at build time - `comp_ty` from
+`RATIOED_PER_LINE` and the shim out task from `RATIOED_N` - so both were patched from arange's compressed
+length (736 and 2,944) to the raw length (1,024 and 4,096), leaving a consumer descriptor sized for the whole
+raw payload.
+
+**It times out, and it times out on `arange`** - the one input whose compressed length is known, where the run
+must have returned 2,944 words. Consumer sizing was the only variable, so the cause is isolated: **a consumer
+descriptor must MATCH the compressed byte count, not merely accommodate it.** The README's warning is exact
+rather than approximate, and sizing generously is not a way around it.
+
+That makes variable-length receive load-bearing rather than a convenience. Either the `FoT_Mode` field in the
+same control register (bits 17:16, "finish on TLAST", with a `FoT_counts_from_mm_register` encoding that
+implies a readable count) provides a transfer that ends on the stream rather than on a byte count, or hardware
+compression cannot carry per-packet weight data at all - whatever its ratio - because every packet's length
+differs and nothing can be sized in advance.
+
+The device is not the variable: the known-good flag-off container verified 66/66 exact immediately after this
+timeout, at 7.239 ms, the tenth such verify of the sitting.
