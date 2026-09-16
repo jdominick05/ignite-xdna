@@ -231,7 +231,8 @@ def compile_graph_container(onnx_path, output_path, build_dir: Optional[Path] = 
 
     def body(ws_arg, wp_arg):
         emitter = SequenceEmitter(ws_arg, wp_arg, ws_extent, wp_extent,
-                                  {c: eng.fifo_names(c) for c in range(eng.COLS)})
+                                  {c: eng.fifo_names(c) for c in range(eng.COLS)},
+                                  a_ring=activation_ring)
         for s in scheds:
             emitter.run_column_programs(s.programs, bd_budget=14)
 

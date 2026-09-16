@@ -241,6 +241,15 @@ RING_ITERATION_CURRENT_MASK = 0x3F << RING_ITERATION_CURRENT_SHIFT
 RING_LOCK_REL_SHIFT = 24
 RING_LOCK_MASK = 0x7F
 RING_LOCK_REL_VALUE_MASK = RING_LOCK_MASK << RING_LOCK_REL_SHIFT
+# The acquire value sits in the same word and is stored NEGATED in seven bits: AcquireGreaterEqual N is -N,
+# which is why the configuration CDO writes an acquire of 8 as 0x78. Both values live in word 7, so a layer
+# that changes how many tokens a slot carries rewrites them in one masked write.
+RING_LOCK_ACQ_SHIFT = 8
+RING_LOCK_ACQ_VALUE_MASK = RING_LOCK_MASK << RING_LOCK_ACQ_SHIFT
+# Next_BD sits above the buffer address in word 1, with Use_Next_BD one bit below it. Relinking a cycle to a
+# shorter one is a write to these two fields and nothing else.
+RING_NEXT_BD_SHIFT = 20
+RING_NEXT_BD_MASK = 0x3F << RING_NEXT_BD_SHIFT
 MEMTILE_ROW = 1
 # A MemTile's DMA channel control registers, confirmed against both builds' configuration CDO: six channels
 # per direction at a stride of eight, S2MM first, each with its START_QUEUE in the word above. Bit 1 of the
@@ -307,7 +316,8 @@ def split_rounds(items: Sequence[tuple]) -> List[List[tuple]]:
 class SequenceEmitter:
     """Emit raw shim DMA tasks inside an IRON runtime sequence body."""
 
-    def __init__(self, ws, wp, ws_bytes: int, wp_bytes: int, fifo_names: Dict[int, Dict[str, str]]):
+    def __init__(self, ws, wp, ws_bytes: int, wp_bytes: int, fifo_names: Dict[int, Dict[str, str]],
+                 a_ring: int = 0):
         from aie.dialects.aiex import (dma_await_task, dma_free_task, dma_start_task, npu_maskwrite32,
                                        npu_push_queue, npu_write32, shim_dma_single_bd_task)
         from aie.dialects._aie_enum_gen import DMAChannelDir
@@ -317,11 +327,15 @@ class SequenceEmitter:
         self._dir = DMAChannelDir
         # The ring's descriptor and lock ids are pinned by the design that compiles them, and read from it here
         # rather than restated, so the two cannot drift: a maskwrite to the wrong descriptor is silent.
-        from kernels.aie2.conv_engine.design import (ROWS as RING_ROWS, RING_BD_FILL, RING_LOCK_ARRIVED,
-                                                     RING_LOCK_SPACE, _ring_bd)
+        from kernels.aie2.conv_engine.design import (ROWS as RING_ROWS, RING_FILL_CHANNEL, RING_LOCK_ARRIVED,
+                                                     RING_LOCK_SPACE, _ring_bd, _ring_fill_bd)
         from .scheduler import MEMTILE_BD_BASE, memtile_lock_reg
         self._ring_rows = RING_ROWS
-        self._ring_fill = RING_BD_FILL
+        # How many slots the design was compiled with, which fixes the descriptor ids: a layer's pass may be
+        # narrower than this, but never wider.
+        self._ring_slots = a_ring
+        self._ring_fill_channel = RING_FILL_CHANNEL
+        self._ring_fill = _ring_fill_bd
         self._ring_arrived = RING_LOCK_ARRIVED
         self._ring_space = RING_LOCK_SPACE
         self._ring_serve = _ring_bd
@@ -346,105 +360,71 @@ class SequenceEmitter:
         self._start(task)
         return task
 
-    def _ring_channel_ctrl(self):
-        """The control register of each of the ring's five channels: the arrival, then a serve per core."""
-        yield MEMTILE_S2MM_CTRL
-        for r in range(self._ring_rows):
-            yield MEMTILE_MM2S_CTRL + MEMTILE_CHANNEL_STRIDE * r
+    def _ring_chains(self, slots: int):
+        """The ring's five descriptor chains, each a slot-ordered list of ids: the arrival, then a serve per core.
 
-    def _ring_descriptors(self):
-        """The ring's five descriptor ids, in the same order as their channels."""
-        yield self._ring_fill
-        for r in range(self._ring_rows):
-            yield self._ring_serve(r, 0)
-
-    def _arm_ring(self, col: int, slots: int, serves: int, reset_done: set) -> None:
-        """Point one column's ring descriptors at a tile of ``slots`` chunks, and restart its channels.
-
-        Five descriptors: the arrival on S2MM 0, and one serve per core on MM2S 0..3. Three things vary per
-        layer - how far a descriptor walks, what its locks count, and how many executions the queue asks for.
-        The compiled address, offset, length and stride are left alone, and the counts are rewritten only when
-        a layer's chunk count differs from the one the descriptors carry, so a like-shaped run pays nothing.
-
-        The channels are already running before the instruction stream does anything. ``aie.dma_start`` arms
-        them at configuration time - the init CDO writes their START_QUEUE registers - on a descriptor that
-        self-links, and such a chain is one task that never completes, so a push alone would stack behind it
-        forever. Each column is therefore reset before its first tile, which drains that queue and clears the
-        run state. After it every task terminates on its own, because ``Use_Next_BD`` is cleared below and the
-        queue asks for an exact number of executions. ``reset_done`` lives as long as one call and the caller
-        makes one per layer, so this is one reset per layer rather than one per dispatch - deliberately, since
-        a layer then begins from a known channel state for the cost of two register writes. The reset also
-        freezes the channel's bound lock counters, which is why the locks are restored after it and the push
-        comes last.
+        Nothing resets these channels any more. They are started once by the configuration CDO and left running:
+        a chain whose descriptors link back to their own head is one task that never completes, so the hardware
+        never clears a Valid_BD, never advances an iteration counter and never empties a start queue. That is
+        exactly how the output join's own eight-descriptor cycle runs - it takes no runtime push at all - and it
+        is what lets a layer configure the ring once instead of arming it once per tile.
         """
-        if col not in reset_done:
-            for ctrl in self._ring_channel_ctrl():
-                self._maskwrite(ctrl, MEMTILE_CHANNEL_RESET, MEMTILE_CHANNEL_RESET,
-                                column=col, row=MEMTILE_ROW)
-                self._maskwrite(ctrl, 0, MEMTILE_CHANNEL_RESET, column=col, row=MEMTILE_ROW)
-            reset_done.add(col)
-        # Every tile, not only when the chunk count changes. Running a descriptor consumes it: the hardware
-        # clears ``Valid_BD`` when its task completes and advances ``Iteration_Current`` as it executes, so a
-        # descriptor left as the previous tile finished with it is not one the channel will run again. This is
-        # safe to do per tile only because the previous tile's drain was awaited before this call, so its
-        # serves have been consumed to the last byte and nothing is in flight to disturb.
-        wrap = (slots - 1) << RING_ITERATION_SHIFT
-        for bd_id in self._ring_descriptors():
-            bd = self._ring_bd_base + RING_BD_STRIDE * bd_id
-            # Clear the compiled self-link. Bit 19 sits above the buffer address in the same word, so a
-            # masked write leaves the address alone.
-            self._maskwrite(bd + RING_BD_NEXT_WORD, 0, RING_USE_NEXT_BD, column=col, row=MEMTILE_ROW)
-            # The wrap this tile needs, and Iteration_Current back to zero so the first execution reads the
-            # first slot rather than wherever the last tile left the counter.
-            self._maskwrite(bd + RING_BD_ITERATION_WORD, wrap,
-                            RING_ITERATION_MASK | RING_ITERATION_CURRENT_MASK,
-                            column=col, row=MEMTILE_ROW)
-            self._maskwrite(bd + RING_BD_LOCK_WORD, RING_VALID_BD, RING_VALID_BD,
-                            column=col, row=MEMTILE_ROW)
-        # The arrival hands out one token per core per replay, so every serve execution can take one of its own
-        # and none of them ever waits on another. Only this release value varies with the layer; a serve's own
-        # counts are constant and its descriptor is never written here.
+        yield [self._ring_fill(i, slots) for i in range(slots)]
+        for r in range(self._ring_rows):
+            yield [self._ring_serve(r, i, slots) for i in range(slots)]
+
+    def _configure_ring(self, col: int, width: int, serves: int, slots: int) -> None:
+        """Point one column's ring at a layer's geometry - once per layer, not once per tile.
+
+        Arming used to be per tile, and it had to be: a pushed task consumes its descriptor, because the
+        hardware clears ``Valid_BD`` when the task completes and advances ``Iteration_Current`` as it runs, so
+        every tile rewrote all five descriptors and pushed them again. Nineteen register writes a tile, 1,104
+        tiles a frame on yolov8n and 1,853 on yolov8s: measured against the flag-off container, the ring's
+        instruction stream carried 45,521 ops to its 12,258, and that gap was larger than every byte the ring
+        saved.
+
+        Nothing is pushed here and nothing is reset. The descriptors form cycles, so each chain is one task
+        that never completes, never clears a Valid_BD and never empties a start queue - it free-runs from the
+        configuration CDO's ``aie.dma_start`` with the locks alone sequencing it, exactly as the output join's
+        own eight-descriptor cycle already does without a single runtime push.
+
+        What is left varies per layer and not per tile:
+
+        * **How many tokens a slot carries.** The arrival hands a slot ``ROWS * serves`` - one per core per
+          replay - and each of those serves takes one back, so both of a slot's locks end a tile where they
+          started and no tile has to restore them. The acquire and release values share word 7, and the
+          acquire is stored negated, so one masked write sets both.
+        * **``space``**, which must start at the same count. It is written here and nowhere else, because a
+          layer boundary is the one point where every task has been retired and the channel is quiescent; a
+          write to a lock a running DMA may be mid-acquire on is a race, and a tile boundary does not have
+          that guarantee.
+        * **The width of each cycle**, when the layer's pass is narrower than the compiled window. Only the
+          wrap matters, so each chain is relinked slot by slot with the last pointing back at the head.
+        """
         tokens = self._ring_rows * serves
         if tokens > RING_LOCK_MASK:
-            raise ValueError(f"a tile replayed {serves} times needs {tokens} arrival tokens per slot, "
-                             f"past the {RING_LOCK_MASK} a 7-bit release field holds")
-        fill_bd = self._ring_bd_base + RING_BD_STRIDE * self._ring_fill
-        self._maskwrite(fill_bd + RING_BD_LOCK_WORD, tokens << RING_LOCK_REL_SHIFT, RING_LOCK_REL_VALUE_MASK,
-                        column=col, row=MEMTILE_ROW)
-        # The serves consume `arrived` and nothing returns it, so the ring is restored here rather than drained
-        # by being served: `space` back to a full tile, `arrived` back to empty.
-        self._write32(self._ring_lock_reg(self._ring_arrived), 0, column=col, row=MEMTILE_ROW)
-        self._write32(self._ring_lock_reg(self._ring_space), slots, column=col, row=MEMTILE_ROW)
-        self._push_queue(col, MEMTILE_ROW, self._dir.S2MM, 0, False, slots - 1, self._ring_fill)
-
-    def _serve_ring(self, col: int, slots: int, serves: int) -> None:
-        """Replay one column's tile once per output group of it that the column owns.
-
-        A serve sends one core's slice out of every slot, so one replay is ``slots`` executions and ``serves``
-        replays that many again. The register holds one less than the executions asked for.
-
-        **No completion token is asked for and nothing is awaited here.** A MemTile task-completion token only
-        reaches the shim if its tile carries a ``controller_id`` attribute and a packet flow carries
-        TileControl to the shim's South port, and a design compiled the ordinary way has neither: aiecc runs
-        the column-control overlay with ``route-shim-to-tct`` at its default ``shim-only``, which filters every
-        non-shim tile out. Asking for a token here and waiting on it hangs the dispatch on work that has
-        already finished - measured, with the tile those serves produced sitting byte-exact in DDR.
-
-        Both jobs those waits were doing are taken instead by the drain of this tile, awaited before the next
-        ``R`` re-arms the descriptors. It orders the re-arm behind these serves, because the cores had to
-        consume every slice to emit the objects that drain moves. And it bounds the MemTile's four-deep task
-        queue, which nothing else here does: one arrival and one serve per channel are pushed per tile, and
-        the next tile cannot push until this one's output has reached DDR.
-
-        Ordering against the fill stays on the tile, where it has to. Each serve acquires one ``arrived`` token
-        per slice and releases none, and the arrival hands out one per core per replay. A shim fill's
-        completion token cannot stand in for that: it says the shim pushed its bytes, not that this tile's
-        S2MM wrote them into the ring. That was measured, not argued - with the serves taking no lock, every
-        layer came back wrong, single-chunk ones included.
-        """
-        for r in range(self._ring_rows):
-            self._push_queue(col, MEMTILE_ROW, self._dir.MM2S, r, False, slots * serves - 1,
-                             self._ring_serve(r, 0))
+            raise ValueError(f"a tile replayed {serves} times needs {tokens} tokens per slot, past the "
+                             f"{RING_LOCK_MASK} a 7-bit lock field holds")
+        for chain, ids in enumerate(self._ring_chains(slots)):
+            for i in range(width):
+                bd = self._ring_bd_base + RING_BD_STRIDE * ids[i]
+                # Close the cycle at this layer's width: the last descriptor of the pass points back at the
+                # first, every other at its successor.
+                self._maskwrite(bd + RING_BD_NEXT_WORD,
+                                RING_USE_NEXT_BD | (ids[(i + 1) % width] << RING_NEXT_BD_SHIFT),
+                                RING_USE_NEXT_BD | RING_NEXT_BD_MASK, column=col, row=MEMTILE_ROW)
+            if chain:
+                continue
+            # Only the arrival's counts move with the layer; a serve always takes one and gives one back.
+            for i in range(width):
+                bd = self._ring_bd_base + RING_BD_STRIDE * ids[i]
+                self._maskwrite(bd + RING_BD_LOCK_WORD,
+                                (tokens << RING_LOCK_REL_SHIFT) | ((-tokens & RING_LOCK_MASK)
+                                                                   << RING_LOCK_ACQ_SHIFT),
+                                RING_LOCK_REL_VALUE_MASK | RING_LOCK_ACQ_VALUE_MASK,
+                                column=col, row=MEMTILE_ROW)
+                self._write32(self._ring_lock_reg(self._ring_space + i), tokens,
+                              column=col, row=MEMTILE_ROW)
 
     def run_column_programs(self, programs: Sequence[Sequence[tuple]], bd_budget: int = 14,
                             queue_depth: int = 4, retire_batch: int = 2) -> None:
@@ -535,30 +515,11 @@ class SequenceEmitter:
                         e[2] -= 1
                         break
 
-        # Ring state per column: the tile awaiting its replay, and whether the column's channels have been
-        # reset out of the endless chain the configuration CDO started them on. Both live as long as one
-        # call, and this is called once per layer, so every layer resets its columns once and then re-arms
-        # the descriptors per tile.
-        serving: Dict[int, int] = {}
-        reset_done: set = set()
-
-        def ring_barrier(c: int) -> None:
-            """Await every drain this column still has outstanding, before its ring is re-armed.
-
-            The ring's five descriptors and its lock pair are shared by every tile, and ``_arm_ring`` rewrites
-            them unconditionally, so a re-arm that overtakes the serves still reading them corrupts the tile
-            in flight. A MemTile serve cannot say when it is done - its completion token has no route back to
-            the shim - but a drain can, and a drain completing means more: the cores had to consume every
-            slice those serves delivered in order to emit the objects it moves.
-
-            Each drain issued while a tile is armed carries its own token for exactly this, so each one here
-            is awaited once and freed. The drains outstanding at this point are the previous tile's, whose
-            ``S`` was issued before it, so every one of them can complete; the first tile of a layer finds an
-            empty queue and waits for nothing.
-            """
-            while any(e[1] == "o" for e in queues[c]):
-                if not retire_channel(c, "o"):
-                    raise RuntimeError("ring barrier: an outstanding drain cannot be awaited")
+        # The shape each column's ring was configured with, for as long as this call - and this is called once
+        # per layer, so a column configures its ring once and every later tile of that layer finds it done.
+        # There is no barrier and nothing to re-arm: the descriptors free-run as cycles, so a later tile has
+        # nothing to overtake.
+        configured: Dict[int, tuple] = {}
 
         def issue(c: int, item: tuple) -> None:
             if item[0] == "w":
@@ -573,18 +534,23 @@ class SequenceEmitter:
                 served(c)
                 push(c, "a", item[1])
             elif item[0] == "o":
-                # A drain issued while a tile is armed is what the next re-arm waits on, so it carries a token
-                # of its own rather than sharing one with a later drain of the channel.
-                push(c, "o", item[1], hold=item[2] if len(item) > 2 else 0, force_token=c in serving)
-            elif item[0] == "R":      # arm this column's ring for a tile, before its fills are issued
-                if len(item) > 2 and item[2]:
-                    ring_barrier(c)
-                # How many times the tile will be replayed sets how many tokens each arrival hands out, and the
-                # fill task is pushed at the end of the arm, so it has to be known here rather than at "S".
-                self._arm_ring(c, item[1], item[3] if len(item) > 3 else 1, reset_done)
-                serving[c] = item[1]
-            elif item[0] == "S":      # replay it, once the fills are in flight
-                self._serve_ring(c, serving.pop(c), item[1])
+                push(c, "o", item[1], hold=item[2] if len(item) > 2 else 0)
+            elif item[0] == "R":
+                # The first tile of a layer configures this column's ring; the rest of the layer's tiles find
+                # it configured and cost nothing at all. Every tile of a layer and column carries the same
+                # shape - the window is narrowed to a divisor of the tile so the cycles never have to be
+                # relinked mid-layer, and a column's replay count is a property of the layer - but a schedule
+                # that broke that would corrupt the tile in flight silently, so it is checked rather than
+                # assumed.
+                shape = (item[1], item[3] if len(item) > 3 else 1)
+                if c not in configured:
+                    configured[c] = shape
+                    self._configure_ring(c, shape[0], shape[1], self._ring_slots)
+                elif configured[c] != shape:
+                    raise ValueError(f"column {c} arms {shape} after {configured[c]} inside one layer; the "
+                                     f"ring is configured once per layer and cannot change shape mid-layer")
+            elif item[0] == "S":
+                pass                  # the serves free-run on their locks; nothing is pushed for them
             else:
                 raise ValueError(item[0])
 
