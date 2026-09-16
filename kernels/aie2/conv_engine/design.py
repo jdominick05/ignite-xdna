@@ -115,7 +115,11 @@ def ddr_extents(workspace_bytes, packet_bytes):
 # The ring is split into windows, so the next tile's fetch lands while this tile's groups are still being
 # served. Its buffer descriptors are placeholders the instruction stream rewrites per layer, so their ids are
 # pinned and the lowering assigns the output join's BDs around them.
-RING_WINDOWS = 2
+# One window. A second would need its own descriptors, but a buffer descriptor no ``aie.dma_start`` reaches is
+# dropped from the id allocator and its id handed to another fifo: with two windows the generated CDO configured
+# ids 1, 3, 5, 25 and 27 as output-join descriptors, 800 words long, so arming the second window rewrote live
+# ones. Overlapping a fetch with a replay is a follow-up, and needs ids reserved by a channel that starts them.
+RING_WINDOWS = 1
 RING_BD_FILL = 0                              # one arrival BD per window, on the (even) S2MM channel 0
 RING_BD_SERVE = RING_BD_FILL + RING_WINDOWS   # then one serve BD per core per window
 RING_BD_ODD = 24                              # a MemTile's odd channels may only reach ids 24 and above

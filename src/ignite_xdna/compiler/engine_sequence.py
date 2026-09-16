@@ -202,10 +202,19 @@ OPS_PER_TASK_ISSUE = 4  # BLOCKWRITE (BD), DDR_PATCH, MASKWRITE, WRITE (queue pu
 #   word 6  (iteration_size << 17) | iteration_stride     word 7  bit 31 = valid
 # `iteration_size` is the hardware's 6-bit Iteration_Wrap and is stored off by one, so a tile of C slots writes
 # C - 1. One maskwrite sets it and leaves the compiled stride and address alone.
+#   word 7  bit 31 valid, bits 24-30 lock_rel_val, 16-23 lock_rel_id, 15 lock_acq_enable, 8-14 lock_acq_val,
+#           0-7 lock_acq_id
+# A serve waits for the whole tile to have landed and hands the tokens straight back, so both of its counts are
+# the layer's chunk count. The compiled pair sizes a full window, and a tile narrower than one would wait for
+# tokens the arrival never releases: that deadlocks the dispatch, which is how it was found.
 RING_BD_STRIDE = 0x20
 RING_BD_ITERATION_WORD = 0x18
+RING_BD_LOCK_WORD = 0x1C
 RING_ITERATION_SHIFT = 17
 RING_ITERATION_MASK = 0x3F << RING_ITERATION_SHIFT
+RING_LOCK_ACQ_SHIFT = 8
+RING_LOCK_REL_SHIFT = 24
+RING_LOCK_VALUE_MASK = (0x7F << RING_LOCK_ACQ_SHIFT) | (0x7F << RING_LOCK_REL_SHIFT)
 MEMTILE_ROW = 1
 
 
@@ -312,13 +321,21 @@ class SequenceEmitter:
         Iteration_Wrap, stored off by one. It is rewritten only when a layer's chunk count differs from the one
         the descriptors already carry, so a run of like-shaped layers pays nothing.
         """
-        if armed.get(col) != slots:
+        if armed.get((col, window)) != slots:
             wrap = (slots - 1) << RING_ITERATION_SHIFT
-            for bd in (self._ring_fill + window,
-                       *(self._ring_serve(r, window) for r in range(self._ring_rows))):
-                self._maskwrite(self._ring_bd_base + RING_BD_STRIDE * bd + RING_BD_ITERATION_WORD,
-                                wrap, RING_ITERATION_MASK, column=col, row=MEMTILE_ROW)
-            armed[col] = slots
+            counts = (slots << RING_LOCK_ACQ_SHIFT) | (slots << RING_LOCK_REL_SHIFT)
+            for r in range(self._ring_rows):
+                bd = self._ring_bd_base + RING_BD_STRIDE * self._ring_serve(r, window)
+                self._maskwrite(bd + RING_BD_ITERATION_WORD, wrap, RING_ITERATION_MASK,
+                                column=col, row=MEMTILE_ROW)
+                self._maskwrite(bd + RING_BD_LOCK_WORD, counts, RING_LOCK_VALUE_MASK,
+                                column=col, row=MEMTILE_ROW)
+            # The arrival takes one slot from `space` and hands one to `arrived` whatever the tile holds, so
+            # only how far it walks changes.
+            self._maskwrite(self._ring_bd_base + RING_BD_STRIDE * (self._ring_fill + window)
+                            + RING_BD_ITERATION_WORD, wrap, RING_ITERATION_MASK,
+                            column=col, row=MEMTILE_ROW)
+            armed[(col, window)] = slots
         # A replay acquires and releases `arrived` by the same count, so the window is restored here rather
         # than drained by being served: `space` back to a full window, `arrived` back to empty.
         self._write32(self._ring_lock_reg(self._ring_arrived + window), 0, column=col, row=MEMTILE_ROW)
@@ -424,7 +441,9 @@ class SequenceEmitter:
         # the column's descriptors currently carry (so a like-shaped run of layers rewrites nothing).
         window: Dict[int, int] = {c: 0 for c in range(len(programs))}
         serving: Dict[int, tuple] = {}
-        armed: Dict[int, int] = {}
+        # Keyed by (column, window): the two windows carry their own descriptors, so arming one says nothing
+        # about the other, and a tile landing in the unarmed one would wait on the compiled counts.
+        armed: Dict[Tuple[int, int], int] = {}
 
         def issue(c: int, item: tuple) -> None:
             if item[0] == "w":
