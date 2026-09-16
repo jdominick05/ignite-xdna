@@ -330,7 +330,11 @@ evidence [`results/aie/yolo11n_hybrid_phoenix_20260915T0216Z.log`](../results/ai
 - **Both, in the `balanced` power mode** (2026-09-16; the runs above spun the preprocessor's workers): 10.439 and
   10.369 ms with the attention core on the host, 11.182 and 11.177 ms with the whole block, against 36.540 and
   36.644 ms on AMD's stack, every container re-verified exact first
-  ([BENCHMARKS](BENCHMARKS.md#the-amd-comparisons-re-measured-in-the-balanced-default-2026-09-16-desktop-2)).
+  ([BENCHMARKS](BENCHMARKS.md#the-amd-comparisons-re-measured-in-the-balanced-default-2026-09-16-desktop-2)). That
+  host segment's ONNX Runtime threads still spun; since `fbd53f5` they follow the power mode, and `balanced` read
+  10.674 and 10.627 ms (attention core) and 11.588 and 11.557 ms (whole block) against 37.665 and 37.702 ms, at 165 mJ
+  per frame against AMD's 1,396
+  ([BENCHMARKS](BENCHMARKS.md#energy-per-frame-on-yolov8s-sesr-m7-yolo11n-and-yolov8n-pose-2026-09-16-desktop-2)).
 
 ```bash
 MSYS_NO_PATHCONV=1 bash scripts/research-iron.sh -m ignite_xdna.compiler.cli compile --model models/yolo11n_cut_xint8.onnx --output build/yolo11n.ignite --host-region /model.10/

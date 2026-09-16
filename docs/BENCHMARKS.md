@@ -8473,7 +8473,9 @@ per run, median of 8 undisturbed 30 s idle baselines (34.708 W), two runs each:
   frame instead of running back to back. Not isolated further.
 
 **Not done:** any host but the 8700G (the modes are defined relative to the host, and verified on this one); YOLOv8s,
-SESR M7, YOLOv8n-pose and YOLO11n; re-measuring the latency comparisons published before power modes, which were taken
+SESR M7, YOLOv8n-pose and YOLO11n (since measured:
+[energy on the other models](#energy-per-frame-on-yolov8s-sesr-m7-yolo11n-and-yolov8n-pose-2026-09-16-desktop-2));
+re-measuring the latency comparisons published before power modes, which were taken
 with spinning workers (since done: [the next section](#the-amd-comparisons-re-measured-in-the-balanced-default-2026-09-16-desktop-2));
 the NPU's own device-wide power modes (`xrt-smi configure --pmode`), which would also slow any other NPU application
 (since measured: [the NPU's own power modes](#the-npus-own-power-modes-buy-energy-only-at-a-cameras-rate-and-cost-ignition-its-latency-lead-2026-09-16-desktop-2)).
@@ -8555,6 +8557,10 @@ over 500 frames); `4_pose.py` reports none. Run 17's maximum frame was 27.024 ms
   unchanged (7.234 against 7.233 ms). The host's busier idle today is one candidate; the environments differ too.
 - **Not re-measured:** node placement on AMD's stack, accuracy (the pose container's COCO figures, box IoU between
   stacks), install footprints, and any host but the 8700G.
+- **YOLO11n's rows (15-20) ran before `fbd53f5`**, while its host segment's ONNX Runtime threads still spun in every
+  mode. With them sleeping in `balanced`, a later sitting read 10.674 / 10.627 ms with the attention core on the host
+  and 11.588 / 11.557 ms with the whole block, against 37.665 / 37.702 ms on AMD's stack
+  ([energy on the other models](#energy-per-frame-on-yolov8s-sesr-m7-yolo11n-and-yolov8n-pose-2026-09-16-desktop-2)).
 
 ## The NPU's own power modes buy energy only at a camera's rate, and cost Ignition its latency lead (2026-09-16, Desktop 2)
 
@@ -8606,3 +8612,136 @@ Energy is scored against that median, and both runs are shown.
 
 **Not done:** `performance` and `turbo` (the same 1.80 GHz clock as `default`), other models, `balanced` host mode
 under a lower pmode, and a host or NPU other than Desktop 2's.
+
+## Energy per frame on YOLOv8s, SESR M7, YOLO11n and YOLOv8n-pose (2026-09-16, Desktop 2)
+
+The YOLOv8n energy section above left the other models open. This section closes that. Along the way it found a
+second spinning thread pool, fixed in `fbd53f5`, and a sitting-wide power offset that forced a re-run. Evidence:
+`results/aie/energy_power_modes_models_phoenix_20260916T2012Z.log` (full speed) and
+`results/aie/energy_power_modes_paced30_models_phoenix_20260916T2049Z.log` (30 fps), both with `.json`;
+`results/aie/latency_yolo11n_host_power_modes_phoenix_20260916T2010Z.log` (YOLO11n after the fix); and, discarded,
+`energy_power_modes_models_phoenix_20260916T1758Z`, `energy_power_modes_paced30_models_phoenix_20260916T1835Z` and
+the controls in `energy_rerun_pose_paced30_controls_phoenix_20260916T1913Z` (`.log` and `.json` each).
+
+**The first two sittings are discarded** (17:58-19:08 UTC). Their first 49 idle baselines read 39.9-41.8 W, the 50th
+36.2 W and the last six 34.6-36.0 W. Every sitting before and after had a median idle of 34.7-35.0 W. CPU stayed at
+6.9-9.1 % throughout. So a load
+that showed no CPU held the package about 5.5 W high for an hour, and neither the CPU nor the noise check caught it.
+A steady offset should cancel in a delta, so a clean sitting (19:13-19:31 UTC, median idle 34.882 W) repeated four arm
+pairs from the high stretch as controls. It did not cancel. mJ per frame against each arm's own idle, runs 1 / 2:
+
+| Control arm | During the 5.5 W offset | Clean |
+|---|---:|---:|
+| YOLOv8s, AMD's stack, 30 fps | 322.8 / 292.2 | 280.5 / 242.2 |
+| YOLOv8s, Ignition `balanced`, 30 fps | 322.2 / 292.9 | 278.1 / 265.9 |
+| SESR M7, AMD's stack, full speed | 72.1 / 71.2 | 57.3 / 57.8 |
+| SESR M7, Ignition `balanced`, full speed | 92.9 / 92.9 | 80.1 / 78.4 |
+
+On the means every control read 13-25 % high during the offset, so nothing from those two sittings is quoted. `tools/energy_sitting.py`
+now flags a baseline that moves more than 2 W (`c732b96`); it flagged none in the sittings below. The clean
+sitting's six YOLOv8n-pose arms at 30 fps (AMD 262.6 / 249.2, `balanced` 188.3 / 178.9, `efficiency` 178.1 /
+165.1 mJ against its median idle) agree with the table below.
+
+**YOLO11n's host segment spun in every mode.** In the discarded sittings YOLO11n through Ignition read 53-54 % CPU in
+`efficiency` and `balanced` as well as `performance`, and cost more per frame in `efficiency` than in `balanced`.
+The cause is its host segment's ONNX Runtime session, created with default options. Its intra-op pool, one thread per
+physical core, spins between runs and reads none of OpenMP's settings. On the attention core alone, CPU only, each
+run followed by a 9 ms sleep standing in for the NPU dispatch:
+
+| ONNX Runtime setting | Mean run | P99 | CPU |
+|---|---:|---:|---:|
+| defaults (spinning, 8 threads here) | **0.417 ms** | 0.891 ms | 7.01 cores |
+| no spinning, 8 threads (`balanced` on this host) | 0.640 ms | 1.461 ms | 0.23 cores |
+| no spinning, 4 threads | 0.754 ms | 1.366 ms | 0.19 cores |
+| no spinning, 2 threads (`efficiency` on this host) | 1.066 ms | 1.822 ms | 0.19 cores |
+| no spinning, 1 thread | 1.590 ms | 2.532 ms | 0.15 cores |
+
+`fbd53f5` makes the sleeping modes turn spinning off and size the pool as they size OpenMP's. `performance` keeps
+ONNX Runtime's defaults. Both YOLO11n containers still match ONNX Runtime on every layer (91/91 and 84/84). One
+latency sitting (20:10-20:12 UTC, the method of the balanced-default re-measure, 50 warm-up and 500 frames,
+interleaved, NPU idle before every group):
+
+| Arm | G2G mean | P99 | Host step | RSS |
+|---|---:|---:|---:|---:|
+| AMD's stack | 37.665 / 37.702 ms | 40.511 / 40.981 ms | — | 343.4 / 342.6 MB |
+| `yolo11n.ignite` (whole C2PSA block on the host), `balanced` | 11.588 / 11.557 ms | 12.589 / 12.686 ms | 1.983 / 1.950 ms | 202.2 / 202.3 MB |
+| `yolo11n_core.ignite` (attention core on the host), `balanced` | 10.674 / 10.627 ms | 11.404 / 11.348 ms | 0.713 / 0.733 ms | 200.3 / 200.4 MB |
+| `yolo11n_core.ignite`, `performance` | **10.563 / 10.456 ms** | 11.837 / 14.532 ms | 0.549 / 0.572 ms | 200.9 / 201.2 MB |
+
+In `balanced` the attention core now costs 0.14 ms more per frame than in `performance` on the means. The whole
+block, with its convolutions on the CPU, costs more: its host step went from 1.636 / 1.631 ms before the fix
+([the balanced-default re-measure](#the-amd-comparisons-re-measured-in-the-balanced-default-2026-09-16-desktop-2))
+to 1.983 / 1.950 ms. AMD's stack read 1.1 ms slower than in that earlier sitting (session.run 33.78 against 32.82 ms)
+with nothing changed on its side.
+
+**Method of the energy sittings.** `tools/energy_sitting.py` (`c732b96`) with 30 s idle baselines. AMD's arms are
+`tools/amd_vitisai_yolo.py`, `tools/amd_vitisai_sesr.py` and `pipelines/yolov8n-pose/4_pose.py --ep npu` (`53e1075`).
+Ignition's arms are `live_ignition.py --power-mode <mode>` from Ignition main `a16d7e9`, importing this worktree's
+runtime at `fbd53f5` through `PYTHONPATH`. YOLO11n is `yolo11n_core.ignite`. Pose ran on ignite-xdna's
+`assets/bus.jpg`, the rest on Ignition's. Full speed ran 20:12-20:50 UTC, with 32 undisturbed baselines and a median
+of 35.014 W. Frames per run: YOLOv8s 1,800 on both stacks; SESR M7 7,000 AMD and 4,500 Ignition; YOLO11n 900 and
+3,000; pose 2,700 and 3,600. 30 fps ran 20:50-21:22 UTC, with 24 undisturbed baselines and a median of 34.940 W, at
+1,200 frames per run. `performance` was not repeated at 30 fps, where YOLOv8n showed what spinning costs. Energy is
+against the sitting's median idle; both runs are shown.
+
+**As fast as each stack runs:**
+
+| Model | Arm | fps | G2G mean | CPU | mJ per frame |
+|---|---|---:|---:|---:|---:|
+| YOLOv8s | AMD's stack | 59.86 / 59.77 | 16.716 / 16.734 ms | 9.7 / 10.1 % | **207.3 / 207.4** |
+| YOLOv8s | Ignition, `performance` | 57.29 / 57.26 | 17.445 / 17.443 ms | 99.9 / 99.9 % | 847.0 / 848.2 |
+| YOLOv8s | Ignition, `balanced` | 55.36 / 55.54 | 18.048 / 17.983 ms | 9.0 / 8.7 % | 248.3 / 246.8 |
+| YOLOv8s | Ignition, `efficiency` | 53.58 / 53.53 | 18.646 / 18.657 ms | 8.5 / 8.2 % | 225.5 / 230.9 |
+| SESR M7 | AMD's stack | 232.34 / 232.55 | 4.301 / 4.295 ms | 12.8 / 12.9 % | **56.3 / 55.4** |
+| SESR M7 | Ignition, `performance` | 146.38 / 146.16 | 6.816 / 6.826 ms | 10.0 / 9.7 % | 79.3 / 74.3 |
+| SESR M7 | Ignition, `balanced` | 145.89 / 146.02 | 6.838 / 6.832 ms | 9.8 / 9.8 % | 74.4 / 72.6 |
+| SESR M7 | Ignition, `efficiency` | 146.04 / 145.95 | 6.830 / 6.835 ms | 9.8 / 9.5 % | 77.1 / 75.0 |
+| YOLO11n | AMD's stack | 26.86 / 26.65 | 37.254 / 37.473 ms | 57.4 / 57.6 % | 1,387.2 / 1,405.8 |
+| YOLO11n | Ignition, `performance` | 96.62 / 95.02 | 10.327 / 10.512 ms | 100.0 / 100.0 % | 530.8 / 539.8 |
+| YOLO11n | Ignition, `balanced` | 92.86 / 93.97 | 10.752 / 10.617 ms | 11.5 / 11.8 % | 166.3 / 164.9 |
+| YOLO11n | Ignition, `efficiency` | 84.02 / 83.98 | 11.881 / 11.887 ms | 10.4 / 10.3 % | **138.2 / 132.9** |
+| YOLOv8n-pose | AMD's stack | 82.83 / 83.20 | 12.070 / 12.011 ms | 12.5 / 12.2 % | 163.4 / 154.9 |
+| YOLOv8n-pose | Ignition, `performance` | 116.92 / 117.66 | 8.543 / 8.486 ms | 99.9 / 99.9 % | 403.6 / 400.4 |
+| YOLOv8n-pose | Ignition, `balanced` | 111.38 / 111.04 | 8.964 / 8.992 ms | 10.2 / 10.7 % | 129.4 / 129.1 |
+| YOLOv8n-pose | Ignition, `efficiency` | 103.94 / 104.00 | 9.607 / 9.599 ms | 9.4 / 9.8 % | **123.9 / 121.9** |
+
+**At a camera's 30 frames per second:**
+
+| Model | Arm | G2G mean | CPU | mJ per frame |
+|---|---|---:|---:|---:|
+| YOLOv8s | AMD's stack | 17.003 / 17.056 ms | 8.3 / 8.5 % | 278.0 / 264.6 |
+| YOLOv8s | Ignition, `balanced` | 18.184 / 18.319 ms | 8.6 / 8.4 % | 290.3 / 287.5 |
+| YOLOv8s | Ignition, `efficiency` | 19.069 / 19.114 ms | 8.1 / 8.0 % | 270.0 / 275.6 |
+| SESR M7 | AMD's stack | 4.631 / 4.646 ms | 7.8 / 7.9 % | 133.7 / 137.7 |
+| SESR M7 | Ignition, `balanced` | 6.859 / 6.891 ms | 7.6 / 7.5 % | 148.3 / 130.5 |
+| SESR M7 | Ignition, `efficiency` | 6.862 / 6.889 ms | 7.6 / 7.8 % | 135.7 / 134.4 |
+| YOLO11n | AMD's stack (26.59 / 26.90 fps: it cannot reach 30) | 37.580 / 37.214 ms | 57.5 / 57.4 % | 1,392.2 / 1,364.9 |
+| YOLO11n | Ignition, `balanced` | 11.001 / 11.114 ms | 8.7 / 9.3 % | 231.7 / 224.8 |
+| YOLO11n | Ignition, `efficiency` | 12.270 / 12.274 ms | 8.4 / 8.3 % | **213.1 / 213.9** |
+| YOLOv8n-pose | AMD's stack | 12.223 / 12.366 ms | 9.0 / 8.8 % | 241.6 / 253.0 |
+| YOLOv8n-pose | Ignition, `balanced` | 9.314 / 9.356 ms | 7.6 / 7.7 % | 180.1 / 182.1 |
+| YOLOv8n-pose | Ignition, `efficiency` | 10.004 / 10.019 ms | 7.9 / 7.7 % | **173.5 / 183.8** |
+
+(Paced G2G sits a little above full speed for every arm but AMD's second YOLO11n run. The latency comparisons stay in
+the sections that measured latency.)
+
+- **YOLO11n: 8.4 times less energy per frame than AMD's stack, at 3.5 times the frame rate.** Flat out, `balanced`
+  spends 165.6 mJ against 1,396.5 on the means, and `efficiency` 135.5 (10.3 times less). At 30 fps `balanced` spends
+  228.2 against 1,378.5 (6.0 times less), and AMD's stack cannot hold the rate. AMD's EP leaves most of the graph on
+  the CPU (57 % CPU).
+- **YOLOv8n-pose: less energy and more frames.** Flat out, `balanced` spends 129.3 mJ against 159.2, 19 % less, at
+  111.2 against 83.0 fps. At 30 fps it spends 181.1 against 247.3, 27 % less, and both runs of each Ignition mode read
+  below both of AMD's.
+- **YOLOv8s: AMD's stack spends less flat out, and `efficiency` ties it at a camera's rate.** Flat out AMD spends
+  207.3 mJ, against 228.2 for `efficiency` (+10 %) and 247.5 for `balanced` (+19 %), and runs more frames. At 30 fps
+  `efficiency` spends 272.8 against 271.3, with the runs interleaved (270.0 and 275.6 against 278.0 and 264.6). That
+  is not separated. `balanced` spends 288.9, and both of its runs read above both of AMD's.
+- **SESR M7: AMD's stack spends less flat out, and at 30 fps nothing separates them.** Flat out AMD spends 55.8 mJ
+  against 73.5 for `balanced` (+32 %), at 1.59 times the frame rate. At 30 fps AMD reads 135.7, `balanced` 139.4
+  (runs 148.3 and 130.5) and `efficiency` 135.1. SESR's frame did not spin in any mode: `performance` read 9.7-10.0 %
+  CPU, like the sleeping modes. Why was not checked.
+- **`performance` is never the efficient choice.** On YOLOv8s, YOLO11n and pose it held 99.9-100.0 % CPU and 3.1-3.4
+  times `balanced`'s energy per frame, for 3-6 % more frames per second.
+
+**Not done:** YOLO11n's whole-block container (`yolo11n.ignite`) in the energy sittings; any host but the 8700G; the
+YOLOv8n table above re-measured with the guard (its sittings' baselines read 34.3-35.5 W, the clean level).
