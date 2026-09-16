@@ -195,6 +195,24 @@ def build_manifest(ir: GraphIR, ws: es.Workspace, scheds: List[es.LayerSchedule]
     return manifest
 
 
+def check_weight_buffer_addresses(mlir_path: Path, expected: int, columns: int) -> None:
+    """Refuse a build whose allocator did not put every weight buffer where the instruction stream points.
+
+    The stream writes whole MemTile descriptors, whose word 1 is an absolute address, so it assumes where
+    the buffer is. The buffer cannot be pinned - ``Buffer(address=...)`` breaks the bank-aware allocator on
+    a buffer this large - so the assumption is checked against the addresses the build assigned. A wrong
+    one does not fail loudly on the device: the descriptors point at other bytes and the dispatch hangs.
+    """
+    found = re.findall(r'aie\.buffer\([^)]*\)\s*\{address = (\d+) : i32,[^}]*sym_name = "(w\d+_buf)"',
+                       Path(mlir_path).read_text(encoding="utf-8"))
+    if len(found) != columns:
+        raise RuntimeError(f"expected {columns} weight buffers in {mlir_path}, found {len(found)}")
+    wrong = [f"{name} at {int(addr):#x}" for addr, name in found if int(addr) != expected]
+    if wrong:
+        raise RuntimeError(f"weight buffers allocated away from {expected:#x}, where the instruction stream "
+                           f"points: {', '.join(wrong)}")
+
+
 def compile_graph_container(onnx_path, output_path, build_dir: Optional[Path] = None, layers: Optional[int] = None,
                             verbose: bool = True, host_regions: Sequence[str] = (),
                             activation_ring: int = 0, weight_buffer: bool = False) -> Dict[str, Any]:
@@ -249,6 +267,8 @@ def compile_graph_container(onnx_path, output_path, build_dir: Optional[Path] = 
     insts_path = build_dir / "insts.bin"
     compile_mlir_module(module, insts_path=insts_path, xclbin_path=xclbin_path, work_dir=work,
                         device=iron.get_current_device())
+    if weight_buffer:
+        check_weight_buffer_addresses(work / "input_with_addresses.mlir", eng.WBUF_ADDRESS, eng.COLS)
     xclbin = xclbin_path.read_bytes()
     insts = insts_path.read_bytes()
     kernel_sha = hashlib.sha256(eng.KERNEL_SOURCE.read_bytes()).hexdigest()
