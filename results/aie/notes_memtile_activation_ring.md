@@ -850,6 +850,70 @@ for that same schedule is 6.481 ms, so **the model this investigation has used t
 optimistic**. Every ring verdict derived at 26.8 GB/s and 145 ns per op therefore sits further negative than
 written - yolov8s's -0.912 ms included - and nothing here should be quoted as a latency.
 
+## Tested and refuted: the barrier was never missing, and crediting the parked head does not fix it
+
+Two corrections to the section above, both from reading the emitter rather than reasoning about it.
+
+**The drain barrier was never missing.** `run_column_programs` ends by retiring every channel of every column
+until each queue is empty - the loop that raises `layer barrier: a channel's newest task carries no token` - and
+it is called once per layer. So every layer boundary already awaits every outstanding drain, which is precisely
+the proof that the cores consumed every slice the serves delivered. The quiescence the arm-once design was said
+to lack is already there on the serve side, at layer granularity, for free. A per-layer barrier was therefore
+not the fix, because it was never absent.
+
+**What was left was the fill side, and that is not the whole story either.** A free-running chain always has a
+current descriptor. If a descriptor takes its acquire when it becomes current rather than when stream bytes
+arrive, then the head of the arrival cycle has already drawn its slot's `space` down and sits parked, and
+writing the full count back to every slot hands the DMA tokens it is still holding - the arrival then runs a lap
+ahead of the serves reading that slot. The window being a divisor of the tile makes every pass full width, so
+the chain returns to its head after every tile and the parked slot is always slot 0: a deterministic correction,
+not a guess. Crediting slot 0 zero instead of `ROWS * serves` was built - `insts.bin` sha `14b6eca6...` against
+the hung build's `5ba90b00...`, so the stream really did change - and **it timed out in exactly the same way**.
+
+So at least one of these holds, and nothing dispatched here distinguishes them: a descriptor acquires only when
+data arrives; or a channel prefetches deeper than one descriptor; or relinking `next_bd` on a live cycle is
+fatal by itself. A third variant was not dispatched - two timeouts on one design shape is the point to stop and
+ask, not to keep feeding silicon guesses.
+
+**The device is not the variable.** The known-good flag-off container verified 66/66 exact four times across
+this sitting - 7.366, 7.314, 7.321 and 7.333 ms mean over 20 dispatches each - including immediately after both
+timeouts.
+
+### The lock semantics, settled from the sources, and a diagnostic nobody here has used
+
+A descriptor acquires **before** it transfers, and this is no longer an inference from a hang. AMD's own
+programming guide says it in so many words (`mlir-aie/programming_guide/section-2/section-2g/README.md`):
+"Each BD says which buffer is being moved and how it synchronizes - *locks acquired before the transfer starts
+and released after it completes*. BDs in a chain link to a `next` BD, forming a loop that keeps streaming as
+long as the lock protocol permits." The S2MM status register corroborates it structurally: it carries two
+*different* stall states, `Stalled_Lock_Acq` and `Stalled_Stream_Starvation`, which a channel that acquired
+only on data arrival would not need.
+
+The refinement that matters: whether the parked head is *holding* a token is decided by whether one was there.
+Acquire succeeded, so the lock is already decremented and the channel parks on the stream
+(`Stalled_Stream_Starvation`); or it blocked, so the lock is untouched and the channel parks on the acquire
+(`Stalled_Lock_Acq`). For a producer-side lock at its replenished resting value - which is exactly `space` in
+this ring - the first case holds and **the head has already drawn its slot down**. So the correction above was
+the architecturally correct one and the ring hangs anyway, which moves the cause elsewhere rather than
+vindicating it.
+
+Two constants confirmed rather than assumed, and one trap: MemTile lock fields really are **word 7**
+(`DMA_BD0_7` at `0x0001D01C`, and the `aie-rt` driver reads `BdWord[7]` for all five lock fields), so the
+emitter's `RING_BD_LOCK_WORD` is right - but a **core** tile keeps them in word **5** (`DMA_BD0_5` at
+`0x0001D014`), so this constant is correct only as long as the ring stays on the MemTile. And
+`Task_Queue_Size` is **not** the chain's prefetch depth: it counts outstanding start-queue pushes, a different
+mechanism from `Use_Next_BD` chaining, and a free-running cycle pushes nothing at all - so that counter says
+nothing about this design. How deep a channel prefetches descriptors is **not** documented anywhere on this
+machine; the status register exposing a single `Cur_BD` and a single `Stalled_Lock_Acq` bit is suggestive of
+one at a time, but that is an argument from absence and is recorded as one.
+
+**The diagnostic, unused so far and the obvious next instrument:** `DMA_S2MM_Status_N` (offset `0x1DF00`)
+carries `Cur_BD` ("current BD channel is operating on"), bit 2 `Stalled_Lock_Acq`, bit 4
+`Stalled_Stream_Starvation`, and bits 1:0 as `00=IDLE, 01=STARTING, 10=RUNNING`. Reading it after a hang says
+which descriptor the ring stopped on and whether it is waiting for a lock or for bytes. Every diagnosis in this
+file so far has been inferred from byte-exactness and timeouts; this register would replace that with an
+observation.
+
 A hazard this narrows without closing, recorded so it is not rediscovered: `ensure` retires a channel once it
 holds `queue_depth` tasks, and retiring means awaiting. A tile whose column owns five or more groups pushes
 that many drains before its `S`, and such a drain cannot complete until that `S` runs. Over the schedules,
