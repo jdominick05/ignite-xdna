@@ -747,6 +747,46 @@ layer has exactly one shape, paying fills on the padding; or split a layer at it
 there; or keep per-tile arming for the minority of layers that change shape and arm-once for the rest, which on
 yolov8n is 25 layers of 66 and on yolov8s all of them - so that third option helps yolov8n and not yolov8s.
 
+## Costing the padding, and the window that makes it unnecessary
+
+**Padding costs more than the design it would enable.** A short pass cannot simply be left short: the cycle
+walks all `capacity` slots, so every one must be filled and served each turn or `space[i]` is never released
+and the ring stalls; and the core's trip count comes from its weight packet header rather than from how many
+packets arrive, so a padding slot needs a real fill *and* a NOP weight packet, or the accumulator is wrong.
+
+| model | padding slots | (tile, group) units | activation bytes | NOP weight bytes | derived |
+|---|---|---|---|---|---|
+| yolov8n | 3,479 | 779 | 89,062,400 | 32,953,088 | **6.571 ms** |
+| yolov8s | 3,146 | 785 | 80,537,600 | 29,798,912 | **5.942 ms** |
+
+That is against the 3.0 ms arm-once saves on yolov8n and the 5.1 ms it swings on yolov8s, and it does not count
+core time for the NOP packets. The reason sits in the layer list: the worst cases are the *narrowest* layers -
+a one- or two-chunk layer padded out to six wastes four or five slots, times hundreds of (tile, group) units -
+and most layers are narrow. The cost scales with `window - chunks`, which is largest exactly where the layers
+are smallest. Padding is not worth costing further.
+
+**A window that divides the layer costs nothing and fixes the same problem completely.** The chain length is
+configurable per layer; only variation *inside* a layer hurts. Choosing the largest divisor of the chunk count
+that fits the window - 8 to 4, 16 to 4, 32 to 4, 9 to 3 - leaves every layer one width and pads nothing. Seven
+layers narrow on yolov8n, seventeen on yolov8s.
+
+And the variation is entirely in the width, which is the half that fixes for free:
+
+| model | layer+column pairs arming | single shape | width varies | replay varies | both |
+|---|---|---|---|---|---|
+| yolov8n | 255 | 230 | 25 | **0** | 0 |
+| yolov8s | 257 | 191 | 66 | **0** | 0 |
+
+`serves` never varies within a layer and column on either model, so the fill descriptors' lock values are a
+per-layer constant. After a divisor window **no layer+column pair needs a mid-layer rewrite**, and the
+precondition that blocked arm-once is met.
+
+**One axis is still unmeasured, and it should be measured before anything is built:** narrower passes give
+`pass_fills` fewer chunks to merge across, so a divisor window may cost DMA tasks even though it costs no
+bytes. A 16-chunk layer in four passes of four has fewer chances to merge than in three passes of six. Nothing
+here says how much, and the arm-once case is thin enough on yolov8n (+0.864 ms before drain merging) that a
+task regression could decide it.
+
 A hazard this narrows without closing, recorded so it is not rediscovered: `ensure` retires a channel once it
 holds `queue_depth` tasks, and retiring means awaiting. A tile whose column owns five or more groups pushes
 that many drains before its `S`, and such a drain cannot complete until that `S` runs. Over the schedules,
