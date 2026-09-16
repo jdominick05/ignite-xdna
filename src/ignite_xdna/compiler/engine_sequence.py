@@ -14,10 +14,11 @@ A column program is a list of items executed by one column's shim DMAs:
 * ``("o", pattern[, serves])`` drain joined output objects; with ``serves`` the
                            drain is issued ahead of the fills that feed it and is
                            held until those ``serves`` activation items are issued,
-* ``("R", slots, barrier)`` arm the MemTile activation ring for a tile of ``slots``
-                           chunks; with ``barrier`` the column's outstanding drains
-                           are awaited first, which orders the re-arm behind the
-                           serves of the tile before it, and
+* ``("R", slots, barrier, serves)`` arm the MemTile activation ring for a tile of
+                           ``slots`` chunks that will be replayed ``serves`` times;
+                           with ``barrier`` the column's outstanding drains are
+                           awaited first, which orders the re-arm behind the serves
+                           of the tile before it, and
 * ``("S", serves)``        replay the armed tile once per output group it feeds.
 
 A task has three hardware access dimensions plus a repeat dimension (the
@@ -209,11 +210,12 @@ OPS_PER_TASK_ISSUE = 4  # BLOCKWRITE (BD), DDR_PATCH, MASKWRITE, WRITE (queue pu
 # C - 1. One maskwrite sets it and leaves the compiled stride and address alone.
 #   word 7  bit 31 valid, bits 24-30 lock_rel_val, 16-23 lock_rel_id, 15 lock_acq_enable, 8-14 lock_acq_val,
 #           0-7 lock_acq_id
-# The arrival takes a slot from `space` and hands one to `arrived`; a serve holds no lock at all, so its word-7
-# lock fields are left exactly as compiled. An acquire is stored NEGATED - AcquireGreaterEqual N is -N in the
-# 7-bit field - and a release positive; the values the configuration CDO wrote confirm it, an acquire of 8
-# appearing as 0x78. The release has no enable bit, unlike the acquire, so a descriptor meant to hold no lock
-# must be given no release count either or it raises its lock on every execution with nothing taking it down.
+# The arrival takes a slot from `space` and hands `ROWS * serves` tokens to `arrived`, one per core per replay,
+# and that release count is the only lock field the instruction stream rewrites. A serve acquires one of those
+# and releases none, so its word-7 lock fields never vary and are left exactly as compiled. An acquire is
+# stored NEGATED - AcquireGreaterEqual N is -N in the 7-bit field - and a release positive; the values the
+# configuration CDO wrote confirm it, an acquire of 8 appearing as 0x78. The release field has no enable bit,
+# unlike the acquire, so a descriptor that must release nothing needs an explicit zero there, not an omission.
 #
 # Word 1 carries Next_BD in bits 25:20 and Use_Next_BD in bit 19, above the buffer address in bits 18:0. Every
 # compiled ring descriptor self-links, because IRON's ``Bd.next`` defaults to "self" - the streaming pattern an
@@ -236,6 +238,9 @@ RING_ITERATION_SHIFT = 17
 RING_ITERATION_MASK = 0x3F << RING_ITERATION_SHIFT
 RING_ITERATION_CURRENT_SHIFT = 23
 RING_ITERATION_CURRENT_MASK = 0x3F << RING_ITERATION_CURRENT_SHIFT
+RING_LOCK_REL_SHIFT = 24
+RING_LOCK_MASK = 0x7F
+RING_LOCK_REL_VALUE_MASK = RING_LOCK_MASK << RING_LOCK_REL_SHIFT
 MEMTILE_ROW = 1
 # A MemTile's DMA channel control registers, confirmed against both builds' configuration CDO: six channels
 # per direction at a stride of eight, S2MM first, each with its START_QUEUE in the word above. Bit 1 of the
@@ -353,7 +358,7 @@ class SequenceEmitter:
         for r in range(self._ring_rows):
             yield self._ring_serve(r, 0)
 
-    def _arm_ring(self, col: int, slots: int, reset_done: set) -> None:
+    def _arm_ring(self, col: int, slots: int, serves: int, reset_done: set) -> None:
         """Point one column's ring descriptors at a tile of ``slots`` chunks, and restart its channels.
 
         Five descriptors: the arrival on S2MM 0, and one serve per core on MM2S 0..3. Three things vary per
@@ -396,13 +401,18 @@ class SequenceEmitter:
                             column=col, row=MEMTILE_ROW)
             self._maskwrite(bd + RING_BD_LOCK_WORD, RING_VALID_BD, RING_VALID_BD,
                             column=col, row=MEMTILE_ROW)
-        # No lock counts go to the serve descriptors, and that omission is paired with their being compiled
-        # lock-free: the word-7 release field has no enable bit, so a serve that holds no lock but is still
-        # handed a release count here would raise `arrived` on every execution with nothing ever taking it
-        # down, past the seven bits it has. The arrival keeps its compiled pair, taking one slot from `space`
-        # and handing one to `arrived` per execution whatever the tile holds, so only how far it walks changes.
-        # Nothing consumes `arrived` now, so the ring is restored here rather than drained by being served:
-        # `space` back to a full tile, `arrived` back to empty.
+        # The arrival hands out one token per core per replay, so every serve execution can take one of its own
+        # and none of them ever waits on another. Only this release value varies with the layer; a serve's own
+        # counts are constant and its descriptor is never written here.
+        tokens = self._ring_rows * serves
+        if tokens > RING_LOCK_MASK:
+            raise ValueError(f"a tile replayed {serves} times needs {tokens} arrival tokens per slot, "
+                             f"past the {RING_LOCK_MASK} a 7-bit release field holds")
+        fill_bd = self._ring_bd_base + RING_BD_STRIDE * self._ring_fill
+        self._maskwrite(fill_bd + RING_BD_LOCK_WORD, tokens << RING_LOCK_REL_SHIFT, RING_LOCK_REL_VALUE_MASK,
+                        column=col, row=MEMTILE_ROW)
+        # The serves consume `arrived` and nothing returns it, so the ring is restored here rather than drained
+        # by being served: `space` back to a full tile, `arrived` back to empty.
         self._write32(self._ring_lock_reg(self._ring_arrived), 0, column=col, row=MEMTILE_ROW)
         self._write32(self._ring_lock_reg(self._ring_space), slots, column=col, row=MEMTILE_ROW)
         self._push_queue(col, MEMTILE_ROW, self._dir.S2MM, 0, False, slots - 1, self._ring_fill)
@@ -426,10 +436,11 @@ class SequenceEmitter:
         queue, which nothing else here does: one arrival and one serve per channel are pushed per tile, and
         the next tile cannot push until this one's output has reached DDR.
 
-        The serve descriptors hold no lock either, so nothing on the tile makes them wait for the tile to
-        land. The caller awaits this tile's fills before calling this, and that is where the ordering went: a
-        fill task completes when the arrival descriptor took its bytes, and the arrival needs only the
-        ``space`` count ``_arm_ring`` restored - never a serve - so waiting on one cannot deadlock.
+        Ordering against the fill stays on the tile, where it has to. Each serve acquires one ``arrived`` token
+        per slice and releases none, and the arrival hands out one per core per replay. A shim fill's
+        completion token cannot stand in for that: it says the shim pushed its bytes, not that this tile's
+        S2MM wrote them into the ring. That was measured, not argued - with the serves taking no lock, every
+        layer came back wrong, single-chunk ones included.
         """
         for r in range(self._ring_rows):
             self._push_queue(col, MEMTILE_ROW, self._dir.MM2S, r, False, slots * serves - 1,
@@ -549,19 +560,6 @@ class SequenceEmitter:
                 if not retire_channel(c, "o"):
                     raise RuntimeError("ring barrier: an outstanding drain cannot be awaited")
 
-        def ring_fill_barrier(c: int) -> None:
-            """Await the fills of the tile now armed, before its serves are pushed.
-
-            A serve descriptor holds no lock, so nothing on the MemTile makes it wait for the tile to arrive -
-            that ordering lives here instead. A fill completes when the arrival descriptor accepted its bytes,
-            and the arrival needs only the ``space`` count ``_arm_ring`` restored and never a serve, so
-            awaiting every fill of the armed tile cannot deadlock. Each fill issued while a tile is armed
-            carries a token of its own so that it can be awaited individually.
-            """
-            while any(e[1] == "a" for e in queues[c]):
-                if not retire_channel(c, "a"):
-                    raise RuntimeError("ring barrier: a fill of the armed tile cannot be awaited")
-
         def issue(c: int, item: tuple) -> None:
             if item[0] == "w":
                 push(c, "w", linear("wp", item[1], item[2]), hold=item[3] if len(item) > 3 else 0)
@@ -570,10 +568,10 @@ class SequenceEmitter:
             elif item[0] == "a":
                 served(c)
                 for p in item[1]:
-                    push(c, "a", p, force_token=c in serving)
+                    push(c, "a", p)
             elif item[0] == "A":  # one 4-D task fills all four cores' packets
                 served(c)
-                push(c, "a", item[1], force_token=c in serving)
+                push(c, "a", item[1])
             elif item[0] == "o":
                 # A drain issued while a tile is armed is what the next re-arm waits on, so it carries a token
                 # of its own rather than sharing one with a later drain of the channel.
@@ -581,10 +579,11 @@ class SequenceEmitter:
             elif item[0] == "R":      # arm this column's ring for a tile, before its fills are issued
                 if len(item) > 2 and item[2]:
                     ring_barrier(c)
-                self._arm_ring(c, item[1], reset_done)
+                # How many times the tile will be replayed sets how many tokens each arrival hands out, and the
+                # fill task is pushed at the end of the arm, so it has to be known here rather than at "S".
+                self._arm_ring(c, item[1], item[3] if len(item) > 3 else 1, reset_done)
                 serving[c] = item[1]
-            elif item[0] == "S":      # replay it, once its fills have actually landed
-                ring_fill_barrier(c)
+            elif item[0] == "S":      # replay it, once the fills are in flight
                 self._serve_ring(c, serving.pop(c), item[1])
             else:
                 raise ValueError(item[0])

@@ -591,7 +591,7 @@ def schedule_layer_ring(ir: GraphIR, ws: Workspace, layer, store: PacketStore, p
                 # One fetch of the whole tile, replayed for every group this column owns. Every drain
                 # outstanding here belongs to the previous tile, whose "S" was issued before it, so each of
                 # them can complete and their completion orders this re-arm behind that tile's serves.
-                programs[c].append(("R", len(chunks), True))
+                programs[c].append(("R", len(chunks), True, len(group_list)))
                 programs[c].extend(("A", f) for f in pass_fills(chunks, 0))
                 for g in group_list:
                     group_work(g)
@@ -608,7 +608,7 @@ def schedule_layer_ring(ir: GraphIR, ws: Workspace, layer, store: PacketStore, p
                         # Only the pass that begins a group may wait. This group's drain is issued with that
                         # first pass and completes only once every later pass has been served, so a pass that
                         # waited on it would wait for work its own "S" has not issued yet.
-                        programs[c].append(("R", len(part), p == 0))
+                        programs[c].append(("R", len(part), p == 0, 1))
                         programs[c].extend(("A", f) for f in pass_fills(part, g))
                         if p == 0:
                             group_work(g)
