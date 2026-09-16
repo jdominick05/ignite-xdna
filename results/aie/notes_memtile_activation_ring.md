@@ -389,3 +389,61 @@ construction and fails at compile time rather than hanging if a token is ever dr
 One caveat to carry: the auto-assigned controller id for a memtile is 26, while both working tests hand-pick
 `pkt_id = 1`. The field is 8 bits wide in hardware and the lowering writes five, so 26 is writable, but no test
 in the tree exercises a memtile id at or above 16. Pick the id explicitly rather than relying on the default.
+
+## The reverse edge: wait for a drain, which is a token this engine already awaits
+
+Neither fix above was taken. Both declare something new about how the engine builds its tiles; the third
+option needs nothing declared, because the ordering the MemTile token was carrying is available from the shim
+side already. A tile's drain completes only after the cores emitted its output objects, and the cores could
+only do that by consuming every slice the serves delivered. So the drain is proof the serves are done - proof
+that travels a route the engine has used since it was written.
+
+The serves are now pushed asking for no token and nothing waits on them. Before a tile re-arms, the column's
+outstanding drains are awaited instead. That also restores the bound the waits had been providing on the
+MemTile's four-deep task queue: one arrival and one serve per channel are pushed per tile, and the next tile
+cannot push until this one's output has reached DDR.
+
+An `R` item carries a flag saying whether that wait may happen, set for every tile of a replayed layer and for
+the first pass of a group otherwise. **It is not set between passes of one group**, and that gap is deliberate:
+a group has a single drain, issued with its first pass, which cannot complete until the last pass has been
+served, so waiting on it there would deadlock the dispatch outright. Passes therefore remain as unordered
+against each other as they were before - two layers of yolov8s (`/model.7/conv/Conv`, `/model.19/conv/Conv`,
+32 chunks each) and no layer of yolov8n. Each drain issued while a tile is armed carries its own completion
+token rather than sharing one with a later drain, so each can be awaited individually.
+
+**Offline, all green.** Per-layer exactness against `graph_reference.run_direct`, seeding the workspace and
+emulating one layer back: RING EXACT 66/66 on yolov8n and yolov8s, with the per-group schedule as a control at
+66/66 on both. `tests/test_graph_engine_offline` 21 tests OK, `tests/test_conv_engine` 4 OK. Traffic is
+unchanged from the tables above, so this adds ordering and not tasks.
+
+**The built stream says the waits are gone**, which is the check worth making before spending a dispatch on a
+stale artifact. `probe1_ring4.ignite` - one layer, one chunk, one replay - against the flag-off container:
+
+| | TCT waits | distinct TCT words | WRITE at row 1 | MASKWRITE at row 1 |
+|---|---|---|---|---|
+| `probe1_ring4` (ring, 1 layer) | 512 | 2 | 1,792 | 4,904 |
+| the probe that hung (ring + syncs) | 1,408 | — | 1,792 | 6,312 |
+| `yolov8n_flagoff` (66 layers) | 1,671 | 2 | 0 | 0 |
+
+The two distinct wait words of the ring stream, `0x00010100` and `0x01010100`, are **the same two the flag-off
+stream uses**, and a flag-off stream waits on shim channels only. So every wait the ring stream makes is drawn
+from the shim vocabulary and none is a MemTile wait. The 512 breaks down as the 384 a ring stream made before
+the syncs were added, plus 128 for the drains that now carry a token each rather than every second one. Row 1
+accounting is exact too: 1,792 writes = 1,280 queue pushes + 512 lock writes, and a flag-off stream touches
+row 1 not at all. A transaction address is `(col << 25) | (row << 20) | offset`, so a register write's tile row
+comes from its address; the op header's row field is zero for all of them and reading it there proves nothing.
+
+**Not dispatched.** The device refused a hardware context, `0xc01e0009`, raised from `pyxrt.hw_context` - on
+the flag-off container, as the readiness check, before the ring probe ran at all. `xrt-smi` had reported
+`[003d:00:01.1] : NPU Phoenix` with no hardware contexts minutes earlier. That is the second time in this
+session the partition listing has said healthy immediately before a context creation failed, and the third
+time the device has needed recovery; the previous two cleared with a reboot. NPU work stopped here rather than
+being retried.
+
+A hazard this narrows without closing, recorded so it is not rediscovered: `ensure` retires a channel once it
+holds `queue_depth` tasks, and retiring means awaiting. A tile whose column owns five or more groups pushes
+that many drains before its `S`, and such a drain cannot complete until that `S` runs. Over the schedules,
+yolov8s has 196 ring episodes with four or more drains before their `S` (worst eight) and yolov8n has 28
+(worst four, one below the depth). The barrier frees each tile's drains at the next re-arm, so far fewer tasks
+are ever live, but the ordering itself is untouched deliberately: it needs `hold` semantics, and a helper that
+changed those deadlocked the build once already. One variable per dispatch.
