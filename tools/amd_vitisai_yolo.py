@@ -31,6 +31,9 @@ ap.add_argument("--warmup", type=int, default=50)
 ap.add_argument("--iterations", type=int, default=500)
 ap.add_argument("--conf", type=float, default=0.25)
 ap.add_argument("--iou", type=float, default=0.45)
+ap.add_argument("--max-fps", type=float, default=0.0,
+                help="pace timed frames to at most this rate, like a camera (0 = as fast as possible); frames start on "
+                     "a fixed schedule and the wait is outside each frame's G2G time")
 ap.add_argument("--json", type=Path, default=None)
 args = ap.parse_args()
 
@@ -67,7 +70,14 @@ for _ in range(args.warmup):
                            conf_thres=args.conf, iou_thres=args.iou)
 total, pre, run, post = [], [], [], []
 dets = []
+period = 1.0 / args.max_fps if args.max_fps > 0 else 0.0
+t_start = time.perf_counter()
 for i in range(1, args.iterations + 1):
+    if period:
+        # Absolute schedule: a late frame does not make the next one early, and the rate averages exactly max_fps.
+        delay = t_start + (i - 1) * period - time.perf_counter()
+        if delay > 0:
+            time.sleep(delay)
     a = time.perf_counter()
     blob, pad, scale = letterbox(img, 640)
     b = time.perf_counter()
@@ -95,6 +105,7 @@ if args.json:
     args.json.write_text(json.dumps({
         "engine": "ONNX Runtime + Vitis AI EP (Ryzen AI 1.7.1)", "model": args.model.name, "cache_key": args.cache_key,
         "session_load_s": load_s, "ep_node_devices": placement, "warmup": args.warmup, "iterations": args.iterations,
+        "max_fps": args.max_fps,
         "g2g_ms": {"mean": float(v.mean()), "p50": float(p50), "p95": float(p95), "p99": float(p99),
                    "min": float(v.min()), "max": float(v.max())},
         "stages_ms": {"letterbox": float(np.mean(pre)), "session_run": float(np.mean(run)),
