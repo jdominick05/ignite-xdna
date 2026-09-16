@@ -402,6 +402,8 @@ class LayerSchedule:
     rounds: int
     packets: int                      # activation packets (all cores)
     w_fills: int
+    # Set when the MemTile activation ring serves this layer: the geometry the instruction stream arms it with.
+    ring: Optional["RingPlan"] = None
 
 
 def round_packets(layer, group: int, chunks: List[Chunk], coarse: bool = False,
@@ -515,12 +517,15 @@ def schedule_layer_ring(ir: GraphIR, ws: Workspace, layer, store: PacketStore, p
     group-invariant - ``ring_plan`` admits no other layer - so the whole tile is replayed and nothing of it is
     re-fetched.
 
-    Items per tile: ``R`` arms the arrival for the tile's window, the group's drain and weight run are issued
-    ahead of the fills and held exactly as the per-group schedule issues them, the fills follow, and ``S``
-    replays the window once per group. Ordering the drain and weights first keeps today's backpressure: a
-    drain is queued before the cores can emit into it, and ``served`` releases both holds as the fills are
-    issued. ``S`` comes after the fills so the replay is armed only once they are in flight; the ring's peek
-    lock is what actually gates it.
+    Items per tile: ``R`` arms the arrival for the tile's window, the fills follow, then each group's drain and
+    weight run, and ``S`` replays the window once per group.
+
+    The per-group schedule issues a drain ahead of its fills and holds it, because its fills feed the cores
+    directly and a core must have a drain queued before it can emit. A ring fill lands in the MemTile instead,
+    and nothing computes until ``S``, so the fills go first and the drains and weights need no hold at all.
+    That also keeps the drain channel retirable: ``served`` clears only the oldest held task of a channel per
+    activation item, and ``retire_channel`` refuses to walk past a held one, so G drains sharing one set of
+    fills cannot each hold on them.
 
     The drain is what this costs. A tile's groups are no longer consecutive for one group, so a drain covers
     one quad and one group instead of a run of up to 16. Measured over the streams that is about 3,500 more
@@ -556,16 +561,16 @@ def schedule_layer_ring(ir: GraphIR, ws: Workspace, layer, store: PacketStore, p
                 pats.extend([merged] if merged is not None else quad)
             fills = merge_runs(pats)
             programs[c].append(("R", plan.slots, plan.windows))
+            programs[c].extend(("A", f) for f in fills)
             for g in group_list:
-                programs[c].append(("o", run_drain(ws, layer, g, [(y, x0)]), len(fills)))
+                programs[c].append(("o", run_drain(ws, layer, g, [(y, x0)]), 0))
                 pkts = round_packets(layer, g, chunks, coarse=True, trim_ncin=trim_ncin)
-                programs[c].append(("w", store.add_run(pkts), len(pkts) * em.W_BYTES, len(fills)))
+                programs[c].append(("w", store.add_run(pkts), len(pkts) * em.W_BYTES, 0))
                 n_w += 1
                 n_packets += ROWS * len(chunks)
-            programs[c].extend(("A", f) for f in fills)
             programs[c].append(("S", len(group_list)))
             n_rounds += 1
-    return LayerSchedule(layer.index, layer.name, programs, n_rounds, n_packets, n_w)
+    return LayerSchedule(layer.index, layer.name, programs, n_rounds, n_packets, n_w, ring=plan)
 
 
 def schedule_layer_coarse(ir: GraphIR, ws: Workspace, layer, store: PacketStore,
@@ -689,7 +694,7 @@ def schedule_layer_coarse(ir: GraphIR, ws: Workspace, layer, store: PacketStore,
 def schedule_layer(ir: GraphIR, ws: Workspace, layer, store: PacketStore, merge_fills: bool = True,
                    pair_drains: bool = True, weight_runs: bool = True, coarse: bool = True,
                    weight_repeat: bool = True, trim_ncin: bool = True, balance_columns: bool = True,
-                   merge_group_weights: bool = True) -> LayerSchedule:
+                   merge_group_weights: bool = True, activation_ring: int = 0) -> LayerSchedule:
     """Cut one layer into rounds and per-column item lists.
 
     ``coarse`` (the default) is ``schedule_layer_coarse``. Without it, the
@@ -703,6 +708,10 @@ def schedule_layer(ir: GraphIR, ws: Workspace, layer, store: PacketStore, merge_
         # No DMA traffic: the runtime ends the dispatch before this layer and starts the next one after it.
         return LayerSchedule(layer.index, layer.name, [[] for _ in range(COLS)], 0, 0, 0)
     if coarse:
+        # `ring_plan` returns None when the ring is off, so a flag-off build takes exactly the path it did.
+        plan = ring_plan(ir, layer, activation_ring)
+        if plan is not None:
+            return schedule_layer_ring(ir, ws, layer, store, plan, trim_ncin=trim_ncin)
         return schedule_layer_coarse(ir, ws, layer, store, weight_repeat=weight_repeat, trim_ncin=trim_ncin,
                                      balance_columns=balance_columns, merge_group_weights=merge_group_weights)
     t = ir.tensors[layer.output]
@@ -770,12 +779,13 @@ def schedule_layer(ir: GraphIR, ws: Workspace, layer, store: PacketStore, merge_
 def schedule_graph(ir: GraphIR, ws: Workspace, merge_fills: bool = True, pair_drains: bool = True,
                    weight_runs: bool = True, coarse: bool = True, weight_repeat: bool = True,
                    trim_ncin: bool = True, balance_columns: bool = True,
-                   merge_group_weights: bool = True) -> Tuple[List[LayerSchedule], PacketStore]:
+                   merge_group_weights: bool = True,
+                   activation_ring: int = 0) -> Tuple[List[LayerSchedule], PacketStore]:
     store = PacketStore()
     scheds = [schedule_layer(ir, ws, L, store, merge_fills=merge_fills, pair_drains=pair_drains,
                              weight_runs=weight_runs, coarse=coarse, weight_repeat=weight_repeat,
                              trim_ncin=trim_ncin, balance_columns=balance_columns,
-                             merge_group_weights=merge_group_weights)
+                             merge_group_weights=merge_group_weights, activation_ring=activation_ring)
               for L in ir.layers]
     return scheds, store
 
