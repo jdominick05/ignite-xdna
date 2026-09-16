@@ -1,0 +1,42 @@
+Resident MemTile weight buffer vs flag-off, same sitting, interleaved
+======================================================================
+
+Machine   Desktop 2 (DESKTOP-CBL5NUA), AMD Ryzen 7 8700G (Phoenix NPU), Windows 11 Pro build 26200
+Date      2026-09-16, sitting ended 15:08 UTC
+Env       mlir-aie ironenv via scripts/research-iron.sh; host otherwise idle
+Source    branch activation-residency at 485051c (descriptor address base and lock id offset fixed)
+
+Containers (all built by compile_graph_container from one driver; the only difference is weight_buffer)
+  build/yolov8n_flagoff_check.ignite   weight_buffer=False  8,823,680 B
+  build/yolov8n_wbuf.ignite            weight_buffer=True   8,913,024 B  insts 518,260 B
+  build/yolov8s_flagoff_check.ignite   weight_buffer=False  30,743,680 B
+  build/yolov8s_wbuf.ignite            weight_buffer=True   30,830,848 B insts 1,105,028 B
+  build/yolov8n_wbuf_L1.ignite         weight_buffer=True, first layer only
+
+Command, per run
+  bash scripts/research-iron.sh tools/verify_engine_container.py --container <container>
+       --model models/<model>_cut_xint8.onnx --iters 100
+Each run checks every layer tensor on its first dispatch, then times 100 more.
+
+One layer (before the full models; --iters 2, not a benchmark)
+  yolov8n_wbuf_L1  /model.0/conv/Conv 0 mismatches of 1,638,400 B | first dispatch 2.077 ms | mean 0.671 ms over 2
+  yolov8n_wbuf_L1  /model.0/conv/Conv 0 mismatches of 1,638,400 B | first dispatch 2.141 ms | mean 0.669 ms over 2
+
+yolov8n, in run order
+  off   66/66 layers exact | first dispatch 8.931 ms | dispatch mean 7.314 ms, min 7.158, max 7.858 over 100
+  wbuf  66/66 layers exact | first dispatch 9.979 ms | dispatch mean 8.492 ms, min 8.349, max 9.163 over 100
+  off   66/66 layers exact | first dispatch 8.894 ms | dispatch mean 7.331 ms, min 7.142, max 7.882 over 100
+  wbuf  66/66 layers exact | first dispatch 9.986 ms | dispatch mean 8.474 ms, min 8.323, max 9.266 over 100
+
+yolov8s, in run order
+  off   66/66 layers exact | first dispatch 18.288 ms | dispatch mean 16.752 ms, min 16.623, max 17.247 over 100
+  wbuf  66/66 layers exact | first dispatch 22.202 ms | dispatch mean 20.436 ms, min 20.250, max 21.225 over 100
+  off   66/66 layers exact | first dispatch 18.428 ms | dispatch mean 16.868 ms, min 16.674, max 17.473 over 100
+  wbuf  66/66 layers exact | first dispatch 22.074 ms | dispatch mean 20.443 ms, min 20.263, max 20.936 over 100
+
+Summary (mean of the two run means)
+  yolov8n  off 7.323 ms   wbuf 8.483 ms   wbuf SLOWER by 1.160 ms   (derived beforehand: 0.077 ms FASTER)
+  yolov8s  off 16.810 ms  wbuf 20.440 ms  wbuf SLOWER by 3.630 ms   (derived beforehand: 0.729 ms FASTER)
+
+Every container byte-exact on every run. The buffer is correct and slower on both models.
+Not run: no AMD stack in this sitting; no benchmark document is updated.
