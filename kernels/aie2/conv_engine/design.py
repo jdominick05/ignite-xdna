@@ -230,6 +230,13 @@ WBUF_BD_FILL = 42
 WBUF_BD_SERVE = 43              # 43..46, one per arm; 47 stays free
 WBUF_LOCK_SPACE = 32
 WBUF_LOCK_READY = 33
+# The buffer's L1 address as the instruction stream ASSUMES it, because the stream writes whole descriptors and
+# a descriptor's word 1 holds an absolute address rather than an offset into its buffer. It is checked, not
+# pinned: ``Buffer(address=0)`` fails to compile - the bank-aware allocator then places an activation buffer at
+# 0x10000 inside it, and the sequential fallback fails too - while unpinned, the sequential fallback puts the
+# buffer at 0. ``engine_compile`` reads the assigned address back after every build and refuses a mismatch,
+# so a changed allocation is a build error rather than a descriptor pointing at the wrong bytes.
+WBUF_ADDRESS = 0
 
 
 def _weight_buffer(col, name):

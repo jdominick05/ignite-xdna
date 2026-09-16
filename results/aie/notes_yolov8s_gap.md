@@ -504,3 +504,52 @@ A cheaper arming is available if the measurement is marginal: the two word-7 rew
 0.077 ms of deliberate insurance against `writebd`'s undocumented acquire-sign convention, and the ring's
 shape-skip (e3b6028) would drop the arming entirely for a layer whose arms match the layer before it.
 Neither is worth doing before silicon says whether any of this survives contact.
+
+## The weight-buffer hang: two descriptor fields the MLIR could not show
+
+A one-layer weight-buffer container timed out three times on a healthy device (flag-off 66/66 exact
+between every attempt). The cause was one mistake in two fields: the instruction stream writes WHOLE
+MemTile descriptors, and nothing in this tree had ever done that. The activation ring maskwrites lock
+values into compiled descriptors and inherits every other field, so its encoding, proven on silicon,
+never covered buffer addresses or lock ids.
+
+Both fields were read from the configuration CDO of the same build, against the addresses its MLIR
+assigned:
+
+| buffer | L1 address | CDO word 1, low bits | (0x80000 + address) / 4 |
+|---|---|---|---|
+| `w0_buf` | 0 | 0x20000 | 0x20000 |
+| `a0_cons_buff_0` | 303,104 | 0x32800 | 0x32800 |
+| `o0_buff_0` | 354,304 | 0x35A00 | 0x35A00 |
+
+- **Word 1 is an absolute address in 32-bit words**, from where a MemTile DMA sees its own memory, at
+  0x80000. The runtime wrote a bare offset of 0, pointing every weight descriptor below the tile's memory.
+- **Word 7 names a MemTile lock at its id plus 64.** Lock 32 is written 0x60 and lock 8 is written 0x48.
+  The runtime wrote 32 and 33, so the fill and serves waited on locks nobody releases. The lock VALUE
+  registers index by the raw id, so the absolute lock writes were already right.
+- **Word 0 was never wrong.** It counts words (9472 B is 0x940), as the emitter assumed.
+
+Every earlier check passed because the MLIR spells both fields in the design's terms (`w0_buf`, `%w0_space`)
+rather than as register values. Three theories were refuted by reading the MLIR; the answer was in the CDO.
+
+Pinning the buffer with `Buffer(address=0)` does not compile: the bank-aware allocator places
+`a3_cons_buff_0` at 0x10000 inside it, and the sequential fallback then fails too. Unpinned, the sequential
+fallback puts it at 0. So the address is CHECKED instead: `engine_compile` reads every `w*_buf` address back
+after the build and refuses a mismatch, which turns a changed allocation into a build error rather than a
+hang. Tested both ways against the full yolov8n build (passes at 0, refuses when told 0x100).
+
+After the fix, the runtime's descriptors equal the CDO's: word 7 exactly (`0x8161ff60` fill, `0x8160ff61`
+serve), and word 1's address exactly (0x20000); only the next-descriptor bits differ, cleared on purpose so
+each queued execution retires. In all four columns.
+
+**On silicon, one layer: byte-exact.** `/model.0/conv/Conv`, 0 mismatches of 1,638,400 B, in two
+dispatches of the one-layer container. First dispatch 2.077 and 2.141 ms, mean 0.671 and 0.669 ms over 2
+timed. One layer is not a benchmark and those times are not comparable to anything.
+
+**A correction to the costing above.** The two word-7 rewrites per descriptor are not insurance: the emitted
+bytes show `writebd` stores the acquire value un-negated (acquire 1 lands as 0x01 in bits 14-8, where the
+hardware needs 0x7F), so without the rewrite every descriptor would acquire the wrong amount. What the bytes
+DO allow is passing the negated value into `writebd` directly and dropping the rewrite, which is the
+0.077 ms named above. Not done and not measured.
+
+Not run: the full-model weight-buffer container is NOT verified and NOT measured.

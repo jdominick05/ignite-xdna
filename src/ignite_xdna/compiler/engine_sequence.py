@@ -304,6 +304,18 @@ MEMTILE_S2MM_CTRL = 0xA0600
 MEMTILE_MM2S_CTRL = 0xA0630
 MEMTILE_CHANNEL_STRIDE = 8
 MEMTILE_CHANNEL_RESET = 1 << 1
+# Two fields a WHOLE MemTile descriptor write has to get right, which the ring never exercised because it
+# maskwrites lock values into compiled descriptors and inherits everything else. Both read from the
+# configuration CDO of the weight-buffer build, against the addresses its MLIR assigned.
+#
+# Word 1's low bits are an ABSOLUTE address in 32-bit words, and a MemTile DMA sees its own memory at 0x80000:
+# ``w0_buf`` at L1 address 0 is written 0x20000, ``a0_cons_buff_0`` at 303,104 is 0x32800 and ``o0_buff_0`` at
+# 354,304 is 0x35A00 - (0x80000 + address) / 4, all three. Writing a bare offset points the descriptor below
+# the tile's memory.
+MEMTILE_DMA_MEMORY_BASE = 0x80000
+# And word 7 names a MemTile lock at its id plus 64: lock 32 is written 0x60 and lock 8 is written 0x48. Only
+# the descriptor field is offset - the lock value registers (``memtile_lock_reg``) index by the raw id.
+MEMTILE_BD_LOCK_ID_OFFSET = 64
 
 
 def split_instruction_stream(insts: bytes, tasks_per_segment: Sequence[int]) -> List[bytes]:
@@ -374,7 +386,7 @@ class SequenceEmitter:
         # The ring's descriptor and lock ids are pinned by the design that compiles them, and read from it here
         # rather than restated, so the two cannot drift: a maskwrite to the wrong descriptor is silent.
         from kernels.aie2.conv_engine.design import (ROWS as RING_ROWS, RING_FILL_CHANNEL, RING_LOCK_ARRIVED,
-                                                     RING_LOCK_SPACE, WBUF_BD_FILL, WBUF_BD_SERVE,
+                                                     RING_LOCK_SPACE, WBUF_ADDRESS, WBUF_BD_FILL, WBUF_BD_SERVE,
                                                      WBUF_FILL_CHANNEL, WBUF_LOCK_READY, WBUF_LOCK_SPACE,
                                                      WBUF_SERVE_CHANNEL, _ring_bd, _ring_fill_bd)
         from .scheduler import MEMTILE_BD_BASE, memtile_lock_reg
@@ -403,6 +415,7 @@ class SequenceEmitter:
         self._wbuf_serve_channel = WBUF_SERVE_CHANNEL
         self._wbuf_space = WBUF_LOCK_SPACE
         self._wbuf_ready = WBUF_LOCK_READY
+        self._wbuf_address = WBUF_ADDRESS
         self._ws, self._wp = ws, wp
         self._bytes = {"ws": ws_bytes, "wp": wp_bytes}
         self._names = fifo_names
@@ -567,11 +580,20 @@ class SequenceEmitter:
         layer's weight run has its own length. One ``writebd`` is a single BLOCKWRITE, against four
         maskwrites to reach the same words, which is why it is worth the field-by-field spelling: six ops
         per column per layer instead of twelve, 0.23 ms across a frame instead of 0.46.
+
+        ``offset_words`` is an arm's slice of the concatenation and ``acq_id``/``rel_id`` are the design's raw
+        lock ids; both are translated to what the descriptor fields hold here. The first build wrote them
+        untranslated and hung on one layer - every weight descriptor pointed below the tile's memory and
+        waited on locks nobody releases - while every check against the MLIR passed, because the MLIR spells
+        both fields in the design's terms.
         """
+        acq_bd_id = acq_id + MEMTILE_BD_LOCK_ID_OFFSET
+        rel_bd_id = rel_id + MEMTILE_BD_LOCK_ID_OFFSET
         self._writebd(
             column=col, row=MEMTILE_ROW, bd_id=bd_id,
-            buffer_length=length_words,   # word 0 counts 32-BIT WORDS, not bytes
-            buffer_offset=offset_words,   # word 1, in the same units: an arm's slice of the concatenation
+            buffer_length=length_words,   # word 0 counts 32-BIT WORDS, not bytes (CDO: 9472 B is 0x940)
+            # word 1: an ABSOLUTE address in words, from where the DMA sees the tile's memory
+            buffer_offset=(MEMTILE_DMA_MEMORY_BASE + self._wbuf_address) // 4 + offset_words,
             enable_packet=0, out_of_order_id=0, packet_id=0, packet_type=0,
             d0_size=0, d0_stride=0, d1_size=0, d1_stride=0, d2_size=0, d2_stride=0,
             iteration_current=0,          # the hardware advances this as the BD runs; restored before reuse
@@ -579,8 +601,8 @@ class SequenceEmitter:
             next_bd=0, use_next_bd=0,     # MUST be 0: a self-linked BD never completes, so it never retires,
                                           # and IRON's Bd.next defaults to "self" when the design compiles it
             valid_bd=1,                   # cleared by the hardware on completion; restored here
-            lock_acq_enable=1, lock_acq_id=acq_id, lock_acq_val=acq_val,
-            lock_rel_id=rel_id, lock_rel_val=rel_val,
+            lock_acq_enable=1, lock_acq_id=acq_bd_id, lock_acq_val=acq_val,
+            lock_rel_id=rel_bd_id, lock_rel_val=rel_val,
             d0_zero_before=0, d1_zero_before=0, d2_zero_before=0,
             d0_zero_after=0, d1_zero_after=0, d2_zero_after=0,
         )
@@ -593,10 +615,10 @@ class SequenceEmitter:
         self._write32(self._ring_bd_base + RING_BD_STRIDE * bd_id + RING_BD_LOCK_WORD,
                       RING_VALID_BD
                       | ((rel_val & RING_LOCK_MASK) << RING_LOCK_REL_SHIFT)
-                      | (rel_id << self.WBUF_REL_ID_SHIFT)
+                      | (rel_bd_id << self.WBUF_REL_ID_SHIFT)
                       | self.WBUF_ACQ_ENABLE
                       | ((-acq_val & RING_LOCK_MASK) << RING_LOCK_ACQ_SHIFT)
-                      | acq_id,
+                      | acq_bd_id,
                       column=col, row=MEMTILE_ROW)
 
     def _reset_wbuf_channels(self, col: int) -> None:
