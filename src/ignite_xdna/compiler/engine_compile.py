@@ -197,7 +197,7 @@ def build_manifest(ir: GraphIR, ws: es.Workspace, scheds: List[es.LayerSchedule]
 
 def compile_graph_container(onnx_path, output_path, build_dir: Optional[Path] = None, layers: Optional[int] = None,
                             verbose: bool = True, host_regions: Sequence[str] = (),
-                            activation_ring: int = 0) -> Dict[str, Any]:
+                            activation_ring: int = 0, weight_buffer: bool = False) -> Dict[str, Any]:
     """Lower, schedule, build the device binaries and write the container. Returns the manifest.
 
     ``host_regions`` are node-name prefixes or ``FROM=TO`` boundaries run on the host between dispatches
@@ -218,7 +218,7 @@ def compile_graph_container(onnx_path, output_path, build_dir: Optional[Path] = 
     build_dir = Path(build_dir or out_p.parent / "conv_engine" / out_p.stem).resolve()
     ir = lower_yolov8n(onnx_path, host_regions=host_regions)
     ws = es.plan_workspace(ir)
-    scheds, store = es.schedule_graph(ir, ws, activation_ring=activation_ring)
+    scheds, store = es.schedule_graph(ir, ws, activation_ring=activation_ring, weight_buffer=weight_buffer)
     if layers is not None:
         scheds = scheds[:layers]
     if verbose:
@@ -238,7 +238,7 @@ def compile_graph_container(onnx_path, output_path, build_dir: Optional[Path] = 
 
     iron.set_current_device(NPU1())
     program = eng.build_program(iron.get_current_device(), body, ws_bytes=ws_extent, wp_bytes=wp_extent,
-                                a_ring=activation_ring)
+                                a_ring=activation_ring, w_buf=weight_buffer)
     module = program.resolve_program()
     work = build_dir / "design.prj"
     if work.exists():
