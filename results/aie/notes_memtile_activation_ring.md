@@ -433,12 +433,67 @@ accounting is exact too: 1,792 writes = 1,280 queue pushes + 512 lock writes, an
 row 1 not at all. A transaction address is `(col << 25) | (row << 20) | offset`, so a register write's tile row
 comes from its address; the op header's row field is zero for all of them and reading it there proves nothing.
 
-**Not dispatched.** The device refused a hardware context, `0xc01e0009`, raised from `pyxrt.hw_context` - on
-the flag-off container, as the readiness check, before the ring probe ran at all. `xrt-smi` had reported
-`[003d:00:01.1] : NPU Phoenix` with no hardware contexts minutes earlier. That is the second time in this
-session the partition listing has said healthy immediately before a context creation failed, and the third
-time the device has needed recovery; the previous two cleared with a reboot. NPU work stopped here rather than
-being retried.
+The first attempt to dispatch it never ran: the device refused a hardware context, `0xc01e0009`, from
+`pyxrt.hw_context` - on the flag-off container, as the readiness check, before the ring probe ran at all, with
+`xrt-smi` having reported `[003d:00:01.1] : NPU Phoenix` and no hardware contexts minutes earlier. Second time
+this session the partition listing said healthy immediately before a context failed, third recovery needed.
+A reboot cleared it, as the previous two did.
+
+## On silicon: the ring completes a dispatch, and it is the replay that stalls
+
+Same machine, in the sitting that followed that reboot and ran from 2026-09-15 into 2026-09-16.
+
+Readiness first, the real check rather than the partition listing: `yolov8n_flagoff.ignite` **66/66 layers
+exact**, first dispatch 9.206 ms, mean 7.399 ms over 20 (min 7.201, max 7.774). The machine creates contexts
+and computes correctly, so what follows is the ring's.
+
+| container | layers | result |
+|---|---|---|
+| `probe1_ring4` | 1 | **completed in 4.600 ms, 320/320 rows of layer 0 correct** |
+| `probe8_ring4` | 8 | L0-L5 correct (320 + 160x5 rows); **stalls at L6** `/model.3/conv/Conv` |
+| `probe8_serves1` | 8 | replay forced off: **completed, all eight layers correct** |
+
+The first of those is the ring's first completed dispatch after seven timeouts. So the reverse edge works: the
+drain is an adequate substitute for the token that has no route, and the single-serve path is correct on
+silicon across multi-chunk tiles and across layer boundaries.
+
+**L6 is the first layer with `serves > 1`**, and forcing every layer onto the no-replay path makes the same
+eight layers pass. That is a single-variable experiment, so the fault is the replay and nothing else: the
+barrier, the re-arm, the drain tokens and the whole no-replay path are exonerated by it.
+
+**What the stalled layer left behind.** Not corruption - absence. Of L6's two output groups, group 1 is
+untouched entirely and group 0 holds 9,600 correct bytes with the remaining 16,000 still zero. Mapped to
+output objects (4 blocks x 5 rows x 20 columns, 3,200 B each), exactly three objects landed - core 0 at column
+tiles 1 and 2, core 1 at column tile 2 - and **every object that landed is byte-exact**. No object is
+partially written. Cores 2 and 3 emitted nothing. Two runs stalled after a different number of objects
+(44,800 and 41,600 bytes differing) with the same geometry, so how far it gets varies.
+
+**Theories this disproves**, each checked against the dumped arrays rather than argued: the groups are not
+swapped, no group holds another's reference, the groups do not hold identical bytes, and nothing equals the
+reference rolled by 1-3 channels or rows. Nor is it the iteration counter wrapping inside one task - a
+descriptor asked to wrap mid-task would misaddress bytes, and what is missing here is whole objects that were
+never produced.
+
+**Replay is the entire benefit, so this cannot be shipped without it.** With replay forced off the ring moves
+*more* than the per-group schedule, because fetching once per group through the MemTile moves exactly what the
+per-group schedule moved and adds tasks:
+
+| model | ring, no replay | ring off |
+|---|---|---|
+| yolov8n | 131,920,640 B / 5,424 tasks | 127,487,744 B / 2,972 tasks |
+| yolov8s | 353,422,848 B / 10,659 tasks | 349,103,616 B / 7,143 tasks |
+
+Activation bytes with replay off are identical to the flag-off figures. And replay is most of the graph: 37 of
+yolov8n's 66 layers have `serves > 1` (histogram 1:29, 2:24, 3:6, 4:7) and 47 of yolov8s's (1:19, 2:17, 3:2,
+4:21, 8:7). So there is no partial result to measure and no benchmark to publish.
+
+**Where to resume.** The remaining question is the lock protocol across a replay, which lives in the compiled
+design and needs an xclbin rebuild: nothing releases `space` back - `_arm_ring` rewrites it per tile - and
+every serve execution acquires `arrived` by the whole chunk count and releases the same count, so with
+`arrived` sitting at `slots` the four serve channels are sequenced against each other and against the cores by
+nothing at all. Whether only the last serve should release `arrived`, and what should release `space`, is the
+question to answer first. Note also that a MemTile channel's task queue holds four entries while yolov8s has
+layers with `serves = 8`, so one task per replay is not universally available either.
 
 A hazard this narrows without closing, recorded so it is not rediscovered: `ensure` retires a channel once it
 holds `queue_depth` tasks, and retiring means awaiting. A tile whose column owns five or more groups pushes
