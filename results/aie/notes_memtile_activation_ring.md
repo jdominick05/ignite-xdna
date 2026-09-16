@@ -1,17 +1,27 @@
-# The MemTile activation ring on silicon — what the build artifacts actually say
+# The MemTile activation ring on silicon
 
-Desktop 2 (DESKTOP-CBL5NUA), 2026-09-15. Offline only: every fact here comes from reading build artifacts of
-the probe containers and from mlir-aie / aie-rt sources. No dispatch established any of it.
+Desktop 2 (DESKTOP-CBL5NUA), 2026-09-15. This is a chronological record and later sections supersede earlier
+ones: it opens with what the build artifacts say and ends with a root cause established on hardware. Read to
+the end before acting on any middle section.
+
+The short version: **the ring computes a byte-exact output tile on silicon, then waits forever for a completion
+token that has no route back to the shim.** Three defects were found, fixed and verified before that one, and
+none of them was the cause. See "Root cause: the completion token has no route home".
+
+Facts here come from two places and each is marked: reading the probe containers' build artifacts and the
+mlir-aie / aie-rt sources, or a dispatch on this machine, named by container. No benchmark figure appears
+below, and no ring dispatch has completed.
 
 ## Method
 
 `tools/disasm_txn.py` prints only five op categories and leaves most decoded ops unprinted, so its silence is
 not evidence. Instead: scan every aligned 32-bit word of a binary and report those that look like a MemTile
-register address — column in bits 25+, row bit `1 << 20` set. Scripts in this directory:
-`scan_memtile_words.py` (BD and lock windows), `scan_memtile_channels.py` (the channel page),
-`decode_cdo_bds.py` (a descriptor's eight configured words), `dump_channel_writes.py` (channel registers with
-their values), `check_ring_items.py` (served vs unserved fills per layer), `ring_coverage.py` (how each layer
-would be served), `gate_ring_exact.py` (per-layer byte-exactness against the direct reference).
+register address — column in bits 25+, row bit `1 << 20` set. The scans behind this note were throwaway
+scripts, each a few dozen lines and none committed: the BD and lock windows, the channel page, a descriptor's
+eight configured words, channel registers with their values, served versus unserved fills per layer, how each
+layer would be served, and per-layer byte-exactness against the direct reference. The last is the one worth
+rebuilding — it gates a schedule change offline — and `tools/engine_stream_report.py` already covers the
+traffic totals.
 
 ## Register map, confirmed
 
@@ -88,8 +98,10 @@ activation fills nothing serves; flag-off traffic unchanged.
 
 Total DDR falls 21.1% on yolov8n and 38.3% on yolov8s. Tasks fall on yolov8s (7,143 to 6,927) but **rise** on
 yolov8n (2,972 to 4,496), because its 18 non-amortising layers lose the coarse schedule's drain merging and
-merged weight runs. Scaled by the measured cost of a task that cancels most of yolov8n's byte saving. Recovering
-that merging for the serves-1 path is the next schedule change.
+merged weight runs. Against the recorded cost model — 145 ns per instruction op, 26.8 GB/s of transport — those
+1,524 extra tasks cost about 0.22 ms while the 26.9 MB saved is worth about 1.0 ms, so yolov8n keeps most of
+its saving but not all of it. Both are derived from a schedule, not measured. Recovering that merging on the
+serves-1 path is the next schedule change.
 
 Emitter side, committed at `ba9071b`: defects 3, 4 and 5 are addressed — reset once per column per layer,
 negated acquire, cleared `USE_NEXT_BD`, biased repeat counts, single window. Verified in the built stream, both
@@ -267,6 +279,37 @@ where the split-ObjectFifo path the engine has always used gives each core a dep
 session tested that handshake in isolation, and it is the one part of the ring that differs from proven code
 without having been verified in an artifact.
 
+## Instrumented: the ring computes its first tile exactly, then never starts a second
+
+`verify_engine_container.py` raises on a timeout and compares nothing, which is why six dispatches said only
+"it hung". But `read_tensor` is a BO sync plus a read and does not care whether `dispatch()` raised, so the
+workspace after a failed dispatch records how far the work got. The probe used here — scratch, uncommitted, and
+the one instrument in this note worth rebuilding as a tool — reads each output row before the dispatch and
+again after it raises, classifying the row **correct** (equals the reference), **untouched** (still the
+pre-dispatch bytes) or **wrong**. Validated on the flag-off container first: 320/320 and 160/160 rows correct.
+
+On `probe1_ring2.ignite` the dispatch timed out after 7.0 s and left: rows 0-19 "wrong", rows 20-319
+untouched, layer 1 untouched throughout. Of the 102,400 bytes in those 20 rows, 96,000 were zero and 6,400
+carried plausible values - and 6,400 is exactly one 20x20 output tile across layer 0's 16 channels.
+
+Analysed offline from the dumped arrays, the written region is rows 0-19, cols 0-19, 6,400 bytes, and it is
+**EXACT**: 0 of 6,400 bytes differ from the reference, all 6,400 non-zero, matching in place. The row-level
+"wrong" was an artifact of classifying a whole row - the other fifteen tiles across that band were simply
+never written.
+
+**So the ring works.** One shim fetch lands in the MemTile, the serves deliver each core its slice, the cores
+compute, and the drain writes a byte-exact tile to DDR. What fails is proceeding to the second tile.
+
+**What differs between tile 1 and tile 2** is exactly the `armed[col]` guard: tile 2 skips the channel reset
+and skips every descriptor maskwrite, doing only the lock writes and the pushes. Two fields in a descriptor
+are stateful and consumed by execution - `Valid_BD` (word 7 bit 31), which a completed task clears, and
+`Iteration_Current` (word 6, bits 28:23), which advances as the BD runs. Neither is in any mask the emitter
+writes, so tile 2 pushes a descriptor the hardware no longer considers valid.
+
+The fix is to state the whole descriptor again on every tile rather than only when the chunk count changes,
+restoring `Valid_BD` and zeroing `Iteration_Current`. That is safe now for a reason it was not before: the
+serves of the previous tile are awaited, so nothing is in flight to disturb.
+
 ## What a rebuild must show before any dispatch
 
 Two reset maskwrites on each of `0xA0600`, `0xA0630`, `0xA0638`, `0xA0640`, `0xA0648` per column; a word-1
@@ -274,3 +317,75 @@ maskwrite clearing bit 19 on each of the five ring descriptors; iteration maskwr
 lock writes whose acquire field is negative; and pushes whose repeat count is one less than the executions
 intended. The ring's descriptor ids must appear in the init CDO with the ring's own lengths, and no id may be
 shared with another fifo.
+
+## Restoring the consumed descriptor fields changed nothing
+
+`probe1_ring3.ignite` re-arms every descriptor per tile: `Valid_BD` restored on all five (the arrival's word 7
+is written with mask `0x80000000` only, so its compiled acquire -1 / release +1 survives), `Iteration_Current`
+zeroed by widening the iteration mask from `0x007E0000` to `0x1FFE0000`, and the whole re-arm moved from once
+per layer to once per tile - maskwrites 1,504 to 6,312, WRITE and TCT unchanged at 2,560 and 1,408.
+
+Its dispatch is **bit-for-bit identical** to the run before it: one tile at rows 0-19 cols 0-19, the same 6,400
+non-zero bytes, the same value histogram, the same 7.0 s timeout. Neither consumed field was the blocker.
+
+## The syncs are not broken - they are the only thing holding correctness
+
+Instrumenting `probe1_ring.ignite`, built before the sync was added, discriminates cleanly:
+
+| container | serve pushes | rows written | data |
+|---|---|---|---|
+| `probe1_ring` | no token, nothing awaited | **all 320** | 1,304,875 of 1,638,400 bytes wrong |
+| `probe1_ring2/3` | token + `npu.sync` per channel | **20** (one tile) | that tile **byte-exact** |
+
+Unbounded, the ring runs ahead of the cores: descriptors are rewritten under live tasks and the four-deep
+MemTile queues overrun, so every tile is touched and almost nothing is right. Bounded to one tile, what it
+produces is exactly right. Both still time out.
+
+**So the stall is the wait itself.** Tile 1's fill, serve, core compute and drain all complete - its output is
+in DDR and correct - and the emitter then blocks on four `aiex.npu.sync` ops for MemTile completion tokens. If
+a MemTile MM2S channel does not issue a token such a sync can consume, it waits forever for work that has
+already finished, which is precisely what both instrumented runs show.
+
+**The way out does not need a MemTile token.** A tile's drain is a shim task, and shim tasks already carry
+completion tokens the emitter awaits routinely through `retire_channel`. Ordering the next re-arm behind the
+previous tile's drain is the reverse edge proposed at the outset, built on token machinery this engine has
+used since it was written. The open question is whether a drain can be awaited per tile: a token is attached
+only to every `retire_batch`-th task of a channel, so the ring would need its drains tokened individually.
+
+## Root cause: the completion token has no route home
+
+The MemTile buffer descriptor runs to completion and lands its bytes - which is why tile 1 is byte-exact - and
+`issue_token` sets bit 31 so it emits a task-completion token. The token then has nowhere to go, so the sync
+waits forever for work that has already finished. Two things a design needs for a MemTile TCT to arrive, and
+this one has neither:
+
+1. `controller_id = #aie.packet_info<pkt_type = ..., pkt_id = ...>` on the MemTile's `aie.tile` op. Without it
+   the lowering silently skips programming the TCT controller-ID field - `AIEDmaToNpu.cpp:164-181`, which
+   emits that maskwrite only `if the tile carries a controller_id attribute`.
+2. An `aie.packet_flow` from `<memtile, "TileControl" : 0>` to `<shim, "South" : 0>`, the token's route back.
+
+A design compiled the ordinary way has neither, because aiecc runs the column-control overlay with
+`route-shim-to-tct` left at its default `"shim-only"`, and `AIEGenerateColumnControlOverlay.cpp:326` filters
+every non-shim tile out: `if (clRouteShimCTRLToTCT == "shim-only" && !tOp.isShimNOCorPLTile()) continue;`.
+
+**This is not a shim-only mechanism.** Two lit tests execute MemTile token waits on npu1/Phoenix silicon -
+`test/npu-xrt/memtile_dmas/writebd_tokens` syncs on row 1 after writing the memtile START_QUEUE at `0xa0604`,
+and `test/npu-xrt/memtile_dmas/dma_configure_task_token` awaits a memtile task with `dma_await_task`. The TCT
+encoding carries a full 8-bit row (`TxnEncoding.h:158-160`), `AIE_NpuSyncOp` has no verifier, and the op's own
+troubleshooting text blames a missing token rather than the tile. Both tests declare exactly the two things
+above, with `keep_pkt_header = true, priority_route = true` on the flow.
+
+`dma_await_task` and `npu.sync` are one mechanism with two entry points, both lowering to `NpuSyncOp` ->
+`txn_append_sync` -> `TXN_OPC_TCT`, and `DMAAwaitTaskOpPattern` is tile-generic. Only `npu.dma_wait`, which
+resolves its tile through a `ShimDMAAllocationOp` symbol, is structurally shim-bound - a limitation of
+ObjectFifo symbol resolution, not of tokens.
+
+**Two ways to fix it.** Declare the `controller_id` and the TileControl -> South packet flow in the design, as
+the on-silicon tests do; or migrate the ring off raw `push_queue` + `npu.sync` onto
+`dma_configure_task`/`dma_start_task`/`dma_await_task` with `issue_token = true`, which is tile-generic by
+construction and fails at compile time rather than hanging if a token is ever dropped. Running the overlay with
+`route-shim-to-tct=all-tiles` would also generate the flow, but no aiecc or IRON flag exposes that setting.
+
+One caveat to carry: the auto-assigned controller id for a memtile is 26, while both working tests hand-pick
+`pkt_id = 1`. The field is 8 bits wide in hardware and the lowering writes five, so 26 is writable, but no test
+in the tree exercises a memtile id at or above 16. Pick the id explicitly rather than relying on the default.
