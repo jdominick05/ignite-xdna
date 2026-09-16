@@ -250,6 +250,26 @@ RING_LOCK_ACQ_VALUE_MASK = RING_LOCK_MASK << RING_LOCK_ACQ_SHIFT
 # shorter one is a write to these two fields and nothing else.
 RING_NEXT_BD_SHIFT = 20
 RING_NEXT_BD_MASK = 0x3F << RING_NEXT_BD_SHIFT
+
+# The head of a free-running chain already holds its acquire.
+#
+# A cyclic chain is never idle: one descriptor is always the channel's current one, and a descriptor takes its
+# lock when it becomes current rather than when stream bytes arrive for it. AMD's programming guide says so -
+# locks are "acquired before the transfer starts and released after it completes" - and the S2MM status register
+# corroborates it structurally by carrying two different stall states, Stalled_Lock_Acq and
+# Stalled_Stream_Starvation, which a channel acquiring only on data arrival would not need. For a producer lock
+# at its replenished resting value, which is exactly what ``space`` is here, the acquire SUCCEEDED: the head has
+# already drawn its slot down and is parked on the stream.
+#
+# So crediting every slot alike hands the DMA tokens it is still holding, and the arrival runs a lap ahead of
+# the serves still reading that slot. Measured: a one-layer container built with this False returned layer 0
+# with 45,459 of 1,638,400 bytes wrong - computed, nearly right, sporadically overwritten - where per-tile
+# arming had been byte-exact.
+#
+# Only ``space`` is affected, and the asymmetry is the tell: ``space`` rests high so a parked acquire succeeds,
+# while ``arrived`` rests at zero so a parked serve blocks without taking anything. Per-tile arming never met
+# this because a completed task leaves the channel idle with no current descriptor holding anything.
+RING_HEAD_PARKED = True
 MEMTILE_ROW = 1
 # A MemTile's DMA channel control registers, confirmed against both builds' configuration CDO: six channels
 # per direction at a stride of eight, S2MM first, each with its START_QUEUE in the word above. Bit 1 of the
@@ -394,10 +414,13 @@ class SequenceEmitter:
           replay - and each of those serves takes one back, so both of a slot's locks end a tile where they
           started and no tile has to restore them. The acquire and release values share word 7, and the
           acquire is stored negated, so one masked write sets both.
-        * **``space``**, which must start at the same count. It is written here and nowhere else, because a
-          layer boundary is the one point where every task has been retired and the channel is quiescent; a
-          write to a lock a running DMA may be mid-acquire on is a race, and a tile boundary does not have
-          that guarantee.
+        * **``space``**, which must start at the same count - except at the head of the cycle, which never
+          starts there. See ``RING_HEAD_PARKED``: a free-running chain always has a current descriptor, and
+          that descriptor has already drawn its slot's ``space`` down and is parked waiting for bytes. It is
+          written here and nowhere else, because a layer boundary is the one point where every drain has been
+          awaited (``run_column_programs`` retires every channel of every column before returning, and this
+          runs once per layer), so the cores have consumed every slice the serves delivered and nothing but
+          that one parked descriptor is live.
         * **The width of each cycle**, when the layer's pass is narrower than the compiled window. Only the
           wrap matters, so each chain is relinked slot by slot with the last pointing back at the head.
         """
@@ -423,7 +446,12 @@ class SequenceEmitter:
                                                                    << RING_LOCK_ACQ_SHIFT),
                                 RING_LOCK_REL_VALUE_MASK | RING_LOCK_ACQ_VALUE_MASK,
                                 column=col, row=MEMTILE_ROW)
-                self._write32(self._ring_lock_reg(self._ring_space + i), tokens,
+                # The head of the cycle is parked holding this slot's space, so it starts from nothing: its own
+                # serves credit the slot back up to ``tokens`` once its fill lands. Every pass is the full
+                # width - the window is narrowed to a divisor of the tile - so the chain returns to ids[0]
+                # after every tile, and the parked slot is always this one.
+                credit = 0 if (RING_HEAD_PARKED and i == 0) else tokens
+                self._write32(self._ring_lock_reg(self._ring_space + i), credit,
                               column=col, row=MEMTILE_ROW)
 
     def run_column_programs(self, programs: Sequence[Sequence[tuple]], bd_budget: int = 14,

@@ -907,12 +907,78 @@ nothing about this design. How deep a channel prefetches descriptors is **not** 
 machine; the status register exposing a single `Cur_BD` and a single `Stalled_Lock_Acq` bit is suggestive of
 one at a time, but that is an argument from absence and is recorded as one.
 
-**The diagnostic, unused so far and the obvious next instrument:** `DMA_S2MM_Status_N` (offset `0x1DF00`)
-carries `Cur_BD` ("current BD channel is operating on"), bit 2 `Stalled_Lock_Acq`, bit 4
-`Stalled_Stream_Starvation`, and bits 1:0 as `00=IDLE, 01=STARTING, 10=RUNNING`. Reading it after a hang says
-which descriptor the ring stopped on and whether it is waiting for a lock or for bytes. Every diagnosis in this
-file so far has been inferred from byte-exactness and timeouts; this register would replace that with an
-observation.
+**Register readback cannot be built - but the probe bisect turned out to be the instrument.** Read this
+section as closing one route, not the goal: what actually localized the fault was building containers of 1, 2
+and 8 layers and reading their *graded* output (bytes wrong, and whether the first or a repeat dispatch fails),
+which needs no register access at all. Do not re-litigate the read path below; it is closed.
+
+The idea was to read
+`DMA_S2MM_Status_N` after a hang: it carries `Cur_BD`, bit 2 `Stalled_Lock_Acq`, bit 4
+`Stalled_Stream_Starvation` and bits 1:0 as `00=IDLE, 01=STARTING, 10=RUNNING`. **There is no supported way to
+read it from the host on Windows/XDNA.** The transaction format has no read opcode (`XAIE_IO_CUSTOM_OP_READ_REGS`
+= 130 is defined but never executed and has no emitter); the AIEX dialect has no `npu.read32`, `npu.maskpoll`
+or `npu.poll`; and **pyxrt does not export `read_aie_reg`** - zero occurrences in `pyxrt.pyd`, though XRT
+declares it in `xrt_aie.h`. `XAIE_IO_MASKPOLL` (opcode 4) does exist, shape-identical to MASKWRITE, but it
+returns no value, its encoding carries **no timeout field**, and what the XDNA firmware does with a poll that
+never matches is undocumented - a wedge risk, not an instrument.
+
+Two corrections worth keeping anyway, because a mis-mapped access corrupts a tile silently. **`0x1DF00` is the
+CORE tile's status register, not the MemTile's.** The MemTile's are `DMA_S2MM_Status_N` at **`0xA0660 + 4N`**
+(so channel 5 is `0xA0674`) and `DMA_MM2S_Status_N` at `0xA0680 + 4N`; the channel *control* registers use a
+different stride, `0xA0600 + 8i` and `0xA0630 + 8i`. A MemTile has 6 channels each way, so S2MM 5 is the last
+one. `Cur_BD` is **6 bits** on a MemTile (`29:24`, 48 descriptors) against 4 on a core tile, so it must be
+masked with `0x3F`; and bit 4 is `Stalled_Stream_Starvation` only on S2MM - on MM2S it is
+`Stalled_Stream_Backpressure`. The engine's `(col << 25) | (row << 20) | offset` is confirmed correct. MemTile
+lock values are readable at `0xC0000 + 0x10*N`, if a read path ever exists.
+
+## The parked head is real: layer 0 goes from corrupt to byte-exact
+
+The instrument turned out to be the probe. A **one-layer** container is one `_configure_ring` and no
+reconfiguration at all, and it does not hang - it completes in about 1 ms. What it does instead is compute
+layer 0 *nearly* right:
+
+| one-layer container | slot 0 credited | layer 0 |
+|---|---|---|
+| `probe1_armonce` (`8b33c5ec...`) | `ROWS * serves` | **MISMATCH 45,459 / 1,638,400 bytes** |
+| `probe1_headparked` (`7283824...`) | `0` | **EXACT** |
+
+One word of the instruction stream differs between them. At width 1 the over-credit is exactly one extra
+fill's worth, so the arrival may run a single lap ahead of the serves and overwrite the slot while it is being
+read - which is what 2.8% of bytes sporadically wrong looks like. Crediting the parked head nothing makes it
+byte-exact. **So the free-running cycle is sound, the lock protocol is sound, and `RING_HEAD_PARKED` is
+confirmed on silicon rather than argued from the architecture.**
+
+That also explains why the eight-layer head-parked probe read as a flat failure: it carried both a correctness
+bug and a hang at once. The hang is now bracketed between one layer (correct) and eight (hangs), and the layer
+shapes split it - L0-L5 are all `serves 1` with only the *width* changing (1, 2, 1, 1, 2, 2), while L6 is the
+first layer to change `serves`.
+
+## The hang is not inside a frame: it is a frame that does not leave the ring re-runnable
+
+A **two-layer** container - L0 at width 1, then L1 at width 2, the first reconfiguration there is - returns
+**both layers byte-exact**, so relinking a live cycle's `next_bd` is not fatal and that candidate is closed.
+It then times out on a **repeat** dispatch: the traceback is `verify_engine_container.py:104`, the timing loop,
+not `:90`, the checked dispatch. The eight-layer container fails at `:90` instead - within the first frame. So
+the failure point moves earlier as layers are added, which is the signature of residue that accumulates rather
+than of a deadlock.
+
+The mechanism is in `_configure_ring`: it restores locks `for i in range(width)`. A narrow layer relinks its
+cycle over the first `width` slots and never touches the rest, so a wider layer before it leaves `space` credit
+in slots the new cycle never consumes, and `arrived` is balanced only by serves that no longer run. Nothing in
+a frame notices; the next frame starts from it. That predicts exactly what was measured - one layer at a fixed
+width survives twenty dispatches, two layers survive one, eight do not survive the first - and the obvious fix
+is to restore both locks of **every** slot of the compiled window, at 2 * slots writes a layer.
+
+**That fix was built, and it changes nothing.** With every slot's `space` and `arrived` restored on every layer
+- `insts.bin` grew 138,640 -> 140,656 B at two layers and 297,040 -> 304,912 B at eight, so the extra writes
+really are in the stream - the two-layer container is still byte-exact on both layers of its first dispatch and
+still times out at `verify_engine_container.py:104` on a repeat, at the same failure point. The
+residue-in-untouched-slots explanation is refuted, and **what leaves the ring un-re-runnable across a frame
+boundary is still unidentified**. Offline is unaffected: 21/21 tests pass with the change.
+
+The device is not the variable, said once for the whole sitting: the known-good flag-off container verified
+66/66 exact **six** times between these experiments - 7.366, 7.314, 7.321, 7.333, 7.227 and 7.293 ms mean over
+20 dispatches each - including immediately after every timeout.
 
 A hazard this narrows without closing, recorded so it is not rediscovered: `ensure` retires a channel once it
 holds `queue_depth` tasks, and retiring means awaiting. A tile whose column owns five or more groups pushes
