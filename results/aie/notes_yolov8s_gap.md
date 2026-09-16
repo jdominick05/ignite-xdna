@@ -188,3 +188,28 @@ differs and nothing can be sized in advance.
 
 The device is not the variable: the known-good flag-off container verified 66/66 exact immediately after this
 timeout, at 7.239 ms, the tenth such verify of the sitting.
+
+### But our weight data does survive the codec, byte for byte
+
+The ratio is blocked; correctness is not, and it can be tested without knowing any length. In
+`lossless_roundtrip` both `engage_compress` and `engage_decompress` are set, so `out_tap_rt` is `None` - there
+is no ratio-sized tap anywhere, both shim ends are raw-sized, and the compressed form exists only on the
+internal leg where the consumer's S2MM expands it back into a raw-sized buffer. Lengths match on the
+decompressed side whatever the data does. It is also the right topology: that config's consumer is the
+**MemTile**, so it compresses on a core-tile MM2S and decompresses at a MemTile S2MM.
+
+Sixteen chunks, eight from each model's real weight store, after a guard run of `arange` at 4,096/4,096:
+
+| model | chunks sampled | result | zero-word density spanned |
+|---|---|---|---|
+| yolov8n | 8 of 498 | **8/8 byte-exact**, 4,096/4,096 each | 0.3% - 83.1% |
+| yolov8s | 8 of 1,799 | **8/8 byte-exact**, 4,096/4,096 each | 0.6% - 81.5% |
+
+Every one identical, none untouched. The samples deliberately span the range of data character - the
+heavily padded chunks and the near-incompressible ones at 0.3% and 0.6% zero words - so the codec is lossless
+on our bytes regardless of density, and the hard cases behave exactly like the easy ones.
+
+So the necessary condition holds: **the codec does not corrupt our weight data, and it decompresses correctly at
+the MemTile.** What remains is not correctness but plumbing - a compressed stream whose length is data-dependent
+cannot be received by a descriptor that must be sized in advance, and that is the whole of the remaining
+question.
