@@ -78,6 +78,10 @@ def _load_preprocess_lib() -> Optional[ctypes.CDLL]:
         if not success or not dll_path.exists():
             return None
 
+    # The power mode (how OpenMP's workers wait, and how many run) must be in the environment before this DLL loads:
+    # the runtime reads it once. See pipelines/power.py for the modes and why the spinning default was the problem.
+    from .power import apply_openmp_settings
+    apply_openmp_settings()
     try:
         lib = ctypes.CDLL(str(dll_path))
         lib.fused_preprocess_bgr_to_chw_int8.argtypes = [
