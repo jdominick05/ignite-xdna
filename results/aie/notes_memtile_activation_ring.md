@@ -1063,6 +1063,100 @@ frame at six layers just as it did at one. The width-1 selection begins at L0, t
 predecessor is also built, and that layer comes back byte-exact - so at a constant width the ring is exact and
 re-runnable together, which is what no container had managed before.
 
+## The fix: reset the channels, then push, so the head's state is known rather than guessed
+
+The fault was never which value to write - it was that the right value depended on something unobservable. A
+cyclic chain always has a current descriptor, and whether that descriptor is *holding* its acquire or *blocked*
+on it cannot be read back from the host. `dma_channel_reset` removes the question: a reset drains the channel's
+start queue and clears its run state, so afterwards nothing is current and no lock is held.
+
+`_configure_ring` now does, per column and per layer, in this order - the order per-tile arming already proved
+on silicon:
+
+1. reset each of the ring's five channels (assert bit 1 of the channel control register, then deassert);
+2. relink the cycles to this layer's width;
+3. restore both locks of **every** slot - `space` full, `arrived` empty;
+4. **push last**, one task per channel at the head descriptor.
+
+A reset freezes the channel's bound lock counters, which is why the locks are restored after it rather than
+before, and a cyclic chain never completes, so the single push is perpetual and its repeat count never comes
+into play - exactly what the configuration CDO's `aie.dma_start` does at load.
+
+**The reset inverts the head credit, which is the counterintuitive part.** Without it the head had already
+taken its acquire before the lock write, so slot 0 had to be credited nothing. With it the head acquires *from*
+the value written here, so crediting nothing strands it on an empty lock for ever - the same hang by the
+opposite route. `RING_HEAD_PARKED` is therefore off; the finding it records still stands, and is precisely why
+the state had to be made deterministic instead of guessed.
+
+Measured on Device 0, on the two containers that previously failed:
+
+| container | before | after |
+|---|---|---|
+| 2 layers, widths 1 -> 2 | both layers exact, **timed out on a repeat** (`verify:104`) | **both exact, survives 20**, mean 1.299 ms |
+| 8 layers, widths 1/2/4 and a `serves` change at L6 | **timed out inside the first frame** (`verify:90`) | **all 8 exact, survives 20**, mean 2.992 ms |
+
+## The full model runs, and on yolov8n it is slower than the schedule it replaces
+
+**66/66 layers byte-exact, PASS** - the first completed full-model ring dispatch of this investigation. L13
+`/model.5/conv/Conv`, which stalled every earlier attempt, is exact. The overflow that caused that stall is
+structurally gone: per-slot locks bound the counter to `ROWS * serves`, and the built shapes peak at `serves 4`,
+so 16 against the 63 a MemTile lock holds, where the shared counter reached 128. The container exercises
+everything at once - widths 1 to 6, multi-pass layers at 8 and 16 chunks, `replicas` up to 4.
+
+And it is a loss on this model, measured rather than derived:
+
+| yolov8n container | dispatch mean over 20 | first |
+|---|---|---|
+| flag-off, immediately before | 7.308 ms | 8.892 ms |
+| ring, six slots, with the reset | **10.052 ms** (min 9.889, max 10.454) | 11.556 ms |
+| flag-off, immediately after | **7.392 ms** (min 7.184, max 7.758) | 8.823 ms |
+
+The flag-off runs bracket the ring in one sitting, so the comparison is not against a remembered number: eight
+flag-off verifies across the session land between 7.227 and 7.392 ms, every one of them 66/66 exact.
+
+About **2.7 ms worse**, where the derived comparator said +0.871 ms. Two reasons, both known: the cost model
+runs about 13% optimistic (its flag-off figure is 6.481 ms against 7.3 measured), and it never counted the
+reset. The reset costs ten register writes, five pushes and `2 * slots` lock writes per layer per column, which
+is why `insts.bin` goes 297,040 -> 317,712 B at eight layers and 951,580 B over the full model.
+
+None of that makes the ring wrong - it makes yolov8n the wrong model for it. The design was never predicted to
+win here: the costing put yolov8n at +0.871 ms and yolov8s at -0.748 ms, because yolov8s is where a fetched
+tile is replayed enough to amortise. `activation_ring` is a per-container compile flag, so the question is
+whether yolov8s now runs, and what it measures.
+
+## It runs on yolov8s too, and it loses there as well - which settles the design
+
+yolov8s is the model this was built for, and its container is **66/66 byte-exact** as well. Every number below
+is a dispatch mean over 20, measured in one sitting, each container verifying 66/66 exact:
+
+| model | flag-off | ring, six slots, with the reset | ring costs |
+|---|---|---|---|
+| yolov8n | **7.392 ms** | **10.052 ms** | **+2.66 ms** (+36%) |
+| yolov8s | **16.828 ms** | **20.228 ms** | **+3.40 ms** (+20%) |
+
+The derived costing said yolov8s would **win** by 0.748 ms. It loses by 3.40, so the comparator was wrong by
+about 4.1 ms on the case it was most confident about, and in the direction that mattered. Two contributions are
+known and were already written down - the model runs about 13% optimistic, and it never counted this reset -
+but the larger lesson is the one this file has been circling since the first costing: **a DDR saving derived
+from a schedule is not a latency measurement.** The ring's -38.3% derived traffic on yolov8s is real as
+traffic; it does not convert into time at this task count.
+
+So the ring is finished and it does not pay. What it leaves behind is worth more than the design: the protocol
+is proven (a free-running cyclic MemTile chain, per-slot locks bounded by `ROWS * serves`, reset and re-push at
+every layer), the parked-head semantics are documented and confirmed on silicon, and a whole class of derived
+verdicts in this file now has a measured correction factor.
+
+If anyone returns to it, the two levers not pulled are drain merging (worth a derived 0.940 ms on yolov8n and
+0.696 on yolov8s, unblocked once the drain barrier went) and resetting only when the shape actually changes:
+the first layer of a frame must reset unconditionally, since its predecessor in execution is the previous
+frame's last layer, but every later layer could reset only when its shape differs from the one before it in
+program order. Neither closes a 2.7-3.4 ms deficit.
+
+The eight-layer container is the stronger correctness result: it changes the pass width *and* the lock values,
+so both kinds of reconfiguration now survive. It costs stream: `insts.bin` grows 138,640 -> 143,856 B at two layers and
+297,040 -> 317,712 B at eight, for ten reset writes, five pushes and `2 * slots` lock writes per layer per
+column. Offline unaffected: 21/21 offline tests and 4/4 conv-engine tests pass.
+
 The tool that does the selecting is `tools/ring_shape_probe.py`, and two things in it are worth keeping rather
 than rediscovering. Layers are dropped from the **schedule**, never from the ring, for the reason above. And it
 refuses to write a container unless the filter actually dropped layers: a filter that silently matched
