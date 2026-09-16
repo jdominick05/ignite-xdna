@@ -361,6 +361,11 @@ class SequenceEmitter:
         # How many slots the design was compiled with, which fixes the descriptor ids: a layer's pass may be
         # narrower than this, but never wider.
         self._ring_slots = a_ring
+        # The shape each column's ring currently carries, for the life of this emitter - which is one
+        # instruction stream, that is, one frame. A layer whose shape matches the one before it writes nothing
+        # at all (see ``_configure_ring``); an empty map at construction is what makes the stream's first layer
+        # always emit the full reset, and so every frame open from a known channel state.
+        self._ring_shape: Dict[int, tuple] = {}
         self._ring_fill_channel = RING_FILL_CHANNEL
         self._ring_fill = _ring_fill_bd
         self._ring_arrived = RING_LOCK_ARRIVED
@@ -446,6 +451,22 @@ class SequenceEmitter:
         if tokens > RING_LOCK_MASK:
             raise ValueError(f"a tile replayed {serves} times needs {tokens} tokens per slot, past the "
                              f"{RING_LOCK_MASK} a 7-bit lock field holds")
+        shape = (width, serves)
+        if self._ring_shape.get(col) == shape:
+            # The layer before this one left the ring in exactly this shape, so there is nothing to write and
+            # nothing to reset. The cycles already wrap where they should, the descriptors already carry these
+            # counts, and a tile leaves both locks of every slot where it found them - the arrival hands out
+            # ``ROWS * serves`` and the serves take them all back. The channels are still running from the push
+            # that established this shape, and a channel that is not reset does not need re-pushing.
+            #
+            # Safe across a frame as well as within one: this map starts empty when the emitter is built, so
+            # the FIRST layer of the stream always emits the full sequence, and the stream is static and
+            # replayed per frame - which means every frame opens with a reset that clears whatever the previous
+            # frame left, and every later layer's predecessor is the same layer on every frame. Measured
+            # separately, a container whose shape never changes is byte-exact and survives twenty repeat
+            # dispatches with no reset at all.
+            return
+        self._ring_shape[col] = shape
         chains = list(self._ring_chains(slots))
         channels = list(self._ring_channels())
         # Reset every channel first, so the layer starts from a state that does not depend on the one before.
