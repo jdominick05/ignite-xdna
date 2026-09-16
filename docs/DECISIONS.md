@@ -1680,7 +1680,8 @@ cached reference heads rather than `bo_out`.
   7.929 ms mean over 60 witnessed live-camera frames with NPU boxes
   ([BENCHMARKS](BENCHMARKS.md#graph-engine-latency-from-192-to-79-ms-glass-to-glass-2026-09-14-desktop-2)).
   The margin is under 0.1 ms; the next levers are fewer fill tasks for multi-chunk rounds
-  and less over-read per activation packet.
+  and less over-read per activation packet. (Superseded 2026-09-16: both were sized and neither
+  is available; see the rejected entries below.)
 - **One engine program for every model (2026-09-14).** YOLOv8s and SESR M7 run on the same
   xclbin program as YOLOv8n; what a model needs goes into packet headers, the schedule and
   the host, not into a new core program. The residual op gained per-operand left shifts
@@ -1697,6 +1698,8 @@ cached reference heads rather than `bo_out`.
   through DDR (67.1 MB of activation fills and drains a frame), not weight traffic (36 fills,
   6.4 MB, about 0.26 ms DERIVED by `tools/engine_stream_report.py`)
   ([MODEL_ZOO_BENCHMARKS](MODEL_ZOO_BENCHMARKS.md#sesr-the-15-ms-dispatch-and-sram-resident-weights-are-not-met)).
+  (2026-09-16: a hand-written MemTile weight buffer that avoids the ObjectFIFO lock was later built for
+  YOLOv8n and YOLOv8s; it is byte-exact and slower, see the rejected entry below. SESR was not tried.)
 - **Host segments for what the engine does not compute (2026-09-15).** A graph region named by a
   node-name prefix (YOLO11's C2PSA block, `/model.10/`) runs on ONNX Runtime's CPU provider between two
   NPU dispatches over the same workspace, instead of keeping the whole model off the NPU. The region
@@ -1738,3 +1741,40 @@ cached reference heads rather than `bo_out`.
   `ExternalFunction` once per process and places `engine.o` only in the first design's work directory,
   so a second `compile_graph_container` call in the same process fails to link (`unable to find
   ...design.prj\engine.o`). The first container of the process is unaffected.
+- **Rejected: holding activations or weights in the MemTile to fetch fewer DDR bytes (2026-09-16, built and
+  measured).** The activation ring holds a fetched tile in the MemTile and serves it to several output groups; the
+  resident weight buffer fetches a layer's weight run once and replays it per round. Both are 66/66 byte-exact on
+  YOLOv8n and YOLOv8s, and both are slower: 3.40 and 3.63 ms on YOLOv8s. They stay as `compile_graph_container`
+  parameters (`activation_ring`, `weight_buffer`), off by default and not exposed by `ignite-compile`, and are
+  refused together with host regions, because their configuration writes carry no shim task and
+  `split_instruction_stream` counts WRITE ops as task pushes
+  ([BENCHMARKS](BENCHMARKS.md#memtile-residency-does-not-pay-on-the-graph-engine-and-the-yolov8s-gap-is-a-known-limitation-2026-09-16-desktop-2)).
+- **Rejected: routing activations around the MemTile (2026-09-16, measured, not built).** A MemTile ObjectFIFO
+  `forward` costs -0.00023 ms per MB in and +0.00053 ms per MB out against a direct shim-to-core path, which is not
+  worth packet-switched shim flows and a replacement for the output join. The cost model above needs no hop term.
+- **Rejected: trimming activation packets to the kernel's extent, and packing fill tasks fuller (2026-09-16,
+  sized offline).** The fixed-packet decision above stands for one more reason: the DMA transfer length is the
+  ObjectFIFO object size, so a tighter plane saves nothing unless every packet shrinks, and smaller packets cost
+  more in task issue than they save in transport. Multi-chunk fill tasks are already at their floor, because the
+  MemTile split fixes each object to one chunk's four core packets.
+- **Parked: compressing weight packets in the MemTile's hardware codec (2026-09-16, codec checked on Device 0).**
+  The codec works on this part and our weights round-trip through it byte-exact, but an all-zeros input stalls the
+  DMA with the receiving descriptor sized for the full payload, and the mechanism is unidentified.
+- **Not pursued: exchanging halo rows between neighbouring cores over the cascade (2026-09-16, design check).**
+  The cascade carries only what kernel code puts on it with `put_mcd` and `get_scd`, so this is a change to the one
+  engine program and the owner's decision; and flows within a column run north to south, so a core can take only
+  its top halo row that way, not its bottom one.
+- **Pitfall: a whole MemTile buffer descriptor written from the instruction stream needs the CDO's encoding, not
+  the MLIR's names (2026-09-16).** Read from `design.prj/cdo_main/main_aie_cdo_init.bin` against the addresses in
+  `input_with_addresses.mlir`: word 0 is the length in 32-bit words; word 1's low bits are an absolute address in
+  words, (0x80000 + the buffer's L1 address) / 4, because a MemTile DMA sees its own memory at 0x80000; word 7
+  names a MemTile lock at its id plus 64, while the lock value registers (`0xC0000 + 0x10 × id`) take the raw id;
+  and `npu_writebd` stores the acquire value un-negated where the hardware wants -N in seven bits. With a bare
+  offset and raw lock ids every check against the MLIR passed and the dispatch hung. Two neighbours of the same
+  trap: IRON's `Bd.next` defaults to the descriptor itself, so descriptors no `dma_start` chain reaches are dropped
+  from the build; and `Buffer(address=...)` on a 303,104 B MemTile buffer breaks the bank-aware allocator, so
+  `compile_graph_container` reads the assigned address back and refuses a mismatch instead of pinning it.
+- **The YOLOv8s gap to AMD's stack is a known limitation of this runtime (2026-09-16).** 17.240 and 17.265 ms
+  against 16.954 and 16.958 ms, lost inside the NPU stage, with every runtime-side lever above closed. Further
+  YOLOv8s latency work goes into model shape, not into the transport
+  ([BENCHMARKS](BENCHMARKS.md#known-limitations)).

@@ -7024,6 +7024,12 @@ establishes vendor parity — the oracle diff remains that gate — and neither 
   linearly with stream count, decoupled from measured throughput); see the
   [GOPS section](#two-cameras-does-independent-concurrency-work-where-batching-doesnt) above and
   [Roadmap](../RESEARCH.md#roadmap).
+- **YOLOv8s on the graph engine is slower than AMD's stack, and no runtime lever is left to close it.** 17.240
+  and 17.265 ms against 16.954 and 16.958 ms, lost inside the NPU stage. Holding activations or weights in the
+  MemTile, routing around the MemTile, trimming packets, packing fill tasks, hardware compression and cascade halo
+  exchange were each built, measured or sized, and none survived
+  ([MemTile residency does not pay](#memtile-residency-does-not-pay-on-the-graph-engine-and-the-yolov8s-gap-is-a-known-limitation-2026-09-16-desktop-2)).
+  The traffic that remains is cut by model shape, not by the runtime.
 - **No formal test suite.** Verification here is empirical (`compileall` + import checks
   as a syntax gate, then real pipeline runs read from `results/`) rather than unit tests
   — there's no fixture NPU to test against in CI.
@@ -7889,6 +7895,8 @@ The margin under 8 ms is under 0.1 ms. What is left in the frame (DERIVED from t
 split): ~1.9 ms of core compute, ~1.3 ms of instruction ops, ~3 ms of transport — most of
 it fill bytes that are fixed 6,400-byte packets with over-read — and ~0.7 ms of host work.
 The next levers are fewer fill tasks for multi-chunk rounds and less over-read per packet.
+(Superseded 2026-09-16: both were sized and neither is available; see
+[MemTile residency does not pay](#memtile-residency-does-not-pay-on-the-graph-engine-and-the-yolov8s-gap-is-a-known-limitation-2026-09-16-desktop-2).)
 
 ### Native int8 head decode with identical detections (2026-09-14, Desktop 2)
 
@@ -8273,3 +8281,111 @@ Ignition controls.
 **Not done:** a container from the AdaRound model (`yolov8n-pose_cut_xint8_adaround.onnx`, 34.32 OKS mAP@50-95 on
 AMD's stack); a native keypoint decode (decode and NMS take 0.29–0.32 ms, against 0.033 ms for YOLOv8n's native
 decode); energy per frame.
+
+## MemTile residency does not pay on the graph engine, and the YOLOv8s gap is a known limitation (2026-09-16, Desktop 2)
+
+AMD's stack runs YOLOv8s in 16.954 and 16.958 ms against the container's 17.240 and 17.265 ms, and the gap is
+inside the NPU stage ([MODEL_ZOO_BENCHMARKS](MODEL_ZOO_BENCHMARKS.md#against-amds-stack-2026-09-15)). This
+section records every runtime-side way of closing it that was sized or built on branch `activation-residency`.
+None survived, so the gap is now a [known limitation](#known-limitations) of this runtime. Evidence:
+`results/aie/weight_buffer_phoenix_20260916T1508Z.log` (the weight buffer's sitting),
+`results/aie/memtile_hop_phoenix_20260916T1523Z.log` and its `.json` (the hop probe), and the working in
+`results/aie/notes_memtile_activation_ring.md` and `results/aie/notes_yolov8s_gap.md`. The activation ring's
+latencies were recorded in its note at the time; no separate raw log was committed for them. Tools:
+`tools/memtile_hop_probe.py`, `tools/ring_shape_probe.py`. Both MemTile structures are parameters of
+`compile_graph_container` (`activation_ring`, `weight_buffer`), off by default, not exposed by `ignite-compile`,
+and refused together with host regions.
+
+| Lever | How far it got | Outcome |
+|---|---|---|
+| Activation ring: hold a fetched tile in the MemTile and serve it to several output groups | Built; 66/66 byte-exact on YOLOv8n and YOLOv8s | **3.40 ms slower** on YOLOv8s |
+| Resident weight buffer: fetch a layer's weight run into the MemTile once and replay it per round | Built; 66/66 byte-exact on both | **3.63 ms slower** on YOLOv8s |
+| Route activations around the MemTile | Hop measured in isolation | Nothing to gain: the hop costs under 0.001 ms per MB |
+| Trim activation packets to what the kernel reads | Sized offline | Unavailable: the transfer length is the object size |
+| Pack fill tasks fuller | Sized offline | Unavailable: multi-chunk fills are at their structural floor |
+| Compress weight packets in the MemTile's hardware codec | Codec checked on Device 0 | Parked: an all-zeros input stalls, mechanism unidentified |
+| Exchange halo rows between neighbouring cores over the cascade | Design check | Not built: needs an `engine.cc` change and reaches one halo row of two |
+
+**The activation ring** (MEASURED; one sitting, dispatch mean over 20, every container 66/66 byte-exact; recorded
+in `notes_memtile_activation_ring.md`):
+
+| Model | Flag-off | Ring | Ring costs |
+|---|---:|---:|---:|
+| YOLOv8n | 7.392 ms | 10.052 ms | +2.66 ms |
+| YOLOv8n, configuring a column only when the layer's shape changes | 7.392 ms | 9.758 ms | +2.37 ms |
+| YOLOv8s | 16.828 ms | 20.228 ms | +3.40 ms |
+
+The derived costing said YOLOv8s would win by 0.748 ms. The ring completed a full-model dispatch only once every
+layer reset its MemTile channels, wrote absolute lock values and re-pushed its descriptors (`055376a`); it is
+correct and finished, and `activation_ring` stays 0.
+
+**The resident weight buffer** (MEASURED, `weight_buffer_phoenix_20260916T1508Z.log`; one sitting, flag-off and
+buffer interleaved, 100 timed dispatches per run, every run 66/66 byte-exact):
+
+| Model | Flag-off | Buffer | Measured | Derived beforehand |
+|---|---|---|---|---|
+| YOLOv8n | 7.314, 7.331 ms | 8.492, 8.474 ms | 1.160 ms slower | 0.077 ms faster |
+| YOLOv8s | 16.752, 16.868 ms | 20.436, 20.443 ms | **3.630 ms slower** | 0.729 ms faster |
+
+The traffic it removes is real: 27,279,360 B of stride-0 weight replays per frame on YOLOv8s (19 of 66 layers)
+and 9,888,768 B on YOLOv8n (14 of 66), DERIVED from the scheduled patterns. That estimate supersedes an earlier
+2.006 ms for the same lever, which counted runs already concatenated across output groups as re-sends; the
+corrected figure is 1.018 ms on YOLOv8s. It did not convert into time. Its first containers hung on silicon
+because whole MemTile descriptors written from the instruction stream need the CDO's encoding, not the MLIR's
+names; that pitfall is recorded in
+[DECISIONS](DECISIONS.md#the-graph-engine-lowers-every-layer-onto-one-persistent-core-program-packets-are-fixed-size-and-the-sequencer-is-the-budget-2026-09-13).
+
+**A MemTile hop costs nothing per byte** (MEASURED, `memtile_hop_phoenix_20260916T1523Z.log`). One core, the
+engine's 6,400 B input and 3,200 B output objects, no compute, transfers issued as the engine issues them, and four
+routes that differ only in whether each direction passes through a MemTile ObjectFIFO `forward`; five volumes
+from 3.3 to 52.4 MB in, three interleaved rounds, 30 timed dispatches per point:
+
+| Route | ms per MB in | Intercept |
+|---|---:|---:|
+| Shim to core to shim | 0.14301 | 0.117 ms |
+| Through the MemTile on the way in | 0.14278 | 0.122 ms |
+| Through the MemTile on the way out | 0.14327 | 0.116 ms |
+| Through the MemTile both ways | 0.14280 | 0.127 ms |
+
+The hop costs -0.00023 ms per MB in and +0.00053 ms per MB out: zero within noise, and additive. So the ring and
+the buffer lost to their own protocols rather than to the MemTile, most likely because a fill has to land whole
+before its serve begins where the shim path is cut-through (not isolated). And removing the MemTile from the
+default activation and drain paths would recover under 0.15 ms on YOLOv8s even charging all 265.5 MB of them the
+larger figure. **Retracted:** the inference in `notes_yolov8s_gap.md`, recorded earlier the same day, that a MemTile
+hop costs about 0.05 ms per MB. It generalised from the two protocol losses to the hop itself, which had not been
+measured.
+
+**Packets and tasks cannot be trimmed** (DERIVED, `notes_yolov8s_gap.md`). Over-read has two measures, and they
+must not be quoted for each other:
+
+- Whole junk blocks: `res` packets are half junk and `k1up2` packets a fifth. They are 4,771,840 B on YOLOv8s (2.0 %
+  of activation traffic, 0.178 ms at 26.8 GB/s) and 2,140,160 B on YOLOv8n (2.6 %).
+- Slack inside a packet plane: the kernel's vector extent reads 7 × 22 of k3s1's 8 × 25 plane (23 %), 11 × 42 of
+  k3s2's 16 × 50 (42 %) and 9 × 24 of k5s1's 16 × 50 (73 %).
+
+Neither can be taken without shrinking every packet, because the DMA transfer length is the ObjectFIFO object
+size. The best object size over 541 candidates is 7,920 B, worth -0.265 ms on YOLOv8s and +0.143 ms on YOLOv8n;
+smaller objects cost more in task issue than they save in transport. Fill tasks are already at their floor:
+YOLOv8s's 37,136 activation packets ride in 5,857 tasks, 5,406 of them carrying exactly four, because the MemTile
+split fixes each object to one chunk's four core packets and moving a chunk across a round boundary changes the
+result.
+
+**Hardware compression is parked** (MEASURED on Device 0, `notes_yolov8s_gap.md`). mlir-aie's `memtile_both` test
+passes on this part (`matches=2944 mismatches=0`, compressed to 71.9 %, 1.391x on `arange`), and 16 chunks of
+YOLOv8n and YOLOv8s weights, eight from each, round-trip byte-exact through a MemTile decompressor. It is not
+usable: an all-zeros input stalls the DMA even with the receiving descriptor sized for the full payload, and the
+mechanism is unidentified. An earlier experiment on consumer sizing is VOID, as the note records.
+
+**Cascade halo exchange is not built** (design check against IRON's `cascadeflow.py`). The cascade carries only
+what kernel code puts on it with `put_mcd` and `get_scd`, so a halo exchange is a change to `engine.cc`, which the
+one-engine-program decision leaves to the owner. Flows within a column also run north to south only, so a core can
+take its top halo row from the core above but not its bottom one. The best case, k3s1 losing one row of seven, is
+about 8.7 MB or 0.32 ms of transport on YOLOv8s (DERIVED) before the packet resize it forces.
+
+**Superseded:** "The next levers are fewer fill tasks for multi-chunk rounds and less over-read per packet", in
+[Graph engine latency from 19.2 to 7.9 ms](#graph-engine-latency-from-192-to-79-ms-glass-to-glass-2026-09-14-desktop-2).
+Both were sized above and are unavailable.
+
+**Not done:** isolating which part of the weight buffer's protocol costs the time; the hop on the engine's split and
+join shapes (one MemTile channel to four cores) and across several columns at once; SESR with either structure.
+No further YOLOv8s latency work is planned in the runtime; the remaining traffic is cut by model shape.
