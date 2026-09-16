@@ -612,6 +612,42 @@ and from the 18.3 ms schedule that issued far more tasks; the 145 ns-per-op mode
 its count by 1,620 to begin with. That recovery needs no xclbin rebuild, and it belongs *before* the lock
 protocol rather than after - it decides whether a 6-slot ring is worth compiling for one model or for both.
 
+**But the recovery collides with the reverse edge, which is worth recording before anyone tries it.**
+`schedule_layer_ring` issues one drain per (tile, group) - `run_drain(ws, layer, g, [(y, x0)])`, a single quad -
+where `schedule_layer_coarse` gathers up to 16 vertically adjacent quads at one tile column and drains the run
+once. Merging them back is where the tasks are. A merged drain, though, spans several tiles, and the drain *is*
+the ring's barrier: `ring_barrier` awaits every outstanding `"o"` of a column before `_arm_ring` rewrites the
+descriptors they share. A drain covering tiles N..N+k cannot complete until tile N+k has been served, so tile
+N+1's re-arm would wait on work its own `S` has not issued yet - precisely the deadlock the schedule already
+refuses between passes of one group. The two things that make the ring work, the replay and the reverse edge,
+are in tension with the thing that would pay for it.
+
+Merging drains *within* a tile does not help either: a tile's groups differ by `group * OUT_BLOCKS` in the
+plane, and `run_drain` has already spent its outermost dimension on the quad repeat, so there is no dimension
+left to fold groups into and no fifth one to be had.
+
+**The other lever is descriptors rather than tasks, and it is a dead end - measured, not argued.** The output
+join's chain on MM2S 4 is eight descriptors because its fifo is depth 2; at depth 1 the join would hold 8 ids
+instead of 14, which lifts the window to 7. A 7-slot ring admits not one extra layer in either model: 33
+replayed on yolov8n and 31 on yolov8s, the same as at 6, the same bytes to the byte, and 8 more tasks for the
+trouble. Chunk counts run 1, 2, 3, 4, 5, 6, 8, 12, 16, so no layer has exactly 7 and the next one only arrives
+at 8. Nor is 8 reachable by rearranging channels: three chains of 8 is 24 descriptors, past the free space in
+either half under every assignment of the join's channels, depth 1 included.
+
+| model | ring 6 | ring 7 | ring 8 |
+|---|---|---|---|
+| yolov8n | +0.150 ms | +0.154 ms | -0.049 ms |
+| yolov8s | -1.852 ms | -1.856 ms | -3.191 ms |
+
+So the buildable window is 6, yolov8n's break-even at 8 is out of reach, and giving up the output path's
+double buffering would buy nothing at all.
+
+**Which leaves one resolution needing no new mechanism: the ring is already a per-container compile flag.**
+`activation_ring` is an argument to `compile_graph_container`, so a per-slot-lock design at 6 slots can be
+compiled for the models it helps and left off for those it does not - yolov8s gains its 1.85 ms, yolov8n keeps
+the per-group schedule, and nothing regresses. What that costs is the one-program rule: a ring build and a
+flag-off build are different xclbins, and whether the engine ships two is a decision above a session's.
+
 A hazard this narrows without closing, recorded so it is not rediscovered: `ensure` retires a channel once it
 holds `queue_depth` tasks, and retiring means awaiting. A tile whose column owns five or more groups pushes
 that many drains before its `S`, and such a drain cannot complete until that `S` runs. Over the schedules,
