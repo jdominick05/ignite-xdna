@@ -151,12 +151,21 @@ def _activation_ring(col, name, slots):
     ``aiex.npu.push_queue`` reach any tile with a DMA engine, and ignite-xdna regenerates ``insts.bin`` for
     every container, so neither needs a new xclbin.
 
-    The serve acquires no ring lock. One shared counter would overflow the 63 a lock register holds (C
-    arrivals x G serves reaches 256), and per-slot locks would need one BD per slot on each of the four serve
-    channels, past the MemTile's 48. Ordering comes from the instruction stream instead: ``arrived`` is a peek
-    lock the serve acquires and releases by the same count - net zero, so every replay sees the same tokens
-    rather than consuming them - which the runtime clears when it recycles the window, and a tile's fills wait
-    on the drain of the tile two back.
+    **A serve touches no lock at all**, and that is load-bearing rather than an economy. A serve that acquired
+    ``arrived`` by the window's whole count held it for the length of its transfer, and a transfer only ends
+    when its core has taken the bytes - so a core that ran ahead and filled the output join blocks, its serve
+    never releases, and the other three serve channels can never acquire. Measured on silicon: the first
+    replayed layer emitted exactly two objects from core 0, which is the join's depth, one from core 1 and none
+    from cores 2 and 3, then deadlocked. Acquiring a smaller count only narrows the window, because a
+    single-chunk layer leaves one token and one blocked serve still holds it.
+
+    Nothing on this tile can carry that ordering instead: a buffer descriptor has one acquire field and one
+    release field, so the arrival cannot hand a token to each of four per-core locks, and per-slot locks would
+    need one BD per slot on every serve channel, past the MemTile's 48. So the ordering moves off the tile
+    entirely. The instruction stream awaits this tile's fills - shim tasks, which do carry completion tokens -
+    before it pushes the serves, and awaits the previous tile's drain before it re-arms. The
+    ``arrived``/``space`` pair stays for the arrival alone, and the runtime restores both when it recycles the
+    window.
 
     Returns ``(handles, parts)``: one ``(buffer, cons lock, prod lock)`` per core, and the flows, locks and DMA
     programs to register on the Runtime.
@@ -183,12 +192,12 @@ def _activation_ring(col, name, slots):
                 acquires=[Acquire(space[w], 1)], releases=[Release(arrived[w], 1)],
                 iteration=BdIteration(size=window, stride=slot_bytes))
              for w in range(RING_WINDOWS)]
-    # A serve sends one core's 6,400-byte slice from every slot of the window. Its acquire and release counts
-    # are that slot count, written per layer and equal to each other.
+    # A serve sends one core's 6,400-byte slice from every slot of the window, and holds no lock while it does
+    # it - see above for why acquiring one deadlocks the four channels against each other. ``acquires`` and
+    # ``releases`` both default to empty, and the lowering emits a BD with no ``use_lock`` op on either side.
     serves = [DmaChannel(DMAChannelDir.MM2S, r,
                          [Bd(ring, offset=w * window * slot_bytes + r * A_BYTES, length=A_BYTES,
                              bd_id=_ring_bd(r, w),
-                             acquires=[Acquire(arrived[w], window)], releases=[Release(arrived[w], window)],
                              iteration=BdIteration(size=window, stride=slot_bytes))
                           for w in range(RING_WINDOWS)])
               for r in range(ROWS)]

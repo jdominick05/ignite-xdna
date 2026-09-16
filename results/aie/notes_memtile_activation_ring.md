@@ -406,9 +406,11 @@ cannot push until this one's output has reached DDR.
 An `R` item carries a flag saying whether that wait may happen, set for every tile of a replayed layer and for
 the first pass of a group otherwise. **It is not set between passes of one group**, and that gap is deliberate:
 a group has a single drain, issued with its first pass, which cannot complete until the last pass has been
-served, so waiting on it there would deadlock the dispatch outright. Passes therefore remain as unordered
-against each other as they were before - two layers of yolov8s (`/model.7/conv/Conv`, `/model.19/conv/Conv`,
-32 chunks each) and no layer of yolov8n. Each drain issued while a tile is armed carries its own completion
+served, so waiting on it there would deadlock the dispatch outright. Passes are therefore unordered against
+each other - two layers of yolov8s (`/model.7/conv/Conv`, `/model.19/conv/Conv`, 32 chunks each) and no layer
+of yolov8n - and once the serve descriptors were made lock-free, below, they lost their last coupling too,
+because a serve no longer waits on `arrived` for the pass before it. Neither layer has been dispatched with
+the ring. Each drain issued while a tile is armed carries its own completion
 token rather than sharing one with a later drain, so each can be awaited individually.
 
 **Offline, all green.** Per-layer exactness against `graph_reference.run_direct`, seeding the workspace and
