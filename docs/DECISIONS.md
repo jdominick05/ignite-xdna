@@ -1800,9 +1800,19 @@ cached reference heads rather than `bo_out`.
   defaults. That costs the attention core about 0.14 ms per frame against `performance` and brings YOLO11n to
   11.5-11.8 % CPU and 165 mJ per frame in `balanced`
   ([BENCHMARKS](BENCHMARKS.md#energy-per-frame-on-yolov8s-sesr-m7-yolo11n-and-yolov8n-pose-2026-09-16-desktop-2)).
-- **A power mode will switch the NPU's own power mode (decided 2026-09-16; not yet designed or built).** `xrt-smi
-  configure --pmode powersaver` would save `efficiency` 14 % energy per frame at 30 fps, for twice the G2G and nothing
-  at full speed, and it slows every NPU application on the machine. After that measurement the maintainer decided
-  that a power mode should switch it anyway, so the design has to confine the switch to capped frame rates, keep
-  other NPU applications in view, and restore the device even after a crash. Nothing switches it yet
+- **A power mode switches the NPU's own power mode (decided and built 2026-09-16).** `xrt-smi configure --pmode
+  powersaver` would save `efficiency` 14 % energy per frame at 30 fps, for twice the G2G and nothing at full speed, and
+  it slows every NPU application on the machine. After that measurement the maintainer decided that a power mode
+  should switch it anyway, so the design had to confine the switch to capped frame rates, keep other NPU applications
+  in view, and restore the device even after a crash
   ([BENCHMARKS](BENCHMARKS.md#the-npus-own-power-modes-buy-energy-only-at-a-cameras-rate-and-cost-ignition-its-latency-lead-2026-09-16-desktop-2)).
+  It was built as `pipelines/npu_power.py` (`e816bc5`): an `NpuPowerGovernor` lowers the mode only in `efficiency`,
+  only with a frame period, only when CPU time plus 2.19 times the dispatch fits 80 % of that period, only from
+  `default`, and only with no other process's hardware context. It restores `default` on a slow P95, on another
+  process's context (polled every 5 s) and on exit, and a lease file lets the next run put back a mode that a killed
+  run left lowered. The considered and rejected alternatives:
+  - **Switching in every mode, or flat out:** measured to save nothing flat out.
+  - **The NPU's `balanced` device mode:** not separated from `default` on energy.
+  - **Setting the mode through pyxrt:** it reads the mode but cannot set it or list other processes' contexts.
+  - **A longer poll:** the 5 s poll's cost did not separate from no poll
+    ([BENCHMARKS](BENCHMARKS.md#the-npu-power-mode-governor-less-energy-per-frame-at-30-fps-and-the-device-always-put-back-2026-09-16-desktop-2)).

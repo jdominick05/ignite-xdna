@@ -8745,3 +8745,81 @@ the sections that measured latency.)
 
 **Not done:** YOLO11n's whole-block container (`yolo11n.ignite`) in the energy sittings; any host but the 8700G; the
 YOLOv8n table above re-measured with the guard (its sittings' baselines read 34.3-35.5 W, the clean level).
+
+## The NPU power-mode governor: less energy per frame at 30 fps, and the device always put back (2026-09-16, Desktop 2)
+
+The maintainer decided that a power mode should switch the NPU's device-wide power mode
+([DECISIONS](DECISIONS.md)). `pipelines/npu_power.py` (`e816bc5`) is that switch, and Ignition's `live_ignition.py
+--npu-power` drives it (Ignition `0863738`). Evidence: `results/aie/npu_power_governor_silicon_phoenix_20260916T2217Z.log`
+(behaviour), `results/aie/energy_npu_power_governor_phoenix_20260916T2221Z.log` and
+`results/aie/energy_npu_power_watcher_phoenix_20260916T2240Z.log` (energy, each with `.json`).
+
+**Design, from the pmode sitting above.** `powersaver` pays only at a capped frame rate, stretches the dispatch 2.19
+times and is device-wide. So `NpuPowerGovernor` lowers the mode only when all of these hold:
+- the host mode is `efficiency`;
+- a frame period is known, from `--max-fps` or a `--fresh` webcam's measured rate;
+- the warm-up frames' CPU time plus 2.19 times their dispatch fits 80 % of the period;
+- the device reads `default`;
+- `xrt-smi examine -r aie-partitions` lists no other process's hardware context (each context row starts with its
+  PID).
+
+It restores `default` and stays there if G2G's P95 over the next 100 frames exceeds 90 % of the period, when a watcher
+(every 5 s) sees another process's context, and on exit. Before switching it writes a lease with its PID and creation
+time; any later governor, or `ignition devices --restore-npu-power`, restores a mode that a dead process left lowered,
+if the device still reads it. Offline: `tests/test_npu_power_offline.py`, 16 tests against a fake `xrt-smi` in the
+formats captured on this machine.
+
+**Behaviour on the NPU** (Ignition worktree on this worktree's runtime, `bus.jpg`, 50 warm-up frames, device mode and
+contexts read back mid-run and after exit; 0 failures):
+
+| Case | Decision | Device mid-run, after exit | G2G mean / P95 |
+|---|---|---|---|
+| YOLOv8n `efficiency` @30 | lowered at frame 50, predicted 18.3 ms | Powersaver, Default | 18.181 / 18.903 ms |
+| YOLO11n (attention core) `efficiency` @30 | lowered, predicted 22.8 ms | Powersaver, Default | 22.471 / 23.357 ms |
+| YOLOv8s `efficiency` @30 | kept: predicted 39.0 ms does not fit 26.7 ms | Default, Default | 19.070 / 19.463 ms |
+| YOLOv8n `balanced` @30 | kept: the mode leaves the NPU alone | Default, Default | 8.720 / 9.312 ms |
+| YOLOv8n `efficiency` unpaced | kept: frames not paced | Default, Default | 9.175 / 9.573 ms |
+| YOLOv8n `efficiency` @30 `--npu-power off` | kept: off | Default, Default | 9.564 / 9.993 ms |
+| Ctrl+Break after lowering | restored on the shutdown path | Powersaver, Default | 18.127 / 18.774 ms (182 frames) |
+| A second NPU process started mid-run | watcher restored: "another process opened the NPU (PID 4720)" | Powersaver, then Default within the 5 s check | 17.694 / 36.816 ms (shared NPU) |
+| Hard kill after lowering | none possible | Powersaver with the lease; `ignition devices --restore-npu-power` restored Default and removed it | — |
+
+**Energy** (`tools/energy_sitting.py`, 30 fps, 1,200 frames per run, every arm's setup reading `Default` and no
+contexts; against the median idle, 35.110 W over 14 baselines and 34.766 W over 8, none shifted), mJ per frame, runs
+1 / 2:
+
+| Sitting | Model | Arm | G2G mean | mJ per frame |
+|---|---|---|---:|---:|
+| 22:21 | YOLOv8n | AMD's stack | 10.850 / 10.804 ms | 215.7 / 183.4 |
+| 22:21 | YOLOv8n | `efficiency`, `--npu-power off` | 9.605 / 9.551 ms | 166.2 / 177.1 |
+| 22:21 | YOLOv8n | `efficiency`, `--npu-power auto` | 18.194 / 18.140 ms | 141.6 / 132.4 |
+| 22:21 | YOLOv8n | `auto`, watcher off | 18.115 / 18.133 ms | 124.3 / 125.6 |
+| 22:21 | YOLO11n | AMD's stack (26.80 / 26.85 fps) | 37.294 / 37.212 ms | 1,358.0 / 1,356.9 |
+| 22:21 | YOLO11n | `efficiency`, `--npu-power off` | 12.282 / 12.267 ms | 200.1 / 213.0 |
+| 22:21 | YOLO11n | `efficiency`, `--npu-power auto` | 22.494 / 22.466 ms | **154.0 / 148.2** |
+| 22:40 | YOLOv8n | `auto`, watcher every 5 s | 18.217 / 18.138 ms | 122.3 / 121.5 |
+| 22:40 | YOLOv8n | `auto`, watcher every 30 s | 18.143 / 18.186 ms | 127.1 / 131.8 |
+| 22:40 | YOLOv8n | `auto`, watcher off | 18.190 / 18.159 ms | 120.4 / 125.9 |
+| 22:40 | YOLOv8n | `efficiency`, `--npu-power off` | 9.580 / 9.564 ms | 167.8 / 170.9 |
+
+- **The switch saved YOLOv8n 20 % in one sitting and 28 % in the other, and YOLO11n 27 %, at 30 fps.** YOLOv8n's means
+  were 137.0 against 171.6 (22:21) and 121.9 against 169.4 (22:40), YOLO11n's 151.1 against 206.6. Every `auto` run read below both `off` runs of its sitting,
+  against the median idle and against its own idle (own idle, YOLOv8n in the second sitting: 109.4-130.1 against
+  171.3 and 176.4). G2G doubles, as the 2.19 dispatch factor predicts, and P95 stayed inside the period, so the revert
+  check never fired.
+- **The watcher costs no measurable energy.** In the first sitting the no-watcher arm read 124.9 against 137.0 mJ on
+  the means, which is plausible for an `xrt-smi` process every 5 s. The second sitting, built to price it, did not
+  reproduce that: 5 s, 30 s and no watcher read 121.9, 129.4 and 123.2 mJ, not separated, so the interval stays 5 s,
+  the shortest wait before another application gets its NPU speed back. The first sitting's `auto` arms with the
+  watcher also read about 15 mJ above the second's, while its `off` arms matched (171.6 against 169.4 mJ). So its gap
+  sits in the level of those arms rather than in the watcher alone; that is unexplained. Compare arms only within a
+  sitting.
+- **Against AMD's stack at 30 fps** (its device in `default`): YOLOv8n 137.0 against 199.6 mJ, 31 % less; YOLO11n 151.1
+  against 1,357.4, 9.0 times less. In the pmode sitting AMD's stack also saved 19 % in `powersaver`, so the YOLOv8n
+  margin at equal device mode is the 9 % measured there, not 31 %.
+- **With a second application on the NPU** both slowed: the governed run's P95 read 36.816 ms and the second process's
+  P95 18.163 ms while they shared it, and the watcher put `default` back within its interval.
+
+**Not done:** a webcam with `--fresh` (the camera-rate period is untested on silicon); other models' energy with the
+switch; the NPU's `balanced` device mode as an intermediate step (YOLOv8s at 30 fps would need it); any host but the
+8700G.
