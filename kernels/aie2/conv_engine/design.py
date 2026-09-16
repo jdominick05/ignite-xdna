@@ -112,33 +112,79 @@ def ddr_extents(workspace_bytes, packet_bytes):
             max(WP_BYTES, -(-int(packet_bytes) // mib) * mib))
 
 
+# The ring is split into windows, so the next tile's fetch lands while this tile's groups are still being
+# served. Its buffer descriptors are placeholders the instruction stream rewrites per layer, so their ids are
+# pinned and the lowering assigns the output join's BDs around them.
+RING_WINDOWS = 2
+RING_BD_FILL = 0                              # one arrival BD per window, on the (even) S2MM channel 0
+RING_BD_SERVE = RING_BD_FILL + RING_WINDOWS   # then one serve BD per core per window
+RING_BD_ODD = 24                              # a MemTile's odd channels may only reach ids 24 and above
+
+
+def _ring_bd(channel, window):
+    """The pinned id of a serve BD, inside the half of the MemTile's 48 that its channel can reach.
+
+    ``AIETargetModel::isBdChannelAccessible`` splits a MemTile's buffer descriptors by channel parity: an even
+    channel may use only ids below 24, an odd channel only 24 and above. No other tile type is split. Ids are a
+    per-tile resource, so the two halves are packed independently, after the arrival's.
+    """
+    base = RING_BD_ODD if channel % 2 else RING_BD_SERVE
+    return base + (channel // 2) * RING_WINDOWS + window
+
+
 def _activation_ring(col, name, slots):
     """One column's activations through a hand-written MemTile ring instead of a split ObjectFifo.
 
-    The shim writes one 25,600-byte object (four per-core packets) into slot k; each core's MM2S channel walks
-    every slot with a single BD, so one shim fetch can serve as many output groups as the layer arms. The shim
-    allocation keeps the fifo's name, so the runtime sequence's tasks bind unchanged.
+    The shim writes a tile's chunk packets into one window of the ring; each core's MM2S channel walks that
+    window with a single BD, so one shim fetch serves every output group of the tile instead of one. The shim
+    allocation keeps the fifo's name, so the runtime sequence's fill tasks bind unchanged.
+
+    How many slots a window holds is the layer's chunk count, and how many times it is replayed the layer's
+    output-group count, so both are written per layer from the instruction stream: ``aiex.npu.writebd`` and
+    ``aiex.npu.push_queue`` reach any tile with a DMA engine, and ignite-xdna regenerates ``insts.bin`` for
+    every container, so neither needs a new xclbin.
+
+    The serve acquires no ring lock. One shared counter would overflow the 63 a lock register holds (C
+    arrivals x G serves reaches 256), and per-slot locks would need one BD per slot on each of the four serve
+    channels, past the MemTile's 48. Ordering comes from the instruction stream instead: ``arrived`` is a peek
+    lock the serve acquires and releases by the same count - net zero, so every replay sees the same tokens
+    rather than consuming them - which the runtime clears when it recycles the window, and a tile's fills wait
+    on the drain of the tile two back.
 
     Returns ``(handles, parts)``: one ``(buffer, cons lock, prod lock)`` per core, and the flows, locks and DMA
     programs to register on the Runtime.
     """
+    if slots % RING_WINDOWS:
+        raise ValueError(f"a {slots}-slot ring does not divide into {RING_WINDOWS} windows")
     shim = Tile(col, 0, tile_type=AIETileType.ShimNOCTile)
     mem = Tile(col, 1, tile_type=AIETileType.MemTile)
     slot_bytes = ROWS * A_BYTES
+    window = slots // RING_WINDOWS
     ring_ty = np.ndarray[(slots * slot_bytes,), np.dtype[np.uint8]]
     ring = Buffer(ring_ty, name=f"{name}_ring", tile=mem)
-    prod = Lock(mem, init=slots, name=f"{name}_ring_prod")
-    cons = Lock(mem, init=0, name=f"{name}_ring_cons")
-    fills = [Bd(ring, offset=k * slot_bytes, length=slot_bytes, acquires=[Acquire(prod, 1)],
-                releases=[Release(cons, 1)], next=(k + 1) % slots)
-             for k in range(slots)]
+    # One pair of locks per window, so a tile landing in one window cannot disturb the tile being served from
+    # the other. A buffer descriptor that touches a lock at all must both acquire and release one, so the
+    # arrival takes a slot from ``space`` and hands it to ``arrived`` rather than releasing alone; the runtime
+    # restores both when it recycles the window, which is the re-arm the aie2p DMA model wants regardless.
+    arrived = [Lock(mem, init=0, name=f"{name}_arrived{w}") for w in range(RING_WINDOWS)]
+    space = [Lock(mem, init=window, name=f"{name}_space{w}") for w in range(RING_WINDOWS)]
+    # The arrival walks its window's slots, one token per slot; the layer's chunk count replaces the iteration
+    # size at runtime.
+    fills = [Bd(ring, offset=w * window * slot_bytes, length=slot_bytes, bd_id=RING_BD_FILL + w,
+                acquires=[Acquire(space[w], 1)], releases=[Release(arrived[w], 1)],
+                iteration=BdIteration(size=window, stride=slot_bytes))
+             for w in range(RING_WINDOWS)]
+    # A serve sends one core's 6,400-byte slice from every slot of the window. Its acquire and release counts
+    # are that slot count, written per layer and equal to each other.
     serves = [DmaChannel(DMAChannelDir.MM2S, r,
-                         [Bd(ring, offset=r * A_BYTES, length=A_BYTES, acquires=[Acquire(cons, 1)],
-                             releases=[Release(prod, 1)],
-                             iteration=BdIteration(size=slots, stride=slot_bytes))])
+                         [Bd(ring, offset=w * window * slot_bytes + r * A_BYTES, length=A_BYTES,
+                             bd_id=_ring_bd(r, w),
+                             acquires=[Acquire(arrived[w], window)], releases=[Release(arrived[w], window)],
+                             iteration=BdIteration(size=window, stride=slot_bytes))
+                          for w in range(RING_WINDOWS)])
               for r in range(ROWS)]
     flows = [Flow(shim, mem, src_channel=0, dst_channel=0, shim_symbol=name)]
-    locks = [prod, cons]
+    locks = arrived + space
     tile_dmas = [TileDma(mem, [DmaChannel(DMAChannelDir.S2MM, 0, fills), *serves])]
     handles = []
     for r in range(ROWS):
