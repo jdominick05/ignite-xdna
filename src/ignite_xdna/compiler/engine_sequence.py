@@ -222,8 +222,13 @@ RING_BD_NEXT_WORD = 0x04
 RING_BD_ITERATION_WORD = 0x18
 RING_BD_LOCK_WORD = 0x1C
 RING_USE_NEXT_BD = 1 << 19
+# Two descriptor fields are consumed by running it: Valid_BD is cleared when a task completes, and
+# Iteration_Current advances as the BD executes. Both must be restored before the descriptor is pushed again.
+RING_VALID_BD = 1 << 31
 RING_ITERATION_SHIFT = 17
 RING_ITERATION_MASK = 0x3F << RING_ITERATION_SHIFT
+RING_ITERATION_CURRENT_SHIFT = 23
+RING_ITERATION_CURRENT_MASK = 0x3F << RING_ITERATION_CURRENT_SHIFT
 RING_LOCK_ACQ_SHIFT = 8
 RING_LOCK_REL_SHIFT = 24
 RING_LOCK_MASK = 0x7F
@@ -346,7 +351,7 @@ class SequenceEmitter:
         for r in range(self._ring_rows):
             yield self._ring_serve(r, 0)
 
-    def _arm_ring(self, col: int, slots: int, armed: Dict[int, int], reset_done: set) -> None:
+    def _arm_ring(self, col: int, slots: int, reset_done: set) -> None:
         """Point one column's ring descriptors at a tile of ``slots`` chunks, and restart its channels.
 
         Five descriptors: the arrival on S2MM 0, and one serve per core on MM2S 0..3. Three things vary per
@@ -371,24 +376,31 @@ class SequenceEmitter:
                                 column=col, row=MEMTILE_ROW)
                 self._maskwrite(ctrl, 0, MEMTILE_CHANNEL_RESET, column=col, row=MEMTILE_ROW)
             reset_done.add(col)
-        if armed.get(col) != slots:
-            wrap = (slots - 1) << RING_ITERATION_SHIFT
-            counts = ((-slots & RING_LOCK_MASK) << RING_LOCK_ACQ_SHIFT) | \
-                     ((slots & RING_LOCK_MASK) << RING_LOCK_REL_SHIFT)
-            for bd_id in self._ring_descriptors():
-                bd = self._ring_bd_base + RING_BD_STRIDE * bd_id
-                # Clear the compiled self-link. Bit 19 sits above the buffer address in the same word, so a
-                # masked write leaves the address alone.
-                self._maskwrite(bd + RING_BD_NEXT_WORD, 0, RING_USE_NEXT_BD, column=col, row=MEMTILE_ROW)
-                self._maskwrite(bd + RING_BD_ITERATION_WORD, wrap, RING_ITERATION_MASK,
-                                column=col, row=MEMTILE_ROW)
-            # The arrival takes one slot from `space` and hands one to `arrived` per execution whatever the
-            # tile holds, so only how far it walks changes; a serve's counts are the whole tile.
-            for r in range(self._ring_rows):
-                bd = self._ring_bd_base + RING_BD_STRIDE * self._ring_serve(r, 0)
-                self._maskwrite(bd + RING_BD_LOCK_WORD, counts, RING_LOCK_VALUE_MASK,
-                                column=col, row=MEMTILE_ROW)
-            armed[col] = slots
+        # Every tile, not only when the chunk count changes. Running a descriptor consumes it: the hardware
+        # clears ``Valid_BD`` when its task completes and advances ``Iteration_Current`` as it executes, so a
+        # descriptor left as the previous tile finished with it is not one the channel will run again. This is
+        # safe to do per tile only because the previous tile's serves were awaited, so nothing is in flight.
+        wrap = (slots - 1) << RING_ITERATION_SHIFT
+        counts = ((-slots & RING_LOCK_MASK) << RING_LOCK_ACQ_SHIFT) | \
+                 ((slots & RING_LOCK_MASK) << RING_LOCK_REL_SHIFT)
+        for bd_id in self._ring_descriptors():
+            bd = self._ring_bd_base + RING_BD_STRIDE * bd_id
+            # Clear the compiled self-link. Bit 19 sits above the buffer address in the same word, so a
+            # masked write leaves the address alone.
+            self._maskwrite(bd + RING_BD_NEXT_WORD, 0, RING_USE_NEXT_BD, column=col, row=MEMTILE_ROW)
+            # The wrap this tile needs, and Iteration_Current back to zero so the first execution reads the
+            # first slot rather than wherever the last tile left the counter.
+            self._maskwrite(bd + RING_BD_ITERATION_WORD, wrap,
+                            RING_ITERATION_MASK | RING_ITERATION_CURRENT_MASK,
+                            column=col, row=MEMTILE_ROW)
+            self._maskwrite(bd + RING_BD_LOCK_WORD, RING_VALID_BD, RING_VALID_BD,
+                            column=col, row=MEMTILE_ROW)
+        # The arrival takes one slot from `space` and hands one to `arrived` per execution whatever the
+        # tile holds, so only how far it walks changes; a serve's counts are the whole tile.
+        for r in range(self._ring_rows):
+            bd = self._ring_bd_base + RING_BD_STRIDE * self._ring_serve(r, 0)
+            self._maskwrite(bd + RING_BD_LOCK_WORD, counts, RING_LOCK_VALUE_MASK,
+                            column=col, row=MEMTILE_ROW)
         # A replay acquires and releases `arrived` by the same count, so the ring is restored here rather than
         # drained by being served: `space` back to a full tile, `arrived` back to empty.
         self._write32(self._ring_lock_reg(self._ring_arrived), 0, column=col, row=MEMTILE_ROW)
@@ -509,17 +521,11 @@ class SequenceEmitter:
                         e[2] -= 1
                         break
 
-        # Ring state per column: the tile awaiting its replay, the chunk count the column's descriptors
-        # currently carry, and whether the column's channels have been reset out of the endless chain the
-        # configuration CDO started them on.
-        #
-        # All three live as long as one call, and this is called once per layer, so a column's descriptors are
-        # rewritten at every layer boundary - immediately after the drain that ends the previous call, when
-        # nothing of that layer is outstanding. That is what makes rewriting the five shared descriptors safe
-        # with no barrier of its own. Within a layer ``armed`` suppresses the rewrite entirely, unless two of
-        # the layer's passes differ in size, which the guard below refuses.
+        # Ring state per column: the tile awaiting its replay, and whether the column's channels have been
+        # reset out of the endless chain the configuration CDO started them on. Both live as long as one
+        # call, and this is called once per layer, so every layer resets its columns once and then re-arms
+        # the descriptors per tile.
         serving: Dict[int, int] = {}
-        armed: Dict[int, int] = {}
         reset_done: set = set()
 
         def issue(c: int, item: tuple) -> None:
@@ -537,15 +543,7 @@ class SequenceEmitter:
             elif item[0] == "o":
                 push(c, "o", item[1], hold=item[2] if len(item) > 2 else 0)
             elif item[0] == "R":      # arm this column's ring for a tile, before its fills are issued
-                if armed.get(c) not in (None, item[1]):
-                    # Rewriting the five shared descriptors here would edit them under a task still reading
-                    # them, and nothing can await that task: a completion token is attached only to every
-                    # `retire_batch`-th task of a channel, so a channel's newest often carries none. Only a
-                    # layer whose passes differ in size reaches this, which no layer of either model does; an
-                    # error is better than the silent corruption a best-effort retire would leave.
-                    raise RuntimeError(f"ring: column {c} reshaped mid-layer, "
-                                       f"{armed[c]} chunks to {item[1]}")
-                self._arm_ring(c, item[1], armed, reset_done)
+                self._arm_ring(c, item[1], reset_done)
                 serving[c] = item[1]
             elif item[0] == "S":      # replay it, once the fills are in flight
                 self._serve_ring(c, serving.pop(c), item[1])
