@@ -1167,8 +1167,33 @@ The skip rate is low because a layer's `(width, serves)` genuinely changes most 
 shape are short. Against flag-off's 7.392 ms the ring is still **+2.37 ms**, so the lever is real, cheap and
 nowhere near enough; it recovers about a ninth of the deficit.
 
-The one lever still unpulled is drain merging, derived at 0.940 ms on yolov8n and 0.696 on yolov8s and
-unblocked once the drain barrier went. Even granting it in full, the ring stays behind on both models.
+### The last lever measured: drain merging is not available to the ring at all
+
+Drain merging was the one lever left, derived at 0.940 ms on yolov8n and 0.696 on yolov8s and believed
+unblocked once the drain barrier went. Counted over the real scheduled programs rather than derived:
+
+| schedule | drains | dimensions as emitted | 3-D after folding | consecutive pairs that can fuse |
+|---|---|---|---|---|
+| yolov8n, ring 6 | 1,415 | all 4-D | 50 | **12** (0.007 ms) |
+| yolov8n, flag-off | 523 | all 4-D | 50 | 12 |
+| yolov8s, ring 6 | 2,173 | all 4-D | 91 | **52** (0.030 ms) |
+| yolov8s, flag-off | 897 | all 4-D | 91 | 52 |
+
+`o_pattern` is already four-dimensional - `(4, OUT_BLOCKS, TILE_R, TILE_C*8)` - and `run_drain` *overwrites* its
+outermost with the quad repeat instead of adding a dimension. `merge_runs` fuses only patterns of three
+dimensions or fewer and `DmaPattern` caps at four, so about 96% of ring drains cannot fuse in any window. The
+identical counts under flag-off show the check is sound: that schedule's merging is already baked in by the
+time the items exist, and the same dozen leftovers remain.
+
+**And the extra drains were never a switched-off pass - they are the loop order.** The coarse schedule drains a
+run of up to sixteen vertically adjacent quads for ONE group in one task precisely because it loops
+group-outer. The ring loops tile-outer so it can fetch a tile once and replay it across groups, and then a
+drain covers one quad and one group. Recovering the runs means restoring group-outer order, which is exactly
+what the ring gives up in order to exist. **The ring's saving and the coarse schedule's drain runs are the same
+degree of freedom spent two ways**, and the costing that put this lever at 0.940 / 0.696 ms counted it twice.
+
+Measured, it is worth 0.007 ms and 0.030 ms. There is nothing further to try: the ring stays **+2.37 ms** on
+yolov8n and **+3.40 ms** on yolov8s, and the design is closed.
 
 The eight-layer container is the stronger correctness result: it changes the pass width *and* the lock values,
 so both kinds of reconfiguration now survive. It costs stream: `insts.bin` grows 138,640 -> 143,856 B at two layers and
