@@ -24,7 +24,15 @@ Arms come from a JSON file, a list in run order::
 
     [{"label": "amd yolov8n #1", "cwd": "...", "env": {"VAR": "value"}, "cmd": ["python.exe", "script.py", "..."]}]
 
-Interleave the stacks in that list (AMD, Ignition, AMD, Ignition) so drift lands on both. The log and JSON replace the
+An arm may also carry ``"setup": [[argv], ...]``, commands run before its idle baseline with their output logged (a
+device setting such as ``xrt-smi configure --pmode``, then a report that evidences it); a failing setup command stops
+the sitting. The file may instead be ``{"arms": [...], "finally": [[argv], ...]}``, whose ``finally`` commands run
+when the sitting ends, however it ends, to put such a setting back.
+
+Interleave the stacks in that list (AMD, Ignition, AMD, Ignition) so drift lands on both. An idle baseline more than
+``--idle-max-shift-w`` from the median of the sitting's earlier ones is flagged: measured, a load that showed no CPU
+held idle about 5.5 W high for an hour and then vanished, which a disturbed-baseline check cannot see and which
+makes the median-idle column wrong for every arm on the other side of the step (each arm's own idle stays valid). The log and JSON replace the
 user profile directory with ``<home>``, and any ``--redact PATH=PLACEHOLDER`` path (a scratch or checkout directory)
 with its placeholder, in every string including the arms' recorded environment.
 
@@ -159,6 +167,22 @@ def idle_baseline(seconds: int, tmp: Path, log: Log):
     return statistics.fmean(mw), statistics.pstdev(mw), len(mw), cpu
 
 
+def run_commands(cmds, log: Log, what: str, cwd=None, env=None, stop_on_error: bool = True):
+    """Run each argv in ``cmds`` in order, logging the command and its non-blank output lines."""
+    for cmd in cmds:
+        log(f"  {what:<9} $ {' '.join(cmd)}")
+        proc = subprocess.run(cmd, cwd=cwd, env=env, capture_output=True, text=True, encoding="utf-8",
+                              errors="replace")
+        for line in (proc.stdout + proc.stderr).splitlines():
+            if line.strip() and set(line.strip()) != {"-"}:
+                log(f"    {line.rstrip()}")
+        if proc.returncode != 0:
+            msg = f"{what} command exited {proc.returncode}: {' '.join(cmd)}"
+            if stop_on_error:
+                raise SystemExit(msg + "; stopping the sitting")
+            log(f"  {msg}")
+
+
 def run_arm(arm: dict, skip_lines: int, tmp: Path, log: Log):
     env = dict(os.environ)
     env.update(arm.get("env", {}))
@@ -213,6 +237,8 @@ def main():
     ap.add_argument("--settle-s", type=float, default=5.0, help="pause after each arm before the next idle baseline")
     ap.add_argument("--idle-max-cpu", type=float, default=12.0, help="retake an idle baseline above this CPU %%")
     ap.add_argument("--idle-max-stdev-w", type=float, default=2.5, help="retake an idle baseline noisier than this")
+    ap.add_argument("--idle-max-shift-w", type=float, default=2.0,
+                    help="flag an idle baseline this far from the median of the sitting's earlier ones")
     ap.add_argument("--json", required=True)
     ap.add_argument("--log", default=None)
     ap.add_argument("--redact", action="append", default=[], metavar="PATH=PLACEHOLDER",
@@ -224,7 +250,8 @@ def main():
         REDACTIONS.append((path, placeholder))
     REDACTIONS.sort(key=lambda p: len(p[0]), reverse=True)
 
-    arms = json.loads(Path(args.arms).read_text(encoding="utf-8"))
+    spec = json.loads(Path(args.arms).read_text(encoding="utf-8"))
+    arms, final_cmds = (spec["arms"], spec.get("finally", [])) if isinstance(spec, dict) else (spec, [])
     log = Log(args.log)
     tmp = Path(tempfile.mkdtemp(prefix="energy_sitting_"))
     started = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
@@ -232,25 +259,40 @@ def main():
     log(f"Package power: typeperf '{PKG}', 1 s samples, milliwatts. Idle {args.idle_s} s before each arm; window "
         f"from progress line {args.skip_lines} to the last.")
     results = []
-    for arm in arms:
-        log(f"== {time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())} [{arm['label']}]")
-        idle_mw, idle_sd, idle_n, idle_cpu, suspect = idle_baseline_checked(
-            args.idle_s, tmp, log, args.idle_max_cpu, args.idle_max_stdev_w)
-        r = run_arm(arm, args.skip_lines, tmp, log)
-        r.update(idle_mw_mean=idle_mw, idle_mw_stdev=idle_sd, idle_samples=idle_n, idle_cpu_percent=idle_cpu,
-                 idle_suspect=suspect, env=arm.get("env", {}))
-        r["delta_w"] = (r["package_mw_mean"] - idle_mw) / 1000.0
-        r["mj_per_frame"] = 1000.0 * r["delta_w"] / r["window_fps"]
-        log(f"  window    {r['window_frames']} frames in {r['window_s']:.1f} s = {r['window_fps']:.2f} fps, "
-            f"{r['power_samples']} power samples, CPU {r['cpu_percent_mean']:.1f} %")
-        log(f"  energy    package {r['package_mw_mean'] / 1000:.3f} W - idle {idle_mw / 1000:.3f} W = "
-            f"+{r['delta_w']:.3f} W -> {r['mj_per_frame']:.2f} mJ per frame")
-        results.append(r)
-        time.sleep(args.settle_s)
+    try:
+        for arm in arms:
+            log(f"== {time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())} [{arm['label']}]")
+            if arm.get("setup"):
+                run_commands(arm["setup"], log, "setup")
+            idle_mw, idle_sd, idle_n, idle_cpu, suspect = idle_baseline_checked(
+                args.idle_s, tmp, log, args.idle_max_cpu, args.idle_max_stdev_w)
+            earlier = [r["idle_mw_mean"] for r in results if not r["idle_suspect"]]
+            shifted = len(earlier) >= 3 and abs(idle_mw - statistics.median(earlier)) > args.idle_max_shift_w * 1000
+            if shifted:
+                log(f"  idle      shifted {(idle_mw - statistics.median(earlier)) / 1000:+.3f} W from the median of "
+                    f"the {len(earlier)} earlier baselines; read this arm against its own idle")
+            r = run_arm(arm, args.skip_lines, tmp, log)
+            r.update(idle_mw_mean=idle_mw, idle_mw_stdev=idle_sd, idle_samples=idle_n, idle_cpu_percent=idle_cpu,
+                     idle_suspect=suspect, idle_shifted=shifted, env=arm.get("env", {}), setup=arm.get("setup", []))
+            r["delta_w"] = (r["package_mw_mean"] - idle_mw) / 1000.0
+            r["mj_per_frame"] = 1000.0 * r["delta_w"] / r["window_fps"]
+            log(f"  window    {r['window_frames']} frames in {r['window_s']:.1f} s = {r['window_fps']:.2f} fps, "
+                f"{r['power_samples']} power samples, CPU {r['cpu_percent_mean']:.1f} %")
+            log(f"  energy    package {r['package_mw_mean'] / 1000:.3f} W - idle {idle_mw / 1000:.3f} W = "
+                f"+{r['delta_w']:.3f} W -> {r['mj_per_frame']:.2f} mJ per frame")
+            results.append(r)
+            time.sleep(args.settle_s)
+    finally:
+        if final_cmds:
+            run_commands(final_cmds, log, "finally", stop_on_error=False)
 
     # The sitting's median idle, from the undisturbed baselines: a second column that one bad baseline cannot move.
     clean = [r["idle_mw_mean"] for r in results if not r["idle_suspect"]] or [r["idle_mw_mean"] for r in results]
     median_idle = statistics.median(clean)
+    if max(clean) - min(clean) > args.idle_max_shift_w * 1000:
+        log(f"Idle baselines span {min(clean) / 1000:.3f}-{max(clean) / 1000:.3f} W, more than "
+            f"{args.idle_max_shift_w} W: the median-idle column does not hold across that; read arms against their own "
+            f"idle")
     for r in results:
         r["delta_w_vs_median_idle"] = (r["package_mw_mean"] - median_idle) / 1000.0
         r["mj_per_frame_vs_median_idle"] = 1000.0 * r["delta_w_vs_median_idle"] / r["window_fps"]
@@ -258,13 +300,13 @@ def main():
     log(f"Median idle over {len(clean)} undisturbed baselines: {median_idle / 1000:.3f} W")
     log(f"{'arm':<40} {'fps':>8} {'CPU %':>6} {'+W own idle':>12} {'mJ/frame':>9} {'mJ vs median idle':>18}")
     for r in results:
-        flag = "  idle disturbed" if r["idle_suspect"] else ""
+        flag = ("  idle disturbed" if r["idle_suspect"] else "") + ("  idle shifted" if r["idle_shifted"] else "")
         log(f"{r['label']:<40} {r['window_fps']:>8.2f} {r['cpu_percent_mean']:>6.1f} {r['delta_w']:>12.3f} "
             f"{r['mj_per_frame']:>9.2f} {r['mj_per_frame_vs_median_idle']:>18.2f}{flag}")
     Path(args.json).write_text(json.dumps(scrub_tree({
         "host": socket.gethostname(), "started_utc": started,
         "finished_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "counter": PKG,
-        "idle_s": args.idle_s, "skip_lines": args.skip_lines, "median_idle_mw": median_idle,
+        "idle_s": args.idle_s, "skip_lines": args.skip_lines, "median_idle_mw": median_idle, "finally": final_cmds,
         "arms": [dict(r, command=" ".join(a["cmd"])) for r, a in zip(results, arms)],
     }), indent=1), encoding="utf-8")
     return 0
