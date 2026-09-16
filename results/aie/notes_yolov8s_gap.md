@@ -115,3 +115,54 @@ and psum buffers.
 Nothing here is built. These are byte counts and capacity checks; only a measurement on Device 0 settles
 whether the configuration cost stays below the 2.006 ms - and the ring is the standing warning that a
 configuration cost can exceed the bytes it saves.
+
+## Lever 4: hardware compression - the mechanism works on this device
+
+The MemTile DMA can compress and decompress, and it is not a dead field. `aie_registers_aie2.json` gives the
+MemTile S2MM control register (`0xA0600 + 8i`) a `Decompression_Enable` at bit 4 - "0=no decompression;
+1=decompression may be enabled by BD" - and the MM2S control register (`0xA0630 + 8i`) a `Compression_Enable`
+at the same bit. Each BD needs its own bit too (MemTile `DMA_BD{n}_4` bit 31, "only effective if channel has
+(de)compression enabled"). npu1's reginit table marks `.Compression = XAIE_FEATURE_AVAILABLE`, and aie-rt
+implements both halves. The **shim has no compression field at all**, which does not matter: the shim moves
+opaque bytes and the codec sits at the MemTile.
+
+Two things are missing rather than broken. **MLIR and IRON expose none of it** - `AIEDmaToNpu.cpp` hardcodes
+`words[1] = 0; // Enable_Compression` - so the bits must be written directly, which is the same `npu_write32` /
+`npu_maskwrite32` machinery the ring work already proved. And **the format is undocumented**, so no offline
+encoder can be written; the compressed form has to be produced by the hardware itself, which is possible
+because `Compression_Enable` exists.
+
+**Verified on this device**, not just in source: `programming_examples/basic/dma_compression` is committed and
+lit-gated on npu1, and `memtile_both` passes here - `matches=2944 mismatches=0 compressed_to=71.9%(=1.391x)
+sha-ok` in 225 ms, arch detected `npu1`. That is the MemTile compressor and decompressor both engaging, with a
+byte-exact round trip against the committed golden.
+
+**Measuring our own data is blocked by fixed BD sizing.** `dma_compression()` takes no length parameter, and
+the compress-only path comments "asymmetric compress-only: ratio-size shim S2MM to match the compressed stream
+length" with the output tap fixed at `RATIOED_N` = 2,944 words. Feeding real weight bytes through it times out:
+the compressed length differs, and the README is explicit that a consumer BD whose length does not match the
+compressed byte count stalls the DMA. A real measurement needs a design whose output side is sized
+independently.
+
+**But the prize is large and the bar is low.** Counted on the CPU over twelve 16,384-byte chunks sampled across
+each model's real weight store:
+
+| model | zero bytes per chunk | byte entropy | zlib | lzma | whole store zlib |
+|---|---|---|---|---|---|
+| yolov8n | 9.6% - 89.9% | 1.15 - 4.75 b | mean **5.20x** | 5.31x | 3.75x |
+| yolov8s | 4.3% - 85.8% | 1.32 - 5.84 b | mean **4.67x** | 4.70x | 3.76x |
+
+To clear the 0.29 ms gap on yolov8s needs only **1.102x** - about 7.8 MB of the 83.6 MB of weight traffic. Even
+the single worst chunk sampled (1.34x) clears it.
+
+Generic codecs do not predict this one, and **the mismatch points our way**. The hardware managed only 1.391x
+on `arange`, which zlib would crush, so the MemTile codec is not a general compressor but almost certainly a
+zero-run or sparsity encoder - and `arange` contains **no zeros at all**. That makes 1.391x plausibly its floor
+rather than its typical case, while our weight packets are 70-85% zeros by construction: `conv_packet`
+zero-fills wherever `cin_avail` or `cout_avail` do not fill a block, and the bias array is 32 int64 mostly zero.
+
+What is still unknown, and each would have to hold: whether a single 9,472-byte packet compresses and
+decompresses **standalone** (every lossless demonstration in the tree uses matched BD geometry on both sides,
+and the README notes a state-machine warm-up artifact in the first BD, which suggests the codec carries state
+across BDs); how to carry the per-packet compressed length, since the consumer BD must match it exactly; and
+whether a full CTRL write can clobber bit 4 when out-of-order is enabled on the same channel.
