@@ -1,0 +1,111 @@
+Energy sitting on DESKTOP-CBL5NUA, started 2026-09-17T04:28:26Z
+Package power: typeperf '\Energy Meter(RAPL_Package0_PKG)\Power', 1 s samples, milliwatts. Idle 30 s before each arm; window from progress line 2 to the last.
+== 2026-09-17T04:28:26Z [container balanced pmode default @5 #1]
+  setup     $ C:/Windows/System32/AMD/xrt-smi.exe configure --pmode default
+    Power mode is set to default
+  setup     $ <home>/miniforge3/envs/resnet_env17/python.exe <scratch>/pmode_readback.py
+    [pmode] Power Mode             : Default | No hardware contexts running on device
+  idle      29 samples, mean 40.923 W, stdev 3.799 W, CPU 10.2 %
+  idle      disturbed (CPU 10.2 % > 12.0 or stdev 3.799 W > 2.5); retaking
+  idle      29 samples, mean 39.020 W, stdev 1.067 W, CPU 7.8 %
+  $ <home>/miniforge3/envs/mlir-aie-iron/python.exe <ignite-xdna main>/pipelines/yolow/4b_g2g.py --model <ignite-xdna main>/build/yolow.ignite --ep ignite --warmup 50 --frames 600 --max-fps 5 --json <scratch>\yolow\pmode\container_balanced_pmode_default_1.json
+  window    300 frames in 60.0 s = 5.00 fps, 59 power samples, CPU 9.1 %
+  energy    package 45.844 W - idle 39.020 W = +6.824 W -> 1364.78 mJ per frame
+== 2026-09-17T04:31:39Z [container efficiency pmode default @5 #1]
+  setup     $ C:/Windows/System32/AMD/xrt-smi.exe configure --pmode default
+    Power mode is set to default
+  setup     $ <home>/miniforge3/envs/resnet_env17/python.exe <scratch>/pmode_readback.py
+    [pmode] Power Mode             : Default | No hardware contexts running on device
+  idle      29 samples, mean 38.830 W, stdev 0.588 W, CPU 7.1 %
+  $ <home>/miniforge3/envs/mlir-aie-iron/python.exe <ignite-xdna main>/pipelines/yolow/4b_g2g.py --model <ignite-xdna main>/build/yolow.ignite --ep ignite --warmup 50 --frames 600 --max-fps 5 --json <scratch>\yolow\pmode\container_efficiency_pmode_default_1.json
+  window    300 frames in 60.0 s = 5.00 fps, 58 power samples, CPU 9.2 %
+  energy    package 46.656 W - idle 38.830 W = +7.827 W -> 1565.40 mJ per frame
+== 2026-09-17T04:34:22Z [container efficiency pmode powersaver @5 #1]
+  setup     $ C:/Windows/System32/AMD/xrt-smi.exe configure --pmode powersaver
+    Power mode is set to powersaver
+  setup     $ <home>/miniforge3/envs/resnet_env17/python.exe <scratch>/pmode_readback.py
+    [pmode] Power Mode             : Powersaver | No hardware contexts running on device
+  idle      29 samples, mean 40.472 W, stdev 1.427 W, CPU 7.0 %
+  $ <home>/miniforge3/envs/mlir-aie-iron/python.exe <ignite-xdna main>/pipelines/yolow/4b_g2g.py --model <ignite-xdna main>/build/yolow.ignite --ep ignite --warmup 50 --frames 600 --max-fps 5 --json <scratch>\yolow\pmode\container_efficiency_pmode_powersaver_1.json
+  window    300 frames in 60.0 s = 5.00 fps, 58 power samples, CPU 8.5 %
+  energy    package 45.904 W - idle 40.472 W = +5.431 W -> 1086.27 mJ per frame
+== 2026-09-17T04:37:06Z [DirectML FP32 pmode default @5 #1]
+  setup     $ C:/Windows/System32/AMD/xrt-smi.exe configure --pmode default
+    Power mode is set to default
+  setup     $ <home>/miniforge3/envs/resnet_env17/python.exe <scratch>/pmode_readback.py
+    [pmode] Power Mode             : Default | No hardware contexts running on device
+  idle      29 samples, mean 40.030 W, stdev 1.401 W, CPU 7.2 %
+  $ <home>/miniforge3/envs/resnet_env17/python.exe <ignite-xdna main>/pipelines/yolow/4b_g2g.py --model <ignite-xdna main>/models/yolov8s-worldv2_cut.onnx --ep dml --warmup 50 --frames 600 --max-fps 5 --json <scratch>\yolow\pmode\directml_fp32_pmode_default_1.json
+  window    300 frames in 60.0 s = 5.00 fps, 58 power samples, CPU 10.6 %
+  energy    package 43.288 W - idle 40.030 W = +3.258 W -> 651.69 mJ per frame
+== 2026-09-17T04:39:48Z [AMD variant D pmode powersaver @5 #1]
+  setup     $ C:/Windows/System32/AMD/xrt-smi.exe configure --pmode powersaver
+    Power mode is set to powersaver
+  setup     $ <home>/miniforge3/envs/resnet_env17/python.exe <scratch>/pmode_readback.py
+    [pmode] Power Mode             : Powersaver | No hardware contexts running on device
+  idle      29 samples, mean 40.141 W, stdev 1.278 W, CPU 7.2 %
+  $ <home>/miniforge3/envs/resnet_env17/python.exe <ignite-xdna main>/pipelines/yolow/4b_g2g.py --model <ignite-xdna main>/models/yolov8s-worldv2_cut_xint8_fp32cv2.onnx --ep npu --cache-key yolow_fp32D --warmup 50 --frames 600 --max-fps 5 --json <scratch>\yolow\pmode\amd_variant_d_pmode_powersaver_1.json
+  window    300 frames in 60.0 s = 5.00 fps, 58 power samples, CPU 38.1 %
+  energy    package 67.227 W - idle 40.141 W = +27.086 W -> 5416.88 mJ per frame
+== 2026-09-17T04:42:34Z [container balanced pmode default @5 #2]
+  setup     $ C:/Windows/System32/AMD/xrt-smi.exe configure --pmode default
+    Power mode is set to default
+  setup     $ <home>/miniforge3/envs/resnet_env17/python.exe <scratch>/pmode_readback.py
+    [pmode] Power Mode             : Default | No hardware contexts running on device
+  idle      29 samples, mean 39.340 W, stdev 0.770 W, CPU 7.1 %
+  $ <home>/miniforge3/envs/mlir-aie-iron/python.exe <ignite-xdna main>/pipelines/yolow/4b_g2g.py --model <ignite-xdna main>/build/yolow.ignite --ep ignite --warmup 50 --frames 600 --max-fps 5 --json <scratch>\yolow\pmode\container_balanced_pmode_default_2.json
+  window    300 frames in 60.0 s = 5.00 fps, 58 power samples, CPU 9.2 %
+  energy    package 46.788 W - idle 39.340 W = +7.448 W -> 1489.51 mJ per frame
+== 2026-09-17T04:45:15Z [container efficiency pmode default @5 #2]
+  setup     $ C:/Windows/System32/AMD/xrt-smi.exe configure --pmode default
+    Power mode is set to default
+  setup     $ <home>/miniforge3/envs/resnet_env17/python.exe <scratch>/pmode_readback.py
+    [pmode] Power Mode             : Default | No hardware contexts running on device
+  idle      29 samples, mean 40.098 W, stdev 0.912 W, CPU 7.2 %
+  $ <home>/miniforge3/envs/mlir-aie-iron/python.exe <ignite-xdna main>/pipelines/yolow/4b_g2g.py --model <ignite-xdna main>/build/yolow.ignite --ep ignite --warmup 50 --frames 600 --max-fps 5 --json <scratch>\yolow\pmode\container_efficiency_pmode_default_2.json
+  window    300 frames in 60.0 s = 5.00 fps, 58 power samples, CPU 8.7 %
+  energy    package 46.385 W - idle 40.098 W = +6.287 W -> 1257.45 mJ per frame
+== 2026-09-17T04:47:58Z [container efficiency pmode powersaver @5 #2]
+  setup     $ C:/Windows/System32/AMD/xrt-smi.exe configure --pmode powersaver
+    Power mode is set to powersaver
+  setup     $ <home>/miniforge3/envs/resnet_env17/python.exe <scratch>/pmode_readback.py
+    [pmode] Power Mode             : Powersaver | No hardware contexts running on device
+  idle      29 samples, mean 40.225 W, stdev 1.067 W, CPU 7.1 %
+  $ <home>/miniforge3/envs/mlir-aie-iron/python.exe <ignite-xdna main>/pipelines/yolow/4b_g2g.py --model <ignite-xdna main>/build/yolow.ignite --ep ignite --warmup 50 --frames 600 --max-fps 5 --json <scratch>\yolow\pmode\container_efficiency_pmode_powersaver_2.json
+  window    300 frames in 60.0 s = 5.00 fps, 58 power samples, CPU 8.7 %
+  energy    package 45.526 W - idle 40.225 W = +5.300 W -> 1060.09 mJ per frame
+== 2026-09-17T04:50:43Z [DirectML FP32 pmode default @5 #2]
+  setup     $ C:/Windows/System32/AMD/xrt-smi.exe configure --pmode default
+    Power mode is set to default
+  setup     $ <home>/miniforge3/envs/resnet_env17/python.exe <scratch>/pmode_readback.py
+    [pmode] Power Mode             : Default | No hardware contexts running on device
+  idle      29 samples, mean 40.339 W, stdev 0.998 W, CPU 7.1 %
+  $ <home>/miniforge3/envs/resnet_env17/python.exe <ignite-xdna main>/pipelines/yolow/4b_g2g.py --model <ignite-xdna main>/models/yolov8s-worldv2_cut.onnx --ep dml --warmup 50 --frames 600 --max-fps 5 --json <scratch>\yolow\pmode\directml_fp32_pmode_default_2.json
+  window    300 frames in 60.0 s = 5.00 fps, 58 power samples, CPU 10.5 %
+  energy    package 43.760 W - idle 40.339 W = +3.421 W -> 684.28 mJ per frame
+== 2026-09-17T04:53:25Z [AMD variant D pmode powersaver @5 #2]
+  setup     $ C:/Windows/System32/AMD/xrt-smi.exe configure --pmode powersaver
+    Power mode is set to powersaver
+  setup     $ <home>/miniforge3/envs/resnet_env17/python.exe <scratch>/pmode_readback.py
+    [pmode] Power Mode             : Powersaver | No hardware contexts running on device
+  idle      29 samples, mean 40.053 W, stdev 0.820 W, CPU 7.2 %
+  $ <home>/miniforge3/envs/resnet_env17/python.exe <ignite-xdna main>/pipelines/yolow/4b_g2g.py --model <ignite-xdna main>/models/yolov8s-worldv2_cut_xint8_fp32cv2.onnx --ep npu --cache-key yolow_fp32D --warmup 50 --frames 600 --max-fps 5 --json <scratch>\yolow\pmode\amd_variant_d_pmode_powersaver_2.json
+  window    300 frames in 60.0 s = 5.00 fps, 58 power samples, CPU 38.8 %
+  energy    package 67.149 W - idle 40.053 W = +27.096 W -> 5419.82 mJ per frame
+  finally   $ C:/Windows/System32/AMD/xrt-smi.exe configure --pmode default
+    Power mode is set to default
+  finally   $ <home>/miniforge3/envs/resnet_env17/python.exe <scratch>/pmode_readback.py
+    [pmode] Power Mode             : Default | No hardware contexts running on device
+
+Median idle over 10 undisturbed baselines: 40.076 W
+arm                                           fps  CPU %  +W own idle  mJ/frame  mJ vs median idle
+container balanced pmode default @5 #1       5.00    9.1        6.824   1364.78            1153.69
+container efficiency pmode default @5 #1     5.00    9.2        7.827   1565.40            1316.17
+container efficiency pmode powersaver @5 #1     5.00    8.5        5.431   1086.27            1165.61
+DirectML FP32 pmode default @5 #1            5.00   10.6        3.258    651.69             642.48
+AMD variant D pmode powersaver @5 #1         5.00   38.1       27.086   5416.88            5429.94
+container balanced pmode default @5 #2       5.00    9.2        7.448   1489.51            1342.41
+container efficiency pmode default @5 #2     5.00    8.7        6.287   1257.45            1261.89
+container efficiency pmode powersaver @5 #2     5.00    8.7        5.300   1060.09            1089.99
+DirectML FP32 pmode default @5 #2            5.00   10.5        3.421    684.28             736.88
+AMD variant D pmode powersaver @5 #2         5.00   38.8       27.096   5419.82            5415.38

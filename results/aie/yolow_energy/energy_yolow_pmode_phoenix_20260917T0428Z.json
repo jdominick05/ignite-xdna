@@ -1,0 +1,405 @@
+{
+ "host": "DESKTOP-CBL5NUA",
+ "started_utc": "2026-09-17T04:28:26Z",
+ "finished_utc": "2026-09-17T04:56:11Z",
+ "counter": "\\Energy Meter(RAPL_Package0_PKG)\\Power",
+ "idle_s": 30,
+ "skip_lines": 2,
+ "median_idle_mw": 40075.66136708463,
+ "finally": [
+  [
+   "C:/Windows/System32/AMD/xrt-smi.exe",
+   "configure",
+   "--pmode",
+   "default"
+  ],
+  [
+   "<home>/miniforge3/envs/resnet_env17/python.exe",
+   "<scratch>/pmode_readback.py"
+  ]
+ ],
+ "arms": [
+  {
+   "label": "container balanced pmode default @5 #1",
+   "returncode": 0,
+   "launch_to_exit_s": 123.88935852050781,
+   "window_s": 60.00034523010254,
+   "window_frames": 300,
+   "window_fps": 4.999971230990321,
+   "power_samples": 59,
+   "package_mw_mean": 45844.09731163612,
+   "package_mw_stdev": 751.8750030923068,
+   "cpu_percent_mean": 9.083200717671389,
+   "summary_lines": [],
+   "idle_mw_mean": 39020.254095062664,
+   "idle_mw_stdev": 1067.2497627348573,
+   "idle_samples": 29,
+   "idle_cpu_percent": 7.755847955729671,
+   "idle_suspect": false,
+   "idle_shifted": false,
+   "env": {},
+   "setup": [
+    [
+     "C:/Windows/System32/AMD/xrt-smi.exe",
+     "configure",
+     "--pmode",
+     "default"
+    ],
+    [
+     "<home>/miniforge3/envs/resnet_env17/python.exe",
+     "<scratch>/pmode_readback.py"
+    ]
+   ],
+   "delta_w": 6.823843216573456,
+   "mj_per_frame": 1364.7764959683357,
+   "delta_w_vs_median_idle": 5.768435944551493,
+   "mj_per_frame_vs_median_idle": 1153.693827036074,
+   "command": "<home>/miniforge3/envs/mlir-aie-iron/python.exe <ignite-xdna main>/pipelines/yolow/4b_g2g.py --model <ignite-xdna main>/build/yolow.ignite --ep ignite --warmup 50 --frames 600 --max-fps 5 --json <scratch>\\yolow\\pmode\\container_balanced_pmode_default_1.json"
+  },
+  {
+   "label": "container efficiency pmode default @5 #1",
+   "returncode": 0,
+   "launch_to_exit_s": 125.13946652412415,
+   "window_s": 60.00121474266052,
+   "window_frames": 300,
+   "window_fps": 4.999898773494359,
+   "power_samples": 58,
+   "package_mw_mean": 46656.39052903977,
+   "package_mw_stdev": 713.1308717431758,
+   "cpu_percent_mean": 9.18197210318164,
+   "summary_lines": [],
+   "idle_mw_mean": 38829.56575025551,
+   "idle_mw_stdev": 588.1035661713346,
+   "idle_samples": 29,
+   "idle_cpu_percent": 7.122995866081832,
+   "idle_suspect": false,
+   "idle_shifted": false,
+   "env": {
+    "IGNITE_XDNA_POWER_MODE": "efficiency"
+   },
+   "setup": [
+    [
+     "C:/Windows/System32/AMD/xrt-smi.exe",
+     "configure",
+     "--pmode",
+     "default"
+    ],
+    [
+     "<home>/miniforge3/envs/resnet_env17/python.exe",
+     "<scratch>/pmode_readback.py"
+    ]
+   ],
+   "delta_w": 7.826824778784256,
+   "mj_per_frame": 1565.3966476833684,
+   "delta_w_vs_median_idle": 6.58072916195514,
+   "mj_per_frame_vs_median_idle": 1316.1724786991958,
+   "command": "<home>/miniforge3/envs/mlir-aie-iron/python.exe <ignite-xdna main>/pipelines/yolow/4b_g2g.py --model <ignite-xdna main>/build/yolow.ignite --ep ignite --warmup 50 --frames 600 --max-fps 5 --json <scratch>\\yolow\\pmode\\container_efficiency_pmode_default_1.json"
+  },
+  {
+   "label": "container efficiency pmode powersaver @5 #1",
+   "returncode": 0,
+   "launch_to_exit_s": 126.24651741981506,
+   "window_s": 59.999935150146484,
+   "window_frames": 300,
+   "window_fps": 5.000005404160301,
+   "power_samples": 58,
+   "package_mw_mean": 45903.70655492446,
+   "package_mw_stdev": 571.6075385411033,
+   "cpu_percent_mean": 8.47916113738232,
+   "summary_lines": [],
+   "idle_mw_mean": 40472.33798165089,
+   "idle_mw_stdev": 1427.3493842446644,
+   "idle_samples": 29,
+   "idle_cpu_percent": 6.960248429710463,
+   "idle_suspect": false,
+   "idle_shifted": false,
+   "env": {
+    "IGNITE_XDNA_POWER_MODE": "efficiency"
+   },
+   "setup": [
+    [
+     "C:/Windows/System32/AMD/xrt-smi.exe",
+     "configure",
+     "--pmode",
+     "powersaver"
+    ],
+    [
+     "<home>/miniforge3/envs/resnet_env17/python.exe",
+     "<scratch>/pmode_readback.py"
+    ]
+   ],
+   "delta_w": 5.431368573273568,
+   "mj_per_frame": 1086.272540576526,
+   "delta_w_vs_median_idle": 5.828045187839831,
+   "mj_per_frame_vs_median_idle": 1165.6077777417104,
+   "command": "<home>/miniforge3/envs/mlir-aie-iron/python.exe <ignite-xdna main>/pipelines/yolow/4b_g2g.py --model <ignite-xdna main>/build/yolow.ignite --ep ignite --warmup 50 --frames 600 --max-fps 5 --json <scratch>\\yolow\\pmode\\container_efficiency_pmode_powersaver_1.json"
+  },
+  {
+   "label": "DirectML FP32 pmode default @5 #1",
+   "returncode": 0,
+   "launch_to_exit_s": 124.50792717933655,
+   "window_s": 60.00014066696167,
+   "window_frames": 300,
+   "window_fps": 4.999988277780676,
+   "power_samples": 58,
+   "package_mw_mean": 43288.06601159609,
+   "package_mw_stdev": 796.3415683249348,
+   "cpu_percent_mean": 10.56086396885782,
+   "summary_lines": [],
+   "idle_mw_mean": 40029.64046396122,
+   "idle_mw_stdev": 1400.840693133451,
+   "idle_samples": 29,
+   "idle_cpu_percent": 7.224906448406317,
+   "idle_suspect": false,
+   "idle_shifted": false,
+   "env": {},
+   "setup": [
+    [
+     "C:/Windows/System32/AMD/xrt-smi.exe",
+     "configure",
+     "--pmode",
+     "default"
+    ],
+    [
+     "<home>/miniforge3/envs/resnet_env17/python.exe",
+     "<scratch>/pmode_readback.py"
+    ]
+   ],
+   "delta_w": 3.25842554763487,
+   "mj_per_frame": 651.6866373697128,
+   "delta_w_vs_median_idle": 3.2124046445114653,
+   "mj_per_frame_vs_median_idle": 642.4824351662965,
+   "command": "<home>/miniforge3/envs/resnet_env17/python.exe <ignite-xdna main>/pipelines/yolow/4b_g2g.py --model <ignite-xdna main>/models/yolov8s-worldv2_cut.onnx --ep dml --warmup 50 --frames 600 --max-fps 5 --json <scratch>\\yolow\\pmode\\directml_fp32_pmode_default_1.json"
+  },
+  {
+   "label": "AMD variant D pmode powersaver @5 #1",
+   "returncode": 0,
+   "launch_to_exit_s": 128.37747621536255,
+   "window_s": 59.99687051773071,
+   "window_frames": 300,
+   "window_fps": 5.000260803792122,
+   "power_samples": 58,
+   "package_mw_mean": 67226.7909566314,
+   "package_mw_stdev": 482.4796074867013,
+   "cpu_percent_mean": 38.11350715061458,
+   "summary_lines": [],
+   "idle_mw_mean": 40140.9997653978,
+   "idle_mw_stdev": 1277.8174978742147,
+   "idle_samples": 29,
+   "idle_cpu_percent": 7.24352227350052,
+   "idle_suspect": false,
+   "idle_shifted": false,
+   "env": {
+    "RYZEN_AI_INSTALLATION_PATH": "C:\\Program Files\\RyzenAI\\1.7.1"
+   },
+   "setup": [
+    [
+     "C:/Windows/System32/AMD/xrt-smi.exe",
+     "configure",
+     "--pmode",
+     "powersaver"
+    ],
+    [
+     "<home>/miniforge3/envs/resnet_env17/python.exe",
+     "<scratch>/pmode_readback.py"
+    ]
+   ],
+   "delta_w": 27.085791191233607,
+   "mj_per_frame": 5416.875689902446,
+   "delta_w_vs_median_idle": 27.151129589546777,
+   "mj_per_frame_vs_median_idle": 5429.94268798055,
+   "command": "<home>/miniforge3/envs/resnet_env17/python.exe <ignite-xdna main>/pipelines/yolow/4b_g2g.py --model <ignite-xdna main>/models/yolov8s-worldv2_cut_xint8_fp32cv2.onnx --ep npu --cache-key yolow_fp32D --warmup 50 --frames 600 --max-fps 5 --json <scratch>\\yolow\\pmode\\amd_variant_d_pmode_powersaver_1.json"
+  },
+  {
+   "label": "container balanced pmode default @5 #2",
+   "returncode": 0,
+   "launch_to_exit_s": 123.77864956855774,
+   "window_s": 59.99854826927185,
+   "window_frames": 300,
+   "window_fps": 5.000120980487864,
+   "power_samples": 58,
+   "package_mw_mean": 46787.863635143745,
+   "package_mw_stdev": 767.827858111685,
+   "cpu_percent_mean": 9.192871723055486,
+   "summary_lines": [],
+   "idle_mw_mean": 39340.117588801084,
+   "idle_mw_stdev": 769.8233731492015,
+   "idle_samples": 29,
+   "idle_cpu_percent": 7.110114563283718,
+   "idle_suspect": false,
+   "idle_shifted": false,
+   "env": {},
+   "setup": [
+    [
+     "C:/Windows/System32/AMD/xrt-smi.exe",
+     "configure",
+     "--pmode",
+     "default"
+    ],
+    [
+     "<home>/miniforge3/envs/resnet_env17/python.exe",
+     "<scratch>/pmode_readback.py"
+    ]
+   ],
+   "delta_w": 7.447746046342662,
+   "mj_per_frame": 1489.5131688625625,
+   "delta_w_vs_median_idle": 6.7122022680591185,
+   "mj_per_frame_vs_median_idle": 1342.4079725775366,
+   "command": "<home>/miniforge3/envs/mlir-aie-iron/python.exe <ignite-xdna main>/pipelines/yolow/4b_g2g.py --model <ignite-xdna main>/build/yolow.ignite --ep ignite --warmup 50 --frames 600 --max-fps 5 --json <scratch>\\yolow\\pmode\\container_balanced_pmode_default_2.json"
+  },
+  {
+   "label": "container efficiency pmode default @5 #2",
+   "returncode": 0,
+   "launch_to_exit_s": 125.08919310569763,
+   "window_s": 59.99904179573059,
+   "window_frames": 300,
+   "window_fps": 5.00007985163102,
+   "power_samples": 58,
+   "package_mw_mean": 46385.22364880857,
+   "package_mw_stdev": 649.0717973775432,
+   "cpu_percent_mean": 8.668926666243237,
+   "summary_lines": [],
+   "idle_mw_mean": 40097.85710147628,
+   "idle_mw_stdev": 911.6285988253287,
+   "idle_samples": 29,
+   "idle_cpu_percent": 7.224320193733326,
+   "idle_suspect": false,
+   "idle_shifted": false,
+   "env": {
+    "IGNITE_XDNA_POWER_MODE": "efficiency"
+   },
+   "setup": [
+    [
+     "C:/Windows/System32/AMD/xrt-smi.exe",
+     "configure",
+     "--pmode",
+     "default"
+    ],
+    [
+     "<home>/miniforge3/envs/resnet_env17/python.exe",
+     "<scratch>/pmode_readback.py"
+    ]
+   ],
+   "delta_w": 6.287366547332291,
+   "mj_per_frame": 1257.4532275282281,
+   "delta_w_vs_median_idle": 6.309562281723942,
+   "mj_per_frame_vs_median_idle": 1261.892303513067,
+   "command": "<home>/miniforge3/envs/mlir-aie-iron/python.exe <ignite-xdna main>/pipelines/yolow/4b_g2g.py --model <ignite-xdna main>/build/yolow.ignite --ep ignite --warmup 50 --frames 600 --max-fps 5 --json <scratch>\\yolow\\pmode\\container_efficiency_pmode_default_2.json"
+  },
+  {
+   "label": "container efficiency pmode powersaver @5 #2",
+   "returncode": 0,
+   "launch_to_exit_s": 126.20712041854858,
+   "window_s": 59.99932408332825,
+   "window_frames": 300,
+   "window_fps": 5.000056327023852,
+   "power_samples": 58,
+   "package_mw_mean": 45525.69037685199,
+   "package_mw_stdev": 521.3027123419898,
+   "cpu_percent_mean": 8.725802001724375,
+   "summary_lines": [],
+   "idle_mw_mean": 40225.197283682006,
+   "idle_mw_stdev": 1067.2610898113778,
+   "idle_samples": 29,
+   "idle_cpu_percent": 7.1255565196754675,
+   "idle_suspect": false,
+   "idle_shifted": false,
+   "env": {
+    "IGNITE_XDNA_POWER_MODE": "efficiency"
+   },
+   "setup": [
+    [
+     "C:/Windows/System32/AMD/xrt-smi.exe",
+     "configure",
+     "--pmode",
+     "powersaver"
+    ],
+    [
+     "<home>/miniforge3/envs/resnet_env17/python.exe",
+     "<scratch>/pmode_readback.py"
+    ]
+   ],
+   "delta_w": 5.300493093169986,
+   "mj_per_frame": 1060.0866763284964,
+   "delta_w_vs_median_idle": 5.4500290097673645,
+   "mj_per_frame_vs_median_idle": 1089.993522735242,
+   "command": "<home>/miniforge3/envs/mlir-aie-iron/python.exe <ignite-xdna main>/pipelines/yolow/4b_g2g.py --model <ignite-xdna main>/build/yolow.ignite --ep ignite --warmup 50 --frames 600 --max-fps 5 --json <scratch>\\yolow\\pmode\\container_efficiency_pmode_powersaver_2.json"
+  },
+  {
+   "label": "DirectML FP32 pmode default @5 #2",
+   "returncode": 0,
+   "launch_to_exit_s": 124.58232593536377,
+   "window_s": 60.00005316734314,
+   "window_frames": 300,
+   "window_fps": 4.999995569391998,
+   "power_samples": 58,
+   "package_mw_mean": 43760.03672688786,
+   "package_mw_stdev": 684.3670775889856,
+   "cpu_percent_mean": 10.533780738175468,
+   "summary_lines": [],
+   "idle_mw_mean": 40338.663103182385,
+   "idle_mw_stdev": 997.9283549102184,
+   "idle_samples": 29,
+   "idle_cpu_percent": 7.109506854671435,
+   "idle_suspect": false,
+   "idle_shifted": false,
+   "env": {},
+   "setup": [
+    [
+     "C:/Windows/System32/AMD/xrt-smi.exe",
+     "configure",
+     "--pmode",
+     "default"
+    ],
+    [
+     "<home>/miniforge3/envs/resnet_env17/python.exe",
+     "<scratch>/pmode_readback.py"
+    ]
+   ],
+   "delta_w": 3.421373623705476,
+   "mj_per_frame": 684.2753310922468,
+   "delta_w_vs_median_idle": 3.6843753598032345,
+   "mj_per_frame_vs_median_idle": 736.8757249221436,
+   "command": "<home>/miniforge3/envs/resnet_env17/python.exe <ignite-xdna main>/pipelines/yolow/4b_g2g.py --model <ignite-xdna main>/models/yolov8s-worldv2_cut.onnx --ep dml --warmup 50 --frames 600 --max-fps 5 --json <scratch>\\yolow\\pmode\\directml_fp32_pmode_default_2.json"
+  },
+  {
+   "label": "AMD variant D pmode powersaver @5 #2",
+   "returncode": 0,
+   "launch_to_exit_s": 128.38287949562073,
+   "window_s": 60.007946491241455,
+   "window_frames": 300,
+   "window_fps": 4.999337880088714,
+   "power_samples": 58,
+   "package_mw_mean": 67148.96670678261,
+   "package_mw_stdev": 394.02470689448717,
+   "cpu_percent_mean": 38.763427096333096,
+   "summary_lines": [],
+   "idle_mw_mean": 40053.46563269297,
+   "idle_mw_stdev": 819.5283185722329,
+   "idle_samples": 29,
+   "idle_cpu_percent": 7.1827798647782375,
+   "idle_suspect": false,
+   "idle_shifted": false,
+   "env": {
+    "RYZEN_AI_INSTALLATION_PATH": "C:\\Program Files\\RyzenAI\\1.7.1"
+   },
+   "setup": [
+    [
+     "C:/Windows/System32/AMD/xrt-smi.exe",
+     "configure",
+     "--pmode",
+     "powersaver"
+    ],
+    [
+     "<home>/miniforge3/envs/resnet_env17/python.exe",
+     "<scratch>/pmode_readback.py"
+    ]
+   ],
+   "delta_w": 27.09550107408964,
+   "mj_per_frame": 5419.8179286911545,
+   "delta_w_vs_median_idle": 27.07330533969798,
+   "mj_per_frame_vs_median_idle": 5415.37819388546,
+   "command": "<home>/miniforge3/envs/resnet_env17/python.exe <ignite-xdna main>/pipelines/yolow/4b_g2g.py --model <ignite-xdna main>/models/yolov8s-worldv2_cut_xint8_fp32cv2.onnx --ep npu --cache-key yolow_fp32D --warmup 50 --frames 600 --max-fps 5 --json <scratch>\\yolow\\pmode\\amd_variant_d_pmode_powersaver_2.json"
+  }
+ ]
+}

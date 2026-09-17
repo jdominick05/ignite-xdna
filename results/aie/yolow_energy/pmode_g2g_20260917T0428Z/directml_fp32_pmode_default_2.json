@@ -1,0 +1,34 @@
+{
+ "ep": "dml",
+ "model": "yolov8s-worldv2_cut.onnx",
+ "source": "bus.jpg",
+ "classes": 80,
+ "warmup": 50,
+ "frames": 600,
+ "description": "ONNX Runtime dml (DmlExecutionProvider), numpy letterbox, float decode",
+ "preprocess_ms": {
+  "mean": 3.3874824998201802,
+  "median": 3.336799971293658,
+  "p95": 3.8097700191428885,
+  "p99": 4.359721016953699
+ },
+ "network_ms": {
+  "mean": 66.75810066585352,
+  "median": 66.57705001998693,
+  "p95": 67.03161497425754,
+  "p99": 73.31132795836311
+ },
+ "decode_ms": {
+  "mean": 9.569009333014643,
+  "median": 9.461949986871332,
+  "p95": 10.604620011872612,
+  "p99": 11.115683948155493
+ },
+ "glass_to_glass_ms": {
+  "mean": 79.71459249868833,
+  "median": 79.47394999791868,
+  "p95": 81.34311996691395,
+  "p99": 86.30786902096588
+ },
+ "detections_per_frame": 5.0
+}
