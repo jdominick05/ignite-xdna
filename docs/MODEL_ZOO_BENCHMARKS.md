@@ -398,6 +398,14 @@ evidence `results/aie/yolow_gptq/` and `results/aie/yolow_vocabulary/`.
   43.0 in FP32. AMD's stack scores 1.8 on the 5,000 images in plain XINT8.
 - **Frame:** 48.0-48.2 ms profiled against 53.0-53.5 ms with the four convolutions as FP32 host steps, in one sitting,
   with numpy input quantization and head dequantization. That is not a comparison with AMD's stack.
+- **Against AMD's stack, the CPU and the iGPU** (one sitting, `5_eval_map.py` per-image inference, 300 images each):
+  - container 47.33 and 47.51 ms at 24.7 %;
+  - AMD's stack on variant D (its best usable model) 95.91 and 95.89 ms at 24.5 %;
+  - ONNX Runtime CPU on FP32 67.75 ms at 43.0 %;
+  - DirectML on the iGPU on FP32 46.22 ms at 43.0 %.
+
+  So twice AMD's speed at equal accuracy, and level with the iGPU at far lower accuracy
+  ([BENCHMARKS](BENCHMARKS.md#yolo-world-v2-against-amds-stack-the-cpu-and-the-igpu-in-one-sitting-2026-09-16-desktop-2)).
 - **What the compiler, runtime and kernel needed beyond YOLO11n:**
   - host regions whose constants are shared with another region;
   - host inputs that are Concat views;
