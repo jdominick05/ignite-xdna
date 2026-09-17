@@ -9424,6 +9424,11 @@ calibration stay those of the shipped model.
 - **The committed tools rebuild the evaluated models byte for byte:** all 13 oracle models and all 8 FP32 form models
   (`oracle_rebuild_sha256.log`, `fp32_pl_fits.log`). Both keep-Sigmoid quantizations ran from a scratch copy of
   `tools/quantize_keep_sigmoid.py` and were not re-run.
+- **Why two rows have gaps.** The `hardsigmoid` row validates the table surgery, and one bit-exact model is enough to
+  do that, so it ran on YOLOv8n only. YOLOv8s has no keep-Sigmoid figure because its quantization, run from
+  `tools/quantize_keep_sigmoid.py` with 200 calibration images like the other two, was stopped by Windows for lack of
+  memory during calibration on this 31.1 GB host (`quantize_yolov8s_xint8_keep_sigmoid_oom.log`). It was not retried
+  with fewer images, which would have changed the recipe.
 - **Per layer, today's epilogue is up to 5 output LSBs off the exact quantized SiLU.** That is YOLOv8n-pose's most common
   scale pair (s1 1/16, s2 1/32, 16 layers), with a mean of 1.223 LSB over the 256 inputs; four lines are off by at most 1
   (mean 0.195). Every pair of the three models is in the `oracle_build_*.log` files.
@@ -9470,3 +9475,4 @@ device; `engine_epilogue_variants.log`):
 - The full 5,000 images.
 - YOLO11n and SESR.
 - AMD's stack on the keep-Sigmoid models.
+- YOLOv8s with Sigmoid kept: its quantization ran out of memory (above).

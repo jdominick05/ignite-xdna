@@ -1890,8 +1890,8 @@ cached reference heads rather than `bo_out`.
   - **An exact 256-entry table in the core.** The core has no vector gather, so the table costs 3,200 scalar lookups
     per tile against 100 vector steps for the lines. It also needs 256 B of packet space per layer, which the header
     does not have. Four lines score within 0.54 points of the exact table on this slice.
-  - **Keeping Quark's real Sigmoid** (`ConvertSigmoidToHardSigmoid=False`). It scores 37.83 and 43.58, within 0.54
-    points of four lines, but the core would still need a sigmoid of its own. The compiler matches only
+  - **Keeping Quark's real Sigmoid** (`ConvertSigmoidToHardSigmoid=False`). On YOLOv8n and YOLOv8n-pose it scores
+    37.83 and 43.58, within 0.54 points of four lines (YOLOv8s's quantization ran out of memory), but the core would still need a sigmoid of its own. The compiler matches only
     HardSigmoid + Mul, so it buys nothing the oracle model does not.
 
   Open, and the maintainer's to decide: whether the core program changes at all. It is the one program every
