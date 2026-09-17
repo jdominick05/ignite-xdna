@@ -60,6 +60,33 @@ class _Decode(ctypes.Structure):
     ]
 
 
+class _HeadC8(ctypes.Structure):
+    _fields_ = [
+        ("box_c8", ctypes.c_void_p),
+        ("cls_c8", ctypes.c_void_p),
+        ("cls_max", ctypes.c_void_p),
+        ("dfl_exp", ctypes.c_void_p),
+        ("sigmoid", ctypes.c_void_p),
+        ("sigmoid_low", ctypes.c_void_p),
+        ("q_threshold", ctypes.c_double),
+        ("anchors", ctypes.c_int32),
+        ("anchor_offset", ctypes.c_int32),
+    ]
+
+
+class _DecodeC8(ctypes.Structure):
+    _fields_ = [
+        ("head", _HeadC8 * 3),
+        ("anchor_x", ctypes.c_void_p),
+        ("anchor_y", ctypes.c_void_p),
+        ("strides", ctypes.c_void_p),
+        ("reg_max", ctypes.c_int32),
+        ("num_classes", ctypes.c_int32),
+        ("conf", ctypes.c_float),
+        ("iou", ctypes.c_float),
+    ]
+
+
 def _load_library() -> Optional[ctypes.CDLL]:
     here = Path(__file__).parent.resolve()
     dll = here / ("decode_native.dll" if platform.system() == "Windows" else "decode_native.so")
@@ -76,6 +103,12 @@ def _load_library() -> Optional[ctypes.CDLL]:
             ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p,
         ]
         lib.yolo_decode_int8.restype = ctypes.c_int
+        if hasattr(lib, "yolo_decode_c8_blocks"):
+            lib.yolo_decode_c8_blocks.argtypes = [
+                ctypes.c_void_p, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_int32,
+                ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p,
+            ]
+            lib.yolo_decode_c8_blocks.restype = ctypes.c_int
         return lib
     except (OSError, AttributeError):
         return None
@@ -134,6 +167,7 @@ class NativeDecode:
     """Decodes int8 heads for one anchor grid; ``decode`` returns ``None`` when the numpy path must run."""
 
     def __init__(self, lib: ctypes.CDLL, anchors: np.ndarray, strides: np.ndarray, num_classes: int):
+        self._lib = lib
         self._fn = lib.yolo_decode_int8
         self._anchor_x = np.ascontiguousarray(anchors[0, 0], dtype=np.float32)
         self._anchor_y = np.ascontiguousarray(anchors[0, 1], dtype=np.float32)
@@ -141,6 +175,7 @@ class NativeDecode:
         self._num_classes = int(num_classes)
         self._tables: Dict[Tuple[str, float, int], Optional[np.ndarray]] = {}
         self._binding: Optional[_Binding] = None
+        self._binding_c8: Optional[_Binding] = None
         self._local = threading.local()
 
     def _table(self, kind: str, scale: float, zero_point: int) -> Optional[np.ndarray]:
@@ -203,10 +238,90 @@ class NativeDecode:
         args.iou = float(np.float32(iou_t))
         return _Binding(key, args, refs)
 
+    def _bind_c8(self, key: Tuple[Any, ...], box_c8: Sequence[Any], cls_c8: Sequence[Any],
+                 cls_max: Mapping[str, Any], scales: Mapping[str, Any], conf_t: float,
+                 iou_t: float) -> Optional[_Binding]:
+        args = _DecodeC8()
+        refs: List[Any] = [self._anchor_x, self._anchor_y, self._strides]
+        c_clamped = min(max(float(conf_t), 1e-12), 1.0 - 1e-12)
+        logit_t = np.log(c_clamped / (1.0 - c_clamped))
+        cls_blocks = (self._num_classes + 7) // 8
+        for h, (box_name, cls_name) in enumerate(HEAD_NAMES):
+            b, c = box_c8[h], cls_c8[h]
+            n_anc = HEAD_ANCHORS[h]
+            for arr, blocks in ((b, 8), (c, cls_blocks)):
+                if (not isinstance(arr, np.ndarray) or arr.dtype != np.uint8 or not arr.flags["C_CONTIGUOUS"]
+                        or arr.size < blocks * n_anc * 8):
+                    return None
+            try:
+                s_b, zp_b = scales[box_name]
+                s_c, zp_c = scales[cls_name]
+            except (KeyError, TypeError, ValueError):
+                return None
+            for s, zp in ((s_b, zp_b), (s_c, zp_c)):
+                if not (float(s) > 0.0 and np.isfinite(float(s))) or int(zp) != zp or not -128 <= int(zp) <= 127:
+                    return None
+            m = cls_max.get(cls_name) if cls_max else None
+            if m is None or not isinstance(m, np.ndarray) or m.dtype != np.int8 or not m.flags["C_CONTIGUOUS"] or m.size != n_anc:
+                return None
+            dfl = self._table("dfl", s_b, int(zp_b))
+            sig = self._table("sigmoid", s_c, int(zp_c))
+            low = self._table("sigmoid_low", s_c, int(zp_c))
+            head = args.head[h]
+            head.box_c8 = b.ctypes.data
+            head.cls_c8 = c.ctypes.data
+            head.cls_max = m.ctypes.data
+            head.dfl_exp = dfl.ctypes.data
+            head.sigmoid = sig.ctypes.data
+            head.sigmoid_low = low.ctypes.data if low is not None else None
+            head.q_threshold = float(logit_t / float(s_c) + int(zp_c))
+            head.anchors = n_anc
+            head.anchor_offset = HEAD_OFFSETS[h]
+            refs += [b, c, m, dfl, sig, low]
+        args.anchor_x = self._anchor_x.ctypes.data
+        args.anchor_y = self._anchor_y.ctypes.data
+        args.strides = self._strides.ctypes.data
+        args.reg_max = REG_MAX
+        args.num_classes = self._num_classes
+        args.conf = float(np.float32(conf_t))
+        args.iou = float(np.float32(iou_t))
+        return _Binding(key, args, refs)
+
+    def decode_c8(self, box_c8: Sequence[Any], cls_c8: Sequence[Any], cls_max: Mapping[str, Any],
+                  scales: Mapping[str, Any], pad: Tuple[Any, Any], scale: float, conf_t: float,
+                  iou_t: float) -> Optional[Tuple[List[float], List[float], List[int]]]:
+        """Returns (boxes x0, y0, w, h flattened, scores, class ids) from channel-blocked heads, or ``None``."""
+        if not hasattr(self._lib, "yolo_decode_c8_blocks"):
+            return None
+        maxima = (cls_max.get("p3_cls"), cls_max.get("p4_cls"), cls_max.get("p5_cls"))
+        key = ("c8", id(box_c8[0]), id(box_c8[1]), id(box_c8[2]), id(cls_c8[0]), id(cls_c8[1]), id(cls_c8[2]),
+               id(maxima[0]), id(maxima[1]), id(maxima[2]), id(scales), conf_t, iou_t)
+        binding = self._binding_c8
+        if binding is None or binding.key != key:
+            binding = self._bind_c8(key, box_c8, cls_c8, cls_max, scales, conf_t, iou_t)
+            if binding is None:
+                return None
+            binding.refs.append(scales)
+            self._binding_c8 = binding
+        local = self._local
+        pointers = getattr(local, "pointers", None)
+        if pointers is None:
+            local.out = (np.empty(4 * TOTAL_ANCHORS, np.float32), np.empty(TOTAL_ANCHORS, np.float32),
+                         np.empty(TOTAL_ANCHORS, np.int32))
+            local.pointers = pointers = tuple(a.ctypes.data for a in local.out)
+        n = self._lib.yolo_decode_c8_blocks(binding.address, pad[0], pad[1], scale, TOTAL_ANCHORS, *pointers)
+        if n < 0:
+            return None
+        out = local.out
+        return out[0][:4 * n].tolist(), out[1][:n].tolist(), out[2][:n].tolist()
+
     def decode(self, box_f: Sequence[Any], cls_f: Sequence[Any], cls_max: Optional[Mapping[str, Any]],
                scales: Mapping[str, Any], pad: Tuple[Any, Any], scale: float, conf_t: float,
                iou_t: float) -> Optional[Tuple[List[float], List[float], List[int]]]:
         """Returns (boxes x0, y0, w, h flattened, scores, class ids) in detection order, or ``None``."""
+        if (len(box_f) == 3 and isinstance(box_f[0], np.ndarray) and box_f[0].dtype == np.uint8
+                and cls_max is not None):
+            return self.decode_c8(box_f, cls_f, cls_max, scales, pad, scale, conf_t, iou_t)
         maxima = (cls_max.get("p3_cls"), cls_max.get("p4_cls"), cls_max.get("p5_cls")) if cls_max else (None,) * 3
         # Identity of every array and of the scales (the binding holds them, so ids cannot be reused), thresholds.
         key = (id(box_f[0]), id(box_f[1]), id(box_f[2]), id(cls_f[0]), id(cls_f[1]), id(cls_f[2]),

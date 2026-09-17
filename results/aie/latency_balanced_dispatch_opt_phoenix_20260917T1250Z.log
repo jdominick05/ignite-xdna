@@ -1,0 +1,334 @@
+# Interleaved same-sitting benchmark: Ignition bare-metal vs AMD Ryzen AI 1.7.1 (Vitis AI EP)
+# Host: DESKTOP-CBL5NUA (Desktop 2, Ryzen 7 8700G, XDNA1 Phoenix), balanced default mode
+# Optimizations: direct C8 channel-blocked native decode, consolidated head sync spans, fast SESR ingress + depth_to_space_crd_bgr
+# Start: 2026-09-17T12:50:03Z
+
+[xrt-smi before start] ----------------------------- | [003d:00:01.1] : NPU Phoenix | ----------------------------- | AIE Partitions | No hardware contexts running on device
+[cpu] CPU 9.3 % over 3 s
+
+## Timed: SESR M7 (Interleaved AMD vs Ignition)
+[xrt-smi before amd sesr_m7 #1] ----------------------------- | [003d:00:01.1] : NPU Phoenix | ----------------------------- | AIE Partitions | No hardware contexts running on device
+
+== 2026-09-17T12:50:06Z [amd sesr_m7 #1] $ <conda envs>\resnet_env17\python.exe <ignite-xdna worktree>\tools\amd_vitisai_sesr.py --model <ignite-xdna main>\models\sesr_m7_xint8.onnx --image <Ignition main>\examples\assets\bus.jpg --ignition-src <Ignition main>\src --cache-dir <temp>\sitting_dispatch_opt\vitisai_cache --cache-key sesr_m7_sitting --xclbin <ignite-xdna main>\yolocutcachekey\4x4.xclbin --warmup 50 --iterations 500 --json <temp>\sitting_dispatch_opt\amd_sesr_m7_1.json
+[amd] ort 1.23.3.dev20260320 | model sesr_m7_xint8.onnx | session load 1.31 s | EP report node devices report not found
+[run] frame 100 | G2G 4.80 ms | output 512x512
+[run] frame 200 | G2G 4.02 ms | output 512x512
+[run] frame 300 | G2G 4.21 ms | output 512x512
+[run] frame 400 | G2G 4.80 ms | output 512x512
+[run] frame 500 | G2G 4.66 ms | output 512x512
+[amd] G2G mean 4.543 ms | P50 4.576 | P95 5.038 | P99 5.603 | max 6.438 | over 500 timed frames after 50 warm-up
+[amd] stage means (ms): preprocess 0.400 | session.run 1.550 | postprocess 2.593
+[amd] output (512, 512, 3) from input (256, 256) | RSS 295.3 MB
+== 2026-09-17T12:50:10Z [amd sesr_m7 #1] exit 0 after 4.1 s
+[xrt-smi before ignition sesr_m7 #1] ----------------------------- | [003d:00:01.1] : NPU Phoenix | ----------------------------- | AIE Partitions | No hardware contexts running on device
+
+== 2026-09-17T12:50:12Z [ignition sesr_m7 #1] $ <conda envs>\mlir-aie-iron\python.exe <Ignition main>\live_ignition.py --model <ignite-xdna main>\build\sesr_m7.ignite --source <Ignition main>\examples\assets\bus.jpg --headless --warmup 50 --frames 500 --json <temp>\sitting_dispatch_opt\ign_sesr_m7_1.json
+[Ignition] loading <ignite-xdna main>\build\sesr_m7.ignite (bare-metal .ignite container)
+[Ignition] Native XDNA1 NPU backend active (Device 0)
+[Ignition] task: super_resolution
+[Ignition] power mode balanced: 8 worker threads, sleeping between regions (8 cores / 16 threads on this host)
+[Ignition] source: image bus.jpg 810x1080
+[Ignition] NPU power mode: default kept: the balanced power mode leaves the NPU's mode alone
+[run] frame 100 | G2G 4.76 ms | 208 FPS | 512x512 output | super_resolution: npu
+[run] frame 200 | G2G 4.80 ms | 209 FPS | 512x512 output | super_resolution: npu
+[run] frame 300 | G2G 4.56 ms | 207 FPS | 512x512 output | super_resolution: npu
+[run] frame 400 | G2G 4.89 ms | 203 FPS | 512x512 output | super_resolution: npu
+[run] frame 500 | G2G 4.72 ms | 208 FPS | 512x512 output | super_resolution: npu
+[Ignition] shutdown: source released, window closed, NPU hardware context released
+[summary] stop: frame limit | 550 frames processed (50 warm-up, 500 timed) | 1 distinct source frames | image bus.jpg 810x1080
+[summary] NPU power mode: default kept: the balanced power mode leaves the NPU's mode alone
+[summary] G2G mean 4.783 ms | P50 4.771 | P95 4.985 | P99 5.201 | max 5.458 | over the last 500 timed frames; cold first frame 7.21 ms
+[summary] stage means (ms): preprocess 0.185 | NPU forward 4.239 (dispatch 4.215, readback 0.024) | image output 0.353
+[summary] output image [512, 512, 3] from the NPU
+[summary] RSS 163.2 MB at the first timed frame, 163.2 MB at the end (+0.00 MB over 500 frames)
+[summary] wrote <temp>\sitting_dispatch_opt\ign_sesr_m7_1.json
+== 2026-09-17T12:50:16Z [ignition sesr_m7 #1] exit 0 after 3.1 s
+[xrt-smi before amd sesr_m7 #2] ----------------------------- | [003d:00:01.1] : NPU Phoenix | ----------------------------- | AIE Partitions | No hardware contexts running on device
+
+== 2026-09-17T12:50:18Z [amd sesr_m7 #2] $ <conda envs>\resnet_env17\python.exe <ignite-xdna worktree>\tools\amd_vitisai_sesr.py --model <ignite-xdna main>\models\sesr_m7_xint8.onnx --image <Ignition main>\examples\assets\bus.jpg --ignition-src <Ignition main>\src --cache-dir <temp>\sitting_dispatch_opt\vitisai_cache --cache-key sesr_m7_sitting --xclbin <ignite-xdna main>\yolocutcachekey\4x4.xclbin --warmup 50 --iterations 500 --json <temp>\sitting_dispatch_opt\amd_sesr_m7_2.json
+[amd] ort 1.23.3.dev20260320 | model sesr_m7_xint8.onnx | session load 0.29 s | EP report node devices report not found
+[run] frame 100 | G2G 4.46 ms | output 512x512
+[run] frame 200 | G2G 4.65 ms | output 512x512
+[run] frame 300 | G2G 5.94 ms | output 512x512
+[run] frame 400 | G2G 4.82 ms | output 512x512
+[run] frame 500 | G2G 4.38 ms | output 512x512
+[amd] G2G mean 4.576 ms | P50 4.573 | P95 5.185 | P99 5.714 | max 6.675 | over 500 timed frames after 50 warm-up
+[amd] stage means (ms): preprocess 0.418 | session.run 1.576 | postprocess 2.582
+[amd] output (512, 512, 3) from input (256, 256) | RSS 265.4 MB
+== 2026-09-17T12:50:21Z [amd sesr_m7 #2] exit 0 after 3.1 s
+[xrt-smi before ignition sesr_m7 #2] ----------------------------- | [003d:00:01.1] : NPU Phoenix | ----------------------------- | AIE Partitions | No hardware contexts running on device
+
+== 2026-09-17T12:50:23Z [ignition sesr_m7 #2] $ <conda envs>\mlir-aie-iron\python.exe <Ignition main>\live_ignition.py --model <ignite-xdna main>\build\sesr_m7.ignite --source <Ignition main>\examples\assets\bus.jpg --headless --warmup 50 --frames 500 --json <temp>\sitting_dispatch_opt\ign_sesr_m7_2.json
+[Ignition] loading <ignite-xdna main>\build\sesr_m7.ignite (bare-metal .ignite container)
+[Ignition] Native XDNA1 NPU backend active (Device 0)
+[Ignition] task: super_resolution
+[Ignition] power mode balanced: 8 worker threads, sleeping between regions (8 cores / 16 threads on this host)
+[Ignition] source: image bus.jpg 810x1080
+[Ignition] NPU power mode: default kept: the balanced power mode leaves the NPU's mode alone
+[run] frame 100 | G2G 4.70 ms | 208 FPS | 512x512 output | super_resolution: npu
+[run] frame 200 | G2G 4.75 ms | 210 FPS | 512x512 output | super_resolution: npu
+[run] frame 300 | G2G 4.72 ms | 212 FPS | 512x512 output | super_resolution: npu
+[run] frame 400 | G2G 4.75 ms | 211 FPS | 512x512 output | super_resolution: npu
+[run] frame 500 | G2G 4.74 ms | 211 FPS | 512x512 output | super_resolution: npu
+[Ignition] shutdown: source released, window closed, NPU hardware context released
+[summary] stop: frame limit | 550 frames processed (50 warm-up, 500 timed) | 1 distinct source frames | image bus.jpg 810x1080
+[summary] NPU power mode: default kept: the balanced power mode leaves the NPU's mode alone
+[summary] G2G mean 4.766 ms | P50 4.753 | P95 4.967 | P99 5.177 | max 5.485 | over the last 500 timed frames; cold first frame 7.20 ms
+[summary] stage means (ms): preprocess 0.184 | NPU forward 4.223 (dispatch 4.200, readback 0.023) | image output 0.355
+[summary] output image [512, 512, 3] from the NPU
+[summary] RSS 163.6 MB at the first timed frame, 163.6 MB at the end (+0.00 MB over 500 frames)
+[summary] wrote <temp>\sitting_dispatch_opt\ign_sesr_m7_2.json
+== 2026-09-17T12:50:26Z [ignition sesr_m7 #2] exit 0 after 3.1 s
+
+## Timed: YOLOv8s (Interleaved AMD vs Ignition)
+[xrt-smi before amd yolov8s #1] ----------------------------- | [003d:00:01.1] : NPU Phoenix | ----------------------------- | AIE Partitions | No hardware contexts running on device
+
+== 2026-09-17T12:50:28Z [amd yolov8s #1] $ <conda envs>\resnet_env17\python.exe <ignite-xdna worktree>\tools\amd_vitisai_yolo.py --model <ignite-xdna main>\models\yolov8s_cut_xint8.onnx --image <Ignition main>\examples\assets\bus.jpg --ignition-src <Ignition main>\src --cache-dir <temp>\sitting_dispatch_opt\vitisai_cache --cache-key yolov8s_sitting --xclbin <ignite-xdna main>\yolocutcachekey\4x4.xclbin --warmup 50 --iterations 500 --json <temp>\sitting_dispatch_opt\amd_yolov8s_1.json
+[amd] ort 1.23.3.dev20260320 | model yolov8s_cut_xint8.onnx | session load 15.24 s | EP report node devices report not found
+[run] frame 100 | G2G 16.67 ms | 5 objects
+[run] frame 200 | G2G 16.65 ms | 5 objects
+[run] frame 300 | G2G 16.80 ms | 5 objects
+[run] frame 400 | G2G 16.62 ms | 5 objects
+[run] frame 500 | G2G 16.26 ms | 5 objects
+[amd] G2G mean 16.966 ms | P50 16.865 | P95 17.855 | P99 18.597 | max 19.415 | over 500 timed frames after 50 warm-up
+[amd] stage means (ms): letterbox 1.862 | session.run 12.883 | decode+NMS 2.221
+[amd] detections on the last frame: 5 {'person': 4, 'bus': 1} | RSS 552.4 MB
+== 2026-09-17T12:50:53Z [amd yolov8s #1] exit 0 after 25.0 s
+[xrt-smi before ignition yolov8s #1] ----------------------------- | [003d:00:01.1] : NPU Phoenix | ----------------------------- | AIE Partitions | No hardware contexts running on device
+
+== 2026-09-17T12:50:55Z [ignition yolov8s #1] $ <conda envs>\mlir-aie-iron\python.exe <Ignition main>\live_ignition.py --model <ignite-xdna main>\build\yolov8s.ignite --source <Ignition main>\examples\assets\bus.jpg --headless --warmup 50 --frames 500 --json <temp>\sitting_dispatch_opt\ign_yolov8s_1.json
+[Ignition] loading <ignite-xdna main>\build\yolov8s.ignite (bare-metal .ignite container)
+[Ignition] Native XDNA1 NPU backend active (Device 0)
+[Ignition] task: detect
+[Ignition] power mode balanced: 8 worker threads, sleeping between regions (8 cores / 16 threads on this host)
+[Ignition] source: image bus.jpg 810x1080
+[Ignition] NPU power mode: default kept: the balanced power mode leaves the NPU's mode alone
+[run] frame 100 | G2G 17.87 ms | 56 FPS | 6 objects | detect: npu
+[run] frame 200 | G2G 18.23 ms | 56 FPS | 6 objects | detect: npu
+[run] frame 300 | G2G 17.90 ms | 56 FPS | 6 objects | detect: npu
+[run] frame 400 | G2G 17.94 ms | 56 FPS | 6 objects | detect: npu
+[run] frame 500 | G2G 17.76 ms | 55 FPS | 6 objects | detect: npu
+[Ignition] shutdown: source released, window closed, NPU hardware context released
+[summary] stop: frame limit | 550 frames processed (50 warm-up, 500 timed) | 1 distinct source frames | image bus.jpg 810x1080
+[summary] NPU power mode: default kept: the balanced power mode leaves the NPU's mode alone
+[summary] G2G mean 17.950 ms | P50 17.894 | P95 18.369 | P99 18.902 | max 19.624 | over the last 500 timed frames; cold first frame 21.01 ms
+[summary] stage means (ms): preprocess 0.626 | NPU forward 17.155 (dispatch 16.843, readback 0.312) | decode+NMS 0.160
+[summary] boxes from NPU heads on 500/500 timed frames | 6.00 detections per frame
+[summary] RSS 240.5 MB at the first timed frame, 240.5 MB at the end (+0.00 MB over 500 frames)
+[summary] wrote <temp>\sitting_dispatch_opt\ign_yolov8s_1.json
+== 2026-09-17T12:51:06Z [ignition yolov8s #1] exit 0 after 10.5 s
+[xrt-smi before amd yolov8s #2] ----------------------------- | [003d:00:01.1] : NPU Phoenix | ----------------------------- | AIE Partitions | No hardware contexts running on device
+
+== 2026-09-17T12:51:08Z [amd yolov8s #2] $ <conda envs>\resnet_env17\python.exe <ignite-xdna worktree>\tools\amd_vitisai_yolo.py --model <ignite-xdna main>\models\yolov8s_cut_xint8.onnx --image <Ignition main>\examples\assets\bus.jpg --ignition-src <Ignition main>\src --cache-dir <temp>\sitting_dispatch_opt\vitisai_cache --cache-key yolov8s_sitting --xclbin <ignite-xdna main>\yolocutcachekey\4x4.xclbin --warmup 50 --iterations 500 --json <temp>\sitting_dispatch_opt\amd_yolov8s_2.json
+[amd] ort 1.23.3.dev20260320 | model yolov8s_cut_xint8.onnx | session load 0.44 s | EP report node devices report not found
+[run] frame 100 | G2G 16.78 ms | 5 objects
+[run] frame 200 | G2G 17.24 ms | 5 objects
+[run] frame 300 | G2G 17.15 ms | 5 objects
+[run] frame 400 | G2G 16.46 ms | 5 objects
+[run] frame 500 | G2G 16.78 ms | 5 objects
+[amd] G2G mean 16.916 ms | P50 16.797 | P95 17.832 | P99 18.911 | max 21.923 | over 500 timed frames after 50 warm-up
+[amd] stage means (ms): letterbox 1.818 | session.run 12.890 | decode+NMS 2.207
+[amd] detections on the last frame: 5 {'person': 4, 'bus': 1} | RSS 338.3 MB
+== 2026-09-17T12:51:18Z [amd yolov8s #2] exit 0 after 10.1 s
+[xrt-smi before ignition yolov8s #2] ----------------------------- | [003d:00:01.1] : NPU Phoenix | ----------------------------- | AIE Partitions | No hardware contexts running on device
+
+== 2026-09-17T12:51:20Z [ignition yolov8s #2] $ <conda envs>\mlir-aie-iron\python.exe <Ignition main>\live_ignition.py --model <ignite-xdna main>\build\yolov8s.ignite --source <Ignition main>\examples\assets\bus.jpg --headless --warmup 50 --frames 500 --json <temp>\sitting_dispatch_opt\ign_yolov8s_2.json
+[Ignition] loading <ignite-xdna main>\build\yolov8s.ignite (bare-metal .ignite container)
+[Ignition] Native XDNA1 NPU backend active (Device 0)
+[Ignition] task: detect
+[Ignition] power mode balanced: 8 worker threads, sleeping between regions (8 cores / 16 threads on this host)
+[Ignition] source: image bus.jpg 810x1080
+[Ignition] NPU power mode: default kept: the balanced power mode leaves the NPU's mode alone
+[run] frame 100 | G2G 17.63 ms | 56 FPS | 6 objects | detect: npu
+[run] frame 200 | G2G 18.02 ms | 56 FPS | 6 objects | detect: npu
+[run] frame 300 | G2G 17.78 ms | 56 FPS | 6 objects | detect: npu
+[run] frame 400 | G2G 17.92 ms | 56 FPS | 6 objects | detect: npu
+[run] frame 500 | G2G 18.07 ms | 56 FPS | 6 objects | detect: npu
+[Ignition] shutdown: source released, window closed, NPU hardware context released
+[summary] stop: frame limit | 550 frames processed (50 warm-up, 500 timed) | 1 distinct source frames | image bus.jpg 810x1080
+[summary] NPU power mode: default kept: the balanced power mode leaves the NPU's mode alone
+[summary] G2G mean 17.940 ms | P50 17.914 | P95 18.239 | P99 18.560 | max 18.937 | over the last 500 timed frames; cold first frame 21.55 ms
+[summary] stage means (ms): preprocess 0.653 | NPU forward 17.121 (dispatch 16.811, readback 0.310) | decode+NMS 0.157
+[summary] boxes from NPU heads on 500/500 timed frames | 6.00 detections per frame
+[summary] RSS 240.8 MB at the first timed frame, 240.9 MB at the end (+0.00 MB over 500 frames)
+[summary] wrote <temp>\sitting_dispatch_opt\ign_yolov8s_2.json
+== 2026-09-17T12:51:31Z [ignition yolov8s #2] exit 0 after 10.5 s
+
+## Timed: YOLOv8n (Interleaved AMD vs Ignition)
+[xrt-smi before amd yolov8n #1] ----------------------------- | [003d:00:01.1] : NPU Phoenix | ----------------------------- | AIE Partitions | No hardware contexts running on device
+
+== 2026-09-17T12:51:33Z [amd yolov8n #1] $ <conda envs>\resnet_env17\python.exe <ignite-xdna worktree>\tools\amd_vitisai_yolo.py --model <ignite-xdna main>\models\yolov8n_cut_xint8.onnx --image <Ignition main>\examples\assets\bus.jpg --ignition-src <Ignition main>\src --cache-dir <temp>\sitting_dispatch_opt\vitisai_cache --cache-key yolov8n_energy --xclbin <ignite-xdna main>\yolocutcachekey\4x4.xclbin --warmup 50 --iterations 500 --json <temp>\sitting_dispatch_opt\amd_yolov8n_1.json
+[amd] ort 1.23.3.dev20260320 | model yolov8n_cut_xint8.onnx | session load 12.21 s | EP report node devices report not found
+[run] frame 100 | G2G 10.55 ms | 5 objects
+[run] frame 200 | G2G 10.75 ms | 5 objects
+[run] frame 300 | G2G 10.54 ms | 5 objects
+[run] frame 400 | G2G 10.48 ms | 5 objects
+[run] frame 500 | G2G 10.68 ms | 5 objects
+[amd] G2G mean 10.637 ms | P50 10.608 | P95 11.329 | P99 12.190 | max 12.728 | over 500 timed frames after 50 warm-up
+[amd] stage means (ms): letterbox 1.816 | session.run 6.663 | decode+NMS 2.158
+[amd] detections on the last frame: 5 {'person': 4, 'bus': 1} | RSS 420.9 MB
+== 2026-09-17T12:51:51Z [amd yolov8n #1] exit 0 after 18.4 s
+[xrt-smi before ignition yolov8n #1] ----------------------------- | [003d:00:01.1] : NPU Phoenix | ----------------------------- | AIE Partitions | No hardware contexts running on device
+
+== 2026-09-17T12:51:53Z [ignition yolov8n #1] $ <conda envs>\mlir-aie-iron\python.exe <Ignition main>\live_ignition.py --model <ignite-xdna main>\build\yolov8n_full.ignite --source <Ignition main>\examples\assets\bus.jpg --headless --warmup 50 --frames 500 --json <temp>\sitting_dispatch_opt\ign_yolov8n_1.json
+[Ignition] loading <ignite-xdna main>\build\yolov8n_full.ignite (bare-metal .ignite container)
+[Ignition] Native XDNA1 NPU backend active (Device 0)
+[Ignition] task: detect
+[Ignition] power mode balanced: 8 worker threads, sleeping between regions (8 cores / 16 threads on this host)
+[Ignition] source: image bus.jpg 810x1080
+[Ignition] NPU power mode: default kept: the balanced power mode leaves the NPU's mode alone
+[run] frame 100 | G2G 8.14 ms | 122 FPS | 5 objects | detect: npu
+[run] frame 200 | G2G 8.28 ms | 119 FPS | 5 objects | detect: npu
+[run] frame 300 | G2G 8.14 ms | 121 FPS | 5 objects | detect: npu
+[run] frame 400 | G2G 8.12 ms | 120 FPS | 5 objects | detect: npu
+[run] frame 500 | G2G 8.37 ms | 119 FPS | 5 objects | detect: npu
+[Ignition] shutdown: source released, window closed, NPU hardware context released
+[summary] stop: frame limit | 550 frames processed (50 warm-up, 500 timed) | 1 distinct source frames | image bus.jpg 810x1080
+[summary] NPU power mode: default kept: the balanced power mode leaves the NPU's mode alone
+[summary] G2G mean 8.309 ms | P50 8.282 | P95 8.599 | P99 8.891 | max 9.279 | over the last 500 timed frames; cold first frame 12.60 ms
+[summary] stage means (ms): preprocess 0.626 | NPU forward 7.535 (dispatch 7.257, readback 0.279) | decode+NMS 0.140
+[summary] boxes from NPU heads on 500/500 timed frames | 5.00 detections per frame
+[summary] RSS 190.4 MB at the first timed frame, 190.4 MB at the end (+0.00 MB over 500 frames)
+[summary] wrote <temp>\sitting_dispatch_opt\ign_yolov8n_1.json
+== 2026-09-17T12:51:58Z [ignition yolov8n #1] exit 0 after 5.2 s
+[xrt-smi before amd yolov8n #2] ----------------------------- | [003d:00:01.1] : NPU Phoenix | ----------------------------- | AIE Partitions | No hardware contexts running on device
+
+== 2026-09-17T12:52:01Z [amd yolov8n #2] $ <conda envs>\resnet_env17\python.exe <ignite-xdna worktree>\tools\amd_vitisai_yolo.py --model <ignite-xdna main>\models\yolov8n_cut_xint8.onnx --image <Ignition main>\examples\assets\bus.jpg --ignition-src <Ignition main>\src --cache-dir <temp>\sitting_dispatch_opt\vitisai_cache --cache-key yolov8n_energy --xclbin <ignite-xdna main>\yolocutcachekey\4x4.xclbin --warmup 50 --iterations 500 --json <temp>\sitting_dispatch_opt\amd_yolov8n_2.json
+[amd] ort 1.23.3.dev20260320 | model yolov8n_cut_xint8.onnx | session load 0.41 s | EP report node devices report not found
+[run] frame 100 | G2G 10.52 ms | 5 objects
+[run] frame 200 | G2G 10.25 ms | 5 objects
+[run] frame 300 | G2G 10.20 ms | 5 objects
+[run] frame 400 | G2G 11.58 ms | 5 objects
+[run] frame 500 | G2G 10.49 ms | 5 objects
+[amd] G2G mean 10.530 ms | P50 10.504 | P95 11.449 | P99 11.918 | max 12.206 | over 500 timed frames after 50 warm-up
+[amd] stage means (ms): letterbox 1.800 | session.run 6.595 | decode+NMS 2.135
+[amd] detections on the last frame: 5 {'person': 4, 'bus': 1} | RSS 304.4 MB
+== 2026-09-17T12:52:07Z [amd yolov8n #2] exit 0 after 6.5 s
+[xrt-smi before ignition yolov8n #2] ----------------------------- | [003d:00:01.1] : NPU Phoenix | ----------------------------- | AIE Partitions | No hardware contexts running on device
+
+== 2026-09-17T12:52:09Z [ignition yolov8n #2] $ <conda envs>\mlir-aie-iron\python.exe <Ignition main>\live_ignition.py --model <ignite-xdna main>\build\yolov8n_full.ignite --source <Ignition main>\examples\assets\bus.jpg --headless --warmup 50 --frames 500 --json <temp>\sitting_dispatch_opt\ign_yolov8n_2.json
+[Ignition] loading <ignite-xdna main>\build\yolov8n_full.ignite (bare-metal .ignite container)
+[Ignition] Native XDNA1 NPU backend active (Device 0)
+[Ignition] task: detect
+[Ignition] power mode balanced: 8 worker threads, sleeping between regions (8 cores / 16 threads on this host)
+[Ignition] source: image bus.jpg 810x1080
+[Ignition] NPU power mode: default kept: the balanced power mode leaves the NPU's mode alone
+[run] frame 100 | G2G 8.10 ms | 121 FPS | 5 objects | detect: npu
+[run] frame 200 | G2G 8.57 ms | 118 FPS | 5 objects | detect: npu
+[run] frame 300 | G2G 8.34 ms | 120 FPS | 5 objects | detect: npu
+[run] frame 400 | G2G 8.33 ms | 120 FPS | 5 objects | detect: npu
+[run] frame 500 | G2G 8.33 ms | 119 FPS | 5 objects | detect: npu
+[Ignition] shutdown: source released, window closed, NPU hardware context released
+[summary] stop: frame limit | 550 frames processed (50 warm-up, 500 timed) | 1 distinct source frames | image bus.jpg 810x1080
+[summary] NPU power mode: default kept: the balanced power mode leaves the NPU's mode alone
+[summary] G2G mean 8.349 ms | P50 8.305 | P95 8.686 | P99 9.316 | max 10.927 | over the last 500 timed frames; cold first frame 12.48 ms
+[summary] stage means (ms): preprocess 0.635 | NPU forward 7.566 (dispatch 7.278, readback 0.287) | decode+NMS 0.141
+[summary] boxes from NPU heads on 500/500 timed frames | 5.00 detections per frame
+[summary] RSS 190.0 MB at the first timed frame, 190.0 MB at the end (+0.00 MB over 500 frames)
+[summary] wrote <temp>\sitting_dispatch_opt\ign_yolov8n_2.json
+== 2026-09-17T12:52:14Z [ignition yolov8n #2] exit 0 after 5.2 s
+
+## Timed: YOLOv8n-pose (Interleaved AMD vs Ignition)
+[xrt-smi before amd pose #1] ----------------------------- | [003d:00:01.1] : NPU Phoenix | ----------------------------- | AIE Partitions | No hardware contexts running on device
+
+== 2026-09-17T12:52:16Z [amd pose #1] $ <conda envs>\resnet_env17\python.exe <ignite-xdna main>\pipelines\yolov8n-pose\4_pose.py --model <ignite-xdna main>\models\yolov8n-pose_cut_xint8.onnx --ep npu --source <ignite-xdna main>\assets\bus.jpg --warmup 50 --runs 500 --log 2 --out <temp>\sitting_dispatch_opt\amd_pose_1.jpg
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  <ignite-xdna main>\yoloposecutcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+model: head-cut (9 outputs), decode tail runs in numpy
+input: 640x640
+[run] frame 100 | G2G 12.83 ms | 3 people
+[run] frame 200 | G2G 13.17 ms | 3 people
+[run] frame 300 | G2G 11.25 ms | 3 people
+[run] frame 400 | G2G 11.81 ms | 3 people
+[run] frame 500 | G2G 12.08 ms | 3 people
+
+=== NPU | <ignite-xdna main>\models\yolov8n-pose_cut_xint8.onnx | 640px | <ignite-xdna main>\assets\bus.jpg ===
+infer   mean 8.75 ms   median 8.74 ms   p95 9.23 ms   (114.3 fps)
+post    mean 0.12 ms
+pre     mean 3.114 ms
+g2g     mean 12.137 ms   p50 12.034   p95 13.112   p99 13.686 ms   over 500 runs (82.4 fps)
+3 people:
+   person 0.88  (45,397,196,509)  16/17 keypoints visible
+   person 0.85  (224,406,118,451)  17/17 keypoints visible
+   person 0.73  (669,399,140,477)  8/17 keypoints visible
+wrote <temp>\sitting_dispatch_opt\amd_pose_1.jpg
+== 2026-09-17T12:52:24Z [amd pose #1] exit 0 after 7.4 s
+[xrt-smi before ignition pose #1] ----------------------------- | [003d:00:01.1] : NPU Phoenix | ----------------------------- | AIE Partitions | No hardware contexts running on device
+
+== 2026-09-17T12:52:26Z [ignition pose #1] $ <conda envs>\mlir-aie-iron\python.exe <Ignition main>\live_ignition.py --model <ignite-xdna main>\build\yolov8n_pose.ignite --source <ignite-xdna main>\assets\bus.jpg --headless --warmup 50 --frames 500 --json <temp>\sitting_dispatch_opt\ign_pose_1.json
+[Ignition] loading <ignite-xdna main>\build\yolov8n_pose.ignite (bare-metal .ignite container)
+[Ignition] Native XDNA1 NPU backend active (Device 0)
+[Ignition] task: pose
+[Ignition] power mode balanced: 8 worker threads, sleeping between regions (8 cores / 16 threads on this host)
+[Ignition] source: image bus.jpg 810x1080
+[Ignition] NPU power mode: default kept: the balanced power mode leaves the NPU's mode alone
+[run] frame 100 | G2G 9.23 ms | 109 FPS | 3 people | pose: npu
+[run] frame 200 | G2G 8.75 ms | 112 FPS | 3 people | pose: npu
+[run] frame 300 | G2G 8.73 ms | 112 FPS | 3 people | pose: npu
+[run] frame 400 | G2G 8.82 ms | 113 FPS | 3 people | pose: npu
+[run] frame 500 | G2G 8.91 ms | 111 FPS | 3 people | pose: npu
+[Ignition] shutdown: source released, window closed, NPU hardware context released
+[summary] stop: frame limit | 550 frames processed (50 warm-up, 500 timed) | 1 distinct source frames | image bus.jpg 810x1080
+[summary] NPU power mode: default kept: the balanced power mode leaves the NPU's mode alone
+[summary] G2G mean 8.981 ms | P50 8.932 | P95 9.346 | P99 9.759 | max 10.719 | over the last 500 timed frames; cold first frame 12.07 ms
+[summary] stage means (ms): preprocess 0.546 | NPU forward 8.080 (dispatch 7.569, readback 0.492) | decode+NMS 0.349
+[summary] keypoints from NPU heads on 500/500 timed frames | 3.00 people per frame
+[summary] RSS 181.5 MB at the first timed frame, 181.6 MB at the end (+0.13 MB over 500 frames)
+[summary] wrote <temp>\sitting_dispatch_opt\ign_pose_1.json
+== 2026-09-17T12:52:31Z [ignition pose #1] exit 0 after 5.4 s
+[xrt-smi before amd pose #2] ----------------------------- | [003d:00:01.1] : NPU Phoenix | ----------------------------- | AIE Partitions | No hardware contexts running on device
+
+== 2026-09-17T12:52:34Z [amd pose #2] $ <conda envs>\resnet_env17\python.exe <ignite-xdna main>\pipelines\yolov8n-pose\4_pose.py --model <ignite-xdna main>\models\yolov8n-pose_cut_xint8.onnx --ep npu --source <ignite-xdna main>\assets\bus.jpg --warmup 50 --runs 500 --log 2 --out <temp>\sitting_dispatch_opt\amd_pose_2.jpg
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  <ignite-xdna main>\yoloposecutcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+model: head-cut (9 outputs), decode tail runs in numpy
+input: 640x640
+[run] frame 100 | G2G 12.71 ms | 3 people
+[run] frame 200 | G2G 12.00 ms | 3 people
+[run] frame 300 | G2G 11.69 ms | 3 people
+[run] frame 400 | G2G 11.80 ms | 3 people
+[run] frame 500 | G2G 12.32 ms | 3 people
+
+=== NPU | <ignite-xdna main>\models\yolov8n-pose_cut_xint8.onnx | 640px | <ignite-xdna main>\assets\bus.jpg ===
+infer   mean 8.81 ms   median 8.79 ms   p95 9.39 ms   (113.4 fps)
+post    mean 0.12 ms
+pre     mean 3.131 ms
+g2g     mean 12.220 ms   p50 12.047   p95 13.468   p99 14.512 ms   over 500 runs (81.8 fps)
+3 people:
+   person 0.88  (45,397,196,509)  16/17 keypoints visible
+   person 0.85  (224,406,118,451)  17/17 keypoints visible
+   person 0.73  (669,399,140,477)  8/17 keypoints visible
+wrote <temp>\sitting_dispatch_opt\amd_pose_2.jpg
+== 2026-09-17T12:52:41Z [amd pose #2] exit 0 after 7.4 s
+[xrt-smi before ignition pose #2] ----------------------------- | [003d:00:01.1] : NPU Phoenix | ----------------------------- | AIE Partitions | No hardware contexts running on device
+
+== 2026-09-17T12:52:43Z [ignition pose #2] $ <conda envs>\mlir-aie-iron\python.exe <Ignition main>\live_ignition.py --model <ignite-xdna main>\build\yolov8n_pose.ignite --source <ignite-xdna main>\assets\bus.jpg --headless --warmup 50 --frames 500 --json <temp>\sitting_dispatch_opt\ign_pose_2.json
+[Ignition] loading <ignite-xdna main>\build\yolov8n_pose.ignite (bare-metal .ignite container)
+[Ignition] Native XDNA1 NPU backend active (Device 0)
+[Ignition] task: pose
+[Ignition] power mode balanced: 8 worker threads, sleeping between regions (8 cores / 16 threads on this host)
+[Ignition] source: image bus.jpg 810x1080
+[Ignition] NPU power mode: default kept: the balanced power mode leaves the NPU's mode alone
+[run] frame 100 | G2G 9.14 ms | 111 FPS | 3 people | pose: npu
+[run] frame 200 | G2G 8.89 ms | 111 FPS | 3 people | pose: npu
+[run] frame 300 | G2G 9.08 ms | 112 FPS | 3 people | pose: npu
+[run] frame 400 | G2G 8.99 ms | 112 FPS | 3 people | pose: npu
+[run] frame 500 | G2G 8.87 ms | 112 FPS | 3 people | pose: npu
+[Ignition] shutdown: source released, window closed, NPU hardware context released
+[summary] stop: frame limit | 550 frames processed (50 warm-up, 500 timed) | 1 distinct source frames | image bus.jpg 810x1080
+[summary] NPU power mode: default kept: the balanced power mode leaves the NPU's mode alone
+[summary] G2G mean 8.952 ms | P50 8.913 | P95 9.269 | P99 9.576 | max 10.247 | over the last 500 timed frames; cold first frame 12.62 ms
+[summary] stage means (ms): preprocess 0.544 | NPU forward 8.064 (dispatch 7.566, readback 0.480) | decode+NMS 0.339
+[summary] keypoints from NPU heads on 500/500 timed frames | 3.00 people per frame
+[summary] RSS 181.7 MB at the first timed frame, 181.8 MB at the end (+0.13 MB over 500 frames)
+[summary] wrote <temp>\sitting_dispatch_opt\ign_pose_2.json
+== 2026-09-17T12:52:49Z [ignition pose #2] exit 0 after 5.4 s
+
+[xrt-smi after complete suite] ----------------------------- | [003d:00:01.1] : NPU Phoenix | ----------------------------- | AIE Partitions | No hardware contexts running on device
+# Finished at: 2026-09-17T12:52:49Z

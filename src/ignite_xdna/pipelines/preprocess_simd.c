@@ -473,6 +473,208 @@ PREPROCESS_API int c8_blocks_class_max_int8(
     return 0;
 }
 
+/**
+ * Fast DepthToSpace (CRD mode, bs=2) + LUT dequantization for super-resolution (SESR M7):
+ * Input is channel-blocked uint8 [2][h][w][8], 12 active channels.
+ * Output is upscaled BGR image uint8 [2*h][2*w][3].
+ */
+PREPROCESS_API int depth_to_space_crd_bgr(
+    const uint8_t* __restrict src,
+    int h,
+    int w,
+    const uint8_t* __restrict lut,
+    uint8_t* __restrict dst
+) {
+    if (!src || !lut || !dst || h <= 0 || w <= 0) {
+        return -1;
+    }
+    const size_t hw = (size_t)h * (size_t)w;
+    const uint8_t* __restrict b0 = src;
+    const uint8_t* __restrict b1 = src + hw * 8;
+    const int out_stride = w * 2 * 3;
+
+    for (int y = 0; y < h; ++y) {
+        uint8_t* __restrict row_top = dst + (size_t)(2 * y) * out_stride;
+        uint8_t* __restrict row_bot = dst + (size_t)(2 * y + 1) * out_stride;
+        const uint8_t* __restrict p0 = b0 + (size_t)y * w * 8;
+        const uint8_t* __restrict p1 = b1 + (size_t)y * w * 8;
+
+        for (int x = 0; x < w; ++x) {
+            uint8_t p0_0 = p0[0], p0_1 = p0[1], p0_2 = p0[2], p0_3 = p0[3];
+            uint8_t p0_4 = p0[4], p0_5 = p0[5], p0_6 = p0[6], p0_7 = p0[7];
+            uint8_t p1_0 = p1[0], p1_1 = p1[1], p1_2 = p1[2], p1_3 = p1[3];
+            p0 += 8;
+            p1 += 8;
+
+            row_top[0] = lut[p1_0];
+            row_top[1] = lut[p0_4];
+            row_top[2] = lut[p0_0];
+            row_top[3] = lut[p1_1];
+            row_top[4] = lut[p0_5];
+            row_top[5] = lut[p0_1];
+            row_top += 6;
+
+            row_bot[0] = lut[p1_2];
+            row_bot[1] = lut[p0_6];
+            row_bot[2] = lut[p0_2];
+            row_bot[3] = lut[p1_3];
+            row_bot[4] = lut[p0_7];
+            row_bot[5] = lut[p0_3];
+            row_bot += 6;
+        }
+    }
+    return 0;
+}
+
+/**
+ * Fused direct bilinear resize + BGR-to-RGB + input quantization straight into
+ * the dense graph engine's input plane (e.g. for SESR super-resolution).
+ * No letterboxing or aspect-ratio padding is performed; the image is scaled to (dst_w, dst_h).
+ *
+ * @param src_bgr      Pointer to source BGR image (HWC uint8)
+ * @param src_w        Source image width in pixels
+ * @param src_h        Source image height in pixels
+ * @param src_stride   Source image stride in bytes (typically src_w * 3)
+ * @param dst_plane    Pointer to destination input plane [dst_h + 2*halo][dst_w + 2*halo][8] uint8
+ * @param dst_w        Target network width (e.g. 256)
+ * @param dst_h        Target network height (e.g. 256)
+ * @param halo         Halo border size in pixels (e.g. 1)
+ * @param lut          Optional 256-byte LUT (uint8); if NULL, pixel values are written unmapped
+ * @return 0 on success; negative error code on failure.
+ */
+PREPROCESS_API int fused_resize_bgr_to_c8_plane(
+    const uint8_t* __restrict src_bgr,
+    int src_w,
+    int src_h,
+    int src_stride,
+    uint8_t* __restrict dst_plane,
+    int dst_w,
+    int dst_h,
+    int halo,
+    const uint8_t* __restrict lut
+) {
+    if (!src_bgr || !dst_plane || src_w <= 0 || src_h <= 0 || dst_w <= 0 || dst_h <= 0 || halo < 0) {
+        return -1;
+    }
+    if (src_stride < src_w * 3) {
+        return -3;
+    }
+
+    const size_t pitch = (size_t)(dst_w + 2 * halo) * 8;
+
+    if (src_w == dst_w && src_h == dst_h) {
+        int y;
+#ifdef _OPENMP
+        #pragma omp parallel for schedule(static)
+#endif
+        for (y = 0; y < dst_h; ++y) {
+            const uint8_t* __restrict src_row = src_bgr + ((size_t)y * src_stride);
+            uint8_t* __restrict dst_row = dst_plane + (size_t)(y + halo) * pitch + (size_t)halo * 8;
+            for (int x = 0; x < dst_w; ++x) {
+                uint8_t b = src_row[x * 3 + 0];
+                uint8_t g = src_row[x * 3 + 1];
+                uint8_t r = src_row[x * 3 + 2];
+                uint8_t* p = dst_row + (size_t)x * 8;
+                p[0] = lut ? lut[r] : r;
+                p[1] = lut ? lut[g] : g;
+                p[2] = lut ? lut[b] : b;
+            }
+        }
+        return 0;
+    }
+
+    // Precompute 1D horizontal table
+    XCoordTable x_tab_stack[1024];
+    XCoordTable* x_tab = x_tab_stack;
+    XCoordTable* x_tab_heap = NULL;
+    if (dst_w > 1024) {
+        x_tab_heap = (XCoordTable*)malloc((size_t)dst_w * sizeof(XCoordTable));
+        if (!x_tab_heap) return -2;
+        x_tab = x_tab_heap;
+    }
+
+    float fx = (float)src_w / (float)dst_w;
+    for (int x = 0; x < dst_w; ++x) {
+        float sx = (x + 0.5f) * fx - 0.5f;
+        int x0 = (int)floorf(sx);
+        if (x0 < 0) x0 = 0;
+        int x1 = x0 + 1;
+        if (x1 >= src_w) x1 = src_w - 1;
+
+        float alpha = sx - (float)x0;
+        if (alpha < 0.0f) alpha = 0.0f;
+        if (alpha > 1.0f) alpha = 1.0f;
+
+        int bx1 = (int)floorf(alpha * 2048.0f + 0.5f);
+        int bx0 = 2048 - bx1;
+
+        x_tab[x].x0 = x0;
+        x_tab[x].x1 = x1;
+        x_tab[x].bx0 = bx0;
+        x_tab[x].bx1 = bx1;
+    }
+
+    float fy = (float)src_h / (float)dst_h;
+    int y;
+#ifdef _OPENMP
+    #pragma omp parallel for schedule(static)
+#endif
+    for (y = 0; y < dst_h; ++y) {
+        float sy = (y + 0.5f) * fy - 0.5f;
+        int y0 = (int)floorf(sy);
+        if (y0 < 0) y0 = 0;
+        int y1 = y0 + 1;
+        if (y1 >= src_h) y1 = src_h - 1;
+
+        float beta = sy - (float)y0;
+        if (beta < 0.0f) beta = 0.0f;
+        if (beta > 1.0f) beta = 1.0f;
+
+        int by1 = (int)floorf(beta * 2048.0f + 0.5f);
+        int by0 = 2048 - by1;
+
+        const uint8_t* __restrict row0 = src_bgr + ((size_t)y0 * src_stride);
+        const uint8_t* __restrict row1 = src_bgr + ((size_t)y1 * src_stride);
+        uint8_t* __restrict dst_row = dst_plane + (size_t)(y + halo) * pitch + (size_t)halo * 8;
+
+        for (int x = 0; x < dst_w; ++x) {
+            int x0 = x_tab[x].x0;
+            int x1 = x_tab[x].x1;
+            int bx0 = x_tab[x].bx0;
+            int bx1 = x_tab[x].bx1;
+
+            const uint8_t* p00 = row0 + (x0 * 3);
+            const uint8_t* p01 = row0 + (x1 * 3);
+            const uint8_t* p10 = row1 + (x0 * 3);
+            const uint8_t* p11 = row1 + (x1 * 3);
+
+            int r0_b = (p00[0] * bx0 + p01[0] * bx1 + 1024) >> 11;
+            int r1_b = (p10[0] * bx0 + p11[0] * bx1 + 1024) >> 11;
+            int v_b = (r0_b * by0 + r1_b * by1 + 1024) >> 11;
+
+            int r0_g = (p00[1] * bx0 + p01[1] * bx1 + 1024) >> 11;
+            int r1_g = (p10[1] * bx0 + p11[1] * bx1 + 1024) >> 11;
+            int v_g = (r0_g * by0 + r1_g * by1 + 1024) >> 11;
+
+            int r0_r = (p00[2] * bx0 + p01[2] * bx1 + 1024) >> 11;
+            int r1_r = (p10[2] * bx0 + p11[2] * bx1 + 1024) >> 11;
+            int v_r = (r0_r * by0 + r1_r * by1 + 1024) >> 11;
+
+            if (v_r < 0) v_r = 0; else if (v_r > 255) v_r = 255;
+            if (v_g < 0) v_g = 0; else if (v_g > 255) v_g = 255;
+            if (v_b < 0) v_b = 0; else if (v_b > 255) v_b = 255;
+
+            uint8_t* p = dst_row + (size_t)x * 8;
+            p[0] = lut ? lut[v_r] : (uint8_t)v_r;
+            p[1] = lut ? lut[v_g] : (uint8_t)v_g;
+            p[2] = lut ? lut[v_b] : (uint8_t)v_b;
+        }
+    }
+
+    free(x_tab_heap);
+    return 0;
+}
+
 #ifdef __cplusplus
 }
 #endif
