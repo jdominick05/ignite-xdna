@@ -19,6 +19,11 @@
 #include <string.h>
 #include <math.h>
 
+#if defined(_MSC_VER) || defined(__AVX2__)
+#include <immintrin.h>
+#define HAVE_AVX2 1
+#endif
+
 #ifdef _OPENMP
 #include <omp.h>
 #endif
@@ -30,6 +35,8 @@ typedef struct {
     int x1;
     int bx0;
     int bx1;
+    int off0;
+    int off1;
 } XCoordTable;
 
 // Export symbol for Windows DLL
@@ -149,7 +156,38 @@ PREPROCESS_API int fused_preprocess_bgr_to_chw_int8(
         x_tab[x].x1 = x1;
         x_tab[x].bx0 = bx0;
         x_tab[x].bx1 = bx1;
+        x_tab[x].off0 = x0 * 3;
+        x_tab[x].off1 = x1 * 3;
     }
+
+#if defined(HAVE_AVX2)
+    int n_pairs = nw / 2;
+    __declspec(align(32)) __m256i w_bx0_stack[512];
+    __declspec(align(32)) __m256i w_bx1_stack[512];
+    __m256i* w_bx0 = w_bx0_stack;
+    __m256i* w_bx1 = w_bx1_stack;
+    __m256i* w_bx0_heap = NULL;
+    __m256i* w_bx1_heap = NULL;
+
+    if (n_pairs > 512) {
+        w_bx0_heap = (__m256i*)_mm_malloc((size_t)(n_pairs + 1) * sizeof(__m256i), 32);
+        w_bx1_heap = (__m256i*)_mm_malloc((size_t)(n_pairs + 1) * sizeof(__m256i), 32);
+        if (w_bx0_heap && w_bx1_heap) {
+            w_bx0 = w_bx0_heap;
+            w_bx1 = w_bx1_heap;
+        }
+    }
+
+    for (int p = 0; p < n_pairs; ++p) {
+        int xA = p * 2;
+        int xB = xA + 1;
+        w_bx0[p] = _mm256_set_epi32(0, x_tab[xB].bx0, x_tab[xB].bx0, x_tab[xB].bx0,
+                                    0, x_tab[xA].bx0, x_tab[xA].bx0, x_tab[xA].bx0);
+        w_bx1[p] = _mm256_set_epi32(0, x_tab[xB].bx1, x_tab[xB].bx1, x_tab[xB].bx1,
+                                    0, x_tab[xA].bx1, x_tab[xA].bx1, x_tab[xA].bx1);
+    }
+    const __m256i v_1024 = _mm256_set1_epi32(1024);
+#endif
 
     // 4. Precompute 1D vertical interpolation table (Y coords and Q11 weights)
     float fy = (float)src_h / (float)nh;
@@ -180,37 +218,86 @@ PREPROCESS_API int fused_preprocess_bgr_to_chw_int8(
         int8_t* __restrict out_g = dst_g_plane + row_offset;
         int8_t* __restrict out_b = dst_b_plane + row_offset;
 
-        // Vectorized row loop with unrolled fixed-point bilinear filtering
-        for (int x = 0; x < nw; ++x) {
-            int x0 = x_tab[x].x0;
-            int x1 = x_tab[x].x1;
-            int bx0 = x_tab[x].bx0;
-            int bx1 = x_tab[x].bx1;
+#if defined(HAVE_AVX2)
+        __m256i v_by0 = _mm256_set1_epi32(by0);
+        __m256i v_by1 = _mm256_set1_epi32(by1);
 
-            const uint8_t* p00 = row0 + (x0 * 3);
-            const uint8_t* p01 = row0 + (x1 * 3);
-            const uint8_t* p10 = row1 + (x0 * 3);
-            const uint8_t* p11 = row1 + (x1 * 3);
+        int p = 0;
+        for (; p < n_pairs; ++p) {
+            int xA = p * 2;
+            int xB = xA + 1;
 
-            // Channel 0: Blue (written to Plane 2)
-            int r0_b = (p00[0] * bx0 + p01[0] * bx1 + 1024) >> 11;
-            int r1_b = (p10[0] * bx0 + p11[0] * bx1 + 1024) >> 11;
+            int off0_A = x_tab[xA].off0;
+            int off1_A = x_tab[xA].off1;
+            int off0_B = x_tab[xB].off0;
+            int off1_B = x_tab[xB].off1;
+
+            uint32_t raw_p00_A = *(const uint32_t*)(row0 + off0_A);
+            uint32_t raw_p00_B = *(const uint32_t*)(row0 + off0_B);
+            uint32_t raw_p01_A = *(const uint32_t*)(row0 + off1_A);
+            uint32_t raw_p01_B = *(const uint32_t*)(row0 + off1_B);
+
+            uint32_t raw_p10_A = *(const uint32_t*)(row1 + off0_A);
+            uint32_t raw_p10_B = *(const uint32_t*)(row1 + off0_B);
+            uint32_t raw_p11_A = *(const uint32_t*)(row1 + off1_A);
+            uint32_t raw_p11_B = *(const uint32_t*)(row1 + off1_B);
+
+            __m256i P00 = _mm256_set_m128i(_mm_cvtepu8_epi32(_mm_cvtsi32_si128(raw_p00_B)),
+                                          _mm_cvtepu8_epi32(_mm_cvtsi32_si128(raw_p00_A)));
+            __m256i P01 = _mm256_set_m128i(_mm_cvtepu8_epi32(_mm_cvtsi32_si128(raw_p01_B)),
+                                          _mm_cvtepu8_epi32(_mm_cvtsi32_si128(raw_p01_A)));
+            __m256i P10 = _mm256_set_m128i(_mm_cvtepu8_epi32(_mm_cvtsi32_si128(raw_p10_B)),
+                                          _mm_cvtepu8_epi32(_mm_cvtsi32_si128(raw_p10_A)));
+            __m256i P11 = _mm256_set_m128i(_mm_cvtepu8_epi32(_mm_cvtsi32_si128(raw_p11_B)),
+                                          _mm_cvtepu8_epi32(_mm_cvtsi32_si128(raw_p11_A)));
+
+            __m256i bx0 = w_bx0[p];
+            __m256i bx1 = w_bx1[p];
+
+            __m256i r0 = _mm256_srli_epi32(
+                _mm256_add_epi32(_mm256_add_epi32(_mm256_mullo_epi32(P00, bx0),
+                                                  _mm256_mullo_epi32(P01, bx1)), v_1024), 11);
+            __m256i r1 = _mm256_srli_epi32(
+                _mm256_add_epi32(_mm256_add_epi32(_mm256_mullo_epi32(P10, bx0),
+                                                  _mm256_mullo_epi32(P11, bx1)), v_1024), 11);
+
+            __m256i v = _mm256_srli_epi32(
+                _mm256_add_epi32(_mm256_add_epi32(_mm256_mullo_epi32(r0, v_by0),
+                                                  _mm256_mullo_epi32(r1, v_by1)), v_1024), 11);
+
+            int32_t buf[8];
+            _mm256_storeu_si256((__m256i*)buf, v);
+
+            out_r[xA] = (int8_t)(buf[2] - 128);
+            out_g[xA] = (int8_t)(buf[1] - 128);
+            out_b[xA] = (int8_t)(buf[0] - 128);
+
+            out_r[xB] = (int8_t)(buf[6] - 128);
+            out_g[xB] = (int8_t)(buf[5] - 128);
+            out_b[xB] = (int8_t)(buf[4] - 128);
+        }
+        int x_start = p * 2;
+#else
+        int x_start = 0;
+#endif
+        for (int x = x_start; x < nw; ++x) {
+            const XCoordTable* t = &x_tab[x];
+            const uint8_t* p00 = row0 + t->off0;
+            const uint8_t* p01 = row0 + t->off1;
+            const uint8_t* p10 = row1 + t->off0;
+            const uint8_t* p11 = row1 + t->off1;
+
+            int r0_b = (p00[0] * t->bx0 + p01[0] * t->bx1 + 1024) >> 11;
+            int r1_b = (p10[0] * t->bx0 + p11[0] * t->bx1 + 1024) >> 11;
             int v_b = (r0_b * by0 + r1_b * by1 + 1024) >> 11;
 
-            // Channel 1: Green (written to Plane 1)
-            int r0_g = (p00[1] * bx0 + p01[1] * bx1 + 1024) >> 11;
-            int r1_g = (p10[1] * bx0 + p11[1] * bx1 + 1024) >> 11;
+            int r0_g = (p00[1] * t->bx0 + p01[1] * t->bx1 + 1024) >> 11;
+            int r1_g = (p10[1] * t->bx0 + p11[1] * t->bx1 + 1024) >> 11;
             int v_g = (r0_g * by0 + r1_g * by1 + 1024) >> 11;
 
-            // Channel 2: Red (written to Plane 0)
-            int r0_r = (p00[2] * bx0 + p01[2] * bx1 + 1024) >> 11;
-            int r1_r = (p10[2] * bx0 + p11[2] * bx1 + 1024) >> 11;
+            int r0_r = (p00[2] * t->bx0 + p01[2] * t->bx1 + 1024) >> 11;
+            int r1_r = (p10[2] * t->bx0 + p11[2] * t->bx1 + 1024) >> 11;
             int v_r = (r0_r * by0 + r1_r * by1 + 1024) >> 11;
-
-            // Clamp and convert to signed int8 (-128 .. 127)
-            if (v_r < 0) v_r = 0; else if (v_r > 255) v_r = 255;
-            if (v_g < 0) v_g = 0; else if (v_g > 255) v_g = 255;
-            if (v_b < 0) v_b = 0; else if (v_b > 255) v_b = 255;
 
             out_r[x] = (int8_t)(v_r - 128);
             out_g[x] = (int8_t)(v_g - 128);
@@ -218,6 +305,10 @@ PREPROCESS_API int fused_preprocess_bgr_to_chw_int8(
         }
     }
 
+#if defined(HAVE_AVX2)
+    if (w_bx0_heap) _mm_free(w_bx0_heap);
+    if (w_bx1_heap) _mm_free(w_bx1_heap);
+#endif
     free(x_tab_heap);
     return 0;
 }
@@ -334,7 +425,47 @@ PREPROCESS_API int fused_preprocess_bgr_to_c8_plane(
         x_tab[x].x1 = x1;
         x_tab[x].bx0 = 2048 - bx1;
         x_tab[x].bx1 = bx1;
+        x_tab[x].off0 = x0 * 3;
+        x_tab[x].off1 = x1 * 3;
     }
+
+#if defined(HAVE_AVX2)
+    int n_pairs = nw / 2;
+    __declspec(align(32)) __m256i w_bx0_stack[512];
+    __declspec(align(32)) __m256i w_bx1_stack[512];
+    __m256i* w_bx0 = w_bx0_stack;
+    __m256i* w_bx1 = w_bx1_stack;
+    __m256i* w_bx0_heap = NULL;
+    __m256i* w_bx1_heap = NULL;
+
+    if (n_pairs > 512) {
+        w_bx0_heap = (__m256i*)_mm_malloc((size_t)(n_pairs + 1) * sizeof(__m256i), 32);
+        w_bx1_heap = (__m256i*)_mm_malloc((size_t)(n_pairs + 1) * sizeof(__m256i), 32);
+        if (w_bx0_heap && w_bx1_heap) {
+            w_bx0 = w_bx0_heap;
+            w_bx1 = w_bx1_heap;
+        }
+    }
+
+    for (int p = 0; p < n_pairs; ++p) {
+        int xA = p * 2;
+        int xB = xA + 1;
+        w_bx0[p] = _mm256_set_epi32(0, x_tab[xB].bx0, x_tab[xB].bx0, x_tab[xB].bx0,
+                                    0, x_tab[xA].bx0, x_tab[xA].bx0, x_tab[xA].bx0);
+        w_bx1[p] = _mm256_set_epi32(0, x_tab[xB].bx1, x_tab[xB].bx1, x_tab[xB].bx1,
+                                    0, x_tab[xA].bx1, x_tab[xA].bx1, x_tab[xA].bx1);
+    }
+
+    const __m256i v_1024 = _mm256_set1_epi32(1024);
+    const __m256i v_pad_val = _mm256_set1_epi8((char)pad_q);
+    const __m256i v_pad_mask = _mm256_setr_epi8(
+        (char)0xFF, (char)0xFF, (char)0xFF, 0x00, 0x00, 0x00, 0x00, 0x00,
+        (char)0xFF, (char)0xFF, (char)0xFF, 0x00, 0x00, 0x00, 0x00, 0x00,
+        (char)0xFF, (char)0xFF, (char)0xFF, 0x00, 0x00, 0x00, 0x00, 0x00,
+        (char)0xFF, (char)0xFF, (char)0xFF, 0x00, 0x00, 0x00, 0x00, 0x00
+    );
+#endif
+
     float fy = (float)src_h / (float)nh;
 
     int y;
@@ -343,12 +474,50 @@ PREPROCESS_API int fused_preprocess_bgr_to_c8_plane(
         uint8_t* __restrict row = dst_plane + (size_t)(y + halo) * pitch + (size_t)halo * 8;
         int iy = y - pad_top;
         if (iy < 0 || iy >= nh) {
+#if defined(HAVE_AVX2)
+            int x = 0;
+            for (; x + 3 < dst_w; x += 4) {
+                uint8_t* p = row + (size_t)x * 8;
+                __m256i orig = _mm256_loadu_si256((const __m256i*)p);
+                __m256i blended = _mm256_blendv_epi8(orig, v_pad_val, v_pad_mask);
+                _mm256_storeu_si256((__m256i*)p, blended);
+            }
+            for (; x < dst_w; ++x) {
+                uint8_t* p = row + (size_t)x * 8;
+                p[0] = pad_q; p[1] = pad_q; p[2] = pad_q;
+            }
+#else
             for (int x = 0; x < dst_w; ++x) {
                 uint8_t* p = row + (size_t)x * 8;
                 p[0] = pad_q; p[1] = pad_q; p[2] = pad_q;
             }
+#endif
             continue;
         }
+#if defined(HAVE_AVX2)
+        int xl = 0;
+        for (; xl + 3 < pad_left; xl += 4) {
+            uint8_t* p = row + (size_t)xl * 8;
+            __m256i orig = _mm256_loadu_si256((const __m256i*)p);
+            __m256i blended = _mm256_blendv_epi8(orig, v_pad_val, v_pad_mask);
+            _mm256_storeu_si256((__m256i*)p, blended);
+        }
+        for (; xl < pad_left; ++xl) {
+            uint8_t* p = row + (size_t)xl * 8;
+            p[0] = pad_q; p[1] = pad_q; p[2] = pad_q;
+        }
+        int xr = pad_left + nw;
+        for (; xr + 3 < dst_w; xr += 4) {
+            uint8_t* p = row + (size_t)xr * 8;
+            __m256i orig = _mm256_loadu_si256((const __m256i*)p);
+            __m256i blended = _mm256_blendv_epi8(orig, v_pad_val, v_pad_mask);
+            _mm256_storeu_si256((__m256i*)p, blended);
+        }
+        for (; xr < dst_w; ++xr) {
+            uint8_t* p = row + (size_t)xr * 8;
+            p[0] = pad_q; p[1] = pad_q; p[2] = pad_q;
+        }
+#else
         for (int x = 0; x < pad_left; ++x) {
             uint8_t* p = row + (size_t)x * 8;
             p[0] = pad_q; p[1] = pad_q; p[2] = pad_q;
@@ -357,6 +526,7 @@ PREPROCESS_API int fused_preprocess_bgr_to_c8_plane(
             uint8_t* p = row + (size_t)x * 8;
             p[0] = pad_q; p[1] = pad_q; p[2] = pad_q;
         }
+#endif
         float sy = (iy + 0.5f) * fy - 0.5f;
         int y0 = (int)floorf(sy);
         if (y0 < 0) y0 = 0;
@@ -370,27 +540,94 @@ PREPROCESS_API int fused_preprocess_bgr_to_c8_plane(
         const uint8_t* __restrict row0 = src_bgr + ((size_t)y0 * src_stride);
         const uint8_t* __restrict row1 = src_bgr + ((size_t)y1 * src_stride);
         uint8_t* __restrict out = row + (size_t)pad_left * 8;
-        for (int x = 0; x < nw; ++x) {
+
+#if defined(HAVE_AVX2)
+        __m256i v_by0 = _mm256_set1_epi32(by0);
+        __m256i v_by1 = _mm256_set1_epi32(by1);
+
+        int p = 0;
+        for (; p < n_pairs; ++p) {
+            int xA = p * 2;
+            int xB = xA + 1;
+
+            int off0_A = x_tab[xA].off0;
+            int off1_A = x_tab[xA].off1;
+            int off0_B = x_tab[xB].off0;
+            int off1_B = x_tab[xB].off1;
+
+            uint32_t raw_p00_A = *(const uint32_t*)(row0 + off0_A);
+            uint32_t raw_p00_B = *(const uint32_t*)(row0 + off0_B);
+            uint32_t raw_p01_A = *(const uint32_t*)(row0 + off1_A);
+            uint32_t raw_p01_B = *(const uint32_t*)(row0 + off1_B);
+
+            uint32_t raw_p10_A = *(const uint32_t*)(row1 + off0_A);
+            uint32_t raw_p10_B = *(const uint32_t*)(row1 + off0_B);
+            uint32_t raw_p11_A = *(const uint32_t*)(row1 + off1_A);
+            uint32_t raw_p11_B = *(const uint32_t*)(row1 + off1_B);
+
+            __m256i P00 = _mm256_set_m128i(_mm_cvtepu8_epi32(_mm_cvtsi32_si128(raw_p00_B)),
+                                          _mm_cvtepu8_epi32(_mm_cvtsi32_si128(raw_p00_A)));
+            __m256i P01 = _mm256_set_m128i(_mm_cvtepu8_epi32(_mm_cvtsi32_si128(raw_p01_B)),
+                                          _mm_cvtepu8_epi32(_mm_cvtsi32_si128(raw_p01_A)));
+            __m256i P10 = _mm256_set_m128i(_mm_cvtepu8_epi32(_mm_cvtsi32_si128(raw_p10_B)),
+                                          _mm_cvtepu8_epi32(_mm_cvtsi32_si128(raw_p10_A)));
+            __m256i P11 = _mm256_set_m128i(_mm_cvtepu8_epi32(_mm_cvtsi32_si128(raw_p11_B)),
+                                          _mm_cvtepu8_epi32(_mm_cvtsi32_si128(raw_p11_A)));
+
+            __m256i bx0 = w_bx0[p];
+            __m256i bx1 = w_bx1[p];
+
+            __m256i r0 = _mm256_srli_epi32(
+                _mm256_add_epi32(_mm256_add_epi32(_mm256_mullo_epi32(P00, bx0),
+                                                  _mm256_mullo_epi32(P01, bx1)), v_1024), 11);
+            __m256i r1 = _mm256_srli_epi32(
+                _mm256_add_epi32(_mm256_add_epi32(_mm256_mullo_epi32(P10, bx0),
+                                                  _mm256_mullo_epi32(P11, bx1)), v_1024), 11);
+
+            __m256i v = _mm256_srli_epi32(
+                _mm256_add_epi32(_mm256_add_epi32(_mm256_mullo_epi32(r0, v_by0),
+                                                  _mm256_mullo_epi32(r1, v_by1)), v_1024), 11);
+
+            int32_t buf[8];
+            _mm256_storeu_si256((__m256i*)buf, v);
+
+            uint8_t* pA = out + (size_t)xA * 8;
+            pA[0] = lut[buf[2]];
+            pA[1] = lut[buf[1]];
+            pA[2] = lut[buf[0]];
+
+            uint8_t* pB = out + (size_t)xB * 8;
+            pB[0] = lut[buf[6]];
+            pB[1] = lut[buf[5]];
+            pB[2] = lut[buf[4]];
+        }
+        int x_start = p * 2;
+#else
+        int x_start = 0;
+#endif
+        for (int x = x_start; x < nw; ++x) {
             const XCoordTable* t = &x_tab[x];
-            const uint8_t* p00 = row0 + (t->x0 * 3);
-            const uint8_t* p01 = row0 + (t->x1 * 3);
-            const uint8_t* p10 = row1 + (t->x0 * 3);
-            const uint8_t* p11 = row1 + (t->x1 * 3);
+            const uint8_t* p00 = row0 + t->off0;
+            const uint8_t* p01 = row0 + t->off1;
+            const uint8_t* p10 = row1 + t->off0;
+            const uint8_t* p11 = row1 + t->off1;
             int v_b = ((((p00[0] * t->bx0 + p01[0] * t->bx1 + 1024) >> 11) * by0 +
                         ((p10[0] * t->bx0 + p11[0] * t->bx1 + 1024) >> 11) * by1 + 1024) >> 11);
             int v_g = ((((p00[1] * t->bx0 + p01[1] * t->bx1 + 1024) >> 11) * by0 +
                         ((p10[1] * t->bx0 + p11[1] * t->bx1 + 1024) >> 11) * by1 + 1024) >> 11);
             int v_r = ((((p00[2] * t->bx0 + p01[2] * t->bx1 + 1024) >> 11) * by0 +
                         ((p10[2] * t->bx0 + p11[2] * t->bx1 + 1024) >> 11) * by1 + 1024) >> 11);
-            if (v_r < 0) v_r = 0; else if (v_r > 255) v_r = 255;
-            if (v_g < 0) v_g = 0; else if (v_g > 255) v_g = 255;
-            if (v_b < 0) v_b = 0; else if (v_b > 255) v_b = 255;
             uint8_t* p = out + (size_t)x * 8;
             p[0] = lut[v_r];
             p[1] = lut[v_g];
             p[2] = lut[v_b];
         }
     }
+
+#if defined(HAVE_AVX2)
+    if (w_bx0_heap) _mm_free(w_bx0_heap);
+    if (w_bx1_heap) _mm_free(w_bx1_heap);
+#endif
     free(x_tab_heap);
     return 0;
 }
@@ -612,7 +849,38 @@ PREPROCESS_API int fused_resize_bgr_to_c8_plane(
         x_tab[x].x1 = x1;
         x_tab[x].bx0 = bx0;
         x_tab[x].bx1 = bx1;
+        x_tab[x].off0 = x0 * 3;
+        x_tab[x].off1 = x1 * 3;
     }
+
+#if defined(HAVE_AVX2)
+    int n_pairs = dst_w / 2;
+    __declspec(align(32)) __m256i w_bx0_stack[512];
+    __declspec(align(32)) __m256i w_bx1_stack[512];
+    __m256i* w_bx0 = w_bx0_stack;
+    __m256i* w_bx1 = w_bx1_stack;
+    __m256i* w_bx0_heap = NULL;
+    __m256i* w_bx1_heap = NULL;
+
+    if (n_pairs > 512) {
+        w_bx0_heap = (__m256i*)_mm_malloc((size_t)(n_pairs + 1) * sizeof(__m256i), 32);
+        w_bx1_heap = (__m256i*)_mm_malloc((size_t)(n_pairs + 1) * sizeof(__m256i), 32);
+        if (w_bx0_heap && w_bx1_heap) {
+            w_bx0 = w_bx0_heap;
+            w_bx1 = w_bx1_heap;
+        }
+    }
+
+    for (int p = 0; p < n_pairs; ++p) {
+        int xA = p * 2;
+        int xB = xA + 1;
+        w_bx0[p] = _mm256_set_epi32(0, x_tab[xB].bx0, x_tab[xB].bx0, x_tab[xB].bx0,
+                                    0, x_tab[xA].bx0, x_tab[xA].bx0, x_tab[xA].bx0);
+        w_bx1[p] = _mm256_set_epi32(0, x_tab[xB].bx1, x_tab[xB].bx1, x_tab[xB].bx1,
+                                    0, x_tab[xA].bx1, x_tab[xA].bx1, x_tab[xA].bx1);
+    }
+    const __m256i v_1024 = _mm256_set1_epi32(1024);
+#endif
 
     float fy = (float)src_h / (float)dst_h;
     int y;
@@ -637,32 +905,88 @@ PREPROCESS_API int fused_resize_bgr_to_c8_plane(
         const uint8_t* __restrict row1 = src_bgr + ((size_t)y1 * src_stride);
         uint8_t* __restrict dst_row = dst_plane + (size_t)(y + halo) * pitch + (size_t)halo * 8;
 
-        for (int x = 0; x < dst_w; ++x) {
-            int x0 = x_tab[x].x0;
-            int x1 = x_tab[x].x1;
-            int bx0 = x_tab[x].bx0;
-            int bx1 = x_tab[x].bx1;
+#if defined(HAVE_AVX2)
+        __m256i v_by0 = _mm256_set1_epi32(by0);
+        __m256i v_by1 = _mm256_set1_epi32(by1);
 
-            const uint8_t* p00 = row0 + (x0 * 3);
-            const uint8_t* p01 = row0 + (x1 * 3);
-            const uint8_t* p10 = row1 + (x0 * 3);
-            const uint8_t* p11 = row1 + (x1 * 3);
+        int p = 0;
+        for (; p < n_pairs; ++p) {
+            int xA = p * 2;
+            int xB = xA + 1;
 
-            int r0_b = (p00[0] * bx0 + p01[0] * bx1 + 1024) >> 11;
-            int r1_b = (p10[0] * bx0 + p11[0] * bx1 + 1024) >> 11;
+            int off0_A = x_tab[xA].off0;
+            int off1_A = x_tab[xA].off1;
+            int off0_B = x_tab[xB].off0;
+            int off1_B = x_tab[xB].off1;
+
+            uint32_t raw_p00_A = *(const uint32_t*)(row0 + off0_A);
+            uint32_t raw_p00_B = *(const uint32_t*)(row0 + off0_B);
+            uint32_t raw_p01_A = *(const uint32_t*)(row0 + off1_A);
+            uint32_t raw_p01_B = *(const uint32_t*)(row0 + off1_B);
+
+            uint32_t raw_p10_A = *(const uint32_t*)(row1 + off0_A);
+            uint32_t raw_p10_B = *(const uint32_t*)(row1 + off0_B);
+            uint32_t raw_p11_A = *(const uint32_t*)(row1 + off1_A);
+            uint32_t raw_p11_B = *(const uint32_t*)(row1 + off1_B);
+
+            __m256i P00 = _mm256_set_m128i(_mm_cvtepu8_epi32(_mm_cvtsi32_si128(raw_p00_B)),
+                                          _mm_cvtepu8_epi32(_mm_cvtsi32_si128(raw_p00_A)));
+            __m256i P01 = _mm256_set_m128i(_mm_cvtepu8_epi32(_mm_cvtsi32_si128(raw_p01_B)),
+                                          _mm_cvtepu8_epi32(_mm_cvtsi32_si128(raw_p01_A)));
+            __m256i P10 = _mm256_set_m128i(_mm_cvtepu8_epi32(_mm_cvtsi32_si128(raw_p10_B)),
+                                          _mm_cvtepu8_epi32(_mm_cvtsi32_si128(raw_p10_A)));
+            __m256i P11 = _mm256_set_m128i(_mm_cvtepu8_epi32(_mm_cvtsi32_si128(raw_p11_B)),
+                                          _mm_cvtepu8_epi32(_mm_cvtsi32_si128(raw_p11_A)));
+
+            __m256i bx0 = w_bx0[p];
+            __m256i bx1 = w_bx1[p];
+
+            __m256i r0 = _mm256_srli_epi32(
+                _mm256_add_epi32(_mm256_add_epi32(_mm256_mullo_epi32(P00, bx0),
+                                                  _mm256_mullo_epi32(P01, bx1)), v_1024), 11);
+            __m256i r1 = _mm256_srli_epi32(
+                _mm256_add_epi32(_mm256_add_epi32(_mm256_mullo_epi32(P10, bx0),
+                                                  _mm256_mullo_epi32(P11, bx1)), v_1024), 11);
+
+            __m256i v = _mm256_srli_epi32(
+                _mm256_add_epi32(_mm256_add_epi32(_mm256_mullo_epi32(r0, v_by0),
+                                                  _mm256_mullo_epi32(r1, v_by1)), v_1024), 11);
+
+            int32_t buf[8];
+            _mm256_storeu_si256((__m256i*)buf, v);
+
+            uint8_t* pA = dst_row + (size_t)xA * 8;
+            pA[0] = lut ? lut[buf[2]] : (uint8_t)buf[2];
+            pA[1] = lut ? lut[buf[1]] : (uint8_t)buf[1];
+            pA[2] = lut ? lut[buf[0]] : (uint8_t)buf[0];
+
+            uint8_t* pB = dst_row + (size_t)xB * 8;
+            pB[0] = lut ? lut[buf[6]] : (uint8_t)buf[6];
+            pB[1] = lut ? lut[buf[5]] : (uint8_t)buf[5];
+            pB[2] = lut ? lut[buf[4]] : (uint8_t)buf[4];
+        }
+        int x_start = p * 2;
+#else
+        int x_start = 0;
+#endif
+        for (int x = x_start; x < dst_w; ++x) {
+            const XCoordTable* t = &x_tab[x];
+            const uint8_t* p00 = row0 + t->off0;
+            const uint8_t* p01 = row0 + t->off1;
+            const uint8_t* p10 = row1 + t->off0;
+            const uint8_t* p11 = row1 + t->off1;
+
+            int r0_b = (p00[0] * t->bx0 + p01[0] * t->bx1 + 1024) >> 11;
+            int r1_b = (p10[0] * t->bx0 + p11[0] * t->bx1 + 1024) >> 11;
             int v_b = (r0_b * by0 + r1_b * by1 + 1024) >> 11;
 
-            int r0_g = (p00[1] * bx0 + p01[1] * bx1 + 1024) >> 11;
-            int r1_g = (p10[1] * bx0 + p11[1] * bx1 + 1024) >> 11;
+            int r0_g = (p00[1] * t->bx0 + p01[1] * t->bx1 + 1024) >> 11;
+            int r1_g = (p10[1] * t->bx0 + p11[1] * t->bx1 + 1024) >> 11;
             int v_g = (r0_g * by0 + r1_g * by1 + 1024) >> 11;
 
-            int r0_r = (p00[2] * bx0 + p01[2] * bx1 + 1024) >> 11;
-            int r1_r = (p10[2] * bx0 + p11[2] * bx1 + 1024) >> 11;
+            int r0_r = (p00[2] * t->bx0 + p01[2] * t->bx1 + 1024) >> 11;
+            int r1_r = (p10[2] * t->bx0 + p11[2] * t->bx1 + 1024) >> 11;
             int v_r = (r0_r * by0 + r1_r * by1 + 1024) >> 11;
-
-            if (v_r < 0) v_r = 0; else if (v_r > 255) v_r = 255;
-            if (v_g < 0) v_g = 0; else if (v_g > 255) v_g = 255;
-            if (v_b < 0) v_b = 0; else if (v_b > 255) v_b = 255;
 
             uint8_t* p = dst_row + (size_t)x * 8;
             p[0] = lut ? lut[v_r] : (uint8_t)v_r;
@@ -671,6 +995,10 @@ PREPROCESS_API int fused_resize_bgr_to_c8_plane(
         }
     }
 
+#if defined(HAVE_AVX2)
+    if (w_bx0_heap) _mm_free(w_bx0_heap);
+    if (w_bx1_heap) _mm_free(w_bx1_heap);
+#endif
     free(x_tab_heap);
     return 0;
 }

@@ -25,7 +25,7 @@ import numpy as np
 
 def _compile_simd_dll(c_path: Path, dll_path: Path) -> bool:
     """Compiles preprocess_simd.c into a shared library / DLL using MSVC cl.exe or clang."""
-    return _compile_native_dll(c_path, dll_path, "/O2 /fp:fast /openmp", ["-O3", "-fopenmp", "-mavx2"])
+    return _compile_native_dll(c_path, dll_path, "/O2 /fp:fast /arch:AVX2 /openmp", ["-O3", "-fopenmp", "-mavx2"])
 
 
 def _compile_native_dll(c_path: Path, dll_path: Path, msvc_flags: str, cc_flags: List[str]) -> bool:
