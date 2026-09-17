@@ -1,0 +1,34 @@
+{
+ "ep": "npu",
+ "model": "yolov8s-worldv2_cut_xint8_fp32cv2.onnx",
+ "source": "bus.jpg",
+ "classes": 80,
+ "warmup": 50,
+ "frames": 600,
+ "description": "ONNX Runtime npu (VitisAIExecutionProvider), numpy letterbox, float decode",
+ "preprocess_ms": {
+  "mean": 3.4992520016385242,
+  "median": 3.3987500064540654,
+  "p95": 4.134569992311299,
+  "p99": 4.428007951937615
+ },
+ "network_ms": {
+  "mean": 108.50795783209226,
+  "median": 109.07805000897497,
+  "p95": 111.99113500479143,
+  "p99": 113.01857202663086
+ },
+ "decode_ms": {
+  "mean": 9.982303166082906,
+  "median": 9.909199958201498,
+  "p95": 10.737209979561158,
+  "p99": 11.428718999959528
+ },
+ "glass_to_glass_ms": {
+  "mean": 121.9895129998137,
+  "median": 122.46215000050142,
+  "p95": 125.85877999954391,
+  "p99": 126.87978798814584
+ },
+ "detections_per_frame": 9.0
+}

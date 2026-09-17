@@ -9311,6 +9311,52 @@ Energy per frame for the same four stacks and the same frame loop as the glass-t
   throughout.
 
 **Not done:**
-- `--power-mode efficiency` and the NPU power switch at 5 fps.
+- `--power-mode efficiency` and the NPU power switch at 5 fps. (Measured next:
+  [the NPU's power-saving mode at 5 fps](#yolo-world-v2-at-5-fps-with-the-npus-power-saving-mode-less-energy-for-17-times-the-frame-time-and-the-igpu-still-spends-less-2026-09-17-desktop-2).)
 - Energy with a small vocabulary.
 - An accuracy recovery that would make the comparison with FP32 on the iGPU like for like.
+
+## YOLO-World v2 at 5 fps with the NPU's power-saving mode: less energy for 1.7 times the frame time, and the iGPU still spends less (2026-09-17, Desktop 2)
+
+The energy sitting above left one question open: at 5 fps, where the iGPU spends less than the container, how much does
+the NPU's own power-saving mode recover? Evidence: `results/aie/yolow_energy/energy_yolow_pmode_phoenix_20260917T0428Z.log`,
+its JSON, and each arm's glass-to-glass record in `pmode_g2g_20260917T0428Z/`.
+
+**Method.**
+- **Loop and tool:** the same as above, `tools/energy_sitting.py` over `pipelines/yolow/4b_g2g.py` on `bus.jpg`, COCO's
+  80 names, 600 frames at 5 fps after 50 warm-up, run from ignite-xdna `469c9d5`.
+- **Device mode:** each arm's setup sets the device-wide NPU power mode with `xrt-smi configure --pmode` and reads it
+  back. The sitting's final step put it back to `default`, and the readback confirmed it.
+- **Host mode:** `IGNITE_XDNA_POWER_MODE` for the container arms.
+- **Arms,** interleaved twice:
+  - the container in `balanced` with the NPU in `default`;
+  - the container in `efficiency` with the NPU in `default`;
+  - the container in `efficiency` with the NPU in `powersaver`;
+  - DirectML FP32 with the NPU in `default`;
+  - AMD's stack on variant D with the NPU in `powersaver`, since the setting applies to it too.
+- **Idle baselines:** they stayed within the tool's 2.0 W flag this time (one disturbed baseline was retaken), so both
+  the own-idle and the median-idle columns are shown.
+
+| Arm, 5 fps | mJ per frame, own idle | mJ per frame, median idle | Glass-to-glass mean | CPU |
+|---|---:|---:|---:|---:|
+| container, balanced, NPU default | 1364.78 / 1489.51 | 1153.69 / 1342.41 | 40.551 / 40.451 ms | 9.1-9.2 % |
+| container, efficiency, NPU default | 1565.40 / 1257.45 | 1316.17 / 1261.89 | 46.396 / 46.627 ms | 8.7-9.2 % |
+| container, efficiency, NPU powersaver | 1086.27 / 1060.09 | 1165.61 / 1089.99 | 69.145 / 69.279 ms | 8.5-8.7 % |
+| DirectML FP32, NPU default | **651.69 / 684.28** | **642.48 / 736.88** | 79.557 / 79.715 ms | 10.5-10.6 % |
+| AMD's stack, variant D, NPU powersaver | 5416.88 / 5419.82 | 5429.94 / 5415.38 | 121.912 / 121.990 ms | 38.1-38.8 % |
+
+- **What `powersaver` buys the container:** 20.4 and 28.8 % less energy per frame than the default configuration against
+  each arm's own idle (1073 against 1427 mJ on the means). Against the median idle it is between 1.0 % more and 18.8 %
+  less. It costs 1.71 times the frame time (69.2 against 40.5 ms). `efficiency` without `powersaver` is not
+  consistently cheaper than `balanced` and adds 6 ms per frame.
+- **The iGPU still spends less at 5 fps:** 651.69 and 684.28 mJ, 1.6 times less than the container in `powersaver`.
+- **At this rate the iGPU is also slower per frame than the container in any mode.** DirectML took 79.6 ms per frame
+  at 5 fps against 52.4 ms flat out (its network call 66.6 against 39.4 ms). Why is unexplained: the GPU dropping to a
+  lower power state between frames is one candidate, not measured.
+- **`powersaver` does nothing for AMD's stack:** 5417-5420 mJ per frame at 121.9 ms, 5.0 times the container's energy
+  in `powersaver` and 3.8 times in its default configuration.
+
+**Conclusion for 5 fps:** the NPU's power-saving mode narrows the container's energy gap to the iGPU but does not close
+it, and it gives up most of the container's latency margin. The iGPU running FP32 remains the lower-energy and
+more accurate choice at a low frame rate on this machine; the container stays ahead on frame time. No change to the
+power-mode defaults follows from this.
