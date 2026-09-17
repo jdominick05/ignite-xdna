@@ -406,6 +406,13 @@ evidence `results/aie/yolow_gptq/` and `results/aie/yolow_vocabulary/`.
 
   So twice AMD's speed at equal accuracy, and level with the iGPU at far lower accuracy
   ([BENCHMARKS](BENCHMARKS.md#yolo-world-v2-against-amds-stack-the-cpu-and-the-igpu-in-one-sitting-2026-09-16-desktop-2)).
+- **Glass-to-glass** (`pipelines/yolow/4b_g2g.py`, `bus.jpg`, 500 frames, one sitting):
+  - with 80 classes: container 39.912 and 39.853 ms, AMD's stack 109.729 and 109.376 ms, iGPU FP32 52.415 ms, CPU FP32
+    81.593 ms;
+  - with five names: container 32.595 ms, iGPU 28.444 ms.
+
+  So 2.75 times AMD's stack, and faster than the iGPU only with the larger vocabulary
+  ([BENCHMARKS](BENCHMARKS.md#yolo-world-v2-glass-to-glass-275-times-amds-stack-and-against-the-igpu-it-depends-on-the-vocabulary-2026-09-16-desktop-2)).
 - **What the compiler, runtime and kernel needed beyond YOLO11n:**
   - host regions whose constants are shared with another region;
   - host inputs that are Concat views;

@@ -1,0 +1,12 @@
+$ pipelines/yolow/4b_g2g.py --model <ignite-xdna main>\models\yolov8s-worldv2_cut_xint8_fp32cv2.onnx --ep npu --cache-key yolow_fp32D --warmup 5 --frames 20 --json <scratch>\yolow\g2g_sitting\0_amd_warmup.json
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  <ignite-xdna worktree>\yolow_fp32D
+First run compiles the model. It takes a while and looks frozen. It isn't.
+ONNX Runtime npu (VitisAIExecutionProvider), numpy letterbox, float decode; 80 classes; 20 frames of bus.jpg after 5 warm-up
+  preprocess_ms      mean   3.265  median   3.153  p95   3.672  p99   3.731
+  network_ms         mean  95.520  median  95.847  p95  98.805  p99  99.161
+  decode_ms          mean   9.979  median   9.814  p95  11.133  p99  11.449
+  glass_to_glass_ms  mean 108.764  median 108.958  p95 112.121  p99 113.242
+  detections per frame 9.00

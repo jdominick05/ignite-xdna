@@ -1,0 +1,8 @@
+$ pipelines/yolow/4b_g2g.py --model <ignite-xdna main>\models\yolov8s-worldv2_cut.onnx --ep dml --warmup 50 --frames 500 --json <scratch>\yolow\g2g_sitting\5_dml.json
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+ONNX Runtime dml (DmlExecutionProvider), numpy letterbox, float decode; 80 classes; 500 frames of bus.jpg after 50 warm-up
+  preprocess_ms      mean   3.280  median   3.163  p95   3.896  p99   4.320
+  network_ms         mean  39.383  median  38.914  p95  42.021  p99  45.886
+  decode_ms          mean   9.752  median   9.595  p95  10.686  p99  12.037
+  glass_to_glass_ms  mean  52.415  median  51.896  p95  55.701  p99  58.882
+  detections per frame 5.00

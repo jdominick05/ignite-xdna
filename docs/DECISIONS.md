@@ -1864,3 +1864,9 @@ cached reference heads rather than `bo_out`.
 
   Known cost: renaming 23 COCO categories to synonyms costs the XINT8 model 22 % of its mAP on those categories,
   against 11 % in FP32.
+- **YOLO-World's host decode stays bit-exact with the float decode (2026-09-16).** On int8 heads the contrastive product
+  runs on the int8 values with the power-of-two head scale folded into the logit scale. That is exact, and it halved
+  the decode on real container heads. Rejected: one large matrix product in the other orientation, 5.65 against
+  10.19 ms at 80 classes on synthetic heads but with logits up to 8.4e-05 off. Parity with the float decode is what
+  lets the container's detections be compared byte for byte with ONNX Runtime's
+  ([BENCHMARKS](BENCHMARKS.md#yolo-world-v2-glass-to-glass-275-times-amds-stack-and-against-the-igpu-it-depends-on-the-vocabulary-2026-09-16-desktop-2)).

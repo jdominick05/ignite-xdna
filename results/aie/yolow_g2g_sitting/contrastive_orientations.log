@@ -1,0 +1,9 @@
+$ python contrastive_bench2.py --k 80 ; python contrastive_bench2.py --k 5   (mlir-aie-iron, random int8 heads at 80/40/20 grids, 512 channels; CPU only, after the sitting)
+K=80 hwc      10.19 ms (ref 14.89); max |diff| 0.00e+00
+K=80 rowsF     5.65 ms (ref 14.89); max |diff| 8.39e-05
+K=80 rowsC     8.47 ms (ref 14.89); max |diff| 8.39e-05
+K=80 maxonly    7.43 ms
+K=5 hwc       3.87 ms (ref 8.28); max |diff| 0.00e+00
+K=5 rowsF     4.45 ms (ref 8.28); max |diff| 5.72e-05
+K=5 rowsC     6.20 ms (ref 8.28); max |diff| 5.72e-05
+K=5 maxonly    6.43 ms

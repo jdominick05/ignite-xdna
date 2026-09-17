@@ -7052,7 +7052,9 @@ establishes vendor parity — the oracle diff remains that gate — and neither 
   43.0 % for FP32 on the first 300 images, and its four text attention cores still run on the CPU (9.650 ms of a
   48.227 ms profiled frame). In one sitting it runs at twice the speed of AMD's stack at equal accuracy, but no faster
   than DirectML running the FP32 model on the iGPU (46.22 against 47.33-47.51 ms)
-  ([sitting](#yolo-world-v2-against-amds-stack-the-cpu-and-the-igpu-in-one-sitting-2026-09-16-desktop-2))
+  ([sitting](#yolo-world-v2-against-amds-stack-the-cpu-and-the-igpu-in-one-sitting-2026-09-16-desktop-2)). Frame to
+  detections it is 2.75 times AMD's stack, 1.31 times the iGPU with 80 classes and 0.87 times with five
+  ([glass-to-glass](#yolo-world-v2-glass-to-glass-275-times-amds-stack-and-against-the-igpu-it-depends-on-the-vocabulary-2026-09-16-desktop-2))
   ([only the text attention on the CPU](#yolo-world-v2-with-only-its-text-attention-on-the-cpu-gptq-and-an-int32-bias-recover-the-four-output-convolutions-2026-09-16-desktop-2),
   [vocabulary at run time](#yolo-world-v2s-vocabulary-chosen-at-run-time-one-container-any-class-names-2026-09-16-desktop-2)).
 - **No formal test suite.** Verification here is empirical (`compileall` + import checks
@@ -9210,6 +9212,61 @@ log with its command, and `summary.txt`), started 03:26 UTC on 2026-09-17.
 
 **Not done:**
 - Energy per frame for the four stacks.
-- The container through `YoloWorldPipeline` (native ingress, int8 decode) in a sitting.
+- The container through `YoloWorldPipeline` (native ingress, int8 decode) in a sitting. (Done next:
+  [glass-to-glass](#yolo-world-v2-glass-to-glass-275-times-amds-stack-and-against-the-igpu-it-depends-on-the-vocabulary-2026-09-16-desktop-2).)
 - AMD's stack on the GPTQ model itself.
 - The full 5,000 images.
+
+## YOLO-World v2 glass-to-glass: 2.75 times AMD's stack, and against the iGPU it depends on the vocabulary (2026-09-16, Desktop 2)
+
+The sitting above timed only each stack's network call. This one times a frame to its detections, including each
+stack's own way of preparing the input and decoding the class scores. Evidence: `results/aie/yolow_g2g_sitting/`
+(each run's log with its command, its JSON record, and `summary.txt`), started 03:46 UTC on 2026-09-17. Code: `a62450d`.
+
+**The decode first.** On int8 heads with power-of-two scales, `YoloWorldDecoder` now runs the contrastive product on the
+int8 values with the head scale folded into the logit scale, prunes level by level, and dequantizes only the kept boxes.
+- **Bit-exact:** scaling by a power of two is exact in floating point, so the result equals the float decode bit for bit.
+  It was checked on 20 COCO images' real container heads, at 80 and at 5 classes, at conf 0.25 and 0.001.
+- **Faster:** the old decode spent 7.9 ms dequantizing the 512-channel features and 8.0 ms on the products (80 classes).
+- **Rejected, a faster non-exact variant:** one large matrix product in the other orientation is faster (5.65 against
+  10.19 ms at 80 classes on synthetic heads), but its logits differ by up to 8.4e-05. It was not taken, to keep the
+  decode's parity (`contrastive_orientations.log`).
+
+**Method.** `pipelines/yolow/4b_g2g.py` on `bus.jpg`, 50 warm-up and 500 timed frames per run.
+- **ONNX Runtime stacks:** the numpy letterbox, `session.run`, then the float decode and per-class NMS.
+- **The container:** `YoloWorldPipeline.predict_sync`, which uses native ingress into the input plane, the NPU segments
+  and attention host steps, head readback, then the int8 decode and NMS.
+- **Shared constants:** every stack decodes with the same text bundle's embeddings and constants.
+- **Order:** an AMD warm-up (20 frames, not a record), AMD, container, AMD, container, iGPU, CPU, then the container and
+  the iGPU with five names.
+- **Host:** quiet, and `xrt-smi` reported no hardware contexts before every run and after the last.
+- **Accuracy:** from the first 300 COCO val2017 images, as above. As there, AMD's stack runs its best usable model,
+  variant D.
+
+| Stack, vocabulary | Glass-to-glass mean | Median | P95 | Preprocess / network / decode | Detections per frame |
+|---|---:|---:|---:|---|---:|
+| AMD's stack (variant D, 24.5 %), 80 classes | 109.729 / 109.376 ms | 110.122 / 110.107 | 113.970 / 113.180 | 3.429 / 96.257 / 10.044 ms (first run) | 9 |
+| graph-engine container (24.7 %), 80 classes | **39.912 / 39.853 ms** | 39.683 / 39.646 | 41.651 / 41.363 | 0.550 / 28.793 / 10.568 ms (first run) | 8 |
+| DirectML iGPU, FP32 (43.0 %), 80 classes | 52.415 ms | 51.896 | 55.701 | 3.280 / 39.383 / 9.752 ms | 5 |
+| ONNX Runtime CPU, FP32 (43.0 %), 80 classes | 81.593 ms | 82.665 | 86.273 | 3.455 / 67.778 / 10.360 ms | 5 |
+| graph-engine container, 5 names | 32.595 ms | 32.454 | 33.889 | 0.567 / 27.758 / 4.270 ms | 13 |
+| DirectML iGPU, FP32, 5 names | **28.444 ms** | 27.835 | 33.424 | 3.230 / 22.723 / 2.491 ms | 8 |
+
+For the container, "network" includes the attention host steps and head readback.
+
+- **2.75 times AMD's stack at equal accuracy.** 39.88 against 109.55 ms on the means of the two runs each. Across the
+  earlier network-only sitting's 2.02 times, the container pulls further ahead through native ingress: 0.550 against
+  3.429 ms, plus the quantization AMD's EP does inside its network time.
+- **Against the iGPU it depends on the vocabulary.** With COCO's 80 names the container is 1.31 times faster (39.88
+  against 52.42 ms). With five names the iGPU is 1.15 times faster (28.44 against 32.60 ms), because its network time
+  drops from 39.383 to 22.723 ms while the container's drops only from 28.793 to 27.758. On the iGPU the text attention
+  runs with the rest of the network and its cost scales with the class count; on the container the attention is a
+  CPU step that is only part of the frame. Either way the iGPU is 18.3 points more accurate.
+- **Detections per frame differ by model, not by stack:** the quantized models report more low-score boxes on
+  `bus.jpg` than FP32 does.
+
+**Not done:**
+- Energy per frame. On a machine where the iGPU is level on speed, that is the remaining question for the NPU.
+- The attention steps' cost against class count on the CPU.
+- COCO accuracy through native ingress.
+- Closing the accuracy gap.
