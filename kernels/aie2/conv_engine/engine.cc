@@ -75,7 +75,6 @@ using Acc = aie::accum<acc32, 32>;
 struct Hdr {
     int op, k, stride, ncin, flags, shift_out;
     int a1, b1, s1, qmax, k2, s2, ysh, rsh;
-    int a2, b2, a3, b3, a4, b4;
     int rlsh_m, rlsh_r;
     int rows_in, cols_in, plane_bytes;
     int phase;
@@ -87,7 +86,6 @@ inline Hdr read_header(const int32_t *h, int core_row) {
     d.flags = h[H_FLAGS]; d.shift_out = h[H_SHIFT_OUT];
     d.a1 = h[H_A1]; d.b1 = h[H_B1]; d.s1 = h[H_S1]; d.qmax = h[H_QMAX];
     d.k2 = h[H_K2]; d.s2 = h[H_S2]; d.ysh = h[H_YSH]; d.rsh = h[H_RSH];
-    d.a2 = h[H_A2]; d.b2 = h[H_B2]; d.a3 = h[H_A3]; d.b3 = h[H_B3]; d.a4 = h[H_A4]; d.b4 = h[H_B4];
     d.rlsh_m = (d.flags & F_RES_SHIFTS) ? h[H_RLSH_M] : 0;
     d.rlsh_r = (d.flags & F_RES_SHIFTS) ? h[H_RLSH_R] : d.rsh;
     d.rows_in = h[H_ROWS_IN]; d.cols_in = h[H_COLS_IN]; d.plane_bytes = h[H_PLANE_BYTES];
@@ -121,25 +119,31 @@ inline V32u hswish_u8(V32u q1, const Hdr &d) {
     return sat_u8_from_i16(aie::add(y, int16_t(128)));
 }
 
-// Piecewise-linear sigmoid SiLU on 32 uint8 values at the header's line constants: q1 -> q2.
-// One accumulator at a time: each line is reduced to int16 before the next is formed.
+// Piecewise-linear sigmoid SiLU on 32 uint8 values: q1 -> q2. One accumulator at a time: each
+// line is reduced to int16 before the next is formed.
+struct SigmoidK {
+    int32_t b[4];
+    int16_t a[4];
+    int s, ysh;
+};
+
 __attribute__((always_inline))
-inline V32u silu_pl_u8(V32u q1, const Hdr &d) {
+inline V32u silu_pl_u8(V32u q1, const SigmoidK &k) {
     V32i16 t = unpack_centered(q1);
     V32i16 u = aie::abs(t);
     Acc l;
-    l.from_vector(aie::broadcast<int32, 32>(d.b1));
-    V32i16 g = aie::mac(l, u, int16_t(d.a1)).template to_vector<int16>(d.s1);
-    l.from_vector(aie::broadcast<int32, 32>(d.b2));
-    g = aie::min(g, aie::mac(l, u, int16_t(d.a2)).template to_vector<int16>(d.s1));
-    l.from_vector(aie::broadcast<int32, 32>(d.b3));
-    g = aie::min(g, aie::mac(l, u, int16_t(d.a3)).template to_vector<int16>(d.s1));
-    l.from_vector(aie::broadcast<int32, 32>(d.b4));
-    g = aie::min(g, aie::mac(l, u, int16_t(d.a4)).template to_vector<int16>(d.s1));
+    l.from_vector(aie::broadcast<int32, 32>(k.b[0]));
+    V32i16 g = aie::mac(l, u, k.a[0]).template to_vector<int16>(k.s);
+    l.from_vector(aie::broadcast<int32, 32>(k.b[1]));
+    g = aie::min(g, aie::mac(l, u, k.a[1]).template to_vector<int16>(k.s));
+    l.from_vector(aie::broadcast<int32, 32>(k.b[2]));
+    g = aie::min(g, aie::mac(l, u, k.a[2]).template to_vector<int16>(k.s));
+    l.from_vector(aie::broadcast<int32, 32>(k.b[3]));
+    g = aie::min(g, aie::mac(l, u, k.a[3]).template to_vector<int16>(k.s));
     g = aie::max(g, int16_t(0));
     g = aie::min(g, int16_t(64));
     l.from_vector(t, 6);
-    V32i16 y = aie::mac(l, u, g).template to_vector<int16>(d.ysh);
+    V32i16 y = aie::mac(l, u, g).template to_vector<int16>(k.ysh);
     return sat_u8_from_i16(aie::add(y, int16_t(128)));
 }
 
@@ -253,10 +257,17 @@ inline void conv_pass(const Hdr &d, const uint8_t *a, const int8_t *w, const int
 
 // The sigmoid SiLU over a whole emitted or held tile, in place. It runs after every pass of
 // the packet, so no pass accumulator is live: inside the pass epilogue the same arithmetic
-// spills them to the stack (tools/engine_epilogue_variants.py).
-void silu_pl_tile(const Hdr &d, uint8_t *dst) {
+// spills them to the stack (tools/engine_epilogue_variants.py). Out of line, so run() and its
+// pass code are laid out as before; the constants are copied from the raw header into locals
+// first, because a store through the uint8 tile pointer may alias the header and would force a
+// reload of every constant after each store.
+__attribute__((noinline))
+void silu_pl_tile(const int32_t *h, uint8_t *dst) {
+    const SigmoidK k = {{h[H_B1], h[H_B2], h[H_B3], h[H_B4]},
+                        {int16_t(h[H_A1]), int16_t(h[H_A2]), int16_t(h[H_A3]), int16_t(h[H_A4])},
+                        h[H_S1], h[H_YSH]};
     for (int off = 0; off < NCO * OUT_BLOCK_BYTES; off += 32)
-        aie::store_v(dst + off, silu_pl_u8(aie::load_v<32>(dst + off), d));
+        aie::store_v(dst + off, silu_pl_u8(aie::load_v<32>(dst + off), k));
 }
 
 // Nearest 2x upsampling: expand the [10 blocks][4][20][8] source packet in place
@@ -364,7 +375,7 @@ inline void run(int32_t *hdr, uint8_t *apkt, uint8_t *out, int32_t *psum, int co
             conv_pass<false>(d, apkt, w, bias, psum, out, r, 4);
         }
         if ((d.flags & F_SIGMOID) && (d.flags & (F_EMIT | F_HOLD)))
-            silu_pl_tile(d, (d.flags & F_EMIT) ? out : reinterpret_cast<uint8_t *>(psum) + HOLD_OFFSET_BYTES);
+            silu_pl_tile(hdr, (d.flags & F_EMIT) ? out : reinterpret_cast<uint8_t *>(psum) + HOLD_OFFSET_BYTES);
         break;
     case OP_MAXPOOL:
         maxpool_tile(d, apkt, psum, out);
