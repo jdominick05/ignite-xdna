@@ -7054,7 +7054,9 @@ establishes vendor parity — the oracle diff remains that gate — and neither 
   than DirectML running the FP32 model on the iGPU (46.22 against 47.33-47.51 ms)
   ([sitting](#yolo-world-v2-against-amds-stack-the-cpu-and-the-igpu-in-one-sitting-2026-09-16-desktop-2)). Frame to
   detections it is 2.75 times AMD's stack, 1.31 times the iGPU with 80 classes and 0.87 times with five
-  ([glass-to-glass](#yolo-world-v2-glass-to-glass-275-times-amds-stack-and-against-the-igpu-it-depends-on-the-vocabulary-2026-09-16-desktop-2))
+  ([glass-to-glass](#yolo-world-v2-glass-to-glass-275-times-amds-stack-and-against-the-igpu-it-depends-on-the-vocabulary-2026-09-16-desktop-2)),
+  and it spends 4.3-5.0 times less energy per frame than AMD's stack flat out, but more than the iGPU at 5 fps
+  ([energy](#yolo-world-v2-energy-per-frame-43-50-times-less-than-amds-stack-and-the-igpu-spends-less-at-5-fps-2026-09-17-desktop-2))
   ([only the text attention on the CPU](#yolo-world-v2-with-only-its-text-attention-on-the-cpu-gptq-and-an-int32-bias-recover-the-four-output-convolutions-2026-09-16-desktop-2),
   [vocabulary at run time](#yolo-world-v2s-vocabulary-chosen-at-run-time-one-container-any-class-names-2026-09-16-desktop-2)).
 - **No formal test suite.** Verification here is empirical (`compileall` + import checks
@@ -9266,7 +9268,49 @@ For the container, "network" includes the attention host steps and head readback
   `bus.jpg` than FP32 does.
 
 **Not done:**
-- Energy per frame. On a machine where the iGPU is level on speed, that is the remaining question for the NPU.
+- Energy per frame. On a machine where the iGPU is level on speed, that is the remaining question for the NPU. (Measured
+  next: [energy per frame](#yolo-world-v2-energy-per-frame-43-50-times-less-than-amds-stack-and-the-igpu-spends-less-at-5-fps-2026-09-17-desktop-2).)
 - The attention steps' cost against class count on the CPU.
 - COCO accuracy through native ingress.
 - Closing the accuracy gap.
+
+## YOLO-World v2 energy per frame: 4.3-5.0 times less than AMD's stack, and the iGPU spends less at 5 fps (2026-09-17, Desktop 2)
+
+Energy per frame for the same four stacks and the same frame loop as the glass-to-glass sitting above. Evidence:
+`results/aie/yolow_energy/energy_yolow_phoenix_20260917T0356Z.log` and its JSON.
+- **Tool:** `tools/energy_sitting.py`, package power (RAPL) during each arm's frame window minus a 30 s idle baseline
+  taken just before it, divided by frames per second.
+- **Loop:** `pipelines/yolow/4b_g2g.py` on `bus.jpg` with COCO's 80 names, 600 frames after 50 warm-up, the window from
+  the second progress line.
+- **Order:** flat out interleaved twice (AMD's stack on variant D, the container, DirectML FP32, CPU FP32), then each
+  stack once paced to 5 fps, a rate all four hold.
+- **Idle baselines:** they spanned 38.171-40.315 W, over the tool's 2.0 W flag, so every arm is read against its own
+  idle; the median-idle column is in the log.
+
+| Stack | Flat out, fps | Flat out, mJ per frame | At 5 fps, mJ per frame | CPU flat out / at 5 fps |
+|---|---:|---:|---:|---:|
+| AMD's stack, variant D (24.5 %) | 9.09 / 9.04 | 4483.41 / 4544.51 | 5337.04 | 58.4 / 35.8 % |
+| graph-engine container (24.7 %) | 24.94 / 24.88 | **1040.36 / 908.91** | 1428.13 | 16.8-17.5 / 9.2 % |
+| DirectML iGPU, FP32 (43.0 %) | 19.11 / 19.43 | 1201.12 / 1336.00 | **842.48** | 16.3-16.5 / 10.6 % |
+| ONNX Runtime CPU, FP32 (43.0 %) | 12.33 / 12.23 | 3610.19 / 3580.88 | 4214.34 | 59.4-59.6 / 28.1 % |
+
+- **Against AMD's stack, at equal accuracy:** the container spends 4.3-5.0 times less energy per frame flat out (4.31
+  and 5.00, pairwise by run) and 3.74 times less at 5 fps. AMD's stack holds 35.8 % of the CPU even at 5 fps.
+- **Against the iGPU, flat out:** the container spends less, 1.15 and 1.47 times, while running 1.3 times the frames.
+- **Against the iGPU, at 5 fps:** the iGPU spends less, 842.48 against 1428.13 mJ, or +4.212 against +7.141 W. The iGPU's
+  idle baseline in that arm was the noisiest of the sitting (stdev 1.835 W) and 1.06 W above the median. Read against the
+  median idle, the two are 1053.75 and 1396.63 mJ, so the iGPU still spends less.
+- **Not tried at a low rate:** the container ran the default `balanced` host mode with the NPU in its default power
+  mode. The `efficiency` mode's NPU power switch was not tried here.
+
+**Where this leaves YOLO-World v2 on this machine.**
+- **Against AMD's stack:** the graph engine is both faster (2.75 times glass-to-glass) and cheaper (3.7-5.0 times less
+  energy per frame) at equal accuracy.
+- **Against DirectML on the iGPU running the FP32 model:** the container is ahead flat out with 80 classes, on time and
+  on energy. The iGPU is ahead with five classes on time and at 5 fps on energy. It is 18.3 points more accurate
+  throughout.
+
+**Not done:**
+- `--power-mode efficiency` and the NPU power switch at 5 fps.
+- Energy with a small vocabulary.
+- An accuracy recovery that would make the comparison with FP32 on the iGPU like for like.
