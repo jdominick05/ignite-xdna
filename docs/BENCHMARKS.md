@@ -7054,6 +7054,10 @@ establishes vendor parity — the oracle diff remains that gate — and neither 
   compute that sigmoid: inside the pass loops it spills the pass accumulators, and the spill-free form, a separate loop
   over the finished tile, is sized but not built
   ([sized offline](#silus-hardsigmoid-form-is-most-of-the-model-zoos-xint8-accuracy-loss-and-an-integer-four-line-sigmoid-wins-55-119-points-back-offline-2026-09-17-desktop-2)).
+  (Superseded 2026-09-17: the core program computes it for containers compiled with `--silu-sigmoid`, an opt-in. They
+  are exact on the NPU, score the same 37.29, 46.25 and 43.50 on those images, and cost 2.4-3.9 % more dispatch time;
+  [built](#the-sigmoid-silu-epilogue-on-the-npu-an-opt-in-exact-through-the-containers-for-24-39--more-dispatch-time-2026-09-17-desktop-2).
+  The default is still the HardSigmoid form, and models with host regions (YOLO11n, YOLO-World v2) cannot use the flag.)
 - **Every graph-engine model computes SiLU as HardSigmoid times x, and YOLO-World v2 pays for it.** The swap alone takes
   YOLO-World v2 from 41.5 % to 30.5 % mAP in FP32 (first 500 images). Its best XINT8 container scores 24.7 % against
   43.0 % for FP32 on the first 300 images, and its four text attention cores still run on the CPU (9.650 ms of a
@@ -9468,11 +9472,101 @@ device; `engine_epilogue_variants.log`):
   epilogue at 69.29 % extra compute cycles on a 32-channel convolution.
 
 **Not done:**
-- The epilogue on the NPU: the core program is unchanged and waits on the maintainer's decision.
+- The epilogue on the NPU: the core program is unchanged and waits on the maintainer's decision. (Superseded
+  2026-09-17: built as an opt-in, exact on the NPU, with its dispatch cost measured;
+  [below](#the-sigmoid-silu-epilogue-on-the-npu-an-opt-in-exact-through-the-containers-for-24-39--more-dispatch-time-2026-09-17-desktop-2).)
 - The C++ expression run off the device against its Python mirror: there is no `aie_api` native build here.
-- The compiler fit and the container header field.
-- Latency and energy.
+  (Superseded 2026-09-17: the synthetic NPU sequence checks the C++ against the emulator on every uint8 value.)
+- The compiler fit and the container header field. (Superseded 2026-09-17: built.)
+- Latency and energy. (Superseded 2026-09-17 for dispatch latency; energy is still not measured.)
 - The full 5,000 images.
 - YOLO11n and SESR.
 - AMD's stack on the keep-Sigmoid models.
 - YOLOv8s with Sigmoid kept: its quantization ran out of memory (above).
+
+## The sigmoid SiLU epilogue on the NPU: an opt-in, exact through the containers, for 2.4-3.9 % more dispatch time (2026-09-17, Desktop 2)
+
+The sizing above stopped at the core program; with the maintainer's go-ahead it is now built. `ignite-compile
+--silu-sigmoid` gives every SiLU after a convolution the four-line sigmoid epilogue, and the core program applies it in a
+separate loop over the finished tile. Without the flag every container compiles to the same instruction stream and
+weight packets as before. Everything ran on Desktop 2 (`DESKTOP-CBL5NUA`) with the NPU idle before each hardware step.
+Evidence: `results/aie/silu_sigmoid_engine/`; `container_names.log` maps the container names in its logs to kernels.
+
+**What changed.**
+- **Core program** (`engine.cc` at `7700316`):
+  - Flag `F_SIGMOID` (64), with lines 2-4 in header words 26-31.
+  - `silu_pl_tile` runs out of line after the passes and copies its ten constants into locals before the loop.
+  - `.text` is 9,824 B against 8,960 B, with no accumulator stack moves (`engine_census_versions.log`).
+- **Compiler:**
+  - `silu_sigmoid.py` fits every layer, and `lower_yolov8n(silu_sigmoid=True)` uses it.
+  - The container manifest records `graph_engine.silu = "sigmoid4"`, and `verify_engine_container.py` lowers
+    accordingly.
+  - It refuses host regions and a SiLU after a residual add, so YOLO11n and YOLO-World v2 cannot use it.
+- **Reference:** such a container is exact against `silu_sigmoid.reference_model` of the QDQ model, not against the QDQ
+  model itself. That reference model is byte-identical to the four-line oracle model the section above evaluated
+  (`oracle_rebuild_after_refactor_sha256.log`).
+
+**Exactness.**
+
+| Check | YOLOv8n | YOLOv8s | YOLOv8n-pose |
+|---|---:|---:|---:|
+| `run_direct` equals ONNX Runtime on the reference model for every layer; bus.jpg, 4 COCO images, 1 random input (`offline_gates_*.log`) | 66/66 | 66/66 | 75/75 |
+| Packet emulation of every layer equals `run_direct` | 66/66 | 66/66 | 75/75 |
+| Every layer on the NPU (`verify_engine_container.py`), in every run of the sittings below | 66/66 | 66/66 | 75/75 |
+| Detections on the first 500 COCO val2017 images through the container on the NPU, byte-identical to ONNX Runtime CPU on the reference model (`coco/`) | 62,522 | 47,410 | 19,781 |
+
+- **The C++ against its Python mirror:** `tests/test_conv_engine.py --hardware` ran the synthetic sequence 3 times
+  bit-exact on every kernel version (`synthetic_v*_hardware.log`). The sequence includes a 1x1 identity convolution
+  that feeds every uint8 value through the sigmoid at two scale pairs.
+- **Regression gate:**
+  - For all three models, `insts.bin` is identical across every container of the model: today's program (main
+    `c714629`), both kernel versions, with and without the flag.
+  - Without the flag, `wpackets.bin` equals today's (`container_blobs.log`).
+- **Offline tests at `7700316`:** 43 passed, and the pipeline checks pass (`offline_checks.log`).
+
+**Accuracy through the containers.** All figures cover the first 500 COCO val2017 images, with the ONNX Runtime path's
+letterbox (`npu/yolo.py`) for all three models. They are not comparable with full-set figures elsewhere, such as
+YOLOv8n-pose's 32.77 OKS with the native letterbox on 5,000 images.
+
+| | YOLOv8n | YOLOv8s | YOLOv8n-pose, OKS |
+|---|---:|---:|---:|
+| `--silu-sigmoid` containers on the NPU (`coco/summary_7700316.log`, the same for `45a8685`) | 37.29 | 46.25 | 43.50 |
+| The shipped XINT8 models on ONNX Runtime CPU, the models today's containers are exact against (section above) | 30.25 | 40.77 | 31.56 |
+
+The HardSigmoid row was not re-run through today's containers in this round.
+
+**Dispatch time.** `verify_engine_container.py --iters 100` on bus.jpg, all arms in one sitting
+(2026-09-17T12:31Z), forward then reverse per model; each figure is the mean of two runs
+(`sitting_five_arms_20260917T1231Z/`).
+
+| Container | YOLOv8n | YOLOv8s | YOLOv8n-pose |
+|---|---:|---:|---:|
+| Today's program (main `c714629`) | 7.297 ms | 16.799 ms | 7.587 ms |
+| `7700316` without the flag | 7.240 ms | 16.799 ms | 7.553 ms |
+| `7700316` with `--silu-sigmoid` | 7.488 ms | 17.201 ms | 7.850 ms |
+| `45a8685` without the flag | 7.265 ms | 16.892 ms | 7.577 ms |
+| `45a8685` with `--silu-sigmoid` | 7.509 ms | 17.228 ms | 7.857 ms |
+
+- **The sigmoid costs 0.248, 0.402 and 0.297 ms per dispatch** over the same program without the flag: 3.4, 2.4 and
+  3.9 %. Against today's program it costs 0.191, 0.402 and 0.263 ms.
+- **Without the flag, `7700316` costs existing containers nothing measurable:** it is within 0.06 ms of today's program
+  on every model, equal or lower.
+- **Two other layouts were built and timed:**
+  - `45a8685` read lines 2-4 into the header struct for every packet and inlined the tile loop into `run()`. In the
+    same sitting it was 0.007-0.027 ms slower with the flag and 0.024-0.093 ms slower without it.
+  - A v2 (`engine_v2_rejected.diff.log`, never committed) read lines 2-4 from the raw header inside an out-of-line loop.
+    In its own sitting the sigmoid cost 0.503, 0.432 and 0.493 ms over its option-off build (YOLOv8n, pose, YOLOv8s;
+    `sitting_v2_rejected/`). A store through the uint8 tile pointer may alias the header, so every constant is reloaded
+    after each store; the committed tile function loads its ten constants once.
+- **Scope of the timings:** dispatch only, not glass-to-glass, and the sittings differ from one another by up to about
+  0.13 ms for the same container. Compare arms within one sitting.
+
+**Not done:**
+- AMD's stack on the same 500 images (three Vitis AI EP evaluations). Without it, no claim that the sigmoid containers
+  are more accurate than AMD's stack is made.
+- Glass-to-glass through Ignition, and energy, with the sigmoid containers.
+- The full 5,000 images.
+- The HardSigmoid containers through COCO on the NPU in this round.
+- YOLO11n and YOLO-World v2 (refused: host regions), and a SiLU after a residual add.
+- Making the flag the default: see
+  [DECISIONS](DECISIONS.md#the-graph-engine-lowers-every-layer-onto-one-persistent-core-program-packets-are-fixed-size-and-the-sequencer-is-the-budget-2026-09-13).

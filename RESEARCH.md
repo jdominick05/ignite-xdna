@@ -2062,3 +2062,9 @@ models score 37.29, 46.25 and 43.50 against 30.25, 40.77 and 31.56. In the graph
 compiles without accumulator spills only as a separate loop over the finished tile. Whether to change that program, and
 at what core-time cost, is open
 ([sized offline](docs/BENCHMARKS.md#silus-hardsigmoid-form-is-most-of-the-model-zoos-xint8-accuracy-loss-and-an-integer-four-line-sigmoid-wins-55-119-points-back-offline-2026-09-17-desktop-2)).
+(Answered the same day: the program now carries that loop. A container compiled with `--silu-sigmoid` is exact on the
+NPU and scores those figures through the NPU on the same images, and the loop costs 2.4-3.9 % of the dispatch
+([built](docs/BENCHMARKS.md#the-sigmoid-silu-epilogue-on-the-npu-an-opt-in-exact-through-the-containers-for-24-39--more-dispatch-time-2026-09-17-desktop-2)).
+So model-level parity for a SiLU on AIE2 is established for these three models, measured against the integer reference
+model rather than Quark's graph. Still open: whether it is more accurate than AMD's stack on the same images, which is
+not yet measured.)
