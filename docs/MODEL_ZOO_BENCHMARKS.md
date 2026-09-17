@@ -379,6 +379,46 @@ python pipelines/yolov8n-pose/5_eval_map.py --model build/yolov8n_pose.ignite --
 python tests/test_pose_pipeline_offline.py
 ```
 
+## YOLO-World v2: only the text attention on the CPU, class names at run time (2026-09-16)
+
+The head-cut YOLO-World v2 (yolov8s-worldv2) after Quark XINT8, with its four C2fAttn output convolutions requantized
+by GPTQ with int32 biases. Its four text cross-attention cores run on ONNX Runtime's CPU provider between five NPU
+segments. Design, accuracy, exactness and the profile sitting are in
+[BENCHMARKS](BENCHMARKS.md#yolo-world-v2-with-only-its-text-attention-on-the-cpu-gptq-and-an-int32-bias-recover-the-four-output-convolutions-2026-09-16-desktop-2),
+the run-time vocabulary in
+[BENCHMARKS](BENCHMARKS.md#yolo-world-v2s-vocabulary-chosen-at-run-time-one-container-any-class-names-2026-09-16-desktop-2);
+evidence `results/aie/yolow_gptq/` and `results/aie/yolow_vocabulary/`.
+
+| Container | Layers | Rounds | Weight packets | Instructions | DDR workspace | Container size | Segments |
+|---|---:|---:|---:|---:|---:|---:|---|
+| `yolow_gptqcv2.ignite` | 70 (4 host) | 2,446 | 31,181,824 B | 1,145,856 B | 36.7 MB | 33,725,760 B | NhNhNhNhN |
+
+- **Exactness:** 70 / 70 layers byte-exact on Device 0, with COCO's names and with another vocabulary set at run time.
+- **COCO, first 300 val2017 images:** mAP@50-95 **24.7** through the container, the same detections as ONNX Runtime CPU;
+  43.0 in FP32. AMD's stack scores 1.8 on the 5,000 images in plain XINT8.
+- **Frame:** 48.0-48.2 ms profiled against 53.0-53.5 ms with the four convolutions as FP32 host steps, in one sitting,
+  with numpy input quantization and head dequantization. That is not a comparison with AMD's stack.
+- **What the compiler, runtime and kernel needed beyond YOLO11n:**
+  - host regions whose constants are shared with another region;
+  - host inputs that are Concat views;
+  - int32 convolution biases;
+  - host constants replaced at run time (`EngineSession.set_host_constants`);
+  - a residual flag for HardSwish after the add, which no model uses.
+
+```bash
+# model tools (resnet_env): export, head cut, XINT8, then the text side for run-time vocabularies
+python pipelines/yolow/1_export.py && python pipelines/yolow/1b_cut_head.py
+python pipelines/yolow/3b_quantize_cut.py --calib-dir data/coco_calib --limit 200
+python pipelines/yolow/6_text_encoder.py
+# mlir-aie-iron: GPTQ on the four output convolutions, then compile (MSYS_NO_PATHCONV=1 under Git Bash)
+python pipelines/yolow/3c_gptq_cv2.py
+MSYS_NO_PATHCONV=1 bash scripts/research-iron.sh -m ignite_xdna.compiler.cli compile --model models/yolov8s-worldv2_cut_xint8_gptqcv2.onnx --output build/yolow.ignite --host-region /model.12/attn/ --host-region /model.15/attn/ --host-region /model.18/attn/ --host-region /model.21/attn/
+bash scripts/research-iron.sh tools/verify_engine_container.py --container build/yolow.ignite --model models/yolov8s-worldv2_cut_xint8_gptqcv2.onnx [--host-constants guides.npz]
+conda activate mlir-aie-iron   # pyxrt and pycocotools; worktree or checkout src first on PYTHONPATH
+python pipelines/yolow/5_eval_map.py --model build/yolow.ignite --ep ignite --n 300 [--vocabulary pipelines/yolow/vocabularies/coco_synonyms.txt]
+python tests/test_yolow_pipeline_offline.py
+```
+
 ## Reproduce
 
 ```bash

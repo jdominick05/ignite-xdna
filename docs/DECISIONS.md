@@ -788,7 +788,10 @@
   monolithic DPU subgraph of 946 / 953 nodes (99.3%, `results/diag_yolow_no_attn_cut_xint8.log`) running at
   **15.89 ms (62.9 fps)**. However, because bypassing attention destroys open-vocabulary alignment (mAP 0.3%)
   and plain XINT8 PTQ scrambles 5D attention weights (mAP 1.8%), running stock YOLO-World cross-attention
-  directly on the DPU is rejected.
+  directly on the DPU is rejected. (Superseded in part, 2026-09-16: the 1.8% collapse is rounding in four C2fAttn
+  output convolutions, not the attention weights, and the graph engine runs the stock model with those
+  convolutions on the NPU and the attention cores on the CPU; see the YOLO-World v2 entries at the end of this
+  list and [BENCHMARKS](BENCHMARKS.md#yolo-world-v2-with-only-its-text-attention-on-the-cpu-gptq-and-an-int32-bias-recover-the-four-output-convolutions-2026-09-16-desktop-2).)
 - **Depthwise-separable decoder achieves monolithic DPU compilation for monocular depth (2026-09-09):**
   MiDaS v2.1 Small required substituting stock bilinear upsampling with nearest-neighbor resize to avoid
   a 5-subgraph partitioning trap that added 5.63 ms of host round-trips. FastDepth (Wofk et al., ICRA 2019)
@@ -1703,7 +1706,9 @@ cached reference heads rather than `bo_out`.
 - **Host segments for what the engine does not compute (2026-09-15).** A graph region named by a
   node-name prefix (YOLO11's C2PSA block, `/model.10/`) runs on ONNX Runtime's CPU provider between two
   NPU dispatches over the same workspace, instead of keeping the whole model off the NPU. The region
-  needs one uint8 input that is a physical tensor and one uint8 output at zero point 128 and a
+  needs one uint8 input that is a physical tensor (2026-09-16: or a Concat view over several, `1a56120`; a tensor
+  derived only from constants, such as YOLO-World's text guide shared by four regions, is not an input, `0d4583d`;
+  and a region's initializers can be replaced at run time, `6a39780`) and one uint8 output at zero point 128 and a
   power-of-two scale; it is extracted as its own model, stored in the container, and the manifest's
   `segments` list is the execution order. The engine program does not change. A container can therefore
   call ONNX Runtime, but only for its declared host segments: YOLO11n once per frame, a single-stream
@@ -1822,7 +1827,7 @@ cached reference heads rather than `bo_out`.
   exact halves. It is exact on the NPU: a synthetic sequence, YOLOv8n and YOLOv8s 66/66, and the split model 74/74.
   YOLOv8n measured no slower, 7.216 and 7.245 ms against 7.331 and 7.299 ms interleaved. But the split model scores
   2.3 % mAP, because the halves cancel and a separate weight scale per half recovers nothing
-  ([BENCHMARKS](BENCHMARKS.md#yolo-world-v2-with-every-convolution-on-the-npu-gptq-and-an-int32-bias-recover-the-four-output-convolutions-2026-09-16-desktop-2)).
+  ([BENCHMARKS](BENCHMARKS.md#yolo-world-v2-with-only-its-text-attention-on-the-cpu-gptq-and-an-int32-bias-recover-the-four-output-convolutions-2026-09-16-desktop-2)).
   Whether an op no model needs stays in the program is open for the maintainer; removing it is `ca5b6cd`'s
   `engine.cc` hunk and its mirrors.
 - **Convolution biases may be int32, and a quantization recipe rather than the core program recovers YOLO-World v2

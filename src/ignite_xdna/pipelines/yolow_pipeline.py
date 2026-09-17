@@ -4,8 +4,8 @@ src/ignite_xdna/pipelines/yolow_pipeline.py
 Open-vocabulary detection (YOLO-World v2) on the Phoenix NPU, with the classes chosen at run time.
 
 A YOLO-World v2 container (``pipelines/yolow/``: head cut, XINT8, ``3c_gptq_cv2.py``, compiled with host regions
-``/model.{12,15,18,21}/attn/``) runs every convolution on the NPU and its four text cross-attention cores on the CPU
-between NPU segments. The vocabulary enters only through those attention cores' text guides and the contrastive
+``/model.{12,15,18,21}/attn/``) runs its four text cross-attention blocks (each with its projection convolution) on
+the CPU between NPU segments and everything else on the NPU (63 of its 67 convolutions). The vocabulary enters only through those attention cores' text guides and the contrastive
 decode (``yolow_text``), so ``set_classes`` swaps it on an open session: it embeds the names with CLIP's text
 encoder, replaces the guides in the host segments (``EngineSession.set_host_constants``) and keeps the embeddings for
 the decode. The NPU program never changes.

@@ -27,7 +27,7 @@ environment table, which ``os.environ`` has not written since CPython 3.9. Measu
 also written with ``_putenv_s``, it did not (14.0 % CPU, 133.8 mJ, 118.8 fps). So ``apply_openmp_settings`` writes
 both.
 
-A container's host segments (YOLO11n's attention core) run on ONNX Runtime, whose own intra-op thread pool spins
+A container's host segments (YOLO11n's attention core, YOLO-World v2's four) run on ONNX Runtime, whose own intra-op thread pool spins
 between runs by default and ignores OpenMP's settings: YOLO11n through Ignition read 53-54 % CPU in every mode.
 ``ort_session_options`` gives those sessions the same mode. Measured on the attention core alone, CPU only, each run
 followed by a 9 ms sleep standing in for the NPU dispatch: ONNX Runtime's defaults 0.417 ms per run holding 7.01

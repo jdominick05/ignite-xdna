@@ -37,6 +37,13 @@ conda create -n resnet_env   --clone ryzen-ai-1.8.0
 conda create -n resnet_env17 --clone ryzen-ai-1.7.1
 ```
 
+The graph engine (`ignite-compile`, `.ignite` containers) runs outside both. It needs the mlir-aie toolchain: either
+`scripts/research-iron.sh` (mlir-aie's `ironenv`) or the `mlir-aie-iron` conda environment (Python 3.13, `pyxrt`,
+onnxruntime, opencv, pycocotools). YOLO-World v2's steps split across environments:
+- `pipelines/yolow/3c_gptq_cv2.py` and `ignite_xdna.pipelines.yolow_text` need no torch and run in `mlir-aie-iron`.
+- `pipelines/yolow/6_text_encoder.py` needs `resnet_env` (torch, ultralytics and the CLIP package ultralytics installs),
+  and downloads `ViT-B-32.pt` on first use.
+
 Do not install torch or timm into `resnet_env17`. Keeping the inference environment
 thin is what keeps Quark out of the inference import path.
 

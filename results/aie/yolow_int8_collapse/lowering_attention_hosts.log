@@ -1,0 +1,6 @@
+$ python yolow_lowering_report.py models/yolov8s-worldv2_cut_xint8.onnx  (mlir-aie-iron, worktree src first; re-run 2026-09-16 on Desktop 2 for the record of ef1746e's lowering sentence: graph_ir.lower_yolov8n with the four attention regions, plan_workspace and schedule_graph as compile_graph_container prints them, then the TextAttentionLowering tests)
+regions ['/model.12/attn/', '/model.15/attn/', '/model.18/attn/', '/model.21/attn/']
+Lowered 70 layers (4 on the host, 63 convolutions on the NPU); workspace 36.7 MB; 2446 rounds, 31.18 MB static packets
+$ pytest tests/test_engine_host_layer.py::TextAttentionLowering
+4 passed in 8.72s
+host regions' ops (the GPTQ model, same regions): each of /model.{12,15,18,21}/attn/ holds Reshape 3, Conv 1, Einsum 1, ReduceMax 1, Div 1, Add 1, Unsqueeze 1, Mul 2, HardSigmoid 1, Constant 1 (plus Q/DQ): the Conv is the region's projection convolution, so 4 of the model's 67 convolutions run on the host
