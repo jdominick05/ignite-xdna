@@ -17,6 +17,9 @@ Uses models/yolo11n_cut_xint8.onnx, models/yolo11n_no_c2psa_cut_xint8.onnx and m
   layers with four HostLayers, alternating NPU and host segments; the text guide those blocks share, built from
   Constant nodes inside /model.12/attn/, is a constant rather than a region boundary, and every tensor equals ONNX
   Runtime's;
+- with its four C2fAttn output convolutions also on the host (models/yolov8s-worldv2_cut_xint8_fp32cv2.onnx, those
+  convolutions quantized in FP32), each of those regions reads the C2fAttn Concat as a list of segments: every tensor
+  still equals ONNX Runtime's, the emulated host steps read the same view, and the manifest segments run NhhNhhNhhNhhN;
 - dilated and grouped (non-depthwise) convolutions, 1x1 stride-2 convolutions and a host region that names
   no node are refused;
 - ``ignite-compile --host-region`` reaches the graph compile, and a region Git Bash rewrote into a path is refused
@@ -47,6 +50,8 @@ ABLATED = MODELS / "yolo11n_no_c2psa_cut_xint8.onnx"
 YOLOV8N = MODELS / "yolov8n_cut_xint8.onnx"
 YOLOW = MODELS / "yolov8s-worldv2_cut_xint8.onnx"
 YOLOW_ATTN = ("/model.12/attn/", "/model.15/attn/", "/model.18/attn/", "/model.21/attn/")
+# pipelines/yolow/3b_quantize_cut.py --exclude /model.{12,15,18,21}/cv2/ (the four C2fAttn output convs in FP32)
+YOLOW_CV2 = MODELS / "yolov8s-worldv2_cut_xint8_fp32cv2.onnx"
 BUS = ROOT / "assets" / "bus.jpg"
 C2PSA = "/model.10/"
 CORE = "/model.10/m/m.0/attn/qkv/conv/Conv=/model.10/m/m.0/attn/Reshape_1"
@@ -206,6 +211,54 @@ class TextAttentionLowering(_OrtCase):
         scheds, _ = es.schedule_graph(self.ir, ws)
         kinds = [s["kind"] for s in plan_segments(self.ir, scheds)]
         self.assertEqual(kinds, ["npu", "host"] * 4 + ["npu"])
+
+
+@unittest.skipUnless(YOLOW_CV2.exists(), f"{YOLOW_CV2.name} not present")
+class ConcatViewHostInput(_OrtCase):
+    """YOLO-World v2 quantized with its four C2fAttn output convolutions in FP32: those regions read the C2fAttn
+    Concat, a view over several physical tensors, so a host layer's input is a list of segments."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.regions = tuple(f"/model.{b}/{p}/" for b in (12, 15, 18, 21) for p in ("attn", "cv2"))
+        cls.ir = graph_ir.lower_yolov8n(YOLOW_CV2, host_regions=cls.regions)
+        cls.hosts = [L for L in cls.ir.layers if isinstance(L, graph_ir.HostLayer)]
+
+    def test_cv2_regions_read_a_concat_view(self):
+        self.assertEqual(len(self.ir.layers), 70)
+        self.assertEqual([H.name for H in self.hosts], list(self.regions))
+        for H in self.hosts:
+            view = H.name.endswith("/cv2/")
+            self.assertEqual(bool(H.inputs), view, H.name)
+            if view:
+                self.assertGreater(len(H.inputs), 1)
+                self.assertEqual(H.in_channels, 8 * sum(s.blocks for s in H.inputs))
+
+    def test_every_tensor_matches_onnx_runtime(self):
+        self.assert_every_tensor_matches_ort(YOLOW_CV2, self.ir)
+
+    def test_emulated_host_steps_read_the_view(self):
+        chw, q = quantized_bus(self.ir)
+        direct = gr.run_direct(self.ir, q)
+        ws = es.plan_workspace(self.ir)
+        arr = np.zeros(ws.nbytes, dtype=np.uint8)
+        for name, v in direct.items():
+            if name in ws.placements:
+                ws.write_tensor(arr, name, v)
+        for H in self.hosts:
+            es.emulate_host_layer(self.ir, ws, H, arr)
+            c = self.ir.tensors[H.output].channels
+            self.assertTrue(np.array_equal(ws.read_tensor(arr, H.output)[:c], direct[H.output][:c]), H.name)
+
+    def test_manifest_segments_carry_the_view_and_pair_host_steps(self):
+        from ignite_xdna.compiler.engine_compile import plan_segments
+        ws = es.plan_workspace(self.ir)
+        scheds, _ = es.schedule_graph(self.ir, ws)
+        segs = plan_segments(self.ir, scheds)
+        self.assertEqual("".join("N" if s["kind"] == "npu" else "h" for s in segs), "NhhNhhNhhNhhN")
+        for s in segs:
+            if s["kind"] == "host":
+                self.assertEqual("inputs" in s, s["name"].endswith("/cv2/"), s["name"])
 
 
 @unittest.skipUnless(YOLOV8N.exists(), f"{YOLOV8N.name} not present")

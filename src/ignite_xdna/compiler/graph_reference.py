@@ -115,8 +115,9 @@ def run_direct(ir: GraphIR, input_q: np.ndarray, stop_after: Optional[int] = Non
                 y = em.residual_combine(y, r, L.residual_shift, L.residual_lsh_main, L.residual_lsh_res)
             tensors[L.output] = y
         elif isinstance(L, HostLayer):
-            src = ir.tensors[L.input.tensor]
-            x = gather_input(tensors, [L.input], src.height, src.width)[:src.channels]
+            segs = L.input_segments()
+            src = ir.tensors[segs[0].tensor]
+            x = gather_input(tensors, segs, src.height, src.width)[:L.in_channels or src.channels]
             tensors[L.output] = run_host_layer(L, x)
         else:
             x = gather_input(tensors, [L.input], t.height, t.width)

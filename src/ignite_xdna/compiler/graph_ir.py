@@ -140,15 +140,20 @@ class HostLayer:
 
     ``onnx_bytes`` is the region extracted by ``onnx.utils.Extractor`` between its input and output
     QuantizeLinear tensors, so it maps the uint8 input tensor to the uint8 output tensor exactly as the
-    original graph does. The input is one whole physical tensor; the output is a physical tensor like
-    a conv output.
+    original graph does. The input is one whole physical tensor, or a Concat view over several (``inputs``,
+    YOLO-World's C2fAttn output convolutions); the output is a physical tensor like a conv output.
     """
     name: str                 # the region spec: a node-name prefix ("/model.10/") or "FROM=TO"
     index: int
-    input: Segment
+    input: Segment            # the first input segment (the whole input when it is one physical tensor)
     output: str
     onnx_bytes: bytes
     op_types: Dict[str, int] = field(default_factory=dict)
+    inputs: List[Segment] = field(default_factory=list)  # every input segment in channel order; empty = [input]
+    in_channels: int = 0      # the region input's channel count; 0 = the input tensor's
+
+    def input_segments(self) -> List[Segment]:
+        return list(self.inputs) or [self.input]
 
 
 @dataclass
@@ -542,8 +547,16 @@ def lower_yolov8n(model_or_path, host_regions: Sequence[str] = ()) -> GraphIR:
             if node.name == region["builder"]:
                 # Own names: q_in, c, h, w and friends belong to the enclosing walk (q_in is the graph input).
                 r_in, r_out, r_qnode = region["q_in"], region["q_out"], region["q_node"]
-                if r_in not in tensors:
-                    raise ValueError(f"host region {region['spec']}: input {r_in} is not a physical tensor")
+                if r_in not in tensors and r_in not in views:
+                    raise ValueError(f"host region {region['spec']}: input {r_in} is not a physical tensor or view")
+                r_segs = resolve(r_in)
+                if any(sg.up2 for sg in r_segs):
+                    raise ValueError(f"host region {region['spec']}: input {r_in} includes an upsampled view")
+                if len({(tensors[sg.tensor].height, tensors[sg.tensor].width) for sg in r_segs}) != 1:
+                    raise ValueError(f"host region {region['spec']}: input {r_in} spans tensors of different sizes")
+                r_in_c = dims_chw(G.by_output[r_in].input[0])[0]
+                if r_in_c > 8 * sum(sg.blocks for sg in r_segs):
+                    raise ValueError(f"host region {region['spec']}: input {r_in} has more channels than its blocks")
                 r_scale, r_zp = G.scale_zp(r_qnode)
                 if r_zp != ZP:
                     raise ValueError(f"host region {region['spec']}: output zero point {r_zp}")
@@ -555,9 +568,10 @@ def lower_yolov8n(model_or_path, host_regions: Sequence[str] = ()) -> GraphIR:
                         sub_ins[0].type.tensor_type.elem_type != onnx.TensorProto.UINT8 or \
                         sub_outs[0].type.tensor_type.elem_type != onnx.TensorProto.UINT8:
                     raise ValueError(f"host region {region['spec']}: extracted model is not uint8 {r_in} -> {r_out}")
-                host = HostLayer(name=region["spec"], index=len(layers), input=Segment(r_in, 0, tensors[r_in].blocks),
+                host = HostLayer(name=region["spec"], index=len(layers), input=r_segs[0],
                                  output=r_out, onnx_bytes=sub.SerializeToString(),
-                                 op_types=dict(Counter(n.op_type for n in sub.graph.node)))
+                                 op_types=dict(Counter(n.op_type for n in sub.graph.node)),
+                                 inputs=r_segs if len(r_segs) > 1 else [], in_channels=r_in_c)
                 tensors[r_out] = TensorInfo(r_out, r_c, r_h, r_w, r_scale, ZP, producer=host.name)
                 scales[r_out] = r_scale
                 layers.append(host)

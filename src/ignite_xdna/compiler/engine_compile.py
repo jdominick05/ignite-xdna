@@ -89,8 +89,13 @@ def plan_segments(ir: GraphIR, scheds: List[es.LayerSchedule]) -> List[Dict[str,
         if isinstance(L, HostLayer):
             if start is not None:
                 segments.append({"kind": "npu", "layers": [start, s.layer_index], "tasks": tasks})
-            segments.append({"kind": "host", "layer": s.layer_index, "name": L.name, "input": L.input.tensor,
-                             "output": L.output, "op_types": dict(L.op_types)})
+            seg = {"kind": "host", "layer": s.layer_index, "name": L.name, "input": L.input.tensor,
+                   "output": L.output, "op_types": dict(L.op_types)}
+            if L.inputs:  # a Concat view over several tensors; a single-tensor input keeps the older manifest form
+                seg["inputs"] = [{"tensor": g.tensor, "block_offset": g.block_offset, "blocks": g.blocks}
+                                 for g in L.inputs]
+                seg["in_channels"] = L.in_channels
+            segments.append(seg)
             start, tasks = None, 0
         else:
             if start is None:
