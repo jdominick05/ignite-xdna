@@ -9054,8 +9054,8 @@ on a residual packet, so existing containers keep their meaning.
   `ab_sitting_summary.txt`): old program 7.331 and 7.299 ms, new 7.216 and 7.245 ms. An accumulator spill would have
   cost 2.6-3 times; the difference is within run-to-run noise and is not a speedup.
 
-No model worth running uses the new flag. It is in the program on this branch because it is exact and measured no
-slower on YOLOv8n; whether an unused op stays in the one engine program is the maintainer's call (DECISIONS).
+No model worth running uses the new flag. It is in the program because it is exact and measured no slower on YOLOv8n;
+whether an unused op stays in the one engine program was the maintainer's call, and it is kept (DECISIONS).
 
 **Not done:** AMD's stack on the GPTQ model (so no comparison with AMD is claimed for it; a best-against-best sitting
 with AMD's stack on variant D came later,
