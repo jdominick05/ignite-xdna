@@ -8887,16 +8887,48 @@ tensor.
   activations. AMD's stack runs that model at the same accuracy but places 110 of 1,049 nodes on the NPU and takes
   96.34 ms per image, no faster than the model on the CPU (87.83 ms in the same script).
 
-**What the engine still needs** (not built):
+**What the engine still needed** (as of `ef1746e`; the first item was built next, below):
 - **Host regions over a Concat view:** variant D's four FP32 convolutions read the C2fAttn Concat, which spans
-  several physical tensors. Refused today: "input /model.12/Concat_output_0_QuantizeLinear_Output is not a physical
-  tensor". That makes eight host layers and nine dispatches.
+  several physical tensors. Refused at `ef1746e`: "input /model.12/Concat_output_0_QuantizeLinear_Output is not a
+  physical tensor". That makes eight host layers, and nine dispatches were expected.
 - **Or an exact split** of each sensitive convolution into one over the three ordinary Concat inputs and one over
   the attention branch, summed before the activation. Every layer could then stay on the NPU, but the kernel applies
   the activation before the residual add, so that is a kernel program change for the maintainer.
 - An open-vocabulary head pipeline (512-channel egress and the contrastive decode) and a same-sitting comparison
   against AMD's 96.34 ms, the CPU, and DirectML on the iGPU (40.42 ms per image in FP32, whose full-set accuracy on the CPU is 37.0 %, above).
 
+**Through the container** (MEASURED, NPU Device 0; evidence `results/aie/yolow_engine/`). A host layer's input may
+now be a Concat view (`1a56120`): each segment's block range is synced and the channels concatenated. Variant D
+(`models/yolov8s-worldv2_cut_xint8_fp32cv2.onnx`) compiles with host regions `/model.{12,15,18,21}/{attn,cv2}/`:
+- **Build:** 70 layers, 8 on the host, in 29.8 s. The container is 33,082,368 B: the same 188,542 B engine xclbin,
+  998,480 B of instructions and 27,393,024 B of weight packets.
+- **Segments:** `NhhNhhNhhNhhN`. Each attention block and its C2fAttn output convolution run back to back on the
+  host, so a frame makes five NPU dispatches.
+- **Exact:** `tools/verify_engine_container.py`: 70/70 layers exact. Dispatch mean 17.197 ms (min 17.050, max 17.482)
+  and host mean 15.687 ms (min 14.215, max 17.704) over 50 runs.
+- **COCO through the container:** the first 300 val2017 images with the numpy letterbox (`5_eval_map.py --ep
+  ignite`). mAP@50-95 24.5 %, mAP@50 35.5 %, AR 46.5 %, identical to ONNX Runtime CPU on the same model. Both runs
+  wrote 76,649 detections, the same set, with one tie at score 0.00483 listed in the other order. The script's
+  inference time, which includes numpy input quantization and head dequantization, was 52.77 ms mean (median 52.22,
+  P95 58.43) against 96.34 ms for AMD's stack and 87.83 ms for the CPU on the same model in their own runs. Those
+  are separate processes, not one sitting.
+- **Where a frame goes** (100 frames of 20 COCO images, `balanced`):
+
+  | Step | Mean |
+  |---|---:|
+  | numpy input quantization (float64 round) | 9.249 ms |
+  | staging into the input plane | 1.107 ms |
+  | five NPU segments (9.400 / 1.083 / 3.931 / 2.203 / 0.704) | 17.321 ms |
+  | four attention host steps (2.334 / 2.863 / 2.247 / 1.937) | 9.381 ms |
+  | four FP32 output-convolution host steps (1.482 / 2.362 / 1.495 / 1.111) | 6.450 ms |
+  | head readback and unpack | 0.910 ms |
+  | head dequantization to float32 | 8.636 ms |
+  | total | 53.074 ms |
+
+  Native ingress and a cheaper dequantization address the 17.9 ms of the first and last steps. The host time is the
+  attention and the four FP32 convolutions.
+
 **Not done:** the full 5,000 images for variant D; variant E (the attention blocks also FP32; its quantization was
-killed for low memory); anything on the engine's NPU for YOLO-World; recovering the HardSigmoid cost (QAT or an exact
-SiLU epilogue).
+killed for low memory); a same-sitting latency and energy comparison (AMD's stack, the CPU, DirectML) with native
+ingress; the contrastive decode's cost (every stack pays it; the evaluations time the network only); recovering the
+HardSigmoid cost (QAT or an exact SiLU epilogue); an Ignition task for open-vocabulary detection.

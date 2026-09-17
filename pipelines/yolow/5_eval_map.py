@@ -43,10 +43,40 @@ def build_forward(sess, conf, imgsz, txt_feats):
     raise SystemExit(f"don't know what to do with {n_out} outputs")
 
 
+IGNITE_HEADS = ("p3_box", "p4_box", "p5_box", "p3_cls", "p4_cls", "p5_cls")  # HEAD_OUTS order
+
+
+def build_ignite_forward(model, conf, txt_feats):
+    """-> (session, imgsz, run_fn, decode_fn, description) for a graph-engine container.
+
+    run_fn stages the letterboxed float input quantized as the model's input QuantizeLinear does (round half to
+    even), runs every NPU segment and host layer, and dequantizes the six head tensors; so with the same input the
+    heads equal ONNX Runtime's on the model the container was compiled from."""
+    from ignite_xdna.runtime.graph_session import GraphSession
+    sess = GraphSession(model)
+    imgsz = int(sess.input_placement["width"])
+    qs = sess.ignite_manifest["quant_scales"]
+    s_in, z_in = float(qs["input_scale"]), int(qs.get("input_zero_point", 128))
+
+    def run(x):
+        q = np.clip(np.round(x[0].astype(np.float64) / s_in).astype(np.int64) + z_in, 0, 255).astype(np.uint8)
+        sess.stage_quantized(q)
+        heads = sess.run_yolo_monolithic(None)
+        if not heads["heads_present"]:
+            raise RuntimeError(f"{model}: no heads in the egress ({heads['head_status']})")
+        return [(heads[n].astype(np.float32) - np.float32(heads["scales"][n][1])) * np.float32(heads["scales"][n][0])
+                for n in IGNITE_HEADS]
+
+    return (sess, imgsz, run,
+            lambda r: yw.decode_yolow(r, txt_feats, imgsz=imgsz, conf_thres=conf),
+            f"graph-engine container ({len(sess.segments)} segments), contrastive + numpy decode")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", required=True)
-    ap.add_argument("--ep", choices=["cpu", "dml", "npu"], default="npu")
+    ap.add_argument("--ep", choices=["cpu", "dml", "npu", "ignite"], default="npu",
+                    help="ignite: --model is a graph-engine .ignite container (run with pyxrt available)")
     ap.add_argument("--images", default=str(DATA / "coco" / "val2017"))
     ap.add_argument("--ann", default=str(DATA / "coco" / "annotations" /
                                          "instances_val2017.json"))
@@ -80,12 +110,14 @@ def main():
     if args.n:
         img_ids = img_ids[: args.n]
 
-    sess = build_session(args.model, args.ep, cache_key, args.xclbin,
-                         log_severity=args.log)
-    imgsz = yw.input_size(sess.get_inputs()[0].shape, args.model)
     txt_feats = np.load(args.txt_feats) if args.txt_feats else yw.load_coco_txt_feats()
-
-    run_fn, decode_fn, desc = build_forward(sess, args.conf, imgsz, txt_feats)
+    if args.ep == "ignite":
+        sess, imgsz, run_fn, decode_fn, desc = build_ignite_forward(args.model, args.conf, txt_feats)
+    else:
+        sess = build_session(args.model, args.ep, cache_key, args.xclbin,
+                             log_severity=args.log)
+        imgsz = yw.input_size(sess.get_inputs()[0].shape, args.model)
+        run_fn, decode_fn, desc = build_forward(sess, args.conf, imgsz, txt_feats)
     print(f"model: {desc}, input {imgsz}x{imgsz}")
     print(f"eval : {len(img_ids)} images, conf {args.conf}, iou {args.iou}, "
           f"max_det {args.max_det}, "
@@ -123,6 +155,8 @@ def main():
             print(f"  [{k + 1:4d}/{len(img_ids)}]  infer {cur_ms:5.2f} ms  "
                   f"elapsed {elapsed:5.1f}s")
 
+    if args.ep == "ignite":
+        sess.close()  # release the NPU hardware context before the CPU-only COCO evaluation
     ts = np.array(times)
     print(f"\nTiming ({len(times)} images):")
     print(f"  mean   : {ts.mean():.2f} ms  ({1000 / ts.mean():.1f} fps)")

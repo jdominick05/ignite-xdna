@@ -1,0 +1,21 @@
+$ PYTHONPATH=<ignite-xdna worktree>/src <conda envs>/mlir-aie-iron/python.exe yolow_profile.py <scratch>/yolow/yolow_fp32cv2.ignite --frames 100 (10 warm-up; 20 COCO images cycled)
+100 frames, power mode balanced (default)
+  quantize         mean   9.249 ms
+  stage            mean   1.107 ms
+  dispatch+host    mean  33.171 ms
+  readback+unpack  mean   0.910 ms
+  dequantize       mean   8.636 ms
+  total            mean  53.074 ms
+    npu segment 0              9.400 ms
+    /model.12/attn/            2.334 ms
+    /model.12/cv2/             1.482 ms
+    npu segment 3              1.083 ms
+    /model.15/attn/            2.863 ms
+    /model.15/cv2/             2.362 ms
+    npu segment 6              3.931 ms
+    /model.18/attn/            2.247 ms
+    /model.18/cv2/             1.495 ms
+    npu segment 9              2.203 ms
+    /model.21/attn/            1.937 ms
+    /model.21/cv2/             1.111 ms
+    npu segment 12             0.704 ms
