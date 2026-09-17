@@ -9195,7 +9195,10 @@ log with its command, and `summary.txt`), started 03:26 UTC on 2026-09-17.
   24.7 against 24.5 %.
 - **Faster than the CPU, but not at its accuracy.** The CPU runs FP32 at 67.75 ms, 1.43 times the container's time,
   and 18.3 points more accurate.
-- **Not faster than the iGPU.** DirectML runs FP32 at 46.22 ms, 1.2 ms under the container, at 43.0 %. On this machine
+- **Not faster than the iGPU.** DirectML runs FP32 at 46.22 ms, 1.2 ms under the container, at 43.0 %. Its accuracy
+  equal to the CPU's is not a silent CPU fallback: a verbose session on the same model reports "All nodes placed on
+  [DmlExecutionProvider]. Number of nodes: 1", the whole graph fused into one DirectML node
+  (`dml_placement_verbose.log`). On this machine
   the iGPU serves YOLO-World v2 better today. What the NPU container could still offer is unmeasured: energy per
   frame, and leaving the iGPU free.
 - **Where the container's time goes** (the profile sitting above, same container): numpy quantization 9.093-9.183 ms
