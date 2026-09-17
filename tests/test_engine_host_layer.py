@@ -26,7 +26,8 @@ Uses models/yolo11n_cut_xint8.onnx, models/yolo11n_no_c2psa_cut_xint8.onnx and m
   packet emulation of those four layers equal to the direct reference;
 - with those convolutions requantized by GPTQ with int32 biases instead (models/yolov8s-worldv2_cut_xint8_gptqcv2.onnx),
   the biases reach the layers as int32 (no int8 truncation) and every tensor equals ONNX Runtime's; an accumulator
-  bias outside int32 is refused;
+  bias outside int32 is refused; a host step whose text guide is replaced at run time with another class count
+  (``HostStep.replace_constants``, no device) gives the same output as the host layer of a rewritten model;
 - dilated and grouped (non-depthwise) convolutions, 1x1 stride-2 convolutions and a host region that names
   no node are refused;
 - ``ignite-compile --host-region`` reaches the graph compile, and a region Git Bash rewrote into a path is refused
@@ -332,6 +333,29 @@ class Int32Bias(_OrtCase):
 
     def test_every_tensor_matches_onnx_runtime(self):
         self.assert_every_tensor_matches_ort(YOLOW_GPTQ, self.ir)
+
+    def test_host_constants_replaced_at_run_time_match_a_rewritten_model(self):
+        """A vocabulary chosen at run time: another class count in a text guide changes only the host step."""
+        from onnx import numpy_helper
+        from ignite_xdna.runtime.graph_session import HostStep
+        H = next(L for L in self.ir.layers if isinstance(L, graph_ir.HostLayer))
+        name = f"{H.name}Reshape_output_0"
+        guide = np.random.default_rng(5).standard_normal((1, 5, 4, 32)).astype(np.float32)
+        step = object.__new__(HostStep)   # the ONNX Runtime part only: no device
+        step.name, step.blob = H.name, H.onnx_bytes
+        self.assertIn(name, step.initializer_names())
+        self.assertEqual(step.replace_constants({name: guide}), [name])
+        m = onnx.load_from_string(H.onnx_bytes)
+        for t in m.graph.initializer:
+            if t.name == name:
+                t.CopyFrom(numpy_helper.from_array(guide, name))
+        rewritten = dataclasses.replace(H, onnx_bytes=m.SerializeToString())
+        t = self.ir.tensors[H.input.tensor]
+        x = np.random.default_rng(6).integers(0, 256, (t.channels, t.height, t.width), dtype=np.uint8)
+        got = step.ort_session.run(None, {step.input_name: x[None]})[0][0]
+        self.assertTrue(np.array_equal(got, gr.run_host_layer(rewritten, x)))
+        with self.assertRaisesRegex(ValueError, "rank"):
+            step.replace_constants({name: guide[0]})
 
 
 @unittest.skipUnless(YOLOV8N.exists(), f"{YOLOV8N.name} not present")
