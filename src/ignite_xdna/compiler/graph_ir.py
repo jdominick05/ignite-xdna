@@ -84,7 +84,7 @@ class ConvLayer:
     stride: int
     pad: int
     weights: np.ndarray      # int8 [Cout][Cin][k][k]
-    bias_q: np.ndarray       # int8 [Cout]
+    bias_q: np.ndarray       # int32 [Cout], from an int8 (XINT8) or int32 bias initializer
     bias_scale: float
     weight_scale: float
     conv_scale: float        # scale of the conv output QuantizeLinear (s1)
@@ -589,6 +589,8 @@ def lower_yolov8n(model_or_path, host_regions: Sequence[str] = ()) -> GraphIR:
             if len(node.input) > 2 and node.input[2]:
                 b_q, sb, zb = G.q_source(node.input[2])
                 bias = G.const(b_q)
+                if bias.dtype not in (np.int8, np.int32):
+                    raise ValueError(f"{node.name}: bias is {bias.dtype}; int8 or int32 only")
             else:  # bias-free conv (SESR): a zero bias at the product scale
                 sb, zb, bias = sx * sw, 0, np.zeros(cout, dtype=np.int8)
             if zx != ZP or zw != 0 or zb != 0:
@@ -629,7 +631,7 @@ def lower_yolov8n(model_or_path, host_regions: Sequence[str] = ()) -> GraphIR:
                 raise ValueError(f"{node.name}: output zero point {z1}")
             layer = ConvLayer(name=node.name, index=len(layers), inputs=resolve(x_q), in_scale=sx, k=k,
                               stride=stride, pad=int(pads[0]), weights=weights.astype(np.int8),
-                              bias_q=bias.astype(np.int8), bias_scale=sb, weight_scale=sw, conv_scale=s1,
+                              bias_q=bias.astype(np.int32), bias_scale=sb, weight_scale=sw, conv_scale=s1,
                               output=conv_q)
             # Activation chain?
             conv_f = G.dq_of(conv_q)
