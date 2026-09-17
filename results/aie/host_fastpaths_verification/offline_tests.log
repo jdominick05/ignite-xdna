@@ -1,0 +1,14 @@
+$ python -m pytest -v tests/test_host_fastpaths_offline.py  (resnet_env17; the committed DLLs)
+============================= test session starts =============================
+platform win32 -- Python 3.12.11, pytest-9.1.1, pluggy-1.6.0 -- python(resnet_env17)
+rootdir: <ignite-xdna worktree>
+configfile: pyproject.toml
+plugins: anyio-4.15.1
+collecting ... collected 3 items
+
+tests/test_host_fastpaths_offline.py::HostFastPathsOffline::test_c8_decode_equals_nchw_decode PASSED [ 33%]
+tests/test_host_fastpaths_offline.py::HostFastPathsOffline::test_depth_to_space_matches_numpy PASSED [ 66%]
+tests/test_host_fastpaths_offline.py::HostFastPathsOffline::test_resize_is_within_one_code_of_opencv PASSED [100%]
+
+============================== 3 passed in 8.76s ==============================
+rc=0

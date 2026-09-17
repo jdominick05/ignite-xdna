@@ -1,0 +1,39 @@
+$ PYTHONPATH=<worktree>/src python pipelines/yolov8n/5_eval_map.py --model <scratch>\sig_containers\yolov8s_new_sigmoid.ignite --ep ignite --n 500 --images <ignite-xdna main>\data\coco\val2017 --ann <ignite-xdna main>\data\coco\annotations\instances_val2017.json --dets <scratch>\sig_containers\dets_yolov8s_sigmoid_merged_ignite500.json
+loading annotations into memory...
+Done (t=0.29s)
+creating index...
+index created!
+model: graph-engine container (SiLU sigmoid4), numpy decode, input 640x640
+eval : 500 images, conf 0.001, iou 0.7, max_det 300, per-class NMS
+  500/500  (47410 detections so far)
+
+47410 detections over 500 images in 18s
+inference  mean 29.89 ms   median 29.67 ms
+wrote <scratch>\sig_containers\dets_yolov8s_sigmoid_merged_ignite500.json
+Loading and preparing results...
+DONE (t=0.17s)
+creating index...
+index created!
+Running per image evaluation...
+Evaluate annotation type *bbox*
+DONE (t=2.05s).
+Accumulating evaluation results...
+DONE (t=0.54s).
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.463
+ Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] = 0.621
+ Average Precision  (AP) @[ IoU=0.75      | area=   all | maxDets=100 ] = 0.507
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.304
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.509
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.589
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=  1 ] = 0.361
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets= 10 ] = 0.579
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.614
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.411
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.655
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.731
+
+=== yolov8s_new_sigmoid | IGNITE | 640px | 500 images ===
+mAP@50-95  46.25
+mAP@50     62.07
+mAP small / medium / large   30.41 / 50.95 / 58.89
+latency    29.89 ms

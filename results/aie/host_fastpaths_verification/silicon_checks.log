@@ -1,0 +1,26 @@
+$ PYTHONPATH=<worktree>/src python gemini_runtime_silicon.py --n 100  (Device 0; containers: today = main c714629 HardSigmoid, *_new_sigmoid = 7700316 --silu-sigmoid; SESR M7 = the main checkout's build/sesr_m7.ignite)
+Silicon checks of the consolidated head readback, the C8 decode and SESR's native host paths (Device 0).
+
+Run in mlir-aie-iron with the worktree's src first on PYTHONPATH.
+
+1. Detect containers (YOLOv8n today + --silu-sigmoid, YOLOv8s --silu-sigmoid): for bus.jpg and the first --n COCO
+   val2017 images, stage the frame once (native ingress), then
+   - run_yolo_monolithic(unswizzle=True): every head equals an independent read_tensor of its tensor (int8 view);
+   - run_yolo_monolithic(unswizzle=False): every raw C8 view equals read_tensor transposed;
+   - detections from the C8 heads (native C8 decode) equal detections from the NCHW heads (native int8 decode);
+   - predict_sync on the same frame, oracle-free, gives those detections, and so does its ONNX Runtime oracle
+     (the reference model for a --silu-sigmoid container).
+2. Pose container: the NCHW heads after the consolidated syncs equal read_tensor of each head tensor.
+3. SESR M7: for bus.jpg and the first 10 COCO images, the native image (native resize ingress + native
+   DepthToSpace) against the reference path (cv2 resize + numpy DepthToSpace): DepthToSpace alone exact on the same
+   output blocks; whole images compared (differing bytes, max difference, PSNR), since the resize is not OpenCV's.
+
+    python gemini_runtime_silicon.py [--n 100]
+
+host DESKTOP-CBL5NUA, 2026-09-17T15:21:08Z, 101 frames per detect container
+yolov8n_today: 101 frames, 634 detections; NCHW heads != read_tensor: 0; C8 views != read_tensor: 0; C8 decode != NCHW decode: 0 frames; predict_sync != NCHW decode: 0 frames; predict_sync with the ONNX Runtime oracle != NPU decode: 0 frames -> PASS
+yolov8n_new_sigmoid: 101 frames, 472 detections; NCHW heads != read_tensor: 0; C8 views != read_tensor: 0; C8 decode != NCHW decode: 0 frames; predict_sync != NCHW decode: 0 frames; predict_sync with the ONNX Runtime oracle != NPU decode: 0 frames -> PASS
+yolov8s_new_sigmoid: 101 frames, 540 detections; NCHW heads != read_tensor: 0; C8 views != read_tensor: 0; C8 decode != NCHW decode: 0 frames; predict_sync != NCHW decode: 0 frames; predict_sync with the ONNX Runtime oracle != NPU decode: 0 frames -> PASS
+pose_new_sigmoid: 21 frames x 9 heads after consolidated syncs, heads != read_tensor: 0 -> PASS
+sesr_m7: native DepthToSpace != numpy on the same blocks: 0/11 -> PASS; whole image native (resize + DepthToSpace) vs cv2 + numpy: 4805861/8650752 bytes differ (55.55 %), max 26, PSNR min 41.42 dB, mean 42.19 dB
+RESULT: PASS

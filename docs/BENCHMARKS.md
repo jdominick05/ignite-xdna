@@ -9667,21 +9667,55 @@ that slice. The calibration differs (100 images and Quark's own scales), so it i
   images (section above).
 - Energy at full speed.
 - YOLO11n and YOLO-World v2, which cannot use the flag.
-## Dispatch, readback and SIMD host optimization in the balanced default (2026-09-17, Desktop 2)
 
-Following the balanced default baseline measurements on 2026-09-16, three host-side bottlenecks were investigated and
-optimized to reduce per-frame dispatch and head-readback latency: direct channel-blocked native C decode on raw `[B, H, W, C8]`
-uint8 tensors (eliminating the 1.21 MB NCHW transpose per frame), consolidated head memory allocations (cutting driver
-synchronization ioctls from 6 to 3 spans), and native SIMD implementations of SESR M7's depth-to-space channel rearrangement
-and resize ingress.
+## Host fast paths: SESR M7 2.05 ms faster in its host stages, detection heads decoded in their channel blocks (2026-09-17, Desktop 2)
 
-Evidence: `results/aie/latency_balanced_dispatch_opt_phoenix_20260917T1250Z.log`.
+Three host-side changes to the runtime (`8285f78`); the core program, the xclbin and every container are unchanged:
+- **Detection heads decoded where they sit.** `GraphSession.read_heads(unswizzle=False)` syncs each run of adjacent head
+  regions once (YOLOv8n and YOLOv8s: three syncs instead of six) and returns views of the channel-blocked
+  `[blocks][H][W][8]` codes. `decode_native.c`'s `yolo_decode_c8_blocks` decodes those views without the NCHW transpose.
+  `YoloPipeline` takes this path when the native decode loads; the numpy fallback converts to NCHW first. YOLOv8n-pose
+  keeps its NCHW heads and gets only the merged syncs.
+- **SESR M7's image output native.** `preprocess_simd.c`'s `depth_to_space_crd_bgr` does DepthToSpace and the output
+  lookup in one pass, replacing numpy.
+- **SESR M7's resize native.** `fused_resize_bgr_to_c8_plane` resizes the BGR frame straight into the input plane,
+  replacing `cv2.resize`. **It is not OpenCV's resize**, and SESR's output image changes with it (verification below).
+
+Evidence: `results/aie/latency_balanced_dispatch_opt_phoenix_20260917T1250Z.log` (the sitting) and
+`results/aie/host_fastpaths_verification/` (exactness).
+
+**Verification.** Offline in `resnet_env17`; on the NPU in `mlir-aie-iron` with this runtime first on `PYTHONPATH`,
+Device 0 on Desktop 2.
+
+| Check | Result | Log in `host_fastpaths_verification/` |
+|---|---|---|
+| Channel-block decode against NCHW decode, synthetic heads: 12 seeds at thresholds 0.001, 0.25 and 0.6; native C8, native NCHW and the numpy C8 fallback against numpy NCHW | identical, with the committed DLLs and with both DLLs deleted and rebuilt from their C sources | `offline_tests.log`, `offline_tests_rebuilt_dlls.log` |
+| `tools/decode_native_check.py stress`, 3,000 trials | 159,946 detections, 0 mismatches | `decode_native_stress.log` |
+| YOLOv8n (today's container and `--silu-sigmoid`) and YOLOv8s (`--silu-sigmoid`) on the NPU, bus.jpg and the first 100 COCO val2017 images | every head through the merged syncs equals `read_tensor`; every channel-block view equals `read_tensor`; the channel-block decode equals the NCHW decode on 101 of 101 frames (634, 472 and 540 detections); `predict_sync` gives those detections oracle-free and with its ONNX Runtime oracle | `silicon_checks.log` |
+| YOLOv8n-pose on the NPU, 21 frames of 9 heads | heads through the merged syncs equal `read_tensor` | `silicon_checks.log` |
+| The `--silu-sigmoid` containers through `5_eval_map.py --ep ignite` on this runtime, first 500 COCO val2017 images | 37.29 / 46.25 / 43.50 (YOLOv8n / YOLOv8s / YOLOv8n-pose), detections byte-identical to `silu_sigmoid.reference_model` on ONNX Runtime CPU | `coco500_merged_runtime.log`, `eval_*_sigmoid_merged_ignite500.log` |
+| SESR M7 native DepthToSpace against numpy on the same NPU output, 11 frames | identical | `silicon_checks.log` |
+| Native resize against `cv2.resize` INTER_LINEAR (identity lookup; bus.jpg, 20 COCO images and 5 random sizes, to 256x256 and 640x640) | never more than 1 code apart; 13.240 % of bytes differ | `resize_vs_opencv.log` |
+| SESR M7 whole image, native resize and DepthToSpace against `cv2.resize` and numpy, 11 frames | **55.55 % of output bytes differ, max 26 codes; PSNR 41.42 dB at worst, 42.19 dB mean** | `silicon_checks.log` |
+
+The last row is a change of output, not a rounding detail: the network amplifies the one-code input differences. The NPU
+stays exact against ONNX Runtime on whatever input it is given, but SESR's image is no longer the image ONNX Runtime
+makes from an OpenCV-resized frame. No SESR quality figure was re-measured through the native resize.
+
+Found while verifying: `YoloPipeline.predict_sync(use_oracle_for_boxes=True)`, the default, built its ONNX Runtime
+oracle from the Quark model, whose SiLU is the HardSigmoid form. On a `--silu-sigmoid` container its boxes were therefore
+not the container's. The oracle is now `silu_sigmoid.reference_model` when the manifest says
+`graph_engine.silu = "sigmoid4"`, and the silicon check runs both modes. The disagreement before the fix was seen
+during the check and not kept as a log. Ignition and `runtime/loader.py` call `predict_sync` oracle-free, so no
+shipped path was affected.
 
 **Method.** One sitting, 12:50-12:53 UTC on Desktop 2 (`DESKTOP-CBL5NUA`, Ryzen 7 8700G, XDNA1 Phoenix).
-Preflight `xrt-smi examine -r aie-partitions` verified no hardware contexts were running on device; host CPU was 9.3 % over 3 s
-before start. 50 warm-up and 500 timed frames per run on `bus.jpg` (810x1080), stacks interleaved per model and each group run
+`xrt-smi examine -r aie-partitions` showed no hardware context before every run and after the last; host CPU
+was 9.3 % over 3 s before the start. 50 warm-up and 500 timed frames per run on `bus.jpg` (810x1080), stacks interleaved per model and each group run
 twice. Ignition ran in its `balanced` default (8 worker threads, sleeping between regions). AMD runs used the Vitis AI EP
 (Ryzen AI 1.7.1) with pre-compiled caches.
+
+The containers are today's (`build/*.ignite` in the main checkout, HardSigmoid SiLU), not the `--silu-sigmoid` ones.
 
 | Run | Model | Arm | G2G mean | P50 | P95 | P99 | Stage means (ms) | Output / Detections | RSS |
 |---|---|---|---:|---:|---:|---:|---|---|---:|
@@ -9702,24 +9736,50 @@ twice. Ignition ran in its `balanced` default (8 worker threads, sleeping betwee
 | 15 | YOLOv8n-pose | AMD, `4_pose.py --ep npu` | 12.220 | 12.047 | 13.468 | 14.512 | pre 3.131, infer 8.81, post 0.12 | 3 people | — |
 | 16 | YOLOv8n-pose | Ignition, `live_ignition.py` | **8.952** | 8.913 | 9.269 | 9.576 | preprocess 0.544, NPU forward 8.064 (dispatch 7.566, readback 0.480), decode+NMS 0.339 | 3 people | 181.7 MB |
 
-All times in ms. 500 timed frames after 50 warm-up. RSS flat across all Ignition runs.
+All times in ms. 500 timed frames after 50 warm-up. RSS flat across all Ignition runs. AMD's YOLOv8n-pose arm is
+`4_pose.py --ep npu` with its own timer, as in the earlier pose sittings.
 
-- **SESR M7 slashed by 2.06 ms per frame:** Glass-to-glass mean dropped from 6.840 / 6.815 ms (mean 6.828 ms in the 2026-09-16
-  baseline sitting) down to 4.783 / 4.766 ms (mean 4.775 ms). The 2.48 ms gap to AMD's stack (4.543 / 4.576 ms, mean 4.560 ms)
-  is reduced to **0.21 ms**.
-  - Replacing the NumPy channel-rearrangement postprocessing with native C SIMD (`depth_to_space_crd_bgr` in `preprocess_simd.c`)
-    reduced postprocess latency from 2.20 ms to **0.35 ms** (6.2x faster).
-  - Replacing OpenCV resize with fused native C SIMD resize ingress (`fused_resize_bgr_to_c8_plane`) reduced preprocess latency
-    from 0.43 ms to **0.18 ms** (2.4x faster).
-  - The remaining 0.21 ms difference is purely NPU execution: Ignition's bare-metal container dispatches in 4.21 ms (single dispatch
-    of 9 layers on physical AIE2 tiles) vs AMD's Vitis AI EP partition `session.run` of 1.56 ms.
-- **YOLOv8s readback halved:** Head readback latency dropped from 0.651 / 0.635 ms down to **0.312 / 0.310 ms** (-0.33 ms, a 2.1x
-  reduction), dropping overall NPU forward from 17.42 ms to 17.14 ms (-0.28 ms) and G2G from 18.02 ms to **17.95 ms**.
-  - Detection head allocations were consolidated into 3 contiguous spans (P3 921.6 KB, P4 230.4 KB, P5 57.6 KB), cutting sync
-    driver ioctl calls by half (from 6 to 3).
-  - The native C decode (`yolo_decode_c8_blocks` in `decode_native.c`) was extended to decode directly from channel-blocked
-    `[B, H, W, C8]` memory, bypassing the 1.21 MB NCHW transpose entirely and yielding bit-exact detections across all 80 classes.
-- **YOLOv8n and YOLOv8n-pose maintain clear leads over AMD:**
-  - YOLOv8n runs at **8.309 / 8.349 ms** vs AMD's 10.637 / 10.530 ms (Ignition is **2.26 ms / 27 % faster**).
-  - YOLOv8n-pose runs at **8.981 / 8.952 ms** vs AMD's 12.137 / 12.220 ms (Ignition is **3.21 ms / 36 % faster**).
+**Before and after.** Against the balanced-default sitting of the day before
+(`results/aie/latency_balanced_default_phoenix_20260916T1745Z.log`). These are two sittings, not an interleaved old and
+new runtime, and AMD's arms moved too between them (YOLOv8n 10.392 / 10.335 to 10.637 / 10.530 ms, YOLOv8s 16.744 /
+16.564 to 16.966 / 16.916 ms), so a difference of a few tenths of a millisecond between them is not established by
+these runs.
 
+| Model | Stage | 2026-09-16 | 2026-09-17 |
+|---|---|---:|---:|
+| SESR M7 | preprocess | 0.434 / 0.431 | 0.185 / 0.184 |
+| SESR M7 | NPU forward | 4.199 / 4.198 | 4.239 / 4.223 |
+| SESR M7 | image output | 2.202 / 2.181 | 0.353 / 0.355 |
+| SESR M7 | glass-to-glass | 6.840 / 6.815 | 4.783 / 4.766 |
+| YOLOv8n | preprocess | 0.545 / 0.534 | 0.626 / 0.635 |
+| YOLOv8n | readback | 0.607 / 0.599 | 0.279 / 0.287 |
+| YOLOv8n | decode+NMS | 0.041 / 0.042 | 0.140 / 0.141 |
+| YOLOv8n | glass-to-glass | 8.420 / 8.386 | 8.309 / 8.349 |
+| YOLOv8s | preprocess | 0.548 / 0.546 | 0.626 / 0.653 |
+| YOLOv8s | readback | 0.651 / 0.635 | 0.312 / 0.310 |
+| YOLOv8s | decode+NMS | 0.047 / 0.046 | 0.160 / 0.157 |
+| YOLOv8s | glass-to-glass | 18.046 / 17.988 | 17.950 / 17.940 |
+| YOLOv8n-pose | readback | 0.536 / 0.526 | 0.492 / 0.480 |
+| YOLOv8n-pose | glass-to-glass | 9.025 / 8.970 | 8.981 / 8.952 |
+
+- **SESR M7: 2.06 / 2.05 ms less per frame, all of it host work.** Image output fell 1.85 / 1.83 ms and preprocess
+  0.25 ms; the NPU forward did not move. The step is far outside the sittings' spread.
+- **SESR M7 is still behind AMD's stack, by 0.240 / 0.190 ms (4.783 / 4.766 against 4.543 / 4.576), and the NPU is not
+  close.** Ignition's NPU forward (4.239 / 4.223 ms) is about 2.7 ms slower than AMD's `session.run` (1.550 / 1.576 ms).
+  Ignition's host stages (0.538 / 0.539 ms) are about 2.5 ms faster than those of AMD's arm (2.993 / 3.000 ms), which
+  still runs Ignition's float `sr_postprocess` on its output. A faster postprocess for that float output would move
+  AMD's arm as well; none was tried.
+- **YOLOv8n and YOLOv8s: the readback halved, the frame barely moved.** Readback is 0.31-0.34 ms shorter on both, but
+  decode+NMS is 0.10-0.11 ms longer on the channel-block decode, and preprocess read 0.08-0.11 ms higher with no change
+  to ingress. Glass-to-glass is 0.04-0.11 ms lower, inside the difference between the two sittings. The 2026-09-16
+  YOLOv8n `performance` runs already read back in 0.276 / 0.279 ms on the old path.
+- **YOLOv8n-pose: unchanged.** Readback 0.04-0.05 ms shorter from the merged syncs alone; glass-to-glass 8.981 / 8.952
+  against 9.025 / 8.970 ms.
+- **Against AMD's stack in this sitting:** YOLOv8n 8.309 / 8.349 against 10.637 / 10.530 ms, YOLOv8n-pose 8.981 / 8.952
+  against 12.137 / 12.220 ms, YOLOv8s 17.950 / 17.940 against 16.966 / 16.916 ms (still about 1 ms behind).
+
+**Not done:**
+- An interleaved sitting of the old and new runtime on the same containers.
+- The `--silu-sigmoid` containers timed on this runtime.
+- SESR quality (PSNR against a reference set) through the native resize.
+- AMD's SESR arm with a faster float postprocess.

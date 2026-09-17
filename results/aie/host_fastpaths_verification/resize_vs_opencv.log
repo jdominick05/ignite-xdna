@@ -1,0 +1,16 @@
+$ python resize_vs_cv2.py <worktree>  (native fused_resize_bgr_to_c8_plane against cv2.resize INTER_LINEAR, identity LUT; bus.jpg, the first 20 COCO val2017 images and 5 random sizes, to 256x256 and 640x640)
+cv2 5.0.0 native lib True
+bus.jpg                -> 256x256: ok=True differing bytes 38956/196608 (19.81 %), max 1
+bus.jpg                -> 640x640: ok=True differing bytes 246025/1228800 (20.02 %), max 1
+random 168x749         -> 256x256: ok=True differing bytes 44903/196608 (22.84 %), max 1
+random 168x749         -> 640x640: ok=True differing bytes 280206/1228800 (22.80 %), max 1
+random 893x430         -> 256x256: ok=True differing bytes 44538/196608 (22.65 %), max 1
+random 893x430         -> 640x640: ok=True differing bytes 281523/1228800 (22.91 %), max 1
+random 242x277         -> 256x256: ok=True differing bytes 44769/196608 (22.77 %), max 1
+random 242x277         -> 640x640: ok=True differing bytes 278623/1228800 (22.67 %), max 1
+random 406x109         -> 256x256: ok=True differing bytes 44838/196608 (22.81 %), max 1
+random 406x109         -> 640x640: ok=True differing bytes 278060/1228800 (22.63 %), max 1
+random 709x645         -> 256x256: ok=True differing bytes 44363/196608 (22.56 %), max 1
+random 709x645         -> 640x640: ok=True differing bytes 281121/1228800 (22.88 %), max 1
+all: differing bytes 4906780/37060608 (13.240 %), max abs diff 1
+rc=0
