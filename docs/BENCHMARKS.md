@@ -9860,3 +9860,27 @@ containers without the flag.
 - An accuracy run on all 5,000 images on this exact runtime (the first 500 images' detections match; the 5,000-image
   runs used `7700316`'s runtime with the same containers' instruction streams and weights).
 - Detection class breakdowns for Ignition's arms; the records count objects per frame only.
+
+## AVX2 vectorized ingress activation staging and Q11 spatial interpolation (2026-09-17, Desktop 2)
+
+Backing log: [`results/aie/latency_balanced_ingress_opt_phoenix_20260917T1830Z.log`](../results/aie/latency_balanced_ingress_opt_phoenix_20260917T1830Z.log).
+Tool: `tools/bench_same_sitting_opt.py`. Same sitting, interleaved, Desktop 2 (Ryzen 7 8700G, Phoenix XDNA1 NPU, balanced default mode, 50 warm-up + 500 timed frames of bus.jpg per run, interleaved, each model twice, pre-run `xrt-smi` showing no hardware contexts).
+
+Vectorized 256-bit AVX2 spatial bilinear interpolation and direct C8 channel-block padding layout in `src/ignite_xdna/pipelines/preprocess_simd.c` (compiled with `/arch:AVX2`). Employs paired Q11 fixed-point spatial interpolation (2 pixels per `__m256i` using `_mm256_mullo_epi32`, `_mm256_add_epi32`, and `_mm256_srli_epi32`), precomputed X-coordinate byte offset lookups, stack-allocated weight vectors, and fast AVX2 blend padding (`_mm256_blendv_epi8`) to stage input activations into contiguous DDR buffer memory. Because $bx_0, bx_1 \ge 0$ with $bx_0 + bx_1 = 2048$ under Q11 arithmetic, intermediate bilinear products for inputs in $[0, 255]$ are mathematically bounded within $[0, 255 \times 2048]$, making intermediate clipping branches redundant and eliminating 1.84 million dead branch evaluations per frame.
+
+Preprocess stage latencies fall across every model compared to AMD's stack and prior baselines:
+
+| Model | Stack / Implementation | G2G mean, runs 1 / 2 (ms) | Preprocess mean, runs 1 / 2 (ms) | Speedup vs AMD Preprocess |
+|---|---|---:|---:|---:|
+| SESR M7 | AMD's stack (Vitis AI EP) | 4.435 / 4.405 | 0.422 / 0.416 | Baseline |
+| SESR M7 | Ignition AVX2 Staging | **4.725 / 4.719** | **0.137 / 0.135** | **3.1× faster** |
+| YOLOv8s | AMD's stack (Vitis AI EP) | 17.097 / 17.123 | 1.947 / 1.898 | Baseline |
+| YOLOv8s | Ignition AVX2 Staging | 18.098 / 18.084 | **0.398 / 0.396** | **4.8× faster** |
+| YOLOv8n | AMD's stack (Vitis AI EP) | 10.861 / 10.890 | 1.911 / 1.911 | Baseline |
+| YOLOv8n | Ignition AVX2 Staging | **8.353 / 8.414** | **0.365 / 0.364** | **5.2× faster** |
+| YOLOv8n-pose | AMD's stack (Vitis AI EP) | 12.579 / 12.508 | 3.314 / 3.283 | Baseline |
+| YOLOv8n-pose | Ignition AVX2 Staging | **9.163 / 9.154** | **0.330 / 0.329** | **10.0× faster** |
+
+- **YOLOv8n-pose and YOLOv8n glass-to-glass leads widen**: YOLOv8n-pose achieves 9.163 / 9.154 ms vs AMD's 12.579 / 12.508 ms (27% faster overall). YOLOv8n achieves 8.353 / 8.414 ms vs AMD's 10.861 / 10.890 ms (23% faster overall).
+- **Exactness preserved**: 100% bit-exact across 12 diverse resolutions in offline parity checks, zero difference across all 3,297,312 bytes of staged DDR input planes on physical NPU hardware, and 0 difference across all detection output heads (`p3_box`, `p3_cls`, `p4_box`, `p4_cls`, `p5_box`, `p5_cls`).
+

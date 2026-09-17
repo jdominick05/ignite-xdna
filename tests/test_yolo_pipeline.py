@@ -28,16 +28,19 @@ class TestYoloPipeline(unittest.TestCase):
         cls.bus_path = cls.repo_root / "assets" / "bus.jpg"
         if not cls.bus_path.exists():
             cls.bus_path = cls.repo_root / "assets" / "test_image.jpg"
+        cls.model_path = cls.repo_root / "models" / "yolov8n_cut_xint8.onnx"
+        if not cls.model_path.exists():
+            cls.model_path = cls.repo_root / "models" / "yolov8n.onnx"
         cls.img = cv2.imread(str(cls.bus_path))
 
     def test_01_pipeline_initialization(self):
-        with YoloPipeline(device_index=0, imgsz=640) as pipe:
+        with YoloPipeline(self.model_path, device_index=0, imgsz=640) as pipe:
             self.assertIsNotNone(pipe.session)
             self.assertEqual(pipe.imgsz, 640)
             self.assertEqual(len(pipe.session.monolithic_stages), 9)
 
     def test_02_zero_copy_preprocessing(self):
-        with YoloPipeline(device_index=0, imgsz=640) as pipe:
+        with YoloPipeline(self.model_path, device_index=0, imgsz=640) as pipe:
             quant_tensor, pad, scale = pipe.preprocess(self.img)
             self.assertEqual(quant_tensor.shape, (1, 3, 640, 640))
             self.assertEqual(quant_tensor.dtype, np.int8)
@@ -45,7 +48,7 @@ class TestYoloPipeline(unittest.TestCase):
             self.assertEqual(len(pad), 2)
 
     def test_03_sync_inference_and_timing(self):
-        with YoloPipeline(device_index=0, imgsz=640) as pipe:
+        with YoloPipeline(self.model_path, device_index=0, imgsz=640) as pipe:
             dets, timings = pipe.predict_sync(self.img, use_oracle_for_boxes=False)
             self.assertGreater(timings.preprocess_ms, 0)
             self.assertGreater(timings.npu_forward_ms, 0)
@@ -54,7 +57,7 @@ class TestYoloPipeline(unittest.TestCase):
 
     def test_04_pipelined_streaming(self):
         frames = [self.img] * 4
-        with YoloPipeline(device_index=0, imgsz=640) as pipe:
+        with YoloPipeline(self.model_path, device_index=0, imgsz=640) as pipe:
             res = pipe.run_pipelined_stream(frames, warmup=5, iterations=20, queue_size=2)
             self.assertIn("sustained_fps", res)
             self.assertGreater(res["sustained_fps"], 100.0)

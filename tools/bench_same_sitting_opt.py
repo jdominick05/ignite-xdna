@@ -120,10 +120,15 @@ def run_command(name: str, cmd: list, env: dict, log_f) -> None:
 
 
 def main():
+    import argparse
+    parser = argparse.ArgumentParser(description="Interleaved same-sitting benchmark")
+    parser.add_argument("--prefix", default="latency_balanced_ingress_opt", help="Log file prefix")
+    args = parser.parse_args()
+
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%MZ")
     log_dir = REPO_ROOT / "results" / "aie"
     log_dir.mkdir(parents=True, exist_ok=True)
-    log_path = log_dir / f"latency_balanced_dispatch_opt_phoenix_{timestamp}.log"
+    log_path = log_dir / f"{args.prefix}_phoenix_{timestamp}.log"
 
     print(f"Starting same-sitting benchmark -> {log_path}")
 
@@ -138,7 +143,7 @@ def main():
     with open(log_path, "w", encoding="utf-8") as f:
         f.write(f"# Interleaved same-sitting benchmark: Ignition bare-metal vs AMD Ryzen AI 1.7.1 (Vitis AI EP)\n")
         f.write(f"# Host: DESKTOP-CBL5NUA (Desktop 2, Ryzen 7 8700G, XDNA1 Phoenix), balanced default mode\n")
-        f.write(f"# Optimizations: direct C8 channel-blocked native decode, consolidated head sync spans, fast SESR ingress + depth_to_space_crd_bgr\n")
+        f.write(f"# Optimizations: direct C8 channel-blocked native decode, consolidated head sync spans, AVX2 vectorized ingress staging & Q11 spatial interpolation\n")
         f.write(f"# Start: {datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')}\n\n")
 
         smi = check_xrt_smi()
