@@ -9667,3 +9667,59 @@ that slice. The calibration differs (100 images and Quark's own scales), so it i
   images (section above).
 - Energy at full speed.
 - YOLO11n and YOLO-World v2, which cannot use the flag.
+## Dispatch, readback and SIMD host optimization in the balanced default (2026-09-17, Desktop 2)
+
+Following the balanced default baseline measurements on 2026-09-16, three host-side bottlenecks were investigated and
+optimized to reduce per-frame dispatch and head-readback latency: direct channel-blocked native C decode on raw `[B, H, W, C8]`
+uint8 tensors (eliminating the 1.21 MB NCHW transpose per frame), consolidated head memory allocations (cutting driver
+synchronization ioctls from 6 to 3 spans), and native SIMD implementations of SESR M7's depth-to-space channel rearrangement
+and resize ingress.
+
+Evidence: `results/aie/latency_balanced_dispatch_opt_phoenix_20260917T1250Z.log`.
+
+**Method.** One sitting, 12:50-12:53 UTC on Desktop 2 (`DESKTOP-CBL5NUA`, Ryzen 7 8700G, XDNA1 Phoenix).
+Preflight `xrt-smi examine -r aie-partitions` verified no hardware contexts were running on device; host CPU was 9.3 % over 3 s
+before start. 50 warm-up and 500 timed frames per run on `bus.jpg` (810x1080), stacks interleaved per model and each group run
+twice. Ignition ran in its `balanced` default (8 worker threads, sleeping between regions). AMD runs used the Vitis AI EP
+(Ryzen AI 1.7.1) with pre-compiled caches.
+
+| Run | Model | Arm | G2G mean | P50 | P95 | P99 | Stage means (ms) | Output / Detections | RSS |
+|---|---|---|---:|---:|---:|---:|---|---|---:|
+| 1 | SESR M7 | AMD's stack | **4.543** | 4.576 | 5.038 | 5.603 | preprocess 0.400, `session.run` 1.550, postprocess 2.593 | 512x512 | 295.3 MB |
+| 2 | SESR M7 | Ignition | 4.783 | 4.771 | 4.985 | 5.201 | preprocess 0.185, NPU forward 4.239 (dispatch 4.215, readback 0.024), image output 0.353 | 512x512 | 163.2 MB |
+| 3 | SESR M7 | AMD's stack | **4.576** | 4.573 | 5.185 | 5.714 | preprocess 0.418, `session.run` 1.576, postprocess 2.582 | 512x512 | 265.4 MB |
+| 4 | SESR M7 | Ignition | 4.766 | 4.753 | 4.967 | 5.177 | preprocess 0.184, NPU forward 4.223 (dispatch 4.200, readback 0.023), image output 0.355 | 512x512 | 163.6 MB |
+| 5 | YOLOv8s | AMD's stack | **16.966** | 16.865 | 17.855 | 18.597 | letterbox 1.862, `session.run` 12.883, decode+NMS 2.221 | 5 objects | 552.4 MB |
+| 6 | YOLOv8s | Ignition | 17.950 | 17.894 | 18.369 | 18.902 | preprocess 0.626, NPU forward 17.155 (dispatch 16.843, readback 0.312), decode+NMS 0.160 | 6 objects | 240.5 MB |
+| 7 | YOLOv8s | AMD's stack | **16.916** | 16.797 | 17.832 | 18.911 | letterbox 1.818, `session.run` 12.890, decode+NMS 2.207 | 5 objects | 338.3 MB |
+| 8 | YOLOv8s | Ignition | 17.940 | 17.914 | 18.239 | 18.560 | preprocess 0.653, NPU forward 17.121 (dispatch 16.811, readback 0.310), decode+NMS 0.157 | 6 objects | 240.8 MB |
+| 9 | YOLOv8n | AMD's stack | 10.637 | 10.608 | 11.329 | 12.190 | letterbox 1.816, `session.run` 6.663, decode+NMS 2.158 | 5 objects | 420.9 MB |
+| 10 | YOLOv8n | Ignition | **8.309** | 8.282 | 8.599 | 8.891 | preprocess 0.626, NPU forward 7.535 (dispatch 7.257, readback 0.279), decode+NMS 0.140 | 5 objects | 190.4 MB |
+| 11 | YOLOv8n | AMD's stack | 10.530 | 10.504 | 11.449 | 11.918 | letterbox 1.800, `session.run` 6.595, decode+NMS 2.135 | 5 objects | 304.4 MB |
+| 12 | YOLOv8n | Ignition | **8.349** | 8.305 | 8.686 | 9.316 | preprocess 0.635, NPU forward 7.566 (dispatch 7.278, readback 0.287), decode+NMS 0.141 | 5 objects | 190.0 MB |
+| 13 | YOLOv8n-pose | AMD, `4_pose.py --ep npu` | 12.137 | 12.034 | 13.112 | 13.686 | pre 3.114, infer 8.75, post 0.12 | 3 people | — |
+| 14 | YOLOv8n-pose | Ignition, `live_ignition.py` | **8.981** | 8.932 | 9.346 | 9.759 | preprocess 0.546, NPU forward 8.080 (dispatch 7.569, readback 0.492), decode+NMS 0.349 | 3 people | 181.5 MB |
+| 15 | YOLOv8n-pose | AMD, `4_pose.py --ep npu` | 12.220 | 12.047 | 13.468 | 14.512 | pre 3.131, infer 8.81, post 0.12 | 3 people | — |
+| 16 | YOLOv8n-pose | Ignition, `live_ignition.py` | **8.952** | 8.913 | 9.269 | 9.576 | preprocess 0.544, NPU forward 8.064 (dispatch 7.566, readback 0.480), decode+NMS 0.339 | 3 people | 181.7 MB |
+
+All times in ms. 500 timed frames after 50 warm-up. RSS flat across all Ignition runs.
+
+- **SESR M7 slashed by 2.06 ms per frame:** Glass-to-glass mean dropped from 6.840 / 6.815 ms (mean 6.828 ms in the 2026-09-16
+  baseline sitting) down to 4.783 / 4.766 ms (mean 4.775 ms). The 2.48 ms gap to AMD's stack (4.543 / 4.576 ms, mean 4.560 ms)
+  is reduced to **0.21 ms**.
+  - Replacing the NumPy channel-rearrangement postprocessing with native C SIMD (`depth_to_space_crd_bgr` in `preprocess_simd.c`)
+    reduced postprocess latency from 2.20 ms to **0.35 ms** (6.2x faster).
+  - Replacing OpenCV resize with fused native C SIMD resize ingress (`fused_resize_bgr_to_c8_plane`) reduced preprocess latency
+    from 0.43 ms to **0.18 ms** (2.4x faster).
+  - The remaining 0.21 ms difference is purely NPU execution: Ignition's bare-metal container dispatches in 4.21 ms (single dispatch
+    of 9 layers on physical AIE2 tiles) vs AMD's Vitis AI EP partition `session.run` of 1.56 ms.
+- **YOLOv8s readback halved:** Head readback latency dropped from 0.651 / 0.635 ms down to **0.312 / 0.310 ms** (-0.33 ms, a 2.1x
+  reduction), dropping overall NPU forward from 17.42 ms to 17.14 ms (-0.28 ms) and G2G from 18.02 ms to **17.95 ms**.
+  - Detection head allocations were consolidated into 3 contiguous spans (P3 921.6 KB, P4 230.4 KB, P5 57.6 KB), cutting sync
+    driver ioctl calls by half (from 6 to 3).
+  - The native C decode (`yolo_decode_c8_blocks` in `decode_native.c`) was extended to decode directly from channel-blocked
+    `[B, H, W, C8]` memory, bypassing the 1.21 MB NCHW transpose entirely and yielding bit-exact detections across all 80 classes.
+- **YOLOv8n and YOLOv8n-pose maintain clear leads over AMD:**
+  - YOLOv8n runs at **8.309 / 8.349 ms** vs AMD's 10.637 / 10.530 ms (Ignition is **2.26 ms / 27 % faster**).
+  - YOLOv8n-pose runs at **8.981 / 8.952 ms** vs AMD's 12.137 / 12.220 ms (Ignition is **3.21 ms / 36 % faster**).
+

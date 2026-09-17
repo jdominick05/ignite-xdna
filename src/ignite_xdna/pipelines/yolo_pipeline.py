@@ -223,6 +223,17 @@ class YoloDecoder:
         surviving_indices = []
 
         for h_idx, (b, c) in enumerate(zip(box_f, cls_f)):
+            if b is not None and b.dtype == np.uint8 and b.ndim == 3:
+                # Fallback: convert uint8 C8 blocked heads to int8 NCHW if native decode is bypassed
+                h_c = 4 * REG_MAX
+                h_blocks = (h_c + 7) // 8
+                n_anc = b.shape[1]
+                b_chw = np.transpose(b[:h_blocks].reshape(h_blocks, n_anc, 8), (0, 2, 1)).reshape(-1, n_anc)[:h_c]
+                b = (b_chw ^ 0x80).view(np.int8)
+                c_blocks = (NUM_CLASSES + 7) // 8
+                c_chw = np.transpose(c[:c_blocks].reshape(c_blocks, n_anc, 8), (0, 2, 1)).reshape(-1, n_anc)[:NUM_CLASSES]
+                c = (c_chw ^ 0x80).view(np.int8)
+
             if c.dtype == np.int8:
                 if scales is None:
                     raise ValueError("int8 head tensors need a 'scales' entry {name: (scale, zero_point)}")
@@ -350,7 +361,9 @@ class YoloPipeline(YoloDecoder):
         repo_root = get_repo_root()
 
         if model_path_or_bundle is None:
-            ignite_cand = repo_root / "build" / "yolov8n.ignite"
+            ignite_cand = repo_root / "build" / "yolov8n_full.ignite"
+            if not ignite_cand.exists():
+                ignite_cand = repo_root / "build" / "yolov8n.ignite"
             if ignite_cand.exists():
                 cand = ignite_cand
             else:
@@ -421,8 +434,9 @@ class YoloPipeline(YoloDecoder):
 
     def forward_npu(
         self,
-        quant_tensor: np.ndarray,
+        quant_tensor: Optional[np.ndarray],
         return_timestamps: bool = False,
+        unswizzle: bool = True,
     ) -> Union[Dict[str, np.ndarray], Tuple[Dict[str, np.ndarray], Any]]:
         """
         Stage 2: Monolithic 3-Stage Silicon Forward Pass on Phoenix Device 0 (~1.732 ms).
@@ -431,6 +445,7 @@ class YoloPipeline(YoloDecoder):
         """
         return self.session.run_yolo_monolithic(
             quant_tensor,
+            unswizzle=unswizzle,
             return_timestamps=return_timestamps,
         )
 
@@ -453,7 +468,14 @@ class YoloPipeline(YoloDecoder):
             quant_tensor, pad, scale = self.preprocess(img_bgr)
         t1 = time.perf_counter()
 
-        heads, hw_ts = self.forward_npu(quant_tensor, return_timestamps=True)
+        # When not using the CPU oracle and native decode is available, we skip unswizzling
+        # to decode directly from channel-blocked egress buffers.
+        unswizzle = use_oracle_for_boxes or not self.uses_native_decode
+        heads, hw_ts = self.forward_npu(
+            quant_tensor,
+            return_timestamps=True,
+            unswizzle=unswizzle,
+        )
         t2 = time.perf_counter()
 
         heads_present = bool(heads.get("heads_present", False))
@@ -576,7 +598,7 @@ class YoloPipeline(YoloDecoder):
                     ready_0.clear()
                     pad, scale, t_cap = meta_0[0], meta_0[1], meta_0[2]
                     t_npu_0 = time.perf_counter()
-                    heads = self.forward_npu(buf_0)
+                    heads = self.forward_npu(buf_0, unswizzle=not self.uses_native_decode)
                     t_npu_1 = time.perf_counter()
                     done_0.set()
                     p_us = prep_times_0[idx]
@@ -585,7 +607,7 @@ class YoloPipeline(YoloDecoder):
                     ready_1.clear()
                     pad, scale, t_cap = meta_1[0], meta_1[1], meta_1[2]
                     t_npu_0 = time.perf_counter()
-                    heads = self.forward_npu(buf_1)
+                    heads = self.forward_npu(buf_1, unswizzle=not self.uses_native_decode)
                     t_npu_1 = time.perf_counter()
                     done_1.set()
                     p_us = prep_times_1[idx]

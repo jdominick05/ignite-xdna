@@ -110,6 +110,15 @@ def _load_preprocess_lib() -> Optional[ctypes.CDLL]:
                 fn = getattr(lib, name)
                 fn.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_void_p]
                 fn.restype = ctypes.c_int
+        if hasattr(lib, "depth_to_space_crd_bgr"):
+            lib.depth_to_space_crd_bgr.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_void_p, ctypes.c_void_p]
+            lib.depth_to_space_crd_bgr.restype = ctypes.c_int
+        if hasattr(lib, "fused_resize_bgr_to_c8_plane"):
+            lib.fused_resize_bgr_to_c8_plane.argtypes = [
+                ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int,
+                ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_void_p,
+            ]
+            lib.fused_resize_bgr_to_c8_plane.restype = ctypes.c_int
         return lib
     except Exception as e:
         sys.stderr.write(f"Warning: Failed to load preprocess_simd library: {e}\n")
@@ -150,6 +159,49 @@ def blocks_class_max_int8(src: np.ndarray, blocks: int, h: int, w: int, channels
         return False
     return _LIB.c8_blocks_class_max_int8(ctypes.c_void_p(src.ctypes.data), blocks, h, w, channels,
                                          ctypes.c_void_p(out.ctypes.data)) == 0
+
+
+def depth_to_space_crd_bgr(src: np.ndarray, h: int, w: int, lut: np.ndarray, dst: np.ndarray) -> bool:
+    """Fast DepthToSpace (CRD mode, bs=2) + LUT dequantization for super-resolution (SESR M7).
+
+    Reads uint8 [2][h][w][8] (channel-blocked, 12 active channels) and writes [2*h][2*w][3] BGR image.
+    Returns False (dst untouched) when the native library lacks the function or buffers do not fit.
+    """
+    if _LIB is None or not hasattr(_LIB, "depth_to_space_crd_bgr"):
+        return False
+    if (src.dtype != np.uint8 or dst.dtype != np.uint8 or lut.dtype != np.uint8
+            or not src.flags["C_CONTIGUOUS"] or not dst.flags["C_CONTIGUOUS"] or not lut.flags["C_CONTIGUOUS"]
+            or src.size < 2 * h * w * 8 or dst.size < 2 * h * 2 * w * 3 or lut.size < 256):
+        return False
+    return _LIB.depth_to_space_crd_bgr(ctypes.c_void_p(src.ctypes.data), h, w,
+                                       ctypes.c_void_p(lut.ctypes.data), ctypes.c_void_p(dst.ctypes.data)) == 0
+
+
+def resize_bgr_to_c8_plane(src_bgr: np.ndarray, dst_plane: np.ndarray, dst_w: int, dst_h: int, halo: int,
+                           lut: Optional[np.ndarray] = None) -> bool:
+    """Direct bilinear resize (BGR->RGB) + optional LUT quantization into channel-blocked input plane.
+
+    Writes channels 0..2 of dst_plane [dst_h + 2*halo][dst_w + 2*halo][8] uint8.
+    Returns False when the native library lacks the function or buffers do not fit.
+    """
+    if _LIB is None or not hasattr(_LIB, "fused_resize_bgr_to_c8_plane"):
+        return False
+    if (src_bgr.dtype != np.uint8 or dst_plane.dtype != np.uint8 or not src_bgr.flags["C_CONTIGUOUS"]
+            or not dst_plane.flags["C_CONTIGUOUS"] or src_bgr.ndim != 3 or src_bgr.shape[2] != 3):
+        return False
+    lut_ptr = ctypes.c_void_p(lut.ctypes.data) if (lut is not None and lut.flags["C_CONTIGUOUS"]) else None
+    ret = _LIB.fused_resize_bgr_to_c8_plane(
+        ctypes.c_void_p(src_bgr.ctypes.data),
+        int(src_bgr.shape[1]),
+        int(src_bgr.shape[0]),
+        int(src_bgr.strides[0]),
+        ctypes.c_void_p(dst_plane.ctypes.data),
+        int(dst_w),
+        int(dst_h),
+        int(halo),
+        lut_ptr,
+    )
+    return ret == 0
 
 
 class FusedPreprocessor:

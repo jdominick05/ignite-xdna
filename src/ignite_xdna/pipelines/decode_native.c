@@ -75,6 +75,29 @@ typedef struct {
     float iou;                  /* float32(iou_thres) */
 } yolo_decode_t;
 
+typedef struct {
+    const uint8_t* box_c8;      /* uint8 [8][anchors][8] in channel-blocked order */
+    const uint8_t* cls_c8;      /* uint8 [(num_classes+7)/8][anchors][8] in channel-blocked order */
+    const int8_t* cls_max;      /* int8 [anchors] per-anchor class maximum */
+    const float* dfl_exp;       /* [256 * 256]: np.exp(v(q) - v(q_max)) */
+    const float* sigmoid;       /* [256]: numpy's float32 1 / (1 + exp(-v(q))) at q + 128 */
+    const int32_t* sigmoid_low; /* [256]: smallest q with sigmoid[q] == sigmoid[q_max] at q_max + 128, or NULL */
+    double q_threshold;         /* an anchor survives when its class maximum > q_threshold */
+    int32_t anchors;            /* grid height * width */
+    int32_t anchor_offset;      /* index of the head's first anchor in anchor_x / anchor_y / strides */
+} yolo_head_c8_t;
+
+typedef struct {
+    yolo_head_c8_t head[3];
+    const float* anchor_x;      /* [total anchors] */
+    const float* anchor_y;
+    const float* strides;
+    int32_t reg_max;            /* 16 */
+    int32_t num_classes;
+    float conf;                 /* float32(conf_thres) */
+    float iou;                  /* float32(iou_thres) */
+} yolo_decode_c8_t;
+
 /* A candidate at or above the confidence threshold, in anchor order. */
 typedef struct {
     float x0, y0, w, h;         /* box in source-image pixels, as YoloDetection holds it */
@@ -120,41 +143,48 @@ static int int_threshold(double qt)
     return (int)floor(qt);
 }
 
+/* Writes surviving anchors from an int8 cls_max array in ascending order. */
+static size_t collect_survivors_from_max(const int8_t* m, int32_t n, int qi, int32_t* out, size_t room)
+{
+    size_t count = 0;
+    int32_t a = 0;
+    if (qi >= 127 || !m) return 0;
+#if DECODE_SSE2
+    if (qi >= -128) {
+        const __m128i t = _mm_set1_epi8((char)qi);
+        for (; a + 16 <= n; a += 16) {
+            unsigned int mask = (unsigned int)_mm_movemask_epi8(
+                _mm_cmpgt_epi8(_mm_loadu_si128((const __m128i*)(m + a)), t));
+            while (mask) {
+                if (count < room) out[count] = a + lowest_bit(mask);
+                ++count;
+                mask &= mask - 1;
+            }
+        }
+    }
+#endif
+    for (; a < n; ++a) {
+        if ((int)m[a] > qi) {
+            if (count < room) out[count] = a;
+            ++count;
+        }
+    }
+    return count;
+}
+
 /* Writes the head's surviving anchors in ascending order while `room` lasts; returns how many survive. */
 static size_t collect_survivors(const yolo_head_t* hd, int32_t num_classes, int qi, int32_t* out, size_t room)
 {
-    size_t count = 0;
-    const int32_t n = hd->anchors;
-    int32_t a = 0;
     if (qi >= 127) return 0;
     if (hd->cls_max) {
-        const int8_t* m = hd->cls_max;
-#if DECODE_SSE2
-        if (qi >= -128) {
-            const __m128i t = _mm_set1_epi8((char)qi);
-            for (; a + 16 <= n; a += 16) {
-                unsigned int mask = (unsigned int)_mm_movemask_epi8(
-                    _mm_cmpgt_epi8(_mm_loadu_si128((const __m128i*)(m + a)), t));
-                while (mask) {
-                    if (count < room) out[count] = a + lowest_bit(mask);
-                    ++count;
-                    mask &= mask - 1;
-                }
-            }
-        }
-#endif
-        for (; a < n; ++a) {
-            if ((int)m[a] > qi) {
-                if (count < room) out[count] = a;
-                ++count;
-            }
-        }
-    } else {
-        for (; a < n; ++a) {
-            if (class_max_at(hd, num_classes, a) > qi) {
-                if (count < room) out[count] = a;
-                ++count;
-            }
+        return collect_survivors_from_max(hd->cls_max, hd->anchors, qi, out, room);
+    }
+    size_t count = 0;
+    const int32_t n = hd->anchors;
+    for (int32_t a = 0; a < n; ++a) {
+        if (class_max_at(hd, num_classes, a) > qi) {
+            if (count < room) out[count] = a;
+            ++count;
         }
     }
     return count;
@@ -240,6 +270,112 @@ static float dfl_side(const int8_t* box, size_t n, size_t a, int side, const flo
     float acc = w[0];
     for (int k = 1; k < DFL_BINS; ++k) acc += w[k];
     return acc;
+}
+
+/* DFL expectation from channel-blocked layout: 16 bins for side come from 2 blocks of 8 channels. */
+static float dfl_side_c8(const uint8_t* box_c8, size_t n, size_t a, int side, const float* dfl_exp)
+{
+    int q[DFL_BINS];
+    int q_max = -128;
+    const uint8_t* p0 = box_c8 + (size_t)(2 * side + 0) * (n * 8) + a * 8;
+    const uint8_t* p1 = box_c8 + (size_t)(2 * side + 1) * (n * 8) + a * 8;
+
+    for (int k = 0; k < 8; ++k) {
+        int v = (int)(int8_t)(p0[k] ^ 0x80);
+        q[k] = v;
+        if (v > q_max) q_max = v;
+    }
+    for (int k = 0; k < 8; ++k) {
+        int v = (int)(int8_t)(p1[k] ^ 0x80);
+        q[8 + k] = v;
+        if (v > q_max) q_max = v;
+    }
+
+    const float* row = dfl_exp + (size_t)(q_max + 128) * 256;
+    float e[DFL_BINS];
+    float w[DFL_BINS];
+    for (int k = 0; k < DFL_BINS; ++k) e[k] = row[q[k] + 128];
+    float sum = e[0];
+    for (int k = 1; k < DFL_BINS; ++k) sum += e[k];
+#if DECODE_SSE2
+    const __m128 vs = _mm_set1_ps(sum);
+    for (int k = 0; k < DFL_BINS; k += 4) {
+        const __m128 bins = _mm_setr_ps((float)k, (float)(k + 1), (float)(k + 2), (float)(k + 3));
+        _mm_storeu_ps(w + k, _mm_mul_ps(_mm_div_ps(_mm_loadu_ps(e + k), vs), bins));
+    }
+#else
+    for (int k = 0; k < DFL_BINS; ++k) w[k] = (e[k] / sum) * (float)k;
+#endif
+    float acc = w[0];
+    for (int k = 1; k < DFL_BINS; ++k) acc += w[k];
+    return acc;
+}
+
+/* 3. NMSBoxesBatched + 4. NMSFast_: returns count on success, -3 if capacity exceeded. */
+static int nms_and_output(
+    candidate_t* cand,
+    int32_t* index,
+    size_t m,
+    size_t total,
+    float conf,
+    float iou,
+    int32_t capacity,
+    float* out_box,
+    float* out_score,
+    int32_t* out_class
+) {
+    if (m == 0) return 0;
+
+    /* 3. NMSBoxesBatched: offset each box by class_id * (max_coord + 1). */
+    double max_coord = 0;
+    for (size_t i = 0; i < m; ++i) {
+        const double x1 = cand[i].x0;
+        const double y1 = cand[i].y0;
+        const double x2 = x1 + (double)cand[i].w;
+        const double y2 = y1 + (double)cand[i].h;
+        max_coord = (x1 < max_coord) ? max_coord : x1;  /* std::max(x1, max_coord) */
+        max_coord = (y1 < max_coord) ? max_coord : y1;
+        max_coord = (x2 < max_coord) ? max_coord : x2;
+        max_coord = (y2 < max_coord) ? max_coord : y2;
+    }
+    for (size_t i = 0; i < m; ++i) {
+        const double offset = (double)cand[i].class_id * (max_coord + 1);
+        cand[i].ox = (double)cand[i].x0 + offset;
+        cand[i].oy = (double)cand[i].y0 + offset;
+        cand[i].ow = cand[i].w;
+        cand[i].oh = cand[i].h;
+    }
+
+    /* 4. NMSFast_: scores strictly above the threshold, stably sorted, then greedy suppression. */
+    size_t ranked = 0;
+    for (size_t i = 0; i < m; ++i) {
+        if (cand[i].score > conf) index[ranked++] = (int32_t)i;
+    }
+    sort_by_score(index, index + total, ranked, cand);
+    int32_t* kept = index + total;
+    size_t count = 0;
+    for (size_t i = 0; i < ranked; ++i) {
+        const candidate_t* a = &cand[index[i]];
+        int keep = 1;
+        for (size_t k = 0; k < count && keep; ++k) {
+            const float overlap = rect_overlap(a, &cand[kept[k]]);
+            keep = overlap <= iou;
+        }
+        if (keep) kept[count++] = index[i];
+    }
+    if (count > (size_t)capacity) {
+        return -3;
+    }
+    for (size_t k = 0; k < count; ++k) {
+        const candidate_t* c = &cand[kept[k]];
+        out_box[4 * k] = c->x0;
+        out_box[4 * k + 1] = c->y0;
+        out_box[4 * k + 2] = c->w;
+        out_box[4 * k + 3] = c->h;
+        out_score[k] = c->score;
+        out_class[k] = c->class_id;
+    }
+    return (int)count;
 }
 
 /**
@@ -370,56 +506,141 @@ DECODE_API int yolo_decode_int8(
         return 0;
     }
 
-    /* 3. NMSBoxesBatched: offset each box by class_id * (max_coord + 1). */
-    double max_coord = 0;
-    for (size_t i = 0; i < m; ++i) {
-        const double x1 = cand[i].x0;
-        const double y1 = cand[i].y0;
-        const double x2 = x1 + (double)cand[i].w;
-        const double y2 = y1 + (double)cand[i].h;
-        max_coord = (x1 < max_coord) ? max_coord : x1;  /* std::max(x1, max_coord) */
-        max_coord = (y1 < max_coord) ? max_coord : y1;
-        max_coord = (x2 < max_coord) ? max_coord : x2;
-        max_coord = (y2 < max_coord) ? max_coord : y2;
+    /* 3. NMSBoxesBatched + 4. NMSFast_ */
+    int count = nms_and_output(cand, index, m, total, d->conf, d->iou, capacity, out_box, out_score, out_class);
+    free(heap);
+    return count;
+}
+
+/**
+ * Decodes the three channel-blocked heads described by `d` for a frame letterboxed with (pad_top, pad_left)
+ * and `scale`. Reads uint8 [blocks][anchors][8] heads and int8 [anchors] cls_max without an intermediate NCHW
+ * transpose. Writes up to `capacity` detections in YoloDecoder.postprocess order.
+ */
+DECODE_API int yolo_decode_c8_blocks(
+    const yolo_decode_c8_t* d,
+    float pad_top,
+    float pad_left,
+    float scale,
+    int32_t capacity,
+    float* out_box,
+    float* out_score,
+    int32_t* out_class
+) {
+    if (!d || !out_box || !out_score || !out_class || capacity < 0 || d->reg_max != DFL_BINS ||
+        d->num_classes <= 0 || !d->anchor_x || !d->anchor_y || !d->strides) {
+        return -1;
     }
-    for (size_t i = 0; i < m; ++i) {
-        const double offset = (double)cand[i].class_id * (max_coord + 1);
-        cand[i].ox = (double)cand[i].x0 + offset;
-        cand[i].oy = (double)cand[i].y0 + offset;
-        cand[i].ow = cand[i].w;
-        cand[i].oh = cand[i].h;
+    const int32_t nc = d->num_classes;
+    int qi[3];
+    for (int h = 0; h < 3; ++h) {
+        const yolo_head_c8_t* hd = &d->head[h];
+        if (!hd->box_c8 || !hd->cls_c8 || !hd->cls_max || !hd->dfl_exp || !hd->sigmoid ||
+            hd->anchors <= 0 || hd->anchor_offset < 0) {
+            return -1;
+        }
+        qi[h] = int_threshold(hd->q_threshold);
     }
 
-    /* 4. NMSFast_: scores strictly above the threshold, stably sorted, then greedy suppression. */
-    size_t ranked = 0;
-    for (size_t i = 0; i < m; ++i) {
-        if (cand[i].score > d->conf) index[ranked++] = (int32_t)i;
+    /* 1. Surviving anchors per head from cls_max. */
+    int32_t stack_survivor[STACK_SURVIVORS];
+    int32_t* survivor = stack_survivor;
+    void* heap_survivor = NULL;
+    size_t seg[4] = {0, 0, 0, 0};
+    size_t total = 0;
+    for (int h = 0; h < 3; ++h) {
+        const size_t room = (total < STACK_SURVIVORS) ? STACK_SURVIVORS - total : 0;
+        total += collect_survivors_from_max(d->head[h].cls_max, d->head[h].anchors, qi[h],
+                                           survivor + (total < STACK_SURVIVORS ? total : 0), room);
+        seg[h + 1] = total;
     }
-    sort_by_score(index, index + total, ranked, cand);
-    int32_t* kept = index + total;
-    size_t count = 0;
-    for (size_t i = 0; i < ranked; ++i) {
-        const candidate_t* a = &cand[index[i]];
-        int keep = 1;
-        for (size_t k = 0; k < count && keep; ++k) {
-            const float overlap = rect_overlap(a, &cand[kept[k]]);
-            keep = overlap <= d->iou;
+    if (total == 0) return 0;
+    if (total > STACK_SURVIVORS) {
+        heap_survivor = malloc(total * sizeof(int32_t));
+        if (!heap_survivor) return -2;
+        survivor = (int32_t*)heap_survivor;
+        size_t again = 0;
+        for (int h = 0; h < 3; ++h) {
+            again += collect_survivors_from_max(d->head[h].cls_max, d->head[h].anchors, qi[h],
+                                               survivor + again, total - again);
+            seg[h + 1] = again;
         }
-        if (keep) kept[count++] = index[i];
     }
-    if (count > (size_t)capacity) {
-        free(heap);
-        return -3;
+
+    candidate_t stack_cand[STACK_CANDIDATES];
+    int32_t stack_index[2 * STACK_CANDIDATES];
+    candidate_t* cand = stack_cand;
+    int32_t* index = stack_index;
+    void* heap = NULL;
+    if (total > STACK_CANDIDATES) {
+        heap = malloc(total * (sizeof(candidate_t) + 2 * sizeof(int32_t)));
+        if (!heap) {
+            free(heap_survivor);
+            return -2;
+        }
+        cand = (candidate_t*)heap;
+        index = (int32_t*)((char*)heap + total * sizeof(candidate_t));
     }
-    for (size_t k = 0; k < count; ++k) {
-        const candidate_t* c = &cand[kept[k]];
-        out_box[4 * k] = c->x0;
-        out_box[4 * k + 1] = c->y0;
-        out_box[4 * k + 2] = c->w;
-        out_box[4 * k + 3] = c->h;
-        out_score[k] = c->score;
-        out_class[k] = c->class_id;
+
+    /* 2. Direct channel-blocked read for each survivor at or above conf threshold. */
+    size_t m = 0;
+    for (int h = 0; h < 3; ++h) {
+        const yolo_head_c8_t* hd = &d->head[h];
+        const size_t n = (size_t)hd->anchors;
+        const float* sig = hd->sigmoid;
+        for (size_t i = seg[h]; i < seg[h + 1]; ++i) {
+            const size_t a = (size_t)survivor[i];
+            const int q_max = hd->cls_max[a];
+            const float best = sig[q_max + 128];
+            if (!(best >= d->conf)) continue;
+            const int lo = hd->sigmoid_low ? hd->sigmoid_low[q_max + 128] : q_max;
+
+            int32_t best_c = 0;
+            for (int b = 0; b < (nc + 7) / 8; ++b) {
+                const uint8_t* cp = hd->cls_c8 + (size_t)b * (n * 8) + a * 8;
+                int rem = nc - b * 8;
+                int valid = rem > 8 ? 8 : rem;
+                int found = 0;
+                for (int k = 0; k < valid; ++k) {
+                    int v = (int)(int8_t)(cp[k] ^ 0x80);
+                    if (v >= lo) {
+                        best_c = b * 8 + k;
+                        found = 1;
+                        break;
+                    }
+                }
+                if (found) break;
+            }
+
+            const float l = dfl_side_c8(hd->box_c8, n, a, 0, hd->dfl_exp);
+            const float t = dfl_side_c8(hd->box_c8, n, a, 1, hd->dfl_exp);
+            const float r = dfl_side_c8(hd->box_c8, n, a, 2, hd->dfl_exp);
+            const float b = dfl_side_c8(hd->box_c8, n, a, 3, hd->dfl_exp);
+            const size_t ai = (size_t)hd->anchor_offset + a;
+            const float ax = d->anchor_x[ai];
+            const float ay = d->anchor_y[ai];
+            const float st = d->strides[ai];
+            const float x1 = ax - l;
+            const float y1 = ay - t;
+            const float x2 = ax + r;
+            const float y2 = ay + b;
+            const float cx = ((x1 + x2) * 0.5f) * st;
+            const float cy = ((y1 + y2) * 0.5f) * st;
+            const float bw = (x2 - x1) * st;
+            const float bh = (y2 - y1) * st;
+
+            candidate_t* c = &cand[m++];
+            c->x0 = ((cx - bw / 2.0f) - pad_left) / scale;
+            c->y0 = ((cy - bh / 2.0f) - pad_top) / scale;
+            c->w = bw / scale;
+            c->h = bh / scale;
+            c->score = best;
+            c->class_id = best_c;
+        }
     }
+    free(heap_survivor);
+
+    int count = nms_and_output(cand, index, m, total, d->conf, d->iou, capacity, out_box, out_score, out_class);
     free(heap);
-    return (int)count;
+    return count;
 }

@@ -150,6 +150,19 @@
   hardware contexts have no shared semaphore contract. BOs remain in system DDR.
   [Validation and limits](BENCHMARKS.md#native-bo-kernel-splicing-2026-09-13-desktop-2).
 
+- **Direct channel-blocked native decode and consolidated head readbacks:**
+  YOLOv8 detect heads output channel-blocked `[B, H, W, C8]` uint8 tensors from AIE2 cores.
+  The original host path performed an unswizzle and 1.21 MB NCHW transpose in NumPy/C before
+  invoking native decode, costing ~0.34 ms readback overhead and CPU cache churn. Consolidating
+  detection head allocations into 3 contiguous spans (P3 921.6 KB, P4 230.4 KB, P5 57.6 KB)
+  cuts driver sync ioctls from 6 to 3. Direct C8 native decode in `decode_native.c`
+  (`yolo_decode_c8_blocks`) indexes directly into channel blocks without transposing, cutting
+  head readback from 0.64 ms to 0.31 ms while remaining 100% bit-exact across all 80 classes.
+  In SESR M7, native SIMD `depth_to_space_crd_bgr` and fused resize ingress eliminate 2.10 ms of
+  host bottleneck (postprocess 2.20 ms -> 0.35 ms, preprocess 0.43 ms -> 0.18 ms), closing the
+  gap to AMD from 2.48 ms down to 0.21 ms.
+  [Validation and measurements](BENCHMARKS.md#dispatch-readback-and-simd-host-optimization-in-the-balanced-default-2026-09-17-desktop-2).
+
 - **The launcher (`tui/`) is a front end, not a measurement tool, and the boundary is
   load-bearing.** It writes only to `outputs/` (git-ignored): every demo defaults
   `--out-dir` to `results/`, which is the tracked evidence base -- 69 of its images

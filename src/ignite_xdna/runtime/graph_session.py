@@ -434,6 +434,18 @@ class GraphSession(EngineSession):
             hp = self.ge["placements"][hm["tensor"]]
             nbytes = hp["blocks"] * hp["height"] * hp["width"] * 8
             self._head_regions.append((name, hm, hp, hp["base"], nbytes))
+        # Consolidated head sync spans: merge contiguous/overlapping regions
+        # to reduce ioctl roundtrips from 6-9 down to 3.
+        ranges = sorted((base, base + nbytes) for _, _, _, base, nbytes in self._head_regions)
+        merged = []
+        for b, e in ranges:
+            if not merged or b > merged[-1][1]:
+                merged.append([b, e])
+            else:
+                merged[-1][1] = max(merged[-1][1], e)
+        self._head_sync_spans = [(b, e - b) for b, e in merged]
+        self._raw_heads: Dict[str, np.ndarray] = {}
+        self._raw_c8_views: Optional[Dict[str, np.ndarray]] = None
         # Per-anchor class-logit maxima of the class heads (int8, zero point 0), filled natively
         # during readback so the decoder's confidence prune does not scan the class tensors. A pose score
         # head has one channel, so the pose decoder prunes on it directly.
@@ -496,22 +508,26 @@ class GraphSession(EngineSession):
         self._input_plane[h:-h or None, h:-h or None, :3] = np.moveaxis(q, 0, -1)
         self._upload_input()
 
-    def read_heads(self) -> np.ndarray:
-        """Sync the head tensors back and assemble the int8 NCHW egress buffer."""
+    def read_heads(self, unswizzle: bool = True) -> np.ndarray:
+        """Sync the head tensors back and assemble the int8 NCHW egress buffer (or raw C8 views)."""
         d = self.harness.pyxrt.xclBOSyncDirection.XCL_BO_SYNC_BO_FROM_DEVICE
         cls_ok = self._class_max is not None
-        for name, hm, hp, base, nbytes in self._head_regions:
+        for base, nbytes in self._head_sync_spans:
             self.bo_ws.sync(d, nbytes, base)
+        for name, hm, hp, base, nbytes in self._head_regions:
             if self._ws_map is not None:
                 raw = self._ws_map[base:base + nbytes]
             else:
                 raw = np.frombuffer(self.bo_ws.read(nbytes, base), dtype=np.uint8)
+            self._raw_heads[name] = raw
             c = hm["channels"]
-            off = hm["egress_offset"]
-            dst = self._egress[off:off + c * hp["height"] * hp["width"]]
             if name in self._cls_max:
                 cls_ok = cls_ok and self._class_max(raw, hp["blocks"], hp["height"], hp["width"], c,
                                                     self._cls_max[name])
+            if not unswizzle:
+                continue
+            off = hm["egress_offset"]
+            dst = self._egress[off:off + c * hp["height"] * hp["width"]]
             # uint8 with zero point 128 -> int8 with zero point 0 (flip the top bit), NHWC blocks -> NCHW
             if self._to_nchw is not None and self._to_nchw(raw, hp["blocks"], hp["height"], hp["width"], c, dst):
                 continue
@@ -526,6 +542,7 @@ class GraphSession(EngineSession):
         """Whole-network forward pass; returns the ``run_yolo_monolithic`` head dict of InferenceSession.
 
         ``input_tensor=None`` dispatches on the input plane already staged by ``stage_image``.
+        ``unswizzle=False`` skips the NCHW egress transpose and provides raw channel-blocked heads.
         """
         t0 = time.perf_counter()
         if input_tensor is not None:
@@ -533,23 +550,35 @@ class GraphSession(EngineSession):
         t1 = time.perf_counter()
         self.dispatch(timeout_ms=timeout_ms)
         t2 = time.perf_counter()
-        egress = self.read_heads()
+        egress = self.read_heads(unswizzle=unswizzle)
         t3 = time.perf_counter()
         status = self.head_status
         out: Dict[str, Any] = {name: None for name in self.head_names}
         if status.present:
-            if self._head_views is None:
-                # The egress buffer is allocated once, so its head views and scales are too.
-                self._head_views = status.layout.unpack(egress)
-                self._head_scales = status.layout.scales()
-            out.update(self._head_views)
-            out["scales"] = self._head_scales
+            if unswizzle:
+                if self._head_views is None:
+                    # The egress buffer is allocated once, so its head views and scales are too.
+                    self._head_views = status.layout.unpack(egress)
+                    self._head_scales = status.layout.scales()
+                out.update(self._head_views)
+                out["scales"] = self._head_scales
+            else:
+                if self._raw_c8_views is None:
+                    self._head_scales = status.layout.scales()
+                    self._raw_c8_views = {}
+                for name in self.head_names:
+                    hm = self.heads_meta[name]
+                    hp = self.ge["placements"][hm["tensor"]]
+                    self._raw_c8_views[name] = self._raw_heads[name].reshape(hp["blocks"], hp["height"] * hp["width"], 8)
+                out.update(self._raw_c8_views)
+                out["scales"] = self._head_scales
             if self._cls_max_valid:
                 out["cls_max"] = self._cls_max  # {p*_cls: int8 per-anchor class maxima}, see YoloDecoder
         out["heads_present"] = status.present
         out["head_status"] = status.reason
         out["raw_output"] = egress
         out["raw_heads"] = egress
+        out["unswizzled"] = unswizzle
         # npu_ms is the NPU segments' dispatch; host_ms the host layers between them (0 without any).
         timestamps = {"stage_ms": (t1 - t0) * 1e3, "npu_ms": self.last_dispatch_ms, "host_ms": self.last_host_ms,
                       "readback_ms": (t3 - t2) * 1e3}
@@ -619,12 +648,20 @@ class DenseGraphSession(EngineSession):
 
     def stage_image(self, img_bgr: np.ndarray) -> None:
         """Resize a BGR frame to the network input (bilinear), write RGB input codes into the plane, upload."""
-        import cv2
         ih, iw = self.input_hw
         if img_bgr.ndim != 3 or img_bgr.shape[2] != 3 or img_bgr.dtype != np.uint8:
             raise ValueError(f"stage_image expects an HxWx3 uint8 BGR frame, got {img_bgr.shape} {img_bgr.dtype}")
-        src = img_bgr if img_bgr.shape[:2] == (ih, iw) else cv2.resize(img_bgr, (iw, ih), interpolation=cv2.INTER_LINEAR)
         h = int(self.input_placement["halo"])
+        try:
+            from ignite_xdna.pipelines.preprocess import resize_bgr_to_c8_plane
+            lut = None if self._input_identity else self._input_lut
+            if resize_bgr_to_c8_plane(img_bgr, self._input_plane, iw, ih, h, lut):
+                self._upload_input()
+                return
+        except Exception:
+            pass
+        import cv2
+        src = img_bgr if img_bgr.shape[:2] == (ih, iw) else cv2.resize(img_bgr, (iw, ih), interpolation=cv2.INTER_LINEAR)
         rgb = src[:, :, ::-1]
         self._input_plane[h:h + ih, h:h + iw, :3] = rgb if self._input_identity else self._input_lut[rgb]
         self._upload_input()
@@ -650,6 +687,13 @@ class DenseGraphSession(EngineSession):
         bs, oc = self._bs, self._image_channels
         lut = self._output_lut
         image = np.empty((oh * bs, ow * bs, oc), dtype=np.uint8)
+        if bs == 2 and oc == 3 and self._out_blocks == 2:
+            try:
+                from ignite_xdna.pipelines.preprocess import depth_to_space_crd_bgr
+                if depth_to_space_crd_bgr(blocks, oh, ow, lut, image):
+                    return image
+            except Exception:
+                pass
         for k in range(oc):
             for i in range(bs):
                 for j in range(bs):
