@@ -8882,7 +8882,10 @@ tensor.
   branch are the largest in the layer (max |w| 4.69 against at most 1.25 elsewhere in `/model.15/cv2`, 2.32 against
   1.15 in `/model.18/cv2`), so one per-tensor power-of-two scale leaves the other channels, median |w| about 0.03,
   with a step comparable to themselves (`yolow_concat_ranges.log`). Per-output-channel scales would not help: the
-  disparity is across input channels.
+  disparity is across input channels. **Superseded as the mechanism (2026-09-16, same day):** the disparity is real,
+  but giving the attention-reading weights their own scale recovers nothing, and per-output-channel scales do help.
+  Each of these convolutions outputs a small difference of large terms, so any rounding error is large against the
+  output ([below](#yolo-world-v2-with-every-convolution-on-the-npu-gptq-and-an-int32-bias-recover-the-four-output-convolutions-2026-09-16-desktop-2)).
 - **With those four in FP32, Quark's XINT8 recovers to 24.5 %** on the same 300 images: 5 points below float
   activations. AMD's stack runs that model at the same accuracy but places 110 of 1,049 nodes on the NPU and takes
   96.34 ms per image, no faster than the model on the CPU (87.83 ms in the same script).
@@ -8893,7 +8896,10 @@ tensor.
   physical tensor". That makes eight host layers, and nine dispatches were expected.
 - **Or an exact split** of each sensitive convolution into one over the three ordinary Concat inputs and one over
   the attention branch, summed before the activation. Every layer could then stay on the NPU, but the kernel applies
-  the activation before the residual add, so that is a kernel program change for the maintainer.
+  the activation before the residual add, so that is a kernel program change for the maintainer. (Built with the
+  maintainer's go-ahead as `ca5b6cd` and exact on the NPU, but the split model scores 2.3 %. GPTQ weights with an int32
+  bias put every layer but the attention on the NPU instead, with no kernel change:
+  [below](#yolo-world-v2-with-every-convolution-on-the-npu-gptq-and-an-int32-bias-recover-the-four-output-convolutions-2026-09-16-desktop-2).)
 - An open-vocabulary head pipeline (512-channel egress and the contrastive decode) and a same-sitting comparison
   against AMD's 96.34 ms, the CPU, and DirectML on the iGPU (40.42 ms per image in FP32, whose full-set accuracy on the CPU is 37.0 %, above).
 
@@ -8932,3 +8938,105 @@ now be a Concat view (`1a56120`): each segment's block range is synced and the c
 killed for low memory); a same-sitting latency and energy comparison (AMD's stack, the CPU, DirectML) with native
 ingress; the contrastive decode's cost (every stack pays it; the evaluations time the network only); recovering the
 HardSigmoid cost (QAT or an exact SiLU epilogue); an Ignition task for open-vocabulary detection.
+
+## YOLO-World v2 with every convolution on the NPU: GPTQ and an int32 bias recover the four output convolutions (2026-09-16, Desktop 2)
+
+Variant D ran the four C2fAttn output convolutions on the host in FP32. This section puts them on the NPU. The exact
+split into two halves was built first, with a change to the core program; it is exact on the NPU and does not
+recover the accuracy. GPTQ rounding with an int32 bias does, and needs no core program change. Evidence:
+`results/aie/yolow_gptq/` (the model) and `results/aie/engine_residual_hswish/` (the core program change), each log
+with its command. Code: `ca5b6cd` (HardSwish after the residual add, `pipelines/yolow/3a_split_attn_conv.py`) and
+`80ca69e` (int32 biases, `pipelines/yolow/3c_gptq_cv2.py`). Accuracy is COCO val2017 mAP@50-95 on the **first 300
+images**, the subset of variant D's rows above.
+
+**Accuracy** (MEASURED; ONNX Runtime CPU unless the row says otherwise):
+
+| Model | mAP@50-95 | mAP@50 | Log |
+|---|---:|---:|---|
+| XINT8, the four convolutions FP32 (variant D, above) | 24.5 % | 35.5 % | `yolow_int8_collapse/eval_xint8_fp32D_c2fattn_cv2_cpu300.log` |
+| XINT8 of the exact FP32 split (each convolution as two, then Quark) | 2.3 % | 4.0 % | `eval_split_xint8_cpu300.log` |
+| the same, with the Q/DQ pairs on both halves' outputs removed (the halves add in float) | 2.7 % | 4.5 % | `eval_split_floatadd_cpu300.log` |
+| XINT8, the four convolutions requantized: GPTQ int8 weights, int32 bias | **24.7 %** | 35.8 % | `eval_gptqcv2_cpu300.log` |
+| the GPTQ model through its graph-engine container on the NPU | 24.7 % | 35.8 % | `eval_gptqcv2_ignite300.log` |
+
+The container and the CPU wrote the same 72,972 detections, entry for entry (`compare_gptqcv2_detections.log`), and
+AP75 is 25.8 % and AR 47.5 % in both.
+
+**Why the split does not help** (MEASURED, numpy on FP32 activations, `cv2_cancellation.log`). Each of these
+convolutions outputs a small difference of large terms. The part reading Concat(a, b, c) and the part reading the
+attention output cancel. At `/model.12/cv2` their RMS is 22.4 and 22.3, and their sum's is 1.34; at `/model.15` 14.1,
+14.2 and 1.19; at `/model.18` 4.9, 5.0 and 1.78; at `/model.21` 16.9, 16.9 and 2.13. A rounding error that is small
+against either part is large against the output. The table gives the SQNR of the convolution output against FP32, on
+8 images held out from the 16 that GPTQ's statistics used. All weights are int8 with power-of-two scales:
+
+| Weights and bias | `/model.12` | `/model.15` | `/model.18` | `/model.21` |
+|---|---:|---:|---:|---:|
+| one scale, nearest rounding, exact bias | 14.4 dB | -2.9 dB | 9.1 dB | 21.2 dB |
+| one scale per half, nearest rounding, exact bias | 14.4 dB | -2.9 dB | 9.2 dB | 21.3 dB |
+| Quark's split weights and its int8 bias | 6.6 dB | -3.4 dB | 8.4 dB | 10.9 dB |
+| one scale per output channel, nearest rounding, exact bias | 16.3 dB | 28.9 dB | 33.2 dB | 29.9 dB |
+| GPTQ at one scale, exact bias | 37.1 dB | 25.2 dB | 31.1 dB | 37.1 dB |
+| GPTQ at one scale, Quark's int8 bias (from the split model) | 7.4 dB | 6.5 dB | 15.9 dB | 11.4 dB |
+| int16 weights, one scale, nearest rounding, exact bias (reference) | 61.3 dB | 57.2 dB | 64.9 dB | 66.0 dB |
+
+- **A scale per half buys nothing:** the two nearest-rounding rows agree to 0.1 dB. That retracts the explanation
+  above, that the attention-reading weights' size sets a step too coarse for the rest, as the mechanism.
+- **Both the rounding and the bias matter.** Quark's int8 bias has a scale of 1 or 2 in the split model's layers, against an
+  output whose RMS is 1.2-2.1. With GPTQ weights it still leaves 7.4 dB at `/model.12` and 11.4 dB at `/model.21`. The
+  engine's accumulator is 32 bits, so it takes a bias at the product scale as it is.
+- **Per-output-channel scales help but need a core program change** (one output shift per channel). GPTQ at one
+  scale is ahead of them on `/model.12` and `/model.21` and within 4 dB on the other two, and needs none.
+- Removing the quantization of the two halves' outputs in the split model (2.7 %) shows that their scales (0.5-2.0,
+  against 0.0625-0.125 for the sum) were not what broke it (`split_quant_report.log`).
+
+**The GPTQ model** (`pipelines/yolow/3c_gptq_cv2.py`, `gptq_cv2_build.log`). The script works block by block, so
+each block's statistics include the blocks already replaced. H is the Gram matrix of the dequantized Concat inputs
+over every pixel of 64 calibration images, and the damping is 1 % of its mean diagonal. Each convolution keeps its
+MSE-best power-of-two weight scale, which Quark had chosen too in all four (0.0078125, 0.03125, 0.015625 and
+0.0078125). GPTQ rounds the weights at that scale, and the bias becomes int32 at the input scale times the weight
+scale (-181,316 to 169,054 at `/model.21`). Every other tensor stays as Quark wrote it. Before this change the
+compiler truncated any bias to int8; it now keeps int8 or int32 and refuses an accumulator bias outside int32
+(YOLOv8n's instruction stream and weight packets are byte-identical after the change).
+
+**Through the container** (MEASURED, NPU Device 0). Host regions `/model.{12,15,18,21}/attn/`:
+- **Build:** 70 layers, 4 on the host, 2,446 rounds, a 36.7 MB workspace and 31.18 MB of weight packets. The container is
+  33,725,760 B (`build_gptqcv2.log`).
+- **Exact:** offline, every tensor equals ONNX Runtime and every layer's packet emulation equals the direct reference
+  (`exact_gptqcv2_offline.log`). On the NPU, 70/70 layers exact (`verify_gptqcv2.log`).
+- **Segments:** `NhNhNhNhN`, so the four C2fAttn output convolutions run inside the NPU segments.
+- **Where a frame goes**, in one sitting with variant D's container: quiet host, interleaved D, GPTQ, D, GPTQ, 100
+  frames each on 20 COCO images, `balanced`, numpy input quantization and head dequantization (`profile_ab_*.log`):
+
+  | Step | D, pass 0 | D, pass 1 | GPTQ, pass 0 | GPTQ, pass 1 |
+  |---|---:|---:|---:|---:|
+  | numpy input quantization | 9.204 ms | 9.236 ms | 9.183 ms | 9.093 ms |
+  | NPU segments and host steps | 33.231 ms | 33.491 ms | 28.450 ms | **28.359 ms** |
+  | head dequantization to float32 | 8.621 ms | 8.769 ms | 8.559 ms | 8.494 ms |
+  | total | 53.035 ms | 53.485 ms | 48.227 ms | **48.024 ms** |
+
+  In pass 0 the NPU segments sum to 17.302 ms for D and 18.783 ms for GPTQ, and the attention host steps to 9.424
+  and 9.650 ms. D's four FP32 convolution steps (6.484 ms) are gone, and the four convolutions they held cost 1.48 ms
+  on the NPU. The eval script's own inference time through the container was 48.08 ms mean (median 47.51, P95
+  53.25). That is a separate process, not this sitting.
+
+**The core program change, built and unused** (MEASURED; `results/aie/engine_residual_hswish/`). With header flag 4 set,
+the residual op now applies the packet's HardSwish constants after the add. No compiler before `ca5b6cd` set that flag
+on a residual packet, so existing containers keep their meaning.
+- **Synthetic:** a synthetic sequence is bit-exact against the emulator on the NPU (`kernel_hardware_synthetic.log`).
+- **Regression:** rebuilt with the new program, YOLOv8n (its instruction stream and packets byte-identical, only the
+  xclbin new) and YOLOv8s each verify 66/66 exact.
+- **Split model:** the split YOLO-World container verifies 74/74 exact, including the four residual layers carrying
+  HardSwish.
+- **Speed** (YOLOv8n, interleaved old/new/old/new on a quiet host, 100 timed dispatches each after the verify,
+  `ab_sitting_summary.txt`): old program 7.331 and 7.299 ms, new 7.216 and 7.245 ms. An accumulator spill would have
+  cost 2.6-3 times; the difference is within run-to-run noise and is not a speedup.
+
+No model worth running uses the new flag. It is in the program on this branch because it is exact and measured no
+slower on YOLOv8n; whether an unused op stays in the one engine program is the maintainer's call (DECISIONS).
+
+**Not done:** AMD's stack on the GPTQ model (so no comparison with AMD is claimed for it); the full 5,000 images; a
+glass-to-glass pipeline with native ingress and a native dequantization (numpy quantization and dequantization
+take 17.6 ms of the frame);
+sweeps of GPTQ's damping, column order and calibration size; GPTQ on the rest of the model to recover more of the 5
+points below float activations (29.5 %, above) or the HardSigmoid cost; energy per frame; an Ignition task for
+open-vocabulary detection.

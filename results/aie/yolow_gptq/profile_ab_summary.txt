@@ -1,0 +1,5 @@
+$ python yolow_profile_ab.py <scratch>/yolow/yolow_fp32cv2.ignite (A, variant D, 8 host steps) <scratch>/yolow/yolow_gptqcv2.ignite (B, 4 host steps) <out> --frames 100 --pairs 2  (interleaved, quiet host, xrt-smi idle before each run)
+A yolow_fp32cv2.ignite pass 0: rc=0 dispatch+host    mean  33.231 ms | total            mean  53.035 ms
+B yolow_gptqcv2.ignite pass 0: rc=0 dispatch+host    mean  28.450 ms | total            mean  48.227 ms
+A yolow_fp32cv2.ignite pass 1: rc=0 dispatch+host    mean  33.491 ms | total            mean  53.485 ms
+B yolow_gptqcv2.ignite pass 1: rc=0 dispatch+host    mean  28.359 ms | total            mean  48.024 ms

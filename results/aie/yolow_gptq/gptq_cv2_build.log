@@ -1,0 +1,6 @@
+$ pipelines/yolow/3c_gptq_cv2.py --fp32 models/yolov8s-worldv2_cut.onnx --xint8 models/yolov8s-worldv2_cut_xint8.onnx --calib-dir <ignite-xdna main>/data/coco_calib --out <scratch>/yolow/gptq_repo_script.onnx  (identical to the evaluated model: 1,070 nodes, 912 initializers)
+/model.12/cv2/conv/Conv: 512 -> 256 channels, s_x 0.25, s_w 0.0078125; in-sample output error nearest -38.8 dB, GPTQ -60.9 dB; int32 bias -61030..76061
+/model.15/cv2/conv/Conv: 256 -> 128 channels, s_x 0.125, s_w 0.03125; in-sample output error nearest -18.7 dB, GPTQ -45.2 dB; int32 bias -12360..36821
+/model.18/cv2/conv/Conv: 512 -> 256 channels, s_x 0.125, s_w 0.015625; in-sample output error nearest -18.4 dB, GPTQ -38.1 dB; int32 bias -12791..34773
+/model.21/cv2/conv/Conv: 1024 -> 512 channels, s_x 0.125, s_w 0.0078125; in-sample output error nearest -39.2 dB, GPTQ -54.0 dB; int32 bias -181316..169054
+wrote <scratch>/yolow/gptq_repo_script.onnx

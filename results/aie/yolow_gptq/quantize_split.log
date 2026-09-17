@@ -1,0 +1,10 @@
+$ pipelines/yolow/3b_quantize_cut.py --in <scratch>/yolow/yolov8s-worldv2_cut_split.onnx --calib-dir <ignite-xdna main>/data/coco_calib --limit 200 --out <scratch>/yolow/yolov8s-worldv2_cut_split_xint8.onnx  (resnet_env; progress and banners dropped)
+CPU threads: 8
+input model: <scratch>/yolow/yolov8s-worldv2_cut_split.onnx, 265 nodes, 6 outputs, 640x640 input
+calibrating on 200 images at 640x640
+quantizing with XINT8 -> <scratch>/yolow/yolov8s-worldv2_cut_split_xint8.onnx
+wrote <scratch>/yolow/yolov8s-worldv2_cut_split_xint8.onnx
+ops: [('DequantizeLinear', 409), ('QuantizeLinear', 266), ('Mul', 122), ('Constant', 93), ('Conv', 71), ('HardSigmoid', 61), ('Slice', 16), ('Add', 14), ('Concat', 13), ('Reshape', 12), ('Einsum', 4), ('ReduceMax', 4), ('Div', 4), ('Unsqueeze', 4), ('MaxPool', 3), ('Resize', 2)]
+QuantizeLinear 266  DequantizeLinear 409
+first node: Constant 
+Next: tools/diag_ep.py --model <scratch>/yolow/yolov8s-worldv2_cut_split_xint8.onnx, then 4_detect.py --ep npu --fresh

@@ -1,0 +1,45 @@
+$ python cv2_cancellation.py <split FP32> --xint8 <split XINT8> --calib-dir <ignite-xdna main>/data/coco_calib --images 16 --eval-images 8  (numpy on FP32 activations; SQNR of the convolution output on the 8 held-out images)
+/model.12/cv2: 384+128 -> 256 channels; RMS abc 22.395, attention 22.254, sum 1.342
+    unsplit pow2 int8          14.4 dB
+    split pow2 int8 +b32       14.4 dB
+    quark split int8            6.6 dB
+    quark split int8 +b32      13.5 dB
+    per-channel pow2 int8      16.3 dB
+    unsplit pow2 int16         61.3 dB
+    gptq pow2 int8             37.1 dB
+    gptq + quark int8 bias      7.4 dB
+    gptq + int8 bias pow2       7.4 dB
+    gptq split int8            36.8 dB
+/model.15/cv2: 192+64 -> 128 channels; RMS abc 14.063, attention 14.227, sum 1.187
+    unsplit pow2 int8          -2.9 dB
+    split pow2 int8 +b32       -2.9 dB
+    quark split int8           -3.4 dB
+    quark split int8 +b32      -2.9 dB
+    per-channel pow2 int8      28.9 dB
+    unsplit pow2 int16         57.2 dB
+    gptq pow2 int8             25.2 dB
+    gptq + quark int8 bias      6.5 dB
+    gptq + int8 bias pow2       6.5 dB
+    gptq split int8            25.6 dB
+/model.18/cv2: 384+128 -> 256 channels; RMS abc 4.914, attention 5.011, sum 1.777
+    unsplit pow2 int8           9.1 dB
+    split pow2 int8 +b32        9.2 dB
+    quark split int8            8.4 dB
+    quark split int8 +b32       9.2 dB
+    per-channel pow2 int8      33.2 dB
+    unsplit pow2 int16         64.9 dB
+    gptq pow2 int8             31.1 dB
+    gptq + quark int8 bias     15.9 dB
+    gptq + int8 bias pow2      15.9 dB
+    gptq split int8            31.8 dB
+/model.21/cv2: 768+256 -> 512 channels; RMS abc 16.860, attention 16.940, sum 2.134
+    unsplit pow2 int8          21.2 dB
+    split pow2 int8 +b32       21.3 dB
+    quark split int8           10.9 dB
+    quark split int8 +b32      21.3 dB
+    per-channel pow2 int8      29.9 dB
+    unsplit pow2 int16         66.0 dB
+    gptq pow2 int8             37.1 dB
+    gptq + quark int8 bias     11.4 dB
+    gptq + int8 bias pow2      11.4 dB
+    gptq split int8            37.8 dB
