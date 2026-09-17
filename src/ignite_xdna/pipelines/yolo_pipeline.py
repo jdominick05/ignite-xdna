@@ -402,6 +402,11 @@ class YoloPipeline(YoloDecoder):
         if cut_cand.exists():
             try:
                 cm = onnx.load(str(cut_cand))
+                ge = (getattr(self.session, "ignite_manifest", None) or {}).get("graph_engine", {})
+                if ge.get("silu") == "sigmoid4":
+                    # A --silu-sigmoid container is exact against the reference model, not Quark's HardSigmoid graph.
+                    from ignite_xdna.compiler.silu_sigmoid import reference_model
+                    cm = reference_model(cm)
                 self._ort_cut_sess = ort.InferenceSession(cm.SerializeToString(), providers=["CPUExecutionProvider"])
                 self._ort_cut_input_name = self._ort_cut_sess.get_inputs()[0].name
             except Exception:

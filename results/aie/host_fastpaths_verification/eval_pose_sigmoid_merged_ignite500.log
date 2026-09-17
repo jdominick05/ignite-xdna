@@ -1,0 +1,37 @@
+$ PYTHONPATH=<worktree>/src python pipelines/yolov8n-pose/5_eval_map.py --model <scratch>\sig_containers\pose_new_sigmoid.ignite --ep ignite --ingress numpy --n 500 --images <ignite-xdna main>\data\coco\val2017 --ann <ignite-xdna main>\data\coco\annotations\person_keypoints_val2017.json --dets <scratch>\sig_containers\dets_pose_sigmoid_merged_ignite500.json
+loading annotations into memory...
+Done (t=0.14s)
+creating index...
+index created!
+ignite_xdna: <ignite-xdna worktree>\ignite_xdna\__init__.py
+model: graph-engine container (task pose), every layer on the NPU, numpy decode, ingress numpy, input 640x640
+eval : 500 images, conf 0.001, iou 0.7, max_det 300, class-agnostic NMS (single class)
+  500/500  (19781 detections so far)
+
+19781 detections over 500 images in 12s
+inference  mean 21.95 ms   median 21.71 ms  (letterbox, NPU, decode and NMS)
+wrote <scratch>\sig_containers\dets_pose_sigmoid_merged_ignite500.json
+Loading and preparing results...
+DONE (t=0.33s)
+creating index...
+index created!
+Running per image evaluation...
+Evaluate annotation type *keypoints*
+DONE (t=0.58s).
+Accumulating evaluation results...
+DONE (t=0.03s).
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets= 20 ] = 0.435
+ Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets= 20 ] = 0.772
+ Average Precision  (AP) @[ IoU=0.75      | area=   all | maxDets= 20 ] = 0.436
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=medium | maxDets= 20 ] = 0.304
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= large | maxDets= 20 ] = 0.592
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets= 20 ] = 0.510
+ Average Recall     (AR) @[ IoU=0.50      | area=   all | maxDets= 20 ] = 0.837
+ Average Recall     (AR) @[ IoU=0.75      | area=   all | maxDets= 20 ] = 0.519
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=medium | maxDets= 20 ] = 0.379
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets= 20 ] = 0.672
+
+=== pose_new_sigmoid | IGNITE_NUMPY | 640px | 500 images ===
+OKS mAP@50-95  43.50
+OKS mAP@50     77.22
+latency        21.95 ms  (letterbox, NPU, decode and NMS)

@@ -150,18 +150,16 @@
   hardware contexts have no shared semaphore contract. BOs remain in system DDR.
   [Validation and limits](BENCHMARKS.md#native-bo-kernel-splicing-2026-09-13-desktop-2).
 
-- **Direct channel-blocked native decode and consolidated head readbacks:**
-  YOLOv8 detect heads output channel-blocked `[B, H, W, C8]` uint8 tensors from AIE2 cores.
-  The original host path performed an unswizzle and 1.21 MB NCHW transpose in NumPy/C before
-  invoking native decode, costing ~0.34 ms readback overhead and CPU cache churn. Consolidating
-  detection head allocations into 3 contiguous spans (P3 921.6 KB, P4 230.4 KB, P5 57.6 KB)
-  cuts driver sync ioctls from 6 to 3. Direct C8 native decode in `decode_native.c`
-  (`yolo_decode_c8_blocks`) indexes directly into channel blocks without transposing, cutting
-  head readback from 0.64 ms to 0.31 ms while remaining 100% bit-exact across all 80 classes.
-  In SESR M7, native SIMD `depth_to_space_crd_bgr` and fused resize ingress eliminate 2.10 ms of
-  host bottleneck (postprocess 2.20 ms -> 0.35 ms, preprocess 0.43 ms -> 0.18 ms), closing the
-  gap to AMD from 2.48 ms down to 0.21 ms.
-  [Validation and measurements](BENCHMARKS.md#dispatch-readback-and-simd-host-optimization-in-the-balanced-default-2026-09-17-desktop-2).
+- **Detection heads decoded in their channel blocks; SESR's host stages native, its resize not OpenCV's:**
+  the runtime reads YOLO detection heads as views of their `[blocks][H][W][8]` codes, one sync per run of adjacent head
+  regions (three instead of six on YOLOv8n and YOLOv8s), and `yolo_decode_c8_blocks` decodes them without the NCHW
+  transpose. It is exact against the NCHW decode offline, in the 3,000-trial stress and on 101 frames per container on
+  the NPU. It halved the readback (0.31-0.34 ms less) but lengthened decode by 0.10-0.11 ms, so the frame moved by less
+  than the spread between the two sittings compared. SESR M7 takes a native DepthToSpace (exact) and a native resize
+  that is within one code of `cv2.resize` but not equal to it: 2.05 ms less per frame, at the cost of an output image
+  that differs from the OpenCV path's (PSNR 41.42-42.19 dB between them). It landed as the default, trading equality with
+  OpenCV's resize for speed, until an SESR quality measurement says otherwise; the NPU stays exact on its input.
+  [Verification and measurements](BENCHMARKS.md#host-fast-paths-sesr-m7-205-ms-faster-in-its-host-stages-detection-heads-decoded-in-their-channel-blocks-2026-09-17-desktop-2).
 
 - **The launcher (`tui/`) is a front end, not a measurement tool, and the boundary is
   load-bearing.** It writes only to `outputs/` (git-ignored): every demo defaults
