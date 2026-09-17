@@ -1,0 +1,9 @@
+$ pipelines/yolow/5_eval_map.py --model <ignite-xdna main>/models/yolov8s-worldv2_cut.onnx --txt-feats <ignite-xdna main>/models/yolow_coco_txt_feats.npy --ep dml --n 10 --log 0 --images <ignite-xdna main>/data/coco/val2017 --ann <ignite-xdna main>/data/coco/annotations/instances_val2017.json  (resnet_env17, after the sitting; ONNX Runtime verbose log reduced to its node-placement lines, the model and eval lines, timing and the COCO summary; timing over 10 images includes the first, cold calls and is not a figure of the sitting)
+[V:onnxruntime:, session_state.cc:1296 onnxruntime::VerifyEachNodeIsAssignedToAnEp] Node placements
+[V:onnxruntime:, session_state.cc:1299 onnxruntime::VerifyEachNodeIsAssignedToAnEp]  All nodes placed on [DmlExecutionProvider]. Number of nodes: 1
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+model: head-cut (6 outputs), contrastive + numpy decode, input 640x640
+eval : 10 images, conf 0.001, iou 0.7, max_det 300, per-class NMS
+  mean   : 61.43 ms  (16.3 fps)
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.480
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.575
