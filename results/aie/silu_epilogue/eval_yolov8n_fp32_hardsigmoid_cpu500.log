@@ -1,0 +1,39 @@
+$ pipelines/yolov8n/5_eval_map.py --model <scratch>\silu\yolov8n_cut_hardsigmoid.onnx --ep cpu --n 500 --images <ignite-xdna main>\data\coco\val2017 --ann <ignite-xdna main>\data\coco\annotations\instances_val2017.json --dets <scratch>\silu\dets_yolov8n_fp32_hardsigmoid.json
+loading annotations into memory...
+Done (t=0.27s)
+creating index...
+index created!
+model: head-cut (6 outputs), numpy decode, input 640x640
+eval : 500 images, conf 0.001, iou 0.7, max_det 300, per-class NMS
+  500/500  (69662 detections so far)
+
+69662 detections over 500 images in 19s
+inference  mean 27.53 ms   median 27.56 ms
+wrote <scratch>\silu\dets_yolov8n_fp32_hardsigmoid.json
+Loading and preparing results...
+DONE (t=0.20s)
+creating index...
+index created!
+Running per image evaluation...
+Evaluate annotation type *bbox*
+DONE (t=2.48s).
+Accumulating evaluation results...
+DONE (t=0.68s).
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.337
+ Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] = 0.477
+ Average Precision  (AP) @[ IoU=0.75      | area=   all | maxDets=100 ] = 0.365
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.180
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.382
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.459
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=  1 ] = 0.288
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets= 10 ] = 0.483
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.521
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.308
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.578
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.660
+
+=== yolov8n_cut_hardsigmoid | CPU | 640px | 500 images ===
+mAP@50-95  33.66
+mAP@50     47.73
+mAP small / medium / large   18.02 / 38.22 / 45.92
+latency    27.53 ms

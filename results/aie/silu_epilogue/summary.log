@@ -1,0 +1,27 @@
+host DESKTOP-CBL5NUA
+onnxruntime 1.23.3.dev20260320 (resnet_env17, every evaluation, CPUExecutionProvider)
+quark 0.11rc1 (resnet_env, the two keep-Sigmoid quantizations)
+COCO val2017, first 500 images; detection mAP@50-95 (yolov8n, yolov8s) and keypoint OKS mAP@50-95 (pose), as each log's own summary line prints it
+
+model | FP32 | FP32 HardSigmoid form | FP32 PL3 | XINT8 shipped | oracle hardsigmoid | oracle PL3 | oracle PL4 | oracle exact SiLU | oracle sigmoid@1/128 | Quark keep-Sigmoid
+yolov8n | 39.95 | 33.66 | 39.99 | 30.25 | 30.25 | 37.05 | 37.29 | 37.22 | 37.68 | 37.83
+yolov8s | 48.52 | 43.33 | 48.42 | 40.77 | - | 45.66 | 46.25 | 46.39 | 46.50 | -
+yolov8n-pose | 49.49 | 36.07 | 48.93 | 31.56 | - | 42.99 | 43.50 | 43.65 | 43.45 | 43.58
+
+yolov8n FP32 with a K-line sigmoid: 2 lines 38.50, 3 lines 39.99, 5 lines 39.90
+
+File map. The evaluation logs name each oracle model by its build tag: _sig_hs is tools/silu_integer_oracle.py
+--mode hardsigmoid, _sig_exact is --mode sigmoid, _sig_silu is --mode silu, _sig_pl3/_sig_pl4 are --mode pl
+--lines 3/4. oracle_rebuild_sha256.log rebuilt all 13 from the committed tool: byte-identical to the evaluated
+models. fp32_pl_fits.log did the same for the 8 FP32 form models (tools/silu_fp32_forms.py). The two keep-Sigmoid
+quantizations ran from a scratch copy of tools/quantize_keep_sigmoid.py and were not re-run from tools/.
+
+A first PL oracle clamped qh at 127, which the candidate core expression does not do (it reaches 128 when g
+saturates at 64); its evaluations were discarded before any figure was recorded and are not in this directory.
+The PL mode now asserts, for every (s1, s2) pair, that ORT's float path equals the integer core expression on all
+256 inputs.
+
+Not run: the candidate epilogue on the NPU (the kernel program is unchanged); the C++ expression executed off-device
+against the Python mirror (no aie_api native build here); the full 5,000 images; AMD's stack on these oracle models
+(they contain Gather tables, not a vendor graph). Inference latencies inside the eval logs were taken with other
+evaluations running on the same CPU and are not measurements.

@@ -1,0 +1,39 @@
+$ pipelines/yolov8n/5_eval_map.py --model <ignite-xdna main>\models\yolov8s_cut.onnx --ep cpu --n 500 --images <ignite-xdna main>\data\coco\val2017 --ann <ignite-xdna main>\data\coco\annotations\instances_val2017.json --dets <scratch>\silu\dets_yolov8s_fp32.json
+loading annotations into memory...
+Done (t=0.26s)
+creating index...
+index created!
+model: head-cut (6 outputs), numpy decode, input 640x640
+eval : 500 images, conf 0.001, iou 0.7, max_det 300, per-class NMS
+  500/500  (55139 detections so far)
+
+55139 detections over 500 images in 34s
+inference  mean 59.22 ms   median 60.71 ms
+wrote <scratch>\silu\dets_yolov8s_fp32.json
+Loading and preparing results...
+DONE (t=0.17s)
+creating index...
+index created!
+Running per image evaluation...
+Evaluate annotation type *bbox*
+DONE (t=2.06s).
+Accumulating evaluation results...
+DONE (t=0.57s).
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.485
+ Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] = 0.646
+ Average Precision  (AP) @[ IoU=0.75      | area=   all | maxDets=100 ] = 0.536
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.323
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.539
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.621
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=  1 ] = 0.378
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets= 10 ] = 0.607
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.644
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.447
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.695
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.765
+
+=== yolov8s_cut | CPU | 640px | 500 images ===
+mAP@50-95  48.52
+mAP@50     64.61
+mAP small / medium / large   32.28 / 53.87 / 62.11
+latency    59.22 ms

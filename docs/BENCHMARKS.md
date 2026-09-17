@@ -7047,6 +7047,13 @@ establishes vendor parity — the oracle diff remains that gate — and neither 
   is `--power-mode performance` today; in the `balanced` default the gap measured 1.36 ms on the means (18.046 and
   17.988 ms against 16.744 and 16.564 ms), with the NPU stage unchanged and the rest in host work around it
   ([re-measured in the balanced default](#the-amd-comparisons-re-measured-in-the-balanced-default-2026-09-16-desktop-2)).
+- **Every graph-engine model pays for computing SiLU as HardSigmoid times x.** On the first 500 COCO val2017 images the
+  form alone, in FP32, is 64.8 %, 67.0 % and 74.8 % of the XINT8 loss of YOLOv8n, YOLOv8s and YOLOv8n-pose. As shipped,
+  XINT8 scores 30.25, 40.77 and 31.56 against FP32's 39.95, 48.52 and 49.49. With an integer four-line sigmoid in place
+  of the form, the same XINT8 models score 37.29, 46.25 and 43.50 offline on ONNX Runtime. The core program does not
+  compute that sigmoid: inside the pass loops it spills the pass accumulators, and the spill-free form, a separate loop
+  over the finished tile, is sized but not built
+  ([sized offline](#silus-hardsigmoid-form-is-most-of-the-model-zoos-xint8-accuracy-loss-and-an-integer-four-line-sigmoid-wins-55-119-points-back-offline-2026-09-17-desktop-2)).
 - **Every graph-engine model computes SiLU as HardSigmoid times x, and YOLO-World v2 pays for it.** The swap alone takes
   YOLO-World v2 from 41.5 % to 30.5 % mAP in FP32 (first 500 images). Its best XINT8 container scores 24.7 % against
   43.0 % for FP32 on the first 300 images, and its four text attention cores still run on the CPU (9.650 ms of a
@@ -9360,3 +9367,106 @@ its JSON, and each arm's glass-to-glass record in `pmode_g2g_20260917T0428Z/`.
 it, and it gives up most of the container's latency margin. The iGPU running FP32 remains the lower-energy and
 more accurate choice at a low frame rate on this machine; the container stays ahead on frame time. No change to the
 power-mode defaults follows from this.
+
+## SiLU's HardSigmoid form is most of the model zoo's XINT8 accuracy loss, and an integer four-line sigmoid wins 5.5-11.9 points back offline (2026-09-17, Desktop 2)
+
+Every graph-engine container computes SiLU as x times HardSigmoid: Quark's XINT8 writes that form (SimulateDPU converts
+every Sigmoid) and the core program's epilogue reproduces it bit for bit. The
+[YOLO-World v2 section](#yolo-world-v2-on-the-graph-engine-the-text-attention-lowers-and-xint8s-collapse-is-four-convolutions-2026-09-16-desktop-2)
+measured what the swap costs that one model. This one measures it on YOLOv8n, YOLOv8s and YOLOv8n-pose, sizes what a
+better sigmoid in the core program would buy, and stops before changing the core program, which is the maintainer's
+decision.
+
+**Scope of every figure here.** CPU only, on Desktop 2 (`DESKTOP-CBL5NUA`): ONNX Runtime 1.23.3.dev20260320, CPU
+execution provider, `resnet_env17`. Each figure covers the **first 500 COCO val2017 images**, so none is comparable with
+a full-set figure elsewhere in this file, including YOLOv8n-pose's 32.77 OKS. The detectors report box mAP@50-95 and pose
+reports keypoint OKS mAP@50-95, both to the two decimals each log's summary line prints. Nothing ran on the NPU.
+Evidence: `results/aie/silu_epilogue/`, where `summary.log` holds every figure and a file map.
+
+**Where the XINT8 loss goes.**
+
+| Model | FP32 | FP32 with SiLU in the HardSigmoid form | XINT8 as shipped | (FP32 - form) / (FP32 - XINT8) |
+|---|---:|---:|---:|---:|
+| YOLOv8n | 39.95 | 33.66 | 30.25 | 64.8 % |
+| YOLOv8s | 48.52 | 43.33 | 40.77 | 67.0 % |
+| YOLOv8n-pose, OKS | 49.49 | 36.07 | 31.56 | 74.8 % |
+
+- **How the form models are built:** `tools/silu_fp32_forms.py --form hardsigmoid` swaps each SiLU's Sigmoid for
+  HardSigmoid(1/6, 0.5) times 1.000122070, exactly what SimulateDPU writes, and keeps the FP32 weights.
+- **The last column is a ratio of two differences on one slice,** not a decomposition of the XINT8 loss.
+- **A piecewise-linear sigmoid in FP32 recovers almost all of the form's loss.** Three lines score 39.99, 48.42 and 48.93
+  (`--form pl`). On YOLOv8n, two lines score 38.50 and five 39.90.
+
+**What a better sigmoid in the core program would score, measured offline.**
+
+The core applies the activation to one uint8, the requantized convolution output (t = q1 - 128). Any candidate epilogue
+is therefore a 256-entry function per layer. `tools/silu_integer_oracle.py` replaces every SiLU of the shipped XINT8
+model with that function as an ONNX `Gather` table, and ONNX Runtime evaluates the result. The weights, scales and
+calibration stay those of the shipped model.
+
+| SiLU in the shipped XINT8 model | YOLOv8n | YOLOv8s | YOLOv8n-pose, OKS |
+|---|---:|---:|---:|
+| The HardSigmoid epilogue as the core computes it today (`--mode hardsigmoid`) | 30.25 | — | — |
+| Integer three-line sigmoid (`--mode pl --lines 3`) | 37.05 | 45.66 | 42.99 |
+| Integer four-line sigmoid (`--mode pl --lines 4`) | 37.29 | 46.25 | 43.50 |
+| Exact quantized SiLU, a 256-entry output table (`--mode silu`) | 37.22 | 46.39 | 43.65 |
+| A real sigmoid at the HardSigmoid's 1/128 int8 quantization (`--mode sigmoid`) | 37.68 | 46.50 | 43.45 |
+| Quark XINT8 with `ConvertSigmoidToHardSigmoid=False` and its own calibration (`tools/quantize_keep_sigmoid.py`) | 37.83 | — | 43.58 |
+
+- **Four lines against the shipped models:** 7.04, 5.48 and 11.94 points more. They score within 0.54, 0.25 and 0.15
+  points of every exact variant on the same model, and the exact variants themselves spread over 0.61, 0.11 and 0.20
+  points on this slice.
+- **Four lines against FP32:** 2.66, 2.27 and 5.99 points below. That remainder is quantization, not the activation.
+- **The oracle is validated against the shipped model.** In `hardsigmoid` mode its table is today's epilogue at
+  `fit_hardswish`'s constants. That model's outputs equal the shipped model's bit for bit on ten inputs (the first 8
+  val2017 images and 2 random), and its 500-image detections JSON is byte-identical (`oracle_hs_bitexact.log`,
+  `oracle_hs_dets_identical.log`).
+- **The committed tools rebuild the evaluated models byte for byte:** all 13 oracle models and all 8 FP32 form models
+  (`oracle_rebuild_sha256.log`, `fp32_pl_fits.log`). Both keep-Sigmoid quantizations ran from a scratch copy of
+  `tools/quantize_keep_sigmoid.py` and were not re-run.
+- **Per layer, today's epilogue is up to 5 output LSBs off the exact quantized SiLU.** That is YOLOv8n-pose's most common
+  scale pair (s1 1/16, s2 1/32, 16 layers), with a mean of 1.223 LSB over the 256 inputs; four lines are off by at most 1
+  (mean 0.195). Every pair of the three models is in the `oracle_build_*.log` files.
+
+**The candidate epilogue.** K lines, fitted per layer to that layer's (s1, s2):
+
+    u = |t|;  g = clip(min_i rne((u * A_i + B_i) >> S), 0, 64);  y = rne(((t << 6) + u * g) >> YSH)
+
+- **What it computes:** t times (64 + sign(t) · g), a sigmoid in 1/128 steps that reaches 1.0.
+- **Header space:** line 1 takes the existing `A1`, `B1` and `S1` header words, and lines 2-4 take the six free words
+  26-31. Four lines is therefore the most the 128-byte W header holds without a layout change.
+- **The oracle mirrors this expression step by step** with the emulator's rounding and saturation (`rne_shift`,
+  `sat_i16`). For every scale pair it asserts that ONNX Runtime's float path equals the expression on all 256 inputs.
+- **A first version of the oracle was wrong.** It clamped the sigmoid at 127/128, which the expression does not do, and
+  its evaluations were discarded before any figure was recorded.
+
+**What it would cost the core program, sized offline** (`tools/engine_epilogue_variants.py`: Peano `-O2` objects, no
+device; `engine_epilogue_variants.log`):
+
+| Core program | `.text` | Accumulator stack moves |
+|---|---:|---:|
+| `engine.cc` today | 8,960 B | 0 |
+| Four lines inside the pass epilogue, beside HardSwish | 12,336 B | 88 |
+| Four lines inside the pass epilogue, replacing HardSwish | 10,320 B | 88 |
+| Four lines in a separate loop over the finished tile | 9,792 B | 0 |
+| Three lines in a separate loop over the finished tile | 9,728 B | 0 |
+
+- **Inside the pass, the epilogue spills the pass accumulators to the stack.** `engine.cc`'s header records that failure
+  as 2.6 to 3 times the frame's core time. Evaluating the lines one at a time does not stop it: the census above is of
+  that version.
+- **In a separate loop after the passes, the object has no accumulator stack moves.** With `F_SIGMOID` set and
+  `F_HSWISH` clear, the passes emit the linear q1 and the loop applies the sigmoid to the finished tile. In the
+  disassembly the pass blocks load from the stack exactly what they load today; the one extra wide-register load is in
+  a block of its own.
+- **This is a static property of the object, not a latency.** The loop's core time on narrow layers is unmeasured, and
+  the [fused Conv residual SiLU kernel](#fused-conv-residual-silu-2026-09-13-desktop-2) measured its polynomial SiLU
+  epilogue at 69.29 % extra compute cycles on a 32-channel convolution.
+
+**Not done:**
+- The epilogue on the NPU: the core program is unchanged and waits on the maintainer's decision.
+- The C++ expression run off the device against its Python mirror: there is no `aie_api` native build here.
+- The compiler fit and the container header field.
+- Latency and energy.
+- The full 5,000 images.
+- YOLO11n and SESR.
+- AMD's stack on the keep-Sigmoid models.
