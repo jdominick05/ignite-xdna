@@ -1,0 +1,36 @@
+$ pipelines/yolow/5_eval_map.py --model <ignite-xdna main>\models\yolov8s-worldv2_cut_xint8_gptqcv2.onnx --ep cpu --n 300 --images <ignite-xdna main>\data\coco\val2017 --ann <ignite-xdna main>\data\coco\annotations\instances_val2017.json --dets <scratch>/yolow/vocab_evals\dets_gptq_vocab_coco.json --vocabulary <ignite-xdna worktree>\pipelines\yolow\vocabularies\coco.txt
+loading annotations into memory...
+Done (t=0.29s)
+creating index...
+index created!
+vocabulary: <ignite-xdna worktree>\pipelines\yolow\vocabularies\coco.txt, 0 categories renamed: 
+model: head-cut (6 outputs), contrastive + numpy decode, input 640x640
+eval : 300 images, conf 0.001, iou 0.7, max_det 300, per-class NMS
+  [ 300/300]  infer 92.06 ms  elapsed  33.6s
+
+Timing (300 images):
+  mean   : 92.06 ms  (10.9 fps)
+  median : 92.69 ms
+  p95    : 100.50 ms
+wrote 72989 detections to <scratch>/yolow/vocab_evals\dets_gptq_vocab_coco.json
+Loading and preparing results...
+DONE (t=0.21s)
+creating index...
+index created!
+Running per image evaluation...
+Evaluate annotation type *bbox*
+DONE (t=1.80s).
+Accumulating evaluation results...
+DONE (t=0.72s).
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.247
+ Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] = 0.358
+ Average Precision  (AP) @[ IoU=0.75      | area=   all | maxDets=100 ] = 0.258
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.165
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.330
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.316
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=  1 ] = 0.254
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets= 10 ] = 0.437
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.475
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.307
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.543
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.587

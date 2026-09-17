@@ -1,0 +1,11 @@
+$ pipelines/yolow/6_text_encoder.py --pt models/yolov8s-worldv2.pt --cut-onnx models/yolov8s-worldv2_cut.onnx --clip-dir <scratch>/weights/clip --out-dir <scratch>/yolow  (resnet_env; torch export warnings dropped)
+wrote <scratch>/yolow\yolow_text_encoder.onnx (254,388,933 B)
+wrote <scratch>/yolow\yolow_text.npz (7,640,092 B): 48894 merges, guides for blocks (12, 15, 18, 21)
+tokenizer: 97/97 phrases give clip.tokenize's tokens
+text encoder: ONNX against PyTorch on 97 phrases, max |diff| 7.302e-07
+guide /model.12/attn/Reshape_output_0 (1, 80, 4, 32): max |diff| against the exported initializer 1.997e-06
+guide /model.15/attn/Reshape_output_0 (1, 80, 2, 32): max |diff| against the exported initializer 5.364e-07
+guide /model.18/attn/Reshape_output_0 (1, 80, 4, 32): max |diff| against the exported initializer 9.537e-07
+guide /model.21/attn/Reshape_output_0 (1, 80, 8, 32): max |diff| against the exported initializer 1.907e-06
+contrastive scale [1.7861779928207397, 1.74992036819458, 1.895814299583435] (npu.yolow [1.7862274646759033, 1.749911904335022, 1.8958474397659302], largest relative difference 2.8e-05), bias [-11.953125, -10.40625, -8.8671875] (npu.yolow [-11.953125, -10.40625, -8.8671875])
+all checks passed

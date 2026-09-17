@@ -1,0 +1,9 @@
+$ python yolow_text_runtime_check.py models/yolow_text_encoder.onnx models/yolow_text.npz <PyTorch embeddings and guides of person, bus, window, road sign, shoe>  (mlir-aie-iron, no torch)
+load 378 ms, embed 5 names 52.8 ms, guides 0.25 ms
+embeddings against PyTorch: max |diff| 4.172e-07
+  /model.12/attn/Reshape_output_0 (1, 5, 4, 32): max |diff| 2.384e-07
+  /model.15/attn/Reshape_output_0 (1, 5, 2, 32): max |diff| 2.384e-07
+  /model.18/attn/Reshape_output_0 (1, 5, 4, 32): max |diff| 9.537e-07
+  /model.21/attn/Reshape_output_0 (1, 5, 8, 32): max |diff| 1.907e-06
+vocabulary of 1: 17.2 ms
+vocabulary of 80: 1103.7 ms

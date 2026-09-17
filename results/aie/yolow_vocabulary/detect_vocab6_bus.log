@@ -1,0 +1,15 @@
+$ python iron_run.py <ignite-xdna worktree> yolow_vocab_detect.py <container> <GPTQ model> <FP32 cut model> <vocabulary: backpack, wheel, hat, glasses, jacket, street lamp> <guides> assets/bus.jpg
+replaced: {'/model.12/attn/': ['/model.12/attn/Reshape_output_0'], '/model.15/attn/': ['/model.15/attn/Reshape_output_0'], '/model.18/attn/': ['/model.18/attn/Reshape_output_0'], '/model.21/attn/': ['/model.21/attn/Reshape_output_0']}
+container: 3 detections
+    glasses    0.425  x  260.9 y  433.7 w   52.1 h   20.0
+    street lamp 0.323  x  179.4 y  304.0 w  102.2 h  252.4
+    jacket     0.282  x   57.5 y  458.3 w  146.3 h  245.2
+ort-xint8: 3 detections
+    glasses    0.425  x  260.9 y  433.7 w   52.1 h   20.0
+    street lamp 0.323  x  179.4 y  304.0 w  102.2 h  252.4
+    jacket     0.282  x   57.5 y  458.3 w  146.3 h  245.2
+ort-fp32: 3 detections
+    jacket     0.548  x   54.6 y  454.1 w  149.3 h  248.4
+    jacket     0.462  x  222.1 y  466.8 w  123.2 h  238.6
+    glasses    0.278  x  262.1 y  434.5 w   49.0 h   17.6
+container heads IDENTICAL to ort-xint8; detections identical

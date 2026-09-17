@@ -1836,3 +1836,25 @@ cached reference heads rather than `bo_out`.
   - **Per-output-channel weight scales:** a core program change (one output shift per channel), and behind GPTQ at
     one scale on two of the four layers.
   - **Those convolutions as FP32 host steps (variant D):** kept as the record; its NPU segments and host steps take 4.8-5.1 ms more per frame.
+- **A YOLO-World v2 vocabulary is chosen at run time by replacing host segments' constants, not by a compile
+  (2026-09-16).** The vocabulary enters the network only through the attention regions' text guides, FP32
+  initializers inside host segments, and through the host-side contrastive decode. `EngineSession.set_host_constants`
+  rebuilds those segments' ONNX Runtime sessions with new guides, and one container serves any class names. It is exact
+  on the NPU with another class count (70/70) and gives the detections of ONNX Runtime on the rewritten model
+  ([BENCHMARKS](BENCHMARKS.md#yolo-world-v2s-vocabulary-chosen-at-run-time-one-container-any-class-names-2026-09-16-desktop-2)).
+  Choices:
+  - **The text encoder runs on ONNX Runtime from a bundle each user exports** (`pipelines/yolow/6_text_encoder.py`),
+    not from torch at run time, and no CLIP weights ship.
+  - **The tokenizer is written on `re`** and accepts printable ASCII only, refusing other text rather than tokenizing
+    it differently from CLIP's `regex` and `ftfy` version.
+  - **The bundle keeps the checkpoint's contrastive scales,** which differ from the hand-written `npu/yolow.py`
+    values by up to 2.8e-05 relative.
+
+  Rejected:
+  - **The guides as graph inputs of the extracted host models:** that is a compiler and manifest change, where the
+    constant replacement needs neither.
+  - **A container per vocabulary:** 32.5 s of compile and 33,725,760 B each, where `set_classes` swaps six names on an
+    open session in 90.1 ms.
+
+  Known cost: renaming 23 COCO categories to synonyms costs the XINT8 model 22 % of its mAP on those categories,
+  against 11 % in FP32.
