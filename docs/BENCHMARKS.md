@@ -9039,4 +9039,102 @@ glass-to-glass pipeline with native ingress and a native dequantization (numpy q
 take 17.6 ms of the frame);
 sweeps of GPTQ's damping, column order and calibration size; GPTQ on the rest of the model to recover more of the 5
 points below float activations (29.5 %, above) or the HardSigmoid cost; energy per frame; an Ignition task for
-open-vocabulary detection.
+open-vocabulary detection (its ignite-xdna side, a vocabulary chosen at run time, is
+[below](#yolo-world-v2s-vocabulary-chosen-at-run-time-one-container-any-class-names-2026-09-16-desktop-2)).
+
+## YOLO-World v2's vocabulary chosen at run time: one container, any class names (2026-09-16, Desktop 2)
+
+The container above was compiled with COCO's 80 class names baked into the model. This section asks whether the same
+container can detect other classes, named at run time, without re-exporting, requantizing or recompiling. AMD's stack
+cannot: its compiled model carries the vocabulary its export was given. Evidence: `results/aie/yolow_vocabulary/`
+(each log with its command). Code: `6a39780` (`EngineSession.set_host_constants`, `verify_engine_container.py
+--host-constants`), `3d74b66` (`pipelines/yolow/6_text_encoder.py`, `ignite_xdna.pipelines.yolow_text`,
+`YoloWorldPipeline`) and `b58d997` (`5_eval_map.py --vocabulary`).
+
+**Where the vocabulary lives.** It reaches the network in two places. One is the attention regions' four text guides,
+`/model.{12,15,18,21}/attn/Reshape_output_0` of shape (1, classes, heads, 32): each block's projection of the class
+names' CLIP ViT-B/32 embeddings, folded into FP32 initializers at export. The other is the contrastive decode on the
+host. The attention regions are host segments, so replacing the guides changes what ONNX Runtime computes between NPU
+segments, and never the NPU program.
+- **The swap is the network ultralytics builds for those names** (MEASURED, FP32, `bus.jpg`). With five names
+  (person, bus, window, road sign, shoe) swapped into the exported model's guides, all six head tensors match
+  ultralytics' `set_classes` in PyTorch at 108.4-112.5 dB SQNR (`vocabulary_swap_fp32_vs_set_classes.log`).
+- **Exact on the NPU with another class count** (MEASURED). With those five names' guides, the GPTQ model lowers to
+  the same 70 layers and every tensor equals ONNX Runtime offline. The container compiled with COCO's guides, given the
+  five-name guides at run time, verifies 70/70 layers exact on Device 0 (`exact_gptqcv2_vocab5_offline.log`,
+  `verify_gptqcv2_vocab5.log`).
+- **Guides stay inside the calibrated range.** Both vocabularies tried keep every block's guide values and per-head
+  norms inside COCO's (largest per-head norm 23.24 and 23.22 against 23.43 at `/model.21`), because unit-norm
+  embeddings through a fixed projection are bounded (`guide_ranges.log`). The accuracy cost of other names is measured
+  below; the range alone does not rule one out.
+
+**The text side without torch** (MEASURED). `6_text_encoder.py` runs once in the model-tools environment and writes
+CLIP ViT-B/32's text encoder as ONNX (254,388,933 B) and a bundle with the BPE merges, the four guide projections and
+the contrastive constants. `ignite_xdna.pipelines.yolow_text` runs them on ONNX Runtime's CPU provider with a tokenizer
+built on `re`, which accepts printable ASCII only (`text_encoder_export.log`, `text_runtime_check.log`):
+- **Tokenizer:** 97/97 phrases give `clip.tokenize`'s tokens: COCO's names plus HTML entities, apostrophes, digits and
+  a 200-character name.
+- **Encoder:** the ONNX encoder's embeddings match PyTorch's to 7.3e-07.
+- **Guides:** the bundle's guides for COCO's names match the exported initializers to 2.0e-06.
+- **Contrastive constants:** the biases equal the decode's hard-coded ones. The checkpoint's scales differ from the
+  hard-coded ones by up to 2.8e-05 relative, and where those came from is unrecorded.
+- **In the runtime environment (Python 3.13, no torch):** the five names' embeddings match PyTorch's to 4.2e-07.
+  Loading the bundle takes 378 ms. A vocabulary of 1 name takes 17.2 ms, 5 names 52.8 ms and 80 names 1,103.7 ms.
+
+**Detections on `bus.jpg`** (MEASURED, conf 0.25; `detect_vocab5_bus.log`, `detect_vocab6_bus.log`). In both runs
+the container's heads are identical to ONNX Runtime CPU on the GPTQ model with the same guides:
+
+| Vocabulary | Container (= ONNX Runtime, GPTQ XINT8) | FP32 |
+|---|---|---|
+| person, bus, window, road sign, shoe | 12: person 0.901, 0.873, 0.838, 0.514; shoe 0.790, 0.489, 0.387; bus 0.685; road sign 0.447, 0.438, 0.376, 0.312 | 8: person 0.903, 0.899, 0.892, 0.711; bus 0.880; shoe 0.380, 0.313, 0.301 |
+| backpack, wheel, hat, glasses, jacket, street lamp | 3: glasses 0.425, street lamp 0.323, jacket 0.282 | 3: jacket 0.548, 0.462; glasses 0.278 |
+
+"shoe", "road sign", "glasses" and "jacket" are not COCO classes. The quantized model scores differently from FP32 and
+adds boxes FP32 does not report (the road signs, the street lamp).
+
+**Accuracy with renamed classes** (MEASURED, COCO val2017 first 300 images). `vocabularies/coco_synonyms.txt` renames
+23 of the 80 categories (person to human, car to automobile, tv to television, cell phone to mobile phone, and 19
+more). mAP@50-95 / mAP@50 (`subset_map.log` and the `eval_*` logs):
+
+| Model, prompts | All 80 | 23 renamed | 57 not renamed |
+|---|---:|---:|---:|
+| FP32, COCO's names | 43.0 / 59.2 | 40.8 / 56.6 | 44.0 / 60.2 |
+| FP32, synonyms | 41.9 / 57.7 | 36.4 / 51.0 | 44.2 / 60.3 |
+| GPTQ XINT8, COCO's names through the text encoder | 24.7 / 35.8 | 26.4 / 37.9 | 24.1 / 34.9 |
+| GPTQ XINT8, synonyms | 22.9 / 33.2 | 20.6 / 29.3 | 23.8 / 34.7 |
+
+- **The text path reproduces the COCO result:** 24.7 %, as with the embeddings saved at export.
+- **Synonyms cost the quantized model twice FP32's relative loss.** On the renamed categories FP32 loses 4.4 points
+  (11 %) and the quantized model 5.8 points (22 %). The categories not renamed move by 0.2 and 0.3 points.
+- **The container gives that result:** with the synonyms it scores 22.9 % and 20.6 %. Its 70,687 detections are
+  identical to ONNX Runtime CPU run in the same environment (`compare_ignite_vs_cpu_same_env.log`). Against the CPU
+  run in another environment they differ in the fifth decimal of some scores and by three boxes, because ONNX Runtime
+  1.22 and 1.30 compute the text embeddings to slightly different floats (`compare_ignite_vs_cpu_resnet_env17.log`).
+
+**Through `YoloWorldPipeline`** (MEASURED, `bus.jpg`, a check and not a sitting; `pipeline_npu_check.log`):
+- **Opening and switching:** opening the pipeline with five names took 565 ms. `set_classes` to six other names on the
+  open session took 90.1 ms.
+- **Native ingress, 50 frames:** glass-to-glass 39.770 ms, made of:
+
+  | Step | Mean |
+  |---|---:|
+  | preprocessing | 0.608 ms |
+  | NPU segments | 18.673 ms |
+  | attention host steps | 8.673 ms |
+  | head readback | 0.878 ms |
+  | postprocessing | 10.913 ms |
+
+  Postprocessing is numpy: dequantizing the 512-channel visual features, the contrastive products, DFL and NMS.
+  `(q - zp) * s @ E.T` equals `(q @ E.T - zp * E.sum(1)) * s`, a product on the int8 values with the scale applied
+  once, which is the next lever.
+- **Native and numpy ingress give different detections.** The native letterbox differs from numpy's by a code in some
+  pixels. Numpy ingress reproduces the detections above exactly; native ingress gives 12 others (bus 0.715 with a
+  taller box).
+
+**Not done:**
+- An open-vocabulary benchmark (LVIS or similar). COCO with synonyms is the only scored vocabulary change here.
+- A latency and energy sitting against AMD's stack and the CPU.
+- A native contrastive decode.
+- Non-ASCII class names.
+- The full 5,000 images.
+- An Ignition task. It waits for this work to reach ignite-xdna's `main`.

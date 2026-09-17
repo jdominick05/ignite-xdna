@@ -1,0 +1,55 @@
+$ pipelines/yolow/5_eval_map.py --model <ignite-xdna main>\models\yolov8s-worldv2_cut_xint8_gptqcv2.onnx --ep cpu --n 300 --images <ignite-xdna main>\data\coco\val2017 --ann <ignite-xdna main>\data\coco\annotations\instances_val2017.json --dets <scratch>/yolow/vocab_evals\dets_gptq_synonyms.json --vocabulary <ignite-xdna worktree>\pipelines\yolow\vocabularies\coco_synonyms.txt
+loading annotations into memory...
+Done (t=0.28s)
+creating index...
+index created!
+vocabulary: <ignite-xdna worktree>\pipelines\yolow\vocabularies\coco_synonyms.txt, 23 categories renamed: person -> human, bicycle -> bike, car -> automobile, motorcycle -> motorbike, airplane -> aircraft, truck -> lorry, boat -> ship, traffic light -> stoplight, fire hydrant -> hydrant, handbag -> purse, sports ball -> ball, cup -> mug, donut -> doughnut, couch -> sofa, potted plant -> houseplant, dining table -> table, tv -> television, laptop -> notebook computer, mouse -> computer mouse, remote -> remote control, cell phone -> mobile phone, refrigerator -> fridge, hair drier -> hair dryer
+model: head-cut (6 outputs), contrastive + numpy decode, input 640x640
+eval : 300 images, conf 0.001, iou 0.7, max_det 300, per-class NMS
+  [ 300/300]  infer 93.11 ms  elapsed  33.8s
+
+Timing (300 images):
+  mean   : 93.11 ms  (10.7 fps)
+  median : 93.32 ms
+  p95    : 101.43 ms
+wrote 70690 detections to <scratch>/yolow/vocab_evals\dets_gptq_synonyms.json
+Loading and preparing results...
+DONE (t=0.23s)
+creating index...
+index created!
+Running per image evaluation...
+Evaluate annotation type *bbox*
+DONE (t=1.64s).
+Accumulating evaluation results...
+DONE (t=0.76s).
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.229
+ Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] = 0.332
+ Average Precision  (AP) @[ IoU=0.75      | area=   all | maxDets=100 ] = 0.248
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.151
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.331
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.288
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=  1 ] = 0.238
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets= 10 ] = 0.430
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.464
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.291
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.542
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.559
+Running per image evaluation...
+Evaluate annotation type *bbox*
+DONE (t=0.63s).
+Accumulating evaluation results...
+DONE (t=0.23s).
+
+renamed categories only (23):
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.206
+ Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] = 0.293
+ Average Precision  (AP) @[ IoU=0.75      | area=   all | maxDets=100 ] = 0.228
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.155
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.263
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.302
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=  1 ] = 0.250
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets= 10 ] = 0.432
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.458
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.275
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.486
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.557

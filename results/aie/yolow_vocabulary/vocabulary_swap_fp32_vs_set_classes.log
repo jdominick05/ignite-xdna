@@ -1,0 +1,9 @@
+$ python yolow_vocab_swap_check.py models/yolov8s-worldv2.pt models/yolov8s-worldv2_cut.onnx assets/bus.jpg <out> person bus window "road sign" shoe  (resnet_env; FP32 ONNX with swapped guides against PyTorch set_classes)
+5 classes, embedding norms [1.0, 1.0, 1.0, 1.0, 1.0]
+  /model.22/cv2.0/cv2.0.2/Conv_output_0: (1, 64, 80, 80), max |diff| 4.230e-04, SQNR 108.4 dB
+  /model.22/cv3.0/cv3.0.2/Conv_output_0: (1, 512, 80, 80), max |diff| 9.823e-05, SQNR 108.9 dB
+  /model.22/cv2.1/cv2.1.2/Conv_output_0: (1, 64, 40, 40), max |diff| 2.909e-04, SQNR 109.7 dB
+  /model.22/cv3.1/cv3.1.2/Conv_output_0: (1, 512, 40, 40), max |diff| 8.106e-05, SQNR 108.5 dB
+  /model.22/cv2.2/cv2.2.2/Conv_output_0: (1, 64, 20, 20), max |diff| 2.265e-04, SQNR 112.5 dB
+  /model.22/cv3.2/cv3.2.2/Conv_output_0: (1, 512, 20, 20), max |diff| 6.104e-05, SQNR 109.6 dB
+wrote <scratch>/yolow/vocab_bus5.npz
