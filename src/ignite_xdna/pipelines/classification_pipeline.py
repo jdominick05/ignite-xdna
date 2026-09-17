@@ -44,13 +44,13 @@ class ClassificationPipeline:
         self.input_hw: Tuple[int, int] = self.session.input_hw
         self.in_channels: int = self.session.in_channels
 
-    def predict_sync(self, pooled_features: np.ndarray) -> Tuple[np.ndarray, ClassificationTimings]:
-        """Pooled feature vector [Cin] -> probabilities [Cout] and stage latencies."""
+    def predict_sync(self, input_data: np.ndarray) -> Tuple[np.ndarray, ClassificationTimings]:
+        """Input data [Cin] or [C, H, W] -> probabilities [Cout] and stage latencies."""
         session = self.session
         if session is None:
             raise RuntimeError("ClassificationPipeline is closed")
         t0 = time.perf_counter()
-        session.stage_pooled(pooled_features)
+        session.stage_input(input_data)
         t1 = time.perf_counter()
         session.dispatch()
         t2 = time.perf_counter()

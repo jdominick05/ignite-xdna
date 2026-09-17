@@ -572,7 +572,7 @@ def lower_yolov8n(model_or_path, host_regions: Sequence[str] = (), silu_sigmoid:
     absorbed_adds: set = set()  # residual Adds a convolution completed (with HardSwish after, the Add's own q is never built)
 
     for node in G.g.node:
-        if cls_head is not None and node.name in cls_head.consumed_nodes:
+        if node.name not in region_of and cls_head is not None and node.name in cls_head.consumed_nodes:
             if node == cls_head.gemm_node:
                 in_q = cls_head.input_q if (cls_head.input_q in tensors or cls_head.input_q in views) else None
                 if in_q is None:
