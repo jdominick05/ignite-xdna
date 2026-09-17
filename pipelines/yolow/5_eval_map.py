@@ -9,6 +9,11 @@ YOLO-World v2 step 5: COCO mAP on val2017.
 
 Evaluation settings follow ultralytics/COCO convention:
 conf 0.001 and per-class NMS at IoU 0.7, keeping up to 300 boxes.
+
+--vocabulary FILE prompts each COCO category with the FILE's line instead of its name (80 lines, COCO's order; e.g.
+vocabularies/coco_synonyms.txt): the text encoder of 6_text_encoder.py embeds them, the model's four text guides are
+rewritten (a copy of the model for ONNX Runtime, EngineSession.set_host_constants for --ep ignite) and the contrastive
+decode uses the new embeddings. Besides mAP over all 80 categories it prints mAP over the renamed ones alone.
 """
 import argparse
 import json
@@ -86,6 +91,9 @@ def main():
     ap.add_argument("--max-det", type=int, default=300)
     ap.add_argument("--agnostic", action="store_true")
     ap.add_argument("--txt-feats", default=None)
+    ap.add_argument("--vocabulary", default=None, help="one prompt per COCO category, in COCO's order (see above)")
+    ap.add_argument("--text-encoder", default=str(Path(__file__).resolve().parents[2] / "models" / "yolow_text_encoder.onnx"))
+    ap.add_argument("--text-bundle", default=str(Path(__file__).resolve().parents[2] / "models" / "yolow_text.npz"))
     ap.add_argument("--cache-key", default=None)
     ap.add_argument("--xclbin", default=None)
     ap.add_argument("--fresh", action="store_true")
@@ -111,10 +119,37 @@ def main():
         img_ids = img_ids[: args.n]
 
     txt_feats = np.load(args.txt_feats) if args.txt_feats else yw.load_coco_txt_feats()
+    guides, renamed = None, []
+    model_path = args.model
+    if args.vocabulary:
+        sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
+        from ignite_xdna.pipelines.yolow_text import YoloWorldText
+        prompts = [line.strip() for line in open(args.vocabulary, encoding="utf-8") if line.strip()]
+        if len(prompts) != len(yw.COCO_CLASSES):
+            raise SystemExit(f"{args.vocabulary}: {len(prompts)} prompts, need one per COCO category ({len(yw.COCO_CLASSES)})")
+        renamed = [i for i, (p, c) in enumerate(zip(prompts, yw.COCO_CLASSES)) if p != c]
+        txt_feats, guides = YoloWorldText(args.text_encoder, args.text_bundle).vocabulary(prompts)
+        print(f"vocabulary: {args.vocabulary}, {len(renamed)} categories renamed: "
+              f"{', '.join(f'{yw.COCO_CLASSES[i]} -> {prompts[i]}' for i in renamed)}")
+        if args.ep != "ignite":
+            import onnx
+            import tempfile
+            from onnx import numpy_helper
+            m = onnx.load(args.model)
+            hit = [t.name for t in m.graph.initializer if t.name in guides]
+            if sorted(hit) != sorted(guides):
+                raise SystemExit(f"{args.model} lacks text guides {sorted(set(guides) - set(hit))}")
+            for t in m.graph.initializer:
+                if t.name in guides:
+                    t.CopyFrom(numpy_helper.from_array(guides[t.name], t.name))
+            model_path = os.path.join(tempfile.mkdtemp(prefix="yolow_vocab_"), f"{stem}_vocab.onnx")
+            onnx.save(m, model_path)
     if args.ep == "ignite":
         sess, imgsz, run_fn, decode_fn, desc = build_ignite_forward(args.model, args.conf, txt_feats)
+        if guides is not None:
+            print(f"host constants replaced: {sess.set_host_constants(guides)}")
     else:
-        sess = build_session(args.model, args.ep, cache_key, args.xclbin,
+        sess = build_session(model_path, args.ep, cache_key, args.xclbin,
                              log_severity=args.log)
         imgsz = yw.input_size(sess.get_inputs()[0].shape, args.model)
         run_fn, decode_fn, desc = build_forward(sess, args.conf, imgsz, txt_feats)
@@ -183,6 +218,15 @@ def main():
     ev.evaluate()
     ev.accumulate()
     ev.summarize()
+    if renamed:
+        sub = COCOeval(coco, coco_dt, "bbox")
+        if args.n:
+            sub.params.imgIds = img_ids
+        sub.params.catIds = [yw.COCO_IDS[i] for i in renamed]
+        sub.evaluate()
+        sub.accumulate()
+        print(f"\nrenamed categories only ({len(renamed)}):")
+        sub.summarize()
 
 
 if __name__ == "__main__":
