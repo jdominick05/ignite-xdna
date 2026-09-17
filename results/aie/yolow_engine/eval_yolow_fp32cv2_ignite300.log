@@ -1,0 +1,35 @@
+$ PYTHONPATH=<ignite-xdna worktree>/src <conda envs>/mlir-aie-iron/python.exe pipelines/yolow/5_eval_map.py --model <scratch>/yolow/yolow_fp32cv2.ignite --ep ignite --n 300 (COCO val2017, numpy letterbox)
+loading annotations into memory...
+Done (t=0.27s)
+creating index...
+index created!
+model: graph-engine container (13 segments), contrastive + numpy decode, input 640x640
+eval : 300 images, conf 0.001, iou 0.7, max_det 300, per-class NMS
+  [ 300/300]  infer 52.77 ms  elapsed  20.7s
+
+Timing (300 images):
+  mean   : 52.77 ms  (18.9 fps)
+  median : 52.22 ms
+  p95    : 58.43 ms
+wrote 76649 detections to <scratch>/yolow/fp32cv2_ignite300_dets.json
+Loading and preparing results...
+DONE (t=0.15s)
+creating index...
+index created!
+Running per image evaluation...
+Evaluate annotation type *bbox*
+DONE (t=1.81s).
+Accumulating evaluation results...
+DONE (t=0.70s).
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.245
+ Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] = 0.355
+ Average Precision  (AP) @[ IoU=0.75      | area=   all | maxDets=100 ] = 0.264
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.169
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.345
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.293
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=  1 ] = 0.243
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets= 10 ] = 0.430
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.465
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.286
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.543
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.570
