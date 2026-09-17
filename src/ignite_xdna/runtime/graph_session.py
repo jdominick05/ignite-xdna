@@ -101,6 +101,7 @@ class HostStep:
             raise ValueError(f"{session.path}: host model {seg['blob']} does not match the manifest's sha256")
         self.name = seg.get("name", seg["blob"])
         self.session = session
+        self.blob = blob
         from ignite_xdna.pipelines.power import ort_session_options  # the power mode covers host segments too
         self.ort_session = ort.InferenceSession(blob, ort_session_options(), providers=["CPUExecutionProvider"])
         self.input_name = self.ort_session.get_inputs()[0].name
@@ -120,6 +121,39 @@ class HostStep:
         self.out_base, self.out_bytes = _region(self.pout)
         self._x = np.empty((1, in_channels, int(self.pin["height"]), int(self.pin["width"])), dtype=np.uint8)
         self.last_ms = 0.0
+
+    def initializer_names(self) -> List[str]:
+        import onnx
+        return [t.name for t in onnx.load_from_string(self.blob).graph.initializer]
+
+    def replace_constants(self, values: Dict[str, np.ndarray]) -> List[str]:
+        """Rebuild the ONNX Runtime session with the named float initializers replaced; returns the names replaced.
+
+        A value keeps the initializer's dtype and rank; other dimensions may change (YOLO-World's text guides take
+        the vocabulary size). Stored intermediate shapes are dropped so ONNX Runtime infers them again. The NPU
+        segments never see these constants, so the container's program is unchanged.
+        """
+        import onnx
+        import onnxruntime as ort
+        from onnx import numpy_helper
+        from ignite_xdna.pipelines.power import ort_session_options
+        model = onnx.load_from_string(self.blob)
+        done = []
+        for t in model.graph.initializer:
+            if t.name not in values:
+                continue
+            old = numpy_helper.to_array(t)
+            new = np.asarray(values[t.name])
+            if new.dtype != old.dtype or new.ndim != old.ndim:
+                raise ValueError(f"{self.name}: {t.name} is {old.dtype} rank {old.ndim}, got {new.dtype} rank {new.ndim}")
+            t.CopyFrom(numpy_helper.from_array(np.ascontiguousarray(new), t.name))
+            done.append(t.name)
+        if done:
+            del model.graph.value_info[:]
+            self.blob = model.SerializeToString()
+            self.ort_session = ort.InferenceSession(self.blob, ort_session_options(), providers=["CPUExecutionProvider"])
+            self.input_name = self.ort_session.get_inputs()[0].name
+        return done
 
     def run(self) -> None:
         s = self.session
@@ -304,6 +338,19 @@ class EngineSession:
         self.last_host_ms = sum(ms for ms, seg in zip(seg_ms, self.segments) if seg["kind"] == "host")
         self.last_dispatch_ms = sum(seg_ms) - self.last_host_ms
         return self.last_dispatch_ms
+
+    def set_host_constants(self, values: Dict[str, np.ndarray]) -> Dict[str, List[str]]:
+        """Replace named float initializers in the host segments' models ({host segment name: names replaced}).
+
+        Only host segments run ONNX Runtime, so this changes what the CPU computes between NPU segments and never the
+        NPU program. YOLO-World v2 uses it for a vocabulary chosen at run time: its text guides are initializers of
+        the attention regions. Every name must exist in some host segment.
+        """
+        replaced = {step.name: step.replace_constants(values) for step in self._host_steps}
+        missing = sorted(set(values) - {n for names in replaced.values() for n in names})
+        if missing:
+            raise KeyError(f"{self.path}: no host segment has initializers {missing}")
+        return {k: v for k, v in replaced.items() if v}
 
     def read_tensor(self, name: str) -> np.ndarray:
         """Debug helper: sync one tensor from the device and return uint8 [C][H][W]."""

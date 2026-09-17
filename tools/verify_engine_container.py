@@ -53,6 +53,9 @@ def main() -> int:
     ap.add_argument("--device", type=int, default=0)
     ap.add_argument("--iters", type=int, default=20, help="extra timed dispatches after the checked one")
     ap.add_argument("--json", default=None, help="write per-layer results and timings here")
+    ap.add_argument("--host-constants", default=None, metavar="NPZ",
+                    help="replace these initializers (npz keys are their names) in the host segments and in the "
+                         "reference model, e.g. YOLO-World text guides for another vocabulary")
     args = ap.parse_args()
 
     with IgniteModelReader(args.container) as reader:
@@ -60,7 +63,27 @@ def main() -> int:
     task = manifest.get("task", "detect")
     ge = manifest["graph_engine"]
     host_regions = [s["name"] for s in ge.get("segments", []) if s["kind"] == "host"]
-    ir = graph_ir.lower_yolov8n(args.model, host_regions=host_regions)
+    model = args.model
+    constants = {}
+    if args.host_constants:
+        import onnx
+        from onnx import numpy_helper
+        with np.load(args.host_constants) as npz:
+            constants = {k: npz[k] for k in npz.files}
+        model = onnx.load(args.model)
+        found = []
+        for t in model.graph.initializer:
+            if t.name in constants:
+                t.CopyFrom(numpy_helper.from_array(constants[t.name], t.name))
+                found.append(t.name)
+        if sorted(found) != sorted(constants):
+            print(f"[verify] {args.model} has no initializers {sorted(set(constants) - set(found))}")
+            return 2
+        # The lowering reads the stored intermediate shapes; ONNX Runtime only warns that the attention outputs'
+        # stored class dimension no longer matches.
+        print(f"[verify] host constants from {Path(args.host_constants).name}: "
+              f"{', '.join(f'{k} {constants[k].shape}' for k in sorted(constants))}", flush=True)
+    ir = graph_ir.lower_yolov8n(model, host_regions=host_regions)
     ws = es.plan_workspace(ir)
     if ws.nbytes != int(ge["workspace_bytes"]) or ir.input != ge["input_tensor"]:
         print(f"[verify] container plan differs from {args.model}: workspace {ge['workspace_bytes']} vs {ws.nbytes}")
@@ -79,6 +102,8 @@ def main() -> int:
     sess = session_cls(args.container, device_index=args.device)
     results, timings, host_timings = [], [], []
     try:
+        if constants:
+            print(f"[verify] replaced in host segments: {sess.set_host_constants(constants)}", flush=True)
         p = sess.input_placement
         h = int(p["halo"])
         plane = sess._input_plane
