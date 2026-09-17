@@ -41,6 +41,11 @@ from ignite_xdna.pipelines.pose_pipeline import REG_MAX, _dequantize, _sigmoid, 
 HEAD_ORDER = ("p3_box", "p4_box", "p5_box", "p3_cls", "p4_cls", "p5_cls")   # cls: the 512-channel visual features
 
 
+def _pow2_zero_point_0(scale_zero_point: Tuple[float, int]) -> bool:
+    scale, zero_point = scale_zero_point
+    return int(zero_point) == 0 and scale > 0 and float(np.log2(scale)).is_integer()
+
+
 @dataclass
 class WorldDetection:
     """One detection in original image pixels."""
@@ -97,6 +102,8 @@ class YoloWorldDecoder:
         ``{name: (scale, zero_point)}`` as ``GraphSession.run_yolo_monolithic`` returns them. With ``conf_thres``
         only anchors whose best logit clears the threshold's logit are box-decoded (identical detections).
         """
+        if isinstance(heads, Mapping) and scales is not None and all(_pow2_zero_point_0(scales[n]) for n in HEAD_ORDER):
+            return self._decode_int8(heads, scales, conf_thres)
         outs = [heads[n] for n in HEAD_ORDER] if isinstance(heads, Mapping) else list(heads)
         if scales is not None:
             outs = [_dequantize(o, scales[n]) for o, n in zip(outs, HEAD_ORDER)]
@@ -130,6 +137,53 @@ class YoloWorldDecoder:
         wh = x2y2 - x1y1
         xywh = np.concatenate([cxcy, wh], 1) * st[:, None]
         return np.concatenate([xywh, _sigmoid(cls.astype(np.float32, copy=False))], 1)
+
+    def _decode_int8(self, heads: Mapping[str, np.ndarray], scales: Mapping[str, Tuple[float, int]],
+                     conf_thres: Optional[float]) -> np.ndarray:
+        """``decode`` on int8 heads whose scales are powers of two at zero point 0, bit for bit, in about half the time.
+
+        The contrastive product runs on the int8 values with the head scale folded into the level's logit scale:
+        ``((q * s) @ E) * S == (q @ E) * (s * S)`` exactly when ``s`` is a power of two, because scaling by a power of
+        two is exact in floating point (the product and every partial sum are scaled, not rounded). Anchors are pruned
+        level by level on the same per-anchor maxima, so no full logit tensor is concatenated, and only the kept
+        anchors' box distributions are dequantized.
+        """
+        c = None if conf_thres is None else min(max(float(conf_thres), 1e-12), 1.0 - 1e-12)
+        t = None if c is None else np.log(c / (1.0 - c))
+        emb_t = self.embeddings.T
+        nc = self.embeddings.shape[0]
+        cls_kept, box_kept, keeps = [], [], []
+        offset = 0
+        for i in range(3):
+            q = heads[HEAD_ORDER[3 + i]]
+            s = float(scales[HEAD_ORDER[3 + i]][0])
+            hw = q.shape[2] * q.shape[3]
+            sim = np.transpose(q[0].astype(np.float32), (1, 2, 0)) @ emb_t
+            logits = (sim * np.float32(s * self.contrastive_scales[i]) + np.float32(self.contrastive_biases[i]))
+            logits = logits.reshape(hw, nc)
+            keep = np.arange(hw) if t is None else np.flatnonzero(logits.max(1) > t)
+            if keep.size:
+                cls_kept.append(logits[keep])
+                box_kept.append(_dequantize(heads[HEAD_ORDER[i]].reshape(1, 4 * REG_MAX, -1)[:, :, keep],
+                                            scales[HEAD_ORDER[i]]))
+                keeps.append(keep + offset)
+            offset += hw
+        if not keeps:
+            return np.zeros((1, 4 + nc, 0), np.float32)
+        keep = np.concatenate(keeps)
+        cls = np.ascontiguousarray(np.concatenate(cls_kept, 0).T)[np.newaxis]
+        box = np.concatenate(box_kept, 2)
+        anc, st = self._anchors[:, :, keep], self._strides[:, keep]
+        n = box.shape[2]
+        d = _softmax(box.reshape(1, 4, REG_MAX, n).transpose(0, 2, 1, 3).copy(), axis=1)
+        bins = np.arange(REG_MAX, dtype=np.float32).reshape(1, REG_MAX, 1, 1)
+        ltrb = (d * bins).sum(1)
+        x1y1 = anc - ltrb[:, 0:2]
+        x2y2 = anc + ltrb[:, 2:4]
+        cxcy = (x1y1 + x2y2) * 0.5
+        wh = x2y2 - x1y1
+        xywh = np.concatenate([cxcy, wh], 1) * st[:, None]
+        return np.concatenate([xywh, _sigmoid(cls)], 1)
 
     def postprocess(self, output: np.ndarray, pad: Tuple[int, int], scale: float,
                     conf_thres: Optional[float] = None, iou_thres: Optional[float] = None,

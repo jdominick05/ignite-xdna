@@ -125,6 +125,27 @@ class Decoder(unittest.TestCase):
         b = self.dec.decode(floats)
         self.assertTrue(np.array_equal(a, b))
 
+    def test_int8_fast_path_is_bit_exact_with_pruning_and_falls_back_off_power_of_two(self):
+        """The int8 decode (scale folded into the contrastive product, per-level prune, kept boxes only) equals the
+        float reference bit for bit, with and without a threshold; a scale that is not a power of two takes the
+        reference path."""
+        rng = np.random.default_rng(8)
+        q = {n: rng.integers(-128, 128, h.shape, dtype=np.int8) for n, h in zip(HEAD_ORDER, self.heads)}
+        for level, g in enumerate((80, 40, 20)):   # confident anchors: visual features along a class embedding
+            for a in rng.choice(g * g, 4, replace=False):
+                q[HEAD_ORDER[3 + level]][0, :, a // g, a % g] = np.clip(np.round(self.emb[level] * 900), -128, 127)
+        scales = {n: (0.25 if n.endswith("box") else 0.125, 0) for n in HEAD_ORDER}
+        floats = [(q[n].astype(np.float32) - np.float32(0)) * np.float32(scales[n][0]) for n in HEAD_ORDER]
+        for conf in (None, 0.25, 0.001):
+            a = self.dec.decode(q, scales, conf)
+            b = self.dec.decode(floats, None, conf)
+            self.assertEqual(a.shape, b.shape, conf)
+            self.assertTrue(np.array_equal(a, b), conf)
+        self.assertGreater(self.dec.decode(q, scales, 0.25).shape[2], 0)
+        odd = dict(scales, p4_cls=(0.1, 0))
+        floats_odd = [(q[n].astype(np.float32) - np.float32(0)) * np.float32(odd[n][0]) for n in HEAD_ORDER]
+        self.assertTrue(np.array_equal(self.dec.decode(q, odd, 0.25), self.dec.decode(floats_odd, None, 0.25)))
+
     def test_pruned_decode_gives_the_same_detections(self):
         pad, scale = (0, 0), 1.0
         full = self.dec.postprocess(self.dec.decode(self.heads), pad, scale)
