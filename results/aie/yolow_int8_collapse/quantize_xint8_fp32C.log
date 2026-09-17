@@ -1,0 +1,10 @@
+$ <home>\miniforge3\envs\resnet_env\python.exe pipelines/yolow/3b_quantize_cut.py --in <ignite-xdna main>\models\yolov8s-worldv2_cut.onnx --calib-dir <ignite-xdna main>\data\coco_calib --limit 200 --out <scratch>/yolow\mixed\yolov8s-worldv2_cut_xint8_fp32C.onnx --exclude /model.12/attn/ --exclude /model.15/attn/ --exclude /model.18/attn/ --exclude /model.21/attn/ --exclude /model.22/cv3.0/cv3.0.2/Conv --exclude /model.22/cv3.1/cv3.1.2/Conv --exclude /model.22/cv3.2/cv3.2.2/Conv
+CPU threads: 8
+input model: <ignite-xdna main>\models\yolov8s-worldv2_cut.onnx, 257 nodes, 6 outputs, 640x640 input
+keeping 47 nodes in FP32: /model.12/attn/, /model.15/attn/, /model.18/attn/, /model.21/attn/, /model.22/cv3.0/cv3.0.2/Conv, /model.22/cv3.1/cv3.1.2/Conv, /model.22/cv3.2/cv3.2.2/Conv
+calibrating on 200 images at 640x640
+quantizing with XINT8 -> <scratch>/yolow\mixed\yolov8s-worldv2_cut_xint8_fp32C.onnx
+wrote <scratch>/yolow\mixed\yolov8s-worldv2_cut_xint8_fp32C.onnx
+ops: [('DequantizeLinear', 339), ('QuantizeLinear', 219), ('Mul', 118), ('Constant', 89), ('Conv', 67), ('HardSigmoid', 57), ('Slice', 16), ('Concat', 13), ('Reshape', 12), ('Add', 10), ('Einsum', 4), ('ReduceMax', 4), ('Div', 4), ('Sigmoid', 4), ('Unsqueeze', 4), ('MaxPool', 3), ('Resize', 2)]
+QuantizeLinear 219  DequantizeLinear 339
+first node: Constant 

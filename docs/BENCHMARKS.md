@@ -3457,6 +3457,14 @@ Three findings:
    XINT8 PTQ on the stock 5D cross-attention blocks destroys attention dynamic range, collapsing stock
    XINT8 mAP to 1.8%. Open-vocabulary architectures on XDNA1 require either hybrid CPU/iGPU attention
    execution or re-distillation into standard fixed-class detection heads.
+   **Superseded in part (2026-09-16):** the collapse does not come from the attention blocks.
+   - Keeping all four in FP32 still scores 1.9 % on ONNX Runtime's CPU.
+   - Keeping only the four C2fAttn output convolutions (`/model.{12,15,18,21}/cv2/`) in FP32 recovers 24.5 %, on
+     the CPU and on AMD's stack alike, the latter at 96 ms per image with 110 of 1,049 nodes on the NPU.
+   - The graph engine lowers the model with the attention blocks on the host.
+
+   Details:
+   [YOLO-World v2 on the graph engine](#yolo-world-v2-on-the-graph-engine-the-text-attention-lowers-and-xint8s-collapse-is-four-convolutions-2026-09-16-desktop-2).
 
 ### Category D: Monocular Depth Estimation (MiDaS v2.1 Small)
 
@@ -8823,3 +8831,72 @@ contexts; against the median idle, 35.110 W over 14 baselines and 34.766 W over 
 **Not done:** a webcam with `--fresh` (the camera-rate period is untested on silicon); other models' energy with the
 switch; the NPU's `balanced` device mode as an intermediate step (YOLOv8s at 30 fps would need it); any host but the
 8700G.
+
+## YOLO-World v2 on the graph engine: the text attention lowers, and XINT8's collapse is four convolutions (2026-09-16, Desktop 2)
+
+AMD's stack cannot run YOLO-World v2 usefully: plain XINT8 places 48 of 1,081 nodes on the NPU and scores 1.8 % mAP
+against 37.0 % in FP32 ([above](#category-c-third-candidate-yolo-world-v2-vision-language-decoupled-cross-attention)).
+This section asks whether the graph engine can, without a kernel change. Evidence: `results/aie/yolow_int8_collapse/`
+(each log with its command). Code: `0d4583d` (host regions around YOLO-World's attention, and
+`pipelines/yolow/3b_quantize_cut.py --exclude`). All accuracy figures are COCO val2017 mAP@50-95 on the **first 300 or
+500 images**, which read higher than the full set (FP32: 41.5 % on 500 against 37.0 % on 5,000), so compare rows of
+the same subset only.
+
+**The engine lowers it** (MEASURED, offline). The four MaxSigmoidAttnBlocks share one text guide, built from Constant
+nodes inside `/model.12/attn/`, and the host-region extractor had counted it as a second output of that region and
+a second input of the others. With constant-derived tensors excluded from region boundaries, host regions
+`/model.{12,15,18,21}/attn/` lower plain XINT8 YOLO-World v2 to 70 layers with four host layers. It schedules in
+2,446 rounds, a 36.7 MB workspace and 31.18 MB of weight packets, and every tensor equals ONNX Runtime's uint8
+intermediates on `bus.jpg` (`tests/test_engine_host_layer.py`, 19 passed). All 67 convolutions reach the NPU,
+against none in AMD's partition. Whole C2fAttn blocks are still refused: their input is a Concat, not a physical
+tensor.
+
+**The collapse is in the quantized model, not AMD's EP, and not in the attention** (MEASURED, CPU; Quark 0.11rc1 XINT8,
+200 calibration images, MinMSE power-of-two, CLE on):
+
+| Model | Images | mAP@50-95 | mAP@50 | Log |
+|---|---:|---:|---:|---|
+| FP32 cut | 500 | 41.5 % | 57.1 % | `eval_fp32_cut_cpu500.log` |
+| FP32 cut, SiLU's Sigmoid swapped for the HardSigmoid XINT8 emits | 500 | 30.5 % | 43.6 % | `eval_fp32_hardsigmoid_cpu500.log` |
+| plain XINT8 | 500 | 2.1 % | 3.4 % | `eval_xint8_cut_cpu500.log` |
+| XINT8, attention blocks FP32 (A) | 500 | 1.9 % | 3.3 % | `eval_xint8_fp32A_attention_cpu500.log` |
+| XINT8, text projection convs `cv3.*.2` FP32 (B) | 500 | 2.1 % | 3.4 % | `eval_xint8_fp32B_projection_cpu500.log` |
+| XINT8, A and B together (C) | 500 | 1.9 % | 3.3 % | `eval_xint8_fp32C_attention_projection_cpu500.log` |
+| FP32 cut with HardSigmoid | 300 | 31.2 % | — | `eval_fp32_hardsigmoid_cpu300.log` |
+| plain XINT8, every activation QDQ pair removed (int8 weights, float activations) | 300 | 0.2 % | — | `eval_weights_only_bypass_cpu300.log` |
+| HardSigmoid FP32, weights rounded to power-of-two int8 except the four C2fAttn `cv2` convs | 300 | 29.5 % | — | `eval_weights_pow2_keep4_cpu300.log` |
+| XINT8, the four C2fAttn `cv2` convs FP32 (D) | 300 | **24.5 %** | 35.5 % | `eval_xint8_fp32D_c2fattn_cv2_cpu300.log` |
+| D on AMD's stack (Vitis AI EP, 110 NPU / 939 CPU nodes, 96.34 ms per image at the end) | 300 | 24.5 % | 35.4 % | `eval_xint8_fp32D_c2fattn_cv2_amd_npu300.log`, `amd_ep_placement_xint8_fp32D.log` |
+
+- **The SiLU-to-HardSigmoid swap alone costs 11 points** (41.5 to 30.5 % on 500 images) before any rounding. Every
+  model the engine runs carries it, because the kernel's activation epilogue is the HardSigmoid form; this is the
+  first measurement of its accuracy cost here.
+- **Weight rounding breaks the model, and four layers carry it.** Float activations with Quark's int8 weights score
+  0.2 %. Rounding every conv weight with the MSE-best power-of-two scale, without CLE, sends the heads to between
+  −12.4 and +4.9 dB SQNR, although the weights themselves keep a median 29.3 dB (YOLOv8s: 30.2 dB,
+  `yolow_weight_ranges.log`). Rounding one layer at a time, the worst head falls to −12.9 dB for `/model.15/cv2`
+  alone, −1.8 dB for `/model.18/cv2`, 6.3 dB for `/model.12/cv2` and 14.8 dB for `/model.21/cv2`, against a median
+  33.5 dB over all 67 layers (`yolow_layer_sensitivity.log`). Leaving those four in float lifts the heads to
+  11.2-14.7 dB and the mAP to 29.5 %.
+- **Why those four:** each is the 1x1 convolution after the C2fAttn Concat. The weights reading the attention
+  branch are the largest in the layer (max |w| 4.69 against at most 1.25 elsewhere in `/model.15/cv2`, 2.32 against
+  1.15 in `/model.18/cv2`), so one per-tensor power-of-two scale leaves the other channels, median |w| about 0.03,
+  with a step comparable to themselves (`yolow_concat_ranges.log`). Per-output-channel scales would not help: the
+  disparity is across input channels.
+- **With those four in FP32, Quark's XINT8 recovers to 24.5 %** on the same 300 images: 5 points below float
+  activations. AMD's stack runs that model at the same accuracy but places 110 of 1,049 nodes on the NPU and takes
+  96.34 ms per image, no faster than the model on the CPU (87.83 ms in the same script).
+
+**What the engine still needs** (not built):
+- **Host regions over a Concat view:** variant D's four FP32 convolutions read the C2fAttn Concat, which spans
+  several physical tensors. Refused today: "input /model.12/Concat_output_0_QuantizeLinear_Output is not a physical
+  tensor". That makes eight host layers and nine dispatches.
+- **Or an exact split** of each sensitive convolution into one over the three ordinary Concat inputs and one over
+  the attention branch, summed before the activation. Every layer could then stay on the NPU, but the kernel applies
+  the activation before the residual add, so that is a kernel program change for the maintainer.
+- An open-vocabulary head pipeline (512-channel egress and the contrastive decode) and a same-sitting comparison
+  against AMD's 96.34 ms, the CPU, and DirectML on the iGPU (40.42 ms per image in FP32, whose full-set accuracy on the CPU is 37.0 %, above).
+
+**Not done:** the full 5,000 images for variant D; variant E (the attention blocks also FP32; its quantization was
+killed for low memory); anything on the engine's NPU for YOLO-World; recovering the HardSigmoid cost (QAT or an exact
+SiLU epilogue).
