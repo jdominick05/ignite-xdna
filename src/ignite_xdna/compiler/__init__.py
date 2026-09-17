@@ -30,6 +30,7 @@ from .partitioner import (
     PartitionedGraph,
     build_synthetic_multi_layer_conv_model,
 )
+from .topology import TopologyFinding, audit_model, enforce
 from .scheduler import (
     MemTileMultiPassScheduler,
     SchedulePlan,
@@ -66,6 +67,9 @@ __all__ = [
     "CpuFallbackPartition",
     "PartitionedGraph",
     "build_synthetic_multi_layer_conv_model",
+    "TopologyFinding",
+    "audit_model",
+    "enforce",
     "MemTileMultiPassScheduler",
     "SchedulePlan",
     "PassDescriptor",

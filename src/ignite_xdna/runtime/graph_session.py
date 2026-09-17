@@ -713,3 +713,136 @@ class DenseGraphSession(EngineSession):
         t4 = time.perf_counter()
         return image, {"stage_ms": (t1 - t0) * 1e3, "npu_ms": (t2 - t1) * 1e3, "readback_ms": (t3 - t2) * 1e3,
                        "postprocess_ms": (t4 - t3) * 1e3}
+
+
+class ClassificationSession(EngineSession):
+    """Session for ``classify`` graph containers: ImageNet-style classification logits come back.
+
+    The model's weights and matrix multiplication are executed on the NPU as a 1x1 convolution
+    (k=1, s=1, p=0) across 20x20 tile geometry, eliminating all CPU host segments.
+    """
+
+    def __init__(self, container_path: Union[str, Path], device_index: int = 0,
+                 xclbin_cache_dir: Optional[Union[str, Path]] = None, map_workspace: bool = True, **_ignored):
+        super().__init__(container_path, device_index=device_index, xclbin_cache_dir=xclbin_cache_dir,
+                         map_workspace=map_workspace)
+        try:
+            self._init_classification()
+        except Exception:
+            self.close()
+            raise
+
+    def _init_classification(self) -> None:
+        m = self.ignite_manifest
+        if self.task != "classify":
+            raise ValueError(f"{self.path} is a {self.task} container; open it with GraphSession")
+        self.cls_meta = m["classification"]
+        ip = self.input_placement
+        self.input_hw: Tuple[int, int] = (int(ip["height"]), int(ip["width"]))
+        self.in_channels = int(m["input_shape"][1])
+        self.in_blocks = int(ip["blocks"])
+        self.num_classes = int(self.cls_meta["channels"])
+        self.scale = float(self.cls_meta["scale"])
+        self.zero_point = int(self.cls_meta["zero_point"])
+
+        qs = m["quant_scales"]
+        self.input_scale = float(qs["input_scale"])
+        self.input_zp = int(qs["input_zero_point"])
+
+        # Input buffer: blocks * (H + 2*halo) * (W + 2*halo) * 8
+        h, w, halo = int(ip["height"]), int(ip["width"]), int(ip["halo"])
+        self._cls_in_base = int(ip["base"])
+        self._cls_in_bytes = self.in_blocks * (h + 2 * halo) * (w + 2 * halo) * 8
+        self._cls_in_shape = (self.in_blocks, h + 2 * halo, w + 2 * halo, 8)
+
+        op = self.ge["placements"][self.cls_meta["tensor"]]
+        self._out_base = int(op["base"])
+        self._out_blocks = int(op["blocks"])
+        self._out_hw = (int(op["height"]), int(op["width"]))
+        self._out_region = self._out_blocks * self._out_hw[0] * self._out_hw[1] * 8
+
+    def stage_pooled(self, pooled_features: np.ndarray) -> None:
+        """Stage a pooled feature vector [Cin] or [1, Cin, 1, 1] into workspace at pixel (0, 0)."""
+        x = np.asarray(pooled_features)
+        x_flat = x.reshape(-1)
+        if x_flat.size != self.in_channels:
+            raise ValueError(f"expected {self.in_channels} features, got {x_flat.size}")
+
+        if np.issubdtype(x_flat.dtype, np.floating):
+            # Quantize float features
+            q = np.clip(np.round(x_flat.astype(np.float64) / self.input_scale) + self.input_zp, 0, 255).astype(np.uint8)
+        else:
+            q = x_flat.astype(np.uint8)
+
+        # Build blocks array initialized to ZP
+        blocks_arr = np.full(self._cls_in_shape, ZP, dtype=np.uint8)
+        ip = self.input_placement
+        halo = int(ip["halo"])
+
+        # Stage features at (y=0, x=0) across channel blocks
+        for b in range(self.in_blocks):
+            ch_start = b * 8
+            ch_end = min(ch_start + 8, self.in_channels)
+            blocks_arr[b, halo, halo, :ch_end - ch_start] = q[ch_start:ch_end]
+
+        if self._ws_map is not None:
+            self._ws_map[self._cls_in_base:self._cls_in_base + self._cls_in_bytes] = blocks_arr.reshape(-1)
+        else:
+            self.bo_ws.write(blocks_arr.reshape(-1), self._cls_in_base)
+        self.bo_ws.sync(self.harness.pyxrt.xclBOSyncDirection.XCL_BO_SYNC_BO_TO_DEVICE,
+                        self._cls_in_bytes, self._cls_in_base)
+
+    def stage_input(self, x: np.ndarray) -> None:
+        """Alias for stage_pooled or full quantized input staging."""
+        arr = np.asarray(x)
+        if arr.ndim == 3 and arr.shape[1:] == self.input_hw:
+            self.stage_quantized(arr)
+        else:
+            self.stage_pooled(arr)
+
+    def stage_quantized(self, chw: np.ndarray) -> None:
+        """Stage an already-quantized uint8 [C, H, W] tensor into workspace."""
+        c = chw.shape[0]
+        ip = self.input_placement
+        halo = int(ip["halo"])
+        h, w = int(ip["height"]), int(ip["width"])
+        blocks_arr = np.full(self._cls_in_shape, ZP, dtype=np.uint8)
+        padded = np.full((self.in_blocks * 8, h, w), ZP, dtype=np.uint8)
+        padded[:c] = chw
+        for b in range(self.in_blocks):
+            blocks_arr[b, halo:halo + h, halo:halo + w, :] = np.transpose(
+                padded[b * 8:(b + 1) * 8], (1, 2, 0)
+            )
+        if self._ws_map is not None:
+            self._ws_map[self._cls_in_base:self._cls_in_base + self._cls_in_bytes] = blocks_arr.reshape(-1)
+        else:
+            self.bo_ws.write(blocks_arr.reshape(-1), self._cls_in_base)
+        self.bo_ws.sync(self.harness.pyxrt.xclBOSyncDirection.XCL_BO_SYNC_BO_TO_DEVICE,
+                        self._cls_in_bytes, self._cls_in_base)
+
+    def read_logits(self) -> np.ndarray:
+        """Sync output tensor from device, extract pixel (0, 0) and dequantize to float32 logits."""
+        self.bo_ws.sync(self.harness.pyxrt.xclBOSyncDirection.XCL_BO_SYNC_BO_FROM_DEVICE,
+                        self._out_region, self._out_base)
+        if self._ws_map is not None:
+            raw = self._ws_map[self._out_base:self._out_base + self._out_region]
+        else:
+            raw = np.frombuffer(self.bo_ws.read(self._out_region, self._out_base), dtype=np.uint8)
+        blocks = raw.reshape(self._out_blocks, self._out_hw[0], self._out_hw[1], 8)
+        raw_u8 = blocks[:, 0, 0, :].reshape(-1)[:self.num_classes]
+        logits = (raw_u8.astype(np.float32) - float(self.zero_point)) * float(self.scale)
+        return logits
+
+    def run(self, pooled_features: np.ndarray, timeout_ms: int = 10000) -> Tuple[np.ndarray, Dict[str, float]]:
+        t0 = time.perf_counter()
+        self.stage_pooled(pooled_features)
+        t1 = time.perf_counter()
+        self.dispatch(timeout_ms=timeout_ms)
+        t2 = time.perf_counter()
+        logits = self.read_logits()
+        t3 = time.perf_counter()
+        return logits, {
+            "stage_ms": (t1 - t0) * 1e3,
+            "npu_ms": (t2 - t1) * 1e3,
+            "readback_ms": (t3 - t2) * 1e3,
+        }

@@ -285,6 +285,9 @@ class _Graph:
     def q_source(self, float_name: str):
         """For a float tensor produced by DequantizeLinear, return (uint8 name, scale, zp)."""
         n = self.by_output.get(float_name)
+        if n is not None and n.op_type == "QuantizeLinear":
+            s, z = self.scale_zp(n)
+            return n.output[0], s, z
         if n is None or n.op_type != "DequantizeLinear":
             raise ValueError(f"{float_name} is not the output of a DequantizeLinear")
         s, z = self.scale_zp(n)
@@ -459,6 +462,8 @@ def lower_yolov8n(model_or_path, host_regions: Sequence[str] = (), silu_sigmoid:
     model = onnx.load(str(model_or_path)) if not isinstance(model_or_path, onnx.ModelProto) else model_or_path
     model = onnx.shape_inference.infer_shapes(model)
     G = _Graph(model)
+    from ignite_xdna.compiler.passes import match_classification_head
+    cls_head = match_classification_head(G)
     regions = [_host_region(G, prefix) for prefix in host_regions]
     region_of = {name: r for r in regions for name in r["names"]}
     if len(region_of) != sum(len(r["names"]) for r in regions):
@@ -477,13 +482,23 @@ def lower_yolov8n(model_or_path, host_regions: Sequence[str] = (), silu_sigmoid:
 
     def dims_chw(float_name: str) -> Tuple[int, int, int]:
         d = G.shape(float_name)
+        if len(d) == 2 and d[0] == 1:
+            return int(d[1]), 20, 20
+        if len(d) == 4 and d[0] == 1 and d[2] == 1 and d[3] == 1:
+            return int(d[1]), 20, 20
         if len(d) != 4 or d[0] != 1:
             raise ValueError(f"{float_name}: unexpected shape {d}")
         return int(d[1]), int(d[2]), int(d[3])
 
     # Graph input: images (float) -> QuantizeLinear -> DequantizeLinear
     inp = G.g.input[0].name
-    q_in, s_in, z_in = G.q_sink(inp)
+    inp_vi = G.g.input[0]
+    if inp_vi.type.tensor_type.elem_type == onnx.TensorProto.UINT8:
+        dqs = [c for c in G.consumers.get(inp, []) if c.op_type == "DequantizeLinear"]
+        s_in, z_in = G.scale_zp(dqs[0]) if dqs else (cls_head.in_scale if cls_head else 1.0, ZP)
+        q_in = inp
+    else:
+        q_in, s_in, z_in = G.q_sink(inp)
     c, h, w = dims_chw(inp)
     tensors[q_in] = TensorInfo(q_in, c, h, w, s_in, z_in, producer="input")
 
@@ -557,6 +572,37 @@ def lower_yolov8n(model_or_path, host_regions: Sequence[str] = (), silu_sigmoid:
     absorbed_adds: set = set()  # residual Adds a convolution completed (with HardSwish after, the Add's own q is never built)
 
     for node in G.g.node:
+        if cls_head is not None and node.name in cls_head.consumed_nodes:
+            if node == cls_head.gemm_node:
+                in_q = cls_head.input_q if (cls_head.input_q in tensors or cls_head.input_q in views) else None
+                if in_q is None:
+                    in_q = cls_head.pool_q if (cls_head.pool_q in tensors or cls_head.pool_q in views) else None
+                if in_q is None:
+                    in_q = q_in
+                segs = resolve(in_q)
+                in_scale = tensors[segs[0].tensor].scale
+                w_4d = cls_head.weights[:, :, None, None]
+                conv = ConvLayer(
+                    name=node.name,
+                    index=len(layers),
+                    inputs=segs,
+                    in_scale=in_scale,
+                    k=1,
+                    stride=1,
+                    pad=0,
+                    weights=w_4d,
+                    bias_q=cls_head.bias,
+                    bias_scale=cls_head.bias_scale,
+                    weight_scale=cls_head.weight_scale,
+                    conv_scale=cls_head.out_scale,
+                    output=cls_head.output_q,
+                )
+                tensors[cls_head.output_q] = TensorInfo(
+                    cls_head.output_q, cls_head.cout, 20, 20, cls_head.out_scale, ZP, producer=node.name
+                )
+                scales[cls_head.output_q] = cls_head.out_scale
+                layers.append(conv)
+            continue
         region = region_of.get(node.name)
         if region is not None:
             # The region's nodes are not lowered. Its layer is built at the DequantizeLinear that exposes the
@@ -839,6 +885,8 @@ def lower_yolov8n(model_or_path, host_regions: Sequence[str] = (), silu_sigmoid:
 
     for node in G.g.node:
         if node.op_type == "Add" and node.name not in region_of and node.name not in absorbed_adds:
+            if cls_head is not None and node.name in cls_head.consumed_nodes:
+                continue
             raise ValueError(f"{node.name}: no conv output absorbed this Add")
     for r in regions:
         if r["q_out"] not in tensors:
