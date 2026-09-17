@@ -20,6 +20,10 @@ Uses models/yolo11n_cut_xint8.onnx, models/yolo11n_no_c2psa_cut_xint8.onnx and m
 - with its four C2fAttn output convolutions also on the host (models/yolov8s-worldv2_cut_xint8_fp32cv2.onnx, those
   convolutions quantized in FP32), each of those regions reads the C2fAttn Concat as a list of segments: every tensor
   still equals ONNX Runtime's, the emulated host steps read the same view, and the manifest segments run NhhNhhNhhNhhN;
+- with those convolutions split in two exact halves instead (models/yolov8s-worldv2_cut_split_xint8.onnx), each
+  Add -> HardSigmoid * Mul lowers onto the attention half's convolution as a residual whose packet applies HardSwish
+  after the add: 74 layers, the attention cores the only host layers, every tensor equal to ONNX Runtime's and the
+  packet emulation of those four layers equal to the direct reference;
 - dilated and grouped (non-depthwise) convolutions, 1x1 stride-2 convolutions and a host region that names
   no node are refused;
 - ``ignite-compile --host-region`` reaches the graph compile, and a region Git Bash rewrote into a path is refused
@@ -52,6 +56,8 @@ YOLOW = MODELS / "yolov8s-worldv2_cut_xint8.onnx"
 YOLOW_ATTN = ("/model.12/attn/", "/model.15/attn/", "/model.18/attn/", "/model.21/attn/")
 # pipelines/yolow/3b_quantize_cut.py --exclude /model.{12,15,18,21}/cv2/ (the four C2fAttn output convs in FP32)
 YOLOW_CV2 = MODELS / "yolov8s-worldv2_cut_xint8_fp32cv2.onnx"
+# pipelines/yolow/3a_split_attn_conv.py, then 3b_quantize_cut.py --in models/yolov8s-worldv2_cut_split.onnx
+YOLOW_SPLIT = MODELS / "yolov8s-worldv2_cut_split_xint8.onnx"
 BUS = ROOT / "assets" / "bus.jpg"
 C2PSA = "/model.10/"
 CORE = "/model.10/m/m.0/attn/qkv/conv/Conv=/model.10/m/m.0/attn/Reshape_1"
@@ -259,6 +265,45 @@ class ConcatViewHostInput(_OrtCase):
         for s in segs:
             if s["kind"] == "host":
                 self.assertEqual("inputs" in s, s["name"].endswith("/cv2/"), s["name"])
+
+
+@unittest.skipUnless(YOLOW_SPLIT.exists(), f"{YOLOW_SPLIT.name} not present")
+class ResidualHardSwish(_OrtCase):
+    """YOLO-World v2 with each C2fAttn output convolution split in two exact halves (pipelines/yolow/3a_split_attn_conv.py,
+    then XINT8): Add -> HardSigmoid * Mul after two convolutions lowers as a residual packet that applies HardSwish
+    after the add, so only the attention cores stay on the host."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.ir = graph_ir.lower_yolov8n(YOLOW_SPLIT, host_regions=YOLOW_ATTN)
+        cls.post = [L for L in cls.ir.layers if isinstance(L, graph_ir.ConvLayer) and L.post_hswish is not None]
+
+    def test_each_split_output_is_one_residual_layer_with_hardswish_after_the_add(self):
+        self.assertEqual(len(self.ir.layers), 74)
+        self.assertEqual([H.name for H in self.ir.layers if isinstance(H, graph_ir.HostLayer)], list(YOLOW_ATTN))
+        self.assertEqual([L.name for L in self.post], [f"/model.{b}/cv2/split/attn/Conv" for b in (12, 15, 18, 21)])
+        for L in self.post:
+            self.assertEqual(L.residual.tensor, L.name.replace("/attn/Conv", "/abc/Conv") + "_output_0_QuantizeLinear_Output")
+            self.assertEqual(L.post_hswish.max_error, 0, L.name)
+            self.assertTrue(L.output.endswith("/act/Mul_output_0_QuantizeLinear_Output"), L.output)
+
+    def test_every_tensor_matches_onnx_runtime(self):
+        self.assert_every_tensor_matches_ort(YOLOW_SPLIT, self.ir)
+
+    def test_packet_emulation_of_the_residual_hardswish_layers_matches_direct(self):
+        _, q = quantized_bus(self.ir)
+        direct = gr.run_direct(self.ir, q)
+        ws = es.plan_workspace(self.ir)
+        scheds, store = es.schedule_graph(self.ir, ws)
+        arr = ws.halo_fill()
+        for name, v in direct.items():
+            if name in ws.placements:
+                ws.write_tensor(arr, name, v)
+        for L in self.post:
+            c = self.ir.tensors[L.output].channels
+            ws.write_tensor(arr, L.output, np.zeros_like(direct[L.output]))
+            es.emulate_layer(scheds[L.index], store, arr)
+            self.assertTrue(np.array_equal(ws.read_tensor(arr, L.output)[:c], direct[L.output][:c]), L.name)
 
 
 @unittest.skipUnless(YOLOV8N.exists(), f"{YOLOV8N.name} not present")

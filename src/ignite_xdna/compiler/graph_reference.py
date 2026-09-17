@@ -113,6 +113,8 @@ def run_direct(ir: GraphIR, input_q: np.ndarray, stop_after: Optional[int] = Non
             if L.residual is not None:
                 r = gather_input(tensors, [L.residual], t.height, t.width)
                 y = em.residual_combine(y, r, L.residual_shift, L.residual_lsh_main, L.residual_lsh_res)
+                if L.post_hswish is not None:
+                    y = em.hswish_epilogue(y, L.post_hswish.params)
             tensors[L.output] = y
         elif isinstance(L, HostLayer):
             segs = L.input_segments()
