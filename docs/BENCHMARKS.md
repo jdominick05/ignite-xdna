@@ -7050,7 +7050,9 @@ establishes vendor parity — the oracle diff remains that gate — and neither 
 - **Every graph-engine model computes SiLU as HardSigmoid times x, and YOLO-World v2 pays for it.** The swap alone takes
   YOLO-World v2 from 41.5 % to 30.5 % mAP in FP32 (first 500 images). Its best XINT8 container scores 24.7 % against
   43.0 % for FP32 on the first 300 images, and its four text attention cores still run on the CPU (9.650 ms of a
-  48.227 ms profiled frame)
+  48.227 ms profiled frame). In one sitting it runs at twice the speed of AMD's stack at equal accuracy, but no faster
+  than DirectML running the FP32 model on the iGPU (46.22 against 47.33-47.51 ms)
+  ([sitting](#yolo-world-v2-against-amds-stack-the-cpu-and-the-igpu-in-one-sitting-2026-09-16-desktop-2))
   ([only the text attention on the CPU](#yolo-world-v2-with-only-its-text-attention-on-the-cpu-gptq-and-an-int32-bias-recover-the-four-output-convolutions-2026-09-16-desktop-2),
   [vocabulary at run time](#yolo-world-v2s-vocabulary-chosen-at-run-time-one-container-any-class-names-2026-09-16-desktop-2)).
 - **No formal test suite.** Verification here is empirical (`compileall` + import checks
@@ -9055,7 +9057,9 @@ on a residual packet, so existing containers keep their meaning.
 No model worth running uses the new flag. It is in the program on this branch because it is exact and measured no
 slower on YOLOv8n; whether an unused op stays in the one engine program is the maintainer's call (DECISIONS).
 
-**Not done:** AMD's stack on the GPTQ model (so no comparison with AMD is claimed for it); the full 5,000 images; a
+**Not done:** AMD's stack on the GPTQ model (so no comparison with AMD is claimed for it; a best-against-best sitting
+with AMD's stack on variant D came later,
+[below](#yolo-world-v2-against-amds-stack-the-cpu-and-the-igpu-in-one-sitting-2026-09-16-desktop-2)); the full 5,000 images; a
 glass-to-glass pipeline with native ingress and a native dequantization (numpy quantization and dequantization
 take 17.6 ms of the frame; native ingress was measured later through `YoloWorldPipeline`, 39.770 ms glass-to-glass with
 the dequantization and decode still numpy,
@@ -9161,3 +9165,48 @@ more). mAP@50-95 / mAP@50 (`subset_map.log` and the `eval_*` logs):
 - Non-ASCII class names.
 - The full 5,000 images.
 - An Ignition task. It waits for this work to reach ignite-xdna's `main`.
+
+## YOLO-World v2 against AMD's stack, the CPU and the iGPU in one sitting (2026-09-16, Desktop 2)
+
+At the accuracy each stack reaches, how fast is YOLO-World v2? Evidence: `results/aie/yolow_sitting_vs_amd/` (each run's
+log with its command, and `summary.txt`), started 03:26 UTC on 2026-09-17.
+
+**Method.**
+- **Instrument:** `pipelines/yolow/5_eval_map.py` on the first 300 COCO val2017 images per run. Its per-image inference
+  time spans the stack's network call only. For the container that is numpy input quantization, staging, the five NPU
+  segments and four attention host steps, head readback and numpy dequantization of the six heads. For ONNX Runtime it
+  is `session.run` on the float image. The contrastive decode, NMS and COCO scoring are outside the timing.
+- **Order:** AMD warm-up (10 images, compile cache hit), AMD, container, AMD, container, CPU, iGPU.
+- **Host:** quiet, and `xrt-smi` reported no hardware contexts before every run and after the last.
+- **Best against best, not one model on two stacks:**
+  - **AMD's stack** runs variant D, the XINT8 model with the four C2fAttn output convolutions in FP32, whose EP report
+    places 110 nodes on the NPU. It is AMD's best usable YOLO-World v2 here; plain XINT8 scores 1.8 % on 5,000 images.
+  - **The graph engine** runs the GPTQ container (int32 biases, only the text attention on the CPU).
+  - The two are different quantized models at the same accuracy.
+
+| Stack | Model | Mean (two runs) | Median | P95 | mAP@50-95 |
+|---|---|---:|---:|---:|---:|
+| AMD's stack (Vitis AI EP, Ryzen AI 1.7.1) | variant D | 95.91 / 95.89 ms | 96.42 / 96.47 ms | 99.95 / 100.14 ms | 24.5 % |
+| ignite-xdna graph engine | GPTQ container | **47.33 / 47.51 ms** | 46.65 / 46.79 ms | 52.26 / 51.72 ms | 24.7 % |
+| ONNX Runtime CPU | FP32 cut model | 67.75 ms | 69.08 ms | 74.76 ms | 43.0 % |
+| ONNX Runtime DirectML (Radeon 780M) | FP32 cut model | 46.22 ms | 45.05 ms | 51.40 ms | 43.0 % |
+
+- **Twice AMD's stack at equal accuracy.** 47.42 ms against 95.90 ms on the means of the two runs, 2.02 times, at
+  24.7 against 24.5 %.
+- **Faster than the CPU, but not at its accuracy.** The CPU runs FP32 at 67.75 ms, 1.43 times the container's time,
+  and 18.3 points more accurate.
+- **Not faster than the iGPU.** DirectML runs FP32 at 46.22 ms, 1.2 ms under the container, at 43.0 %. On this machine
+  the iGPU serves YOLO-World v2 better today. What the NPU container could still offer is unmeasured: energy per
+  frame, and leaving the iGPU free.
+- **Where the container's time goes** (the profile sitting above, same container): numpy quantization 9.093-9.183 ms
+  and dequantization 8.494-8.559 ms of a 48.0-48.2 ms frame. The FP32 runs pay neither. Through `YoloWorldPipeline`
+  with native ingress the whole frame, decode and NMS included, measured 39.770 ms in a separate check. So native
+  ingress and an int8 contrastive decode are the levers on speed.
+- **The accuracy gap is the larger problem.** The container scores 24.7 % against FP32's 43.0 %. The HardSigmoid form of
+  SiLU alone accounts for about 11 points in FP32 (on 500 images, above), and quantization for the rest.
+
+**Not done:**
+- Energy per frame for the four stacks.
+- The container through `YoloWorldPipeline` (native ingress, int8 decode) in a sitting.
+- AMD's stack on the GPTQ model itself.
+- The full 5,000 images.

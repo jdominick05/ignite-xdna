@@ -1,0 +1,40 @@
+$ pipelines/yolow/5_eval_map.py --model <ignite-xdna main>\models\yolov8s-worldv2_cut_xint8_fp32cv2.onnx --ep npu --cache-key yolow_fp32D --log 3 --n 10 --dets <scratch>\yolow\sitting_vs_amd\0_amd_warmup_dets.json --images <ignite-xdna main>\data\coco\val2017 --ann <ignite-xdna main>\data\coco\annotations\instances_val2017.json
+loading annotations into memory...
+Done (t=0.27s)
+creating index...
+index created!
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  <ignite-xdna main>\yolow_fp32D
+First run compiles the model. It takes a while and looks frozen. It isn't.
+model: head-cut (6 outputs), contrastive + numpy decode, input 640x640
+eval : 10 images, conf 0.001, iou 0.7, max_det 300, per-class NMS
+  [  10/10]  infer 97.88 ms  elapsed   1.2s
+
+Timing (10 images):
+  mean   : 97.88 ms  (10.2 fps)
+  median : 97.08 ms
+  p95    : 103.79 ms
+wrote 2205 detections to <scratch>\yolow\sitting_vs_amd\0_amd_warmup_dets.json
+Loading and preparing results...
+DONE (t=0.00s)
+creating index...
+index created!
+Running per image evaluation...
+Evaluate annotation type *bbox*
+DONE (t=0.05s).
+Accumulating evaluation results...
+DONE (t=0.05s).
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.400
+ Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] = 0.551
+ Average Precision  (AP) @[ IoU=0.75      | area=   all | maxDets=100 ] = 0.451
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.225
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.540
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.785
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=  1 ] = 0.270
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets= 10 ] = 0.523
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.547
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.296
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.706
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.807
