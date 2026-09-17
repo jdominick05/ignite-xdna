@@ -1,0 +1,52 @@
+$ <ignite-xdna worktree>\pipelines\yolov8n\5_eval_map.py --model <scratch>\sig_containers\yolov8s_new_sigmoid.ignite --ep ignite --n 0 --images <ignite-xdna main>\data\coco\val2017 --ann <ignite-xdna main>\data\coco\annotations\instances_val2017.json --dets <scratch>\proper_accuracy\dets_yolov8s_sigmoid_5000.json
+(cwd <ignite-xdna worktree>; env {'PYTHONPATH': '<ignite-xdna worktree>\\src'}; NPU idle before: True)
+loading annotations into memory...
+Done (t=0.26s)
+creating index...
+index created!
+model: graph-engine container (SiLU sigmoid4), numpy decode, input 640x640
+eval : 5000 images, conf 0.001, iou 0.7, max_det 300, per-class NMS
+  500/5000  (47410 detections so far)
+  1000/5000  (94872 detections so far)
+  1500/5000  (144937 detections so far)
+  2000/5000  (192367 detections so far)
+  2500/5000  (238576 detections so far)
+  3000/5000  (286775 detections so far)
+  3500/5000  (335355 detections so far)
+  4000/5000  (384071 detections so far)
+  4500/5000  (434326 detections so far)
+  5000/5000  (482050 detections so far)
+
+482050 detections over 5000 images in 184s
+inference  mean 29.82 ms   median 29.47 ms
+wrote <scratch>\proper_accuracy\dets_yolov8s_sigmoid_5000.json
+Loading and preparing results...
+DONE (t=1.35s)
+creating index...
+index created!
+Running per image evaluation...
+Evaluate annotation type *bbox*
+DONE (t=21.07s).
+Accumulating evaluation results...
+DONE (t=3.58s).
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.424
+ Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] = 0.587
+ Average Precision  (AP) @[ IoU=0.75      | area=   all | maxDets=100 ] = 0.460
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.241
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.468
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.577
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=  1 ] = 0.335
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets= 10 ] = 0.545
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.592
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.387
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.652
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.738
+
+=== yolov8s_new_sigmoid | IGNITE | 640px | 5000 images ===
+mAP@50-95  42.37
+mAP@50     58.70
+mAP small / medium / large   24.07 / 46.75 / 57.74
+latency    29.82 ms
+rc=0 after 217 s
+$ python rescore.py dets_yolov8s_sigmoid_5000.json <annotations> bbox 500
+RESCORED first 500 images: 47410 detections, AP@50-95 46.25, AP@50 62.07

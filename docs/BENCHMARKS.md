@@ -7057,7 +7057,10 @@ establishes vendor parity — the oracle diff remains that gate — and neither 
   (Superseded 2026-09-17: the core program computes it for containers compiled with `--silu-sigmoid`, an opt-in. They
   are exact on the NPU, score the same 37.29, 46.25 and 43.50 on those images, and cost 2.4-3.9 % more dispatch time;
   [built](#the-sigmoid-silu-epilogue-on-the-npu-an-opt-in-exact-through-the-containers-for-24-39--more-dispatch-time-2026-09-17-desktop-2).
-  The default is still the HardSigmoid form, and models with host regions (YOLO11n, YOLO-World v2) cannot use the flag.)
+  The default is still the HardSigmoid form, and models with host regions (YOLO11n, YOLO-World v2) cannot use the flag.
+  On all 5,000 images these containers score 34.12, 42.37 and 44.16, against 26.68, 37.31 and 32.64 for AMD's stack.
+  They stay faster than AMD's stack glass-to-glass on YOLOv8n and YOLOv8n-pose, but not on YOLOv8s:
+  [against AMD](#the-sigmoid-silu-containers-against-amds-stack-more-accurate-on-all-5000-coco-images-faster-on-yolov8n-and-yolov8n-pose-slower-on-yolov8s-2026-09-17-desktop-2).)
 - **Every graph-engine model computes SiLU as HardSigmoid times x, and YOLO-World v2 pays for it.** The swap alone takes
   YOLO-World v2 from 41.5 % to 30.5 % mAP in FP32 (first 500 images). Its best XINT8 container scores 24.7 % against
   43.0 % for FP32 on the first 300 images, and its four text attention cores still run on the CPU (9.650 ms of a
@@ -9432,7 +9435,9 @@ calibration stay those of the shipped model.
   do that, so it ran on YOLOv8n only. YOLOv8s has no keep-Sigmoid figure because its quantization, run from
   `tools/quantize_keep_sigmoid.py` with 200 calibration images like the other two, was stopped by Windows for lack of
   memory during calibration on this 31.1 GB host (`quantize_yolov8s_xint8_keep_sigmoid_oom.log`). It was not retried
-  with fewer images, which would have changed the recipe.
+  with fewer images, which would have changed the recipe. (Superseded 2026-09-17: retried on 100 calibration images at
+  the maintainer's request, it scores 47.26. That is a different recipe from the other two, and it is recorded in the
+  against-AMD section below.)
 - **Per layer, today's epilogue is up to 5 output LSBs off the exact quantized SiLU.** That is YOLOv8n-pose's most common
   scale pair (s1 1/16, s2 1/32, 16 layers), with a mean of 1.223 LSB over the 256 inputs; four lines are off by at most 1
   (mean 0.195). Every pair of the three models is in the `oracle_build_*.log` files.
@@ -9482,7 +9487,8 @@ device; `engine_epilogue_variants.log`):
 - The full 5,000 images.
 - YOLO11n and SESR.
 - AMD's stack on the keep-Sigmoid models.
-- YOLOv8s with Sigmoid kept: its quantization ran out of memory (above).
+- YOLOv8s with Sigmoid kept: its quantization ran out of memory (above). (Superseded 2026-09-17: 47.26 with 100
+  calibration images; see the against-AMD section below.)
 
 ## The sigmoid SiLU epilogue on the NPU: an opt-in, exact through the containers, for 2.4-3.9 % more dispatch time (2026-09-17, Desktop 2)
 
@@ -9563,10 +9569,101 @@ The HardSigmoid row was not re-run through today's containers in this round.
 
 **Not done:**
 - AMD's stack on the same 500 images (three Vitis AI EP evaluations). Without it, no claim that the sigmoid containers
-  are more accurate than AMD's stack is made.
-- Glass-to-glass through Ignition, and energy, with the sigmoid containers.
-- The full 5,000 images.
-- The HardSigmoid containers through COCO on the NPU in this round.
+  are more accurate than AMD's stack is made. (Superseded 2026-09-17: measured on all 5,000 images and re-scored on
+  these 500; [next section](#the-sigmoid-silu-containers-against-amds-stack-more-accurate-on-all-5000-coco-images-faster-on-yolov8n-and-yolov8n-pose-slower-on-yolov8s-2026-09-17-desktop-2).)
+- Glass-to-glass through Ignition, and energy, with the sigmoid containers. (Superseded 2026-09-17: next section.)
+- The full 5,000 images. (Superseded 2026-09-17: next section.)
+- The HardSigmoid containers through COCO on the NPU in this round. (Superseded 2026-09-17: next section.)
 - YOLO11n and YOLO-World v2 (refused: host regions), and a SiLU after a residual add.
 - Making the flag the default: see
   [DECISIONS](DECISIONS.md#the-graph-engine-lowers-every-layer-onto-one-persistent-core-program-packets-are-fixed-size-and-the-sequencer-is-the-budget-2026-09-13).
+
+## The sigmoid SiLU containers against AMD's stack: more accurate on all 5,000 COCO images, faster on YOLOv8n and YOLOv8n-pose, slower on YOLOv8s (2026-09-17, Desktop 2)
+
+This section gives the comparison the section above left open. Three stacks ran on Desktop 2 (`DESKTOP-CBL5NUA`):
+- **AMD's stack:** Ryzen AI 1.7.1, Vitis AI EP, on the shipped XINT8 model.
+- **Today's container:** main `c714629`, SiLU in the HardSigmoid form.
+- **The `7700316` `--silu-sigmoid` container.**
+
+Every NPU run started on an idle NPU. Evidence: `results/aie/silu_sigmoid_vs_amd/`.
+
+**Host during the timing sittings.**
+- **One logical core was busy throughout.** A desktop process held one of the 16 logical cores for the whole time, and
+  total CPU before each group measured 7.0-8.0 %.
+- **Idle power was higher than in earlier sittings.** The energy sitting's idle baselines have a median of 38.661 W,
+  about 3.7 W above the 34.8-35.1 W of the earlier energy sittings in this file.
+- **So compare within these sittings, not across them.** Every arm here ran under that same load. The earlier
+  balanced-default sitting logged 7.4 % CPU before it, but whether the same load was present then is not known.
+
+**Accuracy.** Each figure covers all 5,000 COCO val2017 images, with the ONNX Runtime path's letterbox (`npu/yolo.py`)
+for every stack. AMD's stack runs `pipelines/<p>/5_eval_map.py --ep npu` on a freshly compiled cache, and the containers
+run `--ep ignite`, with `--ingress numpy` for pose. `tools/diag_ep.py` shows AMD's runs on the NPU: 922 of 929 nodes for
+YOLOv8n and YOLOv8s, 1,015 of 1,025 for pose (`accuracy/diag_*.log`). Each detection file is also re-scored on the first
+500 images, the slice of the sections above (`accuracy/summary.log`).
+
+| mAP@50-95 (pose: OKS) | AMD's stack | Today's container | `--silu-sigmoid` container |
+|---|---:|---:|---:|
+| YOLOv8n, 5,000 images | 26.68 | 27.10 | 34.12 |
+| YOLOv8s, 5,000 images | 37.31 | 37.21 | 42.37 |
+| YOLOv8n-pose, 5,000 images | 32.64 | 32.71 | 44.16 |
+| YOLOv8n, first 500 | 30.02 | 30.24 | 37.29 |
+| YOLOv8s, first 500 | 41.15 | 40.77 | 46.25 |
+| YOLOv8n-pose, first 500 | 31.65 | 31.56 | 43.50 |
+
+- **Against AMD's stack, the sigmoid containers score 7.44, 5.06 and 11.52 points more** on all 5,000 images.
+- **Today's containers and AMD's stack are within 0.42 points of each other** on every model. The pose figures 32.64
+  and 32.71 match the full-set values recorded for AMD's stack and for the container with the numpy letterbox in
+  [YOLOv8n-pose on the graph engine](#yolov8n-pose-on-the-graph-engine-every-layer-on-the-npu-keypoints-through-the-container-2026-09-15-desktop-2).
+- **The first-500 re-scores of the sigmoid containers equal the 500-image runs above.** The HardSigmoid containers
+  give 30.24 against ONNX Runtime CPU's 30.25 on YOLOv8n. Those two ran in different environments (mlir-aie-iron and
+  resnet_env17), the known cause of such differences. The YOLOv8s and pose figures agree.
+
+**Glass-to-glass.** `live_ignition.py` in its balanced default for the containers, `tools/amd_vitisai_yolo.py` and
+`4_pose.py --ep npu` for AMD's stack. Each run is 50 warm-up and 500 timed frames of bus.jpg, stacks interleaved, twice
+(`g2g/`).
+
+| ms, two runs | AMD's stack | Today's container | `7700316`, no flag | `--silu-sigmoid` |
+|---|---:|---:|---:|---:|
+| YOLOv8n | 10.740 / 10.742 | 8.430 / 8.409 | 8.435 / 8.402 | 8.672 / 8.774 |
+| YOLOv8s | 16.966 / 17.005 | 18.013 / 18.003 | 18.007 / 18.004 | 18.430 / 18.424 |
+| YOLOv8n-pose | 12.350 / 12.330 | 9.009 / 9.002 | 9.058 / 8.989 | 9.362 / 9.286 |
+
+- **YOLOv8n and pose:** the sigmoid containers stay faster than AMD's stack, 8.723 against 10.741 ms and 9.324 against
+  12.340 ms on the means.
+- **YOLOv8s:** AMD's stack stays faster, 16.986 against 18.427 ms.
+- **The flag's cost against today's container** is 0.304, 0.419 and 0.318 ms on the means, most of it in the NPU
+  forward stage (0.250, 0.393 and 0.238 ms of it; `g2g/summary.log`). Without the flag, `7700316` is within 0.02 ms
+  of today's container.
+
+**Dispatch time**, re-measured in the same session: `verify_engine_container.py --iters 100`, forward then reverse,
+means of two runs (`dispatch/`). Today's program 7.264 / 16.701 / 7.575 ms; `7700316` without the flag 7.280 / 16.734 /
+7.609; with it 7.482 / 17.110 / 7.811. The flag costs 0.202, 0.376 and 0.202 ms (2.8, 2.2 and 2.7 %), within the
+2.4-3.9 % of the section above. All 18 runs were exact.
+
+**Energy per frame at a camera's 30 fps.** `tools/energy_sitting.py`, 1,200 paced frames, with the window at 30.00 fps
+on every arm. The balanced default for the containers, interleaved, twice
+(`energy/energy_sigmoid_paced30_phoenix_20260917T1433Z.log`). No idle baseline was flagged.
+
+| mJ per frame, own idle (median idle) | AMD's stack | Today's container | `--silu-sigmoid` |
+|---|---:|---:|---:|
+| YOLOv8n | 234.73 / 201.41 (203.96 / 203.63) | 220.20 / 233.03 (210.85 / 227.95) | 212.81 / 202.39 (212.18 / 203.48) |
+| YOLOv8s | 287.13 / 292.79 (285.60 / 297.00) | 321.32 / 301.41 (319.26 / 303.45) | 321.77 / 330.09 (314.79 / 332.06) |
+| YOLOv8n-pose | 270.17 / 265.13 (263.62 / 259.66) | 193.31 / 206.06 (198.54 / 221.31) | 199.52 / 214.45 (206.79 / 215.08) |
+
+- **YOLOv8n:** the three stacks overlap run to run (201-235 mJ), so this sitting does not separate them.
+- **YOLOv8n-pose:** both containers spend less than AMD's stack in every run.
+- **YOLOv8s:** AMD's stack spends less in every run.
+- **The flag adds no energy these runs can resolve** on any model.
+
+**Also recorded here.** YOLOv8s quantized by Quark with Sigmoid kept, on 100 calibration images instead of 200, scores
+47.26 on the first 500 images (`silu_epilogue/eval_yolov8s_xint8_keep_sigmoid_calib100_cpu500.log`). The quantization
+peaked at 8.8 GB, with at least 11.3 GB of the host's 31.1 GB left available
+(`silu_epilogue/quantize_yolov8s_xint8_keep_sigmoid_calib100.log`). That is 1.01 points above the sigmoid container on
+that slice. The calibration differs (100 images and Quark's own scales), so it is not a like-for-like comparison.
+
+**Not done:**
+- AMD's stack and the containers glass-to-glass on the full 5,000 images: the timing ran on bus.jpg only.
+- The full-set detections byte-compared against ONNX Runtime CPU on the reference model: that identity holds on 500
+  images (section above).
+- Energy at full speed.
+- YOLO11n and YOLO-World v2, which cannot use the flag.

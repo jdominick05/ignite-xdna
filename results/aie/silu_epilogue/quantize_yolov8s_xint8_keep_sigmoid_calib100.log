@@ -1,0 +1,5 @@
+$ python tools/quantize_keep_sigmoid.py models/yolov8s_cut.onnx <scratch>\silu\yolov8s_cut_xint8_sigmoid_calib100.onnx --pipeline yolov8n --limit 100   (resnet_env, committed tool, watchdog: stop below 2.5 GB available)
+XINT8 with ConvertSigmoidToHardSigmoid=False; extra_options {'ActivationSymmetric': True, 'ConvertSigmoidToHardSigmoid': False}; 640x640
+calibrating on 100 images at 640x640
+wrote yolov8s_cut_xint8_sigmoid_calib100.onnx: Sigmoid 57, HardSigmoid 0, Mul 57, QuantizeLinear 218, DequantizeLinear 344
+memory: host 31.1 GB, lowest available 11.3 GB, peak RSS of the quantization 8.8 GB, 500 s; rc=0

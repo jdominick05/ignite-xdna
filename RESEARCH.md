@@ -2067,4 +2067,7 @@ NPU and scores those figures through the NPU on the same images, and the loop co
 ([built](docs/BENCHMARKS.md#the-sigmoid-silu-epilogue-on-the-npu-an-opt-in-exact-through-the-containers-for-24-39--more-dispatch-time-2026-09-17-desktop-2)).
 So model-level parity for a SiLU on AIE2 is established for these three models, measured against the integer reference
 model rather than Quark's graph. Still open: whether it is more accurate than AMD's stack on the same images, which is
-not yet measured.)
+not yet measured.) (Answered the same day: on all 5,000 COCO val2017 images the sigmoid containers score 34.12, 42.37
+and 44.16 against 26.68, 37.31 and 32.64 for AMD's stack on the shipped models, and they stay faster than AMD's stack
+glass-to-glass on YOLOv8n and YOLOv8n-pose but not on YOLOv8s
+([against AMD](docs/BENCHMARKS.md#the-sigmoid-silu-containers-against-amds-stack-more-accurate-on-all-5000-coco-images-faster-on-yolov8n-and-yolov8n-pose-slower-on-yolov8s-2026-09-17-desktop-2)).)

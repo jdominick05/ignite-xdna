@@ -1,0 +1,54 @@
+$ <ignite-xdna main>\pipelines\yolov8n-pose\5_eval_map.py --model <ignite-xdna main>\models\yolov8n-pose_cut_xint8.onnx --ep npu --fresh --log 2 --cache-key posesigsittingcachekey --n 0 --images <ignite-xdna main>\data\coco\val2017 --ann <ignite-xdna main>\data\coco\annotations\person_keypoints_val2017.json --dets <scratch>\proper_accuracy\dets_pose_amd_5000.json
+(cwd <ignite-xdna main>; env {'RYZEN_AI_INSTALLATION_PATH': 'C:\\Program Files\\RyzenAI\\1.7.1'}; NPU idle before: True)
+loading annotations into memory...
+Done (t=0.13s)
+creating index...
+index created!
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  <ignite-xdna main>\posesigsittingcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+model: head-cut (9 outputs), numpy decode, input 640x640
+eval : 5000 images, conf 0.001, iou 0.7, max_det 300, class-agnostic NMS (single class)
+  500/5000  (11319 detections so far)
+  1000/5000  (23536 detections so far)
+  1500/5000  (35986 detections so far)
+  2000/5000  (48361 detections so far)
+  2500/5000  (60252 detections so far)
+  3000/5000  (71877 detections so far)
+  3500/5000  (84148 detections so far)
+  4000/5000  (95912 detections so far)
+  4500/5000  (106772 detections so far)
+  5000/5000  (118729 detections so far)
+
+118729 detections over 5000 images in 74s
+inference  mean 9.13 ms   median 9.09 ms
+wrote <scratch>\proper_accuracy\dets_pose_amd_5000.json
+Loading and preparing results...
+DONE (t=2.33s)
+creating index...
+index created!
+Running per image evaluation...
+Evaluate annotation type *keypoints*
+DONE (t=4.86s).
+Accumulating evaluation results...
+DONE (t=0.22s).
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets= 20 ] = 0.326
+ Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets= 20 ] = 0.669
+ Average Precision  (AP) @[ IoU=0.75      | area=   all | maxDets= 20 ] = 0.280
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=medium | maxDets= 20 ] = 0.235
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= large | maxDets= 20 ] = 0.452
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets= 20 ] = 0.426
+ Average Recall     (AR) @[ IoU=0.50      | area=   all | maxDets= 20 ] = 0.779
+ Average Recall     (AR) @[ IoU=0.75      | area=   all | maxDets= 20 ] = 0.409
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=medium | maxDets= 20 ] = 0.331
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets= 20 ] = 0.557
+
+=== yolov8n-pose_cut_xint8 | NPU | 640px | 5000 images ===
+OKS mAP@50-95  32.64
+OKS mAP@50     66.90
+latency        9.13 ms
+rc=0 after 100 s
+$ python rescore.py dets_pose_amd_5000.json <annotations> keypoints 500
+RESCORED first 500 images: 11319 detections, AP@50-95 31.65, AP@50 66.39

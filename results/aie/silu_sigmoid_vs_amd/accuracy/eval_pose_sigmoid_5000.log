@@ -1,0 +1,50 @@
+$ <ignite-xdna worktree>\pipelines\yolov8n-pose\5_eval_map.py --model <scratch>\sig_containers\pose_new_sigmoid.ignite --ep ignite --ingress numpy --n 0 --images <ignite-xdna main>\data\coco\val2017 --ann <ignite-xdna main>\data\coco\annotations\person_keypoints_val2017.json --dets <scratch>\proper_accuracy\dets_pose_sigmoid_5000.json
+(cwd <ignite-xdna worktree>; env {'PYTHONPATH': '<ignite-xdna worktree>\\src'}; NPU idle before: True)
+loading annotations into memory...
+Done (t=0.13s)
+creating index...
+index created!
+ignite_xdna: <ignite-xdna worktree>\ignite_xdna\__init__.py
+model: graph-engine container (task pose), every layer on the NPU, numpy decode, ingress numpy, input 640x640
+eval : 5000 images, conf 0.001, iou 0.7, max_det 300, class-agnostic NMS (single class)
+  500/5000  (19781 detections so far)
+  1000/5000  (40237 detections so far)
+  1500/5000  (61108 detections so far)
+  2000/5000  (81212 detections so far)
+  2500/5000  (101688 detections so far)
+  3000/5000  (121412 detections so far)
+  3500/5000  (141356 detections so far)
+  4000/5000  (161353 detections so far)
+  4500/5000  (180315 detections so far)
+  5000/5000  (200808 detections so far)
+
+200808 detections over 5000 images in 122s
+inference  mean 22.05 ms   median 21.60 ms  (letterbox, NPU, decode and NMS)
+wrote <scratch>\proper_accuracy\dets_pose_sigmoid_5000.json
+Loading and preparing results...
+DONE (t=3.42s)
+creating index...
+index created!
+Running per image evaluation...
+Evaluate annotation type *keypoints*
+DONE (t=5.63s).
+Accumulating evaluation results...
+DONE (t=0.27s).
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets= 20 ] = 0.442
+ Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets= 20 ] = 0.764
+ Average Precision  (AP) @[ IoU=0.75      | area=   all | maxDets= 20 ] = 0.449
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=medium | maxDets= 20 ] = 0.333
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= large | maxDets= 20 ] = 0.584
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets= 20 ] = 0.518
+ Average Recall     (AR) @[ IoU=0.50      | area=   all | maxDets= 20 ] = 0.831
+ Average Recall     (AR) @[ IoU=0.75      | area=   all | maxDets= 20 ] = 0.539
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=medium | maxDets= 20 ] = 0.415
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets= 20 ] = 0.660
+
+=== pose_new_sigmoid | IGNITE_NUMPY | 640px | 5000 images ===
+OKS mAP@50-95  44.16
+OKS mAP@50     76.39
+latency        22.05 ms  (letterbox, NPU, decode and NMS)
+rc=0 after 140 s
+$ python rescore.py dets_pose_sigmoid_5000.json <annotations> keypoints 500
+RESCORED first 500 images: 19781 detections, AP@50-95 43.50, AP@50 77.22

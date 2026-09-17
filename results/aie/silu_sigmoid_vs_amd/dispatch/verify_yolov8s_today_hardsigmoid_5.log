@@ -1,0 +1,70 @@
+$ python tools/verify_engine_container.py --container <scratch>\sig_containers\yolov8s_today.ignite --model models/yolov8s_cut_xint8.onnx --iters 100
+[verify] detect container yolov8s_today.ignite: 66 layers, reference in 1.2 s
+  L 0 /model.0/conv/Conv                           EXACT
+  L 1 /model.1/conv/Conv                           EXACT
+  L 2 /model.2/cv1/conv/Conv                       EXACT
+  L 3 /model.2/m.0/cv1/conv/Conv                   EXACT
+  L 4 /model.2/m.0/cv2/conv/Conv                   EXACT
+  L 5 /model.2/cv2/conv/Conv                       EXACT
+  L 6 /model.3/conv/Conv                           EXACT
+  L 7 /model.4/cv1/conv/Conv                       EXACT
+  L 8 /model.4/m.0/cv1/conv/Conv                   EXACT
+  L 9 /model.4/m.0/cv2/conv/Conv                   EXACT
+  L10 /model.4/m.1/cv1/conv/Conv                   EXACT
+  L11 /model.4/m.1/cv2/conv/Conv                   EXACT
+  L12 /model.4/cv2/conv/Conv                       EXACT
+  L13 /model.5/conv/Conv                           EXACT
+  L14 /model.6/cv1/conv/Conv                       EXACT
+  L15 /model.6/m.0/cv1/conv/Conv                   EXACT
+  L16 /model.6/m.0/cv2/conv/Conv                   EXACT
+  L17 /model.6/m.1/cv1/conv/Conv                   EXACT
+  L18 /model.6/m.1/cv2/conv/Conv                   EXACT
+  L19 /model.6/cv2/conv/Conv                       EXACT
+  L20 /model.7/conv/Conv                           EXACT
+  L21 /model.8/cv1/conv/Conv                       EXACT
+  L22 /model.8/m.0/cv1/conv/Conv                   EXACT
+  L23 /model.8/m.0/cv2/conv/Conv                   EXACT
+  L24 /model.8/cv2/conv/Conv                       EXACT
+  L25 /model.9/cv1/conv/Conv                       EXACT
+  L26 /model.9/m/MaxPool                           EXACT
+  L27 /model.9/m_1/MaxPool                         EXACT
+  L28 /model.9/m_2/MaxPool                         EXACT
+  L29 /model.9/cv2/conv/Conv                       EXACT
+  L30 /model.12/cv1/conv/Conv                      EXACT
+  L31 /model.12/m.0/cv1/conv/Conv                  EXACT
+  L32 /model.12/m.0/cv2/conv/Conv                  EXACT
+  L33 /model.12/cv2/conv/Conv                      EXACT
+  L34 /model.15/cv1/conv/Conv                      EXACT
+  L35 /model.15/m.0/cv1/conv/Conv                  EXACT
+  L36 /model.15/m.0/cv2/conv/Conv                  EXACT
+  L37 /model.15/cv2/conv/Conv                      EXACT
+  L38 /model.16/conv/Conv                          EXACT
+  L39 /model.22/cv2.0/cv2.0.0/conv/Conv            EXACT
+  L40 /model.22/cv3.0/cv3.0.0/conv/Conv            EXACT
+  L41 /model.22/cv2.0/cv2.0.1/conv/Conv            EXACT
+  L42 /model.22/cv3.0/cv3.0.1/conv/Conv            EXACT
+  L43 /model.18/cv1/conv/Conv                      EXACT
+  L44 /model.22/cv2.0/cv2.0.2/Conv                 EXACT
+  L45 /model.22/cv3.0/cv3.0.2/Conv                 EXACT
+  L46 /model.18/m.0/cv1/conv/Conv                  EXACT
+  L47 /model.18/m.0/cv2/conv/Conv                  EXACT
+  L48 /model.18/cv2/conv/Conv                      EXACT
+  L49 /model.19/conv/Conv                          EXACT
+  L50 /model.22/cv2.1/cv2.1.0/conv/Conv            EXACT
+  L51 /model.22/cv3.1/cv3.1.0/conv/Conv            EXACT
+  L52 /model.22/cv2.1/cv2.1.1/conv/Conv            EXACT
+  L53 /model.22/cv3.1/cv3.1.1/conv/Conv            EXACT
+  L54 /model.21/cv1/conv/Conv                      EXACT
+  L55 /model.22/cv2.1/cv2.1.2/Conv                 EXACT
+  L56 /model.22/cv3.1/cv3.1.2/Conv                 EXACT
+  L57 /model.21/m.0/cv1/conv/Conv                  EXACT
+  L58 /model.21/m.0/cv2/conv/Conv                  EXACT
+  L59 /model.21/cv2/conv/Conv                      EXACT
+  L60 /model.22/cv2.2/cv2.2.0/conv/Conv            EXACT
+  L61 /model.22/cv3.2/cv3.2.0/conv/Conv            EXACT
+  L62 /model.22/cv2.2/cv2.2.1/conv/Conv            EXACT
+  L63 /model.22/cv3.2/cv3.2.1/conv/Conv            EXACT
+  L64 /model.22/cv2.2/cv2.2.2/Conv                 EXACT
+  L65 /model.22/cv3.2/cv3.2.2/Conv                 EXACT
+[verify] 66/66 layers exact | first dispatch 18.430 ms | dispatch mean 16.698 ms, min 16.607, max 17.976 over 100
+[verify] PASS

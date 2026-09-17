@@ -1,0 +1,72 @@
+{
+  "schema": 1,
+  "created_utc": "2026-09-17T14:30:22Z",
+  "model": "<scratch>\\sig_containers\\yolov8n_new_hardsigmoid.ignite",
+  "model_name": "yolov8n_new_hardsigmoid.ignite",
+  "model_bytes": 8839552,
+  "task": "detect",
+  "backend": "npu",
+  "source": "image bus.jpg 810x1080",
+  "source_kind": "image",
+  "frames_requested": 500,
+  "warmup": 50,
+  "frames_processed": 550,
+  "frames_timed": 500,
+  "stop_reason": "frame limit",
+  "host": {
+    "hostname": "DESKTOP-CBL5NUA",
+    "processor": "AMD64 Family 25 Model 117 Stepping 2, AuthenticAMD",
+    "python": "3.13.15",
+    "numpy": "2.5.3",
+    "opencv": "5.0.0",
+    "cpu_count": 16,
+    "onnxruntime": "1.30.0"
+  },
+  "max_fps": 0.0,
+  "power_mode": {
+    "mode": "balanced",
+    "wait_policy": "PASSIVE",
+    "threads": 8,
+    "physical_cores": 8,
+    "logical_processors": 16,
+    "wait_policy_source": "mode",
+    "threads_source": "mode",
+    "description": "balanced: 8 worker threads, sleeping between regions (8 cores / 16 threads on this host)"
+  },
+  "npu_power": {
+    "state": "kept",
+    "reason": "the balanced power mode leaves the NPU's mode alone",
+    "lower_mode": "powersaver",
+    "previous_mode": null,
+    "period_ms": 0.0,
+    "predicted_ms": 17.011827339384972,
+    "lowered_at_frame": null,
+    "check_p95_ms": null,
+    "watch_interval_s": 5.0,
+    "recovered_lease": null
+  },
+  "g2g_ms": {
+    "mean": 8.435248000198044,
+    "p50": 8.407099987380207,
+    "p95": 8.755944966105744,
+    "p99": 9.371716995956376,
+    "min": 8.022999973036349,
+    "max": 10.379799990914762,
+    "cold_first_frame": 11.215400008950382
+  },
+  "fps_from_mean": 118.55015999251259,
+  "stages_ms": {
+    "preprocess": 0.564458200125955,
+    "network": 7.821863399003632,
+    "postprocess": 0.042168201645836234,
+    "dispatch": 7.209376999759115,
+    "readback": 0.6124863992445171
+  },
+  "rss_mb": {
+    "first_timed": 190.6953125,
+    "end": 190.6953125,
+    "drift": 0.0
+  },
+  "npu_frames": 500,
+  "detections_per_frame": 5.0
+}

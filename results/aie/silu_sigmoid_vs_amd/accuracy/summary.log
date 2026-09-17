@@ -1,0 +1,10 @@
+$ python proper_accuracy.py <out>  (COCO val2017, all 5,000 images; AMD's stack = Vitis AI EP, Ryzen AI 1.7.1, on the shipped XINT8 model through pipelines/<p>/5_eval_map.py --ep npu with a fresh cache; today = main c714629 container, sigmoid = 7700316 --silu-sigmoid container, both --ep ignite (pose --ingress numpy); every run uses the ONNX Runtime path's letterbox; each detection file re-scored on the first 500 images with rescore.py)
+yolov8n  amd      rc=0 NPU idle before True | 5,000 images AP@50-95 26.68 | RESCORED first 500 images: 65643 detections, AP@50-95 30.02, AP@50 43.39
+yolov8n  today    rc=0 NPU idle before True | 5,000 images AP@50-95 27.10 | RESCORED first 500 images: 66419 detections, AP@50-95 30.24, AP@50 44.13
+yolov8n  sigmoid  rc=0 NPU idle before True | 5,000 images AP@50-95 34.12 | RESCORED first 500 images: 62522 detections, AP@50-95 37.29, AP@50 52.33
+yolov8s  amd      rc=0 NPU idle before True | 5,000 images AP@50-95 37.31 | RESCORED first 500 images: 56391 detections, AP@50-95 41.15, AP@50 56.59
+yolov8s  today    rc=0 NPU idle before True | 5,000 images AP@50-95 37.21 | RESCORED first 500 images: 57288 detections, AP@50-95 40.77, AP@50 56.31
+yolov8s  sigmoid  rc=0 NPU idle before True | 5,000 images AP@50-95 42.37 | RESCORED first 500 images: 47410 detections, AP@50-95 46.25, AP@50 62.07
+pose     amd      rc=0 NPU idle before True | 5,000 images AP@50-95 32.64 | RESCORED first 500 images: 11319 detections, AP@50-95 31.65, AP@50 66.39
+pose     today    rc=0 NPU idle before True | 5,000 images AP@50-95 32.71 | RESCORED first 500 images: 13274 detections, AP@50-95 31.56, AP@50 66.74
+pose     sigmoid  rc=0 NPU idle before True | 5,000 images AP@50-95 44.16 | RESCORED first 500 images: 19781 detections, AP@50-95 43.50, AP@50 77.22
