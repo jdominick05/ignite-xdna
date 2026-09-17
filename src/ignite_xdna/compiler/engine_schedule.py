@@ -329,11 +329,15 @@ def conv_packet(layer: ConvLayer, group: int, chunk: Chunk, count_out: int, coun
         flags |= em.F_HOLD if layer.residual is not None else em.F_EMIT
         if layer.hswish is not None:   # HardSwish, or ReLU through the same epilogue
             flags |= em.F_HSWISH
+        if layer.sigmoid is not None:  # SiLU through the sigmoid epilogue, applied to the finished tile
+            flags |= em.F_SIGMOID
     if seg.up2:
         flags |= em.F_UP2
+    last_sig = chunk.last and layer.sigmoid is not None
     hdr = em.PacketHeader(op=em.OP_CONV, k=layer.k, stride=layer.stride, ncin=ncin, nco=OUT_BLOCKS,
                           flags=flags, shift_out=layer.shift_out,
-                          hs=layer.hswish.params if layer.hswish else None, count_out=count_out,
+                          hs=layer.hswish.params if layer.hswish else None,
+                          sig=layer.sigmoid.params if last_sig else None, count_out=count_out,
                           count_acc=count_acc, phases=phases, rows_in=chunk.rows_in,
                           cols_in=chunk.cols_in, plane_bytes=chunk.plane_bytes)
     return em.pack_w_packet(hdr, bias.astype(np.int32), w)

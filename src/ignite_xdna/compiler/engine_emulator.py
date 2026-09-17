@@ -24,7 +24,8 @@ W_OFFSET = 256
 W_MAX_BYTES = W_BYTES - W_OFFSET  # 9,216
 
 OP_NOP, OP_CONV, OP_MAXPOOL, OP_RESIDUAL = 0, 1, 2, 3
-F_LOAD_PSUM, F_EMIT, F_HSWISH, F_UP2, F_HOLD, F_RES_SHIFTS = 1, 2, 4, 8, 16, 32
+F_LOAD_PSUM, F_EMIT, F_HSWISH, F_UP2, F_HOLD, F_RES_SHIFTS, F_SIGMOID = 1, 2, 4, 8, 16, 32, 64
+SIGMOID_LINES = 4   # line 1 in H_A1/H_B1, lines 2-4 in H_A2..H_B4 (the header's last six words)
 
 TILE_ROWS = 5
 TILE_COLS = 20
@@ -35,6 +36,7 @@ OUT_BLOCK_BYTES = TILE_ROWS * TILE_COLS * 8  # 800
  H_QMAX, H_K2, H_S2, H_YSH, H_RSH, H_COUNT_OUT, H_COUNT_ACC, H_PHASE0,
  H_ROWS_IN, H_COLS_IN, H_PLANE_BYTES, H_RLSH_M, H_RLSH_R) = (0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12,
                                                              13, 14, 15, 16, 17, 21, 22, 23, 24, 25)
+H_A2, H_B2, H_A3, H_B3, H_A4, H_B4 = 26, 27, 28, 29, 30, 31
 
 # Packet geometries the header advertises: (rows_in, cols_in, plane_bytes, ncin).
 # The core always computes four output blocks; ``ncin`` is the number of input
@@ -62,6 +64,16 @@ class HardSwishParams:
 
 
 @dataclass
+class SigmoidParams:
+    """Integer constants of the piecewise-linear sigmoid SiLU epilogue (see engine.cc).
+
+    ``lines`` holds SIGMOID_LINES (A, B) pairs; ``s`` is the lines' shift and ``ysh`` the output shift."""
+    lines: tuple
+    s: int
+    ysh: int
+
+
+@dataclass
 class PacketHeader:
     op: int = OP_CONV
     k: int = 1
@@ -71,6 +83,7 @@ class PacketHeader:
     flags: int = F_EMIT
     shift_out: int = 0
     hs: Optional[HardSwishParams] = None
+    sig: Optional[SigmoidParams] = None   # with F_SIGMOID; shares H_A1, H_B1, H_S1 and H_YSH with ``hs``
     rsh: int = 0
     count_out: int = 1
     count_acc: int = 0
@@ -85,9 +98,20 @@ class PacketHeader:
         h = np.zeros(HDR_BYTES // 4, dtype=np.int32)
         h[H_OP], h[H_K], h[H_STRIDE], h[H_NCIN], h[H_NCO] = self.op, self.k, self.stride, self.ncin, self.nco
         h[H_FLAGS], h[H_SHIFT_OUT] = self.flags, self.shift_out
+        if self.hs is not None and self.sig is not None:
+            raise ValueError("a packet carries HardSwish or sigmoid constants, not both")
         if self.hs is not None:
             h[H_A1], h[H_B1], h[H_S1], h[H_QMAX] = self.hs.a1, self.hs.b1, self.hs.s1, self.hs.qmax
             h[H_K2], h[H_S2], h[H_YSH] = self.hs.k2, self.hs.s2, self.hs.ysh
+        if self.sig is not None:
+            if len(self.sig.lines) != SIGMOID_LINES:
+                raise ValueError(f"sigmoid epilogue takes {SIGMOID_LINES} lines, got {len(self.sig.lines)}")
+            for (a_idx, b_idx), (a, b) in zip(((H_A1, H_B1), (H_A2, H_B2), (H_A3, H_B3), (H_A4, H_B4)),
+                                              self.sig.lines):
+                if not 0 <= a < 1 << 15 or not -(1 << 31) <= b < 1 << 31:
+                    raise ValueError(f"sigmoid line ({a}, {b}) does not fit an int16 slope and an int32 intercept")
+                h[a_idx], h[b_idx] = a, b
+            h[H_S1], h[H_YSH] = self.sig.s, self.sig.ysh
         h[H_RSH], h[H_COUNT_OUT], h[H_COUNT_ACC] = self.rsh, self.count_out, self.count_acc
         for i in range(4):
             h[H_PHASE0 + i] = self.phases[i]
@@ -100,8 +124,14 @@ class PacketHeader:
         h = np.asarray(h, dtype=np.int32)
         hs = HardSwishParams(int(h[H_A1]), int(h[H_B1]), int(h[H_S1]), int(h[H_QMAX]),
                              int(h[H_K2]), int(h[H_S2]), int(h[H_YSH]))
+        sig = None
+        if int(h[H_FLAGS]) & F_SIGMOID:
+            sig = SigmoidParams(tuple((int(h[a]), int(h[b])) for a, b in
+                                      ((H_A1, H_B1), (H_A2, H_B2), (H_A3, H_B3), (H_A4, H_B4))),
+                                int(h[H_S1]), int(h[H_YSH]))
+            hs = None
         return cls(op=int(h[H_OP]), k=int(h[H_K]), stride=int(h[H_STRIDE]), ncin=int(h[H_NCIN]),
-                   nco=int(h[H_NCO]), flags=int(h[H_FLAGS]), shift_out=int(h[H_SHIFT_OUT]), hs=hs,
+                   nco=int(h[H_NCO]), flags=int(h[H_FLAGS]), shift_out=int(h[H_SHIFT_OUT]), hs=hs, sig=sig,
                    rsh=int(h[H_RSH]), count_out=int(h[H_COUNT_OUT]), count_acc=int(h[H_COUNT_ACC]),
                    phases=tuple(int(h[H_PHASE0 + i]) for i in range(4)), rows_in=int(h[H_ROWS_IN]),
                    cols_in=int(h[H_COLS_IN]), plane_bytes=int(h[H_PLANE_BYTES]),
@@ -135,6 +165,22 @@ def hswish_epilogue(q1: np.ndarray, hs: HardSwishParams) -> np.ndarray:
     h = np.clip(h, 0, hs.qmax)
     qh = np.minimum(sat_i16(rne_shift(h * hs.k2, hs.s2)), 127)
     y = sat_i16(rne_shift(t * qh, hs.ysh))
+    return sat_u8(y + 128)
+
+
+def sigmoid_epilogue(q1: np.ndarray, sig: SigmoidParams) -> np.ndarray:
+    """uint8 linear conv output -> uint8 SiLU output through the piecewise-linear sigmoid, as the core computes it.
+
+    u = |t|;  g = clip(min_i sat16(rne((u * A_i + B_i) >> S)), 0, 64);  y = sat16(rne(((t << 6) + u * g) >> YSH)),
+    which is t * (64 + sign(t) * g): a sigmoid in 1/128 steps that reaches 1.0."""
+    t = q1.astype(np.int64) - 128
+    u = np.abs(t)
+    g = None
+    for a, b in sig.lines:
+        line = sat_i16(rne_shift(u * a + b, sig.s))
+        g = line if g is None else np.minimum(g, line)
+    g = np.minimum(np.maximum(g, 0), 64)
+    y = sat_i16(rne_shift((t << 6) + u * g, sig.ysh))
     return sat_u8(y + 128)
 
 
@@ -246,6 +292,8 @@ def run_packet(wpkt: np.ndarray, apkt: np.ndarray, state: CoreState, core_row: i
             q = sat_u8(rne_shift(acc, hdr.shift_out))
             if hdr.flags & F_HSWISH:
                 q = hswish_epilogue(q, hdr.hs)
+            if hdr.flags & F_SIGMOID:   # the core's separate loop over the finished tile, after the passes
+                q = sigmoid_epilogue(q, hdr.sig)
             if emit:
                 out[:] = q
             else:

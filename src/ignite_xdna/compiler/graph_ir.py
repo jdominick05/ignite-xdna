@@ -34,6 +34,7 @@ import onnx
 from onnx import numpy_helper
 
 from ignite_xdna.compiler.engine_emulator import HardSwishParams, hswish_epilogue, rne_shift, sat_u8
+from ignite_xdna.compiler.silu_sigmoid import fit_sigmoid
 
 ZP = 128
 HS_ALPHA = np.float32(0.1666666716337204)
@@ -92,8 +93,9 @@ class ConvLayer:
     weight_scale: float
     conv_scale: float        # scale of the conv output QuantizeLinear (s1)
     output: str              # physical output tensor name
-    act: Optional[str] = None            # "hswish" or None
+    act: Optional[str] = None            # "hswish", "relu", "silu_sigmoid" or None
     hswish: Optional[HardSwishFit] = None
+    sigmoid: Optional[object] = None     # silu_sigmoid.SigmoidFit: SiLU through the core's sigmoid epilogue
     residual: Optional[Segment] = None   # added after the activation
     residual_shift: int = 0              # log2(out_scale / finer operand scale): the rounding shift
     residual_lsh_main: int = 0           # log2(act_scale / finer operand scale)
@@ -170,6 +172,7 @@ class GraphIR:
     adjacency: List[List[str]] = field(default_factory=list)  # tensor groups that must be contiguous
     # onnx output name -> host-side transform of the read-back tensor, e.g. {"op": "depth_to_space", ...}
     output_transforms: Dict[str, Dict[str, Any]] = field(default_factory=dict)
+    silu_sigmoid: bool = False    # SiLU layers use the sigmoid epilogue; the reference is silu_sigmoid.reference_model
 
 
 # ----------------------------------------------------------------------------
@@ -442,9 +445,17 @@ def _host_region(G: _Graph, spec: str) -> Dict[str, Any]:
             "q_node": q_node, "builder": dq.name}
 
 
-def lower_yolov8n(model_or_path, host_regions: Sequence[str] = ()) -> GraphIR:
+def lower_yolov8n(model_or_path, host_regions: Sequence[str] = (), silu_sigmoid: bool = False) -> GraphIR:
     """Lower a QDQ graph to engine layers. ``host_regions`` name regions the engine does not lower, as node-name
-    prefixes (``"/model.10/"``) or ``"FROM=TO"`` boundaries (see ``_host_region``); each becomes one ``HostLayer``."""
+    prefixes (``"/model.10/"``) or ``"FROM=TO"`` boundaries (see ``_host_region``); each becomes one ``HostLayer``.
+
+    ``silu_sigmoid`` gives every SiLU after a convolution the core's four-line sigmoid epilogue instead of Quark's
+    HardSigmoid form (``silu_sigmoid.py``); the graph's exactness reference is then
+    ``silu_sigmoid.reference_model``, not the model itself."""
+    if silu_sigmoid and host_regions:
+        # A host region is extracted from the original graph, so its SiLUs would keep the HardSigmoid form while the
+        # reference model's would not.
+        raise ValueError("silu_sigmoid cannot be combined with host_regions")
     model = onnx.load(str(model_or_path)) if not isinstance(model_or_path, onnx.ModelProto) else model_or_path
     model = onnx.shape_inference.infer_shapes(model)
     G = _Graph(model)
@@ -658,9 +669,15 @@ def lower_yolov8n(model_or_path, host_regions: Sequence[str] = ()) -> GraphIR:
                 if abs(hs_scale - 1 / 128) > 1e-12 or hs_zp != ZP:
                     raise ValueError(f"{node.name}: HardSigmoid quantization {hs_scale}/{hs_zp}")
                 act_q, s2, z2 = G.q_sink(mul_act.output[0])
-                layer.act = "hswish"
                 layer.act_scale = s2
-                layer.hswish = fit_hardswish(s1, s2, k_val)
+                if silu_sigmoid:
+                    if z2 != ZP:
+                        raise ValueError(f"{node.name}: activation output zero point {z2}")
+                    layer.act = "silu_sigmoid"
+                    layer.sigmoid = fit_sigmoid(s1, s2)
+                else:
+                    layer.act = "hswish"
+                    layer.hswish = fit_hardswish(s1, s2, k_val)
                 layer.output = act_q
                 out_name = act_q
                 out_scale = s2
@@ -711,6 +728,9 @@ def lower_yolov8n(model_or_path, host_regions: Sequence[str] = ()) -> GraphIR:
                 add_f = G.dq_of(add_q)
                 add_cons = G.float_consumers(add_f)
                 if sorted(c.op_type for c in add_cons) == ["HardSigmoid", "Mul"]:
+                    if silu_sigmoid:
+                        raise ValueError(f"{add.name}: silu_sigmoid does not cover a SiLU after a residual add "
+                                         f"(the residual packet applies only the HardSwish epilogue)")
                     hs_node = [c for c in add_cons if c.op_type == "HardSigmoid"][0]
                     mul_act = [c for c in add_cons if c.op_type == "Mul"][0]
                     alpha = float(_attr(hs_node, "alpha", 0.2))
@@ -843,7 +863,7 @@ def lower_yolov8n(model_or_path, host_regions: Sequence[str] = ()) -> GraphIR:
                 pass
     adjacency = _adjacency_groups(views, tensors)
     return GraphIR(tensors=tensors, layers=layers, input=q_in, outputs=outputs, adjacency=adjacency,
-                   output_transforms=output_transforms)
+                   output_transforms=output_transforms, silu_sigmoid=bool(silu_sigmoid))
 
 
 def _adjacency_groups(views, tensors) -> List[List[str]]:
@@ -888,6 +908,8 @@ def summarize(ir: GraphIR) -> str:
             segs = ", ".join(f"{s.tensor.split('/')[-1][:24]}[{s.block_offset}:{s.block_offset + s.blocks}]"
                              f"{'x2' if s.up2 else ''}" for s in L.inputs)
             hs = f" hswish(err={L.hswish.max_error})" if L.hswish else ""
+            if L.sigmoid is not None:
+                hs = f" silu_sigmoid(err max {L.sigmoid.max_error}, mean {L.sigmoid.mean_error:.3f})"
             res = f" +res>>{L.residual_shift}" if L.residual else ""
             lines.append(f"{L.index:2d} conv {L.name:38s} {L.cin:3d}->{L.cout:3d} k{L.k} s{L.stride} "
                          f"{t.height}x{t.width} shift={L.shift_out}{hs}{res} in=[{segs}]")

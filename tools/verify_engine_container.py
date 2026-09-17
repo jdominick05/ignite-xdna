@@ -83,7 +83,13 @@ def main() -> int:
         # stored class dimension no longer matches.
         print(f"[verify] host constants from {Path(args.host_constants).name}: "
               f"{', '.join(f'{k} {constants[k].shape}' for k in sorted(constants))}", flush=True)
-    ir = graph_ir.lower_yolov8n(model, host_regions=host_regions)
+    silu = ge.get("silu", "hardsigmoid")
+    if silu not in ("hardsigmoid", "sigmoid4"):
+        print(f"[verify] container SiLU form {silu!r} is unknown to this verifier")
+        return 2
+    ir = graph_ir.lower_yolov8n(model, host_regions=host_regions, silu_sigmoid=silu == "sigmoid4")
+    if silu == "sigmoid4":
+        print("[verify] SiLU through the sigmoid epilogue: the reference is silu_sigmoid.reference_model of the model")
     ws = es.plan_workspace(ir)
     if ws.nbytes != int(ge["workspace_bytes"]) or ir.input != ge["input_tensor"]:
         print(f"[verify] container plan differs from {args.model}: workspace {ge['workspace_bytes']} vs {ws.nbytes}")
