@@ -1,0 +1,36 @@
+$ pipelines/yolov8n-pose/5_eval_map.py --model <scratch>\silu\oracle\yolov8n-pose_xint8_sig_pl3.onnx --ep cpu --n 500 --images <ignite-xdna main>\data\coco\val2017 --ann <ignite-xdna main>\data\coco\annotations\person_keypoints_val2017.json --dets <scratch>\silu\oracle\dets_yolov8n-pose_xint8_sig_pl3.json
+loading annotations into memory...
+Done (t=0.16s)
+creating index...
+index created!
+model: head-cut (9 outputs), numpy decode, input 640x640
+eval : 500 images, conf 0.001, iou 0.7, max_det 300, class-agnostic NMS (single class)
+  500/500  (22842 detections so far)
+
+22842 detections over 500 images in 50s
+inference  mean 91.35 ms   median 89.28 ms
+wrote <scratch>\silu\oracle\dets_yolov8n-pose_xint8_sig_pl3.json
+Loading and preparing results...
+DONE (t=0.46s)
+creating index...
+index created!
+Running per image evaluation...
+Evaluate annotation type *keypoints*
+DONE (t=0.64s).
+Accumulating evaluation results...
+DONE (t=0.03s).
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets= 20 ] = 0.430
+ Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets= 20 ] = 0.765
+ Average Precision  (AP) @[ IoU=0.75      | area=   all | maxDets= 20 ] = 0.436
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=medium | maxDets= 20 ] = 0.301
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= large | maxDets= 20 ] = 0.580
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets= 20 ] = 0.504
+ Average Recall     (AR) @[ IoU=0.50      | area=   all | maxDets= 20 ] = 0.835
+ Average Recall     (AR) @[ IoU=0.75      | area=   all | maxDets= 20 ] = 0.518
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=medium | maxDets= 20 ] = 0.381
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets= 20 ] = 0.657
+
+=== yolov8n-pose_xint8_sig_pl3 | CPU | 640px | 500 images ===
+OKS mAP@50-95  42.99
+OKS mAP@50     76.45
+latency        91.35 ms

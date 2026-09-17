@@ -1,0 +1,4 @@
+$ <scratch>\quantize_keep_sigmoid.py <ignite-xdna main>\models\yolov8n-pose_cut.onnx <scratch>\silu\yolov8n-pose_cut_xint8_sigmoid.onnx --pipeline yolov8n-pose
+XINT8 with ConvertSigmoidToHardSigmoid=False; extra_options {'ActivationSymmetric': True, 'ConvertSigmoidToHardSigmoid': False}; 640x640
+calibrating on 200 images at 640x640
+wrote <scratch>\silu\yolov8n-pose_cut_xint8_sigmoid.onnx: Sigmoid 63, HardSigmoid 0, Mul 63, QuantizeLinear 239, DequantizeLinear 383

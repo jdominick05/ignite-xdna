@@ -1870,3 +1870,30 @@ cached reference heads rather than `bo_out`.
   10.19 ms at 80 classes on synthetic heads but with logits up to 8.4e-05 off. Parity with the float decode is what
   lets the container's detections be compared byte for byte with ONNX Runtime's
   ([BENCHMARKS](BENCHMARKS.md#yolo-world-v2-glass-to-glass-275-times-amds-stack-and-against-the-igpu-it-depends-on-the-vocabulary-2026-09-16-desktop-2)).
+- **A better SiLU in the core program is sized, not built: it waits on the maintainer (2026-09-17).** On the first 500
+  COCO val2017 images the HardSigmoid form is most of the XINT8 loss of YOLOv8n, YOLOv8s and YOLOv8n-pose. An integer
+  four-line sigmoid in the shipped models scores 37.29, 46.25 and 43.50, against 30.25, 40.77 and 31.56 as shipped,
+  evaluated offline through ONNX Runtime
+  ([BENCHMARKS](BENCHMARKS.md#silus-hardsigmoid-form-is-most-of-the-model-zoos-xint8-accuracy-loss-and-an-integer-four-line-sigmoid-wins-55-119-points-back-offline-2026-09-17-desktop-2)).
+  What the sizing settles, if it is built:
+  - **A separate loop over the finished tile, not the pass epilogue.** With the sigmoid inside the pass the object
+    spills the pass accumulators (88 stack moves with four lines, beside or instead of HardSwish), even with the lines
+    evaluated one at a time. After the passes it has none, at 9,792 B of text against 8,960 B today.
+  - **Four lines at most without a header change.** Line 1 takes `A1`/`B1`/`S1` and lines 2-4 the six free words
+    26-31. Four lines score within 0.54 points of every exact variant on this slice. Three lines lose a further
+    0.24-0.59 points and save little: 64 B of text and one line per 32 outputs.
+  - **The reference is an ONNX model with the integer function as `Gather` tables,** not Quark's graph.
+    `tools/silu_integer_oracle.py` writes it, and it mirrors the expression with the emulator's `rne_shift` and
+    `sat_i16`. Exactness would then be asserted against that model, as it is today against Quark's.
+
+  Rejected on sizing, not measured:
+  - **An exact 256-entry table in the core.** The core has no vector gather, so the table costs 3,200 scalar lookups
+    per tile against 100 vector steps for the lines. It also needs 256 B of packet space per layer, which the header
+    does not have. Four lines score within 0.54 points of the exact table on this slice.
+  - **Keeping Quark's real Sigmoid** (`ConvertSigmoidToHardSigmoid=False`). It scores 37.83 and 43.58, within 0.54
+    points of four lines, but the core would still need a sigmoid of its own. The compiler matches only
+    HardSigmoid + Mul, so it buys nothing the oracle model does not.
+
+  Open, and the maintainer's to decide: whether the core program changes at all. It is the one program every
+  container runs. The core-time cost of the loop is unmeasured, and the fused Conv residual SiLU kernel measured a
+  polynomial SiLU epilogue at 69.29 % extra compute cycles on a 32-channel convolution.

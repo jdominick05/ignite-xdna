@@ -1,0 +1,12 @@
+$ python tools/silu_integer_oracle.py models/yolov8n-pose_cut_xint8.onnx yolov8n-pose_xint8_sig_silu.onnx --mode silu
+yolov8n-pose_cut_xint8.onnx: 63 SiLU sites, 9 (s1, s2) pairs; output-LSB error against the exact quantized SiLU, max/mean over the 256 inputs
+  s1 1/16 s2 1/32 x16:  HardSigmoid 5/1.223  sigmoid@1/128 1/0.125  PL2 2/0.395  PL3 2/0.371  PL4 1/0.195  PL5 1/0.148
+  s1 1/16 s2 1/16 x27:  HardSigmoid 2/0.863  sigmoid@1/128 1/0.246  PL2 1/0.234  PL3 1/0.211  PL4 1/0.070  PL5 1/0.039
+  s1 1/16 s2 1/8 x2:  HardSigmoid 1/0.285  sigmoid@1/128 1/0.035  PL2 1/0.113  PL3 1/0.109  PL4 1/0.113  PL5 1/0.039
+  s1 1/8 s2 1/16 x5:  HardSigmoid 2/0.426  sigmoid@1/128 1/0.137  PL2 2/0.312  PL3 1/0.094  PL4 1/0.070  PL5 1/0.016
+  s1 1/8 s2 1/8 x3:  HardSigmoid 1/0.402  sigmoid@1/128 1/0.270  PL2 1/0.039  PL3 1/0.008  PL4 1/0.047  PL5 1/0.016
+  s1 1/4 s2 1/8 x2:  HardSigmoid 1/0.199  sigmoid@1/128 1/0.137  PL2 1/0.023  PL3 0/0.000  PL4 1/0.023  PL5 1/0.008
+  s1 1/4 s2 1/4 x6:  HardSigmoid 1/0.270  sigmoid@1/128 1/0.254  PL2 1/0.008  PL3 0/0.000  PL4 0/0.000  PL5 0/0.000
+  s1 1/2 s2 1/4 x1:  HardSigmoid 1/0.137  sigmoid@1/128 1/0.121  PL2 1/0.008  PL3 1/0.008  PL4 0/0.000  PL5 0/0.000
+  s1 1/2 s2 1/2 x1:  HardSigmoid 1/0.254  sigmoid@1/128 1/0.246  PL2 0/0.000  PL3 0/0.000  PL4 0/0.000  PL5 0/0.000
+mode silu: replaced 63 sites -> yolov8n-pose_xint8_sig_silu.onnx

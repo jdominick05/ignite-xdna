@@ -1,0 +1,52 @@
+$ python tools/silu_fp32_forms.py models/yolov8n_cut.onnx yolov8n_cut_hardsigmoid.onnx --form hardsigmoid
+<ignite-xdna main>\models\yolov8n_cut.onnx: 57 SiLU Sigmoids -> HardSigmoid(1/6, 0.5) * 1.000122070; 0 other Sigmoids left -> <scratch>\silu\rebuild_fp32\yolov8n_cut_hardsigmoid.onnx
+rc=0 sha256 74fa3021d309f1a4 identical to the evaluated model
+
+$ python tools/silu_fp32_forms.py models/yolov8s_cut.onnx yolov8s_cut_hardsigmoid.onnx --form hardsigmoid
+<ignite-xdna main>\models\yolov8s_cut.onnx: 57 SiLU Sigmoids -> HardSigmoid(1/6, 0.5) * 1.000122070; 0 other Sigmoids left -> <scratch>\silu\rebuild_fp32\yolov8s_cut_hardsigmoid.onnx
+rc=0 sha256 bd927b475e575508 identical to the evaluated model
+
+$ python tools/silu_fp32_forms.py models/yolov8n-pose_cut.onnx yolov8n-pose_cut_hardsigmoid.onnx --form hardsigmoid
+<ignite-xdna main>\models\yolov8n-pose_cut.onnx: 63 SiLU Sigmoids -> HardSigmoid(1/6, 0.5) * 1.000122070; 0 other Sigmoids left -> <scratch>\silu\rebuild_fp32\yolov8n-pose_cut_hardsigmoid.onnx
+rc=0 sha256 88c9a81f8605e685 identical to the evaluated model
+
+$ python tools/silu_fp32_forms.py models/yolov8n_cut.onnx yolov8n_cut_pl2.onnx --form pl --lines 2
+2 lines: breakpoints [np.float64(0.0), np.float64(2.15), np.float64(7.09)], max |sigmoid error| 0.0243 (HardSigmoid form 0.0692)
+   line 0.18403 * u + 0.02354
+   line 0.02095 * u + 0.37417
+<ignite-xdna main>\models\yolov8n_cut.onnx: 57 SiLU Sigmoids -> 2-line sigmoid; 0 other Sigmoids left -> <scratch>\silu\rebuild_fp32\yolov8n_cut_pl2.onnx
+rc=0 sha256 51dc7be4ce4524cd identical to the evaluated model
+
+$ python tools/silu_fp32_forms.py models/yolov8n_cut.onnx yolov8n_cut_pl3.onnx --form pl --lines 3
+3 lines: breakpoints [np.float64(0.0), np.float64(1.7), np.float64(3.77), np.float64(12.0)], max |sigmoid error| 0.0140 (HardSigmoid form 0.0692)
+   line 0.20326 * u + 0.01402
+   line 0.06374 * u + 0.25121
+   line 0.00274 * u + 0.48117
+<ignite-xdna main>\models\yolov8n_cut.onnx: 57 SiLU Sigmoids -> 3-line sigmoid; 0 other Sigmoids left -> <scratch>\silu\rebuild_fp32\yolov8n_cut_pl3.onnx
+rc=0 sha256 f938626bb46365ac identical to the evaluated model
+
+$ python tools/silu_fp32_forms.py models/yolov8n_cut.onnx yolov8n_cut_pl5.onnx --form pl --lines 5
+5 lines: breakpoints [np.float64(0.0), np.float64(1.19), np.float64(2.19), np.float64(3.6), np.float64(7.86), np.float64(12.0)], max |sigmoid error| 0.0057 (HardSigmoid form 0.0692)
+   line 0.22415 * u + 0.00566
+   line 0.13261 * u + 0.11460
+   line 0.05252 * u + 0.28999
+   line 0.00615 * u + 0.45691
+   line 0.00009 * u + 0.50455
+<ignite-xdna main>\models\yolov8n_cut.onnx: 57 SiLU Sigmoids -> 5-line sigmoid; 0 other Sigmoids left -> <scratch>\silu\rebuild_fp32\yolov8n_cut_pl5.onnx
+rc=0 sha256 8382a9893097e774 identical to the evaluated model
+
+$ python tools/silu_fp32_forms.py models/yolov8s_cut.onnx yolov8s_cut_pl3.onnx --form pl --lines 3
+3 lines: breakpoints [np.float64(0.0), np.float64(1.7), np.float64(3.77), np.float64(12.0)], max |sigmoid error| 0.0140 (HardSigmoid form 0.0692)
+   line 0.20326 * u + 0.01402
+   line 0.06374 * u + 0.25121
+   line 0.00274 * u + 0.48117
+<ignite-xdna main>\models\yolov8s_cut.onnx: 57 SiLU Sigmoids -> 3-line sigmoid; 0 other Sigmoids left -> <scratch>\silu\rebuild_fp32\yolov8s_cut_pl3.onnx
+rc=0 sha256 fa7c9d93b295739f identical to the evaluated model
+
+$ python tools/silu_fp32_forms.py models/yolov8n-pose_cut.onnx yolov8n-pose_cut_pl3.onnx --form pl --lines 3
+3 lines: breakpoints [np.float64(0.0), np.float64(1.7), np.float64(3.77), np.float64(12.0)], max |sigmoid error| 0.0140 (HardSigmoid form 0.0692)
+   line 0.20326 * u + 0.01402
+   line 0.06374 * u + 0.25121
+   line 0.00274 * u + 0.48117
+<ignite-xdna main>\models\yolov8n-pose_cut.onnx: 63 SiLU Sigmoids -> 3-line sigmoid; 0 other Sigmoids left -> <scratch>\silu\rebuild_fp32\yolov8n-pose_cut_pl3.onnx
+rc=0 sha256 5d13b4bd9c4dacce identical to the evaluated model

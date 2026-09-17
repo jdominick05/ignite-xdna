@@ -2054,3 +2054,11 @@ and the compute-overhead target for a defined wide-channel shape, with output
 DMA activity during the epilogue. The original narrow-channel shape misses the
 target. See [qualification and limits](docs/BENCHMARKS.md#fused-conv-residual-silu-2026-09-13-desktop-2).
 Connecting this ABI to model execution and establishing model-level parity remain open.
+
+What a better SiLU would buy a model is now measured offline (2026-09-17). On the first 500 COCO val2017 images, the
+HardSigmoid form every graph-engine container computes is 64.8-74.8 % of the XINT8 loss of YOLOv8n, YOLOv8s and
+YOLOv8n-pose. With an integer four-line sigmoid in place of the form, evaluated on ONNX Runtime, the shipped XINT8
+models score 37.29, 46.25 and 43.50 against 30.25, 40.77 and 31.56. In the graph engine's core program that sigmoid
+compiles without accumulator spills only as a separate loop over the finished tile. Whether to change that program, and
+at what core-time cost, is open
+([sized offline](docs/BENCHMARKS.md#silus-hardsigmoid-form-is-most-of-the-model-zoos-xint8-accuracy-loss-and-an-integer-four-line-sigmoid-wins-55-119-points-back-offline-2026-09-17-desktop-2)).
