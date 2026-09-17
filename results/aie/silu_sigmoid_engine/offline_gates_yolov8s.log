@@ -1,0 +1,10 @@
+$ python tools/silu_sigmoid_gates.py models/yolov8s_cut_xint8.onnx --images data/coco/val2017 --coco 4  (resnet_env17)
+[gates] yolov8s_cut_xint8.onnx: 66 layers, 57 with the sigmoid epilogue, 0 with the HardSwish epilogue; per-layer output-LSB error against the exact quantized SiLU (max, mean): {(0, 0.0): 8, (1, 0.023): 2, (1, 0.047): 2, (1, 0.07): 27, (1, 0.113): 1, (1, 0.148): 1, (1, 0.195): 15, (2, 0.125): 1}; lowered and reference model built in 1.0 s
+[gates] bus.jpg: run_direct == ONNX Runtime on the reference model for 66/66 layers
+[gates] 000000000139.jpg: run_direct == ONNX Runtime on the reference model for 66/66 layers
+[gates] 000000000285.jpg: run_direct == ONNX Runtime on the reference model for 66/66 layers
+[gates] 000000000632.jpg: run_direct == ONNX Runtime on the reference model for 66/66 layers
+[gates] 000000000724.jpg: run_direct == ONNX Runtime on the reference model for 66/66 layers
+[gates] uniform random: run_direct == ONNX Runtime on the reference model for 66/66 layers
+[gates] packet emulation of every layer == run_direct (bus.jpg): 66/66 layers in 60 s
+[gates] PASS

@@ -1,0 +1,75 @@
+# engine.cc v2 (built, timed, not committed) against 45a8685: lines 2-4 read from the raw header inside a noinline
+# tile loop; Hdr and read_header as before. Slower for sigmoid packets (see sitting_v2_rejected).
+--- 45a8685:kernels/aie2/conv_engine/engine.cc
++++ v2 (not committed):kernels/aie2/conv_engine/engine.cc
+@@ -75,7 +75,6 @@
+ struct Hdr {
+     int op, k, stride, ncin, flags, shift_out;
+     int a1, b1, s1, qmax, k2, s2, ysh, rsh;
+-    int a2, b2, a3, b3, a4, b4;
+     int rlsh_m, rlsh_r;
+     int rows_in, cols_in, plane_bytes;
+     int phase;
+@@ -87,7 +86,6 @@
+     d.flags = h[H_FLAGS]; d.shift_out = h[H_SHIFT_OUT];
+     d.a1 = h[H_A1]; d.b1 = h[H_B1]; d.s1 = h[H_S1]; d.qmax = h[H_QMAX];
+     d.k2 = h[H_K2]; d.s2 = h[H_S2]; d.ysh = h[H_YSH]; d.rsh = h[H_RSH];
+-    d.a2 = h[H_A2]; d.b2 = h[H_B2]; d.a3 = h[H_A3]; d.b3 = h[H_B3]; d.a4 = h[H_A4]; d.b4 = h[H_B4];
+     d.rlsh_m = (d.flags & F_RES_SHIFTS) ? h[H_RLSH_M] : 0;
+     d.rlsh_r = (d.flags & F_RES_SHIFTS) ? h[H_RLSH_R] : d.rsh;
+     d.rows_in = h[H_ROWS_IN]; d.cols_in = h[H_COLS_IN]; d.plane_bytes = h[H_PLANE_BYTES];
+@@ -122,20 +120,21 @@
+ }
+ 
+ // Piecewise-linear sigmoid SiLU on 32 uint8 values at the header's line constants: q1 -> q2.
+-// One accumulator at a time: each line is reduced to int16 before the next is formed.
++// One accumulator at a time: each line is reduced to int16 before the next is formed. Lines 2-4
++// are read from the raw header here, so read_header and every other packet stay as they were.
+ __attribute__((always_inline))
+-inline V32u silu_pl_u8(V32u q1, const Hdr &d) {
++inline V32u silu_pl_u8(V32u q1, const Hdr &d, const int32_t *h) {
+     V32i16 t = unpack_centered(q1);
+     V32i16 u = aie::abs(t);
+     Acc l;
+     l.from_vector(aie::broadcast<int32, 32>(d.b1));
+     V32i16 g = aie::mac(l, u, int16_t(d.a1)).template to_vector<int16>(d.s1);
+-    l.from_vector(aie::broadcast<int32, 32>(d.b2));
+-    g = aie::min(g, aie::mac(l, u, int16_t(d.a2)).template to_vector<int16>(d.s1));
+-    l.from_vector(aie::broadcast<int32, 32>(d.b3));
+-    g = aie::min(g, aie::mac(l, u, int16_t(d.a3)).template to_vector<int16>(d.s1));
+-    l.from_vector(aie::broadcast<int32, 32>(d.b4));
+-    g = aie::min(g, aie::mac(l, u, int16_t(d.a4)).template to_vector<int16>(d.s1));
++    l.from_vector(aie::broadcast<int32, 32>(h[H_B2]));
++    g = aie::min(g, aie::mac(l, u, int16_t(h[H_A2])).template to_vector<int16>(d.s1));
++    l.from_vector(aie::broadcast<int32, 32>(h[H_B3]));
++    g = aie::min(g, aie::mac(l, u, int16_t(h[H_A3])).template to_vector<int16>(d.s1));
++    l.from_vector(aie::broadcast<int32, 32>(h[H_B4]));
++    g = aie::min(g, aie::mac(l, u, int16_t(h[H_A4])).template to_vector<int16>(d.s1));
+     g = aie::max(g, int16_t(0));
+     g = aie::min(g, int16_t(64));
+     l.from_vector(t, 6);
+@@ -253,10 +252,12 @@
+ 
+ // The sigmoid SiLU over a whole emitted or held tile, in place. It runs after every pass of
+ // the packet, so no pass accumulator is live: inside the pass epilogue the same arithmetic
+-// spills them to the stack (tools/engine_epilogue_variants.py).
+-void silu_pl_tile(const Hdr &d, uint8_t *dst) {
++// spills them to the stack (tools/engine_epilogue_variants.py). Kept out of line so run() and
++// its pass code are laid out as they were for packets without the flag.
++__attribute__((noinline))
++void silu_pl_tile(const Hdr &d, const int32_t *h, uint8_t *dst) {
+     for (int off = 0; off < NCO * OUT_BLOCK_BYTES; off += 32)
+-        aie::store_v(dst + off, silu_pl_u8(aie::load_v<32>(dst + off), d));
++        aie::store_v(dst + off, silu_pl_u8(aie::load_v<32>(dst + off), d, h));
+ }
+ 
+ // Nearest 2x upsampling: expand the [10 blocks][4][20][8] source packet in place
+@@ -364,7 +365,7 @@
+             conv_pass<false>(d, apkt, w, bias, psum, out, r, 4);
+         }
+         if ((d.flags & F_SIGMOID) && (d.flags & (F_EMIT | F_HOLD)))
+-            silu_pl_tile(d, (d.flags & F_EMIT) ? out : reinterpret_cast<uint8_t *>(psum) + HOLD_OFFSET_BYTES);
++            silu_pl_tile(d, hdr, (d.flags & F_EMIT) ? out : reinterpret_cast<uint8_t *>(psum) + HOLD_OFFSET_BYTES);
+         break;
+     case OP_MAXPOOL:
+         maxpool_tile(d, apkt, psum, out);

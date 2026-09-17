@@ -1,0 +1,4 @@
+$ python census_versions.py  (Peano -O2 objects of kernels/aie2/conv_engine/engine.cc at each commit, tools/engine_epilogue_variants.census)
+c714629 (main, before the sigmoid): .text 8960 B, 2102 instructions, accumulator stack moves 0; stack vector moves vlda wh 5, vlda wl 5, vst wh 1, vst wl 1; no out-of-line tile function
+45a8685 (first sigmoid version): .text 9792 B, 2334 instructions, accumulator stack moves 0; stack vector moves vlda wh 6, vlda wl 6, vst wh 1, vst wl 1; no out-of-line tile function
+7700316 (committed sigmoid version): .text 9824 B, 2349 instructions, accumulator stack moves 0; stack vector moves vlda wh 5, vlda wl 5, vst wh 1, vst wl 1; out-of-line silu_pl_tile: 10 scalar loads

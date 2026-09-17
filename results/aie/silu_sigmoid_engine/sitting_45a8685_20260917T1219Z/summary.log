@@ -1,0 +1,30 @@
+$ python iron_run.py <ignite-xdna worktree> sig_sitting.py <out> --iters 100 [--arms ...]  (verify_engine_container.py per run, xrt-smi idle before each, forward then reverse order per model)
+host DESKTOP-CBL5NUA, 2026-09-17T12:19Z, --iters 100, order A B C C B A per model
+yolov8n today_hardsigmoid run 0: rc=0 [verify] 66/66 layers exact | first dispatch 8.792 ms | dispatch mean 7.221 ms, min 7.107, max 7.351 over 100
+yolov8n new_hardsigmoid run 1: rc=0 [verify] 66/66 layers exact | first dispatch 8.880 ms | dispatch mean 7.298 ms, min 7.179, max 7.581 over 100
+yolov8n new_sigmoid run 2: rc=0 [verify] 66/66 layers exact | first dispatch 9.089 ms | dispatch mean 7.540 ms, min 7.428, max 7.718 over 100
+yolov8n new_sigmoid run 3: rc=0 [verify] 66/66 layers exact | first dispatch 9.271 ms | dispatch mean 7.556 ms, min 7.413, max 7.719 over 100
+yolov8n new_hardsigmoid run 4: rc=0 [verify] 66/66 layers exact | first dispatch 9.032 ms | dispatch mean 7.273 ms, min 7.149, max 7.563 over 100
+yolov8n today_hardsigmoid run 5: rc=0 [verify] 66/66 layers exact | first dispatch 8.835 ms | dispatch mean 7.242 ms, min 7.153, max 7.347 over 100
+yolov8s today_hardsigmoid run 0: rc=0 [verify] 66/66 layers exact | first dispatch 18.435 ms | dispatch mean 16.648 ms, min 16.380, max 16.998 over 100
+yolov8s new_hardsigmoid run 1: rc=0 [verify] 66/66 layers exact | first dispatch 18.450 ms | dispatch mean 16.761 ms, min 16.649, max 17.398 over 100
+yolov8s new_sigmoid run 2: rc=0 [verify] 66/66 layers exact | first dispatch 18.732 ms | dispatch mean 17.173 ms, min 17.052, max 17.390 over 100
+yolov8s new_sigmoid run 3: rc=0 [verify] 66/66 layers exact | first dispatch 18.666 ms | dispatch mean 17.102 ms, min 16.990, max 17.262 over 100
+yolov8s new_hardsigmoid run 4: rc=0 [verify] 66/66 layers exact | first dispatch 18.546 ms | dispatch mean 16.786 ms, min 16.668, max 17.174 over 100
+yolov8s today_hardsigmoid run 5: rc=0 [verify] 66/66 layers exact | first dispatch 18.405 ms | dispatch mean 16.726 ms, min 16.637, max 16.870 over 100
+pose today_hardsigmoid run 0: rc=0 [verify] 75/75 layers exact | first dispatch 9.297 ms | dispatch mean 7.579 ms, min 7.505, max 7.775 over 100
+pose new_hardsigmoid run 1: rc=0 [verify] 75/75 layers exact | first dispatch 9.282 ms | dispatch mean 7.596 ms, min 7.557, max 7.711 over 100
+pose new_sigmoid run 2: rc=0 [verify] 75/75 layers exact | first dispatch 9.409 ms | dispatch mean 7.829 ms, min 7.764, max 7.941 over 100
+pose new_sigmoid run 3: rc=0 [verify] 75/75 layers exact | first dispatch 9.486 ms | dispatch mean 7.882 ms, min 7.771, max 8.390 over 100
+pose new_hardsigmoid run 4: rc=0 [verify] 75/75 layers exact | first dispatch 9.373 ms | dispatch mean 7.688 ms, min 7.528, max 8.672 over 100
+pose today_hardsigmoid run 5: rc=0 [verify] 75/75 layers exact | first dispatch 9.115 ms | dispatch mean 7.608 ms, min 7.444, max 8.020 over 100
+idle after: True
+yolov8n  today_hardsigmoid  7.221 / 7.242  mean 7.232 ms
+yolov8n  new_hardsigmoid    7.298 / 7.273  mean 7.285 ms
+yolov8n  new_sigmoid        7.540 / 7.556  mean 7.548 ms
+yolov8s  today_hardsigmoid  16.648 / 16.726  mean 16.687 ms
+yolov8s  new_hardsigmoid    16.761 / 16.786  mean 16.773 ms
+yolov8s  new_sigmoid        17.173 / 17.102  mean 17.137 ms
+pose     today_hardsigmoid  7.579 / 7.608  mean 7.593 ms
+pose     new_hardsigmoid    7.596 / 7.688  mean 7.642 ms
+pose     new_sigmoid        7.829 / 7.882  mean 7.855 ms
