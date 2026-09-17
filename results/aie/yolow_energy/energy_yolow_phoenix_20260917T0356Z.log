@@ -1,0 +1,78 @@
+Energy sitting on DESKTOP-CBL5NUA, started 2026-09-17T03:56:49Z
+Package power: typeperf '\Energy Meter(RAPL_Package0_PKG)\Power', 1 s samples, milliwatts. Idle 30 s before each arm; window from progress line 2 to the last.
+== 2026-09-17T03:56:49Z [YOLO-World AMD variant D flat out #1]
+  idle      29 samples, mean 38.619 W, stdev 1.400 W, CPU 7.8 %
+  $ <home>/miniforge3/envs/resnet_env17/python.exe <ignite-xdna worktree>/pipelines/yolow/4b_g2g.py --model <home>/PycharmProjects/ignite-xdna/models/yolov8s-worldv2_cut_xint8_fp32cv2.onnx --ep npu --cache-key yolow_fp32D --warmup 50 --frames 600
+  window    300 frames in 33.0 s = 9.09 fps, 31 power samples, CPU 58.4 %
+  energy    package 79.393 W - idle 38.619 W = +40.774 W -> 4483.41 mJ per frame
+== 2026-09-17T03:58:40Z [YOLO-World container flat out #1]
+  idle      29 samples, mean 39.371 W, stdev 0.629 W, CPU 7.2 %
+  $ <home>/miniforge3/envs/mlir-aie-iron/python.exe <ignite-xdna worktree>/pipelines/yolow/4b_g2g.py --model <home>/PycharmProjects/ignite-xdna/build/yolow.ignite --ep ignite --warmup 50 --frames 600
+  window    300 frames in 12.0 s = 24.94 fps, 10 power samples, CPU 16.8 %
+  energy    package 65.319 W - idle 39.371 W = +25.949 W -> 1040.36 mJ per frame
+== 2026-09-17T03:59:46Z [YOLO-World DirectML FP32 flat out #1]
+  idle      29 samples, mean 40.315 W, stdev 0.920 W, CPU 8.0 %
+  $ <home>/miniforge3/envs/resnet_env17/python.exe <ignite-xdna worktree>/pipelines/yolow/4b_g2g.py --model <home>/PycharmProjects/ignite-xdna/models/yolov8s-worldv2_cut.onnx --ep dml --warmup 50 --frames 600
+  window    300 frames in 15.7 s = 19.11 fps, 14 power samples, CPU 16.3 %
+  energy    package 63.266 W - idle 40.315 W = +22.951 W -> 1201.12 mJ per frame
+== 2026-09-17T04:00:59Z [YOLO-World CPU FP32 flat out #1]
+  idle      29 samples, mean 38.171 W, stdev 0.808 W, CPU 7.1 %
+  $ <home>/miniforge3/envs/resnet_env17/python.exe <ignite-xdna worktree>/pipelines/yolow/4b_g2g.py --model <home>/PycharmProjects/ignite-xdna/models/yolov8s-worldv2_cut.onnx --ep cpu --warmup 50 --frames 600
+  window    300 frames in 24.3 s = 12.33 fps, 22 power samples, CPU 59.6 %
+  energy    package 82.701 W - idle 38.171 W = +44.530 W -> 3610.19 mJ per frame
+== 2026-09-17T04:02:31Z [YOLO-World AMD variant D flat out #2]
+  idle      29 samples, mean 38.402 W, stdev 0.874 W, CPU 7.0 %
+  $ <home>/miniforge3/envs/resnet_env17/python.exe <ignite-xdna worktree>/pipelines/yolow/4b_g2g.py --model <home>/PycharmProjects/ignite-xdna/models/yolov8s-worldv2_cut_xint8_fp32cv2.onnx --ep npu --cache-key yolow_fp32D --warmup 50 --frames 600
+  window    300 frames in 33.2 s = 9.04 fps, 30 power samples, CPU 58.4 %
+  energy    package 79.506 W - idle 38.402 W = +41.103 W -> 4544.51 mJ per frame
+== 2026-09-17T04:04:22Z [YOLO-World container flat out #2]
+  idle      29 samples, mean 39.057 W, stdev 0.968 W, CPU 7.2 %
+  $ <home>/miniforge3/envs/mlir-aie-iron/python.exe <ignite-xdna worktree>/pipelines/yolow/4b_g2g.py --model <home>/PycharmProjects/ignite-xdna/build/yolow.ignite --ep ignite --warmup 50 --frames 600
+  window    300 frames in 12.1 s = 24.88 fps, 10 power samples, CPU 17.5 %
+  energy    package 61.671 W - idle 39.057 W = +22.614 W -> 908.91 mJ per frame
+== 2026-09-17T04:05:28Z [YOLO-World DirectML FP32 flat out #2]
+  idle      29 samples, mean 38.376 W, stdev 0.622 W, CPU 7.2 %
+  $ <home>/miniforge3/envs/resnet_env17/python.exe <ignite-xdna worktree>/pipelines/yolow/4b_g2g.py --model <home>/PycharmProjects/ignite-xdna/models/yolov8s-worldv2_cut.onnx --ep dml --warmup 50 --frames 600
+  window    300 frames in 15.4 s = 19.43 fps, 14 power samples, CPU 16.5 %
+  energy    package 64.330 W - idle 38.376 W = +25.954 W -> 1336.00 mJ per frame
+== 2026-09-17T04:06:41Z [YOLO-World CPU FP32 flat out #2]
+  idle      29 samples, mean 38.745 W, stdev 0.559 W, CPU 7.0 %
+  $ <home>/miniforge3/envs/resnet_env17/python.exe <ignite-xdna worktree>/pipelines/yolow/4b_g2g.py --model <home>/PycharmProjects/ignite-xdna/models/yolov8s-worldv2_cut.onnx --ep cpu --warmup 50 --frames 600
+  window    300 frames in 24.5 s = 12.23 fps, 23 power samples, CPU 59.4 %
+  energy    package 82.535 W - idle 38.745 W = +43.790 W -> 3580.88 mJ per frame
+== 2026-09-17T04:08:13Z [YOLO-World AMD variant D @5 #1]
+  idle      29 samples, mean 38.881 W, stdev 0.906 W, CPU 7.0 %
+  $ <home>/miniforge3/envs/resnet_env17/python.exe <ignite-xdna worktree>/pipelines/yolow/4b_g2g.py --model <home>/PycharmProjects/ignite-xdna/models/yolov8s-worldv2_cut_xint8_fp32cv2.onnx --ep npu --cache-key yolow_fp32D --warmup 50 --frames 600 --max-fps 5.0
+  window    300 frames in 60.0 s = 5.00 fps, 58 power samples, CPU 35.8 %
+  energy    package 65.566 W - idle 38.881 W = +26.686 W -> 5337.04 mJ per frame
+== 2026-09-17T04:10:59Z [YOLO-World container @5 #1]
+  idle      29 samples, mean 38.627 W, stdev 0.615 W, CPU 7.0 %
+  $ <home>/miniforge3/envs/mlir-aie-iron/python.exe <ignite-xdna worktree>/pipelines/yolow/4b_g2g.py --model <home>/PycharmProjects/ignite-xdna/build/yolow.ignite --ep ignite --warmup 50 --frames 600 --max-fps 5.0
+  window    300 frames in 60.0 s = 5.00 fps, 58 power samples, CPU 9.2 %
+  energy    package 45.767 W - idle 38.627 W = +7.141 W -> 1428.13 mJ per frame
+== 2026-09-17T04:13:40Z [YOLO-World DirectML FP32 @5 #1]
+  idle      29 samples, mean 39.841 W, stdev 1.835 W, CPU 7.5 %
+  $ <home>/miniforge3/envs/resnet_env17/python.exe <ignite-xdna worktree>/pipelines/yolow/4b_g2g.py --model <home>/PycharmProjects/ignite-xdna/models/yolov8s-worldv2_cut.onnx --ep dml --warmup 50 --frames 600 --max-fps 5.0
+  window    300 frames in 60.0 s = 5.00 fps, 58 power samples, CPU 10.6 %
+  energy    package 44.053 W - idle 39.841 W = +4.212 W -> 842.48 mJ per frame
+== 2026-09-17T04:16:22Z [YOLO-World CPU FP32 @5 #1]
+  idle      29 samples, mean 38.823 W, stdev 0.612 W, CPU 7.2 %
+  $ <home>/miniforge3/envs/resnet_env17/python.exe <ignite-xdna worktree>/pipelines/yolow/4b_g2g.py --model <home>/PycharmProjects/ignite-xdna/models/yolov8s-worldv2_cut.onnx --ep cpu --warmup 50 --frames 600 --max-fps 5.0
+  window    300 frames in 60.0 s = 5.00 fps, 58 power samples, CPU 28.1 %
+  energy    package 59.894 W - idle 38.823 W = +21.071 W -> 4214.34 mJ per frame
+Idle baselines span 38.171-40.315 W, more than 2.0 W: the median-idle column does not hold across that; read arms against their own idle
+
+Median idle over 12 undisturbed baselines: 38.784 W
+arm                                           fps  CPU %  +W own idle  mJ/frame  mJ vs median idle
+YOLO-World AMD variant D flat out #1         9.09   58.4       40.774   4483.41            4465.26
+YOLO-World container flat out #1            24.94   16.8       25.949   1040.36            1063.87
+YOLO-World DirectML FP32 flat out #1        19.11   16.3       22.951   1201.12            1281.26
+YOLO-World CPU FP32 flat out #1             12.33   59.6       44.530   3610.19            3560.45
+YOLO-World AMD variant D flat out #2         9.04   58.4       41.103   4544.51            4502.27
+YOLO-World container flat out #2            24.88   17.5       22.614    908.91             919.88
+YOLO-World DirectML FP32 flat out #2        19.43   16.5       25.954   1336.00            1314.98
+YOLO-World CPU FP32 flat out #2             12.23   59.4       43.790   3580.88            3577.69
+YOLO-World AMD variant D @5 #1               5.00   35.8       26.686   5337.04            5356.38
+YOLO-World container @5 #1                   5.00    9.2        7.141   1428.13            1396.63
+YOLO-World DirectML FP32 @5 #1               5.00   10.6        4.212    842.48            1053.75
+YOLO-World CPU FP32 @5 #1                    5.00   28.1       21.071   4214.34            4222.16

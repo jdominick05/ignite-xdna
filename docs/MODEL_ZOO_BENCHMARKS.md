@@ -413,6 +413,12 @@ evidence `results/aie/yolow_gptq/` and `results/aie/yolow_vocabulary/`.
 
   So 2.75 times AMD's stack, and faster than the iGPU only with the larger vocabulary
   ([BENCHMARKS](BENCHMARKS.md#yolo-world-v2-glass-to-glass-275-times-amds-stack-and-against-the-igpu-it-depends-on-the-vocabulary-2026-09-16-desktop-2)).
+- **Energy per frame** (`tools/energy_sitting.py`, same loop, 80 classes):
+  - flat out: container 1040.36 and 908.91 mJ, AMD's stack 4483.41 and 4544.51 mJ, iGPU 1201.12 and 1336.00 mJ, CPU
+    3610.19 and 3580.88 mJ;
+  - at 5 fps: container 1428.13 mJ, AMD's stack 5337.04, iGPU 842.48, CPU 4214.34.
+
+  ([BENCHMARKS](BENCHMARKS.md#yolo-world-v2-energy-per-frame-43-50-times-less-than-amds-stack-and-the-igpu-spends-less-at-5-fps-2026-09-17-desktop-2)).
 - **What the compiler, runtime and kernel needed beyond YOLO11n:**
   - host regions whose constants are shared with another region;
   - host inputs that are Concat views;
