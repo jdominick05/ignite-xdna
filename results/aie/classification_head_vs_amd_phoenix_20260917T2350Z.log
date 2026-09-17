@@ -1,0 +1,121 @@
+==============================================================================
+Classification Head Silicon Benchmark: Ignition vs AMD Ryzen AI 1.7.1
+Hardware: AMD Ryzen 7 8700G, Phoenix XDNA1 NPU [003d:00:01.1]
+Timestamp: 2026-09-17T23:50:53Z
+==============================================================================
+[xrt-smi before]
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+Auditing AMD Vitis AI EP 1.7.1 on classification head...
+  Vitis AI EP status: failed
+  Error: F20260917 19:50:55.607383 49288 runner_requests_queue.cpp:178] -- Error: Failed to create runner: invalid vector subscript
+  NPU nodes accelerated: 0 (100% CPU fallback)
+
+--- Round 1: Interleaved Execution ---
+  Running AMD CPU fallback (50 warmup, 500 timed frames)...
+    AMD CPU: mean 0.666 ms, 99th 1.035 ms, RSS 91.3 MB
+  Running Ignition NPU container (50 warmup, 500 timed frames)...
+    Ignition NPU: mean 1.378 ms (dispatch 1.142 ms), 99th 1.646 ms, RSS 168.8 MB
+
+--- Round 2: Interleaved Execution ---
+  Running AMD CPU fallback (50 warmup, 500 timed frames)...
+    AMD CPU: mean 0.707 ms, 99th 1.144 ms, RSS 169.8 MB
+  Running Ignition NPU container (50 warmup, 500 timed frames)...
+    Ignition NPU: mean 1.386 ms (dispatch 1.153 ms), 99th 1.657 ms, RSS 232.9 MB
+
+[xrt-smi after]
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+==============================================================================
+Summary Table:
+| Run | Stack | Target | Mean | 99th pct | Where the time goes | Memory |
+|---|---|---|---:|---:|---|---:|
+| 1 | AMD Ryzen AI Software 1.7.1 (Vitis AI EP) | NPU | **crashes** | - | 0 nodes on NPU (`invalid vector subscript`), 100% CPU fallback | - |
+| 2 | AMD Ryzen AI Software 1.7.1 (CPU fallback) | CPU | 0.666 ms | 1.035 ms | prep 0.000 ms, Gemm 0.647 ms, softmax 0.019 ms | 91.3 MB |
+| 3 | Ignition on the container | NPU | **1.378 ms** | 1.646 ms | prep 0.193 ms, NPU dispatch 1.142 ms, readback 0.024 ms, softmax 0.015 ms | **168.8 MB** |
+| 4 | AMD Ryzen AI Software 1.7.1 (CPU fallback) | CPU | 0.707 ms | 1.144 ms | prep 0.000 ms, Gemm 0.687 ms, softmax 0.020 ms | 169.8 MB |
+| 5 | Ignition on the container | NPU | **1.386 ms** | 1.657 ms | prep 0.191 ms, NPU dispatch 1.153 ms, readback 0.024 ms, softmax 0.015 ms | **232.9 MB** |
+==============================================================================
+
+AMD Vitis AI EP Failure Witness:
+WARNING: Logging before InitGoogleLogging() is written to STDERR
+F20260917 19:50:55.607383 49288 runner_requests_queue.cpp:178] -- Error: Failed to create runner: invalid vector subscript
+F20260917 19:50:55.619392 49288 runner_requests_queue.cpp:178] -- Error: Failed to create runner: invalid vector subscript
+2026-09-17 19:50:55.6199156 [E:onnxruntime:, sequential_executor.cc:572 onnxruntime::ExecuteKernel] Non-zero status code returned while running vitis_ai_ep_1 node. Name:'VitisAIExecutionProvider_vitis_ai_ep_1_0' Status Message: public: int __cdecl vaip_core::TarWriter::write(class vaip_core::IStreamReader const & __ptr64,class std::basic_string<char,struct std::char_traits<char>,class std::allocator<char> > const & __ptr64) __ptr64
+xir_deserialize_cif
+xir_deserialize_cif
+xir_deserialize_cif
+RtlCaptureContext2
+public: class vaip_core::TryFuseProto * __ptr64 __cdecl vaip_core::DpuSubgraphEntryProto::mutable_try_fuse(void) __ptr64
+public: class vaip_core::TryFuseProto * __ptr64 __cdecl vaip_core::DpuSubgraphEntryProto::mutable_try_fuse(void) __ptr64
+public: class vaip_core::TryFuseProto * __ptr64 __cdecl vaip_core::DpuSubgraphEntryProto::mutable_try_fuse(void) __ptr64
+(unknown)
+PyInit_onnxruntime_pybind11_state
+PyInit_onnxruntime_pybind11_state
+PyInit_onnxruntime_pybind11_state
+PyInit_onnxruntime_pybind11_state
+PyInit_onnxruntime_pybind11_state
+PyInit_onnxruntime_pybind11_state
+PyInit_onnxruntime_pybind11_state
+PyInit_onnxruntime_pybind11_state
+PyInit_onnxruntime_pybind11_state
+PyInit_onnxruntime_pybind11_state
+PyInit_onnxruntime_pybind11_state
+PyInit_onnxruntime_pybind11_state
+PyInit_onnxruntime_pybind11_state
+PyInit_onnxruntime_pybind11_state
+PyInit_onnxruntime_pybind11_state
+(unknown)
+PyCFunction_GetFlags
+_PyObject_MakeTpCall
+PyObject_Vectorcall
+_PyEval_EvalFrameDefault
+PyEval_EvalCode
+PyRun_FileExFlags
+PyRun_FileExFlags
+
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+  File "C:\Users\<user>\miniforge3\envs\resnet_env17\Lib\site-packages\onnxruntime\capi\onnxruntime_inference_collection.py", line 287, in run
+    return self._sess.run(output_names, input_feed, run_options)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+onnxruntime.capi.onnxruntime_pybind11_state.RuntimeException: [ONNXRuntimeError] : 6 : RUNTIME_EXCEPTION : Non-zero status code returned while running vitis_ai_ep_1 node. Name:'VitisAIExecutionProvider_vitis_ai_ep_1_0' Status Message: public: int __cdecl vaip_core::TarWriter::write(class vaip_core::IStreamReader const & __ptr64,class std::basic_string<char,struct std::char_traits<char>,class std::allocator<char> > const & __ptr64) __ptr64
+xir_deserialize_cif
+xir_deserialize_cif
+xir_deserialize_cif
+RtlCaptureContext2
+public: class vaip_core::TryFuseProto * __ptr64 __cdecl vaip_core::DpuSubgraphEntryProto::mutable_try_fuse(void) __ptr64
+public: class vaip_core::TryFuseProto * __ptr64 __cdecl vaip_core::DpuSubgraphEntryProto::mutable_try_fuse(void) __ptr64
+public: class vaip_core::TryFuseProto * __ptr64 __cdecl vaip_core::DpuSubgraphEntryProto::mutable_try_fuse(void) __ptr64
+(unknown)
+PyInit_onnxruntime_pybind11_state
+PyInit_onnxruntime_pybind11_state
+PyInit_onnxruntime_pybind11_state
+PyInit_onnxruntime_pybind11_state
+PyInit_onnxruntime_pybind11_state
+PyInit_onnxruntime_pybind11_state
+PyInit_onnxruntime_pybind11_state
+PyInit_onnxruntime_pybind11_state
+PyInit_onnxruntime_pybind11_state
+PyInit_onnxruntime_pybind11_state
+PyInit_onnxruntime_pybind11_state
+PyInit_onnxruntime_pybind11_state
+PyInit_onnxruntime_pybind11_state
+PyInit_onnxruntime_pybind11_state
+PyInit_onnxruntime_pybind11_state
+(unknown)
+PyCFunction_GetFlags
+_PyObject_MakeTpCall
+PyObject_Vectorcall
+_PyEval_EvalFrameDefault
+PyEval_EvalCode
+PyRun_FileExFlags
+PyRun_FileExFlags

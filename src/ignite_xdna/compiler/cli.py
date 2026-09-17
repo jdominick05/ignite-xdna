@@ -438,6 +438,10 @@ def compile_graph_engine(input_path: Union[str, Path], output_path: Union[str, P
         from ignite_xdna.runtime.heads import resolve_head_layout
         status = resolve_head_layout(manifest, int(manifest["egress_bytes"]))
         print(f"    [OK] head_status: {'present' if status.present else 'absent'} ({status.reason})")
+    elif manifest.get("task") == "classify":
+        c = manifest["classification"]
+        print(f"    [OK] classification output: {c['channels']} classes at scale {c['scale']}, "
+              f"layout {c['layout']} -> logits {manifest['output_shapes']['logits']}")
     else:
         d = manifest["dense_output"]
         print(f"    [OK] dense output: {d['channels']}x{d['height']}x{d['width']} uint8 at scale {d['scale']}, "

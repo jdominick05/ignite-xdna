@@ -793,10 +793,19 @@ class ClassificationSession(EngineSession):
                         self._cls_in_bytes, self._cls_in_base)
 
     def stage_input(self, x: np.ndarray) -> None:
-        """Alias for stage_pooled or full quantized input staging."""
+        """Stage input tensor (image or pooled features) into workspace."""
         arr = np.asarray(x)
+        if arr.ndim == 4 and arr.shape[0] == 1:
+            arr = arr[0]
         if arr.ndim == 3 and arr.shape[1:] == self.input_hw:
-            self.stage_quantized(arr)
+            if np.issubdtype(arr.dtype, np.floating):
+                q = np.clip(np.round(arr.astype(np.float64) / self.input_scale) + self.input_zp, 0, 255).astype(np.uint8)
+            else:
+                q = arr.astype(np.uint8)
+            if self.in_blocks == 1:
+                super().stage_quantized(q)
+            else:
+                self.stage_quantized(q)
         else:
             self.stage_pooled(arr)
 
@@ -833,9 +842,9 @@ class ClassificationSession(EngineSession):
         logits = (raw_u8.astype(np.float32) - float(self.zero_point)) * float(self.scale)
         return logits
 
-    def run(self, pooled_features: np.ndarray, timeout_ms: int = 10000) -> Tuple[np.ndarray, Dict[str, float]]:
+    def run(self, input_data: np.ndarray, timeout_ms: int = 10000) -> Tuple[np.ndarray, Dict[str, float]]:
         t0 = time.perf_counter()
-        self.stage_pooled(pooled_features)
+        self.stage_input(input_data)
         t1 = time.perf_counter()
         self.dispatch(timeout_ms=timeout_ms)
         t2 = time.perf_counter()
