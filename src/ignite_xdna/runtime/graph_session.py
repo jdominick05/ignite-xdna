@@ -106,25 +106,36 @@ class HostStep:
         self.input_name = self.ort_session.get_inputs()[0].name
         placements = session.ge["placements"]
         self.pin, self.pout = placements[seg["input"]], placements[seg["output"]]
+        # The input: one whole tensor (older manifests), or the block ranges of a Concat view over several tensors.
+        parts = seg.get("inputs") or [{"tensor": seg["input"], "block_offset": 0, "blocks": int(self.pin["blocks"])}]
+        self.in_parts = []
+        for part in parts:
+            p = placements[part["tensor"]]
+            h, w, halo = int(p["height"]), int(p["width"]), int(p["halo"])
+            plane = (h + 2 * halo) * (w + 2 * halo) * 8
+            self.in_parts.append((int(p["base"]) + int(part["block_offset"]) * plane, int(part["blocks"]) * plane,
+                                  int(part["blocks"]), h, w, halo))
+        in_channels = int(seg.get("in_channels") or self.pin["channels"])
         self.in_base, self.in_bytes = _region(self.pin)
         self.out_base, self.out_bytes = _region(self.pout)
-        self._x = np.empty((1, int(self.pin["channels"]), int(self.pin["height"]), int(self.pin["width"])),
-                           dtype=np.uint8)
+        self._x = np.empty((1, in_channels, int(self.pin["height"]), int(self.pin["width"])), dtype=np.uint8)
         self.last_ms = 0.0
 
     def run(self) -> None:
         s = self.session
         t0 = time.perf_counter()
         d = s.harness.pyxrt.xclBOSyncDirection
-        p = self.pin
-        h, w, halo, blocks = int(p["height"]), int(p["width"]), int(p["halo"]), int(p["blocks"])
-        s.bo_ws.sync(d.XCL_BO_SYNC_BO_FROM_DEVICE, self.in_bytes, self.in_base)
-        if s._ws_map is not None:
-            raw = s._ws_map[self.in_base:self.in_base + self.in_bytes]
-        else:
-            raw = np.frombuffer(s.bo_ws.read(self.in_bytes, self.in_base), dtype=np.uint8)
-        planes = raw.reshape(blocks, h + 2 * halo, w + 2 * halo, 8)[:, halo:halo + h, halo:halo + w, :]
-        self._x[0] = np.transpose(planes, (0, 3, 1, 2)).reshape(blocks * 8, h, w)[:self._x.shape[1]]
+        filled = 0
+        for base, nbytes, blocks, h, w, halo in self.in_parts:
+            s.bo_ws.sync(d.XCL_BO_SYNC_BO_FROM_DEVICE, nbytes, base)
+            if s._ws_map is not None:
+                raw = s._ws_map[base:base + nbytes]
+            else:
+                raw = np.frombuffer(s.bo_ws.read(nbytes, base), dtype=np.uint8)
+            planes = raw.reshape(blocks, h + 2 * halo, w + 2 * halo, 8)[:, halo:halo + h, halo:halo + w, :]
+            take = min(blocks * 8, self._x.shape[1] - filled)
+            self._x[0, filled:filled + take] = np.transpose(planes, (0, 3, 1, 2)).reshape(blocks * 8, h, w)[:take]
+            filled += take
         y = self.ort_session.run(None, {self.input_name: self._x})[0]
         q = self.pout
         oh, ow, ohalo, oblocks = int(q["height"]), int(q["width"]), int(q["halo"]), int(q["blocks"])

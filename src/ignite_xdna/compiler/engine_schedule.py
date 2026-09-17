@@ -1023,5 +1023,7 @@ def emulate_host_layer(ir: GraphIR, ws: Workspace, layer: HostLayer, ws_arr: np.
     """The host step between two dispatches on a workspace array: read the input tensor, run the layer's
     extracted model and write the output tensor's interior (its halo ring is left as planned)."""
     from ignite_xdna.compiler.graph_reference import run_host_layer
-    x = ws.read_tensor(ws_arr, layer.input.tensor)[:ir.tensors[layer.input.tensor].channels]
+    segs = layer.input_segments()
+    parts = [ws.read_tensor(ws_arr, s.tensor)[s.block_offset * 8:(s.block_offset + s.blocks) * 8] for s in segs]
+    x = np.concatenate(parts, axis=0)[:layer.in_channels or ir.tensors[segs[0].tensor].channels]
     ws.write_tensor(ws_arr, layer.output, run_host_layer(layer, x, optimize=optimize))
