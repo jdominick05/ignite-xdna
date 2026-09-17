@@ -1,0 +1,35 @@
+$ <home>\miniforge3\envs\resnet_env17\python.exe pipelines/yolow/5_eval_map.py --model <scratch>/yolow\mixed\yolov8s-worldv2_cut_xint8_fp32A.onnx --ep cpu --n 500 --images <ignite-xdna main>\data\coco\val2017 --ann <ignite-xdna main>\data\coco\annotations\instances_val2017.json --txt-feats <ignite-xdna main>\models\yolow_coco_txt_feats.npy --dets <scratch>/yolow\mixed\dets_A.json
+loading annotations into memory...
+Done (t=0.28s)
+creating index...
+index created!
+model: head-cut (6 outputs), contrastive + numpy decode, input 640x640
+eval : 500 images, conf 0.001, iou 0.7, max_det 300, per-class NMS
+  [ 500/500]  infer 91.58 ms  elapsed  55.2s
+
+Timing (500 images):
+  mean   : 91.58 ms  (10.9 fps)
+  median : 91.95 ms
+  p95    : 98.47 ms
+wrote 85047 detections to <scratch>/yolow\mixed\dets_A.json
+Loading and preparing results...
+DONE (t=0.31s)
+creating index...
+index created!
+Running per image evaluation...
+Evaluate annotation type *bbox*
+DONE (t=1.42s).
+Accumulating evaluation results...
+DONE (t=0.71s).
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.019
+ Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] = 0.033
+ Average Precision  (AP) @[ IoU=0.75      | area=   all | maxDets=100 ] = 0.020
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.013
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.056
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.017
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=  1 ] = 0.035
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets= 10 ] = 0.054
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.056
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.018
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.106
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.065

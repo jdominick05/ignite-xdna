@@ -1,0 +1,27 @@
+$ <home>\miniforge3\envs\resnet_env17\python.exe <scratch>\yolow_concat_ranges.py <scratch>\yolow\yolov8s-worldv2_cut_fp32_hardsigmoid.onnx --images 2
+
+/model.12/cv2: weight (256, 512, 1, 1), per-tensor max|w| 1.0346
+  input /model.12/Slice_output_0                                ch   0-127 | act max     7.592 p99.9    4.202 | max|w| 0.51567 median|w| 0.03039 | act*w    3.915
+  input /model.12/Slice_1_output_0                              ch 128-255 | act max     7.318 p99.9    3.328 | max|w| 0.65419 median|w| 0.03122 | act*w    4.788
+  input /model.12/m.0/cv2/act/Mul_output_0                      ch 256-383 | act max    15.626 p99.9    9.306 | max|w| 0.72694 median|w| 0.02429 | act*w   11.359
+  input /model.12/attn/Reshape_3_output_0                       ch 384-511 | act max    18.906 p99.9   18.670 | max|w| 1.03460 median|w| 0.03313 | act*w   19.561
+
+/model.15/cv2: weight (128, 256, 1, 1), per-tensor max|w| 4.6886
+  input /model.15/Slice_output_0                                ch   0- 63 | act max     8.414 p99.9    4.243 | max|w| 0.91875 median|w| 0.03214 | act*w    7.730
+  input /model.15/Slice_1_output_0                              ch  64-127 | act max     3.516 p99.9    1.856 | max|w| 0.89455 median|w| 0.03955 | act*w    3.146
+  input /model.15/m.0/cv2/act/Mul_output_0                      ch 128-191 | act max     8.066 p99.9    3.851 | max|w| 1.24924 median|w| 0.03007 | act*w   10.076
+  input /model.15/attn/Reshape_3_output_0                       ch 192-255 | act max    10.342 p99.9    8.838 | max|w| 4.68860 median|w| 0.03970 | act*w   48.491
+
+/model.18/cv2: weight (256, 512, 1, 1), per-tensor max|w| 2.3172
+  input /model.18/Slice_output_0                                ch   0-127 | act max     9.873 p99.9    5.444 | max|w| 1.14601 median|w| 0.02182 | act*w   11.315
+  input /model.18/Slice_1_output_0                              ch 128-255 | act max     7.865 p99.9    3.325 | max|w| 0.64775 median|w| 0.02777 | act*w    5.094
+  input /model.18/m.0/cv2/act/Mul_output_0                      ch 256-383 | act max    13.020 p99.9    3.960 | max|w| 1.04956 median|w| 0.02457 | act*w   13.666
+  input /model.18/attn/Reshape_3_output_0                       ch 384-511 | act max    16.322 p99.9   14.984 | max|w| 2.31722 median|w| 0.03076 | act*w   37.822
+
+/model.21/cv2: weight (512, 1024, 1, 1), per-tensor max|w| 1.1052
+  input /model.21/Slice_output_0                                ch   0-255 | act max    11.839 p99.9    5.631 | max|w| 0.78332 median|w| 0.01925 | act*w    9.273
+  input /model.21/Slice_1_output_0                              ch 256-511 | act max     7.135 p99.9    3.613 | max|w| 0.63404 median|w| 0.02387 | act*w    4.524
+  input /model.21/m.0/cv2/act/Mul_output_0                      ch 512-767 | act max     8.322 p99.9    5.570 | max|w| 1.10517 median|w| 0.01987 | act*w    9.197
+  input /model.21/attn/Reshape_3_output_0                       ch 768-1023 | act max    16.629 p99.9   16.383 | max|w| 1.01507 median|w| 0.02205 | act*w   16.880
+
+exit 0
