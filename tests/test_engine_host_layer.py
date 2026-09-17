@@ -24,6 +24,9 @@ Uses models/yolo11n_cut_xint8.onnx, models/yolo11n_no_c2psa_cut_xint8.onnx and m
   Add -> HardSigmoid * Mul lowers onto the attention half's convolution as a residual whose packet applies HardSwish
   after the add: 74 layers, the attention cores the only host layers, every tensor equal to ONNX Runtime's and the
   packet emulation of those four layers equal to the direct reference;
+- with those convolutions requantized by GPTQ with int32 biases instead (models/yolov8s-worldv2_cut_xint8_gptqcv2.onnx),
+  the biases reach the layers as int32 (no int8 truncation) and every tensor equals ONNX Runtime's; an accumulator
+  bias outside int32 is refused;
 - dilated and grouped (non-depthwise) convolutions, 1x1 stride-2 convolutions and a host region that names
   no node are refused;
 - ``ignite-compile --host-region`` reaches the graph compile, and a region Git Bash rewrote into a path is refused
@@ -58,6 +61,8 @@ YOLOW_ATTN = ("/model.12/attn/", "/model.15/attn/", "/model.18/attn/", "/model.2
 YOLOW_CV2 = MODELS / "yolov8s-worldv2_cut_xint8_fp32cv2.onnx"
 # pipelines/yolow/3a_split_attn_conv.py, then 3b_quantize_cut.py --in models/yolov8s-worldv2_cut_split.onnx
 YOLOW_SPLIT = MODELS / "yolov8s-worldv2_cut_split_xint8.onnx"
+# pipelines/yolow/3c_gptq_cv2.py: those four convolutions with GPTQ int8 weights and int32 biases
+YOLOW_GPTQ = MODELS / "yolov8s-worldv2_cut_xint8_gptqcv2.onnx"
 BUS = ROOT / "assets" / "bus.jpg"
 C2PSA = "/model.10/"
 CORE = "/model.10/m/m.0/attn/qkv/conv/Conv=/model.10/m/m.0/attn/Reshape_1"
@@ -306,8 +311,38 @@ class ResidualHardSwish(_OrtCase):
             self.assertTrue(np.array_equal(ws.read_tensor(arr, L.output)[:c], direct[L.output][:c]), L.name)
 
 
+@unittest.skipUnless(YOLOW_GPTQ.exists(), f"{YOLOW_GPTQ.name} not present")
+class Int32Bias(_OrtCase):
+    """YOLO-World v2 with its four C2fAttn output convolutions requantized by pipelines/yolow/3c_gptq_cv2.py: GPTQ int8
+    weights and an int32 bias at the product scale. The bias reaches the accumulator unchanged; nothing is truncated to
+    int8."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.ir = graph_ir.lower_yolov8n(YOLOW_GPTQ, host_regions=YOLOW_ATTN)
+
+    def test_the_four_output_convolutions_carry_int32_biases(self):
+        self.assertEqual(len(self.ir.layers), 70)
+        by_name = {L.name: L for L in self.ir.layers}
+        for b in (12, 15, 18, 21):
+            L = by_name[f"/model.{b}/cv2/conv/Conv"]
+            self.assertEqual(L.bias_q.dtype, np.int32)
+            self.assertGreater(int(np.abs(L.bias_q).max()), 127, L.name)
+            self.assertAlmostEqual(L.bias_scale, L.in_scale * L.weight_scale, delta=1e-12)
+
+    def test_every_tensor_matches_onnx_runtime(self):
+        self.assert_every_tensor_matches_ort(YOLOW_GPTQ, self.ir)
+
+
 @unittest.skipUnless(YOLOV8N.exists(), f"{YOLOV8N.name} not present")
 class ConvolutionGuard(unittest.TestCase):
+    def test_accumulator_bias_outside_int32_is_refused(self):
+        ir = graph_ir.lower_yolov8n(YOLOV8N)
+        L = next(L for L in ir.layers if isinstance(L, graph_ir.ConvLayer))
+        bad = dataclasses.replace(L, bias_q=np.full_like(L.bias_q, np.iinfo(np.int32).max))
+        with self.assertRaisesRegex(ValueError, "does not fit int32"):
+            es.conv_packet(bad, 0, es.layer_chunks(ir, bad)[0], 1, 0)
+
     def lowered_with(self, attr_name, value):
         m = onnx.load(str(YOLOV8N))
         conv = next(n for n in m.graph.node if n.op_type == "Conv")

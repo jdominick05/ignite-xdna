@@ -319,6 +319,8 @@ def conv_packet(layer: ConvLayer, group: int, chunk: Chunk, count_out: int, coun
                 w[:, ci // 8, co // 8, ci % 8, co % 8] = wt[:, ci, co]
     bias = np.zeros(32, dtype=np.int64)
     bacc = layer.bias_acc()
+    if bacc.min() < -(1 << 31) or bacc.max() >= (1 << 31):   # an int32 bias can leave the accumulator's range
+        raise ValueError(f"{layer.name}: accumulator bias {bacc.min()}..{bacc.max()} does not fit int32")
     bias[:cout_avail] = bacc[co0:co0 + cout_avail]
     flags = 0
     if chunk.index > 0:
