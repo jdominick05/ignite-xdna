@@ -1,0 +1,72 @@
+{
+  "schema": 1,
+  "created_utc": "2026-09-17T14:33:05Z",
+  "model": "<scratch>\\sig_containers\\pose_today.ignite",
+  "model_name": "pose_today.ignite",
+  "model_bytes": 8847296,
+  "task": "pose",
+  "backend": "npu",
+  "source": "image bus.jpg 810x1080",
+  "source_kind": "image",
+  "frames_requested": 500,
+  "warmup": 50,
+  "frames_processed": 550,
+  "frames_timed": 500,
+  "stop_reason": "frame limit",
+  "host": {
+    "hostname": "DESKTOP-CBL5NUA",
+    "processor": "AMD64 Family 25 Model 117 Stepping 2, AuthenticAMD",
+    "python": "3.13.15",
+    "numpy": "2.5.3",
+    "opencv": "5.0.0",
+    "cpu_count": 16,
+    "onnxruntime": "1.30.0"
+  },
+  "max_fps": 0.0,
+  "power_mode": {
+    "mode": "balanced",
+    "wait_policy": "PASSIVE",
+    "threads": 8,
+    "physical_cores": 8,
+    "logical_processors": 16,
+    "wait_policy_source": "mode",
+    "threads_source": "mode",
+    "description": "balanced: 8 worker threads, sleeping between regions (8 cores / 16 threads on this host)"
+  },
+  "npu_power": {
+    "state": "kept",
+    "reason": "the balanced power mode leaves the NPU's mode alone",
+    "lower_mode": "powersaver",
+    "previous_mode": null,
+    "period_ms": 0.0,
+    "predicted_ms": 18.093946624312036,
+    "lowered_at_frame": null,
+    "check_p95_ms": null,
+    "watch_interval_s": 5.0,
+    "recovered_lease": null
+  },
+  "g2g_ms": {
+    "mean": 9.00199439865537,
+    "p50": 8.957599988207221,
+    "p95": 9.370214986847714,
+    "p99": 9.892696004826576,
+    "min": 8.5636000148952,
+    "max": 10.094499972183257,
+    "cold_first_frame": 11.867099965456873
+  },
+  "fps_from_mean": 111.08649436055751,
+  "stages_ms": {
+    "preprocess": 0.5721145997522399,
+    "network": 8.104571399861015,
+    "postprocess": 0.3205804005265236,
+    "dispatch": 7.557898798957467,
+    "readback": 0.531388399307616
+  },
+  "rss_mb": {
+    "first_timed": 181.6015625,
+    "end": 181.81640625,
+    "drift": 0.21484375
+  },
+  "npu_frames": 500,
+  "people_per_frame": 3.0
+}

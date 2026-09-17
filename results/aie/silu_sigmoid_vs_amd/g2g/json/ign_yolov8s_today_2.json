@@ -1,0 +1,72 @@
+{
+  "schema": 1,
+  "created_utc": "2026-09-17T14:32:01Z",
+  "model": "<scratch>\\sig_containers\\yolov8s_today.ignite",
+  "model_name": "yolov8s_today.ignite",
+  "model_bytes": 30745728,
+  "task": "detect",
+  "backend": "npu",
+  "source": "image bus.jpg 810x1080",
+  "source_kind": "image",
+  "frames_requested": 500,
+  "warmup": 50,
+  "frames_processed": 550,
+  "frames_timed": 500,
+  "stop_reason": "frame limit",
+  "host": {
+    "hostname": "DESKTOP-CBL5NUA",
+    "processor": "AMD64 Family 25 Model 117 Stepping 2, AuthenticAMD",
+    "python": "3.13.15",
+    "numpy": "2.5.3",
+    "opencv": "5.0.0",
+    "cpu_count": 16,
+    "onnxruntime": "1.30.0"
+  },
+  "max_fps": 0.0,
+  "power_mode": {
+    "mode": "balanced",
+    "wait_policy": "PASSIVE",
+    "threads": 8,
+    "physical_cores": 8,
+    "logical_processors": 16,
+    "wait_policy_source": "mode",
+    "threads_source": "mode",
+    "description": "balanced: 8 worker threads, sleeping between regions (8 cores / 16 threads on this host)"
+  },
+  "npu_power": {
+    "state": "kept",
+    "reason": "the balanced power mode leaves the NPU's mode alone",
+    "lower_mode": "powersaver",
+    "previous_mode": null,
+    "period_ms": 0.0,
+    "predicted_ms": 37.865636236965656,
+    "lowered_at_frame": null,
+    "check_p95_ms": null,
+    "watch_interval_s": 5.0,
+    "recovered_lease": null
+  },
+  "g2g_ms": {
+    "mean": 18.002785999677144,
+    "p50": 17.965200007893145,
+    "p95": 18.35111003019847,
+    "p99": 18.79727298510261,
+    "min": 17.615499964449555,
+    "max": 19.488500023726374,
+    "cold_first_frame": 20.975899999029934
+  },
+  "fps_from_mean": 55.546958121811464,
+  "stages_ms": {
+    "preprocess": 0.5751713982317597,
+    "network": 17.374240602599457,
+    "postprocess": 0.04577220091596246,
+    "dispatch": 16.705274000298232,
+    "readback": 0.6689666023012251
+  },
+  "rss_mb": {
+    "first_timed": 241.71875,
+    "end": 241.71875,
+    "drift": 0.0
+  },
+  "npu_frames": 500,
+  "detections_per_frame": 6.0
+}

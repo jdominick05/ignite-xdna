@@ -1,0 +1,13 @@
+# rescore.py, as run
+
+import json, sys
+from pycocotools.coco import COCO
+from pycocotools.cocoeval import COCOeval
+dets, ann, kind, n = sys.argv[1], sys.argv[2], sys.argv[3], int(sys.argv[4])
+coco = COCO(ann)
+ids = sorted(coco.getImgIds())[:n]
+d = [x for x in json.load(open(dets)) if x["image_id"] in set(ids)]
+ev = COCOeval(coco, coco.loadRes(d), kind)
+ev.params.imgIds = ids
+ev.evaluate(); ev.accumulate(); ev.summarize()
+print(f"RESCORED first {n} images: {len(d)} detections, AP@50-95 {ev.stats[0] * 100:.2f}, AP@50 {ev.stats[1] * 100:.2f}")

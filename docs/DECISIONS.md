@@ -1881,7 +1881,9 @@ cached reference heads rather than `bo_out`.
     spills the pass accumulators (88 stack moves with four lines, beside or instead of HardSwish), even with the lines
     evaluated one at a time. After the passes it has none, at 9,792 B of text against 8,960 B today.
   - **Four lines at most without a header change.** Line 1 takes `A1`/`B1`/`S1` and lines 2-4 the six free words
-    26-31. Four lines score within 0.54 points of every exact variant on this slice. Three lines lose a further
+    26-31. Four lines score within 0.54 points of every exact variant on this slice. (Qualified 2026-09-17: Quark
+    with Sigmoid kept, recalibrated on YOLOv8s with 100 images instead of 200, scores 1.01 points above four lines;
+    that is a different calibration recipe.) Three lines lose a further
     0.24-0.59 points and save little: 64 B of text and one line per 32 outputs.
   - **The reference is an ONNX model with the integer function as `Gather` tables,** not Quark's graph.
     `tools/silu_integer_oracle.py` writes it, and it mirrors the expression with the emulator's `rne_shift` and
@@ -1928,4 +1930,12 @@ cached reference heads rather than `bo_out`.
     YOLOv8n, YOLOv8s and YOLOv8n-pose only.
   - Changing the default would move Ignition's published latency figures, which all compare against AMD's stack.
   - AMD's accuracy on the same 500 images has not been measured, so the trade (2.4-3.9 % dispatch for 5.5-11.9
-    points on that slice) cannot yet be stated against AMD.
+    points on that slice) cannot yet be stated against AMD. (Answered 2026-09-17, measured against AMD's stack on
+    all 5,000 COCO val2017 images:
+    - **Accuracy:** the sigmoid containers score 34.12, 42.37 and 44.16 against AMD's 26.68, 37.31 and 32.64.
+    - **Glass-to-glass:** YOLOv8n takes 8.723 ms against AMD's 10.741, pose 9.324 against 12.340, and YOLOv8s
+      18.427 against 16.986.
+
+    [BENCHMARKS](BENCHMARKS.md#the-sigmoid-silu-containers-against-amds-stack-more-accurate-on-all-5000-coco-images-faster-on-yolov8n-and-yolov8n-pose-slower-on-yolov8s-2026-09-17-desktop-2).
+    The first two reasons still stand, so the flag stays opt-in. Whether Ignition builds its containers with it is the
+    maintainer's call.)

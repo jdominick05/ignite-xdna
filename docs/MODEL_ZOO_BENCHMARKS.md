@@ -440,6 +440,29 @@ python pipelines/yolow/5_eval_map.py --model build/yolow.ignite --ep ignite --n 
 python tests/test_yolow_pipeline_offline.py
 ```
 
+## YOLOv8n, YOLOv8s and YOLOv8n-pose with `--silu-sigmoid` (2026-09-17)
+
+`ignite-compile --silu-sigmoid` computes SiLU through the core program's four-line sigmoid instead of Quark's
+HardSigmoid form. Every layer is exact on the NPU against `silu_sigmoid.reference_model`. The table covers all 5,000
+COCO val2017 images with the ONNX Runtime path's letterbox for every stack; glass-to-glass is the mean of two runs of
+bus.jpg in one sitting. Details are in
+[BENCHMARKS](BENCHMARKS.md#the-sigmoid-silu-containers-against-amds-stack-more-accurate-on-all-5000-coco-images-faster-on-yolov8n-and-yolov8n-pose-slower-on-yolov8s-2026-09-17-desktop-2).
+
+| Model | AMD's stack mAP | Container mAP | `--silu-sigmoid` mAP | AMD's stack G2G | `--silu-sigmoid` G2G |
+|---|---:|---:|---:|---:|---:|
+| YOLOv8n | 26.68 | 27.10 | 34.12 | 10.741 ms | 8.723 ms |
+| YOLOv8s | 37.31 | 37.21 | 42.37 | 16.986 ms | 18.427 ms |
+| YOLOv8n-pose (OKS) | 32.64 | 32.71 | 44.16 | 12.340 ms | 9.324 ms |
+
+- **The flag costs 2.2-3.9 % of the NPU dispatch** across the sittings, which is 0.30-0.42 ms glass-to-glass against
+  the same container without it.
+- **Opt-in:** YOLO11n and YOLO-World v2 cannot use it (host regions), and SESR M7 has no SiLU.
+
+```bash
+bash scripts/research-iron.sh -m ignite_xdna.compiler.cli compile --model models/yolov8n_cut_xint8.onnx --output build/yolov8n_sigmoid.ignite --silu-sigmoid
+bash scripts/research-iron.sh tools/verify_engine_container.py --container build/yolov8n_sigmoid.ignite --model models/yolov8n_cut_xint8.onnx
+```
+
 ## Reproduce
 
 ```bash

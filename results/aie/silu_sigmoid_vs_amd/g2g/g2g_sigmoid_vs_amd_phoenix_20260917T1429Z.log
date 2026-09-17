@@ -1,0 +1,460 @@
+# Glass-to-glass: the sigmoid SiLU epilogue against today's containers and AMD's stack, host DESKTOP-CBL5NUA (Desktop 2), start 2026-09-17T14:29:42Z
+# ignite-xdna worktree 861fde3 runtime via PYTHONPATH (runtime unchanged from main c714629); Ignition main live_ignition.py, balanced default; AMD arms in resnet_env17 with Ryzen AI 1.7.1
+[xrt-smi before] [003d:00:01.1] : NPU Phoenix | AIE Partitions | No hardware contexts running on device
+[cpu] CPU 7.3 % over 5 s; busiest System Idle Process 0, System 0,  0, Registry 0
+
+## Witnesses
+
+== 2026-09-17T14:29:48Z [verify yolov8n_today] $ <conda envs>\mlir-aie-iron\python.exe tools/verify_engine_container.py --container <scratch>\sig_containers\yolov8n_today.ignite --model models/yolov8n_cut_xint8.onnx --iters 2
+[verify] detect container yolov8n_today.ignite: 66 layers, reference in 0.5 s
+[verify] 66/66 layers exact | first dispatch 8.886 ms | dispatch mean 7.209 ms, min 7.181, max 7.238 over 2
+[verify] PASS
+== 2026-09-17T14:29:49Z [verify yolov8n_today] exit 0 after 1.1 s
+
+== 2026-09-17T14:29:49Z [verify yolov8n_new_hardsigmoid] $ <conda envs>\mlir-aie-iron\python.exe tools/verify_engine_container.py --container <scratch>\sig_containers\yolov8n_new_hardsigmoid.ignite --model models/yolov8n_cut_xint8.onnx --iters 2
+[verify] detect container yolov8n_new_hardsigmoid.ignite: 66 layers, reference in 0.5 s
+[verify] 66/66 layers exact | first dispatch 8.820 ms | dispatch mean 7.255 ms, min 7.232, max 7.278 over 2
+[verify] PASS
+== 2026-09-17T14:29:50Z [verify yolov8n_new_hardsigmoid] exit 0 after 1.1 s
+
+== 2026-09-17T14:29:50Z [verify yolov8n_new_sigmoid] $ <conda envs>\mlir-aie-iron\python.exe tools/verify_engine_container.py --container <scratch>\sig_containers\yolov8n_new_sigmoid.ignite --model models/yolov8n_cut_xint8.onnx --iters 2
+[verify] SiLU through the sigmoid epilogue: the reference is silu_sigmoid.reference_model of the model
+[verify] detect container yolov8n_new_sigmoid.ignite: 66 layers, reference in 0.5 s
+[verify] 66/66 layers exact | first dispatch 9.033 ms | dispatch mean 7.478 ms, min 7.432, max 7.524 over 2
+[verify] PASS
+== 2026-09-17T14:29:52Z [verify yolov8n_new_sigmoid] exit 0 after 1.8 s
+
+== 2026-09-17T14:29:52Z [verify yolov8s_today] $ <conda envs>\mlir-aie-iron\python.exe tools/verify_engine_container.py --container <scratch>\sig_containers\yolov8s_today.ignite --model models/yolov8s_cut_xint8.onnx --iters 2
+[verify] detect container yolov8s_today.ignite: 66 layers, reference in 1.2 s
+[verify] 66/66 layers exact | first dispatch 20.126 ms | dispatch mean 16.787 ms, min 16.760, max 16.814 over 2
+[verify] PASS
+== 2026-09-17T14:29:54Z [verify yolov8s_today] exit 0 after 1.8 s
+
+== 2026-09-17T14:29:54Z [verify yolov8s_new_hardsigmoid] $ <conda envs>\mlir-aie-iron\python.exe tools/verify_engine_container.py --container <scratch>\sig_containers\yolov8s_new_hardsigmoid.ignite --model models/yolov8s_cut_xint8.onnx --iters 2
+[verify] detect container yolov8s_new_hardsigmoid.ignite: 66 layers, reference in 1.2 s
+[verify] 66/66 layers exact | first dispatch 18.377 ms | dispatch mean 16.738 ms, min 16.677, max 16.798 over 2
+[verify] PASS
+== 2026-09-17T14:29:56Z [verify yolov8s_new_hardsigmoid] exit 0 after 1.9 s
+
+== 2026-09-17T14:29:56Z [verify yolov8s_new_sigmoid] $ <conda envs>\mlir-aie-iron\python.exe tools/verify_engine_container.py --container <scratch>\sig_containers\yolov8s_new_sigmoid.ignite --model models/yolov8s_cut_xint8.onnx --iters 2
+[verify] SiLU through the sigmoid epilogue: the reference is silu_sigmoid.reference_model of the model
+[verify] detect container yolov8s_new_sigmoid.ignite: 66 layers, reference in 1.2 s
+[verify] 66/66 layers exact | first dispatch 18.630 ms | dispatch mean 17.179 ms, min 17.146, max 17.213 over 2
+[verify] PASS
+== 2026-09-17T14:29:58Z [verify yolov8s_new_sigmoid] exit 0 after 2.4 s
+
+== 2026-09-17T14:29:58Z [verify pose_today] $ <conda envs>\mlir-aie-iron\python.exe tools/verify_engine_container.py --container <scratch>\sig_containers\pose_today.ignite --model models/yolov8n-pose_cut_xint8.onnx --iters 2
+[verify] pose container pose_today.ignite: 75 layers, reference in 0.6 s
+[verify] 75/75 layers exact | first dispatch 9.159 ms | dispatch mean 7.564 ms, min 7.544, max 7.584 over 2
+[verify] PASS
+== 2026-09-17T14:29:59Z [verify pose_today] exit 0 after 1.1 s
+
+== 2026-09-17T14:29:59Z [verify pose_new_hardsigmoid] $ <conda envs>\mlir-aie-iron\python.exe tools/verify_engine_container.py --container <scratch>\sig_containers\pose_new_hardsigmoid.ignite --model models/yolov8n-pose_cut_xint8.onnx --iters 2
+[verify] pose container pose_new_hardsigmoid.ignite: 75 layers, reference in 0.6 s
+[verify] 75/75 layers exact | first dispatch 9.158 ms | dispatch mean 7.584 ms, min 7.567, max 7.601 over 2
+[verify] PASS
+== 2026-09-17T14:30:01Z [verify pose_new_hardsigmoid] exit 0 after 1.1 s
+
+== 2026-09-17T14:30:01Z [verify pose_new_sigmoid] $ <conda envs>\mlir-aie-iron\python.exe tools/verify_engine_container.py --container <scratch>\sig_containers\pose_new_sigmoid.ignite --model models/yolov8n-pose_cut_xint8.onnx --iters 2
+[verify] SiLU through the sigmoid epilogue: the reference is silu_sigmoid.reference_model of the model
+[verify] pose container pose_new_sigmoid.ignite: 75 layers, reference in 0.6 s
+[verify] 75/75 layers exact | first dispatch 9.370 ms | dispatch mean 7.803 ms, min 7.779, max 7.826 over 2
+[verify] PASS
+== 2026-09-17T14:30:02Z [verify pose_new_sigmoid] exit 0 after 1.6 s
+
+## Timed: yolov8n
+[cpu] CPU 7.6 % over 2 s; busiest System Idle Process 0, System 0,  0, Registry 0
+[xrt-smi before yolov8n #1] [003d:00:01.1] : NPU Phoenix | AIE Partitions | No hardware contexts running on device
+
+== 2026-09-17T14:30:05Z [amd yolov8n #1] $ <conda envs>\resnet_env17\python.exe <ignite-xdna worktree>\tools\amd_vitisai_yolo.py --model <ignite-xdna main>\models\yolov8n_cut_xint8.onnx --image <Ignition main>\examples\assets\bus.jpg --ignition-src <Ignition main>\src --cache-dir <scratch>\vitisai_cache --cache-key yolov8n_energy --xclbin <ignite-xdna main>\yolocutcachekey\4x4.xclbin --json <scratch>\proper_g2g\amd_yolov8n_1.json
+[amd] ort 1.23.3.dev20260320 | model yolov8n_cut_xint8.onnx | session load 0.41 s | EP report node devices report not found
+[amd] G2G mean 10.740 ms | P50 10.717 | P95 11.355 | P99 11.892 | max 12.937 | over 500 timed frames after 50 warm-up
+[amd] stage means (ms): letterbox 1.794 | session.run 6.642 | decode+NMS 2.304
+[amd] detections on the last frame: 5 {'person': 4, 'bus': 1} | RSS 304.3 MB
+== 2026-09-17T14:30:12Z [amd yolov8n #1] exit 0 after 6.6 s
+
+== 2026-09-17T14:30:12Z [ignition yolov8n today #1] $ <conda envs>\mlir-aie-iron\python.exe live_ignition.py --model <scratch>\sig_containers\yolov8n_today.ignite --source <Ignition main>\examples\assets\bus.jpg --headless --warmup 50 --frames 500 --json <scratch>\proper_g2g\ign_yolov8n_today_1.json
+[Ignition] loading <scratch>\sig_containers\yolov8n_today.ignite (bare-metal .ignite container)
+[Ignition] Native XDNA1 NPU backend active (Device 0)
+[Ignition] task: detect
+[Ignition] power mode balanced: 8 worker threads, sleeping between regions (8 cores / 16 threads on this host)
+[Ignition] source: image bus.jpg 810x1080
+[Ignition] NPU power mode: default kept: the balanced power mode leaves the NPU's mode alone
+[Ignition] shutdown: source released, window closed, NPU hardware context released
+[summary] stop: frame limit | 550 frames processed (50 warm-up, 500 timed) | 1 distinct source frames | image bus.jpg 810x1080
+[summary] NPU power mode: default kept: the balanced power mode leaves the NPU's mode alone
+[summary] G2G mean 8.430 ms | P50 8.393 | P95 8.794 | P99 9.127 | max 9.811 | over the last 500 timed frames; cold first frame 11.27 ms
+[summary] stage means (ms): preprocess 0.547 | NPU forward 7.834 (dispatch 7.231, readback 0.603) | decode+NMS 0.042
+[summary] boxes from NPU heads on 500/500 timed frames | 5.00 detections per frame
+[summary] RSS 191.9 MB at the first timed frame, 191.9 MB at the end (+0.00 MB over 500 frames)
+[summary] wrote <scratch>\proper_g2g\ign_yolov8n_today_1.json
+== 2026-09-17T14:30:17Z [ignition yolov8n today #1] exit 0 after 5.2 s
+
+== 2026-09-17T14:30:17Z [ignition yolov8n new_hardsigmoid #1] $ <conda envs>\mlir-aie-iron\python.exe live_ignition.py --model <scratch>\sig_containers\yolov8n_new_hardsigmoid.ignite --source <Ignition main>\examples\assets\bus.jpg --headless --warmup 50 --frames 500 --json <scratch>\proper_g2g\ign_yolov8n_new_hardsigmoid_1.json
+[Ignition] loading <scratch>\sig_containers\yolov8n_new_hardsigmoid.ignite (bare-metal .ignite container)
+[Ignition] Native XDNA1 NPU backend active (Device 0)
+[Ignition] task: detect
+[Ignition] power mode balanced: 8 worker threads, sleeping between regions (8 cores / 16 threads on this host)
+[Ignition] source: image bus.jpg 810x1080
+[Ignition] NPU power mode: default kept: the balanced power mode leaves the NPU's mode alone
+[Ignition] shutdown: source released, window closed, NPU hardware context released
+[summary] stop: frame limit | 550 frames processed (50 warm-up, 500 timed) | 1 distinct source frames | image bus.jpg 810x1080
+[summary] NPU power mode: default kept: the balanced power mode leaves the NPU's mode alone
+[summary] G2G mean 8.435 ms | P50 8.407 | P95 8.756 | P99 9.372 | max 10.380 | over the last 500 timed frames; cold first frame 11.22 ms
+[summary] stage means (ms): preprocess 0.564 | NPU forward 7.822 (dispatch 7.209, readback 0.612) | decode+NMS 0.042
+[summary] boxes from NPU heads on 500/500 timed frames | 5.00 detections per frame
+[summary] RSS 190.7 MB at the first timed frame, 190.7 MB at the end (+0.00 MB over 500 frames)
+[summary] wrote <scratch>\proper_g2g\ign_yolov8n_new_hardsigmoid_1.json
+== 2026-09-17T14:30:22Z [ignition yolov8n new_hardsigmoid #1] exit 0 after 5.1 s
+
+== 2026-09-17T14:30:22Z [ignition yolov8n new_sigmoid #1] $ <conda envs>\mlir-aie-iron\python.exe live_ignition.py --model <scratch>\sig_containers\yolov8n_new_sigmoid.ignite --source <Ignition main>\examples\assets\bus.jpg --headless --warmup 50 --frames 500 --json <scratch>\proper_g2g\ign_yolov8n_new_sigmoid_1.json
+[Ignition] loading <scratch>\sig_containers\yolov8n_new_sigmoid.ignite (bare-metal .ignite container)
+[Ignition] Native XDNA1 NPU backend active (Device 0)
+[Ignition] task: detect
+[Ignition] power mode balanced: 8 worker threads, sleeping between regions (8 cores / 16 threads on this host)
+[Ignition] source: image bus.jpg 810x1080
+[Ignition] NPU power mode: default kept: the balanced power mode leaves the NPU's mode alone
+[Ignition] shutdown: source released, window closed, NPU hardware context released
+[summary] stop: frame limit | 550 frames processed (50 warm-up, 500 timed) | 1 distinct source frames | image bus.jpg 810x1080
+[summary] NPU power mode: default kept: the balanced power mode leaves the NPU's mode alone
+[summary] G2G mean 8.672 ms | P50 8.626 | P95 9.043 | P99 9.453 | max 9.738 | over the last 500 timed frames; cold first frame 11.81 ms
+[summary] stage means (ms): preprocess 0.565 | NPU forward 8.061 (dispatch 7.445, readback 0.615) | decode+NMS 0.040
+[summary] boxes from NPU heads on 500/500 timed frames | 5.00 detections per frame
+[summary] RSS 190.3 MB at the first timed frame, 190.3 MB at the end (+0.00 MB over 500 frames)
+[summary] wrote <scratch>\proper_g2g\ign_yolov8n_new_sigmoid_1.json
+== 2026-09-17T14:30:27Z [ignition yolov8n new_sigmoid #1] exit 0 after 5.3 s
+[cpu] CPU 7.5 % over 2 s; busiest System Idle Process 0, System 0,  0, Registry 0
+[xrt-smi before yolov8n #2] [003d:00:01.1] : NPU Phoenix | AIE Partitions | No hardware contexts running on device
+
+== 2026-09-17T14:30:31Z [amd yolov8n #2] $ <conda envs>\resnet_env17\python.exe <ignite-xdna worktree>\tools\amd_vitisai_yolo.py --model <ignite-xdna main>\models\yolov8n_cut_xint8.onnx --image <Ignition main>\examples\assets\bus.jpg --ignition-src <Ignition main>\src --cache-dir <scratch>\vitisai_cache --cache-key yolov8n_energy --xclbin <ignite-xdna main>\yolocutcachekey\4x4.xclbin --json <scratch>\proper_g2g\amd_yolov8n_2.json
+[amd] ort 1.23.3.dev20260320 | model yolov8n_cut_xint8.onnx | session load 0.39 s | EP report node devices report not found
+[amd] G2G mean 10.742 ms | P50 10.696 | P95 11.424 | P99 11.769 | max 12.584 | over 500 timed frames after 50 warm-up
+[amd] stage means (ms): letterbox 1.776 | session.run 6.627 | decode+NMS 2.338
+[amd] detections on the last frame: 5 {'person': 4, 'bus': 1} | RSS 304.3 MB
+== 2026-09-17T14:30:37Z [amd yolov8n #2] exit 0 after 6.6 s
+
+== 2026-09-17T14:30:37Z [ignition yolov8n today #2] $ <conda envs>\mlir-aie-iron\python.exe live_ignition.py --model <scratch>\sig_containers\yolov8n_today.ignite --source <Ignition main>\examples\assets\bus.jpg --headless --warmup 50 --frames 500 --json <scratch>\proper_g2g\ign_yolov8n_today_2.json
+[Ignition] loading <scratch>\sig_containers\yolov8n_today.ignite (bare-metal .ignite container)
+[Ignition] Native XDNA1 NPU backend active (Device 0)
+[Ignition] task: detect
+[Ignition] power mode balanced: 8 worker threads, sleeping between regions (8 cores / 16 threads on this host)
+[Ignition] source: image bus.jpg 810x1080
+[Ignition] NPU power mode: default kept: the balanced power mode leaves the NPU's mode alone
+[Ignition] shutdown: source released, window closed, NPU hardware context released
+[summary] stop: frame limit | 550 frames processed (50 warm-up, 500 timed) | 1 distinct source frames | image bus.jpg 810x1080
+[summary] NPU power mode: default kept: the balanced power mode leaves the NPU's mode alone
+[summary] G2G mean 8.409 ms | P50 8.385 | P95 8.699 | P99 9.039 | max 9.504 | over the last 500 timed frames; cold first frame 11.32 ms
+[summary] stage means (ms): preprocess 0.540 | NPU forward 7.824 (dispatch 7.222, readback 0.602) | decode+NMS 0.039
+[summary] boxes from NPU heads on 500/500 timed frames | 5.00 detections per frame
+[summary] RSS 191.5 MB at the first timed frame, 191.5 MB at the end (+0.00 MB over 500 frames)
+[summary] wrote <scratch>\proper_g2g\ign_yolov8n_today_2.json
+== 2026-09-17T14:30:42Z [ignition yolov8n today #2] exit 0 after 5.2 s
+
+== 2026-09-17T14:30:42Z [ignition yolov8n new_hardsigmoid #2] $ <conda envs>\mlir-aie-iron\python.exe live_ignition.py --model <scratch>\sig_containers\yolov8n_new_hardsigmoid.ignite --source <Ignition main>\examples\assets\bus.jpg --headless --warmup 50 --frames 500 --json <scratch>\proper_g2g\ign_yolov8n_new_hardsigmoid_2.json
+[Ignition] loading <scratch>\sig_containers\yolov8n_new_hardsigmoid.ignite (bare-metal .ignite container)
+[Ignition] Native XDNA1 NPU backend active (Device 0)
+[Ignition] task: detect
+[Ignition] power mode balanced: 8 worker threads, sleeping between regions (8 cores / 16 threads on this host)
+[Ignition] source: image bus.jpg 810x1080
+[Ignition] NPU power mode: default kept: the balanced power mode leaves the NPU's mode alone
+[Ignition] shutdown: source released, window closed, NPU hardware context released
+[summary] stop: frame limit | 550 frames processed (50 warm-up, 500 timed) | 1 distinct source frames | image bus.jpg 810x1080
+[summary] NPU power mode: default kept: the balanced power mode leaves the NPU's mode alone
+[summary] G2G mean 8.402 ms | P50 8.369 | P95 8.728 | P99 9.079 | max 9.292 | over the last 500 timed frames; cold first frame 11.53 ms
+[summary] stage means (ms): preprocess 0.539 | NPU forward 7.816 (dispatch 7.225, readback 0.591) | decode+NMS 0.040
+[summary] boxes from NPU heads on 500/500 timed frames | 5.00 detections per frame
+[summary] RSS 191.6 MB at the first timed frame, 191.6 MB at the end (+0.00 MB over 500 frames)
+[summary] wrote <scratch>\proper_g2g\ign_yolov8n_new_hardsigmoid_2.json
+== 2026-09-17T14:30:47Z [ignition yolov8n new_hardsigmoid #2] exit 0 after 5.1 s
+
+== 2026-09-17T14:30:47Z [ignition yolov8n new_sigmoid #2] $ <conda envs>\mlir-aie-iron\python.exe live_ignition.py --model <scratch>\sig_containers\yolov8n_new_sigmoid.ignite --source <Ignition main>\examples\assets\bus.jpg --headless --warmup 50 --frames 500 --json <scratch>\proper_g2g\ign_yolov8n_new_sigmoid_2.json
+[Ignition] loading <scratch>\sig_containers\yolov8n_new_sigmoid.ignite (bare-metal .ignite container)
+[Ignition] Native XDNA1 NPU backend active (Device 0)
+[Ignition] task: detect
+[Ignition] power mode balanced: 8 worker threads, sleeping between regions (8 cores / 16 threads on this host)
+[Ignition] source: image bus.jpg 810x1080
+[Ignition] NPU power mode: default kept: the balanced power mode leaves the NPU's mode alone
+[Ignition] shutdown: source released, window closed, NPU hardware context released
+[summary] stop: frame limit | 550 frames processed (50 warm-up, 500 timed) | 1 distinct source frames | image bus.jpg 810x1080
+[summary] NPU power mode: default kept: the balanced power mode leaves the NPU's mode alone
+[summary] G2G mean 8.774 ms | P50 8.716 | P95 9.157 | P99 9.839 | max 10.625 | over the last 500 timed frames; cold first frame 11.95 ms
+[summary] stage means (ms): preprocess 0.632 | NPU forward 8.096 (dispatch 7.453, readback 0.643) | decode+NMS 0.039
+[summary] boxes from NPU heads on 500/500 timed frames | 5.00 detections per frame
+[summary] RSS 191.4 MB at the first timed frame, 191.4 MB at the end (+0.00 MB over 500 frames)
+[summary] wrote <scratch>\proper_g2g\ign_yolov8n_new_sigmoid_2.json
+== 2026-09-17T14:30:53Z [ignition yolov8n new_sigmoid #2] exit 0 after 5.3 s
+
+## Timed: yolov8s
+[cpu] CPU 7.0 % over 2 s; busiest System Idle Process 0, System 0,  0, Registry 0
+[xrt-smi before yolov8s #1] [003d:00:01.1] : NPU Phoenix | AIE Partitions | No hardware contexts running on device
+
+== 2026-09-17T14:30:56Z [amd yolov8s #1] $ <conda envs>\resnet_env17\python.exe <ignite-xdna worktree>\tools\amd_vitisai_yolo.py --model <ignite-xdna main>\models\yolov8s_cut_xint8.onnx --image <Ignition main>\examples\assets\bus.jpg --ignition-src <Ignition main>\src --cache-dir <scratch>\sitting\vitisai_cache --cache-key yolov8s_sitting --xclbin <ignite-xdna main>\yolocutcachekey\4x4.xclbin --json <scratch>\proper_g2g\amd_yolov8s_1.json
+[amd] ort 1.23.3.dev20260320 | model yolov8s_cut_xint8.onnx | session load 0.44 s | EP report node devices report not found
+[amd] G2G mean 16.966 ms | P50 16.901 | P95 17.604 | P99 17.958 | max 18.957 | over 500 timed frames after 50 warm-up
+[amd] stage means (ms): letterbox 1.782 | session.run 12.818 | decode+NMS 2.365
+[amd] detections on the last frame: 5 {'person': 4, 'bus': 1} | RSS 337.0 MB
+== 2026-09-17T14:31:06Z [amd yolov8s #1] exit 0 after 10.1 s
+
+== 2026-09-17T14:31:06Z [ignition yolov8s today #1] $ <conda envs>\mlir-aie-iron\python.exe live_ignition.py --model <scratch>\sig_containers\yolov8s_today.ignite --source <Ignition main>\examples\assets\bus.jpg --headless --warmup 50 --frames 500 --json <scratch>\proper_g2g\ign_yolov8s_today_1.json
+[Ignition] loading <scratch>\sig_containers\yolov8s_today.ignite (bare-metal .ignite container)
+[Ignition] Native XDNA1 NPU backend active (Device 0)
+[Ignition] task: detect
+[Ignition] power mode balanced: 8 worker threads, sleeping between regions (8 cores / 16 threads on this host)
+[Ignition] source: image bus.jpg 810x1080
+[Ignition] NPU power mode: default kept: the balanced power mode leaves the NPU's mode alone
+[Ignition] shutdown: source released, window closed, NPU hardware context released
+[summary] stop: frame limit | 550 frames processed (50 warm-up, 500 timed) | 1 distinct source frames | image bus.jpg 810x1080
+[summary] NPU power mode: default kept: the balanced power mode leaves the NPU's mode alone
+[summary] G2G mean 18.013 ms | P50 17.979 | P95 18.296 | P99 18.584 | max 18.990 | over the last 500 timed frames; cold first frame 21.19 ms
+[summary] stage means (ms): preprocess 0.576 | NPU forward 17.383 (dispatch 16.713, readback 0.670) | decode+NMS 0.047
+[summary] boxes from NPU heads on 500/500 timed frames | 6.00 detections per frame
+[summary] RSS 243.0 MB at the first timed frame, 243.0 MB at the end (+0.00 MB over 500 frames)
+[summary] wrote <scratch>\proper_g2g\ign_yolov8s_today_1.json
+== 2026-09-17T14:31:16Z [ignition yolov8s today #1] exit 0 after 10.4 s
+
+== 2026-09-17T14:31:16Z [ignition yolov8s new_hardsigmoid #1] $ <conda envs>\mlir-aie-iron\python.exe live_ignition.py --model <scratch>\sig_containers\yolov8s_new_hardsigmoid.ignite --source <Ignition main>\examples\assets\bus.jpg --headless --warmup 50 --frames 500 --json <scratch>\proper_g2g\ign_yolov8s_new_hardsigmoid_1.json
+[Ignition] loading <scratch>\sig_containers\yolov8s_new_hardsigmoid.ignite (bare-metal .ignite container)
+[Ignition] Native XDNA1 NPU backend active (Device 0)
+[Ignition] task: detect
+[Ignition] power mode balanced: 8 worker threads, sleeping between regions (8 cores / 16 threads on this host)
+[Ignition] source: image bus.jpg 810x1080
+[Ignition] NPU power mode: default kept: the balanced power mode leaves the NPU's mode alone
+[Ignition] shutdown: source released, window closed, NPU hardware context released
+[summary] stop: frame limit | 550 frames processed (50 warm-up, 500 timed) | 1 distinct source frames | image bus.jpg 810x1080
+[summary] NPU power mode: default kept: the balanced power mode leaves the NPU's mode alone
+[summary] G2G mean 18.007 ms | P50 17.970 | P95 18.358 | P99 18.646 | max 19.003 | over the last 500 timed frames; cold first frame 20.85 ms
+[summary] stage means (ms): preprocess 0.556 | NPU forward 17.398 (dispatch 16.734, readback 0.664) | decode+NMS 0.045
+[summary] boxes from NPU heads on 500/500 timed frames | 6.00 detections per frame
+[summary] RSS 243.0 MB at the first timed frame, 243.0 MB at the end (+0.00 MB over 500 frames)
+[summary] wrote <scratch>\proper_g2g\ign_yolov8s_new_hardsigmoid_1.json
+== 2026-09-17T14:31:27Z [ignition yolov8s new_hardsigmoid #1] exit 0 after 10.4 s
+
+== 2026-09-17T14:31:27Z [ignition yolov8s new_sigmoid #1] $ <conda envs>\mlir-aie-iron\python.exe live_ignition.py --model <scratch>\sig_containers\yolov8s_new_sigmoid.ignite --source <Ignition main>\examples\assets\bus.jpg --headless --warmup 50 --frames 500 --json <scratch>\proper_g2g\ign_yolov8s_new_sigmoid_1.json
+[Ignition] loading <scratch>\sig_containers\yolov8s_new_sigmoid.ignite (bare-metal .ignite container)
+[Ignition] Native XDNA1 NPU backend active (Device 0)
+[Ignition] task: detect
+[Ignition] power mode balanced: 8 worker threads, sleeping between regions (8 cores / 16 threads on this host)
+[Ignition] source: image bus.jpg 810x1080
+[Ignition] NPU power mode: default kept: the balanced power mode leaves the NPU's mode alone
+[Ignition] shutdown: source released, window closed, NPU hardware context released
+[summary] stop: frame limit | 550 frames processed (50 warm-up, 500 timed) | 1 distinct source frames | image bus.jpg 810x1080
+[summary] NPU power mode: default kept: the balanced power mode leaves the NPU's mode alone
+[summary] G2G mean 18.430 ms | P50 18.354 | P95 18.876 | P99 19.228 | max 19.661 | over the last 500 timed frames; cold first frame 21.60 ms
+[summary] stage means (ms): preprocess 0.605 | NPU forward 17.775 (dispatch 17.113, readback 0.662) | decode+NMS 0.043
+[summary] boxes from NPU heads on 500/500 timed frames | 5.00 detections per frame
+[summary] RSS 243.1 MB at the first timed frame, 243.1 MB at the end (+0.00 MB over 500 frames)
+[summary] wrote <scratch>\proper_g2g\ign_yolov8s_new_sigmoid_1.json
+== 2026-09-17T14:31:37Z [ignition yolov8s new_sigmoid #1] exit 0 after 10.7 s
+[cpu] CPU 7.8 % over 2 s; busiest System Idle Process 0, System 0,  0, Registry 0
+[xrt-smi before yolov8s #2] [003d:00:01.1] : NPU Phoenix | AIE Partitions | No hardware contexts running on device
+
+== 2026-09-17T14:31:40Z [amd yolov8s #2] $ <conda envs>\resnet_env17\python.exe <ignite-xdna worktree>\tools\amd_vitisai_yolo.py --model <ignite-xdna main>\models\yolov8s_cut_xint8.onnx --image <Ignition main>\examples\assets\bus.jpg --ignition-src <Ignition main>\src --cache-dir <scratch>\sitting\vitisai_cache --cache-key yolov8s_sitting --xclbin <ignite-xdna main>\yolocutcachekey\4x4.xclbin --json <scratch>\proper_g2g\amd_yolov8s_2.json
+[amd] ort 1.23.3.dev20260320 | model yolov8s_cut_xint8.onnx | session load 0.43 s | EP report node devices report not found
+[amd] G2G mean 17.005 ms | P50 16.938 | P95 17.736 | P99 18.126 | max 18.383 | over 500 timed frames after 50 warm-up
+[amd] stage means (ms): letterbox 1.782 | session.run 12.877 | decode+NMS 2.346
+[amd] detections on the last frame: 5 {'person': 4, 'bus': 1} | RSS 339.2 MB
+== 2026-09-17T14:31:51Z [amd yolov8s #2] exit 0 after 10.1 s
+
+== 2026-09-17T14:31:51Z [ignition yolov8s today #2] $ <conda envs>\mlir-aie-iron\python.exe live_ignition.py --model <scratch>\sig_containers\yolov8s_today.ignite --source <Ignition main>\examples\assets\bus.jpg --headless --warmup 50 --frames 500 --json <scratch>\proper_g2g\ign_yolov8s_today_2.json
+[Ignition] loading <scratch>\sig_containers\yolov8s_today.ignite (bare-metal .ignite container)
+[Ignition] Native XDNA1 NPU backend active (Device 0)
+[Ignition] task: detect
+[Ignition] power mode balanced: 8 worker threads, sleeping between regions (8 cores / 16 threads on this host)
+[Ignition] source: image bus.jpg 810x1080
+[Ignition] NPU power mode: default kept: the balanced power mode leaves the NPU's mode alone
+[Ignition] shutdown: source released, window closed, NPU hardware context released
+[summary] stop: frame limit | 550 frames processed (50 warm-up, 500 timed) | 1 distinct source frames | image bus.jpg 810x1080
+[summary] NPU power mode: default kept: the balanced power mode leaves the NPU's mode alone
+[summary] G2G mean 18.003 ms | P50 17.965 | P95 18.351 | P99 18.797 | max 19.489 | over the last 500 timed frames; cold first frame 20.98 ms
+[summary] stage means (ms): preprocess 0.575 | NPU forward 17.374 (dispatch 16.705, readback 0.669) | decode+NMS 0.046
+[summary] boxes from NPU heads on 500/500 timed frames | 6.00 detections per frame
+[summary] RSS 241.7 MB at the first timed frame, 241.7 MB at the end (+0.00 MB over 500 frames)
+[summary] wrote <scratch>\proper_g2g\ign_yolov8s_today_2.json
+== 2026-09-17T14:32:01Z [ignition yolov8s today #2] exit 0 after 10.4 s
+
+== 2026-09-17T14:32:01Z [ignition yolov8s new_hardsigmoid #2] $ <conda envs>\mlir-aie-iron\python.exe live_ignition.py --model <scratch>\sig_containers\yolov8s_new_hardsigmoid.ignite --source <Ignition main>\examples\assets\bus.jpg --headless --warmup 50 --frames 500 --json <scratch>\proper_g2g\ign_yolov8s_new_hardsigmoid_2.json
+[Ignition] loading <scratch>\sig_containers\yolov8s_new_hardsigmoid.ignite (bare-metal .ignite container)
+[Ignition] Native XDNA1 NPU backend active (Device 0)
+[Ignition] task: detect
+[Ignition] power mode balanced: 8 worker threads, sleeping between regions (8 cores / 16 threads on this host)
+[Ignition] source: image bus.jpg 810x1080
+[Ignition] NPU power mode: default kept: the balanced power mode leaves the NPU's mode alone
+[Ignition] shutdown: source released, window closed, NPU hardware context released
+[summary] stop: frame limit | 550 frames processed (50 warm-up, 500 timed) | 1 distinct source frames | image bus.jpg 810x1080
+[summary] NPU power mode: default kept: the balanced power mode leaves the NPU's mode alone
+[summary] G2G mean 18.004 ms | P50 17.966 | P95 18.356 | P99 18.681 | max 19.192 | over the last 500 timed frames; cold first frame 21.09 ms
+[summary] stage means (ms): preprocess 0.560 | NPU forward 17.391 (dispatch 16.729, readback 0.662) | decode+NMS 0.045
+[summary] boxes from NPU heads on 500/500 timed frames | 6.00 detections per frame
+[summary] RSS 243.3 MB at the first timed frame, 243.3 MB at the end (+0.00 MB over 500 frames)
+[summary] wrote <scratch>\proper_g2g\ign_yolov8s_new_hardsigmoid_2.json
+== 2026-09-17T14:32:11Z [ignition yolov8s new_hardsigmoid #2] exit 0 after 10.4 s
+
+== 2026-09-17T14:32:11Z [ignition yolov8s new_sigmoid #2] $ <conda envs>\mlir-aie-iron\python.exe live_ignition.py --model <scratch>\sig_containers\yolov8s_new_sigmoid.ignite --source <Ignition main>\examples\assets\bus.jpg --headless --warmup 50 --frames 500 --json <scratch>\proper_g2g\ign_yolov8s_new_sigmoid_2.json
+[Ignition] loading <scratch>\sig_containers\yolov8s_new_sigmoid.ignite (bare-metal .ignite container)
+[Ignition] Native XDNA1 NPU backend active (Device 0)
+[Ignition] task: detect
+[Ignition] power mode balanced: 8 worker threads, sleeping between regions (8 cores / 16 threads on this host)
+[Ignition] source: image bus.jpg 810x1080
+[Ignition] NPU power mode: default kept: the balanced power mode leaves the NPU's mode alone
+[Ignition] shutdown: source released, window closed, NPU hardware context released
+[summary] stop: frame limit | 550 frames processed (50 warm-up, 500 timed) | 1 distinct source frames | image bus.jpg 810x1080
+[summary] NPU power mode: default kept: the balanced power mode leaves the NPU's mode alone
+[summary] G2G mean 18.424 ms | P50 18.346 | P95 18.857 | P99 19.232 | max 19.469 | over the last 500 timed frames; cold first frame 20.95 ms
+[summary] stage means (ms): preprocess 0.609 | NPU forward 17.767 (dispatch 17.102, readback 0.665) | decode+NMS 0.042
+[summary] boxes from NPU heads on 500/500 timed frames | 5.00 detections per frame
+[summary] RSS 242.8 MB at the first timed frame, 242.8 MB at the end (+0.00 MB over 500 frames)
+[summary] wrote <scratch>\proper_g2g\ign_yolov8s_new_sigmoid_2.json
+== 2026-09-17T14:32:22Z [ignition yolov8s new_sigmoid #2] exit 0 after 10.7 s
+
+## Timed: pose
+[cpu] CPU 7.5 % over 2 s; busiest System Idle Process 0, System 0,  0, Registry 0
+[xrt-smi before pose #1] [003d:00:01.1] : NPU Phoenix | AIE Partitions | No hardware contexts running on device
+
+== 2026-09-17T14:32:25Z [amd pose #1] $ <conda envs>\resnet_env17\python.exe pipelines/yolov8n-pose/4_pose.py --model models/yolov8n-pose_cut_xint8.onnx --ep npu --source assets/bus.jpg --warmup 50 --runs 500 --log 2 --out <scratch>\proper_g2g\amd_pose_1.jpg
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  <ignite-xdna main>\yoloposecutcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+model: head-cut (9 outputs), decode tail runs in numpy
+input: 640x640
+
+=== NPU | models/yolov8n-pose_cut_xint8.onnx | 640px | assets/bus.jpg ===
+infer   mean 8.95 ms   median 8.91 ms   p95 9.49 ms   (111.8 fps)
+post    mean 0.12 ms
+pre     mean 3.123 ms
+g2g     mean 12.350 ms   p50 12.233   p95 13.155   p99 14.852 ms   over 500 runs (81.0 fps)
+3 people:
+   person 0.88  (45,397,196,509)  16/17 keypoints visible
+   person 0.85  (224,406,118,451)  17/17 keypoints visible
+   person 0.73  (669,399,140,477)  8/17 keypoints visible
+wrote <scratch>\proper_g2g\amd_pose_1.jpg
+== 2026-09-17T14:32:33Z [amd pose #1] exit 0 after 7.5 s
+
+== 2026-09-17T14:32:33Z [ignition pose today #1] $ <conda envs>\mlir-aie-iron\python.exe live_ignition.py --model <scratch>\sig_containers\pose_today.ignite --source <ignite-xdna main>\assets\bus.jpg --headless --warmup 50 --frames 500 --json <scratch>\proper_g2g\ign_pose_today_1.json
+[Ignition] loading <scratch>\sig_containers\pose_today.ignite (bare-metal .ignite container)
+[Ignition] Native XDNA1 NPU backend active (Device 0)
+[Ignition] task: pose
+[Ignition] power mode balanced: 8 worker threads, sleeping between regions (8 cores / 16 threads on this host)
+[Ignition] source: image bus.jpg 810x1080
+[Ignition] NPU power mode: default kept: the balanced power mode leaves the NPU's mode alone
+[Ignition] shutdown: source released, window closed, NPU hardware context released
+[summary] stop: frame limit | 550 frames processed (50 warm-up, 500 timed) | 1 distinct source frames | image bus.jpg 810x1080
+[summary] NPU power mode: default kept: the balanced power mode leaves the NPU's mode alone
+[summary] G2G mean 9.009 ms | P50 8.967 | P95 9.335 | P99 9.866 | max 10.274 | over the last 500 timed frames; cold first frame 11.93 ms
+[summary] stage means (ms): preprocess 0.583 | NPU forward 8.106 (dispatch 7.553, readback 0.536) | decode+NMS 0.315
+[summary] keypoints from NPU heads on 500/500 timed frames | 3.00 people per frame
+[summary] RSS 181.6 MB at the first timed frame, 181.8 MB at the end (+0.21 MB over 500 frames)
+[summary] wrote <scratch>\proper_g2g\ign_pose_today_1.json
+== 2026-09-17T14:32:38Z [ignition pose today #1] exit 0 after 5.4 s
+
+== 2026-09-17T14:32:38Z [ignition pose new_hardsigmoid #1] $ <conda envs>\mlir-aie-iron\python.exe live_ignition.py --model <scratch>\sig_containers\pose_new_hardsigmoid.ignite --source <ignite-xdna main>\assets\bus.jpg --headless --warmup 50 --frames 500 --json <scratch>\proper_g2g\ign_pose_new_hardsigmoid_1.json
+[Ignition] loading <scratch>\sig_containers\pose_new_hardsigmoid.ignite (bare-metal .ignite container)
+[Ignition] Native XDNA1 NPU backend active (Device 0)
+[Ignition] task: pose
+[Ignition] power mode balanced: 8 worker threads, sleeping between regions (8 cores / 16 threads on this host)
+[Ignition] source: image bus.jpg 810x1080
+[Ignition] NPU power mode: default kept: the balanced power mode leaves the NPU's mode alone
+[Ignition] shutdown: source released, window closed, NPU hardware context released
+[summary] stop: frame limit | 550 frames processed (50 warm-up, 500 timed) | 1 distinct source frames | image bus.jpg 810x1080
+[summary] NPU power mode: default kept: the balanced power mode leaves the NPU's mode alone
+[summary] G2G mean 9.058 ms | P50 9.012 | P95 9.372 | P99 9.959 | max 10.095 | over the last 500 timed frames; cold first frame 11.83 ms
+[summary] stage means (ms): preprocess 0.611 | NPU forward 8.132 (dispatch 7.582, readback 0.533) | decode+NMS 0.310
+[summary] keypoints from NPU heads on 500/500 timed frames | 3.00 people per frame
+[summary] RSS 181.9 MB at the first timed frame, 182.1 MB at the end (+0.21 MB over 500 frames)
+[summary] wrote <scratch>\proper_g2g\ign_pose_new_hardsigmoid_1.json
+== 2026-09-17T14:32:43Z [ignition pose new_hardsigmoid #1] exit 0 after 5.4 s
+
+== 2026-09-17T14:32:43Z [ignition pose new_sigmoid #1] $ <conda envs>\mlir-aie-iron\python.exe live_ignition.py --model <scratch>\sig_containers\pose_new_sigmoid.ignite --source <ignite-xdna main>\assets\bus.jpg --headless --warmup 50 --frames 500 --json <scratch>\proper_g2g\ign_pose_new_sigmoid_1.json
+[Ignition] loading <scratch>\sig_containers\pose_new_sigmoid.ignite (bare-metal .ignite container)
+[Ignition] Native XDNA1 NPU backend active (Device 0)
+[Ignition] task: pose
+[Ignition] power mode balanced: 8 worker threads, sleeping between regions (8 cores / 16 threads on this host)
+[Ignition] source: image bus.jpg 810x1080
+[Ignition] NPU power mode: default kept: the balanced power mode leaves the NPU's mode alone
+[Ignition] shutdown: source released, window closed, NPU hardware context released
+[summary] stop: frame limit | 550 frames processed (50 warm-up, 500 timed) | 1 distinct source frames | image bus.jpg 810x1080
+[summary] NPU power mode: default kept: the balanced power mode leaves the NPU's mode alone
+[summary] G2G mean 9.362 ms | P50 9.313 | P95 9.666 | P99 9.955 | max 10.168 | over the last 500 timed frames; cold first frame 11.85 ms
+[summary] stage means (ms): preprocess 0.625 | NPU forward 8.381 (dispatch 7.823, readback 0.543) | decode+NMS 0.351
+[summary] keypoints from NPU heads on 500/500 timed frames | 4.00 people per frame
+[summary] RSS 181.7 MB at the first timed frame, 181.8 MB at the end (+0.11 MB over 500 frames)
+[summary] wrote <scratch>\proper_g2g\ign_pose_new_sigmoid_1.json
+== 2026-09-17T14:32:49Z [ignition pose new_sigmoid #1] exit 0 after 5.5 s
+[cpu] CPU 7.8 % over 2 s; busiest System Idle Process 0, System 0,  0, Registry 0
+[xrt-smi before pose #2] [003d:00:01.1] : NPU Phoenix | AIE Partitions | No hardware contexts running on device
+
+== 2026-09-17T14:32:52Z [amd pose #2] $ <conda envs>\resnet_env17\python.exe pipelines/yolov8n-pose/4_pose.py --model models/yolov8n-pose_cut_xint8.onnx --ep npu --source assets/bus.jpg --warmup 50 --runs 500 --log 2 --out <scratch>\proper_g2g\amd_pose_2.jpg
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  <ignite-xdna main>\yoloposecutcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+model: head-cut (9 outputs), decode tail runs in numpy
+input: 640x640
+
+=== NPU | models/yolov8n-pose_cut_xint8.onnx | 640px | assets/bus.jpg ===
+infer   mean 8.97 ms   median 8.94 ms   p95 9.54 ms   (111.5 fps)
+post    mean 0.12 ms
+pre     mean 3.081 ms
+g2g     mean 12.330 ms   p50 12.250   p95 13.200   p99 14.362 ms   over 500 runs (81.1 fps)
+3 people:
+   person 0.88  (45,397,196,509)  16/17 keypoints visible
+   person 0.85  (224,406,118,451)  17/17 keypoints visible
+   person 0.73  (669,399,140,477)  8/17 keypoints visible
+wrote <scratch>\proper_g2g\amd_pose_2.jpg
+== 2026-09-17T14:32:59Z [amd pose #2] exit 0 after 7.5 s
+
+== 2026-09-17T14:32:59Z [ignition pose today #2] $ <conda envs>\mlir-aie-iron\python.exe live_ignition.py --model <scratch>\sig_containers\pose_today.ignite --source <ignite-xdna main>\assets\bus.jpg --headless --warmup 50 --frames 500 --json <scratch>\proper_g2g\ign_pose_today_2.json
+[Ignition] loading <scratch>\sig_containers\pose_today.ignite (bare-metal .ignite container)
+[Ignition] Native XDNA1 NPU backend active (Device 0)
+[Ignition] task: pose
+[Ignition] power mode balanced: 8 worker threads, sleeping between regions (8 cores / 16 threads on this host)
+[Ignition] source: image bus.jpg 810x1080
+[Ignition] NPU power mode: default kept: the balanced power mode leaves the NPU's mode alone
+[Ignition] shutdown: source released, window closed, NPU hardware context released
+[summary] stop: frame limit | 550 frames processed (50 warm-up, 500 timed) | 1 distinct source frames | image bus.jpg 810x1080
+[summary] NPU power mode: default kept: the balanced power mode leaves the NPU's mode alone
+[summary] G2G mean 9.002 ms | P50 8.958 | P95 9.370 | P99 9.893 | max 10.094 | over the last 500 timed frames; cold first frame 11.87 ms
+[summary] stage means (ms): preprocess 0.572 | NPU forward 8.105 (dispatch 7.558, readback 0.531) | decode+NMS 0.321
+[summary] keypoints from NPU heads on 500/500 timed frames | 3.00 people per frame
+[summary] RSS 181.6 MB at the first timed frame, 181.8 MB at the end (+0.21 MB over 500 frames)
+[summary] wrote <scratch>\proper_g2g\ign_pose_today_2.json
+== 2026-09-17T14:33:05Z [ignition pose today #2] exit 0 after 5.4 s
+
+== 2026-09-17T14:33:05Z [ignition pose new_hardsigmoid #2] $ <conda envs>\mlir-aie-iron\python.exe live_ignition.py --model <scratch>\sig_containers\pose_new_hardsigmoid.ignite --source <ignite-xdna main>\assets\bus.jpg --headless --warmup 50 --frames 500 --json <scratch>\proper_g2g\ign_pose_new_hardsigmoid_2.json
+[Ignition] loading <scratch>\sig_containers\pose_new_hardsigmoid.ignite (bare-metal .ignite container)
+[Ignition] Native XDNA1 NPU backend active (Device 0)
+[Ignition] task: pose
+[Ignition] power mode balanced: 8 worker threads, sleeping between regions (8 cores / 16 threads on this host)
+[Ignition] source: image bus.jpg 810x1080
+[Ignition] NPU power mode: default kept: the balanced power mode leaves the NPU's mode alone
+[Ignition] shutdown: source released, window closed, NPU hardware context released
+[summary] stop: frame limit | 550 frames processed (50 warm-up, 500 timed) | 1 distinct source frames | image bus.jpg 810x1080
+[summary] NPU power mode: default kept: the balanced power mode leaves the NPU's mode alone
+[summary] G2G mean 8.989 ms | P50 8.949 | P95 9.299 | P99 9.896 | max 10.187 | over the last 500 timed frames; cold first frame 11.53 ms
+[summary] stage means (ms): preprocess 0.571 | NPU forward 8.098 (dispatch 7.553, readback 0.530) | decode+NMS 0.315
+[summary] keypoints from NPU heads on 500/500 timed frames | 3.00 people per frame
+[summary] RSS 181.6 MB at the first timed frame, 181.8 MB at the end (+0.21 MB over 500 frames)
+[summary] wrote <scratch>\proper_g2g\ign_pose_new_hardsigmoid_2.json
+== 2026-09-17T14:33:10Z [ignition pose new_hardsigmoid #2] exit 0 after 5.4 s
+
+== 2026-09-17T14:33:10Z [ignition pose new_sigmoid #2] $ <conda envs>\mlir-aie-iron\python.exe live_ignition.py --model <scratch>\sig_containers\pose_new_sigmoid.ignite --source <ignite-xdna main>\assets\bus.jpg --headless --warmup 50 --frames 500 --json <scratch>\proper_g2g\ign_pose_new_sigmoid_2.json
+[Ignition] loading <scratch>\sig_containers\pose_new_sigmoid.ignite (bare-metal .ignite container)
+[Ignition] Native XDNA1 NPU backend active (Device 0)
+[Ignition] task: pose
+[Ignition] power mode balanced: 8 worker threads, sleeping between regions (8 cores / 16 threads on this host)
+[Ignition] source: image bus.jpg 810x1080
+[Ignition] NPU power mode: default kept: the balanced power mode leaves the NPU's mode alone
+[Ignition] shutdown: source released, window closed, NPU hardware context released
+[summary] stop: frame limit | 550 frames processed (50 warm-up, 500 timed) | 1 distinct source frames | image bus.jpg 810x1080
+[summary] NPU power mode: default kept: the balanced power mode leaves the NPU's mode alone
+[summary] G2G mean 9.286 ms | P50 9.239 | P95 9.667 | P99 9.968 | max 10.237 | over the last 500 timed frames; cold first frame 11.97 ms
+[summary] stage means (ms): preprocess 0.627 | NPU forward 8.305 (dispatch 7.753, readback 0.537) | decode+NMS 0.349
+[summary] keypoints from NPU heads on 500/500 timed frames | 4.00 people per frame
+[summary] RSS 181.5 MB at the first timed frame, 181.6 MB at the end (+0.09 MB over 500 frames)
+[summary] wrote <scratch>\proper_g2g\ign_pose_new_sigmoid_2.json
+== 2026-09-17T14:33:16Z [ignition pose new_sigmoid #2] exit 0 after 5.5 s
+[xrt-smi after] [003d:00:01.1] : NPU Phoenix | AIE Partitions | No hardware contexts running on device
+
+# end 2026-09-17T14:33:16Z exit 0

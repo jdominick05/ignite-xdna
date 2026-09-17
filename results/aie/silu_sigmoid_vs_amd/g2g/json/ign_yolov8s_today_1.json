@@ -1,0 +1,72 @@
+{
+  "schema": 1,
+  "created_utc": "2026-09-17T14:31:16Z",
+  "model": "<scratch>\\sig_containers\\yolov8s_today.ignite",
+  "model_name": "yolov8s_today.ignite",
+  "model_bytes": 30745728,
+  "task": "detect",
+  "backend": "npu",
+  "source": "image bus.jpg 810x1080",
+  "source_kind": "image",
+  "frames_requested": 500,
+  "warmup": 50,
+  "frames_processed": 550,
+  "frames_timed": 500,
+  "stop_reason": "frame limit",
+  "host": {
+    "hostname": "DESKTOP-CBL5NUA",
+    "processor": "AMD64 Family 25 Model 117 Stepping 2, AuthenticAMD",
+    "python": "3.13.15",
+    "numpy": "2.5.3",
+    "opencv": "5.0.0",
+    "cpu_count": 16,
+    "onnxruntime": "1.30.0"
+  },
+  "max_fps": 0.0,
+  "power_mode": {
+    "mode": "balanced",
+    "wait_policy": "PASSIVE",
+    "threads": 8,
+    "physical_cores": 8,
+    "logical_processors": 16,
+    "wait_policy_source": "mode",
+    "threads_source": "mode",
+    "description": "balanced: 8 worker threads, sleeping between regions (8 cores / 16 threads on this host)"
+  },
+  "npu_power": {
+    "state": "kept",
+    "reason": "the balanced power mode leaves the NPU's mode alone",
+    "lower_mode": "powersaver",
+    "previous_mode": null,
+    "period_ms": 0.0,
+    "predicted_ms": 37.873812304460444,
+    "lowered_at_frame": null,
+    "check_p95_ms": null,
+    "watch_interval_s": 5.0,
+    "recovered_lease": null
+  },
+  "g2g_ms": {
+    "mean": 18.012594797532074,
+    "p50": 17.97854999313131,
+    "p95": 18.295690018567257,
+    "p99": 18.58357799879741,
+    "min": 17.639499972574413,
+    "max": 18.98950000759214,
+    "cold_first_frame": 21.18699997663498
+  },
+  "fps_from_mean": 55.516709904394844,
+  "stages_ms": {
+    "preprocess": 0.575783998821862,
+    "network": 17.38275499944575,
+    "postprocess": 0.04659920115955174,
+    "dispatch": 16.712833199766465,
+    "readback": 0.6699217996792868
+  },
+  "rss_mb": {
+    "first_timed": 242.953125,
+    "end": 242.953125,
+    "drift": 0.0
+  },
+  "npu_frames": 500,
+  "detections_per_frame": 6.0
+}

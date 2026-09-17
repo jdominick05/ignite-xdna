@@ -1,0 +1,58 @@
+$ <ignite-xdna main>\pipelines\yolov8n\5_eval_map.py --model <ignite-xdna main>\models\yolov8n_cut_xint8.onnx --ep npu --fresh --log 2 --cache-key yolov8nsigsittingcachekey --n 0 --images <ignite-xdna main>\data\coco\val2017 --ann <ignite-xdna main>\data\coco\annotations\instances_val2017.json --dets <scratch>\proper_accuracy\dets_yolov8n_amd_5000.json
+(cwd <ignite-xdna main>; env {'RYZEN_AI_INSTALLATION_PATH': 'C:\\Program Files\\RyzenAI\\1.7.1'}; NPU idle before: True)
+deleted stale cache <ignite-xdna main>\yolov8nsigsittingcachekey
+loading annotations into memory...
+Done (t=0.28s)
+creating index...
+index created!
+RYZEN_AI_INSTALLATION_PATH = C:\Program Files\RyzenAI\1.7.1
+xclbin: C:\Program Files\RyzenAI\1.7.1\voe-4.0-win_amd64\xclbins\phoenix\4x4.xclbin
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+cache:  <ignite-xdna main>\yolov8nsigsittingcachekey
+First run compiles the model. It takes a while and looks frozen. It isn't.
+model: head-cut (6 outputs), numpy decode, input 640x640
+eval : 5000 images, conf 0.001, iou 0.7, max_det 300, per-class NMS
+  500/5000  (65643 detections so far)
+  1000/5000  (132581 detections so far)
+  1500/5000  (202736 detections so far)
+  2000/5000  (270396 detections so far)
+  2500/5000  (338512 detections so far)
+  3000/5000  (406599 detections so far)
+  3500/5000  (474518 detections so far)
+  4000/5000  (542993 detections so far)
+  4500/5000  (614578 detections so far)
+  5000/5000  (682448 detections so far)
+
+682448 detections over 5000 images in 75s
+inference  mean 6.71 ms   median 6.67 ms
+wrote <scratch>\proper_accuracy\dets_yolov8n_amd_5000.json
+Loading and preparing results...
+DONE (t=1.82s)
+creating index...
+index created!
+Running per image evaluation...
+Evaluate annotation type *bbox*
+DONE (t=23.59s).
+Accumulating evaluation results...
+DONE (t=5.46s).
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.267
+ Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] = 0.397
+ Average Precision  (AP) @[ IoU=0.75      | area=   all | maxDets=100 ] = 0.285
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.135
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.303
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.363
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=  1 ] = 0.255
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets= 10 ] = 0.425
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.468
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.256
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.528
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.596
+
+=== yolov8n_cut_xint8 | NPU | 640px | 5000 images ===
+mAP@50-95  26.68
+mAP@50     39.73
+mAP small / medium / large   13.52 / 30.34 / 36.32
+latency    6.71 ms
+rc=0 after 126 s
+$ python rescore.py dets_yolov8n_amd_5000.json <annotations> bbox 500
+RESCORED first 500 images: 65643 detections, AP@50-95 30.02, AP@50 43.39

@@ -1,0 +1,33 @@
+$ python iron_run.py <ignite-xdna worktree> sig_sitting.py <out> --iters 100 --arms today new_hardsigmoid new_sigmoid  (verify_engine_container.py per run, NPU idle before each, forward then reverse per model)
+host DESKTOP-CBL5NUA, 2026-09-17T14:28Z, --iters 100, arms ['today', 'new_hardsigmoid', 'new_sigmoid'], order forward then reverse per model
+[cpu before yolov8n] CPU 8.0 % over 3 s; busiest System Idle Process 0, System 0,  0
+yolov8n today_hardsigmoid run 0: rc=0 [verify] 66/66 layers exact | first dispatch 8.815 ms | dispatch mean 7.260 ms, min 7.134, max 7.839 over 100
+yolov8n new_hardsigmoid run 1: rc=0 [verify] 66/66 layers exact | first dispatch 8.902 ms | dispatch mean 7.306 ms, min 7.156, max 7.836 over 100
+yolov8n new_sigmoid run 2: rc=0 [verify] 66/66 layers exact | first dispatch 9.035 ms | dispatch mean 7.447 ms, min 7.339, max 7.913 over 100
+yolov8n new_sigmoid run 3: rc=0 [verify] 66/66 layers exact | first dispatch 9.069 ms | dispatch mean 7.517 ms, min 7.381, max 8.084 over 100
+yolov8n new_hardsigmoid run 4: rc=0 [verify] 66/66 layers exact | first dispatch 8.857 ms | dispatch mean 7.255 ms, min 7.129, max 7.868 over 100
+yolov8n today_hardsigmoid run 5: rc=0 [verify] 66/66 layers exact | first dispatch 8.851 ms | dispatch mean 7.267 ms, min 7.139, max 7.846 over 100
+[cpu before yolov8s] CPU 7.0 % over 3 s; busiest System Idle Process 0, System 0,  0
+yolov8s today_hardsigmoid run 0: rc=0 [verify] 66/66 layers exact | first dispatch 20.399 ms | dispatch mean 16.705 ms, min 16.607, max 17.389 over 100
+yolov8s new_hardsigmoid run 1: rc=0 [verify] 66/66 layers exact | first dispatch 18.303 ms | dispatch mean 16.743 ms, min 16.665, max 17.257 over 100
+yolov8s new_sigmoid run 2: rc=0 [verify] 66/66 layers exact | first dispatch 18.557 ms | dispatch mean 17.091 ms, min 16.984, max 18.009 over 100
+yolov8s new_sigmoid run 3: rc=0 [verify] 66/66 layers exact | first dispatch 18.710 ms | dispatch mean 17.128 ms, min 17.009, max 18.196 over 100
+yolov8s new_hardsigmoid run 4: rc=0 [verify] 66/66 layers exact | first dispatch 18.230 ms | dispatch mean 16.726 ms, min 16.607, max 17.267 over 100
+yolov8s today_hardsigmoid run 5: rc=0 [verify] 66/66 layers exact | first dispatch 18.430 ms | dispatch mean 16.698 ms, min 16.607, max 17.976 over 100
+[cpu before pose] CPU 7.7 % over 3 s; busiest System Idle Process 0, System 0,  0
+pose today_hardsigmoid run 0: rc=0 [verify] 75/75 layers exact | first dispatch 9.101 ms | dispatch mean 7.580 ms, min 7.500, max 8.182 over 100
+pose new_hardsigmoid run 1: rc=0 [verify] 75/75 layers exact | first dispatch 9.121 ms | dispatch mean 7.592 ms, min 7.502, max 8.226 over 100
+pose new_sigmoid run 2: rc=0 [verify] 75/75 layers exact | first dispatch 9.379 ms | dispatch mean 7.812 ms, min 7.750, max 7.981 over 100
+pose new_sigmoid run 3: rc=0 [verify] 75/75 layers exact | first dispatch 9.329 ms | dispatch mean 7.809 ms, min 7.733, max 8.408 over 100
+pose new_hardsigmoid run 4: rc=0 [verify] 75/75 layers exact | first dispatch 9.160 ms | dispatch mean 7.627 ms, min 7.559, max 8.238 over 100
+pose today_hardsigmoid run 5: rc=0 [verify] 75/75 layers exact | first dispatch 9.156 ms | dispatch mean 7.570 ms, min 7.486, max 8.176 over 100
+idle after: True
+yolov8n  today_hardsigmoid  7.260 / 7.267  mean 7.264 ms
+yolov8n  new_hardsigmoid    7.306 / 7.255  mean 7.280 ms
+yolov8n  new_sigmoid        7.447 / 7.517  mean 7.482 ms
+yolov8s  today_hardsigmoid  16.705 / 16.698  mean 16.701 ms
+yolov8s  new_hardsigmoid    16.743 / 16.726  mean 16.734 ms
+yolov8s  new_sigmoid        17.091 / 17.128  mean 17.110 ms
+pose     today_hardsigmoid  7.580 / 7.570  mean 7.575 ms
+pose     new_hardsigmoid    7.592 / 7.627  mean 7.609 ms
+pose     new_sigmoid        7.812 / 7.809  mean 7.811 ms
