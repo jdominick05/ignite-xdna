@@ -119,6 +119,12 @@ def parse_args(args: Optional[List[str]] = None) -> argparse.Namespace:
              "between two nodes' quantized outputs (e.g. /model.10/m/m.0/attn/qkv/conv/Conv="
              "/model.10/m/m.0/attn/Reshape_1, its attention core only)",
     )
+    parser.add_argument(
+        "--silu-sigmoid",
+        action="store_true",
+        help="Graph engine: compute every SiLU with the core's four-line sigmoid epilogue instead of Quark's "
+             "HardSigmoid form (more accurate; the exactness reference becomes silu_sigmoid.reference_model)",
+    )
     argv = list(sys.argv[1:] if args is None else args)
     # ``ignite-compile compile --model X`` is accepted as a spelling of ``--input X``.
     if argv and argv[0] == "compile":
@@ -392,8 +398,10 @@ def verify_on_silicon(container_path: Path, device_idx: int = 0):
 
 
 def compile_graph_engine(input_path: Union[str, Path], output_path: Union[str, Path],
-                         build_dir: Optional[Union[str, Path]] = None, host_regions: Optional[List[str]] = None) -> int:
-    """Lower the whole graph onto the convolution engine (see engine_compile.py); ``host_regions`` run on the host."""
+                         build_dir: Optional[Union[str, Path]] = None, host_regions: Optional[List[str]] = None,
+                         silu_sigmoid: bool = False) -> int:
+    """Lower the whole graph onto the convolution engine (see engine_compile.py); ``host_regions`` run on the host;
+    ``silu_sigmoid`` gives SiLU the sigmoid epilogue."""
     for region in host_regions or ():
         for part in region.split("="):
             if len(part) > 2 and part[1] == ":" and part[2] in "/\\":
@@ -407,7 +415,10 @@ def compile_graph_engine(input_path: Union[str, Path], output_path: Union[str, P
             f"import failed: {ex}") from ex
     from ignite_xdna.compiler.engine_compile import compile_graph_container
     manifest = compile_graph_container(input_path, output_path, build_dir=build_dir,
-                                       host_regions=tuple(host_regions or ()))
+                                       host_regions=tuple(host_regions or ()), silu_sigmoid=silu_sigmoid)
+    if silu_sigmoid:
+        print(f"    [OK] SiLU: {manifest['graph_engine'].get('silu')} epilogue (reference: "
+              f"silu_sigmoid.reference_model of {Path(input_path).name})")
     for seg in manifest["graph_engine"].get("segments", []):
         if seg["kind"] == "host":
             print(f"    [OK] host segment: {seg['name']} (layer {seg['layer']}) between NPU segments")
@@ -428,7 +439,8 @@ def main(args: Optional[List[str]] = None):
     parsed = parse_args(args)
     try:
         if parsed.engine == "graph":
-            compile_graph_engine(parsed.input, parsed.output, parsed.build_dir, host_regions=parsed.host_region)
+            compile_graph_engine(parsed.input, parsed.output, parsed.build_dir, host_regions=parsed.host_region,
+                                 silu_sigmoid=parsed.silu_sigmoid)
             if parsed.verify_silicon:
                 from ignite_xdna.runtime.graph_session import GraphSession
                 sess = GraphSession(parsed.output, device_index=parsed.device)

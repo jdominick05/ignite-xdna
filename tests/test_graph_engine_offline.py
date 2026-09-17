@@ -369,6 +369,56 @@ class EngineGeneralizationOffline(unittest.TestCase):
         self.assertEqual(set(_emulate_layers(ir, ws, scheds, store, direct, picked).values()), {0})
 
 
+@unittest.skipUnless(MODEL.exists(), "quantized model not present")
+class SiluSigmoidOffline(unittest.TestCase):
+    """--silu-sigmoid: every SiLU through the core's four-line sigmoid epilogue, exact against the reference model."""
+
+    @classmethod
+    def setUpClass(cls):
+        import onnx
+        from ignite_xdna.compiler import silu_sigmoid
+        cls.ir = graph_ir.lower_yolov8n(MODEL, silu_sigmoid=True)
+        cls.ref = silu_sigmoid.reference_model(onnx.load(str(MODEL)))
+
+    def test_26_every_silu_takes_the_sigmoid_epilogue(self):
+        convs = [L for L in self.ir.layers if isinstance(L, graph_ir.ConvLayer)]
+        self.assertTrue(self.ir.silu_sigmoid)
+        self.assertEqual(sum(L.sigmoid is not None for L in convs), 57)
+        self.assertEqual(sum(L.hswish is not None for L in convs), 0)
+        for L in convs:
+            if L.sigmoid is not None:
+                self.assertEqual(len(L.sigmoid.params.lines), em.SIGMOID_LINES)
+                self.assertLessEqual(L.sigmoid.max_error, 2, L.name)
+                self.assertTrue(np.array_equal(L.sigmoid.table, em.sigmoid_epilogue(np.arange(256), L.sigmoid.params)))
+
+    def test_27_direct_reference_matches_onnx_runtime_on_the_reference_model(self):
+        from ignite_xdna.compiler import graph_reference as gr
+        rng = np.random.default_rng(27)
+        x = rng.random((3, 640, 640), dtype=np.float32)
+        t_in = self.ir.tensors[self.ir.input]
+        direct = gr.run_direct(self.ir, gr.quantize_input(x, t_in.scale, t_in.zero_point))
+        ort = gr.ort_intermediates(self.ref, x[None], [L.output for L in self.ir.layers])
+        for L in self.ir.layers:
+            c = self.ir.tensors[L.output].channels
+            self.assertTrue(np.array_equal(direct[L.output][:c], ort[L.output]), L.name)
+
+    def test_28_emitted_and_held_sigmoid_layers_emulate_exactly(self):
+        from ignite_xdna.compiler import graph_reference as gr
+        ws = es.plan_workspace(self.ir)
+        scheds, store = es.schedule_graph(self.ir, ws)
+        convs = [L for L in self.ir.layers if isinstance(L, graph_ir.ConvLayer) and L.sigmoid is not None]
+        emitted = next(L.index for L in convs if L.residual is None)
+        held = next(L.index for L in convs if L.residual is not None)   # the tile is held, then the residual adds
+        rng = np.random.default_rng(28)
+        direct = gr.run_direct(self.ir, rng.integers(0, 256, size=(3, 640, 640), dtype=np.uint8), stop_after=held)
+        mism = _emulate_layers(self.ir, ws, scheds, store, direct, [emitted, held])
+        self.assertEqual(set(mism.values()), {0}, mism)
+
+    def test_29_host_regions_are_refused(self):
+        with self.assertRaises(ValueError):
+            graph_ir.lower_yolov8n(MODEL, host_regions=["/model.9/"], silu_sigmoid=True)
+
+
 class NativeDecodeOffline(unittest.TestCase):
     """The native int8 decode (pipelines/decode_native.c) returns the numpy path's detections exactly."""
 

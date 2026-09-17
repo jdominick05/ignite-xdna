@@ -6,8 +6,9 @@
 
 The synthetic sequence drives every packet kind the core program implements
 (3x3 stride 1 with HardSwish, chunked 1x1 with partial sums, 3x3 stride 2,
-2x upsampling, 5x5 max pool, a residual packet and one activated after its add) through all sixteen cores
-and compares every output byte with the NumPy emulator.
+2x upsampling, 5x5 max pool, a residual packet and one activated after its add, and the sigmoid SiLU
+epilogue on an identity convolution fed every uint8 value, on a 3x3 convolution and on a held tile before a
+residual add) through all sixteen cores and compares every output byte with the NumPy emulator.
 """
 import argparse
 import hashlib
@@ -26,6 +27,7 @@ for p in (ROOT, ROOT / "src"):
         sys.path.insert(0, str(p))
 
 from ignite_xdna.compiler import engine_emulator as em  # noqa: E402
+from ignite_xdna.compiler.silu_sigmoid import fit_sigmoid  # noqa: E402
 
 BUILD_DEFAULT = ROOT / "build" / "conv_engine"
 COLS, ROWS = 4, 4
@@ -34,6 +36,16 @@ COLS, ROWS = 4, 4
 def _hs_params_identityish():
     """HardSwish constants for scale 0.25 in/out (checked exactly by the compiler later)."""
     return em.HardSwishParams(a1=5461, b1=524288, s1=13, qmax=128, k2=16386, s2=14, ysh=7)
+
+
+def _identity_k1_weights():
+    """1x1 weights mapping input block b channel i to output block b channel i: with a zero bias and shift 0 the
+    linear output q1 is the input byte, so the epilogue sees exactly the A packet's values."""
+    w = np.zeros((1, 4, 4, 8, 8), dtype=np.int8)
+    for b in range(4):
+        for i in range(8):
+            w[0, b, b, i, i] = 1
+    return w
 
 
 def synthetic_scenarios(seed: int):
@@ -97,13 +109,39 @@ def synthetic_scenarios(seed: int):
     hdr = em.PacketHeader(op=em.OP_MAXPOOL, ncin=2, nco=4, flags=em.F_EMIT | em.F_LOAD_PSUM, count_out=1,
                           rows_in=16, cols_in=25, plane_bytes=3200)
     scenarios.append(("maxpool_emit", em.pack_w_packet(hdr, np.zeros(32, np.int32), None), 1, 0))
+    # 6. SiLU through the sigmoid epilogue (F_SIGMOID), applied by the core to the finished tile after the passes.
+    #    Constants of YOLOv8n's most common SiLU scale pair, and of a pair whose fourth line has a zero slope.
+    sig_a = fit_sigmoid(1 / 16, 1 / 32).params
+    sig_b = fit_sigmoid(1 / 8, 1 / 16).params
+    for tag, sig in (("a", sig_a), ("b", sig_b)):
+        hdr = em.PacketHeader(op=em.OP_CONV, k=1, stride=1, ncin=4, nco=4, flags=em.F_EMIT | em.F_SIGMOID,
+                              shift_out=0, sig=sig, count_out=2, rows_in=5, cols_in=20, plane_bytes=800)
+        scenarios.append((f"identity_sigmoid_{tag}", em.pack_w_packet(hdr, np.zeros(32, np.int32),
+                                                                      _identity_k1_weights()), 2, 0))
+    hdr = em.PacketHeader(op=em.OP_CONV, k=3, stride=1, ncin=4, nco=4, flags=em.F_EMIT | em.F_SIGMOID,
+                          shift_out=9, sig=sig_a, count_out=2, rows_in=8, cols_in=25, plane_bytes=1600)
+    scenarios.append(("k3s1_sigmoid", em.pack_w_packet(hdr, rand_bias(9), rand_w(9, 4)), 2, 0))
+    hdr = em.PacketHeader(op=em.OP_CONV, k=1, stride=1, ncin=8, nco=4, flags=0, shift_out=0, count_out=0,
+                          count_acc=1, rows_in=5, cols_in=20, plane_bytes=800)
+    scenarios.append(("k1_acc_before_sigmoid", em.pack_w_packet(hdr, rand_bias(7), rand_w(1, 8)), 0, 1))
+    hdr = em.PacketHeader(op=em.OP_CONV, k=1, stride=1, ncin=8, nco=4,
+                          flags=em.F_LOAD_PSUM | em.F_HOLD | em.F_SIGMOID, shift_out=7, sig=sig_b, count_out=0,
+                          count_acc=1, rows_in=5, cols_in=20, plane_bytes=800)
+    scenarios.append(("k1_hold_sigmoid", em.pack_w_packet(hdr, rand_bias(7), rand_w(1, 8)), 0, 1))
+    hdr = em.PacketHeader(op=em.OP_RESIDUAL, ncin=4, nco=4, flags=em.F_EMIT, rsh=1, count_out=1)
+    scenarios.append(("residual_after_sigmoid", em.pack_w_packet(hdr, np.zeros(32, np.int32), None), 1, 0))
 
     plan = []  # per column: list of dicts
     for c in range(COLS):
         col = []
         for name, wpkt, n_out, n_acc in scenarios:
             rounds = n_out + n_acc
-            a_rounds = [[rand_a(1)[0] for _ in range(ROWS)] for _ in range(rounds)]  # [round][core]
+            if name.startswith("identity"):
+                # Every uint8 value twelve times per core, offset per column, core and round.
+                a_rounds = [[((np.arange(em.A_BYTES) + 37 * c + 11 * r + 101 * rnd) % 256).astype(np.uint8)
+                             for r in range(ROWS)] for rnd in range(rounds)]
+            else:
+                a_rounds = [[rand_a(1)[0] for _ in range(ROWS)] for _ in range(rounds)]  # [round][core]
             col.append({"name": name, "w": wpkt, "n_out": n_out, "n_acc": n_acc, "a": a_rounds})
         plan.append(col)
     return plan
@@ -315,9 +353,39 @@ class EngineEmulatorOffline(unittest.TestCase):
         plan = synthetic_scenarios(1)
         expected = emulate_plan(plan)
         self.assertEqual(len(expected), COLS)
-        # 3 + 1 + 2 + 1 (residual) + 1 (residual then HardSwish) + 1 (pool emit) output rounds per column
-        self.assertEqual(len(expected[0]), 9)
+        # 3 + 1 + 2 + 1 (residual) + 1 (residual then HardSwish) + 1 (pool emit) output rounds per column,
+        # then 2 + 2 (identity sigmoid) + 2 (3x3 sigmoid) + 1 (residual after a held sigmoid tile)
+        self.assertEqual(len(expected[0]), 16)
         self.assertTrue(all(o.size == ROWS * em.O_BYTES for o in expected[0]))
+
+    def test_sigmoid_packet_roundtrip(self):
+        sig = fit_sigmoid(1 / 8, 1 / 16).params
+        hdr = em.PacketHeader(op=em.OP_CONV, k=1, stride=1, ncin=4, nco=4, flags=em.F_EMIT | em.F_SIGMOID,
+                              shift_out=0, sig=sig, count_out=2, rows_in=5, cols_in=20, plane_bytes=800)
+        h2, _, _ = em.unpack_w_packet(em.pack_w_packet(hdr, np.zeros(32, np.int32), _identity_k1_weights()))
+        self.assertEqual(h2, hdr)
+        words = hdr.words()
+        self.assertEqual([int(v) for v in words[26:32]], [v for line in sig.lines[1:] for v in line])
+
+    def test_identity_sigmoid_packet_is_the_fitted_table(self):
+        """Through the identity convolution every uint8 value reaches the epilogue; the emulated output is the
+        compiler's table for that scale pair, byte for byte."""
+        for s1, s2 in ((1 / 16, 1 / 32), (1 / 8, 1 / 16)):
+            fit = fit_sigmoid(s1, s2)
+            hdr = em.PacketHeader(op=em.OP_CONV, k=1, stride=1, ncin=4, nco=4, flags=em.F_EMIT | em.F_SIGMOID,
+                                  shift_out=0, sig=fit.params, count_out=1, rows_in=5, cols_in=20, plane_bytes=800)
+            a = (np.arange(em.A_BYTES) % 256).astype(np.uint8)
+            out = em.run_packet(em.pack_w_packet(hdr, np.zeros(32, np.int32), _identity_k1_weights()), a,
+                                em.CoreState(), 0)
+            q = a[:4 * 800].reshape(4, 5, 20, 8)
+            self.assertTrue(np.array_equal(out.reshape(4, 5, 20, 8), fit.table[q]), (s1, s2))
+            self.assertEqual(len(np.unique(q)), 256)
+
+    def test_hardswish_packets_do_not_carry_sigmoid_words(self):
+        hdr = em.PacketHeader(op=em.OP_CONV, k=3, stride=1, ncin=4, nco=4, flags=em.F_EMIT | em.F_HSWISH,
+                              shift_out=9, hs=_hs_params_identityish(), count_out=3, rows_in=8, cols_in=25,
+                              plane_bytes=1600)
+        self.assertEqual([int(v) for v in hdr.words()[26:32]], [0] * 6)
 
     def test_up2_expand_duplicates_pixels(self):
         src = np.zeros((10, 4, 20, 8), dtype=np.uint8)

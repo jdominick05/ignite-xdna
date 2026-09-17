@@ -18,7 +18,11 @@ Variants:
 
 Run in the mlir-aie ironenv (source scripts/research-iron.sh, or any environment where aie.utils.config resolves):
 
-    python tools/engine_epilogue_variants.py OUT_DIR [--lines 3 4]
+    python tools/engine_epilogue_variants.py OUT_DIR [--lines 3 4] [--source ENGINE_CC]
+
+The variants patch the program as it was before the sigmoid epilogue landed (the committed census ran on engine.cc
+at 3b5be0e); engine.cc now contains the post4 form, so pass that older source, e.g.
+``git show 3b5be0e:kernels/aie2/conv_engine/engine.cc > engine_3b5be0e.cc``.
 """
 import argparse
 import re
@@ -119,9 +123,13 @@ def main():
     ap.add_argument("out")
     ap.add_argument("--lines", type=int, nargs="+", default=[3, 4])
     ap.add_argument("--no-compile", action="store_true")
+    ap.add_argument("--source", default=str(SRC), help="the engine.cc to patch (default: the repository's)")
     args = ap.parse_args()
     out = Path(args.out)
-    base = SRC.read_text(encoding="utf-8")
+    base = Path(args.source).read_text(encoding="utf-8")
+    if "F_SIGMOID" in base:
+        raise SystemExit(f"{args.source} already has the sigmoid epilogue; pass the program from before it "
+                         f"(--source, see the docstring)")
     sources = {"engine": base}
     for K in args.lines:
         assert 1 <= K <= 4, "the 32-word header has six free words: lines 2..4"

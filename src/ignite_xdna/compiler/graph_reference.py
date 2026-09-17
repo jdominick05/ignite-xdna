@@ -56,6 +56,8 @@ def conv_direct(layer: ConvLayer, x: np.ndarray) -> np.ndarray:
     q = em.sat_u8(em.rne_shift(acc, layer.shift_out))
     if layer.hswish is not None:   # HardSwish, or ReLU expressed as the same epilogue
         q = layer.hswish.table[q]
+    if layer.sigmoid is not None:  # SiLU through the sigmoid epilogue
+        q = layer.sigmoid.table[q]
     return q
 
 
@@ -128,10 +130,13 @@ def run_direct(ir: GraphIR, input_q: np.ndarray, stop_after: Optional[int] = Non
 
 
 def ort_intermediates(model_path, image_nchw_float: np.ndarray, names: List[str]) -> Dict[str, np.ndarray]:
-    """Run the QDQ model in ONNX Runtime exposing the requested uint8 tensors as outputs."""
+    """Run the QDQ model (a path or a ModelProto, e.g. ``silu_sigmoid.reference_model``) in ONNX Runtime exposing the
+    requested uint8 tensors as outputs."""
+    import copy
+
     import onnx
     import onnxruntime as ort
-    model = onnx.load(str(model_path))
+    model = copy.deepcopy(model_path) if isinstance(model_path, onnx.ModelProto) else onnx.load(str(model_path))
     existing = {o.name for o in model.graph.output}
     for n in names:
         if n not in existing:

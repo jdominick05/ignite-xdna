@@ -16,6 +16,10 @@
 //   qh   = min(rne((hs * K2) >> S2), 127)
 //   y    = rne((t * qh) >> YSH)
 //   q2   = sat_u8(y + 128)                   (act = hswish) else q2 = q1
+//   F_SIGMOID (F_HSWISH clear, the passes emit q1): SiLU through a four-line sigmoid, applied by a separate
+//   loop over the emitted or held tile after every pass (inside a pass it spills the pass accumulators):
+//     u = |t|;  g = clip(min_i rne((u * A_i + B_i) >> S1), 0, 64)    i = 1..4, A_i int16, B_i int32
+//     q2 = sat_u8(rne(((t << 6) + u * g) >> YSH) + 128)              = t * (64 + sign(t) * g) >> YSH
 //   residual packet: q = sat_u8(rne(((qm - 128) << LSH_M) + ((qr - 128) << LSH_R)) >> RSH) + 128)
 //                    with LSH_M = 0 and LSH_R = RSH unless the header sets F_RES_SHIFTS;
 //                    with F_HSWISH the residual packet's own HardSwish constants then act on q (an
@@ -40,13 +44,15 @@ enum {
     H_SHIFT_OUT = 6, H_A1 = 7, H_B1 = 8, H_S1 = 9, H_QMAX = 10, H_K2 = 11,
     H_S2 = 12, H_YSH = 13, H_RSH = 14, H_COUNT_OUT = 15, H_COUNT_ACC = 16,
     H_PHASE0 = 17, H_ROWS_IN = 21, H_COLS_IN = 22, H_PLANE_BYTES = 23,
-    H_RLSH_M = 24, H_RLSH_R = 25,
+    H_RLSH_M = 24, H_RLSH_R = 25, H_A2 = 26, H_B2 = 27, H_A3 = 28, H_B3 = 29, H_A4 = 30, H_B4 = 31,
 };
 enum { OP_NOP = 0, OP_CONV = 1, OP_MAXPOOL = 2, OP_RESIDUAL = 3 };
 // F_RES_SHIFTS: a residual packet takes the left shifts of both operands from
 // H_RLSH_M / H_RLSH_R; without it the held tile is unshifted and the residual
 // tile is shifted by RSH (the rule every YOLOv8n residual uses).
-enum { F_LOAD_PSUM = 1, F_EMIT = 2, F_HSWISH = 4, F_UP2 = 8, F_HOLD = 16, F_RES_SHIFTS = 32 };
+// F_SIGMOID: after the passes, the sigmoid SiLU acts on the emitted or held tile at the
+// header's line constants (A1/B1, A2/B2..A4/B4, S1, YSH).
+enum { F_LOAD_PSUM = 1, F_EMIT = 2, F_HSWISH = 4, F_UP2 = 8, F_HOLD = 16, F_RES_SHIFTS = 32, F_SIGMOID = 64 };
 constexpr int HDR_BYTES = 128;
 constexpr int BIAS_BYTES = 128;
 constexpr int W_OFFSET = HDR_BYTES + BIAS_BYTES;
@@ -69,6 +75,7 @@ using Acc = aie::accum<acc32, 32>;
 struct Hdr {
     int op, k, stride, ncin, flags, shift_out;
     int a1, b1, s1, qmax, k2, s2, ysh, rsh;
+    int a2, b2, a3, b3, a4, b4;
     int rlsh_m, rlsh_r;
     int rows_in, cols_in, plane_bytes;
     int phase;
@@ -80,6 +87,7 @@ inline Hdr read_header(const int32_t *h, int core_row) {
     d.flags = h[H_FLAGS]; d.shift_out = h[H_SHIFT_OUT];
     d.a1 = h[H_A1]; d.b1 = h[H_B1]; d.s1 = h[H_S1]; d.qmax = h[H_QMAX];
     d.k2 = h[H_K2]; d.s2 = h[H_S2]; d.ysh = h[H_YSH]; d.rsh = h[H_RSH];
+    d.a2 = h[H_A2]; d.b2 = h[H_B2]; d.a3 = h[H_A3]; d.b3 = h[H_B3]; d.a4 = h[H_A4]; d.b4 = h[H_B4];
     d.rlsh_m = (d.flags & F_RES_SHIFTS) ? h[H_RLSH_M] : 0;
     d.rlsh_r = (d.flags & F_RES_SHIFTS) ? h[H_RLSH_R] : d.rsh;
     d.rows_in = h[H_ROWS_IN]; d.cols_in = h[H_COLS_IN]; d.plane_bytes = h[H_PLANE_BYTES];
@@ -110,6 +118,28 @@ inline V32u hswish_u8(V32u q1, const Hdr &d) {
     V32i16 qh = aie::mul(hs, int16_t(d.k2)).template to_vector<int16>(d.s2);
     qh = aie::min(qh, int16_t(127));
     V32i16 y = aie::mul(t, qh).template to_vector<int16>(d.ysh);
+    return sat_u8_from_i16(aie::add(y, int16_t(128)));
+}
+
+// Piecewise-linear sigmoid SiLU on 32 uint8 values at the header's line constants: q1 -> q2.
+// One accumulator at a time: each line is reduced to int16 before the next is formed.
+__attribute__((always_inline))
+inline V32u silu_pl_u8(V32u q1, const Hdr &d) {
+    V32i16 t = unpack_centered(q1);
+    V32i16 u = aie::abs(t);
+    Acc l;
+    l.from_vector(aie::broadcast<int32, 32>(d.b1));
+    V32i16 g = aie::mac(l, u, int16_t(d.a1)).template to_vector<int16>(d.s1);
+    l.from_vector(aie::broadcast<int32, 32>(d.b2));
+    g = aie::min(g, aie::mac(l, u, int16_t(d.a2)).template to_vector<int16>(d.s1));
+    l.from_vector(aie::broadcast<int32, 32>(d.b3));
+    g = aie::min(g, aie::mac(l, u, int16_t(d.a3)).template to_vector<int16>(d.s1));
+    l.from_vector(aie::broadcast<int32, 32>(d.b4));
+    g = aie::min(g, aie::mac(l, u, int16_t(d.a4)).template to_vector<int16>(d.s1));
+    g = aie::max(g, int16_t(0));
+    g = aie::min(g, int16_t(64));
+    l.from_vector(t, 6);
+    V32i16 y = aie::mac(l, u, g).template to_vector<int16>(d.ysh);
     return sat_u8_from_i16(aie::add(y, int16_t(128)));
 }
 
@@ -221,6 +251,14 @@ inline void conv_pass(const Hdr &d, const uint8_t *a, const int8_t *w, const int
     }
 }
 
+// The sigmoid SiLU over a whole emitted or held tile, in place. It runs after every pass of
+// the packet, so no pass accumulator is live: inside the pass epilogue the same arithmetic
+// spills them to the stack (tools/engine_epilogue_variants.py).
+void silu_pl_tile(const Hdr &d, uint8_t *dst) {
+    for (int off = 0; off < NCO * OUT_BLOCK_BYTES; off += 32)
+        aie::store_v(dst + off, silu_pl_u8(aie::load_v<32>(dst + off), d));
+}
+
 // Nearest 2x upsampling: expand the [10 blocks][4][20][8] source packet in place
 // into a [8 blocks][5][20][8] full-resolution tile. Output row r reads source row
 // (r + phase) >> 1; output col x reads source col x >> 1. Blocks are expanded from
@@ -325,6 +363,8 @@ inline void run(int32_t *hdr, uint8_t *apkt, uint8_t *out, int32_t *psum, int co
             conv_pass<true>(d, apkt, w, bias, psum, out, r, 2);
             conv_pass<false>(d, apkt, w, bias, psum, out, r, 4);
         }
+        if ((d.flags & F_SIGMOID) && (d.flags & (F_EMIT | F_HOLD)))
+            silu_pl_tile(d, (d.flags & F_EMIT) ? out : reinterpret_cast<uint8_t *>(psum) + HOLD_OFFSET_BYTES);
         break;
     case OP_MAXPOOL:
         maxpool_tile(d, apkt, psum, out);

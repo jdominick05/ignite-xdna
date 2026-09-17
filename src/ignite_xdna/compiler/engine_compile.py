@@ -220,11 +220,15 @@ def check_weight_buffer_addresses(mlir_path: Path, expected: int, columns: int) 
 
 def compile_graph_container(onnx_path, output_path, build_dir: Optional[Path] = None, layers: Optional[int] = None,
                             verbose: bool = True, host_regions: Sequence[str] = (),
-                            activation_ring: int = 0, weight_buffer: bool = False) -> Dict[str, Any]:
+                            activation_ring: int = 0, weight_buffer: bool = False,
+                            silu_sigmoid: bool = False) -> Dict[str, Any]:
     """Lower, schedule, build the device binaries and write the container. Returns the manifest.
 
     ``host_regions`` are node-name prefixes or ``FROM=TO`` boundaries run on the host between dispatches
     (``graph_ir.HostLayer``).
+
+    ``silu_sigmoid`` computes every SiLU with the core's four-line sigmoid epilogue instead of Quark's HardSigmoid
+    form (``silu_sigmoid.py``); the manifest records it as ``graph_engine.silu``.
 
     ``activation_ring`` (slots, 0 = off) builds the engine with a hand-written MemTile ring for activations
     instead of the split ObjectFifo, so one shim fetch can serve several output groups of a tile.
@@ -246,7 +250,7 @@ def compile_graph_container(onnx_path, output_path, build_dir: Optional[Path] = 
     onnx_path = Path(onnx_path)
     out_p = Path(output_path)
     build_dir = Path(build_dir or out_p.parent / "conv_engine" / out_p.stem).resolve()
-    ir = lower_yolov8n(onnx_path, host_regions=host_regions)
+    ir = lower_yolov8n(onnx_path, host_regions=host_regions, silu_sigmoid=silu_sigmoid)
     ws = es.plan_workspace(ir)
     scheds, store = es.schedule_graph(ir, ws, activation_ring=activation_ring, weight_buffer=weight_buffer)
     if layers is not None:
@@ -287,6 +291,8 @@ def compile_graph_container(onnx_path, output_path, build_dir: Optional[Path] = 
     manifest = build_manifest(ir, ws, scheds, store, onnx_path.stem, len(insts),
                               hashlib.sha256(xclbin).hexdigest(), kernel_sha, time.perf_counter() - t0)
     manifest["graph_engine"]["ddr_extents_bytes"] = {"workspace": ws_extent, "packets": wp_extent}
+    if silu_sigmoid:   # absent means Quark's HardSigmoid form, as every earlier container
+        manifest["graph_engine"]["silu"] = "sigmoid4"
     segments = plan_segments(ir, scheds)
     hosts = [seg for seg in segments if seg["kind"] == "host"]
     blobs = [("engine.xclbin", xclbin, "xclbin")]
