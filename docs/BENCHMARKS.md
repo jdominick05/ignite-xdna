@@ -9783,3 +9783,80 @@ these runs.
 - The `--silu-sigmoid` containers timed on this runtime.
 - SESR quality (PSNR against a reference set) through the native resize.
 - AMD's SESR arm with a faster float postprocess.
+
+## The v0.3.3 release sitting: sigmoid SiLU containers on the host fast paths against AMD's stack (2026-09-17, Desktop 2)
+
+Every latency comparison Ignition publishes, re-run for its v0.3.3 release with the containers its documentation now
+builds: YOLOv8n, YOLOv8s and YOLOv8n-pose compiled with `ignite-compile --silu-sigmoid`, on the runtime with the host
+fast paths ([section above](#host-fast-paths-sesr-m7-205-ms-faster-in-its-host-stages-detection-heads-decoded-in-their-channel-blocks-2026-09-17-desktop-2)).
+Each of those three also ran a control: the same model compiled at the same commit without the flag. SESR M7 and
+YOLO11n cannot take the flag and ran their existing containers.
+
+Evidence: `results/aie/release_033/`.
+- `containers_1879614.log`: the six containers built through the CLI at main `1879614`, each in a fresh build
+  directory. `insts.bin`, `wpackets.bin` and the kernel hash equal the `7700316` builds of `silu_sigmoid_engine/`;
+  `engine.xclbin` differs between any two builds.
+- `latency_release033_phoenix_20260917T1538Z.log`: the sitting, 15:38-15:44 UTC. Every container's SiLU form was read
+  from its manifest and every container verified layer-exact on the NPU first: 66/66 for each YOLOv8n and YOLOv8s
+  container, 75/75 for each pose container, 9/9 SESR M7, 84/84 and 91/91 YOLO11n. Then 50 warm-up and 500 timed frames
+  of bus.jpg per run, interleaved, each model twice, `xrt-smi` showing no hardware context before every group and
+  after the last, host CPU 6.5-10.6 % over 2 s before each group. Ignition ran `live_ignition.py` from Ignition main
+  `e27ef79` in its `balanced` default unless marked; AMD's stack (Ryzen AI 1.7.1, Vitis AI EP) ran
+  `tools/amd_vitisai_yolo.py`, `tools/amd_vitisai_sesr.py` and `pipelines/yolov8n-pose/4_pose.py --ep npu`.
+- `energy_release033_paced30_phoenix_20260917T1544Z.log` and `.json`: an energy sitting at 30 fps on the same
+  containers, **discarded** (below).
+
+| Model | Arm | G2G mean, runs 1 / 2 (ms) | P99 (ms) | Stage means, run 1 (ms) | Output | RSS (MB) |
+|---|---|---:|---:|---|---|---:|
+| YOLOv8n | AMD's stack | 10.658 / 10.424 | 11.854 / 11.456 | letterbox 1.842, `session.run` 6.701, decode+NMS 2.115 | 5 objects | 304.4 / 304.7 |
+| YOLOv8n | Ignition, `--silu-sigmoid` | **8.500 / 8.532** | 9.373 / 9.394 | preprocess 0.607, dispatch 7.477, readback 0.279, decode+NMS 0.132 | 5 objects | 191.5 / 191.0 |
+| YOLOv8n | Ignition, `--silu-sigmoid`, `performance` | 8.083 / 8.135 | 8.417 / 8.330 | preprocess 0.409, dispatch 7.413, readback 0.134, decode+NMS 0.121 | 5 objects | 191.7 / 191.5 |
+| YOLOv8n | Ignition, control without the flag | 8.262 / 8.286 | 8.960 / 9.168 | preprocess 0.625, dispatch 7.225, readback 0.271, decode+NMS 0.134 | 5 objects | 190.7 / 190.8 |
+| YOLOv8s | AMD's stack | **16.786 / 16.754** | 17.763 / 17.711 | letterbox 1.795, `session.run` 12.887, decode+NMS 2.104 | 5 objects | 339.9 / 337.4 |
+| YOLOv8s | Ignition, `--silu-sigmoid` | 18.213 / 18.183 | 18.996 / 18.936 | preprocess 0.639, dispatch 17.124, readback 0.302, decode+NMS 0.141 | 5 objects | 240.8 / 242.1 |
+| YOLOv8s | Ignition, control without the flag | 17.870 / 17.797 | 18.781 / 18.716 | preprocess 0.635, dispatch 16.792, readback 0.296, decode+NMS 0.141 | 6 objects | 242.2 / 240.6 |
+| SESR M7 | AMD's stack | **4.353 / 4.349** | 5.000 / 4.930 | preprocess 0.425, `session.run` 1.509, postprocess 2.419 | 512x512 | 265.3 / 266.0 |
+| SESR M7 | Ignition | 4.775 / 4.781 | 5.267 / 5.215 | preprocess 0.194, dispatch 4.184, readback 0.021, image output 0.372 | 512x512 | 163.3 / 163.4 |
+| YOLO11n | AMD's stack | 36.771 / 38.303 | 39.262 / 41.796 | letterbox 1.902, `session.run` 32.922, decode+NMS 1.948 | 7 objects | 343.7 / 342.6 |
+| YOLO11n | Ignition, whole C2PSA block on the CPU | 11.249 / 11.351 | 12.083 / 12.413 | preprocess 0.565, dispatch 8.407, host 1.880, readback 0.250, decode+NMS 0.140 | 6 objects | 202.2 / 202.4 |
+| YOLO11n | Ignition, attention core on the CPU | **10.458 / 10.497** | 11.188 / 11.205 | preprocess 0.584, dispatch 8.735, host 0.746, readback 0.249, decode+NMS 0.137 | 6 objects | 200.9 / 200.9 |
+| YOLO11n | Ignition, attention core, `performance` | 10.235 / 10.267 | 11.113 / 10.970 | preprocess 0.640, dispatch 8.777, host 0.525, readback 0.158, decode+NMS 0.128 | 6 objects | 200.3 / 201.2 |
+| YOLOv8n-pose | AMD's stack, `4_pose.py --ep npu` | 12.067 / 11.971 | 13.383 / 13.153 | pre 3.098, infer 8.70, post 0.10 | 3 people | — |
+| YOLOv8n-pose | ignite-xdna's pose pipeline, `4_pose.py --ep ignite`, `--silu-sigmoid` | 9.274 / 9.295 | 10.226 / 10.102 | pre 0.584, infer 8.59, post 0.09 | 4 people | — |
+| YOLOv8n-pose | Ignition, `--silu-sigmoid` | **9.282 / 9.349** | 10.024 / 10.102 | preprocess 0.588, dispatch 7.798, readback 0.517, decode+NMS 0.358 | 4 people | 181.6 / 181.8 |
+| YOLOv8n-pose | Ignition, control without the flag | 8.986 / 8.996 | 9.942 / 9.627 | preprocess 0.559, dispatch 7.571, readback 0.509, decode+NMS 0.327 | 3 people | 181.6 / 181.8 |
+
+RSS is at the first timed frame; it moved by at most +0.17 MB over any run.
+
+- **What the flag costs, against its same-commit control:** 0.24 / 0.25 ms of glass-to-glass on YOLOv8n (dispatch
+  +0.25 / +0.27), 0.34 / 0.39 ms on YOLOv8s (dispatch +0.33 / +0.41) and 0.30 / 0.35 ms on YOLOv8n-pose (dispatch
+  +0.23 / +0.27).
+- **Against AMD's stack with the flag:** YOLOv8n 1.89-2.16 ms faster and YOLOv8n-pose 2.62-2.79 ms faster; YOLOv8s
+  1.43 ms slower (the control 1.04-1.08 ms slower). With the flag all three are more accurate than AMD's stack on
+  COCO val2017: 34.12 / 42.37 / 44.16 against 26.68 / 37.31 / 32.64 on all 5,000 images through the same letterbox
+  ([accuracy](#the-sigmoid-silu-containers-against-amds-stack-more-accurate-on-all-5000-coco-images-faster-on-yolov8n-and-yolov8n-pose-slower-on-yolov8s-2026-09-17-desktop-2));
+  on this runtime the first 500 images' detections stay byte-identical to the reference model
+  (`host_fastpaths_verification/coco500_merged_runtime.log`).
+- **SESR M7 is 0.42 / 0.43 ms behind AMD's stack**, on the native resize and DepthToSpace. Its NPU forward (4.205 /
+  4.210 ms) is 2.7 ms slower than AMD's `session.run`; its host stages are 2.3 ms faster than those of AMD's arm, which
+  runs Ignition's float `sr_postprocess`.
+- **Detections on bus.jpg:** YOLOv8s with the flag finds AMD's 5 objects where its control finds 6. The pose container
+  with the flag finds 4 people where AMD's stack and the control find 3; ONNX Runtime's CPU provider found 4 on the
+  numpy letterbox with the HardSigmoid model ([pose section](#yolov8n-pose-on-the-graph-engine-every-layer-on-the-npu-keypoints-through-the-container-2026-09-15-desktop-2)).
+  YOLO11n finds 6 objects against AMD's 7, as before.
+- **Readback and decode on the fast paths:** readback 0.271-0.302 ms and decode+NMS 0.132-0.141 ms on the detection
+  containers in `balanced`; `performance` reads back in 0.134 ms.
+
+**The energy sitting is discarded.** At 30 fps, 1,200 frames per arm, its idle baselines sat at 36.730-40.560 W and
+climbed through the sitting, against about 35 W on this host when clean, and `tools/energy_sitting.py` flagged the
+spread. A desktop application held about one core for the whole sitting, which no setting of the tool removes. The
+arms do not repeat: AMD's stack on YOLOv8n read 222.42 and 315.98 mJ per frame, Ignition's `balanced` 207.46 and
+260.20. No figure from it is quoted, and the flat-out sitting planned after it was not run. The energy per frame on the
+`--silu-sigmoid` containers is therefore unmeasured on a clean host; the 2026-09-16 figures were measured on the
+containers without the flag.
+
+**Not done:**
+- Energy per frame on the `--silu-sigmoid` containers on a clean host.
+- An accuracy run on all 5,000 images on this exact runtime (the first 500 images' detections match; the 5,000-image
+  runs used `7700316`'s runtime with the same containers' instruction streams and weights).
+- Detection class breakdowns for Ignition's arms; the records count objects per frame only.

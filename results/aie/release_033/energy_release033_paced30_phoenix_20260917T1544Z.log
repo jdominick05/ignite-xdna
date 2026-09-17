@@ -1,0 +1,196 @@
+Energy sitting on DESKTOP-CBL5NUA, started 2026-09-17T15:44:39Z
+Package power: typeperf '\Energy Meter(RAPL_Package0_PKG)\Power', 1 s samples, milliwatts. Idle 30 s before each arm; window from progress line 2 to the last.
+== 2026-09-17T15:44:39Z [yolov8n AMD @30 #1]
+  idle      29 samples, mean 37.382 W, stdev 3.549 W, CPU 8.9 %
+  idle      disturbed (CPU 8.9 % > 12.0 or stdev 3.549 W > 2.5); retaking
+  idle      29 samples, mean 38.490 W, stdev 0.577 W, CPU 6.8 %
+  $ <home>/miniforge3/envs/resnet_env17/python.exe <ignite-xdna main>/tools/amd_vitisai_yolo.py --model <ignite-xdna main>/models/yolov8n_cut_xint8.onnx --image <Ignition main>/examples/assets/bus.jpg --ignition-src <Ignition main>/src --cache-dir <scratch>/vitisai_cache --cache-key yolov8n_energy --xclbin <ignite-xdna main>/yolocutcachekey/4x4.xclbin --warmup 50 --iterations 1200 --max-fps 30
+    [amd] ort 1.23.3.dev20260320 | model yolov8n_cut_xint8.onnx | session load 0.39 s | EP report node devices report not found
+    [amd] G2G mean 10.835 ms | P50 10.792 | P95 11.545 | P99 11.991 | max 12.603 | over 1200 timed frames after 50 warm-up
+    [amd] stage means (ms): letterbox 2.056 | session.run 6.695 | decode+NMS 2.084
+    [amd] detections on the last frame: 5 {'person': 4, 'bus': 1} | RSS 305.1 MB
+  window    900 frames in 30.0 s = 30.00 fps, 28 power samples, CPU 8.5 %
+  energy    package 45.163 W - idle 38.490 W = +6.673 W -> 222.42 mJ per frame
+== 2026-09-17T15:46:28Z [yolov8n Ignition performance @30 #1]
+  idle      29 samples, mean 38.477 W, stdev 0.730 W, CPU 6.8 %
+  $ <home>/miniforge3/envs/mlir-aie-iron/python.exe <Ignition main>/live_ignition.py --model <ignite-xdna main>/build/yolov8n_full.ignite --source <Ignition main>/examples/assets/bus.jpg --headless --warmup 50 --frames 1200 --power-mode performance --max-fps 30
+    [Ignition] power mode performance: 16 worker threads, spinning between regions (8 cores / 16 threads on this host)
+    [summary] stop: frame limit | 1250 frames processed (50 warm-up, 1200 timed) | 1 distinct source frames | image bus.jpg 810x1080
+    [summary] NPU power mode: default kept: the performance power mode leaves the NPU's mode alone
+    [summary] G2G mean 8.168 ms | P50 8.168 | P95 8.310 | P99 8.428 | max 10.283 | over the last 1200 timed frames; cold first frame 11.70 ms
+    [summary] stage means (ms): preprocess 0.423 | NPU forward 7.609 (dispatch 7.470, readback 0.139) | decode+NMS 0.129
+    [summary] boxes from NPU heads on 1200/1200 timed frames | 5.00 detections per frame
+    [summary] RSS 191.5 MB at the first timed frame, 191.5 MB at the end (+0.00 MB over 1200 frames)
+  window    900 frames in 30.0 s = 30.00 fps, 28 power samples, CPU 99.9 %
+  energy    package 81.941 W - idle 38.477 W = +43.465 W -> 1448.83 mJ per frame
+== 2026-09-17T15:47:48Z [yolov8n Ignition balanced @30 #1]
+  idle      29 samples, mean 36.730 W, stdev 0.619 W, CPU 6.9 %
+  $ <home>/miniforge3/envs/mlir-aie-iron/python.exe <Ignition main>/live_ignition.py --model <ignite-xdna main>/build/yolov8n_full.ignite --source <Ignition main>/examples/assets/bus.jpg --headless --warmup 50 --frames 1200 --power-mode balanced --max-fps 30
+    [Ignition] power mode balanced: 8 worker threads, sleeping between regions (8 cores / 16 threads on this host)
+    [summary] stop: frame limit | 1250 frames processed (50 warm-up, 1200 timed) | 1 distinct source frames | image bus.jpg 810x1080
+    [summary] NPU power mode: default kept: the balanced power mode leaves the NPU's mode alone
+    [summary] G2G mean 8.708 ms | P50 8.623 | P95 9.489 | P99 9.660 | max 9.835 | over the last 1200 timed frames; cold first frame 11.11 ms
+    [summary] stage means (ms): preprocess 0.756 | NPU forward 7.796 (dispatch 7.497, readback 0.299) | decode+NMS 0.149
+    [summary] boxes from NPU heads on 1200/1200 timed frames | 5.00 detections per frame
+    [summary] RSS 191.2 MB at the first timed frame, 191.2 MB at the end (+0.00 MB over 1200 frames)
+  window    900 frames in 30.0 s = 30.00 fps, 29 power samples, CPU 7.0 %
+  energy    package 42.954 W - idle 36.730 W = +6.224 W -> 207.46 mJ per frame
+== 2026-09-17T15:49:09Z [yolov8n Ignition efficiency @30 #1]
+  idle      29 samples, mean 38.816 W, stdev 0.624 W, CPU 6.8 %
+  $ <home>/miniforge3/envs/mlir-aie-iron/python.exe <Ignition main>/live_ignition.py --model <ignite-xdna main>/build/yolov8n_full.ignite --source <Ignition main>/examples/assets/bus.jpg --headless --warmup 50 --frames 1200 --power-mode efficiency --npu-power off --max-fps 30
+    [Ignition] power mode efficiency: 2 worker threads, sleeping between regions (8 cores / 16 threads on this host)
+    [summary] stop: frame limit | 1250 frames processed (50 warm-up, 1200 timed) | 1 distinct source frames | image bus.jpg 810x1080
+    [summary] NPU power mode: default kept: IGNITE_XDNA_NPU_POWER=off
+    [summary] G2G mean 9.438 ms | P50 9.424 | P95 9.878 | P99 10.156 | max 10.768 | over the last 1200 timed frames; cold first frame 11.69 ms
+    [summary] stage means (ms): preprocess 1.529 | NPU forward 7.760 (dispatch 7.490, readback 0.270) | decode+NMS 0.141
+    [summary] boxes from NPU heads on 1200/1200 timed frames | 5.00 detections per frame
+    [summary] RSS 190.8 MB at the first timed frame, 190.8 MB at the end (+0.00 MB over 1200 frames)
+  window    900 frames in 30.0 s = 30.00 fps, 29 power samples, CPU 7.3 %
+  energy    package 43.478 W - idle 38.816 W = +4.662 W -> 155.39 mJ per frame
+== 2026-09-17T15:50:29Z [yolov8n AMD @30 #2]
+  idle      29 samples, mean 37.846 W, stdev 0.857 W, CPU 6.8 %
+  $ <home>/miniforge3/envs/resnet_env17/python.exe <ignite-xdna main>/tools/amd_vitisai_yolo.py --model <ignite-xdna main>/models/yolov8n_cut_xint8.onnx --image <Ignition main>/examples/assets/bus.jpg --ignition-src <Ignition main>/src --cache-dir <scratch>/vitisai_cache --cache-key yolov8n_energy --xclbin <ignite-xdna main>/yolocutcachekey/4x4.xclbin --warmup 50 --iterations 1200 --max-fps 30
+    [amd] ort 1.23.3.dev20260320 | model yolov8n_cut_xint8.onnx | session load 0.43 s | EP report node devices report not found
+    [amd] G2G mean 10.844 ms | P50 10.792 | P95 11.585 | P99 12.107 | max 14.227 | over 1200 timed frames after 50 warm-up
+    [amd] stage means (ms): letterbox 2.064 | session.run 6.668 | decode+NMS 2.111
+    [amd] detections on the last frame: 5 {'person': 4, 'bus': 1} | RSS 304.9 MB
+  window    900 frames in 30.0 s = 30.00 fps, 29 power samples, CPU 10.6 %
+  energy    package 47.325 W - idle 37.846 W = +9.479 W -> 315.98 mJ per frame
+== 2026-09-17T15:51:48Z [yolov8n Ignition performance @30 #2]
+  idle      29 samples, mean 39.909 W, stdev 0.752 W, CPU 7.1 %
+  $ <home>/miniforge3/envs/mlir-aie-iron/python.exe <Ignition main>/live_ignition.py --model <ignite-xdna main>/build/yolov8n_full.ignite --source <Ignition main>/examples/assets/bus.jpg --headless --warmup 50 --frames 1200 --power-mode performance --max-fps 30
+    [Ignition] power mode performance: 16 worker threads, spinning between regions (8 cores / 16 threads on this host)
+    [summary] stop: frame limit | 1250 frames processed (50 warm-up, 1200 timed) | 1 distinct source frames | image bus.jpg 810x1080
+    [summary] NPU power mode: default kept: the performance power mode leaves the NPU's mode alone
+    [summary] G2G mean 8.191 ms | P50 8.187 | P95 8.335 | P99 8.599 | max 10.270 | over the last 1200 timed frames; cold first frame 11.30 ms
+    [summary] stage means (ms): preprocess 0.423 | NPU forward 7.632 (dispatch 7.497, readback 0.135) | decode+NMS 0.129
+    [summary] boxes from NPU heads on 1200/1200 timed frames | 5.00 detections per frame
+    [summary] RSS 191.5 MB at the first timed frame, 191.5 MB at the end (+0.00 MB over 1200 frames)
+  window    900 frames in 30.0 s = 30.00 fps, 29 power samples, CPU 99.9 %
+  energy    package 84.505 W - idle 39.909 W = +44.596 W -> 1486.55 mJ per frame
+== 2026-09-17T15:53:08Z [yolov8n Ignition balanced @30 #2]
+  idle      29 samples, mean 37.777 W, stdev 1.539 W, CPU 6.7 %
+  $ <home>/miniforge3/envs/mlir-aie-iron/python.exe <Ignition main>/live_ignition.py --model <ignite-xdna main>/build/yolov8n_full.ignite --source <Ignition main>/examples/assets/bus.jpg --headless --warmup 50 --frames 1200 --power-mode balanced --max-fps 30
+    [Ignition] power mode balanced: 8 worker threads, sleeping between regions (8 cores / 16 threads on this host)
+    [summary] stop: frame limit | 1250 frames processed (50 warm-up, 1200 timed) | 1 distinct source frames | image bus.jpg 810x1080
+    [summary] NPU power mode: default kept: the balanced power mode leaves the NPU's mode alone
+    [summary] G2G mean 8.738 ms | P50 8.662 | P95 9.558 | P99 9.727 | max 10.092 | over the last 1200 timed frames; cold first frame 11.05 ms
+    [summary] stage means (ms): preprocess 0.776 | NPU forward 7.812 (dispatch 7.511, readback 0.301) | decode+NMS 0.143
+    [summary] boxes from NPU heads on 1200/1200 timed frames | 5.00 detections per frame
+    [summary] RSS 191.1 MB at the first timed frame, 191.1 MB at the end (+0.00 MB over 1200 frames)
+  window    900 frames in 30.0 s = 30.00 fps, 29 power samples, CPU 8.2 %
+  energy    package 45.583 W - idle 37.777 W = +7.806 W -> 260.20 mJ per frame
+== 2026-09-17T15:54:29Z [yolov8n Ignition efficiency @30 #2]
+  idle      29 samples, mean 39.740 W, stdev 1.811 W, CPU 7.0 %
+  $ <home>/miniforge3/envs/mlir-aie-iron/python.exe <Ignition main>/live_ignition.py --model <ignite-xdna main>/build/yolov8n_full.ignite --source <Ignition main>/examples/assets/bus.jpg --headless --warmup 50 --frames 1200 --power-mode efficiency --npu-power off --max-fps 30
+    [Ignition] power mode efficiency: 2 worker threads, sleeping between regions (8 cores / 16 threads on this host)
+    [summary] stop: frame limit | 1250 frames processed (50 warm-up, 1200 timed) | 1 distinct source frames | image bus.jpg 810x1080
+    [summary] NPU power mode: default kept: IGNITE_XDNA_NPU_POWER=off
+    [summary] G2G mean 9.485 ms | P50 9.473 | P95 9.953 | P99 10.173 | max 10.571 | over the last 1200 timed frames; cold first frame 11.44 ms
+    [summary] stage means (ms): preprocess 1.525 | NPU forward 7.812 (dispatch 7.529, readback 0.283) | decode+NMS 0.139
+    [summary] boxes from NPU heads on 1200/1200 timed frames | 5.00 detections per frame
+    [summary] RSS 190.8 MB at the first timed frame, 190.8 MB at the end (+0.00 MB over 1200 frames)
+  window    900 frames in 30.0 s = 30.00 fps, 29 power samples, CPU 7.9 %
+  energy    package 45.816 W - idle 39.740 W = +6.075 W -> 202.51 mJ per frame
+== 2026-09-17T15:55:49Z [yolov8s AMD @30 #1]
+  idle      29 samples, mean 39.459 W, stdev 2.074 W, CPU 7.1 %
+  $ <home>/miniforge3/envs/resnet_env17/python.exe <ignite-xdna main>/tools/amd_vitisai_yolo.py --model <ignite-xdna main>/models/yolov8s_cut_xint8.onnx --image <Ignition main>/examples/assets/bus.jpg --ignition-src <Ignition main>/src --cache-dir <scratch>/sitting/vitisai_cache --cache-key yolov8s_sitting --xclbin <ignite-xdna main>/yolocutcachekey/4x4.xclbin --warmup 50 --iterations 1200 --max-fps 30
+    [amd] ort 1.23.3.dev20260320 | model yolov8s_cut_xint8.onnx | session load 0.44 s | EP report node devices report not found
+    [amd] G2G mean 17.055 ms | P50 17.044 | P95 17.755 | P99 18.055 | max 18.612 | over 1200 timed frames after 50 warm-up
+    [amd] stage means (ms): letterbox 2.040 | session.run 12.925 | decode+NMS 2.090
+    [amd] detections on the last frame: 5 {'person': 4, 'bus': 1} | RSS 337.5 MB
+  window    900 frames in 30.0 s = 30.00 fps, 29 power samples, CPU 8.6 %
+  energy    package 48.581 W - idle 39.459 W = +9.122 W -> 304.07 mJ per frame
+== 2026-09-17T15:57:09Z [yolov8s Ignition balanced @30 #1]
+  idle      29 samples, mean 39.198 W, stdev 2.477 W, CPU 6.9 %
+  $ <home>/miniforge3/envs/mlir-aie-iron/python.exe <Ignition main>/live_ignition.py --model <ignite-xdna main>/build/yolov8s.ignite --source <Ignition main>/examples/assets/bus.jpg --headless --warmup 50 --frames 1200 --power-mode balanced --max-fps 30
+    [Ignition] power mode balanced: 8 worker threads, sleeping between regions (8 cores / 16 threads on this host)
+    [summary] stop: frame limit | 1250 frames processed (50 warm-up, 1200 timed) | 1 distinct source frames | image bus.jpg 810x1080
+    [summary] NPU power mode: default kept: the balanced power mode leaves the NPU's mode alone
+    [summary] G2G mean 18.369 ms | P50 18.307 | P95 19.192 | P99 19.314 | max 20.145 | over the last 1200 timed frames; cold first frame 20.66 ms
+    [summary] stage means (ms): preprocess 0.785 | NPU forward 17.432 (dispatch 17.133, readback 0.299) | decode+NMS 0.143
+    [summary] boxes from NPU heads on 1200/1200 timed frames | 5.00 detections per frame
+    [summary] RSS 242.5 MB at the first timed frame, 242.5 MB at the end (+0.00 MB over 1200 frames)
+  window    900 frames in 30.0 s = 30.00 fps, 28 power samples, CPU 7.1 %
+  energy    package 48.565 W - idle 39.198 W = +9.366 W -> 312.22 mJ per frame
+== 2026-09-17T15:58:29Z [yolov8s AMD @30 #2]
+  idle      29 samples, mean 40.560 W, stdev 1.782 W, CPU 6.8 %
+  $ <home>/miniforge3/envs/resnet_env17/python.exe <ignite-xdna main>/tools/amd_vitisai_yolo.py --model <ignite-xdna main>/models/yolov8s_cut_xint8.onnx --image <Ignition main>/examples/assets/bus.jpg --ignition-src <Ignition main>/src --cache-dir <scratch>/sitting/vitisai_cache --cache-key yolov8s_sitting --xclbin <ignite-xdna main>/yolocutcachekey/4x4.xclbin --warmup 50 --iterations 1200 --max-fps 30
+    [amd] ort 1.23.3.dev20260320 | model yolov8s_cut_xint8.onnx | session load 0.43 s | EP report node devices report not found
+    [amd] G2G mean 17.058 ms | P50 17.039 | P95 17.707 | P99 18.217 | max 18.819 | over 1200 timed frames after 50 warm-up
+    [amd] stage means (ms): letterbox 2.010 | session.run 12.961 | decode+NMS 2.087
+    [amd] detections on the last frame: 5 {'person': 4, 'bus': 1} | RSS 338.2 MB
+  window    900 frames in 30.0 s = 30.00 fps, 29 power samples, CPU 8.4 %
+  energy    package 48.788 W - idle 40.560 W = +8.228 W -> 274.27 mJ per frame
+== 2026-09-17T15:59:47Z [yolov8s Ignition balanced @30 #2]
+  idle      29 samples, mean 40.205 W, stdev 1.957 W, CPU 6.8 %
+  $ <home>/miniforge3/envs/mlir-aie-iron/python.exe <Ignition main>/live_ignition.py --model <ignite-xdna main>/build/yolov8s.ignite --source <Ignition main>/examples/assets/bus.jpg --headless --warmup 50 --frames 1200 --power-mode balanced --max-fps 30
+    [Ignition] power mode balanced: 8 worker threads, sleeping between regions (8 cores / 16 threads on this host)
+    [summary] stop: frame limit | 1250 frames processed (50 warm-up, 1200 timed) | 1 distinct source frames | image bus.jpg 810x1080
+    [summary] NPU power mode: default kept: the balanced power mode leaves the NPU's mode alone
+    [summary] G2G mean 18.386 ms | P50 18.323 | P95 19.216 | P99 19.361 | max 19.673 | over the last 1200 timed frames; cold first frame 20.87 ms
+    [summary] stage means (ms): preprocess 0.783 | NPU forward 17.452 (dispatch 17.155, readback 0.297) | decode+NMS 0.143
+    [summary] boxes from NPU heads on 1200/1200 timed frames | 5.00 detections per frame
+    [summary] RSS 242.2 MB at the first timed frame, 242.2 MB at the end (+0.00 MB over 1200 frames)
+  window    900 frames in 30.0 s = 30.00 fps, 29 power samples, CPU 7.6 %
+  energy    package 48.777 W - idle 40.205 W = +8.572 W -> 285.72 mJ per frame
+== 2026-09-17T16:01:08Z [pose AMD @30 #1]
+  idle      29 samples, mean 39.925 W, stdev 1.597 W, CPU 6.9 %
+  $ <home>/miniforge3/envs/resnet_env17/python.exe <ignite-xdna main>/pipelines/yolov8n-pose/4_pose.py --model <ignite-xdna main>/models/yolov8n-pose_cut_xint8.onnx --ep npu --source <ignite-xdna main>/assets/bus.jpg --warmup 50 --runs 1200 --log 2 --out <scratch>/rel033_energy/pose_amd.jpg --max-fps 30
+    infer   mean 8.85 ms   median 8.76 ms   p95 9.23 ms   (113.0 fps)
+    pre     mean 3.143 ms
+    g2g     mean 12.270 ms   p50 12.261   p95 12.905   p99 13.248 ms   over 1200 runs (81.5 fps)
+  window    900 frames in 30.0 s = 30.00 fps, 28 power samples, CPU 9.0 %
+  energy    package 48.025 W - idle 39.925 W = +8.100 W -> 269.98 mJ per frame
+== 2026-09-17T16:02:26Z [pose Ignition balanced @30 #1]
+  idle      29 samples, mean 39.679 W, stdev 1.620 W, CPU 7.0 %
+  $ <home>/miniforge3/envs/mlir-aie-iron/python.exe <Ignition main>/live_ignition.py --model <ignite-xdna main>/build/yolov8n_pose.ignite --source <ignite-xdna main>/assets/bus.jpg --headless --warmup 50 --frames 1200 --power-mode balanced --max-fps 30
+    [Ignition] power mode balanced: 8 worker threads, sleeping between regions (8 cores / 16 threads on this host)
+    [summary] stop: frame limit | 1250 frames processed (50 warm-up, 1200 timed) | 1 distinct source frames | image bus.jpg 810x1080
+    [summary] NPU power mode: default kept: the balanced power mode leaves the NPU's mode alone
+    [summary] G2G mean 9.545 ms | P50 9.451 | P95 10.389 | P99 10.609 | max 11.069 | over the last 1200 timed frames; cold first frame 12.12 ms
+    [summary] stage means (ms): preprocess 0.767 | NPU forward 8.394 (dispatch 7.841, readback 0.535) | decode+NMS 0.377
+    [summary] keypoints from NPU heads on 1200/1200 timed frames | 4.00 people per frame
+    [summary] RSS 181.8 MB at the first timed frame, 181.9 MB at the end (+0.10 MB over 1200 frames)
+  window    900 frames in 30.0 s = 30.00 fps, 29 power samples, CPU 7.7 %
+  energy    package 46.690 W - idle 39.679 W = +7.011 W -> 233.68 mJ per frame
+== 2026-09-17T16:03:45Z [pose AMD @30 #2]
+  idle      29 samples, mean 39.695 W, stdev 1.569 W, CPU 7.0 %
+  $ <home>/miniforge3/envs/resnet_env17/python.exe <ignite-xdna main>/pipelines/yolov8n-pose/4_pose.py --model <ignite-xdna main>/models/yolov8n-pose_cut_xint8.onnx --ep npu --source <ignite-xdna main>/assets/bus.jpg --warmup 50 --runs 1200 --log 2 --out <scratch>/rel033_energy/pose_amd.jpg --max-fps 30
+    infer   mean 8.83 ms   median 8.71 ms   p95 9.27 ms   (113.3 fps)
+    pre     mean 3.156 ms
+    g2g     mean 12.260 ms   p50 12.248   p95 12.962   p99 13.392 ms   over 1200 runs (81.6 fps)
+  window    900 frames in 30.0 s = 30.00 fps, 29 power samples, CPU 9.0 %
+  energy    package 47.710 W - idle 39.695 W = +8.015 W -> 267.17 mJ per frame
+== 2026-09-17T16:05:04Z [pose Ignition balanced @30 #2]
+  idle      29 samples, mean 39.497 W, stdev 1.402 W, CPU 7.0 %
+  $ <home>/miniforge3/envs/mlir-aie-iron/python.exe <Ignition main>/live_ignition.py --model <ignite-xdna main>/build/yolov8n_pose.ignite --source <ignite-xdna main>/assets/bus.jpg --headless --warmup 50 --frames 1200 --power-mode balanced --max-fps 30
+    [Ignition] power mode balanced: 8 worker threads, sleeping between regions (8 cores / 16 threads on this host)
+    [summary] stop: frame limit | 1250 frames processed (50 warm-up, 1200 timed) | 1 distinct source frames | image bus.jpg 810x1080
+    [summary] NPU power mode: default kept: the balanced power mode leaves the NPU's mode alone
+    [summary] G2G mean 9.522 ms | P50 9.409 | P95 10.394 | P99 10.501 | max 10.659 | over the last 1200 timed frames; cold first frame 12.05 ms
+    [summary] stage means (ms): preprocess 0.765 | NPU forward 8.369 (dispatch 7.816, readback 0.534) | decode+NMS 0.382
+    [summary] keypoints from NPU heads on 1200/1200 timed frames | 4.00 people per frame
+    [summary] RSS 181.6 MB at the first timed frame, 181.7 MB at the end (+0.17 MB over 1200 frames)
+  window    900 frames in 30.0 s = 30.00 fps, 29 power samples, CPU 8.1 %
+  energy    package 46.772 W - idle 39.497 W = +7.275 W -> 242.50 mJ per frame
+Idle baselines span 36.730-40.560 W, more than 2.0 W: the median-idle column does not hold across that; read arms against their own idle
+
+Median idle over 16 undisturbed baselines: 39.478 W
+arm                                           fps  CPU %  +W own idle  mJ/frame  mJ vs median idle
+yolov8n AMD @30 #1                          30.00    8.5        6.673    222.42             189.51
+yolov8n Ignition performance @30 #1         30.00   99.9       43.465   1448.83            1415.44
+yolov8n Ignition balanced @30 #1            30.00    7.0        6.224    207.46             115.86
+yolov8n Ignition efficiency @30 #1          30.00    7.3        4.662    155.39             133.33
+yolov8n AMD @30 #2                          30.00   10.6        9.479    315.98             261.58
+yolov8n Ignition performance @30 #2         30.00   99.9       44.596   1486.55            1500.91
+yolov8n Ignition balanced @30 #2            30.00    8.2        7.806    260.20             203.49
+yolov8n Ignition efficiency @30 #2          30.00    7.9        6.075    202.51             211.26
+yolov8s AMD @30 #1                          30.00    8.6        9.122    304.07             303.43
+yolov8s Ignition balanced @30 #1            30.00    7.1        9.366    312.22             302.89
+yolov8s AMD @30 #2                          30.00    8.4        8.228    274.27             310.34
+yolov8s Ignition balanced @30 #2            30.00    7.6        8.572    285.72             309.97
+pose AMD @30 #1                             30.00    9.0        8.100    269.98             284.89
+pose Ignition balanced @30 #1               30.00    7.7        7.011    233.68             240.39
+pose AMD @30 #2                             30.00    9.0        8.015    267.17             274.40
+pose Ignition balanced @30 #2               30.00    8.1        7.275    242.50             243.14

@@ -1,0 +1,72 @@
+# Containers for the v0.3.3 release sitting, built on DESKTOP-CBL5NUA (Desktop 2) at ignite-xdna main 1879614 through ignite-compile (python cli_run.py = ignite_xdna.compiler.cli.main) in the mlir-aie IRON environment, each with a fresh --build-dir, then copied into <ignite-xdna main>/build/ (the --silu-sigmoid ones under the names the docs use, the others as *_hardsigmoid.ignite). The containers timed before this sitting moved to build/pre033_hardsigmoid/.
+
+$ ignite-compile --engine graph --input models/yolov8n_cut_xint8.onnx --output yolov8n_full_sigmoid.ignite --build-dir build_yolov8n_full_sigmoid --silu-sigmoid
+    [OK] SiLU: sigmoid4 epilogue (reference: silu_sigmoid.reference_model of yolov8n_cut_xint8.onnx)
+    [OK] head_status: present (6 heads declared in head_layout, 1209600 of 1209600 egress bytes)
+    [OK] egress bytes: 1,209,600
+size 8,839,552 B
+
+$ ignite-compile --engine graph --input models/yolov8n_cut_xint8.onnx --output yolov8n_full_hardsigmoid.ignite --build-dir build_yolov8n_full_hardsigmoid
+    [OK] head_status: present (6 heads declared in head_layout, 1209600 of 1209600 egress bytes)
+    [OK] egress bytes: 1,209,600
+size 8,839,552 B
+
+$ ignite-compile --engine graph --input models/yolov8s_cut_xint8.onnx --output yolov8s_sigmoid.ignite --build-dir build_yolov8s_sigmoid --silu-sigmoid
+    [OK] SiLU: sigmoid4 epilogue (reference: silu_sigmoid.reference_model of yolov8s_cut_xint8.onnx)
+    [OK] head_status: present (6 heads declared in head_layout, 1209600 of 1209600 egress bytes)
+    [OK] egress bytes: 1,209,600
+size 30,759,616 B
+
+$ ignite-compile --engine graph --input models/yolov8s_cut_xint8.onnx --output yolov8s_hardsigmoid.ignite --build-dir build_yolov8s_hardsigmoid
+    [OK] head_status: present (6 heads declared in head_layout, 1209600 of 1209600 egress bytes)
+    [OK] egress bytes: 1,209,600
+size 30,759,552 B
+
+$ ignite-compile --engine graph --input models/yolov8n-pose_cut_xint8.onnx --output yolov8n_pose_sigmoid.ignite --build-dir build_yolov8n_pose_sigmoid --silu-sigmoid
+    [OK] SiLU: sigmoid4 epilogue (reference: silu_sigmoid.reference_model of yolov8n-pose_cut_xint8.onnx)
+    [OK] head_status: present (9 heads declared in head_layout, 974400 of 974400 egress bytes)
+    [OK] egress bytes: 974,400
+size 8,861,120 B
+
+$ ignite-compile --engine graph --input models/yolov8n-pose_cut_xint8.onnx --output yolov8n_pose_hardsigmoid.ignite --build-dir build_yolov8n_pose_hardsigmoid
+    [OK] head_status: present (9 heads declared in head_layout, 974400 of 974400 egress bytes)
+    [OK] egress bytes: 974,400
+size 8,861,120 B
+
+# Blobs against the 7700316 containers of silu_sigmoid_engine/ (same compiler; engine.xclbin is not reproducible byte for byte between builds, so compare kernel hash, insts.bin and wpackets.bin)
+== yolov8n_full_sigmoid.ignite (1879614) vs yolov8n_new_sigmoid.ignite (7700316)
+kernel_sha256  SAME  yolov8n_full_sigmoid.ignite=f07e99b4d41b817d  yolov8n_new_sigmoid.ignite=f07e99b4d41b817d
+silu           SAME  yolov8n_full_sigmoid.ignite=sigmoid4  yolov8n_new_sigmoid.ignite=sigmoid4
+engine.xclbin  DIFF  yolov8n_full_sigmoid.ignite=2d4247b96b3cb65d  yolov8n_new_sigmoid.ignite=3dc39a642f625b1d
+insts.bin      SAME  yolov8n_full_sigmoid.ignite=1638da1c474f5b6f  yolov8n_new_sigmoid.ignite=1638da1c474f5b6f
+wpackets.bin   SAME  yolov8n_full_sigmoid.ignite=5017e09737ca7537  yolov8n_new_sigmoid.ignite=5017e09737ca7537
+== yolov8n_full_hardsigmoid.ignite (1879614) vs yolov8n_new_hardsigmoid.ignite (7700316)
+kernel_sha256  SAME  yolov8n_full_hardsigmoid.ignite=f07e99b4d41b817d  yolov8n_new_hardsigmoid.ignite=f07e99b4d41b817d
+silu           SAME  yolov8n_full_hardsigmoid.ignite=hardsigmoid  yolov8n_new_hardsigmoid.ignite=hardsigmoid
+engine.xclbin  DIFF  yolov8n_full_hardsigmoid.ignite=e503f8aa48a1748a  yolov8n_new_hardsigmoid.ignite=e26c1a81d742df13
+insts.bin      SAME  yolov8n_full_hardsigmoid.ignite=1638da1c474f5b6f  yolov8n_new_hardsigmoid.ignite=1638da1c474f5b6f
+wpackets.bin   SAME  yolov8n_full_hardsigmoid.ignite=49b29f6176d4dab0  yolov8n_new_hardsigmoid.ignite=49b29f6176d4dab0
+== yolov8s_sigmoid.ignite (1879614) vs yolov8s_new_sigmoid.ignite (7700316)
+kernel_sha256  SAME  yolov8s_sigmoid.ignite=f07e99b4d41b817d  yolov8s_new_sigmoid.ignite=f07e99b4d41b817d
+silu           SAME  yolov8s_sigmoid.ignite=sigmoid4  yolov8s_new_sigmoid.ignite=sigmoid4
+engine.xclbin  DIFF  yolov8s_sigmoid.ignite=1425d17eee77ec36  yolov8s_new_sigmoid.ignite=0f5457b6a9767ee2
+insts.bin      SAME  yolov8s_sigmoid.ignite=ec3c08ca6e32396c  yolov8s_new_sigmoid.ignite=ec3c08ca6e32396c
+wpackets.bin   SAME  yolov8s_sigmoid.ignite=396830ffd5a90ddf  yolov8s_new_sigmoid.ignite=396830ffd5a90ddf
+== yolov8s_hardsigmoid.ignite (1879614) vs yolov8s_new_hardsigmoid.ignite (7700316)
+kernel_sha256  SAME  yolov8s_hardsigmoid.ignite=f07e99b4d41b817d  yolov8s_new_hardsigmoid.ignite=f07e99b4d41b817d
+silu           SAME  yolov8s_hardsigmoid.ignite=hardsigmoid  yolov8s_new_hardsigmoid.ignite=hardsigmoid
+engine.xclbin  DIFF  yolov8s_hardsigmoid.ignite=464aff030326595d  yolov8s_new_hardsigmoid.ignite=5d85dac000c6c64e
+insts.bin      SAME  yolov8s_hardsigmoid.ignite=ec3c08ca6e32396c  yolov8s_new_hardsigmoid.ignite=ec3c08ca6e32396c
+wpackets.bin   SAME  yolov8s_hardsigmoid.ignite=9d9e3665b44217e0  yolov8s_new_hardsigmoid.ignite=9d9e3665b44217e0
+== yolov8n_pose_sigmoid.ignite (1879614) vs pose_new_sigmoid.ignite (7700316)
+kernel_sha256  SAME  yolov8n_pose_sigmoid.ignite=f07e99b4d41b817d  pose_new_sigmoid.ignite=f07e99b4d41b817d
+silu           SAME  yolov8n_pose_sigmoid.ignite=sigmoid4  pose_new_sigmoid.ignite=sigmoid4
+engine.xclbin  DIFF  yolov8n_pose_sigmoid.ignite=10a40d162ed7bf83  pose_new_sigmoid.ignite=332ab4d9e42449db
+insts.bin      SAME  yolov8n_pose_sigmoid.ignite=0b65ef1326c8b66a  pose_new_sigmoid.ignite=0b65ef1326c8b66a
+wpackets.bin   SAME  yolov8n_pose_sigmoid.ignite=062cc38a91d1287d  pose_new_sigmoid.ignite=062cc38a91d1287d
+== yolov8n_pose_hardsigmoid.ignite (1879614) vs pose_new_hardsigmoid.ignite (7700316)
+kernel_sha256  SAME  yolov8n_pose_hardsigmoid.ignite=f07e99b4d41b817d  pose_new_hardsigmoid.ignite=f07e99b4d41b817d
+silu           SAME  yolov8n_pose_hardsigmoid.ignite=hardsigmoid  pose_new_hardsigmoid.ignite=hardsigmoid
+engine.xclbin  DIFF  yolov8n_pose_hardsigmoid.ignite=ae3bcd12887390f2  pose_new_hardsigmoid.ignite=369f8c381fef044d
+insts.bin      SAME  yolov8n_pose_hardsigmoid.ignite=0b65ef1326c8b66a  pose_new_hardsigmoid.ignite=0b65ef1326c8b66a
+wpackets.bin   SAME  yolov8n_pose_hardsigmoid.ignite=0e694423259790fc  pose_new_hardsigmoid.ignite=0e694423259790fc
