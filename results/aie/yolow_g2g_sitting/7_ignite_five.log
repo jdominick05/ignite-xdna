@@ -1,0 +1,7 @@
+$ pipelines/yolow/4b_g2g.py --model <ignite-xdna main>\build\yolow.ignite --ep ignite --classes person,bus,window,road sign,shoe --warmup 50 --frames 500 --json <scratch>\yolow\g2g_sitting\7_ignite_five.json
+graph-engine container (9 segments), native ingress, int8 decode; 5 classes; 500 frames of bus.jpg after 50 warm-up
+  preprocess_ms      mean   0.567  median   0.555  p95   0.625  p99   0.853
+  network_ms         mean  27.758  median  27.665  p95  28.770  p99  29.364
+  decode_ms          mean   4.270  median   4.158  p95   5.026  p99   5.914
+  glass_to_glass_ms  mean  32.595  median  32.454  p95  33.889  p99  34.711
+  detections per frame 13.00

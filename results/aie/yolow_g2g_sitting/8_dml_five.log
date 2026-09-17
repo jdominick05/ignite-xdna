@@ -1,0 +1,8 @@
+$ pipelines/yolow/4b_g2g.py --model <ignite-xdna main>\models\yolov8s-worldv2_cut.onnx --ep dml --classes person,bus,window,road sign,shoe --warmup 50 --frames 500 --json <scratch>\yolow\g2g_sitting\8_dml_five.json
+onnxruntime 1.23.3.dev20260320  providers: ['VitisAIExecutionProvider', 'DmlExecutionProvider', 'CPUExecutionProvider']
+ONNX Runtime dml (DmlExecutionProvider), numpy letterbox, float decode; 5 classes; 500 frames of bus.jpg after 50 warm-up
+  preprocess_ms      mean   3.230  median   3.093  p95   3.951  p99   4.542
+  network_ms         mean  22.723  median  22.194  p95  26.232  p99  29.425
+  decode_ms          mean   2.491  median   2.394  p95   2.731  p99   4.126
+  glass_to_glass_ms  mean  28.444  median  27.835  p95  33.424  p99  35.434
+  detections per frame 8.00

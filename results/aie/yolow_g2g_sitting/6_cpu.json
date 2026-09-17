@@ -1,0 +1,34 @@
+{
+ "ep": "cpu",
+ "model": "yolov8s-worldv2_cut.onnx",
+ "source": "bus.jpg",
+ "classes": 80,
+ "warmup": 50,
+ "frames": 500,
+ "description": "ONNX Runtime cpu (CPUExecutionProvider), numpy letterbox, float decode",
+ "preprocess_ms": {
+  "mean": 3.4551794006256387,
+  "median": 3.382250026334077,
+  "p95": 4.145335013163276,
+  "p99": 4.835703036515036
+ },
+ "network_ms": {
+  "mean": 67.77780840056948,
+  "median": 69.31225000880659,
+  "p95": 71.71031004399993,
+  "p99": 80.59215800836682
+ },
+ "decode_ms": {
+  "mean": 10.360252599115483,
+  "median": 10.050200013210997,
+  "p95": 11.488350020954382,
+  "p99": 13.47927200200501
+ },
+ "glass_to_glass_ms": {
+  "mean": 81.5932404003106,
+  "median": 82.66544999787584,
+  "p95": 86.27311503805686,
+  "p99": 97.65498299151655
+ },
+ "detections_per_frame": 5.0
+}
