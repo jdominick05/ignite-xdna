@@ -32,6 +32,7 @@ from ignite_xdna.compiler.serializer import (
     IgniteModelReader,
     IgniteModelWriter,
 )
+from ignite_xdna.compiler.topology import enforce
 from ignite_xdna.runtime.driver import get_repo_root, setup_xrt_environment
 
 
@@ -124,6 +125,12 @@ def parse_args(args: Optional[List[str]] = None) -> argparse.Namespace:
         action="store_true",
         help="Graph engine: compute every SiLU with the core's four-line sigmoid epilogue instead of Quark's "
              "HardSigmoid form (more accurate; the exactness reference becomes silu_sigmoid.reference_model)",
+    )
+    parser.add_argument(
+        "--topology-policy",
+        choices=("report", "refuse"),
+        default="report",
+        help="report traffic-heavy 5x5/high-resolution entry shapes, or refuse them before lowering",
     )
     argv = list(sys.argv[1:] if args is None else args)
     # ``ignite-compile compile --model X`` is accepted as a spelling of ``--input X``.
@@ -399,7 +406,7 @@ def verify_on_silicon(container_path: Path, device_idx: int = 0):
 
 def compile_graph_engine(input_path: Union[str, Path], output_path: Union[str, Path],
                          build_dir: Optional[Union[str, Path]] = None, host_regions: Optional[List[str]] = None,
-                         silu_sigmoid: bool = False) -> int:
+                         silu_sigmoid: bool = False, topology_policy: str = "report") -> int:
     """Lower the whole graph onto the convolution engine (see engine_compile.py); ``host_regions`` run on the host;
     ``silu_sigmoid`` gives SiLU the sigmoid epilogue."""
     for region in host_regions or ():
@@ -407,6 +414,10 @@ def compile_graph_engine(input_path: Union[str, Path], output_path: Union[str, P
             if len(part) > 2 and part[1] == ":" and part[2] in "/\\":
                 raise ValueError(f"--host-region {region}: {part} is a file path, not a node name (Git Bash "
                                  "rewrites arguments that start with '/'; run the command with MSYS_NO_PATHCONV=1)")
+    topology_model = onnx.load(str(input_path))
+    findings = enforce(topology_model, topology_policy)
+    for finding in findings:
+        print(f"    [TOPOLOGY] {finding.kind}: {finding.node_name}: {finding.detail}")
     try:
         import aie.iron  # noqa: F401
     except ImportError as ex:
@@ -440,7 +451,7 @@ def main(args: Optional[List[str]] = None):
     try:
         if parsed.engine == "graph":
             compile_graph_engine(parsed.input, parsed.output, parsed.build_dir, host_regions=parsed.host_region,
-                                 silu_sigmoid=parsed.silu_sigmoid)
+                                 silu_sigmoid=parsed.silu_sigmoid, topology_policy=parsed.topology_policy)
             if parsed.verify_silicon:
                 from ignite_xdna.runtime.graph_session import GraphSession
                 sess = GraphSession(parsed.output, device_index=parsed.device)

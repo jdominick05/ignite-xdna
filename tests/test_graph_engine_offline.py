@@ -506,5 +506,83 @@ class NativeDecodeOffline(unittest.TestCase):
                          native_dec.postprocess(heads, (0, 0), 1.0))
 
 
+HEAD_MODEL = ROOT / "build" / "test_resnet50_head.onnx"
+
+
+@unittest.skipUnless(HEAD_MODEL.exists(), "test_resnet50_head model not present")
+class ClassificationHeadOffline(unittest.TestCase):
+    """Classification head lowering: 1x1 ConvLayer, 0 host segments, exact emulate_layer and layout."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.ir = graph_ir.lower_yolov8n(HEAD_MODEL)
+        cls.ws = es.plan_workspace(cls.ir)
+        cls.scheds, cls.store = es.schedule_graph(cls.ir, cls.ws)
+        cls.manifest = build_manifest(cls.ir, cls.ws, cls.scheds, cls.store, "resnet50_head", 0, "x", "y", 0.0)
+
+    def test_01_classification_manifest_and_zero_host_segments(self):
+        from ignite_xdna.compiler.engine_compile import graph_task
+        self.assertEqual(graph_task(self.ir), "classify")
+        self.assertEqual(len(self.ir.layers), 1)
+        self.assertIsInstance(self.ir.layers[0], graph_ir.ConvLayer)
+        self.assertEqual(self.ir.layers[0].k, 1)
+        self.assertEqual(self.ir.layers[0].stride, 1)
+        self.assertEqual(self.ir.layers[0].pad, 0)
+        self.assertEqual(self.manifest["task"], "classify")
+        self.assertEqual(self.manifest["num_classes"], 1000)
+        self.assertEqual(self.manifest["output_shapes"]["logits"], [1, 1000])
+        segments = self.manifest.get("graph_engine", {}).get("segments", [])
+        host_segs = [s for s in segments if s.get("kind") == "host"]
+        self.assertEqual(len(host_segs), 0)
+
+    def test_02_layout_resolution_and_unpacking(self):
+        from ignite_xdna.runtime.heads import resolve_classification_layout
+        layout = resolve_classification_layout(self.manifest)
+        self.assertIsNotNone(layout)
+        self.assertEqual(layout.num_classes, 1000)
+        self.assertEqual(layout.scale, 0.125)
+        self.assertEqual(layout.zero_point, 128)
+        # Verify 4D unpacking at (0, 0)
+        blocks = np.zeros((125, 20, 20, 8), dtype=np.uint8)
+        test_vals = np.arange(1000, dtype=np.uint8)
+        blocks[:, 0, 0, :] = test_vals.reshape(125, 8)
+        unpacked = layout.unpack(blocks)
+        self.assertTrue(np.array_equal(unpacked, test_vals))
+        deq = layout.dequantize(unpacked)
+        expected_deq = (test_vals.astype(np.float32) - 128.0) * 0.125
+        self.assertTrue(np.array_equal(deq, expected_deq))
+
+    def test_03_emulate_layer_exact(self):
+        from ignite_xdna.compiler import graph_reference as gr
+        rng = np.random.default_rng(42)
+        t_in = self.ir.tensors[self.ir.input]
+        x_u8 = np.full((t_in.channels, 20, 20), 128, dtype=np.uint8)
+        x_u8[:, 0, 0] = rng.integers(0, 256, size=t_in.channels, dtype=np.uint8)
+        direct = gr.run_direct(self.ir, x_u8)
+        mism = _emulate_layers(self.ir, self.ws, self.scheds, self.store, direct, [0])
+        self.assertEqual(list(mism.values()), [0])
+
+    def test_04_direct_matches_onnx_runtime(self):
+        import onnxruntime as ort
+        from ignite_xdna.compiler import graph_reference as gr
+        from ignite_xdna.runtime.heads import resolve_classification_layout
+        layout = resolve_classification_layout(self.manifest)
+        rng = np.random.default_rng(42)
+        t_in = self.ir.tensors[self.ir.input]
+        feat = rng.integers(115, 140, size=t_in.channels, dtype=np.uint8)
+        sess = ort.InferenceSession(str(HEAD_MODEL), providers=["CPUExecutionProvider"])
+        in_name = sess.get_inputs()[0].name
+        ort_in = feat.reshape(1, t_in.channels, 1, 1)
+        ort_out = sess.run(None, {in_name: ort_in})[0].reshape(-1)
+
+        x_u8 = np.full((t_in.channels, 20, 20), 128, dtype=np.uint8)
+        x_u8[:, 0, 0] = feat
+        direct = gr.run_direct(self.ir, x_u8)
+        direct_u8 = direct[self.ir.layers[0].output][:, 0, 0]
+        direct_deq = layout.dequantize(direct_u8)
+        diff = np.abs(direct_deq - ort_out)
+        self.assertEqual(float(np.max(diff)), 0.0)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

@@ -55,9 +55,11 @@ def head_name_for(onnx_output: str) -> str:
 
 def graph_task(ir: GraphIR) -> str:
     """The runtime contract a lowered graph's outputs fit: YOLO detect heads, YOLO pose heads (one person class
-    plus 51 keypoint channels per level) or a dense upscaled image."""
+    plus 51 keypoint channels per level), classification logits or a dense upscaled image."""
     if len(ir.outputs) == 1 and ir.output_transforms.get(ir.outputs[0][0], {}).get("op") == "depth_to_space":
         return "super_resolution"
+    if len(ir.outputs) == 1:
+        return "classify"
     if len(ir.outputs) == len(HEAD_NAMES):
         return "detect"
     if len(ir.outputs) == len(POSE_HEAD_NAMES) and all(_HEAD_OUTPUT.search(o) for o, _ in ir.outputs):
@@ -181,6 +183,25 @@ def build_manifest(ir: GraphIR, ws: es.Workspace, scheds: List[es.LayerSchedule]
                          "egress_bytes": offset})
         if task == "pose":
             manifest["kpt_shape"] = list(POSE_KPT_SHAPE)
+    elif task == "classify":
+        onnx_name, tensor = ir.outputs[0]
+        t = ir.tensors[tensor]
+        manifest.update({
+            "num_classes": t.channels,
+            "output_shapes": {"logits": [1, t.channels]},
+            "classification": {
+                "tensor": tensor,
+                "onnx_output": onnx_name,
+                "channels": t.channels,
+                "height": t.height,
+                "width": t.width,
+                "scale": t.scale,
+                "zero_point": t.zero_point,
+                "layout": "blocks_hw8",
+                "pixel_index": [0, 0],
+            },
+            "egress_bytes": t.blocks * t.height * t.width * 8,
+        })
     else:
         # Dense egress: the tail tensor is read back as [blocks][H][W][8] uint8 (zero point 128) and the
         # host applies the model's DepthToSpace; the image is clip((q - zp) * scale + mean).

@@ -36,6 +36,11 @@ from ignite_xdna.compiler.serializer import IgniteModelReader  # noqa: E402
 
 def quantized_input(ir, image: Path, task: str) -> np.ndarray:
     t = ir.tensors[ir.input]
+    if task == "classify":
+        full = np.full((t.blocks * 8, t.height, t.width), t.zero_point, dtype=np.uint8)
+        rng = np.random.RandomState(42)
+        full[:t.channels, 0, 0] = rng.randint(0, 256, size=t.channels, dtype=np.uint8)
+        return full[:t.channels]
     img = cv2.resize(cv2.imread(str(image)), (t.width, t.height), interpolation=cv2.INTER_LINEAR)
     rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB).astype(np.float32)
     x = rgb - 128.0 if task == "super_resolution" else rgb / 255.0
@@ -105,6 +110,9 @@ def main() -> int:
     if task == "super_resolution":
         from ignite_xdna.runtime.graph_session import DenseGraphSession  # noqa: E402
         session_cls = DenseGraphSession
+    elif task == "classify":
+        from ignite_xdna.runtime.graph_session import ClassificationSession  # noqa: E402
+        session_cls = ClassificationSession
     sess = session_cls(args.container, device_index=args.device)
     results, timings, host_timings = [], [], []
     try:
@@ -112,12 +120,15 @@ def main() -> int:
             print(f"[verify] replaced in host segments: {sess.set_host_constants(constants)}", flush=True)
         p = sess.input_placement
         h = int(p["halo"])
-        plane = sess._input_plane
-        plane[h:h + p["height"], h:h + p["width"], :q_in.shape[0]] = np.transpose(q_in, (1, 2, 0))
         base = int(p["base"])
-        if sess._ws_map is None:
-            sess.bo_ws.write(plane, base)
-        sess.bo_ws.sync(sess.harness.pyxrt.xclBOSyncDirection.XCL_BO_SYNC_BO_TO_DEVICE, sess._input_bytes, base)
+        if task == "classify":
+            sess.stage_quantized(q_in)
+        else:
+            plane = sess._input_plane
+            plane[h:h + p["height"], h:h + p["width"], :q_in.shape[0]] = np.transpose(q_in, (1, 2, 0))
+            if sess._ws_map is None:
+                sess.bo_ws.write(plane, base)
+            sess.bo_ws.sync(sess.harness.pyxrt.xclBOSyncDirection.XCL_BO_SYNC_BO_TO_DEVICE, sess._input_bytes, base)
         first_ms = sess.dispatch()
         first_host_ms = sess.last_host_ms
         exact = 0

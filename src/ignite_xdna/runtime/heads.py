@@ -231,3 +231,39 @@ def contiguous_head_layout(shapes: Mapping[str, Any], scales: Mapping[str, Tuple
         out[name] = {"offset": offset, "scale": float(scale), "zero_point": int(zero_point)}
         offset += int(np.prod([int(d) for d in shapes[name]]))
     return out
+
+
+@dataclass(frozen=True)
+class ClassificationHeadLayout:
+    """Resolved placement and dequantization of classification logits."""
+    num_classes: int
+    scale: float
+    zero_point: int
+
+    def unpack(self, raw_blocks: np.ndarray) -> np.ndarray:
+        """Extract uint8 logits from channel-blocked array [blocks, H, W, 8] at pixel (0, 0)."""
+        arr = np.asarray(raw_blocks)
+        if arr.ndim == 4:
+            flat = arr[:, 0, 0, :].reshape(-1)[:self.num_classes]
+        else:
+            flat = arr.reshape(-1)[:self.num_classes]
+        return flat
+
+    def dequantize(self, raw_u8: np.ndarray) -> np.ndarray:
+        """float32 (q - zero_point) * scale."""
+        return (raw_u8.astype(np.float32) - float(self.zero_point)) * float(self.scale)
+
+
+def resolve_classification_layout(manifest: Optional[Mapping[str, Any]]) -> Optional[ClassificationHeadLayout]:
+    """Resolve classification layout from manifest metadata if task == 'classify'."""
+    manifest = manifest or {}
+    if manifest.get("task") != "classify":
+        return None
+    cls_meta = manifest.get("classification")
+    if not cls_meta:
+        return None
+    return ClassificationHeadLayout(
+        num_classes=int(cls_meta["channels"]),
+        scale=float(cls_meta["scale"]),
+        zero_point=int(cls_meta.get("zero_point", 128)),
+    )

@@ -5,6 +5,7 @@
 
 set -euo pipefail
 if [ "${1:-}" = --help ]; then sed -n '2,4s/^# //p' "${BASH_SOURCE[0]}"; exit 0; fi
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 : "${MLIR_AIE_ROOT:=$HOME/mlir-aie}"
 source "$MLIR_AIE_ROOT/ironenv/Scripts/activate"
 export MLIR_AIE_INSTALL_DIR="$(cygpath -w "$MLIR_AIE_ROOT/ironenv/Lib/site-packages/mlir_aie")"
@@ -12,7 +13,7 @@ export PEANO_INSTALL_DIR="$(cygpath -w "$MLIR_AIE_ROOT/ironenv/Lib/site-packages
 export PATH="$MLIR_AIE_ROOT/ironenv/Lib/site-packages/mlir_aie/bin:$MLIR_AIE_ROOT/ironenv/Lib/site-packages/mlir_aie/lib:/c/Xilinx/XRT/xrt_sdk/xrt/lib:/c/Xilinx/XRT/xrt_sdk/xrt:/c/Windows/System32/AMD:$PATH"
 unset XILINX_XRT
 export XRT_ROOT="C:/Xilinx/XRT/xrt_sdk/xrt"
-export PYTHONPATH="$XRT_ROOT/python"
+export PYTHONPATH="$(cygpath -w "$REPO_ROOT/src");$(cygpath -w "$REPO_ROOT");$XRT_ROOT/python;${PYTHONPATH:-}"
 export NPU2=0
 export NPU_CACHE_HOME="$(pwd -W)/scratch/iron-cache"
 python "$@"
