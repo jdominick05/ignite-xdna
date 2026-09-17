@@ -19,11 +19,13 @@ readback); the manifest's ``task`` picks the session on top of it:
   manifest's ``dense_output`` transform (DepthToSpace and dequantization)
   into an upscaled BGR image.
 
-A container whose manifest lists ``graph_engine.segments`` (YOLO11's C2PSA block on the host) runs
-them in order in ``dispatch``: each NPU segment is its own instruction stream and XRT run over the
-shared workspace, and each host segment is a ``HostStep`` that reads its input tensor from the
-workspace, runs the layer's ONNX model on ONNX Runtime's CPU provider and writes the output tensor
-back before the next NPU segment reads it.
+A container whose manifest lists ``graph_engine.segments`` (YOLO11's C2PSA block, or YOLO-World v2's four
+text attention cores, on the host) runs them in order in ``dispatch``: each NPU segment is its own
+instruction stream and XRT run over the shared workspace, and each host segment is a ``HostStep`` that
+reads its input tensor from the workspace (or the block ranges of a Concat view over several tensors),
+runs the layer's ONNX model on ONNX Runtime's CPU provider and writes the output tensor back before the
+next NPU segment reads it. ``set_host_constants`` replaces initializers of those host models at run time
+(YOLO-World's text guides: another vocabulary without a new container).
 
 All buffers are allocated once at construction.
 """

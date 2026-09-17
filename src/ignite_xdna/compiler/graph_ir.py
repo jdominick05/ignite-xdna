@@ -1,9 +1,10 @@
 """YOLOv8n QDQ ONNX -> engine layer IR.
 
 The Quark-quantized model stores every activation as uint8 with zero point
-128 and a power-of-two scale, weights as per-tensor int8, and each SiLU as a
-HardSigmoid chain that is a pure function of one uint8. This module walks the
-graph once and produces:
+128 and a power-of-two scale, weights as per-tensor int8, biases as int8 (or
+int32 at the product scale, as pipelines/yolow/3c_gptq_cv2.py writes them), and
+each SiLU as a HardSigmoid chain that is a pure function of one uint8. This
+module walks the graph once and produces:
 
 * ``TensorInfo`` for every physical uint8 tensor the engine stores in the
   workspace (the image, every activated conv output, every residual sum, every
@@ -12,8 +13,10 @@ graph once and produces:
   ``Segment`` views (tensor, channel block range, optional 2x upsampling), so
   Split, Concat and Resize never materialise, and
 * ``HostLayer`` records for regions named by ``host_regions`` (YOLO11's C2PSA
-  attention block, or only its attention core): the region is extracted as a
-  uint8 -> uint8 ONNX model and run on the host between two dispatches.
+  attention block, or only its attention core; YOLO-World v2's text attention
+  blocks, whose shared text guide is a constant, not an input): the region is
+  extracted as a uint8 -> uint8 ONNX model, whose input may be a Concat view
+  over several tensors, and run on the host between two dispatches.
 
 Exactness: the integer HardSwish constants are fitted against a float32
 re-evaluation of the ONNX chain for all 256 inputs; ``HardSwishFit.max_error``

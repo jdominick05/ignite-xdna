@@ -1398,6 +1398,10 @@ Structurally re-parameterized networks collapse multi-branch training graphs int
   collapses to 1.8% mAP due to 5D quantization error, while attention-free ablation collapses to 0.3%
   mAP due to severed CLIP alignment:
   [docs/BENCHMARKS.md](docs/BENCHMARKS.md#category-c-third-candidate-yolo-world-v2-vision-language-decoupled-cross-attention).
+  **The cause is superseded (2026-09-16):** the collapse reproduces on the CPU and is weight and bias rounding in four
+  C2fAttn output convolutions whose output is a small difference of large terms, not the 5D attention. GPTQ rounding
+  with int32 biases recovers 24.7% on the first 300 images, with every convolution on the NPU through the graph engine
+  ([docs/BENCHMARKS.md](docs/BENCHMARKS.md#yolo-world-v2-with-only-its-text-attention-on-the-cpu-gptq-and-an-int32-bias-recover-the-four-output-convolutions-2026-09-16-desktop-2)).
 
 ### Category D: Monocular Depth Estimation
 
@@ -1615,6 +1619,11 @@ sections above.
   natively on XDNA1 or severed zero-shot without retraining. All Category C candidate hypotheses
   are now closed.
   [Working](docs/BENCHMARKS.md#category-c-third-candidate-yolo-world-v2-vision-language-decoupled-cross-attention).
+  **Reopened and answered on the graph engine (2026-09-16), superseding "cannot be executed natively" for YOLO-World
+  v2:** the four attention blocks run on the CPU between NPU segments, the rest on the NPU (63 of 67 convolutions), exact against ONNX
+  Runtime at 24.7% mAP on the first 300 images, and one container takes any class names at run time (renamed COCO
+  categories cost the quantized model 22% of their mAP against 11% in FP32)
+  ([docs/BENCHMARKS.md](docs/BENCHMARKS.md#yolo-world-v2s-vocabulary-chosen-at-run-time-one-container-any-class-names-2026-09-16-desktop-2)).
 - **Category D: Monocular Depth Estimation (MiDaS v2.1 Small and FastDepth).** New pipelines
   (`pipelines/midas/`, `pipelines/fastdepth/`). Nearest-neighbor upsampling in MiDaS fuses all
   RefineNet decoder layers into a single monolithic DPU subgraph (682/684 nodes, 99.7%), eliminating 4 host
@@ -1722,7 +1731,8 @@ sections above.
   only when that input is already marked at its own visit order, and the vendor's
   SimplifyModel step is onnxslim, which Ignition calls rather than transcribes.
   Safe departures from power-of-two scales, product-scale INT32 bias execution and
-  per-channel compiler memory growth remain open. See
+  per-channel compiler memory growth remain open (for the vendor stack's dialect; the graph engine executes
+  product-scale int32 biases exactly since 2026-09-16, [YOLO-World v2](docs/BENCHMARKS.md#yolo-world-v2-with-only-its-text-attention-on-the-cpu-gptq-and-an-int32-bias-recover-the-four-output-convolutions-2026-09-16-desktop-2)). See
   [`quant/DESIGN.md`](quant/DESIGN.md) for the ordered gates and remaining source questions.
 - **Native Windows driver overhead floor and DPU microcode stream — closed.** Low-level
   driver characterization via `pyxrt.pyd` and `amdxe.sys` (`results/aie/windows_xrt_driver_bench.log`,
@@ -2006,7 +2016,7 @@ sections above.
     70% AdaRound recovery) and Real-ESRGAN Compact (activation memory spill) closed above.
   - **Category B:** Real-Time Portrait Matting and Semantic Segmentation — MODNet (zero-concat trade-off, calibration fix) and BiSeNetV2 (13.12 ms, 1.09x iGPU win, monolithic DPU subgraph, fixed-point bilateral gating distortion) closed above.
   - **Category C:** Advanced Detection and RepVGG Backbones — YOLOv6n, YOLOv11n, and
-    YOLO-World v2 closed above.
+    YOLO-World v2 closed above for AMD's stack; YOLO-World v2 reopened and answered on the graph engine (2026-09-16).
   - **Category D:** Monocular Depth Estimation — MiDaS v2.1 Small (bilinear vs nearest fusion,
     10.81 ms, 1.53x CPU win) and FastDepth (depthwise separable decoder, 2.87 ms, 1.05x iGPU win,
     r = 0.9383) closed above.

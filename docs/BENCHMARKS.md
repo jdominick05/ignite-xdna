@@ -3460,11 +3460,17 @@ Three findings:
    **Superseded in part (2026-09-16):** the collapse does not come from the attention blocks.
    - Keeping all four in FP32 still scores 1.9 % on ONNX Runtime's CPU.
    - Keeping only the four C2fAttn output convolutions (`/model.{12,15,18,21}/cv2/`) in FP32 recovers 24.5 %, on
-     the CPU and on AMD's stack alike, the latter at 96 ms per image with 110 of 1,049 nodes on the NPU.
+     the CPU and on AMD's stack alike, the latter at 96 ms per image with 110 of 1,049 nodes on the NPU (the EP
+     report's count; the model file has 1,038).
    - The graph engine lowers the model with the attention blocks on the host.
+   - Later the same day: those four convolutions output a small difference of large terms. GPTQ rounding with int32
+     biases puts them back on the NPU at 24.7 % (first 300 images), and one container takes any class names at run
+     time. So "hybrid CPU attention" is the route that worked, with no re-distillation.
 
    Details:
-   [YOLO-World v2 on the graph engine](#yolo-world-v2-on-the-graph-engine-the-text-attention-lowers-and-xint8s-collapse-is-four-convolutions-2026-09-16-desktop-2).
+   [YOLO-World v2 on the graph engine](#yolo-world-v2-on-the-graph-engine-the-text-attention-lowers-and-xint8s-collapse-is-four-convolutions-2026-09-16-desktop-2),
+   [only the text attention on the CPU](#yolo-world-v2-with-only-its-text-attention-on-the-cpu-gptq-and-an-int32-bias-recover-the-four-output-convolutions-2026-09-16-desktop-2),
+   [vocabulary at run time](#yolo-world-v2s-vocabulary-chosen-at-run-time-one-container-any-class-names-2026-09-16-desktop-2).
 
 ### Category D: Monocular Depth Estimation (MiDaS v2.1 Small)
 
@@ -7041,6 +7047,12 @@ establishes vendor parity — the oracle diff remains that gate — and neither 
   is `--power-mode performance` today; in the `balanced` default the gap measured 1.36 ms on the means (18.046 and
   17.988 ms against 16.744 and 16.564 ms), with the NPU stage unchanged and the rest in host work around it
   ([re-measured in the balanced default](#the-amd-comparisons-re-measured-in-the-balanced-default-2026-09-16-desktop-2)).
+- **Every graph-engine model computes SiLU as HardSigmoid times x, and YOLO-World v2 pays for it.** The swap alone takes
+  YOLO-World v2 from 41.5 % to 30.5 % mAP in FP32 (first 500 images). Its best XINT8 container scores 24.7 % against
+  43.0 % for FP32 on the first 300 images, and its four text attention cores still run on the CPU (9.650 ms of a
+  48.227 ms profiled frame)
+  ([only the text attention on the CPU](#yolo-world-v2-with-only-its-text-attention-on-the-cpu-gptq-and-an-int32-bias-recover-the-four-output-convolutions-2026-09-16-desktop-2),
+  [vocabulary at run time](#yolo-world-v2s-vocabulary-chosen-at-run-time-one-container-any-class-names-2026-09-16-desktop-2)).
 - **No formal test suite.** Verification here is empirical (`compileall` + import checks
   as a syntax gate, then real pipeline runs read from `results/`) rather than unit tests
   — there's no fixture NPU to test against in CI.
@@ -8043,7 +8055,8 @@ same workspace. Branch `yolo11-hybrid` from `0da6135`; evidence
 **Design:**
 
 - `lower_yolov8n(model, host_regions=("/model.10/",))` turns the nodes under a named prefix into one
-  `HostLayer`. The region must have one uint8 input that is a physical tensor
+  `HostLayer`. The region must have one uint8 input that is a physical tensor (since `1a56120` also a Concat view
+  over several tensors, and since `0d4583d` constants shared with another region do not count as inputs)
   (`/model.9/cv2/act/Mul_output_0_QuantizeLinear_Output`, 256 × 20 × 20) and one uint8 output at zero
   point 128 and a power-of-two scale (`/model.10/cv2/act/Mul_output_0_QuantizeLinear_Output`). It is
   extracted with `onnx.utils.Extractor` as a 134-node uint8 → uint8 model (Conv 7, MatMul 2, Softmax 1,
@@ -8849,7 +8862,11 @@ a second input of the others. With constant-derived tensors excluded from region
 2,446 rounds, a 36.7 MB workspace and 31.18 MB of weight packets, and every tensor equals ONNX Runtime's uint8
 intermediates on `bus.jpg` (`tests/test_engine_host_layer.py`, 19 passed). All 67 convolutions reach the NPU,
 against none in AMD's partition. Whole C2fAttn blocks are still refused: their input is a Concat, not a physical
-tensor.
+tensor (until `1a56120`, below). **Corrected 2026-09-16:** 63 of the 67 convolutions reach the NPU; each attention
+region carries its own projection convolution to the CPU. The lowering was re-run for the record: 70 layers, 4 on
+the host, 63 convolutions on the NPU, a 36.7 MB workspace, 2,446 rounds and 31.18 MB of static packets, with the four
+text-attention lowering tests passing. The whole test file's 19 at `ef1746e` has no log
+(`lowering_attention_hosts.log`).
 
 **The collapse is in the quantized model, not AMD's EP, and not in the attention** (MEASURED, CPU; Quark 0.11rc1 XINT8,
 200 calibration images, MinMSE power-of-two, CLE on):
@@ -8885,9 +8902,11 @@ tensor.
   disparity is across input channels. **Superseded as the mechanism (2026-09-16, same day):** the disparity is real,
   but giving the attention-reading weights their own scale recovers nothing, and per-output-channel scales do help.
   Each of these convolutions outputs a small difference of large terms, so any rounding error is large against the
-  output ([below](#yolo-world-v2-with-every-convolution-on-the-npu-gptq-and-an-int32-bias-recover-the-four-output-convolutions-2026-09-16-desktop-2)).
+  output ([below](#yolo-world-v2-with-only-its-text-attention-on-the-cpu-gptq-and-an-int32-bias-recover-the-four-output-convolutions-2026-09-16-desktop-2)).
 - **With those four in FP32, Quark's XINT8 recovers to 24.5 %** on the same 300 images: 5 points below float
-  activations. AMD's stack runs that model at the same accuracy but places 110 of 1,049 nodes on the NPU and takes
+  activations. AMD's stack runs that model at the same accuracy but places 110 of 1,049 nodes on the NPU (the EP
+report's count; the model file has 1,038 nodes, and the 11 more the report lists are unexplained. The placement log's
+line saying the report is missing is wrong: it exists, and the eval log names the Vitis AI EP first) and takes
   96.34 ms per image, no faster than the model on the CPU (87.83 ms in the same script).
 
 **What the engine still needed** (as of `ef1746e`; the first item was built next, below):
@@ -8899,7 +8918,7 @@ tensor.
   the activation before the residual add, so that is a kernel program change for the maintainer. (Built with the
   maintainer's go-ahead as `ca5b6cd` and exact on the NPU, but the split model scores 2.3 %. GPTQ weights with an int32
   bias put every layer but the attention on the NPU instead, with no kernel change:
-  [below](#yolo-world-v2-with-every-convolution-on-the-npu-gptq-and-an-int32-bias-recover-the-four-output-convolutions-2026-09-16-desktop-2).)
+  [below](#yolo-world-v2-with-only-its-text-attention-on-the-cpu-gptq-and-an-int32-bias-recover-the-four-output-convolutions-2026-09-16-desktop-2).)
 - An open-vocabulary head pipeline (512-channel egress and the contrastive decode) and a same-sitting comparison
   against AMD's 96.34 ms, the CPU, and DirectML on the iGPU (40.42 ms per image in FP32, whose full-set accuracy on the CPU is 37.0 %, above).
 
@@ -8936,10 +8955,12 @@ now be a Concat view (`1a56120`): each segment's block range is synced and the c
 
 **Not done:** the full 5,000 images for variant D; variant E (the attention blocks also FP32; its quantization was
 killed for low memory); a same-sitting latency and energy comparison (AMD's stack, the CPU, DirectML) with native
-ingress; the contrastive decode's cost (every stack pays it; the evaluations time the network only); recovering the
+ingress; the contrastive decode's cost (every stack pays it; the evaluations time the network only; measured later on
+the GPTQ container inside a 10.913 ms numpy postprocessing step,
+[below](#yolo-world-v2s-vocabulary-chosen-at-run-time-one-container-any-class-names-2026-09-16-desktop-2)); recovering the
 HardSigmoid cost (QAT or an exact SiLU epilogue); an Ignition task for open-vocabulary detection.
 
-## YOLO-World v2 with every convolution on the NPU: GPTQ and an int32 bias recover the four output convolutions (2026-09-16, Desktop 2)
+## YOLO-World v2 with only its text attention on the CPU: GPTQ and an int32 bias recover the four output convolutions (2026-09-16, Desktop 2)
 
 Variant D ran the four C2fAttn output convolutions on the host in FP32. This section puts them on the NPU. The exact
 split into two halves was built first, with a change to the core program; it is exact on the NPU and does not
@@ -9036,7 +9057,9 @@ slower on YOLOv8n; whether an unused op stays in the one engine program is the m
 
 **Not done:** AMD's stack on the GPTQ model (so no comparison with AMD is claimed for it); the full 5,000 images; a
 glass-to-glass pipeline with native ingress and a native dequantization (numpy quantization and dequantization
-take 17.6 ms of the frame);
+take 17.6 ms of the frame; native ingress was measured later through `YoloWorldPipeline`, 39.770 ms glass-to-glass with
+the dequantization and decode still numpy,
+[below](#yolo-world-v2s-vocabulary-chosen-at-run-time-one-container-any-class-names-2026-09-16-desktop-2));
 sweeps of GPTQ's damping, column order and calibration size; GPTQ on the rest of the model to recover more of the 5
 points below float activations (29.5 %, above) or the HardSigmoid cost; energy per frame; an Ignition task for
 open-vocabulary detection (its ignite-xdna side, a vocabulary chosen at run time, is
