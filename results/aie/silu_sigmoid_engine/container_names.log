@@ -1,0 +1,20 @@
+Container names in these logs (every container built on DESKTOP-CBL5NUA from models/<model>_cut_xint8.onnx; pose is
+yolov8n-pose):
+
+  <model>_today.ignite            main c714629: today's core program, SiLU in the HardSigmoid form
+  <model>_new_hardsigmoid.ignite  the worktree's program, compiled without --silu-sigmoid
+  <model>_new_sigmoid.ignite      the worktree's program, compiled with --silu-sigmoid
+
+Which program "new" means depends on when the log was written:
+
+  builds/*_45a8685.log, verify/*_45a8685.log, coco/*_45a8685*, sitting_45a8685_20260917T1219Z/
+      "new" = 45a8685's kernel (the containers were later renamed <model>_v1_new_*.ignite)
+  sitting_v2_rejected/
+      "new" = the v2 kernel in engine_v2_rejected.diff.log (never committed; its build logs were overwritten by the
+      7700316 rebuilds and are not kept; renamed <model>_v2_new_*.ignite afterwards)
+  builds/*_7700316.log, coco/*_7700316*, sitting_five_arms_20260917T1231Z/
+      "new" = 7700316's kernel; in the five-arm sitting "v1_new_*" are the 45a8685 containers
+
+The compiler did not change between 45a8685 and 7700316: container_blobs.log shows insts.bin identical across all five
+containers of a model, wpackets.bin identical between today and new_hardsigmoid, and identical between the two
+sigmoid builds.

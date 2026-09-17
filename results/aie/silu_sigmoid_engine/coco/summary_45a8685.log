@@ -1,0 +1,7 @@
+$ python sig_container_evals.py  (each sigmoid container on the NPU, then ONNX Runtime CPU on silu_sigmoid.reference_model in the same env; detections compared byte for byte)
+yolov8n container on the NPU: rc=0 AP 37.29 (NPU idle before: True)
+yolov8n reference model on ONNX Runtime CPU (same env): rc=0 AP 37.29; detections 62522 vs 62522, byte-identical
+yolov8s container on the NPU: rc=0 AP 46.25 (NPU idle before: True)
+yolov8s reference model on ONNX Runtime CPU (same env): rc=0 AP 46.25; detections 47410 vs 47410, byte-identical
+pose container on the NPU: rc=0 AP 43.50 (NPU idle before: True)
+pose reference model on ONNX Runtime CPU (same env): rc=0 AP 43.50; detections 19781 vs 19781, byte-identical
