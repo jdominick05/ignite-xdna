@@ -1,0 +1,6 @@
+$ python tools/quantize_keep_sigmoid.py models/yolov8s_cut.onnx <scratch>/silu/yolov8s_cut_xint8_sigmoid.onnx --pipeline yolov8n   (resnet_env, from the committed tool, run 2026-09-17 on DESKTOP-CBL5NUA; then pipelines/yolov8n/5_eval_map.py --n 500 was to follow)
+No output line was written and no model was produced: the background run was stopped by Windows because the system
+was running low on memory, during Quark's calibration on 200 images at 640x640. The host has 31.1 GB of physical
+memory; 19.5 GB were free after the stop, and nothing else of this study was running at the time.
+Not retried: fewer calibration images would change the recipe the YOLOv8n and YOLOv8n-pose keep-Sigmoid figures used.
+YOLOv8s therefore has no keep-Sigmoid figure in summary.log.
