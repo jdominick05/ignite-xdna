@@ -21,7 +21,8 @@ Run in the mlir-aie ironenv (source scripts/research-iron.sh, or any environment
     python tools/engine_epilogue_variants.py OUT_DIR [--lines 3 4] [--source ENGINE_CC]
 
 The variants patch the program as it was before the sigmoid epilogue landed (the committed census ran on engine.cc
-at 3b5be0e); engine.cc now contains the post4 form, so pass that older source, e.g.
+at 3b5be0e); engine.cc now contains the sigmoid epilogue (post4, out of line, constants hoisted), so pass that older
+source, e.g.
 ``git show 3b5be0e:kernels/aie2/conv_engine/engine.cc > engine_3b5be0e.cc``.
 """
 import argparse
