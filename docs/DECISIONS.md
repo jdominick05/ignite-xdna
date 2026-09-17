@@ -1870,7 +1870,8 @@ cached reference heads rather than `bo_out`.
   10.19 ms at 80 classes on synthetic heads but with logits up to 8.4e-05 off. Parity with the float decode is what
   lets the container's detections be compared byte for byte with ONNX Runtime's
   ([BENCHMARKS](BENCHMARKS.md#yolo-world-v2-glass-to-glass-275-times-amds-stack-and-against-the-igpu-it-depends-on-the-vocabulary-2026-09-16-desktop-2)).
-- **A better SiLU in the core program is sized, not built: it waits on the maintainer (2026-09-17).** On the first 500
+- **A better SiLU in the core program is sized, not built: it waits on the maintainer (2026-09-17).** (Superseded the
+  same day: built as an opt-in, next entry.) On the first 500
   COCO val2017 images the HardSigmoid form is most of the XINT8 loss of YOLOv8n, YOLOv8s and YOLOv8n-pose. An integer
   four-line sigmoid in the shipped models scores 37.29, 46.25 and 43.50, against 30.25, 40.77 and 31.56 as shipped,
   evaluated offline through ONNX Runtime
@@ -1891,9 +1892,40 @@ cached reference heads rather than `bo_out`.
     per tile against 100 vector steps for the lines. It also needs 256 B of packet space per layer, which the header
     does not have. Four lines score within 0.54 points of the exact table on this slice.
   - **Keeping Quark's real Sigmoid** (`ConvertSigmoidToHardSigmoid=False`). On YOLOv8n and YOLOv8n-pose it scores
-    37.83 and 43.58, within 0.54 points of four lines (YOLOv8s's quantization ran out of memory), but the core would still need a sigmoid of its own. The compiler matches only
-    HardSigmoid + Mul, so it buys nothing the oracle model does not.
+    37.83 and 43.58, within 0.54 points of four lines (YOLOv8s's quantization ran out of memory), but the core would
+    still need a sigmoid of its own. The compiler matches only HardSigmoid + Mul, so it buys nothing the oracle model
+    does not.
 
   Open, and the maintainer's to decide: whether the core program changes at all. It is the one program every
   container runs. The core-time cost of the loop is unmeasured, and the fused Conv residual SiLU kernel measured a
-  polynomial SiLU epilogue at 69.29 % extra compute cycles on a 32-channel convolution.
+  polynomial SiLU epilogue at 69.29 % extra compute cycles on a 32-channel convolution. (Answered 2026-09-17: the
+  maintainer approved the change, and the loop costs 0.248, 0.402 and 0.297 ms per dispatch on YOLOv8n, YOLOv8s and
+  YOLOv8n-pose; next entry.)
+- **The sigmoid SiLU epilogue is in the core program, and the compiler emits it only on request (2026-09-17).**
+  `ignite-compile --silu-sigmoid` gives every SiLU after a convolution the four-line sigmoid; the core applies it with
+  `F_SIGMOID` in a loop over the finished tile. Every layer is exact on the NPU. On the first 500 COCO val2017 images
+  the containers score 37.29, 46.25 and 43.50, with detections byte-identical to ONNX Runtime on
+  `silu_sigmoid.reference_model`. The flag costs 2.4-3.9 % dispatch time over the same program without it
+  ([BENCHMARKS](BENCHMARKS.md#the-sigmoid-silu-epilogue-on-the-npu-an-opt-in-exact-through-the-containers-for-24-39--more-dispatch-time-2026-09-17-desktop-2)).
+
+  Choices:
+  - **The tile loop is out of line and copies its ten constants into locals before it runs.** Timed in one sitting
+    against `45a8685`, which read lines 2-4 into the header struct for every packet and inlined the loop, it is
+    0.007-0.027 ms faster with the flag. Without the flag it is within 0.06 ms of the program before the change.
+  - **The header layout stays fixed.** Lines 2-4 take words 26-31, and packets without the flag leave those words
+    zero. Existing containers compile to byte-identical instruction streams and weight packets.
+  - **A container records its SiLU form in the manifest (`graph_engine.silu`),** and the verifier lowers the model
+    the same way. Its exactness reference is the Gather-table model, not Quark's graph.
+
+  Rejected:
+  - **Reading lines 2-4 from the raw header inside the loop.** A store through the uint8 tile pointer may alias the
+    header, so every constant is reloaded after each store. In its own sitting it cost 0.432-0.503 ms per dispatch,
+    against 0.248-0.402 ms for the committed loop.
+
+  **It stays opt-in, not the default:**
+  - It covers only three models. YOLO11n and YOLO-World v2 are refused (host regions, which are extracted from the
+    original graph, and a SiLU after a residual add), and SESR M7 has no SiLU. A default would therefore apply to
+    YOLOv8n, YOLOv8s and YOLOv8n-pose only.
+  - Changing the default would move Ignition's published latency figures, which all compare against AMD's stack.
+  - AMD's accuracy on the same 500 images has not been measured, so the trade (2.4-3.9 % dispatch for 5.5-11.9
+    points on that slice) cannot yet be stated against AMD.
