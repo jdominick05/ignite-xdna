@@ -24,7 +24,9 @@ Why:
     python pipelines/yolow/4b_g2g.py --model build/yolow.ignite --ep ignite
 
 Prints per-stage mean, median, p95 and p99 over --frames timed frames after --warmup, the detections per frame, and
-with --json writes the record.
+with --json writes the record. --max-fps paces the timed frames on an absolute schedule like a camera (the wait is not
+part of a frame's time), and every 100th timed frame prints a "[run] frame N" line, which tools/energy_sitting.py uses
+as its measurement window.
 """
 import argparse
 import json
@@ -66,6 +68,7 @@ def main():
     ap.add_argument("--iou", type=float, default=0.7)
     ap.add_argument("--warmup", type=int, default=50)
     ap.add_argument("--frames", type=int, default=500)
+    ap.add_argument("--max-fps", type=float, default=0.0, help="pace the timed frames to this rate (0: flat out)")
     ap.add_argument("--cache-key", default=None)
     ap.add_argument("--xclbin", default=None)
     ap.add_argument("--log", type=int, default=3)
@@ -77,6 +80,22 @@ def main():
     if img is None:
         raise SystemExit(f"could not read {args.source}")
     rows, dets = [], []
+    period = 1.0 / args.max_fps if args.max_fps > 0 else 0.0
+    schedule = {}
+
+    def before_frame(k):
+        """Absolute schedule from the first timed frame: a late frame does not make the next one early."""
+        if k < args.warmup or not period:
+            return
+        start = schedule.setdefault("t0", time.perf_counter())
+        delay = start + (k - args.warmup) * period - time.perf_counter()
+        if delay > 0:
+            time.sleep(delay)
+
+    def after_frame(k, g2g_ms, n):
+        i = k - args.warmup + 1
+        if i > 0 and i % 100 == 0:
+            print(f"[run] frame {i} | G2G {g2g_ms:.2f} ms | {n} detections", flush=True)
 
     if args.ep == "ignite":
         from ignite_xdna.pipelines.yolow_pipeline import YoloWorldPipeline
@@ -84,10 +103,12 @@ def main():
                                iou_thres=args.iou) as world:
             desc = f"graph-engine container ({len(world.session.segments)} segments), native ingress, int8 decode"
             for k in range(args.warmup + args.frames):
+                before_frame(k)
                 d, t = world.predict_sync(img)
                 if k >= args.warmup:
                     rows.append((t.preprocess_ms, t.npu_forward_ms, t.postprocess_ms, t.glass_to_glass_ms))
                     dets.append(len(d))
+                after_frame(k, t.glass_to_glass_ms, len(d))
     else:
         from ignite_xdna.pipelines.yolow_pipeline import YoloWorldDecoder
         from ignite_xdna.pipelines.yolow_text import YoloWorldText
@@ -114,6 +135,7 @@ def main():
                                conf_thres=args.conf, iou_thres=args.iou)
         desc = f"ONNX Runtime {args.ep} ({sess.get_providers()[0]}), numpy letterbox, float decode"
         for k in range(args.warmup + args.frames):
+            before_frame(k)
             t0 = time.perf_counter()
             x, pad, scale = yw.letterbox(img, imgsz)
             t1 = time.perf_counter()
@@ -124,6 +146,7 @@ def main():
             if k >= args.warmup:
                 rows.append(((t1 - t0) * 1e3, (t2 - t1) * 1e3, (t3 - t2) * 1e3, (t3 - t0) * 1e3))
                 dets.append(len(d))
+            after_frame(k, (t3 - t0) * 1e3, len(d))
 
     a = np.asarray(rows)
     record = {"ep": args.ep, "model": Path(args.model).name, "source": Path(args.source).name, "classes": len(names),
