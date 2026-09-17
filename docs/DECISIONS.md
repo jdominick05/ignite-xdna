@@ -1828,8 +1828,9 @@ cached reference heads rather than `bo_out`.
   YOLOv8n measured no slower, 7.216 and 7.245 ms against 7.331 and 7.299 ms interleaved. But the split model scores
   2.3 % mAP, because the halves cancel and a separate weight scale per half recovers nothing
   ([BENCHMARKS](BENCHMARKS.md#yolo-world-v2-with-only-its-text-attention-on-the-cpu-gptq-and-an-int32-bias-recover-the-four-output-convolutions-2026-09-16-desktop-2)).
-  Whether an op no model needs stays in the program is open for the maintainer; removing it is `ca5b6cd`'s
-  `engine.cc` hunk and its mirrors.
+  Whether an op no model needs stays in the program was open for the maintainer. **Kept (maintainer, 2026-09-16:
+  "keep the kernel op just in case").** It costs no measured time, and a later model with an activation after a
+  residual add can use it without a new program. Removing it later is `ca5b6cd`'s `engine.cc` hunk and its mirrors.
 - **Convolution biases may be int32, and a quantization recipe rather than the core program recovers YOLO-World v2
   (2026-09-16).** The engine's accumulator is 32 bits and its weight packets carry int32 biases, but the compiler
   truncated every bias to int8; it now keeps int8 or int32 and refuses an accumulator bias outside int32.
