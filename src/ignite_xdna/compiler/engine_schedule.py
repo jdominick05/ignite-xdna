@@ -16,6 +16,7 @@
 """
 from __future__ import annotations
 
+from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple
 
@@ -118,27 +119,128 @@ def _halos(ir: GraphIR) -> Tuple[Dict[str, int], Dict[str, int]]:
     return halo, value
 
 
-def plan_workspace(ir: GraphIR, slack_bytes: int = 64) -> Workspace:
+def plan_workspace(ir: GraphIR, slack_bytes: int = 64, reuse: bool = True) -> Workspace:
     halo, halo_value = _halos(ir)
     placements: Dict[str, Placement] = {}
-    cursor = 0
-    order = [ir.input] + [L.output for L in ir.layers]
-    for name in order:
+
+    if not reuse:
+        cursor = 0
+        order = [ir.input] + [L.output for L in ir.layers]
+        for name in order:
+            t = ir.tensors[name]
+            engine_written = t.producer != "input"
+            junk = (-t.blocks) % OUT_BLOCKS if engine_written else 0
+            p = Placement(name=name, base=cursor, halo=halo[name], height=t.height, width=t.width,
+                          blocks=t.blocks, planes=t.blocks + junk, producer=t.producer, halo_value=halo_value[name])
+            placements[name] = p
+            cursor = (cursor + p.nbytes + 63) // 64 * 64
+        ws = Workspace(placements=placements, nbytes=cursor, input=ir.input)
+        max_read = cursor
+        for L in ir.layers:
+            for chunk in layer_chunks(ir, L):
+                for y0, x0 in ((ir.tensors[L.output].height - TILE_R, ir.tensors[L.output].width - TILE_C),):
+                    pat = a_pattern(ws, ir, L, chunk, y0, x0)
+                    max_read = max(max_read, int(pat.indices().max()) + 1)
+        ws.nbytes = (max_read + slack_bytes + 63) // 64 * 64
+        return ws
+
+    # Liveness-based workspace buffer reuse with geometry-invariant halo ring preservation
+    first_use: Dict[str, int] = {ir.input: 0}
+    last_use: Dict[str, int] = {ir.input: 0}
+    output_tensors = {t for _, t in ir.outputs}
+
+    for idx, L in enumerate(ir.layers):
+        out = L.output
+        if out not in first_use:
+            first_use[out] = idx
+        last_use[out] = max(last_use.get(out, idx), idx)
+
+        in_tensors = []
+        if isinstance(L, ConvLayer):
+            in_tensors.extend(s.tensor for s in L.inputs)
+            if L.residual:
+                in_tensors.append(L.residual.tensor)
+        elif isinstance(L, PoolLayer):
+            in_tensors.append(L.input.tensor)
+        elif isinstance(L, HostLayer):
+            in_tensors.extend(s.tensor for s in L.input_segments())
+
+        for t in in_tensors:
+            last_use[t] = max(last_use.get(t, 0), idx)
+
+    for t in output_tensors:
+        last_use[t] = len(ir.layers) + 1
+
+    # Place graph input at base 0
+    t_in = ir.tensors[ir.input]
+    p_in = Placement(name=ir.input, base=0, halo=halo[ir.input], height=t_in.height, width=t_in.width,
+                     blocks=t_in.blocks, planes=t_in.blocks, producer=t_in.producer,
+                     halo_value=halo_value[ir.input])
+    placements[ir.input] = p_in
+    cursor = (p_in.nbytes + 63) // 64 * 64
+
+    # Group intermediate tensors by geometry key (height, width, halo, halo_value).
+    # Identical geometry guarantees identical plane pitch, row stride, and interior offsets.
+    # Interior DMA writes strictly never touch the halo border ring, so sequential reuse
+    # of the same slot across non-overlapping lifetimes preserves intact halo borders.
+    by_geom = defaultdict(list)
+    for L in ir.layers:
+        name = L.output
         t = ir.tensors[name]
         engine_written = t.producer != "input"
         junk = (-t.blocks) % OUT_BLOCKS if engine_written else 0
-        p = Placement(name=name, base=cursor, halo=halo[name], height=t.height, width=t.width,
-                      blocks=t.blocks, planes=t.blocks + junk, producer=t.producer, halo_value=halo_value[name])
-        placements[name] = p
-        cursor = (cursor + p.nbytes + 63) // 64 * 64
+        planes = t.blocks + junk
+        key = (t.height, t.width, halo[name], halo_value[name])
+        by_geom[key].append((first_use[name], last_use[name], planes, name))
+
+    geom_slots = defaultdict(list)
+    for key, tlist in by_geom.items():
+        tlist.sort(key=lambda x: x[0])
+        for f, l, planes, name in tlist:
+            chosen = -1
+            for s_idx, slot in enumerate(geom_slots[key]):
+                if slot["last_use"] < f:
+                    chosen = s_idx
+                    break
+            if chosen != -1:
+                slot = geom_slots[key][chosen]
+                slot["last_use"] = l
+                slot["max_planes"] = max(slot["max_planes"], planes)
+                slot["tensors"].append((name, planes))
+            else:
+                geom_slots[key].append({
+                    "last_use": l,
+                    "max_planes": planes,
+                    "tensors": [(name, planes)],
+                })
+
+    for key, slots in geom_slots.items():
+        h, w, hal, val = key
+        pitch = (w + 2 * hal) * 8
+        plane_bytes = (h + 2 * hal) * pitch
+        for slot in slots:
+            base = cursor
+            slot_bytes = slot["max_planes"] * plane_bytes
+            cursor = (cursor + slot_bytes + 63) // 64 * 64
+            for name, planes in slot["tensors"]:
+                t = ir.tensors[name]
+                p = Placement(name=name, base=base, halo=hal, height=h, width=w,
+                              blocks=t.blocks, planes=slot["max_planes"], producer=t.producer,
+                              halo_value=val)
+                placements[name] = p
+
     ws = Workspace(placements=placements, nbytes=cursor, input=ir.input)
-    # Over-read slack: the largest byte any activation packet reads past the end.
+    # Over-read slack: check the highest byte any activation packet reads past the end.
     max_read = cursor
     for L in ir.layers:
+        t = ir.tensors[L.output]
+        n_groups = (t.blocks + OUT_BLOCKS - 1) // OUT_BLOCKS
         for chunk in layer_chunks(ir, L):
-            for y0, x0 in ((ir.tensors[L.output].height - TILE_R, ir.tensors[L.output].width - TILE_C),):
-                pat = a_pattern(ws, ir, L, chunk, y0, x0)
-                max_read = max(max_read, int(pat.indices().max()) + 1)
+            for y0 in (0, t.height - TILE_R):
+                for x0 in (0, t.width - TILE_C):
+                    for g in range(n_groups):
+                        pat = a_pattern(ws, ir, L, chunk, y0, x0, group=g)
+                        max_read = max(max_read, int(pat.indices().max()) + 1)
     ws.nbytes = (max_read + slack_bytes + 63) // 64 * 64
     return ws
 

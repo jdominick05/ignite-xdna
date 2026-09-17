@@ -9884,3 +9884,28 @@ Preprocess stage latencies fall across every model compared to AMD's stack and p
 - **YOLOv8n-pose and YOLOv8n glass-to-glass leads widen**: YOLOv8n-pose achieves 9.163 / 9.154 ms vs AMD's 12.579 / 12.508 ms (27% faster overall). YOLOv8n achieves 8.353 / 8.414 ms vs AMD's 10.861 / 10.890 ms (23% faster overall).
 - **Exactness preserved**: 100% bit-exact across 12 diverse resolutions in offline parity checks, zero difference across all 3,297,312 bytes of staged DDR input planes on physical NPU hardware, and 0 difference across all detection output heads (`p3_box`, `p3_cls`, `p4_box`, `p4_cls`, `p5_box`, `p5_cls`).
 
+## Liveness-based workspace buffer reuse and DMA retirement relaxation (2026-09-17, Desktop 2)
+
+Backing log: [`results/aie/workspace_reuse_retire_batch_opt_phoenix_20260917T1900Z.log`](../results/aie/workspace_reuse_retire_batch_opt_phoenix_20260917T1900Z.log).
+Tool: `tools/bench_layer2_opt.py`. Measured on physical silicon, Desktop 2 (Ryzen 7 8700G, Phoenix XDNA1 NPU Device 0, pre-run `xrt-smi` showing no hardware contexts).
+
+Two optimizations targeting intermediate activation footprint, DDR traffic, and DMA scheduling overhead:
+1. **Liveness-based workspace buffer reuse with geometry-invariant halo ring preservation**: Rather than allocating DDR workspace memory linearly across all layers, tensors are grouped by geometry `(height, width, halo, halo_value)` and scheduled via greedy first-fit interval coloring over non-overlapping lifetime spans $[ \text{first\_use}, \text{last\_use} ]$. Because layer drain patterns write strictly to the interior $(y \in [0, H), x \in [0, W))$ and never touch halo borders $(y < 0 \lor y \ge H \lor x < 0 \lor x \ge W)$, sequential reuse of the same slot across disjoint lifetimes preserves intact 128 zero-point halo borders bit-for-bit.
+2. **Relaxed DMA task retirement (`retire_batch = 4`)**: The compiler previously forced a completion token and await every 2 tasks, even though the hardware shim start queue depth is 4. Setting `retire_batch = 4` batches retirement tokens to every 4th task, cutting ~30% to ~46% of await instructions and shrinking the instruction stream.
+
+### Memory & DMA Task Reductions Across Model Zoo
+
+| Model | Linear Workspace | Reused Workspace | Memory Saved | DMA Tasks | Awaits (rb=2) | Awaits (rb=4) | Awaits Cut |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| SESR M7 | 19.71 MB | **11.19 MB** | **8.52 MB (43.2%)** | 1,007 | 546 | **293** | **-253 (-46.3%)** |
+| YOLOv8s | 32.24 MB | **19.73 MB** | **12.51 MB (38.8%)** | 7,143 | 3,681 | **2,025** | **-1,656 (-45.0%)** |
+| YOLOv8n | 22.04 MB | **14.14 MB** | **7.90 MB (35.8%)** | 2,972 | 1,671 | **1,110** | **-561 (-33.6%)** |
+| YOLOv8n-pose | 22.60 MB | **14.55 MB** | **8.04 MB (35.6%)** | 2,947 | 1,657 | **1,153** | **-504 (-30.4%)** |
+
+- **Instruction stream size**: On YOLOv8n, `insts.bin` shrinks from 430,180 bytes down to 405,496 bytes (-24,684 bytes of instruction overhead).
+- **Physical silicon latency**:
+  - YOLOv8n (100 timed iterations, 20 warmup): NPU dispatch drops from 7.572 +/- 0.215 ms (min 7.344) down to **7.412 +/- 0.111 ms (min 7.299)** (-0.160 ms mean, -0.044 ms min).
+  - YOLOv8s (50 timed iterations, 10 warmup): NPU dispatch achieves **17.163 +/- 0.382 ms (min 16.995)** vs 17.195 +/- 0.177 ms (min 17.058); G2G drops from 26.109 ms down to **25.490 ms** (-0.619 ms).
+- **Correctness**: 100% bit-exact across all output heads (`p3_box`, `p3_cls`, `p4_box`, `p4_cls`, `p5_box`, `p5_cls`, `raw_output`, `raw_heads`) on physical Phoenix NPU Device 0 (max absolute difference = 0).
+
+

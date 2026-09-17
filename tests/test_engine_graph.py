@@ -126,11 +126,14 @@ def compare_layers(ir, ws, scheds, ws_got, direct):
 def run_offline(n_layers: int):
     ir, ws, scheds, store, ws_arr, q_in = prepare(n_layers)
     direct = gr.run_direct(ir, q_in, stop_after=n_layers - 1)
+    ok = True
     for s in scheds:
         es.emulate_layer(s, store, ws_arr)
-    ok = True
-    for idx, name, nd, total in compare_layers(ir, ws, scheds, ws_arr, direct):
-        print(f"  L{idx:2d} {name:38s} {'EXACT' if nd == 0 else f'MISMATCH {nd}/{total}'}")
+        L = ir.layers[s.layer_index]
+        got = ws.read_tensor(ws_arr, L.output)[:ir.tensors[L.output].channels]
+        ref = direct[L.output]
+        nd = int(np.sum(got != ref))
+        print(f"  L{s.layer_index:2d} {s.name:38s} {'EXACT' if nd == 0 else f'MISMATCH {nd}/{ref.size}'}")
         ok &= nd == 0
     return ok
 

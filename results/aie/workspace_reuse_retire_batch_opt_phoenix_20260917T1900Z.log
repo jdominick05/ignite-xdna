@@ -1,0 +1,53 @@
+================================================================================
+PHOENIX NPU HARDWARE EVIDENCE: LAYER 2 WORKSPACE REUSE & DMA RETIREMENT RELAXATION
+================================================================================
+Date: 2026-09-17T19:00:00Z
+Host: DESKTOP-CBL5NUA (AMD Ryzen 7 8700G with Radeon 780M Graphics, Phoenix XDNA1 NPU)
+Device: Device 0 ([003d:00:01.1] : NPU Phoenix)
+Environments: mlir-aie-iron (PyXRT 2024.1) / resnet_env17 (Ryzen AI 1.7.1)
+
+--- 1. MODEL ZOO WORKSPACE MEMORY REDUCTION (Linear vs Liveness Reuse) ---
+yolov8n        : Linear= 22.04 MB -> Reused= 14.14 MB | Saved= 7.90 MB (35.8%)
+yolov8s        : Linear= 32.24 MB -> Reused= 19.73 MB | Saved=12.51 MB (38.8%)
+sesr_m7        : Linear= 19.71 MB -> Reused= 11.19 MB | Saved= 8.52 MB (43.2%)
+yolov8n_pose   : Linear= 22.60 MB -> Reused= 14.55 MB | Saved= 8.04 MB (35.6%)
+
+--- 2. DMA TASK RETIREMENT & TCT AWAIT REDUCTION (retire_batch=2 vs retire_batch=4) ---
+yolov8n        : Tasks= 2972 | Awaits (rb=2)=1671 -> (rb=4)=1110 | Cut= 561 awaits (33.6%)
+yolov8s        : Tasks= 7143 | Awaits (rb=2)=3681 -> (rb=4)=2025 | Cut=1656 awaits (45.0%)
+sesr_m7        : Tasks= 1007 | Awaits (rb=2)= 546 -> (rb=4)= 293 | Cut= 253 awaits (46.3%)
+yolov8n_pose   : Tasks= 2947 | Awaits (rb=2)=1657 -> (rb=4)=1153 | Cut= 504 awaits (30.4%)
+
+--- 3. PHYSICAL SILICON BIT-EXACT PARITY CHECK (Device 0) ---
+Testing YOLOv8n on physical silicon Device 0...
+  Head p3_box      : shape=(1, 64, 80, 80)  max diff = 0
+  Head p3_cls      : shape=(1, 80, 80, 80)  max diff = 0
+  Head p4_box      : shape=(1, 64, 40, 40)  max diff = 0
+  Head p4_cls      : shape=(1, 80, 40, 40)  max diff = 0
+  Head p5_box      : shape=(1, 64, 20, 20)  max diff = 0
+  Head p5_cls      : shape=(1, 80, 20, 20)  max diff = 0
+  Head raw_output  : shape=(1209600,)       max diff = 0
+  Head raw_heads   : shape=(1209600,)       max diff = 0
+  [PASS] YOLOv8n: 100% BIT-EXACT ZERO DIFFERENCE across all heads on physical NPU silicon!
+Testing YOLOv8s on physical silicon Device 0...
+  Head p3_box      : shape=(1, 64, 80, 80)  max diff = 0
+  Head p3_cls      : shape=(1, 80, 80, 80)  max diff = 0
+  Head p4_box      : shape=(1, 64, 40, 40)  max diff = 0
+  Head p4_cls      : shape=(1, 80, 40, 40)  max diff = 0
+  Head p5_box      : shape=(1, 64, 20, 20)  max diff = 0
+  Head p5_cls      : shape=(1, 80, 20, 20)  max diff = 0
+  Head raw_output  : shape=(1209600,)       max diff = 0
+  Head raw_heads   : shape=(1209600,)       max diff = 0
+  [PASS] YOLOv8s: 100% BIT-EXACT ZERO DIFFERENCE across all heads on physical NPU silicon!
+
+--- 4. PHYSICAL SILICON BENCHMARKS (Device 0) ---
+Benchmarking YOLOv8n on Device 0 (100 iterations, 20 warmup)...
+YOLOv8n Baseline  (22.04 MB ws, rb=2): NPU=7.572 +/- 0.215 ms (min 7.344), G2G=16.218 ms (ing=7.774, egr=0.873)
+YOLOv8n Optimized (14.14 MB ws, rb=4): NPU=7.412 +/- 0.111 ms (min 7.299), G2G=15.734 ms (ing=7.425, egr=0.897)
+YOLOv8n Delta: NPU = -0.160 ms (-2.11%), min = -0.044 ms
+
+Benchmarking YOLOv8s on Device 0 (50 iterations, 10 warmup)...
+YOLOv8s Baseline  (32.24 MB ws, rb=2): NPU=17.195 +/- 0.177 ms (min 17.058), G2G=26.109 ms (ing=8.030, egr=0.883)
+YOLOv8s Optimized (19.73 MB ws, rb=4): NPU=17.163 +/- 0.382 ms (min 16.995), G2G=25.490 ms (ing=7.414, egr=0.912)
+YOLOv8s Delta: NPU = -0.032 ms (-0.19%), G2G = -0.619 ms (-2.37%)
+================================================================================

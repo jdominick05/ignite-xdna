@@ -52,13 +52,38 @@ class GraphEngineOffline(unittest.TestCase):
                 self.assertTrue(np.all(np.abs(bias) < 2 ** 31), L.name)
 
     def test_03_workspace_placements_disjoint_and_aligned(self):
-        ps = sorted(self.ws.placements.values(), key=lambda p: p.base)
-        for a, b in zip(ps, ps[1:]):
-            self.assertLessEqual(a.base + a.nbytes, b.base, a.name)
+        ps = list(self.ws.placements.values())
+        first_use = {self.ir.input: 0}
+        last_use = {self.ir.input: 0}
+        for idx, L in enumerate(self.ir.layers):
+            first_use[L.output] = min(first_use.get(L.output, idx), idx)
+            last_use[L.output] = max(last_use.get(L.output, idx), idx)
+            in_tensors = []
+            if isinstance(L, graph_ir.ConvLayer):
+                in_tensors.extend(s.tensor for s in L.inputs)
+                if L.residual:
+                    in_tensors.append(L.residual.tensor)
+            elif isinstance(L, graph_ir.PoolLayer):
+                in_tensors.append(L.input.tensor)
+            elif isinstance(L, graph_ir.HostLayer):
+                in_tensors.extend(s.tensor for s in L.input_segments())
+            for t in in_tensors:
+                last_use[t] = max(last_use.get(t, 0), idx)
+
+        for i, a in enumerate(ps):
+            for b in ps[i + 1:]:
+                a_range = (a.base, a.base + a.nbytes)
+                b_range = (b.base, b.base + b.nbytes)
+                spatial_overlap = max(a_range[0], b_range[0]) < min(a_range[1], b_range[1])
+                if spatial_overlap:
+                    a_life = (first_use[a.name], last_use[a.name])
+                    b_life = (first_use[b.name], last_use[b.name])
+                    temporal_overlap = max(a_life[0], b_life[0]) <= min(a_life[1], b_life[1])
+                    self.assertFalse(temporal_overlap, f"{a.name} and {b.name} overlap in both space and time!")
         for p in ps:
             self.assertEqual(p.base % 64, 0)
             self.assertIn(p.halo_value, (0, 128))
-        self.assertLess(self.ws.nbytes, 64 * 1024 * 1024)
+        self.assertLess(self.ws.nbytes, 16 * 1024 * 1024)
 
     def test_04_every_transfer_moves_whole_packets_within_the_repeat_limit(self):
         from ignite_xdna.compiler.engine_sequence import MAX_REPEAT
@@ -250,16 +275,22 @@ POSE = ROOT / "models" / "yolov8n-pose_cut_xint8.onnx"
 
 
 def _emulate_layers(ir, ws, scheds, store, direct, indices):
-    """Seed a workspace with every reference tensor, clear each chosen layer's output, emulate it back."""
-    ws_arr = ws.halo_fill()
-    for name, arr in direct.items():
-        if name in ws.placements:
-            ws.write_tensor(ws_arr, name, arr)
+    """Seed a workspace with reference inputs per layer, clear chosen layer's output, emulate it back."""
     mismatches = {}
     for i in indices:
+        ws_arr = ws.halo_fill()
         L = ir.layers[i]
+        if isinstance(L, graph_ir.ConvLayer):
+            for s in L.inputs:
+                ws.write_tensor(ws_arr, s.tensor, direct[s.tensor])
+            if L.residual:
+                ws.write_tensor(ws_arr, L.residual.tensor, direct[L.residual.tensor])
+        elif isinstance(L, graph_ir.PoolLayer):
+            ws.write_tensor(ws_arr, L.input.tensor, direct[L.input.tensor])
+        elif isinstance(L, graph_ir.HostLayer):
+            for s in L.input_segments():
+                ws.write_tensor(ws_arr, s.tensor, direct[s.tensor])
         c = ir.tensors[L.output].channels
-        ws.write_tensor(ws_arr, L.output, np.zeros_like(direct[L.output]))
         es.emulate_layer(scheds[i], store, ws_arr)
         mismatches[L.name] = int(np.sum(ws.read_tensor(ws_arr, L.output)[:c] != direct[L.output][:c]))
     return mismatches

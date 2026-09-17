@@ -736,7 +736,7 @@ class SequenceEmitter:
                              self._wbuf_bd_serve + k)
 
     def run_column_programs(self, programs: Sequence[Sequence[tuple]], bd_budget: int = 14,
-                            queue_depth: int = 4, retire_batch: int = 2) -> None:
+                            queue_depth: int = 4, retire_batch: int = 4) -> None:
         """Issue every column's items interleaved within two hardware limits per shim.
 
         Every task carries a completion token. Before a new task is configured,
