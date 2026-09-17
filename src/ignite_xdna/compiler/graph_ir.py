@@ -96,6 +96,8 @@ class ConvLayer:
     residual_lsh_main: int = 0           # log2(act_scale / finer operand scale)
     residual_lsh_res: Optional[int] = None  # log2(residual scale / finer operand scale); None: residual_shift
     act_scale: Optional[float] = None    # scale after the activation (s2)
+    post_hswish: Optional[HardSwishFit] = None  # HardSwish after the residual add (the residual packet applies it)
+    post_act_scale: Optional[float] = None       # scale after that activation
 
     @property
     def cin(self) -> int:
@@ -538,6 +540,7 @@ def lower_yolov8n(model_or_path, host_regions: Sequence[str] = ()) -> GraphIR:
 
     scales: Dict[str, float] = {q_in: s_in}
     transforms: Dict[str, Tuple[str, Dict[str, Any]]] = {}  # host-side output transforms (DepthToSpace)
+    absorbed_adds: set = set()  # residual Adds a convolution completed (with HardSwish after, the Add's own q is never built)
 
     for node in G.g.node:
         region = region_of.get(node.name)
@@ -686,6 +689,7 @@ def lower_yolov8n(model_or_path, host_regions: Sequence[str] = ()) -> GraphIR:
                 if len(segs) != 1:
                     raise ValueError(f"{add.name}: residual must be one segment")
                 layer.residual = segs[0]
+                absorbed_adds.add(add.name)
                 # Float semantics with power-of-two scales, exact in integers at the finest of the three
                 # scales: y = rne((t_main << lsh_main) + (t_res << lsh_res), shift). An output finer than both
                 # operands (YOLO11's attention Add) shifts both left and rounds nothing.
@@ -697,6 +701,28 @@ def lower_yolov8n(model_or_path, host_regions: Sequence[str] = ()) -> GraphIR:
                 out_name, out_scale = add_q, s_add
                 if layer.residual_shift < 0:
                     raise ValueError(f"{add.name}: output scale {s_add} is finer than both operands")
+                # HardSwish after the add (a convolution split in two exact halves, YOLO-World's C2fAttn
+                # output): the residual packet applies it at the add's output scale.
+                add_f = G.dq_of(add_q)
+                add_cons = G.float_consumers(add_f)
+                if sorted(c.op_type for c in add_cons) == ["HardSigmoid", "Mul"]:
+                    hs_node = [c for c in add_cons if c.op_type == "HardSigmoid"][0]
+                    mul_act = [c for c in add_cons if c.op_type == "Mul"][0]
+                    alpha = float(_attr(hs_node, "alpha", 0.2))
+                    if abs(alpha - float(HS_ALPHA)) > 1e-6:
+                        raise ValueError(f"{add.name}: HardSigmoid alpha {alpha}")
+                    scale_mul = G.consumers[hs_node.output[0]][0]
+                    k_val = float(np.asarray(G.const(scale_mul.input[1])).flatten()[0])
+                    _, hs_scale, hs_zp = G.q_sink(scale_mul.output[0])
+                    if abs(hs_scale - 1 / 128) > 1e-12 or hs_zp != ZP:
+                        raise ValueError(f"{add.name}: HardSigmoid quantization {hs_scale}/{hs_zp}")
+                    act_q, s_post, z_post = G.q_sink(mul_act.output[0])
+                    if z_post != ZP:
+                        raise ValueError(f"{add.name}: activation output zero point {z_post}")
+                    layer.post_hswish = fit_hardswish(s_add, s_post, k_val)
+                    layer.post_act_scale = s_post
+                    layer.output = act_q
+                    out_name, out_scale = act_q, s_post
             tensors[out_name] = TensorInfo(out_name, cout, oh, ow, out_scale, ZP, producer=layer.name)
             scales[out_name] = out_scale
             layers.append(layer)
@@ -787,7 +813,7 @@ def lower_yolov8n(model_or_path, host_regions: Sequence[str] = ()) -> GraphIR:
             raise ValueError(f"unsupported op {node.op_type} ({node.name})")
 
     for node in G.g.node:
-        if node.op_type == "Add" and node.name not in region_of and G.q_sink(node.output[0])[0] not in tensors:
+        if node.op_type == "Add" and node.name not in region_of and node.name not in absorbed_adds:
             raise ValueError(f"{node.name}: no conv output absorbed this Add")
     for r in regions:
         if r["q_out"] not in tensors:

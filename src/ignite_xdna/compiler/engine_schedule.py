@@ -343,8 +343,12 @@ def residual_packet(layer: ConvLayer) -> np.ndarray:
                                    and layer.residual_lsh_res != layer.residual_shift):
         flags |= em.F_RES_SHIFTS
         lsh_m, lsh_r = layer.residual_lsh_main, layer.residual_lsh_res
+    hs = None
+    if layer.post_hswish is not None:  # activation after the add, at this packet's constants
+        flags |= em.F_HSWISH
+        hs = layer.post_hswish.params
     hdr = em.PacketHeader(op=em.OP_RESIDUAL, ncin=4, nco=OUT_BLOCKS, flags=flags, rsh=layer.residual_shift,
-                          rlsh_m=lsh_m, rlsh_r=lsh_r, count_out=1)
+                          rlsh_m=lsh_m, rlsh_r=lsh_r, count_out=1, hs=hs)
     return em.pack_w_packet(hdr, np.zeros(32, np.int32), None)
 
 

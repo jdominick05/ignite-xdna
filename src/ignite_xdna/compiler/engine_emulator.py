@@ -270,9 +270,12 @@ def run_packet(wpkt: np.ndarray, apkt: np.ndarray, state: CoreState, core_row: i
     elif hdr.op == OP_RESIDUAL:
         res = a[:OUT_BLOCKS * OUT_BLOCK_BYTES].reshape(OUT_BLOCKS, TILE_ROWS, TILE_COLS, 8)
         if hdr.flags & F_RES_SHIFTS:
-            out[:] = residual_combine(state.hold, res, hdr.rsh, hdr.rlsh_m, hdr.rlsh_r)
+            q = residual_combine(state.hold, res, hdr.rsh, hdr.rlsh_m, hdr.rlsh_r)
         else:
-            out[:] = residual_combine(state.hold, res, hdr.rsh)
+            q = residual_combine(state.hold, res, hdr.rsh)
+        if hdr.flags & F_HSWISH:  # activation after the add
+            q = hswish_epilogue(q, hdr.hs)
+        out[:] = q
     elif hdr.op == OP_NOP:
         pass
     else:

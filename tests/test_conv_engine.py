@@ -6,7 +6,7 @@
 
 The synthetic sequence drives every packet kind the core program implements
 (3x3 stride 1 with HardSwish, chunked 1x1 with partial sums, 3x3 stride 2,
-2x upsampling, 5x5 max pool and a residual packet) through all sixteen cores
+2x upsampling, 5x5 max pool, a residual packet and one activated after its add) through all sixteen cores
 and compares every output byte with the NumPy emulator.
 """
 import argparse
@@ -82,6 +82,14 @@ def synthetic_scenarios(seed: int):
     scenarios.append(("k1_hold", em.pack_w_packet(hdr, rand_bias(7), rand_w(1, 8)), 0, 1))
     hdr = em.PacketHeader(op=em.OP_RESIDUAL, ncin=4, nco=4, flags=em.F_EMIT, rsh=1, count_out=1)
     scenarios.append(("residual", em.pack_w_packet(hdr, np.zeros(32, np.int32), None), 1, 0))
+    # 4b. Activation after the add: a held chunk without an activation, then a residual packet with both
+    #     operand shifts that applies HardSwish at its own constants (a convolution split in two halves).
+    hdr = em.PacketHeader(op=em.OP_CONV, k=1, stride=1, ncin=8, nco=4, flags=em.F_HOLD, shift_out=7,
+                          count_out=0, count_acc=1, rows_in=5, cols_in=20, plane_bytes=800)
+    scenarios.append(("k1_hold_linear", em.pack_w_packet(hdr, rand_bias(7), rand_w(1, 8)), 0, 1))
+    hdr = em.PacketHeader(op=em.OP_RESIDUAL, ncin=4, nco=4, flags=em.F_EMIT | em.F_RES_SHIFTS | em.F_HSWISH,
+                          rsh=1, rlsh_m=1, rlsh_r=0, hs=_hs_params_identityish(), count_out=1)
+    scenarios.append(("residual_then_hswish", em.pack_w_packet(hdr, np.zeros(32, np.int32), None), 1, 0))
     # 5. 5x5 max pool: two blocks held, then two more blocks emitted with the held pair.
     hdr = em.PacketHeader(op=em.OP_MAXPOOL, ncin=2, nco=4, flags=em.F_HOLD, count_out=0, count_acc=1,
                           rows_in=16, cols_in=25, plane_bytes=3200)
@@ -307,8 +315,8 @@ class EngineEmulatorOffline(unittest.TestCase):
         plan = synthetic_scenarios(1)
         expected = emulate_plan(plan)
         self.assertEqual(len(expected), COLS)
-        # 3 + 1 + 2 + 1 (residual) + 1 (pool emit) output rounds per column
-        self.assertEqual(len(expected[0]), 8)
+        # 3 + 1 + 2 + 1 (residual) + 1 (residual then HardSwish) + 1 (pool emit) output rounds per column
+        self.assertEqual(len(expected[0]), 9)
         self.assertTrue(all(o.size == ROWS * em.O_BYTES for o in expected[0]))
 
     def test_up2_expand_duplicates_pixels(self):

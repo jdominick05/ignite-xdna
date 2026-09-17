@@ -17,7 +17,9 @@
 //   y    = rne((t * qh) >> YSH)
 //   q2   = sat_u8(y + 128)                   (act = hswish) else q2 = q1
 //   residual packet: q = sat_u8(rne(((qm - 128) << LSH_M) + ((qr - 128) << LSH_R)) >> RSH) + 128)
-//                    with LSH_M = 0 and LSH_R = RSH unless the header sets F_RES_SHIFTS
+//                    with LSH_M = 0 and LSH_R = RSH unless the header sets F_RES_SHIFTS;
+//                    with F_HSWISH the residual packet's own HardSwish constants then act on q (an
+//                    activation after the add: YOLO-World's split C2fAttn output convolutions)
 // rne = round half to even (AIE conv_even rounding), sat_u8 = clamp to [0, 255].
 //
 // Program memory is 16 KB. The eight accumulators of a pass must stay in vector
@@ -95,11 +97,9 @@ inline V32u sat_u8_from_i16(V32i16 y) {
     return ya.template to_vector<uint8>(0);
 }
 
-// HardSwish epilogue on one 4x8 accumulator: acc -> 32 uint8 outputs.
-inline V32u epilogue(MMUL &acc, const Hdr &d) {
-    V32u q1 = acc.template to_vector<uint8>(d.shift_out);
-    if (!(d.flags & F_HSWISH))
-        return q1;
+// HardSwish on 32 uint8 values at the header's constants: q1 -> q2.
+__attribute__((always_inline))
+inline V32u hswish_u8(V32u q1, const Hdr &d) {
     V32i16 t = unpack_centered(q1);
     Acc accb;
     accb.from_vector(aie::broadcast<int32, 32>(d.b1));
@@ -111,6 +111,15 @@ inline V32u epilogue(MMUL &acc, const Hdr &d) {
     qh = aie::min(qh, int16_t(127));
     V32i16 y = aie::mul(t, qh).template to_vector<int16>(d.ysh);
     return sat_u8_from_i16(aie::add(y, int16_t(128)));
+}
+
+// HardSwish epilogue on one 4x8 accumulator: acc -> 32 uint8 outputs.
+__attribute__((always_inline))
+inline V32u epilogue(MMUL &acc, const Hdr &d) {
+    V32u q1 = acc.template to_vector<uint8>(d.shift_out);
+    if (!(d.flags & F_HSWISH))
+        return q1;
+    return hswish_u8(q1, d);
 }
 
 // One pass over output row r: pixel groups g0 and g0 + 1 (DUAL) or group g0 alone,
@@ -242,13 +251,15 @@ inline void up2_expand(uint8_t *a, int phase, uint8_t *tmp) {
     }
 }
 
-// Residual add: the activated conv tile was held as uint8 in the psum buffer by
-// the previous packet; this packet's A holds the residual tile [block][5][20][8].
+// Residual add: the conv tile (activated by its own packet, or not) was held as uint8 in
+// the psum buffer by the previous packet; this packet's A holds the residual tile
+// [block][5][20][8]. With F_HSWISH the sum is activated here, at this packet's constants.
 inline void residual_tile(const Hdr &d, const uint8_t *a, const int32_t *psum, uint8_t *out) {
     const uint8_t *held = reinterpret_cast<const uint8_t *>(psum) + HOLD_OFFSET_BYTES;
     const int rsh = d.rsh;
     const int lsh_m = d.rlsh_m;
     const int16_t rmul = int16_t(1 << d.rlsh_r);
+    const bool act = (d.flags & F_HSWISH) != 0;
     for (int off = 0; off < NCO * OUT_BLOCK_BYTES; off += 32) {
         V32i16 tm = unpack_centered(aie::load_v<32>(held + off));
         V32i16 tr = unpack_centered(aie::load_v<32>(a + off));
@@ -256,7 +267,10 @@ inline void residual_tile(const Hdr &d, const uint8_t *a, const int32_t *psum, u
         sa.from_vector(tm, lsh_m);
         sa = aie::mac(sa, tr, rmul);
         V32i16 y = sa.template to_vector<int16>(rsh);
-        aie::store_v(out + off, sat_u8_from_i16(aie::add(y, int16_t(128))));
+        V32u q = sat_u8_from_i16(aie::add(y, int16_t(128)));
+        if (act)
+            q = hswish_u8(q, d);
+        aie::store_v(out + off, q);
     }
 }
 
