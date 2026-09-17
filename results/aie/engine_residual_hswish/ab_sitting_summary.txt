@@ -1,0 +1,5 @@
+$ python iron_run.py <ignite-xdna worktree> kernel_ab.py build/yolov8n_full.ignite <scratch>/kernel/yolov8n_full_newkernel.ignite models/yolov8n_cut_xint8.onnx <out> --iters 100 --pairs 2  (old = the main checkout's build, same insts.bin and wpackets.bin, new xclbin; interleaved, xrt-smi idle before each run)
+old pass 0: rc=0 [verify] 66/66 layers exact | first dispatch 9.285 ms | dispatch mean 7.331 ms, min 7.183, max 7.632 over 100
+new pass 0: rc=0 [verify] 66/66 layers exact | first dispatch 10.314 ms | dispatch mean 7.216 ms, min 7.091, max 7.399 over 100
+old pass 1: rc=0 [verify] 66/66 layers exact | first dispatch 8.946 ms | dispatch mean 7.299 ms, min 7.133, max 7.842 over 100
+new pass 1: rc=0 [verify] 66/66 layers exact | first dispatch 8.788 ms | dispatch mean 7.245 ms, min 7.086, max 7.890 over 100

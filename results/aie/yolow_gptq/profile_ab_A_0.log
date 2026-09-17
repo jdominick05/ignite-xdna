@@ -1,0 +1,21 @@
+$ yolow_profile.py yolow_fp32cv2.ignite --frames 100
+100 frames, power mode balanced (default)
+  quantize         mean   9.204 ms
+  stage            mean   1.075 ms
+  dispatch+host    mean  33.231 ms
+  readback+unpack  mean   0.905 ms
+  dequantize       mean   8.621 ms
+  total            mean  53.035 ms
+    npu segment 0              9.384 ms
+    /model.12/attn/            2.344 ms
+    /model.12/cv2/             1.450 ms
+    npu segment 3              1.094 ms
+    /model.15/attn/            2.861 ms
+    /model.15/cv2/             2.393 ms
+    npu segment 6              3.935 ms
+    /model.18/attn/            2.258 ms
+    /model.18/cv2/             1.486 ms
+    npu segment 9              2.190 ms
+    /model.21/attn/            1.961 ms
+    /model.21/cv2/             1.155 ms
+    npu segment 12             0.699 ms

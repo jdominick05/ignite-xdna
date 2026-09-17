@@ -1,0 +1,53 @@
+$ python split_quant_report.py <split FP32> <split XINT8> models/yolov8s-worldv2_cut_xint8.onnx
+/model.12/cv2 split
+  abc: input /model.12/cv2/split/Concat_abc_output_0_DequantizeLinear_Output
+    weight int8 scale 0.00390625   max   186.1 steps, clipped  0.00%, SQNR  31.6 dB
+    bias   int8 scale 2            max    74.3 steps, clipped  0.00%, SQNR  31.8 dB
+  attn: input /model.12/attn/Reshape_3_output_0_DequantizeLinear_Output
+    weight int8 scale 0.0078125    max   132.4 steps, clipped  0.02%, SQNR  29.5 dB
+  act /model.12/cv2/split/Concat_abc_output_0          scale 0.125      reference -
+  act /model.12/attn/Reshape_3_output_0                scale 0.25       reference 0.25
+  act /model.12/cv2/split/abc/Conv_output_0            scale 2.0        reference -
+  act /model.12/cv2/split/attn/Conv_output_0           scale 2.0        reference -
+  act /model.12/cv2/conv/Conv_output_0                 scale 0.0625     reference 0.0625
+  act /model.12/cv2/act/Mul_output_0                   scale 0.03125    reference 0.03125
+  act /model.12/Concat_output_0                        scale -          reference 0.25
+/model.15/cv2 split
+  abc: input /model.15/cv2/split/Concat_abc_output_0_DequantizeLinear_Output
+    weight int8 scale 0.0078125    max   159.9 steps, clipped  0.00%, SQNR  29.9 dB
+    bias   int8 scale 2            max    71.9 steps, clipped  0.00%, SQNR  27.9 dB
+  attn: input /model.15/attn/Reshape_3_output_0_DequantizeLinear_Output
+    weight int8 scale 0.03125      max   150.0 steps, clipped  0.04%, SQNR  18.6 dB
+  act /model.15/cv2/split/Concat_abc_output_0          scale 0.0625     reference -
+  act /model.15/attn/Reshape_3_output_0                scale 0.125      reference 0.125
+  act /model.15/cv2/split/abc/Conv_output_0            scale 2.0        reference -
+  act /model.15/cv2/split/attn/Conv_output_0           scale 2.0        reference -
+  act /model.15/cv2/conv/Conv_output_0                 scale 0.0625     reference 0.0625
+  act /model.15/cv2/act/Mul_output_0                   scale 0.03125    reference 0.03125
+  act /model.15/Concat_output_0                        scale -          reference 0.125
+/model.18/cv2 split
+  abc: input /model.18/cv2/split/Concat_abc_output_0_DequantizeLinear_Output
+    weight int8 scale 0.0078125    max   146.7 steps, clipped  0.00%, SQNR  28.5 dB
+    bias   int8 scale 1            max    67.9 steps, clipped  0.00%, SQNR  25.0 dB
+  attn: input /model.18/attn/Reshape_3_output_0_DequantizeLinear_Output
+    weight int8 scale 0.015625     max   148.3 steps, clipped  0.01%, SQNR  22.2 dB
+  act /model.18/cv2/split/Concat_abc_output_0          scale 0.0625     reference -
+  act /model.18/attn/Reshape_3_output_0                scale 0.125      reference 0.125
+  act /model.18/cv2/split/abc/Conv_output_0            scale 0.5        reference -
+  act /model.18/cv2/split/attn/Conv_output_0           scale 1.0        reference -
+  act /model.18/cv2/conv/Conv_output_0                 scale 0.125      reference 0.125
+  act /model.18/cv2/act/Mul_output_0                   scale 0.0625     reference 0.0625
+  act /model.18/Concat_output_0                        scale -          reference 0.125
+/model.21/cv2 split
+  abc: input /model.21/cv2/split/Concat_abc_output_0_DequantizeLinear_Output
+    weight int8 scale 0.00390625   max   282.9 steps, clipped  0.01%, SQNR  27.1 dB
+    bias   int8 scale 2            max    88.5 steps, clipped  0.00%, SQNR  29.3 dB
+  attn: input /model.21/attn/Reshape_3_output_0_DequantizeLinear_Output
+    weight int8 scale 0.0078125    max   129.9 steps, clipped  0.00%, SQNR  27.1 dB
+  act /model.21/cv2/split/Concat_abc_output_0          scale 0.0625     reference -
+  act /model.21/attn/Reshape_3_output_0                scale 0.125      reference 0.125
+  act /model.21/cv2/split/abc/Conv_output_0            scale 2.0        reference -
+  act /model.21/cv2/split/attn/Conv_output_0           scale 2.0        reference -
+  act /model.21/cv2/conv/Conv_output_0                 scale 0.125      reference 0.125
+  act /model.21/cv2/act/Mul_output_0                   scale 0.0625     reference 0.0625
+  act /model.21/Concat_output_0                        scale -          reference 0.125

@@ -1,0 +1,9 @@
+$ python yolow_exact_split.py models/yolov8s-worldv2_cut_split_xint8.onnx model.{12,15,18,21}/attn/  (every tensor vs ONNX Runtime, every layer's packet emulation vs the direct reference)
+lowered 74 layers (4 host) in 0.1 s; regions ['/model.12/attn/', '/model.15/attn/', '/model.18/attn/', '/model.21/attn/']
+  post-add HardSwish: L35 /model.12/cv2/split/attn/Conv residual /model.12/cv2/split/abc/Conv_output_0_QuantizeLinear_Output shifts rsh=0 lsh_m=5 lsh_r=5 fit max_error=0
+  post-add HardSwish: L41 /model.15/cv2/split/attn/Conv residual /model.15/cv2/split/abc/Conv_output_0_QuantizeLinear_Output shifts rsh=0 lsh_m=5 lsh_r=5 fit max_error=0
+  post-add HardSwish: L54 /model.18/cv2/split/attn/Conv residual /model.18/cv2/split/abc/Conv_output_0_QuantizeLinear_Output shifts rsh=0 lsh_m=3 lsh_r=2 fit max_error=0
+  post-add HardSwish: L67 /model.21/cv2/split/attn/Conv residual /model.21/cv2/split/abc/Conv_output_0_QuantizeLinear_Output shifts rsh=0 lsh_m=4 lsh_r=4 fit max_error=0
+tensors mismatching ONNX Runtime: 0 []
+layers whose emulation differs from run_direct: 0 {}
+PASS

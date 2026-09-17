@@ -1,0 +1,35 @@
+$ pipelines/yolow/5_eval_map.py --model <scratch>/yolow/yolov8s-worldv2_cut_split_xint8_floatadd.onnx (strip_half_qdq.py: the Q/DQ pairs on both halves' outputs removed) --ep cpu --n 300 --images <ignite-xdna main>/data/coco/val2017 --ann <ignite-xdna main>/data/coco/annotations/instances_val2017.json
+loading annotations into memory...
+Done (t=0.25s)
+creating index...
+index created!
+model: head-cut (6 outputs), contrastive + numpy decode, input 640x640
+eval : 300 images, conf 0.001, iou 0.7, max_det 300, per-class NMS
+  [ 300/300]  infer 88.93 ms  elapsed  31.8s
+
+Timing (300 images):
+  mean   : 88.93 ms  (11.2 fps)
+  median : 89.83 ms
+  p95    : 93.88 ms
+wrote 64356 detections to <scratch>/yolow/split_floatadd_cpu300_dets.json
+Loading and preparing results...
+DONE (t=0.17s)
+creating index...
+index created!
+Running per image evaluation...
+Evaluate annotation type *bbox*
+DONE (t=1.03s).
+Accumulating evaluation results...
+DONE (t=0.53s).
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.027
+ Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] = 0.045
+ Average Precision  (AP) @[ IoU=0.75      | area=   all | maxDets=100 ] = 0.028
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.015
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.068
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.014
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=  1 ] = 0.038
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets= 10 ] = 0.064
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.071
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.031
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.124
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.068

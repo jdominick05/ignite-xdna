@@ -1816,3 +1816,23 @@ cached reference heads rather than `bo_out`.
   - **Setting the mode through pyxrt:** it reads the mode but cannot set it or list other processes' contexts.
   - **A longer poll:** the 5 s poll's cost did not separate from no poll
     ([BENCHMARKS](BENCHMARKS.md#the-npu-power-mode-governor-less-energy-per-frame-at-30-fps-and-the-device-always-put-back-2026-09-16-desktop-2)).
+- **The residual op can apply HardSwish after the add (built 2026-09-16 with the maintainer's go-ahead; no model uses
+  it).** The one engine program gained a meaning for header flag 4 on a residual packet, the one change to the program
+  since the residual operand shifts. It was built for YOLO-World v2's C2fAttn output convolutions split into two
+  exact halves. It is exact on the NPU: a synthetic sequence, YOLOv8n and YOLOv8s 66/66, and the split model 74/74.
+  YOLOv8n measured no slower, 7.216 and 7.245 ms against 7.331 and 7.299 ms interleaved. But the split model scores
+  2.3 % mAP, because the halves cancel and a separate weight scale per half recovers nothing
+  ([BENCHMARKS](BENCHMARKS.md#yolo-world-v2-with-every-convolution-on-the-npu-gptq-and-an-int32-bias-recover-the-four-output-convolutions-2026-09-16-desktop-2)).
+  Whether an op no model needs stays in the program is open for the maintainer; removing it is `ca5b6cd`'s
+  `engine.cc` hunk and its mirrors.
+- **Convolution biases may be int32, and a quantization recipe rather than the core program recovers YOLO-World v2
+  (2026-09-16).** The engine's accumulator is 32 bits and its weight packets carry int32 biases, but the compiler
+  truncated every bias to int8; it now keeps int8 or int32 and refuses an accumulator bias outside int32.
+  `pipelines/yolow/3c_gptq_cv2.py` gives the four C2fAttn output convolutions GPTQ-rounded int8 weights at their
+  power-of-two scale and an int32 bias at the product scale. That is 24.7 % mAP on the first 300 images through the
+  container, identical to ONNX Runtime and above variant D's 24.5 %, with only the attention cores on the host, and a
+  profiled frame 4.8-5.5 ms shorter than D's in one sitting. Rejected:
+  - **The exact split plus HardSwish after the add:** 2.3 %, above.
+  - **Per-output-channel weight scales:** a core program change (one output shift per channel), and behind GPTQ at
+    one scale on two of the four layers.
+  - **Those convolutions as FP32 host steps (variant D):** kept as the record; its NPU segments and host steps take 4.8-5.1 ms more per frame.
