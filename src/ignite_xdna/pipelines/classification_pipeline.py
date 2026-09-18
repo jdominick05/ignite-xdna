@@ -4,8 +4,15 @@
 src/ignite_xdna/pipelines/classification_pipeline.py
 
 Image classification on the Phoenix NPU from a graph-engine ``.ignite`` container
-(``task == "classify"``). Matrix multiplication and classification head layers run
-natively as 1x1 convolutions on NPU Device 0 without ONNX Runtime host segments.
+(``task == "classify"``). The Gemm and the convolutions feeding it run natively on NPU
+Device 0 -- the Gemm as a single 1x1 convolution.
+
+Whether the container declares a host segment depends on where the average happens. A
+head-only model, whose graph input already holds pooled features, declares none. A whole
+classifier must declare one: nothing in the engine computes a global average, so
+``lower_yolov8n`` carves the pooling into a host region, which makes that container a hybrid
+in the manifest's own terms -- as YOLO11n's attention core is -- and not a network wholly on
+the device. ``ClassificationPipeline`` runs either shape unchanged.
 
     with ClassificationPipeline("build/resnet50_head.ignite") as pipe:
         probs, timings = pipe.predict_sync(pooled_features)

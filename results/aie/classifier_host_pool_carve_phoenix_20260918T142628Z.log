@@ -1,0 +1,33 @@
+[verify] workspace reuse off: every tensor owns a slot, so every layer below is readable
+[verify] classify container yolov8n_cls640_carved_noreuse2.ignite: 28 layers, reference in 0.3 s
+  L 0 /model.0/conv/Conv                           EXACT
+  L 1 /model.1/conv/Conv                           EXACT
+  L 2 /model.2/cv1/conv/Conv                       EXACT
+  L 3 /model.2/m.0/cv1/conv/Conv                   EXACT
+  L 4 /model.2/m.0/cv2/conv/Conv                   EXACT
+  L 5 /model.2/cv2/conv/Conv                       EXACT
+  L 6 /model.3/conv/Conv                           EXACT
+  L 7 /model.4/cv1/conv/Conv                       EXACT
+  L 8 /model.4/m.0/cv1/conv/Conv                   EXACT
+  L 9 /model.4/m.0/cv2/conv/Conv                   EXACT
+  L10 /model.4/m.1/cv1/conv/Conv                   EXACT
+  L11 /model.4/m.1/cv2/conv/Conv                   EXACT
+  L12 /model.4/cv2/conv/Conv                       EXACT
+  L13 /model.5/conv/Conv                           EXACT
+  L14 /model.6/cv1/conv/Conv                       EXACT
+  L15 /model.6/m.0/cv1/conv/Conv                   EXACT
+  L16 /model.6/m.0/cv2/conv/Conv                   EXACT
+  L17 /model.6/m.1/cv1/conv/Conv                   EXACT
+  L18 /model.6/m.1/cv2/conv/Conv                   EXACT
+  L19 /model.6/cv2/conv/Conv                       EXACT
+  L20 /model.7/conv/Conv                           EXACT
+  L21 /model.8/cv1/conv/Conv                       EXACT
+  L22 /model.8/m.0/cv1/conv/Conv                   EXACT
+  L23 /model.8/m.0/cv2/conv/Conv                   EXACT
+  L24 /model.8/cv2/conv/Conv                       EXACT
+  L25 /model.9/conv/conv/Conv                      EXACT
+  L26 HOST /model.9/conv/act/Mul_output_0_QuantizeLinear_Output=/model.9/Flatten_output_0_QuantizeLinear_Output EXACT
+  L27 /model.9/linear/Gemm                         EXACT
+[verify] 28/28 layers exact | first dispatch 6.338 ms | dispatch mean 4.511 ms, min 4.285, max 5.032 over 10
+[verify] 1 host segment(s) ['/model.9/conv/act/Mul_output_0_QuantizeLinear_Output=/model.9/Flatten_output_0_QuantizeLinear_Output']: host mean 0.914 ms, min 0.635, max 1.288 (NPU dispatch above excludes it)
+[verify] PASS

@@ -617,6 +617,21 @@ class ClassificationHeadPooling(unittest.TestCase):
         self.assertEqual(sum(1 for L in ir.layers if isinstance(L, graph_ir.HostLayer)), 2)
         self.assertEqual(ir.layers[-1].weights.shape[1], sum(s.blocks for s in ir.layers[-1].inputs) * 8)
 
+    def test_the_gate_still_refuses_when_the_pool_cannot_be_carved_out(self):
+        """The backstop behind the carve: if the span cannot become a host region, refuse -- do not wire
+        the head to the graph input, which is the miscompile this whole path exists to prevent."""
+        real = graph_ir._pool_host_spec
+        graph_ir._pool_host_spec = lambda G, head: None
+        try:
+            with self.assertRaises(ValueError) as cm:
+                graph_ir.lower_yolov8n(CLS_MODEL)
+        finally:
+            graph_ir._pool_host_spec = real
+        msg = str(cm.exception)
+        self.assertIn("classification head", msg)
+        self.assertIn("GlobalAveragePool", msg)
+        self.assertIn("1280", msg)
+
 
 class HostOutputPlacement(unittest.TestCase):
     """A host layer returning a vector lands at pixel (0, 0) of the plane its tensor declares."""

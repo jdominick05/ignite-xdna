@@ -71,6 +71,32 @@ def slot_final_tenants(ws, ir) -> dict:
     return {ws.placements[L.output].base: (L.index, L.output) for L in ir.layers}
 
 
+def session_for(task: str, container: str, device_index: int = 0):
+    """The session that runs this container: dense planes for super-resolution, a pooled-vector egress
+    for classification, the channel-block layout for everything else."""
+    from ignite_xdna.runtime import graph_session as gs  # noqa: PLC0415 - opens the device
+    if task == "super_resolution":
+        return gs.DenseGraphSession(container, device_index=device_index)
+    if task == "classify":
+        return gs.ClassificationSession(container, device_index=device_index)
+    return gs.GraphSession(container, device_index=device_index)
+
+
+def stage_input(sess, task: str, q_in) -> None:
+    """Place one already-quantized frame where the container expects it, without dispatching."""
+    if task == "classify":
+        sess.stage_quantized(q_in)
+        return
+    p = sess.input_placement
+    h, base = int(p["halo"]), int(p["base"])
+    plane = sess._input_plane
+    plane[h:h + p["height"], h:h + p["width"], :q_in.shape[0]] = np.transpose(q_in, (1, 2, 0))
+    if sess._ws_map is None:
+        sess.bo_ws.write(plane, base)
+    sess.bo_ws.sync(sess.harness.pyxrt.xclBOSyncDirection.XCL_BO_SYNC_BO_TO_DEVICE,
+                    sess._input_bytes, base)
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--container", required=True)
@@ -132,30 +158,12 @@ def main() -> int:
     print(f"[verify] {task} container {Path(args.container).name}: {len(ir.layers)} layers, reference in "
           f"{time.perf_counter() - t0:.1f} s", flush=True)
 
-    from ignite_xdna.runtime.graph_session import GraphSession, is_graph_container  # noqa: E402
-    session_cls = GraphSession
-    if task == "super_resolution":
-        from ignite_xdna.runtime.graph_session import DenseGraphSession  # noqa: E402
-        session_cls = DenseGraphSession
-    elif task == "classify":
-        from ignite_xdna.runtime.graph_session import ClassificationSession  # noqa: E402
-        session_cls = ClassificationSession
-    sess = session_cls(args.container, device_index=args.device)
+    sess = session_for(task, args.container, args.device)
     results, timings, host_timings = [], [], []
     try:
         if constants:
             print(f"[verify] replaced in host segments: {sess.set_host_constants(constants)}", flush=True)
-        p = sess.input_placement
-        h = int(p["halo"])
-        base = int(p["base"])
-        if task == "classify":
-            sess.stage_quantized(q_in)
-        else:
-            plane = sess._input_plane
-            plane[h:h + p["height"], h:h + p["width"], :q_in.shape[0]] = np.transpose(q_in, (1, 2, 0))
-            if sess._ws_map is None:
-                sess.bo_ws.write(plane, base)
-            sess.bo_ws.sync(sess.harness.pyxrt.xclBOSyncDirection.XCL_BO_SYNC_BO_TO_DEVICE, sess._input_bytes, base)
+        stage_input(sess, task, q_in)
         first_ms = sess.dispatch()
         first_host_ms = sess.last_host_ms
         # plan_workspace's liveness reuse hands co-tenant tensors the same slot base and every tenant
