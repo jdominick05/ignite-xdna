@@ -127,6 +127,13 @@ def parse_args(args: Optional[List[str]] = None) -> argparse.Namespace:
              "HardSigmoid form (more accurate; the exactness reference becomes silu_sigmoid.reference_model)",
     )
     parser.add_argument(
+        "--no-workspace-reuse",
+        action="store_true",
+        help="Graph engine: give every tensor its own workspace slot instead of recycling a freed one. "
+             "Costs workspace (yolov8n 22.0 MB against 14.1) and buys nothing on dispatch; it is the mode "
+             "tools/verify_engine_container.py needs to read back every layer after one dispatch.",
+    )
+    parser.add_argument(
         "--topology-policy",
         choices=("report", "refuse"),
         default="report",
@@ -406,7 +413,8 @@ def verify_on_silicon(container_path: Path, device_idx: int = 0):
 
 def compile_graph_engine(input_path: Union[str, Path], output_path: Union[str, Path],
                          build_dir: Optional[Union[str, Path]] = None, host_regions: Optional[List[str]] = None,
-                         silu_sigmoid: bool = False, topology_policy: str = "report") -> int:
+                         silu_sigmoid: bool = False, topology_policy: str = "report",
+                         no_workspace_reuse: bool = False) -> int:
     """Lower the whole graph onto the convolution engine (see engine_compile.py); ``host_regions`` run on the host;
     ``silu_sigmoid`` gives SiLU the sigmoid epilogue."""
     for region in host_regions or ():
@@ -426,7 +434,11 @@ def compile_graph_engine(input_path: Union[str, Path], output_path: Union[str, P
             f"import failed: {ex}") from ex
     from ignite_xdna.compiler.engine_compile import compile_graph_container
     manifest = compile_graph_container(input_path, output_path, build_dir=build_dir,
-                                       host_regions=tuple(host_regions or ()), silu_sigmoid=silu_sigmoid)
+                                       host_regions=tuple(host_regions or ()), silu_sigmoid=silu_sigmoid,
+                                       workspace_reuse=not no_workspace_reuse)
+    if no_workspace_reuse:
+        print(f"    [OK] workspace reuse off: every tensor owns a slot, so every layer is readable "
+              f"after one dispatch")
     if silu_sigmoid:
         print(f"    [OK] SiLU: {manifest['graph_engine'].get('silu')} epilogue (reference: "
               f"silu_sigmoid.reference_model of {Path(input_path).name})")
@@ -455,7 +467,8 @@ def main(args: Optional[List[str]] = None):
     try:
         if parsed.engine == "graph":
             compile_graph_engine(parsed.input, parsed.output, parsed.build_dir, host_regions=parsed.host_region,
-                                 silu_sigmoid=parsed.silu_sigmoid, topology_policy=parsed.topology_policy)
+                                 silu_sigmoid=parsed.silu_sigmoid, topology_policy=parsed.topology_policy,
+                                 no_workspace_reuse=parsed.no_workspace_reuse)
             if parsed.verify_silicon:
                 from ignite_xdna.runtime.graph_session import GraphSession
                 sess = GraphSession(parsed.output, device_index=parsed.device)

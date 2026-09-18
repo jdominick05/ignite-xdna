@@ -533,6 +533,52 @@ def _host_region(G: _Graph, spec: str) -> Dict[str, Any]:
             "q_node": q_node, "builder": dq.name}
 
 
+def _pool_host_spec(G: _Graph, cls_head) -> Optional[str]:
+    """A ``FROM=TO`` spec covering a matched head's pooling: from the uint8 tensor feeding the pool to
+    the uint8 tensor the head reads. ``None`` when either end does not resolve.
+
+    Nothing lowers ``GlobalAveragePool``, so the pooled tensor is never a stored tensor and the head's
+    input would fall back to the graph input. Carving the pool out as a host region is what makes the
+    average actually get computed."""
+    try:
+        q_from = G.q_source(cls_head.pool_node.input[0])[0]
+    except Exception:  # noqa: BLE001 - the pool's input may not sit on a Q/DQ chain
+        return None
+    q_to = cls_head.input_q
+    if not q_from or not q_to or q_from == q_to:
+        return None
+    return f"{q_from}={q_to}"
+
+
+def place_host_output(y, channels: int, height: int, width: int, fill: int = ZP) -> np.ndarray:
+    """Fit a host layer's uint8 output into the plane its stored tensor declares.
+
+    A host region that computes a classification head's pooling returns ``[C]`` or ``[C, 1, 1]``, while the
+    tensor it writes is stored as a ``height x width`` plane: that is this engine's shape for a pooled
+    vector, and pixel ``(0, 0)`` is the only position the head conv's result is read from (``runtime``
+    ``ClassificationSession.stage_pooled`` fills a staged vector the same way). Everything but ``(0, 0)``
+    is the zero point. An output that already matches the plane is passed through unchanged."""
+    a = np.asarray(y, dtype=np.uint8)
+    if a.shape == (channels, height, width):
+        return a
+    if a.ndim == 1:
+        a = a.reshape(-1, 1, 1)
+    elif a.ndim != 3:
+        raise ValueError(f"host layer output has rank {a.ndim}, expected a [C][H][W] tensor")
+    if a.shape[0] > channels:
+        raise ValueError(f"host layer output has {a.shape[0]} channels, the tensor holds {channels}")
+    if (a.shape[1], a.shape[2]) == (height, width):
+        out = np.full((channels, height, width), fill, dtype=np.uint8)
+        out[:a.shape[0]] = a
+        return out
+    if (a.shape[1], a.shape[2]) != (1, 1):
+        raise ValueError(f"host layer output is {a.shape[1]}x{a.shape[2]}, which does not fit a "
+                         f"{height}x{width} plane; only a flat or 1x1 output is placed at (0, 0)")
+    out = np.full((channels, height, width), fill, dtype=np.uint8)
+    out[:a.shape[0], 0, 0] = a[:, 0, 0]
+    return out
+
+
 def lower_yolov8n(model_or_path, host_regions: Sequence[str] = (), silu_sigmoid: bool = False) -> GraphIR:
     """Lower a QDQ graph to engine layers. ``host_regions`` name regions the engine does not lower, as node-name
     prefixes (``"/model.10/"``) or ``"FROM=TO"`` boundaries (see ``_host_region``); each becomes one ``HostLayer``.
@@ -553,6 +599,15 @@ def lower_yolov8n(model_or_path, host_regions: Sequence[str] = (), silu_sigmoid:
     region_of = {name: r for r in regions for name in r["names"]}
     if len(region_of) != sum(len(r["names"]) for r in regions):
         raise ValueError(f"host regions {list(host_regions)} overlap")
+    if cls_head is not None and cls_head.pool_node is not None and cls_head.pool_node.name not in region_of:
+        # The caller did not name the head's pooling, and nothing here lowers it: carve it automatically so the
+        # average is computed on the host between dispatches instead of the head silently reading the image.
+        auto_spec = _pool_host_spec(G, cls_head)
+        if auto_spec is not None:
+            auto = _host_region(G, auto_spec)
+            if not set(auto["names"]) & set(region_of):
+                regions.append(auto)
+                region_of.update({name: auto for name in auto["names"]})
     tensors: Dict[str, TensorInfo] = {}
     views: Dict[str, List[Segment]] = {}   # virtual uint8 tensors -> segments
     layers: List[object] = []
@@ -665,6 +720,20 @@ def lower_yolov8n(model_or_path, host_regions: Sequence[str] = (), silu_sigmoid:
                 if in_q is None:
                     in_q = q_in
                 segs = resolve(in_q)
+                # The fallback above may land on the graph input when neither the head's own nor the pooled
+                # tensor was stored. That is right only when the graph input already holds pooled features (a
+                # head-only model); for a whole classifier the head would apply its Gemm to image pixels at a
+                # spatial position instead of to the pooled vector. Nothing here computes the average, so
+                # refuse rather than emit a container that loads, runs and is silently the wrong function.
+                given = sum(s.blocks for s in segs) * 8
+                if given < cls_head.cin:
+                    pool = (f"GlobalAveragePool {cls_head.pool_node.name}"
+                            if cls_head.pool_node is not None else "the head's pooling")
+                    raise ValueError(
+                        f"classification head {node.name}: its weights take {cls_head.cin} channels but the "
+                        f"tensor it resolves to ({in_q}) holds {given}. {pool} is matched into the head and "
+                        f"never lowered, so the pooled features are not a stored tensor. Name the pooling as a "
+                        f"host region, or feed the head a model whose input is already pooled.")
                 in_scale = tensors[segs[0].tensor].scale
                 w_4d = cls_head.weights[:, :, None, None]
                 conv = ConvLayer(
