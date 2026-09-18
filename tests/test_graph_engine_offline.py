@@ -584,5 +584,78 @@ class ClassificationHeadOffline(unittest.TestCase):
         self.assertEqual(float(np.max(diff)), 0.0)
 
 
+@unittest.skipUnless(MODEL.exists(), "quantized model not present")
+class TestSpatialStencilFusion(unittest.TestCase):
+    """Inter-layer spatial stencil fusion in persistent core engine and compiler."""
+
+    @classmethod
+    def setUpClass(cls):
+        from ignite_xdna.compiler import passes
+        cls.raw_ir = graph_ir.lower_yolov8n(MODEL)
+        cls.fused_ir = passes.match_stencil_fusion(cls.raw_ir)
+        cls.ws = es.plan_workspace(cls.fused_ir)
+        cls.scheds, cls.store = es.schedule_graph(cls.fused_ir, cls.ws)
+
+    def test_01_matcher_fuses_eligible_bottleneck(self):
+        self.assertEqual(len(self.raw_ir.layers), 66)
+        self.assertEqual(len(self.fused_ir.layers), 65)
+
+        fused_layers = [L for L in self.fused_ir.layers if isinstance(L, graph_ir.FusedConvLayer)]
+        self.assertEqual(len(fused_layers), 1)
+        fused = fused_layers[0]
+        self.assertEqual(fused.index, 3)
+        self.assertEqual(fused.cin, 16)
+        self.assertEqual(fused.cout, 16)
+        self.assertEqual(fused.pad, 2)
+        self.assertEqual(fused.stage1.name, "/model.2/m.0/cv1/conv/Conv")
+        self.assertEqual(fused.stage2.name, "/model.2/m.0/cv2/conv/Conv")
+        # Intermediate activation tensor omitted from physical workspace tensors
+        self.assertNotIn(fused.stage1.output, self.fused_ir.tensors)
+
+    def test_02_workspace_zero_ddr_intermediate(self):
+        fused = self.fused_ir.layers[3]
+        # Ingress tensor halo must expand to 2 to support compound receptive field
+        in_tensor = fused.inputs[0].tensor
+        self.assertEqual(self.ws.placements[in_tensor].halo, 2)
+        # Intermediate tensor has zero DDR allocation
+        self.assertNotIn(fused.stage1.output, self.ws.placements)
+
+    def test_03_fused_scheduling_invariants(self):
+        fused_sched = self.scheds[3]
+        self.assertEqual(fused_sched.rounds, 64)
+        self.assertEqual(fused_sched.packets, 256)
+        self.assertEqual(fused_sched.w_fills, 64)
+
+        blob = self.store.blob()
+        for prog in fused_sched.programs:
+            a_items = sum(1 for it in prog if it[0] in ("a", "A"))
+            w_served = sum(it[3] if it[0] == "w" else it[2] for it in prog if it[0] in ("w", "W"))
+            self.assertEqual(w_served, a_items)
+            o_held = sum(it[2] for it in prog if it[0] == "o" and len(it) > 2)
+            self.assertEqual(o_held, a_items)
+
+    def test_04_emulate_fused_layer_bit_exact(self):
+        from ignite_xdna.compiler import graph_reference as gr
+        rng = np.random.default_rng(42)
+        img = rng.integers(0, 256, size=(3, 640, 640), dtype=np.uint8)
+        direct = gr.run_direct(self.raw_ir, img)
+
+        ws_arr = self.ws.halo_fill()
+        L = self.fused_ir.layers[3]
+        for s in L.inputs:
+            self.ws.write_tensor(ws_arr, s.tensor, direct[s.tensor])
+        if L.residual:
+            self.ws.write_tensor(ws_arr, L.residual.tensor, direct[L.residual.tensor])
+
+        es.emulate_layer(self.scheds[3], self.store, ws_arr)
+        c = self.fused_ir.tensors[L.output].channels
+        got = self.ws.read_tensor(ws_arr, L.output)[:c]
+        ref = direct[L.output][:c]
+        diff = np.abs(got.astype(int) - ref.astype(int))
+        self.assertEqual(int(diff.max()), 0)
+        self.assertEqual(int(np.count_nonzero(diff)), 0)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+

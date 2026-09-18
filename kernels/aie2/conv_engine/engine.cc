@@ -46,13 +46,13 @@ enum {
     H_PHASE0 = 17, H_ROWS_IN = 21, H_COLS_IN = 22, H_PLANE_BYTES = 23,
     H_RLSH_M = 24, H_RLSH_R = 25, H_A2 = 26, H_B2 = 27, H_A3 = 28, H_B3 = 29, H_A4 = 30, H_B4 = 31,
 };
-enum { OP_NOP = 0, OP_CONV = 1, OP_MAXPOOL = 2, OP_RESIDUAL = 3 };
+enum { OP_NOP = 0, OP_CONV = 1, OP_MAXPOOL = 2, OP_RESIDUAL = 3, OP_FUSED_CONV = 4 };
 // F_RES_SHIFTS: a residual packet takes the left shifts of both operands from
 // H_RLSH_M / H_RLSH_R; without it the held tile is unshifted and the residual
 // tile is shifted by RSH (the rule every YOLOv8n residual uses).
 // F_SIGMOID: after the passes, the sigmoid SiLU acts on the emitted or held tile at the
 // header's line constants (A1/B1, A2/B2..A4/B4, S1, YSH).
-enum { F_LOAD_PSUM = 1, F_EMIT = 2, F_HSWISH = 4, F_UP2 = 8, F_HOLD = 16, F_RES_SHIFTS = 32, F_SIGMOID = 64 };
+enum { F_LOAD_PSUM = 1, F_EMIT = 2, F_HSWISH = 4, F_UP2 = 8, F_HOLD = 16, F_RES_SHIFTS = 32, F_SIGMOID = 64, F_RESIDUAL = 128 };
 constexpr int HDR_BYTES = 128;
 constexpr int BIAS_BYTES = 128;
 constexpr int W_OFFSET = HDR_BYTES + BIAS_BYTES;
@@ -62,6 +62,9 @@ constexpr int NCO = 4;                                        // output blocks p
 constexpr int OUT_BLOCK_BYTES = TILE_ROWS * TILE_COLS * 8;    // 800
 constexpr int PSUM_BLOCK_WORDS = TILE_ROWS * TILE_COLS * 8;   // 800 int32
 constexpr int HOLD_OFFSET_BYTES = NCO * PSUM_BLOCK_WORDS * 4; // 12,800
+constexpr int MID_ROWS = 7;
+constexpr int MID_COLS_PITCH = 24;                            // 24 cols x 8 bytes = 192 bytes/row
+constexpr int MID_BLOCK_BYTES = MID_ROWS * MID_COLS_PITCH * 8; // 1344 bytes
 constexpr int UP2_SRC_ROWS = 4;
 constexpr int UP2_SRC_COLS = 20;
 constexpr int UP2_SRC_BLOCK_BYTES = UP2_SRC_ROWS * UP2_SRC_COLS * 8;  // 640
@@ -358,6 +361,150 @@ inline void maxpool_tile(const Hdr &d, const uint8_t *a, int32_t *psum, uint8_t 
     }
 }
 
+// ----------------------------------------------------------------------------
+// Fused Spatial Stencil Convolution (Stage 1 Conv3x3 + Stage 2 Conv3x3 + Residual)
+// ----------------------------------------------------------------------------
+__attribute__((noinline))
+void fused_stage1(const int32_t *h, const uint8_t *apkt, uint8_t *mid, int core_row) {
+    const int y_quad = h[H_PHASE0];
+    const int x0 = h[H_PHASE0 + 1];
+    const int H = h[H_PHASE0 + 2];
+    const int W = h[H_PHASE0 + 3];
+    const int y0 = y_quad + TILE_ROWS * core_row;
+
+    const int r_start = (y0 == 0) ? 1 : 0;
+    const int r_end = (y0 + TILE_ROWS >= H) ? 6 : 7;
+    const int c_start = (x0 == 0) ? 1 : 0;
+    const int c_end = (x0 + TILE_COLS >= W) ? 21 : 22;
+
+    const int w1_off = h[H_A3]; // byte offset to Stage 1 block
+    const uint8_t *w1_base = reinterpret_cast<const uint8_t *>(h) + w1_off;
+    const int32_t *s1_params = reinterpret_cast<const int32_t *>(w1_base);
+    const int32_t *b1 = reinterpret_cast<const int32_t *>(w1_base + 32);
+    const int8_t *w1 = reinterpret_cast<const int8_t *>(w1_base + 96);
+
+    Hdr d1;
+    d1.shift_out = s1_params[7];
+    d1.a1 = s1_params[0];
+    d1.b1 = s1_params[1];
+    d1.s1 = s1_params[2];
+    d1.qmax = s1_params[3];
+    d1.k2 = s1_params[4];
+    d1.s2 = s1_params[5];
+    d1.ysh = s1_params[6];
+    d1.flags = F_HSWISH;
+
+    const int cols_in = h[H_COLS_IN];
+    const int plane_bytes = h[H_PLANE_BYTES];
+    const V32u zp_vec = aie::broadcast<uint8, 32>(128);
+
+    for (int rm = 0; rm < MID_ROWS; ++rm) {
+        if (rm < r_start || rm >= r_end) {
+            for (int b = 0; b < 2; ++b) {
+                uint8_t *row_dst = mid + b * MID_BLOCK_BYTES + rm * MID_COLS_PITCH * 8;
+                for (int v = 0; v < 6; ++v)
+                    aie::store_v(row_dst + v * 32, zp_vec);
+            }
+            continue;
+        }
+        for (int g = 0; g < 6; ++g) {
+            const int cm0 = (g == 5) ? 18 : g * 4;
+            MMUL acc0 = MMUL(aie::load_v<8>(b1).template grow_replicate<32>());
+            MMUL acc1 = MMUL(aie::load_v<8>(b1 + 8).template grow_replicate<32>());
+
+            const int8_t *wp = w1;
+            for (int ky = 0; ky < 3; ++ky) {
+                for (int kx = 0; kx < 3; ++kx) {
+                    const int aoff = ((rm + ky) * cols_in + cm0 + kx) * 8;
+                    for (int c = 0; c < 2; ++c) {
+                        const uint8_t *plane = apkt + c * plane_bytes;
+                        V32u av = aie::load_unaligned_v<32>(plane + aoff);
+                        V64s wv0 = aie::load_v<64>(wp);
+                        V64s wv1 = aie::load_v<64>(wp + 64);
+                        wp += 128;
+                        acc0.mac(av, wv0);
+                        acc1.mac(av, wv1);
+                    }
+                }
+            }
+            V32u q0 = epilogue(acc0, d1);
+            V32u q1 = epilogue(acc1, d1);
+            aie::store_v(mid + 0 * MID_BLOCK_BYTES + (rm * MID_COLS_PITCH + cm0) * 8, q0);
+            aie::store_v(mid + 1 * MID_BLOCK_BYTES + (rm * MID_COLS_PITCH + cm0) * 8, q1);
+        }
+        if (c_start == 1) {
+            *reinterpret_cast<uint64_t *>(mid + 0 * MID_BLOCK_BYTES + rm * MID_COLS_PITCH * 8) = 0x8080808080808080ULL;
+            *reinterpret_cast<uint64_t *>(mid + 1 * MID_BLOCK_BYTES + rm * MID_COLS_PITCH * 8) = 0x8080808080808080ULL;
+        }
+        if (c_end == 21) {
+            *reinterpret_cast<uint64_t *>(mid + 0 * MID_BLOCK_BYTES + (rm * MID_COLS_PITCH + 21) * 8) = 0x8080808080808080ULL;
+            *reinterpret_cast<uint64_t *>(mid + 1 * MID_BLOCK_BYTES + (rm * MID_COLS_PITCH + 21) * 8) = 0x8080808080808080ULL;
+        }
+    }
+}
+
+__attribute__((noinline))
+void fused_stage2(const Hdr &d2, const uint8_t *mid, const uint8_t *apkt, const int8_t *w2,
+                  const int32_t *bias2, uint8_t *out) {
+    for (int r = 0; r < TILE_ROWS; ++r) {
+        for (int g = 0; g < 5; ++g) {
+            const int g0 = g * 4;
+            const int off0 = (r * TILE_COLS + g0) * 8;
+            MMUL acc[NCO];
+#pragma unroll
+            for (int b = 0; b < NCO; ++b) {
+                aie::vector<int32, 8> bv = aie::load_v<8>(bias2 + b * 8);
+                acc[b] = MMUL(bv.template grow_replicate<32>());
+            }
+            const int8_t *wp = w2;
+            for (int ky = 0; ky < 3; ++ky) {
+                for (int kx = 0; kx < 3; ++kx) {
+                    const int mid_off = ((r + ky) * MID_COLS_PITCH + g0 + kx) * 8;
+                    for (int c = 0; c < 2; ++c) {
+                        const uint8_t *plane = mid + c * MID_BLOCK_BYTES;
+                        V32u av = aie::load_unaligned_v<32>(plane + mid_off);
+#pragma unroll
+                        for (int b = 0; b < NCO; ++b) {
+                            V64s wv = aie::load_v<64>(wp);
+                            wp += 64;
+                            acc[b].mac(av, wv);
+                        }
+                    }
+                }
+            }
+#pragma unroll
+            for (int b = 0; b < NCO; ++b) {
+                V32u q = epilogue(acc[b], d2);
+                if ((d2.flags & F_RESIDUAL) && b < 2) {
+                    const int res_off = ((2 + r) * d2.cols_in + 2 + g0) * 8;
+                    V32u qres = aie::load_unaligned_v<32>(apkt + b * d2.plane_bytes + res_off);
+                    V32i16 tm = unpack_centered(q);
+                    V32i16 tr = unpack_centered(qres);
+                    Acc sa;
+                    sa.from_vector(tm, d2.rlsh_m);
+                    sa = aie::mac(sa, tr, int16_t(1 << d2.rlsh_r));
+                    V32i16 y = sa.template to_vector<int16>(d2.rsh);
+                    q = sat_u8_from_i16(aie::add(y, int16_t(128)));
+                }
+                aie::store_v(out + b * OUT_BLOCK_BYTES + off0, q);
+            }
+        }
+    }
+}
+
+inline void fused_conv_tile(const int32_t *hdr, const uint8_t *apkt, int32_t *psum, uint8_t *out, int core_row) {
+    uint8_t *mid = reinterpret_cast<uint8_t *>(psum) + HOLD_OFFSET_BYTES;
+    fused_stage1(hdr, apkt, mid, core_row);
+
+    const Hdr d2 = read_header(hdr, core_row);
+    const int w2_off = hdr[H_A4];
+    const uint8_t *wpkt = reinterpret_cast<const uint8_t *>(hdr);
+    const int32_t *bias2 = reinterpret_cast<const int32_t *>(wpkt + HDR_BYTES);
+    const int8_t *w2 = reinterpret_cast<const int8_t *>(wpkt + w2_off);
+
+    fused_stage2(d2, mid, apkt, w2, bias2, out);
+}
+
 inline void run(int32_t *hdr, uint8_t *apkt, uint8_t *out, int32_t *psum, int core_row) {
     aie::set_rounding(aie::rounding_mode::conv_even);
     aie::set_saturation(aie::saturation_mode::saturate);
@@ -382,6 +529,9 @@ inline void run(int32_t *hdr, uint8_t *apkt, uint8_t *out, int32_t *psum, int co
         break;
     case OP_RESIDUAL:
         residual_tile(d, apkt, psum, out);
+        break;
+    case OP_FUSED_CONV:
+        fused_conv_tile(hdr, apkt, psum, out, core_row);
         break;
     default:
         break;

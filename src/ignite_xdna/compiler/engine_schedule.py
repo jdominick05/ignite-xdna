@@ -24,7 +24,7 @@ import numpy as np
 
 from ignite_xdna.compiler import engine_emulator as em
 from ignite_xdna.compiler.engine_sequence import COLS, MAX_REPEAT, ROWS, DmaPattern, linear, merge_quad, merge_runs
-from ignite_xdna.compiler.graph_ir import ConvLayer, GraphIR, HostLayer, PoolLayer, Segment, TensorInfo, ZP
+from ignite_xdna.compiler.graph_ir import ConvLayer, FusedConvLayer, GraphIR, HostLayer, PoolLayer, Segment, TensorInfo, ZP
 
 TILE_R, TILE_C = em.TILE_ROWS, em.TILE_COLS
 OUT_BLOCKS = em.OUT_BLOCKS
@@ -106,14 +106,14 @@ def _halos(ir: GraphIR) -> Tuple[Dict[str, int], Dict[str, int]]:
     value = {name: ZP for name in ir.tensors}
     pooled = set()
     for L in ir.layers:
-        if isinstance(L, ConvLayer) and L.k > 1:
+        if isinstance(L, (ConvLayer, FusedConvLayer)) and L.k > 1:
             for s in L.inputs:
-                halo[s.tensor] = max(halo[s.tensor], L.pad)   # 1 for 3x3, 2 for SESR's 5x5
+                halo[s.tensor] = max(halo[s.tensor], L.pad)   # 1 for 3x3, 2 for SESR's 5x5 or FusedConvLayer
         elif isinstance(L, PoolLayer):
             halo[L.input.tensor] = max(halo[L.input.tensor], 2)
             pooled.add(L.input.tensor)
     for name in pooled:
-        if any(isinstance(L, ConvLayer) and L.k > 1 and any(s.tensor == name for s in L.inputs) for L in ir.layers):
+        if any(isinstance(L, (ConvLayer, FusedConvLayer)) and L.k > 1 and any(s.tensor == name for s in L.inputs) for L in ir.layers):
             raise ValueError(f"{name} feeds both a 3x3 conv and a max pool; halo values conflict")
         value[name] = 0
     return halo, value
@@ -156,7 +156,7 @@ def plan_workspace(ir: GraphIR, slack_bytes: int = 64, reuse: bool = True) -> Wo
         last_use[out] = max(last_use.get(out, idx), idx)
 
         in_tensors = []
-        if isinstance(L, ConvLayer):
+        if isinstance(L, (ConvLayer, FusedConvLayer)):
             in_tensors.extend(s.tensor for s in L.inputs)
             if L.residual:
                 in_tensors.append(L.residual.tensor)
@@ -288,6 +288,7 @@ CHUNK_GEOMETRY = {
     "k5s1": (16, 50, 6400, 1, 1),
     "pool": (16, 25, 3200, 2, 2),
     "res": (5, 20, 800, 4, 8),
+    "fused_k3k3": (16, 25, 3200, 2, 2),
 }
 
 
@@ -300,6 +301,9 @@ def layer_chunks(ir: GraphIR, layer) -> List[Chunk]:
         for i in range(2):  # blocks 0-1 held, blocks 2-3 emitted
             chunks.append(Chunk("pool", 0, 2 * i, ncin, rb, rows_in, cols_in, pb, i, i == 1))
         return chunks
+    if isinstance(layer, FusedConvLayer):
+        rows_in, cols_in, pb, ncin, rb = CHUNK_GEOMETRY["fused_k3k3"]
+        return [Chunk("fused_k3k3", 0, 0, ncin, rb, rows_in, cols_in, pb, 0, True)]
     idx = 0
     specs = []
     for si, seg in enumerate(layer.inputs):
@@ -338,7 +342,7 @@ def a_pattern(ws: Workspace, ir: GraphIR, layer, chunk: Chunk, y0: int, x0: int,
         return DmaPattern("ws", p.offset(b0, 2 * y0 - 1, 2 * x0 - 1), (16, 400), (p.pitch, 1))
     if chunk.kind == "k5s1":
         return DmaPattern("ws", p.offset(b0, y0 - 2, x0 - 2), (16, 400), (p.pitch, 1))
-    if chunk.kind == "pool":
+    if chunk.kind == "pool" or chunk.kind == "fused_k3k3":
         return DmaPattern("ws", p.offset(b0, y0 - 2, x0 - 2), (2, 16, 200), (p.plane_bytes, p.pitch, 1))
     raise ValueError(chunk.kind)
 
@@ -466,6 +470,83 @@ def pool_packet(chunk: Chunk) -> np.ndarray:
                           count_out=1 if chunk.last else 0, count_acc=0 if chunk.last else 1,
                           rows_in=chunk.rows_in, cols_in=chunk.cols_in, plane_bytes=chunk.plane_bytes)
     return em.pack_w_packet(hdr, np.zeros(32, np.int32), None)
+
+
+def fused_packet(layer: FusedConvLayer, y_quad: int, x0: int, H: int, W: int) -> np.ndarray:
+    """Build a static W packet for an OP_FUSED_CONV tile."""
+    s1, s2 = layer.stage1, layer.stage2
+    flags = em.F_EMIT
+    if s2.hswish is not None:
+        flags |= em.F_HSWISH
+    if s2.residual is not None:
+        flags |= em.F_RESIDUAL
+    if s2.residual_lsh_main or (s2.residual_lsh_res is not None and s2.residual_lsh_res != s2.residual_shift):
+        flags |= em.F_RES_SHIFTS
+
+    rlsh_r = s2.residual_lsh_res if s2.residual_lsh_res is not None else s2.residual_shift
+
+    hdr = em.PacketHeader(
+        op=em.OP_FUSED_CONV,
+        k=3,
+        stride=1,
+        ncin=2,
+        nco=em.OUT_BLOCKS,
+        flags=flags,
+        shift_out=s2.shift_out,
+        hs=s2.hswish.params if s2.hswish else None,
+        rsh=s2.residual_shift,
+        count_out=1,
+        count_acc=0,
+        phases=(y_quad, x0, H, W),
+        rows_in=16,
+        cols_in=25,
+        plane_bytes=3200,
+        rlsh_m=s2.residual_lsh_main,
+        rlsh_r=rlsh_r,
+    )
+    words = hdr.words()
+    w1_off = 256
+    w2_off = 2656
+    words[em.H_A3] = w1_off
+    words[em.H_A4] = w2_off
+
+    pkt = np.zeros(em.W_BYTES, dtype=np.uint8)
+    pkt[:em.HDR_BYTES] = words.view(np.uint8)
+
+    # Stage 2 Bias (128 bytes at offset 128)
+    bacc2 = s2.bias_acc()
+    bias2 = np.zeros(32, dtype=np.int32)
+    bias2[:s2.cout] = bacc2[:s2.cout]
+    pkt[em.BIAS_OFFSET:em.BIAS_OFFSET + 128] = bias2.view(np.uint8)
+
+    # Stage 1 Block at w1_off (256)
+    hs1 = s1.hswish.params
+    s1_params = np.array([
+        hs1.a1, hs1.b1, hs1.s1, hs1.qmax, hs1.k2, hs1.s2, hs1.ysh, s1.shift_out
+    ], dtype=np.int32)
+    pkt[w1_off:w1_off + 32] = s1_params.view(np.uint8)
+
+    bacc1 = s1.bias_acc()
+    b1 = np.zeros(16, dtype=np.int32)
+    b1[:s1.cout] = bacc1[:s1.cout]
+    pkt[w1_off + 32:w1_off + 96] = b1.view(np.uint8)
+
+    w1 = np.zeros((9, 2, 2, 8, 8), dtype=np.int8)
+    wt1 = np.transpose(s1.weights.reshape(s1.cout, s1.cin, 9), (2, 1, 0))
+    for ci in range(s1.cin):
+        for co in range(s1.cout):
+            w1[:, ci // 8, co // 8, ci % 8, co % 8] = wt1[:, ci, co]
+    pkt[w1_off + 96:w1_off + 96 + 2304] = w1.ravel().view(np.uint8)
+
+    # Stage 2 weights at w2_off (2656)
+    w2 = np.zeros((9, 2, 4, 8, 8), dtype=np.int8)
+    wt2 = np.transpose(s2.weights.reshape(s2.cout, s2.cin, 9), (2, 1, 0))
+    for ci in range(s2.cin):
+        for co in range(s2.cout):
+            w2[:, ci // 8, co // 8, ci % 8, co % 8] = wt2[:, ci, co]
+    pkt[w2_off:w2_off + 4608] = w2.ravel().view(np.uint8)
+
+    return pkt
 
 
 class PacketStore:
@@ -828,7 +909,7 @@ def schedule_layer_coarse(ir: GraphIR, ws: Workspace, layer, store: PacketStore,
             # run_fills[run][round] = merged fill patterns of that round (single chunk: one entry per run)
             run_fills: List[List[List[DmaPattern]]] = []
             for run in runs:
-                if single:
+                if single and not isinstance(layer, FusedConvLayer):
                     strips = [p for q, x0 in run
                               for p in quad_patterns(ws, ir, layer, chunks[0], q, x0, g, coarse=True)]
                     run_fills.append([merge_runs(strips)])
@@ -851,6 +932,19 @@ def schedule_layer_coarse(ir: GraphIR, ws: Workspace, layer, store: PacketStore,
         if not entries:
             continue
         items_of = [sum(len(f) for per_round in rf for f in per_round) for _, _, _, rf in entries]
+        if isinstance(layer, FusedConvLayer):
+            for k, (g, mine, runs, run_fills) in enumerate(entries):
+                for run, per_round in zip(runs, run_fills):
+                    held_items = sum(len(f) for f in per_round)
+                    programs[c].append(("o", run_drain(ws, layer, g, run), held_items))
+                    for (q, x0), fills in zip(run, per_round):
+                        pkt = fused_packet(layer, q, x0, t.height, t.width)
+                        off = store.add(pkt)
+                        programs[c].append(("w", off, em.W_BYTES, len(fills)))
+                        for f in fills:
+                            programs[c].append(("A", f))
+                        n_w += 1
+            continue
         if single:
             pkts = [pool_packet(chunks[0]) if isinstance(layer, PoolLayer)
                     else conv_packet(layer, g, chunks[0], count_out=len(mine), count_acc=0, trim_ncin=trim_ncin)

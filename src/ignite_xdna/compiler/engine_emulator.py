@@ -23,8 +23,8 @@ BIAS_OFFSET = 128
 W_OFFSET = 256
 W_MAX_BYTES = W_BYTES - W_OFFSET  # 9,216
 
-OP_NOP, OP_CONV, OP_MAXPOOL, OP_RESIDUAL = 0, 1, 2, 3
-F_LOAD_PSUM, F_EMIT, F_HSWISH, F_UP2, F_HOLD, F_RES_SHIFTS, F_SIGMOID = 1, 2, 4, 8, 16, 32, 64
+OP_NOP, OP_CONV, OP_MAXPOOL, OP_RESIDUAL, OP_FUSED_CONV = 0, 1, 2, 3, 4
+F_LOAD_PSUM, F_EMIT, F_HSWISH, F_UP2, F_HOLD, F_RES_SHIFTS, F_SIGMOID, F_RESIDUAL = 1, 2, 4, 8, 16, 32, 64, 128
 SIGMOID_LINES = 4   # line 1 in H_A1/H_B1, lines 2-4 in H_A2..H_B4 (the header's last six words)
 
 TILE_ROWS = 5
@@ -324,6 +324,91 @@ def run_packet(wpkt: np.ndarray, apkt: np.ndarray, state: CoreState, core_row: i
         if hdr.flags & F_HSWISH:  # activation after the add
             q = hswish_epilogue(q, hdr.hs)
         out[:] = q
+    elif hdr.op == OP_FUSED_CONV:
+        # Fused Stage 1 (Conv3x3 + HardSwish) -> Stage 2 (Conv3x3 + HardSwish + Residual)
+        y_quad, x0, H, W = hdr.phases
+        y0 = y_quad + TILE_ROWS * core_row
+        r_start = 1 if y0 == 0 else 0
+        r_end = 6 if y0 + TILE_ROWS >= H else 7
+        c_start = 1 if x0 == 0 else 0
+        c_end = 21 if x0 + TILE_COLS >= W else 22
+
+        w_words = wpkt.view(np.int32)
+        w1_off = int(w_words[H_A3])
+        s1_bytes = wpkt[w1_off:w1_off + 2400]
+        s1_params = s1_bytes[:32].view(np.int32)
+        hs1 = HardSwishParams(
+            a1=int(s1_params[0]), b1=int(s1_params[1]), s1=int(s1_params[2]),
+            qmax=int(s1_params[3]), k2=int(s1_params[4]), s2=int(s1_params[5]),
+            ysh=int(s1_params[6]),
+        )
+        shift_out1 = int(s1_params[7])
+        b1 = s1_bytes[32:96].view(np.int32)
+        w1 = s1_bytes[96:96 + 2304].view(np.int8).reshape(9, 2, 2, 8, 8)
+
+        mid = np.full((2, 7, 24, 8), 128, dtype=np.uint8)
+        cols_in = hdr.cols_in
+        plane_bytes = hdr.plane_bytes
+
+        for rm in range(7):
+            if rm < r_start or rm >= r_end:
+                mid[:, rm, :, :] = 128
+                continue
+            for g in range(6):
+                cm0 = 18 if g == 5 else g * 4
+                acc0 = np.full((4, 8), b1[:8], dtype=np.int64)
+                acc1 = np.full((4, 8), b1[8:16], dtype=np.int64)
+                for ky in range(3):
+                    for kx in range(3):
+                        tap = ky * 3 + kx
+                        for c in range(2):
+                            aoff = ((rm + ky) * cols_in + cm0 + kx) * 8
+                            plane = a[c * plane_bytes:(c + 1) * plane_bytes]
+                            av = plane[aoff:aoff + 32].reshape(4, 8)
+                            acc0 += av.astype(np.int64) @ w1[tap, c, 0].astype(np.int64)
+                            acc1 += av.astype(np.int64) @ w1[tap, c, 1].astype(np.int64)
+                q0 = sat_u8(rne_shift(acc0, shift_out1))
+                q0 = hswish_epilogue(q0, hs1)
+                q1 = sat_u8(rne_shift(acc1, shift_out1))
+                q1 = hswish_epilogue(q1, hs1)
+                mid[0, rm, cm0:cm0 + 4, :] = q0
+                mid[1, rm, cm0:cm0 + 4, :] = q1
+            if c_start == 1:
+                mid[:, rm, 0, :] = 128
+            if c_end == 21:
+                mid[:, rm, 21, :] = 128
+
+        w2_off = int(w_words[H_A4])
+        w2 = wpkt[w2_off:w2_off + 4608].view(np.int8).reshape(9, 2, 4, 8, 8)
+        bias2 = bias
+
+        for r in range(TILE_ROWS):
+            for g in range(5):
+                g0 = g * 4
+                acc = np.zeros((4, 4, 8), dtype=np.int64)
+                for b in range(4):
+                    acc[b, :, :] = bias2[b * 8:(b + 1) * 8]
+                for ky in range(3):
+                    for kx in range(3):
+                        tap = ky * 3 + kx
+                        mid_r = r + ky
+                        mid_c = g0 + kx
+                        for c in range(2):
+                            av = mid[c, mid_r, mid_c:mid_c + 4, :].reshape(4, 8)
+                            for b in range(4):
+                                acc[b, :, :] += av.astype(np.int64) @ w2[tap, c, b].astype(np.int64)
+                for b in range(4):
+                    q = sat_u8(rne_shift(acc[b], hdr.shift_out))
+                    if hdr.flags & F_HSWISH:
+                        q = hswish_epilogue(q, hdr.hs)
+                    if (hdr.flags & F_RESIDUAL) and b < 2:
+                        res_off = ((2 + r) * cols_in + 2 + g0) * 8
+                        qres = a[b * plane_bytes + res_off:b * plane_bytes + res_off + 32].reshape(4, 8)
+                        if hdr.flags & F_RES_SHIFTS:
+                            q = residual_combine(q, qres, hdr.rsh, hdr.rlsh_m, hdr.rlsh_r)
+                        else:
+                            q = residual_combine(q, qres, hdr.rsh)
+                    out[b, r, g0:g0 + 4, :] = q
     elif hdr.op == OP_NOP:
         pass
     else:
