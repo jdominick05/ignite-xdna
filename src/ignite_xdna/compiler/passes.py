@@ -230,3 +230,71 @@ def match_classification_head(G: Any) -> Optional[ClassificationHead]:
         output_f=out_f,
         consumed_nodes=consumed_nodes,
     )
+
+
+def match_stencil_fusion(ir: Any) -> Any:
+    """Fuse eligible adjacent Conv3x3 layers into FusedConvLayers.
+
+    Eliminates intermediate feature map writes and reads from DDR by retaining
+    intermediate activations in local core memory (psum HOLD area).
+    """
+    from ignite_xdna.compiler.graph_ir import ConvLayer, FusedConvLayer, GraphIR
+
+    consumers: Dict[str, List[str]] = {}
+    for L in ir.layers:
+        if hasattr(L, "inputs"):
+            for s in (L.inputs if isinstance(L.inputs, list) else [L.inputs]):
+                consumers.setdefault(s.tensor, []).append(L.name)
+        if hasattr(L, "residual") and L.residual is not None:
+            consumers.setdefault(L.residual.tensor, []).append(L.name)
+
+    graph_outputs = {out[1] for out in ir.outputs}
+
+    new_layers: List[object] = []
+    removed_tensors: Set[str] = set()
+    i = 0
+    while i < len(ir.layers):
+        if i < len(ir.layers) - 1:
+            L1 = ir.layers[i]
+            L2 = ir.layers[i + 1]
+            if (isinstance(L1, ConvLayer) and isinstance(L2, ConvLayer)
+                    and L1.k == 3 and L1.stride == 1 and L1.pad == 1
+                    and L2.k == 3 and L2.stride == 1 and L2.pad == 1
+                    and L1.cin <= 16 and L1.cout <= 16 and L2.cout <= 16
+                    and consumers.get(L1.output, []) == [L2.name]
+                    and L1.output not in graph_outputs):
+                res_ok = (L2.residual is None) or (
+                    len(L1.inputs) == 1 and L2.residual.tensor == L1.inputs[0].tensor
+                    and L2.residual.block_offset == L1.inputs[0].block_offset
+                    and L2.residual.blocks == L1.inputs[0].blocks
+                )
+                if res_ok:
+                    fused = FusedConvLayer(
+                        name=f"{L1.name}+{L2.name}",
+                        index=len(new_layers),
+                        stage1=L1,
+                        stage2=L2,
+                        output=L2.output,
+                    )
+                    new_layers.append(fused)
+                    removed_tensors.add(L1.output)
+                    i += 2
+                    continue
+        new_layers.append(ir.layers[i])
+        i += 1
+
+    for idx, L in enumerate(new_layers):
+        L.index = idx
+
+    new_tensors = {name: t for name, t in ir.tensors.items() if name not in removed_tensors}
+
+    return GraphIR(
+        tensors=new_tensors,
+        layers=new_layers,
+        input=ir.input,
+        outputs=ir.outputs,
+        adjacency=ir.adjacency,
+        output_transforms=ir.output_transforms,
+        silu_sigmoid=ir.silu_sigmoid,
+    )
+

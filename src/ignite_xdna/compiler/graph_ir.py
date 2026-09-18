@@ -132,6 +132,91 @@ class ConvLayer:
 
 
 @dataclass
+class FusedConvLayer:
+    """Inter-layer spatial stencil fused convolution (Stage 1 Conv3x3 + Stage 2 Conv3x3 + Residual)."""
+    name: str
+    index: int
+    stage1: ConvLayer
+    stage2: ConvLayer
+    output: str
+
+    @property
+    def inputs(self) -> List[Segment]:
+        return self.stage1.inputs
+
+    @property
+    def in_scale(self) -> float:
+        return self.stage1.in_scale
+
+    @property
+    def k(self) -> int:
+        return 3
+
+    @property
+    def stride(self) -> int:
+        return 1
+
+    @property
+    def pad(self) -> int:
+        return 2
+
+    @property
+    def cin(self) -> int:
+        return self.stage1.cin
+
+    @property
+    def cout(self) -> int:
+        return self.stage2.cout
+
+    @property
+    def in_blocks(self) -> int:
+        return self.stage1.in_blocks
+
+    @property
+    def act(self) -> Optional[str]:
+        return self.stage2.act
+
+    @property
+    def hswish(self) -> Optional[HardSwishFit]:
+        return self.stage2.hswish
+
+    @property
+    def sigmoid(self) -> Optional[object]:
+        return self.stage2.sigmoid
+
+    @property
+    def residual(self) -> Optional[Segment]:
+        return self.stage2.residual
+
+    @property
+    def residual_shift(self) -> int:
+        return self.stage2.residual_shift
+
+    @property
+    def residual_lsh_main(self) -> int:
+        return self.stage2.residual_lsh_main
+
+    @property
+    def residual_lsh_res(self) -> Optional[int]:
+        return self.stage2.residual_lsh_res
+
+    @property
+    def conv_scale(self) -> float:
+        return self.stage2.conv_scale
+
+    @property
+    def act_scale(self) -> Optional[float]:
+        return self.stage2.act_scale
+
+    @property
+    def shift_out(self) -> int:
+        return self.stage2.shift_out
+
+    def bias_acc(self) -> np.ndarray:
+        return self.stage2.bias_acc()
+
+
+@dataclass
 class PoolLayer:
     name: str
     index: int
