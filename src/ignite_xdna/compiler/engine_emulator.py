@@ -23,7 +23,7 @@ BIAS_OFFSET = 128
 W_OFFSET = 256
 W_MAX_BYTES = W_BYTES - W_OFFSET  # 9,216
 
-OP_NOP, OP_CONV, OP_MAXPOOL, OP_RESIDUAL, OP_FUSED_CONV = 0, 1, 2, 3, 4
+OP_NOP, OP_CONV, OP_MAXPOOL, OP_RESIDUAL, OP_FUSED_CONV, OP_MUL, OP_SCALE, OP_POOL = 0, 1, 2, 3, 4, 5, 6, 7
 F_LOAD_PSUM, F_EMIT, F_HSWISH, F_UP2, F_HOLD, F_RES_SHIFTS, F_SIGMOID, F_RESIDUAL = 1, 2, 4, 8, 16, 32, 64, 128
 SIGMOID_LINES = 4   # line 1 in H_A1/H_B1, lines 2-4 in H_A2..H_B4 (the header's last six words)
 
@@ -47,6 +47,9 @@ GEOM_K3S1 = (8, 25, 1600, 4)
 GEOM_K3S2 = (16, 50, 6400, 1)      # 11 rows x 41 pixels needed, contiguous rows
 GEOM_POOL = (16, 25, 3200, 2)
 GEOM_RESIDUAL = (5, 20, 800, 4)
+# OP_SCALE coefficients: 4 blocks x 32 int16 lanes (8 channel values replicated 4x per block)
+# at W_OFFSET in the W packet — 512 bytes, the same region a conv packet's weights occupy.
+SCALE_COEF_BYTES = OUT_BLOCKS * 32 * 2
 # Raw layout of an up2 source packet before expansion: 10 blocks of [4][20][8].
 UP2_SRC_ROWS, UP2_SRC_COLS, UP2_SRC_BLOCK_BYTES = 4, 20, 640
 
@@ -196,22 +199,47 @@ def residual_combine(qm: np.ndarray, qr: np.ndarray, rsh: int, lsh_m: int = 0,
     return sat_u8(y + 128)
 
 
-def pack_w_packet(hdr: PacketHeader, bias: np.ndarray, weights: Optional[np.ndarray]) -> np.ndarray:
-    """Serialize a W packet. ``weights`` is int8 [taps][ncin][4 blocks][8 ci][8 co]."""
+def mul_combine(qm: np.ndarray, qr: np.ndarray, ysh: int) -> np.ndarray:
+    """Elementwise product of the uint8 held tile ``qm`` and the uint8 operand tile ``qr``:
+    ``sat_u8(sat16(rne((tm * tr) >> ysh)) + 128)`` with centered operands (see engine.cc OP_MUL)."""
+    tm = qm.astype(np.int64) - 128
+    tr = qr.astype(np.int64) - 128
+    y = sat_i16(rne_shift(tm * tr, ysh))
+    return sat_u8(y + 128)
+
+
+def scale_apply(t_tile: np.ndarray, coef: np.ndarray, ysh: int) -> np.ndarray:
+    """Per-channel scalar gain on the centered int64 tile ``t_tile`` [blocks][pixels]:
+    ``sat_u8(sat16(rne((t * co) >> ysh)) + 128)`` with int16 coefficients (see engine.cc OP_SCALE)."""
+    y = sat_i16(rne_shift(t_tile * coef, ysh))
+    return sat_u8(y + 128)
+
+
+def pack_w_packet(hdr: PacketHeader, bias: np.ndarray, weights: Optional[np.ndarray],
+                  extra: Optional[np.ndarray] = None) -> np.ndarray:
+    """Serialize a W packet. ``weights`` is int8 [taps][ncin][4 blocks][8 ci][8 co]; ``extra`` is a raw
+    byte payload for the same W_OFFSET region (an OP_SCALE packet's int16 coefficients)."""
     pkt = np.zeros(W_BYTES, dtype=np.uint8)
     pkt[:HDR_BYTES] = hdr.words().view(np.uint8)
     b = np.zeros(32, dtype=np.int32)
     bias = np.asarray(bias, dtype=np.int32).ravel()
     b[:bias.size] = bias
     pkt[BIAS_OFFSET:BIAS_OFFSET + 128] = b.view(np.uint8)
+    if weights is not None and extra is not None:
+        raise ValueError("a packet carries weights or a raw payload, not both")
     if weights is not None:
         w = np.asarray(weights, dtype=np.int8)
         expected = (hdr.k * hdr.k, hdr.ncin, OUT_BLOCKS, 8, 8)
         if w.shape != expected:
             raise ValueError(f"weights shape {w.shape} != {expected}")
         raw = w.ravel().view(np.uint8)
+    elif extra is not None:
+        raw = np.asarray(extra, dtype=np.uint8).ravel()
+    else:
+        raw = None
+    if raw is not None:
         if raw.size > W_MAX_BYTES:
-            raise ValueError(f"{raw.size} weight bytes exceed the {W_MAX_BYTES}-byte packet budget")
+            raise ValueError(f"{raw.size} payload bytes exceed the {W_MAX_BYTES}-byte packet budget")
         pkt[W_OFFSET:W_OFFSET + raw.size] = raw
     return pkt
 
@@ -324,6 +352,39 @@ def run_packet(wpkt: np.ndarray, apkt: np.ndarray, state: CoreState, core_row: i
         if hdr.flags & F_HSWISH:  # activation after the add
             q = hswish_epilogue(q, hdr.hs)
         out[:] = q
+    elif hdr.op == OP_MUL:
+        hs = hdr.hs or HardSwishParams(0, 0, 0, 0, 0, 0, 0)
+        res = a[:OUT_BLOCKS * OUT_BLOCK_BYTES].reshape(OUT_BLOCKS, TILE_ROWS, TILE_COLS, 8)
+        out[:] = mul_combine(state.hold, res, hs.ysh)
+    elif hdr.op == OP_SCALE:
+        hs = hdr.hs or HardSwishParams(0, 0, 0, 0, 0, 0, 0)
+        coef = np.asarray(wpkt)[W_OFFSET:W_OFFSET + SCALE_COEF_BYTES].view(np.int16).reshape(OUT_BLOCKS, 32)
+        co = np.tile(coef, (1, OUT_BLOCK_BYTES // 32)).reshape(OUT_BLOCKS, TILE_ROWS, TILE_COLS, 8)
+        t = a[:OUT_BLOCKS * OUT_BLOCK_BYTES].reshape(OUT_BLOCKS, TILE_ROWS, TILE_COLS, 8).astype(np.int64) - 128
+        q = scale_apply(t, co, hs.ysh)
+        if hdr.flags & F_EMIT:
+            out[:] = q
+        else:  # the core's ternary: without F_EMIT the tile lands in the hold buffer
+            state.hold[:] = q
+    elif hdr.op == OP_POOL:
+        # k x k stride-1 average pool on the max pool's two-packet geometry; the reciprocal
+        # K2/S2 divides the window sum. Mirrors avgpool_tile's int16 accumulation (k <= 5).
+        hs = hdr.hs or HardSwishParams(0, 0, 0, 0, 0, 0, 0)
+        if hdr.k > 5:
+            raise ValueError(f"average pool window {hdr.k}x{hdr.k} exceeds the int16 sum bound (k <= 5)")
+        pooled = np.zeros((2, TILE_ROWS, TILE_COLS, 8), dtype=np.uint8)
+        for b in range(2):
+            plane = a[b * hdr.plane_bytes:(b + 1) * hdr.plane_bytes].reshape(hdr.rows_in, hdr.cols_in, 8)
+            sums = np.zeros((TILE_ROWS, TILE_COLS, 8), dtype=np.int64)
+            for dy in range(hdr.k):
+                for dx in range(hdr.k):
+                    sums += plane[dy:dy + TILE_ROWS, dx:dx + TILE_COLS, :].astype(np.int64)
+            pooled[b] = sat_u8(rne_shift(sums * hs.k2, hs.s2))
+        if emit:
+            out[0:2] = state.hold[0:2]
+            out[2:4] = pooled
+        else:
+            state.hold[0:2] = pooled
     elif hdr.op == OP_FUSED_CONV:
         # Fused Stage 1 (Conv3x3 + HardSwish) -> Stage 2 (Conv3x3 + HardSwish + Residual)
         y_quad, x0, H, W = hdr.phases

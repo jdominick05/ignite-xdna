@@ -1,0 +1,6 @@
+# OP_POOL dispatched alone with the four "#pragma clang loop unroll(disable)" lines removed from the copy
+# (the committed engine.cc keeps them; this prices what the constant-trip unrolling of the pool row/group loops costs)
+# machine: DESKTOP-CBL5NUA  utc: 20260918T041050Z  branch: program-ram-epilogue-ops
+# tool: tools/engine_epilogue_variants.py::census on the stripped copy below
+# ---- output ----
+engine.cc: .text 16464 B, 3645 instructions, accumulator stack moves 0; stack vector moves vlda wh 9, vlda wl 10, vst wh 6, vst wl 6

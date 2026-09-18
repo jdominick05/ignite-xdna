@@ -656,6 +656,81 @@ class TestSpatialStencilFusion(unittest.TestCase):
         self.assertEqual(int(np.count_nonzero(diff)), 0)
 
 
+class TestProgramRamEpilogueOps(unittest.TestCase):
+    """The elementwise Mul, per-channel scalar Scale and k x k average Pool opcodes added under
+    the program-RAM budget: the emulator's integer arithmetic matches a direct NumPy reference,
+    computed from the documented contracts, on random tiles."""
+
+    def test_mul_packet_matches_direct_reference(self):
+        rng = np.random.default_rng(20260917)
+        hold = rng.integers(0, 256, size=(4, 5, 20, 8), dtype=np.uint8)
+        for ysh in (0, 6, 11):
+            hdr = em.PacketHeader(op=em.OP_MUL, ncin=4, nco=4, flags=em.F_EMIT,
+                                  hs=em.HardSwishParams(0, 0, 0, 0, 0, 0, ysh), count_out=1)
+            w = em.pack_w_packet(hdr, np.zeros(32, np.int32), None)
+            a = rng.integers(0, 256, size=em.A_BYTES, dtype=np.uint8)
+            st = em.CoreState()
+            st.hold[:] = hold
+            got = em.run_packet(w, a, st, 0)
+            tm = hold.astype(np.int64) - 128
+            tr = a[:4 * 800].astype(np.int64).reshape(4, 5, 20, 8) - 128
+            # Products are |.| <= 16,384 and the shifted result is exact as a binary fraction,
+            # so numpy's round-half-to-even is the core's conv_even.
+            ref = np.clip(np.round(tm * tr / (1 << ysh)).astype(np.int64) + 128, 0, 255)
+            self.assertTrue(np.array_equal(got.reshape(4, 5, 20, 8), ref.astype(np.uint8)), ysh)
+
+    def test_scale_packet_matches_direct_reference(self):
+        rng = np.random.default_rng(2026)
+        coef_ch = rng.integers(-2048, 2048, size=(4, 8), dtype=np.int64)  # one int16-range gain per channel
+        coef32 = np.concatenate([np.tile(coef_ch[b], (4, 1)).ravel()[None, :] for b in range(4)],
+                                axis=0).astype(np.int16)  # [4 blocks][32 lanes], channel = lane % 8
+        hdr = em.PacketHeader(op=em.OP_SCALE, ncin=4, nco=4, flags=em.F_EMIT,
+                              hs=em.HardSwishParams(0, 0, 0, 0, 0, 0, 5), count_out=1)
+        w = em.pack_w_packet(hdr, np.zeros(32, np.int32), None, extra=coef32.view(np.uint8).ravel())
+        a = rng.integers(0, 256, size=em.A_BYTES, dtype=np.uint8)
+        got = em.run_packet(w, a, em.CoreState(), 0)
+        t = a[:4 * 800].astype(np.int64).reshape(4, 5, 20, 8) - 128
+        co = np.tile(coef32, (1, 25)).reshape(4, 5, 20, 8)
+        ref = np.clip(np.round(t * co / 32).astype(np.int64) + 128, 0, 255)  # ysh = 5
+        self.assertTrue(np.array_equal(got.reshape(4, 5, 20, 8), ref.astype(np.uint8)))
+
+    def test_pool_packet_pair_matches_direct_reference(self):
+        rng = np.random.default_rng(4242)
+        # (k, K2, S2): the true 1/25 and 1/9 reciprocals, and the 2x reciprocal the synthetic
+        # silicon scenario uses — 5243/2^16 ≈ 1/12.5, whose bright-region results exceed 255 and
+        # engage the uint8 saturation.
+        for k, k2, s2 in ((5, 2621, 16), (3, 7282, 16), (5, 5243, 16)):
+            hdr_h = em.PacketHeader(op=em.OP_POOL, k=k, ncin=2, nco=4, flags=em.F_HOLD,
+                                    hs=em.HardSwishParams(0, 0, 0, 0, k2, s2, 0), count_out=0,
+                                    count_acc=1, rows_in=16, cols_in=25, plane_bytes=3200)
+            hdr_e = em.PacketHeader(op=em.OP_POOL, k=k, ncin=2, nco=4, flags=em.F_EMIT,
+                                    hs=em.HardSwishParams(0, 0, 0, 0, k2, s2, 0), count_out=1,
+                                    rows_in=16, cols_in=25, plane_bytes=3200)
+            st = em.CoreState()
+            a_h = rng.integers(0, 256, size=em.A_BYTES, dtype=np.uint8)
+            a_e = rng.integers(0, 256, size=em.A_BYTES, dtype=np.uint8)
+            self.assertIsNone(em.run_packet(em.pack_w_packet(hdr_h, np.zeros(32, np.int32), None),
+                                            a_h, st, 0))
+            got = em.run_packet(em.pack_w_packet(hdr_e, np.zeros(32, np.int32), None), a_e, st, 0)
+
+            def pooled(a):
+                """Both planes of one pool packet, pooled — what the core leaves in blocks 0-1
+                of the hold packet and blocks 2-3 of the emit packet."""
+                res = np.zeros((2, 5, 20, 8), dtype=np.uint8)
+                for b in range(2):
+                    plane = a[b * 3200:(b + 1) * 3200].reshape(16, 25, 8).astype(np.int64)
+                    sums = np.zeros((5, 20, 8), dtype=np.int64)
+                    for dy in range(k):
+                        for dx in range(k):
+                            sums += plane[dy:dy + 5, dx:dx + 20, :]
+                    res[b] = np.clip(np.round(sums * k2 / (1 << s2)).astype(np.int64),
+                                     0, 255).astype(np.uint8)
+                return res
+
+            ref = np.concatenate([pooled(a_h), pooled(a_e)])
+            self.assertTrue(np.array_equal(got.reshape(4, 5, 20, 8), ref), k)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
 

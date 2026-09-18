@@ -1,0 +1,11 @@
+# program-RAM census of the persistent conv-engine core (kernels/aie2/conv_engine/engine.cc)
+# machine: DESKTOP-CBL5NUA  utc: 20260918T040616Z  branch: program-ram-epilogue-ops  head: 6d9306c
+# tool: tools/engine_epilogue_variants.py::census via tools/engine_opcode_census.py (Peano aie2 -O2, object only, no device)
+# rows: the committed program with each new opcode dispatched alone, and all three together
+# cmd: bash scripts/research-iron.sh tools/engine_opcode_census.py
+# ---- output ----
+none   .text 13424 B, 3146 instructions, accumulator stack moves 0; stack vector moves vlda wh 9, vlda wl 10, vst wh 6, vst wl 6
+MUL    .text 13648 B, 3197 instructions, accumulator stack moves 0; stack vector moves vlda wh 9, vlda wl 10, vst wh 6, vst wl 6
+SCALE  .text 13888 B, 3237 instructions, accumulator stack moves 0; stack vector moves vlda wh 9, vlda wl 10, vst wh 6, vst wl 6
+POOL   .text 14304 B, 3294 instructions, accumulator stack moves 0; stack vector moves vlda wh 9, vlda wl 10, vst wh 6, vst wl 6
+all    .text 15280 B, 3499 instructions, accumulator stack moves 0; stack vector moves vlda wh 8, vlda wl 9, vst wh 7, vst wl 7

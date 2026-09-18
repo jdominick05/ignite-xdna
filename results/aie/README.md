@@ -1246,3 +1246,12 @@ measured. Read the retractions above before quoting it. Full treatment in
 | [classification_head_vs_amd_phoenix_20260917T2350Z.log](classification_head_vs_amd_phoenix_20260917T2350Z.log) | Classification head silicon benchmark: Ignition native 1x1 convolution lowering on Phoenix NPU Device 0 (1.38 ms end-to-end, 1.14 ms NPU dispatch mean, 0 host segments, bit-exact across 1,000 ImageNet classes) vs AMD Ryzen AI 1.7.1 Vitis AI EP runtime crash (`runner_requests_queue.cpp:178: Failed to create runner: invalid vector subscript`, 0 NPU nodes, 100% CPU fallback at 0.67-0.71 ms). |
 
 
+
+
+## Program-RAM epilogue opcodes (2026-09-18, Desktop 2)
+
+| Log | Outcome |
+|---|---|
+| [program_ram_epilogue_census_phoenix_20260918T040616Z.log](program_ram_epilogue_census_phoenix_20260918T040616Z.log) | Per-opcode .text census of the persistent conv engine (tools/engine_opcode_census.py, Peano object-only): baseline 13,424 B; OP_MUL 13,648 (+224), OP_SCALE 13,888 (+464), OP_POOL 14,304 (+880), all three 15,280 B (+1,856) with accumulator stack moves 0 and 1,104 B still free of 16,384 - [BENCHMARKS](../../docs/BENCHMARKS.md#three-epilogue-opcodes-under-the-program-ram-budget-elementwise-mul-per-channel-scale-and-5x5-average-pool-bit-exact-on-silicon-2026-09-18-desktop-2) |
+| [program_ram_epilogue_census_pool_no_pragma_phoenix_20260918T041050Z.log](program_ram_epilogue_census_pool_no_pragma_phoenix_20260918T041050Z.log) | What the unroll decision costs: OP_POOL dispatched alone with the unroll pragmas stripped compiles to 16,464 B (+3,040, over the budget by itself); the committed pragmas bring it to +880 B - [BENCHMARKS](../../docs/BENCHMARKS.md#three-epilogue-opcodes-under-the-program-ram-budget-elementwise-mul-per-channel-scale-and-5x5-average-pool-bit-exact-on-silicon-2026-09-18-desktop-2) |
+| [program_ram_epilogue_ops_phoenix_20260918T040329Z.log](program_ram_epilogue_ops_phoenix_20260918T040329Z.log) | The three new opcodes on silicon: xclbin built from the censed 15,280 B source (kernel_sha256 bf28f95a...), the 19-round synthetic sequence (was 16) through all sixteen cores, three iterations, 0 mismatching bytes against the emulator (972,800 output bytes per iteration), 2.284 / 0.805 / 0.753 ms, xrt-smi no contexts pre- and post-run - [BENCHMARKS](../../docs/BENCHMARKS.md#three-epilogue-opcodes-under-the-program-ram-budget-elementwise-mul-per-channel-scale-and-5x5-average-pool-bit-exact-on-silicon-2026-09-18-desktop-2) |

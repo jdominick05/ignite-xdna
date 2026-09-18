@@ -6,9 +6,11 @@
 
 The synthetic sequence drives every packet kind the core program implements
 (3x3 stride 1 with HardSwish, chunked 1x1 with partial sums, 3x3 stride 2,
-2x upsampling, 5x5 max pool, a residual packet and one activated after its add, and the sigmoid SiLU
+2x upsampling, 5x5 max pool, a residual packet and one activated after its add, the sigmoid SiLU
 epilogue on an identity convolution fed every uint8 value, on a 3x3 convolution and on a held tile before a
-residual add) through all sixteen cores and compares every output byte with the NumPy emulator.
+residual add, a general elementwise multiply of the held tile by the A packet, a per-channel scalar
+gain, and a 5x5 stride-1 average pool) through all sixteen cores and compares every output byte with
+the NumPy emulator.
 """
 import argparse
 import hashlib
@@ -109,6 +111,32 @@ def synthetic_scenarios(seed: int):
     hdr = em.PacketHeader(op=em.OP_MAXPOOL, ncin=2, nco=4, flags=em.F_EMIT | em.F_LOAD_PSUM, count_out=1,
                           rows_in=16, cols_in=25, plane_bytes=3200)
     scenarios.append(("maxpool_emit", em.pack_w_packet(hdr, np.zeros(32, np.int32), None), 1, 0))
+    # 5b. General elementwise multiply: a producer holds a linear tile, the next A packet's tile is
+    #     multiplied into it lane-wise (attention gating, SE reweight).
+    hdr = em.PacketHeader(op=em.OP_CONV, k=1, stride=1, ncin=8, nco=4, flags=em.F_HOLD, shift_out=7,
+                          count_out=0, count_acc=1, rows_in=5, cols_in=20, plane_bytes=800)
+    scenarios.append(("k1_hold_for_mul", em.pack_w_packet(hdr, rand_bias(7), rand_w(1, 8)), 0, 1))
+    hdr = em.PacketHeader(op=em.OP_MUL, ncin=4, nco=4, flags=em.F_EMIT,
+                          hs=em.HardSwishParams(0, 0, 0, 0, 0, 0, 6), count_out=1)
+    scenarios.append(("mul_held_by_a", em.pack_w_packet(hdr, np.zeros(32, np.int32), None), 1, 0))
+    # 5c. Per-channel scalar gain over an A packet's tile: int16 coefficients [4 blocks][32 lanes]
+    #     in the W packet's weight region, requantization shift 5.
+    coef = rng.integers(-1024, 1024, size=(4, 32), dtype=np.int16)
+    hdr = em.PacketHeader(op=em.OP_SCALE, ncin=4, nco=4, flags=em.F_EMIT,
+                          hs=em.HardSwishParams(0, 0, 0, 0, 0, 0, 5), count_out=1)
+    scenarios.append(("scale_per_channel", em.pack_w_packet(hdr, np.zeros(32, np.int32), None,
+                                                            extra=coef.view(np.uint8).ravel()), 1, 0))
+    # 5d. 5x5 stride-1 average pool, the max pool's hold/emit pair, q = rne(sum * 5243 >> 16).
+    #     The constant is deliberately 2x the true 1/25 reciprocal so bright regions exceed 255 and the
+    #     uint8 saturation engages; bit-exactness is against the emulator's integer contract.
+    hdr = em.PacketHeader(op=em.OP_POOL, k=5, ncin=2, nco=4, flags=em.F_HOLD,
+                          hs=em.HardSwishParams(0, 0, 0, 0, 5243, 16, 0), count_out=0, count_acc=1,
+                          rows_in=16, cols_in=25, plane_bytes=3200)
+    scenarios.append(("avgpool_hold", em.pack_w_packet(hdr, np.zeros(32, np.int32), None), 0, 1))
+    hdr = em.PacketHeader(op=em.OP_POOL, k=5, ncin=2, nco=4, flags=em.F_EMIT,
+                          hs=em.HardSwishParams(0, 0, 0, 0, 5243, 16, 0), count_out=1,
+                          rows_in=16, cols_in=25, plane_bytes=3200)
+    scenarios.append(("avgpool_emit", em.pack_w_packet(hdr, np.zeros(32, np.int32), None), 1, 0))
     # 6. SiLU through the sigmoid epilogue (F_SIGMOID), applied by the core to the finished tile after the passes.
     #    Constants of YOLOv8n's most common SiLU scale pair, and of a pair whose fourth line has a zero slope.
     sig_a = fit_sigmoid(1 / 16, 1 / 32).params
@@ -354,8 +382,9 @@ class EngineEmulatorOffline(unittest.TestCase):
         expected = emulate_plan(plan)
         self.assertEqual(len(expected), COLS)
         # 3 + 1 + 2 + 1 (residual) + 1 (residual then HardSwish) + 1 (pool emit) output rounds per column,
-        # then 2 + 2 (identity sigmoid) + 2 (3x3 sigmoid) + 1 (residual after a held sigmoid tile)
-        self.assertEqual(len(expected[0]), 16)
+        # then 2 + 2 (identity sigmoid) + 2 (3x3 sigmoid) + 1 (residual after a held sigmoid tile),
+        # then 1 (mul) + 1 (scale) + 1 (average pool emit) for the program-RAM epilogue opcodes.
+        self.assertEqual(len(expected[0]), 19)
         self.assertTrue(all(o.size == ROWS * em.O_BYTES for o in expected[0]))
 
     def test_sigmoid_packet_roundtrip(self):
