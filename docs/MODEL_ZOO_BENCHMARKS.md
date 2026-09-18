@@ -89,6 +89,13 @@ What the compiler and kernel needed beyond YOLOv8n (commit `91d0d7e`):
 - `tools/verify_engine_container.py` compares every layer tensor after one dispatch with the
   integer reference (itself equal to ONNX Runtime's uint8 intermediates offline):
   **66 / 66** for yolov8n, **66 / 66** for yolov8s, **9 / 9** for SESR M7.
+  *Those three figures predate `6a620f0`'s workspace buffer reuse, and a reuse-built container
+  can no longer be read that way: after one dispatch a reused slot holds only its last writer,
+  so 41 of yolov8n's 66 layers are unreadable and the tool reports them as slots, not as
+  mismatches. The like-for-like number today is `25/25 readable layers exact; 41/41 reused slots
+  hold their planned final tenant`, and the full per-layer check needs
+  `ignite-compile --no-workspace-reuse`, which still gives **66 / 66**. See
+  [what the verifier can and cannot see](BENCHMARKS.md#workspace-reuse-makes-41-of-66-layer-readbacks-unobservable-what-verify_engine_container-can-and-cannot-see-2026-09-18-desktop-2).*
 - yolov8s, oracle-free: six detections on `bus.jpg`, IoU 1.0 against the ONNX Runtime pass
   over `yolov8s_cut_xint8.onnx`.
 - SESR M7: 0 of 786,432 output values differ from ONNX Runtime (graph optimizations off).
@@ -494,6 +501,42 @@ loads Ignition from that checkout and ignite-xdna from this one, and rewrites th
 the tables only when every run is clean. Both tables above were produced before that change, when the tool ran
 `live_ignition.py` itself and wrote `results/model_zoo/<suite>_<model>.log`; they have not been
 re-run.
+
+## Classification models: one of fifteen reaches a schedule (2026-09-18, Desktop 2)
+
+`tools/sweep_model_zoo_classifiers.py` puts every XINT8 classification model under `models/` through the real
+compiler stages offline — `lower_yolov8n`, then `plan_workspace`, then `schedule_graph` — and records where each
+stops. No device, no container written, nothing about cost or accuracy. Log:
+[`results/aie/model_zoo_classifier_compile_20260918T142628Z.log`](../results/aie/model_zoo_classifier_compile_20260918T142628Z.log).
+The filter keeps one variant per family; the `resnet50_r192/r256/r320` rows survived it and are kept because they
+show resolution is not what blocks ResNet.
+
+| Model | Stage reached | Layers | What stopped it |
+|---|---|---:|---|
+| `resnet50_xint8_c64` | lower | 0 | `/maxpool/MaxPool: unsupported maxpool` |
+| `resnet50_r192 / _r256 / _r320_xint8_c64` | lower | 0 | same — resolution does not move the blocker |
+| `wide_resnet50_2_xint8_c64` | lower | 0 | same |
+| `wide_resnet101_2_xint8_c64` | lower | 0 | same |
+| `resnext50_32x4d_xint8` | lower | 0 | same |
+| `densenet121_xint8` | lower | 0 | `/features/pool0/MaxPool: unsupported maxpool` |
+| `resnetv2_50x3_xint8` | lower | 0 | `/stem/conv/Conv: unexpected consumers ['MaxPool']` |
+| `regnetx_002_xint8` | lower | 0 | `/s1/b1/conv2/conv/Conv: group 3 convolution (24 -> 24) is not supported; only depthwise` |
+| `mobilevit_xint8`, `mobilevit_xxs_xint8`, `mobilevit_cut_backbone_xint8` | lower | 0 | `/stages.2.0/conv3_1x1/conv/Conv: unexpected consumers ['Concat', 'Conv']` |
+| `yolov8n-cls_cut_xint8` (224) | schedule | 28 | `a 14-pixel map is smaller than one 20-pixel tile` |
+| **`yolov8n-cls_640_cut_xint8`** | **scheduled** | **28** | — 27 layers on the device, 1 host region, 12.6 MB |
+
+- **The stem pool is the wall.** Nine of the fifteen stop at a 3x3 stride-2 `MaxPool` the core does not implement
+  (it takes only the SPPF 5x5 pad-2 form), before pooling, grouping or the head are ever reached. `regnetx_002`
+  adds grouped convolutions, and the `resnetv2` / `mobilevit` refusals are the graph walk declining nodes whose
+  consumers it cannot express.
+- **The 20-pixel tile floor decides the input size.** A /32 network at 224 ends at 7x7, and `yolov8n-cls` at 224
+  lowers all 28 layers and then dies at 14x14; only the 640 re-export clears it. That is why the one survivor is
+  8x the arithmetic of a 224 classifier and why its latency is not comparable to the Vitis AI EP rows above.
+- **The survivor is a hybrid.** Its pooling runs as a declared host region — nothing in the engine computes a
+  global average — so it is not the zero-CPU-fallback result the graph-engine bar asks for. Measurement and the
+  reasoning: [A whole classifier on the NPU](BENCHMARKS.md#a-whole-classifier-on-the-npu-the-heads-pooling-is-carved-to-the-host-2828-layers-exact-2026-09-18-desktop-2).
+- **Not swept:** families with no XINT8 file on disk (vgg, efficientnet, inception, senet, convnext, swin,
+  resnet18/34, googlenet), and `mobilenetv2`, which exists here only as an AdaRound variant.
 
 ## Caveats
 

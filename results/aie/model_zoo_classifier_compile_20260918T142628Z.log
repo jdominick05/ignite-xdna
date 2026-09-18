@@ -1,0 +1,21 @@
+# graph-engine compile sweep over 15 XINT8 classifiers (offline, no device)
+# host DESKTOP-CBL5NUA  python 3.13.15  onnxruntime-free lowering only
+# stages: lower_yolov8n -> plan_workspace -> schedule_graph
+
+resnet50_r192_xint8_c64.onnx        lower       0L  ValueError: /maxpool/MaxPool: unsupported maxpool  (0s)
+resnet50_r256_xint8_c64.onnx        lower       0L  ValueError: /maxpool/MaxPool: unsupported maxpool  (0s)
+resnet50_r320_xint8_c64.onnx        lower       0L  ValueError: /maxpool/MaxPool: unsupported maxpool  (0s)
+resnet50_xint8_c64.onnx             lower       0L  ValueError: /maxpool/MaxPool: unsupported maxpool  (0s)
+resnetv2_50x3_xint8.onnx            lower       0L  ValueError: /stem/conv/Conv: unexpected consumers ['MaxPool']  (0s)
+wide_resnet101_2_xint8_c64.onnx     lower       0L  ValueError: /maxpool/MaxPool: unsupported maxpool  (0s)
+wide_resnet50_2_xint8_c64.onnx      lower       0L  ValueError: /maxpool/MaxPool: unsupported maxpool  (0s)
+resnext50_32x4d_xint8.onnx          lower       0L  ValueError: /maxpool/MaxPool: unsupported maxpool  (0s)
+densenet121_xint8.onnx              lower       0L  ValueError: /features/pool0/MaxPool: unsupported maxpool  (0s)
+regnetx_002_xint8.onnx              lower       0L  ValueError: /s1/b1/conv2/conv/Conv: group 3 convolution (24 -> 24 channels) is not supported; only depthwise (group == Cin == Cout)  (0s)
+mobilevit_cut_backbone_xint8.onnx   lower       0L  ValueError: /stages/stages.2/stages.2.0/conv3_1x1/conv/Conv: unexpected consumers ['Concat', 'Conv']  (0s)
+mobilevit_xint8.onnx                lower       0L  ValueError: /stages/stages.2/stages.2.0/conv3_1x1/conv/Conv: unexpected consumers ['Concat', 'Conv']  (0s)
+mobilevit_xxs_xint8.onnx            lower       0L  ValueError: /stages/stages.2/stages.2.0/conv3_1x1/conv/Conv: unexpected consumers ['Concat', 'Conv']  (0s)
+yolov8n-cls_640_cut_xint8.onnx      ok         28L  SCHEDULED task=classify 1 host layer(s) workspace 12.6 MB  (2s)
+yolov8n-cls_cut_xint8.onnx          schedule   28L  ValueError: a 14-pixel map is smaller than one 20-pixel tile  (0s)
+
+# 1/15 reached a schedulable graph
