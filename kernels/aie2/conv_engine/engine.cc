@@ -24,6 +24,15 @@
 //                    with LSH_M = 0 and LSH_R = RSH unless the header sets F_RES_SHIFTS;
 //                    with F_HSWISH the residual packet's own HardSwish constants then act on q (an
 //                    activation after the add: YOLO-World's split C2fAttn output convolutions)
+//   OP_MUL (general elementwise product, held tile x A tile):
+//                    y = sat_u8(sat16(rne((tm * tr) >> YSH)) + 128)   tm = held - 128, tr = A - 128
+//   OP_SCALE (per-channel scalar gain on the A tile, no conv passes): coefficients are 4 blocks x
+//                    32 int16 lanes (8 channel values replicated 4x per block) at W_OFFSET in the W
+//                    packet; y = sat_u8(sat16(rne((t * co) >> YSH)) + 128); F_HOLD writes the hold
+//                    buffer instead of the output object, F_EMIT emits the tile.
+//   OP_POOL (k x k stride-1 average pool, k <= 5, same two-packet hold/emit pair and halo-in-packet
+//                    geometry as the max pool): q = sat_u8(rne((sum * K2) >> S2)), sum over the
+//                    window of the unsigned operand bytes; K2/S2 is the reciprocal of the divisor.
 // rne = round half to even (AIE conv_even rounding), sat_u8 = clamp to [0, 255].
 //
 // Program memory is 16 KB. The eight accumulators of a pass must stay in vector
@@ -46,7 +55,8 @@ enum {
     H_PHASE0 = 17, H_ROWS_IN = 21, H_COLS_IN = 22, H_PLANE_BYTES = 23,
     H_RLSH_M = 24, H_RLSH_R = 25, H_A2 = 26, H_B2 = 27, H_A3 = 28, H_B3 = 29, H_A4 = 30, H_B4 = 31,
 };
-enum { OP_NOP = 0, OP_CONV = 1, OP_MAXPOOL = 2, OP_RESIDUAL = 3, OP_FUSED_CONV = 4 };
+enum { OP_NOP = 0, OP_CONV = 1, OP_MAXPOOL = 2, OP_RESIDUAL = 3, OP_FUSED_CONV = 4,
+       OP_MUL = 5, OP_SCALE = 6, OP_POOL = 7 };
 // F_RES_SHIFTS: a residual packet takes the left shifts of both operands from
 // H_RLSH_M / H_RLSH_R; without it the held tile is unshifted and the residual
 // tile is shifted by RSH (the rule every YOLOv8n residual uses).
@@ -362,6 +372,81 @@ inline void maxpool_tile(const Hdr &d, const uint8_t *a, int32_t *psum, uint8_t 
 }
 
 // ----------------------------------------------------------------------------
+// General elementwise product, per-channel scalar gain, k x k average pool
+// ----------------------------------------------------------------------------
+
+// Elementwise multiply: the held tile (first operand, left by a producing packet) times the
+// A packet tile (second). YSH is the requantization shift; the product of two centered bytes
+// needs no accumulator beyond the int32 lanes the mac already forms.
+inline void mul_tile(const Hdr &d, const uint8_t *a, const int32_t *psum, uint8_t *out) {
+    const uint8_t *held = reinterpret_cast<const uint8_t *>(psum) + HOLD_OFFSET_BYTES;
+    const int ysh = d.ysh;
+#pragma clang loop unroll(disable)
+    for (int off = 0; off < NCO * OUT_BLOCK_BYTES; off += 32) {
+        V32i16 tm = unpack_centered(aie::load_v<32>(held + off));
+        V32i16 tr = unpack_centered(aie::load_v<32>(a + off));
+        Acc sa;
+        sa.from_vector(aie::broadcast<int32, 32>(0));
+        sa = aie::mac(sa, tm, tr);
+        aie::store_v(out + off, sat_u8_from_i16(aie::add(sa.template to_vector<int16>(ysh), int16_t(128))));
+    }
+}
+
+// Per-channel scalar gain on the A tile, no conv passes: 4 blocks x 32 int16 coefficients at
+// W_OFFSET (8 channel values replicated 4x per block, matching the 4 pixels x 8 channels a
+// 32-byte vector covers). F_HOLD writes the hold buffer for a later packet, F_EMIT the object.
+inline void scale_tile(const Hdr &d, const uint8_t *a, const uint8_t *wpkt, int32_t *psum, uint8_t *out) {
+    const int16_t *coef = reinterpret_cast<const int16_t *>(wpkt + W_OFFSET);
+    uint8_t *dst = (d.flags & F_EMIT) ? out : reinterpret_cast<uint8_t *>(psum) + HOLD_OFFSET_BYTES;
+    const int ysh = d.ysh;
+    for (int b = 0; b < NCO; ++b) {
+        const V32i16 cv = aie::load_v<32>(coef + b * 32);
+#pragma clang loop unroll(disable)
+        for (int o = 0; o < OUT_BLOCK_BYTES; o += 32) {
+            const int off = b * OUT_BLOCK_BYTES + o;
+            V32i16 t = unpack_centered(aie::load_v<32>(a + off));
+            Acc sa;
+            sa.from_vector(aie::broadcast<int32, 32>(0));
+            sa = aie::mac(sa, t, cv);
+            aie::store_v(dst + off, sat_u8_from_i16(aie::add(sa.template to_vector<int16>(ysh), int16_t(128))));
+        }
+    }
+}
+
+// k x k stride-1 average pool (k <= 5) on the max pool's geometry: the window halo is inside
+// the packet, two blocks per packet, the first packet holds blocks 0-1, the second emits them
+// and its own pair. The window sum of unsigned bytes fits int16 (25 x 255 = 6,375); the
+// reciprocal K2/S2 divides by any window size whose rounded mean stays in [0, 255].
+inline void avgpool_tile(const Hdr &d, const uint8_t *a, int32_t *psum, uint8_t *out) {
+    uint8_t *hold = reinterpret_cast<uint8_t *>(psum) + HOLD_OFFSET_BYTES;
+    uint8_t *dst = (d.flags & F_EMIT) ? out + 2 * OUT_BLOCK_BYTES : hold;
+    if (d.flags & F_EMIT) {
+        for (int i = 0; i < 2 * OUT_BLOCK_BYTES; i += 32)
+            aie::store_v(out + i, aie::load_v<32>(hold + i));
+    }
+    const int k = d.k;
+    const int16_t rmul = int16_t(d.k2);
+    const int rsh = d.s2;
+    for (int b = 0; b < 2; ++b) {
+        const uint8_t *plane = a + b * d.plane_bytes;
+#pragma clang loop unroll(disable)
+        for (int r = 0; r < TILE_ROWS; ++r) {
+#pragma clang loop unroll(disable)
+            for (int g = 0; g < TILE_COLS / 4; ++g) {
+                V32i16 s = aie::zeros<int16, 32>();
+                for (int dy = 0; dy < k; ++dy) {
+                    const uint8_t *row = plane + ((r + dy) * d.cols_in + 4 * g) * 8;
+                    for (int dx = 0; dx < k; ++dx)
+                        s = aie::add(s, aie::load_unaligned_v<32>(row + dx * 8).template unpack().template cast_to<int16>());
+                }
+                aie::store_v(dst + b * OUT_BLOCK_BYTES + (r * TILE_COLS + 4 * g) * 8,
+                             aie::mul(s, rmul).template to_vector<uint8>(rsh));
+            }
+        }
+    }
+}
+
+// ----------------------------------------------------------------------------
 // Fused Spatial Stencil Convolution (Stage 1 Conv3x3 + Stage 2 Conv3x3 + Residual)
 // ----------------------------------------------------------------------------
 __attribute__((noinline))
@@ -529,6 +614,15 @@ inline void run(int32_t *hdr, uint8_t *apkt, uint8_t *out, int32_t *psum, int co
         break;
     case OP_RESIDUAL:
         residual_tile(d, apkt, psum, out);
+        break;
+    case OP_MUL:
+        mul_tile(d, apkt, psum, out);
+        break;
+    case OP_SCALE:
+        scale_tile(d, apkt, wpkt, psum, out);
+        break;
+    case OP_POOL:
+        avgpool_tile(d, apkt, psum, out);
         break;
     case OP_FUSED_CONV:
         fused_conv_tile(hdr, apkt, psum, out, core_row);

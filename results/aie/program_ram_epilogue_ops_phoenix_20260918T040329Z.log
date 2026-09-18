@@ -1,0 +1,16 @@
+# program-RAM epilogue opcodes (OP_MUL / OP_SCALE / OP_POOL) on silicon
+# core program: .text 15280 B of the 16 KB budget, accumulator stack moves 0
+# machine: DESKTOP-CBL5NUA  utc: 20260918T040329Z  branch: program-ram-epilogue-ops  head: 6d9306c
+# kernel_sha256: bf28f95ab4fe9e908425fdb0136090c5982efab752a21c8337acf7a81a34d94e
+# xclbin_sha256: a534abc92a2c3ad962353bf00ca50fe2b051879bd2519bcbf46924c5c64919df
+# cmd: bash scripts/research-iron.sh tests/test_conv_engine.py --hardware --build-dir build/conv_engine_program_ram --iters 3
+# xrt-smi pre-run:
+  No hardware contexts running on device
+# ---- run ----
+[hardware] iter 0: 2.284 ms, mismatching bytes per column: none
+[hardware] iter 1: 0.805 ms, mismatching bytes per column: none
+[hardware] iter 2: 0.753 ms, mismatching bytes per column: none
+[hardware] PASS: 3 iterations bit-exact against the emulator
+# ---- run exit=0 ----
+# xrt-smi post-run:
+  No hardware contexts running on device
