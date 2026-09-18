@@ -39,6 +39,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 
+from ignite_xdna.compiler.graph_ir import place_host_output
 from ignite_xdna.compiler.serializer import IgniteModelReader
 from ignite_xdna.runtime.driver import XrtSiliconHarness, get_repo_root, setup_xrt_environment
 from ignite_xdna.runtime.heads import HEAD_NAMES, POSE_HEAD_NAMES, HeadStatus, resolve_head_layout
@@ -179,8 +180,7 @@ class HostStep:
             region = s._ws_map[self.out_base:self.out_base + self.out_bytes]
         else:
             region = np.frombuffer(s.bo_ws.read(self.out_bytes, self.out_base), dtype=np.uint8).copy()
-        full = np.full((oblocks * 8, oh, ow), ZP, dtype=np.uint8)
-        full[:y.shape[1]] = y[0]
+        full = place_host_output(np.asarray(y, dtype=np.uint8)[0], oblocks * 8, oh, ow)
         interior = region.reshape(oblocks, oh + 2 * ohalo, ow + 2 * ohalo, 8)[:, ohalo:ohalo + oh, ohalo:ohalo + ow, :]
         interior[:] = np.transpose(full.reshape(oblocks, 8, oh, ow), (0, 2, 3, 1))
         if s._ws_map is None:

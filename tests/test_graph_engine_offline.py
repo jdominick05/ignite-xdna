@@ -584,6 +584,108 @@ class ClassificationHeadOffline(unittest.TestCase):
         self.assertEqual(float(np.max(diff)), 0.0)
 
 
+CLS_MODEL = ROOT / "models" / "yolov8n-cls_640_cut_xint8.onnx"
+
+
+@unittest.skipUnless(CLS_MODEL.exists(), "yolov8n-cls model not present")
+class ClassificationHeadPooling(unittest.TestCase):
+    """A whole classifier's pooling is carved to the host; its head is never wired to the image.
+
+    match_classification_head swallows GlobalAveragePool into consumed_nodes and nothing lowers it, so
+    the pooled tensor is never stored and the head's input falls back to the graph input -- the image.
+    The Gemm then addresses more channel blocks than its input holds (1280 channels against 3), which
+    is a container that loads, runs and is quietly not the model. lower_yolov8n now names the pool's
+    span as a host region on its own, so the average is actually computed."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.ir = graph_ir.lower_yolov8n(CLS_MODEL)
+
+    def test_the_pooling_is_carved_into_one_host_layer(self):
+        hosts = [L for L in self.ir.layers if isinstance(L, graph_ir.HostLayer)]
+        self.assertEqual(len(hosts), 1)
+        self.assertIn("GlobalAveragePool", hosts[0].op_types)
+        self.assertIn("Flatten", hosts[0].op_types)
+
+    def test_the_head_reads_pooled_channels_and_not_the_graph_input(self):
+        head = self.ir.layers[-1]
+        self.assertEqual(head.weights.shape[1], sum(s.blocks for s in head.inputs) * 8)
+        self.assertNotEqual(head.inputs[0].tensor, self.ir.input)
+
+    def test_an_explicit_region_over_the_pool_is_not_carved_a_second_time(self):
+        ir = graph_ir.lower_yolov8n(CLS_MODEL, host_regions=("/model.9/pool/", "/model.9/Flatten"))
+        self.assertEqual(sum(1 for L in ir.layers if isinstance(L, graph_ir.HostLayer)), 2)
+        self.assertEqual(ir.layers[-1].weights.shape[1], sum(s.blocks for s in ir.layers[-1].inputs) * 8)
+
+
+class HostOutputPlacement(unittest.TestCase):
+    """A host layer returning a vector lands at pixel (0, 0) of the plane its tensor declares."""
+
+    def test_a_flat_vector_is_placed_at_zero_zero_over_the_zero_point(self):
+        from ignite_xdna.compiler.graph_ir import place_host_output
+        vec = np.arange(10, 20, dtype=np.uint8)
+        plane = place_host_output(vec, channels=16, height=20, width=20)
+        self.assertEqual(plane.shape, (16, 20, 20))
+        self.assertTrue(np.array_equal(plane[:10, 0, 0], vec))
+        self.assertEqual(int(plane[10:, 0, 0].min()), 128)      # unused channels hold the zero point
+        self.assertEqual(int(plane[:, 1:, 1:].min()), 128)      # every other pixel holds the zero point
+        self.assertEqual(int(plane[:, 0, 1:].max()), 128)
+
+    def test_a_full_plane_is_passed_through(self):
+        from ignite_xdna.compiler.graph_ir import place_host_output
+        x = np.random.default_rng(3).integers(0, 256, size=(8, 4, 4), dtype=np.uint8)
+        self.assertTrue(np.array_equal(place_host_output(x, 8, 4, 4), x))
+
+    def test_an_output_that_is_not_a_vector_is_refused(self):
+        from ignite_xdna.compiler.graph_ir import place_host_output
+        with self.assertRaises(ValueError):
+            place_host_output(np.zeros((8, 3, 2), np.uint8), 8, 20, 20)
+
+
+@unittest.skipUnless(MODEL.exists(), "quantized model not present")
+class WorkspaceReadbackCoverage(unittest.TestCase):
+    """Which layers a post-dispatch readback can actually see, and why that is fewer than all of them.
+
+    plan_workspace's liveness reuse aliases tensors of identical geometry onto one slot base, each written
+    from the slot start, so after a single dispatch only the last writer survives. verify_engine_container
+    read every tensor as though all were still there and reported 25/66 on a device that was correct; these
+    pin the model that tells the two cases apart."""
+
+    @classmethod
+    def setUpClass(cls):
+        sys.path.insert(0, str(ROOT / "tools"))
+        from verify_engine_container import slot_final_tenants
+        cls.final_tenants = staticmethod(slot_final_tenants)
+        cls.ir = graph_ir.lower_yolov8n(MODEL)
+
+    def test_co_tenants_of_a_slot_share_geometry_so_their_bytes_truly_overlap(self):
+        ws = es.plan_workspace(self.ir)
+        by_base = {}
+        for L in self.ir.layers:
+            by_base.setdefault(ws.placements[L.output].base, []).append(L.output)
+        for base, names in by_base.items():
+            shapes = {(self.ir.tensors[n].height, self.ir.tensors[n].width) for n in names}
+            self.assertEqual(len(shapes), 1, f"the slot at base {base} aliases {shapes}")
+
+    def test_only_a_slots_final_tenant_is_readable(self):
+        ws = es.plan_workspace(self.ir)
+        final = self.final_tenants(ws, self.ir)
+        readable = {name for _, name in final.values()}
+        self.assertTrue(readable <= {L.output for L in self.ir.layers})
+        for L in self.ir.layers:
+            idx, owner = final[ws.placements[L.output].base]
+            if owner != L.output:
+                self.assertGreater(idx, L.index, "a slot may only be retaken by a later layer")
+
+    def test_reuse_off_makes_every_layer_readable_and_costs_the_workspace_back(self):
+        off = es.plan_workspace(self.ir)
+        full = es.plan_workspace(self.ir, reuse=False)
+        self.assertEqual(len(self.final_tenants(full, self.ir)), len(self.ir.layers),
+                         "with reuse off every tensor owns a slot, so all are readable")
+        self.assertLess(len(self.final_tenants(off, self.ir)), len(self.ir.layers))
+        self.assertLess(off.nbytes, full.nbytes, "reuse should still be the one that shrinks the workspace")
+
+
 @unittest.skipUnless(MODEL.exists(), "quantized model not present")
 class TestSpatialStencilFusion(unittest.TestCase):
     """Inter-layer spatial stencil fusion in persistent core engine and compiler."""

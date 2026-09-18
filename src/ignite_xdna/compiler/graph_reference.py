@@ -14,7 +14,7 @@ from typing import Any, Dict, List, Optional
 import numpy as np
 
 from ignite_xdna.compiler import engine_emulator as em
-from ignite_xdna.compiler.graph_ir import ConvLayer, GraphIR, HostLayer, PoolLayer, Segment, ZP
+from ignite_xdna.compiler.graph_ir import ConvLayer, GraphIR, HostLayer, Segment, ZP, place_host_output
 
 
 def quantize_input(image_chw_float: np.ndarray, scale: float, zp: int = ZP) -> np.ndarray:
@@ -122,7 +122,7 @@ def run_direct(ir: GraphIR, input_q: np.ndarray, stop_after: Optional[int] = Non
             segs = L.input_segments()
             src = ir.tensors[segs[0].tensor]
             x = gather_input(tensors, segs, src.height, src.width)[:L.in_channels or src.channels]
-            tensors[L.output] = run_host_layer(L, x)
+            tensors[L.output] = place_host_output(run_host_layer(L, x), t.channels, t.height, t.width)
         else:
             x = gather_input(tensors, [L.input], t.height, t.width)
             tensors[L.output] = maxpool5_direct(x)
