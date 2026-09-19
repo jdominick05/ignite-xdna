@@ -9904,7 +9904,7 @@ Two optimizations targeting intermediate activation footprint, DDR traffic, and 
 
 - **Instruction stream size**: On YOLOv8n, `insts.bin` shrinks from 430,180 bytes down to 405,496 bytes (-24,684 bytes of instruction overhead).
 - **Physical silicon latency**:
-  - YOLOv8n (100 timed iterations, 20 warmup): NPU dispatch drops from 7.572 +/- 0.215 ms (min 7.344) down to **7.412 +/- 0.111 ms (min 7.299)** (-0.160 ms mean, -0.044 ms min).
+  - YOLOv8n (100 timed iterations, 20 warmup): NPU dispatch drops from 7.572 +/- 0.215 ms (min 7.344) down to **7.412 +/- 0.111 ms (min 7.299)** (-0.160 ms mean, -0.044 ms min). *Superseded attribution: that baseline bundled reuse-off+rb=2 against reuse-on+rb=4; at constant reuse-on, rb=2 reads 7.336 ms and the cadence half is a net loss, and it costs SESR M7 0.94 ms ([the 2026-09-19 section](#the-retirement-cadence-was-the-sesr-dispatch-regression-6a620f0s-retire_batch4-costs-a-thin-container-094-ms-and-the-engine-now-retires-every-2nd-task-2026-09-19-desktop-2)).*
   - YOLOv8s (50 timed iterations, 10 warmup): NPU dispatch achieves **17.163 +/- 0.382 ms (min 16.995)** vs 17.195 +/- 0.177 ms (min 17.058); G2G drops from 26.109 ms down to **25.490 ms** (-0.619 ms).
 - **Correctness**: 100% bit-exact across all output heads (`p3_box`, `p3_cls`, `p4_box`, `p4_cls`, `p5_box`, `p5_cls`, `raw_output`, `raw_heads`) on physical Phoenix NPU Device 0 (max absolute difference = 0).
 
@@ -9995,5 +9995,44 @@ What the tool does now instead:
 - **The gate for a schedule or allocator change is now the reuse-free run.** A reuse-built container cannot see 41 of its own layers, so it cannot detect a wrong value in them; the co-tenancy check confirms the allocator's writes landed, not that each layer computed correctly.
 - **Not established:** whether the two long-failing host-layer tests (`ConcatViewHostInput`, `ResidualHardSwish`) are the same class of stale harness. They fail identically on clean `1c6c427`, before any of this, and I did not test the hypothesis.
 - **Reproducing the scratch bisect:** `git checkout ae430cb`, rebuild `models/yolov8n_cut_xint8.onnx` through `ignite-compile --engine graph`, run the then-current `tools/verify_engine_container.py`; it has no slot logic, so it prints `N/66` directly.
+
+## The retirement cadence was the SESR dispatch regression: `6a620f0`'s `retire_batch=4` costs a thin container 0.94 ms, and the engine now retires every 2nd task (2026-09-19, Desktop 2)
+
+Backing logs: [`results/aie/retire_batch_cadence_sweep_phoenix_20260919T0251Z.log`](../results/aie/retire_batch_cadence_sweep_phoenix_20260919T0251Z.log) (the sweep, the buildability bound, the bisect and the isolation), [`results/aie/retire_batch2_verification_phoenix_20260919T0304Z.log`](../results/aie/retire_batch2_verification_phoenix_20260919T0304Z.log) (layer-exact in reuse-free mode, image byte-identical, `xrt-smi` witnesses), [`results/aie/latency_retire_batch2_phoenix_20260919T0306Z.log`](../results/aie/latency_retire_batch2_phoenix_20260919T0306Z.log) (the same-sitting head-to-head).
+Tools: `tools/engine_dispatch_floor.py`, `ignite-compile --retire-batch N`, `tools/sesr_identity_probe.py`, `tools/bench_same_sitting_opt.py`.
+
+**Symptom.** SESR M7's dispatch read **5.256 ms** today against the 4.208 / 4.331 ms logged on 2026-09-14 and 2026-09-15 for the same graph — while the published same-sitting gap to AMD's stack on this model was only 0.42 ms, so most of SESR's loss to AMD was self-inflicted.
+
+**Attribution, by control and by bisect, in one place.** The 2026-09-15 container (built at `6bd2718`, `retire_batch=2`, workspace reuse off, 19.7 MB) dispatches in **4.331 ms** under today's runtime; today's default build is 5.256 ms and a `--no-workspace-reuse` rebuild at today's source is also **5.256 ms** — so the layout is not it and the runtime is not it, the compiled schedule is. `git bisect` over `6bd2718..f3b37cd`, each step compiling SESR and measuring its floor, returns **first bad `6a620f0`** (*perf(schedule): liveness-based workspace buffer reuse and DMA retirement relaxation*), with `ae430cb` 4.287, `1879614` 4.287, `2f805a2` 4.275, `7c0d82e` 4.243, `a78a500` 4.322 and `65dff07` 4.275 all good and `a2677db` 5.156 bad. At `6a620f0` itself, flipping **only** `retire_batch` from 4 back to 2 with workspace reuse left on gives **4.286 ms (floor 2.631 + compute 1.654)**. The regression is the one-liner; the −43.2 % workspace-reuse half costs nothing on dispatch and is kept.
+
+**The cadence sweep** (same container, one sitting, 300 dispatches each of the container and its all-NOP copy):
+
+| Model | rb=1 | rb=2 | rb=3 | rb=4 (was the default) | rb≥5 |
+|---|---:|---:|---:|---:|---|
+| SESR M7 dispatch | 4.573 | **4.311** | 4.964 | 5.254 ms | will not compile |
+| SESR M7 NOP floor | 3.040 | **2.629** | 2.952 | 3.228 ms | — |
+| SESR M7 `insts.bin` | 165,164 | 144,880 | 138,368 | 133,748 B | — |
+| YOLOv8n dispatch | — | 7.336 | **7.175** | 7.278 ms | — |
+| YOLOv8n NOP floor | — | 5.406 | **5.223** | 5.447 ms | — |
+
+Both containers have an *interior* optimum and they differ: SESR at 2, YOLOv8n at 3. `rb=1` (a token on every task) is worse than `rb=2` on SESR at 165 kB of instructions against 145 kB, so awaits are not free — the U-shape is real, and 4 sat past the peak on **both** models. `rb ≥ 5` is not merely slow: the compiler **refuses to emit** (`RuntimeError: channel o queue is full of held tasks`), because a token every rb-th task leaves runs of rb−1 untokened tasks and the emitter must retire once a channel holds `queue_depth` (4, the shim start queue) of them.
+
+**What this retracts.** [The 2026-09-17 section](#liveness-based-workspace-buffer-reuse-and-dma-retirement-relaxation-2026-09-17-desktop-2) attributes YOLOv8n's −0.160 ms to the retirement relaxation. That comparison was reuse-off+rb=2 against reuse-on+rb=4 — bundled, so it priced both changes at once. Holding reuse on, YOLOv8n at rb=2 reads **7.336 ms**, *better* than the 7.412 ms published there for rb=4: the saving that section measured was the workspace, not the cadence, and the cadence half cost SESR 0.94 ms that no one had looked at (SESR M7 appears in that section's own table only as an await count).
+
+**Decision.** The emitter default is **2**; `ignite-compile --retire-batch N` exposes it (it also takes `queue_depth` as a hardware constant, not a knob); and every container records `graph_engine.retire_batch` plus the layer's thinnest DMA channel in its manifest, so a container declares the schedule it was built with. YOLOv8n's own optimum is 3, and 2 costs it 0.058 ms against the old 4 — inside the between-sitting drift this file warns about, whereas SESR's 0.94 ms is ~30× that and monotone across four cadences.
+
+**Verification of the change.** Reuse-free rebuild, every layer readable: `[verify] 9/9 layers exact | dispatch mean 4.376 ms`, `PASS`. Output unchanged: `tools/sesr_identity_probe.py` over 24 frames of `data/sesr_calib` — `identical=24 differing=0 max_diff=0`, and the two containers' combined SHA-256 match (`55b129f3…c7114`). The flagship still beats AMD's stack in the same sitting: YOLOv8n 8.588 against 10.892 ms.
+
+**The head-to-head, and where SESR still stands.** One interleaved sitting (50 warm-up + 500 frames, both arms twice, `xrt-smi` idle before every group):
+
+| Arm | G2G mean, runs 1 / 2 | Stage means (ms) |
+|---|---:|---|
+| AMD's stack (Vitis AI EP) | **3.820 / 3.844** | preprocess 0.368, `session.run` 1.477, postprocess 1.975 |
+| Engine, rb=2 | 4.883 / 4.886 | preprocess 0.19, dispatch 4.27, readback 0.02, image output 0.35 |
+
+So fixing the regression did **not** overtake AMD on SESR today, and the reason is two-layered. AMD's `session.run` is unchanged from earlier sittings (1.477 against 1.461-1.576), but their *host* postprocess read 1.975 ms against the 2.419-2.593 ms logged on 2026-09-15/16/17, so their arm is ~0.45 ms faster with nothing changed on either side — the drift this repo warns about, and the reason a 0.42 ms target gap was never robust. And the remaining 1.05 ms is the NPU stage: our floor is 2.650 ms for ~14 MB of per-frame fill and drain (5.4 GB/s effective) against their 1.477 ms for the same graph, because their DPU keeps SESR's intermediates on-chip across concatenated layers while this engine round-trips every layer.
+
+**Held-out test of the traffic story, and it fails the other way.** The MemTile activation ring was rejected on 2026-09-16 for YOLOv8s and never measured on SESR — the one container whose dispatch is demonstrably transport-bound. At rb=2 on SESR it moves the cost rather than removing it: **dispatch 6.310 ms = floor 5.952 + compute 0.358**, instructions 144,880 → 678,516 B. Compute falls 4.5×, the floor triples. The rejection stands on a third model, and the wall is localized: not the cores, not the arithmetic, but getting 14 MB through the shim, and the ring's own configuration traffic costs more than the fills it saves. Closing the 1.05 ms needs fewer bytes on the wire — inter-layer fusion, which is still scaffolding with no call site on any branch (`match_stencil_fusion` is never invoked) — not another cadence.
+
 
 

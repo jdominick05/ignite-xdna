@@ -134,6 +134,19 @@ def parse_args(args: Optional[List[str]] = None) -> argparse.Namespace:
              "tools/verify_engine_container.py needs to read back every layer after one dispatch.",
     )
     parser.add_argument(
+        "--retire-batch",
+        type=int,
+        default=None,
+        metavar="N",
+        help="Graph engine: shim tasks one DMA channel may queue before the emitter retires a group. "
+             "Each retire costs an await round trip to the shim, so a bigger N removes instructions; the "
+             "await also blocks on the deepest task queued, so an N at the channel's start-queue depth (4) "
+             "leaves nothing in flight -- measured to cost SESR M7 0.94 ms of pure dispatch, while YOLOv8n "
+             "peaks at 3 and is already slower at 4. Default: derived per schedule from its thinnest DMA "
+             "channel (half its per-layer task count, bounded to 2..queue_depth-1); force N to measure a "
+             "point.",
+    )
+    parser.add_argument(
         "--topology-policy",
         choices=("report", "refuse"),
         default="report",
@@ -414,9 +427,9 @@ def verify_on_silicon(container_path: Path, device_idx: int = 0):
 def compile_graph_engine(input_path: Union[str, Path], output_path: Union[str, Path],
                          build_dir: Optional[Union[str, Path]] = None, host_regions: Optional[List[str]] = None,
                          silu_sigmoid: bool = False, topology_policy: str = "report",
-                         no_workspace_reuse: bool = False) -> int:
+                         no_workspace_reuse: bool = False, retire_batch: Optional[int] = None) -> int:
     """Lower the whole graph onto the convolution engine (see engine_compile.py); ``host_regions`` run on the host;
-    ``silu_sigmoid`` gives SiLU the sigmoid epilogue."""
+    ``silu_sigmoid`` gives SiLU the sigmoid epilogue; ``retire_batch`` sets the shim retirement cadence."""
     for region in host_regions or ():
         for part in region.split("="):
             if len(part) > 2 and part[1] == ":" and part[2] in "/\\":
@@ -435,10 +448,16 @@ def compile_graph_engine(input_path: Union[str, Path], output_path: Union[str, P
     from ignite_xdna.compiler.engine_compile import compile_graph_container
     manifest = compile_graph_container(input_path, output_path, build_dir=build_dir,
                                        host_regions=tuple(host_regions or ()), silu_sigmoid=silu_sigmoid,
-                                       workspace_reuse=not no_workspace_reuse)
+                                       workspace_reuse=not no_workspace_reuse, retire_batch=retire_batch)
     if no_workspace_reuse:
         print(f"    [OK] workspace reuse off: every tensor owns a slot, so every layer is readable "
               f"after one dispatch")
+    ge = manifest["graph_engine"]
+    if ge.get("retire_batch"):
+        forced = ge.get("retire_batch_forced")
+        print(f"    [OK] shim retirement cadence: every {ge['retire_batch']} task(s) of a DMA channel whose "
+              f"thinnest holds {ge['retire_batch_thinnest_channel']} per layer"
+              + (f" (forced by --retire-batch {forced})" if forced else ""))
     if silu_sigmoid:
         print(f"    [OK] SiLU: {manifest['graph_engine'].get('silu')} epilogue (reference: "
               f"silu_sigmoid.reference_model of {Path(input_path).name})")
@@ -468,7 +487,8 @@ def main(args: Optional[List[str]] = None):
         if parsed.engine == "graph":
             compile_graph_engine(parsed.input, parsed.output, parsed.build_dir, host_regions=parsed.host_region,
                                  silu_sigmoid=parsed.silu_sigmoid, topology_policy=parsed.topology_policy,
-                                 no_workspace_reuse=parsed.no_workspace_reuse)
+                                 no_workspace_reuse=parsed.no_workspace_reuse,
+                                 retire_batch=parsed.retire_batch)
             if parsed.verify_silicon:
                 from ignite_xdna.runtime.graph_session import GraphSession
                 sess = GraphSession(parsed.output, device_index=parsed.device)

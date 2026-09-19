@@ -1765,6 +1765,27 @@ cached reference heads rather than `bo_out`.
   refused together with host regions, because their configuration writes carry no shim task and
   `split_instruction_stream` counts WRITE ops as task pushes
   ([BENCHMARKS](BENCHMARKS.md#memtile-residency-does-not-pay-on-the-graph-engine-and-the-yolov8s-gap-is-a-known-limitation-2026-09-16-desktop-2)).
+- **Rejected again, on the container it mattered most for: the activation ring on SESR M7 (2026-09-19, built and
+  measured).** SESR is the one zoo model whose dispatch is demonstrably transport-bound (2.650 ms NOP floor for
+  ~14 MB of per-frame fill and drain, 5.4 GB/s effective), so the ring's "fetch once, serve several output groups"
+  premise had a real shot here even though it lost on YOLOv8s. It moves cost instead of removing it: dispatch
+  6.310 ms = floor 5.952 + compute 0.358, instructions 144,880 -> 678,516 B. Compute drops 4.5x, the floor
+  triples. Do not reach for the ring to fix a traffic-bound container; the configuration traffic it adds costs
+  more than the fills it saves. Fewer bytes on the wire is the only lever, and inter-layer fusion is unwired
+  scaffolding (`match_stencil_fusion` has no call site on any branch)
+  ([BENCHMARKS](BENCHMARKS.md#the-retirement-cadence-was-the-sesr-dispatch-regression-6a620f0s-retire_batch4-costs-a-thin-container-094-ms-and-the-engine-now-retires-every-2nd-task-2026-09-19-desktop-2)).
+- **LOCKED: the shim retirement cadence is `retire_batch = 2`, and a cadence at or above the queue depth is a
+  bug, not a tuning choice (2026-09-19, measured).** `run_column_programs` may let at most `retire_batch` tasks
+  accumulate on one DMA channel before retiring a group; the start queue is 4 deep, so tokens must appear within
+  every 4 pushes. Swept on silicon: SESR M7 4.573 / **4.311** / 4.964 / 5.254 ms at rb 1/2/3/4 with its floor
+  moving 3.040 / 2.629 / 2.952 / 3.228, YOLOv8n 7.336 / **7.175** / 7.278 at 2/3/4 -- an interior optimum on both,
+  past the peak on both at 4, and rb >= 5 does not compile at all
+  (`RuntimeError: channel o queue is full of held tasks`). `6a620f0`'s default of 4 was therefore both a
+  ~0.94 ms regression on the one model nobody timed and a cliff edge. `--retire-batch` overrides it per build and
+  `graph_engine.retire_batch` records what a container was built with; YOLOv8n's own optimum is 3 and costs
+  0.058 ms at 2, inside sitting drift, so 2 is the default until a per-model cadence is measured, not guessed
+  ([BENCHMARKS](BENCHMARKS.md#the-retirement-cadence-was-the-sesr-dispatch-regression-6a620f0s-retire_batch4-costs-a-thin-container-094-ms-and-the-engine-now-retires-every-2nd-task-2026-09-19-desktop-2)).
+
 - **Rejected: routing activations around the MemTile (2026-09-16, measured, not built).** A MemTile ObjectFIFO
   `forward` costs -0.00023 ms per MB in and +0.00053 ms per MB out against a direct shim-to-core path, which is not
   worth packet-switched shim flows and a replacement for the output join. The cost model above needs no hop term.

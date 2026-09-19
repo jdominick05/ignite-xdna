@@ -242,7 +242,8 @@ def check_weight_buffer_addresses(mlir_path: Path, expected: int, columns: int) 
 def compile_graph_container(onnx_path, output_path, build_dir: Optional[Path] = None, layers: Optional[int] = None,
                             verbose: bool = True, host_regions: Sequence[str] = (),
                             activation_ring: int = 0, weight_buffer: bool = False,
-                            silu_sigmoid: bool = False, workspace_reuse: bool = True) -> Dict[str, Any]:
+                            silu_sigmoid: bool = False, workspace_reuse: bool = True,
+                            retire_batch: Optional[int] = None) -> Dict[str, Any]:
     """Lower, schedule, build the device binaries and write the container. Returns the manifest.
 
     ``host_regions`` are node-name prefixes or ``FROM=TO`` boundaries run on the host between dispatches
@@ -258,6 +259,12 @@ def compile_graph_container(onnx_path, output_path, build_dir: Optional[Path] = 
     geometry matches, which is most of the workspace saving. Off, every tensor owns a slot, so a
     post-dispatch readback can see every layer -- the mode ``tools/verify_engine_container.py`` needs to
     check a lowering layer by layer. Recorded in the manifest when off.
+
+    ``retire_batch`` is how many shim tasks the emitter lets pile up on one DMA channel before it retires a
+    group (``engine_sequence.run_column_programs``). Bigger retires fewer completion tokens; it also moves
+    the await onto a later, slower-to-complete task. None derives it from the schedule's thinnest channel,
+    which is the default and the measured-best cadence on both a thin (SESR M7) and a wide (YOLOv8n) stream.
+    The effective value is recorded in the manifest, so a container declares the schedule it was built with.
     """
     if host_regions and (activation_ring or weight_buffer):
         # ``split_instruction_stream`` cuts a host-segment stream by counting WRITE ops as task pushes, and
@@ -270,6 +277,7 @@ def compile_graph_container(onnx_path, output_path, build_dir: Optional[Path] = 
     from aie.iron.device import NPU1
     from aie.utils.compile.utils import compile_mlir_module
     from ignite_xdna.compiler.engine_sequence import SequenceEmitter
+
     from kernels.aie2.conv_engine import design as eng
 
     t0 = time.perf_counter()
@@ -289,12 +297,16 @@ def compile_graph_container(onnx_path, output_path, build_dir: Optional[Path] = 
     # yolov8s streams 29.5 MB of weight packets, past the 16 MB default packet extent.
     ws_extent, wp_extent = eng.ddr_extents(ws.nbytes, store.nbytes)
 
+    cadence: List[Dict[str, int]] = []
+
     def body(ws_arg, wp_arg):
         emitter = SequenceEmitter(ws_arg, wp_arg, ws_extent, wp_extent,
                                   {c: eng.fifo_names(c) for c in range(eng.COLS)},
                                   a_ring=activation_ring)
         for s in scheds:
-            emitter.run_column_programs(s.programs, bd_budget=14)
+            emitter.run_column_programs(s.programs, bd_budget=14, retire_batch=retire_batch)
+        cadence.append({"retire_batch": emitter.last_retire_batch,
+                        "thinnest_channel_tasks": emitter.thinnest_channel_tasks})
 
     iron.set_current_device(NPU1())
     program = eng.build_program(iron.get_current_device(), body, ws_bytes=ws_extent, wp_bytes=wp_extent,
@@ -321,6 +333,16 @@ def compile_graph_container(onnx_path, output_path, build_dir: Optional[Path] = 
         manifest["graph_engine"]["silu"] = "sigmoid4"
     if not workspace_reuse:   # absent means reuse on: co-tenant tensors share a workspace slot
         manifest["graph_engine"]["workspace_reuse"] = False
+    if cadence:
+        # What the emitter retired on, per shim DMA channel: derived from the schedule's thinnest channel
+        # unless --retire-batch forced it. Dispatch time is a property of this number (SESR M7: 4.31 ms at 2,
+        # 5.25 ms at 4), so a container states the cadence it was built with. The minimum over the layers is
+        # the binding one -- a layer whose channels are all deeper is not the stall.
+        ge = manifest["graph_engine"]
+        ge["retire_batch"] = min(c["retire_batch"] for c in cadence)
+        ge["retire_batch_thinnest_channel"] = min(c["thinnest_channel_tasks"] for c in cadence)
+        if retire_batch is not None:
+            ge["retire_batch_forced"] = retire_batch
     segments = plan_segments(ir, scheds)
     hosts = [seg for seg in segments if seg["kind"] == "host"]
     blobs = [("engine.xclbin", xclbin, "xclbin")]

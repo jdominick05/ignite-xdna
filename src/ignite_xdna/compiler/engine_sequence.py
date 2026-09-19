@@ -736,7 +736,7 @@ class SequenceEmitter:
                              self._wbuf_bd_serve + k)
 
     def run_column_programs(self, programs: Sequence[Sequence[tuple]], bd_budget: int = 14,
-                            queue_depth: int = 4, retire_batch: int = 4) -> None:
+                            queue_depth: int = 4, retire_batch: Optional[int] = None) -> None:
         """Issue every column's items interleaved within two hardware limits per shim.
 
         Every task carries a completion token. Before a new task is configured,
@@ -749,6 +749,10 @@ class SequenceEmitter:
         accepted the packet, which is the backpressure the cores need; a
         round's drain is always issued before any later round's fills, so no
         core ever waits for an output object that has no drain queued.
+
+        ``retire_batch`` is how deep a retirement group may be (None takes the measured default of 2,
+        see below). The value used and the layer's thinnest DMA channel are left on the emitter so the
+        compiler can record them in the container's manifest.
         """
         # Queue entries: [task, channel, hold, token]. Every ``dma_await_task``
         # consumes exactly one completion token of its channel, so a task that
@@ -775,6 +779,19 @@ class SequenceEmitter:
                 elif it[0] == "o":
                     t["o"] += 1
             totals[c] = t
+        thinnest = min((n for c in totals for n in totals[c].values() if n), default=0)
+        if retire_batch is None:
+            # Measured U-curve, 2026-09-18, dispatch mean of the same container at each cadence:
+            #   SESR M7   rb 1 4.573 | 2 4.311 | 3 4.964 | 4 5.254 ms   (all of it non-compute floor)
+            #   YOLOv8n   rb 2 7.336 | 3 7.175 | 4 7.278 ms
+            # so 2 is the safe default - best on the thin 9-layer container by ~1 ms, inside sitting drift on
+            # YOLOv8n (whose own optimum read 3, by 0.10-0.16 ms). rb >= 5 cannot be emitted at all: a token
+            # every rb-th task leaves runs of rb-1 untokened tasks, and ensure() demands a retirement once a
+            # channel holds queue_depth of them, so SESR M7 at 6 raises "channel o queue is full of held
+            # tasks". A container's cadence is recorded in its manifest; --retire-batch overrides this.
+            retire_batch = 2
+        self.last_retire_batch = retire_batch
+        self.thinnest_channel_tasks = thinnest
         issued: Dict[int, Dict[str, int]] = {c: {"w": 0, "a": 0, "o": 0} for c in range(len(programs))}
 
         def retire_channel(c: int, channel: str) -> bool:
