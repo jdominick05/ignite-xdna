@@ -10607,4 +10607,66 @@ Evidence is indexed in [results/aie](../results/aie/README.md#split-container-si
 3. **Targeted DMA Synchronization (Variant 3):** When a host runtime inspects intermediate tensors (e.g., assessing backbone embeddings or routing features to a secondary classifier), synchronizing the specific 204,800-byte P5 slice takes only **3.647 µs** on physical PCIe/DMA, compared to **55.663 µs** for the entire 32.2 MB workspace buffer—a **15.3× speedup**.
 4. **ComposedSession & Tensor Placement ABI (Variant 3 & 5):** Separate stage containers (`yolov8s_stage1.ignite` and `yolov8s_stage2.ignite`) chained through `ComposedSession` reuse a single physical 32.2 MB workspace allocation (`bo_ws`), incurring **zero memory bloat** over the monolithic baseline. Handoff occurs entirely through device-local DDR with **zero bytes copied across the host bus**, producing bit-exact detection outputs (`max_diff = 0`).
 
+## Pricing retention with a freed dimension: the ring may add at most ~1,389 descriptors, and it added 3,725 (2026-09-20, Desktop 2)
 
+The layout sizing closed by saying a retention design must free a descriptor dimension to be
+affordable. This prices that claim against the one retention design this engine has actually built —
+the MemTile activation ring, which is
+[byte-exact on silicon](#memtile-residency-does-not-pay-on-the-graph-engine-and-the-yolov8s-gap-is-a-known-limitation-2026-09-16-desktop-2)
+and 1.999 ms slower per dispatch. `tools/fill_layout_sizing.py --ring 2` schedules it offline, and
+`tools/fill_retention_pricing.py` does the arithmetic on logged arms. No device was opened for any of
+this, and the tool prints the `src/` files that are modified in the working tree so the schedule being
+measured is identified honestly.
+
+**Retention multiplies exactly the class a dimension would rescue.** The shipped container offers
+merge_runs 5,408 patterns, of which 338 end up four-dimensional and chain-capped at 4 packets
+(1,352 packets). The ring offers 1,859 patterns, of which **1,352 are four-dimensional carrying 5,408
+packets** — the two numbers are the shipped design's, swapped: retention quadrupled the capped class.
+Its byte-free fraction falls with it, because the extra serves overlap: **169 of 1,352 abut (12%)
+against 169 of 338 (50%) shipped.**
+
+**Collapsing the capped class perfectly still loses.** Arithmetic on the ring's own measured
+decomposition (floor 5.952 = transfer 1.442 + per-task 4.510 over 4,732 descriptors):
+
+| chain ceiling | descriptors | floor | dispatch | vs shipped 4.311 ms |
+|---:|---:|---:|---:|---|
+| 4 (as built) | 4,732 | 5.952 | 6.310 | +1.999 |
+| 8 | 4,056 | 5.308 | 5.666 | +1.355 |
+| 16 | 3,718 | 4.985 | 5.343 | +1.032 |
+| 64 (hardware max) | 3,465 | 4.744 | 5.102 | **+0.791** |
+
+So the freed dimension is neither necessary nor sufficient: at its ideal it recovers 1.208 ms of the
+2.0 ms the ring is behind, and the design still loses.
+
+**The number that decides it.** Retention's measured benefit is compute: 1.682 → 0.358 ms, a win of
+**1.324 ms**. At the ring's own measured unit of 0.953 µs per descriptor, that win pays for
+**1,389 added descriptors**. The ring added 3,725 (4,732 against the shipped 1,007) — over by 2.7×.
+That is the criterion any retention design must meet on this model, and it is the useful output of the
+sizing: not "free a dimension" but **"add fewer than ~1,389 descriptors"**, which for SESR's 9 layers
+and 4 columns means each retained object has to replace several transfers, not one — a whole plane
+per column rather than a 6,400 B window. Deleting the ring's entire capped class, an impossible
+upper bound, still leaves 3,380 descriptors at 3.222 ms against a 1.324 ms win: its cost is in the
+serves, resets and re-pushes that the `055376a` note already names, not in chain depth.
+
+**A correction to the model published yesterday.** `tools/fill_layout_lever_math.py` assumes per-task
+cost is proportional to descriptor count. That holds within one design — the cadence result moved
+0.599 ms of floor on identical traffic — but **across designs it fails by 2.2×**: the shipped
+container's unit is 2.136 µs and the ring's is 0.953 µs. Ring tasks are individually cheaper, which is
+why the ring's totals are dominated by count rather than by expensive tasks. Any lever priced with that
+tool is therefore valid only for the design whose floor it was calibrated on, and the tool now says so
+in its own docstring.
+
+**What this does not establish.** Nothing here was timed on a device; the ring's and the shipped
+container's floors come from the cadence sweep and the ring sitting, and cross-sitting drift on this
+machine is measured at ~0.5 ms, which is smaller than the 2.0 ms being explained but not negligible.
+The 0.953 µs unit is a residue (floor minus a byte-derived transfer), so it bundles lock, reset and
+re-push bookkeeping into one number and attributes nothing finer. And the cautionary precedent is on
+the record: a derived costing of this same lever predicted YOLOv8s would *win* by 0.748 ms and it lost
+by 3.40 ms — this pricing reproduces the measured ordering of both arms, which is the only reason to
+trust its interpolation between them.
+
+Evidence: [fill_layout_sizing_ring2](../results/aie/fill_layout_sizing_ring2_sesr_m7_desktop2_20260920.log),
+[fill_layout_sizing_weightbuffer](../results/aie/fill_layout_sizing_weightbuffer_sesr_m7_desktop2_20260920.log)
+(its resident weight buffer offers the shipped pattern set unchanged — 5,408 patterns, 338 capped —
+consistent with a weight-side change, while measuring +3.63 ms on YOLOv8s),
+[fill_retention_pricing](../results/aie/fill_retention_pricing_sesr_m7_desktop2_20260920.log).

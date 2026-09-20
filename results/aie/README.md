@@ -55,6 +55,9 @@ relied on is recorded in [SILICON 1.4](../../docs/SILICON.md).
 | [fill_layout_sizing_sesr_m7_desktop2_20260920.log](fill_layout_sizing_sesr_m7_desktop2_20260920.log) | Line-spanning needs 66,048-82,560 B per packet against a 65,536 B core and 6.51-12.90x the bytes; plane-packing frees the dimension at zero wire cost for 169 of 338. |
 | [fill_layout_sizing_yolov8n_full_desktop2_20260920.log](fill_layout_sizing_yolov8n_full_desktop2_20260920.log) | The same two budgets on the flagship: 940 of 1,869 byte-free, 929 replicating 1.60-3.20x. |
 | [fill_layout_lever_sesr_m7_desktop2_20260920.log](fill_layout_lever_sesr_m7_desktop2_20260920.log) | Prices both: -15.7% descriptors leaves G2G 0.718 ms short of AMD, -31.4% still 0.468 short; break-even is 48% of the stream. |
+| [fill_layout_sizing_ring2_sesr_m7_desktop2_20260920.log](fill_layout_sizing_ring2_sesr_m7_desktop2_20260920.log) | The ring's schedule quadruples the chain-capped class (338 -> 1,352 descriptors, 1,352 -> 5,408 packets) and drops the byte-free fraction 50% -> 12%. |
+| [fill_layout_sizing_weightbuffer_sesr_m7_desktop2_20260920.log](fill_layout_sizing_weightbuffer_sesr_m7_desktop2_20260920.log) | Control: the resident weight buffer offers the shipped pattern set unchanged, as expected of a weight-side change. |
+| [fill_retention_pricing_sesr_m7_desktop2_20260920.log](fill_retention_pricing_sesr_m7_desktop2_20260920.log) | Retention may add ~1,389 descriptors before its own compute win stops paying; the ring added 3,725. Chain collapse to 64 still leaves it 0.791 ms slower. |
 
 ## Split container sizing
 
