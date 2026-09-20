@@ -1772,7 +1772,9 @@ cached reference heads rather than `bo_out`.
   6.310 ms = floor 5.952 + compute 0.358, instructions 144,880 -> 678,516 B. Compute drops 4.5x, the floor
   triples. Do not reach for the ring to fix a traffic-bound container; the configuration traffic it adds costs
   more than the fills it saves. Fewer bytes on the wire is the only lever, and inter-layer fusion is unwired
-  scaffolding (`match_stencil_fusion` has no call site on any branch)
+  scaffolding (`match_stencil_fusion` has no call site on any branch) *[Superseded the same day: the wire runs at
+  18% of its measured rate, so bytes are not the binding term -- see the rejected entry below. The ring rejection
+  itself stands, and its 4.7x task increase is now the measured reason.]*
   ([BENCHMARKS](BENCHMARKS.md#the-retirement-cadence-was-the-sesr-dispatch-regression-6a620f0s-retire_batch4-costs-a-thin-container-094-ms-and-the-engine-now-retires-every-2nd-task-2026-09-19-desktop-2)).
 - **LOCKED: the shim retirement cadence is `retire_batch = 2`, and a cadence at or above the queue depth is a
   bug, not a tuning choice (2026-09-19, measured).** `run_column_programs` may let at most `retire_batch` tasks
@@ -1785,6 +1787,26 @@ cached reference heads rather than `bo_out`.
   `graph_engine.retire_batch` records what a container was built with; YOLOv8n's own optimum is 3 and costs
   0.058 ms at 2, inside sitting drift, so 2 is the default until a per-model cadence is measured, not guessed
   ([BENCHMARKS](BENCHMARKS.md#the-retirement-cadence-was-the-sesr-dispatch-regression-6a620f0s-retire_batch4-costs-a-thin-container-094-ms-and-the-engine-now-retires-every-2nd-task-2026-09-19-desktop-2)).
+- **Rejected: three transport-shaped fixes to SESR's floor that the utilisation read made plausible (2026-09-19,
+  measured offline on the emitted streams, no device).** The floor is not bandwidth: `tools/shim_channel_audit.py`
+  decodes the shipped container's 1,007 tasks and 13,181,568 bytes to 1.25 GB/s per column, **18% of the
+  measured 6.898931 GB/s**, so 2.151 ms of a 2.629 ms floor is not transfer time at all -- and two streams
+  carrying identical traffic at `retire_batch` 2 and 4 differ by 0.599 ms of floor while the wire gets *less*
+  busy. That opens three apparent levers, and each closes on measurement: **(a) more channels** -- the only idle
+  shim channels are the second drain of each column, and 835,200 of 13,181,568 bytes (6.3%) are outbound;
+  **(b) merging the small fills** -- `tools/fill_merge_audit.py` finds 355 of SESR's 412 distinct 6,400 B
+  windows stepping 640 B apart, a 10x overlap delivering 2.42x the address range it reads, which no repeat
+  dimension can express; only 30 windows are repeatable, so 1,007 tasks become no fewer than 992 (1.5%), which
+  confirms the 2026-09-16 "already at their floor" sizing from the artifact side; **(c) removing the refetches**
+  -- `tools/fill_repeat_audit.py` shows all 100 of SESR's repeated descriptors are far from their first send
+  (median 124 tasks), i.e. cross-layer, so no wider window covers them. The flagship, which already beats AMD,
+  has the opposite shape and is the only place where (b) and (c) are live: 677 of 987 windows collapse to 181
+  descriptors, and 280 of 938 refetches are near. Do not propose channel count, fill merging, or refetch
+  removal for SESR; what remains is a packet/tile shape that removes the overlap at the source, or retaining
+  activations across a layer boundary -- and (b)'s 2.42x overlap and (c)'s cross-layer repeats are that same
+  need measured twice
+  ([BENCHMARKS](BENCHMARKS.md#sesrs-small-fills-overlap-by-construction-merging-could-remove-about-15-of-its-1007-tasks-2026-09-19-desktop-2),
+  [utilisation](BENCHMARKS.md#sesrs-shim-channels-run-at-18-of-the-measured-rate-the-dispatch-floor-is-wait-structure-not-wire-2026-09-19-desktop-2)).
 
 - **Rejected: routing activations around the MemTile (2026-09-16, measured, not built).** A MemTile ObjectFIFO
   `forward` costs -0.00023 ms per MB in and +0.00053 ms per MB out against a direct shim-to-core path, which is not
