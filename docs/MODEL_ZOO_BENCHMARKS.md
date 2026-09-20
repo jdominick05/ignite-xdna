@@ -546,3 +546,44 @@ show resolution is not what blocks ResNet.
   not with numbers from another day.
 - The CPU rows are ONNX Runtime's CPU provider on the same XINT8 QDQ models, not a tuned
   CPU implementation.
+
+## Which current detection architectures could lower at all (2026-09-20, Desktop 2)
+
+A node census of the families `ultralytics` 8.4.142 ships, built from their YAMLs with random
+weights and exported at 640, scored against what the graph engine accepts. Structural only: it
+can rule a model out, never in. `tools/arch_compat_audit.py`,
+[`arch_compat_current_models_20260920.log`](../results/aie/arch_compat_current_models_20260920.log).
+
+**YOLO26 is the newest family in this toolchain.** The families present are 26, 12, 11, v10,
+v9, v8, v6, v5, v3 and rt-detr; there is no YOLO27 here, and whether one exists elsewhere was
+not established.
+
+Every row reports Div, Gather, Shape, Sub and one Softmax - that is the DFL and anchor decode
+tail the head cut removes, and YOLOv8n lowers today carrying exactly it. The column that
+matters is what is left after that, because it is what would go to a host segment.
+
+| model | nodes | convs | unsupported conv shapes | host burden beyond decode |
+|---|---:|---:|---|---|
+| YOLO26n | 496 | 102 | **none** | MatMul 4, Softmax 2 |
+| YOLO26s | 497 | 102 | **none** | MatMul 4, Softmax 2 |
+| YOLO12n | 744 | 120 | 7x7 stride 1 x8 | MatMul 16, Softmax 9 |
+| YOLO11n | 431 | 88 | none | MatMul 2, Softmax 2 |
+| YOLOv10n | 399 | 83 | 7x7 stride 1 x1 | MatMul 2, Softmax 2 |
+| YOLOv8n | 316 | 64 | none | Softmax 1 |
+
+YOLO26 is the most engine-compatible modern family: no conv shape it needs is missing, and its
+non-decode remainder is one attention block's worth - the same shape of problem as YOLO11n's
+C2PSA, which the engine already carves to the host at one ONNX Runtime call and 0.51-0.53 ms
+per frame. YOLO12 is a much larger lift: area attention runs through the whole backbone, and
+eight 7x7 convolutions are unsupported at any stride.
+
+That matters beyond compatibility. The engine's widest margin over AMD's stack anywhere in the
+zoo is YOLO11n, 10.46 / 10.50 ms against 36.77 / 38.30, and the reason is that the Vitis AI EP
+places almost none of an attention block. Modern detectors are attention-heavy, so the
+architectures that are hardest for AMD's stack are the ones this engine already has a route
+for.
+
+Not established: nothing here was exported with real weights, head-cut, quantized or lowered;
+whether YOLO26's 8 grouped convolutions are all depthwise (anything else is refused); whether
+an NMS-free family's head cut removes the same tail; and channel counts against the
+multiple-of-32 rule or map sizes against the 20-pixel tile floor.

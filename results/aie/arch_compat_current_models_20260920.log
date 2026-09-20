@@ -1,0 +1,77 @@
+# Which current detection architectures the graph engine could take, by op and by conv shape
+# Host DESKTOP-CBL5NUA (Desktop 2, Ryzen 7 8700G), 2026-09-20, env resnet_env, ultralytics 8.4.142
+# OFFLINE and STRUCTURAL. Each model is built from the YAML ultralytics ships, with RANDOM
+# weights, and exported to ONNX at 640. No device, no accuracy, no latency: this says what
+# would have to lower, never how well it would score.
+#
+# Command: python tools/arch_compat_audit.py yolo26n yolo26s yolo12n yolo11n yolov10n yolov8n
+#
+# YOLO26 is the newest family this toolchain ships. There is no YOLO27 in ultralytics 8.4.142
+# (the families present are 26, 12, 11, v10, v9, v8, v6, v5, v3 and rt-detr), and whether one
+# exists elsewhere was not established.
+#
+# What the engine accepts: 1x1 s1 p0, 3x3 s1 p1, 3x3 s2 p1, 5x5 s1 p2; MaxPool, Add, Resize x2,
+# Concat and the Mul/Sigmoid epilogues; depthwise convolution only (group == Cin == Cout), and
+# any dilation is refused (graph_ir.py:834-842 - it raises now, where an earlier revision read
+# neither attribute and lowered a grouped conv as silently wrong arithmetic).
+#
+# The Div, Gather, Shape, Sub and one Softmax every row reports are the DFL and anchor decode
+# tail, which the head cut removes before quantization - YOLOv8n lowers today carrying exactly
+# that set. The row to read is "of which NOT decode": that is the attention a model would have
+# to put on the host, and the bar is YOLO11n, which the engine already runs with one ONNX
+# Runtime call per frame (0.51-0.53 ms).
+=== yolo26n: 496 nodes, 102 convs
+    conv (k, stride, pad)  : {(1, 1, 0): 55, (3, 1, 1): 40, (3, 2, 1): 7}
+    UNSUPPORTED conv shapes: none
+    grouped 8, dilated 0
+    outside the vocabulary : {'Div': 2, 'Gather': 1, 'MatMul': 4, 'Shape': 1, 'Softmax': 2, 'Sub': 2}
+    of which NOT decode    : {'MatMul': 4, 'Softmax': 2}   <- the real host burden
+=== yolo26s: 497 nodes, 102 convs
+    conv (k, stride, pad)  : {(1, 1, 0): 55, (3, 1, 1): 40, (3, 2, 1): 7}
+    UNSUPPORTED conv shapes: none
+    grouped 8, dilated 0
+    outside the vocabulary : {'Div': 2, 'Gather': 1, 'MatMul': 4, 'Shape': 1, 'Softmax': 2, 'Sub': 2}
+    of which NOT decode    : {'MatMul': 4, 'Softmax': 2}   <- the real host burden
+=== yolo12n: 744 nodes, 120 convs
+    conv (k, stride, pad)  : {(1, 1, 0): 73, (3, 1, 1): 32, (3, 2, 1): 7, (7, 1, 3): 8}
+    UNSUPPORTED conv shapes: {(7, 1, 3): 8}
+    grouped 14, dilated 0
+    outside the vocabulary : {'Div': 2, 'Gather': 1, 'MatMul': 16, 'Shape': 9, 'Softmax': 9, 'Sub': 2}
+    of which NOT decode    : {'MatMul': 16, 'Softmax': 9}   <- the real host burden
+=== yolo11n: 431 nodes, 88 convs
+    conv (k, stride, pad)  : {(1, 1, 0): 46, (3, 1, 1): 35, (3, 2, 1): 7}
+    UNSUPPORTED conv shapes: none
+    grouped 7, dilated 0
+    outside the vocabulary : {'Div': 2, 'Gather': 1, 'MatMul': 2, 'Shape': 1, 'Softmax': 2, 'Sub': 2}
+    of which NOT decode    : {'MatMul': 2, 'Softmax': 2}   <- the real host burden
+=== yolov10n: 399 nodes, 83 convs
+    conv (k, stride, pad)  : {(1, 1, 0): 42, (3, 1, 1): 33, (3, 2, 1): 7, (7, 1, 3): 1}
+    UNSUPPORTED conv shapes: {(7, 1, 3): 1}
+    grouped 13, dilated 0
+    outside the vocabulary : {'Div': 2, 'Gather': 1, 'MatMul': 2, 'Shape': 1, 'Softmax': 2, 'Sub': 2}
+    of which NOT decode    : {'MatMul': 2, 'Softmax': 2}   <- the real host burden
+=== yolov8n: 316 nodes, 64 convs
+    conv (k, stride, pad)  : {(1, 1, 0): 25, (3, 1, 1): 32, (3, 2, 1): 7}
+    UNSUPPORTED conv shapes: none
+    grouped 0, dilated 0
+    outside the vocabulary : {'Div': 2, 'Gather': 1, 'Shape': 1, 'Softmax': 1, 'Sub': 2}
+    of which NOT decode    : {'Softmax': 1}   <- the real host burden
+
+# READING IT
+#
+# yolo26n is the most engine-compatible modern family here: ZERO unsupported conv shapes, and
+# its only non-decode ops are 4 MatMul and 1 Softmax - one attention block's worth, the same
+# shape of problem as yolo11n's C2PSA, which is already carved to the host and measured.
+# Its 8 grouped convs must all be depthwise or lowering refuses; that was not checked here.
+#
+# yolo12n is a much larger lift: 8 convolutions of 7x7 (unsupported at any stride), 16 MatMul
+# and 9 Softmax. Area attention runs through the whole backbone, not one block.
+#
+# NOT ESTABLISHED
+#   - No model here was exported with real weights, head-cut, quantized, or lowered. This is a
+#     node census, and a census can only rule a model OUT, never in.
+#   - Whether yolo26n's grouped convolutions are depthwise.
+#   - Whether the head cut for an NMS-free family (yolo26 is end-to-end) removes the same tail
+#     it removes for yolov8n.
+#   - Channel counts against the multiple-of-32 rule, and map sizes against the 20-pixel tile
+#     floor, were not checked.
