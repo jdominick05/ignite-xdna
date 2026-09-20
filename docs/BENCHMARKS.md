@@ -10840,3 +10840,62 @@ and it models neither workspace capacity nor the lock and barrier structure a re
 Changing `Placement` to interleave a tensor's channel blocks at a five-row band is a
 compiler-side change needing no xclbin and no kernel change, so one sitting would turn every
 figure here into a measurement.
+## The plane-packed activation layout: a contiguous fill merges deeper, and is 0.34 ms on YOLOv8s (2026-09-20, Desktop 2)
+
+`Placement.band_rows` interleaves a tensor's channel blocks every five rows, so one tile's
+blocks sit adjacent and a k1 or res fill becomes contiguous. That drops the fill from three
+dimensions to two, which is what admits `merge_runs` on top of `merge_quad`: each adds one
+dimension and both refuse a four-dimensional pattern, so a 3-D fill gets the quad merge alone
+where k3s2's 2-D one folds 23.6 to 39.6 packets into a single task.
+
+A tensor has one layout, and one wider reader disqualifies it - k3s1 reads eight rows from
+y0-1, k3s2 sixteen from 2*y0-1, pool sixteen from y0-2, k1up2 four from y0>>1, and each crosses
+a band boundary where the row-to-address map stops being affine. **22 of 61 read tensors
+qualify** on both models, which is why this is worth a few tenths rather than the 2 ms an
+unconstrained simulation suggested.
+
+Device 0, `xrt-smi` idle before and after every run, 300 iterations after 20 warm-up, arms
+interleaved, same sitting -
+[`plane_packed_layout_20260920.log`](../results/aie/plane_packed_layout_20260920.log).
+
+| model | arm | real ms | floor ms | compute ms | activation bytes | DMA tasks |
+|---|---|---:|---:|---:|---:|---:|
+| YOLOv8n | control | 7.371 | 5.398 | 1.973 | 83,072,000 | 2,972 |
+| YOLOv8n | banded | **7.236** | 5.339 | 1.897 | 83,072,000 | 2,896 |
+| YOLOv8s | control | 16.901 | 12.720 | 4.181 | 237,670,400 | 7,143 |
+| YOLOv8s | banded | **16.580** | 12.474 | 4.106 | 237,670,400 | 6,795 |
+| YOLOv8s | control (2nd) | 16.945 | 12.775 | 4.171 | 237,670,400 | 7,143 |
+| YOLOv8s | banded (2nd) | **16.588** | 12.440 | 4.148 | 237,670,400 | 6,795 |
+
+The activation byte counts are identical in every row: the saving is descriptors, not traffic.
+`insts.bin` shrinks 430,180 to 419,476 B and 1,019,140 to 969,812 B. The workspace grows 5.15%
+and 5.51%, because a banded tensor and a plane-major one of the same geometry can no longer
+share a reuse slot. `tools/verify_engine_container.py` reads 66/66 layers exact on YOLOv8n with
+reuse off; YOLOv8s was measured for latency and not checked layer by layer.
+
+The descriptor count predicted -0.108 ms and -0.518 ms. YOLOv8n came in a little better and
+YOLOv8s at about two thirds, so the per-task constant over-predicts on the larger model; the
+measurement is the number to quote. Glass-to-glass was not measured and AMD's stack was not run
+in this sitting, so nothing here is a comparison against it.
+
+### Two BD constraints this exposed
+
+A shim buffer descriptor has **three addressing dimensions plus a repeat**, each wrap field ten
+bits. Folding a whole 6,400 B fill into one 1,600-word run overflows that: mlir-aie splits the
+run, spends a fourth addressing dimension, and the lowering refuses the descriptor because the
+repeat may not be counted in the transfer length. `canonical` now caps at 1,023 words, and it
+costs no merging. Separately `run_drain` canonicalises the drain it builds, because a foldable
+four-dimensional tap is ambiguous about which dimension is the repeat; folding in the emitter
+instead was tried and reverted, since it also folds the weight runs' stride-0 replay into a
+shape the lowering rejects.
+
+### The readback was the bug, and the offline suite could not see it
+
+This was first recorded as "wrong on silicon": 44 of 66 layers mismatched, and exactly the 22
+banded tensors. `GraphSession.read_tensor` carried its own plane-major reshape and never
+learned `band_rows`, so it read the right bytes in the wrong order; the layout and the device
+were correct throughout. The offline suite passed the whole time - 256 tests, including
+layer-exactness against ONNX Runtime - because it writes an output with `write_tensor` and
+reads it with `read_tensor`, which agree by construction, and emulates activation packets
+through the same pattern that wrote them, so a layout error cancels on both sides. A readback
+shared with the thing under test is not a check.

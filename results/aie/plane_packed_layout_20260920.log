@@ -1,104 +1,102 @@
-# Plane-packed (band-interleaved) activation layout: built, byte-free, and WRONG ON SILICON
+# Plane-packed (band-interleaved) activation layout: 66/66 exact on silicon, -0.34 ms on YOLOv8s
 # Host DESKTOP-CBL5NUA (Desktop 2, Ryzen 7 8700G, XDNA1 Phoenix), 2026-09-20, env mlir-aie-iron
-# Device 0 used for three verification runs; xrt-smi reported no hardware contexts before and
-# after every one of them, and the device was idle at the end.
+# Device 0. xrt-smi reported "No hardware contexts running on device" before and after every
+# run below, and the device was idle at the end.
 #
-# STATUS: NOT WORKING. The layout builds, lowers, and saves exactly the descriptors predicted,
-# on unchanged bytes - and then disagrees with the reference on silicon. Do not land it.
+# Supersedes the first version of this log, which concluded "WRONG ON SILICON". That conclusion
+# was wrong: the layout and the device were correct and the READBACK was not. Kept visible here
+# because the retraction is the useful part.
 #
-## What was built
+## What it is
 #
-# Placement.band_rows: 0 lays a tensor out plane-major (one whole channel block after another,
-# as today); TILE_R interleaves the channel blocks every five rows, so one tile's blocks sit
-# adjacent and a k1 or res fill becomes contiguous. That drops the fill from three dimensions
-# to two, which is what admits merge_runs on top of merge_quad - each adds one dimension and
-# both refuse a four-dimensional pattern (results/aie/merge_depth_sizing_20260920.log).
+# Placement.band_rows interleaves a tensor's channel blocks every five rows, so one tile's
+# blocks sit adjacent and a k1 or res fill becomes contiguous. That drops the fill from three
+# dimensions to two, which is what admits merge_runs on top of merge_quad: each adds one
+# dimension and both refuse a four-dimensional pattern, so a 3-D fill gets the quad merge alone
+# while k3s2's 2-D one folds 23.6-39.6 packets into a single task
+# (results/aie/merge_depth_sizing_20260920.log).
 #
-#   src/ignite_xdna/compiler/engine_schedule.py  band_rows, plane_stride, band_stride, a banded
-#                                                offset(), banded read_tensor/write_tensor,
-#                                                _band_rows() eligibility, banding in the slot
-#                                                reuse key, plane_stride in every fill and drain
-#   src/ignite_xdna/compiler/engine_compile.py   band_rows into the manifest placements
-#   src/ignite_xdna/runtime/graph_session.py     _plane_view reads a banded tensor back
-#   src/ignite_xdna/compiler/engine_sequence.py  canonical() stops folding at the shim BD wrap
+# A tensor has ONE layout, so a single wider reader disqualifies it: k3s1 reads eight rows from
+# y0-1, k3s2 sixteen from 2*y0-1, pool sixteen from y0-2, k1up2 four from y0>>1, and each
+# crosses a band boundary where the row-to-address map stops being affine. 22 of 61 read
+# tensors qualify on both models. That is why this is worth a few tenths and not 2 ms.
 #
-# IGNITE_XDNA_BAND_ROWS=0 turns it off, which is the A/B control used below.
+## Correctness
 #
-## Eligibility: 22 of 61 read tensors, on both models
+#   tools/verify_engine_container.py, yolov8n, --no-workspace-reuse so every layer is readable
+#     66/66 layers EXACT, PASS
 #
-# A tensor has ONE layout, so a single wider reader disqualifies it. k3s1 takes eight rows from
-# y0-1, k3s2 sixteen from 2*y0-1, pool sixteen from y0-2, k1up2 four from y0>>1; each crosses a
-# band boundary, where the row-to-address map stops being affine and the read cannot be one
-# descriptor at all. Also excluded: the graph input and outputs (host code reads them) and any
-# height that is not a multiple of five (tile_origins then emits a last tile starting mid-band).
+## Latency, same sitting, 300 iterations after 20 warm-up, arms interleaved
 #
-#   22 tensors read as k1 only          ELIGIBLE
-#   17 read as k3s1 only                no k1 traffic to win
-#   17 read as k1 AND something wider   where the rest of the prize sits, and unreachable
-#    5 other
+#   model     arm       real ms   floor ms   compute ms   floor %
+#   yolov8n   control     7.371      5.398        1.973    73.2%
+#   yolov8n   banded      7.236      5.339        1.897    73.8%
+#   yolov8s   control    16.901     12.720        4.181    75.3%
+#   yolov8s   banded     16.580     12.474        4.106    75.2%
+#   yolov8s   control    16.945     12.775        4.171    75.4%
+#   yolov8s   banded     16.588     12.440        4.148    75.0%
 #
-# That is why this is worth -0.518 ms and not the -2.163 ms an unconstrained simulation gave.
+#   yolov8n  real -0.135 ms            floor -0.059 ms
+#   yolov8s  real -0.321 and -0.357    floor -0.246 and -0.335    (mean -0.339 / -0.291)
 #
-## What it saves, in the real compiler
+# Predicted -0.108 (yolov8n) and -0.518 (yolov8s) from the descriptor count alone. yolov8n
+# lands slightly better than predicted and yolov8s at about two thirds of it, so the per-task
+# constant over-predicts on the larger model. Direction and rough size hold; the exact
+# coefficient does not, and the measurement is the number to quote.
 #
-#   model     DMA tasks            activation bytes        workspace
-#   yolov8n   2,972 -> 2,896       83,072,000 unchanged    14,138,880 -> 14,867,072  (+5.15%)
-#   yolov8s   7,143 -> 6,795      237,670,400 unchanged    19,730,048 -> 20,816,640  (+5.51%)
+## What it costs
 #
-# Exactly the -76 and -348 the sizing predicted, on byte-identical traffic. The workspace grows
-# because a banded tensor and a plane-major one of the same geometry can no longer share a
-# reuse slot, so band_rows had to enter the slot key.
+#   activation bytes   unchanged (83,072,000 yolov8n / 237,670,400 yolov8s)
+#   DMA tasks          2,972 -> 2,896 and 7,143 -> 6,795, exactly as sized
+#   insts.bin          430,180 -> 419,476 B and 1,019,140 -> 969,812 B
+#   workspace          +5.15% and +5.51%, because a banded and a plane-major tensor of the
+#                      same geometry can no longer share a reuse slot
 #
-## The build needed one more fix, and it is worth recording
+## Two constraints found while building it
 #
-# The first container failed in MLIR: "Buffer descriptor length does not match ... BD length is
-# 102400 bytes. Lowest three dimensions would result in 25600 bytes. Do not include the highest
-# dimension size in transfer length, as this is the BD repeat count."
+# A shim BD has THREE addressing dimensions plus a repeat, each wrap field ten bits
+# (docs/SILICON.md). canonical() folding a whole 6,400 B fill into one 1,600-word run overflows
+# that: mlir-aie splits the run, spends a fourth addressing dimension, and the lowering refuses
+# the descriptor because the repeat may not be counted in the transfer length. canonical() now
+# caps at 1,023 words, and it costs no merging - the task counts are identical either way.
 #
-# A shim BD has THREE addressing dimensions plus a repeat, and each wrap field is ten bits
-# (docs/SILICON.md). A band-packed tensor whose pitch is 160 B lets canonical() fold a whole
-# 6,400 B fill into ONE run of 1,600 words, past the 1,023-word wrap; mlir-aie then splits it,
-# spends a fourth addressing dimension, and the lowering refuses the descriptor. Capping
-# canonical() at 1,023 words fixes it and costs no merging at all - the task counts above are
-# identical with and without the cap.
+# run_drain now canonicalises the drain it builds. Fills arrive at the emitter already folded,
+# through merge_quad and merge_runs; a drain went straight to the tap, and on a banded tensor
+# its block stride equals its row extent, so the pattern was foldable and a foldable 4-D tap is
+# ambiguous about which dimension is the repeat. Folding in the emitter instead was tried and
+# REVERTED: it also folds the weight runs' stride-0 replay into a shape the lowering rejects.
 #
-## Silicon says it is wrong
+## The bug, and why the offline suite could not see it
 #
-#   build/yolov8n_full_banded.ignite  (reuse on)   21/28 readable layers exact, 4 MISMATCH
-#   build/yolov8n_band_nore.ignite    (reuse off)  18 of 66 layers MISMATCH, first at
-#                                                  L1 /model.1/conv/Conv (606,033 of 819,200 B)
-#   build/yolov8n_control.ignite      (BAND_ROWS=0) 25/25 readable exact, 41/41 slots  PASS
+# GraphSession.read_tensor carried its own plane-major reshape and never learned band_rows: it
+# read blocks * plane_bytes from the tensor base and reshaped [blocks][h][w][8]. Banded, a
+# block's rows are not contiguous and the region spans every plane of every band, so that read
+# returns the right bytes in the wrong order. _plane_view had been taught banding; this path
+# had not, and this is the path the verifier uses. 44/66 exact before the fix, 66/66 after.
 #
-# The control is the same branch, same compiler, same tool, banding off. So this is the banded
-# layout and nothing else. Every mismatching layer WRITES a banded tensor; every layer that
-# writes a plane-major one is exact.
+# The offline suite passed throughout - 256 tests, including layer-exactness against ONNX
+# Runtime. It writes an output with write_tensor and reads it with read_tensor, so those agree
+# by construction, and the emulation reads activation packets through the same pattern that
+# wrote them, so a layout error cancels on both sides. A passing offline test is not evidence
+# of on-silicon behaviour, and a readback shared with the thing under test is not a check.
 #
-## What has been ruled out, offline
+## Ruled out on the way, none of them the cause
 #
-#   - The drain's byte order. Building the stream the MemTile join really delivers (core, then
-#     block, then row, then column) from an intended image and scattering it through o_pattern
-#     reproduces read_tensor on 66 of 66 layers, banded included. An earlier probe that fed the
-#     pattern its own indices proved nothing and was discarded.
-#   - The readback. The runtime's _plane_view agrees with the compiler's read_tensor on all 22
-#     banded placements.
-#   - The fill and drain strides. Every remaining use of plane_bytes is capacity or a reshape,
-#     not a DMA stride.
+#   BD field overflow    max wrap 200 of 1,023; max step 207,368 of 1,048,575 words; identical
+#                        banded and not. DmaPattern validates alignment and dimension count and
+#                        NOT field widths, so this was worth checking rather than assuming.
+#   drain byte order     building the stream the MemTile join really delivers (core, then block,
+#                        then row, then column) and scattering it through o_pattern reproduces
+#                        read_tensor on 66 of 66 layers. An earlier probe that fed the pattern
+#                        its own indices proved nothing and was discarded.
+#   strides              every remaining plane_bytes is a capacity or a reshape, never a stride.
 #
-# So the descriptors are self-consistent and the disagreement is between them and what the
-# hardware executes. That is the open question.
+## Not established
 #
-## Why the offline suite did not catch this
-#
-# 256 tests pass, including the layer-exact comparison against ONNX Runtime. The suite writes a
-# layer's output with write_tensor and reads it with read_tensor, so the two agree by
-# construction, and the emulation reads activation packets through the same pattern that wrote
-# them - a layout error cancels on both sides. A passing offline test is not evidence of
-# on-silicon behaviour, and this is a clean example of the class.
-#
-## Next
-#
-# Dump the emitted BD for one banded drain and one banded fill out of the transaction stream
-# (tools/shim_channel_audit.py decodes them) and compare the wrap, step and repeat fields
-# against what the pattern asks for. The suspicion is a field overflow that lowers silently:
-# band_stride is planes*5*pitch, far larger than any stride this engine emitted before, and the
-# shim step field is 20 bits.
+#   - Glass-to-glass was not measured, only NPU dispatch. No comparison against AMD's stack was
+#     run in this sitting, and none of these numbers is one.
+#   - Only yolov8n was verified layer-by-layer. yolov8s was measured for latency, not checked
+#     for exactness.
+#   - The +5% workspace was not traced to a slot-by-slot cause, and no attempt was made to
+#     recover it by letting banded and plane-major tensors share a slot at different bases.
+#   - IGNITE_XDNA_BAND_ROWS=0 restores the old layout exactly and is how both arms were built.
