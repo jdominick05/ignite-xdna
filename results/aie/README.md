@@ -44,14 +44,28 @@ relied on is recorded in [SILICON 1.4](../../docs/SILICON.md).
 | Log | Evidence |
 |---|---|
 | [shim_channel_utilisation_sesr_yolov8n_desktop2_20260919.log](shim_channel_utilisation_sesr_yolov8n_desktop2_20260919.log) | SESR's floor runs at 18% of one column's measured rate with 2.151 ms outside transfer time; identical traffic at two cadences differs by ~1 ms; the arms differ in merge width, not bandwidth. |
-| [fill_merge_attribution_sesr_m7_desktop2_20260919.log](fill_merge_attribution_sesr_m7_desktop2_20260919.log) | 355 of SESR's 412 distinct 6,400 B windows step 640 B apart and deliver 2.42x the address range they read; merging reaches ~15 of 1,007 tasks. |
-| [fill_merge_attribution_yolov8n_full_desktop2_20260919.log](fill_merge_attribution_yolov8n_full_desktop2_20260919.log) | The flagship's same size class is mostly regular: 677 of 987 windows collapse to 181 descriptors, and 938 tasks refetch an address already fetched. |
+| [fill_merge_attribution_sesr_m7_desktop2_20260919.log](fill_merge_attribution_sesr_m7_desktop2_20260919.log) | 355 of SESR's 412 distinct 6,400 B windows step 640 B apart and deliver 2.42x the address range they read. Its merge-savings reading is superseded by the pre-merge logs below. |
+| [fill_merge_attribution_yolov8n_full_desktop2_20260919.log](fill_merge_attribution_yolov8n_full_desktop2_20260919.log) | The flagship's size class looks mostly regular in the artifact; the "496 pushes on the table" reading drawn from it is retracted (see the top of this file's retraction list). |
+| [fill_premerge_sesr_m7_desktop2_20260919.log](fill_premerge_sesr_m7_desktop2_20260919.log) | The merger is offered 5,408 patterns and returns 710 - exactly the stream's activation task count - declining 0 multi-pattern runs. |
+| [fill_premerge_yolov8n_full_desktop2_20260919.log](fill_premerge_yolov8n_full_desktop2_20260919.log) | 4,811 offered, 2,146 returned (= the activation task count); 1,869 stand alone because they are already four-dimensional. |
 | [fill_repeat_positions_sesr_m7_desktop2_20260919.log](fill_repeat_positions_sesr_m7_desktop2_20260919.log) | All 100 of SESR's refetches are far from their first send (median 124 tasks) - cross-layer, so not coverable by a wider window. |
 | [fill_repeat_positions_yolov8n_full_desktop2_20260919.log](fill_repeat_positions_yolov8n_full_desktop2_20260919.log) | The flagship's 938 refetches split 280 near against 658 far; only the near third is a packing question. |
 
 ## Retractions and supersessions in this directory
 
 Read these before quoting anything below.
+
+- **`fill_merge_attribution_*.log`'s claim that the flagship "leaves roughly 496 pushes on the table"
+  is retracted**, and with it the reason given for SESR (`no repeat dimension can express an
+  overlapping chain`). `tools/fill_premerge_audit.py` wraps the merger the schedule actually calls and
+  finds the opposite: it is offered those chains and collapses 87% of SESR's patterns (5,408 offered,
+  710 returned, and 710 equals the container's activation task count in the emitted stream), so what
+  stands alone is four-dimensional already - 1,869 of the flagship's 2,146, 338 of SESR's 710 - and
+  the shim descriptor has no fifth dimension. See `fill_premerge_sesr_m7_desktop2_20260919.log` and
+  `fill_premerge_yolov8n_full_desktop2_20260919.log`. The artifact counts survive (1,007 tasks,
+  13,181,568 B, 355 of 412 windows stepping 640 B, 2.42x the range read), and so does the rejection:
+  **there is no unexploited merge in either container's fills**, which is a stronger reason than the
+  1.5% figure.
 
 - **`conv2x_int8_cpu_baseline.log`'s "628.2 µs reproduces `dispatch_floor`'s 617.0 µs to
   ~2%" is retracted** as a bracket mismatch. 617.0 µs is the passthrough's *wall*

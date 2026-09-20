@@ -1,0 +1,14 @@
+UTC: 2026-09-20T04:32:26.763754+00:00
+MACHINE: DESKTOP-CBL5NUA AMD64 Family 25 Model 117 Stepping 2, AuthenticAMD
+COMMAND: python tools/fill_premerge_audit.py models/sesr_m7_xint8.onnx
+COMMIT: 6c5ffdd0ae6d7acf10376434212bff675f59f08d
+
+[premerge] models/sesr_m7_xint8.onnx: 9 layers, 541 merge_runs calls
+[premerge] offered 5408 patterns, returned 710 -- 4698 fewer, 87% collapsed
+[identity] returned 710 vs 710 activation tasks in the emitted stream: MATCH -- the wrap saw the schedule the compiler ran
+[runs ] collapsed whole                 :   372 runs,  5070 patterns
+[runs ] already uses four dimensions    :   338 runs,   338 patterns
+[step ] gap (step > payload): 5070 patterns offered together
+[dims ] as offered (raw): 2 x676, 3 x4394, 4 x338
+[dims ] as merge_runs compares them (canonicalised): 2 x676, 3 x4394, 4 x338 -- a pattern with four canonical dimensions is one the merger will not touch
+[out  ] 0 patterns were in a multi-pattern run that the merger declined; the four-dimension rule and the 64 cap are the limits it enforces

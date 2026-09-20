@@ -3,16 +3,22 @@
 A shim descriptor is 8 words: word 0 is the length in 32-bit words and word 1 the address in
 32-bit words (docs/SILICON.md 1.3-1.4); words 2-7 carry the address generator's per-dimension
 strides and sizes plus the lock pair. Grouping tasks by everything except length and address finds
-the tasks that are the same shape of transfer at different offsets -- the only set the repeat
-dimension could collapse into one descriptor. Within each group the source addresses are cut into
-maximal constant-step runs, and each run is judged by its step against the payload:
+the tasks that are the same shape of transfer at different offsets. Within each group the source
+addresses are cut into maximal constant-step runs, and each run is classified by its step against
+the payload:
 
-  overlap    step < payload    the windows overlap, which no repeat encoding can express
-  contiguous step == payload  a plain larger memcpy
-  gap        step > payload    repeatable only while the step fits the 20-bit step field, in words
+  overlap    step < payload    the windows cover overlapping source ranges (this tool does NOT
+                               decide whether the repeat dimension could express such a chain)
+  contiguous step == payload   a plain larger memcpy
+  gap        step > payload    a regular chain, repeatable while the step fits the 20-bit field
 
-It also reports the redundancy the overlap class carries: the bytes a run delivers against the
-union of the windows it reads, which is the over-read the packets exist to pay for.
+WHAT AN ARTIFACT CANNOT SAY. These counts show descriptors that were pushed, never what the merger
+was offered. ``tools/fill_premerge_audit.py`` wraps the real ``merge_runs`` and measures that
+instead, and its verdict supersedes any inference drawn here about a missed merge: on both models
+tested the merger already collapses every adjacent chain it is offered, and the residue is the
+descriptor's four-dimension limit. Read it before quoting a saving from this tool. What this file
+does establish is the redundancy: bytes delivered against the union of the windows read, which is
+the over-read the packets exist to pay for.
 """
 import argparse
 import sys
@@ -82,7 +88,7 @@ def main() -> int:
         if step is None:
             k, bds = "lone (no partner in its group)", n
         elif step < pk:
-            k, bds = "OVERLAP: step < payload, no repeat can express it", n
+            k, bds = "step < payload: OVERLAPPING source ranges", n
         elif step == pk:
             k, bds = "contiguous: a larger memcpy", (n + MAX_REPEAT - 1) // MAX_REPEAT
         elif step > MAX_STEP_BYTES:

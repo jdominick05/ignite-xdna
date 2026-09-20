@@ -1797,15 +1797,25 @@ cached reference heads rather than `bo_out`.
   **(b) merging the small fills** -- `tools/fill_merge_audit.py` finds 355 of SESR's 412 distinct 6,400 B
   windows stepping 640 B apart, a 10x overlap delivering 2.42x the address range it reads, which no repeat
   dimension can express; only 30 windows are repeatable, so 1,007 tasks become no fewer than 992 (1.5%), which
-  confirms the 2026-09-16 "already at their floor" sizing from the artifact side; **(c) removing the refetches**
+  confirms the 2026-09-16 "already at their floor" sizing; *[reason corrected the same day by
+  `tools/fill_premerge_audit.py`: the merger is offered these chains and collapses 87% of SESR's
+  patterns -- 5,408 offered, 710 returned, and 710 is exactly the container's activation task count
+  in the emitted stream -- so what stands alone does so because the descriptor already carries four
+  dimensions (338 of SESR's 710, 1,869 of the flagship's 2,146), not because an overlap is
+  inexpressible. The "no repeat can express an overlapping chain" reason given here is withdrawn,
+  and the rejection stands on firmer ground: there is no unexploited merge in either container]*;
+  **(c) removing the refetches**
   -- `tools/fill_repeat_audit.py` shows all 100 of SESR's repeated descriptors are far from their first send
   (median 124 tasks), i.e. cross-layer, so no wider window covers them. The flagship, which already beats AMD,
   has the opposite shape and is the only place where (b) and (c) are live: 677 of 987 windows collapse to 181
-  descriptors, and 280 of 938 refetches are near. Do not propose channel count, fill merging, or refetch
+  descriptors, and 280 of 938 refetches are near. *[The merge half of that sentence is retracted the same day --
+  those 677 windows are four-dimensional and were never mergeable; only the refetch split stands.
+  See `tools/fill_premerge_audit.py` and the corrected reason above.]* Do not propose channel count, fill merging, or refetch
   removal for SESR; what remains is a packet/tile shape that removes the overlap at the source, or retaining
   activations across a layer boundary -- and (b)'s 2.42x overlap and (c)'s cross-layer repeats are that same
   need measured twice
   ([BENCHMARKS](BENCHMARKS.md#sesrs-small-fills-overlap-by-construction-merging-could-remove-about-15-of-its-1007-tasks-2026-09-19-desktop-2),
+  [pre-merge correction](BENCHMARKS.md#the-fill-merger-already-collapses-what-it-is-offered-the-residue-is-the-descriptors-four-dimensions-2026-09-19-desktop-2),
   [utilisation](BENCHMARKS.md#sesrs-shim-channels-run-at-18-of-the-measured-rate-the-dispatch-floor-is-wait-structure-not-wire-2026-09-19-desktop-2)).
 
 - **Rejected: routing activations around the MemTile (2026-09-16, measured, not built).** A MemTile ObjectFIFO

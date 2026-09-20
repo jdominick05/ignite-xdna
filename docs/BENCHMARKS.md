@@ -10251,12 +10251,12 @@ loosely packed, they are *overlapping*: 355 of the 412 distinct windows step 640
 each carries 6,400 bytes — a 10x overlap — and those runs deliver **2.42x the address range they
 read** (DERIVED: payload plus step per extra window in a run, against bytes delivered). No repeat
 encoding expresses a chain of overlapping windows, so this is not a missed merge; the small packets
-are the over-read itself.
+are the over-read itself. *[Mechanism retracted the same day, next section: the merger is offered these chains and collapses 87% of SESR's patterns, so what stands alone is the descriptor's four-dimension limit, not an encoding that cannot express an overlap. The overlap arithmetic itself stands.]*
 
 **The flagship has the opposite shape, and it is already winning.** YOLOv8n's 6,400 B class is
 987 distinct windows of which 677 are regularly spaced with a step at least the payload; they would
 collapse from 677 pushes to 181 descriptors, so the container that beats AMD's stack (8.588 against
-10.892 ms G2G) leaves roughly 496 pushes on the table in this size class alone. It also refetches:
+10.892 ms G2G) leaves roughly 496 pushes on the table in this size class alone. *[Retracted the same day: 1,869 of those 2,146 activation patterns are already four-dimensional, so no merge was available -- see the next section.]* It also refetches:
 938 of its 1,925 packet tasks land on an address already fetched in the same dispatch, against 100
 of SESR's 512.
 
@@ -10287,3 +10287,48 @@ mergeable sets, not for it. The 640 B step is read from the descriptors' own add
 windows overlap is `engine_schedule`'s packet geometry (the halo and the 25-column packet), which
 this tool does not evaluate, and the duplicate addresses say a window is fetched more than once, not
 why.
+
+## The fill merger already collapses what it is offered; the residue is the descriptor's four dimensions (2026-09-19, Desktop 2)
+
+The section before this one inferred, from the emitted stream, which fills "could have been merged".
+That inference was wrong in its mechanism, and the correction is measured rather than argued:
+`tools/fill_premerge_audit.py` runs the real lowering and scheduling with `merge_runs` wrapped in
+the same process, so it sees the pattern lists the merger is actually offered. A cross-check worth
+stating as a correlation rather than a proof: **the number of patterns the wrapped merger returns
+equals the container's activation task count in the emitted stream** — 710 returned against 710
+pushed for SESR M7, 2,146 against 2,146 for YOLOv8n. `merge_runs` also serves the drain and weight
+paths, so that identity says the wrap is watching the schedule the compiler ran, not that every
+returned pattern is an activation fill.
+
+| Model | patterns offered | returned | collapsed | returned = activation tasks | patterns in declined multi-pattern runs |
+|---|---:|---:|---:|---:|---:|
+| SESR M7 | 5,408 | 710 | 4,698 (87%) | 710 ✓ | **0** |
+| YOLOv8n | 4,811 | 2,146 | 2,665 (55%) | 2,146 ✓ | 80 |
+
+**The residue is a dimension limit, not a missed opportunity.** `DmaPattern` accepts one to four
+sizes and `merge_runs` adds exactly one outermost dimension, so it refuses any pattern already
+carrying four (`if len(p0.sizes) > 3`). Those dominate what stands alone: **1,869 of the flagship's
+2,146 returned patterns (87%) and 338 of SESR's 710 (48%) are four-dimensional**, and the shim
+descriptor has 3-D addressing plus an iteration modifier (`docs/SILICON.md` 1.4), so there is no
+fifth dimension to add. SESR has no declined multi-pattern run at all — everything adjacent was
+collapsed, and 182 of its descriptors at 25,600 B (four 6,400 B packets each) are that collapsing
+doing its work.
+
+**What this retracts, and what survives.** Retracted: the flagship "leaves roughly 496 pushes on the
+table in this size class" — those windows are four-dimensional and were never mergeable — and the
+explanation that "no repeat encoding expresses a chain of overlapping windows", which the artifact
+method cannot establish either way and which `tools/fill_merge_audit.py` no longer claims.
+Unaffected: the artifact counts themselves (1,007 tasks, 13,181,568 B, 512 packets of 6,400 B, 355 of
+412 distinct windows stepping 640 B and delivering 2.42x the address range they read), the 18%
+utilisation read, and the conclusion that fill merging is not a route to SESR's 1.05 ms — which is
+now better supported than before, because the merger is already doing everything it can. "1.5% of
+tasks" is the wrong shape of claim: the honest statement is that **there is no unexploited merge in
+either container's fills** (0 declined patterns on SESR, 80 on the flagship), and the flagship's
+1,869 four-dimensional patterns are where any further reduction would have to come from — a
+different packet shape, not a better merge pass.
+
+Evidence: [fill_premerge_sesr_m7_desktop2_20260919.log](../results/aie/fill_premerge_sesr_m7_desktop2_20260919.log),
+[fill_premerge_yolov8n_full_desktop2_20260919.log](../results/aie/fill_premerge_yolov8n_full_desktop2_20260919.log).
+Offline throughout: no device, no hardware context, no source change — the module is wrapped in the
+audit's own process only. Both logs record `COMMIT` so the identity check is tied to the code it
+describes.
