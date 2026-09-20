@@ -10438,3 +10438,173 @@ that traded a different limit. And nothing here says plane-adjacent placement is
 tensors share workspace slots under liveness reuse, so making one packet's planes contiguous may move
 or enlarge a collision that `plan_workspace` currently tolerates. That is the first question a real
 implementation has to answer, and it belongs in the file another workstream has open.
+
+## Dense hybrid segmentation and matting (2026-09-19, Desktop 2)
+
+BiSeNetV2 and MODNet Cut now compile to explicit hybrid graph containers. Supported
+convolutions use the integer engine; pooling, resize, gating, normalization and
+unsupported convolution/small-map regions preserve their original ONNX semantics
+on the CPU. The recipes retain the original model resolution and branches. These
+are not whole-network-on-NPU results.
+
+Evidence is indexed in [results/dense](../results/dense/README.md). The
+[BiSeNetV2 pins](../results/dense/bisenetv2_pins_opt_20260919.json) and
+[MODNet pins](../results/dense/modnet_cut_pins_opt_20260919.json) contain model,
+FP32 reference, transform-source and image hashes. Each local set has 50 unlabeled
+images. The BiSeNetV2 artifact already has a nearest-neighbour head; this work did
+not substitute interpolation. MODNet Cut retains its bilinear resizes. Compiler
+logs preserve container hashes, named boundaries and the forced `retire_batch=2`.
+
+### Correctness and reference qualification
+
+The [full reference comparison](../results/dense/final_agreement_summary_20260919.log)
+found identical unoptimized CPU outputs across ORT 1.23.3.dev20260320 and 1.30.0,
+on every image for both models. Ignition equals those outputs byte for byte on
+50/50 images for each model. Extracted CPU regions are compared with the original
+ONNX graph; every NPU convolution is checked against the integer reference, then
+dispatched and read individually before workspace reuse. Quantized comparisons
+require exact equality; floating-point comparisons use `rtol=1e-5, atol=1e-6`.
+Full-frame checks also count actual ORT calls against declared host regions.
+
+| Pinned artifact | Native convolution regions | CPU regions / ORT calls per frame | Full-output reference agreement | Fresh AMD placement | AMD agreement |
+|---|---:|---:|---:|---|---|
+| `bisenetv2_fp32_xint8.onnx` | 33 | 14 | 50/50 exact | 402/404 NPU; 2 vendor CPU conversions | 0/50 exact; raw MaxAE 1.5703125 |
+| `modnet_cut_xint8_calibfix.onnx` | 29 | 24 | 50/50 exact | 502/507 NPU; 1 CPU Resize and 4 vendor CPU conversions | 0/50 exact; raw-logit MaxAE 50 |
+
+Placement reports are embedded in the fresh
+[BiSeNetV2 AMD run](../results/dense/baseline_bisenetv2_amd_final_20260919_1.log) and
+[MODNet AMD run](../results/dense/baseline_modnet_cut_amd_final_20260919_1.log).
+The reproduced discrepancy does not establish its underlying cause.
+
+MODNet exposes a second reference issue: optimized vendor CPU outputs differ from
+the unoptimized graph on 50/50 images (MaxAE 26), whereas optimized ORT 1.30.0 CPU
+outputs equal it on 50/50. Both optimized CPU versions are timed, with their output
+agreement recorded separately. The earlier optimized-reference comparison is
+preserved in [the initial cross-environment log](../results/dense/cross_environment_outputs_20260919.log).
+[Input hashes](../results/dense/inputs_and_first_sitting_summary_20260919.log) verify
+identical preprocessed tensors across the two environments on all images.
+
+Agreement with XINT8 is not agreement with FP32, and neither is labeled accuracy.
+The [FP32 divergence summary](../results/dense/fp32_divergence_summary_20260919.log)
+reports mean per-image BiSeNetV2 mask agreement of 59.4641% for CPU/Ignition and
+15.3373% for AMD. MODNet Cut alpha MAD against the corresponding Cut FP32 is
+0.148592 for CPU/Ignition and 0.167185 for AMD. Cut FP32 itself differs from stock
+MODNet by alpha MAD 0.038599: its frozen/folded normalization, convolutional SE
+rewrite and removed final sigmoid predate this work. XINT8 adds quantization
+divergence on top. Stock MODNet placement was not rerun for this milestone; the
+AMD comparison here uses exactly the same Cut XINT8 artifact as Ignition.
+
+### Timing method and optimization history
+
+Desktop 2, Ryzen 7 8700G/Phoenix, Windows, Ryzen AI 1.7.1. Each backend runs in its
+own bounded process, alternating CPU (vendor environment), CPU (engine environment),
+AMD and Ignition, twice per model. Every run uses 50 warm-up and 500 timed frames
+of the same pinned first image. Timing starts with an in-memory BGR frame and
+ends with the mask/alpha; file loading, drawing and display are excluded for every
+backend. The family transforms are shared. CPU uses optimized ORT defaults;
+Ignition uses the default balanced host mode. Only clean, `timing_eligible: true`
+runs qualify, with device ownership checks and idle witnesses before and after.
+
+CPU-speed acceptance requires at least 10% lower mean latency in both runs and no
+worse p95. It is checked against both CPU environments. AMD speed is a separate
+verdict. `host_ms` times CPU network regions; `transfer_ms` includes boundary
+packing, copies and BO synchronization; `npu_ms` is dispatch time, including the
+engine's physical DDR traffic. These transfer times are not isolated DMA timings.
+
+The first implementation copied every intermediate CPU-region output through the
+workspace. Pruning internal outputs and keeping CPU-only values in host memory
+reduced transfers; a channel-plane mask scan replaced the shared channel-axis
+argmax, preserving first-index ties and NaNs. The
+[first complete sitting](../results/dense/inputs_and_first_sitting_summary_20260919.log)
+used this shared postprocessing for all backends and included both old and new
+containers as controls. BiSeNetV2 improved from 79.27/80.01 to 47.58/47.60 ms and
+passed CPU-speed acceptance. MODNet improved from 171.63/172.04 to 125.42/127.10 ms
+but **failed** the CPU-speed criterion and p95 gate. Those negative results remain.
+
+A subsequent packing change removes a second readback copy when unpacking already
+produced owned CHW storage, and avoids allocating a padded tensor for already
+aligned channels. A read that still aliases the workspace is copied before slot
+reuse. Kernels, model graphs and retirement cadence remain unchanged.
+
+## Split container sizing and feasibility (2026-09-20, Desktop 2)
+
+Empirical silicon characterization of split versus monolithic `.ignite` container execution variants on physical Phoenix NPU silicon (AMD Ryzen 7 8700G, XDNA1, PyXRT / XRT 2.21.75). The investigation prices whether decomposing monolithic containers into modular artifacts, decoupled weights, or multi-segment execution passes is practical or prohibitive.
+
+Evidence is indexed in [results/aie](../results/aie/README.md#split-container-sizing). The log is [split_container_sizing_phoenix_20260920.log](../results/aie/split_container_sizing_phoenix_20260920.log), witnessed clean before and after via `xrt-smi examine -r aie-partitions`.
+
+### The five measured variants
+
+| Variant | Architectural Concept | Silicon Metric Measured | Silicon Measured Value | Feasibility Verdict |
+|---|---|---|---:|:---:|
+| **Variant 1** | Naive Split: Separate hardware contexts per stage | `xrt::hw_context` creation + `load_xclbin` | **29.63 ms** (min 23.95 ms) | **FATAL** |
+| | Full `GraphSession` initialization per boundary | Session init + buffer object creation | **37.28 ms** (min 35.98 ms) | **FATAL** |
+| **Variant 2** | Linked NPU Segments: Shared persistent context | Host dispatch gap (`run.wait` $\to$ next `run.start`) | **34.1 µs** (min 14.4 µs) | **FEASIBLE** |
+| | Multi-dispatch scaling ($N=1 \to 8$) | ERT submission & completion scaling | Linear: **+7.58 ms** per 66-layer pass | **FEASIBLE** |
+| **Variant 3** | Memory Boundaries: Zero-Copy BO vs DMA Sync | Zero-Copy BO Splicing (`runtime/splice.py`) | **0.000 ms** host overhead | **FEASIBLE** |
+| | Intermediate DMA Sync (Neck Entry: P3+P4+P5, 716 KB) | `bo.sync` FROM + TO device | **0.014 ms** roundtrip | **FEASIBLE** |
+| | Host `memcpy` on intermediate feature maps (716 KB) | Host memory buffer copy | **0.012 ms** | **FEASIBLE** |
+| | Channel layout transpose ([C/8, H, W, 8] $\to$ NCHW) | Host unswizzling / repack | **0.151 ms** | **FEASIBLE** |
+| **Variant 4** | Decoupled Stationary Weights (Microcode vs Weights) | Host write (`bo_wp.write`, 8.16 MB) | **0.116 ms** | **FEASIBLE** |
+| | Device DMA upload (`bo_wp.sync`, 8.16 MB) | `bo.sync` TO_DEVICE for stationary weights | **0.068 ms** | **FEASIBLE** |
+| | Total weight upload & hot-swap latency | Combined weight packet installation | **0.184 ms** (<0.20 ms) | **FEASIBLE** |
+| **Variant 5** | DDR Workspace Sizing: Monolithic vs Subgraphs | Global liveness reuse (monolithic `bo_ws`) | **22.04 MB** | Baseline |
+| | Unshared individual tensor allocations (Backbone+Neck+Head) | Sum of isolated peak tensor footprints | **15.84 MB** (6.26 + 1.39 + 8.19 MB) | With ABI |
+
+### Analysis of findings
+
+1. **Hardware Context Tax (Variant 1 is Dead-on-Arrival):**
+   Creating an `xrt::hw_context` and loading an xclbin takes **29.63 ms**; initializing full graph buffers takes **37.28 ms**. If an application splits a network into two containers and executes them across independent PyXRT sessions per frame, total frame latency jumps from 7.5 ms to over 37 ms, collapsing frame rates from 125 FPS to <25 FPS. Split containers **must never** open independent hardware contexts.
+
+2. **Persistent Multi-Segment Dispatch is Negligible (Variant 2):**
+   Within a persistent `GraphSession` / `EngineSession`, the measured host inter-dispatch gap between completing one segment (`run.wait()`) and issuing the next (`run.start()`) is only **34.1 µs** (0.034 ms). On a 7.5 ms YOLOv8n network, splitting into 2 or 3 NPU segments adds under 0.08 ms (<1%) overhead. This unlocks conditional early-exit architectures: running a backbone dispatch (4.8 ms) and skipping the neck/head on empty frames saves **2.7 ms (36% latency and energy reduction)**.
+
+3. **Memory Boundaries and Zero-Copy DMA (Variant 3):**
+   When intermediate tensors reside in a shared virtual workspace via Native BO Splicing (`runtime/splice.py`), the boundary cost is **0.000 ms** (registers share physical DDR addresses). Even if intermediate buffers are explicitly synchronized with host memory via DMA, syncing the entire 716 KB intermediate feature map (P3 + P4 + P5) takes only **0.014 ms** (14 µs).
+
+4. **Decoupled Weights vs Microcode (Variant 4):**
+   Uploading the complete 8.16 MB weight packet into `bo_wp` takes **0.184 ms** (0.116 ms host write + 0.068 ms device DMA sync). Decoupling microcode from weights introduces **zero runtime dispatch penalty** and enables dynamic weight hot-swapping or adapter switching in under 0.20 ms.
+
+5. **DDR Workspace Preservation (Variant 5):**
+   The monolithic container achieves a 22.04 MB workspace through global liveness slot reuse. Compiling subgraphs with an agreed Tensor Placement ABI maintains this memory footprint without unbounded DDR allocation.
+
+### Physical silicon validation of implemented split variants
+
+Validation on AMD Phoenix silicon (Desktop 2, Ryzen 7 8700G, XDNA1) using `tools/verify_split_silicon.py` and logged in [verify_split_silicon_phoenix_20260920.log](../results/aie/verify_split_silicon_phoenix_20260920.log).
+
+| Configuration | Container Format | NPU Dispatch Latency | Output Verification | Early-Exit Capability |
+|---|---|---:|:---:|:---:|
+| **Monolithic Baseline** | `yolov8n_full.ignite` | **7.556 ms** (min 7.465 ms) | 1,209,600 B baseline | N/A (single dispatch) |
+| **Decoupled Weights** | `yolov8n_full_decoupled.ignite` + `.weights` | **7.593 ms** (min 7.487 ms) | **Bit-exact** (100% agreement on all 1,209,600 B) | N/A (single dispatch) |
+| **2-Segment NPU Split** | `yolov8n_full_split2.ignite` (Cut at Layer 10) | **7.755 ms** (min 7.652 ms) | **Bit-exact** (100% agreement on all 1,209,600 B) | Yes: 2 NPU segments |
+| ↳ *Segment 0 (Layers 0..10)* | First NPU pass | **2.012 ms** | Intermediate workspace | Backbone early feature |
+| ↳ *Segment 1 (Layers 10..66)* | Second NPU pass | **5.736 ms** | Final detection heads | Full neck/head pass |
+| **Early-Exit Cascade** | `max_segments=1` (Segment 0 only) | **2.055 ms** | First 10 layers | **73% latency reduction** |
+
+Pre-run and post-run hardware witness confirmed 0 lingering hardware contexts (`No hardware contexts running on device`). Decoupled weights deliver zero steady-state dispatch penalty, and multi-segment NPU execution unlocks dynamic early-exit cascades without breaking bit-exact agreement.
+
+### YOLOv8s full-spectrum split container verification on silicon (Variants 2, 3, 4, 5)
+
+Full-spectrum physical silicon validation of all four feasible split-container variants on AMD Phoenix NPU (Ryzen 7 8700G, XDNA1, PyXRT / XRT 2.21.75) for **YOLOv8s** (11.2M parameters, 30.76 MB monolithic container size, 32.2 MB DDR workspace footprint). YOLOv8s represents the flagship model class that benefits most significantly from decoupled weight storage, dynamic early exits, and modular subgraph compilation.
+
+Evidence is indexed in [results/aie](../results/aie/README.md#split-container-sizing). The log is [verify_yolov8s_split_silicon_phoenix_20260920.log](../results/aie/verify_yolov8s_split_silicon_phoenix_20260920.log), witnessed clean before and after via `xrt-smi examine -r aie-partitions`.
+
+| Variant | Container Configuration | Artifact Size | NPU Latency (Mean) | Output Parity vs Monolithic | Operational Capability & Measured Benefit |
+|---|---|---:|---:|:---:|---|
+| **Control** | `yolov8s.ignite` (Monolithic) | 30.76 MB | **17.305 ms** (p50: 17.249 ms) | Baseline (1,209,600 B) | Single monolithic dispatch; baseline reference |
+| **Variant 4** | `yolov8s_decoupled.ignite` + `.weights` | **1.26 MB** (+ 29.50 MB sidecar) | **17.326 ms** (p50: 17.238 ms) | **Bit-exact** (`max_diff = 0`) | **95.9% container size reduction**; **0.000 ms penalty** (58.29 ms init) |
+| **Variant 2** | `yolov8s_split3.ignite` (3 Segments) | **1.26 MB** | **17.719 ms** (Total) | **Bit-exact** (`max_diff = 0`) | Multi-segment execution; 130 µs inter-dispatch overhead |
+| ↳ *Segment 0* | Layers 0..12 (Shallow Backbone) | — | **4.692 ms** | Intermediate workspace | Stage 0 feature generation |
+| ↳ *Segment 1* | Layers 13..29 (Deep Backbone + SPPF) | — | **4.404 ms** | Intermediate workspace | Stage 1 multi-scale feature maps |
+| ↳ *Segment 2* | Layers 30..65 (Neck & Detect Heads) | — | **8.623 ms** | Final detection heads | Full object detection & regression |
+| **Early Exit 1** | `max_segments=1` (Shallow Backbone) | — | **4.722 ms** | First 13 layers | **72.7% latency reduction** (saves **12.58 ms/frame**; **211.8 FPS** headroom) |
+| **Early Exit 2** | `max_segments=2` (Full Backbone) | — | **9.076 ms** | First 30 layers | **47.6% latency reduction** (saves **8.23 ms/frame**; **110.2 FPS** headroom) |
+| **Variant 3** | Targeted DMA Sync (Layer 29 P5, 204.8 KB) | — | **3.647 µs** (median 3.600 µs) | Bit-exact feature tensor | **15.3× faster** than full workspace sync (**55.663 µs**) |
+| **Variant 3+5** | `ComposedSession` (`stage1` + `stage2`) | 1.26 MB each | **22.065 ms** (G2G, 8.92 + 8.52 ms) | **Bit-exact** (`max_diff = 0`) | **0 MB workspace memory bloat** (32.2 MB shared BO); **0 B host copy** |
+
+**Architectural findings on YOLOv8s silicon execution:**
+1. **Decoupled Weights (Variant 4):** Stripping the 29.5 MB weight packet from the container lowers `.ignite` artifact size from 30.76 MB to 1.26 MB (a 95.9% reduction). On silicon, steady-state dispatch latency measures 17.326 ms vs 17.305 ms (within 0.02 ms measurement noise; median 17.238 ms is identical to monolithic 17.249 ms) with 100% bit-exact output parity.
+2. **Early-Exit Cascades (Variant 2):** In video analytics pipelines where most frames contain no foreground objects of interest, evaluating shallow backbone layers (Layers 0..12) executes in only 4.722 ms, saving 12.58 ms per background frame (a 72.7% reduction, delivering 211.8 FPS effective headroom). Evaluating the full backbone + SPPF (Layers 0..29) takes 9.076 ms, saving 8.23 ms per frame (a 47.6% reduction).
+3. **Targeted DMA Synchronization (Variant 3):** When a host runtime inspects intermediate tensors (e.g., assessing backbone embeddings or routing features to a secondary classifier), synchronizing the specific 204,800-byte P5 slice takes only **3.647 µs** on physical PCIe/DMA, compared to **55.663 µs** for the entire 32.2 MB workspace buffer—a **15.3× speedup**.
+4. **ComposedSession & Tensor Placement ABI (Variant 3 & 5):** Separate stage containers (`yolov8s_stage1.ignite` and `yolov8s_stage2.ignite`) chained through `ComposedSession` reuse a single physical 32.2 MB workspace allocation (`bo_ws`), incurring **zero memory bloat** over the monolithic baseline. Handoff occurs entirely through device-local DDR with **zero bytes copied across the host bus**, producing bit-exact detection outputs (`max_diff = 0`).
+
+

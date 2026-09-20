@@ -15,6 +15,10 @@ Native graph/custom-kernel BO handoff logs are indexed under
 [AIE native graph BO splicing](aie/README.md#native-graph-bo-splicing), with
 [measurements and scope](../docs/BENCHMARKS.md#native-bo-kernel-splicing-2026-09-13-desktop-2).
 
+Split container sizing logs are indexed under
+[AIE split container sizing](aie/README.md#split-container-sizing), with
+[measurements and feasibility verdicts](../docs/BENCHMARKS.md#split-container-sizing-and-feasibility-2026-09-20-desktop-2).
+
 Raw logs behind every number in `README.md`, `RESEARCH.md` and `docs/BENCHMARKS.md`. Each
 log is the UTF-8 stdout of one script invocation, written by the wrappers in `scripts/`;
 nothing here is edited by hand except that the local user profile path has been replaced
@@ -36,6 +40,7 @@ than silently.
 | Directory | Experiment | Section it backs |
 |---|---|---|
 | `benchmarks/` | `hardware_vitisai_comparison.log`: empirical hardware comparison between AMD ONNX Runtime Vitis AI EP (Ryzen AI 1.7.1) and ignite-xdna direct AIE2 silicon across Model A (Single Conv) and Model B (Fused 2-Layer with L2 MemTile activation ping-pong) on physical Phoenix NPU silicon | [Empirical Silicon Benchmark](../docs/BENCHMARKS.md#empirical-silicon-benchmark-ignite-xdna-vs-amd-vitis-ai-ep-2026-09-12-desktop-2) |
+| `aie/` | `split_container_sizing_phoenix_20260920.log`: empirical silicon characterization of split vs monolithic .ignite containers on Phoenix NPU (Ryzen 7 8700G), measuring context switching overhead (29.6 ms raw / 37.3 ms session), persistent multi-dispatch scaling (34.1 us gap), DMA sync (14 us roundtrip on 716 KB), weight upload (0.18 ms for 8.16 MB), and DDR workspace sizing (22 MB vs 15.8 MB unshared) | [Split container sizing and feasibility](../docs/BENCHMARKS.md#split-container-sizing-and-feasibility-2026-09-20-desktop-2) |
 | `quant/` | `notes_qdq_pruning_and_sharing_audit.md`: comprehensive static graph and compiler-rule audit of retained QDQ pruning and activation scale-sharing across six vision topologies (ResNet50, YOLOv8n-cut, YOLOv6n-cut, MODNet-Cut, FastDepth, BiSeNetV2); formalization of `Graph.vendor_order` visit-order dependency, transitive SPPF MaxPool cascades, DPU systolic writeback fusion, and dynamic range truncation under multi-branch alignment | [Localised to one Mul](../docs/BENCHMARKS.md#bisenetv2s-cpunpu-gap-localised-to-one-mul-2026-09-09-desktop-2), [The Mul is not the fault](../docs/BENCHMARKS.md#the-mul-is-not-the-fault-a-long-lived-activation-is-2026-09-09-desktop-2) |
 | `quant/` | `notes_histogram_calibration_analysis.md`, `alphabet_*_cle_dual_1.log`: mathematical loss-bound, position stability, and memory-complexity analysis of uniform histograms (2048/4096 bins) against exact float16 activation spooling across 391 tensors; proof of +/-1 position perturbation on boundary layers, shift-cut contract breach risks, and 1,793x to 15,662x memory reduction ceiling | [Exact-count calibration](../docs/BENCHMARKS.md#exact-count-calibration-what-it-costs), [Trimmed calibration spool](../docs/BENCHMARKS.md#ignition-calibration-spool-without-the-pruned-pre-relu-tensors) |
 | `quant/` | `quant_resnet50_ignition_cle_adaround_{lean,lean2}.log`: AdaRound peak working set with the duplicate activation sets released and then collected into one buffer, against the committed `_c64` baseline. Bit-identical output at every step | [AdaRound peak memory](../docs/BENCHMARKS.md#adaround-peak-memory-six-copies-of-the-activation-set-down-to-two-2026-09-09-desktop-2) |

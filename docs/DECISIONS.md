@@ -1774,7 +1774,15 @@ cached reference heads rather than `bo_out`.
   more than the fills it saves. Fewer bytes on the wire is the only lever, and inter-layer fusion is unwired
   scaffolding (`match_stencil_fusion` has no call site on any branch) *[Superseded the same day: the wire runs at
   18% of its measured rate, so bytes are not the binding term -- see the rejected entry below. The ring rejection
-  itself stands, and its 4.7x task increase is now the measured reason.]*
+  itself stands, and its 4.7x task increase is now the measured reason. Sized 2026-09-20
+  (`tools/fill_retention_pricing.py`, `tools/fill_layout_sizing.py --ring 2`): the ring's compute win is
+  real and bounded -- 1.682 -> 0.358 ms, +1.324 ms -- and at its own measured 0.953 us per descriptor
+  that pays for **at most ~1,389 added descriptors**, while it added 3,725. Freeing a descriptor
+  dimension does not rescue it either: collapsing its chain-capped class to the hardware maximum of 64
+  still leaves dispatch 0.791 ms above the shipped container, so the criterion is serve COUNT, not
+  chain depth -- a retained object must replace several transfers (a whole plane per column, not a
+  6,400 B window). Corollary: per-descriptor cost scales with descriptor count only WITHIN one design
+  -- 2.136 us shipped against 0.953 us ring, 2.2x apart on the same shim channel at the same rate]*
   ([BENCHMARKS](BENCHMARKS.md#the-retirement-cadence-was-the-sesr-dispatch-regression-6a620f0s-retire_batch4-costs-a-thin-container-094-ms-and-the-engine-now-retires-every-2nd-task-2026-09-19-desktop-2)).
 - **LOCKED: the shim retirement cadence is `retire_batch = 2`, and a cadence at or above the queue depth is a
   bug, not a tuning choice (2026-09-19, measured).** `run_column_programs` may let at most `retire_batch` tasks

@@ -56,6 +56,17 @@ relied on is recorded in [SILICON 1.4](../../docs/SILICON.md).
 | [fill_layout_sizing_yolov8n_full_desktop2_20260920.log](fill_layout_sizing_yolov8n_full_desktop2_20260920.log) | The same two budgets on the flagship: 940 of 1,869 byte-free, 929 replicating 1.60-3.20x. |
 | [fill_layout_lever_sesr_m7_desktop2_20260920.log](fill_layout_lever_sesr_m7_desktop2_20260920.log) | Prices both: -15.7% descriptors leaves G2G 0.718 ms short of AMD, -31.4% still 0.468 short; break-even is 48% of the stream. |
 
+## Split container sizing
+
+The [2026-09-20 Desktop 2 sitting](../../docs/BENCHMARKS.md#split-container-sizing-and-feasibility-2026-09-20-desktop-2)
+measures the hardware boundaries and driver costs of split vs monolithic .ignite containers on AMD Phoenix NPU (Ryzen 7 8700G).
+
+| Log | Evidence |
+|---|---|
+| [split_container_sizing_phoenix_20260920.log](split_container_sizing_phoenix_20260920.log) | Physical silicon measurement across 5 variants: hardware context creation tax (29.63 ms), persistent multi-dispatch scaling (34.1 us gap), DMA buffer sync (0.014 ms roundtrip on 716 KB), weight upload (0.184 ms on 8.16 MB), and DDR workspace sizing (22.04 MB vs 15.84 MB unshared). |
+| [verify_split_silicon_phoenix_20260920.log](verify_split_silicon_phoenix_20260920.log) | Physical silicon validation on YOLOv8n: monolithic baseline (7.556 ms), decoupled weights (7.593 ms, bit-exact agreement on all 1,209,600 bytes), 2-segment NPU split (7.755 ms, bit-exact agreement), and early-exit dispatch (max_segments=1 at 2.055 ms, 73% latency reduction). |
+| [verify_yolov8s_split_silicon_phoenix_20260920.log](verify_yolov8s_split_silicon_phoenix_20260920.log) | Physical silicon verification on YOLOv8s (11.2M params): monolithic baseline (17.305 ms, 29.33 MB), Variant 4 decoupled weights (1.21 MB container, 95.9% reduction, 17.326 ms, bit-exact match), Variant 2 3-segment linked split (17.719 ms, bit-exact match), early-exit cascades (Layer 13 shallow exit saves 12.58 ms at 4.722 ms / 211.8 FPS; Layer 30 backbone exit saves 8.23 ms at 9.076 ms / 110.2 FPS), Variant 3 targeted DMA sync (3.647 us vs 55.663 us full sync, 15.3x speedup), and Variant 3+5 ComposedSession (zero-copy device DMA handoff, 0 MB workspace memory bloat, bit-exact match). |
+
 ## Retractions and supersessions in this directory
 
 Read these before quoting anything below.

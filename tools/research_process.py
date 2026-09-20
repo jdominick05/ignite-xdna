@@ -202,6 +202,11 @@ def main():
         if child.poll() is None:
             kill_owned(proc)
             child.wait()
+    if a.npu:
+        witness = context_report()
+        emit('POST_NPU_CONTEXT_WITNESS', witness)
+        if 'No hardware contexts running' not in witness:
+            contended = True
     emit('RESEARCH_PROCESS_RESULT', {'exit_code': rc, 'stop': stop, 'peak_tree_rss_bytes': peak or None,
          'rss_measurement': 'maximum observed across sampled descendant working sets; zero observations reported as null',
          'elapsed_seconds': time.monotonic()-start, 'foreign_contention_observed': contended,

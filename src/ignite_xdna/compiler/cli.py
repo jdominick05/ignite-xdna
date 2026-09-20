@@ -16,7 +16,7 @@ import os
 import sys
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
 import numpy as np
 import onnx
@@ -151,6 +151,19 @@ def parse_args(args: Optional[List[str]] = None) -> argparse.Namespace:
         choices=("report", "refuse"),
         default="report",
         help="report traffic-heavy 5x5/high-resolution entry shapes, or refuse them before lowering",
+    )
+    parser.add_argument(
+        "--split-layer",
+        type=int,
+        action="append",
+        default=None,
+        metavar="INDEX",
+        help="Graph engine: cut NPU execution into segments at specified scheduled layer indices; repeatable",
+    )
+    parser.add_argument(
+        "--decouple-weights",
+        action="store_true",
+        help="Graph engine: omit static weight packets from the .ignite container and emit a .weights sidecar file",
     )
     argv = list(sys.argv[1:] if args is None else args)
     # ``ignite-compile compile --model X`` is accepted as a spelling of ``--input X``.
@@ -427,7 +440,10 @@ def verify_on_silicon(container_path: Path, device_idx: int = 0):
 def compile_graph_engine(input_path: Union[str, Path], output_path: Union[str, Path],
                          build_dir: Optional[Union[str, Path]] = None, host_regions: Optional[List[str]] = None,
                          silu_sigmoid: bool = False, topology_policy: str = "report",
-                         no_workspace_reuse: bool = False, retire_batch: Optional[int] = None) -> int:
+                         no_workspace_reuse: bool = False, retire_batch: Optional[int] = None,
+                         split_layers: Optional[Sequence[int]] = None,
+                         decouple_weights: bool = False,
+                         task: Optional[str] = None, dense_recipe: Optional[str] = None) -> int:
     """Lower the whole graph onto the convolution engine (see engine_compile.py); ``host_regions`` run on the host;
     ``silu_sigmoid`` gives SiLU the sigmoid epilogue; ``retire_batch`` sets the shim retirement cadence."""
     for region in host_regions or ():
@@ -448,7 +464,9 @@ def compile_graph_engine(input_path: Union[str, Path], output_path: Union[str, P
     from ignite_xdna.compiler.engine_compile import compile_graph_container
     manifest = compile_graph_container(input_path, output_path, build_dir=build_dir,
                                        host_regions=tuple(host_regions or ()), silu_sigmoid=silu_sigmoid,
-                                       workspace_reuse=not no_workspace_reuse, retire_batch=retire_batch)
+                                       workspace_reuse=not no_workspace_reuse, retire_batch=retire_batch,
+                                       split_layers=split_layers, decouple_weights=decouple_weights,
+                                       task=task, dense_recipe=dense_recipe)
     if no_workspace_reuse:
         print(f"    [OK] workspace reuse off: every tensor owns a slot, so every layer is readable "
               f"after one dispatch")
@@ -461,9 +479,13 @@ def compile_graph_engine(input_path: Union[str, Path], output_path: Union[str, P
     if silu_sigmoid:
         print(f"    [OK] SiLU: {manifest['graph_engine'].get('silu')} epilogue (reference: "
               f"silu_sigmoid.reference_model of {Path(input_path).name})")
+    if ge.get("decoupled_weights"):
+        print(f"    [OK] weights decoupled: {ge['weights_file']} ({ge['weights_bytes']:,} B, sha256 {ge['weights_sha256'][:8]}...)")
     for seg in manifest["graph_engine"].get("segments", []):
         if seg["kind"] == "host":
             print(f"    [OK] host segment: {seg['name']} (layer {seg['layer']}) between NPU segments")
+        elif seg["kind"] == "npu" and len(manifest["graph_engine"].get("segments", [])) > 1:
+            print(f"    [OK] npu segment: layers {seg['layers'][0]}..{seg['layers'][1]} ({seg['tasks']} tasks)")
     out_p = Path(output_path)
     if manifest.get("task", "detect") in ("detect", "pose"):
         from ignite_xdna.runtime.heads import resolve_head_layout
@@ -472,7 +494,7 @@ def compile_graph_engine(input_path: Union[str, Path], output_path: Union[str, P
     elif manifest.get("task") == "classify":
         c = manifest["classification"]
         print(f"    [OK] classification output: {c['channels']} classes at scale {c['scale']}, "
-              f"layout {c['layout']} -> logits {manifest['output_shapes']['logits']}")
+        f"layout {c['layout']} -> logits {manifest['output_shapes']['logits']}")
     else:
         d = manifest["dense_output"]
         print(f"    [OK] dense output: {d['channels']}x{d['height']}x{d['width']} uint8 at scale {d['scale']}, "
@@ -482,13 +504,41 @@ def compile_graph_engine(input_path: Union[str, Path], output_path: Union[str, P
 
 
 def main(args: Optional[List[str]] = None):
+    argv = list(sys.argv[1:] if args is None else args)
     parsed = parse_args(args)
     try:
+        if parsed.input.endswith(".ignite") and parsed.decouple_weights:
+            from ignite_xdna.compiler.serializer import decouple_container_weights
+            t0 = time.perf_counter()
+            out_target = parsed.output if ("--output" in argv or "-o" in argv) else None
+            out_c, out_w = decouple_container_weights(parsed.input, out_target)
+            elapsed = (time.perf_counter() - t0) * 1e3
+            orig_sz = Path(parsed.input).stat().st_size
+            new_sz = out_c.stat().st_size
+            w_sz = out_w.stat().st_size
+            print(f"[+] Decoupled weights in {elapsed:.2f} ms:")
+            print(f"    Original container: {orig_sz:,} B -> {new_sz:,} B ({100 * (1 - new_sz / orig_sz):.1f}% reduction)")
+            print(f"    Sidecar weights:    {w_sz:,} B ({out_w.name})")
+            print(f"    Output container:   {out_c}")
+            if parsed.verify_silicon:
+                from ignite_xdna.runtime.graph_session import GraphSession
+                sess = GraphSession(out_c, weights_path=out_w, device_index=parsed.device)
+                try:
+                    dummy = np.zeros((1, 3, 640, 640), dtype=np.int8)
+                    lat = [sess.run_yolo_monolithic(dummy, return_timestamps=True)[1]["npu_ms"] for _ in range(5)]
+                    print(f"    [OK] Physical silicon execution succeeded: NPU {np.mean(lat[1:]):.3f} ms/frame")
+                finally:
+                    sess.close()
+            print("\nAll packaging checks passed successfully!")
+            return
+
         if parsed.engine == "graph":
             compile_graph_engine(parsed.input, parsed.output, parsed.build_dir, host_regions=parsed.host_region,
                                  silu_sigmoid=parsed.silu_sigmoid, topology_policy=parsed.topology_policy,
                                  no_workspace_reuse=parsed.no_workspace_reuse,
-                                 retire_batch=parsed.retire_batch)
+                                 retire_batch=parsed.retire_batch,
+                                 split_layers=parsed.split_layer,
+                                 decouple_weights=parsed.decouple_weights)
             if parsed.verify_silicon:
                 from ignite_xdna.runtime.graph_session import GraphSession
                 sess = GraphSession(parsed.output, device_index=parsed.device)

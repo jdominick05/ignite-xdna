@@ -14,7 +14,7 @@ from typing import Any, Dict, List, Optional
 import numpy as np
 
 from ignite_xdna.compiler import engine_emulator as em
-from ignite_xdna.compiler.graph_ir import ConvLayer, GraphIR, HostLayer, Segment, ZP, place_host_output
+from ignite_xdna.compiler.graph_ir import ConvLayer, FusedConvLayer, GraphIR, HostLayer, Segment, ZP, place_host_output
 
 
 def quantize_input(image_chw_float: np.ndarray, scale: float, zp: int = ZP) -> np.ndarray:
@@ -99,6 +99,23 @@ def run_host_layer(layer: HostLayer, x: np.ndarray, optimize: bool = False) -> n
     return np.asarray(y, dtype=np.uint8)[0]
 
 
+def run_named_host(layer: HostLayer, tensors: Dict[str, np.ndarray], ir: GraphIR,
+                   optimize: bool = False) -> Dict[str, np.ndarray]:
+    """Run every declared boundary by name, preserving dtype and logical shape."""
+    feeds = {name: np.ascontiguousarray(tensors[t][:ir.tensors[t].channels][None])
+             for name, t in layer.named_inputs.items()}
+    names = list(layer.named_outputs)
+    values = host_session(layer.onnx_bytes, optimize).run(names, feeds)
+    result = {}
+    for name, value in zip(names, values):
+        tensor = layer.named_outputs[name]
+        info = ir.tensors[tensor]
+        if tuple(value.shape) != info.shape or value.dtype != np.dtype(info.dtype):
+            raise ValueError(f"{layer.name}: {name} does not match its boundary metadata")
+        result[tensor] = value[0]
+    return result
+
+
 def run_direct(ir: GraphIR, input_q: np.ndarray, stop_after: Optional[int] = None) -> Dict[str, np.ndarray]:
     """Evaluate the graph on uint8 tensors; returns {tensor name: uint8 [C][H][W]}."""
     tensors: Dict[str, np.ndarray] = {ir.input: input_q}
@@ -118,7 +135,30 @@ def run_direct(ir: GraphIR, input_q: np.ndarray, stop_after: Optional[int] = Non
                 if L.post_hswish is not None:
                     y = em.hswish_epilogue(y, L.post_hswish.params)
             tensors[L.output] = y
+        elif isinstance(L, FusedConvLayer):
+            # A fused layer means exactly "these two convolutions, in order, with the intermediate kept
+            # off DDR" -- so the reference runs the pair through the same ConvLayer code above and keeps no
+            # fused semantics of its own. This is the definition the core program and the emulator are
+            # measured against; match_stencil_fusion removes the intermediate from ir.tensors, so it is
+            # registered here under its own name to stay comparable with the unfused graph.
+            s1, s2 = L.stage1, L.stage2
+            src = ir.tensors[s1.inputs[0].tensor]
+            in_h = src.height * (2 if s1.inputs[0].up2 else 1)
+            in_w = src.width * (2 if s1.inputs[0].up2 else 1)
+            mid = conv_direct(s1, gather_input(tensors, s1.inputs, in_h, in_w))
+            tensors[s1.output] = mid
+            t2 = ir.tensors[s2.output]
+            y = conv_direct(s2, mid)
+            if s2.residual is not None:
+                r = gather_input(tensors, [s2.residual], t2.height, t2.width)
+                y = em.residual_combine(y, r, s2.residual_shift, s2.residual_lsh_main, s2.residual_lsh_res)
+                if s2.post_hswish is not None:
+                    y = em.hswish_epilogue(y, s2.post_hswish.params)
+            tensors[L.output] = y
         elif isinstance(L, HostLayer):
+            if L.named_inputs:
+                tensors.update(run_named_host(L, tensors, ir))
+                continue
             segs = L.input_segments()
             src = ir.tensors[segs[0].tensor]
             x = gather_input(tensors, segs, src.height, src.width)[:L.in_channels or src.channels]

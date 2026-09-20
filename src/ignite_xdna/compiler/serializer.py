@@ -35,6 +35,7 @@ Container Format Layout:
   └────────────────────────────────────────────────────────┘
 """
 
+import hashlib
 import json
 import mmap
 import os
@@ -427,3 +428,86 @@ class IgniteModelReader:
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.close()
+
+
+def decouple_container_weights(
+    ignite_path: Union[str, Path],
+    output_path: Optional[Union[str, Path]] = None,
+    weights_path: Optional[Union[str, Path]] = None,
+) -> Tuple[Path, Path]:
+    """Decouples static weights from an existing monolithic .ignite container.
+
+    Extracts 'wpackets.bin' into a separate sidecar file (.weights), records the
+    weights SHA-256 and byte length in the container manifest, and writes out a
+    slimmed container without the weights payload.
+
+    Args:
+        ignite_path: Path to existing monolithic .ignite file.
+        output_path: Path for slimmed container. If None, appends '_decoupled.ignite'.
+                     If identical to ignite_path, the container is safely overwritten.
+        weights_path: Path for .weights sidecar file. If None, uses output_path.with_suffix('.weights').
+
+    Returns:
+        Tuple of (slimmed_container_path, weights_sidecar_path).
+    """
+    src_p = Path(ignite_path).resolve()
+    if not src_p.exists():
+        raise FileNotFoundError(f"Source container not found: {src_p}")
+
+    if output_path is None:
+        out_p = src_p.with_name(f"{src_p.stem}_decoupled.ignite")
+    else:
+        out_p = Path(output_path).resolve()
+
+    if weights_path is None:
+        w_p = out_p.with_suffix(".weights")
+    else:
+        w_p = Path(weights_path).resolve()
+
+    with IgniteModelReader(src_p) as reader:
+        if "wpackets.bin" not in reader.blobs:
+            raise ValueError(f"Container {src_p} does not contain 'wpackets.bin' (already decoupled?)")
+
+        weights_bytes = reader.get_blob_bytes("wpackets.bin")
+        weights_sha = hashlib.sha256(weights_bytes).hexdigest()
+
+        # Update manifest
+        manifest = dict(reader.manifest)
+        if "graph_engine" not in manifest:
+            manifest["graph_engine"] = {}
+        manifest["graph_engine"]["decoupled_weights"] = True
+        manifest["graph_engine"]["weights_file"] = w_p.name
+        manifest["graph_engine"]["weights_sha256"] = weights_sha
+        manifest["graph_engine"]["weights_bytes"] = len(weights_bytes)
+
+        # Collect blobs excluding wpackets.bin
+        blobs: List[Tuple[str, bytes, str]] = []
+        for b_dict in manifest.get("blobs", []):
+            name = b_dict["name"]
+            if name == "wpackets.bin":
+                continue
+            ctype = b_dict.get("content_type", "raw")
+            blobs.append((name, reader.get_blob_bytes(name), ctype))
+        arch_id = reader.header.arch_id
+
+    # reader is closed here - avoiding any file locking on Windows
+    w_p.parent.mkdir(parents=True, exist_ok=True)
+    w_p.write_bytes(weights_bytes)
+
+    writer = IgniteModelWriter(manifest_meta=manifest, arch_id=arch_id)
+    for name, data, ctype in blobs:
+        writer.add_blob(name, data, content_type=ctype)
+
+    if out_p == src_p:
+        tmp_p = out_p.with_suffix(".tmp.ignite")
+        writer.write(tmp_p)
+        tmp_p.replace(out_p)
+    else:
+        writer.write(out_p)
+
+    with IgniteModelReader(out_p) as test_reader:
+        if not test_reader.verify_checksum():
+            raise RuntimeError(f"Slimmed container {out_p} failed checksum verification")
+
+    return out_p, w_p
+

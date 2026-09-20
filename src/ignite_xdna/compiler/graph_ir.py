@@ -57,6 +57,9 @@ class TensorInfo:
     scale: float
     zero_point: int
     producer: str = ""       # layer name or "input"
+    dtype: str = "uint8"
+    shape: Tuple[int, ...] = ()  # logical ONNX shape; empty for legacy padded classification tensors
+    storage: str = "workspace"  # named host-only boundaries need no device transfer
 
     @property
     def blocks(self) -> int:
@@ -232,8 +235,9 @@ class HostLayer:
 
     ``onnx_bytes`` is the region extracted by ``onnx.utils.Extractor`` between its input and output
     QuantizeLinear tensors, so it maps the uint8 input tensor to the uint8 output tensor exactly as the
-    original graph does. The input is one whole physical tensor, or a Concat view over several (``inputs``,
-    YOLO-World's C2fAttn output convolutions); the output is a physical tensor like a conv output.
+    original graph does. Legacy input is one tensor or a Concat view (``inputs``).
+    ``named_inputs``/``named_outputs`` explicitly map every ONNX boundary to a stored
+    tensor, including float graph inputs, float terminal outputs and small maps.
     """
     name: str                 # the region spec: a node-name prefix ("/model.10/") or "FROM=TO"
     index: int
@@ -243,9 +247,16 @@ class HostLayer:
     op_types: Dict[str, int] = field(default_factory=dict)
     inputs: List[Segment] = field(default_factory=list)  # every input segment in channel order; empty = [input]
     in_channels: int = 0      # the region input's channel count; 0 = the input tensor's
+    named_inputs: Dict[str, str] = field(default_factory=dict)
+    named_outputs: Dict[str, str] = field(default_factory=dict)
 
     def input_segments(self) -> List[Segment]:
+        if self.named_inputs:
+            return [Segment(t, 0, 0) for t in self.named_inputs.values()]
         return list(self.inputs) or [self.input]
+
+    def output_tensors(self) -> List[str]:
+        return list(self.named_outputs.values()) or [self.output]
 
 
 @dataclass
@@ -258,6 +269,8 @@ class GraphIR:
     # onnx output name -> host-side transform of the read-back tensor, e.g. {"op": "depth_to_space", ...}
     output_transforms: Dict[str, Dict[str, Any]] = field(default_factory=dict)
     silu_sigmoid: bool = False    # SiLU layers use the sigmoid epilogue; the reference is silu_sigmoid.reference_model
+    task: str = ""
+    recipe: str = ""
 
 
 # ----------------------------------------------------------------------------
@@ -1055,6 +1068,8 @@ def lower_yolov8n(model_or_path, host_regions: Sequence[str] = (), silu_sigmoid:
         if q not in tensors:
             raise ValueError(f"graph output {o.name} is not a physical tensor")
         outputs.append((o.name, q))
+        if not tensors[q].shape and o.name not in transforms:
+            tensors[q].shape = tuple(G.shape(o.name))
 
     # Concat inputs that span several physical tensors must be contiguous in the workspace.
     for segs in views.values():

@@ -129,6 +129,13 @@ def main() -> int:
                     help="this container's measured non-compute floor, for the FLOOR MODEL line")
     ap.add_argument("--fill-bytes", type=int, default=None,
                     help="host->device activation bytes per dispatch, from the shim channel audit")
+    ap.add_argument("--ring", type=int, default=0, metavar="SLOTS",
+                    help="schedule with the MemTile activation ring of this many slots (0 = the shipped "
+                         "transport). Retention IS the ring's purpose, so this is how the same dimension "
+                         "question gets asked of a retention design instead of of the default fills")
+    ap.add_argument("--weight-buffer", action="store_true",
+                    help="schedule with the resident MemTile weight buffer, the other design that keeps "
+                         "transfers off the shim")
     args = ap.parse_args()
 
     print("UTC:", datetime.datetime.now(datetime.timezone.utc).isoformat())
@@ -136,8 +143,19 @@ def main() -> int:
     cmd = ["python", "tools/fill_layout_sizing.py", args.model]
     if args.floor_ms is not None:
         cmd += ["--floor-ms", str(args.floor_ms), "--fill-bytes", str(args.fill_bytes)]
+    if args.ring:
+        cmd += ["--ring", str(args.ring)]
+    if args.weight_buffer:
+        cmd.append("--weight-buffer")
     print("COMMAND:", " ".join(cmd))
     print("COMMIT:", subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip())
+    dirty = subprocess.check_output(["git", "status", "--short", "--", "src"], text=True).strip()
+    if dirty:
+        # What gets imported is the working tree, so the measurement is of THIS source and not of the
+        # commit above. Say it rather than let COMMIT imply more coverage than it has.
+        print("SOURCE: working tree, modified under src/ -- the numbers describe the dirty tree:")
+        for line in dirty.splitlines():
+            print("       ", line)
     # Relative, so a committed log never carries a developer profile path -- while still proving
     # which checkout the analysis imported (a worktree or the main one), which is why it is here.
     print("PACKAGE:", os.path.relpath(__import__("ignite_xdna").__file__, ROOT))
@@ -147,7 +165,7 @@ def main() -> int:
     es_seq.merge_runs = wrapped
     ir = graph_ir.lower_yolov8n(args.model)
     ws = es.plan_workspace(ir)
-    es.schedule_graph(ir, ws)
+    es.schedule_graph(ir, ws, activation_ring=args.ring, weight_buffer=args.weight_buffer)
 
     four = [p for p in captured if len(p.sizes) == 4]
     shapes = Counter(tuple(p.sizes) for p in four)

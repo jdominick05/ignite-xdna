@@ -14,7 +14,7 @@ import time
 from collections import OrderedDict
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, Any, Optional, Union, Tuple, List
+from typing import Dict, Any, Optional, Union, Tuple, List, Sequence
 import numpy as np
 
 from .driver import XrtSiliconHarness, setup_xrt_environment, get_repo_root
@@ -1510,7 +1510,7 @@ class InferenceSession:
         with _Reader(ignite_path) as reader:
             manifest = reader.manifest
         if is_graph_container(manifest):
-            return GraphSession(ignite_path, device_index=device_index)
+            return GraphSession(ignite_path, device_index=device_index, **kwargs)
         return cls(
             model_path_or_bundle=ignite_path,
             device_index=device_index,
@@ -1518,6 +1518,20 @@ class InferenceSession:
             full_yolo=True,
             **kwargs,
         )
+
+    @classmethod
+    def compose(
+        cls,
+        stage_paths: Sequence[Union[str, Path]],
+        device_index: int = 0,
+        **kwargs,
+    ):
+        """Chains multiple .ignite stage containers in a single persistent hardware context.
+
+        Shares a unified workspace BO across all stages according to the Tensor Placement ABI.
+        """
+        from ignite_xdna.runtime.graph_session import ComposedSession
+        return ComposedSession(stage_paths, device_index=device_index, **kwargs)
 
     def __enter__(self):
         return self

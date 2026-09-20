@@ -12,8 +12,11 @@ that says whether a proposed compiler change could be worth doing before anyone 
 The model is deliberately simple and its assumptions are printed with the result:
   * floor = transfer + per-task, transfer being this column's activation bytes over the measured
     rate, so the per-task unit is the residue divided by the descriptor count;
-  * per-task cost is proportional to descriptor count, which the retirement-cadence measurement
-    supports (identical traffic, 0.599 ms of floor between rb=4 and rb=2) but does not prove;
+  * per-task cost is proportional to descriptor count WITHIN ONE DESIGN. It does not hold across
+    designs, and that is measured: the shipped SESR container's unit is 2.136 us per descriptor and
+    the MemTile ring's is 0.953 us, 2.2x apart on the same shim channel at the same rate
+    (tools/fill_retention_pricing.py). A figure from this tool therefore prices a change to the design
+    whose floor was passed in, and says nothing about any other design;
   * compute and the host stages (preprocess, readback, image output) are unchanged;
   * a layout that moves more bytes pays for them at the same measured rate.
 So the numbers are an upper bound on the gain of any descriptor-count lever, not a forecast.
@@ -62,7 +65,8 @@ def main() -> int:
         print(f"[scenario] -{saved} descriptors ({saved / args.descriptors * 100:.1f}% of "
               f"{args.descriptors}), +{extra:,} B/col: floor {args.floor_ms:.3f} -> {floor:.3f}, "
               f"dispatch -> {disp:.3f}, G2G {args.g2g_ms:.3f} -> {g2g:.3f}; {verdict}")
-    print("[caveat] upper bound: assumes per-task cost scales with descriptor count and that no "
+    print("[caveat] upper bound: assumes per-task cost scales with descriptor count WITHIN THIS "
+          "DESIGN (measured 2.2x apart across designs -- see the module docstring) and that no "
           "other stage regains the time; ignores lock/barrier structure and workspace capacity")
     return 0
 
