@@ -1,0 +1,21 @@
+UTC: 2026-09-20T03:52:20.320761+00:00
+MACHINE: DESKTOP-CBL5NUA AMD64 Family 25 Model 117 Stepping 2, AuthenticAMD
+COMMAND: C:/Users/<user>/miniforge3/envs/mlir-aie-iron/python.exe tools/fill_merge_audit.py build/conv_engine/yolov8n_full/insts.bin
+COMMIT: 3610067c77a8ac9d2f908e2a5aa5785c0ebb61ef
+[merge] build/conv_engine/yolov8n_full/insts.bin: 6,400 B packets grouped by identical control words
+[merge] 72 groups, 987 distinct addresses, 938 duplicate addresses (the same window fetched twice), 338 maximal constant-step runs
+[runs ] length  1:   4 runs
+[runs ] length  2: 206 runs   (2 points make no claim of regularity)
+[runs ] length  3:   7 runs
+[runs ] length  4: 102 runs
+[runs ] length  5:   4 runs
+[runs ] length  6:   4 runs
+[runs ] length  8:   9 runs
+[runs ] length 13:   2 runs
+[cls  ] regular gap: repeatable: 181 runs, 677 packets, 181 descriptors if merged
+[cls  ] OVERLAP: step < payload, no repeat can express it: 136 runs, 272 packets, 272 descriptors if merged, delivers 1.82x the address range it reads
+[cls  ] gap too wide for the 20-bit step field (max 4,194,300 B): 17 runs, 34 packets, 34 descriptors if merged
+[cls  ] lone (no partner in its group): 4 runs, 4 packets, 4 descriptors if merged
+[merge] this size class: 987 packets would become 491 descriptors; the stream's other 1985 tasks are unaffected, so the whole-stream floor could not drop below 2476 tasks from 2972 by merging alone
+
+EXIT_CODE: 0

@@ -10222,10 +10222,56 @@ same arithmetic that made its floor rise rather than fall.
 the hardware can already carry 64 regularly spaced packets in one descriptor, plus a single 33.5 MB
 descriptor proven byte-exact in [the stream log](../results/aie/silicon_stream_width_desktop2_20260919.log).
 So the runnable question is which of SESR's 512 single-packet fills are not regularly spaced enough
-to merge, and why — an address-generation and workspace-layout question, not a transport one. Not
+to merge, and why — an address-generation and workspace-layout question, not a transport one. *[Answered the same day, below: 355 of SESR's 412 distinct 6,400 B windows overlap their neighbours at a 640 B step, so merging is worth about 15 tasks here -- the answer closes this lever rather than opening it.]* Not
 established here, and deliberately not guessed: how the 2.151 ms divides between the `bd_budget=14`
 live-descriptor window (252 tasks per column against 14 slots is about 18 refills per column per
 dispatch, each a wait behind a per-layer barrier) and raw per-task issue cost; whether merging
 recovers any of it; and no timing in this section was taken on a device, so its floors are carried
 from the sittings named above, with the cross-sitting drift those sections record as the standing
 caveat on comparing them.
+
+## SESR's small fills overlap by construction: merging could remove about 15 of its 1,007 tasks (2026-09-19, Desktop 2)
+
+The section above closed by asking which of SESR's single-packet activation fills are not regularly
+spaced enough to merge. `tools/fill_merge_audit.py` answers it offline, from the descriptors
+themselves: word 1 is the address in 32-bit words and words 2-7 the address generator's
+configuration, so tasks sharing control words and differing only in address are the only set the
+repeat dimension could ever collapse, and a run's step against its payload decides whether it may.
+Evidence: [fill_merge_attribution_sesr_m7_desktop2_20260919.log](../results/aie/fill_merge_attribution_sesr_m7_desktop2_20260919.log)
+and [fill_merge_attribution_yolov8n_full_desktop2_20260919.log](../results/aie/fill_merge_attribution_yolov8n_full_desktop2_20260919.log),
+Desktop 2, no NPU context opened.
+
+| Arm | 6,400 B packet tasks | distinct windows | overlapping (step < payload) | regular gap, repeatable | step beyond the 20-bit field | class collapses to | whole-stream floor bound |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| SESR M7 | 512 | 412 | **355** (step 640 B) | 30 → 15 | 24 | 397 descriptors | 992 of 1,007 tasks |
+| YOLOv8n whole network | 1,925 | 987 | 272 | **677 → 181** | 34 | 491 descriptors | 2,476 of 2,972 tasks |
+
+**For SESR the merge lever is worth about 15 tasks, 1.5% of the stream.** Its small fills are not
+loosely packed, they are *overlapping*: 355 of the 412 distinct windows step 640 bytes apart while
+each carries 6,400 bytes — a 10x overlap — and those runs deliver **2.42x the address range they
+read** (DERIVED: payload plus step per extra window in a run, against bytes delivered). No repeat
+encoding expresses a chain of overlapping windows, so this is not a missed merge; the small packets
+are the over-read itself.
+
+**The flagship has the opposite shape, and it is already winning.** YOLOv8n's 6,400 B class is
+987 distinct windows of which 677 are regularly spaced with a step at least the payload; they would
+collapse from 677 pushes to 181 descriptors, so the container that beats AMD's stack (8.588 against
+10.892 ms G2G) leaves roughly 496 pushes on the table in this size class alone. It also refetches:
+938 of its 1,925 packet tasks land on an address already fetched in the same dispatch, against 100
+of SESR's 512.
+
+**What this closes.** Merging the existing fills is not a route to SESR's 1.05 ms, and neither is
+any plan that keeps SESR's packet geometry and expects materially fewer shim tasks — the same
+arithmetic that made the MemTile ring's floor triple and composed-stencil fusion's rise. If SESR's
+floor falls, it falls by moving fewer, larger *windows* (a different packet or tile shape, with the
+overlap removed at the source) or by not round-tripping the intermediate between layers at all,
+which is the AMD behaviour named two sections back and now carries a number: 2.42x of the bytes in
+the overlapping class is redundant coverage of addresses already read.
+
+**Limits of this read.** No timing was taken, so a 15-descriptor saving is not claimed to be free or
+even visible in dispatch. The grouping key includes each task's lock pair, so two otherwise
+identical transfers with different locks land in different groups — a bias *against* finding
+mergeable sets, not for it. The 640 B step is read from the descriptors' own addresses; *why* the
+windows overlap is `engine_schedule`'s packet geometry (the halo and the 25-column packet), which
+this tool does not evaluate, and the duplicate addresses say a window is fetched more than once, not
+why.
