@@ -25,7 +25,8 @@ from typing import Dict, List, Optional, Tuple
 import numpy as np
 
 from ignite_xdna.compiler import engine_emulator as em
-from ignite_xdna.compiler.engine_sequence import COLS, MAX_REPEAT, ROWS, DmaPattern, linear, merge_quad, merge_runs
+from ignite_xdna.compiler.engine_sequence import (COLS, MAX_REPEAT, ROWS, DmaPattern, canonical, linear,
+                                                   merge_quad, merge_runs)
 from ignite_xdna.compiler.graph_ir import ConvLayer, FusedConvLayer, GraphIR, HostLayer, PoolLayer, Segment, TensorInfo, ZP
 
 TILE_R, TILE_C = em.TILE_ROWS, em.TILE_COLS
@@ -485,7 +486,15 @@ def run_drain(ws: Workspace, layer, group: int, run: List[Tuple[int, int]]) -> D
     """One drain for a run of vertically adjacent quads (at most 16) at one tile column; rounds are (y, x0)."""
     q0, x0 = run[0]
     o = o_pattern(ws, layer, group, q0, x0)
-    return DmaPattern("ws", o.offset, (ROWS * len(run),) + tuple(o.sizes[1:]), o.strides)
+    # Canonicalise the drain, which nothing else does: fills reach the emitter through
+    # merge_quad and merge_runs, which fold first, but a drain goes straight to the tap. On a
+    # band-packed tensor the block stride equals the row extent, so the pattern is foldable,
+    # and a foldable four-dimensional tap is ambiguous to the BD lowering - a shim descriptor
+    # has three addressing dimensions plus a repeat, so whether the outermost dimension is the
+    # repeat or a fourth addressing dimension decides what the hardware executes. Folding here
+    # (and not in the emitter, which would also fold the weight runs' stride-0 replay into a
+    # shape the lowering rejects) leaves one unambiguous reading.
+    return canonical(DmaPattern("ws", o.offset, (ROWS * len(run),) + tuple(o.sizes[1:]), o.strides))
 
 
 # ----------------------------------------------------------------------------
@@ -1202,7 +1211,7 @@ def schedule_layer(ir: GraphIR, ws: Workspace, layer, store: PacketStore, merge_
                     if pending_drain:
                         first = pending_drain.pop()
                         drain = DmaPattern("ws", first.offset, (2 * ROWS,) + first.sizes[1:], first.strides)
-                    programs[c].append(("o", drain))
+                    programs[c].append(("o", canonical(drain)))
                 n_rounds += 1
             if pending_drain:
                 raise AssertionError("unpaired pending drain")

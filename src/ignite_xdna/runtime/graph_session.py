@@ -435,6 +435,19 @@ class EngineSession:
         """Debug helper: sync one tensor from the device and return uint8 [C][H][W]."""
         p = self.ge["placements"][name]
         h, w, halo = p["height"], p["width"], p["halo"]
+        band = p.get("band_rows", 0)
+        if band:
+            # Band-packed: channel blocks interleave every `band` rows, so a block's rows are
+            # NOT contiguous and the region spans every plane of every band, not blocks planes.
+            # Reading it plane-major returns the right bytes in the wrong order.
+            nbytes = p["planes"] * h * w * 8          # halo is always 0 when banded
+            if sync:
+                self.bo_ws.sync(self.harness.pyxrt.xclBOSyncDirection.XCL_BO_SYNC_BO_FROM_DEVICE,
+                                nbytes, p["base"])
+            raw = np.frombuffer(self.bo_ws.read(nbytes, p["base"]), dtype=np.uint8)
+            v = raw.reshape(h // band, p["planes"], band, w, 8)[:, :p["blocks"]]
+            return np.ascontiguousarray(v.transpose(1, 4, 0, 2, 3)).reshape(
+                p["blocks"] * 8, h, w)[:p["channels"]]
         nbytes = p["blocks"] * (h + 2 * halo) * (w + 2 * halo) * 8
         if sync:
             self.bo_ws.sync(self.harness.pyxrt.xclBOSyncDirection.XCL_BO_SYNC_BO_FROM_DEVICE, nbytes, p["base"])
@@ -466,6 +479,13 @@ class EngineSession:
         else:
             plane = np.ascontiguousarray(swizzled, dtype=np.uint8)
 
+        if p.get("band_rows", 0):
+            band = p["band_rows"]
+            nb = h // band
+            full = np.full((nb, p["planes"], band, w, 8), p.get("halo_value", ZP), dtype=np.uint8)
+            full[:, :blocks] = swizzled.reshape(blocks, nb, band, w, 8).transpose(1, 0, 2, 3, 4)
+            plane = np.ascontiguousarray(full, dtype=np.uint8)
+            nbytes = plane.size
         raw_bytes = plane.tobytes()
         if self._ws_map is not None:
             self._ws_map[p["base"]:p["base"] + nbytes] = np.frombuffer(raw_bytes, dtype=np.uint8)
