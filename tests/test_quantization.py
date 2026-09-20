@@ -40,6 +40,7 @@ from ignite_xdna.quantization import (
     QuantizationConfig,
 )
 from ignite_xdna.compiler.cli import compile_model
+from ignite_xdna.compiler.serializer import IgniteModelReader
 
 
 def build_synthetic_conv_pair_model(
@@ -209,7 +210,59 @@ def test_adaround_rectified_sigmoid_relaxation():
 # Test 4: End-to-End Quantization and .ignite Container Compilation
 # -----------------------------------------------------------------------------
 def test_end_to_end_quantization_and_compilation():
-    """Runs PTQEngine and verifies output model and scales compile to .ignite container."""
+    """Quantize and package one Conv per required legacy stage, within resident capacity.
+
+    This checks compilation and container integrity, not silicon execution or
+    detector-head semantics of the graph engine.
+    """
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp_path = Path(tmp_dir)
+        prefixes = ["/model.0", "/model.4", "/model.6", "/model.8", "/model.10", "/model.16",
+                    "/model.22/cv2.0", "/model.22/cv2.1", "/model.22/cv2.2"]
+        nodes, initializers = [], []
+        rng = np.random.default_rng(2901)
+        previous = "input"
+        for i, prefix in enumerate(prefixes):
+            channels_in = 3 if i == 0 else 32
+            weight = rng.normal(0, .01, (32, channels_in, 3, 3)).astype(np.float32)
+            initializers.append(numpy_helper.from_array(weight, f"w{i}"))
+            initializers.append(numpy_helper.from_array(np.zeros(32, dtype=np.float32), f"b{i}"))
+            output = f"v{i}"
+            nodes.append(helper.make_node("Conv", [previous, f"w{i}", f"b{i}"], [output],
+                                          name=prefix + "/conv/Conv", kernel_shape=[3, 3], pads=[1, 1, 1, 1]))
+            previous = output
+        graph = helper.make_graph(nodes, "resident_capacity_fixture",
+                                  [helper.make_tensor_value_info("input", onnx.TensorProto.FLOAT, [1, 3, 16, 16])],
+                                  [helper.make_tensor_value_info(previous, onnx.TensorProto.FLOAT, [1, 32, 16, 16])],
+                                  initializers)
+        model = helper.make_model(graph, opset_imports=[helper.make_opsetid("", 17)], ir_version=8)
+        onnx.checker.check_model(model)
+        model_path = tmp_path / "nine_conv.onnx"
+        onnx.save(model, model_path)
+        out_onnx, out_scales = tmp_path / "quant.onnx", tmp_path / "scales.json"
+        config = QuantizationConfig(use_cle=True, use_adaround=True, num_calib=8,
+                                    adaround_iterations=30, input_shape=(1, 3, 16, 16))
+        summary = PTQEngine(config).quantize(
+            model_path=model_path, calib_data_dir="data/coco128/",
+            output_onnx_path=out_onnx, output_scales_path=out_scales,
+        )
+        assert summary["status"] == "SUCCESS"
+        scales = json.loads(out_scales.read_text())
+        assert scales["producer"] == "Ignite-PTQ"
+        assert len(scales["scales"]) == len(prefixes)
+        out_ignite = tmp_path / "nine_conv.ignite"
+        compiled_bytes = compile_model(out_onnx, out_ignite, quant_scales_path=out_scales)
+        assert 0 < compiled_bytes == out_ignite.stat().st_size < 10 * 1024 * 1024
+        with IgniteModelReader(out_ignite) as reader:
+            assert reader.verify_checksum()
+            assert reader.manifest["num_stages"] == len(prefixes)
+            assert all(stage["num_layers"] == 1 for stage in reader.manifest["stages"].values())
+            assert reader.get_blob_memoryview("init_monolithic.bin").nbytes > 0
+            assert reader.get_blob_memoryview("exec_monolithic.bin").nbytes > 0
+
+
+def test_full_model_quantization_rejects_oversized_resident_schedule():
+    """Keep full-model PTQ coverage and reject the unsafe flattened legacy schedule."""
     with tempfile.TemporaryDirectory() as tmp_dir:
         tmp_path = Path(tmp_dir)
         out_onnx = tmp_path / "test_quant.onnx"
@@ -241,17 +294,11 @@ def test_end_to_end_quantization_and_compilation():
         assert scales_data["producer"] == "Ignite-PTQ"
         assert len(scales_data["scales"]) > 0
 
-        # Verify direct compilation into .ignite binary container
-        compiled_bytes = compile_model(
-            input_path=out_onnx,
-            output_path=out_ignite,
-            quant_scales_path=out_scales,
-        )
-
-        assert out_ignite.exists()
-        assert compiled_bytes > 0
-        assert compiled_bytes == out_ignite.stat().st_size
-        assert compiled_bytes < 10 * 1024 * 1024  # Under 10 MB constraint
+        # Full YOLO has more parameter sets than this legacy resident layout
+        # can hold. Container creation must stop before emitting an unsafe model.
+        with pytest.raises(ValueError, match="63 resident parameter sets.*data memory ends at 0x10000"):
+            compile_model(input_path=out_onnx, output_path=out_ignite, quant_scales_path=out_scales)
+        assert not out_ignite.exists()
 
 
 # -----------------------------------------------------------------------------

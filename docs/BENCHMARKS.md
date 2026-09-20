@@ -10036,3 +10036,113 @@ So fixing the regression did **not** overtake AMD on SESR today, and the reason 
 
 
 
+## Four silicon levers measured (2026-09-19, Desktop 2)
+
+The four open claims in [SILICON](SILICON.md) now have bounded verdicts. The device was
+Phoenix on the Ryzen 7 8700G. No engine implementation or retirement-cadence setting
+changed. Every device child ran serially through the research environment, with
+`xrt-smi examine -r aie-partitions` reporting `No hardware contexts running on device`
+before and after it. The evidence distinguishes hardware observations, artifact byte
+counts and compiler acceptance; compilation is not a silicon throughput measurement.
+
+| Lever | Measurement and consequence | Evidence |
+|---|---|---|
+| East/west MemTile affinity | Logical tile (1,1) directly reads and writes buffers in (0,1) and (2,1). Local control plus four neighbour cases, three distinct 16,384-byte payloads each: zero mismatches. Opens cross-column memory-allocation experiments. | [Fresh-context log](../results/aie/silicon_mem_neighbour_fresh_desktop2_20260919.log) |
+| Single-stream rate | On-chip MemTile DMA to core scalar-stream input: 1.000061 cycles per 32-bit word, 8-cycle intercept; 3.999756 B/cycle. Supports the 4 B/cycle model and independent-stream scaling. | [Stream log](../results/aie/silicon_stream_width_desktop2_20260919.log) |
+| Head-cut YOLOv8n weight storage | Conv weights 3,146,160 bytes, Conv biases 5,728 bytes, all initializers 3,153,599 bytes. `graph.params` counts 3,151,892 elements. Original Conv weights alone exceed reachable SRAM, before activations. | [Storage log](../results/aie/silicon_weight_storage_desktop2_20260919.log) |
+| Mixed int16/int8 API | Dense 4x8x4, 4x4x8, 8x4x4, 8x4x8, 4x4x4, 2x8x8 and sparse-weight 2x16x8, 4x16x8 compile with `acc32`; dense 4x8x8 is rejected. Opens A16W8 kernel experiments. | [Compile/disassembly log](../results/aie/silicon_mmul_shapes_desktop2_20260919.log) |
+
+**Neighbour access.** `tools/silicon_mem_neighbour_probe.py` puts the writer and reader
+on different MemTiles, so both sides accidentally using the same local address cannot
+pass. The host poisons the output with the complement of each pseudorandom input before
+submission. The buffer belongs to the neighbour; the central DMA either reads or writes
+it, and the neighbour's DMA supplies the other half. No inter-column stream route moves
+the payload between those two tiles. The log identifies each MLIR, instruction and xclbin
+artifact by SHA-256.
+
+The [initial repeated-submission probe](../results/aie/silicon_mem_neighbour_desktop2_20260919.log)
+is retained: local passed three submissions, west read passed its first and timed out on
+its second. The final sweep therefore uses a fresh context per payload. It proves direct
+read/write access in both directions, not a reusable engine protocol. Production adoption
+still needs a repeatable lock/BD lifecycle; the timeout is not attributed to silicon or
+to any particular reset mechanism by these measurements.
+
+**Stream width.** `kernels/silicon_stream/onchip.cc` emits a hardware loop containing
+16 scalar `mov ..., SS` reads for each 16 words. A preinitialized MemTile buffer feeds
+that core input continuously. Core `event0`/`event1` timestamps bracket consumption;
+only parameters, the last consumed word and the trace leave or enter DDR. Each of three
+fresh-context repetitions gives the same cycle count at each length:
+
+| 32-bit words | Trace cycles |
+|---|---|
+| 262,144 | 262,168 |
+| 1,048,576 | 1,048,648 |
+| 4,194,304 | 4,194,568 |
+
+The measured relation is `cycles = 8 + words * 1.00006103515625`. The final word is checked
+against the initialized pattern; the log also contains the kernel disassembly proving
+that unused intermediate stream reads were not optimized away. This is a stream-rate
+probe, not full-payload integrity testing. The separate DDR passthrough checks every
+output word on every call against a changing input and poisoned output buffer.
+
+That same log includes a trace-clock calibration with scalar and vector loops and a
+one/two-channel DDR sweep: 1.796301 GHz; 6.898931 and 13.548102 GB/s per direction,
+respectively. Each of four sizes has three warmups and 15 timed calls; fits use the median
+submit/wait time, excluding host fill, synchronization and readback. The two fits have
+R-squared 0.999814 and 0.999861. Each stream uses two 262,144-byte MemTile buffers. These
+end-to-end rates remain below the on-chip word/cycle rate. They do not settle whether
+the earlier shared cap in SILICON 1.6 is DRAM, NoC or channel count, nor prove a faster
+engine without a graph-level experiment. Trace samples use fresh contexts because
+reusing the raw trace DMA configuration did not reliably capture the next sample.
+
+**Weights.** `tools/silicon_weight_bytes_probe.py` profiles the exact head-cut XINT8 ONNX
+artifact with `onnx_tool`, counts initializer storage by dtype, and follows Conv weight
+and bias inputs through `DequantizeLinear` to their stored tensors. Artifact SHA-256 is
+`f02e86ba1bf61ff3fdc159e29b15259567e279df06f68c6d9adeb966fe56c885`.
+There are 63 Conv weight tensors and 63 Conv bias tensors, all int8. Other initializers
+include scales and quantization constants. The earlier
+[parameter/initializer-only log](../results/aie/silicon_weight_bytes_desktop2_20260919.log)
+is preserved; the final log adds the Conv-only distinction.
+
+DERIVED: reachable storage is `16 * 65536 + 4 * 524288 = 3,145,728` bytes from SILICON's
+existing geometry. Conv weights exceed it by 432 bytes; all original initializers by
+7,871 bytes. This closes residency of the original complete weight set in that SRAM,
+even before activation and workspace allocation. Packing, eliminating constants and
+partial residency are separate experiments. ONNX bytes are not the compiler's packed
+or replicated footprint and are not measured DDR traffic.
+
+**Mixed precision.** `tools/silicon_mmul_probe.py` enumerates the installed AIE2
+`mmul_16_8.hpp` specializations, instantiates both `mul` and `mac`, and compiles for
+`aie2-none-unknown-elf`. Accepted objects contain vector multiply/MAC instructions;
+the log includes commands, header/object hashes and disassembly. The compiler is
+Peano clang 22 at `a36c62b9d26291fb06604bc976c897791f0bb578`. Sparse shapes are tested
+with sparse-vector arguments, not dense substitutes. The negative control prevents
+reading int8's dense 4x8x8 shape as a mixed-precision shape. This verifies API and code
+generation support, not sparse encoding correctness, execution accuracy or MAC/cycle.
+
+**What this sitting changed outside `results/`.** No engine implementation changed, but three
+test files and one packaging setting did, and each is a narrowing worth seeing before these
+numbers are quoted. `tests/test_engine_host_layer.py` now allocates its two fixtures' workspace
+with `reuse=False`: both preload every golden tensor at once, outside graph execution order, so
+a co-tenant slot overwrote an input under test. `tests/test_quantization.py`'s
+full-`yolov8n_cut` case asserts the legacy single-dispatch scheduler's fail-closed rejection
+instead of a successful container — `0fc5a37` added that gate, and 63 resident parameter sets
+need 63 windows where at most 16 fit at the `0x1000` stride — and positive container coverage
+now comes from a nine-conv graph. `tests/test_inference_session.py`'s two fused cases pass their
+matching `im2col_fused_2layer.xclbin` and skip when it or its transaction bundles are absent,
+rather than silently falling back to the single-layer design. `pyproject.toml` pins
+`testpaths = ["tests"]` so a bare `pytest -q` cannot collect a sibling worktree's suite. Each
+failure was diagnosed offline at `7c9efd5` before any test was edited:
+[silicon_gate_workspace_desktop2_20260919.log](../results/aie/silicon_gate_workspace_desktop2_20260919.log)
+runs both host-layer assertions with only the allocation changed and reports `OK`;
+[silicon_gate_compilation_desktop2_20260919.log](../results/aie/silicon_gate_compilation_desktop2_20260919.log)
+reproduces the rejection verbatim (`EXPECTED_FULL_MODEL_REJECTION: 63 resident parameter sets do
+not fit core data memory: set 16 spans [0x1037c, 0x10d00) but data memory ends at 0x10000; at
+most 16 sets fit at the 0x1000 stride`) and builds a 1,029,312-byte container from the nine-conv
+graph. `pytest -q` on this tree: **261 passed, 15 skipped, 13 subtests passed** (2026-09-19,
+Desktop 2).
+
+The stream-rate row in SILICON 1.5 and the DDR slopes recorded in 1.6 do not print the power
+mode's name. The same log calibrates the trace clock in the same sitting at 1.796301 GHz, which
+matches 1.7's 1.80 GHz `default`-mode figure, so those bytes-per-cycle readings carry a measured
+clock rather than a mode label.

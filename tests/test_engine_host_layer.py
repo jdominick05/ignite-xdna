@@ -252,7 +252,9 @@ class ConcatViewHostInput(_OrtCase):
     def test_emulated_host_steps_read_the_view(self):
         chw, q = quantized_bus(self.ir)
         direct = gr.run_direct(self.ir, q)
-        ws = es.plan_workspace(self.ir)
+        # This fixture preloads every golden tensor at once, outside graph
+        # execution order. Co-tenant slots would overwrite the inputs under test.
+        ws = es.plan_workspace(self.ir, reuse=False)
         arr = np.zeros(ws.nbytes, dtype=np.uint8)
         for name, v in direct.items():
             if name in ws.placements:
@@ -299,7 +301,9 @@ class ResidualHardSwish(_OrtCase):
     def test_packet_emulation_of_the_residual_hardswish_layers_matches_direct(self):
         _, q = quantized_bus(self.ir)
         direct = gr.run_direct(self.ir, q)
-        ws = es.plan_workspace(self.ir)
+        # Preserve all preloaded inputs while testing individual layer packets;
+        # workspace reuse is valid only with execution-order tensor lifetimes.
+        ws = es.plan_workspace(self.ir, reuse=False)
         scheds, store = es.schedule_graph(self.ir, ws)
         arr = ws.halo_fill()
         for name, v in direct.items():

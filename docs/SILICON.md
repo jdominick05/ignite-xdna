@@ -88,7 +88,7 @@ New numbers use 1.80 GHz and say which power mode they were taken in.
 | Memory | 512 KB, 8 banks | SPEC: `device.yaml` `memtile_capacity: 512`, `memtile_num_banks: 8`; `getMemTileSize() = 0x80000`. |
 | DMA | 6 S2MM + 6 MM2S channels; 48 BDs (even channels use BDs 0–23, odd 24–47); 64 locks | SPEC: switchbox DMA bundle = 6 each way; `getNumBDs(MemTile) = 48`; `isBdChannelAccessible`; `getNumLocks(MemTile) = 64`. |
 | BD fields | length ≤ 2¹⁷−1 words (the whole tile); **4-D** addressing; 10-bit wrap; 17-bit step; 6-bit iteration wrap | SPEC: same accessors. The 4-D BD is the one address generator on the chip that can do an im2col or a transpose in flight without a core touching the data. |
-| Neighbour access | east and west mem tiles are addressable | SPEC: `isLegalMemAffinity`'s mem-tile branch. TO VERIFY on NPU1 hardware. |
+| Neighbour access | direct east/west MemTile DMA reads and writes work | MEASURED: [silicon_mem_neighbour_fresh_desktop2_20260919.log](../results/aie/silicon_mem_neighbour_fresh_desktop2_20260919.log), Desktop 2: local plus east/west read/write, three distinct 16,384-byte payloads each, zero mismatches. Opens cross-column SRAM allocation experiments. Fresh context per payload: repeated submission remains unqualified after the [earlier west-read timeout](../results/aie/silicon_mem_neighbour_desktop2_20260919.log). |
 | BD encoding when a transaction stream writes a whole BD | word 0: length in 32-bit words. Word 1: low bits an absolute address in words, (0x80000 + the buffer's L1 address) / 4. Word 7: lock ids written as id + 64, while the lock value registers at `0xC0000 + 0x10 × id` take the raw id | MEASURED: read from the configuration CDO of the graph engine's weight-buffer build against its assigned addresses (`w0_buf` at 0 is 0x20000, `a0_cons_buff_0` at 303,104 is 0x32800, `o0_buff_0` at 354,304 is 0x35A00; lock 32 is 0x60), recorded in `results/aie/notes_yolov8s_gap.md`; a stream using this encoding runs 66/66 exact in `results/aie/weight_buffer_phoenix_20260916T1508Z.log`. |
 
 ### 1.4 One shim tile
@@ -103,7 +103,7 @@ New numbers use 1.80 GHz and say which power mode they were taken in.
 
 | Fact | Value | Tag and evidence |
 |---|---|---|
-| Stream width | 32-bit streams, one word per cycle per stream | SPEC-adjacent: `device.yaml` `max_stream_bw: 4` carries no unit in the excerpt; it is consistent with 4 bytes per cycle per stream and nothing else obvious. **TO VERIFY** with the single-channel microbenchmark in S1 — see the 9% discrepancy in 1.6. |
+| Stream width | one 32-bit word per cycle; sustained on-chip rate 3.999756 B/cycle | MEASURED: [silicon_stream_width_desktop2_20260919.log](../results/aie/silicon_stream_width_desktop2_20260919.log), Desktop 2: MemTile-to-core trace slope 1.000061 cycles/word, fixed intercept 8 cycles; no DDR payload in the interval. Supports the 4 B/cycle stream model, opens independent-stream scaling and closes assuming a wider per-stream engine budget. The shared DDR/NoC cap in 1.6 remains unattributed. |
 | Switch features used or provable here | circuit-switched routes, packet-switched routes (packet id ≤ 31), broadcast from one master to several slaves, trace ports on core, mem and shim tiles | SPEC: `getMaxPacketId() = 31`; `WireBundle::Trace` slave ports exist on all three tile types (`AIETargetModel.cpp`, port-index tables). Broadcast is what lets `whole_array.py` feed one A-tile to a whole row of cores and one B-tile to a whole column. |
 | Switch ports per tile (masters out / slaves in) | core tile: DMA 2/2, core 1/1, FIFO 1/1, north 6/4, south 4/6, east and west 4/4 (0 at the array edge); mem tile: DMA 6/6, north 6/4, south 4/6; shim: north 6/4, south (the NoC side) 6/8, east and west 4/4, FIFO 1/1 | SPEC: `AIE2TargetModel::getNumDestSwitchboxConnections` and `getNumSourceSwitchboxConnections`, read with their `case` labels. Consistent with the model's own validation rule that a tile's north masters equal the tile above's south slaves. |
 
@@ -135,6 +135,13 @@ S0 has settled its half (1.7): the clock is 1.80 GHz, so 7.0 GB/s is 3.9 bytes p
 all. The DRAM figure at 1.8 GHz is 28.8 GB/s, still within 10% of the 26–28 GB/s shared
 cap. What S1 still owns is whether that cap is DRAM, NoC, or channel count.
 
+The 2026-09-19 S1 probe now directly measures the on-chip stream rate in 1.5.
+Its same-sitting DDR passthrough measures 6.898931 GB/s per direction on one channel
+and 13.548102 GB/s on two, with all readbacks exact and a trace-calibrated 1.796301 GHz
+clock ([log](../results/aie/silicon_stream_width_desktop2_20260919.log)). Those are
+submit/wait slopes across payload sizes, below the on-chip rate; they do not identify
+the resource responsible for the earlier shared cap.
+
 A fourth design isolates the mem tile hop rather than a rate. `tools/memtile_hop_probe.py` sends the graph engine's
 6,400 B input and 3,200 B output objects through one core with no compute, on four routes that differ only in
 whether each direction passes through a mem tile ObjectFIFO `forward`. Dispatch time against megabytes in (3.3 to
@@ -158,10 +165,9 @@ pays a core's acquire and release per object, which this run cannot separate fro
 
 DERIVED from 1.2–1.3: 16 core tiles × 64 KB + 4 mem tiles × 512 KB = **3.0 MB** reachable
 today; 20 + 5 gives **3.75 MB** if column 0 is reached. Program memory is 16 KB per core,
-256 KB across the reachable array. For scale: yolov8n's head-cut int8 graph is on the order
-of 3 MB of weights (TO VERIFY the exact byte count with `onnx-tool`'s `graph.params`, which
-`tools/estimate_tops.py` already reads), so a fully weight-resident small CNN is at the
-edge of what the reachable array can hold and comfortably inside the physical one.
+256 KB across the reachable array.
+
+MEASURED: head-cut `yolov8n_cut_xint8.onnx` has **3,146,160 bytes of Conv weights**, 5,728 bytes of Conv biases and 3,153,599 initializer bytes in total; `onnx_tool.graph.params` is 3,151,892 elements, not a dtype-aware byte count ([silicon_weight_storage_desktop2_20260919.log](../results/aie/silicon_weight_storage_desktop2_20260919.log), Desktop 2, artifact SHA-256 recorded). Closes full residency of the original Conv weights in the reachable array: weights alone exceed its DERIVED 3,145,728-byte capacity by 432 bytes before workspace; compact packing or partial residency remains open. This is artifact storage, not a measurement of runtime DDR traffic.
 
 ## 2. Ceilings, and where every measured number sits
 
@@ -394,7 +400,7 @@ T_model = max(T_compute, T_dram, T_stream) + T_dispatch
 
 A core computing an m×n output tile over a k-step needs (m+n)·k·2 bytes of bf16 operands
 for m·n·k MACs, i.e. **2(m+n)/(m·n) bytes per MAC**. Its two S2MM channels deliver at most
-8 bytes per cycle if a stream is 4 B/cycle (1.5, TO VERIFY). At 128 bf16 MACs per cycle
+8 bytes per cycle using the measured approximately 4 B/cycle stream rate (1.5). At 128 bf16 MACs per cycle
 the core can absorb 0.0625 B/MAC. DERIVED:
 
 | Tile m×n (k=64) | B/MAC | Input-bound MAC/cycle | Ceiling as % of bf16 peak | Where it was measured |
@@ -862,7 +868,7 @@ the 0.889 GEMM ceiling (a 4.0× density uplift), unlocking the path to 1.65 TOPS
 **Bandwidth is not what would kill the design, though** — DERIVED, gate 1 of the same run: an
 im2col conv's expansion cancels, giving **1/C_out bytes per MAC**, so against 3.1's int8 ceiling
 of 0.03125 B/MAC it is stream-bound only below C_out = 32 and has 2× headroom at C_out = 64.
-(That ceiling inherits 1.5's TO VERIFY on the 4 B/cycle stream rate.)
+(That DERIVED ceiling uses 1.5's measured approximately 4 B/cycle stream rate.)
 Bar: 1.65 TOPS per column, clock-independent (2.2); today 146 GOPS (2.3). Physical
 basis: 3.3 — conv has ten times the reuse the core needs, the weights fit on-chip, and the
 same column sustains the bar under AMD's compiler. Tooling: a conv design of this repo's
@@ -908,9 +914,11 @@ transformer capstone C2.
 Physical basis: the tile does int16×int8 at 128 MACs per cycle, the same rate as bf16
 with half the weight bytes (1.2); Quark's `A16W8` places 0/394 nodes because opset-17 Q/DQ
 can't carry 16-bit types (`results/a16w8/diag_resnet50_a16w8_npu.log`) — an EP limit, not
-a silicon one. Tooling: `mmul` for mixed int16×int8 (TO VERIFY which shapes the AIE API
-offers on aie2; `mm.cc` ships only int16×int16 4×4×4), then a GEMM and a 1×1 conv on the
-K2 template. Measurement: accuracy on a model XINT8 breaks — yolov8n-pose's 17.8-point OKS
+a silicon one.
+
+MEASURED: mixed `int16×int8`, `acc32` AIE2 API compilation accepts dense **4×8×4, 4×4×8, 8×4×4, 8×4×8, 4×4×4, 2×8×8** and sparse-weight **2×16×8, 4×16×8**; dense 4×8×8 is rejected ([silicon_mmul_shapes_desktop2_20260919.log](../results/aie/silicon_mmul_shapes_desktop2_20260919.log), Desktop 2; header hash, compiler commands and object disassembly recorded). Opens A16W8 GEMM/1×1-convolution experiments with these API shapes; silicon throughput and accuracy are not established by compilation.
+
+Next is a GEMM and a 1×1 conv on the K2 template. Measurement: accuracy on a model XINT8 breaks — yolov8n-pose's 17.8-point OKS
 loss, or MobileViT's 0.00% — with the K2 CPU harness for latency. Decides: whether an
 int16-activation path recovers accuracy at a cost the array can pay.
 

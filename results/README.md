@@ -1,5 +1,8 @@
 # results/
 
+Four silicon inventory claims are backed by the [AIE lever logs](aie/README.md#four-silicon-levers),
+with [methods and qualification limits](../docs/BENCHMARKS.md#four-silicon-levers-measured-2026-09-19-desktop-2).
+
 The native SPPF work is an unfinished performance qualification; build and
 silicon logs are indexed under [AIE SPPF](aie/README.md#sppf-checkpoint), with
 [results and open gates](../docs/BENCHMARKS.md#sppf-checkpoint-2026-09-13-desktop-2).

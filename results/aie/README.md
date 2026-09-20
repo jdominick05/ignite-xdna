@@ -11,6 +11,30 @@ This file exists because these entries used to be a single cell in
 [`results/README.md`](../README.md)'s table, long enough that its three retractions were
 invisible to anyone scanning it.
 
+## Four silicon levers
+
+The [2026-09-19 Desktop 2 sitting](../../docs/BENCHMARKS.md#four-silicon-levers-measured-2026-09-19-desktop-2)
+backs the corresponding verdicts in [SILICON](../../docs/SILICON.md).
+
+| Log | Evidence |
+|---|---|
+| [silicon_mem_neighbour_fresh_desktop2_20260919.log](silicon_mem_neighbour_fresh_desktop2_20260919.log) | Local/east/west read/write payload checks in fresh contexts; opens cross-column allocation experiments. |
+| [silicon_stream_width_desktop2_20260919.log](silicon_stream_width_desktop2_20260919.log) | On-chip word/cycle trace, clock calibration and correct one/two-channel DDR transfers. |
+| [silicon_weight_storage_desktop2_20260919.log](silicon_weight_storage_desktop2_20260919.log) | Exact Conv weights, biases, initializer bytes and graph.params; original weights exceed reachable SRAM. |
+| [silicon_mmul_shapes_desktop2_20260919.log](silicon_mmul_shapes_desktop2_20260919.log) | Dense/sparse mixed int16/int8 compiler acceptance, rejected control and disassembly. |
+| [silicon_mem_neighbour_desktop2_20260919.log](silicon_mem_neighbour_desktop2_20260919.log) | Earlier west-read second-submission timeout; preserved qualification limit. |
+| [silicon_weight_bytes_desktop2_20260919.log](silicon_weight_bytes_desktop2_20260919.log) | Earlier parameter/initializer-only measurement, refined by the Conv-specific storage log. |
+
+### Suite state behind those verdicts
+
+That sitting re-scoped three test files, so it diagnosed the failures offline, at the same
+commit, before editing anything. Neither log opened an NPU context.
+
+| Log | Evidence |
+|---|---|
+| [silicon_gate_workspace_desktop2_20260919.log](silicon_gate_workspace_desktop2_20260919.log) | Both host-layer assertions pass with the fixture's allocation only; the collision is slot reuse against an out-of-order preload. |
+| [silicon_gate_compilation_desktop2_20260919.log](silicon_gate_compilation_desktop2_20260919.log) | Verbatim legacy-scheduler rejection for 63 resident parameter sets, plus a 1,029,312-byte container from a nine-conv graph. |
+
 ## Retractions and supersessions in this directory
 
 Read these before quoting anything below.

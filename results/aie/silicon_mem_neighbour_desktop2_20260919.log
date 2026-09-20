@@ -1,0 +1,83 @@
+UTC: 2026-09-19T16:53:39.809152+00:00
+MACHINE: DESKTOP-CBL5NUA AMD64 Family 25 Model 117 Stepping 2, AuthenticAMD
+COMMAND: "C:/Program Files/Git/bin/bash.exe" scripts/research-iron.sh tools/silicon_mem_neighbour_probe.py suite
+COMMIT: 7c9efd5f0d35f23a5ce6d476900660600ab4f10c
+PRE_DEVICE_WITNESS
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+PRE_CASE local
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+CASE local writer,reader,memory (1, 1, 1)
+probe.mlir SHA256 5a227967ee7ac05d383a1d7ecc2f03466e9ac24c623b9bc5f494fc8b7ac81f81
+probe.xclbin SHA256 3d3802fac54ed60b69b2f70304c1b7bd560898980601db196c7a43fd193f8064
+insts.bin SHA256 f4d1dcb2b9c207061c86d4860e154c0faa4cfc914986160916e392bf37752ac1
+seed 17 bytes 16384 mismatches 0
+seed 2901 bytes 16384 mismatches 0
+seed 7021 bytes 16384 mismatches 0
+VERDICT local PASS
+POST_CASE local
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+PRE_CASE west_read
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+CASE west_read writer,reader,memory (0, 1, 0)
+probe.mlir SHA256 8051800f3714d8d9eb2e24c2d2634da739a2641ffbd6b44cb04cc2a72938209c
+probe.xclbin SHA256 4b9ba82623cec0618278d20c5429b08b713cda51147c911a66b2680d8524e47d
+insts.bin SHA256 2567e645dbd785db2b674f3151452a000ada3992b5b1e9d0c210e6a715cdb070
+seed 17 bytes 16384 mismatches 0
+Traceback (most recent call last):
+  File "C:/Users/<user>\PycharmProjects\ignite-xdna\tools\silicon_mem_neighbour_probe.py", line 128, in <module>
+    main()
+    ~~~~^^
+  File "C:/Users/<user>\PycharmProjects\ignite-xdna\tools\silicon_mem_neighbour_probe.py", line 111, in main
+    run(a.case)
+    ~~~^^^^^^^^
+  File "C:/Users/<user>\PycharmProjects\ignite-xdna\tools\silicon_mem_neighbour_probe.py", line 92, in run
+    raise RuntimeError(f"dispatch failed {state}")
+RuntimeError: dispatch failed ert_cmd_state.ERT_CMD_STATE_TIMEOUT
+POST_CASE west_read
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+
+EXIT_CODE: 1
+POST_DEVICE_WITNESS
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
