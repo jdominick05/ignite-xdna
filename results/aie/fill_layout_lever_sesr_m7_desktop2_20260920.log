@@ -1,0 +1,10 @@
+UTC: 2026-09-20T12:27:04.156551+00:00
+MACHINE: DESKTOP-CBL5NUA AMD64 Family 25 Model 117 Stepping 2, AuthenticAMD
+COMMAND: C:/Users/<user>/miniforge3/envs/mlir-aie-iron/python.exe tools/fill_layout_lever_math.py --saved 158 --extra-bytes-per-col 0 --saved 316 --extra-bytes-per-col 648960
+COMMIT: 28259feb0fa6b23674b8b7e9773a4d0b9e294727
+[model] floor 2.629 = transfer 0.432 + per-task 2.197 over 1007 descriptors -> 2.181 us/descriptor; compute 1.682 ms, host stages 0.572 ms
+[scenario] -158 descriptors (15.7% of 1007), +0 B/col: floor 2.629 -> 2.284, dispatch -> 3.966, G2G 4.883 -> 4.538; still short by 0.718 ms
+[scenario] -316 descriptors (31.4% of 1007), +648,960 B/col: floor 2.629 -> 2.034, dispatch -> 3.716, G2G 4.883 -> 4.288; still short by 0.468 ms
+[caveat] upper bound: assumes per-task cost scales with descriptor count and that no other stage regains the time; ignores lock/barrier structure and workspace capacity
+
+EXIT_CODE: 0

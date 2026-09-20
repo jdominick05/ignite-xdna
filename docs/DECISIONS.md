@@ -1807,7 +1807,14 @@ cached reference heads rather than `bo_out`.
   2026-09-20, the limit behind it is the workspace row pitch -- all 2,207 four-dimensional fills across
   both containers are 25,600 B (exactly 4 packets) and none has contiguous rows, so a chain carries 4
   packets where the hardware allows 64. That is a layout question and the one large lever left here,
-  not a merge pass that could simply be turned on]*;
+  not a merge pass that could simply be turned on. Sized the same day (tools/fill_layout_sizing.py,
+  tools/fill_layout_lever_math.py): the line-spanning layout needs 66,048-82,560 B per packet against a
+  65,536 B core and moves 6.5-12.9x the bytes -- rejected on both budgets; packing a packet's planes
+  adjacently frees the dimension at zero wire cost exactly where chained windows abut (169 of SESR's 338,
+  940 of the flagship's 1,869), worth -15.7% descriptors and G2G 4.538 against AMD's 3.820 -- real and
+  not enough, since break-even is 48% of the stream. So for SESR the G2G gap cannot be closed
+  transport-side, and what remains (retention across layers) must itself free a descriptor dimension to
+  be affordable at 4 packets per descriptor]*;
   **(c) removing the refetches**
   -- `tools/fill_repeat_audit.py` shows all 100 of SESR's repeated descriptors are far from their first send
   (median 124 tasks), i.e. cross-layer, so no wider window covers them. The flagship, which already beats AMD,

@@ -52,6 +52,9 @@ relied on is recorded in [SILICON 1.4](../../docs/SILICON.md).
 | [fill_repeat_positions_yolov8n_full_desktop2_20260919.log](fill_repeat_positions_yolov8n_full_desktop2_20260919.log) | The flagship's 938 refetches split 280 near against 658 far; only the near third is a packing question. |
 | [fill_premerge_dims_sesr_m7_desktop2_20260920.log](fill_premerge_dims_sesr_m7_desktop2_20260920.log) | All 338 four-dimensional SESR fills are 25,600 B = 4 packets, and 0 of them have contiguous rows (pitch 10.32-12.90x the row) - which is what caps a chain at 4. |
 | [fill_premerge_dims_yolov8n_full_desktop2_20260920.log](fill_premerge_dims_yolov8n_full_desktop2_20260920.log) | The same ceiling on the flagship's 1,869 (pitch 6.48-8.10x the row); 88 patterns have pitch *below* row bytes, unexplained. |
+| [fill_layout_sizing_sesr_m7_desktop2_20260920.log](fill_layout_sizing_sesr_m7_desktop2_20260920.log) | Line-spanning needs 66,048-82,560 B per packet against a 65,536 B core and 6.51-12.90x the bytes; plane-packing frees the dimension at zero wire cost for 169 of 338. |
+| [fill_layout_sizing_yolov8n_full_desktop2_20260920.log](fill_layout_sizing_yolov8n_full_desktop2_20260920.log) | The same two budgets on the flagship: 940 of 1,869 byte-free, 929 replicating 1.60-3.20x. |
+| [fill_layout_lever_sesr_m7_desktop2_20260920.log](fill_layout_lever_sesr_m7_desktop2_20260920.log) | Prices both: -15.7% descriptors leaves G2G 0.718 ms short of AMD, -31.4% still 0.468 short; break-even is 48% of the stream. |
 
 ## Retractions and supersessions in this directory
 

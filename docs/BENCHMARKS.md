@@ -10371,3 +10371,70 @@ Evidence: [fill_premerge_dims_sesr_m7_desktop2_20260920.log](../results/aie/fill
 [fill_premerge_dims_yolov8n_full_desktop2_20260920.log](../results/aie/fill_premerge_dims_yolov8n_full_desktop2_20260920.log).
 Offline again: no device, no hardware context, `merge_runs` wrapped in the audit's own process, and
 each log's `COMMIT` ties the shape counts to the code they were read from.
+
+## Sizing the two layouts that could free a fill dimension: neither reaches AMD, and one cannot fit L1 (2026-09-20, Desktop 2)
+
+[The previous section](#every-four-dimensional-fill-is-exactly-four-packets-the-row-pitch-caps-it-not-the-merger-2026-09-20-desktop-2)
+found that all 2,207 four-dimensional fills chain exactly 4 packets because three dimensions go to the
+packet's own geometry. This sizes what it would cost to free one, before anyone edits a scheduler.
+`tools/fill_layout_sizing.py` captures the same patterns the merger sees and prices each candidate
+layout on both budgets that matter — wire bytes and per-packet footprint against the 64 KB core data
+memory — and `tools/fill_layout_lever_math.py` converts a descriptor reduction into floor, dispatch
+and end-to-end time against AMD's 3.820 ms. Offline throughout; no device, no hardware context, no
+source change; logs at [fill_layout_sizing_sesr_m7](../results/aie/fill_layout_sizing_sesr_m7_desktop2_20260920.log),
+[fill_layout_sizing_yolov8n](../results/aie/fill_layout_sizing_yolov8n_full_desktop2_20260920.log),
+[fill_layout_lever](../results/aie/fill_layout_lever_sesr_m7_desktop2_20260920.log).
+
+**Spanning the line is impossible twice over.** Making rows contiguous means a packet carries whole
+padded lines: its footprint becomes 4 planes x 8 rows x 2,064 B = **66,048 B** for the (4,4,8,200)
+shape and 8 x 5 x 2,064 = **82,560 B** for (4,8,5,160), against a core tile's 65,536 B — over by 512
+bytes and 17,024 bytes, the same shape of miss as the [432-byte weight
+overshoot](#four-silicon-levers-measured-2026-09-19-desktop-2). It also moves 6.51x and 12.90x the
+useful bytes. Rejected without needing a run.
+
+**Packing a packet's planes adjacently does free a dimension at zero wire cost — for exactly half of
+them.** The chains step 5 lines and a packet spans `r` rows, so where `r <= 5` consecutive packets abut
+and adjacency is pure placement; where `r > 5` it replicates the overlap:
+
+| Shape | count | rows vs step | byte-free? |
+|---|---:|---|---|
+| SESR (4,8,5,160) | 169 | 5 rows at step 5 | **yes** — abutting |
+| SESR (4,4,8,200) | 169 | 8 rows at step 5 | no, 1.60x the bytes |
+| YOLOv8n (4,8,5,160) | 940 | 5 at step 5 | **yes** |
+| YOLOv8n (4,4,8,200) | 841 | 8 at step 5 | no, 1.60x |
+| YOLOv8n (4,10,4,160) | 64 | 4 at step 2 | no, 2.00x |
+| YOLOv8n (4,2,16,200) | 24 | 16 at step 5 | no, 3.20x |
+
+Freeing a dimension lifts the chain ceiling from 4 to `MAX_REPEAT = 64`, so the byte-free class
+re-chains 169 descriptors into 11 on SESR (940 into 59 on the flagship).
+
+**And the whole lever, taken at its upper bound, does not close the gap.** DERIVED model, printed by
+the tool: the floor decomposes as transfer 0.432 ms + per-task 2.197 ms over 1,007 descriptors =
+**2.181 µs per descriptor**, with compute 1.682 ms and host stages 0.572 ms.
+
+| Scenario | Descriptors | Floor | Dispatch | G2G | vs AMD 3.820 |
+|---|---:|---:|---:|---:|---|
+| today | 1,007 | 2.629 | 4.311 | 4.883 | +1.063 |
+| byte-free half re-chained | 849 (-15.7%) | 2.284 | 3.966 | 4.538 | **still short by 0.718** |
+| both halves, overlapping one paying 1.60x bytes | 691 (-31.4%) | 2.034 | 3.716 | 4.288 | **still short by 0.468** |
+| break-even | 520 (-48%) | 1.566 | 3.248 | 3.820 | needs nearly half the stream gone |
+
+(The break-even row is the same tool run without `--saved`: "to reach 3.820 ms G2G the floor must
+fall to 1.566 ms: remove 1.063 ms = 487 descriptors = 48% of the stream".)
+
+So fill-dimension repacking is real — a 16% to 31% descriptor cut, worth 0.35 to 0.57 ms of SESR's
+floor — and it is not enough. With channels (6.3% of bytes), merging (0 declined patterns) and refetch
+removal (all cross-layer) already closed, **SESR's G2G gap cannot be closed on the transport side**:
+the remaining term of the right size is not sending the intermediates at all, which is the
+retention change the MemTile ring once attempted at 4,732 tasks. This sizing partly explains that
+failure and points at the one thing that would make a retention design affordable: a ring or window
+layout has to free a descriptor dimension too, because at 4 packets per descriptor any re-send scheme
+multiplies tasks by construction.
+
+**Not priced.** The flagship's floor/dispatch split was never measured, so its 881-descriptor
+opportunity is unpriced. Column-major was not modelled: the operative variable turned out to be
+rows-versus-step, not which axis is contiguous, and `docs/SILICON.md` records one column-major attempt
+that traded a different limit. And nothing here says plane-adjacent placement is *achievable* —
+tensors share workspace slots under liveness reuse, so making one packet's planes contiguous may move
+or enlarge a collision that `plan_workspace` currently tolerates. That is the first question a real
+implementation has to answer, and it belongs in the file another workstream has open.

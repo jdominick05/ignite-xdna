@@ -1,0 +1,56 @@
+UTC: 2026-09-20T12:21:29.662825+00:00
+MACHINE: DESKTOP-CBL5NUA AMD64 Family 25 Model 117 Stepping 2, AuthenticAMD
+COMMAND: python tools/fill_layout_sizing.py models/yolov8n_cut_xint8.onnx
+COMMIT: 28259feb0fa6b23674b8b7e9773a4d0b9e294727
+PACKAGE: ignite_xdna\__init__.py
+
+[sizing] models/yolov8n_cut_xint8.onnx: 4811 patterns offered to merge_runs, 1869 four-dimensional across 4 shapes (cross-check against tools/fill_premerge_audit.py's count for this model)
+[count] (4, 8, 5, 160) x940
+
+[shape] sizes (4, 8, 5, 160) strides (6480, 209952, 1296, 1): 8 planes x 5 rows x 160 B = 6,400 B per packet, 4 packets per descriptor, line pitch 1,296 B (row is 12.3% of a line), chain step 5 lines
+  [emitted]
+    dims 4, chain ceiling 4 packets/descriptor (1x fewer descriptors than 4), per-packet footprint 6,400 B fits, baseline, chain-overlap dedup -
+  [planes packed adjacent (plane stride 209,952 -> 6,480 B)]
+    dims 3, chain ceiling 64 packets/descriptor (16x fewer descriptors than 4), per-packet footprint 6,400 B fits, same bytes on the wire (chained windows abut or are disjoint: step 5 >= 5 rows), chain-overlap dedup -
+  [lines spanned (row 160 B -> pitch 1,296 B)]
+    dims 2, chain ceiling 64 packets/descriptor (16x fewer descriptors than 4), per-packet footprint 51,840 B fits, delivers 8.10x the useful bytes (5.00 of 5 rows per packet after dedup), chain-overlap dedup 1.00x dedup
+  [both: planes packed AND lines spanned]
+    dims 1, chain ceiling 64 packets/descriptor (16x fewer descriptors than 4), per-packet footprint 51,840 B fits, both changes; 8.10x the useful bytes, chain-overlap dedup 1.00x dedup
+[count] (4, 4, 8, 200) x841
+
+[shape] sizes (4, 4, 8, 200) strides (6480, 209952, 1296, 1): 4 planes x 8 rows x 200 B = 6,400 B per packet, 4 packets per descriptor, line pitch 1,296 B (row is 15.4% of a line), chain step 5 lines
+  [emitted]
+    dims 4, chain ceiling 4 packets/descriptor (1x fewer descriptors than 4), per-packet footprint 6,400 B fits, baseline, chain-overlap dedup -
+  [planes packed adjacent (plane stride 209,952 -> 10,368 B)]
+    dims 3, chain ceiling 64 packets/descriptor (16x fewer descriptors than 4), per-packet footprint 6,400 B fits, replicates 8 of 5 stepped rows: 1.60x the bytes, because chained windows overlap, chain-overlap dedup -
+  [lines spanned (row 200 B -> pitch 1,296 B)]
+    dims 2, chain ceiling 64 packets/descriptor (16x fewer descriptors than 4), per-packet footprint 41,472 B fits, delivers 4.09x the useful bytes (5.05 of 8 rows per packet after dedup), chain-overlap dedup 1.59x dedup
+  [both: planes packed AND lines spanned]
+    dims 1, chain ceiling 64 packets/descriptor (16x fewer descriptors than 4), per-packet footprint 41,472 B fits, both changes; 4.09x the useful bytes, chain-overlap dedup 1.59x dedup
+[count] (4, 10, 4, 160) x64
+
+[shape] sizes (4, 10, 4, 160) strides (640, 12800, 320, 1): 10 planes x 4 rows x 160 B = 6,400 B per packet, 4 packets per descriptor, line pitch 320 B (row is 50.0% of a line), chain step 2 lines
+  [emitted]
+    dims 4, chain ceiling 4 packets/descriptor (1x fewer descriptors than 4), per-packet footprint 6,400 B fits, baseline, chain-overlap dedup -
+  [planes packed adjacent (plane stride 12,800 -> 1,280 B)]
+    dims 3, chain ceiling 64 packets/descriptor (16x fewer descriptors than 4), per-packet footprint 6,400 B fits, replicates 4 of 2 stepped rows: 2.00x the bytes, because chained windows overlap, chain-overlap dedup -
+  [lines spanned (row 160 B -> pitch 320 B)]
+    dims 2, chain ceiling 64 packets/descriptor (16x fewer descriptors than 4), per-packet footprint 12,800 B fits, delivers 1.02x the useful bytes (2.03 of 4 rows per packet after dedup), chain-overlap dedup 1.97x dedup
+  [both: planes packed AND lines spanned]
+    dims 1, chain ceiling 64 packets/descriptor (16x fewer descriptors than 4), per-packet footprint 12,800 B fits, both changes; 1.02x the useful bytes, chain-overlap dedup 1.97x dedup
+[count] (4, 2, 16, 200) x24
+
+[shape] sizes (4, 2, 16, 200) strides (960, 4608, 192, 1): 2 planes x 16 rows x 200 B = 6,400 B per packet, 4 packets per descriptor, line pitch 192 B (row is 104.2% of a line), chain step 5 lines
+  [emitted]
+    dims 4, chain ceiling 4 packets/descriptor (1x fewer descriptors than 4), per-packet footprint 6,400 B fits, baseline, chain-overlap dedup -
+  [planes packed adjacent (plane stride 4,608 -> 3,072 B)]
+    dims 3, chain ceiling 64 packets/descriptor (16x fewer descriptors than 4), per-packet footprint 6,400 B fits, replicates 16 of 5 stepped rows: 3.20x the bytes, because chained windows overlap, chain-overlap dedup -
+  [lines spanned (row 200 B -> pitch 192 B)]
+    dims 2, chain ceiling 64 packets/descriptor (16x fewer descriptors than 4), per-packet footprint 6,144 B fits, delivers 0.31x the useful bytes (5.17 of 16 rows per packet after dedup), chain-overlap dedup 3.09x dedup
+  [both: planes packed AND lines spanned]
+    dims 1, chain ceiling 64 packets/descriptor (16x fewer descriptors than 4), per-packet footprint 6,144 B fits, both changes; 0.31x the useful bytes, chain-overlap dedup 3.09x dedup
+
+[sizsum] 1869 four-dimensional descriptors today (1869 patterns, 7476 packets)
+[sizsum]   byte-free to re-chain (windows abut): 940 = 50% of them, 3760 packets
+[sizsum]   would replicate overlapping rows (1.0-3.2x bytes): 929 = 50%, 3716 packets -> not proposed
+[sizsum] ESTIMATE assuming byte-free packets re-chain within a stream: 940 descriptors -> 59, i.e. 881 of the stream's tasks; every figure above is arithmetic on the emitted strides, and no timing was taken
