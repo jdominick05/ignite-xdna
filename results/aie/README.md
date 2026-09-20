@@ -46,6 +46,8 @@ relied on is recorded in [SILICON 1.4](../../docs/SILICON.md).
 | [shim_channel_utilisation_sesr_yolov8n_desktop2_20260919.log](shim_channel_utilisation_sesr_yolov8n_desktop2_20260919.log) | SESR's floor runs at 18% of one column's measured rate with 2.151 ms outside transfer time; identical traffic at two cadences differs by ~1 ms; the arms differ in merge width, not bandwidth. |
 | [fill_merge_attribution_sesr_m7_desktop2_20260919.log](fill_merge_attribution_sesr_m7_desktop2_20260919.log) | 355 of SESR's 412 distinct 6,400 B windows step 640 B apart and deliver 2.42x the address range they read; merging reaches ~15 of 1,007 tasks. |
 | [fill_merge_attribution_yolov8n_full_desktop2_20260919.log](fill_merge_attribution_yolov8n_full_desktop2_20260919.log) | The flagship's same size class is mostly regular: 677 of 987 windows collapse to 181 descriptors, and 938 tasks refetch an address already fetched. |
+| [fill_repeat_positions_sesr_m7_desktop2_20260919.log](fill_repeat_positions_sesr_m7_desktop2_20260919.log) | All 100 of SESR's refetches are far from their first send (median 124 tasks) - cross-layer, so not coverable by a wider window. |
+| [fill_repeat_positions_yolov8n_full_desktop2_20260919.log](fill_repeat_positions_yolov8n_full_desktop2_20260919.log) | The flagship's 938 refetches split 280 near against 658 far; only the near third is a packing question. |
 
 ## Retractions and supersessions in this directory
 

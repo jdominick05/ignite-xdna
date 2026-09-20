@@ -1,0 +1,12 @@
+UTC: 2026-09-20T04:02:22.898147+00:00
+MACHINE: DESKTOP-CBL5NUA AMD64 Family 25 Model 117 Stepping 2, AuthenticAMD
+COMMAND: C:/Users/<user>/miniforge3/envs/mlir-aie-iron/python.exe tools/fill_repeat_audit.py build/conv_engine/yolov8n_full/insts.bin
+COMMIT: d456d683a61a95dde8eefec29f29fb9b0cb39beb
+[repeat] build/conv_engine/yolov8n_full/insts.bin sha256 1638da1c474f5b6f2dae9b48d9112706670e832faa9b203156dad3080dd1e914
+[repeat] 1925 host->device tasks carrying a 6,400 B payload, 987 distinct (column, channel, control words, address), 938 sent more than once (49% of these tasks)
+[repeat]   same layer block, <=16  :  280 (30% of repeats)
+[repeat]   far, >16                :  658 (70% of repeats)
+[repeat] mean gap 32.6 tasks, median 36 tasks; 280 of 938 repeats are within 16 tasks of their first send, 658 are further
+[repeat] DERIVED reading: a near repeat is coverable by a wider window or by holding the packet across rounds; a far repeat needs the data retained across a layer boundary, which is the transport change, not a packing one.
+
+EXIT_CODE: 0

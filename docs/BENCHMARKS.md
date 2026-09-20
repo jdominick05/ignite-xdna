@@ -10260,6 +10260,18 @@ collapse from 677 pushes to 181 descriptors, so the container that beats AMD's s
 938 of its 1,925 packet tasks land on an address already fetched in the same dispatch, against 100
 of SESR's 512.
 
+**Where the refetches fall, measured by position.** `tools/fill_repeat_audit.py` separates a packing
+miss from a transport need: two sends of the same descriptor shape at the same address, measured in
+tasks apart. Every one of SESR's 100 repeats is far -- median 124 tasks, mean 145.3 -- so none is a
+window the next round could have covered and all of them need the data held across a layer
+boundary ([log](../results/aie/fill_repeat_positions_sesr_m7_desktop2_20260919.log)). YOLOv8n splits
+280 near within 16 tasks (30% of its repeats) against 658 far (70%), median gap 36
+([log](../results/aie/fill_repeat_positions_yolov8n_full_desktop2_20260919.log)). The refetch counts
+are therefore the transport story seen from the other side, not a second cheap lever: the flagship's
+near third is coverable by a wider window or a retained packet, and nothing in SESR's is. Both
+audits read the emitted stream offline; no device was opened.
+
+
 **What this closes.** Merging the existing fills is not a route to SESR's 1.05 ms, and neither is
 any plan that keeps SESR's packet geometry and expects materially fewer shim tasks — the same
 arithmetic that made the MemTile ring's floor triple and composed-stencil fusion's rise. If SESR's
