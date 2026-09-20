@@ -23,7 +23,7 @@ import datetime
 import platform
 import subprocess
 import sys
-from collections import defaultdict
+from collections import Counter, defaultdict
 from math import isclose
 from pathlib import Path
 
@@ -148,6 +148,31 @@ def main() -> int:
     print("[dims ] as merge_runs compares them (canonicalised):",
           ", ".join(f"{k} x{v}" for k, v in sorted(dims.items())),
           "-- a pattern with four canonical dimensions is one the merger will not touch")
+
+    # What those four dimensions are spent on. The innermost size is a byte count and its stride is
+    # 1, so `sizes[3]` is one row of the packet and `strides[2]` is the pitch between rows; if the
+    # pitch exceeds the row, a whole dimension is paying for padding, and the chain ceiling is then
+    # sizes[0] - the packets one descriptor can carry - instead of the hardware's 64.
+    four = [p for _, _, _, c in calls for p in c if len(p.sizes) == 4]
+    shapes = Counter(tuple(p.sizes) for p in four)
+    by_shape = {}
+    for p in four:
+        by_shape.setdefault(tuple(p.sizes), p)
+    print(f"[dims4] {len(four)} four-dimensional patterns; "
+          f"{sum(1 for p in four if 1 in p.sizes)} carry a degenerate size-1 dimension (a slot the "
+          f"merger could use); extents {sorted({p.nbytes for p in four})}")
+    for shape, n in shapes.most_common(6):
+        p = by_shape[shape]
+        row, pitch = shape[3], p.strides[2]
+        print(f"[dims4]   {str(shape):16s} x{n:5d} {p.nbytes:>7,} B: row {row} B, pitch {pitch:,} B "
+              f"({pitch / row:.2f}x the row), chain step {p.strides[0]:,} B = "
+              f"{p.strides[0] / pitch:g} pitches, {shape[0]} packets per descriptor")
+    if four:
+        contig = sum(1 for p in four if p.strides[2] == p.sizes[3])
+        print(f"[dims4] rows already contiguous (pitch == row bytes) in {contig} of {len(four)}; "
+              f"every pattern above pays a dimension for row padding, which is why none can chain "
+              f"past {max(p.sizes[0] for p in four)} packets")
+
     declined = sum(n for _, _, runs, _ in calls for n, d, nb, s in runs if s and n > 1)
     print(f"[out  ] {declined} patterns were in a multi-pattern run that the merger declined; "
           f"the four-dimension rule and the 64 cap are the limits it enforces")

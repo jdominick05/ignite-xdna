@@ -50,6 +50,8 @@ relied on is recorded in [SILICON 1.4](../../docs/SILICON.md).
 | [fill_premerge_yolov8n_full_desktop2_20260919.log](fill_premerge_yolov8n_full_desktop2_20260919.log) | 4,811 offered, 2,146 returned (= the activation task count); 1,869 stand alone because they are already four-dimensional. |
 | [fill_repeat_positions_sesr_m7_desktop2_20260919.log](fill_repeat_positions_sesr_m7_desktop2_20260919.log) | All 100 of SESR's refetches are far from their first send (median 124 tasks) - cross-layer, so not coverable by a wider window. |
 | [fill_repeat_positions_yolov8n_full_desktop2_20260919.log](fill_repeat_positions_yolov8n_full_desktop2_20260919.log) | The flagship's 938 refetches split 280 near against 658 far; only the near third is a packing question. |
+| [fill_premerge_dims_sesr_m7_desktop2_20260920.log](fill_premerge_dims_sesr_m7_desktop2_20260920.log) | All 338 four-dimensional SESR fills are 25,600 B = 4 packets, and 0 of them have contiguous rows (pitch 10.32-12.90x the row) - which is what caps a chain at 4. |
+| [fill_premerge_dims_yolov8n_full_desktop2_20260920.log](fill_premerge_dims_yolov8n_full_desktop2_20260920.log) | The same ceiling on the flagship's 1,869 (pitch 6.48-8.10x the row); 88 patterns have pitch *below* row bytes, unexplained. |
 
 ## Retractions and supersessions in this directory
 

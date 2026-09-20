@@ -1803,7 +1803,11 @@ cached reference heads rather than `bo_out`.
   in the emitted stream -- so what stands alone does so because the descriptor already carries four
   dimensions (338 of SESR's 710, 1,869 of the flagship's 2,146), not because an overlap is
   inexpressible. The "no repeat can express an overlapping chain" reason given here is withdrawn,
-  and the rejection stands on firmer ground: there is no unexploited merge in either container]*;
+  and the rejection stands on firmer ground: there is no unexploited merge in either container; measured
+  2026-09-20, the limit behind it is the workspace row pitch -- all 2,207 four-dimensional fills across
+  both containers are 25,600 B (exactly 4 packets) and none has contiguous rows, so a chain carries 4
+  packets where the hardware allows 64. That is a layout question and the one large lever left here,
+  not a merge pass that could simply be turned on]*;
   **(c) removing the refetches**
   -- `tools/fill_repeat_audit.py` shows all 100 of SESR's repeated descriptors are far from their first send
   (median 124 tasks), i.e. cross-layer, so no wider window covers them. The flagship, which already beats AMD,

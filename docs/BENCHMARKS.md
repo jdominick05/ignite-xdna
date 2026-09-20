@@ -10332,3 +10332,42 @@ Evidence: [fill_premerge_sesr_m7_desktop2_20260919.log](../results/aie/fill_prem
 Offline throughout: no device, no hardware context, no source change — the module is wrapped in the
 audit's own process only. Both logs record `COMMIT` so the identity check is tied to the code it
 describes.
+
+## Every four-dimensional fill is exactly four packets: the row pitch caps it, not the merger (2026-09-20, Desktop 2)
+
+The pre-merge audit left one question open: [338 SESR and 1,869 flagship patterns](#the-fill-merger-already-collapses-what-it-is-offered-the-residue-is-the-descriptors-four-dimensions-2026-09-19-desktop-2)
+stand alone because a merge needs a free dimension and they have none. `tools/fill_premerge_audit.py`
+now reports what those four dimensions are spent on. The innermost size is a byte count with stride 1,
+so it is one row of the packet, and the stride next to it is the pitch between rows.
+
+| Model | four-dim patterns | extents | degenerate (size-1) dim | shapes seen | row / pitch | chain step | packets per descriptor |
+|---|---:|---|---:|---|---|---|---:|
+| SESR M7 | 338 | 25,600 B only | 0 | (4,4,8,200) x169; (4,8,5,160) x169 | 200 B / 2,064 B = **10.32x**; 160 B / 2,064 B = **12.90x** | 10,320 B = 5 pitches | **4** |
+| YOLOv8n | 1,869 | 25,600 B only | 0 | (4,8,5,160) x940; (4,4,8,200) x841; (4,10,4,160) x64; (4,2,16,200) x24 | 160 B / 1,296 B = **8.10x**; 200 B / 1,296 B = **6.48x** | 6,480 B = 5 pitches | **4** |
+
+**One answer, uniform across both containers.** All 2,207 patterns carry exactly 25,600 bytes = four
+6,400 B packets, and **none of them has contiguous rows** (0 of 2,207 with pitch equal to row bytes).
+Three of the packet's four dimensions go to its own geometry — rows within a plane, planes, and the
+row itself — because the workspace row pitch is 6.5x to 12.9x larger than the row it holds, which is
+the halo padding `plan_workspace` sets as `(width + 2 * halo) * 8`. That leaves exactly one dimension
+for a chain, and one dimension chains `sizes[0] = 4` packets rather than the hardware's
+`MAX_REPEAT = 64`. The merger is not conservative and the descriptor count is not a scheduling
+accident: the layout spends the dimension budget, so a fill can carry four packets and no more.
+
+**What that makes available, as a ceiling and not a result.** If a packet's rows sat contiguously, its
+geometry would fit three dimensions and the chain could reach 64 — **up to 16x fewer fill
+descriptors**, on 338 of SESR's 710 activation tasks and 1,869 of the flagship's 2,146. That is the
+first lever this branch has found that is large enough to matter, and it is the right shape of lever:
+the floor is per-task waiting (18% wire utilisation, and 0.599 ms of floor moving on identical
+traffic), so fewer tasks is the axis that measured. It is *not* a measured saving. Unexamined before
+anyone tries it: the halo padding exists because the core reads the neighbour ring, so a contiguous-row
+packet needs some other way to supply it (a wider packet that includes the ring once, or a column-major
+plane); whether either is possible for these tensors' consumers is a `plan_workspace` and
+`memtile_agu` design question, not a flag; and 88 of the flagship's patterns have a pitch *smaller*
+than their row (320 B for 160 B rows, and 192 B for 200 B rows — overlapping rows), which this read
+notes and does not explain.
+
+Evidence: [fill_premerge_dims_sesr_m7_desktop2_20260920.log](../results/aie/fill_premerge_dims_sesr_m7_desktop2_20260920.log),
+[fill_premerge_dims_yolov8n_full_desktop2_20260920.log](../results/aie/fill_premerge_dims_yolov8n_full_desktop2_20260920.log).
+Offline again: no device, no hardware context, `merge_runs` wrapped in the audit's own process, and
+each log's `COMMIT` ties the shape counts to the code they were read from.
