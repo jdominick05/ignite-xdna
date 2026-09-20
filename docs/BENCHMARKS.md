@@ -10878,6 +10878,33 @@ YOLOv8s at about two thirds, so the per-task constant over-predicts on the large
 measurement is the number to quote. Glass-to-glass was not measured and AMD's stack was not run
 in this sitting, so nothing here is a comparison against it.
 
+### Glass-to-glass, against AMD's stack, in one sitting
+
+`tools/bench_layout_ab.py` runs three arms per round - AMD's Vitis AI EP, Ignition on the
+control container, Ignition on the banded one - in that order, twice, 50 warm-up and 500 timed
+frames on bus.jpg. Both Ignition arms use the same runtime and differ only in the container.
+`xrt-smi` was idle before every run and at the end -
+[`layout_ab_yolov8s_phoenix_20260920T1932Z.log`](../results/aie/layout_ab_yolov8s_phoenix_20260920T1932Z.log).
+
+| arm | run 1 | run 2 | mean | NPU dispatch | where the rest goes |
+|---|---:|---:|---:|---:|---|
+| AMD Ryzen AI 1.7.1 | 16.954 | 16.981 | **16.968** | `session.run` 13.10 | letterbox 1.82, decode and NMS 2.05 |
+| Ignition, control | 17.786 | 17.800 | 17.793 | 16.876 | preprocess 0.32, readback 0.43, decode 0.16 |
+| Ignition, banded | 17.471 | 17.559 | **17.515** | 16.579 | preprocess 0.34, readback 0.43, decode 0.16 |
+
+Banding is worth **0.278 ms glass-to-glass** and 0.297 ms of dispatch, which agrees with the
+0.339 ms the floor tool measured on the same containers. It closes **34% of the gap to AMD**,
+from 0.825 ms behind to 0.547 ms behind. It does not close it: AMD's stack is still faster on
+YOLOv8s, which remains the accepted known limitation it was on 2026-09-16.
+
+Both YOLOv8s containers here were compiled without `--silu-sigmoid`, so this is not the shipped
+configuration - the flag costs about 0.34 ms and buys mAP. The engine finds 6 objects per frame
+where AMD finds 5, which is the recorded letterbox rounding difference and not a layout effect.
+
+`tools/verify_engine_container.py` reads **66/66 layers exact** on YOLOv8s with reuse off
+([`plane_packed_verify_yolov8s_20260920.log`](../results/aie/plane_packed_verify_yolov8s_20260920.log)),
+so both detect models in the zoo are now layer-exact on this layout.
+
 ### Two BD constraints this exposed
 
 A shim buffer descriptor has **three addressing dimensions plus a repeat**, each wrap field ten

@@ -1,0 +1,35 @@
+# Plane-packed layout: YOLOv8s verified layer by layer on Phoenix Device 0
+# Host DESKTOP-CBL5NUA (Desktop 2, Ryzen 7 8700G, XDNA1 Phoenix), 2026-09-20, env mlir-aie-iron
+# xrt-smi reported "No hardware contexts running on device" before and after; idle at the end.
+#
+# Completes results/aie/plane_packed_layout_20260920.log, which verified yolov8n only and listed
+# yolov8s under "not established". That bullet is superseded by this run.
+#
+# Commands:
+#   bash scripts/research-iron.sh -m ignite_xdna.compiler.cli --engine graph \
+#     --input models/yolov8s_cut_xint8.onnx --output build/ab_s_nore.ignite --no-workspace-reuse
+#   bash scripts/research-iron.sh tools/verify_engine_container.py \
+#     --container build/ab_s_nore.ignite --model models/yolov8s_cut_xint8.onnx
+#
+# --no-workspace-reuse so every tensor owns a slot and every layer is readable. With reuse on a
+# later layer overwrites 41 of the slots and only 25 layers can be checked at all, which is the
+# tool's coverage limit and not a device finding.
+#
+# Compile: 66 layers, 0 on the host, workspace 32.2 MB, 2173 rounds, 29.50 MB static packets;
+# container 30,847,232 B, insts.bin 969,812 B.
+
+  L60 /model.22/cv2.2/cv2.2.0/conv/Conv            EXACT
+  L61 /model.22/cv3.2/cv3.2.0/conv/Conv            EXACT
+  L62 /model.22/cv2.2/cv2.2.1/conv/Conv            EXACT
+  L63 /model.22/cv3.2/cv3.2.1/conv/Conv            EXACT
+  L64 /model.22/cv2.2/cv2.2.2/Conv                 EXACT
+  L65 /model.22/cv3.2/cv3.2.2/Conv                 EXACT
+[verify] 66/66 layers exact | first dispatch 18.361 ms | dispatch mean 16.703 ms, min 16.482, max 17.256 over 20
+[verify] PASS
+
+# Both models in the zoo's detect family are now layer-exact on the band-packed layout:
+#   yolov8n  66/66  (results/aie/plane_packed_layout_20260920.log)
+#   yolov8s  66/66  (this log)
+# The dispatch mean here is from 20 iterations inside the verifier and is NOT the latency
+# result; that is results/aie/layout_ab_yolov8s_phoenix_20260920T1932Z.log, 500 timed frames
+# interleaved against AMD's stack.
