@@ -1,0 +1,111 @@
+# The merge-depth lever: descriptors saved by packing planes adjacent, priced against the floor
+# Host DESKTOP-CBL5NUA (Desktop 2, Ryzen 7 8700G), 2026-09-20, env mlir-aie-iron
+# OFFLINE. No container was built, no hardware context was opened, xrt-smi was not consulted.
+#
+# Command:  python tools/merge_depth_sizing.py
+#
+# MEASURED   the control row of each model: 2,972 (yolov8n) and 7,143 (yolov8s) DMA tasks per
+#            frame, asserted by the tool against results/aie/split_segment_floor_phoenix_20260920.log.
+#            The floor split and us/task come from results/aie/object_size_repricing_20260920.log.
+# DERIVED    every other row.
+#
+## Why descriptors, and not bytes
+#
+# The floor is 69.6%-75.4% of every dispatch in this family and 77%-81% of the floor is not
+# transfer, so per-task issue is the dominant cost in this engine. Task count is set by how
+# deeply fills merge, and merge depth is set by ONE rule:
+#
+#   canonical() folds contiguous dimensions. merge_quad folds a quad's four fills into one task
+#   and adds a dimension. merge_runs folds up to 64 consecutive same-shape fills into one task
+#   and adds a dimension. BOTH refuse a pattern that already has four dimensions.
+#
+# So a fill must be at most TWO-dimensional after canonical() to receive both merges.
+#
+#   k3s2 emits (16, 400)      2-D  -> quad -> runs   folds 23.6 (n) / 39.6 (s) packets per task
+#   k1   emits (8, 5, 160)    3-D  -> quad -> XX     folds 4.90 (n) / 4.71 (s)
+#   k3s1 emits (4, 8, 200)    3-D  -> quad -> XX     folds 4.42 (n) / 4.09 (s)
+#
+# k1's rows fold into its bytes only when the pitch is 160 B, i.e. a 20-pixel-wide map, so on
+# every wider map it stays three-dimensional. k1 is the largest single kind: 38% of yolov8s's
+# activation fills, stuck at a quarter of the merge depth k3s2 gets for free.
+#
+## What was simulated
+#
+# Each selected kind's fill is replaced by a CONTIGUOUS run of A_BYTES at the same offset, and
+# the real scheduler re-merges it. That substitution is exactly what tools/fill_layout_sizing.py
+# calls "planes packed adjacent": set the plane stride to five times the pitch and k1's
+# (8, 5, 160) at strides (plane_bytes, pitch, 1) becomes (40, 160), which is two-dimensional.
+# Activation BYTE counts are identical in every scenario below - 83,072,000 B (yolov8n) and
+# 237,670,400 B (yolov8s) - so the task saving is on unchanged traffic.
+#
+## What it costs
+#
+# Packing planes adjacent is byte-free only where a kind's chained windows abut.
+# tools/fill_layout_sizing.py measured that per shape: k1 abuts (step 5 rows >= 5 rows per
+# packet, 1.00x bytes) while k3s1 replicates 8 of 5 stepped rows (1.60x), k1up2 2.00x and pool
+# 3.20x. Those factors are charged below as transport at the measured 6.898931 GB/s per column.
+#
+[merge] DERIVED over real schedules. No container built, no hardware context opened.
+
+[merge] yolov8n: control 2972 tasks matches silicon; floor 5.510 = 1.278 transfer + 4.232 per-task at 1.4238 us/task; core:shim 3.614
+[merge] scenario             tasks  d tasks  d task ms  d byte ms   net ms
+[merge] control               2972       +0     +0.000     +0.000   +0.000
+[merge] k1                    2696     -276     -0.393     +0.000   -0.393
+[merge] k1 + res              2696     -276     -0.393     +0.000   -0.393
+[merge] k1 + res + k3s1       2225     -747     -1.064     +0.144   -0.920
+[merge] every kind            2181     -791     -1.126     +0.155   -0.971
+
+[merge] yolov8s: control 7143 tasks matches silicon; floor 13.340 = 2.700 transfer + 10.640 per-task at 1.4896 us/task; core:shim 4.685
+[merge] scenario             tasks  d tasks  d task ms  d byte ms   net ms
+[merge] control               7143       +0     +0.000     +0.000   +0.000
+[merge] k1                    5691    -1452     -2.163     +0.000   -2.163
+[merge] k1 + res              5691    -1452     -2.163     +0.000   -2.163
+[merge] k1 + res + k3s1       4051    -3092     -4.606     +0.278   -4.328
+[merge] every kind            3835    -3308     -4.927     +0.298   -4.630
+
+## Reading it
+
+k1 alone is BYTE-FREE and worth -0.393 ms (yolov8n) and -2.163 ms (yolov8s). On yolov8s that
+is 7.5x the 0.29 ms gap to AMD's stack that was accepted as a known runtime limitation on
+2026-09-16, and it would move a 17.894 ms dispatch to about 15.7 ms.
+
+k3s1 costs 1.60x on its own bytes and is worth MORE THAN k1 on top of it: -2.44 ms of task
+time against +0.278 ms of transport on yolov8s, net a further -2.17 ms. Taking both gives
+-4.328 ms, which would put the dispatch near 13.6 ms.
+
+That reverses an earlier judgement, and the reason is worth recording. The 2026-09-20 layout
+sizing measured the same replication factors and declined every kind but k1 on them -
+"would replicate overlapping rows (1.0-3.2x bytes): 929 = 50%, not proposed". That decision
+priced bytes against a model that charged core-side traffic at the DDR rate and over-counted
+transport 3.10x (results/aie/object_size_repricing_20260920.log). Re-priced against the
+measured floor, where transport is 20% and per-task issue 80%, the declined half is the more
+valuable one.
+
+The same sizing estimated the byte-free half at 940 descriptors collapsing to 59 on yolov8n,
+i.e. -881 tasks. This run measures -276 by putting the real offsets through the real
+merge_runs, which enforces constant spacing, identical shape and the 64-repeat ceiling. The
+earlier figure assumed every candidate folds at the ceiling; it is 3.2x optimistic, and -276
+is the number to plan against.
+
+## Not established
+
+  - No container was built and nothing was dispatched. The control is the only row with
+    silicon behind it, and it is behind it only as a task count.
+  - The offsets are today's. A real repack moves them, so this bounds merging under today's
+    placement rather than predicting a built layout.
+  - Workspace capacity is not modelled. Interleaving channel blocks at a five-row band changes
+    how plan_workspace sizes and reuses slots, and that could cost memory or reuse.
+  - Neither is the lock and barrier structure a repack disturbs, which is what made the
+    activation ring fail twice.
+  - The replication factors were measured on yolov8n's four fill shapes and are applied to
+    yolov8s unchanged.
+  - Every kind other than k1 and res needs a kernel-visible decision: the core reads rows_in,
+    cols_in and plane_bytes from the packet header, so plane geometry is data, but a layout
+    whose plane stride is no longer the tensor plane changes what those fields mean.
+
+## What would settle it
+
+Change Placement so a tensor's channel blocks interleave at a five-row band (plane stride
+5 x pitch), rebuild yolov8n's container, and run tools/engine_dispatch_floor_split.py on it.
+That is a compiler-side change with no xclbin rebuild and no kernel change, and one sitting
+would convert every number above into a measurement.

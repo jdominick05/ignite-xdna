@@ -10780,3 +10780,63 @@ about a third of the traffic and pays 12% to 41% more bytes on all of it. The on
 negative needs the up2 uncertainty to resolve entirely in its favour, still sits under the 0.29 ms
 bar, and regresses yolov8n in the same best case. The real lever is weight capacity, not the
 activation packet.
+
+## The merge-depth lever: k1 is stuck at a quarter of k3s2's merge depth, and that is 2.2 ms on YOLOv8s (2026-09-20, Desktop 2)
+
+The floor is 69.6% to 75.4% of every dispatch in this family and 77% to 81% of the floor is
+not transfer, so per-task issue is the dominant cost the engine pays. Task count is not packet
+count: it is set by how deeply fills merge, and merge depth is set by one rule.
+
+`canonical` folds contiguous dimensions; `merge_quad` folds a quad's four fills into one task
+and adds a dimension; `merge_runs` folds up to 64 consecutive same-shape fills into one task
+and adds a dimension. **Both refuse a pattern that already has four dimensions.** So a fill
+must be at most two-dimensional after `canonical` to receive both merges:
+
+| kind | emitted pattern | canonical dims | merges it gets | packets per task, yolov8n / yolov8s |
+|---|---|---:|---|---:|
+| k3s2 | `(16, 400)` | 2 | quad and runs | **23.60 / 39.63** |
+| k1 | `(8, 5, 160)` | 3 | quad only | 4.90 / 4.71 |
+| k3s1 | `(4, 8, 200)` | 3 | quad only | 4.42 / 4.09 |
+| pool, res | 3 | 3 | quad only | 4.00 / 4.00 |
+
+k1's rows fold into its bytes only when the pitch is 160 B, that is a 20-pixel-wide map, so on
+every wider map it stays three-dimensional. It is the largest single kind, 38% of YOLOv8s's
+activation fills, and it runs at a quarter of the depth k3s2 gets for free.
+
+`tools/merge_depth_sizing.py` replaces a kind's fill with a contiguous run of `A_BYTES` at the
+same offset and lets the real scheduler re-merge, which is what `fill_layout_sizing.py` calls
+"planes packed adjacent": set the plane stride to five times the pitch and `(8, 5, 160)`
+becomes `(40, 160)`. Activation byte counts are identical in every row, so the saving is on
+unchanged traffic. The byte column charges the replication `fill_layout_sizing.py` measured
+per shape (k1 1.00x, k3s1 1.60x, k1up2 2.00x, pool 3.20x) at the measured per-column rate. The
+6,400 B control is asserted against the DMA task counts measured on silicon -
+[`merge_depth_sizing_20260920.log`](../results/aie/merge_depth_sizing_20260920.log).
+
+| packed contiguous | yolov8n tasks | net ms | yolov8s tasks | net ms |
+|---|---:|---:|---:|---:|
+| nothing (control) | 2,972 | 0.000 | 7,143 | 0.000 |
+| k1 | 2,696 | **-0.393** | 5,691 | **-2.163** |
+| k1 and k3s1 | 2,225 | -0.920 | 4,051 | **-4.328** |
+| every kind | 2,181 | -0.971 | 3,835 | -4.630 |
+
+k1 alone is byte-free and worth 2.163 ms on YOLOv8s - 7.5 times the 0.29 ms gap to AMD's stack
+that was accepted as a known runtime limitation, and enough to move a 17.894 ms dispatch to
+about 15.7 ms.
+
+**This reverses an earlier judgement.** The 2026-09-20 layout sizing measured the same
+replication factors and declined every kind but k1 on them ("would replicate overlapping rows
+(1.0-3.2x bytes): 929 = 50%, not proposed"). That priced bytes against a model which charged
+core-side traffic at the DDR rate and over-counted transport 3.10x. Re-priced against the
+measured floor, where transport is 20% and per-task issue 80%, k3s1 is worth a further
+2.44 ms of task time against 0.278 ms of transport - the declined half is the more valuable
+one. The same sizing put the byte-free half at 940 descriptors collapsing to 59 on YOLOv8n,
+i.e. 881 tasks; putting the real offsets through the real `merge_runs`, with its constant
+spacing, identical shape and 64-repeat ceiling, gives 276. That earlier estimate is 3.2 times
+optimistic and 276 is the figure to plan against.
+
+Derived, not measured: no container was built and nothing was dispatched. The offsets are
+today's, so this bounds merging under today's placement rather than predicting a built layout,
+and it models neither workspace capacity nor the lock and barrier structure a repack disturbs.
+Changing `Placement` to interleave a tensor's channel blocks at a five-row band is a
+compiler-side change needing no xclbin and no kernel change, so one sitting would turn every
+figure here into a measurement.
