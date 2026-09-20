@@ -1,0 +1,98 @@
+# YOLO26n on the graph engine: it lowers, compiles and dispatches; the host attention is wrong
+# Host DESKTOP-CBL5NUA (Desktop 2, Ryzen 7 8700G, XDNA1 Phoenix), 2026-09-20
+# envs: resnet_env (ultralytics 8.4.142, Quark) for export and quantization, mlir-aie-iron for
+# the compiler and the device. xrt-smi reported no hardware contexts before and after the one
+# device run, and the device was idle at the end.
+#
+# STATUS: NOT WORKING END TO END. 38 of 107 layers exact. The NPU side is clean - every layer
+# up to and including the qkv convolution is EXACT - and the first mismatch is the HOST
+# attention segment itself, so everything after it is downstream contamination.
+#
+## Why YOLO26
+#
+# It is the newest family ultralytics 8.4.142 ships and the most engine-compatible of the
+# modern ones (results/aie/arch_compat_current_models_20260920.log). yolo26n is also SMALLER
+# than yolov8n: 2,408,932 parameters and 5.5 GFLOPs against 3,151,904 and 8.7.
+#
+## The gates, all passed
+#
+#   grouped convolutions   8, ALL depthwise (group == Cin == Cout). graph_ir accepts no other
+#                          group form, so one non-depthwise convolution would have ended this.
+#   tile floor             map sizes 320, 160, 80, 40, 20 - none below the 20-pixel tile.
+#   32-channel rule        31 convolution outputs are not a multiple of 32. Not a blocker:
+#                          yolov8n has 13 (channels 1, 16, 80) and lowers today, because the
+#                          engine pads to 8-channel blocks.
+#
+## The head cut
+#
+#   python tools/cut_detect_head.py yolo26n.onnx yolo26n_cut.onnx --find      # then --heads
+#
+# 405 -> 364 nodes. YOLO26 HAS NO DFL: its box branch is 4 channels, not 64, and BOTH of its
+# Softmax ops are attention, not DFL. After the cut the only ops outside the engine's
+# vocabulary are MatMul 4 and Softmax 2 - two attention blocks, where YOLO11n has one.
+#
+## Quantization
+#
+#   python pipelines/yolov8n/3b_quantize_cut.py --in yolo26n_cut.onnx \
+#     --out yolo26n_cut_xint8.onnx --calib-dir data/coco_calib --limit 200 --head-outs <six>
+#
+# --head-outs is new: the script asserted YOLOv8's head names, and the check is worth keeping
+# because npu.yolo_decode reads the six heads positionally, so a wrong ORDER would be silent.
+# Two documented traps cost time here: Quark needs ninja from the env's Scripts, which only
+# reaches PATH on conda activate and not on a by-path python; and Git Bash rewrites an argument
+# beginning with "/" into a file path, so --host-region needs MSYS_NO_PATHCONV=1.
+#
+## One compiler change was needed
+#
+# graph_ir refused /model.9/cv1/conv/Conv with "unexpected consumers ['Concat', 'MaxPool']".
+# That is a real architectural difference, checked against the float graphs of both families:
+# YOLO26's SPPF cv1 has NO activation and feeds MaxPool/Concat directly, where YOLOv8's carries
+# SiLU before the same fan-out. The no-activation whitelist now includes MaxPool and Concat, so
+# the engine reads the convolution's own quantized output and scale.
+#
+## It lowers, compiles and runs
+#
+#   107 layers, 2 on the host, workspace 16.4 MB, 1725 rounds, 11.29 MB static packets
+#   build/yolo26n.ignite 12,270,976 B, insts.bin 510,612 B
+#   npu segment  layers 0..38    1392 tasks
+#   host segment /model.10/m/m.0/attn/qkv/conv/Conv=/model.10/m/m.0/attn/Reshape_1  (layer 38)
+#   npu segment  layers 39..93   1820 tasks
+#   host segment /model.22/m.0/m.0.1/attn/qkv/conv/Conv=/model.22/m.0/m.0.1/attn/Reshape_1 (93)
+#   npu segment  layers 94..107   266 tasks
+#
+# The two boundary regions are the same shape as YOLO11n's C2PSA carve: from the qkv convolution
+# to the reshape after the second MatMul, with Reshape_2 feeding the pe convolution as the
+# channel view _boundary_region already supports.
+#
+## On silicon (Device 0, --no-workspace-reuse so every layer is readable)
+#
+#   38/107 layers exact
+#   NPU dispatch mean 9.009 ms, min 8.912, max 9.230 over 20; first dispatch 10.808 ms
+#   host segments  mean 1.413 ms, min 1.200, max 1.890 (the NPU figure excludes it)
+#
+#   L36 /model.10/cv1/conv/Conv                  EXACT
+#   L37 /model.10/m/m.0/attn/qkv/conv/Conv       EXACT      <- last good layer
+#   L38 HOST ...attn/qkv/conv/Conv=...Reshape_1  MISMATCH 46,986/51,200
+#   L39 /model.10/m/m.0/attn/pe/conv/Conv        MISMATCH 46,986/51,200
+#   ... every later layer mismatches
+#
+# So the whole NPU backbone is bit-exact and the carved attention core is not. The 9.0 ms NPU
+# and 1.4 ms host figures are what a correct build would cost only if fixing the host segment
+# changes neither - they are recorded as a shape, not as a result.
+#
+## Where to look next
+#
+# The suspicion is the region's channel view. YOLO26's attn splits qkv and multiplies by a
+# scalar before the transpose (Split -> Mul(Constant_1) -> Transpose -> MatMul), and
+# Reshape_2 feeds pe from inside the region. If YOLO11's attention applies its scale elsewhere,
+# _boundary_region's view resolution may be picking the wrong channels. Compare the region's
+# extracted subgraph against ONNX Runtime on the same intermediate, the way the YOLO11 bring-up
+# did: that isolates the extractor from the runtime in one step.
+#
+## Not established
+#
+#   - No accuracy of any kind. No mAP, no detections: with 69 layers wrong there is nothing to
+#     score, and YOLO26 needs a NEW DECODER anyway - the engine's decode_native assumes DFL.
+#   - No comparison against AMD's stack, and no glass-to-glass.
+#   - Whether the 9.0 ms dispatch survives a correct host segment.
+#   - yolo26s and the other scales were never built.

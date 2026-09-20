@@ -895,8 +895,13 @@ def lower_yolov8n(model_or_path, host_regions: Sequence[str] = (), silu_sigmoid:
                 out_name = act_q
                 out_scale = s2
             elif (not cons and conv_f in [o.name for o in G.g.output]) or \
-                    (cons and {c.op_type for c in cons if c.name not in region_of} <= {"Conv", "Add", "DepthToSpace"}):
-                # No activation (a head, SESR's head/tail convs, or YOLO11's qkv read by a host region).
+                    (cons and {c.op_type for c in cons if c.name not in region_of}
+                     <= {"Conv", "Add", "DepthToSpace", "MaxPool", "Concat"}):
+                # No activation: a head, SESR's head/tail convs, YOLO11's qkv read by a host
+                # region, or a convolution feeding a pool or a concat directly. That last case is
+                # YOLO26's SPPF, whose cv1 has no activation at all where YOLOv8's carries SiLU
+                # before the same MaxPool/Concat fan-out - so the engine reads the convolution's
+                # own quantized output and scale, which is what an unactivated conv means.
                 out_name, out_scale = conv_q, s1
             else:
                 raise ValueError(f"{node.name}: unexpected consumers {kinds}")

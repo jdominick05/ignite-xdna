@@ -83,6 +83,12 @@ def main():
     ap.add_argument("--threads", type=int, default=None,
                     help="number of CPU threads for PyTorch/OpenMP (default: respects OMP_NUM_THREADS or 4)")
     ap.add_argument("--out", default=None)
+    ap.add_argument("--head-outs", default=None,
+                    help="comma-separated head output names, in decode order, for a family whose "
+                         "detect head is not YOLOv8's. The check exists because npu.yolo_decode "
+                         "reads the six heads positionally, so a wrong ORDER is silent; pass this "
+                         "only with a decoder that matches. YOLO26 needs it: it has no DFL, so its "
+                         "box branch is 4 channels rather than 64")
     args = ap.parse_args()
 
     threads = args.threads
@@ -120,8 +126,10 @@ def main():
 
     m = onnx.load(args.src)
     got = [o.name for o in m.graph.output]
-    if got != HEAD_OUTS:
-        raise SystemExit(f"expected the 6 head outputs in HEAD_OUTS order, got {got}")
+    want = args.head_outs.split(",") if args.head_outs else HEAD_OUTS
+    if got != want:
+        raise SystemExit(f"expected the 6 head outputs in {'--head-outs' if args.head_outs else 'HEAD_OUTS'} "
+                         f"order, got {got}")
     # Calibrate at the model's own resolution. Taking this from the graph rather
     # than a flag is what makes the byte-identical-preprocessing invariant hold
     # across a resolution sweep: inference reads the same number the same way.
