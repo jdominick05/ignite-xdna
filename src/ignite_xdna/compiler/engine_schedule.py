@@ -192,7 +192,13 @@ def _band_rows(ir: GraphIR, halo: Dict[str, int]) -> Dict[str, int]:
             readers[chunk_tensor(L, chunk)].add(chunk.kind)
     produced = {o for L in ir.layers for o in
                 (L.output_tensors() if isinstance(L, HostLayer) else [L.output])}
-    reserved = {t for _, t in ir.outputs} | {ir.input}
+    # A host segment stages its input and output through a plane-major NCHW conversion in
+    # HostStep.run, so anything it touches must stay plane-major. Its INPUT is already excluded
+    # by the reader test below ("host" is not in the bandable set); its OUTPUT would not be, and
+    # banding it writes the right bytes to the wrong addresses - measured, as 38/107 layers exact
+    # on YOLO26n with the first mismatch at the host segment itself.
+    host_written = {o for L in ir.layers if isinstance(L, HostLayer) for o in L.output_tensors()}
+    reserved = {t for _, t in ir.outputs} | {ir.input} | host_written
     out: Dict[str, int] = {}
     for name, t in ir.tensors.items():
         ok = (name in produced and name not in reserved and halo.get(name, 0) == 0

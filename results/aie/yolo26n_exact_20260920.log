@@ -1,0 +1,59 @@
+# YOLO26n is bit-exact on the engine, and a host-segment regression in the band-packed layout
+# Host DESKTOP-CBL5NUA (Desktop 2, Ryzen 7 8700G, XDNA1 Phoenix), 2026-09-20, env mlir-aie-iron
+# Device 0. xrt-smi reported no hardware contexts before and after every run; idle at the end.
+#
+# Supersedes the verdict in results/aie/yolo26n_bringup_20260920.log, which read 38/107 layers
+# exact and said the carved attention core was wrong. It was not. The fault was a regression in
+# the band-packed activation layout introduced earlier the same day, and YOLO26 was correct all
+# along. The earlier log is left as written.
+#
+## What was actually wrong
+#
+# HostStep.run stages a host segment's input and output through a PLANE-MAJOR reshape:
+#
+#     planes = raw.reshape(blocks, h + 2*halo, w + 2*halo, 8)          # read, line 180
+#     interior[:] = np.transpose(full.reshape(oblocks, 8, oh, ow), ...) # write, line 192
+#
+# band_rows interleaves a tensor's channel blocks every five rows, so those reshapes address
+# the wrong bytes. A host segment's INPUT was already safe - _band_rows does not band a tensor
+# a host region reads - but its OUTPUT was not, and banding it wrote the right values to the
+# wrong addresses. Every layer up to and including the qkv convolution was exact and the first
+# mismatch was the host segment itself, which is exactly the signature.
+#
+# Fixed by excluding host-written tensors from banding rather than teaching HostStep the
+# layout: the host path is CPU numpy, so a tensor it writes gains nothing from a layout whose
+# only purpose is DMA merge depth.
+#
+# The offline suite could not see this either. run_direct was checked against ONNX Runtime on
+# all 107 layers of YOLO26n and agreed on every one, host segments included - the reference was
+# ground truth and the device was the only thing disagreeing.
+#
+## YOLO26n, every layer readable (--no-workspace-reuse)
+#
+#   arm                          layers exact   NPU dispatch (20)      host segments
+#   banded (band_rows = 5)         107/107      8.963 ms mean          1.342 ms mean
+#   control (BAND_ROWS=0)          107/107      9.319 ms mean          1.380 ms mean
+#
+# 107 layers, 2 on the host, workspace 16.4 MB, container 12.27 MB, insts.bin 510,612 B banded
+# against 538,180 B plane-major. Segments: npu 0..38 (1392 tasks), host, npu 39..93 (1820),
+# host, npu 94..107 (266).
+#
+# The two host segments are the attention cores, carved FROM=TO from the qkv convolution to the
+# reshape after the second MatMul - the same carve YOLO11n's C2PSA gets.
+#
+## Regression check: YOLO11n, which ships and carries a badge
+#
+#   84/84 layers exact, NPU dispatch 8.310 ms mean over 20, host segment 1.952 ms mean
+#
+# So the fix holds on the one shipped model that has a host segment.
+#
+## NOT ESTABLISHED
+#
+#   - No accuracy. No mAP, no detections, no COCO. YOLO26 needs a NEW DECODER before any of
+#     that: decode_native.c assumes DFL, and YOLO26 regresses four box values directly and is
+#     NMS-free. Layer-exactness says the container reproduces the quantized ONNX graph; it
+#     says nothing about detection quality.
+#   - No comparison against AMD's stack and no glass-to-glass. The dispatch figures above are
+#     from --no-workspace-reuse builds, which is not the shipped configuration, and they
+#     exclude the host segments by construction.
+#   - yolo26s and the other scales were never built.

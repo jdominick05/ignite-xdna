@@ -587,3 +587,30 @@ Not established: nothing here was exported with real weights, head-cut, quantize
 whether YOLO26's 8 grouped convolutions are all depthwise (anything else is refused); whether
 an NMS-free family's head cut removes the same tail; and channel counts against the
 multiple-of-32 rule or map sizes against the 20-pixel tile floor.
+
+### YOLO26n is bit-exact on the engine (2026-09-20, Desktop 2)
+
+107 of 107 layers exact on Device 0, with both attention cores carved to the host -
+[`yolo26n_exact_20260920.log`](../results/aie/yolo26n_exact_20260920.log).
+
+| arm | layers exact | NPU dispatch (20) | host segments |
+|---|---|---:|---:|
+| band-packed | **107/107** | 8.963 ms | 1.342 ms |
+| plane-major control | **107/107** | 9.319 ms | 1.380 ms |
+
+107 layers, 2 on the host, container 12.27 MB; segments npu 0..38 (1,392 tasks), host,
+npu 39..93 (1,820), host, npu 94..107 (266). One compiler change was needed: YOLO26's SPPF
+`cv1` has no activation and feeds MaxPool/Concat directly, where YOLOv8's carries SiLU before
+the same fan-out.
+
+This first read 38/107 and was recorded as a broken attention carve. That was wrong. The fault
+was a regression in the band-packed layout: `HostStep.run` stages a host segment through a
+plane-major reshape, and banding the segment's output tensor wrote the right values to the
+wrong addresses. Host-written tensors are now excluded from banding, since the host path is
+CPU numpy and gains nothing from a layout whose only purpose is DMA merge depth. YOLO11n, the
+one shipped model with a host segment, re-checks at 84/84 exact.
+
+Layer-exactness says the container reproduces the quantized ONNX graph. It says nothing about
+detection quality, and there is none yet: **YOLO26 needs a new decoder**, because
+`decode_native.c` assumes DFL and YOLO26 regresses four box values directly and is NMS-free.
+No mAP, no detections, no comparison against AMD's stack.
