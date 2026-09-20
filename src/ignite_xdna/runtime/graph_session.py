@@ -57,6 +57,13 @@ def _plane_view(buf: np.ndarray, p: Dict[str, Any], planes: Optional[int] = None
     h, w, halo = p["height"], p["width"], p["halo"]
     n = p["planes"] if planes is None else planes
     plane_bytes = (h + 2 * halo) * (w + 2 * halo) * 8
+    band = p.get("band_rows", 0)
+    if band:
+        # Channel blocks interleaved every `band` rows (compiler's Placement.band_rows), so the
+        # blocks of one tile sit adjacent. Always halo 0. This copies; it is a read path.
+        total = p["planes"] * plane_bytes
+        v = buf[p["base"]:p["base"] + total].reshape(h // band, p["planes"], band, w, 8)
+        return np.ascontiguousarray(v[:, :n].transpose(1, 0, 2, 3, 4)).reshape(n, h, w, 8)
     return buf[p["base"]:p["base"] + n * plane_bytes].reshape(n, h + 2 * halo, w + 2 * halo, 8)
 
 

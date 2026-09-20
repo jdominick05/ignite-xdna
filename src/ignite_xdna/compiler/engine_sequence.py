@@ -104,6 +104,10 @@ def linear(buffer: str, offset: int, length: int) -> DmaPattern:
     return DmaPattern(buffer, offset, (length,), (1,))
 
 
+SHIM_WRAP_WORDS = 1023   # 10-bit wrap field on a shim BD dimension (docs/SILICON.md)
+MAX_INNER_BYTES = SHIM_WRAP_WORDS * 4
+
+
 def canonical(p: DmaPattern) -> DmaPattern:
     """The same access with unit dimensions dropped and contiguous dimensions folded.
 
@@ -119,6 +123,16 @@ def canonical(p: DmaPattern) -> DmaPattern:
         changed = False
         for i in range(len(sizes) - 2, -1, -1):
             if sizes[i] == 1 or strides[i] == sizes[i + 1] * strides[i + 1]:
+                # A shim BD has THREE addressing dimensions plus a repeat, each wrap field ten
+                # bits, so an innermost run past 1,023 words cannot be expressed: mlir-aie
+                # splits it, spends a fourth addressing dimension, and the lowering then
+                # refuses the descriptor because the repeat may not be counted in the transfer
+                # length. A band-packed tensor with a 160 B pitch folds a whole 6,400 B fill
+                # into one run and hits exactly that, so this cap is what keeps the fill at two
+                # dimensions - which is the point of banding, two being what admits both merges.
+                if (i + 1 == len(sizes) - 1 and sizes[i] > 1
+                        and sizes[i] * sizes[i + 1] > MAX_INNER_BYTES):
+                    continue
                 sizes[i + 1] *= sizes[i]
                 del sizes[i], strides[i]
                 changed = True

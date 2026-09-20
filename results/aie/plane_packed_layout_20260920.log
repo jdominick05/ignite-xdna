@@ -1,0 +1,104 @@
+# Plane-packed (band-interleaved) activation layout: built, byte-free, and WRONG ON SILICON
+# Host DESKTOP-CBL5NUA (Desktop 2, Ryzen 7 8700G, XDNA1 Phoenix), 2026-09-20, env mlir-aie-iron
+# Device 0 used for three verification runs; xrt-smi reported no hardware contexts before and
+# after every one of them, and the device was idle at the end.
+#
+# STATUS: NOT WORKING. The layout builds, lowers, and saves exactly the descriptors predicted,
+# on unchanged bytes - and then disagrees with the reference on silicon. Do not land it.
+#
+## What was built
+#
+# Placement.band_rows: 0 lays a tensor out plane-major (one whole channel block after another,
+# as today); TILE_R interleaves the channel blocks every five rows, so one tile's blocks sit
+# adjacent and a k1 or res fill becomes contiguous. That drops the fill from three dimensions
+# to two, which is what admits merge_runs on top of merge_quad - each adds one dimension and
+# both refuse a four-dimensional pattern (results/aie/merge_depth_sizing_20260920.log).
+#
+#   src/ignite_xdna/compiler/engine_schedule.py  band_rows, plane_stride, band_stride, a banded
+#                                                offset(), banded read_tensor/write_tensor,
+#                                                _band_rows() eligibility, banding in the slot
+#                                                reuse key, plane_stride in every fill and drain
+#   src/ignite_xdna/compiler/engine_compile.py   band_rows into the manifest placements
+#   src/ignite_xdna/runtime/graph_session.py     _plane_view reads a banded tensor back
+#   src/ignite_xdna/compiler/engine_sequence.py  canonical() stops folding at the shim BD wrap
+#
+# IGNITE_XDNA_BAND_ROWS=0 turns it off, which is the A/B control used below.
+#
+## Eligibility: 22 of 61 read tensors, on both models
+#
+# A tensor has ONE layout, so a single wider reader disqualifies it. k3s1 takes eight rows from
+# y0-1, k3s2 sixteen from 2*y0-1, pool sixteen from y0-2, k1up2 four from y0>>1; each crosses a
+# band boundary, where the row-to-address map stops being affine and the read cannot be one
+# descriptor at all. Also excluded: the graph input and outputs (host code reads them) and any
+# height that is not a multiple of five (tile_origins then emits a last tile starting mid-band).
+#
+#   22 tensors read as k1 only          ELIGIBLE
+#   17 read as k3s1 only                no k1 traffic to win
+#   17 read as k1 AND something wider   where the rest of the prize sits, and unreachable
+#    5 other
+#
+# That is why this is worth -0.518 ms and not the -2.163 ms an unconstrained simulation gave.
+#
+## What it saves, in the real compiler
+#
+#   model     DMA tasks            activation bytes        workspace
+#   yolov8n   2,972 -> 2,896       83,072,000 unchanged    14,138,880 -> 14,867,072  (+5.15%)
+#   yolov8s   7,143 -> 6,795      237,670,400 unchanged    19,730,048 -> 20,816,640  (+5.51%)
+#
+# Exactly the -76 and -348 the sizing predicted, on byte-identical traffic. The workspace grows
+# because a banded tensor and a plane-major one of the same geometry can no longer share a
+# reuse slot, so band_rows had to enter the slot key.
+#
+## The build needed one more fix, and it is worth recording
+#
+# The first container failed in MLIR: "Buffer descriptor length does not match ... BD length is
+# 102400 bytes. Lowest three dimensions would result in 25600 bytes. Do not include the highest
+# dimension size in transfer length, as this is the BD repeat count."
+#
+# A shim BD has THREE addressing dimensions plus a repeat, and each wrap field is ten bits
+# (docs/SILICON.md). A band-packed tensor whose pitch is 160 B lets canonical() fold a whole
+# 6,400 B fill into ONE run of 1,600 words, past the 1,023-word wrap; mlir-aie then splits it,
+# spends a fourth addressing dimension, and the lowering refuses the descriptor. Capping
+# canonical() at 1,023 words fixes it and costs no merging at all - the task counts above are
+# identical with and without the cap.
+#
+## Silicon says it is wrong
+#
+#   build/yolov8n_full_banded.ignite  (reuse on)   21/28 readable layers exact, 4 MISMATCH
+#   build/yolov8n_band_nore.ignite    (reuse off)  18 of 66 layers MISMATCH, first at
+#                                                  L1 /model.1/conv/Conv (606,033 of 819,200 B)
+#   build/yolov8n_control.ignite      (BAND_ROWS=0) 25/25 readable exact, 41/41 slots  PASS
+#
+# The control is the same branch, same compiler, same tool, banding off. So this is the banded
+# layout and nothing else. Every mismatching layer WRITES a banded tensor; every layer that
+# writes a plane-major one is exact.
+#
+## What has been ruled out, offline
+#
+#   - The drain's byte order. Building the stream the MemTile join really delivers (core, then
+#     block, then row, then column) from an intended image and scattering it through o_pattern
+#     reproduces read_tensor on 66 of 66 layers, banded included. An earlier probe that fed the
+#     pattern its own indices proved nothing and was discarded.
+#   - The readback. The runtime's _plane_view agrees with the compiler's read_tensor on all 22
+#     banded placements.
+#   - The fill and drain strides. Every remaining use of plane_bytes is capacity or a reshape,
+#     not a DMA stride.
+#
+# So the descriptors are self-consistent and the disagreement is between them and what the
+# hardware executes. That is the open question.
+#
+## Why the offline suite did not catch this
+#
+# 256 tests pass, including the layer-exact comparison against ONNX Runtime. The suite writes a
+# layer's output with write_tensor and reads it with read_tensor, so the two agree by
+# construction, and the emulation reads activation packets through the same pattern that wrote
+# them - a layout error cancels on both sides. A passing offline test is not evidence of
+# on-silicon behaviour, and this is a clean example of the class.
+#
+## Next
+#
+# Dump the emitted BD for one banded drain and one banded fill out of the transaction stream
+# (tools/shim_channel_audit.py decodes them) and compare the wrap, step and repeat fields
+# against what the pattern asks for. The suspicion is a field overflow that lowers silently:
+# band_stride is planes*5*pitch, far larger than any stride this engine emitted before, and the
+# shim step field is 20 bits.

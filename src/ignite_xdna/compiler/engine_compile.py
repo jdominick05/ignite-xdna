@@ -127,7 +127,8 @@ def build_manifest(ir: GraphIR, ws: es.Workspace, scheds: List[es.LayerSchedule]
     placements = {}
     for name, p in ws.placements.items():
         placements[name] = {"base": p.base, "halo": p.halo, "halo_value": p.halo_value, "height": p.height,
-                            "width": p.width, "blocks": p.blocks, "planes": p.planes, "channels": ir.tensors[name].channels,
+                            "width": p.width, "blocks": p.blocks, "planes": p.planes, "band_rows": p.band_rows,
+                            "channels": ir.tensors[name].channels,
                             "scale": ir.tensors[name].scale, "zero_point": ir.tensors[name].zero_point}
     task = graph_task(ir)
     t_in = ir.tensors[ir.input]

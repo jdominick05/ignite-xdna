@@ -16,6 +16,8 @@
 """
 from __future__ import annotations
 
+import os
+
 from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple
@@ -42,6 +44,14 @@ class Placement:
     producer: str = ""
     halo_value: int = ZP  # 128 (zero point) for conv consumers, 0 (-inf) for max-pool consumers
     dtype: str = "uint8"
+    band_rows: int = 0
+    """0 lays the tensor out plane-major, one whole channel block after another. A positive
+    value interleaves the channel blocks every ``band_rows`` rows, so one tile's blocks sit
+    adjacent and a 5-row fill becomes CONTIGUOUS. That matters because ``canonical`` then
+    folds the fill from three dimensions to two, and ``merge_quad`` and ``merge_runs`` each
+    add one and both refuse a four-dimensional pattern: at three dimensions a fill gets the
+    quad merge only, at two it gets both. Only an access that stays inside one band can be
+    laid out this way, which is k1 and res; ``_band_rows`` picks the tensors."""
 
     @property
     def pitch(self) -> int:
@@ -49,7 +59,18 @@ class Placement:
 
     @property
     def plane_bytes(self) -> int:
+        """Bytes one channel block occupies. The tensor's total is unchanged by banding."""
         return (self.height + 2 * self.halo) * self.pitch
+
+    @property
+    def plane_stride(self) -> int:
+        """Bytes from one channel block to the next, as a DMA pattern walks them."""
+        return self.band_rows * self.pitch if self.band_rows else self.plane_bytes
+
+    @property
+    def band_stride(self) -> int:
+        """Bytes from one row band to the next. Meaningless unless ``band_rows``."""
+        return self.planes * self.band_rows * self.pitch
 
     @property
     def nbytes(self) -> int:
@@ -57,8 +78,12 @@ class Placement:
 
     def offset(self, block: int, y: int, x: int) -> int:
         """Byte offset of tensor pixel (y, x) of ``block``; y/x may reach into the halo."""
-        return (self.base + block * self.plane_bytes + (y + self.halo) * self.pitch
-                + (x + self.halo) * 8 * np.dtype(self.dtype).itemsize)
+        row = y + self.halo
+        col = (x + self.halo) * 8 * np.dtype(self.dtype).itemsize
+        if self.band_rows:
+            band, r = divmod(row, self.band_rows)
+            return self.base + band * self.band_stride + block * self.plane_stride + r * self.pitch + col
+        return self.base + block * self.plane_bytes + row * self.pitch + col
 
 
 @dataclass
@@ -82,9 +107,18 @@ class Workspace:
                 plane[:, -p.halo:, :] = p.halo_value
         return ws
 
+    def _banded(self, ws: np.ndarray, p: Placement) -> np.ndarray:
+        """[bands][planes][band_rows][W][8] view of a band-packed tensor (halo is always 0)."""
+        return ws[p.base:p.base + p.planes * p.plane_bytes].view(p.dtype).reshape(
+            p.height // p.band_rows, p.planes, p.band_rows, p.width, 8)
+
     def read_tensor(self, ws: np.ndarray, name: str) -> np.ndarray:
         """Return the real interior of a tensor as uint8 [C][H][W]."""
         p = self.placements[name]
+        if p.band_rows:
+            v = self._banded(ws, p)[:, :p.blocks]          # [bands][blocks][rows][W][8]
+            return np.ascontiguousarray(v.transpose(1, 4, 0, 2, 3)).reshape(
+                p.blocks * 8, p.height, p.width)
         planes = ws[p.base:p.base + p.blocks * p.plane_bytes].view(p.dtype).reshape(
             p.blocks, p.height + 2 * p.halo, p.width + 2 * p.halo, 8)
         interior = planes[:, p.halo:p.halo + p.height, p.halo:p.halo + p.width, :]
@@ -96,6 +130,11 @@ class Workspace:
         c = chw.shape[0]
         padded = np.full((p.blocks * 8, p.height, p.width), p.halo_value, dtype=p.dtype)
         padded[:c] = chw
+        if p.band_rows:
+            nb = p.height // p.band_rows
+            blocked = padded.reshape(p.blocks, 8, nb, p.band_rows, p.width).transpose(2, 0, 3, 4, 1)
+            self._banded(ws, p)[:, :p.blocks] = blocked
+            return
         blocked = np.transpose(padded.reshape(p.blocks, 8, p.height, p.width), (0, 2, 3, 1))
         planes = ws[p.base:p.base + p.blocks * p.plane_bytes].view(p.dtype).reshape(
             p.blocks, p.height + 2 * p.halo, p.width + 2 * p.halo, 8)
@@ -121,8 +160,50 @@ def _halos(ir: GraphIR) -> Tuple[Dict[str, int], Dict[str, int]]:
     return halo, value
 
 
+def _band_rows(ir: GraphIR, halo: Dict[str, int]) -> Dict[str, int]:
+    """``TILE_R`` for each tensor whose every reader is one aligned 5-row tile, else 0.
+
+    Interleaving a tensor's channel blocks every five rows makes a k1 or res fill contiguous,
+    which drops it from three dimensions to two. That is what unlocks ``merge_runs``: it and
+    ``merge_quad`` each add one dimension and both refuse a four-dimensional pattern, so a
+    3-D fill gets the quad merge alone and a 2-D one gets both. k3s2 is already 2-D and folds
+    23.6-39.6 packets into one task where k1 folds 4.7.
+
+    A tensor has ONE layout, so a single wider reader disqualifies it: k3s1 takes eight rows
+    from y0-1, k3s2 sixteen from 2*y0-1, pool sixteen from y0-2 and k1up2 four from y0>>1, and
+    each crosses a band boundary, where the row-to-address map stops being affine and the read
+    cannot be one descriptor at all. The graph input and the graph outputs stay plane-major
+    because host code reads them, and a tensor whose height is not a multiple of TILE_R is
+    excluded because ``tile_origins`` then emits a last overlapping tile that starts mid-band.
+
+    Worth -0.518 ms on yolov8s and -0.108 ms on yolov8n, on unchanged bytes:
+    results/aie/merge_depth_sizing_20260920.log.
+    """
+    if os.environ.get("IGNITE_XDNA_BAND_ROWS") == "0":
+        return {name: 0 for name in ir.tensors}   # A/B control: plane-major everywhere
+    readers: Dict[str, set] = defaultdict(set)
+    for L in ir.layers:
+        if isinstance(L, HostLayer):
+            for s in L.input_segments():
+                readers[s.tensor].add("host")
+            continue
+        for chunk in layer_chunks(ir, L):
+            readers[chunk_tensor(L, chunk)].add(chunk.kind)
+    produced = {o for L in ir.layers for o in
+                (L.output_tensors() if isinstance(L, HostLayer) else [L.output])}
+    reserved = {t for _, t in ir.outputs} | {ir.input}
+    out: Dict[str, int] = {}
+    for name, t in ir.tensors.items():
+        ok = (name in produced and name not in reserved and halo.get(name, 0) == 0
+              and t.height % TILE_R == 0
+              and readers.get(name) and readers[name] <= {"k1", "res"})
+        out[name] = TILE_R if ok else 0
+    return out
+
+
 def plan_workspace(ir: GraphIR, slack_bytes: int = 64, reuse: bool = True) -> Workspace:
     halo, halo_value = _halos(ir)
+    band = _band_rows(ir, halo)
     placements: Dict[str, Placement] = {}
 
     if not reuse:
@@ -135,7 +216,7 @@ def plan_workspace(ir: GraphIR, slack_bytes: int = 64, reuse: bool = True) -> Wo
             junk = (-t.blocks) % OUT_BLOCKS if engine_written else 0
             p = Placement(name=name, base=cursor, halo=halo[name], height=t.height, width=t.width,
                           blocks=t.blocks, planes=t.blocks + junk, producer=t.producer, halo_value=halo_value[name],
-                          dtype=t.dtype)
+                          dtype=t.dtype, band_rows=band[name])
             placements[name] = p
             cursor = (cursor + p.nbytes + 63) // 64 * 64
         ws = Workspace(placements=placements, nbytes=cursor, input=ir.input)
@@ -194,7 +275,7 @@ def plan_workspace(ir: GraphIR, slack_bytes: int = 64, reuse: bool = True) -> Wo
         engine_written = t.producer != "input"
         junk = (-t.blocks) % OUT_BLOCKS if engine_written else 0
         planes = t.blocks + junk
-        key = (t.height, t.width, halo[name], halo_value[name], t.dtype)
+        key = (t.height, t.width, halo[name], halo_value[name], t.dtype, band[name])
         by_geom[key].append((first_use[name], last_use[name], planes, name))
 
     geom_slots = defaultdict(list)
@@ -219,7 +300,7 @@ def plan_workspace(ir: GraphIR, slack_bytes: int = 64, reuse: bool = True) -> Wo
                 })
 
     for key, slots in geom_slots.items():
-        h, w, hal, val, dtype = key
+        h, w, hal, val, dtype, band_rows = key
         pitch = (w + 2 * hal) * 8 * np.dtype(dtype).itemsize
         plane_bytes = (h + 2 * hal) * pitch
         for slot in slots:
@@ -230,7 +311,7 @@ def plan_workspace(ir: GraphIR, slack_bytes: int = 64, reuse: bool = True) -> Wo
                 t = ir.tensors[name]
                 p = Placement(name=name, base=base, halo=hal, height=h, width=w,
                               blocks=t.blocks, planes=slot["max_planes"], producer=t.producer,
-                              halo_value=val, dtype=dtype)
+                              halo_value=val, dtype=dtype, band_rows=band_rows)
                 placements[name] = p
 
     ws = Workspace(placements=placements, nbytes=cursor, input=ir.input)
@@ -323,6 +404,15 @@ def layer_chunks(ir: GraphIR, layer) -> List[Chunk]:
     return chunks
 
 
+def chunk_tensor(layer, chunk: Chunk) -> str:
+    """The tensor a chunk reads."""
+    if chunk.kind == "res":
+        return layer.residual.tensor
+    if isinstance(layer, PoolLayer):
+        return layer.input.tensor
+    return layer.inputs[chunk.seg_index].tensor
+
+
 def a_pattern(ws: Workspace, ir: GraphIR, layer, chunk: Chunk, y0: int, x0: int, group: int = 0) -> DmaPattern:
     """DMA pattern that fills one core's 6,400-byte packet for output tile (y0, x0)."""
     if chunk.kind == "res":
@@ -330,32 +420,33 @@ def a_pattern(ws: Workspace, ir: GraphIR, layer, chunk: Chunk, y0: int, x0: int,
         p = ws.placements[seg.tensor]
         # Four real blocks plus four over-read blocks make the fixed 6,400-byte packet.
         return DmaPattern("ws", p.offset(seg.block_offset + group * OUT_BLOCKS, y0, x0),
-                          (8, TILE_R, TILE_C * 8), (p.plane_bytes, p.pitch, 1))
+                          (8, TILE_R, TILE_C * 8), (p.plane_stride, p.pitch, 1))
     seg = layer.input if isinstance(layer, PoolLayer) else layer.inputs[chunk.seg_index]
     p = ws.placements[seg.tensor]
     b0 = seg.block_offset + chunk.block_start
     if chunk.kind == "pool":
         b0 += group * OUT_BLOCKS  # a pool round produces the same four blocks it reads
     if chunk.kind == "k1":
-        return DmaPattern("ws", p.offset(b0, y0, x0), (8, 5, 160), (p.plane_bytes, p.pitch, 1))
+        return DmaPattern("ws", p.offset(b0, y0, x0), (8, 5, 160), (p.plane_stride, p.pitch, 1))
     if chunk.kind == "k1up2":
-        return DmaPattern("ws", p.offset(b0, y0 >> 1, x0 >> 1), (10, 4, 160), (p.plane_bytes, p.pitch, 1))
+        return DmaPattern("ws", p.offset(b0, y0 >> 1, x0 >> 1), (10, 4, 160), (p.plane_stride, p.pitch, 1))
     if chunk.kind == "k3s1":
-        return DmaPattern("ws", p.offset(b0, y0 - 1, x0 - 1), (4, 8, 200), (p.plane_bytes, p.pitch, 1))
+        return DmaPattern("ws", p.offset(b0, y0 - 1, x0 - 1), (4, 8, 200), (p.plane_stride, p.pitch, 1))
     if chunk.kind == "k3s2":
         return DmaPattern("ws", p.offset(b0, 2 * y0 - 1, 2 * x0 - 1), (16, 400), (p.pitch, 1))
     if chunk.kind == "k5s1":
         return DmaPattern("ws", p.offset(b0, y0 - 2, x0 - 2), (16, 400), (p.pitch, 1))
     if chunk.kind == "pool" or chunk.kind == "fused_k3k3":
-        return DmaPattern("ws", p.offset(b0, y0 - 2, x0 - 2), (2, 16, 200), (p.plane_bytes, p.pitch, 1))
+        return DmaPattern("ws", p.offset(b0, y0 - 2, x0 - 2), (2, 16, 200), (p.plane_stride, p.pitch, 1))
     raise ValueError(chunk.kind)
 
 
 def o_pattern(ws: Workspace, layer, group: int, y0: int, x0: int) -> DmaPattern:
     """DMA pattern that drains one joined 12,800-byte object: four strips of four blocks."""
     p = ws.placements[layer.output]
+    quad_stride = p.band_stride if p.band_rows else TILE_R * p.pitch
     return DmaPattern("ws", p.offset(group * OUT_BLOCKS, y0, x0), (4, OUT_BLOCKS, TILE_R, TILE_C * 8),
-                      (TILE_R * p.pitch, p.plane_bytes, p.pitch, 1))
+                      (quad_stride, p.plane_stride, p.pitch, 1))
 
 
 # Coarse schedule: core r of a quad expands source rows (y_quad / 2) + 2r .. + 3 with
@@ -372,7 +463,7 @@ def quad_patterns(ws: Workspace, ir: GraphIR, layer, chunk: Chunk, y_quad: int, 
         seg = layer.inputs[chunk.seg_index]
         p = ws.placements[seg.tensor]
         b0 = seg.block_offset + chunk.block_start
-        return [DmaPattern("ws", p.offset(b0, (y_quad >> 1) + 2 * r, x0 >> 1), (10, 4, 160), (p.plane_bytes, p.pitch, 1))
+        return [DmaPattern("ws", p.offset(b0, (y_quad >> 1) + 2 * r, x0 >> 1), (10, 4, 160), (p.plane_stride, p.pitch, 1))
                 for r in range(ROWS)]
     return [a_pattern(ws, ir, layer, chunk, y_quad + TILE_R * r, x0, group) for r in range(ROWS)]
 
