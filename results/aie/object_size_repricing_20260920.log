@@ -1,0 +1,96 @@
+# Re-pricing the 2026-09-16 activation-object sizing against the MEASURED dispatch floor
+UTC:      2026-09-20 (Desktop 2, DESKTOP-CBL5NUA)
+COMMIT:   ignite-xdna Canary 88c4605 (detached worktree split-audit)
+INPUTS:   MEASURED - results/aie/split_segment_floor_phoenix_20260920.log (this session's NOP sitting,
+          six models, 300/200 dispatches each, xrt-smi idle before every container)
+          MEASURED - 6.898931 GB/s per column achievable DDR passthrough (the four-lever silicon sitting)
+          QUOTED   - results/aie/notes_yolov8s_gap.md:384-392, the sweep's own cost model and results
+STATUS:   DERIVED re-pricing over measured inputs. No container was built at any other object size and
+          nothing here has been run on silicon. It changes a cost model, not a measurement.
+
+WHY: the 541-candidate sweep that kept A_BYTES at 6,400 is NOT in the repo - only its results are. Its
+cost model, however, is stated in the notes, and that is reproducible. The sweep's TOTAL was right to
+1.1% against the floor measured three days later, but its SPLIT was not, and the split is what scores
+a candidate.
+STEP 1 - decompose the measured floor the way the sweep decomposed its model
+  transfer = shim bytes / (4 x 6.898931 GB/s), the measured achievable channel rate
+  per-task = (measured floor - transfer) / shim tasks
+
+model            tasks    shim bytes  floor ms   transfer   per-task     us/task transfer%
+YOLOv8n           2972    35,276,672     5.510      1.278      4.232      1.4238     23.2%
+YOLOv8n-pose      2947    35,133,312     5.719      1.273      4.446      1.5086     22.3%
+YOLOv8s           7143    74,511,488    13.340      2.700     10.640      1.4896     20.2%
+YOLOv8m          19296   179,314,048    32.938      6.498     26.440      1.3702     19.7%
+YOLOv8l          36115   311,865,984    57.856     11.301     46.555      1.2891     19.5%
+YOLOv8x          57968   491,212,928    92.411     17.800     74.611      1.2871     19.3%
+
+  per-task cost 1.287 - 1.509 us, mean 1.3947 us; transfer is only 19.3-23.2% of the floor.
+
+STEP 2 - what the sweep assumed, from its own words (notes_yolov8s_gap.md:384-392)
+  yolov8s: 224.6 MB at 26.8 GB/s = 8.38 ms transport, 'roughly 5.1 ms of issue for 8772 merged quad tasks'
+  => 0.581 us per task, and a split of 62.2% transport / 37.8% issue.
+  Its TOTAL is right: 13.48 ms against the 13.340 ms measured floor (1.1%).
+
+STEP 3 - the error: it priced CORE-SIDE bytes at the DDR rate
+  Only shim-side bytes cross DDR. yolov8s moves 74,511,488 B over the shim, not 224.6 MB:
+  the MemTile re-serves overlapping windows to the four cores, so core-side traffic is 3.01x the wire.
+  measured  transport 2.700 ms (20.2%) | per-task 10.640 ms (79.8%)
+  sweep     transport 8.381 ms (62.2%) | issue    5.100 ms (37.8%)
+  => the sweep over-counted transport 3.10x and under-counted per-task cost 2.56x
+     (2.09x if you normalise its issue cost onto the same 7143 shim tasks)
+
+STEP 4 - re-score the two candidates the notes actually report
+  ASSUMPTION, stated: task count scales as 1/A (same work, larger packets). This is the crude part
+  and it is the reason these are bounds, not a sweep.
+
+model          A cand     dtasks    task term     bytes term NET (measured)
+YOLOv8n          4032       1745        2.485   -0.473..0.000   2.012..2.485  
+YOLOv8n          7920       -570       -0.812    0.000..0.304  -0.812..-0.509 
+YOLOv8n          9472       -964       -1.372    0.000..0.614  -1.372..-0.759 
+YOLOv8n-pose     4032       1731        2.611   -0.471..0.000   2.140..2.611  
+YOLOv8n-pose     7920       -566       -0.853    0.000..0.302  -0.853..-0.551 
+YOLOv8n-pose     9472       -956       -1.442    0.000..0.611  -1.442..-0.831 
+YOLOv8s          4032       4195        6.249   -0.999..0.000   5.250..6.249  
+YOLOv8s          7920      -1371       -2.042    0.000..0.641  -2.042..-1.401 
+YOLOv8s          9472      -2317       -3.451    0.000..1.296  -3.451..-2.155 
+YOLOv8m          4032      11333       15.528   -2.404..0.000  13.124..15.528 
+YOLOv8m          7920      -3703       -5.074    0.000..1.543  -5.074..-3.531 
+YOLOv8m          9472      -6258       -8.575    0.000..3.119  -8.575..-5.456 
+YOLOv8l          4032      21210       27.342   -4.181..0.000  23.160..27.342 
+YOLOv8l          7920      -6931       -8.935    0.000..2.684  -8.935..-6.251 
+YOLOv8l          9472     -11713      -15.099    0.000..5.425 -15.099..-9.674 
+YOLOv8x          4032      34045       43.819   -6.586..0.000  37.233..43.819 
+YOLOv8x          7920     -11125      -14.319    0.000..4.228 -14.319..-10.092
+YOLOv8x          9472     -18800      -24.198    0.000..8.544 -24.198..-15.654
+
+  Negative is a win. The sweep scored A=7,920 at -0.265 ms on yolov8s and +0.143 ms on yolov8n.
+  The bar it was judged against was 0.29 ms (the same-sitting gap to AMD on yolov8s).
+
+CONCLUSION
+The sweep's verdict rests on a split it got wrong by construction: it charged MemTile-to-core bytes at
+the DDR rate. Correct that and the activation path is task-bound far harder than it claimed - 80% of the
+floor is per-task waiting, not 38%. Every candidate's score therefore moves in favour of LARGER packets,
+because shrinking A multiplies the term that was under-counted and growing A reduces it.
+
+A = 7,920 B - the sweep's own optimum, which it rejected for a +0.143 ms regression on YOLOv8n - scores
+-0.51 to -0.81 ms on YOLOv8n and -1.40 to -2.04 ms on YOLOv8s once the task term is priced as measured.
+Both are past the 0.29 ms bar the lever was judged against, and the sign flips on YOLOv8n.
+A = 9,472 B is the core-L1 ceiling at ObjectFIFO depth 2 (65,536 - 59,392 = 6,144 B free, two buffers).
+
+WHAT THIS DOES NOT ESTABLISH
+- The 1/A task scaling is crude. A faithful re-sweep must redo the per-kind geometry search
+  (engine_schedule.CHUNK_GEOMETRY and a_pattern) for each candidate, which is what the original did and
+  what no committed script can currently do.
+- The bytes term is given as a range because the shim-side byte growth of a larger packet depends on that
+  same geometry search: the low end assumes the MemTile's re-serving absorbs it, the high end assumes
+  shim bytes grow proportionally with A.
+- Nothing is measured at any A other than 6,400. Building one resized container and running this
+  session's NOP tool on it would settle the direction in a single sitting.
+
+WHAT IT WOULD COST TO TRY
+Compiler: engine_emulator.A_BYTES and GEOM_*, engine_schedule.CHUNK_GEOMETRY and all seven a_pattern
+shapes, Placement's junk-plane sizing, engine_compile's manifest "a_bytes". Overlay: an xclbin rebuild,
+because kernels/aie2/conv_engine/design.py:30 bakes A_BYTES into a_ty and the ObjectFifo split. NOT
+engine.cc - it reads rows_in/cols_in/plane_bytes from the packet header at runtime.
+Also worth fixing first: A_BYTES is a bare literal duplicated in src/ and kernels/ with no gate keeping
+them equal, unlike WBUF_BYTES which has both a comment and a source-reading check.

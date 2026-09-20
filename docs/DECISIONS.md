@@ -1640,6 +1640,17 @@ cached reference heads rather than `bo_out`.
   and the tile geometry (5 × 20, four blocks out) is the same everywhere. The price is
   extra DMA bytes on shallow layers; the alternative (per-layer packet sizes) needs
   MemTile channels the column does not have.
+  Re-examined against the real scheduler on 2026-09-20. The MemTile-channel reason holds for
+  per-LAYER sizes but is not what binds the single global one, and 6,400 B turns out to be a
+  defended choice rather than an unexamined constant. A fill pattern is one strided BD whose
+  extent must equal the object exactly; k1 reads the output tile's own 5 x 20 x 8 = 800 B with
+  no halo and nothing to trim, and k3s1 is pinned at ncin = 4 by weight capacity, so the object
+  must be a multiple of 800, while core data memory (6,144 B of headroom at activation depth 2)
+  caps it at 9,472 B. Above all of that, packets are not tasks: k3s2's 2-D pattern folds 24 to
+  40 packets into one DMA task where every 3-D kind folds about 4, and 6,400 B is the largest
+  object that keeps k3s2 at one plane and therefore two-dimensional. Every buildable larger
+  object prices as a regression, and the 7,920 B a 2026-09-16 sweep named is not buildable at
+  all ([BENCHMARKS](BENCHMARKS.md#the-dispatch-floor-separated-from-compute-and-the-activation-packet-priced-against-it-2026-09-20-desktop-2)).
 - **Activations round-trip DDR between layers by NPU DMA with no CPU involvement.**
   YOLOv8n's early feature maps (1.6 MB after conv0) do not fit the MemTiles, and the
   skip connections keep several maps alive across the neck; "no host roundtrip" here

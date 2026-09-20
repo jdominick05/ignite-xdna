@@ -9997,3 +9997,91 @@ What the tool does now instead:
 - **Reproducing the scratch bisect:** `git checkout ae430cb`, rebuild `models/yolov8n_cut_xint8.onnx` through `ignite-compile --engine graph`, run the then-current `tools/verify_engine_container.py`; it has no slot logic, so it prints `N/66` directly.
 
 
+
+## The dispatch floor separated from compute, and the activation packet priced against it (2026-09-20, Desktop 2)
+
+The YOLOv8s gap to AMD was accepted as a known runtime limitation on 2026-09-16 with every
+transport lever closed. Three logs reopen the one question that closure left unanswered: what the
+dispatch floor is made of, and whether the 6,400 B activation packet can be resized to move it.
+
+### The floor is seven tenths of a dispatch, and barely moves with scale
+
+`tools/engine_dispatch_floor_split.py` builds a NOP copy of a split container: every weight
+packet's op becomes `OP_NOP`, so the cores still acquire every weight packet, consume every
+activation packet and emit every output object, and only the arithmetic is skipped. Floor is the
+NOP dispatch, compute is real minus NOP. Device 0, `xrt-smi` reporting no contexts before every
+container and after the last, 300 iterations (200 for l and x), assets/bus.jpg -
+[`split_segment_floor_phoenix_20260920.log`](../results/aie/split_segment_floor_phoenix_20260920.log).
+
+| model | DMA tasks | shim bytes | real ms | floor ms | compute ms | floor share | GB/s per column |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| YOLOv8n | 2,972 | 35,276,672 | 7.882 | **5.510** | 2.372 | 69.9% | 1.601 |
+| YOLOv8n-pose | 2,947 | 35,133,312 | 8.222 | **5.719** | 2.503 | 69.6% | 1.536 |
+| YOLOv8s | 7,143 | 74,511,488 | 17.894 | **13.340** | 4.554 | 74.6% | 1.396 |
+| YOLOv8m | 19,296 | 179,314,048 | 43.658 | **32.938** | 10.720 | 75.4% | 1.361 |
+| YOLOv8l | 36,115 | 311,865,984 | 78.140 | **57.856** | 20.284 | 74.0% | 1.348 |
+| YOLOv8x | 57,968 | 491,212,928 | 125.735 | **92.411** | 33.324 | 73.5% | 1.329 |
+
+The floor is 69.6% to 75.4% of dispatch on every model (mean 72.8%) across a 19.7x range in task
+count, and during it the shim moves 1.33 to 1.60 GB/s per column against 6.899 GB/s of measured
+achievable DDR passthrough. So 77% to 81% of the floor is not transfer. This generalises to the
+whole family the 18% wire utilisation previously measured on SESR M7 alone.
+
+Per-task and per-byte cost cannot be separated on this family, and the reason is structural: the
+packet is fixed at 6,400 B, so bytes per task spans only 1.40x while scale spans 19.7x. Tasks and
+bytes are collinear by construction. Bytes alone fit the floor to 2.6% and tasks alone to 12.7%;
+that ordering is real but it is not an attribution.
+
+### The 2026-09-16 object-size sweep priced the wrong bytes
+
+That sweep, whose script was never committed (`git log -S` finds nothing; only the cost model
+quoted in `notes_yolov8s_gap.md` survives), rejected a larger packet on a model that charged
+224.6 MB of activation fills at 26.8 GB/s. Only 74.5 MB of a YOLOv8s frame crosses the shim; the
+rest is the MemTile re-serving overlapping windows, and a MemTile hop was separately measured free
+per byte. Its total came out 1.1% from the floor measured three days later, which is why nothing
+caught it, but its split did not: it read 62.2% transport and 37.8% issue where the measured split
+is 20.2% and 79.8%, over-counting transport 3.10x -
+[`object_size_repricing_20260920.log`](../results/aie/object_size_repricing_20260920.log).
+
+### Every buildable activation packet larger than 6,400 B is a regression
+
+`tools/activation_object_sweep.py` points the compiler at a candidate geometry, emits the real
+schedule and counts what the DMA would do, then prices the difference with the constants above. It
+asserts its 6,400 B control against the task counts measured on silicon. Nothing was built and no
+context was opened; every row above 6,400 is derived over a real schedule -
+[`activation_object_size_sweep_20260920.log`](../results/aie/activation_object_size_sweep_20260920.log).
+
+Two conditions decide what is buildable. One `a_pattern` is a single strided BD whose extent must
+equal the object exactly; `rows_in` and `cols_in` may exceed what a kind needs, so the surplus is
+junk inside the plane and the size is not confined to multiples of today's planes. But k1 reads the
+output tile's own 5 x 20 x 8 = 800 B with no halo and nothing to trim, and k3s1 is pinned at
+`ncin = 4` by weight capacity (`k*k*ncin*256 <= 9,216`), so the object must be a multiple of 800.
+Core data memory caps it: two 6,400 B activation buffers at depth 2 in 59,392 B of 65,536 leave
+6,144 B of headroom, so 9,472 B or less.
+
+The 7,920 B the lost sweep named is a multiple of 16 and not of 32, so k3s1 would fall to
+`ncin = 3` and emit a third more chunks. It is not buildable as an object size at all.
+
+| object | yolov8n net ms | yolov8s net ms | note |
+|---|---:|---:|---|
+| 6,400 (today) | 0.000 | 0.000 | the control, asserted against silicon |
+| 7,200 | +0.172 | +0.563 | k1 gains no ncin the merge does not give back |
+| 8,000 | +0.099 | +0.665 | |
+| 8,800 | +0.132 | +0.180 | **best case -0.153 on yolov8s, +0.064 on yolov8n** |
+| 9,600 | +0.215 | +0.360 | also needs 256 B of tile memory freed |
+
+The mechanism is that packets are not tasks. `merge_quad` folds a quad's four fills into one task
+and the scheduler keeps folding along whatever BD dimensions remain under the 4-D ceiling, so a
+2-D pattern folds far deeper than a 3-D one: k3s2, whose pattern is `(16, 400)`, folds 23.6
+(yolov8n) to 39.6 (yolov8s) packets into one task where every 3-D kind folds about 4. Raising k3s2
+to two input blocks per packet - the obvious use of a bigger object - costs it that dimension, and
+built that way at 8,800 B it went from 283 to 1,290 tasks on yolov8s, pushing the frame from 7,143
+to 8,335. So 6,400 B is the largest object that keeps the kind with the biggest plane at a single
+plane, and therefore two-dimensional.
+
+Only k1 and k1up2 can raise `ncin` at all; k3s1 is already at its weight-capacity maximum, k5s1 at
+1, and pool and res are fixed by their semantics. A bigger object therefore buys fewer tasks on
+about a third of the traffic and pays 12% to 41% more bytes on all of it. The one corner that goes
+negative needs the up2 uncertainty to resolve entirely in its favour, still sits under the 0.29 ms
+bar, and regresses yolov8n in the same best case. The real lever is weight capacity, not the
+activation packet.

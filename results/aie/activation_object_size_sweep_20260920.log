@@ -1,0 +1,146 @@
+# Activation object size: what is feasible, and what it would cost
+# Host DESKTOP-CBL5NUA (Desktop 2, Ryzen 7 8700G), 2026-09-20, env mlir-aie-iron
+# OFFLINE. No container was built at any object size but 6,400 B, no hardware context was
+# opened, and xrt-smi was not consulted because nothing here touches the device.
+#
+# Command:
+#   python tools/activation_object_sweep.py --sizes 4032,7920,7200,8000,8800,9600
+#
+# WHAT IS MEASURED AND WHAT IS DERIVED
+#   MEASURED  the 6,400 B control row: 2,972 (yolov8n) and 7,143 (yolov8s) DMA tasks per
+#             frame, asserted by the tool against the counts read off silicon in
+#             results/aie/split_segment_floor_phoenix_20260920.log. The floor split
+#             (transfer / per-task) is from results/aie/object_size_repricing_20260920.log.
+#   DERIVED   every row above 6,400 B. The schedule is real - the compiler is pointed at the
+#             candidate geometry and asked to emit - but the pricing applies measured
+#             constants to a counted workload. It is not a measurement of that container.
+#
+# WHY THIS RAN
+#   results/aie/notes_yolov8s_gap.md records "the best object size found over 541 candidates
+#   is 7,920 B, worth -0.265 ms on yolov8s and +0.143 ms on yolov8n". The script behind that
+#   sweep was never committed (git log -S finds nothing); only the quoted cost model survives.
+#   results/aie/object_size_repricing_20260920.log showed that model over-counted transport
+#   3.10x by charging MemTile-to-core bytes at the DDR rate, which moved its optimum upward.
+#   This run replaces the lost sweep with the real scheduler.
+
+## 1. 7,920 B cannot be built
+
+An a_pattern is ONE strided BD whose extent must equal the object size exactly, and a packet
+carries ncin planes of rows_in x cols_in x 8 bytes. rows_in and cols_in MAY exceed what a kind
+needs - the surplus is junk inside the plane - so the size is not confined to multiples of the
+plane sizes in use today. Two conditions bind instead.
+
+  k1 reads the output tile's own pixels: 5 x 20 x 8 = 800 B per plane, no halo, nothing to
+  trim and nothing to pad without reading a neighbouring tile's columns. So the object wants
+  to be a multiple of 800.
+
+  k3s1 is pinned at ncin = 4 by weight capacity (k*k*ncin*256 <= 9,216 gives k1 <= 36,
+  k3 <= 4, k5 <= 1). Four planes of whole pixels means A_BYTES / 8 must divide by 4, so the
+  object must be a multiple of 32.
+
+7,920 = 2^4 x 495 is a multiple of 16 and not of 32. 7,920 / 8 = 990 pixels, and 990 / 4 is
+247.5, so k3s1 would drop to ncin = 3 and emit a third more chunks - about +764 tasks on
+yolov8s by itself. 7,920 was a scalar with no descriptor behind it.
+
+The ceiling above is core data memory. results/model_zoo/memory_yolov8s.json reads 59,392 B
+used of 65,536 on every compute tile, with TWO 6,400 B activation buffers (depth 2), so the
+6,144 B of headroom allows at most 6,400 + 3,072 = 9,472 B. 9,600 is listed below anyway; it
+needs 256 B freed elsewhere on the tile before it could be built at all.
+
+That leaves 7,200, 8,000 and 8,800 as buildable today, and 9,600 behind a tile-memory change.
+
+## 2. Packets are not tasks, and that is what the lost sweep got wrong second
+
+The sweep priced "roughly 5.1 ms of issue for 8,772 merged quad tasks", i.e. tasks in
+proportion to packets. They are not proportional. merge_quad folds a quad's four fills into
+one task and the scheduler keeps folding along whatever BD dimensions remain under the 4-D
+ceiling, so a kind whose pattern is 2-D folds far deeper than one that is 3-D:
+
+| kind | pattern today | packets per DMA task, yolov8n | yolov8s |
+|---|---|---:|---:|
+| k3s2 | (16, 400), two-dimensional | 23.60 | 39.63 |
+| k1 | (8, 5, 160) | 4.90 | 4.71 |
+| k3s1 | (4, 8, 200) | 4.42 | 4.09 |
+| pool | (2, 16, 200) | 4.00 | 4.00 |
+| res | (8, 5, 160) | 4.00 | 4.00 |
+
+The per-kind split is an attribution, not an assertion: items the scheduler rebuilds during a
+merge lose their kind and are pooled, which overcounts the activation total by about 8%
+against the asserted figure. Only the control totals are checked against silicon.
+
+The consequence is direct. Raising k3s2 to two input blocks per packet - the obvious use of a
+bigger object, and the one that looked free - costs it its second dimension. Built that way at
+8,800 B, k3s2 went from 283 to 1,290 tasks on yolov8s, swamping k1's 303-task saving and
+pushing the whole frame from 7,143 to 8,335 tasks. Every candidate below therefore keeps k3s2
+and k5s1 two-dimensional, at one input block per packet with junk rows.
+
+So 6,400 B is not an arbitrary constant that nobody justified. It is the largest object that
+keeps the kind with the biggest plane at a single plane, and therefore two-dimensional, and
+therefore merging about 40 packets into one task.
+
+## 3. The sweep
+
+[sweep] DERIVED over real schedules. No container was built at any size but 6,400.
+[sweep] core data memory caps the object at 9,472 B (6,144 B headroom, depth 2)
+[sweep] 4032 B INFEASIBLE: 4032 is not a multiple of 800, so k1 would read junk columns
+[sweep] 7920 B INFEASIBLE: 7920 is not a multiple of 32, so k3s1 cannot keep ncin = 4
+
+[sweep] yolov8n: control 2972 DMA tasks matches the measured floor (5.510 ms = 1.278 transfer + 4.232 per-task, 1.4238 us/task); core:shim bytes 3.614; up2 shape costs at most 48 tasks per candidate row
+[sweep]      A   tasks  d tasks         core B  d task ms  d xfer ms   net ms
+[sweep]   6400    2972        0    127,487,744      0.000      0.000    0.000
+[sweep]   7200    3020      +48    137,871,744     +0.068     +0.104   +0.172   (best case +0.104)
+[sweep]   8000    2916      -56    145,302,016     -0.080     +0.179   +0.099   (best case +0.031)
+[sweep]   8800    2884      -88    153,161,472     -0.125     +0.257   +0.132   (best case +0.064)
+[sweep]   9600    2872     -100    163,177,472     -0.142     +0.358   +0.215   (best case +0.147)
+
+[sweep] yolov8s: control 7143 DMA tasks matches the measured floor (13.340 ms = 2.700 transfer + 10.640 per-task, 1.4896 us/task); core:shim bytes 4.685; up2 shape costs at most 224 tasks per candidate row
+[sweep]      A   tasks  d tasks         core B  d task ms  d xfer ms   net ms
+[sweep]   6400    7143        0    349,103,616      0.000      0.000    0.000
+[sweep]   7200    7367     +224    378,812,416     +0.334     +0.230   +0.563   (best case +0.230)
+[sweep]   8000    7303     +160    404,208,128     +0.238     +0.426   +0.665   (best case +0.331)
+[sweep]   8800    6935     -208    412,498,944     -0.310     +0.490   +0.180   (best case -0.153)
+[sweep]   9600    6911     -232    440,364,544     -0.346     +0.706   +0.360   (best case +0.027)
+
+
+## 4. Reading it
+
+Net is the derived change in the dispatch floor: the task term at the model's measured
+microseconds per task, plus the transport term at the measured 6.898931 GB/s per column over
+four columns. Core bytes are converted to wire bytes by the model's own measured core:shim
+ratio (3.614 on yolov8n, 4.685 on yolov8s), which is the weakest step here - it assumes the
+MemTile re-serves the extra bytes in the same proportion it re-serves today's.
+
+"Best case" subtracts the up2 bound. Every candidate generates the k1up2 source block as rows
+of 25 pixels rather than today's 20, because no multiple of 800 is also a multiple of the
+640 B four-row source block. The core's up2 expansion would have to be taught the wider row.
+Running the control with the generated shape instead of the real one costs 48 (yolov8n) and
+224 (yolov8s) tasks, so that is the most a candidate row can be overstating.
+
+EVERY BUILDABLE CANDIDATE IS A REGRESSION. The single corner that goes negative is yolov8s at
+8,800 B in the best case, -0.153 ms, which requires the up2 uncertainty to resolve entirely in
+its favour, still sits under the 0.29 ms bar the yolov8s gap was accepted at, and comes with
++0.064 ms on yolov8n in the same best case. 9,600 B is worse than 8,800 on both models and
+additionally needs 256 B of tile memory freed.
+
+The shape of the answer is that the task saving is small and bounded while the byte penalty is
+large and linear. Only k1 and k1up2 can raise ncin at all; k3s1 is already at its weight-
+capacity maximum of 4, k5s1 at 1, and pool and res are fixed by their semantics. So a bigger
+object buys fewer tasks on about a third of the traffic and pays 12 to 41 per cent more bytes
+on all of it.
+
+## 5. What would change this
+
+  - Going SMALLER was already priced a loss in notes_yolov8s_gap.md, and the re-pricing made
+    the task term 2.1 to 2.6x bigger, so smaller is now a worse loss, not a better one. The
+    floor is k3s2's own minimum plane of 11 rows x 41 pixels x 8 = 3,608 B.
+  - The weight capacity cap is the real lever, not the object size. If k3s1 could carry more
+    than 4 input blocks, a bigger object would pay. That is a weight-packet question
+    (W_MAX_BYTES = 9,216), not an activation-packet one.
+  - A per-kind object size would dissolve the whole constraint, and is the thing
+    docs/DECISIONS.md already records as needing MemTile channels the column does not have.
+    That recorded reason is correct but it is not the binding one; the binding one is above.
+
+## 6. Not done here
+
+  No container was built. No dispatch was run. The 6,400 B control is the only row with
+  silicon behind it, and it is behind it only as a task count.
