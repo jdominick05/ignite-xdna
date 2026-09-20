@@ -35,6 +35,16 @@ commit, before editing anything. Neither log opened an NPU context.
 | [silicon_gate_workspace_desktop2_20260919.log](silicon_gate_workspace_desktop2_20260919.log) | Both host-layer assertions pass with the fixture's allocation only; the collision is slot reuse against an out-of-order preload. |
 | [silicon_gate_compilation_desktop2_20260919.log](silicon_gate_compilation_desktop2_20260919.log) | Verbatim legacy-scheduler rejection for 63 resident parameter sets, plus a 1,029,312-byte container from a nine-conv graph. |
 
+## Shim channel utilisation
+
+The [2026-09-19 audit of four emitted streams](../../docs/BENCHMARKS.md#sesrs-shim-channels-run-at-18-of-the-measured-rate-the-dispatch-floor-is-wait-structure-not-wire-2026-09-19-desktop-2)
+is offline evidence about the engine's traffic, not about the silicon; the decoded task ABI it
+relied on is recorded in [SILICON 1.4](../../docs/SILICON.md).
+
+| Log | Evidence |
+|---|---|
+| [shim_channel_utilisation_sesr_yolov8n_desktop2_20260919.log](shim_channel_utilisation_sesr_yolov8n_desktop2_20260919.log) | SESR's floor runs at 18% of one column's measured rate with 2.172 ms outside transfer time; identical traffic at two cadences differs by ~1 ms; the arms differ in merge width, not bandwidth. |
+
 ## Retractions and supersessions in this directory
 
 Read these before quoting anything below.

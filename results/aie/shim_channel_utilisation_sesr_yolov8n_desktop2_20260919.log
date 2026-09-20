@@ -1,0 +1,55 @@
+UTC: 2026-09-20T03:29:04.389255+00:00
+MACHINE: DESKTOP-CBL5NUA AMD64 Family 25 Model 117 Stepping 2, AuthenticAMD
+COMMAND: C:/Users/<user>/miniforge3/envs/mlir-aie-iron/python.exe tools/shim_channel_audit.py --arm "SESR M7 rb2=build/conv_engine/sesr_m7/insts.bin:2.629" --arm "SESR M7 rb4=build/conv_engine/sesr_rb4/insts.bin:3.228" --arm "SESR M7 MemTile ring rb2=build/conv_engine/sesr_ring2/insts.bin:5.952" --arm "YOLOv8n whole network=build/conv_engine/yolov8n_full/insts.bin" --measured-gbps 6.898931
+COMMIT: 2e64ca5baab63a9613daae9af7f7984f50bc2526
+
+[arm] SESR M7 rb2: build\conv_engine\sesr_m7\insts.bin
+[arm] sha256 ca97eb62326cb34e00e77077a4408ee1557746688972964c5424d0a68798eca3 ops=4113 BDwrites=1007 tasks=1007 tokens=546 columns=[0, 1, 2, 3]
+      col0 MM2S0: 175t/ 2,956,800B MM2S1:   9t/   104,192B S2MM0:  63t/   201,600B
+      col1 MM2S0: 175t/ 2,956,800B MM2S1:   9t/   104,192B S2MM0:  63t/   201,600B
+      col2 MM2S0: 175t/ 2,956,800B MM2S1:   9t/   104,192B S2MM0:  63t/   201,600B
+      col3 MM2S0: 185t/ 3,059,200B MM2S1:   9t/   104,192B S2MM0:  72t/   230,400B
+      host->device 12,346,368 B over 746 tasks (94% of bytes) | device->host 835,200 B over 261 tasks | total 13,181,568 B
+      avg 13,090 B/task, median 6,400 B/task, biggest 307,200B x10, 230,400B x2, 153,600B x2, 76,800B x2, 25,600B x182
+      idle shim channels: col0:S2MM1, col1:S2MM1, col2:S2MM1, col3:S2MM1
+      DERIVED at a 2.629 ms floor: 1.25 GB/s per column = 18% of the measured 6.898931 GB/s; these bytes need 0.478 ms per column, so 2.151 ms of the floor is not transfer time.
+
+[arm] SESR M7 rb4: build\conv_engine\sesr_rb4\insts.bin
+[arm] sha256 8bf4184c7584ce838afcfee8fc5568b1808b9846803445196a226dc2905f5441 ops=3607 BDwrites=1007 tasks=1007 tokens=293 columns=[0, 1, 2, 3]
+      col0 MM2S0: 175t/ 2,956,800B MM2S1:   9t/   104,192B S2MM0:  63t/   201,600B
+      col1 MM2S0: 175t/ 2,956,800B MM2S1:   9t/   104,192B S2MM0:  63t/   201,600B
+      col2 MM2S0: 175t/ 2,956,800B MM2S1:   9t/   104,192B S2MM0:  63t/   201,600B
+      col3 MM2S0: 185t/ 3,059,200B MM2S1:   9t/   104,192B S2MM0:  72t/   230,400B
+      host->device 12,346,368 B over 746 tasks (94% of bytes) | device->host 835,200 B over 261 tasks | total 13,181,568 B
+      avg 13,090 B/task, median 6,400 B/task, biggest 307,200B x10, 230,400B x2, 153,600B x2, 76,800B x2, 25,600B x182
+      idle shim channels: col0:S2MM1, col1:S2MM1, col2:S2MM1, col3:S2MM1
+      DERIVED at a 3.228 ms floor: 1.02 GB/s per column = 15% of the measured 6.898931 GB/s; these bytes need 0.478 ms per column, so 2.750 ms of the floor is not transfer time.
+
+[arm] SESR M7 MemTile ring rb2: build\conv_engine\sesr_ring2\insts.bin
+[arm] sha256 dabcc9f40ac1388ed680df9f457528256de286bacef72b052cf269bc9a78faf0 ops=19178 BDwrites=4732 tasks=4732 tokens=2379 columns=[0, 1, 2, 3]
+      col0 MM2S0: 420t/ 4,300,800B MM2S1: 378t/ 4,376,064B S2MM0: 378t/ 1,209,600B
+      col1 MM2S0: 420t/ 4,300,800B MM2S1: 378t/ 4,376,064B S2MM0: 378t/ 1,209,600B
+      col2 MM2S0: 420t/ 4,300,800B MM2S1: 378t/ 4,376,064B S2MM0: 378t/ 1,209,600B
+      col3 MM2S0: 430t/ 4,403,200B MM2S1: 387t/ 4,480,256B S2MM0: 387t/ 1,238,400B
+      host->device 34,914,048 B over 3211 tasks (88% of bytes) | device->host 4,867,200 B over 1521 tasks | total 39,781,248 B
+      avg 8,407 B/task, median 6,400 B/task, biggest 25,600B x338, 18,944B x338, 9,472B x1183, 6,400B x1352, 3,200B x1521
+      idle shim channels: col0:S2MM1, col1:S2MM1, col2:S2MM1, col3:S2MM1
+      DERIVED at a 5.952 ms floor: 1.67 GB/s per column = 24% of the measured 6.898931 GB/s; these bytes need 1.442 ms per column, so 4.510 ms of the floor is not transfer time.
+
+[arm] YOLOv8n whole network: build\conv_engine\yolov8n_full\insts.bin
+[arm] sha256 1638da1c474f5b6f2dae9b48d9112706670e832faa9b203156dad3080dd1e914 ops=12258 BDwrites=2972 tasks=2972 tokens=1671 columns=[0, 1, 2, 3]
+      col0 MM2S0: 545t/ 6,099,200B MM2S1:  78t/ 2,453,248B S2MM0: 133t/   425,600B
+      col1 MM2S0: 545t/ 6,099,200B MM2S1:  78t/ 2,453,248B S2MM0: 133t/   425,600B
+      col2 MM2S0: 534t/ 6,009,600B MM2S1:  75t/ 2,349,056B S2MM0: 130t/   416,000B
+      col3 MM2S0: 522t/ 5,913,600B MM2S1:  72t/ 2,225,920B S2MM0: 127t/   406,400B
+      host->device 33,603,072 B over 2449 tasks (95% of bytes) | device->host 1,673,600 B over 523 tasks | total 35,276,672 B
+      avg 11,870 B/task, median 6,400 B/task, biggest 409,600B x16, 151,552B x8, 75,776B x17, 56,832B x16, 47,360B x4
+      idle shim channels: col0:S2MM1, col1:S2MM1, col2:S2MM1, col3:S2MM1
+
+[compare] per arm: tasks, completion tokens, bytes, median task, per-column rate, utilisation against the comparison rate, and the floor time that is not transfer
+[compare] SESR M7 rb2                      tasks= 1007 tokens=  546 bytes= 13,181,568 median= 6,400 GB/s/col= 1.25 utilised= 18% not-transfer=2.151ms
+[compare] SESR M7 rb4                      tasks= 1007 tokens=  293 bytes= 13,181,568 median= 6,400 GB/s/col= 1.02 utilised= 15% not-transfer=2.750ms
+[compare] SESR M7 MemTile ring rb2         tasks= 4732 tokens= 2379 bytes= 39,781,248 median= 6,400 GB/s/col= 1.67 utilised= 24% not-transfer=4.510ms
+[compare] YOLOv8n whole network            tasks= 2972 tokens= 1671 bytes= 35,276,672 median= 6,400 GB/s/col=    - utilised=   - not-transfer=-
+
+EXIT_CODE: 0

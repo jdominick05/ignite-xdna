@@ -10032,7 +10032,7 @@ Both containers have an *interior* optimum and they differ: SESR at 2, YOLOv8n a
 
 So fixing the regression did **not** overtake AMD on SESR today, and the reason is two-layered. AMD's `session.run` is unchanged from earlier sittings (1.477 against 1.461-1.576), but their *host* postprocess read 1.975 ms against the 2.419-2.593 ms logged on 2026-09-15/16/17, so their arm is ~0.45 ms faster with nothing changed on either side — the drift this repo warns about, and the reason a 0.42 ms target gap was never robust. And the remaining 1.05 ms is the NPU stage: our floor is 2.650 ms for ~14 MB of per-frame fill and drain (5.4 GB/s effective) against their 1.477 ms for the same graph, because their DPU keeps SESR's intermediates on-chip across concatenated layers while this engine round-trips every layer.
 
-**Held-out test of the traffic story, and it fails the other way.** The MemTile activation ring was rejected on 2026-09-16 for YOLOv8s and never measured on SESR — the one container whose dispatch is demonstrably transport-bound. At rb=2 on SESR it moves the cost rather than removing it: **dispatch 6.310 ms = floor 5.952 + compute 0.358**, instructions 144,880 → 678,516 B. Compute falls 4.5×, the floor triples. The rejection stands on a third model, and the wall is localized: not the cores, not the arithmetic, but getting 14 MB through the shim, and the ring's own configuration traffic costs more than the fills it saves. Closing the 1.05 ms needs fewer bytes on the wire — inter-layer fusion, which is still scaffolding with no call site on any branch (`match_stencil_fusion` is never invoked) — not another cadence.
+**Held-out test of the traffic story, and it fails the other way.** The MemTile activation ring was rejected on 2026-09-16 for YOLOv8s and never measured on SESR — the one container whose dispatch is demonstrably transport-bound. At rb=2 on SESR it moves the cost rather than removing it: **dispatch 6.310 ms = floor 5.952 + compute 0.358**, instructions 144,880 → 678,516 B. Compute falls 4.5×, the floor triples. The rejection stands on a third model, and the wall is localized: not the cores, not the arithmetic, but getting 14 MB through the shim, and the ring's own configuration traffic costs more than the fills it saves. Closing the 1.05 ms needs fewer bytes on the wire — inter-layer fusion, which is still scaffolding with no call site on any branch (`match_stencil_fusion` is never invoked) — not another cadence. *Superseded attribution: "fewer bytes on the wire" is not the diagnosis — [the shim-channel audit below](#sesrs-shim-channels-run-at-18-of-the-measured-rate-the-dispatch-floor-is-wait-structure-not-wire-2026-09-19-desktop-2) decodes the same container's stream and finds its 2.629 ms floor running at 18% of one column's measured rate, with 2.151 ms of it outside transfer time entirely; what that section keeps from this one is the ring rejection and the finding that the wall is not the cores or the arithmetic, and it corrects this sentence's "not another cadence" in both directions (the cadence term is real — two streams carrying identical traffic, 1,007 tasks and 13,181,568 bytes each, measured floors of 3.228 against 2.629 ms and dispatches of 5.254 against 4.311 ms, in one sitting — and rb=2 is its measured optimum).*
 
 
 
@@ -10146,3 +10146,86 @@ The stream-rate row in SILICON 1.5 and the DDR slopes recorded in 1.6 do not pri
 mode's name. The same log calibrates the trace clock in the same sitting at 1.796301 GHz, which
 matches 1.7's 1.80 GHz `default`-mode figure, so those bytes-per-cycle readings carry a measured
 clock rather than a mode label.
+
+## SESR's shim channels run at 18% of the measured rate: the dispatch floor is wait structure, not wire (2026-09-19, Desktop 2)
+
+The retirement-cadence section above left the SESR gap attributed to transport: "our floor is
+2.650 ms for ~14 MB of per-frame fill and drain (5.4 GB/s effective) against their 1.477 ms for the
+same graph". The four silicon levers measured in [this sitting](#four-silicon-levers-measured-2026-09-19-desktop-2)
+put a measured rate under that sentence for the first time — 6.898931 GB/s per direction on one
+column, 13.548102 on two, [here](../results/aie/silicon_stream_width_desktop2_20260919.log) — which
+makes the question answerable without a device: is that floor the wire, or the gaps around it?
+
+`tools/shim_channel_audit.py` answers it offline by decoding each container's emitted transaction
+stream: a shim buffer descriptor's word 0 is its byte length, and every task is a push of a
+descriptor onto a channel's start-queue register, so a stream says exactly which channels a
+container programs, with how many tasks and how many bytes. Pairing resolves completely (1,007
+descriptor writes, 1,007 pushes, none naming an unwritten slot) and a push whose descriptor was
+never written is an error rather than a gap, so an arm cannot silently understate its traffic.
+Streams are pinned by SHA-256; no NPU context was opened. Floors come from
+[the cadence sweep](../results/aie/retire_batch_cadence_sweep_phoenix_20260919T0251Z.log), so the
+two cadence arms are one sitting. Evidence:
+[shim_channel_utilisation_sesr_yolov8n_desktop2_20260919.log](../results/aie/shim_channel_utilisation_sesr_yolov8n_desktop2_20260919.log),
+Desktop 2, at `2e64ca5`.
+
+| Arm | Tasks | Tokens | Bytes per dispatch | Median task | Floor (ms) | GB/s per column | Utilised | Floor that is not transfer |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| SESR M7, rb=2 | 1,007 | 546 | 13,181,568 | 6,400 B | 2.629 | 1.25 | 18% | 2.151 ms |
+| SESR M7, rb=4 | 1,007 | 293 | 13,181,568 | 6,400 B | 3.228 | 1.02 | 15% | 2.750 ms |
+| SESR M7, MemTile ring, rb=2 | 4,732 | 2,379 | 39,781,248 | 6,400 B | 5.952 | 1.67 | 24% | 4.510 ms |
+| YOLOv8n whole network | 2,972 | 1,671 | 35,276,672 | 6,400 B | — | — | — | — |
+
+**The floor is not bandwidth.** DERIVED from the two measured numbers, per column rather than in
+aggregate: the shipped SESR container moves 13,181,568 B over four columns in a 2.629 ms floor, so
+3,295,392 B per column is 1.25 GB/s, which is **18%** of the measured 6.898931 GB/s a single column
+sustains per direction. Those bytes need 0.478 ms per column at that rate, so **2.151 ms of the
+floor is not transfer time**. The comparison rate is one column carrying both directions at once;
+read against a single-column rate, an aggregate figure understates utilisation fourfold, which is
+the error this section's first draft made, and the tool now prints that caveat itself. The shipped
+container's own verification sitting read the floor as 2.650 ms — the sweep's 2.629 is used here
+because it is the same sitting as the rb=4 arm.
+
+**Identical traffic, half a millisecond of floor apart.** The rb=2 and rb=4 arms are the same
+lowering: 1,007 tasks and 13,181,568 bytes each, differing only in how often a completion token is
+taken (546 against 293, which is what `retire_batch` 2 against 4 means). Their floors are 2.629 and
+3.228 ms and their dispatches 4.311 and 5.254 ms. So 0.599 ms of floor moved with the traffic
+bit-for-bit unchanged — and it moved in the direction of *lower* wire utilisation, 18% to 15%. That
+is what cadence costs or buys: not transfer time but when the emitter may reuse a descriptor slot.
+It also corrects the sentence above that the gap needs "not another cadence" in both directions: the
+cadence term is real, and rb=2 is its measured optimum rather than a residual source of savings. The
+sweep's split is not clean here and is not hidden: that tool also attributes 1.682 ms of compute to
+rb=2 against 2.025 ms to rb=4 for the same core programs, so part of a cadence change lands under
+"compute" in that decomposition, and only the floor's byte-side arithmetic is claimed above.
+
+**The ring rejection now has the size of its mechanism.** The MemTile ring arm moves 3.0 times the
+bytes in 4.7 times the tasks of the shipped container, and even at that it runs at 24% of one
+column's measured rate with 4.510 ms of its 5.952 ms floor outside transfer time. Its cost was
+neither the wire nor the cores: it added tasks and its own configuration traffic on a floor that was
+already mostly waiting.
+
+**What separates the arms is merge width, not bandwidth.** YOLOv8n carries 2.7 times SESR's bytes
+per dispatch and still beats AMD's stack (8.588 against 10.892 ms G2G, same sitting). Its stream has
+sixteen 409,600 B descriptors — exactly 64 x 6,400 B, the `MAX_REPEAT = 64` hardware maximum —
+while SESR's largest descriptor is 307,200 B (48 packets) and **512 of its 1,007 tasks move a single
+6,400 B packet**. Average 13,090 B per task, median 6,400 B, and the median is 6,400 B in every arm.
+
+**What this closes.** Not the wire, so not more channels: every arm programs 12 of the 16 shim
+channels (activation fill on MM2S0, weights on MM2S1, drain on S2MM0, across all four columns) and
+the idle one is the *second drain* in every column — but only 835,200 of SESR's 13,181,568 bytes
+(6.3%) are outbound, so lighting up S2MM1 addresses a rounding error of the traffic and none of the
+waiting. "Closing the 1.05 ms needs fewer bytes on the wire" is superseded on that line; see the
+note there. It also closes, from a second direction, the composed-stencil fusion route: fusion adds
+weight *tasks* (513 packets) to a container whose cost is already per-task waiting, which is the
+same arithmetic that made its floor rise rather than fall.
+
+**What this opens, and what stays unattributed.** 2.151 ms of SESR's floor is per-task waiting, and
+the hardware can already carry 64 regularly spaced packets in one descriptor, plus a single 33.5 MB
+descriptor proven byte-exact in [the stream log](../results/aie/silicon_stream_width_desktop2_20260919.log).
+So the runnable question is which of SESR's 512 single-packet fills are not regularly spaced enough
+to merge, and why — an address-generation and workspace-layout question, not a transport one. Not
+established here, and deliberately not guessed: how the 2.151 ms divides between the `bd_budget=14`
+live-descriptor window (252 tasks per column against 14 slots is about 18 refills per column per
+dispatch, each a wait behind a per-layer barrier) and raw per-task issue cost; whether merging
+recovers any of it; and no timing in this section was taken on a device, so its floors are carried
+from the sittings named above, with the cross-sitting drift those sections record as the standing
+caveat on comparing them.
