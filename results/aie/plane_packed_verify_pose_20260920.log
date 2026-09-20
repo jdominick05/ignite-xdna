@@ -1,0 +1,19 @@
+# Plane-packed layout: YOLOv8n-pose verified layer by layer on Phoenix Device 0
+# Host DESKTOP-CBL5NUA (Desktop 2, Ryzen 7 8700G, XDNA1 Phoenix), 2026-09-20, env mlir-aie-iron
+# xrt-smi reported "No hardware contexts running on device" before and after; idle at the end.
+#
+#   bash scripts/research-iron.sh -m ignite_xdna.compiler.cli --engine graph \
+#     --input models/yolov8n-pose_cut_xint8.onnx --output build/ab_pose_nore.ignite --no-workspace-reuse
+#   bash scripts/research-iron.sh tools/verify_engine_container.py \
+#     --container build/ab_pose_nore.ignite --model models/yolov8n-pose_cut_xint8.onnx
+#
+# Compile: 75 layers, 0 on the host, workspace 22.6 MB, 1457 rounds, 8.18 MB static packets;
+# container 9,002,624 B, insts.bin 424,292 B.
+
+  L74 /model.22/cv4.2/cv4.2.2/Conv                 EXACT
+[verify] 75/75 layers exact | first dispatch 9.294 ms | dispatch mean 7.810 ms, min 7.593, max 8.073 over 20
+[verify] PASS
+
+# Layer-exact on the band-packed layout so far: yolov8n 66/66, yolov8s 66/66, yolov8n-pose
+# 75/75. yolov8m, l and x were not built or checked. The dispatch mean above is 20 iterations
+# inside the verifier and is not a latency result.

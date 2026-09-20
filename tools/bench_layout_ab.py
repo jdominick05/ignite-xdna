@@ -70,7 +70,9 @@ def run(name, cmd, env, f, keep):
                          cwd=str(IGNITION_REPO if "live_ignition" in str(cmd[1]) else REPO_ROOT),
                          stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
                          encoding="utf-8", errors="replace", bufsize=1)
+    tail = []
     for line in iter(p.stdout.readline, ""):
+        tail = (tail + [line])[-25:]
         if any(k in line for k in keep):
             line = scrub(line)
             print(line, end="", flush=True)
@@ -80,7 +82,11 @@ def run(name, cmd, env, f, keep):
     p.wait()
     f.write(f"== [{name}] exit {p.returncode}\n")
     if p.returncode != 0:
-        raise RuntimeError(f"{name} exited {p.returncode}")
+        # a child that fails before printing anything the filter keeps would otherwise vanish
+        for line in tail:
+            f.write(scrub("   | " + line))
+        f.flush()
+        raise RuntimeError(f"{name} exited {p.returncode}; its last lines are in the log")
 
 
 def main():
@@ -96,6 +102,13 @@ def main():
     ap.add_argument("--note", default=None)
     ap.add_argument("--prefix", default="layout_ab")
     args = ap.parse_args()
+    # The Ignition arms run with cwd set to the Ignition repo, so a relative container path
+    # resolves there and the run exits 2 before printing anything the filter keeps.
+    for name in ("onnx", "control", "test"):
+        setattr(args, name, str(Path(getattr(args, name)).resolve()))
+    for name in ("control", "test"):
+        if not Path(getattr(args, name)).exists():
+            raise SystemExit(f"{name} container not found: {getattr(args, name)}")
 
     iron = os.environ.copy()
     iron["PYTHONPATH"] = str(REPO_ROOT / "src")

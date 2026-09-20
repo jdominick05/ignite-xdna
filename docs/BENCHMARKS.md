@@ -10905,6 +10905,37 @@ where AMD finds 5, which is the recorded letterbox rounding difference and not a
 ([`plane_packed_verify_yolov8s_20260920.log`](../results/aie/plane_packed_verify_yolov8s_20260920.log)),
 so both detect models in the zoo are now layer-exact on this layout.
 
+
+### The shipped configuration, and the verdict on this lever
+
+The pair above was compiled without `--silu-sigmoid`, which is not what Ignition ships. Rebuilt
+with the flag and run through the same three-arm harness -
+[`layout_ab_silu_yolov8s_phoenix_20260920T1957Z.log`](../results/aie/layout_ab_silu_yolov8s_phoenix_20260920T1957Z.log):
+
+| arm | run 1 | run 2 | mean | behind AMD |
+|---|---:|---:|---:|---:|
+| AMD Ryzen AI 1.7.1 | 16.915 | 16.836 | **16.876** | - |
+| Ignition `--silu-sigmoid`, control | 18.236 | 18.240 | 18.238 | +1.362 |
+| Ignition `--silu-sigmoid`, banded | 17.779 | 17.798 | **17.789** | +0.913 |
+
+Banding is worth **0.449 ms** here against 0.278 ms on the plain pair, from an identical
+schedule - `insts.bin` is byte-for-byte the same size with and without the flag, so the flag
+changes epilogue constants and not the descriptor count. The two sittings bracket the 0.339 ms
+the floor tool measured, and the difference between them is larger than the spread within
+either, so it is drift between sittings rather than an effect of the flag. Quote the range,
+not a single figure: **0.28 to 0.45 ms**.
+
+**The lever does not close the YOLOv8s gap.** In the configuration Ignition actually ships,
+the engine goes from 1.362 ms behind AMD's stack to 0.913 ms behind. That is a third of the
+way and it is the largest activation-side lever found: the object size cannot grow
+(results/aie/activation_object_size_sweep_20260920.log), the merge-depth prize is capped at
+22 of 61 tensors by the one-layout-per-tensor rule, and every transport lever was closed on
+2026-09-16. YOLOv8s against AMD remains a known runtime limitation.
+
+Layer-exactness holds across the family tried: YOLOv8n 66/66, YOLOv8s 66/66, YOLOv8n-pose
+75/75, all with workspace reuse off so every layer is readable. YOLOv8m, l and x were not
+built or checked on this layout.
+
 ### Two BD constraints this exposed
 
 A shim buffer descriptor has **three addressing dimensions plus a repeat**, each wrap field ten
