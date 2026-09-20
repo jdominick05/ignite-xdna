@@ -99,6 +99,8 @@ def run_command(name: str, cmd: list, env: dict, log_f) -> None:
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True,
+        encoding="utf-8",
+        errors="replace",     # a child that writes its own codepage otherwise lands NULs in a UTF-8 log
         bufsize=1,
     )
     for line in iter(proc.stdout.readline, ""):
@@ -123,6 +125,8 @@ def main():
     import argparse
     parser = argparse.ArgumentParser(description="Interleaved same-sitting benchmark")
     parser.add_argument("--prefix", default="latency_balanced_ingress_opt", help="Log file prefix")
+    parser.add_argument("--note", default=None,
+                        help="one line written into the log header, saying what this sitting is testing")
     args = parser.parse_args()
 
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%MZ")
@@ -144,6 +148,8 @@ def main():
         f.write(f"# Interleaved same-sitting benchmark: Ignition bare-metal vs AMD Ryzen AI 1.7.1 (Vitis AI EP)\n")
         f.write(f"# Host: DESKTOP-CBL5NUA (Desktop 2, Ryzen 7 8700G, XDNA1 Phoenix), balanced default mode\n")
         f.write(f"# Optimizations: direct C8 channel-blocked native decode, consolidated head sync spans, AVX2 vectorized ingress staging & Q11 spatial interpolation\n")
+        if args.note:
+            f.write(f"# Note: {args.note}\n")
         f.write(f"# Start: {datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')}\n\n")
 
         smi = check_xrt_smi()

@@ -86,7 +86,15 @@ def postprocess_mask(raw_logits, orig_shape=None):
     logits = np.squeeze(raw_logits)
     if logits.ndim != 3 or logits.shape[0] != len(CITYSCAPES_CLASSES):
         raise ValueError(f"Expected logits of shape (19, H, W), got {logits.shape}")
-    mask = np.argmax(logits, axis=0).astype(np.uint8)
+    # Scan contiguous channel planes. Keep the first maximum, including the
+    # first NaN, exactly as numpy.argmax does on the original channel axis.
+    best = logits[0].copy()
+    mask = np.zeros(logits.shape[1:], dtype=np.uint8)
+    for channel in range(1, logits.shape[0]):
+        plane = logits[channel]
+        take = (plane > best) | (np.isnan(plane) & ~np.isnan(best))
+        np.copyto(best, plane, where=take)
+        np.copyto(mask, channel, where=take)
 
     if orig_shape is not None:
         orig_h, orig_w = orig_shape

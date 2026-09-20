@@ -1,0 +1,23 @@
+UTC: 2026-09-19T16:59:22.750790+00:00
+MACHINE: DESKTOP-CBL5NUA AMD64 Family 25 Model 117 Stepping 2, AuthenticAMD
+COMMAND: C:/Users/<user>/miniforge3/envs/mlir-aie-iron/python.exe tools/silicon_weight_bytes_probe.py
+COMMIT: 7c9efd5f0d35f23a5ce6d476900660600ab4f10c
+machine: DESKTOP-CBL5NUA AMD64 Family 25 Model 117 Stepping 2, AuthenticAMD
+artifact: yolov8n_cut_xint8.onnx
+sha256: f02e86ba1bf61ff3fdc159e29b15259567e279df06f68c6d9adeb966fe56c885
+onnx_tool.graph.params: 3151892
+initializer dtype=float32 tensors=340 elements=343 bytes=1372
+initializer dtype=int8 tensors=252 elements=3152014 bytes=3152014
+initializer dtype=uint8 tensors=213 elements=213 bytes=213
+initializer_total_bytes: 3153599
+Conv_nodes: 63
+Conv_weights tensors: 63 elements: 3146160 bytes: 3146160 dtypes: ['int8']
+Conv_biases tensors: 63 elements: 5728 bytes: 5728 dtypes: ['int8']
+DERIVED_reachable_L1_plus_MemTile_bytes: 3145728
+DERIVED_initializer_excess_bytes: 7871
+VERDICT: total artifact initializers exceed reachable SRAM before activation/workspace allocation;
+whole-artifact residency is closed; compact packing and partial residency remain open experiments.
+Scope: artifact storage only; graph.params counts elements, not dtype-aware bytes.
+No NPU context opened; no latency or runtime-residency claim.
+
+EXIT_CODE: 0

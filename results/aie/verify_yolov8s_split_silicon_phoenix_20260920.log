@@ -1,0 +1,106 @@
+﻿
+[PRE-RUN WITNESS] NPU Hardware Partition Witness:
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+================================================================================
+BUILDING / PREPARING SPLIT ARTIFACTS FOR YOLOV8S
+================================================================================
+[*] Decoupled container exists: yolov8s_decoupled.ignite
+[*] 3-segment container exists: yolov8s_split3.ignite
+[*] Composed stage containers exist: yolov8s_stage1.ignite, yolov8s_stage2.ignite
+
+================================================================================
+TEST 1: MONOLITHIC CONTROL ON SILICON (build/yolov8s.ignite)
+================================================================================
+Container size: 30,759,616 B (29.33 MB)
+Monolithic Forward Pass (N=50):
+  Mean:   17.305 ms
+  Median: 17.249 ms
+  p95:    17.589 ms
+  Egress bytes captured: 1,209,600
+
+================================================================================
+TEST 2: VARIANT 4 (DECOUPLED STATIONARY WEIGHTS) ON SILICON
+================================================================================
+Decoupled container size: 1,263,808 B (1.21 MB)
+Sidecar weights size:    29,495,808 B (28.13 MB)
+Artifact compression:    95.9% reduction in .ignite container size
+Session init with sidecar loading: 58.29 ms
+Decoupled Forward Pass (N=50):
+  Mean:   17.326 ms (Delta vs Mono: +0.021 ms)
+  Median: 17.238 ms
+Output Parity:
+  Max absolute difference: 0
+  Bit-exact match: True
+
+================================================================================
+TEST 3: VARIANT 2 (LINKED NPU SEGMENTS IN PERSISTENT CONTEXT)
+================================================================================
+Segments configured: 3
+  Segment 0: layers [0, 13], tasks 1592, blob insts_0.bin
+  Segment 1: layers [13, 30], tasks 1620, blob insts_1.bin
+  Segment 2: layers [30, 66], tasks 3931, blob insts_2.bin
+Full 3-Segment Forward Pass (N=50):
+  Mean Total NPU: 17.719 ms
+  Segment 0 (Layers 0..12, Shallow Backbone): 4.692 ms
+  Segment 1 (Layers 13..29, Deep Backbone):   4.404 ms
+  Segment 2 (Layers 30..65, Neck & Heads):    8.623 ms
+Output Parity:
+  Max absolute difference: 0
+  Bit-exact match: True
+
+================================================================================
+TEST 4: EARLY-EXIT CASCADE LATENCY REDUCTION ON SILICON
+================================================================================
+Early Exit 1 (Layers 0..12, Shallow Backbone):
+  Latency: 4.722 ms vs 17.305 ms (72.7% reduction)
+  Effective Headroom Throughput: 211.8 FPS (saves 12.58 ms/frame)
+Early Exit 2 (Layers 0..29, Full Backbone + SPPF):
+  Latency: 9.076 ms vs 17.305 ms (47.6% reduction)
+  Effective Headroom Throughput: 110.2 FPS (saves 8.23 ms/frame)
+
+================================================================================
+TEST 5: VARIANT 3 (TARGETED DMA SYNC VS FULL WORKSPACE SYNC)
+================================================================================
+Target Tensor: /model.9/cv2/act/Mul_output_0_QuantizeLinear_Output
+  Logical Shape: (512, 20, 20) uint8
+  Physical Slice Size: 204,800 bytes at offset 21,136,448
+  Full Workspace Size: 32,236,672 bytes
+Targeted DMA Sync (204,800 B):
+  Mean:   3.647 us (median: 3.600 us)
+Full Workspace Sync (32,236,672 B):
+  Mean:   55.663 us (median: 47.000 us)
+DMA Sync Speedup: 15.3x faster synchronization
+
+================================================================================
+TEST 6: VARIANT 3 & 5 (TENSOR PLACEMENT ABI & COMPOSEDSESSION)
+================================================================================
+ComposedSession Stages: 2
+  Stage 1 (Backbone): yolov8s_stage1.ignite
+  Stage 2 (Head):     yolov8s_stage2.ignite
+  Shared Workspace BO size: 32,236,672 bytes (30.74 MB)
+  Workspace Memory Bloat: 0.0 MB (reuses exact 32.2 MB allocation)
+  Inter-stage Host Copy:  0 Bytes (device-direct DMA handoff)
+Composed Forward Pass (N=50):
+  Mean Total (Glass-to-Glass): 22.065 ms
+  Stage 1 Dispatch: 8.921 ms
+  Stage 2 Dispatch: 8.519 ms
+Output Parity:
+  Max absolute difference: 0
+  Bit-exact match: True
+
+================================================================================
+ALL 4 VARIANTS (VARIANTS 2, 3, 4, 5) VERIFIED ON PHYSICAL SILICON
+================================================================================
+
+[POST-RUN WITNESS] NPU Hardware Partition Witness:
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+[PASS] Hardware contexts completely clean.

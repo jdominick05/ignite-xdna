@@ -1776,6 +1776,78 @@ cached reference heads rather than `bo_out`.
   refused together with host regions, because their configuration writes carry no shim task and
   `split_instruction_stream` counts WRITE ops as task pushes
   ([BENCHMARKS](BENCHMARKS.md#memtile-residency-does-not-pay-on-the-graph-engine-and-the-yolov8s-gap-is-a-known-limitation-2026-09-16-desktop-2)).
+- **Rejected again, on the container it mattered most for: the activation ring on SESR M7 (2026-09-19, built and
+  measured).** SESR is the one zoo model whose dispatch is demonstrably transport-bound (2.650 ms NOP floor for
+  ~14 MB of per-frame fill and drain, 5.4 GB/s effective), so the ring's "fetch once, serve several output groups"
+  premise had a real shot here even though it lost on YOLOv8s. It moves cost instead of removing it: dispatch
+  6.310 ms = floor 5.952 + compute 0.358, instructions 144,880 -> 678,516 B. Compute drops 4.5x, the floor
+  triples. Do not reach for the ring to fix a traffic-bound container; the configuration traffic it adds costs
+  more than the fills it saves. Fewer bytes on the wire is the only lever, and inter-layer fusion is unwired
+  scaffolding (`match_stencil_fusion` has no call site on any branch) *[Superseded the same day: the wire runs at
+  18% of its measured rate, so bytes are not the binding term -- see the rejected entry below. The ring rejection
+  itself stands, and its 4.7x task increase is now the measured reason. Sized 2026-09-20
+  (`tools/fill_retention_pricing.py`, `tools/fill_layout_sizing.py --ring 2`): the ring's compute win is
+  real and bounded -- 1.682 -> 0.358 ms, +1.324 ms -- and at its own measured 0.953 us per descriptor
+  that pays for **at most ~1,389 added descriptors**, while it added 3,725. Freeing a descriptor
+  dimension does not rescue it either: collapsing its chain-capped class to the hardware maximum of 64
+  still leaves dispatch 0.791 ms above the shipped container, so the criterion is serve COUNT, not
+  chain depth -- a retained object must replace several transfers (a whole plane per column, not a
+  6,400 B window). Corollary: per-descriptor cost scales with descriptor count only WITHIN one design
+  -- 2.136 us shipped against 0.953 us ring, 2.2x apart on the same shim channel at the same rate]*
+  ([BENCHMARKS](BENCHMARKS.md#the-retirement-cadence-was-the-sesr-dispatch-regression-6a620f0s-retire_batch4-costs-a-thin-container-094-ms-and-the-engine-now-retires-every-2nd-task-2026-09-19-desktop-2)).
+- **LOCKED: the shim retirement cadence is `retire_batch = 2`, and a cadence at or above the queue depth is a
+  bug, not a tuning choice (2026-09-19, measured).** `run_column_programs` may let at most `retire_batch` tasks
+  accumulate on one DMA channel before retiring a group; the start queue is 4 deep, so tokens must appear within
+  every 4 pushes. Swept on silicon: SESR M7 4.573 / **4.311** / 4.964 / 5.254 ms at rb 1/2/3/4 with its floor
+  moving 3.040 / 2.629 / 2.952 / 3.228, YOLOv8n 7.336 / **7.175** / 7.278 at 2/3/4 -- an interior optimum on both,
+  past the peak on both at 4, and rb >= 5 does not compile at all
+  (`RuntimeError: channel o queue is full of held tasks`). `6a620f0`'s default of 4 was therefore both a
+  ~0.94 ms regression on the one model nobody timed and a cliff edge. `--retire-batch` overrides it per build and
+  `graph_engine.retire_batch` records what a container was built with; YOLOv8n's own optimum is 3 and costs
+  0.058 ms at 2, inside sitting drift, so 2 is the default until a per-model cadence is measured, not guessed
+  ([BENCHMARKS](BENCHMARKS.md#the-retirement-cadence-was-the-sesr-dispatch-regression-6a620f0s-retire_batch4-costs-a-thin-container-094-ms-and-the-engine-now-retires-every-2nd-task-2026-09-19-desktop-2)).
+- **Rejected: three transport-shaped fixes to SESR's floor that the utilisation read made plausible (2026-09-19,
+  measured offline on the emitted streams, no device).** The floor is not bandwidth: `tools/shim_channel_audit.py`
+  decodes the shipped container's 1,007 tasks and 13,181,568 bytes to 1.25 GB/s per column, **18% of the
+  measured 6.898931 GB/s**, so 2.151 ms of a 2.629 ms floor is not transfer time at all -- and two streams
+  carrying identical traffic at `retire_batch` 2 and 4 differ by 0.599 ms of floor while the wire gets *less*
+  busy. That opens three apparent levers, and each closes on measurement: **(a) more channels** -- the only idle
+  shim channels are the second drain of each column, and 835,200 of 13,181,568 bytes (6.3%) are outbound;
+  **(b) merging the small fills** -- `tools/fill_merge_audit.py` finds 355 of SESR's 412 distinct 6,400 B
+  windows stepping 640 B apart, a 10x overlap delivering 2.42x the address range it reads, which no repeat
+  dimension can express; only 30 windows are repeatable, so 1,007 tasks become no fewer than 992 (1.5%), which
+  confirms the 2026-09-16 "already at their floor" sizing; *[reason corrected the same day by
+  `tools/fill_premerge_audit.py`: the merger is offered these chains and collapses 87% of SESR's
+  patterns -- 5,408 offered, 710 returned, and 710 is exactly the container's activation task count
+  in the emitted stream -- so what stands alone does so because the descriptor already carries four
+  dimensions (338 of SESR's 710, 1,869 of the flagship's 2,146), not because an overlap is
+  inexpressible. The "no repeat can express an overlapping chain" reason given here is withdrawn,
+  and the rejection stands on firmer ground: there is no unexploited merge in either container; measured
+  2026-09-20, the limit behind it is the workspace row pitch -- all 2,207 four-dimensional fills across
+  both containers are 25,600 B (exactly 4 packets) and none has contiguous rows, so a chain carries 4
+  packets where the hardware allows 64. That is a layout question and the one large lever left here,
+  not a merge pass that could simply be turned on. Sized the same day (tools/fill_layout_sizing.py,
+  tools/fill_layout_lever_math.py): the line-spanning layout needs 66,048-82,560 B per packet against a
+  65,536 B core and moves 6.5-12.9x the bytes -- rejected on both budgets; packing a packet's planes
+  adjacently frees the dimension at zero wire cost exactly where chained windows abut (169 of SESR's 338,
+  940 of the flagship's 1,869), worth -15.7% descriptors and G2G 4.538 against AMD's 3.820 -- real and
+  not enough, since break-even is 48% of the stream. So for SESR the G2G gap cannot be closed
+  transport-side, and what remains (retention across layers) must itself free a descriptor dimension to
+  be affordable at 4 packets per descriptor]*;
+  **(c) removing the refetches**
+  -- `tools/fill_repeat_audit.py` shows all 100 of SESR's repeated descriptors are far from their first send
+  (median 124 tasks), i.e. cross-layer, so no wider window covers them. The flagship, which already beats AMD,
+  has the opposite shape and is the only place where (b) and (c) are live: 677 of 987 windows collapse to 181
+  descriptors, and 280 of 938 refetches are near. *[The merge half of that sentence is retracted the same day --
+  those 677 windows are four-dimensional and were never mergeable; only the refetch split stands.
+  See `tools/fill_premerge_audit.py` and the corrected reason above.]* Do not propose channel count, fill merging, or refetch
+  removal for SESR; what remains is a packet/tile shape that removes the overlap at the source, or retaining
+  activations across a layer boundary -- and (b)'s 2.42x overlap and (c)'s cross-layer repeats are that same
+  need measured twice
+  ([BENCHMARKS](BENCHMARKS.md#sesrs-small-fills-overlap-by-construction-merging-could-remove-about-15-of-its-1007-tasks-2026-09-19-desktop-2),
+  [pre-merge correction](BENCHMARKS.md#the-fill-merger-already-collapses-what-it-is-offered-the-residue-is-the-descriptors-four-dimensions-2026-09-19-desktop-2),
+  [utilisation](BENCHMARKS.md#sesrs-shim-channels-run-at-18-of-the-measured-rate-the-dispatch-floor-is-wait-structure-not-wire-2026-09-19-desktop-2)).
+
 - **Rejected: routing activations around the MemTile (2026-09-16, measured, not built).** A MemTile ObjectFIFO
   `forward` costs -0.00023 ms per MB in and +0.00053 ms per MB out against a direct shim-to-core path, which is not
   worth packet-switched shim flows and a replacement for the output join. The cost model above needs no hop term.

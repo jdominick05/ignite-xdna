@@ -1,0 +1,42 @@
+UTC: 2026-09-20T12:21:29.088869+00:00
+MACHINE: DESKTOP-CBL5NUA AMD64 Family 25 Model 117 Stepping 2, AuthenticAMD
+COMMAND: python tools/fill_layout_sizing.py models/sesr_m7_xint8.onnx --floor-ms 2.629 --fill-bytes 2982400
+COMMIT: 28259feb0fa6b23674b8b7e9773a4d0b9e294727
+PACKAGE: ignite_xdna\__init__.py
+
+[sizing] models/sesr_m7_xint8.onnx: 5408 patterns offered to merge_runs, 338 four-dimensional across 2 shapes (cross-check against tools/fill_premerge_audit.py's count for this model)
+[count] (4, 4, 8, 200) x169
+
+[shape] sizes (4, 4, 8, 200) strides (10320, 532512, 2064, 1): 4 planes x 8 rows x 200 B = 6,400 B per packet, 4 packets per descriptor, line pitch 2,064 B (row is 9.7% of a line), chain step 5 lines
+  [emitted]
+    dims 4, chain ceiling 4 packets/descriptor (1x fewer descriptors than 4), per-packet footprint 6,400 B fits, baseline, chain-overlap dedup -
+    FLOOR MODEL (task cost proportional to descriptor count, bytes priced at 6.898931 GB/s): today 0.432 transfer + 2.197 per-task = 2.629 ms -> 0.432 + 2.197 = 2.629 ms  [upper bound on the gain: ignores lock and barrier cost and any workspace-size effect of the layout itself]
+  [planes packed adjacent (plane stride 532,512 -> 16,512 B)]
+    dims 3, chain ceiling 64 packets/descriptor (16x fewer descriptors than 4), per-packet footprint 6,400 B fits, replicates 8 of 5 stepped rows: 1.60x the bytes, because chained windows overlap, chain-overlap dedup -
+    FLOOR MODEL (task cost proportional to descriptor count, bytes priced at 6.898931 GB/s): today 0.432 transfer + 2.197 per-task = 2.629 ms -> 0.692 + 0.137 = 0.829 ms  [upper bound on the gain: ignores lock and barrier cost and any workspace-size effect of the layout itself]
+  [lines spanned (row 200 B -> pitch 2,064 B)]
+    dims 2, chain ceiling 64 packets/descriptor (16x fewer descriptors than 4), per-packet footprint 66,048 B ** 66,048 B EXCEEDS the 64 KB core ** (one packet at a time must land in local memory), delivers 6.51x the useful bytes (5.05 of 8 rows per packet after dedup), chain-overlap dedup 1.59x dedup
+    FLOOR MODEL (task cost proportional to descriptor count, bytes priced at 6.898931 GB/s): today 0.432 transfer + 2.197 per-task = 2.629 ms -> 2.814 + 0.137 = 2.952 ms  [upper bound on the gain: ignores lock and barrier cost and any workspace-size effect of the layout itself]
+  [both: planes packed AND lines spanned]
+    dims 1, chain ceiling 64 packets/descriptor (16x fewer descriptors than 4), per-packet footprint 66,048 B ** 66,048 B EXCEEDS the 64 KB core ** (one packet at a time must land in local memory), both changes; 6.51x the useful bytes, chain-overlap dedup 1.59x dedup
+    FLOOR MODEL (task cost proportional to descriptor count, bytes priced at 6.898931 GB/s): today 0.432 transfer + 2.197 per-task = 2.629 ms -> 2.814 + 0.137 = 2.952 ms  [upper bound on the gain: ignores lock and barrier cost and any workspace-size effect of the layout itself]
+[count] (4, 8, 5, 160) x169
+
+[shape] sizes (4, 8, 5, 160) strides (10320, 532512, 2064, 1): 8 planes x 5 rows x 160 B = 6,400 B per packet, 4 packets per descriptor, line pitch 2,064 B (row is 7.8% of a line), chain step 5 lines
+  [emitted]
+    dims 4, chain ceiling 4 packets/descriptor (1x fewer descriptors than 4), per-packet footprint 6,400 B fits, baseline, chain-overlap dedup -
+    FLOOR MODEL (task cost proportional to descriptor count, bytes priced at 6.898931 GB/s): today 0.432 transfer + 2.197 per-task = 2.629 ms -> 0.432 + 2.197 = 2.629 ms  [upper bound on the gain: ignores lock and barrier cost and any workspace-size effect of the layout itself]
+  [planes packed adjacent (plane stride 532,512 -> 10,320 B)]
+    dims 3, chain ceiling 64 packets/descriptor (16x fewer descriptors than 4), per-packet footprint 6,400 B fits, same bytes on the wire (chained windows abut or are disjoint: step 5 >= 5 rows), chain-overlap dedup -
+    FLOOR MODEL (task cost proportional to descriptor count, bytes priced at 6.898931 GB/s): today 0.432 transfer + 2.197 per-task = 2.629 ms -> 0.432 + 0.137 = 0.570 ms  [upper bound on the gain: ignores lock and barrier cost and any workspace-size effect of the layout itself]
+  [lines spanned (row 160 B -> pitch 2,064 B)]
+    dims 2, chain ceiling 64 packets/descriptor (16x fewer descriptors than 4), per-packet footprint 82,560 B ** 82,560 B EXCEEDS the 64 KB core ** (one packet at a time must land in local memory), delivers 12.90x the useful bytes (5.00 of 5 rows per packet after dedup), chain-overlap dedup 1.00x dedup
+    FLOOR MODEL (task cost proportional to descriptor count, bytes priced at 6.898931 GB/s): today 0.432 transfer + 2.197 per-task = 2.629 ms -> 5.577 + 0.137 = 5.714 ms  [upper bound on the gain: ignores lock and barrier cost and any workspace-size effect of the layout itself]
+  [both: planes packed AND lines spanned]
+    dims 1, chain ceiling 64 packets/descriptor (16x fewer descriptors than 4), per-packet footprint 82,560 B ** 82,560 B EXCEEDS the 64 KB core ** (one packet at a time must land in local memory), both changes; 12.90x the useful bytes, chain-overlap dedup 1.00x dedup
+    FLOOR MODEL (task cost proportional to descriptor count, bytes priced at 6.898931 GB/s): today 0.432 transfer + 2.197 per-task = 2.629 ms -> 5.577 + 0.137 = 5.714 ms  [upper bound on the gain: ignores lock and barrier cost and any workspace-size effect of the layout itself]
+
+[sizsum] 338 four-dimensional descriptors today (338 patterns, 1352 packets)
+[sizsum]   byte-free to re-chain (windows abut): 169 = 50% of them, 676 packets
+[sizsum]   would replicate overlapping rows (1.0-3.2x bytes): 169 = 50%, 676 packets -> not proposed
+[sizsum] ESTIMATE assuming byte-free packets re-chain within a stream: 169 descriptors -> 11, i.e. 158 of the stream's tasks; every figure above is arithmetic on the emitted strides, and no timing was taken

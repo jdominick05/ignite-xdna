@@ -1,0 +1,42 @@
+[arms] using the logged SESR M7 defaults; pass NAME:TASKS:BYTES:FLOOR:COMPUTE:FOURD:PACKETS:ABUT to price another pair
+UTC: 2026-09-20T12:54:30.485698+00:00
+MACHINE: DESKTOP-CBL5NUA AMD64 Family 25 Model 117 Stepping 2, AuthenticAMD
+COMMAND: python tools/fill_retention_pricing.py 
+COMMIT: ae6c26f24c74c695bf35958aad518dd5d229f91d
+SOURCE: working tree modified (the tool reads logs, not src/):
+        M src/ignite_xdna/compiler/cli.py
+         M src/ignite_xdna/compiler/engine_compile.py
+         M src/ignite_xdna/compiler/engine_schedule.py
+         M src/ignite_xdna/compiler/graph_ir.py
+         M src/ignite_xdna/compiler/graph_reference.py
+         M src/ignite_xdna/runtime/graph_session.py
+         M src/ignite_xdna/runtime/session.py
+         M tools/fill_layout_sizing.py
+         M tools/research_process.py
+         M tools/verify_engine_container.py
+        ?? src/ignite_xdna/compiler/dense_regions.py
+        ?? src/ignite_xdna/runtime/dense_session.py
+        ?? tools/fill_retention_pricing.py
+
+[arm] shipped rb=2: 1007 descriptors, 13,181,568 B, floor 2.629 ms
+  transfer 0.478 + per-task 2.151 -> 2.136 us/descriptor; dispatch 4.311 ms (compute 1.682)
+  chain-capped class: 338 descriptors / 1352 packets = 4 per descriptor; 169 abut (50%) so a freed dimension is byte-free only for those
+
+[arm] ring, 2 slots: 4732 descriptors, 39,781,248 B, floor 5.952 ms
+  transfer 1.442 + per-task 4.510 -> 0.953 us/descriptor; dispatch 6.310 ms (compute 0.358)
+  chain-capped class: 1352 descriptors / 5408 packets = 4 per descriptor; 169 abut (12%) so a freed dimension is byte-free only for those
+
+[units] the per-descriptor unit differs by arm: shipped rb=2 2.136 us, ring, 2 slots 0.953 us
+  so per-task cost does not scale across task TYPES, and a model that assumed it would under-price a design whose tasks are individually cheap
+
+[ideal] collapse the ring's chain-capped class as far as the hardware allows (4732 descriptors, 1352 of them capped, 5408 packets)
+  chain  4: descriptors  4732, floor 5.952, dispatch 6.310 ms -> still 1.999 ms slower than the shipped container
+  chain  8: descriptors  4056, floor 5.308, dispatch 5.666 ms -> still 1.355 ms slower than the shipped container
+  chain 16: descriptors  3718, floor 4.985, dispatch 5.343 ms -> still 1.032 ms slower than the shipped container
+  chain 32: descriptors  3549, floor 4.824, dispatch 5.182 ms -> still 0.871 ms slower than the shipped container
+  chain 64: descriptors  3465, floor 4.744, dispatch 5.102 ms -> still 0.791 ms slower than the shipped container
+
+[why] retention bought compute 1.682 -> 0.358 ms (-1.324) and cost floor 2.629 -> 5.952 ms (+3.323) on 4.7x the descriptors and 3.0x the bytes
+[why] deleting the ring's ENTIRE capped class -- not collapsing it, deleting it -- still leaves 3380 descriptors at 0.953 us = 3.222 ms against a compute win of 1.324 ms
+
+[verdict] on these arms, chain length is not what retention costs: the best the freed dimension can do is collapse the capped class, and that still leaves the retention design slower than the shipped one. Reading, not measurement: what would have to change is the number of serves -- retain at a granularity coarse enough that the serves are fewer than the fills they replace, rather than chaining the serves better.

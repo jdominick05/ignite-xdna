@@ -140,6 +140,15 @@ def main() -> int:
         print(f"[verify] container SiLU form {silu!r} is unknown to this verifier")
         return 2
     ir = graph_ir.lower_yolov8n(model, host_regions=host_regions, silu_sigmoid=silu == "sigmoid4")
+    if ge.get("fuse_stencils"):
+        # Re-apply the pass the container was built with, or the plan check below compares a fused
+        # container against an unfused lowering and refuses it - which is how a wrong fused layer could
+        # never be localized on silicon. The reference for each layer stays the model's own semantics:
+        # graph_reference runs a fused pair as the two convolutions it replaces.
+        from ignite_xdna.compiler import passes
+        ir = passes.match_stencil_fusion(ir)
+        print(f"[verify] container declares fuse_stencils: re-lowered to {len(ir.layers)} layers "
+              f"({sum(1 for L in ir.layers if isinstance(L, graph_ir.FusedConvLayer))} fused pairs)")
     if silu == "sigmoid4":
         print("[verify] SiLU through the sigmoid epilogue: the reference is silu_sigmoid.reference_model of the model")
     # Plan the workspace the way this container was built. A reuse-free container gives every tensor its own

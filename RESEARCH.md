@@ -1838,8 +1838,10 @@ sections above.
   [`docs/SILICON.md`](docs/SILICON.md). Its objective S0 is done: the core clock is
   **1.80 GHz** in `default` (0.80 `powersaver`, 1.03 `balanced`), measured through the
   trace unit because Peano cannot read the cycle counter (`results/aie/clock_probe_npu.log`).
-  Open from it: S0's concurrent-VitisAI-EP leg; S1's bandwidth constants, now with a
-  clock behind them (the 7.0 GB/s shim channel is one 32-bit word per cycle); and S2's
+  S1's single-stream rate, east/west MemTile access, exact head-cut weight storage and
+  mixed-precision API shapes now have [measured verdicts](docs/BENCHMARKS.md#four-silicon-levers-measured-2026-09-19-desktop-2).
+  Open from it: S0's concurrent-VitisAI-EP leg; S1's attribution of the shared bandwidth
+  cap to DRAM, NoC or channel count; and S2's
   full trace, whose upstream parser mis-times gaps over 2^18 cycles; and S4, the
   package-power delta that would let a work-per-watt verdict exist at all — nothing here
   has ever measured a watt, and no per-NPU rail is exposed to read one from.

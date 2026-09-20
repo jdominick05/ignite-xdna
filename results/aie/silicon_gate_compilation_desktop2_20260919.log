@@ -1,0 +1,80 @@
+UTC: 2026-09-20T01:51:23.239492+00:00
+MACHINE: DESKTOP-CBL5NUA AMD64 Family 25 Model 117 Stepping 2, AuthenticAMD
+COMMAND: C:/Users/<user>/miniforge3/envs/mlir-aie-iron/python.exe tools/silicon_gate_probe.py compilation
+COMMIT: 7c9efd5f0d35f23a5ce6d476900660600ab4f10c
+[*] Loading and preparing model: C:/Users/<user>\PycharmProjects\ignite-xdna\models\yolov8n_cut.onnx
+    Graph contains 209 nodes and 131 initializers.
+[*] Running Cross-Layer Equalization (CLE) & High-Bias Absorption...
+    [OK] Equalized 29 Conv pairs across graph.
+    [OK] Absorbed 11 high-residual biases to prevent SRS saturation.
+[*] Ingesting calibration data from: C:/Users/<user>\PycharmProjects\ignite-xdna\data\coco128
+    Loaded 8 calibration images.
+[*] Collecting intermediate layer activations via ONNX Runtime...
+[*] Running AdaRound optimization (30 iters/layer, cosine beta annealing)...
+    [OK] Optimized and locked integer weights across 63 layers.
+    [OK] Completed 1890 iterations in 6.46s.
+[+] Saved quantized ONNX model: C:/Users/<user>\AppData\Local\Temp\silicon_gate_ixs729i8\quant.onnx (12.08 MB)
+[+] Saved quantization scales JSON: C:/Users/<user>\AppData\Local\Temp\silicon_gate_ixs729i8\scales.json
+[+] Quantization Complete in 6.92s!
+[*] Validating ONNX model: C:/Users/<user>\AppData\Local\Temp\silicon_gate_ixs729i8\quant.onnx
+    [OK] Checked 209 nodes across graph; 100% operator compatibility verified.
+[*] Partitioning ONNX DAG into monolithic MemTile stages...
+    [OK] Graph partitioned into 9 monolithic stages.
+    [OK] CPU fallback partitions: 0 (strictly 0 required).
+[*] Scheduling MemTile L2 SRAM ping-pong buffer layouts...
+    [OK] Multi-stage schedule generated: 0 intermediate DDR bytes across all layers.
+[*] Synthesizing 64-byte aligned CDO transaction streams for all stages...
+    - Stage 0: Stem         | Layers: 7 | Exec:  10688 B | Init:  289280 B
+    - Stage 1: P3           | Layers: 7 | Exec:  10688 B | Init:  289280 B
+    - Stage 2: P4           | Layers: 7 | Exec:  10688 B | Init:  289280 B
+    - Stage 3: P5           | Layers: 6 | Exec:  10688 B | Init:  249536 B
+    - Stage 4: Neck_FPN     | Layers: 8 | Exec:  10688 B | Init:  329024 B
+    - Stage 5: Neck_PAN     | Layers: 10 | Exec:  10688 B | Init:  408512 B
+    - Stage 6: Detect_P3    | Layers: 6 | Exec:  10688 B | Init:  249536 B
+    - Stage 7: Detect_P4    | Layers: 6 | Exec:  10688 B | Init:  249536 B
+    - Stage 8: Detect_P5    | Layers: 6 | Exec:  10688 B | Init:  249536 B
+[*] Synthesizing continuous single-dispatch monolithic transaction stream...
+EXPECTED_FULL_MODEL_REJECTION: 63 resident parameter sets do not fit core data memory: set 16 spans [0x1037c, 0x10d00) but data memory ends at 0x10000; at most 16 sets fit at the 0x1000 stride. (9 stages flattened into one resident set by to_schedule_plan(): Stem=7, P3=7, P4=7, P5=6, Neck_FPN=8, Neck_PAN=10, Detect_P3=6, Detect_P4=6, Detect_P5=6; parameters must be staged per stage instead)
+[*] Loading and preparing model: C:/Users/<user>\AppData\Local\Temp\silicon_gate_ixs729i8\nine_conv.onnx
+    Graph contains 9 nodes and 18 initializers.
+[*] Running Cross-Layer Equalization (CLE) & High-Bias Absorption...
+    [OK] Equalized 8 Conv pairs across graph.
+    [OK] Absorbed 0 high-residual biases to prevent SRS saturation.
+[*] Ingesting calibration data from: C:/Users/<user>\PycharmProjects\ignite-xdna\data\coco128
+    Loaded 8 calibration images.
+[*] Collecting intermediate layer activations via ONNX Runtime...
+[*] Running AdaRound optimization (30 iters/layer, cosine beta annealing)...
+    [OK] Optimized and locked integer weights across 9 layers.
+    [OK] Completed 270 iterations in 0.12s.
+[+] Saved quantized ONNX model: C:/Users/<user>\AppData\Local\Temp\silicon_gate_ixs729i8\nine_quant.onnx (0.29 MB)
+[+] Saved quantization scales JSON: C:/Users/<user>\AppData\Local\Temp\silicon_gate_ixs729i8\nine_scales.json
+[+] Quantization Complete in 0.15s!
+[*] Validating ONNX model: C:/Users/<user>\AppData\Local\Temp\silicon_gate_ixs729i8\nine_quant.onnx
+    [OK] Checked 9 nodes across graph; 100% operator compatibility verified.
+[*] Partitioning ONNX DAG into monolithic MemTile stages...
+    [OK] Graph partitioned into 9 monolithic stages.
+    [OK] CPU fallback partitions: 0 (strictly 0 required).
+[*] Scheduling MemTile L2 SRAM ping-pong buffer layouts...
+    [OK] Multi-stage schedule generated: 0 intermediate DDR bytes across all layers.
+[*] Synthesizing 64-byte aligned CDO transaction streams for all stages...
+    - Stage 0: Stem         | Layers: 1 | Exec:  10688 B | Init:   50816 B
+    - Stage 1: P3           | Layers: 1 | Exec:  10688 B | Init:   50816 B
+    - Stage 2: P4           | Layers: 1 | Exec:  10688 B | Init:   50816 B
+    - Stage 3: P5           | Layers: 1 | Exec:  10688 B | Init:   50816 B
+    - Stage 4: Neck_FPN     | Layers: 1 | Exec:  10688 B | Init:   50816 B
+    - Stage 5: Neck_PAN     | Layers: 1 | Exec:  10688 B | Init:   50816 B
+    - Stage 6: Detect_P3    | Layers: 1 | Exec:  10688 B | Init:   50816 B
+    - Stage 7: Detect_P4    | Layers: 1 | Exec:  10688 B | Init:   50816 B
+    - Stage 8: Detect_P5    | Layers: 1 | Exec:  10688 B | Init:   50816 B
+[*] Synthesizing continuous single-dispatch monolithic transaction stream...
+    [OK] Unified Single-Dispatch Stream: Exec= 99520 B | Init= 368768 B
+[*] Loaded quantization scales from C:/Users/<user>\AppData\Local\Temp\silicon_gate_ixs729i8\nine_scales.json
+[*] Packaging 20 blobs into container: C:/Users/<user>\AppData\Local\Temp\silicon_gate_ixs729i8\nine_conv.ignite
+[+] COMPILATION COMPLETE: nine_conv.ignite (0.98 MB, 1,029,312 bytes)
+    [OK] CRC32 Checksum Verified: 0x5223F364
+    [OK] Total 64-Byte Aligned Blobs: 20
+    [OK] Model Size Constraint (< 10 MB): PASSED (0.98 MB)
+SMALL_MODEL_CONTAINER_BYTES: 1029312
+DIAGNOSIS: full-model safety rejection and positive small-model container coverage can coexist.
+
+EXIT_CODE: 0

@@ -1,0 +1,427 @@
+UTC: 2026-09-19T16:53:29.635871+00:00
+MACHINE: DESKTOP-CBL5NUA AMD64 Family 25 Model 117 Stepping 2, AuthenticAMD
+COMMAND: "C:/Program Files/Git/bin/bash.exe" scripts/research-iron.sh tools/silicon_mmul_probe.py
+COMMIT: 7c9efd5f0d35f23a5ce6d476900660600ab4f10c
+machine: DESKTOP-CBL5NUA
+API_HEADER_SHA256: b1a3cf9d0298ae328e10c496f1031da0a7bb5870926f3b7617d6080de14b09e3
+clang version 22.0.0 (https://github.com/Xilinx/llvm-aie a36c62b9d26291fb06604bc976c897791f0bb578)
+Target: x86_64-pc-windows-msvc
+Thread model: posix
+InstalledDir: C:/Users/<user>\mlir-aie\ironenv\Lib\site-packages\llvm-aie\bin
+Build config: +assertions
+
+COMMAND: C:/Users/<user>\mlir-aie\ironenv\Lib\site-packages\llvm-aie\bin\clang++.exe C:/Users/<user>\PycharmProjects\ignite-xdna\build\silicon_mmul_probe\4x8x4_dense.cc -c -o C:/Users/<user>\PycharmProjects\ignite-xdna\build\silicon_mmul_probe\4x8x4_dense.o -IC:/Users/<user>\mlir-aie\ironenv\Lib\site-packages\mlir_aie\include -std=c++20 -O2 -Wno-attributes -Wno-macro-redefined -D__AIE_API_AIE_ADF_HPP__ --target=aie2-none-unknown-elf
+COMPILE 4x8x4_dense exit=0 expected=accept
+OBJECT_SHA256: 6d7c30db1917e3ca1fc73cacb5118bb7fcaee23a7e35ea7339bc906359393215
+
+C:/Users/<user>\PycharmProjects\ignite-xdna\build\silicon_mmul_probe\4x8x4_dense.o:	file format elf32-aie
+
+Disassembly of section .text.probe:
+
+00000000 <probe>:
+       0: 7f 00 00 00 65 07 33 00 00 00 00 00 00 00    	nopa	;		nopb	;		nopx	;		mov	p3, p0;		nops	
+       e: 7d 10 07 3b 50 00    	vlda	wl0, [p0, #0x0];		paddb	[p3], #32
+      14: 7d 28 0c 3b 51 20    	vlda	wl2, [p1, #0x0];		vldb	wh0, [p3, #0x0]
+      1a: 01 00        	nop	
+      1c: 01 00        	nop	
+      1e: 01 00        	nop	
+      20: 01 00        	nop	
+      22: 01 00        	nop	
+      24: 59 00 32 03  	mova	r0, #0x332
+      28: 09 80 80 07  	vmul	cm0, x0, x2, r0
+      2c: 01 00        	nop	
+      2e: 09 80 00 00  	vmac	cm0, cm0, x0, x2, r0
+      32: 01 00        	nop	
+      34: 01 00        	nop	
+      36: 59 00 00 00  	mova	r0, #0x0
+      3a: 43 28 0b 58 c0 00 00 00      	ret lr	;		mov	s0, r0
+      42: 99 c3 2c 0a  	vst.srs.s32.s64	bmh0, s0, [p2, #0x20]
+      46: 99 c1 0c 0a  	vst.srs.s32.s64	bml0, s0, [p2, #0x0]
+      4a: 01 00        	nop	
+      4c: 01 00        	nop	
+      4e: 01 00        	nop	
+
+COMMAND: C:/Users/<user>\mlir-aie\ironenv\Lib\site-packages\llvm-aie\bin\clang++.exe C:/Users/<user>\PycharmProjects\ignite-xdna\build\silicon_mmul_probe\4x4x8_dense.cc -c -o C:/Users/<user>\PycharmProjects\ignite-xdna\build\silicon_mmul_probe\4x4x8_dense.o -IC:/Users/<user>\mlir-aie\ironenv\Lib\site-packages\mlir_aie\include -std=c++20 -O2 -Wno-attributes -Wno-macro-redefined -D__AIE_API_AIE_ADF_HPP__ --target=aie2-none-unknown-elf
+COMPILE 4x4x8_dense exit=0 expected=accept
+OBJECT_SHA256: f1df5250dbfd8136a0a66dcc54a800bc3e11fe436e46aa1328051973524b4210
+
+C:/Users/<user>\PycharmProjects\ignite-xdna\build\silicon_mmul_probe\4x4x8_dense.o:	file format elf32-aie
+
+Disassembly of section .text.probe:
+
+00000000 <probe>:
+       0: b7 00 00 00 00 00 00 88 0c 39 50 00  	vlda	wl0, [p0, #0x0];		vldb	wl2, [p1, #0x0];		nopxm	
+       c: 01 00        	nop	
+       e: 01 00        	nop	
+      10: 01 00        	nop	
+      12: 01 00        	nop	
+      14: 01 00        	nop	
+      16: 59 00 10 03  	mova	r0, #0x310
+      1a: 09 80 80 07  	vmul	cm0, x0, x2, r0
+      1e: 01 00        	nop	
+      20: 09 80 00 00  	vmac	cm0, cm0, x0, x2, r0
+      24: 01 00        	nop	
+      26: 01 00        	nop	
+      28: 01 00        	nop	
+      2a: 19 18 00 10  	ret lr	
+      2e: 59 81 06 0a  	vst	amlh0, [p2, #0x20]
+      32: 59 80 02 0a  	vst	amll0, [p2, #0x0]
+      36: 59 83 0e 0a  	vst	amhh0, [p2, #0x60]
+      3a: 59 82 0a 0a  	vst	amhl0, [p2, #0x40]
+      3e: 01 00        	nop	
+
+COMMAND: C:/Users/<user>\mlir-aie\ironenv\Lib\site-packages\llvm-aie\bin\clang++.exe C:/Users/<user>\PycharmProjects\ignite-xdna\build\silicon_mmul_probe\8x4x4_dense.cc -c -o C:/Users/<user>\PycharmProjects\ignite-xdna\build\silicon_mmul_probe\8x4x4_dense.o -IC:/Users/<user>\mlir-aie\ironenv\Lib\site-packages\mlir_aie\include -std=c++20 -O2 -Wno-attributes -Wno-macro-redefined -D__AIE_API_AIE_ADF_HPP__ --target=aie2-none-unknown-elf
+COMPILE 8x4x4_dense exit=0 expected=accept
+OBJECT_SHA256: f438ccdce49990089daf10cdd13920178e068d8bce1c503a80c90430fa961f06
+
+C:/Users/<user>\PycharmProjects\ignite-xdna\build\silicon_mmul_probe\8x4x4_dense.o:	file format elf32-aie
+
+Disassembly of section .text.probe:
+
+00000000 <probe>:
+       0: 4d 76 30 03 00 00    	nopa	;		mov	p3, p0
+       6: 7d 10 07 3b 01 30    	vlda.128	wl2, [p1];		paddb	[p3], #32
+       c: 19 28 0c 3b  	vldb	wh0, [p3, #0x0]
+      10: 19 08 0c 38  	vldb	wl0, [p0, #0x0]
+      14: 01 00        	nop	
+      16: 01 00        	nop	
+      18: 01 00        	nop	
+      1a: 59 02 14 00  	mova	r1, #0x14
+      1e: 79 91 00 19  	vshuffle	x2, x2, x2, r1
+      22: 4d 87 8c 08 40 02    	mova	r0, #0x12;		vmov	wl4, wh0
+      28: 79 02 00 18  	vshuffle	x0, x0, x4, r0
+      2c: 59 00 30 03  	mova	r0, #0x330
+      30: 09 80 80 07  	vmul	cm0, x0, x2, r0
+      34: 01 00        	nop	
+      36: 09 80 00 00  	vmac	cm0, cm0, x0, x2, r0
+      3a: 01 00        	nop	
+      3c: 01 00        	nop	
+      3e: 01 00        	nop	
+      40: 01 00        	nop	
+      42: d9 86 00 18  	vmov	x0, bmh0
+      46: cd 06 00 09 80 00    	mova	r0, #0x4;		vmov	x2, bml0
+      4c: 6d 10 40 0c a0 00    	mova	r0, #0x5;		vshuffle	bmh0, x2, x0, r0
+      52: 43 38 08 00 c0 00 00 00      	ret lr	;		vshuffle	x0, x2, x0, r0
+      5a: 03 60 03 36 00 68 d0 40      	vst	amhh0, [p2, #0x20];		vmov	bmh0, x0
+      62: 59 82 02 0a  	vst	amhl0, [p2, #0x0]
+      66: 59 83 0e 0a  	vst	amhh0, [p2, #0x60]
+      6a: 59 82 0a 0a  	vst	amhl0, [p2, #0x40]
+      6e: 01 00        	nop	
+
+COMMAND: C:/Users/<user>\mlir-aie\ironenv\Lib\site-packages\llvm-aie\bin\clang++.exe C:/Users/<user>\PycharmProjects\ignite-xdna\build\silicon_mmul_probe\8x4x8_dense.cc -c -o C:/Users/<user>\PycharmProjects\ignite-xdna\build\silicon_mmul_probe\8x4x8_dense.o -IC:/Users/<user>\mlir-aie\ironenv\Lib\site-packages\mlir_aie\include -std=c++20 -O2 -Wno-attributes -Wno-macro-redefined -D__AIE_API_AIE_ADF_HPP__ --target=aie2-none-unknown-elf
+COMPILE 8x4x8_dense exit=0 expected=accept
+OBJECT_SHA256: 7d79c315673dead78fc843177d335b234d78ae7224475113a52042de206f2d41
+
+C:/Users/<user>\PycharmProjects\ignite-xdna\build\silicon_mmul_probe\8x4x8_dense.o:	file format elf32-aie
+
+Disassembly of section .text.probe:
+
+00000000 <probe>:
+       0: 4d 76 30 03 00 00    	nopa	;		mov	p3, p0
+       6: 7d 10 07 3b 50 00    	vlda	wl0, [p0, #0x0];		paddb	[p3], #32
+       c: 7d 28 0c 3b 51 20    	vlda	wl2, [p1, #0x0];		vldb	wh0, [p3, #0x0]
+      12: 01 00        	nop	
+      14: 01 00        	nop	
+      16: 01 00        	nop	
+      18: 01 00        	nop	
+      1a: 01 00        	nop	
+      1c: 59 00 10 03  	mova	r0, #0x310
+      20: 09 80 80 07  	vmul	cm0, x0, x2, r0
+      24: 59 02 20 00  	mova	r1, #0x20
+      28: 23 84 00 00 66 80 20 02      	vshift	x4, x0, x0, r1;		vmac	cm1, cm0, x0, x2, r0
+      30: 01 00        	nop	
+      32: 09 80 90 07  	vmul	cm0, x4, x2, r0
+      36: 01 00        	nop	
+      38: 09 80 10 00  	vmac	cm0, cm0, x4, x2, r0
+      3c: 59 85 06 0a  	vst	amlh1, [p2, #0x20]
+      40: 59 84 05 0a  	vst	amll1, [p2], #0x40
+      44: 59 87 06 0a  	vst	amhh1, [p2, #0x20]
+      48: 3d 18 00 c8 b0 40    	vst	amhl1, [p2], #0x40;		ret lr	
+      4e: 59 81 06 0a  	vst	amlh0, [p2, #0x20]
+      52: 59 80 02 0a  	vst	amll0, [p2, #0x0]
+      56: 59 83 0e 0a  	vst	amhh0, [p2, #0x60]
+      5a: 59 82 0a 0a  	vst	amhl0, [p2, #0x40]
+      5e: 01 00        	nop	
+
+COMMAND: C:/Users/<user>\mlir-aie\ironenv\Lib\site-packages\llvm-aie\bin\clang++.exe C:/Users/<user>\PycharmProjects\ignite-xdna\build\silicon_mmul_probe\4x4x4_dense.cc -c -o C:/Users/<user>\PycharmProjects\ignite-xdna\build\silicon_mmul_probe\4x4x4_dense.o -IC:/Users/<user>\mlir-aie\ironenv\Lib\site-packages\mlir_aie\include -std=c++20 -O2 -Wno-attributes -Wno-macro-redefined -D__AIE_API_AIE_ADF_HPP__ --target=aie2-none-unknown-elf
+COMPILE 4x4x4_dense exit=0 expected=accept
+OBJECT_SHA256: 66cd20b861b167495c5f984c09c724cf48a1efd03db9dd094af368a57b02c655
+
+C:/Users/<user>\PycharmProjects\ignite-xdna\build\silicon_mmul_probe\4x4x4_dense.o:	file format elf32-aie
+
+Disassembly of section .text.probe:
+
+00000000 <probe>:
+       0: c0 03 00 00 00 00 00 00 00 00 00 00 00 00 81 01      	vldb	wl0, [p0, #0x0];		nopa	;		nops	;		nopxm	;		nopv	
+      10: d9 09 80 01  	vlda.128	wl2, [p1]
+      14: 01 00        	nop	
+      16: 01 00        	nop	
+      18: 01 00        	nop	
+      1a: 01 00        	nop	
+      1c: 59 00 12 00  	mova	r0, #0x12
+      20: 6d 00 00 48 80 02    	mova	r1, #0x14;		vshuffle	x0, x0, x0, r0
+      26: 79 91 00 19  	vshuffle	x2, x2, x2, r1
+      2a: 59 00 30 03  	mova	r0, #0x330
+      2e: 09 80 80 07  	vmul	cm0, x0, x2, r0
+      32: 01 00        	nop	
+      34: 09 80 00 00  	vmac	cm0, cm0, x0, x2, r0
+      38: 01 00        	nop	
+      3a: 01 00        	nop	
+      3c: 01 00        	nop	
+      3e: 01 00        	nop	
+      40: d9 86 00 18  	vmov	x0, bmh0
+      44: bb 68 03 80 c0 00 00 08 80 00	mova	r0, #0x4;		ret lr	;		vmov	x2, bml0
+      4e: 79 10 00 18  	vshuffle	x0, x2, x0, r0
+      52: 01 00        	nop	
+      54: c5 81 02 12 07 0a    	paddb	[p2], #32;		vst	wl0, [p2, #0x0]
+      5a: d9 83 02 0a  	vst	wh0, [p2, #0x0]
+      5e: 01 00        	nop	
+
+COMMAND: C:/Users/<user>\mlir-aie\ironenv\Lib\site-packages\llvm-aie\bin\clang++.exe C:/Users/<user>\PycharmProjects\ignite-xdna\build\silicon_mmul_probe\2x8x8_dense.cc -c -o C:/Users/<user>\PycharmProjects\ignite-xdna\build\silicon_mmul_probe\2x8x8_dense.o -IC:/Users/<user>\mlir-aie\ironenv\Lib\site-packages\mlir_aie\include -std=c++20 -O2 -Wno-attributes -Wno-macro-redefined -D__AIE_API_AIE_ADF_HPP__ --target=aie2-none-unknown-elf
+COMPILE 2x8x8_dense exit=0 expected=accept
+OBJECT_SHA256: 806b3ea32137f704f7d3799d10c83045469bf1012578a1649e2986f3a562a245
+
+C:/Users/<user>\PycharmProjects\ignite-xdna\build\silicon_mmul_probe\2x8x8_dense.o:	file format elf32-aie
+
+Disassembly of section .text.probe:
+
+00000000 <probe>:
+       0: c0 03 00 28 3b 19 00 00 00 00 00 00 00 00 81 01      	vldb	wl0, [p0, #0x0];		nopa	;		nops	;		nopx	;		mov	p0, p1;		nopv	
+      10: 7d 10 07 38 51 20    	vlda	wl2, [p1, #0x0];		paddb	[p0], #32
+      16: 19 a8 0c 38  	vldb	wh2, [p0, #0x0]
+      1a: 01 00        	nop	
+      1c: 01 00        	nop	
+      1e: 01 00        	nop	
+      20: 01 00        	nop	
+      22: 01 00        	nop	
+      24: 59 00 12 03  	mova	r0, #0x312
+      28: 09 80 80 07  	vmul	cm0, x0, x2, r0
+      2c: 01 00        	nop	
+      2e: 09 80 00 00  	vmac	cm0, cm0, x0, x2, r0
+      32: 01 00        	nop	
+      34: 01 00        	nop	
+      36: 59 00 00 00  	mova	r0, #0x0
+      3a: 43 28 0b 58 c0 00 00 00      	ret lr	;		mov	s0, r0
+      42: 99 c3 2c 0a  	vst.srs.s32.s64	bmh0, s0, [p2, #0x20]
+      46: 99 c1 0c 0a  	vst.srs.s32.s64	bml0, s0, [p2, #0x0]
+      4a: 01 00        	nop	
+      4c: 01 00        	nop	
+      4e: 01 00        	nop	
+
+COMMAND: C:/Users/<user>\mlir-aie\ironenv\Lib\site-packages\llvm-aie\bin\clang++.exe C:/Users/<user>\PycharmProjects\ignite-xdna\build\silicon_mmul_probe\2x16x8_sparse.cc -c -o C:/Users/<user>\PycharmProjects\ignite-xdna\build\silicon_mmul_probe\2x16x8_sparse.o -IC:/Users/<user>\mlir-aie\ironenv\Lib\site-packages\mlir_aie\include -std=c++20 -O2 -Wno-attributes -Wno-macro-redefined -D__AIE_API_AIE_ADF_HPP__ --target=aie2-none-unknown-elf
+COMPILE 2x16x8_sparse exit=0 expected=accept
+OBJECT_SHA256: 32b0c27d85c06cb7eb9396f9c725e905d2da9caa84ca5cf9a9d3daa1d2d9fb37
+
+C:/Users/<user>\PycharmProjects\ignite-xdna\build\silicon_mmul_probe\2x16x8_sparse.o:	file format elf32-aie
+
+Disassembly of section .text.probe:
+
+00000000 <probe>:
+       0: 05 00 00 e0 03 10    	paddb	[sp], #0xe0;		nopx	
+       6: 19 66 fe 0f  	st	r19, [sp, #-16]
+       a: 99 fe ff 0f  	st	p7, [sp, #-4]
+       e: 59 76 30 1f  	mov	p7, p0
+      12: b3 76 ff 17 07 3f 50 00      	vlda	wl0, [p0, #0x0];		paddb	[p7], #32;		st	p6, [sp, #-8]
+      1a: bb 2e 3b 19 03 28 0c 1f 54 22	lda	q2, [p1, #0x40];		vldb	wh0, [p7, #0x0];		mov	p6, p1
+      24: 33 e8 fe 17 07 3e 51 20      	vlda	wl2, [p1, #0x0];		paddb	[p6], #32;		st	r20, [sp, #-12]
+      2c: 05 e4 fd af 0c 0e    	vldb	wh2, [p6, #0x0];		st	r18, [sp, #-20]
+      32: 3b 41 00 00 00 00 00 00 9c ff	st	r16, [sp, #-28];		jl	#0x0
+      3c: 19 62 fd 0f  	st	r17, [sp, #-24]
+      40: 99 42 fc 0f  	st	lr, [sp, #-32]
+      44: 03 20 3b 61 02 38 98 ff      	vst	wl0, [sp, #-0xe0];		mov	r19, p1
+      4c: bb 22 3b 80 c2 43 fd 0f 60 04	mova	r0, #0x23;		vst	wh0, [sp, #-0xc0];		mov	r20, p0
+      56: bb 28 3b 42 4a 02 1b 48 04 00	mova	r17, #0x0;		movx	r16, #0x352;		mov	r18, p2
+      60: c0 03 00 28 cb 1c 00 00 00 00 00 00 00 00 00 00      	nopb	;		nopa	;		nops	;		nopx	;		mov	p0, r19;		nopv	
+      70: 1d 00 00 18 54 02    	lda	q2, [p0, #0x40];		nopx	
+      76: bb 2e 0b 1d 00 88 0c 78 52 e0	vlda	wh4, [p7, #0x0];		vldb	wl2, [p0, #0x0];		mov	p0, r20
+      80: 7d 08 0d 78 aa ff    	vlda	wh4, [sp, #-0xc0];		vldb	wl4, [p0, #0x0]
+      86: d9 d1 fc 07  	vlda	wl4, [sp, #-0xe0]
+      8a: 01 00        	nop	
+      8c: 01 00        	nop	
+      8e: 01 00        	nop	
+      90: 01 00        	nop	
+      92: d9 53 ff 0f  	vst	wh4, [sp, #-0x40]
+      96: d9 d1 fe 0f  	vst	wl4, [sp, #-0x60]
+      9a: 09 00 93 87  	vmul	cm0, x4, qx0, r16
+      9e: 01 00        	nop	
+      a0: 01 00        	nop	
+      a2: 19 a8 0c 3e  	vldb	wh2, [p6, #0x0]
+      a6: 15 01 00 00 00 00    	jl	#0x0
+      ac: 59 c0 fc 0f  	vst	amll0, [sp, #-0xe0]
+      b0: 59 41 fd 0f  	vst	amlh0, [sp, #-0xc0]
+      b4: 59 c2 fd 0f  	vst	amhl0, [sp, #-0xa0]
+      b8: 59 43 fe 0f  	vst	amhh0, [sp, #-0x80]
+      bc: 59 00 23 00  	mova	r0, #0x23
+      c0: 7f 00 00 00 00 00 00 00 00 00 00 10 98 ff    	vlda	amll0, [sp, #-0xe0];		nopb	;		nopxm	;		nops	
+      ce: 99 41 fd 07  	vlda	amlh0, [sp, #-0xc0]
+      d2: d9 c9 fe 07  	vlda	wl2, [sp, #-0x60]
+      d6: d9 4b ff 07  	vlda	wh2, [sp, #-0x40]
+      da: 99 c2 fd 07  	vlda	amhl0, [sp, #-0xa0]
+      de: 99 43 fe 07  	vlda	amhh0, [sp, #-0x80]
+      e2: d9 fe ff 07  	lda	p7, [sp, #-4]
+      e6: d9 42 fc 07  	lda	lr, [sp, #-32]
+      ea: d9 76 ff 07  	lda	p6, [sp, #-8]
+      ee: 59 e8 fe 07  	lda	r20, [sp, #-12]
+      f2: 23 00 0b 80 04 c8 cc ff      	lda	r19, [sp, #-16];		vmac	cm0, cm0, x2, qx0, r16
+      fa: 4d 16 39 88 bc ff    	lda	r18, [sp, #-20];		mov	p0, r18
+     100: 59 62 fd 07  	lda	r17, [sp, #-24]
+     104: 59 e0 fc 07  	lda	r16, [sp, #-28]
+     108: 43 28 4b 5c c0 00 00 00      	ret lr	;		mov	s0, r17
+     110: 99 c3 2c 08  	vst.srs.s32.s64	bmh0, s0, [p0, #0x20]
+     114: 99 c1 0c 08  	vst.srs.s32.s64	bml0, s0, [p0, #0x0]
+     118: 01 00        	nop	
+     11a: 01 00        	nop	
+     11c: 19 20 ff 3f  	paddb	[sp], #-0xe0
+
+COMMAND: C:/Users/<user>\mlir-aie\ironenv\Lib\site-packages\llvm-aie\bin\clang++.exe C:/Users/<user>\PycharmProjects\ignite-xdna\build\silicon_mmul_probe\4x16x8_sparse.cc -c -o C:/Users/<user>\PycharmProjects\ignite-xdna\build\silicon_mmul_probe\4x16x8_sparse.o -IC:/Users/<user>\mlir-aie\ironenv\Lib\site-packages\mlir_aie\include -std=c++20 -O2 -Wno-attributes -Wno-macro-redefined -D__AIE_API_AIE_ADF_HPP__ --target=aie2-none-unknown-elf
+COMPILE 4x16x8_sparse exit=0 expected=accept
+OBJECT_SHA256: d6de25b8e15d0f989d1741601f0422a2d5b790ef8743fb5cf0ec145a06fd3bde
+
+C:/Users/<user>\PycharmProjects\ignite-xdna\build\silicon_mmul_probe\4x16x8_sparse.o:	file format elf32-aie
+
+Disassembly of section .text.probe:
+
+00000000 <probe>:
+       0: 19 00 0b 38  	paddb	[sp], #0x200
+       4: 99 fe fd 0f  	st	p7, [sp, #-20]
+       8: 59 76 30 1f  	mov	p7, p0
+       c: 05 66 fc 17 07 08    	paddb	[p0], #32;		st	r19, [sp, #-32]
+      12: 59 76 c0 1c  	mov	r19, p0
+      16: 45 76 32 28 0c 00    	vldb	wh0, [p0, #0x0];		mov	p0, p1
+      1c: 19 10 07 38  	paddb	[p0], #32
+      20: 7d 28 0c 38 50 e0    	vlda	wl0, [p7, #0x0];		vldb	wh0, [p0, #0x0]
+      26: 05 62 fb 0f 0c 09    	vldb	wl0, [p1, #0x0];		st	r17, [sp, #-40]
+      2c: 35 e0 fa 1f 54 22    	lda	q2, [p1, #0x40];		st	r16, [sp, #-44]
+      32: 99 76 fd 0f  	st	p6, [sp, #-24]
+      36: 19 e4 fb 0f  	st	r18, [sp, #-36]
+      3a: 85 42 fa 0f 4c 0f    	vldb	wl0, [p7, #0x40];		st	lr, [sp, #-48]
+      40: c5 c3 f9 2f 6c 0f    	vldb	wh0, [p7, #0x60];		vst	wh0, [sp, #-0x1a0]
+      46: d9 41 f9 0f  	vst	wl0, [sp, #-0x1c0]
+      4a: 03 60 03 86 00 00 9d ff      	st	r20, [sp, #-28];		vmov	x2, x0
+      52: 3b 41 00 00 00 00 00 50 0d fe	st	q2, [sp, #-0x200];		jl	#0x0
+      5c: d9 49 fd 0f  	vst	wl2, [sp, #-0xc0]
+      60: d9 cb fd 0f  	vst	wh2, [sp, #-0xa0]
+      64: 03 20 3b 19 03 38 68 ff      	vst	wl0, [sp, #-0x140];		mov	p6, p1
+      6c: bb 22 3b 42 c2 c3 fb 0f 60 04	mova	r0, #0x23;		vst	wh0, [sp, #-0x120];		mov	r18, p2
+      76: bb 28 3b 80 4a 12 1b 08 04 00	mova	r16, #0x0;		movx	r17, #0x352;		mov	r20, p0
+      80: 1d 00 00 38 29 ff    	vlda	wl2, [sp, #-0x1c0];		nopx	
+      86: d9 cb f9 07  	vlda	wh2, [sp, #-0x1a0]
+      8a: 01 00        	nop	
+      8c: 01 00        	nop	
+      8e: 01 00        	nop	
+      90: 01 00        	nop	
+      92: 01 00        	nop	
+      94: 01 00        	nop	
+      96: 09 00 8b 8f  	vmul	cm0, x2, qx0, r17
+      9a: d9 60 f0 07  	lda	q2, [sp, #-0x200]
+      9e: d9 49 fd 07  	vlda	wl2, [sp, #-0xc0]
+      a2: d9 cb fd 07  	vlda	wh2, [sp, #-0xa0]
+      a6: 15 01 00 00 00 00    	jl	#0x0
+      ac: 59 40 f9 0f  	vst	amll0, [sp, #-0x1c0]
+      b0: 59 c1 f9 0f  	vst	amlh0, [sp, #-0x1a0]
+      b4: 59 42 fa 0f  	vst	amhl0, [sp, #-0x180]
+      b8: 59 c3 fa 0f  	vst	amhh0, [sp, #-0x160]
+      bc: 59 00 23 00  	mova	r0, #0x23
+      c0: c0 03 00 28 cb 1c 00 00 00 00 00 00 00 00 91 e1      	vldb	wl2, [p7, #0x0];		nopa	;		nops	;		nopx	;		mov	p0, r19;		nopv	
+      d0: 19 a8 0c 38  	vldb	wh2, [p0, #0x0]
+      d4: 19 88 4c 3f  	vldb	wl2, [p7, #0x40]
+      d8: 7d a8 6c 3f 69 ff    	vlda	wl2, [sp, #-0x140];		vldb	wh2, [p7, #0x60]
+      de: d9 cb fb 07  	vlda	wh2, [sp, #-0x120]
+      e2: 01 00        	nop	
+      e4: 19 08 0d 3e  	vldb	wl4, [p6, #0x0]
+      e8: bb 22 0b 1d c0 49 f8 1f 54 c2	lda	q2, [p6, #0x40];		vst	wl2, [sp, #-0x200];		mov	p0, r20
+      f2: c5 cb f8 2f 0d 08    	vldb	wh4, [p0, #0x0];		vst	wh2, [sp, #-0x1e0]
+      f8: d9 49 fd 0f  	vst	wl2, [sp, #-0xc0]
+      fc: d9 cb fd 0f  	vst	wh2, [sp, #-0xa0]
+     100: 09 00 8b 8f  	vmul	cm0, x2, qx0, r17
+     104: 01 00        	nop	
+     106: d9 51 fe 0f  	vst	wl4, [sp, #-0x80]
+     10a: 99 6a fe 0f  	st	q2, [sp, #-0x40]
+     10e: 3b 41 00 00 00 00 00 78 da ff	vst	wh4, [sp, #-0x60];		jl	#0x0
+     118: 59 40 fb 0f  	vst	amll0, [sp, #-0x140]
+     11c: 59 c1 fb 0f  	vst	amlh0, [sp, #-0x120]
+     120: 59 42 fc 0f  	vst	amhl0, [sp, #-0x100]
+     124: 03 60 13 86 00 68 98 ff      	vst	amhh0, [sp, #-0xe0];		vmov	x2, x4
+     12c: 59 00 23 00  	mova	r0, #0x23
+     130: bb 00 00 00 00 00 00 10 28 ff	vlda	amll0, [sp, #-0x1c0];		nopxm	
+     13a: 99 c1 f9 07  	vlda	amlh0, [sp, #-0x1a0]
+     13e: d9 49 f8 07  	vlda	wl2, [sp, #-0x200]
+     142: d9 cb f8 07  	vlda	wh2, [sp, #-0x1e0]
+     146: 99 42 fa 07  	vlda	amhl0, [sp, #-0x180]
+     14a: 99 c3 fa 07  	vlda	amhh0, [sp, #-0x160]
+     14e: 01 00        	nop	
+     150: 01 00        	nop	
+     152: 01 00        	nop	
+     154: 01 00        	nop	
+     156: 09 00 0b 88  	vmac	cm0, cm0, x2, qx0, r17
+     15a: d9 60 fe 07  	lda	q2, [sp, #-0x40]
+     15e: d9 49 fe 07  	vlda	wl2, [sp, #-0x80]
+     162: d9 cb fe 07  	vlda	wh2, [sp, #-0x60]
+     166: 15 01 00 00 00 00    	jl	#0x0
+     16c: 59 40 f9 0f  	vst	amll0, [sp, #-0x1c0]
+     170: 59 c1 f9 0f  	vst	amlh0, [sp, #-0x1a0]
+     174: 59 42 fa 0f  	vst	amhl0, [sp, #-0x180]
+     178: 59 c3 fa 0f  	vst	amhh0, [sp, #-0x160]
+     17c: 59 00 23 00  	mova	r0, #0x23
+     180: b7 00 00 00 00 00 00 00 00 d8 bf ff  	lda	p7, [sp, #-20];		nopb	;		nopxm	
+     18c: 99 44 f9 07  	vlda	amll1, [sp, #-0x1c0]
+     190: 99 c5 f9 07  	vlda	amlh1, [sp, #-0x1a0]
+     194: 99 46 fa 07  	vlda	amhl1, [sp, #-0x180]
+     198: 99 40 fb 07  	vlda	amll0, [sp, #-0x140]
+     19c: 99 c1 fb 07  	vlda	amlh0, [sp, #-0x120]
+     1a0: d9 49 fd 07  	vlda	wl2, [sp, #-0xc0]
+     1a4: d9 cb fd 07  	vlda	wh2, [sp, #-0xa0]
+     1a8: 99 42 fc 07  	vlda	amhl0, [sp, #-0x100]
+     1ac: 99 c3 fc 07  	vlda	amhh0, [sp, #-0xe0]
+     1b0: 99 c7 fa 07  	vlda	amhh1, [sp, #-0x160]
+     1b4: d9 42 fa 07  	lda	lr, [sp, #-48]
+     1b8: d9 76 fd 07  	lda	p6, [sp, #-24]
+     1bc: 59 e8 fc 07  	lda	r20, [sp, #-28]
+     1c0: 23 00 0b 88 04 c8 8c ff      	lda	r19, [sp, #-32];		vmac	cm0, cm0, x2, qx0, r17
+     1c8: 4d 16 b8 88 7c ff    	lda	r18, [sp, #-36];		mov	s0, r16
+     1ce: 4d 16 39 08 5c ff    	lda	r16, [sp, #-44];		mov	p0, r18
+     1d4: b5 c7 2c 48 6c ff    	lda	r17, [sp, #-40];		vst.srs.s32.s64	bmh1, s0, [p0, #0x20]
+     1da: 3d 18 00 b0 98 01    	vst.srs.s32.s64	bml1, s0, [p0, #0x0];		ret lr	
+     1e0: 99 c3 6c 08  	vst.srs.s32.s64	bmh0, s0, [p0, #0x60]
+     1e4: 99 c1 4c 08  	vst.srs.s32.s64	bml0, s0, [p0, #0x40]
+     1e8: 01 00        	nop	
+     1ea: 01 00        	nop	
+     1ec: 19 00 fb 3f  	paddb	[sp], #-0x200
+
+COMMAND: C:/Users/<user>\mlir-aie\ironenv\Lib\site-packages\llvm-aie\bin\clang++.exe C:/Users/<user>\PycharmProjects\ignite-xdna\build\silicon_mmul_probe\4x8x8_dense.cc -c -o C:/Users/<user>\PycharmProjects\ignite-xdna\build\silicon_mmul_probe\4x8x8_dense.o -IC:/Users/<user>\mlir-aie\ironenv\Lib\site-packages\mlir_aie\include -std=c++20 -O2 -Wno-attributes -Wno-macro-redefined -D__AIE_API_AIE_ADF_HPP__ --target=aie2-none-unknown-elf
+COMPILE 4x8x8_dense exit=1 expected=reject
+In file included from C:/Users/<user>\PycharmProjects\ignite-xdna\build\silicon_mmul_probe\4x8x8_dense.cc:1:
+In file included from C:/Users/<user>\mlir-aie\ironenv\Lib\site-packages\mlir_aie\include\aie_api/aie.hpp:58:
+In file included from C:/Users/<user>\mlir-aie\ironenv\Lib\site-packages\mlir_aie\include\aie_api\detail/mmul.hpp:745:
+In file included from C:/Users/<user>\mlir-aie\ironenv\Lib\site-packages\mlir_aie\include\aie_api\detail\aie2/mmul.hpp:13:
+C:/Users/<user>\mlir-aie\ironenv\Lib\site-packages\mlir_aie\include\aie_api\detail\aie2\mmul_16_8.hpp:288:50: error: implicit instantiation of undefined template 'aie::detail::mmul_16_8<4, 8, 8, short, signed char, 32>'
+  288 | struct mmul<M, K, N, int16, int8, 32>   : public mmul_16_8<M, K, N, int16,  int8, 32>  { using mmul_16_8<M, K, N, int16,  int8, 32>::mmul_16_8; };
+      |                                                  ^
+C:/Users/<user>\mlir-aie\ironenv\Lib\site-packages\mlir_aie\include\aie_api/aie.hpp:6319:22: note: in instantiation of template class 'aie::detail::mmul<4, 8, 8, short, signed char, 32, aie::accum_ownership::owned>' requested here
+ 6319 | struct mmul : public detail::mmul<M_Elems, K_Elems, N_Elems, TypeA, TypeB,
+      |                      ^
+C:/Users/<user>\PycharmProjects\ignite-xdna\build\silicon_mmul_probe\4x8x8_dense.cc:4:36: note: in instantiation of template class 'aie::mmul<4, 8, 8, short, signed char, __acc32>' requested here
+    4 |  aie::mmul<4,8,8,int16,int8,acc32> c;
+      |                                    ^
+C:/Users/<user>\mlir-aie\ironenv\Lib\site-packages\mlir_aie\include\aie_api\detail\aie2\mmul_16_8.hpp:21:8: note: template is declared here
+   21 | struct mmul_16_8;
+      |        ^
+C:/Users/<user>\mlir-aie\ironenv\Lib\site-packages\mlir_aie\include\aie_api\detail\aie2\mmul_16_8.hpp:288:96: error: implicit instantiation of undefined template 'aie::detail::mmul_16_8<4, 8, 8, short, signed char, 32>'
+  288 | struct mmul<M, K, N, int16, int8, 32>   : public mmul_16_8<M, K, N, int16,  int8, 32>  { using mmul_16_8<M, K, N, int16,  int8, 32>::mmul_16_8; };
+      |                                                                                                ^
+C:/Users/<user>\mlir-aie\ironenv\Lib\site-packages\mlir_aie\include\aie_api\detail\aie2\mmul_16_8.hpp:21:8: note: template is declared here
+   21 | struct mmul_16_8;
+      |        ^
+In file included from C:/Users/<user>\PycharmProjects\ignite-xdna\build\silicon_mmul_probe\4x8x8_dense.cc:1:
+C:/Users/<user>\mlir-aie\ironenv\Lib\site-packages\mlir_aie\include\aie_api/aie.hpp:6365:44: error: no type named 'accum_type' in 'aie::detail::mmul<4, 8, 8, short, signed char, 32, aie::accum_ownership::owned>'
+ 6365 |     using accum_type = typename mmul_impl::accum_type;
+      |                        ~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~
+C:/Users/<user>\PycharmProjects\ignite-xdna\build\silicon_mmul_probe\4x8x8_dense.cc:4:36: note: in instantiation of template class 'aie::mmul<4, 8, 8, short, signed char, __acc32>' requested here
+    4 |  aie::mmul<4,8,8,int16,int8,acc32> c;
+      |                                    ^
+3 errors generated.
+
+VERDICT: PASS
+Scope: measured compiler acceptance and emitted AIE2 instructions, not silicon throughput or accuracy.
+
+EXIT_CODE: 0

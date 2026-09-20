@@ -1,0 +1,18 @@
+UTC: 2026-09-20T04:32:27.399099+00:00
+MACHINE: DESKTOP-CBL5NUA AMD64 Family 25 Model 117 Stepping 2, AuthenticAMD
+COMMAND: python tools/fill_premerge_audit.py models/yolov8n_cut_xint8.onnx
+COMMIT: 6c5ffdd0ae6d7acf10376434212bff675f59f08d
+
+[premerge] models/yolov8n_cut_xint8.onnx: 66 layers, 967 merge_runs calls
+[premerge] offered 4811 patterns, returned 2146 -- 2665 fewer, 55% collapsed
+[identity] returned 2146 vs 2146 activation tasks in the emitted stream: MATCH -- the wrap saw the schedule the compiler ran
+[runs ] collapsed whole                 :   253 runs,  2862 patterns
+[runs ] already uses four dimensions    :  1869 runs,  1869 patterns
+[runs ] shape or buffer changed         :    16 runs,    64 patterns
+[runs ] step changed                    :     8 runs,    16 patterns
+[step ] gap (step > payload): 1728 patterns offered together
+[step ] overlap (step < payload): 744 patterns offered together
+[step ] contiguous (step == payload): 470 patterns offered together
+[dims ] as offered (raw): 2 x1024, 3 x1918, 4 x1869
+[dims ] as merge_runs compares them (canonicalised): 2 x1032, 3 x1910, 4 x1869 -- a pattern with four canonical dimensions is one the merger will not touch
+[out  ] 80 patterns were in a multi-pattern run that the merger declined; the four-dimension rule and the 64 cap are the limits it enforces

@@ -9904,7 +9904,7 @@ Two optimizations targeting intermediate activation footprint, DDR traffic, and 
 
 - **Instruction stream size**: On YOLOv8n, `insts.bin` shrinks from 430,180 bytes down to 405,496 bytes (-24,684 bytes of instruction overhead).
 - **Physical silicon latency**:
-  - YOLOv8n (100 timed iterations, 20 warmup): NPU dispatch drops from 7.572 +/- 0.215 ms (min 7.344) down to **7.412 +/- 0.111 ms (min 7.299)** (-0.160 ms mean, -0.044 ms min).
+  - YOLOv8n (100 timed iterations, 20 warmup): NPU dispatch drops from 7.572 +/- 0.215 ms (min 7.344) down to **7.412 +/- 0.111 ms (min 7.299)** (-0.160 ms mean, -0.044 ms min). *Superseded attribution: that baseline bundled reuse-off+rb=2 against reuse-on+rb=4; at constant reuse-on, rb=2 reads 7.336 ms and the cadence half is a net loss, and it costs SESR M7 0.94 ms ([the 2026-09-19 section](#the-retirement-cadence-was-the-sesr-dispatch-regression-6a620f0s-retire_batch4-costs-a-thin-container-094-ms-and-the-engine-now-retires-every-2nd-task-2026-09-19-desktop-2)).*
   - YOLOv8s (50 timed iterations, 10 warmup): NPU dispatch achieves **17.163 +/- 0.382 ms (min 16.995)** vs 17.195 +/- 0.177 ms (min 17.058); G2G drops from 26.109 ms down to **25.490 ms** (-0.619 ms).
 - **Correctness**: 100% bit-exact across all output heads (`p3_box`, `p3_cls`, `p4_box`, `p4_cls`, `p5_box`, `p5_cls`, `raw_output`, `raw_heads`) on physical Phoenix NPU Device 0 (max absolute difference = 0).
 
@@ -9996,7 +9996,702 @@ What the tool does now instead:
 - **Not established:** whether the two long-failing host-layer tests (`ConcatViewHostInput`, `ResidualHardSwish`) are the same class of stale harness. They fail identically on clean `1c6c427`, before any of this, and I did not test the hypothesis.
 - **Reproducing the scratch bisect:** `git checkout ae430cb`, rebuild `models/yolov8n_cut_xint8.onnx` through `ignite-compile --engine graph`, run the then-current `tools/verify_engine_container.py`; it has no slot logic, so it prints `N/66` directly.
 
+## The retirement cadence was the SESR dispatch regression: `6a620f0`'s `retire_batch=4` costs a thin container 0.94 ms, and the engine now retires every 2nd task (2026-09-19, Desktop 2)
 
+Backing logs: [`results/aie/retire_batch_cadence_sweep_phoenix_20260919T0251Z.log`](../results/aie/retire_batch_cadence_sweep_phoenix_20260919T0251Z.log) (the sweep, the buildability bound, the bisect and the isolation), [`results/aie/retire_batch2_verification_phoenix_20260919T0304Z.log`](../results/aie/retire_batch2_verification_phoenix_20260919T0304Z.log) (layer-exact in reuse-free mode, image byte-identical, `xrt-smi` witnesses), [`results/aie/latency_retire_batch2_phoenix_20260919T0306Z.log`](../results/aie/latency_retire_batch2_phoenix_20260919T0306Z.log) (the same-sitting head-to-head).
+Tools: `tools/engine_dispatch_floor.py`, `ignite-compile --retire-batch N`, `tools/sesr_identity_probe.py`, `tools/bench_same_sitting_opt.py`.
+
+**Symptom.** SESR M7's dispatch read **5.256 ms** today against the 4.208 / 4.331 ms logged on 2026-09-14 and 2026-09-15 for the same graph — while the published same-sitting gap to AMD's stack on this model was only 0.42 ms, so most of SESR's loss to AMD was self-inflicted.
+
+**Attribution, by control and by bisect, in one place.** The 2026-09-15 container (built at `6bd2718`, `retire_batch=2`, workspace reuse off, 19.7 MB) dispatches in **4.331 ms** under today's runtime; today's default build is 5.256 ms and a `--no-workspace-reuse` rebuild at today's source is also **5.256 ms** — so the layout is not it and the runtime is not it, the compiled schedule is. `git bisect` over `6bd2718..f3b37cd`, each step compiling SESR and measuring its floor, returns **first bad `6a620f0`** (*perf(schedule): liveness-based workspace buffer reuse and DMA retirement relaxation*), with `ae430cb` 4.287, `1879614` 4.287, `2f805a2` 4.275, `7c0d82e` 4.243, `a78a500` 4.322 and `65dff07` 4.275 all good and `a2677db` 5.156 bad. At `6a620f0` itself, flipping **only** `retire_batch` from 4 back to 2 with workspace reuse left on gives **4.286 ms (floor 2.631 + compute 1.654)**. The regression is the one-liner; the −43.2 % workspace-reuse half costs nothing on dispatch and is kept.
+
+**The cadence sweep** (same container, one sitting, 300 dispatches each of the container and its all-NOP copy):
+
+| Model | rb=1 | rb=2 | rb=3 | rb=4 (was the default) | rb≥5 |
+|---|---:|---:|---:|---:|---|
+| SESR M7 dispatch | 4.573 | **4.311** | 4.964 | 5.254 ms | will not compile |
+| SESR M7 NOP floor | 3.040 | **2.629** | 2.952 | 3.228 ms | — |
+| SESR M7 `insts.bin` | 165,164 | 144,880 | 138,368 | 133,748 B | — |
+| YOLOv8n dispatch | — | 7.336 | **7.175** | 7.278 ms | — |
+| YOLOv8n NOP floor | — | 5.406 | **5.223** | 5.447 ms | — |
+
+Both containers have an *interior* optimum and they differ: SESR at 2, YOLOv8n at 3. `rb=1` (a token on every task) is worse than `rb=2` on SESR at 165 kB of instructions against 145 kB, so awaits are not free — the U-shape is real, and 4 sat past the peak on **both** models. `rb ≥ 5` is not merely slow: the compiler **refuses to emit** (`RuntimeError: channel o queue is full of held tasks`), because a token every rb-th task leaves runs of rb−1 untokened tasks and the emitter must retire once a channel holds `queue_depth` (4, the shim start queue) of them.
+
+**What this retracts.** [The 2026-09-17 section](#liveness-based-workspace-buffer-reuse-and-dma-retirement-relaxation-2026-09-17-desktop-2) attributes YOLOv8n's −0.160 ms to the retirement relaxation. That comparison was reuse-off+rb=2 against reuse-on+rb=4 — bundled, so it priced both changes at once. Holding reuse on, YOLOv8n at rb=2 reads **7.336 ms**, *better* than the 7.412 ms published there for rb=4: the saving that section measured was the workspace, not the cadence, and the cadence half cost SESR 0.94 ms that no one had looked at (SESR M7 appears in that section's own table only as an await count).
+
+**Decision.** The emitter default is **2**; `ignite-compile --retire-batch N` exposes it (it also takes `queue_depth` as a hardware constant, not a knob); and every container records `graph_engine.retire_batch` plus the layer's thinnest DMA channel in its manifest, so a container declares the schedule it was built with. YOLOv8n's own optimum is 3, and 2 costs it 0.058 ms against the old 4 — inside the between-sitting drift this file warns about, whereas SESR's 0.94 ms is ~30× that and monotone across four cadences.
+
+**Verification of the change.** Reuse-free rebuild, every layer readable: `[verify] 9/9 layers exact | dispatch mean 4.376 ms`, `PASS`. Output unchanged: `tools/sesr_identity_probe.py` over 24 frames of `data/sesr_calib` — `identical=24 differing=0 max_diff=0`, and the two containers' combined SHA-256 match (`55b129f3…c7114`). The flagship still beats AMD's stack in the same sitting: YOLOv8n 8.588 against 10.892 ms.
+
+**The head-to-head, and where SESR still stands.** One interleaved sitting (50 warm-up + 500 frames, both arms twice, `xrt-smi` idle before every group):
+
+| Arm | G2G mean, runs 1 / 2 | Stage means (ms) |
+|---|---:|---|
+| AMD's stack (Vitis AI EP) | **3.820 / 3.844** | preprocess 0.368, `session.run` 1.477, postprocess 1.975 |
+| Engine, rb=2 | 4.883 / 4.886 | preprocess 0.19, dispatch 4.27, readback 0.02, image output 0.35 |
+
+So fixing the regression did **not** overtake AMD on SESR today, and the reason is two-layered. AMD's `session.run` is unchanged from earlier sittings (1.477 against 1.461-1.576), but their *host* postprocess read 1.975 ms against the 2.419-2.593 ms logged on 2026-09-15/16/17, so their arm is ~0.45 ms faster with nothing changed on either side — the drift this repo warns about, and the reason a 0.42 ms target gap was never robust. And the remaining 1.05 ms is the NPU stage: our floor is 2.650 ms for ~14 MB of per-frame fill and drain (5.4 GB/s effective) against their 1.477 ms for the same graph, because their DPU keeps SESR's intermediates on-chip across concatenated layers while this engine round-trips every layer.
+
+**Held-out test of the traffic story, and it fails the other way.** The MemTile activation ring was rejected on 2026-09-16 for YOLOv8s and never measured on SESR — the one container whose dispatch is demonstrably transport-bound. At rb=2 on SESR it moves the cost rather than removing it: **dispatch 6.310 ms = floor 5.952 + compute 0.358**, instructions 144,880 → 678,516 B. Compute falls 4.5×, the floor triples. The rejection stands on a third model, and the wall is localized: not the cores, not the arithmetic, but getting 14 MB through the shim, and the ring's own configuration traffic costs more than the fills it saves. Closing the 1.05 ms needs fewer bytes on the wire — inter-layer fusion, which is still scaffolding with no call site on any branch (`match_stencil_fusion` is never invoked) — not another cadence. *Superseded attribution: "fewer bytes on the wire" is not the diagnosis — [the shim-channel audit below](#sesrs-shim-channels-run-at-18-of-the-measured-rate-the-dispatch-floor-is-wait-structure-not-wire-2026-09-19-desktop-2) decodes the same container's stream and finds its 2.629 ms floor running at 18% of one column's measured rate, with 2.151 ms of it outside transfer time entirely; what that section keeps from this one is the ring rejection and the finding that the wall is not the cores or the arithmetic, and it corrects this sentence's "not another cadence" in both directions (the cadence term is real — two streams carrying identical traffic, 1,007 tasks and 13,181,568 bytes each, measured floors of 3.228 against 2.629 ms and dispatches of 5.254 against 4.311 ms, in one sitting — and rb=2 is its measured optimum).*
+
+
+
+## Four silicon levers measured (2026-09-19, Desktop 2)
+
+The four open claims in [SILICON](SILICON.md) now have bounded verdicts. The device was
+Phoenix on the Ryzen 7 8700G. No engine implementation or retirement-cadence setting
+changed. Every device child ran serially through the research environment, with
+`xrt-smi examine -r aie-partitions` reporting `No hardware contexts running on device`
+before and after it. The evidence distinguishes hardware observations, artifact byte
+counts and compiler acceptance; compilation is not a silicon throughput measurement.
+
+| Lever | Measurement and consequence | Evidence |
+|---|---|---|
+| East/west MemTile affinity | Logical tile (1,1) directly reads and writes buffers in (0,1) and (2,1). Local control plus four neighbour cases, three distinct 16,384-byte payloads each: zero mismatches. Opens cross-column memory-allocation experiments. | [Fresh-context log](../results/aie/silicon_mem_neighbour_fresh_desktop2_20260919.log) |
+| Single-stream rate | On-chip MemTile DMA to core scalar-stream input: 1.000061 cycles per 32-bit word, 8-cycle intercept; 3.999756 B/cycle. Supports the 4 B/cycle model and independent-stream scaling. | [Stream log](../results/aie/silicon_stream_width_desktop2_20260919.log) |
+| Head-cut YOLOv8n weight storage | Conv weights 3,146,160 bytes, Conv biases 5,728 bytes, all initializers 3,153,599 bytes. `graph.params` counts 3,151,892 elements. Original Conv weights alone exceed reachable SRAM, before activations. | [Storage log](../results/aie/silicon_weight_storage_desktop2_20260919.log) |
+| Mixed int16/int8 API | Dense 4x8x4, 4x4x8, 8x4x4, 8x4x8, 4x4x4, 2x8x8 and sparse-weight 2x16x8, 4x16x8 compile with `acc32`; dense 4x8x8 is rejected. Opens A16W8 kernel experiments. | [Compile/disassembly log](../results/aie/silicon_mmul_shapes_desktop2_20260919.log) |
+
+**Neighbour access.** `tools/silicon_mem_neighbour_probe.py` puts the writer and reader
+on different MemTiles, so both sides accidentally using the same local address cannot
+pass. The host poisons the output with the complement of each pseudorandom input before
+submission. The buffer belongs to the neighbour; the central DMA either reads or writes
+it, and the neighbour's DMA supplies the other half. No inter-column stream route moves
+the payload between those two tiles. The log identifies each MLIR, instruction and xclbin
+artifact by SHA-256.
+
+The [initial repeated-submission probe](../results/aie/silicon_mem_neighbour_desktop2_20260919.log)
+is retained: local passed three submissions, west read passed its first and timed out on
+its second. The final sweep therefore uses a fresh context per payload. It proves direct
+read/write access in both directions, not a reusable engine protocol. Production adoption
+still needs a repeatable lock/BD lifecycle; the timeout is not attributed to silicon or
+to any particular reset mechanism by these measurements.
+
+**Stream width.** `kernels/silicon_stream/onchip.cc` emits a hardware loop containing
+16 scalar `mov ..., SS` reads for each 16 words. A preinitialized MemTile buffer feeds
+that core input continuously. Core `event0`/`event1` timestamps bracket consumption;
+only parameters, the last consumed word and the trace leave or enter DDR. Each of three
+fresh-context repetitions gives the same cycle count at each length:
+
+| 32-bit words | Trace cycles |
+|---|---|
+| 262,144 | 262,168 |
+| 1,048,576 | 1,048,648 |
+| 4,194,304 | 4,194,568 |
+
+The measured relation is `cycles = 8 + words * 1.00006103515625`. The final word is checked
+against the initialized pattern; the log also contains the kernel disassembly proving
+that unused intermediate stream reads were not optimized away. This is a stream-rate
+probe, not full-payload integrity testing. The separate DDR passthrough checks every
+output word on every call against a changing input and poisoned output buffer.
+
+That same log includes a trace-clock calibration with scalar and vector loops and a
+one/two-channel DDR sweep: 1.796301 GHz; 6.898931 and 13.548102 GB/s per direction,
+respectively. Each of four sizes has three warmups and 15 timed calls; fits use the median
+submit/wait time, excluding host fill, synchronization and readback. The two fits have
+R-squared 0.999814 and 0.999861. Each stream uses two 262,144-byte MemTile buffers. These
+end-to-end rates remain below the on-chip word/cycle rate. They do not settle whether
+the earlier shared cap in SILICON 1.6 is DRAM, NoC or channel count, nor prove a faster
+engine without a graph-level experiment. Trace samples use fresh contexts because
+reusing the raw trace DMA configuration did not reliably capture the next sample.
+
+**Weights.** `tools/silicon_weight_bytes_probe.py` profiles the exact head-cut XINT8 ONNX
+artifact with `onnx_tool`, counts initializer storage by dtype, and follows Conv weight
+and bias inputs through `DequantizeLinear` to their stored tensors. Artifact SHA-256 is
+`f02e86ba1bf61ff3fdc159e29b15259567e279df06f68c6d9adeb966fe56c885`.
+There are 63 Conv weight tensors and 63 Conv bias tensors, all int8. Other initializers
+include scales and quantization constants. The earlier
+[parameter/initializer-only log](../results/aie/silicon_weight_bytes_desktop2_20260919.log)
+is preserved; the final log adds the Conv-only distinction.
+
+DERIVED: reachable storage is `16 * 65536 + 4 * 524288 = 3,145,728` bytes from SILICON's
+existing geometry. Conv weights exceed it by 432 bytes; all original initializers by
+7,871 bytes. This closes residency of the original complete weight set in that SRAM,
+even before activation and workspace allocation. Packing, eliminating constants and
+partial residency are separate experiments. ONNX bytes are not the compiler's packed
+or replicated footprint and are not measured DDR traffic.
+
+**Mixed precision.** `tools/silicon_mmul_probe.py` enumerates the installed AIE2
+`mmul_16_8.hpp` specializations, instantiates both `mul` and `mac`, and compiles for
+`aie2-none-unknown-elf`. Accepted objects contain vector multiply/MAC instructions;
+the log includes commands, header/object hashes and disassembly. The compiler is
+Peano clang 22 at `a36c62b9d26291fb06604bc976c897791f0bb578`. Sparse shapes are tested
+with sparse-vector arguments, not dense substitutes. The negative control prevents
+reading int8's dense 4x8x8 shape as a mixed-precision shape. This verifies API and code
+generation support, not sparse encoding correctness, execution accuracy or MAC/cycle.
+
+**What this sitting changed outside `results/`.** No engine implementation changed, but three
+test files and one packaging setting did, and each is a narrowing worth seeing before these
+numbers are quoted. `tests/test_engine_host_layer.py` now allocates its two fixtures' workspace
+with `reuse=False`: both preload every golden tensor at once, outside graph execution order, so
+a co-tenant slot overwrote an input under test. `tests/test_quantization.py`'s
+full-`yolov8n_cut` case asserts the legacy single-dispatch scheduler's fail-closed rejection
+instead of a successful container — `0fc5a37` added that gate, and 63 resident parameter sets
+need 63 windows where at most 16 fit at the `0x1000` stride — and positive container coverage
+now comes from a nine-conv graph. `tests/test_inference_session.py`'s two fused cases pass their
+matching `im2col_fused_2layer.xclbin` and skip when it or its transaction bundles are absent,
+rather than silently falling back to the single-layer design. `pyproject.toml` pins
+`testpaths = ["tests"]` so a bare `pytest -q` cannot collect a sibling worktree's suite. Each
+failure was diagnosed offline at `7c9efd5` before any test was edited:
+[silicon_gate_workspace_desktop2_20260919.log](../results/aie/silicon_gate_workspace_desktop2_20260919.log)
+runs both host-layer assertions with only the allocation changed and reports `OK`;
+[silicon_gate_compilation_desktop2_20260919.log](../results/aie/silicon_gate_compilation_desktop2_20260919.log)
+reproduces the rejection verbatim (`EXPECTED_FULL_MODEL_REJECTION: 63 resident parameter sets do
+not fit core data memory: set 16 spans [0x1037c, 0x10d00) but data memory ends at 0x10000; at
+most 16 sets fit at the 0x1000 stride`) and builds a 1,029,312-byte container from the nine-conv
+graph. `pytest -q` on this tree: **261 passed, 15 skipped, 13 subtests passed** (2026-09-19,
+Desktop 2).
+
+The stream-rate row in SILICON 1.5 and the DDR slopes recorded in 1.6 do not print the power
+mode's name. The same log calibrates the trace clock in the same sitting at 1.796301 GHz, which
+matches 1.7's 1.80 GHz `default`-mode figure, so those bytes-per-cycle readings carry a measured
+clock rather than a mode label.
+
+## SESR's shim channels run at 18% of the measured rate: the dispatch floor is wait structure, not wire (2026-09-19, Desktop 2)
+
+The retirement-cadence section above left the SESR gap attributed to transport: "our floor is
+2.650 ms for ~14 MB of per-frame fill and drain (5.4 GB/s effective) against their 1.477 ms for the
+same graph". The four silicon levers measured in [this sitting](#four-silicon-levers-measured-2026-09-19-desktop-2)
+put a measured rate under that sentence for the first time — 6.898931 GB/s per direction on one
+column, 13.548102 on two, [here](../results/aie/silicon_stream_width_desktop2_20260919.log) — which
+makes the question answerable without a device: is that floor the wire, or the gaps around it?
+
+`tools/shim_channel_audit.py` answers it offline by decoding each container's emitted transaction
+stream: a shim buffer descriptor's word 0 is its byte length, and every task is a push of a
+descriptor onto a channel's start-queue register, so a stream says exactly which channels a
+container programs, with how many tasks and how many bytes. Pairing resolves completely (1,007
+descriptor writes, 1,007 pushes, none naming an unwritten slot) and a push whose descriptor was
+never written is an error rather than a gap, so an arm cannot silently understate its traffic.
+Streams are pinned by SHA-256; no NPU context was opened. Floors come from
+[the cadence sweep](../results/aie/retire_batch_cadence_sweep_phoenix_20260919T0251Z.log), so the
+two cadence arms are one sitting. Evidence:
+[shim_channel_utilisation_sesr_yolov8n_desktop2_20260919.log](../results/aie/shim_channel_utilisation_sesr_yolov8n_desktop2_20260919.log),
+Desktop 2, at `2e64ca5`.
+
+| Arm | Tasks | Tokens | Bytes per dispatch | Median task | Floor (ms) | GB/s per column | Utilised | Floor that is not transfer |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| SESR M7, rb=2 | 1,007 | 546 | 13,181,568 | 6,400 B | 2.629 | 1.25 | 18% | 2.151 ms |
+| SESR M7, rb=4 | 1,007 | 293 | 13,181,568 | 6,400 B | 3.228 | 1.02 | 15% | 2.750 ms |
+| SESR M7, MemTile ring, rb=2 | 4,732 | 2,379 | 39,781,248 | 6,400 B | 5.952 | 1.67 | 24% | 4.510 ms |
+| YOLOv8n whole network | 2,972 | 1,671 | 35,276,672 | 6,400 B | — | — | — | — |
+
+**The floor is not bandwidth.** DERIVED from the two measured numbers, per column rather than in
+aggregate: the shipped SESR container moves 13,181,568 B over four columns in a 2.629 ms floor, so
+3,295,392 B per column is 1.25 GB/s, which is **18%** of the measured 6.898931 GB/s a single column
+sustains per direction. Those bytes need 0.478 ms per column at that rate, so **2.151 ms of the
+floor is not transfer time**. The comparison rate is one column carrying both directions at once;
+read against a single-column rate, an aggregate figure understates utilisation fourfold, which is
+the error this section's first draft made, and the tool now prints that caveat itself. The shipped
+container's own verification sitting read the floor as 2.650 ms — the sweep's 2.629 is used here
+because it is the same sitting as the rb=4 arm.
+
+**Identical traffic, half a millisecond of floor apart.** The rb=2 and rb=4 arms are the same
+lowering: 1,007 tasks and 13,181,568 bytes each, differing only in how often a completion token is
+taken (546 against 293, which is what `retire_batch` 2 against 4 means). Their floors are 2.629 and
+3.228 ms and their dispatches 4.311 and 5.254 ms. So 0.599 ms of floor moved with the traffic
+bit-for-bit unchanged — and it moved in the direction of *lower* wire utilisation, 18% to 15%. That
+is what cadence costs or buys: not transfer time but when the emitter may reuse a descriptor slot.
+It also corrects the sentence above that the gap needs "not another cadence" in both directions: the
+cadence term is real, and rb=2 is its measured optimum rather than a residual source of savings. The
+sweep's split is not clean here and is not hidden: that tool also attributes 1.682 ms of compute to
+rb=2 against 2.025 ms to rb=4 for the same core programs, so part of a cadence change lands under
+"compute" in that decomposition, and only the floor's byte-side arithmetic is claimed above.
+
+**The ring rejection now has the size of its mechanism.** The MemTile ring arm moves 3.0 times the
+bytes in 4.7 times the tasks of the shipped container, and even at that it runs at 24% of one
+column's measured rate with 4.510 ms of its 5.952 ms floor outside transfer time. Its cost was
+neither the wire nor the cores: it added tasks and its own configuration traffic on a floor that was
+already mostly waiting.
+
+**What separates the arms is merge width, not bandwidth.** YOLOv8n carries 2.7 times SESR's bytes
+per dispatch and still beats AMD's stack (8.588 against 10.892 ms G2G, same sitting). Its stream has
+sixteen 409,600 B descriptors — exactly 64 x 6,400 B, the `MAX_REPEAT = 64` hardware maximum —
+while SESR's largest descriptor is 307,200 B (48 packets) and **512 of its 1,007 tasks move a single
+6,400 B packet**. Average 13,090 B per task, median 6,400 B, and the median is 6,400 B in every arm.
+
+**What this closes.** Not the wire, so not more channels: every arm programs 12 of the 16 shim
+channels (activation fill on MM2S0, weights on MM2S1, drain on S2MM0, across all four columns) and
+the idle one is the *second drain* in every column — but only 835,200 of SESR's 13,181,568 bytes
+(6.3%) are outbound, so lighting up S2MM1 addresses a rounding error of the traffic and none of the
+waiting. "Closing the 1.05 ms needs fewer bytes on the wire" is superseded on that line; see the
+note there. It also closes, from a second direction, the composed-stencil fusion route: fusion adds
+weight *tasks* (513 packets) to a container whose cost is already per-task waiting, which is the
+same arithmetic that made its floor rise rather than fall.
+
+**What this opens, and what stays unattributed.** 2.151 ms of SESR's floor is per-task waiting, and
+the hardware can already carry 64 regularly spaced packets in one descriptor, plus a single 33.5 MB
+descriptor proven byte-exact in [the stream log](../results/aie/silicon_stream_width_desktop2_20260919.log).
+So the runnable question is which of SESR's 512 single-packet fills are not regularly spaced enough
+to merge, and why — an address-generation and workspace-layout question, not a transport one. *[Answered the same day, below: 355 of SESR's 412 distinct 6,400 B windows overlap their neighbours at a 640 B step, so merging is worth about 15 tasks here -- the answer closes this lever rather than opening it.]* Not
+established here, and deliberately not guessed: how the 2.151 ms divides between the `bd_budget=14`
+live-descriptor window (252 tasks per column against 14 slots is about 18 refills per column per
+dispatch, each a wait behind a per-layer barrier) and raw per-task issue cost; whether merging
+recovers any of it; and no timing in this section was taken on a device, so its floors are carried
+from the sittings named above, with the cross-sitting drift those sections record as the standing
+caveat on comparing them.
+
+## SESR's small fills overlap by construction: merging could remove about 15 of its 1,007 tasks (2026-09-19, Desktop 2)
+
+The section above closed by asking which of SESR's single-packet activation fills are not regularly
+spaced enough to merge. `tools/fill_merge_audit.py` answers it offline, from the descriptors
+themselves: word 1 is the address in 32-bit words and words 2-7 the address generator's
+configuration, so tasks sharing control words and differing only in address are the only set the
+repeat dimension could ever collapse, and a run's step against its payload decides whether it may.
+Evidence: [fill_merge_attribution_sesr_m7_desktop2_20260919.log](../results/aie/fill_merge_attribution_sesr_m7_desktop2_20260919.log)
+and [fill_merge_attribution_yolov8n_full_desktop2_20260919.log](../results/aie/fill_merge_attribution_yolov8n_full_desktop2_20260919.log),
+Desktop 2, no NPU context opened.
+
+| Arm | 6,400 B packet tasks | distinct windows | overlapping (step < payload) | regular gap, repeatable | step beyond the 20-bit field | class collapses to | whole-stream floor bound |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| SESR M7 | 512 | 412 | **355** (step 640 B) | 30 → 15 | 24 | 397 descriptors | 992 of 1,007 tasks |
+| YOLOv8n whole network | 1,925 | 987 | 272 | **677 → 181** | 34 | 491 descriptors | 2,476 of 2,972 tasks |
+
+**For SESR the merge lever is worth about 15 tasks, 1.5% of the stream.** Its small fills are not
+loosely packed, they are *overlapping*: 355 of the 412 distinct windows step 640 bytes apart while
+each carries 6,400 bytes — a 10x overlap — and those runs deliver **2.42x the address range they
+read** (DERIVED: payload plus step per extra window in a run, against bytes delivered). No repeat
+encoding expresses a chain of overlapping windows, so this is not a missed merge; the small packets
+are the over-read itself. *[Mechanism retracted the same day, next section: the merger is offered these chains and collapses 87% of SESR's patterns, so what stands alone is the descriptor's four-dimension limit, not an encoding that cannot express an overlap. The overlap arithmetic itself stands.]*
+
+**The flagship has the opposite shape, and it is already winning.** YOLOv8n's 6,400 B class is
+987 distinct windows of which 677 are regularly spaced with a step at least the payload; they would
+collapse from 677 pushes to 181 descriptors, so the container that beats AMD's stack (8.588 against
+10.892 ms G2G) leaves roughly 496 pushes on the table in this size class alone. *[Retracted the same day: 1,869 of those 2,146 activation patterns are already four-dimensional, so no merge was available -- see the next section.]* It also refetches:
+938 of its 1,925 packet tasks land on an address already fetched in the same dispatch, against 100
+of SESR's 512.
+
+**Where the refetches fall, measured by position.** `tools/fill_repeat_audit.py` separates a packing
+miss from a transport need: two sends of the same descriptor shape at the same address, measured in
+tasks apart. Every one of SESR's 100 repeats is far -- median 124 tasks, mean 145.3 -- so none is a
+window the next round could have covered and all of them need the data held across a layer
+boundary ([log](../results/aie/fill_repeat_positions_sesr_m7_desktop2_20260919.log)). YOLOv8n splits
+280 near within 16 tasks (30% of its repeats) against 658 far (70%), median gap 36
+([log](../results/aie/fill_repeat_positions_yolov8n_full_desktop2_20260919.log)). The refetch counts
+are therefore the transport story seen from the other side, not a second cheap lever: the flagship's
+near third is coverable by a wider window or a retained packet, and nothing in SESR's is. Both
+audits read the emitted stream offline; no device was opened.
+
+
+**What this closes.** Merging the existing fills is not a route to SESR's 1.05 ms, and neither is
+any plan that keeps SESR's packet geometry and expects materially fewer shim tasks — the same
+arithmetic that made the MemTile ring's floor triple and composed-stencil fusion's rise. If SESR's
+floor falls, it falls by moving fewer, larger *windows* (a different packet or tile shape, with the
+overlap removed at the source) or by not round-tripping the intermediate between layers at all,
+which is the AMD behaviour named two sections back and now carries a number: 2.42x of the bytes in
+the overlapping class is redundant coverage of addresses already read.
+
+**Limits of this read.** No timing was taken, so a 15-descriptor saving is not claimed to be free or
+even visible in dispatch. The grouping key includes each task's lock pair, so two otherwise
+identical transfers with different locks land in different groups — a bias *against* finding
+mergeable sets, not for it. The 640 B step is read from the descriptors' own addresses; *why* the
+windows overlap is `engine_schedule`'s packet geometry (the halo and the 25-column packet), which
+this tool does not evaluate, and the duplicate addresses say a window is fetched more than once, not
+why.
+
+## The fill merger already collapses what it is offered; the residue is the descriptor's four dimensions (2026-09-19, Desktop 2)
+
+The section before this one inferred, from the emitted stream, which fills "could have been merged".
+That inference was wrong in its mechanism, and the correction is measured rather than argued:
+`tools/fill_premerge_audit.py` runs the real lowering and scheduling with `merge_runs` wrapped in
+the same process, so it sees the pattern lists the merger is actually offered. A cross-check worth
+stating as a correlation rather than a proof: **the number of patterns the wrapped merger returns
+equals the container's activation task count in the emitted stream** — 710 returned against 710
+pushed for SESR M7, 2,146 against 2,146 for YOLOv8n. `merge_runs` also serves the drain and weight
+paths, so that identity says the wrap is watching the schedule the compiler ran, not that every
+returned pattern is an activation fill.
+
+| Model | patterns offered | returned | collapsed | returned = activation tasks | patterns in declined multi-pattern runs |
+|---|---:|---:|---:|---:|---:|
+| SESR M7 | 5,408 | 710 | 4,698 (87%) | 710 ✓ | **0** |
+| YOLOv8n | 4,811 | 2,146 | 2,665 (55%) | 2,146 ✓ | 80 |
+
+**The residue is a dimension limit, not a missed opportunity.** `DmaPattern` accepts one to four
+sizes and `merge_runs` adds exactly one outermost dimension, so it refuses any pattern already
+carrying four (`if len(p0.sizes) > 3`). Those dominate what stands alone: **1,869 of the flagship's
+2,146 returned patterns (87%) and 338 of SESR's 710 (48%) are four-dimensional**, and the shim
+descriptor has 3-D addressing plus an iteration modifier (`docs/SILICON.md` 1.4), so there is no
+fifth dimension to add. SESR has no declined multi-pattern run at all — everything adjacent was
+collapsed, and 182 of its descriptors at 25,600 B (four 6,400 B packets each) are that collapsing
+doing its work.
+
+**What this retracts, and what survives.** Retracted: the flagship "leaves roughly 496 pushes on the
+table in this size class" — those windows are four-dimensional and were never mergeable — and the
+explanation that "no repeat encoding expresses a chain of overlapping windows", which the artifact
+method cannot establish either way and which `tools/fill_merge_audit.py` no longer claims.
+Unaffected: the artifact counts themselves (1,007 tasks, 13,181,568 B, 512 packets of 6,400 B, 355 of
+412 distinct windows stepping 640 B and delivering 2.42x the address range they read), the 18%
+utilisation read, and the conclusion that fill merging is not a route to SESR's 1.05 ms — which is
+now better supported than before, because the merger is already doing everything it can. "1.5% of
+tasks" is the wrong shape of claim: the honest statement is that **there is no unexploited merge in
+either container's fills** (0 declined patterns on SESR, 80 on the flagship), and the flagship's
+1,869 four-dimensional patterns are where any further reduction would have to come from — a
+different packet shape, not a better merge pass.
+
+Evidence: [fill_premerge_sesr_m7_desktop2_20260919.log](../results/aie/fill_premerge_sesr_m7_desktop2_20260919.log),
+[fill_premerge_yolov8n_full_desktop2_20260919.log](../results/aie/fill_premerge_yolov8n_full_desktop2_20260919.log).
+Offline throughout: no device, no hardware context, no source change — the module is wrapped in the
+audit's own process only. Both logs record `COMMIT` so the identity check is tied to the code it
+describes.
+
+## Every four-dimensional fill is exactly four packets: the row pitch caps it, not the merger (2026-09-20, Desktop 2)
+
+The pre-merge audit left one question open: [338 SESR and 1,869 flagship patterns](#the-fill-merger-already-collapses-what-it-is-offered-the-residue-is-the-descriptors-four-dimensions-2026-09-19-desktop-2)
+stand alone because a merge needs a free dimension and they have none. `tools/fill_premerge_audit.py`
+now reports what those four dimensions are spent on. The innermost size is a byte count with stride 1,
+so it is one row of the packet, and the stride next to it is the pitch between rows.
+
+| Model | four-dim patterns | extents | degenerate (size-1) dim | shapes seen | row / pitch | chain step | packets per descriptor |
+|---|---:|---|---:|---|---|---|---:|
+| SESR M7 | 338 | 25,600 B only | 0 | (4,4,8,200) x169; (4,8,5,160) x169 | 200 B / 2,064 B = **10.32x**; 160 B / 2,064 B = **12.90x** | 10,320 B = 5 pitches | **4** |
+| YOLOv8n | 1,869 | 25,600 B only | 0 | (4,8,5,160) x940; (4,4,8,200) x841; (4,10,4,160) x64; (4,2,16,200) x24 | 160 B / 1,296 B = **8.10x**; 200 B / 1,296 B = **6.48x** | 6,480 B = 5 pitches | **4** |
+
+**One answer, uniform across both containers.** All 2,207 patterns carry exactly 25,600 bytes = four
+6,400 B packets, and **none of them has contiguous rows** (0 of 2,207 with pitch equal to row bytes).
+Three of the packet's four dimensions go to its own geometry — rows within a plane, planes, and the
+row itself — because the workspace row pitch is 6.5x to 12.9x larger than the row it holds, which is
+the halo padding `plan_workspace` sets as `(width + 2 * halo) * 8`. That leaves exactly one dimension
+for a chain, and one dimension chains `sizes[0] = 4` packets rather than the hardware's
+`MAX_REPEAT = 64`. The merger is not conservative and the descriptor count is not a scheduling
+accident: the layout spends the dimension budget, so a fill can carry four packets and no more.
+
+**What that makes available, as a ceiling and not a result.** If a packet's rows sat contiguously, its
+geometry would fit three dimensions and the chain could reach 64 — **up to 16x fewer fill
+descriptors**, on 338 of SESR's 710 activation tasks and 1,869 of the flagship's 2,146. That is the
+first lever this branch has found that is large enough to matter, and it is the right shape of lever:
+the floor is per-task waiting (18% wire utilisation, and 0.599 ms of floor moving on identical
+traffic), so fewer tasks is the axis that measured. It is *not* a measured saving. Unexamined before
+anyone tries it: the halo padding exists because the core reads the neighbour ring, so a contiguous-row
+packet needs some other way to supply it (a wider packet that includes the ring once, or a column-major
+plane); whether either is possible for these tensors' consumers is a `plan_workspace` and
+`memtile_agu` design question, not a flag; and 88 of the flagship's patterns have a pitch *smaller*
+than their row (320 B for 160 B rows, and 192 B for 200 B rows — overlapping rows), which this read
+notes and does not explain.
+
+Evidence: [fill_premerge_dims_sesr_m7_desktop2_20260920.log](../results/aie/fill_premerge_dims_sesr_m7_desktop2_20260920.log),
+[fill_premerge_dims_yolov8n_full_desktop2_20260920.log](../results/aie/fill_premerge_dims_yolov8n_full_desktop2_20260920.log).
+Offline again: no device, no hardware context, `merge_runs` wrapped in the audit's own process, and
+each log's `COMMIT` ties the shape counts to the code they were read from.
+
+## Sizing the two layouts that could free a fill dimension: neither reaches AMD, and one cannot fit L1 (2026-09-20, Desktop 2)
+
+[The previous section](#every-four-dimensional-fill-is-exactly-four-packets-the-row-pitch-caps-it-not-the-merger-2026-09-20-desktop-2)
+found that all 2,207 four-dimensional fills chain exactly 4 packets because three dimensions go to the
+packet's own geometry. This sizes what it would cost to free one, before anyone edits a scheduler.
+`tools/fill_layout_sizing.py` captures the same patterns the merger sees and prices each candidate
+layout on both budgets that matter — wire bytes and per-packet footprint against the 64 KB core data
+memory — and `tools/fill_layout_lever_math.py` converts a descriptor reduction into floor, dispatch
+and end-to-end time against AMD's 3.820 ms. Offline throughout; no device, no hardware context, no
+source change; logs at [fill_layout_sizing_sesr_m7](../results/aie/fill_layout_sizing_sesr_m7_desktop2_20260920.log),
+[fill_layout_sizing_yolov8n](../results/aie/fill_layout_sizing_yolov8n_full_desktop2_20260920.log),
+[fill_layout_lever](../results/aie/fill_layout_lever_sesr_m7_desktop2_20260920.log).
+
+**Spanning the line is impossible twice over.** Making rows contiguous means a packet carries whole
+padded lines: its footprint becomes 4 planes x 8 rows x 2,064 B = **66,048 B** for the (4,4,8,200)
+shape and 8 x 5 x 2,064 = **82,560 B** for (4,8,5,160), against a core tile's 65,536 B — over by 512
+bytes and 17,024 bytes, the same shape of miss as the [432-byte weight
+overshoot](#four-silicon-levers-measured-2026-09-19-desktop-2). It also moves 6.51x and 12.90x the
+useful bytes. Rejected without needing a run.
+
+**Packing a packet's planes adjacently does free a dimension at zero wire cost — for exactly half of
+them.** The chains step 5 lines and a packet spans `r` rows, so where `r <= 5` consecutive packets abut
+and adjacency is pure placement; where `r > 5` it replicates the overlap:
+
+| Shape | count | rows vs step | byte-free? |
+|---|---:|---|---|
+| SESR (4,8,5,160) | 169 | 5 rows at step 5 | **yes** — abutting |
+| SESR (4,4,8,200) | 169 | 8 rows at step 5 | no, 1.60x the bytes |
+| YOLOv8n (4,8,5,160) | 940 | 5 at step 5 | **yes** |
+| YOLOv8n (4,4,8,200) | 841 | 8 at step 5 | no, 1.60x |
+| YOLOv8n (4,10,4,160) | 64 | 4 at step 2 | no, 2.00x |
+| YOLOv8n (4,2,16,200) | 24 | 16 at step 5 | no, 3.20x |
+
+Freeing a dimension lifts the chain ceiling from 4 to `MAX_REPEAT = 64`, so the byte-free class
+re-chains 169 descriptors into 11 on SESR (940 into 59 on the flagship).
+
+**And the whole lever, taken at its upper bound, does not close the gap.** DERIVED model, printed by
+the tool: the floor decomposes as transfer 0.432 ms + per-task 2.197 ms over 1,007 descriptors =
+**2.181 µs per descriptor**, with compute 1.682 ms and host stages 0.572 ms.
+
+| Scenario | Descriptors | Floor | Dispatch | G2G | vs AMD 3.820 |
+|---|---:|---:|---:|---:|---|
+| today | 1,007 | 2.629 | 4.311 | 4.883 | +1.063 |
+| byte-free half re-chained | 849 (-15.7%) | 2.284 | 3.966 | 4.538 | **still short by 0.718** |
+| both halves, overlapping one paying 1.60x bytes | 691 (-31.4%) | 2.034 | 3.716 | 4.288 | **still short by 0.468** |
+| break-even | 520 (-48%) | 1.566 | 3.248 | 3.820 | needs nearly half the stream gone |
+
+(The break-even row is the same tool run without `--saved`: "to reach 3.820 ms G2G the floor must
+fall to 1.566 ms: remove 1.063 ms = 487 descriptors = 48% of the stream".)
+
+So fill-dimension repacking is real — a 16% to 31% descriptor cut, worth 0.35 to 0.57 ms of SESR's
+floor — and it is not enough. With channels (6.3% of bytes), merging (0 declined patterns) and refetch
+removal (all cross-layer) already closed, **SESR's G2G gap cannot be closed on the transport side**:
+the remaining term of the right size is not sending the intermediates at all, which is the
+retention change the MemTile ring once attempted at 4,732 tasks. This sizing partly explains that
+failure and points at the one thing that would make a retention design affordable: a ring or window
+layout has to free a descriptor dimension too, because at 4 packets per descriptor any re-send scheme
+multiplies tasks by construction.
+
+**Not priced.** The flagship's floor/dispatch split was never measured, so its 881-descriptor
+opportunity is unpriced. Column-major was not modelled: the operative variable turned out to be
+rows-versus-step, not which axis is contiguous, and `docs/SILICON.md` records one column-major attempt
+that traded a different limit. And nothing here says plane-adjacent placement is *achievable* —
+tensors share workspace slots under liveness reuse, so making one packet's planes contiguous may move
+or enlarge a collision that `plan_workspace` currently tolerates. That is the first question a real
+implementation has to answer, and it belongs in the file another workstream has open.
+
+## Dense hybrid segmentation and matting: withdrawn pending its evidence (2026-09-19, Desktop 2)
+
+A section reporting BiSeNetV2 and MODNet-Cut through dense host regions was written here and is
+withdrawn before publication, not because anything in it was found wrong but because none of it
+could be checked: it cited ten logs under `results/dense/` that were never committed, and the
+code it describes (`compiler/dense_regions.py`, `runtime/dense_session.py`, the
+`benchmarks/dense_*.py` harnesses) is not on this branch and does not import as it stands -
+`graph_session` has no `read_boundary` or `write_boundary`. A measurement whose log is not in
+the repository is not a measurement this project reports.
+
+The logs exist and are not lost; they are untracked on Desktop 2. This section comes back when
+the code lands, imports, and its logs land with it.
+
+## Split container sizing and feasibility (2026-09-20, Desktop 2)
+
+Empirical silicon characterization of split versus monolithic `.ignite` container execution variants on physical Phoenix NPU silicon (AMD Ryzen 7 8700G, XDNA1, PyXRT / XRT 2.21.75). The investigation prices whether decomposing monolithic containers into modular artifacts, decoupled weights, or multi-segment execution passes is practical or prohibitive.
+
+Evidence is indexed in [results/aie](../results/aie/README.md#split-container-sizing). The log is [split_container_sizing_phoenix_20260920.log](../results/aie/split_container_sizing_phoenix_20260920.log), witnessed clean before and after via `xrt-smi examine -r aie-partitions`.
+
+### The five measured variants
+
+| Variant | Architectural Concept | Silicon Metric Measured | Silicon Measured Value | Feasibility Verdict |
+|---|---|---|---:|:---:|
+| **Variant 1** | Naive Split: Separate hardware contexts per stage | `xrt::hw_context` creation + `load_xclbin` | **29.63 ms** (min 23.95 ms) | **FATAL** |
+| | Full `GraphSession` initialization per boundary | Session init + buffer object creation | **37.28 ms** (min 35.98 ms) | **FATAL** |
+| **Variant 2** | Linked NPU Segments: Shared persistent context | Host dispatch gap (`run.wait` $\to$ next `run.start`) | **34.1 µs** (min 14.4 µs) | **FEASIBLE** |
+| | Multi-dispatch scaling ($N=1 \to 8$) | ERT submission & completion scaling | Linear: **+7.58 ms** per 66-layer pass | **FEASIBLE** |
+| **Variant 3** | Memory Boundaries: Zero-Copy BO vs DMA Sync | Zero-Copy BO Splicing (`runtime/splice.py`) | **0.000 ms** host overhead | **FEASIBLE** |
+| | Intermediate DMA Sync (Neck Entry: P3+P4+P5, 716 KB) | `bo.sync` FROM + TO device | **0.014 ms** roundtrip | **FEASIBLE** |
+| | Host `memcpy` on intermediate feature maps (716 KB) | Host memory buffer copy | **0.012 ms** | **FEASIBLE** |
+| | Channel layout transpose ([C/8, H, W, 8] $\to$ NCHW) | Host unswizzling / repack | **0.151 ms** | **FEASIBLE** |
+| **Variant 4** | Decoupled Stationary Weights (Microcode vs Weights) | Host write (`bo_wp.write`, 8.16 MB) | **0.116 ms** | **FEASIBLE** |
+| | Device DMA upload (`bo_wp.sync`, 8.16 MB) | `bo.sync` TO_DEVICE for stationary weights | **0.068 ms** | **FEASIBLE** |
+| | Total weight upload & hot-swap latency | Combined weight packet installation | **0.184 ms** (<0.20 ms) | **FEASIBLE** |
+| **Variant 5** | DDR Workspace Sizing: Monolithic vs Subgraphs | Global liveness reuse (monolithic `bo_ws`) | **22.04 MB** | Baseline |
+| | Unshared individual tensor allocations (Backbone+Neck+Head) | Sum of isolated peak tensor footprints | **15.84 MB** (6.26 + 1.39 + 8.19 MB) | With ABI |
+
+### Analysis of findings
+
+1. **Hardware Context Tax (Variant 1 is Dead-on-Arrival):**
+   Creating an `xrt::hw_context` and loading an xclbin takes **29.63 ms**; initializing full graph buffers takes **37.28 ms**. If an application splits a network into two containers and executes them across independent PyXRT sessions per frame, total frame latency jumps from 7.5 ms to over 37 ms, collapsing frame rates from 125 FPS to <25 FPS. Split containers **must never** open independent hardware contexts.
+
+2. **Persistent Multi-Segment Dispatch is Negligible (Variant 2):**
+   Within a persistent `GraphSession` / `EngineSession`, the measured host inter-dispatch gap between completing one segment (`run.wait()`) and issuing the next (`run.start()`) is only **34.1 µs** (0.034 ms). On a 7.5 ms YOLOv8n network, splitting into 2 or 3 NPU segments adds under 0.08 ms (<1%) overhead. This is what a conditional early-exit architecture would need. It is not one: skipping the neck and head on an empty frame would save 2.7 ms of the 7.5 ms, but the backbone dispatch has no detect heads and so cannot decide that the frame is empty. The saving is available only once a decision rule exists and has been measured.
+
+3. **Memory Boundaries and Zero-Copy DMA (Variant 3):**
+   When intermediate tensors reside in a shared virtual workspace via Native BO Splicing (`runtime/splice.py`), the boundary cost is **0.000 ms** (registers share physical DDR addresses). Even if intermediate buffers are explicitly synchronized with host memory via DMA, syncing the entire 716 KB intermediate feature map (P3 + P4 + P5) takes only **0.014 ms** (14 µs).
+
+4. **Decoupled Weights vs Microcode (Variant 4):**
+   Uploading the complete 8.16 MB weight packet into `bo_wp` takes **0.184 ms** (0.116 ms host write + 0.068 ms device DMA sync). Decoupling microcode from weights introduces **zero runtime dispatch penalty** and enables dynamic weight hot-swapping or adapter switching in under 0.20 ms.
+
+5. **DDR Workspace Preservation (Variant 5):**
+   The monolithic container achieves a 22.04 MB workspace through global liveness slot reuse. Compiling subgraphs with an agreed Tensor Placement ABI maintains this memory footprint without unbounded DDR allocation.
+
+### Physical silicon validation of implemented split variants
+
+Validation on AMD Phoenix silicon (Desktop 2, Ryzen 7 8700G, XDNA1) using `tools/verify_split_silicon.py` and logged in [verify_split_silicon_phoenix_20260920.log](../results/aie/verify_split_silicon_phoenix_20260920.log).
+
+| Configuration | Container Format | NPU Dispatch Latency | Output Verification | Early-Exit Capability |
+|---|---|---:|:---:|:---:|
+| **Monolithic Baseline** | `yolov8n_full.ignite` | **7.556 ms** (min 7.465 ms) | 1,209,600 B baseline | N/A (single dispatch) |
+| **Decoupled Weights** | `yolov8n_full_decoupled.ignite` + `.weights` | **7.593 ms** (min 7.487 ms) | **Bit-exact** (100% agreement on all 1,209,600 B) | N/A (single dispatch) |
+| **2-Segment NPU Split** | `yolov8n_full_split2.ignite` (Cut at Layer 10) | **7.755 ms** (min 7.652 ms) | **Bit-exact** (100% agreement on all 1,209,600 B) | Yes: 2 NPU segments |
+| ↳ *Segment 0 (Layers 0..10)* | First NPU pass | **2.012 ms** | Intermediate workspace | Backbone early feature |
+| ↳ *Segment 1 (Layers 10..66)* | Second NPU pass | **5.736 ms** | Final detection heads | Full neck/head pass |
+| Segment 0 only | `max_segments=1` (Segment 0 only) | 2.055 ms | First 10 layers, no heads | 27% of the full dispatch; emits no detections |
+
+Pre-run and post-run hardware witness confirmed 0 lingering hardware contexts (`No hardware contexts running on device`). Decoupled weights deliver zero steady-state dispatch penalty, and multi-segment NPU execution preserves bit-exact agreement. Stopping after segment 0 is a partial forward pass with no detect heads and therefore no detections; it is priced here as a decomposition of the dispatch, not as a cheaper detector.
+
+### YOLOv8s full-spectrum split container verification on silicon (Variants 2, 3, 4, 5)
+
+Full-spectrum physical silicon validation of all four feasible split-container variants on AMD Phoenix NPU (Ryzen 7 8700G, XDNA1, PyXRT / XRT 2.21.75) for **YOLOv8s** (11.2M parameters, 30.76 MB monolithic container size, 32.2 MB DDR workspace footprint). YOLOv8s represents the flagship model class that benefits most significantly from decoupled weight storage, dynamic early exits, and modular subgraph compilation.
+
+Evidence is indexed in [results/aie](../results/aie/README.md#split-container-sizing). The log is [verify_yolov8s_split_silicon_phoenix_20260920.log](../results/aie/verify_yolov8s_split_silicon_phoenix_20260920.log), witnessed clean before and after via `xrt-smi examine -r aie-partitions`.
+
+| Variant | Container Configuration | Artifact Size | NPU Latency (Mean) | Output Parity vs Monolithic | Operational Capability & Measured Benefit |
+|---|---|---:|---:|:---:|---|
+| **Control** | `yolov8s.ignite` (Monolithic) | 30.76 MB | **17.305 ms** (p50: 17.249 ms) | Baseline (1,209,600 B) | Single monolithic dispatch; baseline reference |
+| **Variant 4** | `yolov8s_decoupled.ignite` + `.weights` | **1.26 MB** (+ 29.50 MB sidecar) | **17.326 ms** (p50: 17.238 ms) | **Bit-exact** (`max_diff = 0`) | **95.9% container size reduction**; **0.000 ms penalty** (58.29 ms init) |
+| **Variant 2** | `yolov8s_split3.ignite` (3 Segments) | **1.26 MB** | **17.719 ms** (Total) | **Bit-exact** (`max_diff = 0`) | Multi-segment execution; 130 µs inter-dispatch overhead |
+| ↳ *Segment 0* | Layers 0..12 (Shallow Backbone) | — | **4.692 ms** | Intermediate workspace | Stage 0 feature generation |
+| ↳ *Segment 1* | Layers 13..29 (Deep Backbone + SPPF) | — | **4.404 ms** | Intermediate workspace | Stage 1 multi-scale feature maps |
+| ↳ *Segment 2* | Layers 30..65 (Neck & Detect Heads) | — | **8.623 ms** | Final detection heads | Full object detection & regression |
+| Segment 0 only | `max_segments=1` (Shallow Backbone) | — | 4.722 ms | First 13 layers, no heads | 27.3% of the full dispatch; emits no detections |
+| Segments 0-1 only | `max_segments=2` (Full Backbone) | — | 9.076 ms | First 30 layers, no heads | 52.4% of the full dispatch; emits no detections |
+| **Variant 3** | Targeted DMA Sync (Layer 29 P5, 204.8 KB) | — | **3.647 µs** (median 3.600 µs) | Bit-exact feature tensor | **15.3× faster** than full workspace sync (**55.663 µs**) |
+| **Variant 3+5** | `ComposedSession` (`stage1` + `stage2`) | 1.26 MB each | **22.065 ms** (G2G, 8.92 + 8.52 ms) | **Bit-exact** (`max_diff = 0`) | **0 MB workspace memory bloat** (32.2 MB shared BO); **0 B host copy** |
+
+**Architectural findings on YOLOv8s silicon execution:**
+1. **Decoupled Weights (Variant 4):** Stripping the 29.5 MB weight packet from the container lowers `.ignite` artifact size from 30.76 MB to 1.26 MB (a 95.9% reduction). On silicon, steady-state dispatch latency measures 17.326 ms vs 17.305 ms (within 0.02 ms measurement noise; median 17.238 ms is identical to monolithic 17.249 ms) with 100% bit-exact output parity.
+2. **Partial dispatch (Variant 2):** Stopping after layer 12 costs 4.722 ms and stopping after
+   layer 29 costs 9.076 ms, against 17.305 ms for the whole network - 27.3% and 52.4% of it.
+   Neither stop point has detect heads, so neither produces bounding boxes; these are the cost
+   of the first and second thirds of the network, not a cheaper detector. An earlier draft read
+   them as savings on background frames in a video analytics pipeline, which requires a decision
+   rule that does not exist here - see the caveat above the family suite below.
+3. **Targeted DMA Synchronization (Variant 3):** When a host runtime inspects intermediate tensors (e.g., assessing backbone embeddings or routing features to a secondary classifier), synchronizing the specific 204,800-byte P5 slice takes only **3.647 µs** on physical PCIe/DMA, compared to **55.663 µs** for the entire 32.2 MB workspace buffer—a **15.3× speedup**.
+4. **ComposedSession & Tensor Placement ABI (Variant 3 & 5):** Separate stage containers (`yolov8s_stage1.ignite` and `yolov8s_stage2.ignite`) chained through `ComposedSession` reuse a single physical 32.2 MB workspace allocation (`bo_ws`), incurring **zero memory bloat** over the monolithic baseline. Handoff occurs entirely through device-local DDR with **zero bytes copied across the host bus**, producing bit-exact detection outputs (`max_diff = 0`).
+
+## Pricing retention with a freed dimension: the ring may add at most ~1,389 descriptors, and it added 3,725 (2026-09-20, Desktop 2)
+
+The layout sizing closed by saying a retention design must free a descriptor dimension to be
+affordable. This prices that claim against the one retention design this engine has actually built —
+the MemTile activation ring, which is
+[byte-exact on silicon](#memtile-residency-does-not-pay-on-the-graph-engine-and-the-yolov8s-gap-is-a-known-limitation-2026-09-16-desktop-2)
+and 1.999 ms slower per dispatch. `tools/fill_layout_sizing.py --ring 2` schedules it offline, and
+`tools/fill_retention_pricing.py` does the arithmetic on logged arms. No device was opened for any of
+this, and the tool prints the `src/` files that are modified in the working tree so the schedule being
+measured is identified honestly.
+
+**Retention multiplies exactly the class a dimension would rescue.** The shipped container offers
+merge_runs 5,408 patterns, of which 338 end up four-dimensional and chain-capped at 4 packets
+(1,352 packets). The ring offers 1,859 patterns, of which **1,352 are four-dimensional carrying 5,408
+packets** — the two numbers are the shipped design's, swapped: retention quadrupled the capped class.
+Its byte-free fraction falls with it, because the extra serves overlap: **169 of 1,352 abut (12%)
+against 169 of 338 (50%) shipped.**
+
+**Collapsing the capped class perfectly still loses.** Arithmetic on the ring's own measured
+decomposition (floor 5.952 = transfer 1.442 + per-task 4.510 over 4,732 descriptors):
+
+| chain ceiling | descriptors | floor | dispatch | vs shipped 4.311 ms |
+|---:|---:|---:|---:|---|
+| 4 (as built) | 4,732 | 5.952 | 6.310 | +1.999 |
+| 8 | 4,056 | 5.308 | 5.666 | +1.355 |
+| 16 | 3,718 | 4.985 | 5.343 | +1.032 |
+| 64 (hardware max) | 3,465 | 4.744 | 5.102 | **+0.791** |
+
+So the freed dimension is neither necessary nor sufficient: at its ideal it recovers 1.208 ms of the
+2.0 ms the ring is behind, and the design still loses.
+
+**The number that decides it.** Retention's measured benefit is compute: 1.682 → 0.358 ms, a win of
+**1.324 ms**. At the ring's own measured unit of 0.953 µs per descriptor, that win pays for
+**1,389 added descriptors**. The ring added 3,725 (4,732 against the shipped 1,007) — over by 2.7×.
+That is the criterion any retention design must meet on this model, and it is the useful output of the
+sizing: not "free a dimension" but **"add fewer than ~1,389 descriptors"**, which for SESR's 9 layers
+and 4 columns means each retained object has to replace several transfers, not one — a whole plane
+per column rather than a 6,400 B window. Deleting the ring's entire capped class, an impossible
+upper bound, still leaves 3,380 descriptors at 3.222 ms against a 1.324 ms win: its cost is in the
+serves, resets and re-pushes that the `055376a` note already names, not in chain depth.
+
+**A correction to the model published yesterday.** `tools/fill_layout_lever_math.py` assumes per-task
+cost is proportional to descriptor count. That holds within one design — the cadence result moved
+0.599 ms of floor on identical traffic — but **across designs it fails by 2.2×**: the shipped
+container's unit is 2.136 µs and the ring's is 0.953 µs. Ring tasks are individually cheaper, which is
+why the ring's totals are dominated by count rather than by expensive tasks. Any lever priced with that
+tool is therefore valid only for the design whose floor it was calibrated on, and the tool now says so
+in its own docstring.
+
+**What this does not establish.** Nothing here was timed on a device; the ring's and the shipped
+container's floors come from the cadence sweep and the ring sitting, and cross-sitting drift on this
+machine is measured at ~0.5 ms, which is smaller than the 2.0 ms being explained but not negligible.
+The 0.953 µs unit is a residue (floor minus a byte-derived transfer), so it bundles lock, reset and
+re-push bookkeeping into one number and attributes nothing finer. And the cautionary precedent is on
+the record: a derived costing of this same lever predicted YOLOv8s would *win* by 0.748 ms and it lost
+by 3.40 ms — this pricing reproduces the measured ordering of both arms, which is the only reason to
+trust its interpolation between them.
+
+Evidence: [fill_layout_sizing_ring2](../results/aie/fill_layout_sizing_ring2_sesr_m7_desktop2_20260920.log),
+[fill_layout_sizing_weightbuffer](../results/aie/fill_layout_sizing_weightbuffer_sesr_m7_desktop2_20260920.log)
+(its resident weight buffer offers the shipped pattern set unchanged — 5,408 patterns, 338 capped —
+consistent with a weight-side change, while measuring +3.63 ms on YOLOv8s),
+[fill_retention_pricing](../results/aie/fill_retention_pricing_sesr_m7_desktop2_20260920.log).
+
+## All YOLOv8 variants on split containers, and what each segment costs (2026-09-20, Desktop 2)
+
+> **What a segment-0 early exit is, and is not.** Segment 0 stops after the shallow backbone.
+> It contains no detect heads, so it emits no bounding boxes, no class scores and no keypoints.
+> A segment-0 dispatch is therefore not a cheaper detection - it is a fraction of one, and its
+> latency is not comparable to any stack running a complete network. There is also no decision
+> rule yet: nothing in segment 0's output tells the runtime whether the frame needs the rest of
+> the network, so the cascade described here is a measured latency decomposition, not a working
+> early exit. What these numbers are good for is exactly that decomposition - what each segment
+> of the network costs on silicon.
+
+Empirical silicon characterization of multi-segment linked dispatch, zero-copy activation chaining, decoupled stationary weights, and conditional early-exit cascades across the entire YOLOv8 family on AMD Phoenix NPU (Ryzen 7 8700G, XDNA1, PyXRT / XRT 2.21.75).
+
+Every model was compiled natively with 0 CPU fallback partitions (100% NPU native) and executed with process affinity pinned to **8 physical CPU cores** (`0x5555`, `OMP_NUM_THREADS=8`). Hardware witnesses before and after confirmed zero lingering hardware contexts (`No hardware contexts running on device`).
+
+The backing log is [yolov8_split_suite_phoenix_20260920.log](../results/aie/yolov8_split_suite_phoenix_20260920.log).
+
+### Suite benchmark on physical Phoenix silicon (8 physical cores pinned)
+
+| Model | Task | Container (.ignite) | Decoupled Weights | Full Net Latency (Mean / p50) | Full Net FPS | Segment 0 only | Segment 0 share | AMD full net, NOT same sitting | RSS Memory |
+|:---|:---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| **yolov8n** | detect | 0.68 MB (675 KB) | 8.16 MB | 7.85 ms / 7.79 ms | 127.4 | 2.01 ms | 25.5% | 10.42 ms | 174.4 MB |
+| **yolov8s** | detect | 1.26 MB | 29.50 MB | 17.66 ms / 17.53 ms | 56.6 | 4.64 ms | 26.3% | 16.75 ms | 207.1 MB |
+| **yolov8n-pose** | pose | 0.68 MB (678 KB) | 8.18 MB | 8.21 ms / 8.16 ms | 121.8 | 2.29 ms | 27.9% | 11.97 ms | 177.6 MB |
+| **yolov8m** | detect | 3.15 MB | 61.00 MB | 43.60 ms / 43.52 ms | 22.9 | 11.24 ms | 25.8% | 26.95 ms | 239.9 MB |
+| **yolov8l** | detect | 5.56 MB | 92.66 MB | 78.22 ms / 78.08 ms | 12.8 | 19.53 ms | 25.0% | 49.67 ms | 394.6 MB |
+| **yolov8x** | detect | 8.67 MB | 145.49 MB | 125.50 ms / 125.57 ms | 8.0 | 32.95 ms | 26.3% | 117.11 ms | 347.5 MB |
+
+The AMD column was not measured by this suite. `tools/bench_yolov8_split_suite.py` never runs
+AMD's stack, and the backing log contains the string "AMD" zero times; the six figures were
+brought in from two different places, and they are not the same kind of number:
+
+| AMD figure | Where it comes from | What it is |
+|---|---|---|
+| yolov8n 10.42, yolov8s 16.75, yolov8n-pose 11.97 ms | the v0.3.3 release sitting, 2026-09-17, `results/aie/release_033/` | glass-to-glass, Ignition's own pre- and post-processing, a real comparison but from a different sitting three days earlier |
+| yolov8m 26.95, yolov8l 49.67, yolov8x 117.11 ms | the VitisAI EP study's head-cut latency table, this page's own rows for those variants | **`session.run` alone** - no letterbox, no decode, no NMS - and months older |
+
+So the first three are comparable to a whole engine frame and the last three are not comparable
+to anything in this table: they are a fraction of AMD's frame set beside all of Ignition's. No
+row here establishes a result against AMD's stack in either direction. Reading the full-net
+column against them makes the engine lose on five of six, and that conclusion is exactly as
+unsound as the win it replaced. Closing this needs one sitting that runs both stacks on all six.
+
+### Key architectural findings across the family
+
+1. **Segment 0 is almost exactly a quarter of the network's dispatch, at every scale:**
+   From nano (8.7 GFLOPs) to extra-large (258 GFLOPs), the shallow backbone (Segment 0, through
+   C2f stage 1) costs 25.0% to 27.9% of the full dispatch. That constancy across a 16x range in
+   latency is the finding; the per-model figures below are the decomposition, not a saving:
+   - `yolov8n`: 2.01 ms of 7.85 ms (25.5%)
+   - `yolov8s`: 4.64 ms of 17.66 ms (26.3%)
+   - `yolov8n-pose`: 2.29 ms of 8.21 ms (27.9%)
+   - `yolov8m`: 11.24 ms of 43.60 ms (25.8%)
+   - `yolov8l`: 19.53 ms of 78.22 ms (25.0%)
+   - `yolov8x`: 32.95 ms of 125.50 ms (26.3%)
+   The remainder of each dispatch is the neck and the detect heads, which is where the output is.
+   These are not screening rates. Segment 0 has no detect heads, so it cannot tell a background
+   frame from a foreground one, and a cascade needs exactly that test before any of this latency
+   can be skipped. Building one means training or fitting a cheap decision head on segment 0's
+   feature map and measuring both its accuracy and its own cost. None of that was done here.
+
+2. **RETRACTED before publication: the 2.40x to 5.23x "wins over AMD" this section first claimed.**
+   They divided a segment-0 dispatch by AMD's full detection pass. Segment 0 emits no bounding
+   boxes, so the two sides do not compute the same thing and the ratio has no meaning. The
+   observation underneath it is sound and worth keeping: AMD's stack has no multi-segment
+   dispatch on the NPU, a new hardware context costs 29.63 ms and CPU fallback 80+ ms, so a
+   cascade is not available to it at all. That is an architectural difference, not a measured
+   speedup, and it becomes one only when a cascade with a working decision rule is built and a
+   whole-frame comparison is run in one sitting.
+
+3. **Sub-50 µs inter-dispatch chaining overhead:**
+   Chained sequential execution of multi-segment containers on PyXRT introduces minimal overhead:
+   - `yolov8n-pose`: 17.7 µs
+   - `yolov8n`: 20.8 µs
+   - `yolov8s`: 26.1 µs
+   - `yolov8m`: 33.1 µs
+   - `yolov8l`: 45.7 µs
+   - `yolov8x`: 49.9 µs
+   Even for large 100+ MB models with 3 segments, the cumulative inter-segment switching gap is under 0.1 ms (<0.1% of total inference time).
+
+4. **Decoupled weight storage collapses container distribution footprints:**
+   Decoupling static weights into sidecar `.weights` files and uploading them during session initialization shrinks `.ignite` container artifacts by **92.3% to 95.9%**, the range of the six figures below
+   (an earlier draft of this section read 90.5% to 96.8%, which is wider than any model measured):
+   - `yolov8n`: 0.68 MB container + 8.16 MB weights (vs 8.84 MB monolithic, 92.4% reduction)
+   - `yolov8s`: 1.26 MB container + 29.50 MB weights (vs 30.76 MB monolithic, 95.9% reduction)
+   - `yolov8n-pose`: 0.68 MB container + 8.18 MB weights (vs 8.86 MB monolithic, 92.3% reduction)
+   - `yolov8m`: 3.15 MB container + 61.00 MB weights (vs 64.15 MB monolithic, 95.1% reduction)
+   - `yolov8l`: 5.56 MB container + 92.66 MB weights (vs 98.22 MB monolithic, 94.3% reduction)
+   - `yolov8x`: 8.67 MB container + 145.49 MB weights (vs 154.16 MB monolithic, 94.4% reduction)
+   This enables lightweight container distribution, dynamic model patching, and rapid task switching on edge hardware.
 
 ## The dispatch floor separated from compute, and the activation packet priced against it (2026-09-20, Desktop 2)
 

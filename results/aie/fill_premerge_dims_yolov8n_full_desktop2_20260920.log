@@ -1,0 +1,24 @@
+UTC: 2026-09-20T12:08:32.025111+00:00
+MACHINE: DESKTOP-CBL5NUA AMD64 Family 25 Model 117 Stepping 2, AuthenticAMD
+COMMAND: python tools/fill_premerge_audit.py models/yolov8n_cut_xint8.onnx
+COMMIT: de8fc8372c7c056eaae4fdbb76e6c6365d8401f4
+
+[premerge] models/yolov8n_cut_xint8.onnx: 66 layers, 967 merge_runs calls
+[premerge] offered 4811 patterns, returned 2146 -- 2665 fewer, 55% collapsed
+[identity] returned 2146 vs 2146 activation tasks in the emitted stream: MATCH -- the wrap saw the schedule the compiler ran
+[runs ] collapsed whole                 :   253 runs,  2862 patterns
+[runs ] already uses four dimensions    :  1869 runs,  1869 patterns
+[runs ] shape or buffer changed         :    16 runs,    64 patterns
+[runs ] step changed                    :     8 runs,    16 patterns
+[step ] gap (step > payload): 1728 patterns offered together
+[step ] overlap (step < payload): 744 patterns offered together
+[step ] contiguous (step == payload): 470 patterns offered together
+[dims ] as offered (raw): 2 x1024, 3 x1918, 4 x1869
+[dims ] as merge_runs compares them (canonicalised): 2 x1032, 3 x1910, 4 x1869 -- a pattern with four canonical dimensions is one the merger will not touch
+[dims4] 1869 four-dimensional patterns; 0 carry a degenerate size-1 dimension (a slot the merger could use); extents [25600]
+[dims4]   (4, 8, 5, 160)   x  940  25,600 B: row 160 B, pitch 1,296 B (8.10x the row), chain step 6,480 B = 5 pitches, 4 packets per descriptor
+[dims4]   (4, 4, 8, 200)   x  841  25,600 B: row 200 B, pitch 1,296 B (6.48x the row), chain step 6,480 B = 5 pitches, 4 packets per descriptor
+[dims4]   (4, 10, 4, 160)  x   64  25,600 B: row 160 B, pitch 320 B (2.00x the row), chain step 640 B = 2 pitches, 4 packets per descriptor
+[dims4]   (4, 2, 16, 200)  x   24  25,600 B: row 200 B, pitch 192 B (0.96x the row), chain step 960 B = 5 pitches, 4 packets per descriptor
+[dims4] rows already contiguous (pitch == row bytes) in 0 of 1869; every pattern above pays a dimension for row padding, which is why none can chain past 4 packets
+[out  ] 80 patterns were in a multi-pattern run that the merger declined; the four-dimension rule and the 64 cap are the limits it enforces

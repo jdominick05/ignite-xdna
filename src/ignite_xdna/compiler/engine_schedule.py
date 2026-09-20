@@ -41,10 +41,11 @@ class Placement:
     planes: int          # blocks + junk planes
     producer: str = ""
     halo_value: int = ZP  # 128 (zero point) for conv consumers, 0 (-inf) for max-pool consumers
+    dtype: str = "uint8"
 
     @property
     def pitch(self) -> int:
-        return (self.width + 2 * self.halo) * 8
+        return (self.width + 2 * self.halo) * 8 * np.dtype(self.dtype).itemsize
 
     @property
     def plane_bytes(self) -> int:
@@ -56,7 +57,8 @@ class Placement:
 
     def offset(self, block: int, y: int, x: int) -> int:
         """Byte offset of tensor pixel (y, x) of ``block``; y/x may reach into the halo."""
-        return self.base + block * self.plane_bytes + (y + self.halo) * self.pitch + (x + self.halo) * 8
+        return (self.base + block * self.plane_bytes + (y + self.halo) * self.pitch
+                + (x + self.halo) * 8 * np.dtype(self.dtype).itemsize)
 
 
 @dataclass
@@ -83,7 +85,7 @@ class Workspace:
     def read_tensor(self, ws: np.ndarray, name: str) -> np.ndarray:
         """Return the real interior of a tensor as uint8 [C][H][W]."""
         p = self.placements[name]
-        planes = ws[p.base:p.base + p.blocks * p.plane_bytes].reshape(
+        planes = ws[p.base:p.base + p.blocks * p.plane_bytes].view(p.dtype).reshape(
             p.blocks, p.height + 2 * p.halo, p.width + 2 * p.halo, 8)
         interior = planes[:, p.halo:p.halo + p.height, p.halo:p.halo + p.width, :]
         chw = np.transpose(interior, (0, 3, 1, 2)).reshape(p.blocks * 8, p.height, p.width)
@@ -92,10 +94,10 @@ class Workspace:
     def write_tensor(self, ws: np.ndarray, name: str, chw: np.ndarray) -> None:
         p = self.placements[name]
         c = chw.shape[0]
-        padded = np.full((p.blocks * 8, p.height, p.width), ZP, dtype=np.uint8)
+        padded = np.full((p.blocks * 8, p.height, p.width), p.halo_value, dtype=p.dtype)
         padded[:c] = chw
         blocked = np.transpose(padded.reshape(p.blocks, 8, p.height, p.width), (0, 2, 3, 1))
-        planes = ws[p.base:p.base + p.blocks * p.plane_bytes].reshape(
+        planes = ws[p.base:p.base + p.blocks * p.plane_bytes].view(p.dtype).reshape(
             p.blocks, p.height + 2 * p.halo, p.width + 2 * p.halo, 8)
         planes[:, p.halo:p.halo + p.height, p.halo:p.halo + p.width, :] = blocked
 
@@ -125,13 +127,15 @@ def plan_workspace(ir: GraphIR, slack_bytes: int = 64, reuse: bool = True) -> Wo
 
     if not reuse:
         cursor = 0
-        order = [ir.input] + [L.output for L in ir.layers]
+        order = [ir.input] + [o for L in ir.layers for o in
+                              (L.output_tensors() if isinstance(L, HostLayer) else [L.output])]
         for name in order:
             t = ir.tensors[name]
             engine_written = t.producer != "input"
             junk = (-t.blocks) % OUT_BLOCKS if engine_written else 0
             p = Placement(name=name, base=cursor, halo=halo[name], height=t.height, width=t.width,
-                          blocks=t.blocks, planes=t.blocks + junk, producer=t.producer, halo_value=halo_value[name])
+                          blocks=t.blocks, planes=t.blocks + junk, producer=t.producer, halo_value=halo_value[name],
+                          dtype=t.dtype)
             placements[name] = p
             cursor = (cursor + p.nbytes + 63) // 64 * 64
         ws = Workspace(placements=placements, nbytes=cursor, input=ir.input)
@@ -150,10 +154,10 @@ def plan_workspace(ir: GraphIR, slack_bytes: int = 64, reuse: bool = True) -> Wo
     output_tensors = {t for _, t in ir.outputs}
 
     for idx, L in enumerate(ir.layers):
-        out = L.output
-        if out not in first_use:
-            first_use[out] = idx
-        last_use[out] = max(last_use.get(out, idx), idx)
+        for out in L.output_tensors() if isinstance(L, HostLayer) else [L.output]:
+            if out not in first_use:
+                first_use[out] = idx
+            last_use[out] = max(last_use.get(out, idx), idx)
 
         in_tensors = []
         if isinstance(L, (ConvLayer, FusedConvLayer)):
@@ -175,7 +179,7 @@ def plan_workspace(ir: GraphIR, slack_bytes: int = 64, reuse: bool = True) -> Wo
     t_in = ir.tensors[ir.input]
     p_in = Placement(name=ir.input, base=0, halo=halo[ir.input], height=t_in.height, width=t_in.width,
                      blocks=t_in.blocks, planes=t_in.blocks, producer=t_in.producer,
-                     halo_value=halo_value[ir.input])
+                     halo_value=halo_value[ir.input], dtype=t_in.dtype)
     placements[ir.input] = p_in
     cursor = (p_in.nbytes + 63) // 64 * 64
 
@@ -184,13 +188,13 @@ def plan_workspace(ir: GraphIR, slack_bytes: int = 64, reuse: bool = True) -> Wo
     # Interior DMA writes strictly never touch the halo border ring, so sequential reuse
     # of the same slot across non-overlapping lifetimes preserves intact halo borders.
     by_geom = defaultdict(list)
-    for L in ir.layers:
-        name = L.output
+    for name in (o for L in ir.layers for o in
+                 (L.output_tensors() if isinstance(L, HostLayer) else [L.output])):
         t = ir.tensors[name]
         engine_written = t.producer != "input"
         junk = (-t.blocks) % OUT_BLOCKS if engine_written else 0
         planes = t.blocks + junk
-        key = (t.height, t.width, halo[name], halo_value[name])
+        key = (t.height, t.width, halo[name], halo_value[name], t.dtype)
         by_geom[key].append((first_use[name], last_use[name], planes, name))
 
     geom_slots = defaultdict(list)
@@ -215,8 +219,8 @@ def plan_workspace(ir: GraphIR, slack_bytes: int = 64, reuse: bool = True) -> Wo
                 })
 
     for key, slots in geom_slots.items():
-        h, w, hal, val = key
-        pitch = (w + 2 * hal) * 8
+        h, w, hal, val, dtype = key
+        pitch = (w + 2 * hal) * 8 * np.dtype(dtype).itemsize
         plane_bytes = (h + 2 * hal) * pitch
         for slot in slots:
             base = cursor
@@ -226,7 +230,7 @@ def plan_workspace(ir: GraphIR, slack_bytes: int = 64, reuse: bool = True) -> Wo
                 t = ir.tensors[name]
                 p = Placement(name=name, base=base, halo=hal, height=h, width=w,
                               blocks=t.blocks, planes=slot["max_planes"], producer=t.producer,
-                              halo_value=val)
+                              halo_value=val, dtype=dtype)
                 placements[name] = p
 
     ws = Workspace(placements=placements, nbytes=cursor, input=ir.input)
@@ -1230,6 +1234,12 @@ def emulate_host_layer(ir: GraphIR, ws: Workspace, layer: HostLayer, ws_arr: np.
     extracted model and write the output tensor's interior (its halo ring is left as planned)."""
     from ignite_xdna.compiler.graph_reference import run_host_layer
     from ignite_xdna.compiler.graph_ir import place_host_output
+    if layer.named_inputs:
+        from ignite_xdna.compiler.graph_reference import run_named_host
+        tensors = {t: ws.read_tensor(ws_arr, t) for t in layer.named_inputs.values()}
+        for name, value in run_named_host(layer, tensors, ir, optimize).items():
+            ws.write_tensor(ws_arr, name, value)
+        return
     segs = layer.input_segments()
     parts = [ws.read_tensor(ws_arr, s.tensor)[s.block_offset * 8:(s.block_offset + s.blocks) * 8] for s in segs]
     x = np.concatenate(parts, axis=0)[:layer.in_channels or ir.tensors[segs[0].tensor].channels]

@@ -1,0 +1,17 @@
+UTC: 2026-09-20T03:52:19.945680+00:00
+MACHINE: DESKTOP-CBL5NUA AMD64 Family 25 Model 117 Stepping 2, AuthenticAMD
+COMMAND: C:/Users/<user>/miniforge3/envs/mlir-aie-iron/python.exe tools/fill_merge_audit.py build/conv_engine/sesr_m7/insts.bin
+COMMIT: 3610067c77a8ac9d2f908e2a5aa5785c0ebb61ef
+[merge] build/conv_engine/sesr_m7/insts.bin: 6,400 B packets grouped by identical control words
+[merge] 18 groups, 412 distinct addresses, 100 duplicate addresses (the same window fetched twice), 151 maximal constant-step runs
+[runs ] length  1:   3 runs
+[runs ] length  2:  53 runs   (2 points make no claim of regularity)
+[runs ] length  3:  77 runs
+[runs ] length  4:  18 runs
+[cls  ] OVERLAP: step < payload, no repeat can express it: 124 runs, 355 packets, 355 descriptors if merged, delivers 2.42x the address range it reads
+[cls  ] regular gap: repeatable: 15 runs, 30 packets, 15 descriptors if merged
+[cls  ] gap too wide for the 20-bit step field (max 4,194,300 B): 9 runs, 24 packets, 24 descriptors if merged
+[cls  ] lone (no partner in its group): 3 runs, 3 packets, 3 descriptors if merged
+[merge] this size class: 412 packets would become 397 descriptors; the stream's other 595 tasks are unaffected, so the whole-stream floor could not drop below 992 tasks from 1007 by merging alone
+
+EXIT_CODE: 0

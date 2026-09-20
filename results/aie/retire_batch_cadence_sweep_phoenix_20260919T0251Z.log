@@ -1,0 +1,59 @@
+================================================================================
+SHIM RETIREMENT CADENCE (retire_batch): U-CURVE, BUILDABILITY BOUND, AND BISECT
+================================================================================
+Date: 2026-09-19T02:33-03:00Z (local 2026-09-18, 22:33-23:00), DESKTOP-CBL5NUA (Desktop 2,
+      Ryzen 7 8700G, XDNA1 Phoenix, NPU Device 0 [003d:00:01.1]), Windows, balanced power scheme
+Runtime: ignite-xdna main f3b37cd + the --retire-batch knob, mlir-aie-iron env (ironenv)
+Tool:    tools/engine_dispatch_floor.py (300 dispatches each of the container and its all-NOP copy)
+         ignite-compile --retire-batch N
+Note:    the sweep ran back-to-back with no other context on the device; the bracketing
+         xrt-smi witnesses are in retire_batch2_verification_phoenix_20260919T0304Z.log and in the sitting log
+         latency_retire_batch2_phoenix_20260919T0306Z.log.
+
+--- 1. WHY: SESR M7 dispatch had moved from 4.21-4.33 ms (2026-09-15/17 sittings) to 5.26 ms ---
+Control in one place, same machine, same minutes:
+  build/sesr_m7.ignite as built 2026-09-15 (rb=2, reuse off, 19.7 MB workspace)  -> 4.331 ms
+  rebuilt at f3b37cd, default schedule (rb=4, reuse on, 11.2 MB)                 -> 5.256 ms
+  rebuilt at f3b37cd with --no-workspace-reuse (rb=4, 19.7 MB)                   -> 5.256 ms
+=> the layout is not it; the compiled schedule is. git bisect over 6bd2718..f3b37cd with
+   tools/bisect_step (compile + dispatch floor per step) returns:
+     first bad commit: 6a620f0  perf(schedule): liveness-based workspace buffer reuse and DMA
+                     retirement relaxation
+     ae430cb 4.287 good | 1879614 4.287 good | 2f805a2 4.275 good | 7c0d82e 4.243 good
+     a78a500 4.322 good | 65dff07 4.275 good | a2677db 5.156 bad  | 6a620f0 5.214 bad
+   6a620f0 is two changes bundled; its own evidence (results/aie/
+   workspace_reuse_retire_batch_opt_phoenix_20260917T1900Z.log) timed only YOLOv8n and
+   YOLOv8s, and never SESR M7, which is the model that regressed.
+
+--- 2. ISOLATION: at 6a620f0 itself, flip ONLY retire_batch 4 -> 2 (workspace reuse left on) ---
+  dispatch 4.286 ms = non-compute floor 2.631 ms + core compute 1.654 ms   (rb=4 read 5.214)
+  => the one-liner is the whole regression; the -43.2% workspace-reuse half costs nothing
+     on dispatch and is kept.
+
+--- 3. THE CADENCE SWEEP (same container, same sitting, dispatch mean | NOP floor | insts) ---
+  SESR rb=1 insts=165164 dispatch 4.573 ms = non-compute floor 3.040 ms + core compute 1.534 ms
+  SESR rb=2 insts=144880 dispatch 4.311 ms = non-compute floor 2.629 ms + core compute 1.682 ms
+  SESR rb=3 insts=138368 dispatch 4.964 ms = non-compute floor 2.952 ms + core compute 2.013 ms
+  SESR rb=4 insts=133748 dispatch 5.254 ms = non-compute floor 3.228 ms + core compute 2.025 ms
+  SESR rb=6 insts=? 
+  SESR rb=8 insts=? 
+  YOLOv8n rb=2 insts=430180 dispatch 7.336 ms = non-compute floor 5.406 ms + core compute 1.930 ms
+  YOLOv8n rb=3 insts=416452 dispatch 7.175 ms = non-compute floor 5.223 ms + core compute 1.952 ms
+  YOLOv8n rb=4 insts=405496 dispatch 7.278 ms = non-compute floor 5.447 ms + core compute 1.831 ms
+  SWEEP DONE
+
+--- 4. BUILDABILITY BOUND ---
+  --retire-batch 5 and 6 do not merely run slower, they cannot be emitted at all:
+  RuntimeError: channel o queue is full of held tasks
+  A token every rb-th task leaves runs of rb-1 untokened tasks, and the emitter demands a
+  retirement as soon as a channel holds queue_depth (4, the shim start queue) of them, so
+  rb >= queue_depth + 1 deadlocks a channel with more than queue_depth tasks.
+
+--- 5. READ ---
+  Both models have an interior optimum and they differ: SESR M7 at 2 (4.311) is 0.94 ms
+  better than the 2026-09-17 default of 4 (5.254); YOLOv8n peaks at 3 (7.175) and at 2 reads
+  7.336, i.e. 0.058 ms off today's 4 - inside the between-sitting drift this repo warns about,
+  while SESR's 0.94 ms is 30x that drift and monotone across four cadences. rb=1 (a token on
+  every task) is worse than rb=2 on SESR (4.573) at 165 kB of instructions against 145 kB,
+  so awaits are not free: the U-shape is real. Default moved to 2; --retire-batch exposes it;
+  every container records the cadence it was built with in its manifest.

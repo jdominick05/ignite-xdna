@@ -1,0 +1,26 @@
+================================================================================
+POST-CHANGE SESR M7: LAYER-EXACT IN REUSE-FREE MODE, IMAGE BYTE-IDENTICAL TO rb=4
+================================================================================
+Date: 2026-09-19T03:00-03:05Z, DESKTOP-CBL5NUA (Desktop 2), NPU Device 0, balanced scheme
+### xrt-smi before:   No hardware contexts running on device
+=== build post-change container (default cadence) ===
+[*] Lowered 9 layers (0 on the host); workspace 11.2 MB; 1521 rounds, 0.17 MB static packets
+[+] build\sesr_m7.ignite written: 614,976 bytes in 7.8 s (xclbin 292,238 B, insts 144,880 B, packets 170,496 B)
+    [OK] shim retirement cadence: every 2 task(s) of a DMA channel whose thinnest holds 1 per layer (derived from the schedule)
+=== build reuse-free container for full layer readback ===
+[*] Lowered 9 layers (0 on the host); workspace 19.7 MB; 1521 rounds, 0.17 MB static packets
+[+] build\sesr_m7_noreuse.ignite written: 615,040 bytes in 7.7 s (xclbin 292,238 B, insts 144,880 B, packets 170,496 B)
+    [OK] shim retirement cadence: every 2 task(s) of a DMA channel whose thinnest holds 1 per layer (derived from the schedule)
+=== verify every layer (reuse-free) ===
+  L 7 /body.6/body.6.0/Conv                        EXACT
+  L 8 /tail/Conv                                   EXACT
+[verify] 9/9 layers exact | first dispatch 5.768 ms | dispatch mean 4.376 ms, min 4.154, max 4.961 over 20
+[verify] PASS
+### xrt-smi mid:   No hardware contexts running on device
+=== identity probe: pre-change rb=4 container vs post-change rb=2 ===
+[probe] 24 frames from data/sesr_calib (of 24 candidate files)
+[probe] RESULT frames=24 identical=24 differing=0 max_diff=0 worst_psnr=inf
+[probe] combined sha256 sesr_m7_base.ignite=55b129f3db50d035883796e89d463430ccdc1983d80a77cbf5e8f96cde0c7114
+[probe] combined sha256 sesr_m7.ignite=55b129f3db50d035883796e89d463430ccdc1983d80a77cbf5e8f96cde0c7114
+### xrt-smi after:   No hardware contexts running on device
+SEQUENCE DONE

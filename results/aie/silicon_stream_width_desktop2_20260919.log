@@ -1,0 +1,1120 @@
+UTC: 2026-09-19T17:06:52.986393+00:00
+MACHINE: DESKTOP-CBL5NUA AMD64 Family 25 Model 117 Stepping 2, AuthenticAMD
+COMMAND: "C:/Program Files/Git/bin/bash.exe" scripts/research-iron.sh tools/silicon_stream_probe.py suite
+COMMIT: 7c9efd5f0d35f23a5ce6d476900660600ab4f10c
+PRE_DEVICE_WITNESS
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+HOST_LOAD busy_cores=0.27 logical_cores=16 free_ram_gb=15.8 sample_sec=1 peer_busy_cores []
+PRE_CHILD ['suite']
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+Fresh context per trace sample; source disassembly shows 16 scalar stream reads per 16-word hardware-loop iteration.
+PRE_ONCHIP 262144 0
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+ONCHIP_STREAM: MemTile buffer -> DMA0 -> core Core0; no DDR payload in the timed interval.
+SHA256 probe.mlir dcf402b691ceb2858ea093e53be6c157b7af55bf11f363ea70d5a5634ee67c01
+SHA256 insts.bin b4b9c07bdc16d13629851ddbcbde4a99513ab1566bef292601671d77a95acaf0
+SHA256 design.prj/onchip.o c3cda787279de62d3c944824e3eb7be68a3af6e279432bcf8d2b16b3c6f10d5a
+
+C:/Users/<user>\PycharmProjects\ignite-xdna\build\silicon_onchip_stream_probe\design.prj\onchip.o:	file format elf32-aie
+
+Disassembly of section .text.onchip_stream:
+
+00000000 <onchip_stream>:
+       0: c0 03 00 00 00 00 00 00 00 00 00 08 50 00 00 00      	nopb	;		lda	r0, [p0, #0];		nops	;		nopxm	;		nopv	
+      10: 19 00 00 10  	nopx	
+      14: 01 00        	nop	
+      16: 01 00        	nop	
+      18: 01 00        	nop	
+      1a: 01 00        	nop	
+      1c: 01 00        	nop	
+      1e: 59 02 10 00  	mova	r1, #0x10
+      22: 99 1c 06 10  	ltu	r3, r0, r1
+      26: 95 01 40 00 00 18    	jnz	r3, #0x0
+      2c: 01 00        	nop	
+      2e: 01 00        	nop	
+      30: 01 00        	nop	
+      32: 19 10 00 10  	event	#0x0
+      36: 1d 01 04 48 00 08    	mova	r1, #0x40;		movx	r2, #0x0
+      3c: 55 00 e0 00 00 00    	movxm	ls, #0x0
+      42: bb 10 00 38 02 00 00 88 80 ff	mova	r2, #-0x4;		movxm	le, #0x0
+      4c: 99 2d 04 10  	lshl	r2, r0, r2
+      50: c0 03 00 38 83 b8 02 00 00 00 00 00 00 00 00 00      	nopb	;		nopa	;		nops	;		nopx	;		add.nc	lc, r2, #0x0;		nopv	
+
+00000060 <.LBB0_2>:
+      60: c0 03 00 00 00 00 00 00 00 00 00 80 30 00 00 00      	nopb	;		mov	r2, SS;		nops	;		nopxm	;		nopv	
+      70: c0 03 00 00 00 00 00 00 00 00 00 80 30 00 00 00      	nopb	;		mov	r2, SS;		nops	;		nopxm	;		nopv	
+      80: c0 03 00 00 00 00 00 00 00 00 00 80 30 00 00 00      	nopb	;		mov	r2, SS;		nops	;		nopxm	;		nopv	
+      90: 19 84 01 00  	mov	r2, SS
+      94: 19 84 01 00  	mov	r2, SS
+      98: 19 84 01 00  	mov	r2, SS
+      9c: 19 84 01 00  	mov	r2, SS
+      a0: 19 84 01 00  	mov	r2, SS
+      a4: 19 84 01 00  	mov	r2, SS
+      a8: 19 84 01 00  	mov	r2, SS
+      ac: 19 84 01 00  	mov	r2, SS
+      b0: 19 84 01 00  	mov	r2, SS
+      b4: 19 84 01 00  	mov	r2, SS
+      b8: 19 84 01 00  	mov	r2, SS
+      bc: 19 84 01 00  	mov	r2, SS
+
+000000c0 <.L_LEnd1>:
+      c0: c0 03 00 00 00 00 00 00 00 00 00 80 30 00 00 00      	nopb	;		mov	r2, SS;		nops	;		nopxm	;		nopv	
+      d0: bb 00 00 00 00 00 00 00 00 00	nopa	;		nopxm	
+      da: 01 00        	nop	
+      dc: 01 00        	nop	
+      de: 01 00        	nop	
+
+000000e0 <.LBB0_4>:
+      e0: bb 38 43 b8 82 00 10 00 00 00	nopa	;		event	#0x1;		add.nc	lc, r1, #0x0
+      ea: 55 00 e0 00 00 00    	movxm	ls, #0x0
+      f0: c0 03 00 10 00 38 02 00 00 00 00 00 00 00 00 00      	nopb	;		nopa	;		nops	;		movxm	le, #0x0;		nopv	
+
+00000100 <.LBB0_5>:
+     100: c0 03 00 88 03 00 80 00 00 00 00 00 00 00 00 00      	nopb	;		nopa	;		nops	;		event	#0x0;		nopm	;		nopv	
+     110: c0 03 00 88 03 00 80 00 10 00 00 00 00 00 00 00      	nopb	;		nopa	;		nops	;		event	#0x1;		nopm	;		nopv	
+     120: c0 03 00 88 03 00 80 00 00 00 00 00 00 00 00 00      	nopb	;		nopa	;		nops	;		event	#0x0;		nopm	;		nopv	
+     130: c0 03 00 88 03 00 80 00 10 00 00 00 00 00 00 00      	nopb	;		nopa	;		nops	;		event	#0x1;		nopm	;		nopv	
+     140: c0 03 00 88 03 00 80 00 00 00 00 00 00 00 00 00      	nopb	;		nopa	;		nops	;		event	#0x0;		nopm	;		nopv	
+     150: b7 88 03 00 80 00 10 00 00 00 00 00  	nopa	;		nopb	;		event	#0x1;		nopm	
+     15c: 19 10 00 10  	event	#0x0
+
+00000160 <.L_LEnd0>:
+     160: c0 03 00 88 03 00 80 00 10 00 00 00 00 00 00 00      	nopb	;		nopa	;		nops	;		event	#0x1;		nopm	;		nopv	
+     170: c0 03 00 88 03 00 c0 00 00 00 00 00 00 00 00 00      	nopb	;		nopa	;		nops	;		ret lr	;		nopm	;		nopv	
+     180: 19 00 00 10  	nopx	
+     184: 01 00        	nop	
+     186: 19 84 02 09  	st	r2, [p1, #0]
+     18a: 19 80 06 09  	st	r0, [p1, #4]
+     18e: 01 00        	nop	
+
+ONCHIP_POINT {"words": 262144, "bytes": 1048576, "cycles": 262168, "last_word": 1, "trial": 0}
+ 
+POST_ONCHIP 262144 0
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+PRE_ONCHIP 262144 1
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+ONCHIP_STREAM: MemTile buffer -> DMA0 -> core Core0; no DDR payload in the timed interval.
+SHA256 probe.mlir dcf402b691ceb2858ea093e53be6c157b7af55bf11f363ea70d5a5634ee67c01
+SHA256 insts.bin b4b9c07bdc16d13629851ddbcbde4a99513ab1566bef292601671d77a95acaf0
+SHA256 design.prj/onchip.o c3cda787279de62d3c944824e3eb7be68a3af6e279432bcf8d2b16b3c6f10d5a
+
+C:/Users/<user>\PycharmProjects\ignite-xdna\build\silicon_onchip_stream_probe\design.prj\onchip.o:	file format elf32-aie
+
+Disassembly of section .text.onchip_stream:
+
+00000000 <onchip_stream>:
+       0: c0 03 00 00 00 00 00 00 00 00 00 08 50 00 00 00      	nopb	;		lda	r0, [p0, #0];		nops	;		nopxm	;		nopv	
+      10: 19 00 00 10  	nopx	
+      14: 01 00        	nop	
+      16: 01 00        	nop	
+      18: 01 00        	nop	
+      1a: 01 00        	nop	
+      1c: 01 00        	nop	
+      1e: 59 02 10 00  	mova	r1, #0x10
+      22: 99 1c 06 10  	ltu	r3, r0, r1
+      26: 95 01 40 00 00 18    	jnz	r3, #0x0
+      2c: 01 00        	nop	
+      2e: 01 00        	nop	
+      30: 01 00        	nop	
+      32: 19 10 00 10  	event	#0x0
+      36: 1d 01 04 48 00 08    	mova	r1, #0x40;		movx	r2, #0x0
+      3c: 55 00 e0 00 00 00    	movxm	ls, #0x0
+      42: bb 10 00 38 02 00 00 88 80 ff	mova	r2, #-0x4;		movxm	le, #0x0
+      4c: 99 2d 04 10  	lshl	r2, r0, r2
+      50: c0 03 00 38 83 b8 02 00 00 00 00 00 00 00 00 00      	nopb	;		nopa	;		nops	;		nopx	;		add.nc	lc, r2, #0x0;		nopv	
+
+00000060 <.LBB0_2>:
+      60: c0 03 00 00 00 00 00 00 00 00 00 80 30 00 00 00      	nopb	;		mov	r2, SS;		nops	;		nopxm	;		nopv	
+      70: c0 03 00 00 00 00 00 00 00 00 00 80 30 00 00 00      	nopb	;		mov	r2, SS;		nops	;		nopxm	;		nopv	
+      80: c0 03 00 00 00 00 00 00 00 00 00 80 30 00 00 00      	nopb	;		mov	r2, SS;		nops	;		nopxm	;		nopv	
+      90: 19 84 01 00  	mov	r2, SS
+      94: 19 84 01 00  	mov	r2, SS
+      98: 19 84 01 00  	mov	r2, SS
+      9c: 19 84 01 00  	mov	r2, SS
+      a0: 19 84 01 00  	mov	r2, SS
+      a4: 19 84 01 00  	mov	r2, SS
+      a8: 19 84 01 00  	mov	r2, SS
+      ac: 19 84 01 00  	mov	r2, SS
+      b0: 19 84 01 00  	mov	r2, SS
+      b4: 19 84 01 00  	mov	r2, SS
+      b8: 19 84 01 00  	mov	r2, SS
+      bc: 19 84 01 00  	mov	r2, SS
+
+000000c0 <.L_LEnd1>:
+      c0: c0 03 00 00 00 00 00 00 00 00 00 80 30 00 00 00      	nopb	;		mov	r2, SS;		nops	;		nopxm	;		nopv	
+      d0: bb 00 00 00 00 00 00 00 00 00	nopa	;		nopxm	
+      da: 01 00        	nop	
+      dc: 01 00        	nop	
+      de: 01 00        	nop	
+
+000000e0 <.LBB0_4>:
+      e0: bb 38 43 b8 82 00 10 00 00 00	nopa	;		event	#0x1;		add.nc	lc, r1, #0x0
+      ea: 55 00 e0 00 00 00    	movxm	ls, #0x0
+      f0: c0 03 00 10 00 38 02 00 00 00 00 00 00 00 00 00      	nopb	;		nopa	;		nops	;		movxm	le, #0x0;		nopv	
+
+00000100 <.LBB0_5>:
+     100: c0 03 00 88 03 00 80 00 00 00 00 00 00 00 00 00      	nopb	;		nopa	;		nops	;		event	#0x0;		nopm	;		nopv	
+     110: c0 03 00 88 03 00 80 00 10 00 00 00 00 00 00 00      	nopb	;		nopa	;		nops	;		event	#0x1;		nopm	;		nopv	
+     120: c0 03 00 88 03 00 80 00 00 00 00 00 00 00 00 00      	nopb	;		nopa	;		nops	;		event	#0x0;		nopm	;		nopv	
+     130: c0 03 00 88 03 00 80 00 10 00 00 00 00 00 00 00      	nopb	;		nopa	;		nops	;		event	#0x1;		nopm	;		nopv	
+     140: c0 03 00 88 03 00 80 00 00 00 00 00 00 00 00 00      	nopb	;		nopa	;		nops	;		event	#0x0;		nopm	;		nopv	
+     150: b7 88 03 00 80 00 10 00 00 00 00 00  	nopa	;		nopb	;		event	#0x1;		nopm	
+     15c: 19 10 00 10  	event	#0x0
+
+00000160 <.L_LEnd0>:
+     160: c0 03 00 88 03 00 80 00 10 00 00 00 00 00 00 00      	nopb	;		nopa	;		nops	;		event	#0x1;		nopm	;		nopv	
+     170: c0 03 00 88 03 00 c0 00 00 00 00 00 00 00 00 00      	nopb	;		nopa	;		nops	;		ret lr	;		nopm	;		nopv	
+     180: 19 00 00 10  	nopx	
+     184: 01 00        	nop	
+     186: 19 84 02 09  	st	r2, [p1, #0]
+     18a: 19 80 06 09  	st	r0, [p1, #4]
+     18e: 01 00        	nop	
+
+ONCHIP_POINT {"words": 262144, "bytes": 1048576, "cycles": 262168, "last_word": 1, "trial": 0}
+ 
+POST_ONCHIP 262144 1
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+PRE_ONCHIP 262144 2
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+ONCHIP_STREAM: MemTile buffer -> DMA0 -> core Core0; no DDR payload in the timed interval.
+SHA256 probe.mlir dcf402b691ceb2858ea093e53be6c157b7af55bf11f363ea70d5a5634ee67c01
+SHA256 insts.bin b4b9c07bdc16d13629851ddbcbde4a99513ab1566bef292601671d77a95acaf0
+SHA256 design.prj/onchip.o c3cda787279de62d3c944824e3eb7be68a3af6e279432bcf8d2b16b3c6f10d5a
+
+C:/Users/<user>\PycharmProjects\ignite-xdna\build\silicon_onchip_stream_probe\design.prj\onchip.o:	file format elf32-aie
+
+Disassembly of section .text.onchip_stream:
+
+00000000 <onchip_stream>:
+       0: c0 03 00 00 00 00 00 00 00 00 00 08 50 00 00 00      	nopb	;		lda	r0, [p0, #0];		nops	;		nopxm	;		nopv	
+      10: 19 00 00 10  	nopx	
+      14: 01 00        	nop	
+      16: 01 00        	nop	
+      18: 01 00        	nop	
+      1a: 01 00        	nop	
+      1c: 01 00        	nop	
+      1e: 59 02 10 00  	mova	r1, #0x10
+      22: 99 1c 06 10  	ltu	r3, r0, r1
+      26: 95 01 40 00 00 18    	jnz	r3, #0x0
+      2c: 01 00        	nop	
+      2e: 01 00        	nop	
+      30: 01 00        	nop	
+      32: 19 10 00 10  	event	#0x0
+      36: 1d 01 04 48 00 08    	mova	r1, #0x40;		movx	r2, #0x0
+      3c: 55 00 e0 00 00 00    	movxm	ls, #0x0
+      42: bb 10 00 38 02 00 00 88 80 ff	mova	r2, #-0x4;		movxm	le, #0x0
+      4c: 99 2d 04 10  	lshl	r2, r0, r2
+      50: c0 03 00 38 83 b8 02 00 00 00 00 00 00 00 00 00      	nopb	;		nopa	;		nops	;		nopx	;		add.nc	lc, r2, #0x0;		nopv	
+
+00000060 <.LBB0_2>:
+      60: c0 03 00 00 00 00 00 00 00 00 00 80 30 00 00 00      	nopb	;		mov	r2, SS;		nops	;		nopxm	;		nopv	
+      70: c0 03 00 00 00 00 00 00 00 00 00 80 30 00 00 00      	nopb	;		mov	r2, SS;		nops	;		nopxm	;		nopv	
+      80: c0 03 00 00 00 00 00 00 00 00 00 80 30 00 00 00      	nopb	;		mov	r2, SS;		nops	;		nopxm	;		nopv	
+      90: 19 84 01 00  	mov	r2, SS
+      94: 19 84 01 00  	mov	r2, SS
+      98: 19 84 01 00  	mov	r2, SS
+      9c: 19 84 01 00  	mov	r2, SS
+      a0: 19 84 01 00  	mov	r2, SS
+      a4: 19 84 01 00  	mov	r2, SS
+      a8: 19 84 01 00  	mov	r2, SS
+      ac: 19 84 01 00  	mov	r2, SS
+      b0: 19 84 01 00  	mov	r2, SS
+      b4: 19 84 01 00  	mov	r2, SS
+      b8: 19 84 01 00  	mov	r2, SS
+      bc: 19 84 01 00  	mov	r2, SS
+
+000000c0 <.L_LEnd1>:
+      c0: c0 03 00 00 00 00 00 00 00 00 00 80 30 00 00 00      	nopb	;		mov	r2, SS;		nops	;		nopxm	;		nopv	
+      d0: bb 00 00 00 00 00 00 00 00 00	nopa	;		nopxm	
+      da: 01 00        	nop	
+      dc: 01 00        	nop	
+      de: 01 00        	nop	
+
+000000e0 <.LBB0_4>:
+      e0: bb 38 43 b8 82 00 10 00 00 00	nopa	;		event	#0x1;		add.nc	lc, r1, #0x0
+      ea: 55 00 e0 00 00 00    	movxm	ls, #0x0
+      f0: c0 03 00 10 00 38 02 00 00 00 00 00 00 00 00 00      	nopb	;		nopa	;		nops	;		movxm	le, #0x0;		nopv	
+
+00000100 <.LBB0_5>:
+     100: c0 03 00 88 03 00 80 00 00 00 00 00 00 00 00 00      	nopb	;		nopa	;		nops	;		event	#0x0;		nopm	;		nopv	
+     110: c0 03 00 88 03 00 80 00 10 00 00 00 00 00 00 00      	nopb	;		nopa	;		nops	;		event	#0x1;		nopm	;		nopv	
+     120: c0 03 00 88 03 00 80 00 00 00 00 00 00 00 00 00      	nopb	;		nopa	;		nops	;		event	#0x0;		nopm	;		nopv	
+     130: c0 03 00 88 03 00 80 00 10 00 00 00 00 00 00 00      	nopb	;		nopa	;		nops	;		event	#0x1;		nopm	;		nopv	
+     140: c0 03 00 88 03 00 80 00 00 00 00 00 00 00 00 00      	nopb	;		nopa	;		nops	;		event	#0x0;		nopm	;		nopv	
+     150: b7 88 03 00 80 00 10 00 00 00 00 00  	nopa	;		nopb	;		event	#0x1;		nopm	
+     15c: 19 10 00 10  	event	#0x0
+
+00000160 <.L_LEnd0>:
+     160: c0 03 00 88 03 00 80 00 10 00 00 00 00 00 00 00      	nopb	;		nopa	;		nops	;		event	#0x1;		nopm	;		nopv	
+     170: c0 03 00 88 03 00 c0 00 00 00 00 00 00 00 00 00      	nopb	;		nopa	;		nops	;		ret lr	;		nopm	;		nopv	
+     180: 19 00 00 10  	nopx	
+     184: 01 00        	nop	
+     186: 19 84 02 09  	st	r2, [p1, #0]
+     18a: 19 80 06 09  	st	r0, [p1, #4]
+     18e: 01 00        	nop	
+
+ONCHIP_POINT {"words": 262144, "bytes": 1048576, "cycles": 262168, "last_word": 1, "trial": 0}
+ 
+POST_ONCHIP 262144 2
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+PRE_ONCHIP 1048576 0
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+ONCHIP_STREAM: MemTile buffer -> DMA0 -> core Core0; no DDR payload in the timed interval.
+SHA256 probe.mlir dcf402b691ceb2858ea093e53be6c157b7af55bf11f363ea70d5a5634ee67c01
+SHA256 insts.bin b4b9c07bdc16d13629851ddbcbde4a99513ab1566bef292601671d77a95acaf0
+SHA256 design.prj/onchip.o c3cda787279de62d3c944824e3eb7be68a3af6e279432bcf8d2b16b3c6f10d5a
+
+C:/Users/<user>\PycharmProjects\ignite-xdna\build\silicon_onchip_stream_probe\design.prj\onchip.o:	file format elf32-aie
+
+Disassembly of section .text.onchip_stream:
+
+00000000 <onchip_stream>:
+       0: c0 03 00 00 00 00 00 00 00 00 00 08 50 00 00 00      	nopb	;		lda	r0, [p0, #0];		nops	;		nopxm	;		nopv	
+      10: 19 00 00 10  	nopx	
+      14: 01 00        	nop	
+      16: 01 00        	nop	
+      18: 01 00        	nop	
+      1a: 01 00        	nop	
+      1c: 01 00        	nop	
+      1e: 59 02 10 00  	mova	r1, #0x10
+      22: 99 1c 06 10  	ltu	r3, r0, r1
+      26: 95 01 40 00 00 18    	jnz	r3, #0x0
+      2c: 01 00        	nop	
+      2e: 01 00        	nop	
+      30: 01 00        	nop	
+      32: 19 10 00 10  	event	#0x0
+      36: 1d 01 04 48 00 08    	mova	r1, #0x40;		movx	r2, #0x0
+      3c: 55 00 e0 00 00 00    	movxm	ls, #0x0
+      42: bb 10 00 38 02 00 00 88 80 ff	mova	r2, #-0x4;		movxm	le, #0x0
+      4c: 99 2d 04 10  	lshl	r2, r0, r2
+      50: c0 03 00 38 83 b8 02 00 00 00 00 00 00 00 00 00      	nopb	;		nopa	;		nops	;		nopx	;		add.nc	lc, r2, #0x0;		nopv	
+
+00000060 <.LBB0_2>:
+      60: c0 03 00 00 00 00 00 00 00 00 00 80 30 00 00 00      	nopb	;		mov	r2, SS;		nops	;		nopxm	;		nopv	
+      70: c0 03 00 00 00 00 00 00 00 00 00 80 30 00 00 00      	nopb	;		mov	r2, SS;		nops	;		nopxm	;		nopv	
+      80: c0 03 00 00 00 00 00 00 00 00 00 80 30 00 00 00      	nopb	;		mov	r2, SS;		nops	;		nopxm	;		nopv	
+      90: 19 84 01 00  	mov	r2, SS
+      94: 19 84 01 00  	mov	r2, SS
+      98: 19 84 01 00  	mov	r2, SS
+      9c: 19 84 01 00  	mov	r2, SS
+      a0: 19 84 01 00  	mov	r2, SS
+      a4: 19 84 01 00  	mov	r2, SS
+      a8: 19 84 01 00  	mov	r2, SS
+      ac: 19 84 01 00  	mov	r2, SS
+      b0: 19 84 01 00  	mov	r2, SS
+      b4: 19 84 01 00  	mov	r2, SS
+      b8: 19 84 01 00  	mov	r2, SS
+      bc: 19 84 01 00  	mov	r2, SS
+
+000000c0 <.L_LEnd1>:
+      c0: c0 03 00 00 00 00 00 00 00 00 00 80 30 00 00 00      	nopb	;		mov	r2, SS;		nops	;		nopxm	;		nopv	
+      d0: bb 00 00 00 00 00 00 00 00 00	nopa	;		nopxm	
+      da: 01 00        	nop	
+      dc: 01 00        	nop	
+      de: 01 00        	nop	
+
+000000e0 <.LBB0_4>:
+      e0: bb 38 43 b8 82 00 10 00 00 00	nopa	;		event	#0x1;		add.nc	lc, r1, #0x0
+      ea: 55 00 e0 00 00 00    	movxm	ls, #0x0
+      f0: c0 03 00 10 00 38 02 00 00 00 00 00 00 00 00 00      	nopb	;		nopa	;		nops	;		movxm	le, #0x0;		nopv	
+
+00000100 <.LBB0_5>:
+     100: c0 03 00 88 03 00 80 00 00 00 00 00 00 00 00 00      	nopb	;		nopa	;		nops	;		event	#0x0;		nopm	;		nopv	
+     110: c0 03 00 88 03 00 80 00 10 00 00 00 00 00 00 00      	nopb	;		nopa	;		nops	;		event	#0x1;		nopm	;		nopv	
+     120: c0 03 00 88 03 00 80 00 00 00 00 00 00 00 00 00      	nopb	;		nopa	;		nops	;		event	#0x0;		nopm	;		nopv	
+     130: c0 03 00 88 03 00 80 00 10 00 00 00 00 00 00 00      	nopb	;		nopa	;		nops	;		event	#0x1;		nopm	;		nopv	
+     140: c0 03 00 88 03 00 80 00 00 00 00 00 00 00 00 00      	nopb	;		nopa	;		nops	;		event	#0x0;		nopm	;		nopv	
+     150: b7 88 03 00 80 00 10 00 00 00 00 00  	nopa	;		nopb	;		event	#0x1;		nopm	
+     15c: 19 10 00 10  	event	#0x0
+
+00000160 <.L_LEnd0>:
+     160: c0 03 00 88 03 00 80 00 10 00 00 00 00 00 00 00      	nopb	;		nopa	;		nops	;		event	#0x1;		nopm	;		nopv	
+     170: c0 03 00 88 03 00 c0 00 00 00 00 00 00 00 00 00      	nopb	;		nopa	;		nops	;		ret lr	;		nopm	;		nopv	
+     180: 19 00 00 10  	nopx	
+     184: 01 00        	nop	
+     186: 19 84 02 09  	st	r2, [p1, #0]
+     18a: 19 80 06 09  	st	r0, [p1, #4]
+     18e: 01 00        	nop	
+
+ONCHIP_POINT {"words": 1048576, "bytes": 4194304, "cycles": 1048648, "last_word": 1, "trial": 0}
+ 
+POST_ONCHIP 1048576 0
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+PRE_ONCHIP 1048576 1
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+ONCHIP_STREAM: MemTile buffer -> DMA0 -> core Core0; no DDR payload in the timed interval.
+SHA256 probe.mlir dcf402b691ceb2858ea093e53be6c157b7af55bf11f363ea70d5a5634ee67c01
+SHA256 insts.bin b4b9c07bdc16d13629851ddbcbde4a99513ab1566bef292601671d77a95acaf0
+SHA256 design.prj/onchip.o c3cda787279de62d3c944824e3eb7be68a3af6e279432bcf8d2b16b3c6f10d5a
+
+C:/Users/<user>\PycharmProjects\ignite-xdna\build\silicon_onchip_stream_probe\design.prj\onchip.o:	file format elf32-aie
+
+Disassembly of section .text.onchip_stream:
+
+00000000 <onchip_stream>:
+       0: c0 03 00 00 00 00 00 00 00 00 00 08 50 00 00 00      	nopb	;		lda	r0, [p0, #0];		nops	;		nopxm	;		nopv	
+      10: 19 00 00 10  	nopx	
+      14: 01 00        	nop	
+      16: 01 00        	nop	
+      18: 01 00        	nop	
+      1a: 01 00        	nop	
+      1c: 01 00        	nop	
+      1e: 59 02 10 00  	mova	r1, #0x10
+      22: 99 1c 06 10  	ltu	r3, r0, r1
+      26: 95 01 40 00 00 18    	jnz	r3, #0x0
+      2c: 01 00        	nop	
+      2e: 01 00        	nop	
+      30: 01 00        	nop	
+      32: 19 10 00 10  	event	#0x0
+      36: 1d 01 04 48 00 08    	mova	r1, #0x40;		movx	r2, #0x0
+      3c: 55 00 e0 00 00 00    	movxm	ls, #0x0
+      42: bb 10 00 38 02 00 00 88 80 ff	mova	r2, #-0x4;		movxm	le, #0x0
+      4c: 99 2d 04 10  	lshl	r2, r0, r2
+      50: c0 03 00 38 83 b8 02 00 00 00 00 00 00 00 00 00      	nopb	;		nopa	;		nops	;		nopx	;		add.nc	lc, r2, #0x0;		nopv	
+
+00000060 <.LBB0_2>:
+      60: c0 03 00 00 00 00 00 00 00 00 00 80 30 00 00 00      	nopb	;		mov	r2, SS;		nops	;		nopxm	;		nopv	
+      70: c0 03 00 00 00 00 00 00 00 00 00 80 30 00 00 00      	nopb	;		mov	r2, SS;		nops	;		nopxm	;		nopv	
+      80: c0 03 00 00 00 00 00 00 00 00 00 80 30 00 00 00      	nopb	;		mov	r2, SS;		nops	;		nopxm	;		nopv	
+      90: 19 84 01 00  	mov	r2, SS
+      94: 19 84 01 00  	mov	r2, SS
+      98: 19 84 01 00  	mov	r2, SS
+      9c: 19 84 01 00  	mov	r2, SS
+      a0: 19 84 01 00  	mov	r2, SS
+      a4: 19 84 01 00  	mov	r2, SS
+      a8: 19 84 01 00  	mov	r2, SS
+      ac: 19 84 01 00  	mov	r2, SS
+      b0: 19 84 01 00  	mov	r2, SS
+      b4: 19 84 01 00  	mov	r2, SS
+      b8: 19 84 01 00  	mov	r2, SS
+      bc: 19 84 01 00  	mov	r2, SS
+
+000000c0 <.L_LEnd1>:
+      c0: c0 03 00 00 00 00 00 00 00 00 00 80 30 00 00 00      	nopb	;		mov	r2, SS;		nops	;		nopxm	;		nopv	
+      d0: bb 00 00 00 00 00 00 00 00 00	nopa	;		nopxm	
+      da: 01 00        	nop	
+      dc: 01 00        	nop	
+      de: 01 00        	nop	
+
+000000e0 <.LBB0_4>:
+      e0: bb 38 43 b8 82 00 10 00 00 00	nopa	;		event	#0x1;		add.nc	lc, r1, #0x0
+      ea: 55 00 e0 00 00 00    	movxm	ls, #0x0
+      f0: c0 03 00 10 00 38 02 00 00 00 00 00 00 00 00 00      	nopb	;		nopa	;		nops	;		movxm	le, #0x0;		nopv	
+
+00000100 <.LBB0_5>:
+     100: c0 03 00 88 03 00 80 00 00 00 00 00 00 00 00 00      	nopb	;		nopa	;		nops	;		event	#0x0;		nopm	;		nopv	
+     110: c0 03 00 88 03 00 80 00 10 00 00 00 00 00 00 00      	nopb	;		nopa	;		nops	;		event	#0x1;		nopm	;		nopv	
+     120: c0 03 00 88 03 00 80 00 00 00 00 00 00 00 00 00      	nopb	;		nopa	;		nops	;		event	#0x0;		nopm	;		nopv	
+     130: c0 03 00 88 03 00 80 00 10 00 00 00 00 00 00 00      	nopb	;		nopa	;		nops	;		event	#0x1;		nopm	;		nopv	
+     140: c0 03 00 88 03 00 80 00 00 00 00 00 00 00 00 00      	nopb	;		nopa	;		nops	;		event	#0x0;		nopm	;		nopv	
+     150: b7 88 03 00 80 00 10 00 00 00 00 00  	nopa	;		nopb	;		event	#0x1;		nopm	
+     15c: 19 10 00 10  	event	#0x0
+
+00000160 <.L_LEnd0>:
+     160: c0 03 00 88 03 00 80 00 10 00 00 00 00 00 00 00      	nopb	;		nopa	;		nops	;		event	#0x1;		nopm	;		nopv	
+     170: c0 03 00 88 03 00 c0 00 00 00 00 00 00 00 00 00      	nopb	;		nopa	;		nops	;		ret lr	;		nopm	;		nopv	
+     180: 19 00 00 10  	nopx	
+     184: 01 00        	nop	
+     186: 19 84 02 09  	st	r2, [p1, #0]
+     18a: 19 80 06 09  	st	r0, [p1, #4]
+     18e: 01 00        	nop	
+
+ONCHIP_POINT {"words": 1048576, "bytes": 4194304, "cycles": 1048648, "last_word": 1, "trial": 0}
+ 
+POST_ONCHIP 1048576 1
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+PRE_ONCHIP 1048576 2
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+ONCHIP_STREAM: MemTile buffer -> DMA0 -> core Core0; no DDR payload in the timed interval.
+SHA256 probe.mlir dcf402b691ceb2858ea093e53be6c157b7af55bf11f363ea70d5a5634ee67c01
+SHA256 insts.bin b4b9c07bdc16d13629851ddbcbde4a99513ab1566bef292601671d77a95acaf0
+SHA256 design.prj/onchip.o c3cda787279de62d3c944824e3eb7be68a3af6e279432bcf8d2b16b3c6f10d5a
+
+C:/Users/<user>\PycharmProjects\ignite-xdna\build\silicon_onchip_stream_probe\design.prj\onchip.o:	file format elf32-aie
+
+Disassembly of section .text.onchip_stream:
+
+00000000 <onchip_stream>:
+       0: c0 03 00 00 00 00 00 00 00 00 00 08 50 00 00 00      	nopb	;		lda	r0, [p0, #0];		nops	;		nopxm	;		nopv	
+      10: 19 00 00 10  	nopx	
+      14: 01 00        	nop	
+      16: 01 00        	nop	
+      18: 01 00        	nop	
+      1a: 01 00        	nop	
+      1c: 01 00        	nop	
+      1e: 59 02 10 00  	mova	r1, #0x10
+      22: 99 1c 06 10  	ltu	r3, r0, r1
+      26: 95 01 40 00 00 18    	jnz	r3, #0x0
+      2c: 01 00        	nop	
+      2e: 01 00        	nop	
+      30: 01 00        	nop	
+      32: 19 10 00 10  	event	#0x0
+      36: 1d 01 04 48 00 08    	mova	r1, #0x40;		movx	r2, #0x0
+      3c: 55 00 e0 00 00 00    	movxm	ls, #0x0
+      42: bb 10 00 38 02 00 00 88 80 ff	mova	r2, #-0x4;		movxm	le, #0x0
+      4c: 99 2d 04 10  	lshl	r2, r0, r2
+      50: c0 03 00 38 83 b8 02 00 00 00 00 00 00 00 00 00      	nopb	;		nopa	;		nops	;		nopx	;		add.nc	lc, r2, #0x0;		nopv	
+
+00000060 <.LBB0_2>:
+      60: c0 03 00 00 00 00 00 00 00 00 00 80 30 00 00 00      	nopb	;		mov	r2, SS;		nops	;		nopxm	;		nopv	
+      70: c0 03 00 00 00 00 00 00 00 00 00 80 30 00 00 00      	nopb	;		mov	r2, SS;		nops	;		nopxm	;		nopv	
+      80: c0 03 00 00 00 00 00 00 00 00 00 80 30 00 00 00      	nopb	;		mov	r2, SS;		nops	;		nopxm	;		nopv	
+      90: 19 84 01 00  	mov	r2, SS
+      94: 19 84 01 00  	mov	r2, SS
+      98: 19 84 01 00  	mov	r2, SS
+      9c: 19 84 01 00  	mov	r2, SS
+      a0: 19 84 01 00  	mov	r2, SS
+      a4: 19 84 01 00  	mov	r2, SS
+      a8: 19 84 01 00  	mov	r2, SS
+      ac: 19 84 01 00  	mov	r2, SS
+      b0: 19 84 01 00  	mov	r2, SS
+      b4: 19 84 01 00  	mov	r2, SS
+      b8: 19 84 01 00  	mov	r2, SS
+      bc: 19 84 01 00  	mov	r2, SS
+
+000000c0 <.L_LEnd1>:
+      c0: c0 03 00 00 00 00 00 00 00 00 00 80 30 00 00 00      	nopb	;		mov	r2, SS;		nops	;		nopxm	;		nopv	
+      d0: bb 00 00 00 00 00 00 00 00 00	nopa	;		nopxm	
+      da: 01 00        	nop	
+      dc: 01 00        	nop	
+      de: 01 00        	nop	
+
+000000e0 <.LBB0_4>:
+      e0: bb 38 43 b8 82 00 10 00 00 00	nopa	;		event	#0x1;		add.nc	lc, r1, #0x0
+      ea: 55 00 e0 00 00 00    	movxm	ls, #0x0
+      f0: c0 03 00 10 00 38 02 00 00 00 00 00 00 00 00 00      	nopb	;		nopa	;		nops	;		movxm	le, #0x0;		nopv	
+
+00000100 <.LBB0_5>:
+     100: c0 03 00 88 03 00 80 00 00 00 00 00 00 00 00 00      	nopb	;		nopa	;		nops	;		event	#0x0;		nopm	;		nopv	
+     110: c0 03 00 88 03 00 80 00 10 00 00 00 00 00 00 00      	nopb	;		nopa	;		nops	;		event	#0x1;		nopm	;		nopv	
+     120: c0 03 00 88 03 00 80 00 00 00 00 00 00 00 00 00      	nopb	;		nopa	;		nops	;		event	#0x0;		nopm	;		nopv	
+     130: c0 03 00 88 03 00 80 00 10 00 00 00 00 00 00 00      	nopb	;		nopa	;		nops	;		event	#0x1;		nopm	;		nopv	
+     140: c0 03 00 88 03 00 80 00 00 00 00 00 00 00 00 00      	nopb	;		nopa	;		nops	;		event	#0x0;		nopm	;		nopv	
+     150: b7 88 03 00 80 00 10 00 00 00 00 00  	nopa	;		nopb	;		event	#0x1;		nopm	
+     15c: 19 10 00 10  	event	#0x0
+
+00000160 <.L_LEnd0>:
+     160: c0 03 00 88 03 00 80 00 10 00 00 00 00 00 00 00      	nopb	;		nopa	;		nops	;		event	#0x1;		nopm	;		nopv	
+     170: c0 03 00 88 03 00 c0 00 00 00 00 00 00 00 00 00      	nopb	;		nopa	;		nops	;		ret lr	;		nopm	;		nopv	
+     180: 19 00 00 10  	nopx	
+     184: 01 00        	nop	
+     186: 19 84 02 09  	st	r2, [p1, #0]
+     18a: 19 80 06 09  	st	r0, [p1, #4]
+     18e: 01 00        	nop	
+
+ONCHIP_POINT {"words": 1048576, "bytes": 4194304, "cycles": 1048648, "last_word": 1, "trial": 0}
+ 
+POST_ONCHIP 1048576 2
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+PRE_ONCHIP 4194304 0
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+ONCHIP_STREAM: MemTile buffer -> DMA0 -> core Core0; no DDR payload in the timed interval.
+SHA256 probe.mlir dcf402b691ceb2858ea093e53be6c157b7af55bf11f363ea70d5a5634ee67c01
+SHA256 insts.bin b4b9c07bdc16d13629851ddbcbde4a99513ab1566bef292601671d77a95acaf0
+SHA256 design.prj/onchip.o c3cda787279de62d3c944824e3eb7be68a3af6e279432bcf8d2b16b3c6f10d5a
+
+C:/Users/<user>\PycharmProjects\ignite-xdna\build\silicon_onchip_stream_probe\design.prj\onchip.o:	file format elf32-aie
+
+Disassembly of section .text.onchip_stream:
+
+00000000 <onchip_stream>:
+       0: c0 03 00 00 00 00 00 00 00 00 00 08 50 00 00 00      	nopb	;		lda	r0, [p0, #0];		nops	;		nopxm	;		nopv	
+      10: 19 00 00 10  	nopx	
+      14: 01 00        	nop	
+      16: 01 00        	nop	
+      18: 01 00        	nop	
+      1a: 01 00        	nop	
+      1c: 01 00        	nop	
+      1e: 59 02 10 00  	mova	r1, #0x10
+      22: 99 1c 06 10  	ltu	r3, r0, r1
+      26: 95 01 40 00 00 18    	jnz	r3, #0x0
+      2c: 01 00        	nop	
+      2e: 01 00        	nop	
+      30: 01 00        	nop	
+      32: 19 10 00 10  	event	#0x0
+      36: 1d 01 04 48 00 08    	mova	r1, #0x40;		movx	r2, #0x0
+      3c: 55 00 e0 00 00 00    	movxm	ls, #0x0
+      42: bb 10 00 38 02 00 00 88 80 ff	mova	r2, #-0x4;		movxm	le, #0x0
+      4c: 99 2d 04 10  	lshl	r2, r0, r2
+      50: c0 03 00 38 83 b8 02 00 00 00 00 00 00 00 00 00      	nopb	;		nopa	;		nops	;		nopx	;		add.nc	lc, r2, #0x0;		nopv	
+
+00000060 <.LBB0_2>:
+      60: c0 03 00 00 00 00 00 00 00 00 00 80 30 00 00 00      	nopb	;		mov	r2, SS;		nops	;		nopxm	;		nopv	
+      70: c0 03 00 00 00 00 00 00 00 00 00 80 30 00 00 00      	nopb	;		mov	r2, SS;		nops	;		nopxm	;		nopv	
+      80: c0 03 00 00 00 00 00 00 00 00 00 80 30 00 00 00      	nopb	;		mov	r2, SS;		nops	;		nopxm	;		nopv	
+      90: 19 84 01 00  	mov	r2, SS
+      94: 19 84 01 00  	mov	r2, SS
+      98: 19 84 01 00  	mov	r2, SS
+      9c: 19 84 01 00  	mov	r2, SS
+      a0: 19 84 01 00  	mov	r2, SS
+      a4: 19 84 01 00  	mov	r2, SS
+      a8: 19 84 01 00  	mov	r2, SS
+      ac: 19 84 01 00  	mov	r2, SS
+      b0: 19 84 01 00  	mov	r2, SS
+      b4: 19 84 01 00  	mov	r2, SS
+      b8: 19 84 01 00  	mov	r2, SS
+      bc: 19 84 01 00  	mov	r2, SS
+
+000000c0 <.L_LEnd1>:
+      c0: c0 03 00 00 00 00 00 00 00 00 00 80 30 00 00 00      	nopb	;		mov	r2, SS;		nops	;		nopxm	;		nopv	
+      d0: bb 00 00 00 00 00 00 00 00 00	nopa	;		nopxm	
+      da: 01 00        	nop	
+      dc: 01 00        	nop	
+      de: 01 00        	nop	
+
+000000e0 <.LBB0_4>:
+      e0: bb 38 43 b8 82 00 10 00 00 00	nopa	;		event	#0x1;		add.nc	lc, r1, #0x0
+      ea: 55 00 e0 00 00 00    	movxm	ls, #0x0
+      f0: c0 03 00 10 00 38 02 00 00 00 00 00 00 00 00 00      	nopb	;		nopa	;		nops	;		movxm	le, #0x0;		nopv	
+
+00000100 <.LBB0_5>:
+     100: c0 03 00 88 03 00 80 00 00 00 00 00 00 00 00 00      	nopb	;		nopa	;		nops	;		event	#0x0;		nopm	;		nopv	
+     110: c0 03 00 88 03 00 80 00 10 00 00 00 00 00 00 00      	nopb	;		nopa	;		nops	;		event	#0x1;		nopm	;		nopv	
+     120: c0 03 00 88 03 00 80 00 00 00 00 00 00 00 00 00      	nopb	;		nopa	;		nops	;		event	#0x0;		nopm	;		nopv	
+     130: c0 03 00 88 03 00 80 00 10 00 00 00 00 00 00 00      	nopb	;		nopa	;		nops	;		event	#0x1;		nopm	;		nopv	
+     140: c0 03 00 88 03 00 80 00 00 00 00 00 00 00 00 00      	nopb	;		nopa	;		nops	;		event	#0x0;		nopm	;		nopv	
+     150: b7 88 03 00 80 00 10 00 00 00 00 00  	nopa	;		nopb	;		event	#0x1;		nopm	
+     15c: 19 10 00 10  	event	#0x0
+
+00000160 <.L_LEnd0>:
+     160: c0 03 00 88 03 00 80 00 10 00 00 00 00 00 00 00      	nopb	;		nopa	;		nops	;		event	#0x1;		nopm	;		nopv	
+     170: c0 03 00 88 03 00 c0 00 00 00 00 00 00 00 00 00      	nopb	;		nopa	;		nops	;		ret lr	;		nopm	;		nopv	
+     180: 19 00 00 10  	nopx	
+     184: 01 00        	nop	
+     186: 19 84 02 09  	st	r2, [p1, #0]
+     18a: 19 80 06 09  	st	r0, [p1, #4]
+     18e: 01 00        	nop	
+
+ONCHIP_POINT {"words": 4194304, "bytes": 16777216, "cycles": 4194568, "last_word": 1, "trial": 0}
+ 
+POST_ONCHIP 4194304 0
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+PRE_ONCHIP 4194304 1
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+ONCHIP_STREAM: MemTile buffer -> DMA0 -> core Core0; no DDR payload in the timed interval.
+SHA256 probe.mlir dcf402b691ceb2858ea093e53be6c157b7af55bf11f363ea70d5a5634ee67c01
+SHA256 insts.bin b4b9c07bdc16d13629851ddbcbde4a99513ab1566bef292601671d77a95acaf0
+SHA256 design.prj/onchip.o c3cda787279de62d3c944824e3eb7be68a3af6e279432bcf8d2b16b3c6f10d5a
+
+C:/Users/<user>\PycharmProjects\ignite-xdna\build\silicon_onchip_stream_probe\design.prj\onchip.o:	file format elf32-aie
+
+Disassembly of section .text.onchip_stream:
+
+00000000 <onchip_stream>:
+       0: c0 03 00 00 00 00 00 00 00 00 00 08 50 00 00 00      	nopb	;		lda	r0, [p0, #0];		nops	;		nopxm	;		nopv	
+      10: 19 00 00 10  	nopx	
+      14: 01 00        	nop	
+      16: 01 00        	nop	
+      18: 01 00        	nop	
+      1a: 01 00        	nop	
+      1c: 01 00        	nop	
+      1e: 59 02 10 00  	mova	r1, #0x10
+      22: 99 1c 06 10  	ltu	r3, r0, r1
+      26: 95 01 40 00 00 18    	jnz	r3, #0x0
+      2c: 01 00        	nop	
+      2e: 01 00        	nop	
+      30: 01 00        	nop	
+      32: 19 10 00 10  	event	#0x0
+      36: 1d 01 04 48 00 08    	mova	r1, #0x40;		movx	r2, #0x0
+      3c: 55 00 e0 00 00 00    	movxm	ls, #0x0
+      42: bb 10 00 38 02 00 00 88 80 ff	mova	r2, #-0x4;		movxm	le, #0x0
+      4c: 99 2d 04 10  	lshl	r2, r0, r2
+      50: c0 03 00 38 83 b8 02 00 00 00 00 00 00 00 00 00      	nopb	;		nopa	;		nops	;		nopx	;		add.nc	lc, r2, #0x0;		nopv	
+
+00000060 <.LBB0_2>:
+      60: c0 03 00 00 00 00 00 00 00 00 00 80 30 00 00 00      	nopb	;		mov	r2, SS;		nops	;		nopxm	;		nopv	
+      70: c0 03 00 00 00 00 00 00 00 00 00 80 30 00 00 00      	nopb	;		mov	r2, SS;		nops	;		nopxm	;		nopv	
+      80: c0 03 00 00 00 00 00 00 00 00 00 80 30 00 00 00      	nopb	;		mov	r2, SS;		nops	;		nopxm	;		nopv	
+      90: 19 84 01 00  	mov	r2, SS
+      94: 19 84 01 00  	mov	r2, SS
+      98: 19 84 01 00  	mov	r2, SS
+      9c: 19 84 01 00  	mov	r2, SS
+      a0: 19 84 01 00  	mov	r2, SS
+      a4: 19 84 01 00  	mov	r2, SS
+      a8: 19 84 01 00  	mov	r2, SS
+      ac: 19 84 01 00  	mov	r2, SS
+      b0: 19 84 01 00  	mov	r2, SS
+      b4: 19 84 01 00  	mov	r2, SS
+      b8: 19 84 01 00  	mov	r2, SS
+      bc: 19 84 01 00  	mov	r2, SS
+
+000000c0 <.L_LEnd1>:
+      c0: c0 03 00 00 00 00 00 00 00 00 00 80 30 00 00 00      	nopb	;		mov	r2, SS;		nops	;		nopxm	;		nopv	
+      d0: bb 00 00 00 00 00 00 00 00 00	nopa	;		nopxm	
+      da: 01 00        	nop	
+      dc: 01 00        	nop	
+      de: 01 00        	nop	
+
+000000e0 <.LBB0_4>:
+      e0: bb 38 43 b8 82 00 10 00 00 00	nopa	;		event	#0x1;		add.nc	lc, r1, #0x0
+      ea: 55 00 e0 00 00 00    	movxm	ls, #0x0
+      f0: c0 03 00 10 00 38 02 00 00 00 00 00 00 00 00 00      	nopb	;		nopa	;		nops	;		movxm	le, #0x0;		nopv	
+
+00000100 <.LBB0_5>:
+     100: c0 03 00 88 03 00 80 00 00 00 00 00 00 00 00 00      	nopb	;		nopa	;		nops	;		event	#0x0;		nopm	;		nopv	
+     110: c0 03 00 88 03 00 80 00 10 00 00 00 00 00 00 00      	nopb	;		nopa	;		nops	;		event	#0x1;		nopm	;		nopv	
+     120: c0 03 00 88 03 00 80 00 00 00 00 00 00 00 00 00      	nopb	;		nopa	;		nops	;		event	#0x0;		nopm	;		nopv	
+     130: c0 03 00 88 03 00 80 00 10 00 00 00 00 00 00 00      	nopb	;		nopa	;		nops	;		event	#0x1;		nopm	;		nopv	
+     140: c0 03 00 88 03 00 80 00 00 00 00 00 00 00 00 00      	nopb	;		nopa	;		nops	;		event	#0x0;		nopm	;		nopv	
+     150: b7 88 03 00 80 00 10 00 00 00 00 00  	nopa	;		nopb	;		event	#0x1;		nopm	
+     15c: 19 10 00 10  	event	#0x0
+
+00000160 <.L_LEnd0>:
+     160: c0 03 00 88 03 00 80 00 10 00 00 00 00 00 00 00      	nopb	;		nopa	;		nops	;		event	#0x1;		nopm	;		nopv	
+     170: c0 03 00 88 03 00 c0 00 00 00 00 00 00 00 00 00      	nopb	;		nopa	;		nops	;		ret lr	;		nopm	;		nopv	
+     180: 19 00 00 10  	nopx	
+     184: 01 00        	nop	
+     186: 19 84 02 09  	st	r2, [p1, #0]
+     18a: 19 80 06 09  	st	r0, [p1, #4]
+     18e: 01 00        	nop	
+
+ONCHIP_POINT {"words": 4194304, "bytes": 16777216, "cycles": 4194568, "last_word": 1, "trial": 0}
+ 
+POST_ONCHIP 4194304 1
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+PRE_ONCHIP 4194304 2
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+ONCHIP_STREAM: MemTile buffer -> DMA0 -> core Core0; no DDR payload in the timed interval.
+SHA256 probe.mlir dcf402b691ceb2858ea093e53be6c157b7af55bf11f363ea70d5a5634ee67c01
+SHA256 insts.bin b4b9c07bdc16d13629851ddbcbde4a99513ab1566bef292601671d77a95acaf0
+SHA256 design.prj/onchip.o c3cda787279de62d3c944824e3eb7be68a3af6e279432bcf8d2b16b3c6f10d5a
+
+C:/Users/<user>\PycharmProjects\ignite-xdna\build\silicon_onchip_stream_probe\design.prj\onchip.o:	file format elf32-aie
+
+Disassembly of section .text.onchip_stream:
+
+00000000 <onchip_stream>:
+       0: c0 03 00 00 00 00 00 00 00 00 00 08 50 00 00 00      	nopb	;		lda	r0, [p0, #0];		nops	;		nopxm	;		nopv	
+      10: 19 00 00 10  	nopx	
+      14: 01 00        	nop	
+      16: 01 00        	nop	
+      18: 01 00        	nop	
+      1a: 01 00        	nop	
+      1c: 01 00        	nop	
+      1e: 59 02 10 00  	mova	r1, #0x10
+      22: 99 1c 06 10  	ltu	r3, r0, r1
+      26: 95 01 40 00 00 18    	jnz	r3, #0x0
+      2c: 01 00        	nop	
+      2e: 01 00        	nop	
+      30: 01 00        	nop	
+      32: 19 10 00 10  	event	#0x0
+      36: 1d 01 04 48 00 08    	mova	r1, #0x40;		movx	r2, #0x0
+      3c: 55 00 e0 00 00 00    	movxm	ls, #0x0
+      42: bb 10 00 38 02 00 00 88 80 ff	mova	r2, #-0x4;		movxm	le, #0x0
+      4c: 99 2d 04 10  	lshl	r2, r0, r2
+      50: c0 03 00 38 83 b8 02 00 00 00 00 00 00 00 00 00      	nopb	;		nopa	;		nops	;		nopx	;		add.nc	lc, r2, #0x0;		nopv	
+
+00000060 <.LBB0_2>:
+      60: c0 03 00 00 00 00 00 00 00 00 00 80 30 00 00 00      	nopb	;		mov	r2, SS;		nops	;		nopxm	;		nopv	
+      70: c0 03 00 00 00 00 00 00 00 00 00 80 30 00 00 00      	nopb	;		mov	r2, SS;		nops	;		nopxm	;		nopv	
+      80: c0 03 00 00 00 00 00 00 00 00 00 80 30 00 00 00      	nopb	;		mov	r2, SS;		nops	;		nopxm	;		nopv	
+      90: 19 84 01 00  	mov	r2, SS
+      94: 19 84 01 00  	mov	r2, SS
+      98: 19 84 01 00  	mov	r2, SS
+      9c: 19 84 01 00  	mov	r2, SS
+      a0: 19 84 01 00  	mov	r2, SS
+      a4: 19 84 01 00  	mov	r2, SS
+      a8: 19 84 01 00  	mov	r2, SS
+      ac: 19 84 01 00  	mov	r2, SS
+      b0: 19 84 01 00  	mov	r2, SS
+      b4: 19 84 01 00  	mov	r2, SS
+      b8: 19 84 01 00  	mov	r2, SS
+      bc: 19 84 01 00  	mov	r2, SS
+
+000000c0 <.L_LEnd1>:
+      c0: c0 03 00 00 00 00 00 00 00 00 00 80 30 00 00 00      	nopb	;		mov	r2, SS;		nops	;		nopxm	;		nopv	
+      d0: bb 00 00 00 00 00 00 00 00 00	nopa	;		nopxm	
+      da: 01 00        	nop	
+      dc: 01 00        	nop	
+      de: 01 00        	nop	
+
+000000e0 <.LBB0_4>:
+      e0: bb 38 43 b8 82 00 10 00 00 00	nopa	;		event	#0x1;		add.nc	lc, r1, #0x0
+      ea: 55 00 e0 00 00 00    	movxm	ls, #0x0
+      f0: c0 03 00 10 00 38 02 00 00 00 00 00 00 00 00 00      	nopb	;		nopa	;		nops	;		movxm	le, #0x0;		nopv	
+
+00000100 <.LBB0_5>:
+     100: c0 03 00 88 03 00 80 00 00 00 00 00 00 00 00 00      	nopb	;		nopa	;		nops	;		event	#0x0;		nopm	;		nopv	
+     110: c0 03 00 88 03 00 80 00 10 00 00 00 00 00 00 00      	nopb	;		nopa	;		nops	;		event	#0x1;		nopm	;		nopv	
+     120: c0 03 00 88 03 00 80 00 00 00 00 00 00 00 00 00      	nopb	;		nopa	;		nops	;		event	#0x0;		nopm	;		nopv	
+     130: c0 03 00 88 03 00 80 00 10 00 00 00 00 00 00 00      	nopb	;		nopa	;		nops	;		event	#0x1;		nopm	;		nopv	
+     140: c0 03 00 88 03 00 80 00 00 00 00 00 00 00 00 00      	nopb	;		nopa	;		nops	;		event	#0x0;		nopm	;		nopv	
+     150: b7 88 03 00 80 00 10 00 00 00 00 00  	nopa	;		nopb	;		event	#0x1;		nopm	
+     15c: 19 10 00 10  	event	#0x0
+
+00000160 <.L_LEnd0>:
+     160: c0 03 00 88 03 00 80 00 10 00 00 00 00 00 00 00      	nopb	;		nopa	;		nops	;		event	#0x1;		nopm	;		nopv	
+     170: c0 03 00 88 03 00 c0 00 00 00 00 00 00 00 00 00      	nopb	;		nopa	;		nops	;		ret lr	;		nopm	;		nopv	
+     180: 19 00 00 10  	nopx	
+     184: 01 00        	nop	
+     186: 19 84 02 09  	st	r2, [p1, #0]
+     18a: 19 80 06 09  	st	r0, [p1, #4]
+     18e: 01 00        	nop	
+
+ONCHIP_POINT {"words": 4194304, "bytes": 16777216, "cycles": 4194568, "last_word": 1, "trial": 0}
+ 
+POST_ONCHIP 4194304 2
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+ONCHIP_FIT {"cycles_per_32bit_word": 1.00006103515625, "bytes_per_cycle": 3.9997558742752517, "intercept_cycles": 7.999999999659646}
+VERDICT: on-chip single-stream 32-bit word/cycle supported by trace slope; opens independent-stream scaling, closes a wider-per-stream engine assumption.
+ 
+POST_CHILD ['suite']
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+PRE_CHILD ['clock']
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+CLOCK_POINT {"mode": "scalar", "iterations": 1048576, "cycles": 9437188, "hardware_ms": [5.5361, 5.5729, 5.5703, 5.5901, 5.6014, 5.5707, 5.6468, 5.5996, 5.6001], "tile": [1, 2]}
+CLOCK_POINT {"mode": "scalar", "iterations": 4194304, "cycles": 37748740, "hardware_ms": [21.689, 21.4434, 21.3328, 21.4109, 21.4022, 21.7923, 21.467, 21.325, 21.472], "tile": [1, 2]}
+CLOCK_POINT {"mode": "scalar", "iterations": 16777216, "cycles": 150994948, "hardware_ms": [84.279, 84.7922, 84.5005, 84.65, 84.7868, 84.4024, 84.2727, 84.757, 84.5423], "tile": [1, 2]}
+CLOCK scalar GHz 1.7934652016508354 R2 0.9999993258295738
+CLOCK_POINT {"mode": "vector", "iterations": 4194304, "cycles": 8388629, "hardware_ms": [4.9706, 4.9558, 5.0305, 4.9803, 5.0275, 4.9978, 5.0166, 4.9858, 5.0011], "tile": [1, 2]}
+CLOCK_POINT {"mode": "vector", "iterations": 16777216, "cycles": 33554453, "hardware_ms": [19.3948, 19.0811, 18.9839, 19.12, 19.5513, 19.1466, 19.2707, 19.0278, 19.0484], "tile": [1, 2]}
+CLOCK_POINT {"mode": "vector", "iterations": 67108864, "cycles": 134217749, "hardware_ms": [75.1, 74.9315, 74.9812, 74.9919, 74.9392, 75.2053, 74.9717, 74.953, 75.3873], "tile": [1, 2]}
+CLOCK vector GHz 1.799137692260555 R2 0.9999965763169614
+CLOCK_JSON {"ghz": 1.7963014469556953, "method": "trace event cycle/time slopes, scalar and vector"}
+ 
+POST_CHILD ['clock']
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+PRE_CHILD ['run', '--words', '1048576', '--channels', '1']
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+ARTIFACT c1_n1048576 chunk_bytes 262144 insts_sha256 c179a503770b58b9ace5bb1b310efbb4f7241dc1cbacfb171d0c08176cf78a68
+RESULT_JSON {"words_per_channel": 1048576, "channels": 1, "bytes_per_direction": 4194304, "times_ms": [0.8034, 0.7989, 0.8051, 0.8061, 0.7839, 0.7843, 0.823, 0.8085, 0.7619, 0.7822, 0.8087, 0.7791, 0.7692, 0.7829, 0.7887], "median_ms": 0.7887, "mean_ms": 0.7923933333333333, "verified_calls": 18, "mismatches": 0}
+ 
+POST_CHILD ['run', '--words', '1048576', '--channels', '1']
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+PRE_CHILD ['run', '--words', '1048576', '--channels', '2']
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+ARTIFACT c2_n1048576 chunk_bytes 262144 insts_sha256 e1b026baa4c1d02845f6fca6e964716afb9b43783afc667e080dfa8e1b097026
+RESULT_JSON {"words_per_channel": 1048576, "channels": 2, "bytes_per_direction": 8388608, "times_ms": [0.8497, 0.8392, 0.8296, 0.8192, 0.8339, 0.7905, 0.8137, 0.8019, 0.8053, 0.7993, 0.8617, 0.8396, 0.8483, 0.8538, 0.8737], "median_ms": 0.8339, "mean_ms": 0.8306266666666667, "verified_calls": 18, "mismatches": 0}
+ 
+POST_CHILD ['run', '--words', '1048576', '--channels', '2']
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+PRE_CHILD ['run', '--words', '2097152', '--channels', '1']
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+ARTIFACT c1_n2097152 chunk_bytes 262144 insts_sha256 68fb4f3053e5a559f04509d1f528c2866d39a445a9df76c458c1d8cf2c2e8275
+RESULT_JSON {"words_per_channel": 2097152, "channels": 1, "bytes_per_direction": 8388608, "times_ms": [1.4367, 1.4499, 1.4162, 1.4463, 1.4462, 1.4023, 1.4083, 1.4313, 1.4607, 1.4497, 1.4107, 1.4309, 1.4517, 1.4488, 1.4038], "median_ms": 1.4367, "mean_ms": 1.4329, "verified_calls": 18, "mismatches": 0}
+ 
+POST_CHILD ['run', '--words', '2097152', '--channels', '1']
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+PRE_CHILD ['run', '--words', '2097152', '--channels', '2']
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+ARTIFACT c2_n2097152 chunk_bytes 262144 insts_sha256 8dec9aae3cc09064e37c8d1ca43f736f32e19a9363f8bc84bcc213943662218d
+RESULT_JSON {"words_per_channel": 2097152, "channels": 2, "bytes_per_direction": 16777216, "times_ms": [1.5016, 1.5248, 1.5282, 1.4973, 1.5875, 1.4927, 1.5071, 1.51, 1.4959, 1.5607, 1.4993, 1.4936, 1.4957, 1.4956, 1.4812], "median_ms": 1.4993, "mean_ms": 1.5114133333333333, "verified_calls": 18, "mismatches": 0}
+ 
+POST_CHILD ['run', '--words', '2097152', '--channels', '2']
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+PRE_CHILD ['run', '--words', '4194304', '--channels', '1']
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+ARTIFACT c1_n4194304 chunk_bytes 262144 insts_sha256 4071ecaa3bc8d09b7f75be9512bb8e013a1913e9071094c9b34d3f5c124ae984
+RESULT_JSON {"words_per_channel": 4194304, "channels": 1, "bytes_per_direction": 16777216, "times_ms": [2.6797, 2.7155, 2.8845, 2.6469, 2.6589, 2.6603, 2.6693, 2.6824, 2.6446, 2.6864, 2.6599, 2.6834, 2.6784, 2.646, 2.6459], "median_ms": 2.6693, "mean_ms": 2.6828066666666666, "verified_calls": 18, "mismatches": 0}
+ 
+POST_CHILD ['run', '--words', '4194304', '--channels', '1']
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+PRE_CHILD ['run', '--words', '4194304', '--channels', '2']
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+ARTIFACT c2_n4194304 chunk_bytes 262144 insts_sha256 8f3892d0d9f9de66bdb13dac6aab201646b6a956b1be6fd2c1242681cfd8f4ca
+RESULT_JSON {"words_per_channel": 4194304, "channels": 2, "bytes_per_direction": 33554432, "times_ms": [2.7363, 2.6993, 2.7316, 2.7027, 2.7038, 2.7647, 2.763, 2.7476, 2.7624, 2.7121, 2.699, 2.7207, 2.8138, 2.7517, 2.7619], "median_ms": 2.7363, "mean_ms": 2.73804, "verified_calls": 18, "mismatches": 0}
+ 
+POST_CHILD ['run', '--words', '4194304', '--channels', '2']
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+PRE_CHILD ['run', '--words', '8388608', '--channels', '1']
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+ARTIFACT c1_n8388608 chunk_bytes 262144 insts_sha256 a7f4d980f7f503a29f23af1c42f007cd7e902db1b4f68bb7d28e7746b09855c0
+RESULT_JSON {"words_per_channel": 8388608, "channels": 1, "bytes_per_direction": 33554432, "times_ms": [5.1141, 5.0916, 5.0977, 5.0328, 5.0077, 5.0507, 5.0424, 5.0177, 5.0553, 5.0351, 5.063, 5.0576, 5.085, 5.111, 5.0718], "median_ms": 5.0576, "mean_ms": 5.062233333333333, "verified_calls": 18, "mismatches": 0}
+ 
+POST_CHILD ['run', '--words', '8388608', '--channels', '1']
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+PRE_CHILD ['run', '--words', '8388608', '--channels', '2']
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+ARTIFACT c2_n8388608 chunk_bytes 262144 insts_sha256 a00368ad5867559850856b75595ceda576ca53cc39d5f4c2dfc60b1482dd0739
+RESULT_JSON {"words_per_channel": 8388608, "channels": 2, "bytes_per_direction": 67108864, "times_ms": [5.1516, 5.0967, 5.3138, 5.1845, 5.1639, 5.1244, 5.5825, 5.2166, 5.1712, 5.2012, 5.3176, 5.0978, 5.1447, 5.3533, 5.2455], "median_ms": 5.1845, "mean_ms": 5.224353333333334, "verified_calls": 18, "mismatches": 0}
+ 
+POST_CHILD ['run', '--words', '8388608', '--channels', '2']
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+FIT_JSON {"channels": 1, "GBps_per_direction": 6.898930858359826, "bytes_per_core_cycle_per_channel": 3.84063090861051, "intercept_ms": 0.20820869565217273, "R2": 0.9998144273691173}
+FIT_JSON {"channels": 2, "GBps_per_direction": 13.548102375120774, "bytes_per_core_cycle_per_channel": 3.771110466475878, "intercept_ms": 0.2416043478260862, "R2": 0.9998611210257317}
+Scope: host submit/wait slope for correct full-duplex transfers; bytes/cycle derived using same-sitting trace clock.
+Shared DRAM vs NoC ceiling is not attributed by this one/two-channel probe.
+
+EXIT_CODE: 0
+POST_DEVICE_WITNESS
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+

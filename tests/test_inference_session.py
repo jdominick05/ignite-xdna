@@ -39,6 +39,7 @@ class TestInferenceSession(unittest.TestCase):
         cls.model_path = REPO_ROOT / "models" / "yolov8n_cut_xint8.onnx"
         cls.calib_image = REPO_ROOT / "data" / "bisenetv2_calib" / "000000000139.jpg"
         cls.xclbin_path = REPO_ROOT / "build" / "im2col_4d_16core.xclbin"
+        cls.fused_xclbin_path = REPO_ROOT / "build" / "im2col_fused_2layer.xclbin"
         cls.exec_a = REPO_ROOT / "build" / "layer_conv0_exec.bin"
         cls.init_a = REPO_ROOT / "build" / "layer_conv0_init.bin"
         cls.exec_b = REPO_ROOT / "build" / "layer_fused_exec.bin"
@@ -95,6 +96,7 @@ class TestInferenceSession(unittest.TestCase):
 
     def test_02_fused_2layer_parity(self):
         """Test 2: Fused 2-layer MemTile SRAM inference achieving >= 96.88% bit-agreement vs ORT CPU."""
+        self._require_fused_artifacts()
         golden_exact = run_fused_2layer_fixed_point_reference(
             self.sub0, self.sub1, self.in_bytes_single, num_cores=16
         )
@@ -105,6 +107,7 @@ class TestInferenceSession(unittest.TestCase):
         with InferenceSession(
             model_path_or_bundle=str(self.exec_b),
             enable_fusion=True,
+            xclbin_path=self.fused_xclbin_path,
             device_index=0,
             num_cores=16,
         ) as session:
@@ -147,7 +150,7 @@ class TestInferenceSession(unittest.TestCase):
             self.assertTrue(session._closed)
 
     def test_04_throughput_regression(self):
-        """Test 4: Verify throughput matches canonical silicon targets (~84-86 us single, ~160-165 us fused)."""
+        """Verify single-layer throughput against the existing silicon thresholds."""
         with InferenceSession(
             model_path_or_bundle=str(self.exec_a),
             device_index=0,
@@ -165,9 +168,20 @@ class TestInferenceSession(unittest.TestCase):
                 f"Single-layer throughput regressed: {bench_a['fps']} FPS"
             )
 
+    def _require_fused_artifacts(self):
+        # Automatic firmware lookup can fall back to the single-layer design.
+        # That cannot validate the fused transaction bundle's silicon behavior.
+        missing = [p.name for p in (self.fused_xclbin_path, self.init_b, self.exec_b) if not p.is_file()]
+        if missing:
+            self.skipTest("Fused hardware artifacts missing: " + ", ".join(missing))
+
+    def test_04b_fused_throughput_regression(self):
+        """Verify fused throughput only with its matching hardware design present."""
+        self._require_fused_artifacts()
         with InferenceSession(
             model_path_or_bundle=str(self.exec_b),
             enable_fusion=True,
+            xclbin_path=self.fused_xclbin_path,
             device_index=0,
             num_cores=16,
         ) as session_fused:
