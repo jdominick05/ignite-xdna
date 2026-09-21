@@ -21,7 +21,7 @@ for p in (ROOT, ROOT / "src"):
         sys.path.insert(0, str(p))
 
 from ignite_xdna.pipelines import preprocess as pp  # noqa: E402
-from ignite_xdna.pipelines.yolo_pipeline import YoloDecoder  # noqa: E402
+from ignite_xdna.pipelines.yolo_pipeline import YoloDecoder, reg_max_from_manifest  # noqa: E402
 
 GRIDS = (("p3", 80), ("p4", 40), ("p5", 20))
 SCALES = {"p3_box": (0.0625, 0), "p4_box": (0.0625, 0), "p5_box": (0.125, 0),
@@ -128,6 +128,42 @@ class HostFastPathsOffline(unittest.TestCase):
                 self.assertEqual(int(diff.max()), 0)
             self.assertTrue(np.all(plane[:halo] == 0) and np.all(plane[:, :, 3:] == 0))
 
+
+
+class RegMaxFromManifest(unittest.TestCase):
+    """A container's declared reg_max must agree with the box head it describes.
+
+    The compiler derives one from the other, so they agree by construction - but containers compiled
+    before it did that declare 16 beside a 4-channel box head. That combination does not raise when
+    decoded, it silently reduces over DFL bins that are not there and returns wrong boxes, which is
+    the worst available failure mode. build/yolo26n.ignite and two siblings are real examples.
+    """
+
+    @staticmethod
+    def _manifest(reg_max, box_channels):
+        return {"reg_max": reg_max,
+                "output_shapes": {"p3_box": [1, box_channels, 80, 80],
+                                  "p3_cls": [1, 80, 80, 80]}}
+
+    def test_dfl_and_dfl_free_heads_are_accepted(self):
+        self.assertEqual(reg_max_from_manifest(self._manifest(16, 64)), 16)   # YOLOv8
+        self.assertEqual(reg_max_from_manifest(self._manifest(1, 4)), 1)      # YOLO26
+
+    def test_a_stale_manifest_is_refused_naming_both_numbers(self):
+        with self.assertRaises(ValueError) as caught:
+            reg_max_from_manifest(self._manifest(16, 4))
+        message = str(caught.exception)
+        self.assertIn("64", message)   # what 16 bins would require
+        self.assertIn("4", message)    # what the head actually carries
+
+    def test_nothing_declared_leaves_the_caller_default(self):
+        self.assertIsNone(reg_max_from_manifest(None))
+        self.assertIsNone(reg_max_from_manifest({}))
+
+    def test_a_manifest_without_shapes_is_taken_at_its_word(self):
+        # Older containers carry reg_max but no output_shapes; there is nothing to check against,
+        # and refusing them would break containers that decode correctly today.
+        self.assertEqual(reg_max_from_manifest({"reg_max": 16}), 16)
 
 if __name__ == "__main__":
     unittest.main()

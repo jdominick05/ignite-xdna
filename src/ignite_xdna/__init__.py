@@ -4,7 +4,7 @@
 ignite-xdna: Bare-metal AIE2 vector compute engine and compiler lowering for AMD XDNA1 NPU.
 """
 
-__version__ = "0.3.1"
+__version__ = "0.3.2"
 
 from . import compiler
 from . import runtime

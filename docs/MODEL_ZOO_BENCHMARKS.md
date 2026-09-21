@@ -629,6 +629,13 @@ detection quality, and there is none yet: **YOLO26 needs a new decoder**, becaus
 `decode_native.c` assumes DFL and YOLO26 regresses four box values directly and is NMS-free.
 No mAP, no detections, no comparison against AMD's stack.
 
+> **SUPERSEDED the same day (2026-09-21).** `decode_native.c` implements the DFL-free form as well
+> since `266802f` (ABI 3, `direct_side`/`direct_side_c8`), and `4cc03df` made `reg_max` a property
+> the container declares, so nothing decodes by model name. YOLO26n now has mAP (32.55 against
+> AMD's 23.64 on all 5,000 val2017 images) and a pipeline comparison
+> ([below](#yolo26n-through-ignitions-own-pipeline-against-amds-stack-2026-09-21-desktop-2)). The
+> sentence is kept because it was true when written, not because it still is.
+
 ### YOLO26n detects on the NPU (2026-09-20, Desktop 2)
 
 `npu/yolo26_decode.py` is the anchor decode the head cut removes. YOLO26 dropped DFL, so its
@@ -721,3 +728,50 @@ this model and no README badge may carry these figures. Neither arm has a native
 both sides and cost about 8.7 ms of every frame. The engine arm additionally pays one readback
 per head where the EP returns all six from one call, which makes 1.43x a floor. And there is
 **no accuracy figure**: six detections on one image is a smoke test, not mAP.
+
+> **SUPERSEDED (2026-09-21).** Three of these caveats have been closed and one stands. Closed:
+> `decode_native.c` decodes the DFL-free form since `266802f`, so both arms have a native decode;
+> Ignition does run the model, taking `reg_max` from the manifest with no SDK change, at 5 objects
+> a frame on 500/500 frames; and there is now an accuracy figure, 32.55 mAP@50-95 against AMD's
+> 23.64 over all 5,000 val2017 images. Still standing: the 1.43x itself, which was superseded first
+> by 2.53x on the corrected benchmark and then by **3.41x** through Ignition's own pipeline
+> ([below](#yolo26n-through-ignitions-own-pipeline-against-amds-stack-2026-09-21-desktop-2)).
+
+### YOLO26n through Ignition's own pipeline against AMD's stack (2026-09-21, Desktop 2)
+
+The section above is the container benchmark, whose decode is deliberately unoptimized numpy on
+every arm. This is Ignition's own pipeline: `live_ignition.py` in its balanced default against
+`tools/amd_vitisai_yolo.py` on Ryzen AI 1.7.1, arms alternating, two rounds, 50 warm-up and 500
+timed frames of `bus.jpg`, `xrt-smi` idle before every run and after the last. Evidence:
+`results/aie/yolo26n_ignition_sitting_20260921.log`.
+
+| arm | run 1 | run 2 | mean | vs AMD |
+|---|---:|---:|---:|---:|
+| AMD Ryzen AI 1.7.1, Vitis AI EP | 37.437 ms | 37.672 ms | 37.555 ms | - |
+| Ignition, sigmoid epilogue | 11.033 ms | 11.011 ms | **11.022 ms** | 3.41x |
+| Ignition, no epilogue (control) | 10.725 ms | 10.714 ms | 10.720 ms | 3.50x |
+
+- **The ratio moved upward against the container benchmark's 2.53x, and the reason is the decode.**
+  Ignition decodes in 0.092 ms where the benchmark charged the engine arm about 4.5 ms of numpy.
+  AMD's arm gained as well, its decode falling from 5.270 to 1.254 ms, but by less, because its
+  frame is dominated by `session.run` at 34.259 ms.
+- **The epilogue costs 0.302 ms**, 2.8 % of the frame, which agrees with the +0.260 ms the
+  container benchmark measured for it independently.
+- **Stage split, epilogue arm:** preprocess 0.202, forward 10.733 (dispatch 9.149, host 1.373,
+  readback 0.211), decode and NMS 0.092. AMD: letterbox 1.924, `session.run` 34.259, decode and
+  NMS 1.254.
+- **Ignition runs this model with no SDK change.** It reads `reg_max` from the manifest and takes
+  its boxes from the NPU detect heads on 500/500 timed frames in all four engine runs. The
+  container's two host segments make exactly **2** `onnxruntime.InferenceSession.run` calls per
+  frame, counted in a harness, against 0 for YOLOv8n and 1 for YOLO11n.
+- **Detections:** 5.00 per frame with the epilogue and 6.00 without, on every timed frame. AMD
+  returns 6. The sixth is a quantization artifact of the HardSigmoid form that the float model
+  does not produce either, so 5 is the correct count.
+- **Memory:** 201 MB resident against AMD's 362.6 MB, flat over each run.
+
+**Not established here.** Accuracy was not re-run: the 32.55 against AMD's 23.64 over all 5,000
+val2017 images comes from `pipelines/yolov8n/5_eval_map.py` and is recorded in
+`results/aie/yolo26n_silu_recovery_20260921.log`; the model's own float export scores 39.66 on that
+harness, so the win is against AMD on the same quantized weights, not against float. Energy was not
+measured. Both AMD runs reported `EP report node devices report not found`, so the 12-of-1,526-nodes
+placement is the earlier session's and is not re-confirmed by this one.

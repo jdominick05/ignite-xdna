@@ -1,0 +1,137 @@
+# YOLO26n through Ignition's own pipeline against AMD's stack: 3.41x, and 8.91 mAP more accurate
+# Host DESKTOP-CBL5NUA (Desktop 2, Ryzen 7 8700G, XDNA1 Phoenix), 2026-09-21, Device 0.
+# Ignition in its balanced default through live_ignition.py; AMD's stack through
+# tools/amd_vitisai_yolo.py on Ryzen AI 1.7.1's Phoenix 4x4 xclbin. Arms alternating, two rounds,
+# 50 warm-up and 500 timed frames of bus.jpg. xrt-smi idle before every run and after the last.
+#
+## Why this sitting exists
+#
+# Every YOLO26 latency published before this came from tools/bench_container_vs_amd.py, whose
+# decode is deliberately unoptimized numpy ON EVERY ARM. That is a fair container comparison and
+# it read 2.49x. It is not an Ignition number and no badge could carry it. This is the pipeline.
+#
+# The ratio MOVED, and upward: the pipeline decodes in 0.092 ms where the benchmark charged the
+# engine arm about 4.5 ms of numpy. AMD's arm gained too (its decode fell from 5.270 to 1.254 ms)
+# but by less, because its frame is dominated by session.run.
+#
+## Result
+#
+# | arm                              | run 1  | run 2  | mean    | vs AMD |
+# |----------------------------------|-------:|-------:|--------:|-------:|
+# | AMD Ryzen AI 1.7.1, Vitis AI EP  | 37.437 | 37.672 |  37.555 |      - |
+# | Ignition, sigmoid epilogue       | 11.033 | 11.011 |  11.022 |  3.41x |
+# | Ignition, no epilogue (control)  | 10.725 | 10.714 |  10.720 |  3.50x |
+#
+# Ignition with the epilogue is 3.41x AMD's stack, 26.533 ms faster per frame.
+# The epilogue costs +0.303 ms (2.8% of the frame), which agrees with the
+# +0.260 ms the container benchmark measured for it independently.
+#
+## Accuracy is NOT from this sitting
+#
+# 32.55 mAP@50-95 for the epilogue container against AMD's 23.64, over all 5,000 COCO val2017
+# images, was measured by pipelines/yolov8n/5_eval_map.py and is recorded in
+# results/aie/yolo26n_silu_recovery_20260921.log and yolo26n_coco_map_20260921.log. The model's
+# own float export scores 39.66 on that harness, so 32.55 is 7.11 BELOW float: the win is against
+# AMD on the same quantized weights, not against the float model.
+#
+## Detections
+#
+# The epilogue container returns 5.00 objects per frame on bus.jpg and the control 6.00, on every
+# one of 500 timed frames in both rounds. AMD returns 6. The sixth is a quantization artifact of
+# the HardSigmoid form which the float model does not produce either, so 5 is the correct count.
+# Ignition took its boxes from the NPU detect heads on 500/500 frames in all four engine runs.
+#
+## What was NOT established here
+#
+# - AMD's EP placement. Both AMD runs printed 'EP report node devices report not found', so the
+#   12-of-1,526-nodes figure is the earlier session's and is not re-confirmed by this one.
+# - Energy. Not measured for any arm.
+# - AMD's first run paid a 26.61 s session load and the second 0.56 s; G2G excludes both.
+#
+## Raw
+#
+# YOLO26n through Ignition against AMD's stack - the 0.3.4 sitting
+# Host DESKTOP-CBL5NUA (Desktop 2, Ryzen 7 8700G, XDNA1 Phoenix), 2026-09-21, Device 0, Ignition balanced default
+# live_ignition.py against tools/amd_vitisai_yolo.py --decoder npu.yolo26_decode:decode_heads.
+
+# [xrt-smi before amd #1] idle
+# == 14:15:29Z [amd #1] AMD Vitis AI EP
+#    [amd] ort 1.23.3.dev20260320 | model yolo26n_cut_xint8.onnx | session load 26.61 s | EP report node devices report not found
+#    [run] frame 100 | G2G 37.70 ms | 6 objects
+#    [run] frame 200 | G2G 34.90 ms | 6 objects
+#    [run] frame 300 | G2G 36.21 ms | 6 objects
+#    [run] frame 400 | G2G 36.37 ms | 6 objects
+#    [run] frame 500 | G2G 37.70 ms | 6 objects
+#    [amd] G2G mean 37.437 ms | P50 37.480 | P95 40.166 | P99 41.400 | max 50.868 | over 500 timed frames after 50 warm-up
+#    [amd] stage means (ms): letterbox 1.924 | session.run 34.259 | decode+NMS 1.254
+#    [amd] detections on the last frame: 6 {'person': 4, 'bus': 1, 'dog': 1} | RSS 535.9 MB
+#    2026-09-21 10:15:55.6586727 [W:onnxruntime:, session_state.cc:1316 onnxruntime::VerifyEachNodeIsAssignedToAnEp] Some nodes were not assigned to the preferred execution providers which may or may not have an negative impact on performance. e.g. ORT explicitly assigns shape related ops to CPU to improve perf.
+# == exit 0 after 48 s
+
+# [xrt-smi before silu #1] idle
+# == 14:16:16Z [silu #1] yolo26n_r2_silu.ignite
+#    [run] frame 100 | G2G 11.09 ms | 90 FPS | 5 objects | detect: npu
+#    [run] frame 200 | G2G 11.25 ms | 89 FPS | 5 objects | detect: npu
+#    [run] frame 300 | G2G 11.03 ms | 90 FPS | 5 objects | detect: npu
+#    [run] frame 400 | G2G 10.86 ms | 90 FPS | 5 objects | detect: npu
+#    [run] frame 500 | G2G 10.85 ms | 90 FPS | 5 objects | detect: npu
+#    [summary] G2G mean 11.033 ms | P50 10.966 | P95 11.578 | P99 11.913 | max 12.736 | over the last 500 timed frames; cold first frame 16.18 ms
+#    [summary] stage means (ms): preprocess 0.202 | NPU + host forward 10.733 (dispatch 9.149, host 1.373, readback 0.211) | decode+NMS 0.092
+#    [summary] boxes from NPU heads on 500/500 timed frames | 5.00 detections per frame
+#    [summary] RSS 201.2 MB at the first timed frame, 201.2 MB at the end (+0.00 MB over 500 frames)
+# == exit 0 after 7 s
+
+# [xrt-smi before ctl #1] idle
+# == 14:16:24Z [ctl #1] yolo26n_r2.ignite
+#    [run] frame 100 | G2G 10.63 ms | 92 FPS | 6 objects | detect: npu
+#    [run] frame 200 | G2G 10.62 ms | 94 FPS | 6 objects | detect: npu
+#    [run] frame 300 | G2G 10.66 ms | 94 FPS | 6 objects | detect: npu
+#    [run] frame 400 | G2G 10.77 ms | 93 FPS | 6 objects | detect: npu
+#    [run] frame 500 | G2G 10.95 ms | 93 FPS | 6 objects | detect: npu
+#    [summary] G2G mean 10.725 ms | P50 10.657 | P95 11.185 | P99 11.654 | max 12.850 | over the last 500 timed frames; cold first frame 15.06 ms
+#    [summary] stage means (ms): preprocess 0.204 | NPU + host forward 10.417 (dispatch 8.831, host 1.367, readback 0.219) | decode+NMS 0.099
+#    [summary] boxes from NPU heads on 500/500 timed frames | 6.00 detections per frame
+#    [summary] RSS 199.6 MB at the first timed frame, 199.6 MB at the end (+0.00 MB over 500 frames)
+# == exit 0 after 6 s
+
+# [xrt-smi before amd #2] idle
+# == 14:16:30Z [amd #2] AMD Vitis AI EP
+#    [amd] ort 1.23.3.dev20260320 | model yolo26n_cut_xint8.onnx | session load 0.56 s | EP report node devices report not found
+#    [run] frame 100 | G2G 36.78 ms | 6 objects
+#    [run] frame 200 | G2G 35.01 ms | 6 objects
+#    [run] frame 300 | G2G 38.19 ms | 6 objects
+#    [run] frame 400 | G2G 37.78 ms | 6 objects
+#    [run] frame 500 | G2G 39.34 ms | 6 objects
+#    [amd] G2G mean 37.672 ms | P50 37.671 | P95 40.254 | P99 41.971 | max 61.165 | over 500 timed frames after 50 warm-up
+#    [amd] stage means (ms): letterbox 1.908 | session.run 34.505 | decode+NMS 1.259
+#    [amd] detections on the last frame: 6 {'person': 4, 'bus': 1, 'dog': 1} | RSS 362.6 MB
+#    2026-09-21 10:16:31.2416265 [W:onnxruntime:, session_state.cc:1316 onnxruntime::VerifyEachNodeIsAssignedToAnEp] Some nodes were not assigned to the preferred execution providers which may or may not have an negative impact on performance. e.g. ORT explicitly assigns shape related ops to CPU to improve perf.
+# == exit 0 after 22 s
+
+# [xrt-smi before silu #2] idle
+# == 14:16:52Z [silu #2] yolo26n_r2_silu.ignite
+#    [run] frame 100 | G2G 10.92 ms | 91 FPS | 5 objects | detect: npu
+#    [run] frame 200 | G2G 10.97 ms | 92 FPS | 5 objects | detect: npu
+#    [run] frame 300 | G2G 10.90 ms | 90 FPS | 5 objects | detect: npu
+#    [run] frame 400 | G2G 10.85 ms | 91 FPS | 5 objects | detect: npu
+#    [run] frame 500 | G2G 10.84 ms | 91 FPS | 5 objects | detect: npu
+#    [summary] G2G mean 11.011 ms | P50 10.937 | P95 11.534 | P99 11.926 | max 12.760 | over the last 500 timed frames; cold first frame 15.64 ms
+#    [summary] stage means (ms): preprocess 0.200 | NPU + host forward 10.714 (dispatch 9.133, host 1.374, readback 0.207) | decode+NMS 0.092
+#    [summary] boxes from NPU heads on 500/500 timed frames | 5.00 detections per frame
+#    [summary] RSS 200.8 MB at the first timed frame, 200.8 MB at the end (+0.00 MB over 500 frames)
+# == exit 0 after 7 s
+
+# [xrt-smi before ctl #2] idle
+# == 14:16:59Z [ctl #2] yolo26n_r2.ignite
+#    [run] frame 100 | G2G 11.33 ms | 92 FPS | 6 objects | detect: npu
+#    [run] frame 200 | G2G 10.65 ms | 94 FPS | 6 objects | detect: npu
+#    [run] frame 300 | G2G 10.53 ms | 94 FPS | 6 objects | detect: npu
+#    [run] frame 400 | G2G 10.79 ms | 93 FPS | 6 objects | detect: npu
+#    [run] frame 500 | G2G 10.56 ms | 93 FPS | 6 objects | detect: npu
+#    [summary] G2G mean 10.714 ms | P50 10.648 | P95 11.137 | P99 11.735 | max 12.466 | over the last 500 timed frames; cold first frame 15.01 ms
+#    [summary] stage means (ms): preprocess 0.203 | NPU + host forward 10.411 (dispatch 8.833, host 1.371, readback 0.208) | decode+NMS 0.094
+#    [summary] boxes from NPU heads on 500/500 timed frames | 6.00 detections per frame
+#    [summary] RSS 200.1 MB at the first timed frame, 200.1 MB at the end (+0.00 MB over 500 frames)
+# == exit 0 after 6 s
+
+# [xrt-smi after all runs] idle

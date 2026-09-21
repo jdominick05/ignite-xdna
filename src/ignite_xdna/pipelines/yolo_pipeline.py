@@ -54,6 +54,33 @@ REG_MAX = 16
 NUM_CLASSES = 80
 
 
+def reg_max_from_manifest(manifest):
+    """The container's declared DFL bins per box side, checked against the head it describes.
+
+    The compiler derives reg_max from the box head's channel count, so the two agree by
+    construction -- but a container compiled before it did that can declare 16 beside a 4-channel
+    box head. Decoding that reduces over bins that are not there: it does not raise, it returns
+    wrong boxes. Refuse instead, naming both numbers. ``build/yolo26n.ignite`` and two siblings on
+    this machine are real examples of the shape.
+
+    Returns ``None`` when the manifest declares nothing, which leaves the caller's default.
+    """
+    manifest = manifest or {}
+    declared = manifest.get("reg_max")
+    if not declared:
+        return None
+    declared = int(declared)
+    box = (manifest.get("output_shapes") or {}).get("p3_box") or []
+    if len(box) >= 2 and declared * 4 != int(box[1]):
+        raise ValueError(
+            f"this container declares reg_max {declared}, so its box head should carry "
+            f"4 * {declared} = {declared * 4} channels, but p3_box has {int(box[1])}. The manifest "
+            "predates reg_max being derived from the head's channel count; recompile the container "
+            "with a current ignite-compile."
+        )
+    return declared
+
+
 @dataclass
 class YoloDetection:
     """Represents a single detected object."""
@@ -418,9 +445,9 @@ class YoloPipeline(YoloDecoder):
         # How many DFL bins the container's box head carries. The compiler derives it from the
         # head's channel count, so a family that dropped DFL (YOLO26, 4 channels) arrives as 1
         # and the decode skips a reduction that would otherwise read bins that are not there.
-        _reg_max = (getattr(self.session, "ignite_manifest", None) or {}).get("reg_max")
+        _reg_max = reg_max_from_manifest(getattr(self.session, "ignite_manifest", None))
         if _reg_max:
-            self.set_reg_max(int(_reg_max))
+            self.set_reg_max(_reg_max)
 
         # The oracle is the model the container was compiled from (manifest model_name), else yolov8n.
         compiled_from = (getattr(self.session, "ignite_manifest", None) or {}).get("model_name")

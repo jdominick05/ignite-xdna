@@ -139,7 +139,9 @@ def dfl_exp_table(scale: float, zero_point: int) -> np.ndarray:
 def sigmoid_table(scale: float, zero_point: int) -> np.ndarray:
     """float32 [256]: ``1 / (1 + np.exp(-v(q)))`` at ``[q + 128]``, computed as the numpy decode does."""
     v = _dequantized_logits(scale, zero_point)
-    return np.ascontiguousarray(1.0 / (1.0 + np.exp(-v)), dtype=np.float32)
+    with np.errstate(over="ignore"):  # a strongly negative logit overflows exp and saturates to 0.0, which is
+        table = 1.0 / (1.0 + np.exp(-v))  # the value wanted; the warning is noise on every container load
+    return np.ascontiguousarray(table, dtype=np.float32)
 
 
 def sigmoid_low_table(sigmoid: np.ndarray) -> Optional[np.ndarray]:

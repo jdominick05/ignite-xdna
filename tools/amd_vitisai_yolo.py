@@ -35,12 +35,26 @@ ap.add_argument("--max-fps", type=float, default=0.0,
                 help="pace timed frames to at most this rate, like a camera (0 = as fast as possible); frames start on "
                      "a fixed schedule and the wait is outside each frame's G2G time")
 ap.add_argument("--json", type=Path, default=None)
+ap.add_argument("--decoder", default="ignition.pipelines.yolo:decode_heads",
+                help="module:function decoding the head-cut outputs, the same contract as "
+                     "bench_container_vs_amd.py and 5_eval_map.py. The default is Ignition's DFL decode, "
+                     "which is YOLOv8-shaped; a DFL-free head such as YOLO26's regresses four box channels "
+                     "instead of 4*reg_max and needs its own, e.g. npu.yolo26_decode:decode_heads. The "
+                     "decoder reads the heads POSITIONALLY, so a wrong order decodes to the wrong place "
+                     "silently rather than raising.")
 args = ap.parse_args()
 
 sys.path.insert(0, str(args.ignition_src))
+# This repo's root too, so a decoder under npu/ resolves. Ignition's src supplies the default decoder;
+# the DFL-free ones live here beside the pipelines that produced the heads.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+import importlib  # noqa: E402
 import onnxruntime as ort  # noqa: E402
 
-from ignition.pipelines.yolo import decode_heads, letterbox, postprocess_detections  # noqa: E402
+from ignition.pipelines.yolo import letterbox, postprocess_detections  # noqa: E402
+
+_mod, _, _fn = args.decoder.partition(":")
+decode_heads = getattr(importlib.import_module(_mod), _fn or "decode_heads")
 
 proc = psutil.Process()
 opts = {"cacheDir": str(args.cache_dir), "cacheKey": args.cache_key, "enable_cache_file_io_in_mem": "0",
