@@ -11416,3 +11416,63 @@ shipped block carve - the two baselines were not compared, and the shipped conta
 re-evaluated; YOLO11n's remaining 4.09 mAP, whose int8 and fit-error shares were not separated;
 anything about YOLO-World beyond the three lowering attempts - no container, no mAP, no sitting.
 Energy was not measured. These are not Ignition numbers.
+
+## YOLO11n's carve: the narrow one is free on accuracy, 0.74 ms faster, and unlocks 8.83 mAP (2026-09-21, Desktop 2)
+
+The section above left one question open: the sigmoid epilogue needs the attention-core carve, but
+nobody had checked whether that carve costs anything against the `/model.10/` block carve the
+container ships. It does not - it is better on every measured axis
+(`results/aie/yolo11n_carve_compare_20260921.log`).
+
+**The shipped container is not a valid control.** `build/yolo11n.ignite` dates from 2026-09-15 and
+predates the band-packed activation layout, so comparing it against a container built today would
+mix the carve with the layout - the cross-configuration arithmetic this session has already had to
+retract once. The block carve was therefore **rebuilt today** from the same model with the same
+compiler, so the two arms differ only in `--host-region`. The block carve sends 97 nodes to ONNX
+Runtime, the whole C2PSA with its convolutions; the core carve sends 33, the attention alone.
+
+### Accuracy: the carve boundary changes nothing
+
+Both read **25.80 mAP@50-95 / 38.68 @50**, identical to every decimal including the small, medium
+and large splits. Matching mAP summaries are weak evidence because mAP rounds, so the COCO
+detection dumps were compared directly: **715,908 detections each, identical in order**, files the
+same size to the byte. Not one detection moves.
+
+That is the expected result and worth stating as such - both containers run the same quantized
+model and the engine's layers are verified exact against ONNX Runtime, so moving the NPU/host
+boundary cannot change the arithmetic. It is now measured rather than assumed.
+
+### Speed: the narrow carve is faster
+
+Four arms alternating, two rounds, 50 warm-up and 500 timed frames:
+
+| arm | G2G mean ms | rounds | forward | decode | detections |
+|---|---:|---|---:|---:|---:|
+| AMD Ryzen AI 1.7.1 | 42.948 | 43.017, 42.878 | 32.331 | 7.152 | 7 |
+| block carve (as shipped) | 20.246 | 20.302, 20.189 | 13.025 | 6.474 | 7 |
+| core carve | **19.505** | 19.496, 19.515 | 12.214 | 6.507 | 7 |
+| core carve + sigmoid4 | 19.788 | 19.784, 19.793 | 12.540 | 6.420 | 5 |
+
+The core carve is **0.741 ms faster** against a worst round-to-round spread of 0.113, so the
+difference is above the noise, and it comes from the `forward` stage (13.025 to 12.214 ms): the
+C2PSA convolutions are cheaper on the NPU than on ONNX Runtime's CPU, and the block carve was
+paying to send them to the host.
+
+### The conclusion
+
+| container | mAP | G2G | vs AMD |
+|---|---:|---:|---:|
+| block carve (as shipped) | 25.80 | 20.246 ms | 2.12x |
+| core carve | 25.80 | 19.505 ms | **2.20x** |
+| core carve + sigmoid4 | **34.63** | 19.788 ms | 2.17x |
+
+The core carve dominates: same detections, 0.741 ms faster, and it permits the epilogue. The
+epilogue container - 8.83 mAP more accurate than what ships - is still **0.458 ms faster** than the
+block carve. YOLO11n should ship the attention-core carve with the sigmoid epilogue; there is no
+measured axis on which the block carve is preferable.
+
+**Not established:** `build/yolo11n.ignite` itself was not re-evaluated - it was excluded as a
+control because it predates the band layout, its own numbers today are unknown, and nothing here
+supersedes a figure measured from it. No Ignition-side change was made or proposed; switching the
+shipped container is a decision, not something this measurement performs. Energy was not measured.
+These G2G figures are the container benchmark's, whose decode is unoptimized numpy on every arm.
