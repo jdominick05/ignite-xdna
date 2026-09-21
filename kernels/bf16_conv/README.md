@@ -113,6 +113,10 @@ Both were found by the toolchain refusing, and both are worth not rediscovering:
 * **No model runs on it.** This is one kernel on one core, driven by a test harness. The graph engine
   is int8 end to end and cannot host this: its core program uses 15,280 of 16,384 bytes of program
   RAM, so a second conv pass does not fit, and its packet geometry assumes one byte per element.
+  *(Superseded 2026-09-21: 15,280 B is the kernel object. The linked core is 16,160 B, so the
+  int8 engine has 224 B free, not 1,104 -
+  [`engine_linked_program_size_desktop2_20260921.log`](../../results/aie/engine_linked_program_size_desktop2_20260921.log).
+  The conclusion stands and is stronger.)*
 * **No comparison against AMD's stack** is made here. That the Vitis AI EP places no float of any
   width on the NPU is measured separately, by `tools/amd_float_precision_probe.py`.
 

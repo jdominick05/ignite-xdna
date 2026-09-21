@@ -1,0 +1,29 @@
+RESEARCH_PLATFORM {"machine": "Desktop 2", "cpu": "AMD Ryzen 7 8700G w/ Radeon 780M Graphics", "os": "Windows-11-10.0.26200-SP0", "ram_bytes": 33381138432, "source_sha256": {"tools/research_process.py": "9964df088a6a1cdd21c15195d2810606ef708ccabfd802232217cd12400da896", "tools/quant_calib_alphabet.py": "2dc0b2878c564853f340880209a425dfcf63b8536b2b8e9fd32344daade58d37", "tools/xint8_arithmetic_probe.py": "6aa3df08b9870c3c2264b868459d7ffbac3070dddc1349d7c6f3f480075f7041", "scripts/research-lowlevel.sh": "3455ad7933697936487712665505c216891865c6deada647302785f6e37020bd", "scripts/research-iron.sh": "4c863a262646ddab39b5005006ba8e03809895e6386c6310e2fd9d0a9e9609ee", "kernels/memory_placement/probe.py": "e8d990169ad6091fa1b53852e9f61eff495b5def72d35165a5c5cf1759e38898", "kernels/memory_placement/memory_kernels.cc": "182e7af7071a1e851afb4a7ca266069c489aea1fbaaa85eca129708daeba5ba6", "scripts/research-matrix.sh": "739254171629deae822b0ad7dabc875aee19ace56dde77d3e8aab61663f97516", "kernels/memory_placement/gemm.py": "17c905ad66110d3346bbf0db898dfc6b780df59fae1dfb0c1747057ce1e5844e", "kernels/memory_placement/gemm_placement.cc": "f21acf7250b12914ea30cc1f77613239dfa18421a85a1b9a5199017dd916278a", "tools/research_summary.py": "0c00dcceef07053d06731b41a1f1ed58d3ba4ea09f82497de354ce9cef17da20", "tools/research_toolchain.py": "f0a126a24ae213acfaa43460cfd9def0c86d9cb70cfee0228aa271688467b314"}, "commit": "7def754c55f71480ede99e13bc4e3cca049adf56", "command": ["bash", "scripts/research-iron.sh", "tools/engine_linked_size.py", "--build-root", "build/conv_engine", "--builds", "yolov8n_full", "yolov8s_opt", "resnet50_head", "yolov8n_rb2", "sesr_m7", "yolov8n_stride2ctrl", "bisenetv2_dense_20260921", "modnet_cut_dense_20260921", "--prj", "../bf16-engine/scratch/iron-cache/0eda467fe2a82e4838c607d8"], "seconds_limit": 300.0, "rss_gib_limit": 8, "checks_only": true, "free_ram_bytes": 18816290816}
+yolov8n_full: engine.o .text 9824 B over 2 sections; 16 core ELF(s), linked .text [10704] B
+  wrapper 880 B = core_0_2 768 + _main_init 80 + __start 32 (sum 880)
+  program memory 16384 B: 10704 used, 5680 B free; an object may be at most 15504 B under this wrapper
+yolov8s_opt: engine.o .text 9824 B over 2 sections; 16 core ELF(s), linked .text [10704] B
+  wrapper 880 B = core_0_2 768 + _main_init 80 + __start 32 (sum 880)
+  program memory 16384 B: 10704 used, 5680 B free; an object may be at most 15504 B under this wrapper
+resnet50_head: engine.o .text 9824 B over 2 sections; 16 core ELF(s), linked .text [10704] B
+  wrapper 880 B = core_0_2 768 + _main_init 80 + __start 32 (sum 880)
+  program memory 16384 B: 10704 used, 5680 B free; an object may be at most 15504 B under this wrapper
+yolov8n_rb2: engine.o .text 15280 B over 4 sections; 16 core ELF(s), linked .text [16160] B
+  wrapper 880 B = core_0_2 768 + _main_init 80 + __start 32 (sum 880)
+  program memory 16384 B: 16160 used, 224 B free; an object may be at most 15504 B under this wrapper
+sesr_m7: engine.o .text 15280 B over 4 sections; 16 core ELF(s), linked .text [16160] B
+  wrapper 880 B = core_0_2 768 + _main_init 80 + __start 32 (sum 880)
+  program memory 16384 B: 16160 used, 224 B free; an object may be at most 15504 B under this wrapper
+yolov8n_stride2ctrl: engine.o .text 15488 B over 4 sections; 16 core ELF(s), linked .text [16368] B
+  wrapper 880 B = core_0_2 768 + _main_init 80 + __start 32 (sum 880)
+  program memory 16384 B: 16368 used, 16 B free; an object may be at most 15504 B under this wrapper
+bisenetv2_dense_20260921: engine.o .text 15280 B over 4 sections; 16 core ELF(s), linked .text [16160] B
+  wrapper 880 B = core_0_2 768 + _main_init 80 + __start 32 (sum 880)
+  program memory 16384 B: 16160 used, 224 B free; an object may be at most 15504 B under this wrapper
+modnet_cut_dense_20260921: engine.o .text 15280 B over 4 sections; 16 core ELF(s), linked .text [16160] B
+  wrapper 880 B = core_0_2 768 + _main_init 80 + __start 32 (sum 880)
+  program memory 16384 B: 16160 used, 224 B free; an object may be at most 15504 B under this wrapper
+0eda467fe2a82e4838c607d8: engine_bf16.o .text 3520 B over 1 sections; 1 core ELF(s), linked .text [4048] B
+  wrapper 528 B = core_0_2 416 + _main_init 80 + __start 32 (sum 528)
+  program memory 16384 B: 4048 used, 12336 B free; an object may be at most 15856 B under this wrapper
+RESEARCH_PROCESS_RESULT {"exit_code": 0, "stop": null, "peak_tree_rss_bytes": 52965376, "rss_measurement": "maximum observed across sampled descendant working sets; zero observations reported as null", "elapsed_seconds": 3.687999999965541, "foreign_contention_observed": false, "timing_eligible": false}
