@@ -96,6 +96,96 @@ def _region(p: Dict[str, Any]) -> Tuple[int, int]:
     return int(p["base"]), int(p["blocks"]) * (h + 2 * halo) * (w + 2 * halo) * 8
 
 
+def _boundary_placement(session: "EngineSession", binding: Dict[str, Any]) -> Dict[str, Any]:
+    """The workspace placement a named boundary lives in, refusing a layout this cannot marshal."""
+    p = session.ge["placements"][binding["tensor"]]
+    band = int(p.get("band_rows") or 0)
+    if band:
+        raise ValueError(
+            f"{binding['name']}: tensor {binding['tensor']} is band-packed (band_rows {band}), and boundary "
+            "marshalling only reads the plane-major layout. A boundary is read by a host step rather than by a "
+            "five-row tile reader, so it should never have been banded - fix the layout, do not unpack it here.")
+    return p
+
+
+def _boundary_region(p: Dict[str, Any]) -> Tuple[int, int]:
+    """(base, bytes) of a boundary's region, in the placement's own dtype."""
+    h, w, halo = int(p["height"]), int(p["width"]), int(p["halo"])
+    item = np.dtype(p.get("dtype") or "uint8").itemsize
+    return int(p["base"]), int(p["blocks"]) * (h + 2 * halo) * (w + 2 * halo) * 8 * item
+
+
+def _boundary_interior(raw: np.ndarray, p: Dict[str, Any]) -> np.ndarray:
+    """[blocks][H][W][8] view of a region's real interior, the halo ring excluded."""
+    h, w, halo = int(p["height"]), int(p["width"]), int(p["halo"])
+    planes = raw.view(np.dtype(p.get("dtype") or "uint8")).reshape(
+        int(p["blocks"]), h + 2 * halo, w + 2 * halo, 8)
+    return planes[:, halo:halo + h, halo:halo + w, :]
+
+
+def write_boundary(session: "EngineSession", binding: Dict[str, Any], value: np.ndarray) -> None:
+    """Put a named tensor where the container's next step reads it from.
+
+    A ``storage: host`` boundary never reaches the device: it lives in ``session._host_values`` for the frame,
+    so two host steps either side of a CPU-only region hand values over without paying a round trip. Everything
+    else is marshalled into the workspace's plane-packed ``[blocks][H+2*halo][W+2*halo][8]`` layout.
+
+    Only the real channel lanes are written. The halo ring, and the padding lanes above ``channels`` in the last
+    block, keep whatever the halo image put there - the convolutions read them, so overwriting them with a
+    plausible-looking zero would change results rather than raise.
+    """
+    want = np.dtype(binding["dtype"])
+    value = np.asarray(value)
+    if value.dtype != want:
+        raise ValueError(f"{binding['name']}: expected {want} at this boundary, got {value.dtype}")
+    if binding.get("storage") == "host":
+        session._host_values[binding["name"]] = value.copy()
+        return
+    p = _boundary_placement(session, binding)
+    base, nbytes = _boundary_region(p)
+    h, w = int(p["height"]), int(p["width"])
+    chw = value.reshape(-1, h, w)
+    mapped = session._ws_map is not None
+    if mapped:
+        raw = session._ws_map[base:base + nbytes]
+    else:
+        # Read-modify-write: the halo ring is already on the device and a blind write would flatten it.
+        raw = np.frombuffer(session.bo_ws.read(nbytes, base), dtype=np.uint8).copy()
+    interior = _boundary_interior(raw, p)
+    blocks, rem = divmod(int(chw.shape[0]), 8)
+    if blocks:
+        interior[:blocks] = np.transpose(chw[:blocks * 8].reshape(blocks, 8, h, w), (0, 2, 3, 1))
+    if rem:
+        interior[blocks, :, :, :rem] = np.transpose(chw[blocks * 8:blocks * 8 + rem], (1, 2, 0))
+    if not mapped:
+        session.bo_ws.write(raw, base)
+    session.bo_ws.sync(session.harness.pyxrt.xclBOSyncDirection.XCL_BO_SYNC_BO_TO_DEVICE, nbytes, base)
+
+
+def read_boundary(session: "EngineSession", binding: Dict[str, Any]) -> np.ndarray:
+    """Read a named tensor back out, in the binding's own NCHW shape.
+
+    A ``storage: host`` boundary raises ``KeyError`` once the frame that produced it has been cleared, which is
+    the point: a stale value from the previous frame is indistinguishable from a fresh one in the output.
+    """
+    if binding.get("storage") == "host":
+        return session._host_values[binding["name"]]
+    p = _boundary_placement(session, binding)
+    base, nbytes = _boundary_region(p)
+    h, w = int(p["height"]), int(p["width"])
+    session.bo_ws.sync(session.harness.pyxrt.xclBOSyncDirection.XCL_BO_SYNC_BO_FROM_DEVICE, nbytes, base)
+    if session._ws_map is not None:
+        raw = session._ws_map[base:base + nbytes]
+    else:
+        raw = np.frombuffer(session.bo_ws.read(nbytes, base), dtype=np.uint8)
+    interior = _boundary_interior(raw, p)
+    shape = [int(d) for d in binding["shape"]]
+    channels = shape[-3] if len(shape) >= 3 else int(p["channels"])
+    # A copy, not a view: the workspace slot this came from is reused by a later region in the same frame.
+    chw = np.transpose(interior, (0, 3, 1, 2)).reshape(-1, h, w)[:channels].copy()
+    return chw.reshape(shape)
+
+
 class HostStep:
     """One host layer between two NPU segments.
 
@@ -116,6 +206,19 @@ class HostStep:
         from ignite_xdna.pipelines.power import ort_session_options  # the power mode covers host segments too
         self.ort_session = ort.InferenceSession(blob, ort_session_options(), providers=["CPUExecutionProvider"])
         self.input_name = self.ort_session.get_inputs()[0].name
+        self.last_ms = 0.0
+        self.last_cpu_ms = 0.0        # the ONNX Runtime call alone
+        self.last_transfer_ms = 0.0   # marshalling its boundaries in and out
+        # Version 2 names every input and output, so a host region may take several tensors and produce
+        # several, and a value that never leaves the CPU never reaches the workspace at all. Version 1 is
+        # one input tensor to one output tensor and stays exactly as it was.
+        self.boundary_version = int(seg.get("boundary_version") or 1)
+        self.input_bindings = list(seg.get("input_bindings") or [])
+        self.output_bindings = list(seg.get("output_bindings") or [])
+        if self.boundary_version >= 2:
+            if not self.input_bindings or not self.output_bindings:
+                raise ValueError(f"{self.name}: boundary_version 2 needs input_bindings and output_bindings")
+            return
         placements = session.ge["placements"]
         self.pin, self.pout = placements[seg["input"]], placements[seg["output"]]
         # The input: one whole tensor (older manifests), or the block ranges of a Concat view over several tensors.
@@ -166,7 +269,31 @@ class HostStep:
             self.input_name = self.ort_session.get_inputs()[0].name
         return done
 
+    def _run_named(self) -> None:
+        """Boundary version 2: read every named input, run the region, write every named output.
+
+        The two timings are kept apart on purpose. ``last_cpu_ms`` is the region's own arithmetic and is the
+        number that decides whether a hybrid container can ever beat a stack that runs the whole graph
+        elsewhere; ``last_transfer_ms`` is what moving its boundaries costs and is the part a protocol change
+        could remove. Summing them hides which of the two a model is actually paying.
+        """
+        s = self.session
+        t0 = time.perf_counter()
+        feeds = {b["name"]: read_boundary(s, b) for b in self.input_bindings}
+        t1 = time.perf_counter()
+        outputs = self.ort_session.run([b["name"] for b in self.output_bindings], feeds)
+        t2 = time.perf_counter()
+        for binding, y in zip(self.output_bindings, outputs):
+            write_boundary(s, binding, y)
+        t3 = time.perf_counter()
+        self.last_cpu_ms = (t2 - t1) * 1e3
+        self.last_transfer_ms = ((t1 - t0) + (t3 - t2)) * 1e3
+        self.last_ms = (t3 - t0) * 1e3
+
     def run(self) -> None:
+        if self.boundary_version >= 2:
+            self._run_named()
+            return
         s = self.session
         t0 = time.perf_counter()
         d = s.harness.pyxrt.xclBOSyncDirection
@@ -181,7 +308,9 @@ class HostStep:
             take = min(blocks * 8, self._x.shape[1] - filled)
             self._x[0, filled:filled + take] = np.transpose(planes, (0, 3, 1, 2)).reshape(blocks * 8, h, w)[:take]
             filled += take
+        t_cpu = time.perf_counter()
         y = self.ort_session.run(None, {self.input_name: self._x})[0]
+        self.last_cpu_ms = (time.perf_counter() - t_cpu) * 1e3
         q = self.pout
         oh, ow, ohalo, oblocks = int(q["height"]), int(q["width"]), int(q["halo"]), int(q["blocks"])
         if s._ws_map is not None:
@@ -195,6 +324,7 @@ class HostStep:
             s.bo_ws.write(region, self.out_base)
         s.bo_ws.sync(d.XCL_BO_SYNC_BO_TO_DEVICE, self.out_bytes, self.out_base)
         self.last_ms = (time.perf_counter() - t0) * 1e3
+        self.last_transfer_ms = self.last_ms - self.last_cpu_ms
 
 
 class EngineSession:
@@ -216,6 +346,9 @@ class EngineSession:
         self._weights_mmap = None
         self._runs: List[Any] = []
         self._host_steps: List[Any] = []
+        # Boundary values that never reach the device, handed between host regions within one frame. Frame
+        # scoped on purpose: whoever starts a frame clears it, so a stale value raises instead of being read.
+        self._host_values: Dict[str, np.ndarray] = {}
         self._npu_streams: List[Any] = []
         self._ws_map: Optional[np.ndarray] = None
         self._input_plane: Optional[np.ndarray] = None

@@ -63,11 +63,31 @@ def head_name_for(onnx_output: str) -> str:
 
 def graph_task(ir: GraphIR) -> str:
     """The runtime contract a lowered graph's outputs fit: YOLO detect heads, YOLO pose heads (one person class
-    plus 51 keypoint channels per level), classification logits or a dense upscaled image."""
+    plus 51 keypoint channels per level), classification logits, a dense upscaled image, or the segmentation and
+    matting maps a dense lowering declares for itself.
+
+    A lowering that knows its own contract says so, and is believed. Everything else is inferred from the
+    outputs, and for a single output the test is the rank the MODEL declares, not the tensor's placement.
+    `resnet50_head` carries its logits in a 1000x20x20 workspace tensor but its graph output is `(1, 1000)`:
+    a vector, read at one pixel. A segmentation map's graph output is `(1, 19, 512, 512)`. So a rank-4 single
+    output is a map, and calling it classification is how a segmentation graph would silently compile to a
+    container declaring `num_classes` and no dense output - refuse it and make the caller name the task.
+    """
+    declared = getattr(ir, "task", "") or ""
+    if declared:
+        return declared
     if len(ir.outputs) == 1 and ir.output_transforms.get(ir.outputs[0][0], {}).get("op") == "depth_to_space":
         return "super_resolution"
     if len(ir.outputs) == 1:
-        return "classify"
+        onnx_name, tensor = ir.outputs[0]
+        t = ir.tensors[tensor]
+        if t.shape is not None and len(t.shape) <= 2:
+            return "classify"
+        shape = list(t.shape) if t.shape is not None else [1, t.channels, t.height, t.width]
+        raise ValueError(
+            f"the single output {onnx_name} has shape {shape}, which is a map rather than a vector of logits. "
+            "A dense graph must name its task explicitly (segment or matte); inferring classify from one "
+            "output would emit num_classes and no dense output for it.")
     if len(ir.outputs) == len(HEAD_NAMES):
         return "detect"
     if len(ir.outputs) == len(POSE_HEAD_NAMES) and all(_HEAD_OUTPUT.search(o) for o, _ in ir.outputs):
@@ -82,6 +102,9 @@ def graph_task(ir: GraphIR) -> str:
 
 # SESR's preprocessing (npu/sesr.py): the float input is the RGB pixel minus 128. It is not in the graph.
 SR_INPUT_NORMALIZATION = {"mean": 128.0, "divisor": 1.0}
+
+# Tasks whose output is a map the size of the input rather than a head, a vector or an upscaled image.
+DENSE_TASKS = ("segment", "matte")
 
 
 def plan_segments(ir: GraphIR, scheds: List[es.LayerSchedule],
@@ -107,6 +130,16 @@ def plan_segments(ir: GraphIR, scheds: List[es.LayerSchedule],
                 seg["inputs"] = [{"tensor": g.tensor, "block_offset": g.block_offset, "blocks": g.blocks}
                                  for g in L.inputs]
                 seg["in_channels"] = L.in_channels
+            if L.named_inputs and L.named_outputs:
+                # A host region that names its boundaries may take several tensors and produce several, and may
+                # keep a value on the CPU between two regions. The older single-in single-out keys stay beside
+                # these so a runtime that does not know version 2 still describes the segment correctly.
+                from ignite_xdna.compiler.dense_regions import boundary_metadata
+                seg["boundary_version"] = 2
+                seg["input_bindings"] = [boundary_metadata(ir.tensors[t], name=n)
+                                         for n, t in L.named_inputs.items()]
+                seg["output_bindings"] = [boundary_metadata(ir.tensors[t], name=n)
+                                          for n, t in L.named_outputs.items()]
             segments.append(seg)
             start, tasks = None, 0
         else:
@@ -136,7 +169,7 @@ def build_manifest(ir: GraphIR, ws: es.Workspace, scheds: List[es.LayerSchedule]
     for name, p in ws.placements.items():
         placements[name] = {"base": p.base, "halo": p.halo, "halo_value": p.halo_value, "height": p.height,
                             "width": p.width, "blocks": p.blocks, "planes": p.planes, "band_rows": p.band_rows,
-                            "channels": ir.tensors[name].channels,
+                            "channels": ir.tensors[name].channels, "dtype": p.dtype,
                             "scale": ir.tensors[name].scale, "zero_point": ir.tensors[name].zero_point}
     task = graph_task(ir)
     t_in = ir.tensors[ir.input]
@@ -182,7 +215,10 @@ def build_manifest(ir: GraphIR, ws: es.Workspace, scheds: List[es.LayerSchedule]
         "engine": ENGINE_NAME,
         "task": task,
         "input_shape": [1, t_in.channels, t_in.height, t_in.width],
-        "input_dtype": "int8" if task in ("detect", "pose") else "uint8",
+        # A dense container takes the model's own input, which for both segmentation recipes is float32 at
+        # scale 1.0 - the quantization is a QuantizeLinear inside the graph, not something the caller applies.
+        "input_dtype": "int8" if task in ("detect", "pose")
+        else (t_in.dtype or "uint8") if task in DENSE_TASKS else "uint8",
         "single_dispatch": True,
         "quant_scales": {"input_scale": t_in.scale, "input_zero_point": t_in.zero_point, "input_dtype": "uint8"},
         "tensor_placement_abi": tensor_placement_abi,
@@ -239,6 +275,19 @@ def build_manifest(ir: GraphIR, ws: es.Workspace, scheds: List[es.LayerSchedule]
                 "pixel_index": [0, 0],
             },
             "egress_bytes": t.blocks * t.height * t.width * 8,
+        })
+    elif task in DENSE_TASKS:
+        # Segmentation and matting read one map back through the same named-boundary metadata the host regions
+        # use, so the runtime needs no second description of it: storage says whether it ever reached the
+        # device, and dtype says whether the host still has to dequantize it.
+        from ignite_xdna.compiler.dense_regions import boundary_metadata
+        onnx_name, tensor = ir.outputs[0]
+        t = ir.tensors[tensor]
+        manifest.update({
+            "output_shapes": {"map": [1, t.channels, t.height, t.width]},
+            "dense_output": {**boundary_metadata(t), "onnx_output": onnx_name, "channels": t.channels,
+                             "height": t.height, "width": t.width},
+            "egress_bytes": t.channels * t.height * t.width * np.dtype(t.dtype or "uint8").itemsize,
         })
     else:
         # Dense egress: the tail tensor is read back as [blocks][H][W][8] uint8 (zero point 128) and the
@@ -327,7 +376,17 @@ def compile_graph_container(onnx_path, output_path, build_dir: Optional[Path] = 
     onnx_path = Path(onnx_path)
     out_p = Path(output_path)
     build_dir = Path(build_dir or out_p.parent / "conv_engine" / out_p.stem).resolve()
-    ir = lower_yolov8n(onnx_path, host_regions=host_regions, silu_sigmoid=silu_sigmoid)
+    if dense_recipe:
+        # A dense recipe finds its own host regions - every region the core cannot take becomes a named host
+        # layer - so naming them by hand as well would cut the graph twice in different places.
+        if host_regions:
+            raise ValueError("dense_recipe picks its own host regions; --host-region cannot be combined with it")
+        from ignite_xdna.compiler.dense_regions import lower_dense
+        ir = lower_dense(onnx_path, dense_recipe, task=task)
+    else:
+        ir = lower_yolov8n(onnx_path, host_regions=host_regions, silu_sigmoid=silu_sigmoid)
+        if task:
+            ir.task = task
     ws = es.plan_workspace(ir, reuse=workspace_reuse)
     scheds, store = es.schedule_graph(ir, ws, activation_ring=activation_ring, weight_buffer=weight_buffer)
     if layers is not None:

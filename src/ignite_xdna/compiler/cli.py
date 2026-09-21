@@ -165,6 +165,19 @@ def parse_args(args: Optional[List[str]] = None) -> argparse.Namespace:
         action="store_true",
         help="Graph engine: omit static weight packets from the .ignite container and emit a .weights sidecar file",
     )
+    parser.add_argument(
+        "--task",
+        choices=("detect", "pose", "classify", "super_resolution", "segment", "matte"),
+        help="Graph engine: the runtime contract of the outputs. Only needed when the graph cannot say: a "
+             "single rank-4 output fits a segmentation map and an alpha matte equally well, so it is refused "
+             "rather than guessed",
+    )
+    parser.add_argument(
+        "--dense-recipe",
+        choices=("bisenetv2", "modnet_cut"),
+        help="Graph engine: lower a dense model through compiler/dense_regions.py, which runs every region the "
+             "core cannot take as a named host layer. Implies the recipe's task and picks its own host regions",
+    )
     argv = list(sys.argv[1:] if args is None else args)
     # ``ignite-compile compile --model X`` is accepted as a spelling of ``--input X``.
     if argv and argv[0] == "compile":
@@ -538,7 +551,8 @@ def main(args: Optional[List[str]] = None):
                                  no_workspace_reuse=parsed.no_workspace_reuse,
                                  retire_batch=parsed.retire_batch,
                                  split_layers=parsed.split_layer,
-                                 decouple_weights=parsed.decouple_weights)
+                                 decouple_weights=parsed.decouple_weights,
+                                 task=parsed.task, dense_recipe=parsed.dense_recipe)
             if parsed.verify_silicon:
                 from ignite_xdna.runtime.graph_session import GraphSession
                 sess = GraphSession(parsed.output, device_index=parsed.device)
