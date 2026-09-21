@@ -6,25 +6,44 @@ core program that a MODEL needs: one compiled program whose shape - kernel size,
 channel count, activation geometry, epilogue - arrives in the weight packet's header and is read on
 the core, exactly as the int8 engine does it.
 
-The bar is BYTE EQUALITY with src/ignite_xdna/compiler/engine_bf16_emulator.py, not a tolerance.
-There is no bf16 convolution engine anywhere to compare against, so the emulator is the reference,
-and it is itself checked against a naive octuple loop before it is trusted. Anything short of byte
-equality on a fixed-point-free datapath means a layout is wrong, not that floating point is fuzzy.
+The bar is BYTE EQUALITY with src/ignite_xdna/compiler/engine_bf16_emulator.py, not a tolerance,
+and it is taken on the 16-bit patterns: comparing float values calls -0.0 and +0.0 equal. There is
+no bf16 convolution engine anywhere to compare against, so the emulator is the reference, and
+tests/test_engine_bf16_emulator_offline.py checks it against a naive loop.
+
+Three modes, and only the last may carry a timing claim:
+
+  --sweep   the shape family, one packet per dispatch, plus a two-packet F_LOAD_PSUM chain run
+            INSIDE ONE DISPATCH (the partial sums cross packets as unrounded fp32, which is the
+            one place the accumulation order is directly observable).
+  --probe   packets built so that different models of the one-instruction multiply-accumulate
+            give different answers (0.0 against 1.0, not a last-bit difference). A measurement,
+            not a gate: it prints what the silicon returned beside each model's prediction.
+  --bench   this core against milestone 1's fixed-shape kernel on identical work, alternating in
+            one process, the kernel call repeated in-core so the dispatch is amortised.
 
     bash scripts/research-lowlevel.sh --log results/aie/engine_bf16_npu_<date>.log --checks-only --npu \\
-        -- bash scripts/research-iron.sh kernels/bf16_conv/engine_bf16.py --sweep
+        -- bash scripts/research-iron.sh kernels/bf16_conv/engine_bf16.py --sweep --probe
+    bash scripts/research-lowlevel.sh --log results/aie/engine_bf16_bench_npu_<date>.log --npu \\
+        -- bash scripts/research-iron.sh kernels/bf16_conv/engine_bf16.py --bench --repeat 128
+
+Packets per dispatch and the in-core repeat are compile-time parameters of the DESIGN (each pair is
+its own xclbin); the core program is the same object in all of them. H_COUNT_OUT / H_COUNT_ACC are
+not read here: a weight packet serves exactly one activation packet in this harness.
 """
 from __future__ import annotations
 
 import argparse
 import json
 import sys
+import time
 from pathlib import Path
 
 import aie.iron as iron
 import numpy as np
 from aie.helpers.taplib.tap import TensorAccessPattern
-from aie.iron import Buffer, In, ObjectFifo, Out, Program, Runtime, Worker
+from aie.iron import Buffer, CompileTime, In, ObjectFifo, Out, Program, Runtime, Worker
+from aie.iron.controlflow import range_
 from aie.iron.device import Tile
 from aie.iron.kernel import ExternalFunction
 from aie.utils import config
@@ -32,10 +51,12 @@ from ml_dtypes import bfloat16
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+from ignite_xdna.compiler import engine_bf16_emulator as em  # noqa: E402
 from ignite_xdna.compiler.engine_bf16_emulator import (  # noqa: E402
-    F_EMIT, F_RELU, F_RELU6, HOLD_OFFSET_ELEMS, NCO, OUT_BLOCK_ELEMS, PSUM_BLOCK_ELEMS,
-    TILE_COLS, TILE_ROWS, make_header, run_packet, to_bf16,
+    F_EMIT, F_LOAD_PSUM, F_RELU, F_RELU6, NCO, OUT_BLOCK_ELEMS, PSUM_FLOATS, TILE_COLS, TILE_ROWS,
+    bf16_bits, make_header, run_packet, to_bf16,
 )
 
 SOURCE = Path(__file__).with_name("engine_bf16.cc")
@@ -46,8 +67,7 @@ SOURCE = Path(__file__).with_name("engine_bf16.cc")
 # 6,400 B at one input channel block, and there is no channel count left to trade.
 W_BYTES = 9472
 A_BYTES = 12800
-O_BYTES = NCO * OUT_BLOCK_ELEMS * 2                       # 3,200
-PSUM_FLOATS = HOLD_OFFSET_ELEMS + NCO * OUT_BLOCK_ELEMS // 2   # sums, then the held bf16 tile
+O_ELEMS = NCO * OUT_BLOCK_ELEMS                           # 1,600 bf16 = 3,200 B
 
 
 def whole(n: int) -> TensorAccessPattern:
@@ -55,11 +75,16 @@ def whole(n: int) -> TensorAccessPattern:
 
 
 @iron.jit
-def engine_bf16(wpkt: In, apkt: In, out: Out):
+def engine_bf16(wpkt: In, apkt: In, out: Out, *, packets: CompileTime[int] = 1, repeat: CompileTime[int] = 1):
     w_ty = np.ndarray[(W_BYTES // 4,), np.dtype[np.int32]]
     a_ty = np.ndarray[(A_BYTES // 2,), np.dtype[bfloat16]]
-    o_ty = np.ndarray[(O_BYTES // 2,), np.dtype[bfloat16]]
+    o_ty = np.ndarray[(O_ELEMS,), np.dtype[bfloat16]]
     psum_ty = np.ndarray[(PSUM_FLOATS,), np.dtype[np.float32]]
+    # The host buffers hold `packets` objects end to end; one shim transfer feeds them to the core
+    # one object at a time, which is how the 16-core int8 design moves 64 packets per descriptor.
+    w_host = np.ndarray[(packets * W_BYTES // 4,), np.dtype[np.int32]]
+    a_host = np.ndarray[(packets * A_BYTES // 2,), np.dtype[bfloat16]]
+    o_host = np.ndarray[(packets * O_ELEMS,), np.dtype[bfloat16]]
 
     kernel = ExternalFunction(
         "engine_bf16",
@@ -73,13 +98,17 @@ def engine_bf16(wpkt: In, apkt: In, out: Out):
     f_o = ObjectFifo(o_ty, name="o")
 
     def core_fn(w_in, a_in, o_out, engine, psum, row):
-        w = w_in.acquire(1)
-        a = a_in.acquire(1)
-        o = o_out.acquire(1)
-        engine(w, a, o, psum, row)
-        a_in.release(1)
-        o_out.release(1)
-        w_in.release(1)
+        for _ in range_(packets):
+            w = w_in.acquire(1)
+            a = a_in.acquire(1)
+            o = o_out.acquire(1)
+            # `repeat` calls on one packet amortise the dispatch for timing. An emitting packet
+            # that does not load psum is idempotent, so repeating it does not change the result.
+            for _ in range_(repeat):
+                engine(w, a, o, psum, row)
+            a_in.release(1)
+            o_out.release(1)
+            w_in.release(1)
 
     psum = Buffer(psum_ty, name="psum_0_2")
     worker = Worker(
@@ -92,27 +121,41 @@ def engine_bf16(wpkt: In, apkt: In, out: Out):
     )
 
     def sequence(w, a, o, in_h, out_h):
-        in_h[0].fill(w, whole(W_BYTES // 4))
-        in_h[1].fill(a, whole(A_BYTES // 2))
-        out_h[0].drain(o, whole(O_BYTES // 2), wait=True)
+        in_h[0].fill(w, whole(packets * W_BYTES // 4))
+        in_h[1].fill(a, whole(packets * A_BYTES // 2))
+        out_h[0].drain(o, whole(packets * O_ELEMS), wait=True)
 
     return Program(
         iron.get_current_device(),
-        Runtime(sequence, [w_ty, a_ty, o_ty,
+        Runtime(sequence, [w_host, a_host, o_host,
                            [f_w.prod(tile=Tile(0, 0)), f_a.prod(tile=Tile(0, 0))],
                            [f_o.cons(tile=Tile(0, 0))]]),
         workers=[worker],
     ).resolve_program()
 
 
-def build_packets(k, stride, ncin, flags, seed):
-    """Host-side packet construction, in the exact layouts the core walks.
-
-    Returns the device buffers and, separately, the float32 views the emulator scores.
-    """
+def geometry(k, stride):
     rows_in = (TILE_ROWS - 1) * stride + k
     cols_in = (TILE_COLS - 1) * stride + k
-    plane = rows_in * cols_in * 8
+    return rows_in, cols_in, rows_in * cols_in * 8
+
+
+def pack(header, act_f, wts_f, bias_f):
+    """One W packet and one A packet, in the exact layouts the core walks."""
+    w_bytes = np.zeros(W_BYTES, np.uint8)
+    w_bytes[:128] = header.view(np.uint8)
+    w_bytes[128:256] = bias_f.astype(bfloat16).view(np.uint8)
+    wb = wts_f.astype(bfloat16).view(np.uint8)
+    if wb.size > W_BYTES - 256:
+        raise ValueError(f"weights {wb.size} B exceed the {W_BYTES - 256} B payload")
+    w_bytes[256:256 + wb.size] = wb
+    a = np.zeros(A_BYTES // 2, bfloat16)
+    a[:act_f.size] = act_f.astype(bfloat16)
+    return w_bytes.view(np.int32), a
+
+
+def random_packet(k, stride, ncin, flags, seed):
+    rows_in, cols_in, plane = geometry(k, stride)
     # The stride-2 path loads EIGHT pixels and keeps the even four, so at the last column group it
     # reads up to one pixel (8 elements, 16 B) past the end of the final plane. Every lane it KEEPS
     # is in bounds - only discarded lanes fall off - but the packet must still own those bytes, so
@@ -121,7 +164,6 @@ def build_packets(k, stride, ncin, flags, seed):
     if plane * ncin * 2 + slack > A_BYTES:
         raise ValueError(f"activation {plane * ncin * 2} B (+{slack} B stride-2 over-read) "
                          f"exceeds the {A_BYTES} B packet")
-
     rng = np.random.default_rng(seed)
     act_f = to_bf16(rng.normal(size=ncin * plane).astype(np.float32))
     wts_f = to_bf16(rng.normal(scale=0.25, size=k * k * ncin * NCO * 32).astype(np.float32))
@@ -129,60 +171,56 @@ def build_packets(k, stride, ncin, flags, seed):
     # bf16 has no 4-element load, so the core cannot broadcast it itself.
     per_ch = to_bf16(rng.normal(scale=0.1, size=NCO * 4).astype(np.float32)).reshape(NCO, 4)
     bias_f = np.repeat(per_ch[:, None, :], 4, axis=1).reshape(-1)
-
     header = make_header(k=k, stride=stride, ncin=ncin, flags=flags,
                          rows_in=rows_in, cols_in=cols_in, plane_elems=plane)
-
-    w_bytes = np.zeros(W_BYTES, np.uint8)
-    w_bytes[:128] = header.view(np.uint8)
-    w_bytes[128:256] = bias_f.astype(bfloat16).view(np.uint8)
-    wb = wts_f.astype(bfloat16).view(np.uint8)
-    if wb.size > W_BYTES - 256:
-        raise ValueError(f"weights {wb.size} B exceed the {W_BYTES - 256} B payload")
-    w_bytes[256:256 + wb.size] = wb
-
-    a_bytes = np.zeros(A_BYTES // 2, bfloat16)
-    a_bytes[:act_f.size] = act_f.astype(bfloat16)
-
-    return (w_bytes.view(np.int32), a_bytes, header, act_f, wts_f, bias_f, rows_in, cols_in, plane)
+    return header, act_f, wts_f, bias_f
 
 
-def run_one(k, stride, ncin, flags, seed) -> int:
-    w_i32, a_bf, header, act_f, wts_f, bias_f, rows_in, cols_in, plane = \
-        build_packets(k, stride, ncin, flags, seed)
+def dispatch(pkts, repeat=1):
+    """Send a list of (header, act, wts, bias) through ONE dispatch; return the output tiles' bits."""
+    packed = [pack(*p) for p in pkts]
+    w_t = iron.tensor(np.concatenate([w for w, _ in packed]), dtype=np.int32, device="npu")
+    a_t = iron.tensor(np.concatenate([a for _, a in packed]), dtype=bfloat16, device="npu")
+    o_t = iron.zeros(len(pkts) * O_ELEMS, dtype=bfloat16, device="npu")
+    engine_bf16(w_t, a_t, o_t, packets=len(pkts), repeat=repeat)
+    return np.asarray(o_t.numpy()).view(np.uint16).reshape(len(pkts), O_ELEMS)
 
-    psum = np.zeros(PSUM_FLOATS, np.float32)
-    want = np.zeros(NCO * OUT_BLOCK_ELEMS, np.float32)
-    run_packet(header, act_f, wts_f, bias_f, psum, want)
 
-    w_t = iron.tensor(w_i32, dtype=np.int32, device="npu")
-    a_t = iron.tensor(a_bf, dtype=bfloat16, device="npu")
-    o_t = iron.zeros(O_BYTES // 2, dtype=bfloat16, device="npu")
+def expect(pkts, model):
+    """The emulator's bits for the LAST packet of a chain sharing one psum."""
+    psum, want = np.zeros(PSUM_FLOATS, np.float32), np.zeros(O_ELEMS, np.float32)
+    for header, act_f, wts_f, bias_f in pkts:
+        run_packet(header, act_f, wts_f, bias_f, psum, want, mac_model=model)
+    return bf16_bits(want)
 
-    engine_bf16(w_t, a_t, o_t)
 
-    got = np.asarray(o_t.numpy()).astype(np.float32)
-    exact = int(np.sum(got == want))
-    worst = float(np.abs(got - want).max()) if got.size else 0.0
-
+def check(label, pkts) -> int:
+    got = dispatch(pkts)[-1]
+    header = pkts[-1][0]
+    per_model = {m: int(np.sum(got == expect(pkts, m))) for m in em.MAC_MODELS}
+    want = expect(pkts, em.MAC_MODEL)
+    exact = per_model[em.MAC_MODEL]
+    values = int(np.sum(em.from_bf16_bits(got) == em.from_bf16_bits(want)))
+    k, ncin, flags = int(header[em.H_K]), int(header[em.H_NCIN]), int(header[em.H_FLAGS])
     print("ENGINE_BF16 " + json.dumps({
-        "kdim": k, "stride": stride, "ncin": ncin, "in_channels": ncin * 8,
-        "out_channels": NCO * 4, "relu": bool(flags & F_RELU), "relu6": bool(flags & F_RELU6),
-        "rows_in": rows_in, "cols_in": cols_in, "plane_elems": plane,
-        "elements": int(got.size), "bit_exact": exact,
-        "bit_exact_frac": exact / max(got.size, 1), "max_abs": worst,
-        "nan": int(np.isnan(got).sum()),
+        "case": label, "packets_in_dispatch": len(pkts), "kdim": k, "stride": int(header[em.H_STRIDE]),
+        "ncin": ncin, "in_channels": ncin * 8, "out_channels": NCO * 4,
+        "relu": bool(flags & F_RELU), "relu6": bool(flags & F_RELU6), "load_psum": bool(flags & F_LOAD_PSUM),
+        "elements": int(got.size), "mac_model": em.MAC_MODEL, "bytes_equal": exact,
+        "bytes_equal_frac": exact / got.size, "values_equal": values,
+        "bytes_equal_by_model": per_model,
+        "nan": int(np.isnan(em.from_bf16_bits(got)).sum()),
         "macs": int(NCO * 4 * TILE_ROWS * TILE_COLS * ncin * 8 * k * k),
     }, sort_keys=True), flush=True)
-
     if exact != got.size:
-        print("FAIL: the core does not match the emulator byte for byte")
+        print(f"FAIL {label}: the core does not match the emulator byte for byte under {em.MAC_MODEL!r}")
         return 1
     return 0
 
 
 # A 3x3 like a backbone's, a 1x1 like the pointwise convolutions that dominate modern networks, a
-# stride-2 downsample, and the ReLU6 that MODNet-Cut's 35 Clip nodes are.
+# stride-2 downsample, the ReLU6 that MODNet-Cut's 35 Clip nodes are - and the shapes the first
+# sweep left out: the 5x5 both target models open with, and a 1x1 that fills the activation packet.
 SWEEP = [
     dict(k=3, stride=1, ncin=1, flags=F_EMIT),
     dict(k=1, stride=1, ncin=4, flags=F_EMIT),
@@ -191,7 +229,173 @@ SWEEP = [
     # ReLU6 is BOTH flags: F_RELU is the floor and F_RELU6 the ceiling, kept separate so a plain
     # ReLU is the same opcode with the ceiling left off. A Clip(0, 6) lowers to both.
     dict(k=3, stride=1, ncin=2, flags=F_EMIT | F_RELU | F_RELU6),
+    dict(k=5, stride=1, ncin=1, flags=F_EMIT | F_RELU),
+    dict(k=1, stride=1, ncin=8, flags=F_EMIT),
+    dict(k=3, stride=1, ncin=4, flags=F_EMIT | F_RELU6 | F_RELU),
 ]
+
+
+def sweep(seed) -> int:
+    rc = 0
+    for s in SWEEP:
+        rc |= check(f"k{s['k']}s{s['stride']}c{s['ncin']}", [random_packet(s["k"], s["stride"], s["ncin"], s["flags"], seed)])
+    # A layer whose input channels do not fit one packet: the first packet leaves fp32 partial sums
+    # in psum, the second continues them and emits. One dispatch, so psum is the core's own.
+    first = random_packet(3, 1, 2, 0, seed + 1)
+    second = random_packet(3, 1, 2, F_LOAD_PSUM | F_EMIT | F_RELU, seed + 2)
+    rc |= check("chain_k3s1_c2+c2", [first, second])
+    first = random_packet(5, 1, 1, 0, seed + 3)
+    second = random_packet(5, 1, 1, F_LOAD_PSUM | F_EMIT, seed + 4)
+    rc |= check("chain_k5s1_c1+c1", [first, second])
+    return rc
+
+
+# ---------------------------------------------------------------------------------------------------
+# The probe. With k = 1 and a weight of +1 on every input channel of one output lane, the eight
+# activations of a pixel ARE the eight products of that lane's multiply-accumulate, so each of the
+# 100 pixels is an independent experiment on the instruction's nine-operand sum.
+# ---------------------------------------------------------------------------------------------------
+BIG = 30   # 2**30 swamps a +1 in fp32 (24-bit significand) and is far from overflow
+
+
+def probe_vectors():
+    """(label, [products of input block 0], [block 1], [block 2]) per pixel; unused blocks are None."""
+    P = []
+    for e in range(16, 41):                                # how wide is the sum INSIDE one instruction?
+        P.append((f"intra 2^{e},+1,-2^{e}", [2.0 ** e, 1.0, -(2.0 ** e)], None, None))
+    big = 2.0 ** BIG
+    for i, j, l in [(0, 1, 2), (0, 2, 1), (1, 0, 2), (2, 0, 1), (1, 2, 0), (2, 1, 0),   # every order
+                    (0, 1, 7), (0, 7, 1), (6, 7, 0), (0, 2, 1), (0, 4, 1), (0, 7, 3), (3, 4, 0)]:
+        v = [0.0] * 8
+        v[i], v[j], v[l] = big, 1.0, -big
+        P.append((f"order +B@{i} +1@{j} -B@{l}", v, None, None))
+    for small in (1.0, 3.0, 5.0):                          # how does the fp32 sum round: even, up, truncate?
+        P.append((f"round 2^24,+{small:g},-2^24", [2.0 ** 24, small, -(2.0 ** 24)], None, None))
+    P.append(("round 2^25,+2,-2^25", [2.0 ** 25, 2.0, -(2.0 ** 25)], None, None))
+    P.append(("round 2^25,+6,-2^25", [2.0 ** 25, 6.0, -(2.0 ** 25)], None, None))
+    P.append(("smalls 1,1,1,1,-2^25 (lane bias 2^25 tells sequential from dot-first)",
+              [1.0, 1.0, 1.0, 1.0, -(2.0 ** 25)], None, None))
+    P.append(("tie 2^-8 (lane bias 1: bf16 tie, even is 1.0)", [2.0 ** -8], None, None))
+    P.append(("tie 3*2^-8 (lane bias 1: bf16 tie, even is 1+2^-6)", [3 * 2.0 ** -8], None, None))
+    P.append(("above tie 2^-8+2^-20 (lane bias 1)", [2.0 ** -8, 2.0 ** -20], None, None))
+    P.append(("product exactness (1+2^-7)^2 - (1+2^-6) on lane 2", [1 + 2.0 ** -7, 1 + 2.0 ** -6], None, None))
+    for e in range(16, 41):                                # is the accumulator BETWEEN instructions fp32?
+        P.append((f"inter 2^{e} | +1 | -2^{e}", [2.0 ** e], [1.0], [-(2.0 ** e)]))
+    P.append(("inter eight +1 | -2^25 (lane bias 2^25)", [1.0] * 8, [-(2.0 ** 25)], None))
+    # A sum that CARRIES past 24 bits has to be renormalised: how does that last step round?
+    # Ties-to-even gives 0 and 4 below, truncation 0 and 2, round-half-up 2 and 4.
+    for small in (1.0, 3.0):
+        P.append((f"carry 2^23,2^23,+{small:g} | -2^24", [2.0 ** 23, 2.0 ** 23, small], [-(2.0 ** 24)], None))
+    P.append(("carry 2^23,2^23,+1,+1 | -2^24 (exact: 2)", [2.0 ** 23, 2.0 ** 23, 1.0, 1.0], [-(2.0 ** 24)], None))
+    assert len(P) <= TILE_ROWS * TILE_COLS, len(P)
+    return P
+
+
+def probe_packet(vectors, ncin):
+    rows_in, cols_in, plane = geometry(1, 1)
+    act = np.zeros(ncin * plane, np.float32)
+    for p, (_, *blocks) in enumerate(vectors):
+        for c in range(ncin):
+            if blocks[c] is not None:
+                act[c * plane + p * 8: c * plane + p * 8 + len(blocks[c])] = blocks[c]
+    wts = np.zeros((ncin, NCO, 8, 4), np.float32)
+    wts[:, 0, :, 0] = 1.0                                   # block 0 lane 0: the products themselves
+    wts[:, 0, :, 1] = -1.0                                  # lane 1: every product negated
+    wts[:, 0, 0, 2], wts[:, 0, 1, 2] = 1 + 2.0 ** -7, -1.0  # lane 2: is a bf16 x bf16 product exact?
+    wts[:, 0, :, 3] = 2.0 ** -3                             # lane 3: scaled, the same cancellations
+    wts[:, 1, :, :] = 1.0                                   # block 1: products against a loaded accumulator
+    per_ch = np.zeros((NCO, 4), np.float32)
+    per_ch[1] = [2.0 ** 25, 1.0, 2.0 ** 24, -(2.0 ** 25)]
+    bias = np.repeat(per_ch[:, None, :], 4, axis=1).reshape(-1)
+    assert np.array_equal(to_bf16(act), act) and np.array_equal(to_bf16(wts), wts), "probe values must be exact in bf16"
+    header = make_header(k=1, stride=1, ncin=ncin, flags=F_EMIT, rows_in=rows_in, cols_in=cols_in, plane_elems=plane)
+    return header, act, wts.reshape(-1), bias
+
+
+def probe() -> int:
+    vectors = probe_vectors()
+    intra = [v for v in vectors if v[2] is None]
+    inter = [v for v in vectors if v[2] is not None]
+    for name, vecs, ncin in (("intra-instruction", intra, 1), ("inter-instruction", inter, 3)):
+        pkt = probe_packet(vecs, ncin)
+        got = em.from_bf16_bits(dispatch([pkt])[0]).reshape(NCO, TILE_ROWS * TILE_COLS, 4)
+        bits = bf16_bits(got)
+        pred = {m: em.from_bf16_bits(expect([pkt], m)).reshape(got.shape) for m in em.MAC_MODELS}
+        score = {m: int(np.sum(bf16_bits(pred[m]) == bits)) for m in em.MAC_MODELS}
+        print("ENGINE_BF16_PROBE " + json.dumps({"set": name, "ncin": ncin, "elements": int(got.size),
+                                               "bytes_equal_by_model": score}, sort_keys=True), flush=True)
+        for p, (label, *_) in enumerate(vecs):
+            row = {"probe": label,
+                   "silicon": {f"b{b}n{n}": float(got[b, p, n]) for b in (0, 1) for n in range(4)},
+                   "disagree": {m: {f"b{b}n{n}": float(pred[m][b, p, n]) for b in (0, 1) for n in range(4)
+                                    if bf16_bits(pred[m][b, p, n:n + 1])[0] != bits[b, p, n]}
+                                for m in em.MAC_MODELS}}
+            row["disagree"] = {m: d for m, d in row["disagree"].items() if d}
+            print("ENGINE_BF16_PROBE_ROW " + json.dumps(row, sort_keys=True), flush=True)
+    return 0
+
+
+def bench(args) -> int:
+    """This core against milestone 1's fixed-shape kernel: identical MACs, alternating, one process."""
+    from conv_bf16 import conv_bf16  # noqa: PLC0415 - milestone 1's harness, imported, never edited
+
+    k, ncin, rep = args.kdim, args.ncin, args.repeat
+    flags = F_EMIT
+    pkt = random_packet(k, 1, ncin, flags, args.seed)
+    macs = NCO * 4 * TILE_ROWS * TILE_COLS * ncin * 8 * k * k
+    w_i32, a_bf = pack(*pkt)
+    w_t = iron.tensor(w_i32, dtype=np.int32, device="npu")
+    a_t = iron.tensor(a_bf, dtype=bfloat16, device="npu")
+    o_t = iron.zeros(O_ELEMS, dtype=bfloat16, device="npu")
+
+    rows_in, cols_in, plane = geometry(k, 1)
+    rng = np.random.default_rng(args.seed)
+    m1_act = iron.tensor(rng.normal(size=ncin * plane).astype(np.float32).astype(bfloat16), dtype=bfloat16, device="npu")
+    m1_wts = iron.tensor(rng.normal(scale=0.25, size=NCO * k * k * ncin * 32 + NCO * 16).astype(np.float32).astype(bfloat16),
+                         dtype=bfloat16, device="npu")
+    m1_out = iron.zeros(NCO * TILE_ROWS * TILE_COLS * 4, dtype=bfloat16, device="npu")
+
+    def run_engine(r):
+        engine_bf16(w_t, a_t, o_t, packets=1, repeat=r)
+
+    def run_m1(r):
+        conv_bf16(m1_act, m1_wts, m1_out, kdim=k, rows_out=TILE_ROWS, cols_out=TILE_COLS, ncin=ncin, ncout=NCO, repeat=r)
+
+    arms = {"engine_bf16": run_engine, "conv_bf16_milestone1": run_m1}
+    for fn in arms.values():                       # compile and warm every design before any clock starts
+        for r in (1, rep):
+            for _ in range(3):
+                fn(r)
+    rounds = []
+    for rnd in range(args.rounds):
+        for name, fn in arms.items():              # A, B, A, B ... so drift shows as spread, not as a result
+            for label, r in (("single_dispatch", 1), ("amortised", rep)):
+                times = []
+                for _ in range(args.iters):
+                    t0 = time.perf_counter()
+                    fn(r)
+                    times.append(time.perf_counter() - t0)
+                best, med = min(times), float(np.median(times))
+                rounds.append({"round": rnd, "arm": name, "mode": label, "passes": r,
+                               "best_us_per_pass": best / r * 1e6, "median_us_per_pass": med / r * 1e6,
+                               "best_gflops": 2.0 * macs * r / best / 1e9})
+    # The dispatch-free cost of a pass: the slope between one pass and `repeat` passes.
+    summary = {}
+    for name in arms:
+        one = min(x["best_us_per_pass"] for x in rounds if x["arm"] == name and x["mode"] == "single_dispatch")
+        many = [x["best_us_per_pass"] for x in rounds if x["arm"] == name and x["mode"] == "amortised"]
+        slope = [(m * rep - one) / (rep - 1) for m in many]
+        summary[name] = {"amortised_us_per_pass_by_round": many,
+                         "slope_us_per_pass_by_round": slope,
+                         "slope_gflops_by_round": [2.0 * macs / (s * 1e-6) / 1e9 for s in slope],
+                         "single_dispatch_us": one}
+    print("ENGINE_BF16_BENCH " + json.dumps({
+        "kdim": k, "stride": 1, "ncin": ncin, "in_channels": ncin * 8, "out_channels": NCO * 4,
+        "tile": [TILE_ROWS, TILE_COLS], "macs_per_pass": int(macs), "repeat": rep, "iters": args.iters,
+        "rounds": args.rounds, "npu_core_ceiling_gflops": 2.0 * 128 * 1.80e9 / 1e9,
+        "summary": summary, "per_round": rounds,
+    }, sort_keys=True), flush=True)
+    return 0
 
 
 def main() -> int:
@@ -204,12 +408,28 @@ def main() -> int:
     ap.add_argument("--relu6", action="store_true")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--sweep", action="store_true", help="run the whole shape family in one process")
+    ap.add_argument("--probe", action="store_true", help="measure the multiply-accumulate's summation model")
+    ap.add_argument("--bench", action="store_true", help="time this core against milestone 1 on identical work")
+    ap.add_argument("--repeat", type=int, default=128, help="--bench: kernel calls per dispatch")
+    ap.add_argument("--iters", type=int, default=20, help="--bench: timed dispatches per arm per round")
+    ap.add_argument("--rounds", type=int, default=3, help="--bench: alternations of the two arms")
+    ap.add_argument("--mac-model", choices=em.MAC_MODELS, default=None,
+                    help="the emulator's multiply-accumulate model to gate on (default: the emulator's own)")
     args = ap.parse_args()
+    if args.mac_model:
+        em.MAC_MODEL = args.mac_model
 
+    if args.bench:
+        return bench(args)
+    rc = 0
     if args.sweep:
-        return max(run_one(s["k"], s["stride"], s["ncin"], s["flags"], args.seed) for s in SWEEP)
-    flags = F_EMIT | (F_RELU if args.relu else 0) | (F_RELU6 if args.relu6 else 0)
-    return run_one(args.kdim, args.stride, args.ncin, flags, args.seed)
+        rc |= sweep(args.seed)
+    if args.probe:
+        rc |= probe()
+    if not (args.sweep or args.probe):
+        flags = F_EMIT | (F_RELU if args.relu else 0) | (F_RELU6 if args.relu6 else 0)
+        rc |= check("single", [random_packet(args.kdim, args.stride, args.ncin, flags, args.seed)])
+    return rc
 
 
 if __name__ == "__main__":

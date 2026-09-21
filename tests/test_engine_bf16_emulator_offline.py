@@ -39,6 +39,13 @@ F32 = np.float32
 
 def scalar_mac(acc, a8, w8, model):
     """One output lane of one multiply-accumulate, by the model's definition and nothing else."""
+    if model == "aligned":
+        ops = [float(acc)] + [float(a) * float(w) for a, w in zip(a8, w8)]
+        peak = max(abs(o) for o in ops)
+        if peak == 0.0:
+            return F32(0.0)
+        quantum = 2.0 ** (math.frexp(peak)[1] - 24)          # a 24-bit grid under the largest operand
+        return F32(sum(round(o / quantum) for o in ops) * quantum)   # round() is ties-to-even
     if model == "wide":
         return F32(math.fsum([float(acc)] + [float(a) * float(w) for a, w in zip(a8, w8)]))
     if model == "sequential":
@@ -223,12 +230,27 @@ class ModelsAreDistinguishable(unittest.TestCase):
     def test_a_small_product_between_two_cancelling_large_ones(self):
         big = (F32(2 ** 13), F32(2 ** 12))
         got = self.lane([big, (F32(1), F32(1)), (big[0], -big[1])], bias=0.0)
-        self.assertEqual(got, {"wide": 1.0, "sequential": 0.0, "dot_first": 0.0})
+        self.assertEqual(got, {"aligned": 0.0, "wide": 1.0, "sequential": 0.0, "dot_first": 0.0})
+
+    def test_a_small_product_after_the_large_ones_have_cancelled(self):
+        # The one that separates the silicon from every ordered model: in order, 2^25 - 2^25 is 0 and
+        # the +1 survives; aligned to 2^25 first, the +1 is a quarter of a grid step and is gone.
+        big = (F32(2 ** 13), F32(2 ** 12))
+        got = self.lane([big, (big[0], -big[1]), (F32(1), F32(1))], bias=0.0)
+        self.assertEqual(got, {"aligned": 0.0, "wide": 1.0, "sequential": 1.0, "dot_first": 1.0})
 
     def test_small_products_against_a_large_accumulator(self):
         ones = [(F32(1), F32(1))] * 4
         got = self.lane(ones + [(F32(2 ** 13), -F32(2 ** 12))], bias=2.0 ** 25)
-        self.assertEqual(got, {"wide": 4.0, "sequential": 0.0, "dot_first": 4.0})
+        self.assertEqual(got, {"aligned": 0.0, "wide": 4.0, "sequential": 0.0, "dot_first": 4.0})
+
+    def test_the_grid_rounds_ties_to_even(self):
+        # What the silicon returned for (2^24, +s, -2^24): s = 1 -> 0, 3 -> 4, 5 -> 4. Truncation
+        # would give 0, 2, 4 and round-half-up 2, 4, 6.
+        big = (F32(2 ** 12), F32(2 ** 12))
+        for small, want in ((1, 0.0), (3, 4.0), (5, 4.0)):
+            got = self.lane([big, (F32(small), F32(1)), (big[0], -big[1])], bias=0.0)
+            self.assertEqual(got["aligned"], want, small)
 
 
 class Header(unittest.TestCase):

@@ -11658,3 +11658,46 @@ control because it predates the band layout, its own numbers today are unknown, 
 supersedes a figure measured from it. No Ignition-side change was made or proposed; switching the
 shipped container is a decision, not something this measurement performs. Energy was not measured.
 These G2G figures are the container benchmark's, whose decode is unoptimized numpy on every arm.
+
+## bf16 convolution on one core: the multiply-accumulate is an aligned add, every path the engine core has is byte-exact, and header parameterisation costs 12.8% (2026-09-21, Desktop 2)
+
+Backing logs: [`engine_bf16_mac_model_probe_npu_20260921.log`](../results/aie/engine_bf16_mac_model_probe_npu_20260921.log) (correctness and the probe; `--checks-only --npu`, so no timing claim) and [`engine_bf16_bench_npu_20260921.log`](../results/aie/engine_bf16_bench_npu_20260921.log) (`timing_eligible: true`, host CLEAR). Harness `kernels/bf16_conv/engine_bf16.py`, reference `src/ignite_xdna/compiler/engine_bf16_emulator.py`, offline `tests/test_engine_bf16_emulator_offline.py`. Desktop 2, `xrt-smi` reporting no hardware contexts before and after each run. One core of sixteen, driven by a harness: nothing here is a device number or a model number. The milestone-1 results this builds on (one fixed-shape bf16 convolution, bit-exact on four shapes, 92.10 GFLOPS amortised on an 8x32 tile, the accumulators-in-flight ladder 24.44 / 31.13 / 36.64 / 45.35 GFLOPS) are written up in [`kernels/bf16_conv/README.md`](../kernels/bf16_conv/README.md) against [`bf16_conv_npu`](../results/aie/bf16_conv_npu_20260921.log), [`bf16_conv_bench_npu`](../results/aie/bf16_conv_bench_npu_20260921.log) and [`bf16_conv_bench_large_npu`](../results/aie/bf16_conv_bench_large_npu_20260921.log); they had no entry on this page.
+
+**What the earlier "byte-exact on five shapes" did and did not establish.** [`engine_bf16_npu_20260921.log`](../results/aie/engine_bf16_npu_20260921.log) compared float values, which calls -0.0 and +0.0 equal, and its reference contracted a whole kernel tap in one `einsum` whose summation order NumPy does not define, where the core issues one fp32 multiply-accumulate per (ky, kx, input channel block). It passed because output is compared only after rounding to bf16's 8-bit significand, which hides nearly every fp32 difference on Gaussian data. Measured here: on every case of the sweep below, **four different models of the accumulate all score 1,600 of 1,600** - a random sweep cannot tell them apart, so it never tested the model it was taken to confirm. That log's result stands as far as it went; it is superseded as evidence of the arithmetic.
+
+**The multiply-accumulate, measured.** `mmul<4,8,4>::mac` is one hardware instruction (`::mac_4x8_8x4_conf`), so how it sums its eight products into the accumulator cannot be read from any source. With k = 1 and a weight of +1 the eight activations of a pixel *are* the eight products of one output lane, so each pixel is an independent experiment built from exact powers of two whose answer differs between models by 0.0 against 1.0, not by a last bit. 77 experiments over two packets, 3,200 output elements:
+
+| Model of `acc <- acc + sum of 8 products` | intra-instruction set | inter-instruction set |
+|---|---:|---:|
+| **aligned**: all nine operands aligned to the largest exponent among them, each rounded separately to a 24-bit grid there (ties to even), then added exactly | **1,600 / 1,600** | **1,600 / 1,600** |
+| ordered fp32, a rounding per product | 1,568 | 1,595 |
+| dot product rounded, then added | 1,540 | 1,594 |
+| exact sum, one rounding | 1,460 | 1,599 |
+
+What the silicon returned, and what each reading rules out: `(+2^e, +1, -2^e)` keeps the +1 for e <= 23 and loses it from e = 24 (a 24-bit grid, no guard bits); `(2^24, +s, -2^24)` gives 0, 4, 4 for s = 1, 3, 5 (ties to even: truncation would give 0, 2, 4 and round-half-up 2, 4, 6); four +1 products against a 2^25 accumulator vanish one by one (each operand is rounded on its own - an exact sum rounded once would keep 4); and **a +1 placed after `+2^30, -2^30` is still lost**, which no ordered sum does. A sum that carries past 24 bits renormalises ties-to-even (`2^23 + 2^23 + s`, then `-2^24`: 0 and 4 for s = 1, 3). `(1+2^-7)^2 - (1+2^-6)` returns 2^-14, so a bf16 x bf16 product is exact; `1 + 2^-8` stores as 1.0 and `1 + 3*2^-8` as `1 + 2^-6`, so the fp32-to-bf16 store is ties-to-even; between instructions the accumulator carries 24 bits. This is not IEEE addition and the emulator now says so: `MAC_MODEL = "aligned"`, with the three rejected models kept beside it so the probe keeps testing them.
+
+- **What it changes in practice:** nothing on well-scaled data, which is why it went unseen - and everything for a byte-equality gate at model scale, where an unfaithful reference would report mismatches that are not layout bugs.
+- **Not measured:** the sign the core gives an exactly zero sum, what its `max` makes of -0.0 and NaN under ReLU, and any operand that is Inf, NaN or subnormal.
+
+**Every path the core has, under a true byte comparison.** 16-bit patterns against `bf16_bits(emulator)`, 1,600 elements per case, all 1,600 equal in every case:
+
+| case | note |
+|---|---|
+| k3 s1, 1 block / k1 s1, 4 blocks / k3 s1, 2 blocks + ReLU / k3 s2, 1 block / k3 s1, 2 blocks + ReLU6 | the original five, now compared as bytes |
+| **k5 s1, 1 block + ReLU** | never run before; both target models open with a 5x5 |
+| **k1 s1, 8 blocks** | never run before; fills the 12,800 B activation packet exactly |
+| **k3 s1, 4 blocks + ReLU6** | never run before; fills the 9,216 B weight payload exactly |
+| **`F_LOAD_PSUM` chain, k3, 2 + 2 blocks, and k5, 1 + 1** | never run before; two packets **inside one dispatch**, so the fp32 partial sums cross packets in the core's own `psum` |
+
+`F_HOLD` is not in the table because its result is not observable: the held tile stays in `psum` until an `OP_RESIDUAL` exists to add to it. The emulator's `F_HOLD` store used to raise `ValueError` at the core's buffer size; it now writes the same bytes at the same offsets, checked offline only.
+
+**The anchor: this core has now been timed.** Identical work for both kernels - 3x3, 32 input and 16 output channels, 5x20 tile, 460,800 MACs per pass - alternating in one process for five rounds, the kernel call repeated 128 times in-core, 20 timed dispatches per arm per round. The dispatch-free cost is the slope between one pass and 128:
+
+| | us per pass, dispatch-free (5 rounds) | median | GFLOPS | of the 460.8 ceiling | amortised us per pass | single dispatch |
+|---|---|---:|---:|---:|---:|---:|
+| `engine_bf16.cc`, header-parameterised, 4 blocks x 2 column groups | 10.02 - 10.48 | **10.098** | **91.27** | 19.8% | 14.57 | 582.5 us |
+| `conv_bf16.cc`, every dimension compile-time, 4 accumulators | 8.85 - 9.02 | **8.956** | **102.9** | 22.3% | 13.45 | 583.6 us |
+
+The engine core is **12.8% slower per pass** and the two ranges do not overlap. **That difference is unattributed**: the kernels differ in dual-group structure, bias handling, the stride-2 path's presence, the run-time epilogue and run-time trip counts, not only in where the shape comes from. Two things are established. The fixed-shape kernel holds four accumulators and the engine eight, and the four win - so accumulators in flight, the lever milestone 1 measured, is spent. And per multiply-accumulate instruction the two inner loops cost about the same statically (13 bundles per 4 against a 24/24/18 blend of 66 per 20, [static readings](#static-readings-of-both-engine-cores-a-wider-census-what-unreachable-dispatch-costs-and-a-9-cycle-loop-beside-a-17-cycle-one-2026-09-21-desktop-2)), so the 12.8% is outside the inner loop. The inner-loop bundles account for about 65% of the engine's measured cycles at 1.80 GHz and 73% of the fixed-shape kernel's (DERIVED: 11,880 and 11,700 static cycles against 18,180 and 16,120 measured); the rest is loop re-entry, epilogue and stall, and no counter has split it.
+
+- **Not established:** any model, any schedule, any 16-core number. 582 us for a single dispatch is the IRON one-shot floor, not the kernel.

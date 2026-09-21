@@ -75,6 +75,29 @@ on such a small tile and should not be quoted; the large-tile table above is the
 Remaining headroom is large and the next levers are known: this is one core, the loop is not
 software-pipelined, and 20% of ceiling is well short of what the bf16 GEMM reaches.
 
+## Milestone 2: the engine core, `engine_bf16.cc`
+
+One program whose kernel size, stride, input block count, geometry and epilogue arrive in the weight
+packet's header. Measured on one core
+([`engine_bf16_mac_model_probe_npu_20260921.log`](../../results/aie/engine_bf16_mac_model_probe_npu_20260921.log),
+[`engine_bf16_bench_npu_20260921.log`](../../results/aie/engine_bf16_bench_npu_20260921.log); full working in
+`docs/BENCHMARKS.md`, "bf16 convolution on one core"):
+
+* **Byte-exact on every path it has**, compared as 16-bit patterns: k = 1, 3, 5; stride 1 and 2; 1 to 8
+  input blocks; ReLU and ReLU6; and a two-packet `F_LOAD_PSUM` chain inside one dispatch. `F_HOLD` is
+  not observable until `OP_RESIDUAL` exists.
+* **The reference is only as good as its model of the multiply-accumulate**, and that model is now
+  measured: the instruction aligns the accumulator and its eight products to the largest exponent and
+  rounds each to a 24-bit grid, ties to even. It is not IEEE addition. A random sweep cannot see this -
+  four different models all pass it - so `--probe` exists to break a wrong one.
+* **10.10 us per pass dispatch-free, 91.3 GFLOPS, 19.8% of ceiling**, against 8.96 us and 102.9 GFLOPS for
+  `conv_bf16.cc` on identical work in the same sitting: 12.8% slower, unattributed.
+
+    bash scripts/research-lowlevel.sh --log results/aie/engine_bf16_npu_<date>.log --checks-only --npu \
+        -- bash scripts/research-iron.sh kernels/bf16_conv/engine_bf16.py --sweep --probe
+    bash scripts/research-lowlevel.sh --log results/aie/engine_bf16_bench_npu_<date>.log --npu \
+        -- bash scripts/research-iron.sh kernels/bf16_conv/engine_bf16.py --bench --kdim 3 --ncin 4
+
 ## Why it did not exist before
 
 There is no bf16 convolution in mlir-aie's `aie_kernels` tree (`conv2dk1.cc` and `conv2dk3.cc` are

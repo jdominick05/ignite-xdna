@@ -58,13 +58,17 @@ OP_NOP, OP_CONV, OP_RESIDUAL = 0, 1, 2
 F_LOAD_PSUM, F_EMIT, F_RELU, F_RELU6, F_HOLD = 1, 2, 4, 8, 16
 
 # Candidate models of the one-instruction multiply-accumulate, acc <- acc + sum_k a[k] * w[k]:
+#   "aligned"     the accumulator and the eight products are aligned to the largest exponent among
+#                 the nine, each rounded SEPARATELY to a 24-bit grid at that exponent (ties to even),
+#                 and the rounded operands added exactly
 #   "wide"        the nine operands summed exactly, one rounding to fp32
 #   "sequential"  acc <- fl(acc + a[k] * w[k]) for k = 0..7, a rounding per product
 #   "dot_first"   d <- the eight products summed in order with fp32 rounding, then acc <- fl(acc + d)
 # Every bf16 x bf16 product is exact in fp32 (two 8-bit significands), so the models differ only in
-# how the sum rounds.
-MAC_MODELS = ("wide", "sequential", "dot_first")
-MAC_MODEL = "wide"   # UNMEASURED: set from the silicon probe, not from taste
+# how the sum rounds. On ordinary data all four agree after rounding to bf16; they are told apart by
+# kernels/bf16_conv/engine_bf16.py --probe.
+MAC_MODELS = ("aligned", "wide", "sequential", "dot_first")
+MAC_MODEL = "aligned"
 
 
 def to_bf16(a: np.ndarray) -> np.ndarray:
@@ -115,6 +119,14 @@ def mac(acc: np.ndarray, a: np.ndarray, w: np.ndarray, model: str) -> np.ndarray
     acc float32 [NCO][R][C][4], a float32 [R][C][8], w float32 [NCO][8][4]. Vectorised over every
     lane the hardware treats independently; the sum over k is the only place order can matter.
     """
+    if model == "aligned":
+        prod = a.astype(np.float64)[None, :, :, :, None] * w.astype(np.float64)[:, None, None, :, :]
+        ops = np.concatenate([acc.astype(np.float64)[:, :, :, None, :], prod], axis=3)   # [NCO][R][C][9][4]
+        _, ex = np.frexp(np.abs(ops).max(axis=3))          # peak = m * 2**ex with m in [0.5, 1)
+        quantum = np.ldexp(1.0, ex - 24)                   # 24 bits below the largest operand's leading bit
+        units = np.rint(ops / quantum[:, :, :, None, :]).sum(axis=3)   # rint is ties-to-even; exact in fp64
+        # An exactly zero sum is written +0.0; what sign the core gives one is unmeasured.
+        return (units * quantum + 0.0).astype(np.float32)
     if model == "wide":
         prod = a.astype(np.float64)[None, :, :, :, None] * w.astype(np.float64)[:, None, None, :, :]
         return (acc.astype(np.float64) + prod.sum(axis=3)).astype(np.float32)
