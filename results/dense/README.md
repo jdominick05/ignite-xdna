@@ -47,6 +47,24 @@ environments.
   containing a person. Everything else in this directory is agreement. BiSeNetV2 has no `acc_*` log
   on purpose - its FP32 predicts 0.00-0.30 % person on images that are 84-96 % person, so a
   Cityscapes model on COCO photographs is out of domain and scoring it here would measure noise.
+
+  Five arms, same images, same threshold, same harness:
+
+  | arm | log | person IoU | pixel accuracy |
+  |---|---|---:|---:|
+  | FP32 | `acc_modnet_cut_fp32_20260921.log` | 0.5030 | 90.22 % |
+  | bf16 | `acc_modnet_cut_bf16_20260921.log` | 0.5029 | 90.26 % |
+  | int8, CLE + AdaRound | `acc_modnet_cut_cle_adaround_20260921.log` | 0.4272 | 88.02 % |
+  | int8, plain XINT8 | `acc_modnet_cut_cpu_20260921.log`, `..._ignite_...` | 0.1609 | 83.69 % |
+  | AMD | `acc_modnet_cut_amd_20260921.log` | 0.1700 | 82.08 % |
+
+  The two 2026-09-21 additions are the bf16 and CLE+AdaRound arms, and together they correct a
+  claim this directory used to support. "int8 costs this model 68 %" is true only of the plain
+  XINT8 model: a better recipe reaches 84.9 % of FP32 without touching the hardware, so most of
+  that collapse was the recipe. bf16 reaches 99.97 % and is the only arm here that keeps the whole
+  model. The bf16 arm is a CPU simulation - `tools/onnx_bf16_cast.py` rounds weights and bias once
+  and casts every convolution's activation input and output - not a device run, and it makes no
+  timing claim.
 - `*_summary_*` are the aggregated reports `dense_report.py` produces from the logs above.
 - `*_initial*` and `*_opt*` (2026-09-19 only) are that sitting's own before/after for pruning internal
   CPU outputs. The 2026-09-21 containers correspond to the `_opt` form.
