@@ -60,6 +60,9 @@ from ignite_xdna.compiler.engine_bf16_emulator import (  # noqa: E402
 )
 
 SOURCE = Path(__file__).with_name("engine_bf16.cc")
+# --source swaps the kernel source the design compiles (a variant copy from
+# tools/engine_bf16_loop_variants.py); it must define the same `engine_bf16` entry point.
+SOURCE_OVERRIDE: Path | None = None
 
 # Packet sizes, derived rather than guessed. The weight packet is the int8 engine's 9,472 B exactly:
 # bf16's mmul<4,8,4> halves the output channels per block and doubles the bytes each, so they
@@ -89,7 +92,7 @@ def engine_bf16(wpkt: In, apkt: In, out: Out, *, packets: CompileTime[int] = 1, 
     kernel = ExternalFunction(
         "engine_bf16",
         arg_types=[w_ty, a_ty, o_ty, psum_ty, np.int32],
-        source_file=str(SOURCE),
+        source_file=str(SOURCE_OVERRIDE or SOURCE),
         object_file_name="engine_bf16.o",
         include_dirs=[config.cxx_header_path()],
     )
@@ -355,13 +358,23 @@ def bench(args) -> int:
                          dtype=bfloat16, device="npu")
     m1_out = iron.zeros(NCO * TILE_ROWS * TILE_COLS * 4, dtype=bfloat16, device="npu")
 
-    def run_engine(r):
-        engine_bf16(w_t, a_t, o_t, packets=1, repeat=r)
+    def engine_arm(source):
+        # Each source is its own design (the jit digests the kernel text), and the DESIGN is what is
+        # timed; the labels are the variant directory names so the log reads without a key.
+        def run(r):
+            global SOURCE_OVERRIDE
+            SOURCE_OVERRIDE = source
+            engine_bf16(w_t, a_t, o_t, packets=1, repeat=r)
+        return run
 
     def run_m1(r):
         conv_bf16(m1_act, m1_wts, m1_out, kdim=k, rows_out=TILE_ROWS, cols_out=TILE_COLS, ncin=ncin, ncout=NCO, repeat=r)
 
-    arms = {"engine_bf16": run_engine, "conv_bf16_milestone1": run_m1}
+    arms = {"engine_bf16": engine_arm(SOURCE_OVERRIDE)}
+    for extra in args.also:
+        p = Path(extra).resolve()
+        arms[f"engine_bf16[{p.parent.name}]"] = engine_arm(p)
+    arms["conv_bf16_milestone1"] = run_m1
     for fn in arms.values():                       # compile and warm every design before any clock starts
         for r in (1, rep):
             for _ in range(3):
@@ -415,9 +428,16 @@ def main() -> int:
     ap.add_argument("--rounds", type=int, default=3, help="--bench: alternations of the two arms")
     ap.add_argument("--mac-model", choices=em.MAC_MODELS, default=None,
                     help="the emulator's multiply-accumulate model to gate on (default: the emulator's own)")
+    ap.add_argument("--source", default=None, help="a variant copy of engine_bf16.cc to build instead of the repository's")
+    ap.add_argument("--also", nargs="*", default=[], metavar="VARIANT_CC",
+                    help="--bench: further kernel sources timed as extra arms, alternating with the others")
     args = ap.parse_args()
     if args.mac_model:
         em.MAC_MODEL = args.mac_model
+    if args.source:
+        global SOURCE_OVERRIDE
+        SOURCE_OVERRIDE = Path(args.source).resolve()
+        print(f"ENGINE_BF16_SOURCE {SOURCE_OVERRIDE.relative_to(ROOT) if SOURCE_OVERRIDE.is_relative_to(ROOT) else SOURCE_OVERRIDE.name}", flush=True)
 
     if args.bench:
         return bench(args)

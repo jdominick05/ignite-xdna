@@ -98,6 +98,19 @@ packet's header. Measured on one core
     bash scripts/research-lowlevel.sh --log results/aie/engine_bf16_bench_npu_<date>.log --npu \
         -- bash scripts/research-iron.sh kernels/bf16_conv/engine_bf16.py --bench --kdim 3 --ncin 4
 
+### The hot loop was rewritten five ways, byte-exact, and none of it reached the wall clock
+
+`tools/engine_bf16_loop_variants.py` writes variants of this core's hot loop as copies (running
+pointers; constant-trip loops of 4, 2, 1 over the input blocks, which is what makes the compiler
+pipeline loads under the multiply-accumulates; a flattened tap table; hoisted bias) and censuses
+each; `engine_bf16.py --source` runs one on the device and `--bench --also` times several in one
+sitting. Static bundles per 8 MACs fell from 24 to 19 (`ptr`) and 16 (`chunk`); the pass time
+moved -0.0% to +1.3% at k=3 and k=1 across five alternating rounds
+([`engine_bf16_loop_variants_bench_k3_npu`](../../results/aie/engine_bf16_loop_variants_bench_k3_npu_20260921.log),
+[`..._k1_npu`](../../results/aie/engine_bf16_loop_variants_bench_k1_npu_20260921.log)). The
+committed kernel is unchanged. What the loop waits on is not established; a trace-unit cycle
+counter is the next instrument, not another variant.
+
 ## Why it did not exist before
 
 There is no bf16 convolution in mlir-aie's `aie_kernels` tree (`conv2dk1.cc` and `conv2dk3.cc` are

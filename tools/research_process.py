@@ -30,9 +30,15 @@ BUILD = re.compile(r'^(cl|link|ninja|cmake|make|clang\+\+|clang|llc|opt|aie-opt|
 AGENT_PROCESS = re.compile(r'(?i)\b(?:claude|codex|gemini|qwen|agy|antigravity|chatgpt|copilot|cursor|aider)[\w.-]*(?=:\d+)')
 
 
+# A local tooling directory (the worktrees of a development agent live under one) as a path
+# component: a log made from inside a worktree must not carry the tool's name in every path it prints.
+TOOLING_DIR = re.compile(r'(?i)([\\/])\.(?:claude|codex|gemini|qwen|agy|antigravity|cursor|aider)(?=[\\/])')
+
+
 def scrub(value):
     value = re.sub(r'(?i)([a-z]:[\\/]+Users[\\/]+)[^\\/\s"\'<>]+', r'\1<user>', str(value))
     value = re.sub(r'(?i)(/[a-z]/Users/)[^/\s"\'<>]+', r'\1<user>', value)
+    value = TOOLING_DIR.sub(r'\1<tooling>', value)
     return AGENT_PROCESS.sub('dev-agent', value)
 
 

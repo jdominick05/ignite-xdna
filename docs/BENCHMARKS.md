@@ -11701,3 +11701,59 @@ What the silicon returned, and what each reading rules out: `(+2^e, +1, -2^e)` k
 The engine core is **12.8% slower per pass** and the two ranges do not overlap. **That difference is unattributed**: the kernels differ in dual-group structure, bias handling, the stride-2 path's presence, the run-time epilogue and run-time trip counts, not only in where the shape comes from. Two things are established. The fixed-shape kernel holds four accumulators and the engine eight, and the four win - so accumulators in flight, the lever milestone 1 measured, is spent. And per multiply-accumulate instruction the two inner loops cost about the same statically (13 bundles per 4 against a 24/24/18 blend of 66 per 20, [static readings](#static-readings-of-both-engine-cores-a-wider-census-what-unreachable-dispatch-costs-and-a-9-cycle-loop-beside-a-17-cycle-one-2026-09-21-desktop-2)), so the 12.8% is outside the inner loop. The inner-loop bundles account for about 65% of the engine's measured cycles at 1.80 GHz and 73% of the fixed-shape kernel's (DERIVED: 11,880 and 11,700 static cycles against 18,180 and 16,120 measured); the rest is loop re-entry, epilogue and stall, and no counter has split it.
 
 - **Not established:** any model, any schedule, any 16-core number. 582 us for a single dispatch is the IRON one-shot floor, not the kernel.
+
+## Five arithmetic-neutral rewrites of the bf16 hot loop cut its bundles by up to a third, and the wall clock did not move (2026-09-21, Desktop 2)
+
+Backing logs: [`engine_bf16_loop_variants_census`](../results/aie/engine_bf16_loop_variants_census_desktop2_20260921.log) (static), [`engine_bf16_loop_variants_exact_npu`](../results/aie/engine_bf16_loop_variants_exact_npu_20260921.log) (`--checks-only --npu`), [`engine_bf16_loop_variants_bench_k3_npu`](../results/aie/engine_bf16_loop_variants_bench_k3_npu_20260921.log) and [`engine_bf16_loop_variants_bench_k1_npu`](../results/aie/engine_bf16_loop_variants_bench_k1_npu_20260921.log) (both `timing_eligible: true`, host CLEAR, alternating arms in one process). Tool: `tools/engine_bf16_loop_variants.py` writes each variant as a copy under `scratch/` by exact-text replacement and censuses it; `kernels/bf16_conv/engine_bf16.py --source` builds a copy, `--bench --also` times several in one sitting. `engine_bf16.cc` itself is unchanged by this section.
+
+**The question.** The [static readings](#static-readings-of-both-engine-cores-a-wider-census-what-unreachable-dispatch-costs-and-a-9-cycle-loop-beside-a-17-cycle-one-2026-09-21-desktop-2) found the engine's hot loop issuing 8 multiply-accumulates in 24 bundles and, in the same int8 object, a constant-trip loop doing the same work at twice the density. Every variant here issues the same multiply-accumulates in the same order - byte-exactness by construction, and confirmed - and changes only how addresses are formed or how the loop nest is shaped.
+
+| variant | what changes | object | dual loop, bundles / 8 MACs | single, / 4 MACs |
+|---|---|---:|---:|---:|
+| base | as committed | 3,520 B | 29 (s2), **24** (s1) | 18, 21 |
+| ptr | running plane pointers: `p += plane_elems` replaces `act + c*plane_elems + aoff` | 3,600 B | 23, **19** | 15, 19 |
+| hint | `load_unaligned_v(p, 8)`: the pixel-alignment hint | 3,520 B | 29, 24 (no change) | 18, 21 |
+| flat | one hardware loop per pass over a per-packet tap table | 3,440 B | 37, 32 (worse) | 27, 30 |
+| flatptr | the table holds deltas, pointers walk | 3,552 B | 32, 28 (worse) | 24, 28 |
+| **chunk** | the input-block loop as constant-trip loops of 4, 2, 1 (`ptr` + a trip count the compiler can see) | 6,192 B | 21/17 on the remainder paths, **16 / 16** on the loops of 4 | 8, 8, 11, 12 |
+| hoist | bias vectors formed once per packet, not once per pass | 3,456 B | 29, 24 | 21, 18 |
+| ptr+ncin4, ptr+ncin4+k3 | diagnostics with the trip count hard-coded, not general kernels | 3,776 / 3,680 B | 20, 16 | 8, 12 |
+
+So the trigger for the pipelining seen in `fused_stage2` is **a trip count the compiler can see**: with it, the loop over input blocks reaches 16 bundles per 8 MACs (0.50 MAC issues per cycle) and the single-group loop 8 per 4, and `chunk` reaches the same through general code at +2,672 B. Every variant censuses at 0 accumulator and 0 vector stack moves, and `chunk`, `ptr` and `hoist+ptr` are byte-exact on all ten sweep cases and the accumulate probe.
+
+**On the device, none of it reaches the wall clock.** Dispatch-free microseconds per pass, the slope between 1 and 128 in-core repeats, medians of five alternating rounds (each round's five values in the logs):
+
+| arm | k3, 4 input blocks (460,800 MACs) | k1, 8 input blocks (102,400 MACs) |
+|---|---:|---:|
+| base | 10.093 us | 3.198 us |
+| ptr | 10.168 (+0.7%) | 3.204 (+0.2%) |
+| chunk | 10.228 (+1.3%) | 3.209 (+0.3%) |
+| hoist | 10.094 (0.0%) | 3.239 (+1.3%) |
+| hoist+ptr | 10.134 (+0.4%) | 3.239 (+1.3%) |
+| `conv_bf16.cc`, milestone 1 | 9.173 (-9.1%) | 2.084 (-34.8%) |
+
+The rounds of every engine arm overlap the rounds of every other; the fixed-shape kernel's do not overlap any of them. A static saving of 21% (`ptr`) to 33% (`chunk`) in the loop that the bundle counts make 65% of the pass produced **-0.0% to +1.3%**. This is H11 ([the int8 GEMM section](#the-int8-gemm-issues-at-40-of-nameplate-and-a-3200-cycle-per-buffer-floor-caps-it)) again, on a different kernel, with no DMA in flight and one core: **on this engine the hardware loop's bundle count is not its cycle count**, and whatever the loop is waiting on - load latency the schedule does not cover, or a memory-port stall the bank check cannot see because no two of these buffers share a bank - the compiler's tighter schedule does not shorten it.
+
+**What the k1 column says about where the time is.** At k=1 over 8 blocks the base loop bodies sum to 2,640 static cycles per pass, 1.47 us at 1.80 GHz, against 3.20 us measured - so more than half of a 1x1 pass is outside the loop bodies, and the fixed-shape kernel, whose loop is 13 bundles per 4 MACs, does the same MACs in 2.08 us. The per-pass fixed cost - accumulator initialisation, the epilogue's rounding and stores, loop entries - is the larger term for the layers that dominate MODNet-Cut (39 of 71 convolutions are 1x1), and `hoist` shows that the bias part of it is not where it goes. **Unattributed.** The instrument that would split it is a cycle counter in the trace unit, which `kernels/pmu_probe/` has for stalls but no engine run has used.
+
+- **What this closes:** the "dominant kernel lever" of the handoff (accumulators in flight) was already spent, and the next one down (issue density) is now measured not to pay on this engine either. `engine_bf16.cc` stays as it is: nothing here earned a change to it.
+- **What it closes for int8:** the port of a loop pattern to `engine.cc` was gated on a bf16 win. There is none, so `engine.cc` is left alone on evidence - see `docs/DECISIONS.md`.
+- **Not established:** why the tighter loops do not run faster. The trace-unit counter is the next instrument, not another variant.
+
+## The int8 engine's weight/activation bank collision cannot be placed away with the levers IRON exposes (2026-09-21, Desktop 2)
+
+Backing log: [`engine_bank_placement_probe_desktop2_20260921.log`](../results/aie/engine_bank_placement_probe_desktop2_20260921.log). Tool: `tools/engine_bank_placement_probe.py` - it wraps `Worker` and `Buffer` for one compile of the synthetic engine design (`tests/test_conv_engine.py::compile_engine`, `design.py` untouched) and reads the placed addresses back. **Compile only**: five xclbins were built and none was run, so this is a placement result and no latency.
+
+The [static readings](#static-readings-of-both-engine-cores-a-wider-census-what-unreachable-dispatch-costs-and-a-9-cycle-loop-beside-a-17-cycle-one-2026-09-21-desktop-2) found `a*_cons_buff_1` in the bank that holds `w*_cons_buff_0` on every core of every build. IRON offers two placement levers - the allocation scheme and a pinned address on a raw buffer - and neither removes it:
+
+| trial | outcome | weight and activation buffers sharing a bank |
+|---|---|---|
+| bank-aware (the default; reproduces every shipped build byte for byte) | placed | bank 2: `w0_0_cons_buff_0` + `a0_0_cons_buff_1` |
+| basic-sequential | placed, and three buffers straddle a bank boundary | bank 2 |
+| bank-aware, `psum` pinned to bank 3 | placed | bank 1: `w0_0_cons_buff_1` + `a0_0_cons_buff_1` |
+| bank-aware, `psum` pinned to bank 2 | placed | bank 1 |
+| bank-aware, `psum` to bank 3 and `scratch` beside `w0_0_cons_buff_1` (so that bank is too full for `a0_0_cons_buff_1`) | **allocation failed**: `Failed to allocate buffer: "a3_3_cons_buff_1" with size: 6400 bytes` | not placed |
+
+The bank-aware allocator places buffers largest first, rotating through the banks and falling forward to the next bank that fits. With `psum` filling one bank and the two 9,472 B weight buffers taking two more, the second 6,400 B activation buffer always falls into a weight bank; and when a pin makes that impossible, the allocator does not try the bank that has room (bank 2 held 6,400 B beside the first activation buffer) - it fails. A placement with no collision exists on paper (weights in banks 0 and 1 with an output buffer each, both activation buffers and the scratch in bank 2, `psum` in bank 3: 14,720 / 12,672 / 16,000 / 16,000 B), but reaching it means giving every ObjectFifo buffer an explicit address, which IRON's ObjectFifo lowering does not expose. That is a design rewrite to raw buffers and locks, not a flag.
+
+- **Not measured:** what the collision costs. The prediction from the [same-bank paired-load rule](#two-loads-in-one-bank-cost-a-cycle-and-the-int8-gemm-has-that-collision-where-bf16-does-not) is 23 to 27 cycles per iteration when those two buffers meet, a quarter of packets; the section above is the standing warning that a static prediction about this engine's hot loop may reach the wall clock as nothing.

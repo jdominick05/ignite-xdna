@@ -1,0 +1,54 @@
+RESEARCH_PLATFORM {"machine": "Desktop 2", "cpu": "AMD Ryzen 7 8700G w/ Radeon 780M Graphics", "os": "Windows-11-10.0.26200-SP0", "ram_bytes": 33381138432, "source_sha256": {"tools/research_process.py": "ffeb1857f190b482eed101b5f5a928f455de26bfa61d23f78a2eacec08e2663e", "tools/quant_calib_alphabet.py": "2dc0b2878c564853f340880209a425dfcf63b8536b2b8e9fd32344daade58d37", "tools/xint8_arithmetic_probe.py": "6aa3df08b9870c3c2264b868459d7ffbac3070dddc1349d7c6f3f480075f7041", "scripts/research-lowlevel.sh": "3455ad7933697936487712665505c216891865c6deada647302785f6e37020bd", "scripts/research-iron.sh": "4c863a262646ddab39b5005006ba8e03809895e6386c6310e2fd9d0a9e9609ee", "kernels/memory_placement/probe.py": "e8d990169ad6091fa1b53852e9f61eff495b5def72d35165a5c5cf1759e38898", "kernels/memory_placement/memory_kernels.cc": "182e7af7071a1e851afb4a7ca266069c489aea1fbaaa85eca129708daeba5ba6", "scripts/research-matrix.sh": "739254171629deae822b0ad7dabc875aee19ace56dde77d3e8aab61663f97516", "kernels/memory_placement/gemm.py": "17c905ad66110d3346bbf0db898dfc6b780df59fae1dfb0c1747057ce1e5844e", "kernels/memory_placement/gemm_placement.cc": "f21acf7250b12914ea30cc1f77613239dfa18421a85a1b9a5199017dd916278a", "tools/research_summary.py": "0c00dcceef07053d06731b41a1f1ed58d3ba4ea09f82497de354ce9cef17da20", "tools/research_toolchain.py": "f0a126a24ae213acfaa43460cfd9def0c86d9cb70cfee0228aa271688467b314"}, "commit": "37eb5cd44f54e5720c05f5539be862c8f91b5275", "command": ["bash", "scripts/research-iron.sh", "tools/engine_bank_placement_probe.py", "--all"], "seconds_limit": 1500.0, "rss_gib_limit": 8, "checks_only": true, "free_ram_bytes": 18817892352}
+HOST_TIMELINE {"elapsed_seconds": 3.89, "tree_rss_bytes": 333975552, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 7.64, "tree_rss_bytes": 312614912, "foreign_peers": []}
+PLACEMENT scheme=bank-aware core=0_2 psum_pin=None scratch_pin=None
+    2048-  8447    6400 B  bank 0     a0_0_cons_buff_0
+    8448- 11647    3200 B  bank 0     o0_0_buff_1
+   16384- 32383   16000 B  bank 1     psum_0_0
+   32768- 42239    9472 B  bank 2     w0_0_cons_buff_0
+   42240- 48639    6400 B  bank 2     a0_0_cons_buff_1
+   49152- 58623    9472 B  bank 3     w0_0_cons_buff_1
+   58624- 61823    3200 B  bank 3     o0_0_buff_0
+   61824- 65023    3200 B  bank 3     scratch_0_0
+WEIGHT_ACTIVATION_SHARED_BANKS {2: ['a0_0_cons', 'w0_0_cons']}
+HOST_TIMELINE {"elapsed_seconds": 11.671, "tree_rss_bytes": 340930560, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 15.375, "tree_rss_bytes": 313110528, "foreign_peers": []}
+PLACEMENT scheme=basic-sequential core=0_2 psum_pin=None scratch_pin=None
+    2048- 18047   16000 B  banks 0-1  psum_0_0
+   18048- 27519    9472 B  bank 1     w0_0_cons_buff_0
+   27520- 36991    9472 B  banks 1-2  w0_0_cons_buff_1
+   36992- 43391    6400 B  bank 2     a0_0_cons_buff_0
+   43392- 49791    6400 B  banks 2-3  a0_0_cons_buff_1
+   49792- 52991    3200 B  bank 3     o0_0_buff_0
+   52992- 56191    3200 B  bank 3     o0_0_buff_1
+   56192- 59391    3200 B  bank 3     scratch_0_0
+WEIGHT_ACTIVATION_SHARED_BANKS {2: ['a0_0_cons', 'w0_0_cons']}
+HOST_TIMELINE {"elapsed_seconds": 19.203, "tree_rss_bytes": 336289792, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 23.015, "tree_rss_bytes": 314208256, "foreign_peers": []}
+PLACEMENT scheme=bank-aware core=0_2 psum_pin=49152 scratch_pin=None
+    2048- 11519    9472 B  bank 0     w0_0_cons_buff_0
+   11520- 14719    3200 B  bank 0     o0_0_buff_1
+   16384- 25855    9472 B  bank 1     w0_0_cons_buff_1
+   25856- 32255    6400 B  bank 1     a0_0_cons_buff_1
+   32768- 39167    6400 B  bank 2     a0_0_cons_buff_0
+   39168- 42367    3200 B  bank 2     o0_0_buff_0
+   42368- 45567    3200 B  bank 2     scratch_0_0
+   49152- 65151   16000 B  bank 3     psum_0_0
+WEIGHT_ACTIVATION_SHARED_BANKS {1: ['a0_0_cons', 'w0_0_cons']}
+HOST_TIMELINE {"elapsed_seconds": 26.937, "tree_rss_bytes": 340934656, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 30.593, "tree_rss_bytes": 314163200, "foreign_peers": []}
+PLACEMENT scheme=bank-aware core=0_2 psum_pin=32768 scratch_pin=None
+    2048- 11519    9472 B  bank 0     w0_0_cons_buff_0
+   11520- 14719    3200 B  bank 0     o0_0_buff_1
+   16384- 25855    9472 B  bank 1     w0_0_cons_buff_1
+   25856- 32255    6400 B  bank 1     a0_0_cons_buff_1
+   32768- 48767   16000 B  bank 2     psum_0_0
+   49152- 55551    6400 B  bank 3     a0_0_cons_buff_0
+   55552- 58751    3200 B  bank 3     o0_0_buff_0
+   58752- 61951    3200 B  bank 3     scratch_0_0
+WEIGHT_ACTIVATION_SHARED_BANKS {1: ['a0_0_cons', 'w0_0_cons']}
+HOST_TIMELINE {"elapsed_seconds": 34.453, "tree_rss_bytes": 333287424, "foreign_peers": []}
+PLACEMENT scheme=bank-aware core=0_2 psum_pin=49152 scratch_pin=25856
+  COMPILE FAILED: \aie.mlir:61:5: warning: Failed to allocate buffer: "a3_3_cons_buff_1" with size: 6400 bytes.
+WEIGHT_ACTIVATION_SHARED_BANKS not placed
+RESEARCH_PROCESS_RESULT {"exit_code": 0, "stop": null, "peak_tree_rss_bytes": 340934656, "rss_measurement": "maximum observed across sampled descendant working sets; zero observations reported as null", "elapsed_seconds": 37.01500000001397, "foreign_contention_observed": false, "timing_eligible": false}
