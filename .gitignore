@@ -40,6 +40,11 @@ modnet_webcam_cache/
 # tools/shift_cut_forward_test.py takes its key on the command line, one per model
 # under test, so these are matched by shape rather than listed one by one.
 *fwdcachekey/
+# tools/bench_container_vs_amd.py does the same: benchcachekey is only its DEFAULT, and a
+# sitting that compares several models gives each its own key so a stale cache cannot serve
+# the wrong graph. Name those keys *benchcache so they are covered without another list entry.
+benchcachekey/
+*benchcache/
 modnet_zero_concat_cache/
 modnet_user_cache/
 modnet_ref_cache/

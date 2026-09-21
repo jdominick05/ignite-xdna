@@ -669,6 +669,16 @@ alternating, `xrt-smi` idle before each -
 Both arms returned 6 detections on every frame and shared the letterbox, the decoder and the
 NMS, so the only difference is what executes the network.
 
+**Caveat added 2026-09-21, and it moves the figure the favourable way.** The benchmark was
+filling the engine arm's input plane with numpy rather than calling the AVX2 ingress the shipped
+pipeline uses, which costs about 12 ms on a 640x640 frame and sat inside the `network` column
+above. Both numbers here are therefore an **understatement** of the container, not an
+overstatement. The corrected figure was **not measured** and none is invented: the sitting could
+not be re-run because `yolo26n_cut_xint8.onnx` was lost with a removed worktree and AMD's arm
+needs it, though `build/yolo26n.ignite` survives. See
+[BENCHMARKS](BENCHMARKS.md#the-benchmark-was-charging-the-engine-arm-12-ms-of-numpy-its-own-pipeline-never-pays-2026-09-21-desktop-2),
+where the same fix is measured on YOLOv8n and YOLOv8s. The figures above stand as measured.
+
 What this is not. It is **not an Ignition number**: this is ignite-xdna's benchmark driving the
 container directly, and Ignition's pipeline has no YOLO26 decode path, so the app cannot run
 this model and no README badge may carry these figures. Neither arm has a native decode -

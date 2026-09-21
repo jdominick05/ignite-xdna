@@ -89,9 +89,17 @@ COCO_IDS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 14, 15, 16, 17, 18, 19, 20, 2
             76, 77, 78, 79, 80, 81, 82, 84, 85, 86, 87, 88, 89, 90]
 
 
-def letterbox(img_bgr, size=INPUT_SIZE):
-    """Resize keeping aspect, pad to size x size. Returns NCHW float32 RGB [0,1],
-    plus (pad_top, pad_left) and scale for mapping boxes back."""
+def letterbox_canvas(img_bgr, size=INPUT_SIZE):
+    """The uint8 BGR half of `letterbox`: resize keeping aspect, pad to size x size.
+
+    Returns the HWC uint8 BGR canvas, (pad_top, pad_left) and scale. `letterbox` is this
+    plus the RGB/float/NCHW conversion, so the two can never drift apart. Split out so a
+    caller that wants to hand the letterboxed frame to a native ingress (which does its own
+    colour conversion and quantization) does not have to pay for the float tensor, and does
+    not have to keep a second copy of the resize. Preprocessing lives in exactly one place per
+    pipeline here: MODNet shipped with this transform copied five times and two of them
+    disagreed, so a second "equivalent" copy is the bug, not the shortcut.
+    """
     h, w = img_bgr.shape[:2]
     scale = min(size / w, size / h)
     nw, nh = int(round(w * scale)), int(round(h * scale))
@@ -100,6 +108,13 @@ def letterbox(img_bgr, size=INPUT_SIZE):
     left = (size - nw) // 2
     canvas = np.full((size, size, 3), 114, dtype=np.uint8)
     canvas[top:top + nh, left:left + nw] = resized
+    return canvas, (top, left), scale
+
+
+def letterbox(img_bgr, size=INPUT_SIZE):
+    """Resize keeping aspect, pad to size x size. Returns NCHW float32 RGB [0,1],
+    plus (pad_top, pad_left) and scale for mapping boxes back."""
+    canvas, (top, left), scale = letterbox_canvas(img_bgr, size)
     rgb = cv2.cvtColor(canvas, cv2.COLOR_BGR2RGB)
     x = rgb.astype(np.float32) / 255.0
     x = x.transpose(2, 0, 1)[np.newaxis, ...]

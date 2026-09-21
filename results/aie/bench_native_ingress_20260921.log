@@ -1,0 +1,108 @@
+# The benchmark was charging the engine arm 12 ms of numpy the shipped pipeline never pays
+# Host DESKTOP-CBL5NUA (Desktop 2, Ryzen 7 8700G, XDNA1 Phoenix), 2026-09-21
+# Engine arms in mlir-aie-iron on Device 0; AMD arm in resnet_env17 with Ryzen AI 1.7.1's
+# Phoenix 4x4 xclbin. xrt-smi checked idle before EVERY run and after the last; idle throughout.
+#
+## What was wrong
+#
+# tools/bench_container_vs_amd.py filled the container's input plane like this:
+#
+#     x, pad, scale = letterbox(img, imgsz)              # cv2 resize + pad, then float32 NCHW RGB
+#     q = gr.quantize_input(x[0], scale, zero_point)     # numpy, over 1,228,800 floats
+#     plane[halo:.., halo:.., :3] = np.transpose(q, (1, 2, 0))
+#
+# The quantize sat INSIDE the arm's `forward` bucket, so it was also inflating what the tool
+# reported as the engine's network time. YoloPipeline never does any of this: it ships an AVX2
+# ingress (pipelines/preprocess_simd.c) that letterboxes, converts BGR->RGB and quantizes in one
+# pass. The benchmark simply was not calling it.
+#
+## What changed
+#
+#     canvas, pad, scale = letterbox_canvas(img, imgsz)  # the SAME cv2 resize and pad, shared
+#     pre.preprocess_to_plane(canvas, plane, halo, lut)  # native, straight into the plane
+#
+# npu.yolo.letterbox is now the uint8 half (letterbox_canvas) plus the float conversion, so both
+# halves stay in one place and cannot drift - the repo's rule that a preprocessing transform lives
+# in exactly one copy per pipeline. letterbox's own output is unchanged.
+#
+# The canvas handed to the native ingress is ALREADY square at imgsz, so the native resize is an
+# identity pass. That matters: the native bilinear resize is not OpenCV's and differs on about
+# 13% of bytes by one code, but at identity it is exact, so the arms keep seeing the same frame.
+#
+## Why this is a fair change and not a thumb on the scale
+#
+# THE PLANE BYTES ARE IDENTICAL EITHER WAY. Checked offline, no device, six frames - bus.jpg plus
+# random 720x1280, 1080x607, 640x640, 480x640 and 1234x411:
+#
+#     letterbox unchanged on 6/6; plane byte-identical on 6/6; pad and scale agree on 6/6.
+#
+# So the model receives exactly the same input, and the detections are identical by construction
+# rather than by luck - which the sitting then confirms at 5 objects on every arm.
+#
+# The ingress LUT is only equal to the numpy quantize it replaces because these containers have an
+# input scale of 0.0078125, a power of two, where float32 and float64 divide identically.
+# quantize_input receives float32 and widens; input_lut stays in float64. The tool now ASSERTS
+# the two agree over all 256 pixel values and refuses the container otherwise, rather than quietly
+# measuring a different frame on a model whose scale is not a power of two.
+#
+## The sitting: three arms, alternating, 50 warm-up and 500 timed frames on bus.jpg
+#
+# | model   | arm    | G2G mean ms | preprocess | forward | decode | detections |
+# |---------|--------|------------:|-----------:|--------:|-------:|-----------:|
+# | yolov8n | amd    |      16.749 |      3.084 |   6.811 |  6.854 |          5 |
+# | yolov8n | numpy  |      29.452 |      2.892 |  20.299 |  6.261 |          5 |
+# | yolov8n | native |      17.072 |      0.738 |  10.311 |  6.023 |          5 |
+# | yolov8s | amd    |      22.969 |      3.044 |  13.220 |  6.705 |          5 |
+# | yolov8s | numpy  |      38.798 |      2.873 |  29.813 |  6.112 |          5 |
+# | yolov8s | native |      26.886 |      0.720 |  20.149 |  6.017 |          5 |
+#
+#   yolov8n   29.452 -> 17.072 ms,  12.380 ms saved (42.0 %), detections 5 vs 5 IDENTICAL
+#   yolov8s   38.798 -> 26.886 ms,  11.912 ms saved (30.7 %), detections 5 vs 5 IDENTICAL
+#
+# The saving is flat at about 12 ms across both models, which is what it should be: the ingress
+# cost is set by the 640x640 frame, not by the network behind it. It splits as about 9.9 ms of
+# numpy quantize out of `forward` and about 2.2 ms out of `preprocess` (the float32 NCHW
+# conversion the container never needed), minus the native pass at roughly 0.7 ms.
+#
+## THE ENGINE DID NOT GET FASTER
+#
+# The container, the xclbin, the instruction stream and the dispatch are untouched, and AMD's arm
+# is byte-for-byte the same run it was. Nothing here is a hardware result. A benchmark stopped
+# charging one arm for work its own pipeline does not do.
+#
+## Against AMD, in this tool, and why it is NOT the badge number
+#
+#   yolov8n   before 0.57x, after 0.98x   (still 0.32 ms behind)
+#   yolov8s   before 0.59x, after 0.85x   (still 3.92 ms behind)
+#
+# This tool deliberately leaves the host tail unoptimized and SHARED: numpy decode and NMS on all
+# three arms, about 6.0-6.9 ms of the frame. The engine arm additionally reads back each head
+# separately and dequantizes it in numpy, where the EP returns all heads from one call - that is
+# most of the gap left on yolov8s (its `forward` is 20.1 ms against a dispatch known to be about
+# 16.8). Ignition's shipped pipeline decodes natively and reads heads in their channel blocks, and
+# it is the one that beats AMD on yolov8n. DO NOT quote the numbers above as Ignition figures or
+# move any badge on them; they are container-versus-EP with a matched, slow tail.
+#
+## A correction this forces, which could NOT be re-measured
+#
+# results/aie/yolo26n_vs_amd_20260920.log reported the engine at 30.192 ms against AMD's 43.109,
+# 1.43x. That engine arm was this same tool BEFORE the fix, so it too was carrying about 12 ms of
+# numpy ingress. The 1.43x is therefore an UNDERSTATEMENT of what the container does, not an
+# overstatement - but the corrected figure is not measured, and no number should be invented for it.
+#
+# It could not be re-run: yolo26n_cut_xint8.onnx lived in a worktree's scratch/ that was removed
+# during cleanup, and the AMD arm cannot run without it. build/yolo26n.ignite survives. Re-running
+# that comparison needs the model re-exported and re-quantized first.
+#
+## NOT ESTABLISHED
+#
+#   - One image (bus.jpg), one host, one day. No mAP: identical detections on one frame say the two
+#     ingress paths agree, not that either is accurate.
+#   - The per-head numpy dequantize on readback is still there on the engine arm and is now the
+#     largest remaining host cost in this tool. Not touched, not measured separately here.
+#   - YOLOv8m/l/x, pose, YOLO11n and YOLO-World were not run through the fixed tool.
+#   - The AMD arm's absolute numbers come from a Vitis AI compile cache built fresh for this
+#     sitting, one key per model so a stale cache could not serve the wrong graph, and deleted
+#     afterwards. They are not comparable to AMD numbers taken on other days.
+#     .gitignore now covers this tool's caches (benchcachekey/ and *benchcache/); it covered
+#     neither before, so a default run left an untracked directory at the repo root.
