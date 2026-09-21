@@ -334,6 +334,20 @@ evidence [`results/aie/yolo11n_hybrid_phoenix_20260915T0216Z.log`](../results/ai
   **10.411** and **10.115** ms mean glass-to-glass (NPU dispatch 8.784 and 8.708 ms, host 0.533 and 0.505 ms)
   against 11.109 and 10.987 ms for `yolo11n.ignite` and 36.361 and 34.549 ms on AMD's stack in the same
   sitting ([BENCHMARKS](BENCHMARKS.md#yolo11ns-c2psa-convolutions-on-the-npu-only-its-attention-core-on-the-host-2026-09-15-desktop-2)).
+- **The recommended build, 2026-09-21: the attention core AND the sigmoid epilogue.**
+
+  ```
+  ignite-compile --engine graph --input models/yolo11n_cut_xint8.onnx     --output build/yolo11n_core_silu.ignite --silu-sigmoid     --host-region /model.10/m/m.0/attn/qkv/conv/Conv=/model.10/m/m.0/attn/Reshape_1
+  ```
+
+  `--silu-sigmoid` was refused for any container with a host region until `146e3eb`; the guard was
+  over-broad, and an attention core contains no SiLU for it to conflict with. 91/91 layers exact
+  against `silu_sigmoid.reference_model`. On the full COCO val2017 5,000 it reads **34.63 mAP@50-95**
+  against **25.80** for either container without the flag and **25.82** for AMD's stack, and the two
+  carves' detections are identical to the byte, so the carve is free on accuracy and the epilogue is
+  the whole gain. Glass to glass through Ignition it costs 0.29 ms against the attention core alone
+  and is still 0.58 ms faster than the whole-block container
+  ([BENCHMARKS](BENCHMARKS.md#yolo11ns-carve-the-narrow-one-is-free-on-accuracy-074-ms-faster-and-unlocks-883-map-2026-09-21-desktop-2)).
 - **Both, in the `balanced` power mode** (2026-09-16; the runs above spun the preprocessor's workers): 10.439 and
   10.369 ms with the attention core on the host, 11.182 and 11.177 ms with the whole block, against 36.540 and
   36.644 ms on AMD's stack, every container re-verified exact first
