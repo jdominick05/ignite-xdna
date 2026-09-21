@@ -98,18 +98,24 @@ packet's header. Measured on one core
     bash scripts/research-lowlevel.sh --log results/aie/engine_bf16_bench_npu_<date>.log --npu \
         -- bash scripts/research-iron.sh kernels/bf16_conv/engine_bf16.py --bench --kdim 3 --ncin 4
 
-### The hot loop was rewritten five ways, byte-exact, and none of it reached the wall clock
+### The hot loop was rewritten five ways, byte-exact, and the tighter loops are faster
 
 `tools/engine_bf16_loop_variants.py` writes variants of this core's hot loop as copies (running
 pointers; constant-trip loops of 4, 2, 1 over the input blocks, which is what makes the compiler
 pipeline loads under the multiply-accumulates; a flattened tap table; hoisted bias) and censuses
 each; `engine_bf16.py --source` runs one on the device and `--bench --also` times several in one
-sitting. Static bundles per 8 MACs fell from 24 to 19 (`ptr`) and 16 (`chunk`); the pass time
-moved -0.0% to +1.3% at k=3 and k=1 across five alternating rounds
-([`engine_bf16_loop_variants_bench_k3_npu`](../../results/aie/engine_bf16_loop_variants_bench_k3_npu_20260921.log),
-[`..._k1_npu`](../../results/aie/engine_bf16_loop_variants_bench_k1_npu_20260921.log)). The
-committed kernel is unchanged. What the loop waits on is not established; a trace-unit cycle
-counter is the next instrument, not another variant.
+sitting. Static bundles per 8 MACs fell from 24 to 19 (`ptr`) and 16 (`chunk`), and on the device
+a k3 pass fell 10.1% (`ptr`) and 17.7% (`chunk`), a k1 pass 6.5% and 13.7%, with hoisting the
+bias worth another 9.7% at k1 - medians of five alternating rounds, every arm's object named in
+the log ([`engine_bf16_loop_variants_bench_k3_npu_20260921_02`](../../results/aie/engine_bf16_loop_variants_bench_k3_npu_20260921_02.log),
+[`..._k1_npu_20260921_02`](../../results/aie/engine_bf16_loop_variants_bench_k1_npu_20260921_02.log)).
+*(An earlier pair of logs, `..._bench_k3_npu_20260921` and `..._k1_npu_20260921`, read
+"-0.0% to +1.3%": every arm in them ran the same cached kernel, because the source was chosen
+inside the jit generator and so was not in the design's cache key. Superseded, kept.)* The
+committed kernel is still unchanged: the loop goes in with the contract work the core still owes
+(a `switch` with a no-op default, an output layout equal to the input's, `F_HOLD` at the core's
+width, `OP_RESIDUAL`), byte-exact against the emulator, and `engine_bf16.py` now prints an
+`ENGINE_BF16_DESIGN` line per design so a log shows which object ran.
 
 ## Why it did not exist before
 

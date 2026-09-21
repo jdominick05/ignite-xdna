@@ -1,0 +1,31 @@
+RESEARCH_PLATFORM {"machine": "Desktop 2", "cpu": "AMD Ryzen 7 8700G w/ Radeon 780M Graphics", "os": "Windows-11-10.0.26200-SP0", "ram_bytes": 33381138432, "source_sha256": {"tools/research_process.py": "ffeb1857f190b482eed101b5f5a928f455de26bfa61d23f78a2eacec08e2663e", "tools/quant_calib_alphabet.py": "2dc0b2878c564853f340880209a425dfcf63b8536b2b8e9fd32344daade58d37", "tools/xint8_arithmetic_probe.py": "6aa3df08b9870c3c2264b868459d7ffbac3070dddc1349d7c6f3f480075f7041", "scripts/research-lowlevel.sh": "3455ad7933697936487712665505c216891865c6deada647302785f6e37020bd", "scripts/research-iron.sh": "4c863a262646ddab39b5005006ba8e03809895e6386c6310e2fd9d0a9e9609ee", "kernels/memory_placement/probe.py": "e8d990169ad6091fa1b53852e9f61eff495b5def72d35165a5c5cf1759e38898", "kernels/memory_placement/memory_kernels.cc": "182e7af7071a1e851afb4a7ca266069c489aea1fbaaa85eca129708daeba5ba6", "scripts/research-matrix.sh": "739254171629deae822b0ad7dabc875aee19ace56dde77d3e8aab61663f97516", "kernels/memory_placement/gemm.py": "17c905ad66110d3346bbf0db898dfc6b780df59fae1dfb0c1747057ce1e5844e", "kernels/memory_placement/gemm_placement.cc": "f21acf7250b12914ea30cc1f77613239dfa18421a85a1b9a5199017dd916278a", "tools/research_summary.py": "0c00dcceef07053d06731b41a1f1ed58d3ba4ea09f82497de354ce9cef17da20", "tools/research_toolchain.py": "f0a126a24ae213acfaa43460cfd9def0c86d9cb70cfee0228aa271688467b314"}, "commit": "8e452368ec0fc0c8546523ee8fba83ba949c92da", "command": ["bash", "scripts/research-iron.sh", "tools/engine_bf16_cache_audit.py"], "seconds_limit": 300, "rss_gib_limit": 8, "checks_only": false, "free_ram_bytes": 18838061056}
+HOST_LOAD busy_cores=0.8 logical_cores=16 free_ram_gb=17.5 sample_sec=1
+HOST_LOAD_TOP 0.31 Code:44448 ws_mb=388
+HOST_LOAD_TOP 0.09 dev-agent:21712 ws_mb=734
+HOST_LOAD_TOP 0.08 Code:47992 ws_mb=130
+HOST_LOAD_TOP 0.05 dev-agent:58512 ws_mb=561
+HOST_LOAD_TOP 0.03 Code:15120 ws_mb=138
+HOST_LOAD_VERDICT CLEAR
+
+ENGINE_BF16_CACHE 20 engine designs under iron-cache; sources known by digest: ['chunk', 'flat', 'flat_hint', 'flatptr', 'hint', 'hoist', 'hoist_ptr', 'ptr', 'ptr_hint', 'ptr_ncin4', 'ptr_ncin4_k3', 'repository=base']
+  2026-09-21 18:48:40  6c28e408  object .text  3520 B  source=repository=base finite loop trips [1]
+  2026-09-21 18:48:43  5e6895b5  object .text  3520 B  source=repository=base finite loop trips [2]
+  2026-09-21 18:53:01  70f74783  object .text  3520 B  source=repository=base finite loop trips [128]
+  2026-09-21 19:04:39  c1aa597f  object .text  3600 B  source=ptr          finite loop trips [1]
+  2026-09-21 19:04:42  64f438ce  object .text  3600 B  source=ptr          finite loop trips [2]
+  2026-09-21 19:05:38  8618e632  object .text  3520 B  source=repository=base finite loop trips [128]
+  2026-09-21 19:40:17  5447c3d0  object .text  6192 B  source=chunk        finite loop trips [1]
+  2026-09-21 19:40:21  afd676b7  object .text  6192 B  source=chunk        finite loop trips [2]
+  2026-09-21 19:40:51  5d70d5c5  object .text  3456 B  source=hoist        finite loop trips [1]
+  2026-09-21 19:40:54  27f249af  object .text  3456 B  source=hoist        finite loop trips [2]
+  2026-09-21 19:41:19  73cd194f  object .text  3552 B  source=hoist_ptr    finite loop trips [1]
+  2026-09-21 19:41:22  29d8732f  object .text  3552 B  source=hoist_ptr    finite loop trips [2]
+  2026-09-21 19:41:45  3811bb14  object .text  3600 B  source=ptr          finite loop trips [1]
+  2026-09-21 19:41:49  ce043e8d  object .text  3600 B  source=ptr          finite loop trips [2]
+  2026-09-21 19:42:17  17e381aa  object .text  3520 B  source=repository=base finite loop trips [1]
+  2026-09-21 19:42:21  f7fa81f5  object .text  3520 B  source=repository=base finite loop trips [128]
+  2026-09-21 19:42:24  48b69fb8  object .text  3600 B  source=ptr          finite loop trips [128]
+  2026-09-21 19:42:27  7b587fe4  object .text  6192 B  source=chunk        finite loop trips [128]
+  2026-09-21 19:42:30  eef5b886  object .text  3456 B  source=hoist        finite loop trips [128]
+  2026-09-21 19:42:33  7932ebd1  object .text  3552 B  source=hoist_ptr    finite loop trips [128]
+RESEARCH_PROCESS_RESULT {"exit_code": 0, "stop": null, "peak_tree_rss_bytes": null, "rss_measurement": "maximum observed across sampled descendant working sets; zero observations reported as null", "elapsed_seconds": 1.672000000020489, "foreign_contention_observed": false, "timing_eligible": true}

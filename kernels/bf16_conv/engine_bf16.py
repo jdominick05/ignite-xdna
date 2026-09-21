@@ -27,13 +27,18 @@ Three modes, and only the last may carry a timing claim:
     bash scripts/research-lowlevel.sh --log results/aie/engine_bf16_bench_npu_<date>.log --npu \\
         -- bash scripts/research-iron.sh kernels/bf16_conv/engine_bf16.py --bench --repeat 128
 
-Packets per dispatch and the in-core repeat are compile-time parameters of the DESIGN (each pair is
-its own xclbin); the core program is the same object in all of them. H_COUNT_OUT / H_COUNT_ACC are
+Packets per dispatch, the in-core repeat AND the kernel source are compile-time parameters of the
+DESIGN (each triple is its own xclbin). The source has to be one: the jit keys its cache before the
+generator body runs, on the generator's bytecode and its CompileTime values, so a source chosen
+inside the body is invisible to the key and a second source silently runs the first source's
+xclbin. Every design this file compiles prints an ENGINE_BF16_DESIGN line naming the object it
+linked and that object's .text size, so a log shows which kernel ran. H_COUNT_OUT / H_COUNT_ACC are
 not read here: a weight packet serves exactly one activation packet in this harness.
 """
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import sys
 import time
@@ -50,6 +55,7 @@ from aie.utils import config
 from ml_dtypes import bfloat16
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
@@ -63,6 +69,22 @@ SOURCE = Path(__file__).with_name("engine_bf16.cc")
 # --source swaps the kernel source the design compiles (a variant copy from
 # tools/engine_bf16_loop_variants.py); it must define the same `engine_bf16` entry point.
 SOURCE_OVERRIDE: Path | None = None
+
+
+def source_key(path: Path) -> str:
+    """The kernel source as a CompileTime value: its path and a digest of its text.
+
+    The path alone would let an edited file reuse a stale xclbin; the digest alone would not say
+    which file. Relative to the repository where it can be, so the key is the same in every
+    checkout.
+    """
+    rel = path.relative_to(ROOT) if path.is_relative_to(ROOT) else path
+    return f"{rel.as_posix()}#{hashlib.sha256(path.read_bytes()).hexdigest()[:16]}"
+
+
+def source_path(key: str) -> Path:
+    p = Path(key.split("#", 1)[0])
+    return p if p.is_absolute() else ROOT / p
 
 # Packet sizes, derived rather than guessed. The weight packet is the int8 engine's 9,472 B exactly:
 # bf16's mmul<4,8,4> halves the output channels per block and doubles the bytes each, so they
@@ -78,7 +100,8 @@ def whole(n: int) -> TensorAccessPattern:
 
 
 @iron.jit
-def engine_bf16(wpkt: In, apkt: In, out: Out, *, packets: CompileTime[int] = 1, repeat: CompileTime[int] = 1):
+def engine_bf16(wpkt: In, apkt: In, out: Out, *, source: CompileTime[str],
+                packets: CompileTime[int] = 1, repeat: CompileTime[int] = 1):
     w_ty = np.ndarray[(W_BYTES // 4,), np.dtype[np.int32]]
     a_ty = np.ndarray[(A_BYTES // 2,), np.dtype[bfloat16]]
     o_ty = np.ndarray[(O_ELEMS,), np.dtype[bfloat16]]
@@ -92,7 +115,7 @@ def engine_bf16(wpkt: In, apkt: In, out: Out, *, packets: CompileTime[int] = 1, 
     kernel = ExternalFunction(
         "engine_bf16",
         arg_types=[w_ty, a_ty, o_ty, psum_ty, np.int32],
-        source_file=str(SOURCE_OVERRIDE or SOURCE),
+        source_file=str(source_path(source)),
         object_file_name="engine_bf16.o",
         include_dirs=[config.cxx_header_path()],
     )
@@ -179,13 +202,41 @@ def random_packet(k, stride, ncin, flags, seed):
     return header, act_f, wts_f, bias_f
 
 
+_designs: dict[tuple[str, int, int], tuple[object, str]] = {}
+
+
+def design(source: Path | None, packets: int, repeat: int):
+    """The compiled design for one (source, packets, repeat), built once per process.
+
+    Compiled eagerly so the log carries, before any result, the jit cache entry the design came
+    from and the .text size of the kernel object linked into it: the one line that tells a
+    variant's run from a cache hit on another source. Returns (design, cache entry).
+    """
+    src = source or SOURCE_OVERRIDE or SOURCE
+    key = (source_key(src), packets, repeat)
+    if key not in _designs:
+        from tools.engine_linked_size import text_sections  # noqa: PLC0415 - needs the ironenv's llvm-size
+
+        d = engine_bf16.specialize(source=key[0], packets=packets, repeat=repeat)
+        xclbin, _ = d.compile()
+        obj = xclbin.parent / "engine_bf16.o"
+        entry = xclbin.parent.name
+        print("ENGINE_BF16_DESIGN " + json.dumps({
+            "source": key[0].split("#", 1)[0], "packets": packets, "repeat": repeat,
+            "cache_entry": entry[:8],
+            "object_text_bytes": sum(size for _, size in text_sections(obj)),
+        }, sort_keys=True), flush=True)
+        _designs[key] = (d, entry)
+    return _designs[key]
+
+
 def dispatch(pkts, repeat=1):
     """Send a list of (header, act, wts, bias) through ONE dispatch; return the output tiles' bits."""
     packed = [pack(*p) for p in pkts]
     w_t = iron.tensor(np.concatenate([w for w, _ in packed]), dtype=np.int32, device="npu")
     a_t = iron.tensor(np.concatenate([a for _, a in packed]), dtype=bfloat16, device="npu")
     o_t = iron.zeros(len(pkts) * O_ELEMS, dtype=bfloat16, device="npu")
-    engine_bf16(w_t, a_t, o_t, packets=len(pkts), repeat=repeat)
+    design(None, len(pkts), repeat)[0](w_t, a_t, o_t)
     return np.asarray(o_t.numpy()).view(np.uint16).reshape(len(pkts), O_ELEMS)
 
 
@@ -359,26 +410,34 @@ def bench(args) -> int:
     m1_out = iron.zeros(NCO * TILE_ROWS * TILE_COLS * 4, dtype=bfloat16, device="npu")
 
     def engine_arm(source):
-        # Each source is its own design (the jit digests the kernel text), and the DESIGN is what is
-        # timed; the labels are the variant directory names so the log reads without a key.
+        # Each source is its own design - the source is a CompileTime value of the jit, so it is in
+        # the cache key - and the DESIGN is what is timed; the labels are the variant directory
+        # names so the log reads without a key. Designs are resolved here, outside the clock: the
+        # key digests the source text, and that read must not be timed.
+        designs = {r: design(source, 1, r)[0] for r in (1, rep)}
+
         def run(r):
-            global SOURCE_OVERRIDE
-            SOURCE_OVERRIDE = source
-            engine_bf16(w_t, a_t, o_t, packets=1, repeat=r)
+            designs[r](w_t, a_t, o_t)
         return run
 
     def run_m1(r):
         conv_bf16(m1_act, m1_wts, m1_out, kdim=k, rows_out=TILE_ROWS, cols_out=TILE_COLS, ncin=ncin, ncout=NCO, repeat=r)
 
-    arms = {"engine_bf16": engine_arm(SOURCE_OVERRIDE)}
+    sources = {"engine_bf16": SOURCE_OVERRIDE or SOURCE}
     for extra in args.also:
         p = Path(extra).resolve()
-        arms[f"engine_bf16[{p.parent.name}]"] = engine_arm(p)
+        sources[f"engine_bf16[{p.parent.name}]"] = p
+    arms = {name: engine_arm(src) for name, src in sources.items()}
     arms["conv_bf16_milestone1"] = run_m1
     for fn in arms.values():                       # compile and warm every design before any clock starts
         for r in (1, rep):
             for _ in range(3):
                 fn(r)
+    # Two arms on one cache entry would time one kernel twice under two names. Refuse to.
+    for r in (1, rep):
+        entries = {name: design(src, 1, r)[1] for name, src in sources.items()}
+        if len(set(entries.values())) != len(entries):
+            raise SystemExit(f"arms share a compiled design at repeat={r}: {entries}")
     rounds = []
     for rnd in range(args.rounds):
         for name, fn in arms.items():              # A, B, A, B ... so drift shows as spread, not as a result
@@ -406,6 +465,9 @@ def bench(args) -> int:
         "kdim": k, "stride": 1, "ncin": ncin, "in_channels": ncin * 8, "out_channels": NCO * 4,
         "tile": [TILE_ROWS, TILE_COLS], "macs_per_pass": int(macs), "repeat": rep, "iters": args.iters,
         "rounds": args.rounds, "npu_core_ceiling_gflops": 2.0 * 128 * 1.80e9 / 1e9,
+        # Every engine design is a live hardware context for the whole sitting; milestone 1's two
+        # are not counted here (its harness owns them).
+        "engine_designs_alive": len(_designs),
         "summary": summary, "per_round": rounds,
     }, sort_keys=True), flush=True)
     return 0
