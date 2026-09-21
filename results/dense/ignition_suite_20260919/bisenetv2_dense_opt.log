@@ -1,0 +1,13 @@
+$ C:\Users\<user>\miniforge3\envs\mlir-aie-iron\python.exe -m ignition.live --model <ignite-xdna>\build\bisenetv2_dense_opt.ignite --source <ignite-xdna>\assets\bus.jpg --headless --frames 5 --warmup 2 --json <out>\.bisenetv2_dense_opt.live.json
+[Ignition] loading <ignite-xdna>\build\bisenetv2_dense_opt.ignite (bare-metal .ignite container)
+[Ignition] task: segment
+[Ignition] power mode balanced: 8 worker threads, sleeping between regions (8 cores / 16 threads on this host; wait policy from the environment, thread count from the environment)
+[Ignition] source: image bus.jpg 810x1080
+[Ignition] shutdown: source released, window closed, NPU hardware context released
+[summary] stop: frame limit | 7 frames processed (2 warm-up, 5 timed) | 1 distinct source frames | image bus.jpg 810x1080
+[summary] NPU power mode: default kept: not evaluated
+[summary] G2G mean 44.457 ms | P50 44.192 | P95 45.068 | P99 45.078 | max 45.080 | over the last 5 timed frames; cold first frame 57.06 ms
+[summary] stage means (ms): preprocess 4.593 | NPU + host forward 36.591 (dispatch 18.580, host 12.290, readback 0.001) | image output 3.272
+[summary] output image [1080, 810] from the NPU
+[summary] RSS 400.6 MB at the first timed frame, 400.6 MB at the end (+0.01 MB over 5 frames)
+[summary] wrote <out>\.bisenetv2_dense_opt.live.json

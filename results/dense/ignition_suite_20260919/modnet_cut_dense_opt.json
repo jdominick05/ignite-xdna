@@ -1,0 +1,129 @@
+{
+  "suite_created_utc": "2026-09-19T19:04:25Z",
+  "model_path": "<ignite-xdna>\\build\\modnet_cut_dense_opt.ignite",
+  "log": "modnet_cut_dense_opt.log",
+  "command": [
+    "C:\\Users\\<user>\\miniforge3\\envs\\mlir-aie-iron\\python.exe",
+    "-m",
+    "ignition.live",
+    "--model",
+    "<ignite-xdna>\\build\\modnet_cut_dense_opt.ignite",
+    "--source",
+    "<ignite-xdna>\\assets\\bus.jpg",
+    "--headless",
+    "--frames",
+    "5",
+    "--warmup",
+    "2",
+    "--json",
+    "<out>\\.modnet_cut_dense_opt.live.json"
+  ],
+  "ignition_version": "0.3.3",
+  "ignition_path": "<Ignition>\\src\\ignition\\__init__.py",
+  "ignition_commit": "v0.3.3-4-g3eeb1e0-dirty",
+  "ignite_xdna_version": "0.3.1",
+  "ignite_xdna_path": "<ignite-xdna>\\src\\ignite_xdna\\__init__.py",
+  "ignite_xdna_commit": "v0.1.0-phoenix-npu-138-g7c9efd5-dirty",
+  "python": "C:\\Users\\<user>\\miniforge3\\envs\\mlir-aie-iron\\python.exe",
+  "hostname": "DESKTOP-CBL5NUA",
+  "xrt_smi_before": "-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device",
+  "npu_idle_before": true,
+  "wall_s": 1.4,
+  "returncode": 0,
+  "schema": 1,
+  "created_utc": "2026-09-19T19:04:28Z",
+  "model": "<ignite-xdna>\\build\\modnet_cut_dense_opt.ignite",
+  "model_name": "modnet_cut_dense_opt.ignite",
+  "model_bytes": 10433728,
+  "task": "matte",
+  "backend": "npu",
+  "source": "image bus.jpg 810x1080",
+  "source_kind": "image",
+  "frames_requested": 5,
+  "warmup": 2,
+  "frames_processed": 7,
+  "frames_timed": 5,
+  "stop_reason": "frame limit",
+  "host": {
+    "hostname": "DESKTOP-CBL5NUA",
+    "processor": "AMD64 Family 25 Model 117 Stepping 2, AuthenticAMD",
+    "python": "3.13.15",
+    "numpy": "2.5.3",
+    "opencv": "5.0.0",
+    "cpu_count": 16,
+    "onnxruntime": "1.30.0"
+  },
+  "max_fps": 0.0,
+  "power_mode": {
+    "mode": "balanced",
+    "wait_policy": "PASSIVE",
+    "threads": 8,
+    "physical_cores": 8,
+    "logical_processors": 16,
+    "wait_policy_source": "environment",
+    "threads_source": "environment",
+    "description": "balanced: 8 worker threads, sleeping between regions (8 cores / 16 threads on this host; wait policy from the environment, thread count from the environment)"
+  },
+  "npu_power": {
+    "state": "not evaluated",
+    "reason": "",
+    "lower_mode": "powersaver",
+    "previous_mode": null,
+    "period_ms": 0.0,
+    "predicted_ms": null,
+    "lowered_at_frame": null,
+    "check_p95_ms": null,
+    "watch_interval_s": 5.0,
+    "recovered_lease": null
+  },
+  "g2g_ms": {
+    "mean": 104.54315997194499,
+    "p50": 104.37849990557879,
+    "p95": 105.82584000658244,
+    "p99": 105.86492800619453,
+    "min": 102.94139990583062,
+    "max": 105.87470000609756,
+    "cold_first_frame": 130.49730006605387
+  },
+  "fps_from_mean": 9.56542733420683,
+  "stages_ms": {
+    "preprocess": 2.704479987733066,
+    "network": 100.1652000239119,
+    "postprocess": 1.6734799603000283,
+    "dispatch": 21.908340021036565,
+    "readback": 0.0022599706426262856,
+    "host": 41.91510006785393,
+    "transfer": 35.69645993411541
+  },
+  "rss_mb": {
+    "first_timed": 1040.3984375,
+    "end": 1040.46484375,
+    "drift": 0.06640625
+  },
+  "npu_frames": 5,
+  "output_shape": [
+    1080,
+    810
+  ],
+  "dense_output": {
+    "kind": "alpha",
+    "dtype": "float32",
+    "layout": "HW",
+    "shape": [
+      1080,
+      810
+    ],
+    "raw_shape": [
+      1,
+      1,
+      512,
+      512
+    ],
+    "source": "hybrid",
+    "min": 3.343209875605879e-10,
+    "max": 0.0024726232513785362
+  },
+  "xrt_smi_after": "-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device",
+  "npu_idle_after": true,
+  "problems": []
+}
