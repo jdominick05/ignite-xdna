@@ -1,0 +1,95 @@
+# A native decode for a DFL-free head: decode_native learns what reg_max means
+# Host DESKTOP-CBL5NUA (Desktop 2, Ryzen 7 8700G, XDNA1 Phoenix), 2026-09-20, env mlir-aie-iron
+# Device 0 for the container arm; xrt-smi idle before and after, and idle at the end.
+#
+## What changed
+#
+# decode_native.c implemented YOLOv8's 16-bin DFL reduction and refused anything else
+# (d->reg_max != DFL_BINS at both entry points). It now implements two forms and the branch is
+# on the value, not a compile-time constant:
+#
+#   reg_max 16   softmax over the bins from the exp table, then sum(p_k * k)   unchanged
+#   reg_max 1    the head's four channels ARE the four distances               new
+#
+# The new path needs the dequantized value rather than a bin index, so each head gained a
+# box_val[256] table: v(q) = (q - zero_point) * scale at q + 128. It is built by
+# _dequantized_logits, the SAME helper the dfl and sigmoid tables use and the same expression
+# the numpy path applies to the box head, which is what makes the two agree bit for bit rather
+# than approximately.
+#
+# The channel-blocked variant is where this could have gone wrong quietly. dfl_side_c8 reads
+# side s from blocks 2s and 2s+1; at one bin per side the four distances are lanes 0..3 of
+# block 0, and lanes 4..7 are junk the fixed 8-channel block over-reads. direct_side_c8 reads
+# the lane, never the block pair.
+#
+# ABI 2 -> 3. for_grid now refuses a reg_max the library does not implement, so YoloDecoder
+# gates on the library instead of duplicating the rule.
+#
+## Bit-exactness
+#
+#   tools/decode_native_check.py stress --trials 2000       (reg_max 16, the shipped path)
+#     2000 trials, 108,891 detections, 177 empty results, MISMATCHES 0, PASS
+#     1031 trials with class maxima, 286 with the threshold at a reachable score,
+#     506 with more than 256 candidates
+#
+#   random int8 NCHW heads, native against numpy, YoloDetection equality (exact floats):
+#     reg_max 1    400 trials,   989,387 detections, 0 mismatching trials
+#     reg_max 16   400 trials, 3,060,670 detections, 0 mismatching trials
+#
+#   the real YOLO26n container on Device 0, channel-blocked heads, head_source npu:
+#     6 detections, IDENTICAL between native and numpy
+#
+#   tests/test_host_fastpaths_offline.py, now parameterised on reg_max - 12 seeds x 3
+#   thresholds (0.001, 0.25, 0.6) x {native NCHW, native c8, numpy c8} against the numpy
+#   NCHW reference, with a different random padding fill per seed:
+#     reg_max 16 and reg_max 1 both PASS (4 tests, 8.35 s)
+#
+#   and the control that makes the c8 case mean something, at conf 0.001:
+#     reg_max 16   8 blocks, 7,728 detections   padding 200 vs 33: IDENTICAL
+#     reg_max 1    1 block,  1,454 detections   padding 200 vs 33: IDENTICAL
+#   At reg_max 1 the box head is a SINGLE block whose lanes 4-7 are padding, so a decode
+#   that read the block pair DFL needs would move when that padding changed. It does not.
+#   Both decoders report uses_native_decode True, so neither number is a numpy fallback.
+#
+# The DLL was rebuilt from source with /O2 and WITHOUT /fp:fast, OpenMP or AVX2, which the
+# file's own header requires because each changes the bits; 114,176 -> 114,688 B. The stress
+# pass above is what proves the rebuild did not move YOLOv8's numbers.
+#
+## What it is worth, and a correction
+#
+#   pipeline postprocess on the real container:  numpy 0.221 ms -> native 0.102 ms
+#
+# That is 0.119 ms, not the 3.4 ms an earlier frame breakdown implied. The 3.49 ms figure in
+# results/aie/yolo26n_vs_amd_20260920.log is MY BENCHMARK'S decode - a naive full-tensor numpy
+# decode of all 8,400 anchors. The pipeline prunes in the int8 domain first and dequantizes
+# only survivors, so its numpy decode already costs 0.221 ms and the native path halves it.
+# The benchmark's number was never the pipeline's, and the native decoder should be valued at
+# 0.119 ms in the shipped path.
+#
+# The same breakdown found the real host cost, which is NOT decode:
+#
+#   letterbox 3.094 | quantize 9.132 | stage 1.091 | dispatch 10.732 | readback 1.368 |
+#   decode 3.488 | nms 1.052 ms        (tools/bench_container_vs_amd.py's own numpy stages)
+#
+# Letterbox plus quantize is 12.226 ms of numpy there, and quantize alone is 30.5% of the
+# frame. preprocess_simd.c already does both in one AVX2 pass, measured at 0.364-0.398 ms
+# across the four YOLO arms of latency_balanced_ingress_opt_phoenix_20260917T1830Z.log
+# (the `preprocess` field of its `[summary] stage means` lines). The benchmark does not
+# call it. That is about 11.8 ms where this decoder is worth 0.12.
+#
+## Also fixed
+#
+# decode_native_check.py's import guard compared ignite_xdna.__file__ against src/ and so
+# rejected the repo's own root forwarder (ignite_xdna/__init__.py sets __path__ to src and
+# execs it, so every submodule does come from src). It now checks __path__, which is where the
+# code actually comes from and still catches the editable-install-points-elsewhere trap the
+# guard exists for.
+#
+## NOT ESTABLISHED
+#
+#   - No mAP for YOLO26, still. Identical detections on one image says the two decode paths
+#     agree, not that either is accurate.
+#   - The 0.119 ms is a median over 60 frames on one image on a non-quiet host.
+#   - reg_max values other than 1 and 16 fall back to numpy; none was tried, because no model
+#     in the zoo has one.
+#   - Nothing was re-measured against AMD with the native decode in place.

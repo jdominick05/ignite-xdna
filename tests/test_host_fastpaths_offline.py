@@ -1,7 +1,9 @@
 """Offline checks of the host fast paths added with the consolidated head readback (no device).
 
 - ``yolo_decode_c8_blocks``: detections decoded straight from channel-blocked uint8 heads equal the int8 NCHW decode,
-  native and numpy, on synthetic heads.
+  native and numpy, on synthetic heads, at both box forms the library implements (reg_max 16 and 1). At reg_max 1 the
+  box head is one block wide and its lanes 4-7 are padding, so this is what proves the decode reads the lane rather
+  than the block pair DFL needs.
 - ``depth_to_space_crd_bgr``: SESR M7's native DepthToSpace + lookup equals ``DenseGraphSession.postprocess``'s numpy
   loop byte for byte.
 - ``resize_bgr_to_c8_plane``: the native bilinear resize is not OpenCV's fixed-point INTER_LINEAR; it stays within
@@ -26,11 +28,15 @@ SCALES = {"p3_box": (0.0625, 0), "p4_box": (0.0625, 0), "p5_box": (0.125, 0),
           "p3_cls": (0.125, 0), "p4_cls": (0.125, 0), "p5_cls": (0.25, 0)}
 
 
-def _synthetic_heads(rng, confident=8):
-    """int8 NCHW heads [C][H][W] with a few confident class logits per grid."""
+def _synthetic_heads(rng, confident=8, reg_max=16):
+    """int8 NCHW heads [C][H][W] with a few confident class logits per grid.
+
+    The box head is ``4 * reg_max`` channels: 64 for YOLOv8's DFL, 4 for a DFL-free head
+    like YOLO26's, where the four channels are the four distances directly.
+    """
     heads = {}
     for g, hw in GRIDS:
-        box = rng.integers(-60, 60, (64, hw, hw), dtype=np.int8)
+        box = rng.integers(-60, 60, (4 * reg_max, hw, hw), dtype=np.int8)
         cls = rng.integers(-128, -50, (80, hw, hw), dtype=np.int8)
         for _ in range(confident):
             cls[rng.integers(0, 80), rng.integers(0, hw), rng.integers(0, hw)] = rng.integers(20, 127)
@@ -52,15 +58,17 @@ def _detections(dets):
 
 
 class HostFastPathsOffline(unittest.TestCase):
-    def test_c8_decode_equals_nchw_decode(self):
+    def _c8_equals_nchw(self, reg_max):
         native = YoloDecoder(imgsz=640, native_decode=True)
+        native.set_reg_max(reg_max)
         if not native.uses_native_decode or not hasattr(native._native._lib, "yolo_decode_c8_blocks"):
-            self.skipTest("native decode library without yolo_decode_c8_blocks")
+            self.skipTest(f"native decode library without yolo_decode_c8_blocks at reg_max {reg_max}")
         numpy_dec = YoloDecoder(imgsz=640, native_decode=False)
+        numpy_dec.set_reg_max(reg_max)
         checked = 0
         for seed in range(12):
             rng = np.random.default_rng(seed)
-            nchw = _synthetic_heads(rng)
+            nchw = _synthetic_heads(rng, reg_max=reg_max)
             cls_max = {f"{g}_cls": nchw[f"{g}_cls"].reshape(80, -1).max(0) for g, _ in GRIDS}
             ref_heads = dict(nchw, scales=SCALES, cls_max=cls_max)
             c8_heads = {k: _to_c8(v, junk=int(rng.integers(0, 256))) for k, v in nchw.items()}
@@ -72,11 +80,20 @@ class HostFastPathsOffline(unittest.TestCase):
                 c8_native = _detections(native.postprocess(c8_heads, pad, scale, conf_thres=conf, iou_thres=0.7))
                 no_max = {k: v for k, v in c8_heads.items() if k != "cls_max"}
                 c8_numpy = _detections(native.postprocess(no_max, pad, scale, conf_thres=conf, iou_thres=0.7))
-                self.assertEqual(nchw_native, ref, (seed, conf))
-                self.assertEqual(c8_native, ref, (seed, conf))
-                self.assertEqual(c8_numpy, ref, (seed, conf))
+                self.assertEqual(nchw_native, ref, (reg_max, seed, conf))
+                self.assertEqual(c8_native, ref, (reg_max, seed, conf))
+                self.assertEqual(c8_numpy, ref, (reg_max, seed, conf))
                 checked += len(ref)
         self.assertGreater(checked, 0)
+        return checked
+
+    def test_c8_decode_equals_nchw_decode(self):
+        """YOLOv8's 16-bin DFL box head, the shipped path."""
+        self._c8_equals_nchw(16)
+
+    def test_c8_decode_equals_nchw_decode_dfl_free(self):
+        """A DFL-free box head: four channels in one block, lanes 4-7 padding."""
+        self._c8_equals_nchw(1)
 
     def test_depth_to_space_matches_numpy(self):
         rng = np.random.default_rng(7)

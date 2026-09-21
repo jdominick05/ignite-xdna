@@ -10957,3 +10957,65 @@ layer-exactness against ONNX Runtime - because it writes an output with `write_t
 reads it with `read_tensor`, which agree by construction, and emulates activation packets
 through the same pattern that wrote them, so a layout error cancels on both sides. A readback
 shared with the thing under test is not a check.
+
+## The native decoder learns what reg_max means, and a benchmark's decode was never the pipeline's (2026-09-20, Desktop 2)
+
+`pipelines/decode_native.c` implemented one box form - YOLOv8's 16-bin DFL reduction - and refused
+everything else at both entry points (`d->reg_max != DFL_BINS`). YOLO26 drops DFL: its box head
+carries four channels that are the four distances directly, so the container decoded through numpy
+while YOLOv8 decoded in C. The library now implements both forms and branches on the value:
+
+| `reg_max` | Box form | Path |
+|---|---|---|
+| 16 | softmax over the bins from the exp table, then the expectation | unchanged |
+| 1 | the four channels **are** left, top, right, bottom | new |
+
+The new path needs a dequantized value rather than a bin index, so each head gained a `box_val[256]`
+table built by `_dequantized_logits` - the same helper behind the existing DFL and sigmoid tables, and
+the same expression the numpy path applies to the box head. That shared construction is what makes the
+two agree bit for bit rather than approximately. ABI 2 becomes 3, and `decode_native.for_grid` now
+refuses an unimplemented `reg_max`, so `YoloDecoder` gates on the library instead of restating the rule.
+
+The channel-blocked variant is where this could have gone wrong quietly. `dfl_side_c8` reads side *s*
+from blocks 2*s* and 2*s*+1; at one bin per side the four distances are lanes 0 to 3 of block 0, and
+lanes 4 to 7 are padding the fixed eight-channel block over-reads. `direct_side_c8` reads the lane. The
+padding control in the table below is what shows it: at reg_max 1 the whole box head is one block, so a
+decode reaching into the block pair would move when the padding did, and none of 1,454 detections moves.
+
+**Exactness** (`results/aie/decode_native_regmax_20260920.log`):
+
+| Check | Result |
+|---|---|
+| `tools/decode_native_check.py stress --trials 2000` (reg_max 16, the shipped path) | 108,891 detections, 177 empty results, **0 mismatches** |
+| Random int8 NCHW heads against numpy, exact `YoloDetection` equality, reg_max 1 | 400 trials, 989,387 detections, **0 mismatching trials** |
+| The same at reg_max 16 | 400 trials, 3,060,670 detections, **0 mismatching trials** |
+| The YOLO26n container on Device 0, channel-blocked heads, `head_source: npu` | 6 detections, **identical** between native and numpy |
+| `tests/test_host_fastpaths_offline.py`, now parameterised on `reg_max`: 12 seeds, thresholds 0.001, 0.25 and 0.6, native NCHW and native and numpy channel-blocked against the numpy NCHW reference | passes at reg_max 16 **and** 1 |
+| The control for the channel-blocked case, conf 0.001: change the padding fill from 200 to 33 | reg_max 16 (8 blocks, 7,728 detections) and reg_max 1 (**1 block**, 1,454 detections) both **identical** |
+
+The DLL was rebuilt from source with `/O2` and without `/fp:fast`, OpenMP or AVX2, which the file's own
+header requires because each of those changes the bits; 114,176 to 114,688 B. The stress pass above is
+what shows the rebuild did not move YOLOv8's numbers.
+
+### The 3.49 ms decode in the YOLO26 sitting was the benchmark's, not the pipeline's
+
+On the real container the pipeline's postprocess goes **0.221 ms to 0.102 ms** - 0.119 ms, not the
+3.4 ms the frame breakdown in that sitting implied. The 3.488 ms figure is
+`tools/bench_container_vs_amd.py`'s own numpy decode, which dequantizes all 8,400 anchors;
+`YoloPipeline` prunes in the int8 domain first and dequantizes only the survivors, so its numpy decode
+already costs 0.221 ms. Value the native decoder at **0.119 ms** in the shipped path. The benchmark's
+stage numbers are the benchmark's, and this is the second time a host cost has been read across that
+boundary.
+
+The same breakdown does name a real host cost, and it is not decode: that benchmark spends **3.094 ms
+letterboxing and 9.132 ms quantizing**, 12.226 ms of numpy, and quantize alone is 30.5 % of its frame.
+`pipelines/preprocess_simd.c` already does both in one AVX2 pass, measured at **0.364 to 0.398 ms**
+across the four YOLO arms of
+`results/aie/latency_balanced_ingress_opt_phoenix_20260917T1830Z.log` (`preprocess` in the
+`[summary] stage means` lines). The benchmark does not call it. That is about **11.8 ms** on the table
+where this decoder is worth 0.12, and it is the next thing to fix on that tool.
+
+**Not established:** no mAP for YOLO26 on either decode path - identical detections on one image say the
+two paths agree, not that either is accurate; the 0.119 ms is a median over 60 frames on one image on a
+non-quiet host; `reg_max` values other than 1 and 16 fall back to numpy and none was tried, because no
+model in the zoo has one; and nothing was re-measured against AMD with the native decode in place.

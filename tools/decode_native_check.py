@@ -54,8 +54,16 @@ def _decoder_modules():
     from ignite_xdna.pipelines import decode_native
     from ignite_xdna.pipelines.yolo_pipeline import YoloDecoder
     src = (ROOT / "src").resolve()
-    if not Path(ignite_xdna.__file__).resolve().is_relative_to(src):
-        raise SystemExit(f"ignite_xdna was imported from {ignite_xdna.__file__}, not from {src}")
+    # __path__, not __file__: the repo root carries a forwarding ignite_xdna/__init__.py whose
+    # own file is at the root but whose __path__ is src, so every submodule - including the one
+    # under test - comes from src. Checking __file__ rejects that layout while still letting an
+    # editable install pointing at another checkout through, which is backwards; __path__ is
+    # where the code actually comes from and catches the install trap this guard exists for.
+    where = [Path(q).resolve() for q in getattr(ignite_xdna, "__path__", [])]
+    if not where:
+        where = [Path(ignite_xdna.__file__).resolve().parent]
+    if not all(q.is_relative_to(src) for q in where):
+        raise SystemExit(f"ignite_xdna resolves to {where}, not under {src}")
     return decode_native, YoloDecoder
 
 

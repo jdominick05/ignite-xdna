@@ -24,7 +24,7 @@ import numpy as np
 
 from .preprocess import _compile_native_dll
 
-ABI = 2
+ABI = 3
 REG_MAX = 16
 HEAD_NAMES = (("p3_box", "p3_cls"), ("p4_box", "p4_cls"), ("p5_box", "p5_cls"))
 # Anchors per head and each head's first anchor, as YoloDecoder.postprocess indexes them.
@@ -39,6 +39,7 @@ class _Head(ctypes.Structure):
         ("cls", ctypes.c_void_p),
         ("cls_max", ctypes.c_void_p),
         ("dfl_exp", ctypes.c_void_p),
+        ("box_val", ctypes.c_void_p),
         ("sigmoid", ctypes.c_void_p),
         ("sigmoid_low", ctypes.c_void_p),
         ("q_threshold", ctypes.c_double),
@@ -66,6 +67,7 @@ class _HeadC8(ctypes.Structure):
         ("cls_c8", ctypes.c_void_p),
         ("cls_max", ctypes.c_void_p),
         ("dfl_exp", ctypes.c_void_p),
+        ("box_val", ctypes.c_void_p),
         ("sigmoid", ctypes.c_void_p),
         ("sigmoid_low", ctypes.c_void_p),
         ("q_threshold", ctypes.c_double),
@@ -166,7 +168,9 @@ class _Binding:
 class NativeDecode:
     """Decodes int8 heads for one anchor grid; ``decode`` returns ``None`` when the numpy path must run."""
 
-    def __init__(self, lib: ctypes.CDLL, anchors: np.ndarray, strides: np.ndarray, num_classes: int):
+    def __init__(self, lib: ctypes.CDLL, anchors: np.ndarray, strides: np.ndarray, num_classes: int,
+                 reg_max: int = REG_MAX):
+        self._reg_max = int(reg_max)
         self._lib = lib
         self._fn = lib.yolo_decode_int8
         self._anchor_x = np.ascontiguousarray(anchors[0, 0], dtype=np.float32)
@@ -185,6 +189,12 @@ class NativeDecode:
                 self._tables[key] = dfl_exp_table(scale, zero_point)
             elif kind == "sigmoid":
                 self._tables[key] = sigmoid_table(scale, zero_point)
+            elif kind == "box_val":
+                # v(q) = (q - zero_point) * scale, the same expression the numpy path applies to
+                # the box head. At reg_max 1 the four distances ARE these values, so sharing the
+                # helper is what makes native and numpy agree bit for bit.
+                self._tables[key] = np.ascontiguousarray(_dequantized_logits(scale, zero_point),
+                                                         dtype=np.float32)
             else:
                 self._tables[key] = sigmoid_low_table(self._table("sigmoid", scale, zero_point))
         return self._tables[key]
@@ -198,7 +208,7 @@ class NativeDecode:
         logit_t = np.log(c_clamped / (1.0 - c_clamped))
         for h, (box_name, cls_name) in enumerate(HEAD_NAMES):
             b, c = box_f[h], cls_f[h]
-            for arr, channels in ((b, 4 * REG_MAX), (c, self._num_classes)):
+            for arr, channels in ((b, 4 * self._reg_max), (c, self._num_classes)):
                 if (not isinstance(arr, np.ndarray) or arr.dtype != np.int8 or not arr.flags["C_CONTIGUOUS"]
                         or arr.size != channels * HEAD_ANCHORS[h]):
                     return None
@@ -215,6 +225,7 @@ class NativeDecode:
                                   or not m.flags["C_CONTIGUOUS"] or m.size != HEAD_ANCHORS[h]):
                 return None
             dfl = self._table("dfl", s_b, int(zp_b))
+            bval = self._table("box_val", s_b, int(zp_b))
             sig = self._table("sigmoid", s_c, int(zp_c))
             low = self._table("sigmoid_low", s_c, int(zp_c))
             head = args.head[h]
@@ -222,17 +233,18 @@ class NativeDecode:
             head.cls = c.ctypes.data
             head.cls_max = m.ctypes.data if m is not None else None
             head.dfl_exp = dfl.ctypes.data
+            head.box_val = bval.ctypes.data
             head.sigmoid = sig.ctypes.data
             head.sigmoid_low = low.ctypes.data if low is not None else None
             # The numpy prune's threshold, computed by the same expression.
             head.q_threshold = float(logit_t / float(s_c) + int(zp_c))
             head.anchors = HEAD_ANCHORS[h]
             head.anchor_offset = HEAD_OFFSETS[h]
-            refs += [b, c, m, dfl, sig, low]
+            refs += [b, c, m, dfl, bval, sig, low]
         args.anchor_x = self._anchor_x.ctypes.data
         args.anchor_y = self._anchor_y.ctypes.data
         args.strides = self._strides.ctypes.data
-        args.reg_max = REG_MAX
+        args.reg_max = self._reg_max
         args.num_classes = self._num_classes
         args.conf = float(np.float32(conf_t))
         args.iou = float(np.float32(iou_t))
@@ -249,7 +261,7 @@ class NativeDecode:
         for h, (box_name, cls_name) in enumerate(HEAD_NAMES):
             b, c = box_c8[h], cls_c8[h]
             n_anc = HEAD_ANCHORS[h]
-            for arr, blocks in ((b, 8), (c, cls_blocks)):
+            for arr, blocks in ((b, (4 * self._reg_max + 7) // 8), (c, cls_blocks)):
                 if (not isinstance(arr, np.ndarray) or arr.dtype != np.uint8 or not arr.flags["C_CONTIGUOUS"]
                         or arr.size < blocks * n_anc * 8):
                     return None
@@ -265,6 +277,7 @@ class NativeDecode:
             if m is None or not isinstance(m, np.ndarray) or m.dtype != np.int8 or not m.flags["C_CONTIGUOUS"] or m.size != n_anc:
                 return None
             dfl = self._table("dfl", s_b, int(zp_b))
+            bval = self._table("box_val", s_b, int(zp_b))
             sig = self._table("sigmoid", s_c, int(zp_c))
             low = self._table("sigmoid_low", s_c, int(zp_c))
             head = args.head[h]
@@ -272,16 +285,17 @@ class NativeDecode:
             head.cls_c8 = c.ctypes.data
             head.cls_max = m.ctypes.data
             head.dfl_exp = dfl.ctypes.data
+            head.box_val = bval.ctypes.data
             head.sigmoid = sig.ctypes.data
             head.sigmoid_low = low.ctypes.data if low is not None else None
             head.q_threshold = float(logit_t / float(s_c) + int(zp_c))
             head.anchors = n_anc
             head.anchor_offset = HEAD_OFFSETS[h]
-            refs += [b, c, m, dfl, sig, low]
+            refs += [b, c, m, dfl, bval, sig, low]
         args.anchor_x = self._anchor_x.ctypes.data
         args.anchor_y = self._anchor_y.ctypes.data
         args.strides = self._strides.ctypes.data
-        args.reg_max = REG_MAX
+        args.reg_max = self._reg_max
         args.num_classes = self._num_classes
         args.conf = float(np.float32(conf_t))
         args.iou = float(np.float32(iou_t))
@@ -346,8 +360,13 @@ class NativeDecode:
         return out[0][:4 * n].tolist(), out[1][:n].tolist(), out[2][:n].tolist()
 
 
-def for_grid(anchors: np.ndarray, strides: np.ndarray, num_classes: int) -> Optional[NativeDecode]:
-    """A ``NativeDecode`` for a decoder's anchor grid, or ``None`` without the library or for another grid."""
+def for_grid(anchors: np.ndarray, strides: np.ndarray, num_classes: int,
+             reg_max: int = REG_MAX) -> Optional[NativeDecode]:
+    """A ``NativeDecode`` for a decoder's anchor grid, or ``None`` without the library, for another
+    grid, or for a ``reg_max`` the library does not implement (it does 16, the DFL head, and 1,
+    a head that regresses the four distances directly)."""
     if _LIB is None or anchors.shape != (1, 2, TOTAL_ANCHORS) or strides.shape != (1, TOTAL_ANCHORS):
         return None
-    return NativeDecode(_LIB, anchors, strides, num_classes)
+    if int(reg_max) not in (1, REG_MAX):
+        return None
+    return NativeDecode(_LIB, anchors, strides, num_classes, int(reg_max))

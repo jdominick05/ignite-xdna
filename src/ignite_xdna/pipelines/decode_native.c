@@ -47,16 +47,17 @@
 #pragma STDC FP_CONTRACT OFF
 #endif
 
-#define YOLO_DECODE_ABI 2
+#define YOLO_DECODE_ABI 3
 #define DFL_BINS 16
 #define STACK_SURVIVORS 1024
 #define STACK_CANDIDATES 256
 
 typedef struct {
-    const int8_t* box;          /* int8 [4 * 16][anchors] in NCHW order */
+    const int8_t* box;          /* int8 [4 * reg_max][anchors] in NCHW order */
     const int8_t* cls;          /* int8 [num_classes][anchors] */
     const int8_t* cls_max;      /* int8 [anchors] per-anchor class maximum, or NULL to compute it here */
     const float* dfl_exp;       /* [256 * 256]: np.exp(v(q) - v(q_max)) at (q_max + 128) * 256 + (q + 128) */
+    const float* box_val;       /* [256]: v(q) = (q - zp) * scale at q + 128; used only at reg_max 1 */
     const float* sigmoid;       /* [256]: numpy's float32 1 / (1 + exp(-v(q))) at q + 128 */
     const int32_t* sigmoid_low; /* [256]: smallest q with sigmoid[q] == sigmoid[q_max] at q_max + 128, or NULL */
     double q_threshold;         /* an anchor survives when its class maximum > q_threshold */
@@ -69,17 +70,18 @@ typedef struct {
     const float* anchor_x;      /* [total anchors] */
     const float* anchor_y;
     const float* strides;
-    int32_t reg_max;            /* 16 */
+    int32_t reg_max;            /* 16 with DFL, 1 when the family regresses distances directly */
     int32_t num_classes;
     float conf;                 /* float32(conf_thres) */
     float iou;                  /* float32(iou_thres) */
 } yolo_decode_t;
 
 typedef struct {
-    const uint8_t* box_c8;      /* uint8 [8][anchors][8] in channel-blocked order */
+    const uint8_t* box_c8;      /* uint8 [blocks][anchors][8] in channel-blocked order */
     const uint8_t* cls_c8;      /* uint8 [(num_classes+7)/8][anchors][8] in channel-blocked order */
     const int8_t* cls_max;      /* int8 [anchors] per-anchor class maximum */
     const float* dfl_exp;       /* [256 * 256]: np.exp(v(q) - v(q_max)) */
+    const float* box_val;       /* [256]: v(q) = (q - zp) * scale at q + 128; used only at reg_max 1 */
     const float* sigmoid;       /* [256]: numpy's float32 1 / (1 + exp(-v(q))) at q + 128 */
     const int32_t* sigmoid_low; /* [256]: smallest q with sigmoid[q] == sigmoid[q_max] at q_max + 128, or NULL */
     double q_threshold;         /* an anchor survives when its class maximum > q_threshold */
@@ -92,7 +94,7 @@ typedef struct {
     const float* anchor_x;      /* [total anchors] */
     const float* anchor_y;
     const float* strides;
-    int32_t reg_max;            /* 16 */
+    int32_t reg_max;            /* 16 with DFL, 1 when the family regresses distances directly */
     int32_t num_classes;
     float conf;                 /* float32(conf_thres) */
     float iou;                  /* float32(iou_thres) */
@@ -241,6 +243,24 @@ static void sort_by_score(int32_t* v, int32_t* tmp, size_t n, const candidate_t*
     if (src != v) {
         for (size_t i = 0; i < n; ++i) v[i] = src[i];
     }
+}
+
+/* No DFL (reg_max 1): the head's four channels ARE the four distances, so there is nothing to
+   reduce and the "expectation" is the dequantized value itself. box_val is the same table the
+   numpy path computes with, (q - zero_point) * scale in float32, so the two agree bit for bit. */
+static float direct_side(const int8_t* box, size_t n, size_t a, int side, const float* box_val)
+{
+    return box_val[(int)box[(size_t)side * n + a] + 128];
+}
+
+/* No DFL, channel-blocked: the four distances are lanes 0..3 of block 0. Lanes 4..7 are the junk
+   a fixed 8-channel block over-reads and must not be touched; the DFL routine below indexes
+   blocks 2*side and 2*side+1 instead, which is the wrong place entirely at one bin per side. */
+static float direct_side_c8(const uint8_t* box_c8, size_t n, size_t a, int side, const float* box_val)
+{
+    (void)n;
+    const uint8_t* p = box_c8 + a * 8;
+    return box_val[(int)(int8_t)(p[side] ^ 0x80) + 128];
 }
 
 /* DFL expectation of one side: softmax over the 16 bins from the exp table, then sum(p_k * k) in index order. */
@@ -394,7 +414,7 @@ DECODE_API int yolo_decode_int8(
     float* out_score,
     int32_t* out_class
 ) {
-    if (!d || !out_box || !out_score || !out_class || capacity < 0 || d->reg_max != DFL_BINS ||
+    if (!d || !out_box || !out_score || !out_class || capacity < 0 || (d->reg_max != DFL_BINS && d->reg_max != 1) ||
         d->num_classes <= 0 || !d->anchor_x || !d->anchor_y || !d->strides) {
         return -1;
     }
@@ -474,10 +494,11 @@ DECODE_API int yolo_decode_int8(
                 if (!(best >= d->conf)) continue;
             }
 
-            const float l = dfl_side(hd->box, n, a, 0, hd->dfl_exp);
-            const float t = dfl_side(hd->box, n, a, 1, hd->dfl_exp);
-            const float r = dfl_side(hd->box, n, a, 2, hd->dfl_exp);
-            const float b = dfl_side(hd->box, n, a, 3, hd->dfl_exp);
+            const int direct = (d->reg_max == 1);
+            const float l = direct ? direct_side(hd->box, n, a, 0, hd->box_val) : dfl_side(hd->box, n, a, 0, hd->dfl_exp);
+            const float t = direct ? direct_side(hd->box, n, a, 1, hd->box_val) : dfl_side(hd->box, n, a, 1, hd->dfl_exp);
+            const float r = direct ? direct_side(hd->box, n, a, 2, hd->box_val) : dfl_side(hd->box, n, a, 2, hd->dfl_exp);
+            const float b = direct ? direct_side(hd->box, n, a, 3, hd->box_val) : dfl_side(hd->box, n, a, 3, hd->dfl_exp);
             const size_t ai = (size_t)hd->anchor_offset + a;
             const float ax = d->anchor_x[ai];
             const float ay = d->anchor_y[ai];
@@ -527,7 +548,7 @@ DECODE_API int yolo_decode_c8_blocks(
     float* out_score,
     int32_t* out_class
 ) {
-    if (!d || !out_box || !out_score || !out_class || capacity < 0 || d->reg_max != DFL_BINS ||
+    if (!d || !out_box || !out_score || !out_class || capacity < 0 || (d->reg_max != DFL_BINS && d->reg_max != 1) ||
         d->num_classes <= 0 || !d->anchor_x || !d->anchor_y || !d->strides) {
         return -1;
     }
@@ -612,10 +633,11 @@ DECODE_API int yolo_decode_c8_blocks(
                 if (found) break;
             }
 
-            const float l = dfl_side_c8(hd->box_c8, n, a, 0, hd->dfl_exp);
-            const float t = dfl_side_c8(hd->box_c8, n, a, 1, hd->dfl_exp);
-            const float r = dfl_side_c8(hd->box_c8, n, a, 2, hd->dfl_exp);
-            const float b = dfl_side_c8(hd->box_c8, n, a, 3, hd->dfl_exp);
+            const int direct = (d->reg_max == 1);
+            const float l = direct ? direct_side_c8(hd->box_c8, n, a, 0, hd->box_val) : dfl_side_c8(hd->box_c8, n, a, 0, hd->dfl_exp);
+            const float t = direct ? direct_side_c8(hd->box_c8, n, a, 1, hd->box_val) : dfl_side_c8(hd->box_c8, n, a, 1, hd->dfl_exp);
+            const float r = direct ? direct_side_c8(hd->box_c8, n, a, 2, hd->box_val) : dfl_side_c8(hd->box_c8, n, a, 2, hd->dfl_exp);
+            const float b = direct ? direct_side_c8(hd->box_c8, n, a, 3, hd->box_val) : dfl_side_c8(hd->box_c8, n, a, 3, hd->dfl_exp);
             const size_t ai = (size_t)hd->anchor_offset + a;
             const float ax = d->anchor_x[ai];
             const float ay = d->anchor_y[ai];

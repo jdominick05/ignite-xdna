@@ -147,14 +147,16 @@ class YoloDecoder:
         it in its manifest, derived there from the box head's channel count, so nothing here
         has to know a model by name.
 
-        decode_native.c implements the 16-bin reduction specifically, so any other value falls
-        back to the numpy path rather than silently decoding bins that are not there.
+        decode_native.c implements two: the 16-bin reduction and the direct read at 1. Any other
+        value falls back to numpy rather than silently decoding bins that are not there.
         """
         self.reg_max = int(reg_max)
         if self.reg_max < 1:
             raise ValueError(f"reg_max must be at least 1, got {reg_max}")
-        self._native = (decode_native.for_grid(self._anchors, self._strides, NUM_CLASSES)
-                        if (self._native_requested and self.reg_max == REG_MAX) else None)
+        # for_grid refuses a reg_max the library does not implement, so the gate lives with the
+        # code that would have to do the work rather than being duplicated here.
+        self._native = (decode_native.for_grid(self._anchors, self._strides, NUM_CLASSES, self.reg_max)
+                        if self._native_requested else None)
 
     @property
     def uses_native_decode(self) -> bool:
