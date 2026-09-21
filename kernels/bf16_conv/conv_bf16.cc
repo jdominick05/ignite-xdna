@@ -14,7 +14,7 @@
 // Here the input keeps 8 channels per block, because K is still 8, and the OUTPUT blocks by 4.
 //
 //   act  [cin_block][row][col][8]   bf16, halo rows and columns included in row/col
-//   wts  [cout_block][ky][kx][cin_block][32]   bf16, 32 = 8 input by 4 output, walked in this order
+//   wts  [ky][kx][cin_block][cout_block][32]   bf16, 32 = 8 input by 4 output, walked in this order
 //        followed by [cout_block][16] bf16 of bias, ALREADY REPLICATED to the accumulator's shape:
 //        mmul's C is 4 pixels by 4 channels row major, so element m*4+n wants bias[n], which is the
 //        four bias values repeated four times. Replicating on the host rather than on the core also
@@ -70,39 +70,51 @@ extern "C" void conv_bf16(bfloat16 *act, bfloat16 *wts, bfloat16 *out) {
     aie::set_rounding(aie::rounding_mode::conv_even);
     aie::set_saturation(aie::saturation_mode::saturate);
 
-    const bfloat16 *bias = wts + NCOUT * (KDIM * KDIM * NCIN * MMUL::size_B);
+    const bfloat16 *bias = wts + KDIM * KDIM * NCIN * NCOUT * MMUL::size_B;
 
+    // Bias for every output block, loaded once.
+    aie::vector<float, MMUL::size_C> bv[NCOUT];
+#pragma unroll
     for (int ob = 0; ob < NCOUT; ++ob) {
-        // Every output block re-reads the whole activation tile; the weight stream is contiguous
-        // within a block, which is what the layout above is for.
-        const bfloat16 *wblock = wts + ob * (KDIM * KDIM * NCIN * MMUL::size_B);
         aie::accum<accfloat, MMUL::size_C> bacc;
         bacc.from_vector(aie::load_v<MMUL::size_C>(bias + ob * MMUL::size_C));
-        const aie::vector<float, MMUL::size_C> bv = bacc.to_vector<float>();
+        bv[ob] = bacc.to_vector<float>();
+    }
 
-        for (int r = 0; r < ROWS_OUT; ++r) {
-            for (int g = 0; g < GROUPS; ++g) {
-                MMUL acc = MMUL(bv);
-                const bfloat16 *wp = wblock;
+    for (int r = 0; r < ROWS_OUT; ++r) {
+        for (int g = 0; g < GROUPS; ++g) {
+            // NCOUT accumulators in flight. A single accumulator would serialise on the vector
+            // MAC's latency - every mac waiting on the one before it - which measured 27.18 GFLOPS,
+            // 5.9% of this core's bf16 ceiling and only 1.09x one CPU thread. The int8 engine keeps
+            // four in flight for the same reason (kernels/aie2/conv_engine/engine.cc).
+            MMUL acc[NCOUT];
+#pragma unroll
+            for (int ob = 0; ob < NCOUT; ++ob)
+                acc[ob] = MMUL(bv[ob]);
 
-                for (int ky = 0; ky < KDIM; ++ky) {
-                    for (int kx = 0; kx < KDIM; ++kx) {
-                        // 4 consecutive output columns read 4 consecutive input columns at this
-                        // kernel offset, and [col][8] laid end to end is exactly mmul's 4x8 A.
-                        const int aoff = ((r + ky) * COLS_IN + 4 * g + kx) * 8;
-                        for (int cb = 0; cb < NCIN; ++cb) {
-                            const aie::vector<bfloat16, MMUL::size_A> a =
-                                aie::load_unaligned_v<MMUL::size_A>(act + cb * PLANE + aoff);
-                            const aie::vector<bfloat16, MMUL::size_B> b =
-                                aie::load_v<MMUL::size_B>(wp);
-                            wp += MMUL::size_B;
-                            acc.mac(a, b);
+            const bfloat16 *wp = wts;
+            for (int ky = 0; ky < KDIM; ++ky) {
+                for (int kx = 0; kx < KDIM; ++kx) {
+                    // 4 consecutive output columns read 4 consecutive input columns at this kernel
+                    // offset, and [col][8] laid end to end is exactly mmul's 4x8 A.
+                    const int aoff = ((r + ky) * COLS_IN + 4 * g + kx) * 8;
+                    for (int cb = 0; cb < NCIN; ++cb) {
+                        const aie::vector<bfloat16, MMUL::size_A> a =
+                            aie::load_unaligned_v<MMUL::size_A>(act + cb * PLANE + aoff);
+                        // One activation load feeds every output block, which is why the weight
+                        // layout puts the output block innermost: this walk stays contiguous.
+#pragma unroll
+                        for (int ob = 0; ob < NCOUT; ++ob) {
+                            acc[ob].mac(a, aie::load_v<MMUL::size_B>(wp + ob * MMUL::size_B));
                         }
+                        wp += NCOUT * MMUL::size_B;
                     }
                 }
-                aie::store_v(out + ob * OPLANE + (r * COLS_OUT + 4 * g) * 4,
-                             acc.template to_vector<bfloat16>());
             }
+#pragma unroll
+            for (int ob = 0; ob < NCOUT; ++ob)
+                aie::store_v(out + ob * OPLANE + (r * COLS_OUT + 4 * g) * 4,
+                             acc[ob].template to_vector<bfloat16>());
         }
     }
 }

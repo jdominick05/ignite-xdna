@@ -23,6 +23,53 @@ The reference is itself checked against a naive quadruple loop on three shapes b
 touched hardware, because the reference encodes the memory layouts and a wrong layout would have
 been blamed on the kernel.
 
+## Speed: one AIE core against one Zen 4 thread
+
+[`results/aie/bf16_conv_bench_large_npu_20260921.log`](../../results/aie/bf16_conv_bench_large_npu_20260921.log),
+`timing_eligible: true`. 3x3, 8 in / 32 out channels over an 8x32 tile, 589,824 MACs per pass,
+torch 2.14 bf16 on the same machine as the baseline (the 8700G is Zen 4, so its CPU path has
+AVX512-BF16 and is not a strawman):
+
+| | per pass | GFLOPS |
+|---|---:|---:|
+| One AIE core, dispatch amortised | **12.81 us** | **92.10** |
+| CPU torch bf16, 1 thread | 35.34 us | 33.38 |
+| CPU torch bf16, 16 threads | 116.30 us | 10.14 |
+| One AIE core, single dispatch | 577.90 us | 2.04 |
+
+**2.76x one CPU thread, at 20.0% of this core's 460.8 GFLOPS bf16 ceiling.**
+
+Three things that number needs attached to it, or it misleads:
+
+* **The 16-thread row is degenerate and is not a win to quote.** At this tile torch's threading
+  overhead exceeds the work, so 16 threads are slower than 1. The honest comparison is per core.
+* **`single dispatch` is the dispatch floor, not the kernel.** 577.9 us for a tile that is ~13 us of
+  arithmetic reproduces this repo's documented ~617 us one-shot IRON floor. Any real use has to put
+  many passes in one dispatch, which is exactly what the graph engine already does for 66 layers.
+* **This is one core of sixteen**, and the harness drives it directly. It is not a device number and
+  not a model number.
+
+### Accumulators in flight is the whole optimisation so far
+
+[`results/aie/bf16_conv_bench_npu_20260921.log`](../../results/aie/bf16_conv_bench_npu_20260921.log).
+Identical work in every row - 147,456 MACs, same tile, same kernel - with only the number of live
+accumulators changing, because `ncout` is that number:
+
+| accumulators | GFLOPS | us per pass |
+|---:|---:|---:|
+| 1 | 24.44 | 12.07 |
+| 2 | 31.13 | 9.47 |
+| 4 | 36.64 | 8.05 |
+| 8 | **45.35** | 6.50 |
+
+A single accumulator serialises on the vector MAC's latency: every `mac` waits for the one before
+it. Eight independent chains is 1.86x one, from nothing but reordering. The int8 engine keeps four
+for the same reason. The CPU-relative speedups in that log are inflated by torch's per-call overhead
+on such a small tile and should not be quoted; the large-tile table above is the fair one.
+
+Remaining headroom is large and the next levers are known: this is one core, the loop is not
+software-pipelined, and 20% of ceiling is well short of what the bf16 GEMM reaches.
+
 ## Why it did not exist before
 
 There is no bf16 convolution in mlir-aie's `aie_kernels` tree (`conv2dk1.cc` and `conv2dk3.cc` are
