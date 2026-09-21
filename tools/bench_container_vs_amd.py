@@ -20,8 +20,8 @@ theirs.
 Both arms share the letterbox - the same cv2 resize and pad, from npu.yolo.letterbox_canvas -
 the decoder and the NMS, and time the same span: a decoded frame from an image already in
 memory. Neither uses a native decode path, so the host tail is numpy on both sides and is NOT
-optimized - the engine arm additionally pays one readback per head, where the EP returns all of
-them from one call, so a margin measured here is a floor.
+optimized - the engine arm must also dequantize its int8 heads to float32, where the EP's model
+returns float already, so a margin measured here is a floor.
 
 Where the arms necessarily differ is the ingress AFTER that shared letterbox, because the two
 stacks want different things: AMD's model takes float32 NCHW RGB, the container takes a
@@ -37,9 +37,15 @@ not faster, and AMD's arm is untouched. The engine arm asserts its ingress LUT e
 quantize it replaces for all 256 pixel values, so a container whose input scale is not a power of
 two fails loudly instead of quietly measuring a different frame.
 
+Egress is the shipped path too: read_heads merges the device syncs, takes zero-copy views of a
+mapped workspace and unswizzles with the native kernel, where this arm used to sync, copy and
+transpose once per head out of the read_tensor DEBUG helper. What is left is the float32
+dequantize the shared numpy decoder needs, and that is a real cost of this arm rather than an
+artefact of the tool. It is also small: on yolov8s the dispatch is 17.4 ms of a 20.0 ms forward.
+
 Stage buckets differ per arm and are reported as such:
   preprocess  everything up to a model-ready input, the plane write included on the engine arm.
-  forward     amd = session.run; ignite = sync + dispatch + one readback and dequantize per head.
+  forward     amd = session.run; ignite = sync + dispatch + the shipped read_heads + dequantize.
   decode      the shared numpy decode and NMS.
 """
 import argparse
@@ -114,8 +120,11 @@ def main():
         if not args.container:
             raise SystemExit("--container is required for --arm ignite")
         from ignite_xdna.compiler import graph_reference as gr
-        from ignite_xdna.runtime.graph_session import EngineSession
-        s = EngineSession(args.container, device_index=0)
+        from ignite_xdna.runtime.graph_session import GraphSession
+        # GraphSession, not the bare EngineSession, because it carries the declared head layout
+        # and the shipped read_heads; read_tensor is a debug helper and this arm used to hand-roll
+        # the readback out of it, one device sync and one numpy transpose per head.
+        s = GraphSession(args.container, device_index=0)
         pl_all = s.ge["placements"]
         # the quantizer renames a head; take whichever spelling the container placed
         qheads = [h if h in pl_all else h + "_QuantizeLinear_Output" for h in heads]
@@ -160,12 +169,51 @@ def main():
                 s.bo_ws.write(s._input_plane, base)
             return None, pad_, scale_
 
+        # The readback goes through the shipped path too. read_heads merges the device syncs into
+        # one span per run of adjacent heads, takes zero-copy views when the workspace is mapped,
+        # and unswizzles with the native kernel into one reused buffer - where read_tensor synced,
+        # copied and transposed per head. The egress is int8 with zero point 0 (read_heads flips
+        # the uint8 codes' top bit), which is why the layout's own zero points are 0 and not the
+        # containers' 128, and why dequantizing it is a multiply.
+        status = s.head_status
+        if not status.present:
+            raise SystemExit(
+                f"{args.container} declares no head layout, so the shipped readback cannot be "
+                f"used and this arm would not measure what the pipeline measures.")
+        layout = status.layout
+
+        # The layout names heads canonically (p3_box, p3_cls, ...); the ONNX names them by their
+        # convolution and in a different order. Map on (scale, channels, height, width): the scale
+        # alone repeats across strides and the shape alone can collide when a class head happens to
+        # be as wide as a box head, so the pair is the key. Refuse if it is not one-to-one rather
+        # than fall back quietly - a silent fallback would measure a different thing per model.
+        spec_by_key = {}
+        for hs in layout.heads:
+            c, hh, ww = (int(v) for v in hs.shape[1:])
+            spec_by_key.setdefault((float(hs.scale), c, hh, ww), []).append(hs.name)
+        order = []
+        for h, q_ in zip(qheads, pls):
+            key = (float(q_["scale"]), int(q_["channels"]), int(q_["height"]), int(q_["width"]))
+            hit = spec_by_key.get(key, [])
+            if len(hit) != 1:
+                raise SystemExit(
+                    f"{args.container}: head {h} matches {len(hit)} entries of the declared head "
+                    f"layout on (scale, channels, height, width)={key}. Refusing rather than "
+                    f"guessing which egress region is which head.")
+            order.append(hit[0])
+
+        head_views = {}
+
         def forward(_x):
             s.bo_ws.sync(s.harness.pyxrt.xclBOSyncDirection.XCL_BO_SYNC_BO_TO_DEVICE,
                          s._input_bytes, base)
             s.dispatch()
-            return [((s.read_tensor(h).astype(np.float32) - float(q_["zero_point"])) * float(q_["scale"]))[None]
-                    for h, q_ in zip(qheads, pls)]
+            egress = s.read_heads(unswizzle=True)
+            if not head_views:
+                # the egress buffer is allocated once, so its views are too
+                head_views.update(layout.unpack(egress))
+            deq = layout.dequantize(head_views)
+            return [deq[k] for k in order]
         close = s.close
         ingress = "shared letterbox + native AVX2 plane ingress (what YoloPipeline ships)"
 

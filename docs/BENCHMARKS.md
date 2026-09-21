@@ -11083,6 +11083,81 @@ caveat attached.
 The same applies to the 3.488 ms decode corrected in the section above: both were this tool's host
 stages, never the shipped pipeline's.
 
-**Not established:** one image, one host, one day; no mAP; the per-head numpy dequantize on readback is
-untouched and is now the largest remaining host cost in this tool; YOLOv8m/l/x, pose, YOLO11n and
+**Not established:** one image, one host, one day; no mAP; YOLOv8m/l/x, pose, YOLO11n and
 YOLO-World were not run through it.
+
+~~The per-head numpy dequantize on readback is now the largest remaining host cost in this tool.~~
+**Retracted 2026-09-21.** It is about 2.0 ms against a 17.4 ms dispatch, and only about 0.05 ms of
+it was recoverable - see the section below, which also gives the arithmetic error that produced
+the claim.
+
+## The readback lever is worth almost nothing, and the claim that it was the big one was ours (2026-09-21, Desktop 2)
+
+The section above closed by calling the per-head numpy dequantize on readback "the largest
+remaining host cost in this tool", at about 3.4 ms. **That was wrong**, and the error is worth
+recording: the figure came from subtracting a dispatch measured in a *different* tool and
+configuration (about 16.8 ms, from an Ignition sitting) from this tool's 20.1 ms `forward`. A
+number from one sitting minus a number from another measures nothing.
+
+Decomposed in one place on YOLOv8s, medians of 60
+(`results/aie/bench_shipped_readback_20260921.log`):
+
+| stage | ms |
+|---|---:|
+| sync input to device | 0.032 |
+| **dispatch** | **17.375** |
+| readback and dequantize, per-head `read_tensor` | 2.018 |
+| whole `forward` | 19.958 |
+
+Inside that readback, `read_heads` alone is 0.271 ms and the float32 dequantize is 1.212 ms. The
+dispatch is 87 % of the arm's `forward`; there was never a large host lever here.
+
+### A negative result: the dequantize lookup table is slower
+
+Replacing `(q - zp) * scale` with a 256-entry float32 lookup - there are only 256 possible codes -
+costs **2.131 ms against 1.212 ms**. numpy's fancy indexing over 1,209,600 elements is worse than
+two vectorised passes even though the table is 1 KB. Both forms are bit-identical. Not pursued.
+
+### What changed anyway
+
+The engine arm read each head through `EngineSession.read_tensor`, whose own docstring calls it a
+debug helper: one device sync, one copy and one numpy transpose **per head**. It now uses
+`GraphSession.read_heads`, the shipped path, which merges the syncs, takes zero-copy views of a
+mapped workspace and unswizzles natively into one reused buffer. Same reason as the ingress
+change: the tool should measure the path that ships.
+
+The egress is int8 with zero point 0 (`read_heads` flips the uint8 top bit), which is why the head
+layout's zero points read 0 where the container placements read 128. The layout names heads
+canonically while the ONNX names them by convolution in a different order, so the arm maps them on
+`(scale, channels, height, width)` - scale alone repeats across strides, shape alone can collide
+when a class head is as wide as a box head - and refuses loudly if that is not one-to-one.
+
+The float32 heads are **bit-identical**, 8/8 across both models and four frames each.
+
+| model | arm | G2G mean ms | rounds | forward | decode | detections |
+|---|---|---:|---|---:|---:|---:|
+| yolov8n | AMD | 16.832 | 16.890, 16.775 | 6.830 | 6.883 | 5 |
+| yolov8n | `read_tensor` | 17.230 | 17.259, 17.202 | 10.352 | 6.165 | 5 |
+| yolov8n | `read_heads` | 17.158 | 17.179, 17.137 | 10.350 | 6.084 | 5 |
+| yolov8s | AMD | 23.184 | 23.282, 23.085 | 13.171 | 6.848 | 5 |
+| yolov8s | `read_tensor` | 27.240 | 27.094, 27.385 | 20.243 | 6.244 | 5 |
+| yolov8s | `read_heads` | 27.075 | 27.073, 27.077 | 20.198 | 6.178 | 5 |
+
+YOLOv8n gains 0.072 ms against a round-to-round spread of 0.057; YOLOv8s gains 0.165 ms against a
+spread of 0.291, so on YOLOv8s **the effect is inside the noise**. Call it nil on speed. It is kept
+because the arm now measures the shipped readback and a false caveat could be deleted from the
+tool's docstring, not because anything got faster.
+
+### Why the estimate was five times out
+
+An isolated probe that called the readback 60 times in a row **without re-dispatching between
+calls** put the saving at 0.48 ms. In the real loop, where every iteration dispatches first, it is
+0.05 ms. Replaying a readback over data the device has not rewritten is a different operation - the
+syncs have nothing to move and the buffers stay warm. Measure a stage in the loop it lives in, or
+do not quote the number.
+
+**Not established:** one image, one host, one day; no mAP. The remaining 1.2 ms dequantize is
+irreducible while the shared decoder wants float32, and it is a genuine cost of this arm since
+AMD's model returns float already. The engine is still behind AMD here - 0.98x on YOLOv8n, 0.86x on
+YOLOv8s - and that gap is now almost entirely dispatch plus the shared numpy decode. Only YOLOv8n
+and YOLOv8s were run.

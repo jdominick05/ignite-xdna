@@ -1,0 +1,97 @@
+# The readback lever is worth almost nothing, and the claim that it was the big one was mine
+# Host DESKTOP-CBL5NUA (Desktop 2, Ryzen 7 8700G, XDNA1 Phoenix), 2026-09-21
+# Engine arms in mlir-aie-iron on Device 0; AMD arm in resnet_env17 on Ryzen AI 1.7.1's Phoenix
+# 4x4 xclbin. xrt-smi idle before every run and after the last.
+#
+## THE CORRECTION FIRST
+#
+# bench_native_ingress_20260921.log and the handoff both said the per-head numpy dequantize on
+# readback was "the largest remaining host cost" in this tool, and put it at about 3.3 ms. THAT
+# WAS WRONG. It came from subtracting a dispatch figure measured in a DIFFERENT tool and
+# configuration (about 16.8 ms, from an Ignition sitting) from this tool's 20.1 ms forward. A
+# number from one sitting minus a number from another is not a measurement of anything.
+#
+# Decomposed properly, in one place, on yolov8s (medians of 60):
+#
+#   sync input to device                            0.032 ms
+#   dispatch                                       17.375 ms      <- 87 % of forward
+#   readback + dequantize (read_tensor per head)     2.018 ms
+#   WHOLE forward                                   19.958 ms
+#
+# and inside that readback:
+#
+#   read_heads alone (merged syncs, native unswizzle) 0.271 ms
+#   dequantize to float32 by astype and multiply      1.212 ms
+#
+# So the readback was about 2.0 ms, not 3.3, and the dispatch is the overwhelming majority of the
+# arm's forward. There was never a large host lever here.
+#
+## A NEGATIVE RESULT: the dequantize LUT is SLOWER
+#
+# The obvious idea - replace (q.astype(float32) - zp) * scale with a 256-entry float32 lookup,
+# since there are only 256 possible codes - is worse:
+#
+#   dequantize by astype and multiply                1.212 ms
+#   dequantize by 256-entry LUT gather               2.131 ms
+#
+# numpy's fancy indexing over 1,209,600 elements costs more than two vectorised passes, even
+# though the table is 1 KB and sits in L1. Not pursued. Both forms are bit-identical.
+#
+## WHAT WAS CHANGED ANYWAY, AND WHY
+#
+# The engine arm read each head with EngineSession.read_tensor - whose own docstring calls it a
+# debug helper - doing one device sync, one copy out of the buffer object and one numpy transpose
+# PER HEAD. The shipped path is GraphSession.read_heads: it merges the syncs into one span per run
+# of adjacent heads, takes zero-copy views when the workspace is mapped, and unswizzles with the
+# native kernel into one reused buffer. The arm now uses it, for the same reason the ingress was
+# changed: the tool should measure the path that ships, not one no user takes.
+#
+# The egress is int8 with zero point 0 (read_heads flips the uint8 codes' top bit), which is why
+# the layout's own zero points read 0 where the container placements read 128. The layout names
+# heads canonically (p3_box ...) while the ONNX names them by their convolution and in a different
+# order, so the arm maps them on (scale, channels, height, width) - the scale alone repeats across
+# strides, the shape alone can collide when a class head is as wide as a box head - and REFUSES
+# loudly if that is not one-to-one, rather than falling back and silently measuring another thing.
+#
+# BIT-IDENTICAL: the float32 heads handed to the decoder are unchanged, 8/8 across both models and
+# four frames each (bus.jpg, random 720x1280, 1080x607, 480x640), max |d| 0.0.
+#
+## THE SITTING: three arms alternating, two rounds each, 50 warm-up and 500 timed frames
+#
+# | model   | arm         | G2G mean ms | rounds         | preprocess | forward | decode | dets |
+# |---------|-------------|------------:|----------------|-----------:|--------:|-------:|-----:|
+# | yolov8n | amd         |      16.832 | 16.890, 16.775 |      3.119 |   6.830 |  6.883 |    5 |
+# | yolov8n | read_tensor |      17.230 | 17.259, 17.202 |      0.713 |  10.352 |  6.165 |    5 |
+# | yolov8n | read_heads  |      17.158 | 17.179, 17.137 |      0.724 |  10.350 |  6.084 |    5 |
+# | yolov8s | amd         |      23.184 | 23.282, 23.085 |      3.165 |  13.171 |  6.848 |    5 |
+# | yolov8s | read_tensor |      27.240 | 27.094, 27.385 |      0.753 |  20.243 |  6.244 |    5 |
+# | yolov8s | read_heads  |      27.075 | 27.073, 27.077 |      0.699 |  20.198 |  6.178 |    5 |
+#
+#   yolov8n  17.230 -> 17.158 ms, 0.072 ms; worst round spread 0.057 -> barely above the noise
+#   yolov8s  27.240 -> 27.075 ms, 0.165 ms; worst round spread 0.291 -> WITHIN the noise
+#   forward  10.352 -> 10.350 (n) and 20.243 -> 20.198 (s): essentially unchanged
+#   detections 5 on every arm
+#
+# CALL IT NIL ON SPEED. On yolov8s the difference does not clear the round-to-round spread, and on
+# yolov8n it clears it by 0.015 ms. This change is kept because it makes the arm measure the
+# shipped readback and lets a false caveat be deleted from the tool's docstring - not because it
+# made anything faster. Nothing about the container, the xclbin or the dispatch changed, and
+# AMD's arm is untouched.
+#
+## AND A METHOD NOTE, because it is why the estimate was 5x out
+#
+# An isolated probe that called the readback 60 times in a row WITHOUT re-dispatching between
+# calls put the saving at 0.48 ms (2.018 -> 1.535). In the real loop, where every iteration
+# dispatches first, it is 0.05 ms. Replaying a readback over data the device has not rewritten is
+# not the same operation: the syncs have nothing to move and the buffers stay warm. Measure a
+# stage in the loop it lives in, or do not quote the number.
+#
+## NOT ESTABLISHED
+#
+#   - One image, one host, one day; no mAP.
+#   - The remaining 1.2 ms dequantize is irreducible while the shared decoder wants float32, and
+#     it is a genuine cost of this arm - AMD's model returns float already. Removing it would mean
+#     decoding int8 natively, which this tool deliberately does not do on EITHER arm.
+#   - The engine is still behind AMD in this tool: 0.98x on yolov8n, 0.86x on yolov8s. That gap is
+#     now almost entirely dispatch plus the shared numpy decode, not readback.
+#   - Only YOLOv8n and YOLOv8s were run. Pose, YOLO11n, YOLO-World and YOLO26 were not.
