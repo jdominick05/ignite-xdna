@@ -10496,6 +10496,51 @@ containers reproduce the original partition exactly: BiSeNetV2 47 layers and 27 
 NPU), MODNet-Cut 53 layers and 47 segments (24 host, 23 NPU), same workspace sizes. The 2026-09-19
 numbers are superseded, not retracted, and their logs are kept beside the new ones.
 
+### Against real labels there is no accuracy win either (2026-09-21)
+
+Everything below this heading, and everything published about these two families before it, is
+**agreement** - with the quantized CPU reference, or with the FP32 model. So is
+`pipelines/bisenetv2/5_eval.py`, whose `--ref` is `bisenetv2_fp32.onnx`: the "mIoU" it prints is
+mIoU against the float model's own output. None of it had ever seen a label.
+
+`benchmarks/dense_accuracy.py` scores against the COCO instance masks already in `data/`. MODNet-Cut's
+alpha is thresholded at 0.5 and compared against every annotated person instance, so the ground truth
+covers the whole image; crowd regions are ignored. All **2,693** val2017 images containing a person:
+
+| arm | person IoU | pixel accuracy | mean per-image IoU |
+|---|---:|---:|---:|
+| FP32 | **0.5030** | 90.22 % | 0.3648 |
+| Ignition | 0.1609 | 83.69 % | 0.0931 |
+| XINT8 CPU reference | 0.1609 | 83.69 % | 0.0931 |
+| AMD | **0.1700** | 82.08 % | 0.0976 |
+
+Two things fall out of this, and the second one matters more than anything else on this page.
+
+**Ignition equals the XINT8 CPU reference to every digit** - 0.16091512046142384 on both arms, over
+2,693 images. That is the bit-exactness claim confirmed at 54 times the scale of the 50-image check.
+
+**It buys nothing here.** XINT8 costs this model **68 % of its person IoU** (0.5030 to 0.1609), and
+that loss dwarfs every difference between the two stacks. AMD is *higher* on IoU and lower on pixel
+accuracy; the two are mixed, and both differences are noise next to the quantization gap. Being exact
+where AMD's stack is not therefore does **not** mean being more accurate - it means faithfully
+reproducing a model that quantization has already broken. Anyone reading the exactness result below
+as an accuracy advantage is reading it wrong, and the work this points at is the XINT8 recipe for
+MODNet-Cut, not the engine.
+
+Caveats: COCO masks are polygons, so this scores gross person segmentation and says nothing about the
+hair-level detail a matting model exists for; and the AMD arm's witness recorded foreign contention
+from a CPU arm still running beside it - these are `--checks-only` runs making no timing claim and
+the outputs are deterministic, so it is recorded rather than hidden.
+
+**BiSeNetV2 is not scoreable this way, and no labelled number is reported for it.** On the five most
+person-dominated val2017 images - 84 % to 96 % person by area - the **FP32** model predicts
+0.00-0.30 % person, calling them car, train, motorcycle and pole. That is the float model, so it is
+not quantization: a Cityscapes-trained model on COCO's mostly indoor photographs is out of domain,
+and scoring two stacks on that output would compare them on noise. It follows that the BiSeNetV2
+agreement figures in this section are agreement between models that are *all* out of domain. They
+remain valid as agreement, which is what they are labelled; they cannot be read as segmentation
+quality. A real BiSeNetV2 accuracy number needs Cityscapes val, which this repo does not have.
+
 ### What the engine does win: it is exact where AMD's stack is not
 
 Full-set verification passes both families on Device 0 - every extracted CPU region, every integer

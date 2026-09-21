@@ -797,5 +797,11 @@ host regions.
 
 The exactness column is agreement with the CPU reference on 50 local unlabeled images, where AMD's
 stack matches on none (largest single-element difference 1.5703125 and 50.0, on the raw network
-output rather than on a mask or an alpha). It is not task accuracy, and no labelled segmentation or
-matting score has been measured on either stack.
+output rather than on a mask or an alpha). It is not task accuracy.
+
+Task accuracy has now been measured for MODNet-Cut, against COCO person masks on all 2,693 val2017
+images containing a person, and **there is no accuracy win**: Ignition matches the XINT8 CPU
+reference to every digit at 0.1609 person IoU, AMD scores 0.1700, and FP32 scores 0.5030 - so XINT8
+costs the model 68 % of its IoU and the gap between stacks is noise beside it. BiSeNetV2 cannot be
+scored this way at all, because its FP32 predicts 0.00-0.30 % person on images that are 84-96 %
+person: a Cityscapes model on COCO photographs is out of domain.

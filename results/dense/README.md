@@ -42,6 +42,11 @@ environments.
   environment (`cpu_current`), AMD, then Ignition, twice per model, 50 warm-up and 500 timed frames on
   the same pinned first image. **Only `timing_eligible: true` qualifies as a timing result**, and every
   `bench_*` run here carries it.
+- `acc_*` is the only LABELLED evidence here, from `benchmarks/dense_accuracy.py`: MODNet-Cut's alpha
+  thresholded at 0.5 against every annotated COCO person instance, on all 2,693 val2017 images
+  containing a person. Everything else in this directory is agreement. BiSeNetV2 has no `acc_*` log
+  on purpose - its FP32 predicts 0.00-0.30 % person on images that are 84-96 % person, so a
+  Cityscapes model on COCO photographs is out of domain and scoring it here would measure noise.
 - `*_summary_*` are the aggregated reports `dense_report.py` produces from the logs above.
 - `*_initial*` and `*_opt*` (2026-09-19 only) are that sitting's own before/after for pruning internal
   CPU outputs. The 2026-09-21 containers correspond to the `_opt` form.
