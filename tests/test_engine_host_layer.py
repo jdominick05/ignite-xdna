@@ -225,6 +225,17 @@ class TextAttentionLowering(_OrtCase):
         for H in self.hosts:
             self.assertEqual(H.op_types.get("Einsum"), 1, H.name)
 
+    def test_the_epilogue_is_refused_for_the_right_reason(self):
+        """This model cannot take the sigmoid epilogue, and not because of its host regions.
+
+        silu_sites is fitted for a SiLU whose Mul output is quantized at scale 1/128, zero point
+        128; YOLO-World's are not, so the epilogue is unavailable to it whatever the regions. The
+        host-region check must say that rather than let a bare AssertionError out, which is what it
+        did when the check first replaced the blanket refusal.
+        """
+        with self.assertRaisesRegex(ValueError, "not in the form the sigmoid epilogue is fitted for"):
+            graph_ir.lower_yolov8n(YOLOW, host_regions=YOLOW_ATTN, silu_sigmoid=True)
+
     def test_a_tensor_derived_only_from_constants_is_constant(self):
         G = graph_ir._Graph(onnx.load(str(YOLOW)))
         self.assertTrue(G.is_constant("/model.12/attn/Constant_2_output_0_DequantizeLinear_Output"))

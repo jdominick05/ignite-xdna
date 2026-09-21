@@ -1,0 +1,101 @@
+# The sigmoid epilogue on the other two attention models: YOLO11n gains 8.83 mAP, YOLO-World cannot
+# Host DESKTOP-CBL5NUA (Desktop 2, Ryzen 7 8700G, XDNA1 Phoenix), 2026-09-21
+# Engine arms in mlir-aie-iron on Device 0; float and AMD arms in resnet_env17 on Ryzen AI 1.7.1.
+# xrt-smi idle before every NPU arm and after the last. All mAP on the FULL val2017 5,000 at
+# conf 0.001, per-class NMS at IoU 0.7, max 300 detections.
+#
+# Relaxing the silu_sigmoid/host_regions guard (see yolo26n_silu_recovery_20260921.log) was
+# expected to free the same lever for the two other models that carve attention to the host. It
+# freed one of them, blocked the other for an unrelated reason, and exposed a defect in the
+# relaxation itself.
+#
+## YOLO11n: the epilogue needed a NARROWER CARVE, not just the relaxed guard
+#
+# The shipped container (build/yolo11n.ignite) carves "/model.10/" - the WHOLE C2PSA block. That
+# region is 97 nodes and 12 of them are ones the epilogue rewrites (the SiLUs of cv1 and cv2), so
+# the guard correctly refuses it. The refusal is not about attention; it is about the convolutions
+# swept in alongside it.
+#
+# Carving only the attention core instead - the same FROM=TO shape YOLO26 uses - gives a 33-node
+# region with ZERO overlap, and the epilogue is permitted:
+#
+#   /model.10/m/m.0/attn/qkv/conv/Conv=/model.10/m/m.0/attn/Reshape_1
+#
+#   build/yolo11n_core.ignite        91 layers, 1 host segment, HardSigmoid  (the baseline arm)
+#   build/yolo11n_core_silu.ignite   91 layers, 1 host segment, sigmoid4     (the epilogue arm)
+#   verify, reuse build              31/31 readable exact, 60/60 reused slots correct
+#   verify, --no-workspace-reuse     91/91 layers EXACT against silu_sigmoid.reference_model
+#
+## What it buys, full 5,000 images
+#
+# | arm                         | mAP@50-95 | mAP@50 | small | medium | large |
+# |-----------------------------|----------:|-------:|------:|-------:|------:|
+# | engine, HardSigmoid         |     25.80 |  38.68 | 12.54 |  30.25 | 36.86 |
+# | engine, sigmoid4 epilogue   |     34.63 |  49.59 | 17.40 |  38.97 | 50.10 |
+# | ONNX Runtime CPU, float     |     38.72 |  54.24 | 19.53 |  42.45 | 56.11 |
+#
+#   the epilogue is worth  +8.83 mAP   (25.80 -> 34.63)
+#   loss against float      12.92  ->  4.09 mAP
+#
+# The HardSigmoid arm's 25.80 sits on the 25.82 this repo already recorded for AMD's EP on the same
+# quantized model - the engine and AMD agreeing again on identical weights, which is what a
+# layer-exact container should do and is the check that this is a quantization result, not an
+# engine one.
+#
+## What it costs, same artifacts, one alternating sitting, two rounds, 50 warm-up and 500 frames
+#
+# | arm                       | G2G mean ms | rounds         | forward | decode | dets |
+# |---------------------------|------------:|----------------|--------:|-------:|-----:|
+# | amd                       |      43.064 | 43.134, 42.994 |  32.430 |  7.168 |    7 |
+# | engine, HardSigmoid       |      19.360 | 19.342, 19.378 |  12.190 |  6.482 |    7 |
+# | engine, sigmoid4 epilogue |      19.617 | 19.590, 19.645 |  12.467 |  6.457 |    5 |
+#
+#   HardSigmoid  2.22x AMD, 25.80 mAP
+#   sigmoid4     2.20x AMD, 34.63 mAP
+#   the epilogue costs +0.257 ms glass to glass
+#
+# 8.83 mAP for 0.257 ms, against YOLO26n's 8.81 for 0.260 - the two models price the lever almost
+# identically, which is what a per-SiLU epilogue should do.
+#
+# The detection counts repeat YOLO26's pattern: HardSigmoid returns 7 objects on bus.jpg and
+# sigmoid4 returns 5. AMD, running the same HardSigmoid model, also returns 7. The extra two are
+# quantization artifacts the better activation removes.
+#
+# These G2G numbers are tools/bench_container_vs_amd.py's, whose decode is deliberately unoptimized
+# numpy on every arm (6.5-7.2 ms here). They are NOT comparable to Ignition's own YOLO11n figures,
+# which use the native decode.
+#
+## YOLO-WORLD v2: NOT UNLOCKED, and for a different reason
+#
+# Probing all three combinations separates the causes rather than guessing:
+#
+#   silu_sigmoid alone, no host regions   ValueError, graph_ir: /model.12/attn/Reshape_1 view shape
+#                                         [1, 4, 32, 40, 40] is not [1, 8k, 40, 40]
+#                                         -> the attention blocks MUST go to the host
+#   silu_sigmoid + the four attn regions  the SiLU precondition below
+#   the four attn regions alone           OK, 70 layers, 4 host  (what ships)
+#
+# silu_sites is fitted for a SiLU whose Mul output is quantized at scale exactly 1/128 with zero
+# point 128. YOLO-World's are not, so the epilogue is unavailable to this model REGARDLESS of host
+# regions. The relaxed guard does not help it. Its four /model.N/attn/ regions were never the
+# obstacle.
+#
+## A DEFECT IN THE RELAXATION, found by this follow-up and fixed here
+#
+# The relaxed guard calls silu_sites to compute the rewrite footprint. On a model that fails the
+# precondition above, that raises a BARE AssertionError with no message - where the old blanket
+# refusal gave a clean ValueError. The change made the error worse for exactly the model it could
+# not help. It now raises a ValueError naming the real precondition and saying that host regions
+# are not the cause, with a regression test on YOLO-World pinning it.
+#
+## NOT ESTABLISHED
+#
+#   - Whether the attention-core carve changes YOLO11n's accuracy against the shipped /model.10/
+#     block carve. The two baselines were not compared; 25.80 is the core carve's own HardSigmoid
+#     number, and the shipped container was not re-evaluated.
+#   - YOLO11n's remaining 4.09 mAP. int8 arithmetic and the four-line fit's error were not
+#     separated for this model, as they were not for YOLO26n.
+#   - Nothing was measured for YOLO-World beyond the three lowering attempts above: no new
+#     container, no mAP, no sitting.
+#   - Energy was not measured for any container here.
+#   - These are not Ignition numbers and no badge may move on them.

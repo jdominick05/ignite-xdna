@@ -11354,3 +11354,65 @@ error and was not separated; AdaRound, per-channel weights and a larger calibrat
 tried. Whether the relaxed guard helps YOLO11n or YOLO-World v2 in practice - it now permits their
 attention-core regions to build with the epilogue and the test proves both branches, but neither
 was compiled or evaluated with it here. Energy was not measured. Still not an Ignition number.
+
+## The sigmoid epilogue on the other two attention models: YOLO11n gains 8.83 mAP, YOLO-World cannot take it (2026-09-21, Desktop 2)
+
+Relaxing the `silu_sigmoid`/`host_regions` guard was expected to free the same lever for the two
+other models that carve attention to the host. It freed one, blocked the other for an unrelated
+reason, and exposed a defect in the relaxation itself
+(`results/aie/epilogue_yolo11n_yolow_20260921.log`).
+
+### YOLO11n needed a narrower carve, not just the relaxed guard
+
+The shipped container carves `/model.10/` - the **whole C2PSA block**, 97 nodes, 12 of them SiLU
+nodes the epilogue rewrites - so the guard correctly refuses it. The refusal is not about
+attention; it is about the convolutions swept in alongside it. Carving only the attention core, the
+same `FROM=TO` shape YOLO26 uses, gives a 33-node region with zero overlap and the epilogue is
+permitted. The result verifies **91/91 layers exact** against `silu_sigmoid.reference_model` with
+workspace reuse off.
+
+| arm | mAP@50-95 | mAP@50 | G2G mean | vs AMD | detections |
+|---|---:|---:|---:|---:|---:|
+| AMD Ryzen AI 1.7.1 | 25.82 (EP run) | - | 43.064 ms | - | 7 |
+| engine, HardSigmoid | 25.80 | 38.68 | 19.360 ms | 2.22x | 7 |
+| engine, sigmoid4 epilogue | **34.63** | 49.59 | 19.617 ms | **2.20x** | 5 |
+| ONNX Runtime CPU, float | 38.72 | 54.24 | - | - | - |
+
+**8.83 mAP for 0.257 ms**, and the gap to float falls from 12.92 to **4.09**. YOLO26n priced the
+same lever at 8.81 mAP for 0.260 ms - near-identical, which is what a per-SiLU epilogue should do.
+The HardSigmoid arm's 25.80 sits on the 25.82 already recorded for AMD's EP on the same quantized
+model, the engine and AMD agreeing again on identical weights. The detection counts repeat YOLO26's
+pattern: 7 objects on bus.jpg with HardSigmoid (AMD also 7), 5 with the epilogue - the extra two
+are quantization artifacts the better activation removes.
+
+These G2G figures come from `tools/bench_container_vs_amd.py`, whose decode is deliberately
+unoptimized numpy on every arm, and are not comparable to Ignition's own YOLO11n numbers.
+
+### YOLO-World v2 is blocked by a different constraint
+
+Probing all three combinations separates the causes instead of guessing:
+
+| attempt | outcome |
+|---|---|
+| `silu_sigmoid` alone | fails on `/model.12/attn/Reshape_1`'s view shape - the attention blocks **must** go to the host |
+| `silu_sigmoid` + the four `attn` regions | fails the SiLU precondition below |
+| the four `attn` regions alone | builds, 70 layers, 4 host - what ships |
+
+`silu_sites` is fitted for a SiLU whose Mul output is quantized at scale exactly 1/128 with zero
+point 128. YOLO-World's are not, so the epilogue is unavailable to it **regardless of host
+regions**. Its four `/model.N/attn/` regions were never the obstacle, and the relaxed guard does
+not help it.
+
+### A defect in the relaxation, found here and fixed
+
+The relaxed guard calls `silu_sites` to compute the rewrite footprint. On a model that fails that
+precondition it raised a **bare `AssertionError`** where the old blanket refusal gave a clean
+`ValueError` - the change made the error worse for exactly the model it could not help. It now
+raises a `ValueError` naming the real precondition and stating that host regions are not the cause,
+with a regression test on YOLO-World pinning it.
+
+**Not established:** whether the attention-core carve changes YOLO11n's accuracy against the
+shipped block carve - the two baselines were not compared, and the shipped container was not
+re-evaluated; YOLO11n's remaining 4.09 mAP, whose int8 and fit-error shares were not separated;
+anything about YOLO-World beyond the three lowering attempts - no container, no mAP, no sitting.
+Energy was not measured. These are not Ignition numbers.

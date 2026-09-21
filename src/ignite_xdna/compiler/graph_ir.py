@@ -616,8 +616,21 @@ def lower_yolov8n(model_or_path, host_regions: Sequence[str] = (), silu_sigmoid:
         # was over-broad: an attention block carved to the host contains no SiLU at all, so the region is
         # byte-identical in both graphs and the combination is well defined. Check, rather than assume.
         from ignite_xdna.compiler.silu_sigmoid import silu_sites
+        try:
+            sites = silu_sites(model)
+        except AssertionError as ex:
+            # silu_sites asserts the shape it is fitted for: every SiLU's Mul output quantized at
+            # scale 1/128, zero point 128. A model that does not match it - YOLO-World v2 does not -
+            # cannot take the epilogue AT ALL, with or without host regions. Say that, rather than
+            # letting a bare assertion out of a guard whose message would otherwise blame the host
+            # regions for an unrelated incompatibility.
+            raise ValueError(
+                "silu_sigmoid: this model's SiLUs are not in the form the sigmoid epilogue is "
+                "fitted for (each SiLU's Mul output quantized at scale 1/128, zero point 128), so "
+                "the epilogue is unavailable for it regardless of host regions"
+            ) from ex
         rewritten = set()
-        for hs, mk, _dq, _s1, _s2, _k, qk, dqk, _mx in silu_sites(model):
+        for hs, mk, _dq, _s1, _s2, _k, qk, dqk, _mx in sites:
             rewritten.update({hs.name, mk.name, qk.name, dqk.name})
         clash = sorted(n for n in region_of if n in rewritten)
         if clash:
