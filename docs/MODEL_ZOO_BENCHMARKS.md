@@ -635,8 +635,15 @@ The device reproduces the quantized CPU model exactly: a bus, four people and on
 low-confidence false positive that XINT8 also produces on CPU, so the extra box is the
 quantizer and not the engine.
 
-No mAP: six detections on one image is a smoke test, and this repo's own rule is that even a
-500-image slice is not the answer. No latency figure either - the dispatch in that log is one
+~~No mAP: six detections on one image is a smoke test, and this repo's own rule is that even a
+500-image slice is not the answer.~~ **Measured 2026-09-21 on the full val2017 5,000: the engine
+reads 23.74 mAP@50-95 / 39.40 @50, AMD's EP on the same XINT8 model 23.64 / 39.16, and the FLOAT
+cut model 39.66 / 55.87 - so XINT8 costs 15.92 mAP, a 40 % relative drop, while the two
+accelerators agree to 0.10.** The loss is the quantization recipe, not the engine, and it cannot be
+attacked with `--silu-sigmoid`, which refuses to combine with the host regions YOLO26's attention
+requires. See
+[BENCHMARKS](BENCHMARKS.md#yolo26n-coco-map-253x-faster-than-amd-and-1592-map-poorer-than-its-own-float-model-2026-09-21-desktop-2).
+The original caveat is kept below as written. No latency figure either - the dispatch in that log is one
 cold run through a debug script that reads six tensors back separately. And the decoder is
 numpy only, where YOLOv8's decode has a native C path, so a fair glass-to-glass comparison
 must either add one or say plainly that the host tail is unoptimized.

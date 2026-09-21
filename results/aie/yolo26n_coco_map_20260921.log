@@ -1,0 +1,76 @@
+# YOLO26n COCO mAP: 2.53x faster than AMD, and 15.92 mAP poorer than its own float model
+# Host DESKTOP-CBL5NUA (Desktop 2, Ryzen 7 8700G, XDNA1 Phoenix), 2026-09-21
+# Engine arm in mlir-aie-iron on Device 0; AMD and CPU arms in resnet_env17 on Ryzen AI 1.7.1.
+# xrt-smi idle before each NPU arm and after the last.
+#
+# FULL val2017, all 5,000 images. Not a slice: yolov8s AdaRound once read 45.19 on a slice and
+# 39.98 on the full set, which was a different conclusion.
+# conf 0.001, per-class NMS at IoU 0.7, max 300 detections - the COCO convention, not demo defaults.
+#
+## The numbers
+#
+# | arm                                   | mAP@50-95 | mAP@50 | small | medium | large | latency |
+# |---------------------------------------|----------:|-------:|------:|-------:|------:|--------:|
+# | engine, build/yolo26n_r2.ignite       |     23.74 |  39.40 |  9.56 |  26.80 | 34.96 | 22.14ms |
+# | AMD Vitis AI EP, same XINT8 ONNX      |     23.64 |  39.16 |  9.52 |  26.68 | 34.97 | 33.60ms |
+# | ONNX Runtime CPU, the FLOAT cut model |     39.66 |  55.87 | 18.90 |  43.33 | 57.29 | 17.11ms |
+#
+#   engine vs AMD's EP      +0.10 mAP   (23.74 vs 23.64)
+#   quantization cost      -15.92 mAP   (float 39.66 -> int8 23.74), a 40 % relative loss
+#
+# 573,355 detections over 5,000 images on the engine; 572,856 on AMD's EP; 482,322 on float.
+#
+## WHAT THIS MEANS, and it is not flattering
+#
+# THE SPEED RESULT STANDS AND THE ACCURACY RESULT IS BAD. YOLO26n runs 2.53x faster than AMD's
+# stack glass to glass (yolo26n_requant_vs_amd_20260921.log) and its container is bit-exact to the
+# quantized model it was compiled from (107/107 layers). But the quantized model it is exact TO has
+# lost 15.92 mAP against its own float export. A fast wrong answer is still wrong, and any use of
+# the 2.53x figure has to carry this number with it.
+#
+# THE ENGINE IS NOT THE PROBLEM. The engine and AMD's EP run the SAME XINT8 ONNX and land 0.10 mAP
+# apart - inside what the numpy decode's own thresholding explains. That is the expected result for
+# a container verified layer-exact, and it means the loss is in the QUANTIZATION RECIPE, not in
+# either accelerator. Neither vendor's silicon can be blamed for it.
+#
+# THE HARNESS IS SOUND. The float arm reads 39.66 mAP, a sane figure for this model class, using
+# the same letterbox, the same npu.yolo26_decode and the same COCO scoring as the int8 arms. If the
+# head cut, the head ORDER or the decode were wrong, the float arm would be wrong too, and it is
+# not. The cut was separately checked against the float export's own end-to-end output at max
+# corner delta 0.000 px.
+#
+## THE LEADING SUSPECT, not isolated
+#
+# The quantizer substitutes HardSigmoid for Sigmoid: the float cut graph has Sigmoid 87 and the
+# XINT8 graph has HardSigmoid 87, one for each SiLU. This repo has already measured that form to be
+# 65-75 % of the XINT8 loss across the zoo, and ships an opt-in integer sigmoid epilogue
+# (--silu-sigmoid) that recovered YOLOv8n from 30.25 to 37.29 mAP.
+#
+# IT CANNOT BE APPLIED HERE. Compiling yolo26n with --silu-sigmoid fails:
+#
+#   ValueError: silu_sigmoid cannot be combined with host_regions
+#
+# YOLO26's two attention blocks are exactly what force host regions - they are the ops the engine's
+# vocabulary does not contain - so the one accuracy lever this repo has is structurally unavailable
+# to this model. That is the same reason YOLO11n and YOLO-World v2 cannot use the flag. The
+# HardSigmoid share of YOLO26's specific 15.92 mAP is therefore NOT MEASURED, and is a hypothesis
+# carried over from other models rather than a result.
+#
+## NOT ESTABLISHED
+#
+#   - The split of the 15.92 mAP between int8 arithmetic and the HardSigmoid substitution. It was
+#     not isolated for this model and the usual instrument (--silu-sigmoid) refuses to build.
+#   - Whether AdaRound, per-channel weights or a different calibration set would recover any of it.
+#     None was tried; calibration here was 200 COCO images through the repo's standard recipe.
+#   - Any YOLO26 scale other than n.
+#   - This is still NOT an Ignition number and no badge may carry any of it: Ignition has no YOLO26
+#     decode path.
+#
+## The eval path
+#
+# pipelines/yolov8n/5_eval_map.py hardcoded YOLOv8's DFL decoder and a head_order that matches a
+# 64-channel box head, so it rejected YOLO26's 4-channel one outright. It now takes --decoder
+# module:function - the same flag and contract tools/bench_container_vs_amd.py uses - and
+# --head-order {shapes,graph}, where graph trusts the model's own output order. A head-cut model
+# already carries its heads in the order the decoder reads them positionally, which was verified
+# directly on both the float and the XINT8 model before relying on it.

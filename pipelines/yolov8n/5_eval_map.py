@@ -39,7 +39,20 @@ from npu.session import build_session, clear_cache
 from npu.yolo_decode import decode_heads, head_order
 
 
-def build_forward(sess, conf, imgsz):
+def load_decoder(spec):
+    """``module:function`` -> the callable, with the contract decode_heads has.
+
+    Same flag and same contract as tools/bench_container_vs_amd.py: it takes the six head arrays
+    and ``imgsz`` and returns (1, 4 + nc, N). A family whose head is shaped differently needs its
+    own decode module, not its own eval script - YOLO26 dropped DFL, so its box branch is four
+    channels and its decoder is npu.yolo26_decode.
+    """
+    import importlib
+    mod, _, fn = spec.partition(":")
+    return getattr(importlib.import_module(mod), fn or "decode_heads")
+
+
+def build_forward(sess, conf, imgsz, decode=decode_heads, head_order_mode="shapes"):
     """-> (run_fn, decode_fn, description). Same dispatch as 4_detect.py.
 
     Split so a caller can time run_fn (pure sess.run) separately from
@@ -52,10 +65,16 @@ def build_forward(sess, conf, imgsz):
     inp = sess.get_inputs()[0].name
     n_out = len(sess.get_outputs())
     if n_out == len(yc.HEAD_OUTS):
-        order = head_order(sess, imgsz)
+        if head_order_mode == "graph":
+            # Trust the model's own output order. tools/cut_detect_head.py writes the heads in the
+            # order the decoder reads them, and the quantizer preserves it. head_order's shape
+            # matching expects YOLOv8's 64-channel box head and rejects, say, YOLO26's 4-channel one.
+            order = list(range(n_out))
+        else:
+            order = head_order(sess, imgsz)
         return (lambda x: sess.run(None, {inp: x}),
-                lambda r: decode_heads([r[i] for i in order], imgsz=imgsz, conf_thres=conf),
-                f"head-cut ({n_out} outputs), numpy decode")
+                lambda r: decode([r[i] for i in order], imgsz=imgsz, conf_thres=conf),
+                f"head-cut ({n_out} outputs), numpy decode, {head_order_mode} order")
     if n_out == 1:
         return (lambda x: sess.run(None, {inp: x}),
                 lambda r: r[0],
@@ -66,7 +85,7 @@ def build_forward(sess, conf, imgsz):
 IGNITE_HEADS = ("p3_box", "p4_box", "p5_box", "p3_cls", "p4_cls", "p5_cls")  # HEAD_OUTS order
 
 
-def build_ignite_forward(model, conf):
+def build_ignite_forward(model, conf, decode=decode_heads):
     """-> (session, imgsz, run_fn, decode_fn, description) for a graph-engine detection container.
 
     run_fn stages the letterboxed float input quantized as the model's input QuantizeLinear does (round half to
@@ -89,7 +108,7 @@ def build_ignite_forward(model, conf):
                 for n in IGNITE_HEADS]
 
     silu = sess.ignite_manifest["graph_engine"].get("silu", "hardsigmoid")
-    return (sess, imgsz, run, lambda r: decode_heads(r, imgsz=imgsz, conf_thres=conf),
+    return (sess, imgsz, run, lambda r: decode(r, imgsz=imgsz, conf_thres=conf),
             f"graph-engine container (SiLU {silu}), numpy decode")
 
 
@@ -106,6 +125,11 @@ def main():
                     help="print progress every N images (default 500). Lower it "
                          "when a run is being watched for a mid-run hardware "
                          "hang -- it sets how precisely a crash can be located")
+    ap.add_argument("--decoder", default="npu.yolo_decode:decode_heads",
+                    help="module:function taking the six heads and imgsz, returning (1, 4 + nc, N)")
+    ap.add_argument("--head-order", choices=("shapes", "graph"), default="shapes",
+                    help="shapes: match YOLOv8's head shapes (default). graph: trust the model's "
+                         "own output order, which is what a head-cut model already carries")
     ap.add_argument("--conf", type=float, default=0.001)
     ap.add_argument("--iou", type=float, default=0.7)
     ap.add_argument("--max-det", type=int, default=300)
@@ -117,6 +141,8 @@ def main():
     ap.add_argument("--log", type=int, default=2)
     ap.add_argument("--dets", default=None, help="where to write detections json")
     args = ap.parse_args()
+
+    decode = load_decoder(args.decoder)
 
     from pycocotools.coco import COCO
     from pycocotools.cocoeval import COCOeval
@@ -137,13 +163,13 @@ def main():
         img_ids = img_ids[: args.n]
 
     if args.ep == "ignite":
-        sess, imgsz, run_fn, decode_fn, desc = build_ignite_forward(args.model, args.conf)
+        sess, imgsz, run_fn, decode_fn, desc = build_ignite_forward(args.model, args.conf, decode)
     else:
         sess = build_session(args.model, args.ep, cache_key, args.xclbin,
                              log_severity=args.log)
         # Letterbox size comes from the model, not from a flag -- see 4_detect.py.
         imgsz = yc.input_size(sess.get_inputs()[0].shape, args.model)
-        run_fn, decode_fn, desc = build_forward(sess, args.conf, imgsz)
+        run_fn, decode_fn, desc = build_forward(sess, args.conf, imgsz, decode, args.head_order)
     print(f"model: {desc}, input {imgsz}x{imgsz}")
     print(f"eval : {len(img_ids)} images, conf {args.conf}, iou {args.iou}, "
           f"max_det {args.max_det}, "
