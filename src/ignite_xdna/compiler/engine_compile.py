@@ -41,15 +41,23 @@ HEAD_NAMES = ("p3_box", "p4_box", "p5_box", "p3_cls", "p4_cls", "p5_cls")
 # keypoints x (x, y, visibility) per anchor.
 POSE_HEAD_NAMES = HEAD_NAMES + ("p3_kpt", "p4_kpt", "p5_kpt")
 POSE_KPT_SHAPE = (17, 3)
-_HEAD_OUTPUT = re.compile(r"/cv([234])\.([012])/")
+# An end-to-end, NMS-free detector carries two head branches and exports the one2one one: YOLO26's
+# inference head is /model.23/one2one_cv2.0/..., where YOLOv8's is /model.22/cv2.0/.... The branch
+# and level semantics are identical, so the prefix is optional here. It is spelled out rather than
+# matched as a general \w+_ so an unexpected third naming scheme still fails loudly.
+_HEAD_OUTPUT = re.compile(r"/(?:one2one_)?cv([234])\.([012])/")
 _HEAD_BRANCH = {"2": "box", "3": "cls", "4": "kpt"}
 
 
 def head_name_for(onnx_output: str) -> str:
-    """Map an ONNX head output name (/model.22/cv2.0/... -> p3_box, cv3.1 -> p4_cls, cv4.2 -> p5_kpt)."""
+    """Map an ONNX head output name (/model.22/cv2.0/... -> p3_box, cv3.1 -> p4_cls, cv4.2 -> p5_kpt).
+
+    ``one2one_cv2.0`` maps to the same ``p3_box``: it is an NMS-free detector's inference branch.
+    """
     m = _HEAD_OUTPUT.search(onnx_output)
     if m is None:
-        raise ValueError(f"{onnx_output} is not a YOLOv8 head output (/cv2.*, /cv3.* or /cv4.*)")
+        raise ValueError(f"{onnx_output} is not a detect head output "
+                         f"(/cv2.*, /cv3.*, /cv4.* or the one2one_ form of those)")
     return f"p{3 + int(m.group(2))}_{_HEAD_BRANCH[m.group(1)]}"
 
 

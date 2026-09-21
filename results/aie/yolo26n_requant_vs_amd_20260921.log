@@ -1,0 +1,101 @@
+# YOLO26n re-derived from scratch, and 2.53x AMD once the benchmark stops charging it 13 ms of numpy
+# Host DESKTOP-CBL5NUA (Desktop 2, Ryzen 7 8700G, XDNA1 Phoenix), 2026-09-21
+# Export/cut/quantize in resnet_env (ultralytics 8.4.142, onnx 1.19.0); compile through the
+# mlir-aie ironenv; engine arms in mlir-aie-iron on Device 0; AMD arm in resnet_env17 on Ryzen AI
+# 1.7.1's Phoenix 4x4 xclbin. xrt-smi idle before every run and after the last.
+#
+## Why this was re-derived rather than re-run
+#
+# yolo26n_vs_amd_20260920.log carried a caveat saying its 1.43x UNDERSTATED the container, because
+# the benchmark's engine arm was filling the input plane with numpy. The sitting could not be
+# re-run: yolo26n_cut_xint8.onnx lived in a worktree's scratch/ that was removed during cleanup,
+# and AMD's arm cannot run without it. Only build/yolo26n.ignite survived. So the whole chain was
+# rebuilt: export, head cut, quantize, compile, verify.
+#
+## The re-derivation reproduces the original, which is what makes the comparison legitimate
+#
+#   export          445 nodes (the original recorded 405 - see UNEXPLAINED below)
+#   head cut        364 nodes, IDENTICAL to the original's 364
+#   heads           box 4 channels (no DFL), cls 80; out-of-vocabulary ops are exactly the
+#                   4 MatMul + 2 Softmax of the two attention blocks, as before
+#   quantize        op census identical to the original: DequantizeLinear 568, QuantizeLinear 363,
+#                   Conv 102, HardSigmoid 87, Mul 176, Slice 24, Add 20, Concat 19, Reshape 6,
+#                   Transpose 4, MatMul 4, MaxPool 3, Softmax 2, Resize 2
+#   lower           107 layers, 2 on the host, workspace 16.4 MB, 1725 rounds, 11.29 MB packets
+#                   - every figure identical to the original
+#   compile         build/yolo26n_r2.ignite 12,273,728 B (original 12,270,976), insts.bin
+#                   510,612 B - the SAME SIZE as the original's, so the schedule is the same
+#   segments        layers 0..38 (1392 tasks) | host | 39..93 (1820) | host | 94..107 (266)
+#   verify          107/107 layers EXACT on Device 0 (--no-workspace-reuse build, so every layer
+#                   is readable); the shipping reuse build gives 34/34 readable exact and 73/73
+#                   reused slots holding their planned tenant
+#
+# The cut was also checked against the float export's OWN end-to-end output before quantizing:
+# decoding the six cut heads through npu.yolo26_decode reproduces its 5 detections on bus.jpg with
+# max corner delta 0.000 px. That is the check that catches a wrong head ORDER, which is otherwise
+# silent because the decoder reads the heads positionally.
+#
+## Two generalizations were needed, neither model-specific
+#
+#   tools/cut_detect_head.py  --find walks back from the graph output through decode ops. YOLO26's
+#     end-to-end head selects its top-k boxes IN the graph, so the walk hit GatherElements and Mod
+#     and stopped before reaching the convolutions. Both are decode, not computation; they join
+#     TopK in the tail vocabulary. This is what any NMS-free head needs, not a YOLO26 special case.
+#
+#   compiler/engine_compile.py  head_name_for matched /cvN.M/ only. An end-to-end detector carries
+#     two head branches and exports the one2one one, so YOLO26's heads are /one2one_cv2.0/... The
+#     prefix is now optional. It is spelled out rather than matched as a general \w+_ so a third
+#     naming scheme still fails loudly instead of being silently mapped.
+#
+## The sitting: three arms, alternating, two rounds, 50 warm-up and 500 timed frames on bus.jpg
+#
+# The two engine arms run the SAME container. Only the benchmark's host path differs: the middle
+# arm is the tool as it was when 1.43x was measured (numpy ingress, per-head read_tensor), the
+# last is the tool as it is now (shipped AVX2 plane ingress, shipped read_heads).
+#
+# | arm               | G2G mean ms | rounds         | preprocess | forward | decode | dets |
+# |-------------------|------------:|----------------|-----------:|--------:|-------:|-----:|
+# | amd               |      44.039 | 43.232, 44.847 |      3.624 |  35.145 |  5.270 |    6 |
+# | engine, old tool  |      30.434 | 30.845, 30.023 |      3.272 |  22.515 |  4.647 |    6 |
+# | engine, fixed     |      17.414 | 17.596, 17.232 |      0.768 |  12.133 |  4.513 |    6 |
+#
+#   old tool   AMD 44.039 vs engine 30.434 ms   13.605 ms   1.45x
+#   fixed      AMD 44.039 vs engine 17.414 ms   26.626 ms   2.53x
+#   the benchmark's host tax on this model was 13.020 ms
+#
+# Six detections on every arm, the same six the original recorded.
+#
+## THE ORIGINAL MEASUREMENT REPLICATES
+#
+# The old-tool arm reads 30.434 ms against the original's 30.192 (0.8 % apart) and AMD 44.039
+# against 43.109 (2.2 % apart), on a different day and a separately re-derived model. The 1.43x
+# was sound; it was measuring a benchmark that handicapped the engine arm. The caveat said it
+# understated the container. It did, by 13 ms.
+#
+#   superseded:  1.43x glass to glass (yolo26n_vs_amd_20260920.log, stands as measured)
+#   current:     2.53x glass to glass, same container, corrected host path
+#
+## THE ENGINE DID NOT GET FASTER
+#
+# The container is a fresh build of the same lowering - same layer count, same segment split, same
+# insts.bin size - and its dispatch is unchanged (verify reports 8.807 ms mean with reuse, against
+# the original's 8.963/9.319). AMD's arm is unchanged. What moved is that the benchmark stopped
+# charging the engine arm for numpy its own pipeline never runs.
+#
+## NOT ESTABLISHED
+#
+#   - NO mAP, on any path. Six matching detections on one image say the arms agree, not that
+#     either is accurate. YOLO26 has never been evaluated on COCO here.
+#   - Still NOT an Ignition number and no badge may carry it: Ignition has no YOLO26 decode path.
+#   - The decode is numpy on all three arms (4.4-5.3 ms) and is not optimized; the engine arm's
+#     remaining forward is dominated by dispatch.
+#   - One image, one host, one day.
+#
+## UNEXPLAINED
+#
+#   The fresh export has 445 nodes where the original recorded 405, and its head convolutions are
+#   named one2one_cv2.*/one2one_cv3.* where the original's evidently were cv2.*/cv3.* - the old
+#   head_name_for could not otherwise have accepted them. Everything downstream matches exactly
+#   (364 cut nodes, identical op census, identical lowering, identical insts.bin size, 107/107
+#   exact), so it is the same graph; what differed in the earlier export is not known. Recorded
+#   rather than guessed at.

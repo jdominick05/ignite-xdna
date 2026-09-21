@@ -669,7 +669,18 @@ alternating, `xrt-smi` idle before each -
 Both arms returned 6 detections on every frame and shared the letterbox, the decoder and the
 NMS, so the only difference is what executes the network.
 
-**Caveat added 2026-09-21, and it moves the figure the favourable way.** The benchmark was
+**RESOLVED 2026-09-21: the corrected figure is 2.53x, and it is measured.** The model was
+re-exported, re-cut, re-quantized and the container rebuilt (the artifacts had been lost), giving
+an identical lowering - 364 cut nodes, identical op census, 107 layers, the same `insts.bin` size,
+107/107 layers exact on Device 0. In one sitting of three alternating arms: AMD **44.039 ms**, the
+engine through the old tool **30.434 ms** (1.45x, replicating the 1.43x below to 0.8 %), and the
+engine through the corrected tool **17.414 ms** - **2.53x**, six detections on every arm. The
+benchmark's host tax on this model was 13.020 ms. The engine did not get faster; its dispatch is
+unchanged. See `results/aie/yolo26n_requant_vs_amd_20260921.log` and
+[BENCHMARKS](BENCHMARKS.md#yolo26n-re-derived-and-253x-amd-once-the-benchmark-stops-charging-it-13-ms-of-numpy-2026-09-21-desktop-2).
+The figures below stand as measured and are superseded, not deleted.
+
+**Original caveat, 2026-09-21.** The benchmark was
 filling the engine arm's input plane with numpy rather than calling the AVX2 ingress the shipped
 pipeline uses, which costs about 12 ms on a 640x640 frame and sat inside the `network` column
 above. Both numbers here are therefore an **understatement** of the container, not an

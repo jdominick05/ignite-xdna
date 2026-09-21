@@ -26,7 +26,11 @@ from onnx.utils import Extractor
 TAIL = {"Reshape", "Softmax", "Transpose", "Slice", "Div", "Sub", "Add", "Mul", "Concat",
         "Sigmoid", "Shape", "Gather", "Unsqueeze", "Squeeze", "Split", "Constant", "Cast",
         "Range", "Expand", "Tile", "ScatterND", "TopK", "ReduceMax", "ArgMax", "Where",
-        "Greater", "Less", "Equal", "Not", "Pad", "Flatten", "Identity", "Exp", "Clip", "Neg"}
+        "Greater", "Less", "Equal", "Not", "Pad", "Flatten", "Identity", "Exp", "Clip", "Neg",
+        # An end-to-end, NMS-free head (YOLO26 exported with nms=False still has one) selects
+        # its top-k boxes in the graph: TopK picks the indices, GatherElements applies them and
+        # Mod turns a flat index back into a class. All three are decode, not computation.
+        "GatherElements", "Mod"}
 
 
 def find_heads(g):
