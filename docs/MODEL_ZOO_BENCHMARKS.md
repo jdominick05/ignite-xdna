@@ -640,3 +640,39 @@ No mAP: six detections on one image is a smoke test, and this repo's own rule is
 cold run through a debug script that reads six tensors back separately. And the decoder is
 numpy only, where YOLOv8's decode has a native C path, so a fair glass-to-glass comparison
 must either add one or say plainly that the host tail is unoptimized.
+
+### YOLO26n against AMD's stack: 1.43x glass to glass, because attention stops the Vitis AI EP (2026-09-20, Desktop 2)
+
+How much of each model the two stacks place on the NPU, from AMD's own
+`vitisai_ep_report.json`:
+
+| model | total nodes | on the NPU | CPU | VITIS_EP_CPU |
+|---|---:|---:|---:|---:|
+| YOLO26n | 1,526 | **12** | 445 | 1,069 |
+| YOLO11n | 1,300 | 6 | 382 | 912 |
+| YOLOv8n | 929 | 922 | 0 | 7 |
+
+AMD's EP takes 12 nodes of 1,526. The engine runs 107 of 107 layers, two of them - the
+attention cores - on the host by declaration. That is the same collapse YOLO11n shows, and it
+is the reason a modern detector is worth measuring here at all.
+
+`tools/bench_container_vs_amd.py`, bus.jpg, 50 warm-up and 500 timed frames per run, arms
+alternating, `xrt-smi` idle before each -
+[`yolo26n_vs_amd_20260920.log`](../results/aie/yolo26n_vs_amd_20260920.log):
+
+| arm | round 1 | round 2 | mean | preprocess | forward | decode |
+|---|---:|---:|---:|---:|---:|---:|
+| AMD Ryzen AI 1.7.1 | 43.099 | 43.118 | 43.109 | 3.50 | 34.47 | 5.13 |
+| the engine | 30.124 | 30.260 | **30.192** | 3.16 | 22.46 | 4.57 |
+
+**12.92 ms faster glass to glass, 1.43x**; on the network alone, 34.47 to 22.46 ms, 1.53x.
+Both arms returned 6 detections on every frame and shared the letterbox, the decoder and the
+NMS, so the only difference is what executes the network.
+
+What this is not. It is **not an Ignition number**: this is ignite-xdna's benchmark driving the
+container directly, and Ignition's pipeline has no YOLO26 decode path, so the app cannot run
+this model and no README badge may carry these figures. Neither arm has a native decode -
+`decode_native.c` assumes DFL, which YOLO26 dropped - so preprocess and decode are numpy on
+both sides and cost about 8.7 ms of every frame. The engine arm additionally pays one readback
+per head where the EP returns all six from one call, which makes 1.43x a floor. And there is
+**no accuracy figure**: six detections on one image is a smoke test, not mAP.

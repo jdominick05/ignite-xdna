@@ -1,0 +1,51 @@
+# YOLO26n glass-to-glass: the engine against AMD's Vitis AI EP, one sitting
+# Host DESKTOP-CBL5NUA (Desktop 2, Ryzen 7 8700G, XDNA1 Phoenix), 2026-09-20
+# envs: resnet_env17 for AMD's arm (the only one that can run the Vitis AI EP), mlir-aie-iron
+# for the engine's. xrt-smi reported "No hardware contexts running on device" before every run
+# and after the last; the device was idle at the end.
+#
+# Command, per arm, alternating AMD / engine / AMD / engine:
+#   python tools/bench_container_vs_amd.py --arm amd    --onnx yolo26n_cut_xint8.onnx \
+#       --decoder npu.yolo26_decode:decode_heads --warmup 50 --frames 500
+#   python tools/bench_container_vs_amd.py --arm ignite --container build/yolo26n_band2.ignite \
+#       --onnx yolo26n_cut_xint8.onnx --decoder npu.yolo26_decode:decode_heads ...
+#
+## How much of YOLO26n each stack places on the NPU
+#
+#   model     total nodes   NPU    CPU   VITIS_EP_CPU      (AMD's own vitisai_ep_report.json)
+#   yolo26n          1526    12    445           1069
+#   yolo11n          1300     6    382            912
+#   yolov8n           929   922      0              7
+#
+# AMD's EP takes 12 nodes of 1,526. The engine runs 107 of 107 layers, two of them - the
+# attention cores - on the host by declaration. That is the same collapse YOLO11n shows and
+# the reason this comparison is worth making: attention is where the Vitis AI EP stops.
+#
+## Glass to glass, bus.jpg, 50 warm-up and 500 timed frames per run
+#
+#   arm       round 1     round 2      mean     preprocess   forward   decode
+#   AMD        43.099      43.118    43.109          3.50      34.47     5.13
+#   engine     30.124      30.260    30.192          3.16      22.46     4.57
+#
+#   engine is 12.92 ms faster glass to glass, 1.43x
+#   on the network alone (forward): 34.47 -> 22.46 ms, 1.53x
+#
+# Both arms produced 6 detections on every frame, and both ran the same npu.yolo.letterbox,
+# the same npu.yolo26_decode.decode_heads and the same npu.yolo.postprocess, so the only
+# difference between them is what executes the network.
+#
+## WHAT THIS IS NOT
+#
+#   - NOT an Ignition number. It is ignite-xdna's benchmark tool driving the container
+#     directly. Ignition's pipeline has no YOLO26 decode path yet, so the app cannot run this
+#     model at all and no README badge may carry these figures.
+#   - NOT an optimized host tail. Neither arm has a native decode: YOLOv8's decode_native.c
+#     assumes DFL, which YOLO26 dropped. Preprocess and decode are numpy on BOTH sides, about
+#     8.7 ms of every frame, and that is why even the winning arm reads 30 ms.
+#   - The engine arm additionally pays ONE READBACK PER HEAD, six syncs where the EP returns
+#     everything from one call. So 1.43x is a floor, not a ceiling.
+#   - NO ACCURACY. Six detections on one image is a smoke test. No mAP has been run on any
+#     YOLO26 arm, and this repo's rule is that even a 500-image slice gave a different answer
+#     than the full 5,000 on YOLOv8s.
+#   - One image, one machine, one sitting. Latency on this shared box drifts between sittings,
+#     which is why both arms were interleaved rather than run back to back.

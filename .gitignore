@@ -137,6 +137,11 @@ dev-tools/
 # The *.log files in results/ are small and ARE tracked deliberately.
 results/dets_*.json
 scratch/
+
+# Any VitisAI compile cache. The five original keys are listed by name below;
+# this glob catches the ones a probe or a benchmark creates, which is how
+# y26epcachekey and friends turned up as untracked directories.
+*cachekey/
 # The TUI (tui/, scripts/tui.sh) writes every result it produces here, never into
 # results/ -- that tree is the tracked evidence base and 69 of its images are cited
 # from the docs. Sidecar JSONs here record a hostname, so this stays local.
