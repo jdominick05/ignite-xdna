@@ -64,7 +64,12 @@ accumulators changing, because `ncout` is that number:
 
 A single accumulator serialises on the vector MAC's latency: every `mac` waits for the one before
 it. Eight independent chains is 1.86x one, from nothing but reordering. The int8 engine keeps four
-for the same reason. The CPU-relative speedups in that log are inflated by torch's per-call overhead
+for the same reason. *(Corrected 2026-09-21: it keeps eight - four output blocks times two column
+groups, all in `cm0`-`cm7` with no spill, read off its object in
+[`engine_census_widened_desktop2_20260921.log`](../../results/aie/engine_census_widened_desktop2_20260921.log).
+The bf16 engine core holds eight as well, so this lever is spent in both and what remains is how
+densely the hot loop issues them: see `docs/BENCHMARKS.md`, "Static readings of both engine cores".)*
+The CPU-relative speedups in that log are inflated by torch's per-call overhead
 on such a small tile and should not be quoted; the large-tile table above is the fair one.
 
 Remaining headroom is large and the next levers are known: this is one core, the loop is not

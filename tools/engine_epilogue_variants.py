@@ -28,10 +28,12 @@ source, e.g.
 import argparse
 import re
 import subprocess
+import sys
 from collections import Counter
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
 SRC = ROOT / "kernels" / "aie2" / "conv_engine" / "engine.cc"
 HS_START = "inline V32u hswish_u8(V32u q1, const Hdr &d) {\n"
 HS_END = "    return sat_u8_from_i16(aie::add(y, int16_t(128)));\n}\n"
@@ -100,6 +102,56 @@ def variants(base, K):
     return out
 
 
+# The 16-core int8 design links engine.cc's object with 880 B of IRON core program (core loop 768 +
+# _main_init 80 + __start 32, results/aie/engine_linked_program_size_desktop2_20260921.log), so an
+# object over PROGRAM_MEMORY - CORE_WRAPPER does not fit although its .text reads under 16,384.
+PROGRAM_MEMORY = 16 * 1024
+CORE_WRAPPER = 880
+ACC_CLASSES = ("am", "bm", "cm")  # 256-bit quarters, 512-bit halves, whole 1024-bit accumulators
+_MOVE = re.compile(r"^(vst|vlda|vldb)(?:\.\S+)? ([a-z]+)\d*, \[(\w+)")
+_FRAME_ALIAS = re.compile(r"^mov (p\d), sp$")
+_POINTER_WRITE = re.compile(r"^(?:mov|movxm|mova|lda|ldb) (p\d)\b")
+_MAC = re.compile(r"^vma[cd]\S* ")
+
+
+def widened(obj, objdump):
+    """Stack traffic the legacy reading cannot see, and the hot loops' issue density.
+
+    The legacy census matches `vst`/`vlda` against `[sp` and calls only `am*` registers accumulators. That misses
+    the second load port (`vldb`), a frame reached through a pointer the prologue copied from `sp`, and the
+    `bm*`/`cm*` names a bf16 kernel's 512-bit accumulators carry. A pointer stops being a frame alias at its next
+    plain write, so one the compiler reuses as a data pointer is not counted. Moves are also counted inside
+    hardware loops alone, which is where a spill costs cycles. Each loop that issues MACs is reported as
+    bundles/MACs per iteration; on AIE2 a hardware-loop body's bundle count is its cycle count.
+    """
+    from tools import aie_disasm as ad
+    acc = vec = acc_loop = vec_loop = 0
+    loops = []
+    for section in ad.parse(ad.disassemble(str(obj), str(objdump))):
+        spans = [(lp.start, lp.end) for lp in section.loops]
+        frame = {"sp"}
+        for b in section.bundles:
+            for raw in b.fields:
+                f = " ".join(raw.split())
+                alias, write, move = _FRAME_ALIAS.match(f), _POINTER_WRITE.match(f), _MOVE.match(f)
+                if alias:
+                    frame.add(alias.group(1))
+                elif write:
+                    frame.discard(write.group(1))
+                if move and move.group(3) in frame:
+                    inside = any(lo <= b.addr <= hi for lo, hi in spans)
+                    if move.group(2).startswith(ACC_CLASSES):
+                        acc, acc_loop = acc + 1, acc_loop + inside
+                    else:
+                        vec, vec_loop = vec + 1, vec_loop + inside
+        for lp in section.loops:
+            macs = sum(1 for b in lp.bundles for f in b.live if _MAC.match(" ".join(f.split())))
+            if macs:
+                loops.append(f"{lp.n_bundles}/{macs}")
+    return (f"widened: accumulator moves {acc} ({acc_loop} in hardware loops), vector moves {vec} "
+            f"({vec_loop} in hardware loops); MAC loops bundles/MACs {' '.join(loops) or 'none'}")
+
+
 def census(src, obj_dir):
     from aie.utils import config
     peano = Path(config.peano_install_dir()) / "bin"
@@ -115,8 +167,12 @@ def census(src, obj_dir):
     insns = len(re.findall(r"^\s+[0-9a-f]+:", dump, re.M))
     moves = Counter(f"{op} {reg}" for op, reg in re.findall(r"\b(vst|vlda)\s+([a-z]+)[0-9]+, \[sp", dump))
     spills = sum(v for k, v in moves.items() if k.split()[1].startswith("am"))
+    budget = PROGRAM_MEMORY - CORE_WRAPPER
+    fit = f"fits the {budget} B object budget by {budget - text}" if text <= budget else f"OVER the {budget} B object budget by {text - budget}"
+    # The first three fields are the reading every earlier census log carries, unchanged, so rows stay comparable.
     return (f".text {text} B, {insns} instructions, accumulator stack moves {spills}; stack vector moves "
-            + (", ".join(f"{k} {v}" for k, v in sorted(moves.items())) or "none"))
+            + (", ".join(f"{k} {v}" for k, v in sorted(moves.items())) or "none")
+            + f" | {fit} | " + widened(obj, peano / "llvm-objdump.exe"))
 
 
 def main():

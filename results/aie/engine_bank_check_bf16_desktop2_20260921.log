@@ -1,0 +1,53 @@
+RESEARCH_PLATFORM {"machine": "Desktop 2", "cpu": "AMD Ryzen 7 8700G w/ Radeon 780M Graphics", "os": "Windows-11-10.0.26200-SP0", "ram_bytes": 33381138432, "source_sha256": {"tools/research_process.py": "9964df088a6a1cdd21c15195d2810606ef708ccabfd802232217cd12400da896", "tools/quant_calib_alphabet.py": "2dc0b2878c564853f340880209a425dfcf63b8536b2b8e9fd32344daade58d37", "tools/xint8_arithmetic_probe.py": "6aa3df08b9870c3c2264b868459d7ffbac3070dddc1349d7c6f3f480075f7041", "scripts/research-lowlevel.sh": "3455ad7933697936487712665505c216891865c6deada647302785f6e37020bd", "scripts/research-iron.sh": "4c863a262646ddab39b5005006ba8e03809895e6386c6310e2fd9d0a9e9609ee", "kernels/memory_placement/probe.py": "e8d990169ad6091fa1b53852e9f61eff495b5def72d35165a5c5cf1759e38898", "kernels/memory_placement/memory_kernels.cc": "182e7af7071a1e851afb4a7ca266069c489aea1fbaaa85eca129708daeba5ba6", "scripts/research-matrix.sh": "739254171629deae822b0ad7dabc875aee19ace56dde77d3e8aab61663f97516", "kernels/memory_placement/gemm.py": "17c905ad66110d3346bbf0db898dfc6b780df59fae1dfb0c1747057ce1e5844e", "kernels/memory_placement/gemm_placement.cc": "f21acf7250b12914ea30cc1f77613239dfa18421a85a1b9a5199017dd916278a", "tools/research_summary.py": "0c00dcceef07053d06731b41a1f1ed58d3ba4ea09f82497de354ce9cef17da20", "tools/research_toolchain.py": "f0a126a24ae213acfaa43460cfd9def0c86d9cb70cfee0228aa271688467b314"}, "commit": "2905b079ff79ddfdff2a8900448eed67508d555c", "command": ["bash", "scripts/research-iron.sh", "tools/aie_bank_check.py", "--elf", "../bf16-engine/scratch/iron-cache/0eda467fe2a82e4838c607d8/elfs_main_core_0_2/elfs_main_core_0_2.elf", "--obj", "../bf16-engine/scratch/iron-cache/0eda467fe2a82e4838c607d8/engine_bf16.o"], "seconds_limit": 300.0, "rss_gib_limit": 8, "checks_only": true, "free_ram_bytes": 18773413888}
+WHERE THE BUFFERS LANDED
+  elfs_main_core_0_2.elf
+    own local memory window 0x70000-0x7ffff, 4 banks of 16 KB
+    bank 0: 2
+      0x70800-0x739ff   12 KB  a_cons_buff_0
+      0x73a00-0x76bff   12 KB  a_cons_buff_1  (spans banks [0, 1])
+    bank 1: 2
+      0x73a00-0x76bff   12 KB  a_cons_buff_1  (spans banks [0, 1])
+      0x76c00-0x7917f    9 KB  psum_0_2  (spans banks [1, 2])
+    bank 2: 3
+      0x76c00-0x7917f    9 KB  psum_0_2  (spans banks [1, 2])
+      0x79180-0x7b67f    9 KB  w_cons_buff_0
+      0x7b680-0x7db7f    9 KB  w_cons_buff_1  (spans banks [2, 3])
+    bank 3: 3
+      0x7b680-0x7db7f    9 KB  w_cons_buff_1  (spans banks [2, 3])
+      0x7db80-0x7e7ff    3 KB  o_buff_0
+      0x7e800-0x7ffff    6 KB  o_buff_1
+
+BANK SHARING
+  bank 1 holds 2 distinct buffers: a_cons, psum_0_2
+  bank 2 holds 2 distinct buffers: psum_0_2, w_cons
+  bank 3 holds 2 distinct buffers: o, w_cons
+
+BUNDLES THAT ISSUE TWO LOADS
+  .text.engine_bf16: 15 of 771 bundles
+    hardware loop .L_LEnd2: 4 of 29 bundles  <-- in the hardware loop
+      0x0476  vlda	wh5, [p0, #0x20] | vldb	wh2, [p7, #0x0]
+      0x047c  vlda	wl5, [p0], #0x40 | vldb	wl6, [p1], #0x20 | mov	r5, p1
+      0x0486  vlda	wh7, [p0, #0x20] | vldb	wl3, [p1, #0x20]
+      0x048c  vlda	wl7, [p0], #0x40 | vldb	wh6, [p1, #0x0]
+    hardware loop .L_LEnd3: 6 of 24 bundles  <-- in the hardware loop
+      0x05c6  vlda	wh8, [p5, #0x20] | vldb	wl0, [p1], #0x20 | add	r6, r5, r20 | mov	r5, p1
+      0x05d2  vlda	wl8, [p5], #0x40 | vldb	wh0, [p1, #0x0]
+      0x05d8  vlda	wh10, [p5, #0x20] | vldb	wl2, [p1, #0x20] | mov	m1, r6
+      0x05e8  vlda	wh1, [p5, #0x20] | vldb	wl4, [p7], #0x20 | mov	r6, p7
+      0x05f2  vlda	wl1, [p5], #0x40 | vldb	wh4, [p7, #0x0]
+      0x05f8  vlda	wh7, [p5, #0x20] | vldb	wl6, [p7, #0x20]
+    hardware loop .L_LEnd1: 3 of 18 bundles  <-- in the hardware loop
+      0x0a00  vlda	wh4, [p7, #0x20] | vldb	wl0, [p1], #0x20 | mov	r5, p1
+      0x0a0a  vlda	wl4, [p7], #0x40 | vldb	wh0, [p1, #0x0]
+      0x0a10  vlda	wh6, [p7, #0x20] | vldb	wl2, [p1, #0x20]
+    hardware loop .L_LEnd0: 2 of 21 bundles  <-- in the hardware loop
+      0x0b8e  vlda	wh8, [p0, #0x20] | vldb	wl6, [p1, #0x20]
+      0x0b94  vlda	wl8, [p0], #0x40 | vldb	wh2, [p1, #0x0]
+
+VERDICT
+  HAZARD. 15 paired-load bundle(s) in loop bodies, hardware and
+  software, and a bank holds more than one buffer. If a paired load reads two
+  buffers in the same bank it costs one extra cycle per iteration, so the
+  loop's bundle count understates its cycles by that much.
+  Predicted penalty = 15 x the iteration count of the loop it is in.
+RESEARCH_PROCESS_RESULT {"exit_code": 0, "stop": null, "peak_tree_rss_bytes": null, "rss_measurement": "maximum observed across sampled descendant working sets; zero observations reported as null", "elapsed_seconds": 1.6570000000065193, "foreign_contention_observed": false, "timing_eligible": false}

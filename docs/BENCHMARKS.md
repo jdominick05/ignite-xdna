@@ -9948,6 +9948,44 @@ The difference is **880 B in every 16-core build, across three different kernel 
 - **It also sources a number that had none.** The bf16 engine core's 3,520 B had been quoted from no log; it is the object, and its harness links at 4,048 B.
 - **Not established:** whether the 768 B core loop can be made smaller. It is generated code and was not examined.
 
+## Static readings of both engine cores: a wider census, what unreachable dispatch costs, and a 9-cycle loop beside a 17-cycle one (2026-09-21, Desktop 2)
+
+Everything in this section is read off object code. **It is a property of an object, not a latency**, and every cycle figure is a static count until a same-sitting run says otherwise. Backing logs, all through `scripts/research-lowlevel.sh --checks-only` (no device): [`engine_census_widened`](../results/aie/engine_census_widened_desktop2_20260921.log), [`engine_census_without`](../results/aie/engine_census_without_desktop2_20260921.log), [`engine_bf16_census`](../results/aie/engine_bf16_census_desktop2_20260921.log), [`engine_loops_int8`](../results/aie/engine_loops_int8_desktop2_20260921.log), [`engine_loops_bf16`](../results/aie/engine_loops_bf16_desktop2_20260921.log), [`engine_bank_check_int8`](../results/aie/engine_bank_check_int8_desktop2_20260921.log), [`engine_bank_check_bf16`](../results/aie/engine_bank_check_bf16_desktop2_20260921.log). Tools: `tools/engine_opcode_census.py` (now `--source` and `--without`), `tools/aie_disasm.py --loops`, `tools/aie_bank_check.py` — the last two had never been run on either engine core.
+
+**The census could not see three things, and now can.** `census()` matched `vst`/`vlda` against `[sp` and called only `am*` registers accumulators. That misses the second load port (`vldb`), a frame reached through a pointer the prologue copied from `sp` (`engine` does `mov p7, sp`), and the `bm*`/`cm*` names a bf16 kernel's 512-bit accumulators carry, so its "0 spills" could not vouch for a bf16 kernel at all. The widened reading follows frame aliases until their next plain write, counts every accumulator class on both ports, and counts again inside hardware loops alone. The legacy fields are unchanged and reproduce the 2026-09-18 rows exactly (13,424 / 13,648 / 13,888 / 14,304 / 15,280 B, 0). The widened verdict agrees with the narrow one and closes what it left open: the int8 engine has **0 accumulator stack moves and 31 vector stack moves, none of either inside a hardware loop** — the 31 are setup and epilogue traffic, not hot-loop traffic. The bf16 core: 3,520 B, 0 and 0.
+
+**Eight live accumulators, no spill.** The conv pass holds 8 live 1024-bit accumulators in `cm0`–`cm7` across a hardware loop. The "five is the spill-free ceiling" reading of 2026-09-09 was measured on `kernels/acc_spill_probe` and upstream GEMM and is true of those loop shapes; it is not a limit on this kernel, and `docs/SILICON.md` now says so. Both engine cores hold exactly 8.
+
+**What dispatch no compiled container reaches costs.** `--without` strips a dispatch case from a copy and recompiles; unreferenced functions of the anonymous namespace are dropped with it.
+
+| Program | object `.text` | freed | linked headroom it would leave |
+|---|---:|---:|---:|
+| as committed | 15,280 B | — | 224 B |
+| without `OP_FUSED_CONV` | 11,664 B | 3,616 B | 3,840 B |
+| without `OP_MUL` | 14,896 B | 384 B | 608 B |
+| without `OP_SCALE` | 14,592 B | 688 B | 912 B |
+| without `OP_POOL` | 14,176 B | 1,104 B | 1,328 B |
+| without all four | **9,824 B** | **5,456 B** | **5,680 B** |
+
+The last row equals, to the byte, the object inside the 2026-09-17 builds, which is the program before any of the four landed. `passes.match_stencil_fusion` is called by a test and by `tools/verify_engine_container.py` and by nothing in the compile path, and `engine_schedule.py` emits no `OP_MUL`/`OP_SCALE`/`OP_POOL` packet, so today 5,456 B of a 15,280 B object serve no container that `ignite-compile` produces. **Nothing is removed here** — those opcodes were built on purpose — but it is the price of the next opcode: at 224 B nothing else fits, and a compile-time gate is what would.
+
+**Hot-loop issue density, and an unexplained gap inside one object.** On AIE2 a hardware-loop body's bundle count is its cycle count (`tools/gemm_cost_model.py`, `results/aie/aie2_isa_static.log`).
+
+| Loop (per iteration = one input channel block) | int8 `engine.o` | bf16 `engine_bf16.o` |
+|---|---:|---:|
+| stride-1 dual, 8 MACs | 23 cycles | 24 cycles |
+| stride-2 dual, 8 MACs | 32 cycles | 29 cycles |
+| stride-1 single group, 4 MACs | 17 cycles | 18 cycles |
+| `fused_stage2`, 4 MACs (int8 only) | **9 cycles** | — |
+
+About 0.35 MAC issues per cycle, against 0.889 for upstream GEMM's loop; for bf16 that is, by itself, most of the distance to the "20.0% of the 460.8 GFLOPS ceiling" measured on milestone 1. In the stride-1 dual body five bundles recompute `a + c*plane + aoff`, each `load_unaligned_v` is two aligned 256-bit loads plus `and` plus `vshift`, each 64-byte weight vector is two half-loads, and the eight MACs follow the loads with almost no overlap.
+
+`fused_stage2`'s loop does 4 MACs, one activation load and four weight loads — the single-group loop's work exactly — in 9 cycles to its 17: four consecutive bundles each carry a load *and* a `vmac`, the next iteration's loads issued under this iteration's MACs. Same compiler, same intrinsics, same translation unit. The visible differences are compile-time trip counts and constant pointer strides against a run-time `ncin` and a recomputed plane address. **Which of them triggers the pipelining is unexplained**: no variant has reproduced it yet. Were the production loops to reach that density the inner loops would shorten by roughly 40% (DERIVED from the counts above), and by the NOP split [below](#the-floor-is-seven-tenths-of-a-dispatch-and-barely-moves-with-scale) core compute is 2.37 ms of a YOLOv8n dispatch and 4.55 ms of YOLOv8s's — so this is a lever whose size in milliseconds is still to be measured, and H11 is the standing warning that a static win can reach the wall clock as nothing.
+
+**A paired-load bank hazard in the int8 design, none in the bf16 harness.** `tools/aie_bank_check.py` on a placed core: the weight ping-pong buffers are in banks 2 and 3, the activation ping-pong buffers in banks 0 and **2** (`a0_0_cons_buff_1` beside `w0_0_cons_buff_0`), on every core of every build sampled. The stride-1 dual loop has four bundles that pair a weight load with an activation load, and [two loads paired to one bank cost a cycle](#two-loads-in-one-bank-cost-a-cycle-and-the-int8-gemm-has-that-collision-where-bf16-does-not). Predicted: 23 → 27 cycles per iteration whenever `w_buff_0` meets `a_buff_1`. The tool reports a hazard without resolving pointers; the pointers were resolved here by reading the loop (`p0` walks the weights, `p6`/`p2` the two activation windows). The bf16 harness places activations in banks 0–1 and weights in 2–3, so its six paired loads per iteration do not collide — but a 16-core bf16 design that copies the int8 buffer structure with a 12,800 B activation packet needs 65,792 B of a 65,536 B tile (DERIVED), so its bank plan is a first-order constraint rather than an afterthought.
+
+- **Not established:** any latency. No variant of either kernel has been built, and the bank prediction has not been timed.
+
 ## Terminal classification head as one 1x1 conv: 1.38 ms on silicon where the Vitis AI EP crashes at placement (2026-09-17, Desktop 2)
 
 Backing log: [`results/aie/classification_head_vs_amd_phoenix_20260917T2350Z.log`](../results/aie/classification_head_vs_amd_phoenix_20260917T2350Z.log) (this section folded the measurement on 2026-09-18; the commit that landed the log recorded only the index line). Tool: `benchmarks/benchmark_classification_head.py` (at `6d9306c`), driving the engine's own `ClassificationPipeline` over `build/test_resnet50_head.ignite` against AMD Ryzen AI Software 1.7.1 (ONNX Runtime + Vitis AI EP, `resnet_env17`) on `build/test_resnet50_head.onnx`. Desktop 2 (Ryzen 7 8700G, Phoenix Device 0); `xrt-smi` reports no hardware contexts before the rounds and after them.

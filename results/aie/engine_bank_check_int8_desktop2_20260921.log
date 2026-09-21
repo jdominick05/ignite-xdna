@@ -1,0 +1,86 @@
+RESEARCH_PLATFORM {"machine": "Desktop 2", "cpu": "AMD Ryzen 7 8700G w/ Radeon 780M Graphics", "os": "Windows-11-10.0.26200-SP0", "ram_bytes": 33381138432, "source_sha256": {"tools/research_process.py": "9964df088a6a1cdd21c15195d2810606ef708ccabfd802232217cd12400da896", "tools/quant_calib_alphabet.py": "2dc0b2878c564853f340880209a425dfcf63b8536b2b8e9fd32344daade58d37", "tools/xint8_arithmetic_probe.py": "6aa3df08b9870c3c2264b868459d7ffbac3070dddc1349d7c6f3f480075f7041", "scripts/research-lowlevel.sh": "3455ad7933697936487712665505c216891865c6deada647302785f6e37020bd", "scripts/research-iron.sh": "4c863a262646ddab39b5005006ba8e03809895e6386c6310e2fd9d0a9e9609ee", "kernels/memory_placement/probe.py": "e8d990169ad6091fa1b53852e9f61eff495b5def72d35165a5c5cf1759e38898", "kernels/memory_placement/memory_kernels.cc": "182e7af7071a1e851afb4a7ca266069c489aea1fbaaa85eca129708daeba5ba6", "scripts/research-matrix.sh": "739254171629deae822b0ad7dabc875aee19ace56dde77d3e8aab61663f97516", "kernels/memory_placement/gemm.py": "17c905ad66110d3346bbf0db898dfc6b780df59fae1dfb0c1747057ce1e5844e", "kernels/memory_placement/gemm_placement.cc": "f21acf7250b12914ea30cc1f77613239dfa18421a85a1b9a5199017dd916278a", "tools/research_summary.py": "0c00dcceef07053d06731b41a1f1ed58d3ba4ea09f82497de354ce9cef17da20", "tools/research_toolchain.py": "f0a126a24ae213acfaa43460cfd9def0c86d9cb70cfee0228aa271688467b314"}, "commit": "2905b079ff79ddfdff2a8900448eed67508d555c", "command": ["bash", "scripts/research-iron.sh", "tools/aie_bank_check.py", "--elf", "build/conv_engine/modnet_cut_dense_20260921/design.prj/elfs_main_core_0_2/elfs_main_core_0_2.elf", "--obj", "build/conv_engine/modnet_cut_dense_20260921/design.prj/engine.o"], "seconds_limit": 300.0, "rss_gib_limit": 8, "checks_only": true, "free_ram_bytes": 18769346560}
+WHERE THE BUFFERS LANDED
+  elfs_main_core_0_2.elf
+    own local memory window 0x70000-0x7ffff, 4 banks of 16 KB
+    bank 0: 3
+      0x70800-0x720ff    6 KB  a0_0_cons_buff_0
+      0x72100-0x72d7f    3 KB  o0_0_buff_1
+      0x72d80-0x73fff    4 KB  .LJTI0_0
+    bank 1: 1
+      0x74000-0x77fff   16 KB  psum_0_0
+    bank 2: 2
+      0x78000-0x7a4ff    9 KB  w0_0_cons_buff_0
+      0x7a500-0x7bfff    6 KB  a0_0_cons_buff_1
+    bank 3: 3
+      0x7c000-0x7e4ff    9 KB  w0_0_cons_buff_1
+      0x7e500-0x7f17f    3 KB  o0_0_buff_0
+      0x7f180-0x7ffff    3 KB  scratch_0_0
+
+BANK SHARING
+  bank 0 holds 3 distinct buffers: .LJTI0_0, a0_0_cons, o0_0
+  bank 2 holds 2 distinct buffers: a0_0_cons, w0_0_cons
+  bank 3 holds 3 distinct buffers: o0_0, scratch_0_0, w0_0_cons
+
+BUNDLES THAT ISSUE TWO LOADS
+  .text.engine: 12 of 2556 bundles
+    hardware loop .L_LEnd6: 0 of 11 bundles
+    hardware loop .L_LEnd4: 1 of 32 bundles  <-- in the hardware loop
+      0x088c  vlda	wl7, [p4], #0x40 | vldb	wl3, [p6, #0x0] | and	r6, r6, r22 | vmov	wh3, wl5
+    hardware loop .L_LEnd5: 4 of 23 bundles  <-- in the hardware loop
+      0x09e6  vlda	wh5, [p0, #0x20] | vldb	wl1, [p6, #0x0]
+      0x09ec  vlda	wl5, [p0], #0x40 | vldb	wh1, [p6, #0x20]
+      0x09f8  vlda	wl7, [p0], #0x40 | vldb	wl3, [p2, #0x0]
+      0x09fe  vlda	wh9, [p0, #0x20] | vldb	wh3, [p2, #0x20]
+    hardware loop .L_LEnd3: 4 of 23 bundles  <-- in the hardware loop
+      0x1086  vlda	wh5, [p0, #0x20] | vldb	wl1, [p6, #0x0]
+      0x108c  vlda	wl5, [p0], #0x40 | vldb	wh1, [p6, #0x20]
+      0x1098  vlda	wl7, [p0], #0x40 | vldb	wl3, [p2, #0x0]
+      0x109e  vlda	wh9, [p0, #0x20] | vldb	wh3, [p2, #0x20]
+    hardware loop .L_LEnd2: 1 of 32 bundles  <-- in the hardware loop
+      0x12dc  vlda	wl7, [p0], #0x40 | vldb	wl3, [p6, #0x0] | and	r6, r6, r22 | mov	p2, p6
+    hardware loop .L_LEnd1: 2 of 17 bundles  <-- in the hardware loop
+      0x15e8  vlda	wl1, [p2], #0x40 | vldb	wl8, [p6, #0x0]
+      0x15ee  vlda	wh3, [p2, #0x20] | vldb	wh8, [p6, #0x20]
+    hardware loop .L_LEnd0: 0 of 24 bundles
+    hardware loop .L_LEnd9: 0 of 27 bundles
+    hardware loop .L_LEnd8: 0 of 16 bundles
+    hardware loop .L_LEnd7: 0 of 37 bundles
+    hardware loop .L_LEnd11: 0 of 26 bundles
+    hardware loop .L_LEnd10: 0 of 26 bundles
+    hardware loop .L_LEnd14: 0 of 16 bundles
+    hardware loop .L_LEnd13: 0 of 15 bundles
+    hardware loop .L_LEnd12: 0 of 15 bundles
+  .text._ZN12_GLOBAL__N_112silu_pl_tileEPKiPh: 0 of 212 bundles
+    hardware loop .L_LEnd15: 0 of 175 bundles
+  .text._ZN12_GLOBAL__N_112fused_stage1EPKiPKhPhi: 8 of 243 bundles
+    hardware loop .L_LEnd16: 4 of 13 bundles  <-- in the hardware loop
+      0x02be  vlda	wh4, [p6, #0x20] | vldb	wl6, [p5], #0x40 | vshift	x8, x9, x0, r27 | vmac	cm1, cm3, x0, x5, r11
+      0x02ca  vlda	wl4, [p7], m0 | vldb	wh5, [p0, #0x20] | mov	p4, p5 | vmac	cm2, cm4, x0, x10, r11
+      0x02d6  vlda	wl9, [p7, #0x0] | vldb	wl11, [p4], #0x40 | vmac	cm3, cm1, x8, x11, r11
+      0x02e0  vldb	wh11, [p5, #0x20] | vlda	wh9, [p7, #0x20] | add	r22, r22, #0x8 | mov	p0, p4 | vmac	cm4, cm2, x8, x7, r11
+    software loop .LBB2_7: 8 of 30 bundles  <-- one extra cycle per iteration each
+      0x024e  vlda	wh4, [p6, #0x20] | vldb	wl6, [p0], #0x40 | mov	p7, p6
+      0x0258  vlda	wh10, [p2, #0x20] | vldb	wl4, [p7], m0 | movxm	ls, #0x0
+      0x0264  vlda	wl9, [p7, #0x0] | vldb	wh11, [p0, #0x20] | movxm	le, #0x0
+      0x0270  vldb	wl11, [p0], #0x40 | vlda	wh9, [p7, #0x20] | add	r22, r20, #0x8 | add.nc	lc, r7, #-0x1
+      0x02be  vlda	wh4, [p6, #0x20] | vldb	wl6, [p5], #0x40 | vshift	x8, x9, x0, r27 | vmac	cm1, cm3, x0, x5, r11
+      0x02ca  vlda	wl4, [p7], m0 | vldb	wh5, [p0, #0x20] | mov	p4, p5 | vmac	cm2, cm4, x0, x10, r11
+      0x02d6  vlda	wl9, [p7, #0x0] | vldb	wl11, [p4], #0x40 | vmac	cm3, cm1, x8, x11, r11
+      0x02e0  vldb	wh11, [p5, #0x20] | vlda	wh9, [p7, #0x20] | add	r22, r22, #0x8 | mov	p0, p4 | vmac	cm4, cm2, x8, x7, r11
+  .text._ZN12_GLOBAL__N_112fused_stage2ERKNS_3HdrEPKhS4_PKaPKiPh: 4 of 488 bundles
+    hardware loop .L_LEnd17: 2 of 9 bundles  <-- in the hardware loop
+      0x06b6  vlda	wl8, [p0, #0x0] | vldb	wl6, [p5], #0x40 | mov	p2, p7
+      0x06c0  vlda	wh8, [p0, #0x20] | vldb	wh10, [p5, #0x20] | mov	p6, p5 | vmac	cm1, cm1, x2, x6, r5
+    software loop .LBB3_17: 4 of 48 bundles  <-- one extra cycle per iteration each
+      0x0654  vlda	wl6, [p7], #0x40 | vldb	wl8, [p0, #0x0]
+      0x065a  vlda	wh10, [p7, #0x20] | vldb	wh8, [p0, #0x20]
+      0x06b6  vlda	wl8, [p0, #0x0] | vldb	wl6, [p5], #0x40 | mov	p2, p7
+      0x06c0  vlda	wh8, [p0, #0x20] | vldb	wh10, [p5, #0x20] | mov	p6, p5 | vmac	cm1, cm1, x2, x6, r5
+
+VERDICT
+  HAZARD. 24 paired-load bundle(s) in loop bodies, hardware and
+  software, and a bank holds more than one buffer. If a paired load reads two
+  buffers in the same bank it costs one extra cycle per iteration, so the
+  loop's bundle count understates its cycles by that much.
+  Predicted penalty = 24 x the iteration count of the loop it is in.
+RESEARCH_PROCESS_RESULT {"exit_code": 0, "stop": null, "peak_tree_rss_bytes": null, "rss_measurement": "maximum observed across sampled descendant working sets; zero observations reported as null", "elapsed_seconds": 1.7190000000409782, "foreign_contention_observed": false, "timing_eligible": false}

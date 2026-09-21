@@ -1,0 +1,33 @@
+RESEARCH_PLATFORM {"machine": "Desktop 2", "cpu": "AMD Ryzen 7 8700G w/ Radeon 780M Graphics", "os": "Windows-11-10.0.26200-SP0", "ram_bytes": 33381138432, "source_sha256": {"tools/research_process.py": "9964df088a6a1cdd21c15195d2810606ef708ccabfd802232217cd12400da896", "tools/quant_calib_alphabet.py": "2dc0b2878c564853f340880209a425dfcf63b8536b2b8e9fd32344daade58d37", "tools/xint8_arithmetic_probe.py": "6aa3df08b9870c3c2264b868459d7ffbac3070dddc1349d7c6f3f480075f7041", "scripts/research-lowlevel.sh": "3455ad7933697936487712665505c216891865c6deada647302785f6e37020bd", "scripts/research-iron.sh": "4c863a262646ddab39b5005006ba8e03809895e6386c6310e2fd9d0a9e9609ee", "kernels/memory_placement/probe.py": "e8d990169ad6091fa1b53852e9f61eff495b5def72d35165a5c5cf1759e38898", "kernels/memory_placement/memory_kernels.cc": "182e7af7071a1e851afb4a7ca266069c489aea1fbaaa85eca129708daeba5ba6", "scripts/research-matrix.sh": "739254171629deae822b0ad7dabc875aee19ace56dde77d3e8aab61663f97516", "kernels/memory_placement/gemm.py": "17c905ad66110d3346bbf0db898dfc6b780df59fae1dfb0c1747057ce1e5844e", "kernels/memory_placement/gemm_placement.cc": "f21acf7250b12914ea30cc1f77613239dfa18421a85a1b9a5199017dd916278a", "tools/research_summary.py": "0c00dcceef07053d06731b41a1f1ed58d3ba4ea09f82497de354ce9cef17da20", "tools/research_toolchain.py": "f0a126a24ae213acfaa43460cfd9def0c86d9cb70cfee0228aa271688467b314"}, "commit": "2905b079ff79ddfdff2a8900448eed67508d555c", "command": ["bash", "scripts/research-iron.sh", "tools/aie_disasm.py", "build/conv_engine/modnet_cut_dense_20260921/design.prj/engine.o", "--loops", "--regs"], "seconds_limit": 300.0, "rss_gib_limit": 8, "checks_only": true, "free_ram_bytes": 18790002688}
+== build/conv_engine/modnet_cut_dense_20260921/design.prj/engine.o
+  section .text.engine: 2556 bundles (102 full-width, 2454 compressed), frame 352 B, stack refs 104
+      acc registers (9): cm0 cm1 cm2 cm3 cm4 cm5 cm6 cm7 cm8
+      vec registers (12): x0 x1 x2 x3 x4 x5 x6 x7 x8 x9 x10 x11
+    loop .L_LEnd6 0x250-0x2b0: 11 bundles = 11 cycles/iteration, 10 live ops, density 0.91 of 6
+    loop .L_LEnd4 0x840-0x8f0: 32 bundles = 32 cycles/iteration, 51 live ops, density 1.59 of 6
+    loop .L_LEnd5 0x9d0-0xa40: 23 bundles = 23 cycles/iteration, 33 live ops, density 1.43 of 6
+    loop .L_LEnd3 0x1070-0x10e0: 23 bundles = 23 cycles/iteration, 33 live ops, density 1.43 of 6
+    loop .L_LEnd2 0x1290-0x1340: 32 bundles = 32 cycles/iteration, 51 live ops, density 1.59 of 6
+    loop .L_LEnd1 0x15d0-0x1620: 17 bundles = 17 cycles/iteration, 21 live ops, density 1.24 of 6
+    loop .L_LEnd0 0x1ad0-0x1b40: 24 bundles = 24 cycles/iteration, 30 live ops, density 1.25 of 6
+    loop .L_LEnd9 0x1dd0-0x1e30: 27 bundles = 27 cycles/iteration, 14 live ops, density 0.52 of 6
+    loop .L_LEnd8 0x2230-0x2290: 16 bundles = 16 cycles/iteration, 8 live ops, density 0.50 of 6
+    loop .L_LEnd7 0x23e0-0x24b0: 37 bundles = 37 cycles/iteration, 55 live ops, density 1.49 of 6
+    loop .L_LEnd11 0x2680-0x26e0: 26 bundles = 26 cycles/iteration, 11 live ops, density 0.42 of 6
+    loop .L_LEnd10 0x2760-0x27c0: 26 bundles = 26 cycles/iteration, 11 live ops, density 0.42 of 6
+    loop .L_LEnd14 0x2870-0x28d0: 16 bundles = 16 cycles/iteration, 8 live ops, density 0.50 of 6
+    loop .L_LEnd13 0x2970-0x29d0: 15 bundles = 15 cycles/iteration, 11 live ops, density 0.73 of 6
+    loop .L_LEnd12 0x2ac0-0x2b20: 15 bundles = 15 cycles/iteration, 11 live ops, density 0.73 of 6
+  section .text._ZN12_GLOBAL__N_112silu_pl_tileEPKiPh: 212 bundles (1 full-width, 211 compressed), frame none B, stack refs 0
+      acc registers (9): cm0 cm1 cm2 cm3 cm4 cm5 cm6 cm7 cm8
+      vec registers (12): x0 x1 x2 x3 x4 x5 x6 x7 x8 x9 x10 x11
+    loop .L_LEnd15 0xb0-0x2f0: 175 bundles = 175 cycles/iteration, 108 live ops, density 0.62 of 6
+  section .text._ZN12_GLOBAL__N_112fused_stage1EPKiPKhPhi: 243 bundles (6 full-width, 237 compressed), frame 384 B, stack refs 49
+      acc registers (5): cm0 cm1 cm2 cm3 cm4
+      vec registers (12): x0 x1 x2 x3 x4 x5 x6 x7 x8 x9 x10 x11
+    loop .L_LEnd16 0x280-0x2e0: 13 bundles = 13 cycles/iteration, 32 live ops, density 2.46 of 6
+  section .text._ZN12_GLOBAL__N_112fused_stage2ERKNS_3HdrEPKhS4_PKaPKiPh: 488 bundles (11 full-width, 477 compressed), frame 64 B, stack refs 29
+      acc registers (5): cm0 cm1 cm2 cm3 cm4
+      vec registers (8): x0 x1 x2 x3 x4 x6 x8 x10
+    loop .L_LEnd17 0x680-0x6e0: 9 bundles = 9 cycles/iteration, 24 live ops, density 2.67 of 6
+RESEARCH_PROCESS_RESULT {"exit_code": 0, "stop": null, "peak_tree_rss_bytes": null, "rss_measurement": "maximum observed across sampled descendant working sets; zero observations reported as null", "elapsed_seconds": 1.7650000000139698, "foreign_contention_observed": false, "timing_eligible": false}
