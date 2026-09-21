@@ -170,6 +170,11 @@ def build_manifest(ir: GraphIR, ws: es.Workspace, scheds: List[es.LayerSchedule]
         placements[name] = {"base": p.base, "halo": p.halo, "halo_value": p.halo_value, "height": p.height,
                             "width": p.width, "blocks": p.blocks, "planes": p.planes, "band_rows": p.band_rows,
                             "channels": ir.tensors[name].channels, "dtype": p.dtype,
+                            # Whether this tensor ever reaches the device. A host-stored tensor is planned a
+                            # workspace slot like any other but is handed between host regions in memory, so
+                            # the runtime has to be told which it is: writing one to the workspace instead
+                            # leaves the region that wanted it reading an address nothing filled.
+                            "storage": ir.tensors[name].storage,
                             "scale": ir.tensors[name].scale, "zero_point": ir.tensors[name].zero_point}
     task = graph_task(ir)
     t_in = ir.tensors[ir.input]
@@ -215,6 +220,9 @@ def build_manifest(ir: GraphIR, ws: es.Workspace, scheds: List[es.LayerSchedule]
         "engine": ENGINE_NAME,
         "task": task,
         "input_shape": [1, t_in.channels, t_in.height, t_in.width],
+        # The graph's own name for the input, which a host region feeds by name; it is not always the
+        # workspace tensor's key.
+        "input_name": getattr(t_in, "name", None) or ir.input,
         # A dense container takes the model's own input, which for both segmentation recipes is float32 at
         # scale 1.0 - the quantization is a QuantizeLinear inside the graph, not something the caller applies.
         "input_dtype": "int8" if task in ("detect", "pose")
@@ -431,6 +439,10 @@ def compile_graph_container(onnx_path, output_path, build_dir: Optional[Path] = 
     manifest = build_manifest(ir, ws, scheds, store, onnx_path.stem, len(insts),
                               hashlib.sha256(xclbin).hexdigest(), kernel_sha, time.perf_counter() - t0)
     manifest["graph_engine"]["ddr_extents_bytes"] = {"workspace": ws_extent, "packets": wp_extent}
+    # Which ONNX this container was compiled from. The compile caches in this repo key on a NAME rather
+    # than a model hash, so "is this container the model I think it is" has needed an external answer
+    # more than once; recording it here lets a harness refuse a stale pairing instead of measuring it.
+    manifest["source_model_sha256"] = hashlib.sha256(onnx_path.read_bytes()).hexdigest()
     if silu_sigmoid:   # absent means Quark's HardSigmoid form, as every earlier container
         manifest["graph_engine"]["silu"] = "sigmoid4"
     if not workspace_reuse:   # absent means reuse on: co-tenant tensors share a workspace slot

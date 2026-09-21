@@ -681,7 +681,11 @@ class GraphSession(EngineSession):
         if self.task not in ("detect", "pose"):
             task = self.task
             self.close()
-            raise ValueError(f"{self.path} is a {task} container; open it with DenseGraphSession")
+            opener = {"super_resolution": "DenseGraphSession", "segment": "DenseTensorSession",
+                      "matte": "DenseTensorSession"}.get(task)
+            raise ValueError(f"{self.path} is a {task} container; open it with "
+                             f"{opener or 'the session for that task'}, or let "
+                             "InferenceSession.from_file pick one")
         self.head_names = POSE_HEAD_NAMES if self.task == "pose" else HEAD_NAMES
         self.in_bytes = 3 * 640 * 640
         p = self.input_placement
