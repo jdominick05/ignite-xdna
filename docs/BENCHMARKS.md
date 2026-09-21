@@ -11282,3 +11282,75 @@ module:function` - the same flag and contract `tools/bench_container_vs_amd.py` 
 `--head-order {shapes,graph}`, where `graph` trusts the model's own output order. A head-cut model
 already carries its heads in the order the decoder reads them positionally, verified directly on
 both the float and the XINT8 model before relying on it.
+
+## The YOLO26n accuracy loss split in two, and 8.81 mAP of it came back for 0.26 ms (2026-09-21, Desktop 2)
+
+The section above measured a 15.92 mAP gap between YOLO26n's float export and its XINT8 container,
+named the Sigmoid to HardSigmoid substitution as the leading suspect, and said plainly that this
+was a hypothesis carried from other models. It is now isolated, and then largely fixed.
+
+### Where the loss actually is
+
+The quantizer inserts `HardSigmoid(alpha=1/6)` for all 87 of the graph's Sigmoids, every one of
+which forms a genuine SiLU. `tools/swap_activation.py` makes that one change to the **float** graph
+- no calibration, no int8, no device - so the activation's share separates from the arithmetic's:
+
+| model | mAP@50-95 | mAP@50 | attributable |
+|---|---:|---:|---|
+| float, Sigmoid (the export) | 39.66 | 55.87 | - |
+| float, HardSigmoid | 29.55 | 46.72 | **-10.11, the activation form** |
+| int8, HardSigmoid (what shipped) | 23.74 | 39.40 | **-5.81, int8 arithmetic** |
+
+The activation form is **63.5 %** of the loss, inside the 65-75 % band already measured across this
+zoo - now a result for this model rather than a borrowed one.
+
+### The guard that blocked the fix was over-broad
+
+`--silu-sigmoid` refused with `silu_sigmoid cannot be combined with host_regions`. The reason is
+real but narrow: a host region is extracted from the *original* graph while the exactness reference
+becomes `silu_sigmoid.reference_model`, so a region containing a SiLU would have the two compute
+different things. The guard refused whenever any host region existed at all.
+
+Checked rather than assumed: `reference_model` rewrites 348 node names across 87 SiLU sites, and
+extracting YOLO26n's two host regions from both graphs and diffing node for node gives **33 nodes
+each, zero overlap with the rewrite, zero bytes different**. The regions hold Quantize/Dequantize,
+Slice, MatMul, Transpose, Reshape, Softmax and one attention Mul - no Sigmoid, no HardSigmoid. The
+conflict cannot arise, because an attention core, which is precisely what forces a host region,
+contains no SiLU.
+
+The guard is now the check it stood in for: refuse only when a region actually holds a node the
+epilogue rewrites, and name them. Regression-tested both ways on YOLO11n, whose two region forms
+are exactly the two cases - `/model.10/` (the whole C2PSA block, 97 nodes, 12 rewritten) still
+refuses; the attention core alone (33 nodes, 0 rewritten) now builds.
+
+### It builds, it is exact, and it recovers most of the loss
+
+`build/yolo26n_r2_silu.ignite` is 12,273,792 B with `insts.bin` the same 510,612 B as the
+HardSigmoid build. It verifies **107/107 layers exact** with workspace reuse off, against
+`silu_sigmoid.reference_model` - which the verifier derives from the manifest's `silu` field rather
+than being told, so this is not 107/107 against the wrong reference.
+
+Predicted before measuring: about 39.66 - 5.81 = 33.85, if the integer sigmoid were exact.
+Measured: **32.55 mAP@50-95**, 48.85 @50 - 1.3 below, which is the four-line fit's own error.
+
+| container | mAP@50-95 | G2G mean | vs AMD |
+|---|---:|---:|---:|
+| HardSigmoid | 23.74 | 17.161 ms | 2.53x |
+| sigmoid4 epilogue | **32.55** | 17.421 ms | **2.49x** |
+| AMD Ryzen AI 1.7.1 | 23.64 | 43.344 ms | - |
+
+**8.81 mAP recovered for 0.260 ms**, 1.5 % of the frame, measured on the same artifacts in one
+alternating sitting. The 2.53x replicates exactly from the previous sitting under a different arm
+ordering. Note the ordering of the ablation: int8 with the sigmoid epilogue (32.55) **beats float
+with HardSigmoid** (29.55) - the activation form matters more here than the arithmetic width. And
+the HardSigmoid container returns 6 objects on bus.jpg where the sigmoid4 container returns 5,
+which is what the float model returns: the sixth was a quantization artifact.
+
+**The headline pair, and neither figure travels without the other: YOLO26n runs 2.49x AMD's stack
+at 32.55 mAP, against its float model's 39.66.**
+
+**Not established:** the remaining 7.11 mAP, which is int8 arithmetic plus the four-line fit's
+error and was not separated; AdaRound, per-channel weights and a larger calibration set were not
+tried. Whether the relaxed guard helps YOLO11n or YOLO-World v2 in practice - it now permits their
+attention-core regions to build with the epilogue and the test proves both branches, but neither
+was compiled or evaluated with it here. Energy was not measured. Still not an Ignition number.

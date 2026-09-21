@@ -152,6 +152,22 @@ class HostLayerLowering(_OrtCase):
         with self.assertRaisesRegex(ValueError, "no node names start with it"):
             graph_ir.lower_yolov8n(STOCK, host_regions=("/model.99/",))
 
+    def test_silu_sigmoid_is_refused_only_when_a_host_region_holds_a_silu(self):
+        """The sigmoid epilogue and host regions conflict where they OVERLAP, and only there.
+
+        The host blob is extracted from the original graph while the exactness reference becomes
+        silu_sigmoid.reference_model, so a region containing a SiLU would have the two compute
+        different things. A region that contains none - an attention core, which is what forces a
+        host region in the first place - is byte-identical in both graphs. The guard used to refuse
+        any host region at all, which cost YOLO26n about 8.8 mAP it could have had.
+        """
+        # /model.10/ wraps the whole C2PSA block, convolutions and their SiLUs included.
+        with self.assertRaisesRegex(ValueError, "host region that contains a SiLU"):
+            graph_ir.lower_yolov8n(STOCK, host_regions=(C2PSA,), silu_sigmoid=True)
+        # the attention core alone holds no activation the epilogue rewrites
+        ir = graph_ir.lower_yolov8n(STOCK, host_regions=(CORE,), silu_sigmoid=True)
+        self.assertEqual(len([L for L in ir.layers if isinstance(L, graph_ir.HostLayer)]), 1)
+
 
 @unittest.skipUnless(STOCK.exists(), f"{STOCK.name} not present")
 class AttentionCoreLowering(_OrtCase):

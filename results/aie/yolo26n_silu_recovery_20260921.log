@@ -1,0 +1,110 @@
+# The 15.92 mAP split in two, and 8.81 of it came back for 0.26 ms
+# Host DESKTOP-CBL5NUA (Desktop 2, Ryzen 7 8700G, XDNA1 Phoenix), 2026-09-21
+# Ablation and float arms in resnet_env17 on ONNX Runtime CPU; engine arms in mlir-aie-iron on
+# Device 0; AMD arm in resnet_env17 on Ryzen AI 1.7.1. xrt-smi idle before each NPU arm.
+# All mAP on the FULL val2017 5,000, conf 0.001, per-class NMS at IoU 0.7, max 300 detections.
+#
+## 1. WHERE THE 15.92 ACTUALLY WENT - isolated, not inherited
+#
+# yolo26n_coco_map_20260921.log named the Sigmoid -> HardSigmoid substitution as the leading
+# suspect and said so was a hypothesis carried from other models. It is now measured on this one.
+#
+# The quantizer inserts HardSigmoid(alpha=1/6) for all 87 of the graph's Sigmoids, every one of
+# which forms a genuine SiLU (x * sigmoid(x)). tools/swap_activation.py makes that ONE change to
+# the FLOAT graph - no calibration, no int8, no device - so the activation's share separates from
+# the arithmetic's:
+#
+#   float, Sigmoid       (the export itself)      39.66 mAP@50-95   55.87 @50
+#   float, HardSigmoid   (activation form only)   29.55             46.72     -10.11
+#   int8,  HardSigmoid   (what shipped)           23.74             39.40      -5.81
+#
+#   activation form   -10.11 mAP   63.5 % of the loss
+#   int8 arithmetic    -5.81 mAP   36.5 %
+#
+# That lands inside the 65-75 % band this repo had already measured across the zoo, and it is now
+# a result for YOLO26n rather than a borrowed one.
+#
+## 2. THE GUARD THAT BLOCKED THE FIX WAS OVER-BROAD
+#
+# --silu-sigmoid gives every SiLU the core's four-line integer sigmoid instead of HardSigmoid.
+# It refused outright:
+#
+#   ValueError: silu_sigmoid cannot be combined with host_regions
+#
+# The stated reason is real but narrow: a host region is extracted from the ORIGINAL graph while
+# the exactness reference becomes silu_sigmoid.reference_model, so a region containing a SiLU would
+# have the two compute different things. The guard refused whenever ANY host region existed.
+#
+# Checked, rather than assumed. reference_model rewrites 348 node names across 87 SiLU sites - the
+# HardSigmoid, its Mul, and the QuantizeLinear/DequantizeLinear pair at each. Extracting YOLO26n's
+# two host regions from both graphs and diffing them node for node:
+#
+#   /model.10/m/m.0/attn/...      33 nodes, 0 overlap with the rewrite, 0 bytes differ
+#   /model.22/m.0/m.0.1/attn/...  33 nodes, 0 overlap with the rewrite, 0 bytes differ
+#
+# The regions are Quantize/Dequantize, Slice, MatMul, Transpose, Reshape, Softmax and one attention
+# Mul. NO Sigmoid, NO HardSigmoid. The conflict cannot arise, because an attention core - which is
+# precisely what forces a host region - contains no SiLU.
+#
+# The guard is now the check it was standing in for: refuse only when a region actually holds a
+# node the epilogue rewrites, and name them. Regression-tested both ways on YOLO11n, whose two
+# region forms happen to be exactly the two cases: /model.10/ (the whole C2PSA block, 97 nodes, 12
+# of them rewritten) still REFUSES, and the attention core alone (33 nodes, 0 rewritten) now BUILDS.
+#
+## 3. IT BUILDS, IT IS EXACT, AND IT RECOVERS MOST OF THE LOSS
+#
+#   build/yolo26n_r2_silu.ignite       12,273,792 B, insts.bin 510,612 B (same as HardSigmoid's)
+#   verify, reuse build                34/34 readable exact, 73/73 reused slots correct
+#   verify, --no-workspace-reuse       107/107 layers EXACT
+#
+# against silu_sigmoid.reference_model, which the verifier derives from the manifest's silu field
+# rather than being told - so this is not 107/107 against the wrong reference.
+#
+#   PREDICTED BEFORE MEASURING: roughly 39.66 - 5.81 = 33.85, if the integer sigmoid were exact.
+#   MEASURED:                   32.55 mAP@50-95, 48.85 @50
+#
+# 1.3 below the prediction, which is the four-line fit's own error - the epilogue is a very good
+# sigmoid, not a perfect one.
+#
+#   int8, HardSigmoid   23.74 mAP
+#   int8, sigmoid4      32.55 mAP     +8.81 recovered, 55 % of the total loss
+#   remaining vs float   7.11 mAP
+#
+# Note the ordering: int8 with the sigmoid epilogue (32.55) BEATS float with HardSigmoid (29.55).
+# The activation form matters more than the arithmetic width here.
+#
+## 4. WHAT IT COSTS, measured on the same artifacts in one sitting
+#
+# Three arms alternating, two rounds, 50 warm-up and 500 timed frames on bus.jpg:
+#
+# | arm                          | G2G mean ms | rounds         | forward | decode | dets |
+# |------------------------------|------------:|----------------|--------:|-------:|-----:|
+# | amd                          |      43.344 | 43.303, 43.384 |  34.662 |  5.163 |    6 |
+# | engine, HardSigmoid          |      17.161 | 17.161, 17.161 |  11.998 |  4.485 |    6 |
+# | engine, sigmoid4 epilogue    |      17.421 | 17.381, 17.461 |  12.314 |  4.427 |    5 |
+#
+#   HardSigmoid container   2.53x AMD, 23.74 mAP
+#   sigmoid4 container      2.49x AMD, 32.55 mAP
+#   the epilogue costs      +0.260 ms glass to glass, 1.5 %
+#
+# 8.81 mAP for 0.26 ms. The 2.53x also replicates exactly from the previous sitting on a different
+# arm ordering, which is the cross-check that the speed number is stable.
+#
+# The detection count is a detail worth keeping: the HardSigmoid container returns 6 objects on
+# bus.jpg and the sigmoid4 container returns 5, which is what the FLOAT model returns. The sixth
+# was a quantization artifact, and the better activation removes it.
+#
+## THE HEADLINE PAIR, and neither figure travels without the other
+#
+#   YOLO26n, sigmoid epilogue:  2.49x AMD's stack, 32.55 mAP against the float model's 39.66.
+#
+## NOT ESTABLISHED
+#
+#   - The remaining 7.11 mAP. It is int8 arithmetic plus the four-line fit's error, and those two
+#     were NOT separated. AdaRound, per-channel weights and a larger calibration set were not tried.
+#   - Whether the relaxed guard helps YOLO11n or YOLO-World v2 in practice. It now permits their
+#     attention-core regions to build with the epilogue, and the test proves the guard's two
+#     branches, but neither model was compiled, verified or evaluated with it here.
+#   - Still NOT an Ignition number and no badge may carry any of it: Ignition has no YOLO26 decode
+#     path.
+#   - Energy was not measured for either container.

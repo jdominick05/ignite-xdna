@@ -599,10 +599,6 @@ def lower_yolov8n(model_or_path, host_regions: Sequence[str] = (), silu_sigmoid:
     ``silu_sigmoid`` gives every SiLU after a convolution the core's four-line sigmoid epilogue instead of Quark's
     HardSigmoid form (``silu_sigmoid.py``); the graph's exactness reference is then
     ``silu_sigmoid.reference_model``, not the model itself."""
-    if silu_sigmoid and host_regions:
-        # A host region is extracted from the original graph, so its SiLUs would keep the HardSigmoid form while the
-        # reference model's would not.
-        raise ValueError("silu_sigmoid cannot be combined with host_regions")
     model = onnx.load(str(model_or_path)) if not isinstance(model_or_path, onnx.ModelProto) else model_or_path
     model = onnx.shape_inference.infer_shapes(model)
     G = _Graph(model)
@@ -612,6 +608,24 @@ def lower_yolov8n(model_or_path, host_regions: Sequence[str] = (), silu_sigmoid:
     region_of = {name: r for r in regions for name in r["names"]}
     if len(region_of) != sum(len(r["names"]) for r in regions):
         raise ValueError(f"host regions {list(host_regions)} overlap")
+    if silu_sigmoid and regions:
+        # A host region is extracted from the ORIGINAL graph, while the exactness reference becomes
+        # silu_sigmoid.reference_model. That is a contradiction only where the two disagree, i.e. where a
+        # region contains a node the rewrite drops or replaces - the HardSigmoid, its Mul, and the
+        # QuantizeLinear/DequantizeLinear pair around each SiLU. Refusing whenever ANY host region exists
+        # was over-broad: an attention block carved to the host contains no SiLU at all, so the region is
+        # byte-identical in both graphs and the combination is well defined. Check, rather than assume.
+        from ignite_xdna.compiler.silu_sigmoid import silu_sites
+        rewritten = set()
+        for hs, mk, _dq, _s1, _s2, _k, qk, dqk, _mx in silu_sites(model):
+            rewritten.update({hs.name, mk.name, qk.name, dqk.name})
+        clash = sorted(n for n in region_of if n in rewritten)
+        if clash:
+            raise ValueError(
+                f"silu_sigmoid cannot be combined with a host region that contains a SiLU: the sigmoid "
+                f"epilogue rewrites {len(clash)} node(s) inside one, so the host blob (taken from the "
+                f"original graph) and the exactness reference would compute different things. "
+                f"Offending nodes: {clash[:6]}{' ...' if len(clash) > 6 else ''}")
     if cls_head is not None and cls_head.pool_node is not None and cls_head.pool_node.name not in region_of:
         # The caller did not name the head's pooling, and nothing here lowers it: carve it automatically so the
         # average is computed on the host between dispatches instead of the head silently reading the image.
