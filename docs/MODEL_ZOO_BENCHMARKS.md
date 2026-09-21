@@ -775,3 +775,26 @@ val2017 images comes from `pipelines/yolov8n/5_eval_map.py` and is recorded in
 harness, so the win is against AMD on the same quantized weights, not against float. Energy was not
 measured. Both AMD runs reported `EP report node devices report not found`, so the 12-of-1,526-nodes
 placement is the earlier session's and is not re-confirmed by this one.
+
+## Dense tasks: BiSeNetV2 and MODNet-Cut compile and run, and lose to AMD (2026-09-21, Desktop 2)
+
+Two tasks beyond detection, pose, classification and super-resolution now compile and run end to end:
+`segment` (BiSeNetV2) and `matte` (MODNet-Cut), lowered by `compiler/dense_regions.py`, which makes
+every region the core cannot take a named host layer. Full treatment, with the evidence and its
+caveats, is in
+[BENCHMARKS](BENCHMARKS.md#dense-segmentation-and-matting-against-amds-stack-2026-09-21-desktop-2).
+
+| model | task | layers | segments (host / NPU) | Ignition | AMD | exact vs CPU |
+|---|---|---:|---:|---:|---:|---|
+| BiSeNetV2 | `segment` | 47 | 27 (14 / 13) | 43.20 ms | **20.59 ms** | 50 / 50 |
+| MODNet-Cut | `matte` | 53 | 47 (24 / 23) | 87.35 ms | **31.00 ms** | 50 / 50 |
+
+These are **not** whole-network-on-NPU containers and must never be described as one: roughly half of
+each container's segments are host regions, and that is exactly why they lose. `npu_ms + host_ms` is
+30.30 ms and 53.66 ms, which is 1.47x and 1.73x AMD's complete frame, so no change to how boundaries
+move can make either competitive. Closing the gap needs kernels for the operations that forced the
+host regions.
+
+The exactness column is agreement with the CPU reference on 50 local unlabeled images, where AMD's
+stack matches on none (max abs 1.5703125 and 50.0). It is not task accuracy, and no labelled
+segmentation or matting score has been measured on either stack.

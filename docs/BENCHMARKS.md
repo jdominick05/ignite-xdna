@@ -10439,18 +10439,82 @@ tensors share workspace slots under liveness reuse, so making one packet's plane
 or enlarge a collision that `plan_workspace` currently tolerates. That is the first question a real
 implementation has to answer, and it belongs in the file another workstream has open.
 
-## Dense hybrid segmentation and matting: withdrawn pending its evidence (2026-09-19, Desktop 2)
+## Dense segmentation and matting against AMD's stack (2026-09-21, Desktop 2)
 
-A section reporting BiSeNetV2 and MODNet-Cut through dense host regions was written here and is
-withdrawn before publication, not because anything in it was found wrong but because none of it
-could be checked: it cited ten logs under `results/dense/` that were never committed, and the
-code it describes (`compiler/dense_regions.py`, `runtime/dense_session.py`, the
-`benchmarks/dense_*.py` harnesses) is not on this branch and does not import as it stands -
-`graph_session` has no `read_boundary` or `write_boundary`. A measurement whose log is not in
-the repository is not a measurement this project reports.
+The engine runs two dense models end to end - BiSeNetV2 (`segment`) and MODNet-Cut (`matte`) - by
+cutting each graph into named host regions around the parts the core cannot take, and it **loses to
+AMD's stack on both**. This section replaces a withdrawal: an earlier version was written on
+2026-09-19, withdrawn because its code was never committed and `graph_session` had no
+`read_boundary` or `write_boundary`, and is restored here on a re-run of the whole sitting against
+the code that is now on this branch. Evidence is indexed in
+[results/dense](../results/dense/README.md).
 
-The logs exist and are not lost; they are untracked on Desktop 2. This section comes back when
-the code lands, imports, and its logs land with it.
+`benchmarks/dense_sitting.py`, both families, arms alternating, 50 warm-up and 500 timed frames on the
+same pinned image, twice per arm, `xrt-smi` idle witnessed before and after every run and
+`timing_eligible: true` on every bench run:
+
+| model | Ignition, runs 1 / 2 | AMD, runs 1 / 2 | CPU (engine env) | ratio |
+|---|---:|---:|---:|---:|
+| BiSeNetV2 | 43.29 / 43.12 | **20.64 / 20.55** | 63.29 / 62.46 | 2.10x slower |
+| MODNet-Cut | 87.24 / 87.47 | **31.02 / 30.99** | 98.80 / 99.24 | 2.82x slower |
+
+All times in ms.
+
+### Why this is structural, and not an unfinished optimization
+
+The engine's stage split separates what the NPU does from what the host regions do, and the two behave
+differently. `host_ms` is **CPU-region compute** - `runtime/dense_session.py` sums each host step's own
+`last_cpu_ms` - while `transfer_ms` is the cost of moving boundaries in and out. Only the second is
+something a boundary protocol could remove, so `npu_ms + host_ms` is a floor:
+
+| model | npu_ms | host_ms | transfer_ms | floor | against AMD's whole frame |
+|---|---:|---:|---:|---:|---:|
+| BiSeNetV2 | 18.66 | 11.64 | 6.35 | 30.30 | **1.47x** |
+| MODNet-Cut | 21.75 | 31.90 | 29.67 | 53.66 | **1.73x** |
+
+Driving transfer to zero - the expensive thing a dense boundary protocol could buy - still leaves both
+families above AMD's complete frame. The gap is the CPU regions themselves, which exist because the
+core has no route for those operations, so closing it needs new kernels, not new transport. What else
+could produce the same numbers: a slow host preprocessor is ruled out because `pre_ms` and `post_ms`
+are reported separately and are small; contention is ruled out by the idle witnesses and by
+`foreign_contention_observed: false` on every bench run; a stale container is ruled out because the
+manifest now records `source_model_sha256` and the harness refuses a mismatch.
+
+### Against the withdrawn 2026-09-19 sweep
+
+The engine improved substantially between the two sittings and still does not close the gap, which is
+the useful part of keeping both:
+
+| model | 2026-09-19 | 2026-09-21 | ratio then / now |
+|---|---:|---:|---:|
+| BiSeNetV2 | 47.09 | 43.20 | 2.18x / 2.10x |
+| MODNet-Cut | 117.05 | 87.35 | 3.74x / 2.82x |
+
+Almost all of MODNet's 30 ms is host and transfer (51.41 to 31.90, and 41.35 to 29.67 ms). The two
+sittings measure the same inputs - identical model, FP32 reference and image hashes - and the rebuilt
+containers reproduce the original partition exactly: BiSeNetV2 47 layers and 27 segments (14 host, 13
+NPU), MODNet-Cut 53 layers and 47 segments (24 host, 23 NPU), same workspace sizes. The 2026-09-19
+numbers are superseded, not retracted, and their logs are kept beside the new ones.
+
+### What the engine does win: it is exact where AMD's stack is not
+
+Full-set verification passes both families on Device 0 - every extracted CPU region, every integer
+convolution, every silicon region and the complete output on all 50 pinned images,
+`passed: true, failures: 0, full_set: true`. Against the same CPU reference:
+
+| model | Ignition exact | AMD exact | AMD max abs |
+|---|---|---|---:|
+| BiSeNetV2 | **50 / 50** | 0 / 50 | 1.5703125 |
+| MODNet-Cut | **50 / 50** | 0 / 50 | 50.0 |
+
+A maximum absolute error of 50 on an alpha matte is a visible artifact, not a rounding difference.
+
+**This is agreement with the CPU reference, not task accuracy.** The validation sets are local and
+unlabeled, so these figures say the engine computes the quantized model exactly and AMD's stack does
+not; they do not say what either scores on a segmentation or matting benchmark. A labelled comparison
+is a separate measurement and has not been run. The BiSeNetV2 verification observed foreign contention
+from an overlapping offline test process; it is a checks-only run carrying no timing, so the verdict
+stands, and the observation is recorded rather than quietly re-run.
 
 ## Split container sizing and feasibility (2026-09-20, Desktop 2)
 
