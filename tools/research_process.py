@@ -25,9 +25,15 @@ PRODUCER = re.compile(r'3\w*_quantize|1_export\.py|-m\s+quant\b|quant_adaround|a
 BUILD = re.compile(r'^(cl|link|ninja|cmake|make|clang\+\+|clang|llc|opt|aie-opt|aie-translate|xchesscc)(\.exe)?$', re.I)
 
 
+# Process names of AI coding tools, as the host-load sampler reports them. What loaded the host
+# matters to a timing; which assistant it was does not, and no tracked log may name one.
+AGENT_PROCESS = re.compile(r'(?i)\b(?:claude|codex|gemini|qwen|agy|antigravity|chatgpt|copilot|cursor|aider)[\w.-]*(?=:\d+)')
+
+
 def scrub(value):
     value = re.sub(r'(?i)([a-z]:[\\/]+Users[\\/]+)[^\\/\s"\'<>]+', r'\1<user>', str(value))
-    return re.sub(r'(?i)(/[a-z]/Users/)[^/\s"\'<>]+', r'\1<user>', value)
+    value = re.sub(r'(?i)(/[a-z]/Users/)[^/\s"\'<>]+', r'\1<user>', value)
+    return AGENT_PROCESS.sub('dev-agent', value)
 
 
 def emit(label, value):
