@@ -152,9 +152,19 @@ def main() -> int:
     ap.add_argument("--limit", type=int, default=0, help="0 is every scoreable image; anything else is a SLICE")
     ap.add_argument("--threshold", type=float, default=0.5, help="matte -> person mask, modnet_cut only")
     ap.add_argument("--progress", type=int, default=250)
+    ap.add_argument("--model", type=Path,
+                    help="score this ONNX instead of the family's own, so a variant (a different "
+                         "quantization recipe, a precision cast) can be scored on the same labels "
+                         "without inventing a family for it. ORT backends only.")
     args = ap.parse_args()
 
     model, fp32, task = FAMILIES[args.family]
+    if args.model is not None and args.backend in ("ignite", "amd"):
+        ap.error("--model replaces the ONNX an ORT backend loads; --backend ignite reads a container "
+                 "and --backend amd needs the family's cache key, so neither can honour it")
+    # Exactly one path is scored, and every reference to it goes through this name so the recorded
+    # sha256 cannot drift from the file that actually ran.
+    scored_model = args.model if args.model is not None else ROOT / (fp32 if args.backend == "fp32" else model)
     coco = json.loads((ROOT / ANNOTATIONS).read_text(encoding="utf-8"))
     cats = {c["id"]: c["name"] for c in coco["categories"]}
     anns_by_img = {}
@@ -165,11 +175,14 @@ def main() -> int:
     classes = sorted(set(CITY_TO_COCO)) if args.family == "bisenetv2" else [1]
     emit("IDENTITY", family=args.family, backend=args.backend, task=task,
          model_sha256=sha(ROOT / model), annotations_sha256=sha(ROOT / ANNOTATIONS),
+         scored_model=str(scored_model.relative_to(ROOT)) if scored_model.is_relative_to(ROOT)
+         else str(scored_model),
+         scored_model_sha256=sha(scored_model),
          container_sha256=sha(args.container) if args.container else None,
          scored_classes=classes, threshold=args.threshold if args.family == "modnet_cut" else None,
          numpy=np.__version__, ort=ort.__version__, full_set=not args.limit)
 
-    shape = ort_session(ROOT / (fp32 if args.backend == "fp32" else model)).get_inputs()[0].shape
+    shape = ort_session(scored_model).get_inputs()[0].shape
     target = native = None
     if args.backend == "amd":
         from npu.session import build_session
@@ -180,8 +193,7 @@ def main() -> int:
         from ignite_xdna.runtime.dense_session import DenseTensorSession
         native = DenseTensorSession(str(args.container))
     else:
-        target = ort_session(ROOT / (fp32 if args.backend == "fp32" else model),
-                             optimize=args.backend != "cpu")
+        target = ort_session(scored_model, optimize=args.backend != "cpu")
     name = target.get_inputs()[0].name if target is not None else None
 
     inter = np.zeros(max(classes) + 1, np.int64)
