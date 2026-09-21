@@ -614,3 +614,29 @@ Layer-exactness says the container reproduces the quantized ONNX graph. It says 
 detection quality, and there is none yet: **YOLO26 needs a new decoder**, because
 `decode_native.c` assumes DFL and YOLO26 regresses four box values directly and is NMS-free.
 No mAP, no detections, no comparison against AMD's stack.
+
+### YOLO26n detects on the NPU (2026-09-20, Desktop 2)
+
+`npu/yolo26_decode.py` is the anchor decode the head cut removes. YOLO26 dropped DFL, so its
+box branch regresses four values per anchor where YOLOv8 emits `4 x REG_MAX` bins reduced
+through a softmax-weighted sum; everything else is identical, so the result is a drop-in for
+`npu.yolo.postprocess`. Checked against the float export's own `output0`: box channels
+bit-exact, class channels `1.4e-07` -
+[`yolo26n_detections_20260920.log`](../results/aie/yolo26n_detections_20260920.log).
+
+| arm | detections on bus.jpg |
+|---|---|
+| full float export | 5 - c5@0.90, c0@0.85, c0@0.85, c0@0.84, c0@0.56 |
+| float cut, this decoder | 5 - identical to the export |
+| XINT8 cut, ONNX Runtime CPU | 6 - c5@0.92, c0@0.82, c0@0.82, c0@0.73, c0@0.73, c11@0.32 |
+| **the container on Device 0** | **6 - c5@0.924, c0@0.818, c0@0.818, c0@0.731, c0@0.731, c11@0.321** |
+
+The device reproduces the quantized CPU model exactly: a bus, four people and one
+low-confidence false positive that XINT8 also produces on CPU, so the extra box is the
+quantizer and not the engine.
+
+No mAP: six detections on one image is a smoke test, and this repo's own rule is that even a
+500-image slice is not the answer. No latency figure either - the dispatch in that log is one
+cold run through a debug script that reads six tensors back separately. And the decoder is
+numpy only, where YOLOv8's decode has a native C path, so a fair glass-to-glass comparison
+must either add one or say plainly that the host tail is unoptimized.

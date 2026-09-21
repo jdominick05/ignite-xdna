@@ -1,0 +1,62 @@
+# YOLO26n end to end on the NPU: correct detections from the container
+# Host DESKTOP-CBL5NUA (Desktop 2, Ryzen 7 8700G, XDNA1 Phoenix), 2026-09-20, env mlir-aie-iron
+# Device 0; xrt-smi reported no hardware contexts before and after, and idle at the end.
+#
+## The decoder
+#
+# npu/yolo26_decode.py. YOLO26 dropped DFL, so its box branch regresses four values per anchor
+# where YOLOv8 emits 4 x REG_MAX bins reduced through a softmax-weighted sum. Everything else
+# is identical, which is why the result is a drop-in for npu.yolo.postprocess. Transcribed from
+# the ops the export actually contains, read out of the graph rather than from the paper:
+#
+#   lt, rb = box[:, 0:2], box[:, 2:4]
+#   x1y1   = anchors - lt ; x2y2 = anchors + rb
+#   xywh   = concat([(x1y1 + x2y2) / 2, x2y2 - x1y1]) * strides
+#   out    = concat([xywh, sigmoid(cls)])
+#
+# The anchor centres (0.5, 1.5, ...) and strides (8, 16, 32) were read from the graph's own
+# constants and match npu.yolo_decode.anchors_and_strides.
+#
+## Checked against the export itself
+#
+#   decode_heads(cut float heads) vs the full float export's output0, bus.jpg:
+#     box channels     max |diff| 0.000e+00      (bit-exact)
+#     class channels   max |diff| 1.382e-07      (float32 sigmoid rounding)
+#
+## Detections on bus.jpg, conf 0.25, IoU 0.7, per-class NMS
+#
+#   full float export         5   c5@0.90, c0@0.85, c0@0.85, c0@0.84, c0@0.56
+#   float cut + this decoder  5   c5@0.90, c0@0.85, c0@0.85, c0@0.84, c0@0.56   (identical)
+#   XINT8 cut on ORT CPU      6   c5@0.92, c0@0.82, c0@0.82, c0@0.73, c0@0.73, c11@0.32
+#   THE CONTAINER ON DEVICE 0 6   c5@0.924, c0@0.818, c0@0.818, c0@0.731, c0@0.731, c11@0.321
+#
+#     class  5 conf 0.924 box (7, 250, 790, 506)      bus
+#     class  0 conf 0.818 box (61, 398, 176, 500)     person
+#     class  0 conf 0.818 box (223, 412, 122, 439)    person
+#     class  0 conf 0.731 box (0, 567, 61, 307)       person
+#     class  0 conf 0.731 box (668, 392, 142, 472)    person
+#     class 11 conf 0.321 box (2, 246, 34, 81)        stop sign
+#
+# The device reproduces the quantized CPU model exactly. Quantization COSTS nothing visible
+# here and adds one low-confidence false positive (the stop sign at 0.32), which XINT8 also
+# produces on CPU - it is the quantizer, not the engine.
+#
+## A trap worth recording
+#
+# The first device run gave 2 detections and looked like a decode bug. It was a stale
+# container: build/yolo26n.ignite was compiled BEFORE the host-segment banding fix
+# (results/aie/yolo26n_exact_20260920.log) and is wrong by construction. The fixed containers
+# are yolo26n_band2.ignite and yolo26n_ctl.ignite. A container is a build artifact and goes
+# stale the moment the compiler changes.
+#
+## NOT ESTABLISHED
+#
+#   - No mAP. Six detections on one image is a smoke test, not accuracy; the 500-image slice
+#     rule applies doubly to a single frame.
+#   - No latency result. The 14.089 ms above is one cold dispatch through a debug script that
+#     reads six tensors back one at a time; it is not a G2G figure and not comparable to
+#     anything.
+#   - No comparison against AMD's stack.
+#   - The decoder is numpy only. There is no native C path for it, where YOLOv8's decode has
+#     one (decode_native.c), so a fair G2G comparison must either add one or say plainly that
+#     the host tail is unoptimized.
