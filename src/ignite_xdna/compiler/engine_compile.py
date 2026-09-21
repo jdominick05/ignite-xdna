@@ -199,7 +199,16 @@ def build_manifest(ir: GraphIR, ws: es.Workspace, scheds: List[es.LayerSchedule]
             head_layout[hn] = {"offset": offset, "scale": t.scale, "zero_point": 0}
             offset += nbytes
         graph_engine["heads"] = heads
-        manifest.update({"strides": [8, 16, 32], "reg_max": 16, "num_classes": 80 if task == "detect" else 1,
+        # reg_max is DERIVED from the box head, not assumed. A DFL head carries 4 * reg_max
+        # channels (YOLOv8: 64, so 16 bins per side); a detector that dropped DFL regresses the
+        # four distances directly and lands on reg_max 1 (YOLO26). A decoder reads this to know
+        # whether to do the softmax-weighted bin reduction at all, so hardcoding 16 silently
+        # told every consumer to decode a 4-channel head as if it had bins.
+        box_channels = heads["p3_box"]["channels"]
+        if box_channels % 4:
+            raise ValueError(f"box head has {box_channels} channels, not a multiple of 4")
+        manifest.update({"strides": [8, 16, 32], "reg_max": box_channels // 4,
+                         "num_classes": 80 if task == "detect" else 1,
                          "fused_dfl": False, "output_shapes": output_shapes, "head_layout": head_layout,
                          "egress_bytes": offset})
         if task == "pose":

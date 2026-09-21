@@ -129,16 +129,32 @@ class YoloDecoder:
     """
 
     def __init__(self, imgsz: int = 640, conf_thres: float = 0.25, iou_thres: float = 0.50,
-                 native_decode: bool = True):
+                 native_decode: bool = True, reg_max: int = REG_MAX):
         self.imgsz = imgsz
         self.conf_thres = conf_thres
         self.iou_thres = iou_thres
         # Pre-cache anchor grids and strides for fast vectorized DFL decode
         self._anchors, self._strides = self._build_anchors_and_strides(self.imgsz, STRIDES)
-        # int8 heads decode in one native call (decode_native.c, identical detections); float heads,
-        # native_decode=False and a missing library keep the numpy path below.
+        self._native_requested = native_decode
+        self.set_reg_max(reg_max)
+
+    def set_reg_max(self, reg_max: int) -> None:
+        """How many DFL bins per box side the heads carry.
+
+        16 is YOLOv8's: the box head is 4 x 16 channels and the four distances are the
+        softmax-weighted expectation over the bins. 1 means the family DROPPED DFL and the head
+        regresses the four distances directly, which is what YOLO26 does. A container declares
+        it in its manifest, derived there from the box head's channel count, so nothing here
+        has to know a model by name.
+
+        decode_native.c implements the 16-bin reduction specifically, so any other value falls
+        back to the numpy path rather than silently decoding bins that are not there.
+        """
+        self.reg_max = int(reg_max)
+        if self.reg_max < 1:
+            raise ValueError(f"reg_max must be at least 1, got {reg_max}")
         self._native = (decode_native.for_grid(self._anchors, self._strides, NUM_CLASSES)
-                        if native_decode else None)
+                        if (self._native_requested and self.reg_max == REG_MAX) else None)
 
     @property
     def uses_native_decode(self) -> bool:
@@ -225,7 +241,7 @@ class YoloDecoder:
         for h_idx, (b, c) in enumerate(zip(box_f, cls_f)):
             if b is not None and b.dtype == np.uint8 and b.ndim == 3:
                 # Fallback: convert uint8 C8 blocked heads to int8 NCHW if native decode is bypassed
-                h_c = 4 * REG_MAX
+                h_c = 4 * self.reg_max
                 h_blocks = (h_c + 7) // 8
                 n_anc = b.shape[1]
                 b_chw = np.transpose(b[:h_blocks].reshape(h_blocks, n_anc, 8), (0, 2, 1)).reshape(-1, n_anc)[:h_c]
@@ -245,7 +261,7 @@ class YoloDecoder:
                 c_max = cls_max.get(head_names[h_idx][1]) if cls_max else None
                 keep_local = np.flatnonzero((c_max if c_max is not None else c_flat.max(0)) > q_t)
                 if keep_local.size > 0:
-                    b_flat = b.reshape(4 * REG_MAX, -1)
+                    b_flat = b.reshape(4 * self.reg_max, -1)
                     surviving_boxes.append(
                         (b_flat[:, keep_local].astype(np.float32) - np.float32(zp_b)) * np.float32(s_b))
                     surviving_cls.append(
@@ -256,7 +272,7 @@ class YoloDecoder:
             c_flat = c.reshape(NUM_CLASSES, -1)
             keep_local = np.flatnonzero(c_flat.max(0) > logit_t)
             if keep_local.size > 0:
-                b_flat = b.reshape(4 * REG_MAX, -1)
+                b_flat = b.reshape(4 * self.reg_max, -1)
                 surviving_boxes.append(b_flat[:, keep_local])
                 surviving_cls.append(c_flat[:, keep_local])
                 surviving_indices.append(keep_local + offsets[h_idx])
@@ -271,15 +287,19 @@ class YoloDecoder:
         anc_kept = self._anchors[:, :, keep]
         strides_kept = self._strides[:, keep]
 
-        # 3. DFL Softmax Projection (16 bins -> expected distance)
+        # 3. DFL softmax projection (reg_max bins -> expected distance), or nothing to project
         n_cand = box_kept.shape[2]
-        b_reshaped = box_kept.reshape(1, 4, REG_MAX, n_cand).transpose(0, 2, 1, 3).copy()
-        b_reshaped -= b_reshaped.max(axis=1, keepdims=True)
-        np.exp(b_reshaped, out=b_reshaped)
-        b_reshaped /= b_reshaped.sum(axis=1, keepdims=True)
+        if self.reg_max == 1:
+            # The family dropped DFL: the four distances are the head's own four channels.
+            ltrb = box_kept.reshape(1, 4, n_cand)
+        else:
+            b_reshaped = box_kept.reshape(1, 4, self.reg_max, n_cand).transpose(0, 2, 1, 3).copy()
+            b_reshaped -= b_reshaped.max(axis=1, keepdims=True)
+            np.exp(b_reshaped, out=b_reshaped)
+            b_reshaped /= b_reshaped.sum(axis=1, keepdims=True)
 
-        bins = np.arange(REG_MAX, dtype=np.float32).reshape(1, REG_MAX, 1, 1)
-        ltrb = (b_reshaped * bins).sum(1)  # (1, 4, n) distances: left, top, right, bottom
+            bins = np.arange(self.reg_max, dtype=np.float32).reshape(1, self.reg_max, 1, 1)
+            ltrb = (b_reshaped * bins).sum(1)  # (1, 4, n) distances: left, top, right, bottom
 
         # 4. Box reconstruction in letterboxed pixel coordinates
         x1y1 = anc_kept - ltrb[:, 0:2]
@@ -393,6 +413,13 @@ class YoloPipeline(YoloDecoder):
         # 2. Anchor grids and strides come from YoloDecoder.__init__
 
         # 3. Pre-load reference cut model for exact head outputs if required for visual verification
+        # How many DFL bins the container's box head carries. The compiler derives it from the
+        # head's channel count, so a family that dropped DFL (YOLO26, 4 channels) arrives as 1
+        # and the decode skips a reduction that would otherwise read bins that are not there.
+        _reg_max = (getattr(self.session, "ignite_manifest", None) or {}).get("reg_max")
+        if _reg_max:
+            self.set_reg_max(int(_reg_max))
+
         # The oracle is the model the container was compiled from (manifest model_name), else yolov8n.
         compiled_from = (getattr(self.session, "ignite_manifest", None) or {}).get("model_name")
         cut_cand = repo_root / "models" / f"{compiled_from}.onnx" if compiled_from else None
