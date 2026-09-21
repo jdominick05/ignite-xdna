@@ -796,5 +796,6 @@ move can make either competitive. Closing the gap needs kernels for the operatio
 host regions.
 
 The exactness column is agreement with the CPU reference on 50 local unlabeled images, where AMD's
-stack matches on none (max abs 1.5703125 and 50.0). It is not task accuracy, and no labelled
-segmentation or matting score has been measured on either stack.
+stack matches on none (largest single-element difference 1.5703125 and 50.0, on the raw network
+output rather than on a mask or an alpha). It is not task accuracy, and no labelled segmentation or
+matting score has been measured on either stack.

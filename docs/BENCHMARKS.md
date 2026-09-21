@@ -10502,12 +10502,27 @@ Full-set verification passes both families on Device 0 - every extracted CPU reg
 convolution, every silicon region and the complete output on all 50 pinned images,
 `passed: true, failures: 0, full_set: true`. Against the same CPU reference:
 
-| model | Ignition exact | AMD exact | AMD max abs |
-|---|---|---|---:|
-| BiSeNetV2 | **50 / 50** | 0 / 50 | 1.5703125 |
-| MODNet-Cut | **50 / 50** | 0 / 50 | 50.0 |
+| model | Ignition exact | AMD exact | AMD max abs | AMD mean abs |
+|---|---|---|---:|---:|
+| BiSeNetV2 | **50 / 50** | 0 / 50 | 1.5703125 | ~0.25 |
+| MODNet-Cut | **50 / 50** | 0 / 50 | 50.0 | 1.2 - 3.3 |
 
-A maximum absolute error of 50 on an alpha matte is a visible artifact, not a rounding difference.
+Read those two columns carefully. `dense_compare.py:169` takes them as `diff(y, y_cpu)` on the **raw
+network output**, so they are BiSeNetV2's logits and MODNet-Cut's unscaled float32 tensor - which
+carries no `scale` at all - and not alpha or mask values. The max is the largest single element over
+the whole set (MODNet-Cut's per-image maxima are 16, 24, 28, 32), the mean is per image. On their own
+they establish that AMD's arithmetic differs from the reference everywhere, and nothing about what a
+viewer would see. What a viewer sees is the postprocessed comparison against FP32, measured
+separately on the same 50 images:
+
+| model | Ignition | AMD |
+|---|---:|---:|
+| BiSeNetV2 mean mask pixel agreement | **59.4641%** | 15.3373% |
+| MODNet-Cut mean alpha MAD (lower is better) | **0.148592** | 0.167185 |
+
+All four reproduce the withdrawn 2026-09-19 sitting to every digit on different engine code.
+`npu/bisenetv2.py` changed between the two sittings (`00c287e`, 2026-09-20), so agreement matching to
+four decimals is also evidence that what changed did not touch the postprocess these run through.
 
 **This is agreement with the CPU reference, not task accuracy.** The validation sets are local and
 unlabeled, so these figures say the engine computes the quantized model exactly and AMD's stack does
