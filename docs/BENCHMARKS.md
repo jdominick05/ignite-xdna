@@ -11944,17 +11944,33 @@ YOLOv8n -0.226 ms, **-2.8%**; YOLOv8s -0.772 ms, **-4.4%**. On the dispatch stag
 6.964 ms and 16.683 to 15.910 ms. Every control round is slower than every test round on both
 models, and AMD's two arms agree to 0.010 and 0.065 ms, so the sitting was quiet.
 
-**What it does to the AMD standing.** In this sitting the committed kernel loses YOLOv8s to AMD by
-0.678 ms and `ptr` **wins it by 0.094 ms**, with the test arm's slower round (16.883) still below
-AMD's faster one (16.916). That reopens a question closed on 2026-09-16, when the gap was accepted
-as a known runtime limitation after every transport lever had been built and measured. The closure
-was correct about what it surveyed and wrong in its scope: the levers it exhausted were all
-*transport*, and this one is in the core's addressing.
+**A second YOLOv8s sitting, because one was not enough.** The first sitting's margin over AMD was
+0.094 ms - 0.55%, with the thinner round at 0.033 ms - which is a win with disjoint ranges but too
+thin to stand on alone. It was repeated, this time wrapped in `scripts/research-lowlevel.sh --npu`
+so the run carries the platform manifest and `timing_eligible: true` that the first pair lacks:
 
-**Read the margin honestly.** 0.094 ms is 0.55%, and the thinner round is 0.033 ms. The ranges do
-not overlap and both rounds agree, which is why it is reported as a win rather than as noise, but
-it is one sitting on one image, and a second sitting is what would turn it into a standing claim.
-The YOLOv8n margin over AMD is not close and needs no such care: 1.34x against the control's 1.30x.
+| arm | round 1 | round 2 | mean |
+|---|---|---:|---:|---:|
+| AMD | 17.058 | 17.211 | 17.135 |
+| control | 17.407 | 17.423 | 17.415 |
+| **`ptr`** | 16.669 | 16.661 | **16.665** |
+
+The control-to-test delta reproduces: -0.750 ms and -4.3% against the first sitting's -0.772 ms and
+-4.4%. The margin over AMD does not, because AMD itself drifted between sittings (16.949 to 17.135)
+- which is the reason a single sitting could not carry this and is the more useful of the two
+readings.
+
+**What it does to the AMD standing.** Across both sittings, eight arms, `ptr` is faster than AMD in
+every one: its slowest arm is 16.883 ms and AMD's fastest is 16.916 ms, so the two do not overlap
+anywhere. The committed kernel loses YOLOv8s to AMD by 0.678 ms in the first sitting and 0.280 ms in
+the second; `ptr` wins it by 0.094 ms and 0.470 ms. That closes a question settled on 2026-09-16,
+when the gap was accepted as a known runtime limitation after every transport lever had been built
+and measured. The closure was correct about what it surveyed and wrong in its scope: the levers it
+exhausted were all *transport*, and this one is in the core's addressing. The YOLOv8n margin needs
+no such care - 1.34x against the control's 1.30x.
+
+**One caveat that survives both sittings:** this is `bus.jpg`, one image, glass-to-glass. Nothing
+here says anything about other inputs, and nothing here measures energy.
 
 Do not pair the control's 17.627 ms with the 17.240 ms recorded on 2026-09-16. Different sitting
 and a different harness; the arms here are comparable to each other and to nothing else.
@@ -11970,7 +11986,13 @@ for 500 interleaved frames.
 not fit the 320 B this change leaves free without first compiling out the 5,456 B of dispatch
 groups no model reaches.
 
+A note on provenance: `bench_layout_ab.py` takes its own `xrt-smi` witness before every run and
+interleaves its own arms, so the first two A/B logs are sound measurements - but they were taken by
+running the tool directly, so unlike every other timing log here they carry no `RESEARCH_PLATFORM`
+manifest and no `timing_eligible` flag. The second YOLOv8s sitting was wrapped and does carry both.
+
 Backing logs: [`ptr_ab_yolov8n_phoenix_20260922T0315Z.log`](../results/aie/ptr_ab_yolov8n_phoenix_20260922T0315Z.log),
+[`ptr_ab_yolov8s_s2_phoenix_20260922T0325Z.log`](../results/aie/ptr_ab_yolov8s_s2_phoenix_20260922T0325Z.log) and its wrapper [`engine_int8_ptr_ab_yolov8s_sitting2_npu_20260922.log`](../results/aie/engine_int8_ptr_ab_yolov8s_sitting2_npu_20260922.log),
 [`ptr_ab_yolov8s_phoenix_20260922T0317Z.log`](../results/aie/ptr_ab_yolov8s_phoenix_20260922T0317Z.log),
 [`engine_int8_ptr_verify_yolov8n_npu_20260921.log`](../results/aie/engine_int8_ptr_verify_yolov8n_npu_20260921.log),
 [`engine_int8_base_verify_yolov8n_npu_20260921.log`](../results/aie/engine_int8_base_verify_yolov8n_npu_20260921.log),
