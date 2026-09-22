@@ -163,10 +163,37 @@ def scenarios(seed: int):
     return out
 
 
+def check_acc_packets_do_not_emit(scs) -> None:
+    """Refuse a plan that puts an emitting packet in the accumulate-only loop.
+
+    That loop passes `scratch` as the output pointer as well as the scratch pointer, because a
+    second 3,200 B buffer does not fit (design._core_fn). A packet that emits there writes its
+    tile over the held tile a later OP_RESIDUAL is going to read, and the result is wrong without
+    looking wrong.
+
+    Checked here rather than assumed, because byte-exactness against the emulator would NOT catch
+    it in general: whether it does depends on whether the reference models the aliasing, and a
+    reference that modelled it faithfully would reproduce the corruption - which is exactly how
+    OP_RESIDUAL managed to fail open on both sides at once before 935446e.
+    """
+    for name, w, n_out, n_acc in scs:
+        header = w[:128].view(np.int32)
+        if n_acc and emits(header):
+            raise ValueError(
+                f"scenario {name!r} emits but is counted in count_acc={n_acc}: in the "
+                f"accumulate-only loop the output pointer IS scratch, so this would overwrite "
+                f"the held tile")
+        if n_out and not emits(header):
+            raise ValueError(
+                f"scenario {name!r} does not emit but is counted in count_out={n_out}: the core "
+                f"would acquire an output object and release it unwritten")
+
+
 def build_plan(seed: int):
     """Per column, the scenario list with its own activation bytes for every core and round."""
     rng = np.random.default_rng(seed + 1)
     scs = scenarios(seed)
+    check_acc_packets_do_not_emit(scs)
     plan = []
     for c in range(COLS):
         col = []
