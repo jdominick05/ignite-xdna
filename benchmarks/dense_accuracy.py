@@ -155,16 +155,33 @@ def main() -> int:
     ap.add_argument("--model", type=Path,
                     help="score this ONNX instead of the family's own, so a variant (a different "
                          "quantization recipe, a precision cast) can be scored on the same labels "
-                         "without inventing a family for it. ORT backends only.")
+                         "without inventing a family for it. On an ORT backend it is the file that "
+                         "is loaded; with --backend ignite it names the ONNX the container was "
+                         "built from, so the recorded provenance is the model that actually ran "
+                         "rather than the family's; with --backend amd it also needs --cache-key.")
+    ap.add_argument("--cache-key",
+                    help="compile-cache directory for --backend amd. REQUIRED with --model, because "
+                         "npu.paths.modnet_cache_key picks the key from a filename marker and every "
+                         "MODNet-Cut variant contains 'cut', so a different graph would silently be "
+                         "served another model's compiled artifacts instead of being recompiled.")
     args = ap.parse_args()
 
     model, fp32, task = FAMILIES[args.family]
-    if args.model is not None and args.backend in ("ignite", "amd"):
-        ap.error("--model replaces the ONNX an ORT backend loads; --backend ignite reads a container "
-                 "and --backend amd needs the family's cache key, so neither can honour it")
+    if args.model is not None and args.backend == "amd" and not args.cache_key:
+        ap.error("--model with --backend amd needs --cache-key, or the run silently reuses the "
+                 "family's cache: modnet_cache_key matches on 'cut', which every MODNet-Cut variant "
+                 "contains, so a different graph would be served another model's compile")
+    if args.model is not None and args.backend == "ignite" and args.container is None:
+        ap.error("--model with --backend ignite names the ONNX the container was built from, for "
+                 "provenance and input shape; --container is still what runs and is required")
+    if args.cache_key and args.backend != "amd":
+        ap.error("--cache-key only applies to --backend amd")
     # Exactly one path is scored, and every reference to it goes through this name so the recorded
-    # sha256 cannot drift from the file that actually ran.
-    scored_model = args.model if args.model is not None else ROOT / (fp32 if args.backend == "fp32" else model)
+    # sha256 cannot drift from the file that actually ran. On the ignite arm the container executes
+    # and this names the ONNX it was built from, which is what the sha256 below is of.
+    scored_model = ((args.model if args.model.is_absolute() else ROOT / args.model)
+                    if args.model is not None
+                    else ROOT / (fp32 if args.backend == "fp32" else model))
     coco = json.loads((ROOT / ANNOTATIONS).read_text(encoding="utf-8"))
     cats = {c["id"]: c["name"] for c in coco["categories"]}
     anns_by_img = {}
@@ -178,7 +195,7 @@ def main() -> int:
          scored_model=str(scored_model.relative_to(ROOT)) if scored_model.is_relative_to(ROOT)
          else str(scored_model),
          scored_model_sha256=sha(scored_model),
-         container_sha256=sha(args.container) if args.container else None,
+         container_sha256=sha(args.container) if args.container else None, cache_key=args.cache_key,
          scored_classes=classes, threshold=args.threshold if args.family == "modnet_cut" else None,
          numpy=np.__version__, ort=ort.__version__, full_set=not args.limit)
 
@@ -187,8 +204,15 @@ def main() -> int:
     if args.backend == "amd":
         from npu.session import build_session
         from npu.paths import BISENETV2_CACHE_KEY, modnet_cache_key
-        key = BISENETV2_CACHE_KEY if args.family == "bisenetv2" else modnet_cache_key(model)
-        target = build_session(ROOT / model, "npu", cache_key=key)
+        key = args.cache_key or (BISENETV2_CACHE_KEY if args.family == "bisenetv2"
+                                 else modnet_cache_key(model))
+        target = build_session(scored_model, "npu", cache_key=key)
+        # A `_npu` filename proves nothing about placement. If the EP fell back to the CPU for the
+        # whole graph this arm would score the ONNX exactly and still read as an NPU result, so the
+        # comparison would be CPU-vs-CPU wearing AMD's name. The report is the witness.
+        report = ROOT / key / "vitisai_ep_report.json"
+        emit("AMD_REPORT", path=report.relative_to(ROOT).as_posix(), sha256=sha(report),
+             report=json.loads(report.read_text(encoding="utf-8")))
     elif args.backend == "ignite":
         from ignite_xdna.runtime.dense_session import DenseTensorSession
         native = DenseTensorSession(str(args.container))

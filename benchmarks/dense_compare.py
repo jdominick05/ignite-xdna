@@ -73,8 +73,24 @@ def main():
     ap.add_argument('--warmup', type=int, default=50)
     ap.add_argument('--frames', type=int, default=500)
     ap.add_argument('--limit', type=int, default=0, help='Diagnostic subset only; zero is the complete pinned set')
+    ap.add_argument('--model', help='repo-relative ONNX to use instead of the family default, so a '
+                    'variant (a different quantization recipe) can be pinned, compiled and verified '
+                    'without inventing a family for it. It is recorded in the pins, so a later run '
+                    'against those pins cannot drift onto a different model.')
+    ap.add_argument('--cache-key', help='compile-cache directory for --backend amd. REQUIRED with '
+                    '--model: npu.paths.modnet_cache_key picks the key from a filename marker, so '
+                    'every "*cut*" variant resolves to one key and a different graph would silently '
+                    'reuse another model\'s compiled artifacts instead of being recompiled.')
     args = ap.parse_args()
     model, fp32, valdir, task = FAMILIES[args.family]
+    if args.model:
+        model = Path(args.model).as_posix()
+    if args.backend == 'amd' and args.model and not args.cache_key:
+        ap.error('--model with --backend amd needs --cache-key, or the run silently reuses the '
+                 'family cache: modnet_cache_key matches on "cut", which every MODNet-Cut variant '
+                 'contains, so a different graph would be served another model\'s compile')
+    if args.cache_key and args.backend != 'amd':
+        ap.error('--cache-key only applies to --backend amd')
     if args.mode == 'pin':
         paths = [model, fp32, f'npu/{"bisenetv2" if args.family == "bisenetv2" else "modnet"}.py']
         if args.family == 'modnet_cut':
@@ -96,7 +112,8 @@ def main():
         if sha(ROOT/p) != want:
             raise ValueError(f'pinned artifact changed: {p}')
     images = pins['images'][:args.limit or None]
-    emit('IDENTITY', family=args.family,pins_sha256=sha(args.pins),model_sha256=sha(ROOT/model),
+    emit('IDENTITY', family=args.family,pins_sha256=sha(args.pins),model=model,
+         cache_key=args.cache_key,model_sha256=sha(ROOT/model),
          numpy=np.__version__,ort=ort.__version__,images=len(images),full_set=not args.limit,
          source_sha256={p:sha(ROOT/p) for p in ['benchmarks/dense_compare.py',
              'src/ignite_xdna/compiler/dense_regions.py','src/ignite_xdna/compiler/graph_ir.py',
@@ -132,7 +149,8 @@ def main():
     if args.backend == 'amd':
         from npu.session import build_session, clear_cache
         from npu.paths import BISENETV2_CACHE_KEY, modnet_cache_key
-        key = BISENETV2_CACHE_KEY if args.family == 'bisenetv2' else modnet_cache_key(model)
+        key = args.cache_key or (BISENETV2_CACHE_KEY if args.family == 'bisenetv2'
+                                 else modnet_cache_key(model))
         if args.fresh:
             clear_cache(key)
         target = build_session(ROOT/model,'npu',cache_key=key)
