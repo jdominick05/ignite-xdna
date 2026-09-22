@@ -11,9 +11,14 @@ by wrapping `Worker` and `Buffer` for the duration of one synthetic-design compi
 
 Compile only: it builds an xclbin it never runs, so it establishes a placement and no latency.
 
+The readback half - `read_placement` / `report_placement` - is a pure function of a placed
+MLIR module and knows nothing about which design produced it, so `--placed` reports any
+build made through `compile_mlir_module`, including the bf16 engine's.
+
     bash scripts/research-iron.sh tools/engine_bank_placement_probe.py --scheme bank-aware
     bash scripts/research-iron.sh tools/engine_bank_placement_probe.py --scheme basic-sequential
     bash scripts/research-iron.sh tools/engine_bank_placement_probe.py --scheme bank-aware --psum-address 49152
+    python tools/engine_bank_placement_probe.py --placed scratch/bf16_build/design.prj/input_with_addresses.mlir
 """
 from __future__ import annotations
 
@@ -28,8 +33,58 @@ for p in (ROOT, ROOT / "src"):
     sys.path.insert(0, str(p))
 
 BANK = 16 * 1024
+TILE_L1 = 64 * 1024      # one core tile's data memory
 BUF = re.compile(r'aie\.buffer\(%tile_(\d)_(\d)\) \{address = (\d+) : i32(?:, mem_bank = (\d+) : i32)?, sym_name = "([^"]+)"\} : memref<(\d+)x(\w+)>')
 WIDTH = {"i8": 1, "ui8": 1, "i32": 4, "f32": 4, "bf16": 2, "i16": 2}
+
+
+def read_placement(placed_mlir: Path, core: str):
+    """Placed L1 buffers of one core, as sorted (lo, hi, name, size, bank_lo, bank_hi) rows.
+
+    Reads `design.prj/input_with_addresses.mlir`, which is written by any compile through
+    `compile_mlir_module` - so this serves the int8 design, the bf16 design and anything
+    else built the same way. It is a pure function of the file: no design is imported and
+    nothing is compiled, which is what makes it shareable.
+    """
+    text = Path(placed_mlir).read_text(encoding="utf-8")
+    rows = []
+    for col, row, addr, _bank, name, n, ty in BUF.findall(text):
+        if f"{col}_{row}" != core:
+            continue
+        size = int(n) * WIDTH.get(ty, 1)
+        lo = int(addr)
+        hi = lo + size - 1
+        rows.append((lo, hi, name, size, lo // BANK, hi // BANK))
+    rows.sort()
+    return rows
+
+
+def report_placement(rows) -> None:
+    """Print one core's placement, then the line the L1 budget is actually decided by.
+
+    The per-buffer sum is NOT the number that decides whether a design fits. The bank-aware
+    allocator leaves holes between buffers, so what has to clear 65,536 B is the placed
+    EXTENT, and on the int8 engine the two differ by several kilobytes - enough to turn a
+    budget that looks clear into a build that does not place.
+
+    The span below the first buffer is reported separately because it is the STACK, not a
+    hole: the linker puts it at address 0 and `Worker(stack_size=...)` sizes it. Counting it
+    as fragmentation would overstate the holes by exactly the stack on every design, and
+    would make two designs with different stack sizes look differently fragmented when they
+    are not.
+    """
+    for lo, hi, name, size, b0, b1 in rows:
+        span = f"bank {b0}" if b0 == b1 else f"banks {b0}-{b1}"
+        print(f"  {lo:6d}-{hi:6d}  {size:6d} B  {span:9s}  {name}")
+    if not rows:
+        print("  (no buffers placed on this core)")
+        return
+    total = sum(r[3] for r in rows)
+    extent = max(r[1] for r in rows) + 1
+    stack = min(r[0] for r in rows)
+    print(f"EXTENT {extent} B placed of {TILE_L1} B "
+          f"(buffers {total} B, stack {stack} B, holes {extent - total - stack} B, "
+          f"{TILE_L1 - extent} B free)", flush=True)
 
 
 TRIALS = [  # (scheme, psum pin, scratch pin)
@@ -74,18 +129,13 @@ def trial(scheme, psum_address, scratch_address, core, build_dir=None) -> int:
     finally:
         eng.Worker, eng.Buffer = real_worker, real_buffer
 
-    placed = (build / "design.prj" / "input_with_addresses.mlir").read_text(encoding="utf-8")
-    rows = []
-    for col, row, addr, bank, name, n, ty in BUF.findall(placed):
-        if f"{col}_{row}" != core:
-            continue
-        size = int(n) * WIDTH.get(ty, 1)
-        lo, hi = int(addr), int(addr) + size - 1
-        rows.append((lo, hi, name, size, lo // BANK, hi // BANK))
-    rows.sort()
-    for lo, hi, name, size, b0, b1 in rows:
-        span = f"bank {b0}" if b0 == b1 else f"banks {b0}-{b1}"
-        print(f"  {lo:6d}-{hi:6d}  {size:6d} B  {span:9s}  {name}")
+    rows = read_placement(build / "design.prj" / "input_with_addresses.mlir", core)
+    report_placement(rows)
+    shared_banks(rows)
+    return 0
+
+
+def shared_banks(rows) -> None:
     by_bank: dict[int, set[str]] = {}
     for lo, hi, name, size, b0, b1 in rows:
         base = re.sub(r"_buff_\d+$", "", name)
@@ -93,7 +143,6 @@ def trial(scheme, psum_address, scratch_address, core, build_dir=None) -> int:
             by_bank.setdefault(b, set()).add(base)
     shared = {b: sorted(s) for b, s in by_bank.items() if any(n.startswith("w") for n in s) and any(n.startswith("a") for n in s)}
     print(f"WEIGHT_ACTIVATION_SHARED_BANKS {shared if shared else 'none'}", flush=True)
-    return 0
 
 
 def main() -> int:
@@ -104,7 +153,19 @@ def main() -> int:
     ap.add_argument("--all", action="store_true", help="run every trial in TRIALS instead of one configuration")
     ap.add_argument("--build-dir", default=None)
     ap.add_argument("--core", default="0_2")
+    ap.add_argument("--placed", default=None,
+                    help="report an existing design.prj/input_with_addresses.mlir instead of "
+                         "compiling; the reader is design-agnostic, so this serves the bf16 "
+                         "engine and anything else built through compile_mlir_module")
     args = ap.parse_args()
+
+    if args.placed:
+        # No IRON import and no compile: reading a placed module is a pure file operation.
+        rows = read_placement(Path(args.placed), args.core)
+        print(f"PLACEMENT core={args.core} from {args.placed}", flush=True)
+        report_placement(rows)
+        shared_banks(rows)
+        return 0
 
     import aie.iron as iron  # noqa: F401 - the design needs the IRON runtime importable
 
