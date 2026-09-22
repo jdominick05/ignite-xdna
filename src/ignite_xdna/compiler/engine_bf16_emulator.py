@@ -14,8 +14,9 @@ details and are not:
     version contracted a whole tap in one einsum, whose summation order NumPy does not define;
   * every value that the core STORES is rounded to bf16 round-to-nearest-even, and every value it
     keeps in psum stays fp32;
-  * the held tile is bf16 aliased into the tail of psum, so it occupies half as many float32 slots
-    as it has elements - stored here as the same bit patterns at the same byte offsets;
+  * the held tile lives in the core's `scratch` buffer, not in a tail of psum, and the emitted tile
+    is written in the next layer's ACTIVATION layout - eight channels a block, interleaved from the
+    pairs of 4-channel accumulator blocks that mmul<4, 8, 4> produces;
   * the bias is read pre-replicated to the accumulator's 4x4 shape, so element m*4+n is the bias of
     output channel n - replication happens on the host because bf16 has no 4-element load.
 
@@ -43,11 +44,27 @@ HDR_BYTES = 128
 HDR_WORDS = HDR_BYTES // 4
 BIAS_ELEMS = NCO * 16                            # 64 bf16, 128 B
 W_OFFSET_ELEMS = HDR_BYTES // 2 + BIAS_ELEMS     # counted in bf16 elements
-OUT_BLOCK_ELEMS = TILE_ROWS * TILE_COLS * 4      # 400 bf16
+OUT_BLOCK_ELEMS = TILE_ROWS * TILE_COLS * 4      # 400 bf16, one 4-channel accumulator block
 PSUM_BLOCK_ELEMS = TILE_ROWS * TILE_COLS * 4     # 400 float
-HOLD_OFFSET_ELEMS = NCO * PSUM_BLOCK_ELEMS       # in float32 slots: the held tile starts past the sums
-HOLD_SLOTS = NCO * OUT_BLOCK_ELEMS // 2          # 1,600 bf16 occupy 800 float32 slots
-PSUM_FLOATS = HOLD_OFFSET_ELEMS + HOLD_SLOTS     # 2,400 float32 = 9,600 B, the core's psum buffer
+PSUM_FLOATS = NCO * PSUM_BLOCK_ELEMS             # 1,600 float32 = 6,400 B, the core's psum buffer
+
+# The emitted tile is written in the ACTIVATION layout, [cin_block][row][col][8], because that is
+# what the next layer reads and what Placement lays out in DDR (engine_schedule.Placement.pitch is
+# `(width + 2*halo) * 8 * itemsize` - eight channels a block, whatever the dtype). The core
+# accumulates in 4-channel blocks because mmul<4,8,4> blocks the output by 4, so a pair of
+# accumulator blocks interleaves into one 8-channel block on the way out.
+OUT_BLOCKS_8 = NCO // 2                          # 2 blocks of 8 channels
+OUT_BLOCK8_ELEMS = TILE_ROWS * TILE_COLS * 8     # 800 bf16
+OUT_ELEMS = NCO * OUT_BLOCK_ELEMS                # 1,600 bf16 = 3,200 B, either way it is counted
+
+# The held tile lives in `scratch`, NOT in a tail of psum. The int8 core aliases its hold into
+# psum's tail and this file used to mirror that, but bf16 cannot afford it: at int8 depths the
+# 16-core design needs 65,792 B of a 65,536 B tile, and the 3,200 B hold is what puts it over.
+# `scratch` is already allocated per core (design.py's `scratch_{c}_{r}`, o_ty, 3,200 B) and is
+# never written - the accumulate-only loop passes it as `out` and a non-emitting packet writes
+# psum, not `out`. Holding there costs nothing, and it removes the reinterpret_cast aliasing that
+# the milestone-2 commit recorded as needing to close before OP_RESIDUAL existed.
+SCRATCH_ELEMS = OUT_ELEMS                        # 1,600 bf16 = 3,200 B
 
 H_OP, H_K, H_STRIDE, H_NCIN, H_FLAGS = 0, 1, 2, 3, 4
 H_COUNT_OUT, H_COUNT_ACC = 5, 6
@@ -143,20 +160,84 @@ def mac(acc: np.ndarray, a: np.ndarray, w: np.ndarray, model: str) -> np.ndarray
     raise ValueError(f"mac model {model!r} is not one of {MAC_MODELS}")
 
 
+def epilogue(acc: np.ndarray, flags: int) -> np.ndarray:
+    """The core's whole epilogue: round to bf16, then the floor and the ceiling.
+
+    0 and 6 are exact in bf16 and rounding is monotone, so the order is not observable - it is
+    kept anyway. F_RELU is the floor and F_RELU6 the ceiling, INDEPENDENTLY, so a plain ReLU is
+    the same opcode with the ceiling left off and a Clip(0, 6) sets both. What the core's max
+    makes of -0.0 and of NaN is unmeasured; here -0.0 becomes +0.0 and NaN passes through.
+    """
+    y = to_bf16(acc)
+    if flags & F_RELU:
+        y = np.where(y > 0, y, np.where(np.isnan(y), y, np.float32(0.0)))
+    if flags & F_RELU6:
+        y = np.where(y < 6, y, np.where(np.isnan(y), y, np.float32(6.0)))
+    return y.astype(np.float32)
+
+
+def interleave_out(y: np.ndarray) -> np.ndarray:
+    """[NCO][rows][cols][4] accumulator blocks -> the flat activation layout, eight a block.
+
+    Accumulator block b, channel n is channel ``(b % 2) * 4 + n`` of 8-channel block ``b // 2``.
+    On the core this is one ``interleave_zip`` per block pair - the exact inverse of the
+    ``interleave_unzip`` the stride-2 load path already uses, so the idiom is not new here.
+
+    This exists because mmul<4, 8, 4> blocks the OUTPUT by 4 while every activation the engine
+    reads is blocked by 8 (``Placement.pitch``). int8 never needed it: mmul<4, 8, 8> emits the
+    same width it consumes.
+    """
+    return (y.reshape(OUT_BLOCKS_8, 2, TILE_ROWS, TILE_COLS, 4)
+             .transpose(0, 2, 3, 1, 4)
+             .reshape(-1))
+
+
+def _residual(header: np.ndarray, act: np.ndarray, scratch: np.ndarray, out: np.ndarray) -> None:
+    """OP_RESIDUAL: add this packet's A to the held tile, activate, retire.
+
+    Both addends are already in the emitted 8-channel layout - the held tile because an F_HOLD
+    packet wrote it that way, this packet's A because the schedule hands the residual branch over
+    as an output-shaped tile. The int8 core's ``residual_tile`` does the same add and then spends
+    fifteen lines requantizing it; in bf16 the requantization is deleted rather than widened, so
+    what is left is the add, the flag epilogue and one rounding on the store.
+    """
+    flags = int(header[H_FLAGS])
+    held = np.ascontiguousarray(scratch, dtype=np.float32)[:OUT_ELEMS]
+    res = np.ascontiguousarray(act, dtype=np.float32)[:OUT_ELEMS]
+    y = epilogue(held + res, flags)
+    if flags & F_HOLD:
+        scratch[:OUT_ELEMS] = y
+    else:
+        out[:OUT_ELEMS] = y
+
+
 def run_packet(header: np.ndarray, act: np.ndarray, wts: np.ndarray, bias: np.ndarray,
-               psum: np.ndarray, out: np.ndarray, core_row: int = 0, mac_model: str | None = None) -> None:
+               psum: np.ndarray, out: np.ndarray, scratch: np.ndarray,
+               core_row: int = 0, mac_model: str | None = None) -> None:
     """Execute one packet in place, exactly as the core would.
 
-    act   float32 holding bf16-representable values, [ncin * plane_elems]
-    wts   float32 holding bf16-representable values, [k][k][ncin][NCO][32], 32 = kk*4 + n
-    bias  float32 holding bf16-representable values, [NCO][16], element m*4+n is channel n's bias
-    psum  float32 [PSUM_FLOATS]: NCO * PSUM_BLOCK_ELEMS partial sums, then the held tile's bf16 bits
-    out   float32 [NCO * OUT_BLOCK_ELEMS], modified in place
+    act     float32 holding bf16-representable values, [ncin * plane_elems]; for OP_RESIDUAL it is
+            instead the residual tile, [OUT_ELEMS] in the emitted 8-channel layout
+    wts     float32 holding bf16-representable values, [k][k][ncin][NCO][32], 32 = kk*4 + n
+    bias    float32 holding bf16-representable values, [NCO][16], element m*4+n is channel n's bias
+    psum    float32 [PSUM_FLOATS], the fp32 partial sums
+    out     float32 [OUT_ELEMS], modified in place
+    scratch float32 [SCRATCH_ELEMS], the hold buffer, modified in place
+
+    An unknown opcode RAISES. It used to fall through to the convolution on both sides at once -
+    the core had no switch and this had no else - so a mis-typed packet quietly convolved and
+    byte-exactness could not catch it, because the emulator reproduced the bug faithfully. The
+    int8 core fails closed on a `default: break;` and so does this.
     """
     model = MAC_MODEL if mac_model is None else mac_model
     op = int(header[H_OP])
     if op == OP_NOP:
         return
+    if op == OP_RESIDUAL:
+        _residual(header, act, scratch, out)
+        return
+    if op != OP_CONV:
+        raise ValueError(f"unknown opcode {op}; the core's switch has no case for it")
     k, stride, ncin = int(header[H_K]), int(header[H_STRIDE]), int(header[H_NCIN])
     flags, cols_in, plane = int(header[H_FLAGS]), int(header[H_COLS_IN]), int(header[H_PLANE_ELEMS])
 
@@ -181,26 +262,24 @@ def run_packet(header: np.ndarray, act: np.ndarray, wts: np.ndarray, bias: np.nd
                 acc = mac(acc, win, w[ky, kx, c], model)
 
     if flags & (F_EMIT | F_HOLD):
-        # The core's order: round to bf16, then the floor and the ceiling. 0 and 6 are exact in
-        # bf16 and rounding is monotone, so the order is not observable - it is kept anyway.
-        y = to_bf16(acc)
-        # F_RELU is the floor and F_RELU6 the ceiling, independently, so a plain ReLU is the same
-        # opcode with the ceiling left off and a Clip(0, 6) sets both. What the core's max makes of
-        # -0.0 and of NaN is unmeasured; here -0.0 becomes +0.0 and NaN passes through.
-        if flags & F_RELU:
-            y = np.where(y > 0, y, np.where(np.isnan(y), y, np.float32(0.0)))
-        if flags & F_RELU6:
-            y = np.where(y < 6, y, np.where(np.isnan(y), y, np.float32(6.0)))
-        y = y.astype(np.float32).reshape(-1)
+        y = interleave_out(epilogue(acc, flags))
+        # F_EMIT retires the tile to the output object; F_HOLD keeps it for a residual packet.
+        # Both destinations carry the same layout, so a held tile and an emitted one are the same
+        # bytes and OP_RESIDUAL can add them without knowing which produced which.
         if flags & F_EMIT:
-            out[:NCO * OUT_BLOCK_ELEMS] = y
+            out[:OUT_ELEMS] = y
         else:
-            # The held tile is bf16 aliased into the tail of psum: the same bits, the same offsets.
-            psum[HOLD_OFFSET_ELEMS:HOLD_OFFSET_ELEMS + HOLD_SLOTS].view(np.uint16)[:] = bf16_bits(y)
+            scratch[:OUT_ELEMS] = y
     else:
         psum[:NCO * PSUM_BLOCK_ELEMS] = acc.reshape(-1)
 
 
-def held_tile(psum: np.ndarray) -> np.ndarray:
-    """The tile a F_HOLD packet left in psum's tail, widened back to float32 values."""
-    return from_bf16_bits(psum[HOLD_OFFSET_ELEMS:HOLD_OFFSET_ELEMS + HOLD_SLOTS].view(np.uint16))
+def held_tile(scratch: np.ndarray) -> np.ndarray:
+    """The tile an F_HOLD packet left in `scratch`, in the emitted 8-channel layout.
+
+    Every value in it is bf16-representable because it went through `epilogue`, so this is the
+    same convention `out` and `act` use: a float32 container holding bf16 values. Use `bf16_bits`
+    to compare it against device memory - as floats, -0.0 and +0.0 compare equal and they are not
+    the same bytes.
+    """
+    return np.ascontiguousarray(scratch, dtype=np.float32)[:OUT_ELEMS].copy()

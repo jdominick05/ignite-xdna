@@ -37,6 +37,30 @@ from ignite_xdna.compiler import engine_bf16_emulator as em  # noqa: E402
 F32 = np.float32
 
 
+def run(*args, **kw):
+    """`run_packet` with a throwaway hold buffer unless the caller owns one.
+
+    The core takes `scratch` as an argument now, because that is where a held tile lives - a test
+    that does not hold does not care which buffer it did not write.
+    """
+    if len(args) == 6:
+        args = args + (np.zeros(em.SCRATCH_ELEMS, F32),)
+    return em.run_packet(*args, **kw)
+
+
+def as_blocks(tile):
+    """An emitted tile back in ACCUMULATOR-block order, [NCO][rows][cols][4].
+
+    The core emits eight channels a block because that is what the next layer reads, but the
+    naive loop below reasons in the 4-channel blocks mmul<4, 8, 4> actually produces. This is
+    `em.interleave_out` inverted, written out independently so a bug in one is not a bug in both.
+    """
+    return (np.asarray(tile)[:em.OUT_ELEMS]
+            .reshape(em.OUT_BLOCKS_8, em.TILE_ROWS, em.TILE_COLS, 2, 4)
+            .transpose(0, 3, 1, 2, 4)
+            .reshape(em.NCO, em.TILE_ROWS, em.TILE_COLS, 4))
+
+
 def scalar_mac(acc, a8, w8, model):
     """One output lane of one multiply-accumulate, by the model's definition and nothing else."""
     if model == "aligned":
@@ -137,9 +161,9 @@ class PacketAgainstNaiveLoop(unittest.TestCase):
             for model in em.MAC_MODELS:
                 with self.subTest(model=model, **shape):
                     want, lanes = naive_accumulate(header, act, wts, bias_start(bias), model, every)
-                    psum, out = np.zeros(em.PSUM_FLOATS, F32), np.zeros(em.NCO * em.OUT_BLOCK_ELEMS, F32)
-                    em.run_packet(header, act, wts, bias, psum, out, mac_model=model)
-                    got = out.reshape(em.NCO, em.TILE_ROWS, em.TILE_COLS, 4)
+                    psum, out = np.zeros(em.PSUM_FLOATS, F32), np.zeros(em.OUT_ELEMS, F32)
+                    run(header, act, wts, bias, psum, out, mac_model=model)
+                    got = as_blocks(out)
                     for lane in lanes:
                         self.assertEqual(em.bf16_bits(got[lane]), em.bf16_bits(em.to_bf16(want[lane])), lane)
 
@@ -147,9 +171,9 @@ class PacketAgainstNaiveLoop(unittest.TestCase):
         header, act, wts, bias = packet(3, 1, 2, 0, seed=12)       # no F_EMIT, no F_HOLD: sums stay in psum
         for model in em.MAC_MODELS:
             want, lanes = naive_accumulate(header, act, wts, bias_start(bias), model, every=5)
-            psum, out = np.zeros(em.PSUM_FLOATS, F32), np.zeros(em.NCO * em.OUT_BLOCK_ELEMS, F32)
-            em.run_packet(header, act, wts, bias, psum, out, mac_model=model)
-            got = psum[:em.HOLD_OFFSET_ELEMS].reshape(want.shape)
+            psum, out = np.zeros(em.PSUM_FLOATS, F32), np.zeros(em.OUT_ELEMS, F32)
+            run(header, act, wts, bias, psum, out, mac_model=model)
+            got = psum[:em.PSUM_FLOATS].reshape(want.shape)
             for lane in lanes:
                 self.assertEqual(got[lane].view(np.uint32), want[lane].view(np.uint32), (model, lane))
             self.assertFalse(out.any(), "an accumulate-only packet must not write the output tile")
@@ -160,10 +184,10 @@ class PacketAgainstNaiveLoop(unittest.TestCase):
         model = "sequential"
         mid, _ = naive_accumulate(h1, act1, w1, bias_start(bias), model, every=1)
         want, lanes = naive_accumulate(h2, act2, w2, mid, model, every=9)
-        psum, out = np.zeros(em.PSUM_FLOATS, F32), np.zeros(em.NCO * em.OUT_BLOCK_ELEMS, F32)
-        em.run_packet(h1, act1, w1, bias, psum, out, mac_model=model)
-        em.run_packet(h2, act2, w2, bias, psum, out, mac_model=model)
-        got = out.reshape(want.shape)
+        psum, out = np.zeros(em.PSUM_FLOATS, F32), np.zeros(em.OUT_ELEMS, F32)
+        run(h1, act1, w1, bias, psum, out, mac_model=model)
+        run(h2, act2, w2, bias, psum, out, mac_model=model)
+        got = as_blocks(out)
         for lane in lanes:
             self.assertEqual(em.bf16_bits(got[lane]), em.bf16_bits(em.to_bf16(want[lane])), lane)
 
@@ -173,39 +197,139 @@ class PacketAgainstNaiveLoop(unittest.TestCase):
         both_w = np.concatenate([w1.reshape(k, k, 2, -1), w2.reshape(k, k, 2, -1)], axis=2).reshape(-1)
         one = em.make_header(k=3, stride=1, ncin=4, flags=0, rows_in=7, cols_in=22, plane_elems=plane)
         p1, p2 = np.zeros(em.PSUM_FLOATS, F32), np.zeros(em.PSUM_FLOATS, F32)
-        em.run_packet(one, np.concatenate([act1, act2]), both_w, bias, p1, out.copy(), mac_model=model)
-        em.run_packet(h1, act1, w1, bias, p2, out.copy(), mac_model=model)
+        run(one, np.concatenate([act1, act2]), both_w, bias, p1, out.copy(), mac_model=model)
+        run(h1, act1, w1, bias, p2, out.copy(), mac_model=model)
         chained = em.make_header(k=3, stride=1, ncin=2, flags=em.F_LOAD_PSUM, rows_in=7, cols_in=22, plane_elems=plane)
-        em.run_packet(chained, act2, w2, bias, p2, out.copy(), mac_model=model)
-        sums = slice(0, em.HOLD_OFFSET_ELEMS)
+        run(chained, act2, w2, bias, p2, out.copy(), mac_model=model)
+        sums = slice(0, em.PSUM_FLOATS)
         self.assertTrue(np.allclose(p1[sums], p2[sums], rtol=1e-4, atol=1e-4))
         self.assertFalse(np.array_equal(p1[sums].view(np.uint32), p2[sums].view(np.uint32)))
 
-    def test_hold_stores_the_emitted_bits_at_the_cores_width(self):
+    def test_hold_writes_scratch_and_leaves_the_partial_sums_alone(self):
         header, act, wts, bias = packet(3, 1, 1, em.F_EMIT | em.F_RELU, seed=15)
-        psum, out = np.zeros(em.PSUM_FLOATS, F32), np.zeros(em.NCO * em.OUT_BLOCK_ELEMS, F32)
-        em.run_packet(header, act, wts, bias, psum, out)
+        psum, out = np.zeros(em.PSUM_FLOATS, F32), np.zeros(em.OUT_ELEMS, F32)
+        run(header, act, wts, bias, psum, out)
         held_hdr = header.copy()
         held_hdr[em.H_FLAGS] = em.F_HOLD | em.F_RELU
-        psum2, out2 = np.zeros(em.PSUM_FLOATS, F32), np.zeros(em.NCO * em.OUT_BLOCK_ELEMS, F32)
-        em.run_packet(held_hdr, act, wts, bias, psum2, out2)             # 2,400 floats: used to raise
-        self.assertEqual(em.PSUM_FLOATS, 2400)
+        psum2, out2 = np.zeros(em.PSUM_FLOATS, F32), np.zeros(em.OUT_ELEMS, F32)
+        scratch = np.zeros(em.SCRATCH_ELEMS, F32)
+        em.run_packet(held_hdr, act, wts, bias, psum2, out2, scratch)
+        # psum lost the 800-float hold tail it used to carry: 1,600 floats, 6,400 B. Those 3,200 B
+        # are what put a 16-core bf16 design at 65,792 B of a 65,536 B tile.
+        self.assertEqual(em.PSUM_FLOATS, 1600)
+        self.assertEqual(em.SCRATCH_ELEMS, 1600)
         self.assertFalse(out2.any(), "a held tile is not emitted")
-        self.assertTrue(np.array_equal(em.bf16_bits(em.held_tile(psum2)), em.bf16_bits(out)))
-        tail = psum2[em.HOLD_OFFSET_ELEMS:].view(np.uint8)
-        self.assertTrue(np.array_equal(tail, em.bf16_bits(out).view(np.uint8)), "same bytes, same offsets")
+        self.assertFalse(psum2.any(), "a held tile does not touch the partial sums")
+        self.assertTrue(np.array_equal(em.bf16_bits(em.held_tile(scratch)), em.bf16_bits(out)),
+                        "a held tile is the emitted tile - same layout, same bits, a different buffer")
 
     def test_relu_floor_and_relu6_ceiling(self):
         header, act, wts, bias = packet(3, 1, 2, em.F_EMIT, seed=16)
-        raw, relu, relu6 = (np.zeros(em.NCO * em.OUT_BLOCK_ELEMS, F32) for _ in range(3))
+        raw, relu, relu6 = (np.zeros(em.OUT_ELEMS, F32) for _ in range(3))
         for flags, out in ((em.F_EMIT, raw), (em.F_EMIT | em.F_RELU, relu),
                            (em.F_EMIT | em.F_RELU | em.F_RELU6, relu6)):
             header[em.H_FLAGS] = flags
-            em.run_packet(header, act * F32(4), wts, bias, np.zeros(em.PSUM_FLOATS, F32), out)
+            run(header, act * F32(4), wts, bias, np.zeros(em.PSUM_FLOATS, F32), out)
         self.assertTrue((raw < 0).any() and (raw > 6).any(), "the data must exercise both clamps")
         self.assertTrue(np.array_equal(em.bf16_bits(relu), em.bf16_bits(np.where(raw > 0, raw, F32(0)))))
         self.assertTrue(np.array_equal(em.bf16_bits(relu6), em.bf16_bits(np.clip(np.where(raw > 0, raw, F32(0)), 0, 6))))
         self.assertFalse((em.bf16_bits(relu) == 0x8000).any(), "the floor is +0.0, never -0.0")
+
+    def test_the_emitted_layout_is_the_one_the_next_layer_reads(self):
+        """Accumulator block b, channel n lands at 8-channel block b // 2, channel (b % 2) * 4 + n.
+
+        The index arithmetic is asserted directly rather than through `as_blocks`, so this fails if
+        the stated mapping and the implemented one drift apart.
+        """
+        header, act, wts, bias = packet(1, 1, 1, em.F_EMIT, seed=17)
+        psum, out = np.zeros(em.PSUM_FLOATS, F32), np.zeros(em.OUT_ELEMS, F32)
+        run(header, act, wts, bias, psum, out)
+        self.assertEqual(em.OUT_ELEMS, em.OUT_BLOCKS_8 * em.OUT_BLOCK8_ELEMS)
+        blocks = as_blocks(out)
+        eight = out.reshape(em.OUT_BLOCKS_8, em.TILE_ROWS, em.TILE_COLS, 8)
+        self.assertTrue(blocks.any(), "an all-zero tile would pass this vacuously")
+        for b in range(em.NCO):
+            for n in range(4):
+                self.assertTrue(np.array_equal(em.bf16_bits(blocks[b, :, :, n]),
+                                               em.bf16_bits(eight[b // 2, :, :, (b % 2) * 4 + n])),
+                                (b, n))
+
+    def test_an_exactly_zero_sum_emits_positive_zero(self):
+        """UNMEASURED on silicon, and pinned here so the device can disagree loudly.
+
+        The accumulate-fidelity sitting listed the sign the core gives an exactly zero sum as one
+        of the two things it had not established. Zero weights and zero bias make every lane
+        exactly zero by construction, which is the cheapest shape that asks the question.
+        """
+        header, act, wts, bias = packet(1, 1, 1, em.F_EMIT, seed=25)
+        psum, out = np.zeros(em.PSUM_FLOATS, F32), np.zeros(em.OUT_ELEMS, F32)
+        run(header, act, np.zeros_like(wts), np.zeros_like(bias), psum, out)
+        self.assertTrue(np.array_equal(em.bf16_bits(out), np.zeros(em.OUT_ELEMS, np.uint16)),
+                        "every lane is +0.0 (0x0000), not -0.0 (0x8000)")
+
+
+class OpcodeDispatch(unittest.TestCase):
+    """The dispatch fails CLOSED now, on both sides.
+
+    It used to fail open identically in the core and in this emulator - the core had no switch and
+    `run_packet` had no else - so a mis-typed packet quietly ran a convolution and byte-exactness
+    could not catch it, because the emulator reproduced the bug faithfully. int8 has always failed
+    closed on a `default: break;`.
+    """
+
+    def test_an_unknown_opcode_raises_rather_than_convolving(self):
+        header, act, wts, bias = packet(3, 1, 1, em.F_EMIT, seed=21)
+        for op in (3, 7, 99):
+            bad = header.copy()
+            bad[em.H_OP] = op
+            with self.subTest(op=op), self.assertRaises(ValueError):
+                run(bad, act, wts, bias, np.zeros(em.PSUM_FLOATS, F32), np.zeros(em.OUT_ELEMS, F32))
+
+    def test_nop_writes_nothing_at_all(self):
+        header, act, wts, bias = packet(3, 1, 1, em.F_EMIT, seed=22)
+        header[em.H_OP] = em.OP_NOP
+        psum, out = np.zeros(em.PSUM_FLOATS, F32), np.zeros(em.OUT_ELEMS, F32)
+        scratch = np.zeros(em.SCRATCH_ELEMS, F32)
+        em.run_packet(header, act, wts, bias, psum, out, scratch)
+        self.assertFalse(psum.any() or out.any() or scratch.any())
+
+
+class Residual(unittest.TestCase):
+    """OP_RESIDUAL adds this packet's A to the tile an earlier F_HOLD packet left in scratch."""
+
+    def held_and_residual(self, seed=23):
+        header, act, wts, bias = packet(3, 1, 1, em.F_HOLD, seed=seed)
+        psum, out = np.zeros(em.PSUM_FLOATS, F32), np.zeros(em.OUT_ELEMS, F32)
+        scratch = np.zeros(em.SCRATCH_ELEMS, F32)
+        em.run_packet(header, act, wts, bias, psum, out, scratch)
+        held = em.held_tile(scratch)
+        self.assertTrue(held.any(), "the fixture must actually hold something")
+        res = em.to_bf16(np.random.default_rng(seed + 1).standard_normal(em.OUT_ELEMS).astype(F32) * F32(3))
+        return psum, out, scratch, held, res, wts, bias
+
+    def test_residual_adds_the_held_tile(self):
+        psum, out, scratch, held, res, wts, bias = self.held_and_residual()
+        rh = em.make_header(op=em.OP_RESIDUAL, flags=em.F_EMIT)
+        em.run_packet(rh, res, wts, bias, psum, out, scratch)
+        self.assertTrue(np.array_equal(em.bf16_bits(out), em.bf16_bits(em.to_bf16(held + res))))
+
+    def test_residual_activates_at_its_own_packets_flags(self):
+        psum, out, scratch, held, res, wts, bias = self.held_and_residual(seed=27)
+        big = em.to_bf16(res * F32(8))
+        rh = em.make_header(op=em.OP_RESIDUAL, flags=em.F_EMIT | em.F_RELU | em.F_RELU6)
+        em.run_packet(rh, big, wts, bias, psum, out, scratch)
+        raw = em.to_bf16(held + big)
+        self.assertTrue((raw < 0).any() and (raw > 6).any(), "the fixture must exercise both clamps")
+        want = np.clip(np.where(raw > 0, raw, F32(0)), 0, 6)
+        self.assertTrue(np.array_equal(em.bf16_bits(out), em.bf16_bits(want)))
+
+    def test_a_residual_can_hold_its_own_result_for_a_second_one(self):
+        psum, out, scratch, held, res, wts, bias = self.held_and_residual(seed=29)
+        rh = em.make_header(op=em.OP_RESIDUAL, flags=em.F_HOLD)
+        em.run_packet(rh, res, wts, bias, psum, out, scratch)
+        self.assertFalse(out.any(), "a held residual is not emitted")
+        self.assertTrue(np.array_equal(em.bf16_bits(em.held_tile(scratch)),
+                                       em.bf16_bits(em.to_bf16(held + res))))
 
 
 class ModelsAreDistinguishable(unittest.TestCase):
@@ -222,8 +346,8 @@ class ModelsAreDistinguishable(unittest.TestCase):
         b[0::4][:4] = bias                                       # channel 0 of block 0, replicated
         got = {}
         for model in em.MAC_MODELS:
-            out = np.zeros(em.NCO * em.OUT_BLOCK_ELEMS, F32)
-            em.run_packet(header, act, wts, b, np.zeros(em.PSUM_FLOATS, F32), out, mac_model=model)
+            out = np.zeros(em.OUT_ELEMS, F32)
+            run(header, act, wts, b, np.zeros(em.PSUM_FLOATS, F32), out, mac_model=model)
             got[model] = float(out[0])
         return got
 
