@@ -205,6 +205,22 @@ def random_packet(k, stride, ncin, flags, seed):
     return header, act_f, wts_f, bias_f
 
 
+def residual_packet(flags, seed):
+    """An OP_RESIDUAL packet: its A is an output-shaped tile and its weights are never read.
+
+    The core takes the other addend from `scratch`, where an earlier F_HOLD packet left it, so a
+    residual only makes sense as the second half of a pair. Its weights and bias still have to be
+    present because every packet carries a W object, but OP_RESIDUAL never loads them - they are
+    zeros so that a core which wrongly convolved this packet would emit the bias, not noise.
+    """
+    rng = np.random.default_rng(seed)
+    act_f = to_bf16(rng.normal(scale=1.5, size=O_ELEMS).astype(np.float32))
+    wts_f = np.zeros(NCO * 32, np.float32)
+    bias_f = np.zeros(NCO * 16, np.float32)
+    header = make_header(op=em.OP_RESIDUAL, k=1, stride=1, ncin=1, flags=flags)
+    return header, act_f, wts_f, bias_f
+
+
 _designs: dict[tuple[str, int, int], tuple[object, str]] = {}
 
 
@@ -305,6 +321,20 @@ def sweep(seed) -> int:
     first = random_packet(5, 1, 1, 0, seed + 3)
     second = random_packet(5, 1, 1, F_LOAD_PSUM | F_EMIT, seed + 4)
     rc |= check("chain_k5s1_c1+c1", [first, second])
+    # A residual: the first packet activates its tile and HOLDS it in scratch, the second adds its
+    # own A to what it finds there and emits. This pair is the only path that reads the hold buffer
+    # back, so before it existed nothing could tell a working F_HOLD from one writing where no one
+    # looks - and OP_RESIDUAL, declared since milestone 2, had never executed at all.
+    held = random_packet(3, 1, 1, em.F_HOLD | F_RELU, seed + 5)
+    rc |= check("residual_hold_add", [held, residual_packet(F_EMIT, seed + 6)])
+    # The residual activates at its OWN packet's flags, not the held packet's.
+    held = random_packet(3, 1, 2, em.F_HOLD, seed + 7)
+    rc |= check("residual_relu6", [held, residual_packet(F_EMIT | F_RELU | F_RELU6, seed + 8)])
+    # A residual may hold its own result for a second one: scratch is read and written at the same
+    # offset, which is only safe because each iteration loads before it stores.
+    held = random_packet(3, 1, 1, em.F_HOLD, seed + 9)
+    rc |= check("residual_chain", [held, residual_packet(em.F_HOLD, seed + 10),
+                                   residual_packet(F_EMIT | F_RELU, seed + 11)])
     return rc
 
 
