@@ -7038,7 +7038,7 @@ establishes vendor parity — the oracle diff remains that gate — and neither 
   linearly with stream count, decoupled from measured throughput); see the
   [GOPS section](#two-cameras-does-independent-concurrency-work-where-batching-doesnt) above and
   [Roadmap](../RESEARCH.md#roadmap).
-- **YOLOv8s on the graph engine is slower than AMD's stack, and no runtime lever is left to close it.** 17.240
+- **YOLOv8s on the graph engine is slower than AMD's stack, and no runtime lever is left to close it.** *(Superseded 2026-09-22: still true of every TRANSPORT lever, and no longer true of the frame - a core addressing change puts YOLOv8s ahead of AMD by 0.094 ms in a same-sitting A/B, [below](#the-ptr-loop-pattern-lands-in-the-int8-engine-and-yolov8s-overtakes-amds-stack-2026-09-22-desktop-2).)* 17.240
   and 17.265 ms against 16.954 and 16.958 ms, lost inside the NPU stage. Holding activations or weights in the
   MemTile, routing around the MemTile, trimming packets, packing fill tasks, hardware compression and cascade halo
   exchange were each built, measured or sized, and none survived
@@ -10878,7 +10878,7 @@ unsound as the win it replaced. Closing this needs one sitting that runs both st
 ## The dispatch floor separated from compute, and the activation packet priced against it (2026-09-20, Desktop 2)
 
 The YOLOv8s gap to AMD was accepted as a known runtime limitation on 2026-09-16 with every
-transport lever closed. Three logs reopen the one question that closure left unanswered: what the
+transport lever closed. *(Superseded 2026-09-22: the gap is closed, by a lever that is not a transport one - see [the ptr port](#the-ptr-loop-pattern-lands-in-the-int8-engine-and-yolov8s-overtakes-amds-stack-2026-09-22-desktop-2). What follows stands as written.)* Three logs reopen the one question that closure left unanswered: what the
 dispatch floor is made of, and whether the 6,400 B activation packet can be resized to move it.
 
 ### The floor is seven tenths of a dispatch, and barely moves with scale
@@ -11899,3 +11899,79 @@ one that matters - it currently loses to AMD by 0.29 ms, which is an accepted kn
 
 Backing log: [`engine_int8_loop_variants_census_desktop2_20260921.log`](../results/aie/engine_int8_loop_variants_census_desktop2_20260921.log),
 `--checks-only`, no device. Tool: `tools/engine_int8_loop_variants.py`.
+
+## The `ptr` loop pattern lands in the int8 engine, and YOLOv8s overtakes AMD's stack (2026-09-22, Desktop 2)
+
+`kernels/aie2/conv_engine/engine.cc` now walks running pointers in both loops over input-channel
+blocks instead of rebuilding `a + c * d.plane_bytes + aoff` each iteration. Arithmetic-neutral -
+same addresses, same order, same multiply-accumulates - so the change is byte-exact by
+construction, and measured byte-exact on two whole models below. It came from the bf16 sitting,
+which found the pattern and could not justify porting it until bf16 gave a measured win; the
+[static reading](#the-ptr-loop-pattern-makes-the-int8-engines-object-smaller-not-bigger-and-takes-a-fifth-off-its-hot-loop-2026-09-21-desktop-2)
+then priced it on int8 at 23 to 18 bundles per 8 MACs and **-96 B** of object.
+
+**Which kernel ran, checked not assumed.** Every arm was built in its own process into a freshly
+deleted directory, and the linked object read back per arm rather than taken from the manifest's
+`kernel_sha256`, which records only the source a build meant to use. Control links a 15,280 B
+object, test a 15,184 B one, in all four containers. That check is not ceremony: the YOLOv8s test
+arm's object is *named* `engine.o`, identical to the control's, and only its size distinguishes
+it.
+
+**Correctness.** Workspace reuse off, so every tensor owns a slot and every layer is readable
+after one dispatch - the gate `verify_engine_container.py` documents for checking a whole
+lowering:
+
+| model | layers exact | verdict |
+|---|---:|---|
+| YOLOv8n | 66/66 | PASS |
+| YOLOv8s | 66/66 | PASS |
+
+**Latency.** `tools/bench_layout_ab.py`: AMD, Ignition control, Ignition test in that order, twice,
+500 timed frames after 50 warm-up on `bus.jpg`, `xrt-smi` reporting no hardware contexts before
+every run. Glass-to-glass, not dispatch. Both rounds are shown because a single round proves
+nothing about drift on this machine.
+
+| model | arm | round 1 | round 2 | mean |
+|---|---|---:|---:|---:|
+| YOLOv8n | AMD | 10.482 | 10.492 | 10.487 |
+| YOLOv8n | control | 8.086 | 8.047 | 8.067 |
+| YOLOv8n | **`ptr`** | 7.822 | 7.859 | **7.841** |
+| YOLOv8s | AMD | 16.981 | 16.916 | 16.949 |
+| YOLOv8s | control | 17.607 | 17.646 | 17.627 |
+| YOLOv8s | **`ptr`** | 16.826 | 16.883 | **16.855** |
+
+YOLOv8n -0.226 ms, **-2.8%**; YOLOv8s -0.772 ms, **-4.4%**. On the dispatch stage alone, 7.212 to
+6.964 ms and 16.683 to 15.910 ms. Every control round is slower than every test round on both
+models, and AMD's two arms agree to 0.010 and 0.065 ms, so the sitting was quiet.
+
+**What it does to the AMD standing.** In this sitting the committed kernel loses YOLOv8s to AMD by
+0.678 ms and `ptr` **wins it by 0.094 ms**, with the test arm's slower round (16.883) still below
+AMD's faster one (16.916). That reopens a question closed on 2026-09-16, when the gap was accepted
+as a known runtime limitation after every transport lever had been built and measured. The closure
+was correct about what it surveyed and wrong in its scope: the levers it exhausted were all
+*transport*, and this one is in the core's addressing.
+
+**Read the margin honestly.** 0.094 ms is 0.55%, and the thinner round is 0.033 ms. The ranges do
+not overlap and both rounds agree, which is why it is reported as a win rather than as noise, but
+it is one sitting on one image, and a second sitting is what would turn it into a standing claim.
+The YOLOv8n margin over AMD is not close and needs no such care: 1.34x against the control's 1.30x.
+
+Do not pair the control's 17.627 ms with the 17.240 ms recorded on 2026-09-16. Different sitting
+and a different harness; the arms here are comparable to each other and to nothing else.
+
+**Why a 21.7% loop saving arrives as 4.4%.** A 66-layer frame is dominated by transport, so the
+convolution loop is a fraction of it, and the fraction is what the frame sees. An earlier reading
+of this same change over 20 dispatches in separate processes showed -1.0% with overlapping ranges,
+which is the instrument being too coarse rather than a different result - the reason the gate asks
+for 500 interleaved frames.
+
+**Not established.** Energy. Accuracy is untouched by construction and was not re-scored. The
+`chunk` pattern remains unported: it is the bigger bf16 win (-17.7%) and costs +2,672 B, which does
+not fit the 320 B this change leaves free without first compiling out the 5,456 B of dispatch
+groups no model reaches.
+
+Backing logs: [`ptr_ab_yolov8n_phoenix_20260922T0315Z.log`](../results/aie/ptr_ab_yolov8n_phoenix_20260922T0315Z.log),
+[`ptr_ab_yolov8s_phoenix_20260922T0317Z.log`](../results/aie/ptr_ab_yolov8s_phoenix_20260922T0317Z.log),
+[`engine_int8_ptr_verify_yolov8n_npu_20260921.log`](../results/aie/engine_int8_ptr_verify_yolov8n_npu_20260921.log),
+[`engine_int8_base_verify_yolov8n_npu_20260921.log`](../results/aie/engine_int8_base_verify_yolov8n_npu_20260921.log),
+[`engine_int8_ptr_verify_yolov8s_npu_20260922.log`](../results/aie/engine_int8_ptr_verify_yolov8s_npu_20260922.log).

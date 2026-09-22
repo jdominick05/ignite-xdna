@@ -1,0 +1,80 @@
+# Interleaved same-sitting A/B: an activation layout, its control, and AMD's stack
+# Host DESKTOP-CBL5NUA (Desktop 2, Ryzen 7 8700G, XDNA1 Phoenix), balanced default mode
+# 50 warm-up + 500 timed frames per run, 2 rounds
+# Note: int8 ptr loop pattern, hot loop 23->18 bundles per 8 MACs, object 15280->15184 B
+# control  <ignite-xdna worktree>\build\ptr_gate\ab_yolov8n_ctl.ignite
+# test     <ignite-xdna worktree>\build\ptr_gate\ab_yolov8n_ptr.ignite
+# Start 2026-09-22T03:15:35Z
+[xrt-smi before start] No hardware contexts running on device
+[cpu] CPU 6.0 % over 3 s
+
+[xrt-smi before amd #1] No hardware contexts running on device
+
+== 2026-09-22T03:15:39Z [amd yolov8n #1]
+[run] frame 100 | G2G 10.08 ms | 5 objects
+[run] frame 200 | G2G 10.21 ms | 5 objects
+[run] frame 300 | G2G 11.65 ms | 5 objects
+[run] frame 400 | G2G 10.35 ms | 5 objects
+[run] frame 500 | G2G 10.16 ms | 5 objects
+[amd] G2G mean 10.482 ms | P50 10.432 | P95 11.185 | P99 11.793 | max 12.495 | over 500 timed frames after 50 warm-up
+[amd] stage means (ms): letterbox 1.765 | session.run 6.784 | decode+NMS 1.932
+== [amd yolov8n #1] exit 0
+[xrt-smi before ignition control #1] No hardware contexts running on device
+
+== 2026-09-22T03:15:59Z [ignition control yolov8n #1]
+[summary] stop: frame limit | 550 frames processed (50 warm-up, 500 timed) | 1 distinct source frames | image bus.jpg 810x1080
+[summary] NPU power mode: default kept: the balanced power mode leaves the NPU's mode alone
+[summary] G2G mean 8.086 ms | P50 8.054 | P95 8.540 | P99 8.783 | max 9.162 | over the last 500 timed frames; cold first frame 10.33 ms
+[summary] stage means (ms): preprocess 0.312 | NPU forward 7.613 (dispatch 7.224, readback 0.389) | decode+NMS 0.154
+[summary] boxes from NPU heads on 500/500 timed frames | 5.00 detections per frame
+[summary] RSS 185.6 MB at the first timed frame, 185.6 MB at the end (+0.00 MB over 500 frames)
+[summary] wrote <scratch>\ign_control_1.json
+== [ignition control yolov8n #1] exit 0
+[xrt-smi before ignition test #1] No hardware contexts running on device
+
+== 2026-09-22T03:16:07Z [ignition test yolov8n #1]
+[summary] stop: frame limit | 550 frames processed (50 warm-up, 500 timed) | 1 distinct source frames | image bus.jpg 810x1080
+[summary] NPU power mode: default kept: the balanced power mode leaves the NPU's mode alone
+[summary] G2G mean 7.822 ms | P50 7.800 | P95 8.256 | P99 8.651 | max 9.072 | over the last 500 timed frames; cold first frame 10.52 ms
+[summary] stage means (ms): preprocess 0.317 | NPU forward 7.344 (dispatch 6.938, readback 0.406) | decode+NMS 0.154
+[summary] boxes from NPU heads on 500/500 timed frames | 5.00 detections per frame
+[summary] RSS 184.7 MB at the first timed frame, 184.7 MB at the end (+0.00 MB over 500 frames)
+[summary] wrote <scratch>\ign_test_1.json
+== [ignition test yolov8n #1] exit 0
+
+[xrt-smi before amd #2] No hardware contexts running on device
+
+== 2026-09-22T03:16:14Z [amd yolov8n #2]
+[run] frame 100 | G2G 10.31 ms | 5 objects
+[run] frame 200 | G2G 11.67 ms | 5 objects
+[run] frame 300 | G2G 10.31 ms | 5 objects
+[run] frame 400 | G2G 10.52 ms | 5 objects
+[run] frame 500 | G2G 10.27 ms | 5 objects
+[amd] G2G mean 10.492 ms | P50 10.444 | P95 11.270 | P99 11.669 | max 12.328 | over 500 timed frames after 50 warm-up
+[amd] stage means (ms): letterbox 1.743 | session.run 6.816 | decode+NMS 1.933
+== [amd yolov8n #2] exit 0
+[xrt-smi before ignition control #2] No hardware contexts running on device
+
+== 2026-09-22T03:16:22Z [ignition control yolov8n #2]
+[summary] stop: frame limit | 550 frames processed (50 warm-up, 500 timed) | 1 distinct source frames | image bus.jpg 810x1080
+[summary] NPU power mode: default kept: the balanced power mode leaves the NPU's mode alone
+[summary] G2G mean 8.047 ms | P50 7.977 | P95 8.547 | P99 8.763 | max 9.010 | over the last 500 timed frames; cold first frame 10.69 ms
+[summary] stage means (ms): preprocess 0.311 | NPU forward 7.575 (dispatch 7.199, readback 0.376) | decode+NMS 0.153
+[summary] boxes from NPU heads on 500/500 timed frames | 5.00 detections per frame
+[summary] RSS 184.5 MB at the first timed frame, 184.5 MB at the end (+0.00 MB over 500 frames)
+[summary] wrote <scratch>\ign_control_2.json
+== [ignition control yolov8n #2] exit 0
+[xrt-smi before ignition test #2] No hardware contexts running on device
+
+== 2026-09-22T03:16:29Z [ignition test yolov8n #2]
+[summary] stop: frame limit | 550 frames processed (50 warm-up, 500 timed) | 1 distinct source frames | image bus.jpg 810x1080
+[summary] NPU power mode: default kept: the balanced power mode leaves the NPU's mode alone
+[summary] G2G mean 7.859 ms | P50 7.820 | P95 8.315 | P99 8.435 | max 8.839 | over the last 500 timed frames; cold first frame 10.29 ms
+[summary] stage means (ms): preprocess 0.310 | NPU forward 7.386 (dispatch 6.989, readback 0.397) | decode+NMS 0.155
+[summary] boxes from NPU heads on 500/500 timed frames | 5.00 detections per frame
+[summary] RSS 185.1 MB at the first timed frame, 185.1 MB at the end (+0.00 MB over 500 frames)
+[summary] wrote <scratch>\ign_test_2.json
+== [ignition test yolov8n #2] exit 0
+
+[xrt-smi after] No hardware contexts running on device
+[cpu] CPU 1.7 % over 3 s
