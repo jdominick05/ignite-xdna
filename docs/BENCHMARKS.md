@@ -12074,3 +12074,96 @@ the trace unit, not for another kernel variant.
 
 Backing logs: [`ptr_ab_yolov8x_split_phoenix_20260922T0340Z.log`](../results/aie/ptr_ab_yolov8x_split_phoenix_20260922T0340Z.log)
 and its wrapper [`engine_int8_ptr_ab_yolov8x_split_npu_20260922.log`](../results/aie/engine_int8_ptr_ab_yolov8x_split_npu_20260922.log).
+
+## What a whole frame is bound by: the instruction stream, not the bytes and not the loop (DERIVED, 2026-09-22)
+
+**Everything in this section is derived**, composed from constants already measured on this
+machine and counts read out of built containers. No new measurement was taken. The standing
+reminder that a derived cost is not a latency prediction is this repo's own MemTile activation
+ring, which cut DDR traffic 38.3% and ran 20% slower - and which this model explains, below.
+
+The question is where a YOLOv8x frame's 115 ms goes. The `ptr` port already ruled out the obvious
+answer: a 21.7% cut in hot-loop bundles moved the frame 6%, so the convolution loop is not the
+binding term.
+
+### Two candidates, and only one has a flat price
+
+| | unit of cost | fitted parameters |
+|---|---|---|
+| A | the activation packet, at 145 ns op + 6,400 B at 26.8 GB/s = **383.8 ns** | none |
+| B | the instruction stream, at **k** ns per byte | one, `k`, reported rather than assumed |
+
+The discriminator is not which fits better - B has a free parameter and A does not - but whether
+the per-unit price is **flat across models**. A term that is really the cost has a constant price;
+one that merely correlates does not.
+
+| model | activation packets | instruction bytes | dispatch | A explains | ns per instruction byte |
+|---|---:|---:|---:|---:|---:|
+| YOLOv8n | 12,980 | 419,476 | 6.964 ms | 75.1% | **16.01** |
+| YOLOv8s | 37,136 | 969,812 | 15.840 ms | 91.6% | **16.08** |
+| YOLOv8x | 279,752 | 7,605,540 | 114.989 ms | 93.6% | **15.09** |
+
+`k` varies by **1.066x across a 16.5x range of frame time**. At 145 ns per op that is 9.06, 9.02
+and 9.61 bytes per op - an independent confirmation of the op cost, arrived at from whole frames
+rather than from appending BD writes to one.
+
+This is the same conclusion [the dispatch anatomy](#whole-network-yolov8n-on-a-16-core-convolution-engine-every-layer-on-the-npu-bit-exact-2026-09-13-desktop-2) reached from the other
+direction on a single model: appending harmless BD writes cost 145 ns per op, a transport probe
+moved 78.7 MB in 2.94 ms *whether as 52 or 772 tasks*, and "the per-round schedule was paying for
+ops and for columns waiting on each other, not for bytes". That held for one frame; it now holds
+across the family.
+
+Model A is not wrong so much as **downstream**: more activation packets means more BD writes means
+a longer instruction stream. Its residual grows at YOLOv8n (75%) because the 0.25 ms fixed cost is
+a larger share of a small frame.
+
+### Why the frame grows 16.5x, in one chain
+
+| link | YOLOv8n | YOLOv8x | growth |
+|---|---:|---:|---:|
+| activation re-fetch (lower bound) | 5.6x | 31.6x | 5.6x |
+| activation packets | 12,980 | 279,752 | 21.6x |
+| instruction stream bytes | 419,476 | 7,605,540 | 18.1x |
+| dispatch | 6.964 ms | 114.989 ms | **16.5x** |
+
+The engine re-fetches an activation tile once per output-block group, so a layer with four times
+the output channels reads its input four times more often. That is why re-fetch grows
+superlinearly with width, and it is what makes YOLOv8x's instruction stream 7.6 MB.
+
+**The re-fetch figures are a lower bound.** They divide activation bytes moved by
+`workspace_bytes`, which is peak allocation under reuse rather than the sum of tensor bytes, so
+the true factor is higher.
+
+### What it explains, and what it says to do
+
+**The activation ring.** It kept activation bytes in the MemTile and still issued a packet
+operation per packet, plus its own credit and lock protocol. Under this model it traded away the
+term that is not the cost and added to the term that is, so it should have lost - and it lost by
+20% on YOLOv8s. That reconciliation is the strongest evidence here, because the ring was built
+before this model existed and its result was not available to fit.
+
+**Every other transport lever.** Routing around the MemTile, compression, packing fill tasks, the
+resident weight buffer - all aimed at bytes. Bytes are 239 ns of a 384 ns packet at best, and the
+measured price is per instruction byte, not per moved byte.
+
+**The lever that is left is fewer packets, not faster ones**, which is a scheduler and tiling
+question rather than a kernel one: anything that lowers the re-fetch factor shortens the
+instruction stream proportionally. That is the opposite end of the stack from where the last year
+of engine optimisation has been spent.
+
+### What this does not establish
+
+It does not distinguish *the core is stalled waiting for a packet* from *the shim is the critical
+path and the core is irrelevant*. Both produce a frame linear in instruction bytes. Separating
+them is the trace unit's job, and the model now gives it a falsifiable prediction to test -
+`LOCK_STALL` should dominate a core's cycles and scale with packet count - rather than an open
+question. Tracing a whole YOLOv8x frame is not feasible (about 209 million cycles against the
+65,536-byte buffer that captured ~37,000), so that has to be a bounded window.
+
+`k` is also not perfectly flat: YOLOv8x is 6% cheaper per instruction byte than YOLOv8n and
+YOLOv8s, which the model does not account for and which may be the three-segment split amortising
+something. Nothing here measures AMD's stack, which does not use this scheme at all; the
+comparison remains architecture against architecture.
+
+Backing log: [`engine_dispatch_cost_model_desktop2_20260922.log`](../results/aie/engine_dispatch_cost_model_desktop2_20260922.log),
+`--checks-only`, no device. Tool: `tools/engine_dispatch_cost_model.py`.
