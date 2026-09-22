@@ -12651,6 +12651,11 @@ ONNX graph to bf16 - `dense_regions.py` still cuts regions at `QuantizeLinear` o
 model collapses to one host region, which is task #139. The packer seam is still owed, and its
 inertness gate with it.
 
-**One seed, one shape set.** Seven scenarios, not a sweep. `OP_NOP` is not exercised here, and no
-scenario deliberately mis-counts an emitting packet into `count_acc` - the failure the aliasing
-contract exists to forbid is argued, not tested.
+**One seed, one shape set.** Seven scenarios, not a sweep, and `OP_NOP` is not exercised here.
+
+The `count_acc` contract is no longer only argued: the harness refuses to build a plan that counts
+an emitting packet into the accumulate-only loop, or a silent one into `count_out`. It is a guard
+rather than a measurement, and deliberately does not depend on the emulator - byte-exactness would
+not reliably catch the first case, because a reference that modelled the aliasing faithfully would
+reproduce the corruption, which is exactly how `OP_RESIDUAL` failed open on both sides at once
+before `935446e`.
