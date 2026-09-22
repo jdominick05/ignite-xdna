@@ -12572,5 +12572,85 @@ Sixteen-core byte-exactness against the emulator is therefore still owed, and it
 schedule's packer before it can be attempted. The only bf16 silicon evidence that exists remains
 the single-core contract sweep: 13 cases, 1,600 of 1,600 bytes each.
 
+> **Both halves of that last paragraph were superseded the same day.** Sixteen-core byte-exactness
+> is established - see [the next section](#sixteen-cores-run-bf16-byte-exactly-on-silicon-2026-09-22-desktop-2) -
+> and it did **not** need the packer: the synthetic path that proved the int8 design on hardware
+> never imports `engine_schedule` at all. The sentence is left standing as a record of a planning
+> assumption that reading the code refuted.
+
 No latency is claimed or implied. The engine is 35.6% above the fixed-shape kernel at k1 and the
 `chunk` loop is 7.7% faster than milestone 1 at k3; neither figure moves on a placement.
+
+## Sixteen cores run bf16 byte-exactly on silicon (2026-09-22, Desktop 2)
+
+Backing log: [results/aie/engine_bf16_16core_npu_20260922.log](../results/aie/engine_bf16_16core_npu_20260922.log).
+checks-only, `timing_eligible` false, device idle witnessed before and after.
+
+Every bf16 silicon result before this one was one core of sixteen. This is the whole engine.
+
+### The result
+
+Four columns, three iterations, **76,800 of 76,800 bytes equal every time** - 921,600 bytes
+compared, all exact. Seven scenarios, six output objects per column, one instruction stream of
+25,664 B. Exit 0.
+
+| scenario | bytes per column | what it is there to break |
+|---|---:|---|
+| `k3s1_relu` | 25,600 | two tiles from one weight packet |
+| `k1s1_c8` | 12,800 | fills the 12,800 B activation packet exactly |
+| `k1_chunk0` + `k1_chunk1` | 12,800 | accumulate with **no** output object, then emit loading psum back |
+| `k1_hold` + `residual_relu6` | 12,800 | a held tile crossing two weight packets, read back by a residual |
+| `k3s2` | 12,800 | the stride-2 load path, which unzips eight pixels to keep four |
+
+`k1_chunk0` and `k1_hold` emit nothing, so they contribute no output bytes of their own; what they
+prove is read out of the packet that follows them.
+
+### What it establishes that the placement build could not
+
+The 16-core placement build emitted no dispatch at all - `insts.bin` was 16 B. Everything below was
+unproven on hardware until this run:
+
+- **Split and join offsets are counted in elements, not bytes.** Four 12,800 B activation windows
+  and four 3,200 B output objects per column land where intended. Byte offsets would have put
+  cores 2 and 3 outside the column buffer; that had only ever been checked by reading the MLIR.
+- **`count_out` and `count_acc`, which the core reads from header words 5 and 6.** The chunk pair
+  runs both loops of `_core_fn` and carries `psum` between two weight packets. The second loop had
+  never executed.
+- **The MemTile join** reassembling four cores' bf16 tiles, and sixteen cores advancing in lockstep.
+- **The `scratch` aliasing contract.** `_core_fn` passes `scratch` as both the output and the
+  scratch pointer in the accumulate-only loop, because a second 3,200 B buffer does not fit in the
+  512 B that is left. `k1_hold` runs there and `residual_relu6` reads the tile back; if the
+  aliasing were wrong, that pair returns garbage.
+
+### It did not need the schedule, and the plan said it would
+
+The plan recorded this step as blocked on parameterising the packer. Reading the code refuted that:
+`tests/test_conv_engine.py` proved the int8 design on hardware through a synthetic path that never
+imports `engine_schedule`. `SequenceEmitter` works in byte offsets over the two DDR buffers and in
+fifo symbol names, and packing goes through the emulator that owns the geometry - so the bf16
+harness is a fork of that test, not a refactor.
+
+Two unit conventions meet in this design, and only int8 cannot tell them apart: the DDR side is
+**bytes** (`DmaPattern` documents it, and the workspace argument is `uint8`), while the MemTile
+split and join offsets are **elements** of the fifo's own type.
+
+### Gates passed
+
+- Linked `engine_bf16.o` sha256 `67d1050f...` - the same object as the single-core builds behind the
+  13-case sweep and as the placement build, so all three results describe one kernel.
+- Device released with no hardware contexts.
+
+### Not established
+
+**No latency.** `timing_eligible` is false. The per-dispatch milliseconds in the log are wall clock
+around a correctness run with three iterations and no warm-up, and must not be paired with any
+other figure.
+
+**No model, and no schedule.** These packets are synthetic and hand-built. Nothing here lowers an
+ONNX graph to bf16 - `dense_regions.py` still cuts regions at `QuantizeLinear` outputs, so a bf16
+model collapses to one host region, which is task #139. The packer seam is still owed, and its
+inertness gate with it.
+
+**One seed, one shape set.** Seven scenarios, not a sweep. `OP_NOP` is not exercised here, and no
+scenario deliberately mis-counts an emitting packet into `count_acc` - the failure the aliasing
+contract exists to forbid is argued, not tested.
