@@ -11786,3 +11786,67 @@ The [static readings](#static-readings-of-both-engine-cores-a-wider-census-what-
 The bank-aware allocator places buffers largest first, rotating through the banks and falling forward to the next bank that fits. With `psum` filling one bank and the two 9,472 B weight buffers taking two more, the second 6,400 B activation buffer always falls into a weight bank; and when a pin makes that impossible, the allocator does not try the bank that has room (bank 2 held 6,400 B beside the first activation buffer) - it fails. A placement with no collision exists on paper (weights in banks 0 and 1 with an output buffer each, both activation buffers and the scratch in bank 2, `psum` in bank 3: 14,720 / 12,672 / 16,000 / 16,000 B), but reaching it means giving every ObjectFifo buffer an explicit address, which IRON's ObjectFifo lowering does not expose. That is a design rewrite to raw buffers and locks, not a flag.
 
 - **Not measured:** what the collision costs. The prediction from the [same-bank paired-load rule](#two-loads-in-one-bank-cost-a-cycle-and-the-int8-gemm-has-that-collision-where-bf16-does-not) is 23 to 27 cycles per iteration when those two buffers meet, a quarter of packets; the section above is the standing warning that a static prediction about this engine's hot loop may reach the wall clock as nothing.
+
+## The core's aligned accumulate is invisible after a bf16 store, and the CPU bf16 score survives it (2026-09-21, Desktop 2)
+
+The bf16 accuracy for MODNet-Cut - **0.5029** person IoU against FP32's 0.5030, 99.97% - was taken
+on the CPU, by rounding the model's convolution arithmetic to bf16 with `tools/onnx_bf16_cast.py`.
+That tool justified leaving the accumulation in float32 by asserting the core's accumulator is
+fp32, and [the accumulate probe](#bf16-convolution-on-one-core-the-multiply-accumulate-is-an-aligned-add-every-path-the-engine-core-has-is-byte-exact-and-header-parameterisation-costs-128-2026-09-21-desktop-2)
+measured that it is not. One `mmul<4,8,4>::mac` aligns its nine operands to the largest exponent
+among them and rounds each separately to a 24-bit grid. That is not IEEE addition, so on the day
+the probe landed the 0.5029 stopped being a prediction of silicon and became an upper bound on it.
+Nothing downstream of it - the case for building a bf16 engine at all - was safe until the gap was
+measured, so it was, offline, before any more of the engine was built.
+
+Asked against the emulator's own `mac()`, so it tests the measured model rather than a paraphrase,
+with an fp64 reference sharing no code with either. Relative error is the median over every lane;
+"stored lanes differ" is the fraction disagreeing **after** the bf16 store, which is the only
+difference a next layer can see. Tap count is `k*k*ncin`, one multiply-accumulate per tap.
+
+| layer | taps | aligned, rel. err | exact sum, rel. err | stored lanes differ |
+|---|---:|---:|---:|---:|
+| k1 over 32 channels | 4 | 0.0 | 0.0 | 0 |
+| k1 over 64 channels | 8 | 2.30e-08 | 2.41e-08 | 0 |
+| k3 over 8 channels | 9 | 3.40e-08 | 2.80e-08 | 0 |
+| k3 over 32 channels | 36 | 7.61e-08 | 7.31e-08 | 0 |
+| k3 over 64 channels | 72 | 1.08e-07 | 9.05e-08 | 0 |
+| k3 over 128 channels | 144 | 2.17e-07 | 1.61e-07 | 0 |
+| k3 over 64, post-ReLU | 72 | 1.47e-07 | 1.09e-07 | 0 |
+| k3 over 128, post-ReLU | 144 | 1.94e-07 | 1.78e-07 | 0 |
+
+The aligned model is not merely close to an exact sum, it is the same size of wrong: at 144 taps
+2.17e-07 against 1.61e-07, both of them the ordinary drift of accumulating 144 rounded products.
+The post-ReLU rows are there because non-negative activations make errors accumulate rather than
+cancel, which is the worse case and is not worse.
+
+**Why, and where it stops.** The grid keeps 24 bits below an instruction's largest operand; a bf16
+store keeps 8. The difference therefore sits 16 bits beneath anything a stored activation carries
+into the next layer. That argument fails in exactly one regime - a small difference of large terms,
+which this repo has met in the mild form in YOLO-World's four C2fAttn cv2 convs - so the boundary
+was bracketed rather than asserted. Driving the accumulator to `M`, cancelling it inside one
+instruction and leaving `r`:
+
+| cancellation ratio M/r | aligned stores | exact sum stores |
+|---|---:|---:|
+| 2^4 through 2^22 | the exact value, every step | the exact value |
+| 2^24 | 0 | 6.10e-05 |
+| 2^26, 2^28 | 0 | the exact value |
+
+The boundary is **2^24 within a single multiply-accumulate**, not the 2^16 predicted from the
+store's width - the store is never the binding constraint, because the question is only whether
+the result clears the grid's quantum of `largest operand * 2^-24`. A convolution would need
+16.7 million-fold cancellation inside one instruction to notice, and nothing in MODNet-Cut or
+SESR-M7 comes within orders of magnitude of that.
+
+**What this settles.** The CPU bf16 score is a prediction of silicon and not just a bound on it,
+for any layer that does not cancel by 2^24 in one instruction. `tools/onnx_bf16_cast.py`'s
+docstring is corrected: its float32 accumulation is right, and the reason it gave for it was not.
+**What it does not settle:** this is synthetic data, Gaussian activations and weights, not
+MODNet-Cut's own tensors - the margin is 16 bits, which is why that is tolerable rather than
+sloppy, but a model whose layers cancel hard needs `--cancel` re-run against its own numbers. The
+sign the core gives an exactly zero sum, and what its `max` makes of -0.0 and NaN, remain
+unmeasured. No device was opened and there is no timing claim.
+
+Backing log: [`bf16_accum_fidelity_desktop2_20260921.log`](../results/aie/bf16_accum_fidelity_desktop2_20260921.log),
+`--checks-only`, offline. Tool: `tools/bf16_accum_fidelity.py`.

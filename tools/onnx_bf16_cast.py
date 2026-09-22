@@ -13,14 +13,31 @@ reproduces exactly that, and nothing else:
     memory already rounded;
   * each convolution's activation input and its output get a Cast(BFLOAT16) -> Cast(FLOAT) pair,
     which is the store-and-reload rounding the core performs;
-  * the accumulation between them stays float32, because the core's accumulator is fp32.
+  * the accumulation between them stays float32.
 
 It does NOT model the halo, the packet geometry or the tile shape - those change no arithmetic.
 
-CAVEAT worth keeping attached to any number this produces: ONNX Runtime's Conv still accumulates in
-float32 from float32 inputs that happen to hold bf16-representable values, whereas the core's mmul
-accumulates in fp32 from bf16 operands. Those agree for the products but not necessarily for the
-summation order, so this is a faithful model of PRECISION, not a bit-exact model of the kernel.
+WHAT THE ACCUMULATOR ACTUALLY DOES, and why this is still a fair model. This file used to justify
+the float32 accumulation by saying the core's accumulator is fp32. It is not: the accumulate probe
+measured `mmul<4,8,4>::mac` aligning its nine operands to the largest exponent among them and
+rounding each separately to a 24-bit grid, ties to even, which is not IEEE addition
+(results/aie/engine_bf16_mac_model_probe_npu_20260921.log). That made every number this tool
+produces an upper bound on silicon rather than a prediction of it, until the gap was measured.
+It was, offline, against the emulator's own `mac()`: over the tap counts real layers have - up to
+144, k3 over 128 channels, and the post-ReLU case where errors accumulate instead of cancelling -
+the aligned model tracks an exact sum to 2e-7 relative, and NO lane differs after the bf16 store
+(`tools/bf16_accum_fidelity.py`, results/aie/bf16_accum_fidelity_desktop2_20260921.log). The
+reason is margin: the grid keeps 24 bits below an instruction's largest operand and a bf16 store
+keeps 8, so the difference sits 16 bits under what a stored activation can carry into the next
+layer. The boundary is a cancellation ratio of 2**24 within ONE instruction - measured, not
+assumed, and the same log brackets it. Below that the two are indistinguishable; above it the core
+returns zero where an exact sum keeps the value.
+
+So the remaining CAVEAT is narrower than the old one: this is a faithful model of PRECISION for any
+layer that does not cancel by more than 2**24 inside a single multiply-accumulate, and a bit-exact
+model of the kernel for nothing. A model with that much cancellation - this repo has met the
+milder form in YOLO-World's four C2fAttn cv2 convs - must be re-checked with `--cancel` before its
+CPU score is quoted as a silicon prediction.
 
 Usage:
 
