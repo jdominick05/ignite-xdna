@@ -1,0 +1,171 @@
+RESEARCH_PLATFORM {"machine": "Desktop 2", "cpu": "AMD Ryzen 7 8700G w/ Radeon 780M Graphics", "os": "Windows-11-10.0.26200-SP0", "ram_bytes": 33381138432, "source_sha256": {"tools/research_process.py": "ffeb1857f190b482eed101b5f5a928f455de26bfa61d23f78a2eacec08e2663e", "tools/quant_calib_alphabet.py": "2dc0b2878c564853f340880209a425dfcf63b8536b2b8e9fd32344daade58d37", "tools/xint8_arithmetic_probe.py": "6aa3df08b9870c3c2264b868459d7ffbac3070dddc1349d7c6f3f480075f7041", "scripts/research-lowlevel.sh": "3455ad7933697936487712665505c216891865c6deada647302785f6e37020bd", "scripts/research-iron.sh": "4c863a262646ddab39b5005006ba8e03809895e6386c6310e2fd9d0a9e9609ee", "kernels/memory_placement/probe.py": "e8d990169ad6091fa1b53852e9f61eff495b5def72d35165a5c5cf1759e38898", "kernels/memory_placement/memory_kernels.cc": "182e7af7071a1e851afb4a7ca266069c489aea1fbaaa85eca129708daeba5ba6", "scripts/research-matrix.sh": "739254171629deae822b0ad7dabc875aee19ace56dde77d3e8aab61663f97516", "kernels/memory_placement/gemm.py": "17c905ad66110d3346bbf0db898dfc6b780df59fae1dfb0c1747057ce1e5844e", "kernels/memory_placement/gemm_placement.cc": "f21acf7250b12914ea30cc1f77613239dfa18421a85a1b9a5199017dd916278a", "tools/research_summary.py": "0c00dcceef07053d06731b41a1f1ed58d3ba4ea09f82497de354ce9cef17da20", "tools/research_toolchain.py": "f0a126a24ae213acfaa43460cfd9def0c86d9cb70cfee0228aa271688467b314"}, "commit": "3249289433230ae988f8be810c5fe8ab00e6abf6", "command": ["bash", "scripts/research-iron.sh", "tools/engine_bf16_build.py"], "seconds_limit": 1800.0, "rss_gib_limit": 8, "checks_only": true, "free_ram_bytes": 18403848192}
+BUILD bf16 16-core design -> scratch\bf16_build  w_depth=2
+HOST_TIMELINE {"elapsed_seconds": 3.859, "tree_rss_bytes": 134406144, "foreign_peers": []}
+BUILD ok in 4.5 s
+  xclbin        engine_bf16.xclbin  sha256 7b446de9c2de518c
+  insts.bin     16 B
+  kernel source sha256 183f81843b866427
+  kernel object sha256 67d1050f6809f390  12480 B
+  predicted per-core sum 62592 B
+PLACEMENT core=0_2
+    2048- 14847   12800 B  bank 0     a0_0_cons_buff_0
+   16384- 29183   12800 B  bank 1     a0_0_cons_buff_1
+   29184- 32383    3200 B  bank 1     o0_0_buff_1
+   32768- 42239    9472 B  bank 2     w0_0_cons_buff_0
+   42240- 48639    6400 B  bank 2     psum_0_0
+   49152- 58623    9472 B  bank 3     w0_0_cons_buff_1
+   58624- 61823    3200 B  bank 3     o0_0_buff_0
+   61824- 65023    3200 B  bank 3     scratch_0_0
+EXTENT 65024 B placed of 65536 B (buffers 60544 B, stack 2048 B, holes 2432 B, 512 B free)
+PLACEMENT core=0_3
+    2048- 14847   12800 B  bank 0     a0_1_cons_buff_0
+   16384- 29183   12800 B  bank 1     a0_1_cons_buff_1
+   29184- 32383    3200 B  bank 1     o0_1_buff_1
+   32768- 42239    9472 B  bank 2     w0_1_cons_buff_0
+   42240- 48639    6400 B  bank 2     psum_0_1
+   49152- 58623    9472 B  bank 3     w0_1_cons_buff_1
+   58624- 61823    3200 B  bank 3     o0_1_buff_0
+   61824- 65023    3200 B  bank 3     scratch_0_1
+EXTENT 65024 B placed of 65536 B (buffers 60544 B, stack 2048 B, holes 2432 B, 512 B free)
+PLACEMENT core=0_4
+    2048- 14847   12800 B  bank 0     a0_2_cons_buff_0
+   16384- 29183   12800 B  bank 1     a0_2_cons_buff_1
+   29184- 32383    3200 B  bank 1     o0_2_buff_1
+   32768- 42239    9472 B  bank 2     w0_2_cons_buff_0
+   42240- 48639    6400 B  bank 2     psum_0_2
+   49152- 58623    9472 B  bank 3     w0_2_cons_buff_1
+   58624- 61823    3200 B  bank 3     o0_2_buff_0
+   61824- 65023    3200 B  bank 3     scratch_0_2
+EXTENT 65024 B placed of 65536 B (buffers 60544 B, stack 2048 B, holes 2432 B, 512 B free)
+PLACEMENT core=0_5
+    2048- 14847   12800 B  bank 0     a0_3_cons_buff_0
+   16384- 29183   12800 B  bank 1     a0_3_cons_buff_1
+   29184- 32383    3200 B  bank 1     o0_3_buff_1
+   32768- 42239    9472 B  bank 2     w0_3_cons_buff_0
+   42240- 48639    6400 B  bank 2     psum_0_3
+   49152- 58623    9472 B  bank 3     w0_3_cons_buff_1
+   58624- 61823    3200 B  bank 3     o0_3_buff_0
+   61824- 65023    3200 B  bank 3     scratch_0_3
+EXTENT 65024 B placed of 65536 B (buffers 60544 B, stack 2048 B, holes 2432 B, 512 B free)
+PLACEMENT core=1_2
+    2048- 14847   12800 B  bank 0     a1_0_cons_buff_0
+   16384- 29183   12800 B  bank 1     a1_0_cons_buff_1
+   29184- 32383    3200 B  bank 1     o1_0_buff_1
+   32768- 42239    9472 B  bank 2     w1_0_cons_buff_0
+   42240- 48639    6400 B  bank 2     psum_1_0
+   49152- 58623    9472 B  bank 3     w1_0_cons_buff_1
+   58624- 61823    3200 B  bank 3     o1_0_buff_0
+   61824- 65023    3200 B  bank 3     scratch_1_0
+EXTENT 65024 B placed of 65536 B (buffers 60544 B, stack 2048 B, holes 2432 B, 512 B free)
+PLACEMENT core=1_3
+    2048- 14847   12800 B  bank 0     a1_1_cons_buff_0
+   16384- 29183   12800 B  bank 1     a1_1_cons_buff_1
+   29184- 32383    3200 B  bank 1     o1_1_buff_1
+   32768- 42239    9472 B  bank 2     w1_1_cons_buff_0
+   42240- 48639    6400 B  bank 2     psum_1_1
+   49152- 58623    9472 B  bank 3     w1_1_cons_buff_1
+   58624- 61823    3200 B  bank 3     o1_1_buff_0
+   61824- 65023    3200 B  bank 3     scratch_1_1
+EXTENT 65024 B placed of 65536 B (buffers 60544 B, stack 2048 B, holes 2432 B, 512 B free)
+PLACEMENT core=1_4
+    2048- 14847   12800 B  bank 0     a1_2_cons_buff_0
+   16384- 29183   12800 B  bank 1     a1_2_cons_buff_1
+   29184- 32383    3200 B  bank 1     o1_2_buff_1
+   32768- 42239    9472 B  bank 2     w1_2_cons_buff_0
+   42240- 48639    6400 B  bank 2     psum_1_2
+   49152- 58623    9472 B  bank 3     w1_2_cons_buff_1
+   58624- 61823    3200 B  bank 3     o1_2_buff_0
+   61824- 65023    3200 B  bank 3     scratch_1_2
+EXTENT 65024 B placed of 65536 B (buffers 60544 B, stack 2048 B, holes 2432 B, 512 B free)
+PLACEMENT core=1_5
+    2048- 14847   12800 B  bank 0     a1_3_cons_buff_0
+   16384- 29183   12800 B  bank 1     a1_3_cons_buff_1
+   29184- 32383    3200 B  bank 1     o1_3_buff_1
+   32768- 42239    9472 B  bank 2     w1_3_cons_buff_0
+   42240- 48639    6400 B  bank 2     psum_1_3
+   49152- 58623    9472 B  bank 3     w1_3_cons_buff_1
+   58624- 61823    3200 B  bank 3     o1_3_buff_0
+   61824- 65023    3200 B  bank 3     scratch_1_3
+EXTENT 65024 B placed of 65536 B (buffers 60544 B, stack 2048 B, holes 2432 B, 512 B free)
+PLACEMENT core=2_2
+    2048- 14847   12800 B  bank 0     a2_0_cons_buff_0
+   16384- 29183   12800 B  bank 1     a2_0_cons_buff_1
+   29184- 32383    3200 B  bank 1     o2_0_buff_1
+   32768- 42239    9472 B  bank 2     w2_0_cons_buff_0
+   42240- 48639    6400 B  bank 2     psum_2_0
+   49152- 58623    9472 B  bank 3     w2_0_cons_buff_1
+   58624- 61823    3200 B  bank 3     o2_0_buff_0
+   61824- 65023    3200 B  bank 3     scratch_2_0
+EXTENT 65024 B placed of 65536 B (buffers 60544 B, stack 2048 B, holes 2432 B, 512 B free)
+PLACEMENT core=2_3
+    2048- 14847   12800 B  bank 0     a2_1_cons_buff_0
+   16384- 29183   12800 B  bank 1     a2_1_cons_buff_1
+   29184- 32383    3200 B  bank 1     o2_1_buff_1
+   32768- 42239    9472 B  bank 2     w2_1_cons_buff_0
+   42240- 48639    6400 B  bank 2     psum_2_1
+   49152- 58623    9472 B  bank 3     w2_1_cons_buff_1
+   58624- 61823    3200 B  bank 3     o2_1_buff_0
+   61824- 65023    3200 B  bank 3     scratch_2_1
+EXTENT 65024 B placed of 65536 B (buffers 60544 B, stack 2048 B, holes 2432 B, 512 B free)
+PLACEMENT core=2_4
+    2048- 14847   12800 B  bank 0     a2_2_cons_buff_0
+   16384- 29183   12800 B  bank 1     a2_2_cons_buff_1
+   29184- 32383    3200 B  bank 1     o2_2_buff_1
+   32768- 42239    9472 B  bank 2     w2_2_cons_buff_0
+   42240- 48639    6400 B  bank 2     psum_2_2
+   49152- 58623    9472 B  bank 3     w2_2_cons_buff_1
+   58624- 61823    3200 B  bank 3     o2_2_buff_0
+   61824- 65023    3200 B  bank 3     scratch_2_2
+EXTENT 65024 B placed of 65536 B (buffers 60544 B, stack 2048 B, holes 2432 B, 512 B free)
+PLACEMENT core=2_5
+    2048- 14847   12800 B  bank 0     a2_3_cons_buff_0
+   16384- 29183   12800 B  bank 1     a2_3_cons_buff_1
+   29184- 32383    3200 B  bank 1     o2_3_buff_1
+   32768- 42239    9472 B  bank 2     w2_3_cons_buff_0
+   42240- 48639    6400 B  bank 2     psum_2_3
+   49152- 58623    9472 B  bank 3     w2_3_cons_buff_1
+   58624- 61823    3200 B  bank 3     o2_3_buff_0
+   61824- 65023    3200 B  bank 3     scratch_2_3
+EXTENT 65024 B placed of 65536 B (buffers 60544 B, stack 2048 B, holes 2432 B, 512 B free)
+PLACEMENT core=3_2
+    2048- 14847   12800 B  bank 0     a3_0_cons_buff_0
+   16384- 29183   12800 B  bank 1     a3_0_cons_buff_1
+   29184- 32383    3200 B  bank 1     o3_0_buff_1
+   32768- 42239    9472 B  bank 2     w3_0_cons_buff_0
+   42240- 48639    6400 B  bank 2     psum_3_0
+   49152- 58623    9472 B  bank 3     w3_0_cons_buff_1
+   58624- 61823    3200 B  bank 3     o3_0_buff_0
+   61824- 65023    3200 B  bank 3     scratch_3_0
+EXTENT 65024 B placed of 65536 B (buffers 60544 B, stack 2048 B, holes 2432 B, 512 B free)
+PLACEMENT core=3_3
+    2048- 14847   12800 B  bank 0     a3_1_cons_buff_0
+   16384- 29183   12800 B  bank 1     a3_1_cons_buff_1
+   29184- 32383    3200 B  bank 1     o3_1_buff_1
+   32768- 42239    9472 B  bank 2     w3_1_cons_buff_0
+   42240- 48639    6400 B  bank 2     psum_3_1
+   49152- 58623    9472 B  bank 3     w3_1_cons_buff_1
+   58624- 61823    3200 B  bank 3     o3_1_buff_0
+   61824- 65023    3200 B  bank 3     scratch_3_1
+EXTENT 65024 B placed of 65536 B (buffers 60544 B, stack 2048 B, holes 2432 B, 512 B free)
+PLACEMENT core=3_4
+    2048- 14847   12800 B  bank 0     a3_2_cons_buff_0
+   16384- 29183   12800 B  bank 1     a3_2_cons_buff_1
+   29184- 32383    3200 B  bank 1     o3_2_buff_1
+   32768- 42239    9472 B  bank 2     w3_2_cons_buff_0
+   42240- 48639    6400 B  bank 2     psum_3_2
+   49152- 58623    9472 B  bank 3     w3_2_cons_buff_1
+   58624- 61823    3200 B  bank 3     o3_2_buff_0
+   61824- 65023    3200 B  bank 3     scratch_3_2
+EXTENT 65024 B placed of 65536 B (buffers 60544 B, stack 2048 B, holes 2432 B, 512 B free)
+PLACEMENT core=3_5
+    2048- 14847   12800 B  bank 0     a3_3_cons_buff_0
+   16384- 29183   12800 B  bank 1     a3_3_cons_buff_1
+   29184- 32383    3200 B  bank 1     o3_3_buff_1
+   32768- 42239    9472 B  bank 2     w3_3_cons_buff_0
+   42240- 48639    6400 B  bank 2     psum_3_3
+   49152- 58623    9472 B  bank 3     w3_3_cons_buff_1
+   58624- 61823    3200 B  bank 3     o3_3_buff_0
+   61824- 65023    3200 B  bank 3     scratch_3_3
+EXTENT 65024 B placed of 65536 B (buffers 60544 B, stack 2048 B, holes 2432 B, 512 B free)
+WORST_CORE_EXTENT 65024 B of 65536
+RESEARCH_PROCESS_RESULT {"exit_code": 0, "stop": null, "peak_tree_rss_bytes": 231333888, "rss_measurement": "maximum observed across sampled descendant working sets; zero observations reported as null", "elapsed_seconds": 5.717999999993481, "foreign_contention_observed": false, "timing_eligible": false}

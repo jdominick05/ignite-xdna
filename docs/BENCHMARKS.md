@@ -11691,6 +11691,12 @@ What the silicon returned, and what each reading rules out: `(+2^e, +1, -2^e)` k
 
 `F_HOLD` is not in the table because its result is not observable: the held tile stays in `psum` until an `OP_RESIDUAL` exists to add to it. The emulator's `F_HOLD` store used to raise `ValueError` at the core's buffer size; it now writes the same bytes at the same offsets, checked offline only.
 
+> **Superseded on 2026-09-22.** `OP_RESIDUAL` now exists, so `F_HOLD` is observable and both have
+> run on silicon - see [the contract sweep below](#the-bf16-core-meets-its-emulators-contract-and-op_residual-and-f_hold-reach-silicon-2026-09-22-desktop-2).
+> The held tile also no longer lives in `psum`: it is its own `scratch` buffer, which is what lets a
+> sixteen-core design fit L1. The paragraph above stands as a record of what was true when the
+> sweep in this section was run.
+
 **The anchor: this core has now been timed.** Identical work for both kernels - 3x3, 32 input and 16 output channels, 5x20 tile, 460,800 MACs per pass - alternating in one process for five rounds, the kernel call repeated 128 times in-core, 20 timed dispatches per arm per round. The dispatch-free cost is the slope between one pass and 128:
 
 | | us per pass, dispatch-free (5 rounds) | median | GFLOPS | of the 460.8 ceiling | amortised us per pass | single dispatch |
@@ -12398,3 +12404,173 @@ it.
 Nothing here says the engine is slower than the CPU at convolution in general - it says that
 *these* convolutions, lowered this way, cost more on the engine than they cost ONNX Runtime. The two
 claims differ by the 54.2% of weight packets that are structurally zero.
+
+## The bf16 core meets its emulator's contract, and OP_RESIDUAL and F_HOLD reach silicon (2026-09-22, Desktop 2)
+
+Backing logs: [engine_bf16_contract_npu_20260922.log](../results/aie/engine_bf16_contract_npu_20260922.log)
+(10 cases) and [engine_bf16_contract_npu_20260922_02.log](../results/aie/engine_bf16_contract_npu_20260922_02.log)
+(13 cases, superseding it). Both checks-only, device idle witnessed before and after.
+
+### It used to fail open on both sides at once
+
+`OP_RESIDUAL` was declared in the kernel and in the emulator and implemented in neither, and both
+failed open *in the same way*: the core tested only `d.op == OP_NOP` and fell through to a
+convolution, and `run_packet` had no `else`. A mis-typed packet therefore convolved quietly, and
+**byte equality could not have caught it**, because the emulator reproduced the bug faithfully.
+This is the failure mode a reference implementation is supposed to exclude and did not.
+
+The emulator now raises on an unknown opcode and the core has a `switch` with a `default`, which is
+how the int8 engine has always behaved.
+
+### Thirteen cases, every byte
+
+16-bit patterns against `bf16_bits(emulator)`, 1,600 elements per case, `bytes_equal_frac` 1.0 and
+`nan` 0 on all thirteen:
+
+| case | note |
+|---|---|
+| k3 s1 1 block / k1 s1 4 blocks / k3 s1 2 blocks ReLU / k3 s2 1 block / k3 s1 2 blocks ReLU6 | the original five |
+| k5 s1 1 block ReLU / k1 s1 8 blocks / k3 s1 4 blocks ReLU6 | the packet-filling shapes |
+| `F_LOAD_PSUM` chains, k3 2+2 blocks and k5 1+1 | partial sums crossing packets inside one dispatch |
+| **`residual_hold_add`, `residual_relu6`, `residual_chain`** | `OP_RESIDUAL` and `F_HOLD`, executing for the first time |
+
+The residual cases are the ones worth naming. `residual_chain` is a residual that holds its own
+result for a second residual - three packets in one dispatch - so it reads and writes `scratch` at
+the same offset, which is safe only because each iteration loads before it stores. All three carry
+deliberately zero weights, so a core that wrongly fell through to a convolution would emit the bias
+rather than plausible noise.
+
+The previous commit said honestly that neither flag had ever run: the sweep sent convolutions only,
+so the hold buffer was written by packets nothing read back.
+
+### What the rewrite cost, and what it did not
+
+| reading | before | after |
+|---|---|---|
+| object `.text` | 3,520 B | 7,216 B |
+| of the 15,504 B object budget | 11,984 B free | **8,288 B free** |
+| accumulator stack moves | 0 | 0 |
+| vector stack moves | 0 | 0 |
+
+The spill count is the reading that mattered. `NCO` is compile-time precisely so the accumulators
+stay in vector registers, and the commit landed the `chunk` and `hoist` loop rewrites in the same
+change as the contract work - per the rule that the loop goes in once, byte-exact, rather than as a
+fifth commit of variants. MAC loop bundles went `29/8 24/8 18/4 21/4` to
+`21/8 17/8 16/8 16/8 12/4 12/4 8/4 8/4`.
+
+The 3,520 B baseline is the census figure from the table above; 7,216 B is `object_text_bytes` in
+both logs.
+
+### The emitted layout is the activation layout
+
+`mmul<4,8,4>` blocks the output by 4 while every activation the engine reads is blocked by 8, so a
+pair of accumulator blocks interleaves into one 8-channel block - one `aie::interleave_zip` per
+pair, the exact inverse of the `interleave_unzip` the stride-2 load path already uses. int8 never
+needed this, because `mmul<4,8,8>` emits the width it consumes.
+
+Doing it in a DMA descriptor was considered and rejected: `engine_schedule.Placement` hardcodes
+eight channels a block in DDR, so the innermost contiguous run would fall from a row to four
+elements - 400 eight-byte writes where int8 has contiguous row runs.
+
+A wrong zip differs in **every** byte, which is why these thirteen cases test it hard.
+
+### Gates passed
+
+- Offline: 21 emulator tests, was 14. Full suite 279 passed, 25 skipped (baseline plus exactly the
+  seven new tests).
+- Silicon: 13 of 13 cases, 1,600 of 1,600 bytes, `nan` 0, device released with no contexts.
+
+### Not established
+
+**One core of sixteen.** Everything here is the single-core harness. Sixteen-core byte-exactness is
+a separate result and is still owed.
+
+No latency is claimed. The rewrite was measured statically (bundles, spills, object size); the
+`chunk` timing that justified it is the 2026-09-21 sitting, not this one, and the two must not be
+paired.
+
+## Sixteen cores of bf16 place inside 65,536 B, and the extra bytes come out of int8's holes (2026-09-22, Desktop 2)
+
+Backing log: [results/aie/engine_bf16_design_l1_desktop2_20260922.log](../results/aie/engine_bf16_design_l1_desktop2_20260922.log).
+Compile only. The xclbin is built and never run, so this establishes a placement and no latency.
+
+Until this build, no bf16 design existed at all. Every bf16 figure in this document came from one
+core of sixteen (`kernels/bf16_conv/engine_bf16.py`) or from a CPU cast, so the question "does a
+bf16 engine fit in a core tile" had only ever been answered by arithmetic - and arithmetic is the
+wrong instrument, because the bank-aware allocator leaves holes a sum of buffers cannot see.
+
+### It fits, and the lever the task named was not needed
+
+`kernels/bf16_conv/design.py` builds through `tools/engine_bf16_build.py`. All sixteen cores place
+identically:
+
+| quantity | int8 engine | bf16 engine |
+|---|---|---|
+| buffers placed | 57,344 B | 60,544 B |
+| stack | 2,048 B | 2,048 B |
+| holes between buffers | 5,632 B | **2,432 B** |
+| placed extent | 65,024 B | 65,024 B |
+| free below 65,536 | 512 B | 512 B |
+
+The bf16 column is measured. The int8 column is derived by summing the rows already in
+[engine_bank_placement_probe_desktop2_20260921.log](../results/aie/engine_bank_placement_probe_desktop2_20260921.log);
+no int8 build was re-run.
+
+Task #127 recorded `w_depth=1` as the fix for a predicted 256 B overrun. It was never needed. The
+held tile moving out of psum's tail into its own `scratch` buffer (`935446e`) brought psum from
+16,000 B to 6,400 B, and the design places at depth 2 - so weight double-buffering survives on all
+71 layers and nothing was paid for the fit.
+
+### The extra bytes came out of the holes, exactly
+
+bf16 carries 3,200 B more buffer than int8 (activations double to 12,800 B each, psum falls by
+9,600 B) and loses 3,200 B fewer to holes. The two deltas cancel to the byte, and both designs
+place out to the same address, 65,024.
+
+That is the useful form of the result, and it is also the caveat. The 512 B of headroom is not
+bf16 headroom - it is where this allocator stops on both engines. bf16 fits because its buffers
+are bank-sized and tile the four 16 KB banks rather than straddling them, not because it is small.
+Anything that grows a per-core buffer meets the same wall int8 meets.
+
+### The xclbin carries the kernel that passed silicon
+
+`ExternalFunction` is spelled in the 16-core design exactly as the single-core harness spells it -
+same source, same include directories, no compile flags, where the int8 design passes `-O2`.
+`ExternalFunction`'s content digest covers the source text and the sorted compile flags, so a flag
+added here would have produced a different object from the one the 13-case byte-exactness result
+is evidence about. It did not: the linked `engine_bf16.o` is sha256 `67d1050f...`, 12,480 B, in
+this build and in the cached single-core builds behind
+[engine_bf16_contract_npu_20260922_02.log](../results/aie/engine_bf16_contract_npu_20260922_02.log).
+Kernel source sha256 `183f8184...`.
+
+### The int8 bank collision is absent from this layout
+
+bf16 reports `WEIGHT_ACTIVATION_SHARED_BANKS none`, where every int8 build reports
+`{2: [a0_0_cons, w0_0_cons]}` - the collision task #134 exists to cost. The 12,800 B activation
+buffers fill banks 0 and 1 and push both weight buffers into banks 2 and 3.
+
+This is a placement, not a latency. The int8 penalty was measured on a stride-1 dual loop that
+pairs a weight load with an activation load four times an iteration; nothing here establishes that
+the bf16 loop has that shape, or what removing the collision is worth in bf16.
+
+### Gates passed
+
+- Design resolves and compiles; xclbin sha256 `7b446de9...`, build 4.5 s.
+- Split and join offsets verified in the resolved MLIR as element counts, not bytes:
+  `[0, 6400, 12800, 19200]` into `memref<25600xbf16>`.
+- All 16 cores placed; `WORST_CORE_EXTENT 65024 B of 65536`.
+- `pytest tests/` 279 passed, 25 skipped - unchanged.
+
+### Not established
+
+**No bf16 packet has ever been dispatched through this design.** The build emits no shim
+transfers: `insts.bin` is 16 B. L1 placement is a function of the core programs and their buffers,
+not of what the shim sends, which is why an allocation probe does not need a schedule - and the
+bf16 schedule does not exist yet. This xclbin cannot be run to produce a number.
+
+Sixteen-core byte-exactness against the emulator is therefore still owed, and it needs the
+schedule's packer before it can be attempted. The only bf16 silicon evidence that exists remains
+the single-core contract sweep: 13 cases, 1,600 of 1,600 bytes each.
+
+No latency is claimed or implied. The engine is 35.6% above the fixed-shape kernel at k1 and the
+`chunk` loop is 7.7% faster than milestone 1 at k3; neither figure moves on a placement.
