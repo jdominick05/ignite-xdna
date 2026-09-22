@@ -12913,3 +12913,74 @@ outruns ONNX Runtime on the host is not being held back by its kernel. **It is n
 the two numbers come from different runs and the spans are only approximately the same - but it is
 the cheapest question on this page and it bears directly on whether #132's off-diagonal skip is worth
 building.
+
+
+## The bf16 datapath carries integer work exactly, and the bound is 2^24 (2026-09-22, offline)
+
+The bf16 engine was forked to run float models, and every argument for it so far has been a float
+argument. The opposite question is cheaper and had never been asked: the int8 domain fits inside
+bf16 exactly, so can the bf16 datapath carry INTEGER work? It can, it is bit-exact, and the limit is
+not the operand width.
+
+`tools/bf16_integer_exactness.py`, log `results/aie/bf16_integer_exactness_20260922.log`.
+
+### Why the aligned add stops mattering
+
+The measured core model is the thing that made the CPU bf16 score an upper bound rather than a
+prediction: one `mmul<4,8,4>::mac` aligns its nine operands to the largest exponent among them and
+rounds each separately to a 24-bit grid, ties to even. For general floats that costs precision,
+because a small operand aligned to a large exponent rounds away.
+
+An integer below 2^24 does not round away. It sits exactly on the 24-bit grid at every alignment at
+or above its own exponent, so the nonideality is invisible to integer operands. uint8 activations
+and int8 weights are each exact in bf16 - an 8-bit significand covers [-256, 256] - and their
+products reach only 255 x 128 = 32,640.
+
+### Measured, against an int64 reference sharing no code with the emulator
+
+| case | depth | max deviation | peak running sum |
+|---|---:|---:|---:|
+| uint8 activation x int8 weight, random | 18,432 MACs | **0.0** | 5,035,709 |
+| int8 x int8, random | 18,432 MACs | **0.0** | 2,470,632 |
+| adversarial, every product 255 x 127 same sign | 2,304 MACs | **0.0** | 9,326,880 |
+| adversarial, the first break | 4,608 MACs | 56.0 | 18,653,760 |
+
+Exactness holds to the byte where the running sum crosses 2^24 = 16,777,216 and fails immediately
+after. The psum buffer is float32 (`kernels/bf16_conv/design.py`, 6,400 B as 1,600 float32), so a
+chain across weight packets does not round-trip through bf16 and the bound covers the whole chain
+rather than one packet.
+
+**The rule: integer operands accumulate exactly while the running sum stays under 2^24. The bound is
+the accumulator grid, not the operand width.** Random data at 18,432 MACs peaked at 5.0M, a 3.3x
+margin; the adversarial arm is the only guarantee, and a real layer sits between the two because
+post-ReLU activations are all positive and correlate with their weights.
+
+### What this does not establish, and it is the part that decides the design
+
+**The output store is bf16, not float32.** An accumulator above 256 does not survive it. Carrying
+int8 end to end therefore needs the epilogue to bring the accumulator back into int8 range before it
+stores, and `engine_bf16_emulator.epilogue` has no output scale today - it is `to_bf16(acc)`, then a
+floor at 0 for `F_RELU` and a ceiling at 6 for `F_RELU6`. This probe measures the accumulator. It is
+not a working int8 path and does not claim to be one.
+
+It is also the emulator's `mac()` in aligned mode, which is the measured model of the core rather
+than the core. Device-vs-emulator byte-exactness is established separately at
+[sixteen cores](#sixteen-cores-run-bf16-byte-exactly-on-silicon-2026-09-22-desktop-2).
+
+### Two designs follow, and they are not the same one
+
+**Bit-exact int8 emulation** needs a settable output scale in the epilogue - one multiply and one
+header word, against 9 header fields in use. It would produce results provably identical to the int8
+engine, which is what the 2^24 bound licenses.
+
+**Scale folded into the weights at pack time** needs no kernel change at all, because the weights are
+bf16 and the requantization scale multiplies into them on the host. It forfeits bit-exactness, since
+the products stop being integers, but accuracy moves up rather than down - the accumulate is wider
+than int8's. Its structural advantage is that the source graph stays QDQ, so `dense_regions.py` keeps
+cutting regions exactly as it does now, and the boundary collapse that #139 exists to solve does not
+arise on this path.
+
+Neither is costed. bf16 packets hold half the weights of int8 packets, so integer work on the bf16
+engine carries roughly twice the traffic of the same work on the int8 engine, and for any model the
+int8 engine already runs it is strictly worse. The case for either design is capability - models the
+int8 path refuses or carves to the host - and not speed.
