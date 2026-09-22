@@ -12973,12 +12973,23 @@ than the core. Device-vs-emulator byte-exactness is established separately at
 header word, against 9 header fields in use. It would produce results provably identical to the int8
 engine, which is what the 2^24 bound licenses.
 
-**Scale folded into the weights at pack time** needs no kernel change at all, because the weights are
-bf16 and the requantization scale multiplies into them on the host. It forfeits bit-exactness, since
-the products stop being integers, but accuracy moves up rather than down - the accumulate is wider
-than int8's. Its structural advantage is that the source graph stays QDQ, so `dense_regions.py` keeps
-cutting regions exactly as it does now, and the boundary collapse that #139 exists to solve does not
-arise on this path.
+**Scale folded into the weights at pack time** needs no kernel change to PROBE, because the weights
+are bf16 and the requantization scale multiplies into them on the host. It forfeits bit-exactness,
+since the products stop being integers, and accuracy is then *expected* to move up rather than down -
+the accumulate is wider than int8's, and MODNet's bf16 cast at 0.5029 against int8's 0.4272 is the
+precedent - but that is a prediction, not a measurement, and the aligned-add nonideality returns the
+moment the products stop being integers. Its structural advantage is that the source graph stays QDQ,
+so `dense_regions.py` keeps cutting regions exactly as it does now, and the boundary collapse that
+#139 exists to solve does not arise on this path.
+
+**Neither design escapes the epilogue, and an earlier draft of this section understated that.** The
+ceiling in `epilogue()` is hardcoded at 6, so there is no way to saturate at 127 or 255 - and a QDQ
+model's boundary numerics include saturation. Design A needs a scale *and* a settable clamp; design B
+needs the settable clamp or must accept unsaturated arithmetic. The clamp is #137's request arriving
+on the bf16 side. Two further things the kernel does not have today and that the capability argument
+assumes: LeakyRelu's negative slope is a multiply the epilogue cannot yet apply, and an engine-to-host
+region boundary needs a bf16-to-uint8 conversion somewhere, which is host work - and host time is what
+the dense path already loses on.
 
 Neither is costed. bf16 packets hold half the weights of int8 packets, so integer work on the bf16
 engine carries roughly twice the traffic of the same work on the int8 engine, and for any model the
@@ -13013,3 +13024,57 @@ the accumulator does.
 
 The float arm is unchanged by the flag: a default compile reproduces `insts_bytes` 25,664 and kernel
 object sha256 `67d1050f...`, the same as the [float sweep](#sixteen-cores-run-bf16-byte-exactly-on-silicon-2026-09-22-desktop-2).
+
+
+## The float case for bf16 closed negative on all three candidate models (2026-09-22)
+
+The hunt was for a workload whose int8 quality loss is large enough that bf16 would be worth 2x the
+traffic. On the three models this repo has quality numbers for, there is no such loss left once the
+quantization recipe is applied. No new measurement was needed for any of this - two of the three were
+already logged, and one of them was nearly re-measured by mistake.
+
+### SESR-M7: AdaRound already recovers all but 0.48 dB
+
+From `results/eval_sesr_m7_set5_npu.log` and `results/eval_sesr_m7_set14_npu.log`, both committed
+before this sitting:
+
+| set | bicubic | FP32 | XINT8 | XINT8 + AdaRound |
+|---|---:|---:|---:|---:|
+| Set5 PSNR-Y | 32.63 dB | 35.64 dB | 34.06 dB | **35.16 dB** |
+| Set14 PSNR-Y | 28.51 dB | 30.03 dB | 29.32 dB | **29.82 dB** |
+
+Plain int8 costs 1.58 dB on Set5 and 0.71 dB on Set14; AdaRound gives back all but **0.48 dB and
+0.21 dB**. That is the entire margin a bf16 SESR could recover, and its dispatch bracket straddles
+the CPU's 7.872 ms rather than clearing it. Unlike Real-ESRGAN this is a PSNR-trained model that
+beats bicubic by 3.01 dB, so PSNR is the right metric here and the numbers mean what they say.
+Set5 is 5 images and Set14 is 14, so these are small-N and are not averaged together.
+
+### Real-ESRGAN: the model is below bicubic in FP32, so int8 is not what broke it
+
+| arm | PSNR-Y | SSIM-Y |
+|---|---:|---:|
+| Bicubic | 27.30 dB | 0.7941 |
+| FP32 reference, DML | 24.32 dB | 0.7344 |
+| XINT8 plain, DML | 23.76 dB | 0.6786 |
+| XINT8 + AdaRound, NPU | **24.50 dB** | 0.7085 |
+
+Real-ESRGAN is a GAN trained for perceptual realism, and GAN-based super-resolution routinely scores
+below bicubic on PSNR by design. **FP32 itself is 2.98 dB under bicubic**, so "int8 is worse than
+bicubic" is true of the float model too and is not evidence that quantization broke anything. The
+honest int8 cost is fp32 to plain int8, 0.56 dB, and the AdaRound arm at 24.50 dB sits *above* the
+fp32 DML reference - which is a fair measure of how noisy PSNR is on this model. Any quality claim
+here needs a perceptual metric. Logs `results/eval_realesrgan_rrdb_r64_set5_dml.log` and
+`results/eval_realesrgan_rrdb_r64_set5_adaround_npu.log`.
+
+### MODNet-Cut: killed by the CPU, not by accuracy
+
+Covered above - the bf16 bracket is 1.18x to 1.56x slower than plain ONNX Runtime fp32 on this
+machine's own CPU, so the +12.6% accuracy margin has nothing to stand on.
+
+### What is left unmeasured, and it is the framing that survives
+
+Every one of these kills is a **latency** kill, and the CPU bar is a latency bar. For batch or
+offline work that nobody is waiting on, the comparison is energy per frame or host offload rather
+than milliseconds, and this repo has `tools/energy_sitting.py` to measure it. **That door is open and
+unmeasured.** It is named here so it is not silently treated as closed by results that never tested
+it.
