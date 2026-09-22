@@ -12170,9 +12170,9 @@ Backing log: [`engine_dispatch_cost_model_desktop2_20260922.log`](../results/aie
 
 ## Compiling out the dispatch no container reaches frees 5,408 B, and costs a manifest field to stay honest (2026-09-22, Desktop 2)
 
-Backing logs: [`engine_dispatch_gate_census_desktop2_20260922.log`](../results/aie/engine_dispatch_gate_census_desktop2_20260922.log) (static, no device) and [`engine_dispatch_gate_yolov8n_desktop2_20260922.log`](../results/aie/engine_dispatch_gate_yolov8n_desktop2_20260922.log) (silicon, `--checks-only`). Tools: `tools/engine_dispatch_gate_census.py` (new), `tools/verify_engine_container.py`.
+Backing logs: [`engine_dispatch_gate_census_desktop2_20260922_02.log`](../results/aie/engine_dispatch_gate_census_desktop2_20260922_02.log) (static, no device; supersedes [the first census run](../results/aie/engine_dispatch_gate_census_desktop2_20260922.log), which lacked the loop and container readings), [`engine_dispatch_gate_yolov8n_desktop2_20260922.log`](../results/aie/engine_dispatch_gate_yolov8n_desktop2_20260922.log) (silicon, `--checks-only`) and [`gate_ab_yolov8n_phoenix_20260922T0455Z.log`](../results/aie/gate_ab_yolov8n_phoenix_20260922T0455Z.log) (silicon, same-sitting A/B). Tools: `tools/engine_dispatch_gate_census.py` (new), `tools/verify_engine_container.py`, `tools/bench_layout_ab.py`.
 
-**This establishes object sizes and byte-exactness. It makes no latency claim, and the reason it does not owe one is the equivalence below.**
+**The gate buys program memory and costs a measured 0.43% of a YOLOv8n dispatch.** It is a trade, not a free win, and the first version of this section got that wrong - see below.
 
 The census of 2026-09-21 priced four unreachable dispatch groups by **text-stripping** their case blocks out of a copy: 5,456 B of a 15,280 B object. Production cannot strip text. It compiles the cases out with `-DENGINE_OP_<NAME>=0`, and that is a different mechanism, so the price does not transfer by assertion.
 
@@ -12187,7 +12187,31 @@ The census of 2026-09-21 priced four unreachable dispatch groups by **text-strip
 | without `OP_POOL` | 14,224 B | 960 B | 1,280 B |
 | without all four | **9,776 B** | **5,408 B** | **5,728 B** |
 
-The `-D` build and the text-stripped build produce **the same object bytes** - sha `08de6919...` both ways - so the earlier census's reading is the gated build's reading. Byte identity also settles the latency question without an A/B: every function that survives compiled to identical bytes, so nothing that still runs can have become faster or slower. **The gain is program memory, not time**, and a timing sitting would only be measuring noise.
+The `-D` build and the text-stripped build produce **the same object bytes** - sha `08de6919...` both ways - so the earlier census's reading is the gated build's reading.
+
+### The gate is not free, and the first reading of this section said it was
+
+*(Superseded 2026-09-22, same day, by the measurement below. The retracted claim: "byte identity also settles the latency question without an A/B: every function that survives compiled to identical bytes, so nothing that still runs can have become faster or slower... a timing sitting would only be measuring noise." It is kept here because the error is instructive.)*
+
+**The byte identity is between the `-D` gate and the text strip - two spellings of the same gate.** It says nothing about the gated object against the **ungated** one, which is the comparison a latency claim needs. Read that way, the loops do not match:
+
+| | hot loops, bundles/MACs per iteration |
+|---|---|
+| ungated | 27/8 **18/8 18/8 27/8 15/4 21/4** 27/1 26/1 26/1 175/20 13/4 9/4 |
+| gated | **28/8** **18/8 18/8 27/8 15/4 21/4** 175/20 |
+
+Five of the six production loops survive untouched and the gate removes five that only the gated-out cases reached. But **one stride-2 dual loop goes 27 to 28 bundles**, and on AIE2 a hardware-loop body's bundle count is its cycle count. So the gate owed an A/B.
+
+Measured, interleaved with AMD's stack on `bus.jpg`, 50 warm-up and 500 timed frames, two rounds:
+
+| arm | round 1 dispatch | round 2 dispatch | G2G P50 |
+|---|---:|---:|---:|
+| ungated control | 6.969 ms | 6.960 ms | 7.742 / 7.725 ms |
+| gated | **7.000 ms** | **6.990 ms** | 7.768 / 7.744 ms |
+
+Both rounds agree in direction and the ranges are disjoint: **+0.030 ms, +0.43% of dispatch**, +0.31% glass-to-glass. Small, reproducible and real. It is the price of the 5,408 B, and it is worth paying only because of what the 5,408 B is for - `chunk` at -17.7% on a k3 pass is two orders of magnitude more than 0.43%, and could not land at all before this.
+
+**The general lesson, which is the reason this is written up rather than quietly fixed:** byte identity between two builds retires a timing question only when one of them is the build you are comparing against. Here it was not, and the argument was one step short of the claim it was used to support. `tools/engine_dispatch_gate_census.py` now prints which loops survive, which are removed and which moved, so a future change to this kernel is warned rather than inheriting the conclusion.
 
 Two smaller readings. The four groups are now **exactly additive** (3,568 + 320 + 560 + 960 = 5,408) where before `ptr` they overlapped (5,792 summed against 5,456 together), so each group's helpers are now its own. And the total moved 5,456 -> 5,408 B because `ptr` saved 96 B ungated but only 48 B gated: one copy of its loop was inlined into `fused_conv_tile`, which the gate removes anyway.
 
@@ -12209,11 +12233,13 @@ Surveyed across the twelve containers on this machine, **every one carries only 
 
 ### Gates passed
 
-- Object 9,776 B with **0 accumulator stack moves**, byte-identical to the text-stripped build, and inert against the pre-gate kernel when no flag is set.
+- Object 9,776 B with **0 accumulator stack moves** and none in a hardware loop (widened census), byte-identical to the text-stripped build, and inert against the pre-gate kernel when no flag is set. Stack vector moves fall 31 to 12, all outside the loops.
 - **YOLOv8n 66/66 layers byte-exact on silicon** from a `--no-workspace-reuse` gated build, device released clean.
 - The gated and ungated containers carry **byte-identical `wpackets.bin` and `insts.bin`**; only `engine.xclbin` differs, by 87,056 B, which is the 5,408 B object across 16 cores. The gate does not touch the schedule.
 - `pytest -q tests/test_graph_engine_offline.py tests/test_dense_regions_offline.py tests/test_conv_engine.py`: 68 passed, 4 skipped.
 
 ### Not established
 
-No latency was measured and none is claimed. Whether the freed 5,728 B actually buys anything depends on `chunk` porting to int8 and winning there, which is a separate gate and unrun - the bf16 result does not transfer, as `ptr` itself showed by beating its own bf16 prediction. The four opcodes remain unreachable by lowering, so nothing here makes Mul, Scale, Pool or fused stencils available to a model; it only stops containers paying for them.
+The +0.43% was measured on **YOLOv8n only**, in one sitting of two rounds. It was not measured on YOLOv8s or YOLOv8x, and the cost need not be the same fraction on a model whose loop mix differs - the changed loop is one stride-2 dual, so a model with a different stride-2 share would pay differently. Nothing establishes *why* that loop gained a bundle; it is a register-allocation consequence of a smaller function set, not a change anyone wrote.
+
+Whether the freed 5,728 B actually buys anything depends on `chunk` porting to int8 and winning there, which is a separate gate and unrun - the bf16 result does not transfer, as `ptr` itself showed by beating its own bf16 prediction. The four opcodes remain unreachable by lowering, so nothing here makes Mul, Scale, Pool or fused stencils available to a model; it only stops containers paying for them.

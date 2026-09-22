@@ -1,0 +1,53 @@
+RESEARCH_PLATFORM {"machine": "Desktop 2", "cpu": "AMD Ryzen 7 8700G w/ Radeon 780M Graphics", "os": "Windows-11-10.0.26200-SP0", "ram_bytes": 33381138432, "source_sha256": {"tools/research_process.py": "ffeb1857f190b482eed101b5f5a928f455de26bfa61d23f78a2eacec08e2663e", "tools/quant_calib_alphabet.py": "2dc0b2878c564853f340880209a425dfcf63b8536b2b8e9fd32344daade58d37", "tools/xint8_arithmetic_probe.py": "6aa3df08b9870c3c2264b868459d7ffbac3070dddc1349d7c6f3f480075f7041", "scripts/research-lowlevel.sh": "3455ad7933697936487712665505c216891865c6deada647302785f6e37020bd", "scripts/research-iron.sh": "4c863a262646ddab39b5005006ba8e03809895e6386c6310e2fd9d0a9e9609ee", "kernels/memory_placement/probe.py": "e8d990169ad6091fa1b53852e9f61eff495b5def72d35165a5c5cf1759e38898", "kernels/memory_placement/memory_kernels.cc": "182e7af7071a1e851afb4a7ca266069c489aea1fbaaa85eca129708daeba5ba6", "scripts/research-matrix.sh": "739254171629deae822b0ad7dabc875aee19ace56dde77d3e8aab61663f97516", "kernels/memory_placement/gemm.py": "17c905ad66110d3346bbf0db898dfc6b780df59fae1dfb0c1747057ce1e5844e", "kernels/memory_placement/gemm_placement.cc": "f21acf7250b12914ea30cc1f77613239dfa18421a85a1b9a5199017dd916278a", "tools/research_summary.py": "0c00dcceef07053d06731b41a1f1ed58d3ba4ea09f82497de354ce9cef17da20", "tools/research_toolchain.py": "f0a126a24ae213acfaa43460cfd9def0c86d9cb70cfee0228aa271688467b314"}, "commit": "ed6b1baaf2eb84047420f88d6ccf70b96db1728c", "command": ["bash", "scripts/research-iron.sh", "tools/engine_dispatch_gate_census.py", "--baseline", "scratch/dispatch_gate_census/engine_pregate.cc", "--containers", "build/gate/yolov8n_gated.ignite", "build/gate/yolov8n_ctl.ignite", "--survey"], "seconds_limit": 300, "rss_gib_limit": 8, "checks_only": true, "free_ram_bytes": 18572378112}
+=== 1. what the gate frees ===
+HOST_TIMELINE {"elapsed_seconds": 3.875, "tree_rss_bytes": 176472064, "foreign_peers": []}
+build                                 .text   freed  headroom  object sha256
+ungated (every case compiled in)      15184       -       320  779bb7f6083c9a5b
+  without FUSED_CONV                  11616    3568      3888  47082b448762757e
+HOST_TIMELINE {"elapsed_seconds": 7.703, "tree_rss_bytes": 114515968, "foreign_peers": []}
+  without MUL                         14864     320       640  a9c268bb26961244
+HOST_TIMELINE {"elapsed_seconds": 11.562, "tree_rss_bytes": 126607360, "foreign_peers": []}
+  without SCALE                       14624     560       880  2b9ed6a650715f59
+HOST_TIMELINE {"elapsed_seconds": 15.312, "tree_rss_bytes": 131887104, "foreign_peers": []}
+  without POOL                        14224     960      1280  65b38b45c7910b9e
+HOST_TIMELINE {"elapsed_seconds": 19.125, "tree_rss_bytes": 148545536, "foreign_peers": []}
+  without all four                     9776    5408      5728  08de69197dda72f1
+
+ENGINE_DISPATCH_GATE_FREED 5408 B (15184 -> 9776); headroom 320 -> 5728 B of the 15504 B object budget
+
+=== 2. the -D gate is the text strip the earlier census priced ===
+HOST_TIMELINE {"elapsed_seconds": 22.953, "tree_rss_bytes": 177119232, "foreign_peers": []}
+text-stripped (what --without prices)  .text   9776  08de69197dda72f1
+EQUIVALENCE  the -D gate is byte-identical to the text strip : PASS
+HOST_TIMELINE {"elapsed_seconds": 26.734, "tree_rss_bytes": 196521984, "foreign_peers": []}
+baseline (pre-gate kernel)             .text  15184  779bb7f6083c9a5b
+INERTNESS    the guards change nothing when none is set  : PASS
+
+=== 3. the object the gate ships: spills, and whether the hot loops moved ===
+ungated  widened: accumulator moves 0 (0 in hardware loops), vector moves 31 (0 in hardware loops); MAC loops bundles/MACs 27/8 18/8 18/8 27/8 15/4 21/4 27/1 26/1 26/1 175/20 13/4 9/4
+gated    widened: accumulator moves 0 (0 in hardware loops), vector moves 12 (0 in hardware loops); MAC loops bundles/MACs 28/8 18/8 18/8 27/8 15/4 21/4 175/20
+  loops that survive unchanged : 18/8 18/8 27/8 15/4 21/4 175/20
+  loops the gate removes       : 27/1 26/1 26/1 13/4 9/4
+  loops that CHANGED           : 28/8
+  LOOPS MOVED - the gate is not a pure program-memory change and owes an A/B.
+
+=== 4. the gate does not move the schedule ===
+  wpackets.bin     8,164,864 vs 8,164,864 B  identical              (must match) PASS
+  insts.bin          419,476 vs   419,476 B  identical              (must match) PASS
+  engine.xclbin      203,646 vs   290,702 B  differs by 87,056 B    (must differ) PASS
+
+=== 5. which gate set every built container derives ===
+  build/gate/yolov8n_ctl.ignite                     862 pkts  CONV+MAXPOOL+RESIDUAL      gateable: NONE  obj -
+  build/gate/yolov8n_gated.ignite                   862 pkts  CONV+MAXPOOL+RESIDUAL      gateable: NONE  obj 08de6919
+  build/ptr_gate/ab_yolov8n_ctl.ignite              862 pkts  CONV+MAXPOOL+RESIDUAL      gateable: NONE  obj -
+  build/ptr_gate/ab_yolov8n_ptr.ignite              862 pkts  CONV+MAXPOOL+RESIDUAL      gateable: NONE  obj -
+  build/ptr_gate/ab_yolov8s_ctl.ignite            3,114 pkts  CONV+MAXPOOL+RESIDUAL      gateable: NONE  obj -
+  build/ptr_gate/ab_yolov8s_ptr.ignite            3,114 pkts  CONV+MAXPOOL+RESIDUAL      gateable: NONE  obj -
+  build/ptr_gate/ab_yolov8s_ptr_noreuse.ignite    3,114 pkts  CONV+MAXPOOL+RESIDUAL      gateable: NONE  obj -
+  build/ptr_gate/x_split_ctl.ignite              15,360 pkts  CONV+MAXPOOL+RESIDUAL      gateable: NONE  obj -
+  build/ptr_gate/x_split_ptr.ignite              15,360 pkts  CONV+MAXPOOL+RESIDUAL      gateable: NONE  obj -
+  build/ptr_gate/x_split_ptr_noreuse.ignite      15,360 pkts  CONV+MAXPOOL+RESIDUAL      gateable: NONE  obj -
+  build/ptr_gate/yolov8n_base.ignite                862 pkts  CONV+MAXPOOL+RESIDUAL      gateable: NONE  obj -
+  build/ptr_gate/yolov8n_ptr.ignite                 862 pkts  CONV+MAXPOOL+RESIDUAL      gateable: NONE  obj -
+  -> 12 containers, 1 distinct opcode set(s): CONV+MAXPOOL+RESIDUAL
+RESEARCH_PROCESS_RESULT {"exit_code": 0, "stop": null, "peak_tree_rss_bytes": 346341376, "rss_measurement": "maximum observed across sampled descendant working sets; zero observations reported as null", "elapsed_seconds": 28.82799999997951, "foreign_contention_observed": false, "timing_eligible": false}

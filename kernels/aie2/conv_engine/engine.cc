@@ -62,7 +62,7 @@ enum { OP_NOP = 0, OP_CONV = 1, OP_MAXPOOL = 2, OP_RESIDUAL = 3, OP_FUSED_CONV =
 // each group none of them uses; the case goes, and with it every anonymous-namespace function
 // only that case referenced. No container ignite-compile produces reaches any of the four -
 // match_stencil_fusion runs in a test and the verifier but never in the compile path, and
-// engine_schedule.py emits no Mul/Scale/Pool packet - which is 5,456 B of a 15,184 B object.
+// engine_schedule.py emits no Mul/Scale/Pool packet - which is 5,408 B of a 15,184 B object.
 // Each defaults to 1, so a build passing no flags (the census, the synthetic silicon sequence,
 // any direct build_program caller) still gets the whole kernel. The ENUM IS NEVER GATED: a
 // header word keeps its meaning whatever is compiled in, and the emulator is the contract.

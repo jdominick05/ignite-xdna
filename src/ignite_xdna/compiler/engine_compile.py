@@ -213,7 +213,11 @@ def build_manifest(ir: GraphIR, ws: es.Workspace, scheds: List[es.LayerSchedule]
         "kernel_sha256": kernel_sha,
         # kernel_sha256 hashes the SOURCE. The dispatch gate compiles cases out, so two
         # containers can share a source and not a kernel: the OBJECT hash is what identifies
-        # what ran, and kernel_ops says in words which dispatch cases it was built with.
+        # what ran. kernel_ops is the opcode set THIS CONTAINER'S PACKETS CARRY - what the gate
+        # was derived from, not a read-back of which cases the compiler kept. The two agree by
+        # construction for the gateable cases; CONV, MAXPOOL and RESIDUAL are compiled in
+        # whether or not a packet uses them, and OP_NOP is served by `default:`. A check
+        # against kernel_ops is therefore conservative, which is the safe direction to err.
         "kernel_ops": kernel_ops,
         "kernel_object_sha256": kernel_object_sha256,
         "xclbin_sha256": xclbin_sha,
@@ -478,9 +482,17 @@ def compile_graph_container(onnx_path, output_path, build_dir: Optional[Path] = 
     xclbin = xclbin_path.read_bytes()
     insts = insts_path.read_bytes()
     kernel_sha = hashlib.sha256(eng.KERNEL_SOURCE.read_bytes()).hexdigest()
+    # Not Optional in practice: a None here is an identity field that does not identify, and
+    # it is the field that replaces kernel_sha256 now the gate has made that ambiguous. An
+    # inline=True build would emit engine.ll instead, and that wants a deliberate change here
+    # rather than a silent null in every container it produces.
     kernel_obj = work / "engine.o"
-    kernel_obj_sha = (hashlib.sha256(kernel_obj.read_bytes()).hexdigest()
-                      if kernel_obj.exists() else None)
+    if not kernel_obj.exists():
+        raise RuntimeError(
+            f"no linked kernel object at {kernel_obj}: the manifest's kernel_object_sha256 is "
+            f"what says which kernel a container got, and the dispatch gate means the source "
+            f"hash no longer does")
+    kernel_obj_sha = hashlib.sha256(kernel_obj.read_bytes()).hexdigest()
     manifest = build_manifest(ir, ws, scheds, store, onnx_path.stem, len(insts),
                               hashlib.sha256(xclbin).hexdigest(), kernel_sha, time.perf_counter() - t0,
                               kernel_ops=sorted(em.OP_NAMES[o] for o in kernel_ops),
