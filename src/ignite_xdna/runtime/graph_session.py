@@ -70,18 +70,56 @@ def container_elem(manifest: Optional[Dict[str, Any]]) -> str:
     return elems.pop() if elems else ELEM_INT
 
 
+def placement_dtype(p: Dict[str, Any]) -> np.dtype:
+    """The numpy dtype a placement's bytes are STORED as.
+
+    Required, not defaulted. Falling back to uint8 on a missing key is exactly how a two-byte
+    workspace gets read at half length with nothing raising: the halved byte count equals the
+    element count, so every reshape succeeds and the tensor merely comes back wrong. Every
+    container ignite-compile emits carries the key.
+
+    This says how WIDE an element is, not what it means. What it means is the placement's
+    ``elem`` (see ``container_elem``), and the two are separate because np.dtype("bf16") raises
+    outright while np.dtype("bfloat16") resolves only if ml_dtypes was imported first.
+    """
+    dtype = p.get("dtype")
+    if not dtype:
+        raise KeyError("placement has no 'dtype': a graph-engine container has to say how wide "
+                       "its elements are, because a region length computed without it is right "
+                       "only at one byte an element")
+    return np.dtype(dtype)
+
+
+def plane_bytes(p: Dict[str, Any]) -> int:
+    """Bytes of ONE channel-block plane, halo ring included, in the placement's own dtype."""
+    h, w, halo = int(p["height"]), int(p["width"]), int(p["halo"])
+    return (h + 2 * halo) * (w + 2 * halo) * 8 * placement_dtype(p).itemsize
+
+
+def region_bytes(p: Dict[str, Any], planes: Optional[int] = None) -> int:
+    """Bytes spanned by ``planes`` planes of a placement; by default its real channel blocks.
+
+    The eight inside ``plane_bytes`` is CHANNELS A BLOCK, not a width in bytes. Both meanings of
+    ``* 8`` live in this file - ``blocks * 8`` is a channel count in a dozen places - and
+    conflating them is what made the original region arithmetic look correct at one byte.
+    """
+    n = int(p["blocks"]) if planes is None else int(planes)
+    return n * plane_bytes(p)
+
+
 def _plane_view(buf: np.ndarray, p: Dict[str, Any], planes: Optional[int] = None) -> np.ndarray:
     h, w, halo = p["height"], p["width"], p["halo"]
     n = p["planes"] if planes is None else planes
-    plane_bytes = (h + 2 * halo) * (w + 2 * halo) * 8
+    pb = plane_bytes(p)
+    dt = placement_dtype(p)
     band = p.get("band_rows", 0)
     if band:
         # Channel blocks interleaved every `band` rows (compiler's Placement.band_rows), so the
         # blocks of one tile sit adjacent. Always halo 0. This copies; it is a read path.
-        total = p["planes"] * plane_bytes
-        v = buf[p["base"]:p["base"] + total].reshape(h // band, p["planes"], band, w, 8)
+        total = p["planes"] * pb
+        v = buf[p["base"]:p["base"] + total].view(dt).reshape(h // band, p["planes"], band, w, 8)
         return np.ascontiguousarray(v[:, :n].transpose(1, 0, 2, 3, 4)).reshape(n, h, w, 8)
-    return buf[p["base"]:p["base"] + n * plane_bytes].reshape(n, h + 2 * halo, w + 2 * halo, 8)
+    return buf[p["base"]:p["base"] + n * pb].view(dt).reshape(n, h + 2 * halo, w + 2 * halo, 8)
 
 
 def halo_fill_image(ge: Dict[str, Any]) -> np.ndarray:
@@ -109,8 +147,7 @@ def input_lut(input_scale: float, input_zero_point: int = ZP) -> np.ndarray:
 
 def _region(p: Dict[str, Any]) -> Tuple[int, int]:
     """(base, bytes) of a placement's real channel blocks, halo ring included."""
-    h, w, halo = int(p["height"]), int(p["width"]), int(p["halo"])
-    return int(p["base"]), int(p["blocks"]) * (h + 2 * halo) * (w + 2 * halo) * 8
+    return int(p["base"]), region_bytes(p)
 
 
 def _boundary_placement(session: "EngineSession", binding: Dict[str, Any]) -> Dict[str, Any]:
@@ -126,16 +163,16 @@ def _boundary_placement(session: "EngineSession", binding: Dict[str, Any]) -> Di
 
 
 def _boundary_region(p: Dict[str, Any]) -> Tuple[int, int]:
-    """(base, bytes) of a boundary's region, in the placement's own dtype."""
-    h, w, halo = int(p["height"]), int(p["width"]), int(p["halo"])
-    item = np.dtype(p.get("dtype") or "uint8").itemsize
-    return int(p["base"]), int(p["blocks"]) * (h + 2 * halo) * (w + 2 * halo) * 8 * item
+    """(base, bytes) of a boundary's region. Same arithmetic as ``_region`` - it always was,
+    except that this one threaded itemsize and that one did not. One helper now serves both.
+    """
+    return int(p["base"]), region_bytes(p)
 
 
 def _boundary_interior(raw: np.ndarray, p: Dict[str, Any]) -> np.ndarray:
     """[blocks][H][W][8] view of a region's real interior, the halo ring excluded."""
     h, w, halo = int(p["height"]), int(p["width"]), int(p["halo"])
-    planes = raw.view(np.dtype(p.get("dtype") or "uint8")).reshape(
+    planes = raw.view(placement_dtype(p)).reshape(
         int(p["blocks"]), h + 2 * halo, w + 2 * halo, 8)
     return planes[:, halo:halo + h, halo:halo + w, :]
 
@@ -244,7 +281,7 @@ class HostStep:
         for part in parts:
             p = placements[part["tensor"]]
             h, w, halo = int(p["height"]), int(p["width"]), int(p["halo"])
-            plane = (h + 2 * halo) * (w + 2 * halo) * 8
+            plane = plane_bytes(p)
             self.in_parts.append((int(p["base"]) + int(part["block_offset"]) * plane, int(part["blocks"]) * plane,
                                   int(part["blocks"]), h, w, halo))
         in_channels = int(seg.get("in_channels") or self.pin["channels"])
@@ -374,6 +411,9 @@ class EngineSession:
         self._npu_streams: List[Any] = []
         self._ws_map: Optional[np.ndarray] = None
         self._input_plane: Optional[np.ndarray] = None
+        # Overwritten from the input placement below when there is one; a session that never
+        # stages an input still has to have a width to answer with.
+        self._input_dtype: np.dtype = np.dtype(np.uint8)
         self.bo_ws = None
         self.bo_wp = None
         self.bo_instr_exec = None
@@ -489,7 +529,10 @@ class EngineSession:
             self.input_placement = self.ge["placements"][self.ge["input_tensor"]]
             p = self.input_placement
             plane_shape = (p["height"] + 2 * p["halo"], p["width"] + 2 * p["halo"], 8)
-            self._input_bytes = int(np.prod(plane_shape))
+            # ONE plane, which is what every _upload_input sync spans. np.prod is an ELEMENT
+            # count; the sync wants bytes, and the two are equal only at one byte an element.
+            self._input_dtype = placement_dtype(p)
+            self._input_bytes = int(np.prod(plane_shape)) * self._input_dtype.itemsize
             self._ws_map = None
             if map_workspace:
                 try:
@@ -500,10 +543,14 @@ class EngineSession:
                     self._ws_map = None
             if self._ws_map is not None:
                 base = p["base"]
-                self._input_plane = self._ws_map[base:base + self._input_bytes].reshape(plane_shape)
+                # _ws_map is a BYTE view of the workspace, so reinterpret before reshaping:
+                # at two bytes an element the old reshape would have raised, which is the one
+                # place this file failed loudly rather than quietly.
+                self._input_plane = (self._ws_map[base:base + self._input_bytes]
+                                     .view(self._input_dtype).reshape(plane_shape))
                 self._input_plane[:] = ZP
             else:
-                self._input_plane = np.full(plane_shape, ZP, dtype=np.uint8)
+                self._input_plane = np.full(plane_shape, ZP, dtype=self._input_dtype)
             self.last_dispatch_ms = 0.0
 
             # One XRT run object for every frame: its arguments (opcode, instructions,
@@ -608,19 +655,19 @@ class EngineSession:
             # Band-packed: channel blocks interleave every `band` rows, so a block's rows are
             # NOT contiguous and the region spans every plane of every band, not blocks planes.
             # Reading it plane-major returns the right bytes in the wrong order.
-            nbytes = p["planes"] * h * w * 8          # halo is always 0 when banded
+            nbytes = region_bytes(p, p["planes"])     # halo is always 0 when banded
             if sync:
                 self.bo_ws.sync(self.harness.pyxrt.xclBOSyncDirection.XCL_BO_SYNC_BO_FROM_DEVICE,
                                 nbytes, p["base"])
             raw = np.frombuffer(self.bo_ws.read(nbytes, p["base"]), dtype=np.uint8)
-            v = raw.reshape(h // band, p["planes"], band, w, 8)[:, :p["blocks"]]
+            v = raw.view(placement_dtype(p)).reshape(h // band, p["planes"], band, w, 8)[:, :p["blocks"]]
             return np.ascontiguousarray(v.transpose(1, 4, 0, 2, 3)).reshape(
                 p["blocks"] * 8, h, w)[:p["channels"]]
-        nbytes = p["blocks"] * (h + 2 * halo) * (w + 2 * halo) * 8
+        nbytes = region_bytes(p)
         if sync:
             self.bo_ws.sync(self.harness.pyxrt.xclBOSyncDirection.XCL_BO_SYNC_BO_FROM_DEVICE, nbytes, p["base"])
         raw = np.frombuffer(self.bo_ws.read(nbytes, p["base"]), dtype=np.uint8)
-        planes = raw.reshape(p["blocks"], h + 2 * halo, w + 2 * halo, 8)[:, halo:halo + h, halo:halo + w, :]
+        planes = raw.view(placement_dtype(p)).reshape(p["blocks"], h + 2 * halo, w + 2 * halo, 8)[:, halo:halo + h, halo:halo + w, :]
         return np.transpose(planes, (0, 3, 1, 2)).reshape(p["blocks"] * 8, h, w)[:p["channels"]]
 
     def stage_tensor(self, name: str, data: np.ndarray, sync: bool = True):
@@ -633,27 +680,28 @@ class EngineSession:
         channels = p["channels"]
         if data.shape != (channels, h, w):
             raise ValueError(f"Expected shape ({channels}, {h}, {w}), got {data.shape}")
-        nbytes = blocks * (h + 2 * halo) * (w + 2 * halo) * 8
+        nbytes = region_bytes(p)
+        dt = placement_dtype(p)
 
-        padded_c = blocks * 8
+        padded_c = blocks * 8          # CHANNELS a block, not a width in bytes
         if channels < padded_c:
             padded_data = np.pad(data, ((0, padded_c - channels), (0, 0), (0, 0)), mode="constant", constant_values=ZP)
         else:
             padded_data = data
         swizzled = padded_data.reshape(blocks, 8, h, w).transpose(0, 2, 3, 1)
         if halo > 0:
-            plane = np.full((blocks, h + 2 * halo, w + 2 * halo, 8), p.get("halo_value", ZP), dtype=np.uint8)
+            plane = np.full((blocks, h + 2 * halo, w + 2 * halo, 8), p.get("halo_value", ZP), dtype=dt)
             plane[:, halo:halo + h, halo:halo + w, :] = swizzled
         else:
-            plane = np.ascontiguousarray(swizzled, dtype=np.uint8)
+            plane = np.ascontiguousarray(swizzled, dtype=dt)
 
         if p.get("band_rows", 0):
             band = p["band_rows"]
             nb = h // band
-            full = np.full((nb, p["planes"], band, w, 8), p.get("halo_value", ZP), dtype=np.uint8)
+            full = np.full((nb, p["planes"], band, w, 8), p.get("halo_value", ZP), dtype=dt)
             full[:, :blocks] = swizzled.reshape(blocks, nb, band, w, 8).transpose(1, 0, 2, 3, 4)
-            plane = np.ascontiguousarray(full, dtype=np.uint8)
-            nbytes = plane.size
+            plane = np.ascontiguousarray(full, dtype=dt)
+            nbytes = plane.nbytes          # .size is an element count, equal only at one byte
         raw_bytes = plane.tobytes()
         if self._ws_map is not None:
             self._ws_map[p["base"]:p["base"] + nbytes] = np.frombuffer(raw_bytes, dtype=np.uint8)
@@ -751,7 +799,7 @@ class GraphSession(EngineSession):
         for name in self.head_names:
             hm = self.heads_meta[name]
             hp = self.ge["placements"][hm["tensor"]]
-            nbytes = hp["blocks"] * hp["height"] * hp["width"] * 8
+            nbytes = region_bytes(hp)          # heads are planned without a halo
             self._head_regions.append((name, hm, hp, hp["base"], nbytes))
         # Consolidated head sync spans: merge contiguous/overlapping regions
         # to reduce ioctl roundtrips from 6-9 down to 3.
@@ -955,7 +1003,7 @@ class DenseGraphSession(EngineSession):
         self._out_base = int(op["base"])
         self._out_blocks = int(op["blocks"])
         self._out_hw = (int(op["height"]), int(op["width"]))
-        self._out_region = self._out_blocks * self._out_hw[0] * self._out_hw[1] * 8
+        self._out_region = region_bytes(op)
         transform = self.dense["transform"]
         if transform.get("op") != "depth_to_space" or transform.get("mode", "DCR") != "CRD":
             raise ValueError(f"unsupported dense output transform {transform}")
@@ -1069,17 +1117,17 @@ class ClassificationSession(EngineSession):
         self.input_scale = float(qs["input_scale"])
         self.input_zp = int(qs["input_zero_point"])
 
-        # Input buffer: blocks * (H + 2*halo) * (W + 2*halo) * 8
+        # Input buffer: one whole region, in the placement's own element width
         h, w, halo = int(ip["height"]), int(ip["width"]), int(ip["halo"])
         self._cls_in_base = int(ip["base"])
-        self._cls_in_bytes = self.in_blocks * (h + 2 * halo) * (w + 2 * halo) * 8
+        self._cls_in_bytes = region_bytes(ip, self.in_blocks)
         self._cls_in_shape = (self.in_blocks, h + 2 * halo, w + 2 * halo, 8)
 
         op = self.ge["placements"][self.cls_meta["tensor"]]
         self._out_base = int(op["base"])
         self._out_blocks = int(op["blocks"])
         self._out_hw = (int(op["height"]), int(op["width"]))
-        self._out_region = self._out_blocks * self._out_hw[0] * self._out_hw[1] * 8
+        self._out_region = region_bytes(op)
 
     def stage_pooled(self, pooled_features: np.ndarray) -> None:
         """Stage a pooled feature vector [Cin] or [1, Cin, 1, 1] into workspace at pixel (0, 0)."""
