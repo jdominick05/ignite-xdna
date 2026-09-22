@@ -102,6 +102,36 @@ class TestTheHelpersActuallyScale(unittest.TestCase):
             self.assertEqual(_region(p), _boundary_region(p), dtype)
 
 
+class TestTheHeadEgressContract(unittest.TestCase):
+    """``HeadSpec.nbytes`` named bytes and returned elements. Ignition consumes this module through
+    the [npu] wheel, so the int8 numbers must be identical to the byte - and they are, because
+    int8's itemsize is 1. The field exists so a wider head could never land at half its offset.
+    """
+
+    def test_nbytes_is_unchanged_for_int8_heads(self):
+        from ignite_xdna.runtime.heads import HeadSpec
+        shape = (1, 64, 80, 80)
+        h = HeadSpec(name="p3_box", shape=shape, offset=0, scale=0.05, zero_point=0)
+        self.assertEqual(h.itemsize, 1)
+        self.assertEqual(h.nbytes, int(np.prod(shape)))
+        self.assertEqual(h.end, h.offset + int(np.prod(shape)))
+
+    def test_nbytes_would_scale_for_a_wider_head(self):
+        from ignite_xdna.runtime.heads import HeadSpec
+        shape = (1, 64, 80, 80)
+        narrow = HeadSpec(name="p3_box", shape=shape, offset=0, scale=0.05, zero_point=0)
+        wide = HeadSpec(name="p3_box", shape=shape, offset=0, scale=0.05, zero_point=0, dtype="int16")
+        self.assertEqual(wide.nbytes, 2 * narrow.nbytes)
+
+    def test_unpack_still_refuses_an_egress_that_is_not_int8(self):
+        from ignite_xdna.runtime.heads import DetectHeadLayout, HeadSpec
+        layout = DetectHeadLayout(heads=(HeadSpec("p3_box", (1, 2, 2, 2), 0, 0.05, 0),))
+        with self.assertRaises(TypeError):
+            layout.unpack(np.zeros(8, dtype=np.uint8))
+        views = layout.unpack(np.zeros(8, dtype=np.int8))
+        self.assertEqual(views["p3_box"].shape, (1, 2, 2, 2))
+
+
 class TestAMissingDtypeIsRefused(unittest.TestCase):
     """The default that made the whole class silent."""
 

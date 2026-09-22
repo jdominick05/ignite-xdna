@@ -55,10 +55,22 @@ class HeadSpec:
     offset: int
     scale: float
     zero_point: int
+    #: Storage width of one element. Heads are int8 and this exists so ``nbytes`` is a byte
+    #: count rather than an element count that happens to equal one. Ignition consumes this
+    #: module through the [npu] wheel, so the int8 arithmetic must stay identical - and it is:
+    #: itemsize is 1, so every existing offset and length is unchanged to the byte.
+    dtype: str = "int8"
+
+    @property
+    def itemsize(self) -> int:
+        return int(np.dtype(self.dtype).itemsize)
 
     @property
     def nbytes(self) -> int:
-        return int(np.prod(self.shape))
+        """BYTES, as the name says. np.prod(shape) is an ELEMENT count, and the two are equal
+        only at one byte an element - the confusion this module named but did not make.
+        """
+        return int(np.prod(self.shape)) * self.itemsize
 
     @property
     def end(self) -> int:

@@ -35,6 +35,7 @@ import hashlib
 import mmap
 import os
 import time
+import warnings
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
@@ -794,6 +795,12 @@ class GraphSession(EngineSession):
             self._ingress_fn = self._pre.lib.fused_preprocess_bgr_to_c8_plane
         # Head readback: each head tensor is contiguous (halo 0); egress is int8 NCHW.
         self.heads_meta = self.ge["heads"]
+        # out_bytes is a BYTE count - the manifest's egress_bytes, which threads itemsize - while
+        # every head slice below indexes this buffer by ELEMENT (`off + c * height * width`).
+        # The two coincide only while the egress is one byte an element, which int8 heads are.
+        # A wider egress would allocate twice the elements and land every head at half its
+        # declared offset, overlapping its neighbour. DetectHeadLayout.unpack refuses a non-int8
+        # egress outright, which is what keeps that from being discovered in a detection.
         self._egress = np.zeros(self.out_bytes, dtype=np.int8)
         self._head_regions = []
         for name in self.head_names:
@@ -822,6 +829,7 @@ class GraphSession(EngineSession):
             for name in self.head_names if name.endswith("_cls") and self.task == "detect"}
         self._cls_max_valid = False
         self._head_status: Optional[HeadStatus] = None
+        self._head_absence_warned = False
         self._head_views: Optional[Dict[str, np.ndarray]] = None  # int8 views of the persistent egress
         self._head_scales: Optional[Dict[str, Any]] = None
 
@@ -921,6 +929,15 @@ class GraphSession(EngineSession):
         egress = self.read_heads(unswizzle=unswizzle)
         t3 = time.perf_counter()
         status = self.head_status
+        if not status.present and not self._head_absence_warned:
+            # Absent heads are a SOFT failure by design: every head comes back None, a caller
+            # with a CPU oracle falls back to it, and the only symptom is a worse latency with
+            # no stated cause. The reason is in out['head_status'] either way; this says it once
+            # out loud so it is not conditional on somebody reading that key.
+            self._head_absence_warned = True
+            warnings.warn(f"{self.path}: no usable head layout, so every NPU head is None and a caller "
+                          f"that falls back will look merely slow - {status.reason}",
+                          RuntimeWarning, stacklevel=2)
         out: Dict[str, Any] = {name: None for name in self.head_names}
         if status.present:
             if unswizzle:

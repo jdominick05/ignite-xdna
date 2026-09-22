@@ -26,6 +26,13 @@ class DenseTensorSession(EngineSession):
             raise RuntimeError("DenseTensorSession is closed")
         t0 = time.perf_counter()
         self._host_values.clear()
+        # NO ELSE, AND THAT IS CORRECT - checked against the built containers rather than
+        # assumed. Both MODNet recipes declare input_dtype float32 and a float32 dense_output
+        # with scale and zero_point null, because their quantization is a QuantizeLinear INSIDE
+        # the graph rather than something the caller applies. So a float32 container passing
+        # straight through is the intended path, not a missed branch. A container of some third
+        # width never reaches here: EngineSession refuses an element width this session cannot
+        # read before the constructor returns.
         if self.input["dtype"] == "uint8" and np.asarray(x).dtype == np.float32:
             from ignite_xdna.compiler.graph_reference import quantize_input
             q = self.ignite_manifest["quant_scales"]
@@ -35,6 +42,8 @@ class DenseTensorSession(EngineSession):
         self.dispatch()
         t2 = time.perf_counter()
         y = read_boundary(self, self.output)
+        # Same reasoning as the ingress above: a float32 dense output is already in units, and
+        # dequantizing it would be the bug.
         if self.output["dtype"] == "uint8":
             y = (y.astype(np.float32) - self.output["zero_point"]) * self.output["scale"]
         t3 = time.perf_counter()
