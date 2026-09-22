@@ -182,7 +182,7 @@ def main() -> int:
                 cmd += ["--scratch-address", str(scratch_address)]
             out = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
             for line in out.stdout.splitlines():
-                if line.startswith(("PLACEMENT", "  ", "WEIGHT_ACTIVATION")):
+                if line.startswith(("PLACEMENT", "  ", "EXTENT", "WEIGHT_ACTIVATION")):
                     print(line, flush=True)
         return 0
     return trial(args.scheme, args.psum_address, args.scratch_address, args.core, args.build_dir)

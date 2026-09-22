@@ -111,8 +111,8 @@ def _core_fn(w_in, a_in, o_out, engine, psum, scratch, row):
     `scratch` was a dead sink and an emitting packet mis-counted into the accumulate loop
     wrote to nowhere. Here it would write the emitted tile straight over the held tile that a
     later OP_RESIDUAL is going to read, and the result would be wrong without being obviously
-    wrong. Any packet counted in `count_acc` must therefore be non-emitting, and the
-    schedule asserts that rather than assuming it.
+    wrong. Any packet counted in `count_acc` must therefore be non-emitting - a contract
+    whoever builds the packets owes, and one no schedule enforces yet.
     """
     w = w_in.acquire(1)
     idx_ty = IndexType.get()
