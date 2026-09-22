@@ -12024,6 +12024,13 @@ the mechanism predicts, because the convolution loop is a larger share of a wide
 | YOLOv8s | -4.4% |
 | YOLOv8x | **-6.0%** |
 
+**Correctness at this width, and across the cuts.** A third container was built with workspace
+reuse off so every one of the 106 tensors owns a slot and is readable after a single dispatch:
+**106/106 exact, PASS**. That is the only byte-exactness run in the `ptr` set that crosses segment
+boundaries, where workspace state carries between separate instruction streams, and it is the
+widest the kernel has been checked at
+([`engine_int8_ptr_verify_yolov8x_split_npu_20260922.log`](../results/aie/engine_int8_ptr_verify_yolov8x_split_npu_20260922.log)).
+
 ### The crossover, which matters more than the -6%
 
 The same run says Ignition **loses YOLOv8x to AMD by 1.47x**, and `ptr` does not come close to

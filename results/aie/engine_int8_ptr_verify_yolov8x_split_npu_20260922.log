@@ -1,0 +1,128 @@
+RESEARCH_PLATFORM {"machine": "Desktop 2", "cpu": "AMD Ryzen 7 8700G w/ Radeon 780M Graphics", "os": "Windows-11-10.0.26200-SP0", "ram_bytes": 33381138432, "source_sha256": {"tools/research_process.py": "ffeb1857f190b482eed101b5f5a928f455de26bfa61d23f78a2eacec08e2663e", "tools/quant_calib_alphabet.py": "2dc0b2878c564853f340880209a425dfcf63b8536b2b8e9fd32344daade58d37", "tools/xint8_arithmetic_probe.py": "6aa3df08b9870c3c2264b868459d7ffbac3070dddc1349d7c6f3f480075f7041", "scripts/research-lowlevel.sh": "3455ad7933697936487712665505c216891865c6deada647302785f6e37020bd", "scripts/research-iron.sh": "4c863a262646ddab39b5005006ba8e03809895e6386c6310e2fd9d0a9e9609ee", "kernels/memory_placement/probe.py": "e8d990169ad6091fa1b53852e9f61eff495b5def72d35165a5c5cf1759e38898", "kernels/memory_placement/memory_kernels.cc": "182e7af7071a1e851afb4a7ca266069c489aea1fbaaa85eca129708daeba5ba6", "scripts/research-matrix.sh": "739254171629deae822b0ad7dabc875aee19ace56dde77d3e8aab61663f97516", "kernels/memory_placement/gemm.py": "17c905ad66110d3346bbf0db898dfc6b780df59fae1dfb0c1747057ce1e5844e", "kernels/memory_placement/gemm_placement.cc": "f21acf7250b12914ea30cc1f77613239dfa18421a85a1b9a5199017dd916278a", "tools/research_summary.py": "0c00dcceef07053d06731b41a1f1ed58d3ba4ea09f82497de354ce9cef17da20", "tools/research_toolchain.py": "f0a126a24ae213acfaa43460cfd9def0c86d9cb70cfee0228aa271688467b314"}, "commit": "0d16cf376b831d721c846e58ce81f47e9ba7d7b2", "command": ["bash", "scripts/research-iron.sh", "tools/verify_engine_container.py", "--container", "build/ptr_gate/x_split_ptr_noreuse.ignite", "--model", "models/yolov8x_cut_xint8.onnx"], "seconds_limit": 3600.0, "rss_gib_limit": 8, "checks_only": false, "free_ram_bytes": 18669731840}
+HOST_LOAD busy_cores=0.68 logical_cores=16 free_ram_gb=17.3 sample_sec=1
+HOST_LOAD_TOP 0.23 Code:44448 ws_mb=340
+HOST_LOAD_TOP 0.11 Taskmgr:47220 ws_mb=148
+HOST_LOAD_TOP 0.09 dev-agent:21712 ws_mb=806
+HOST_LOAD_TOP 0.06 powershell:65420 ws_mb=81
+HOST_LOAD_TOP 0.03 Code:58932 ws_mb=278
+HOST_LOAD_VERDICT CLEAR
+
+PRE_NPU_CONTEXT_WITNESS "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+[verify] workspace reuse off: every tensor owns a slot, so every layer below is readable
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [61508, 66372, 66496, 66580, 67272], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 4.421, "tree_rss_bytes": 288342016, "foreign_peers": []}
+[verify] detect container x_split_ptr_noreuse.ignite: 106 layers, reference in 4.9 s
+  L 0 /model.0/conv/Conv                           EXACT
+  L 1 /model.1/conv/Conv                           EXACT
+  L 2 /model.2/cv1/conv/Conv                       EXACT
+  L 3 /model.2/m.0/cv1/conv/Conv                   EXACT
+  L 4 /model.2/m.0/cv2/conv/Conv                   EXACT
+  L 5 /model.2/m.1/cv1/conv/Conv                   EXACT
+  L 6 /model.2/m.1/cv2/conv/Conv                   EXACT
+  L 7 /model.2/m.2/cv1/conv/Conv                   EXACT
+  L 8 /model.2/m.2/cv2/conv/Conv                   EXACT
+  L 9 /model.2/cv2/conv/Conv                       EXACT
+  L10 /model.3/conv/Conv                           EXACT
+  L11 /model.4/cv1/conv/Conv                       EXACT
+  L12 /model.4/m.0/cv1/conv/Conv                   EXACT
+  L13 /model.4/m.0/cv2/conv/Conv                   EXACT
+  L14 /model.4/m.1/cv1/conv/Conv                   EXACT
+  L15 /model.4/m.1/cv2/conv/Conv                   EXACT
+  L16 /model.4/m.2/cv1/conv/Conv                   EXACT
+  L17 /model.4/m.2/cv2/conv/Conv                   EXACT
+  L18 /model.4/m.3/cv1/conv/Conv                   EXACT
+  L19 /model.4/m.3/cv2/conv/Conv                   EXACT
+  L20 /model.4/m.4/cv1/conv/Conv                   EXACT
+  L21 /model.4/m.4/cv2/conv/Conv                   EXACT
+  L22 /model.4/m.5/cv1/conv/Conv                   EXACT
+  L23 /model.4/m.5/cv2/conv/Conv                   EXACT
+  L24 /model.4/cv2/conv/Conv                       EXACT
+  L25 /model.5/conv/Conv                           EXACT
+  L26 /model.6/cv1/conv/Conv                       EXACT
+  L27 /model.6/m.0/cv1/conv/Conv                   EXACT
+  L28 /model.6/m.0/cv2/conv/Conv                   EXACT
+  L29 /model.6/m.1/cv1/conv/Conv                   EXACT
+  L30 /model.6/m.1/cv2/conv/Conv                   EXACT
+  L31 /model.6/m.2/cv1/conv/Conv                   EXACT
+  L32 /model.6/m.2/cv2/conv/Conv                   EXACT
+  L33 /model.6/m.3/cv1/conv/Conv                   EXACT
+  L34 /model.6/m.3/cv2/conv/Conv                   EXACT
+  L35 /model.6/m.4/cv1/conv/Conv                   EXACT
+  L36 /model.6/m.4/cv2/conv/Conv                   EXACT
+  L37 /model.6/m.5/cv1/conv/Conv                   EXACT
+  L38 /model.6/m.5/cv2/conv/Conv                   EXACT
+  L39 /model.6/cv2/conv/Conv                       EXACT
+  L40 /model.7/conv/Conv                           EXACT
+  L41 /model.8/cv1/conv/Conv                       EXACT
+  L42 /model.8/m.0/cv1/conv/Conv                   EXACT
+  L43 /model.8/m.0/cv2/conv/Conv                   EXACT
+  L44 /model.8/m.1/cv1/conv/Conv                   EXACT
+  L45 /model.8/m.1/cv2/conv/Conv                   EXACT
+  L46 /model.8/m.2/cv1/conv/Conv                   EXACT
+  L47 /model.8/m.2/cv2/conv/Conv                   EXACT
+  L48 /model.8/cv2/conv/Conv                       EXACT
+  L49 /model.9/cv1/conv/Conv                       EXACT
+  L50 /model.9/m/MaxPool                           EXACT
+  L51 /model.9/m_1/MaxPool                         EXACT
+  L52 /model.9/m_2/MaxPool                         EXACT
+  L53 /model.9/cv2/conv/Conv                       EXACT
+  L54 /model.12/cv1/conv/Conv                      EXACT
+  L55 /model.12/m.0/cv1/conv/Conv                  EXACT
+  L56 /model.12/m.0/cv2/conv/Conv                  EXACT
+  L57 /model.12/m.1/cv1/conv/Conv                  EXACT
+  L58 /model.12/m.1/cv2/conv/Conv                  EXACT
+  L59 /model.12/m.2/cv1/conv/Conv                  EXACT
+  L60 /model.12/m.2/cv2/conv/Conv                  EXACT
+  L61 /model.12/cv2/conv/Conv                      EXACT
+  L62 /model.15/cv1/conv/Conv                      EXACT
+  L63 /model.15/m.0/cv1/conv/Conv                  EXACT
+  L64 /model.15/m.0/cv2/conv/Conv                  EXACT
+  L65 /model.15/m.1/cv1/conv/Conv                  EXACT
+  L66 /model.15/m.1/cv2/conv/Conv                  EXACT
+  L67 /model.15/m.2/cv1/conv/Conv                  EXACT
+  L68 /model.15/m.2/cv2/conv/Conv                  EXACT
+  L69 /model.15/cv2/conv/Conv                      EXACT
+  L70 /model.16/conv/Conv                          EXACT
+  L71 /model.22/cv2.0/cv2.0.0/conv/Conv            EXACT
+  L72 /model.22/cv3.0/cv3.0.0/conv/Conv            EXACT
+  L73 /model.22/cv2.0/cv2.0.1/conv/Conv            EXACT
+  L74 /model.22/cv3.0/cv3.0.1/conv/Conv            EXACT
+  L75 /model.18/cv1/conv/Conv                      EXACT
+  L76 /model.22/cv2.0/cv2.0.2/Conv                 EXACT
+  L77 /model.22/cv3.0/cv3.0.2/Conv                 EXACT
+  L78 /model.18/m.0/cv1/conv/Conv                  EXACT
+  L79 /model.18/m.0/cv2/conv/Conv                  EXACT
+  L80 /model.18/m.1/cv1/conv/Conv                  EXACT
+  L81 /model.18/m.1/cv2/conv/Conv                  EXACT
+  L82 /model.18/m.2/cv1/conv/Conv                  EXACT
+  L83 /model.18/m.2/cv2/conv/Conv                  EXACT
+  L84 /model.18/cv2/conv/Conv                      EXACT
+  L85 /model.19/conv/Conv                          EXACT
+  L86 /model.22/cv2.1/cv2.1.0/conv/Conv            EXACT
+  L87 /model.22/cv3.1/cv3.1.0/conv/Conv            EXACT
+  L88 /model.22/cv2.1/cv2.1.1/conv/Conv            EXACT
+  L89 /model.22/cv3.1/cv3.1.1/conv/Conv            EXACT
+  L90 /model.21/cv1/conv/Conv                      EXACT
+  L91 /model.22/cv2.1/cv2.1.2/Conv                 EXACT
+  L92 /model.22/cv3.1/cv3.1.2/Conv                 EXACT
+  L93 /model.21/m.0/cv1/conv/Conv                  EXACT
+  L94 /model.21/m.0/cv2/conv/Conv                  EXACT
+  L95 /model.21/m.1/cv1/conv/Conv                  EXACT
+  L96 /model.21/m.1/cv2/conv/Conv                  EXACT
+  L97 /model.21/m.2/cv1/conv/Conv                  EXACT
+  L98 /model.21/m.2/cv2/conv/Conv                  EXACT
+  L99 /model.21/cv2/conv/Conv                      EXACT
+  L100 /model.22/cv2.2/cv2.2.0/conv/Conv            EXACT
+  L101 /model.22/cv3.2/cv3.2.0/conv/Conv            EXACT
+  L102 /model.22/cv2.2/cv2.2.1/conv/Conv            EXACT
+  L103 /model.22/cv3.2/cv3.2.1/conv/Conv            EXACT
+  L104 /model.22/cv2.2/cv2.2.2/Conv                 EXACT
+  L105 /model.22/cv3.2/cv3.2.2/Conv                 EXACT
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  Total Memory Usage: 303 MB\n  Partition Index   : 0\n    Columns: [1, 2, 3, 4]\n    HW Contexts:\n      |PID                 |Ctx ID     |Submissions |Migrations  |Err  |Priority |\n      |Process Name        |Status     |Completions |Suspensions |     |GOPS     |\n      |Memory Usage        |Instr BO   |            |            |     |FPS      |\n      |                    |           |            |            |     |Latency  |\n      |====================|===========|============|============|=====|=========|\n      |61508               |226        |38          |0           |0    |Normal   |\n      |python.exe          |Active     |37          |0           |     |N/A      |\n      |303 MB              |7776 KB    |            |            |     |N/A      |\n      |                    |           |            |            |     |N/A      |\n      |--------------------|-----------|------------|------------|-----|---------|\n"
+NPU_OWNERSHIP {"context_pids": [61508], "owned_pids": [61508, 66372, 66496, 66580, 67272], "foreign_pids": []}
+[verify] 106/106 layers exact | first dispatch 120.520 ms | dispatch mean 115.025 ms, min 113.114, max 117.149 over 20
+[verify] PASS
+HOST_TIMELINE {"elapsed_seconds": 8.64, "tree_rss_bytes": 0, "foreign_peers": []}
+POST_NPU_CONTEXT_WITNESS "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+RESEARCH_PROCESS_RESULT {"exit_code": 0, "stop": null, "peak_tree_rss_bytes": 764780544, "rss_measurement": "maximum observed across sampled descendant working sets; zero observations reported as null", "elapsed_seconds": 10.484000000054948, "foreign_contention_observed": false, "timing_eligible": true}
