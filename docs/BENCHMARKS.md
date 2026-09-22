@@ -12243,3 +12243,64 @@ Surveyed across the twelve containers on this machine, **every one carries only 
 The +0.43% was measured on **YOLOv8n only**, in one sitting of two rounds. It was not measured on YOLOv8s or YOLOv8x, and the cost need not be the same fraction on a model whose loop mix differs - the changed loop is one stride-2 dual, so a model with a different stride-2 share would pay differently. Nothing establishes *why* that loop gained a bundle; it is a register-allocation consequence of a smaller function set, not a change anyone wrote.
 
 Whether the freed 5,728 B actually buys anything depends on `chunk` porting to int8 and winning there, which is a separate gate and unrun - the bf16 result does not transfer, as `ptr` itself showed by beating its own bf16 prediction. The four opcodes remain unreachable by lowering, so nothing here makes Mul, Scale, Pool or fused stencils available to a model; it only stops containers paying for them.
+
+## The lowering never matched `Clip`, so every ReLU6 model was refused; matching it puts 11 of MODNet-Cut's 17 depthwise convolutions on the engine (2026-09-22, Desktop 2)
+
+`Clip` appeared nowhere in `graph_ir.py`. The per-convolution activation match accepted one shape, `Conv -> Relu -> QuantizeLinear`. A ReLU6 network is exported as `Conv -> Clip(0,6) -> QuantizeLinear`, so the match failed, `q_sink` was handed the convolution's raw float output, found no `QuantizeLinear` consuming it, and raised `... has 0 QuantizeLinear consumers`. The loop died on the convolution and never reached the `Clip` node, so the generic `unsupported op` message never fired - which is why this read for a long time as a quantization fault rather than a missing activation match.
+
+### ReLU6 is ReLU exactly when the bound cannot bind
+
+The engine has one integer epilogue. `relu_epilogue()` expresses ReLU as `max(q, 128)` through it with **max error 0 over all 256 inputs**, and the uint8 store saturates at 255. So where `6.0` lands at or above the top of the uint8 range, the saturation already performs the upper clamp and ReLU6 *is* ReLU: nothing is lost and nothing new is needed. The condition is `z1 + hi/s1 >= 255`, which with the zero point already asserted to be 128 is `hi >= 127 * s1`.
+
+That test is conservative by half a quantum. A ceiling at 254.5 still rounds to 255, so the tight threshold is 254.5; nothing measured sits in the gap, since non-binding layers are at 320 quanta and above and binding ones at 224.
+
+### Where the bound binds, measured over four models
+
+Every `Conv -> Clip -> QuantizeLinear` layer, all `Clip[0,6]` at zero point 128, all scales powers of two:
+
+| model | Conv -> Clip -> Q | bound binds | needs the match only |
+|---|---:|---:|---:|
+| FastDepth (`fastdepth_fp32_xint8.onnx`) | 27 | 0 | **27** |
+| MODNet-Cut (`modnet_cut_ignition_cle_adaround_c64.onnx`) | 35 | 4 | **31** |
+| MobileNetV2 (`mobilenetv2_xint8_adaround.onnx`) | 35 | **35** | 0 |
+| MiDaS-small (`midas_small_cut_xint8.onnx`) | 48 | **48** | 0 |
+
+A layer binds exactly where calibration reached about 6: a power-of-two range of 8 gives scale 1/16 and puts `6.0` at quantum `128 + 96 = 224`, below the 255 where saturation would have done the clamp for free. Where activations stayed well under 6 the scale is finer and `6.0` lands at 320 to 3,200. So in MobileNetV2 and MiDaS the clamp is doing real work and must not be dropped; those layers are refused, naming the quantum they bind at.
+
+MODNet-Cut's four are `features.1/conv/conv.0` (depthwise), `features.2/conv/conv.0` (pointwise), `features.2/conv/conv.3` (depthwise) and `features.18/features.18.0`.
+
+### The binding case is out of reach of this epilogue, provably
+
+The epilogue computes `t = q - 128`, `h = clip(sat16(rne((t*a1 + b1) >> s1)), 0, qmax)`, `qh = min(sat16(rne((h*k2) >> s2)), 127)`, `y = sat16(rne((t*qh) >> ysh))`, `out = sat_u8(y + 128)`.
+
+A binding ReLU6 needs `y = clip(t, 0, C)`. That wants `qh` constant at `2^ysh` on `t` in `[1, C]` and then `qh = C*2^ysh/t`, strictly decreasing, on `(C, 127]`. `qh` is non-decreasing in `t` for `a1 > 0`, so it cannot do both; `a1 < 0` fixes the negative side and breaks the positive one. `qmax` clips the gate, not the output, and the output ceiling is `sat_u8`'s fixed 127. A settable output clamp - one header word and one `min` - would cover it, and fits inside the 5,728 B the dispatch gate freed. The bf16 core already has exactly this as `F_RELU6`, independent of `F_RELU`, and no lowering has ever emitted it.
+
+### Two refusal paths, and only fixing one would have changed nothing
+
+`dense_regions` admits a unit to the engine only if every operator in it is in an allow-list, and that list ran **before** the `try` that catches a refusal. A unit containing a `Clip` therefore never called the lowering at all and produced no diagnostic. Teaching `graph_ir` alone would have left MODNet-Cut exactly as it was. The whole-model path has no `try` anywhere, so there one refused convolution fails the entire build - which is why MobileNetV2 and MiDaS-small stay refused rather than losing four layers to the host.
+
+### What it changed for MODNet-Cut
+
+| | before | after |
+|---|---:|---:|
+| engine layers | 29 | **53** |
+| host layers | 24 | 22 |
+| depthwise convolutions on the engine | 0 of 17 | **11 of 17** |
+
+Host segments fell rather than rose, so the refused layers did not shred the graph into more host islands. The **after** column and every figure below it comes from the logged run; the **before** column was measured in the same sitting from the container built at the parent commit, and is not itself a committed log.
+
+The lowered schedule carries **1,412 all-zero weight packets of 2,418**, of which 1,311 (54.2%) are droppable once the ones carrying `F_EMIT` or `F_HOLD` are excluded - the built container's `wpackets.bin` gives the same three counts. It is the first container in this repository to carry any at all. That is the surface the depthwise off-diagonal skip has been blocked on: depthwise is lowered as the dense convolution whose off-diagonal taps are zero, which is exact and costs 10 to 32 times the packets the arithmetic needs.
+
+### Gates passed
+
+- MODNet-Cut, dense path: **53 of 53 engine layer tensors byte-exact against ONNX Runtime**, and the model output exact, on a real image ([log](../results/dense/verify_lowering_modnet_cut_relu6_census_20260922.log), which also carries the depthwise and weight-packet census above; [the first run](../results/dense/verify_lowering_modnet_cut_relu6_20260922.log) predates those counters and is kept).
+- YOLOv8n control, no `Clip` anywhere: **63 of 63 exact** ([log](../results/dense/verify_lowering_yolov8n_control_20260922.log)). The checker is not tuned to the case it was written for.
+- `pytest tests/`: 272 passed, 25 skipped, against 266 before - the six new tests cover a non-binding `Clip` matching ONNX Runtime, a binding one refused, a floor above zero refused, a bound that is not a resolvable constant refused, the opset-6 attribute spelling, and an absent bound read as genuinely unbounded. The ten failures are pre-existing missing-`build/` artifacts in this worktree, unrelated.
+
+### Not established
+
+**This has not run on the NPU.** Every number above is the lowering and its integer reference, checked against ONNX Runtime offline. `verify_engine_container` cannot verify a dense container - it re-lowers through the whole-model path, and a dense manifest's host regions are named `<recipe>/host_NNN`, which are not ONNX node prefixes - and `dense_compare.py` runs on pinned artifacts that do not include this model. The eleven depthwise convolutions have therefore never executed on hardware; before this change none ever had.
+
+**Nothing here is a speed claim.** The rebuilt container's instruction stream is 2,182,492 B, which by the instruction-stream cost model is roughly 34 ms before any host work. A first timing is expected to be *slower* than the host path it replaces, because the depthwise layers now on the engine still carry their full dense packet cost. That is the expected shape, not a failure, and it is what the off-diagonal skip exists to fix.
+
+`Clip` was the first error FastDepth hit, not its only one: it now lowers past every `Clip` and fails later, at `KeyError: 'unknown uint8 tensor 386_QuantizeLinear_Output'`. MiDaS-small fails on `asymmetric pads [0, 0, 1, 1]` before any `Clip` is reached. Neither model is unlocked by this change alone.
