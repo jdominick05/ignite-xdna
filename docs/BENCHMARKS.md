@@ -12816,7 +12816,7 @@ geometry ratios are derived from the two emulators' own constants:
 | packet | int8 capacity | bf16 capacity | packets |
 |---|---:|---:|---:|
 | weights | 9,216 | 4,608 | **x2** |
-| activations | 6,400 elements | 6,400 elements | x1 (bytes x2) |
+| activations | 6,400 elements | 6,400 elements | bytes x2, count per model (see below) |
 | outputs | 3,200 elements | 1,600 elements | **x2** |
 
 The container ([`modnet_cut_adaround_dense.ignite`](../results/dense/compile_modnet_cut_adaround_20260922.log))
@@ -12826,16 +12826,42 @@ the 15.72 ns fitted across the YOLO family, which is itself worth recording: thi
 expensive per instruction byte than the family the model was fitted on, so a cross-family k would
 have under-predicted it.
 
+**SUPERSEDED 2026-09-22 by the corrected activation rule below. Kept for the record:**
+
 | bound | instruction stream | dispatch | transfer | frame | against AMD's measured 31.117 ms |
 |---|---:|---:|---:|---:|---:|
-| low | x1.03 | 43.00 ms | 59.89 ms | **128.84 ms** | 4.14x |
-| high | x2.00 | 83.14 ms | 59.89 ms | **168.98 ms** | 5.43x |
+| low (superseded) | x1.03 | 43.00 ms | 59.89 ms | 128.84 ms | 4.14x |
+| high (superseded) | x2.00 | 83.14 ms | 59.89 ms | 168.98 ms | 5.43x |
 
-**Read this as a bracket, not a prediction.** The manifest records `activation_packets` as one figure
-and does not separate tiles read from tiles written, so the output doubling cannot be counted exactly.
-The low bound assumes only the weight packets add instruction stream - a buffer descriptor is the
-same descriptor whatever the element width, only the byte count inside it changes - and the high bound
-assumes the whole mix doubles.
+### The activation packet count does not stay fixed, and that made the bracket too kind
+
+The table above assumed activation packets x1 with their bytes doubling. That is wrong for any model
+wider than 16 output channels a layer. **A bf16 output tile carries 16 channels where an int8 tile
+carries 32** - `O_ELEMS = 1600` is 5 x 20 x 16 at two bytes against `O_BYTES = 3200` as 5 x 20 x 32
+at one, because `mmul<4,8,4>` blocks the output by 4 where `mmul<4,8,8>` blocks it by 8. So a layer
+needs `ceil(Cout/16)` groups against `ceil(Cout/32)`, and **every group re-reads the whole input
+plane**.
+
+`tools/bf16_packet_recount.py` counts that per layer rather than assuming it
+([log](../results/aie/bf16_packet_recount_20260922.log)). MODNet-Cut: **74,276 -> 139,944 activation
+packets, a ratio of 1.8841**, and rounds 4,992 -> 8,976. Re-running the estimator with it
+([log](../results/aie/bf16_dispatch_estimate_corrected_20260922.log)):
+
+| bound | instruction stream | dispatch | transfer | frame | against AMD's measured 31.117 ms |
+|---|---:|---:|---:|---:|---:|
+| low | x1.86 | 77.19 ms | 59.89 ms | **163.02 ms** | 5.24x |
+| high | x1.89 | 78.49 ms | 112.84 ms | **217.28 ms** | 6.98x |
+
+**The corrected floor is above the old ceiling.** The bracket is also narrower now, because the
+activation count is counted rather than guessed and what remains uncertain is only the weight side:
+the low bound holds weight packet count (a bf16 weight packet is the same 9,472 B and covers half the
+output channels, so a layer that under-filled its int8 packet needs no more packets), the high bound
+doubles it.
+
+**The same correction is a nil for SESR-M7, and that is the interesting half.** Its ratio is
+**1.0000** - every layer is 16 output channels or fewer, so one group serves it at either width.
+SESR is narrow enough that **int8 is wasting half of its output tile**, and bf16's narrower tile costs
+it nothing. The geometry that makes MODNet worse makes SESR free.
 
 **Everything not modelled pushes the same way.** The bf16 kernel runs 35.6% above the fixed-shape
 kernel at k1 and **39 of MODNet-Cut's 71 convolutions are 1x1**; the number of schedule rounds may
@@ -12886,23 +12912,35 @@ frames, synthetic seeded input, `timing_eligible: true`
 ### MODNet-Cut in bf16 is dead, and this is what kills it
 
 The [bf16 bracket](#what-modnet-cut-would-cost-in-bf16-before-the-front-end-exists-to-measure-it-derived-2026-09-22)
-for the comparable span - dispatch plus transfer plus host layers - is **125.4 ms to 165.5 ms**
-(43.00-83.14 dispatch, 59.89 transfer, 22.50 host). Against **106.299 ms** of plain ONNX Runtime
-fp32 on the CPU.
+for the comparable span - dispatch plus transfer plus host layers - is **159.6 ms to 213.8 ms**
+(77.19-78.49 dispatch, 59.89-112.84 transfer, 22.50 host). Against **106.299 ms** of plain ONNX
+Runtime fp32 on the CPU. *(Corrected 2026-09-22 from 125.4-165.5 ms, which used the superseded
+activation rule; the conclusion is unchanged and strengthened.)*
 
-**bf16 on the NPU would be 1.18x to 1.56x slower than not using the NPU at all.** That is a firmer
+**bf16 on the NPU would be 1.50x to 2.01x slower than not using the NPU at all.** That is a firmer
 result than the AMD comparison, because it needs no vendor stack to be true and no bf16 front-end to
 be built: the low end of our own optimistic bracket is already above the CPU. The accuracy case
 (+12.6% over AMD's best measured int8) has nothing left to stand on for this model, since the same
 accuracy is available by running the fp32 graph on the CPU faster than the NPU could run it in bf16.
 
-### SESR is the only candidate still standing, and it is tight
+### SESR is the only candidate still standing, and the corrected geometry helps it
 
-SESR's bf16 dispatch bracket is 1.0024x to 2.0x of its int8 dispatch, because it carries **18 weight
-packets against MODNet-Cut's 2,418** and weight-packet doubling is bf16's one certain cost. Against a
-CPU that does the whole network in 7.872 ms, that leaves very little room: the bracket straddles the
-bar rather than clearing it, and resolving it needs SESR's int8 dispatch measured in one sitting with
-its own bf16 estimate. That measurement is the gate, and it is cheap.
+SESR carries **18 weight packets against MODNet-Cut's 2,418**, and the activation recount adds the
+second half of the reason it is the right target: its activation packet count ratio is **1.0000**,
+where MODNet's is 1.8841. Every SESR layer is 16 output channels or fewer (`Cout` is 16 for the head
+and all seven body convolutions, 12 for the tail), so `ceil(Cout/16)` equals `ceil(Cout/32)` and one
+group serves it at either width. **SESR is narrow enough that int8 wastes half of its output tile,
+and bf16's narrower tile costs it nothing.**
+
+Spans have to match here and it is easy to get wrong: the container's `input_shape` is
+`[1, 3, 256, 256]`, so it is **one tile**, and `pipelines/sesr/5_eval.py` splits an image into
+256x256 tiles and times one `sess.run` each. Per tile the bars are **CPU fp32 6.59-7.87 ms** and
+**AMD's EP on int8 2.00 ms** ([log](../results/eval_sesr_m7_set5_npu.log)). A bf16 SESR is not going
+to approach AMD's int8; the question it can answer is whether it clears the CPU, where AMD places
+nothing at all.
+
+Resolving it still needs SESR's int8 dispatch measured in one sitting against a bf16 container, and
+that measurement is the gate.
 
 ### An incidental reading that deserves its own check
 

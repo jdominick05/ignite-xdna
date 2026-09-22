@@ -14,19 +14,26 @@ THE METHOD. Take a BUILT int8 container and its MEASURED dispatch, calibrate the
 cost model against that container rather than against another family's fit, then re-count the packets
 under bf16 geometry and re-apply it.
 
-  weights     a 9,216 B payload holds 9,216 int8 weights or 4,608 bf16       -> packets x2
-  activations a packet holds 6,400 elements either way (6,400 B / 12,800 B)  -> packets x1, bytes x2
-  outputs     3,200 int8 elements or 1,600 bf16                              -> packets x2
+  weights     a 9,216 B payload holds 9,216 int8 weights or 4,608 bf16       -> at most packets x2
+  activations a packet holds 6,400 elements either way (6,400 B / 12,800 B)  -> bytes x2, and a
+              COUNT multiplier that has to be read off the model, not assumed
+  outputs     3,200 B tile either way: 32 int8 channels or 16 bf16           -> packets x2
 
-WHY A BRACKET AND NOT A NUMBER. The manifest records `activation_packets` as one figure and does not
-separate tiles read from tiles written, so the output doubling cannot be counted exactly. The two
-ends are therefore chosen to contain the truth rather than to be likely:
+**CORRECTED 2026-09-22.** This tool hardcoded the activation packet count at x1, and that is wrong
+for any model wider than 16 output channels a layer. A bf16 output tile carries **16** channels where
+an int8 tile carries **32** (`mmul<4,8,4>` blocks the output by 4; `mmul<4,8,8>` by 8), so a layer
+needs `ceil(Cout/16)` groups against `ceil(Cout/32)`, and every group re-reads the whole input plane.
+`tools/bf16_packet_recount.py` counts that per layer and `--activation-packet-ratio` is now required.
+Measured: SESR-M7 **1.0000** (every layer is 16 channels or fewer, so int8 was wasting half its
+output tile and bf16 costs it nothing) against MODNet-Cut **1.8841** (74,276 -> 139,944 packets).
 
-  LOW   only the weight packets add instruction stream. A buffer descriptor is the same descriptor
-        whatever the element width - only the byte count inside it changes - so if no extra BD is
-        issued on the activation side, this is the floor.
-  HIGH  the whole packet mix doubles, which is what happens if every activation packet in the count
-        is a written tile.
+WHY A BRACKET AND NOT A NUMBER. The activation count is now counted rather than assumed, so the
+bracket is narrower and is about the WEIGHT side, which the manifest cannot resolve:
+
+  LOW   activation packets as recounted, weight packet count held. A bf16 weight packet is the same
+        9,472 B and covers half the output channels, so a layer that under-filled its int8 packet
+        needs no more packets at bf16.
+  HIGH  weight packets double as well, which is what a layer that filled its int8 packet costs.
 
 NOT MODELLED, and each of these pushes the same way: the bf16 kernel's own per-pass cost (it runs
 35.6% above the fixed-shape kernel at k1, and 39 of MODNet-Cut's 71 convolutions are 1x1), and any
@@ -37,7 +44,8 @@ modelled either, and that one would help BOTH widths.
         bash scripts/research-iron.sh tools/bf16_dispatch_estimate.py \\
             --container build/modnet_cut_adaround_dense.ignite \\
             --dispatch-ms 41.697 --host-ms 22.496 --transfer-ms 29.944 \\
-            --pre-ms 2.089 --post-ms 1.366 --rival-ms 31.117 --rival-name amd
+            --pre-ms 2.089 --post-ms 1.366 --rival-ms 31.117 --rival-name amd \\
+            --activation-packet-ratio 1.884108
 """
 from __future__ import annotations
 
@@ -77,7 +85,16 @@ def main() -> int:
     ap.add_argument("--post-ms", type=float, default=0.0)
     ap.add_argument("--rival-ms", type=float, default=0.0, help="a measured rival frame to divide by")
     ap.add_argument("--rival-name", default="rival")
+    ap.add_argument("--activation-packet-ratio", type=float, required=True,
+                    help="bf16 activation packets per int8 activation packet, from "
+                         "tools/bf16_packet_recount.py. REQUIRED: this was hardcoded to 1.0 and "
+                         "that is wrong for any model wider than 16 output channels a layer, "
+                         "because a bf16 output tile carries 16 channels where int8 carries 32, "
+                         "so the layer needs more groups and every group re-reads the input plane")
     args = ap.parse_args()
+    if args.activation_packet_ratio < 1.0:
+        ap.error("an activation packet ratio below 1.0 is not physical: a bf16 output tile carries "
+                 "at most as many channels as an int8 one, never more")
 
     from ignite_xdna.compiler.serializer import IgniteModelReader
     ge = IgniteModelReader(str(ROOT / args.container)).manifest["graph_engine"]
@@ -91,12 +108,15 @@ def main() -> int:
 
     # The element ratios, derived rather than asserted, so a geometry change cannot pass silently.
     w_ratio = i8.W_MAX_BYTES / (BF16_W_PAYLOAD_BYTES / 2)      # int8 weights per packet / bf16
-    a_ratio = i8.A_BYTES / BF16_A_ELEMS                        # int8 elements per packet / bf16
+    a_elem_ratio = i8.A_BYTES / BF16_A_ELEMS                   # ELEMENTS per packet, not packets
     o_ratio = i8.O_BYTES / BF16_O_ELEMS
     emit("GEOMETRY", int8_weights_per_packet=i8.W_MAX_BYTES, bf16_weights_per_packet=BF16_W_PAYLOAD_BYTES // 2,
          int8_activation_elems=i8.A_BYTES, bf16_activation_elems=BF16_A_ELEMS,
          int8_output_elems=i8.O_BYTES, bf16_output_elems=BF16_O_ELEMS,
-         weight_packet_ratio=w_ratio, activation_packet_ratio=a_ratio, output_packet_ratio=o_ratio)
+         weight_packet_capacity_ratio=w_ratio, activation_elems_per_packet_ratio=a_elem_ratio,
+         output_channels_per_tile_ratio=o_ratio,
+         note="these are CAPACITY ratios per packet. The activation packet COUNT ratio is a "
+              "separate, per-model quantity and arrives via --activation-packet-ratio.")
 
     k_ns_per_byte = (args.dispatch_ms - FIXED_MS) * 1e6 / insts
     emit("INT8_MEASURED", container=str(args.container), insts_bytes=insts,
@@ -105,12 +125,28 @@ def main() -> int:
          dispatch_ms=args.dispatch_ms, k_ns_per_instruction_byte=round(k_ns_per_byte, 4))
 
     total = apkts + wpkts
-    low_factor = (apkts + wpkts * w_ratio) / total    # weight side only
-    high_factor = 2.0                                 # the whole mix
+    a_bf16 = apkts * args.activation_packet_ratio
+    # LOW: activation packets recounted from the tile geometry (structural, not a guess), weight
+    # packet COUNT held - a bf16 weight packet is the same 9,472 B and covers half the output
+    # channels, so a layer that under-filled its int8 packet needs no more packets in bf16.
+    # HIGH: weight packets double too, which is what a layer that filled its int8 packet costs.
+    low_factor = (a_bf16 + wpkts) / total
+    high_factor = (a_bf16 + wpkts * w_ratio) / total
+    emit("ACTIVATION_RULE", activation_packet_ratio=args.activation_packet_ratio,
+         activation_packets_int8=apkts, activation_packets_bf16=int(round(a_bf16)),
+         source="tools/bf16_packet_recount.py",
+         note="a bf16 output tile carries 16 channels where an int8 tile carries 32, so a layer "
+              "needs ceil(Cout/16) groups against ceil(Cout/32) and every group re-reads the input "
+              "plane. A ratio of 1.0 means the model is narrow enough that int8 was wasting tile "
+              "channels, and bf16 costs it nothing here.")
     out = {}
     for name, factor in (("low", low_factor), ("high", high_factor)):
         dispatch = FIXED_MS + insts * factor * k_ns_per_byte / 1e6
-        transfer = args.transfer_ms * 2.0             # every tile and weight doubles in bytes
+        # Activation BYTES double per packet on top of any count multiplier; weight packets and
+        # output tiles are the same 9,472 B and 3,200 B at either width, so they do not grow in
+        # bytes. Without a transfer split the two ends bracket it.
+        t_scale = 2.0 if name == "low" else 2.0 * args.activation_packet_ratio
+        transfer = args.transfer_ms * t_scale
         frame = args.pre_ms + dispatch + args.host_ms + transfer + args.post_ms
         out[name] = dict(insts_factor=round(factor, 4), dispatch_ms=round(dispatch, 3),
                          transfer_ms=round(transfer, 3), host_ms=args.host_ms,
