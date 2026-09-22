@@ -12801,3 +12801,62 @@ ran.
 - The probe requires an explicit `--cache-key` and never defaults one, because `npu.paths` selects a
   compile cache by filename marker and two different graphs can resolve to the same key; a probe that
   inherited one would report another graph's placement.
+
+## What MODNet-Cut would cost in bf16, before the front-end exists to measure it (DERIVED, 2026-09-22)
+
+bf16's case is an accuracy one: 0.5029 person IoU against AMD's best *measured* int8 of 0.4468,
+**+12.6% relative**. #139's front-end is the largest build left in the arc, so the shape of the
+latency answer is worth having before building the thing that would measure it.
+
+[`tools/bf16_dispatch_estimate.py`](../tools/bf16_dispatch_estimate.py) takes a built int8 container
+and its measured dispatch, calibrates the instruction-stream cost model **against that container**
+rather than against another family's fit, then re-counts the packets under bf16 geometry. The
+geometry ratios are derived from the two emulators' own constants:
+
+| packet | int8 capacity | bf16 capacity | packets |
+|---|---:|---:|---:|
+| weights | 9,216 | 4,608 | **x2** |
+| activations | 6,400 elements | 6,400 elements | x1 (bytes x2) |
+| outputs | 3,200 elements | 1,600 elements | **x2** |
+
+The container ([`modnet_cut_adaround_dense.ignite`](../results/dense/compile_modnet_cut_adaround_20260922.log))
+carries 74,276 activation packets, 2,418 weight packets and 2,182,492 instruction bytes, and its
+measured dispatch of 41.697 ms calibrates **k = 18.99 ns per instruction byte**. That is 21% above
+the 15.72 ns fitted across the YOLO family, which is itself worth recording: this model is more
+expensive per instruction byte than the family the model was fitted on, so a cross-family k would
+have under-predicted it.
+
+| bound | instruction stream | dispatch | transfer | frame | against AMD's measured 31.117 ms |
+|---|---:|---:|---:|---:|---:|
+| low | x1.03 | 43.00 ms | 59.89 ms | **128.84 ms** | 4.14x |
+| high | x2.00 | 83.14 ms | 59.89 ms | **168.98 ms** | 5.43x |
+
+**Read this as a bracket, not a prediction.** The manifest records `activation_packets` as one figure
+and does not separate tiles read from tiles written, so the output doubling cannot be counted exactly.
+The low bound assumes only the weight packets add instruction stream - a buffer descriptor is the
+same descriptor whatever the element width, only the byte count inside it changes - and the high bound
+assumes the whole mix doubles.
+
+**Everything not modelled pushes the same way.** The bf16 kernel runs 35.6% above the fixed-shape
+kernel at k1 and **39 of MODNet-Cut's 71 convolutions are 1x1**; the number of schedule rounds may
+change; and the transfer figure doubles DDR bytes with no allowance for the doubled header overhead.
+The one omission that would help is #132's 1,311 droppable all-zero weight packets, and it helps both
+widths equally.
+
+**And it is DERIVED.** This repo's standing reminder is the MemTile activation ring, which cut DDR
+traffic 38.3% by derivation and ran 20% *slower* on silicon. A bracket from a cost model is a reason
+to look, never a result.
+
+### What it says about the arc
+
+At 4.1x to 5.4x AMD's frame, a +12.6% accuracy margin is not a release on its own - the int8 dense
+path already loses 3.15x and was recorded as a negative for exactly that reason. Two things follow
+without needing any new measurement:
+
+- **The accuracy margin has to carry the whole case, and it is smaller than the arc assumed.** It was
+  +17.7% against our own best int8 and reads as 2.96x against AMD's plain XINT8 arm; against AMD's
+  best measured int8 it is +12.6%, and it is still a CPU cast against an NPU number.
+- **MODNet-Cut may be the wrong showcase.** Its 39 1x1 convolutions are where the bf16 engine is
+  furthest behind the fixed-shape kernel, and its host and transport already exceed AMD's whole frame
+  at int8. A model whose shape suits the engine, and where precision matters more, would test the
+  idea rather than the transport - which is what makes SESR-M7 (#128) the gate rather than #129.
