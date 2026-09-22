@@ -12984,3 +12984,32 @@ Neither is costed. bf16 packets hold half the weights of int8 packets, so intege
 engine carries roughly twice the traffic of the same work on the int8 engine, and for any model the
 int8 engine already runs it is strictly worse. The case for either design is capability - models the
 int8 path refuses or carves to the host - and not speed.
+
+### Sixteen cores carry integer work on silicon, byte for byte
+
+The offline result above is the emulator's `mac()` in aligned mode, which is the measured model of
+the core rather than the core. `kernels/bf16_conv/engine_bf16_16core.py --integer` puts the question
+on the device, and needs no front-end and no kernel change - the synthetic harness never imports
+`engine_schedule`. Log `results/aie/engine_bf16_16core_integer_npu_20260922.log`.
+
+**4 columns x 3 iterations, 76,800 of 76,800 bytes equal every time** - 921,600 bytes compared, all
+exact, over the same seven scenarios the float sweep uses: k3 stride 1 with ReLU, a 1x1 over eight
+input blocks, the accumulate/emit chunk pair, the hold/residual pair, and the stride-2 downsample.
+Exit 0, no foreign contention.
+
+What makes it an integer result rather than a rerun with different numbers is the census the compile
+emits first: **153,600 expected output values, 0 of them non-integer, maximum absolute value 69.0,
+`store_lossless` true.** The harness refuses to build a plan whose expected outputs are not integers,
+so the run cannot quietly become a test of the bf16 store. The `k1_chunk1` scenario matters most
+here - it loads psum back across a weight packet boundary, so the float32 psum carrying integers
+exactly between packets is confirmed on hardware and not only in the design file.
+
+Operand magnitudes are deliberately small: activations in [0, 3], weights in [-1, 1], bias in
+[-4, 4], because the deepest scenario is 72 MACs and 3 x 1 x 72 = 216 keeps every accumulator under
+the 256 the bf16 store can carry. **So silicon confirms that the datapath carries integers exactly;
+it does not confirm the 2^24 bound, which remains an emulator result.** Reaching 2^24 on the device
+needs the epilogue scale that does not exist yet, because without it the store truncates long before
+the accumulator does.
+
+The float arm is unchanged by the flag: a default compile reproduces `insts_bytes` 25,664 and kernel
+object sha256 `67d1050f...`, the same as the [float sweep](#sixteen-cores-run-bf16-byte-exactly-on-silicon-2026-09-22-desktop-2).

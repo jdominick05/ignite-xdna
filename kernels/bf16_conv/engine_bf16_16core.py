@@ -104,23 +104,33 @@ def geometry(k, stride):
     return rows_in, cols_in, rows_in * cols_in * 8
 
 
-def scenarios(seed: int):
+def scenarios(seed: int, ints=None):
     """(name, weight packet, count_out, count_acc) - one W packet per scenario, as the core expects.
 
     A scenario's header serves every one of its rounds, so a scenario is either all-emitting or
     all-accumulating; a chain that accumulates and then emits is two scenarios sharing the core's
     psum, exactly as the int8 synthetic plan builds one.
+
+    `ints` is None for the float sweep, or (w_max, b_max) to draw INTEGER weights and biases -
+    the arm that asks whether this datapath can carry int8 work. See `build_plan`.
     """
     rng = np.random.default_rng(seed)
     out = []
 
     def w_for(k, ncin):
-        return rng.normal(scale=0.25, size=k * k * ncin * em.NCO * 32).astype(np.float32)
+        n = k * k * ncin * em.NCO * 32
+        if ints is None:
+            return rng.normal(scale=0.25, size=n).astype(np.float32)
+        return rng.integers(-ints[0], ints[0] + 1, size=n).astype(np.float32)
 
     def bias():
         # Replicated to mmul's 4x4 C shape on the host, element m*4+n being output channel n:
         # bf16 has no 4-element load, so the core cannot broadcast it itself.
-        per_ch = rng.normal(scale=0.1, size=em.NCO * 4).astype(np.float32).reshape(em.NCO, 4)
+        if ints is None:
+            per_ch = rng.normal(scale=0.1, size=em.NCO * 4).astype(np.float32).reshape(em.NCO, 4)
+        else:
+            per_ch = rng.integers(-ints[1], ints[1] + 1,
+                                  size=em.NCO * 4).astype(np.float32).reshape(em.NCO, 4)
         return np.repeat(per_ch[:, None, :], 4, axis=1).reshape(-1)
 
     # 1. 3x3 stride 1, one input block, ReLU, two tiles per core.
@@ -189,18 +199,37 @@ def check_acc_packets_do_not_emit(scs) -> None:
                 f"would acquire an output object and release it unwritten")
 
 
-def build_plan(seed: int):
-    """Per column, the scenario list with its own activation bytes for every core and round."""
+def build_plan(seed: int, ints=None):
+    """Per column, the scenario list with its own activation bytes for every core and round.
+
+    INTEGER MODE (`ints` = (a_max, w_max, b_max)) asks the question the float sweep cannot: the
+    int8 domain fits inside bf16 exactly, so does this datapath carry INTEGER work on silicon?
+    Activations are drawn from [0, a_max] and weights from [-w_max, w_max], which makes every
+    product and every partial sum an integer.
+
+    The default magnitudes are deliberately small. The accumulator is exact on integers to 2^24
+    (tools/bf16_integer_exactness.py), but the OUTPUT STORE is bf16 and carries only 8 significand
+    bits, so an accumulator above 256 would be rounded by the store and the run would measure the
+    store rather than the datapath. The deepest scenario here is 72 MACs, so a_max * w_max * 72
+    must stay under 256: 3 * 1 * 72 = 216 clears it with the bias on top, and every expected output
+    is then an exactly representable integer. Widen these only with that arithmetic redone.
+    """
     rng = np.random.default_rng(seed + 1)
-    scs = scenarios(seed)
+    scs = scenarios(seed, None if ints is None else (ints[1], ints[2]))
     check_acc_packets_do_not_emit(scs)
     plan = []
     for c in range(COLS):
         col = []
         for name, w, n_out, n_acc in scs:
             rounds = n_out + n_acc
-            a = [[np.asarray(rng.normal(scale=1.5, size=A_ELEMS), np.float32)
-                  .astype(bfloat16).view(np.uint8) for _ in range(ROWS)] for _ in range(rounds)]
+            if ints is None:
+                a = [[np.asarray(rng.normal(scale=1.5, size=A_ELEMS), np.float32)
+                      .astype(bfloat16).view(np.uint8) for _ in range(ROWS)]
+                     for _ in range(rounds)]
+            else:
+                a = [[rng.integers(0, ints[0] + 1, size=A_ELEMS).astype(np.float32)
+                      .astype(bfloat16).view(np.uint8) for _ in range(ROWS)]
+                     for _ in range(rounds)]
             col.append({"name": name, "w": w, "n_out": n_out, "n_acc": n_acc, "a": a})
         plan.append(col)
     return plan
@@ -297,7 +326,7 @@ def sequence_from_meta(meta):
     return body
 
 
-def compile_engine(build_dir: Path, seed: int):
+def compile_engine(build_dir: Path, seed: int, ints=None):
     import aie.iron as iron
     from aie.iron.device import NPU1
     from aie.utils.compile.utils import compile_mlir_module
@@ -305,12 +334,30 @@ def compile_engine(build_dir: Path, seed: int):
     from kernels.bf16_conv import design as eng
 
     iron.set_current_device(NPU1())
-    plan = build_plan(seed)
+    plan = build_plan(seed, ints)
     ws, wp, meta = layout_buffers(plan)
     build_dir.mkdir(parents=True, exist_ok=True)
     np.save(build_dir / "ws.npy", ws)
     np.save(build_dir / "wp.npy", wp)
     expected = emulate_plan(plan)
+    if ints is not None:
+        # The claim the integer arm makes is that nothing anywhere is fractional. If the store had
+        # rounded an accumulator over 256, or a weight were not integral, this census would say so
+        # here rather than the run reporting a byte mismatch with no reason attached.
+        vals = np.concatenate([np.concatenate(col).view(bfloat16).astype(np.float32)
+                               for col in expected if col])
+        frac = int(np.count_nonzero(vals != np.rint(vals)))
+        print("INT_PLAN_CENSUS " + json.dumps(
+            {"ranges": {"act": [0, ints[0]], "weight": [-ints[1], ints[1]],
+                        "bias": [-ints[2], ints[2]]},
+             "expected_values": int(vals.size), "non_integer_values": frac,
+             "max_abs_expected": float(np.abs(vals).max()),
+             "store_lossless": bool(frac == 0 and np.abs(vals).max() <= 256)},
+            sort_keys=True), flush=True)
+        if frac:
+            raise SystemExit(f"{frac} expected outputs are not integers: the bf16 store rounded "
+                             f"an accumulator, so this plan would measure the store, not the "
+                             f"datapath. Lower the magnitudes (see build_plan).")
     flat = [np.concatenate(col) if col else np.zeros(0, np.uint8) for col in expected]
     meta["expected_lengths"] = [int(f.size) for f in flat]
     np.save(build_dir / "expected.npy", np.concatenate(flat))
@@ -332,6 +379,10 @@ def compile_engine(build_dir: Path, seed: int):
     obj = work / "engine_bf16.o"
     manifest = {
         "seed": seed, "compile_seconds": round(dt, 1),
+        "operands": "float" if ints is None else "integer",
+        "integer_ranges": None if ints is None else {"act": [0, ints[0]],
+                                                     "weight": [-ints[1], ints[1]],
+                                                     "bias": [-ints[2], ints[2]]},
         "kernel_sha256": hashlib.sha256(eng.KERNEL_SOURCE.read_bytes()).hexdigest(),
         "kernel_object_sha256": hashlib.sha256(obj.read_bytes()).hexdigest() if obj.exists() else None,
         "xclbin_sha256": hashlib.sha256((build_dir / "design.xclbin").read_bytes()).hexdigest(),
@@ -413,11 +464,20 @@ def main() -> int:
     ap.add_argument("--iters", type=int, default=3)
     ap.add_argument("--compile", action="store_true", help="build the xclbin only")
     ap.add_argument("--run", action="store_true", help="run an already-built xclbin only")
+    ap.add_argument("--integer", action="store_true",
+                    help="draw integer operands instead of Gaussians, to ask whether this "
+                         "datapath carries int8 work; magnitudes are bounded so the bf16 store "
+                         "stays lossless and the run measures the datapath (see build_plan)")
+    ap.add_argument("--int-act-max", type=int, default=3)
+    ap.add_argument("--int-weight-max", type=int, default=1)
+    ap.add_argument("--int-bias-max", type=int, default=4)
     args = ap.parse_args()
 
+    ints = ((args.int_act_max, args.int_weight_max, args.int_bias_max)
+            if args.integer else None)
     build_dir = Path(args.build_dir)
     if not args.run:
-        compile_engine(build_dir, args.seed)
+        compile_engine(build_dir, args.seed, ints)
     if args.compile:
         return 0
     return run_hardware(build_dir, iters=args.iters)
