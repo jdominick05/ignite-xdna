@@ -163,8 +163,36 @@ def plan_segments(ir: GraphIR, scheds: List[es.LayerSchedule],
     return segments
 
 
+def check_kernel_covers_packets(ge: dict, wpackets: bytes) -> None:
+    """Refuse a container whose packets reach a dispatch case its kernel was built without.
+
+    The compile-time dispatch gate (kernels/aie2/conv_engine/design.py) compiles out the cases
+    a container does not use, deriving the set from these same packets - so ignite-compile
+    cannot produce a mismatch. A hand-edited container, or one paired with another build's
+    xclbin, could. The core's failure mode there is `default:`: it emits nothing and raises
+    nothing, so this is checked rather than left to read as an unexplained byte mismatch.
+
+    Containers built before the gate carry no kernel_ops and are not checked.
+    """
+    ops = ge.get("kernel_ops")
+    if not ops:
+        return
+    a = np.frombuffer(wpackets, dtype=np.uint8)
+    n = a.size // em.W_BYTES
+    words = a[:n * em.W_BYTES].reshape(n, em.W_BYTES)[:, :em.HDR_BYTES].copy().view(np.int32)
+    present = {em.OP_NAMES.get(int(o), f"?{o}") for o in np.unique(words[:, em.H_OP])}
+    missing = sorted(present - set(ops) - {"NOP"})
+    if missing:
+        raise ValueError(
+            f"the packets reach {', '.join(missing)} but the kernel was built with only "
+            f"{', '.join(ops)}. The core would fall through to `default:` and emit nothing. "
+            f"Rebuild the container.")
+
+
 def build_manifest(ir: GraphIR, ws: es.Workspace, scheds: List[es.LayerSchedule], store: es.PacketStore,
-                   model_name: str, insts_bytes: int, xclbin_sha: str, kernel_sha: str, compile_s: float) -> Dict[str, Any]:
+                   model_name: str, insts_bytes: int, xclbin_sha: str, kernel_sha: str, compile_s: float,
+                   *, kernel_ops: Optional[List[str]] = None,
+                   kernel_object_sha256: Optional[str] = None) -> Dict[str, Any]:
     placements = {}
     for name, p in ws.placements.items():
         placements[name] = {"base": p.base, "halo": p.halo, "halo_value": p.halo_value, "height": p.height,
@@ -183,6 +211,11 @@ def build_manifest(ir: GraphIR, ws: es.Workspace, scheds: List[es.LayerSchedule]
                **({"kind": "host"} if isinstance(ir.layers[s.layer_index], HostLayer) else {})} for s in scheds]
     graph_engine = {
         "kernel_sha256": kernel_sha,
+        # kernel_sha256 hashes the SOURCE. The dispatch gate compiles cases out, so two
+        # containers can share a source and not a kernel: the OBJECT hash is what identifies
+        # what ran, and kernel_ops says in words which dispatch cases it was built with.
+        "kernel_ops": kernel_ops,
+        "kernel_object_sha256": kernel_object_sha256,
         "xclbin_sha256": xclbin_sha,
         "workspace_bytes": ws.nbytes,
         "input_tensor": ir.input,
@@ -418,9 +451,18 @@ def compile_graph_container(onnx_path, output_path, build_dir: Optional[Path] = 
         cadence.append({"retire_batch": emitter.last_retire_batch,
                         "thinnest_channel_tasks": emitter.thinnest_channel_tasks})
 
+    # Compile out the dispatch groups this container's packets never reach. The set is read
+    # from the stored packets, so it cannot disagree with what the cores will be handed.
+    # The table is checked against the emulator's opcode numbers here rather than in design.py,
+    # because a drift between the two would gate out a case a container does reach and the core
+    # would fall through to `default:` and silently emit nothing.
+    assert eng.GATEABLE_OPS == {"FUSED_CONV": em.OP_FUSED_CONV, "MUL": em.OP_MUL,
+                               "SCALE": em.OP_SCALE, "POOL": em.OP_POOL}, \
+        "design.GATEABLE_OPS has drifted from the emulator's opcode numbers"
+    kernel_ops = store.opcodes()
     iron.set_current_device(NPU1())
     program = eng.build_program(iron.get_current_device(), body, ws_bytes=ws_extent, wp_bytes=wp_extent,
-                                a_ring=activation_ring, w_buf=weight_buffer)
+                                a_ring=activation_ring, w_buf=weight_buffer, ops=kernel_ops)
     module = program.resolve_program()
     work = build_dir / "design.prj"
     if work.exists():
@@ -436,8 +478,13 @@ def compile_graph_container(onnx_path, output_path, build_dir: Optional[Path] = 
     xclbin = xclbin_path.read_bytes()
     insts = insts_path.read_bytes()
     kernel_sha = hashlib.sha256(eng.KERNEL_SOURCE.read_bytes()).hexdigest()
+    kernel_obj = work / "engine.o"
+    kernel_obj_sha = (hashlib.sha256(kernel_obj.read_bytes()).hexdigest()
+                      if kernel_obj.exists() else None)
     manifest = build_manifest(ir, ws, scheds, store, onnx_path.stem, len(insts),
-                              hashlib.sha256(xclbin).hexdigest(), kernel_sha, time.perf_counter() - t0)
+                              hashlib.sha256(xclbin).hexdigest(), kernel_sha, time.perf_counter() - t0,
+                              kernel_ops=sorted(em.OP_NAMES[o] for o in kernel_ops),
+                              kernel_object_sha256=kernel_obj_sha)
     manifest["graph_engine"]["ddr_extents_bytes"] = {"workspace": ws_extent, "packets": wp_extent}
     # Which ONNX this container was compiled from. The compile caches in this repo key on a NAME rather
     # than a model hash, so "is this container the model I think it is" has needed an external answer

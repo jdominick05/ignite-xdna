@@ -39,6 +39,7 @@ import cv2  # noqa: E402
 import numpy as np  # noqa: E402
 
 from ignite_xdna.compiler import engine_schedule as es  # noqa: E402
+from ignite_xdna.compiler.engine_compile import check_kernel_covers_packets  # noqa: E402
 from ignite_xdna.compiler import graph_ir, graph_reference as gr  # noqa: E402
 from ignite_xdna.compiler.serializer import IgniteModelReader  # noqa: E402
 
@@ -112,8 +113,13 @@ def main() -> int:
 
     with IgniteModelReader(args.container) as reader:
         manifest = dict(reader.manifest)
+        wpackets = reader.get_blob_bytes("wpackets.bin")
     task = manifest.get("task", "detect")
     ge = manifest["graph_engine"]
+    try:
+        check_kernel_covers_packets(ge, wpackets)
+    except ValueError as exc:
+        raise SystemExit(f"[verify] REFUSED: {exc}")
     host_regions = [s["name"] for s in ge.get("segments", []) if s["kind"] == "host"]
     model = args.model
     constants = {}

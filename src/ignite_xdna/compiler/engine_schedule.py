@@ -692,6 +692,18 @@ class PacketStore:
         first = offset // em.W_BYTES
         return self._chunks[first:first + nbytes // em.W_BYTES]
 
+    def opcodes(self) -> set:
+        """Every opcode the stored packets actually carry.
+
+        Read out of the packets rather than off the layer kinds that produced them. What the
+        core dispatches is what is IN the container, and the compile-time dispatch gate
+        (kernels/aie2/conv_engine/design.py::gate_flags) decides which cases the kernel still
+        has. Deriving the gate from intent would let a scheduler change that starts emitting a
+        new opcode outrun it, and the failure would be a silent default: in the core.
+        """
+        return {int(np.frombuffer(p[:em.HDR_BYTES].tobytes(), np.int32)[em.H_OP])
+                for p in self._chunks}
+
 
 # ----------------------------------------------------------------------------
 # Layer schedule

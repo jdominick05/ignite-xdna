@@ -12167,3 +12167,53 @@ comparison remains architecture against architecture.
 
 Backing log: [`engine_dispatch_cost_model_desktop2_20260922.log`](../results/aie/engine_dispatch_cost_model_desktop2_20260922.log),
 `--checks-only`, no device. Tool: `tools/engine_dispatch_cost_model.py`.
+
+## Compiling out the dispatch no container reaches frees 5,408 B, and costs a manifest field to stay honest (2026-09-22, Desktop 2)
+
+Backing logs: [`engine_dispatch_gate_census_desktop2_20260922.log`](../results/aie/engine_dispatch_gate_census_desktop2_20260922.log) (static, no device) and [`engine_dispatch_gate_yolov8n_desktop2_20260922.log`](../results/aie/engine_dispatch_gate_yolov8n_desktop2_20260922.log) (silicon, `--checks-only`). Tools: `tools/engine_dispatch_gate_census.py` (new), `tools/verify_engine_container.py`.
+
+**This establishes object sizes and byte-exactness. It makes no latency claim, and the reason it does not owe one is the equivalence below.**
+
+The census of 2026-09-21 priced four unreachable dispatch groups by **text-stripping** their case blocks out of a copy: 5,456 B of a 15,280 B object. Production cannot strip text. It compiles the cases out with `-DENGINE_OP_<NAME>=0`, and that is a different mechanism, so the price does not transfer by assertion.
+
+### The gate is the mechanism that was priced
+
+| build | object `.text` | freed | headroom of the 15,504 B budget |
+|---|---:|---:|---:|
+| ungated, every case compiled in | 15,184 B | - | 320 B |
+| without `OP_FUSED_CONV` | 11,616 B | 3,568 B | 3,888 B |
+| without `OP_MUL` | 14,864 B | 320 B | 640 B |
+| without `OP_SCALE` | 14,624 B | 560 B | 880 B |
+| without `OP_POOL` | 14,224 B | 960 B | 1,280 B |
+| without all four | **9,776 B** | **5,408 B** | **5,728 B** |
+
+The `-D` build and the text-stripped build produce **the same object bytes** - sha `08de6919...` both ways - so the earlier census's reading is the gated build's reading. Byte identity also settles the latency question without an A/B: every function that survives compiled to identical bytes, so nothing that still runs can have become faster or slower. **The gain is program memory, not time**, and a timing sitting would only be measuring noise.
+
+Two smaller readings. The four groups are now **exactly additive** (3,568 + 320 + 560 + 960 = 5,408) where before `ptr` they overlapped (5,792 summed against 5,456 together), so each group's helpers are now its own. And the total moved 5,456 -> 5,408 B because `ptr` saved 96 B ungated but only 48 B gated: one copy of its loop was inlined into `fused_conv_tile`, which the gate removes anyway.
+
+### What it buys, which is the point
+
+Headroom goes **320 B to 5,728 B**. At 320 B nothing fits; `chunk` - the bigger bf16 loop win, -17.7% on a k3 pass - costs +2,672 B and now clears by 3,056 B. Nothing is removed from the repository: all four opcodes, their emulation and their tests stay exactly as they were, and a build that passes no flags still gets the whole kernel.
+
+### The gate is derived from the packets, not declared
+
+`PacketStore.opcodes()` reads the opcode out of every weight packet the container is about to store, and `design.gate_flags()` compiles out every gateable group that set does not contain. Deriving it from the layer kinds instead would let a scheduler change that starts emitting a new opcode outrun the gate, and the core's failure mode is `default:` - it emits nothing and raises nothing.
+
+Surveyed across the twelve containers on this machine, **every one carries only `OP_CONV`, `OP_MAXPOOL` and `OP_RESIDUAL`** - YOLOv8n at 862 packets, YOLOv8s at 3,114, YOLOv8x at 15,360. So this is one kernel variant in practice, not a combinatorial family a reader has to worry about caching. `match_stencil_fusion` is called by a test and by `tools/verify_engine_container.py` and by nothing in the compile path, and `engine_schedule.fused_packet` has no caller at all.
+
+### The identity a manifest has to carry
+
+`kernel_sha256` hashes the **source file**, and the gate breaks it as an answer to "which kernel ran": the gated and ungated YOLOv8n containers built for this section share source sha `44b8fe24...` and do not share a kernel (9,776 B against 15,184 B). Two fields close it - `kernel_object_sha256`, the hash of the `engine.o` that was linked, and `kernel_ops`, the cases compiled in, by name. `kernel_sha256` keeps its documented meaning.
+
+`check_kernel_covers_packets` then refuses a container whose packets reach a case its kernel lacks. `ignite-compile` cannot produce one, because the gate is derived from those same packets; a hand-edited container or one paired with another build's xclbin could. Four offline tests exercise it, including the refusal itself and the rule that `OP_NOP` never needs a case - `tools/engine_dispatch_floor*.py` rewrite every header to `OP_NOP` to measure the dispatch floor, and those containers have to stay verifiable against a gated kernel.
+
+### Gates passed
+
+- Object 9,776 B with **0 accumulator stack moves**, byte-identical to the text-stripped build, and inert against the pre-gate kernel when no flag is set.
+- **YOLOv8n 66/66 layers byte-exact on silicon** from a `--no-workspace-reuse` gated build, device released clean.
+- The gated and ungated containers carry **byte-identical `wpackets.bin` and `insts.bin`**; only `engine.xclbin` differs, by 87,056 B, which is the 5,408 B object across 16 cores. The gate does not touch the schedule.
+- `pytest -q tests/test_graph_engine_offline.py tests/test_dense_regions_offline.py tests/test_conv_engine.py`: 68 passed, 4 skipped.
+
+### Not established
+
+No latency was measured and none is claimed. Whether the freed 5,728 B actually buys anything depends on `chunk` porting to int8 and winning there, which is a separate gate and unrun - the bf16 result does not transfer, as `ptr` itself showed by beating its own bf16 prediction. The four opcodes remain unreachable by lowering, so nothing here makes Mul, Scale, Pool or fused stencils available to a model; it only stops containers paying for them.

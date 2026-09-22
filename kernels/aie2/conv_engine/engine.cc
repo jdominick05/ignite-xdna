@@ -57,6 +57,27 @@ enum {
 };
 enum { OP_NOP = 0, OP_CONV = 1, OP_MAXPOOL = 2, OP_RESIDUAL = 3, OP_FUSED_CONV = 4,
        OP_MUL = 5, OP_SCALE = 6, OP_POOL = 7 };
+// Dispatch groups a container does not reach are gated out at compile time. The compiler
+// scans the opcode of every packet it is about to store and passes -DENGINE_OP_<NAME>=0 for
+// each group none of them uses; the case goes, and with it every anonymous-namespace function
+// only that case referenced. No container ignite-compile produces reaches any of the four -
+// match_stencil_fusion runs in a test and the verifier but never in the compile path, and
+// engine_schedule.py emits no Mul/Scale/Pool packet - which is 5,456 B of a 15,184 B object.
+// Each defaults to 1, so a build passing no flags (the census, the synthetic silicon sequence,
+// any direct build_program caller) still gets the whole kernel. The ENUM IS NEVER GATED: a
+// header word keeps its meaning whatever is compiled in, and the emulator is the contract.
+#ifndef ENGINE_OP_FUSED_CONV
+#define ENGINE_OP_FUSED_CONV 1
+#endif
+#ifndef ENGINE_OP_MUL
+#define ENGINE_OP_MUL 1
+#endif
+#ifndef ENGINE_OP_SCALE
+#define ENGINE_OP_SCALE 1
+#endif
+#ifndef ENGINE_OP_POOL
+#define ENGINE_OP_POOL 1
+#endif
 // F_RES_SHIFTS: a residual packet takes the left shifts of both operands from
 // H_RLSH_M / H_RLSH_R; without it the held tile is unshifted and the residual
 // tile is shifted by RSH (the rule every YOLOv8n residual uses).
@@ -625,18 +646,26 @@ inline void run(int32_t *hdr, uint8_t *apkt, uint8_t *out, int32_t *psum, int co
     case OP_RESIDUAL:
         residual_tile(d, apkt, psum, out);
         break;
+#if ENGINE_OP_MUL
     case OP_MUL:
         mul_tile(d, apkt, psum, out);
         break;
+#endif
+#if ENGINE_OP_SCALE
     case OP_SCALE:
         scale_tile(d, apkt, wpkt, psum, out);
         break;
+#endif
+#if ENGINE_OP_POOL
     case OP_POOL:
         avgpool_tile(d, apkt, psum, out);
         break;
+#endif
+#if ENGINE_OP_FUSED_CONV
     case OP_FUSED_CONV:
         fused_conv_tile(hdr, apkt, psum, out, core_row);
         break;
+#endif
     default:
         break;
     }

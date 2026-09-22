@@ -43,6 +43,30 @@ WP_BYTES = 16 * 1024 * 1024
 
 KERNEL_SOURCE = Path(__file__).with_name("engine.cc")
 
+# Dispatch groups engine.cc can compile out, and the opcode each one serves. Together they are
+# 5,408 B of a 15,184 B object, and no container ignite-compile produces reaches any of them
+# (docs/BENCHMARKS.md). The numbers must agree with engine.cc's enum and the emulator's; the
+# compile path asserts that against ignite_xdna.compiler.engine_emulator rather than trusting it.
+GATEABLE_OPS = {"FUSED_CONV": 4, "MUL": 5, "SCALE": 6, "POOL": 7}
+
+
+def gate_flags(ops):
+    """-D flags compiling out every gateable dispatch group `ops` does not use.
+
+    `ops` is the set of opcode NUMBERS a container's packets carry (PacketStore.opcodes()).
+    None gates nothing, which is what every direct caller gets: the census, the synthetic
+    silicon sequence and the offline tests all build the whole kernel.
+
+    Safe against the cache hazard that cost this repo a sitting: ExternalFunction's
+    _content_digest hashes the source TEXT and its sorted compile_flags, so two gate sets
+    cannot share an object. (The @iron.jit key that hashes only path+mtime is not on this
+    path - the engine builds through build_program, not through a jit'd generator.)
+    """
+    if ops is None:
+        return []
+    return [f"-DENGINE_OP_{name}=0" for name, op in sorted(GATEABLE_OPS.items())
+            if op not in ops]
+
 w_ty = np.ndarray[(W_WORDS,), np.dtype[np.int32]]
 a_ty = np.ndarray[(A_BYTES,), np.dtype[np.uint8]]
 a_col_ty = np.ndarray[(ROWS * A_BYTES,), np.dtype[np.uint8]]
@@ -410,7 +434,7 @@ def _activation_ring(col, name, slots):
 
 
 def build_program(device, sequence_body, w_depth=2, ws_bytes=WS_BYTES, wp_bytes=WP_BYTES, a_ring: int = 0,
-                  w_buf: bool = False):
+                  w_buf: bool = False, ops=None):
     """Return an IRON Program for the engine with ``sequence_body(ws, wp)``.
 
     The body emits raw shim DMA tasks against the FIFO allocation symbols
@@ -422,7 +446,7 @@ def build_program(device, sequence_body, w_depth=2, ws_bytes=WS_BYTES, wp_bytes=
         source_file=str(KERNEL_SOURCE),
         arg_types=[w_ty, a_ty, o_ty, psum_ty, np.int32],
         include_dirs=[config.cxx_header_path()],
-        compile_flags=["-O2"],
+        compile_flags=["-O2"] + gate_flags(ops),
     )
     if a_ring and w_buf:
         # Both would hand the core raw locks for BOTH operands, which needs a fourth core function; and

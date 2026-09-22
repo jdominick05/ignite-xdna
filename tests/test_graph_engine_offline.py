@@ -18,7 +18,8 @@ for p in (ROOT, ROOT / "src"):
 from ignite_xdna.compiler import engine_emulator as em  # noqa: E402
 from ignite_xdna.compiler import engine_schedule as es  # noqa: E402
 from ignite_xdna.compiler import graph_ir  # noqa: E402
-from ignite_xdna.compiler.engine_compile import build_manifest  # noqa: E402
+from ignite_xdna.compiler.engine_compile import (  # noqa: E402
+    build_manifest, check_kernel_covers_packets)
 from ignite_xdna.compiler.engine_sequence import merge_quad, program_task_count  # noqa: E402
 from ignite_xdna.runtime.heads import resolve_head_layout  # noqa: E402
 
@@ -846,6 +847,43 @@ class TestProgramRamEpilogueOps(unittest.TestCase):
 
             ref = np.concatenate([pooled(a_h), pooled(a_e)])
             self.assertTrue(np.array_equal(got.reshape(4, 5, 20, 8), ref), k)
+
+
+class TestDispatchGate(unittest.TestCase):
+    """The compile-time dispatch gate's fail-closed check.
+
+    The gate derives its case set from the container's own packets, so ignite-compile cannot
+    emit a packet its kernel has no case for. If one ever reached a gated-out case the core
+    would fall through to `default:` - emitting nothing and raising nothing - so the check
+    that catches it has to be exercised rather than assumed.
+    """
+
+    @staticmethod
+    def _wpackets(ops):
+        pkts = np.zeros((len(ops), em.W_BYTES), np.uint8)
+        words = np.zeros((len(ops), em.HDR_BYTES // 4), np.int32)
+        words[:, em.H_OP] = ops
+        pkts[:, :em.HDR_BYTES] = words.view(np.uint8).reshape(len(ops), em.HDR_BYTES)
+        return pkts.tobytes()
+
+    def test_passes_when_the_kernel_covers_every_packet(self):
+        wp = self._wpackets([em.OP_CONV, em.OP_MAXPOOL, em.OP_RESIDUAL])
+        check_kernel_covers_packets({"kernel_ops": ["CONV", "MAXPOOL", "RESIDUAL"]}, wp)
+
+    def test_refuses_a_packet_the_kernel_cannot_dispatch(self):
+        wp = self._wpackets([em.OP_CONV, em.OP_POOL])
+        with self.assertRaises(ValueError) as cm:
+            check_kernel_covers_packets({"kernel_ops": ["CONV", "MAXPOOL", "RESIDUAL"]}, wp)
+        self.assertIn("POOL", str(cm.exception))
+
+    def test_a_pre_gate_container_carries_no_op_list_and_is_not_checked(self):
+        check_kernel_covers_packets({}, self._wpackets([em.OP_POOL]))
+
+    def test_nop_never_needs_a_dispatch_case(self):
+        # tools/engine_dispatch_floor*.py rewrite every header to OP_NOP to measure the
+        # dispatch floor, and OP_NOP is served by `default:`. Those containers have to stay
+        # verifiable against a gated kernel.
+        check_kernel_covers_packets({"kernel_ops": ["CONV"]}, self._wpackets([em.OP_NOP] * 4))
 
 
 if __name__ == "__main__":

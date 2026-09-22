@@ -24,6 +24,11 @@ W_OFFSET = 256
 W_MAX_BYTES = W_BYTES - W_OFFSET  # 9,216
 
 OP_NOP, OP_CONV, OP_MAXPOOL, OP_RESIDUAL, OP_FUSED_CONV, OP_MUL, OP_SCALE, OP_POOL = 0, 1, 2, 3, 4, 5, 6, 7
+# Opcode names, for the manifest's kernel_ops and for any tool that has to say which dispatch
+# group a packet reaches. The compile-time gate (kernels/aie2/conv_engine/design.py) names its
+# -D flags from these same words, and the compile path asserts its table against these numbers.
+OP_NAMES = {OP_NOP: "NOP", OP_CONV: "CONV", OP_MAXPOOL: "MAXPOOL", OP_RESIDUAL: "RESIDUAL",
+            OP_FUSED_CONV: "FUSED_CONV", OP_MUL: "MUL", OP_SCALE: "SCALE", OP_POOL: "POOL"}
 F_LOAD_PSUM, F_EMIT, F_HSWISH, F_UP2, F_HOLD, F_RES_SHIFTS, F_SIGMOID, F_RESIDUAL = 1, 2, 4, 8, 16, 32, 64, 128
 SIGMOID_LINES = 4   # line 1 in H_A1/H_B1, lines 2-4 in H_A2..H_B4 (the header's last six words)
 
