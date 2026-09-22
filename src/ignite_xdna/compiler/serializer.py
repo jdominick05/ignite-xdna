@@ -51,6 +51,21 @@ FORMAT_VERSION = 1
 ARCH_XDNA1_PHOENIX = 1
 ARCH_XDNA2_STRIX = 2
 
+# Graph-engine identities. They live here because the serializer is the one module the compiler
+# and the runtime both already import. Before this they were two unlinked string literals, one
+# in engine_compile.py and one in graph_session.py, with nothing keeping them in step.
+ENGINE_CONV_INT8 = "conv_engine_v1"
+ENGINE_CONV_BF16 = "conv_engine_bf16_v1"
+GRAPH_ENGINES = (ENGINE_CONV_INT8, ENGINE_CONV_BF16)
+
+# Activation element semantics, carried per placement as "elem". ABSENT MEANS ELEM_INT, so every
+# container built before the bf16 engine existed keeps working without being rebuilt. The storage
+# dtype stays a real numpy spelling ("uint8", "uint16") because np.dtype("bf16") raises outright
+# and np.dtype("bfloat16") resolves only when ml_dtypes happens to have been imported first -
+# an import-order dependent failure is worse than either alternative.
+ELEM_INT = "int"
+ELEM_BF16 = "bf16"
+
 HEADER_SIZE = 64
 HEADER_STRUCT_FORMAT = "<4s2H2I5QI4s"
 ALIGNMENT = 64

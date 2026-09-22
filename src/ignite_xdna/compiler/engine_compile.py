@@ -33,9 +33,10 @@ import numpy as np
 from ignite_xdna.compiler import engine_emulator as em
 from ignite_xdna.compiler import engine_schedule as es
 from ignite_xdna.compiler.graph_ir import ConvLayer, GraphIR, HostLayer, lower_yolov8n
-from ignite_xdna.compiler.serializer import ARCH_XDNA1_PHOENIX, IgniteModelReader, IgniteModelWriter
+from ignite_xdna.compiler.serializer import (ARCH_XDNA1_PHOENIX, ENGINE_CONV_INT8, IgniteModelReader,
+                                             IgniteModelWriter)
 
-ENGINE_NAME = "conv_engine_v1"
+ENGINE_NAME = ENGINE_CONV_INT8
 HEAD_NAMES = ("p3_box", "p4_box", "p5_box", "p3_cls", "p4_cls", "p5_cls")
 # YOLOv8-pose keeps the detect heads with one class (person) and adds a keypoint branch (cv4): 17 COCO
 # keypoints x (x, y, visibility) per anchor.

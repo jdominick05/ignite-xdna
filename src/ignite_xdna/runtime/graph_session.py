@@ -41,16 +41,33 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 import numpy as np
 
 from ignite_xdna.compiler.graph_ir import place_host_output
-from ignite_xdna.compiler.serializer import IgniteModelReader
+from ignite_xdna.compiler.serializer import (ELEM_INT, ENGINE_CONV_INT8, GRAPH_ENGINES,
+                                             IgniteModelReader)
 from ignite_xdna.runtime.driver import XrtSiliconHarness, get_repo_root, setup_xrt_environment
 from ignite_xdna.runtime.heads import HEAD_NAMES, POSE_HEAD_NAMES, HeadStatus, resolve_head_layout
 
-ENGINE_NAME = "conv_engine_v1"
+ENGINE_NAME = ENGINE_CONV_INT8
 ZP = 128
 
 
 def is_graph_container(manifest: Optional[Dict[str, Any]]) -> bool:
-    return bool(manifest) and manifest.get("engine") == ENGINE_NAME
+    """Whether a manifest names ANY graph engine; ``container_elem`` says what width it carries."""
+    return bool(manifest) and manifest.get("engine") in GRAPH_ENGINES
+
+
+def container_elem(manifest: Optional[Dict[str, Any]]) -> str:
+    """The activation element semantics this container's placements declare.
+
+    Absent means ``ELEM_INT``, so a container built before the bf16 engine reads as integer
+    without being rebuilt. A container that mixes widths is not something one workspace can
+    stage, so it is refused here rather than half-read.
+    """
+    ge = (manifest or {}).get("graph_engine") or {}
+    elems = {str(p.get("elem", ELEM_INT)) for p in (ge.get("placements") or {}).values()}
+    if len(elems) > 1:
+        raise ValueError(f"container mixes activation element widths {sorted(elems)}; "
+                         "one container carries one width")
+    return elems.pop() if elems else ELEM_INT
 
 
 def _plane_view(buf: np.ndarray, p: Dict[str, Any], planes: Optional[int] = None) -> np.ndarray:
@@ -330,6 +347,11 @@ class HostStep:
 class EngineSession:
     """The convolution engine and its buffers for one graph-engine container (see ``compiler/engine_compile.py``)."""
 
+    #: Activation element widths this session can stage and read back. Every region length below
+    #: is an element count used as a byte count, which is correct at one byte an element and
+    #: silently half-length at two, so a session states what it can read and refuses the rest.
+    SUPPORTED_ELEMS = (ELEM_INT,)
+
     def __init__(self, container_path: Union[str, Path], device_index: int = 0,
                  xclbin_cache_dir: Optional[Union[str, Path]] = None, map_workspace: bool = True,
                  weights_path: Optional[Union[str, Path]] = None,
@@ -361,7 +383,20 @@ class EngineSession:
             self._reader = IgniteModelReader(self.path)
             self.ignite_manifest: Dict[str, Any] = self._reader.manifest
             if not is_graph_container(self.ignite_manifest):
-                raise ValueError(f"{self.path} is not a graph-engine container")
+                raise ValueError(f"{self.path} is not a graph-engine container: engine "
+                                 f"{self.ignite_manifest.get('engine')!r} is not one of "
+                                 f"{list(GRAPH_ENGINES)}")
+            # Admission, and it belongs HERE rather than at the first read. Every region length in
+            # this class is an element count used as a byte count; at two bytes an element that is
+            # exactly half the region, so each reshape still succeeds and each sync still returns a
+            # plausible tensor of interleaved high and low bytes. A container this session cannot
+            # read has to fail now, naming the reason, not several frames later as bad pixels.
+            elem = container_elem(self.ignite_manifest)
+            if elem not in self.SUPPORTED_ELEMS:
+                raise ValueError(
+                    f"{self.path} carries {elem!r} activations but {type(self).__name__} reads "
+                    f"{list(self.SUPPORTED_ELEMS)}; it needs the session built for that width")
+            self.elem = elem
             self.ge: Dict[str, Any] = self.ignite_manifest["graph_engine"]
             self.task = self.ignite_manifest.get("task", "detect")
             self.monolithic_stages: Dict[str, Any] = {}

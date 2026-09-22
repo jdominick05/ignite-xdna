@@ -1502,10 +1502,11 @@ class InferenceSession:
         """
         Loads a compiled .ignite model container directly with zero-copy memory-mapped buffers.
 
-        A graph-engine container (manifest ``engine == "conv_engine_v1"``) is served by the session its
-        task needs: ``GraphSession`` for detect and pose, ``DenseGraphSession`` for super-resolution, and
-        ``DenseTensorSession`` for the segmentation and matting maps. Each refuses a container that is not
-        its own, so the caller gets the right one here rather than a shape error several frames later.
+        A graph-engine container (manifest ``engine`` in ``serializer.GRAPH_ENGINES``) is served by the
+        session its task needs: ``GraphSession`` for detect and pose, ``DenseGraphSession`` for
+        super-resolution, and ``DenseTensorSession`` for the segmentation and matting maps. Each refuses
+        a container that is not its own -- by task, and by the activation element width its placements
+        declare -- so the caller gets the right one here rather than bad pixels several frames later.
         """
         from ignite_xdna.compiler.serializer import IgniteModelReader as _Reader
         from ignite_xdna.runtime.graph_session import GraphSession, is_graph_container
