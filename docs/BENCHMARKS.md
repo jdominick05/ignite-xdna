@@ -12299,8 +12299,102 @@ The lowered schedule carries **1,412 all-zero weight packets of 2,418**, of whic
 
 ### Not established
 
-**This has not run on the NPU.** Every number above is the lowering and its integer reference, checked against ONNX Runtime offline. `verify_engine_container` cannot verify a dense container - it re-lowers through the whole-model path, and a dense manifest's host regions are named `<recipe>/host_NNN`, which are not ONNX node prefixes - and `dense_compare.py` runs on pinned artifacts that do not include this model. The eleven depthwise convolutions have therefore never executed on hardware; before this change none ever had.
+**This has not run on the NPU.** *(Superseded the same day by the section below, which ran it: 53 of 53 engine layers exact on silicon over 50 images, and the frame measured against AMD. The second reason given here was also wrong - see the correction under it.)* Every number above is the lowering and its integer reference, checked against ONNX Runtime offline. `verify_engine_container` cannot verify a dense container - it re-lowers through the whole-model path, and a dense manifest's host regions are named `<recipe>/host_NNN`, which are not ONNX node prefixes - and `dense_compare.py` runs on pinned artifacts that do not include this model. The eleven depthwise convolutions have therefore never executed on hardware; before this change none ever had.
+
+**Correction to the sentence above (2026-09-22).** "`dense_compare.py` runs on pinned artifacts that do not include this model" is true of the file that was built for the census, and false as a *reason* this could not be verified. `results/dense/modnet_cut_pins_20260921.json` pins the **model**, not the container, and the pinned model - `modnet_cut_xint8_calibfix.onnx` - gets the identical benefit from the `Clip` match: 35 `Conv -> Clip -> Q`, the same 4 binding, 53 engine / 22 host layers, 11 of 17 depthwise, the same 2,418 / 1,412 / 1,311 packet census. More importantly `benchmarks/dense_compare.py verify` **is** a dense silicon verifier, and a stricter one than `verify_engine_container`: it re-lowers with `lower_dense`, refuses the container unless its `source_model_sha256`, `workspace_bytes` and `wpackets.bin` all match that fresh lowering byte for byte, then dispatches each layer's instruction stream alone against inputs written from an ONNX Runtime oracle. The claim that nothing could check this on silicon was wrong; only the sitting was missing.
 
 **Nothing here is a speed claim.** The rebuilt container's instruction stream is 2,182,492 B, which by the instruction-stream cost model is roughly 34 ms before any host work. A first timing is expected to be *slower* than the host path it replaces, because the depthwise layers now on the engine still carry their full dense packet cost. That is the expected shape, not a failure, and it is what the off-diagonal skip exists to fix.
 
 `Clip` was the first error FastDepth hit, not its only one: it now lowers past every `Clip` and fails later, at `KeyError: 'unknown uint8 tensor 386_QuantizeLinear_Output'`. MiDaS-small fails on `asymmetric pads [0, 0, 1, 1]` before any `Clip` is reached. Neither model is unlocked by this change alone.
+
+## MODNet-Cut's ReLU6 convolutions on silicon: every layer exact, and the frame 11.7 ms slower (2026-09-22, Desktop 2)
+
+The `Clip` match moved 24 convolutions off the CPU and onto the engine, 11 of them depthwise - the
+first depthwise layers this engine has ever run. This is that container measured, on the model the
+2026-09-21 sitting pinned, through the same harness, with one variable changed.
+
+`benchmarks/dense_compare.py`, `--pins results/dense/modnet_cut_pins_20260921.json` unchanged, so the
+model, the FP32 reference and all 50 images are the same bytes as before. The pins fix the model, not
+the container, which is what makes this like-for-like.
+
+### It is exact on silicon, layer by layer
+
+`dense_compare.py verify --backend ignite`, the full 50-image set
+([log](../results/dense/verify_modnet_cut_ignite_20260922_1.log)):
+
+- **3,750 `SILICON_REGION` checks - 75 layers x 50 images - with 0 failures.** Each writes one layer's
+  inputs to the device workspace from an ONNX Runtime oracle, dispatches that layer's instruction
+  stream alone, reads the boundary back and requires byte equality for uint8.
+- 50 `SILICON_OUTPUT` checks: the whole container against the oracle, with ONNX Runtime called exactly
+  once per declared host region.
+- Before running any of it the harness refuses the container unless a fresh `lower_dense` reproduces
+  its `source_model_sha256`, `workspace_bytes` and `wpackets.bin` **byte for byte**.
+- `VERDICT {"passed": true, "failures": 0, "images": 50, "full_set": true}`.
+
+Lowering the pinned model twice gives an identical workspace (105,630,528 B) and identical packets
+(22,903,296 B, sha `c0ab104b`), so that refusal is a real gate rather than a coin toss.
+
+### The frame, and where it went
+
+Arms alternating, 50 warm-up and 500 timed frames on the same pinned image, twice per arm,
+`timing_eligible: true` and `foreign_contention_observed: false` on every run, device idle witnessed
+before and after:
+
+| arm | 2026-09-21 | 2026-09-22, runs 1 / 2 | change |
+|---|---:|---:|---:|
+| Ignition | 87.24 / 87.47 | 98.84 / 99.31 | **+11.7 ms** |
+| AMD | 31.02 / 30.99 | 31.39 / 31.25 | +0.3 ms |
+| ratio | 2.82x slower | **3.16x slower** | worse |
+
+The AMD arm is the integrity check, not the story: its VitisAI EP report hashes to
+`65a3443e...`, **identical** to 2026-09-21, so the stack it was compared against did not move.
+
+The stage split says exactly where the 11.7 ms went:
+
+| | 2026-09-21 | 2026-09-22 | change |
+|---|---:|---:|---:|
+| `npu_ms` | 21.75 | 41.58 | **+19.82** |
+| `host_ms` | 31.90 | 23.07 | -8.83 |
+| `transfer_ms` | 29.67 | 30.17 | +0.50 |
+| floor (`npu + host`) | 53.66 | 64.65 | +10.99 |
+| floor vs AMD's whole frame | 1.73x | 2.06x | worse |
+
+Host compute fell by 8.83 ms, which is what moving 24 convolutions off the CPU was supposed to buy.
+The engine charged 19.82 ms to take them. **The trade is 2.2 to 1 against.** Segment count fell from
+47 to 43 (21 NPU, 22 host), so this is not handoff overhead - it is the convolutions themselves.
+
+### What it prices, which is the point
+
+Depthwise is lowered as the dense convolution whose off-diagonal taps are zero (`graph_ir.py:866-875`).
+That is exact - the 3,750 silicon checks say so - and it costs 10 to 32 times the packets the
+arithmetic needs. This container is the first in the repository to carry the evidence: of 2,418 weight
+packets, **1,412 are entirely zero and 1,311 are droppable** once the ones carrying `F_EMIT` or
+`F_HOLD` are excluded, which is 54.2%.
+
+So the 19.82 ms is the measured price of that redundancy, and the off-diagonal skip stops being a
+speculative optimisation with no surface. It now has one container, one number to beat, and a bounded
+prize: even removing all of it leaves the floor at roughly `23.07 + 41.58 x (1 - 0.542)` = 42.1 ms
+against AMD's 31.3 ms frame, so the skip alone does not win - it decides whether this path is worth
+continuing at all.
+
+### Gates passed
+
+- Determinism: two independent lowerings byte-identical.
+- Container compiled in 99.8 s, 28,004,864 B, sha `8821a491`; 75 layers, 22 on the host; 4,992 rounds;
+  instruction stream 2,182,492 B.
+- Silicon: 3,750 of 3,750 per-layer checks exact, 50 of 50 end-to-end, device released clean.
+- `BENCHMARK_OUTPUT` on both timed runs: oracle `exact: true`, `max_abs 0.0`.
+
+### Not established
+
+**No accuracy number is re-reported and none was re-run.** Both containers are byte-exact against the
+same XINT8 CPU reference, so the labelled person IoU cannot have changed; 0.1609 stands by
+construction, and with it the finding that XINT8 costs this model 68% of its accuracy.
+
+One model, one quantization, one image for the timing arm. BiSeNetV2 was **not** re-measured and is
+unaffected: it contains zero `Conv -> Clip -> QuantizeLinear` layers, so the `Clip` match cannot reach
+it.
+
+Nothing here says the engine is slower than the CPU at convolution in general - it says that
+*these* convolutions, lowered this way, cost more on the engine than they cost ONNX Runtime. The two
+claims differ by the 54.2% of weight packets that are structurally zero.
