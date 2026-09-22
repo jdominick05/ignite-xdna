@@ -11850,3 +11850,52 @@ unmeasured. No device was opened and there is no timing claim.
 
 Backing log: [`bf16_accum_fidelity_desktop2_20260921.log`](../results/aie/bf16_accum_fidelity_desktop2_20260921.log),
 `--checks-only`, offline. Tool: `tools/bf16_accum_fidelity.py`.
+
+## The `ptr` loop pattern makes the int8 engine's object smaller, not bigger, and takes a fifth off its hot loop (2026-09-21, Desktop 2)
+
+Static only. Nothing was built, nothing ran on a device, and `kernels/aie2/conv_engine/engine.cc`
+is unchanged - the variants are exact-text copies under `scratch/`. This answers the two offline
+steps of the port gate and the one risk the bf16 sitting left open: whether int8's loops respond
+to `ptr` the way bf16's did.
+
+They do, harder. `ptr` sets the two activation pointers once before the loop over input-channel
+blocks and steps them by `plane_bytes`, where the committed loop rebuilds `a + c * d.plane_bytes`
+each iteration. Same addresses, same order, same multiply-accumulates, so a correct build is
+byte-exact by construction.
+
+| MAC loop | committed | `ptr` | change |
+|---|---:|---:|---:|
+| stride-1 dual, 8 MACs | 23 | **18** | -21.7% |
+| stride-2 dual, 8 MACs | 32 | 27 | -15.6% |
+| single group, 4 MACs | 17 | 15 | -11.8% |
+| the other 4-MAC loop | 24 | 21 | -12.5% |
+| `fused_stage2`, 4 MACs | 9 | 9 | already the good one |
+
+Bundle counts are per iteration of the hardware loop, and a loop body's bundle count is its cycle
+count on this device.
+
+**The object gets smaller.** 15,280 B to **15,184 B**, so the free space under the 15,504 B object
+budget goes from 224 B to 320 B. The bf16 sitting measured `ptr` at **+80 B** and recorded that
+cost as the reason it, rather than `chunk`, was the candidate the int8 engine could afford. On
+int8 it is -96 B: the committed loop multiplies `c * d.plane_bytes` every iteration and the
+pointer form replaces that with an add, which is smaller as well as shorter. The prediction was
+directionally wrong in the engine's favour, and the gate's size step passes with more room than it
+started with, not less. Accumulator stack moves stay 0, vector moves stay 31, none in a hardware
+loop.
+
+**`fused_stage1` needs nothing.** A third variant that also pointer-walks it compiles to a
+byte-identical object - same `.text`, same instruction count, same loop table - because that loop's
+trip count is already the constant 2, so the compiler had strength-reduced the address on its own.
+That is a negative result about where the lever applies, and it is consistent with `fused_stage2`
+already being the 9-bundle loop the whole exercise is chasing.
+
+**What this does not establish.** No latency. The bf16 sitting turned a 21% static saving into
+-10.1% on the wall clock, so the honest prediction here is a same-shaped fraction of -21.7%, and
+[H11](SILICON.md) is the standing warning that a static win on this device can arrive as nothing.
+The remaining gate steps are unrun: a container built through `design.KERNEL_SOURCE`, YOLOv8n
+66/66 byte-exact on a `--no-workspace-reuse` build, then a same-sitting alternating comparison with
+the NOP split on YOLOv8n and YOLOv8s. The win has to beat sitting noise on both, and YOLOv8s is the
+one that matters - it currently loses to AMD by 0.29 ms, which is an accepted known limitation.
+
+Backing log: [`engine_int8_loop_variants_census_desktop2_20260921.log`](../results/aie/engine_int8_loop_variants_census_desktop2_20260921.log),
+`--checks-only`, no device. Tool: `tools/engine_int8_loop_variants.py`.
