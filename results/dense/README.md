@@ -78,6 +78,21 @@ environments.
   `modnetcutcachekey` and an unguarded run would have been served the previous model's compile.
   Its log embeds the EP report placing 502 of 507 nodes on the NPU, because a whole-graph CPU
   fallback would have scored the ONNX exactly and read as an NPU result.
+- `diag_amd_placement_*` is what AMD's EP actually claimed, from `tools/amd_placement_probe.py`, which
+  builds the session and then counts placement by each node's own output element type. Three widths of
+  one model, same machine, same sitting:
+
+  | log | width | nodes | on NPU |
+  |---|---|---:|---:|
+  | `diag_amd_placement_modnet_cut_fp32_20260922.log` | float32 | 150 | **0** |
+  | `diag_amd_placement_modnet_cut_bf16_20260922.log` | bfloat16 casts | 430 | **0** |
+  | `diag_amd_placement_modnet_cut_int8_20260922.log` | int8 QDQ | 507 | 502 |
+
+  Both float reports have no `NPU` entry in `deviceStat` at all. The int8 row is the control that makes
+  the zeros evidence rather than an absence: the EP works on this box, it just takes nothing at float
+  width. Read the int8 log with its own caveat, which the probe prints rather than papering over - in a
+  QDQ graph a convolution is *declared* float32 and executed as int8, so that log reports 150
+  float-declared compute nodes on the NPU and the probe withholds a verdict on it by design.
 - `*_summary_*` are the aggregated reports `dense_report.py` produces from the logs above.
 - `*_initial*` and `*_opt*` (2026-09-19 only) are that sitting's own before/after for pruning internal
   CPU outputs. The 2026-09-21 containers correspond to the `_opt` form.

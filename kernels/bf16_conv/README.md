@@ -164,8 +164,18 @@ Both were found by the toolchain refusing, and both are worth not rediscovering:
   int8 engine has 224 B free, not 1,104 -
   [`engine_linked_program_size_desktop2_20260921.log`](../../results/aie/engine_linked_program_size_desktop2_20260921.log).
   The conclusion stands and is stronger.)*
-* **No comparison against AMD's stack** is made here. That the Vitis AI EP places no float of any
-  width on the NPU is measured separately, by `tools/amd_float_precision_probe.py`.
+* **No comparison against AMD's stack** is made here. That the Vitis AI EP places no float on the
+  NPU is measured separately, by [`tools/amd_placement_probe.py`](../../tools/amd_placement_probe.py):
+  MODNet-Cut at fp32 gives 150 nodes and
+  [no `NPU` entry in `deviceStat` at all](../../results/dense/diag_amd_placement_modnet_cut_fp32_20260922.log),
+  the same graph carrying bfloat16 casts gives 430 nodes and
+  [none either](../../results/dense/diag_amd_placement_modnet_cut_bf16_20260922.log), while the
+  quantized form of that same model
+  [takes 502 of 507](../../results/dense/diag_amd_placement_modnet_cut_int8_20260922.log) on the
+  same machine.
+  *(Corrected 2026-09-22: this line used to cite `tools/amd_float_precision_probe.py`, which was
+  never committed - the claim had no reproducible source in-repo for as long as it was made. "At
+  any width" is now measured at two widths, fp32 and bfloat16; float16 is untested.)*
 
 ## Running it
 

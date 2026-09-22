@@ -12741,10 +12741,63 @@ happens to land closer to the labels on this task.
 **An open question, promoted by this result.** AMD scores *above* the exact int8 reference on both
 recipes (0.1700 against 0.1609, and 0.4468 against 0.4272) and deviates from it by `max_abs` 20.0 in
 logits. Two points in the same direction are not a mechanism, and none is claimed here. But whether
-AMD's int8 EP is doing faithful int8 arithmetic is now a question with a benchmark consequence, and it
-belongs with the unrun re-measurement of "AMD's EP places zero float nodes on the NPU".
+AMD's int8 EP is doing faithful int8 arithmetic is now a question with a benchmark consequence. It sat
+beside the re-measurement of "AMD's EP places zero float nodes on the NPU", which was unrun when this
+was written and is now measured in the
+[section below](#amds-ep-takes-nothing-from-a-float-graph-and-502-of-507-nodes-from-the-same-model-quantized-2026-09-22-desktop-2)
+- that settles PLACEMENT and leaves this question, about AMD's int8 ARITHMETIC, entirely open.
 
 **For the bf16 arc**, the honest ceiling is repriced. bf16's CPU cast reaches 0.5029 against AMD's best
 *measured* int8 of 0.4468 - **+12.6 % relative**, not the 2.96x that comparing it against AMD's plain
 XINT8 arm would suggest, and not the +17.7 % that comparing it against our own best int8 suggests. It
 also remains a CPU number against an NPU one, so it is an upper bound on a win rather than a win.
+
+## AMD's EP takes nothing from a float graph, and 502 of 507 nodes from the same model quantized (2026-09-22, Desktop 2)
+
+Two documents claimed the Vitis AI EP "places zero float nodes on the NPU at any width" and cited it
+to `tools/amd_float_precision_probe.py`. **That file was never committed**, so for as long as the
+claim was made it had no reproducible source in-repo - and it is the load-bearing half of the bf16
+framing, because without it "we run the whole model in bf16 on the NPU" degrades to "we are more
+accurate than AMD", which invites the reply that AMD would reach the float score on CPU fallback.
+
+[`tools/amd_placement_probe.py`](../tools/amd_placement_probe.py) measures it for any ONNX at any
+width. It builds the session - which is what makes the EP walk the graph and write its report - then
+counts placement by each node's own output element type, read from the report's `comment` field.
+
+| model | width | nodes | on NPU | `deviceStat` |
+|---|---|---:|---:|---|
+| [`modnet_cut_fp32`](../results/dense/diag_amd_placement_modnet_cut_fp32_20260922.log) | float32 | 150 | **0** | `{CPU: 150, all: 150}` |
+| [`modnet_cut_bf16`](../results/dense/diag_amd_placement_modnet_cut_bf16_20260922.log) | bfloat16 casts | 430 | **0** | `{CPU: 430, all: 430}` |
+| [`modnet_cut_ignition_cle_adaround_c64`](../results/dense/diag_amd_placement_modnet_cut_int8_20260922.log) | int8 QDQ | 507 | 502 | `{NPU: 502, CPU: 1, VITIS_EP_CPU: 4, all: 507}` |
+
+**The claim holds, and the control is what makes it evidence rather than an absence.** On both float
+graphs the report has **no `NPU` entry in `deviceStat` at all** - the EP registered, walked the graph
+and claimed nothing, which `tools/diag_ep.py` already documents as a distinct failure from bad
+partitioning. All 71 float convolutions, 35 `Clip`, 17 `Relu`, 10 `Add` and 8 `Resize` went to the
+CPU. That could have been a broken install or a bad machine, except that the *quantized form of the
+same model* took 502 of 507 nodes on the same box in the same sitting. The EP works here; it takes
+nothing at float width.
+
+### A trap this measured on the way past, which would have inverted the answer
+
+Counting "float nodes on the NPU" by ONNX declared type gives the **opposite** result on a quantized
+graph. In the QuantizeLinear/DequantizeLinear form a convolution is *written* as float32 - dequantize,
+convolve in float, requantize - and the EP fuses that pattern back to integer arithmetic while the
+node's declared output type stays float32. The int8 control reports **150 float-declared compute
+nodes on the NPU, including `Conv`**, every one of them executing as int8.
+
+So the probe refuses to answer on a QDQ graph and says why, rather than reporting a number that is
+exactly backwards. **A declared element type is not evidence of execution precision**, in the same
+family as this repo's standing rule that a `_npu` filename means the EP was requested, not that it
+ran.
+
+### What it does and does not license
+
+- **Licensed**: "AMD's stack runs this model on the CPU at float width; ours would run it on the
+  NPU." Measured at fp32 and at bfloat16. Float16 is untested and no claim is made about it.
+- **Not licensed**: any statement about AMD's *arithmetic* at int8. This measures placement, not
+  precision, and the open question from the accuracy sitting - AMD scoring above the exact int8
+  reference on both recipes - is untouched by it.
+- The probe requires an explicit `--cache-key` and never defaults one, because `npu.paths` selects a
+  compile cache by filename marker and two different graphs can resolve to the same key; a probe that
+  inherited one would report another graph's placement.
