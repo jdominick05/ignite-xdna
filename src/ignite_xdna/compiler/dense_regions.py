@@ -1,7 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 """Explicit BiSeNetV2/MODNet-Cut recipes at original Q/DQ boundaries.
 
-Only Conv(+Relu) regions accepted by the existing integer lowering are native.
+Only Conv(+Relu, or a Clip the lowering proves is a ReLU) regions accepted by the
+existing integer lowering are native.
 All other operations retain their original ONNX definitions in named host regions.
 This policy is deliberately limited to the two dense model families; it is not a
 general ONNX fallback partitioner. No interpolation or network branch is rewritten.
@@ -92,7 +93,7 @@ def lower_dense(model_or_path, recipe: str, task: str | None = None) -> GraphIR:
         info = tensor_info(g, target)
         if (len(inputs) == 1 and info.dtype == "uint8" and min(info.height, info.width) >= 20
                 and sum(n.op_type == "Conv" for n in ops) == 1
-                and all(n.op_type in ("Conv", "Relu") for n in ops)):
+                and all(n.op_type in ("Conv", "Relu", "Clip") for n in ops)):
             dq = next((c for c in g.consumers.get(target, []) if c.op_type == "DequantizeLinear"), None)
             if dq is not None:
                 try:

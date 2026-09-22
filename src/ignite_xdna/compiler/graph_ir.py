@@ -331,6 +331,49 @@ def relu_epilogue() -> HardSwishFit:
     return HardSwishFit(params, table, int(np.max(np.abs(got.astype(np.int64) - table.astype(np.int64)))))
 
 
+def clip_bounds(G, clip) -> Tuple[float, float]:
+    """A Clip's (lo, hi) as floats, refusing a bound that is present but not a constant.
+
+    Opset 11 carries the bounds as optional inputs, opset 6 as attributes. An omitted bound is
+    genuinely infinite, but a bound that is present and unresolvable is not - defaulting it to
+    infinity would silently drop a real clamp, so it raises instead.
+    """
+    lo, hi = -math.inf, math.inf
+    for attr in clip.attribute:                             # opset 6 spelling
+        if attr.name == "min":
+            lo = float(attr.f)
+        elif attr.name == "max":
+            hi = float(attr.f)
+    for pos in (1, 2):                                      # opset 11 spelling
+        name = clip.input[pos] if len(clip.input) > pos else ""
+        if not name:
+            continue
+        value = G.const(name)
+        if value is None:
+            raise ValueError(f"{clip.name}: Clip bound '{name}' is not a constant")
+        bound = float(np.asarray(value).reshape(-1)[0])
+        lo, hi = (bound, hi) if pos == 1 else (lo, bound)
+    return lo, hi
+
+
+def check_clip_is_relu(name: str, lo: float, hi: float, s1: float, z1: int) -> None:
+    """Refuse a Clip the engine's ReLU epilogue would not reproduce exactly.
+
+    relu_epilogue() computes max(q, ZP) and the store saturates at 255, so a Clip is that same
+    epilogue only when its floor is the zero point and its ceiling cannot bind. ReLU6's 6.0 lands
+    at quantum ``z1 + 6/s1``; at or above 255 the saturation already performs the clamp and the
+    activation is exactly ReLU. The tight threshold is 254.5 - a ceiling there still rounds to
+    255 - so testing against 255 is conservative by half a quantum, which costs nothing: measured
+    non-binding layers sit at 320 quanta and above, binding ones at 224.
+    """
+    if lo != 0.0:
+        raise ValueError(f"{name}: Clip lower bound {lo} is not 0, so it is not a ReLU")
+    q_hi = z1 + hi / s1
+    if q_hi < 255:
+        raise ValueError(f"{name}: Clip upper bound {hi} binds at quantum {q_hi:.1f} (< 255); "
+                         f"the engine epilogue has no settable output clamp")
+
+
 # ----------------------------------------------------------------------------
 # ONNX walk
 # ----------------------------------------------------------------------------
@@ -750,6 +793,7 @@ def lower_yolov8n(model_or_path, host_regions: Sequence[str] = (), silu_sigmoid:
     scales: Dict[str, float] = {q_in: s_in}
     transforms: Dict[str, Tuple[str, Dict[str, Any]]] = {}  # host-side output transforms (DepthToSpace)
     absorbed_adds: set = set()  # residual Adds a convolution completed (with HardSwish after, the Add's own q is never built)
+    absorbed_clips: set = set()  # Clips a convolution took as its ReLU epilogue, having proved the bound cannot bind
 
     for node in G.g.node:
         if node.name not in region_of and cls_head is not None and node.name in cls_head.consumed_nodes:
@@ -833,7 +877,14 @@ def lower_yolov8n(model_or_path, host_regions: Sequence[str] = (), silu_sigmoid:
                 scales[r_out] = r_scale
                 layers.append(host)
             continue
-        if node.op_type in ("Constant", "QuantizeLinear", "DequantizeLinear", "HardSigmoid", "Mul", "Relu"):
+        if node.op_type == "Clip":
+            # Only a Clip some convolution already took as its ReLU epilogue. A stray one is an
+            # activation the engine does not implement, so it falls through to be refused below
+            # rather than being dropped in silence. The graph is topologically sorted, so the
+            # convolution that absorbs a Clip is always visited before it.
+            if node.name in absorbed_clips:
+                continue
+        elif node.op_type in ("Constant", "QuantizeLinear", "DequantizeLinear", "HardSigmoid", "Mul", "Relu"):
             continue
         if node.op_type == "Conv":
             x_q, sx, zx = G.q_source(node.input[0])
@@ -876,13 +927,19 @@ def lower_yolov8n(model_or_path, host_regions: Sequence[str] = (), silu_sigmoid:
             elif weights.shape[1] != c_in:
                 raise ValueError(f"{node.name}: weights read {weights.shape[1]} input channels, the input has {c_in}")
             y_cons = G.consumers.get(y_f, [])
-            relu = len(y_cons) == 1 and y_cons[0].op_type == "Relu"
+            relu = len(y_cons) == 1 and y_cons[0].op_type in ("Relu", "Clip")
             # Conv -> Relu -> QuantizeLinear: the ReLU clamps at the zero point of that one
             # quantization, so the conv output is quantized at the ReLU's scale and the
-            # activation is max(q, 128).
+            # activation is max(q, 128). A ReLU6 model spells that Clip(0, 6), which is the same
+            # epilogue whenever the upper bound cannot bind - a test that needs s1 and z1, so it
+            # runs below rather than here.
             conv_q, s1, z1 = G.q_sink(y_cons[0].output[0] if relu else y_f)
             if z1 != ZP:
                 raise ValueError(f"{node.name}: output zero point {z1}")
+            if relu and y_cons[0].op_type == "Clip":
+                lo, hi = clip_bounds(G, y_cons[0])
+                check_clip_is_relu(node.name, lo, hi, s1, z1)
+                absorbed_clips.add(y_cons[0].name)
             layer = ConvLayer(name=node.name, index=len(layers), inputs=resolve(x_q), in_scale=sx, k=k,
                               stride=stride, pad=int(pads[0]), weights=weights.astype(np.int8),
                               bias_q=bias.astype(np.int32), bias_scale=sb, weight_scale=sw, conv_scale=s1,
@@ -892,6 +949,9 @@ def lower_yolov8n(model_or_path, host_regions: Sequence[str] = (), silu_sigmoid:
             cons = G.float_consumers(conv_f)
             kinds = sorted(c.op_type for c in cons)
             if relu:
+                # "relu" whether the graph spelled it Relu or a Clip: check_clip_is_relu has
+                # proved the two compute the same function through this epilogue, so the kind
+                # the schedule, emulator and manifest carry is the one the engine performs.
                 layer.act = "relu"
                 layer.act_scale = s1
                 layer.hswish = relu_epilogue()
