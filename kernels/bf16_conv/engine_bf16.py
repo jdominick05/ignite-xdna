@@ -114,7 +114,7 @@ def engine_bf16(wpkt: In, apkt: In, out: Out, *, source: CompileTime[str],
 
     kernel = ExternalFunction(
         "engine_bf16",
-        arg_types=[w_ty, a_ty, o_ty, psum_ty, np.int32],
+        arg_types=[w_ty, a_ty, o_ty, psum_ty, o_ty, np.int32],
         source_file=str(source_path(source)),
         object_file_name="engine_bf16.o",
         include_dirs=[config.cxx_header_path()],
@@ -123,7 +123,7 @@ def engine_bf16(wpkt: In, apkt: In, out: Out, *, source: CompileTime[str],
     f_w, f_a = ObjectFifo(w_ty, name="w"), ObjectFifo(a_ty, name="a")
     f_o = ObjectFifo(o_ty, name="o")
 
-    def core_fn(w_in, a_in, o_out, engine, psum, row):
+    def core_fn(w_in, a_in, o_out, engine, psum, scratch, row):
         for _ in range_(packets):
             w = w_in.acquire(1)
             a = a_in.acquire(1)
@@ -131,15 +131,18 @@ def engine_bf16(wpkt: In, apkt: In, out: Out, *, source: CompileTime[str],
             # `repeat` calls on one packet amortise the dispatch for timing. An emitting packet
             # that does not load psum is idempotent, so repeating it does not change the result.
             for _ in range_(repeat):
-                engine(w, a, o, psum, row)
+                engine(w, a, o, psum, scratch, row)
             a_in.release(1)
             o_out.release(1)
             w_in.release(1)
 
     psum = Buffer(psum_ty, name="psum_0_2")
+    # The hold buffer. It is the output tile's type because a held tile IS an emitted tile, and it
+    # is a separate buffer rather than a tail of psum so that a 16-core design fits 65,536 B.
+    scratch = Buffer(o_ty, name="scratch_0_2")
     worker = Worker(
         core_fn,
-        fn_args=[f_w.cons(), f_a.cons(), f_o.prod(), kernel, psum, 0],
+        fn_args=[f_w.cons(), f_a.cons(), f_o.prod(), kernel, psum, scratch, 0],
         tile=Tile(0, 2),
         # engine_bf16() frames are small, but Peano's default 1 KB stack grows UPWARD into the tile
         # buffers and corrupts them silently. 2 KB is what the int8 engine uses.
@@ -241,10 +244,11 @@ def dispatch(pkts, repeat=1):
 
 
 def expect(pkts, model):
-    """The emulator's bits for the LAST packet of a chain sharing one psum."""
+    """The emulator's bits for the LAST packet of a chain sharing one psum and one hold buffer."""
     psum, want = np.zeros(PSUM_FLOATS, np.float32), np.zeros(O_ELEMS, np.float32)
+    scratch = np.zeros(em.SCRATCH_ELEMS, np.float32)   # carries a held tile between packets
     for header, act_f, wts_f, bias_f in pkts:
-        run_packet(header, act_f, wts_f, bias_f, psum, want, mac_model=model)
+        run_packet(header, act_f, wts_f, bias_f, psum, want, scratch, mac_model=model)
     return bf16_bits(want)
 
 

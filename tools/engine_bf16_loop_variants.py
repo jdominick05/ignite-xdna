@@ -18,6 +18,13 @@ copies under --out, produced by exact-text replacement that fails loudly if the 
 Static only: it compiles objects and reads them. A variant that wins here still has to win on the
 device (kernels/bf16_conv/engine_bf16.py --source <variant> --sweep / --bench).
 
+THE SEARCH IS OVER AND `chunk` + `hoist` WON, so they are now IN engine_bf16.cc rather than beside
+it. Every transform here except `base` therefore targets text the kernel no longer has, and `swap`
+raises rather than producing a variant that silently is not the one named - which is the whole
+reason it fails loudly. `base` still works and is the offline compile-and-census check for the
+kernel as committed. Re-deriving the old table means checking out the commit before the loop landed;
+the numbers themselves are in docs/BENCHMARKS.md and the logs they cite are not going anywhere.
+
     bash scripts/research-iron.sh tools/engine_bf16_loop_variants.py [--only ptr flat] [--out DIR]
 """
 import argparse
