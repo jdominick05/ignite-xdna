@@ -12659,3 +12659,92 @@ rather than a measurement, and deliberately does not depend on the emulator - by
 not reliably catch the first case, because a reference that modelled the aliasing faithfully would
 reproduce the corruption, which is exactly how `OP_RESIDUAL` failed open on both sides at once
 before `935446e`.
+
+## The 2.5x accuracy win over AMD was a quantization recipe, not a runtime (2026-09-22, Desktop 2)
+
+A better-quantized MODNet-Cut - `modnet_cut_ignition_cle_adaround_c64.onnx`, SHA256 `a4ee1083…b267f` -
+had scored **0.4272** person IoU on CPU where the shipped plain-XINT8 model scores 0.1609, against an
+AMD arm measured at **0.1700**. Read across those three numbers, that is a 2.5x accuracy win over AMD
+on the xclbin that already ships, and it was filed as a release candidate.
+
+**It is not a win, and the error is in the comparison rather than in any of the measurements.** 0.4272
+is our stack on the CLE+AdaRound recipe; 0.1700 is AMD's stack on the *plain XINT8* recipe. Two
+different models. The control that had never been run is AMD's own EP on the same CLE+AdaRound ONNX.
+
+Run it, and the ordering inverts. All **2,693** val2017 images containing a person, the same
+729,832,458 labelled pixels, the same 0.5 threshold and the same harness as the 2026-09-21 sitting:
+
+| arm | model | person IoU | pixel accuracy |
+|---|---|---:|---:|
+| FP32 | `modnet_cut_fp32` | **0.5030** | 90.22 % |
+| bf16 cast, CPU | `modnet_cut_fp32` | 0.5029 | 90.26 % |
+| [AMD](../results/dense/acc_modnet_cut_cle_adaround_amd_20260922.log) | CLE + AdaRound | **0.4468** | 87.57 % |
+| [Ignition](../results/dense/acc_modnet_cut_cle_adaround_ignite_20260922.log) | CLE + AdaRound | 0.4272 | 88.02 % |
+| [CPU reference](../results/dense/acc_modnet_cut_cle_adaround_20260921.log) | CLE + AdaRound | 0.4272 | 88.02 % |
+| AMD | plain XINT8 | 0.1700 | 82.08 % |
+| Ignition | plain XINT8 | 0.1609 | 83.69 % |
+
+**AMD is ahead by 4.6 % relative on the same model** (0.446813311429849 against 0.427203295160268).
+The recipe is worth about 2.6x to *both* stacks - 0.1609 to 0.4272 for Ignition, 0.1700 to 0.4468 for
+AMD - so what the candidate measured was the quantization recipe and reported it as the runtime. There
+is no 0.3.5 candidate here and nothing was released.
+
+**Ignition equals its CPU reference to all sixteen digits: 0.427203295160268 on both arms**, with
+`mean_per_image_iou` 0.30924042621385245 and `pixel_accuracy` 0.8801837434859604 also identical. That
+is end-to-end exactness over 2,693 images, a wider gate than the 50-image per-layer check, and it is
+the second recipe on which the container has reproduced its reference exactly. The narrower gate
+passed too: `dense_compare.py verify` on the pinned 50 images returned
+[`{"passed": true, "failures": 0}`](../results/dense/verify_modnet_cut_adaround_ignite_20260922_1.log)
+over 3,750 silicon region checks and 3,750 offline ones, and the timed container's own output check
+came back `exact: true, max_abs 0.0`.
+
+**AMD's arm really ran on the NPU.** The EP report embedded in the accuracy log places **502 of 507
+nodes on the NPU**, one `Resize` on the CPU and four QuantizeLinear/DequantizeLinear on `VITIS_EP_CPU`.
+This matters because a whole-graph CPU fallback would have scored the ONNX exactly and read as an NPU
+result, making the comparison CPU against CPU wearing AMD's name. A `_npu` filename is not a placement
+witness; the report is.
+
+### Latency is unchanged, and the loss is structural
+
+Four alternating arms, 50 warm-up and 500 timed frames each, same sitting, same pinned image, all
+`timing_eligible: true` with no foreign contention:
+
+| arm | run 1 | run 2 | mean |
+|---|---:|---:|---:|
+| [AMD](../results/dense/bench_modnet_cut_adaround_amd_20260922_1.log) | 31.147 ms | 31.086 ms | **31.117 ms** |
+| [Ignition](../results/dense/bench_modnet_cut_adaround_ignite_20260922_1.log) | 98.269 ms | 97.851 ms | 98.060 ms |
+
+**3.15x slower**, in line with the 3.16x the ReLU6 sitting measured on the other recipe. The stage
+split says why it is not a kernel problem: of Ignition's 94.81 ms network time, `npu_ms` is 41.70 and
+`host_ms` plus `transfer_ms` are 22.50 and 29.94. **Host and transport alone are 52.4 ms, which already
+exceeds AMD's entire 31.1 ms frame**, so zero-cost convolution would not close this.
+
+### Caveats
+
+- COCO masks are polygons, so this scores gross person segmentation and says nothing about the
+  hair-level detail a matting model exists for. It is the same caveat the 2026-09-21 arms carry.
+- The bf16 row is a CPU cast (`tools/onnx_bf16_cast.py`), not a device run, and is not paired with any
+  NPU number as a win.
+- The AMD arm needed its own compile cache. `npu.paths.modnet_cache_key` selects by filename marker and
+  all four MODNet-Cut variants contain "cut", so they resolve to one key; without the `--cache-key`
+  added in this sitting the arm would have been served the previous model's compiled artifacts and
+  produced a number that looked like a comparison.
+
+### What this changes
+
+The 2026-09-21 section above already said the work this pointed at was "the XINT8 recipe for
+MODNet-Cut, not the engine". That reading is confirmed and sharpened: the recipe is worth 2.6x, and it
+is available to anyone, on either stack. Being byte-exact where AMD's stack is not remains correctness
+rather than accuracy - here it costs 4.6 %, because AMD's deviation from the exact int8 reference
+happens to land closer to the labels on this task.
+
+**An open question, promoted by this result.** AMD scores *above* the exact int8 reference on both
+recipes (0.1700 against 0.1609, and 0.4468 against 0.4272) and deviates from it by `max_abs` 20.0 in
+logits. Two points in the same direction are not a mechanism, and none is claimed here. But whether
+AMD's int8 EP is doing faithful int8 arithmetic is now a question with a benchmark consequence, and it
+belongs with the unrun re-measurement of "AMD's EP places zero float nodes on the NPU".
+
+**For the bf16 arc**, the honest ceiling is repriced. bf16's CPU cast reaches 0.5029 against AMD's best
+*measured* int8 of 0.4468 - **+12.6 % relative**, not the 2.96x that comparing it against AMD's plain
+XINT8 arm would suggest, and not the +17.7 % that comparing it against our own best int8 suggests. It
+also remains a CPU number against an NPU one, so it is an upper bound on a win rather than a win.

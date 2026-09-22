@@ -48,15 +48,17 @@ environments.
   on purpose - its FP32 predicts 0.00-0.30 % person on images that are 84-96 % person, so a
   Cityscapes model on COCO photographs is out of domain and scoring it here would measure noise.
 
-  Five arms, same images, same threshold, same harness:
+  Seven arms, same images, same threshold, same harness:
 
   | arm | log | person IoU | pixel accuracy |
   |---|---|---:|---:|
   | FP32 | `acc_modnet_cut_fp32_20260921.log` | 0.5030 | 90.22 % |
   | bf16 | `acc_modnet_cut_bf16_20260921.log` | 0.5029 | 90.26 % |
-  | int8, CLE + AdaRound | `acc_modnet_cut_cle_adaround_20260921.log` | 0.4272 | 88.02 % |
+  | AMD, CLE + AdaRound | `acc_modnet_cut_cle_adaround_amd_20260922.log` | 0.4468 | 87.57 % |
+  | Ignition, CLE + AdaRound | `acc_modnet_cut_cle_adaround_ignite_20260922.log` | 0.4272 | 88.02 % |
+  | CPU, CLE + AdaRound | `acc_modnet_cut_cle_adaround_20260921.log` | 0.4272 | 88.02 % |
   | int8, plain XINT8 | `acc_modnet_cut_cpu_20260921.log`, `..._ignite_...` | 0.1609 | 83.69 % |
-  | AMD | `acc_modnet_cut_amd_20260921.log` | 0.1700 | 82.08 % |
+  | AMD, plain XINT8 | `acc_modnet_cut_amd_20260921.log` | 0.1700 | 82.08 % |
 
   The two 2026-09-21 additions are the bf16 and CLE+AdaRound arms, and together they correct a
   claim this directory used to support. "int8 costs this model 68 %" is true only of the plain
@@ -65,6 +67,17 @@ environments.
   model. The bf16 arm is a CPU simulation - `tools/onnx_bf16_cast.py` rounds weights and bias once
   and casts every convolution's activation input and output - not a device run, and it makes no
   timing claim.
+
+  **The two 2026-09-22 arms are the control the CLE+AdaRound row needed, and they invert its
+  reading.** The 0.4272 row is Ignition's recipe and the 0.1700 row is AMD's, so comparing them
+  compares two models. On the *same* CLE+AdaRound ONNX, AMD scores 0.4468 and Ignition 0.4272:
+  AMD is ahead by 4.6 % relative, the recipe is worth about 2.6x to both stacks, and there is no
+  runtime accuracy win here. Ignition's arm equals its CPU reference to all sixteen digits
+  (0.427203295160268), so the loss is not an exactness failure. The AMD arm has its own compile
+  cache key: `modnet_cache_key` matches on "cut", so all four MODNet-Cut variants resolve to
+  `modnetcutcachekey` and an unguarded run would have been served the previous model's compile.
+  Its log embeds the EP report placing 502 of 507 nodes on the NPU, because a whole-graph CPU
+  fallback would have scored the ONNX exactly and read as an NPU result.
 - `*_summary_*` are the aggregated reports `dense_report.py` produces from the logs above.
 - `*_initial*` and `*_opt*` (2026-09-19 only) are that sitting's own before/after for pruning internal
   CPU outputs. The 2026-09-21 containers correspond to the `_opt` form.
