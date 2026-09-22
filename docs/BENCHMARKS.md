@@ -11997,3 +11997,73 @@ Backing logs: [`ptr_ab_yolov8n_phoenix_20260922T0315Z.log`](../results/aie/ptr_a
 [`engine_int8_ptr_verify_yolov8n_npu_20260921.log`](../results/aie/engine_int8_ptr_verify_yolov8n_npu_20260921.log),
 [`engine_int8_base_verify_yolov8n_npu_20260921.log`](../results/aie/engine_int8_base_verify_yolov8n_npu_20260921.log),
 [`engine_int8_ptr_verify_yolov8s_npu_20260922.log`](../results/aie/engine_int8_ptr_verify_yolov8s_npu_20260922.log).
+
+## YOLOv8x: `ptr` scales to -6.0%, and the engine's standing against AMD inverts with model size (2026-09-22, Desktop 2)
+
+The final test for the `ptr` port, and the run that says the most. YOLOv8x is the widest model in
+the family - 106 lowered layers, 145.49 MB of weight packets, 7,631 rounds - built as a
+three-segment split container cut at scheduled layers 35 and 71, so this also exercises the
+multi-segment dispatch path that the YOLOv8n and YOLOv8s A/Bs never touched. Wrapped in
+`scripts/research-lowlevel.sh --npu`, `timing_eligible: true`, no foreign contention. Both arms
+were compiled in separate processes into fresh directories and their linked objects read back:
+control 15,280 B, test 15,184 B, both named `engine.o`.
+
+| arm | round 1 | round 2 | mean |
+|---|---:|---:|---:|
+| AMD | 78.846 | 78.523 | 78.684 |
+| control | 123.285 | 123.422 | 123.353 |
+| **`ptr`** | 115.862 | 116.011 | **115.936** |
+
+**`ptr` gives -7.417 ms, -6.01%** - its largest margin yet, ranges disjoint, both rounds agreeing.
+Dispatch alone moves 122.393 to 114.989 ms, -6.05%. The lever scales with model width exactly as
+the mechanism predicts, because the convolution loop is a larger share of a wider model's frame:
+
+| model | `ptr` gain |
+|---|---:|
+| YOLOv8n | -2.8% |
+| YOLOv8s | -4.4% |
+| YOLOv8x | **-6.0%** |
+
+### The crossover, which matters more than the -6%
+
+The same run says Ignition **loses YOLOv8x to AMD by 1.47x**, and `ptr` does not come close to
+changing that - it removes 7.4 ms of a 37.3 ms deficit. Placed beside the day's other two
+sittings, the engine's standing against AMD does not merely narrow with model size, it **inverts**:
+
+| model | Ignition (`ptr`) | AMD | standing |
+|---|---:|---:|---|
+| YOLOv8n | 7.841 | 10.487 | **Ignition 1.34x faster** |
+| YOLOv8s | 16.855 / 16.665 | 16.949 / 17.135 | Ignition faster by 0.6% and 2.8% |
+| YOLOv8x | 115.936 | 78.684 | **AMD 1.47x faster** |
+
+Three consequences, and the repo should carry all of them.
+
+**The AMD-beating claim has a scope, and the scope is model size.** Every engine-versus-AMD win
+recorded here is on a model at or below YOLOv8s. That was never stated as a limit because the
+comparison had never been run at the top of the family in one sitting; it has now, and the limit
+is real.
+
+**YOLOv8s is not a narrow win, it is the crossover point.** This reframes the 0.29 ms gap that was
+accepted as a known runtime limitation on 2026-09-16 and the 0.5% margin `ptr` won it by. A margin
+that small at exactly that model is what a crossing looks like, not a coincidence, and it explains
+why two sittings were needed to call it.
+
+**The `ptr` trend and the crossover point in opposite directions.** The lever helps most where the
+engine is furthest behind, and still loses there. A conv-loop optimisation cannot close a 1.47x
+deficit, so whatever costs YOLOv8x its frame is not in the convolution loop.
+
+### What is not established
+
+Where the crossover sits precisely. YOLOv8m and YOLOv8l were not measured against AMD in this
+sitting, and they are the two points that would locate it. The
+[full-family split suite](#all-yolov8-variants-on-split-containers-and-what-each-segment-costs-2026-09-20-desktop-2)
+timed all six variants but only on Ignition, so it cannot supply the missing AMD arms, and the
+accuracy width table elsewhere in this document is calibrated at different image counts per row
+and must not be read across either. **Why** the engine falls behind at width is also
+unattributed: 145.49 MB of weight packets is about 5.4 ms at the measured 26.8 GB/s transport rate,
+nowhere near the 37.3 ms deficit, and the round count grows 5.4x from YOLOv8n where the frame grows
+14.8x - so per-round cost is rising too, and neither number has been split. That is a question for
+the trace unit, not for another kernel variant.
+
+Backing logs: [`ptr_ab_yolov8x_split_phoenix_20260922T0340Z.log`](../results/aie/ptr_ab_yolov8x_split_phoenix_20260922T0340Z.log)
+and its wrapper [`engine_int8_ptr_ab_yolov8x_split_npu_20260922.log`](../results/aie/engine_int8_ptr_ab_yolov8x_split_npu_20260922.log).
