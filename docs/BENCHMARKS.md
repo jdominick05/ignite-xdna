@@ -12860,3 +12860,56 @@ without needing any new measurement:
   furthest behind the fixed-shape kernel, and its host and transport already exceed AMD's whole frame
   at int8. A model whose shape suits the engine, and where precision matters more, would test the
   idea rather than the transport - which is what makes SESR-M7 (#128) the gate rather than #129.
+
+## The bar for anything float on this part is the CPU, and it is higher than the NPU work assumed (2026-09-22, Desktop 2)
+
+[#140](#amds-ep-takes-nothing-from-a-float-graph-and-502-of-507-nodes-from-the-same-model-quantized-2026-09-22-desktop-2)
+measured the Vitis AI EP placing zero nodes on the NPU at fp32 and at bfloat16. That is usually read
+as good news for a bf16 engine - nobody else is here - but it has a second consequence that had not
+been stated: **at float width there is no AMD arm to lose to, and no AMD arm to beat either.** The
+only thing a bf16 NPU path can be measured against is this machine's own CPU. This repo already
+carries two results where the NPU lost to that same Zen4 part, MobileNetV2 and resnetv2_50x3, so it
+is not a soft target.
+
+[`tools/ort_cpu_baseline.py`](../tools/ort_cpu_baseline.py) times `session.run` only - the network,
+on an input already in memory, no pre- or postprocessing on either side. 20 warm-up and 200 timed
+frames, synthetic seeded input, `timing_eligible: true`
+([log](../results/aie/ort_cpu_fp32_baseline_desktop2_20260922.log)):
+
+| model | input | mean | p95 |
+|---|---|---:|---:|
+| `sesr_m7_fp32` | 1x3x256x256 | **7.872 ms** | 9.078 ms |
+| `realesrgan_compact_r64_fp32` | 1x3x64x64 | 20.623 ms | 23.693 ms |
+| `realesrgan_rrdb_r64_fp32` | 1x3x64x64 | 44.797 ms | 50.784 ms |
+| `modnet_cut_fp32` | 1x3x512x512 | **106.299 ms** | 117.744 ms |
+
+### MODNet-Cut in bf16 is dead, and this is what kills it
+
+The [bf16 bracket](#what-modnet-cut-would-cost-in-bf16-before-the-front-end-exists-to-measure-it-derived-2026-09-22)
+for the comparable span - dispatch plus transfer plus host layers - is **125.4 ms to 165.5 ms**
+(43.00-83.14 dispatch, 59.89 transfer, 22.50 host). Against **106.299 ms** of plain ONNX Runtime
+fp32 on the CPU.
+
+**bf16 on the NPU would be 1.18x to 1.56x slower than not using the NPU at all.** That is a firmer
+result than the AMD comparison, because it needs no vendor stack to be true and no bf16 front-end to
+be built: the low end of our own optimistic bracket is already above the CPU. The accuracy case
+(+12.6% over AMD's best measured int8) has nothing left to stand on for this model, since the same
+accuracy is available by running the fp32 graph on the CPU faster than the NPU could run it in bf16.
+
+### SESR is the only candidate still standing, and it is tight
+
+SESR's bf16 dispatch bracket is 1.0024x to 2.0x of its int8 dispatch, because it carries **18 weight
+packets against MODNet-Cut's 2,418** and weight-packet doubling is bf16's one certain cost. Against a
+CPU that does the whole network in 7.872 ms, that leaves very little room: the bracket straddles the
+bar rather than clearing it, and resolving it needs SESR's int8 dispatch measured in one sitting with
+its own bf16 estimate. That measurement is the gate, and it is cheap.
+
+### An incidental reading that deserves its own check
+
+The int8 MODNet-Cut container measured **94.81 ms of network time** in this sitting's bench arms
+against the CPU's 106.299 ms here - about **1.12x**. If that survives a same-sitting pairing it says
+the dense path's problem is larger than its 3.15x loss to AMD suggests: an accelerator that barely
+outruns ONNX Runtime on the host is not being held back by its kernel. **It is not claimed here** -
+the two numbers come from different runs and the spans are only approximately the same - but it is
+the cheapest question on this page and it bears directly on whether #132's off-diagonal skip is worth
+building.
