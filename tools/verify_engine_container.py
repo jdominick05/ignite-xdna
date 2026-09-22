@@ -39,7 +39,8 @@ import cv2  # noqa: E402
 import numpy as np  # noqa: E402
 
 from ignite_xdna.compiler import engine_schedule as es  # noqa: E402
-from ignite_xdna.compiler.engine_compile import check_kernel_covers_packets  # noqa: E402
+from ignite_xdna.compiler.engine_compile import (check_kernel_covers_packets,  # noqa: E402
+                                                 profile_for_manifest)
 from ignite_xdna.compiler import graph_ir, graph_reference as gr  # noqa: E402
 from ignite_xdna.compiler.serializer import IgniteModelReader  # noqa: E402
 
@@ -116,8 +117,11 @@ def main() -> int:
         wpackets = reader.get_blob_bytes("wpackets.bin")
     task = manifest.get("task", "detect")
     ge = manifest["graph_engine"]
+    # Walk the packets with the tables of the engine that WROTE them. Opcode 2 is MAXPOOL to the
+    # int8 emulator and RESIDUAL to the bf16 one, so the wrong table refuses a sound container
+    # for reaching a case it never reaches.
     try:
-        check_kernel_covers_packets(ge, wpackets)
+        check_kernel_covers_packets(ge, wpackets, profile=profile_for_manifest(manifest))
     except ValueError as exc:
         raise SystemExit(f"[verify] REFUSED: {exc}")
     host_regions = [s["name"] for s in ge.get("segments", []) if s["kind"] == "host"]

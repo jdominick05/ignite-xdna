@@ -25,18 +25,90 @@ import json
 import re
 import shutil
 import time
+import importlib
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence
 
 import numpy as np
 
-from ignite_xdna.compiler import engine_emulator as em
 from ignite_xdna.compiler import engine_schedule as es
 from ignite_xdna.compiler.graph_ir import ConvLayer, GraphIR, HostLayer, lower_yolov8n
-from ignite_xdna.compiler.serializer import (ARCH_XDNA1_PHOENIX, ENGINE_CONV_INT8, IgniteModelReader,
-                                             IgniteModelWriter)
+from ignite_xdna.compiler.serializer import (ARCH_XDNA1_PHOENIX, ELEM_BF16, ELEM_INT, ENGINE_CONV_BF16,
+                                             ENGINE_CONV_INT8, IgniteModelReader, IgniteModelWriter)
 
 ENGINE_NAME = ENGINE_CONV_INT8
+
+
+@dataclass(frozen=True)
+class EngineProfile:
+    """Everything about a compile that differs between the int8 and the bf16 engine.
+
+    One bundle rather than six parameters, because these are NOT independent. A design module, its
+    emulator and its scheduler agree on a packet header layout and an opcode table; mixing them
+    across engines produces a container whose header words mean something other than what wrote
+    them, and the symptom is a wrong name or a false refusal rather than a crash.
+
+    Modules are named rather than held, because importing a design pulls IRON in and the compile
+    is the only caller that wants that cost. importlib caches, so resolving one twice is free.
+    """
+
+    name: str                       # what the container declares in manifest["engine"]
+    elem: str                       # ELEM_INT writes no placement key at all; absent means integer
+    design_module: str
+    emulator_module: str
+    schedule_module: Optional[str]
+    object_file: str = "engine.o"
+    #: Whether this design's ``build_program`` takes the dispatch gate and the two transport
+    #: experiments (``ops``, ``a_ring``, ``w_buf``). The bf16 design takes none of them.
+    transport_options: bool = True
+
+    @property
+    def emulator(self):
+        return importlib.import_module(self.emulator_module)
+
+    @property
+    def schedule(self):
+        if self.schedule_module is None:
+            raise NotImplementedError(
+                f"{self.name} has no scheduler yet: the packer that builds its weight and "
+                f"activation packets is the fork tracked as the bf16 schedule, and a container "
+                f"cannot be emitted without it. The rest of this profile is wired and tested.")
+        return importlib.import_module(self.schedule_module)
+
+    def load_design(self):
+        return importlib.import_module(self.design_module)
+
+
+INT8_PROFILE = EngineProfile(
+    name=ENGINE_CONV_INT8, elem=ELEM_INT,
+    design_module="kernels.aie2.conv_engine.design",
+    emulator_module="ignite_xdna.compiler.engine_emulator",
+    schedule_module="ignite_xdna.compiler.engine_schedule",
+)
+
+BF16_PROFILE = EngineProfile(
+    name=ENGINE_CONV_BF16, elem=ELEM_BF16,
+    design_module="kernels.bf16_conv.design",
+    emulator_module="ignite_xdna.compiler.engine_bf16_emulator",
+    schedule_module=None,
+    object_file="engine_bf16.o",
+    transport_options=False,
+)
+
+ENGINE_PROFILES = {"int8": INT8_PROFILE, "bf16": BF16_PROFILE}
+
+
+def profile_for_manifest(manifest: Dict[str, Any]) -> EngineProfile:
+    """The profile a built container was produced with, so a reader walks it with its own tables."""
+    name = (manifest or {}).get("engine")
+    for profile in ENGINE_PROFILES.values():
+        if profile.name == name:
+            return profile
+    raise ValueError(f"no engine profile for {name!r}; known: "
+                     f"{[p.name for p in ENGINE_PROFILES.values()]}")
+
+
 HEAD_NAMES = ("p3_box", "p4_box", "p5_box", "p3_cls", "p4_cls", "p5_cls")
 # YOLOv8-pose keeps the detect heads with one class (person) and adds a keypoint branch (cv4): 17 COCO
 # keypoints x (x, y, visibility) per anchor.
@@ -164,7 +236,8 @@ def plan_segments(ir: GraphIR, scheds: List[es.LayerSchedule],
     return segments
 
 
-def check_kernel_covers_packets(ge: dict, wpackets: bytes) -> None:
+def check_kernel_covers_packets(ge: dict, wpackets: bytes,
+                                profile: EngineProfile = INT8_PROFILE) -> None:
     """Refuse a container whose packets reach a dispatch case its kernel was built without.
 
     The compile-time dispatch gate (kernels/aie2/conv_engine/design.py) compiles out the cases
@@ -174,14 +247,21 @@ def check_kernel_covers_packets(ge: dict, wpackets: bytes) -> None:
     nothing, so this is checked rather than left to read as an unexplained byte mismatch.
 
     Containers built before the gate carry no kernel_ops and are not checked.
+
+    ``profile`` supplies the opcode NAME table, and it has to: the stride survives a change of
+    engine by coincidence - W_BYTES is 9,472 and HDR_BYTES 128 in both, and H_OP is word 0 in
+    both - but the names do not. Opcode 2 is MAXPOOL to the int8 emulator and RESIDUAL to the
+    bf16 one, so reading a bf16 blob through the int8 table refuses a container for reaching a
+    case it never reaches. Use ``profile_for_manifest`` when the container says which it is.
     """
     ops = ge.get("kernel_ops")
     if not ops:
         return
+    emu = profile.emulator
     a = np.frombuffer(wpackets, dtype=np.uint8)
-    n = a.size // em.W_BYTES
-    words = a[:n * em.W_BYTES].reshape(n, em.W_BYTES)[:, :em.HDR_BYTES].copy().view(np.int32)
-    present = {em.OP_NAMES.get(int(o), f"?{o}") for o in np.unique(words[:, em.H_OP])}
+    n = a.size // emu.W_BYTES
+    words = a[:n * emu.W_BYTES].reshape(n, emu.W_BYTES)[:, :emu.HDR_BYTES].copy().view(np.int32)
+    present = {emu.OP_NAMES.get(int(o), f"?{o}") for o in np.unique(words[:, emu.H_OP])}
     missing = sorted(present - set(ops) - {"NOP"})
     if missing:
         raise ValueError(
@@ -193,7 +273,9 @@ def check_kernel_covers_packets(ge: dict, wpackets: bytes) -> None:
 def build_manifest(ir: GraphIR, ws: es.Workspace, scheds: List[es.LayerSchedule], store: es.PacketStore,
                    model_name: str, insts_bytes: int, xclbin_sha: str, kernel_sha: str, compile_s: float,
                    *, kernel_ops: Optional[List[str]] = None,
-                   kernel_object_sha256: Optional[str] = None) -> Dict[str, Any]:
+                   kernel_object_sha256: Optional[str] = None,
+                   profile: EngineProfile = INT8_PROFILE) -> Dict[str, Any]:
+    emu = profile.emulator
     placements = {}
     for name, p in ws.placements.items():
         placements[name] = {"base": p.base, "halo": p.halo, "halo_value": p.halo_value, "height": p.height,
@@ -204,7 +286,13 @@ def build_manifest(ir: GraphIR, ws: es.Workspace, scheds: List[es.LayerSchedule]
                             # the runtime has to be told which it is: writing one to the workspace instead
                             # leaves the region that wanted it reading an address nothing filled.
                             "storage": ir.tensors[name].storage,
-                            "scale": ir.tensors[name].scale, "zero_point": ir.tensors[name].zero_point}
+                            "scale": ir.tensors[name].scale, "zero_point": ir.tensors[name].zero_point,
+                            # Absent means integer, so only a non-integer engine writes the key
+                            # and no container built before bf16 changes by a single byte. The
+                            # storage "dtype" above stays a spelling numpy accepts, because
+                            # np.dtype("bf16") raises and np.dtype("bfloat16") depends on
+                            # whether ml_dtypes was imported first.
+                            **({"elem": profile.elem} if profile.elem != ELEM_INT else {})}
     task = graph_task(ir)
     t_in = ir.tensors[ir.input]
     layers = [{"index": s.layer_index, "name": s.name, "output": ir.layers[s.layer_index].output,
@@ -232,8 +320,10 @@ def build_manifest(ir: GraphIR, ws: es.Workspace, scheds: List[es.LayerSchedule]
         "wpackets_bytes": store.nbytes,
         "insts_bytes": insts_bytes,
         "compile_seconds": round(compile_s, 1),
-        "tile": {"rows": es.TILE_R, "cols": es.TILE_C, "a_bytes": em.A_BYTES, "w_bytes": em.W_BYTES,
-                 "o_bytes": em.O_BYTES},
+        # a_bytes is 6,400 at int8 and 12,800 at bf16; o_bytes is the same 3,200 B object either
+        # way, carrying 32 channels at one byte or 16 at two.
+        "tile": {"rows": emu.TILE_ROWS, "cols": emu.TILE_COLS, "a_bytes": emu.A_BYTES,
+                 "w_bytes": emu.W_BYTES, "o_bytes": emu.O_BYTES},
     }
     tensor_placement_abi = {
         "abi_version": 1,
@@ -255,7 +345,7 @@ def build_manifest(ir: GraphIR, ws: es.Workspace, scheds: List[es.LayerSchedule]
         "target_hardware": "AMD Phoenix APU (XDNA1, 16 AIE2 cores)",
         "producer": "ignite-compile v0.4.0 (graph engine)",
         "created_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-        "engine": ENGINE_NAME,
+        "engine": profile.name,
         "task": task,
         "input_shape": [1, t_in.channels, t_in.height, t_in.width],
         # The graph's own name for the input, which a host region feeds by name; it is not always the
@@ -381,6 +471,7 @@ def compile_graph_container(onnx_path, output_path, build_dir: Optional[Path] = 
                             decouple_weights: bool = False,
                             task: Optional[str] = None,
                             dense_recipe: Optional[str] = None,
+                            engine: Any = "int8",
                             **kwargs) -> Dict[str, Any]:
     """Lower, schedule, build the device binaries and write the container. Returns the manifest.
 
@@ -411,12 +502,23 @@ def compile_graph_container(onnx_path, output_path, build_dir: Optional[Path] = 
         # this refuses the combination rather than reconciling the accounting for a path worth nothing.
         raise ValueError("host_regions cannot be combined with activation_ring or weight_buffer: their "
                          "configuration writes break the instruction-stream split between segments")
+    # Resolve the engine BEFORE importing IRON. A profile with no scheduler refuses here, and
+    # there is no reason to pay for the toolchain to find that out.
+    profile = engine if isinstance(engine, EngineProfile) else ENGINE_PROFILES[engine]
+    emu = profile.emulator
+    sched = profile.schedule
+    if not profile.transport_options and (activation_ring or weight_buffer):
+        raise ValueError(
+            f"the {profile.name} design has no activation ring and no resident weight buffer: "
+            f"both are int8-engine transport experiments, and both measured slower than the "
+            f"schedule they were meant to beat")
+
     import aie.iron as iron
     from aie.iron.device import NPU1
     from aie.utils.compile.utils import compile_mlir_module
     from ignite_xdna.compiler.engine_sequence import SequenceEmitter
 
-    from kernels.aie2.conv_engine import design as eng
+    eng = profile.load_design()
 
     t0 = time.perf_counter()
     onnx_path = Path(onnx_path)
@@ -433,8 +535,9 @@ def compile_graph_container(onnx_path, output_path, build_dir: Optional[Path] = 
         ir = lower_yolov8n(onnx_path, host_regions=host_regions, silu_sigmoid=silu_sigmoid)
         if task:
             ir.task = task
-    ws = es.plan_workspace(ir, reuse=workspace_reuse)
-    scheds, store = es.schedule_graph(ir, ws, activation_ring=activation_ring, weight_buffer=weight_buffer)
+    ws = sched.plan_workspace(ir, reuse=workspace_reuse)
+    scheds, store = sched.schedule_graph(ir, ws, activation_ring=activation_ring,
+                                         weight_buffer=weight_buffer)
     if layers is not None:
         scheds = scheds[:layers]
     if verbose:
@@ -461,13 +564,19 @@ def compile_graph_container(onnx_path, output_path, build_dir: Optional[Path] = 
     # The table is checked against the emulator's opcode numbers here rather than in design.py,
     # because a drift between the two would gate out a case a container does reach and the core
     # would fall through to `default:` and silently emit nothing.
-    assert eng.GATEABLE_OPS == {"FUSED_CONV": em.OP_FUSED_CONV, "MUL": em.OP_MUL,
-                               "SCALE": em.OP_SCALE, "POOL": em.OP_POOL}, \
-        "design.GATEABLE_OPS has drifted from the emulator's opcode numbers"
+    # A design may have nothing to gate: the bf16 kernel implements CONV and RESIDUAL and no
+    # more, so it exposes no GATEABLE_OPS and there is no drift to check.
+    gateable = getattr(eng, "GATEABLE_OPS", None)
+    if gateable is not None:
+        assert gateable == {"FUSED_CONV": emu.OP_FUSED_CONV, "MUL": emu.OP_MUL,
+                            "SCALE": emu.OP_SCALE, "POOL": emu.OP_POOL}, \
+            "design.GATEABLE_OPS has drifted from the emulator's opcode numbers"
     kernel_ops = store.opcodes()
     iron.set_current_device(NPU1())
+    build_kwargs = (dict(a_ring=activation_ring, w_buf=weight_buffer, ops=kernel_ops)
+                    if profile.transport_options else {})
     program = eng.build_program(iron.get_current_device(), body, ws_bytes=ws_extent, wp_bytes=wp_extent,
-                                a_ring=activation_ring, w_buf=weight_buffer, ops=kernel_ops)
+                                **build_kwargs)
     module = program.resolve_program()
     work = build_dir / "design.prj"
     if work.exists():
@@ -487,7 +596,7 @@ def compile_graph_container(onnx_path, output_path, build_dir: Optional[Path] = 
     # it is the field that replaces kernel_sha256 now the gate has made that ambiguous. An
     # inline=True build would emit engine.ll instead, and that wants a deliberate change here
     # rather than a silent null in every container it produces.
-    kernel_obj = work / "engine.o"
+    kernel_obj = work / profile.object_file
     if not kernel_obj.exists():
         raise RuntimeError(
             f"no linked kernel object at {kernel_obj}: the manifest's kernel_object_sha256 is "
@@ -496,8 +605,8 @@ def compile_graph_container(onnx_path, output_path, build_dir: Optional[Path] = 
     kernel_obj_sha = hashlib.sha256(kernel_obj.read_bytes()).hexdigest()
     manifest = build_manifest(ir, ws, scheds, store, onnx_path.stem, len(insts),
                               hashlib.sha256(xclbin).hexdigest(), kernel_sha, time.perf_counter() - t0,
-                              kernel_ops=sorted(em.OP_NAMES[o] for o in kernel_ops),
-                              kernel_object_sha256=kernel_obj_sha)
+                              kernel_ops=sorted(emu.OP_NAMES[o] for o in kernel_ops),
+                              kernel_object_sha256=kernel_obj_sha, profile=profile)
     manifest["graph_engine"]["ddr_extents_bytes"] = {"workspace": ws_extent, "packets": wp_extent}
     # Which ONNX this container was compiled from. The compile caches in this repo key on a NAME rather
     # than a model hash, so "is this container the model I think it is" has needed an external answer

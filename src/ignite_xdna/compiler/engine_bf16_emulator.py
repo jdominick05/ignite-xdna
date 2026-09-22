@@ -74,6 +74,22 @@ H_PHASE0 = 12
 OP_NOP, OP_CONV, OP_RESIDUAL = 0, 1, 2
 F_LOAD_PSUM, F_EMIT, F_RELU, F_RELU6, F_HOLD = 1, 2, 4, 8, 16
 
+# THE OPCODE NUMBERS COLLIDE WITH THE INT8 ENGINE'S AND THE NAMES DO NOT, which is exactly why a
+# name table has to travel with its emulator instead of being reached for globally. Opcode 2 is
+# RESIDUAL here and MAXPOOL there; flag 4 is F_RELU here and F_HSWISH there. Reading a bf16
+# container's packets through the int8 table names the ops wrongly, and engine_compile's
+# check_kernel_covers_packets then refuses a container for reaching a case it never reaches.
+OP_NAMES = {OP_NOP: "NOP", OP_CONV: "CONV", OP_RESIDUAL: "RESIDUAL"}
+
+# Byte budgets, for the container manifest and for walking a packet blob. Derived from the element
+# counts above rather than restated, so a geometry change cannot leave them behind.
+# kernels/bf16_conv/design.py owns the same three numbers and must agree.
+A_ELEMS = 6400                                   # one activation object
+A_BYTES = A_ELEMS * 2                            # 12,800 B, twice the int8 object
+O_BYTES = OUT_ELEMS * 2                          # 3,200 B, the same object as int8's, half the
+                                                 # channels: 16 at two bytes against 32 at one
+W_BYTES = 9472                                   # the weight packet object, identical to int8's
+
 # Candidate models of the one-instruction multiply-accumulate, acc <- acc + sum_k a[k] * w[k]:
 #   "aligned"     the accumulator and the eight products are aligned to the largest exponent among
 #                 the nine, each rounded SEPARATELY to a 24-bit grid at that exponent (ties to even),
