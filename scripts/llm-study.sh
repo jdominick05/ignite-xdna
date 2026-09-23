@@ -23,6 +23,12 @@
 #   ./scripts/llm-study.sh npuread-verdict   # the mechanical verdict over the sitting's log
 #   (build the xclbins first: bash scripts/research-iron.sh tools/npu_read_bw_probe.py build)
 #
+# Stage 2 (CPU, DirectML and NPU together): do the chips' DDR reads add? tools/concurrent_read_bw.py
+# holds the design, the rules and the predictions. The three readers overlap by design.
+#   ./scripts/llm-study.sh concurrent-prereg    # its pre-registration log; commit it before the sitting
+#   ./scripts/llm-study.sh concurrent           # the sitting, recorded by tools/silicon_probe_record.py
+#   ./scripts/llm-study.sh concurrent-verdict   # the mechanical verdict over the sitting's log
+#
 # Options: --machine TAG names the logs (default: desktop2 on DESKTOP-CBL5NUA, else required).
 # --tag TAG adds _TAG to the verdict log's name, for a second verdict on the same day.
 #
@@ -41,6 +47,7 @@ while [ $# -gt 0 ]; do
     case "$1" in
         controls|adapter|build|prereg|read|gemv|dml16|verdict) STAGE="$1" ;;
         npuread-prereg|npuread|npuread-verdict) STAGE="${1//-/_}" ;;
+        concurrent-prereg|concurrent|concurrent-verdict) STAGE="${1//-/_}" ;;
         --machine) MACHINE="$2"; shift ;;
         --tag)     TAG="_$2"; shift ;;
         -h|--help) usage "${BASH_SOURCE[0]}"; exit 0 ;;
@@ -291,6 +298,38 @@ stage_npuread_verdict() {
     refuse "$log"
     use_env mlir-aie-iron
     logged "$log" python $NPUREAD verdict "$suite" || die "verdict incomplete, see $log"
+}
+
+CONC=tools/concurrent_read_bw.py
+
+stage_concurrent_prereg() {
+    local log="$OUT/concurrent_read_prereg_${MACHINE}_${DATE}.log"
+    refuse "$log"
+    use_env resnet_env17
+    logged "$log" python $CONC prereg || die "prereg failed"
+    ok "commit $log (with $CONC) before: $0 concurrent"
+}
+
+stage_concurrent() {
+    ls "$OUT"/concurrent_read_prereg_*.log >/dev/null 2>&1 || die "no pre-registration log: run $0 concurrent-prereg and commit it"
+    [ -f build/npu_read_bw_probe/c4x2_m1024/insts.bin ] || die "no NPU reader: bash scripts/research-iron.sh $NPUREAD build"
+    [ -f scratch/llm/readbw_fp32_65536x4096/model.onnx ] || die "no readbw model: $0 read builds it (Phase 1)"
+    local log="$OUT/concurrent_read_suite${TAG}_${MACHINE}_${DATE}.log"
+    refuse "$log"
+    # the coordinator runs in resnet_env17: its interpreter starts the CPU and DirectML readers,
+    # and the NPU reader starts through scripts/research-iron.sh
+    use_env resnet_env17
+    python tools/silicon_probe_record.py --log "$log" --device --seconds 1800 -- \
+        python $CONC suite || die "the sitting failed, see $log"
+    ok "sitting done; next: $0 concurrent-verdict"
+}
+
+stage_concurrent_verdict() {
+    local suite="$OUT/concurrent_read_suite${TAG}_${MACHINE}_${DATE}.log" log="$OUT/concurrent_read_verdict${TAG}_${MACHINE}_${DATE}.log"
+    [ -f "$suite" ] || die "no sitting log $suite"
+    refuse "$log"
+    use_env resnet_env17
+    logged "$log" python $CONC verdict "$suite" || die "verdict incomplete, see $log"
 }
 
 "stage_$STAGE"
