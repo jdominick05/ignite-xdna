@@ -1,3 +1,4 @@
+# Copyright (C) 2026 The ignite-xdna contributors
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Find and fix licence headers that claim AMD authorship of code written in this repo.
 
@@ -55,7 +56,8 @@ def tracked_with_amd() -> list[str]:
     out = subprocess.run(["git", "grep", "-l", "-I", "-E",
                           "Advanced Micro Devices|Copyright.*Xilinx|SPDX-License-Identifier: *Apache",
                           "--", ".", ":!Ignition"], cwd=ROOT, capture_output=True, text=True).stdout
-    return sorted(p for p in out.splitlines() if p)
+    self_path = Path(__file__).resolve().relative_to(ROOT).as_posix()  # its docstring quotes the header
+    return sorted(p for p in out.splitlines() if p and p != self_path)
 
 
 def upstream_ratio(local: str) -> str:

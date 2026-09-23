@@ -9954,7 +9954,7 @@ Everything in this section is read off object code. **It is a property of an obj
 
 **The census could not see three things, and now can.** `census()` matched `vst`/`vlda` against `[sp` and called only `am*` registers accumulators. That misses the second load port (`vldb`), a frame reached through a pointer the prologue copied from `sp` (`engine` does `mov p7, sp`), and the `bm*`/`cm*` names a bf16 kernel's 512-bit accumulators carry, so its "0 spills" could not vouch for a bf16 kernel at all. The widened reading follows frame aliases until their next plain write, counts every accumulator class on both ports, and counts again inside hardware loops alone. The legacy fields are unchanged and reproduce the 2026-09-18 rows exactly (13,424 / 13,648 / 13,888 / 14,304 / 15,280 B, 0). The widened verdict agrees with the narrow one and closes what it left open: the int8 engine has **0 accumulator stack moves and 31 vector stack moves, none of either inside a hardware loop** — the 31 are setup and epilogue traffic, not hot-loop traffic. The bf16 core: 3,520 B, 0 and 0.
 
-**Eight live accumulators, no spill.** The conv pass holds 8 live 1024-bit accumulators in `cm0`–`cm7` across a hardware loop. The "five is the spill-free ceiling" reading of 2026-09-09 was measured on `kernels/acc_spill_probe` and upstream GEMM and is true of those loop shapes; it is not a limit on this kernel, and `docs/SILICON.md` now says so. Both engine cores hold exactly 8.
+**Eight live accumulators, no spill.** The conv pass holds 8 live 1024-bit accumulators in `cm0`–`cm7` across a hardware loop, out of a register file of **nine**, `cm0`–`cm8` *(added 2026-09-23: SPEC(Peano) from its AIE2 register file, and the int8 engine's bit-exact ELFs name `cm8`; the cross-audit on branch `tnzr-audit`, `results/aie/notes_tnzr_cross_audit.md` row A1)*. The "five is the spill-free ceiling" reading of 2026-09-09 was measured on `kernels/acc_spill_probe` and upstream GEMM and is true of those loop shapes; it is not a limit on this kernel, and `docs/SILICON.md` now says so. Both engine cores hold exactly 8.
 
 **What dispatch no compiled container reaches costs.** `--without` strips a dispatch case from a copy and recompiles; unreferenced functions of the anonymous namespace are dropped with it.
 
@@ -11769,6 +11769,8 @@ Backing logs: [`engine_bf16_cache_audit_desktop2_20260921.log`](../results/aie/e
 
 At k3, `chunk`'s five rounds lie below every other arm's; `ptr`, `hoist+ptr` and the fixed-shape kernel overlap one another and lie below `base`'s. At k1 every variant lies below `base`, `chunk`/`hoist`/`hoist+ptr` overlap one another, and every engine arm lies above milestone 1. `chunk` at k3 is 108.9 GFLOPS, 23.6% of the 460.8 GFLOPS core ceiling, and 7.7% faster than the fixed-shape kernel on the same MACs.
 
+*Context added 2026-09-23 (cross-audit, branch `tnzr-audit`):* on this core, the ceiling is within reach of a good schedule. A hand-scheduled bf16 GEMM tile, the one published on [Hello XDNA!](https://tnzr.org/xdna/xdna1_kernel.html), was reproduced on Desktop 2 at **397.5 GFLOPS, 86.3% of the same 460.8**. In an L1 harness it ran at 85.0%, where compiled upstream `mm.cc` reached 28.5-41.3% (`tnzr_bf16_32x32x32_repro_desktop2_20260923T0518Z.log` and `l1_tile_*_desktop2_20260923*.log` on that branch). That is a GEMM tile, not this conv pass, which also realigns activations and walks run-time trip counts. So the 3.7x between `chunk` and 397.5 bounds what a core schedule has been shown to reach on this core. It does not bound what this kernel can reach.
+
 **The static reading was right.** The census had the loop at 65% of a k3 pass, `ptr` cutting its bundles by 21% and `chunk` by 33% - a predicted -14% and -22% per pass (DERIVED, bundle counts only); the device gave -10% and -18%. At k1 the base loop bodies are 1.47 us of a pass; `chunk`'s third off them predicts -0.49 us and measures -0.45, `ptr`'s fifth predicts -0.31 and measures -0.22. On this engine a hardware loop's bundle count *is* most of its cycle count, as [the ISA row](SILICON.md) says, and H11's "did not move" belongs to the GEMM's delivery floor, not to this kernel. `hoist` is a different lever: forming the bias once per packet rather than once per pass takes 0.32 us off a k1 pass (ranges disjoint) and 0.18 off a k3 pass (inside the spread) - so the bias *was* part of the per-pass cost the earlier section said it was not.
 
 - **What this decides for bf16:** running pointers with a compiler-visible trip count is the loop the engine core should have. `chunk` costs +2,672 B of a core that has ~12 KB free, and `hoist` stacks on it. Neither is landed in `engine_bf16.cc` by this commit: the kernel still needs its contract work (`switch`/default, output layout, `F_HOLD`, `OP_RESIDUAL`) and the loop should go in with that, once, byte-exact against the emulator. The variants are reproducible from `tools/engine_bf16_loop_variants.py`.
@@ -13316,6 +13318,16 @@ At float width AMD places nothing on the NPU, and in this same sitting AMD's int
 1.96 ms a tile. So this is a first, not a win over AMD, and there is no release in it. It is the first
 whole network this repository has run on the NPU with bf16 activations, and it is exact.
 
+*Scoped 2026-09-23 (prior-art check, branch `tnzr-audit`, `results/aie/notes_tnzr_cross_audit.md` row
+D10): "a first" holds for this repository only.*
+- bf16 convolution on XDNA1 through an open toolchain is not new. iree-amd-aie has registered a
+  bf16-to-f32 `conv_2d_nhwc_hwcf` test for the `npu1_4col` target since 2024-09-24. That is a test
+  listing, not a confirmed run.
+- "First through mlir-aie/IRON" may still hold: mlir-aie's own `aie_kernels/aie2` has no bf16 conv.
+  Nothing wider than that was checked.
+- "Exact" is to this repository's emulator, on the plain weights. On the AdaRound weights the
+  device departs from it ([below](#w8a16-sesr-m7-on-the-adaround-weights-the-device-departs-from-the-emulator-on-4-of-6-inputs-and-the-accuracy-passes-amds-adaround-2026-09-23-desktop-2)).
+
 *Updated by the next sitting:* with native host paths the bf16 tile beats the CPU, at 6.28-6.29 ms
 against 10.75
 ([next section](#w8a16-sesr-m7-with-native-host-paths-the-tile-beats-the-cpu-and-the-frame-is-now-dispatch-bound-2026-09-22-desktop-2)).
@@ -13431,7 +13443,9 @@ the VitisAI EP, another environment):
 - **bf16 dispatch is 1.27-1.30x int8's.** The two containers have the same 1,521 rounds, the same
   stream length and the same 18 weight packets. What differs is the bytes each descriptor moves (an
   activation packet is 12,800 B against 6,400) and the core's own pass. The two are not separated
-  here, so the 1.1 ms is **unexplained**.
+  here, so the 1.1 ms is **unexplained**. *(2026-09-23: a DERIVED size for the core-pass candidate,
+  and the test that would separate the two, are in
+  [the next section](#w8a16-sesr-m7-with-native-host-paths-the-tile-beats-the-cpu-and-the-frame-is-now-dispatch-bound-2026-09-22-desktop-2).)*
 - **The bf16 network time beats the CPU's**: 5.21-5.28 ms against 7.47 ms of ONNX Runtime on the same
   host in the same sitting, 1.42-1.43x.
 - **The tile does not**: 10.68-10.79 ms against 9.85. Everything it loses is on the host: staging at
@@ -13466,7 +13480,7 @@ bf16 arms.
 
 The framing is unchanged. In this same sitting AMD's int8 SESR ran at 1.65 to 1.93 ms a tile, and
 the bf16 tile below is 3.3-3.8x that. This is a first, not a win over AMD, and there is no release in
-it.
+it. It is a first for this repository only, as scoped in the section above.
 
 Logs:
 - [`sesr_m7_bf16_native_host_desktop2_20260922.log`](../results/aie/sesr_m7_bf16_native_host_desktop2_20260922.log)
@@ -13545,6 +13559,24 @@ AMD's stack, timed as `5_eval.py`'s `sess.run` per tile (ONNX Runtime 1.23.3 wit
   Which of these accounts for the cost is not separated.
 - **bf16 dispatch is 1.28-1.30x int8's** (1.27-1.30 above), and that is still unexplained. It is now
   the largest term in the frame.
+  *A size for the core-pass candidate, added 2026-09-23 (cross-audit, branch `tnzr-audit`). DERIVED;
+  a consistency check, not an attribution.*
+  - A bf16 `vmac.f` does 128 MACs where an int8 `vmac` does 256 (SPEC).
+  - This branch's static census puts the two engines' hot loops at about the same cycles per MAC
+    instruction: 24 against 23 per 8 in the stride-1 dual loop
+    ([static readings](#static-readings-of-both-engine-cores-a-wider-census-what-unreachable-dispatch-costs-and-a-9-cycle-loop-beside-a-17-cycle-one-2026-09-21-desktop-2)).
+  - Upstream `mm.cc`, timed in L1 with no data movement, takes 1.68-2.46x the cycles in bf16 as in
+    int8 at equal MACs (`l1_tile_*_desktop2_20260923*.log` on that branch).
+  - Suppose the bf16 core pass is about twice int8's and nothing else differs. Then the ratio is
+    about 1 + f, where f is compute's share of int8 dispatch. The NOP split finds compute 25-30% of
+    dispatch across the YOLO family
+    ([the floor section](#the-floor-is-seven-tenths-of-a-dispatch-and-barely-moves-with-scale)), which
+    would give 1.25-1.30x, the ratio measured here. The split was never run on SESR.
+  - The named alternative is the doubled descriptor bytes (12,800 B activation packets against
+    6,400). On the YOLO family 77-81% of the floor is not transfer, which limits that candidate but
+    does not rule it out.
+  - Nothing here separates the two on SESR, so the ratio stays **unexplained**. The test that would
+    separate them is the NOP split of the int8 and bf16 SESR containers in one sitting.
 - Against the engine's own int8, the bf16 tile is 1.37-1.40x slower (6.28-6.29 ms against
   4.50-4.58), in exchange for +0.41 / +0.19 dB.
 - Against AMD, the bf16 tile is 3.3-3.8x AMD's int8 tile, and its dispatch alone is 2.7-3.2x.
@@ -13560,7 +13592,9 @@ AMD's stack, timed as `5_eval.py`'s `sess.run` per tile (ONNX Runtime 1.23.3 wit
   2026-09-22 and AMD's arm 00:02-00:03 on 2026-09-23. The engine and its CPU arm ran under ONNX
   Runtime 1.30, AMD's arms under 1.23.3.
 - Why dispatch is 1.28-1.30x int8's. Whether the cause is the doubled descriptor bytes or the core's
-  own pass is not separated, and that is now what decides the frame.
+  own pass is not separated, and that is now what decides the frame. A half-rate `vmac.f` in a core
+  pass that is a quarter of dispatch would fit the ratio (DERIVED, the note above). A NOP split of
+  both SESR containers is the test.
 - What makes the native bf16 egress 2.5-2.6x the int8 one. It is scalar and was not vectorized.
 - W8A16 was run on the plain XINT8 weights only. AMD's AdaRound W8A8 still beats it by 0.51 dB on
   Set5 and 0.22 dB on Set14. *Measured since:* on the AdaRound weights W8A16 passes AMD's AdaRound,
@@ -13580,7 +13614,8 @@ AdaRound weights. It has two results, and the first one qualifies the sections a
   **unexplained**, and so "exact to the emulator" above holds for the plain weights only.
 - **W8A16 on the AdaRound weights reads 35.37 / 29.93 dB PSNR-Y on Set5 / Set14.** That is above AMD's
   AdaRound W8A8 (35.16 / 29.82), the first time an engine arm here has passed AMD's most accurate
-  arm. The tile is still 3.2-3.7x AMD's. So this is a first, not a win, and there is no release in it.
+  arm. The tile is still 3.2-3.7x AMD's. So this is a first for this repository, not a win, and there
+  is no release in it.
 
 The AdaRound model is the plain model with different weight codes. 5,447 of its 22,128 int8 weight
 codes differ, each by one, spread over nine tensors. Every weight scale is a power of two, and the

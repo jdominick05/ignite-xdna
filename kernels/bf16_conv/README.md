@@ -39,7 +39,7 @@ AVX512-BF16 and is not a strawman):
 
 **2.76x one CPU thread, at 20.0% of this core's 460.8 GFLOPS bf16 ceiling.**
 
-Three things that number needs attached to it, or it misleads:
+Four things that number needs attached to it, or it misleads:
 
 * **The 16-thread row is degenerate and is not a win to quote.** At this tile torch's threading
   overhead exceeds the work, so 16 threads are slower than 1. The honest comparison is per core.
@@ -48,6 +48,11 @@ Three things that number needs attached to it, or it misleads:
   many passes in one dispatch, which is exactly what the graph engine already does for 66 layers.
 * **This is one core of sixteen**, and the harness drives it directly. It is not a device number and
   not a model number.
+* **The ceiling is reachable, so 20% is a schedule gap** (added 2026-09-23). A hand-scheduled bf16
+  GEMM tile ([Hello XDNA!](https://tnzr.org/xdna/xdna1_kernel.html)) was reproduced on this chip
+  at 397.5 GFLOPS, 86.3% of the same 460.8. It is on branch `tnzr-audit`, in BENCHMARKS under
+  "Cross-audit against Hello XDNA!". That is a GEMM tile, not this conv, so it shows what a schedule
+  has reached on this core, not what this kernel can.
 
 ### Accumulators in flight is the whole optimisation so far
 
