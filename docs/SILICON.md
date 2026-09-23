@@ -130,7 +130,7 @@ clean read-only test:
 
 | Design | Channels per direction | What moved | NPU time | Rate | Tag and evidence |
 |---|---|---|---|---|---|
-| `00_memcpy` (passthrough, 64 MiB round trip) | 4 ("2 columns × 2 channels") | 64 MiB in and 64 MiB out | 2388.5 µs avg | 56.19 GB/s "effective" = read+write bytes ÷ time, i.e. **28.1 GB/s per direction** | MEASURED `results/aie/mlir_aie_examples_npu.log`; the per-direction split is DERIVED (2 × 67,108,864 B ÷ 2388.5 µs = 56.19 GB/s reproduces the log's own figure). |
+| `00_memcpy` (passthrough, 64 MiB round trip) | 4 ("2 columns × 2 channels"; possibly 8, see the read-only test below) | 64 MiB in and 64 MiB out | 2388.5 µs avg | 56.19 GB/s "effective" = read+write bytes ÷ time, i.e. **28.1 GB/s per direction** | MEASURED `results/aie/mlir_aie_examples_npu.log`; the per-direction split is DERIVED (2 × 67,108,864 B ÷ 2388.5 µs = 56.19 GB/s reproduces the log's own figure). |
 | `groupnorm_bf16`, L=301056 | 8 | 19.27 MB read twice, written once | 1487.3–1546.6 µs | 37.4–38.9 GB/s combined; the read stream alone is **25.9 GB/s** (2 × 19.27 MB ÷ 1487.3 µs) with 13.0 GB/s of writes running concurrently | MEASURED `results/aie/groupnorm_bf16_kernel_npu.log`; split DERIVED. |
 | `dispatch_floor` passthrough (shim→memtile→shim, one fifo in, one forwarded out) | 1 | 8 KB–32 MB, each payload in and back out | slope 0.0726 ns per round-trip byte | 13.78 GB/s of read+write bytes, i.e. **6.9 GB/s per direction on one channel** | MEASURED `results/aie/dispatch_floor_npu.log`; the script counts `n * 4 * 2` bytes per call (`kernels/dispatch_floor/measure_floor.py`), so the split is DERIVED from its own accounting. |
 | `tools/npu_read_bw_probe.py` (shim MM2S into lockless mem-tile sinks; nothing written back) | 1 to 8 (1 column × 1 channel up to 4 columns × 2) | 1 GiB read per dispatch | 150.97 ms on 1 channel, 22.55 ms on 8 (medians of 15) | **7.11 GB/s on 1 channel, 27.4–27.5 on 4, 47.62 on 8**, reads only | MEASURED [suite](../results/llm/npu_read_bw_suite_desktop2_20260923.log), [verdict](../results/llm/npu_read_bw_verdict_desktop2_20260923.log), Desktop 2, pre-registered at `c365f9f` ([prereg](../results/llm/npu_read_bw_prereg_desktop2_20260923.log)). |
@@ -174,19 +174,37 @@ same-sitting trace clock was 1.7972 GHz. The NPU was idle at all 34 witnesses.
   cycle, 98.9% of a word per cycle.
 - So the 26–28 GB/s shared cap above does not bind reads alone. The pre-registered rule
   (binds if ≤ 30.24 GB/s) prints REFUTED.
-  - memcpy's 28.1 GB/s per direction is what four channels read here (27.4–27.5), not a
-    cap.
+  - memcpy's stream count is uncertain.
+    - Its log says 2 columns × 2 channels.
+    - Its own cache note ("2 rows x 4 cores' worth of ELFs") and mlir-aie's current
+      `transform_parallel` point to 4 × 2. That function drives every column (`device.cols`,
+      4 on npu1) × `num_channels` = 2. The version memcpy ran is not pinned.
+    - With four read channels, its 28.1 GB/s per direction is what four channels read here
+      (27.4–27.5). With eight, reads fell from 47.62 alone to 28.1 while writes ran.
+    - Either way, it moved 56.19 GB/s of reads and writes combined.
   - GroupNorm's 25.9 GB/s of reads on eight channels is below what eight channels read
     alone. What held it there is unattributed. Its compute, its 13.0 GB/s of concurrent
     writes and its transfer sizes are candidates; none was tested.
 - The limit is not per column. Two channels in one column read the same as one channel in
   each of two columns (ratio 1.001). Four columns × 1 against two × 2 gives 1.004.
 - Per channel, the rate falls as channels are added: 7.11, 7.00–7.01, 6.85–6.87, 6.41 and
-  5.95 GB/s at 1, 2, 4, 6 and 8 channels. Eight channels give 84% of eight times one. The shared resource
-  behind the shortfall is unattributed; candidates are DRAM efficiency with eight streams,
-  the NPU's port into the data fabric, address translation, and the 256-byte default shim
-  burst (mlir-aie's npu1 default). For scale, on the same DDR5 the CPU reads 60.59 GB/s and
-  DirectML 68.81 (BENCHMARKS, LLM decode yardsticks).
+  5.95 GB/s at 1, 2, 4, 6 and 8 channels. Eight channels give 84% of eight times one. The
+  shared resource behind the shortfall is unattributed. None of the candidates below was
+  tested.
+  - memcpy's 56.19 GB/s of combined traffic, above what eight streams read alone, argues
+    against DRAM itself: mixing reads and writes usually costs DRAM efficiency rather than
+    adding it.
+  - It points instead at the read path:
+    - how many reads the NPU's port into the data fabric keeps outstanding (a read waits a
+      round trip, and a posted write does not);
+    - or a resource the MM2S engines share.
+  - Address translation and the 256-byte default shim burst (mlir-aie's npu1 default) remain
+    candidates.
+  - Other traffic from the host is one too. It was sampled once, before the sitting
+    (1.23 busy cores, against 0.27 in 1.5's sitting), not during the dispatches.
+
+  For scale, on the same DDR5 the CPU reads 60.59 GB/s and DirectML 68.81 (BENCHMARKS, LLM
+  decode yardsticks).
 - The drivable array has eight shim MM2S streams. At a word per cycle each (1.5), that is
   57.5 GB/s at the sitting's 1.797 GHz (DERIVED), an upper bound for reads through the shim
   DMAs.

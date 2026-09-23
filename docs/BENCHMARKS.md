@@ -2597,7 +2597,8 @@ single-direction read, and it derived a shared 26–28 GB/s cap from them.
 - Each row reads 1 GiB per dispatch in a fresh process: 3 warmup and 15 timed dispatches, with
   the rate taken as bytes over the median submit-to-wait time. The 256 MiB rows give the
   fixed cost per dispatch.
-- The witnesses: host load 1.23 busy cores, and the NPU idle at all 34 xrt-smi checks.
+- The witnesses: host load 1.23 busy cores (one 1-second sample before the sitting, not during
+  the dispatches; 0.27 in SILICON 1.5's sitting), and the NPU idle at all 34 xrt-smi checks.
   BFP16 and the gate held off. VS Code's 3D engine on the 780M read 1.3% before the clock
   child and nothing at the end.
 - The same-sitting trace clock was 1.7972 GHz.
@@ -2629,7 +2630,10 @@ that the slope excludes, and it does not decide.
     still above 55.9.
 - **R2, REFUTED for reads alone.** 47.62 GB/s is far above the 26–28.8 GB/s cap, whose
   pre-registered threshold was 30.24.
-  - memcpy's 28.1 GB/s per direction is what four channels read here (27.4–27.5), not a cap.
+  - memcpy's 28.1 GB/s per direction is what four channels read here (27.4–27.5), if it drove
+    four as its log says. Its cache note and mlir-aie's `transform_parallel` point to eight.
+    In that case reads fell from 47.62 alone to 28.1 while writes ran. Either way it moved
+    56.19 GB/s combined (SILICON 1.6).
   - GroupNorm's 25.9 GB/s of reads on eight channels sits below what eight channels read
     alone. Its cause is unattributed.
 - **R3, not a per-column limit.** At equal channel counts, spreading across columns is
@@ -2638,9 +2642,15 @@ that the slope excludes, and it does not decide.
 
 **Scaling is sub-linear past four channels.** Per channel, the rate falls from 7.11 GB/s on one
 channel to 5.95 on eight, so eight channels give 84% of eight times one. The shared resource
-behind the shortfall is unattributed. Candidates: DRAM efficiency with eight streams, the NPU's
-port into the data fabric, address translation, and the 256-byte default shim burst. None was
-tested. For scale, on the same DDR5 the NPU reads at 79% of the CPU's ReduceSum (60.59 GB/s),
+behind the shortfall is unattributed, and none of these candidates was tested.
+- memcpy's 56.19 GB/s of combined traffic, above what eight streams read alone, argues against
+  DRAM itself.
+- It points at the read path: the number of reads the NPU's fabric port keeps outstanding, or
+  a resource the MM2S engines share.
+- Address translation and the 256-byte default shim burst remain candidates.
+- So does other host traffic, since the host was sampled only before the sitting.
+
+For scale, on the same DDR5 the NPU reads at 79% of the CPU's ReduceSum (60.59 GB/s),
 69% of DirectML's (68.81), and 50% of the 96 GB/s theoretical (DERIVED).
 
 **Predictions scored:**
