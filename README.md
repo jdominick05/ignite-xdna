@@ -174,12 +174,12 @@ checks every stage against serial execution. [Scope, measurements and usage](doc
 
 ## Hand-written AIE kernels
 
-The XINT8-only ceiling above is the *shipped runtime's*, not the silicon's. AMD's own
-`device.yaml` (same 1.7.1 install) gives Phoenix's AIE2 MACs/cycle — `bfloat16xbfloat16: 128`,
-`int16xint8: 128`, `int8xint8: 256` — and omits an **int8×int4 `vmac` at 512 the silicon has**:
-int4 weights take the array GEMM to **6,195 GOPS**, 1.26× int8 at its best tile, less or nothing at
-others (bit-exact; halved bytes, not the MAC). Quark and the VitisAI EP expose none of it; the open
-`mlir-aie`/Peano toolchain does, on Windows. Outcomes in `kernels/`, mostly negative, all measured:
+The XINT8-only ceiling above is the *shipped runtime's*, not the silicon's. AMD's `device.yaml`
+(same 1.7.1 install) gives Phoenix's AIE2 MACs/cycle — `bfloat16xbfloat16: 128`, `int16xint8: 128`,
+`int8xint8: 256` — and omits the **int8×int4 `vmac`** AMD's AIE-API documents for AIE-ML, measured
+bit-exact here: int4 weights take the array GEMM to **6,195 GOPS**, 1.26× int8 at its best tile,
+less or nothing at others, and not through the core. Quark and the VitisAI EP expose none of it;
+`mlir-aie`/Peano does, on Windows. Outcomes in `kernels/`, mostly negative, all measured:
 
 - **bf16 GEMM is the first genuine NPU win in this project.** 2072.5 GFLOPS at 1024³
   against CPU bf16's 1161.2 — the NPU wins 1.18×–1.78× once M/N ≥ 1024, and loses at

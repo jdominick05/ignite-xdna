@@ -50,9 +50,9 @@ array program) into `~/.npu/cache/<hash>/`; later runs of the same shape hit the
 | `bank_placement/` | A local copy of `whole_array.py` plus `--stack-size`, and an alternating A/B driver | Tests H12: does separating the int8 GEMM's colliding operands into different memory banks speed it up? **Not resolvable on a shared machine** — seven series, arms overlap, sign varies. Its `bank_stall_probe.py` is a **superseded** control whose headline was retracted; the working observable is `memory_placement/` |
 | `conv_accum/` | Local copies of both 1×1 conv kernels with their accumulators made register-resident | **Worth 2.99–3.01×** (116 → 350 marginal GOPS); hot loop 0.045 → 0.286 MACs/cycle. **The op class stays closed** — CPU still wins 2.4×, down from 7.2× |
 | `aie2/` | In-flight 4-D DMA receptive field generation, vectorized zero-realignment 3×3 conv kernel, and 20-core full-array engine | Replaces software `sliding_mul` shuffles (`vshift`/`vmov`) with MemTile 4-D DMA striding. M=1 achieves **2.00× MAC issue density** (0.222 → 0.444 vmac/cycle); M=2 unrolling achieves **4.50× MAC issue density** (1.000 vmac/cycle, 100% vector ALU saturation) with 0 realignment ops and 0 spills. *(Qualified 2026-09-23: the densities are STATIC inner-loop bundle counts, not measured rates; see the silicon figures at the end of this row.)* Closed-loop Column 0 pipeline: native hardware SRS requantization (`vst.srs.s8.s32`), 4-core gathering, and host-to-host DDR roundtrip. 20-core full-array execution engine: 5 physical columns × 4 cores/col across 30 physical tiles (3.84 MB SRAM, 50 flows), 20 clean ELFs, 18.43 TOPS at 1.80 GHz. Compiler-verified. **Qualified 2026-09-23:** 18.43 TOPS is peak arithmetic for 20 cores, and "compiler-verified" means the build succeeds. It is not a hardware result. On silicon ([`hardware_im2col_execution.log:11-14`](../results/aie/hardware_im2col_execution.log)) the 20-core array hits **ERT_CMD_STATE_TIMEOUT**, 16 cores (Cols 0–3) reach **0.0270 TOPS**, and one core 0.0037 TOPS. The log prints these as 0.37% and 0.80% "density" against a 128 MAC/cycle int8 peak. The SPEC is 256 (`docs/SILICON.md`), so against the true peak they are about **0.18% and 0.40%** (DERIVED; [ledger A5, A7](../results/aie/notes_tnzr_cross_audit.md)); [implementation](../results/aie/notes_im2col_4d_implementation.md), [VLIW audit](../results/aie/notes_im2col_kernel_vliw_audit.md), [pipeline integration](../results/aie/notes_im2col_m2_pipeline_integration.md), [column scaling](../results/aie/notes_im2col_4core_column_scaling.md), [egress roundtrip](../results/aie/notes_im2col_egress_roundtrip.md), [column 4 unlock feasibility](../results/aie/notes_column4_unlock_feasibility.md), and [20-core array synthesis](../results/aie/notes_im2col_20core_array_synthesis.md) |
-| `w4a8_probe/` | Nothing yet — int4 weights on one core, two ways: native `mmul<int8,int4>`, and int4 widened to int8 on load | **int8×int4 is a native `vmac` on AIE2**, bit-exact, one per cycle at 512 MACs: a k loop at 372.4 MAC/cycle, 1.82× the int8 control (upstream's kernel, re-typed). Widening on load is free and buys only bytes. One core, not the array |
-| `w4a8_array/` | Nothing yet — `whole_array`'s int8 GEMM with B packed int4 and the probe's kernels in every core | **int4 weights pay at the array, through bytes rather than MACs**: 1.23–1.26× at the int8 best tile 64/128/64 (**6,195 GOPS**, bit-exact) with the unpack kernel as much as the native one; 1.06–1.13× at 64/64/64, nothing at 128/64/64. Mechanism unexplained |
-| `int4_study/` | Nothing — the INT4 gates: can this chip run int4 at all, and is it worth anything to the graph engine | **The demo runs, the engine has no use for it.** uint8 × int4 (the engine's operand pair) is bit-exact on silicon at int8 × int4's exact cycles; the toolchain's only dense int4 is W4A8; the engine's fixed weight packets make int4 worth under 5% of any container's dispatch even at best. [Evidence](../docs/BENCHMARKS.md#int4-on-phoenix-gates-first-the-chip-runs-the-engines-uint8--int4-and-the-engine-has-no-use-for-it-2026-09-23-desktop-2) |
+| `w4a8_probe/` | Nothing yet — int4 weights on one core, two ways: native `mmul<int8,int4>`, and int4 widened to int8 on load | **int8×int4 is a native `vmac` on AIE2**, as AMD's AIE-API documents for AIE-ML, confirmed bit-exact on Phoenix: 512 MACs per `vmac` by its shape (SPEC); the best k loop sustains 372.4 MAC/cycle (0.73 `vmac`/cycle, MEASURED), 1.82× the int8 control (upstream's kernel, re-typed) and 1.64× the best int8 schedule. Widening on load is free and buys only bytes. One core, not the array |
+| `w4a8_array/` | Nothing yet — `whole_array`'s int8 GEMM with B packed int4 and the probe's kernels in every core | **int4 weights pay at the array, and not through the core**: 1.23–1.26× at the int8 best tile 64/128/64 (**6,195 GOPS**, bit-exact) with the unpack kernel as much as the native one; 1.06–1.13× at 64/64/64, nothing at 128/64/64. Mechanism unexplained |
+| `int4_study/` | Nothing — the INT4 gates: can this chip run int4 at all, and is it worth anything to the graph engine | **The demo runs; on paper, the engine's current packets leave int4 little to save.** uint8 × int4 (the engine's operand pair) is bit-exact on silicon at int8 × int4's exact cycles; the toolchain's only dense int4 is W4A8 (compile-only); under today's fixed weight packets int4 is worth under 5% of any container's dispatch even at best (DERIVED, transport-bound, no accuracy data), and the engine core has 224 B of program memory left. [Evidence](../docs/BENCHMARKS.md#int4-on-phoenix-gates-first-the-chip-runs-the-engines-uint8--int4-and-on-paper-the-current-weight-packets-leave-int4-little-to-save-2026-09-23-desktop-2) |
 
 ## `aie2/dfl/`
 
@@ -501,7 +501,8 @@ bundle for bundle. `results/aie/aie2_isa_static.log`.
 ## `w4a8_probe/`
 
 What int4 weights cost in one AIE2 core. The W4A8 plan started from `docs/SILICON.md`'s
-"int8×int4 — AIE2p only", so its first step was an unpack to int8; `aie_api` turned out to
+"int8×int4 — AIE2p only", so its first step was an unpack to int8. That was this repo's reading
+of one table: AMD's AIE-API 2024.1 lists AIE-ML's `8b x 4b: 4x16x8` as native. `aie_api` turned out to
 define `aie::mmul<4,16,8,int8,int4>` for AIE2, lowered to int8×int8's own `vmac` builtin with one
 configuration field changed. Two questions, then: does the silicon run that mode, and what does
 the unpack cost. `results/aie/w4a8_probe_npu.log`, written up in
@@ -558,7 +559,8 @@ What it measured (`results/aie/w4a8_array_npu.log`, 2048³, same sitting):
 
 - **At the int8 GEMM's best tile, 64/128/64, packed B gives 1.23–1.26×** — the unpack kernel as
   much as the native one, while a faster int8 kernel gives 0.995×. The core is not the critical
-  path there; the win is B's bytes. `native:unroll2` runs **6,195 GOPS**, the best `whole_array`
+  path there; the win comes from packing B, by a mechanism the next bullet leaves open.
+  `native:unroll2` runs **6,195 GOPS**, the best `whole_array`
   rate in this repo (same 2MKN op count; the operands are int8 × int4).
 - **It is tile-dependent:** at 64/64/64 native beats unpack (1.127× against 1.057×), at
   128/64/64 nothing moves. Neither the kernel, total L3 bytes at a fixed bandwidth, nor bytes
@@ -568,11 +570,12 @@ What it measured (`results/aie/w4a8_array_npu.log`, 2048³, same sitting):
 
 ## `int4_study/`
 
-The 2026-09-23 INT4 gates: can the chip run int4 despite no official support, and is it worth
-anything to the graph engine? `w4a8_probe/` and `w4a8_array/` above are reused as they are.
-They stay byte-identical because their logs describe them, so everything new lives here.
+The 2026-09-23 INT4 gates: can the chip run int4, which AMD's shipped runtime does not expose
+(AMD's AIE-API does document it for AIE-ML), and is it worth anything to the graph engine?
+`w4a8_probe/` and `w4a8_array/` above are reused as they are. Their code stays as their logs
+describe it, changed only by a licence header comment, so everything new lives here.
 Written up in
-[`docs/BENCHMARKS.md`](../docs/BENCHMARKS.md#int4-on-phoenix-gates-first-the-chip-runs-the-engines-uint8--int4-and-the-engine-has-no-use-for-it-2026-09-23-desktop-2).
+[`docs/BENCHMARKS.md`](../docs/BENCHMARKS.md#int4-on-phoenix-gates-first-the-chip-runs-the-engines-uint8--int4-and-on-paper-the-current-weight-packets-leave-int4-little-to-save-2026-09-23-desktop-2).
 
 - `isa_gate.cc` + `isa_gate.py` — gate A, compile only.
   - Compiles one `aie::mmul` per int4 operand pair for aie2 and aie2p, each with a no-mmul

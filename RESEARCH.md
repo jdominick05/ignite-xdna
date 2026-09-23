@@ -638,29 +638,38 @@ been closed:
   combinations AIE2 lacks and roughly doubles most throughput figures — an asymmetry
   that is itself evidence this is a real per-chip table, not a copy-pasted default.
   **Measured follow-up (2026-09-10): the missing `int8xint4` row is a cost-model gap, not a
-  missing instruction.** `aie::mmul<4,16,8,int8,int4>` compiles for Phoenix to the same
-  `vmac` builtin int8×int8 uses with one configuration field changed, runs bit-exact on one
-  core at one `vmac` per cycle — 512 MACs each, twice int8's — and its k loop reaches 372.4
-  MAC/cycle against int8's 204.8–227.6 (`results/aie/w4a8_probe_npu.log`,
+  missing instruction** — and a gap in that one table only: AMD documents int8×int4 for AIE-ML
+  elsewhere (AIE-API 2024.1's native `8b x 4b: 4x16x8`, Riallto's 512 int4×int8 MAC per cycle
+  per core; SPEC, cross-audit ledger D11), so what follows confirms prior art on Phoenix rather
+  than discovering it. `aie::mmul<4,16,8,int8,int4>` compiles for Phoenix to the same
+  `vmac` builtin int8×int8 uses with one configuration field changed and runs bit-exact on one
+  core (0 of 4,096 mismatches against an int64 reference). Each `vmac` is 512 MACs by its shape
+  (SPEC), twice int8's; the best k loop sustains 372.4 MAC/cycle two-point, 383.7 fit — 0.73–0.75
+  `vmac` per cycle, MEASURED — against int8's 204.8–227.6 (`results/aie/w4a8_probe_npu.log`,
   [BENCHMARKS](docs/BENCHMARKS.md#int8int4-is-a-native-vmac-on-aie2-and-int4-weights-cost-nothing-to-store)).
   So the table overstates what AIE2 lacks: W4A8 here is a native multiply, not an unpack.
-  **At the array (measured the same day) it helps — through bytes, not MACs.** Packed int4 B
+  **At the array (measured the same day) it helps, and not through the core.** Packed int4 B
   makes `whole_array`'s int8 GEMM 1.23–1.26× faster at its best tile (6,195 GOPS, the best
   `whole_array` rate in this repo) whether the core multiplies natively or widens to int8,
   while a faster int8 kernel gains nothing: the core is not the critical path there. The gain
   is tile-dependent (1.06–1.13× at 64/64/64, none at 128/64/64), and what sets it is open —
   neither the kernel, nor total L3 bytes at a fixed bandwidth, nor bytes per MAC into the core
   explains all three tiles (`results/aie/w4a8_array_npu.log`,
-  [BENCHMARKS](docs/BENCHMARKS.md#w4a8-on-the-whole-array-int4-weights-pay-at-the-best-int8-tile-through-bytes-rather-than-macs)).
-  **Gated follow-up (2026-09-23): int4 is real on this chip, and the engine has no use for it.**
+  [BENCHMARKS](docs/BENCHMARKS.md#w4a8-on-the-whole-array-int4-weights-pay-at-the-best-int8-tile-and-not-through-the-core)).
+  **Gated follow-up (2026-09-23): int4 runs on this chip, and on paper the engine's current
+  weight packets leave it little to save.**
   - **The silicon (measured):** uint8 × int4, the graph engine's own operand pair, is bit-exact
     on silicon at int8 × int4's exact cycles. The 2026-09-10 probe re-ran cycle-identical in all
     27 cells, and the array's best tile reproduced at 1.287×.
   - **The toolchain (a toolchain fact, not a silicon one):** its only dense int4 on AIE2 is
     W4A8. It has no path for int4 activations, W4A4 or W16A4.
-  - **The engine (derived):** priced over every weight packet it streams, int4 could save at most
-    1.4–3.9% of any container's dispatch (a 4.8% ceiling). Its fixed 9,472 B packets make the
-    real saving zero, and trimming them is the larger lever, with no accuracy cost.
+  - **The engine (derived, on paper, under the current packet format):** priced over every
+    weight packet it streams, with the frame assumed purely transport-bound at 26.8 GB/s, int4
+    could save at most 1.4–3.9% of any container's dispatch (a 4.8% ceiling, YOLOv8s, against a
+    5% line). Its fixed 9,472 B packets make the real saving zero, and trimming them is the
+    larger lever, with no accuracy cost. No accuracy data exists for a W4 model. Separately, the
+    newest engine core has 224 B of its 16,384 B program memory free for a second k loop
+    (cross-audit ledger A11).
   - **Open, and now well-posed:**
     - Does the hardware decode the 8 MAC control-word codes Peano never emits, i.e. is there a
       4-bit-A mode the toolchain does not expose? That needs a hand-built control word on
@@ -669,7 +678,7 @@ been closed:
       can express M < 32, so the note's "~2×" there is DERIVED and untested.
 
   Evidence: `results/aie/int4_{isa_gate,engine_bytes_gate,demo_npu}_desktop2_20260923.log`,
-  [BENCHMARKS](docs/BENCHMARKS.md#int4-on-phoenix-gates-first-the-chip-runs-the-engines-uint8--int4-and-the-engine-has-no-use-for-it-2026-09-23-desktop-2).
+  [BENCHMARKS](docs/BENCHMARKS.md#int4-on-phoenix-gates-first-the-chip-runs-the-engines-uint8--int4-and-on-paper-the-current-weight-packets-leave-int4-little-to-save-2026-09-23-desktop-2).
   **Checked whether an actual custom kernel could be built and run on Phoenix from
   material already in this install — a real dead end, confirmed rather than assumed.**
   The same `waic` wheel also bundles `aie4_models/`, a large internal AMD kernel-source

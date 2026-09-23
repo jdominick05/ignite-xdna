@@ -1838,7 +1838,7 @@ Three hypotheses:
   **Confirmed a second way, 2026-09-10 (the array):** a *measured* one-core gain — the int8 k
   loop unrolled twice, 176 cycles per call faster — vanishes at the array too (0.995× at
   64/128/64), and so does int8×int4's doubled MAC rate over the unpack arm there — see
-  [W4A8 on the whole array](#w4a8-on-the-whole-array-int4-weights-pay-at-the-best-int8-tile-through-bytes-rather-than-macs).
+  [W4A8 on the whole array](#w4a8-on-the-whole-array-int4-weights-pay-at-the-best-int8-tile-and-not-through-the-core).
 
 **What this does not show.** Nothing here was measured on hardware; the issuing-cycle figures
 are computed from object code and the microseconds come from a run two days earlier. "Not
@@ -2086,7 +2086,12 @@ tools `kernels/w4a8_probe/`; every call's cycle count in `results/aie/w4a8_probe
 
 The W4A8 item in the backlog assumed Phoenix has no int4 multiply — `docs/SILICON.md` listed
 int8×int4 as AIE2p only, from `device.yaml`'s AIE2 MAC table, which has no such row — so its
-first step was an int4→int8 unpack. Both halves came out differently. `aie_api` defines
+first step was an int4→int8 unpack. Both halves came out differently. *(Added 2026-09-23: the
+assumption was this repo's reading of one table, not the state of AMD's documentation.
+AIE-API 2024.1 lists AIE-ML's `8b x 4b: 4x16x8` as a native `mmul` shape, and Riallto states
+512 int4×int8 MAC per cycle per core — SPEC, both fetched by the 2026-09-23 cross-audit, its
+ledger row D11 on branch `tnzr-audit`. What follows is prior art confirmed on Phoenix silicon
+through Peano, bit-exact, not a discovery.)* `aie_api` defines
 `aie::mmul<4,16,8,int8,int4>` for AIE2 (`detail/aie2/mmul_8_4.hpp`), and Peano lowers it to the
 same `vmac` builtin int8×int8 uses, with the B-mode field of the MAC configuration word cleared.
 On this core that instruction:
@@ -2095,9 +2100,12 @@ On this core that instruction:
   against an int64 reference: 0 mismatches of 4,096. B is packed two per byte, element 2i in the
   low nibble, two's complement — measured, with the verifier ready to report a nibble-swapped
   or unsigned reading, and none was needed.
-- **issues one per cycle, 512 MACs each** against int8's 256. A loop whose 8 int4 `vmac`s sit in
-  8 consecutive bundles runs 17.03 cycles per 16-bundle execution; a multiplier held two cycles
-  per `vmac` would need at least 24. The latency is covered too: the compiler hides latency
+- **can issue back to back, 512 MACs each** against int8's 256. The 512 is the 4×16×8 shape
+  (SPEC), not a count. Back-to-back issue is DERIVED from measured cycles: a loop whose 8 int4
+  `vmac`s sit in 8 consecutive bundles runs 17.03 cycles per 16-bundle execution, and a
+  multiplier held two cycles per `vmac` would need at least 24. No loop here sustains one per
+  cycle: the best measured k loop runs 0.73–0.75 `vmac` per cycle (372.4 MAC/cycle two-point,
+  383.7 fit; the table below). The latency is covered too: the compiler hides latency
   behind explicit nops rather than an interlock ([AIE2 machine code](#aie2-machine-code-the-bundle-count-of-a-loop-is-its-cycle-count)),
   so an int4 mode slower than Peano's model would have produced wrong answers, not slow ones.
 
@@ -2109,6 +2117,8 @@ On this core that instruction:
 | int8×int4 native, as IRON builds it | 17.0 | 240.5 | 1.17× | 16.0 | 1.0 |
 | **int8×int4 native, k loop unrolled twice** | **11.0** | **372.4** | **1.82×** | 10.0 | 1.0 |
 
+In the k loop that is 1.82× the int8 control and 1.64× the best int8 schedule (two-point; the
+fit over K = 64/128/256 gives 1.88× and 1.69×, `int4_demo_npu_desktop2_20260923.log` F1).
 Per call, the int8×int4 kernel takes 4,199 cycles at 64×256×64 against the control's 6,295
 (1.50×) and the best int8's 5,863 (1.40×); at 64×64×64, where a call is mostly C going in and
 out, 2,160 against 2,447 (1.13×). "Static" is the IRON object's own loop, assuming every `vmac`
@@ -2172,13 +2182,13 @@ GOPS, 3,540.7 µs NPU bracket), spends about 6,224 cycles per tile call per core
 tile, 944 cycles, would be at most ~1.18× if nothing else moved (DERIVED). *(Superseded the
 same day, in the wrong direction: at that tile the kernel is not on the array's critical path,
 and packed int4 B alone gives 1.23–1.26× — see
-[W4A8 on the whole array](#w4a8-on-the-whole-array-int4-weights-pay-at-the-best-int8-tile-through-bytes-rather-than-macs).)*
+[W4A8 on the whole array](#w4a8-on-the-whole-array-int4-weights-pay-at-the-best-int8-tile-and-not-through-the-core).)*
 The other half of W4A8 — B at half the bytes through the shim and mem tile — was not measured
 here; the next section does. The paired-load attribution reads pointer roles from
 post-increments, not resolved addresses. int16×int4 has no AIE2 `mmul` in `aie_api` and was not
 tried. Nothing here touches the accuracy of a W4 network.
 
-### W4A8 on the whole array: int4 weights pay at the best int8 tile, through bytes rather than MACs
+### W4A8 on the whole array: int4 weights pay at the best int8 tile, and not through the core
 
 2026-09-10, Desktop 2, `whole_array`'s 4 × 4 cores. Backing log `results/aie/w4a8_array_npu.log`;
 design and tools `kernels/w4a8_array/`; every run in `results/aie/w4a8_array_raw.jsonl`.
@@ -2200,7 +2210,7 @@ GOPS = 2MKN over the NPU-bracket average, 3 processes × 10 iterations per arm, 
 ran; the upstream arm reproduces that sweep's 4,852.06 and 4,683.89 within this machine's
 day-to-day drift.
 
-- **At 64/128/64 the gain is B's bytes, not the MAC rate.** Every int4 arm lands at
+- **At 64/128/64 the gain comes from packing B, not from the MAC rate.** Every int4 arm lands at
   1.23–1.26× — the unpack arms included — with ranges that overlap each other and clear every
   int8 run, while a faster int8 kernel (`i8:unroll2`, 176 fewer cycles per call on one core)
   runs 0.995×. The kernel is not on the critical path there. Mean int4 time is 0.8035 of
@@ -2239,12 +2249,19 @@ unresolved. Cycles per call are DERIVED from the NPU bracket, not traced. The ti
 would separate k from DMA run length from B's re-stream count was not run. Nothing here says a
 W4 network keeps its accuracy.
 
-### INT4 on Phoenix, gates first: the chip runs the engine's uint8 × int4, and the engine has no use for it (2026-09-23, Desktop 2)
+### INT4 on Phoenix, gates first: the chip runs the engine's uint8 × int4, and on paper the current weight packets leave int4 little to save (2026-09-23, Desktop 2)
 
-The question: AMD does not support int4 on XDNA1, so use the documentation this repo already has
-either to demonstrate int4 on the chip or to kill it before any engine work. There are three
-gates, and each was written into its log before it ran. None of it touches `src/`. Two gates
-are compile-only or schedule-only, and one runs on silicon.
+The question: AMD's shipped XDNA1 runtime exposes no int4. `device.yaml`'s AIE2 MAC table has
+no int4 row, and at this repo's opset 17 Quark routes 16-bit and 4-bit Q/DQ through the
+`com.microsoft` domain, where the VitisAI EP took zero nodes for INT16 (measured, DECISIONS
+A16W8; for int4 that is DERIVED from the same quantizer warning, not run). Use the documentation
+this repo already has either to demonstrate int4 on the chip or to kill it before any engine
+work. int4 on this silicon is not new: AIE-API 2024.1 lists AIE-ML's `8b x 4b: 4x16x8` as a
+native `mmul`, and Riallto states 512 int4×int8 MAC per cycle per core (SPEC; cross-audit ledger
+D11, branch `tnzr-audit`). What is new here is the measurement on Phoenix through Peano,
+bit-exact, and the pricing against this engine. There are three gates, and each was written
+into its log before it ran. None of it touches `src/`. Two gates are compile-only or
+schedule-only, and one runs on silicon.
 
 **Gate A: which int4 operand pairs the toolchain can lower.** Compile only;
 `kernels/int4_study/isa_gate.py`, `results/aie/int4_isa_gate_desktop2_20260923.log`. It
@@ -2265,10 +2282,11 @@ can issue.
 - **The verdict is about the toolchain.** On AIE2 its only dense int4 is W4A8. Whether the
   silicon decodes the unused codes is untested, and the 2026-09-10 lesson above (`device.yaml`'s
   silence about int8 × int4 was not the chip's) is the reason not to say more.
-- **Unexpected, and not pre-registered: on aie2p (Strix), int8 × int4 compiles to `vldb.unpack`
-  plus 8-bit MACs.** All 88 4-bit-operand intrinsics in `aie2p_vmult.h` are wrappers that widen B
-  to int8 first. The native 4-bit-B MAC mode exists here on Phoenix, and not on Strix in this
-  toolchain.
+- **Unexpected, not pre-registered, and compile-only: on aie2p (Strix), int8 × int4 compiles to
+  `vldb.unpack` plus 8-bit MACs.** All 88 4-bit-operand intrinsics in `aie2p_vmult.h` are
+  wrappers that widen B to int8 first. So in this toolchain Peano's aie2 intrinsics reach a
+  native 4-bit-B MAC mode and its aie2p intrinsics do not. That is a reading of Peano's headers
+  and objects, not of Strix silicon, which nothing here touched.
 
 **Gate B: the most int4 could save the graph engine.** Schedule only, no device;
 `tools/int4_bytes_gate.py`, `results/aie/int4_engine_bytes_gate_desktop2_20260923.log`.
@@ -2296,8 +2314,17 @@ can issue.
 \* The ceiling is int4 plus half of each conv packet's header and bias, as if two int4 packets
 merged, plus half the weight DMA tasks' issue time.
 
-- **Int4-in-engine is killed at gate B:** every model's best case sits under the line. The
-  narrowest is YOLOv8s's ceiling, 0.2 points under.
+- **On paper, under the current packet format, int4-in-engine is killed at gate B:** every
+  model's best case sits under the line. The narrowest is YOLOv8s's ceiling, 4.8% against 5%,
+  0.2 points under. The verdict rests on three assumptions it did not test: a frame bound
+  purely by the 26.8 GB/s transport, the fixed 9,472 B packet as today's engine builds it, and
+  no accuracy data (no W4 model exists here).
+- **A separate constraint, static:** the newest engine core ELF (56 builds, 2026-09-18 to 09-21,
+  `sesr_m7` among them) uses 16,160 of its 16,384 B of program memory, 224 B free; one variant
+  (`yolov8n_stride2ctrl`) has 16 B free. An int4 path is a second k loop in that core. The
+  older ELF behind `yolov8n_full`, `yolov8s_opt` and `resnet50_head` has 5,680 B free.
+  `results/aie/engine_core_issue_census_desktop2_20260923.log` on branch `tnzr-audit`
+  (cross-audit ledger A11).
 - **The lever that survives costs no accuracy:** the engine streams 2.2–4.6× more weight bytes
   than the layouts it declares. The trim is still a DERIVED best case until someone builds it.
 - **Reopen int4 only with a new mechanism:** activations that stop round-tripping DDR, a
@@ -2309,7 +2336,7 @@ per sweep and a 1 s witness. The NPU ran 05:06–05:16Z. The driver, XRT and too
 
 | Check | Result |
 |---|---|
-| 3a. The one-core W4A8 probe of 2026-09-10, repeated (`kernels/w4a8_probe/sweep.py`, 54 processes) | **All 27 (kernel, mode, K) cells give the same median trace cycles as on 2026-09-10.** 54 of 54 processes are bit-exact, and every IRON object is identical to its static compile. The native k loop fits 10.674 cycles per unit K again: 383.7 MAC/cycle, 1.88× the int8 control. |
+| 3a. The one-core W4A8 probe of 2026-09-10, repeated (`kernels/w4a8_probe/sweep.py`, 54 processes) | **All 27 (kernel, mode, K) cells give the same median trace cycles as on 2026-09-10.** 54 of 54 processes are bit-exact, and every IRON object is identical to its static compile. The native k loop fits 10.674 cycles per unit K again: 383.7 MAC/cycle, 1.88× the int8 control (`i8i8:default`, 204.4) and 1.69× the best int8 schedule (`i8i8:unroll2`, 227.1). |
 | 3b. **uint8 × int4**, the engine's operand pair (`kernels/int4_study/u8i4_probe.py`, 24 processes) | **Bit-exact in all 12 cells** (2 arms × 2 modes × K = 64/128/256), with half of A at or above the zero point of 128. **Every cell's cycles equal its int8 twin's**: uint8 A is only the MAC's sign bit. The engine's own `mmul<4,8,8,uint8,int8>` equals int8 × int8 the same way. |
 | 3c. The array's best tile, repeated (2048³, 64/128/64, 3 runs a side) | Native int4 runs **6,206.73 GOPS against upstream int8's 4,821.17, 1.287×** (2026-09-10: 1.263×). The run ranges are disjoint, and every run is bit-exact with the same output hash as every 2026-09-10 arm. |
 
@@ -2318,9 +2345,13 @@ the NPU.
 
 **The verdict of all three gates:**
 - **The demo runs.** int4 weights compute exactly on this chip, including the uint8 × int4 pair
-  the engine would need. The chip's k loop runs them at 1.88× its int8 loop.
-- **The graph engine has no use for them.** It is bound by its fixed weight packets and its
-  transport, not by its MACs.
+  the engine would need, confirming on Phoenix what AMD documents for AIE-ML. The best int4 k
+  loop runs 1.88× the int8 control's and 1.69× the best int8 schedule's (fit, one core).
+- **On paper, the graph engine as built has little use for them.** Inside today's fixed 9,472 B
+  packets int4 saves nothing; with variable-size packets it is worth at most 4.8% of a dispatch
+  (DERIVED, transport-bound, no accuracy data), and the same packet change spent on trimming is
+  worth more. The engine core also has 224 B of program memory left for a second k loop. None of
+  this was built or measured on the engine.
 - **What this does not establish:**
   - no W4 network, and no W4 accuracy anywhere in this repo;
   - the array ratio's move from 1.263× to 1.287× lies inside this machine's day-to-day drift

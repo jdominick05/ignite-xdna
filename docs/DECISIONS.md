@@ -867,8 +867,12 @@
   and was recorded here and in `docs/SILICON.md` as AIE2p only, which is why the W4A8 plan
   began with an int4→int8 unpack. `aie::mmul<4,16,8,int8,int4>` compiles for aie2 to the same
   `vmac` builtin as int8×int8 with one configuration field changed, and on this Phoenix core it
-  is bit-exact, one `vmac` per cycle, 512 MACs each (`results/aie/w4a8_probe_npu.log`). Before
-  designing around a "missing" data type, look for it in `aie_api`'s `detail/aie2/` headers and
+  is bit-exact, 512 MACs per `vmac` by its shape (SPEC), with the best k loop sustaining
+  0.73–0.75 `vmac` per cycle (MEASURED, `results/aie/w4a8_probe_npu.log`). None of it was
+  undocumented: AIE-API 2024.1 lists AIE-ML's `8b x 4b: 4x16x8` as a native `mmul`, and Riallto
+  states 512 int4×int8 MAC per cycle per core (SPEC, cross-audit ledger D11). The mistake was
+  reading one table as the whole of AMD's documentation. Before designing around a "missing"
+  data type, look for it in `aie_api`'s `detail/aie2/` headers and AMD's AIE-API reference, and
   disassemble a build. (Rejected with it: the unpack route as a way to get MACs — AIE2 widens
   int4 for free in its second load unit, `vldb.unpack.s8.s4`, but that buys bytes, not MACs.)
 - **Upstream `mm.cc`'s k-loop hint never reaches Peano; `AIE_LOOP_UNROLL` does
@@ -888,7 +892,8 @@
   W4A8 probe bounded the native int8×int4 kernel's array gain at ≤ ~1.18× by assuming the time
   outside the kernel stays fixed. At the int8 GEMM's best tile (64/128/64) the kernel is not on
   the critical path at all — the int8 k loop unrolled twice, 176 cycles per call faster on one
-  core, runs 0.995× — and packed int4 B gave 1.23–1.26× through bytes, unpack and native alike;
+  core, runs 0.995× — and packed int4 B gave 1.23–1.26×, unpack and native alike, by a mechanism
+  still unexplained (neither total L3 bytes nor bytes per MAC fits all three tiles);
   at 64/64/64 the MAC rate does show, at 128/64/64 nothing does (`results/aie/w4a8_array_npu.log`).
   Measure the design, not the kernel: H11 learned this from a static improvement, this from a
   measured one.
@@ -904,12 +909,15 @@
   - **This is a toolchain fact, not a silicon one.** Eight of the sixteen (amode, bmode) codes are
     never emitted, and whether the hardware decodes them is untested. The pitfall two entries up
     is exactly the mistake of reading a table's silence as the chip's.
-  - Surprise from the same run: Strix's aie2p reaches int8 × int4 only by unpacking, because every
-    4-bit aie2p intrinsic is a wrapper that widens B to int8. Phoenix's native 4-bit-B MAC mode
-    has no aie2p counterpart in this toolchain, so an int4 kernel written for one chip is not a
-    port to the other.
-- **Rejected: int4 weights in the graph engine — killed at the byte gate before any code
-  (2026-09-23).** `tools/int4_bytes_gate.py`, `results/aie/int4_engine_bytes_gate_desktop2_20260923.log`.
+  - Surprise from the same run, compile-only and not pre-registered: Peano's aie2p (Strix)
+    intrinsics reach int8 × int4 only by unpacking, because every 4-bit aie2p intrinsic is a
+    wrapper that widens B to int8. Phoenix's native 4-bit-B MAC mode has no aie2p counterpart in
+    this toolchain, so an int4 kernel written for one chip is not a port to the other. That reads
+    Peano's headers and objects; no Strix silicon was touched.
+- **Rejected: int4 weights in the graph engine — killed on paper at the byte gate, under the
+  current packet format, before any code (2026-09-23).** `tools/int4_bytes_gate.py`,
+  `results/aie/int4_engine_bytes_gate_desktop2_20260923.log`. DERIVED throughout: it assumes a
+  frame bound purely by transport and today's fixed packet, and no W4 accuracy data exists.
   - Every weight packet is a fixed 9,472 B object, so int4 inside it saves nothing. It needs
     variable-size packets, the same change that trimming the padding needs.
   - Priced over every weight packet each frame streams, at the 26.8 GB/s fill transport with the
@@ -920,6 +928,11 @@
   - Trimming the fixed packet to its declared layout saves more on every model, with no
     accuracy question: 7.7%, 10.5%, 6.8%, 3.0% and 24.0% by the same arithmetic.
   - The 5% line is where this repo already found an effect inseparable from drift (H12).
+    YOLOv8s's ceiling, 4.8%, sits 0.2 points under it.
+  - A separate constraint: the newest engine core ELF has 224 B of its 16,384 B program memory
+    free, and one variant 16 B, for what would be a second k loop
+    (`results/aie/engine_core_issue_census_desktop2_20260923.log` on branch `tnzr-audit`, ledger
+    A11). The older ELF behind `yolov8n_full`, `yolov8s_opt` and `resnet50_head` has 5,680 B free.
   - Reopen only with a new mechanism: activations that stop round-tripping DDR, a weight-bound
     model, or a transport measured slower than 26.8 GB/s.
 

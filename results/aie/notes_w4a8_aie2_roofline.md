@@ -65,6 +65,20 @@ win**. Line numbers below are this note's body as originally committed, shifted 
    - Section 3.2's L1 table arithmetic is off:
      - 64×64×64 W4A8 is 32,000 B single-C and 48,384 B double-C;
      - 128×64×128 int8 is 101,632 B.
+10. **"The widespread assumption that native sub-byte execution was exclusive to AIE2P / Strix
+    Point"** (Executive Summary 1, section 1): **retracted.** It was never a widespread
+    assumption. AMD documents it: AIE-API 2024.1 lists AIE-ML's `8b x 4b: 4x16x8` as a native
+    `mmul` shape, and Riallto states 512 int4×int8 MAC per cycle per core (SPEC; fetched by the
+    2026-09-23 cross-audit, its ledger rows A3 and D11 on branch `tnzr-audit`). The assumption
+    was this repo's, from reading `device.yaml`'s AIE2 table as an ISA listing. The probe is a
+    confirmation on Phoenix silicon through Peano, bit-exact, not a discovery.
+11. **"Executes at 512 MACs per cycle … issues at 1 vmac per cycle in steady-state hardware
+    loops [MEASURED]"** (section 1, "Peak Issue Rate"): only part of that was measured.
+    - 512 MACs per `vmac` is the 4×16×8 shape (SPEC).
+    - Back-to-back issue is DERIVED from measured cycles: 8 consecutive `vmac`s run 17.03 cycles
+      per 16-bundle loop.
+    - No loop sustains one per cycle. The best measured k loop runs 0.727 (two-point) to 0.749
+      (fit) `vmac` per cycle, per item 4.
 
 ## Executive Summary
 
