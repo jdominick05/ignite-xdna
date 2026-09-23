@@ -580,7 +580,9 @@ Kernels `kernels/w4a8_array/`; written up in
 - **Observed, not pre-registered, compile-only:** in Peano's headers aie2p's int8 × int4 is an
   unpack (no Strix silicon touched). All 88 of its 4-bit
   intrinsics widen B to int8 first.
-- Kernels `kernels/int4_study/`.
+- Kernels `kernels/int4_study/`. The log's `COMMIT: f1194be` is the branch HEAD it ran on, with
+  the gate scripts not yet committed. Rebasing onto `35d58d5` made that commit `84fcd4b`, and the
+  scripts landed next, in `5dca733` (`f416c33` before the rebase).
 
 **`int4_engine_bytes_gate_desktop2_20260923.log`** — INT4 gate B, schedule only, no NPU.
 - **Method:** walks every weight packet the graph engine streams per frame, for five containers.
@@ -592,7 +594,9 @@ Kernels `kernels/w4a8_array/`; written up in
   killed (no accuracy data; the engine core also has 224 B of program memory left, ledger A11),
   and trimming the fixed 9,472 B
   packets saves more on every model (3.0–24.0%).
-- Tool `tools/int4_bytes_gate.py`.
+- Tool `tools/int4_bytes_gate.py`. Its `COMMIT: f1194be` maps the same way (`84fcd4b` after the
+  rebase). The rebase brought in no engine code change: main's 68 changed lines under `src/`
+  between `217d1d2` and `35d58d5` are licence headers.
 
 **`int4_demo_npu_desktop2_20260923.log`** (+ `w4a8_probe_repro_raw_20260923.jsonl`,
 `int4_u8i4_probe_raw_20260923.jsonl`, `w4a8_array_repro_raw_20260923.jsonl`,
