@@ -1,5 +1,19 @@
 # Formal Micro-Architectural and Roofline Analysis of W4A8 Sub-Byte Weight Packing on AMD Phoenix AIE2 (XDNA1)
 
+> **UNBACKED ON MAIN (2026-09-23, [ledger A3](notes_tnzr_cross_audit.md)).** The `[MEASURED: w4a8_probe_npu.log]`
+> and `w4a8_array_npu.log` tags below point at logs that exist only on the unmerged branch
+> `worktree-int4-study` (commits `56b4e88`, `2fe7624`, 2026-09-10). They are not on `main`, and
+> `docs/SILICON.md` on `main` still lists int8×int4 as AIE2p-only. Treat every MEASURED tag here as TO
+> VERIFY until those logs land. The "widespread assumption that native sub-byte execution was exclusive
+> to AIE2P" framing is **retracted** ([ledger D11](notes_tnzr_cross_audit.md)). AMD documented the opposite:
+> the AIE-API 2024.1 mmul page lists AIE-ML `8b x 4b: 4x16x8` with no emulation suffix, and Riallto states
+> 512 int4×int8 MAC/cycle per core. `main`'s "AIE2p only" is therefore contradicted by SPEC, and the
+> branch's probe is a confirmation, not a discovery. §2.3's slot claim for
+> `vlshl.8`/`vashr.8` ("must issue in slot [v]") is not checked against Peano's machine model either.
+> That model puts the *realignment* ops `vshift`/`vshuffle` in the **mv** slot, not vec
+> ([ledger A2](notes_tnzr_cross_audit.md), [`peano_aie2_machine_model_a36c62b9.log`](peano_aie2_machine_model_a36c62b9.log) §3),
+> but it does not list the element shifts, so §2.3 stays TO VERIFY.
+
 ## Executive Summary
 
 This study delivers a formal micro-architectural, instruction-issue, and roofline analysis of W4A8 (4-bit integer weights, 8-bit integer activations) sub-byte quantization on AMD Phoenix AIE2 (XDNA1, Ryzen 7 8700G / Ryzen 5 8645HS), resolving whether software unpack overhead permits an end-to-end throughput win over INT8 GEMM.

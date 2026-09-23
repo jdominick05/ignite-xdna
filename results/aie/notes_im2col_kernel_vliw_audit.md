@@ -5,12 +5,12 @@
 **Target:** AMD Phoenix AIE2 (XDNA1, `npu1_4col` array, Tile 0,2 Core L1)  
 **Toolchain:** Peano (`llvm-aie 22.0.0`, `clang++`, `llvm-objdump`)  
 **Artifacts Audited:**  
-- Source Kernel: [`kernels/aie2/conv_im2col_kernel.cc`](file:///C:/Users/Ignis/PycharmProjects/ryzen-ai-xdna1-quantization/kernels/aie2/conv_im2col_kernel.cc)  
-- Compiled ELF Object (M=1): [`build/conv_im2col_kernel.o`](file:///C:/Users/Ignis/PycharmProjects/ryzen-ai-xdna1-quantization/build/conv_im2col_kernel.o)  
-- Compiled ELF Object (M=2): [`build/conv_im2col_kernel_m2.o`](file:///C:/Users/Ignis/PycharmProjects/ryzen-ai-xdna1-quantization/build/conv_im2col_kernel_m2.o)  
-- Dataflow IR Harness: [`kernels/aie2/im2col_4d.mlir`](file:///C:/Users/Ignis/PycharmProjects/ryzen-ai-xdna1-quantization/kernels/aie2/im2col_4d.mlir)  
-- Lowered BD IR: [`build/im2col_4d_lowered_with_bds.mlir`](file:///C:/Users/Ignis/PycharmProjects/ryzen-ai-xdna1-quantization/build/im2col_4d_lowered_with_bds.mlir)  
-- Baseline Trace: [`results/aie/conv_issue_rate_decomposed.log`](file:///C:/Users/Ignis/PycharmProjects/ryzen-ai-xdna1-quantization/results/aie/conv_issue_rate_decomposed.log)  
+- Source Kernel: [`kernels/aie2/conv_im2col_kernel.cc`](../../kernels/aie2/conv_im2col_kernel.cc)  
+- Compiled ELF Object (M=1): `build/conv_im2col_kernel.o`  
+- Compiled ELF Object (M=2): `build/conv_im2col_kernel_m2.o`  
+- Dataflow IR Harness: [`kernels/aie2/im2col_4d.mlir`](../../kernels/aie2/im2col_4d.mlir)  
+- Lowered BD IR: `build/im2col_4d_lowered_with_bds.mlir`  
+- Baseline Trace: [`results/aie/conv_issue_rate_decomposed.log`](conv_issue_rate_decomposed.log)  
 **Epistemic Scope:** `[MEASURED]` (disassembly bytes, bundle cycle counts, slot occupancy, objdump traces), `[DERIVED]` (issue density speedups, architectural bandwidth ratios), `[SPEC]` (AIE2 ISA 6-slot execution units, register file capacity).
 
 ---
@@ -90,7 +90,7 @@ In `conv2dk3`:
 
 ## 3. Kernel Implementation & Contract
 
-The new kernel in [`kernels/aie2/conv_im2col_kernel.cc`](file:///C:/Users/Ignis/PycharmProjects/ryzen-ai-xdna1-quantization/kernels/aie2/conv_im2col_kernel.cc) replaces register shifting with memory striding.
+The new kernel in [`kernels/aie2/conv_im2col_kernel.cc`](../../kernels/aie2/conv_im2col_kernel.cc) replaces register shifting with memory striding.
 
 ### Zero-Realignment Contract:
 1. **Pre-Aligned Memory:** The MemTile DMA transforms the $(8, 8, 32)$ input feature map into consecutive 288-byte patches ($3 \times 3 \times 32$).
@@ -141,7 +141,7 @@ void conv_im2col_kernel(
 
 ## 4. Peano Compilation & Target Driver
 
-Compilation to the AIE2 ELF object [`build/conv_im2col_kernel.o`](file:///C:/Users/Ignis/PycharmProjects/ryzen-ai-xdna1-quantization/build/conv_im2col_kernel.o) was executed via the native Windows Peano toolchain:
+Compilation to the AIE2 ELF object `build/conv_im2col_kernel.o` was executed via the native Windows Peano toolchain:
 
 ```powershell
 & "C:\Users\Ignis\mlir-aie\ironenv\Lib\site-packages\llvm-aie\bin\clang++.exe" -O2 -std=c++20 `
@@ -158,7 +158,7 @@ Compilation to the AIE2 ELF object [`build/conv_im2col_kernel.o`](file:///C:/Use
 
 ## 5. VLIW Disassembly & Bundle-by-Bundle Slot Trace
 
-Disassembly was analyzed using `llvm-objdump -d` and classified using [`tools/aie_disasm.py`](file:///C:/Users/Ignis/PycharmProjects/ryzen-ai-xdna1-quantization/tools/aie_disasm.py):
+Disassembly was analyzed using `llvm-objdump -d` and classified using [`tools/aie_disasm.py`](../../tools/aie_disasm.py):
 
 ```
 == build/conv_im2col_kernel.o
@@ -257,7 +257,7 @@ In `conv2dk3`, `vshift` and `vmac` competed for the vector execution unit (`[v]`
 In `conv_im2col_kernel`, `vshift` is completely absent. Slot `[v]` is never blocked by shuffles, and `vmac` co-issues freely alongside memory loads (`vldb` + `vmac` at 0x0086, 0x0096, 0x00a0).
 
 ### 3. Verification of Ping-Pong Driver
-The companion driver function `conv_im2col_ping_pong` in [`kernels/aie2/conv_im2col_kernel.cc`](file:///C:/Users/Ignis/PycharmProjects/ryzen-ai-xdna1-quantization/kernels/aie2/conv_im2col_kernel.cc):
+The companion driver function `conv_im2col_ping_pong` in [`kernels/aie2/conv_im2col_kernel.cc`](../../kernels/aie2/conv_im2col_kernel.cc):
 - Consumes alternating `%core_ping` and `%core_pong` buffers across `n_iterations` (matching the 6 patches of `im2col_4d.mlir`).
 - Disassembles into two symmetric 9-cycle inner loops (`.L_LEnd2` at 0x0090–0x00c0 and `.L_LEnd1` at 0x0190–0x01c0).
 - Both loops exhibit the identical zero-realignment instruction stream (0 `vshift`, 0 `vmov`, 4 `vmac` in 9 cycles = 0.444 vmac/cycle).
@@ -278,6 +278,13 @@ Because AIE2 features two independent 256-bit load units (`[a]` and `[b]`), the 
 
 ### 2. Physical Accumulator File Allocation
 AIE2 provides 8 physical 1024-bit accumulator registers (`cm0` through `cm7`). The M=2 kernel allocates the entire hardware accumulator file with mathematical perfection:
+
+> **Superseded 2026-09-23 ([ledger A1](notes_tnzr_cross_audit.md)):** the accumulator file is **9** × 1024-bit,
+> `cm0`–`cm8`: SPEC(Peano), [`peano_aie2_machine_model_a36c62b9.log`](peano_aie2_machine_model_a36c62b9.log) §1.
+> The shipped engine ELFs name `cm8` and run bit-exact. The M=2 kernel holds 8 of the 9 spill-free, one short of
+> "the entire file". The "Full file residency" cells in the tables below carry the same error. The static
+> 1.000 vmac/cycle below is an inner-loop bundle count; on silicon, see
+> [`hardware_im2col_execution.log`](hardware_im2col_execution.log) and ledger A5.
 - **Patch A Accumulators:** `cm0`, `cm1`, `cm2`, `cm3` (128 INT32 output values)
 - **Patch B Accumulators:** `cm4`, `cm5`, `cm6`, `cm7` (128 INT32 output values)
 

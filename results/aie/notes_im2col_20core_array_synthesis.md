@@ -1,5 +1,14 @@
 ﻿# Notes: 20-Core Full-Array im2col Execution Engine Synthesis (AMD Phoenix XDNA1)
 
+> **Qualified 2026-09-23 ([ledger A5](notes_tnzr_cross_audit.md)).** Everything below is a *compile*
+> result: routes resolve, ELFs link, and the binary and CDO are emitted. None of it ran. On silicon
+> ([`hardware_im2col_execution.log:11-14`](hardware_im2col_execution.log)) the 20-core array dispatch ends
+> in **ERT_CMD_STATE_TIMEOUT**. 16 cores (Cols 0–3) reach 0.0270 TOPS and one core 0.0037 TOPS, about
+> 0.18% and 0.40% of the true int8 peak; the log's own 0.37% / 0.80% use a 128 MAC/cycle peak, half the
+> SPEC ([ledger A7](notes_tnzr_cross_audit.md)). 18.43 TOPS is peak arithmetic, 1.000 vmac/cycle is a static
+> inner-loop count, and "Physical Silicon Readiness" means address layout, not execution. Of the five
+> physical columns, `docs/SILICON.md` §1.1 records four as reachable from any path on this machine.
+
 **Target Silicon:** AMD Phoenix / Hawk Point XDNA1 (`npu2_5col` physical grid, Columns 0–4, Rows 0–5)  
 **Host System:** Desktop 2 (AMD Ryzen 7 8700G w/ Radeon 780M, Phoenix NPU `[003d:00:01.1]`)  
 **Toolchain:** MLIR-AIE (commit `4d5ef26`, `ironenv`), Peano LLVM-AIE (`clang++`, `llc`, `ld.lld`), `aie-opt`, `aie-translate`  

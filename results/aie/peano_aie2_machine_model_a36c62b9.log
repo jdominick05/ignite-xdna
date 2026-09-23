@@ -1,0 +1,218 @@
+Peano (llvm-aie) AIE2 machine model -- tablegen facts, tagged SPEC(Peano)
+llvm-aie commit: a36c62b9d26291fb06604bc976c897791f0bb578  (installed Peano: a36c62b9d26291fb06604bc976c897791f0bb578, MATCHES)
+source: https://github.com/Xilinx/llvm-aie/tree/<commit>/llvm/lib/Target/AIE/aie2
+  sha256 668ba3267c9f51ab  AIE2Schedule.td
+  sha256 e1f12d046be87ae7  AIE2Slots.td
+  sha256 6e735364f7035d98  AIE2GenRegisterInfo.td
+  sha256 6b8d6d3c95c9925e  AIE2GenInstrInfo.td
+  sha256 9442bda8a14487f7  AIE2GenFixupInstrInfo.td
+  sha256 a5c4e204d40e8555  AIE2GenInstrFormats.td
+  sha256 b5934fd5dea94ab8  AIE2InstrInfo.td
+  sha256 63ebd6be3ba4da53  AIE2InstrFormats.td
+  sha256 84c8eff4ac2d5de1  AIE2MultiSlotPseudoInstrInfo.td
+  sha256 4859edd0270fe106  AIE2CompositeFormats.td
+  sha256 4ef7a96a719e2cfc  AIE2InstrPatterns.td
+  sha256 8af8850225a79557  AIE2RegOperandDef.td
+  sha256 5e3350418a196fcf  AIE2.td
+NOT a measurement: these are the latencies and slots the scheduler assumes.
+
+== 1. Register files (AIE2GenRegisterInfo.td) ==
+  cm      9  cm0..cm8
+  bml     9  bml0..bml8
+  bmh     9  bmh0..bmh8
+  amll    9  amll0..amll8
+  amlh    9  amlh0..amlh8
+  amhl    9  amhl0..amhl8
+  amhh    9  amhh0..amhh8
+  x      12  x0..x11
+  wl     12  wl0..wl11
+  wh     12  wh0..wh11
+  y       4  y2..y5
+  1024-bit accumulators and their 512-bit halves: cm0=[bml0,bmh0], cm1=[bml1,bmh1], cm2=[bml2,bmh2], cm3=[bml3,bmh3], cm4=[bml4,bmh4], cm5=[bml5,bmh5], cm6=[bml6,bmh6], cm7=[bml7,bmh7], cm8=[bml8,bmh8]
+
+== 2. Issue slots (AIE2Slots.td) ==
+  lda_slot     "Lda"  21 encoding bits
+  ldb_slot     "Ldb"  16 encoding bits
+  alu_slot     "Alu"  20 encoding bits
+  mv_slot      "Mv"  22 encoding bits
+  st_slot      "St"  21 encoding bits
+  vec_slot     "Vec"  26 encoding bits
+  lng_slot     "Lng"  42 encoding bits
+  nop_slot     "Nop"  1 encoding bits
+
+== 3. Audited mnemonics: slot, itinerary, [result latency, operand read cycles...], units ==
+   cycles are counted from issue = 1; the first entry is when the result is written.
+  vmac                   slots vec  (3 encodings)
+      II_VMAC                  [5,3,1,1,1]    (Schedule.td:951)  e.g. VMAC_vmac_cm_core_dense slot=vec
+  vmac.f                 slots vec  (3 encodings)
+      II_VMACf                 [6,3,1,1,1,srFPFlags:7,crFPMask:7]    (Schedule.td:974)  e.g. VMAC_F_vmac_bm_core_dense slot=vec
+  vmul                   slots vec  (3 encodings)
+      II_VMUL                  [5,1,1,1]    (Schedule.td:1028)  e.g. VMUL_vmac_cm_core_dense slot=vec
+  vmul.f                 slots vec  (3 encodings)
+      II_VMULf                 [6,1,1,1,srFPFlags:7,crFPMask:7]    (Schedule.td:1032)  e.g. VMUL_F_vmac_bm_core_dense slot=vec
+  vlda                   slots lda  (10 encodings)
+      II_VLDA_W                [7,1,1]  LOAD_UNIT_A  (Schedule.td:834)  e.g. VLDA_dmw_lda_w_ag_idx slot=lda
+      II_VLDA_POSTINC_W        [7,1,1,1]  LOAD_UNIT_A  (Schedule.td:839)  e.g. VLDA_dmw_lda_w_ag_pstm_nrm slot=lda
+      II_VLDA_AM               [7,1,1]  LOAD_UNIT_A  (Schedule.td:854)  e.g. VLDA_dmw_lda_am_ag_idx slot=lda
+      II_VLDA_POSTINC_AM       [7,1,1,1]  LOAD_UNIT_A  (Schedule.td:859)  e.g. VLDA_dmw_lda_am_ag_pstm_nrm slot=lda
+  vldb                   slots ldb  (4 encodings)
+      II_VLDB                  [7,1,1]    (Schedule.td:894)  e.g. VLDB_dmw_ldb_ag_idx slot=ldb
+      II_VLDB_POSTINC          [7,1,1,1]    (Schedule.td:920)  e.g. VLDB_dmw_ldb_ag_pstm_nrm slot=ldb
+  vst                    slots st  (10 encodings)
+      II_VST_W                 [1,1,1]  STORE_UNIT  (Schedule.td:1126)  e.g. VST_dmw_sts_w_ag_idx slot=st
+      II_VST_POSTINC_W         [1,1,1,1]  STORE_UNIT  (Schedule.td:1130)  e.g. VST_dmw_sts_w_ag_pstm_nrm slot=st
+      II_VST_AM                [1,1,1]  STORE_UNIT  (Schedule.td:1139)  e.g. VST_dmw_sts_am_ag_idx slot=st
+      II_VST_POSTINC_AM        [1,1,1,1]  STORE_UNIT  (Schedule.td:1142)  e.g. VST_dmw_sts_am_ag_pstm_nrm slot=st
+  vlda.conv.fp32.bf16    slots lda  (4 encodings)
+      II_VLDA_CONV             [7,1,1]  LOAD_UNIT_A  (Schedule.td:874)  e.g. VLDA_CONV_FP32_BF16_ag_idx_imm slot=lda
+      II_VLDA_POSTINC_CONV     [7,1,1,1]  LOAD_UNIT_A  (Schedule.td:879)  e.g. VLDA_CONV_FP32_BF16_pstm_nrm slot=lda
+  vst.conv.bf16.fp32     slots st  (4 encodings)
+      II_VST_CONV              [1,1,1,def:srF2FFlags:1,crRnd:1,crF2FMask:1]  STORE_UNIT  (Schedule.td:1088)  e.g. VST_CONV_BF16_FP32_ag_idx_imm slot=st
+      II_VST_CONV_POSTINC      [1,1,1,1,def:srF2FFlags:1,crRnd:1,crF2FMask:1]  STORE_UNIT  (Schedule.td:1092)  e.g. VST_CONV_BF16_FP32_ag_pstm_nrm slot=st
+  vlda.ups.s32.s8        slots lda  (4 encodings)
+      (itinerary not attributed by this parser)  e.g. VLDA_UPS_S32_S8_ag_idx_imm slot=lda
+  vst.srs.s8.s32         slots ?/st  (4 encodings)
+      (itinerary not attributed by this parser)  e.g. VST_SRS_S8_S32_ag_idx_imm slot=None
+  vshift                 slots mv  (1 encodings)
+      II_VSHIFT                [2,1,1,1]    (Schedule.td:1118)  e.g. VSHIFT slot=mv
+  vshift.align           slots mv  (1 encodings)
+      II_VSHIFT_ALIGN          [2,1,1,1,1]    (Schedule.td:1120)  e.g. VSHIFT_ALIGN slot=mv
+  vshuffle               slots mv  (1 encodings)
+      II_VSHUFFLE              [2,1,1,1]    (Schedule.td:1116)  e.g. VSHUFFLE slot=mv
+  vmov                   slots lda/mv/st  (5 encodings)
+      II_VMOV_W                [2,1]    (Schedule.td:980)  e.g. VMOV_mv_w slot=mv
+      II_VMOV_X                [2,1]    (Schedule.td:1008)  e.g. VMOV_mv_x slot=mv
+      II_VMOV_CM               [2,1]    (Schedule.td:1018)  e.g. VMOV_mv_cm slot=mv
+      II_VMOV_CASCADE_READ     [7,crSCDEn:5]    (Schedule.td:1023)  e.g. VMOV_mv_scd slot=lda
+      II_VMOV_CASCADE_WRITE    [1,crMCDEn:1]    (Schedule.td:1025)  e.g. VMOV_mv_mcd slot=st
+  vbcst.8                slots mv  (1 encodings)
+      II_VBCST                 [2,1]    (Schedule.td:788)  e.g. VBCST_8 slot=mv
+  vbcst.16               slots mv  (1 encodings)
+      II_VBCST                 [2,1]    (Schedule.td:788)  e.g. VBCST_16 slot=mv
+  vbcst.32               slots mv  (1 encodings)
+      II_VBCST                 [2,1]    (Schedule.td:788)  e.g. VBCST_32 slot=mv
+  lda                    slots lda  (10 encodings)
+      II_LDA                   [7,1,1]  LOAD_UNIT_A  (Schedule.td:477)  e.g. LDA_dms_lda_idx slot=lda
+      II_LDA_POST_1D           [7,1,1,1]  LOAD_UNIT_A  (Schedule.td:507)  e.g. LDA_dms_lda_pstm_nrm slot=lda
+      II_LDA_Q                 [7,1,1]  LOAD_UNIT_A  (Schedule.td:935)  e.g. LDA_dmv_lda_q_ag_idx slot=lda
+      II_LDA_POSTINC_Q         [7,1,1,1]  LOAD_UNIT_A  (Schedule.td:939)  e.g. LDA_dmv_lda_q_ag_pstm_nrm slot=lda
+  st                     slots st  (10 encodings)
+      II_ST                    [1,1,1]  STORE_UNIT  (Schedule.td:661)  e.g. ST_dms_sts_idx slot=st
+      II_ST_POST_1D            [1,1,1,1]  STORE_UNIT  (Schedule.td:693)  e.g. ST_dms_sts_pstm_nrm slot=st
+      II_ST_Q                  [1,1,1]  STORE_UNIT  (Schedule.td:713)  e.g. ST_dmv_sts_q_ag_idx slot=st
+      II_ST_POSTINC_Q          [1,1,1,1]  STORE_UNIT  (Schedule.td:718)  e.g. ST_dmv_sts_q_ag_pstm_nrm slot=st
+  mul                    slots alu  (1 encodings)
+      II_MUL                   [2,1,1]    (Schedule.td:639)  e.g. MUL_mul_r_rr slot=alu
+  add                    slots alu  (2 encodings)
+      II_ADD                   [1,1,1,def:srCarry:1]    (Schedule.td:444)  e.g. ADD_add_r_ri slot=alu
+  mova                   slots lda  (1 encodings)
+      II_MOVA                  [1,1]    (Schedule.td:614)  e.g. MOVA_lda_cg slot=lda
+  movx                   slots alu  (2 encodings)
+      II_MOVX                  [1,1]    (Schedule.td:622)  e.g. MOVX_mvx_scl slot=alu
+  movxm                  slots lng  (1 encodings)
+      II_MOV                   [1,1]    (Schedule.td:606)  e.g. MOVXM_lng_cg slot=lng
+  padda                  slots lda  (3 encodings)
+      II_PADD                  [1,1,1]    (Schedule.td:644)  e.g. PADDA_lda_ptr_inc_idx slot=lda
+  paddb                  slots ldb  (3 encodings)
+      II_PADD                  [1,1,1]    (Schedule.td:644)  e.g. PADDB_ldb_ptr_inc_nospill_nrm slot=ldb
+  padds                  slots st  (2 encodings)
+      II_PADD                  [1,1,1]    (Schedule.td:644)  e.g. PADDS_st_ptr_inc_idx slot=st
+  j                      slots alu/lng  (2 encodings)
+      II_J                     [1,1]    (Schedule.td:470)  e.g. J_jump_imm slot=lng
+      II_J_IND                 [1]    (Schedule.td:471)  e.g. J_jump_ind slot=alu
+  jz                     slots lng  (1 encodings)
+      II_JZ                    [1,1]    (Schedule.td:476)  e.g. JZ slot=lng
+  jnz                    slots lng  (1 encodings)
+      II_JNZ                   [1,1]    (Schedule.td:474)  e.g. JNZ slot=lng
+  ret lr                 slots alu  (1 encodings)
+      II_RET                   [1,1]    (Schedule.td:654)  e.g. RET slot=alu
+  jl                     slots alu/lng  (2 encodings)
+      II_JL                    [1,4]    (Schedule.td:472)  e.g. JL slot=lng
+      II_JL_IND                [1,4]    (Schedule.td:473)  e.g. JL_IND slot=alu
+
+   Operand bypasses: II_VMAC's accumulator operand is VEC_Bypass (forwarded one cycle early),
+   II_VMACf lists none. Delay slots are not in tablegen; section 4 reads them from `ret lr`.
+
+== 4. Local cross-check: AIE-API snippets compiled with the installed Peano (clang -S) ==
+   The bundle distance the scheduler leaves between dependent ops is its latency belief.
+command: clang++ --target=aie2-none-unknown-elf -std=c++20 -O2 -D__AIE_API_AIE_ADF_HPP__=1 -I <mlir_aie>/include -S snip.cc -o snip.s (snippets: SNIPPETS in tools/peano_isa_facts.py)
+
+[bf16_mac]  19 bundles
+    0  nopb ; nopa ; nops ; nopx ; mov p3, p0; nopv
+    1  vldb wl0, [p0, #0]; mov p0, p1
+    2  vlda wl2, [p1, #0]; paddb [p0], #32; padds [p3], #32
+    3  vlda wh0, [p3, #0]; vldb wh2, [p0, #0]
+    4  vlda amhh0, [p2, #32]
+    5  vlda amhl0, [p2, #0]
+    6  nop
+    7  nop
+    8  nop
+    9  mova r0, #28
+   10  vmac.f bmh0, bmh0, x0, x2, r0
+   11  nop
+   12  nop
+   13  ret lr
+   14  nop    // Delay Slot 5
+   15  nop    // Delay Slot 4
+   16  vst amhh0, [p2, #32]    // Delay Slot 3
+   17  vst amhl0, [p2, #0]    // Delay Slot 2
+   18  nop    // Delay Slot 1
+  distance last accumulator load -> first mac: 5 bundles
+  distance last mac -> first store of its result: 6 bundles
+  bundles after ret (delay slots): 5
+
+[bf16_mac2]  24 bundles
+    0  nopa ; nopb ; nopx ; mov p3, p0
+    1  paddb [p3], #32
+    2  vldb wh0, [p3, #0]; mov p3, p1
+    3  vlda wl2, [p1, #0]; paddb [p3], #32
+    4  vlda wl0, [p0, #0]; vldb wh2, [p3, #0]
+    5  vlda amhh0, [p2, #32]
+    6  vlda amhl0, [p2, #0]
+    7  vlda wh4, [p0, #96]; vldb wh6, [p1, #96]
+    8  vlda wl4, [p0, #64]; vldb wl6, [p1, #64]
+    9  nop
+   10  mova r0, #28
+   11  vmac.f bmh0, bmh0, x0, x2, r0
+   12  nop
+   13  nop
+   14  nop
+   15  vmac.f bmh0, bmh0, x4, x6, r0
+   16  nop
+   17  nop
+   18  ret lr
+   19  nop    // Delay Slot 5
+   20  nop    // Delay Slot 4
+   21  vst amhh0, [p2, #32]    // Delay Slot 3
+   22  vst amhl0, [p2, #0]    // Delay Slot 2
+   23  nop    // Delay Slot 1
+  distance last accumulator load -> first mac: 5 bundles
+  distance mac -> dependent mac (same accumulator): 4 bundles
+  distance last mac -> first store of its result: 6 bundles
+  bundles after ret (delay slots): 5
+
+[i8_mac2]  21 bundles
+    0  nopa ; nopx ; mov p3, p1
+    1  vlda wl2, [p1, #0]; paddb [p3], #32
+    2  vlda wl0, [p0, #0]; vldb wh2, [p3, #0]
+    3  vldb wh6, [p1, #96]
+    4  vlda wl4, [p0, #32]; vldb wl6, [p1, #64]
+    5  nop
+    6  nop
+    7  nop
+    8  mova r0, #776
+    9  vmul cm0, x0, x2, r0
+   10  nop
+   11  vmac cm0, cm0, x4, x6, r0
+   12  nop
+   13  nop
+   14  nop
+   15  ret lr
+   16  vst amlh0, [p2, #32]    // Delay Slot 5
+   17  vst amll0, [p2, #0]    // Delay Slot 4
+   18  vst amhh0, [p2, #96]    // Delay Slot 3
+   19  vst amhl0, [p2, #64]    // Delay Slot 2
+   20  nop    // Delay Slot 1
+  distance mac -> dependent mac (same accumulator): 2 bundles
+  distance last mac -> first store of its result: 5 bundles
+  bundles after ret (delay slots): 5

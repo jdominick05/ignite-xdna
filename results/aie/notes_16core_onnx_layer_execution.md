@@ -3,8 +3,8 @@
 **Hardware:** AMD Ryzen 7 8700G (Phoenix Point, NPU PCI device `003d:00:01.1`)  
 **Architecture:** AMD XDNA1 AIE2 (Tile Clock: 1.80 GHz)  
 **Array Topology:** 16 Compute Tiles across 4 Columns ($c \in [0..3]$) and 4 Rows ($r \in [2..5]$)  
-**Verification Log:** [`results/aie/hardware_16core_layer_verification.log`](file:///C:/Users/Ignis/PycharmProjects/ignite-xdna/results/aie/hardware_16core_layer_verification.log)  
-**Lowering Bridge:** [`npu/lower_onnx_conv.py`](file:///C:/Users/Ignis/PycharmProjects/ignite-xdna/npu/lower_onnx_conv.py)  
+**Verification Log:** [`results/aie/hardware_16core_layer_verification.log`](hardware_16core_layer_verification.log)  
+**Lowering Bridge:** [`npu/lower_onnx_conv.py`](../../npu/lower_onnx_conv.py)  
 
 ---
 

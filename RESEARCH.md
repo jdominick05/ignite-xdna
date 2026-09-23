@@ -1310,6 +1310,25 @@ been closed:
   5D tensors come from its unfold/fold (`[4, 256, 3, 4, 16]`) between conv and transformer
   stages, so this is a structural property of the architecture, not a quantization
   artifact.
+- **Open (2026-09-23): the engine's own core schedule is the largest untested lever.**
+  The shipped engine core (`kernels/aie2/conv_engine/engine.cc`, Peano -O2) issues a `vmac` on
+  only **17–35%** of its int8 conv inner-loop bundles (static,
+  `results/aie/engine_core_issue_census_desktop2_20260923.log`). Each iteration loads, realigns
+  through `load_unaligned_v` `vshift`s, idles, then issues 8 `vmac`s, with no overlap across
+  iterations. Three things measured this date make that the next place to look:
+  (a) hand-scheduled assembly runs on this toolchain at exactly its static cycle count, with
+  zero stalls, at 3.0× the compiled upstream kernel on the same tile (`docs/DECISIONS.md`,
+  "Hand-scheduled AIE2 assembly is viable");
+  (b) the compiled GEMM kernels lose most of their time inside the call, not in data movement
+  (`results/aie/notes_tnzr_cross_audit.md` §C.2);
+  (c) bank placement matters inside a call. One same-bank paired load per inner iteration costs
+  the compiled loops a cycle each. A same-bank load+store also costs +1 (MEASURED), and upstream
+  int8's accumulator spills to the stack's bank cost it 7% when C shares that bank. The engine
+  core's `.text` (16,160 of 16,384 B) spills vector registers, pairs stack reloads with stores in
+  27 bundles, and has a static bank HAZARD between activations and weights.
+  Untested: whether a rewritten inner loop (no realignment `vshift`s, overlapped iterations,
+  separated banks) fits the 224 B of `.text` headroom, and what it buys per frame once dispatch
+  and DMA are counted. A kernel-rate gain is not a frame-rate gain until the frame is measured.
 
 ## Future pipeline test plans (Categories A through E)
 
@@ -1857,6 +1876,23 @@ sections above.
   machine's MAC rate while the whole kernel reaches 31.3% of peak, so the loss is outside the
   loop and a kernel rewrite is the wrong lever. Open from it: what the elapsed time is spent
   on instead, which is the trace unit's stall events rather than the disassembly.
+  **Corrected 2026-09-23 ([cross-audit](results/aie/notes_tnzr_cross_audit.md)), three points:**
+  (1) "Stated nowhere before" is false as written. Xilinx's llvm-aie, public since 2024-04-22,
+  defines the six slots in `AIE2Slots.td`. *Hello XDNA!* (Steinert and Breuer, <https://tnzr.org/xdna/>,
+  public since 2026-01-21) describes "up to six operations per cycle". Both predate this repo's
+  2026-09 ISA work. What holds is that no document *in this repo* had stated it.
+  (2) The accumulator file is **9** × 1024-bit `cm0`–`cm8` (SPEC(Peano),
+  `results/aie/peano_aie2_machine_model_a36c62b9.log` §1), and the shipped engine holds 8 live with no accumulator spill (it does spill vector registers). The "five fit,
+  six spill" ceiling is that probe's vector-register pressure, not the size of the accumulator file (ledger A1).
+  (3) "Outside the loop" holds only for the *inner* loop, and "a kernel rewrite is the wrong lever" does
+  not survive a measurement with the data movement removed. In L1, with no DMA in the timed region,
+  the same upstream int8 kernel reaches only **39.3%** of peak at the array's 64³ tile, and bf16 only
+  37.7% (`results/aie/l1_tile_mm_direct_64x64x64_desktop2_20260923T0538Z.log`). The array's int8
+  31.3% is ~80% of that, and its bf16 64×64 figures are 89–95%. So the loss is mostly *inside the
+  kernel call*, outside its inner loop: per-block accumulator reloads and stores, accumulator spills,
+  and one same-bank paired load per iteration. A kernel rewrite is the main lever, and a hand schedule
+  has now been measured to run exactly as written (`docs/DECISIONS.md`, "Hand-scheduled AIE2
+  assembly is viable").
 - **Why a core is not computing, measured.** The trace unit carries a stall taxonomy, and
   `kernels/pmu_probe/` routes it, calibrated by reproducing the two loops above at 2.0003 and
   9.0001 cycles per iteration before anything else is believed. `cycles alive = issuing +

@@ -275,7 +275,7 @@ The stream bandwidth demand per MAC is strictly **1 / C_out bytes per MAC**.
 ### Roofline Analysis & Core Headroom
 
 On Phoenix AIE2:
-- An AIE2 core executes up to **256 INT8 MACs/cycle** (`aie::mmul<4,8,8>` at 1.0 GHz nameplate) [SPEC].
+- An AIE2 core executes up to **256 INT8 MACs/cycle** (`aie::mmul<4,8,8>` at 1.0 GHz nameplate) [SPEC]. *(Clock superseded 2026-09-23, [ledger A8](notes_tnzr_cross_audit.md): the core clock is MEASURED at **1.80 GHz** in `default` (`clock_probe_npu.log`, `docs/SILICON.md` §1.7), not a 1.0 GHz nameplate. Per-second figures below that use 1.0 GHz are 1.8× low.)*
 - The core tile contains two 32-bit AXI-Stream S2MM ingress channels, each delivering 4 bytes/cycle:
   ```text
   Max_Stream_Ingress = 2 channels · 4 Bytes/cycle = 8 Bytes/cycle

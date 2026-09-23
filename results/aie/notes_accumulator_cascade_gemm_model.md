@@ -70,7 +70,7 @@ K = K_0 ∪ K_1 ∪ K_2 ∪ K_3, with |K_i| = K / 4
    - Streams local tile A[m, K_0] and B[K_0, n] via switchbox DMA.
    - Computes partial matrix product:
      C^(0) = sum_{k in K_0} A_k · B_k
-   - Intermediate results remain entirely in the vector accumulator register file (`cm0`–`cm7` for INT8, `bm0`–`bm15` for BF16).
+   - Intermediate results remain entirely in the vector accumulator register file (`cm0`–`cm7` for INT8, `bm0`–`bm15` for BF16). *(Superseded 2026-09-23, [ledger A1](notes_tnzr_cross_audit.md): the file is 9 × 1024-bit `cm0`–`cm8`, each `[bml_i, bmh_i]`, so 18 × 512-bit views `bml0`–`bml8`/`bmh0`–`bmh8` (SPEC(Peano), [`peano_aie2_machine_model_a36c62b9.log`](peano_aie2_machine_model_a36c62b9.log) §1).)*
    - Upon completion of K_0, Core 0 pushes accumulators directly into the 512-bit cascade output port.
    - **L1 Data Memory for C:** Exactly **0 Bytes**.
 

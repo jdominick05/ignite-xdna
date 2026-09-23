@@ -1,0 +1,62 @@
+L1-resident 32x32x32 tile: compiler vs hand schedule (tools/l1_tile_bench.py)
+date: 2026-09-23T01:27:52  host: DESKTOP-CBL5NUA
+peano: clang version 22.0.0 (https://github.com/Xilinx/llvm-aie a36c62b9d26291fb06604bc976c897791f0bb578)
+aiecc: mlir-aie ironenv v1.4.2; mm.cc from the mlir-aie checkout (not vendored)
+xrt-smi: Version              : 2.21.0
+xrt-smi: NPU Driver Version   : 32.0.20101.3760
+xrt-smi: NPU Firmware Version : 1.5.5.391
+pmode: default (not changed by this run; docs/SILICON.md measured 1.80 GHz in default)
+buffers: A 0x400, B 0x4000, C 0x8000; seed 20260923; calls [0, 250000, 500000, 1000000], 5 reps each, 3 warm-ups
+partitions before: idle
+
+## tnzr_bf16  (`tensor_kernel_32x32x32_bf16_bf16_fp32`, bf16)
+compile: clang++.exe --target=aie2-none-unknown-elf -c tensor_kernel_32x32x32_bf16_bf16_fp32.s -o kernel.o
+placement (tile-local offset, bank): tileA 0x0400-0x0c00 b0, inF_cons_buff_0 0x0c00-0x2c40 b0, outF_buff_0 0x2c40-0x3c40 b0, tileB 0x4000-0x4800 b1, tileC 0x8000-0x9000 b2
+static: 160 bundles in `tensor_kernel_32x32x32_bf16_bf16_fp32`, 128 issue a vmac; loops .l_start..l_end 64/64
+correctness layout=tiled calls=1: EXACT (C0 + calls*A@B)
+correctness layout=tiled calls=3: EXACT (C0 + calls*A@B)
+correctness layout=rowmajor calls=1: mismatch (max |err| vs accumulate 180)
+correctness layout=rowmajor calls=3: mismatch (max |err| vs accumulate 540)
+calls=       0: mean     0.249 ms  (min 0.218, max 0.295, n=5)
+calls=  250000: mean    43.269 ms  (min 43.022, max 43.511, n=5)
+calls=  500000: mean    85.823 ms  (min 85.642, max 85.993, n=5)
+calls= 1000000: mean   171.038 ms  (min 170.955, max 171.284, n=5)
+fit: time = 0.414 ms + 170.70 ns x calls   (R^2 0.999991)
+per call: 307.3 cycles at 1.8 GHz; ideal 256 (32^3 MACs / 128 per cycle) -> 83.3% issue efficiency
+rate: 383.9 GFLOPS from the slope (83.3% of 460.8); 383.2 by the reference's method (2*32^3*1000000 / mean wall at 1000000 calls)
+
+## mm_bf16_f32  (`matmul_bf16_f32`, bf16)
+compile: clang++.exe -O2 -std=c++20 --target=aie2-none-unknown-elf -DNDEBUG -Wno-parentheses -Wno-attributes -Wno-macro-redefined -Wno-empty-body -D__AIE_API_AIE_ADF_HPP__ -DVECTORIZED_ONLY -DDIM_M=32 -DDIM_K=32 -DDIM_N=32 -Dbf16_f32_ONLY -IC:\Users\<user>\mlir-aie\ironenv\Lib\site-packages\mlir_aie\include -c mm.cc -o kernel.o
+placement (tile-local offset, bank): tileA 0x0400-0x0c00 b0, inF_cons_buff_0 0x0c00-0x2c40 b0, outF_buff_0 0x2c40-0x3c40 b0, tileB 0x4000-0x4800 b1, tileC 0x8000-0x9000 b2
+static: 195 bundles in `matmul_bf16_f32`, 32 issue a vmac; loops .L_LEnd0 16/32
+correctness layout=tiled calls=1: EXACT (C0 + calls*A@B)
+correctness layout=tiled calls=3: EXACT (C0 + calls*A@B)
+calls=       0: mean     0.342 ms  (min 0.270, max 0.414, n=5)
+calls=  250000: mean   126.100 ms  (min 125.889, max 126.470, n=5)
+calls=  500000: mean   251.557 ms  (min 251.495, max 251.655, n=5)
+calls= 1000000: mean   502.694 ms  (min 502.618, max 502.836, n=5)
+fit: time = 0.418 ms + 502.30 ns x calls   (R^2 0.999999)
+per call: 904.1 cycles at 1.8 GHz; ideal 256 (32^3 MACs / 128 per cycle) -> 28.3% issue efficiency
+rate: 130.5 GFLOPS from the slope (28.3% of 460.8); 130.4 by the reference's method (2*32^3*1000000 / mean wall at 1000000 calls)
+
+## mm_i8_i32  (`matmul_i8_i32`, i8)
+compile: clang++.exe -O2 -std=c++20 --target=aie2-none-unknown-elf -DNDEBUG -Wno-parentheses -Wno-attributes -Wno-macro-redefined -Wno-empty-body -D__AIE_API_AIE_ADF_HPP__ -DVECTORIZED_ONLY -DDIM_M=32 -DDIM_K=32 -DDIM_N=32 -Di8_i32_ONLY -IC:\Users\<user>\mlir-aie\ironenv\Lib\site-packages\mlir_aie\include -c mm.cc -o kernel.o
+placement (tile-local offset, bank): tileA 0x0400-0x0800 b0, inF_cons_buff_0 0x0800-0x2040 b0, outF_buff_0 0x2040-0x3040 b0, tileB 0x4000-0x4400 b1, tileC 0x8000-0x9000 b2
+static: 139 bundles in `matmul_i8_i32`, 24 issue a vmac; loops .L_LEnd0 8/9
+correctness layout=tiled calls=1: EXACT (C0 + calls*A@B)
+correctness layout=tiled calls=3: EXACT (C0 + calls*A@B)
+calls=       0: mean     0.250 ms  (min 0.211, max 0.340, n=5)
+calls=  250000: mean    75.408 ms  (min 75.310, max 75.528, n=5)
+calls=  500000: mean   150.199 ms  (min 150.053, max 150.437, n=5)
+calls= 1000000: mean   300.032 ms  (min 299.831, max 300.176, n=5)
+fit: time = 0.346 ms + 299.72 ns x calls   (R^2 0.999998)
+per call: 539.5 cycles at 1.8 GHz; ideal 128 (32^3 MACs / 256 per cycle) -> 23.7% issue efficiency
+rate: 218.7 GOPS from the slope (23.7% of 921.6); 218.4 by the reference's method (2*32^3*1000000 / mean wall at 1000000 calls)
+
+partitions after close: idle
+
+| kernel | output | static vmac/bundles | cycles/call (slope) | ideal | issue eff. | rate (slope) | % peak | reference method |
+|---|---|---|---|---|---|---|---|---|
+| tnzr_bf16 | exact (tiled) | 128/160 | 307.3 | 256 | 83.3% | 383.9 GFLOPS | 83.3% | 383.2 |
+| mm_bf16_f32 | exact (tiled) | 32/195 | 904.1 | 256 | 28.3% | 130.5 GFLOPS | 28.3% | 130.4 |
+| mm_i8_i32 | exact (tiled) | 24/139 | 539.5 | 128 | 23.7% | 218.7 GOPS | 23.7% | 218.4 |

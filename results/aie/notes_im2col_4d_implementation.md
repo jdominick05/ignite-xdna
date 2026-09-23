@@ -4,9 +4,9 @@
 **Status:** IMPLEMENTED & COMPILER-VERIFIED  
 **Target:** AMD Phoenix AIE2 (XDNA1, `npu1` 4-column array)  
 **Artifacts Produced:**  
-- Source Harness: [`kernels/aie2/im2col_4d.mlir`](file:///C:/Users/Ignis/PycharmProjects/ryzen-ai-xdna1-quantization/kernels/aie2/im2col_4d.mlir)  
-- Lowered Dataflow IR: [`build/im2col_4d_lowered.mlir`](file:///C:/Users/Ignis/PycharmProjects/ryzen-ai-xdna1-quantization/build/im2col_4d_lowered.mlir)  
-- BD-Allocated IR: [`build/im2col_4d_lowered_with_bds.mlir`](file:///C:/Users/Ignis/PycharmProjects/ryzen-ai-xdna1-quantization/build/im2col_4d_lowered_with_bds.mlir)  
+- Source Harness: [`kernels/aie2/im2col_4d.mlir`](../../kernels/aie2/im2col_4d.mlir)  
+- Lowered Dataflow IR: `build/im2col_4d_lowered.mlir`  
+- BD-Allocated IR: `build/im2col_4d_lowered_with_bds.mlir`  
 **Epistemic Scope:** [MEASURED] (toolchain lowering logs, XAIE register synthesis, pass execution), [SPEC] (AIE2 hardware registers, AMD ISA, memory map), [DERIVED] (word-scaling equations, address generator boundaries).
 
 ---
