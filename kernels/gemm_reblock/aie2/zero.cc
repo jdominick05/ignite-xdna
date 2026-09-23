@@ -1,6 +1,7 @@
 //===- zero.cc --------------------------------------------000---*- C++ -*-===//
 //
 // Copyright (C) 2023 Advanced Micro Devices, Inc.
+// Adapted from mlir-aie v1.4.2 aie_kernels/aie2/zero.cc; local changes are marked inline.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//

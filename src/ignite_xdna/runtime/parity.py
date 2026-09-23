@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-# Copyright (C) 2026 Advanced Micro Devices, Inc.
-# SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
+# Copyright (C) 2026 The ignite-xdna contributors
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """
 src/ignite_xdna/runtime/parity.py
 Numerical parity metrics and hardware SRS mathematical emulator for AMD Phoenix AIE2.

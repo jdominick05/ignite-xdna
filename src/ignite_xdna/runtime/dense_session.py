@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Named dense outputs from hybrid graph containers, with separate stage timings."""
 import time
 import numpy as np

@@ -1,5 +1,6 @@
 /*
 Copyright (C) 2014-2022 Xilinx, Inc.
+// Adapted from mlir-aie v1.4.2 aie_kernels/aie_kernel_utils.h; local changes are marked inline.
 Copyright (C) 2022-2025 Advanced Micro Devices, Inc.
     SPDX-License-Identifier: MIT
 */

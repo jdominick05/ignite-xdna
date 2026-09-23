@@ -1,5 +1,6 @@
 #
 # Copyright (C) 2024-2026 Advanced Micro Devices, Inc.
+# Adapted from mlir-aie v1.4.2 programming_examples/basic/matrix_multiplication/whole_array/whole_array.py; local changes are marked inline.
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 #
 """Whole-array matrix multiply — IRON API design with ``@iron.jit`` compilation.

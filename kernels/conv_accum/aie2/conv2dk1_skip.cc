@@ -2,6 +2,7 @@
 //-*-===//
 //
 // Copyright (C) 2024 Advanced Micro Devices, Inc.
+// Adapted from mlir-aie v1.4.2 aie_kernels/aie2/conv2dk1_skip.cc; local changes are marked inline.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
