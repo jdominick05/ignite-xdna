@@ -149,6 +149,24 @@
 
 ## Rejected approaches and known pitfalls
 
+- **NPU-only LLM decode on Phoenix, killed on speed at the NPU DRAM rates measured so far
+  (2026-09-23).** The rule was pre-registered at `37e7bdb`.
+  - The competitors: int4 GEMV at Llama-2-7B's shapes runs 55.9 ms/token on the 780M through
+    DirectML (fp16) and 61.3 ms/token on the CPU through ONNX Runtime (int8 compute). Both are
+    DERIVED from MEASURED per-GEMV rows.
+  - The NPU's most favourable floor is 118.8 ms: the fewest bytes, 3.339 GB, at the best rate
+    seen, 28.1 GB/s.
+  - DirectML fp32 is also on the accuracy front at 1.4e-7 and 64.6 ms, so an NPU decode arm is
+    dominated on both speed and error.
+  - **Reopen only** if a clean NPU read-only test measures ≥ 59.7 GB/s. Prefill and a concurrent
+    three-chip split are separate, unmeasured questions.
+  - ([BENCHMARKS](BENCHMARKS.md#llm-decode-yardsticks-the-cpu-and-the-780m-read-int4-at-5664-gbs-so-npu-only-7b-decode-is-killed-on-speed-2026-09-23-desktop-2))
+- **A pre-registered size floor caught a builder defect (2026-09-23).** `tools/llm_gemv_bench.py build`
+  first sized the fp16-scale variant's copies from the fp32 variant, so six DirectML rows streamed
+  0.90–0.98 GiB against a pre-registered ≥ 1 GiB, and the verdict came out INCOMPLETE (`4620b53`).
+  The fix (`b909584`) went in before the six rows were re-timed. When a data file has variants of
+  different element sizes, size each variant separately.
+
 - **`AIE_PREPARE_FOR_PIPELINING` and `AIE_LOOP_FLATTEN` do nothing under Peano (2026-09-23).**
   Peano predefines `__AIECC__`, so `aie_kernel_utils.h:33-58` (`kernels/conv_accum/` copy) selects its
   Peano branch. There `AIE_LOOP_UNROLL*`, `AIE_LOOP_MIN/MAX_ITERATION_COUNT`, `AIE_LOOP_RANGE` and

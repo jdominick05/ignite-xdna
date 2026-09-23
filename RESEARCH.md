@@ -694,7 +694,11 @@ been closed:
         so this is not yet a hard cap, and the compute side (the on-core int4 → bf16 expansion, and
         M = 1 on a bf16 mmul) is unmeasured too.
       - The NPU earns a decode role only if it beats both the CPU and DirectML on the 780M, in
-        speed or in accuracy. Neither yardstick has been measured on this machine yet.
+        speed or in accuracy. Measured since, pre-registered: the 780M decodes the 7B linear
+        stack in 55.9 ms/token and the CPU in 61.3, against the NPU's 118.8 ms floor. NPU-only
+        decode is killed on speed, and DirectML fp32 (1.4e-7 at 64.6 ms) closes the accuracy
+        route. It reopens only if a clean NPU read test reaches 59.7 GB/s
+        ([BENCHMARKS](docs/BENCHMARKS.md#llm-decode-yardsticks-the-cpu-and-the-780m-read-int4-at-5664-gbs-so-npu-only-7b-decode-is-killed-on-speed-2026-09-23-desktop-2)).
 
   Evidence: `results/aie/int4_{isa_gate,engine_bytes_gate,demo_npu}_desktop2_20260923.log`,
   `results/int4/w4a8_accuracy_{prereg,verdict}_desktop2_20260923.log`,

@@ -2453,6 +2453,103 @@ the NPU.
 - **Reopen int4-in-engine only** with a recovery method that brings a W4 model within 1.0 point,
   measured the same way. Byte savings and silicon speed are settled above; accuracy is the gate.
 
+### LLM decode yardsticks: the CPU and the 780M read int4 at 56–64 GB/s, so NPU-only 7B decode is killed on speed (2026-09-23, Desktop 2)
+
+The question, from the user: the NPU earns an LLM role only if it beats both other chips on this
+APU, the CPU and the Radeon 780M through DirectML, in speed or in accuracy. Decode at M = 1 is
+bandwidth-bound. So Phase 1 of the LLM study measures the two yardsticks before any NPU work:
+int4 GEMV through ONNX Runtime's `MatMulNBits` at Llama-2-7B's three linear shapes. Prior art and
+the NPU bound are in [the prior-art note](../results/llm/notes_prior_art_phoenix_llm.md).
+
+**Setup.** Pre-registered at `37e7bdb` before any timing
+([prereg](../results/llm/llm_decode_prereg_desktop2_20260923.log)); runner `scripts/llm-study.sh`.
+- The weights are uint4, round-to-nearest asymmetric, blocks of 32 and 128. Each timed run streams
+  ≥ 1 GiB of distinct copies, 64× the L3.
+- Six configurations: CPU on ONNX Runtime 1.23.3 and on 1.30.0, each at `accuracy_level` 0
+  (fp32 compute) and 4 (int8 compute), 8 threads; DirectML with fp32 and with fp16 activations
+  and scales.
+- DirectML sessions use `session.disable_cpu_ep_fallback`, and a control proves a node DirectML
+  cannot run is refused. So every DirectML row ran entirely on the iGPU.
+- The error is one GEMV's rel_l2 against float64 on the exact dequantized weights. Controls
+  show the packing exact: fp32 compute reproduces float64 to 8e-8.
+- Token time T = 32 × (4 t(4096×4096) + 2 t(4096×11008) + t(11008×4096)) is DERIVED from the
+  MEASURED per-GEMV medians, linear layers only.
+- The witnesses: host CLEAR and the NPU idle at all 13 checks, BFP16 holding.
+
+**Read bandwidth (MEASURED, context).** DDR5-6000 on two channels is 96 GB/s theoretical, DERIVED
+from the configured speed, which is above AMD's rated DDR5-5200.
+
+| Probe | GB/s |
+|---|---:|
+| ONNX Runtime ReduceSum over 1 GiB, CPU fp32, 8 threads | 60.59 |
+| same, DirectML fp32 | 68.81 |
+| same, DirectML fp16 | 48.88 |
+| numpy float32 sums, 8 / 16 threads | 31.22 / 46.58 |
+
+The numpy probe still scales linearly at 16 threads. That is a per-thread limit, so it reads low;
+ReduceSum is the CPU's figure. Both other chips read at 2.2–2.6× the NPU's best DRAM rate here
+(26.8 GB/s fill, 28.1 GB/s round trip).
+
+**Int4 decode, per 7B token (DERIVED from MEASURED rows;
+[verdict](../results/llm/llm_decode_verdict_rerun_desktop2_20260923.log)).**
+
+| Configuration | Block | ms/token | tokens/s | int4 GB/s | error (max rel_l2) |
+|---|---:|---:|---:|---:|---:|
+| DirectML fp16 | 128 | **55.9** | 17.88 | 60.17 | 4.3e-4 |
+| DirectML fp16 | 32 | 58.8 | 17.01 | 63.69 | 4.1e-4 |
+| CPU 1.23.3, int8 compute | 128 | 61.3 | 16.30 | 56.49 | 6.8e-3 |
+| CPU 1.30.0, int8 compute | 128 | 61.4 | 16.28 | 56.43 | 6.8e-3 |
+| DirectML fp32 | 128 | 64.6 | 15.47 | 53.63 | **1.4e-7** |
+| DirectML fp32 | 32 | 69.6 | 14.37 | 59.63 | 1.4e-7 |
+| CPU 1.23.3, fp32 compute | 128 | 74.0 | 13.52 | 46.86 | 4.4e-7 |
+| CPU 1.30.0, int8 compute | 32 | 80.9 | 12.36 | 51.26 | 5.6e-3 |
+| CPU 1.23.3, int8 compute | 32 | 81.6 | 12.25 | 50.84 | 5.6e-3 |
+| CPU 1.30.0, fp32 compute | 128 | 82.3 | 12.15 | 42.13 | 4.4e-7 |
+| CPU 1.30.0, fp32 compute | 32 | 95.3 | 10.49 | 43.53 | 4.5e-7 |
+| CPU 1.23.3, fp32 compute | 32 | 98.9 | 10.11 | 41.95 | 4.5e-7 |
+
+- **Verdict: KILL.**
+  - T_best is 55.9 ms/token, DirectML fp16 at block 128.
+  - The NPU's most favourable floor is 118.8 ms: 3.339 GB at 28.1 GB/s, the fewest bytes at the
+    best rate seen.
+  - NPU-only 7B int4 decode cannot beat the better of the CPU and DirectML at the NPU DRAM rates
+    measured so far. It reopens only if a clean NPU read test measures ≥ 59.7 GB/s, 2.1× the
+    best seen.
+- **The accuracy route is closed too, at these rates.** Every point on the (time, error) Pareto
+  front is DirectML's. DirectML fp32 delivers near-exact arithmetic (1.4e-7) at 64.6 ms, faster
+  than the NPU floor. An NPU arm at ≥ 118.8 ms with bf16 or int8 arithmetic is dominated on both
+  axes.
+- **DirectML reads int4 natively.** Its int4 GEMV takes 0.28–0.36× the time of the fp16 dense GEMV
+  at the same shape (dense: 70.6–74.6 GB/s). Bytes alone would give 0.26–0.29×, so it does not
+  expand the weights before reading them.
+- **The CPU saturates by 4 threads.** The sweep at 4096×11008, int8 compute, block 32 gives
+  30.3 / 43.9 / 48.3 / 51.2 / 49.5 GB/s at 1 / 2 / 4 / 8 / 16 threads. At `accuracy_level` 4,
+  ONNX Runtime 1.30.0 and 1.23.3 are within 1%.
+- **Predictions scored:**
+  - P2 (DirectML ReduceSum fp16 at 40–85 GB/s), P5 (KILL) and P6 (errors) hold.
+  - P1 misses low: the numpy probe reads 31–47 GB/s, not 50–75.
+  - P3 and P4 each miss narrowly high. The best CPU reads 56.5 GB/s against 25–55, and DirectML
+    fp16 reads 60.2–63.7 against 20–60. `accuracy_level` 4 is ≥ 1.2× faster than level 0 in 3
+    of 4 pairs; 1.30.0 at block 32 is 1.18×.
+- **One re-run.** Sitting 1's verdict was INCOMPLETE under its own rule. The six DirectML fp16 rows
+  streamed 0.90–0.98 GiB per run, because the builder sized their copies from the fp32-scale
+  variant.
+  - Those rows are kept as measured (`4620b53`,
+    [sitting 1's verdict](../results/llm/llm_decode_verdict_desktop2_20260923.log)).
+  - The fix was committed before the re-run (`b909584`), and only those six rows were re-timed.
+  - Sitting 1's void rows gave 53.4 ms/token and the re-run 55.9. Without DirectML fp16 at all,
+    T_best is 61.3 ms (CPU), so the verdict does not rest on the re-run.
+- **What this does not establish:**
+  - The NPU's own read ceiling, which is the one thing that reopens decode.
+  - Whether the three chips' DRAM bandwidths add when run together. The iGPU alone reaches 72%
+    of theoretical.
+  - Prefill, which is compute-bound.
+  - Attention, the KV cache, lm_head and a real model's accuracy.
+  - llama.cpp as a stronger CPU yardstick, which is not used here by the user's choice.
+
+  Evidence: `results/llm/llm_{read,gemv}_*_desktop2_20260923.log`, the `load_llm_*` witnesses, and the
+  controls `results/llm/llm_controls_*_desktop2_20260923.log`.
+
 ### MobileViT-XXS does not survive per-tensor INT8, and AdaRound cannot save it
 
 The accuracy question the attention work deferred, now measured on the full 1000-image

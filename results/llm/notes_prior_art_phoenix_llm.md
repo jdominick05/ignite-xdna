@@ -108,8 +108,9 @@ weights read per token are:
   DDR5-5200" (SPEC([AMD Ryzen 7 8700G product page](https://www.amd.com/en/products/processors/desktops/ryzen/8000-series/amd-ryzen-7-8700g.html)),
   read 2026-09-23), which would be 83.2 GB/s.
 - If the CPU or the 780M reads this DDR5 faster than the NPU in its own int4 GEMV, NPU-only decode
-  cannot win on speed. Neither has been measured on this machine; that is the study's Phase 1
-  (`tools/cpu_mem_bw.py` measures the CPU's read rate).
+  cannot win on speed. Neither had been measured on this machine when this note was written. Phase 1
+  has since measured both: 55.9 ms/token on the 780M and 61.3 on the CPU
+  ([BENCHMARKS](../../docs/BENCHMARKS.md#llm-decode-yardsticks-the-cpu-and-the-780m-read-int4-at-5664-gbs-so-npu-only-7b-decode-is-killed-on-speed-2026-09-23-desktop-2)).
 
 For scale, the published OPT-1.3b figure above implies at most 0.8 GB / 0.117–0.120 s =
 6.67–6.84 GB/s of weight traffic (DERIVED). That assumes every byte of the 0.8 quantized model is

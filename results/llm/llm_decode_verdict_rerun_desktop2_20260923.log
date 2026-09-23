@@ -1,0 +1,82 @@
+Read bandwidth (context)
+  numpy float32 sum,  1 threads:   5.57 GB/s (best 5.69)
+  numpy float32 sum,  2 threads:  10.93 GB/s (best 11.07)
+  numpy float32 sum,  4 threads:  17.94 GB/s (best 19.02)
+  numpy float32 sum,  8 threads:  31.22 GB/s (best 32.71)
+  numpy float32 sum, 16 threads:  46.58 GB/s (best 51.00)
+  ONNX Runtime cpu ReduceSum fp32, 8 threads:  60.59 GB/s (best 62.16)
+  ONNX Runtime dml ReduceSum fp16:  48.88 GB/s (best 50.77)
+  ONNX Runtime dml ReduceSum fp32:  68.81 GB/s (best 70.61)
+
+config block        K x N   ms/GEMV    GB/s    rel_l2 max_abs_rel
+C23a0     32    4096x4096    0.3038   35.37  2.70e-07    3.45e-07
+C23a0     32   4096x11008    0.6565   44.00  2.73e-07    3.37e-07
+C23a0     32   11008x4096    0.5622   51.38  4.50e-07    6.58e-07
+C23a0    128    4096x4096    0.2022   44.39  2.66e-07    3.43e-07
+C23a0    128   4096x11008    0.5007   48.19  2.67e-07    3.32e-07
+C23a0    128   11008x4096    0.5008   48.18  4.37e-07    4.93e-07
+C23a4     32    4096x4096    0.2136   50.32  5.57e-03    6.25e-03
+C23a4     32   4096x11008    0.5644   51.17  5.64e-03    7.89e-03
+C23a4     32   11008x4096    0.5669   50.96  5.40e-03    6.83e-03
+C23a4    128    4096x4096    0.1615   55.58  6.79e-03    7.68e-03
+C23a4    128   4096x11008    0.4235   56.97  6.79e-03    7.54e-03
+C23a4    128   11008x4096    0.4239   56.92  6.48e-03    6.81e-03
+C30a0     32    4096x4096    0.2616   41.08  2.70e-07    3.45e-07
+C30a0     32   4096x11008    0.6238   46.31  2.73e-07    3.37e-07
+C30a0     32   11008x4096    0.6842   42.22  4.50e-07    6.58e-07
+C30a0    128    4096x4096    0.2274   39.49  2.66e-07    3.43e-07
+C30a0    128   4096x11008    0.5452   44.26  2.67e-07    3.32e-07
+C30a0    128   11008x4096    0.5712   42.24  4.37e-07    4.93e-07
+C30a4     32    4096x4096    0.2134   50.37  5.57e-03    6.25e-03
+C30a4     32   4096x11008    0.5585   51.72  5.64e-03    7.89e-03
+C30a4     32   11008x4096    0.5586   51.71  5.40e-03    6.83e-03
+C30a4    128    4096x4096    0.1610   55.78  6.79e-03    7.68e-03
+C30a4    128   4096x11008    0.4237   56.95  6.79e-03    7.54e-03
+C30a4    128   11008x4096    0.4280   56.38  6.48e-03    6.81e-03
+Df32      32    4096x4096    0.1810   59.37  9.99e-08    1.18e-07
+Df32      32   4096x11008    0.4490   64.33  1.01e-07    1.63e-07
+Df32      32   11008x4096    0.5523   52.30  1.38e-07    1.48e-07
+Df32     128    4096x4096    0.1783   50.36  1.00e-07    1.74e-07
+Df32     128   4096x11008    0.4265   56.57  9.93e-08    1.67e-07
+Df32     128   11008x4096    0.4533   53.23  1.38e-07    1.53e-07
+Df16      32    4096x4096    0.1648   58.87  4.09e-04    6.62e-04
+Df16      32   4096x11008    0.3885   67.09  4.09e-04    8.19e-04
+Df16      32   11008x4096    0.4010   65.00  4.13e-04    5.52e-04
+Df16     128    4096x4096    0.1604   54.34  4.16e-04    8.40e-04
+Df16     128   4096x11008    0.3717   63.02  4.19e-04    8.46e-04
+Df16     128   11008x4096    0.3624   64.64  4.31e-04    5.32e-04
+
+config block T ms/token tokens/s int4 GB/s E (max rel_l2)
+Df16     128       55.9    17.88     60.17       4.31e-04
+Df16      32       58.8    17.01     63.69       4.13e-04
+C23a4    128       61.3    16.30     56.49       6.79e-03
+C30a4    128       61.4    16.28     56.43       6.79e-03
+Df32     128       64.6    15.47     53.63       1.38e-07
+Df32      32       69.6    14.37     59.63       1.38e-07
+C23a0    128       74.0    13.52     46.86       4.37e-07
+C30a4     32       80.9    12.36     51.26       5.64e-03
+C23a4     32       81.6    12.25     50.84       5.64e-03
+C30a0    128       82.3    12.15     42.13       4.37e-07
+C30a0     32       95.3    10.49     43.53       4.50e-07
+C23a0     32       98.9    10.11     41.95       4.50e-07
+Pareto front (T, E), CPU and DirectML: Df16 b128 55.9 ms 4.3e-04; Df16 b32 58.8 ms 4.1e-04; Df32 b128 64.6 ms 1.4e-07; Df32 b32 69.6 ms 1.4e-07
+
+context dense cpu fp32 4096x4096: 1.1461 ms/GEMV, 58.55 GB/s, rel_l2 2.77e-07
+context dense cpu fp32 4096x11008: 2.9875 ms/GEMV, 60.37 GB/s, rel_l2 2.78e-07
+context dense cpu fp32 11008x4096: 2.9908 ms/GEMV, 60.30 GB/s, rel_l2 2.98e-07
+context dense dml fp16 4096x4096: 0.4543 ms/GEMV, 73.85 GB/s, rel_l2 4.62e-04
+context dense dml fp16 4096x11008: 1.2095 ms/GEMV, 74.56 GB/s, rel_l2 4.63e-04
+context dense dml fp16 11008x4096: 1.2774 ms/GEMV, 70.59 GB/s, rel_l2 4.62e-04
+context sweep 1.23 acc 4 block 32 4096x11008, 1 threads: 0.9526 ms/GEMV, 30.32 GB/s
+context sweep 1.23 acc 4 block 32 4096x11008, 2 threads: 0.6574 ms/GEMV, 43.94 GB/s
+context sweep 1.23 acc 4 block 32 4096x11008, 4 threads: 0.5977 ms/GEMV, 48.32 GB/s
+context sweep 1.23 acc 4 block 32 4096x11008, 16 threads: 0.5831 ms/GEMV, 49.54 GB/s
+SUPERSEDED ('Df16', 32, 4096, 4096): llm_gemv_dml_ort123_desktop2_20260923.log (969932800 B/run < 1 GiB) superseded by llm_gemv_dml16_rerun_ort123_desktop2_20260923.log
+SUPERSEDED ('Df16', 32, 4096, 11008): llm_gemv_dml_ort123_desktop2_20260923.log (990543872 B/run < 1 GiB) superseded by llm_gemv_dml16_rerun_ort123_desktop2_20260923.log
+SUPERSEDED ('Df16', 32, 11008, 4096): llm_gemv_dml_ort123_desktop2_20260923.log (990543872 B/run < 1 GiB) superseded by llm_gemv_dml16_rerun_ort123_desktop2_20260923.log
+SUPERSEDED ('Df16', 128, 4096, 4096): llm_gemv_dml_ort123_desktop2_20260923.log (1045954560 B/run < 1 GiB) superseded by llm_gemv_dml16_rerun_ort123_desktop2_20260923.log
+SUPERSEDED ('Df16', 128, 4096, 11008): llm_gemv_dml_ort123_desktop2_20260923.log (1054126080 B/run < 1 GiB) superseded by llm_gemv_dml16_rerun_ort123_desktop2_20260923.log
+SUPERSEDED ('Df16', 128, 11008, 4096): llm_gemv_dml_ort123_desktop2_20260923.log (1054126080 B/run < 1 GiB) superseded by llm_gemv_dml16_rerun_ort123_desktop2_20260923.log
+
+T_best 55.9 ms/token (Df16, block 128); NPU floor 118.8 ms (3.339 GB at 28.1 GB/s); BW_needed 59.7 GB/s
+VERDICT KILL: NPU-only 7B int4 decode cannot beat Df16 at the NPU DRAM rates measured so far (26.8 fill, 28.1 best). It reopens only if a clean NPU read test measures >= 59.7 GB/s.
