@@ -195,17 +195,31 @@ def read_logs(paths):
 def cmd_logs(args) -> int:
     rows, problems, witnesses = read_logs(args.logs)
     gemv = [r for r in rows if r["kind"] == "gemv"]
-    t = {}
+    by_key = {}
     for r in gemv:
         if r["arm"] != "nbits":
             continue
         name = config_of(r, r["ort"])
         if name is None:
             continue
-        key = (name, r["block"], r["k"], r["n"])
-        if key in t:
-            problems.append(f"two rows for {key}")
-        t[key] = r
+        by_key.setdefault((name, r["block"], r["k"], r["n"]), []).append(r)
+    # A row that breaks the 1 GiB rule is void. Added 2026-09-23 (after sitting 1, before its re-run,
+    # commit 4620b53): when exactly one valid row exists for a key, it is used and the void one is
+    # listed as superseded. Any other duplicate is still a PROBLEM.
+    t, superseded = {}, []
+    for key, rs in by_key.items():
+        valid = [r for r in rs if r["run_bytes"] >= MIN_RUN_BYTES]
+        if len(rs) == 1:
+            t[key] = rs[0]
+        elif len(valid) == 1:
+            t[key] = valid[0]
+            superseded += [f"{key}: {r['log']} ({r['run_bytes']} B/run < 1 GiB) superseded by {valid[0]['log']}"
+                           for r in rs if r is not valid[0]]
+        else:
+            problems.append(f"{len(rs)} rows for {key}")
+            t[key] = rs[-1]
+    for key, r in t.items():
+        name = key[0]
         if r["run_bytes"] < MIN_RUN_BYTES:
             problems.append(f"{key}: {r['run_bytes']} bytes per run < 1 GiB")
         if not r["finite"]:
@@ -265,6 +279,8 @@ def cmd_logs(args) -> int:
     for name, v in witnesses:
         if v != "CLEAR":
             print(f"witness {name}: {v}")
+    for s in superseded:
+        print(f"SUPERSEDED {s}")
     print()
 
     if problems:

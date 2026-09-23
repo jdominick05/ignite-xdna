@@ -124,7 +124,10 @@ class ExtWriter:
 
 
 def shape_dir(kind: str, k: int, n: int, block: int, seed: int) -> Path:
-    return SCRATCH / f"{kind}_k{k}_n{n}_b{block}_s{seed}_m{TARGET_BYTES >> 20}_{GEN}"
+    # "pv": each scale variant gets its own copy count, so both stream >= --mib. Before 2026-09-23's
+    # re-run the fp16 variant reused the fp32 count and streamed 0.90-0.98 GiB (commit 4620b53).
+    pv = "_pv" if kind == "nbits" else ""
+    return SCRATCH / f"{kind}_k{k}_n{n}_b{block}_s{seed}_m{TARGET_BYTES >> 20}{pv}_{GEN}"
 
 
 def nbits_copy_bytes(k, n, block, t1):
@@ -141,22 +144,23 @@ def cmd_build(args) -> int:
     if k % block or (k // block) % 2:
         raise SystemExit(f"K={k} needs an even number of blocks of {block}")
     d = shape_dir("nbits", k, n, block, args.seed)
-    r = copies_for(nbits_copy_bytes(k, n, block, "fp32"))
+    r = {t1: copies_for(nbits_copy_bytes(k, n, block, t1)) for t1 in ("fp32", "fp16")}
     manifest = d / "manifest.json"
     if manifest.exists():
         print(f"exists: {d.relative_to(ROOT)}")
     else:
         d.mkdir(parents=True, exist_ok=True)
-        writers = {t1: ExtWriter(d / f"weights_{t1}.bin") for t1 in ("fp32", "fp16")}
-        tensors = {t1: [] for t1 in writers}
+        writers = {t1: ExtWriter(d / f"weights_{t1}.bin") for t1 in r}
+        tensors = {t1: [] for t1 in r}
         t0 = time.perf_counter()
-        for i in range(r):
+        for i in range(max(r.values())):
             q, s, zp = copy_weights(k, n, block, i, args.seed)
             b = pack_nibbles(q).reshape(n, k // block, block // 2)
             z = pack_nibbles(zp).reshape(-1)
             for t1, wr in writers.items():
-                sd = s.astype(np.float32 if t1 == "fp32" else np.float16).reshape(-1)
-                tensors[t1].append([wr.add(f"B{i}", b), wr.add(f"S{i}", sd), wr.add(f"Z{i}", z)])
+                if i < r[t1]:
+                    sd = s.astype(np.float32 if t1 == "fp32" else np.float16).reshape(-1)
+                    tensors[t1].append([wr.add(f"B{i}", b), wr.add(f"S{i}", sd), wr.add(f"Z{i}", z)])
         for t1, wr in writers.items():
             wr.close()
             for acc in (0, 4):
@@ -375,7 +379,7 @@ def cmd_gemv(args) -> int:
     acc = args.acc if (args.arm == "nbits" and args.ep == "cpu") else 0
     npt = np.float32 if args.t1 == "fp32" else np.float16
     if args.arm == "nbits":
-        copies, per_copy = info["copies"], info["copy_bytes"][args.t1]
+        copies, per_copy = info["copies"][args.t1], info["copy_bytes"][args.t1]
     else:
         copies, per_copy = info["copies"][args.t1], k * n * np.dtype(npt).itemsize
     t_model = d / f"time_{args.t1}_acc{acc}.onnx"

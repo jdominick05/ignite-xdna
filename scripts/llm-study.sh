@@ -9,9 +9,12 @@
 #   ./scripts/llm-study.sh prereg     # the pre-registration log; commit it before anything below
 #   ./scripts/llm-study.sh read       # read bandwidth: numpy sums, ONNX Runtime ReduceSum on cpu and dml
 #   ./scripts/llm-study.sh gemv       # the 36 decisive int4 rows, then the dense and thread-sweep context
+#   ./scripts/llm-study.sh dml16      # re-run of the 6 DirectML fp16 int4 rows only: sitting 1's streamed
+#                                     # 0.90-0.98 GiB (a builder defect, commit 4620b53); run build first
 #   ./scripts/llm-study.sh verdict    # tools/llm_decode_verdict.py over the read and gemv logs
 #
 # Options: --machine TAG names the logs (default: desktop2 on DESKTOP-CBL5NUA, else required).
+# --tag TAG adds _TAG to the verdict log's name, for a second verdict on the same day.
 #
 # read and gemv are timing sittings: announce them to the other sessions first, and never run them
 # beside another session's NPU, CPU or GPU measurement. Each group refuses to start while another
@@ -23,11 +26,12 @@
 
 . "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
-STAGE="" MACHINE=""
+STAGE="" MACHINE="" TAG=""
 while [ $# -gt 0 ]; do
     case "$1" in
-        controls|build|prereg|read|gemv|verdict) STAGE="$1" ;;
+        controls|build|prereg|read|gemv|dml16|verdict) STAGE="$1" ;;
         --machine) MACHINE="$2"; shift ;;
+        --tag)     TAG="_$2"; shift ;;
         -h|--help) usage "${BASH_SOURCE[0]}"; exit 0 ;;
         *)         die "unknown argument $1" ;;
     esac
@@ -161,9 +165,10 @@ group_cpu() {   # the four int4 cpu configurations of one ONNX Runtime build (ac
     done
 }
 
-group_dml() {
-    local s b t
-    for t in fp32 fp16; do
+group_dml() {   # group_dml [t1...]: the DirectML int4 rows (default fp32 then fp16)
+    local s b t ts=("$@")
+    [ ${#ts[@]} -gt 0 ] || ts=(fp32 fp16)
+    for t in "${ts[@]}"; do
         for b in "${BLOCKS[@]}"; do
             for s in "${SHAPES[@]}"; do
                 # shellcheck disable=SC2086
@@ -217,8 +222,20 @@ stage_gemv() {
     ok "gemv done; next: $0 verdict"
 }
 
+stage_dml16() {
+    need_prereg
+    local w="$OUT/load_llm_gemv_dml16_rerun_${MACHINE}_${DATE}.log" l="$OUT/llm_gemv_dml16_rerun_ort123_${MACHINE}_${DATE}.log"
+    refuse "$w" "$l"
+    use_env resnet_env17
+    witness "$w" "dml fp16 re-run" gpu
+    logged "$l" group_dml fp16
+    witness "$w" "after dml fp16 re-run"
+    grep -h "^ROW_FAILED" "$l" && warn "rows failed, see above" || true
+    ok "re-run done; next: $0 verdict --tag rerun"
+}
+
 stage_verdict() {
-    local log="$OUT/llm_decode_verdict_${MACHINE}_${DATE}.log"
+    local log="$OUT/llm_decode_verdict${TAG}_${MACHINE}_${DATE}.log"
     refuse "$log"
     use_env resnet_env17
     # shellcheck disable=SC2046
