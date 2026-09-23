@@ -284,12 +284,14 @@ def check_frames(frames: list, ir, placement: dict, dense: dict, oracle_bytes: b
         rep["tail"] = {"values": int(dev.size), "lanes": int(dev.shape[0]), "differ": int(np.count_nonzero(dev != want)),
                        "differ_padding_lanes": int(np.count_nonzero(dev[channels:] != want[channels:])),
                        "zero_sign_only": int(np.count_nonzero((dev != want) & (ulp == 0))), "max_ulp": int(ulp.max())}
-        per = {}
+        per, where = {}, {}
         for name, got in f["tensors"].items():
             w = em.bf16_bits(ref[name][:got.shape[0]])
             per[name] = int(np.count_nonzero(got != w))
+            if per[name]:
+                where[name] = where_differ(got, w, ir.tensors[name])
         rep["resident_tensors"] = {"compared": len(per), "values": int(sum(t.size for t in f["tensors"].values())),
-                                   "differ": int(sum(per.values())), "per_tensor_differ": per}
+                                   "differ": int(sum(per.values())), "per_tensor_differ": per, "where": where}
         # The device against the W8A16 oracle, at the model's output.
         y = wo.run(oracle_bytes, x[None])[0]
         dev_img = depth_to_space(em.from_bf16_bits(dev[:channels]), bs, mode)
@@ -360,6 +362,26 @@ def _values(bits: np.ndarray, blocks: int) -> np.ndarray:
 def _origin(origins, p: int, size: int) -> int:
     """The origin of the LAST tile covering ``p``: edge tiles overlap, and the later one is written last."""
     return max(o for o in origins if o <= p < o + size)
+
+
+def where_differ(got: np.ndarray, want: np.ndarray, t, limit: int = 16) -> dict:
+    """Where two ``[C][H][W]`` pattern tensors differ: the bounding box, and the first ``limit`` positions
+    with both patterns, their distance in bf16 steps, and the tile that wrote each. A lone position is
+    where a difference can start; a box that widens layer by layer is one spreading."""
+    pos = np.argwhere(got != want)
+    ys, xs = tile_origins(t.height, em.TILE_ROWS), tile_origins(t.width, em.TILE_COLS)
+    rows = []
+    for c, y, x in pos[:limit]:
+        c, y, x = int(c), int(y), int(x)
+        oy, ox = _origin(ys, y, em.TILE_ROWS), _origin(xs, x, em.TILE_COLS)
+        d, e = int(got[c, y, x]), int(want[c, y, x])
+        rows.append({"c": c, "y": y, "x": x, "device": f"{d:04x}", "emulator": f"{e:04x}",
+                     "steps": int(ordered(np.array([d]))[0] - ordered(np.array([e]))[0]),
+                     "tile_origin": [oy, ox], "covered_by": [sum(o <= y < o + em.TILE_ROWS for o in ys),
+                                                             sum(o <= x < o + em.TILE_COLS for o in xs)]})
+    lo, hi = pos.min(axis=0), pos.max(axis=0)
+    return {"bbox": {"c": [int(lo[0]), int(hi[0])], "y": [int(lo[1]), int(hi[1])], "x": [int(lo[2]), int(hi[2])]},
+            "positions": rows}
 
 
 def exact_value(layer, values: dict, c: int, y: int, x: int):
