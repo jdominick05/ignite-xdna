@@ -1,0 +1,18 @@
+sitting clock 1.7972 GHz; per-stream ceiling at it 7.188 GB/s
+layout  ch    GiB  median ms    GB/s  per ch B/cycle/ch 256 MiB GB/s slope GB/s fixed ms
+smoke 1x1 32 MiB: 6.829 GB/s read-only (SILICON 1.5: 6.899 per direction in a round trip, slope method)
+1x1      1  1.000     150.97    7.11    7.11      3.957         7.06       7.13     0.36
+1x2      2  1.000      76.71   14.00    7.00      3.894        13.85      14.05     0.28
+2x1      2  1.000      76.60   14.02    7.01      3.900        13.83      14.08     0.35
+2x2      4  1.000      39.20   27.39    6.85      3.810        26.63      27.65     0.37
+4x1      4  1.000      39.06   27.49    6.87      3.824        26.38      27.88     0.55
+3x2      6  1.000      27.91   38.47    6.41      3.568        36.60      39.14     0.48
+4x2      8  1.000      22.55   47.62    5.95      3.312        44.81      48.63     0.47
+witness: 1 GPU engine(s) over 1% at a snapshot
+
+best total 47.62 GB/s at 4x2; device.yaml reading 25.6; SILICON 1.6 cap 26.0-28.8
+R1 NOT REOPENED: 47.62 < 59.7 GB/s; NPU-only decode stays killed
+R2 REFUTED for reads alone: 47.62 GB/s at 4x2 > 30.24
+R3 2x1 / 1x2 = 1.001 -> not a per-column limit
+R3 4x1 / 2x2 = 1.004 -> not a per-column limit
+R4 1x1 7.112 GB/s = 3.957 B/cycle at 1.7972 GHz (98.9% of 1 word/cycle)

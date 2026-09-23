@@ -102,6 +102,10 @@ weights read per token are:
 - **So at the DRAM rates this repo has measured for the NPU (26.8 GB/s fill, 28.1 best), and at
   SILICON 1.6's derived 26–28 GB/s shared cap, NPU-only 7B decode stays under about 8 tokens/s**
   (DERIVED). The read-only ceiling is unmeasured, so this is not yet a hard cap.
+- Since measured (2026-09-23, pre-registered): read-only, the NPU reads 47.62 GB/s on eight
+  channels, which refutes the 26–28 GB/s cap for reads. At that rate, the three rows above
+  take 71.5 / 76.2 / 84.1 ms, 13.98 / 13.13 / 11.89 tokens/s (DERIVED)
+  ([BENCHMARKS](../../docs/BENCHMARKS.md#the-npu-reads-ddr-at-476-gbs-when-nothing-is-written-back-silicons-2628-gbs-cap-does-not-bind-reads-and-7b-decode-stays-killed-2026-09-23-desktop-2)).
 - This machine runs DDR5-6000 on two channels: two 16 GiB DIMMs on channels A and B, JEDEC speed
   4800, configured 6000 (Win32_PhysicalMemory, 2026-09-23). That is 96 GB/s theoretical, DERIVED from
   the configured speed. It is above AMD's rated maximum for the 8700G, "2x1R DDR5-5200" / "2x2R

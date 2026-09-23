@@ -161,6 +161,14 @@
   - **Reopen only** if a clean NPU read-only test measures ≥ 59.7 GB/s. Prefill and a concurrent
     three-chip split are separate, unmeasured questions.
   - ([BENCHMARKS](BENCHMARKS.md#llm-decode-yardsticks-the-cpu-and-the-780m-read-int4-at-5664-gbs-so-npu-only-7b-decode-is-killed-on-speed-2026-09-23-desktop-2))
+  - **The reopen test has run, and decode stays killed.** It was pre-registered at `c365f9f`.
+    - Read-only, the NPU reads 47.62 GB/s on eight channels (MEASURED), below 59.7.
+    - The floor moves to 70.1 ms/token (DERIVED). That is still slower than both yardsticks,
+      and slower than DirectML fp32 on the accuracy front.
+    - Even eight streams at a word per cycle, 57.5 GB/s (DERIVED), would give 58.1 ms, above
+      55.9.
+    - Decode kernels stay out. Whether the chips' reads add is the next question.
+    - ([BENCHMARKS](BENCHMARKS.md#the-npu-reads-ddr-at-476-gbs-when-nothing-is-written-back-silicons-2628-gbs-cap-does-not-bind-reads-and-7b-decode-stays-killed-2026-09-23-desktop-2))
 - **A pre-registered size floor caught a builder defect (2026-09-23).** `tools/llm_gemv_bench.py build`
   first sized the fp16-scale variant's copies from the fp32 variant, so six DirectML rows streamed
   0.90–0.98 GiB against a pre-registered ≥ 1 GiB, and the verdict came out INCOMPLETE (`4620b53`).

@@ -1,0 +1,372 @@
+UTC: 2026-09-23T23:14:20.174104+00:00
+MACHINE: DESKTOP-CBL5NUA AMD64 Family 25 Model 117 Stepping 2, AuthenticAMD
+COMMAND: bash scripts/research-iron.sh tools/npu_read_bw_probe.py suite
+COMMIT: c365f9f1ac3228f105cf932abe54d53c4405be63
+PRE_DEVICE_WITNESS
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+HOST_LOAD busy_cores=1.23 logical_cores=16 free_ram_gb=18.4 sample_sec=1 peer_busy_cores []
+GPU_ENGINES_OVER_1PCT 1
+GPU_ENGINE pid_31316_luid_0x00000000_0x0000badf_phys_0_eng_0_engtype_3d 1.3
+PRE_CHILD ['clock']
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+CLOCK_POINT {"mode": "scalar", "iterations": 1048576, "cycles": 9437188, "hardware_ms": [5.5578, 5.5812, 5.533, 5.5967, 5.5983, 5.6252, 5.6123, 5.5471, 5.6654], "tile": [1, 2]}
+CLOCK_POINT {"mode": "scalar", "iterations": 4194304, "cycles": 37748740, "hardware_ms": [21.3307, 21.8337, 21.6497, 21.8505, 21.3563, 21.3127, 21.4248, 21.3403, 21.7907], "tile": [1, 2]}
+CLOCK_POINT {"mode": "scalar", "iterations": 16777216, "cycles": 150994948, "hardware_ms": [84.2993, 84.2769, 84.2209, 84.2628, 84.2247, 84.3271, 84.2247, 84.5588, 84.5674], "tile": [1, 2]}
+CLOCK scalar GHz 1.7999056729295566 R2 0.9999985436152328
+CLOCK_POINT {"mode": "vector", "iterations": 4194304, "cycles": 8388629, "hardware_ms": [5.1889, 5.0662, 5.1139, 5.1469, 5.0239, 5.0962, 5.2483, 5.3634, 5.1047], "tile": [1, 2]}
+CLOCK_POINT {"mode": "vector", "iterations": 16777216, "cycles": 33554453, "hardware_ms": [19.5707, 19.116, 19.3467, 19.3644, 19.5385, 19.3512, 19.3319, 19.1727, 19.3357], "tile": [1, 2]}
+CLOCK_POINT {"mode": "vector", "iterations": 67108864, "cycles": 134217749, "hardware_ms": [75.4277, 75.2212, 75.7697, 75.1515, 75.3275, 75.3084, 75.3036, 75.2353, 75.232], "tile": [1, 2]}
+CLOCK vector GHz 1.794479859302635 R2 0.9999917915835741
+CLOCK_JSON {"ghz": 1.7971927661160958, "method": "trace event cycle/time slopes, scalar and vector"}
+ 
+POST_CHILD ['clock']
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+PRE_CHILD ['run', '--layout', '1x1', '--mib', '32']
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+ARTIFACT c1x1_m32 insts_sha256 1a1b11c909b8a4f6356a23c1434d558ee8b29b98ddf3600a451c45ade81867bc
+RESULT_JSON {"layout": [1, 1], "columns": 1, "per_column": 1, "channels": 1, "target_mib": 32, "words_per_channel": 8388608, "bytes": 33554432, "reps": 15, "warmup": 3, "times_ms": [4.883, 4.8916, 4.9062, 4.9007, 4.9138, 4.9434, 4.9241, 4.9174, 4.9173, 4.9316, 4.9347, 4.9253, 4.8997, 4.8918, 4.9017], "median_ms": 4.9138, "min_ms": 4.883, "max_ms": 4.9434, "gbps": 6.828611665106434, "gbps_best": 6.871683800942043}
+ 
+POST_CHILD ['run', '--layout', '1x1', '--mib', '32']
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+PRE_CHILD ['run', '--layout', '1x1', '--mib', '256']
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+ARTIFACT c1x1_m256 insts_sha256 cb30c1ee6d997eb36ea77c2a177b7f4a1dcc8e8e5eafee97e789d01bb32cc4a5
+RESULT_JSON {"layout": [1, 1], "columns": 1, "per_column": 1, "channels": 1, "target_mib": 256, "words_per_channel": 67108864, "bytes": 268435456, "reps": 15, "warmup": 3, "times_ms": [38.1074, 37.6966, 38.0368, 37.9494, 38.0142, 38.0407, 38.0293, 38.2154, 37.9708, 37.9691, 38.0377, 38.0679, 37.6541, 37.7168, 37.7342], "median_ms": 38.0142, "min_ms": 37.6541, "max_ms": 38.2154, "gbps": 7.061452194180069, "gbps_best": 7.128983457312749}
+ 
+POST_CHILD ['run', '--layout', '1x1', '--mib', '256']
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+PRE_CHILD ['run', '--layout', '1x2', '--mib', '256']
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+ARTIFACT c1x2_m256 insts_sha256 fb13eb1076034f26cc5374ec888656377217cdbdfa7080c9971add2a7d34cf65
+RESULT_JSON {"layout": [1, 2], "columns": 1, "per_column": 2, "channels": 2, "target_mib": 256, "words_per_channel": 33554432, "bytes": 268435456, "reps": 15, "warmup": 3, "times_ms": [19.0679, 19.0843, 19.4023, 19.3788, 19.267, 19.086, 19.4053, 19.406, 19.4479, 19.5358, 19.1606, 19.3882, 19.3316, 19.4045, 19.4477], "median_ms": 19.3882, "min_ms": 19.0679, "max_ms": 19.5358, "gbps": 13.84530054362963, "gbps_best": 14.07787202576057}
+ 
+POST_CHILD ['run', '--layout', '1x2', '--mib', '256']
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+PRE_CHILD ['run', '--layout', '2x1', '--mib', '256']
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+ARTIFACT c2x1_m256 insts_sha256 bceea31826f66baf5c90b8e729345383f308b9ded8b2cc55c671cbead2f13d81
+RESULT_JSON {"layout": [2, 1], "columns": 2, "per_column": 1, "channels": 2, "target_mib": 256, "words_per_channel": 33554432, "bytes": 268435456, "reps": 15, "warmup": 3, "times_ms": [19.5581, 19.2121, 19.4236, 19.3644, 19.2982, 19.4125, 19.5297, 19.2194, 19.5069, 19.3907, 19.5511, 19.0855, 19.5685, 19.3655, 19.4115], "median_ms": 19.4115, "min_ms": 19.0855, "max_ms": 19.5685, "gbps": 13.82868176081189, "gbps_best": 14.064889890230802}
+ 
+POST_CHILD ['run', '--layout', '2x1', '--mib', '256']
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+PRE_CHILD ['run', '--layout', '2x2', '--mib', '256']
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+ARTIFACT c2x2_m256 insts_sha256 820c7cb27d6bea6429021673238fe3331e6266f521b181e8fee2fd6ee47b219b
+RESULT_JSON {"layout": [2, 2], "columns": 2, "per_column": 2, "channels": 4, "target_mib": 256, "words_per_channel": 16777216, "bytes": 268435456, "reps": 15, "warmup": 3, "times_ms": [9.7853, 9.8089, 10.1511, 9.9061, 9.9738, 10.0128, 10.0802, 10.2106, 10.1511, 10.3011, 10.1627, 10.2269, 9.8592, 10.1346, 9.9433], "median_ms": 10.0802, "min_ms": 9.7853, "max_ms": 10.3011, "gbps": 26.629973214817166, "gbps_best": 27.43252184399048}
+ 
+POST_CHILD ['run', '--layout', '2x2', '--mib', '256']
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+PRE_CHILD ['run', '--layout', '4x1', '--mib', '256']
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+ARTIFACT c4x1_m256 insts_sha256 0c87b80bbf176966c31d62debd605317bc35b32180181e35f98f2e61e91c2155
+RESULT_JSON {"layout": [4, 1], "columns": 4, "per_column": 1, "channels": 4, "target_mib": 256, "words_per_channel": 16777216, "bytes": 268435456, "reps": 15, "warmup": 3, "times_ms": [9.8272, 9.8324, 9.8821, 9.8833, 10.1771, 10.1868, 10.1704, 10.152, 10.3854, 10.1784, 10.2973, 10.2949, 9.9083, 10.2188, 10.1802], "median_ms": 10.1771, "min_ms": 9.8272, "max_ms": 10.3854, "gbps": 26.376419215690127, "gbps_best": 27.315558450016283}
+ 
+POST_CHILD ['run', '--layout', '4x1', '--mib', '256']
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+PRE_CHILD ['run', '--layout', '3x2', '--mib', '256']
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+ARTIFACT c3x2_m256 insts_sha256 69c5ab2fa3d8a48626855d7b368b79d57362e5a302fbda3ea9e8c08930299fb5
+RESULT_JSON {"layout": [3, 2], "columns": 3, "per_column": 2, "channels": 6, "target_mib": 256, "words_per_channel": 11185152, "bytes": 268443648, "reps": 15, "warmup": 3, "times_ms": [7.0522, 6.9997, 7.388, 7.531, 7.2719, 7.4378, 7.1929, 7.4254, 7.5802, 7.1642, 7.0941, 7.5493, 7.4625, 7.1296, 7.3345], "median_ms": 7.3345, "min_ms": 6.9997, "max_ms": 7.5802, "gbps": 36.60012925216442, "gbps_best": 38.35073617440747}
+ 
+POST_CHILD ['run', '--layout', '3x2', '--mib', '256']
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+PRE_CHILD ['run', '--layout', '4x2', '--mib', '256']
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+ARTIFACT c4x2_m256 insts_sha256 42c8bc2d6059607e6ca3be6cc6f556e1470e1bcdb17e1d5d5b87b19982ff83fa
+RESULT_JSON {"layout": [4, 2], "columns": 4, "per_column": 2, "channels": 8, "target_mib": 256, "words_per_channel": 8388608, "bytes": 268435456, "reps": 15, "warmup": 3, "times_ms": [5.9804, 6.0393, 5.9904, 6.129, 5.5981, 5.6804, 5.6424, 5.7211, 5.8516, 6.0216, 6.219, 6.1955, 5.9992, 5.7261, 6.0043], "median_ms": 5.9904, "min_ms": 5.5981, "max_ms": 6.219, "gbps": 44.81094017094017, "gbps_best": 47.95117200478734}
+ 
+POST_CHILD ['run', '--layout', '4x2', '--mib', '256']
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+PRE_CHILD ['run', '--layout', '1x1', '--mib', '1024']
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+ARTIFACT c1x1_m1024 insts_sha256 8c654eda8d8227d0feb1296c9e2293d529ac9fb17e104ef6af81da0e473e8e9f
+RESULT_JSON {"layout": [1, 1], "columns": 1, "per_column": 1, "channels": 1, "target_mib": 1024, "words_per_channel": 268435456, "bytes": 1073741824, "reps": 15, "warmup": 3, "times_ms": [150.7706, 150.7208, 150.9625, 150.7395, 150.5924, 150.9586, 151.0168, 150.9853, 150.9929, 151.0279, 151.2414, 151.1834, 150.9682, 150.7153, 151.0444], "median_ms": 150.9682, "min_ms": 150.5924, "max_ms": 151.2414, "gbps": 7.1123708436611155, "gbps_best": 7.130119607629602}
+ 
+POST_CHILD ['run', '--layout', '1x1', '--mib', '1024']
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+PRE_CHILD ['run', '--layout', '1x2', '--mib', '1024']
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+ARTIFACT c1x2_m1024 insts_sha256 5dda30aab9b3d532060554d679f0141cd62f33dcbb7b662d8423bd18b2cd3911
+RESULT_JSON {"layout": [1, 2], "columns": 1, "per_column": 2, "channels": 2, "target_mib": 1024, "words_per_channel": 134217728, "bytes": 1073741824, "reps": 15, "warmup": 3, "times_ms": [76.9665, 76.7299, 76.4447, 76.9477, 76.4744, 76.5628, 76.6791, 76.7123, 76.7261, 76.8492, 76.6687, 76.9826, 76.7263, 76.6949, 76.6147], "median_ms": 76.7123, "min_ms": 76.4447, "max_ms": 76.9826, "gbps": 13.996996883159547, "gbps_best": 14.045994346239832}
+ 
+POST_CHILD ['run', '--layout', '1x2', '--mib', '1024']
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+PRE_CHILD ['run', '--layout', '2x1', '--mib', '1024']
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+ARTIFACT c2x1_m1024 insts_sha256 641d5a38dff63503f1772f507d650ef4c97b586950fd38240caddee4086f8ccf
+RESULT_JSON {"layout": [2, 1], "columns": 2, "per_column": 1, "channels": 2, "target_mib": 1024, "words_per_channel": 134217728, "bytes": 1073741824, "reps": 15, "warmup": 3, "times_ms": [76.3528, 76.8263, 76.2851, 76.266, 76.9627, 76.5835, 76.9704, 76.775, 76.2942, 76.5995, 76.3518, 76.7194, 76.3073, 76.6412, 76.7973], "median_ms": 76.5995, "min_ms": 76.266, "max_ms": 76.9704, "gbps": 14.017608783347148, "gbps_best": 14.07890572470039}
+ 
+POST_CHILD ['run', '--layout', '2x1', '--mib', '1024']
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+PRE_CHILD ['run', '--layout', '2x2', '--mib', '1024']
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+ARTIFACT c2x2_m1024 insts_sha256 8ab844a0bafb9cf2f2801cec7b33a9d3acb4a6b677df2c59865efc5c3cb3d781
+RESULT_JSON {"layout": [2, 2], "columns": 2, "per_column": 2, "channels": 4, "target_mib": 1024, "words_per_channel": 67108864, "bytes": 1073741824, "reps": 15, "warmup": 3, "times_ms": [39.1382, 39.1478, 39.4501, 38.8929, 38.9623, 39.2041, 39.205, 39.2262, 39.3324, 39.2145, 39.0129, 39.2152, 39.1743, 39.2055, 38.9453], "median_ms": 39.2041, "min_ms": 38.8929, "max_ms": 39.4501, "gbps": 27.388508446820616, "gbps_best": 27.607656513142505}
+ 
+POST_CHILD ['run', '--layout', '2x2', '--mib', '1024']
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+PRE_CHILD ['run', '--layout', '4x1', '--mib', '1024']
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+ARTIFACT c4x1_m1024 insts_sha256 24225f6a9c50d6066ce3990da54797e99470a65f0a18209ffcf0400f4f7ce32a
+RESULT_JSON {"layout": [4, 1], "columns": 4, "per_column": 1, "channels": 4, "target_mib": 1024, "words_per_channel": 67108864, "bytes": 1073741824, "reps": 15, "warmup": 3, "times_ms": [39.0607, 39.0697, 38.8511, 39.0624, 39.1334, 38.9051, 38.9127, 38.9288, 38.909, 39.1193, 39.1546, 39.1651, 39.169, 38.9434, 39.134], "median_ms": 39.0624, "min_ms": 38.8511, "max_ms": 39.169, "gbps": 27.487861063324324, "gbps_best": 27.637359662918165}
+ 
+POST_CHILD ['run', '--layout', '4x1', '--mib', '1024']
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+PRE_CHILD ['run', '--layout', '3x2', '--mib', '1024']
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+ARTIFACT c3x2_m1024 insts_sha256 7b6e9eb612f01f2ebd7320137958a4c2eb0cdae0c275acc71d84853923208c02
+RESULT_JSON {"layout": [3, 2], "columns": 3, "per_column": 2, "channels": 6, "target_mib": 1024, "words_per_channel": 44739584, "bytes": 1073750016, "reps": 15, "warmup": 3, "times_ms": [27.8086, 27.9367, 27.7798, 28.181, 27.8775, 27.6807, 27.9083, 27.8747, 28.0967, 27.558, 28.1517, 27.9329, 28.2694, 28.0972, 27.7741], "median_ms": 27.9083, "min_ms": 27.558, "max_ms": 28.2694, "gbps": 38.47421792083359, "gbps_best": 38.9632780317875}
+ 
+POST_CHILD ['run', '--layout', '3x2', '--mib', '1024']
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+PRE_CHILD ['run', '--layout', '4x2', '--mib', '1024']
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+ARTIFACT c4x2_m1024 insts_sha256 c3aa45a3c6013bbcf1170e0cb9d68cb0a20ecbf063bc6eb2d52621e06314fe3a
+RESULT_JSON {"layout": [4, 2], "columns": 4, "per_column": 2, "channels": 8, "target_mib": 1024, "words_per_channel": 33554432, "bytes": 1073741824, "reps": 15, "warmup": 3, "times_ms": [22.5495, 22.8823, 22.8937, 23.6406, 23.3718, 22.2465, 22.4231, 22.6728, 22.4564, 22.5374, 22.5491, 22.3748, 22.4736, 22.6507, 22.7842], "median_ms": 22.5495, "min_ms": 22.2465, "max_ms": 23.6406, "gbps": 47.617101221756585, "gbps_best": 48.265651855348025}
+ 
+POST_CHILD ['run', '--layout', '4x2', '--mib', '1024']
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+
+GPU_ENGINES_OVER_1PCT 0
+SITTING_CLOCK_GHZ 1.7971927661160958
+
+EXIT_CODE: 0
+POST_DEVICE_WITNESS
+
+-----------------------------
+[003d:00:01.1] : NPU Phoenix
+-----------------------------
+AIE Partitions
+  No hardware contexts running on device
+
+

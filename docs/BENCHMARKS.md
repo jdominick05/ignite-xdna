@@ -2496,7 +2496,8 @@ from the configured speed, which is above AMD's rated DDR5-5200.
 
 The numpy probe still scales linearly at 16 threads. That is a per-thread limit, so it reads low;
 ReduceSum is the CPU's figure. Both other chips read at 2.2–2.6× the NPU's best DRAM rate here
-(26.8 GB/s fill, 28.1 GB/s round trip).
+(26.8 GB/s fill, 28.1 GB/s round trip). Since measured: read-only, the NPU reaches 47.62 GB/s
+(next section), so the two other chips read at 1.27–1.44× that.
 
 DirectML's fp16 ReduceSum is slower than its fp32 one (48.88 against 68.81 GB/s) for half the
 bytes. This is unexplained. Candidate causes, none tested:
@@ -2532,6 +2533,8 @@ six shape and block pairs.
   - NPU-only 7B int4 decode cannot beat the better of the CPU and DirectML at the NPU DRAM rates
     measured so far. It reopens only if a clean NPU read test measures ≥ 59.7 GB/s, 2.1× the
     best seen.
+  - That test has since run (next section): 47.62 GB/s read-only on eight channels. The floor
+    moves to 70.1 ms, and the verdict stands.
 - **The accuracy route is closed too, at these rates.** Every point on the (time, error) Pareto
   front is DirectML's. DirectML fp32 delivers near-exact arithmetic (1.4e-7) at 64.6 ms, faster
   than the NPU floor. An NPU arm at ≥ 118.8 ms with bf16 or int8 arithmetic is dominated on both
@@ -2563,7 +2566,8 @@ six shape and block pairs.
   - Sitting 1's void rows gave 53.4 ms/token and the re-run 55.9. Without DirectML fp16 at all,
     T_best is 61.3 ms (CPU), so the verdict does not rest on the re-run.
 - **What this does not establish:**
-  - The NPU's own read ceiling, which is the one thing that reopens decode.
+  - The NPU's own read ceiling, which is the one thing that reopens decode. (Measured since,
+    next section: 47.62 GB/s, below the 59.7 line.)
   - Whether the three chips' DRAM bandwidths add when run together. The iGPU alone reaches 72%
     of theoretical.
   - Prefill, which is compute-bound.
@@ -2572,6 +2576,91 @@ six shape and block pairs.
 
   Evidence: `results/llm/llm_{read,gemv}_*_desktop2_20260923.log`, the `load_llm_*` witnesses, and the
   controls `results/llm/llm_controls_*_desktop2_20260923.log`.
+
+### The NPU reads DDR at 47.6 GB/s when nothing is written back: SILICON's 26–28 GB/s cap does not bind reads, and 7B decode stays killed (2026-09-23, Desktop 2)
+
+The question, from the user's re-scope of the LLM study: how fast can the NPU read DDR alone?
+This is decode's reopen condition (≥ 59.7 GB/s, previous section). It also fills the gap in
+[SILICON 1.6](SILICON.md#16-off-chip-bandwidth): none of its three figures was a clean
+single-direction read, and it derived a shared 26–28 GB/s cap from them.
+
+**Setup.**
+- Pre-registered at `c365f9f` before the sitting
+  ([prereg](../results/llm/npu_read_bw_prereg_desktop2_20260923.log)). The prereg pins the SHA-256
+  of the 15 compiled artifacts, and the sitting loaded exactly those.
+- The probe is `tools/npu_read_bw_probe.py`; the runner is `scripts/llm-study.sh npuread`.
+- Each enabled shim MM2S channel streams its own contiguous region of one host-only buffer into
+  a mem-tile S2MM channel. That channel's single BD loops on itself with no locks, and nothing
+  is written back.
+- The instruction streams were decoded before the sitting: MM2S BDs, queue pushes and waits
+  only, with no shim S2MM op. The 1 GiB single-channel BD is one unsplit 2^28-word transfer.
+- Each row reads 1 GiB per dispatch in a fresh process: 3 warmup and 15 timed dispatches, with
+  the rate taken as bytes over the median submit-to-wait time. The 256 MiB rows give the
+  fixed cost per dispatch.
+- The witnesses: host load 1.23 busy cores, and the NPU idle at all 34 xrt-smi checks.
+  BFP16 and the gate held off. VS Code's 3D engine on the 780M read 1.3% before the clock
+  child and nothing at the end.
+- The same-sitting trace clock was 1.7972 GHz.
+
+**Rows (MEASURED; [suite](../results/llm/npu_read_bw_suite_desktop2_20260923.log),
+[verdict](../results/llm/npu_read_bw_verdict_desktop2_20260923.log)).**
+
+| Columns × channels | Channels | GB/s, 1 GiB | GB/s per channel | Bytes/cycle per channel | Slope GB/s (256 MiB → 1 GiB) | Fixed ms |
+|---|---:|---:|---:|---:|---:|---:|
+| 1 × 1 | 1 | 7.11 | 7.11 | 3.957 | 7.13 | 0.36 |
+| 1 × 2 | 2 | 14.00 | 7.00 | 3.894 | 14.05 | 0.28 |
+| 2 × 1 | 2 | 14.02 | 7.01 | 3.900 | 14.08 | 0.35 |
+| 2 × 2 | 4 | 27.39 | 6.85 | 3.810 | 27.65 | 0.37 |
+| 4 × 1 | 4 | 27.49 | 6.87 | 3.824 | 27.88 | 0.55 |
+| 3 × 2 | 6 | 38.47 | 6.41 | 3.568 | 39.14 | 0.48 |
+| 4 × 2 | 8 | **47.62** | 5.95 | 3.312 | 48.63 | 0.47 |
+
+A 32 MiB single-channel smoke row ran first and reads 6.83 GB/s. It includes the fixed cost
+that the slope excludes, and it does not decide.
+
+**The pre-registered rules print:**
+- **R1, NOT REOPENED.** 47.62 < 59.7 GB/s, so NPU-only 7B decode stays killed.
+  - DERIVED: the NPU's floor per token moves from 118.8 ms to 70.1 ms (the fewest bytes,
+    3.339 GB, at 47.62 GB/s), or 68.7 ms at the slope rate.
+  - That is still slower than DirectML fp16 (55.9 ms) and the CPU (61.3 ms).
+  - The accuracy route stays closed: at 70.1 ms an NPU arm is also slower than DirectML fp32,
+    which reaches 1.4e-7 in 64.6 ms.
+  - Even all eight streams at a word per cycle, 57.5 GB/s (DERIVED), would give 58.1 ms,
+    still above 55.9.
+- **R2, REFUTED for reads alone.** 47.62 GB/s is far above the 26–28.8 GB/s cap, whose
+  pre-registered threshold was 30.24.
+  - memcpy's 28.1 GB/s per direction is what four channels read here (27.4–27.5), not a cap.
+  - GroupNorm's 25.9 GB/s of reads on eight channels sits below what eight channels read
+    alone. Its cause is unattributed.
+- **R3, not a per-column limit.** At equal channel counts, spreading across columns is
+  1.001× (2 × 1 vs 1 × 2) and 1.004× (4 × 1 vs 2 × 2).
+- **R4.** One channel reads 3.957 bytes per cycle, 98.9% of a word per cycle.
+
+**Scaling is sub-linear past four channels.** Per channel, the rate falls from 7.11 GB/s on one
+channel to 5.95 on eight, so eight channels give 84% of eight times one. The shared resource
+behind the shortfall is unattributed. Candidates: DRAM efficiency with eight streams, the NPU's
+port into the data fabric, address translation, and the 256-byte default shim burst. None was
+tested. For scale, on the same DDR5 the NPU reads at 79% of the CPU's ReduceSum (60.59 GB/s),
+69% of DirectML's (68.81), and 50% of the 96 GB/s theoretical (DERIVED).
+
+**Predictions scored:**
+- Q1 holds: one channel reads 7.11 GB/s, within 6.7–7.2.
+- Q2 holds: two channels read 14.00–14.02, within 13–14.4.
+- Q4 holds: decode does not reopen.
+- Q3 misses. 2 × 2 (27.39) and 4 × 1 (27.49) land as predicted. But 4 × 2 reads 1.73× 4 × 1,
+  not under 1.1×. The pre-registered alternative held instead: the evidence for the cap was
+  thin (GroupNorm, a compute kernel, was its only 8-channel figure), and reads went well past
+  it.
+
+**What this does not establish:**
+- Writes: the write rate alone, and reads with writes at eight channels.
+- Whether the NPU's reads add to the CPU's and DirectML's when all run together. That is the
+  study's next stage, and this probe is its NPU read kernel.
+- The cause of the per-channel shortfall at eight channels.
+- Reads into core tiles, packet-switched streams, device buffers other than host-only, and power
+  modes other than the default.
+- A real decode kernel at this rate. Decode kernels come back only at ≥ 59.7 GB/s, and this is
+  47.62.
 
 ### MobileViT-XXS does not survive per-tensor INT8, and AdaRound cannot save it
 
@@ -10662,7 +10751,8 @@ respectively. Each of four sizes has three warmups and 15 timed calls; fits use 
 submit/wait time, excluding host fill, synchronization and readback. The two fits have
 R-squared 0.999814 and 0.999861. Each stream uses two 262,144-byte MemTile buffers. These
 end-to-end rates remain below the on-chip word/cycle rate. They do not settle whether
-the earlier shared cap in SILICON 1.6 is DRAM, NoC or channel count, nor prove a faster
+the earlier shared cap in SILICON 1.6 is DRAM, NoC or channel count (the 2026-09-23 read-only
+test in SILICON 1.6 refutes that cap for reads alone), nor prove a faster
 engine without a graph-level experiment. Trace samples use fresh contexts because
 reusing the raw trace DMA configuration did not reliably capture the next sample.
 

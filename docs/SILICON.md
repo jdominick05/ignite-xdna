@@ -119,21 +119,24 @@ New numbers use 1.80 GHz and say which power mode they were taken in.
 
 | Fact | Value | Tag and evidence |
 |---|---|---|
-| Stream width | one 32-bit word per cycle; sustained on-chip rate 3.999756 B/cycle | MEASURED: [silicon_stream_width_desktop2_20260919.log](../results/aie/silicon_stream_width_desktop2_20260919.log), Desktop 2: MemTile-to-core trace slope 1.000061 cycles/word, fixed intercept 8 cycles; no DDR payload in the interval. Supports the 4 B/cycle stream model, opens independent-stream scaling and closes assuming a wider per-stream engine budget. The shared DDR/NoC cap in 1.6 remains unattributed. |
+| Stream width | one 32-bit word per cycle; sustained on-chip rate 3.999756 B/cycle | MEASURED: [silicon_stream_width_desktop2_20260919.log](../results/aie/silicon_stream_width_desktop2_20260919.log), Desktop 2: MemTile-to-core trace slope 1.000061 cycles/word, fixed intercept 8 cycles; no DDR payload in the interval. Supports the 4 B/cycle stream model, opens independent-stream scaling and closes assuming a wider per-stream engine budget. The shared DDR/NoC cap in 1.6 remains unattributed; the 2026-09-23 read-only test in 1.6 refutes it for reads alone (47.62 GB/s on eight channels). |
 | Switch features used or provable here | circuit-switched routes, packet-switched routes (packet id ≤ 31), broadcast from one master to several slaves, trace ports on core, mem and shim tiles | SPEC: `getMaxPacketId() = 31`; `WireBundle::Trace` slave ports exist on all three tile types (`AIETargetModel.cpp`, port-index tables). Broadcast is what lets `whole_array.py` feed one A-tile to a whole row of cores and one B-tile to a whole column. |
 | Switch ports per tile (masters out / slaves in) | core tile: DMA 2/2, core 1/1, FIFO 1/1, north 6/4, south 4/6, east and west 4/4 (0 at the array edge); mem tile: DMA 6/6, north 6/4, south 4/6; shim: north 6/4, south (the NoC side) 6/8, east and west 4/4, FIFO 1/1 | SPEC: `AIE2TargetModel::getNumDestSwitchboxConnections` and `getNumSourceSwitchboxConnections`, read with their `case` labels. Consistent with the model's own validation rule that a tile's north masters equal the tile above's south slaves. |
 
 ### 1.6 Off-chip bandwidth
 
-Three independent measurements, none of them a clean single-direction read test:
+Three independent measurements that each move data both ways, and (last row, 2026-09-23) a
+clean read-only test:
 
 | Design | Channels per direction | What moved | NPU time | Rate | Tag and evidence |
 |---|---|---|---|---|---|
 | `00_memcpy` (passthrough, 64 MiB round trip) | 4 ("2 columns × 2 channels") | 64 MiB in and 64 MiB out | 2388.5 µs avg | 56.19 GB/s "effective" = read+write bytes ÷ time, i.e. **28.1 GB/s per direction** | MEASURED `results/aie/mlir_aie_examples_npu.log`; the per-direction split is DERIVED (2 × 67,108,864 B ÷ 2388.5 µs = 56.19 GB/s reproduces the log's own figure). |
 | `groupnorm_bf16`, L=301056 | 8 | 19.27 MB read twice, written once | 1487.3–1546.6 µs | 37.4–38.9 GB/s combined; the read stream alone is **25.9 GB/s** (2 × 19.27 MB ÷ 1487.3 µs) with 13.0 GB/s of writes running concurrently | MEASURED `results/aie/groupnorm_bf16_kernel_npu.log`; split DERIVED. |
 | `dispatch_floor` passthrough (shim→memtile→shim, one fifo in, one forwarded out) | 1 | 8 KB–32 MB, each payload in and back out | slope 0.0726 ns per round-trip byte | 13.78 GB/s of read+write bytes, i.e. **6.9 GB/s per direction on one channel** | MEASURED `results/aie/dispatch_floor_npu.log`; the script counts `n * 4 * 2` bytes per call (`kernels/dispatch_floor/measure_floor.py`), so the split is DERIVED from its own accounting. |
+| `tools/npu_read_bw_probe.py` (shim MM2S into lockless mem-tile sinks; nothing written back) | 1 to 8 (1 column × 1 channel up to 4 columns × 2) | 1 GiB read per dispatch | 150.97 ms on 1 channel, 22.55 ms on 8 (medians of 15) | **7.11 GB/s on 1 channel, 27.4–27.5 on 4, 47.62 on 8**, reads only | MEASURED [suite](../results/llm/npu_read_bw_suite_desktop2_20260923.log), [verdict](../results/llm/npu_read_bw_verdict_desktop2_20260923.log), Desktop 2, pre-registered at `c365f9f` ([prereg](../results/llm/npu_read_bw_prereg_desktop2_20260923.log)). |
 
-What those three say together (DERIVED). Two independent designs agree on the per-channel
+What those three say together (DERIVED; the read-only test at the end of this section refutes
+the cap for reads alone). Two independent designs agree on the per-channel
 rate: memcpy at 7.0 GB/s per shim channel per direction across four channels, the
 passthrough at 6.9 GB/s on one. Eight channels did not get eight times that — the
 GroupNorm design's reads total 25.9 GB/s, 3.2 GB/s per channel — so above roughly four
@@ -157,6 +160,41 @@ and 13.548102 GB/s on two, with all readbacks exact and a trace-calibrated 1.796
 clock ([log](../results/aie/silicon_stream_width_desktop2_20260919.log)). Those are
 submit/wait slopes across payload sizes, below the on-chip rate; they do not identify
 the resource responsible for the earlier shared cap.
+
+**The read-only test (2026-09-23, Desktop 2, stage 1 of the LLM study).** Each enabled shim
+MM2S channel streams its own contiguous region of one host-only buffer into a mem-tile S2MM
+channel. That channel's single BD loops on itself with no locks, so nothing is written back.
+The instruction streams were decoded before the sitting: MM2S BDs, queue pushes and waits
+only, and the 1 GiB single-channel BD is one unsplit 2^28-word transfer. Each row reads
+1 GiB per dispatch; the rate is bytes over the median of 15 submit-to-wait times. The
+same-sitting trace clock was 1.7972 GHz. The NPU was idle at all 34 witnesses.
+
+- Reads alone scale past the cap (MEASURED): 7.11 GB/s on one channel, 14.00–14.02 on two,
+  27.39–27.49 on four, 38.47 on six and **47.62 on eight**. One channel is 3.957 bytes per
+  cycle, 98.9% of a word per cycle.
+- So the 26–28 GB/s shared cap above does not bind reads alone. The pre-registered rule
+  (binds if ≤ 30.24 GB/s) prints REFUTED.
+  - memcpy's 28.1 GB/s per direction is what four channels read here (27.4–27.5), not a
+    cap.
+  - GroupNorm's 25.9 GB/s of reads on eight channels is below what eight channels read
+    alone. What held it there is unattributed. Its compute, its 13.0 GB/s of concurrent
+    writes and its transfer sizes are candidates; none was tested.
+- The limit is not per column. Two channels in one column read the same as one channel in
+  each of two columns (ratio 1.001). Four columns × 1 against two × 2 gives 1.004.
+- Per channel, the rate falls as channels are added: 7.11, 7.00–7.01, 6.85–6.87, 6.41 and
+  5.95 GB/s at 1, 2, 4, 6 and 8 channels. Eight channels give 84% of eight times one. The shared resource
+  behind the shortfall is unattributed; candidates are DRAM efficiency with eight streams,
+  the NPU's port into the data fabric, address translation, and the 256-byte default shim
+  burst (mlir-aie's npu1 default). For scale, on the same DDR5 the CPU reads 60.59 GB/s and
+  DirectML 68.81 (BENCHMARKS, LLM decode yardsticks).
+- The drivable array has eight shim MM2S streams. At a word per cycle each (1.5), that is
+  57.5 GB/s at the sitting's 1.797 GHz (DERIVED), an upper bound for reads through the shim
+  DMAs.
+- `device.yaml`'s 16 (25.6 GB/s at 1.6 GHz, 28.8 at 1.8) is not a read ceiling either,
+  whatever its unit.
+- Scope: host-only buffers, the mem tile as the sink, the default power mode,
+  circuit-switched streams, and one contiguous region per channel. A concurrent write
+  stream was not run in this sitting, so the cost of writes to reads is not measured.
 
 A fourth design isolates the mem tile hop rather than a rate. `tools/memtile_hop_probe.py` sends the graph engine's
 6,400 B input and 3,200 B output objects through one core with no compute, on four routes that differ only in
@@ -553,7 +591,15 @@ ceiling for a 64×64 tile at 1.6 GHz is 6.55 TFLOPS, at 1.0 GHz 4.10, at the mea
 **Formally modelled 2026-09-10 ([`results/aie/notes_accumulator_cascade_gemm_model.md`](../results/aie/notes_accumulator_cascade_gemm_model.md)):**
 A 4-core column-wise K-reduction over the 512-bit vertical cascade bus (`Tile(col, r) → Tile(col, r+1)` at 115.2 GB/s per column @ 1.80 GHz) eliminates intermediate C-tile L1 memory allocation entirely on 3 out of 4 cores (freeing 16–32 KB L1 per core). Intermediate C-tile RMW traffic in L1 over the 256-bit bus (1.02 MB for 64×64×64 at K=2048, 1.94× total input activation volume) drops to zero on Cores 0..2 and to a single final write on Core 3. This resolves the paired-load bank collisions between A and B in `matmul_i8_i32` (Bank(A) and Bank(B) map disjointly across the 4 banks), restoring inner loop MAC issue density from 88.9% (9 cycles) to 100% (8 cycles, 1.000 vmac/cycle). Eliminating the 87 non-loop bundles per group spent on accumulator spilling and C-reloads lifts kernel issue rate from 107.3 MACs/cycle (41.9%) to 232.7 MACs/cycle (90.9%), projecting a 2.16× wall-clock throughput uplift (4,368 → ~9,450 GOPS at 4096×2048²), and brings previously impossible wide tiles (bf16 128×64×64, int8 128×64×128) comfortably within the 64 KB L1 compilation limit. *(Refined 2026-09-23: one step of this model does not hold. The int8 hot loop's paired load is two **A** loads (both step `#0x20`), so bank-disjoint A and B do not remove it: the loop measured 9.8–10.2 cycles per iteration with A, B and C in three separate banks (2.3.1, corrections; `results/aie/l1_tile_mm_k64_desktop2_20260923T0533Z.log`). The 88.9% → 100% step needs a different schedule, such as H11's 2×2 reblock, not a different placement. And the whole-call projection is bounded by H11: a 12.5% better kernel did not move the int8 array's wall clock.)*
 
-### 3.2 GroupNorm and InstanceNorm live at the DRAM cap
+### 3.2 GroupNorm and InstanceNorm: bandwidth-heavy, but not at a read cap
+
+**Correction (2026-09-23).** The text below reads GroupNorm as sitting at a shared off-chip cap.
+The read-only test in 1.6 measured 47.62 GB/s on eight channels, so GroupNorm's 25.9 GB/s of
+reads is not at the read ceiling. What limits it is unattributed: its compute, its concurrent
+writes and its transfer sizes are candidates, none tested. The "at most 1.5×" bound below
+assumed that cap and no longer follows. The fusion argument does not depend on the cap: a
+tensor that never leaves the array costs no DDR traffic at any rate. The original text is
+kept as written.
 
 `groupnorm_bf16` reads its 19.27 MB tensor twice and writes it once in 1.487–1.547 ms
 (MEASURED, `results/aie/groupnorm_bf16_kernel_npu.log`), a read rate of 25.9 GB/s that sits
@@ -726,7 +772,10 @@ per-direction off-chip cap and whether it moves with channel count, mem-tile fan
 bandwidth, and the neighbour-memory read rate. Decides: the 8 B/cycle assumption behind
 3.1, the DRAM cap behind 3.2, and whether column count (A1) would raise off-chip bandwidth
 at all. Reuses: the same script; `results/aie/mlir_aie_examples_npu.log`'s memcpy as the
-cross-check.
+cross-check. Status 2026-09-23: the read direction is measured by the read-only test in 1.6.
+Reads scale to 47.62 GB/s on eight channels, not per column, so the cap behind 3.2 is refuted
+for reads. The write direction, and both directions together at eight channels, are not
+measured.
 
 **S2. Hardware trace on npu1, end to end. — Instrument built and calibrated 2026-09-09; the
 applied measurement is what remains.** `kernels/pmu_probe/` routes the stall taxonomy,
@@ -1124,7 +1173,8 @@ and their neighbours fall to the CPU and the graph is cut into subgraphs around 
 (`results/multi_partition_resnet50.log`) by 3² for width and 2² for 448² gives ~150 GMACs;
 at the DPU's measured 1.65 TOPS per column that is ~180 ms on one column and ~45 ms on
 four, plus the norms at the DRAM cap (~25 ms for all 49 if each is one read and one write,
-zero if fused). Against 470.79 ms that is a 3–10× win on paper for the most accurate model
+zero if fused; the 2026-09-23 read-only test in 1.6 refutes that cap for reads, so read at
+up to 47.62 GB/s this is an upper estimate). Against 470.79 ms that is a 3–10× win on paper for the most accurate model
 this repo has — reachable only through K1 (a DPU-class open conv) or A2 (the DPU plus a
 column of norms), and the honest statement is that K1 is the long pole of this whole
 document. Replace the MAC estimate with `onnx-tool`'s count before quoting it anywhere.
@@ -1153,8 +1203,10 @@ decomposition per shape, not a generic one.
 - More than 64 KB per core, 512 KB per mem tile, 16 BDs and 16 locks per core or shim tile,
   a shim BD stride over 4 MiB, a core-tile BD over 16,383 words, an iteration wrap over
   64 — field widths (1.2–1.4, 2.6).
-- An off-chip rate above the shared cap S1 will pin (currently inferred at 26–28 GB/s per
-  direction), whatever the channel count.
+- A DDR read rate above eight shim MM2S streams at a word per cycle: 57.5 GB/s at 1.797 GHz
+  (DERIVED; 47.62 GB/s MEASURED read-only on all eight, 1.6). This replaces "an off-chip rate
+  above the shared cap (inferred at 26–28 GB/s per direction), whatever the channel count",
+  which the 2026-09-23 read-only test refutes for reads.
 - Hardware `sqrtf` in Peano's AIE libc (software reciprocal square root is fine, 1.2).
 
 **Blocked by runtime, firmware or packaging — i.e. work, not walls:**

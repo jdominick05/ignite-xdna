@@ -182,7 +182,7 @@ At the measured core clock of 1.80 GHz [MEASURED: `results/aie/clock_probe_npu.l
 Aggregate Cross-Column Bandwidth = 20 channels × 7.20 GB/s = 144.0 GB/s per direction
 ```
 
-This 144.0 GB/s crossbar capacity vastly exceeds the entire off-chip host DDR bandwidth (measured ceiling of 26.0–28.1 GB/s per direction, [docs/SILICON.md](../../docs/SILICON.md) Section 1.6).
+This 144.0 GB/s crossbar capacity vastly exceeds the entire off-chip host DDR bandwidth (measured ceiling of 26.0–28.1 GB/s per direction, [docs/SILICON.md](../../docs/SILICON.md) Section 1.6; the 2026-09-23 read-only test there measures 47.62 GB/s of reads on eight channels, still far below 144 GB/s).
 
 ### 4.3 Dataflow Topology for Column 0 Execution via Column 1 Shim DMA
 

@@ -283,7 +283,7 @@ The table below evaluates the compilability frontier across candidate tile confi
 ### 4.1 Measured Hardware Bandwidth Ceilings
 
 Silicon characterization across Phoenix AIE2 establishes the following data transmission boundaries:
-- **Shared DDR Off-Chip Bandwidth**: **26.0 to 28.1 GB/s** total read throughput from system LPDDR5x/DDR5 into the NPU array [MEASURED: docs/SILICON.md 1.6 and 3.2 via memcpy and groupnorm_bf16].
+- **Shared DDR Off-Chip Bandwidth**: **26.0 to 28.1 GB/s** total read throughput from system LPDDR5x/DDR5 into the NPU array [MEASURED: docs/SILICON.md 1.6 and 3.2 via memcpy and groupnorm_bf16]. Refuted for reads on 2026-09-23: a read-only test measures 47.62 GB/s on eight channels (docs/SILICON.md 1.6).
 - **Shim Tile Stream Cap**: **~7.0 GB/s per channel** (4 bytes/cycle at 1.75-1.80 GHz) [MEASURED: docs/SILICON.md 1.5].
 - **Array Aggregate Stream Cap**: 4 active column shim channels aggregate up to **28.0 GB/s** streaming from DDR to Memory Tiles.
 - **Memory Tile to Core L1 Cap**: Up to 8 bytes/cycle per core tile across dual S2MM channels.

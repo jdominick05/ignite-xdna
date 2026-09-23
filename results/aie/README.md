@@ -1153,7 +1153,8 @@ MACs/cycle), delivering a 2.16× wall-clock throughput speedup (4,368 → ~9,450
 
 [`notes_master_xdna1_roofline_synthesis.md`](notes_master_xdna1_roofline_synthesis.md) — master
 closed-form roofline model and empirical pipeline reconciliation on AMD Phoenix AIE2 (XDNA1). Reconciles
-physical micro-architectural hardware ceilings (14.75 TOPS INT8 @ 1.80 GHz, 26–28 GB/s DRAM bandwidth, 7.0 GB/s
+physical micro-architectural hardware ceilings (14.75 TOPS INT8 @ 1.80 GHz, 26–28 GB/s DRAM bandwidth (refuted for
+reads on 2026-09-23: 47.62 GB/s read-only on eight channels, docs/SILICON.md 1.6), 7.0 GB/s
 shim stream rate, and 1-cycle paired same-bank load hazard) against measured end-to-end inference latencies
 across six vision architectures: ResNet50 (5.27 ms), YOLOv8n-cut (8.94 ms), YOLOv8s-cut (15.63 ms), YOLOv8m-cut
 (26.95 ms), FastDepth (2.87 ms), and SESR-M7 (1.48 ms). Formulates a unified analytical latency equation

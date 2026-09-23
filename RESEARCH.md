@@ -690,8 +690,9 @@ been closed:
       - Bandwidth alone caps it. A 7B model at 4 bits reads 3.4–4.0 GB per token. At the DRAM
         rates this repo has measured for the NPU (26.8 GB/s fill, 28.1 best), and at the 26–28 GB/s
         shared cap that [SILICON 1.6](docs/SILICON.md#16-off-chip-bandwidth) derives (lines 136-140),
-        NPU-only decode stays under about 8 tokens/s (DERIVED). The read-only ceiling is unmeasured,
-        so this is not yet a hard cap, and the compute side (the on-core int4 → bf16 expansion, and
+        NPU-only decode stays under about 8 tokens/s (DERIVED). The read-only ceiling was
+        unmeasured when this was written (measured since, below), so this was not a hard cap, and
+        the compute side (the on-core int4 → bf16 expansion, and
         M = 1 on a bf16 mmul) is unmeasured too.
       - The NPU earns a decode role only if it beats both the CPU and DirectML on the 780M, in
         speed or in accuracy. Measured since, pre-registered: the 780M decodes the 7B linear
@@ -699,6 +700,10 @@ been closed:
         decode is killed on speed, and DirectML fp32 (1.4e-7 at 64.6 ms) closes the accuracy
         route. It reopens only if a clean NPU read test reaches 59.7 GB/s
         ([BENCHMARKS](docs/BENCHMARKS.md#llm-decode-yardsticks-the-cpu-and-the-780m-read-int4-at-5664-gbs-so-npu-only-7b-decode-is-killed-on-speed-2026-09-23-desktop-2)).
+      - That test has run, pre-registered. With nothing written back, the NPU reads 47.62 GB/s
+        on eight channels, far past SILICON 1.6's 26–28 GB/s cap but below 59.7. Decode stays
+        killed at a 70.1 ms/token floor (DERIVED), about 14 tokens/s at most
+        ([BENCHMARKS](docs/BENCHMARKS.md#the-npu-reads-ddr-at-476-gbs-when-nothing-is-written-back-silicons-2628-gbs-cap-does-not-bind-reads-and-7b-decode-stays-killed-2026-09-23-desktop-2)).
 
   Evidence: `results/aie/int4_{isa_gate,engine_bytes_gate,demo_npu}_desktop2_20260923.log`,
   `results/int4/w4a8_accuracy_{prereg,verdict}_desktop2_20260923.log`,
