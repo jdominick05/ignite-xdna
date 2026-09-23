@@ -169,9 +169,11 @@ def run_direct(ir: GraphIR, input_q: np.ndarray, stop_after: Optional[int] = Non
     return tensors
 
 
-def ort_intermediates(model_path, image_nchw_float: np.ndarray, names: List[str]) -> Dict[str, np.ndarray]:
+def ort_intermediates(model_path, image_nchw_float: np.ndarray, names: List[str],
+                      elem_type: Optional[int] = None) -> Dict[str, np.ndarray]:
     """Run the QDQ model (a path or a ModelProto, e.g. ``silu_sigmoid.reference_model``) in ONNX Runtime exposing the
-    requested uint8 tensors as outputs."""
+    requested uint8 tensors as outputs. ``elem_type`` (an ``onnx.TensorProto`` code, uint8 when None) exposes float
+    tensors instead, for the bf16 oracle."""
     import copy
 
     import onnx
@@ -180,8 +182,11 @@ def ort_intermediates(model_path, image_nchw_float: np.ndarray, names: List[str]
     existing = {o.name for o in model.graph.output}
     for n in names:
         if n not in existing:
-            model.graph.output.append(onnx.helper.make_tensor_value_info(n, onnx.TensorProto.UINT8, None))
+            model.graph.output.append(onnx.helper.make_tensor_value_info(
+                n, onnx.TensorProto.UINT8 if elem_type is None else elem_type, None))
     so = ort.SessionOptions()
+    # Load-bearing for the bf16 oracle too: optimization folds its Cast(BFLOAT16)->Cast(FLOAT) pairs
+    # away, and the oracle silently becomes fp32.
     so.graph_optimization_level = ort.GraphOptimizationLevel.ORT_DISABLE_ALL
     sess = ort.InferenceSession(model.SerializeToString(), so, providers=["CPUExecutionProvider"])
     outs = sess.run(names, {sess.get_inputs()[0].name: image_nchw_float.astype(np.float32)})

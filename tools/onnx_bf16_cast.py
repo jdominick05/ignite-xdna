@@ -68,23 +68,14 @@ def round_bf16(a: np.ndarray) -> np.ndarray:
     return np.where(nan, f, r).astype(np.float32)
 
 
-def main() -> int:
-    ap = argparse.ArgumentParser(description=__doc__,
-                                 formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--in", dest="src", type=Path, required=True)
-    ap.add_argument("--out", dest="dst", type=Path, required=True)
-    ap.add_argument("--ops", default="Conv",
-                    help="comma-separated op types to round; anything the engine would run in bf16")
-    args = ap.parse_args()
-
-    ops = {s.strip() for s in args.ops.split(",") if s.strip()}
-    model = onnx.load(str(args.src))
+def cast_model(model: onnx.ModelProto, ops) -> dict:
+    """Round ``model``'s ``ops`` nodes to bf16 in place; return what was wrapped and rounded."""
     graph = model.graph
 
     inits = {i.name: i for i in graph.initializer}
     targets = [n for n in graph.node if n.op_type in ops]
     if not targets:
-        raise SystemExit(f"no {sorted(ops)} nodes in {args.src}")
+        raise ValueError(f"no {sorted(ops)} nodes in the model")
 
     # 1. Weights and biases, rounded in place. A shared initializer is rounded once; rounding is
     #    idempotent, so a second visit would be harmless anyway.
@@ -153,17 +144,33 @@ def main() -> int:
     # Cast to BFLOAT16 needs opset 13 or later; below that the cast is not defined for the type.
     for o in model.opset_import:
         if o.domain in ("", "ai.onnx") and o.version < 13:
-            raise SystemExit(f"opset {o.version} predates bfloat16 Cast; re-export at 13 or later")
+            raise ValueError(f"opset {o.version} predates bfloat16 Cast; re-export at 13 or later")
 
     onnx.checker.check_model(model)
+    return {"ops": sorted(ops), "nodes_wrapped": len(targets), "initializers_rounded": len(rounded),
+            "input_cast_chains": n_in, "output_cast_chains": n_out}
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--in", dest="src", type=Path, required=True)
+    ap.add_argument("--out", dest="dst", type=Path, required=True)
+    ap.add_argument("--ops", default="Conv",
+                    help="comma-separated op types to round; anything the engine would run in bf16")
+    args = ap.parse_args()
+
+    ops = {s.strip() for s in args.ops.split(",") if s.strip()}
+    model = onnx.load(str(args.src))
+    try:
+        stats = cast_model(model, ops)
+    except ValueError as e:
+        raise SystemExit(f"{args.src}: {e}")
     args.dst.parent.mkdir(parents=True, exist_ok=True)
     onnx.save(model, str(args.dst))
 
-    print("BF16_CAST " + json.dumps({
-        "source": str(args.src), "output": str(args.dst), "ops": sorted(ops),
-        "nodes_wrapped": len(targets), "initializers_rounded": len(rounded),
-        "input_cast_chains": n_in, "output_cast_chains": n_out,
-    }, sort_keys=True), flush=True)
+    print("BF16_CAST " + json.dumps({"source": str(args.src), "output": str(args.dst), **stats},
+                                    sort_keys=True), flush=True)
     return 0
 
 
