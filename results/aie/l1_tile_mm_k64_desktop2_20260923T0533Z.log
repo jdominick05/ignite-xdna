@@ -1,0 +1,61 @@
+L1-resident 32x32x32 tile: compiler vs hand schedule (tools/l1_tile_bench.py)
+date: 2026-09-23T01:33:20  host: DESKTOP-CBL5NUA
+peano: clang version 22.0.0 (https://github.com/Xilinx/llvm-aie a36c62b9d26291fb06604bc976c897791f0bb578)
+aiecc: mlir-aie ironenv v1.4.2; mm.cc from the mlir-aie checkout (not vendored)
+xrt-smi: Version              : 2.21.0
+xrt-smi: NPU Driver Version   : 32.0.20101.3760
+xrt-smi: NPU Firmware Version : 1.5.5.391
+pmode: default (not changed by this run; docs/SILICON.md measured 1.80 GHz in default)
+shape: M32 x K64 x N32; loop counter i32
+buffers: A 0x400, B 0x4000, C 0x8000; seed 20260923; calls [0, 250000, 500000, 1000000], 5 reps each, 3 warm-ups
+partitions before: idle
+
+## empty  (`empty_call`, bf16, M32 x K64 x N32)
+compile: clang++.exe --target=aie2-none-unknown-elf -c empty_call.s -o kernel.o
+placement (tile-local offset, bank): tileA 0x0400-0x1400 b0, tileB 0x4000-0x5000 b1, tileC 0x8000-0x9000 b2, inF_cons_buff_0 0x9000-0xc040 b2, outF_buff_0 0xc040-0xd040 b3
+static: 7 bundles in `empty_call`, 0 issue a vmac; loops none
+correctness layout=tiled calls=1: EXACT (C unchanged)
+correctness layout=tiled calls=3: EXACT (C unchanged)
+calls=       0: mean     0.360 ms  (min 0.230, max 0.523, n=5)
+calls=  250000: mean     3.080 ms  (min 2.887, max 3.670, n=5)
+calls=  500000: mean     5.857 ms  (min 5.540, max 6.094, n=5)
+calls= 1000000: mean    11.150 ms  (min 10.969, max 11.290, n=5)
+fit: time = 0.390 ms + 10.79 ns x calls   (R^2 0.997475)
+per call: 19.4 cycles at 1.8 GHz -- the harness's own cost per call, no MACs
+
+## mm_bf16_f32  (`matmul_bf16_f32`, bf16, M32 x K64 x N32)
+compile: clang++.exe -O2 -std=c++20 --target=aie2-none-unknown-elf -DNDEBUG -Wno-parentheses -Wno-attributes -Wno-macro-redefined -Wno-empty-body -D__AIE_API_AIE_ADF_HPP__ -DVECTORIZED_ONLY -DDIM_M=32 -DDIM_N=32 -DDIM_K=64 -Dbf16_f32_ONLY -IC:\Users\<user>\mlir-aie\ironenv\Lib\site-packages\mlir_aie\include -c mm.cc -o kernel.o
+placement (tile-local offset, bank): tileA 0x0400-0x1400 b0, tileB 0x4000-0x5000 b1, tileC 0x8000-0x9000 b2, inF_cons_buff_0 0x9000-0xc040 b2, outF_buff_0 0xc040-0xd040 b3
+static: 191 bundles in `matmul_bf16_f32`, 32 issue a vmac; loops .L_LEnd0 16/32
+correctness layout=tiled calls=1: EXACT (C0 + calls*A@B)
+correctness layout=tiled calls=3: EXACT (C0 + calls*A@B)
+calls=       0: mean     0.395 ms  (min 0.273, max 0.554, n=5)
+calls=  250000: mean   197.510 ms  (min 197.316, max 197.770, n=5)
+calls=  500000: mean   394.776 ms  (min 394.640, max 394.927, n=5)
+calls= 1000000: mean   788.433 ms  (min 788.335, max 788.542, n=5)
+fit: time = 0.510 ms + 788.04 ns x calls   (R^2 1.000000)
+per call: 1418.5 cycles at 1.8 GHz; ideal 512 (32*64*32 MACs / 128 per cycle) -> 36.1% issue efficiency
+rate: 166.3 GFLOPS from the slope (36.1% of 460.8); 166.2 by the reference's method (2*MACs*1000000 / mean wall at 1000000 calls)
+
+## mm_i8_i32  (`matmul_i8_i32`, i8, M32 x K64 x N32)
+compile: clang++.exe -O2 -std=c++20 --target=aie2-none-unknown-elf -DNDEBUG -Wno-parentheses -Wno-attributes -Wno-macro-redefined -Wno-empty-body -D__AIE_API_AIE_ADF_HPP__ -DVECTORIZED_ONLY -DDIM_M=32 -DDIM_N=32 -DDIM_K=64 -Di8_i32_ONLY -IC:\Users\<user>\mlir-aie\ironenv\Lib\site-packages\mlir_aie\include -c mm.cc -o kernel.o
+placement (tile-local offset, bank): tileA 0x0400-0x0c00 b0, inF_cons_buff_0 0x0c00-0x2c40 b0, outF_buff_0 0x2c40-0x3c40 b0, tileB 0x4000-0x4800 b1, tileC 0x8000-0x9000 b2
+static: 141 bundles in `matmul_i8_i32`, 24 issue a vmac; loops .L_LEnd0 8/9
+correctness layout=tiled calls=1: EXACT (C0 + calls*A@B)
+correctness layout=tiled calls=3: EXACT (C0 + calls*A@B)
+calls=       0: mean     0.405 ms  (min 0.250, max 0.640, n=5)
+calls=  250000: mean    97.480 ms  (min 97.279, max 97.594, n=5)
+calls=  500000: mean   194.338 ms  (min 193.965, max 194.653, n=5)
+calls= 1000000: mean   387.719 ms  (min 387.597, max 387.966, n=5)
+fit: time = 0.559 ms + 387.26 ns x calls   (R^2 0.999998)
+per call: 697.1 cycles at 1.8 GHz; ideal 256 (32*64*32 MACs / 256 per cycle) -> 36.7% issue efficiency
+rate: 338.5 GOPS from the slope (36.7% of 921.6); 338.1 by the reference's method (2*MACs*1000000 / mean wall at 1000000 calls)
+
+partitions after close: idle
+
+harness loop: i32; empty control: 19.4 cycles per call
+
+| kernel | output | static vmac/bundles | cycles/call | over empty | ideal | eff. (over empty) | rate (slope) | % peak | reference method |
+|---|---|---|---|---|---|---|---|---|---|
+| mm_bf16_f32 | exact (tiled) | 32/191 | 1418.5 | 1399.1 | 512 | 36.6% | 166.3 GFLOPS | 36.1% | 166.2 |
+| mm_i8_i32 | exact (tiled) | 24/141 | 697.1 | 677.6 | 256 | 37.8% | 338.5 GOPS | 36.7% | 338.1 |

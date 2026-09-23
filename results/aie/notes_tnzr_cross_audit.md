@@ -97,11 +97,65 @@ bundles in loop bodies, 4 of the 23 in each of the two 0.348 loops, and `a0_0_co
 with `w0_0_cons_buff_0`. If those pairs read the shared bank, each such loop pays up to +4 cycles per
 iteration (23 → 27, 0.348 → 0.296). This is static and depends on pointer resolution, so it is unmeasured.
 
-The repo attributes its bf16 GEMM's "remaining two thirds" to nothing (`SILICON.md:418-425`) and never
-compared it with the 50% cap of the loop it runs. Its own production core issues a `vmac` on at most
+`SILICON.md:418-425` says the bf16 array GEMM's "remaining two thirds" (at 64×64, against a 100%
+input-bound ceiling) lie in "dispatch, the K-loop's C read-modify-write in f32, and the 3.2 kernel".
+It names three candidates and measures none, and it never compares them with the 50% cap of the loop it runs. Its own production core issues a `vmac` on at most
 ~1 bundle in 3: loads, then `load_unaligned_v` `vshift` realignment, then idle, then 8 `vmac`s, with
 no overlap between iterations. The reference shows the same silicon sustaining a `VMAC.F` on 256 of
-288 bundles. The like-for-like split of *schedule* from *data movement* is phase 2.2: PENDING.
+288 bundles.
+
+### C.2 Schedule without movement: the same tile, the same harness, the same banks (MEASURED, phase 2.2)
+
+`tools/l1_tile_bench.py`, written here: operands in L1, the kernel called 10⁵–10⁶ times per dispatch,
+time fitted against the call count so dispatch and DMA drop into the intercept (R² ≥ 0.9992 on
+every fit). Every kernel's output is checked exactly against numpy (C0 + calls·A@B, small
+integers). An empty control (`kernels/l1_tile_bench/empty_call.s`: `ret lr` + 5 delay slots) prices
+the harness at 19.1–20.4 cycles per call with an `i32` counter, and at 25.4 with a 64-bit `index`
+counter.
+
+| Kernel, shape, mode | cycles/call | over empty | % of per-core peak | Log |
+|---|---|---|---|---|
+| Reference hand `.s`, bf16 32³, copy | 301.3 | **282.0** | 85.0% (391.5 GFLOPS) | `l1_tile_compiler_vs_hand_i32loop_desktop2_20260923T0530Z.log` |
+| Upstream `mm.cc` bf16, 32³, copy | 898.6 | 879.3 | 28.5% (131.3) | same |
+| Upstream `mm.cc` int8, 32³, copy | 533.4 | 514.1 | 24.0% (221.2 GOPS) | same |
+| `mm.cc` bf16, 32×64×32 / 32×128×32, copy | 1418.5 / 2482.4 | — | 36.1% / 41.3% | `l1_tile_mm_k64_…0533Z.log`, `l1_tile_mm_k128_…0533Z.log` |
+| `mm.cc` int8, 32×64×32 / 32×128×32, copy | 697.1 / 1009.4 | — | 36.7% / 50.7% | same two |
+| **`mm.cc` bf16, 64³ (the array GEMM's tile), direct** | 5427.4 | 5407.0 | **37.7% (173.9 GFLOPS)** | `l1_tile_mm_direct_64x64x64_desktop2_20260923T0538Z.log` |
+| `mm.cc` int8, 64³, direct | 2604.8 | 2584.4 | 39.3% (362.3 GOPS) | same |
+
+What this settles:
+
+- **The hand schedule runs exactly as written.** 282.0 cycles over the empty control is the
+  kernel's 288 dynamic bundles less the control's own 6-bundle body. That leaves no memory stall and no
+  hidden interlock, and the reference kernel is **exact**: it accumulates into C in `mm.cc`'s tiled
+  layout (C0 + calls·A@B). The reference never checked its output. The 397.5-vs-391.5 difference between
+  their harness and this one is the calling loop: their constant trip count lets Peano unroll the
+  call 4× and fill its delay slots (~8.7 cycles/call), where this one reads the count at run time.
+- **On an identical tile, harness and bank placement, the hand schedule is 3.0× the compiled
+  upstream kernel** (282 vs 879 cycles, bf16 32³).
+- **The compiled loops run at their static schedule plus one bank stall per iteration.** Adding
+  K costs `mm.cc` bf16 32.5–33.3 cycles per inner iteration, against 32 static bundles, and int8 9.8–10.2
+  against 9. Each loop body has exactly one paired load whose two operands come from the same
+  buffer (int8: `vlda [p4]` + `vldb [p3]`, both A-pointers stepping `#0x20`; bf16: two B loads at `0x2a8`), so they hit one bank.
+  The repo's own measured rule (+1 cycle for a same-bank pair, `SILICON.md:269`) predicts exactly
+  +1. With no interlocks and no DMA in the timed loop, a bank conflict is the only stall source
+  left. Attribution: consistent and the only candidate standing, but not isolated by moving the operands.
+- **The bf16 array GEMM's "remaining two thirds" is the kernel.** At the array's own tile, with no
+  movement at all, the kernel reaches 37.7% of peak. The array's measured 64×64 figures, 2477.23 and
+  2641.41 GFLOPS (33.6% and 35.8% of the 16-core 7,372.8, `bf16_matmul_n64_single_buffer_npu.log`),
+  are therefore 89–95% of what its kernel can do in L1. Input bandwidth and dispatch together account for at most a
+  few points. The "K-loop's C read-modify-write" is inside the kernel (16 accumulator loads and
+  stores per output block), not a separate cost. The int8 array (31.2% at 1.80 GHz, `SILICON.md`)
+  reaches ~79% of its kernel's 39.3%, so int8 is more movement-bound.
+- **Bank placement moves a whole compiled call by up to 7%.** `mm.cc` int8 at 32×64×32 costs 697.1
+  cycles with A/B/C in banks 0/1/2 (copy mode) and 745.4 with C in bank 0 beside the stack (direct
+  mode, `l1_tile_mm_direct_32x64x32_desktop2_20260923T0538Z.log`). bf16 does not move (1418.5 vs 1418.6).
+  Why int8 does is **unexplained**. A candidate is C's accumulator loads and stores pairing with stack
+  or operand traffic in bank 0; nothing yet rules that in or out.
+
+A first sitting (`l1_tile_compiler_vs_hand_desktop2_20260923T0527Z.log`, `index` counter, no
+control) measured the same kernels 5.5–6.1 cycles/call slower each. That shift is exactly the
+`index`-vs-`i32` control difference (25.4 − 19.3, `l1_tile_empty_indexloop_desktop2_20260923T0530Z.log`).
 
 ## D. Novelty
 
