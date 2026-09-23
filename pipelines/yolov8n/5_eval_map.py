@@ -140,7 +140,15 @@ def main():
     ap.add_argument("--fresh", action="store_true")
     ap.add_argument("--log", type=int, default=2)
     ap.add_argument("--dets", default=None, help="where to write detections json")
+    ap.add_argument("--ort-opt", choices=("default", "disable_all"), default="default",
+                    help="CPU only. disable_all = ORT_DISABLE_ALL, the reference a QDQ model with "
+                         "rewritten weights needs (docs/DECISIONS.md); default leaves ORT's own level")
+    ap.add_argument("--ort-threads", type=int, default=0,
+                    help="CPU only. Pin intra-op threads (0 = ORT's choice). The float summation "
+                         "order of an unoptimized QDQ Conv depends on the thread split")
     args = ap.parse_args()
+    if args.ep != "cpu" and (args.ort_opt != "default" or args.ort_threads):
+        raise SystemExit("--ort-opt / --ort-threads apply to --ep cpu only")
 
     decode = load_decoder(args.decoder)
 
@@ -165,8 +173,19 @@ def main():
     if args.ep == "ignite":
         sess, imgsz, run_fn, decode_fn, desc = build_ignite_forward(args.model, args.conf, decode)
     else:
+        cpu_opts = {}
+        if args.ep == "cpu":
+            import hashlib
+            import onnxruntime as ort
+            if args.ort_opt == "disable_all":
+                cpu_opts["graph_optimization"] = "ORT_DISABLE_ALL"
+            if args.ort_threads:
+                cpu_opts["intra_op_threads"] = args.ort_threads
+            print(f"onnxruntime {ort.__version__}")
+            print(f"ort-opt : {args.ort_opt}   ort-threads : {args.ort_threads or 'ORT default'}")
+            print(f"model sha256 {hashlib.sha256(Path(args.model).read_bytes()).hexdigest()}")
         sess = build_session(args.model, args.ep, cache_key, args.xclbin,
-                             log_severity=args.log)
+                             log_severity=args.log, **cpu_opts)
         # Letterbox size comes from the model, not from a flag -- see 4_detect.py.
         imgsz = yc.input_size(sess.get_inputs()[0].shape, args.model)
         run_fn, decode_fn, desc = build_forward(sess, args.conf, imgsz, decode, args.head_order)

@@ -55,7 +55,8 @@ def clear_cache(cache_key):
 
 
 def build_session(model, ep, cache_key, xclbin=None, log_severity=1,
-                   enable_profiling=False):
+                   enable_profiling=False, graph_optimization=None,
+                   intra_op_threads=None):
     """Build an InferenceSession on CPU, DirectML (iGPU), or VitisAI (NPU).
 
     log_severity is passed straight to ORT: 0 = verbose (per-node EP
@@ -65,10 +66,27 @@ def build_session(model, ep, cache_key, xclbin=None, log_severity=1,
     timing, written on sess.end_profiling()) -- off by default since it adds
     overhead to every call; only for diagnostic tools that need per-call
     timing breakdown (see tools/percall_overhead_bench.py).
+
+    graph_optimization and intra_op_threads are CPU-only and leave ORT's
+    defaults alone when None. graph_optimization names a
+    GraphOptimizationLevel member ("ORT_DISABLE_ALL", ...): a QDQ model whose
+    weights or scales were rewritten needs an ORT_DISABLE_ALL reference,
+    because an optimized session has been measured wrong on such a mutation
+    (docs/DECISIONS.md). intra_op_threads pins the thread split, which the
+    float summation order of an unoptimized QDQ Conv depends on.
     """
     so = ort.SessionOptions()
     so.log_severity_level = log_severity
     so.enable_profiling = enable_profiling
+    if graph_optimization is not None or intra_op_threads is not None:
+        if ep != "cpu":
+            raise SystemExit("graph_optimization / intra_op_threads are CPU-only; "
+                             f"refusing to pass them to the {ep} provider")
+        if graph_optimization is not None:
+            so.graph_optimization_level = getattr(ort.GraphOptimizationLevel,
+                                                  graph_optimization)
+        if intra_op_threads is not None:
+            so.intra_op_num_threads = int(intra_op_threads)
 
     if ep == "cpu":
         return ort.InferenceSession(str(model), sess_options=so,
