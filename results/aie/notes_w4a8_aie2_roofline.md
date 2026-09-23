@@ -1,10 +1,10 @@
 # Formal Micro-Architectural and Roofline Analysis of W4A8 Sub-Byte Weight Packing on AMD Phoenix AIE2 (XDNA1)
 
 > **UNBACKED ON MAIN (2026-09-23, [ledger A3](notes_tnzr_cross_audit.md)).** The `[MEASURED: w4a8_probe_npu.log]`
-> and `w4a8_array_npu.log` tags below point at logs that exist only on the unmerged branch
-> `worktree-int4-study` (commits `56b4e88`, `2fe7624`, 2026-09-10). They are not on `main`, and
-> `docs/SILICON.md` on `main` still lists int8×int4 as AIE2p-only. Treat every MEASURED tag here as TO
-> VERIFY until those logs land. The "widespread assumption that native sub-byte execution was exclusive
+> and `w4a8_array_npu.log` tags below point at logs that are not on `main`. They are in this directory
+> on the unmerged branch `worktree-int4-study`, added by its commits `891d730` (probe) and `18622ab`
+> (array), both measured 2026-09-10. On `main`, treat every MEASURED tag here as TO VERIFY; on that
+> branch, the errata below say which tags those logs support. The "widespread assumption that native sub-byte execution was exclusive
 > to AIE2P" framing is **retracted** ([ledger D11](notes_tnzr_cross_audit.md)). AMD documented the opposite:
 > the AIE-API 2024.1 mmul page lists AIE-ML `8b x 4b: 4x16x8` with no emulation suffix, and Riallto states
 > 512 int4×int8 MAC/cycle per core. `main`'s "AIE2p only" is therefore contradicted by SPEC, and the
@@ -13,6 +13,58 @@
 > That model puts the *realignment* ops `vshift`/`vshuffle` in the **mv** slot, not vec
 > ([ledger A2](notes_tnzr_cross_audit.md), [`peano_aie2_machine_model_a36c62b9.log`](peano_aie2_machine_model_a36c62b9.log) §3),
 > but it does not list the element shifts, so §2.3 stays TO VERIFY.
+
+## Errata (2026-09-23) — read before anything below
+
+The body of this note is kept as written; where it disagrees with the logs it cites, **the logs
+win**. Line numbers below are this note's body as originally committed, shifted down by this block
+(search for the quoted text). Log references are to `w4a8_probe_npu.log` (probe) and
+`w4a8_array_npu.log` (array) in this directory.
+
+1. **The evidence now lives here.** The note cites both logs "on branch `worktree-w4a8-unpack`".
+   That branch was lost from every ref. Its five commits were cherry-picked back from b0d12d2 on
+   2026-09-23, and the logs, raw jsonl and witness files are byte-identical to that commit.
+2. **"1.98x", "unequivocal ~1.8x to 2.0x" at M ≤ 16** (Executive Summary 4, section 4.3, section
+   5.2): **DERIVED, never measured.** No GEMV was ever run. `whole_array` cannot express M < 4m,
+   so M = 1 is out of reach. The model assumes a 28 GB/s DDR rate that no GEMM here reached: the
+   array log measured upstream int8 at 18.57–23.96 GB/s of L3 traffic (array :51-52). It also
+   labels 2MKN operations as MACs.
+3. **"Strictly tracks L3 bytes", "governed strictly by memory traffic", "avoid W4A8 at m ≥ 128"**
+   (Executive Summary 4-5, section 4.4, section 5.2): contradicted by the array log.
+   - It says "The mechanism is UNEXPLAINED" and explicitly rules out "total L3 bytes at a fixed
+     bandwidth" (array :47-52).
+   - 64/64/64 has the same 0.800 byte ratio (array :191-192) yet gained only 1.057x/1.127x
+     (array :367-368).
+   - Section 4.4 calls the 2048³ case "compute-bound"; the log says the core is not the critical
+     path (array :70).
+4. **"0.889–1.000 vmac/cycle" and "up to 455.1 MACs/cycle", tagged MEASURED** (sections 2.4 and
+   5.1): these are **static** compile-only figures (probe section A, e.g. :229).
+   - Measured native:unroll2 is **372.4 MAC/cycle**, a two-point figure (probe :178), which is
+     0.727 vmac/cycle. The fit gives 383.7 (probe :657).
+   - The int8 "0.889 MEASURED" is static too (probe :214). The int8 control measured 204.8
+     (probe :171).
+5. **Software in-register ALU unpack** (section 2.3; the 2.4 and 5.1 rows with "2–3 stall cycles",
+   "20%–33%", "~1.15x–1.20x", tagged MEASURED): **no such kernel was built or run.** Treat these
+   figures as hypothetical.
+6. **"1 cycle per 64 sign-extended INT8 elements"** (section 2.2): the probe gives 2 bundles per 64
+   elements, i.e. 32 elements per cycle (probe :204, :207).
+7. **"40 MiB weights, 40 MiB activations/outputs"** (section 4.4): the log derives A 32 MiB,
+   B 32 MiB int8 / 16 MiB int4, and C 16 MiB (array :131-133).
+8. **The GOPS table in section 4.4** recomputes most rows from rounded ratios. The log's values
+   are:
+   - 64/128/64: i8 default 4,947.84, i8 unroll2 4,882.90, unpack 6,090.99 (array :312-314);
+   - 128/64/64: unpack 4,617.40, native 4,825.95 (array :342-343);
+   - 64/64/64: unpack 4,644.93, native 4,954.92 (array :367-368).
+9. **Smaller corrections:**
+   - Only Desktop 2 (Ryzen 7 8700G) was measured, not the Ryzen 5 8645HS.
+   - "Quadrupling" (section 4.4, analysis 1) should read "doubling".
+   - `device.yaml` lists 512 int8×int4 MACs only in its AIE2p block, so it is not a SPEC source
+     for AIE2 (section 5.1).
+   - Double-buffered C at 64/128/64 bought nothing: 1.255x against 1.263x single-buffered
+     (array :62, :318).
+   - Section 3.2's L1 table arithmetic is off:
+     - 64×64×64 W4A8 is 32,000 B single-C and 48,384 B double-C;
+     - 128×64×128 int8 is 101,632 B.
 
 ## Executive Summary
 
