@@ -300,7 +300,9 @@
   QDQ Conv depends on the thread split). Neither flag reaches the NPU providers, which refuse
   them.
   - On the shipped YOLOv8n and YOLOv8s XINT8 files the two settings agree to 0.00 mAP on all
-    5,000 images (gate D), and 27.10 / 37.21 equal the graph-engine containers on silicon.
+    5,000 images (gate D). Their 27.10 / 37.21 equal the HardSigmoid-form graph-engine
+    containers (main `c714629`) measured on the NPU on 2026-09-17, which compute this XINT8 file
+    exactly; the shipped `--silu-sigmoid` containers score 34.12 / 42.37.
   - That holds for those files only. It is not a licence for mutated ones.
 
 - **A `*_ortonly.onnx` file must never reach `ignite-compile`.** `graph_ir.scale_zp`
@@ -963,7 +965,8 @@
     - Per-channel pow2 scales (1.58 / 2.47) and the stem and heads kept at W8 (0.08 / 7.87) do
       not rescue it.
     - A post-hoc float-activation diagnostic collapses too (500 images: 0.00–2.89), so the cause
-      is the 4-bit weights, not the frozen W8A8 activation pipeline.
+      is the 4-bit weights as quantized here (RTN, pow2 scales), not the frozen W8A8 activation
+      pipeline.
     - GPTQ, AdaRound, float per-channel scales and mixed precision are untested.
     - Reopen only with a recovery method that brings a W4 model within the line, measured the
       same way (`scripts/w4a8-eval.sh`).

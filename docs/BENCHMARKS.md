@@ -2374,11 +2374,14 @@ the NPU.
   [-7, 7], pow2 scales by Quark's MinMSE. Every activation Q/DQ, bias and other scale stays as
   shipped. The 4-bit value is stored as q4 · 2^k under the shipped 8-bit scale (k = pos8 − pos4
   in 0..4), so the file is a plain XINT8 file that the engine lowers.
-  - A group that wants a finer scale than the shipped one (k < 0) cannot be stored that way.
-    Such a conv gets a per-channel scale vector instead, and the file is named `*_ortonly.onnx`.
-  - That happened to E2 on both models (one 32-channel group each at k = −1) and to U, one pow2
-    scale per output channel (6 convs on YOLOv8n, 11 on YOLOv8s). It is a limit of the int8
-    container, not of a per-group engine shift.
+  - A group whose k falls outside 0..4 cannot be stored that way. Either it wants a finer scale
+    than the shipped one (k < 0), or a scale so coarse that q4 · 2^k leaves int8 (k = 5). Such a
+    conv gets a per-channel scale vector instead, and the file is named `*_ortonly.onnx`.
+  - That happened to E2 on both models (one 32-channel group each at k = −1).
+  - It also happened to U, one pow2 scale per output channel: 6 convs on YOLOv8n and 11 on
+    YOLOv8s. Four of them reach form a through k = 5 alone: `/model.21/cv1` on both models,
+    and `/model.9/cv2` and `/model.21/cv2` on YOLOv8s.
+  - It is a limit of the int8 container, not of a per-group engine shift.
   - E1h is E1 with the stem and the 6 head-output convs kept W8: 1.01% and 0.39% of the weights.
 - **Controls, all before any mAP (`w4a8_controls_*`, `w4a8_engine_gate_*`).**
   - The 8-bit path of the same code rebuilds both shipped files exactly: empty `graph_diff`,
@@ -2410,13 +2413,18 @@ the NPU.
   magnitude, and no arm keeps even a tenth of the baseline except E1h on YOLOv8s.
 - **The prediction held:** B8 with ONNX Runtime's optimizations equals B8 without them to 0.00 on
   both models. So the optimized-CPU mAPs in this file stand for these shipped XINT8 files.
-- **The baseline agrees with silicon.** 27.10 and 37.21 are exactly today's graph-engine
-  containers on the NPU over the same 5,000 images
-  ([accuracy against AMD's stack](#the-sigmoid-silu-containers-against-amds-stack-more-accurate-on-all-5000-coco-images-faster-on-yolov8n-and-yolov8n-pose-slower-on-yolov8s-2026-09-17-desktop-2)),
-  as the engine's bit-exactness with ORT_DISABLE_ALL predicts. AMD's stack scores 26.68 and
-  37.31 on the same files.
+- **The baseline agrees with an earlier NPU sitting.** 27.10 and 37.21 equal the HardSigmoid-form
+  graph-engine containers (main `c714629`), measured on the NPU on 2026-09-17 over the same 5,000
+  images
+  ([accuracy against AMD's stack](#the-sigmoid-silu-containers-against-amds-stack-more-accurate-on-all-5000-coco-images-faster-on-yolov8n-and-yolov8n-pose-slower-on-yolov8s-2026-09-17-desktop-2)).
+  Those containers compute this XINT8 file exactly, as the engine's bit-exactness with
+  ORT_DISABLE_ALL predicts. AMD's stack scores 26.68 and 37.31 on the same files.
+  - They are not what Ignition ships. The shipped `--silu-sigmoid` containers score 34.12 /
+    42.37, because they replace the file's HardSigmoid with a sigmoid.
+  - The diagnostic below runs the real Sigmoid, and W4 collapses there too, so the verdict does
+    not move.
 - **Where the loss is, from the sidecars.** Median per-conv weight SQNR is 31.5 / 30.1 dB at W8,
-  13.2 / 13.1 dB for E1 and 14.7 / 14.5 dB for U (YOLOv8n / YOLOv8s). E1's worst conv is a 3×3
+  13.1 / 13.1 dB for E1 and 14.7 / 14.5 dB for U (YOLOv8n / YOLOv8s). E1's worst conv is a 3×3
   in the class branch at 4.4 / 4.3 dB. Per-channel pow2 scales buy about 1.5 dB at the median.
 - **A post-hoc diagnostic, not pre-registered, that decides nothing** (`diag_*`, 500 images,
   `scripts/w4a8-eval.sh diag`). The same dequantized weights go into the float model, which keeps
@@ -2429,9 +2437,9 @@ the NPU.
 | FP32 with the W4 E1 weights | 0.00 | 2.89 |
 | FP32 with the W4 U weights | 1.67 | 1.85 |
 
-  - The collapse is in the 4-bit weights themselves. Float activations and the real sigmoid do
-    not rescue it, so the frozen W8A8 activation scales and the HardSigmoid form are not the
-    cause.
+  - The collapse is in the 4-bit weights as quantized here (RTN, pow2 scales). Float
+    activations and the real sigmoid do not rescue it, so the frozen W8A8 activation scales and
+    the HardSigmoid form are not the cause.
   - The same code at 8 bits costs 1.41 / 0.87 points and rebuilds the shipped files exactly,
     which argues against an emulation fault. At 4 bits only the bounds and the MinMSE window
     change.
