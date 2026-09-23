@@ -47,8 +47,10 @@ from typing import Dict, List, Tuple
 import numpy as np
 
 from ignite_xdna.compiler import engine_bf16_emulator as em
-from ignite_xdna.compiler.engine_schedule import Chunk, Placement, Workspace, _segment_channel_base, layer_chunks
-from ignite_xdna.compiler.engine_sequence import ROWS, DmaPattern, canonical
+from ignite_xdna.compiler.engine_schedule import (Chunk, LayerSchedule, Placement, Workspace, _segment_channel_base,
+                                                  column_rounds, layer_chunks, tile_origins)
+from ignite_xdna.compiler.engine_sequence import (COLS, MAX_REPEAT, ROWS, DmaPattern, canonical, linear, merge_quad,
+                                                  merge_runs)
 from ignite_xdna.compiler.graph_ir import ConvLayer, FusedConvLayer, GraphIR, HostLayer, PoolLayer
 
 TILE_R, TILE_C = em.TILE_ROWS, em.TILE_COLS
@@ -468,3 +470,169 @@ def run_drain(ws: Workspace, layer: ConvLayer, group: int, run: List[Tuple[int, 
     q0, x0 = run[0]
     o = o_pattern(ws, layer, group, q0, x0)
     return _pattern("ws", o.offset, (ROWS * len(run),) + tuple(o.sizes[1:]), o.strides)
+
+
+# ----------------------------------------------------------------------------
+# Schedule
+# ----------------------------------------------------------------------------
+
+class PacketStore:
+    """Deduplicated static weight packets laid out back to back, each re-checked against the contract."""
+
+    def __init__(self):
+        self._offsets: Dict[bytes, int] = {}
+        self._chunks: List[np.ndarray] = []
+        self.nbytes = 0
+
+    def add(self, pkt: np.ndarray) -> int:
+        return self.add_run([pkt])
+
+    def add_run(self, pkts: List[np.ndarray]) -> int:
+        """Store packets back to back (one weight task streams them all); dedup by content."""
+        for p in pkts:
+            if p.size != em.W_BYTES:
+                raise ValueError(f"a weight packet is {p.size} B, not {em.W_BYTES}")
+            check_counts(p[:em.HDR_BYTES].view(np.int32))
+        key = b"".join(p.tobytes() for p in pkts)
+        if key in self._offsets:
+            return self._offsets[key]
+        off = self.nbytes
+        self._offsets[key] = off
+        for p in pkts:
+            self._chunks.append(p)
+            self.nbytes += em.W_BYTES
+        return off
+
+    def blob(self) -> np.ndarray:
+        return np.concatenate(self._chunks) if self._chunks else np.zeros(0, np.uint8)
+
+    def packets_at(self, offset: int, nbytes: int) -> List[np.ndarray]:
+        first = offset // em.W_BYTES
+        return self._chunks[first:first + nbytes // em.W_BYTES]
+
+    def opcodes(self) -> set:
+        """Every opcode the stored packets carry, read out of the packets themselves."""
+        return {int(p[:em.HDR_BYTES].view(np.int32)[em.H_OP]) for p in self._chunks}
+
+
+def schedule_layer(ir: GraphIR, ws: Workspace, layer: ConvLayer, store: PacketStore, weight_repeat: bool = True,
+                   balance_columns: bool = True, merge_group_weights: bool = True) -> LayerSchedule:
+    """Cut one layer into as few DMA tasks as the transport allows: int8's coarse schedule, at bf16.
+
+    Rounds are taken tile column first, so a column's rounds form runs of vertically adjacent quads
+    at one tile column (at most 16, the repeat limit of 64 packets). Per run: one drain, issued
+    ahead of its fills and held until they are issued. A single-chunk layer streams every strip of a
+    run in one fill task and serves every round of a column from one weight packet, through its
+    header's ``count_out``. A multi-chunk layer merges each round's per-chunk fills across the four
+    cores where they are regularly spaced, and streams its run of weight packets once per round with
+    a stride-0 repeat. Output groups are 16 channels, so a layer has ``ceil(blocks / 2)`` of them.
+    """
+    t = ir.tensors[layer.output]
+    chunks = layer_chunks(ir, layer)
+    single = len(chunks) == 1
+    n_groups = output_groups(t.blocks)
+    quad_rows = TILE_R * ROWS
+    ys, xs = tile_origins(t.height, quad_rows), tile_origins(t.width, TILE_C)
+    max_quads = MAX_REPEAT // ROWS
+    programs: List[List[tuple]] = [[] for _ in range(COLS)]
+    n_rounds = n_packets = n_w = 0
+    per_col_groups: List[List[tuple]] = [[] for _ in range(COLS)]
+    for g in range(n_groups):
+        rounds = [(y, x0) for x0 in xs for y in ys]
+        per_col = column_rounds(rounds, g, balance=balance_columns)
+        for c in range(COLS):
+            mine = per_col[c]
+            if not mine:
+                continue
+            runs: List[List[Tuple[int, int]]] = []
+            for q, x0 in mine:
+                last = runs[-1][-1] if runs else None
+                if last is not None and last[1] == x0 and last[0] == q - quad_rows and len(runs[-1]) < max_quads:
+                    runs[-1].append((q, x0))
+                else:
+                    runs.append([(q, x0)])
+            run_fills: List[List[List[DmaPattern]]] = []
+            for run in runs:
+                if single:
+                    strips = [p for q, x0 in run for p in quad_patterns(ws, layer, chunks[0], q, x0, g)]
+                    run_fills.append([merge_runs(strips)])
+                else:
+                    per_round = []
+                    for q, x0 in run:
+                        pats: List[DmaPattern] = []
+                        for ch in chunks:
+                            quad = quad_patterns(ws, layer, ch, q, x0, g)
+                            merged = merge_quad(quad)
+                            pats.extend([merged] if merged is not None else quad)
+                        per_round.append(merge_runs(pats))
+                    run_fills.append(per_round)
+                n_rounds += len(run)
+                n_packets += ROWS * len(run) * len(chunks)
+            per_col_groups[c].append((g, mine, runs, run_fills))
+
+    for c in range(COLS):
+        entries = per_col_groups[c]
+        if not entries:
+            continue
+        items_of = [sum(len(f) for per_round in rf for f in per_round) for _, _, _, rf in entries]
+        if single:
+            pkts = [conv_packet(layer, g, chunks[0], count_out=len(mine), count_acc=0) for g, mine, _, _ in entries]
+            if merge_group_weights:
+                # The groups' packets back to back: each serves its own group's rounds in order.
+                programs[c].append(("w", store.add_run(pkts), len(pkts) * em.W_BYTES, sum(items_of)))
+                n_w += 1
+            for k, (g, mine, runs, run_fills) in enumerate(entries):
+                if not merge_group_weights:
+                    programs[c].append(("w", store.add(pkts[k]), em.W_BYTES, items_of[k]))
+                    n_w += 1
+                for run, per_round in zip(runs, run_fills):
+                    programs[c].append(("o", run_drain(ws, layer, g, run), len(per_round[0])))
+                    programs[c].extend(("A", f) for f in per_round[0])
+            continue
+        runs_pkts = [[chunk_packet(layer, g, ch) for ch in chunks] for g, _, _, _ in entries]
+        run_len = len(runs_pkts[0]) * em.W_BYTES
+        rounds_col = [len(mine) for _, mine, _, _ in entries]
+        # Only the repeat (outermost) dimension of a DMA task may have stride 0, so the groups' runs
+        # share one task where every group has a single round in this column: the runs back to back,
+        # repeated with a positive stride. Columns with several rounds per group keep one repeated
+        # task per group.
+        merged_w = (merge_group_weights and weight_repeat and 1 < len(entries) <= MAX_REPEAT
+                    and all(n == 1 for n in rounds_col))
+        if merged_w:
+            off = store.add_run([p for run in runs_pkts for p in run])
+            programs[c].append(("W", DmaPattern("wp", off, (len(entries), 1, 1, run_len), (run_len, 0, 0, 1)),
+                                sum(items_of)))
+            n_w += 1
+        for k, (g, mine, runs, run_fills) in enumerate(entries):
+            run_offset = None if merged_w else store.add_run(runs_pkts[k])
+            if weight_repeat and not merged_w:
+                rounds_items = [len(f) for per_round in run_fills for f in per_round]
+                for start in range(0, len(rounds_items), MAX_REPEAT):
+                    part = rounds_items[start:start + MAX_REPEAT]
+                    pat = (DmaPattern("wp", run_offset, (len(part), 1, 1, run_len), (0, 0, 0, 1)) if len(part) > 1
+                           else linear("wp", run_offset, run_len))
+                    programs[c].append(("W", pat, sum(part)))
+                    n_w += 1
+            for run, per_round in zip(runs, run_fills):
+                programs[c].append(("o", run_drain(ws, layer, g, run), sum(len(f) for f in per_round)))
+                for fills in per_round:
+                    if not weight_repeat:
+                        programs[c].append(("w", run_offset, run_len, len(fills)))
+                        n_w += 1
+                    programs[c].extend(("A", f) for f in fills)
+    return LayerSchedule(layer.index, layer.name, programs, n_rounds, n_packets, n_w)
+
+
+def schedule_graph(ir: GraphIR, ws: Workspace, activation_ring: int = 0, weight_buffer: bool = False,
+                   **flags) -> Tuple[List[LayerSchedule], PacketStore]:
+    """Every layer's schedule and the packet store they share - the call ``engine_compile`` makes.
+
+    ``activation_ring`` and ``weight_buffer`` are accepted because the compile passes them, and
+    refused because the bf16 design has neither. ``flags`` are ``schedule_layer``'s, for bisection.
+    """
+    if activation_ring or weight_buffer:
+        raise ValueError("the bf16 design has no activation ring and no resident weight buffer")
+    check_ir(ir)
+    store = PacketStore()
+    scheds = [schedule_layer(ir, ws, L, store, **flags) for L in ir.layers]
+    return scheds, store

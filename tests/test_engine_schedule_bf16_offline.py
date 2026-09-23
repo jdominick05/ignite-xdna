@@ -6,6 +6,7 @@ tolerance derived from bf16's rounding rather than picked. Everything else pins 
 contract the packer must enforce.
 """
 import unittest
+from pathlib import Path
 
 import numpy as np
 
@@ -359,6 +360,120 @@ class WorkspaceAndPatterns(unittest.TestCase):
         ir = graph([L], {"x": (16, 640, 640), "y": (16, 640, 640)})
         with self.assertRaisesRegex(ValueError, "step field"):
             eb.plan_workspace(ir)
+
+
+def check_streams(case, ir, scheds, store):
+    """Stream invariants every column program must satisfy, whatever the graph."""
+    from ignite_xdna.compiler.engine_sequence import MAX_REPEAT
+    for s in scheds:
+        for prog in s.programs:
+            a_items = sum(1 for it in prog if it[0] in ("a", "A"))
+            w_served = sum(it[3] if it[0] == "w" else it[2] for it in prog if it[0] in ("w", "W"))
+            case.assertEqual(w_served, a_items, s.name)
+            fill_objects = sum(it[1].nbytes for it in prog if it[0] == "A") // (4 * em.A_BYTES)
+            weight_uses = 0
+            for it in prog:
+                if it[0] == "w":
+                    pkts = store.packets_at(it[1], it[2])
+                elif it[0] == "W":
+                    data = it[1].read(store.blob())
+                    pkts = [data[k:k + em.W_BYTES] for k in range(0, data.size, em.W_BYTES)]
+                else:
+                    pkts = []
+                for p in pkts:
+                    h = p[:em.HDR_BYTES].view(np.int32)
+                    weight_uses += int(h[em.H_COUNT_OUT]) + int(h[em.H_COUNT_ACC])
+            # Every activation object the fills deliver is paired with exactly one weight-object use.
+            case.assertEqual(weight_uses, fill_objects, s.name)
+            for it in prog:
+                pats = [it[1]] if it[0] in ("A", "o", "W") else []
+                for p in pats:
+                    case.assertEqual(p.offset % 4, 0)
+                    case.assertLessEqual(len(p.sizes), 4)
+                    if len(p.sizes) == 4:
+                        case.assertLessEqual(p.sizes[0], MAX_REPEAT, s.name)
+                    if p.buffer == "ws":
+                        case.assertTrue(all(st <= eb.MAX_STRIDE_BYTES for st in p.strides), s.name)
+                if it[0] == "A":
+                    case.assertEqual(it[1].nbytes % em.A_BYTES, 0, s.name)
+                elif it[0] == "o":
+                    case.assertEqual(it[1].nbytes % (4 * em.O_BYTES), 0, s.name)
+                elif it[0] == "w":
+                    case.assertEqual(it[2] % em.W_BYTES, 0)
+    blob = store.blob()
+    for k in range(0, blob.size, em.W_BYTES):
+        eb.check_counts(blob[k:k + em.HDR_BYTES].view(np.int32))
+    case.assertLessEqual(store.opcodes(), {em.OP_CONV, em.OP_RESIDUAL})
+
+
+class Schedule(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.ir = chain_ir()
+        cls.ws = eb.plan_workspace(cls.ir)
+        cls.scheds, cls.store = eb.schedule_graph(cls.ir, cls.ws)
+
+    def test_streams_pair_every_activation_object_with_a_weight_use(self):
+        check_streams(self, self.ir, self.scheds, self.store)
+
+    def test_rounds_and_packets_follow_the_16_channel_group(self):
+        from ignite_xdna.compiler.engine_schedule import tile_origins as to
+        for s, L in zip(self.scheds, self.ir.layers):
+            t = self.ir.tensors[L.output]
+            rounds = eb.output_groups(t.blocks) * len(to(t.height, 20)) * len(to(t.width, 20))
+            self.assertEqual((s.rounds, s.packets), (rounds, 4 * rounds * len(layer_chunks(self.ir, L))), L.name)
+        self.assertEqual([eb.output_groups(self.ir.tensors[L.output].blocks) for L in self.ir.layers],
+                         [1, 1, 3, 1, 2])
+
+    def test_the_flag_variants_keep_the_invariants(self):
+        for flags in ({"weight_repeat": False}, {"merge_group_weights": False}, {"balance_columns": False}):
+            scheds, store = eb.schedule_graph(self.ir, self.ws, **flags)
+            check_streams(self, self.ir, scheds, store)
+
+    def test_the_int8_transport_experiments_are_refused(self):
+        with self.assertRaisesRegex(ValueError, "no activation ring"):
+            eb.schedule_graph(self.ir, self.ws, activation_ring=4)
+        with self.assertRaisesRegex(ValueError, "no activation ring"):
+            eb.schedule_graph(self.ir, self.ws, weight_buffer=True)
+
+
+SESR = Path(__file__).resolve().parents[1] / "models" / "sesr_m7_xint8.onnx"
+
+
+@unittest.skipUnless(SESR.exists(), "sesr_m7 model not present")
+class SesrSchedule(unittest.TestCase):
+    """SESR-M7 through the fork. These counts are DERIVED - a pin against regression, not a result."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.ir = graph_ir.lower_yolov8n(SESR)
+        cls.ws = eb.plan_workspace(cls.ir)
+        cls.scheds, cls.store = eb.schedule_graph(cls.ir, cls.ws)
+
+    def test_the_counts_match_the_phase_0_recount(self):
+        # results/aie/bf16_packet_recount_20260922.log: every SESR layer is 16 channels or fewer, so one
+        # 16-channel group serves it and the bf16 counts equal int8's.
+        self.assertEqual([(s.rounds, s.packets) for s in self.scheds],
+                         [(169, 676)] * 7 + [(169, 1352)] * 2)
+        self.assertEqual((sum(s.rounds for s in self.scheds), sum(s.packets for s in self.scheds)), (1521, 7436))
+
+    def test_the_counts_equal_the_int8_schedule_of_the_same_ir(self):
+        from ignite_xdna.compiler import engine_schedule as es
+        ws8 = es.plan_workspace(self.ir)
+        scheds8, _ = es.schedule_graph(self.ir, ws8)
+        self.assertEqual([(s.rounds, s.packets) for s in self.scheds], [(s.rounds, s.packets) for s in scheds8])
+
+    def test_the_streams_keep_their_invariants(self):
+        check_streams(self, self.ir, self.scheds, self.store)
+        self.assertEqual(self.store.opcodes(), {em.OP_CONV, em.OP_RESIDUAL})
+
+    def test_placements_are_bf16_with_the_halos_their_readers_need(self):
+        for p in self.ws.placements.values():
+            self.assertEqual((p.dtype, p.halo_value), ("uint16", 0))
+        # The 5x5 head and tail read at halo 2; head and body.0-5 feed a 3x3; the tail's output none.
+        self.assertEqual({n: p.halo for n, p in self.ws.placements.items() if p.halo},
+                         {self.ir.input: 2, **{L.output: 1 for L in self.ir.layers[:7]},
+                          self.ir.layers[7].output: 2})
 
 
 class Admission(unittest.TestCase):
