@@ -13366,6 +13366,11 @@ measured for the emulator, to the digit:
 **So the bound measured offline is now the device's own distance to the model**, which is what
 this arc set out to establish.
 
+*Scoped by a later sitting:* this holds on the plain XINT8 weights. On the AdaRound weights, with a
+byte-identical instruction stream, the device departs from the emulator on 4 of 6 inputs, and why is
+unexplained
+([below](#w8a16-sesr-m7-on-the-adaround-weights-the-device-departs-from-the-emulator-on-4-of-6-inputs-and-the-accuracy-passes-amds-adaround-2026-09-23-desktop-2)).
+
 ### Quality: W8A16 over W8A8, same weights, same tiles, same code
 
 The table uses `5_eval.py`'s tiling (256 x 256, overlap 8) and its metrics. Set5 has 5 images and
@@ -13400,6 +13405,8 @@ weights are different, and its arithmetic is AMD's: AMD's plain XINT8 reads 34.0
 model reads 34.25, as the DML row in the SESR section already recorded. W8A16 on the AdaRound weights
 is not measured. It needs one run of this tool on `sesr_m7_xint8_adaround.onnx` and both containers
 rebuilt from it.
+*Measured since:* W8A16 on the AdaRound weights reads 35.37 / 29.93 dB, above AMD's AdaRound
+([below](#w8a16-sesr-m7-on-the-adaround-weights-the-device-departs-from-the-emulator-on-4-of-6-inputs-and-the-accuracy-passes-amds-adaround-2026-09-23-desktop-2)).
 
 ### Timing, per 256 x 256 tile
 
@@ -13556,6 +13563,217 @@ AMD's stack, timed as `5_eval.py`'s `sess.run` per tile (ONNX Runtime 1.23.3 wit
   own pass is not separated, and that is now what decides the frame.
 - What makes the native bf16 egress 2.5-2.6x the int8 one. It is scalar and was not vectorized.
 - W8A16 was run on the plain XINT8 weights only. AMD's AdaRound W8A8 still beats it by 0.51 dB on
-  Set5 and 0.22 dB on Set14.
+  Set5 and 0.22 dB on Set14. *Measured since:* on the AdaRound weights W8A16 passes AMD's AdaRound,
+  and there the device no longer equals the emulator
+  ([next section](#w8a16-sesr-m7-on-the-adaround-weights-the-device-departs-from-the-emulator-on-4-of-6-inputs-and-the-accuracy-passes-amds-adaround-2026-09-23-desktop-2)).
+- Latency for one tile already in memory. This is neither a camera nor a whole image.
+- Energy was not measured.
+
+## W8A16 SESR-M7 on the AdaRound weights: the device departs from the emulator on 4 of 6 inputs, and the accuracy passes AMD's AdaRound (2026-09-23, Desktop 2)
+
+The two sections above ran W8A16 on the plain XINT8 weights. There the device equalled the emulator to
+the bit, and AMD's AdaRound W8A8 still led on accuracy. This section runs the same engine on the
+AdaRound weights. It has two results, and the first one qualifies the sections above.
+
+- **On these weights the device does not equal the emulator.** Four of six inputs differ, by 1 to
+  73 values out of 5.2 million. The difference is deterministic, the same in two sittings. It is
+  **unexplained**, and so "exact to the emulator" above holds for the plain weights only.
+- **W8A16 on the AdaRound weights reads 35.37 / 29.93 dB PSNR-Y on Set5 / Set14.** That is above AMD's
+  AdaRound W8A8 (35.16 / 29.82), the first time an engine arm here has passed AMD's most accurate
+  arm. The tile is still 3.2-3.7x AMD's. So this is a first, not a win, and there is no release in it.
+
+The AdaRound model is the plain model with different weight codes. 5,447 of its 22,128 int8 weight
+codes differ, each by one, spread over nine tensors. Every weight scale is a power of two, and the
+graph, the initializer shapes, the scales and the biases are the plain model's.
+
+Logs:
+- [`sesr_m7_adaround_int8_compile_desktop2_20260923.log`](../results/aie/sesr_m7_adaround_int8_compile_desktop2_20260923.log)
+  and [`sesr_m7_adaround_bf16_compile_desktop2_20260923.log`](../results/aie/sesr_m7_adaround_bf16_compile_desktop2_20260923.log)
+  build both containers from `sesr_m7_xint8_adaround.onnx`.
+- [`sesr_m7_adaround_vs_plain_int8_containers_desktop2_20260923.log`](../results/aie/sesr_m7_adaround_vs_plain_int8_containers_desktop2_20260923.log)
+  and [`sesr_m7_adaround_vs_plain_bf16_containers_desktop2_20260923.log`](../results/aie/sesr_m7_adaround_vs_plain_bf16_containers_desktop2_20260923.log)
+  come from `tools/container_diff.py`. Each AdaRound container carries its plain twin's schedule on
+  all 26 compared quantities.
+  - The kernel object and `insts.bin` are identical to the plain twin's.
+  - The embedded xclbin differs only inside the regions where a rebuild of the plain container also
+    differs (a timestamp, a UUID, and bytes near the AIE image).
+  - Only the weight packets differ.
+- [`sesr_m7_adaround_bf16_silicon_desktop2_20260923.log`](../results/aie/sesr_m7_adaround_bf16_silicon_desktop2_20260923.log)
+  is the sitting. It was `tools/bf16_sr_silicon_check.py` under `research-lowlevel.sh --npu`.
+  - It was timing eligible, with no foreign contention and the device idle before and after.
+  - The power mode was `default`, XRT 2.21.0, NPU driver 32.0.20101.3760.
+  - It exits 1, because exactness failed.
+- [`sesr_m7_adaround_bf16_dump_desktop2_20260923.log`](../results/aie/sesr_m7_adaround_bf16_dump_desktop2_20260923.log)
+  is a second, checks-only sitting on the same seven frames, with no timing and no quality.
+  - It dumped every frame the device returned (`--dump-frames`) and replayed each isolable layer
+    from the device's own inputs (`--isolate all`).
+  - The dump is git-ignored. The log records each file's hash, and the container's.
+  - The device was idle before and after.
+- [`sesr_m7_adaround_bf16_dump_replay_desktop2_20260923.log`](../results/aie/sesr_m7_adaround_bf16_dump_replay_desktop2_20260923.log)
+  checks that dump again offline (`--from-dump`). It reproduces every count and lists where each
+  difference sits.
+- [`bf16_engine_vs_oracle_adaround_desktop2_20260923.log`](../results/aie/bf16_engine_vs_oracle_adaround_desktop2_20260923.log)
+  is `tools/bf16_engine_vs_oracle.py` on the AdaRound QDQ, offline, on the same six inputs the plain
+  weights were measured on.
+
+**AMD's arm was not run in this sitting.** A run was started and stopped during Set14, and it is
+not evidence. AMD's figures below are from the two sittings of 2026-09-22 and read the same in both.
+Its quality is deterministic, so those rows compare. Its timing is another day's.
+
+### The device departs from the emulator, and every layer that can be isolated is exact
+
+The inputs and method are the sections above's: the five Set5 LR x2 images and seed 0, staged by
+the session, run once each, then recomputed by `run_direct` (aligned multiply-accumulate) from the
+very patterns staged. The table gives the values that differ in each tensor still resident when the
+frame ends.
+
+| input | head | body.4 | body.5 | Add | tail | vs the W8A16 oracle |
+|---|---:|---:|---:|---:|---:|---:|
+| baby | 0 | 8 | 1 | 2 | 1 | 17 |
+| bird | 0 | 0 | 0 | 0 | 0 | 118 |
+| butterfly | 0 | 40 | 10 | 18 | 5 | 11 |
+| head | 0 | 24 | 6 | 8 | 5 | 7 |
+| woman | 0 | 0 | 0 | 0 | 0 | 3 |
+| seed 0 | 0 | 1 | 0 | 0 | 0 | 90 |
+
+- The comparison covered 31,064,064 resident values and 129 differ. Of 6,291,456 tail values, 11
+  differ, none of them in a padding lane.
+- A tail value is at most one bf16 step off, except one in `head` that is 13 steps off. That value
+  is near zero (0.036 against 0.039), where the steps are small.
+- No value is non-finite.
+
+What this rules out:
+- **Nondeterminism.** The seventh frame repeats baby after five others and is identical in every
+  tensor. The second sitting reproduces every count in the table on every frame.
+- **Transport, staging and the first layer.** The input region reads back as staged on all seven
+  frames, the staged plane is the compiler's, and the head is exact on every input.
+- **The schedule.** `insts.bin` is byte-identical to the plain container's. That instruction stream
+  was exact on these six inputs in two sittings, over 31,064,064 resident values each time.
+  Offline, the emulator's own schedule path equals the direct reference on every layer of all six
+  inputs on these weights: 54 of 54 layers-by-inputs, with no value differing
+  ([`bf16_engine_vs_oracle_adaround_desktop2_20260923.log`](../results/aie/bf16_engine_vs_oracle_adaround_desktop2_20260923.log)).
+  So the packets and the stream, as the emulator models them, reproduce the reference.
+- **The host ends.** Native equals numpy on 7 of 7 frames, and the staged values are
+  `npu/sesr.py`'s preprocess on 6 of 6.
+
+**Where it starts.** The chained check feeds each layer the emulator's own previous output, so a
+difference shows in every layer after the one where it begins. The second sitting replays, from the
+DEVICE's own input tensors, every layer whose inputs were still resident: head, body.5, body.6 with
+its residual Add, and the tail. Under the aligned model, **each of them equals the device bit for bit
+on all six inputs**, 23,592,960 values with none differing. So the differences in body.5, the Add and
+the tail are carried in, not made there. body.4 cannot be replayed, because body.3 is overwritten
+before the frame ends, and neither can body.0 to body.3.
+
+**The shape.** Each inexact frame carries exactly one spatial cluster, which the replay log lists
+position by position:
+- **seed 0:** one value in body.4, channel 8 at (126, 185), one step high.
+- **baby:** 8 values in body.4 within a 5 x 5 spot at y 94-98, x 247-251, then 1 in body.5, 2 in
+  the Add and 1 in the tail, all inside that spot.
+- **head:** 24 values in body.4 within y 206-209, x 112-116.
+- **butterfly:** 40 values in body.4 within y 205-210, x 186-190.
+
+The log lists up to 16 positions per tensor. The ones listed in body.4 are 1 to 3 bf16 steps from the
+emulator's values. In each frame the later
+layers' differences stay inside that frame's spot. No listed position lies where two edge tiles
+overlap.
+
+A single differing value spreads by one pixel a side through each 3 x 3 layer, so a 5 x 5 spot in
+body.4 is what one value about two layers upstream becomes, or a few adjacent ones in body.3. The
+dump cannot tell those apart.
+
+**Unexplained.** Somewhere in body.0 to body.4, on these weights, the device occasionally rounds one
+value differently from the emulator: once per frame or not at all. The candidates still standing
+are:
+- a corner of the core's accumulate that the aligned model does not cover;
+- something else about those layers on the device that the emulator does not model. The packets and
+  the stream it does model are ruled out above.
+
+The replay cannot choose between the emulator's four candidate accumulate models either. On these
+layers, fed the device's inputs, the four agree with one another on every value but one (sequential,
+once, seed 0's body.5), so an exact replay under aligned is no evidence for aligned over the others.
+**The step that would locate the origin** is a container compiled with workspace reuse off, so that
+every tensor stays resident and every layer can be replayed. It has not been built.
+
+**What the inexactness costs.** Against the W8A16 oracle the device's worst frame is bird, 118 of
+786,432 values, and bird is one of the two frames that equal the emulator. That distance is therefore
+the emulator's own, not the device's. The largest rel_l2 is 3.44e-5 (seed 0). The bf16 container
+differs from the oracle in 175 of 11,366,412 quality pixels, each by one level. The quality below
+rests on those device-to-oracle comparisons and on the int8 container equalling its QDQ model. It does
+not rest on the device equalling the emulator.
+
+### Quality: W8A16 on the AdaRound weights is above every W8A8 arm here, AMD's included
+
+The table uses `5_eval.py`'s tiling (256 x 256, overlap 8) and its metrics. Set5 has 5 images and
+Set14 has 14, and the two are never averaged together.
+
+| arm | weights | runs on | Set5 PSNR-Y | Set5 SSIM-Y | Set14 PSNR-Y | Set14 SSIM-Y | sitting |
+|---|---|---|---:|---:|---:|---:|---|
+| FP32 | float | CPU | 35.64 | 0.9518 | 30.03 | 0.8910 | this one |
+| **W8A16** | **AdaRound** | **bf16 engine, NPU** | **35.37** | 0.9492 | **29.93** | 0.8888 | this one |
+| AMD XINT8 + AdaRound | AdaRound | VitisAI EP, NPU | 35.16 | 0.9437 | 29.82 | 0.8837 | both of 2026-09-22 |
+| W8A8 | AdaRound | int8 engine, NPU | 35.06 | 0.9415 | 29.79 | 0.8828 | this one |
+| W8A16 | plain XINT8 | bf16 engine, NPU | 34.65 | 0.9408 | 29.60 | 0.8826 | both of 2026-09-22 |
+| W8A8 | plain XINT8 | int8 engine, NPU | 34.25 | 0.9339 | 29.41 | 0.8771 | both of 2026-09-22 |
+| AMD XINT8 | plain XINT8 | VitisAI EP, NPU | 34.06 | 0.9346 | 29.32 | 0.8770 | both of 2026-09-22 |
+
+- **W8A16 on the AdaRound weights gains +0.31 dB on Set5 and +0.14 on Set14 over the same weights at
+  W8A8, and every one of the 19 images improves.** That recovers 54% and 59% of the gap to FP32, which
+  is now 0.27 and 0.10 dB.
+- **It is above AMD's AdaRound W8A8 by +0.21 dB on Set5 and +0.11 on Set14.** AMD's row is from the
+  earlier sittings, as the preamble says.
+- **The two gains do not add.**
+  - AdaRound is worth +0.81 / +0.38 at W8A8 and +0.72 / +0.33 at W8A16.
+  - bf16 activations are worth +0.41 / +0.19 on the plain weights and +0.31 / +0.14 on AdaRound's.
+  - Each gain is smaller when the other is present.
+- **The engine's exact W8A8 on the AdaRound weights reads below AMD's AdaRound**: 35.06 against 35.16
+  on Set5, and 29.79 against 29.82 on Set14. On the plain weights the engine's exact W8A8 read
+  *above* AMD's, 34.25 against 34.06. So AMD's arithmetic departs from the QDQ model in both
+  directions, depending on the weights. Why is not examined here.
+- The int8 container equals the AdaRound QDQ model run on the CPU with graph optimizations off: 0 of
+  11,366,412 pixels differ across both sets.
+- The bf16 container differs from the W8A16 oracle in 175 of those pixels (26 on Set5, 149 on
+  Set14), each by one level. On the plain weights the count was 144.
+
+### Timing, per 256 x 256 tile
+
+The figures are means over 300 frames after 30 of warm-up, with p99 in parentheses. The three NPU
+arms ran two alternating rounds each, and each range covers both rounds.
+
+| arm | host staging | NPU dispatch, or CPU run | readback | host postprocess | the tile |
+|---|---:|---:|---:|---:|---:|
+| int8 engine, native host | 0.10 ms | 4.04-4.06 ms (4.25-4.26) | 0.02 ms | 0.33-0.35 ms | 4.51 ms (4.86-5.19) |
+| **bf16 engine, native host** | 0.11-0.12 ms | 5.19-5.20 ms (5.73-5.74) | 0.04 ms | 0.82-0.83 ms | **6.16-6.18 ms** (6.94-6.99) |
+| bf16 engine, numpy host | 0.65-0.66 ms | 5.24-5.34 ms (5.76-5.98) | 0.04 ms | 4.81-5.44 ms | 10.75-11.49 ms (12.04-13.49) |
+| FP32 on the CPU, ONNX Runtime 1.30 | 0.27 ms | 7.35 ms (11.28) | - | 2.34 ms | 9.95 ms (14.94) |
+
+- The containers carry the plain containers' schedule, so this is the previous section's frame
+  again, and it measures the same within this machine's drift:
+  - bf16 dispatch is 1.28-1.29x int8's (1.28-1.30 before);
+  - the native bf16 tile is 6.16-6.18 ms (6.28-6.29 before), 1.37x the int8 tile;
+  - dispatch is 84% of the bf16 tile, so the frame is still dispatch-bound and design A's parking
+    stands.
+- **The bf16 tile beats the CPU again**: 1.61x its mean, and under its fastest tile of the 300
+  (6.43 ms).
+- The numpy arm's first round is the slow end of both its ranges, with dispatch 5.34 ms against
+  5.19-5.24 in every other bf16 arm and round. It is reported as measured.
+- The CPU arm moved again: its run is 7.35 ms, against 7.47 and 8.17 in the two earlier sittings. These
+  rows are compared only with each other.
+- AMD's arm was not timed in this sitting. In the previous section's sitting its int8 tile was 1.65 to
+  1.93 ms, and the bf16 tile here is 3.2-3.7x that.
+
+### What this does not establish
+
+- **Where the device and the emulator part.** It is somewhere in body.0 to body.4, and why is
+  unexplained.
+- Whether the plain weights' exactness ever tested the accumulate model. On SESR's layers the four
+  candidate models agree almost everywhere: on these weights, in isolation, on all but one of
+  23,592,960 values, as
+  [an earlier section](#the-cores-aligned-accumulate-is-invisible-after-a-bf16-store-and-the-cpu-bf16-score-survives-it-2026-09-21-desktop-2)
+  found on ordinary data. So 0 differing values on the plain weights did not tell the models apart
+  either. What selected the aligned model is the one-core probe built to make them disagree.
+- AMD's arm was not re-run. Its quality is from the two earlier sittings, and its timing from the
+  previous one.
+- One timed sitting on one machine, plus a checks-only second. Five and fourteen images, as means,
+  with no significance test.
 - Latency for one tile already in memory. This is neither a camera nor a whole image.
 - Energy was not measured.

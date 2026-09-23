@@ -1,0 +1,246 @@
+RESEARCH_PLATFORM {"machine": "Desktop 2", "cpu": "AMD Ryzen 7 8700G w/ Radeon 780M Graphics", "os": "Windows-11-10.0.26200-SP0", "ram_bytes": 33381138432, "source_sha256": {"tools/research_process.py": "ffeb1857f190b482eed101b5f5a928f455de26bfa61d23f78a2eacec08e2663e", "tools/quant_calib_alphabet.py": "2dc0b2878c564853f340880209a425dfcf63b8536b2b8e9fd32344daade58d37", "tools/xint8_arithmetic_probe.py": "6aa3df08b9870c3c2264b868459d7ffbac3070dddc1349d7c6f3f480075f7041", "scripts/research-lowlevel.sh": "3455ad7933697936487712665505c216891865c6deada647302785f6e37020bd", "scripts/research-iron.sh": "4c863a262646ddab39b5005006ba8e03809895e6386c6310e2fd9d0a9e9609ee", "kernels/memory_placement/probe.py": "e8d990169ad6091fa1b53852e9f61eff495b5def72d35165a5c5cf1759e38898", "kernels/memory_placement/memory_kernels.cc": "182e7af7071a1e851afb4a7ca266069c489aea1fbaaa85eca129708daeba5ba6", "scripts/research-matrix.sh": "739254171629deae822b0ad7dabc875aee19ace56dde77d3e8aab61663f97516", "kernels/memory_placement/gemm.py": "17c905ad66110d3346bbf0db898dfc6b780df59fae1dfb0c1747057ce1e5844e", "kernels/memory_placement/gemm_placement.cc": "f21acf7250b12914ea30cc1f77613239dfa18421a85a1b9a5199017dd916278a", "tools/research_summary.py": "0c00dcceef07053d06731b41a1f1ed58d3ba4ea09f82497de354ce9cef17da20", "tools/research_toolchain.py": "f0a126a24ae213acfaa43460cfd9def0c86d9cb70cfee0228aa271688467b314"}, "commit": "6c0c90854b6fddf0e9aa0aa160a306c960f16192", "command": ["bash", "scripts/research-iron.sh", "tools/bf16_sr_silicon_check.py", "--container", "build/sesr_m7_adaround_bf16.ignite", "--qdq", "models/sesr_m7_xint8_adaround.onnx", "--fp32", "models/sesr_m7_fp32.onnx", "--no-timing", "--no-quality", "--isolate", "all", "--dump-frames", "scratch/bf16_sr_dump_sesr_m7_adaround_20260923"], "seconds_limit": 1500.0, "rss_gib_limit": 8, "checks_only": false, "free_ram_bytes": 17224859648}
+HOST_LOAD busy_cores=0.96 logical_cores=16 free_ram_gb=16.1 sample_sec=1
+HOST_LOAD_TOP 0.26 Code:44448 ws_mb=333
+HOST_LOAD_TOP 0.16 dev-agent:62812 ws_mb=437
+HOST_LOAD_TOP 0.12 dev-agent:54316 ws_mb=494
+HOST_LOAD_TOP 0.05 cut:54952 ws_mb=5
+HOST_LOAD_TOP 0.03 powershell:42260 ws_mb=82
+HOST_LOAD_VERDICT CLEAR
+
+PRE_NPU_CONTEXT_WITNESS "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+BF16_SR_SETUP {"bf16": {"egress_bytes": 1572864, "elem": "bf16", "engine": "conv_engine_bf16_v1", "insts_sha256": "e4f175d613e8c6df", "kernel_object_sha256": "67d1050f6809f390", "path": "build/sesr_m7_adaround_bf16.ignite", "sha256": "999ee84e4af9ce1f", "source_model_sha256": "b67905b22e6e11aa", "task": "super_resolution", "workspace_bytes": 11732160, "wpackets_sha256": "98b891adfeea9207", "xclbin_sha256": "404f473ef1b6b6df"}, "bf16_hosts": ["native", "numpy"], "cv2": "5.0.0", "datasets": ["Set5", "Set14"], "fp32": {"path": "sesr_m7_fp32.onnx", "sha256": "816b87272c9b54a8"}, "frames": 300, "from_dump": null, "host": "DESKTOP-CBL5NUA", "images": ["baby.png", "bird.png", "butterfly.png", "head.png", "woman.png"], "int8": null, "isolate": "all", "mac_model": "aligned", "native_library": {"bf16_egress": true, "bf16_ingress": true, "loaded": true}, "npu_power_mode": "default", "numpy": "2.5.3", "onnxruntime": "1.30.0", "provenance": {"src/ignite_xdna/compiler/engine_bf16_emulator.py": "9f4fe7c72fdb1b67", "src/ignite_xdna/compiler/engine_schedule_bf16.py": "3a45d7bb4eeda61e", "src/ignite_xdna/compiler/graph_ir.py": "82954487a0dc6e90", "src/ignite_xdna/compiler/graph_reference_bf16.py": "7dec197ba5f0e555", "src/ignite_xdna/pipelines/preprocess.py": "55460d18375b7bf1", "src/ignite_xdna/pipelines/preprocess_simd.dll": "a3e5836080beacce", "src/ignite_xdna/runtime/graph_session.py": "14d9bfb9df31800f", "tools/bf16_sr_silicon_check.py": "5974b1bcf68adba8", "tools/w8a16_oracle.py": "872cd9e8cd0a4b23"}, "qdq": {"path": "sesr_m7_xint8_adaround.onnx", "sha256": "b67905b22e6e11aa"}, "rounds": 2, "seeds": [0], "warmup": 30, "xrt": {"device": "NPU Phoenix", "npu_driver": "32.0.20101.3760", "npu_firmware": "1.5.5.391", "xrt_version": "2.21.0"}}
+BF16_SR_WITNESS {"idle": true, "rc": 0, "report": ["[003d:00:01.1] : NPU Phoenix", "AIE Partitions", "No hardware contexts running on device"], "when": "start"}
+BF16_SR_DEVICE_FRAMES {"dispatch_ms": [6.651, 5.15, 5.19, 5.161, 5.169, 5.157, 5.183], "frames": ["baby", "bird", "butterfly", "head", "woman", "seed0", "baby_again"]}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [39172, 58712, 62836, 64652, 67944], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 4.047, "tree_rss_bytes": 229236736, "foreign_peers": []}
+BF16_SR_DUMP {"container_sha256": "999ee84e4af9ce1f", "dir": "scratch/bf16_sr_dump_sesr_m7_adaround_20260923", "files": {"00_baby.npz": "ca08feaa26144a86", "01_bird.npz": "36c1bd4244dda315", "02_butterfly.npz": "8a0dcc9d2dd1d7ba", "03_head.npz": "23d8f8816bb85ed5", "04_woman.npz": "220dd41576e7a925", "05_seed0.npz": "ca54c39179e84c42", "06_baby_again.npz": "cd1ce2f06525e1d0"}, "qdq_sha256": "b67905b22e6e11aa"}
+BF16_SR_WITNESS {"idle": true, "rc": 0, "report": ["[003d:00:01.1] : NPU Phoenix", "AIE Partitions", "No hardware contexts running on device"], "when": "end"}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [39172, 58712, 62836, 63436, 64652, 67944], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 7.703, "tree_rss_bytes": 236814336, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 11.64, "tree_rss_bytes": 246403072, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [39172, 58712, 62836, 63436, 64652, 67944], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 15.578, "tree_rss_bytes": 252833792, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [39172, 58712, 62836, 63436, 64652, 67944], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 19.594, "tree_rss_bytes": 259309568, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 23.422, "tree_rss_bytes": 266366976, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [39172, 58712, 62836, 63436, 64652, 67944], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 27.422, "tree_rss_bytes": 272044032, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [39172, 58712, 62836, 63436, 64652, 67944], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 31.281, "tree_rss_bytes": 274345984, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 35.14, "tree_rss_bytes": 319213568, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [39172, 58712, 62836, 63436, 64652, 67944], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 38.812, "tree_rss_bytes": 328122368, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [39172, 58712, 62836, 63436, 64652, 67944], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 43.078, "tree_rss_bytes": 334618624, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [39172, 58712, 62836, 63436, 64652, 67944], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 47.219, "tree_rss_bytes": 341762048, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 50.984, "tree_rss_bytes": 349110272, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [39172, 58712, 62836, 63436, 64652, 67944], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 54.594, "tree_rss_bytes": 355422208, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [39172, 58712, 62836, 63436, 64652, 67944], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 58.281, "tree_rss_bytes": 357031936, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 62.406, "tree_rss_bytes": 336953344, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [39172, 58712, 62836, 63436, 64652, 67944], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 66.14, "tree_rss_bytes": 346288128, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [39172, 58712, 62836, 63436, 64652, 67944], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 69.828, "tree_rss_bytes": 352153600, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 74.297, "tree_rss_bytes": 358957056, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [39172, 58712, 62836, 63436, 64652, 67944], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 78.281, "tree_rss_bytes": 366059520, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [39172, 58712, 62836, 63436, 64652, 67944], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 82.234, "tree_rss_bytes": 372453376, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 86.094, "tree_rss_bytes": 374734848, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [39172, 58712, 62836, 63436, 64652, 67944], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 90.109, "tree_rss_bytes": 337776640, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [39172, 58712, 62836, 63436, 64652, 67944], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 94.031, "tree_rss_bytes": 346390528, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 97.828, "tree_rss_bytes": 352915456, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [39172, 58712, 62836, 63436, 64652, 67944], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 101.734, "tree_rss_bytes": 359452672, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [39172, 58712, 62836, 63436, 64652, 67944], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 105.594, "tree_rss_bytes": 365490176, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 109.656, "tree_rss_bytes": 372994048, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [39172, 58712, 62836, 63436, 64652, 67944], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 113.453, "tree_rss_bytes": 376336384, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [39172, 58712, 62836, 63436, 64652, 67944], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 117.25, "tree_rss_bytes": 378052608, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 121.203, "tree_rss_bytes": 345387008, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [39172, 58712, 62836, 63436, 64652, 67944], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 125.047, "tree_rss_bytes": 352677888, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [39172, 58712, 62836, 63436, 64652, 67944], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 129.062, "tree_rss_bytes": 358785024, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 132.828, "tree_rss_bytes": 366174208, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [39172, 58712, 62836, 63436, 64652, 67944], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 136.656, "tree_rss_bytes": 370966528, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [39172, 58712, 62836, 63436, 64652, 67944], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 140.594, "tree_rss_bytes": 376737792, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 144.39, "tree_rss_bytes": 378834944, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [39172, 58712, 62836, 63436, 64652, 67944], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 148.297, "tree_rss_bytes": 341921792, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [39172, 58712, 62836, 63436, 64652, 67944], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 152.172, "tree_rss_bytes": 351592448, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 156.031, "tree_rss_bytes": 358338560, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [39172, 58712, 62836, 63436, 64652, 67944], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 159.922, "tree_rss_bytes": 364113920, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [39172, 58712, 62836, 63436, 64652, 67944], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 163.984, "tree_rss_bytes": 371105792, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 167.797, "tree_rss_bytes": 376516608, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [39172, 58712, 62836, 63436, 64652, 67944], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 171.765, "tree_rss_bytes": 378933248, "foreign_peers": []}
+BF16_SR_EXACT {"dispatch_ms": 6.651, "emulator_s": 27.8, "exact": false, "host": {"egress_path": "native", "native_egress_equals_numpy": true, "stage_path": "native", "staged_is_npu_sesr_preprocess": true}, "input_region_intact": true, "label": "baby", "nonfinite_tail": 0, "resident_tensors": {"compared": 6, "differ": 12, "per_tensor_differ": {"/Add_output_0_QuantizeLinear_Output": 2, "/body.4/body.4.1/Relu_output_0_QuantizeLinear_Output": 8, "/body.5/body.5.1/Relu_output_0_QuantizeLinear_Output": 1, "/head/Conv_output_0_QuantizeLinear_Output": 0, "/tail/Conv_output_0_QuantizeLinear_Output": 1, "input_QuantizeLinear_Output": 0}, "values": 5177344}, "staged_is_the_compilers_plane": true, "tail": {"differ": 1, "differ_padding_lanes": 0, "lanes": 16, "max_ulp": 1, "values": 1048576, "zero_sign_only": 0}, "vs_oracle": {"differ": 17, "finite": true, "max_abs": 0.5, "max_abs_peak_ulps": 0.5, "max_ulp": 1, "n": 786432, "peak": 131.0, "rel_l2": 1.7986921331311675e-05, "zero_sign_only": 0}}
+BF16_SR_EXACT {"dispatch_ms": 5.15, "emulator_s": 27.2, "exact": true, "host": {"egress_path": "native", "native_egress_equals_numpy": true, "stage_path": "native", "staged_is_npu_sesr_preprocess": true}, "input_region_intact": true, "label": "bird", "nonfinite_tail": 0, "resident_tensors": {"compared": 6, "differ": 0, "per_tensor_differ": {"/Add_output_0_QuantizeLinear_Output": 0, "/body.4/body.4.1/Relu_output_0_QuantizeLinear_Output": 0, "/body.5/body.5.1/Relu_output_0_QuantizeLinear_Output": 0, "/head/Conv_output_0_QuantizeLinear_Output": 0, "/tail/Conv_output_0_QuantizeLinear_Output": 0, "input_QuantizeLinear_Output": 0}, "values": 5177344}, "staged_is_the_compilers_plane": true, "tail": {"differ": 0, "differ_padding_lanes": 0, "lanes": 16, "max_ulp": 0, "values": 1048576, "zero_sign_only": 0}, "vs_oracle": {"differ": 118, "finite": true, "max_abs": 0.5, "max_abs_peak_ulps": 0.5, "max_ulp": 31, "n": 786432, "peak": 132.0, "rel_l2": 1.547585288248247e-05, "zero_sign_only": 0}}
+BF16_SR_EXACT {"dispatch_ms": 5.19, "emulator_s": 27.8, "exact": false, "host": {"egress_path": "native", "native_egress_equals_numpy": true, "stage_path": "native", "staged_is_npu_sesr_preprocess": true}, "input_region_intact": true, "label": "butterfly", "nonfinite_tail": 0, "resident_tensors": {"compared": 6, "differ": 73, "per_tensor_differ": {"/Add_output_0_QuantizeLinear_Output": 18, "/body.4/body.4.1/Relu_output_0_QuantizeLinear_Output": 40, "/body.5/body.5.1/Relu_output_0_QuantizeLinear_Output": 10, "/head/Conv_output_0_QuantizeLinear_Output": 0, "/tail/Conv_output_0_QuantizeLinear_Output": 5, "input_QuantizeLinear_Output": 0}, "values": 5177344}, "staged_is_the_compilers_plane": true, "tail": {"differ": 5, "differ_padding_lanes": 0, "lanes": 16, "max_ulp": 1, "values": 1048576, "zero_sign_only": 0}, "vs_oracle": {"differ": 11, "finite": true, "max_abs": 0.5, "max_abs_peak_ulps": 1.0, "max_ulp": 1, "n": 786432, "peak": 116.5, "rel_l2": 1.798406170943759e-05, "zero_sign_only": 0}}
+BF16_SR_EXACT {"dispatch_ms": 5.161, "emulator_s": 27.9, "exact": false, "host": {"egress_path": "native", "native_egress_equals_numpy": true, "stage_path": "native", "staged_is_npu_sesr_preprocess": true}, "input_region_intact": true, "label": "head", "nonfinite_tail": 0, "resident_tensors": {"compared": 6, "differ": 43, "per_tensor_differ": {"/Add_output_0_QuantizeLinear_Output": 8, "/body.4/body.4.1/Relu_output_0_QuantizeLinear_Output": 24, "/body.5/body.5.1/Relu_output_0_QuantizeLinear_Output": 6, "/head/Conv_output_0_QuantizeLinear_Output": 0, "/tail/Conv_output_0_QuantizeLinear_Output": 5, "input_QuantizeLinear_Output": 0}, "values": 5177344}, "staged_is_the_compilers_plane": true, "tail": {"differ": 5, "differ_padding_lanes": 0, "lanes": 16, "max_ulp": 13, "values": 1048576, "zero_sign_only": 0}, "vs_oracle": {"differ": 7, "finite": true, "max_abs": 0.5, "max_abs_peak_ulps": 0.5, "max_ulp": 1, "n": 786432, "peak": 130.0, "rel_l2": 1.7478488398156242e-05, "zero_sign_only": 0}}
+BF16_SR_EXACT {"dispatch_ms": 5.169, "emulator_s": 28.2, "exact": true, "host": {"egress_path": "native", "native_egress_equals_numpy": true, "stage_path": "native", "staged_is_npu_sesr_preprocess": true}, "input_region_intact": true, "label": "woman", "nonfinite_tail": 0, "resident_tensors": {"compared": 6, "differ": 0, "per_tensor_differ": {"/Add_output_0_QuantizeLinear_Output": 0, "/body.4/body.4.1/Relu_output_0_QuantizeLinear_Output": 0, "/body.5/body.5.1/Relu_output_0_QuantizeLinear_Output": 0, "/head/Conv_output_0_QuantizeLinear_Output": 0, "/tail/Conv_output_0_QuantizeLinear_Output": 0, "input_QuantizeLinear_Output": 0}, "values": 5177344}, "staged_is_the_compilers_plane": true, "tail": {"differ": 0, "differ_padding_lanes": 0, "lanes": 16, "max_ulp": 0, "values": 1048576, "zero_sign_only": 0}, "vs_oracle": {"differ": 3, "finite": true, "max_abs": 0.25, "max_abs_peak_ulps": 0.25, "max_ulp": 1, "n": 786432, "peak": 135.0, "rel_l2": 5.4014945882137235e-06, "zero_sign_only": 0}}
+BF16_SR_EXACT {"dispatch_ms": 5.157, "emulator_s": 28.1, "exact": false, "host": {"egress_path": "native", "native_egress_equals_numpy": true}, "input_region_intact": true, "label": "seed0", "nonfinite_tail": 0, "resident_tensors": {"compared": 6, "differ": 1, "per_tensor_differ": {"/Add_output_0_QuantizeLinear_Output": 0, "/body.4/body.4.1/Relu_output_0_QuantizeLinear_Output": 1, "/body.5/body.5.1/Relu_output_0_QuantizeLinear_Output": 0, "/head/Conv_output_0_QuantizeLinear_Output": 0, "/tail/Conv_output_0_QuantizeLinear_Output": 0, "input_QuantizeLinear_Output": 0}, "values": 5177344}, "staged_is_the_compilers_plane": true, "tail": {"differ": 0, "differ_padding_lanes": 0, "lanes": 16, "max_ulp": 0, "values": 1048576, "zero_sign_only": 0}, "vs_oracle": {"differ": 90, "finite": true, "max_abs": 1.0, "max_abs_peak_ulps": 0.5, "max_ulp": 19, "n": 786432, "peak": 318.0, "rel_l2": 3.4380892436728e-05, "zero_sign_only": 0}}
+BF16_SR_EXACT {"dispatch_ms": 5.183, "host": {"egress_path": "native", "native_egress_equals_numpy": true, "stage_path": "native", "staged_is_npu_sesr_preprocess": true}, "input_region_intact": true, "label": "baby_again", "nonfinite_tail": 0, "repeat_of": "baby", "repeat_tail_identical": true, "repeat_tensors_identical": true, "staged_is_the_compilers_plane": true}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [39172, 58712, 62836, 63436, 64652, 67944], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 175.859, "tree_rss_bytes": 295952384, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 179.75, "tree_rss_bytes": 301301760, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [39172, 58712, 62836, 63436, 64652, 67944], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 183.5, "tree_rss_bytes": 311382016, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [39172, 58712, 62836, 63436, 64652, 67944], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 187.578, "tree_rss_bytes": 312623104, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 191.406, "tree_rss_bytes": 309387264, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [39172, 58712, 62836, 63436, 64652, 67944], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 195.187, "tree_rss_bytes": 312205312, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [39172, 58712, 62836, 63436, 64652, 67944], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 199.015, "tree_rss_bytes": 313769984, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 202.875, "tree_rss_bytes": 315113472, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [39172, 58712, 62836, 63436, 64652, 67944], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 206.844, "tree_rss_bytes": 307187712, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [39172, 58712, 62836, 63436, 64652, 67944], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 210.687, "tree_rss_bytes": 311021568, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 214.437, "tree_rss_bytes": 316092416, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [39172, 58712, 62836, 63436, 64652, 67944], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 218.281, "tree_rss_bytes": 313327616, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [39172, 58712, 62836, 63436, 64652, 67944], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 222.172, "tree_rss_bytes": 310599680, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 226.156, "tree_rss_bytes": 314007552, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [39172, 58712, 62836, 63436, 64652, 67944], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 229.922, "tree_rss_bytes": 315109376, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [39172, 58712, 62836, 63436, 64652, 67944], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 233.765, "tree_rss_bytes": 317218816, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 237.578, "tree_rss_bytes": 308670464, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [39172, 58712, 62836, 63436, 64652, 67944], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 241.406, "tree_rss_bytes": 313794560, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [39172, 58712, 62836, 63436, 64652, 67944], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 245.172, "tree_rss_bytes": 317374464, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 249.047, "tree_rss_bytes": 315404288, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [39172, 58712, 62836, 63436, 64652, 67944], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 252.875, "tree_rss_bytes": 312188928, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [39172, 58712, 62836, 63436, 64652, 67944], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 256.656, "tree_rss_bytes": 314654720, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 260.437, "tree_rss_bytes": 316375040, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [39172, 58712, 62836, 63436, 64652, 67944], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 264.297, "tree_rss_bytes": 318431232, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [39172, 58712, 62836, 63436, 64652, 67944], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 268.047, "tree_rss_bytes": 309239808, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 272.047, "tree_rss_bytes": 316157952, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [39172, 58712, 62836, 63436, 64652, 67944], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 276.047, "tree_rss_bytes": 318726144, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [39172, 58712, 62836, 63436, 64652, 67944], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 279.844, "tree_rss_bytes": 316293120, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 283.734, "tree_rss_bytes": 313237504, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [39172, 58712, 62836, 63436, 64652, 67944], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 287.906, "tree_rss_bytes": 316186624, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [39172, 58712, 62836, 63436, 64652, 67944], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 292.14, "tree_rss_bytes": 315539456, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 295.984, "tree_rss_bytes": 307240960, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [39172, 58712, 62836, 63436, 64652, 67944], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 299.562, "tree_rss_bytes": 310312960, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [39172, 58712, 62836, 63436, 64652, 67944], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 303.172, "tree_rss_bytes": 315039744, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [39172, 58712, 62836, 63436, 64652, 67944], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 307.078, "tree_rss_bytes": 324755456, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 310.812, "tree_rss_bytes": 321683456, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [39172, 58712, 62836, 63436, 64652, 67944], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 314.469, "tree_rss_bytes": 315625472, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [39172, 58712, 62836, 63436, 64652, 67944], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 318.062, "tree_rss_bytes": 317984768, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 322.109, "tree_rss_bytes": 319774720, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [39172, 58712, 62836, 63436, 64652, 67944], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 326.047, "tree_rss_bytes": 309776384, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [39172, 58712, 62836, 63436, 64652, 67944], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 330.0, "tree_rss_bytes": 314662912, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 333.687, "tree_rss_bytes": 318951424, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [39172, 58712, 62836, 63436, 64652, 67944], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 337.5, "tree_rss_bytes": 316440576, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [39172, 58712, 62836, 63436, 64652, 67944], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 341.156, "tree_rss_bytes": 324481024, "foreign_peers": []}
+HOST_TIMELINE {"elapsed_seconds": 344.734, "tree_rss_bytes": 318111744, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [39172, 58712, 62836, 63436, 64652, 67944], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 348.547, "tree_rss_bytes": 317480960, "foreign_peers": []}
+NPU_TIMELINE "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+NPU_OWNERSHIP {"context_pids": [], "owned_pids": [39172, 58712, 62836, 63436, 64652, 67944], "foreign_pids": []}
+HOST_TIMELINE {"elapsed_seconds": 352.453, "tree_rss_bytes": 321961984, "foreign_peers": []}
+BF16_SR_ISOLATED {"label": "baby", "layers": [{"differ_by_model": {"aligned": 0, "dot_first": 0, "sequential": 0, "wide": 0}, "isolated": true, "layer": "/head/Conv", "output": "/head/Conv_output_0_QuantizeLinear_Output", "positions": [], "positions_any_model_differs": 0, "positions_no_model_matches": 0, "seconds": 6.8, "values": 1048576}, {"inputs_not_resident": ["/body.3/body.3.1/Relu_output_0_QuantizeLinear_Output"], "isolated": false, "layer": "/body.4/body.4.0/Conv"}, {"differ_by_model": {"aligned": 0, "dot_first": 0, "sequential": 0, "wide": 0}, "isolated": true, "layer": "/body.5/body.5.0/Conv", "output": "/body.5/body.5.1/Relu_output_0_QuantizeLinear_Output", "positions": [], "positions_any_model_differs": 0, "positions_no_model_matches": 0, "seconds": 4.9, "values": 1048576}, {"differ_by_model": {"aligned": 0, "dot_first": 0, "sequential": 0, "wide": 0}, "isolated": true, "layer": "/body.6/body.6.0/Conv", "output": "/Add_output_0_QuantizeLinear_Output", "positions": [], "positions_any_model_differs": 0, "positions_no_model_matches": 0, "seconds": 5.0, "values": 1048576}, {"differ_by_model": {"aligned": 0, "dot_first": 0, "sequential": 0, "wide": 0}, "isolated": true, "layer": "/tail/Conv", "output": "/tail/Conv_output_0_QuantizeLinear_Output", "positions": [], "positions_any_model_differs": 0, "positions_no_model_matches": 0, "seconds": 13.7, "values": 786432}]}
+BF16_SR_ISOLATED {"label": "bird", "layers": [{"differ_by_model": {"aligned": 0, "dot_first": 0, "sequential": 0, "wide": 0}, "isolated": true, "layer": "/head/Conv", "output": "/head/Conv_output_0_QuantizeLinear_Output", "positions": [], "positions_any_model_differs": 0, "positions_no_model_matches": 0, "seconds": 6.9, "values": 1048576}, {"inputs_not_resident": ["/body.3/body.3.1/Relu_output_0_QuantizeLinear_Output"], "isolated": false, "layer": "/body.4/body.4.0/Conv"}, {"differ_by_model": {"aligned": 0, "dot_first": 0, "sequential": 0, "wide": 0}, "isolated": true, "layer": "/body.5/body.5.0/Conv", "output": "/body.5/body.5.1/Relu_output_0_QuantizeLinear_Output", "positions": [], "positions_any_model_differs": 0, "positions_no_model_matches": 0, "seconds": 4.8, "values": 1048576}, {"differ_by_model": {"aligned": 0, "dot_first": 0, "sequential": 0, "wide": 0}, "isolated": true, "layer": "/body.6/body.6.0/Conv", "output": "/Add_output_0_QuantizeLinear_Output", "positions": [], "positions_any_model_differs": 0, "positions_no_model_matches": 0, "seconds": 5.0, "values": 1048576}, {"differ_by_model": {"aligned": 0, "dot_first": 0, "sequential": 0, "wide": 0}, "isolated": true, "layer": "/tail/Conv", "output": "/tail/Conv_output_0_QuantizeLinear_Output", "positions": [], "positions_any_model_differs": 0, "positions_no_model_matches": 0, "seconds": 13.7, "values": 786432}]}
+BF16_SR_ISOLATED {"label": "butterfly", "layers": [{"differ_by_model": {"aligned": 0, "dot_first": 0, "sequential": 0, "wide": 0}, "isolated": true, "layer": "/head/Conv", "output": "/head/Conv_output_0_QuantizeLinear_Output", "positions": [], "positions_any_model_differs": 0, "positions_no_model_matches": 0, "seconds": 6.9, "values": 1048576}, {"inputs_not_resident": ["/body.3/body.3.1/Relu_output_0_QuantizeLinear_Output"], "isolated": false, "layer": "/body.4/body.4.0/Conv"}, {"differ_by_model": {"aligned": 0, "dot_first": 0, "sequential": 0, "wide": 0}, "isolated": true, "layer": "/body.5/body.5.0/Conv", "output": "/body.5/body.5.1/Relu_output_0_QuantizeLinear_Output", "positions": [], "positions_any_model_differs": 0, "positions_no_model_matches": 0, "seconds": 5.0, "values": 1048576}, {"differ_by_model": {"aligned": 0, "dot_first": 0, "sequential": 0, "wide": 0}, "isolated": true, "layer": "/body.6/body.6.0/Conv", "output": "/Add_output_0_QuantizeLinear_Output", "positions": [], "positions_any_model_differs": 0, "positions_no_model_matches": 0, "seconds": 4.9, "values": 1048576}, {"differ_by_model": {"aligned": 0, "dot_first": 0, "sequential": 0, "wide": 0}, "isolated": true, "layer": "/tail/Conv", "output": "/tail/Conv_output_0_QuantizeLinear_Output", "positions": [], "positions_any_model_differs": 0, "positions_no_model_matches": 0, "seconds": 13.6, "values": 786432}]}
+BF16_SR_ISOLATED {"label": "head", "layers": [{"differ_by_model": {"aligned": 0, "dot_first": 0, "sequential": 0, "wide": 0}, "isolated": true, "layer": "/head/Conv", "output": "/head/Conv_output_0_QuantizeLinear_Output", "positions": [], "positions_any_model_differs": 0, "positions_no_model_matches": 0, "seconds": 7.0, "values": 1048576}, {"inputs_not_resident": ["/body.3/body.3.1/Relu_output_0_QuantizeLinear_Output"], "isolated": false, "layer": "/body.4/body.4.0/Conv"}, {"differ_by_model": {"aligned": 0, "dot_first": 0, "sequential": 0, "wide": 0}, "isolated": true, "layer": "/body.5/body.5.0/Conv", "output": "/body.5/body.5.1/Relu_output_0_QuantizeLinear_Output", "positions": [], "positions_any_model_differs": 0, "positions_no_model_matches": 0, "seconds": 4.9, "values": 1048576}, {"differ_by_model": {"aligned": 0, "dot_first": 0, "sequential": 0, "wide": 0}, "isolated": true, "layer": "/body.6/body.6.0/Conv", "output": "/Add_output_0_QuantizeLinear_Output", "positions": [], "positions_any_model_differs": 0, "positions_no_model_matches": 0, "seconds": 5.0, "values": 1048576}, {"differ_by_model": {"aligned": 0, "dot_first": 0, "sequential": 0, "wide": 0}, "isolated": true, "layer": "/tail/Conv", "output": "/tail/Conv_output_0_QuantizeLinear_Output", "positions": [], "positions_any_model_differs": 0, "positions_no_model_matches": 0, "seconds": 13.6, "values": 786432}]}
+BF16_SR_ISOLATED {"label": "woman", "layers": [{"differ_by_model": {"aligned": 0, "dot_first": 0, "sequential": 0, "wide": 0}, "isolated": true, "layer": "/head/Conv", "output": "/head/Conv_output_0_QuantizeLinear_Output", "positions": [], "positions_any_model_differs": 0, "positions_no_model_matches": 0, "seconds": 6.5, "values": 1048576}, {"inputs_not_resident": ["/body.3/body.3.1/Relu_output_0_QuantizeLinear_Output"], "isolated": false, "layer": "/body.4/body.4.0/Conv"}, {"differ_by_model": {"aligned": 0, "dot_first": 0, "sequential": 0, "wide": 0}, "isolated": true, "layer": "/body.5/body.5.0/Conv", "output": "/body.5/body.5.1/Relu_output_0_QuantizeLinear_Output", "positions": [], "positions_any_model_differs": 0, "positions_no_model_matches": 0, "seconds": 4.7, "values": 1048576}, {"differ_by_model": {"aligned": 0, "dot_first": 0, "sequential": 0, "wide": 0}, "isolated": true, "layer": "/body.6/body.6.0/Conv", "output": "/Add_output_0_QuantizeLinear_Output", "positions": [], "positions_any_model_differs": 0, "positions_no_model_matches": 0, "seconds": 4.7, "values": 1048576}, {"differ_by_model": {"aligned": 0, "dot_first": 0, "sequential": 0, "wide": 0}, "isolated": true, "layer": "/tail/Conv", "output": "/tail/Conv_output_0_QuantizeLinear_Output", "positions": [], "positions_any_model_differs": 0, "positions_no_model_matches": 0, "seconds": 13.5, "values": 786432}]}
+BF16_SR_ISOLATED {"label": "seed0", "layers": [{"differ_by_model": {"aligned": 0, "dot_first": 0, "sequential": 0, "wide": 0}, "isolated": true, "layer": "/head/Conv", "output": "/head/Conv_output_0_QuantizeLinear_Output", "positions": [], "positions_any_model_differs": 0, "positions_no_model_matches": 0, "seconds": 6.8, "values": 1048576}, {"inputs_not_resident": ["/body.3/body.3.1/Relu_output_0_QuantizeLinear_Output"], "isolated": false, "layer": "/body.4/body.4.0/Conv"}, {"differ_by_model": {"aligned": 0, "dot_first": 0, "sequential": 1, "wide": 0}, "isolated": true, "layer": "/body.5/body.5.0/Conv", "output": "/body.5/body.5.1/Relu_output_0_QuantizeLinear_Output", "positions": [{"acc_exact": 0.377899169921875, "aligned": "3ec1", "c": 12, "covered_by": [1, 1], "device": "3ec1", "device_value": 0.376953125, "dot_first": "3ec1", "in_tile": [3, 5], "sequential": "3ec2", "tile_origin": [150, 80], "wide": "3ec1", "x": 85, "y": 153}], "positions_any_model_differs": 1, "positions_no_model_matches": 0, "seconds": 4.7, "values": 1048576}, {"differ_by_model": {"aligned": 0, "dot_first": 0, "sequential": 0, "wide": 0}, "isolated": true, "layer": "/body.6/body.6.0/Conv", "output": "/Add_output_0_QuantizeLinear_Output", "positions": [], "positions_any_model_differs": 0, "positions_no_model_matches": 0, "seconds": 4.8, "values": 1048576}, {"differ_by_model": {"aligned": 0, "dot_first": 0, "sequential": 0, "wide": 0}, "isolated": true, "layer": "/tail/Conv", "output": "/tail/Conv_output_0_QuantizeLinear_Output", "positions": [], "positions_any_model_differs": 0, "positions_no_model_matches": 0, "seconds": 13.2, "values": 786432}]}
+BF16_SR_RESULT {"device_equals_emulator": false, "device_idle_after": true, "exact_inputs": 6, "from_dump": null, "host": {"frames": 7, "frames_egress_equal_numpy": 7, "frames_on_the_asked_path": 7, "frames_staged_npu_sesr_preprocess": 6, "image_frames": 6, "quality_host_paths": null, "quality_tiles": null, "quality_tiles_identical": null, "timed_arms_on_their_path": true}, "host_ok": true, "isolated_differ_by_model": {"/body.5/body.5.0/Conv": {"aligned": 0, "dot_first": 0, "sequential": 1, "wide": 0}, "/body.6/body.6.0/Conv": {"aligned": 0, "dot_first": 0, "sequential": 0, "wide": 0}, "/head/Conv": {"aligned": 0, "dot_first": 0, "sequential": 0, "wide": 0}, "/tail/Conv": {"aligned": 0, "dot_first": 0, "sequential": 0, "wide": 0}}, "repeat_frames": 1, "resident_values_compared": 31064064, "tail_values_compared": 6291456, "worst_vs_oracle": {"differ": 118, "finite": true, "max_abs": 0.5, "max_abs_peak_ulps": 0.5, "max_ulp": 31, "n": 786432, "peak": 132.0, "rel_l2": 1.547585288248247e-05, "zero_sign_only": 0}}
+POST_NPU_CONTEXT_WITNESS "\n-----------------------------\n[003d:00:01.1] : NPU Phoenix\n-----------------------------\nAIE Partitions\n  No hardware contexts running on device\n\n"
+RESEARCH_PROCESS_RESULT {"exit_code": 1, "stop": null, "peak_tree_rss_bytes": 380121088, "rss_measurement": "maximum observed across sampled descendant working sets; zero observations reported as null", "elapsed_seconds": 355.14000000001397, "foreign_contention_observed": false, "timing_eligible": false}
