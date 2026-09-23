@@ -1,3 +1,4 @@
+# Copyright (C) 2026 The ignite-xdna contributors
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Read what Peano (llvm-aie) believes about the AIE2 core, from the compiler's own tablegen.
 

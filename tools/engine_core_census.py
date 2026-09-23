@@ -1,3 +1,4 @@
+# Copyright (C) 2026 The ignite-xdna contributors
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Static census of the conv-engine core program: how often it issues a vmac, per loop.
 

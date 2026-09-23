@@ -1,3 +1,4 @@
+# Copyright (C) 2026 The ignite-xdna contributors
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Reproduce Hello XDNA!'s hand-scheduled XDNA1 bf16 kernel on this machine's NPU.
 
