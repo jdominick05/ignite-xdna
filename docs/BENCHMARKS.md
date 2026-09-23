@@ -2469,12 +2469,20 @@ the NPU bound are in [the prior-art note](../results/llm/notes_prior_art_phoenix
   (fp32 compute) and 4 (int8 compute), 8 threads; DirectML with fp32 and with fp16 activations
   and scales.
 - DirectML sessions use `session.disable_cpu_ep_fallback`, and a control proves a node DirectML
-  cannot run is refused. So every DirectML row ran entirely on the iGPU.
+  cannot run is refused. So every DirectML row ran entirely on DirectML.
+- The adapter is the 780M. `device_id 0` allocates on `luid_0x00000000_0x0000badf`, which DXGI
+  names "AMD Radeon 780M Graphics", and not on the software "Microsoft Basic Render Driver"
+  ([adapter log](../results/llm/llm_dml_adapter_desktop2_20260923.log), from the process's own GPU
+  memory counters, no timing).
+  - DXGI also lists a second 780M entry under another LUID. Nothing here allocated on it.
 - The error is one GEMV's rel_l2 against float64 on the exact dequantized weights. Controls
   show the packing exact: fp32 compute reproduces float64 to 8e-8.
 - Token time T = 32 × (4 t(4096×4096) + 2 t(4096×11008) + t(11008×4096)) is DERIVED from the
   MEASURED per-GEMV medians, linear layers only.
 - The witnesses: host CLEAR and the NPU idle at all 13 checks, BFP16 holding.
+  - The GPU engines were idle except VS Code's 3D engine on the same 780M: 2.6% before the
+    DirectML fp16 ReduceSum and 2.0% before the fp16 re-run.
+  - The engines were sampled before each group, not during it.
 
 **Read bandwidth (MEASURED, context).** DDR5-6000 on two channels is 96 GB/s theoretical, DERIVED
 from the configured speed, which is above AMD's rated DDR5-5200.
@@ -2489,6 +2497,15 @@ from the configured speed, which is above AMD's rated DDR5-5200.
 The numpy probe still scales linearly at 16 threads. That is a per-thread limit, so it reads low;
 ReduceSum is the CPU's figure. Both other chips read at 2.2–2.6× the NPU's best DRAM rate here
 (26.8 GB/s fill, 28.1 GB/s round trip).
+
+DirectML's fp16 ReduceSum is slower than its fp32 one (48.88 against 68.81 GB/s) for half the
+bytes. This is unexplained. Candidate causes, none tested:
+- an fp16-to-fp32 conversion per element inside the reduce;
+- a different DirectML kernel path for fp16 reductions;
+- fp16 accumulation handled in more passes.
+
+The int4 GEMVs with fp16 activations do not show it: they take less time than the fp32 ones at all
+six shape and block pairs.
 
 **Int4 decode, per 7B token (DERIVED from MEASURED rows;
 [verdict](../results/llm/llm_decode_verdict_rerun_desktop2_20260923.log)).**
@@ -2537,6 +2554,9 @@ ReduceSum is the CPU's figure. Both other chips read at 2.2–2.6× the NPU's be
   - Those rows are kept as measured (`4620b53`,
     [sitting 1's verdict](../results/llm/llm_decode_verdict_desktop2_20260923.log)).
   - The fix was committed before the re-run (`b909584`), and only those six rows were re-timed.
+  - That commit also added, after the pre-registration, the verdict's handling of a void row
+    when a valid row for the same key exists: the valid one decides, and the void one is printed
+    as SUPERSEDED. The 1 GiB rule itself did not move.
   - Sitting 1's void rows gave 53.4 ms/token and the re-run 55.9. Without DirectML fp16 at all,
     T_best is 61.3 ms (CPU), so the verdict does not rest on the re-run.
 - **What this does not establish:**

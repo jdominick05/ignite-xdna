@@ -5,6 +5,8 @@
 #
 #   ./scripts/llm-study.sh controls   # MatMulNBits packing against float64, and the DirectML placement
 #                                     # negative control; resnet_env17 (cpu, dml) and mlir-aie-iron (cpu)
+#   ./scripts/llm-study.sh adapter    # which adapter DirectML's device_id 0 is: DXGI's list, and the
+#                                     # process's GPU memory per adapter LUID with a session open
 #   ./scripts/llm-study.sh build      # the int4 and dense weight files in scratch/llm/ (no timing)
 #   ./scripts/llm-study.sh prereg     # the pre-registration log; commit it before anything below
 #   ./scripts/llm-study.sh read       # read bandwidth: numpy sums, ONNX Runtime ReduceSum on cpu and dml
@@ -29,7 +31,7 @@
 STAGE="" MACHINE="" TAG=""
 while [ $# -gt 0 ]; do
     case "$1" in
-        controls|build|prereg|read|gemv|dml16|verdict) STAGE="$1" ;;
+        controls|adapter|build|prereg|read|gemv|dml16|verdict) STAGE="$1" ;;
         --machine) MACHINE="$2"; shift ;;
         --tag)     TAG="_$2"; shift ;;
         -h|--help) usage "${BASH_SOURCE[0]}"; exit 0 ;;
@@ -108,6 +110,14 @@ stage_controls() {
     use_env mlir-aie-iron
     logged "$l2" python $B controls --ep cpu || die "controls failed (mlir-aie-iron)"
     ok "controls pass; next: $0 build"
+}
+
+stage_adapter() {
+    local log="$OUT/llm_dml_adapter_${MACHINE}_${DATE}.log"
+    refuse "$log"
+    use_env resnet_env17
+    logged "$log" python $B adapter || die "the DirectML adapter is not the Radeon 780M, see $log"
+    ok "DirectML device_id 0 is the Radeon 780M"
 }
 
 stage_build() {

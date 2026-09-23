@@ -10,6 +10,9 @@ in accuracy. No NPU is touched here.
         packing and placement checks, no timing: MatMulNBits against a float64 reference on a small
         shape, and (dml) a negative control proving session.disable_cpu_ep_fallback refuses a node
         DirectML cannot run.
+    python tools/llm_gemv_bench.py adapter
+        which adapter DirectML's device_id 0 is: DXGI's adapter list with LUIDs, and this process's
+        GPU memory per LUID (Windows GPU Process Memory counters) with one session open. No timing.
     python tools/llm_gemv_bench.py build --shape K N --block B
         writes the int4 weights for one shape and block (fp32- and fp16-scale variants) and the dense
         dequantized weights into scratch/llm/. Deterministic from --seed; no timing.
@@ -328,6 +331,96 @@ def cmd_controls(args) -> int:
     return 1 if fails else 0
 
 
+def dxgi_adapters():
+    """[(index, description, counter-style luid)] from IDXGIFactory1::EnumAdapters1, via ctypes."""
+    import ctypes
+    from ctypes import wintypes
+
+    class GUID(ctypes.Structure):
+        _fields_ = [("a", wintypes.DWORD), ("b", wintypes.WORD), ("c", wintypes.WORD), ("d", ctypes.c_ubyte * 8)]
+
+    class LUID(ctypes.Structure):
+        _fields_ = [("low", wintypes.DWORD), ("high", wintypes.LONG)]
+
+    class DESC1(ctypes.Structure):
+        _fields_ = [("desc", ctypes.c_wchar * 128), ("vendor", ctypes.c_uint), ("device", ctypes.c_uint),
+                    ("subsys", ctypes.c_uint), ("rev", ctypes.c_uint), ("vram", ctypes.c_size_t),
+                    ("sysmem", ctypes.c_size_t), ("shared", ctypes.c_size_t), ("luid", LUID), ("flags", ctypes.c_uint)]
+
+    iid = GUID(0x770AAE78, 0xF26F, 0x4DBA, (ctypes.c_ubyte * 8)(0xA8, 0x29, 0x25, 0x3C, 0x83, 0xD1, 0xB3, 0x87))
+    factory = ctypes.c_void_p()
+    if ctypes.windll.dxgi.CreateDXGIFactory1(ctypes.byref(iid), ctypes.byref(factory)) != 0:
+        raise OSError("CreateDXGIFactory1 failed")
+
+    def method(obj, index, *argtypes):
+        vtbl = ctypes.cast(obj, ctypes.POINTER(ctypes.POINTER(ctypes.c_void_p))).contents
+        return ctypes.WINFUNCTYPE(ctypes.c_long, ctypes.c_void_p, *argtypes)(vtbl[index])
+
+    out, i = [], 0
+    while True:   # IDXGIFactory1::EnumAdapters1 is vtable slot 12; IDXGIAdapter1::GetDesc1 is slot 10
+        adapter = ctypes.c_void_p()
+        if method(factory, 12, ctypes.c_uint, ctypes.POINTER(ctypes.c_void_p))(factory, i, ctypes.byref(adapter)) != 0:
+            break
+        d = DESC1()
+        method(adapter, 10, ctypes.POINTER(DESC1))(adapter, ctypes.byref(d))
+        out.append((i, d.desc, f"luid_0x{d.luid.high & 0xFFFFFFFF:08x}_0x{d.luid.low:08x}", d.flags))
+        method(adapter, 2)(adapter)          # Release
+        i += 1
+    method(factory, 2)(factory)
+    return out
+
+
+def gpu_memory_by_luid(pid: int) -> dict:
+    """This process's GPU memory per adapter LUID, from the Windows GPU Process Memory counters."""
+    import subprocess
+    ps = (f"(Get-Counter '\\GPU Process Memory(pid_{pid}_*)\\Total Committed' -ErrorAction SilentlyContinue)"
+          ".CounterSamples | ForEach-Object { $_.InstanceName + ' ' + $_.CookedValue }")
+    txt = subprocess.run(["powershell", "-NoProfile", "-Command", ps], capture_output=True, text=True).stdout
+    mem = {}
+    for line in txt.splitlines():
+        parts = line.split()
+        if len(parts) == 2 and "_luid_" in parts[0]:
+            luid = "luid_" + parts[0].split("_luid_")[1].split("_phys")[0]
+            mem[luid] = mem.get(luid, 0) + float(parts[1])
+    return mem
+
+
+def cmd_adapter(args) -> int:
+    """Which adapter DirectML's device_id 0 runs on: DXGI's adapter list, and this process's GPU
+    memory per adapter before and after one DirectML session. No timing."""
+    header("dml")
+    adapters = dxgi_adapters()
+    for i, desc, luid, flags in adapters:
+        print(f"DXGI adapter {i}: {desc!r} {luid} flags=0x{flags:x}{' (software)' if flags & 2 else ''}")
+    pid = os.getpid()
+    before = gpu_memory_by_luid(pid)
+    print(f"pid {pid} GPU memory before the session: {before or 'none'}")
+    k, n, block = 256, 128, 32
+    q, s, zp = copy_weights(k, n, block, 0, args.seed)
+    node = helper.make_node("MatMulNBits", ["x", "B", "S", "Z"], ["y"], domain="com.microsoft",
+                            K=k, N=n, bits=4, block_size=block, accuracy_level=0)
+    g = helper.make_graph([node], "a", [helper.make_tensor_value_info("x", TensorProto.FLOAT, [1, k])],
+                          [helper.make_tensor_value_info("y", TensorProto.FLOAT, [1, n])],
+                          [onnx.numpy_helper.from_array(pack_nibbles(q).reshape(n, k // block, block // 2), "B"),
+                           onnx.numpy_helper.from_array(s.reshape(-1), "S"),
+                           onnx.numpy_helper.from_array(pack_nibbles(zp).reshape(-1), "Z")])
+    m = helper.make_model(g, opset_imports=[helper.make_opsetid("", 17), helper.make_opsetid("com.microsoft", 1)])
+    m.ir_version = 9
+    sess = make_session(m.SerializeToString(), "dml", 1)
+    sess.run(None, {"x": x_vector(k, args.seed)})
+    after = gpu_memory_by_luid(pid)
+    print(f"pid {pid} GPU memory with the DirectML session (device_id 0) open: {after or 'none'}")
+    names = {luid: desc for _, desc, luid, _ in adapters}
+    grew = [luid for luid, v in after.items() if v > before.get(luid, 0)]
+    for luid in grew:
+        print(f"ADAPTER {luid} = {names.get(luid, 'not in the DXGI list')!r}: "
+              f"+{(after[luid] - before.get(luid, 0)) / 2**20:.1f} MiB committed")
+    ok = len(grew) == 1 and "780M" in names.get(grew[0], "")
+    print(f"[adapter] {'PASS: DirectML device_id 0 is the Radeon 780M' if ok else 'FAIL: not exactly one adapter, or not the 780M'}")
+    del sess
+    return 0 if ok else 1
+
+
 def cmd_readbw(args) -> int:
     header(args.ep)
     npt, tt = (np.float32, TensorProto.FLOAT) if args.dtype == "fp32" else (np.float16, TensorProto.FLOAT16)
@@ -422,6 +515,8 @@ def main() -> int:
     global TARGET_BYTES
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
+    p = sub.add_parser("adapter")
+    p.add_argument("--seed", type=int, default=SEED)
     for name in ("controls", "build", "readbw", "gemv"):
         p = sub.add_parser(name)
         p.add_argument("--seed", type=int, default=SEED)
@@ -445,7 +540,8 @@ def main() -> int:
             p.add_argument("--acc", type=int, choices=(0, 4), default=0, help="MatMulNBits accuracy_level (cpu)")
     args = ap.parse_args()
     TARGET_BYTES = getattr(args, "mib", TARGET_BYTES >> 20) << 20
-    return {"controls": cmd_controls, "build": cmd_build, "readbw": cmd_readbw, "gemv": cmd_gemv}[args.cmd](args)
+    return {"controls": cmd_controls, "build": cmd_build, "readbw": cmd_readbw, "gemv": cmd_gemv,
+            "adapter": cmd_adapter}[args.cmd](args)
 
 
 if __name__ == "__main__":
