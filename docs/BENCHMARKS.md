@@ -14119,6 +14119,43 @@ Values at which each model's bits differ from aligned's, where the silicon match
     overwrites: 2 on bird and 1 on woman. No sitting has compared them.
   - A plain-weights sitting under `--no-workspace-reuse` would. If exp_sum is the rule, the device
     departs from aligned at exactly those values; if aligned is, it does not.
+  - Pre-registered before that sitting, with its container compiled
+    ([`sesr_m7_bf16_noreuse_compile_desktop2_20260923.log`](../results/aie/sesr_m7_bf16_noreuse_compile_desktop2_20260923.log)).
+    Its weight packets hash the same as the plain reuse container's (`40cdca73e7e4baeb`), and its
+    instruction stream the same as the AdaRound no-reuse container's (`da89e12959ffd58d`).
+  - The prediction:
+    [`bf16_mac_rescore_exp_sum_where_sesr_plain_desktop2_20260923.log`](../results/aie/bf16_mac_rescore_exp_sum_where_sesr_plain_desktop2_20260923.log),
+    from `tools/bf16_mac_model_rescore.py where`. It chains the network under every model on the
+    sitting's six frames and lists every value of every tensor where a model's bits part from
+    aligned's.
+    - exp_sum parts from aligned at exactly 3 values in the whole network, and none is in a padding
+      lane. Its totals agree with the rescore above, taken through the other code path: wide 45 (29
+      compared, 16 not), dot_first 14 (4 + 10), sequential 257 (186 + 71), exp_sum 3 (0 + 3).
+    - Neither difference carries on: every later tensor is the same under both.
+
+    | frame | tensor | c | y | x | aligned | exp_sum |
+    |---|---|---:|---:|---:|---|---|
+    | bird | body.1 | 12 | 70 | 179 | `3ee2` | `3ee3` |
+    | bird | body.1 | 12 | 121 | 252 | `3ab2` | `3ab1` |
+    | woman | body.3 | 13 | 186 | 143 | `3978` | `3977` |
+
+    - These 3 do not single exp_sum out. wide and dot_first side with it at all three, and sequential
+      at the two on bird. The other three are told apart elsewhere, where they depart and exp_sum
+      does not: wide at 42 more values, dot_first at 11, sequential at 255. The plain-weights sittings
+      already refute all three.
+  - The outcomes, written before the sitting. The sitting compares the device with the aligned
+    emulator, so the prediction it can meet is a mismatch: it exits 1.
+    - **S1.** The device departs from aligned at exactly these 3 values, with exp_sum's bits, and
+      nowhere else in any tensor, the tail or its padding lanes. exp_sum passes a test it was not
+      fitted to.
+    - **S2.** The device equals aligned everywhere, and the sitting exits 0. exp_sum is refuted on the
+      network. That conflicts with the probe, and stays unexplained until something explains it.
+    - **S3.** It departs at these 3 with exp_sum's bits, and elsewhere too. exp_sum is not the whole
+      rule, and it is refuted at those other values.
+    - **S4.** Anything else, such as another value or other bits at these 3. Neither model is the rule.
+  - **The flip.** `MAC_MODEL` moves to exp_sum only on S1. The probe's rule is met, but a model a
+    sitting on record refutes does not go in force. On S2, S3 or S4 it stays aligned, and the conflict
+    is reported.
   - Not run.
 
 Not rescored:

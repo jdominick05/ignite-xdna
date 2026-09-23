@@ -24,6 +24,11 @@ MODES
            integer arm), drained as its emulate_plan drains it. The rebuild under R must equal the
            sitting's own --expected file (its build directory's expected.npy) byte for byte, and
            every column of every iteration in each --silicon-log must be byte-equal.
+  where    No sitting: a prediction. The sesr frames through the whole network under every model,
+           and every value of every tensor (padding lanes flagged) where a model's bits part from
+           R's, with both bit patterns. Against a container whose every tensor is resident
+           (--no-workspace-reuse), a later sitting can check it value by value, so commit its log
+           before that sitting runs.
 
 A frame or case the sitting did NOT find exact under R is not scored: the device's bits are
 unknown there. A dump replay (bf16_sr_silicon_check.py --from-dump --mac-model C) answers those.
@@ -71,6 +76,53 @@ def verdict(scored: dict, differ: dict) -> dict:
 
 
 # --------------------------------------------------------------------------------------------- sesr
+def sesr_frames(chk, cv2, images, seeds, qdq) -> list:
+    """[(label, input)] exactly as bf16_sr_silicon_check.py stages its exactness frames: each image
+    through npu.sesr.preprocess, then each seeded input rounded to bf16."""
+    plan = [(Path(p).stem, np.asarray(chk.sesr.preprocess(cv2.imread(str(p)), chk.TILE)[0][0], np.float32))
+            for p in images]
+    plan += [(f"seed{k}", em.to_bf16(chk.wo.seeded_input(qdq, k)[0])) for k in seeds]
+    for label, x in plan:
+        if not np.array_equal(em.to_bf16(x), x):
+            raise SystemExit(f"{label}: the rebuilt input is not bf16-exact, so it is not what was staged")
+    return plan
+
+
+def where_mode(args, ref: str, models: list) -> int:
+    """Every value, in every tensor of the network, where a model's bits part from the reference's on
+    the exactness frames. With a container whose every tensor is resident (--no-workspace-reuse),
+    this is a prediction a sitting can check value by value; commit it before that sitting runs."""
+    import cv2  # noqa: PLC0415
+    import bf16_sr_silicon_check as chk  # noqa: PLC0415 - read-only: its frames and hashes
+    from ignite_xdna.compiler import graph_ir  # noqa: PLC0415
+    from ignite_xdna.compiler import graph_reference_bf16 as gr16  # noqa: PLC0415
+
+    images = args.image or chk.DEFAULT_IMAGES
+    seeds = [0] if args.seed is None else args.seed
+    ir = graph_ir.lower_yolov8n(str(args.qdq))
+    emit("SETUP", {"mode": "where", "qdq": chk.rel(args.qdq), "qdq_sha256": chk.sha16(args.qdq), "reference": ref,
+                   "models": models, "images": [chk.rel(p) for p in images], "seeds": seeds,
+                   "tensors": {n: t.channels for n, t in ir.tensors.items()}})
+    totals = {m: 0 for m in models}
+    for label, x in sesr_frames(chk, cv2, images, seeds, args.qdq):
+        outs = {m: gr16.run_direct(ir, x, mac_model=m) for m in [ref] + models}
+        bits = {m: {n: em.bf16_bits(t) for n, t in o.items()} for m, o in outs.items()}
+        count = {m: {} for m in models}
+        for m in models:
+            for n in bits[ref]:
+                real = ir.tensors[n].channels
+                for c, y, xx in zip(*np.nonzero(bits[m][n] != bits[ref][n])):
+                    emit("WHERE", {"frame": label, "model": m, "tensor": n, "c": int(c), "y": int(y), "x": int(xx),
+                                   "padding_lane": bool(c >= real),
+                                   "bits": {ref: f"{int(bits[ref][n][c, y, xx]):04x}",
+                                            m: f"{int(bits[m][n][c, y, xx]):04x}"}})
+                    count[m][n] = count[m].get(n, 0) + 1
+            totals[m] += sum(count[m].values())
+        emit("WHERE_FRAME", {"frame": label, "differ_by_model": count})
+    emit("WHERE_TOTAL", {"differ_by_model": totals})
+    return 0
+
+
 def sesr_mode(args, ref: str, models: list) -> int:
     import cv2  # noqa: PLC0415 - only this mode needs them
     import bf16_sr_silicon_check as chk  # noqa: PLC0415 - read-only: its frames, survivors and hashes
@@ -113,13 +165,8 @@ def sesr_mode(args, ref: str, models: list) -> int:
                    "images": [chk.rel(p) for p in images], "seeds": seeds, "resident": resident, "tail": tail,
                    "silicon_logs": [chk.rel(p) for p, _ in logs]})
 
-    plan = [(Path(p).stem, np.asarray(chk.sesr.preprocess(cv2.imread(str(p)), chk.TILE)[0][0], np.float32))
-            for p in images]
-    plan += [(f"seed{k}", em.to_bf16(chk.wo.seeded_input(args.qdq, k)[0])) for k in seeds]
     per_frame = {}
-    for label, x in plan:
-        if not np.array_equal(em.to_bf16(x), x):
-            raise SystemExit(f"{label}: the rebuilt input is not bf16-exact, so it is not what was staged")
+    for label, x in sesr_frames(chk, cv2, images, seeds, args.qdq):
         outs = {m: gr16.run_direct(ir, x, mac_model=m) for m in [ref] + models}
         bits = {m: {n: em.bf16_bits(t) for n, t in o.items()} for m, o in outs.items()}
 
@@ -248,6 +295,10 @@ def main() -> int:
     p.add_argument("--image", type=Path, action="append", default=None)
     p.add_argument("--seed", type=int, action="append", default=None)
     p.add_argument("--silicon-log", type=Path, action="append", default=[])
+    p = sub.add_parser("where")
+    p.add_argument("--qdq", type=Path, required=True)
+    p.add_argument("--image", type=Path, action="append", default=None)
+    p.add_argument("--seed", type=int, action="append", default=None)
     p = sub.add_parser("sweep")
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--silicon-log", type=Path, action="append", default=[])
@@ -259,8 +310,8 @@ def main() -> int:
     args = ap.parse_args()
     ref = args.reference
     models = [m for m in (args.models or em.MAC_MODELS) if m != ref]
-    rc = {"sesr": sesr_mode, "sweep": sweep_mode, "sixteen": sixteen_mode}[args.mode](args, ref, models)
-    emit("RESULT", {"mode": args.mode, "any_model_refuted": bool(rc)})
+    rc = {"sesr": sesr_mode, "where": where_mode, "sweep": sweep_mode, "sixteen": sixteen_mode}[args.mode](args, ref, models)
+    emit("RESULT", {"mode": args.mode} if args.mode == "where" else {"mode": args.mode, "any_model_refuted": bool(rc)})
     return 0
 
 
