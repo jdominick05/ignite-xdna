@@ -14193,11 +14193,71 @@ so none is affected.
 
 ### What this does not establish
 
-- The probe has not run. The sitting waits for the user's word.
+- The probe has not run. The sitting waits for the user's word. *Run since (2026-09-23, Desktop 2):*
+  A1, B1 and C1, all for exp_sum ([below](#the-one-core-probe-measures-exp_sum-a1-b1-and-c1-on-the-pre-registered-plan-2026-09-23-desktop-2)).
 - exp_sum is not measured, and nothing about the core's rule has changed: aligned stays in force, and
   every exactness claim keeps the model it was measured under.
 - Arm A's harness is not the network's. `engine_bf16.py` links its own build of `engine_bf16.cc`, and
   arm A exists to check that.
+
+## The one-core probe measures exp_sum: A1, B1 and C1 on the pre-registered plan (2026-09-23, Desktop 2)
+
+Log: [`bf16_mac_position_probe_npu_desktop2_20260923.log`](../results/aie/bf16_mac_position_probe_npu_desktop2_20260923.log).
+It is one sitting on Desktop 2 (`DESKTOP-CBL5NUA`), `--checks-only --npu`, so it makes no timing
+claim.
+- The device was idle before and after, per the wrapper's witnesses. There was no foreign context,
+  and no other session used the NPU during the sitting.
+- The go came from the user, relayed by the gate session.
+
+**The pre-registration bound.**
+- Before it opened the device, the sitting printed its plan, operands and predictions again. All 165
+  of those lines are byte-identical to the committed
+  [predictions log](../results/aie/bf16_mac_position_probe_predictions_desktop2_20260923.log), and so
+  is its SETUP line apart from the `npu` flag.
+- `tools/bf16_mac_position_probe.py` is unchanged since `02e8fec`. So the silicon was read against the
+  predictions committed before it, and against nothing else.
+
+**The readout held.**
+- All 132 readouts decoded exactly. Each agrees with its direct bf16 readout, and each reads the same
+  in pass 1 and pass 2.
+- The two pass-2 dispatches are identical.
+- No readout matches no model, so there is no B3. All 21 readouts where every model agrees came back
+  as predicted, so there is no C4.
+
+| model | A: tiles where one core equals the model, of 10 | B: chain readouts, of 108 | C: fresh-vector readouts, of 24 |
+|---|---:|---:|---:|
+| aligned (in force until the next commit) | 0 | 9 | 16 |
+| wide | 9 | 97 | 22 |
+| dot_first | 8 | 86 | 22 |
+| sequential | 8 | 87 | 16 |
+| **exp_sum** | **10** | **108** | **24** |
+
+- **A1.** One core equals the network's tile at every value, on all 10 tiles. So what arms B and C find
+  carries to the network.
+- **B1 for exp_sum, not B2.** Every readout of every chain equals exp_sum's prediction.
+  - Aligned matches only the 9 assembled starts, so it departs at each chain's first instruction, as
+    the network did.
+  - At butterfly's first instruction, the two-sided case, exp_sum is the only model that matches.
+- **C1 for exp_sum; not C2, not C3.**
+  - All 12 fresh vectors come back as exp_sum predicts.
+  - The 8 that separate it from aligned came back exp_sum.
+  - The 2 that separate it from wide came back exp_sum, including the term half a step under
+    exp_sum's grid, which exp_sum drops and wide keeps.
+  - The 3 controls came back as predicted.
+
+**The rule is met.** It asked for A1 + B1 + C1 for the same model, with the layer replay still exact
+under it. The replay is 0 of 55,050,240 under exp_sum, committed with the pre-registration.
+- `MAC_MODEL` moves to `exp_sum` in its own commit.
+- Every exactness claim measured under aligned keeps that scope.
+
+**What this does not establish**
+- It is one sitting on one core: 132 readouts and 10 tiles. Determinism is shown within the sitting
+  (pass 2 twice), not across sittings.
+- The fresh vectors were built to separate the candidates. They are twelve, and they reach only
+  finite, normal operands. The sign of an exactly zero sum and Inf, NaN or subnormal operands are
+  still unmeasured.
+- That exp_sum is the core's full rule. It is the one candidate that no sitting on record refutes, and
+  it predicted every value this probe was built to read.
 
 ## Cross-audit against Hello XDNA! (2026-09-23, Desktop 2)
 
