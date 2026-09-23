@@ -1,3 +1,5 @@
+# Copyright (C) 2026 The ignite-xdna contributors
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Gate C summary: today's int4 silicon runs against the 2026-09-10 W4A8 record. No hardware.
 
 Reads the raw JSONL the three sweeps wrote (the one-core W4A8 probe repeated, the uint8 x int4

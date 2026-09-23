@@ -1,3 +1,5 @@
+# Copyright (C) 2026 The ignite-xdna contributors
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Run u8i4_probe.py over (kernel, mode, K), one fresh process per row, into one JSONL.
 
 This is kernels/w4a8_probe/sweep.py -- the same rotation of arms and K, the same xrt-smi

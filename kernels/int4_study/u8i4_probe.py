@@ -1,3 +1,5 @@
+# Copyright (C) 2026 The ignite-xdna contributors
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Gate C of the INT4 study: does uint8 x int4 -- the engine's operand pair -- compute right on one AIE2 core?
 
 The W4A8 probe (kernels/w4a8_probe/w4a8_probe.py) showed int8 x int4 bit-exact on Phoenix.

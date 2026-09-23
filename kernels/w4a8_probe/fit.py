@@ -1,3 +1,5 @@
+# Copyright (C) 2026 The ignite-xdna contributors
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Fit w4a8_probe rows: cycles per call = a + b*K per (kernel, mode), against the static loop.
 
 The trace cycle count of one kernel call splits into a per-K part (the k loop: every

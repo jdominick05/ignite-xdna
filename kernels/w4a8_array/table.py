@@ -1,3 +1,5 @@
+# Copyright (C) 2026 The ignite-xdna contributors
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Cross-tile table of a W4A8 array sweep's raw JSONL. No hardware.
 
 Per (tile, arm) over every passing run: the NPU-bracket averages of each run, their mean,

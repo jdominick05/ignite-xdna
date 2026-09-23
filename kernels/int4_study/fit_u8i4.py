@@ -1,3 +1,5 @@
+# Copyright (C) 2026 The ignite-xdna contributors
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Fit u8i4_probe rows exactly as kernels/w4a8_probe/fit.py fits the W4A8 probe's.
 
 fit.py is imported, not copied (it is kept byte-identical because its 2026-09-10 logs

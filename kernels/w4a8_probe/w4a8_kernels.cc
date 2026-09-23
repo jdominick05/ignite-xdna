@@ -1,3 +1,8 @@
+// Copyright (C) 2026 The ignite-xdna contributors
+// Portions adapted from mlir-aie v1.4.2 aie_kernels/aie2/mm.cc (matmul_vectorized_4x2_mmul),
+//   Copyright (C) 2025 Advanced Micro Devices, Inc., Apache-2.0 WITH LLVM-exception.
+// SPDX-License-Identifier: AGPL-3.0-or-later AND Apache-2.0 WITH LLVM-exception
+//
 // W4A8 on AIE2: two ways to multiply int8 activations by int4 weights.
 //
 //   unpack  store B packed (two int4 per byte), widen it to int8 in the core with

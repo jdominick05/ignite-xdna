@@ -1,3 +1,5 @@
+# Copyright (C) 2026 The ignite-xdna contributors
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """W4A8 on AIE2, read off the machine code: what int4 weights cost in a core.
 
 Compile only -- no NPU, no hardware context, no IRON. Compiles `w4a8_kernels.cc` and

@@ -1,3 +1,6 @@
+// Copyright (C) 2026 The ignite-xdna contributors
+// SPDX-License-Identifier: AGPL-3.0-or-later
+//
 // W4A8 on the whole array: the kernels whole_array_w4a8.py links into every core.
 //
 // The GEMM kernels are the one-core probe's, unchanged -- this file includes

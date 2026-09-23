@@ -1,3 +1,5 @@
+# Copyright (C) 2026 The ignite-xdna contributors
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """W4A8 on one AIE2 core: does the int8 x int4 vmac compute right, and what does a call cost?
 
 One Worker on Tile(0, 2) runs one GEMM-tile kernel from w4a8_kernels.cc per call. A

@@ -1,3 +1,6 @@
+// Copyright (C) 2026 The ignite-xdna contributors
+// SPDX-License-Identifier: AGPL-3.0-or-later
+//
 // Gate A of the INT4 study: which int4 operand pairs does the aie_api/Peano toolchain
 // lower for a target? One aie::mmul, typed by compile defines, nothing else.
 //

@@ -1,3 +1,5 @@
+# Copyright (C) 2026 The ignite-xdna contributors
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Which kernel loop does each W4A8 array arm run? Compile-only; no NPU.
 
 For every (arm, mode) this compiles the kernel the array design links -- upstream mm.cc

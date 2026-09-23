@@ -1,3 +1,5 @@
+# Copyright (C) 2026 The ignite-xdna contributors
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Run w4a8_probe.py over (kernel, mode, K), one fresh process per row, into one JSONL.
 
 Arms rotate within each K and K rotates across repetitions, so no arm always runs first

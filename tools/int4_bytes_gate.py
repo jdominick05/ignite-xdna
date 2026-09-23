@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Copyright (C) 2026 The ignite-xdna contributors
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Gate B of the INT4 study: the most int4 weights could save the graph engine, per frame.
 
     python tools/int4_bytes_gate.py [--log results/aie/<name>.log]

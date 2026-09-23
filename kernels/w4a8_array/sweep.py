@@ -1,3 +1,5 @@
+# Copyright (C) 2026 The ignite-xdna contributors
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Run whole_array_w4a8.py over arms, one fresh process per run, into one JSONL, and tabulate.
 
 Each arm is `arm:mode:c_single_buffer`. Arms rotate by one place per repetition, so no arm

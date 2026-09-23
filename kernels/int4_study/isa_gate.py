@@ -1,3 +1,5 @@
+# Copyright (C) 2026 The ignite-xdna contributors
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Gate A of the INT4 study: which int4 operand pairs does the toolchain lower?
 
 Compile only -- no NPU, no hardware context, no IRON. Two independent readings of the

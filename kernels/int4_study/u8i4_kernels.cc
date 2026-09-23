@@ -1,3 +1,8 @@
+// Copyright (C) 2026 The ignite-xdna contributors
+// Portions adapted from mlir-aie v1.4.2 aie_kernels/aie2/mm.cc (matmul_vectorized_4x2_mmul),
+//   Copyright (C) 2025 Advanced Micro Devices, Inc., Apache-2.0 WITH LLVM-exception.
+// SPDX-License-Identifier: AGPL-3.0-or-later AND Apache-2.0 WITH LLVM-exception
+//
 // Gate C of the INT4 study: uint8 activations x int4 weights on one AIE2 core.
 //
 // The graph engine's activations are uint8 (zero point 128; kernels/aie2/conv_engine/engine.cc
