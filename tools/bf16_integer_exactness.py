@@ -24,8 +24,10 @@ WHAT THIS DOES NOT ESTABLISH, and it matters:
   Carrying int8 end to end therefore needs the epilogue to bring the accumulator back into int8
   range before it stores - and `engine_bf16_emulator.epilogue` has no output scale today, only a
   floor at 0 and a ceiling at 6. This probe measures the ACCUMULATOR, not a working int8 path.
-* This is the emulator's `mac()` in "aligned" mode, which is the measured model of the core, not
-  the core. Device-vs-emulator byte-exactness is established separately
+* This is the emulator's `mac()` in "aligned" mode, which was the measured model of the core when
+  this ran, not the core. Since 2026-09-23 the model in force is "exp_sum" (BENCHMARKS, "The
+  plain-weights no-reuse sitting reads S1"). This probe has not been re-run under it.
+  Device-vs-emulator byte-exactness is established separately
   (results/aie/engine_bf16_16core_npu_20260922.log).
 * Uniform random operands are not a model's activations. Real post-ReLU activations are all
   positive and correlate with their weights, so a real layer's sums sit above the random case and

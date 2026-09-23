@@ -14002,7 +14002,8 @@ Nothing in this section opened a device. It does three things:
 - scores that model against the silicon this repo already has;
 - commits a one-core probe's predictions before the probe runs.
 
-The model in force stays `aligned` (`engine_bf16_emulator.MAC_MODEL`).
+The model in force stays `aligned` (`engine_bf16_emulator.MAC_MODEL`). *Since 2026-09-23 it is `exp_sum`,
+after the probe and the plain no-reuse sitting ([below](#the-plain-weights-no-reuse-sitting-reads-s1-the-device-departs-from-aligned-at-exactly-exp_sums-3-values-2026-09-23-desktop-2)).*
 
 Logs, all offline, Desktop 2:
 - [`engine_bf16_mac_model_probe_rescore_exp_sum_desktop2_20260923.log`](../results/aie/engine_bf16_mac_model_probe_rescore_exp_sum_desktop2_20260923.log):
@@ -14234,7 +14235,8 @@ so none is affected.
 - The probe has not run. The sitting waits for the user's word. *Run since (2026-09-23, Desktop 2):*
   A1, B1 and C1, all for exp_sum ([below](#the-one-core-probe-measures-exp_sum-a1-b1-and-c1-on-the-pre-registered-plan-2026-09-23-desktop-2)).
 - exp_sum is not measured, and nothing about the core's rule has changed: aligned stays in force, and
-  every exactness claim keeps the model it was measured under.
+  every exactness claim keeps the model it was measured under. *Since 2026-09-23 exp_sum is measured and
+  in force* ([below](#the-plain-weights-no-reuse-sitting-reads-s1-the-device-departs-from-aligned-at-exactly-exp_sums-3-values-2026-09-23-desktop-2)). *Every claim measured under aligned still keeps that scope.*
 - Arm A's harness is not the network's. `engine_bf16.py` links its own build of `engine_bf16.cc`, and
   arm A exists to check that.
 

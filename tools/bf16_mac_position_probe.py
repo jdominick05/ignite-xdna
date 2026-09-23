@@ -449,7 +449,9 @@ def main() -> int:
     ap.add_argument("--isolated-log", type=Path, required=True, help="a log with BF16_SR_ISOLATED lines for that dump")
     ap.add_argument("--qdq", type=Path, required=True)
     ap.add_argument("--container", type=Path, required=True, help="the container the dump came from (hash-checked)")
-    ap.add_argument("--miss-model", default=em.MAC_MODEL, choices=em.MAC_MODELS,
+    # "aligned", not em.MAC_MODEL: the committed plan probes aligned's nine misses, and the default has
+    # to keep reproducing it now that exp_sum is in force (exp_sum misses none).
+    ap.add_argument("--miss-model", default="aligned", choices=em.MAC_MODELS,
                     help="probe the positions where this model's bits differ from the device's")
     ap.add_argument("--npu", action="store_true", help="dispatch on one core; without it, predictions only")
     ap.add_argument("--dispatches", type=int, default=2, help="--npu: identical pass-2 dispatches, for determinism")

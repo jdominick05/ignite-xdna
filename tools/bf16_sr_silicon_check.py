@@ -3,8 +3,9 @@
 Three questions, answered in this order because each is only worth asking once the one before it holds:
 
 1. EXACT. Does the device equal the emulator to the bit? Each input is staged by the session, run once
-   on the device, and then recomputed offline by ``graph_reference_bf16.run_direct`` (the aligned
-   multiply-accumulate, the model measured on silicon) from the very patterns the session staged. The
+   on the device, and then recomputed offline by ``graph_reference_bf16.run_direct`` (under
+   ``engine_bf16_emulator.MAC_MODEL``, the model in force: exp_sum since 2026-09-23, aligned before)
+   from the very patterns the session staged. The
    comparison is on 16-bit patterns: every lane of the tail, padding lanes included, and every tensor
    still resident in the workspace when the frame ends. The input region is read back after the
    dispatch to show nothing wrote into it, and the first input is staged again as the last frame and
@@ -600,7 +601,8 @@ def main() -> int:
     ap.add_argument("--bf16-host", action="append", choices=("native", "numpy"), default=None,
                     help="host paths the bf16 container is timed with, in order (default: native, numpy)")
     ap.add_argument("--timeout-ms", type=int, default=10000)
-    ap.add_argument("--mac-model", default=None, help="the emulator's accumulate model (default: aligned)")
+    ap.add_argument("--mac-model", default=None,
+                    help="the emulator's accumulate model (default: engine_bf16_emulator.MAC_MODEL, the one in force)")
     ap.add_argument("--no-exact", action="store_true")
     ap.add_argument("--no-timing", action="store_true")
     ap.add_argument("--no-quality", action="store_true")

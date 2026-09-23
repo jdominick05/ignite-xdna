@@ -19,7 +19,10 @@ accumulation. head.png, preprocessed in memory through npu.sesr.preprocess, is t
 worst figures, so there the bound is a real assertion at a factor of two; it is skipped where
 data/sesr_val is absent.
 
-The MAC model is "aligned", the one in force. It is not what the gap is made of: the wide-model
+The bounds were measured under "aligned", the model in force then. The test runs the model in force
+now, exp_sum. On seed 0 and head.png the two agree at every value of every tensor
+(bf16_mac_rescore_exp_sum_where_sesr_plain_desktop2_20260923.log), so the bounds carry over unchanged.
+The MAC model is not what the gap is made of: the wide-model
 control (bf16_engine_vs_oracle_wide_desktop2_20260922.log) leaves the worst figures unchanged, and
 the aligned grid accounts for about 8 of the 80 places where an isolated layer leaves the exact sum.
 The rest is fp32 summation order, and why ORT's order keeps the exact value more often than the
@@ -130,7 +133,7 @@ class _Gap:
 
     def test_the_comparison_is_not_vacuous(self):
         self.assertTrue(self.rep["ok"])
-        self.assertEqual(self.rep["mac_model"], "aligned")
+        self.assertEqual(self.rep["mac_model"], em.MAC_MODEL)
         rounded = {r["layer"]: r["oracle_rounded_by_to_bf16"] for r in self.rep["layers"]}
         # Only the residual Add is an unrounded fp32 sum in the oracle; a Conv or Relu output changing
         # under to_bf16 would mean the Cast pairs were folded and the oracle is fp32.

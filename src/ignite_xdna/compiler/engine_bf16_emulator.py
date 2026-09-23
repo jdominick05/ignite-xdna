@@ -103,14 +103,16 @@ W_BYTES = 9472                                   # the weight packet object, ide
 #                 leads one bit above its place and the grid keeps one more bit below it. Where every
 #                 product's significands multiply to under 2 this IS "aligned", which is why the
 #                 probe's vectors, all powers of two and small integers against weights of 1, could
-#                 not tell them apart. A CANDIDATE, not the model in force: it was fitted on 2026-09-23
-#                 to the nine SESR-M7 positions "aligned" misses on silicon (BENCHMARKS, "The AdaRound
-#                 mismatch starts in body.1"), and is unconfirmed on the core.
+#                 not tell them apart. IN FORCE since 2026-09-23. It was fitted to the nine SESR-M7
+#                 positions "aligned" misses on silicon (BENCHMARKS, "The AdaRound mismatch starts in
+#                 body.1"). Two tests pre-registered after the fit then confirmed it: a one-core probe
+#                 (A1 + B1 + C1) and a plain-weights no-reuse sitting (S1), both in BENCHMARKS.
+#                 "aligned" was in force before, and every sitting judged under it keeps that scope.
 # Every bf16 x bf16 product is exact in fp32 (two 8-bit significands), so the models differ only in
 # how the sum rounds. On ordinary data all of them agree after rounding to bf16; they are told apart by
 # kernels/bf16_conv/engine_bf16.py --probe.
 MAC_MODELS = ("aligned", "wide", "sequential", "dot_first", "exp_sum")
-MAC_MODEL = "aligned"
+MAC_MODEL = "exp_sum"
 
 
 def to_bf16(a: np.ndarray) -> np.ndarray:
