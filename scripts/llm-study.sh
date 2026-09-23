@@ -1,0 +1,229 @@
+#!/usr/bin/env bash
+# LLM study, Phase 1: the CPU and DirectML yardsticks for M = 1 decode, on this APU. No NPU. The
+# arms, the rules and the predictions live in tools/llm_decode_verdict.py and are pre-registered
+# (committed) before any timing runs.
+#
+#   ./scripts/llm-study.sh controls   # MatMulNBits packing against float64, and the DirectML placement
+#                                     # negative control; resnet_env17 (cpu, dml) and mlir-aie-iron (cpu)
+#   ./scripts/llm-study.sh build      # the int4 and dense weight files in scratch/llm/ (no timing)
+#   ./scripts/llm-study.sh prereg     # the pre-registration log; commit it before anything below
+#   ./scripts/llm-study.sh read       # read bandwidth: numpy sums, ONNX Runtime ReduceSum on cpu and dml
+#   ./scripts/llm-study.sh gemv       # the 36 decisive int4 rows, then the dense and thread-sweep context
+#   ./scripts/llm-study.sh verdict    # tools/llm_decode_verdict.py over the read and gemv logs
+#
+# Options: --machine TAG names the logs (default: desktop2 on DESKTOP-CBL5NUA, else required).
+#
+# read and gemv are timing sittings: announce them to the other sessions first, and never run them
+# beside another session's NPU, CPU or GPU measurement. Each group refuses to start while another
+# heavy job holds the CPU, and its witness records the host load, xrt-smi (the NPU must be idle) and,
+# for DirectML, the GPU engines' utilization.
+#
+# Logs go to results/llm/ (UTF-8, profile path scrubbed). The script refuses to replace a log;
+# delete by hand to re-run. Weight files stay in the git-ignored scratch/llm/.
+
+. "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
+
+STAGE="" MACHINE=""
+while [ $# -gt 0 ]; do
+    case "$1" in
+        controls|build|prereg|read|gemv|verdict) STAGE="$1" ;;
+        --machine) MACHINE="$2"; shift ;;
+        -h|--help) usage "${BASH_SOURCE[0]}"; exit 0 ;;
+        *)         die "unknown argument $1" ;;
+    esac
+    shift
+done
+[ -n "$STAGE" ] || { usage "${BASH_SOURCE[0]}"; die "name a stage"; }
+if [ -z "$MACHINE" ]; then
+    case "$(hostname)" in
+        DESKTOP-CBL5NUA) MACHINE=desktop2 ;;
+        *) die "unknown host $(hostname): pass --machine TAG" ;;
+    esac
+fi
+
+DATE="$(date +%Y%m%d)"
+OUT=results/llm
+RAW=scratch/llm/raw
+B=tools/llm_gemv_bench.py
+SHAPES=("4096 4096" "4096 11008" "11008 4096")
+BLOCKS=(32 128)
+mkdir -p "$OUT" "$RAW"
+
+refuse() {
+    local p
+    for p in "$@"; do
+        [ ! -e "$p" ] || die "$p exists; this script never replaces a log. Delete it by hand to re-run."
+    done
+}
+
+# scrub <raw> <log> -- copy with the local profile path replaced by C:\Users\<user>.
+scrub() {
+    python -c 'import pathlib,re,sys; s=pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"); s=re.sub(r"(?i)([A-Z]:[\\/]Users[\\/])[^\\/\s\"<>]+",r"\1<user>",s); s=re.sub(r"(?i)(/[A-Z]/Users/)[^/\s\"<>]+",r"\1<user>",s); pathlib.Path(sys.argv[2]).write_text(s,encoding="utf-8")' "$1" "$2"
+}
+
+# logged <log> <cmd...> -- run through run_logged into scratch, then scrub into results/llm/.
+logged() {
+    local log="$1" rc=0; shift
+    local raw="$RAW/$(basename "$log")"
+    rm -f "$raw"
+    run_logged "$raw" "$@" || rc=$?
+    scrub "$raw" "$log"
+    return $rc
+}
+
+need_prereg() {
+    ls "$OUT"/llm_decode_prereg_*.log >/dev/null 2>&1 || die "no pre-registration log: run $0 prereg and commit it"
+}
+
+# witness <file> <label> [gpu] -- host load (refuse on a heavy peer), xrt-smi, and GPU engines.
+witness() {
+    local w="$RAW/$(basename "$1")" label="$2"
+    printf '\n### %s  %s\n' "$label" "$(date -Iseconds)" >> "$w"
+    check_host_load refuse "$w"
+    printf 'XRT_SMI_BEGIN\n' >> "$w"
+    /c/Windows/System32/AMD/xrt-smi.exe examine -r aie-partitions >> "$w" 2>&1 || printf 'xrt-smi failed\n' >> "$w"
+    printf 'XRT_SMI_END\n' >> "$w"
+    if [ "${3:-}" = gpu ]; then
+        powershell -NoProfile -Command "\$s = (Get-Counter '\\GPU Engine(*)\\Utilization Percentage' -ErrorAction SilentlyContinue).CounterSamples | Where-Object CookedValue -gt 1; 'GPU_ENGINES_OVER_1PCT ' + @(\$s).Count; \$s | ForEach-Object { 'GPU_ENGINE ' + \$_.InstanceName + ' ' + [math]::Round(\$_.CookedValue, 1) }" >> "$w" 2>&1
+    fi
+    scrub "$w" "$1"
+}
+
+# row <desc> <cmd...> -- one row; a failure is written into the log and the group goes on.
+row() {
+    local desc="$1"; shift
+    printf '\n### %s\n' "$desc"
+    "$@" || echo "ROW_FAILED $desc"
+}
+
+stage_controls() {
+    local l1="$OUT/llm_controls_resnet_env17_${MACHINE}_${DATE}.log" l2="$OUT/llm_controls_mlir-aie-iron_${MACHINE}_${DATE}.log"
+    refuse "$l1" "$l2"
+    use_env resnet_env17
+    logged "$l1" bash -c "python $B controls --ep cpu && python $B controls --ep dml" || die "controls failed (resnet_env17)"
+    use_env mlir-aie-iron
+    logged "$l2" python $B controls --ep cpu || die "controls failed (mlir-aie-iron)"
+    ok "controls pass; next: $0 build"
+}
+
+stage_build() {
+    local s b
+    use_env resnet_env17
+    for s in "${SHAPES[@]}"; do
+        for b in "${BLOCKS[@]}"; do
+            # shellcheck disable=SC2086
+            python $B build --shape $s --block "$b" || die "build $s $b failed"
+        done
+    done
+    ok "weights built in scratch/llm/; next: $0 prereg"
+}
+
+stage_prereg() {
+    local log="$OUT/llm_decode_prereg_${MACHINE}_${DATE}.log"
+    refuse "$log"
+    use_env resnet_env17
+    logged "$log" python tools/llm_decode_verdict.py --prereg || die "prereg failed"
+    ok "commit $log (with the tools and the controls) before: $0 read"
+}
+
+read_group() {
+    python tools/cpu_mem_bw.py --gib 4 --threads 1 2 4 8 16 --reps 5
+}
+
+stage_read() {
+    need_prereg
+    local w="$OUT/load_llm_read_${MACHINE}_${DATE}.log"
+    local l1="$OUT/llm_read_cpu_numpy_${MACHINE}_${DATE}.log" l2="$OUT/llm_read_cpu_ort_fp32_${MACHINE}_${DATE}.log"
+    local l3="$OUT/llm_read_dml_fp16_${MACHINE}_${DATE}.log" l4="$OUT/llm_read_dml_fp32_${MACHINE}_${DATE}.log"
+    refuse "$w" "$l1" "$l2" "$l3" "$l4"
+    use_env resnet_env17
+    witness "$w" "numpy"
+    logged "$l1" read_group || die "numpy read failed"
+    witness "$w" "ort cpu fp32"
+    logged "$l2" python $B readbw --ep cpu --dtype fp32 --threads 8 || die "cpu readbw failed"
+    witness "$w" "dml fp16" gpu
+    logged "$l3" python $B readbw --ep dml --dtype fp16 || die "dml fp16 readbw failed"
+    witness "$w" "dml fp32" gpu
+    logged "$l4" python $B readbw --ep dml --dtype fp32 || die "dml fp32 readbw failed"
+    witness "$w" "after read"
+    ok "read done; next: $0 gemv"
+}
+
+group_cpu() {   # the four int4 cpu configurations of one ONNX Runtime build (accuracy_level 0 and 4)
+    local s b a
+    for a in 0 4; do
+        for b in "${BLOCKS[@]}"; do
+            for s in "${SHAPES[@]}"; do
+                # shellcheck disable=SC2086
+                row "cpu nbits acc $a block $b $s" python $B gemv --ep cpu --arm nbits --t1 fp32 --acc "$a" --block "$b" --threads 8 --shape $s
+            done
+        done
+    done
+}
+
+group_dml() {
+    local s b t
+    for t in fp32 fp16; do
+        for b in "${BLOCKS[@]}"; do
+            for s in "${SHAPES[@]}"; do
+                # shellcheck disable=SC2086
+                row "dml nbits $t block $b $s" python $B gemv --ep dml --arm nbits --t1 "$t" --block "$b" --shape $s
+            done
+        done
+    done
+}
+
+group_dense() {
+    local s
+    for s in "${SHAPES[@]}"; do
+        # shellcheck disable=SC2086
+        row "cpu dense fp32 $s" python $B gemv --ep cpu --arm dense --t1 fp32 --threads 8 --shape $s
+    done
+    for s in "${SHAPES[@]}"; do
+        # shellcheck disable=SC2086
+        row "dml dense fp16 $s" python $B gemv --ep dml --arm dense --t1 fp16 --shape $s
+    done
+}
+
+group_sweep() {
+    local th
+    for th in 1 2 4 16; do
+        row "cpu nbits acc 4 block 32 4096 11008, $th threads" python $B gemv --ep cpu --arm nbits --t1 fp32 --acc 4 \
+            --block 32 --threads "$th" --shape 4096 11008
+    done
+}
+
+stage_gemv() {
+    need_prereg
+    local w="$OUT/load_llm_gemv_${MACHINE}_${DATE}.log"
+    local l1="$OUT/llm_gemv_cpu_ort123_${MACHINE}_${DATE}.log" l2="$OUT/llm_gemv_cpu_ort130_${MACHINE}_${DATE}.log"
+    local l3="$OUT/llm_gemv_dml_ort123_${MACHINE}_${DATE}.log" l4="$OUT/llm_gemv_dense_ort123_${MACHINE}_${DATE}.log"
+    local l5="$OUT/llm_gemv_sweep_ort123_${MACHINE}_${DATE}.log"
+    refuse "$w" "$l1" "$l2" "$l3" "$l4" "$l5"
+    use_env resnet_env17
+    witness "$w" "cpu ort 1.23"
+    logged "$l1" group_cpu
+    witness "$w" "dml ort 1.23" gpu
+    logged "$l3" group_dml
+    witness "$w" "dense ort 1.23" gpu
+    logged "$l4" group_dense
+    witness "$w" "sweep ort 1.23"
+    logged "$l5" group_sweep
+    use_env mlir-aie-iron
+    witness "$w" "cpu ort 1.30"
+    logged "$l2" group_cpu
+    witness "$w" "after gemv"
+    grep -h "^ROW_FAILED" "$l1" "$l2" "$l3" "$l4" "$l5" && warn "rows failed, see above" || true
+    ok "gemv done; next: $0 verdict"
+}
+
+stage_verdict() {
+    local log="$OUT/llm_decode_verdict_${MACHINE}_${DATE}.log"
+    refuse "$log"
+    use_env resnet_env17
+    # shellcheck disable=SC2046
+    logged "$log" python tools/llm_decode_verdict.py --logs $(ls "$OUT"/llm_read_*_"${MACHINE}"_*.log \
+        "$OUT"/llm_gemv_*_"${MACHINE}"_*.log "$OUT"/load_llm_*_"${MACHINE}"_*.log) || die "verdict incomplete, see $log"
+}
+
+"stage_$STAGE"
