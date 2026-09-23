@@ -15,6 +15,14 @@
 #                                     # 0.90-0.98 GiB (a builder defect, commit 4620b53); run build first
 #   ./scripts/llm-study.sh verdict    # tools/llm_decode_verdict.py over the read and gemv logs
 #
+# Stage 1 of the re-scoped study (NPU): a clean read-only DRAM bandwidth test, the decode reopen
+# condition. tools/npu_read_bw_probe.py holds the design, the rules and the predictions.
+#   ./scripts/llm-study.sh npuread-prereg    # its pre-registration log; commit it before the sitting
+#   ./scripts/llm-study.sh npuread           # the sitting, recorded by tools/silicon_probe_record.py
+#                                            # (xrt-smi idle before and after every child)
+#   ./scripts/llm-study.sh npuread-verdict   # the mechanical verdict over the sitting's log
+#   (build the xclbins first: bash scripts/research-iron.sh tools/npu_read_bw_probe.py build)
+#
 # Options: --machine TAG names the logs (default: desktop2 on DESKTOP-CBL5NUA, else required).
 # --tag TAG adds _TAG to the verdict log's name, for a second verdict on the same day.
 #
@@ -32,6 +40,7 @@ STAGE="" MACHINE="" TAG=""
 while [ $# -gt 0 ]; do
     case "$1" in
         controls|adapter|build|prereg|read|gemv|dml16|verdict) STAGE="$1" ;;
+        npuread-prereg|npuread|npuread-verdict) STAGE="${1//-/_}" ;;
         --machine) MACHINE="$2"; shift ;;
         --tag)     TAG="_$2"; shift ;;
         -h|--help) usage "${BASH_SOURCE[0]}"; exit 0 ;;
@@ -251,6 +260,37 @@ stage_verdict() {
     # shellcheck disable=SC2046
     logged "$log" python tools/llm_decode_verdict.py --logs $(ls "$OUT"/llm_read_*_"${MACHINE}"_*.log \
         "$OUT"/llm_gemv_*_"${MACHINE}"_*.log "$OUT"/load_llm_*_"${MACHINE}"_*.log) || die "verdict incomplete, see $log"
+}
+
+NPUREAD=tools/npu_read_bw_probe.py
+
+stage_npuread_prereg() {
+    local log="$OUT/npu_read_bw_prereg_${MACHINE}_${DATE}.log"
+    refuse "$log"
+    use_env mlir-aie-iron
+    logged "$log" python $NPUREAD prereg || die "prereg failed"
+    ok "commit $log (with $NPUREAD) before: $0 npuread"
+}
+
+stage_npuread() {
+    ls "$OUT"/npu_read_bw_prereg_*.log >/dev/null 2>&1 || die "no pre-registration log: run $0 npuread-prereg and commit it"
+    [ -f build/npu_read_bw_probe/c4x2_m1024/insts.bin ] || die "no xclbins: bash scripts/research-iron.sh $NPUREAD build"
+    local log="$OUT/npu_read_bw_suite${TAG}_${MACHINE}_${DATE}.log"
+    refuse "$log"
+    use_env mlir-aie-iron
+    # the recorder writes UTC, machine, command and commit, witnesses xrt-smi idle before and after,
+    # scrubs the profile path, and never replaces a log
+    python tools/silicon_probe_record.py --log "$log" --device --seconds 1800 -- \
+        bash scripts/research-iron.sh $NPUREAD suite || die "the sitting failed, see $log"
+    ok "sitting done; next: $0 npuread-verdict"
+}
+
+stage_npuread_verdict() {
+    local suite="$OUT/npu_read_bw_suite${TAG}_${MACHINE}_${DATE}.log" log="$OUT/npu_read_bw_verdict${TAG}_${MACHINE}_${DATE}.log"
+    [ -f "$suite" ] || die "no sitting log $suite"
+    refuse "$log"
+    use_env mlir-aie-iron
+    logged "$log" python $NPUREAD verdict "$suite" || die "verdict incomplete, see $log"
 }
 
 "stage_$STAGE"
