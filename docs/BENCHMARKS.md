@@ -13245,7 +13245,9 @@ A mutation run, not committed, showed the bound has teeth:
 
 ### What this does not establish
 
-- **No device.** This is emulator against oracle on the CPU, as stated above.
+- **No device.** This is emulator against oracle on the CPU, as stated above. (Closed the same day:
+  the device equals the emulator to the bit and reproduces these figures. See
+  [W8A16 SESR-M7 on silicon](#w8a16-sesr-m7-on-silicon-exact-to-the-emulator-041-db-over-int8-and-the-host-egress-loses-the-tile-2026-09-22-desktop-2).)
 - **No bias.** SESR-M7 carries none: every `bias_q` is 0, so this comparison never exercises the bias
   path. The packet tests do, and so does the exact arm's test on the synthetic chain, whose biases are
   nonzero.
@@ -13303,5 +13305,136 @@ above:
 
 `tests/test_bf16_dense_session_offline.py` checks the staged plane against the compiler's workspace
 layout of `npu/sesr.py`'s preprocess, and the image against its postprocess, both to the bit, and
-records the sync lengths through a stand-in buffer object. None of that touches the device. Whether pyxrt, the syncs and the kernel do what those calls ask is the
-silicon sitting's question.
+records the sync lengths through a stand-in buffer object. None of that touches the device. Whether
+pyxrt, the syncs and the kernel do what those calls ask is the silicon sitting's question, answered
+in [the next section](#w8a16-sesr-m7-on-silicon-exact-to-the-emulator-041-db-over-int8-and-the-host-egress-loses-the-tile-2026-09-22-desktop-2).
+
+
+## W8A16 SESR-M7 on silicon: exact to the emulator, 0.41 dB over int8, and the host egress loses the tile (2026-09-22, Desktop 2)
+
+At float width AMD places nothing on the NPU, and in this same sitting AMD's int8 SESR ran at 1.69 to
+1.96 ms a tile. So this is a first, not a win over AMD, and there is no release in it. It is the first
+whole network this repository has run on the NPU with bf16 activations, and it is exact.
+
+Logs:
+- [`sesr_m7_bf16_silicon_desktop2_20260922.log`](../results/aie/sesr_m7_bf16_silicon_desktop2_20260922.log)
+  is the sitting. It was `tools/bf16_sr_silicon_check.py` under `research-lowlevel.sh --npu`, timing
+  eligible, with no foreign contention and the device idle before and after. The power mode was
+  `default`, XRT 2.21.0, NPU driver 32.0.20101.3760.
+- [`sesr_m7_bf16_silicon_smoke_desktop2_20260922.log`](../results/aie/sesr_m7_bf16_silicon_smoke_desktop2_20260922.log)
+  is the first dispatch ever made of this schedule. It was checks-only, on two inputs, and exact.
+- [`sesr_m7_int8_rebuild_desktop2_20260922.log`](../results/aie/sesr_m7_int8_rebuild_desktop2_20260922.log)
+  and [`sesr_m7_bf16_rebuild_desktop2_20260922.log`](../results/aie/sesr_m7_bf16_rebuild_desktop2_20260922.log):
+  both containers reproduce under the day's compiler before they are run.
+- [`eval_sesr_m7_all_npu_desktop2_20260922.log`](../results/eval_sesr_m7_all_npu_desktop2_20260922.log)
+  is AMD's stack in the same sitting (`pipelines/sesr/5_eval.py --ep npu --dataset all --fresh`).
+  [`eval_sesr_m7_ep_placement_desktop2_20260922.log`](../results/eval_sesr_m7_ep_placement_desktop2_20260922.log)
+  shows its EP took 50 of 52 nodes for both caches, with only the boundary QuantizeLinear and
+  DequantizeLinear on the CPU.
+
+Both engine containers were built from `sesr_m7_xint8.onnx`, the plain XINT8 arm, as decided above.
+
+### The device equals the emulator, to the bit
+
+The inputs were the five Set5 LR x2 images, staged through the session, and seed 0, staged as bf16
+patterns. Each ran once on the device. Afterwards the emulator (`run_direct`, aligned
+multiply-accumulate) recomputed it from the very patterns the session staged.
+
+| compared | values | differ |
+|---|---:|---:|
+| the tail, all 16 lanes, padding included | 6,291,456 | **0** |
+| every tensor the workspace holds when the frame ends: input, head, body.4, body.5, Add, tail | 31,064,064 | **0** |
+
+- The input region read back after each dispatch is what was staged, on all seven frames, so no drain
+  wrote into it.
+- The seventh frame repeats the first after six others, and every tensor came back identical. A
+  region left stale from the previous frame would have shown there.
+
+Against the W8A16 oracle, the device reproduces the figures
+[the offline section](#w8a16-on-the-bf16-engine-sesr-m7-stays-within-one-bf16-step-of-its-oracle-and-the-cores-aligned-accumulate-is-not-the-gap-2026-09-22-offline)
+measured for the emulator, to the digit:
+- at most 58 of 786,432 output values differ (head);
+- no value is more than one bf16 step from the oracle at its peak (butterfly);
+- rel_l2 is at most 1.59e-5;
+- baby has 2 differing values, and seed 0 has none.
+
+**So the bound measured offline is now the device's own distance to the model**, which is what
+this arc set out to establish.
+
+### Quality: W8A16 over W8A8, same weights, same tiles, same code
+
+The table uses `5_eval.py`'s tiling (256 x 256, overlap 8) and its metrics. Set5 has 5 images and
+Set14 has 14, and the two are never averaged together.
+
+| arm | runs on | Set5 PSNR-Y | Set5 SSIM-Y | Set14 PSNR-Y | Set14 SSIM-Y |
+|---|---|---:|---:|---:|---:|
+| FP32 | CPU | 35.64 | 0.9518 | 30.03 | 0.8910 |
+| **W8A16** | **bf16 engine, NPU** | **34.65** | 0.9408 | **29.60** | 0.8826 |
+| W8A8 | int8 engine, NPU | 34.25 | 0.9339 | 29.41 | 0.8771 |
+| AMD XINT8 | VitisAI EP, NPU | 34.06 | 0.9346 | 29.32 | 0.8770 |
+| AMD XINT8 + AdaRound | VitisAI EP, NPU | 35.16 | 0.9437 | 29.82 | 0.8837 |
+| Bicubic | CPU | 32.63 | 0.9249 | 28.51 | 0.8557 |
+
+W8A16 gains **+0.41 dB on Set5 and +0.19 dB on Set14** over W8A8, and **every one of the 19 images
+improves**. That recovers 29% and 31% of the gap to FP32.
+
+**The gain is activation precision.** The other candidates are ruled out:
+- The weights are the same bytes by construction: the same `ConvLayer` int8 weights at the same
+  power-of-two scale.
+- The tiles, the evaluation code, the truncation to uint8 and the sitting are all shared.
+- The int8 container equals the QDQ model run on the CPU with graph optimizations off: 0 of
+  11,366,412 pixels differ across both sets.
+- The bf16 container differs from the W8A16 oracle in 144 of them (4 on Set5, 140 on Set14), each by
+  one level.
+
+"Activation" includes the tail's own output quantization, whose int8 step is two pixel levels. Which
+layers the gain comes from is not separated.
+
+**AMD's AdaRound W8A8 is still better**: 0.51 dB above W8A16 on Set5 and 0.22 dB on Set14. Its
+weights are different, and its arithmetic is AMD's: AMD's plain XINT8 reads 34.06 where the exact QDQ
+model reads 34.25, as the DML row in the SESR section already recorded. W8A16 on the AdaRound weights
+is not measured. It needs one run of this tool on `sesr_m7_xint8_adaround.onnx` and both containers
+rebuilt from it.
+
+### Timing, per 256 x 256 tile
+
+The figures are means over 300 frames after 30 of warm-up, with p99 in parentheses. The int8 and bf16
+containers ran two alternating rounds each, and the range covers both rounds.
+
+| arm | host staging | NPU dispatch, or CPU run | readback | host postprocess | the tile |
+|---|---:|---:|---:|---:|---:|
+| int8 engine (native host paths) | 0.12 ms | 4.07-4.10 ms (4.57-4.59) | 0.02 ms | 0.34-0.35 ms | 4.55-4.59 ms |
+| bf16 engine (numpy host paths) | 0.64-0.66 ms | 5.21-5.28 ms (5.72-5.89) | 0.04 ms | 4.72-4.87 ms | **10.68-10.79 ms** |
+| FP32 on the CPU, ONNX Runtime 1.30 | 0.25 ms | 7.47 ms (8.75) | - | 2.13 ms | **9.85 ms** |
+
+AMD's stack in the same sitting, timed as `5_eval.py`'s `sess.run` per tile (ONNX Runtime 1.23.3 with
+the VitisAI EP, another environment):
+
+| AMD arm | Set5 | Set14 |
+|---|---:|---:|
+| XINT8 on the NPU | 1.96 ms | 1.69 ms |
+| AdaRound on the NPU | 1.92 ms | 1.68 ms |
+| FP32 on the CPU | 8.33 ms | 7.62 ms |
+
+- **bf16 dispatch is 1.27-1.30x int8's.** The two containers have the same 1,521 rounds, the same
+  stream length and the same 18 weight packets. What differs is the bytes each descriptor moves (an
+  activation packet is 12,800 B against 6,400) and the core's own pass. The two are not separated
+  here, so the 1.1 ms is **unexplained**.
+- **The bf16 network time beats the CPU's**: 5.21-5.28 ms against 7.47 ms of ONNX Runtime on the same
+  host in the same sitting, 1.42-1.43x.
+- **The tile does not**: 10.68-10.79 ms against 9.85. Everything it loses is on the host: staging at
+  0.65 ms and egress at 4.72-4.87 ms, both in numpy, against int8's native 0.12 ms and 0.35 ms. The
+  plan named this hazard, that the host boundary could decide the result on its own, and it did.
+- *DERIVED, not measured:* with egress at int8's cost, the bf16 tile would come to about 6.3 ms, under
+  the CPU's 9.85. That is a reason to build a native uint16 egress, not a result.
+- Against AMD, bf16 dispatch alone is 2.7-3.1x AMD's whole int8 tile.
+
+### What this does not establish
+
+- One sitting, on one machine. The engine and its CPU arm ran under ONNX Runtime 1.30, AMD's arms
+  under 1.23.3; the CPU figure is this sitting's, not the 6.59-7.87 ms of earlier sittings.
+- Five and fourteen images, as means, with no significance test.
+- W8A16 on the plain XINT8 weights only.
+- Why dispatch is 1.27x int8's.
+- Latency for one tile already in memory. This is neither a camera nor a whole image.
+- Energy was not measured.
