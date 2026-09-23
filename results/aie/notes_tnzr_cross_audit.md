@@ -74,7 +74,7 @@ exploration sweep and are re-read when their fix lands.
 | B1 | `VMAC.F` 6-cycle latency with the accumulator read in cycle 3. **Refinement neither source stated:** int8 `VMAC` is **5** cycles, its accumulator operand is bypassed (`VEC_Bypass`), and Peano issues a dependent int8 `vmac` **2 bundles** after its producer, against **4** for bf16 `vmac.f`. One accumulator therefore sustains a MAC every 2 cycles in int8 and every 4 in bf16; 1 vmac/cycle needs ≥2 (int8) or ≥4 (bf16) independent accumulators. The engine holds 8, so its loops are not latency-bound | Silent. Nothing reasons about VMAC latency or forwarding | SPEC(Peano): `peano_aie2_machine_model_a36c62b9.log` §3 (`II_VMAC [5,3,1,1,1]` with VEC_Bypass, `II_VMACf [6,3,1,1,1]`) and §4 (Peano's own spacing: `bf16_mac2` 4 bundles, `i8_mac2` 2). MEASURED P2: PENDING |
 | B2 | Latencies: VLDA/VLDB 7 (the repo had scalar LDA 7 only), ST/VST 1, VSHUFFLE/VSHIFT/VMOV 2, MUL 2, `ret lr` with 5 delay slots. Accumulator load → first `vmac.f` 5 bundles; `vmac.f` → store 6; int8 `vmac` → store 5 | Scalar load CONFIRMED (`SILICON.md:76`); the rest silent. `asm_core_id.s` puts five NOPs after `ret lr` without saying why | SPEC(Peano) §3–§4. Peano's schedule of `bf16_mac` (§4) is bundle-for-bundle tnzr's Listing 2, so this Peano and theirs agree |
 | B3 | Only load unit A writes accumulators; ≤1 accumulator load/store per bundle | Consistent with every disassembly here, never stated | SPEC(Peano) §3: every accumulator `vlda` (`II_VLDA_AM`, `II_VLDA_CONV`) reserves `LOAD_UNIT_A` and issues in slot lda; `vldb` has no accumulator form; accumulator stores are slot st |
-| B4 | A load and a store to the same bank in one bundle conflict; the reference keeps them in separate instructions | The repo measured only load+load (+1 cycle, `SILICON.md:74`) | MEASURED P4: PENDING |
+| B4 | A load and a store to the same bank in one bundle conflict; the reference keeps them in separate instructions | The repo measured only load+load (+1 cycle, `SILICON.md:74`) | **MEASURED: +1 cycle per same-bank load+store bundle, as for two loads.** A natural experiment settles it. Upstream `mm.cc` int8 spills accumulators to the stack (bank 0, a 416-B frame), and its per-block epilogue has exactly **12** bundles pairing a stack reload (`vlda am.., [sp, ..]`) with a C store (`vst am.., [p3/p4/p5]`). At 32×64×32 (4 blocks per call) that predicts **+48** cycles when C shares bank 0 with the stack. Measured: **+48.5** (697.1 → 745.6 cycles, the same kernel and harness, only A/C swapped between banks 0 and 2: `l1_tile_mm_i8_k64_c_bank0_desktop2_20260923T0545Z.log` vs `l1_tile_mm_k64_…0533Z.log`). Direct mode's identical placement read 745.4. The control is the bf16 kernel: it has **0** such bundles, and its time does not move with placement (1418.5 vs 1418.6) |
 | B5 | Hardware-loop rules (setup distance, 16-B alignment, 16-B last bundle) | Silent. Across every loop of all four engine ELFs, start and end are 16-B aligned and the last bundle is 16 B (consistent with the reference). But the `movxm ls/le` and `add.nc lc` writes sit **16–58 B before loop start**, and the code runs bit-exact. So "≥64 B before the start" is not what the hardware needs. Every loop's setup is **≥112 B before the loop end** (the minimum is exactly 112 in many loops), which suggests an end-anchored rule | Static: `engine_core_issue_census_desktop2_20260923.log`. MEASURED P3: PENDING (run last) |
 | B6 | `VMAC.F` config value 28 = bf16 4×8×4; which bf16 shapes are emulated. **Also:** int8×int8 4×8×8 with acc32 uses config value **776** | Silent on both. The repo uses only native 4×8×4 bf16, so nothing here is wrong | Reference Table 1; `peano_aie2_machine_model_a36c62b9.log` §4 (`mova r0, #28` / `mova r0, #776`) |
 | B7 | **A hand-scheduled assembly kernel runs on XDNA1 and reaches 86% of peak** | `SILICON.md:79`: "no hand-written kernel has been run on the NPU". The repo's only `.s` (`kernels/asm_probe/asm_core_id.s`) was assembled and linked, never executed | **MEASURED, reproduced here:** `tnzr_bf16_32x32x32_repro_desktop2_20260923T0518Z.log`. The reference's `.s`, assembled by this repo's Peano (a36c62b9) and linked by mlir-aie v1.4.2 aiecc on Windows, ran through `XrtSiliconHarness`: **397.5 GFLOPS** mean over 10 dispatches (396.6–397.9), 86.3% of 460.8 and 99.9% of the reference's 398. That was in **default** pmode, where the reference used turbo. Implied 296.7 cycles per call at 1.80 GHz, against 288 static kernel bundles (the other ~9 are the calling loop and call/return). Partitions idle before and after. The path this repo never tried (hand `.s` → `link_with` → aiecc → PyXRT) works end to end |
@@ -139,7 +139,9 @@ What this settles:
   buffer (int8: `vlda [p4]` + `vldb [p3]`, both A-pointers stepping `#0x20`; bf16: two B loads at `0x2a8`), so they hit one bank.
   The repo's own measured rule (+1 cycle for a same-bank pair, `SILICON.md:269`) predicts exactly
   +1. With no interlocks and no DMA in the timed loop, a bank conflict is the only stall source
-  left. Attribution: consistent and the only candidate standing, but not isolated by moving the operands.
+  left. `tools/aie_bank_check.py` finds exactly one paired-load bundle per hardware-loop iteration in each
+  (int8 `0x01f0`, bf16 `0x02a8`). Attribution: consistent and the only candidate standing, but not
+  isolated. Both loads of the pair read one buffer, so no placement can separate them.
 - **The bf16 array GEMM's "remaining two thirds" is the kernel.** At the array's own tile, with no
   movement at all, the kernel reaches 37.7% of peak. The array's measured 64×64 figures, 2477.23 and
   2641.41 GFLOPS (33.6% and 35.8% of the 16-core 7,372.8, `bf16_matmul_n64_single_buffer_npu.log`),
@@ -147,11 +149,22 @@ What this settles:
   few points. The "K-loop's C read-modify-write" is inside the kernel (16 accumulator loads and
   stores per output block), not a separate cost. The int8 array (31.2% at 1.80 GHz, `SILICON.md`)
   reaches ~79% of its kernel's 39.3%, so int8 is more movement-bound.
-- **Bank placement moves a whole compiled call by up to 7%.** `mm.cc` int8 at 32×64×32 costs 697.1
-  cycles with A/B/C in banks 0/1/2 (copy mode) and 745.4 with C in bank 0 beside the stack (direct
-  mode, `l1_tile_mm_direct_32x64x32_desktop2_20260923T0538Z.log`). bf16 does not move (1418.5 vs 1418.6).
-  Why int8 does is **unexplained**. A candidate is C's accumulator loads and stores pairing with stack
-  or operand traffic in bank 0; nothing yet rules that in or out.
+- **Bank placement moves a whole compiled call by 7%, and why is now attributed.** `mm.cc` int8 at 32×64×32
+  costs 697.1 cycles with A/B/C in banks 0/1/2 (copy mode) and 745.4 with C in bank 0 beside the stack
+  (direct mode, `l1_tile_mm_direct_32x64x32_desktop2_20260923T0538Z.log`). Copy mode with direct mode's
+  placement reproduces it (745.6), so the harness mode is not the cause. The kernel spills its
+  accumulators to the stack, and 12 epilogue bundles per block pair a stack reload with a C store:
+  4 blocks × 12 × 1 cycle = 48, against 48.5 measured. bf16 has no such bundle and does not move. Of the other
+  pairings the placement change could affect, none exists in the kernel: its only other paired loads
+  are A+A inside the hardware loop, which sit in one bank whatever the placement. See B4.
+  `tools/aie_bank_check.py` cannot flag this hazard, for two reasons: it drops the stack from its bank map
+  (`n != STACK_SYM`, `aie_bank_check.py:169`), and it looks only for load+load pairs (`PORT_A` +
+  `PORT_B`), never for a load paired with a store. Both are tool gaps. The engine's own core has the
+  same shape. In `modnet_cut_dense_20260921`'s `engine.o`, 27 bundles pair a stack access with another
+  memory op, including vector spill reloads beside accumulator stores (`0x624`, `0x1d44`:
+  `vlda wl8, [sp, #-0x160]` | `vst …, [p0]`). The stack is bank 0 of the core's own window (0x70000),
+  and several of its buffers sit in a neighbour's memory (0x6xxxx), which cannot conflict with it. Whether any
+  pair conflicts depends on where `p0` points at run time: **unchecked**, a follow-up.
 
 A first sitting (`l1_tile_compiler_vs_hand_desktop2_20260923T0527Z.log`, `index` counter, no
 control) measured the same kernels 5.5–6.1 cycles/call slower each. That shift is exactly the
