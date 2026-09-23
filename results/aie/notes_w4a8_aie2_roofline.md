@@ -1,6 +1,6 @@
 # Formal Micro-Architectural and Roofline Analysis of W4A8 Sub-Byte Weight Packing on AMD Phoenix AIE2 (XDNA1)
 
-> **UNBACKED ON MAIN (2026-09-23, [ledger A3](notes_tnzr_cross_audit.md)).** The `[MEASURED: w4a8_probe_npu.log]`
+> *(Updated 2026-09-23, on merging `worktree-int4-study` as `5e25ddb`: both logs are now on `main`, so the tags below are backed here as the errata say; what follows is the flag as first written.)* **UNBACKED ON MAIN (2026-09-23, [ledger A3](notes_tnzr_cross_audit.md)).** The `[MEASURED: w4a8_probe_npu.log]`
 > and `w4a8_array_npu.log` tags below point at logs that are not on `main`. They are in this directory
 > on the unmerged branch `worktree-int4-study`, added by its commits `67bd535` (probe) and `46bc01c`
 > (array), both measured 2026-09-10. On `main`, treat every MEASURED tag here as TO VERIFY; on that
@@ -69,7 +69,7 @@ win**. Line numbers below are this note's body as originally committed, shifted 
     Point"** (Executive Summary 1, section 1): **retracted.** It was never a widespread
     assumption. AMD documents it: AIE-API 2024.1 lists AIE-ML's `8b x 4b: 4x16x8` as a native
     `mmul` shape, and Riallto states 512 int4×int8 MAC per cycle per core (SPEC; fetched by the
-    2026-09-23 cross-audit, its ledger rows A3 and D11 on branch `tnzr-audit`). The assumption
+    2026-09-23 cross-audit, its ledger rows A3 and D11 on `main`). The assumption
     was this repo's, from reading `device.yaml`'s AIE2 table as an ISA listing. The probe is a
     confirmation on Phoenix silicon through Peano, bit-exact, not a discovery.
 11. **"Executes at 512 MACs per cycle … issues at 1 vmac per cycle in steady-state hardware

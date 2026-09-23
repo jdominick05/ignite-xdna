@@ -2090,7 +2090,7 @@ first step was an int4→int8 unpack. Both halves came out differently. *(Added 
 assumption was this repo's reading of one table, not the state of AMD's documentation.
 AIE-API 2024.1 lists AIE-ML's `8b x 4b: 4x16x8` as a native `mmul` shape, and Riallto states
 512 int4×int8 MAC per cycle per core — SPEC, both fetched by the 2026-09-23 cross-audit, its
-ledger row D11 on branch `tnzr-audit`. What follows is prior art confirmed on Phoenix silicon
+ledger row D11 on `main`. What follows is prior art confirmed on Phoenix silicon
 through Peano, bit-exact, not a discovery.)* `aie_api` defines
 `aie::mmul<4,16,8,int8,int4>` for AIE2 (`detail/aie2/mmul_8_4.hpp`), and Peano lowers it to the
 same `vmac` builtin int8×int8 uses, with the B-mode field of the MAC configuration word cleared.
@@ -2258,7 +2258,7 @@ A16W8; for int4 that is DERIVED from the same quantizer warning, not run). Use t
 this repo already has either to demonstrate int4 on the chip or to kill it before any engine
 work. int4 on this silicon is not new: AIE-API 2024.1 lists AIE-ML's `8b x 4b: 4x16x8` as a
 native `mmul`, and Riallto states 512 int4×int8 MAC per cycle per core (SPEC; cross-audit ledger
-D11, branch `tnzr-audit`). What is new here is the measurement on Phoenix through Peano,
+D11, on `main`). What is new here is the measurement on Phoenix through Peano,
 bit-exact, and the pricing against this engine. There are three gates, and each was written
 into its log before it ran. None of it touches `src/`. Two gates are compile-only or
 schedule-only, and one runs on silicon.
@@ -2324,7 +2324,7 @@ merged, plus half the weight DMA tasks' issue time.
   `sesr_m7` among them) uses 16,160 of its 16,384 B of program memory, 224 B free; one variant
   (`yolov8n_stride2ctrl`) has 16 B free. An int4 path is a second k loop in that core. The
   older ELF behind `yolov8n_full`, `yolov8s_opt` and `resnet50_head` has 5,680 B free.
-  `results/aie/engine_core_issue_census_desktop2_20260923.log` on branch `tnzr-audit`
+  `results/aie/engine_core_issue_census_desktop2_20260923.log` on `main`
   (cross-audit ledger A11).
 - **The lever that survives costs no accuracy:** the engine streams 2.2–4.6× more weight bytes
   than the layouts it declares. The trim is still a DERIVED best case until someone builds it.
@@ -2352,7 +2352,8 @@ the NPU.
   packets int4 saves nothing; with variable-size packets it is worth at most 4.8% of a dispatch
   (DERIVED, transport-bound, no accuracy data), and the same packet change spent on trimming is
   worth more. The engine core also has 224 B of program memory left for a second k loop. None of
-  this was built or measured on the engine.
+  this was built or measured on the engine. *(Since then, gate D below measured the accuracy: at
+  round-to-nearest, the 4-bit weights alone kill int4 for the engine.)*
 - **What this does not establish:**
   - no W4 network on the NPU (gate D below measures W4 accuracy on the CPU);
   - the array ratio's move from 1.263× to 1.287× lies inside this machine's day-to-day drift

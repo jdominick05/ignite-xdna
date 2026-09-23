@@ -160,7 +160,8 @@
   which are Chess attributes with no Peano equivalent. Every use of those nine in this tree, upstream
   `mm.cc`'s included, is a no-op, and a kernel that relies on them for its schedule is relying on nothing.
   ([ledger A10](../results/aie/notes_tnzr_cross_audit.md); the `clang++ -dM -E` check is in commit
-  `e91887c` on `worktree-int4-study`, `56b4e88` before its rebase onto `35d58d5` and message scrub.)
+  `e91887c`, on `main` since the int4 merge `5e25ddb`; it was `56b4e88` before the branch's rebase
+  onto `35d58d5` and message scrub.)
 - **`tools/aie_bank_check.py` is blind to two real bank conflicts (2026-09-23).** It drops the stack
   from its bank map (`n != STACK_SYM`) and looks only for load+load pairs. Yet a load and a store to
   the same bank in one bundle cost **+1 cycle**, as two loads do. MEASURED: upstream `mm.cc` int8 spills
@@ -953,7 +954,7 @@
     YOLOv8s's ceiling, 4.8%, sits 0.2 points under it.
   - A separate constraint: the newest engine core ELF has 224 B of its 16,384 B program memory
     free, and one variant 16 B, for what would be a second k loop
-    (`results/aie/engine_core_issue_census_desktop2_20260923.log` on branch `tnzr-audit`, ledger
+    (`results/aie/engine_core_issue_census_desktop2_20260923.log` on `main`, ledger
     A11). The older ELF behind `yolov8n_full`, `yolov8s_opt` and `resnet50_head` has 5,680 B free.
   - Reopen only with a new mechanism: activations that stop round-tripping DDR, a weight-bound
     model, or a transport measured slower than 26.8 GB/s.

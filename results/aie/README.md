@@ -594,7 +594,8 @@ Kernels `kernels/w4a8_array/`; written up in
   against a pre-registered 5% line. On paper, under the current packet format, int4-in-engine is
   killed (no accuracy data; the engine core also has 224 B of program memory left, ledger A11),
   and trimming the fixed 9,472 B
-  packets saves more on every model (3.0–24.0%).
+  packets saves more on every model (3.0–24.0%). *(Since then, gate D in `results/int4/` measured
+  the accuracy: at round-to-nearest, the 4-bit weights alone kill int4 for the engine.)*
 - Tool `tools/int4_bytes_gate.py`. Its `COMMIT: f1194be` maps the same way (`38b3615` after the
   rebase and scrub). The rebase brought in no engine code change: main's 68 changed lines under `src/`
   between `217d1d2` and `35d58d5` are licence headers.
