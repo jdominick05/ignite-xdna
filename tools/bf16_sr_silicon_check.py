@@ -28,6 +28,16 @@ Three questions, answered in this order because each is only worth asking once t
    separately and never averaged together. Every bf16 tile's image is also recomputed through the
    numpy egress from the same device output and must be identical.
 
+WHEN THE DEVICE AND THE EMULATOR DISAGREE. The chained check feeds every layer the emulator's own
+previous output, so it says THAT a frame differs, and where it is first visible, but not where it
+starts: a layer that is overwritten before the frame ends (SESR's body.0 to body.3) is never compared.
+``--isolate`` (on the inexact frames by default) replays each layer whose inputs were all still
+resident, fed the DEVICE's own input tensors, under every candidate accumulate model the emulator
+knows (``engine_bf16_emulator.MAC_MODELS``), and lists each position where any of them differs from
+the device: the device's pattern, each model's, the tile it fell in, and the accumulator's exact
+value before rounding. ``--dump-frames DIR`` writes the device frames out, and ``--from-dump DIR``
+checks them again later with no device at all, refusing a dump from another container or model.
+
 Generic over the containers, the QDQ and float models, the images and the datasets. It opens one
 hardware context at a time and closes each before the next, prints ``xrt-smi``'s partition report at
 the start and after the last close, and never retries a dispatch.
@@ -47,6 +57,7 @@ import argparse
 import gc
 import hashlib
 import json
+import math
 import platform
 import re
 import sys
@@ -65,6 +76,7 @@ from ignite_xdna.compiler import engine_bf16_emulator as em  # noqa: E402
 from ignite_xdna.compiler import engine_schedule_bf16 as eb  # noqa: E402
 from ignite_xdna.compiler import graph_ir  # noqa: E402
 from ignite_xdna.compiler import graph_reference_bf16 as gr16  # noqa: E402
+from ignite_xdna.compiler.engine_schedule import tile_origins  # noqa: E402
 from ignite_xdna.compiler.graph_reference import host_session  # noqa: E402
 from ignite_xdna.compiler.serializer import ELEM_BF16, IgniteModelReader  # noqa: E402
 from ignite_xdna.pipelines import npu_power  # noqa: E402
@@ -288,6 +300,148 @@ def check_frames(frames: list, ir, placement: dict, dense: dict, oracle_bytes: b
     return reports
 
 
+# --------------------------------------------------------------------------- 1b. the dump and the replay
+def dump_frames(frames: list, directory: Path, facts: dict) -> dict:
+    """Write each device frame to ``directory``, one npz apiece plus ``dump.json``, for ``--from-dump``.
+
+    The patterns are kept exactly as the device returned them. The dump names the container and the
+    QDQ model it came from, and ``--from-dump`` refuses any other pair, so a replay cannot quietly
+    check one container's tensors against another's emulator.
+    """
+    directory.mkdir(parents=True, exist_ok=True)
+    files = {}
+    for i, f in enumerate(frames):
+        names = sorted(f["tensors"])
+        arrays = {"staged": f["staged"], "tail": f["tail"], "input_after": f["input_after"]}
+        arrays.update({f"tensor{k}": f["tensors"][n] for k, n in enumerate(names)})
+        if "sesr_input" in f["host"]:
+            arrays["sesr_input"] = f["host"]["sesr_input"]
+        meta = {"label": f["label"], "dispatch_ms": f["dispatch_ms"], "tensor_names": names,
+                "host": {k: v for k, v in f["host"].items() if k != "sesr_input"}}
+        arrays["meta"] = np.frombuffer(json.dumps(meta).encode(), np.uint8)
+        path = directory / f"{i:02d}_{f['label']}.npz"
+        np.savez_compressed(path, **arrays)
+        files[path.name] = sha16(path)
+    (directory / "dump.json").write_text(json.dumps({**facts, "files": files}, sort_keys=True, indent=1))
+    return files
+
+
+def load_frames(directory: Path, facts: dict) -> list:
+    """The frames ``dump_frames`` wrote, refused unless every file hashes as recorded and the dump came
+    from the same container and QDQ model as this run."""
+    info = json.loads((directory / "dump.json").read_text())
+    for key, want in facts.items():
+        if info.get(key) != want:
+            raise SystemExit(f"{directory} was dumped with {key} {info.get(key)}; this run has {want}")
+    frames = []
+    for name in sorted(info["files"]):
+        path = directory / name
+        if sha16(path) != info["files"][name]:
+            raise SystemExit(f"{path} does not hash as dump.json records")
+        with np.load(path) as z:
+            meta = json.loads(z["meta"].tobytes().decode())
+            f = {"label": meta["label"], "dispatch_ms": meta["dispatch_ms"], "staged": z["staged"],
+                 "tail": z["tail"], "input_after": z["input_after"], "host": dict(meta["host"]),
+                 "tensors": {n: z[f"tensor{k}"] for k, n in enumerate(meta["tensor_names"])}}
+            if "sesr_input" in z.files:
+                f["host"]["sesr_input"] = z["sesr_input"]
+        frames.append(f)
+    return frames
+
+
+def _values(bits: np.ndarray, blocks: int) -> np.ndarray:
+    """A device tensor's patterns ``[C][H][W]`` as the float32 values they denote, +0.0 up to whole blocks."""
+    v = em.from_bf16_bits(bits)
+    if v.shape[0] < blocks * 8:
+        v = np.concatenate([v, np.zeros((blocks * 8 - v.shape[0],) + v.shape[1:], np.float32)])
+    return v
+
+
+def _origin(origins, p: int, size: int) -> int:
+    """The origin of the LAST tile covering ``p``: edge tiles overlap, and the later one is written last."""
+    return max(o for o in origins if o <= p < o + size)
+
+
+def exact_value(layer, values: dict, c: int, y: int, x: int):
+    """The accumulator's exact value at one output position, before the epilogue rounds it: the sum of
+    every product in float64 by ``math.fsum``, plus the packet's bf16 bias. Single-input layers only."""
+    if len(layer.inputs) != 1:
+        return None
+    seg = layer.inputs[0]
+    w = eb.dequantized_weights(layer)
+    if c >= w.shape[0]:
+        return None
+    xin = values[seg.tensor][seg.block_offset * 8:(seg.block_offset + seg.blocks) * 8][:w.shape[1]]
+    terms = []
+    for ky in range(layer.k):
+        for kx in range(layer.k):
+            yi, xi = layer.stride * y - layer.pad + ky, layer.stride * x - layer.pad + kx
+            if 0 <= yi < xin.shape[1] and 0 <= xi < xin.shape[2]:
+                terms += (w[c, :, ky, kx].astype(np.float64) * xin[:, yi, xi].astype(np.float64)).tolist()
+    bias = float(em.to_bf16(eb.dequantized_bias(layer)[c:c + 1])[0])
+    out = {"acc_exact": math.fsum(terms + [bias])}
+    if layer.residual is not None:
+        out["residual"] = float(values[layer.residual.tensor][layer.residual.block_offset * 8 + c, y, x])
+    return out
+
+
+def isolated_layers(frames: list, ir, models=em.MAC_MODELS, limit: int = 48) -> list:
+    """Each layer whose inputs were all still resident when the frame ended, recomputed from the DEVICE's
+    own input tensors under every candidate accumulate model and compared with the device's output.
+
+    The chained check feeds each layer the emulator's own previous output, so one early difference
+    reappears in every layer after it. Fed the device's inputs, a layer that still differs differs in
+    its own arithmetic, or in something the emulator assumes about it. A model that reproduces the
+    device where the one in force does not is a candidate, not a verdict: the candidates agree on
+    almost all data and were told apart only by a probe built for it. A layer whose input was
+    overwritten before the frame ended cannot be isolated, and is named rather than skipped.
+    """
+    reports, seen = [], set()
+    for f in frames:
+        key = f["staged"].tobytes()
+        if key in seen:
+            continue
+        seen.add(key)
+        dev = f["tensors"]
+        values = {n: _values(b, ir.tensors[n].blocks) for n, b in dev.items()}
+        rep = {"label": f["label"], "layers": []}
+        for L in ir.layers:
+            if L.output not in dev:
+                continue
+            needs = [s.tensor for s in L.inputs] + ([L.residual.tensor] if L.residual is not None else [])
+            missing = [n for n in needs if n not in dev]
+            if missing:
+                rep["layers"].append({"layer": L.name, "isolated": False, "inputs_not_resident": missing})
+                continue
+            got = dev[L.output]
+            t0 = time.perf_counter()
+            outs = {m: em.bf16_bits(gr16.direct_layer(ir, L, values, mac_model=m)[:got.shape[0]]) for m in models}
+            miss = np.stack([outs[m] != got for m in models])
+            where = np.argwhere(miss.any(axis=0))
+            t = ir.tensors[L.output]
+            ys, xs = tile_origins(t.height, em.TILE_ROWS), tile_origins(t.width, em.TILE_COLS)
+            rows = []
+            for c, y, x in where[:limit]:
+                c, y, x = int(c), int(y), int(x)
+                oy, ox = _origin(ys, y, em.TILE_ROWS), _origin(xs, x, em.TILE_COLS)
+                d = int(got[c, y, x])
+                rows.append({"c": c, "y": y, "x": x, "tile_origin": [oy, ox], "in_tile": [y - oy, x - ox],
+                             # tiles covering the position, rows x columns: 2 is an edge tile's overlap
+                             "covered_by": [sum(o <= y < o + em.TILE_ROWS for o in ys),
+                                            sum(o <= x < o + em.TILE_COLS for o in xs)],
+                             "device": f"{d:04x}", "device_value": float(em.from_bf16_bits(np.array([d], np.uint16))[0]),
+                             **{m: f"{int(outs[m][c, y, x]):04x}" for m in models},
+                             **(exact_value(L, values, c, y, x) or {})})
+            rep["layers"].append({
+                "layer": L.name, "output": L.output, "isolated": True, "values": int(got.size),
+                "differ_by_model": {m: int(miss[i].sum()) for i, m in enumerate(models)},
+                "positions_any_model_differs": int(len(where)),
+                "positions_no_model_matches": int(miss.all(axis=0).sum()),
+                "seconds": round(time.perf_counter() - t0, 1), "positions": rows})
+        reports.append(rep)
+    return reports
+
+
 # --------------------------------------------------------------------------- 2. timing
 def time_container(path: Path, bf16: bool, tile: np.ndarray, frames: int, warmup: int, timeout_ms: int,
                    native_host: bool = True) -> dict:
@@ -428,7 +582,19 @@ def main() -> int:
     ap.add_argument("--no-exact", action="store_true")
     ap.add_argument("--no-timing", action="store_true")
     ap.add_argument("--no-quality", action="store_true")
+    ap.add_argument("--dump-frames", type=Path, default=None,
+                    help="also write the exactness frames here, as npz, for --from-dump (megabytes: keep it "
+                         "out of results/; the log records each file's hash)")
+    ap.add_argument("--from-dump", type=Path, default=None,
+                    help="check frames an earlier sitting dumped, against this container and QDQ model; opens "
+                         "no device, and implies --no-timing --no-quality")
+    ap.add_argument("--isolate", choices=("inexact", "all", "none"), default="inexact",
+                    help="replay each isolable layer from the device's own inputs under every accumulate "
+                         "model: on the inexact frames (default), on all of them, or not at all")
     args = ap.parse_args()
+    offline = args.from_dump is not None
+    if offline:
+        args.no_timing = args.no_quality = True
 
     import onnxruntime as ort
     images = args.image or DEFAULT_IMAGES
@@ -446,15 +612,16 @@ def main() -> int:
         "int8": container_facts(args.int8_container) if args.int8_container else None,
         "qdq": {"path": rel(args.qdq), "sha256": sha16(args.qdq)},
         "fp32": {"path": rel(args.fp32), "sha256": sha16(args.fp32)},
-        "npu_power_mode": npu_power.read_mode(), "xrt": xrt_host(),
+        "npu_power_mode": None if offline else npu_power.read_mode(), "xrt": None if offline else xrt_host(),
         "onnxruntime": ort.__version__, "numpy": np.__version__, "cv2": cv2.__version__,
         # The int8 session takes its native host paths whenever this library loaded; the bf16 session
         # takes its own when they are exported and native_host is on. Each arm reports what ran.
         "native_library": native,
         "mac_model": args.mac_model or em.MAC_MODEL, "provenance": provenance(),
+        "from_dump": rel(args.from_dump) if offline else None, "isolate": args.isolate,
         "images": [rel(p) for p in images], "seeds": seeds, "datasets": datasets,
         "frames": args.frames, "warmup": args.warmup, "rounds": args.rounds, "bf16_hosts": bf16_hosts})
-    if not witness("start"):
+    if not offline and not witness("start"):
         raise SystemExit("the device is not idle; a number measured beside another context is contention")
 
     ir = graph_ir.lower_yolov8n(str(args.qdq))
@@ -466,11 +633,13 @@ def main() -> int:
     tile = cv2.imread(str(images[0]))
     if tile.shape[:2] != (TILE, TILE):
         tile = sesr.split_into_tiles(tile, patch_size=(TILE, TILE), overlap=args.overlap)[0][0]
+    # What a dump is bound to: a replay against any other container or model is refused.
+    dump_facts = {"container_sha256": bf16_facts["sha256"], "qdq_sha256": sha16(args.qdq)}
     failed = False
     frames, npu_arms, timing, host_agreement = [], {}, [], {}
     try:
         # ---- everything that needs the device, one context at a time
-        if not args.no_exact:
+        if not args.no_exact and not offline:
             plan = [(p.stem, "image", cv2.imread(str(p))) for p in images]
             plan += [(f"seed{k}", "bits", em.bf16_bits(em.to_bf16(wo.seeded_input(args.qdq, k)[0]))) for k in seeds]
             plan += [(f"{images[0].stem}_again", "image", cv2.imread(str(images[0])))]
@@ -481,6 +650,9 @@ def main() -> int:
                 close_session(s)
             emit("BF16_SR_DEVICE_FRAMES", {"frames": [f["label"] for f in frames],
                                             "dispatch_ms": [round(f["dispatch_ms"], 3) for f in frames]})
+            if args.dump_frames is not None:
+                files = dump_frames(frames, args.dump_frames, dump_facts)
+                emit("BF16_SR_DUMP", {"dir": rel(args.dump_frames), **dump_facts, "files": files})
         if not args.no_timing:
             arms = ([("int8_npu", args.int8_container, False, None)] if args.int8_container else []) + \
                    [(f"bf16_npu_{h}_host", args.container, True, h) for h in bf16_hosts]
@@ -513,9 +685,12 @@ def main() -> int:
     except Exception as exc:  # noqa: BLE001 - a device failure is the finding; say it and stop
         emit("BF16_SR_ERROR", {"type": type(exc).__name__, "message": str(exc)[:500]})
         failed = True
-    idle = witness("end")
+    idle = None if offline else witness("end")
     if failed:
         return 3
+    if offline and not args.no_exact:
+        frames = load_frames(args.from_dump, dump_facts)
+        emit("BF16_SR_FROM_DUMP", {"dir": rel(args.from_dump), **dump_facts, "frames": [f["label"] for f in frames]})
 
     # ---- CPU only from here
     if not args.no_timing:
@@ -539,6 +714,16 @@ def main() -> int:
             emit("BF16_SR_EXACT", rep)
     fresh = [r for r in reports if "repeat_of" not in r]
     repeats = [r for r in reports if "repeat_of" in r]
+    isolated = {}
+    if frames and args.isolate != "none":
+        inexact = {r["label"] for r in fresh if not r["exact"]}
+        for rep in isolated_layers([f for f in frames if args.isolate == "all" or f["label"] in inexact], ir):
+            emit("BF16_SR_ISOLATED", rep)
+            for L in rep["layers"]:
+                if L["isolated"]:
+                    tot = isolated.setdefault(L["layer"], {m: 0 for m in L["differ_by_model"]})
+                    for m, n in L["differ_by_model"].items():
+                        tot[m] += n
     exact = bool(fresh) and all(r["exact"] and r["staged_is_the_compilers_plane"] for r in fresh) and \
         all(r["repeat_tail_identical"] and r["repeat_tensors_identical"] and r["input_region_intact"] for r in repeats)
     # The host ends: on the exactness frames, in every timed bf16 arm, and on every quality tile.
@@ -560,13 +745,15 @@ def main() -> int:
                and host["quality_tiles_identical"] == host["quality_tiles"]
                and host["quality_host_paths"] in (None, [f"{want}/{want}"]))
     emit("BF16_SR_RESULT", {
-        "device_idle_after": idle,
+        "device_idle_after": idle, "from_dump": rel(args.from_dump) if offline else None,
+        # per isolable layer, the values each accumulate model got wrong, summed over the replayed frames
+        "isolated_differ_by_model": isolated or None,
         "exact_inputs": len(fresh), "repeat_frames": len(repeats), "device_equals_emulator": exact if frames else None,
         "tail_values_compared": int(sum(r["tail"]["values"] for r in fresh)),
         "resident_values_compared": int(sum(r["resident_tensors"]["values"] for r in fresh)),
         "worst_vs_oracle": max(fresh, key=lambda r: r["vs_oracle"]["differ"])["vs_oracle"] if fresh else None,
         "host": host, "host_ok": host_ok})
-    return 0 if (exact or not frames) and idle and host_ok else 1
+    return 0 if (exact or not frames) and (offline or idle) and host_ok else 1
 
 
 if __name__ == "__main__":
