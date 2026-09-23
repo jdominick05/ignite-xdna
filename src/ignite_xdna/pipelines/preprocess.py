@@ -119,6 +119,18 @@ def _load_preprocess_lib() -> Optional[ctypes.CDLL]:
                 ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_void_p,
             ]
             lib.fused_resize_bgr_to_c8_plane.restype = ctypes.c_int
+        # The bf16 engine's super-resolution ingress and egress (uint16 bf16 patterns).
+        if hasattr(lib, "bgr_to_c8_plane_bf16"):
+            lib.bgr_to_c8_plane_bf16.argtypes = [
+                ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_void_p, ctypes.c_int, ctypes.c_void_p,
+            ]
+            lib.bgr_to_c8_plane_bf16.restype = ctypes.c_int
+        if hasattr(lib, "depth_to_space_crd_bgr_bf16"):
+            lib.depth_to_space_crd_bgr_bf16.argtypes = [
+                ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_void_p,
+                ctypes.POINTER(ctypes.c_int64),
+            ]
+            lib.depth_to_space_crd_bgr_bf16.restype = ctypes.c_int
         return lib
     except Exception as e:
         sys.stderr.write(f"Warning: Failed to load preprocess_simd library: {e}\n")
@@ -201,6 +213,60 @@ def resize_bgr_to_c8_plane(src_bgr: np.ndarray, dst_plane: np.ndarray, dst_w: in
         int(halo),
         lut_ptr,
     )
+    return ret == 0
+
+
+def has_native(name: str) -> bool:
+    """True if the loaded native library exports ``name`` (a DLL built before it existed does not)."""
+    return _LIB is not None and hasattr(_LIB, name)
+
+
+def bgr_to_c8_plane_bf16(src_bgr: np.ndarray, dst_plane: np.ndarray, halo: int, lut: np.ndarray) -> bool:
+    """A BGR frame at the network size into lanes 0..2 of a bf16 input plane, RGB, through a uint16 table.
+
+    ``dst_plane`` is uint16 ``[H + 2 halo][W + 2 halo][8]``; interior pixel ``(y, x)`` gets
+    ``lut[R], lut[G], lut[B]``, exactly ``plane[h:h + H, h:h + W, :3] = lut[src[:, :, ::-1]]``. The halo
+    and lanes 3..7 are untouched. There is no resize: returns False (the plane untouched) when the frame
+    is not the plane's interior size, when the library lacks the function, or when a buffer does not
+    fit, so callers keep the numpy path.
+    """
+    if not has_native("bgr_to_c8_plane_bf16"):
+        return False
+    if (src_bgr.dtype != np.uint8 or src_bgr.ndim != 3 or src_bgr.shape[2] != 3
+            or src_bgr.strides[1:] != (3, 1) or src_bgr.strides[0] < 3 * src_bgr.shape[1]):
+        return False
+    h, w = int(src_bgr.shape[0]), int(src_bgr.shape[1])
+    if (dst_plane.dtype != np.uint16 or not dst_plane.flags["C_CONTIGUOUS"] or not dst_plane.flags["WRITEABLE"]
+            or dst_plane.shape != (h + 2 * halo, w + 2 * halo, 8)):
+        return False
+    lut = np.ascontiguousarray(lut)
+    if lut.dtype != np.uint16 or lut.size != 256:
+        return False
+    return _LIB.bgr_to_c8_plane_bf16(ctypes.c_void_p(src_bgr.ctypes.data), w, h, int(src_bgr.strides[0]),
+                                     ctypes.c_void_p(dst_plane.ctypes.data), int(halo),
+                                     ctypes.c_void_p(lut.ctypes.data)) == 0
+
+
+def depth_to_space_crd_bgr_bf16(src: np.ndarray, h: int, w: int, mean: float, dst: np.ndarray) -> bool:
+    """bf16 SESR M7 egress: DepthToSpace (CRD, bs=2) of uint16 bf16 patterns [2][h][w][8] into BGR uint8.
+
+    Byte for byte ``graph_session.bf16_dense_image(src, 12, 2, mean)``: each value widened to float32,
+    plus ``float32(mean)``, clipped to [0, 255] and truncated. Returns False (``dst`` untouched) when the
+    library lacks the function or a buffer does not fit, so callers keep the numpy path. RAISES when an
+    active channel holds a non-finite value, as the numpy path does: that is a refusal, not a decline.
+    """
+    if not has_native("depth_to_space_crd_bgr_bf16"):
+        return False
+    if (src.dtype != np.uint16 or dst.dtype != np.uint8 or not src.flags["C_CONTIGUOUS"]
+            or not dst.flags["C_CONTIGUOUS"] or not dst.flags["WRITEABLE"]
+            or src.size != 2 * h * w * 8 or dst.shape != (2 * h, 2 * w, 3)):
+        return False
+    bad = ctypes.c_int64(0)
+    ret = _LIB.depth_to_space_crd_bgr_bf16(ctypes.c_void_p(src.ctypes.data), int(h), int(w), ctypes.c_float(mean),
+                                           ctypes.c_void_p(dst.ctypes.data), ctypes.byref(bad))
+    if ret == -2:
+        raise RuntimeError(f"{bad.value} non-finite values in the dense output: a multiply-accumulate read memory "
+                           "nothing wrote, or the input lanes past the image's channels are not +0.0")
     return ret == 0
 
 

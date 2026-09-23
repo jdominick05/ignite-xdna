@@ -1003,6 +1003,139 @@ PREPROCESS_API int fused_resize_bgr_to_c8_plane(
     return 0;
 }
 
+/**
+ * A BGR image into lanes 0..2 of the bf16 engine's input plane, RGB order, through a uint16 table of
+ * bf16 patterns: the bf16 twin of fused_resize_bgr_to_c8_plane's table write, WITHOUT the resize.
+ * dst_plane is [h + 2*halo][w + 2*halo][8] uint16; interior pixel (y, x) gets lanes 0, 1, 2 =
+ * lut[R], lut[G], lut[B]. The halo ring and lanes 3..7 are not touched: the session zeroes them once,
+ * and they must stay +0.0 (a zero weight times a NaN is NaN).
+ *
+ * No resize, on purpose. The native bilinear resize above is within one code of OpenCV's, not equal to
+ * it, and a frame already at the network size needs no interpolation; a caller with another size
+ * resizes with cv2 first, exactly as the numpy path does.
+ *
+ * @return 0 on success; -1 null pointer, non-positive size or negative halo; -3 src_stride shorter
+ *         than w * 3.
+ */
+PREPROCESS_API int bgr_to_c8_plane_bf16(
+    const uint8_t* __restrict src_bgr,
+    int w,
+    int h,
+    int src_stride,
+    uint16_t* __restrict dst_plane,
+    int halo,
+    const uint16_t* __restrict lut
+) {
+    if (!src_bgr || !dst_plane || !lut || w <= 0 || h <= 0 || halo < 0) {
+        return -1;
+    }
+    if (src_stride < w * 3) {
+        return -3;
+    }
+    const size_t plane_w = (size_t)w + 2 * (size_t)halo;
+    for (int y = 0; y < h; ++y) {
+        const uint8_t* __restrict s = src_bgr + (size_t)y * (size_t)src_stride;
+        uint16_t* __restrict d = dst_plane + (((size_t)y + halo) * plane_w + (size_t)halo) * 8;
+        for (int x = 0; x < w; ++x) {
+            d[0] = lut[s[2]];
+            d[1] = lut[s[1]];
+            d[2] = lut[s[0]];
+            s += 3;
+            d += 8;
+        }
+    }
+    return 0;
+}
+
+// Exponent all ones: +-Inf or NaN. On the bits, because this file builds with /fp:fast, under which
+// the compiler may assume no float is ever NaN and fold an isfinite() test away.
+#define BF16_NONFINITE(b) (((b) & 0x7F80u) == 0x7F80u)
+
+static inline uint8_t bf16_pixel(uint16_t bits, float mean) {
+    union { uint32_t u; float f; } v;
+    v.u = (uint32_t)bits << 16;  // bf16 is the top half of a float32: widening is exact
+    float x = v.f + mean;        // one float32 add, as numpy's float32 image + float32(mean)
+    if (x < 0.0f) x = 0.0f;
+    if (x > 255.0f) x = 255.0f;
+    return (uint8_t)(int)x;      // truncation, as astype(uint8) does on [0, 255]
+}
+
+/**
+ * DepthToSpace (CRD, bs=2) + bf16 egress for super-resolution on the bf16 engine (SESR M7 at W8A16):
+ * the bf16 twin of depth_to_space_crd_bgr. Input is channel-blocked bf16 patterns uint16 [2][h][w][8]
+ * in real units, 12 active channels; output is the upscaled BGR image uint8 [2*h][2*w][3].
+ *
+ * Each value is the float pipeline's own postprocess (npu/sesr.py, mirrored by bf16_dense_image in
+ * runtime/graph_session.py): the pattern widened to float32, plus mean in float32, clipped to [0, 255]
+ * and TRUNCATED to uint8. The channel map is depth_to_space_crd_bgr's, the same 12 lanes and no
+ * others; lanes 4..7 of the second block are padding and are never read.
+ *
+ * A non-finite value in an active channel refuses the whole tile before any pixel is written. The bf16
+ * engine produces one only when a multiply-accumulate read memory nothing wrote, or when the input
+ * lanes past the image's channels were not +0.0; a pixel made from it would hide that fault.
+ *
+ * @param out_nonfinite  Optional; receives the number of non-finite active values (0 on success).
+ * @return 0 on success; -1 null pointer or non-positive size; -2 a non-finite active value (dst
+ *         untouched).
+ */
+PREPROCESS_API int depth_to_space_crd_bgr_bf16(
+    const uint16_t* __restrict src,
+    int h,
+    int w,
+    float mean,
+    uint8_t* __restrict dst,
+    int64_t* out_nonfinite
+) {
+    if (!src || !dst || h <= 0 || w <= 0) {
+        return -1;
+    }
+    const size_t hw = (size_t)h * (size_t)w;
+    const uint16_t* __restrict b0 = src;
+    const uint16_t* __restrict b1 = src + hw * 8;
+
+    int64_t bad = 0;
+    for (size_t i = 0; i < hw; ++i) {
+        const uint16_t* p0 = b0 + i * 8;
+        const uint16_t* p1 = b1 + i * 8;
+        for (int k = 0; k < 8; ++k) bad += BF16_NONFINITE(p0[k]);
+        for (int k = 0; k < 4; ++k) bad += BF16_NONFINITE(p1[k]);
+    }
+    if (out_nonfinite) *out_nonfinite = bad;
+    if (bad) {
+        return -2;
+    }
+
+    const int out_stride = w * 2 * 3;
+    for (int y = 0; y < h; ++y) {
+        uint8_t* __restrict row_top = dst + (size_t)(2 * y) * out_stride;
+        uint8_t* __restrict row_bot = dst + (size_t)(2 * y + 1) * out_stride;
+        const uint16_t* __restrict p0 = b0 + (size_t)y * w * 8;
+        const uint16_t* __restrict p1 = b1 + (size_t)y * w * 8;
+
+        for (int x = 0; x < w; ++x) {
+            row_top[0] = bf16_pixel(p1[0], mean);
+            row_top[1] = bf16_pixel(p0[4], mean);
+            row_top[2] = bf16_pixel(p0[0], mean);
+            row_top[3] = bf16_pixel(p1[1], mean);
+            row_top[4] = bf16_pixel(p0[5], mean);
+            row_top[5] = bf16_pixel(p0[1], mean);
+            row_top += 6;
+
+            row_bot[0] = bf16_pixel(p1[2], mean);
+            row_bot[1] = bf16_pixel(p0[6], mean);
+            row_bot[2] = bf16_pixel(p0[2], mean);
+            row_bot[3] = bf16_pixel(p1[3], mean);
+            row_bot[4] = bf16_pixel(p0[7], mean);
+            row_bot[5] = bf16_pixel(p0[3], mean);
+            row_bot += 6;
+
+            p0 += 8;
+            p1 += 8;
+        }
+    }
+    return 0;
+}
+
 #ifdef __cplusplus
 }
 #endif

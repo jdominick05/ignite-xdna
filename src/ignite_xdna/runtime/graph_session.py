@@ -1162,11 +1162,27 @@ class Bf16DenseGraphSession(DenseGraphSession):
     ``zero_point``. They are int8 fields the compiler still writes into a bf16 manifest; nothing here
     reads them.
 
-    Neither native fast path is used. ``resize_bgr_to_c8_plane`` and ``depth_to_space_crd_bgr`` are uint8
-    routines; this numpy path is correct and slower, and what it costs is for a sitting to measure.
+    Both host ends have a native path (``preprocess_simd``: ``bgr_to_c8_plane_bf16`` and
+    ``depth_to_space_crd_bgr_bf16``), byte for byte the numpy one, which stays as the fallback when the
+    library lacks them. The numpy egress cost 4.72-4.87 ms a tile on silicon, more than the CPU's whole
+    network, which is why they exist. ``native_host=False`` forces numpy, so one sitting can time both;
+    ``stage_path`` and ``egress_path`` say which ran last. Ingress has no native resize: a frame at
+    another size goes through ``cv2.resize`` first on either path, because the native bilinear resize is
+    within one code of OpenCV's rather than equal to it.
     """
 
     SUPPORTED_ELEMS = (ELEM_BF16,)
+    native_host: bool = True
+    stage_path: Optional[str] = None
+    egress_path: Optional[str] = None
+
+    def __init__(self, container_path: Union[str, Path], device_index: int = 0,
+                 xclbin_cache_dir: Optional[Union[str, Path]] = None, map_workspace: bool = True,
+                 native_host: bool = True, **_ignored):
+        # Read by _init_dense, which runs inside the base constructor.
+        self.native_host = bool(native_host)
+        super().__init__(container_path, device_index=device_index, xclbin_cache_dir=xclbin_cache_dir,
+                         map_workspace=map_workspace)
 
     def _init_dense(self) -> None:
         m = self.ignite_manifest
@@ -1203,6 +1219,11 @@ class Bf16DenseGraphSession(DenseGraphSession):
         self._out_channels = int(self.dense["channels"])
         self._image_channels = self._out_channels // (self._bs * self._bs)
         self._input_plane[...] = 0
+        from ignite_xdna.pipelines import preprocess as pp
+        self._native_stage = self.native_host and pp.has_native("bgr_to_c8_plane_bf16")
+        # The native egress is SESR M7's shape: 12 channels in two blocks, blocksize 2, three image channels.
+        self._native_egress = (self.native_host and pp.has_native("depth_to_space_crd_bgr_bf16")
+                               and self._bs == 2 and self._out_channels == 12 and self._out_blocks == 2)
 
     def _upload_input(self) -> None:
         # The unmapped path hands pyxrt a byte view: the plane is uint16, and a write that counted its
@@ -1220,7 +1241,14 @@ class Bf16DenseGraphSession(DenseGraphSession):
         import cv2
         h = int(self.input_placement["halo"])
         src = img_bgr if img_bgr.shape[:2] == (ih, iw) else cv2.resize(img_bgr, (iw, ih), interpolation=cv2.INTER_LINEAR)
+        if self._native_stage:
+            from ignite_xdna.pipelines.preprocess import bgr_to_c8_plane_bf16
+            if bgr_to_c8_plane_bf16(src, self._input_plane, h, self._input_lut):
+                self.stage_path = "native"
+                self._upload_input()
+                return
         self._input_plane[h:h + ih, h:h + iw, :3] = self._input_lut[src[:, :, ::-1]]
+        self.stage_path = "numpy"
         self._upload_input()
 
     def stage_quantized(self, chw: np.ndarray) -> None:
@@ -1256,7 +1284,18 @@ class Bf16DenseGraphSession(DenseGraphSession):
         return raw.view(np.uint16).reshape(self._out_blocks, self._out_hw[0], self._out_hw[1], 8)
 
     def postprocess(self, blocks: np.ndarray) -> np.ndarray:
-        """[blocks][H][W][8] bf16 patterns -> BGR uint8 image of (H * bs, W * bs); see ``bf16_dense_image``."""
+        """[blocks][H][W][8] bf16 patterns -> BGR uint8 image of (H * bs, W * bs); see ``bf16_dense_image``.
+
+        A non-finite value raises on either path; the native one refuses before writing a pixel.
+        """
+        if self._native_egress:
+            from ignite_xdna.pipelines.preprocess import depth_to_space_crd_bgr_bf16
+            oh, ow = self._out_hw
+            image = np.empty((oh * 2, ow * 2, 3), dtype=np.uint8)
+            if depth_to_space_crd_bgr_bf16(blocks, oh, ow, self._mean, image):
+                self.egress_path = "native"
+                return image
+        self.egress_path = "numpy"
         return bf16_dense_image(blocks, self._out_channels, self._bs, self._mean)
 
 

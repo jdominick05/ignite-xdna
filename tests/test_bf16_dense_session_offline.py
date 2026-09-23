@@ -34,6 +34,7 @@ from ignite_xdna.compiler.engine_bf16_emulator import bf16_bits, from_bf16_bits,
 from ignite_xdna.compiler.engine_schedule import Placement
 from ignite_xdna.compiler.serializer import (ELEM_BF16, ELEM_INT, ENGINE_CONV_BF16, ENGINE_CONV_INT8,
                                              IgniteModelReader, IgniteModelWriter)
+from ignite_xdna.pipelines import preprocess as pp
 from ignite_xdna.runtime.graph_session import (ZP, Bf16DenseGraphSession, DenseGraphSession, EngineSession,
                                                bf16_input_lut, container_elem, halo_fill_image, placement_dtype,
                                                sr_session_class)
@@ -42,6 +43,10 @@ ROOT = Path(__file__).resolve().parents[1]
 BF16_SESR = ROOT / "build" / "sesr_m7_bf16.ignite"
 H_IN, W_IN = 12, 10      # not square, so a swapped height and width shows
 NAN, INF = 0x7FC0, 0x7F80
+# Both host paths go through every check below that has an independent reference. Without the native
+# routines only numpy is run; test_host_fastpaths_offline fails on a library older than its source.
+HOST_PATHS = (("native",) if pp.has_native("bgr_to_c8_plane_bf16") and pp.has_native("depth_to_space_crd_bgr_bf16")
+              else ()) + ("numpy",)
 
 
 def sr_manifest(h=H_IN, w=W_IN, halo=2):
@@ -87,9 +92,13 @@ class FakeBO:
         return self.arr[offset:offset + nbytes].tobytes()
 
 
-def offline_session(m, mapped=True) -> Bf16DenseGraphSession:
-    """A session as ``EngineSession.__init__`` would leave it, with no device, then ``_init_dense``."""
+def offline_session(m, mapped=True, path="native") -> Bf16DenseGraphSession:
+    """A session as ``EngineSession.__init__`` would leave it, with no device, then ``_init_dense``.
+
+    ``path`` is the host path asked for: "native" (the default, as a real session) or "numpy".
+    """
     s = object.__new__(Bf16DenseGraphSession)
+    s.native_host = path == "native"
     s.path = Path("offline.ignite")
     s.ignite_manifest, s.ge, s.task = m, m["graph_engine"], m["task"]
     s.elem = container_elem(m)
@@ -183,34 +192,41 @@ class TestTheInputPlane(unittest.TestCase):
     def test_a_staged_image_is_the_compilers_layout_of_the_float_pipelines_input(self):
         m = sr_manifest()
         want = eb.input_plane(m["graph_engine"]["placements"]["image"], float_input(self.img, H_IN, W_IN))
-        for mapped in (True, False):
-            s = offline_session(m, mapped=mapped)
-            s.stage_image(self.img)
-            np.testing.assert_array_equal(s._input_plane, want, err_msg=f"mapped={mapped}")
-            # What reached the buffer object, which is what the device would sync.
-            np.testing.assert_array_equal(s.bo_ws.arr[:want.nbytes].view(np.uint16).reshape(want.shape), want)
+        for path in HOST_PATHS:
+            for mapped in (True, False):
+                s = offline_session(m, mapped=mapped, path=path)
+                s.stage_image(self.img)
+                self.assertEqual(s.stage_path, path)
+                np.testing.assert_array_equal(s._input_plane, want, err_msg=f"{path} mapped={mapped}")
+                # What reached the buffer object, which is what the device would sync.
+                np.testing.assert_array_equal(s.bo_ws.arr[:want.nbytes].view(np.uint16).reshape(want.shape), want)
 
     def test_the_upload_syncs_the_whole_plane_at_two_bytes_an_element(self):
-        s = offline_session(sr_manifest())
-        s.stage_image(self.img)
-        self.assertEqual(s.bo_ws.syncs, [("to", (H_IN + 4) * (W_IN + 4) * 8 * 2, 0)])
+        for path in HOST_PATHS:
+            s = offline_session(sr_manifest(), path=path)
+            s.stage_image(self.img)
+            self.assertEqual(s.bo_ws.syncs, [("to", (H_IN + 4) * (W_IN + 4) * 8 * 2, 0)], path)
 
     def test_an_image_at_the_network_size_is_staged_without_a_resize(self):
         img = self.img[:H_IN, :W_IN].copy()
-        s = offline_session(sr_manifest())
-        s.stage_image(img)
-        want = eb.input_plane(s.input_placement, np.transpose(img[:, :, ::-1].astype(np.float32) - 128, (2, 0, 1)))
-        np.testing.assert_array_equal(s._input_plane, want)
+        for path in HOST_PATHS:
+            s = offline_session(sr_manifest(), path=path)
+            s.stage_image(img)
+            self.assertEqual(s.stage_path, path)
+            want = eb.input_plane(s.input_placement,
+                                  np.transpose(img[:, :, ::-1].astype(np.float32) - 128, (2, 0, 1)))
+            np.testing.assert_array_equal(s._input_plane, want, err_msg=path)
 
     def test_the_halo_and_the_lanes_past_the_image_stay_zero_across_frames(self):
-        s = offline_session(sr_manifest())
-        for seed in (4, 5):
-            s.stage_image(np.random.default_rng(seed).integers(0, 256, size=(30, 9, 3), dtype=np.uint8))
-        plane = s._input_plane
-        self.assertFalse(np.any(plane[2:-2, 2:-2, 3:]))
-        ring = np.ones(plane.shape[:2], bool)
-        ring[2:-2, 2:-2] = False
-        self.assertFalse(np.any(plane[ring]))
+        for path in HOST_PATHS:
+            s = offline_session(sr_manifest(), path=path)
+            for seed in (4, 5):
+                s.stage_image(np.random.default_rng(seed).integers(0, 256, size=(30, 9, 3), dtype=np.uint8))
+            plane = s._input_plane
+            self.assertFalse(np.any(plane[2:-2, 2:-2, 3:]), path)
+            ring = np.ones(plane.shape[:2], bool)
+            ring[2:-2, 2:-2] = False
+            self.assertFalse(np.any(plane[ring]), path)
 
     def test_stage_quantized_takes_patterns_and_zeroes_the_lanes_it_does_not_write(self):
         s = offline_session(sr_manifest())
@@ -237,8 +253,8 @@ class TestTheInputPlane(unittest.TestCase):
 
 class TestEgress(unittest.TestCase):
 
-    def _planted(self, m, mapped=True, values=None):
-        s = offline_session(m, mapped=mapped)
+    def _planted(self, m, mapped=True, values=None, path="native"):
+        s = offline_session(m, mapped=mapped, path=path)
         dense = m["dense_output"]
         v = tail_values(dense["height"], dense["width"]) if values is None else values
         compiler_workspace(m).write_values(s.bo_ws.arr, dense["tensor"], v)
@@ -258,26 +274,47 @@ class TestEgress(unittest.TestCase):
 
     def test_the_image_is_the_float_pipelines_own_postprocess(self):
         from npu.sesr import postprocess
-        s, v = self._planted(sr_manifest())
-        image = s.postprocess(s.read_output())
-        self.assertEqual((image.shape, image.dtype), ((2 * H_IN, 2 * W_IN, 3), np.dtype(np.uint8)))
-        np.testing.assert_array_equal(image, postprocess(depth_to_space_crd(v, 2)))
+        for path in HOST_PATHS:
+            for mapped in (True, False):
+                s, v = self._planted(sr_manifest(), mapped=mapped, path=path)
+                image = s.postprocess(s.read_output())
+                self.assertEqual(s.egress_path, path)
+                self.assertEqual((image.shape, image.dtype), ((2 * H_IN, 2 * W_IN, 3), np.dtype(np.uint8)))
+                np.testing.assert_array_equal(image, postprocess(depth_to_space_crd(v, 2)),
+                                              err_msg=f"{path} mapped={mapped}")
 
     def test_a_non_finite_value_in_a_real_channel_raises(self):
-        for pattern in (NAN, INF):
-            s, _ = self._planted(sr_manifest())
-            blocks = s.read_output().copy()
-            blocks[1, 3, 4, 2] = pattern          # channel 10
-            with self.assertRaises(RuntimeError) as cm:
-                s.postprocess(blocks)
-            self.assertIn("non-finite", str(cm.exception))
+        for path in HOST_PATHS:
+            for pattern in (NAN, INF):
+                s, _ = self._planted(sr_manifest(), path=path)
+                blocks = s.read_output().copy()
+                blocks[1, 3, 4, 2] = pattern          # channel 10
+                with self.assertRaises(RuntimeError) as cm:
+                    s.postprocess(blocks)
+                self.assertTrue(str(cm.exception).startswith("1 non-finite"), f"{path}: {cm.exception}")
 
     def test_a_non_finite_value_in_a_padding_lane_is_not_part_of_the_image(self):
-        s, v = self._planted(sr_manifest())
-        blocks = s.read_output().copy()
-        blocks[1, 3, 4, 6] = NAN                  # lane 14 of a 12-channel tensor
         from npu.sesr import postprocess
-        np.testing.assert_array_equal(s.postprocess(blocks), postprocess(depth_to_space_crd(v, 2)))
+        for path in HOST_PATHS:
+            s, v = self._planted(sr_manifest(), path=path)
+            blocks = s.read_output().copy()
+            blocks[1, 3, 4, 6] = NAN                  # lane 14 of a 12-channel tensor
+            np.testing.assert_array_equal(s.postprocess(blocks), postprocess(depth_to_space_crd(v, 2)), path)
+            self.assertEqual(s.egress_path, path)
+
+    def test_an_output_the_native_routine_was_not_written_for_takes_numpy(self):
+        # The native egress is SESR M7's shape: 12 channels, a three-channel image. Sixteen channels in the
+        # same two blocks (a four-channel image) fit its buffers exactly, so only the session's own shape
+        # check keeps it from returning three channels of four.
+        m = sr_manifest()
+        m["dense_output"] = dict(m["dense_output"], channels=16)
+        m["graph_engine"]["placements"]["tail"]["channels"] = 16
+        v = to_bf16(np.random.default_rng(9).normal(scale=90.0, size=(16, H_IN, W_IN)).astype(np.float32))
+        s, _ = self._planted(m, values=v)
+        image = s.postprocess(s.read_output())
+        self.assertEqual(s.egress_path, "numpy")
+        want = np.clip(depth_to_space_crd(v, 2) + np.float32(128.0), 0, 255).astype(np.uint8)
+        np.testing.assert_array_equal(image, np.moveaxis(want, 0, -1)[:, :, ::-1])
 
 
 class _Opened(Exception):
@@ -359,19 +396,58 @@ class TestTheFirstBf16Container(unittest.TestCase):
 
     def test_a_staged_image_is_the_compilers_layout_of_npu_sesr_preprocess(self):
         from npu.sesr import preprocess
-        img = np.random.default_rng(7).integers(0, 256, size=(141, 203, 3), dtype=np.uint8)
-        s = offline_session(self.m)
-        s.stage_image(img)
-        want = eb.input_plane(s.input_placement, preprocess(img)[0][0])
-        np.testing.assert_array_equal(s._input_plane, want)
-        self.assertEqual(s.bo_ws.syncs, [("to", 260 * 260 * 8 * 2, 0)])
+        rng = np.random.default_rng(7)
+        # A frame to resize, and one already at the tile size, as the evaluation's tiles are.
+        for img in (rng.integers(0, 256, size=(141, 203, 3), dtype=np.uint8),
+                    rng.integers(0, 256, size=(256, 256, 3), dtype=np.uint8)):
+            want = eb.input_plane(self.m["graph_engine"]["placements"][self.m["graph_engine"]["input_tensor"]],
+                                  preprocess(img)[0][0])
+            for path in HOST_PATHS:
+                s = offline_session(self.m, path=path)
+                s.stage_image(img)
+                self.assertEqual(s.stage_path, path)
+                np.testing.assert_array_equal(s._input_plane, want, err_msg=f"{path} {img.shape}")
+                self.assertEqual(s.bo_ws.syncs, [("to", 260 * 260 * 8 * 2, 0)])
 
     def test_a_planted_tail_comes_back_as_npu_sesr_postprocess(self):
         from npu.sesr import postprocess
-        s = offline_session(self.m)
         v = tail_values(256, 256)
-        compiler_workspace(self.m).write_values(s.bo_ws.arr, self.m["dense_output"]["tensor"], v)
-        np.testing.assert_array_equal(s.postprocess(s.read_output()), postprocess(depth_to_space_crd(v, 2)))
+        want = postprocess(depth_to_space_crd(v, 2))
+        for path in HOST_PATHS:
+            s = offline_session(self.m, path=path)
+            compiler_workspace(self.m).write_values(s.bo_ws.arr, self.m["dense_output"]["tensor"], v)
+            np.testing.assert_array_equal(s.postprocess(s.read_output()), want, err_msg=path)
+            self.assertEqual(s.egress_path, path)
+
+
+class TestTheHostPathToggle(unittest.TestCase):
+    """``native_host`` reaches ``_init_dense``, and a library without the routines costs speed, not results."""
+
+    def test_the_toggle_is_set_before_the_base_constructor_reads_it(self):
+        seen = []
+
+        def record(self, *args, **kwargs):
+            seen.append(self.native_host)
+
+        with mock.patch.object(DenseGraphSession, "__init__", record):
+            Bf16DenseGraphSession("unused.ignite")
+            Bf16DenseGraphSession("unused.ignite", native_host=False)
+        self.assertEqual(seen, [True, False])
+
+    def test_a_library_without_the_bf16_routines_falls_back_to_numpy(self):
+        img = np.random.default_rng(8).integers(0, 256, size=(H_IN, W_IN, 3), dtype=np.uint8)
+        with mock.patch.object(pp, "has_native", return_value=False):
+            s = offline_session(sr_manifest(), path="native")
+        s.stage_image(img)
+        ref = offline_session(sr_manifest(), path="numpy")
+        ref.stage_image(img)
+        self.assertEqual((s.stage_path, ref.stage_path), ("numpy", "numpy"))
+        np.testing.assert_array_equal(s._input_plane, ref._input_plane)
+        v = tail_values(H_IN, W_IN)
+        for sess in (s, ref):
+            compiler_workspace(sr_manifest()).write_values(sess.bo_ws.arr, "tail", v)
+        np.testing.assert_array_equal(s.postprocess(s.read_output()), ref.postprocess(ref.read_output()))
+        self.assertEqual(s.egress_path, "numpy")
 
 
 if __name__ == "__main__":

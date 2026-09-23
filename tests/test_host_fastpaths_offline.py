@@ -8,7 +8,12 @@
   loop byte for byte.
 - ``resize_bgr_to_c8_plane``: the native bilinear resize is not OpenCV's fixed-point INTER_LINEAR; it stays within
   one code of ``cv2.resize`` on every byte (measured about 20 % of bytes one code apart).
+- ``depth_to_space_crd_bgr_bf16`` and ``bgr_to_c8_plane_bf16``: the bf16 engine's super-resolution egress and
+  ingress equal ``graph_session``'s numpy paths byte for byte - the egress on every finite bf16 pattern - and the
+  egress refuses a non-finite value exactly where numpy does. The library is checked against its source, so a
+  DLL left unbuilt after the C changed fails rather than skipping these.
 """
+import re
 import sys
 import unittest
 from pathlib import Path
@@ -20,8 +25,10 @@ for p in (ROOT, ROOT / "src"):
     if str(p) not in sys.path:
         sys.path.insert(0, str(p))
 
+from ignite_xdna.compiler.engine_bf16_emulator import bf16_bits, to_bf16  # noqa: E402
 from ignite_xdna.pipelines import preprocess as pp  # noqa: E402
 from ignite_xdna.pipelines.yolo_pipeline import YoloDecoder, reg_max_from_manifest  # noqa: E402
+from ignite_xdna.runtime.graph_session import bf16_dense_image, bf16_input_lut  # noqa: E402
 
 GRIDS = (("p3", 80), ("p4", 40), ("p5", 20))
 SCALES = {"p3_box": (0.0625, 0), "p4_box": (0.0625, 0), "p5_box": (0.125, 0),
@@ -127,6 +134,125 @@ class HostFastPathsOffline(unittest.TestCase):
             if (sh, sw) == (dh, dw):
                 self.assertEqual(int(diff.max()), 0)
             self.assertTrue(np.all(plane[:halo] == 0) and np.all(plane[:, :, 3:] == 0))
+
+
+NAN, INF, NEG_INF = 0x7FC0, 0x7F80, 0xFF80
+
+
+def _every_finite_bf16_pattern(h=64, w=86) -> np.ndarray:
+    """uint16 [2][h][w][8]: the finite bf16 patterns in order across the 12 active lanes - every one of them at
+    the default size - and NaN in the four padding lanes of the second block, which neither path may read."""
+    pats = np.arange(65536, dtype=np.uint32).astype(np.uint16)
+    finite = pats[(pats & 0x7F80) != 0x7F80]
+    active = np.resize(finite, (h, w, 12))
+    blocks = np.empty((2, h, w, 8), np.uint16)
+    blocks[0] = active[:, :, :8]
+    blocks[1, :, :, :4] = active[:, :, 8:]
+    blocks[1, :, :, 4:] = NAN
+    return blocks
+
+
+class Bf16SrHostPathsOffline(unittest.TestCase):
+    """The bf16 SR host ends, native against ``graph_session``'s numpy, which ``test_bf16_dense_session_offline``
+    checks in turn against the compiler's layout and ``npu/sesr.py``."""
+
+    def setUp(self):
+        for name in ("depth_to_space_crd_bgr_bf16", "bgr_to_c8_plane_bf16"):
+            if not pp.has_native(name):
+                self.skipTest(f"native preprocessor without {name}")
+
+    def test_egress_equals_numpy_on_every_finite_pattern(self):
+        blocks = _every_finite_bf16_pattern()
+        _, h, w, _ = blocks.shape
+        active = np.concatenate([blocks[0].reshape(-1, 8), blocks[1].reshape(-1, 8)[:, :4]], axis=1)
+        self.assertEqual(np.unique(active).size, 65536 - 256)   # all but exponent 0xFF: 2 signs x 128 mantissas
+        for mean in (128.0, 0.0, 127.5, 1e-3):
+            got = np.zeros((2 * h, 2 * w, 3), np.uint8)
+            self.assertTrue(pp.depth_to_space_crd_bgr_bf16(blocks, h, w, mean, got))
+            np.testing.assert_array_equal(got, bf16_dense_image(blocks, 12, 2, mean), err_msg=f"mean {mean}")
+
+    def test_egress_refuses_a_non_finite_active_value_as_numpy_does_and_writes_nothing(self):
+        clean = _every_finite_bf16_pattern(16, 24)
+        for block, lane in ((0, 0), (0, 7), (1, 0), (1, 3)):
+            for pattern in (NAN, INF, NEG_INF):
+                blocks = clean.copy()
+                blocks[block, 5, 9, lane] = pattern
+                blocks[block, 11, 2, lane] = 0xFFC1          # a second NaN, negative, with payload
+                got = np.full((32, 48, 3), 42, np.uint8)
+                with self.assertRaises(RuntimeError) as native:
+                    pp.depth_to_space_crd_bgr_bf16(blocks, 16, 24, 128.0, got)
+                with self.assertRaises(RuntimeError) as numpy_path:
+                    bf16_dense_image(blocks, 12, 2, 128.0)
+                self.assertEqual(str(native.exception), str(numpy_path.exception))
+                self.assertTrue(str(native.exception).startswith("2 non-finite"), str(native.exception))
+                self.assertTrue(np.all(got == 42), (block, lane, pattern))
+
+    def test_egress_declines_what_it_cannot_serve_and_leaves_dst_alone(self):
+        blocks = _every_finite_bf16_pattern(16, 24)
+        cases = {
+            "uint8 source": (blocks.view(np.uint8), 16, 24, np.zeros((32, 48, 3), np.uint8)),
+            "one block": (np.ascontiguousarray(blocks[:1]), 16, 24, np.zeros((32, 48, 3), np.uint8)),
+            "strided source": (blocks[:, :, ::2], 16, 12, np.zeros((32, 24, 3), np.uint8)),
+            "wrong image": (blocks, 16, 24, np.zeros((32, 48, 4), np.uint8)),
+            "float image": (blocks, 16, 24, np.zeros((32, 48, 3), np.float32)),
+        }
+        for label, (src, h, w, dst) in cases.items():
+            before = dst.copy()
+            self.assertFalse(pp.depth_to_space_crd_bgr_bf16(src, h, w, 128.0, dst), label)
+            np.testing.assert_array_equal(dst, before, err_msg=label)
+
+    def test_ingress_equals_numpy_and_touches_nothing_else(self):
+        lut = bf16_input_lut({"mean": 128.0, "divisor": 1.0})
+        rng = np.random.default_rng(11)
+        for h, w, halo in ((256, 256, 2), (12, 10, 2), (7, 5, 0), (3, 9, 1)):
+            img = rng.integers(0, 256, (h, w, 3), dtype=np.uint8)
+            got = np.full((h + 2 * halo, w + 2 * halo, 8), 0x1234, np.uint16)
+            want = got.copy()
+            want[halo:halo + h, halo:halo + w, :3] = lut[img[:, :, ::-1]]
+            self.assertTrue(pp.bgr_to_c8_plane_bf16(img, got, halo, lut), (h, w, halo))
+            np.testing.assert_array_equal(got, want, err_msg=f"{(h, w, halo)}")
+
+    def test_ingress_reads_a_row_strided_view_as_it_is(self):
+        lut = bf16_input_lut({"mean": 128.0, "divisor": 1.0})
+        big = np.random.default_rng(12).integers(0, 256, (40, 50, 3), dtype=np.uint8)
+        view = big[5:17, 7:17]                               # 12 x 10, rows 150 bytes apart
+        self.assertFalse(view.flags["C_CONTIGUOUS"])
+        got = np.zeros((16, 14, 8), np.uint16)
+        self.assertTrue(pp.bgr_to_c8_plane_bf16(view, got, 2, lut))
+        want = np.zeros_like(got)
+        want[2:14, 2:12, :3] = lut[view[:, :, ::-1]]
+        np.testing.assert_array_equal(got, want)
+
+    def test_ingress_declines_what_it_cannot_serve_and_leaves_the_plane_alone(self):
+        lut = bf16_input_lut({"mean": 128.0, "divisor": 1.0})
+        img = np.random.default_rng(13).integers(0, 256, (12, 10, 3), dtype=np.uint8)
+        plane = np.zeros((16, 14, 8), np.uint16)
+        cases = {
+            "another size (no resize here)": (img[:11], plane, lut),
+            "uint8 plane": (img, np.zeros((16, 14, 8), np.uint8), lut),
+            "float frame": (img.astype(np.float32), plane, lut),
+            "column-strided frame": (img[:, ::-1], plane, lut),
+            "uint8 table": (img, plane, lut.astype(np.uint8)),
+            "short table": (img, plane, lut[:128]),
+        }
+        for label, (src, dst, table) in cases.items():
+            before = dst.copy()
+            self.assertFalse(pp.bgr_to_c8_plane_bf16(src, dst, 2, table), label)
+            np.testing.assert_array_equal(dst, before, err_msg=label)
+
+
+class ShippedLibraryMatchesItsSource(unittest.TestCase):
+    """Every function ``preprocess_simd.c`` exports is in the library that loaded. The DLL is committed beside the
+    source; a C change without a rebuild would otherwise leave every native test above skipping, not failing."""
+
+    def test_every_exported_function_is_in_the_loaded_library(self):
+        if pp._LIB is None:
+            self.skipTest("no native preprocessor loaded")
+        source = (ROOT / "src" / "ignite_xdna" / "pipelines" / "preprocess_simd.c").read_text(encoding="utf-8")
+        exported = re.findall(r"^PREPROCESS_API\s+\w+\s+(\w+)\s*\(", source, re.M)
+        self.assertGreaterEqual(len(exported), 8)
+        missing = [name for name in exported if not hasattr(pp._LIB, name)]
+        self.assertEqual(missing, [], f"{pp._LIB._name} predates its source")
 
 
 
