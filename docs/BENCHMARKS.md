@@ -13150,7 +13150,8 @@ model.
 **What it would be if it worked on silicon.** At float width AMD's stack places nothing on the NPU, and
 AMD's int8 SESR runs at 2.00 ms a tile against the CPU's 6.59-7.87 ms
 ([the bars](#sesr-is-the-only-candidate-still-standing-and-the-corrected-geometry-helps-it)). A bf16
-SESR on the NPU would be a first, not a win over AMD. Nothing here is a speed result, and there is no
+SESR on the NPU would be a first for this repository, not a win over AMD. Nothing here is a speed
+result, and there is no
 release in this arc.
 
 ### The arms
@@ -13326,7 +13327,7 @@ D10): "a first" holds for this repository only.*
 - "First through mlir-aie/IRON" may still hold: mlir-aie's own `aie_kernels/aie2` has no bf16 conv.
   Nothing wider than that was checked.
 - "Exact" is to this repository's emulator, on the plain weights. On the AdaRound weights the
-  device departs from it ([below](#w8a16-sesr-m7-on-the-adaround-weights-the-device-departs-from-the-emulator-on-4-of-6-inputs-and-the-accuracy-passes-amds-adaround-2026-09-23-desktop-2)).
+  device departs from it ([below](#w8a16-sesr-m7-on-the-adaround-weights-the-device-departs-from-the-emulator-on-4-of-6-inputs-and-its-aggregate-psnr-is-above-amds-adaround-w8a8-2026-09-23-desktop-2)).
 
 *Updated by the next sitting:* with native host paths the bf16 tile beats the CPU, at 6.28-6.29 ms
 against 10.75
@@ -13381,7 +13382,7 @@ this arc set out to establish.
 *Scoped by a later sitting:* this holds on the plain XINT8 weights. On the AdaRound weights, with a
 byte-identical instruction stream, the device departs from the emulator on 4 of 6 inputs, and why is
 unexplained
-([below](#w8a16-sesr-m7-on-the-adaround-weights-the-device-departs-from-the-emulator-on-4-of-6-inputs-and-the-accuracy-passes-amds-adaround-2026-09-23-desktop-2)).
+([below](#w8a16-sesr-m7-on-the-adaround-weights-the-device-departs-from-the-emulator-on-4-of-6-inputs-and-its-aggregate-psnr-is-above-amds-adaround-w8a8-2026-09-23-desktop-2)).
 
 ### Quality: W8A16 over W8A8, same weights, same tiles, same code
 
@@ -13417,8 +13418,9 @@ weights are different, and its arithmetic is AMD's: AMD's plain XINT8 reads 34.0
 model reads 34.25, as the DML row in the SESR section already recorded. W8A16 on the AdaRound weights
 is not measured. It needs one run of this tool on `sesr_m7_xint8_adaround.onnx` and both containers
 rebuilt from it.
-*Measured since:* W8A16 on the AdaRound weights reads 35.37 / 29.93 dB, above AMD's AdaRound
-([below](#w8a16-sesr-m7-on-the-adaround-weights-the-device-departs-from-the-emulator-on-4-of-6-inputs-and-the-accuracy-passes-amds-adaround-2026-09-23-desktop-2)).
+*Measured since:* W8A16 on the AdaRound weights reads 35.37 / 29.93 dB, above AMD's AdaRound W8A8 in
+aggregate PSNR, with the scope stated there
+([below](#w8a16-sesr-m7-on-the-adaround-weights-the-device-departs-from-the-emulator-on-4-of-6-inputs-and-its-aggregate-psnr-is-above-amds-adaround-w8a8-2026-09-23-desktop-2)).
 
 ### Timing, per 256 x 256 tile
 
@@ -13597,13 +13599,13 @@ AMD's stack, timed as `5_eval.py`'s `sess.run` per tile (ONNX Runtime 1.23.3 wit
   both SESR containers is the test.
 - What makes the native bf16 egress 2.5-2.6x the int8 one. It is scalar and was not vectorized.
 - W8A16 was run on the plain XINT8 weights only. AMD's AdaRound W8A8 still beats it by 0.51 dB on
-  Set5 and 0.22 dB on Set14. *Measured since:* on the AdaRound weights W8A16 passes AMD's AdaRound,
+  Set5 and 0.22 dB on Set14. *Measured since:* on the AdaRound weights W8A16's aggregate PSNR is above AMD's AdaRound W8A8,
   and there the device no longer equals the emulator
-  ([next section](#w8a16-sesr-m7-on-the-adaround-weights-the-device-departs-from-the-emulator-on-4-of-6-inputs-and-the-accuracy-passes-amds-adaround-2026-09-23-desktop-2)).
+  ([next section](#w8a16-sesr-m7-on-the-adaround-weights-the-device-departs-from-the-emulator-on-4-of-6-inputs-and-its-aggregate-psnr-is-above-amds-adaround-w8a8-2026-09-23-desktop-2)).
 - Latency for one tile already in memory. This is neither a camera nor a whole image.
 - Energy was not measured.
 
-## W8A16 SESR-M7 on the AdaRound weights: the device departs from the emulator on 4 of 6 inputs, and the accuracy passes AMD's AdaRound (2026-09-23, Desktop 2)
+## W8A16 SESR-M7 on the AdaRound weights: the device departs from the emulator on 4 of 6 inputs, and its aggregate PSNR is above AMD's AdaRound W8A8 (2026-09-23, Desktop 2)
 
 The two sections above ran W8A16 on the plain XINT8 weights. There the device equalled the emulator to
 the bit, and AMD's AdaRound W8A8 still led on accuracy. This section runs the same engine on the
@@ -13612,10 +13614,20 @@ AdaRound weights. It has two results, and the first one qualifies the sections a
 - **On these weights the device does not equal the emulator.** Four of six inputs differ, by 1 to
   73 values out of 5.2 million. The difference is deterministic, the same in two sittings. It is
   **unexplained**, and so "exact to the emulator" above holds for the plain weights only.
-- **W8A16 on the AdaRound weights reads 35.37 / 29.93 dB PSNR-Y on Set5 / Set14.** That is above AMD's
-  AdaRound W8A8 (35.16 / 29.82), the first time an engine arm here has passed AMD's most accurate
-  arm. The tile is still 3.2-3.7x AMD's. So this is a first for this repository, not a win, and there
-  is no release in it.
+- **W8A16 on the AdaRound weights reads 35.37 / 29.93 dB PSNR-Y on Set5 / Set14**, above AMD's
+  AdaRound W8A8 (35.16 / 29.82). This is the first time an engine arm in this repository has been above
+  AMD's most accurate arm. The comparison is narrower than that sentence:
+  - It sets 16-bit activations against AMD's 8-bit ones, so the two arms are not the same quantization.
+  - It is aggregate PSNR only, a mean over 5 and 14 images. The "19 of 19 images" below is counted
+    against the engine's own W8A8, not against AMD, whose per-image figures were not compared.
+  - The stacks differ beyond the precision. AMD's arm is ONNX Runtime 1.23.3 with the VitisAI EP, and
+    it ran on 2026-09-22. The engine runs no ONNX Runtime on its NPU path, and its CPU references here
+    ran under 1.30.
+  - It was measured on the weights where the device departs from the emulator.
+
+  The bf16 tile is 3.2-3.7x AMD's int8 tile. That ratio crosses sittings: AMD's arm was timed on
+  2026-09-22 and not in this one. So this is a first for this repository, not a win, and there is no
+  release in it.
 
 The AdaRound model is the plain model with different weight codes. 5,447 of its 22,128 int8 weight
 codes differ, each by one, spread over nine tensors. Every weight scale is a power of two, and the
@@ -13737,7 +13749,7 @@ differs from the oracle in 175 of 11,366,412 quality pixels, each by one level. 
 rests on those device-to-oracle comparisons and on the int8 container equalling its QDQ model. It does
 not rest on the device equalling the emulator.
 
-### Quality: W8A16 on the AdaRound weights is above every W8A8 arm here, AMD's included
+### Quality: W8A16 on the AdaRound weights is above every W8A8 arm here in aggregate PSNR, AMD's included
 
 The table uses `5_eval.py`'s tiling (256 x 256, overlap 8) and its metrics. Set5 has 5 images and
 Set14 has 14, and the two are never averaged together.
@@ -13756,7 +13768,8 @@ Set14 has 14, and the two are never averaged together.
   W8A8, and every one of the 19 images improves.** That recovers 54% and 59% of the gap to FP32, which
   is now 0.27 and 0.10 dB.
 - **It is above AMD's AdaRound W8A8 by +0.21 dB on Set5 and +0.11 on Set14.** AMD's row is from the
-  earlier sittings, as the preamble says.
+  earlier sittings. This is aggregate PSNR, W8A16 against W8A8, across two stacks, and on weights where
+  the device departs from the emulator. The preamble scopes each of these.
 - **The two gains do not add.**
   - AdaRound is worth +0.81 / +0.38 at W8A8 and +0.72 / +0.33 at W8A16.
   - bf16 activations are worth +0.41 / +0.19 on the plain weights and +0.31 / +0.14 on AdaRound's.
@@ -13795,7 +13808,8 @@ arms ran two alternating rounds each, and each range covers both rounds.
 - The CPU arm moved again: its run is 7.35 ms, against 7.47 and 8.17 in the two earlier sittings. These
   rows are compared only with each other.
 - AMD's arm was not timed in this sitting. In the previous section's sitting its int8 tile was 1.65 to
-  1.93 ms, and the bf16 tile here is 3.2-3.7x that.
+  1.93 ms, and the bf16 tile here is 3.2-3.7x that. That ratio crosses sittings (2026-09-23 against
+  2026-09-22), and this machine drifts between sittings, so it is indicative only.
 
 ### What this does not establish
 
