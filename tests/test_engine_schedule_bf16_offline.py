@@ -13,7 +13,7 @@ from ignite_xdna.compiler import engine_bf16_emulator as em
 from ignite_xdna.compiler import engine_schedule_bf16 as eb
 from ignite_xdna.compiler import graph_ir
 from ignite_xdna.compiler import graph_reference_bf16 as gr16
-from ignite_xdna.compiler.engine_schedule import layer_chunks
+from ignite_xdna.compiler.engine_schedule import layer_chunks, tile_origins
 from ignite_xdna.compiler.graph_ir import ConvLayer, GraphIR, Segment, TensorInfo
 
 W_SCALE = 2.0 ** -6
@@ -42,6 +42,22 @@ def graph(layers, shapes, inp="x"):
     for i, L in enumerate(layers):
         L.index = i
     return GraphIR(tensors=tensors, layers=layers, input=inp, outputs=[("y", layers[-1].output)])
+
+
+def chain_ir():
+    """Five layers covering every bf16 chunk kind the fork admits, on maps that overlap their edge tiles.
+
+    x(3) -k5-> a(16) -k3 relu, + a-> b(16) -k1 relu-> c(40: 5 blocks, 3 groups, a junk plane)
+         -k3, two chunks-> d(16) -k3 stride 2-> e(24: 3 blocks, 2 groups).
+    40 x 44 tiles as rows 0, 20 and columns 0, 20, 24; e at 20 x 22 as columns 0 and 2.
+    """
+    layers = [conv("head", "x", 3, 16, 5, "a", seed=10),
+              conv("body", "a", 16, 16, 3, "b", act="relu", seed=11, residual="a"),
+              conv("wide", "b", 16, 40, 1, "c", act="relu", seed=12),
+              conv("deep", "c", 40, 16, 3, "d", seed=13),
+              conv("down", "d", 16, 24, 3, "e", stride=2, seed=14)]
+    return graph(layers, {"x": (3, 40, 44), "a": (16, 40, 44), "b": (16, 40, 44), "c": (40, 40, 44),
+                          "d": (16, 40, 44), "e": (24, 20, 22)})
 
 
 def bf16_tensor(rng, c, h, w):
@@ -203,6 +219,146 @@ class PacketContract(unittest.TestCase):
         ir = graph([L], {"x": (16, 20, 20), "y": (16, 20, 20)})
         with self.assertRaisesRegex(ValueError, "no real input channel"):
             eb.layer_packets(ir, L)
+
+
+class WorkspaceAndPatterns(unittest.TestCase):
+    """Placements, the halo, and every DMA pattern a chain's layers can issue - checked per pattern.
+
+    The window check is the direct test of the trap the int8 byte literals set: it reads each fill
+    through its DMA pattern from a workspace holding distinct random values and compares the
+    positions the core multiplies against the tensor, indexed here from scratch.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.ir = chain_ir()
+        cls.ws = eb.plan_workspace(cls.ir)
+        rng = np.random.default_rng(20)
+        cls.values = {n: bf16_tensor(rng, t.channels, t.height, t.width) for n, t in cls.ir.tensors.items()}
+
+    def tiles(self, L):
+        t = self.ir.tensors[L.output]
+        return [(y, x) for y in tile_origins(t.height, 20) for x in tile_origins(t.width, 20)]
+
+    def test_placements_are_bf16_storage_with_zero_halos_and_even_planes(self):
+        for name, p in self.ws.placements.items():
+            self.assertEqual((p.dtype, p.halo_value, p.band_rows), ("uint16", 0, 0), name)
+            if name != self.ir.input:
+                self.assertEqual(p.planes % eb.OUT_BLOCKS_8, 0, name)
+        self.assertEqual(self.ws.placements["c"].planes, 6)
+        self.assertEqual(self.ws.placements["x"].planes, 1)
+        self.assertEqual({n: p.halo for n, p in self.ws.placements.items()},
+                         {"x": 2, "a": 1, "b": 0, "c": 1, "d": 1, "e": 0})
+
+    def test_reuse_shares_a_slot_and_never_in_space_and_time_at_once(self):
+        life = {"x": (0, 0), "a": (0, 1), "b": (1, 2), "c": (2, 3), "d": (3, 4), "e": (4, 6)}
+        ps = list(self.ws.placements.values())
+        self.assertEqual(self.ws.placements["a"].base, self.ws.placements["c"].base)
+        for i, a in enumerate(ps):
+            for b in ps[i + 1:]:
+                space = max(a.base, b.base) < min(a.base + a.nbytes, b.base + b.nbytes)
+                time_ = max(life[a.name][0], life[b.name][0]) <= min(life[a.name][1], life[b.name][1])
+                self.assertFalse(space and time_, f"{a.name} and {b.name}")
+            self.assertEqual(a.base % 64, 0)
+
+    def test_without_reuse_every_tensor_owns_its_slot(self):
+        ws = eb.plan_workspace(self.ir, reuse=False)
+        spans = sorted((p.base, p.base + p.nbytes) for p in ws.placements.values())
+        for (a0, a1), (b0, b1) in zip(spans, spans[1:]):
+            self.assertLessEqual(a1, b0)
+
+    def test_every_fill_is_one_whole_packet_inside_the_workspace(self):
+        for L in self.ir.layers:
+            t = self.ir.tensors[L.output]
+            for ch in layer_chunks(self.ir, L):
+                for g in range(eb.output_groups(t.blocks)):
+                    for y, x in self.tiles(L):
+                        p = eb.a_pattern(self.ws, L, ch, y, x, g)
+                        idx = p.indices()
+                        self.assertEqual(p.nbytes, em.A_BYTES, (L.name, ch.kind))
+                        self.assertEqual(p.offset % 4, 0)
+                        self.assertTrue(all(s <= eb.MAX_STRIDE_BYTES for s in p.strides))
+                        self.assertGreaterEqual(int(idx.min()), 0)
+                        self.assertLess(int(idx.max()), self.ws.nbytes)
+
+    def test_every_drain_moves_whole_joined_objects(self):
+        for L in self.ir.layers:
+            t = self.ir.tensors[L.output]
+            for g in range(eb.output_groups(t.blocks)):
+                self.assertEqual(eb.o_pattern(self.ws, L, g, 0, 0).nbytes, 4 * em.O_BYTES)
+                self.assertEqual(eb.run_drain(self.ws, L, g, [(0, 0)]).nbytes, 4 * em.O_BYTES)
+        L = self.ir.layers[0]
+        self.assertEqual(eb.run_drain(self.ws, L, 0, [(0, 0), (20, 0)]).nbytes, 8 * em.O_BYTES)
+
+    def test_every_fill_delivers_the_right_pixels_where_the_core_reads(self):
+        self.check_fills(self.ir, self.ws, self.values)
+
+    def test_a_two_group_residual_reads_each_groups_own_blocks(self):
+        # The chain's residual layer has one output group, which cannot tell a group stride of two
+        # blocks from int8's four. This one has two.
+        L = conv("res32", "x", 32, 32, 3, "y", act="relu", seed=21, residual="x")
+        ir = graph([L], {"x": (32, 20, 40), "y": (32, 20, 40)})
+        rng = np.random.default_rng(21)
+        values = {n: bf16_tensor(rng, t.channels, t.height, t.width) for n, t in ir.tensors.items()}
+        self.check_fills(ir, eb.plan_workspace(ir), values)
+
+    def check_fills(self, ir, ws, values):
+        for L in ir.layers:
+            t = ir.tensors[L.output]
+            arr = ws.halo_fill()
+            for n in [s.tensor for s in L.inputs] + ([L.residual.tensor] if L.residual else []):
+                ws.write_values(arr, n, values[n])
+            for ch in layer_chunks(ir, L):
+                for g in range(eb.output_groups(t.blocks)):
+                    for y in tile_origins(t.height, 20):
+                        for x in tile_origins(t.width, 20):
+                            for r in range(4):
+                                y0 = min(y + 5 * r, t.height - 5)
+                                got = eb.a_pattern(ws, L, ch, y0, x, g).read(arr).view(np.uint16)
+                                got = got.reshape(ch.read_blocks, ch.rows_in, ch.cols_in, 8)
+                                self.check_window(values, L, ch, g, y0, x, got)
+
+    def check_window(self, values, L, ch, g, y0, x0, got):
+        if ch.kind == "res":
+            src = values[L.residual.tensor]
+            c0 = (L.residual.block_offset + 2 * g) * 8
+            want = src[c0:c0 + 16, y0:y0 + 5, x0:x0 + 20].reshape(2, 8, 5, 20).transpose(0, 2, 3, 1)
+            np.testing.assert_array_equal(got[:2], em.bf16_bits(want), str((L.name, "res", g, y0, x0)))
+            return
+        seg = L.inputs[ch.seg_index]
+        src = values[seg.tensor]
+        m = 8
+        xp = np.pad(src, ((0, 0), (m, m), (m, m)))
+        rows = L.stride * 4 + L.k
+        cols = L.stride * 19 + L.k
+        oy, ox = L.stride * y0 - L.pad + m, L.stride * x0 - L.pad + m
+        ncin = -(-min(ch.ncin * 8, L.cin - ch.block_start * 8) // 8)
+        b0 = seg.block_offset + ch.block_start
+        want = xp[b0 * 8:(b0 + ncin) * 8, oy:oy + rows, ox:ox + cols].reshape(ncin, 8, rows, cols).transpose(0, 2, 3, 1)
+        np.testing.assert_array_equal(got[:ncin, :rows, :cols], em.bf16_bits(want), str((L.name, ch.kind, y0, x0)))
+
+    def test_halo_fill_zeroes_every_ring_and_leaves_the_background_elsewhere(self):
+        nan = 0x7FC0
+        arr = self.ws.halo_fill(background=nan)
+        for name, p in self.ws.placements.items():
+            planes = arr[p.base:p.base + p.planes * p.plane_bytes].view(np.uint16).reshape(
+                p.planes, p.height + 2 * p.halo, p.width + 2 * p.halo, 8)
+            interior = planes[:, p.halo:p.halo + p.height, p.halo:p.halo + p.width]
+            if p.halo:
+                ring = planes.copy()
+                ring[:, p.halo:p.halo + p.height, p.halo:p.halo + p.width] = 0
+                self.assertFalse(ring.any(), name)
+            self.assertTrue(np.all(interior == nan), name)
+
+    def test_write_tensor_refuses_float_values(self):
+        with self.assertRaisesRegex(TypeError, "bf16_bits"):
+            self.ws.write_tensor(self.ws.halo_fill(), "a", self.values["a"])
+
+    def test_a_plane_past_the_descriptor_step_is_refused_at_planning(self):
+        L = conv("big", "x", 16, 16, 3, "y")
+        ir = graph([L], {"x": (16, 640, 640), "y": (16, 640, 640)})
+        with self.assertRaisesRegex(ValueError, "step field"):
+            eb.plan_workspace(ir)
 
 
 class Admission(unittest.TestCase):

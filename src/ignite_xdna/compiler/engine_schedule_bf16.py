@@ -41,12 +41,14 @@ ReLU6 model would lose its bound. SESR uses Relu nodes; the oracle comparison
 """
 from __future__ import annotations
 
-from typing import List, Tuple
+from collections import defaultdict
+from typing import Dict, List, Tuple
 
 import numpy as np
 
 from ignite_xdna.compiler import engine_bf16_emulator as em
-from ignite_xdna.compiler.engine_schedule import Chunk, _segment_channel_base, layer_chunks
+from ignite_xdna.compiler.engine_schedule import Chunk, Placement, Workspace, _segment_channel_base, layer_chunks
+from ignite_xdna.compiler.engine_sequence import ROWS, DmaPattern, canonical
 from ignite_xdna.compiler.graph_ir import ConvLayer, FusedConvLayer, GraphIR, HostLayer, PoolLayer
 
 TILE_R, TILE_C = em.TILE_ROWS, em.TILE_COLS
@@ -55,6 +57,15 @@ GROUP_CHANNELS = OUT_BLOCKS_8 * 8       # 16, against int8's 32
 SUPPORTED_KINDS = ("k1", "k3s1", "k3s2", "k5s1", "res")
 BIAS_BYTES = em.BIAS_ELEMS * 2
 PAYLOAD_BYTES = em.W_BYTES - em.HDR_BYTES - BIAS_BYTES
+
+# The workspace's STORAGE dtype - what numpy sees. "bf16" is the semantic tag the manifest carries
+# beside it as ``elem``; it never reaches np.dtype(), where "bf16" raises and "bfloat16" resolves only
+# if ml_dtypes happened to be imported first.
+STORAGE_DTYPE = "uint16"
+ITEM = np.dtype(STORAGE_DTYPE).itemsize
+# A shim buffer descriptor's step field is 20 bits of 32-bit words: 4 MiB (docs/SILICON.md). bf16
+# doubles every plane, so it reaches this at a smaller map than int8 does - a 640x640 plane is 6.6 MB.
+MAX_STRIDE_BYTES = (1 << 20) * 4
 
 
 # ----------------------------------------------------------------------------
@@ -258,3 +269,202 @@ def layer_packets(ir: GraphIR, layer: ConvLayer) -> List[List[np.ndarray]]:
     chunks = layer_chunks(ir, layer)
     return [[chunk_packet(layer, g, ch) for ch in chunks]
             for g in range(output_groups(ir.tensors[layer.output].blocks))]
+
+
+# ----------------------------------------------------------------------------
+# Workspace
+# ----------------------------------------------------------------------------
+
+class Bf16Workspace(Workspace):
+    """The DDR workspace of a bf16 container. THE ARRAY HOLDS 16-BIT PATTERNS.
+
+    Float conversion happens only at the boundary, through ``write_values`` / ``read_values``.
+    ``write_tensor`` refuses anything but uint16, because the inherited one would cast float32 values
+    into uint16 by truncation without a word of complaint - a plausible wrong answer. Compare what
+    ``read_tensor`` returns against ``bf16_bits(reference)``, never as floats: -0.0 and +0.0 compare
+    equal and are different bytes.
+
+    ``read_tensor`` is inherited and already correct at two bytes an element: it slices by
+    ``plane_bytes`` (itemsize-aware through ``Placement.pitch``) and views as the placement dtype.
+    """
+
+    def halo_fill(self, background: int = 0) -> np.ndarray:
+        """Workspace image with every halo ring set to bf16 +0.0 and everything else ``background``.
+
+        ``background`` is a 16-bit pattern. 0 is what a freshly allocated buffer holds; a NaN pattern
+        (0x7FC0) is how a test proves that no multiply-accumulate reads memory nothing wrote.
+        """
+        ws = np.full(self.nbytes // ITEM, background, dtype=np.uint16)
+        for p in self.placements.values():
+            if p.halo_value != 0:
+                raise ValueError(f"{p.name}: halo value {p.halo_value}; bf16 pads with +0.0")
+            if p.halo == 0:
+                continue
+            for b in range(p.planes):
+                lo = (p.base + b * p.plane_bytes) // ITEM
+                plane = ws[lo:lo + p.plane_bytes // ITEM].reshape(p.height + 2 * p.halo, p.width + 2 * p.halo, 8)
+                plane[:p.halo], plane[-p.halo:] = 0, 0
+                plane[:, :p.halo], plane[:, -p.halo:] = 0, 0
+        return ws.view(np.uint8)
+
+    def write_tensor(self, ws: np.ndarray, name: str, chw: np.ndarray) -> None:
+        if np.asarray(chw).dtype != np.uint16:
+            raise TypeError(f"{name}: the workspace holds bf16 bit patterns; pass bf16_bits(values), "
+                            f"not {np.asarray(chw).dtype}")
+        super().write_tensor(ws, name, chw)
+
+    def write_values(self, ws: np.ndarray, name: str, chw: np.ndarray) -> None:
+        """Round float values to bf16 and store their patterns."""
+        self.write_tensor(ws, name, em.bf16_bits(em.to_bf16(np.asarray(chw, np.float32))))
+
+    def read_values(self, ws: np.ndarray, name: str) -> np.ndarray:
+        """float32 ``[blocks * 8][H][W]`` of the bf16 values a tensor holds."""
+        return em.from_bf16_bits(self.read_tensor(ws, name))
+
+
+def _halo_widths(ir: GraphIR) -> Dict[str, int]:
+    """Per tensor, the widest padding any convolution reading it needs. The value is always +0.0."""
+    halo = {name: 0 for name in ir.tensors}
+    for L in ir.layers:
+        if L.k > 1:
+            for s in L.inputs:
+                halo[s.tensor] = max(halo[s.tensor], L.pad)
+    return halo
+
+
+def _planes(ir: GraphIR, name: str) -> int:
+    """Real blocks plus the junk planes a 2-block output group writes past them (int8 pads to 4)."""
+    t = ir.tensors[name]
+    return t.blocks + ((-t.blocks) % OUT_BLOCKS_8 if t.producer != "input" else 0)
+
+
+def plan_workspace(ir: GraphIR, slack_bytes: int = 64, reuse: bool = True) -> Bf16Workspace:
+    """Place every tensor in one workspace, ``[plane][H + 2h][W + 2h][8]`` bf16, halos at +0.0.
+
+    The int8 planner's logic, liveness-based slot reuse included, with three differences: junk planes
+    pad to two blocks, every placement is ``uint16`` with a +0.0 halo, and no tensor is band-packed
+    (``band_rows`` is a performance layout, worth about 0.1 ms on yolov8n, and not carried into the
+    fork). The workspace is then grown to cover the furthest byte any activation packet over-reads.
+    """
+    check_ir(ir)
+    halo = _halo_widths(ir)
+
+    def placement(name: str, base: int, planes: int) -> Placement:
+        t = ir.tensors[name]
+        return Placement(name=name, base=base, halo=halo[name], height=t.height, width=t.width, blocks=t.blocks,
+                         planes=planes, producer=t.producer, halo_value=0, dtype=STORAGE_DTYPE, band_rows=0)
+
+    def align(n: int) -> int:
+        return (n + 63) // 64 * 64
+
+    placements: Dict[str, Placement] = {}
+    outputs = [L.output for L in ir.layers]
+    if not reuse:
+        cursor = 0
+        for name in [ir.input] + outputs:
+            placements[name] = placement(name, cursor, _planes(ir, name))
+            cursor = align(cursor + placements[name].nbytes)
+    else:
+        first_use: Dict[str, int] = {}
+        last_use: Dict[str, int] = {}
+        for idx, L in enumerate(ir.layers):
+            first_use.setdefault(L.output, idx)
+            last_use[L.output] = max(last_use.get(L.output, idx), idx)
+            for t in [s.tensor for s in L.inputs] + ([L.residual.tensor] if L.residual else []):
+                last_use[t] = max(last_use.get(t, 0), idx)
+        for _, t in ir.outputs:
+            last_use[t] = len(ir.layers) + 1
+        placements[ir.input] = placement(ir.input, 0, _planes(ir, ir.input))
+        cursor = align(placements[ir.input].nbytes)
+        # Identical geometry means identical pitch and interior offsets, and drains write only the
+        # interior, so a slot handed to a later tensor keeps its halo ring intact.
+        by_geom = defaultdict(list)
+        for name in outputs:
+            t = ir.tensors[name]
+            by_geom[(t.height, t.width, halo[name])].append((first_use[name], last_use[name], _planes(ir, name), name))
+        for key, tlist in by_geom.items():
+            slots: List[dict] = []
+            for f, l, planes, name in sorted(tlist, key=lambda e: e[0]):
+                slot = next((s for s in slots if s["last_use"] < f), None)
+                if slot is None:
+                    slots.append({"last_use": l, "max_planes": planes, "tensors": [name]})
+                else:
+                    slot["last_use"] = l
+                    slot["max_planes"] = max(slot["max_planes"], planes)
+                    slot["tensors"].append(name)
+            for slot in slots:
+                for name in slot["tensors"]:
+                    placements[name] = placement(name, cursor, slot["max_planes"])
+                cursor = align(cursor + placements[slot["tensors"][0]].nbytes)
+    ws = Bf16Workspace(placements=placements, nbytes=cursor, input=ir.input)
+    max_read = cursor
+    for L in ir.layers:
+        t = ir.tensors[L.output]
+        for chunk in layer_chunks(ir, L):
+            for y0 in {0, t.height - TILE_R}:
+                for x0 in {0, t.width - TILE_C}:
+                    for g in range(output_groups(t.blocks)):
+                        max_read = max(max_read, int(a_pattern(ws, L, chunk, y0, x0, g).indices().max()) + 1)
+    ws.nbytes = align(max_read + slack_bytes)
+    return ws
+
+
+# ----------------------------------------------------------------------------
+# DMA patterns, in BYTES
+# ----------------------------------------------------------------------------
+
+def _pattern(buffer: str, offset: int, sizes: Tuple[int, ...], strides: Tuple[int, ...]) -> DmaPattern:
+    p = canonical(DmaPattern(buffer, offset, sizes, strides))
+    if any(s > MAX_STRIDE_BYTES for s in p.strides):
+        raise ValueError(f"a stride of {max(p.strides):,} B exceeds the shim descriptor's "
+                         f"{MAX_STRIDE_BYTES:,} B step field; this map is too large for a bf16 plane")
+    return p
+
+
+def a_pattern(ws: Workspace, layer: ConvLayer, chunk: Chunk, y0: int, x0: int, group: int = 0) -> DmaPattern:
+    """The DMA pattern that fills one core's 12,800 B activation packet for output tile (y0, x0).
+
+    Derived from the chunk's own ELEMENT geometry - ``read_blocks`` planes of ``rows_in`` rows of
+    ``cols_in`` pixels - times the item size, in one place. The int8 file writes the same shapes as
+    byte literals (200, 400, 160), and those are the counts that go silently wrong at bf16: right
+    addresses, half the length. Here there is no literal to carry over.
+
+    A residual chunk reads the residual tensor at the OUTPUT tile's origin, starting at this group's
+    two blocks; the six blocks after them are over-read to make up the fixed packet, and never used.
+    """
+    if chunk.read_blocks * chunk.rows_in * chunk.cols_in * 8 != em.A_ELEMS:
+        raise ValueError(f"{layer.name}: a {chunk.kind} chunk does not fill one {em.A_ELEMS}-element packet")
+    if chunk.kind == "res":
+        seg = layer.residual
+        b0, oy, ox = seg.block_offset + group * OUT_BLOCKS_8, y0, x0
+    else:
+        seg = layer.inputs[chunk.seg_index]
+        b0 = seg.block_offset + chunk.block_start
+        oy, ox = layer.stride * y0 - layer.pad, layer.stride * x0 - layer.pad
+    p = ws.placements[seg.tensor]
+    return _pattern("ws", p.offset(b0, oy, ox), (chunk.read_blocks, chunk.rows_in, chunk.cols_in * 8 * ITEM),
+                    (p.plane_stride, p.pitch, 1))
+
+
+def o_pattern(ws: Workspace, layer: ConvLayer, group: int, y0: int, x0: int) -> DmaPattern:
+    """The drain of one joined 12,800 B output object: four cores' strips of two 8-channel blocks."""
+    p = ws.placements[layer.output]
+    return DmaPattern("ws", p.offset(group * OUT_BLOCKS_8, y0, x0), (ROWS, OUT_BLOCKS_8, TILE_R, TILE_C * 8 * ITEM),
+                      (TILE_R * p.pitch, p.plane_stride, p.pitch, 1))
+
+
+def quad_patterns(ws: Workspace, layer: ConvLayer, chunk: Chunk, y_quad: int, x0: int,
+                  group: int = 0) -> List[DmaPattern]:
+    """The four per-core fill patterns of the quad starting at output row ``y_quad``."""
+    return [a_pattern(ws, layer, chunk, y_quad + TILE_R * r, x0, group) for r in range(ROWS)]
+
+
+def run_drain(ws: Workspace, layer: ConvLayer, group: int, run: List[Tuple[int, int]]) -> DmaPattern:
+    """One drain for a run of vertically adjacent quads at one tile column; rounds are (y, x0).
+
+    Canonicalised for the reason the int8 one is: a foldable four-dimensional tap is ambiguous to the
+    descriptor lowering, whose outermost dimension may be read as the repeat or as addressing.
+    """
+    q0, x0 = run[0]
+    o = o_pattern(ws, layer, group, q0, x0)
+    return _pattern("ws", o.offset, (ROWS * len(run),) + tuple(o.sizes[1:]), o.strides)
