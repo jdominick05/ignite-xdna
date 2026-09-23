@@ -13741,6 +13741,9 @@ layers, fed the device's inputs, the four agree with one another on every value 
 once, seed 0's body.5), so an exact replay under aligned is no evidence for aligned over the others.
 **The step that would locate the origin** is a container compiled with workspace reuse off, so that
 every tensor stays resident and every layer can be replayed. It has not been built.
+*Built since:* the mismatch starts in body.1, as single values next to bf16 rounding ties. It does not
+follow addresses, it reaches all six inputs rather than four, and none of the four candidate models
+reproduces it ([next section](#the-adaround-mismatch-starts-in-body1-as-single-values-beside-bf16-rounding-ties-and-none-of-the-four-candidate-accumulate-models-reproduces-it-2026-09-23-desktop-2)).
 
 **What the inexactness costs.** Against the W8A16 oracle the device's worst frame is bird, 118 of
 786,432 values, and bird is one of the two frames that equal the emulator. That distance is therefore
@@ -13827,3 +13830,101 @@ arms ran two alternating rounds each, and each range covers both rounds.
   with no significance test.
 - Latency for one tile already in memory. This is neither a camera nor a whole image.
 - Energy was not measured.
+
+## The AdaRound mismatch starts in body.1, as single values beside bf16 rounding ties, and none of the four candidate accumulate models reproduces it (2026-09-23, Desktop 2)
+
+[The section above](#w8a16-sesr-m7-on-the-adaround-weights-the-device-departs-from-the-emulator-on-4-of-6-inputs-and-its-aggregate-psnr-is-above-amds-adaround-w8a8-2026-09-23-desktop-2)
+could not see where the mismatch starts, because body.0 to body.3 are overwritten before the frame
+ends. This section recompiles the same AdaRound model with `--no-workspace-reuse`, so every tensor
+keeps its own slot and stays resident. It then runs one checks-only sitting on the same seven frames,
+replaying every layer from the device's own inputs. It measures no speed and no accuracy.
+
+Logs:
+- [`sesr_m7_adaround_bf16_noreuse_compile_desktop2_20260923.log`](../results/aie/sesr_m7_adaround_bf16_noreuse_compile_desktop2_20260923.log)
+  is the compile. It has the same 1,521 rounds, and its weight packets are byte-identical to the reuse
+  container's (`wpackets.bin` 98b891adfeea9207). Its instruction stream differs (`insts.bin`
+  da89e12959ffd58d against e4f175d613e8c6df), and so does its workspace: 20.3 MB against 11.7.
+- [`sesr_m7_adaround_bf16_noreuse_dump_desktop2_20260923.log`](../results/aie/sesr_m7_adaround_bf16_noreuse_dump_desktop2_20260923.log)
+  is the sitting (`--no-timing --no-quality --isolate all --dump-frames`).
+  - The device was idle before and after, with no foreign context.
+  - It exits 1, because exactness fails.
+  - The dump is git-ignored. Its file hashes, and the container's, are in the log.
+
+### It follows the values, not the addresses
+
+Six tensors are resident at frame end in both containers: the input, head, body.4, body.5, the Add and
+the tail. On every input, each of them has the same number of differing values here as in the reuse
+container, inside the same bounding box. The tail and the distance to the W8A16 oracle are identical
+too. The two containers share the kernel object (67d1050f6809f390) and the weight packets. The
+instruction stream, every tensor's address and the workspace size all differ. So the mismatch does not
+follow the layout or the stream.
+
+### Where it starts
+
+head and body.0 equal the emulator on all six inputs. The layers the reuse container could not show
+differ in these counts, chained:
+
+| input | body.1 | body.2 | body.3 | body.4 (as before) |
+|---|---:|---:|---:|---:|
+| baby | 3 | 8 | 13 | 8 |
+| bird | 2 | 0 | 0 | 0 |
+| butterfly | 1 | 4 | 21 | 40 |
+| head | 0 | 1 | 12 | 24 |
+| woman | 0 | 0 | 1 | 0 |
+| seed 0 | 0 | 0 | 0 | 1 |
+
+- **All six inputs depart, not four.** bird and woman, which the reuse container called exact, carry
+  differences in body.1 and body.3 that round away before body.4. The section above's "4 of 6 inputs"
+  counted only the tensors still resident at frame end.
+- **The same limit applies to the plain XINT8 weights.** Their exactness was measured on the reuse
+  container, so their body.1 to body.3 were never compared. Whether the plain weights show the same
+  thing is not measured. It needs the plain model compiled with `--no-workspace-reuse` and one more
+  checks-only sitting.
+
+**Replayed layer by layer.** Every layer, fed the device's own input tensors, covers 55,050,240 values
+over the six inputs. This is how many values each candidate accumulate model gets wrong:
+
+| accumulate model | values that differ from the device |
+|---|---:|
+| aligned (the emulator's, measured by the one-core probe) | **9** |
+| dot_first | 14 |
+| wide | 16 |
+| sequential | 17 |
+
+The nine the aligned model misses are single values, each one bf16 step off:
+- 6 are in body.1 (baby 3, bird 2, butterfly 1), and one each is in body.2 (head), body.3 (woman) and
+  body.4 (seed 0);
+- 8 of the 9 sit inside one tile, and one sits in an edge tile's column overlap.
+
+Two facts about those nine:
+- **At 8 of them the device holds the exact sum, correctly rounded, and aligned is one step off.** The
+  exact sum is every product summed by `math.fsum`, plus the packet's bf16 bias, rounded to nearest
+  even. At the ninth (butterfly, body.1, channel 6 at (208, 188)) the device is one step below the
+  rounded exact sum, and none of the four models matches it.
+- **They sit next to rounding ties.** At 8 of the 9 the exact accumulator lies within 0.01 of a bf16
+  spacing from a rounding midpoint. One (baby, body.1, channel 6 at (96, 250)) lies exactly on the
+  midpoint. The ninth lies 0.0625 away. So an accumulator difference of a few fp32 steps between the
+  device and the model is enough to flip each one.
+
+The other three models get most of these nine right. But they miss others that aligned gets right,
+and so none of the four is the device's rule.
+
+**What this settles:**
+- The first layer: body.1.
+- The form: isolated single values next to rounding ties, one step each, spreading from there
+  through the 3 x 3 layers.
+- It does not follow addresses, layout or the instruction stream.
+- None of the four candidate models reproduces the device. Aligned is the closest, not an exact model.
+
+**What it leaves unexplained is the mechanism.** Two candidates stand:
+- an accumulate rule the four candidates do not capture;
+- something else in the core's pass.
+
+A probe built on these nine positions' operands (the accumulator and the eight products at each step)
+is what could separate them. It has not been built.
+
+### What this does not establish
+
+- Why the plain weights looked exact. They were never observed with every tensor resident.
+- The mechanism, as above.
+- One checks-only sitting, on six inputs.
