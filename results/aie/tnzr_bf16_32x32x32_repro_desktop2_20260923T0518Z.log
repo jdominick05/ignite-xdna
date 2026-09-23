@@ -1,0 +1,30 @@
+Hello XDNA! XDNA1 bf16 kernel reproduction (tools/tnzr_repro.py)
+date: 2026-09-23T01:18:41  host: DESKTOP-CBL5NUA
+reference: https://tnzr.org/xdna/xdna1_kernel.html (398 GFLOPS, Ryzen 7 8700G, --pmode turbo)
+source: github.com/scalable-analyses/xdna @ 8db6999ae2c419a4da35c19182323bdc38ad30af (fetched to scratch/, not vendored)
+kernel: tensor_kernel_32x32x32_bf16_bf16_fp32.s assembled by Peano llvm-aie (clang version 22.0.0 (https://github.com/Xilinx/llvm-aie a36c62b9d26291fb06604bc976c897791f0bb578))
+aiecc: mlir-aie ironenv v1.4.2 (aiecc.exe)
+xrt-smi: Version              : 2.21.0
+xrt-smi: NPU Driver Version   : 32.0.20101.3760
+xrt-smi: NPU Firmware Version : 1.5.5.391
+pmode: default (not changed by this run; docs/SILICON.md measured 1.80 GHz in default)
+partitions before: idle
+static (aie_disasm on the assembled object): {'static_bundles': 160, 'static_vmac_bundles': 128, 'hw_loop_bundles': 64, 'hw_loop_trip': 3, 'dynamic_bundles': 288, 'dynamic_vmac_bundles': 256}
+partitions after close: idle
+
+| iteration | time (ms) | GFLOPS |
+|---|---|---|
+| 0 | 164.886 | 397.5 |
+| 1 | 165.252 | 396.6 |
+| 2 | 165.067 | 397.0 |
+| 3 | 164.707 | 397.9 |
+| 4 | 164.695 | 397.9 |
+| 5 | 164.695 | 397.9 |
+| 6 | 164.717 | 397.9 |
+| 7 | 164.719 | 397.9 |
+| 8 | 164.736 | 397.8 |
+| 9 | 165.072 | 397.0 |
+
+mean 164.855 ms/dispatch -> 397.5 GFLOPS (min 164.695 ms -> 397.9, max 165.252 ms -> 396.6)
+implied cycles per kernel call at 1.8 GHz: 296.7 (static: 288 kernel bundles, 256 issuing vmac.f; the difference is the calling loop, call/return and any stall)
+per-core peak at 1.8 GHz: 460.8 GFLOPS -> measured is 86.3% of it; reference 398 -> 99.9% of the reference

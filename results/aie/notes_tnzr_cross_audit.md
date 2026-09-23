@@ -77,7 +77,7 @@ exploration sweep and are re-read when their fix lands.
 | B4 | A load and a store to the same bank in one bundle conflict; the reference keeps them in separate instructions | The repo measured only load+load (+1 cycle, `SILICON.md:74`) | MEASURED P4: PENDING |
 | B5 | Hardware-loop rules (setup distance, 16-B alignment, 16-B last bundle) | Silent. Across every loop of all four engine ELFs, start and end are 16-B aligned and the last bundle is 16 B (consistent with the reference). But the `movxm ls/le` and `add.nc lc` writes sit **16–58 B before loop start**, and the code runs bit-exact. So "≥64 B before the start" is not what the hardware needs. Every loop's setup is **≥112 B before the loop end** (the minimum is exactly 112 in many loops), which suggests an end-anchored rule | Static: `engine_core_issue_census_desktop2_20260923.log`. MEASURED P3: PENDING (run last) |
 | B6 | `VMAC.F` config value 28 = bf16 4×8×4; which bf16 shapes are emulated. **Also:** int8×int8 4×8×8 with acc32 uses config value **776** | Silent on both. The repo uses only native 4×8×4 bf16, so nothing here is wrong | Reference Table 1; `peano_aie2_machine_model_a36c62b9.log` §4 (`mova r0, #28` / `mova r0, #776`) |
-| B7 | **A hand-scheduled assembly kernel runs on XDNA1 and reaches 86% of peak** | `SILICON.md:79`: "no hand-written kernel has been run on the NPU". The repo's only `.s` (`kernels/asm_probe/asm_core_id.s`) was assembled and linked, never executed | MEASURED phase 2.1: PENDING |
+| B7 | **A hand-scheduled assembly kernel runs on XDNA1 and reaches 86% of peak** | `SILICON.md:79`: "no hand-written kernel has been run on the NPU". The repo's only `.s` (`kernels/asm_probe/asm_core_id.s`) was assembled and linked, never executed | **MEASURED, reproduced here:** `tnzr_bf16_32x32x32_repro_desktop2_20260923T0518Z.log`. The reference's `.s`, assembled by this repo's Peano (a36c62b9) and linked by mlir-aie v1.4.2 aiecc on Windows, ran through `XrtSiliconHarness`: **397.5 GFLOPS** mean over 10 dispatches (396.6–397.9), 86.3% of 460.8 and 99.9% of the reference's 398. That was in **default** pmode, where the reference used turbo. Implied 296.7 cycles per call at 1.80 GHz, against 288 static kernel bundles (the other ~9 are the calling loop and call/return). Partitions idle before and after. The path this repo never tried (hand `.s` → `link_with` → aiecc → PyXRT) works end to end |
 
 ## C. The performance gap the reference exposes
 
@@ -85,7 +85,7 @@ Per-core peaks at the measured 1.80 GHz: bf16 460.8 GFLOPS, int8 921.6 GOPS (`do
 
 | Kernel | Result | % of per-core peak | Data movement in the number? |
 |---|---|---|---|
-| Reference, hand-asm bf16 32×32×32, 1 tile | 398 GFLOPS | 86% | none (L1-resident) |
+| Reference, hand-asm bf16 32×32×32, 1 tile | 398 GFLOPS (theirs, turbo); **397.5 reproduced here** (default pmode) | 86.3% | none (L1-resident): `tnzr_bf16_32x32x32_repro_desktop2_20260923T0518Z.log` |
 | Upstream bf16 `mm.cc` hot loop, static | 16 `vmac.f` / 32 bundles | 50% cap | none (static) |
 | Repo best single-tile bf16 conv (`chunk`), dispatch-free slope | 108.9 GFLOPS | 23.6% | yes (branch `worktree-bf16-engine`) |
 | Repo bf16 array GEMM, per core | 168.8 GFLOPS | 36.6% | yes |
