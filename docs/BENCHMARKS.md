@@ -14156,7 +14156,8 @@ Values at which each model's bits differ from aligned's, where the silicon match
   - **The flip.** `MAC_MODEL` moves to exp_sum only on S1. The probe's rule is met, but a model a
     sitting on record refutes does not go in force. On S2, S3 or S4 it stays aligned, and the conflict
     is reported.
-  - Not run.
+  - Not run. *Run since (2026-09-23, Desktop 2):* S1 on every frame
+    ([below](#the-plain-weights-no-reuse-sitting-reads-s1-the-device-departs-from-aligned-at-exactly-exp_sums-3-values-2026-09-23-desktop-2)).
 
 Not rescored:
 - `engine_bf16_npu_20260921.log`, milestone 2's first run. It is superseded as evidence, its lines
@@ -14295,6 +14296,82 @@ under it. The replay is 0 of 55,050,240 under exp_sum, committed with the pre-re
   still unmeasured.
 - That exp_sum is the core's full rule. It is the one candidate that no sitting on record refutes, and
   it predicted every value this probe was built to read.
+
+## The plain-weights no-reuse sitting reads S1: the device departs from aligned at exactly exp_sum's 3 values (2026-09-23, Desktop 2)
+
+Logs:
+- the sitting, [`sesr_m7_bf16_noreuse_dump_desktop2_20260923.log`](../results/aie/sesr_m7_bf16_noreuse_dump_desktop2_20260923.log);
+- its dump replayed under exp_sum,
+  [`sesr_m7_bf16_noreuse_replay_exp_sum_desktop2_20260923.log`](../results/aie/sesr_m7_bf16_noreuse_replay_exp_sum_desktop2_20260923.log);
+- the AdaRound no-reuse dump replayed the same way,
+  [`sesr_m7_adaround_bf16_noreuse_chained_exp_sum_desktop2_20260923.log`](../results/aie/sesr_m7_adaround_bf16_noreuse_chained_exp_sum_desktop2_20260923.log).
+
+It is one sitting on Desktop 2 (`DESKTOP-CBL5NUA`), `--checks-only --npu --no-timing --no-quality`,
+so it makes no timing claim.
+- The device was idle before and after, per the wrapper's witnesses and the tool's own. There was no
+  foreign context, and no other session used the NPU during the sitting.
+- The go came from the user, relayed by the gate session.
+- The container is `build/sesr_m7_bf16_noreuse.ignite` (`df7aae1812771c6f`), from the plain XINT8
+  QDQ with every tensor resident. Its weight packets are the plain reuse container's.
+
+**The prediction bound.** The prediction and outcomes S1 to S4 were committed before the sitting
+([above](#a-fifth-accumulate-model-exp_sum-fits-every-bf16-engine-sitting-that-could-be-rebuilt-and-the-probe-that-can-refute-it-is-pre-registered-not-run-2026-09-23-offline)). The script that scored the sitting against them was also written before it ran.
+
+**S1, on every frame.** The sitting compares the device with the aligned emulator in all 10 tensors
+and the tail, padding lanes included: 9,371,648 resident values and 1,048,576 tail values a frame. It
+exits 1, which is the predicted outcome.
+
+| frame | departs from aligned | where, and the bits |
+|---|---:|---|
+| baby | 0 | |
+| bird | 2 | body.1 c12: y70 x179 `3ee2` -> `3ee3`, y121 x252 `3ab2` -> `3ab1` |
+| butterfly | 0 | |
+| head | 0 | |
+| woman | 1 | body.3 c13: y186 x143 `3978` -> `3977` |
+| seed 0 | 0 | |
+
+- Every departure is at a predicted value, with exp_sum's bits, and the device departs nowhere else.
+  The tail and its padding lanes equal aligned on every frame.
+- The repeat of baby is identical to baby in the tail and in every tensor.
+- So exp_sum passes a test it was not fitted to. These 3 values are where it and aligned part on the
+  plain weights, and nothing about them was chosen by the nine.
+
+**Layer by layer, from the device's own inputs.** The sitting also replays each layer from the
+device's own input under every model: 55,050,240 values.
+
+| model | values wrong |
+|---|---:|
+| aligned | 3 |
+| wide | 8 |
+| dot_first | 7 |
+| sequential | 10 |
+| **exp_sum** | **0** |
+
+No value matches none of the five.
+
+**The whole network, chained.** The dump replayed offline under exp_sum equals the device at every
+value, in all 10 tensors and the tail, on all six frames. That is 56,229,888 resident and 6,291,456
+tail values. The AdaRound no-reuse dump does the same under exp_sum, at the same counts.
+- On the plain weights, this is the whole-network exactness the reuse sittings could not claim. It
+  covers the tensors a reuse container overwrites.
+- On the AdaRound weights it is exp_sum's own fitting data. The nine it was fitted to came from this
+  dump. So it shows that the chained replay agrees, not that the model is right. The test is the plain
+  sitting above, together with the probe.
+
+**What the 3 values separate.** At all three, wide and dot_first side with exp_sum, and sequential
+does at the two on bird. The layer-by-layer counts above refute all three on this sitting's own data,
+as did the plain-weights sittings before it.
+
+**The flip.** The pre-registered rule was S1, on top of the probe's A1 + B1 + C1. Both are met, so
+`MAC_MODEL` moves to `exp_sum` in its own commit. Every exactness claim measured under aligned keeps
+that scope.
+
+**What this does not establish**
+- It is one sitting. Determinism is shown only within it, by the repeat of baby.
+- The three values are single bf16 steps next to rounding ties, as the nine were.
+- The sign of an exactly zero sum and Inf, NaN or subnormal operands are still unmeasured.
+- That exp_sum is the core's full rule. It is the one candidate that no sitting on record refutes,
+  and it has now predicted two sittings that were built to refute it.
 
 ## Cross-audit against Hello XDNA! (2026-09-23, Desktop 2)
 
