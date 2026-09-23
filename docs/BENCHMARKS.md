@@ -11854,6 +11854,14 @@ sloppy, but a model whose layers cancel hard needs `--cancel` re-run against its
 sign the core gives an exactly zero sum, and what its `max` makes of -0.0 and NaN, remain
 unmeasured. No device was opened and there is no timing claim.
 
+**Qualified 2026-09-22: "no lane differs" was 128 lanes a case**, which cannot see a rate below about
+one in a hundred. On SESR-M7's own tensors the store does see the aligned grid, rarely. Across its
+isolated layers on six inputs, the aligned model leaves the exact sum at 80 stored values and a model
+that sums each instruction exactly at 72. The 16-bit margin makes a flip rare, not impossible. The
+conclusion about scores stands, and it is now measured on a model rather than argued: the engine's
+output sits within one bf16 step of the oracle's, and the aligned grid is not what separates them
+([W8A16 on the bf16 engine](#w8a16-on-the-bf16-engine-sesr-m7-stays-within-one-bf16-step-of-its-oracle-and-the-cores-aligned-accumulate-is-not-the-gap-2026-09-22-offline)).
+
 Backing log: [`bf16_accum_fidelity_desktop2_20260921.log`](../results/aie/bf16_accum_fidelity_desktop2_20260921.log),
 `--checks-only`, offline. Tool: `tools/bf16_accum_fidelity.py`.
 
@@ -13116,3 +13124,138 @@ offline work that nobody is waiting on, the comparison is energy per frame or ho
 than milliseconds, and this repo has `tools/energy_sitting.py` to measure it. **That door is open and
 unmeasured.** It is named here so it is not silently treated as closed by results that never tested
 it.
+
+
+## W8A16 on the bf16 engine: SESR-M7 stays within one bf16 step of its oracle, and the core's aligned accumulate is not the gap (2026-09-22, offline)
+
+Backing logs: [`bf16_engine_vs_oracle_desktop2_20260922.log`](../results/aie/bf16_engine_vs_oracle_desktop2_20260922.log)
+(the aligned MAC model, the one in force) and
+[`bf16_engine_vs_oracle_wide_desktop2_20260922.log`](../results/aie/bf16_engine_vs_oracle_wide_desktop2_20260922.log)
+(the control). Both are `--checks-only`, offline, Desktop 2, and no device was opened. Tool:
+`tools/bf16_engine_vs_oracle.py`.
+
+**What this is.** Design B of #143 runs int8 work on the bf16 engine. SESR-M7's lowered int8 weights
+are dequantized into bf16 exactly (every scale is a power of two), and activations are carried as bf16
+in real units: W8A16. This is the first numerics result for that design. It is the emulator against an
+oracle, on the CPU. **Nothing ran on the NPU and no bf16 container exists yet.**
+
+The gap measured here is the tolerance the silicon run will be held to, not a silicon result. That run
+has two contracts, and this section is one of them. The device must equal the emulator to the bit, the
+contract the [sixteen-core sweep](#sixteen-cores-run-bf16-byte-exactly-on-silicon-2026-09-22-desktop-2)
+met on synthetic packets. Only through that does the bound below become the device's distance to the
+model.
+
+**What it would be if it worked on silicon.** At float width AMD's stack places nothing on the NPU, and
+AMD's int8 SESR runs at 2.00 ms a tile against the CPU's 6.59-7.87 ms
+([the bars](#sesr-is-the-only-candidate-still-standing-and-the-corrected-geometry-helps-it)). A bf16
+SESR on the NPU would be a first, not a win over AMD. Nothing here is a speed result, and there is no
+release in this arc.
+
+### The arms
+
+- **engine**: `graph_reference_bf16.run_direct`, chained over all nine layers. It runs the packets
+  `engine_schedule_bf16` builds through `engine_bf16_emulator` with the aligned MAC model.
+- **oracle**: `tools/w8a16_oracle.py`, built from `sesr_m7_xint8.onnx` - the plain XINT8 arm, the same
+  one `build/sesr_m7.ignite` was built from - over `sesr_m7_fp32.onnx`. It runs the IR's dequantized
+  weights in ONNX Runtime fp32, with a bf16 Cast pair around every Conv. Every oracle tensor is rounded
+  to bf16 before comparison. Only the residual Add's output changes under that rounding (93,928 to
+  219,529 values an input), so the Cast pairs survived everywhere else and the oracle is not fp32.
+- **exact**, on isolated layers only: the same bf16 operands summed in float64 and rounded once. It
+  shares no code with the packer or the emulator.
+- **schedule**: the fork's schedule emulated through its workspace, DMA patterns and streams, on a NaN
+  background.
+
+Inputs: all five Set5 LR x2 images, resized to 256x256 by `npu.sesr.preprocess` (sha256 prefixes in
+the log), and seeded integer noise.
+
+### Measured, aligned
+
+| input | output values that differ | largest output difference | output rel_l2, engine vs oracle | the bf16 step itself | worst layer, values that differ |
+|---|---:|---:|---:|---:|---:|
+| baby | 2 of 786,432 | 0.5 (0.50 step) | 1.03e-5 | 1.63e-3 | 91 of 1,048,576 (body.4) |
+| bird | 13 | 0.5 (0.50 step) | 7.6e-6 | 1.74e-3 | 49 (body.4) |
+| butterfly | 10 | 0.5 (1.00 step) | 1.54e-5 | 1.92e-3 | 80 (body.6) |
+| head | 58 | 0.5 (0.50 step) | 1.59e-5 | 1.75e-3 | **151 (body.4)** |
+| woman | 7 | 0.5 (0.50 step) | 1.36e-5 | 1.69e-3 | 82 (body.4) |
+| seed 0 | 0 | 0 | 0 | 3.08e-3 | 1 |
+
+"The bf16 step itself" is the oracle's rel_l2 to the same model without the Cast pairs. The engine's
+own distance to that model matches it to four significant figures on every input. A step is the bf16
+spacing at the tensor's largest magnitude. The outputs are in SESR's pixel units, centred on 128, so
+0.5 is half a grey level.
+
+**The engine's output differs from the oracle's in at most 58 of 786,432 values. On every layer of
+every input, the largest difference is at most one bf16 step at that tensor's peak.** On the Set5
+images the gap is 0.44% to 0.91% of what rounding to bf16 does to the model at all. The worst layer
+rel_l2 is 1.18e-4, at body.4 on head.png.
+
+The largest elementwise distance, counted in the value's own ULPs, is 15,570. It is 0.0 against 0.0256
+at a ReLU edge in body.3, a fraction of one step at that tensor's peak of 408. It is reported and is not
+the headline, because counting a small value's ULPs is not scale-free.
+
+**The schedule agrees to the bit.** Emulated through its workspace on a NaN background, it differs from
+the chained reference in 0 patterns on every layer, for all six inputs. So these are the schedule's
+numbers, not only the reference's.
+
+### Which side leaves the exact sum, and what the control rules out
+
+Fed the oracle's own inputs, the first two layers are exact on every input; the head's arithmetic is
+integer. Over all layers and inputs, the engine leaves the float64 sum at 80 values and the oracle at
+30. At the 73 values where the two disagree, the oracle kept the exact value 61 times, the engine 11
+times, and neither once.
+
+The obvious suspect was the core's measured accumulate, which aligns nine operands to the largest and
+rounds each to a 24-bit grid. **The control rules it out as the main cause.** The "wide" model sums
+each instruction's nine operands exactly. With it the engine still leaves the exact sum at 72 values.
+The chained worst figures do not move (151 values, 1.18e-4, 1.0 step), and head.png is identical layer
+for layer. The aligned grid is therefore about 8 of the 80. The rest is how the fp32 sum is formed: the
+engine rounds once an instruction, walking tap by tap across channels, and ORT's CPU kernel sums in its
+own order.
+
+**Why ORT's order keeps the exact value more often on these images is unexplained.** On seed 0, whose
+noise has no spatial correlation, the two leave it about equally: the engine 6 times, the oracle 7. One
+candidate is that spatial correlation lets some orders cancel earlier. It has not been tested in a log.
+
+On head.png the differences fan out through the body and then fall. Isolated, body.1 to body.4 add 6,
+1, 2 and 1 new departures. Chained, those layers differ in 6, 18, 81 and 151 values, then 37 at body.5,
+66 at body.6 and 58 at the output.
+
+### The bound, and the test that holds it
+
+`tests/test_bf16_engine_vs_oracle_offline.py` pins **twice the worst figures over the six inputs**, on
+every tensor:
+- a differing fraction of at most 2 x 151 / 1,048,576;
+- a largest difference of at most 2 steps at the peak;
+- rel_l2 at most 2.36e-4 in a layer and 3.18e-5 at the output;
+- an output gap of at most 0.0182 of the bf16 step.
+
+The factor of two covers what moves between machines, since the oracle sums in the ORT kernel order
+of the CPU it runs on.
+
+It runs on seed 0 wherever the model is present, and on head.png wherever `data/sesr_val` is too.
+Seed 0 cannot see the accumulation, because its gap does not change with the MAC model. It pins the
+packing and the oracle's wiring. head.png is the input behind the worst figures, so there the bound
+is a real assertion.
+
+A mutation run, not committed, showed the bound has teeth:
+- one weight per layer packed one int8 step high put all nine tensors outside it, with 60,842 to
+  488,888 values differing against an allowance of 302 per 1,048,576;
+- an oracle carrying the fp32 export's own weights instead of the IR's sat at output rel_l2 0.10;
+- skipping the oracle's bf16 rounding left 109,451 values differing at body.6.
+
+### What this does not establish
+
+- **No device.** This is emulator against oracle on the CPU, as stated above.
+- **No bias.** SESR-M7 carries none: every `bias_q` is 0, so this comparison never exercises the bias
+  path. The packet tests do, and so does the exact arm's test on the synthetic chain, whose biases are
+  nonzero.
+- **The plain XINT8 arm.** The oracle and the int8 container both come from `sesr_m7_xint8.onnx`. If the
+  silicon comparison moves to `sesr_m7_xint8_adaround.onnx`, the tool is re-run on that QDQ. That is a
+  run, not new code.
+- **No quality number.** This measures agreement with the oracle, not PSNR.
+- **One CPU.** The oracle's summation order is ORT's MLAS kernel on a Ryzen 7 8700G.
+
+It also qualifies an earlier line. [The aligned accumulate is invisible after a bf16 store](#the-cores-aligned-accumulate-is-invisible-after-a-bf16-store-and-the-cpu-bf16-score-survives-it-2026-09-21-desktop-2)
+reported that no lane differs, but that was 128 lanes a case. On SESR-M7's own tensors the aligned
+and wide models are not identical after the store (80 against 72 departures). They are rare, and not
+absent.

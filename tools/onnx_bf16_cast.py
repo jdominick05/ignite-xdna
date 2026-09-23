@@ -31,7 +31,10 @@ reason is margin: the grid keeps 24 bits below an instruction's largest operand 
 keeps 8, so the difference sits 16 bits under what a stored activation can carry into the next
 layer. The boundary is a cancellation ratio of 2**24 within ONE instruction - measured, not
 assumed, and the same log brackets it. Below that the two are indistinguishable; above it the core
-returns zero where an exact sum keeps the value.
+returns zero where an exact sum keeps the value. "No lane" was 128 lanes a case: on SESR-M7's own
+tensors the store does see the grid, rarely (80 departures from the exact sum against 72 for an
+exact-per-instruction model, over six inputs), and the engine's output still sits within one bf16
+step of an oracle built on this tool (results/aie/bf16_engine_vs_oracle_desktop2_20260922.log).
 
 So the remaining CAVEAT is narrower than the old one: this is a faithful model of PRECISION for any
 layer that does not cancel by more than 2**24 inside a single multiply-accumulate, and a bit-exact

@@ -54,6 +54,33 @@ class TestW8A16Oracle(unittest.TestCase):
         self.assertGreater(wo.rel_l2(y_bf16, y_fp32), 0.0)
         self.assertLess(wo.rel_l2(y_bf16, y_fp32), 0.05)
 
+    def test_every_layer_maps_to_the_tensor_that_holds_its_output(self):
+        from ignite_xdna.compiler import graph_ir
+        ir = graph_ir.lower_yolov8n(str(QDQ))
+        names = wo.layer_tensor_names(onnx.load(str(FP32)), ir)
+        self.assertEqual([names[ir.input]] + [names[L.output] for L in ir.layers],
+                         ["input", "/head/Conv_output_0"]
+                         + [f"/body.{i}/body.{i}.1/Relu_output_0" for i in range(6)]
+                         + ["/Add_output_0", "/tail/Conv_output_0"])
+
+    def test_a_clip_where_the_ir_says_relu_is_refused(self):
+        # The IR records a non-binding Clip(0, 6) as "relu"; the walk must not accept one for it.
+        from ignite_xdna.compiler import graph_ir
+        ir = graph_ir.lower_yolov8n(str(QDQ))
+        model = onnx.load(str(FP32))
+        next(n for n in model.graph.node if n.name == "/body.2/body.2.1/Relu").op_type = "Clip"
+        with self.assertRaisesRegex(ValueError, r"/body\.2/body\.2\.0/Conv: expected .* exactly one Relu"):
+            wo.layer_tensor_names(model, ir)
+
+    def test_an_add_fed_from_the_wrong_tensor_is_refused(self):
+        from ignite_xdna.compiler import graph_ir
+        ir = graph_ir.lower_yolov8n(str(QDQ))
+        model = onnx.load(str(FP32))
+        add = next(n for n in model.graph.node if n.op_type == "Add")
+        add.input[1] = "/body.0/body.0.1/Relu_output_0"
+        with self.assertRaisesRegex(ValueError, "the Add's other input"):
+            wo.layer_tensor_names(model, ir)
+
     def test_uint8_intermediates_unchanged_by_the_elem_type_keyword(self):
         from ignite_xdna.compiler.graph_reference import ort_intermediates
         name = next(n.output[0] for n in onnx.load(str(QDQ)).graph.node if n.op_type == "QuantizeLinear")

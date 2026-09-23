@@ -103,6 +103,67 @@ def patch_weights(model: onnx.ModelProto, convs: dict) -> None:
             raise ValueError(f"{n.name}: the float Conv has no bias but the IR's is nonzero")
 
 
+QDQ_SUFFIX = "_QuantizeLinear_Output"
+
+
+def layer_tensor_names(model: onnx.ModelProto, ir) -> dict:
+    """IR tensor name -> the float model's tensor holding the same values, for the input and every layer.
+
+    ``model`` is the float export BEFORE ``cast_model`` (the oracle republishes every name, so the
+    result reads the oracle too). The walk is driven by the IR, never by searching for a likely op: from
+    the layer's Conv node, a ``relu`` layer steps through exactly one Relu, and a residual layer then
+    through exactly one Add whose OTHER input must be the residual producer's own mapped tensor. That
+    is the engine's order - the conv's epilogue activates, then OP_RESIDUAL adds with no activation -
+    so a graph that adds before activating, clips instead of rectifying, or feeds the Add from
+    elsewhere is refused rather than compared against the wrong tensor. Where the IR name carries the
+    QDQ suffix, stripping it must give the walked name too.
+    """
+    g = model.graph
+    nodes = {n.name: n for n in g.node}
+    consumers = {}
+    for n in g.node:
+        for i in n.input:
+            consumers.setdefault(i, []).append(n)
+    names = {ir.input: g.input[0].name}
+
+    def step(layer, tensor, op):
+        nxt = consumers.get(tensor, [])
+        if len(nxt) != 1 or nxt[0].op_type != op:
+            raise ValueError(f"{layer.name}: expected {tensor} to feed exactly one {op}, "
+                             f"it feeds {[c.op_type for c in nxt]}")
+        return nxt[0]
+
+    for L in ir.layers:
+        n = nodes.get(L.name)
+        if n is None or n.op_type != "Conv":
+            raise ValueError(f"{L.name}: the float model has no Conv node of that name")
+        if len(L.inputs) == 1 and L.inputs[0].block_offset == 0 and n.input[0] != names.get(L.inputs[0].tensor):
+            raise ValueError(f"{L.name}: the Conv reads {n.input[0]}, the IR's input maps to "
+                             f"{names.get(L.inputs[0].tensor)}")
+        t = n.output[0]
+        if L.act == "relu":
+            t = step(L, t, "Relu").output[0]
+        elif L.act is not None:
+            raise ValueError(f"{L.name}: activation {L.act!r} is not on the W8A16 path")
+        if L.residual is not None:
+            add = step(L, t, "Add")
+            other = [i for i in add.input if i != t]
+            want = names.get(L.residual.tensor)
+            if want is None or other != [want]:
+                raise ValueError(f"{L.name}: the Add's other input is {other}, the residual is {want}")
+            t = add.output[0]
+        if L.output.endswith(QDQ_SUFFIX) and L.output[:-len(QDQ_SUFFIX)] != t:
+            raise ValueError(f"{L.name}: walked to {t}, the IR names {L.output}")
+        names[L.output] = t
+    return names
+
+
+def seeded_input(qdq, seed=0) -> np.ndarray:
+    """A seeded integer input in the model's activation range, shaped like its graph input."""
+    dims = [d.dim_value for d in onnx.load(str(qdq)).graph.input[0].type.tensor_type.shape.dim]
+    return np.random.default_rng(seed).integers(-128, 128, size=dims).astype(np.float32)
+
+
 def build(qdq, fp32, bf16=True, host_regions=(), silu_sigmoid=False):
     """Return (oracle ModelProto, cast stats or None)."""
     model = onnx.load(str(fp32))
@@ -144,11 +205,7 @@ def main() -> int:
     saved_casts = sum(n.op_type == "Cast" for n in onnx.load(str(args.out)).graph.node)
     inserted = 2 * (stats["input_cast_chains"] + stats["output_cast_chains"])
 
-    if args.input_npy:
-        x = np.load(args.input_npy)
-    else:
-        dims = [d.dim_value for d in onnx.load(str(args.qdq)).graph.input[0].type.tensor_type.shape.dim]
-        x = np.random.default_rng(args.seed).integers(-128, 128, size=dims).astype(np.float32)
+    x = np.load(args.input_npy) if args.input_npy else seeded_input(args.qdq, args.seed)
     y_qdq, y_plain, y_oracle = run(args.qdq, x), run(plain, x), run(oracle, x)
 
     print("W8A16_ORACLE " + json.dumps({
