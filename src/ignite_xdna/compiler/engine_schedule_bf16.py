@@ -42,7 +42,7 @@ ReLU6 model would lose its bound. SESR uses Relu nodes; the oracle comparison
 from __future__ import annotations
 
 from collections import defaultdict
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 
@@ -636,3 +636,102 @@ def schedule_graph(ir: GraphIR, ws: Workspace, activation_ring: int = 0, weight_
     store = PacketStore()
     scheds = [schedule_layer(ir, ws, L, store, **flags) for L in ir.layers]
     return scheds, store
+
+
+# ----------------------------------------------------------------------------
+# Emulating a schedule on a workspace array
+# ----------------------------------------------------------------------------
+
+def emulate_layer(sched: LayerSchedule, store: PacketStore, ws_arr: np.ndarray,
+                  wp_arr: Optional[np.ndarray] = None, mac_model: Optional[str] = None) -> None:
+    """Replay the column programs through the bf16 core emulator, updating ``ws_arr`` in place.
+
+    Streams are replayed as the hardware sees them: fills and weight tasks append to per-column
+    FIFOs, every four activation packets form one object (one packet per core), and a drain writes
+    its objects once the cores have emitted them, whether it was issued before or after its fills.
+
+    Each core keeps its own fp32 psum and its ``scratch`` across the layer, as the device buffers
+    do. A weight object serves its ``count_out`` objects with a real output object and then its
+    ``count_acc`` objects with ``scratch`` passed as the output pointer as well - exactly what
+    ``kernels/bf16_conv/design._core_fn`` does. That aliasing is modelled rather than assumed away,
+    so a packet that broke the count contract would corrupt the held tile here as it would there.
+    """
+    blob = wp_arr
+    for c, items in enumerate(sched.programs):
+        psum = [np.zeros(em.PSUM_FLOATS, np.float32) for _ in range(ROWS)]
+        scratch = [np.zeros(em.SCRATCH_ELEMS, np.float32) for _ in range(ROWS)]
+        w_queue: List[np.ndarray] = []
+        cur = None
+        used = n_out = n_acc = 0
+        pending: List[np.ndarray] = []
+        drains: List[DmaPattern] = []
+        packets: List[np.ndarray] = []
+
+        def flush_drains():
+            while drains:
+                n_obj = drains[0].nbytes // (ROWS * em.O_BYTES)
+                if len(pending) < n_obj:
+                    return
+                drains.pop(0).write(ws_arr, np.concatenate(pending[:n_obj]))
+                del pending[:n_obj]
+
+        def consume(stream):
+            nonlocal cur, used, n_out, n_acc
+            packets.extend(stream)
+            while len(packets) >= ROWS:
+                obj = packets[:ROWS]
+                del packets[:ROWS]
+                if cur is None or used == n_out + n_acc:
+                    if not w_queue:
+                        raise AssertionError(f"{sched.name}: activation object without a weight object")
+                    cur = unpack_w(w_queue.pop(0))
+                    n_out, n_acc, used = int(cur[0][em.H_COUNT_OUT]), int(cur[0][em.H_COUNT_ACC]), 0
+                hdr, bias, wts = cur
+                real_out = used < n_out
+                used += 1
+                outs = []
+                for r, pkt in enumerate(obj):
+                    act = em.from_bf16_bits(np.ascontiguousarray(pkt).view(np.uint16))
+                    if real_out:
+                        o = np.zeros(em.OUT_ELEMS, np.float32)
+                        em.run_packet(hdr, act, wts, bias, psum[r], o, scratch[r], core_row=r, mac_model=mac_model)
+                        outs.append(em.bf16_bits(o).view(np.uint8))
+                    else:
+                        em.run_packet(hdr, act, wts, bias, psum[r], scratch[r], scratch[r], core_row=r,
+                                      mac_model=mac_model)
+                if real_out:
+                    pending.append(np.concatenate(outs))
+                    flush_drains()
+
+        for it in items:
+            kind = it[0]
+            if kind == "w":
+                if blob is None:
+                    w_queue.extend(store.packets_at(it[1], it[2]))
+                else:
+                    w_queue.extend(blob[it[1] + k:it[1] + k + em.W_BYTES] for k in range(0, it[2], em.W_BYTES))
+            elif kind == "W":
+                if blob is None:
+                    blob = store.blob()
+                data = it[1].read(blob)
+                w_queue.extend(data[k:k + em.W_BYTES] for k in range(0, data.size, em.W_BYTES))
+            elif kind in ("a", "A"):
+                stream = []
+                for pat in (it[1] if kind == "a" else [it[1]]):
+                    data = pat.read(ws_arr)
+                    if data.size % em.A_BYTES:
+                        raise AssertionError(f"{sched.name}: fill of {data.size} bytes is not whole packets")
+                    stream.extend(data[k:k + em.A_BYTES] for k in range(0, data.size, em.A_BYTES))
+                consume(stream)
+            elif kind == "o":
+                drains.append(it[1])
+                flush_drains()
+            else:
+                raise AssertionError(f"{sched.name}: item {kind!r} has no meaning on the bf16 engine")
+        if packets:
+            raise AssertionError(f"{sched.name}: {len(packets)} activation packets do not form whole objects")
+        if pending or drains:
+            raise AssertionError(f"{sched.name}: {len(pending)} emitted objects, {len(drains)} drains left")
+        if w_queue or (cur is not None and used != n_out + n_acc):
+            raise AssertionError(f"{sched.name}: weight objects left over ({len(w_queue)}, "
+                                 f"{n_out + n_acc - used} uses of the last)")

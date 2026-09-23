@@ -437,6 +437,80 @@ class Schedule(unittest.TestCase):
             eb.schedule_graph(self.ir, self.ws, weight_buffer=True)
 
 
+NAN = 0x7FC0
+
+
+def halo_ring_is_zero(ws, arr, name):
+    p = ws.placements[name]
+    if not p.halo:
+        return True
+    planes = arr[p.base:p.base + p.planes * p.plane_bytes].view(np.uint16).reshape(
+        p.planes, p.height + 2 * p.halo, p.width + 2 * p.halo, 8).copy()
+    planes[:, p.halo:p.halo + p.height, p.halo:p.halo + p.width] = 0
+    return not planes.any()
+
+
+def emulate_chain(ir, ws, scheds, store, x, background=0, mac_model=None):
+    """Run every layer's schedule on one workspace; each output is read back right after its layer,
+    because slot reuse may hand its bytes to a later tensor."""
+    arr = ws.halo_fill(background=background)
+    ws.write_values(arr, ir.input, x)
+    outs, rings = {}, {}
+    for s, L in zip(scheds, ir.layers):
+        eb.emulate_layer(s, store, arr, mac_model=mac_model)
+        outs[L.output] = ws.read_tensor(arr, L.output).copy()
+        rings[L.output] = halo_ring_is_zero(ws, arr, L.output)
+    return outs, rings
+
+
+class Emulation(unittest.TestCase):
+    """The schedule, emulated through its DMA patterns and streams, against the direct reference.
+
+    Both run the same packets through the same core emulator, so they must agree to the bit; what
+    differs is everything between DDR and the core. A disagreement is a moved byte.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.ir = chain_ir()
+        cls.ws = eb.plan_workspace(cls.ir)
+        cls.scheds, cls.store = eb.schedule_graph(cls.ir, cls.ws)
+        cls.x = bf16_tensor(np.random.default_rng(30), 3, 40, 44)
+        cls.ref = gr16.run_direct(cls.ir, cls.x)
+
+    def test_each_layer_seeded_from_the_reference_is_bit_exact(self):
+        for s, L in zip(self.scheds, self.ir.layers):
+            arr = self.ws.halo_fill()
+            for n in [g.tensor for g in L.inputs] + ([L.residual.tensor] if L.residual else []):
+                self.ws.write_values(arr, n, self.ref[n])
+            eb.emulate_layer(s, self.store, arr)
+            np.testing.assert_array_equal(self.ws.read_tensor(arr, L.output), em.bf16_bits(self.ref[L.output]),
+                                          L.name)
+
+    def test_the_whole_chain_on_one_workspace_is_bit_exact_and_keeps_its_halos(self):
+        outs, rings = emulate_chain(self.ir, self.ws, self.scheds, self.store, self.x)
+        for L in self.ir.layers:
+            np.testing.assert_array_equal(outs[L.output], em.bf16_bits(self.ref[L.output]), L.name)
+            self.assertTrue(rings[L.output], f"{L.name} wrote into its halo ring")
+
+    def test_a_nan_background_changes_not_one_bit(self):
+        # Everything no layer writes - over-read planes, the space past a tensor's rows, unused slots -
+        # holds a NaN. If any multiply-accumulate touched it, even by a zero weight, the output would.
+        clean, _ = emulate_chain(self.ir, self.ws, self.scheds, self.store, self.x)
+        poisoned, rings = emulate_chain(self.ir, self.ws, self.scheds, self.store, self.x, background=NAN)
+        for L in self.ir.layers:
+            np.testing.assert_array_equal(poisoned[L.output], clean[L.output], L.name)
+            self.assertTrue(np.all(np.isfinite(em.from_bf16_bits(poisoned[L.output]))), L.name)
+            self.assertTrue(rings[L.output], L.name)
+
+    def test_the_reference_is_nontrivial(self):
+        # Guard against a vacuous pass: outputs are finite, mostly non-zero and differ between layers.
+        for L in self.ir.layers:
+            y = self.ref[L.output][:self.ir.tensors[L.output].channels]
+            self.assertTrue(np.all(np.isfinite(y)))
+            self.assertGreater(np.count_nonzero(y) / y.size, 0.3, L.name)
+
+
 SESR = Path(__file__).resolve().parents[1] / "models" / "sesr_m7_xint8.onnx"
 
 
@@ -466,6 +540,21 @@ class SesrSchedule(unittest.TestCase):
     def test_the_streams_keep_their_invariants(self):
         check_streams(self, self.ir, self.scheds, self.store)
         self.assertEqual(self.store.opcodes(), {em.OP_CONV, em.OP_RESIDUAL})
+
+    def test_head_residual_and_tail_emulate_bit_exactly(self):
+        # "wide" is the fast MAC model; both sides use it, so exactness is unaffected by the choice.
+        rng = np.random.default_rng(31)
+        values = {n: bf16_tensor(rng, t.channels, t.height, t.width) for n, t in self.ir.tensors.items()}
+        values[self.ir.input] = em.to_bf16(np.pad(
+            rng.integers(-128, 128, (3, 256, 256)).astype(np.float32), ((0, 5), (0, 0), (0, 0))))
+        for i in (0, 7, 8):
+            L = self.ir.layers[i]
+            arr = self.ws.halo_fill(background=NAN)
+            for n in [g.tensor for g in L.inputs] + ([L.residual.tensor] if L.residual else []):
+                self.ws.write_values(arr, n, values[n])
+            eb.emulate_layer(self.scheds[i], self.store, arr, mac_model="wide")
+            want = gr16.direct_layer(self.ir, L, values, mac_model="wide")
+            np.testing.assert_array_equal(self.ws.read_tensor(arr, L.output), em.bf16_bits(want), L.name)
 
     def test_placements_are_bf16_with_the_halos_their_readers_need(self):
         for p in self.ws.placements.values():
