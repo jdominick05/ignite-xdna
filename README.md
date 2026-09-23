@@ -6,8 +6,8 @@ Pipelines spanning classification, detection, pose, depth, and super-resolution.
 
 **This is a hardware-characterization study, not a packaged tool.** Everything is
 reproducible end to end, but the deliverable is measurements: every number below is
-backed by a log under [`results/`](results/README.md), and the most useful part of the
-repo is probably the set of XDNA1 facts that are undocumented or documented incorrectly.
+backed by a log under [`results/`](results/README.md). Which of its XDNA1 facts are new and which
+were already public is [audited against prior art](results/aie/notes_tnzr_cross_audit.md#d-novelty).
 
 ## Does this run on your machine?
 

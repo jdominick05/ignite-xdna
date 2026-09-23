@@ -135,8 +135,40 @@
    `image['bytes']` directly. `label` column is int class index (sorted-wnid order,
    matches timm). Never use the `datasets` lib (1GB+ RAM from Arrow + torch
    autoimport). Never `load_dataset` without streaming (150GB).
+9. **Licence: the whole repository is GNU AGPL-3.0-or-later (2026-09-23), `src/ignite_xdna/`
+   included.** The owner set this. Before that date, 73 files written here carried
+   `Copyright (C) 2026 Advanced Micro Devices, Inc.` + `SPDX-License-Identifier: Apache-2.0 WITH
+   LLVM-exception`, pasted from mlir-aie's file template onto original work. `pyproject.toml` and
+   `README.md` also said `src/` was Apache. `tools/license_header_audit.py` (report by default, `--apply`
+   to rewrite) now gives authored files `SPDX-License-Identifier: AGPL-3.0-or-later`. The 7 genuine
+   upstream copies (`conv2dk1.cc`, `conv2dk1_skip.cc`, `mm_2x2.cc`, `zero.cc`, both `aie_kernel_utils.h`,
+   `whole_array_bankpad.py`) keep AMD's notice and licence, plus an "Adapted from mlir-aie v1.4.2
+   `<path>`" line. The change is forward-looking: versions already pushed with the Apache header stay
+   Apache for whoever took them. The copyright holder string, "The ignite-xdna contributors", is an
+   **assumption** pending the owner. Never paste mlir-aie's AMD header onto a new file.
 
 ## Rejected approaches and known pitfalls
+
+- **`AIE_PREPARE_FOR_PIPELINING` and `AIE_LOOP_FLATTEN` do nothing under Peano (2026-09-23).**
+  Peano predefines `__AIECC__`, so `aie_kernel_utils.h:33-58` (`kernels/conv_accum/` copy) selects its
+  Peano branch. There `AIE_LOOP_UNROLL*`, `AIE_LOOP_MIN/MAX_ITERATION_COUNT`, `AIE_LOOP_RANGE` and
+  `AIE_TRY_INITIATION_INTERVAL` expand to live clang loop pragmas. `AIE_PREPARE_FOR_POSTPIPELINING`
+  expands to `clang loop pipeline(disable)`: despite its name, it turns software pipelining *off*.
+  Nine others expand to nothing: `AIE_PREPARE_FOR_PIPELINING`, `AIE_LOOP_FLATTEN`,
+  `AIE_NO_PREPARE_FOR_PIPELINING`, `AIE_MODULO_SCHEDULING_BUDGET_RATIO`, `AIE_KEEP_SW_LOOP`,
+  `AIE_PEEL_PIPELINED_LOOP`, `AIE_KEEP_FREE_FOR_PIPELINING`, `AIE_ALLOCATE` and `AIE_NO_HW_LOOP`,
+  which are Chess attributes with no Peano equivalent. Every use of those nine in this tree, upstream
+  `mm.cc`'s included, is a no-op, and a kernel that relies on them for its schedule is relying on nothing.
+  ([ledger A10](../results/aie/notes_tnzr_cross_audit.md); the `clang++ -dM -E` check is in commit
+  `56b4e88` on `worktree-int4-study`.)
+- **`tools/aie_bank_check.py` is blind to two real bank conflicts (2026-09-23).** It drops the stack
+  from its bank map (`n != STACK_SYM`) and looks only for load+load pairs. Yet a load and a store to
+  the same bank in one bundle cost **+1 cycle**, as two loads do. MEASURED: upstream `mm.cc` int8 spills
+  accumulators to the stack, and 12 epilogue bundles per block pair a stack reload with a C store.
+  Putting C in the stack's bank 0 costs exactly 4 blocks × 12 = +48 cycles/call (697.1 → 745.6,
+  [`l1_tile_mm_i8_k64_c_bank0_desktop2_20260923T0545Z.log`](../results/aie/l1_tile_mm_i8_k64_c_bank0_desktop2_20260923T0545Z.log)).
+  A clean "no penalty" from the checker therefore does not clear a kernel that spills or that stores
+  into a bank it is also loading from.
 
 - **Native kernel splicing passes BO objects, not integer device addresses.**
   Existing Shim `DDR_PATCH` relocations retain firmware address translation and
@@ -2051,9 +2083,38 @@ cached reference heads rather than `bo_out`.
 - **Native classification head lowering maps terminal Gemm/MatMul as 1x1 convs, eliminating host segments (2026-09-17).**
   Terminal ONNX classification heads matching `[GlobalAveragePool] -> [Mul] -> [Q/DQ] -> [Flatten/Reshape] -> [Q/DQ] -> Gemm/MatMul -> Q/DQ -> Graph Output` are lowered directly into the persistent core engine as a single 1x1 convolution (`stride=1, pad=0`) via `src/ignite_xdna/compiler/passes.py::match_classification_head` and `src/ignite_xdna/compiler/graph_ir.py`. Preserves the core kernel without modifying `engine.cc` or adding new opcodes. Staged pooled activations conform strictly to the fixed 6,400 B packet boundary (20x20 spatial tile with 4 blocks of 8 channels per quad column), with channel features staged at $(y=0, x=0)$ and remaining positions filled with zero-point $ZP=128$. Manifest emits 0 host segments (`task == "classify"`), with egress carrying channel-blocked logits unpacked at $(0, 0)$ via `ClassificationHeadLayout`. Emulation and physical Phoenix silicon execution on Device 0 verify bit-exact outputs ($max\_diff = 0$) layer-by-layer against direct integer reference and ONNX Runtime CPU intermediates, achieving 1.215 ms dispatch mean on physical NPU hardware with 0 DPU timeouts.
 - **Inter-layer spatial stencil fusion in persistent core engine and compiler (2026-09-17).**
-  Consecutive 3x3 stride-1 convolutions and Conv 3x3 + Residual Add blocks (such as YOLOv8n C2f bottlenecks) are fused into a single core execution pass via `src/ignite_xdna/compiler/passes.py::match_stencil_fusion` and `kernels/aie2/conv_engine/engine.cc` (`OP_FUSED_CONV = 4`). Retains intermediate activations in local core memory (`psum + HOLD_OFFSET_BYTES`, using 2,688 B of the 3,200 B idle hold buffer with 0 extra tile memory allocation), completely eliminating intermediate feature map DDR writes and reads (0 bytes allocated in DDR workspace). For C2f bottlenecks where the Stage 1 input and Stage 2 residual are byte-identical, residual add reads directly from the ingress activation packet `apkt` in-core, completely eliminating the residual DMA fill task. Eliminates 1.23 MB of intermediate DDR traffic per frame on the 160x160 bottleneck alone. Receptive field halo expands to 2 in DDR workspace; Stage 1 absorbs outer image boundaries in-core by padding borders to zero-point ZP = 128. Microcode preserves physical vector registers: core text size is 13,424 B (strictly within the 16 KB program memory budget) with strictly 0 accumulator stack spills (`accumulator stack moves 0`). Bit-exact parity (max_diff = 0, 0 mismatches across all 409,600 elements) verified against the direct integer reference.
+  Consecutive 3x3 stride-1 convolutions and Conv 3x3 + Residual Add blocks (such as YOLOv8n C2f bottlenecks) are fused into a single core execution pass via `src/ignite_xdna/compiler/passes.py::match_stencil_fusion` and `kernels/aie2/conv_engine/engine.cc` (`OP_FUSED_CONV = 4`). Retains intermediate activations in local core memory (`psum + HOLD_OFFSET_BYTES`, using 2,688 B of the 3,200 B idle hold buffer with 0 extra tile memory allocation), completely eliminating intermediate feature map DDR writes and reads (0 bytes allocated in DDR workspace). For C2f bottlenecks where the Stage 1 input and Stage 2 residual are byte-identical, residual add reads directly from the ingress activation packet `apkt` in-core, completely eliminating the residual DMA fill task. Eliminates 1.23 MB of intermediate DDR traffic per frame on the 160x160 bottleneck alone. Receptive field halo expands to 2 in DDR workspace; Stage 1 absorbs outer image boundaries in-core by padding borders to zero-point ZP = 128. Microcode preserves physical vector registers: core text size is 13,424 B (strictly within the 16 KB program memory budget; *stale 2026-09-23, [ledger A11](../results/aie/notes_tnzr_cross_audit.md): the newest engine ELF's `.text` is **16,160 of 16,384 B**, leaving 224 B, and one variant sits at 16,368 B, [`engine_core_issue_census_desktop2_20260923.log`](../results/aie/engine_core_issue_census_desktop2_20260923.log)*) with strictly 0 accumulator stack spills (`accumulator stack moves 0`). Bit-exact parity (max_diff = 0, 0 mismatches across all 409,600 elements) verified against the direct integer reference.
 - **A terminal-head lowering is not a classifier: the pooling was never computed, and the fallback wired the head to the image (2026-09-18; narrows the scope of the 2026-09-17 entry above).**
   That entry is true of a head whose input already holds pooled features and silent about everything else. Nothing lowers `GlobalAveragePool` anywhere in `src/` — the op occurs only inside `passes.py`, in the matcher's comments and its backward walk — so for a whole classifier the pooled tensor is never a stored tensor, `graph_ir.py`'s `input_q -> pool_q -> q_in` fallback runs through to the graph input, and the head conv is built over the *image*: 160 channel blocks demanded against 1 supplied, with the output `TensorInfo` hardcoded to 20x20 whatever the input is. `plan_workspace` and `schedule_graph` accept that without complaint, and it compiles to a container that loads, runs and is quietly not the model. The same fact is why "0 host segments" and `max_diff = 0` above were never evidence about a network: `test_03` stages `np.full((Cin, 20, 20), 128)` — the harness does the pooling itself, so the accidental fallback lands on the right tensor. Fixed in `3f940b4`: a matched head whose input carries fewer blocks than its weights is refused, and `lower_yolov8n` carves the pooling span into a host region on its own so the average is actually computed. Keep the consequence in mind — **a classify container with a pooling host region is a hybrid** (like YOLO11n's attention core), not the zero-CPU-fallback result, and must not be described as one. `place_host_output` is the other half: a host region returning `[C]` or `[C, 1, 1]` must be placed at pixel `(0, 0)` over the zero point, and until it was, `HostStep` could not express a pooled host output at all — so the `--host-region` hybrid of 2026-09-17 was never runnable, and never was run. Measured: [A whole classifier on the NPU](BENCHMARKS.md#a-whole-classifier-on-the-npu-the-heads-pooling-is-carved-to-the-host-2828-layers-exact-2026-09-18-desktop-2). Do not reopen by deleting the gate to make another model compile: a firing gate means the pooling is missing, which is a modelling question, not a check to switch off.
 - **Workspace buffer reuse makes most layer readbacks unobservable — a low exact-count is not a device defect (2026-09-18).**
   Since `6a620f0`, `plan_workspace` hands a slot to the next tensor whose geometry matches once that slot's last reader has run, giving co-tenants the same base while every tenant writes from the slot start. `tools/verify_engine_container.py` reads *every* layer tensor after ONE dispatch, so on a reuse-built container only the last tenant of each slot can read back as itself — 25 of YOLOv8n's 66 layers (25 slot bases, 15 of them shared). The other 41 printed as `MISMATCH n/size` and the tool failed, which is how a correct device came to look like a correctness regression, and how I reported it as one before checking. Not a defect, on three independent legs: a static co-tenancy model predicted every row it parsed (66/66 on YOLOv8n, 27/27 on `yolov8n-cls_640`) with no residual; `tools/prove_slot_cotenancy.py` found **41/41** reused tensors holding their slot's final tenant byte-identically, on device; and `ignite-compile --no-workspace-reuse` restores **66/66**, because every tensor then owns a slot. The tool now classifies before judging — `EXACT`/`MISMATCH` for a slot owner, `SLOT ok`/`SLOT BAD` for a retaken one — and `PASS` means readable-exact plus slot-as-planned, printing the unreadable count. **The gate for any scheduler, workspace, packet-layout or DMA-retirement change is the reuse-free run:** a reuse-built container cannot see 41 of its own layers, so it cannot detect a wrong value in them, and the slot check proves only that the allocator's writes landed. Graph outputs remain readable in both plans because they are pinned to `last_use = len(layers) + 1`, which is why "100% bit-exact parity across all heads" in the reuse commit was, and stays, a true statement about heads and nothing more. Measured: [what the verifier can and cannot see](BENCHMARKS.md#workspace-reuse-makes-41-of-66-layer-readbacks-unobservable-what-verify_engine_container-can-and-cannot-see-2026-09-18-desktop-2).
 
+
+
+### Hand-scheduled AIE2 assembly is viable on this toolchain, and runs exactly as scheduled (2026-09-23)
+
+Until this date `docs/SILICON.md` recorded that no hand-written kernel had run on the NPU. The one
+`.s` in the tree (`kernels/asm_probe/asm_core_id.s`) was assembled and linked, never executed. The
+whole path now works end to end on Desktop 2: Peano (`clang++ --target=aie2-none-unknown-elf -c`)
+assembles a hand `.s`, mlir-aie v1.4.2 `aiecc` links it into a core through `link_with`, and PyXRT
+dispatches it (`runtime/driver.py::XrtSiliconHarness`).
+
+- The reference hand-scheduled bf16 32×32×32 kernel from *Hello XDNA!* (tnzr.org, fetched to
+  `scratch/` and never vendored, since that repository has no licence) runs at **397.5 GFLOPS**, 86.3% of the
+  460.8 per-core peak and 99.9% of the reference's own 398, in default pmode
+  ([`tnzr_bf16_32x32x32_repro_desktop2_20260923T0518Z.log`](../results/aie/tnzr_bf16_32x32x32_repro_desktop2_20260923T0518Z.log)).
+- In this repo's own L1-resident harness (`tools/l1_tile_bench.py`), measured against an empty-call control, it costs
+  **282.0 cycles per call**, exactly its 288 dynamic bundles less the control's 6. **Zero stalls**: with
+  no interlocks, the static schedule is the runtime. It is **3.0×** upstream `mm.cc` compiled by
+  Peano -O2 on the identical tile, harness and banks (879.3 cycles), and its output is exact
+  ([`l1_tile_compiler_vs_hand_i32loop_desktop2_20260923T0530Z.log`](../results/aie/l1_tile_compiler_vs_hand_i32loop_desktop2_20260923T0530Z.log)).
+
+Consequence: the lever this repo never pulled is open. The shipped engine core issues a `vmac` on
+17–35% of its conv inner-loop bundles (static,
+[`engine_core_issue_census_desktop2_20260923.log`](../results/aie/engine_core_issue_census_desktop2_20260923.log)).
+At the bf16 array GEMM's own 64³ tile, the compiled kernel alone reaches only 37.7% of peak with no data movement
+([`l1_tile_mm_direct_64x64x64_desktop2_20260923T0538Z.log`](../results/aie/l1_tile_mm_direct_64x64x64_desktop2_20260923T0538Z.log)).
+A hand schedule is now a measured option, not a speculative one. It has costs: hand assembly carries every hazard
+the hardware does not interlock (latencies, delay slots, bank pairing, hardware-loop setup rules), and the
+engine's `.text` has 224 B of headroom. Record of the audit:
+[`notes_tnzr_cross_audit.md`](../results/aie/notes_tnzr_cross_audit.md).

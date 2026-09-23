@@ -1,0 +1,175 @@
+L1-resident GEMM tile: compiler vs hand schedule (tools/l1_tile_bench.py)
+date: 2026-09-23T02:02:16  host: DESKTOP-CBL5NUA
+peano: clang version 22.0.0 (https://github.com/Xilinx/llvm-aie a36c62b9d26291fb06604bc976c897791f0bb578)
+aiecc: mlir-aie ironenv v1.4.2; mm.cc from the mlir-aie checkout (not vendored)
+xrt-smi: Version              : 2.21.0
+xrt-smi: NPU Driver Version   : 32.0.20101.3760
+xrt-smi: NPU Firmware Version : 1.5.5.391
+pmode: default (not changed by this run; docs/SILICON.md measured 1.80 GHz in default)
+shape: M32 x K32 x N32; mode copy; loop counter i32
+buffers: A 0x400, B 0x4000, C 0x8000 (fixed)
+seed 20260923; calls [0, 250000, 500000, 1000000], 5 reps each, 3 warm-ups
+partitions before: idle
+
+## empty  (`empty_call`, bf16, M32 x K32 x N32, copy mode)
+compile: clang++.exe --target=aie2-none-unknown-elf -c empty_call.s -o kernel.o
+placement (tile-local offset, bank): tileA 0x0400-0x0c00 b0, inF_cons_buff_0 0x0c00-0x2c40 b0, outF_buff_0 0x2c40-0x3c40 b0, tileB 0x4000-0x4800 b1, tileC 0x8000-0x9000 b2
+static: 7 bundles in `empty_call`, 0 issue a vmac; loops none
+correctness layout=tiled calls=1: EXACT (C unchanged)
+correctness layout=tiled calls=3: EXACT (C unchanged)
+calls=       0: mean     0.222 ms  (min 0.194, max 0.278, n=5)
+calls=  250000: mean     3.004 ms  (min 2.860, max 3.278, n=5)
+calls=  500000: mean     5.644 ms  (min 5.575, max 5.749, n=5)
+calls= 1000000: mean    11.011 ms  (min 10.874, max 11.184, n=5)
+fit: time = 0.261 ms + 10.76 ns x calls   (R^2 0.999144)
+per call: 19.4 cycles at 1.8 GHz -- the harness's own cost per call, no MACs
+
+## chain_bf16_d1  (`vmac_chain`, bf16, M32 x K32 x N32, copy mode)
+compile: clang++.exe --target=aie2-none-unknown-elf -c kernel.s -o kernel.o
+placement (tile-local offset, bank): tileA 0x0400-0x0c00 b0, inF_cons_buff_0 0x0c00-0x2c40 b0, outF_buff_0 0x2c40-0x3c40 b0, tileB 0x4000-0x4800 b1, tileC 0x8000-0x9000 b2
+static: 40 bundles in `vmac_chain`, 8 issue a vmac; loops none
+chain d=1 calls=1: block = C0 + m*(A_blk@B_blk) with m = 2 (2 of 8 MACs per call)
+chain d=1 calls=3: block = C0 + m*(A_blk@B_blk) with m = 6 (2 of 8 MACs per call)
+calls=       0: mean     0.380 ms  (min 0.240, max 0.501, n=5)
+calls=  250000: mean     7.765 ms  (min 7.539, max 8.032, n=5)
+calls=  500000: mean    14.785 ms  (min 14.746, max 14.806, n=5)
+calls= 1000000: mean    29.465 ms  (min 29.210, max 29.647, n=5)
+fit: time = 0.398 ms + 29.03 ns x calls   (R^2 0.999765)
+per call: 52.3 cycles at 1.8 GHz against 40 static bundles in the probe (a stall would show as cycles over empty exceeding the bundles the probe executes)
+
+## chain_bf16_d2  (`vmac_chain`, bf16, M32 x K32 x N32, copy mode)
+compile: clang++.exe --target=aie2-none-unknown-elf -c kernel.s -o kernel.o
+placement (tile-local offset, bank): tileA 0x0400-0x0c00 b0, inF_cons_buff_0 0x0c00-0x2c40 b0, outF_buff_0 0x2c40-0x3c40 b0, tileB 0x4000-0x4800 b1, tileC 0x8000-0x9000 b2
+static: 46 bundles in `vmac_chain`, 8 issue a vmac; loops none
+chain d=2 calls=1: block = C0 + m*(A_blk@B_blk) with m = 4 (4 of 8 MACs per call)
+chain d=2 calls=3: block = C0 + m*(A_blk@B_blk) with m = 12 (4 of 8 MACs per call)
+calls=       0: mean     0.316 ms  (min 0.253, max 0.395, n=5)
+calls=  250000: mean     8.701 ms  (min 8.548, max 8.905, n=5)
+calls=  500000: mean    16.811 ms  (min 16.787, max 16.828, n=5)
+calls= 1000000: mean    33.243 ms  (min 33.177, max 33.293, n=5)
+fit: time = 0.384 ms + 32.88 ns x calls   (R^2 0.999933)
+per call: 59.2 cycles at 1.8 GHz against 46 static bundles in the probe (a stall would show as cycles over empty exceeding the bundles the probe executes)
+
+## chain_bf16_d3  (`vmac_chain`, bf16, M32 x K32 x N32, copy mode)
+compile: clang++.exe --target=aie2-none-unknown-elf -c kernel.s -o kernel.o
+placement (tile-local offset, bank): tileA 0x0400-0x0c00 b0, inF_cons_buff_0 0x0c00-0x2c40 b0, outF_buff_0 0x2c40-0x3c40 b0, tileB 0x4000-0x4800 b1, tileC 0x8000-0x9000 b2
+static: 54 bundles in `vmac_chain`, 8 issue a vmac; loops none
+chain d=3 calls=1: block = C0 + m*(A_blk@B_blk) with m = 4 (4 of 8 MACs per call)
+chain d=3 calls=3: block = C0 + m*(A_blk@B_blk) with m = 12 (4 of 8 MACs per call)
+calls=       0: mean     0.396 ms  (min 0.242, max 0.519, n=5)
+calls=  250000: mean     9.876 ms  (min 9.611, max 10.311, n=5)
+calls=  500000: mean    18.873 ms  (min 18.725, max 19.129, n=5)
+calls= 1000000: mean    37.216 ms  (min 37.047, max 37.447, n=5)
+fit: time = 0.519 ms + 36.73 ns x calls   (R^2 0.999764)
+per call: 66.1 cycles at 1.8 GHz against 54 static bundles in the probe (a stall would show as cycles over empty exceeding the bundles the probe executes)
+
+## chain_bf16_d4  (`vmac_chain`, bf16, M32 x K32 x N32, copy mode)
+compile: clang++.exe --target=aie2-none-unknown-elf -c kernel.s -o kernel.o
+placement (tile-local offset, bank): tileA 0x0400-0x0c00 b0, inF_cons_buff_0 0x0c00-0x2c40 b0, outF_buff_0 0x2c40-0x3c40 b0, tileB 0x4000-0x4800 b1, tileC 0x8000-0x9000 b2
+static: 61 bundles in `vmac_chain`, 8 issue a vmac; loops none
+chain d=4 calls=1: block = C0 + m*(A_blk@B_blk) with m = 8 (8 of 8 MACs per call)
+chain d=4 calls=3: block = C0 + m*(A_blk@B_blk) with m = 24 (8 of 8 MACs per call)
+calls=       0: mean     0.349 ms  (min 0.309, max 0.431, n=5)
+calls=  250000: mean    10.685 ms  (min 10.570, max 10.802, n=5)
+calls=  500000: mean    20.838 ms  (min 20.691, max 21.210, n=5)
+calls= 1000000: mean    41.041 ms  (min 40.954, max 41.298, n=5)
+fit: time = 0.443 ms + 40.65 ns x calls   (R^2 0.999903)
+per call: 73.2 cycles at 1.8 GHz against 61 static bundles in the probe (a stall would show as cycles over empty exceeding the bundles the probe executes)
+
+## chain_bf16_d5  (`vmac_chain`, bf16, M32 x K32 x N32, copy mode)
+compile: clang++.exe --target=aie2-none-unknown-elf -c kernel.s -o kernel.o
+placement (tile-local offset, bank): tileA 0x0400-0x0c00 b0, inF_cons_buff_0 0x0c00-0x2c40 b0, outF_buff_0 0x2c40-0x3c40 b0, tileB 0x4000-0x4800 b1, tileC 0x8000-0x9000 b2
+static: 68 bundles in `vmac_chain`, 8 issue a vmac; loops none
+chain d=5 calls=1: block = C0 + m*(A_blk@B_blk) with m = 8 (8 of 8 MACs per call)
+chain d=5 calls=3: block = C0 + m*(A_blk@B_blk) with m = 24 (8 of 8 MACs per call)
+calls=       0: mean     0.375 ms  (min 0.240, max 0.525, n=5)
+calls=  250000: mean    11.516 ms  (min 11.445, max 11.672, n=5)
+calls=  500000: mean    22.703 ms  (min 22.622, max 22.873, n=5)
+calls= 1000000: mean    44.996 ms  (min 44.831, max 45.219, n=5)
+fit: time = 0.373 ms + 44.63 ns x calls   (R^2 0.999954)
+per call: 80.3 cycles at 1.8 GHz against 68 static bundles in the probe (a stall would show as cycles over empty exceeding the bundles the probe executes)
+
+## chain_bf16_d6  (`vmac_chain`, bf16, M32 x K32 x N32, copy mode)
+compile: clang++.exe --target=aie2-none-unknown-elf -c kernel.s -o kernel.o
+placement (tile-local offset, bank): tileA 0x0400-0x0c00 b0, inF_cons_buff_0 0x0c00-0x2c40 b0, outF_buff_0 0x2c40-0x3c40 b0, tileB 0x4000-0x4800 b1, tileC 0x8000-0x9000 b2
+static: 75 bundles in `vmac_chain`, 8 issue a vmac; loops none
+chain d=6 calls=1: block = C0 + m*(A_blk@B_blk) with m = 8 (8 of 8 MACs per call)
+chain d=6 calls=3: block = C0 + m*(A_blk@B_blk) with m = 24 (8 of 8 MACs per call)
+calls=       0: mean     0.340 ms  (min 0.277, max 0.427, n=5)
+calls=  250000: mean    12.634 ms  (min 12.437, max 12.846, n=5)
+calls=  500000: mean    24.661 ms  (min 24.593, max 24.872, n=5)
+calls= 1000000: mean    48.837 ms  (min 48.703, max 49.036, n=5)
+fit: time = 0.422 ms + 48.45 ns x calls   (R^2 0.999942)
+per call: 87.2 cycles at 1.8 GHz against 75 static bundles in the probe (a stall would show as cycles over empty exceeding the bundles the probe executes)
+
+## chain_i8_d1  (`vmac_chain`, i8, M32 x K32 x N32, copy mode)
+compile: clang++.exe --target=aie2-none-unknown-elf -c kernel.s -o kernel.o
+placement (tile-local offset, bank): tileA 0x0400-0x0800 b0, inF_cons_buff_0 0x0800-0x2040 b0, outF_buff_0 0x2040-0x3040 b0, tileB 0x4000-0x4400 b1, tileC 0x8000-0x9000 b2
+static: 43 bundles in `vmac_chain`, 8 issue a vmac; loops none
+chain d=1 calls=1: block = C0 + m*(A_blk@B_blk) with m = 4 (4 of 8 MACs per call)
+chain d=1 calls=3: block = C0 + m*(A_blk@B_blk) with m = 12 (4 of 8 MACs per call)
+calls=       0: mean     0.390 ms  (min 0.256, max 0.699, n=5)
+calls=  250000: mean     8.103 ms  (min 7.938, max 8.397, n=5)
+calls=  500000: mean    15.693 ms  (min 15.586, max 16.021, n=5)
+calls= 1000000: mean    31.097 ms  (min 30.920, max 31.353, n=5)
+fit: time = 0.394 ms + 30.69 ns x calls   (R^2 0.999769)
+per call: 55.2 cycles at 1.8 GHz against 43 static bundles in the probe (a stall would show as cycles over empty exceeding the bundles the probe executes)
+
+## chain_i8_d2  (`vmac_chain`, i8, M32 x K32 x N32, copy mode)
+compile: clang++.exe --target=aie2-none-unknown-elf -c kernel.s -o kernel.o
+placement (tile-local offset, bank): tileA 0x0400-0x0800 b0, inF_cons_buff_0 0x0800-0x2040 b0, outF_buff_0 0x2040-0x3040 b0, tileB 0x4000-0x4400 b1, tileC 0x8000-0x9000 b2
+static: 50 bundles in `vmac_chain`, 8 issue a vmac; loops none
+chain d=2 calls=1: block = C0 + m*(A_blk@B_blk) with m = 8 (8 of 8 MACs per call)
+chain d=2 calls=3: block = C0 + m*(A_blk@B_blk) with m = 24 (8 of 8 MACs per call)
+calls=       0: mean     0.321 ms  (min 0.250, max 0.388, n=5)
+calls=  250000: mean     9.063 ms  (min 8.872, max 9.401, n=5)
+calls=  500000: mean    17.883 ms  (min 17.725, max 18.009, n=5)
+calls= 1000000: mean    34.910 ms  (min 34.787, max 35.133, n=5)
+fit: time = 0.412 ms + 34.59 ns x calls   (R^2 0.999823)
+per call: 62.3 cycles at 1.8 GHz against 50 static bundles in the probe (a stall would show as cycles over empty exceeding the bundles the probe executes)
+
+## chain_i8_d3  (`vmac_chain`, i8, M32 x K32 x N32, copy mode)
+compile: clang++.exe --target=aie2-none-unknown-elf -c kernel.s -o kernel.o
+placement (tile-local offset, bank): tileA 0x0400-0x0800 b0, inF_cons_buff_0 0x0800-0x2040 b0, outF_buff_0 0x2040-0x3040 b0, tileB 0x4000-0x4400 b1, tileC 0x8000-0x9000 b2
+static: 57 bundles in `vmac_chain`, 8 issue a vmac; loops none
+chain d=3 calls=1: block = C0 + m*(A_blk@B_blk) with m = 8 (8 of 8 MACs per call)
+chain d=3 calls=3: block = C0 + m*(A_blk@B_blk) with m = 24 (8 of 8 MACs per call)
+calls=       0: mean     0.266 ms  (min 0.217, max 0.328, n=5)
+calls=  250000: mean    10.266 ms  (min 10.156, max 10.431, n=5)
+calls=  500000: mean    19.696 ms  (min 19.509, max 19.942, n=5)
+calls= 1000000: mean    38.857 ms  (min 38.649, max 39.049, n=5)
+fit: time = 0.434 ms + 38.49 ns x calls   (R^2 0.999816)
+per call: 69.3 cycles at 1.8 GHz against 57 static bundles in the probe (a stall would show as cycles over empty exceeding the bundles the probe executes)
+
+## chain_i8_d4  (`vmac_chain`, i8, M32 x K32 x N32, copy mode)
+compile: clang++.exe --target=aie2-none-unknown-elf -c kernel.s -o kernel.o
+placement (tile-local offset, bank): tileA 0x0400-0x0800 b0, inF_cons_buff_0 0x0800-0x2040 b0, outF_buff_0 0x2040-0x3040 b0, tileB 0x4000-0x4400 b1, tileC 0x8000-0x9000 b2
+static: 64 bundles in `vmac_chain`, 8 issue a vmac; loops none
+chain d=4 calls=1: block = C0 + m*(A_blk@B_blk) with m = 8 (8 of 8 MACs per call)
+chain d=4 calls=3: block = C0 + m*(A_blk@B_blk) with m = 24 (8 of 8 MACs per call)
+calls=       0: mean     0.335 ms  (min 0.230, max 0.441, n=5)
+calls=  250000: mean    11.167 ms  (min 10.823, max 11.408, n=5)
+calls=  500000: mean    21.636 ms  (min 21.444, max 22.058, n=5)
+calls= 1000000: mean    42.804 ms  (min 42.589, max 43.121, n=5)
+fit: time = 0.434 ms + 42.40 ns x calls   (R^2 0.999822)
+per call: 76.3 cycles at 1.8 GHz against 64 static bundles in the probe (a stall would show as cycles over empty exceeding the bundles the probe executes)
+
+partitions after close: idle
+
+harness loop: i32; empty control: 19.4 cycles per call
+
+| kernel | output | static vmac/bundles | cycles/call | over empty | ideal | eff. (over empty) | rate (slope) | % peak | reference method |
+|---|---|---|---|---|---|---|---|---|---|
+
+| probe | MACs landed per call | static bundles | cycles/call | over empty |
+|---|---|---|---|---|
+| chain_bf16_d1 | m=2/8 | 40 | 52.3 | 32.9 |
+| chain_bf16_d2 | m=4/8 | 46 | 59.2 | 39.8 |
+| chain_bf16_d3 | m=4/8 | 54 | 66.1 | 46.7 |
+| chain_bf16_d4 | m=8/8 | 61 | 73.2 | 53.8 |
+| chain_bf16_d5 | m=8/8 | 68 | 80.3 | 61.0 |
+| chain_bf16_d6 | m=8/8 | 75 | 87.2 | 67.8 |
+| chain_i8_d1 | m=4/8 | 43 | 55.2 | 35.9 |
+| chain_i8_d2 | m=8/8 | 50 | 62.3 | 42.9 |
+| chain_i8_d3 | m=8/8 | 57 | 69.3 | 49.9 |
+| chain_i8_d4 | m=8/8 | 64 | 76.3 | 57.0 |

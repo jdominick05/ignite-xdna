@@ -1,10 +1,17 @@
 ﻿# AMD Phoenix XDNA1 AIE2 Physical Silicon Hardware Bringup: im2col 4D Engine & Full-Array Execution
 
+> **CORRECTED 2026-09-23 ([ledger A7](notes_tnzr_cross_audit.md)).** §4.2 takes the int8 vector unit
+> as 128 MACs/cycle and the per-core peak as 460.8 GOPS. The SPEC is **256 int8 MACs/cycle**, which gives
+> **921.6 GOPS per core** at 1.80 GHz and 14.75 TOPS for 16 cores (`docs/SILICON.md`). Every %-of-peak
+> and "density" figure in this note, and in the log it summarises (`hardware_im2col_execution.log`),
+> is therefore **2× too high**: 0.37% is about 0.18%, and 0.80% is about 0.40% (DERIVED). The TOPS
+> and latency figures themselves are unaffected.
+
 ## 1. Executive Summary & Verification Milestones
 
 This report records the physical silicon execution, numerical parity validation, and latency profiling of the **im2col 4-D Buffer Descriptor Convolution Engine** on the AMD Phoenix NPU (Ryzen 7 8700G, XDNA1 microarchitecture, Tile Clock: 1.80 GHz) via the native XRT host runtime.
 
-Hardware executions were conducted on physical hardware without emulation or software workarounds, using the host-side profiling engine implemented in [`npu/test_im2col_hardware.py`](file:///C:/Users/Ignis/PycharmProjects/ryzen-ai-xdna1-quantization/npu/test_im2col_hardware.py).
+Hardware executions were conducted on physical hardware without emulation or software workarounds, using the host-side profiling engine implemented in [`npu/test_im2col_hardware.py`](../../npu/test_im2col_hardware.py).
 
 ### Hardware Verification Matrix
 
@@ -176,8 +183,8 @@ This confirms that:
 
 ## 6. Artifact Index
 
-- **Profiling Engine**: [`npu/test_im2col_hardware.py`](file:///C:/Users/Ignis/PycharmProjects/ryzen-ai-xdna1-quantization/npu/test_im2col_hardware.py)
-- **Raw Silicon Execution Log**: [`results/aie/hardware_im2col_execution.log`](file:///C:/Users/Ignis/PycharmProjects/ryzen-ai-xdna1-quantization/results/aie/hardware_im2col_execution.log)
+- **Profiling Engine**: [`npu/test_im2col_hardware.py`](../../npu/test_im2col_hardware.py)
+- **Raw Silicon Execution Log**: [`results/aie/hardware_im2col_execution.log`](../../results/aie/hardware_im2col_execution.log)
 - **Hardware Binaries & XCLBINs**:
   - `build/im2col_4d.xclbin` & `build/im2col_4d_roundtrip.bin` (Column 0 im2col baseline)
   - `build/test_sc.xclbin` & `build/test_sc.bin` (Single-Core vector MMUL)

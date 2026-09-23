@@ -76,6 +76,11 @@ At the Phoenix nominal tile clock of 1.0 GHz (and dynamic boost up to 1.80 GHz, 
 `results/aie/clock_probe_npu.log`), the 16-tile compute array yields the following theoretical
 ceilings:
 
+> **Corrected 2026-09-23 ([ledger A8](notes_tnzr_cross_audit.md)):** there is no measured "nominal 1.0 GHz"
+> with a boost. `clock_probe_npu.log` measured the core at **1.80 GHz in `default`, `performance` and
+> `turbo`**, 1.03 GHz in `balanced` and 0.80 GHz in `powersaver` (`docs/SILICON.md` §1.7). Read the
+> 1.80 GHz ceilings below as the operating figures and the 1.0 GHz ones as superseded.
+
 - **INT8 × INT8 (256 MACs/cycle/tile):**
   256 × 16 × 1.0 GHz × 2 ops/MAC = **8,192 GOPS** (at 1.0 GHz) / **14,745 GOPS** (at 1.8 GHz).
 - **INT16 × INT8 (128 MACs/cycle/tile):**

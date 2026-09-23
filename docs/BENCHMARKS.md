@@ -1344,7 +1344,11 @@ first two swap order — B's run length is a term. And k is a term: 128/32/64 an
 better B/MAC than 64/64/64 and land below it, while 64/128/32 beats the default tile at the
 same B/MAC by 5.5%. The model still orders tiles that differ only in B/MAC correctly; at 64×64
 the measured 33.9% of peak against its 100% input-bound ceiling says the next two thirds are
-not input bandwidth.
+not input bandwidth. *(Attributed 2026-09-23: those two thirds are the kernel. The same `mm.cc`
+bf16 kernel at this 64×64×64 tile, run in L1 with no data movement at all, reaches 173.9 GFLOPS per
+core, **37.7%** of peak (5,427.4 cycles per call). The array's 64/64/64 figures (2477.23–2653.05 GFLOPS,
+33.6–36.0% of 7,372.8) are 89–95% of that. See
+[Compiler vs hand schedule in L1](#compiler-vs-hand-schedule-in-l1).)*
 
 **Shapes × tiles against the same-sitting CPU bf16** (CPU GFLOPS from the mean, and from the
 best-case min, of 20 iterations):
@@ -1497,7 +1501,10 @@ copied from AMD's `device.yaml`, issue width appeared in no document in this rep
 documents disagreed about the accumulator file. All three are now read off the machine code.
 
 **The bundle format.** The nop mnemonics name the slots: `nopb ; nopa ; nops ; nopx ; nopm ;
-nopv`, so six slots — branch, load, store, scalar, move, vector. `nopxm` is the fused
+nopv`, so six slots — branch, load, store, scalar, move, vector. *(STALE, marked 2026-09-23: slot b
+is the **second load unit**, not branch. `vldb` issues in it and `ret` in the scalar slot x
+(`docs/SILICON.md` "Issue width" row, `tools/aie_disasm.py:21-22`); Peano's own slot names are `lda`
+and `ldb` (`results/aie/peano_aie2_machine_model_a36c62b9.log` §2).)* `nopxm` is the fused
 encoding printed when x and m are both idle, so a five-field bundle still occupies six slots.
 Bundles using few slots are emitted compressed, shorter than 16 bytes, and still issue in one
 cycle, so cycles count by bundle and never by byte.
@@ -1552,7 +1559,14 @@ is correct but one accumulator short of what fits.
 
 Caveat: one accumulator shape, one optimisation level, one compiler version. A wider
 accumulator fits fewer, and nine register names is a lower bound on the architectural file
-since the allocator may simply never have needed a tenth.
+since the allocator may simply never have needed a tenth. *(STALE, marked 2026-09-23: nine is
+the file, not a lower bound. Peano's register definitions declare exactly `cm0`–`cm8`, each a pair
+`[bml_i, bmh_i]` (`results/aie/peano_aie2_machine_model_a36c62b9.log` §1), and every engine ELF
+names `cm8` and runs bit-exact on silicon
+(`results/aie/engine_core_issue_census_desktop2_20260923.log`). "Five live is the ceiling" is this
+probe's pressure, not the accumulator file: `mm.cc`'s bf16 path holds the same 8 × 1024 bits of
+accumulators with no vector spill at all (`results/aie/accumulator_width_vs_count.log`, two sections
+below). See the [Hello XDNA! cross-audit](#cross-audit-against-hello-xdna-2026-09-23-desktop-2).)*
 
 **The production int8 GEMM, read the same way.** The kernel behind the 4607.05 GOPS above has
 a nine-bundle inner loop issuing eight `vmac` instructions, one per live accumulator
@@ -1564,10 +1578,19 @@ Set that against the measured whole-kernel figure. 4607.05 GOPS over 16 cores at
 is 31.3% of the 14,730 GOPS those cores can issue. The inner loop is at 88.9%. **The missing
 factor is not the inner loop's instruction schedule**, so rewriting it is not where the time
 is — the question is how much of the elapsed time is spent inside that loop at all, which is
-a dispatch, DMA and occupancy question rather than a kernel-quality one. The function does
+a dispatch, DMA and occupancy question rather than a kernel-quality one. *(Superseded: two
+sections below, "the schedule is the larger loss", the kernel's own accumulator loads, stores and
+spills outside the loop cost more than the loop. Measured in L1 on 2026-09-23 with no data movement,
+the same kernel at m64 k64 n64 costs 2,604.8 cycles per call, 39.3% of the per-core int8 peak. That
+is about 80% of the array's ~3,274-cycle call, the rest being the per-buffer data-path floor of
+H10/H11. See [Compiler vs hand schedule in L1](#compiler-vs-hand-schedule-in-l1).)* The function does
 spill, a 416-byte frame and 37 stack references, consistent with it holding eight live
 accumulators where five is the ceiling; but none of that traffic is in the nine loop bundles,
-so the spills cost setup per call and not per-iteration throughput.
+so the spills cost setup per call and not per-iteration throughput. *(REFINED 2026-09-23: "five" is
+the probe's pressure, not the 9-register file (see the note two sections below). The per-call spill
+traffic also has a placement cost this paragraph could not see. The 12 reload bundles pair a stack
+load with a C store, so when C shares the stack's bank each pays +1 cycle, 48 cycles per call at
+32×64×32, measured. See [same-bank load and store](#a-same-bank-load-and-store-cost-one-cycle-and-mmccs-int8-spills-pay-it).)*
 
 **Hand-written assembly is available; the cycle counter still is not.** `docs/DECISIONS.md`
 recorded that Peano "rejects inline asm", which closed hand-scheduling on this part. That is
@@ -1587,7 +1610,9 @@ fourth independent route to the same answer.
 
 **What this does not show.** Nothing here is a hardware measurement, the assembly result
 included — the object assembles, disassembles and links, but no hand-written kernel has been
-run on the NPU. The bundle-equals-cycle identity is checked against two measured loops and no
+run on the NPU. *(Superseded 2026-09-23: a hand-written `.s` kernel, Hello XDNA!'s bf16 32³ tile, was
+assembled with this toolchain, linked by aiecc and run on Desktop 2 at 397.5 GFLOPS, exactly at its
+static bundle count. See the [cross-audit section](#cross-audit-against-hello-xdna-2026-09-23-desktop-2).)* The bundle-equals-cycle identity is checked against two measured loops and no
 more. The 88.9% is the inner loop's
 issue density, not the kernel's utilisation. The slot names come from the nop mnemonics
 `llvm-objdump` prints, not from a published AIE-ML ISA document, which this project does not
@@ -1737,7 +1762,17 @@ correct and unchanged, but it covers only 54 of the 141 cycles an accumulator gr
 other 87 bundles per group are accumulator loads, accumulator stores and stack spill traffic,
 run 16 times per call at n=64. **That is a direct consequence of a number measured two sections
 above:** five live 4×8×8 int8 accumulators is the spill-free ceiling and this kernel holds
-eight, with a 416-byte frame and 33 stack references.
+eight, with a 416-byte frame and 33 stack references. *(REFINED 2026-09-23: "five" is not the size
+of the accumulator file. That file is 9 × 1024-bit, `cm0`–`cm8`:
+- SPEC(Peano), `results/aie/peano_aie2_machine_model_a36c62b9.log` §1;
+- SPEC(UG1603, 2026.1), which lists `am0`–`am8`, `bm0`–`bm8` and `cm0`–`cm8`;
+- the shipped engine core names all nine, `cm8` 26 times, and runs bit-exact
+  (`results/aie/engine_core_issue_census_desktop2_20260923.log`).
+Five is the acc_spill_probe's own pressure (fresh A and B vectors per MAC; audit ledger row A1),
+and this kernel spills because of its blocking, as the next paragraph shows. Its spill slots
+hold accumulator quarters: in this repo's rebuild of the same kernel,
+`vst amll4, [sp, #-0xa0]` and its reloads in the per-block epilogue.
+See [same-bank load and store](#a-same-bank-load-and-store-cost-one-cycle-and-mmccs-int8-spills-pay-it).)*
 
 **And the spill is a blocking defect, not a width limit — bf16 proves it.** The two dtype paths
 in `mm.cc` ask the register file for the *same* total accumulator width: int8 takes 8
@@ -7486,7 +7521,7 @@ Both runtimes were profiled across 50 warmup iterations and 500 steady-state tim
 | **Model B: Fused 2-Layer Conv2D** (`/model.15/m.0/cv1` -> `cv2`, 32x32) | **Mean Latency** | `498.84 us` | `168.93 us` | **2.95x faster** |
 | | **Latency Profile (Min / Med / P95)** | `449.4 / 473.2 / 557.0 us` | `139.5 / 161.0 / 216.2 us` | **Sub-200 us deterministic** |
 | | **Sustained Throughput** | `2,004.6 FPS` | `5,919.6 FPS` | **+3,915.0 FPS** |
-| | **Intermediate Memory Traffic** | Intermediate DDR bounce via DPU buffers | **`0 BYTES`** (100% L2 MemTile SRAM) | **Zero DDR writeback** |
+| | **Intermediate Memory Traffic** | Intermediate DDR bounce via DPU buffers | **`0 BYTES`** (100% L2 MemTile SRAM) — *not measured, and not realised by the stream that ran; see the 2026-09-23 note below the findings* | **Zero DDR writeback** |
 | | **Compiled Binary Footprint** | `8.75 MB` (4.15 MB xclbin + 4.43 MB xmodel) | `10,496 B` (10.5 KB exec / 102 KB init) | **833x smaller** |
 | | **Host CPU Tax** | `31.2%` single-core (`0.078s` CPU) | `91.6%` single-core (`0.156s` CPU burst) | **Deterministic submission** |
 
@@ -7495,6 +7530,26 @@ Both runtimes were profiled across 50 warmup iterations and 500 steady-state tim
 1. **Driver Submission Floor**: AMD's proprietary VOE 4.0 stack imposes a ~370-400 us latency floor per dispatch across ONNX Runtime EP, VOE, XRT, and ERT command scheduling. ignite-xdna issues direct, pre-compiled instruction buffers (`bo_instr`) over lightweight PyXRT transactions, achieving **83.94 us** pipelined latency.
 2. **True L2 SRAM Activation Fusion**: In Model B, ignite-xdna holds Layer 0 activations entirely within the 512 KB on-die MemTile L2 SRAM (`0x40000` Ping, `0x60000` Pong) coordinated via hardware semaphore locks (Locks 4/5), writing **0 bytes** back to host DDR memory.
 3. **Binary Compactness**: AMD's compiled cache requires **8.7 MB** of `.xclbin` and `.xmodel` blobs per model partition. ignite-xdna decouples parameter initialization from execution, producing execution transactions of **1,920 bytes** (minimal) and **10,496 bytes** (full), an 833x to 4,531x reduction.
+
+**Unreconciled, 2026-09-23: finding 2 and the "0 BYTES" row are not a measurement, and the stream
+that ran does not realise them.**
+- `benchmarks/benchmark_vitisai.py` writes `"intermediate_ddr_writeback_bytes": 0` as a constant
+  (line 315). The Lock 4/5 / `0x40000` / `0x60000` sentence is a fixed string in its report writer
+  (line 419). Nothing counts bytes.
+- Model B's per-frame stream, `build/layer_fused_exec.bin`, is **byte-identical** to the single-layer
+  template `build/layer_conv0_exec.bin` (both 10,496 B; `cmp` on Desktop 2, 2026-09-23). Only the init
+  streams differ (102,272 vs 62,528 B).
+- The [low-level audit](LOW_LEVEL_AUDIT.md) found, of that template:
+  - its DMA program references MemTile BDs 0/1/2/24/25/26 and locks 0–3 only;
+  - no BD reads or writes `L2_BANK_0` (`0x40000`) or `L2_BANK_1` (`0x60000`), so the ping/pong bank
+    assignments are "bookkeeping that the emitted stream does not realise"
+    ([§1.5](LOW_LEVEL_AUDIT.md#15-documented-stream-unchanged));
+  - the Lock 4/5 initialisation branch in `emit_multi_layer_transaction_bundle` "compared a 20-bit
+    register offset against an absolute address and could never fire" (§1.2, fixed since), and no
+    BD in the shipped template acquires lock 4 or 5.
+
+The latency rows above were measured. The zero-DDR, L2-ping-pong and Lock 4/5 claims were not, and
+must not be quoted. Audit record: `results/aie/notes_tnzr_cross_audit.md`, row A6.
 
 Full executive report: [`benchmarks/vitisai_vs_ignite_xdna.md`](../benchmarks/vitisai_vs_ignite_xdna.md).
 Evidence log: [`results/benchmarks/hardware_vitisai_comparison.log`](../results/benchmarks/hardware_vitisai_comparison.log).
@@ -11600,3 +11655,220 @@ control because it predates the band layout, its own numbers today are unknown, 
 supersedes a figure measured from it. No Ignition-side change was made or proposed; switching the
 shipped container is a decision, not something this measurement performs. Energy was not measured.
 These G2G figures are the container benchmark's, whose decode is unoptimized numpy on every arm.
+
+## Cross-audit against Hello XDNA! (2026-09-23, Desktop 2)
+
+**The reference.** T. Steinert and A. Breuer (Uni Jena), [*Hello XDNA!*](https://tnzr.org/xdna/):
+- the [ISA](https://tnzr.org/xdna/isa.html) and [XDNA1 kernel](https://tnzr.org/xdna/xdna1_kernel.html)
+  pages;
+- source `github.com/scalable-analyses/xdna`, first released 2025-12-18, revised 2026-08-31;
+- a hand-scheduled bf16 32×32×32 GEMM tile measured at **398 GFLOPS on one tile of a Ryzen 7 8700G**,
+  the same part as Desktop 2.
+
+This repo had never cited it. **The audit record is
+`results/aie/notes_tnzr_cross_audit.md`**: every claim checked, its verdict, and the source that
+settles it. Peano's machine model is the tiebreaker, then silicon, never picking a side. This section
+carries its measurements. The SPEC values read from Peano's machine model live in
+`results/aie/peano_aie2_machine_model_a36c62b9.log` and `docs/SILICON.md`, and none of them is a
+measurement.
+
+**Setup.** The reference repository carries **no licence**, so its sources were fetched to the
+git-ignored `scratch/` at a pinned commit (`8db6999a`) and nothing of theirs entered the tracked
+tree.
+- Machine: Desktop 2 (`DESKTOP-CBL5NUA`, Ryzen 7 8700G, Phoenix).
+- Toolchain: Peano llvm-aie `a36c62b9`, mlir-aie v1.4.2 `aiecc`, XRT 2.21.0, NPU driver
+  32.0.20101.3760, firmware 1.5.5.391.
+- Power mode: pmode **default** throughout (the reference used turbo; this repo measured 1.80 GHz in
+  default, `docs/SILICON.md`).
+- Device state: every sitting began and ended with `xrt-smi examine -r aie-partitions` reporting no
+  hardware contexts, and no other NPU process was running.
+
+### The reference's hand-scheduled kernel, reproduced
+
+`tools/tnzr_repro.py` fetches, assembles the reference's `tensor_kernel_32x32x32_bf16_bf16_fp32.s`
+with this repo's Peano, links it with `aiecc` using the reference's own harness MLIR, and times it
+the reference's way. That means opcode-3 dispatch through `runtime/driver.py`'s
+`XrtSiliconHarness`, 3 warm-ups, then 10 timed dispatches of 10⁶ kernel calls each, with
+GFLOPS = 2·32³·10⁶ / wall time.
+
+| | Result |
+|---|---|
+| Mean over 10 dispatches | **397.5 GFLOPS** (396.6–397.9), 164.855 ms per dispatch |
+| Against the 460.8 GFLOPS per-core bf16 peak at 1.80 GHz | **86.3%** |
+| Against the reference's 398 GFLOPS (turbo) | 99.9% |
+| Implied cycles per call at 1.80 GHz | 296.7, against 288 dynamic kernel bundles (256 issuing `vmac.f`) |
+
+Log: `results/aie/tnzr_bf16_32x32x32_repro_desktop2_20260923T0518Z.log`. **This is the first
+hand-written kernel from this repo to execute on the NPU.** The path this repo had assembled and
+linked but never run (`.s` → `link_with` → `aiecc` → PyXRT) works end to end on Windows. The run does
+not check the kernel's output, and neither does the reference. The next subsection does.
+
+### Compiler vs hand schedule in L1
+
+This repo's bf16 and int8 figures all include data movement, so none of them could say how much of a
+gap is the kernel's *schedule* and how much is *movement*. `tools/l1_tile_bench.py` (written here;
+its harness MLIR is not the reference's) removes movement.
+- **Operands already in L1.** The kernel is called 10⁵–10⁶ times per dispatch from a core loop, and
+  wall time is fitted against the call count. Dispatch, DMA and the copies fall into the intercept,
+  and the slope × 1.80 GHz is cycles per call. R² ≥ 0.9954 on every fit, ≥ 0.99999 on every GEMM.
+- **Exact outputs.** Every GEMM's output is compared exactly with numpy (C0 + calls·A@B, with small
+  integers so bf16 and int8 are both exact) at calls = 1 and 3.
+- **An empty control prices the harness.** `kernels/l1_tile_bench/empty_call.s` is `ret lr` plus its
+  5 delay slots: 7 static bundles, 6 executed, because the 7th is alignment padding. It costs 19.1–20.4
+  cycles per call with an `i32` loop counter, and 25.4 with a 64-bit `index` counter.
+- **Two placements.** *Copy* mode puts A, B and C at fixed addresses (the reference's: banks 0, 1, 2),
+  so bank placement is identical for every kernel. *Direct* mode runs the kernel on the FIFO buffers
+  themselves, so a 64³ bf16 tile fits; `aiecc`'s allocator gave A, B and C a bank each.
+
+| Kernel, shape, mode | cycles/call | over empty | % of per-core peak | Log (`results/aie/`) |
+|---|---|---|---|---|
+| Reference hand `.s`, bf16 32³, copy | 301.3 | **282.0** | **85.0%** (391.5 GFLOPS) | `l1_tile_compiler_vs_hand_i32loop_desktop2_20260923T0530Z.log` |
+| Upstream `mm.cc` bf16→f32, 32³, copy | 898.6 | 879.3 | 28.5% (131.3 GFLOPS) | same |
+| Upstream `mm.cc` int8→i32, 32³, copy | 533.4 | 514.1 | 24.0% (221.2 GOPS) | same |
+| `mm.cc` bf16, 32×64×32 / 32×128×32, copy | 1418.5 / 2482.4 | 1399.1 / 2463.1 | 36.1% / 41.3% | `l1_tile_mm_k64_desktop2_20260923T0533Z.log`, `l1_tile_mm_k128_desktop2_20260923T0533Z.log` |
+| `mm.cc` int8, 32×64×32 / 32×128×32, copy | 697.1 / 1009.4 | 677.6 / 990.1 | 36.7% / 50.7% | same two |
+| **`mm.cc` bf16, 64³ (the array GEMM's tile), direct** | 5427.4 | 5407.0 | **37.7%** (173.9 GFLOPS) | `l1_tile_mm_direct_64x64x64_desktop2_20260923T0538Z.log` |
+| `mm.cc` int8, 64³, direct | 2604.8 | 2584.4 | 39.3% (362.3 GOPS) | same |
+| `mm.cc` bf16 / int8, 32×64×32, direct (cross-check) | 1418.6 / 745.4 | — | 36.1% / 34.3% | `l1_tile_mm_direct_32x64x32_desktop2_20260923T0538Z.log` |
+
+`mm.cc` is upstream's `aie_kernels/aie2/mm.cc`, compiled in place from the mlir-aie checkout with
+upstream's Peano flags. Its bf16 path is `aie::mmul<4,8,4>` and its int8 path `aie::mmul<4,8,8>`.
+
+**What this measures:**
+- **The hand schedule runs exactly as written.** 282.0 cycles over the empty control is the kernel's
+  288 dynamic bundles less the control's own 6-bundle body. That leaves no memory stall and no
+  hidden interlock. The reference kernel is also **exact**: it accumulates into C in `mm.cc`'s tiled
+  layout (C0 + calls·A@B), something its authors never checked. Its 391.5 GFLOPS here against 397.5 in its
+  own harness is the calling loop alone. The reference's constant trip count lets Peano unroll the call
+  4× and fill its delay slots, at about 8.7 cycles per call; this harness reads the count at run time
+  and cannot.
+- **On an identical tile, harness and bank placement, the hand schedule is 3.0× the compiled
+  upstream kernel** (282 vs 879 cycles, bf16 32³). The comparison that matters for the array is
+  different, though: the hand kernel at 32³ reaches 85% of peak, and compiled `mm.cc` at the
+  array's 64³ tile reaches 37.7%.
+- **The compiled loops run at their static schedule plus one bank stall per iteration.** Adding K
+  costs `mm.cc` 32.5–33.3 cycles per inner iteration in bf16, against 32 static bundles, and 9.8–10.2
+  in int8, against 9. `tools/aie_bank_check.py` finds exactly one paired-load bundle per hardware-loop
+  iteration in each loop (int8 `0x01f0`, bf16 `0x02a8`), and both loads of that pair read one operand
+  buffer, so one bank. The repo's measured rule predicts +1 cycle for a same-bank pair, and with no
+  interlocks and no DMA in the timed loop, a bank conflict is the only stall source left. That makes
+  it the only candidate standing, not an isolated one: no placement can separate two loads from one
+  buffer.
+- **The bf16 array GEMM's "remaining two thirds" is its kernel.** At the array's own 64×64×64 tile,
+  with no movement at all, `mm.cc` bf16 reaches 37.7% of peak. The array's 64/64/64 figures
+  (2477.23–2653.05 GFLOPS, 33.6–36.0% of the 16-core 7,372.8, sections above) are therefore 89–95% of
+  what its kernel can do in L1. The "K-loop's C read-modify-write in f32" named as a candidate is
+  inside the kernel (16 accumulator loads and stores per output block), not a separate cost.
+- **int8 is different, and consistent with H10/H11.** `mm.cc` int8 at 64³ costs 2,604.8 cycles in
+  L1, about 80% of the array's measured ~3,274-cycle call (the cost-model section above). The array's
+  remaining ~670 cycles are the per-buffer data-path floor, which is why H11's 12% faster kernel moved
+  nothing. The static cost model's 2,442 issuing cycles, plus one stall for each of the 96
+  hardware-loop trips per call (16 groups × 6), give 2,538. That is about 2% under the L1 figure
+  (2,584.4 over the control, ~2,590 counting the kernel's own return); the residue is unattributed.
+- **Published XDNA1 GEMM already exceeds this repo's.** arXiv 2512.13282 (Taka, Rösti, Melber et
+  al., 2025-12-15) reports XDNA int8 up to 6.76 TOPS and bf16 up to 3.14 TOPS at an assumed 1 GHz, and
+  single-core 233.0 int8 and 112.6 bf16 MACs per cycle (91% and 88% of 256 and 128). This repo's best
+  bf16 array figure is 2,700.44 GFLOPS, and compiled `mm.cc` single-core reaches 48.3 bf16 MACs per
+  cycle (37.7% of 128). Taken at the paper's word, published XDNA1 bf16 GEMM is faster than anything
+  measured here. It was not reproduced here.
+
+The first sitting (`l1_tile_compiler_vs_hand_desktop2_20260923T0527Z.log`, 64-bit `index` counter,
+no control) read the same kernels 5.5–6.1 cycles per call slower: 307.3, 904.1 and 539.5. That is
+exactly the counter's measured extra cost, 25.4 − 19.3 cycles
+(`l1_tile_empty_indexloop_desktop2_20260923T0530Z.log`).
+
+### A same-bank load and store cost one cycle, and mm.cc's int8 spills pay it
+
+The reference keeps loads and stores in separate instructions "to avoid bank conflicts". This repo
+had measured only two loads in one bank (+1 cycle, `docs/SILICON.md`). One experiment on `mm.cc`
+int8 at 32×64×32 settles load+store, holding the kernel and harness fixed and swapping only A and C
+between banks 0 and 2:
+
+| Placement | cycles/call | Log |
+|---|---|---|
+| A bank 0, B bank 1, C bank 2 (copy) | 697.1 | `results/aie/l1_tile_mm_k64_desktop2_20260923T0533Z.log` |
+| C bank 0 beside the stack, B bank 1, A bank 2 (copy) | **745.6** | `results/aie/l1_tile_mm_i8_k64_c_bank0_desktop2_20260923T0545Z.log` |
+| The same placement, direct mode | 745.4 | `results/aie/l1_tile_mm_direct_32x64x32_desktop2_20260923T0538Z.log` |
+
+The kernel spills its accumulators to the stack, which sits in bank 0 (a 416-byte frame). Its
+per-block epilogue has exactly **12** bundles pairing a stack reload (`vlda am.., [sp, ..]`) with a C
+store (`vst am.., [p3/p4/p5]`). There are 4 blocks per call at this shape, so a +1-cycle same-bank
+penalty predicts **+48**. Measured: **+48.5**. The control is the bf16 kernel: it has **0** such
+bundles, and its time does not move with placement (1418.5 vs 1418.6). The kernel's only other paired
+loads read a single buffer, so no other pairing is placement-sensitive. **A load and a store to one
+bank in one bundle cost +1 cycle, the same as two loads.** Direct mode reproducing copy mode at this
+placement rules out the harness mode as the cause.
+
+Two tool gaps follow. `tools/aie_bank_check.py` cannot flag this hazard: it drops the stack from
+its bank map (`n != STACK_SYM`), and it looks only for load+load pairs. The shipped engine core has
+the same shape of risk. In `modnet_cut_dense_20260921`'s `engine.o`, 27 bundles pair a stack access
+with another memory op, including vector spill reloads beside accumulator stores. Whether any of them
+conflicts depends on where the other pointer resolves at run time: **unchecked**.
+
+### The shipped engine core, read statically
+
+`tools/engine_core_census.py` over every `build/conv_engine/*` core ELF on Desktop 2. It is static
+object-code reading, no hardware. Log: `results/aie/engine_core_issue_census_desktop2_20260923.log`.
+- **Builds:** 68 builds hold **four** distinct core ELFs. The 56 current builds share
+  `45aeec4edc4f` (2026-09-18..21). `yolov8n_full`, the build behind `build/yolov8n_full.ignite`, is
+  in the older `eaddc8c66b88` group (`.text` 10,704 B), whose conv loops issue at the same rates.
+- **Issue rate:** the int8 conv inner loops issue **0.167–0.348 `vmac` per cycle** (fused stage 2:
+  0.444). Each iteration loads, realigns with `vshift`, idles, then issues its `vmac`s, with no
+  overlap between iterations. The reference sustains a `vmac.f` on 256 of 288 bundles, and compiled
+  `mm.cc`'s loops reach 0.5 (bf16) and 0.889 (int8).
+- **Program memory:** `.text` is **16,160 of 16,384 B** (224 B free). One variant is at 16,368 B.
+- **Hardware loops:** all 16-B aligned, with a 16-B last bundle. Their setup writes land as close as
+  16–58 B before the loop start and at least 112 B before its end, and they run bit-exact. That
+  contradicts the reference's "≥64 B before the start" as a necessary rule, statically. It is not
+  probed.
+- **Bank check of the newest ELF: HAZARD.** 12 paired-load bundles sit in loop bodies, and
+  `a0_0_cons_buff_1` shares bank 2 with `w0_0_cons_buff_0`. If those pairs hit the shared bank, each
+  0.348 loop pays up to +4 cycles per iteration (23 → 27 bundles). That depends on pointer resolution
+  and is unmeasured.
+
+### MAC forwarding distance on silicon (probe P2)
+
+Peano spaces a dependent int8 `vmac` 2 bundles after its producer and a dependent bf16 `vmac.f` 4
+(SPEC, `results/aie/peano_aie2_machine_model_a36c62b9.log` §4). The probe checks that on silicon.
+`tools/l1_tile_bench.py` generates a straight-line `.s` for it, `chain_<bf16|i8>_d<d>`:
+- load A, B and C's first 4×4 (bf16) or 4×8 (int8) accumulator block;
+- 8 guard bundles;
+- **eight `vmac` on one accumulator, `d` bundles apart**;
+- 8 guard bundles, store, return.
+
+The harness, placement and fit are the ones above. The oracle is exact. Every element of the stored block must
+equal `C0 + m·(A_blk @ B_blk)` for one integer `m`, and `3m` after 3 calls. The rest of C must come
+back unchanged. All 20 verdicts in the log pass that form. Desktop 2, one sitting, pmode
+`default`, partitions idle before and after. Log:
+`results/aie/vmac_chain_forwarding_desktop2_20260923T0602Z.log`.
+
+| d (bundles) | 1 | 2 | 3 | 4 | 5 | 6 |
+|---|---|---|---|---|---|---|
+| bf16 `vmac.f`: MACs landed of 8 | 2 | 4 | 4 | **8** | 8 | 8 |
+| bf16 cycles/call over empty (static bundles over empty's 7) | 32.9 (33) | 39.8 (39) | 46.7 (47) | 53.8 (54) | 61.0 (61) | 67.8 (68) |
+| int8 `vmac`: MACs landed of 8 | 4 | **8** | 8 | 8 | | |
+| int8 cycles/call over empty (static bundles over empty's 7) | 35.9 (36) | 42.9 (43) | 49.9 (50) | 57.0 (57) | | |
+
+**The minimum distance for a correct result is 4 bundles in bf16 and 2 in int8, Peano's spacing
+exactly.**
+
+**Closer MACs read a stale sum.** Assume each MAC reads the newest result from a MAC at least 4
+(bf16) or 2 (int8) bundles earlier. That predicts every shortfall in the table: bf16 d = 1 gives 2,
+d = 2 and 3 give 4, and int8 d = 1 gives 4.
+
+**The core does not stall.** Each variant costs its static bundle count to within one bundle. That is
+the count's own resolution, since it includes any alignment bundle after the return's delay slots. So an accumulator hazard gives a silently
+wrong answer, not a slower one. This is the reference's "no interlocks" (R2) observed directly.
+
+The consequences:
+- A loop that runs one `vmac` per cycle needs at least 4 independent accumulators in bf16 and 2 in
+  int8. The engine's kernels hold 8, so this is not what limits them.
+- A hand schedule that breaks the spacing does not fail loudly. Only an exact oracle catches it.
+
+### What was not run
+
+- **Hardware-loop setup rules (probe P3).** Hang risk; the only evidence is the static reading above.
+- **The bf16-vs-int8 core pass on `worktree-bf16-engine`.**
+- **Turbo pmode.**
+- **Trace-timer cycle counts.** Every cycle figure here is a wall-clock slope × the measured 1.80 GHz.
+- **Moving the loops' same-bank pair apart.** Impossible without changing the kernel.

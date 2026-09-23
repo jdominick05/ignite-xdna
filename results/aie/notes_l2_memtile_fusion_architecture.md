@@ -128,4 +128,4 @@ Physical verification was conducted on Device 0 (`AMD Ryzen 7 8700G APU`) using 
 
 ## 6. Verification Trace Log
 Full benchmark trace and silicon measurements are committed in:
-[`results/aie/hardware_fused_layer_verification.log`](file:///C:/Users/Ignis/PycharmProjects/ignite-xdna/results/aie/hardware_fused_layer_verification.log).
+[`results/aie/hardware_fused_layer_verification.log`](hardware_fused_layer_verification.log).
