@@ -13249,8 +13249,9 @@ A mutation run, not committed, showed the bound has teeth:
 ### What this does not establish
 
 - **No device.** This is emulator against oracle on the CPU, as stated above. (Closed the same day:
-  the device equals the emulator to the bit and reproduces these figures. See
-  [W8A16 SESR-M7 on silicon](#w8a16-sesr-m7-on-silicon-exact-to-the-emulator-041-db-over-int8-and-the-host-egress-loses-the-tile-2026-09-22-desktop-2).)
+  the device equals the emulator to the bit in every tensor resident at frame end, and reproduces
+  these figures. See
+  [W8A16 SESR-M7 on silicon](#w8a16-sesr-m7-on-silicon-resident-tensors-exact-to-the-emulator-041-db-over-int8-and-the-host-egress-loses-the-tile-2026-09-22-desktop-2).)
 - **No bias.** SESR-M7 carries none: every `bias_q` is 0, so this comparison never exercises the bias
   path. The packet tests do, and so does the exact arm's test on the synthetic chain, whose biases are
   nonzero.
@@ -13310,14 +13311,16 @@ above:
 layout of `npu/sesr.py`'s preprocess, and the image against its postprocess, both to the bit, and
 records the sync lengths through a stand-in buffer object. None of that touches the device. Whether
 pyxrt, the syncs and the kernel do what those calls ask is the silicon sitting's question, answered
-in [the next section](#w8a16-sesr-m7-on-silicon-exact-to-the-emulator-041-db-over-int8-and-the-host-egress-loses-the-tile-2026-09-22-desktop-2).
+in [the next section](#w8a16-sesr-m7-on-silicon-resident-tensors-exact-to-the-emulator-041-db-over-int8-and-the-host-egress-loses-the-tile-2026-09-22-desktop-2).
 
 
-## W8A16 SESR-M7 on silicon: exact to the emulator, 0.41 dB over int8, and the host egress loses the tile (2026-09-22, Desktop 2)
+## W8A16 SESR-M7 on silicon: resident tensors exact to the emulator, 0.41 dB over int8, and the host egress loses the tile (2026-09-22, Desktop 2)
 
 At float width AMD places nothing on the NPU, and in this same sitting AMD's int8 SESR ran at 1.69 to
 1.96 ms a tile. So this is a first, not a win over AMD, and there is no release in it. It is the first
-whole network this repository has run on the NPU with bf16 activations, and it is exact.
+whole network this repository has run on the NPU with bf16 activations. It is exact in the tensors
+resident at frame end; body.1 to body.3 are overwritten before the frame ends and were never
+compared.
 
 *Scoped 2026-09-23 (prior-art check, branch `tnzr-audit`, `results/aie/notes_tnzr_cross_audit.md` row
 D10): "a first" holds for this repository only.*
@@ -13326,7 +13329,9 @@ D10): "a first" holds for this repository only.*
   listing, not a confirmed run.
 - "First through mlir-aie/IRON" may still hold: mlir-aie's own `aie_kernels/aie2` has no bf16 conv.
   Nothing wider than that was checked.
-- "Exact" is to this repository's emulator, on the plain weights. On the AdaRound weights the
+- "Exact" is to this repository's emulator, on the plain weights, and in the tensors resident at
+  frame end only. With every tensor resident, the AdaRound weights show differences that round away
+  before a resident tensor ([the no-reuse section](#the-adaround-mismatch-starts-in-body1-as-single-values-beside-bf16-rounding-ties-and-none-of-the-four-candidate-accumulate-models-reproduces-it-2026-09-23-desktop-2)). On the AdaRound weights the
   device departs from it ([below](#w8a16-sesr-m7-on-the-adaround-weights-the-device-departs-from-the-emulator-on-4-of-6-inputs-and-its-aggregate-psnr-is-above-amds-adaround-w8a8-2026-09-23-desktop-2)).
 
 *Updated by the next sitting:* with native host paths the bf16 tile beats the CPU, at 6.28-6.29 ms
@@ -13352,7 +13357,7 @@ Logs:
 
 Both engine containers were built from `sesr_m7_xint8.onnx`, the plain XINT8 arm, as decided above.
 
-### The device equals the emulator, to the bit
+### The device equals the emulator, to the bit, in every tensor resident at frame end
 
 The inputs were the five Set5 LR x2 images, staged through the session, and seed 0, staged as bf16
 patterns. Each ran once on the device. Afterwards the emulator (`run_direct`, aligned
@@ -13473,7 +13478,7 @@ the VitisAI EP, another environment):
 
 ## W8A16 SESR-M7 with native host paths: the tile beats the CPU, and the frame is now dispatch-bound (2026-09-22, Desktop 2)
 
-[The section above](#w8a16-sesr-m7-on-silicon-exact-to-the-emulator-041-db-over-int8-and-the-host-egress-loses-the-tile-2026-09-22-desktop-2)
+[The section above](#w8a16-sesr-m7-on-silicon-resident-tensors-exact-to-the-emulator-041-db-over-int8-and-the-host-egress-loses-the-tile-2026-09-22-desktop-2)
 found the bf16 tile losing to the CPU on numpy host work, not on the NPU. This sitting replaces both
 host ends with native routines in `preprocess_simd.c` (`bgr_to_c8_plane_bf16` and
 `depth_to_space_crd_bgr_bf16`). Then it times the tile again, with the old numpy path run as a
@@ -13910,7 +13915,8 @@ The other three models get most of these nine right. But they miss others that a
 and so none of the four is the device's rule.
 
 **What this settles:**
-- The first layer: body.1.
+- The earliest layer: body.1, on baby, bird and butterfly. head, woman and seed 0 first depart at
+  body.2, body.3 and body.4.
 - The form: isolated single values next to rounding ties, one step each, spreading from there
   through the 3 x 3 layers.
 - It does not follow addresses, layout or the instruction stream.
