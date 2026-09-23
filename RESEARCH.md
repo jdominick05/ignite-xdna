@@ -1326,6 +1326,13 @@ been closed:
   int8's accumulator spills to the stack's bank cost it 7% when C shares that bank. The engine
   core's `.text` (16,160 of 16,384 B) spills vector registers, pairs stack reloads with stores in
   27 bundles, and has a static bank HAZARD between activations and weights.
+  *Partly answered on `worktree-bf16-engine` (merged with `main` 2026-09-23):* the
+  [`ptr` rewrite](docs/BENCHMARKS.md#the-ptr-loop-pattern-lands-in-the-int8-engine-and-yolov8s-overtakes-amds-stack-2026-09-22-desktop-2)
+  took the stride-1 dual loop from 23 to 18 bundles per 8 `vmac`, byte-exact.
+  It made the object 96 B smaller and moved a whole frame -2.8% (YOLOv8n) and -4.4% (YOLOv8s).
+  The [dispatch gate](docs/BENCHMARKS.md#compiling-out-the-dispatch-no-container-reaches-frees-5408-b-and-costs-a-manifest-field-to-stay-honest-2026-09-22-desktop-2)
+  leaves a shipped object 5,728 B free, not 224 B.
+  The census behind the 17-35% above predates both.
   Untested: whether a rewritten inner loop (no realignment `vshift`s, overlapped iterations,
   separated banks) fits the 224 B of `.text` headroom, and what it buys per frame once dispatch
   and DMA are counted. A kernel-rate gain is not a frame-rate gain until the frame is measured.

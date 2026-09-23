@@ -50,8 +50,8 @@ Four things that number needs attached to it, or it misleads:
   not a model number.
 * **The ceiling is reachable, so 20% is a schedule gap** (added 2026-09-23). A hand-scheduled bf16
   GEMM tile ([Hello XDNA!](https://tnzr.org/xdna/xdna1_kernel.html)) was reproduced on this chip
-  at 397.5 GFLOPS, 86.3% of the same 460.8. It is on branch `tnzr-audit`, in BENCHMARKS under
-  "Cross-audit against Hello XDNA!". That is a GEMM tile, not this conv, so it shows what a schedule
+  at 397.5 GFLOPS, 86.3% of the same 460.8. It is in BENCHMARKS under
+  ["Cross-audit against Hello XDNA!"](../../docs/BENCHMARKS.md#cross-audit-against-hello-xdna-2026-09-23-desktop-2). That is a GEMM tile, not this conv, so it shows what a schedule
   has reached on this core, not what this kernel can.
 
 ### Accumulators in flight is the whole optimisation so far

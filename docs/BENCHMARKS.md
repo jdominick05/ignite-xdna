@@ -11824,7 +11824,7 @@ Backing logs: [`engine_bf16_cache_audit_desktop2_20260921.log`](../results/aie/e
 
 At k3, `chunk`'s five rounds lie below every other arm's; `ptr`, `hoist+ptr` and the fixed-shape kernel overlap one another and lie below `base`'s. At k1 every variant lies below `base`, `chunk`/`hoist`/`hoist+ptr` overlap one another, and every engine arm lies above milestone 1. `chunk` at k3 is 108.9 GFLOPS, 23.6% of the 460.8 GFLOPS core ceiling, and 7.7% faster than the fixed-shape kernel on the same MACs.
 
-*Context added 2026-09-23 (cross-audit, branch `tnzr-audit`):* on this core, the ceiling is within reach of a good schedule. A hand-scheduled bf16 GEMM tile, the one published on [Hello XDNA!](https://tnzr.org/xdna/xdna1_kernel.html), was reproduced on Desktop 2 at **397.5 GFLOPS, 86.3% of the same 460.8**. In an L1 harness it ran at 85.0%, where compiled upstream `mm.cc` reached 28.5-41.3% (`tnzr_bf16_32x32x32_repro_desktop2_20260923T0518Z.log` and `l1_tile_*_desktop2_20260923*.log` on that branch). That is a GEMM tile, not this conv pass, which also realigns activations and walks run-time trip counts. So the 3.7x between `chunk` and 397.5 bounds what a core schedule has been shown to reach on this core. It does not bound what this kernel can reach.
+*Context added 2026-09-23 (cross-audit, branch `tnzr-audit`):* on this core, the ceiling is within reach of a good schedule. A hand-scheduled bf16 GEMM tile, the one published on [Hello XDNA!](https://tnzr.org/xdna/xdna1_kernel.html), was reproduced on Desktop 2 at **397.5 GFLOPS, 86.3% of the same 460.8**. In an L1 harness it ran at 85.0%, where compiled upstream `mm.cc` reached 28.5-41.3% (`tnzr_bf16_32x32x32_repro_desktop2_20260923T0518Z.log` and `l1_tile_*_desktop2_20260923*.log`, [the cross-audit section](#cross-audit-against-hello-xdna-2026-09-23-desktop-2)). That is a GEMM tile, not this conv pass, which also realigns activations and walks run-time trip counts. So the 3.7x between `chunk` and 397.5 bounds what a core schedule has been shown to reach on this core. It does not bound what this kernel can reach.
 
 **The static reading was right.** The census had the loop at 65% of a k3 pass, `ptr` cutting its bundles by 21% and `chunk` by 33% - a predicted -14% and -22% per pass (DERIVED, bundle counts only); the device gave -10% and -18%. At k1 the base loop bodies are 1.47 us of a pass; `chunk`'s third off them predicts -0.49 us and measures -0.45, `ptr`'s fifth predicts -0.31 and measures -0.22. On this engine a hardware loop's bundle count *is* most of its cycle count, as [the ISA row](SILICON.md) says, and H11's "did not move" belongs to the GEMM's delivery floor, not to this kernel. `hoist` is a different lever: forming the bias once per packet rather than once per pass takes 0.32 us off a k1 pass (ranges disjoint) and 0.18 off a k3 pass (inside the spread) - so the bias *was* part of the per-pass cost the earlier section said it was not.
 
@@ -14137,12 +14137,22 @@ Two tool gaps follow. `tools/aie_bank_check.py` cannot flag this hazard: it drop
 its bank map (`n != STACK_SYM`), and it looks only for load+load pairs. The shipped engine core has
 the same shape of risk. In `modnet_cut_dense_20260921`'s `engine.o`, 27 bundles pair a stack access
 with another memory op, including vector spill reloads beside accumulator stores. Whether any of them
-conflicts depends on where the other pointer resolves at run time: **unchecked**.
+conflicts depends on where the other pointer resolves at run time: **unchecked**. That build predates
+the `ptr` port; see the scope note under "The shipped engine core, read statically".
 
 ### The shipped engine core, read statically
 
 `tools/engine_core_census.py` over every `build/conv_engine/*` core ELF on Desktop 2. It is static
 object-code reading, no hardware. Log: `results/aie/engine_core_issue_census_desktop2_20260923.log`.
+*Scope, added on merging `main` into `worktree-bf16-engine` (2026-09-23):* "current" and "shipped"
+below mean `main`'s core before two changes that were made only on that branch.
+- The [`ptr` port](#the-ptr-loop-pattern-lands-in-the-int8-engine-and-yolov8s-overtakes-amds-stack-2026-09-22-desktop-2)
+  took the stride-1 dual loop from 23 bundles per 8 `vmac` to 18, and the stride-2 dual from 32 to 27.
+- The [dispatch gate](#compiling-out-the-dispatch-no-container-reaches-frees-5408-b-and-costs-a-manifest-field-to-stay-honest-2026-09-22-desktop-2)
+  leaves a shipped object 5,728 B free.
+None of the four ELFs it read is a `ptr` build: they link at 16,160, 16,048, 16,368 and 10,704 B, and a `ptr` build occupies 16,064 B (its 15,184 B object plus the constant 880 B). The census has not been run on a build of the merged `engine.cc`. The bank HAZARD
+below is the collision [a 2026-09-21 section](#the-int8-engines-weightactivation-bank-collision-cannot-be-placed-away-with-the-levers-iron-exposes-2026-09-21-desktop-2) found on every build
+and could not place away with IRON's levers. What it costs is still unmeasured.
 - **Builds:** 68 builds hold **four** distinct core ELFs. The 56 current builds share
   `45aeec4edc4f` (2026-09-18..21). `yolov8n_full`, the build behind `build/yolov8n_full.ignite`, is
   in the older `eaddc8c66b88` group (`.text` 10,704 B), whose conv loops issue at the same rates.

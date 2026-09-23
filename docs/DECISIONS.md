@@ -2148,3 +2148,10 @@ A hand schedule is now a measured option, not a speculative one. It has costs: h
 the hardware does not interlock (latencies, delay slots, bank pairing, hardware-loop setup rules), and the
 engine's `.text` has 224 B of headroom. Record of the audit:
 [`notes_tnzr_cross_audit.md`](../results/aie/notes_tnzr_cross_audit.md).
+
+*Scope, added on merging `main` into `worktree-bf16-engine` (2026-09-23):* the census behind 17-35%
+and 224 B read builds made before the `ptr` port and the dispatch gate. Both changes exist only on that
+branch. There the int8 core's stride-1 dual loop issues 8 `vmac` in 18 bundles, not 23, and a shipped
+object has 5,728 B free
+([ptr](BENCHMARKS.md#the-ptr-loop-pattern-lands-in-the-int8-engine-and-yolov8s-overtakes-amds-stack-2026-09-22-desktop-2), [gate](BENCHMARKS.md#compiling-out-the-dispatch-no-container-reaches-frees-5408-b-and-costs-a-manifest-field-to-stay-honest-2026-09-22-desktop-2)).
+The census has not re-read either figure.
