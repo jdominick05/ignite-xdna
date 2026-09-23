@@ -1,6 +1,8 @@
 // Copyright (C) 2026 The ignite-xdna contributors
-// Portions adapted from mlir-aie v1.4.2 aie_kernels/aie2/mm.cc (matmul_vectorized_4x2_mmul),
+// Adapted from mlir-aie v1.4.2 aie_kernels/aie2/mm.cc in part: the GEMM template's outer-loop
+//   dispatch (matmul_vectorized_4x2_mmul). Those portions are
 //   Copyright (C) 2025 Advanced Micro Devices, Inc., Apache-2.0 WITH LLVM-exception.
+//   The rest is written here.
 // SPDX-License-Identifier: AGPL-3.0-or-later AND Apache-2.0 WITH LLVM-exception
 //
 // W4A8 on AIE2: two ways to multiply int8 activations by int4 weights.

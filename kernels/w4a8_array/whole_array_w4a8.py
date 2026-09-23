@@ -1,5 +1,6 @@
 #
 # Copyright (C) 2024-2026 Advanced Micro Devices, Inc.
+# Adapted from mlir-aie v1.4.2 programming_examples/basic/matrix_multiplication/whole_array/whole_array.py, by way of kernels/bank_placement/whole_array_bankpad.py; the docstring says what changed.
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 #
 """W4A8 on the whole array: upstream's whole_array int8 GEMM with B stored as int4.
