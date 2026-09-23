@@ -32,6 +32,13 @@ MODES
 
 A frame or case the sitting did NOT find exact under R is not scored: the device's bits are
 unknown there. A dump replay (bf16_sr_silicon_check.py --from-dump --mac-model C) answers those.
+A sitting that leaves nothing to score under R is refused, never reported as consistent. So is a sweep
+log that never scored R at all.
+
+R defaults to the model in force, which has been exp_sum since 2026-09-23. Every rescore log
+committed before then was made under aligned, the default at the time. Reproduce one with
+--reference aligned. --models takes a comma list (--models wide,exp_sum), so it cannot swallow the
+mode after it.
 
     bash scripts/research-lowlevel.sh --log results/aie/<name>.log --checks-only -- \\
         bash scripts/research-iron.sh tools/bf16_mac_model_rescore.py sesr \\
@@ -66,6 +73,14 @@ def tagged(path: Path, tag: str) -> list:
         if head == tag:
             rows.append(json.loads(body))
     return rows
+
+
+def refuse_if_empty(log, scored: dict, ref: str) -> None:
+    """A sitting with nothing exact under the reference fixes no bits. Scoring it would report every
+    model consistent on zero values: a silent empty pass."""
+    if not any(scored.values()):
+        raise SystemExit(f"{log}: nothing in this sitting was exact under {ref!r}, so nothing can be scored; "
+                         "check --reference")
 
 
 def verdict(scored: dict, differ: dict) -> dict:
@@ -205,6 +220,7 @@ def sesr_mode(args, ref: str, models: list) -> int:
             for m in models:
                 scored[m] += row["scored_values"]
                 differ[m] += sum(row["differ_from_reference"][m].values())
+        refuse_if_empty(log, scored, ref)
         emit("SITTING", {"log": log.name, "frames_exact_under_reference": used,
                          "frames_not_scored": sorted(set(frames) - set(used)), "by_model": verdict(scored, differ)})
         rc |= int(any(differ.values()))
@@ -235,7 +251,10 @@ def sweep_mode(args, ref: str, models: list) -> int:
                 raise SystemExit(f"{log}: case {r['case']!r} is not one engine_bf16.sweep_cases builds")
             b = bits[r["case"]]
             logged = r["bytes_equal_by_model"]
-            if logged.get(ref) != r["elements"]:
+            if ref not in logged:
+                raise SystemExit(f"{log} {r['case']}: the sitting scored {sorted(logged)}, not the reference "
+                                 f"{ref!r}; pass --reference with one it scored")
+            if logged[ref] != r["elements"]:
                 continue
             # the rebuild must reproduce every count the sitting logged for the models it scored
             for m, n in logged.items():
@@ -244,6 +263,7 @@ def sweep_mode(args, ref: str, models: list) -> int:
             for m in models:
                 scored[m] += int(b[ref].size)
                 differ[m] += int(np.count_nonzero(b[m] != b[ref]))
+        refuse_if_empty(log, scored, ref)
         emit("SITTING", {"log": log.name, "cases": len(rows), "by_model": verdict(scored, differ)})
         rc |= int(any(differ.values()))
     return rc
@@ -276,18 +296,28 @@ def sixteen_mode(args, ref: str, models: list) -> int:
             raise SystemExit(f"{log}: columns carry {sorted(per_col)} B, the expected file {saved.nbytes // e16.COLS} B")
         scored = {m: int(saved.size) if exact else 0 for m in models}
         differ = {m: int(np.count_nonzero(flat[m] != saved)) if exact else 0 for m in models}
+        refuse_if_empty(log, scored, ref)
         emit("SITTING", {"log": log.name, "column_iterations": len(rows), "every_column_byte_equal": exact,
                          "by_model": verdict(scored, differ)})
         rc |= int(any(differ.values()))
     return rc
 
 
+def model_list(text: str) -> list:
+    """--models a,b. A comma list rather than nargs="+", which swallowed the mode that follows it."""
+    names = [s for s in text.split(",") if s]
+    bad = [s for s in names if s not in em.MAC_MODELS]
+    if bad or not names:
+        raise argparse.ArgumentTypeError(f"{bad or text!r}: choose from {','.join(em.MAC_MODELS)}")
+    return names
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--reference", default=em.MAC_MODEL, choices=em.MAC_MODELS,
                     help="the model the sittings were exact under (default: the one in force)")
-    ap.add_argument("--models", nargs="+", default=None, choices=em.MAC_MODELS,
-                    help="the models to score (default: every other one the emulator has)")
+    ap.add_argument("--models", type=model_list, default=None,
+                    help="comma list of the models to score (default: every other one the emulator has)")
     sub = ap.add_subparsers(dest="mode", required=True)
     p = sub.add_parser("sesr")
     p.add_argument("--container", type=Path, required=True)
