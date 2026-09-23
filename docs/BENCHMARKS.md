@@ -2318,7 +2318,8 @@ merged, plus half the weight DMA tasks' issue time.
   model's best case sits under the line. The narrowest is YOLOv8s's ceiling, 4.8% against 5%,
   0.2 points under. The verdict rests on three assumptions it did not test: a frame bound
   purely by the 26.8 GB/s transport, the fixed 9,472 B packet as today's engine builds it, and
-  no accuracy data (no W4 model exists here).
+  no accuracy data (no W4 model existed here then; gate D below measured it, and accuracy alone
+  kills int4 at round-to-nearest).
 - **A separate constraint, static:** the newest engine core ELF (56 builds, 2026-09-18 to 09-21,
   `sesr_m7` among them) uses 16,160 of its 16,384 B of program memory, 224 B free; one variant
   (`yolov8n_stride2ctrl`) has 16 B free. An int4 path is a second k loop in that core. The
@@ -2353,11 +2354,95 @@ the NPU.
   worth more. The engine core also has 224 B of program memory left for a second k loop. None of
   this was built or measured on the engine.
 - **What this does not establish:**
-  - no W4 network, and no W4 accuracy anywhere in this repo;
+  - no W4 network on the NPU (gate D below measures W4 accuracy on the CPU);
   - the array ratio's move from 1.263× to 1.287× lies inside this machine's day-to-day drift
     (upstream int8 averaged 1.7% slower in this sitting) and is not attributed to anything;
   - identical cycle counts on a statically scheduled core running byte-identical objects say
     nothing about wall-clock stability.
+
+**Gate D: accuracy, emulated on the CPU, killed at round-to-nearest (2026-09-23, Desktop 2).**
+`tools/w4a8_emulate.py`, `tools/w4a8_engine_gate.py`, `tools/w4a8_verdict.py`,
+`scripts/w4a8-eval.sh`; every log in `results/int4/`. The NPU was not used.
+
+- **The question, pre-registered.** Does W4A8 lose more than 1.0 point of mAP@50-95 against the
+  shipped W8A8 YOLOv8n and YOLOv8s? The kill line, the decision rule and a written prediction
+  were committed (3c683ee, `w4a8_accuracy_prereg_desktop2_20260923.log`) before any evaluation,
+  smoke runs included. The decision arm is the better of E1 (one pow2 weight scale per tensor,
+  which today's engine lowers unchanged) and E2 (one per 32-output-channel packet group, a
+  compiler change). PASS needed both models within the line.
+- **The variants.** Every Conv weight is re-quantized from the float model: round-to-nearest on
+  [-7, 7], pow2 scales by Quark's MinMSE. Every activation Q/DQ, bias and other scale stays as
+  shipped. The 4-bit value is stored as q4 · 2^k under the shipped 8-bit scale (k = pos8 − pos4
+  in 0..4), so the file is a plain XINT8 file that the engine lowers.
+  - A group that wants a finer scale than the shipped one (k < 0) cannot be stored that way.
+    Such a conv gets a per-channel scale vector instead, and the file is named `*_ortonly.onnx`.
+  - That happened to E2 on both models (one 32-channel group each at k = −1) and to U, one pow2
+    scale per output channel (6 convs on YOLOv8n, 11 on YOLOv8s). It is a limit of the int8
+    container, not of a per-group engine shift.
+  - E1h is E1 with the stem and the 6 head-output convs kept W8: 1.01% and 0.39% of the weights.
+- **Controls, all before any mAP (`w4a8_controls_*`, `w4a8_engine_gate_*`).**
+  - The 8-bit path of the same code rebuilds both shipped files exactly: empty `graph_diff`,
+    bit-identical outputs on 16 images.
+  - Only the intended initializers change. The float identity stored · scale = q4 · 2^−pos4
+    holds on every group, and form a matches form b bit for bit.
+  - A negative control shows the comparison can see a difference.
+  - The engine's integer oracle equals ONNX Runtime (ORT_DISABLE_ALL) on all 66 layers for B8,
+    E1 and E1h, both models, on 6 inputs each.
+- **The setup.** CPU EP with ORT_DISABLE_ALL, 8 pinned threads, resnet_env17, all 5,000 val2017
+  images, one sitting. The host was clear before 11 of the 12 rows. YOLOv8s E1 started with
+  4.5 busy cores, which moves wall time only: the arithmetic is fixed-thread. The smoke rows first
+  reproduced the committed 500-image figures exactly, 30.25 and 40.77.
+
+| mAP@50-95, all 5,000 images | YOLOv8n | YOLOv8s |
+|---|---:|---:|
+| B8, the shipped W8A8 file | **27.10** | **37.21** |
+| E1, W4 per tensor (decides) | 0.06 | 2.76 |
+| E2, W4 per 32-channel group (decides) | 0.02 | 2.76 |
+| E1h, E1 with the stem and heads at W8 (context) | 0.08 | 7.87 |
+| U, W4 per output channel (context) | 1.58 | 2.47 |
+| B8 with ONNX Runtime's optimizations (context) | 27.10 | 37.21 |
+| **Delta, B8 − the better decision arm** | **27.04** | **34.45** |
+
+- **Verdict: KILL** (`w4a8_accuracy_verdict_desktop2_20260923.log`, printed mechanically from
+  the pre-registered constants). int4-in-engine is killed at round-to-nearest (pow2 scales,
+  this dialect). GPTQ, AdaRound and every other recovery method are untested. It is not a
+  narrow miss: the pre-registered expectation of "several points" was wrong by an order of
+  magnitude, and no arm keeps even a tenth of the baseline except E1h on YOLOv8s.
+- **The prediction held:** B8 with ONNX Runtime's optimizations equals B8 without them to 0.00 on
+  both models. So the optimized-CPU mAPs in this file stand for these shipped XINT8 files.
+- **The baseline agrees with silicon.** 27.10 and 37.21 are exactly today's graph-engine
+  containers on the NPU over the same 5,000 images
+  ([accuracy against AMD's stack](#the-sigmoid-silu-containers-against-amds-stack-more-accurate-on-all-5000-coco-images-faster-on-yolov8n-and-yolov8n-pose-slower-on-yolov8s-2026-09-17-desktop-2)),
+  as the engine's bit-exactness with ORT_DISABLE_ALL predicts. AMD's stack scores 26.68 and
+  37.31 on the same files.
+- **Where the loss is, from the sidecars.** Median per-conv weight SQNR is 31.5 / 30.1 dB at W8,
+  13.2 / 13.1 dB for E1 and 14.7 / 14.5 dB for U (YOLOv8n / YOLOv8s). E1's worst conv is a 3×3
+  in the class branch at 4.4 / 4.3 dB. Per-channel pow2 scales buy about 1.5 dB at the median.
+- **A post-hoc diagnostic, not pre-registered, that decides nothing** (`diag_*`, 500 images,
+  `scripts/w4a8-eval.sh diag`). The same dequantized weights go into the float model, which keeps
+  float activations and the real Sigmoid SiLU:
+
+| mAP@50-95, first 500 images | YOLOv8n | YOLOv8s |
+|---|---:|---:|
+| FP32 | 39.95 | 48.52 |
+| FP32 with the W8 weights | 38.54 | 47.65 |
+| FP32 with the W4 E1 weights | 0.00 | 2.89 |
+| FP32 with the W4 U weights | 1.67 | 1.85 |
+
+  - The collapse is in the 4-bit weights themselves. Float activations and the real sigmoid do
+    not rescue it, so the frozen W8A8 activation scales and the HardSigmoid form are not the
+    cause.
+  - The same code at 8 bits costs 1.41 / 0.87 points and rebuilds the shipped files exactly,
+    which argues against an emulation fault. At 4 bits only the bounds and the MinMSE window
+    change.
+- **What this does not establish:**
+  - whether float (non-pow2) per-channel scales survive; no such arm ran, so the cost of pow2
+    scales is unmeasured;
+  - any recovery method: GPTQ, AdaRound, bias correction, BN re-estimation or QAT;
+  - mixed precision beyond E1h's seven convs;
+  - E2's "compiler-only" label, which is on paper: no int4-packed engine lowering exists.
+- **Reopen int4-in-engine only** with a recovery method that brings a W4 model within 1.0 point,
+  measured the same way. Byte savings and silicon speed are settled above; accuracy is the gate.
 
 ### MobileViT-XXS does not survive per-tensor INT8, and AdaRound cannot save it
 

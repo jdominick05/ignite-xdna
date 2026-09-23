@@ -293,6 +293,25 @@
   expose the converse failure: NPU placement with incorrect numerical execution.
   [Controlled evidence and limits](BENCHMARKS.md#ignition-controlled-resnet-qdq-acceptance).
 
+- **A CPU mAP of a weight-mutated QDQ file needs `--ort-opt disable_all`.**
+  `pipelines/yolov8n/5_eval_map.py --ep cpu` runs ONNX Runtime's default optimizations unless
+  told otherwise. So for any file whose weights or scales were rewritten, pass
+  `--ort-opt disable_all` and a fixed `--ort-threads N` (the summation order of an unoptimized
+  QDQ Conv depends on the thread split). Neither flag reaches the NPU providers, which refuse
+  them.
+  - On the shipped YOLOv8n and YOLOv8s XINT8 files the two settings agree to 0.00 mAP on all
+    5,000 images (gate D), and 27.10 / 37.21 equal the graph-engine containers on silicon.
+  - That holds for those files only. It is not a licence for mutated ones.
+
+- **A `*_ortonly.onnx` file must never reach `ignite-compile`.** `graph_ir.scale_zp`
+  (`src/ignite_xdna/compiler/graph_ir.py:378-381`) reads element 0 of a weight scale. A
+  per-channel scale vector is therefore lowered with channel 0's scale everywhere, silently.
+  - `tools/w4a8_emulate.py` names any file holding a per-channel conv `*_ortonly.onnx`, and
+    `tools/w4a8_engine_gate.py` refuses such files.
+  - A search of `graph_ir.py` and `tools/ignite_compile.py` finds no such check; nothing was
+    tested. `lower_onnx_conv.py`'s separate single-conv path does handle per-channel scales. The
+    graph-engine hazard stays in `src/`, not fixed here.
+
 - **Quark's refinement is a silent no-op on `raw_data` scale initializers.** Its
   `set_scale` writes `float_data` in place but assigns a `raw_data` update to a
   temporary list, so on such a file it runs five passes, logs "Modify" lines and the
@@ -917,7 +936,8 @@
 - **Rejected: int4 weights in the graph engine — killed on paper at the byte gate, under the
   current packet format, before any code (2026-09-23).** `tools/int4_bytes_gate.py`,
   `results/aie/int4_engine_bytes_gate_desktop2_20260923.log`. DERIVED throughout: it assumes a
-  frame bound purely by transport and today's fixed packet, and no W4 accuracy data exists.
+  frame bound purely by transport and today's fixed packet. W4 accuracy, measured since, kills it
+  on its own (the last bullet).
   - Every weight packet is a fixed 9,472 B object, so int4 inside it saves nothing. It needs
     variable-size packets, the same change that trimming the padding needs.
   - Priced over every weight packet each frame streams, at the 26.8 GB/s fill transport with the
@@ -935,6 +955,20 @@
     A11). The older ELF behind `yolov8n_full`, `yolov8s_opt` and `resnet50_head` has 5,680 B free.
   - Reopen only with a new mechanism: activations that stop round-tripping DDR, a weight-bound
     model, or a transport measured slower than 26.8 GB/s.
+  - **Accuracy kills it independently, at round-to-nearest (gate D, 2026-09-23, CPU only,
+    pre-registered in 3c683ee).** The rule: W4A8 must stay within 1.0 point of mAP@50-95 of the
+    shipped W8A8 file on all 5,000 COCO val2017 images, for both YOLOv8n and YOLOv8s.
+    - It lost 27.04 and 34.45 points: YOLOv8n 27.10 → 0.06 (E1, per-tensor pow2) and 0.02 (E2,
+      per packet group); YOLOv8s 37.21 → 2.76 for both.
+    - Per-channel pow2 scales (1.58 / 2.47) and the stem and heads kept at W8 (0.08 / 7.87) do
+      not rescue it.
+    - A post-hoc float-activation diagnostic collapses too (500 images: 0.00–2.89), so the cause
+      is the 4-bit weights, not the frozen W8A8 activation pipeline.
+    - GPTQ, AdaRound, float per-channel scales and mixed precision are untested.
+    - Reopen only with a recovery method that brings a W4 model within the line, measured the
+      same way (`scripts/w4a8-eval.sh`).
+    - [Gate D](BENCHMARKS.md#int4-on-phoenix-gates-first-the-chip-runs-the-engines-uint8--int4-and-on-paper-the-current-weight-packets-leave-int4-little-to-save-2026-09-23-desktop-2),
+      `results/int4/w4a8_accuracy_verdict_desktop2_20260923.log`.
 
 ## The YOLOv8 partitioning failure (resolved)
 

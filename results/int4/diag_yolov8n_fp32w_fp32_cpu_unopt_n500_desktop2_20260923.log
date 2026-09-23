@@ -1,0 +1,41 @@
+loading annotations into memory...
+Done (t=0.25s)
+creating index...
+index created!
+onnxruntime 1.23.3.dev20260320
+ort-opt : disable_all   ort-threads : 8
+model sha256 11b52c2530def3c99bccc4bee39a40683aab8619d4278a334b5f0f78c43fd0a1
+model: head-cut (6 outputs), numpy decode, shapes order, input 640x640
+eval : 500 images, conf 0.001, iou 0.7, max_det 300, per-class NMS
+  500/500  (67834 detections so far)
+
+67834 detections over 500 images in 14s
+inference  mean 20.38 ms   median 21.20 ms
+wrote results/dets_yolov8n_fp32w_fp32_cpu_unopt_n500.json
+Loading and preparing results...
+DONE (t=0.20s)
+creating index...
+index created!
+Running per image evaluation...
+Evaluate annotation type *bbox*
+DONE (t=2.36s).
+Accumulating evaluation results...
+DONE (t=0.61s).
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.400
+ Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] = 0.553
+ Average Precision  (AP) @[ IoU=0.75      | area=   all | maxDets=100 ] = 0.439
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.218
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.442
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.545
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=  1 ] = 0.332
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets= 10 ] = 0.550
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.595
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.358
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.660
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.742
+
+=== yolov8n_cut | CPU | 640px | 500 images ===
+mAP@50-95  39.95
+mAP@50     55.35
+mAP small / medium / large   21.85 / 44.16 / 54.46
+latency    20.38 ms

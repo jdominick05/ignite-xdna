@@ -13,6 +13,10 @@
 #   ./scripts/w4a8-eval.sh matrix     # all 5000 images, serial: n then s for B8, E1, E2, then
 #                                     # E1h, U, and B8 with ONNX Runtime's optimizations
 #   ./scripts/w4a8-eval.sh verdict    # tools/w4a8_verdict.py over the matrix logs
+#   ./scripts/w4a8-eval.sh diag       # post-hoc, NOT pre-registered, never decides: the float
+#                                     # model with W8, W4-E1 and W4-U weights (float activations,
+#                                     # Sigmoid SiLU), 500 images, to separate the 4-bit weights
+#                                     # from the frozen W8A8 activation pipeline
 #
 # Options: --threads N pins ONNX Runtime's intra-op threads for every row (default 8; the float
 # summation order of an unoptimized QDQ Conv depends on it). --machine TAG names the logs
@@ -32,7 +36,7 @@
 STAGE="" THREADS=8 MACHINE=""
 while [ $# -gt 0 ]; do
     case "$1" in
-        controls|gate|prereg|smoke|matrix|verdict) STAGE="$1" ;;
+        controls|gate|prereg|smoke|matrix|verdict|diag) STAGE="$1" ;;
         --threads) THREADS="$2"; shift ;;
         --machine) MACHINE="$2"; shift ;;
         -h|--help) usage "${BASH_SOURCE[0]}"; exit 0 ;;
@@ -258,6 +262,51 @@ stage_verdict() {
     # shellcheck disable=SC2046
     logged "$log" python tools/w4a8_verdict.py --logs $(ls "$OUT"/eval_yolov8*_cpu_*_"${MACHINE}"_*.log) \
         || die "verdict incomplete, see $log"
+}
+
+DIAG_ARMS=(w8check e1 u)
+DIAG_N=500
+
+diag_emit() {   # diag_emit <model>: the float model with each arm's dequantized weights
+    local m="$1" v
+    for v in "${DIAG_ARMS[@]}"; do
+        printf '\n### emit-float %s %s\n' "$m" "$v"
+        python tools/w4a8_emulate.py emit-float --float "models/${m}_cut.onnx" --xint8 "models/${m}_cut_xint8.onnx" \
+            --variant "$v" --out "$W4/${m}_fp32w_${v}.onnx" || return 1
+    done
+}
+
+stage_diag() {
+    local m arm f log dets targets=() rows=()
+    for m in "${MODELS[@]}"; do
+        targets+=("$OUT/w4a8_diag_emit_${m}_${MACHINE}_${DATE}.log")
+        for arm in fp32 "${DIAG_ARMS[@]}"; do
+            targets+=("$OUT/diag_${m}_fp32w_${arm}_cpu_unopt_n${DIAG_N}_${MACHINE}_${DATE}.log"
+                      "results/dets_${m}_fp32w_${arm}_cpu_unopt_n${DIAG_N}.json")
+        done
+    done
+    WITNESS="$OUT/load_w4a8_diag_${MACHINE}_${DATE}.log"
+    refuse "${targets[@]}" "$WITNESS"
+    rm -f "$RAW/$(basename "$WITNESS")"
+    use_env resnet_env17
+    for m in "${MODELS[@]}"; do
+        step "diag emit $m (float model, dequantized weights)"
+        logged "$OUT/w4a8_diag_emit_${m}_${MACHINE}_${DATE}.log" diag_emit "$m" || die "diag emit $m failed"
+    done
+    for m in "${MODELS[@]}"; do
+        for arm in fp32 "${DIAG_ARMS[@]}"; do
+            if [ "$arm" = fp32 ]; then f="models/${m}_cut.onnx"; else f="$W4/${m}_fp32w_${arm}.onnx"; fi
+            log="$OUT/diag_${m}_fp32w_${arm}_cpu_unopt_n${DIAG_N}_${MACHINE}_${DATE}.log"
+            dets="results/dets_${m}_fp32w_${arm}_cpu_unopt_n${DIAG_N}.json"
+            step "diag ${m} fp32w_${arm}  ($f, $DIAG_N images)"
+            printf '\n### diag %s %s\n' "$m" "$arm" >> "$RAW/$(basename "$WITNESS")"
+            check_host_load warn "$RAW/$(basename "$WITNESS")"
+            scrub "$RAW/$(basename "$WITNESS")" "$WITNESS"
+            logged "$log" python pipelines/yolov8n/5_eval_map.py --model "$f" --ep cpu --n "$DIAG_N" \
+                --ort-opt disable_all --ort-threads "$THREADS" --dets "$dets" || die "diag $m $arm failed"
+        done
+    done
+    grep -H "^mAP@50-95" "$OUT"/diag_*_"${MACHINE}"_"${DATE}".log || true
 }
 
 "stage_$STAGE"

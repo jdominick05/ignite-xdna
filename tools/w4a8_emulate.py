@@ -29,6 +29,9 @@ After saving, emit checks the file: graph_diff against the shipped model (w8chec
 form b: only the Conv weights differ), the grid (every stored weight is a multiple of 2**k and
 its q4 is in [-7, 7]) and float identity (stored * scale == q4 * 2**-pos4, exactly).
 
+``emit-float`` is a weight-only diagnostic outside the pre-registered gate: the float model, float
+activations and Sigmoid SiLU kept, with each Conv weight replaced by the same q * 2**-pos.
+
 ``compare`` runs two files through ONNX Runtime with ORT_DISABLE_ALL on the first --n val2017
 images and requires bit-identical outputs (form a against form b, or the shipped file against
 w8check).
@@ -495,6 +498,51 @@ def cmd_emit(args) -> int:
     return 0 if not fails else 1
 
 
+def cmd_emit_float(args) -> int:
+    """Weight-only diagnostic: the FLOAT model (float activations, Sigmoid SiLU) with every Conv weight
+    replaced by the variant's dequantized weight, q * 2**-pos, exactly as emit computes it. Not part of
+    the pre-registered gate; it separates the 4-bit weights from the frozen W8A8 activation pipeline."""
+    out = Path(args.out)
+    if out.exists():
+        raise SystemExit(f"refusing to overwrite {shown(out)}")
+    lo, hi = GRIDS[args.grid] if args.variant != "w8check" else W8
+    window = tuple(int(v) for v in args.window.split(":")) if args.variant != "w8check" else W8_WINDOW
+    shipped = Graph.load(Path(args.xint8), strict=True)
+    gf = Graph.load(Path(args.float), strict=False)
+    print(f"[emit-float] variant {args.variant}  grid [{lo}, {hi}]  window {window}  (weight-only, float activations)")
+    print(f"[emit-float] float  {shown(args.float)}  sha256 {sha256(args.float)}")
+    print(f"[emit-float] xint8  {shown(args.xint8)}  sha256 {sha256(args.xint8)}")
+    cws = conv_weights(shipped, gf)
+    keep = set(stem_and_head(shipped)) if args.variant == "e1h" else set()
+    model = copy.deepcopy(gf.model)
+    inits = {t.name: t for t in model.graph.initializer}
+    replaced = {}
+    for cw in cws:
+        if args.variant == "w8check" or cw["conv"].name in keep:
+            w_hat = cw["stored"].astype(np.float32) * pos2scale(cw["pos8"])
+        else:
+            w_hat = quantize_conv(cw, args.variant if args.variant != "e1h" else "e1", lo, hi, window)["w_hat"]
+        fname = cw["qname"][: -len("_quantized")]
+        inits[fname].CopyFrom(numpy_helper.from_array(np.asarray(w_hat, dtype=np.float32), fname))
+        replaced[fname] = w_hat
+    onnx.checker.check_model(model)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    onnx.save_model(model, str(out))
+    back = {t.name: numpy_helper.to_array(t) for t in onnx.load(str(out)).graph.initializer}
+    orig = {t.name: numpy_helper.to_array(t) for t in gf.model.graph.initializer}
+    bad = [n for n, w in replaced.items() if not np.array_equal(back[n], w)]
+    other = [n for n in orig if n not in replaced and (n not in back or back[n].tobytes() != orig[n].tobytes())]
+    extra = [n for n in back if n not in orig]
+    print(f"[check] {len(replaced) - len(bad)}/{len(replaced)} Conv weights equal the variant's q * 2**-pos; "
+          f"{len(orig) - len(replaced) - len(other)}/{len(orig) - len(replaced)} other initializers byte-identical "
+          f"to the float model; {len(extra)} added")
+    digest = sha256(out)
+    print(f"[emit-float] wrote {shown(out)}  sha256 {digest}")
+    ok = not (bad or other or extra)
+    print(f"[emit-float] {'PASS' if ok else 'FAIL'}")
+    return 0 if ok else 1
+
+
 def cmd_compare(args) -> int:
     import cv2
     import onnxruntime as ort
@@ -541,6 +589,13 @@ def main() -> int:
                    "<model>_w4a8_<variant>[_forma][_ortonly].onnx there")
     e.add_argument("--sidecar", default=None, help="per-conv JSON (default: --out with .json; required with a "
                    "directory --out)")
+    f = sub.add_parser("emit-float", help="diagnostic: the float model with the variant's dequantized weights")
+    f.add_argument("--float", required=True)
+    f.add_argument("--xint8", required=True)
+    f.add_argument("--variant", required=True, choices=VARIANTS)
+    f.add_argument("--grid", default="sym7", choices=sorted(GRIDS))
+    f.add_argument("--window", default="-1:5")
+    f.add_argument("--out", required=True)
     c = sub.add_parser("compare", help="bit-compare two models' outputs under ORT_DISABLE_ALL")
     c.add_argument("a")
     c.add_argument("b")
@@ -548,7 +603,7 @@ def main() -> int:
     c.add_argument("--n", type=int, default=16)
     c.add_argument("--threads", type=int, default=4)
     args = ap.parse_args()
-    return cmd_emit(args) if args.cmd == "emit" else cmd_compare(args)
+    return {"emit": cmd_emit, "emit-float": cmd_emit_float, "compare": cmd_compare}[args.cmd](args)
 
 
 if __name__ == "__main__":

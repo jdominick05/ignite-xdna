@@ -667,9 +667,17 @@ been closed:
     weight packet it streams, with the frame assumed purely transport-bound at 26.8 GB/s, int4
     could save at most 1.4–3.9% of any container's dispatch (a 4.8% ceiling, YOLOv8s, against a
     5% line). Its fixed 9,472 B packets make the real saving zero, and trimming them is the
-    larger lever, with no accuracy cost. No accuracy data exists for a W4 model. Separately, the
-    newest engine core has 224 B of its 16,384 B program memory free for a second k loop
-    (cross-audit ledger A11).
+    larger lever, with no accuracy cost. Separately, the newest engine core has 224 B of its
+    16,384 B program memory free for a second k loop (cross-audit ledger A11).
+  - **Accuracy (measured on the CPU, pre-registered, 2026-09-23): W4A8 at round-to-nearest
+    collapses YOLOv8n and YOLOv8s.**
+    - The kill line was 1.0 mAP@50-95 point against W8A8, on all 5,000 COCO images. The loss is
+      27.04 and 34.45 points: 27.10 → 0.06 and 37.21 → 2.76, with pow2 scales per tensor or per
+      packet group.
+    - Per-channel pow2 scales and a W8 stem and heads do not rescue it, and neither do float
+      activations (a post-hoc diagnostic).
+    - So int4-in-engine is killed at RTN independently of the byte gate. GPTQ, AdaRound and float
+      per-channel scales are untested.
   - **Open, and now well-posed:**
     - Does the hardware decode the 8 MAC control-word codes Peano never emits, i.e. is there a
       4-bit-A mode the toolchain does not expose? That needs a hand-built control word on
@@ -678,6 +686,7 @@ been closed:
       can express M < 32, so the note's "~2×" there is DERIVED and untested.
 
   Evidence: `results/aie/int4_{isa_gate,engine_bytes_gate,demo_npu}_desktop2_20260923.log`,
+  `results/int4/w4a8_accuracy_{prereg,verdict}_desktop2_20260923.log`,
   [BENCHMARKS](docs/BENCHMARKS.md#int4-on-phoenix-gates-first-the-chip-runs-the-engines-uint8--int4-and-on-paper-the-current-weight-packets-leave-int4-little-to-save-2026-09-23-desktop-2).
   **Checked whether an actual custom kernel could be built and run on Phoenix from
   material already in this install — a real dead end, confirmed rather than assumed.**
