@@ -2,7 +2,7 @@
 
 > **UNBACKED ON MAIN (2026-09-23, [ledger A3](notes_tnzr_cross_audit.md)).** The `[MEASURED: w4a8_probe_npu.log]`
 > and `w4a8_array_npu.log` tags below point at logs that are not on `main`. They are in this directory
-> on the unmerged branch `worktree-int4-study`, added by its commits `891d730` (probe) and `18622ab`
+> on the unmerged branch `worktree-int4-study`, added by its commits `67bd535` (probe) and `46bc01c`
 > (array), both measured 2026-09-10. On `main`, treat every MEASURED tag here as TO VERIFY; on that
 > branch, the errata below say which tags those logs support. The "widespread assumption that native sub-byte execution was exclusive
 > to AIE2P" framing is **retracted** ([ledger D11](notes_tnzr_cross_audit.md)). AMD documented the opposite:

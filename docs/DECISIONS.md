@@ -160,7 +160,7 @@
   which are Chess attributes with no Peano equivalent. Every use of those nine in this tree, upstream
   `mm.cc`'s included, is a no-op, and a kernel that relies on them for its schedule is relying on nothing.
   ([ledger A10](../results/aie/notes_tnzr_cross_audit.md); the `clang++ -dM -E` check is in commit
-  `8410fc5` on `worktree-int4-study`, `56b4e88` before its rebase onto `35d58d5`.)
+  `e91887c` on `worktree-int4-study`, `56b4e88` before its rebase onto `35d58d5` and message scrub.)
 - **`tools/aie_bank_check.py` is blind to two real bank conflicts (2026-09-23).** It drops the stack
   from its bank map (`n != STACK_SYM`) and looks only for load+load pairs. Yet a load and a store to
   the same bank in one bundle cost **+1 cycle**, as two loads do. MEASURED: upstream `mm.cc` int8 spills
