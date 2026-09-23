@@ -2539,9 +2539,12 @@ six shape and block pairs.
 - **DirectML reads int4 natively.** Its int4 GEMV takes 0.28–0.36× the time of the fp16 dense GEMV
   at the same shape (dense: 70.6–74.6 GB/s). Bytes alone would give 0.26–0.29×, so it does not
   expand the weights before reading them.
-- **The CPU saturates by 4 threads.** The sweep at 4096×11008, int8 compute, block 32 gives
-  30.3 / 43.9 / 48.3 / 51.2 / 49.5 GB/s at 1 / 2 / 4 / 8 / 16 threads. At `accuracy_level` 4,
-  ONNX Runtime 1.30.0 and 1.23.3 are within 1%.
+- **The CPU saturates by 4 threads.** At 4096×11008, int8 compute, block 32, ONNX Runtime 1.23.3:
+  - the sweep gives 30.3 / 43.9 / 48.3 / 49.5 GB/s at 1 / 2 / 4 / 16 threads
+    (`llm_gemv_sweep_ort123_desktop2_20260923.log`);
+  - the decisive matrix gives 51.2 GB/s at 8 threads (`llm_gemv_cpu_ort123_desktop2_20260923.log`).
+
+  At `accuracy_level` 4, ONNX Runtime 1.30.0 and 1.23.3 are within 1%.
 - **Predictions scored:**
   - P2 (DirectML ReduceSum fp16 at 40–85 GB/s), P5 (KILL) and P6 (errors) hold.
   - P1 misses low: the numpy probe reads 31–47 GB/s, not 50–75.
