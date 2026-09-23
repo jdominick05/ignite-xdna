@@ -11845,19 +11845,23 @@ back unchanged. All 20 verdicts in the log pass that form. Desktop 2, one sittin
 | d (bundles) | 1 | 2 | 3 | 4 | 5 | 6 |
 |---|---|---|---|---|---|---|
 | bf16 `vmac.f`: MACs landed of 8 | 2 | 4 | 4 | **8** | 8 | 8 |
-| bf16 cycles/call over empty (static bundles over empty's 7) | 32.9 (33) | 39.8 (39) | 46.7 (47) | 53.8 (54) | 61.0 (61) | 67.8 (68) |
+| bf16 cycles/call over empty (executing bundles over empty's 6) | 32.9 (33) | 39.8 (40) | 46.7 (47) | 53.8 (54) | 61.0 (61) | 67.8 (68) |
 | int8 `vmac`: MACs landed of 8 | 4 | **8** | 8 | 8 | | |
-| int8 cycles/call over empty (static bundles over empty's 7) | 35.9 (36) | 42.9 (43) | 49.9 (50) | 57.0 (57) | | |
+| int8 cycles/call over empty (executing bundles over empty's 6) | 35.9 (36) | 42.9 (43) | 49.9 (50) | 57.0 (57) | | |
 
 **The minimum distance for a correct result is 4 bundles in bf16 and 2 in int8, Peano's spacing
-exactly.**
+exactly.** What this measures is the spacing. How it splits into a latency and a read cycle
+(`vmac.f` 6 cycles with the accumulator read in cycle 3; int8 `vmac` 5 with a bypass) stays
+SPEC(Peano). Any latency and read cycle that imply the same spacing would give this table.
 
 **Closer MACs read a stale sum.** Assume each MAC reads the newest result from a MAC at least 4
 (bf16) or 2 (int8) bundles earlier. That predicts every shortfall in the table: bf16 d = 1 gives 2,
 d = 2 and 3 give 4, and int8 d = 1 gives 4.
 
-**The core does not stall.** Each variant costs its static bundle count to within one bundle. That is
-the count's own resolution, since it includes any alignment bundle after the return's delay slots. So an accumulator hazard gives a silently
+**The core does not stall.** Some bundles never execute. The tool's static count includes one
+alignment bundle after the return's delay slots, in every variant except bf16 d = 2 and in the empty
+control too. Counting only the bundles that execute, each variant costs exactly those bundles over
+the empty control, to within 0.3 cycles. So an accumulator hazard gives a silently
 wrong answer, not a slower one. This is the reference's "no interlocks" (R2) observed directly.
 
 The consequences:
