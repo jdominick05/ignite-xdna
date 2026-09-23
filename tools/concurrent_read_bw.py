@@ -201,7 +201,15 @@ def run_config(run: int, kinds) -> None:
         while time.perf_counter_ns() < start + int(WINDOW_S * 1e9) // 2:
             time.sleep(0.05)
         print("MID_WINDOW", flush=True)
-        counters(("\\Processor Information(_Total)\\% Processor Performance",))
+        paths = ["\\Processor Information(_Total)\\% Processor Performance"]
+        # added after sitting 1 (non-deciding): where the DirectML reader's 1 GiB resource sits,
+        # dedicated (the 780M's 512 MB carve-out) or shared system memory
+        for r in readers:
+            if r.kind == "dml":
+                pid = r.json_line("READY")["pid"]
+                paths += [f"\\GPU Process Memory(pid_{pid}_*)\\Dedicated Usage",
+                          f"\\GPU Process Memory(pid_{pid}_*)\\Shared Usage"]
+        counters(paths)
         gpu_engines()
         for r in readers:
             r.proc.wait(timeout=RUN_TIMEOUT_S)
@@ -331,6 +339,52 @@ any split decode itself.
 """
 
 
+RERUN = """Concurrent DDR reads, stage 2: the re-run rule, written after sitting 1 and before sitting 2
+
+Sitting 1 was committed as measured at 4566f87 and is INCOMPLETE on its own repeat rule. Its two
+DirectML-alone runs read 81.11 and 70.95 GB/s, 13.4% apart, over the 10% limit. Every other
+configuration repeated within 4%.
+
+Sitting 2
+  The full 14-run matrix again, as pre-registered at 4557ec9
+  (concurrent_read_prereg_desktop2_20260923.log): the same readers, windows, mirrored order,
+  2 runs per configuration, thresholds and 10% repeat rule. Its logs carry the tag _rerun.
+
+Which sitting decides
+  Sitting 2 alone decides R1-R5. Its verdict runs on its own log only.
+  If sitting 2 breaks the 10% repeat rule for any configuration, stage 2's verdict is
+  INCOMPLETE and R1-R5 are not decided. The spread is reported as a finding, with both
+  sittings' run totals side by side. There is no averaging across sittings and no new rule
+  after sitting 2's data.
+  Sitting 1 stays in the record as measured. Wherever stage 2 is reported, sitting 1's
+  DirectML-alone spread is shown beside the verdict, as an observation with its cause
+  unattributed. Every figure quoted comes from one sitting; no ratio pairs the two.
+
+Changes made after sitting 1 (none touches a rule's input)
+  (a) Non-deciding: the mid-window counter sample also reads the DirectML reader process's GPU
+      memory, Dedicated Usage and Shared Usage (Windows GPU Process Memory counters). This
+      tests one candidate for the spread: where the 1 GiB resource lands against the 780M's
+      512 MB carve-out. It folds into the existing mid-window PowerShell call, so the
+      sampling footprint is unchanged.
+  (b) Display only: the verdict prints pre-run GPU snapshots as witnesses and leaves out the
+      mid-window samples, which are expected to show the chips at work. Everything that gated
+      or voided a run in sitting 1 (the host-load gate, xrt-smi idle, coverage, the repeat
+      rule) gates sitting 2 identically.
+      Checked: re-printing sitting 1's verdict with this change gives the same table, the
+      same PROBLEM line and VERDICT INCOMPLETE. Only the witness lines differ: one pre-run
+      snapshot, VS Code's 3D engine at 2.2% before run 0.
+  Not changed: repeats, windows, order, readers, thresholds, the 10% rule.
+  Not possible: closing VS Code's use of the 780M (the user's application). It stays witnessed.
+
+Post hoc from sitting 1, labelled as such (the cause is unattributed)
+  Each DirectML-alone run is steady within itself: a median of 13.2 ms per GiB in all four
+  quarters of run 1, and 15.1 ms in run 12.
+  The mid-window counters do not separate them: CPU % Processor Performance 113.7 vs 114.0,
+  and the 780M's 3D engine at 99.4% vs 99.7%.
+  Across all runs, the CPU clock held at 112-118% under combined load.
+"""
+
+
 def verdict(log: Path) -> int:
     text = log.read_text(encoding="utf-8")
     runs = [json.loads(s.split(" ", 1)[1]) for s in text.splitlines() if s.startswith("CONFIG_JSON ")]
@@ -367,9 +421,17 @@ def verdict(log: Path) -> int:
             per = "  ".join(f"{k} {rate[c][k]:.2f}" + (f" ({rate[c][k] / solo[k]:.0%})" if k in solo else "") for k in c)
             ts = " / ".join(f"{r['total_gbps']:.2f}" for r in by[c])
             print(f"{fmt(c):14s} {ts:>18s} {total[c]:7.2f}  {per}")
-    for w in re.findall(r"^GPU_ENGINES_OVER_1PCT (\d+)", text, flags=re.M):
-        if w != "0":
-            print(f"witness: {w} GPU engine(s) over 1% at a snapshot")
+    # pre-run snapshots are witnesses; mid-window samples are expected to show the chips at work
+    mid = False
+    for s in text.splitlines():
+        if s.startswith(("RUN_BEGIN", "READER_CMD")):
+            mid = False
+        elif s.startswith("MID_WINDOW"):
+            mid = True
+        elif s.startswith("GPU_ENGINES_OVER_1PCT ") and not mid and s.split()[1] != "0":
+            print(f"pre-run witness: {s.split()[1]} GPU engine(s) over 1%")
+        elif s.startswith("GPU_ENGINE ") and not mid:
+            print("  " + s)
     if problems:
         for p in problems:
             print("PROBLEM", p)
@@ -402,6 +464,7 @@ def main() -> int:
     ap.add_argument("mode", choices=("reader", "prereg", "suite", "verdict", "selftest"))
     ap.add_argument("log", nargs="?")
     ap.add_argument("--kind", choices=KINDS + ("idle", "idle_iron"))
+    ap.add_argument("--rerun", action="store_true", help="prereg: print the re-run rule written after sitting 1")
     a = ap.parse_args()
     if a.mode == "reader":
         return reader(a.kind)
@@ -413,7 +476,7 @@ def main() -> int:
         return suite()
     if a.mode == "verdict":
         return verdict(Path(a.log))
-    print(PREREG)
+    print(RERUN if a.rerun else PREREG)
     import npu_read_bw_probe as probe
     d = probe.BUILD / probe.name(*NPU_ARTIFACT)
     print("PINS")

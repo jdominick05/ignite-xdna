@@ -303,10 +303,12 @@ stage_npuread_verdict() {
 CONC=tools/concurrent_read_bw.py
 
 stage_concurrent_prereg() {
-    local log="$OUT/concurrent_read_prereg_${MACHINE}_${DATE}.log"
+    # --tag rerun writes the re-run rule (written after sitting 1) instead of the original prereg
+    local log="$OUT/concurrent_read_prereg${TAG}_${MACHINE}_${DATE}.log" extra=()
+    [ "$TAG" = "_rerun" ] && extra=(--rerun)
     refuse "$log"
     use_env resnet_env17
-    logged "$log" python $CONC prereg || die "prereg failed"
+    logged "$log" python $CONC prereg "${extra[@]}" || die "prereg failed"
     ok "commit $log (with $CONC) before: $0 concurrent"
 }
 
