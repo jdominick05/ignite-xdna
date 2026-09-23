@@ -12,14 +12,21 @@ Three questions, answered in this order because each is only worth asking once t
    Each device output is also compared with the W8A16 ORT oracle (``tools/w8a16_oracle.py``). Where the
    device equals the emulator, that comparison has to reproduce what the emulator measured against the
    same oracle offline, and so it is the device's own distance to the model.
+   The host ends are checked on the same frames. Each staged image's values must be
+   ``npu/sesr.py``'s own preprocess, and each tail's image from the session's host path must equal
+   ``bf16_dense_image``'s numpy one, byte for byte.
 2. TIMING. Per tile, split into host staging, NPU dispatch, readback and host postprocess, for the
    int8 container and the bf16 one alternately in the same sitting, and for the float model on this
-   CPU. The spans are reported separately and never folded together.
+   CPU. The bf16 container is timed once per host path it is given (``--bf16-host``): native
+   (``preprocess_simd``) and numpy, so the host ends are the only thing that differs between those two
+   arms. The spans are reported separately and never folded together, and each arm says which host
+   path actually ran.
 3. QUALITY. PSNR and SSIM on each dataset, tiled exactly as ``pipelines/sesr/5_eval.py`` tiles it
    (256 x 256, overlap 8), for both containers and for three CPU references: the float model, the QDQ
    model with graph optimizations off (which the int8 container is expected to equal pixel for pixel),
    and the W8A16 oracle (which the bf16 container is expected to approach). Datasets are reported
-   separately and never averaged together.
+   separately and never averaged together. Every bf16 tile's image is also recomputed through the
+   numpy egress from the same device output and must be identical.
 
 Generic over the containers, the QDQ and float models, the images and the datasets. It opens one
 hardware context at a time and closes each before the next, prints ``xrt-smi``'s partition report at
@@ -131,22 +138,37 @@ def container_facts(path: Path) -> dict:
 
 
 def provenance() -> dict:
-    mods = {m.__name__.rsplit(".", 1)[-1]: Path(m.__file__).resolve() for m in (eb, gr16, em, gs, graph_ir)}
+    mods = {m.__name__.rsplit(".", 1)[-1]: Path(m.__file__).resolve() for m in (eb, gr16, em, gs, graph_ir, pp)}
     src = (ROOT / "src").resolve()
     stray = {k: str(v) for k, v in mods.items() if src not in v.parents}
+    if pp._LIB is not None and src not in Path(pp._LIB._name).resolve().parents:
+        stray["preprocess_simd"] = pp._LIB._name
     if stray:
         raise SystemExit(f"engine modules imported from outside {src}: {stray}")
     files = [Path(__file__).resolve(), Path(wo.__file__).resolve(), *mods.values()]
+    if pp._LIB is not None:
+        files.append(Path(pp._LIB._name).resolve())
     return {rel(p): sha16(p) for p in files}
 
 
-def open_session(path: Path, want_bf16: bool):
-    s = gs.open_sr_session(path)
+def native_library() -> dict:
+    return {"loaded": pp._LIB is not None,
+            "bf16_ingress": pp.has_native("bgr_to_c8_plane_bf16"),
+            "bf16_egress": pp.has_native("depth_to_space_crd_bgr_bf16")}
+
+
+def open_session(path: Path, want_bf16: bool, native_host: bool = True):
+    s = gs.open_sr_session(path, native_host=native_host)
     if isinstance(s, gs.Bf16DenseGraphSession) != want_bf16:
         s.close()
         raise RuntimeError(f"{rel(path)} opened in {type(s).__name__}; expected the "
                          f"{'bf16' if want_bf16 else 'int8'} session")
     return s
+
+
+def numpy_image(s, blocks: np.ndarray) -> np.ndarray:
+    """The numpy egress of a bf16 session's tail: what its host path must equal."""
+    return gs.bf16_dense_image(blocks, s._out_channels, s._bs, s._mean)
 
 
 def close_session(s) -> None:
@@ -185,8 +207,11 @@ def device_frames(s, frames, timeout_ms: int) -> list:
     keep = survivors(ge)
     out = []
     for label, kind, payload in frames:
+        host = {}
         if kind == "image":
             s.stage_image(payload)
+            host["stage_path"] = s.stage_path
+            host["sesr_input"] = sesr.preprocess(payload, TILE)[0][0]
         else:
             s.stage_quantized(payload)
         staged = s._input_plane.copy()
@@ -195,8 +220,14 @@ def device_frames(s, frames, timeout_ms: int) -> list:
         ms = (time.perf_counter() - t0) * 1e3
         tail = s.read_output().copy()
         tensors = {name: s.read_tensor(name).copy() for name in keep}
+        # The session's host egress against numpy's, on this very device output. Host only.
+        try:
+            host["native_egress_equals_numpy"] = bool(np.array_equal(s.postprocess(tail), numpy_image(s, tail)))
+            host["egress_path"] = s.egress_path
+        except RuntimeError as exc:
+            host["egress_error"] = str(exc)[:200]
         out.append({"label": label, "staged": staged, "tail": tail, "tensors": tensors,
-                    "input_after": read_input_region(s), "dispatch_ms": ms})
+                    "input_after": read_input_region(s), "dispatch_ms": ms, "host": host})
     return out
 
 
@@ -214,6 +245,11 @@ def check_frames(frames: list, ir, placement: dict, dense: dict, oracle_bytes: b
         rep["input_region_intact"] = bool(np.array_equal(staged, f["input_after"]))
         x = em.from_bf16_bits(np.ascontiguousarray(staged[h:h + H, h:h + W, :3])).transpose(2, 0, 1).copy()
         rep["staged_is_the_compilers_plane"] = bool(np.array_equal(staged, eb.input_plane(placement, x)))
+        host = {k: v for k, v in f["host"].items() if k != "sesr_input"}
+        if "sesr_input" in f["host"]:
+            # The staged values are the float pipeline's own input, not only laid out the compiler's way.
+            host["staged_is_npu_sesr_preprocess"] = bool(np.array_equal(x, f["host"]["sesr_input"]))
+        rep["host"] = host
         nb, oh, ow, _ = f["tail"].shape
         dev = np.moveaxis(f["tail"], 3, 1).reshape(nb * 8, oh, ow)
         rep["nonfinite_tail"] = int(np.count_nonzero(~np.isfinite(em.from_bf16_bits(dev[:channels]))))
@@ -253,8 +289,10 @@ def check_frames(frames: list, ir, placement: dict, dense: dict, oracle_bytes: b
 
 
 # --------------------------------------------------------------------------- 2. timing
-def time_container(path: Path, bf16: bool, tile: np.ndarray, frames: int, warmup: int, timeout_ms: int) -> dict:
-    s = open_session(path, bf16)
+def time_container(path: Path, bf16: bool, tile: np.ndarray, frames: int, warmup: int, timeout_ms: int,
+                   native_host: bool = True) -> dict:
+    s = open_session(path, bf16, native_host)
+    paths = set()
     try:
         rows = []
         for i in range(warmup + frames):
@@ -269,11 +307,17 @@ def time_container(path: Path, bf16: bool, tile: np.ndarray, frames: int, warmup
             t4 = time.perf_counter()
             if i >= warmup:
                 rows.append(((t1 - t0) * 1e3, (t2 - t1) * 1e3, (t3 - t2) * 1e3, (t4 - t3) * 1e3, (t4 - t0) * 1e3))
+            if bf16:
+                paths.add((s.stage_path, s.egress_path))
     finally:
         close_session(s)
     a = np.array(rows)
-    return {"frames": frames, "warmup": warmup, "stage_ms": stats(a[:, 0]), "dispatch_ms": stats(a[:, 1]),
-            "readback_ms": stats(a[:, 2]), "postprocess_ms": stats(a[:, 3]), "tile_total_ms": stats(a[:, 4])}
+    out = {"frames": frames, "warmup": warmup, "stage_ms": stats(a[:, 0]), "dispatch_ms": stats(a[:, 1]),
+           "readback_ms": stats(a[:, 2]), "postprocess_ms": stats(a[:, 3]), "tile_total_ms": stats(a[:, 4])}
+    if bf16:
+        # Which host path ran, every frame: a native arm that fell back to numpy would time the wrong thing.
+        out["host_paths"] = sorted("/".join(p) for p in paths)
+    return out
 
 
 def time_cpu(sess, tile: np.ndarray, frames: int, warmup: int) -> dict:
@@ -377,6 +421,8 @@ def main() -> int:
     ap.add_argument("--frames", type=int, default=300)
     ap.add_argument("--warmup", type=int, default=30)
     ap.add_argument("--rounds", type=int, default=2, help="int8 / bf16 timing alternations")
+    ap.add_argument("--bf16-host", action="append", choices=("native", "numpy"), default=None,
+                    help="host paths the bf16 container is timed with, in order (default: native, numpy)")
     ap.add_argument("--timeout-ms", type=int, default=10000)
     ap.add_argument("--mac-model", default=None, help="the emulator's accumulate model (default: aligned)")
     ap.add_argument("--no-exact", action="store_true")
@@ -388,6 +434,10 @@ def main() -> int:
     images = args.image or DEFAULT_IMAGES
     seeds = [0] if args.seed is None else args.seed
     datasets = args.dataset or ["Set5", "Set14"]
+    bf16_hosts = args.bf16_host or ["native", "numpy"]
+    native = native_library()
+    if "native" in bf16_hosts and not (native["bf16_ingress"] and native["bf16_egress"]):
+        raise SystemExit(f"a native bf16 host arm was asked for and the loaded library cannot serve it: {native}")
     bf16_facts = container_facts(args.container)
     if bf16_facts["elem"] != ELEM_BF16:
         raise SystemExit(f"{rel(args.container)} is not a bf16 container ({bf16_facts['elem']})")
@@ -398,11 +448,12 @@ def main() -> int:
         "fp32": {"path": rel(args.fp32), "sha256": sha16(args.fp32)},
         "npu_power_mode": npu_power.read_mode(), "xrt": xrt_host(),
         "onnxruntime": ort.__version__, "numpy": np.__version__, "cv2": cv2.__version__,
-        # int8 staging and DepthToSpace take the native paths when this library loaded; bf16 never does.
-        "native_preprocess_loaded": pp._LIB is not None,
+        # The int8 session takes its native host paths whenever this library loaded; the bf16 session
+        # takes its own when they are exported and native_host is on. Each arm reports what ran.
+        "native_library": native,
         "mac_model": args.mac_model or em.MAC_MODEL, "provenance": provenance(),
         "images": [rel(p) for p in images], "seeds": seeds, "datasets": datasets,
-        "frames": args.frames, "warmup": args.warmup, "rounds": args.rounds})
+        "frames": args.frames, "warmup": args.warmup, "rounds": args.rounds, "bf16_hosts": bf16_hosts})
     if not witness("start"):
         raise SystemExit("the device is not idle; a number measured beside another context is contention")
 
@@ -416,14 +467,14 @@ def main() -> int:
     if tile.shape[:2] != (TILE, TILE):
         tile = sesr.split_into_tiles(tile, patch_size=(TILE, TILE), overlap=args.overlap)[0][0]
     failed = False
-    frames, npu_arms, timing = [], {}, []
+    frames, npu_arms, timing, host_agreement = [], {}, [], {}
     try:
         # ---- everything that needs the device, one context at a time
         if not args.no_exact:
             plan = [(p.stem, "image", cv2.imread(str(p))) for p in images]
             plan += [(f"seed{k}", "bits", em.bf16_bits(em.to_bf16(wo.seeded_input(args.qdq, k)[0]))) for k in seeds]
             plan += [(f"{images[0].stem}_again", "image", cv2.imread(str(images[0])))]
-            s = open_session(args.container, True)
+            s = open_session(args.container, True, bf16_hosts[0] == "native")
             try:
                 frames = device_frames(s, plan, args.timeout_ms)
             finally:
@@ -431,21 +482,34 @@ def main() -> int:
             emit("BF16_SR_DEVICE_FRAMES", {"frames": [f["label"] for f in frames],
                                             "dispatch_ms": [round(f["dispatch_ms"], 3) for f in frames]})
         if not args.no_timing:
-            arms = ([("int8", args.int8_container, False)] if args.int8_container else []) + \
-                   [("bf16", args.container, True)]
+            arms = ([("int8_npu", args.int8_container, False, None)] if args.int8_container else []) + \
+                   [(f"bf16_npu_{h}_host", args.container, True, h) for h in bf16_hosts]
             for rnd in range(args.rounds):
-                for name, path, is_bf16 in arms:
-                    t = time_container(path, is_bf16, tile, args.frames, args.warmup, args.timeout_ms)
-                    timing.append(t)
-                    emit("BF16_SR_TIMING", {"arm": f"{name}_npu", "round": rnd, "span": "one 256x256 tile", **t})
+                for name, path, is_bf16, h in arms:
+                    t = time_container(path, is_bf16, tile, args.frames, args.warmup, args.timeout_ms, h != "numpy")
+                    timing.append((h, t))
+                    emit("BF16_SR_TIMING", {"arm": name, "round": rnd, "span": "one 256x256 tile", **t})
         if not args.no_quality:
             for name, path, is_bf16 in ([("int8_npu", args.int8_container, False)] if args.int8_container else []) + \
                     [("bf16_npu", args.container, True)]:
-                s = open_session(path, is_bf16)
+                s = open_session(path, is_bf16, bf16_hosts[0] == "native")
+                agree = {"tiles": 0, "identical": 0, "host_paths": set()}
+
+                def run_tile(t, s=s, is_bf16=is_bf16, agree=agree):
+                    image = s.run(t)[0]
+                    if is_bf16:
+                        # The same device output again through numpy's egress: host only, no dispatch.
+                        agree["tiles"] += 1
+                        agree["identical"] += bool(np.array_equal(image, numpy_image(s, s.read_output())))
+                        agree["host_paths"].add(f"{s.stage_path}/{s.egress_path}")
+                    return image
                 try:
-                    npu_arms[name] = upscale_all(args.data, datasets, lambda t, s=s: s.run(t)[0], args.overlap)
+                    npu_arms[name] = upscale_all(args.data, datasets, run_tile, args.overlap)
                 finally:
                     close_session(s)
+                if is_bf16:
+                    host_agreement = dict(agree, host_paths=sorted(agree["host_paths"]))
+                    emit("BF16_SR_HOST_AGREEMENT", {"arm": name, **host_agreement})
     except Exception as exc:  # noqa: BLE001 - a device failure is the finding; say it and stop
         emit("BF16_SR_ERROR", {"type": type(exc).__name__, "message": str(exc)[:500]})
         failed = True
@@ -477,13 +541,32 @@ def main() -> int:
     repeats = [r for r in reports if "repeat_of" in r]
     exact = bool(fresh) and all(r["exact"] and r["staged_is_the_compilers_plane"] for r in fresh) and \
         all(r["repeat_tail_identical"] and r["repeat_tensors_identical"] and r["input_region_intact"] for r in repeats)
+    # The host ends: on the exactness frames, in every timed bf16 arm, and on every quality tile.
+    want = bf16_hosts[0]
+    frame_host = [r["host"] for r in reports]
+    host = {
+        "frames_egress_equal_numpy": sum(bool(h.get("native_egress_equals_numpy")) for h in frame_host),
+        "frames": len(frame_host),
+        "frames_staged_npu_sesr_preprocess": sum(bool(h.get("staged_is_npu_sesr_preprocess")) for h in frame_host),
+        "image_frames": sum("staged_is_npu_sesr_preprocess" in h for h in frame_host),
+        "frames_on_the_asked_path": sum(h.get("egress_path") == want and h.get("stage_path", want) == want
+                                        for h in frame_host),
+        "timed_arms_on_their_path": all(t["host_paths"] == [f"{h}/{h}"] for h, t in timing if h is not None),
+        "quality_tiles_identical": host_agreement.get("identical"), "quality_tiles": host_agreement.get("tiles"),
+        "quality_host_paths": host_agreement.get("host_paths")}
+    host_ok = (host["frames_egress_equal_numpy"] == host["frames"] == host["frames_on_the_asked_path"]
+               and host["frames_staged_npu_sesr_preprocess"] == host["image_frames"]
+               and host["timed_arms_on_their_path"]
+               and host["quality_tiles_identical"] == host["quality_tiles"]
+               and host["quality_host_paths"] in (None, [f"{want}/{want}"]))
     emit("BF16_SR_RESULT", {
         "device_idle_after": idle,
         "exact_inputs": len(fresh), "repeat_frames": len(repeats), "device_equals_emulator": exact if frames else None,
         "tail_values_compared": int(sum(r["tail"]["values"] for r in fresh)),
         "resident_values_compared": int(sum(r["resident_tensors"]["values"] for r in fresh)),
-        "worst_vs_oracle": max(fresh, key=lambda r: r["vs_oracle"]["differ"])["vs_oracle"] if fresh else None})
-    return 0 if (exact or not frames) and idle else 1
+        "worst_vs_oracle": max(fresh, key=lambda r: r["vs_oracle"]["differ"])["vs_oracle"] if fresh else None,
+        "host": host, "host_ok": host_ok})
+    return 0 if (exact or not frames) and idle and host_ok else 1
 
 
 if __name__ == "__main__":

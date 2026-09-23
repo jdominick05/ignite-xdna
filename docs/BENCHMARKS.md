@@ -13316,6 +13316,11 @@ At float width AMD places nothing on the NPU, and in this same sitting AMD's int
 1.96 ms a tile. So this is a first, not a win over AMD, and there is no release in it. It is the first
 whole network this repository has run on the NPU with bf16 activations, and it is exact.
 
+*Updated by the next sitting:* with native host paths the bf16 tile beats the CPU, at 6.28-6.29 ms
+against 10.75
+([next section](#w8a16-sesr-m7-with-native-host-paths-the-tile-beats-the-cpu-and-the-frame-is-now-dispatch-bound-2026-09-22-desktop-2)).
+The timing below is this sitting's record and stands as measured.
+
 Logs:
 - [`sesr_m7_bf16_silicon_desktop2_20260922.log`](../results/aie/sesr_m7_bf16_silicon_desktop2_20260922.log)
   is the sitting. It was `tools/bf16_sr_silicon_check.py` under `research-lowlevel.sh --npu`, timing
@@ -13427,6 +13432,10 @@ the VitisAI EP, another environment):
   plan named this hazard, that the host boundary could decide the result on its own, and it did.
 - *DERIVED, not measured:* with egress at int8's cost, the bf16 tile would come to about 6.3 ms, under
   the CPU's 9.85. That is a reason to build a native uint16 egress, not a result.
+  *Checked in the next sitting:* the native egress was built and the tile measured 6.28-6.29 ms, but
+  its egress (0.86-0.88 ms) and staging (0.11-0.12 ms) both came out about 0.5 ms from what this
+  derivation assumed, in opposite directions
+  ([next section](#w8a16-sesr-m7-with-native-host-paths-the-tile-beats-the-cpu-and-the-frame-is-now-dispatch-bound-2026-09-22-desktop-2)).
 - Against AMD, bf16 dispatch alone is 2.7-3.1x AMD's whole int8 tile.
 
 ### What this does not establish
@@ -13436,5 +13445,117 @@ the VitisAI EP, another environment):
 - Five and fourteen images, as means, with no significance test.
 - W8A16 on the plain XINT8 weights only.
 - Why dispatch is 1.27x int8's.
+- Latency for one tile already in memory. This is neither a camera nor a whole image.
+- Energy was not measured.
+
+## W8A16 SESR-M7 with native host paths: the tile beats the CPU, and the frame is now dispatch-bound (2026-09-22, Desktop 2)
+
+[The section above](#w8a16-sesr-m7-on-silicon-exact-to-the-emulator-041-db-over-int8-and-the-host-egress-loses-the-tile-2026-09-22-desktop-2)
+found the bf16 tile losing to the CPU on numpy host work, not on the NPU. This sitting replaces both
+host ends with native routines in `preprocess_simd.c` (`bgr_to_c8_plane_bf16` and
+`depth_to_space_crd_bgr_bf16`). Then it times the tile again, with the old numpy path run as a
+third arm in the same sitting, so that the host ends are the only thing that differs between the two
+bf16 arms.
+
+The framing is unchanged. In this same sitting AMD's int8 SESR ran at 1.65 to 1.93 ms a tile, and
+the bf16 tile below is 3.3-3.8x that. This is a first, not a win over AMD, and there is no release in
+it.
+
+Logs:
+- [`sesr_m7_bf16_native_host_desktop2_20260922.log`](../results/aie/sesr_m7_bf16_native_host_desktop2_20260922.log)
+  is the sitting. It was `tools/bf16_sr_silicon_check.py` under `research-lowlevel.sh --npu`, run
+  23:52-23:56 on 2026-09-22.
+  - It was timing eligible, with no foreign contention and the device idle before and after.
+  - The power mode was `default`, XRT 2.21.0, NPU driver 32.0.20101.3760.
+  - The containers and both models are byte-identical to the ones the section above ran. The DLL's
+    hash is in the log's setup line.
+- [`eval_sesr_m7_all_npu_desktop2_20260922_sitting2.log`](../results/eval_sesr_m7_all_npu_desktop2_20260922_sitting2.log)
+  is AMD's stack, run with the same command as before (`5_eval.py --ep npu --dataset all --fresh`).
+  It started at 00:02 on 2026-09-23, seven minutes after the engine sitting ended, and its name
+  carries the sitting's date.
+- [`eval_sesr_m7_ep_placement_desktop2_20260922_sitting2.log`](../results/eval_sesr_m7_ep_placement_desktop2_20260922_sitting2.log)
+  shows 50 of 52 nodes on the NPU for both caches. Apart from its header it is identical to the
+  placement recorded before.
+
+### The native host ends are exact on the device's own data
+
+- On all 7 exactness frames, the image the session's native egress made from the tail equals
+  `bf16_dense_image`'s numpy image, byte for byte.
+- On all 6 image frames, the staged values are `npu/sesr.py`'s own preprocess.
+- On all 31 quality tiles of Set5 and Set14, the same device output run through the numpy egress
+  gives an identical image.
+- Every timed bf16 arm ran only the host path it asked for, on every frame.
+
+The rest reproduces the section above:
+- The device equals the emulator again to the bit, on the same six inputs: 6,291,456 tail values and
+  31,064,064 resident values, and 0 differ. The input region is intact and the repeat identical.
+- The worst frame against the oracle is 58 of 786,432 (head).
+- Quality matches **to every printed digit**:
+  - W8A16 34.65 / 29.60 dB PSNR-Y on Set5 / Set14, W8A8 34.25 / 29.41, FP32 35.64 / 30.03;
+  - AMD's XINT8 34.06 / 29.32 and AdaRound 35.16 / 29.82;
+  - the bf16 container differs from the W8A16 oracle in the same 4 + 140 pixels, each by one level.
+
+That match on real images is the proof that the native egress is exact, beyond the offline
+checks in `tests/test_host_fastpaths_offline.py`, which run it against numpy on every finite bf16
+pattern.
+
+### Timing, per 256 x 256 tile
+
+The figures are means over 300 frames after 30 of warm-up, with p99 in parentheses. The three NPU
+arms ran two alternating rounds each, and each range covers both rounds.
+
+| arm | host staging | NPU dispatch, or CPU run | readback | host postprocess | the tile |
+|---|---:|---:|---:|---:|---:|
+| int8 engine, native host | 0.10-0.12 ms | 4.05-4.09 ms (4.15-4.56) | 0.02 ms | 0.33-0.35 ms | 4.50-4.58 ms |
+| **bf16 engine, native host** | 0.11-0.12 ms | 5.24-5.27 ms (5.79-5.96) | 0.04 ms | 0.86-0.88 ms | **6.28-6.29 ms** (7.07-7.29) |
+| bf16 engine, numpy host | 0.66-0.67 ms | 5.18-5.21 ms (5.64-5.70) | 0.04 ms | 4.75-4.90 ms | 10.65-10.79 ms |
+| FP32 on the CPU, ONNX Runtime 1.30 | 0.25 ms | 8.17 ms (10.66) | - | 2.33 ms | **10.75 ms** (14.00) |
+
+AMD's stack, timed as `5_eval.py`'s `sess.run` per tile (ONNX Runtime 1.23.3 with the VitisAI EP):
+
+| AMD arm | Set5 | Set14 |
+|---|---:|---:|
+| XINT8 on the NPU | 1.91 ms | 1.67 ms |
+| AdaRound on the NPU | 1.93 ms | 1.65 ms |
+| FP32 on the CPU | 7.73 ms | 7.70 ms |
+
+- **The native host ends take 4.37-4.50 ms off the bf16 tile.** Egress falls from 4.75-4.90 ms to
+  0.86-0.88 and staging from 0.66-0.67 to 0.11-0.12. Dispatch is 5.18-5.27 ms in both bf16 arms, as
+  it should be, since only the host differs.
+- **The bf16 tile now beats the CPU**: 6.28-6.29 ms against 10.75, 1.71x. It is also under the
+  CPU's fastest single tile of the 300 (7.44 ms).
+- **The CPU arm drifted** from the section above. Its run is 8.17 ms against 7.47 and its tile 10.75
+  against 9.85, with the same model, the same ONNX Runtime, the same host and no code change, and a
+  wide spread (p99 14.00, maximum 26.19). This is the latency drift the repository already records
+  for this machine. So these rows are compared only with each other, and the verdict holds against
+  the CPU's fastest tile as well as its mean.
+- **The frame is now dispatch-bound.**
+  - Dispatch is 5.24-5.27 ms of the 6.28-6.29, 84%.
+  - The two host ends together are 0.97-0.99 ms, 16%, and readback is 0.04.
+- **The native bf16 egress still costs 2.5-2.6x the int8 engine's native egress** (0.86-0.88 ms
+  against 0.33-0.35). It reads twice the bytes, it converts floats where the int8 routine indexes a lookup
+  table, it is a scalar loop, and it reads the mapped buffer object right after a from-device sync.
+  Which of these accounts for the cost is not separated.
+- **bf16 dispatch is 1.28-1.30x int8's** (1.27-1.30 above), and that is still unexplained. It is now
+  the largest term in the frame.
+- Against the engine's own int8, the bf16 tile is 1.37-1.40x slower (6.28-6.29 ms against
+  4.50-4.58), in exchange for +0.41 / +0.19 dB.
+- Against AMD, the bf16 tile is 3.3-3.8x AMD's int8 tile, and its dispatch alone is 2.7-3.2x.
+- **The section above's DERIVED 6.3 ms is now checked, and it came out right by coincidence.**
+  - It assumed egress at the int8 native cost (0.35 ms) and staging still in numpy (0.65 ms).
+  - Measured, egress is 0.86-0.88 ms, about 0.5 ms over that assumption, and staging is 0.11-0.12,
+    about 0.5 ms under it.
+  - The two errors cancel: the total agrees, but the breakdown it rested on does not.
+
+### What this does not establish
+
+- This is one sitting on one machine, and it crosses midnight. The engine ran 23:52-23:56 on
+  2026-09-22 and AMD's arm 00:02-00:03 on 2026-09-23. The engine and its CPU arm ran under ONNX
+  Runtime 1.30, AMD's arms under 1.23.3.
+- Why dispatch is 1.28-1.30x int8's. Whether the cause is the doubled descriptor bytes or the core's
+  own pass is not separated, and that is now what decides the frame.
+- What makes the native bf16 egress 2.5-2.6x the int8 one. It is scalar and was not vectorized.
+- W8A16 was run on the plain XINT8 weights only. AMD's AdaRound W8A8 still beats it by 0.51 dB on
+  Set5 and 0.22 dB on Set14.
 - Latency for one tile already in memory. This is neither a camera nor a whole image.
 - Energy was not measured.
