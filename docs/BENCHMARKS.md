@@ -2239,6 +2239,95 @@ unresolved. Cycles per call are DERIVED from the NPU bracket, not traced. The ti
 would separate k from DMA run length from B's re-stream count was not run. Nothing here says a
 W4 network keeps its accuracy.
 
+### INT4 on Phoenix, gates first: the chip runs the engine's uint8 × int4, and the engine has no use for it (2026-09-23, Desktop 2)
+
+The question: AMD does not support int4 on XDNA1, so use the documentation this repo already has
+either to demonstrate int4 on the chip or to kill it before any engine work. There are three
+gates, and each was written into its log before it ran. None of it touches `src/`. Two gates
+are compile-only or schedule-only, and one runs on silicon.
+
+**Gate A: which int4 operand pairs the toolchain can lower.** Compile only;
+`kernels/int4_study/isa_gate.py`, `results/aie/int4_isa_gate_desktop2_20260923.log`. It
+compiles one `aie::mmul` per operand pair with IRON's exact Peano command. Each pair also gets a
+harness control with the same loads and casts and no mmul. It also parses every MAC intrinsic
+in Peano's `aiev2_vmult.h` / `aie2p_vmult.h` for the control word it builds. That word has a
+2-bit `amode` and a 2-bit `bmode` field, so it records every operand-width pair the toolchain
+can issue.
+
+- **Lowers to one `vmul` on aie2:** int8 × int4, uint8 × int4 (the engine's operand pair),
+  uint8 × uint4, and int8 × int4 at 8×16×8.
+- **Fails as undefined `aie::detail::mmul` templates:** int4 × int8, int4 × int4 (4×16×8 and
+  4×32×8), and int16 × int4 (acc32 and acc64). Every harness control compiles, so the failures
+  come from missing mmul definitions. 16 cases, 0 departures from the pre-registered
+  expectations.
+- **In the control word,** aie2's only 4-bit code is bmode 0, always paired with an 8-bit A. No
+  intrinsic takes a 4-bit A, and 8 of the 16 (amode, bmode) codes are never emitted.
+- **The verdict is about the toolchain.** On AIE2 its only dense int4 is W4A8. Whether the
+  silicon decodes the unused codes is untested, and the 2026-09-10 lesson above (`device.yaml`'s
+  silence about int8 × int4 was not the chip's) is the reason not to say more.
+- **Unexpected, and not pre-registered: on aie2p (Strix), int8 × int4 compiles to `vldb.unpack`
+  plus 8-bit MACs.** All 88 4-bit-operand intrinsics in `aie2p_vmult.h` are wrappers that widen B
+  to int8 first. The native 4-bit-B MAC mode exists here on Phoenix, and not on Strix in this
+  toolchain.
+
+**Gate B: the most int4 could save the graph engine.** Schedule only, no device;
+`tools/int4_bytes_gate.py`, `results/aie/int4_engine_bytes_gate_desktop2_20260923.log`.
+
+- **What it prices.** It rebuilds each container's default schedule and walks every weight
+  packet one frame streams. Its totals must equal `engine_stream_report`'s, commit 5162671's
+  corrected YOLOv8n and YOLOv8s figures, and every shipped container manifest's
+  `wpackets_bytes` / `weight_fills`; all do. Then it prices three changes at the 26.8 GB/s fill
+  transport, as if the frame were purely transport-bound. That is the best case for any byte
+  saving, so every figure below is DERIVED.
+- **Int4 needs variable-size packets.** A weight packet is a fixed 9,472 B object, so int4
+  inside it saves exactly nothing. The comparison is therefore against trimming that same packet
+  to its declared layout.
+- **The kill line** is 5% of the model's smallest measured dispatch. That is the size of effect
+  H12 found inseparable from this machine's drift.
+
+| Container | weight bytes / frame | declared-layout fill | trim, % of dispatch | int4, % of dispatch | int4 ceiling* |
+|---|---:|---:|---:|---:|---:|
+| YOLOv8n (7.161 ms) | 26,303,744 B | 40.9% | 7.7% | **2.8%** | 4.2% |
+| YOLOv8s (16.609 ms) | 83,618,816 B | 41.5% | 10.5% | **3.9%** | 4.8% |
+| YOLOv8n-pose (7.548 ms) | 25,697,536 B | 43.5% | 6.8% | **2.8%** | 4.2% |
+| SESR-M7 (4.208 ms) | 6,668,288 B | 46.2% | 3.0% | **1.4%** | 1.7% |
+| resnet50_head (1.142 ms) | 9,699,328 B | 21.6% | 24.0% | **3.4%** | 4.0% |
+
+\* The ceiling is int4 plus half of each conv packet's header and bias, as if two int4 packets
+merged, plus half the weight DMA tasks' issue time.
+
+- **Int4-in-engine is killed at gate B:** every model's best case sits under the line. The
+  narrowest is YOLOv8s's ceiling, 0.2 points under.
+- **The lever that survives costs no accuracy:** the engine streams 2.2–4.6× more weight bytes
+  than the layouts it declares. The trim is still a DERIVED best case until someone builds it.
+- **Reopen int4 only with a new mechanism:** activations that stop round-tripping DDR, a
+  weight-bound model, or a slower measured transport. Pricing the same bytes again is not one.
+
+**Gate C: the silicon demo.** `results/aie/int4_demo_npu_desktop2_20260923.log`, with raw JSONL
+per sweep and a 1 s witness. The NPU ran 05:06–05:16Z. The driver, XRT and toolchain match the
+2026-09-10 logs.
+
+| Check | Result |
+|---|---|
+| 3a. The one-core W4A8 probe of 2026-09-10, repeated (`kernels/w4a8_probe/sweep.py`, 54 processes) | **All 27 (kernel, mode, K) cells give the same median trace cycles as on 2026-09-10.** 54 of 54 processes are bit-exact, and every IRON object is identical to its static compile. The native k loop fits 10.674 cycles per unit K again: 383.7 MAC/cycle, 1.88× the int8 control. |
+| 3b. **uint8 × int4**, the engine's operand pair (`kernels/int4_study/u8i4_probe.py`, 24 processes) | **Bit-exact in all 12 cells** (2 arms × 2 modes × K = 64/128/256), with half of A at or above the zero point of 128. **Every cell's cycles equal its int8 twin's**: uint8 A is only the MAC's sign bit. The engine's own `mmul<4,8,8,uint8,int8>` equals int8 × int8 the same way. |
+| 3c. The array's best tile, repeated (2048³, 64/128/64, 3 runs a side) | Native int4 runs **6,206.73 GOPS against upstream int8's 4,821.17, 1.287×** (2026-09-10: 1.263×). The run ranges are disjoint, and every run is bit-exact with the same output hash as every 2026-09-10 arm. |
+
+The witness saw at most one hardware context in 562 samples, and no sample with two processes on
+the NPU.
+
+**The verdict of all three gates:**
+- **The demo runs.** int4 weights compute exactly on this chip, including the uint8 × int4 pair
+  the engine would need. The chip's k loop runs them at 1.88× its int8 loop.
+- **The graph engine has no use for them.** It is bound by its fixed weight packets and its
+  transport, not by its MACs.
+- **What this does not establish:**
+  - no W4 network, and no W4 accuracy anywhere in this repo;
+  - the array ratio's move from 1.263× to 1.287× lies inside this machine's day-to-day drift
+    (upstream int8 averaged 1.7% slower in this sitting) and is not attributed to anything;
+  - identical cycle counts on a statically scheduled core running byte-identical objects say
+    nothing about wall-clock stability.
+
 ### MobileViT-XXS does not survive per-tensor INT8, and AdaRound cannot save it
 
 The accuracy question the attention work deferred, now measured on the full 1000-image

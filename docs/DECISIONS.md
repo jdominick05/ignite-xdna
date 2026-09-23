@@ -892,6 +892,36 @@
   at 64/64/64 the MAC rate does show, at 128/64/64 nothing does (`results/aie/w4a8_array_npu.log`).
   Measure the design, not the kernel: H11 learned this from a static improvement, this from a
   measured one.
+- **On AIE2 the toolchain's only int4 is W4A8; int4 activations, W4A4 and W16A4 have no
+  aie_api/Peano dense path (2026-09-23).** Compile-only, `kernels/int4_study/isa_gate.py`,
+  `results/aie/int4_isa_gate_desktop2_20260923.log`.
+  - Every int4 operand pair is compiled through `aie::mmul` with a harness control that has the
+    same loads and no mmul. int8/uint8 × int4/uint4 lower to one `vmul`. int4 × int8,
+    int4 × int4 and int16 × int4 fail as undefined `aie::detail::mmul` templates while their
+    controls compile.
+  - One layer down, in Peano's `aiev2_vmult.h`, no MAC intrinsic takes a 4-bit A. The only
+    control-word code with a 4-bit B (bmode 0) pairs it with an 8-bit A.
+  - **This is a toolchain fact, not a silicon one.** Eight of the sixteen (amode, bmode) codes are
+    never emitted, and whether the hardware decodes them is untested. The pitfall two entries up
+    is exactly the mistake of reading a table's silence as the chip's.
+  - Surprise from the same run: Strix's aie2p reaches int8 × int4 only by unpacking, because every
+    4-bit aie2p intrinsic is a wrapper that widens B to int8. Phoenix's native 4-bit-B MAC mode
+    has no aie2p counterpart in this toolchain, so an int4 kernel written for one chip is not a
+    port to the other.
+- **Rejected: int4 weights in the graph engine — killed at the byte gate before any code
+  (2026-09-23).** `tools/int4_bytes_gate.py`, `results/aie/int4_engine_bytes_gate_desktop2_20260923.log`.
+  - Every weight packet is a fixed 9,472 B object, so int4 inside it saves nothing. It needs
+    variable-size packets, the same change that trimming the padding needs.
+  - Priced over every weight packet each frame streams, at the 26.8 GB/s fill transport with the
+    frame assumed purely transport-bound, int4's best case is under 5% of the smallest measured
+    dispatch for all five containers: YOLOv8n 2.8%, YOLOv8s 3.9%, YOLOv8n-pose 2.8%, SESR-M7 1.4%
+    and resnet50_head 3.4%. With a generous ceiling (merged headers, half the weight tasks gone)
+    YOLOv8s reaches 4.8%.
+  - Trimming the fixed packet to its declared layout saves more on every model, with no
+    accuracy question: 7.7%, 10.5%, 6.8%, 3.0% and 24.0% by the same arithmetic.
+  - The 5% line is where this repo already found an effect inseparable from drift (H12).
+  - Reopen only with a new mechanism: activations that stop round-tripping DDR, a weight-bound
+    model, or a transport measured slower than 26.8 GB/s.
 
 ## The YOLOv8 partitioning failure (resolved)
 

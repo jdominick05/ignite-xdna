@@ -564,6 +564,46 @@ every block edge, witness at most one context. Supersedes the probe's ≤ 1.18×
 Kernels `kernels/w4a8_array/`; written up in
 [`docs/BENCHMARKS.md`](../../docs/BENCHMARKS.md#w4a8-on-the-whole-array-int4-weights-pay-at-the-best-int8-tile-through-bytes-rather-than-macs).
 
+**`int4_isa_gate_desktop2_20260923.log`** — INT4 gate A, compile only, no NPU.
+- **What it compiles:** one `aie::mmul` per int4 operand pair for aie2 and aie2p, each beside a
+  no-mmul harness control.
+- **What passes on aie2:** int8/uint8 × int4/uint4, each lowering to one `vmul`.
+- **What fails:** int4 × int8, int4 × int4 and int16 × int4, as undefined `aie::detail::mmul`
+  templates while their controls compile. 0 departures from the pre-registered expectations.
+- **The control-word table:** in Peano's `aiev2_vmult.h` the only 4-bit code is bmode 0, always
+  with an 8-bit A. No intrinsic takes a 4-bit A, and 8 of the 16 (amode, bmode) codes are never
+  emitted.
+- **The verdict is about the toolchain, not the silicon.** Its only dense int4 on AIE2 is W4A8.
+- **Observed, not pre-registered:** aie2p's int8 × int4 is an unpack. All 88 of its 4-bit
+  intrinsics widen B to int8 first.
+- Kernels `kernels/int4_study/`.
+
+**`int4_engine_bytes_gate_desktop2_20260923.log`** — INT4 gate B, schedule only, no NPU.
+- **Method:** walks every weight packet the graph engine streams per frame, for five containers.
+- **Cross-checks, all passed:** totals equal `engine_stream_report`, commit 5162671's corrected
+  YOLOv8n and YOLOv8s figures, and every shipped manifest's `wpackets_bytes` / `weight_fills`.
+- **Pricing:** trim and int4 at 26.8 GB/s, as if transport-bound (DERIVED best cases).
+- **Result:** int4 is 1.4–3.9% of the smallest measured dispatch (ceiling 4.8%, YOLOv8s),
+  against a pre-registered 5% line. Int4-in-engine is killed, and trimming the fixed 9,472 B
+  packets saves more on every model (3.0–24.0%).
+- Tool `tools/int4_bytes_gate.py`.
+
+**`int4_demo_npu_desktop2_20260923.log`** (+ `w4a8_probe_repro_raw_20260923.jsonl`,
+`int4_u8i4_probe_raw_20260923.jsonl`, `w4a8_array_repro_raw_20260923.jsonl`,
+`witness_int4_demo_20260923.jsonl`) — INT4 gate C, on silicon. Same driver, XRT and toolchain as
+the 2026-09-10 logs.
+- **3a, the 2026-09-10 one-core W4A8 probe re-run:** cycle-identical in all 27
+  (kernel, mode, K) cells, and 54 of 54 processes bit-exact.
+- **3b, uint8 × int4 (the engine's operand pair):** bit-exact in 12 of 12 cells, with half of A
+  ≥ 128. Every cell's cycles equal its int8 × int4 twin's, and the engine's uint8 × int8 equals
+  int8 × int8.
+- **3c, the array's best tile (2048³, 64/128/64):** native int4 1.287× upstream int8, 6,206.73
+  against 4,821.17 GOPS (2026-09-10: 1.263×). Disjoint ranges, and the same output hash as every
+  2026-09-10 arm.
+- **Witness:** at most one context in 562 samples.
+- **Scope:** no W4 network or accuracy.
+- Kernels `kernels/int4_study/`.
+
 
 **`pmode_clock_readback_npu.log`** — XRT's `max_clock_frequency_mhz` against power mode
 *and* load, varied together: a 2048³ bf16 GEMM hold with `xrt-smi configure --pmode`

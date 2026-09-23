@@ -52,6 +52,7 @@ array program) into `~/.npu/cache/<hash>/`; later runs of the same shape hit the
 | `aie2/` | In-flight 4-D DMA receptive field generation, vectorized zero-realignment 3×3 conv kernel, and 20-core full-array engine | Replaces software `sliding_mul` shuffles (`vshift`/`vmov`) with MemTile 4-D DMA striding. M=1 achieves **2.00× MAC issue density** (0.222 → 0.444 vmac/cycle); M=2 unrolling achieves **4.50× MAC issue density** (1.000 vmac/cycle, 100% vector ALU saturation) with 0 realignment ops and 0 spills. *(Qualified 2026-09-23: the densities are STATIC inner-loop bundle counts, not measured rates; see the silicon figures at the end of this row.)* Closed-loop Column 0 pipeline: native hardware SRS requantization (`vst.srs.s8.s32`), 4-core gathering, and host-to-host DDR roundtrip. 20-core full-array execution engine: 5 physical columns × 4 cores/col across 30 physical tiles (3.84 MB SRAM, 50 flows), 20 clean ELFs, 18.43 TOPS at 1.80 GHz. Compiler-verified. **Qualified 2026-09-23:** 18.43 TOPS is peak arithmetic for 20 cores, and "compiler-verified" means the build succeeds. It is not a hardware result. On silicon ([`hardware_im2col_execution.log:11-14`](../results/aie/hardware_im2col_execution.log)) the 20-core array hits **ERT_CMD_STATE_TIMEOUT**, 16 cores (Cols 0–3) reach **0.0270 TOPS**, and one core 0.0037 TOPS. The log prints these as 0.37% and 0.80% "density" against a 128 MAC/cycle int8 peak. The SPEC is 256 (`docs/SILICON.md`), so against the true peak they are about **0.18% and 0.40%** (DERIVED; [ledger A5, A7](../results/aie/notes_tnzr_cross_audit.md)); [implementation](../results/aie/notes_im2col_4d_implementation.md), [VLIW audit](../results/aie/notes_im2col_kernel_vliw_audit.md), [pipeline integration](../results/aie/notes_im2col_m2_pipeline_integration.md), [column scaling](../results/aie/notes_im2col_4core_column_scaling.md), [egress roundtrip](../results/aie/notes_im2col_egress_roundtrip.md), [column 4 unlock feasibility](../results/aie/notes_column4_unlock_feasibility.md), and [20-core array synthesis](../results/aie/notes_im2col_20core_array_synthesis.md) |
 | `w4a8_probe/` | Nothing yet — int4 weights on one core, two ways: native `mmul<int8,int4>`, and int4 widened to int8 on load | **int8×int4 is a native `vmac` on AIE2**, bit-exact, one per cycle at 512 MACs: a k loop at 372.4 MAC/cycle, 1.82× the int8 control (upstream's kernel, re-typed). Widening on load is free and buys only bytes. One core, not the array |
 | `w4a8_array/` | Nothing yet — `whole_array`'s int8 GEMM with B packed int4 and the probe's kernels in every core | **int4 weights pay at the array, through bytes rather than MACs**: 1.23–1.26× at the int8 best tile 64/128/64 (**6,195 GOPS**, bit-exact) with the unpack kernel as much as the native one; 1.06–1.13× at 64/64/64, nothing at 128/64/64. Mechanism unexplained |
+| `int4_study/` | Nothing — the INT4 gates: can this chip run int4 at all, and is it worth anything to the graph engine | **The demo runs, the engine has no use for it.** uint8 × int4 (the engine's operand pair) is bit-exact on silicon at int8 × int4's exact cycles; the toolchain's only dense int4 is W4A8; the engine's fixed weight packets make int4 worth under 5% of any container's dispatch even at best. [Evidence](../docs/BENCHMARKS.md#int4-on-phoenix-gates-first-the-chip-runs-the-engines-uint8--int4-and-the-engine-has-no-use-for-it-2026-09-23-desktop-2) |
 
 ## `aie2/dfl/`
 
@@ -564,3 +565,36 @@ What it measured (`results/aie/w4a8_array_npu.log`, 2048³, same sitting):
   per MAC into the core explains all three tiles; what does is unexplained.
 - **Double-buffering C**, which only packed B lets 64/128/64 fit (60,672 B against int8's
   68,864 B), buys nothing.
+
+## `int4_study/`
+
+The 2026-09-23 INT4 gates: can the chip run int4 despite no official support, and is it worth
+anything to the graph engine? `w4a8_probe/` and `w4a8_array/` above are reused as they are.
+They stay byte-identical because their logs describe them, so everything new lives here.
+Written up in
+[`docs/BENCHMARKS.md`](../docs/BENCHMARKS.md#int4-on-phoenix-gates-first-the-chip-runs-the-engines-uint8--int4-and-the-engine-has-no-use-for-it-2026-09-23-desktop-2).
+
+- `isa_gate.cc` + `isa_gate.py` — gate A, compile only.
+  - Compiles one `aie::mmul` per int4 operand pair for aie2 and aie2p, each with a no-mmul
+    harness control.
+  - Tabulates the (amode, bmode) MAC control-word codes Peano's intrinsics emit.
+  - Reports how aie_api lowers int8 × int4 on each target.
+  - `results/aie/int4_isa_gate_desktop2_20260923.log`.
+- `u8i4_kernels.cc` — the W4A8 probe's 4×2 GEMM kernel with the A element type as a
+  parameter:
+  - `mm_u8i8`: `mmul<4,8,8,uint8,int8>`, the graph engine's own operand pair, as the control;
+  - `mm_u8i4_native`: `mmul<4,16,8,uint8,int4>`.
+
+  Same layouts, k-loop modes and trace bracket as the probe.
+- `u8i4_probe.py` — gate C's new arm, one Worker on Tile(0, 2).
+  - A is drawn over all of uint8, so half of it sits at or above the engine's zero point of 128.
+  - The output is checked against Σ uint8·int4 in int64, and a mismatch is tried against A read
+    as int8 and against all four nibble readings.
+  - The IRON-built object is compared bundle for bundle with a static compile.
+- `sweep_u8i4.py`, `fit_u8i4.py` — the W4A8 probe's `sweep.py` and `fit.py`, imported and
+  pointed at the uint8 arms, not copied.
+- `demo_summary.py` — gate C's comparison: today's probe and array runs against the 2026-09-10
+  record, the uint8 arms beside today's int8 ones, and the witness.
+
+Gate B lives at `tools/int4_bytes_gate.py`: it prices int4 against the graph engine's own
+weight stream and needs no kernel.

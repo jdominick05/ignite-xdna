@@ -1,0 +1,96 @@
+INT4 study, gate B: the most int4 weights could save the graph engine per frame (DERIVED)
+UTC: 2026-09-23T05:00:59Z
+MACHINE: DESKTOP-CBL5NUA
+COMMIT: f1194be (worktree-int4-study)
+COMMAND: python tools/int4_bytes_gate.py --log results/aie/int4_engine_bytes_gate_desktop2_20260923.log
+ignite_xdna: ignite_xdna/__init__.py (this checkout's src/, asserted)
+SCOPE: no device. Default schedule (activation ring off). Bytes -> ms at 26.8 GB/s,
+  as if the frame were purely transport-bound: every ms below is a DERIVED best case.
+
+PRE-REGISTERED GATE (from the study plan, before this run):
+  int4-in-engine is KILLED if its bound is < 5% of the smallest measured dispatch for
+  EVERY model; >= 5% for any model -> 'not killed by bytes, unresolved' (needs a src/ change).
+  5% = the drift this repo found inseparable from zero (H12, 5.0% floor drift).
+  Expected before the run: YOLOv8n ~0.19 ms / ~2.5% with trim; YOLOv8s might exceed 5%.
+
+YOLOv8n  (2,777 weight packets sent per frame, 2,637 conv; 862 unique; dispatch 7.161 ms, docs/MODEL_ZOO_BENCHMARKS.md:297 (live_ignition dispatch))
+  check: walk == engine_stream_report (26,303,744 B): True
+  check: == 5162671's 26,303,744 B: True
+  check: shipped yolov8n_full.ignite: wpackets_bytes 8164864 vs 8164864, weight_fills 303 vs 303 (match)
+  check: unaligned runs 0, packets whose data overruns their declared layout 0
+  weight bytes streamed / frame         26,303,744 B    0.981 ms
+  of which declared layout (conv)       10,770,432 B  fill  40.9%
+  of which non-zero weight bytes         9,088,576 B  fill  34.6%  (a floor on real weights)
+  save: trim to declared layout           14,822,400 B    0.553 ms    7.7% of dispatch
+  save: int4 (variable-size packets)       5,385,216 B    0.201 ms    2.8% of dispatch
+  save: int4 + merged headers              5,722,752 B    0.214 ms    3.0% of dispatch
+  save: trim + int4                       20,207,616 B    0.754 ms   10.5% of dispatch
+  save: trim to non-zero bytes (floor)    16,504,256 B    0.616 ms    8.6% of dispatch
+  save: int4 CEILING (merged headers + half the 303 weight tasks' issue time)    0.301 ms    4.2% of dispatch
+
+YOLOv8s  (8,828 weight packets sent per frame, 8,612 conv; 3,114 unique; dispatch 16.609 ms, docs/MODEL_ZOO_BENCHMARKS.md:298 (live_ignition dispatch))
+  check: walk == engine_stream_report (83,618,816 B): True
+  check: == 5162671's 83,618,816 B: True
+  check: shipped yolov8s.ignite: wpackets_bytes 29495808 vs 29495808, weight_fills 389 vs 389 (match)
+  check: unaligned runs 0, packets whose data overruns their declared layout 0
+  weight bytes streamed / frame         83,618,816 B    3.120 ms
+  of which declared layout (conv)       34,735,104 B  fill  41.5%
+  of which non-zero weight bytes        31,456,769 B  fill  37.6%  (a floor on real weights)
+  save: trim to declared layout           46,623,744 B    1.740 ms   10.5% of dispatch
+  save: int4 (variable-size packets)      17,367,552 B    0.648 ms    3.9% of dispatch
+  save: int4 + merged headers             18,469,888 B    0.689 ms    4.1% of dispatch
+  save: trim + int4                       63,991,296 B    2.388 ms   14.4% of dispatch
+  save: trim to non-zero bytes (floor)    49,902,079 B    1.862 ms   11.2% of dispatch
+  save: int4 CEILING (merged headers + half the 389 weight tasks' issue time)    0.802 ms    4.8% of dispatch
+
+YOLOv8n-pose  (2,713 weight packets sent per frame, 2,573 conv; 864 unique; dispatch 7.548 ms, docs/MODEL_ZOO_BENCHMARKS.md:388 (NPU dispatch))
+  check: walk == engine_stream_report (25,697,536 B): True
+  check: shipped yolov8n_pose.ignite: wpackets_bytes 8183808 vs 8183808, weight_fills 321 vs 321 (match)
+  check: unaligned runs 0, packets whose data overruns their declared layout 0
+  weight bytes streamed / frame         25,697,536 B    0.959 ms
+  of which declared layout (conv)       11,175,936 B  fill  43.5%
+  of which non-zero weight bytes         9,733,203 B  fill  37.9%  (a floor on real weights)
+  save: trim to declared layout           13,827,072 B    0.516 ms    6.8% of dispatch
+  save: int4 (variable-size packets)       5,587,968 B    0.209 ms    2.8% of dispatch
+  save: int4 + merged headers              5,917,312 B    0.221 ms    2.9% of dispatch
+  save: trim + int4                       19,415,040 B    0.724 ms    9.6% of dispatch
+  save: trim to non-zero bytes (floor)    15,269,805 B    0.570 ms    7.5% of dispatch
+  save: int4 CEILING (merged headers + half the 321 weight tasks' issue time)    0.314 ms    4.2% of dispatch
+
+SESR-M7  (704 weight packets sent per frame, 535 conv; 18 unique; dispatch 4.208 ms, docs/MODEL_ZOO_BENCHMARKS.md:186 (dispatch))
+  check: walk == engine_stream_report (6,668,288 B): True
+  check: shipped sesr_m7.ignite: wpackets_bytes 170496 vs 170496, weight_fills 36 vs 36 (match)
+  check: unaligned runs 0, packets whose data overruns their declared layout 0
+  weight bytes streamed / frame          6,668,288 B    0.249 ms
+  of which declared layout (conv)        3,078,144 B  fill  46.2%
+  of which non-zero weight bytes           898,527 B  fill  13.5%  (a floor on real weights)
+  save: trim to declared layout            3,409,920 B    0.127 ms    3.0% of dispatch
+  save: int4 (variable-size packets)       1,539,072 B    0.057 ms    1.4% of dispatch
+  save: int4 + merged headers              1,607,552 B    0.060 ms    1.4% of dispatch
+  save: trim + int4                        4,948,992 B    0.185 ms    4.4% of dispatch
+  save: trim to non-zero bytes (floor)     5,589,537 B    0.209 ms    5.0% of dispatch
+  save: int4 CEILING (merged headers + half the 36 weight tasks' issue time)    0.070 ms    1.7% of dispatch
+
+resnet50_head  (1,024 weight packets sent per frame, 1,024 conv; 1,024 unique; dispatch 1.142 ms, docs/BENCHMARKS.md:10125 (NPU dispatch))
+  check: walk == engine_stream_report (9,699,328 B): True
+  check: shipped resnet50_head.ignite: wpackets_bytes 9699328 vs 9699328, weight_fills 4 vs 4 (match)
+  check: unaligned runs 0, packets whose data overruns their declared layout 0
+  weight bytes streamed / frame          9,699,328 B    0.362 ms
+  of which declared layout (conv)        2,097,152 B  fill  21.6%
+  of which non-zero weight bytes         1,923,955 B  fill  19.8%  (a floor on real weights)
+  save: trim to declared layout            7,340,032 B    0.274 ms   24.0% of dispatch
+  save: int4 (variable-size packets)       1,048,576 B    0.039 ms    3.4% of dispatch
+  save: int4 + merged headers              1,179,648 B    0.044 ms    3.9% of dispatch
+  save: trim + int4                        8,388,608 B    0.313 ms   27.4% of dispatch
+  save: trim to non-zero bytes (floor)     7,513,229 B    0.280 ms   24.5% of dispatch
+  save: int4 CEILING (merged headers + half the 4 weight tasks' issue time)    0.045 ms    4.0% of dispatch
+
+int4 bound as % of smallest measured dispatch: YOLOv8n 2.8%, YOLOv8s 3.9%, YOLOv8n-pose 2.8%, SESR-M7 1.4%, resnet50_head 3.4%
+int4 CEILING as % of the same:                YOLOv8n 4.2%, YOLOv8s 4.8%, YOLOv8n-pose 4.2%, SESR-M7 1.7%, resnet50_head 4.0%
+VERDICT: int4-in-engine KILLED at gate B -- every model's best case is under 5%.
+  Narrowest: YOLOv8s's CEILING at 4.8% (0.2 points under the line); its plain int4 bound is 3.9%.
+In every row int4 presupposes the variable-size packets that the trim alone would use;
+compare 'trim to declared layout' (no accuracy cost) against 'int4' for the lever order.
+The CEILING prices what int4 could enable beyond halving bytes as two int4 packets in one
+9,472 B object and half the weight tasks gone. Not priced: any change to activation traffic,
+which int4 weights do not touch, and any accuracy cost, which this gate does not reach.
