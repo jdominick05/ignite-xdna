@@ -241,10 +241,10 @@ more RAM/disk are especially useful. Changes must pass the syntax/import gate in
 
 ## License
 
-Licensed under the [GNU Affero General Public License v3.0](LICENSE) (AGPL-3.0): use, study, modify
-and share it freely, including commercially, but any version you distribute or run as a network
-service must also be open-sourced under the AGPL. That follows from a dependency, not a preference —
-`pipelines/yolov8n/1_export.py` imports `ultralytics`, whose YOLOv8 code is itself AGPL-3.0. It
-covers the pipeline code only: upstream model artifacts keep their own licenses and are not
-redistributed here (`models/` and `data/` are git-ignored). The engine under `src/ignite_xdna/` is
-Apache-2.0 WITH LLVM-exception — a different licence from the study code around it.
+The whole repository, engine under `src/ignite_xdna/` included, is licensed under the [GNU Affero
+General Public License v3.0 or later](LICENSE) (AGPL-3.0-or-later): use, study, modify and share it
+freely, including commercially, but any version you distribute or run as a network service must also
+be open-sourced under the AGPL. That follows from a dependency: `pipelines/yolov8n/1_export.py`
+imports `ultralytics`, whose YOLOv8 code is AGPL-3.0. Model artifacts keep their own licenses and are
+not redistributed (`models/` and `data/` are git-ignored); the few files copied from mlir-aie keep
+AMD's notice and licence, and say so in their header.

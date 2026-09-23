@@ -132,12 +132,14 @@ from a run on real hardware.
 
 ## Licensing
 
-This project is licensed under the [GNU Affero General Public License v3.0](LICENSE)
-(AGPL-3.0), chosen because `pipelines/yolov8n/1_export.py` imports `ultralytics`
+This project is licensed under the [GNU Affero General Public License v3.0 or later](LICENSE)
+(AGPL-3.0-or-later), the whole repository including `src/ignite_xdna/`. New files carry
+`SPDX-License-Identifier: AGPL-3.0-or-later`; never paste mlir-aie's AMD copyright header onto
+original work (`tools/license_header_audit.py` reports any that slip in). It was chosen because `pipelines/yolov8n/1_export.py` imports `ultralytics`
 directly, and Ultralytics' own YOLOv8 code is AGPL-3.0; matching that license here
 avoids leaving an unresolved copyleft ambiguity between this repository and a
 dependency it imports at runtime. By contributing, you agree your contributions are
-licensed under the same terms. Note the license covers the pipeline code only. The
+licensed under the same terms. Note the license covers this repository's code only. The
 ResNet50, YOLOv8, ImageNet, and COCO artifacts it uses carry their own upstream licenses
 and are never redistributed by this repository.
 

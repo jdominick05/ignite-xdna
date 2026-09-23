@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Explicit BiSeNetV2/MODNet-Cut recipes at original Q/DQ boundaries.
 
 Only Conv(+Relu) regions accepted by the existing integer lowering are native.
