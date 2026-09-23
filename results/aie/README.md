@@ -11,6 +11,18 @@ This file exists because these entries used to be a single cell in
 [`results/README.md`](../README.md)'s table, long enough that its three retractions were
 invisible to anyone scanning it.
 
+## Cross-audit against Hello XDNA! (2026-09-23, Desktop 2)
+
+This repo checked against Steinert and Breuer's [Hello XDNA!](https://tnzr.org/xdna/), the XDNA1 ISA
+tables and a hand-scheduled bf16 GEMM measured at 398 GFLOPS on one tile of the same 8700G.
+Disagreements are settled by Peano's machine model, then silicon, never by picking a side.
+
+| Log | Evidence |
+|---|---|
+| [notes_tnzr_cross_audit.md](notes_tnzr_cross_audit.md) | The audit record: every claim checked, its verdict, and the source that settles it |
+| [peano_aie2_machine_model_a36c62b9.log](peano_aie2_machine_model_a36c62b9.log) | SPEC(Peano), pinned to the installed llvm-aie commit: 9 accumulators `cm0`–`cm8`; `vshift`/`vshuffle`/`vbcst`/`vmov` issue in the mv slot, not vec; int8 `vmac` 5 cycles with a bypassed accumulator (dependent issue every 2 bundles), bf16 `vmac.f` 6 (every 4); loads 7, stores 1; `ret lr` 5 delay slots; config values 28 (bf16 4×8×4) and 776 (int8 4×8×8). `tools/peano_isa_facts.py` |
+| [engine_core_issue_census_desktop2_20260923.log](engine_core_issue_census_desktop2_20260923.log) | Static: 68 engine builds are 4 distinct core ELFs; the conv inner loops issue 0.167–0.348 `vmac`/cycle (fused stage 2: 0.444); `.text` 16,160 of 16,384 B; loop setup 16–58 B before loop start, ≥112 B before loop end; bank check HAZARD (12 paired loads, activations and weights sharing bank 2). `tools/engine_core_census.py --bank-check` |
+
 ## Four silicon levers
 
 The [2026-09-19 Desktop 2 sitting](../../docs/BENCHMARKS.md#four-silicon-levers-measured-2026-09-19-desktop-2)

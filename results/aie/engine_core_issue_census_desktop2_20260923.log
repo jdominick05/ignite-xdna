@@ -1,0 +1,211 @@
+Conv-engine core census (static; bundles = cycles on this statically scheduled VLIW)
+root: build/conv_engine  core: 0_2  builds with a core ELF: 68
+distinct core ELFs: 4
+
+== ELF sha256 45aeec4edc4f: 56 build(s), built 2026-09-18 .. 2026-09-21 ==
+  builds: yolov8n_cls640_carved, yolov8n_headctrl, yolov8n_noreuse, yolov8n_cls640_carved_noreuse, yolov8n_noreuse_cli, yolov8n_cls640_carved_noreuse2, sesr_m7_base, sesr_rb1, sesr_rb2, sesr_rb3, sesr_rb4, yolov8n_rb2, yolov8n_rb3, yolov8n_rb4, yolov8n_derive, shape_sesr_m7_xint8, shape_yolov8n_cut_xint8, shape_yolov8s_cut_xint8, sesr_m7, sesr_m7_noreuse, sesr_fuse, sesr_fuse_noreuse, bisenetv2_dense, modnet_cut_dense, bisenetv2_dense_opt, modnet_cut_dense_opt, yolov8m_split, yolov8l_split, yolov8x_split, yolov8n_full_banded, yolov8n_control, yolov8n_band_nore, yolov8n_band_c3, ab_yolov8s_band, ab_yolov8s_ctl, ab_yolov8n_band, ab_yolov8n_ctl, ab_s_nore, ab_pose_nore, ab_s_silu_band, ab_s_silu_ctl, yolo26n, yolo26n_nore, yolo26n_ctl, yolo11n_band, yolo26n_band2, yolo26n_r2, yolo26n_r2_nore, yolo26n_r2_silu, yolo26n_r2_silu_nore, yolo11n_core, yolo11n_core_silu, yolo11n_core_silu_nore, yolo11n_block, bisenetv2_dense_20260921, modnet_cut_dense_20260921
+  .text 16160 B of 16384 B program memory (224 B free)
+  accumulators named: cm0, cm1, cm2, cm3, cm4, cm5, cm6, cm7, cm8; uses of the ninth (cm8/bm?8/am??8): 26
+  loop .L_LEnd6 in <engine> 0x570-0x5d0: 11 bundles, 0 vmac/vmul bundles = 0.000 vmac/cycle; vshift 0, vmov 0, vlda 2, vldb 0
+      align: start%16=0 end%16=0; last bundle 16 B; setup: add.nc lc, r0, #-0x1 @0x54e (34 B before start, 130 B before end); movxm ls, #0x570 @0x556 (26 B before start, 122 B before end); movxm le, #0x5d0 @0x560 (16 B before start, 112 B before end)
+  loop .L_LEnd4 in <engine> 0xb60-0xc10: 32 bundles, 8 vmac/vmul bundles = 0.250 vmac/cycle; vshift 4, vmov 4, vlda 2, vldb 12
+      align: start%16=0 end%16=0; last bundle 16 B; setup: add.nc lc, r12, #0x0 @0xb42 (30 B before start, 206 B before end); movxm ls, #0xb60 @0xb46 (26 B before start, 202 B before end); movxm le, #0xc10 @0xb4c (20 B before start, 196 B before end)
+  loop .L_LEnd5 in <engine> 0xcf0-0xd60: 23 bundles, 8 vmac/vmul bundles = 0.348 vmac/cycle; vshift 2, vmov 0, vlda 5, vldb 7
+      align: start%16=0 end%16=0; last bundle 16 B; setup: add.nc lc, r12, #0x0 @0xcd2 (30 B before start, 142 B before end); movxm ls, #0xcf0 @0xcd6 (26 B before start, 138 B before end); movxm le, #0xd60 @0xcdc (20 B before start, 132 B before end)
+  loop .L_LEnd3 in <engine> 0x1390-0x1400: 23 bundles, 8 vmac/vmul bundles = 0.348 vmac/cycle; vshift 2, vmov 0, vlda 5, vldb 7
+      align: start%16=0 end%16=0; last bundle 16 B; setup: add.nc lc, r12, #0x0 @0x1372 (30 B before start, 142 B before end); movxm ls, #0x1390 @0x1376 (26 B before start, 138 B before end); movxm le, #0x1400 @0x137c (20 B before start, 132 B before end)
+  loop .L_LEnd2 in <engine> 0x15b0-0x1660: 32 bundles, 8 vmac/vmul bundles = 0.250 vmac/cycle; vshift 4, vmov 4, vlda 2, vldb 12
+      align: start%16=0 end%16=0; last bundle 16 B; setup: add.nc lc, r12, #0x0 @0x1592 (30 B before start, 206 B before end); movxm ls, #0x15b0 @0x1596 (26 B before start, 202 B before end); movxm le, #0x1660 @0x159c (20 B before start, 196 B before end)
+  loop .L_LEnd1 in <engine> 0x18f0-0x1940: 17 bundles, 4 vmac/vmul bundles = 0.235 vmac/cycle; vshift 1, vmov 0, vlda 3, vldb 7
+      align: start%16=0 end%16=0; last bundle 16 B; setup: add.nc lc, r12, #0x0 @0x18b6 (58 B before start, 138 B before end); movxm ls, #0x18f0 @0x18ba (54 B before start, 134 B before end); movxm le, #0x1940 @0x18c0 (48 B before start, 128 B before end)
+  loop .L_LEnd0 in <engine> 0x1df0-0x1e60: 24 bundles, 4 vmac/vmul bundles = 0.167 vmac/cycle; vshift 2, vmov 2, vlda 1, vldb 10
+      align: start%16=0 end%16=0; last bundle 16 B; setup: add.nc lc, r12, #0x0 @0x1dce (34 B before start, 146 B before end); movxm ls, #0x1df0 @0x1dd2 (30 B before start, 142 B before end); movxm le, #0x1e60 @0x1dd8 (24 B before start, 136 B before end)
+  loop .L_LEnd9 in <engine> 0x20f0-0x2150: 27 bundles, 1 vmac/vmul bundles = 0.037 vmac/cycle; vshift 0, vmov 0, vlda 0, vldb 2
+      align: start%16=0 end%16=0; last bundle 16 B; setup: add.nc lc, r0, #-0x1 @0x207c (116 B before start, 212 B before end); movxm ls, #0x20f0 @0x20da (22 B before start, 118 B before end); movxm le, #0x2150 @0x20e0 (16 B before start, 112 B before end)
+  loop .L_LEnd8 in <engine> 0x2550-0x25b0: 16 bundles, 0 vmac/vmul bundles = 0.000 vmac/cycle; vshift 0, vmov 0, vlda 0, vldb 2
+      align: start%16=0 end%16=0; last bundle 16 B; setup: movxm ls, #0x2550 @0x2534 (28 B before start, 124 B before end); movxm le, #0x25b0 @0x253a (22 B before start, 118 B before end); add.nc lc, r5, #-0x1 @0x2540 (16 B before start, 112 B before end)
+  loop .L_LEnd7 in <engine> 0x2700-0x27d0: 37 bundles, 0 vmac/vmul bundles = 0.000 vmac/cycle; vshift 5, vmov 0, vlda 5, vldb 5
+      align: start%16=0 end%16=0; last bundle 16 B; setup: add.nc lc, r0, #-0x1 @0x2672 (142 B before start, 350 B before end); movxm ls, #0x2700 @0x2676 (138 B before start, 346 B before end); movxm le, #0x27d0 @0x267c (132 B before start, 340 B before end)
+  loop .L_LEnd11 in <engine> 0x29a0-0x2a00: 26 bundles, 1 vmac/vmul bundles = 0.038 vmac/cycle; vshift 0, vmov 0, vlda 0, vldb 1
+      align: start%16=0 end%16=0; last bundle 16 B; setup: movxm ls, #0x29a0 @0x2980 (32 B before start, 128 B before end); movxm le, #0x2a00 @0x298a (22 B before start, 118 B before end); add.nc lc, r5, #-0x1 @0x2990 (16 B before start, 112 B before end)
+  loop .L_LEnd10 in <engine> 0x2a80-0x2ae0: 26 bundles, 1 vmac/vmul bundles = 0.038 vmac/cycle; vshift 0, vmov 0, vlda 0, vldb 1
+      align: start%16=0 end%16=0; last bundle 16 B; setup: movxm ls, #0x2a80 @0x2a60 (32 B before start, 128 B before end); movxm le, #0x2ae0 @0x2a6a (22 B before start, 118 B before end); add.nc lc, r5, #-0x1 @0x2a70 (16 B before start, 112 B before end)
+  loop .L_LEnd14 in <engine> 0x2b90-0x2bf0: 16 bundles, 0 vmac/vmul bundles = 0.000 vmac/cycle; vshift 0, vmov 0, vlda 0, vldb 2
+      align: start%16=0 end%16=0; last bundle 16 B; setup: movxm ls, #0x2b90 @0x2b74 (28 B before start, 124 B before end); movxm le, #0x2bf0 @0x2b7a (22 B before start, 118 B before end); add.nc lc, r5, #-0x1 @0x2b80 (16 B before start, 112 B before end)
+  loop .L_LEnd13 in <engine> 0x2c90-0x2cf0: 15 bundles, 0 vmac/vmul bundles = 0.000 vmac/cycle; vshift 1, vmov 0, vlda 0, vldb 2
+      align: start%16=0 end%16=0; last bundle 16 B; setup: movxm ls, #0x2b90 @0x2b74 (284 B before start, 380 B before end); movxm le, #0x2bf0 @0x2b7a (278 B before start, 374 B before end); add.nc lc, r5, #-0x1 @0x2b80 (272 B before start, 368 B before end); add.nc lc, r19, #0x0 @0x2c60 (48 B before start, 144 B before end); movxm ls, #0x2c90 @0x2c70 (32 B before start, 128 B before end); movxm le, #0x2cf0 @0x2c80 (16 B before start, 112 B before end)
+  loop .L_LEnd12 in <engine> 0x2de0-0x2e40: 15 bundles, 0 vmac/vmul bundles = 0.000 vmac/cycle; vshift 1, vmov 0, vlda 0, vldb 2
+      align: start%16=0 end%16=0; last bundle 16 B; setup: add.nc lc, r19, #0x0 @0x2db0 (48 B before start, 144 B before end); movxm ls, #0x2de0 @0x2dc0 (32 B before start, 128 B before end); movxm le, #0x2e40 @0x2dd0 (16 B before start, 112 B before end)
+  loop .L_LEnd15 in <_ZN12_GLOBAL__N_112silu_pl_tileEPKiPh> 0x2fb0-0x31f0: 175 bundles, 20 vmac/vmul bundles = 0.114 vmac/cycle; vshift 0, vmov 0, vlda 0, vldb 4
+      align: start%16=0 end%16=0; last bundle 16 B; setup: movxm ls, #0x2fb0 @0x2f10 (160 B before start, 736 B before end); movxm le, #0x31f0 @0x2f1a (150 B before start, 726 B before end); add.nc lc, r9, #0x0 @0x2f94 (28 B before start, 604 B before end)
+  loop .L_LEnd16 in <_ZN12_GLOBAL__N_112fused_stage1EPKiPKhPhi> 0x3490-0x34f0: 13 bundles, 4 vmac/vmul bundles = 0.308 vmac/cycle; vshift 2, vmov 1, vlda 4, vldb 8
+      align: start%16=0 end%16=0; last bundle 16 B; setup: movxm ls, #0x3490 @0x3468 (40 B before start, 136 B before end); movxm le, #0x34f0 @0x3474 (28 B before start, 124 B before end); add.nc lc, r7, #-0x1 @0x3480 (16 B before start, 112 B before end)
+  loop .L_LEnd17 in <_ZN12_GLOBAL__N_112fused_stage2ERKNS_3HdrEPKhS4_PKaPKiPh> 0x3d80-0x3de0: 9 bundles, 4 vmac/vmul bundles = 0.444 vmac/cycle; vshift 1, vmov 1, vlda 2, vldb 8
+      align: start%16=0 end%16=0; last bundle 16 B; setup: add.nc lc, r1, #-0x1 @0x3d60 (32 B before start, 128 B before end); movxm ls, #0x3d80 @0x3d66 (26 B before start, 122 B before end); movxm le, #0x3de0 @0x3d70 (16 B before start, 112 B before end)
+
+== ELF sha256 f52d724e278c: 2 build(s), built 2026-09-18 .. 2026-09-18 ==
+  builds: sesr_ring2, sesr_ring4
+  .text 16048 B of 16384 B program memory (336 B free)
+  accumulators named: cm0, cm1, cm2, cm3, cm4, cm5, cm6, cm7, cm8; uses of the ninth (cm8/bm?8/am??8): 26
+  loop .L_LEnd6 in <engine> 0x500-0x560: 11 bundles, 0 vmac/vmul bundles = 0.000 vmac/cycle; vshift 0, vmov 0, vlda 2, vldb 0
+      align: start%16=0 end%16=0; last bundle 16 B; setup: add.nc lc, r0, #-0x1 @0x4de (34 B before start, 130 B before end); movxm ls, #0x500 @0x4e6 (26 B before start, 122 B before end); movxm le, #0x560 @0x4f0 (16 B before start, 112 B before end)
+  loop .L_LEnd4 in <engine> 0xaf0-0xba0: 32 bundles, 8 vmac/vmul bundles = 0.250 vmac/cycle; vshift 4, vmov 4, vlda 2, vldb 12
+      align: start%16=0 end%16=0; last bundle 16 B; setup: add.nc lc, r12, #0x0 @0xad2 (30 B before start, 206 B before end); movxm ls, #0xaf0 @0xad6 (26 B before start, 202 B before end); movxm le, #0xba0 @0xadc (20 B before start, 196 B before end)
+  loop .L_LEnd5 in <engine> 0xc80-0xcf0: 23 bundles, 8 vmac/vmul bundles = 0.348 vmac/cycle; vshift 2, vmov 0, vlda 5, vldb 7
+      align: start%16=0 end%16=0; last bundle 16 B; setup: add.nc lc, r12, #0x0 @0xc62 (30 B before start, 142 B before end); movxm ls, #0xc80 @0xc66 (26 B before start, 138 B before end); movxm le, #0xcf0 @0xc6c (20 B before start, 132 B before end)
+  loop .L_LEnd3 in <engine> 0x1320-0x1390: 23 bundles, 8 vmac/vmul bundles = 0.348 vmac/cycle; vshift 2, vmov 0, vlda 5, vldb 7
+      align: start%16=0 end%16=0; last bundle 16 B; setup: add.nc lc, r12, #0x0 @0x1302 (30 B before start, 142 B before end); movxm ls, #0x1320 @0x1306 (26 B before start, 138 B before end); movxm le, #0x1390 @0x130c (20 B before start, 132 B before end)
+  loop .L_LEnd2 in <engine> 0x1540-0x15f0: 32 bundles, 8 vmac/vmul bundles = 0.250 vmac/cycle; vshift 4, vmov 4, vlda 2, vldb 12
+      align: start%16=0 end%16=0; last bundle 16 B; setup: add.nc lc, r12, #0x0 @0x1522 (30 B before start, 206 B before end); movxm ls, #0x1540 @0x1526 (26 B before start, 202 B before end); movxm le, #0x15f0 @0x152c (20 B before start, 196 B before end)
+  loop .L_LEnd1 in <engine> 0x1880-0x18d0: 17 bundles, 4 vmac/vmul bundles = 0.235 vmac/cycle; vshift 1, vmov 0, vlda 3, vldb 7
+      align: start%16=0 end%16=0; last bundle 16 B; setup: add.nc lc, r12, #0x0 @0x1846 (58 B before start, 138 B before end); movxm ls, #0x1880 @0x184a (54 B before start, 134 B before end); movxm le, #0x18d0 @0x1850 (48 B before start, 128 B before end)
+  loop .L_LEnd0 in <engine> 0x1d80-0x1df0: 24 bundles, 4 vmac/vmul bundles = 0.167 vmac/cycle; vshift 2, vmov 2, vlda 1, vldb 10
+      align: start%16=0 end%16=0; last bundle 16 B; setup: add.nc lc, r12, #0x0 @0x1d5e (34 B before start, 146 B before end); movxm ls, #0x1d80 @0x1d62 (30 B before start, 142 B before end); movxm le, #0x1df0 @0x1d68 (24 B before start, 136 B before end)
+  loop .L_LEnd9 in <engine> 0x2080-0x20e0: 27 bundles, 1 vmac/vmul bundles = 0.037 vmac/cycle; vshift 0, vmov 0, vlda 0, vldb 2
+      align: start%16=0 end%16=0; last bundle 16 B; setup: add.nc lc, r0, #-0x1 @0x200c (116 B before start, 212 B before end); movxm ls, #0x2080 @0x206a (22 B before start, 118 B before end); movxm le, #0x20e0 @0x2070 (16 B before start, 112 B before end)
+  loop .L_LEnd8 in <engine> 0x24e0-0x2540: 16 bundles, 0 vmac/vmul bundles = 0.000 vmac/cycle; vshift 0, vmov 0, vlda 0, vldb 2
+      align: start%16=0 end%16=0; last bundle 16 B; setup: movxm ls, #0x24e0 @0x24c4 (28 B before start, 124 B before end); movxm le, #0x2540 @0x24ca (22 B before start, 118 B before end); add.nc lc, r5, #-0x1 @0x24d0 (16 B before start, 112 B before end)
+  loop .L_LEnd7 in <engine> 0x2690-0x2760: 37 bundles, 0 vmac/vmul bundles = 0.000 vmac/cycle; vshift 5, vmov 0, vlda 5, vldb 5
+      align: start%16=0 end%16=0; last bundle 16 B; setup: add.nc lc, r0, #-0x1 @0x2602 (142 B before start, 350 B before end); movxm ls, #0x2690 @0x2606 (138 B before start, 346 B before end); movxm le, #0x2760 @0x260c (132 B before start, 340 B before end)
+  loop .L_LEnd11 in <engine> 0x2930-0x2990: 26 bundles, 1 vmac/vmul bundles = 0.038 vmac/cycle; vshift 0, vmov 0, vlda 0, vldb 1
+      align: start%16=0 end%16=0; last bundle 16 B; setup: movxm ls, #0x2930 @0x2910 (32 B before start, 128 B before end); movxm le, #0x2990 @0x291a (22 B before start, 118 B before end); add.nc lc, r5, #-0x1 @0x2920 (16 B before start, 112 B before end)
+  loop .L_LEnd10 in <engine> 0x2a10-0x2a70: 26 bundles, 1 vmac/vmul bundles = 0.038 vmac/cycle; vshift 0, vmov 0, vlda 0, vldb 1
+      align: start%16=0 end%16=0; last bundle 16 B; setup: movxm ls, #0x2a10 @0x29f0 (32 B before start, 128 B before end); movxm le, #0x2a70 @0x29fa (22 B before start, 118 B before end); add.nc lc, r5, #-0x1 @0x2a00 (16 B before start, 112 B before end)
+  loop .L_LEnd14 in <engine> 0x2b20-0x2b80: 16 bundles, 0 vmac/vmul bundles = 0.000 vmac/cycle; vshift 0, vmov 0, vlda 0, vldb 2
+      align: start%16=0 end%16=0; last bundle 16 B; setup: movxm ls, #0x2b20 @0x2b04 (28 B before start, 124 B before end); movxm le, #0x2b80 @0x2b0a (22 B before start, 118 B before end); add.nc lc, r5, #-0x1 @0x2b10 (16 B before start, 112 B before end)
+  loop .L_LEnd13 in <engine> 0x2c20-0x2c80: 15 bundles, 0 vmac/vmul bundles = 0.000 vmac/cycle; vshift 1, vmov 0, vlda 0, vldb 2
+      align: start%16=0 end%16=0; last bundle 16 B; setup: movxm ls, #0x2b20 @0x2b04 (284 B before start, 380 B before end); movxm le, #0x2b80 @0x2b0a (278 B before start, 374 B before end); add.nc lc, r5, #-0x1 @0x2b10 (272 B before start, 368 B before end); add.nc lc, r19, #0x0 @0x2bf0 (48 B before start, 144 B before end); movxm ls, #0x2c20 @0x2c00 (32 B before start, 128 B before end); movxm le, #0x2c80 @0x2c10 (16 B before start, 112 B before end)
+  loop .L_LEnd12 in <engine> 0x2d70-0x2dd0: 15 bundles, 0 vmac/vmul bundles = 0.000 vmac/cycle; vshift 1, vmov 0, vlda 0, vldb 2
+      align: start%16=0 end%16=0; last bundle 16 B; setup: add.nc lc, r19, #0x0 @0x2d40 (48 B before start, 144 B before end); movxm ls, #0x2d70 @0x2d50 (32 B before start, 128 B before end); movxm le, #0x2dd0 @0x2d60 (16 B before start, 112 B before end)
+  loop .L_LEnd15 in <_ZN12_GLOBAL__N_112silu_pl_tileEPKiPh> 0x2f40-0x3180: 175 bundles, 20 vmac/vmul bundles = 0.114 vmac/cycle; vshift 0, vmov 0, vlda 0, vldb 4
+      align: start%16=0 end%16=0; last bundle 16 B; setup: movxm ls, #0x2f40 @0x2ea0 (160 B before start, 736 B before end); movxm le, #0x3180 @0x2eaa (150 B before start, 726 B before end); add.nc lc, r9, #0x0 @0x2f24 (28 B before start, 604 B before end)
+  loop .L_LEnd16 in <_ZN12_GLOBAL__N_112fused_stage1EPKiPKhPhi> 0x3420-0x3480: 13 bundles, 4 vmac/vmul bundles = 0.308 vmac/cycle; vshift 2, vmov 1, vlda 4, vldb 8
+      align: start%16=0 end%16=0; last bundle 16 B; setup: movxm ls, #0x3420 @0x33f8 (40 B before start, 136 B before end); movxm le, #0x3480 @0x3404 (28 B before start, 124 B before end); add.nc lc, r7, #-0x1 @0x3410 (16 B before start, 112 B before end)
+  loop .L_LEnd17 in <_ZN12_GLOBAL__N_112fused_stage2ERKNS_3HdrEPKhS4_PKaPKiPh> 0x3d10-0x3d70: 9 bundles, 4 vmac/vmul bundles = 0.444 vmac/cycle; vshift 1, vmov 1, vlda 2, vldb 8
+      align: start%16=0 end%16=0; last bundle 16 B; setup: add.nc lc, r1, #-0x1 @0x3cf0 (32 B before start, 128 B before end); movxm ls, #0x3d10 @0x3cf6 (26 B before start, 122 B before end); movxm le, #0x3d70 @0x3d00 (16 B before start, 112 B before end)
+
+== ELF sha256 62f4b3968268: 1 build(s), built 2026-09-18 .. 2026-09-18 ==
+  builds: yolov8n_stride2ctrl
+  .text 16368 B of 16384 B program memory (16 B free)
+  accumulators named: cm0, cm1, cm2, cm3, cm4, cm5, cm6, cm7, cm8; uses of the ninth (cm8/bm?8/am??8): 26
+  loop .L_LEnd6 in <engine> 0x590-0x5f0: 11 bundles, 0 vmac/vmul bundles = 0.000 vmac/cycle; vshift 0, vmov 0, vlda 2, vldb 0
+      align: start%16=0 end%16=0; last bundle 16 B; setup: add.nc lc, r0, #-0x1 @0x56e (34 B before start, 130 B before end); movxm ls, #0x590 @0x576 (26 B before start, 122 B before end); movxm le, #0x5f0 @0x580 (16 B before start, 112 B before end)
+  loop .L_LEnd5 in <engine> 0xa80-0xaf0: 23 bundles, 8 vmac/vmul bundles = 0.348 vmac/cycle; vshift 2, vmov 0, vlda 5, vldb 7
+      align: start%16=0 end%16=0; last bundle 16 B; setup: add.nc lc, r12, #0x0 @0xa62 (30 B before start, 142 B before end); movxm ls, #0xa80 @0xa66 (26 B before start, 138 B before end); movxm le, #0xaf0 @0xa6c (20 B before start, 132 B before end)
+  loop .L_LEnd4 in <engine> 0xca0-0xd50: 32 bundles, 8 vmac/vmul bundles = 0.250 vmac/cycle; vshift 4, vmov 4, vlda 2, vldb 12
+      align: start%16=0 end%16=0; last bundle 16 B; setup: add.nc lc, r12, #0x0 @0xc82 (30 B before start, 206 B before end); movxm ls, #0xca0 @0xc86 (26 B before start, 202 B before end); movxm le, #0xd50 @0xc8c (20 B before start, 196 B before end)
+  loop .L_LEnd3 in <engine> 0x1370-0x13e0: 23 bundles, 8 vmac/vmul bundles = 0.348 vmac/cycle; vshift 2, vmov 0, vlda 5, vldb 7
+      align: start%16=0 end%16=0; last bundle 16 B; setup: add.nc lc, r12, #0x0 @0x1352 (30 B before start, 142 B before end); movxm ls, #0x1370 @0x1356 (26 B before start, 138 B before end); movxm le, #0x13e0 @0x135c (20 B before start, 132 B before end)
+  loop .L_LEnd2 in <engine> 0x1590-0x1640: 32 bundles, 8 vmac/vmul bundles = 0.250 vmac/cycle; vshift 4, vmov 4, vlda 2, vldb 12
+      align: start%16=0 end%16=0; last bundle 16 B; setup: add.nc lc, r12, #0x0 @0x1572 (30 B before start, 206 B before end); movxm ls, #0x1590 @0x1576 (26 B before start, 202 B before end); movxm le, #0x1640 @0x157c (20 B before start, 196 B before end)
+  loop .L_LEnd1 in <engine> 0x18c0-0x1910: 17 bundles, 4 vmac/vmul bundles = 0.235 vmac/cycle; vshift 1, vmov 0, vlda 3, vldb 7
+      align: start%16=0 end%16=0; last bundle 16 B; setup: add.nc lc, r12, #0x0 @0x1886 (58 B before start, 138 B before end); movxm ls, #0x18c0 @0x188a (54 B before start, 134 B before end); movxm le, #0x1910 @0x1890 (48 B before start, 128 B before end)
+  loop .L_LEnd0 in <engine> 0x1dc0-0x1e30: 24 bundles, 4 vmac/vmul bundles = 0.167 vmac/cycle; vshift 2, vmov 2, vlda 1, vldb 10
+      align: start%16=0 end%16=0; last bundle 16 B; setup: add.nc lc, r12, #0x0 @0x1d9e (34 B before start, 146 B before end); movxm ls, #0x1dc0 @0x1da2 (30 B before start, 142 B before end); movxm le, #0x1e30 @0x1da8 (24 B before start, 136 B before end)
+  loop .L_LEnd8 in <engine> 0x20b0-0x2110: 27 bundles, 1 vmac/vmul bundles = 0.037 vmac/cycle; vshift 0, vmov 0, vlda 0, vldb 2
+      align: start%16=0 end%16=0; last bundle 16 B; setup: add.nc lc, r0, #-0x1 @0x203c (116 B before start, 212 B before end); movxm ls, #0x20b0 @0x209a (22 B before start, 118 B before end); movxm le, #0x2110 @0x20a0 (16 B before start, 112 B before end)
+  loop .L_LEnd7 in <engine> 0x21c0-0x2220: 9 bundles, 0 vmac/vmul bundles = 0.000 vmac/cycle; vshift 0, vmov 0, vlda 0, vldb 1
+      align: start%16=0 end%16=0; last bundle 16 B; setup: movxm ls, #0x21c0 @0x2192 (46 B before start, 142 B before end); movxm le, #0x2220 @0x2198 (40 B before start, 136 B before end); add.nc lc, r8, #0x0 @0x21b0 (16 B before start, 112 B before end)
+  loop .L_LEnd10 in <engine> 0x26d0-0x2730: 26 bundles, 1 vmac/vmul bundles = 0.038 vmac/cycle; vshift 0, vmov 0, vlda 0, vldb 1
+      align: start%16=0 end%16=0; last bundle 16 B; setup: movxm ls, #0x26d0 @0x26b0 (32 B before start, 128 B before end); movxm le, #0x2730 @0x26ba (22 B before start, 118 B before end); add.nc lc, r30, #-0x1 @0x26c0 (16 B before start, 112 B before end)
+  loop .L_LEnd9 in <engine> 0x27b0-0x2810: 26 bundles, 1 vmac/vmul bundles = 0.038 vmac/cycle; vshift 0, vmov 0, vlda 0, vldb 1
+      align: start%16=0 end%16=0; last bundle 16 B; setup: movxm ls, #0x27b0 @0x2790 (32 B before start, 128 B before end); movxm le, #0x2810 @0x279a (22 B before start, 118 B before end); add.nc lc, r30, #-0x1 @0x27a0 (16 B before start, 112 B before end)
+  loop .L_LEnd13 in <engine> 0x28d0-0x2930: 16 bundles, 0 vmac/vmul bundles = 0.000 vmac/cycle; vshift 0, vmov 0, vlda 0, vldb 2
+      align: start%16=0 end%16=0; last bundle 16 B; setup: movxm ls, #0x28d0 @0x28b4 (28 B before start, 124 B before end); movxm le, #0x2930 @0x28ba (22 B before start, 118 B before end); add.nc lc, r30, #-0x1 @0x28c0 (16 B before start, 112 B before end)
+  loop .L_LEnd12 in <engine> 0x29d0-0x2a30: 15 bundles, 0 vmac/vmul bundles = 0.000 vmac/cycle; vshift 1, vmov 0, vlda 0, vldb 2
+      align: start%16=0 end%16=0; last bundle 16 B; setup: movxm ls, #0x28d0 @0x28b4 (284 B before start, 380 B before end); movxm le, #0x2930 @0x28ba (278 B before start, 374 B before end); add.nc lc, r30, #-0x1 @0x28c0 (272 B before start, 368 B before end); add.nc lc, r7, #0x0 @0x29a0 (48 B before start, 144 B before end); movxm ls, #0x29d0 @0x29b0 (32 B before start, 128 B before end); movxm le, #0x2a30 @0x29c0 (16 B before start, 112 B before end)
+  loop .L_LEnd11 in <engine> 0x2b20-0x2b80: 15 bundles, 0 vmac/vmul bundles = 0.000 vmac/cycle; vshift 1, vmov 0, vlda 0, vldb 2
+      align: start%16=0 end%16=0; last bundle 16 B; setup: add.nc lc, r7, #0x0 @0x2af0 (48 B before start, 144 B before end); movxm ls, #0x2b20 @0x2b00 (32 B before start, 128 B before end); movxm le, #0x2b80 @0x2b10 (16 B before start, 112 B before end)
+  loop .L_LEnd14 in <_ZN12_GLOBAL__N_112silu_pl_tileEPKiPh> 0x3080-0x32c0: 175 bundles, 20 vmac/vmul bundles = 0.114 vmac/cycle; vshift 0, vmov 0, vlda 0, vldb 4
+      align: start%16=0 end%16=0; last bundle 16 B; setup: movxm ls, #0x3080 @0x2fe0 (160 B before start, 736 B before end); movxm le, #0x32c0 @0x2fea (150 B before start, 726 B before end); add.nc lc, r9, #0x0 @0x3064 (28 B before start, 604 B before end)
+  loop .L_LEnd15 in <_ZN12_GLOBAL__N_112fused_stage1EPKiPKhPhi> 0x3560-0x35c0: 13 bundles, 4 vmac/vmul bundles = 0.308 vmac/cycle; vshift 2, vmov 1, vlda 4, vldb 8
+      align: start%16=0 end%16=0; last bundle 16 B; setup: movxm ls, #0x3560 @0x3538 (40 B before start, 136 B before end); movxm le, #0x35c0 @0x3544 (28 B before start, 124 B before end); add.nc lc, r7, #-0x1 @0x3550 (16 B before start, 112 B before end)
+  loop .L_LEnd16 in <_ZN12_GLOBAL__N_112fused_stage2ERKNS_3HdrEPKhS4_PKaPKiPh> 0x3e50-0x3eb0: 9 bundles, 4 vmac/vmul bundles = 0.444 vmac/cycle; vshift 1, vmov 1, vlda 2, vldb 8
+      align: start%16=0 end%16=0; last bundle 16 B; setup: add.nc lc, r1, #-0x1 @0x3e30 (32 B before start, 128 B before end); movxm ls, #0x3e50 @0x3e36 (26 B before start, 122 B before end); movxm le, #0x3eb0 @0x3e40 (16 B before start, 112 B before end)
+
+== ELF sha256 eaddc8c66b88: 9 build(s), built 2026-09-17 .. 2026-09-18 ==
+  builds: yolov8n_full, yolov8n_opt, yolov8s_opt, resnet50_head, yolov8n-cls_640, test_resnet50_head, yolov8n-cls_hybrid, yolov8n_bisect_pre_core, yolov8n_bisect_pre_schedule
+  .text 10704 B of 16384 B program memory (5680 B free)
+  accumulators named: cm0, cm1, cm2, cm3, cm4, cm5, cm6, cm7, cm8; uses of the ninth (cm8/bm?8/am??8): 26
+  loop .L_LEnd8 in <engine> 0x550-0x5b0: 11 bundles, 0 vmac/vmul bundles = 0.000 vmac/cycle; vshift 0, vmov 0, vlda 2, vldb 0
+      align: start%16=0 end%16=0; last bundle 16 B; setup: add.nc lc, r24, #-0x1 @0x52e (34 B before start, 130 B before end); movxm ls, #0x550 @0x536 (26 B before start, 122 B before end); movxm le, #0x5b0 @0x540 (16 B before start, 112 B before end)
+  loop .L_LEnd6 in <engine> 0xb40-0xbf0: 33 bundles, 8 vmac/vmul bundles = 0.242 vmac/cycle; vshift 4, vmov 4, vlda 2, vldb 12
+      align: start%16=0 end%16=0; last bundle 16 B; setup: add.nc lc, r13, #0x0 @0xb22 (30 B before start, 206 B before end); movxm ls, #0xb40 @0xb26 (26 B before start, 202 B before end); movxm le, #0xbf0 @0xb2c (20 B before start, 196 B before end)
+  loop .L_LEnd7 in <engine> 0xcc0-0xd30: 23 bundles, 8 vmac/vmul bundles = 0.348 vmac/cycle; vshift 2, vmov 0, vlda 5, vldb 7
+      align: start%16=0 end%16=0; last bundle 16 B; setup: add.nc lc, r13, #0x0 @0xca2 (30 B before start, 142 B before end); movxm ls, #0xcc0 @0xca6 (26 B before start, 138 B before end); movxm le, #0xd30 @0xcac (20 B before start, 132 B before end)
+  loop .L_LEnd5 in <engine> 0x1350-0x13c0: 23 bundles, 8 vmac/vmul bundles = 0.348 vmac/cycle; vshift 2, vmov 0, vlda 5, vldb 7
+      align: start%16=0 end%16=0; last bundle 16 B; setup: add.nc lc, r13, #0x0 @0x1332 (30 B before start, 142 B before end); movxm ls, #0x1350 @0x1336 (26 B before start, 138 B before end); movxm le, #0x13c0 @0x133c (20 B before start, 132 B before end)
+  loop .L_LEnd4 in <engine> 0x1560-0x1610: 32 bundles, 8 vmac/vmul bundles = 0.250 vmac/cycle; vshift 4, vmov 4, vlda 2, vldb 12
+      align: start%16=0 end%16=0; last bundle 16 B; setup: add.nc lc, r13, #0x0 @0x1542 (30 B before start, 206 B before end); movxm ls, #0x1560 @0x1546 (26 B before start, 202 B before end); movxm le, #0x1610 @0x154c (20 B before start, 196 B before end)
+  loop .L_LEnd3 in <engine> 0x1890-0x18e0: 17 bundles, 4 vmac/vmul bundles = 0.235 vmac/cycle; vshift 1, vmov 0, vlda 3, vldb 7
+      align: start%16=0 end%16=0; last bundle 16 B; setup: add.nc lc, r13, #0x0 @0x1856 (58 B before start, 138 B before end); movxm ls, #0x1890 @0x185a (54 B before start, 134 B before end); movxm le, #0x18e0 @0x1860 (48 B before start, 128 B before end)
+  loop .L_LEnd2 in <engine> 0x1d90-0x1e00: 24 bundles, 4 vmac/vmul bundles = 0.167 vmac/cycle; vshift 2, vmov 2, vlda 1, vldb 10
+      align: start%16=0 end%16=0; last bundle 16 B; setup: add.nc lc, r13, #0x0 @0x1d6e (34 B before start, 146 B before end); movxm ls, #0x1d90 @0x1d72 (30 B before start, 142 B before end); movxm le, #0x1e00 @0x1d78 (24 B before start, 136 B before end)
+  loop .L_LEnd1 in <engine> 0x2080-0x20d0: 16 bundles, 0 vmac/vmul bundles = 0.000 vmac/cycle; vshift 0, vmov 0, vlda 0, vldb 2
+      align: start%16=0 end%16=0; last bundle 16 B; setup: add.nc lc, r0, #-0x1 @0x202e (82 B before start, 162 B before end); movxm ls, #0x2080 @0x205a (38 B before start, 118 B before end); movxm le, #0x20d0 @0x2060 (32 B before start, 112 B before end)
+  loop .L_LEnd0 in <engine> 0x2220-0x22f0: 37 bundles, 0 vmac/vmul bundles = 0.000 vmac/cycle; vshift 5, vmov 0, vlda 5, vldb 5
+      align: start%16=0 end%16=0; last bundle 16 B; setup: add.nc lc, r4, #-0x1 @0x2192 (142 B before start, 350 B before end); movxm ls, #0x2220 @0x2196 (138 B before start, 346 B before end); movxm le, #0x22f0 @0x219c (132 B before start, 340 B before end)
+  loop .L_LEnd9 in <_ZN12_GLOBAL__N_112silu_pl_tileEPKiPh> 0x2720-0x2960: 175 bundles, 20 vmac/vmul bundles = 0.114 vmac/cycle; vshift 0, vmov 0, vlda 0, vldb 4
+      align: start%16=0 end%16=0; last bundle 16 B; setup: movxm ls, #0x2720 @0x2680 (160 B before start, 736 B before end); movxm le, #0x2960 @0x268a (150 B before start, 726 B before end); add.nc lc, r9, #0x0 @0x2704 (28 B before start, 604 B before end)
+
+== Bank check of the newest ELF (45aeec4edc4f, build modnet_cut_dense_20260921, core 0_2), static ==
+command: python tools/aie_bank_check.py --elf build/conv_engine/modnet_cut_dense_20260921/design.prj/elfs_main_core_0_2/elfs_main_core_0_2.elf --obj build/conv_engine/modnet_cut_dense_20260921/design.prj/engine.o --kernel engine
+WHERE THE BUFFERS LANDED
+  elfs_main_core_0_2.elf
+    own local memory window 0x70000-0x7ffff, 4 banks of 16 KB
+    bank 0: 3
+      0x70800-0x720ff    6 KB  a0_0_cons_buff_0
+      0x72100-0x72d7f    3 KB  o0_0_buff_1
+      0x72d80-0x73fff    4 KB  .LJTI0_0
+    bank 1: 1
+      0x74000-0x77fff   16 KB  psum_0_0
+    bank 2: 2
+      0x78000-0x7a4ff    9 KB  w0_0_cons_buff_0
+      0x7a500-0x7bfff    6 KB  a0_0_cons_buff_1
+    bank 3: 3
+      0x7c000-0x7e4ff    9 KB  w0_0_cons_buff_1
+      0x7e500-0x7f17f    3 KB  o0_0_buff_0
+      0x7f180-0x7ffff    3 KB  scratch_0_0
+
+BANK SHARING
+  bank 0 holds 3 distinct buffers: .LJTI0_0, a0_0_cons, o0_0
+  bank 2 holds 2 distinct buffers: a0_0_cons, w0_0_cons
+  bank 3 holds 3 distinct buffers: o0_0, scratch_0_0, w0_0_cons
+
+BUNDLES THAT ISSUE TWO LOADS
+  .text.engine: 12 of 2556 bundles
+    hardware loop .L_LEnd6: 0 of 11 bundles
+    hardware loop .L_LEnd4: 1 of 32 bundles  <-- in the hardware loop
+      0x088c  vlda	wl7, [p4], #0x40 | vldb	wl3, [p6, #0x0] | and	r6, r6, r22 | vmov	wh3, wl5
+    hardware loop .L_LEnd5: 4 of 23 bundles  <-- in the hardware loop
+      0x09e6  vlda	wh5, [p0, #0x20] | vldb	wl1, [p6, #0x0]
+      0x09ec  vlda	wl5, [p0], #0x40 | vldb	wh1, [p6, #0x20]
+      0x09f8  vlda	wl7, [p0], #0x40 | vldb	wl3, [p2, #0x0]
+      0x09fe  vlda	wh9, [p0, #0x20] | vldb	wh3, [p2, #0x20]
+    hardware loop .L_LEnd3: 4 of 23 bundles  <-- in the hardware loop
+      0x1086  vlda	wh5, [p0, #0x20] | vldb	wl1, [p6, #0x0]
+      0x108c  vlda	wl5, [p0], #0x40 | vldb	wh1, [p6, #0x20]
+      0x1098  vlda	wl7, [p0], #0x40 | vldb	wl3, [p2, #0x0]
+      0x109e  vlda	wh9, [p0, #0x20] | vldb	wh3, [p2, #0x20]
+    hardware loop .L_LEnd2: 1 of 32 bundles  <-- in the hardware loop
+      0x12dc  vlda	wl7, [p0], #0x40 | vldb	wl3, [p6, #0x0] | and	r6, r6, r22 | mov	p2, p6
+    hardware loop .L_LEnd1: 2 of 17 bundles  <-- in the hardware loop
+      0x15e8  vlda	wl1, [p2], #0x40 | vldb	wl8, [p6, #0x0]
+      0x15ee  vlda	wh3, [p2, #0x20] | vldb	wh8, [p6, #0x20]
+    hardware loop .L_LEnd0: 0 of 24 bundles
+    hardware loop .L_LEnd9: 0 of 27 bundles
+    hardware loop .L_LEnd8: 0 of 16 bundles
+    hardware loop .L_LEnd7: 0 of 37 bundles
+    hardware loop .L_LEnd11: 0 of 26 bundles
+    hardware loop .L_LEnd10: 0 of 26 bundles
+    hardware loop .L_LEnd14: 0 of 16 bundles
+    hardware loop .L_LEnd13: 0 of 15 bundles
+    hardware loop .L_LEnd12: 0 of 15 bundles
+
+VERDICT
+  HAZARD. 12 paired-load bundle(s) in loop bodies, hardware and
+  software, and a bank holds more than one buffer. If a paired load reads two
+  buffers in the same bank it costs one extra cycle per iteration, so the
+  loop's bundle count understates its cycles by that much.
+  Predicted penalty = 12 x the iteration count of the loop it is in.
+
