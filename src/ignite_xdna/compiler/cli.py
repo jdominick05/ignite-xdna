@@ -173,6 +173,14 @@ def parse_args(args: Optional[List[str]] = None) -> argparse.Namespace:
              "rather than guessed",
     )
     parser.add_argument(
+        "--datapath",
+        choices=("int8", "bf16"),
+        default="int8",
+        help="Graph engine: which convolution engine the container targets. bf16 packs the model's int8 "
+             "weights for the bf16 engine (W8A16) through compiler/engine_schedule_bf16.py; no session can run "
+             "such a container yet",
+    )
+    parser.add_argument(
         "--dense-recipe",
         choices=("bisenetv2", "modnet_cut"),
         help="Graph engine: lower a dense model through compiler/dense_regions.py, which runs every region the "
@@ -456,9 +464,11 @@ def compile_graph_engine(input_path: Union[str, Path], output_path: Union[str, P
                          no_workspace_reuse: bool = False, retire_batch: Optional[int] = None,
                          split_layers: Optional[Sequence[int]] = None,
                          decouple_weights: bool = False,
-                         task: Optional[str] = None, dense_recipe: Optional[str] = None) -> int:
+                         task: Optional[str] = None, dense_recipe: Optional[str] = None,
+                         datapath: str = "int8") -> int:
     """Lower the whole graph onto the convolution engine (see engine_compile.py); ``host_regions`` run on the host;
-    ``silu_sigmoid`` gives SiLU the sigmoid epilogue; ``retire_batch`` sets the shim retirement cadence."""
+    ``silu_sigmoid`` gives SiLU the sigmoid epilogue; ``retire_batch`` sets the shim retirement cadence;
+    ``datapath`` picks the engine profile (int8, or bf16 for W8A16)."""
     for region in host_regions or ():
         for part in region.split("="):
             if len(part) > 2 and part[1] == ":" and part[2] in "/\\":
@@ -479,7 +489,7 @@ def compile_graph_engine(input_path: Union[str, Path], output_path: Union[str, P
                                        host_regions=tuple(host_regions or ()), silu_sigmoid=silu_sigmoid,
                                        workspace_reuse=not no_workspace_reuse, retire_batch=retire_batch,
                                        split_layers=split_layers, decouple_weights=decouple_weights,
-                                       task=task, dense_recipe=dense_recipe)
+                                       task=task, dense_recipe=dense_recipe, engine=datapath)
     if no_workspace_reuse:
         print(f"    [OK] workspace reuse off: every tensor owns a slot, so every layer is readable "
               f"after one dispatch")
@@ -510,7 +520,9 @@ def compile_graph_engine(input_path: Union[str, Path], output_path: Union[str, P
         f"layout {c['layout']} -> logits {manifest['output_shapes']['logits']}")
     else:
         d = manifest["dense_output"]
-        print(f"    [OK] dense output: {d['channels']}x{d['height']}x{d['width']} uint8 at scale {d['scale']}, "
+        # The scale is the int8 model's; a bf16 container carries real values and does not apply it.
+        width = ("bf16, real units" if datapath == "bf16" else f"uint8 at scale {d['scale']}")
+        print(f"    [OK] dense output: {d['channels']}x{d['height']}x{d['width']} {width}, "
               f"host {d['transform']['op']} x{d['transform']['blocksize']} -> image {manifest['output_shapes']['image']}")
     print(f"    [OK] egress bytes: {manifest['egress_bytes']:,}")
     return out_p.stat().st_size
@@ -546,13 +558,17 @@ def main(args: Optional[List[str]] = None):
             return
 
         if parsed.engine == "graph":
+            if parsed.datapath == "bf16" and parsed.verify_silicon:
+                # Every session refuses a bf16 container at admission, so the check could only fail.
+                raise SystemExit("--verify-silicon cannot run a bf16 container: no session reads one yet")
             compile_graph_engine(parsed.input, parsed.output, parsed.build_dir, host_regions=parsed.host_region,
                                  silu_sigmoid=parsed.silu_sigmoid, topology_policy=parsed.topology_policy,
                                  no_workspace_reuse=parsed.no_workspace_reuse,
                                  retire_batch=parsed.retire_batch,
                                  split_layers=parsed.split_layer,
                                  decouple_weights=parsed.decouple_weights,
-                                 task=parsed.task, dense_recipe=parsed.dense_recipe)
+                                 task=parsed.task, dense_recipe=parsed.dense_recipe,
+                                 datapath=parsed.datapath)
             if parsed.verify_silicon:
                 from ignite_xdna.runtime.graph_session import GraphSession
                 sess = GraphSession(parsed.output, device_index=parsed.device)

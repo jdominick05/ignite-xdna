@@ -13259,3 +13259,29 @@ It also qualifies an earlier line. [The aligned accumulate is invisible after a 
 reported that no lane differs, but that was 128 lanes a case. On SESR-M7's own tensors the aligned
 and wide models are not identical after the store (80 against 72 departures). They are rare, and not
 absent.
+
+### The first bf16 container compiles, and nothing can run it yet
+
+Log: [`sesr_m7_bf16_compile_desktop2_20260922.log`](../results/aie/sesr_m7_bf16_compile_desktop2_20260922.log).
+It was compile only, checks-only, with no device.
+
+The command was `ignite-compile --engine graph --datapath bf16 --task super_resolution` on
+`sesr_m7_xint8.onnx`. It wrote `build/sesr_m7_bf16.ignite`, 495,744 B, in 7.0 s:
+- an xclbin of 162,942 B, an instruction stream of 144,880 B, and 170,496 B of weight packets;
+- 1,521 rounds over a workspace of about 11.7 MB;
+- 1,572,864 B of egress, which is 12 x 256 x 256 at two bytes.
+
+The rounds and the stream length equal the int8 container's, which
+[the recount log](../results/aie/bf16_packet_recount_20260922.log) records as 1,521 and 144,880 B for
+`build/sesr_m7.ignite`. The 170,496 B of packets are 18 packets of 9,472 B, the same 18 SESR carries
+at int8. This is what [the recount](#sesr-is-the-only-candidate-still-standing-and-the-corrected-geometry-helps-it)
+predicted: every SESR layer has 16 output channels or fewer, so one output group serves it at either
+width. The
+workspace barely grows: int8 pads a 16-channel tensor out to 32 channels at one byte, and bf16 carries
+16 at two.
+
+These are compile facts, not results. The container is the operand the silicon run needs. Every
+session refuses it at admission, naming the bf16 width, and building the session that reads it is
+the next phase. Its manifest still carries the int8 model's output scale and zero point and an
+`input_dtype` of uint8. The bf16 session will not apply them. It has to stage a bf16 input itself,
+and write zeros into input channels 3 to 7, because 0 x NaN is NaN.

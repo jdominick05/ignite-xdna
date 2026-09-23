@@ -37,6 +37,9 @@ sys.path.insert(0, str(ROOT))
 # behaviour change, whatever the diff looked like.
 COMPARED = ("insts_bytes", "activation_packets", "weight_fills", "wpackets_bytes", "rounds",
             "workspace_bytes", "kernel_ops", "tile")
+# The same, at the top of the manifest: what the runtime sizes its readback and its input by. A change
+# to how build_manifest computes one of these moves nothing above, so it has to be compared on its own.
+TOP_COMPARED = ("task", "egress_bytes", "input_shape", "input_dtype", "output_shapes")
 
 
 def main() -> int:
@@ -78,16 +81,22 @@ def main() -> int:
     out = (ROOT / out) if not out.is_absolute() else out
     out.parent.mkdir(parents=True, exist_ok=True)
 
-    from ignite_xdna.compiler.engine_compile import compile_graph_container
+    from ignite_xdna.compiler.engine_compile import compile_graph_container, profile_for_manifest
 
+    # Rebuild with the engine the container declares. Without this a bf16 container would be rebuilt
+    # by the int8 scheduler, and the check would report the difference between two engines as a
+    # regression of one.
+    profile = profile_for_manifest(want_manifest)
     t0 = time.perf_counter()
     manifest = compile_graph_container(model, out, build_dir=ROOT / "scratch" / f"{out.stem}_prj",
                                        task=args.task or want_manifest.get("task"),
-                                       dense_recipe=args.dense_recipe, verbose=False)
+                                       dense_recipe=args.dense_recipe, verbose=False, engine=profile)
     wall = time.perf_counter() - t0
     got = manifest["graph_engine"]
 
     bad = [(k, want.get(k), got.get(k)) for k in COMPARED if got.get(k) != want.get(k)]
+    bad += [(k, want_manifest.get(k), manifest.get(k)) for k in TOP_COMPARED
+            if manifest.get(k) != want_manifest.get(k)]
     if manifest.get("engine") != want_manifest.get("engine"):
         bad.append(("engine", want_manifest.get("engine"), manifest.get("engine")))
 
@@ -101,6 +110,7 @@ def main() -> int:
         "model": model.name, "reference": str(args.container), "engine": manifest.get("engine"),
         "compile_seconds": round(wall, 2),
         **{k: got.get(k) for k in COMPARED},
+        **{k: manifest.get(k) for k in TOP_COMPARED},
         "placement_keys": keyset(got),
     }, sort_keys=True))
 

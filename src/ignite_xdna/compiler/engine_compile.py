@@ -91,7 +91,9 @@ BF16_PROFILE = EngineProfile(
     name=ENGINE_CONV_BF16, elem=ELEM_BF16,
     design_module="kernels.bf16_conv.design",
     emulator_module="ignite_xdna.compiler.engine_bf16_emulator",
-    schedule_module=None,
+    # A fork, not a parameterisation: engine_schedule.py stays byte-for-byte what every shipping
+    # int8 container was built with. The fork's docstring lists what it refuses.
+    schedule_module="ignite_xdna.compiler.engine_schedule_bf16",
     object_file="engine_bf16.o",
     transport_options=False,
 )
@@ -439,7 +441,8 @@ def build_manifest(ir: GraphIR, ws: es.Workspace, scheds: List[es.LayerSchedule]
             "dense_output": {"tensor": tensor, "onnx_output": onnx_name, "channels": t.channels, "height": t.height,
                              "width": t.width, "scale": t.scale, "zero_point": t.zero_point,
                              "layout": "blocks_hw8", "transform": transform},
-            "egress_bytes": t.channels * t.height * t.width,
+            # Bytes, so the element width counts: 1 at int8, where this is unchanged, and 2 at bf16.
+            "egress_bytes": t.channels * t.height * t.width * np.dtype(ws.placements[tensor].dtype).itemsize,
         })
     return manifest
 
