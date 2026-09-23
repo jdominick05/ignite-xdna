@@ -13638,15 +13638,16 @@ frame ends.
 
 - The comparison covered 31,064,064 resident values and 129 differ. Of 6,291,456 tail values, 11
   differ, none of them in a padding lane.
-- A tail value is at most one bf16 step off, except one in `head` that is 13 steps off. That value
-  is near zero (0.036 against 0.039), where the steps are small.
+- A tail value is at most one bf16 step off, except two in `head`, 13 and 5 steps off. Both are near
+  zero (0.036 against 0.039, and 0.0435 against 0.0422), where the steps are small.
 - No value is non-finite.
 
 What this rules out:
 - **Nondeterminism.** The seventh frame repeats baby after five others and is identical in every
   tensor. The second sitting reproduces every count in the table on every frame.
-- **Transport, staging and the first layer.** The input region reads back as staged on all seven
-  frames, the staged plane is the compiler's, and the head is exact on every input.
+- **Staging, the input's transport and the first layer.** The input region reads back as staged on
+  all seven frames, the staged plane is the compiler's, and the head is exact on every input. The
+  transport of every later layer rests on the next point, not on this one.
 - **The schedule.** `insts.bin` is byte-identical to the plain container's. That instruction stream
   was exact on these six inputs in two sittings, over 31,064,064 resident values each time.
   Offline, the emulator's own schedule path equals the direct reference on every layer of all six
