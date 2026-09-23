@@ -14317,10 +14317,15 @@ so it makes no timing claim.
   QDQ with every tensor resident. Its weight packets are the plain reuse container's.
 
 **The prediction bound.** The prediction and outcomes S1 to S4 were committed before the sitting
-([above](#a-fifth-accumulate-model-exp_sum-fits-every-bf16-engine-sitting-that-could-be-rebuilt-and-the-probe-that-can-refute-it-is-pre-registered-not-run-2026-09-23-offline)). The script that scored the sitting against them was also written before it ran.
+([above](#a-fifth-accumulate-model-exp_sum-fits-every-bf16-engine-sitting-that-could-be-rebuilt-and-the-probe-that-can-refute-it-is-pre-registered-not-run-2026-09-23-offline)).
+- The sitting's `BF16_SR_EXACT` lines carry every departure's position and both bit patterns. So
+  checking them against the where log is a direct comparison anyone can repeat from the two logs.
+- The scratch script that made the comparison was written before the sitting, and extended after it
+  to read the repeat frame's line.
 
-**S1, on every frame.** The sitting compares the device with the aligned emulator in all 10 tensors
-and the tail, padding lanes included: 9,371,648 resident values and 1,048,576 tail values a frame. It
+**S1, on every frame.** The sitting compares the device with the aligned emulator in all 10 tensors,
+at their logical channels, and in every lane of the tail, padding lanes included. That is 9,371,648
+resident values and 1,048,576 tail values a frame. It
 exits 1, which is the predicted outcome.
 
 | frame | departs from aligned | where, and the bits |
@@ -14332,8 +14337,8 @@ exits 1, which is the predicted outcome.
 | woman | 1 | body.3 c13: y186 x143 `3978` -> `3977` |
 | seed 0 | 0 | |
 
-- Every departure is at a predicted value, with exp_sum's bits, and the device departs nowhere else.
-  The tail and its padding lanes equal aligned on every frame.
+- Every departure is at a predicted value, with exp_sum's bits. The device departs at no other
+  compared value, and the tail and its padding lanes equal aligned on every frame.
 - The repeat of baby is identical to baby in the tail and in every tensor.
 - So exp_sum passes a test it was not fitted to. These 3 values are where it and aligned part on the
   plain weights, and nothing about them was chosen by the nine.
@@ -14352,7 +14357,7 @@ device's own input under every model: 55,050,240 values.
 No value matches none of the five.
 
 **The whole network, chained.** The dump replayed offline under exp_sum equals the device at every
-value, in all 10 tensors and the tail, on all six frames. That is 56,229,888 resident and 6,291,456
+compared value, in all 10 tensors and the tail, on all six frames. That is 56,229,888 resident and 6,291,456
 tail values. The AdaRound no-reuse dump does the same under exp_sum, at the same counts.
 - On the plain weights, this is the whole-network exactness the reuse sittings could not claim. It
   covers the tensors a reuse container overwrites.
