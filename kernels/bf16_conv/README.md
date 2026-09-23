@@ -99,7 +99,7 @@ packet's header. Measured on one core
   device. A fifth candidate, `exp_sum`, fitted to the nine SESR-M7 values this model misses, predicts
   the same bits as it on every probe element. So the probe cannot tell them apart, and a
   pre-registered one-core probe is what can
-  ([BENCHMARKS](../../docs/BENCHMARKS.md#a-fifth-accumulate-model-exp_sum-fits-every-bf16-observation-so-far-and-the-probe-that-can-refute-it-is-pre-registered-not-run-2026-09-23-offline)).
+  ([BENCHMARKS](../../docs/BENCHMARKS.md#a-fifth-accumulate-model-exp_sum-fits-every-bf16-engine-sitting-that-could-be-rebuilt-and-the-probe-that-can-refute-it-is-pre-registered-not-run-2026-09-23-offline)).
 * **10.10 us per pass dispatch-free, 91.3 GFLOPS, 19.8% of ceiling**, against 8.96 us and 102.9 GFLOPS for
   `conv_bf16.cc` on identical work in the same sitting: 12.8% slower, unattributed.
 

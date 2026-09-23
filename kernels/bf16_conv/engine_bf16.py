@@ -313,32 +313,40 @@ SWEEP = [
 ]
 
 
-def sweep(seed) -> int:
-    rc = 0
-    for s in SWEEP:
-        rc |= check(f"k{s['k']}s{s['stride']}c{s['ncin']}", [random_packet(s["k"], s["stride"], s["ncin"], s["flags"], seed)])
+def sweep_cases(seed):
+    """[(label, packets)] for --sweep, one dispatch each. A function of its own so an offline rescore
+    (tools/bf16_mac_model_rescore.py) rebuilds exactly the packets a sweep sitting ran."""
+    cases = [(f"k{s['k']}s{s['stride']}c{s['ncin']}", [random_packet(s["k"], s["stride"], s["ncin"], s["flags"], seed)])
+             for s in SWEEP]
     # A layer whose input channels do not fit one packet: the first packet leaves fp32 partial sums
     # in psum, the second continues them and emits. One dispatch, so psum is the core's own.
     first = random_packet(3, 1, 2, 0, seed + 1)
     second = random_packet(3, 1, 2, F_LOAD_PSUM | F_EMIT | F_RELU, seed + 2)
-    rc |= check("chain_k3s1_c2+c2", [first, second])
+    cases.append(("chain_k3s1_c2+c2", [first, second]))
     first = random_packet(5, 1, 1, 0, seed + 3)
     second = random_packet(5, 1, 1, F_LOAD_PSUM | F_EMIT, seed + 4)
-    rc |= check("chain_k5s1_c1+c1", [first, second])
+    cases.append(("chain_k5s1_c1+c1", [first, second]))
     # A residual: the first packet activates its tile and HOLDS it in scratch, the second adds its
     # own A to what it finds there and emits. This pair is the only path that reads the hold buffer
     # back, so before it existed nothing could tell a working F_HOLD from one writing where no one
     # looks - and OP_RESIDUAL, declared since milestone 2, had never executed at all.
     held = random_packet(3, 1, 1, em.F_HOLD | F_RELU, seed + 5)
-    rc |= check("residual_hold_add", [held, residual_packet(F_EMIT, seed + 6)])
+    cases.append(("residual_hold_add", [held, residual_packet(F_EMIT, seed + 6)]))
     # The residual activates at its OWN packet's flags, not the held packet's.
     held = random_packet(3, 1, 2, em.F_HOLD, seed + 7)
-    rc |= check("residual_relu6", [held, residual_packet(F_EMIT | F_RELU | F_RELU6, seed + 8)])
+    cases.append(("residual_relu6", [held, residual_packet(F_EMIT | F_RELU | F_RELU6, seed + 8)]))
     # A residual may hold its own result for a second one: scratch is read and written at the same
     # offset, which is only safe because each iteration loads before it stores.
     held = random_packet(3, 1, 1, em.F_HOLD, seed + 9)
-    rc |= check("residual_chain", [held, residual_packet(em.F_HOLD, seed + 10),
-                                   residual_packet(F_EMIT | F_RELU, seed + 11)])
+    cases.append(("residual_chain", [held, residual_packet(em.F_HOLD, seed + 10),
+                                     residual_packet(F_EMIT | F_RELU, seed + 11)]))
+    return cases
+
+
+def sweep(seed) -> int:
+    rc = 0
+    for label, pkts in sweep_cases(seed):
+        rc |= check(label, pkts)
     return rc
 
 

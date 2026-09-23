@@ -13985,9 +13985,9 @@ A probe built on these nine positions' operands (the accumulator and the eight p
 is what could separate them. It has not been built.
 
 *Built since (2026-09-23, offline):* a fifth candidate, exp_sum, reproduces all nine and breaks
-nothing else in the replay. It is a fit to the nine, and the probe that can refute it is
+nothing else in the replay, or in any other engine sitting that can be rebuilt. It is a fit to the nine, and the probe that can refute it is
 pre-registered and has not run
-([below](#a-fifth-accumulate-model-exp_sum-fits-every-bf16-observation-so-far-and-the-probe-that-can-refute-it-is-pre-registered-not-run-2026-09-23-offline)).
+([below](#a-fifth-accumulate-model-exp_sum-fits-every-bf16-engine-sitting-that-could-be-rebuilt-and-the-probe-that-can-refute-it-is-pre-registered-not-run-2026-09-23-offline)).
 
 ### What this does not establish
 
@@ -13995,7 +13995,7 @@ pre-registered and has not run
 - The mechanism, as above.
 - One checks-only sitting, on six inputs.
 
-## A fifth accumulate model, exp_sum, fits every bf16 observation so far, and the probe that can refute it is pre-registered, not run (2026-09-23, offline)
+## A fifth accumulate model, exp_sum, fits every bf16 engine sitting that could be rebuilt, and the probe that can refute it is pre-registered, not run (2026-09-23, offline)
 
 Nothing in this section opened a device. It does three things:
 - adds one candidate model to the emulator;
@@ -14014,6 +14014,18 @@ Logs, all offline, Desktop 2:
 - [`bf16_mac_position_probe_predictions_desktop2_20260923.log`](../results/aie/bf16_mac_position_probe_predictions_desktop2_20260923.log):
   the probe's plan, its operands and every model's prediction (`tools/bf16_mac_position_probe.py`
   without `--npu`).
+- [`bf16_mac_rescore_exp_sum_sesr_plain_desktop2_20260923.log`](../results/aie/bf16_mac_rescore_exp_sum_sesr_plain_desktop2_20260923.log):
+  the three plain-weights SESR sittings, rescored (`tools/bf16_mac_model_rescore.py sesr`).
+- [`bf16_mac_rescore_exp_sum_sesr_adaround_desktop2_20260923.log`](../results/aie/bf16_mac_rescore_exp_sum_sesr_adaround_desktop2_20260923.log):
+  the AdaRound reuse sittings' frames exact under aligned, rescored the same way.
+- [`sesr_m7_adaround_bf16_dump_replay_exp_sum_desktop2_20260923.log`](../results/aie/sesr_m7_adaround_bf16_dump_replay_exp_sum_desktop2_20260923.log):
+  the AdaRound reuse dump replayed under exp_sum (`bf16_sr_silicon_check.py --from-dump --mac-model exp_sum`).
+- [`bf16_mac_rescore_exp_sum_sweep_desktop2_20260923.log`](../results/aie/bf16_mac_rescore_exp_sum_sweep_desktop2_20260923.log):
+  the eight one-core sweep sittings, rescored (`bf16_mac_model_rescore.py sweep`).
+- [`bf16_mac_rescore_exp_sum_16core_desktop2_20260923.log`](../results/aie/bf16_mac_rescore_exp_sum_16core_desktop2_20260923.log):
+  the sixteen-core Gaussian sitting, rescored (`bf16_mac_model_rescore.py sixteen`).
+- [`bf16_mac_rescore_exp_sum_16core_integer_desktop2_20260923.log`](../results/aie/bf16_mac_rescore_exp_sum_16core_integer_desktop2_20260923.log):
+  the sixteen-core integer sitting, rescored.
 
 ### The candidate
 
@@ -14061,8 +14073,66 @@ nine, and the 2026-09-21 probe refutes them. So fitting the nine does not pin a 
   their earlier counts (9, 14, 16, 17), layer by layer.
 - The nine-positions column comes from the predictions log's arm A lines (below). It is the same fit.
 
-**So every observation that separates exp_sum from aligned is one of the nine it was fitted to.** It
-is a candidate that fits all the data so far. It is not a measured rule, and it is not in force.
+### Every other engine sitting, rescored
+
+A first version of this section said exp_sum fits every bf16 observation. It had been scored against
+two. Every other engine sitting that can be rebuilt is now rescored, offline, with
+`tools/bf16_mac_model_rescore.py`:
+- A sitting that found the device byte-equal to the emulator under aligned fixes the device's bits at
+  every value it compared: they are aligned's.
+- So a model whose bits differ from aligned's at one of those values disagrees with the silicon there,
+  and is refuted. This is a deduction from a logged equality, not a new measurement.
+- The tool rebuilds each sitting's inputs, and refuses to count unless the rebuild matches the
+  sitting's own record:
+  - SESR: the container and QDQ hashes, the image and seed lists, the reference model, and every
+    frame's resident and tail value counts;
+  - sweeps: every case label, and the four per-model counts each log recorded;
+  - sixteen cores: the rebuilt output under aligned equals the sitting's own `expected.npy`, byte for
+    byte.
+
+Values at which each model's bits differ from aligned's, where the silicon matched aligned:
+
+| sittings | values scored | exp_sum | wide | dot_first | sequential |
+|---|---:|---:|---:|---:|---:|
+| SESR-M7, plain XINT8 weights (2026-09-22), silicon and native-host sittings: 6 frames each | 32,636,928 each | **0** | 29 | 4 | 186 |
+| SESR-M7, plain weights, smoke sitting: 2 of the same frames | 10,878,976 | **0** | 1 | 1 | 72 |
+| SESR-M7, AdaRound weights, reuse container (2026-09-23), silicon and dump sittings: the 2 frames exact under aligned | 10,878,976 each | **0** | 1 | 1 | 1 |
+| one-core engine sweeps, 8 sittings (2026-09-21 and 22): every shape, psum chain and residual pair | 132,800 | **0** | 0 | 0 | 0 |
+| sixteen cores, Gaussian operands (2026-09-22) | 153,600 | **0** | 0 | 1 | 2 |
+| sixteen cores, integer operands (2026-09-22) | 153,600 | **0** | 0 | 0 | 0 |
+
+- **The AdaRound reuse container's other four frames** were not exact under aligned, so the deduction
+  does not apply to them.
+  - The dump from that sitting answers them directly. Replayed under exp_sum, the device equals the
+    emulator at the tail and every resident tensor on all six frames, where aligned misses 129 resident
+    and 11 tail values.
+  - That is the same weights and inputs as the no-reuse dump the nine came from, and the mismatch
+    follows the values, not the container. So it is the fit's own data seen through a second
+    container, not a test.
+- **exp_sum disagrees with no engine sitting that can be rebuilt**, and it still separates from aligned
+  nowhere the silicon looked except at the nine. On the plain weights, the sweeps and sixteen cores, it
+  equals aligned at every compared value.
+- **The plain-weights sittings refute wide, dot_first and sequential on their own**, independently of
+  the 2026-09-21 probe.
+- **A test exp_sum was not fitted to.**
+  - On the plain weights, exp_sum and aligned part at 3 values in tensors the reuse container
+    overwrites: 2 on bird and 1 on woman. No sitting has compared them.
+  - A plain-weights sitting under `--no-workspace-reuse` would. If exp_sum is the rule, the device
+    departs from aligned at exactly those values; if aligned is, it does not.
+  - Not run.
+
+Not rescored:
+- `engine_bf16_npu_20260921.log`, milestone 2's first run. It is superseded as evidence, its lines
+  carry no case labels, and its packet builder (`random_packet`, `geometry`, `SWEEP` at `7def754`)
+  differs from today's, so its packets cannot be rebuilt.
+- `bf16_conv_npu_20260921.log`, milestone 1's fixed-shape kernel. It was judged bit-exact against a
+  numpy einsum reference, in another harness and layout, not against an accumulate model.
+- The bf16 GEMM, GroupNorm, attention and Hello XDNA! tile sittings. They were judged against float
+  references with tolerances.
+
+**So every observation on record that separates exp_sum from aligned is one of the nine it was fitted
+to.** It fits every bf16 engine sitting that could be rebuilt, and the sittings it was not scored
+against are named above. It is not a measured rule, and it is not in force.
 
 ### The probe, pre-registered
 

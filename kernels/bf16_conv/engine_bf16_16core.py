@@ -235,11 +235,12 @@ def build_plan(seed: int, ints=None):
     return plan
 
 
-def emulate_plan(plan):
+def emulate_plan(plan, mac_model=None):
     """Expected output objects per column, in drain order, as raw bytes.
 
     psum and scratch persist per core across scenarios because they are per-core BUFFERS on the
     device, not per-packet state - which is exactly what the chunk and hold pairs depend on.
+    `mac_model` None is the model in force; tools/bf16_mac_model_rescore.py names the others.
     """
     expected = []
     for c in range(COLS):
@@ -253,7 +254,7 @@ def emulate_plan(plan):
                 for r in range(ROWS):
                     act = sc["a"][rnd][r].view(bfloat16).astype(np.float32)
                     o = np.zeros(em.OUT_ELEMS, np.float32)
-                    em.run_packet(header, act, wts, bias, psum[r], o, scratch[r], core_row=r)
+                    em.run_packet(header, act, wts, bias, psum[r], o, scratch[r], core_row=r, mac_model=mac_model)
                     if emits(header):
                         outs.append(em.bf16_bits(o).view(np.uint8))
                 if outs:
