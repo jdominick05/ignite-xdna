@@ -14129,9 +14129,14 @@ Not rescored:
   numpy einsum reference, in another harness and layout, not against an accumulate model.
 - The bf16 GEMM, GroupNorm, attention and Hello XDNA! tile sittings. They were judged against float
   references with tolerances.
+- The timing-only sittings: `engine_bf16_bench_npu_20260921.log`, the four
+  `engine_bf16_loop_variants_bench_k1/k3_npu_20260921{,_02}.log`, and
+  `bf16_conv_bench{,_large}_npu_20260921.log`. They logged no device output, so there is nothing to
+  score.
 
 **So every observation on record that separates exp_sum from aligned is one of the nine it was fitted
-to.** It fits every bf16 engine sitting that could be rebuilt, and the sittings it was not scored
+to, or downstream of them in the same frames**, as the reuse dump's 129 resident and 11 tail values
+are. It fits every bf16 engine sitting that could be rebuilt, and the sittings it was not scored
 against are named above. It is not a measured rule, and it is not in force.
 
 ### The probe, pre-registered
