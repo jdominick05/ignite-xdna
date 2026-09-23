@@ -19,7 +19,7 @@ from typing import Tuple, Union
 
 import numpy as np
 
-from ignite_xdna.runtime.graph_session import DenseGraphSession
+from ignite_xdna.runtime.graph_session import DenseGraphSession, open_sr_session
 
 
 @dataclass
@@ -35,12 +35,16 @@ class SrTimings:
 
 
 class SuperResolutionPipeline:
-    """Owns one ``DenseGraphSession`` (one XRT hardware context) for its lifetime."""
+    """Owns one ``DenseGraphSession`` (one XRT hardware context) for its lifetime.
+
+    A bf16 container (``ignite-compile --datapath bf16``) opens in ``Bf16DenseGraphSession``, the same
+    session with bf16 ingress and egress, so the stage split below means the same thing at either width.
+    """
 
     def __init__(self, model_path: Union[str, Path], device_index: int = 0):
         self.model_path = Path(model_path)
         self.device_index = device_index
-        self.session = DenseGraphSession(self.model_path, device_index=device_index)
+        self.session: DenseGraphSession = open_sr_session(self.model_path, device_index=device_index)
         self.input_hw: Tuple[int, int] = self.session.input_hw
         self.scale: int = self.session.scale
 

@@ -1518,8 +1518,9 @@ class InferenceSession:
                 from ignite_xdna.runtime.dense_session import DenseTensorSession
                 return DenseTensorSession(ignite_path, device_index=device_index, **kwargs)
             if task == "super_resolution":
-                from ignite_xdna.runtime.graph_session import DenseGraphSession
-                return DenseGraphSession(ignite_path, device_index=device_index, **kwargs)
+                # DenseGraphSession for int8, Bf16DenseGraphSession for the bf16 engine's W8A16 SESR.
+                from ignite_xdna.runtime.graph_session import sr_session_class
+                return sr_session_class(manifest)(ignite_path, device_index=device_index, **kwargs)
             return GraphSession(ignite_path, device_index=device_index, **kwargs)
         return cls(
             model_path_or_bundle=ignite_path,

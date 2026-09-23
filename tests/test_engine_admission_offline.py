@@ -113,10 +113,20 @@ class TestSessionsRefuseAWidthTheyCannotRead(unittest.TestCase):
         path = container(self.tmp, task="segment")
         self._assert_refused_naming_the_width(DenseTensorSession, path)
 
-    def test_inference_session_from_file_refuses_bf16(self):
+    def test_inference_session_from_file_refuses_a_bf16_detect_container(self):
+        # Detect, since 2026-09-22: a bf16 super-resolution container now has a session of its own.
+        from ignite_xdna.runtime.session import InferenceSession
+        path = container(self.tmp, task="detect")
+        self._assert_refused_naming_the_width(InferenceSession.from_file, path)
+
+    def test_inference_session_from_file_no_longer_refuses_a_bf16_sr_container(self):
+        # It routes to Bf16DenseGraphSession (tests/test_bf16_dense_session_offline.py pins which class)
+        # and fails later for want of a real container; what must not happen is a refusal on width.
         from ignite_xdna.runtime.session import InferenceSession
         path = container(self.tmp, task="super_resolution")
-        self._assert_refused_naming_the_width(InferenceSession.from_file, path)
+        with self.assertRaises(Exception) as cm:
+            InferenceSession.from_file(path)
+        self.assertNotIn("activations but", str(cm.exception))
 
     def test_the_refusal_names_the_session_that_could_not_read_it(self):
         path = container(self.tmp, task="detect")

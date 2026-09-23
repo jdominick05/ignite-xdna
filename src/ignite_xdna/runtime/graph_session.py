@@ -17,7 +17,9 @@ readback); the manifest's ``task`` picks the session on top of it:
 * ``DenseGraphSession`` (``super_resolution``, SESR): stages the resized RGB
   frame, dispatches, reads the dense output tensor back and applies the
   manifest's ``dense_output`` transform (DepthToSpace and dequantization)
-  into an upscaled BGR image.
+  into an upscaled BGR image. ``Bf16DenseGraphSession`` is the same session
+  for a bf16-engine container (W8A16: activations as bf16 in real units), and
+  ``sr_session_class`` picks between the two by the width the placements declare.
 
 A container whose manifest lists ``graph_engine.segments`` (YOLO11's C2PSA block, or YOLO-World v2's four
 text attention cores, on the host) runs them in order in ``dispatch``: each NPU segment is its own
@@ -41,8 +43,9 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 
+from ignite_xdna.compiler.engine_bf16_emulator import bf16_bits, from_bf16_bits, to_bf16
 from ignite_xdna.compiler.graph_ir import place_host_output
-from ignite_xdna.compiler.serializer import (ELEM_INT, ENGINE_CONV_INT8, GRAPH_ENGINES,
+from ignite_xdna.compiler.serializer import (ELEM_BF16, ELEM_INT, ENGINE_CONV_INT8, GRAPH_ENGINES,
                                              IgniteModelReader)
 from ignite_xdna.runtime.driver import XrtSiliconHarness, get_repo_root, setup_xrt_environment
 from ignite_xdna.runtime.heads import HEAD_NAMES, POSE_HEAD_NAMES, HeadStatus, resolve_head_layout
@@ -1098,6 +1101,179 @@ class DenseGraphSession(EngineSession):
         t4 = time.perf_counter()
         return image, {"stage_ms": (t1 - t0) * 1e3, "npu_ms": (t2 - t1) * 1e3, "readback_ms": (t3 - t2) * 1e3,
                        "postprocess_ms": (t4 - t3) * 1e3}
+
+
+def bf16_input_lut(norm: Dict[str, Any]) -> np.ndarray:
+    """uint8 pixel -> uint16 bf16 pattern of ``(pixel - mean) / divisor``, rounded to nearest even.
+
+    For SESR (mean 128, divisor 1) every entry is an integer in [-128, 127] and exact in bf16, so
+    this is the float pipeline's own input (``npu/sesr.py``), not an approximation of it.
+    """
+    x = (np.arange(256, dtype=np.float64) - float(norm["mean"])) / float(norm["divisor"])
+    return bf16_bits(to_bf16(x.astype(np.float32)))
+
+
+def bf16_dense_image(blocks: np.ndarray, channels: int, blocksize: int, mean: float) -> np.ndarray:
+    """``[blocks][H][W][8]`` bf16 patterns -> BGR uint8 image of ``(H * bs, W * bs)``.
+
+    DepthToSpace (CRD: channel ``k * bs * bs + i * bs + j`` is pixel ``(y * bs + i, x * bs + j)`` of
+    image channel ``k``), then ``clip(value + mean, 0, 255)`` TRUNCATED to uint8, in float32, with the
+    channels reversed - exactly ``npu/sesr.py``'s ``postprocess``, which is what the float pipeline
+    this is compared against uses. Truncation, not rounding, because that is what it does.
+
+    A non-finite value in a real channel raises. The int8 engine cannot produce one; the bf16 engine
+    produces one when a multiply-accumulate reads memory nothing wrote, or when the input lanes past
+    the image's channels are not +0.0 (0 x NaN is NaN). Converting it to a pixel would hide exactly
+    that fault.
+    """
+    nb, h, w, _ = blocks.shape
+    bs = int(blocksize)
+    oc = int(channels) // (bs * bs)
+    chw = np.moveaxis(np.asarray(blocks, dtype=np.uint16), 3, 1).reshape(nb * 8, h, w)[:int(channels)]
+    y = from_bf16_bits(chw)
+    bad = int(np.count_nonzero(~np.isfinite(y)))
+    if bad:
+        raise RuntimeError(f"{bad} non-finite values in the dense output: a multiply-accumulate read memory "
+                           "nothing wrote, or the input lanes past the image's channels are not +0.0")
+    image = y.reshape(oc, bs, bs, h, w).transpose(3, 1, 4, 2, 0).reshape(h * bs, w * bs, oc)
+    image = image + np.float32(mean)
+    np.clip(image, 0.0, 255.0, out=image)
+    return np.ascontiguousarray(image.astype(np.uint8)[:, :, ::-1])
+
+
+class Bf16DenseGraphSession(DenseGraphSession):
+    """``super_resolution`` on the bf16 engine (``conv_engine_bf16_v1``): W8A16, activations in real units.
+
+    The same session as ``DenseGraphSession`` - one dispatch, the dense tail read back, DepthToSpace on
+    the host - with the conversions a two-byte workspace needs and nothing else:
+
+    * Ingress is a 256-entry uint16 table of bf16 patterns (``bf16_input_lut``) where int8's is a uint8
+      table of quantization codes.
+    * Egress is arithmetic (``bf16_dense_image``), because a bf16 pattern has 65,536 values where an
+      int8 code has 256.
+    * The input plane is +0.0 everywhere the image does not write. ``EngineSession`` fills it with the
+      int8 zero point, which at two bytes is 0x0080, a bf16 denormal: finite, so no 0 x NaN fires and
+      no emulator test sees it, but it is not what the compiler's workspace holds, and ``_upload_input``
+      would carry it to the device in the halo ring and in lanes 3..7 with the first frame. It is
+      overwritten here before anything is synced. The input is pinned at the workspace's base and never
+      handed to another tensor, so what is zeroed once stays zero.
+
+    IGNORED BY DESIGN: ``quant_scales``, ``input_dtype`` and ``dense_output``'s ``scale`` and
+    ``zero_point``. They are int8 fields the compiler still writes into a bf16 manifest; nothing here
+    reads them.
+
+    Neither native fast path is used. ``resize_bgr_to_c8_plane`` and ``depth_to_space_crd_bgr`` are uint8
+    routines; this numpy path is correct and slower, and what it costs is for a sitting to measure.
+    """
+
+    SUPPORTED_ELEMS = (ELEM_BF16,)
+
+    def _init_dense(self) -> None:
+        m = self.ignite_manifest
+        if self.task != "super_resolution":
+            raise ValueError(f"{self.path} is a {self.task} container; open it with GraphSession")
+        self.dense = m["dense_output"]
+        p = self.input_placement
+        self.input_hw = (int(p["height"]), int(p["width"]))
+        self.in_channels = int(m["input_shape"][1])
+        if self.in_channels != 3 or int(p["blocks"]) != 1:
+            raise ValueError(f"{self.path}: stage_image writes a three-channel image into one channel block, "
+                             f"not {self.in_channels} channels in {p['blocks']}")
+        self.scale = int(m.get("upscale", 1))
+        norm = m.get("input_normalization", {"mean": 0.0, "divisor": 1.0})
+        if float(norm["divisor"]) != 1.0:
+            # The int8 session adds the mean back to its output and never multiplies by the divisor, so
+            # it assumes the network answers in the input's centred pixel units. That holds for SESR. At
+            # another divisor the manifest does not say what units the output is in, so refuse to guess.
+            raise ValueError(f"{self.path}: input divisor {norm['divisor']}; the output's units are only "
+                             "known at divisor 1")
+        self._mean = float(norm["mean"])
+        self._input_lut = bf16_input_lut(norm)
+        op = self.ge["placements"][self.dense["tensor"]]
+        if op["halo"]:
+            raise ValueError("the dense output tensor must be planned without a halo")
+        self._out_base = int(op["base"])
+        self._out_blocks = int(op["blocks"])
+        self._out_hw = (int(op["height"]), int(op["width"]))
+        self._out_region = region_bytes(op)
+        transform = self.dense["transform"]
+        if transform.get("op") != "depth_to_space" or transform.get("mode", "DCR") != "CRD":
+            raise ValueError(f"unsupported dense output transform {transform}")
+        self._bs = int(transform["blocksize"])
+        self._out_channels = int(self.dense["channels"])
+        self._image_channels = self._out_channels // (self._bs * self._bs)
+        self._input_plane[...] = 0
+
+    def _upload_input(self) -> None:
+        # The unmapped path hands pyxrt a byte view: the plane is uint16, and a write that counted its
+        # elements as bytes would send half of it. The mapped path (the default) never writes.
+        base = self.input_placement["base"]
+        if self._ws_map is None:
+            self.bo_ws.write(self._input_plane.view(np.uint8), base)
+        self.bo_ws.sync(self.harness.pyxrt.xclBOSyncDirection.XCL_BO_SYNC_BO_TO_DEVICE, self._input_bytes, base)
+
+    def stage_image(self, img_bgr: np.ndarray) -> None:
+        """Resize a BGR frame to the network input (bilinear), write its RGB bf16 patterns, upload."""
+        ih, iw = self.input_hw
+        if img_bgr.ndim != 3 or img_bgr.shape[2] != 3 or img_bgr.dtype != np.uint8:
+            raise ValueError(f"stage_image expects an HxWx3 uint8 BGR frame, got {img_bgr.shape} {img_bgr.dtype}")
+        import cv2
+        h = int(self.input_placement["halo"])
+        src = img_bgr if img_bgr.shape[:2] == (ih, iw) else cv2.resize(img_bgr, (iw, ih), interpolation=cv2.INTER_LINEAR)
+        self._input_plane[h:h + ih, h:h + iw, :3] = self._input_lut[src[:, :, ::-1]]
+        self._upload_input()
+
+    def stage_quantized(self, chw: np.ndarray) -> None:
+        """Write bf16 PATTERNS, uint16 ``[C][H][W]``, into the input plane and upload; lanes past C are +0.0.
+
+        Patterns rather than values, as ``Bf16Workspace.write_tensor`` takes them: assigning float32 into
+        the uint16 plane would truncate each value to an integer without a word of complaint.
+        """
+        chw = np.asarray(chw)
+        if chw.dtype != np.uint16:
+            raise TypeError(f"the input plane holds bf16 patterns; pass bf16_bits(values), not {chw.dtype}")
+        p = self.input_placement
+        h, c = int(p["halo"]), int(chw.shape[0])
+        if chw.shape[1:] != self.input_hw or not 0 < c <= 8:
+            raise ValueError(f"expected [C <= 8][{self.input_hw[0]}][{self.input_hw[1]}], got {chw.shape}")
+        interior = self._input_plane[h:h + p["height"], h:h + p["width"], :]
+        interior[..., :c] = np.moveaxis(chw, 0, -1)
+        interior[..., c:] = 0
+        self._upload_input()
+
+    def stage_tensor(self, name: str, data: np.ndarray, sync: bool = True):
+        raise NotImplementedError("EngineSession.stage_tensor pads with the int8 zero point, a bf16 denormal; "
+                                  "stage the input with stage_image or stage_quantized")
+
+    def read_output(self) -> np.ndarray:
+        """Sync the dense output tensor back; uint16 bf16 patterns [blocks][H][W][8] (a view when mapped)."""
+        self.bo_ws.sync(self.harness.pyxrt.xclBOSyncDirection.XCL_BO_SYNC_BO_FROM_DEVICE, self._out_region,
+                        self._out_base)
+        if self._ws_map is not None:
+            raw = self._ws_map[self._out_base:self._out_base + self._out_region]
+        else:
+            raw = np.frombuffer(self.bo_ws.read(self._out_region, self._out_base), dtype=np.uint8)
+        return raw.view(np.uint16).reshape(self._out_blocks, self._out_hw[0], self._out_hw[1], 8)
+
+    def postprocess(self, blocks: np.ndarray) -> np.ndarray:
+        """[blocks][H][W][8] bf16 patterns -> BGR uint8 image of (H * bs, W * bs); see ``bf16_dense_image``."""
+        return bf16_dense_image(blocks, self._out_channels, self._bs, self._mean)
+
+
+def sr_session_class(manifest: Optional[Dict[str, Any]]) -> type:
+    """The session a ``super_resolution`` container needs, by the activation width its placements declare.
+
+    Anything but bf16 goes to ``DenseGraphSession``, whose admission then refuses a width it cannot read
+    by name, so an unknown width is still refused loudly rather than routed somewhere plausible.
+    """
+    return Bf16DenseGraphSession if container_elem(manifest) == ELEM_BF16 else DenseGraphSession
+
+
+def open_sr_session(container_path: Union[str, Path], device_index: int = 0, **kwargs) -> DenseGraphSession:
+    """Open a ``super_resolution`` container in the session its width needs (see ``sr_session_class``)."""
+    with IgniteModelReader(container_path) as reader:
+        cls = sr_session_class(reader.manifest)
+    return cls(container_path, device_index=device_index, **kwargs)
 
 
 class ClassificationSession(EngineSession):

@@ -13251,7 +13251,9 @@ A mutation run, not committed, showed the bound has teeth:
   nonzero.
 - **The plain XINT8 arm.** The oracle and the int8 container both come from `sesr_m7_xint8.onnx`. If the
   silicon comparison moves to `sesr_m7_xint8_adaround.onnx`, the tool is re-run on that QDQ. That is a
-  run, not new code.
+  run, not new code. Decided 2026-09-22: it does not move. The silicon run pairs bf16 against the plain
+  XINT8 container, so any quality margin it reports is over plain XINT8, the weaker int8 arm, and not
+  over AdaRound, which already recovers all but 0.48 dB of FP32 on Set5.
 - **No quality number.** This measures agreement with the oracle, not PSNR.
 - **One CPU.** The oracle's summation order is ORT's MLAS kernel on a Ryzen 7 8700G.
 
@@ -13285,3 +13287,21 @@ session refuses it at admission, naming the bf16 width, and building the session
 the next phase. Its manifest still carries the int8 model's output scale and zero point and an
 `input_dtype` of uint8. The bf16 session will not apply them. It has to stage a bf16 input itself,
 and write zeros into input channels 3 to 7, because 0 x NaN is NaN.
+
+**Later the same day, a session reads it, and it still has not run.** `Bf16DenseGraphSession`
+(`src/ignite_xdna/runtime/graph_session.py`) opens it. `InferenceSession.from_file` and
+`SuperResolutionPipeline` route a super-resolution container to it by the width its placements
+declare, and every other session still refuses a bf16 container. It reads none of the int8 fields
+above:
+- ingress is a table of the bf16 patterns of `pixel - 128`, exact for every pixel;
+- egress is `npu/sesr.py`'s own postprocess, truncation included, and a NaN or an infinity in an
+  image channel raises rather than becoming a pixel;
+- the input plane is zeroed after `EngineSession` fills it with the int8 zero point. At two bytes that
+  fill is 0x0080, a bf16 denormal, and it would have reached the device in the halo ring and in lanes
+  3 to 7. It is finite, so no 0 x NaN fires and no emulator test could see it; it is simply not what
+  the compiler's workspace holds.
+
+`tests/test_bf16_dense_session_offline.py` checks the staged plane against the compiler's workspace
+layout of `npu/sesr.py`'s preprocess, and the image against its postprocess, both to the bit, and
+records the sync lengths through a stand-in buffer object. None of that touches the device. Whether pyxrt, the syncs and the kernel do what those calls ask is the
+silicon sitting's question.

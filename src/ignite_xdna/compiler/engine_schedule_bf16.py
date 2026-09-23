@@ -324,6 +324,29 @@ class Bf16Workspace(Workspace):
         return em.from_bf16_bits(self.read_tensor(ws, name))
 
 
+def input_plane(placement: Dict, values: np.ndarray) -> np.ndarray:
+    """The graph input's plane as a container expects it staged: ``[H + 2h][W + 2h][8]`` uint16 patterns.
+
+    ``placement`` is the manifest's dict, what a session reads; the layout comes from this module's
+    ``Bf16Workspace``, what the DMA patterns were built against. So a session's staging is checked
+    against the compiler rather than against a second copy of its own arithmetic. The halo ring is
+    +0.0, ``values`` go in as bf16 patterns, and the block's lanes past them are +0.0, because the head
+    convolution multiplies them by zero weights and 0 x NaN is NaN. One block only: an image is one.
+    """
+    if placement.get("dtype") != STORAGE_DTYPE or int(placement.get("band_rows") or 0):
+        raise ValueError(f"not a bf16 placement: dtype {placement.get('dtype')!r}, "
+                         f"band_rows {placement.get('band_rows')!r}")
+    if int(placement["blocks"]) != 1:
+        raise ValueError(f"the input spans {placement['blocks']} channel blocks; an image is one")
+    p = Placement(name="input", base=0, halo=int(placement["halo"]), height=int(placement["height"]),
+                  width=int(placement["width"]), blocks=1, planes=int(placement["planes"]),
+                  halo_value=int(placement["halo_value"]), dtype=STORAGE_DTYPE, band_rows=0)
+    ws = Bf16Workspace(placements={"input": p}, nbytes=p.planes * p.plane_bytes, input="input")
+    arr = ws.halo_fill()          # refuses a halo value other than +0.0
+    ws.write_values(arr, "input", values)
+    return arr[:p.plane_bytes].view(np.uint16).reshape(p.height + 2 * p.halo, p.width + 2 * p.halo, 8)
+
+
 def _halo_widths(ir: GraphIR) -> Dict[str, int]:
     """Per tensor, the widest padding any convolution reading it needs. The value is always +0.0."""
     halo = {name: 0 for name in ir.tensors}
