@@ -97,10 +97,19 @@ W_BYTES = 9472                                   # the weight packet object, ide
 #   "wide"        the nine operands summed exactly, one rounding to fp32
 #   "sequential"  acc <- fl(acc + a[k] * w[k]) for k = 0..7, a rounding per product
 #   "dot_first"   d <- the eight products summed in order with fp32 rounding, then acc <- fl(acc + d)
+#   "exp_sum"     as "aligned", except where the grid sits: a product is placed by the SUM of its two
+#                 operands' exponents (ea + ew) rather than by its own leading bit, and the accumulator
+#                 by its own exponent. Two significands multiply to [1, 4), so a product in [2, 4)
+#                 leads one bit above its place and the grid keeps one more bit below it. Where every
+#                 product's significands multiply to under 2 this IS "aligned", which is why the
+#                 probe's vectors, all powers of two and small integers against weights of 1, could
+#                 not tell them apart. A CANDIDATE, not the model in force: it was fitted on 2026-09-23
+#                 to the nine SESR-M7 positions "aligned" misses on silicon (BENCHMARKS, "The AdaRound
+#                 mismatch starts in body.1"), and is unconfirmed on the core.
 # Every bf16 x bf16 product is exact in fp32 (two 8-bit significands), so the models differ only in
-# how the sum rounds. On ordinary data all four agree after rounding to bf16; they are told apart by
+# how the sum rounds. On ordinary data all of them agree after rounding to bf16; they are told apart by
 # kernels/bf16_conv/engine_bf16.py --probe.
-MAC_MODELS = ("aligned", "wide", "sequential", "dot_first")
+MAC_MODELS = ("aligned", "wide", "sequential", "dot_first", "exp_sum")
 MAC_MODEL = "aligned"
 
 
@@ -173,6 +182,18 @@ def mac(acc: np.ndarray, a: np.ndarray, w: np.ndarray, model: str) -> np.ndarray
         for k in range(8):
             dot = (dot + a[None, :, :, k, None] * w[:, None, None, k, :]).astype(np.float32)
         return (acc + dot).astype(np.float32)
+    if model == "exp_sum":
+        a64, w64, c64 = a.astype(np.float64), w.astype(np.float64), acc.astype(np.float64)
+        prod = a64[None, :, :, :, None] * w64[:, None, None, :, :]            # [NCO][R][C][8][4]
+        # floor(log2|x|) is frexp's exponent less one; a zero operand places nothing.
+        place = (np.frexp(a64)[1] - 1)[None, :, :, :, None] + (np.frexp(w64)[1] - 1)[:, None, None, :, :]
+        place = np.where(prod != 0, place, np.iinfo(np.int32).min)
+        top = np.maximum(place.max(axis=3), np.where(c64 != 0, np.frexp(c64)[1] - 1, np.iinfo(np.int32).min))
+        top = np.where(top == np.iinfo(np.int32).min, 0, top)             # all nine zero: any grid gives 0
+        quantum = np.ldexp(1.0, top - 23)                                   # 24 bits down from the top place
+        ops = np.concatenate([c64[:, :, :, None, :], prod], axis=3)
+        units = np.rint(ops / quantum[:, :, :, None, :]).sum(axis=3)       # ties-to-even; exact in fp64
+        return (units * quantum + 0.0).astype(np.float32)
     raise ValueError(f"mac model {model!r} is not one of {MAC_MODELS}")
 
 

@@ -76,6 +76,16 @@ def scalar_mac(acc, a8, w8, model):
         for a, w in zip(a8, w8):
             acc = F32(acc + F32(a * w))
         return acc
+    if model == "exp_sum":
+        # aligned's grid, hung from the top PLACE: an operand's exponent, a product's ea + ew
+        ops = [float(acc)] + [float(a) * float(w) for a, w in zip(a8, w8)]
+        places = [math.frexp(float(acc))[1] - 1] if float(acc) != 0.0 else []
+        places += [math.frexp(float(a))[1] + math.frexp(float(w))[1] - 2
+                   for a, w in zip(a8, w8) if float(a) != 0.0 and float(w) != 0.0]
+        if not places:
+            return F32(0.0)
+        quantum = 2.0 ** (max(places) - 23)
+        return F32(sum(round(o / quantum) for o in ops) * quantum)
     dot = F32(0.0)
     for a, w in zip(a8, w8):
         dot = F32(dot + F32(a * w))
@@ -354,19 +364,19 @@ class ModelsAreDistinguishable(unittest.TestCase):
     def test_a_small_product_between_two_cancelling_large_ones(self):
         big = (F32(2 ** 13), F32(2 ** 12))
         got = self.lane([big, (F32(1), F32(1)), (big[0], -big[1])], bias=0.0)
-        self.assertEqual(got, {"aligned": 0.0, "wide": 1.0, "sequential": 0.0, "dot_first": 0.0})
+        self.assertEqual(got, {"aligned": 0.0, "wide": 1.0, "sequential": 0.0, "dot_first": 0.0, "exp_sum": 0.0})
 
     def test_a_small_product_after_the_large_ones_have_cancelled(self):
         # The one that separates the silicon from every ordered model: in order, 2^25 - 2^25 is 0 and
         # the +1 survives; aligned to 2^25 first, the +1 is a quarter of a grid step and is gone.
         big = (F32(2 ** 13), F32(2 ** 12))
         got = self.lane([big, (big[0], -big[1]), (F32(1), F32(1))], bias=0.0)
-        self.assertEqual(got, {"aligned": 0.0, "wide": 1.0, "sequential": 1.0, "dot_first": 1.0})
+        self.assertEqual(got, {"aligned": 0.0, "wide": 1.0, "sequential": 1.0, "dot_first": 1.0, "exp_sum": 0.0})
 
     def test_small_products_against_a_large_accumulator(self):
         ones = [(F32(1), F32(1))] * 4
         got = self.lane(ones + [(F32(2 ** 13), -F32(2 ** 12))], bias=2.0 ** 25)
-        self.assertEqual(got, {"aligned": 0.0, "wide": 4.0, "sequential": 0.0, "dot_first": 4.0})
+        self.assertEqual(got, {"aligned": 0.0, "wide": 4.0, "sequential": 0.0, "dot_first": 4.0, "exp_sum": 0.0})
 
     def test_the_grid_rounds_ties_to_even(self):
         # What the silicon returned for (2^24, +s, -2^24): s = 1 -> 0, 3 -> 4, 5 -> 4. Truncation
@@ -375,6 +385,44 @@ class ModelsAreDistinguishable(unittest.TestCase):
         for small, want in ((1, 0.0), (3, 4.0), (5, 4.0)):
             got = self.lane([big, (F32(small), F32(1)), (big[0], -big[1])], bias=0.0)
             self.assertEqual(got["aligned"], want, small)
+
+    @staticmethod
+    def one_mac(acc, pairs, model):
+        """One instruction on one lane, the fp32 accumulator it leaves (no epilogue)."""
+        a = np.zeros((1, 1, 8), F32)
+        w = np.zeros((em.NCO, 8, 4), F32)
+        for kk, (x, y) in enumerate(pairs):
+            a[0, 0, kk], w[0, kk, 0] = x, y
+        c = np.zeros((em.NCO, 1, 1, 4), F32)
+        c[0, 0, 0, 0] = acc
+        return float(em.mac(c, a, w, model)[0, 0, 0, 0])
+
+    def test_exp_sum_places_a_product_by_its_operands_exponents(self):
+        # 1.5 x 1.5 = 2.25 leads at 2^1 but is placed at 2^0 + 2^0: aligned's grid ends at 2^-22,
+        # exp_sum's at 2^-23, so a 2^-23 in the accumulator is half a step to one and whole to the
+        # other. The -1.5 keeps the sum under 2, where fp32 itself can hold 2^-23.
+        acc = 1.0 + 2.0 ** -23
+        pairs = [(F32(1.5), F32(1.5)), (F32(-1.5), F32(1.0))]
+        self.assertEqual(self.one_mac(acc, pairs, "aligned"), 1.75)
+        self.assertEqual(self.one_mac(acc, pairs, "exp_sum"), 1.75 + 2.0 ** -23)
+        self.assertEqual(self.one_mac(acc, pairs, "wide"), 1.75 + 2.0 ** -23)
+        # The same 2^-23 as a product, and one step further down, where exp_sum's grid ends too.
+        small = [(F32(2.0 ** -12), F32(2.0 ** -11))]
+        self.assertEqual(self.one_mac(0.0, pairs[:1] + [(F32(-1.5), F32(1.0))] + small, "exp_sum"), 0.75 + 2.0 ** -23)
+        smaller = [(F32(2.0 ** -12), F32(2.0 ** -12))]
+        self.assertEqual(self.one_mac(0.0, pairs + smaller, "exp_sum"), 0.75)
+        self.assertEqual(self.one_mac(0.0, pairs + smaller, "wide"), 0.75 + 2.0 ** -24)
+
+    def test_exp_sum_is_aligned_when_every_product_leads_at_its_place(self):
+        # Significands multiplying to under 2 lead exactly at ea + ew, so the two grids coincide.
+        rng = np.random.default_rng(1)
+        for _ in range(200):
+            a = em.to_bf16(np.ldexp(1.0 + rng.integers(0, 52, 8) / 128.0, rng.integers(-8, 8, 8)).astype(F32))
+            w = em.to_bf16(np.ldexp(1.0 + rng.integers(0, 52, 8) / 128.0, rng.integers(-8, 8, 8)).astype(F32)
+                           * rng.choice([-1, 1], 8)).astype(F32)
+            acc = F32(rng.normal() * 2.0 ** rng.integers(-6, 10))
+            pairs = list(zip(a, w))
+            self.assertEqual(self.one_mac(acc, pairs, "exp_sum"), self.one_mac(acc, pairs, "aligned"))
 
 
 class Header(unittest.TestCase):

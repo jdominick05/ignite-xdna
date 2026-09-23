@@ -22,6 +22,10 @@ Three modes, and only the last may carry a timing claim:
   --bench   this core against milestone 1's fixed-shape kernel on identical work, alternating in
             one process, the kernel call repeated in-core so the dispatch is amortised.
 
+--probe-log LOG opens no device: it scores every model the emulator now has against the silicon a
+--probe sitting recorded, so a model added later is scored on silicon recorded before it existed.
+That is a test only if the model was not chosen by the same rows.
+
     bash scripts/research-lowlevel.sh --log results/aie/engine_bf16_npu_<date>.log --checks-only --npu \\
         -- bash scripts/research-iron.sh kernels/bf16_conv/engine_bf16.py --sweep --probe
     bash scripts/research-lowlevel.sh --log results/aie/engine_bf16_bench_npu_<date>.log --npu \\
@@ -400,15 +404,32 @@ def probe_packet(vectors, ncin):
     return header, act, wts.reshape(-1), bias
 
 
+def accumulator_blocks(flat: np.ndarray) -> np.ndarray:
+    """An emitted tile as [accumulator block][pixel][lane], the order a --probe row's b<b>n<n> names.
+
+    Since 2026-09-22 the core emits the 8-channel activation layout (``em.interleave_out``). The
+    2026-09-21 probe ran before that, when the emitted order already was this one. Reshaping today's
+    output as if it were would pair each row's label with another pixel's values. The round trip is
+    checked, so a later layout change fails here instead of mislabelling rows.
+    """
+    blocks = (np.asarray(flat)[:em.OUT_ELEMS]
+              .reshape(em.OUT_BLOCKS_8, TILE_ROWS, TILE_COLS, 2, 4)
+              .transpose(0, 3, 1, 2, 4)
+              .reshape(NCO, TILE_ROWS, TILE_COLS, 4))
+    if not np.array_equal(em.interleave_out(blocks), np.asarray(flat)[:em.OUT_ELEMS]):
+        raise AssertionError("accumulator_blocks is not the inverse of the emulator's interleave_out")
+    return blocks.reshape(NCO, TILE_ROWS * TILE_COLS, 4)
+
+
 def probe() -> int:
     vectors = probe_vectors()
     intra = [v for v in vectors if v[2] is None]
     inter = [v for v in vectors if v[2] is not None]
     for name, vecs, ncin in (("intra-instruction", intra, 1), ("inter-instruction", inter, 3)):
         pkt = probe_packet(vecs, ncin)
-        got = em.from_bf16_bits(dispatch([pkt])[0]).reshape(NCO, TILE_ROWS * TILE_COLS, 4)
+        got = em.from_bf16_bits(accumulator_blocks(dispatch([pkt])[0]))
         bits = bf16_bits(got)
-        pred = {m: em.from_bf16_bits(expect([pkt], m)).reshape(got.shape) for m in em.MAC_MODELS}
+        pred = {m: em.from_bf16_bits(accumulator_blocks(expect([pkt], m))) for m in em.MAC_MODELS}
         score = {m: int(np.sum(bf16_bits(pred[m]) == bits)) for m in em.MAC_MODELS}
         print("ENGINE_BF16_PROBE " + json.dumps({"set": name, "ncin": ncin, "elements": int(got.size),
                                                "bytes_equal_by_model": score}, sort_keys=True), flush=True)
@@ -421,6 +442,64 @@ def probe() -> int:
             row["disagree"] = {m: d for m, d in row["disagree"].items() if d}
             print("ENGINE_BF16_PROBE_ROW " + json.dumps(row, sort_keys=True), flush=True)
     return 0
+
+
+def probe_rescore(log: Path) -> int:
+    """Every emulator model, offline, against the silicon a --probe log recorded. No device is opened.
+
+    A --probe log keeps eight elements per probe vector (blocks 0 and 1, lanes 0-3), so a model
+    added after the sitting can be scored only there. Every other element has no nonzero product
+    and returns its bias. Those elements are checked here: if every model agrees on them, and some
+    model matched the whole set in the log, then that model's prediction there IS the silicon, and a
+    whole-set count follows for every model. It is DERIVED, not measured. The derived counts of the
+    models the log did score must equal the log's own counts, or the rescoring is wrong and says so.
+    """
+    silicon, logged = {}, {}
+    for line in log.read_text(encoding="utf-8").splitlines():
+        tag, _, body = line.partition(" ")
+        if tag == "ENGINE_BF16_PROBE_ROW":
+            r = json.loads(body)
+            silicon[r["probe"]] = r["silicon"]
+        elif tag == "ENGINE_BF16_PROBE":
+            r = json.loads(body)
+            logged[r["set"]] = r
+    vectors = probe_vectors()
+    intra = [v for v in vectors if v[2] is None]
+    inter = [v for v in vectors if v[2] is not None]
+    rc = 0
+    for name, vecs, ncin in (("intra-instruction", intra, 1), ("inter-instruction", inter, 3)):
+        missing = [label for label, *_ in vecs if label not in silicon]
+        if missing or name not in logged:
+            raise SystemExit(f"{log}: no silicon for set {name!r} or for {missing[:3]}; not a --probe log of this file")
+        pkt = probe_packet(vecs, ncin)
+        shape = (NCO, TILE_ROWS * TILE_COLS, 4)
+        pred = {m: accumulator_blocks(expect([pkt], m)) for m in em.MAC_MODELS}
+        sil = np.zeros(shape, np.uint16)
+        recorded = np.zeros(shape, bool)
+        for p, (label, *_) in enumerate(vecs):
+            for b in (0, 1):
+                for n in range(4):
+                    sil[b, p, n] = bf16_bits(np.array([silicon[label][f"b{b}n{n}"]], np.float32))[0]
+                    recorded[b, p, n] = True
+        score = {m: int(np.sum(pred[m][recorded] == sil[recorded])) for m in em.MAC_MODELS}
+        misses = {m: sorted({vecs[p][0] for b, p, n in zip(*np.nonzero(recorded & (pred[m] != sil)))})
+                  for m in em.MAC_MODELS}
+        rest = ~recorded
+        rest_split = int(np.sum(np.any([pred[m][rest] != pred[em.MAC_MODEL][rest] for m in em.MAC_MODELS], axis=0)))
+        whole = [m for m, c in logged[name]["bytes_equal_by_model"].items() if c == logged[name]["elements"]]
+        derived = None
+        if rest_split == 0 and whole:
+            truth = pred[whole[0]][rest]
+            derived = {m: score[m] + int(np.sum(pred[m][rest] == truth)) for m in em.MAC_MODELS}
+        agree = derived is not None and all(derived[m] == c for m, c in logged[name]["bytes_equal_by_model"].items())
+        rc |= int(not agree)
+        print("ENGINE_BF16_PROBE_RESCORE " + json.dumps({
+            "set": name, "log": log.name, "recorded_elements": int(recorded.sum()),
+            "recorded_equal_by_model": score, "recorded_misses_by_model": {m: v for m, v in misses.items() if v},
+            "unrecorded_elements": int(rest.sum()), "unrecorded_where_models_differ": rest_split,
+            "whole_set_equal_by_model_DERIVED": derived, "logged_equal_by_model": logged[name]["bytes_equal_by_model"],
+            "derived_reproduces_logged": agree}, sort_keys=True), flush=True)
+    return rc
 
 
 def bench(args) -> int:
@@ -518,6 +597,8 @@ def main() -> int:
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--sweep", action="store_true", help="run the whole shape family in one process")
     ap.add_argument("--probe", action="store_true", help="measure the multiply-accumulate's summation model")
+    ap.add_argument("--probe-log", type=Path, default=None,
+                    help="offline, no device: score every emulator model against the silicon a --probe log recorded")
     ap.add_argument("--bench", action="store_true", help="time this core against milestone 1 on identical work")
     ap.add_argument("--repeat", type=int, default=128, help="--bench: kernel calls per dispatch")
     ap.add_argument("--iters", type=int, default=20, help="--bench: timed dispatches per arm per round")
@@ -535,6 +616,8 @@ def main() -> int:
         SOURCE_OVERRIDE = Path(args.source).resolve()
         print(f"ENGINE_BF16_SOURCE {SOURCE_OVERRIDE.relative_to(ROOT) if SOURCE_OVERRIDE.is_relative_to(ROOT) else SOURCE_OVERRIDE.name}", flush=True)
 
+    if args.probe_log:
+        return probe_rescore(args.probe_log)
     if args.bench:
         return bench(args)
     rc = 0

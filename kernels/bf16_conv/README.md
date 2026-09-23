@@ -94,7 +94,12 @@ packet's header. Measured on one core
 * **The reference is only as good as its model of the multiply-accumulate**, and that model is now
   measured: the instruction aligns the accumulator and its eight products to the largest exponent and
   rounds each to a 24-bit grid, ties to even. It is not IEEE addition. A random sweep cannot see this -
-  four different models all pass it - so `--probe` exists to break a wrong one.
+  four different models all pass it - so `--probe` exists to break a wrong one. *Since 2026-09-23:*
+  `--probe-log LOG` scores every model the emulator now has against a committed probe log, with no
+  device. A fifth candidate, `exp_sum`, fitted to the nine SESR-M7 values this model misses, predicts
+  the same bits as it on every probe element. So the probe cannot tell them apart, and a
+  pre-registered one-core probe is what can
+  ([BENCHMARKS](../../docs/BENCHMARKS.md#a-fifth-accumulate-model-exp_sum-fits-every-bf16-observation-so-far-and-the-probe-that-can-refute-it-is-pre-registered-not-run-2026-09-23-offline)).
 * **10.10 us per pass dispatch-free, 91.3 GFLOPS, 19.8% of ceiling**, against 8.96 us and 102.9 GFLOPS for
   `conv_bf16.cc` on identical work in the same sitting: 12.8% slower, unattributed.
 

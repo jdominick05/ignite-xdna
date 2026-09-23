@@ -13984,11 +13984,145 @@ and so none of the four is the device's rule.
 A probe built on these nine positions' operands (the accumulator and the eight products at each step)
 is what could separate them. It has not been built.
 
+*Built since (2026-09-23, offline):* a fifth candidate, exp_sum, reproduces all nine and breaks
+nothing else in the replay. It is a fit to the nine, and the probe that can refute it is
+pre-registered and has not run
+([below](#a-fifth-accumulate-model-exp_sum-fits-every-bf16-observation-so-far-and-the-probe-that-can-refute-it-is-pre-registered-not-run-2026-09-23-offline)).
+
 ### What this does not establish
 
 - Why the plain weights looked exact. They were never observed with every tensor resident.
 - The mechanism, as above.
 - One checks-only sitting, on six inputs.
+
+## A fifth accumulate model, exp_sum, fits every bf16 observation so far, and the probe that can refute it is pre-registered, not run (2026-09-23, offline)
+
+Nothing in this section opened a device. It does three things:
+- adds one candidate model to the emulator;
+- scores that model against the silicon this repo already has;
+- commits a one-core probe's predictions before the probe runs.
+
+The model in force stays `aligned` (`engine_bf16_emulator.MAC_MODEL`).
+
+Logs, all offline, Desktop 2:
+- [`engine_bf16_mac_model_probe_rescore_exp_sum_desktop2_20260923.log`](../results/aie/engine_bf16_mac_model_probe_rescore_exp_sum_desktop2_20260923.log):
+  every model against the 2026-09-21 probe's silicon (`engine_bf16.py --probe-log`).
+- [`sesr_m7_adaround_bf16_noreuse_replay_exp_sum_desktop2_20260923.log`](../results/aie/sesr_m7_adaround_bf16_noreuse_replay_exp_sum_desktop2_20260923.log):
+  the no-reuse dump replayed layer by layer under all five models (`bf16_sr_silicon_check.py
+  --from-dump --isolate all`). It exits 1 and reads `device_equals_emulator: false` because the
+  model in force is aligned, which gets 9 wrong. That is not a failure of the replay.
+- [`bf16_mac_position_probe_predictions_desktop2_20260923.log`](../results/aie/bf16_mac_position_probe_predictions_desktop2_20260923.log):
+  the probe's plan, its operands and every model's prediction (`tools/bf16_mac_position_probe.py`
+  without `--npu`).
+
+### The candidate
+
+`exp_sum` works like aligned except for where the grid sits:
+- aligned places a product at its own leading bit. exp_sum places it at the sum of its two operands'
+  exponents (ea + ew).
+- Two bf16 significands multiply to [1, 4), so a product in [2, 4) leads one bit above its place.
+  The grid then keeps one more bit below it than aligned's does.
+- The accumulator is placed at its own exponent. The grid runs 24 bits down from the highest place.
+  Every operand is rounded to it (ties to even) and summed exactly, and the sum is rounded to fp32
+  (ties to even).
+- Where every product's significands multiply to under 2, exp_sum is aligned, bit for bit.
+
+`tests/test_engine_bf16_emulator_offline.py` pins both halves against a scalar definition, which adds
+two tests.
+
+**It is a fit.** It was chosen because it reproduces the nine positions aligned misses, including
+butterfly's, where the device sits one step below the rounded exact sum and no earlier model matched.
+Other rules were tried offline in a scratch script that is not committed. Some of them also fit all
+nine, and the 2026-09-21 probe refutes them. So fitting the nine does not pin a rule down.
+
+### What the silicon already on record says about it
+
+| model | 2026-09-21 one-core probe: elements equal, of 3,200 | the nine positions: final bits equal | layer replay: values wrong, of 55,050,240 |
+|---|---:|---:|---:|
+| aligned (in force) | 3,200 | 0 | 9 |
+| exp_sum | 3,200 (DERIVED) | 9 | **0** |
+| wide | 3,059 | 8 | 16 |
+| dot_first | 3,134 | 7 | 14 |
+| sequential | 3,163 | 7 | 17 |
+
+- **The 2026-09-21 column cannot separate exp_sum from aligned.**
+  - The log kept only the 616 elements that carry a probe vector (eight per vector). exp_sum equals
+    the silicon at all 616.
+  - Every other element has no nonzero product, and all five models agree there. So exp_sum's 3,200
+    is DERIVED from the elements aligned matched. The same derivation reproduces the log's own
+    counts for the four models it did score, which checks the rescoring.
+  - exp_sum and aligned predict the same bits at all 3,200 elements. None of that probe's products
+    has significands that multiply to 2 or more, and below 2 the two rules are one rule.
+  - So this column shows only that exp_sum keeps everything aligned got right there. It rules out
+    wide, dot_first and sequential, as it did on 2026-09-21.
+- **The replay is the data the nine came from.** Aligned is wrong at 9 values and exp_sum at 0, so the
+  two disagree at exactly those nine positions and nowhere else in the frame. That shows exp_sum
+  breaks nothing aligned got right. It does not show exp_sum is right. The other four models repeat
+  their earlier counts (9, 14, 16, 17), layer by layer.
+- The nine-positions column comes from the predictions log's arm A lines (below). It is the same fit.
+
+**So every observation that separates exp_sum from aligned is one of the nine it was fitted to.** It
+is a candidate that fits all the data so far. It is not a measured rule, and it is not in force.
+
+### The probe, pre-registered
+
+The pre-registration is `tools/bf16_mac_position_probe.py` and its offline predictions log, committed
+together before any sitting. It is one plan of 66 packets on one core, on
+`kernels/bf16_conv/engine_bf16.py`'s design:
+- **Arm A, 10 packets.** Each position's network tile, rebuilt as the compiler packs it and fed the
+  device's own input window. One position sits in two tiles, so there are ten. Each is compared, all
+  1,600 values, with the tile the network wrote. Offline, exp_sum reproduces all ten tiles exactly and
+  aligned gets 1,599 of 1,600 on each.
+- **Arm B, 48 packets.** Each of the nine chains, started at the first instruction where any
+  candidate leaves the exact running sum.
+  - The start is the exact accumulator, assembled from three bf16 pieces so every model agrees on it.
+  - Then one instruction runs per packet, and the fp32 accumulator is read back after each.
+  - Of 108 readouts, exp_sum and aligned predict different values at 99.
+- **Arm C, 8 packets.** Twelve fresh vectors, one instruction each, built to separate the candidates.
+  No fit has seen them.
+  - exp_sum and aligned differ on 8 of them.
+  - exp_sum and wide differ on 2. In one, a term lies half a step under exp_sum's grid. In the
+    other, a larger place elsewhere puts a term below the grid that wide keeps.
+  - Three are controls on which aligned and exp_sum agree.
+- **Reading an fp32 accumulator from a bf16 store.** Three packets (direct, coarse, fine) subtract a
+  reference in two 8-bit pieces, so the residual fits bf16.
+  - The read takes two passes. Pass 2's reference comes from pass 1, so any accumulator reads
+    exactly, predicted or not.
+  - Offline, under every model, the pass-2 decode equals that model's own psum at all 132 readouts.
+  - Pass 2 runs twice, which checks determinism inside the sitting.
+
+**What each outcome would mean** (written in the tool's docstring, committed with the predictions):
+
+| outcome | reading |
+|---|---|
+| A1: one core equals the network's tile everywhere | The harness reproduces the network, so B and C carry to it. |
+| A2: at a miss, one core equals the in-force model, not the network | The network's value comes from something one packet does not reproduce: operand delivery, state from an earlier packet, or the container's own kernel build. The accumulate rule is not the cause there. |
+| A3: neither, or the two dispatches differ | Nothing else in the sitting is read until that is explained. |
+| B1: every readout equals one model | That rule reproduces the network's values as single instructions. |
+| B2: a chain's first instruction returns the in-force model's value | Under A1, the accumulator carries more than fp32 between instructions inside a packet, which the 2026-09-21 inter-instruction set did not show. |
+| B3: a readout matches no model | Its logged operands are a counterexample to every candidate. |
+| C1: every fresh vector equals one model | The rule holds on operands it was not fitted to. |
+| C2: the vectors separating exp_sum from aligned come back aligned | exp_sum is refuted on fresh operands. If B1 held for it anyway, that is unexplained. |
+| C3: the vectors below exp_sum's grid come back wide | The grid is wider than exp_sum places it. exp_sum approximates the rule without being it. |
+| C4: a readout where every model agrees comes back different (every assembled start is one) | A harness or readout fault. The sitting is discarded. |
+
+A model goes in force only on A1 + B1 + C1 for the same model, with the layer replay still exact under
+it. Anything else is recorded, and aligned stays.
+
+**A harness fix came with it.** Since 2026-09-22 the core and the emulator emit the 8-channel
+activation layout. `engine_bf16.py --probe` still cut its rows as [block][pixel][lane], so a probe run
+today would have paired each label with another pixel's values. Its scores would have been right,
+because both sides were cut the same way. `accumulator_blocks` now inverts `interleave_out` and
+checks the round trip. Every committed log with probe rows dates from 2026-09-21, before the change,
+so none is affected.
+
+### What this does not establish
+
+- The probe has not run. The sitting waits for the user's word.
+- exp_sum is not measured, and nothing about the core's rule has changed: aligned stays in force, and
+  every exactness claim keeps the model it was measured under.
+- Arm A's harness is not the network's. `engine_bf16.py` links its own build of `engine_bf16.cc`, and
+  arm A exists to check that.
 
 ## Cross-audit against Hello XDNA! (2026-09-23, Desktop 2)
 
