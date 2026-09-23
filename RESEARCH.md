@@ -684,6 +684,17 @@ been closed:
       silicon.
     - Does int4 pay where weights dominate, as in M = 1 GEMV (LLM decode)? No design in this repo
       can express M < 32, so the note's "~2×" there is DERIVED and untested.
+      - AMD got there first. RyzenAI-SW 1.1 (2024-02-17) shipped a Phoenix bf16 × uint4 overlay
+        with a dedicated M = 1 path at Llama-2-7B's shapes. The kernel is closed, and no source
+        read gives its bandwidth ([prior art](results/llm/notes_prior_art_phoenix_llm.md)).
+      - Bandwidth alone caps it. A 7B model at 4 bits reads 3.4–4.0 GB per token. At the DRAM
+        rates this repo has measured for the NPU (26.8 GB/s fill, 28.1 best), and at the 26–28 GB/s
+        shared cap that [SILICON 1.6](docs/SILICON.md#16-off-chip-bandwidth) derives (lines 136-140),
+        NPU-only decode stays under about 8 tokens/s (DERIVED). The read-only ceiling is unmeasured,
+        so this is not yet a hard cap, and the compute side (the on-core int4 → bf16 expansion, and
+        M = 1 on a bf16 mmul) is unmeasured too.
+      - The NPU earns a decode role only if it beats both the CPU and DirectML on the 780M, in
+        speed or in accuracy. Neither yardstick has been measured on this machine yet.
 
   Evidence: `results/aie/int4_{isa_gate,engine_bytes_gate,demo_npu}_desktop2_20260923.log`,
   `results/int4/w4a8_accuracy_{prereg,verdict}_desktop2_20260923.log`,

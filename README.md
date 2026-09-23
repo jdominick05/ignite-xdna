@@ -19,7 +19,7 @@ Most of this narrowness is not optional.
 | OS | **Windows** | Linux untested.                                                                                                                                                                                                                 |
 | SDK | **Ryzen AI 1.7.1** for inference, 1.8.0 for export/quantize | 1.8.0 ships no Phoenix xclbin at all and cannot run inference on this chip                                                                                                                                                      |
 | Shell | PowerShell, and Git Bash for `scripts/` | cmd prints `%VAR%` back instead of erroring on an unset variable                                                                                                                                                                |
-| Workload | **CNN INT8 only** | No BF16, no transformer/NLP paths, no LLMs through the shipped runtime. That is a vendor-level limit, not a configuration problem — though the silicon itself is a different question, see [kernels](#hand-written-aie-kernels) |
+| Workload | **CNN INT8 only** | No BF16, no transformer/NLP paths, no LLMs on the NPU in the current Ryzen AI release (1.8.0, 2026-07-23; 1.7.1 here): the release's LLM table lists 7000/8000 as GPU/CPU only. A vendor-level limit, not the chip's: RyzenAI-SW 1.1–1.3.1 (2024) shipped a w4abf16 LLM path for Phoenix's NPU ([prior art](results/llm/notes_prior_art_phoenix_llm.md)); the silicon is a different question, see [kernels](#hand-written-aie-kernels) |
 
 Full environment split, install steps and footguns: [`docs/SETUP.md`](docs/SETUP.md).
 
