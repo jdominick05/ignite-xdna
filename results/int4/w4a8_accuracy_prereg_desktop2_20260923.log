@@ -1,0 +1,56 @@
+W4A8 accuracy gate, pre-registered before any evaluation (smoke runs included)
+
+Question: does 4-bit weight quantization (W4A8) of YOLOv8n and YOLOv8s lose more than 1.0 point of
+mAP@50-95 against the shipped W8A8 model on COCO val2017, emulated on the CPU with no NPU?
+
+Metric   mAP@50-95, all 5000 val2017 images, pipelines/yolov8n/5_eval_map.py at conf 0.001,
+         IoU 0.7, max_det 300, per-class NMS, pycocotools.
+Setup    --ep cpu --ort-opt disable_all (ORT_DISABLE_ALL, the reference the engine's integer oracle
+         matches layer for layer), one pinned --ort-threads for every row, resnet_env17, one sitting,
+         serial, no NPU. Never --fresh.
+Weights  round-to-nearest only, grid [-7, 7], pow2 scales chosen by Quark's MinMSE on the float
+         weights. Activation Q/DQ, biases and every other scale stay as shipped (frozen at W8).
+Arms     B8   the shipped W8A8 XINT8 file, unchanged
+         E1   W4, one pow2 scale per weight tensor (today's engine lowers it)
+         E2   W4, one pow2 scale per 32-output-channel group (needs a compiler change: a shift per packet)
+         E1h  E1 with the stem and the 6 head-output convs kept W8 (diagnostic)
+         U    W4, one pow2 scale per output channel (context: needs a kernel change)
+         B8o  B8 again with ONNX Runtime's default optimizations (cross-check only)
+
+Delta    per model, B8 minus the better of E1 and E2, from the printed 2-decimal mAP@50-95 values.
+PASS     delta <= 1.0 for BOTH yolov8n and yolov8s. Accuracy then no longer blocks int4 in the
+         engine; the next gates are the packet format (variable-size packets) and the 224 B .text
+         left in the core. The headline names the passing arm per model: E1 runs on today's engine,
+         E2 needs a compiler change.
+KILL     otherwise: "int4-in-engine killed at RTN (pow2 scales, this dialect); GPTQ/AdaRound untested".
+Note     if 1.0 < delta <= 2.0, the log adds "fails narrowly; a recovery method is the untested
+         next step". The note does not change the verdict.
+Context  E1h, U and B8o never decide. They are reported beside the verdict.
+
+Written prediction: B8o - B8 ~= 0.00. With int8 biases, optimized ONNX Runtime should keep each Conv
+in float rather than fuse it to QLinearConv, so both sessions compute the same thing. A gap of 0.00
+confirms that reading; a gap of 0.2 or more means it was wrong, and the docs' optimized-CPU mAPs
+need a caveat.
+Stated expectation, not an assumption: per-tensor RTN at 4 bits is expected to lose several points;
+per-group less.
+
+Unverified by design: no int4-packed engine lowering exists (E2's "compiler-only" is on paper); no
+recovery method (GPTQ, AdaRound, bias correction) runs; no float per-channel-scale arm, so the cost
+of pow2 scales is unmeasured; the NPU is not used.
+
+sha256 11b52c2530def3c99bccc4bee39a40683aab8619d4278a334b5f0f78c43fd0a1  models/yolov8n_cut.onnx
+sha256 f02e86ba1bf61ff3fdc159e29b15259567e279df06f68c6d9adeb966fe56c885  models/yolov8n_cut_xint8.onnx
+sha256 4b0c957edb101091d28c02bbc544a8c980fedec9e4d6ca25c1136322b9f96733  scratch/int4_w4a8/yolov8n_w4a8_e1.onnx
+sha256 b90d25b6f780296df48c6ad633a26a0af3240ef8d5985fbcb782a9b12400a37d  scratch/int4_w4a8/yolov8n_w4a8_e2_ortonly.onnx
+sha256 f600d16e19fd13639071afa4d9de1da759af7cfba7332e48d3316a1edbc70a4b  scratch/int4_w4a8/yolov8n_w4a8_e1h.onnx
+sha256 b1fd9f528f54e524c80bc826d325ba88c4f88024d5d63131179eb063bc35346f  scratch/int4_w4a8/yolov8n_w4a8_u_ortonly.onnx
+sha256 f713208d79578f41240d2ffaca96dfca711ad45bcf251326adb68da212ab04d5  models/yolov8s_cut.onnx
+sha256 065f62523000b806e47e227f0b9d71a689f10d8c5368a7c5b6d0ff3b9f733fcc  models/yolov8s_cut_xint8.onnx
+sha256 92633c4528637553de18a83821f69c560e57597b080426ce3c02d2a53b8130a3  scratch/int4_w4a8/yolov8s_w4a8_e1.onnx
+sha256 15bdc6caf9363f5da6f572c95c50c0ce4bb0485c4fddb352b2ac9a99f8108475  scratch/int4_w4a8/yolov8s_w4a8_e2_ortonly.onnx
+sha256 b531a131f543ce1d15735987de803b3879293d6a3a90b76bc8d599d638b713ea  scratch/int4_w4a8/yolov8s_w4a8_e1h.onnx
+sha256 946bf15230b7b5c2921d6d13556410f8341bae585fe9b73e0ec2df85f4ff17cc  scratch/int4_w4a8/yolov8s_w4a8_u_ortonly.onnx
+git HEAD 44da12c5f88388a3f73a88778910cc37e7227f5c (+8 uncommitted paths: this log's own commit)
+onnxruntime 1.23.3.dev20260320
+ort-threads 8 for every row
+PREREG_JSON {"baseline": "b8", "context_arms": ["e1h", "u"], "decision_arms": ["e1", "e2"], "eval": {"conf": 0.001, "ep": "cpu", "iou": 0.7, "max_det": 300, "ort_opt": "disable_all"}, "git_head": "44da12c5f88388a3f73a88778910cc37e7227f5c", "grid": [-7, 7], "images": 5000, "kill_line": 1.0, "metric": "mAP@50-95", "models": ["yolov8n", "yolov8s"], "narrow_line": 2.0, "onnxruntime": "1.23.3.dev20260320", "opt_gap_caveat": 0.2, "ort_threads": 8, "rounding": "RTN", "sha256": {"models/yolov8n_cut.onnx": "11b52c2530def3c99bccc4bee39a40683aab8619d4278a334b5f0f78c43fd0a1", "models/yolov8n_cut_xint8.onnx": "f02e86ba1bf61ff3fdc159e29b15259567e279df06f68c6d9adeb966fe56c885", "models/yolov8s_cut.onnx": "f713208d79578f41240d2ffaca96dfca711ad45bcf251326adb68da212ab04d5", "models/yolov8s_cut_xint8.onnx": "065f62523000b806e47e227f0b9d71a689f10d8c5368a7c5b6d0ff3b9f733fcc", "scratch/int4_w4a8/yolov8n_w4a8_e1.onnx": "4b0c957edb101091d28c02bbc544a8c980fedec9e4d6ca25c1136322b9f96733", "scratch/int4_w4a8/yolov8n_w4a8_e1h.onnx": "f600d16e19fd13639071afa4d9de1da759af7cfba7332e48d3316a1edbc70a4b", "scratch/int4_w4a8/yolov8n_w4a8_e2_ortonly.onnx": "b90d25b6f780296df48c6ad633a26a0af3240ef8d5985fbcb782a9b12400a37d", "scratch/int4_w4a8/yolov8n_w4a8_u_ortonly.onnx": "b1fd9f528f54e524c80bc826d325ba88c4f88024d5d63131179eb063bc35346f", "scratch/int4_w4a8/yolov8s_w4a8_e1.onnx": "92633c4528637553de18a83821f69c560e57597b080426ce3c02d2a53b8130a3", "scratch/int4_w4a8/yolov8s_w4a8_e1h.onnx": "b531a131f543ce1d15735987de803b3879293d6a3a90b76bc8d599d638b713ea", "scratch/int4_w4a8/yolov8s_w4a8_e2_ortonly.onnx": "15bdc6caf9363f5da6f572c95c50c0ce4bb0485c4fddb352b2ac9a99f8108475", "scratch/int4_w4a8/yolov8s_w4a8_u_ortonly.onnx": "946bf15230b7b5c2921d6d13556410f8341bae585fe9b73e0ec2df85f4ff17cc"}}

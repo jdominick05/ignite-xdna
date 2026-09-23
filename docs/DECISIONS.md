@@ -160,7 +160,7 @@
   which are Chess attributes with no Peano equivalent. Every use of those nine in this tree, upstream
   `mm.cc`'s included, is a no-op, and a kernel that relies on them for its schedule is relying on nothing.
   ([ledger A10](../results/aie/notes_tnzr_cross_audit.md); the `clang++ -dM -E` check is in commit
-  `56b4e88` on `worktree-int4-study`.)
+  `e91887c` on `worktree-int4-study`, `56b4e88` before its rebase onto `35d58d5` and message scrub.)
 - **`tools/aie_bank_check.py` is blind to two real bank conflicts (2026-09-23).** It drops the stack
   from its bank map (`n != STACK_SYM`) and looks only for load+load pairs. Yet a load and a store to
   the same bank in one bundle cost **+1 cycle**, as two loads do. MEASURED: upstream `mm.cc` int8 spills
@@ -292,6 +292,27 @@
   to EP placement. Product-scale INT32 bias and non-power-of-two scale mutations
   expose the converse failure: NPU placement with incorrect numerical execution.
   [Controlled evidence and limits](BENCHMARKS.md#ignition-controlled-resnet-qdq-acceptance).
+
+- **A CPU mAP of a weight-mutated QDQ file needs `--ort-opt disable_all`.**
+  `pipelines/yolov8n/5_eval_map.py --ep cpu` runs ONNX Runtime's default optimizations unless
+  told otherwise. So for any file whose weights or scales were rewritten, pass
+  `--ort-opt disable_all` and a fixed `--ort-threads N` (the summation order of an unoptimized
+  QDQ Conv depends on the thread split). Neither flag reaches the NPU providers, which refuse
+  them.
+  - On the shipped YOLOv8n and YOLOv8s XINT8 files the two settings agree to 0.00 mAP on all
+    5,000 images (gate D). Their 27.10 / 37.21 equal the HardSigmoid-form graph-engine
+    containers (main `c714629`) measured on the NPU on 2026-09-17, which compute this XINT8 file
+    exactly; the shipped `--silu-sigmoid` containers score 34.12 / 42.37.
+  - That holds for those files only. It is not a licence for mutated ones.
+
+- **A `*_ortonly.onnx` file must never reach `ignite-compile`.** `graph_ir.scale_zp`
+  (`src/ignite_xdna/compiler/graph_ir.py:378-381`) reads element 0 of a weight scale. A
+  per-channel scale vector is therefore lowered with channel 0's scale everywhere, silently.
+  - `tools/w4a8_emulate.py` names any file holding a per-channel conv `*_ortonly.onnx`, and
+    `tools/w4a8_engine_gate.py` refuses such files.
+  - A search of `graph_ir.py` and `tools/ignite_compile.py` finds no such check; nothing was
+    tested. `lower_onnx_conv.py`'s separate single-conv path does handle per-channel scales. The
+    graph-engine hazard stays in `src/`, not fixed here.
 
 - **Quark's refinement is a silent no-op on `raw_data` scale initializers.** Its
   `set_scale` writes `float_data` in place but assigns a `raw_data` update to a
@@ -862,6 +883,95 @@
   maintains 59.47% pixel accuracy and 25.72% mIoU, on-device fixed-point elementwise multiplication across disparate
   inter-branch activation scales attenuates minority classes (15.33% pixel accuracy, 2.44% mIoU), confirming that
   multi-branch bilateral gating requires fine-tuning or AdaRound to balance inter-branch scale multipliers on physical systolic hardware.
+- **`device.yaml`'s MAC table is a cost model, not an ISA listing — a missing row is not a
+  missing instruction (2026-09-10).** int8×int4 has no row in its AIE2 `macs_per_cycle` table
+  and was recorded here and in `docs/SILICON.md` as AIE2p only, which is why the W4A8 plan
+  began with an int4→int8 unpack. `aie::mmul<4,16,8,int8,int4>` compiles for aie2 to the same
+  `vmac` builtin as int8×int8 with one configuration field changed, and on this Phoenix core it
+  is bit-exact, 512 MACs per `vmac` by its shape (SPEC), with the best k loop sustaining
+  0.73–0.75 `vmac` per cycle (MEASURED, `results/aie/w4a8_probe_npu.log`). None of it was
+  undocumented: AIE-API 2024.1 lists AIE-ML's `8b x 4b: 4x16x8` as a native `mmul`, and Riallto
+  states 512 int4×int8 MAC per cycle per core (SPEC, cross-audit ledger D11). The mistake was
+  reading one table as the whole of AMD's documentation. Before designing around a "missing"
+  data type, look for it in `aie_api`'s `detail/aie2/` headers and AMD's AIE-API reference, and
+  disassemble a build. (Rejected with it: the unpack route as a way to get MACs — AIE2 widens
+  int4 for free in its second load unit, `vldb.unpack.s8.s4`, but that buys bytes, not MACs.)
+- **Upstream `mm.cc`'s k-loop hint never reaches Peano; `AIE_LOOP_UNROLL` does
+  (2026-09-10).** Peano predefines `__AIECC__` for `--target=aie2-none-unknown-elf` — it is not on
+  IRON's command line (`aie/utils/compile/utils.py`, mlir-aie v1.4.2), so check with
+  `clang++ -dM -E`, not by reading the command. An IRON build therefore gets
+  `aie_kernel_utils.h`'s Peano branch: `AIE_LOOP_UNROLL(n)` and `AIE_LOOP_MIN_ITERATION_COUNT(n)`
+  become `clang loop` pragmas, while `AIE_PREPARE_FOR_PIPELINING` and `AIE_LOOP_FLATTEN` are
+  empty — and `AIE_LOOP_FLATTEN` is the only hint on upstream `mm.cc`'s k loop, so Peano sees none
+  there. Unrolling that loop twice (`AIE_LOOP_UNROLL(2)`, byte-identical to the
+  `_Pragma("clang loop unroll_count(2)")` the probe spells it as) is what took the native
+  int8×int4 k loop from 0.5 to 0.8 `vmac` per cycle (`kernels/w4a8_probe/`,
+  `results/aie/w4a8_probe_npu.log` section H). The command itself is reproducible:
+  `kernels/w4a8_probe/static_probe.py --match-cache` reproduces 10 of 10 IRON-built
+  `matmul_i8_i32` objects bundle for bundle.
+- **A one-core kernel speedup does not predict the array at these tiles (2026-09-10).** The
+  W4A8 probe bounded the native int8×int4 kernel's array gain at ≤ ~1.18× by assuming the time
+  outside the kernel stays fixed. At the int8 GEMM's best tile (64/128/64) the kernel is not on
+  the critical path at all — the int8 k loop unrolled twice, 176 cycles per call faster on one
+  core, runs 0.995× — and packed int4 B gave 1.23–1.26×, unpack and native alike, by a mechanism
+  still unexplained (neither total L3 bytes nor bytes per MAC fits all three tiles);
+  at 64/64/64 the MAC rate does show, at 128/64/64 nothing does (`results/aie/w4a8_array_npu.log`).
+  Measure the design, not the kernel: H11 learned this from a static improvement, this from a
+  measured one.
+- **On AIE2 the toolchain's only int4 is W4A8; int4 activations, W4A4 and W16A4 have no
+  aie_api/Peano dense path (2026-09-23).** Compile-only, `kernels/int4_study/isa_gate.py`,
+  `results/aie/int4_isa_gate_desktop2_20260923.log`.
+  - Every int4 operand pair is compiled through `aie::mmul` with a harness control that has the
+    same loads and no mmul. int8/uint8 × int4/uint4 lower to one `vmul`. int4 × int8,
+    int4 × int4 and int16 × int4 fail as undefined `aie::detail::mmul` templates while their
+    controls compile.
+  - One layer down, in Peano's `aiev2_vmult.h`, no MAC intrinsic takes a 4-bit A. The only
+    control-word code with a 4-bit B (bmode 0) pairs it with an 8-bit A.
+  - **This is a toolchain fact, not a silicon one.** Eight of the sixteen (amode, bmode) codes are
+    never emitted, and whether the hardware decodes them is untested. The pitfall two entries up
+    is exactly the mistake of reading a table's silence as the chip's.
+  - Surprise from the same run, compile-only and not pre-registered: Peano's aie2p (Strix)
+    intrinsics reach int8 × int4 only by unpacking, because every 4-bit aie2p intrinsic is a
+    wrapper that widens B to int8. Phoenix's native 4-bit-B MAC mode has no aie2p counterpart in
+    this toolchain, so an int4 kernel written for one chip is not a port to the other. That reads
+    Peano's headers and objects; no Strix silicon was touched.
+- **Rejected: int4 weights in the graph engine — killed on paper at the byte gate, under the
+  current packet format, before any code (2026-09-23).** `tools/int4_bytes_gate.py`,
+  `results/aie/int4_engine_bytes_gate_desktop2_20260923.log`. DERIVED throughout: it assumes a
+  frame bound purely by transport and today's fixed packet. W4 accuracy, measured since, kills it
+  on its own (the last bullet).
+  - Every weight packet is a fixed 9,472 B object, so int4 inside it saves nothing. It needs
+    variable-size packets, the same change that trimming the padding needs.
+  - Priced over every weight packet each frame streams, at the 26.8 GB/s fill transport with the
+    frame assumed purely transport-bound, int4's best case is under 5% of the smallest measured
+    dispatch for all five containers: YOLOv8n 2.8%, YOLOv8s 3.9%, YOLOv8n-pose 2.8%, SESR-M7 1.4%
+    and resnet50_head 3.4%. With a generous ceiling (merged headers, half the weight tasks gone)
+    YOLOv8s reaches 4.8%.
+  - Trimming the fixed packet to its declared layout saves more on every model, with no
+    accuracy question: 7.7%, 10.5%, 6.8%, 3.0% and 24.0% by the same arithmetic.
+  - The 5% line is where this repo already found an effect inseparable from drift (H12).
+    YOLOv8s's ceiling, 4.8%, sits 0.2 points under it.
+  - A separate constraint: the newest engine core ELF has 224 B of its 16,384 B program memory
+    free, and one variant 16 B, for what would be a second k loop
+    (`results/aie/engine_core_issue_census_desktop2_20260923.log` on branch `tnzr-audit`, ledger
+    A11). The older ELF behind `yolov8n_full`, `yolov8s_opt` and `resnet50_head` has 5,680 B free.
+  - Reopen only with a new mechanism: activations that stop round-tripping DDR, a weight-bound
+    model, or a transport measured slower than 26.8 GB/s.
+  - **Accuracy kills it independently, at round-to-nearest (gate D, 2026-09-23, CPU only,
+    pre-registered in 3c683ee).** The rule: W4A8 must stay within 1.0 point of mAP@50-95 of the
+    shipped W8A8 file on all 5,000 COCO val2017 images, for both YOLOv8n and YOLOv8s.
+    - It lost 27.04 and 34.45 points: YOLOv8n 27.10 → 0.06 (E1, per-tensor pow2) and 0.02 (E2,
+      per packet group); YOLOv8s 37.21 → 2.76 for both.
+    - Per-channel pow2 scales (1.58 / 2.47) and the stem and heads kept at W8 (0.08 / 7.87) do
+      not rescue it.
+    - A post-hoc float-activation diagnostic collapses too (500 images: 0.00–2.89), so the cause
+      is the 4-bit weights as quantized here (RTN, pow2 scales), not the frozen W8A8 activation
+      pipeline.
+    - GPTQ, AdaRound, float per-channel scales and mixed precision are untested.
+    - Reopen only with a recovery method that brings a W4 model within the line, measured the
+      same way (`scripts/w4a8-eval.sh`).
+    - [Gate D](BENCHMARKS.md#int4-on-phoenix-gates-first-the-chip-runs-the-engines-uint8--int4-and-on-paper-the-current-weight-packets-leave-int4-little-to-save-2026-09-23-desktop-2),
+      `results/int4/w4a8_accuracy_verdict_desktop2_20260923.log`.
 
 ## The YOLOv8 partitioning failure (resolved)
 

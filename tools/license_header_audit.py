@@ -43,6 +43,11 @@ UPSTREAM = {
     "kernels/conv_accum/aie_kernel_utils.h": "aie_kernels/aie_kernel_utils.h",
     "kernels/gemm_reblock/aie_kernel_utils.h": "aie_kernels/aie_kernel_utils.h",
     "kernels/bank_placement/whole_array_bankpad.py": "programming_examples/basic/matrix_multiplication/whole_array/whole_array.py",
+    "kernels/w4a8_array/whole_array_w4a8.py": "programming_examples/basic/matrix_multiplication/whole_array/whole_array.py",
+    # Partial copies: written here around mm.cc's 544-character outer-loop dispatch, so their
+    # similarity is low by design. Their SPDX is "AGPL-3.0-or-later AND Apache-2.0 WITH LLVM-exception".
+    "kernels/w4a8_probe/w4a8_kernels.cc": "aie_kernels/aie2/mm.cc",
+    "kernels/int4_study/u8i4_kernels.cc": "aie_kernels/aie2/mm.cc",
 }
 
 AMD_RE = re.compile(r"Copyright\s*(\(C\)|\(c\)|©)?\s*[0-9, -]*\s*(Advanced Micro Devices|Xilinx)[^\n]*", re.I)

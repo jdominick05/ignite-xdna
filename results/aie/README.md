@@ -217,6 +217,19 @@ Read these before quoting anything below.
 - **The consumer-sizing compression experiment in `notes_yolov8s_gap.md` is VOID**, as the note itself records: its
   multi-channel design timed out on its own golden `arange` input unpatched, so consumer sizing was not the only
   variable. The later single-channel results in the same note stand.
+- **`notes_aie2_device_dtypes.log`'s "AIE2 is missing entries AIE2p has: … no int8xint4" is
+  superseded as a statement about the silicon** by `w4a8_probe_npu.log`. The log is a verbatim
+  excerpt of `device.yaml` and stays accurate about the table; read as an ISA listing it was
+  wrong: `aie::mmul<4,16,8,int8,int4>` is a native `vmac` on AIE2, bit-exact on hardware, 512
+  MACs by its shape (SPEC), its best k loop sustaining 0.73–0.75 per cycle (MEASURED). AMD
+  documents it for AIE-ML elsewhere (AIE-API 2024.1, Riallto; cross-audit ledger D11), so the
+  probe confirmed prior art. `docs/SILICON.md` 1.2 and 5 were re-tagged in the same change.
+- **`w4a8_probe_npu.log`'s "the native kernel would cut at most ~944 of those cycles: <= 1.18x"
+  (DERIVED) is superseded, in the wrong direction,** by `w4a8_array_npu.log`. The bound
+  assumed the array's time outside the kernel stays fixed; at that tile the kernel is not on
+  the critical path at all, and packed int4 B gives 1.23–1.26× (mechanism unexplained), unpack and native
+  alike. Its "kernel is ~60% of the array's per-call time" is arithmetic, not a reading of what
+  limits the array. The one-core measurements in that log stand.
 
 ## Toolchain bring-up
 
@@ -520,6 +533,87 @@ that would settle it is the trace unit rather than wall time — read `ACTIVE` a
 `LOCK_STALL` in core cycles inside the dispatch, where host contention cannot reach — which
 needs a trace hook in `whole_array`. Harness `kernels/bank_placement/`; written up in
 [`docs/BENCHMARKS.md`](../../docs/BENCHMARKS.md#two-loads-in-one-bank-cost-a-cycle-and-the-int8-gemm-has-that-collision-where-bf16-does-not).
+
+**`w4a8_probe_npu.log`** (+ `w4a8_probe_raw.jsonl`, `witness_w4a8_probe.jsonl`) — int4
+weights on one core, 2026-09-10. **int8×int4 is a native `vmac` on AIE2**, which `device.yaml`'s
+MAC table omits and AMD's AIE-API documents for AIE-ML (prior art, confirmed here):
+`aie::mmul<4,16,8,int8,int4>` is bit-exact on hardware (B two per byte, low nibble first, two's
+complement), 512 MACs per `vmac` by its shape (SPEC), and its best k loop runs 372.4 MAC/cycle,
+0.73 `vmac` per cycle (MEASURED), against 204.8 for the int8 control (upstream's kernel re-typed: its loop length and
+pair) and 227.6 for the best int8 schedule — 1.82× / 1.64×, one `AIE_LOOP_UNROLL(2)` on the k
+loop away from its default build's 1.17×.
+Widening int4 to int8 on load (`vldb.unpack.s8.s4`) costs nothing and buys only bytes. Static
+tables from IRON's exact compile command (10/10 cached objects reproduced), trace-unit cycles
+per call identical across 2 processes × 20 calls in every cell, the IRON object compared with
+the static compile in all 54 processes, calibration gate PASS, witness at most one context.
+Also carries a reading that bears on H12: the extra cycles in these loops match paired loads of
+two rows of one buffer, and upstream's int8 loop's one pair reads two A tiles — not A with B —
+so moving A away from B could not remove it; and it qualifies H11's 2×2 as not strictly better
+on the core. One core, M = N = 64, K ≤ 256; not the array. Kernels `kernels/w4a8_probe/`;
+written up in
+[`docs/BENCHMARKS.md`](../../docs/BENCHMARKS.md#int8int4-is-a-native-vmac-on-aie2-and-int4-weights-cost-nothing-to-store).
+
+**`w4a8_array_npu.log`** (+ `w4a8_array_raw.jsonl`, `witness_w4a8_array.jsonl`) — the same
+kernels on `whole_array`'s 4 × 4 cores with B packed int4, 2026-09-10, 2048³. **At the int8
+GEMM's best tile, 64/128/64, int4 B makes the array 1.23–1.26× faster, and not through the
+core**: the unpack kernel (int8 MACs) gains as much as the native one, a faster int8 kernel
+gains nothing (0.995×), and `native:unroll2` runs 6,195 GOPS, the best `whole_array` rate in
+this repo. Tile-dependent: 1.06–1.13× at 64/64/64 (native over unpack there), nothing at
+128/64/64. The kernel, total L3 bytes at a fixed bandwidth and bytes per MAC into the core are
+each ruled out as the whole explanation; the mechanism is unexplained. Compile-only builds
+first (packed-B lowering, nine L1 outcomes predicted to the byte), every linked kernel object
+identical to the probe's, 49 of 49 runs bit-exact with one C across all arms, xrt-smi clean at
+every block edge, witness at most one context. Supersedes the probe's ≤ 1.18× bound (above).
+Kernels `kernels/w4a8_array/`; written up in
+[`docs/BENCHMARKS.md`](../../docs/BENCHMARKS.md#w4a8-on-the-whole-array-int4-weights-pay-at-the-best-int8-tile-and-not-through-the-core).
+
+**`int4_isa_gate_desktop2_20260923.log`** — INT4 gate A, compile only, no NPU.
+- **What it compiles:** one `aie::mmul` per int4 operand pair for aie2 and aie2p, each beside a
+  no-mmul harness control.
+- **What passes on aie2:** int8/uint8 × int4/uint4, each lowering to one `vmul`.
+- **What fails:** int4 × int8, int4 × int4 and int16 × int4, as undefined `aie::detail::mmul`
+  templates while their controls compile. 0 departures from the pre-registered expectations.
+- **The control-word table:** in Peano's `aiev2_vmult.h` the only 4-bit code is bmode 0, always
+  with an 8-bit A. No intrinsic takes a 4-bit A, and 8 of the 16 (amode, bmode) codes are never
+  emitted.
+- **The verdict is about the toolchain, not the silicon.** Its only dense int4 on AIE2 is W4A8.
+- **Observed, not pre-registered, compile-only:** in Peano's headers aie2p's int8 × int4 is an
+  unpack (no Strix silicon touched). All 88 of its 4-bit
+  intrinsics widen B to int8 first.
+- Kernels `kernels/int4_study/`. The log's `COMMIT: f1194be` is the branch HEAD it ran on, with
+  the gate scripts not yet committed. Rebasing onto `35d58d5` and scrubbing AI links from the
+  messages made that commit `38b3615`, and the scripts landed next, in `3a27748` (`f416c33` before
+  the rebase).
+
+**`int4_engine_bytes_gate_desktop2_20260923.log`** — INT4 gate B, schedule only, no NPU.
+- **Method:** walks every weight packet the graph engine streams per frame, for five containers.
+- **Cross-checks, all passed:** totals equal `engine_stream_report`, commit 5162671's corrected
+  YOLOv8n and YOLOv8s figures, and every shipped manifest's `wpackets_bytes` / `weight_fills`.
+- **Pricing:** trim and int4 at 26.8 GB/s, as if transport-bound (DERIVED best cases).
+- **Result:** int4 is 1.4–3.9% of the smallest measured dispatch (ceiling 4.8%, YOLOv8s),
+  against a pre-registered 5% line. On paper, under the current packet format, int4-in-engine is
+  killed (no accuracy data; the engine core also has 224 B of program memory left, ledger A11),
+  and trimming the fixed 9,472 B
+  packets saves more on every model (3.0–24.0%).
+- Tool `tools/int4_bytes_gate.py`. Its `COMMIT: f1194be` maps the same way (`38b3615` after the
+  rebase and scrub). The rebase brought in no engine code change: main's 68 changed lines under `src/`
+  between `217d1d2` and `35d58d5` are licence headers.
+
+**`int4_demo_npu_desktop2_20260923.log`** (+ `w4a8_probe_repro_raw_20260923.jsonl`,
+`int4_u8i4_probe_raw_20260923.jsonl`, `w4a8_array_repro_raw_20260923.jsonl`,
+`witness_int4_demo_20260923.jsonl`) — INT4 gate C, on silicon. Same driver, XRT and toolchain as
+the 2026-09-10 logs.
+- **3a, the 2026-09-10 one-core W4A8 probe re-run:** cycle-identical in all 27
+  (kernel, mode, K) cells, and 54 of 54 processes bit-exact.
+- **3b, uint8 × int4 (the engine's operand pair):** bit-exact in 12 of 12 cells, with half of A
+  ≥ 128. Every cell's cycles equal its int8 × int4 twin's, and the engine's uint8 × int8 equals
+  int8 × int8.
+- **3c, the array's best tile (2048³, 64/128/64):** native int4 1.287× upstream int8, 6,206.73
+  against 4,821.17 GOPS (2026-09-10: 1.263×). Disjoint ranges, and the same output hash as every
+  2026-09-10 arm.
+- **Witness:** at most one context in 562 samples.
+- **Scope:** no W4 network or accuracy.
+- Kernels `kernels/int4_study/`.
 
 
 **`pmode_clock_readback_npu.log`** — XRT's `max_clock_frequency_mhz` against power mode
