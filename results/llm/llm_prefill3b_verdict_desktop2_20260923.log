@@ -1,0 +1,109 @@
+STAGE 3b: the verdict reads 3b's three logs alone; no stage 3 row enters it.
+
+PINNING: 48 CPU rows read back as pinned, 0 void
+DIRECTML: 5 fresh sessions per row and pass; a pass's value is the median of their medians
+  fp16 S1 M=512  pass 1  value      6.10 ms  sessions 5.92, 6.28, 6.27, 6.10, 6.06  range 1.061x
+  fp16 S1 M=512  pass 2  value      6.25 ms  sessions 6.56, 6.15, 6.11, 6.25, 6.69  range 1.095x
+  fp16 S1 M=2048 pass 1  value     23.61 ms  sessions 24.19, 23.00, 22.98, 24.37, 23.61  range 1.061x
+  fp16 S1 M=2048 pass 2  value     23.70 ms  sessions 23.70, 23.06, 23.80, 23.90, 22.85  range 1.046x
+  fp16 S2 M=512  pass 1  value     13.45 ms  sessions 13.19, 13.75, 13.43, 13.52, 13.45  range 1.042x
+  fp16 S2 M=512  pass 2  value     12.53 ms  sessions 12.83, 12.53, 12.65, 12.18, 12.10  range 1.061x
+  fp16 S2 M=2048 pass 1  value     55.56 ms  sessions 52.72, 54.79, 55.56, 55.70, 57.11  range 1.083x
+  fp16 S2 M=2048 pass 2  value     56.38 ms  sessions 56.94, 54.27, 56.38, 56.42, 56.12  range 1.049x
+  fp16 S3 M=512  pass 1  value     11.25 ms  sessions 11.86, 11.10, 11.54, 11.25, 10.77  range 1.101x
+  fp16 S3 M=512  pass 2  value     12.10 ms  sessions 12.22, 11.63, 11.52, 12.49, 12.10  range 1.085x
+  fp16 S3 M=2048 pass 1  value     85.99 ms  sessions 78.43, 80.45, 86.21, 88.42, 85.99  range 1.127x
+  fp16 S3 M=2048 pass 2  value     81.35 ms  sessions 75.57, 75.46, 81.35, 82.76, 84.00  range 1.113x
+  fp32 S1 M=512  pass 1  value     11.83 ms  sessions 12.17, 12.20, 11.63, 11.72, 11.83  range 1.050x
+  fp32 S1 M=512  pass 2  value     12.36 ms  sessions 12.50, 12.68, 12.04, 12.36, 12.29  range 1.053x
+  fp32 S1 M=2048 pass 1  value     44.90 ms  sessions 45.01, 44.94, 44.65, 44.68, 44.90  range 1.008x
+  fp32 S1 M=2048 pass 2  value     49.69 ms  sessions 49.63, 49.69, 49.38, 50.08, 50.14  range 1.015x
+  fp32 S2 M=512  pass 1  value     41.68 ms  sessions 39.00, 42.11, 41.29, 41.77, 41.68  range 1.080x
+  fp32 S2 M=512  pass 2  value     41.81 ms  sessions 42.46, 41.69, 41.76, 41.81, 41.91  range 1.019x
+  fp32 S2 M=2048 pass 1  value    157.82 ms  sessions 155.79, 156.08, 157.82, 159.97, 170.31  range 1.093x
+  fp32 S2 M=2048 pass 2  value    161.05 ms  sessions 155.64, 161.05, 162.30, 159.15, 164.18  range 1.055x
+  fp32 S3 M=512  pass 1  value     31.65 ms  sessions 30.13, 32.35, 31.54, 31.72, 31.65  range 1.074x
+  fp32 S3 M=512  pass 2  value     31.87 ms  sessions 31.11, 32.20, 31.88, 31.87, 31.20  range 1.035x
+  fp32 S3 M=2048 pass 1  value    129.60 ms  sessions 134.16, 125.68, 130.08, 128.40, 129.60  range 1.067x
+  fp32 S3 M=2048 pass 2  value    130.48 ms  sessions 130.48, 131.66, 133.00, 119.11, 130.45  range 1.117x
+  int8 S1 M=512  pass 1  value     34.35 ms  sessions 34.15, 33.98, 35.44, 34.35, 34.47  range 1.043x  int32 sessions agree
+  int8 S1 M=512  pass 2  value     35.07 ms  sessions 34.49, 35.07, 34.42, 35.15, 35.78  range 1.040x  int32 sessions agree
+  int8 S1 M=2048 pass 1  value    130.56 ms  sessions 130.56, 123.33, 122.57, 132.05, 133.40  range 1.088x  int32 sessions agree
+  int8 S1 M=2048 pass 2  value    130.85 ms  sessions 112.81, 115.69, 130.85, 131.09, 132.85  range 1.178x  int32 sessions agree
+  int8 S2 M=512  pass 1  value     72.82 ms  sessions 72.82, 73.55, 72.42, 73.21, 72.60  range 1.016x  int32 sessions agree
+  int8 S2 M=512  pass 2  value     71.24 ms  sessions 69.11, 72.28, 71.29, 71.24, 71.22  range 1.046x  int32 sessions agree
+  int8 S2 M=2048 pass 1  value    285.81 ms  sessions 284.16, 295.65, 285.81, 284.94, 289.01  range 1.040x  int32 sessions agree
+  int8 S2 M=2048 pass 2  value    277.53 ms  sessions 296.36, 276.12, 280.01, 277.53, 276.42  range 1.073x  int32 sessions agree
+  int8 S3 M=512  pass 1  value    101.40 ms  sessions 100.29, 101.40, 100.35, 103.89, 102.51  range 1.036x  int32 sessions agree
+  int8 S3 M=512  pass 2  value    102.19 ms  sessions 101.67, 101.68, 103.69, 102.19, 102.72  range 1.020x  int32 sessions agree
+  int8 S3 M=2048 pass 1  value    389.56 ms  sessions 386.98, 389.56, 387.38, 392.00, 390.56  range 1.013x  int32 sessions agree
+  int8 S3 M=2048 pass 2  value    390.04 ms  sessions 390.83, 390.04, 389.51, 381.75, 390.61  range 1.024x  int32 sessions agree
+
+INT8_CONTROL S1 M=512: 5 int8 rows, int32 outputs identical
+INT8_CONTROL S1 M=2048: 5 int8 rows, int32 outputs identical
+INT8_CONTROL S2 M=512: 6 int8 rows, int32 outputs identical
+INT8_CONTROL S2 M=2048: 6 int8 rows, int32 outputs identical
+INT8_CONTROL S3 M=512: 5 int8 rows, int32 outputs identical
+INT8_CONTROL S3 M=2048: 5 int8 rows, int32 outputs identical
+CLOCK_WITNESS (display only): % Processor Performance during each CPU row's timed runs
+  fp32 16 threads S1 M=2048 pass 1    99.92 ms, clock 108-108% | pass 2   105.80 ms, clock 108-108%
+  fp32 16 threads S1 M=512  pass 1    23.51 ms, clock 108-108% | pass 2    23.48 ms, clock 108-108%
+  fp32 16 threads S2 M=2048 pass 1   283.12 ms, clock 106-107% | pass 2   296.56 ms, clock 107-107%
+  fp32 16 threads S2 M=512  pass 1    60.66 ms, clock 106-108% | pass 2    60.83 ms, clock 107-108%
+  fp32 16 threads S3 M=2048 pass 1   174.97 ms, clock 104-105% | pass 2   174.73 ms, clock 105-105%
+  fp32 16 threads S3 M=512  pass 1    42.59 ms, clock 104-106% | pass 2    43.13 ms, clock 106-106%
+  fp32  8 threads S1 M=2048 pass 1    77.22 ms, clock 106-107% | pass 2    76.21 ms, clock 106-106%
+  fp32  8 threads S1 M=512  pass 1    17.50 ms, clock 103-103% | pass 2    17.60 ms, clock 106-106%
+  fp32  8 threads S2 M=2048 pass 1   211.39 ms, clock 106-107% | pass 2   209.55 ms, clock 106-107%
+  fp32  8 threads S2 M=512  pass 1    46.49 ms, clock 104-107% | pass 2    47.03 ms, clock 105-107%
+  fp32  8 threads S3 M=2048 pass 1   182.84 ms, clock 102-107% | pass 2   185.06 ms, clock 101-107%
+  fp32  8 threads S3 M=512  pass 1    42.01 ms, clock 105-107% | pass 2    42.57 ms, clock 105-107%
+  int8 16 threads S1 M=2048 pass 1    17.80 ms, clock 107-107% | pass 2    17.85 ms, clock 107-107%
+  int8 16 threads S1 M=512  pass 1     4.12 ms, clock 108-108% | pass 2     4.11 ms, clock 108-108%
+  int8 16 threads S2 M=2048 pass 1    48.77 ms, clock 105-106% | pass 2    49.01 ms, clock 105-106%
+  int8 16 threads S2 M=512  pass 1    11.17 ms, clock 107-107% | pass 2    11.15 ms, clock 107-107%
+  int8 16 threads S3 M=2048 pass 1    47.71 ms, clock 105-106% | pass 2    48.39 ms, clock 105-107%
+  int8 16 threads S3 M=512  pass 1    10.85 ms, clock 107-107% | pass 2    10.87 ms, clock 107-107%
+  int8  8 threads S1 M=2048 pass 1    18.75 ms, clock 109-109% | pass 2    18.76 ms, clock 109-109%
+  int8  8 threads S1 M=512  pass 1     4.15 ms, clock 106-106% | pass 2     4.11 ms, clock 106-106%
+  int8  8 threads S2 M=2048 pass 1    52.37 ms, clock 108-109% | pass 2    51.71 ms, clock 108-109%
+  int8  8 threads S2 M=512  pass 1    11.29 ms, clock 107-107% | pass 2    11.35 ms, clock 108-108%
+  int8  8 threads S3 M=2048 pass 1    49.56 ms, clock 107-109% | pass 2    49.64 ms, clock 107-109%
+  int8  8 threads S3 M=512  pass 1    10.91 ms, clock 108-108% | pass 2    10.89 ms, clock 108-108%
+per layer = 4 x S1 + 2 x S2 + 1 x S3; ms are the mean of two pass medians
+
+M = 512
+  chip arm             S1 ms     S2 ms     S3 ms   layer ms  32 layers s  TFLOPS    rel-L2  config
+  cpu int8              4.12     11.16     10.86      49.65        1.589    4.17  1.54e-02  16 threads
+  dml fp16              6.17     12.99     11.68      62.36        1.995    3.32  3.61e-04  
+  npu int8              5.04     15.62     11.83      63.24        2.024    3.28  1.54e-02  S1:S1-P S2:S2s-P S3:S3-P
+  npu bf16              6.73     21.33     17.28      86.85        2.779    2.39  2.35e-03  S1:S1-P S2:S2s-P S3:S3-P
+  dml fp32             12.09     41.74     31.76     163.62        5.236    1.27  1.33e-06  
+  cpu fp32             17.55     46.76     42.29     206.01        6.592    1.01  3.12e-07  8 threads
+  dml int8             34.71     72.03    101.80     384.70       12.310    0.54  1.54e-02  
+  npu bf16 vs cpu: BEATS -- fp32 2.37x (rival time / NPU time)
+  npu bf16 vs dml: does not beat -- fp16 0.72x, fp32 1.88x (rival time / NPU time)
+  npu int8 vs cpu: does not beat -- fp32 3.26x, int8 0.79x (rival time / NPU time)
+  npu int8 vs dml: does not beat -- fp16 0.99x, fp32 2.59x, int8 6.08x (rival time / NPU time)
+  M = 512: no NPU arm beats both chips
+
+M = 2048
+  chip arm             S1 ms     S2 ms     S3 ms   layer ms  32 layers s  TFLOPS    rel-L2  config
+  npu int8             17.77     48.51     44.36     212.46        6.799    3.90  1.54e-02  S1:S1-P S2:S2s-P S3:S3-P
+  cpu int8             17.82     48.89     48.05     217.12        6.948    3.82  1.54e-02  16 threads
+  dml fp16             23.65     55.97     83.67     290.23        9.287    2.86  3.61e-04  
+  npu bf16             25.72     72.54     67.06     315.02       10.081    2.63  2.35e-03  S1:S1-P S2:S2s-P S3:S3-P
+  dml fp32             47.29    159.43    130.04     638.07       20.418    1.30  1.33e-06  
+  cpu fp32             76.72    210.47    183.95     911.75       29.176    0.91  3.12e-07  8 threads
+  dml int8            130.71    281.67    389.80    1475.97       47.231    0.56  1.54e-02  
+  npu bf16 vs cpu: BEATS -- fp32 2.89x (rival time / NPU time)
+  npu bf16 vs dml: does not beat -- fp16 0.92x, fp32 2.03x (rival time / NPU time)
+  npu int8 vs cpu: does not beat -- fp32 4.29x, int8 1.02x (rival time / NPU time)
+  npu int8 vs dml: BEATS -- fp16 1.37x, fp32 3.00x, int8 6.95x (rival time / NPU time)
+  M = 2048: no NPU arm beats both chips
+
+PROBLEMS
+  ('dml', 'fp32', 0, '', 'S1', 2048): passes 44.8982 / 49.6865 ms, 10.1% apart
+VERDICT INCOMPLETE
+
+STAGE 3b VERDICT INCOMPLETE: it stands, and there is no third run without the user
