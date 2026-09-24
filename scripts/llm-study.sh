@@ -102,6 +102,9 @@
 #   ./scripts/llm-study.sh freeing-loadcheck      # (e): every child to READY and a 2 s go (pre-sitting)
 #   ./scripts/llm-study.sh freeing-suite          # (e): the sitting (BFP16 holds the machine)
 #   ./scripts/llm-study.sh freeing-verdict        # (e): the mechanical verdict over the sitting's log
+#   ./scripts/llm-study.sh prefill3c-models       # 3c step 2: the rivals' models, DirectML placement (light GPU)
+#   ./scripts/llm-study.sh prefill3c-insts        # 3c: stage 3's 28 NPU builds against the insts.bin fit (no chip)
+#   ./scripts/llm-study.sh prefill3c-prereg       # 3c step 3: the plan's log (commit it with the two above)
 #
 # Options: --machine TAG names the logs (default: desktop2 on DESKTOP-CBL5NUA, else required).
 # --tag TAG adds _TAG to the verdict log's name, for a second verdict on the same day.
@@ -132,6 +135,7 @@ while [ $# -gt 0 ]; do
         decode-prereg|decode|decode-accuracy|decode-verdict) STAGE="${1//-/_}" ;;
         decode-gpu-posthoc|decode-rerun-prereg|decode-rerun|decode-rerun-verdict) STAGE="${1//-/_}" ;;
         freeing-build|freeing-dryrun|freeing-prereg|freeing-loadcheck|freeing-suite|freeing-verdict) STAGE="${1//-/_}" ;;
+        prefill3c-models|prefill3c-insts|prefill3c-prereg) STAGE="${1//-/_}" ;;
         --machine) MACHINE="$2"; shift ;;
         --tag)     TAG="_$2"; shift ;;
         -h|--help) usage "${BASH_SOURCE[0]}"; exit 0 ;;
@@ -799,6 +803,38 @@ stage_freeing_verdict() {
     refuse "$log"
     use_env resnet_env17
     logged "$log" python $FREE verdict "$suite" || die "verdict incomplete, see $log"
+}
+
+# ---- stage 3c: prefill weight GEMMs at Gemma 3 4B's shapes, M = 2048 and 8192 (plan v2, approved by the
+# user 2026-09-24)
+P3C=tools/llm_prefill3c.py
+
+stage_prefill3c_models() {
+    # step 2, a light GPU load (under a START REQUEST): the layer models from the release's blk.16, each
+    # DirectML model's placement, the negative control and an M = 64 wiring check; no timing, no rule
+    local log="$OUT/llm_prefill3c_models_${MACHINE}_${DATE}.log"
+    refuse "$log"
+    use_env resnet_env17
+    check_host_load refuse
+    logged "$log" python $P3C models || die "the models step found a problem, see $log"
+    ok "models built; next: $0 prefill3c-insts, then $0 prefill3c-prereg"
+}
+
+stage_prefill3c_insts() {
+    # read-only, no chip: stage 3's builds in build/llm_prefill against insts.bin = 16 + 2576 M / (8 m)
+    local log="$OUT/llm_prefill3c_insts_fit_${MACHINE}_${DATE}.log"
+    refuse "$log"
+    use_env resnet_env17
+    logged "$log" python $P3C insts-fit || die "a build is off the fit, see $log"
+}
+
+stage_prefill3c_prereg() {
+    # no chip and no timing: the plan's text, PROTOCOL_JSON, the predictions and the two logs above by hash
+    local log="$OUT/llm_prefill3c_prereg_${MACHINE}_${DATE}.log"
+    refuse "$log"
+    use_env resnet_env17
+    logged "$log" python $P3C prereg || die "the prereg is incomplete, see $log"
+    ok "prereg written; commit it with the tool, then report HEAD to the gate and wait"
 }
 
 "stage_$STAGE"
