@@ -1,0 +1,67 @@
+The DirectML + NPU split's synchronization cost (LLM study, the R5 follow-up), pre-registered
+before any sitting
+
+Question (the user's decision on R5: "measure the sync first")
+  Stage 2's R5 printed OPEN at 1.1004x, inside its run-to-run spread. A split decode joins the
+  two chips through the host once per GEMV, because each GEMV needs the previous one's output and
+  nothing crosses between DirectML and the NPU without the host. At Llama-2-7B that is 224 joins
+  per token. The most a DirectML + NPU split could save over DirectML alone, at stage 2's
+  reduction rates, is 11.1 ms per token (DERIVED: 47.5 - 36.4). That figure is itself
+  optimistic: GEMV reads slower than a reduction, and no NPU int4 GEMV exists.
+
+Design (tools/split_sync_cost.py), trivial kernels, because the join is the cost and not the math
+  NPU half: a 32 KiB shim -> mem tile -> shim passthrough (one column, two 4 KiB mem-tile
+    buffers). Raw pyxrt, one dispatch at a time: write x, sync to the device, start, wait, sync back,
+    read y. This is the same shape as BENCHMARKS' dispatch-floor table.
+  DirectML half: ONNX Runtime DirectML MatMul, x[1,4096] fp16 by W[4096,64], CPU fallback disabled,
+    session.run with the input and output on the host.
+  No Python here has both runtimes (pyxrt: CPython 3.13 and 3.10; DirectML: 3.12 only). So the
+  DirectML half runs in a resnet_env17 worker, and the halves meet through shared memory with
+  busy-wait flags. Chain e measures that handshake alone, and it is subtracted.
+  Chains, each 224 dependent steps; the next input is built from this step's output:
+    a  the NPU round trip alone
+    b  the DirectML round trip alone, timed inside the worker
+    e  the handshake alone: the worker echoes x with no DirectML
+    c  the join: signal the worker (DirectML starts), the NPU round trip, wait for the worker,
+       then combine both outputs into the next input
+  3 warmup chains, then 30 timed chains of each. a, e and c are interleaved; b runs first, in
+  the worker. The NPU passthrough is verified on 20 warmup steps and on each chain's last step.
+  The sitting: the host-load gate, a GPU engine snapshot before and after, xrt-smi idle
+  before and after, recorded by tools/silicon_probe_record.py, announced to the other sessions.
+
+The join cost, named before the sitting
+  J  = median over chains of (chain c time / 224)     the per-GEMV join, as measured
+  H  = median over chains of (chain e time / 224)     the two-process handshake
+  J* = J - H                                              the join a single-process host would pay;
+                                                          subtracting H favours the split
+Rules
+  R1 (the kill line, set by the gate): DEAD iff 224 x J* >= 11.1 ms, i.e. J* >= 49.55 us. The
+     split is then dead for good. Below the line, report the margin only; nothing is established,
+     and the user decides.
+  R1b (robustness, reported): if independent GEMVs share one join, a token needs 128 joins (32 x
+     QKV, O, gate+up, down). 128 x J* against 11.1 ms, i.e. J* against 86.7 us. If R1 kills and R1b
+     does not, the docs say the kill depends on joining per GEMV.
+  R2 (reported): J against a, b, max(a, b) and a + b, per step: overlap or serialization.
+  INCOMPLETE: an NPU dispatch that does not complete; a passthrough mismatch; DirectML not the
+     first provider (CPU fallback is disabled, so creation fails if any node would leave it);
+     non-finite DirectML output; the worker never READY; an xrt-smi witness that is not idle; a missing chain.
+
+Written predictions
+  Q1 a: 120-220 us per step. BENCHMARKS measured raw pyxrt at about 140 us for one dispatch of this
+     shape; here the BO write and the two syncs add to it.
+  Q2 b: 100-600 us per step (DirectML session.run with host input and output, never measured here).
+  Q3 e: under 10 us per step. A pre-check with no chip (selftest: a dry 3.12 worker, the 3.13
+     coordinator, 5 chains of 224 echoes) gave about 8 us per step, including that loop's own
+     array checks.
+  Q4 J* >= max(a, b) - 20 us: the halves overlap, and the slower one sets the join.
+  Q5 R1 DEAD, and R1b DEAD. The prior: the repo's C++ host pays about 108 us for one dependent
+     NPU dispatch (MEASURED, BENCHMARKS), above both 49.6 and 86.7 us. So a faster host language
+     would not rescue the split.
+
+Unverified by design: a C++ host for both halves (the C++ NPU figure above is prior evidence, not
+remeasured); DirectML IO binding; a device-to-device fence between DirectML and XRT (none is
+available to this host); real GEMV halves; attention and the KV cache.
+
+PINS passthrough_w8192_c1024 insts_sha256 94e5a6738cc363f80fe0baa8c8a01c87d3665f24be4e4258035a3dbdfc20d44f mlir_sha256 f505f47c875631a5418cc3a2bfadf62caf0eae645557c029c4ad0acb20a23122
+git HEAD 1bc286a93c8466258afcceea4c25f39314a8dab8 (plus this log's own commit)
+PREREG_JSON {"steps": 224, "stage_joins": 128, "saving_ms": 11.1, "kill_us": 49.55357142857143, "kill_stage_us": 86.71875, "chains": 30, "warmup_chains": 3, "words": 8192, "chunk": 1024, "k": 4096, "n_dml": 64, "git_head": "1bc286a93c8466258afcceea4c25f39314a8dab8"}
