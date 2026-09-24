@@ -2665,12 +2665,134 @@ For scale, on the same DDR5 the NPU reads at 79% of the CPU's ReduceSum (60.59 G
 **What this does not establish:**
 - Writes: the write rate alone, and reads with writes at eight channels.
 - Whether the NPU's reads add to the CPU's and DirectML's when all run together. That is the
-  study's next stage, and this probe is its NPU read kernel.
+  study's next stage, and this probe is its NPU read kernel. (Measured since, next section:
+  they add, up to 91.76 GB/s with DirectML.)
 - The cause of the per-channel shortfall at eight channels.
 - Reads into core tiles, packet-switched streams, device buffers other than host-only, and power
   modes other than the default.
 - A real decode kernel at this rate. Decode kernels come back only at ≥ 59.7 GB/s, and this is
   47.62.
+
+### Reads add across the chips: DirectML and the NPU together read 91.8 GB/s, and the NPU's share of a split lands on the pre-registered line (2026-09-23, Desktop 2)
+
+The question, the user's second item: do the chips' DDR reads add when they run together? All
+three share one DDR5-6000 on two channels, 96 GB/s theoretical (DERIVED). This is the
+combined-chip read ceiling, and the first question under any split of decode across chips.
+
+**Setup.**
+- Pre-registered at `4557ec9` before any sitting
+  ([prereg](../results/llm/concurrent_read_prereg_desktop2_20260923.log)). The tool is
+  `tools/concurrent_read_bw.py`; the runner is `scripts/llm-study.sh concurrent`.
+- Each chip's reader is its own process, on its fastest read path alone:
+  - ONNX Runtime ReduceSum over Phase 1's 1 GiB fp32 initializer, on the CPU (8 threads) and on
+    DirectML;
+  - the NPU probe from the previous section, 4 × 2 channels.
+- Each reader sets up and warms up. Then all readers get one start and one stop time on
+  `perf_counter_ns`, which is QueryPerformanceCounter and system-wide. A self-test before the
+  sittings showed two processes' first reads starting at the same microsecond.
+- Each reader loops 1 GiB reads for 20 s. Its rate is the bytes it read in the middle 18 s.
+- All 7 configurations (each chip alone, the three pairs, all three) ran twice, in mirrored
+  order.
+- The witnesses: host load checked at the start, xrt-smi idle before and after every run (30
+  checks per sitting), and BFP16 and the gate holding.
+
+**Two sittings.**
+- **Sitting 1 is INCOMPLETE on its own repeat rule.** Its two DirectML-alone runs read
+  **81.11 and 70.95 GB/s**, 13.4% apart, over the 10% limit. Every other configuration repeated
+  within 4.1% ([suite](../results/llm/concurrent_read_suite_desktop2_20260923.log),
+  [verdict](../results/llm/concurrent_read_verdict_desktop2_20260923.log)).
+  - Each of the two runs was steady within itself: 13.2 and 15.1 ms per GiB in every quarter of
+    its window.
+  - Post hoc, the mid-window counters do not separate them. The cause is unattributed.
+- **The re-run rule came next** ([rule](../results/llm/concurrent_read_prereg_rerun_desktop2_20260923.log)).
+  It was written after sitting 1, approved by the gate, and committed at `06ffd7a` before
+  sitting 2.
+  - Sitting 2 is the full matrix again, and it alone decides.
+  - Had it broken the 10% rule too, stage 2 would stay INCOMPLETE.
+  - Added after sitting 1, non-deciding: a mid-window read of the DirectML process's GPU memory,
+    and a display-only split of the witness lines.
+- **Sitting 2 passes every check.** Every configuration repeats within 2.4% (the largest spread
+  is the CPU alone, 2.31%), and DirectML alone reads 70.61 and 69.97.
+
+**Sitting 2 (MEASURED; [suite](../results/llm/concurrent_read_suite_rerun_desktop2_20260923.log),
+[verdict](../results/llm/concurrent_read_verdict_rerun_desktop2_20260923.log)).** All figures below
+come from this sitting alone.
+
+| Configuration | Run totals, GB/s | Total | CPU | DirectML | NPU |
+|---|---|---:|---:|---:|---:|
+| CPU alone | 60.30 / 61.71 | 61.01 | 61.01 | | |
+| DirectML alone | 70.61 / 69.97 | 70.29 | | 70.29 | |
+| NPU alone | 47.33 / 46.27 | 46.80 | | | 46.80 |
+| CPU + DirectML | 83.62 / 83.16 | 83.39 | 27.97 (46%) | 55.42 (79%) | |
+| CPU + NPU | 83.91 / 84.11 | 84.01 | 40.52 (66%) | | 43.49 (93%) |
+| DirectML + NPU | 91.70 / 91.82 | **91.76** | | 53.11 (76%) | 38.65 (83%) |
+| All three | 90.41 / 90.45 | 90.43 | 11.96 (20%) | 48.89 (70%) | 29.58 (63%) |
+
+Percentages are each chip's share of its own rate alone.
+
+**The pre-registered rules print:**
+- **R1, ADD.** CPU + DirectML reads 1.186× the better of the two alone.
+- **R2, ADD** for both NPU pairs. DirectML + NPU reads 1.305× DirectML alone, and CPU + NPU
+  1.377× the CPU alone.
+- **R3, NO.** Adding the NPU to CPU + DirectML gives 1.084×, under 1.10. All three read less
+  than DirectML + NPU without the CPU.
+- **R4.** The combined ceiling is **91.76 GB/s** at DirectML + NPU: 95.6% of the 96 GB/s
+  theoretical (DERIVED), and 1.31× DirectML alone.
+- **R5, OPEN, not established — on the line.** The best total with the NPU (DirectML + NPU,
+  91.76) is 1.1004× the best without it (CPU + DirectML, 83.39), 0.04% over the 1.10 line.
+  - Pairing sitting 2's individual runs instead of means, that ratio spans 1.097–1.104. So the
+    call is inside the sitting's own run-to-run spread.
+  - Under the prereg, OPEN means the NPU adds read bandwidth a split could use. No split
+    decode is measured, and whether decode kernels return is the user's decision.
+
+**What a split could and could not gain (DERIVED from sitting 2's totals and Phase 1's
+3.339 GB per token).** These are bandwidth floors per token at reduction rates:
+- DirectML + NPU: 36.4 ms;
+- CPU + DirectML: 40.0 ms;
+- DirectML alone in the same harness: 47.5 ms.
+
+They are optimistic in three ways:
+- **GEMV reads slower than a reduction.** In Phase 1, DirectML's int4 GEMV read 60.17 GB/s
+  against its ReduceSum's 68.81.
+- **No NPU int4 GEMV exists.** The NPU's share assumes one reads at the DMA rate.
+- **A split synchronizes the chips on every GEMV,** 224 times per token, and this test does not
+  measure that. The repo's amortised NPU dispatch figure, about 36 µs, is a batched-throughput
+  number. Even so, 224 of them are 8.2 ms per token (DERIVED). The most a DirectML + NPU split
+  could save over DirectML alone, at these floors, is 11.1 ms. A latency-bound sync costs
+  more.
+
+**Who gives way.**
+- The CPU loses most. It keeps 46% of its rate beside DirectML and 20% with both others.
+- The NPU keeps 93% beside the CPU and 83% beside DirectML.
+- DirectML keeps 70–79%.
+- The CPU clock held at 112–118% of base in every CPU and DirectML run (mid-window
+  `% Processor Performance`). That argues against the package power limit cutting CPU clocks;
+  GPU and fabric clocks are not observed.
+- Why the shares split this way is unattributed. Candidates are the fabric's arbitration, each
+  chip's outstanding-request depth, and the memory controllers' scheduling.
+
+**Witnesses.**
+- VS Code's 3D engine on the 780M read 2.1% before the first run, and nothing over 1% before
+  any other run.
+- Every DirectML reader in sitting 2 held 12.5 MiB dedicated and 2052.9 MiB shared GPU memory.
+  Placement was identical across its runs. No sitting 2 DirectML-alone run came near sitting
+  1's 81.11, so this witness cannot test whether placement explains that run.
+
+**Predictions scored:**
+- Q1 holds: alone, CPU 61.01, DirectML 70.29, NPU 46.80, all inside their ranges.
+- Q2 holds: R1 ADD, with CPU + DirectML at 83.39, inside 76–85.
+- Q3 holds on the calls (R2 ADD for both pairs), and CPU + NPU's 84.01 is inside 70–85. It
+  misses high on DirectML + NPU: 91.76 against 76–85.
+- Q4 holds on the call (R3 NO). It misses on the margin: all three read 1.084× CPU + DirectML,
+  not within 1.05×.
+- Q5 misses, by 0.04%: R5 prints OPEN at 1.1004×.
+
+**What this does not establish:**
+- A split decode itself, its synchronization cost, or an NPU int4 GEMV.
+- Rates through GEMV kernels rather than reductions and a DMA sink.
+- Writes.
+- The cause of sitting 1's 81.11 GB/s DirectML-alone run.
+- DirectML fp16 reads (Phase 1's ReduceSum anomaly).
 
 ### MobileViT-XXS does not survive per-tensor INT8, and AdaRound cannot save it
 

@@ -169,6 +169,17 @@
       55.9.
     - Decode kernels stay out. Whether the chips' reads add is the next question.
     - ([BENCHMARKS](BENCHMARKS.md#the-npu-reads-ddr-at-476-gbs-when-nothing-is-written-back-silicons-2628-gbs-cap-does-not-bind-reads-and-7b-decode-stays-killed-2026-09-23-desktop-2))
+  - **The chips' reads add, and the NPU's bandwidth role in a split sits on the line.** Stage 2
+    was pre-registered at `4557ec9`; its sitting 2 decides under the re-run rule at `06ffd7a`.
+    Sitting 1 was INCOMPLETE: its DirectML-alone runs read 81.11 and 70.95 GB/s, cause
+    unattributed.
+    - DirectML + NPU read 91.76 GB/s together (MEASURED), 1.31× DirectML alone.
+    - Adding the NPU to CPU + DirectML gives 1.084×, under 1.10 (R3 NO).
+    - The best total with the NPU is 1.1004× the best without it: R5 OPEN, not established,
+      inside the sitting's run-to-run spread.
+    - A split also pays 224 synchronizations per token, which is not measured.
+    - Decode kernels stay out unless the user decides otherwise.
+    - ([BENCHMARKS](BENCHMARKS.md#reads-add-across-the-chips-directml-and-the-npu-together-read-918-gbs-and-the-npus-share-of-a-split-lands-on-the-pre-registered-line-2026-09-23-desktop-2))
 - **A pre-registered size floor caught a builder defect (2026-09-23).** `tools/llm_gemv_bench.py build`
   first sized the fp16-scale variant's copies from the fp32 variant, so six DirectML rows streamed
   0.90–0.98 GiB against a pre-registered ≥ 1 GiB, and the verdict came out INCOMPLETE (`4620b53`).

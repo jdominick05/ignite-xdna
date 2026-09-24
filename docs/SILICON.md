@@ -213,6 +213,10 @@ same-sitting trace clock was 1.7972 GHz. The NPU was idle at all 34 witnesses.
 - Scope: host-only buffers, the mem tile as the sink, the default power mode,
   circuit-switched streams, and one contiguous region per channel. A concurrent write
   stream was not run in this sitting, so the cost of writes to reads is not measured.
+- Beside the other chips (stage 2, sitting 2, MEASURED): the same 8-channel read holds
+  43.49 GB/s with the CPU reading, 38.65 with DirectML, and 29.58 with both. With DirectML,
+  DDR delivered 91.76 GB/s between the two chips, 95.6% of the 96 GB/s theoretical (DERIVED)
+  ([BENCHMARKS](BENCHMARKS.md#reads-add-across-the-chips-directml-and-the-npu-together-read-918-gbs-and-the-npus-share-of-a-split-lands-on-the-pre-registered-line-2026-09-23-desktop-2)).
 
 A fourth design isolates the mem tile hop rather than a rate. `tools/memtile_hop_probe.py` sends the graph engine's
 6,400 B input and 3,200 B output objects through one core with no compute, on four routes that differ only in

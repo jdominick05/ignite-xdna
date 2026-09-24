@@ -704,6 +704,12 @@ been closed:
         on eight channels, far past SILICON 1.6's 26–28 GB/s cap but below 59.7. Decode stays
         killed at a 70.1 ms/token floor (DERIVED), about 14 tokens/s at most
         ([BENCHMARKS](docs/BENCHMARKS.md#the-npu-reads-ddr-at-476-gbs-when-nothing-is-written-back-silicons-2628-gbs-cap-does-not-bind-reads-and-7b-decode-stays-killed-2026-09-23-desktop-2)).
+      - Run together, the chips' reads add (pre-registered; decided by a second sitting after the
+        first broke its repeat rule on DirectML alone). DirectML + NPU read 91.76 GB/s, 96% of
+        the theoretical. The NPU's bandwidth role in a split lands exactly on the pre-registered
+        1.10× line (1.1004×). A split would still need an NPU int4 GEMV and 224 chip-to-chip
+        synchronizations per token, neither measured
+        ([BENCHMARKS](docs/BENCHMARKS.md#reads-add-across-the-chips-directml-and-the-npu-together-read-918-gbs-and-the-npus-share-of-a-split-lands-on-the-pre-registered-line-2026-09-23-desktop-2)).
 
   Evidence: `results/aie/int4_{isa_gate,engine_bytes_gate,demo_npu}_desktop2_20260923.log`,
   `results/int4/w4a8_accuracy_{prereg,verdict}_desktop2_20260923.log`,
