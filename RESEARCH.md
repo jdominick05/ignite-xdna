@@ -751,6 +751,15 @@ been closed:
           chip could read the coded stream. A lossy 4-bit head would give 1.44× (DERIVED), at an
           accuracy cost not yet measured
           ([BENCHMARKS](docs/BENCHMARKS.md#gemma-3-4bs-shipped-weights-compress-losslessly-113-per-token-mostly-in-the-f16-head-compaction-survives-as-a-byte-cut-necessary-but-not-sufficient-2026-09-23-desktop-2)).
+      - Stage (b) asks whether the package power counter sees the 780M and the NPU at all. It
+        does: each chip's control raises the counter beyond one busy CPU thread's rise.
+        - Reading a GB costs the NPU 0.33 J above idle, against DirectML's 0.75 and the CPU's
+          0.88.
+        - Most of the NPU's cost is the package leaving deep idle: about 15 W, the same rise one
+          busy CPU thread causes. Only its compute adds more.
+        - Package counters only: completeness and DRAM power are not shown. This idle was 20-26
+          W lower than the 2026-09-17 sittings', which is not yet attributed
+          ([BENCHMARKS](docs/BENCHMARKS.md#the-780m-and-the-npu-both-register-in-the-package-power-counter-and-the-npu-reads-a-gb-for-033-j-against-directmls-075-and-the-cpus-088-2026-09-24-desktop-2)).
 
   Evidence: `results/aie/int4_{isa_gate,engine_bytes_gate,demo_npu}_desktop2_20260923.log`,
   `results/int4/w4a8_accuracy_{prereg,verdict}_desktop2_20260923.log`,

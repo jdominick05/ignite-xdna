@@ -163,8 +163,9 @@
       (repo list amended 2026-09-24):
       - `google/gemma-3-4b-it`, the instruction-tuned release;
       - `-qat-q4_0-gguf`, the shipped q4_0 file;
-      - `-qat-q4_0-unquantized` (revision `7c0881d8`), its unquantized QAT source, whose card says
-        to quantize with Q4_0.
+      - `-qat-q4_0-unquantized` (revision `7c0881d8`), the QAT checkpoint Google's card pairs with
+        Q4_0 (its card says to quantize with Q4_0). Whether the GGUF was made from it is stage
+        (c)'s B1 test.
       - `-qat-int4-unquantized` is a different QAT run, for int4 quantizers. It was named here in
         error at first, and stage (a)'s prereg compared the GGUF with it
         ([BENCHMARKS](BENCHMARKS.md#gemma-3-4bs-shipped-weights-compress-losslessly-113-per-token-mostly-in-the-f16-head-compaction-survives-as-a-byte-cut-necessary-but-not-sufficient-2026-09-23-desktop-2)).

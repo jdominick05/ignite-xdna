@@ -3449,13 +3449,14 @@ decode reads every weight byte once per token. Can a lossless coder cut those by
 - The prereg compared the GGUF with `google/gemma-3-4b-it-qat-int4-unquantized`. That checkpoint
   was named in error when the plan was drafted. It is a QAT run for int4 quantizers; its card says
   to "quantize with int4".
-- The q4_0 GGUF's matching source is `google/gemma-3-4b-it-qat-q4_0-unquantized` at `7c0881d8`,
-  whose card says to "quantize with Q4_0".
+- The QAT checkpoint Google's card pairs with Q4_0 is `google/gemma-3-4b-it-qat-q4_0-unquantized`
+  at `7c0881d8`; its card says to "quantize with Q4_0". Whether the GGUF was made from it is stage
+  (c)'s B1 test.
 - So the 1.45% grid match (P1) and the 7.64% head match (P10, Q1c) compare the q4_0 GGUF with a
-  different QAT run. They say nothing about whether the GGUF sits on its own checkpoint's grid.
+  different QAT run. They say nothing about whether the GGUF sits on the q4_0 checkpoint's grid.
   - They stay MISS as scored.
   - P9's hit read the same int4-QAT checkpoint's embedding, so it says nothing about the q4_0
-    source either.
+    checkpoint either.
   - The grid question is asked again in stage (c)'s build, against the q4_0 checkpoint.
 - The verdict does not depend on them: K1 and K2 come from the GGUF alone.
 
@@ -3463,7 +3464,149 @@ decode reads every weight byte once per token. Can a lossless coder cut those by
 - The decode rate of any coder on any chip.
 - Whether the NPU gains relative to the CPU and the 780M.
 - Coders beyond static order-0 Huffman codes (context modelling, arithmetic coding).
-- Whether the q4_0 GGUF sits on its own checkpoint's grid.
+- Whether the q4_0 GGUF sits on the grid of the QAT checkpoint Google's card pairs with Q4_0.
+
+### The 780M and the NPU both register in the package power counter, and the NPU reads a GB for 0.33 J against DirectML's 0.75 and the CPU's 0.88 (2026-09-24, Desktop 2)
+
+The question, (b) of the Gemma plan ([locked decision 10](DECISIONS.md#locked-decisions-do-not-reopen)):
+energy is read from the package counters only ("package counters only", the user's decision).
+Before any energy per token is compared, what does one GB read cost each chip above idle? And does
+the package counter see the 780M's and the NPU's power at all? A chip whose power the counter
+missed would look free.
+
+**Setup.**
+- Pre-registered at `29a73fe` before the sitting
+  ([prereg](../results/llm/llm_energy_prereg_desktop2_20260924.log)). The tool is
+  `tools/llm_energy.py`; the runner is `scripts/llm-study.sh energy`. The sitting ran under
+  `tools/silicon_probe_record.py --device`. It was announced to the other sessions, and nothing
+  else ran.
+- **Power.** `\Energy Meter(RAPL_Package0_PKG)\Power` is read through typeperf at 1 Hz, with the
+  eight core meters beside it.
+  - Every arm is read against its own 60 s idle, taken just before it with nothing launched.
+  - R, the residual, is the package minus the sum of the cores.
+- **Read arms.** Stage 2's readers, unchanged, over a 60 s window:
+  - R-cpu: ONNX Runtime ReduceSum over 1 GiB, 8 threads;
+  - R-dml: the same graph on DirectML;
+  - R-npu: stage 1's 4×2 1 GiB DMA read.
+  - J/GB = package power above idle ÷ GB/s read.
+- **Controls:**
+  - C1: one Python thread spinning in cache. It gives the non-core rise one busy core causes.
+  - G100, G50, G25: a DirectML fp16 chain of 32 MatMuls on 256×256 operands. It loops back to
+    back, or is duty-cycled to 50% or 25% of wall time. The chain replays through DirectML graph
+    capture, with its input and output on the device.
+  - N-c: stage 3b's NPU bf16 GEMM at 2048 × 4096 × 4096 (tile S1-P), looped.
+- **The rules.** σ_R is the standard deviation of the residual across the 16 idles.
+  - GPU INSIDE if, in both passes:
+    - dR(G100) − dR(C1) ≥ max(2.0 W, 3σ_R);
+    - dR(G25) < dR(G50) < dR(G100);
+    - and G100 is at least 80% busy.
+  - NPU INSIDE if dR(N-c) − dR(C1) ≥ max(1.0 W, 3σ_R) in both passes.
+- **The sitting.** Two passes, the second in mirrored order.
+  - A 10 s G100 check ran first. Below 80% busy it would have stopped the sitting.
+  - A 10 s settle followed that check before the first idle (the gate's condition).
+
+**Witnesses.**
+- Host load 0.63 busy cores. xrt-smi read idle before and after every arm.
+- GPU engines: one 3D engine at 1.6% before (the display), and none over 1% after.
+- The G100 check read 88.9% busy, with graph capture on.
+- The idle packages read 14.10-15.17 W, at 1.4-1.7% CPU.
+- The readers ran at their earlier rates:
+  - R-cpu 61.53 / 61.58 GB/s (Phase 1: 60.59);
+  - R-dml 73.20 / 76.23 (stage 2's range: 70.95-81.11);
+  - R-npu 47.67 / 47.24 (stage 1: 47.62).
+- N-c's output matched its bf16 reference (rel-L2 6.1e-7). G's chain stayed finite.
+
+**Result** (power MEASURED; J/GB DERIVED from measured power and rate; each cell is pass 1 /
+pass 2; [suite](../results/llm/llm_energy_suite_desktop2_20260924.log),
+[verdict](../results/llm/llm_energy_verdict_desktop2_20260924.log)): **COMPLETE: GPU INSIDE and
+NPU INSIDE.**
+
+| Arm | ΔPKG W | ΔCores W | ΔR W | GB/s | J/GB |
+|---|---:|---:|---:|---:|---:|
+| R-cpu | 53.71 / 54.58 | 30.32 / 31.11 | 23.39 / 23.47 | 61.53 / 61.58 | 0.873 / 0.886 |
+| R-dml | 56.37 / 55.38 | 1.81 / 1.97 | 54.56 / 53.41 | 73.20 / 76.23 | 0.770 / 0.726 |
+| R-npu | 15.53 / 15.56 | 0.23 / 0.38 | 15.30 / 15.19 | 47.67 / 47.24 | 0.326 / 0.329 |
+| C1 | 25.22 / 25.11 | 9.96 / 9.99 | 15.26 / 15.12 | | |
+| G100 (90.2 / 90.3% busy) | 41.60 / 40.68 | 0.94 / 0.95 | 40.65 / 39.74 | | |
+| G50 (45.1 / 44.8%) | 6.12 / 6.38 | 1.09 / 1.46 | 5.03 / 4.92 | | |
+| G25 (22.4 / 22.4%) | 2.86 / 2.93 | 0.69 / 0.74 | 2.17 / 2.19 | | |
+| N-c | 21.12 / 21.25 | 0.30 / 0.36 | 20.82 / 20.89 | | |
+
+- σ_R = 0.124 W, so the lines are 2.0 W (GPU) and 1.0 W (NPU).
+- GPU: dR(G100) − dR(C1) = 25.39 / 24.62 W, and G25 < G50 < G100 in both passes.
+- NPU: dR(N-c) − dR(C1) = 5.55 / 5.77 W.
+- J/GB, the means of the two passes: CPU 0.880, DirectML 0.748, NPU 0.328. The passes agree
+  within 1.5%, 5.8% and 1.1%.
+  - The NPU reads a GB for 2.3× less package energy than DirectML and 2.7× less than the CPU
+    (DERIVED).
+  - For (d): every rival's read floor sits above 1.10× the NPU's (the lowest is DirectML's, 1.63
+    J/token at the 4-bit head). So (d)'s energy rule cannot KILL with these numbers (DERIVED). The
+    energy question needs a real NPU decode arm.
+
+**What INSIDE means.**
+- The controls show that a component scaling with each chip's work is inside the package. They
+  do not show that all of it is.
+  - Completeness is never shown, since only the package counters are read.
+  - DRAM power is outside the package.
+- G's low DRAM traffic is INFERRED, not measured. If the chain spills the 780M's 2 MB L2 (32 ×
+  128 KB outputs, unless ONNX Runtime reuses buffers), part of the rise could be the memory fabric
+  rather than the GPU's cores. "GPU INSIDE" means GPU work raises the package counter, which is
+  what an energy comparison needs.
+- N-c's DRAM traffic is not measured either, and the same reading applies to "NPU INSIDE".
+- **The verdict log's GPUpid column is the NPU's busy on the R-npu and N-c rows, not the GPU's.**
+  - Windows lists the NPU as a second adapter among its `\GPU Engine` counters: LUID 0x5736A8F5,
+    engtype Compute.
+  - The 780M is LUID 0x0000BADF, engtype 3D.
+  - No rule read those rows. G's process touched only the 780M.
+
+**Predictions scored: 1 of 5 hit.**
+- P4, GPU INSIDE: hit.
+- P1, R-cpu at 0.45-0.70 J/GB: 0.880, a miss.
+- P2, R-dml at 0.12-0.35: 0.748, a miss.
+- P3, R-npu at 0.05-0.20: 0.328, a miss.
+- P5, NPU INSIDE with a 1-4 W margin: INSIDE, but at 5.66 W, a miss.
+
+**Post hoc, not pre-registered** (no rule reads these):
+1. **The package pays about 15 W to leave deep idle.** dR(R-npu) − dR(C1) is +0.04 / +0.07 W, under
+   3σ_R (0.37 W). The NPU's 47.5 GB/s read stream raises the package counter no more than one busy
+   Python thread's non-core rise. Only N-c's compute adds more (+5.6 W). Two readings, neither
+   tested:
+   - (i) About 15 W is a common step out of deep idle, which a busy core or an NPU dispatch
+     triggers alike. The NPU's DMA traffic above it then costs about nothing in the package.
+   - (ii) A busy core's non-core cost happens to equal the NPU DMA's.
+   - Either way, NPU INSIDE rests on the NPU's compute, not on its read stream.
+   - Under (i), J/GB above the step is about 0.01 for the NPU, 0.54 for DirectML and 0.63 for the
+     CPU (DERIVED).
+   - P1-P3 plausibly missed high by that step.
+2. **This sitting's idle is 20-26 W lower than earlier sittings' on this machine.**
+   - Here: 14.10-15.17 W at 1.4-1.7% CPU.
+   - The 2026-09-17 midnight sittings: median idles of 38.8-40.1 W at 7.0-10.2% CPU
+     ([YOLO-World v2 energy](#yolo-world-v2-energy-per-frame-43-50-times-less-than-amds-stack-and-the-igpu-spends-less-at-5-fps-2026-09-17-desktop-2)).
+     So it is not the time of day.
+   - Not attributed. One candidate fits in size: those idles had about one busy logical core, and
+     C1 (one thread, 7.1% CPU) lifts this idle by 25.2 W, to about 39.5 W. Other candidates: the
+     power plan, the display, drivers.
+   - The energy sections of 2026-09-16/17 were measured above idles near 39-40 W, from
+     [energy per frame against AMD's stack](#energy-per-frame-against-amds-stack-and-power-modes-2026-09-16-desktop-2)
+     onward. Their comparisons within one sitting hold. Joules from different sittings sit above
+     different idles and do not compare. Those sections stay unedited until the gap is attributed.
+3. **The 780M's power under a duty cycle is far from linear.** This is an observation: no clock
+   was sampled.
+   - G50 and G25 draw 5.0 and 2.2 W, against G100's 40 W.
+   - They take 1.24-1.31 and 1.43 ms per chain, against G100's 0.305 ms: 4.1-4.3× and 4.7× longer
+     (DERIVED from chains completed over busy time).
+   - That is consistent with the 780M clocking down when it idles half the time.
+   - It bears on (e), and on the 2026-09-17 finding that the iGPU spends less at 5 fps.
+4. **Arm 0's idle was the highest and noisiest.** It was the first after the G100 check's 10 s
+   settle: 15.17 W, standard deviation 3.68 W, against 1.9-2.3 W for the others. That is under the
+   2 W flag. Pass 1's R-cpu J/GB is 1.5% below pass 2's, in the same direction.
+
+**What this does not establish:**
+- Energy per token for any decode; that is (c) and (d).
+- Completeness (whether all of any chip's power is inside the package), and DRAM power.
+- Why this idle is lower than the earlier sittings'.
+- The 780M's clocks under a duty cycle.
+- Other read paths, thread counts and dtypes.
 
 ### MobileViT-XXS does not survive per-tensor INT8, and AdaRound cannot save it
 
