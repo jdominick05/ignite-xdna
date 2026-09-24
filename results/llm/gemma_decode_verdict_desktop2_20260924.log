@@ -1,0 +1,45 @@
+pass arm       tok/s     agg  idle W  dPKG W  dCores   J/tok  CPU% 780M pid  rows
+   1 C4-H4   INCOMPLETE: paging: window pages input/s [16.9, 20.6, 328.1] > 100
+   1 D-H4      15.86   15.75   14.86   62.80    1.88   3.987   7.9      0.0   194  seqs 15.80 / 16.02 / 16.34 / 14.82 / 15.86
+   1 C0-H4     17.48   17.46   14.72   71.56   55.92   4.099  46.0      0.0   105  seqs 17.41 / 17.48 / 17.48
+   1 D-H16     13.35   13.32   14.87   61.78    1.59   4.639   7.6      0.0   231  seqs 13.08 / 13.47 / 13.35 / 13.34 / 13.36
+   1 C0-H16    10.90   10.89   14.77   64.83   46.59   5.952  49.1      0.0   168  seqs 10.88 / 10.90 / 10.90
+   2 C0-H16  INCOMPLETE: paging: window pages input/s [219.5, 7.3, 17.1] > 100
+   2 D-H16     10.85   11.14   15.29   58.63    1.32   5.263   7.6      0.0   277  seqs 10.47 / 10.85 / 10.85 / 10.82 / 13.07
+   2 C0-H4     17.61   17.61   14.83   71.46   55.64   4.058  45.4      0.0   104  seqs 17.61 / 17.60 / 17.62
+   2 D-H4    INCOMPLETE: paging: window pages input/s [138.5, 11.6, 5.6, 20.2, 8.8] > 100
+   2 C4-H4     17.03   17.02   14.88   59.19   38.66   3.478  48.1      0.0   108  seqs 16.99 / 17.03 / 17.03
+
+arm     state        tok/s  J/token    KL mean     KL sec  top-1     ppl
+C4-H4   INCOMPLETE       -        -     0.0134    0.00124  0.954  10.145  (pass 1: paging: window pages input/s [16.9, 20.6, 328.1] > 100)
+D-H4    INCOMPLETE       -        -     0.0123   8.69e-06  0.956  10.158  (pass 2: paging: window pages input/s [138.5, 11.6, 5.6, 20.2, 8.8] > 100)
+C0-H4   OK           17.54    4.079     0.0123   1.37e-11  0.956  10.161
+D-H16   INCOMPLETE       -        -   8.31e-06   8.31e-06  0.998  10.070  (passes disagree (tok/s 0.207, J/token 0.126))
+C0-H16  INCOMPLETE       -        -   1.41e-11   1.41e-11  1.000  10.073  (pass 2: paging: window pages input/s [219.5, 7.3, 17.1] > 100)
+reference perplexity over 1023 positions: 10.073
+
+(d): NPU-only decode, per head format; the NPU's ceiling at 47.62 GB/s and its floor at 0.328 J/GB
+
+Labels
+  (b): GPU INSIDE and NPU INSIDE (1e546f0): NPU-vs-DirectML and NPU-vs-CPU energy compare, labelled. A component scaling with each chip's work is inside the package, not shown to be all of it.
+  Package counters only: completeness is never shown, and DRAM power is outside the package; shared DRAM pulls ratios toward 1.
+
+Predictions
+  speed C4-H4: 12-22 tok/s: UNSCORED (INCOMPLETE)
+  speed D-H4: 20-30 tok/s: UNSCORED (INCOMPLETE)
+  speed C0-H4: 6-15 tok/s: MISS (17.54)
+  speed D-H16: 14-22 tok/s: UNSCORED (INCOMPLETE)
+  speed C0-H16: 5-12 tok/s: UNSCORED (INCOMPLETE)
+  energy C4-H4: 2.5-4.5 J/token: UNSCORED (INCOMPLETE)
+  energy D-H4: 1.6-3.0 J/token: UNSCORED (INCOMPLETE)
+  energy C0-H4: 2.5-4.5 J/token: HIT (4.079)
+  energy D-H16: 1.6-3.0 J/token: UNSCORED (INCOMPLETE)
+  energy C0-H16: 2.5-7.0 J/token: UNSCORED (INCOMPLETE)
+  accuracy 1: C0-H16 has the lowest primary KL: HIT
+  accuracy 2: D-H4's KL >= 1.10 x D-H16's: HIT (0.0123 vs 8.31e-06)
+  accuracy 3: C0-H4's primary KL > every arm's secondary KL: HIT (0.0123 vs max secondary 0.00124)
+PROBLEM C4-H4: pass 1: paging: window pages input/s [16.9, 20.6, 328.1] > 100
+PROBLEM D-H4: pass 2: paging: window pages input/s [138.5, 11.6, 5.6, 20.2, 8.8] > 100
+PROBLEM D-H16: passes disagree (tok/s 0.207, J/token 0.126)
+PROBLEM C0-H16: pass 2: paging: window pages input/s [219.5, 7.3, 17.1] > 100
+VERDICT INCOMPLETE
