@@ -270,6 +270,25 @@
       - As pre-registered, there is no third run without the user. What happens next is the
         user's call.
       - ([BENCHMARKS](BENCHMARKS.md#prefill-gemm-re-run-with-pinned-cpu-threads-and-directml-over-fresh-sessions-stage-3b-incomplete-by-one-directml-row-and-its-tables-again-show-no-npu-arm-beating-both-chips-2026-09-23-desktop-2))
+    - **Stage 3c, at Gemma 3 4B's shapes with energy counting (locked decision 10): speed KILL for
+      both NPU arms at both M; a role at M = 2048 on energy above idle alone; M = 8192 INCOMPLETE
+      (2026-09-24).** Pre-registered at `2c29296`. It was amended at `1278d96` (the counters at HIGH
+      priority) and `9ebb7c0` (the cadence gate on the rule itself); the rules and the verdict code did
+      not change.
+      - Speed: DirectML's MatMulNBits is 1.22× faster than NPU int8 at M = 2048, and the CPU's int8
+        only 1.056× slower. At M = 8192 MatMulNBits is 1.029× slower than NPU int8, under the 1.10
+        line. NPU bf16 loses at both M. Accuracy cannot be won by construction.
+      - Energy at M = 2048: NPU int8 uses 2.32× and NPU bf16 1.40× fewer joules above idle than
+        MatMulNBits, the binding rival. With the idle included (post hoc, report-only), 1.75× and
+        1.04×: bf16's lead holds only above idle.
+      - M = 8192 is INCOMPLETE: three 16-thread CPU rivals lost a pass each to the 50-row counter rule,
+        and under R2 a missing rival can block a KEEP. The user ruled no third sitting.
+      - Scope: one block's seven weight GEMMs in isolation, per prompt token; not per token of the
+        model, and no model quality.
+      - **Pitfall: a 1 Hz typeperf beside 16 pinned threads loses samples.** At normal priority a
+        window held 42 rows; at HIGH, six windows at M = 8192 still held 44–49, against a 50-row rule.
+        A later row-count rule should leave headroom for the busiest arm.
+      - ([BENCHMARKS](BENCHMARKS.md#prefill-weight-gemms-at-gemma-3-4bs-shapes-stage-3c-at-m--2048-the-npu-earns-a-role-on-energy-above-idle-alone-loses-on-speed-at-both-m-and-m--8192-is-incomplete-on-three-missing-cpu-rivals-2026-09-24-desktop-2))
 - **A pre-registered size floor caught a builder defect (2026-09-23).** `tools/llm_gemv_bench.py build`
   first sized the fp16-scale variant's copies from the fp32 variant, so six DirectML rows streamed
   0.90–0.98 GiB against a pre-registered ≥ 1 GiB, and the verdict came out INCOMPLETE (`4620b53`).

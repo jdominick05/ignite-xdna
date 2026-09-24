@@ -792,6 +792,24 @@ been closed:
         - The proxy worked 77 ms per token, about 28 GB/s at a 40% duty. A GEMV adds compute and
           synchronization, so a proxy PASS is not a role; building the GEMV is the user's call
           ([BENCHMARKS](docs/BENCHMARKS.md#freeing-the-gpu-or-the-cpu-during-gemma-3-4b-decode-stage-e-complete-on-a-read-only-npu-proxy-frees-both-at-once-pass-only-because-directml-collapses-beside-w1-frees-the-gpu-fail-w1-passing-only-because-the-cpu-arm-cannot-hold-there-frees-the-cpu-fail-2026-09-24-desktop-2)).
+      - Stage 3c asked whether an NPU arm earns a prefill role at Gemma 3 4B's weight-GEMM shapes (one
+        block's seven linears, M = 2048 and 8192 prompt tokens) on speed, accuracy or energy per prompt
+        token. Pre-registered, in two sittings, after two amendments to how the counters sample beside
+        16 pinned CPU threads; the rules did not change.
+        - **M = 2048: the role is KEEP, on energy above idle alone.** NPU int8 uses 2.32× fewer joules
+          above idle than DirectML's MatMulNBits, the binding rival, and NPU bf16 1.40×.
+        - Both lose on speed there: MatMulNBits is 1.22× faster than NPU int8, and the CPU's int8 only
+          1.056× slower. Accuracy cannot be won by construction.
+        - With the idle included (post hoc, report-only), NPU int8's lead is 1.75× and NPU bf16's 1.04×,
+          under the 1.10 line. So bf16's lead holds only above idle.
+        - **M = 8192: INCOMPLETE.** Three 16-thread CPU rivals lost a pass each to the 50-row counter
+          rule, and a missing rival can block a KEEP. Every complete rival was beaten on energy (int8 by
+          ≥ 2.50×, bf16 by ≥ 1.435×). Speed is KILL: MatMulNBits is 1.029× slower than NPU int8, under
+          the 1.10 line. The user ruled no third sitting.
+        - Scope: one block's seven GEMMs in isolation, not per token of the model; kernel-level rel-L2;
+          one machine, one day. A q4_0 NPU kernel stays the user's call; its scale-free int8 × int4
+          bound already fails on speed at M = 2048
+          ([BENCHMARKS](docs/BENCHMARKS.md#prefill-weight-gemms-at-gemma-3-4bs-shapes-stage-3c-at-m--2048-the-npu-earns-a-role-on-energy-above-idle-alone-loses-on-speed-at-both-m-and-m--8192-is-incomplete-on-three-missing-cpu-rivals-2026-09-24-desktop-2)).
 
   Evidence: `results/aie/int4_{isa_gate,engine_bytes_gate,demo_npu}_desktop2_20260923.log`,
   `results/int4/w4a8_accuracy_{prereg,verdict}_desktop2_20260923.log`,
