@@ -2699,7 +2699,8 @@ combined-chip read ceiling, and the first question under any split of decode acr
 **Two sittings.**
 - **Sitting 1 is INCOMPLETE on its own repeat rule.** Its two DirectML-alone runs read
   **81.11 and 70.95 GB/s**, 13.4% apart, over the 10% limit. Every other configuration repeated
-  within 4.1% ([suite](../results/llm/concurrent_read_suite_desktop2_20260923.log),
+  within 4.0%, by the rule's own measure of |a − b| over the mean; the largest was the NPU
+  alone at 4.03% ([suite](../results/llm/concurrent_read_suite_desktop2_20260923.log),
   [verdict](../results/llm/concurrent_read_verdict_desktop2_20260923.log)).
   - Each of the two runs was steady within itself: 13.2 and 15.1 ms per GiB in every quarter of
     its window.
@@ -2711,8 +2712,8 @@ combined-chip read ceiling, and the first question under any split of decode acr
   - Had it broken the 10% rule too, stage 2 would stay INCOMPLETE.
   - Added after sitting 1, non-deciding: a mid-window read of the DirectML process's GPU memory,
     and a display-only split of the witness lines.
-- **Sitting 2 passes every check.** Every configuration repeats within 2.4% (the largest spread
-  is the CPU alone, 2.31%), and DirectML alone reads 70.61 and 69.97.
+- **Sitting 2 passes every check.** Every configuration repeats within 2.3% by the same
+  measure; the largest was the CPU alone at 2.31%. DirectML alone reads 70.61 and 69.97.
 
 **Sitting 2 (MEASURED; [suite](../results/llm/concurrent_read_suite_rerun_desktop2_20260923.log),
 [verdict](../results/llm/concurrent_read_verdict_rerun_desktop2_20260923.log)).** All figures below
@@ -2756,8 +2757,9 @@ They are optimistic in three ways:
   against its ReduceSum's 68.81.
 - **No NPU int4 GEMV exists.** The NPU's share assumes one reads at the DMA rate.
 - **A split synchronizes the chips on every GEMV,** 224 times per token, and this test does not
-  measure that. The repo's amortised NPU dispatch figure, about 36 µs, is a batched-throughput
-  number. Even so, 224 of them are 8.2 ms per token (DERIVED). The most a DirectML + NPU split
+  measure that. The repo's amortised NPU dispatch figure is `pyxrt.runlist`'s 36.3 µs at
+  N = 64 ([batched submission](#batched-submission-drops-the-dispatch-floor-17-and-reopens-four-closed-verdicts)),
+  a batched-throughput number. Even so, 224 of them are 8.1 ms per token (DERIVED). The most a DirectML + NPU split
   could save over DirectML alone, at these floors, is 11.1 ms. A latency-bound sync costs
   more.
 
