@@ -731,6 +731,12 @@ been closed:
         one, cause unattributed. Later pre-registrations should pin CPU threads and time DirectML
         over several sessions
         ([BENCHMARKS](docs/BENCHMARKS.md#measurement-noise-on-this-apu-pinning-orts-8-threads-to-distinct-cores-removes-the-cpus-bimodality-and-directmls-level-is-set-per-session-2026-09-23-desktop-2)).
+      - Prefill re-run that way as stage 3b (pre-registered, a new experiment): INCOMPLETE by
+        one row, DirectML fp32 S1 at M = 2048, 10.1% between passes. Every pinned CPU row and
+        every NPU row held. Not a verdict: its tables again show no NPU arm beating both chips.
+        NPU bf16 loses to DirectML fp16, and NPU int8 is level with the CPU's int8 at M = 2048
+        (1.02×). No third run without the user
+        ([BENCHMARKS](docs/BENCHMARKS.md#prefill-gemm-re-run-with-pinned-cpu-threads-and-directml-over-fresh-sessions-stage-3b-incomplete-by-one-directml-row-and-its-tables-again-show-no-npu-arm-beating-both-chips-2026-09-23-desktop-2)).
 
   Evidence: `results/aie/int4_{isa_gate,engine_bytes_gate,demo_npu}_desktop2_20260923.log`,
   `results/int4/w4a8_accuracy_{prereg,verdict}_desktop2_20260923.log`,

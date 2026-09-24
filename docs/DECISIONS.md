@@ -213,8 +213,21 @@
     - Post hoc, not pre-registered: the rows that held already rule out a KEEP in both sittings.
     - Accuracy is the same in both sittings. The NPU's best arm, bf16 at 2.35e-3, is less
       accurate than CPU fp32, DirectML fp32 and DirectML fp16.
-    - What happens next is the user's call.
     - ([BENCHMARKS](BENCHMARKS.md#prefill-gemm-at-llama-2-7bs-shapes-incomplete-in-both-sittings-on-its-own-repeat-rule-and-neither-sittings-tables-show-an-npu-arm-beating-both-chips-2026-09-23-desktop-2))
+    - **Stage 3b, the user's "re-run prefill, pinned": INCOMPLETE too, by one row.** It was
+      pre-registered at `c2b439c` after the noise study as a new experiment. The CPU was pinned
+      and read back every session, and DirectML ran 5 fresh sessions per row; nothing else
+      changed.
+      - DirectML fp32 S1 at M = 2048 read 44.90 / 49.69 ms between passes (10.1%). Every pinned
+        CPU row, every NPU row and every other DirectML row held.
+      - Not a verdict: its tables again show no NPU arm beating both chips. NPU bf16 loses to
+        DirectML fp16, which takes 0.72–0.92× its time. The CPU's int8 takes 0.79× NPU int8's
+        time at M = 512; at M = 2048 NPU int8 is only 1.02× faster, under the 1.10 line.
+      - Post hoc: the broken row cannot change that, since the NPU beats DirectML fp32 by at
+        least 1.99× at either pass's value.
+      - As pre-registered, there is no third run without the user. What happens next is the
+        user's call.
+      - ([BENCHMARKS](BENCHMARKS.md#prefill-gemm-re-run-with-pinned-cpu-threads-and-directml-over-fresh-sessions-stage-3b-incomplete-by-one-directml-row-and-its-tables-again-show-no-npu-arm-beating-both-chips-2026-09-23-desktop-2))
 - **A pre-registered size floor caught a builder defect (2026-09-23).** `tools/llm_gemv_bench.py build`
   first sized the fp16-scale variant's copies from the fp32 variant, so six DirectML rows streamed
   0.90–0.98 GiB against a pre-registered ≥ 1 GiB, and the verdict came out INCOMPLETE (`4620b53`).

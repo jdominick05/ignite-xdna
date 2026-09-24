@@ -3078,6 +3078,10 @@ rows broke the rule (3.50–3.85 there).
   ([noise study](#measurement-noise-on-this-apu-pinning-orts-8-threads-to-distinct-cores-removes-the-cpus-bimodality-and-directmls-level-is-set-per-session-2026-09-23-desktop-2)).
   The CPU's bimodality is where ONNX Runtime puts its 8 threads: pinned one per core it goes
   away. DirectML's level is set per session, cause unattributed.
+- Re-run since as stage 3b, a new pre-registered experiment with the CPU pinned and DirectML over
+  fresh sessions
+  ([stage 3b](#prefill-gemm-re-run-with-pinned-cpu-threads-and-directml-over-fresh-sessions-stage-3b-incomplete-by-one-directml-row-and-its-tables-again-show-no-npu-arm-beating-both-chips-2026-09-23-desktop-2)).
+  It is INCOMPLETE by one DirectML row, and stage 3 stays INCOMPLETE.
 
 **Predictions scored, on both sittings** (the rule decides, these do not):
 - Q1 holds: CPU fp32 S1 at M = 2048 read 0.76–0.77 TFLOPS.
@@ -3225,6 +3229,108 @@ INCOMPLETE.
 - What in a DirectML session's creation sets its level.
 - Other rows, shapes and thread counts, other CPU stacks, and DirectML IO binding.
 - Anything about the NPU. Its rows held throughout stage 3.
+
+### Prefill GEMM re-run with pinned CPU threads and DirectML over fresh sessions (stage 3b): INCOMPLETE by one DirectML row, and its tables again show no NPU arm beating both chips (2026-09-23, Desktop 2)
+
+The user's decision after the noise study: "Re-run prefill, pinned". Stage 3b is a new experiment,
+designed after stage 3's two INCOMPLETE sittings and after the noise study. Stage 3 stays
+INCOMPLETE in the record. 3b's verdict reads its own three logs alone, and no stage 3 row enters
+it.
+
+**Setup.** Pre-registered at `c2b439c` before the sitting
+([prereg](../results/llm/llm_prefill3b_prereg_desktop2_20260923.log)). The tool is
+`tools/llm_prefill_3b.py`; the runner is `scripts/llm-study.sh prefill3b`. One sitting, NPU then
+CPU then DirectML ([NPU](../results/llm/llm_prefill3b_npu_desktop2_20260923.log),
+[CPU](../results/llm/llm_prefill3b_cpu_desktop2_20260923.log),
+[DirectML](../results/llm/llm_prefill3b_dml_desktop2_20260923.log),
+[verdict](../results/llm/llm_prefill3b_verdict_desktop2_20260923.log)).
+- **Unchanged from stage 3:**
+  - the shapes, M = 512 and 2048, the inputs, the dtypes and the arms;
+  - the NPU sitting, which is stage 3's own code, with its smoke and checks. Its 28 artifacts,
+    `whole_array.py` and `mm.cc` were re-verified identical to stage 3's pins before the sitting;
+  - the accuracy measure, the keep rule and the 10% threshold;
+  - 3 warmups, 10 timed runs, two mirrored passes, and one ORT session per CPU row.
+- **Changed, from the noise study, and nothing else:**
+  - **CPU:** ORT's threads pinned, one per physical core at 8 threads and one per logical CPU
+    at 16, with the calling thread pinned too. Every session's threads were read back after the
+    warmups; a mismatch would have voided the row.
+  - **DirectML:** each row and pass is 5 fresh sessions. The pass value is the median of the
+    session medians, with their range reported.
+- **The repeat rule:** a row's two pass values within 10% of their mean, for every chip. If 3b
+  is INCOMPLETE, it stands, and there is no third run without the user.
+
+**Result: INCOMPLETE, by one row.** DirectML fp32 S1 at M = 2048 read 44.90 / 49.69 ms, pass
+values 10.1% apart. So there is no KEEP and no KILL.
+
+**What held (MEASURED):**
+- **The pinning:** all 48 CPU rows read back as pinned, with none void. Every CPU row held; the
+  largest pass gap is 5.7% (fp32 at 16 threads, S1 at M = 2048).
+- **The NPU:** all 56 rows passed their checks and held, with the largest gap 5.0%. The smoke
+  passed.
+- **DirectML:** every other row held (next largest 7.3%). Within a pass, a row's 5 sessions
+  spread 1.008–1.178×.
+- **The int8 control:** the int32 outputs are identical across all three chips, and across every
+  DirectML row's 5 sessions.
+
+**Stage 3b's tables (MEASURED; layer ms, with its average TFLOPS or TOPS).** These are not a
+verdict. † marks a figure computed from the row that broke the 10% rule.
+
+| Arm | M = 512 | M = 2048 | rel-L2 |
+|---|---:|---:|---:|
+| CPU int8 (16 threads) | 49.65 (4.17) | 217.12 (3.82) | 1.54e-2 |
+| DirectML fp16 | 62.36 (3.32) | 290.23 (2.86) | 3.61e-4 |
+| NPU int8 | 63.24 (3.28) | 212.46 (3.90) | 1.54e-2 |
+| NPU bf16 | 86.85 (2.39) | 315.02 (2.63) | 2.35e-3 |
+| DirectML fp32 | 163.62 (1.27) | 638.07 (1.30) † | 1.33e-6 |
+| CPU fp32 (8 threads) | 206.01 (1.01) | 911.75 (0.91) | 3.12e-7 |
+| DirectML int8 | 384.70 (0.54) | 1475.97 (0.56) | 1.54e-2 |
+
+In these tables, no NPU arm beats both chips at either M (rival time / NPU time):
+- **NPU bf16** beats the CPU (fp32 2.37× and 2.89×). DirectML fp16 is more accurate and faster:
+  it takes 0.72× the NPU's time at M = 512 and 0.92× at M = 2048.
+- **NPU int8** at M = 512 is slower than the CPU's int8 (0.79×) and level with DirectML fp16
+  (0.99×).
+- **NPU int8** at M = 2048 beats DirectML (fp16 1.37×). It is level with the CPU's int8, 1.02×,
+  under the 1.10 line; it would have needed at most 197.4 ms against its 212.46 (DERIVED).
+
+**Post hoc, not pre-registered:**
+- **The broken row cannot change the outcome.** At either pass's value, DirectML fp32 is
+  628.5–647.7 ms per layer (DERIVED), and every NPU arm beats it by at least 1.99× either way. The
+  rivals that stop the NPU, DirectML fp16 and the CPU's int8, come from rows that held. This does
+  not replace the verdict.
+- **The broken row moved between passes, not between sessions.** Its 5 sessions agreed within
+  each pass: 44.65–45.01 ms in pass 1 and 49.38–50.14 in pass 2. Five fresh sessions average out
+  a session's level, but not a level that holds for minutes. What moved it is not observed; a GPU
+  clock or power state is a candidate.
+
+**What pinning did to the CPU arms (MEASURED):**
+- **fp32:** pinned 8 threads took 0.73–0.99× the time of pinned 16 at five of the six shapes.
+  The exception is S3 at M = 2048, where 8 threads took 1.05× the time of 16. So the fp32 arm ran at 8 threads:
+  206.01 ms per layer at M = 512 and 911.75 at M = 2048.
+- **int8:** 8 threads took 1.002–1.065× the time of 16 at every shape, so the int8 arm ran at 16
+  threads.
+
+**Predictions scored** (the rule decides, these do not):
+- R1 holds: every CPU row read back as pinned and held.
+- R2 partly holds.
+  - Its int8 half holds at four shapes of six; 8 threads are 5.2% and 6.5% slower than 16 at S1
+    and S2 at M = 2048.
+  - Its fp32 half holds at five of six, missing S3 at M = 2048. The fp32 arm did run at 8
+    threads.
+- R3 misses: the row that broke is fp32 S1 at M = 2048, not fp32 S2, which held at 2.0%.
+- R4 holds: fp32 S3 at M = 2048 spread 1.117× across its sessions in pass 2.
+- R5 partly holds: 26 of 28 NPU rows are within 10% of both stage 3 sittings. The two misses are
+  bf16's S3-F rows, where stage 3's own sittings differed by 1.20–1.21×. S3-F is not that arm's
+  best tile.
+- R6 holds: the same errors as stage 3, and identical int8 outputs across chips.
+- R7, KILL at both M, is not decided: 3b is INCOMPLETE. Its tables side with it.
+
+**What this does not establish:**
+- A prefill verdict: stage 3b is INCOMPLETE, like stage 3.
+- What moved the broken DirectML row between passes.
+- Everything stage 3 left out: attention, norms, RoPE and the LM head; the activations between
+  GEMMs; DirectML IO binding; CPU stacks other than ONNX Runtime; tiles outside the menu; prefill
+  beside decode.
 
 ### MobileViT-XXS does not survive per-tensor INT8, and AdaRound cannot save it
 
