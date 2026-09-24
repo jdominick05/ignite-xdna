@@ -225,10 +225,11 @@
   stage 3. It re-scores nothing, and stage 3 stays INCOMPLETE.
   - The CPU's 8-thread bimodality is where ORT puts its own threads (ATTRIBUTED). Pinned one per
     physical core, int8 S1 at M = 512 read one level, 4.11 / 4.13 ms, against levels of about 4.1
-    and 7.2 unpinned. One doubled core gives the slow level.
-  - ORT 1.23.3's default (`intra_op_num_threads` 0) does not pin here, whatever its
-    documentation says. Read back, its threads have every logical CPU in their masks, and its
-    rows were bimodal too.
+    and 7.2 unpinned. A3, one deliberately doubled core, reproduces the slow level. Whether A0's
+    slow reps come from doubling or from migration is not separated.
+  - ORT 1.23.3's default (`intra_op_num_threads` 0) does not pin on this machine. Read back
+    every session, it made 7 pool threads plus the caller, all 16 logical CPUs in each mask and
+    no CPU sets, and its rows were bimodal too.
   - DirectML's level is set per session: 1.19× across 20 fresh sessions of one row, 1.011×
     within one session. The GPU memory split was identical in all 20, so the cause is
     unattributed.

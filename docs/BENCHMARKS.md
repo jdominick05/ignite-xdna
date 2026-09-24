@@ -3149,9 +3149,9 @@ pass 2. A slow rep is over 1.30× the arm's 10th percentile.
 - **Pinning one thread per core removes the slow level.** A1 is unimodal at 4.11–4.13 ms, A0's
   fast level (4.08–4.13). This rules out the clock and a thread outside ORT: pinning leaves both in
   place, and A1's eight free siblings stay open to other threads.
-- **One doubled core is enough for the slow level.** A3 reads 7.18–7.21 ms against A0's slow
-  level of 7.17. Four doubled cores (A2) read the same, 7.15–7.18: the GEMM waits on its slowest
-  core.
+- **A deliberately doubled core reproduces the slow level.** A3 reads 7.18–7.21 ms against A0's
+  slow level of 7.17. Four doubled cores (A2) read the same, 7.15–7.18. That is consistent with
+  the GEMM waiting on its slowest core (inferred).
 - **The per-second busy map cannot tell which.** A doubled core shows in 17 of A0's 19 seconds,
   with a slow share of 0.44, against 0.24 in the other 2. The pre-registered association needed a
   0.30 gap. So two threads sharing a core and threads moving are not separated, as the
@@ -3161,10 +3161,9 @@ pass 2. A slow rep is over 1.30× the arm's 10th percentile.
   them.
 - **The clock does not follow it** (reported, not a rule). The arms pinned at the slow level (A3,
   A2) ran at 112–116%, and A1 at 106–109%.
-- **ORT's default does not pin in this build.** ORT's documentation says `intra_op_num_threads`
-  0 makes one thread per physical core and pins them. Here, read back in every session, it made
-  7 pool threads plus the caller. Every one had all 16 logical CPUs in its affinity mask and no
-  CPU sets, and AD was bimodal like A0. Stage 3's 8-thread rows and Q2's prior (at
+- **ORT 1.23.3's default does not pin on this machine.** With `intra_op_num_threads` 0, read
+  back in every session, it made 7 pool threads plus the caller. Every one had all 16 logical
+  CPUs in its affinity mask and no CPU sets, and AD was bimodal like A0. Stage 3's 8-thread rows and Q2's prior (at
   `intra_op_num_threads` 0) both ran unpinned.
 - **The reported fp32 row agrees.** A1 is unimodal at 17.66 / 17.63 ms. A0 and AD are bimodal,
   with levels near 17.5 and 26–27. A16 is unimodal but slower, at 23.04 / 22.92. A core doubled for
