@@ -105,6 +105,8 @@
 #   ./scripts/llm-study.sh prefill3c-models       # 3c step 2: the rivals' models, DirectML placement (light GPU)
 #   ./scripts/llm-study.sh prefill3c-insts        # 3c: stage 3's 28 NPU builds against the insts.bin fit (no chip)
 #   ./scripts/llm-study.sh prefill3c-prereg       # 3c step 3: the plan's log (commit it with the two above)
+#   ./scripts/llm-study.sh prefill3c-build        # 3c step 4: the NPU xclbins, compile only (heavy CPU)
+#   ./scripts/llm-study.sh prefill3c-inputs       # 3c step 4: inputs, references, exact SHAs (heavy CPU)
 #
 # Options: --machine TAG names the logs (default: desktop2 on DESKTOP-CBL5NUA, else required).
 # --tag TAG adds _TAG to the verdict log's name, for a second verdict on the same day.
@@ -135,7 +137,7 @@ while [ $# -gt 0 ]; do
         decode-prereg|decode|decode-accuracy|decode-verdict) STAGE="${1//-/_}" ;;
         decode-gpu-posthoc|decode-rerun-prereg|decode-rerun|decode-rerun-verdict) STAGE="${1//-/_}" ;;
         freeing-build|freeing-dryrun|freeing-prereg|freeing-loadcheck|freeing-suite|freeing-verdict) STAGE="${1//-/_}" ;;
-        prefill3c-models|prefill3c-insts|prefill3c-prereg) STAGE="${1//-/_}" ;;
+        prefill3c-models|prefill3c-insts|prefill3c-prereg|prefill3c-build|prefill3c-inputs) STAGE="${1//-/_}" ;;
         --machine) MACHINE="$2"; shift ;;
         --tag)     TAG="_$2"; shift ;;
         -h|--help) usage "${BASH_SOURCE[0]}"; exit 0 ;;
@@ -836,6 +838,26 @@ stage_prefill3c_prereg() {
     use_env resnet_env17
     logged "$log" python $P3C prereg || die "the prereg is incomplete, see $log"
     ok "prereg written; commit it with the tool, then report HEAD to the gate and wait"
+}
+
+stage_prefill3c_build() {
+    # step 4 (a heavy CPU load, under a START REQUEST): every NPU xclbin, compile only, one row per build;
+    # a failure that is not a verifier refusal stops the stage (exit 3) and goes to the gate
+    local log="$OUT/llm_prefill3c_build_${MACHINE}_${DATE}.log"
+    refuse "$log"
+    check_host_load refuse
+    logged "$log" bash scripts/research-iron.sh $P3C build || die "the build stopped or a P build was refused, see $log"
+    ok "built; next: $0 prefill3c-inputs"
+}
+
+stage_prefill3c_inputs() {
+    # step 4 (a heavy CPU load, under the same START REQUEST): X, W, int8 copies, references, exact SHAs
+    local log="$OUT/llm_prefill3c_inputs_${MACHINE}_${DATE}.log"
+    refuse "$log"
+    use_env resnet_env17
+    check_host_load refuse
+    logged "$log" python $P3C inputs || die "the inputs step failed, see $log"
+    ok "inputs written; next: FINISHED to BFP16, then the pins-only commit"
 }
 
 "stage_$STAGE"

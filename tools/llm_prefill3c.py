@@ -15,11 +15,14 @@ split-K. The pre-registration is PREREG below; the rules are verdict()'s code.
     python tools/llm_prefill3c.py insts-fit           # stage 3's 28 NPU builds against the insts.bin fit (read-only)
     python tools/llm_prefill3c.py prereg              # the plan: its text, PROTOCOL_JSON, the predictions, the step-2
                                                       #   and insts-fit logs' hashes and the dropped-arm list
+    python tools/llm_prefill3c.py build               # step 4, IRON env: the NPU xclbins, compile only, one row each
+    python tools/llm_prefill3c.py inputs              # step 4: X, W, int8 copies, references, exact int32 SHAs
     python tools/llm_prefill3c.py verdict LOG [LOG]   # the mechanical verdict over the sittings' WINDOW_JSON records
     python tools/llm_prefill3c.py selftest            # tiny models and synthetic verdicts; no chip, no GPU
 
-The NPU builds, the inputs and references, the load check and the sitting are added by later code-only
-commits: PROTOCOL_JSON and the rule text stay byte-identical to this plan's.
+Code-only commits after the second plan commit (413a562) add the rest: step 4's builds and inputs first,
+then the window-state code, the load check and the sitting. Each keeps PREREG, PROTOCOL_JSON and
+VERDICT_CODE_SHA256 byte-identical, and every later 3c log prints the three hashes.
 """
 import argparse
 import hashlib
@@ -377,6 +380,224 @@ def insts_fit() -> int:
         say("INSTS_PREDICTED_3C", {"dt": dt, "M": M, "tile": "P", "m": m,
                                    "insts_bytes": INSTS_FIT[0] + INSTS_FIT[1] * M // (8 * m)})
     return 0 if rows and exact == len(rows) else 2
+
+
+# ---------------------------------------------------------------- step 4: the NPU builds (compile only)
+#
+# The gate's condition on this code (after 413a562): exactly one BUILD_ROW_JSON per build, no retries. A P
+# build the verifier refuses gets its F build (v2 §5); N-w4 has no F (U4: dropped and stated). A build that
+# fails for any other reason (a crash, OOM, a tool error) STOPS the stage (BUILD_STOP_JSON, exit 3) and goes to
+# the gate; it is not retried, and it prints no BUILD_ROW_JSON. A refusal is: the field precheck (stage 3's
+# constraints(), SILICON 2.6), a design assert, or an aiecc failure carrying an MLIR op-verification
+# diagnostic. Nothing else is.
+
+BUILD = ROOT / "build/llm_prefill3c"
+W4_DIR = ROOT / "kernels/w4a8_array"
+L1_BYTES, STACK = 65536, 3328
+DTYPE_OUT = {"bf16": "f32", "i8": "i32"}
+VERIFIER_DIAG = re.compile(r"error: '[\w.]+' op ")
+
+
+def build_dir(dt: str, M: int, K: int, N: int, tile: str) -> Path:
+    m, k, n, cs = NPU_TILES[dt][tile]
+    return BUILD / f"{dt}_M{M}_K{K}_N{N}_m{m}k{k}n{n}cs{cs}{'_native_unroll2' if dt == 'w4' else ''}"
+
+
+def fields(dt: str, M: int, K: int, N: int, m: int, k: int, n: int, cs: int):
+    """whole_array's asserts and the three DMA field limits: stage 3's constraints() exactly for bf16 and i8,
+    with B at half a byte per weight for w4 (packed int4; then L1 is w4a8's own l1_estimate)."""
+    a_b = 2 if dt == "bf16" else 1
+    b_b = {"bf16": 2, "i8": 1, "w4": 0.5}[dt]
+    l1 = int(2 * m * k * a_b + 2 * k * n * b_b + (1 if cs else 2) * m * n * 4 + STACK)
+    bad = []
+    if M % (m * 4) or (M // (m * 4)) % 2:
+        bad.append("M")
+    if K % k or N % (n * 4):
+        bad.append("K/N")
+    if m % 16 or k % 8 or n % 16:
+        bad.append("kernel dims")
+    if l1 > L1_BYTES:
+        bad.append(f"L1 {l1}")
+    if m * 4 * N > 2 ** 20:
+        bad.append("C step over 2^20 words")
+    if N // (n * 4) > 64:
+        bad.append("A repeat over 64")
+    if int(k * n * b_b) // 4 > 16383:
+        bad.append("B tile over 16383 words")
+    return bad, l1, {"c_step_words": m * 4 * N, "a_repeat": N // (n * 4), "b_tile_words": int(k * n * b_b) // 4}
+
+
+def refusal_kind(ex: BaseException):
+    """A verifier refusal's kind, or None: then the build failed for another reason and the stage stops."""
+    if isinstance(ex, AssertionError):
+        return "design assert"
+    msg = str(ex)
+    if isinstance(ex, RuntimeError) and msg.startswith("[aiecc] Compilation failed") and VERIFIER_DIAG.search(msg):
+        return "aiecc verifier"
+    return None
+
+
+def build_one(dt: str, M: int, K: int, N: int, tile: str, wa, w4) -> dict:
+    m, k, n, cs = NPU_TILES[dt][tile]
+    bad, l1, fw = fields(dt, M, K, N, m, k, n, cs)
+    d = build_dir(dt, M, K, N, tile)
+    row = {"dt": dt, "M": M, "K": K, "N": N, "tile": tile, "m": m, "k": k, "n": n, "cs": cs, "l1": l1, "fields": fw,
+           "verifier_ok": False, "refusal": None, "insts_bytes": None, "fit_bytes": INSTS_FIT[0] + INSTS_FIT[1] * M // (8 * m),
+           "xclbin_sha256": None, "insts_sha256": None, "seconds": None, "dir": d.relative_to(ROOT).as_posix()}
+    if dt == "w4":
+        row.update(arm="native", mode="unroll2", rev=w4.source_rev())
+    if bad:
+        row["refusal"] = "precheck: " + ", ".join(bad)
+        return row
+    d.mkdir(parents=True)
+    t0 = time.perf_counter()
+    try:
+        if dt == "w4":
+            spec = w4.whole_array_w4a8.specialize(M=M, K=K, N=N, m=m, k=k, n=n, n_aie_cols=4, arm="native",
+                                                  mode="unroll2", rev=w4.source_rev(), c_single_buffer=bool(cs))
+        else:
+            spec = wa.whole_array.specialize(M=M, K=K, N=N, m=m, k=k, n=n, n_aie_cols=4, dtype_in_str=dt,
+                                             dtype_out_str=DTYPE_OUT[dt], c_single_buffer=bool(cs))
+        spec.compile(xclbin_path=d / "final.xclbin", inst_path=d / "insts.bin")
+    except Exception as ex:                                            # noqa: BLE001
+        row["seconds"] = round(time.perf_counter() - t0, 1)
+        kind = refusal_kind(ex)
+        text = str(ex).strip().splitlines()
+        if kind is None:
+            row["stop"] = f"{type(ex).__name__}: " + " | ".join(text[:6])[:600]
+            return row
+        diag = next((s for s in text if VERIFIER_DIAG.search(s)), text[0] if text else "")
+        row["refusal"] = f"{kind}: {diag[:300]}"
+        return row
+    row.update(verifier_ok=True, seconds=round(time.perf_counter() - t0, 1),
+               insts_bytes=(d / "insts.bin").stat().st_size, insts_sha256=sha(d / "insts.bin"),
+               xclbin_sha256=sha(d / "final.xclbin"))
+    return row
+
+
+def plan_hashes() -> None:
+    """Every 3c log after the second plan commit prints these (the gate diffs them)."""
+    print(f"PREREG_TEXT_SHA256 {hashlib.sha256(PREREG.encode('utf-8')).hexdigest()}", flush=True)
+    print(f"PROTOCOL_JSON_SHA256 {hashlib.sha256(json.dumps(protocol()).encode('utf-8')).hexdigest()}", flush=True)
+    print(f"VERDICT_CODE_SHA256 {verdict_code_sha()}", flush=True)
+
+
+def build() -> int:
+    """Step 4, compile only (IRON env, no chip): every NPU xclbin through the aiecc verifier. bf16 and i8 at
+    the four NPU shapes and both M on their P tiles, F only where P is refused; N-w4's native unroll2 P tile
+    at the same shapes. One BUILD_ROW_JSON per build (Q1 reads them); a non-refusal failure stops."""
+    import llm_prefill_bench as s3
+    print(f"BUILD (3c step 4), compile only, no chip. {time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())}", flush=True)
+    plan_hashes()
+    if BUILD.exists() and any(BUILD.iterdir()):
+        sys.exit(f"{BUILD.relative_to(ROOT).as_posix()} is not empty: one row per build, no retries (a re-build is "
+                 "the gate's call)")
+    sys.path.insert(0, str(s3.WA_DIR))
+    sys.path.insert(0, str(W4_DIR))
+    import aie.iron as iron
+    import whole_array as wa
+    import whole_array_w4a8 as w4
+    iron.set_current_device(wa._device_for("npu", 4))
+    BUILD.mkdir(parents=True, exist_ok=True)
+    rows = []
+    for dt in ("bf16", "i8", "w4"):
+        for M in MS:
+            for K, N in NPU_SHAPES:
+                for tile in ("P", "F"):
+                    row = build_one(dt, M, K, N, tile, wa, w4)
+                    if "stop" in row:
+                        say("BUILD_STOP_JSON", row)
+                        print("BUILD STOPPED: not a verifier refusal; not retried. It goes to the gate.", flush=True)
+                        return 3
+                    rows.append(row)
+                    say("BUILD_ROW_JSON", row)
+                    if row["verifier_ok"] or dt == "w4":
+                        break                                          # F only where P is refused; none for w4
+    p = [r for r in rows if r["tile"] == "P"]
+    say("BUILD_SUMMARY_JSON", {"rows": len(rows), "p_builds": len(p), "p_verified": sum(r["verifier_ok"] for r in p),
+                               "refused": [r["dir"] for r in rows if not r["verifier_ok"]],
+                               "f_builds": [r["dir"] for r in rows if r["tile"] == "F"],
+                               "on_fit": sum(r["insts_bytes"] == r["fit_bytes"] for r in rows),
+                               "largest_insts": max((r["insts_bytes"] or 0) for r in rows),
+                               "note": "Q1 is scored by the verdict from the BUILD_ROW_JSON rows (A3); this line decides nothing"})
+    return 0 if all(r["verifier_ok"] for r in p) else 1
+
+
+# ---------------------------------------------------------------- step 4: the inputs and references
+
+INPUT_DIR = WORK / "inputs"
+SHA_FORM = "sha256 of the C-order little-endian int32 array [M, N], as np.ascontiguousarray(y).tobytes()"
+
+
+def int32_sha(y: np.ndarray) -> str:
+    return hashlib.sha256(np.ascontiguousarray(y, dtype=np.int32).tobytes()).hexdigest()
+
+
+def exact_int(a_q: np.ndarray, b: np.ndarray) -> np.ndarray:
+    """The exact int8 product as int32, by float64 BLAS: exact while every |sum| < 2^53 (127 x 127 x 10240
+    = 1.7e8 here)."""
+    return np.rint(a_q.astype(np.float64) @ b.astype(np.float64)).astype(np.int32)
+
+
+def inputs() -> int:
+    """Step 4 (resnet_env17, heavy CPU, no chip): X per input at [8192, K] (seeded; M = 2048 takes the first
+    rows), W from blk.16 (exact d.(q - 8)), the int8 copies (X per M on its own rows, W per column), N-w4's
+    B = q - 8 as int8 [K, N], the float64 references per linear, the float64 products of the bf16-rounded X
+    and W, and the exact int32 products' SHAs per linear and M (C-i8, D-i8, N-i8: X_q . W_q; N-w4: X_q . B).
+    Every file into a SHA-256 manifest; nothing is ever replaced."""
+    import ml_dtypes
+    import gemma_compress as gc
+    print(f"INPUTS (3c step 4), no chip. {time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())}", flush=True)
+    plan_hashes()
+    if INPUT_DIR.exists() and any(INPUT_DIR.iterdir()):
+        sys.exit(f"{INPUT_DIR.relative_to(ROOT).as_posix()} is not empty; inputs are never replaced")
+    INPUT_DIR.mkdir(parents=True, exist_ok=True)
+    bf16 = ml_dtypes.bfloat16
+    files, exact = {}, {}
+
+    def save(name: str, a: np.ndarray) -> None:
+        p = INPUT_DIR / f"{name}.npy"
+        np.save(p, a)
+        files[name] = sha(p)
+        say("INPUT_FILE_JSON", {"name": name, "dtype": str(a.dtype), "shape": list(a.shape), "bytes": p.stat().st_size,
+                                "sha256": files[name]})
+
+    lin = release_layer()
+    rng = np.random.default_rng(SEED)
+    Mx = max(MS)
+    xs = {x: rng.standard_normal((Mx, K), dtype=np.float32) for x, K in INPUTS.items()}
+    xq = {}
+    for x, a in xs.items():
+        save(x, a)
+        for M in MS:
+            q, s = quant_x(a[:M])
+            xq[(x, M)] = q
+            save(f"{x}_q_M{M}", q)
+            save(f"s{x}_M{M}", np.array([s], dtype=np.float64))
+    for name, _, K, N, x in LINEARS:
+        t0 = time.perf_counter()
+        codes, d = lin[name]
+        w = dense(codes, d)
+        wq, sw = quant_w(w)
+        b4 = np.ascontiguousarray((codes.reshape(N, K).astype(np.int16) - 8).astype(np.int8).T)
+        save(f"w_{name}", w)
+        save(f"w_{name}_q", wq)
+        save(f"sw_{name}", sw)
+        save(f"b4_{name}", b4)
+        save(f"ref_{name}", xs[x].astype(np.float64) @ w.astype(np.float64))
+        save(f"ref_bf16_{name}", xs[x].astype(bf16).astype(np.float64) @ w.astype(bf16).astype(np.float64))
+        for M in MS:
+            exact[f"i8_{name}_M{M}"] = int32_sha(exact_int(xq[(x, M)], wq))
+            exact[f"w4_{name}_M{M}"] = int32_sha(exact_int(xq[(x, M)], b4))
+        say("LINEAR_DONE_JSON", {"name": name, "K": K, "N": N, "seconds": round(time.perf_counter() - t0, 1)})
+    manifest = {"stage": "3c", "layer": LAYER, "seed": SEED, "rows": Mx, "prefix_rows": min(MS),
+                "gguf_sha256": gc.GGUF_PIN["sha256"], "bf16": f"ml_dtypes {ml_dtypes.__version__}, round to nearest even",
+                "exact_int32_sha_form": SHA_FORM, "files": files, "exact_int32_sha256": exact}
+    mp = INPUT_DIR / "manifest.json"
+    mp.write_text(json.dumps(manifest, indent=1, sort_keys=True), encoding="utf-8")
+    say("EXACT_INT32_SHA256_JSON", exact)
+    print(f"INPUTS_MANIFEST_SHA256 {sha(mp)} ({len(files)} files)", flush=True)
+    return 0
 
 
 # ---------------------------------------------------------------- the rules (verdict)
@@ -1605,6 +1826,41 @@ def selftest() -> int:
                      encoding="utf-8")
         expect("the verdict over a synthetic log: decided at both M (exit 0)", verdict([p]), 0)
 
+    print("Step 4 (builds and inputs, no compile here):")
+    import llm_prefill_bench as s3
+    same = all(s3.constraints(dict(dt=dt, M=M, K=K, N=N, m=t[0], k=t[1], n=t[2], cs=t[3]))
+               == tuple(fields(dt, M, K, N, *t)[:2]) for dt in ("bf16", "i8") for tl, t in NPU_TILES[dt].items()
+               for M in MS for K, N in NPU_SHAPES)
+    expect("fields() equals stage 3's constraints() for every bf16 and i8 tile, shape and M", same, True)
+    ok24 = [(dt, M, K, N) for dt in ("bf16", "i8", "w4") for M in MS for K, N in NPU_SHAPES
+            if not fields(dt, M, K, N, *NPU_TILES[dt]["P"])[0]]
+    expect("all 24 planned P builds pass the field precheck", len(ok24), 24)
+    expect("w4's L1 equals w4a8's l1_estimate (64/128/64 cs1, native): 44,288 B",
+           fields("w4", 8192, 2560, 2560, *NPU_TILES["w4"]["P"])[1], 44288)
+    expect("unsliced gate/up is refused by the C step (as planned)",
+           "C step over 2^20 words" in fields("i8", 2048, 2560, 10240, *NPU_TILES["i8"]["P"])[0], True)
+    expect("refusal kinds: a design assert; an aiecc op-verification diagnostic; a tool error is not a refusal",
+           [refusal_kind(AssertionError("A must be tileable")),
+            refusal_kind(RuntimeError("[aiecc] Compilation failed with exit code 1:\nloc(\"x\"): error: 'aie.dma_bd' op "
+                                      "Cannot give more than 3 dimensions")),
+            refusal_kind(RuntimeError("[aiecc] Compilation failed with exit code 3221225477:\n")),
+            refusal_kind(MemoryError()), refusal_kind(FileNotFoundError("xclbinutil"))],
+           ["design assert", "aiecc verifier", None, None, None])
+    expect("build dirs", [build_dir("bf16", 8192, 2560, 2560, "P").name, build_dir("w4", 2048, 2560, 1024, "P").name],
+           ["bf16_M8192_K2560_N2560_m32k64n128cs1", "w4_M2048_K2560_N1024_m64k128n64cs1_native_unroll2"])
+    aq = rng.integers(-127, 128, (8, 96)).astype(np.int8)
+    bq = rng.integers(-8, 8, (96, 16)).astype(np.int8)
+    expect("exact_int equals int64 numpy", bool(np.array_equal(exact_int(aq, bq),
+                                                                aq.astype(np.int64) @ bq.astype(np.int64))), True)
+    codes = lin["q"][0]
+    b4 = np.ascontiguousarray((codes.reshape(32, 64).astype(np.int16) - 8).astype(np.int8).T)
+    expect("N-w4's B = (q - 8) as [K, N]: B * d reproduces W", bool(np.array_equal(
+        b4[:32, 0].astype(np.float32) * gc.f16_to_f32(lin["q"][1][:1]), dense(*lin["q"])[:32, 0])), True)
+    expect("the plan's hashes are the second plan commit's (PREREG, PROTOCOL_JSON, VERDICT_CODE)",
+           (hashlib.sha256(PREREG.encode("utf-8")).hexdigest()[:8],
+            hashlib.sha256(json.dumps(protocol()).encode("utf-8")).hexdigest()[:8], verdict_code_sha()[:8]),
+           ("f7fa696b", "a997580c", "6e459e56"))
+
     print("The plan text:")
     expect("the scoped route (i) text is in", "Operand-aware epilogues would cost" in PREREG, True)
     expect("v2's replaced sentence is gone", "The risk to name first" in PREREG, False)
@@ -1623,14 +1879,16 @@ def selftest() -> int:
 def main() -> int:
     sys.stdout.reconfigure(encoding="utf-8")
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("mode", choices=("models", "placement", "insts-fit", "prereg", "verdict", "selftest"))
+    ap.add_argument("mode", choices=("models", "placement", "insts-fit", "prereg", "build", "inputs", "verdict",
+                                     "selftest"))
     ap.add_argument("args", nargs="*")
     a = ap.parse_args()
     if a.mode == "placement":
         return placement(a.args[0])
     if a.mode == "verdict":
         return verdict(a.args)
-    return {"models": models, "insts-fit": insts_fit, "prereg": prereg, "selftest": selftest}[a.mode]()
+    return {"models": models, "insts-fit": insts_fit, "prereg": prereg, "build": build, "inputs": inputs,
+            "selftest": selftest}[a.mode]()
 
 
 if __name__ == "__main__":
