@@ -76,6 +76,7 @@ NPU_TILES = {"bf16": {"P": (32, 64, 128, 1), "F": (64, 64, 64, 1)},
              "w4": {"P": (64, 128, 64, 1)}}           # m, k, n, c_single_buffer; w4: native, unroll2
 NPU_PIECE = 2560                                      # gate/up column slices and down's split-K pieces
 NPU_CONTEXTS = 4                                      # q; k and v; o; the 2560 pieces
+NPU_SHAPES = ((2560, 2048), (2560, 1024), (2048, 2560), (2560, 2560))   # K x N: q; k and v; o; the pieces
 INSTS_FIT = (16, 2576)                                # insts.bin = 16 + 2576 * M / (8 m) B (stage 3's 28 builds)
 
 
@@ -89,7 +90,8 @@ def protocol() -> dict:
             "acc_tie": ACC_TIE, "bf16_acc_max": BF16_ACC_MAX, "hf_max": HF_MAX, "pages_max": PAGES_MAX,
             "rerun_void": RERUN_VOID, "npu_tiles": NPU_TILES, "npu_piece": NPU_PIECE, "npu_contexts": NPU_CONTEXTS,
             "insts_fit": INSTS_FIT, "e_unit": "J per prompt token per layer, above idle (printed in mJ)",
-            "t_unit": "ms per layer iteration, median over the window"}
+            "t_unit": "ms per layer iteration, median over the window", "npu_shapes": NPU_SHAPES,
+            "wiring_max": WIRING_MAX, "void_rel_l2_max": {arm: void_bound(arm) for arm in ORDER}}
 
 
 def sha(path: Path) -> str:
@@ -379,11 +381,30 @@ def insts_fit() -> int:
 
 # ---------------------------------------------------------------- the rules (verdict)
 #
-# Where v2's text leaves a choice, the code reads it as READINGS states (R1-R4; printed in the prereg log).
+# Where v2's text leaves a choice, the code reads it as READINGS states (R1-R6, with the gate's A1-A4; printed
+# in the prereg log). The functions in VERDICT_FUNCS and the constants in verdict_constants() are frozen at the
+# second plan commit: VERDICT_CODE_SHA256 (A4) is printed in every later 3c log.
 
-OUTPUT_CHECK = ("fails (VOID) on: a non-finite output; N-bf16 over 1e-4 rel-L2 from its own bf16 product; any "
-                "int8 arm's (C-i8, D-i8, N-i8) int32 not identical to the exact int8 product. Otherwise its "
-                "per-linear rel-L2s are recorded. The int8 control (Q9) is every int8 window's SHAs, VOID or not.")
+OUTPUT_CHECK = ("fails (VOID) on: a non-finite output; a worst-linear rel-L2 above the arm's wiring bound (A1: "
+                "WIRING_MAX by model kind, N-i8 at int8's); N-bf16 over 1e-4 rel-L2 from its own bf16 product; any "
+                "int8 arm's (C-i8, D-i8, N-i8) int32 not identical to the exact int8 product; N-w4's int32 not "
+                "identical to the exact int8 x (q - 8) product (A2). Otherwise its per-linear rel-L2s are recorded. "
+                "The int8 control (Q9) is every int8 window's SHAs, VOID or not.")
+
+
+def void_bound(arm: str):
+    """A1: the arm's wiring bound (R6's, fixed before the wiring run), or None (N-bf16, N-w4: R4's checks)."""
+    kind = MODEL_OF.get(arm.split("@")[0]) or {"N-i8": "i8_s8"}.get(arm)
+    return WIRING_MAX.get(kind) if kind else None
+
+
+def state_of(w: dict) -> str:
+    """A window's state, with A1 applied here too: an OK window whose worst linear exceeds its arm's wiring
+    bound is VOID (the sitting voids it live; the verdict enforces it whatever the log says)."""
+    b = void_bound(w["arm"])
+    if w["state"] == "OK" and b is not None and w.get("err") is not None and worst(w["err"]) > b:
+        return "VOID"
+    return w["state"]
 
 
 def taken(ws: list):
@@ -391,7 +412,7 @@ def taken(ws: list):
     ws = sorted(ws, key=lambda w: w["position"])
     if not ws:
         return None
-    if ws[0]["state"] == "VOID" and len(ws) > 1 and ws[1].get("rerun"):
+    if state_of(ws[0]) == "VOID" and len(ws) > 1 and ws[1].get("rerun"):
         return ws[1]
     return ws[0]
 
@@ -406,7 +427,7 @@ def arm_record(recs: list, arm: str) -> dict:
     passes = {}
     for p in (1, 2):
         w = taken([r for r in recs if r["arm"] == arm and r["pass"] == p])
-        passes[p] = w if w and w["state"] == "OK" else None
+        passes[p] = w if w and state_of(w) == "OK" else None
     errs = [worst(w["err"]) for w in passes.values() if w and w.get("err") is not None]
     out = {"arm": arm, "valid": sum(v is not None for v in passes.values()), "err": max(errs) if errs else None}
     if out["valid"] < 2:
@@ -534,7 +555,27 @@ def in_range(x, lo, hi) -> bool:
     return x is not None and (lo is None or x >= lo) and (hi is None or x <= hi)
 
 
+def q1(rows) -> list:
+    """A3: Q1 over every 3c build row (BUILD_ROW_JSON: dt bf16 | i8 | w4, M, K, N, tile P | F, m, k, n,
+    verifier_ok, insts_bytes): every planned P build (NPU_SHAPES x both M x bf16, i8 and N-w4's w4) passed
+    the aiecc verifier, and every build, F and w4 included, has insts.bin equal to the fit. A planned P
+    build with no row is unknown."""
+    if not rows:
+        return [None]
+    conds = []
+    for dt in ("bf16", "i8", "w4"):
+        for M in MS:
+            for K, N in NPU_SHAPES:
+                p = [r for r in rows if (r["dt"], r["M"], r["K"], r["N"], r["tile"]) == (dt, M, K, N, "P")]
+                conds.append(bool(p[-1]["verifier_ok"]) if p else None)
+    conds += [r.get("insts_bytes") == INSTS_FIT[0] + INSTS_FIT[1] * r["M"] // (8 * r["m"]) for r in rows]
+    return conds
+
+
 def score(ev: dict, ctl: dict, build=None, load=None) -> dict:
+    """build: the build log's BUILD_ROW_JSON rows; load: the load check's LOADCHECK_SUMMARY_JSON (contexts,
+    buffers_8192, shared_buffer: booleans). A prediction is MISS if any part is known false, else NOT SCORED
+    if any part is unknown, else HIT."""
     s = {}
 
     def val(M, arm, m):
@@ -549,9 +590,9 @@ def score(ev: dict, ctl: dict, build=None, load=None) -> dict:
         return ev[M]["rules"][npu][r]["outcome"]
 
     def verdict_of(conds):
-        return NS if None in conds else "HIT" if all(conds) else "MISS"
+        return "MISS" if any(c is not None and not c for c in conds) else NS if None in conds else "HIT"
 
-    s["Q1"] = verdict_of([build and build.get("all_p_ok"), build and build.get("all_fit")] if build else [None])
+    s["Q1"] = verdict_of(q1(build))
     s["Q2"] = verdict_of([load.get("contexts"), load.get("buffers_8192"), load.get("shared_buffer")] if load else [None])
     t2, t8 = val(2048, "N-i8", "T"), val(8192, "N-i8", "T")
     s["Q3"] = verdict_of([None if t2 is None else in_range(t2, 110, 135), None if t8 is None else in_range(t8, 430, 520)])
@@ -616,16 +657,40 @@ def score(ev: dict, ctl: dict, build=None, load=None) -> dict:
 
 
 def parse(paths) -> tuple:
-    recs, build, load = [], None, None
+    """WINDOW_JSON records, BUILD_ROW_JSON rows (None if there are none) and the LOADCHECK_SUMMARY_JSON."""
+    recs, build, load = [], [], None
     for p in paths:
         for s in Path(p).read_text(encoding="utf-8").splitlines():
             if s.startswith("WINDOW_JSON "):
                 recs.append(json.loads(s.split(" ", 1)[1]))
-            elif s.startswith("BUILD_SUMMARY_JSON "):
-                build = json.loads(s.split(" ", 1)[1])
+            elif s.startswith("BUILD_ROW_JSON "):
+                build.append(json.loads(s.split(" ", 1)[1]))
             elif s.startswith("LOADCHECK_SUMMARY_JSON "):
                 load = json.loads(s.split(" ", 1)[1])
-    return recs, build, load
+    return recs, build or None, load
+
+
+# A4: the verdict code, frozen at the second plan commit. The gate's list (taken, worst, arm_record, rule,
+# evaluate, int8_control, in_range, score; REPEAT_MAX through RERUN_VOID, Q9_RANGES, WIRING_MAX), plus what
+# they call or read: void_bound, state_of, q1, parse; MS, ORDER, NPU_ARMS, MODEL_OF, NPU_SHAPES, INSTS_FIT.
+VERDICT_FUNCS = ("taken", "worst", "arm_record", "rule", "evaluate", "int8_control", "in_range", "score",
+                 "void_bound", "state_of", "q1", "parse")
+
+
+def verdict_constants() -> dict:
+    return {"REPEAT_MAX": REPEAT_MAX, "MARGIN": MARGIN, "ACC_TIE": ACC_TIE, "BF16_ACC_MAX": BF16_ACC_MAX,
+            "HF_MAX": HF_MAX, "PAGES_MAX": PAGES_MAX, "RERUN_VOID": RERUN_VOID, "Q9_RANGES": Q9_RANGES,
+            "WIRING_MAX": WIRING_MAX, "MS": MS, "ORDER": ORDER, "NPU_ARMS": NPU_ARMS, "MODEL_OF": MODEL_OF,
+            "NPU_SHAPES": NPU_SHAPES, "INSTS_FIT": INSTS_FIT}
+
+
+def verdict_code_sha() -> str:
+    """sha256 over the sources of VERDICT_FUNCS (inspect.getsource: universal newlines, so CRLF and LF
+    checkouts agree) and the JSON of verdict_constants()."""
+    import inspect
+    g = globals()
+    src = "".join(inspect.getsource(g[f]) for f in VERDICT_FUNCS)
+    return hashlib.sha256((src + json.dumps(verdict_constants(), sort_keys=True)).encode("utf-8")).hexdigest()
 
 
 def fmt(x, spec=".2f"):
@@ -654,9 +719,9 @@ def report(ev: dict, ctl: dict, sc: dict) -> None:
         if "w4" in res:
             print(f"  N-w4 (report-only; it bounds route (i) only): speed {res['w4']['T']['reading']}, "
                   f"energy {res['w4']['E']['reading']}")
-        print("  int8 control: " + ("no valid int8 windows" if not ctl[M]["windows"] else
+        print("  int8 control: " + ("no int8 windows" if not ctl[M]["windows"] else
                                     f"{'identical' if ctl[M]['identical'] else 'NOT identical'} over "
-                                    f"{ctl[M]['windows']} valid int8 windows"))
+                                    f"{ctl[M]['windows']} int8 windows (VOID or not)"))
     print("\nPredictions (they decide nothing):")
     for q, text in PREDICTIONS:
         print(f"  {q} {sc[q]}: {text}")
@@ -668,6 +733,7 @@ LABELS = ("Energy labels, (b)'s: above idle, with idle charged to no one; packag
 
 
 def verdict(paths) -> int:
+    print(f"VERDICT_CODE_SHA256 {verdict_code_sha()}", flush=True)
     recs, build, load = parse(paths)
     ev = evaluate(recs)
     ctl = int8_control(recs)
@@ -1259,7 +1325,10 @@ Every decision took the recommendation, listed first below; the gate's position 
 
 
 READINGS = """\
-READINGS: the code's choices where v2's text leaves one (not part of v2's text; stated to the gate)
+READINGS: the code's choices where v2's text leaves one (not part of v2's text). The gate ruled on the first
+plan commit (2c29296): R1, R2 and R6 accepted; R3 accepted with A1; R4 accepted as amended by A1 and A2; R5
+accepted with A3; A4 freezes the verdict code. This second plan commit carries A1-A4; the plan text above
+is unchanged.
 - R1 Repeat, arm-level (v2 §6: "An arm that holds on both takes the mean. Otherwise the arm is
   INCOMPLETE."): an arm with two valid passes whose T or E breaks the 10% rule is INCOMPLETE, and U8
   takes both of its pass values of the metric a rule reads.
@@ -1270,21 +1339,43 @@ READINGS: the code's choices where v2's text leaves one (not part of v2's text; 
   than two valid passes leaves its own rules INCOMPLETE.
 - R3 Membership uses the worse of an arm's valid windows' rel-L2s, each its worst linear. A worse error
   only removes an arm from the set, so a known error that already removes an unknown arm decides. A
-  VOID window's error is not used.
-- R4 The output check (v2 §4 lists what it checks, not when it fails) fails, voiding its window, on: a
-  non-finite output; N-bf16 over 1e-4 rel-L2 from its own bf16 product (stage 3's check); any int8
-  arm's (C-i8@8, C-i8@16, D-i8, N-i8) int32 not identical to the exact int8 product (the manifest's,
-  computed in float64, exact since every |sum| < 2^53). The same check for every int8 arm, rival or
-  NPU. The int8 control (§2, Q9) is every int8 window's SHAs, VOID or not; it holds if all agree.
+  VOID window's error is not used. A1 closes the gap this left: a finite garbage pass can no longer stay
+  valid and drop its arm from the set (R4).
+- R4 The output check (v2 §4 lists what it checks, not when it fails) fails, voiding its window, on:
+  - a non-finite output;
+  - (A1) a worst-linear rel-L2 above the arm's wiring bound, R6's bounds, fixed before the wiring run:
+    1e-4 for fp32 and nb0, 1e-2 for fp16 and nb16, 0.2 for nb4 and int8 (C-fp32, C-i8, C-nb0, C-nb4,
+    D-fp16, D-fp32, D-i8, D-nb16, and N-i8 at int8's). The bounds are in PROTOCOL_JSON (wiring_max, and
+    void_rel_l2_max per arm), and the verdict applies them to every window whatever the log says;
+  - N-bf16 over 1e-4 rel-L2 from its own bf16 product (stage 3's check);
+  - any int8 arm's (C-i8@8, C-i8@16, D-i8, N-i8) int32 not identical to the exact int8 product (the
+    manifest's, computed in float64, exact since every |sum| < 2^53): the same check for every int8
+    arm, rival or NPU, which implies v2's SHA identity;
+  - (A2) N-w4's int32 not identical to the exact int8 x (q - 8) product, in float64, so a mis-packed B
+    cannot bound the wrong computation. N-w4 still has no accuracy: its output is not y.
+  Such a VOID takes U12's one re-run like any other. The int8 control (§2, Q9) is every int8 window's
+  SHAs, VOID or not; it holds if all agree.
 - R5 Scoring the predictions: "C-i8" and "C-nb4" mean the better of the two thread counts (U11 made
   each two arms); "N-bf16 loses to D-fp16" means it does not beat D-fp16 by the speed rule's 1.10x;
-  "the best rival" (Q7, Q8) is the best of the NPU arm's at-least-as-accurate set; a prediction whose
-  inputs are missing is NOT SCORED, not MISS.
+  "the best rival" (Q7, Q8) is the best of the NPU arm's at-least-as-accurate set. A prediction is MISS
+  if any part is known false, else NOT SCORED if any part is unknown, else HIT.
+  (A3) Q1's "every 3c build" is every build the build log records, N-w4's and any F build included, with
+  no carve-out: Q1 is scored from the build log's BUILD_ROW_JSON rows (dt bf16 | i8 | w4, M, K, N, tile
+  P | F, m, k, n, verifier_ok, insts_bytes). Every planned P build (the four NPU shapes, both M, bf16, i8
+  and w4) must pass the verifier, and every row's insts.bin must equal 16 + 2576.M/(8m). Q2 reads the
+  load check's LOADCHECK_SUMMARY_JSON booleans contexts, buffers_8192 and shared_buffer.
 - R6 Step 2 ran each model once at M = 64 (its own seed, not the sitting's X) as a wiring check (a
   miswired graph reads rel-L2 near 1): bounds 1e-4 (fp32, nb0), 1e-2 (fp16, nb16), 0.2 (int8, nb4),
   and each int8 model against the exact product. Its M = 64 rel-L2s are a wiring check, own seed, not
   a 3c result: they are never cited as Q9's outcome or as any 3c accuracy figure, and no rule reads
   them. They were seen before this plan commit; Q1-Q12 are v2's text unchanged.
+- A4 The rules are the verdict code, and it is frozen here. VERDICT_CODE_SHA256 is sha256 over the
+  source of taken, worst, arm_record, rule, evaluate, int8_control, in_range and score, plus what they
+  call or read (void_bound, state_of, q1, parse), and the JSON of the constants REPEAT_MAX through
+  RERUN_VOID, Q9_RANGES and WIRING_MAX (plus MS, ORDER, NPU_ARMS, MODEL_OF, NPU_SHAPES, INSTS_FIT).
+  Every later 3c log prints it, and later code-only commits keep those functions and constants
+  byte-identical. The window-state code (R4, U10 and the VOID list) is not written yet: when it lands,
+  its HEAD goes to the gate before the load check.
 """
 
 
@@ -1306,6 +1397,7 @@ def prereg() -> int:
     say("PREDICTIONS_JSON", [{"id": q, "text": t} for q, t in PREDICTIONS])
     print(f"PREREG_TEXT_SHA256 {hashlib.sha256(PREREG.encode('utf-8')).hexdigest()}", flush=True)
     print(f"PROTOCOL_JSON_SHA256 {hashlib.sha256(json.dumps(protocol()).encode('utf-8')).hexdigest()}", flush=True)
+    print(f"VERDICT_CODE_SHA256 {verdict_code_sha()}", flush=True)
     ok = True
     for tag, pat in (("MODELS_LOG", "llm_prefill3c_models_*.log"), ("INSTS_FIT_LOG", "llm_prefill3c_insts_fit_*.log")):
         p = latest(pat)
@@ -1461,6 +1553,36 @@ def selftest() -> int:
     expect("U12: a FAILED window is not replaced", evaluate(rr + recs_for(8192))[2048]["arms"]["D-fp16"]["valid"], 1)
     two = [rec(2048, "D-fp16", 1, 130, 2.3, 1e-4), rec(2048, "D-fp16", 2, 130, 2.3, 9e-3)]
     expect("R3: membership takes the worse of two errors", arm_record(two, "D-fp16")["err"], 9e-3)
+    # A1: an OK window above its arm's wiring bound is VOID, and takes U12's re-run
+    expect("A1: the bounds by arm", [void_bound(a) for a in ("C-fp32@8", "C-nb4@16", "D-fp16", "D-nb16", "D-i8",
+                                                             "N-i8", "N-bf16", "N-w4")],
+           [1e-4, 0.2, 1e-2, 1e-2, 0.2, 0.2, None, None])
+    garbage = [rec(2048, "D-fp32", 1, 500, 7.0, 1.3e-6), rec(2048, "D-fp32", 2, 480, 6.9, 0.9)]
+    a = arm_record(garbage, "D-fp32")
+    expect("A1: a finite garbage pass (0.9 > 1e-4) marked OK is VOID: one valid pass, its error unused",
+           (a["valid"], a["state"], a["err"]), (1, "MISSING", 1.3e-6))
+    a = arm_record(garbage + [rec(2048, "D-fp32", 2, 490, 7.0, 1.4e-6, pos=190, rerun=True)], "D-fp32")
+    expect("A1: ... and its U12 re-run is taken", (a["valid"], a["err"]), (2, 1.4e-6))
+
+    print("Q1 over the build rows (A3), and three-valued scoring:")
+
+    def row(dt, M, K, N, tile="P", m=None, ok=True, insts=None):
+        m = m or {"bf16": 32, "i8": 64, "w4": 64}[dt]
+        return {"dt": dt, "M": M, "K": K, "N": N, "tile": tile, "m": m, "k": 64, "n": 64, "verifier_ok": ok,
+                "insts_bytes": INSTS_FIT[0] + INSTS_FIT[1] * M // (8 * m) if insts is None else insts}
+    rows = [row(dt, M, K, N) for dt in ("bf16", "i8", "w4") for M in MS for K, N in NPU_SHAPES]
+    ev0 = evaluate(recs_for(2048) + recs_for(8192))
+    ctl0 = int8_control([])
+    expect("Q1: all 24 planned P builds verified and on the fit: HIT", score(ev0, ctl0, rows)["Q1"], "HIT")
+    off = rows[:-1] + [dict(rows[-1], insts_bytes=rows[-1]["insts_bytes"] + 16)]
+    expect("Q1: one w4 build off the fit: MISS (no carve-out)", score(ev0, ctl0, off)["Q1"], "MISS")
+    expect("Q1: an F build off the fit also counts: MISS",
+           score(ev0, ctl0, rows + [row("i8", 8192, 2560, 2560, "F", 64, True, 1)])["Q1"], "MISS")
+    expect("Q1: a planned P build with no row: NOT SCORED", score(ev0, ctl0, rows[1:])["Q1"], NS)
+    expect("Q1: no row for one, another known false: MISS", score(ev0, ctl0, rows[2:] + [row("bf16", 2048, 2560, 2048,
+                                                                                         ok=False)])["Q1"], "MISS")
+    expect("VERDICT_CODE_SHA256 is stable and 64 hex", (verdict_code_sha() == verdict_code_sha(),
+                                                        len(verdict_code_sha())), (True, 64))
 
     print("Predictions and the verdict end to end (synthetic):")
     recs = recs_for(2048) + recs_for(8192)

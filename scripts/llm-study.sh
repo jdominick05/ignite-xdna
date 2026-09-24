@@ -829,8 +829,9 @@ stage_prefill3c_insts() {
 }
 
 stage_prefill3c_prereg() {
-    # no chip and no timing: the plan's text, PROTOCOL_JSON, the predictions and the two logs above by hash
-    local log="$OUT/llm_prefill3c_prereg_${MACHINE}_${DATE}.log"
+    # no chip and no timing: the plan's text, PROTOCOL_JSON, the predictions and the two logs above by hash;
+    # --tag names a later plan commit's log (the first is never replaced)
+    local log="$OUT/llm_prefill3c_prereg${TAG}_${MACHINE}_${DATE}.log"
     refuse "$log"
     use_env resnet_env17
     logged "$log" python $P3C prereg || die "the prereg is incomplete, see $log"
