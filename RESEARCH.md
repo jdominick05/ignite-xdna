@@ -776,6 +776,22 @@ been closed:
             to decode at 95.6% of its measured read ceiling.
           - The int4 head is undetermined.
           ([BENCHMARKS](docs/BENCHMARKS.md#gemma-3-4b-decode-on-the-cpu-and-directml-incomplete-in-both-sittings-on-the-page-in-witness-and-the-three-complete-arms-decode-at-108176-toks-2026-09-24-desktop-2)).
+      - Stage (e) asked whether an NPU decode frees the GPU or the CPU where the rivals' decodes do
+        not. Pre-registered, in one sitting, COMPLETE, on a read-only proxy: the NPU arm reads a
+        token's bytes and computes nothing.
+        - **Frees both at once: PASS, only because DirectML collapses beside the read loop** (0.77
+          / 0.92 tok/s), under the "does not hold" clause written into the prereg. Without it, FAIL.
+        - **Frees the GPU: FAIL, unqualified.** The read loop PASSes only because the calibrated
+          CPU rival (2 threads) cannot hold beside it (4.20 / 4.25 tok/s); on the ratio alone it
+          fails. YOLO-World on DirectML FAILs: the CPU arm held there at K 0.880.
+        - **Frees the CPU: FAIL** (K 0.960 against a line of 0.976; DirectML held at K 0.887).
+        - The plain finding: every decode was paced at 5.26 tok/s, and the proxy held its pace
+          beside all three workloads, keeping 0.93–0.96 of each. Neither rival did both.
+        - The read loop's PASS rests on N = 2; no larger CPU rival ran beside it. The YOLO-World
+          FAIL rests on the CPU arm holding 5.7% over the floor while running back to back.
+        - The proxy worked 77 ms per token, about 28 GB/s at a 40% duty. A GEMV adds compute and
+          synchronization, so a proxy PASS is not a role; building the GEMV is the user's call
+          ([BENCHMARKS](docs/BENCHMARKS.md#freeing-the-gpu-or-the-cpu-during-gemma-3-4b-decode-stage-e-complete-on-a-read-only-npu-proxy-frees-both-at-once-pass-only-because-directml-collapses-beside-w1-frees-the-gpu-fail-w1-passing-only-because-the-cpu-arm-cannot-hold-there-frees-the-cpu-fail-2026-09-24-desktop-2)).
 
   Evidence: `results/aie/int4_{isa_gate,engine_bytes_gate,demo_npu}_desktop2_20260923.log`,
   `results/int4/w4a8_accuracy_{prereg,verdict}_desktop2_20260923.log`,

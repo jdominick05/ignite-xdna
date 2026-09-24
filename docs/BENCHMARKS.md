@@ -3921,6 +3921,319 @@ blobs. Each is given below with the other beside it, so a Linux reader can check
   - the attribution ranked by hard faults;
   - AI-tool image names neutralized at the source.
 
+### Freeing the GPU or the CPU during Gemma 3 4B decode, stage (e): COMPLETE, on a read-only NPU proxy. Frees both at once PASS only because DirectML collapses beside W1; frees the GPU FAIL, W1 passing only because the CPU arm cannot hold there; frees the CPU FAIL (2026-09-24, Desktop 2)
+
+**The result, with its qualifiers.** The NPU arm is a proxy: it reads a token's weight bytes and
+computes nothing.
+- **Frees both at once: PASS, on a read-only proxy, only because DirectML collapses beside W1**
+  (0.77 / 0.92 tok/s), under the "does not hold" clause written into the prereg. Without that clause
+  the joint score FAILs (0.933 < 1.10 × 0.996).
+- **Frees the GPU: FAIL, unqualified. W1 PASSes only because the calibrated CPU rival (N = 2) cannot
+  hold beside it** (4.20 / 4.25 tok/s). On the ratio alone, 0.933 < 1.10 × 0.915. W2 FAILs.
+- **Frees the CPU: FAIL** (K 0.960 against a line of 1.10 × 0.887 = 0.976).
+- The plain finding: the proxy held its pace beside all three workloads and kept 0.93–0.96 of each.
+  Neither rival did both. The CPU decode could not hold beside W1 or Wcpu, and DirectML's decode
+  starved beside W1.
+- **The sensitivities:**
+  - W1's PASS rests on N = 2. The CPU arm's 1.25× unpaced headroom did not survive W1's DDR
+    pressure: its work per token rose from 147 to 235 ms. No larger N ran beside W1 (the report-only
+    worst case ran beside Wcpu only), so whether a 4-thread rival holds there is unmeasured.
+  - W2's FAIL rests on the CPU arm holding at 5.283 / 5.333 tok/s while it ran back to back: a median
+    188.8 / 187.4 ms of work per 190 ms slot, every slot starting late. Its lower pass is 5.7% over
+    the floor.
+- The proxy reads only. It worked a median 77.0 / 77.7 ms per token alone here: about 28 GB/s
+  effective and a 40% duty (DERIVED). A GEMV adds compute and synchronization. A PASS justifies at
+  most building the GEMV, and that is the user's call.
+
+The question, (e) of the Gemma plan
+([locked decision 10](DECISIONS.md#locked-decisions-do-not-reopen)): does an NPU decode free the GPU,
+or the CPU, where the two rivals' decodes do not?
+- The rivals are the CPU (C0-H4) and DirectML on the 780M (D-H4), from
+  [(c)](#gemma-3-4b-decode-on-the-cpu-and-directml-incomplete-in-both-sittings-on-the-page-in-witness-and-the-three-complete-arms-decode-at-108176-toks-2026-09-24-desktop-2).
+- The NPU's distinct claim would be freeing both at once: a CPU decode leaves the GPU free, and a
+  DirectML decode leaves most CPU cores free.
+- The floor is 5 tok/s. Energy is not part of (e).
+- The user approved plan v4 on 2026-09-24, with U1–U6 as recommended: run now, with no third (c)
+  sitting; the floor stays 5, with a report-only reading-rate column; the CPU arm is C0-H4; the
+  NPU arm runs on the C++ runner; the memory rule below; and the rivals in their most-freeing
+  configuration.
+
+**The NPU arm is a proxy.** No NPU int4 GEMV exists.
+- It is stage 1's shim-read design at 4 columns × 2 channels. It reads 2,183,659,520 B per token
+  (1.0006× H4) in 238 dependent dispatches of 9,175,040 B (34 layers × 7 GEMVs), each from its own
+  host buffer (DERIVED from the build).
+- The C++ runner (`kernels/dispatch_floor/dispatch_runner.cpp --paced`) paces it on an absolute
+  190 ms schedule, 5.26 tok/s.
+- A GEMV would read at least these bytes and add compute and synchronization, so a proxy FAIL is
+  robust on the GPU side.
+- A proxy PASS is not a role. It only justifies building the GEMV, which the user decides. The
+  proxy has no accuracy axis.
+
+**The protocol** (pre-registered at `30b1d11` before the sitting,
+[prereg](../results/llm/llm_freeing_prereg_desktop2_20260924.log); the tool is
+`tools/llm_freeing.py`).
+- The arms: all at H4, each paced on the same absolute 190 ms schedule, one long-lived session per
+  window.
+  - **CPU:** C0-H4 with the caller on logical CPU 1 and N − 1 pool threads on 3, 5, …, the SMT
+    siblings of Wcpu's CPUs. Intra-op spinning is off. N is calibrated in the sitting.
+  - **DML:** D-H4 with 1 intra-op thread, spinning off, unpinned.
+  - **NPU:** the proxy, unpinned.
+  - The GenAI arms start a fresh generator from (c)'s pinned 128-token prompt and restart it after
+    896 generated tokens. Prompt passes are part of the paced stream.
+- The workloads, each also measured alone in every pass:
+  - **W1:** stage 2's DirectML read loop (a 1 GiB fp32 ReduceSum), in GB/s.
+  - **W2:** YOLO-World v2 FP32 on DirectML, `4b_g2g.py`'s frame loop (letterbox, network, decode and
+    NMS on bus.jpg with COCO's 80 names), flat out, in frames/s.
+  - **Wcpu:** the same model on an ORT CPU session: 8 intra-op threads, the caller on logical CPU 0
+    and the pool on 2, 4, …, 14. It loops a letterboxed bus.jpg, in inferences/s.
+- Calibration: the CPU arm alone and unpaced, at N = 1, 2, 4, 8, twice each from N = 1 up. N is the
+  first whose two runs both reach ≥ 6.58 tok/s (1.25 × 5.26).
+- The matrix, per pass: each arm alone, each W alone, and each W with each arm, 15 windows. Pass 2
+  is pass 1 reversed.
+- A window:
+  - Its processes start and report READY; the proxy starts last and paces from its own READY.
+  - The counters and a per-process fault sampler start.
+  - Every other process gets a common start. A 10 s settle follows, then the 60 s window.
+- The numbers:
+  - An arm's tok/s is its token completions inside the window, over 60 s.
+  - A W's rate sums each unit's overlap with the window as a fraction of that unit, over 60 s.
+  - K_W(arm) = W's rate with the arm ÷ W's rate alone, within one pass.
+- The rules:
+  - A W's alone rate must agree within 10% between the passes, and a K whose passes differ by more
+    than 0.05 is INCOMPLETE. Otherwise K is the passes' mean.
+  - "Holds" means ≥ 5.00 tok/s in that window in both passes; one valid pass below 5.00 decides
+    "does not hold".
+  - **Frees the GPU, on W1 and on W2:** the NPU holds with W; K_W(NPU) ≥ 0.90; and K_W(NPU) ≥ 1.10 ×
+    K_W(CPU), or the CPU arm does not hold with W. Unqualified, it needs both W's.
+  - **Frees the CPU, on Wcpu:** the same three conditions, against the DirectML arm.
+  - **Joint, frees both at once:** the NPU holds with K ≥ 0.90 on all three W's, and each rival gives
+    up the resource its decode occupies. For the CPU arm that is Wcpu; for DirectML, W1 and W2. A
+    rival gives a W up if its K < 0.90, or if K(NPU) ≥ 1.10 × its K, or if it does not hold with that
+    W.
+  - The last clause of the joint rule, "does not hold", was written into the prereg to match the
+    per-resource rules. The gate accepted it before the sitting.
+- The memory rule (U5):
+  - A window is VOID if a measured process's own hard faults exceed 25/s over the window, or if the
+    system's Pages Input/sec over the window exceeds 1,000. The 1,000 was chosen after seeing (c)'s
+    maximum window of 625, and that is disclosed.
+  - A window is also VOID if its counters hold under 50 s, if pinning is not read back, or if a
+    process did not run through it.
+- Hygiene: process names on a local, git-ignored list are replaced by `<tool>` at the source, and the
+  worktree root by `<repo>`.
+
+**Before the sitting: two disclosed runs that enter no rule.**
+- **The dry run** (pre-prereg, go/no-go only;
+  [log](../results/llm/llm_freeing_dryrun_desktop2_20260924.log)): the proxy alone for 60 s. **GO.**
+  - 316 tokens; work per token median 75.6 ms, max 100.6 ms against the 190 ms period; 0 late
+    starts; 5.263 tok/s (MEASURED).
+  - One host-load line named a local AI tool's process. The name was replaced by `<tool>` before
+    commit, and nothing else differs from the raw log (the gate diffed them).
+- **The load check** (pre-sitting, approved by the gate on `30b1d11`;
+  [log](../results/llm/llm_freeing_loadcheck_desktop2_20260924.log)): every child the sitting spawns
+  was started to READY, given a 2 s go, and had its record parsed by the sitting's code. **GO.**
+  - The code was committed first as `bf6643b`. The prereg text and PROTOCOL_JSON are byte-identical
+    to `30b1d11`'s.
+  - `bf6643b` also changes the sitting's own code, not only the load check's. `Live`, which copies
+    the sitting's output to a live log, gained `__getattr__`: any other stream attribute (`encoding`,
+    `isatty`, …) now comes from the real stdout. It only delegates attributes.
+  - It was added as a precaution while the load check was being written, before the load check ran;
+    no failure prompted it. The commit's body lists it, but it was not sent to the gate first, which
+    was the gate's condition for fixes.
+
+**The sitting**, 12:35–13:38Z
+([suite](../results/llm/llm_freeing_suite_desktop2_20260924.log),
+[verdict](../results/llm/llm_freeing_verdict_desktop2_20260924.log),
+[counters](../results/llm/llm_freeing_counters_desktop2_20260924/)).
+- It ran under `tools/silicon_probe_record.py --device`, announced to the other sessions. No other
+  load was launched.
+- The start:
+  - the host-load gate CLEAR;
+  - 22.66 GB available, and the largest process 1.01 GB;
+  - every pin matched;
+  - PROTOCOL_JSON byte-identical to the prereg's.
+- **All 40 windows are OK: 0 VOID and 0 FAILED.**
+  - Every measured process's own hard faults read 0.0/s in every window.
+  - The highest window mean of Pages Input/sec was 98.14, against the 1,000 backstop.
+  - Every window held at least 56 counter rows and 59 fault-sampler seconds.
+
+Calibration (MEASURED; unpaced, alone):
+
+| N | Run 1: tok/s, work ms | Run 2: tok/s, work ms | Process CPU | Passes 6.58? |
+|---:|---|---|---|---|
+| 1 | 3.617, 276.0 | 3.633, 275.3 | 99.1%, 99.6% | no |
+| 2 | 6.750, 148.1 | 6.867, 145.5 | 198.0%, 195.4% | **yes: N = 2** |
+
+So the CPU arm ran with its caller on CPU 1 and one pool thread on CPU 3.
+
+Alone, pass 1 / pass 2 (MEASURED):
+
+| | Rate | Work per token |
+|---|---|---|
+| NPU | 5.250 / 5.250 tok/s | 77.0 / 77.7 ms |
+| CPU | 5.417 / 5.417 tok/s | 147.0 / 145.5 ms |
+| DML | 5.250 / 5.250 tok/s | 95.1 / 95.6 ms |
+| W1 | 70.736 / 72.295 GB/s (2.2% apart) | |
+| W2 | 20.860 / 21.009 frames/s (0.7% apart) | |
+| Wcpu | 22.816 / 22.957 inferences/s (0.6% apart) | |
+
+Every arm holds alone. The W's agree well within the 10% rule.
+
+The co-runs, pass 1 / pass 2. Tok/s and the W's rate are MEASURED; K is DERIVED.
+
+| W | Arm | Arm tok/s | W's rate | K per pass | K | Holds |
+|---|---|---|---|---|---:|---|
+| W1 | NPU | 5.250 / 5.267 | 66.184 / 67.285 | 0.936 / 0.931 | **0.933** | yes |
+| W1 | CPU | 4.200 / 4.250 | 65.467 / 65.382 | 0.926 / 0.904 | 0.915 | **no** |
+| W1 | DML | 0.767 / 0.917 | 70.571 / 71.908 | 0.998 / 0.995 | 0.996 | **no** |
+| W2 | NPU | 5.267 / 5.267 | 19.987 / 19.815 | 0.958 / 0.943 | **0.951** | yes |
+| W2 | CPU | 5.283 / 5.333 | 18.388 / 18.473 | 0.881 / 0.879 | 0.880 | yes |
+| W2 | DML | 5.250 / 5.250 | 17.831 / 18.004 | 0.855 / 0.857 | 0.856 | yes |
+| Wcpu | NPU | 5.250 / 5.267 | 21.923 / 22.029 | 0.961 / 0.960 | **0.960** | yes |
+| Wcpu | CPU | 3.067 / 3.067 | 17.673 / 17.682 | 0.775 / 0.770 | 0.772 | **no** |
+| Wcpu | DML | 5.250 / 5.250 | 20.290 / 20.293 | 0.889 / 0.884 | 0.887 | yes |
+
+Every K's two passes lie within 0.022 of each other. Nothing is INCOMPLETE.
+
+**What the holds rest on.**
+- An arm's tok/s is the reader's own count of token completions inside the window. The log keeps it
+  per window, with the work time's median, p95 and max and the count of late starts.
+- The per-token completion times were not retained, neither in the logs nor in scratch. So no hold
+  can be re-derived from raw times.
+- The gate checked every arm's count against its logged work time and lateness: they agree within
+  6%.
+- Logging per-token times in any future sitting is the user's call.
+
+**Verdict: COMPLETE.**
+- **Frees the GPU on W1: PASS, only because the CPU arm does not hold beside W1** (4.20 and 4.25
+  tok/s; its work per token rose from 147 ms alone to 235 ms). The NPU holds, and K_W1(NPU) = 0.933
+  ≥ 0.90, but the ratio does not carry it: 0.933 < 1.10 × 0.915.
+- **Frees the GPU on W2: FAIL.** 0.951 < 1.10 × 0.880, and the CPU arm holds beside W2 (5.28 and
+  5.33 tok/s).
+- **Frees the GPU, unqualified: FAIL.** It needs both W1 and W2.
+- **Frees the CPU: FAIL.** 0.960 < 0.976 (1.10 × 0.887), and the DirectML arm holds beside Wcpu.
+- **Frees both at once: PASS, on a read-only proxy, only because DirectML does not hold beside W1.**
+  Without the "does not hold" clause, the joint score would FAIL (0.933 < 1.10 × 0.996).
+  - The NPU holds with K ≥ 0.90 beside all three: 0.933, 0.951 and 0.960.
+  - The CPU arm gives up Wcpu: K 0.772 < 0.90, and it does not hold.
+  - DirectML gives up W2: K 0.856 < 0.90.
+  - DirectML gives up W1 only by not holding. Its K there is 0.996: the read loop keeps the 780M, and
+    the decode falls to 0.77 and 0.92 tok/s.
+- What it means: the proxy keeps the GPU and the CPU free enough for each workload (K 0.93–0.96)
+  while holding the pace. The rivals each fail somewhere, in two ways:
+  - by costing the workload more: DirectML beside W2 and Wcpu; the CPU beside W2 and Wcpu;
+  - by not decoding at the floor at all: the CPU beside W1 and Wcpu; DirectML beside W1.
+  - The per-resource rules pass only where a rival failed to hold, which is W1.
+- The proxy is not a role. The PASS justifies only building an NPU GEMV to test for real, and that is
+  the user's decision.
+
+**Predictions** (the prereg's, scored by the verdict):
+
+| Prediction | Predicted | Result |
+|---|---|---|
+| Every arm holds alone | yes | HIT (all three) |
+| CPU arm's N | 2 or 4 | HIT (2) |
+| K_W1(NPU) | 0.90–0.96 | HIT (0.933); the prediction assumed a lighter read duty, about 24% of the period, where the proxy was busy about 40% |
+| K_W1(CPU) | 0.87–0.94 | HIT (0.915) |
+| K_W1(DML) | 0.60–0.80 | MISS (0.996) |
+| K_W2(NPU) | ≥ 0.95 | HIT (0.951) |
+| K_W2(CPU) | ≥ 0.90 | MISS (0.880) |
+| K_W2(DML) | < 0.90 | HIT (0.856) |
+| K_Wcpu(DML) | ≥ 0.90 | MISS (0.887) |
+| K_Wcpu(NPU) | ≥ 0.90 | HIT (0.960) |
+| K_Wcpu(CPU) | 0.80–0.95 | MISS (0.772) |
+| Frees the GPU on W1 | FAIL | MISS (PASS) |
+| Frees the CPU | FAIL | HIT (FAIL) |
+| The joint score | OPEN, no prediction | PASS |
+
+That is 10 hits and 5 misses.
+- The W1 prediction assumed the proxy reads at stage 1's 47.62 GB/s: 45.9 ms, about 24% of each
+  period (DERIVED). It read at about 28 GB/s effective and was busy about 40% of each period (see
+  the post hoc read duty below).
+- Its K landed in range anyway, so the HIT is not evidence for the duty model.
+- The GPU-on-W1 miss comes from the rival failing to hold, which the prediction did not foresee.
+
+**Report-only witnesses** (MEASURED from the sitting's counters and process times; no rule reads
+them).
+- Each process's CPU, over the window, in % of one logical CPU:
+  - the proxy's host 1.7–3.0% in every window;
+  - the DirectML arm 50% alone, 54–62% beside W2 and Wcpu, and 99.8% beside W1;
+  - the CPU arm 156–158% alone, and 196–198% in every co-run, where every slot started late;
+  - Wcpu about 797% alone and in the matrix co-runs.
+- The 780M's busy:
+  - The figure sums every GPU Engine counter instance (per process, per engine) on the 780M's two
+    LUIDs; DXGI lists the 780M twice. So it can exceed 100%.
+  - The DirectML arm alone reads 49%, W1 99% and W2 68%.
+  - The DirectML arm with W1 reads 199%: W1's process 99.1% and the arm's 99.3%.
+  - The log keeps no per-engine split, so which engines or LUIDs those were is not known.
+- The counters on adapters other than the 780M read 38.9–41.4% in the NPU windows and 0 in every
+  other window, so they are the NPU's (INFERRED). That matches the proxy's median 75.7–81.0 ms of
+  work per 190 ms.
+
+**Report-only, not a rival: (c)'s same-core CPU setup against Wcpu.** This is 8 threads on 0, 2, …,
+14 with default spinning.
+- Alone it holds at 5.267 / 5.267 tok/s (54.5 / 54.7 ms per token), and beside Wcpu at 5.250 /
+  5.250 (86 ms).
+- Wcpu drops to 16.374 / 16.437 inferences/s: K_Wcpu = 0.714 / 0.715, with Wcpu's process at 596%.
+- So (c)'s setup holds where the calibrated N = 2 arm does not, but it costs Wcpu more: 0.714
+  against 0.772.
+
+**POST HOC, deciding nothing.**
+- **The proxy's read duty** (POST HOC; DERIVED; the gate's arithmetic):
+  - The dry run's 2,183,659,520 B in a 75.6 ms median is about 28.9 GB/s effective, busy 39.8% of
+    each period, not stage 1's 47.62 GB/s.
+  - In the sitting, alone, the medians were 77.0 / 77.7 ms: about 28.4 / 28.1 GB/s, busy 40.5 /
+    40.9%.
+  - Per dispatch, the dry run's median is 317.7 µs, against 192.7 µs at 47.62 GB/s: about 125 µs of
+    overhead per dispatch.
+- **The CPU arm's catch-up** (POST HOC; INFERRED):
+  - Alone, it counts 5.417 tok/s against the 5.26 pace, with 80–83 late starts per window.
+  - At N = 2 the 128-token prompt pass appears to outlast the 10 s settle, so the absolute schedule
+    is still catching up early in the window.
+  - Its duty there is above steady pacing, which leans against the rival. It holds either way.
+- **DirectML at partial duty** (POST HOC):
+  - Here the paced arm worked 95.1 / 95.6 ms per token alone (MEASURED). In (c), a different sitting,
+    the unpaced DirectML decode worked 63–64 ms per token (MEASURED there).
+  - The two differ in sitting and in mode, so no ratio is drawn.
+  - That the 780M clocks lower at about half duty, the risk the prediction named, is INFERRED; no
+    clock counter was read.
+  - The arm held either way, with 95 ms of work in a 190 ms period.
+- **The rival's headroom** (POST HOC): the CPU arm was calibrated alone. Its 1.25× unpaced headroom
+  does not survive W1's DDR pressure (work 147 → 235 ms) or Wcpu's SMT siblings (147 → 327 ms). The
+  GPU-on-W1 PASS rests on that; see the sensitivities at the top.
+- **DirectML beside W1** (POST HOC): the 780M is time-shared, and the read loop takes nearly all of
+  it. W1 keeps 99.6% of its rate while the decode falls to 15–17% of the pace. The joint PASS rests
+  on this.
+
+**Hashes.**
+- The prereg: CRLF working copy
+  `b9e7e772674eb03d08b956fe5e7b130a1c1313c4e54b35bbf17df2d3d3da11af`, LF blob
+  `f86d79431ac953a5dd12353adf2aa58b6bb5b2c1c65e0ef683ec004674cbdab1`.
+- The build log: CRLF working copy
+  `8b41056e036e4c3c0e44eae0c7ceef09ef233ef985487be82b6644703fb06eaf`, LF blob
+  `6f904a0399d195a18dadc3541050344302f9dbcc92370e47b44110404ae56f83`.
+- The verdict: CRLF working copy
+  `84d04effef552d238d068e08acb73ca73107f049f30bd563759f52d09fe9a17b`, LF blob
+  `eb3143d37b19e7710b27eb828a36a87cb8623df67ea7bffbb38f51f4d2f6ad45`.
+- Three logs are written LF, so their working copy and blob hash alike:
+  - the dry run `845efb16b36f7ce945922ae44fe3cf1d5c28ba9bf075b95ded549f144bdd79fd`;
+  - the load check `d0a6c3d07964641921e5aa0a96dca9a89311c1e9b0a60ba6bfc7a4eb6bdf7c8c`;
+  - the suite `563f4de17b802ca75fcfd292e8da8d4b9205e889c17b78e399344e018cf7523c`.
+- The runner's source, which the prereg pins as the CRLF working copy that was compiled:
+  `27be3db3328ce7ec3c4188bf37c70aa908b024f796f2b49070e1909f2ee6fdc9`, LF blob
+  `9b83b9f3e8c6fd088a534fee200b8462b3484a5bc1f14d115384b6788505f953`. Its exe is
+  `f904c4709aecf40a954ab051ae874a3e38e08c73104d90d942b97e018951aec8`.
+- The 40 counter CSVs' CRLF and LF hashes are in `190aa78`'s message.
+
+**What this does not establish:**
+- A real NPU decode: the proxy reads a token's bytes and computes nothing. A GEMV's compute,
+  synchronization and host cost are unmeasured, as is its accuracy.
+- Energy, which is not part of (e).
+- A rival at N ≥ 4 beside W1. The CPU arm is the one calibrated alone at 1.25× headroom; a larger N
+  might hold beside W1, at a higher cost to W1.
+- Other workloads, other paces and other prompt lengths.
+- The 780M's clocks under a paced decode.
+- Whether to build the GEMV is the user's call.
+
 ### MobileViT-XXS does not survive per-tensor INT8, and AdaRound cannot save it
 
 The accuracy question the attention work deferred, now measured on the full 1000-image
